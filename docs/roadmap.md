@@ -70,25 +70,32 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
   MegaLights vs ShadowDepths every run). MegaLights dominates and the many-light cost is flat
   (395 vs 687 lights → same ~1 ms); ShadowDepths never blows up (≈0 on sm_hub_1). No silent VSM
   fallback → **3.1 is not the immediate next task.** See appendix "0.2 verdict". *Deps:* 0.1.
-- [ ] **0.3 Export a second map** *(was X1)* — `sm_hub_1` is exported and profiles/walks (687
-  lights); the harness's fixed vantages cover it. Still to do: `sm_pawnshop_1` (the travel
-  target) via `export_all.py`. Unblocks texlights (3.4), travel (4.6), calibration (10.1), A/B
-  (7.8), and kills the tutorial-only bias. *Acceptance:* both maps load and walk. *Deps:* none.
-- [ ] **0.4 Sidecar space audit** *(was X2 + engine-core P1 step 1)* — verify every sidecar the
-  next phases consume is emitted by `UE_bsp_to_scene.py` in Unreal space: `.ents` (origins
-  **and** entity-local hulls), `.sprites`, `.spawn`, `.water`, `_decals.obj`. The contract
-  table in `rebuild-strategy.md` still marks `.sprites` Godot-metres and `.spawn` Source
-  coords — reconcile table vs code, fix stragglers in `tools/bsp.py` terms, update the table.
-  *Acceptance:* contract table accurate; all consumed sidecars read verbatim. *Deps:* none.
+- [x] **0.3 Export a second map** *(was X1)* — `sm_hub_1` (687 lights) **and** `sm_pawnshop_1`
+  (161 lights, the travel target) are exported via `export_all.py`, load, walk, and profile
+  headlessly; each has fixed harness vantages (`sm_hub_1` h1/h2, `sm_pawnshop_1` p1/p2/p3 plus
+  the shared spawn vantage — baselines in the appendix). Unblocks texlights (3.4), travel (4.6),
+  calibration (10.1), A/B (7.8), and kills the tutorial-only bias.
+- [x] **0.4 Sidecar space audit** *(was X2 + engine-core P1 step 1)* — audited every sidecar the
+  next phases consume against `UE_bsp_to_scene.py`: `.ents` origins (`:272`) + entity-local hulls
+  (`:286`), `.sprites` origin (`:188`) + sizes (`INCH_TO_CM` `:201`), `.spawn` origin (`:1147`) +
+  pre-negated yaw (`:1150`), `.water` plane Z (world-scene verts) + fogdist (`:1185`), `_decals.obj`
+  (`:1030`, winding reversed) — **all already route through `source_to_unreal`/`INCH_TO_CM`, i.e.
+  Unreal cm.** The exporter was fully migrated; only the `rebuild-strategy.md` contract table lagged
+  (`.sprites` said "Godot metres", `.spawn` said "Source coords") — **corrected**. No `tools/bsp.py`
+  code fix needed → **PL7 is empty.** Runtime spot-check: `.spawn` read verbatim
+  (`ElysiumMapActor.cpp:705,722`; the +100 cm Z lift is a spawn-clearance offset, not a conversion).
+  *Deps:* none.
 - [ ] **0.5 Cog 5.8 compile spike** — vendor [Cog](https://github.com/arnaud-jamin/Cog) into
   `Plugins/`, compile against 5.8, open one stock window in PIE. De-risks the P2 dependency
   early (known patches: ImPlot `INFINITY` MSVC error). Full integration is 2.1.
   Upstream requires UE 5.5+ and is actively maintained (issue activity Nov 2025; no
   engine-version compile reports on the tracker), but 5.8 is unconfirmed — hence the spike.
   *Acceptance:* Cog inspector opens in PIE and standalone. *Deps:* none.
-- [ ] **0.6 `ent_survey` count reconciliation** *(RE, small)* — 16,125 vs 16,214 outputs /
-  1,591 vs 1,621 Python calls across doc snapshots; re-run and pin the numbers in
-  `entity_io.md`. *Deps:* none.
+- [x] **0.6 `ent_survey` count reconciliation** *(RE, small)* — re-ran the survey; the two
+  snapshots were both retail runs, and the tool deterministically yields **16,125 outputs /
+  1,591 Python** on `Vampire/maps` today (the 16,214/1,621 figure was a stale, unreproducible
+  snapshot). Pinned across `entity_io.md`, `python_bridge.md`, `rebuild-strategy.md`,
+  `tools/CLAUDE.md`; also recorded the patch-set counts (108 maps → 24,081 outputs).
 - [ ] **0.7 Repo hygiene** — keep `tools/ghidra*/` and `tools/re/` out of the repo
   (gitignore; they stay local RE references). *Deps:* none.
 
@@ -356,18 +363,18 @@ dialogue, scripted flow, quests, save/load included.
 | PL4 | Batch NPC export + include-model resolution in `mdl_skel.py` | 8.5 |
 | PL5 | Copy sound schemes (a) + `vdata/system/*.txt` (b) | 6.3, 9.4 |
 | PL6 | Texlight merge in exporter | 3.4 |
-| PL7 | Sidecar space fixes surfaced by the audit | 0.4 |
+| PL7 | Sidecar space fixes surfaced by the audit — **none (0.4: all sidecars already Unreal cm)** | 0.4 [x] |
 
 ## RE backlog (reverse-engineering work; each cited where consumed)
 
 | ID | Question | Consumed by | Status |
 |---|---|---|---|
-| RE1 | Trigger/button spawnflag filter bits — `CBaseButton::Spawn` map recovered; button bits `0x20`/`0x2000` + `trigger_multiple` filter remain | 4.2, 4.5 | [~] |
+| RE1 | Trigger/button spawnflag filter bits — `func_button` (`CBaseButton::Spawn`) + `trigger_multiple`/`trigger_once` (`PassesTriggerFilters`) maps confirmed in `entity_io.md` | 4.2, 4.5 | [x] |
 | RE2 | Retail queue-vs-think service order (our queue-first is a recorded choice) | revisit if a chain misbehaves | [P] |
 | RE3 | `__setattr__` write path + error-to-false + `G` default-0 **all confirmed** | 5.2, 9.1 | [x] |
 | RE4 | Ghidra datamap export (validate our input/field tables vs retail) — method confirmed, CBaseEntity base map extracted | 4.5+ (optional, valuable) | [~] |
 | RE5 | Dice-system vroll golden test | 9.6 | [ ] |
-| RE6 | `ent_survey` count reconciliation | 0.6 | [ ] |
+| RE6 | `ent_survey` count reconciliation — retail = 16,125 outputs / 1,591 Python (16,214/1,621 was stale) | 0.6 | [x] |
 | RE7 | Retail `.sav` block wire format | 10.7 (only for importing retail saves) | [P] |
 
 ### Ghidra extraction — findings + plan *(pass dated 2026-07-22; scripts + dumps in `tools/ghidra/`, `out/re*.txt`)*
@@ -406,16 +413,18 @@ All addresses are `vampire.dll` (image base `0x10000000`) unless noted. Structur
   `0`, never raises. `tp_setattr` (`0x1019b570`) mirrors it (morgue/methods read-only; `None` deletes;
   else `PyDict_SetItemString`); G is pickled for saves (`FUN_1019b130`, `cPickle`).
 
-**RE1 — `CBaseButton::Spawn` map recovered; two bits remain.** `m_spawnflags` is a `FIELD_INTEGER`
-at entity `+0x204` (confirmed in the datamap builder `FUN_100a22f0`). `CBaseButton::Spawn`
-(`FUN_100c8d60`, reached via the button vftable `0x1045293c`) reads it and wires the button — the
-confirmed bit→behaviour map is in `entity_io.md`: `0x1`=DONTMOVE (pressed pos = start pos, matches
-stock `SF_BUTTON_DONTMOVE`), `0x40`=spawn-time timed setup, `0x100`=use/activate handler
-(`m_pfn`@`+0x1ec`←`0x10002cd4`), `0x400`=touch handler (`m_pfn`@`+0x1f0`←`0x100111da`),
-`0x800`=starts-locked (sets the `+0x5c4` byte `GetUseIcon` reads), `0x1000`=secondary state (`+0x5c5`).
-**Still open:** bits `0x20` (in 33/1056/1057) and `0x2000` (in 8193/9217) are **not** tested in Spawn
-— they live in the use/touch handlers (`0x10002cd4`/`0x100111da`) or the base class; decompile those
-next, and repeat the exercise for `trigger_multiple`'s filter.
+**RE1 — button + trigger spawnflag maps CONFIRMED** (full tables in `entity_io.md`). `m_spawnflags`
+is a `FIELD_INTEGER` at entity `+0x204` (datamap builder `FUN_100a22f0`).
+- **`func_button`** (`CBaseButton::Spawn` `FUN_100c8d60` + use/touch handlers `0x100c9430`/`0x100c9250`,
+  vftable `0x1045293c`): `0x1`=DONTMOVE, `0x20`=TOGGLE, `0x40`=timed setup, `0x100`=use handler,
+  `0x400`=touch handler, `0x800`=starts-locked (`+0x5c4`), `0x1000`=secondary use-gate (`+0x5c5`).
+  `0x2000` is **inert** for buttons (tested nowhere in the class).
+- **`trigger_multiple`/`trigger_once`** (`CBaseTrigger::PassesTriggerFilters` `FUN_101c5460`,
+  bases `0x1047d08c`/`0x1047da24`/`0x1047dee4`): **matches stock Source** — `0x1`=ALLOW_CLIENTS,
+  `0x2`=ALLOW_NPCS, `0x4`=ALLOW_PUSHABLES, `0x8`=ALLOW_PHYSICS, plus the `m_hFilter` entity (`+0x564`,
+  its vtable `+0x3c4`); bit `0x80`=remove-after-fire (`trigger_once`).
+- Residual (non-blocking): the exact `FL_*` bit values GetFlags tests for client/NPC, and other
+  trigger subclasses' extra flags — read per-class when a specific one is implemented.
 
 **Method note (unblocked):** RE1 + `G` were both stalled because their targets are reached via
 `m_pfn*`/vtable/immediate loads the default analyzers leave un-referenced. **Re-importing `vampire.dll`
@@ -527,6 +536,13 @@ golden test.
   decoded into `entity_io.md`; bits `0x20`/`0x2000` + `trigger_multiple` filter still to do (RE1 stays
   `[~]`). Findings live in `python_bridge.md` (G) + `entity_io.md` (button); the AIF-analyzed DB is now
   the project baseline.
+- **2026-07-22 (cont. 3)** — **0.4 sidecar space audit done.** Traced all five downstream-consumed
+  sidecars through `UE_bsp_to_scene.py`: `.ents`, `.sprites`, `.spawn`, `.water`, `_decals.obj` are
+  **already emitted in Unreal cm** (every one routes through `source_to_unreal`/`INCH_TO_CM`, decals
+  with winding reversed) — the exporter had been fully migrated and the audit found **no code
+  straggler**. The `rebuild-strategy.md` contract table was stale (`.sprites` "Godot metres", `.spawn`
+  "Source coords"); corrected, and space made explicit on `.ents`/`.water` too. **PL7 is empty.**
+  Runtime `.spawn` reader confirmed verbatim.
 - **Pending** — 5.5 level-script execution strategy (interpreter vs transpile vs CPython);
   8.2 glTFRuntime confirmation for the skeletal path; 10.6 EnhancedInput migrate-or-remove;
   7.2 decal final path (PMC parity vs `UDecalComponent`) decided after both stages render.
@@ -582,10 +598,20 @@ report's vantage headers.
 | ShadowDepths / VSM | 0.00 | 0.00 | 0.00 |
 | **Total GPU** (whole frame) | **3.82** | **4.40** | **4.49** |
 
+### sm_pawnshop_1 — 161 world lights — GPU ms per vantage
+
+| Pass | spawn | p1 | p2 | p3 |
+|---|---|---|---|---|
+| Lumen GI (ScreenProbeGather) | 0.01 | 0.01 | 0.01 | 0.01 |
+| Lumen reflections | 0.06 | 0.05 | 0.06 | 0.05 |
+| MegaLights | 1.28 | 1.32 | 1.27 | 1.23 |
+| ShadowDepths / VSM | 0.00 | 0.00 | 0.00 | 0.00 |
+| **Total GPU** (whole frame) | **3.96** | **4.31** | **4.30** | **4.27** |
+
 **0.2 verdict — MegaLights is engaging, no VSM blow-up.** MegaLights (~1.0–1.3 ms) meets or
 beats ShadowDepths on every vantage, and the many-light cost is ~**flat**: 687 lights
-(sm_hub_1) cost the same ~1 ms as 395 (sp_tutorial_1). ShadowDepths never dominates and
-sm_hub_1's is ~0. MegaLights is carrying the local lights as designed — 3.1 is **not** the
+(sm_hub_1) and 161 (sm_pawnshop_1) both cost the same ~1 ms as 395 (sp_tutorial_1).
+ShadowDepths never dominates and is ~0 on both `sm_` maps. MegaLights is carrying the local lights as designed — 3.1 is **not** the
 immediate next task. (The `[VSM] Non-Nanite Marking Job Queue overflow` HUD warning appears
 transiently but does not translate into a ShadowDepths blow-up in steady state — worth a
 glance if ShadowDepths ever spikes in a future capture.)
