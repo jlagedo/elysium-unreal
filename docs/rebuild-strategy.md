@@ -1,9 +1,15 @@
 # Elysium-Unreal — Rebuild Strategy
 
-North star: rebuild VtMB as a **playable game** in Unreal Engine 5.8 + C++, consuming the
-same engine-neutral intermediates the Godot project produces. **No original game content is
-ever converted into `.uasset`s.** The only assets committed to `Content/` are hand-authored,
-game-agnostic scaffolding (master materials, input configs, empty maps).
+North star: rebuild VtMB as a **playable game** in Unreal Engine 5.8 + C++, consuming
+engine-neutral intermediates produced by this repo's own decode/export pipeline (`tools/`).
+**No original game content is ever converted into `.uasset`s.** The only assets committed to
+`Content/` are hand-authored, game-agnostic scaffolding (master materials, input configs,
+empty maps).
+
+Unreal is the committed implementation. The Godot project (`E:\dev\elysium`) was the first
+attempt and is now a **read-only reference**: no further work lands there. It is consulted for
+proven designs and exact data formats until each system it covers is superseded here, then it
+falls away entirely.
 
 The plan has two tracks that run in parallel:
 
@@ -18,30 +24,35 @@ The plan has two tracks that run in parallel:
 
 ## Core principles
 
-1. **Two clean halves** (same as `E:\dev\elysium`):
-   - **Offline**: the Python decoders in `E:\dev\elysium\tools` decode VtMB's proprietary
+1. **Two clean halves**:
+   - **Offline**: the Python decoders in this repo's `tools/` decode VtMB's proprietary
      formats (BSP v17, MDL v2531, TTH/TTZ, VPK, VMT, .fnt, .res) into portable intermediates
-     under `E:\dev\elysium\tools\out\<map>\` — OBJ+MTL+PNG/DDS, glTF `.glb`, and plain-text
-     sidecars. `tools\bsp_to_scene.py` is the exporter; `tools\export_all.py` batches it.
+     under `tools/out/<map>/` (gitignored — regenerable from the user's install) — OBJ+MTL+
+     PNG/DDS, glTF `.glb`, and plain-text sidecars. `tools/bsp_to_scene.py` is the exporter;
+     `tools/export_all.py` batches it.
    - **Runtime**: the C++ module `ElysiumUE` loads those intermediates from disk at
      map-load time and builds engine objects in code. No import step, no bake, no
      editor involvement. Python is **never run at runtime** — the seam between the
      halves is purely file-based.
 2. **The Unreal editor is never in the content loop.** Editor Python exists only for
    offline scaffolding (`make_boot_map.py`).
-3. **The intermediates are shared, not forked.** `tools/out` stays the single content root
-   for both engines; decoder fixes and new sidecar formats land once, in
-   `E:\dev\elysium\tools`, and both runtimes consume them.
+3. **The pipeline lives in this repo.** `tools/` is the single home for the decoders; fixes
+   and new sidecar formats land here. It is not forked from Godot — it is moved here, the
+   Godot copy retired. The intermediates stay engine-neutral so the format work is not
+   Unreal-specific, but there is only one consumer now.
 4. **Bring-your-own-game holds.** Nothing game-sourced is committed to this repo. This is
    the load-bearing legal posture — prior community rebuilds died to a C&D, not to
    technical failure.
 5. **Prove everything on `sp_tutorial_1`** (1,868 entities, 88 classnames — VtMB's own
    vertical slice exercising every system), then scale horizontally across the ~100 maps.
-6. **Reference documentation lives in the Godot repo.** `E:\dev\elysium\docs\` holds the
-   deep RE work this plan builds on: `entity_io.md` (I/O surface), `python_bridge.md`
-   (scripting), `animation_and_movers.md` (skeletal + doors/buttons/elevators),
-   `game_runtime.md` (main loop, RPG data, dialogue format), `audio_pipeline.md`,
-   `source_movement.md`, `level_transitions.md`. Do not re-derive what those already state.
+6. **Reference documentation lives in this repo's `docs/`.** The deep RE work this plan
+   builds on is here: `entity_io.md` (I/O surface), `python_bridge.md` (scripting),
+   `animation_and_movers.md` (skeletal + doors/buttons/elevators), `game_runtime.md` (main
+   loop, RPG data, dialogue format), `audio_pipeline.md`, `source_movement.md`, `lighting.md`,
+   `mdl_v2531.md`, `entity_visuals.md`, `color_gamma.md`, `level_transitions.md`,
+   `m0_menu_build.md`, and `recovered/dice-system.md`. Do not re-derive what those already
+   state. Un-ported system *source* (for class-for-class porting) remains in the read-only
+   Godot repo at `E:\dev\elysium\game\src`.
 
 ## Current implementation state (M0 — verified)
 
@@ -68,11 +79,15 @@ The pipeline emits **two spaces**, and the runtime owns both conversions:
 - **OBJ geometry** (world, sky, props, decals) is Godot space (metres, Y-up):
   Unreal position = `(gx, gz, gy) * 100`, winding reversed
   (`ElysiumObjModel.cpp`).
-- **Sidecar coordinates** (`.spawn`, `.sky`, `.props`, `.lights` origins) are Source
-  space (inches, Z-up): Unreal position = `(sx, -sy, sz) * 2.54`.
-- **`.ents` origins and hulls** are Godot metres (same conversion as OBJ).
-- Keep exactly two named helpers — `GodotToUE()` and `SourceToUE()` — and never
-  inline the math. Every sidecar reader states which space its file is in.
+- **Source-space sidecars** (`.spawn`, `.sky`, `.props` origins) are inches, Z-up:
+  Unreal position = `(sx, -sy, sz) * 2.54`.
+- **Godot-space sidecars** (`.lights`, `.sprites` origins, `.ents` origins, `.hulls`,
+  `.dispcol`) are metres, Y-up — same conversion as OBJ. `.lights`/`.sprites` are written
+  by the exporter with `source_to_godot`; the runtime converts them exactly like OBJ verts.
+- **Directions** (`.lights` beam vectors) use the same Y/Z axis swap **without** the ×100
+  metric scale, then re-normalise.
+- Keep named helpers — `GodotToUE()`, `SourceToUE()`, and a `GodotDirToUE()` for direction
+  vectors — and never inline the math. Every sidecar reader states which space its file is in.
 
 ## Sidecar contracts (what the runtime consumes)
 
@@ -145,7 +160,7 @@ These encode shading logic, not game content — they belong in `Content/` perma
 
 Everything in this track consumes data that is **already exported** (`.ents` carries the
 complete entity/I/O surface) but has no runtime consumer in either engine. Design targets
-come from the decompile-backed docs in `E:\dev\elysium\docs\`, not from Godot code.
+come from the decompile-backed docs in `docs/`, not from Godot code.
 
 ## B1. Entity substrate
 
@@ -340,7 +355,29 @@ toolkit table.
 - **C++ hot path**: parsing is already fast enough with the `.emc` cook-cache; if
   load time ever matters again, extend the cache — never reintroduce `.uasset` baking.
 
-## Pipeline additions (land in `E:\dev\elysium\tools`, shared with Godot)
+## Pipeline & tooling
+
+**Tooling migration — do first (M1 prerequisite).** Move the decode/export pipeline from the
+Godot repo into this repo's `tools/`. It is engine-neutral Python; the only "Godot" in it is the
+`source_to_godot` coordinate convention baked into the intermediates, which the runtime already
+converts. Concretely:
+
+- **Copy** the core pipeline: `bsp.py`, `bsp_to_scene.py`, `export_all.py`, `mdl.py`,
+  `mdl_gltf.py`, `mdl_skel.py`, `vmt.py`, `vpk.py`, `kv.py`, `fnt.py`, `install.py`,
+  `tex_to_png.py`, `retex_dds.py`, `lightmap.py`, `build_grade_lut.py`, `menu_extract.py`,
+  `make_testmap.py`, `sky_upscale.py`, and `tools/CLAUDE.md`. Bring the `probe_*.py` / `*_probe.py`
+  investigation scripts along too (small, and useful for format spelunking).
+- **Exclude**: the bundled Godot engine (`godot/`), the Ghidra installs (`ghidra*/`), the `re/`
+  RE toolchain (Crowbar/TemplePlus/VAMPTools — stays in the read-only Godot repo as the RE
+  archive), ML upscaler weights (`models/*.pth`, ~hundreds of MB — fetch on demand), `.venv/`,
+  `__pycache__/`, and generated `out/` content.
+- **Add** `tools/requirements.txt`: `Pillow`, `numpy`, `matplotlib` (core); `torch`,
+  `torchvision`, `spandrel`, `einops`, `safetensors` optional, only for the ESRGAN upscalers.
+- `.gitignore` `tools/out/`, `tools/.venv/`, `tools/__pycache__/`, `tools/models/`.
+- Then repoint `FElysiumContentPaths::Root()` from `E:/dev/elysium/tools/out` to the in-repo
+  `tools/out`, and regenerate `sp_tutorial_1` there to verify parity.
+
+New sidecar formats and decoder fixes land in `tools/` from now on:
 
 1. Export models referenced by `.ents` entities (`prop_dynamic`/`prop_physics` model
    keyvalues) — static-lump props only today.
@@ -358,7 +395,8 @@ Vertical slice: **play `sp_tutorial_1` start to finish, then walk into
 
 - **M0 — first pixels** *(done, verified)*: world + skybox rendering, DDS/PNG textures,
   trimesh collision, `.emc` cache, free-fly pawn, map switching, debug HUD.
-- **M1 — world parity**: `.hulls`/`.dispcol` collision, Source movement component,
+- **M1 — world parity**: pipeline migrated into this repo's `tools/` (prerequisite; see
+  Pipeline & tooling), then `.hulls`/`.dispcol` collision, Source movement component,
   light rig + lightstyles, `.env` sky/fog, `.cube` LUT, master-material set
   (alpha modes, WVT, bump/envmap), texture prewarm off the game thread.
 - **M2 — dressing parity**: props via ISM (+ convex collision), decals, Single Layer
@@ -391,8 +429,10 @@ one part with no Godot reference to fall back on — de-risk it earliest.
 - Enabled plugins: `ProceduralMeshComponent` (runtime), `PythonScriptPlugin` (offline
   scaffolding only). Module deps: ProceduralMeshComponent, ImageWrapper, ImageCore,
   RenderCore, RHI, EnhancedInput, Slate, SlateCore.
-- Content root: dev builds read `E:/dev/elysium/tools/out` (`-ElysiumMap=` selects the
-  boot map). Packaged builds later read a `content/` folder next to the executable,
-  populated by the user running the pipeline against their own install.
+- Content root: dev builds read `tools/out` in this repo (gitignored), generated by the
+  in-repo pipeline (`-ElysiumMap=` selects the boot map). `FElysiumContentPaths::Root()`
+  still points at the Godot project's `tools/out` until the tooling migration above repoints
+  it. Packaged builds later read a `content/` folder next to the executable, populated by the
+  user running the pipeline against their own install.
 - Map lifecycle details: `docs/map-architecture.md` (note: its async-travel state
   machine and Slate console are design targets, not current code).

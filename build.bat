@@ -3,6 +3,7 @@ REM Compile the Elysium editor target (ElysiumUEEditor, Win64 Development) via U
 REM   build.bat            -> incremental build (default; only recompiles what changed)
 REM   build.bat rebuild    -> full clean + build (forces every module to recompile)
 REM   build.bat clean      -> delete build products only (no compile)
+REM   build.bat analyze    -> static-analysis pass (MSVC analyzer; no extra install)
 REM   build.bat <args...>  -> pass extra flags straight through to UnrealBuildTool
 REM After it succeeds, launch with editor.bat / play.bat, or use Live Coding (Ctrl+Alt+F11)
 REM inside the editor for the fastest inner loop.
@@ -29,6 +30,8 @@ if /I "%~1"=="rebuild" (
     "%REBUILD%" %TARGET% %PLATFORM% %CONFIG% -Project="%PROJECT%" -WaitMutex
 ) else if /I "%~1"=="clean" (
     "%CLEAN%" %TARGET% %PLATFORM% %CONFIG% -Project="%PROJECT%" -WaitMutex
+) else if /I "%~1"=="analyze" (
+    "%BUILD%" %TARGET% %PLATFORM% %CONFIG% -Project="%PROJECT%" -WaitMutex -StaticAnalyzer=Default
 ) else (
     "%BUILD%" %TARGET% %PLATFORM% %CONFIG% -Project="%PROJECT%" -WaitMutex %*
 )

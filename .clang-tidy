@@ -1,0 +1,24 @@
+# Conservative, Unreal-friendly clang-tidy set: real bug/perf smells only, with the
+# checks that fight UE's macro-heavy reflection code switched off so the signal stays high.
+# Run from an IDE (Rider/VS surface these inline) or via clang-tidy over Private/*.cpp.
+Checks: >
+  -*,
+  bugprone-*,
+  performance-*,
+  modernize-use-nullptr,
+  modernize-use-override,
+  modernize-use-equals-default,
+  readability-non-const-parameter,
+  readability-redundant-member-init,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  -bugprone-reserved-identifier,
+  -bugprone-forwarding-reference-overload,
+  -bugprone-macro-parentheses,
+  -performance-no-int-to-ptr,
+  -performance-avoid-endl
+
+WarningsAsErrors: ''
+# Lint our own headers only, never the engine's.
+HeaderFilterRegex: 'Source/ElysiumUE/.*'
+FormatStyle: file

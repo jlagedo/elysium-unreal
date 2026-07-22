@@ -1,0 +1,377 @@
+# M0 — Full-Fidelity Menu Rebuild
+
+**Goal:** rebuild the VtMB main menu + in-game pause menu as a faithful port of the
+original Valve **VGUI2** UI — real fonts, real scheme, real `.res` layouts, real 3D
+particle scene — not a hand-composited look-alike. Actions may be stubbed
+(settings/load/save unimplemented); the target is that **look, structure, and
+behavior** are exact. Current state against that target is the ledger in §0.
+
+This document is self-contained: it captures the full source exploration + the
+`GameUI.dll` decompile results, and specifies what to build. Companion: the overall
+plan is `docs/rebuild-strategy.md` (this is the drill-down for its M0 milestone).
+Decompile tooling + dumps live under `tools/ghidra/` (`README.md`).
+
+**Bring-your-own:** every byte below comes from the user's own install. The pipeline
+(`tools/menu_extract.py`) extracts to `game/content/ui/` at build time; nothing
+game-sourced is committed. The repo keeps Elysium branding.
+
+**Locked decisions (2026-07-16):** runtime `.fnt` fonts · a general `.res`→`Control`
+loader rendering every dialog (inert where unbacked) · geometry informed by a
+`GameUI.dll` decompile · VtMB's VGUI logical coordinate space (proportional).
+
+---
+
+## 0. Implementation status
+
+The menu boots (`MainMenu` → `MenuBackground3D` + title + `GameMenuPanel`, theme
+music; the pause overlay reuses `GameMenuPanel`). Done / partial / missing, as facts:
+
+**Done — main-menu shell**
+- **`VguiScheme`** parses `trackerscheme.res` Colors, the Fonts alias table (per-
+  resolution tiers), and `BaseSettings/Menu/TextInset`. The **`Borders` block is not
+  parsed.**
+- **`VguiFont` / `VguiText`** render a `.fnt` + `-pageN` atlas at runtime, tinted by
+  `modulate`, cached by stem. Extracted families: `vamp_mainfont` (tiers 14–190),
+  `vamp_dialog_base`, `vamp_small`, `tahoma`, `marlett`.
+- **`GameMenuPanel`** — the item list, ported from `CVMainMenu`: `Vamp_MainFont`
+  tiered atlas drawn 1:1, Blood color `(168,0,0,192)` = the measured `(126,0,0)`,
+  engine box-sizing (121px pitch at 1440), centred column, instant no-op hover,
+  `SaveGame` in-game gate, main + pause item sets. Matches the reference item capture.
+- **Title art** — `vtm_title` drawn as one image, centred, stretch-scaled (§ MainMenu).
+- **`MenuBackground3D` + `VguiParticles`** — full CPU port of the particle-script
+  format (tracks, per-keyframe random ranges, even-spread timing, additive
+  premultiplied gamma-space compositing). MM_Skybox cubemap sky in a 3D SubViewport;
+  particles CPU-simulated and drawn as one `MultiMeshInstance2D` per type. Every
+  emitter runs: fire, clouds, cels, and all 17 clan-logo spawns (15 clans +
+  `bloodlinestemp` BLOODLINES wordmark + `vtm_glowtemp` red glow).
+- **Theme music**; neutral fallback menu when `content/ui/` is absent.
+- **Wired actions:** New Game → difficulty dialog → tutorial; Quit; pause Continue +
+  Main Menu.
+
+**Partial — backdrop fidelity is unverified**
+- Only the **fire band** is quantitatively matched to a reference (the `G/R`/`B/R`/
+  `R`/clip stats in `CLAUDE.md`). The **cloud, cel, and clan-logo layers are built
+  from the script data and never matched against a capture of the running game.** The
+  flying logos render sparse and faint — ~34 particles across the 17 spawns (~2 live
+  each, ~5 on screen), peak brightness `10~150/255` — and their size, brightness,
+  density, and motion are unconfirmed against ground truth. A pinned capture (or short
+  recording) of the real menu at a known yaw is needed to tune these as fire was.
+
+**Missing — dialogs (`VguiResDialog` is a placeholder, not a VGUI port)**
+- No VGUI **borders/bevels**: the scheme's `Borders` block is ignored; frame and
+  controls use flat `StyleBoxFlat`.
+- No **Frame title bar** (icon `Vamp_Icon1`, title text, close button).
+- **Checkboxes / radio buttons** are flat gray squares — no bevel, no selected state,
+  no **Marlett** check glyph, radio and check not distinguished.
+- **Buttons** are flat boxes with a hover text-color swap only — no bevel, armed/
+  depressed state, or default-button highlight (`BorderSelection`).
+- **Sliders, combo boxes, list panels, text-entry** collapse to one gray placeholder
+  `Panel` each.
+- The **Options** screen is a **PropertySheet** (tabbed) whose `optionssub*.res`
+  panels are not loaded — it shows a bare frame + Close button.
+- Font is hardcoded `Dominican_640`, scaled by transform, not chosen per control
+  class at the resolution tier.
+
+**Missing — other**
+- **Menu SFX**: `mm_cursor_over.wav` / `mm_cursor_left.wav` (hover) and the select
+  click are neither extracted nor played; the menu is silent apart from music.
+- **Loading screen** on New Game → tutorial.
+- **Dialog fade-in** (the scheme overrides dialog alpha to fade in/out).
+- **Custom cursor.**
+
+---
+
+## 1. Architecture
+
+Port the VGUI runtime into Godot as data-driven layers, mirroring the original:
+
+```
+trackerscheme.res ─► VguiScheme   (colors, font aliases, borders)
+materials/fonts/*.fnt ─► VguiFont (runtime bitmap font)   ─┐
+resource/*.res ─► VguiResLoader (Control tree, scheme-skinned) ─► screens
+gamemenu.res  ─► GameMenuPanel   (item list + commands; decompiled behavior)
+mainmenuparticles.txt ─► MenuBackground3D (SubViewport: camera + skybox + particles)
+GameManager (autoload) routes Boot ► Main Menu ► In-Game ► Pause
+```
+
+The 3D particle scene renders in a `SubViewport` behind the VGUI panels; the pause
+menu reuses the same scene + skin with a different item set.
+
+---
+
+## 2. Source data inventory (all in the VPKs unless noted)
+
+| Purpose | Path |
+|---|---|
+| **Scheme** (the loaded skin) | `resource/trackerscheme.res` |
+| Menu item list + commands | `resource/gamemenu.res` |
+| Localized strings (`#GameUI_*`, UCS-2) | `resource/gameui_english.txt` |
+| Dialog layouts | `resource/{newgamedialog,loadgamedialog,savegamedialog,dialogoptionsingame,optionssub*,confirmdialog,notifydialog,textentrydialog,contentcontroldialog}.res` |
+| Fonts (bitmap) | `materials/fonts/<face>_<size>_<weight>_<flags>.fnt` + `-pageN` (`.tth/.ttz`) |
+| Title art | `materials/interface/mainmenu/vtm_title.*`, `particles/bloodlines.tga` |
+| Particle scene | `resource/mainmenuparticles.txt`, `particles/m_*.txt` |
+| Particle sprites | `particles/{fire-sprite,starpresence,cloud,bloodcel,bloodcel2,mm_<clan>}.*` |
+| 3D-skybox backdrop | `materials/skybox/mm_skybox{ft,bk,up,dn,lf,rt}.tth/.ttz` |
+| Theme music (**loose file**, not in VPKs) | `<install>/Vampire/sound/music/vampire_theme.mp3` |
+
+Not the scheme: `vampirescheme.res` (empty `Fonts`) and `vampirece2scheme.res` (binds
+TTF names Percolator/Dominican) are **not** loaded — `trackerscheme.res` is.
+
+---
+
+## 3. Fonts — runtime bitmap `.fnt`
+
+VtMB ships **Source bitmap-font atlases**, not TTFs. `<face>_<size>_<weight>_<flags>.fnt`
++ `-pageN` atlases; glyphs live in the atlas **alpha** channel. Decoder exists:
+`tools/fnt.py` — header `u32[9]`; `@36` 256-byte char→glyph map; `@292` glyphCount ×
+44-byte entries (advance `@0`, leftBearing `@18`, −height `@20`, page `@24`, width
+`@26`, 4×f32 UV `@28`). **Build:** wrap `fnt.py` output in a Godot runtime bitmap-font
+adapter so any string renders at exact metrics (replaces pre-baked label PNGs).
+
+Face inventory (present as `.fnt`): `vamp_mainfont` (menu + title labels; sizes
+14,16,20,21,26,27,32,35,40,43,44,48,54,55,71,88,111), `vamp_plain`, `vamp_small`,
+`vamp_dialog_base` (+ discipline variants), `vamp_ammo`, `vamp_lcd`,
+`vamp_handwriting1`, `tahoma`, `times_new_roman`, `trebuchet_ms`, `troika_games`
+(studio logo), `marlett` (symbols). **Menu label font = `Vamp_MainFont` weight 1000.**
+
+---
+
+## 4. Scheme — `trackerscheme.res`
+
+Resolution-tiered (base + `_640` families, 640×480 logical). Parse `Colors`,
+`BaseSettings`, `Fonts` (aliases), `Borders`.
+
+**Colors (verbatim, RGBA 0–255):**
+
+| Key | RGBA | Use |
+|---|---|---|
+| `BloodNormal` | `168 9 9 255` | menu label **idle** |
+| `BloodBright` | `192 15 15 255` | menu label **armed / hover** |
+| `BloodDim` | `128 4 4 128` | menu label **disabled** |
+| `DialogBackground` | `57 37 27 255` | load/save/etc dialog fill |
+| `Dlg_FillBkg` | `0 0 0 175` | dark fade behind dialogs |
+| `ControlBG` / `ControlDarkBG` | `57 47 37` / `40 30 21` | control / scrollbar bg |
+| `BaseText` / `BrightBaseText` / `DimBaseText` | `216 222 211` / `255 255 255` / `150 159 142` | body text |
+| `BorderBright` / `BorderDark` | `145 128 128` / `40 30 21` | control bevels |
+
+**Font aliases (subset):** `MainMenu_640` → Vamp_MainFont 44 · `PercolatorMedium/Small`
+→ Vamp_MainFont 35/26 · `Copperplate` → Vamp_Small 18 · `Dominican` → Vamp_Plain 22
+(Vamp_Dialog_Base 16 @640) · `Dlg_Base` + discipline fonts → Vamp_Dialog_Base ·
+`Default*` → Tahoma · `Marlett` → symbol font. Borders are multi-inset color rules
+(`BaseBorder`, `InfoWinBorder`, `ButtonDepressedBorder2`, `TabActiveBorder`, …).
+
+---
+
+## 5. Menu definition + strings
+
+`resource/gamemenu.res` (item → command):
+
+| Item | Command | M0 wiring |
+|---|---|---|
+| New Game | `OpenNewGameDialog` | → New Game difficulty dialog → tutorial |
+| Load Game | `OpenLoadGameDialog` | inert (renders) |
+| Save Game (name `SaveGame`) | `OpenSaveGameDialog` | inert; **gated by in-game** |
+| Multiplayer (SubMenu) | Find Servers / Customize / Create Server | **suppressed** (see §8) |
+| Options | `OpenOptionsDialog` | inert (renders) |
+| Quit | `Quit` | → quit |
+
+Labels from `gameui_english.txt` (UCS-2): "New Game", "Load Game", "Save Game",
+"Multiplayer", "Options", "Quit" (leading `&` = keyboard mnemonic, stripped at render).
+
+**Pause menu** = the same menu; the decompile shows the only difference is `SaveGame`
+being enabled in-game (§8). The pause item set observed in-game is Continue / Reload /
+Load Game / Save Game / Options / Main Menu.
+
+---
+
+## 6. Dialogs — VGUI `.res` loader (640 space)
+
+Each screen is a KeyValues `.res` control tree: `ControlName` (Frame, Label, Button,
+RadioButton, CheckButton, Slider, ComboBox, ListPanel/PropertySheet, BuildModeDialog)
+with `xpos/ypos/wide/tall`, `labelText` (→ `#GameUI_*`), `textAlignment`, `command`,
+`default`, `tabPosition`. Build `VguiResLoader`: `.res` → a Godot `Control` subtree
+positioned in VtMB's logical space, skinned from the scheme.
+
+**Coordinate model:** logical VGUI space with per-panel proportional scaling as
+authored. Font base is ~640; several dialogs use larger absolute panels
+(e.g. `newgamedialog` 372×260 @ (390,270); `dialogoptionsingame` 824×736). The loader
+reads each panel's own `proportional` flag + coordinates, so it is faithful regardless;
+the 4:3 VGUI panels center over the full-window 3D background.
+
+Dialogs to render (all faithful; inert until backed): `newgamedialog` (difficulty:
+Training / Easy / Medium / Hard + Play / Cancel), `loadgamedialog`, `savegamedialog`,
+`dialogoptionsingame` + `optionssub{video,audio,mouse,keyboard,gameplay,voice,visual,
+advanced}`, `confirmdialog`, `notifydialog`, `textentrydialog`, `contentcontroldialog`.
+
+---
+
+## 7. Decompile findings — `GameUI.dll` (resolved)
+
+Ghidra 12.1.2; MSVC RTTI recovered the C++ class names. Imagebase `0x10000000`.
+Tooling + dumps under `tools/ghidra/` (scripts committed; DB + dumps gitignored).
+
+**Build path.** `CBasePanel::CreateGameMenu` (`FUN_10003ef0`) loads
+`Resource/GameMenu.res` via KeyValues → recursive loader (`FUN_10004150`; reads
+`label`/`command`/`name`/`SubMenu`) → `CGameMenu::AddMenuItem`; hardcoded fallback if
+the `.res` fails. Commands dispatch through `RunMenuCommand` (`FUN_10004250`).
+`CBasePanel` is a **singleton** (`DAT_1006c184`); menu ptr at `+0xfc`.
+
+**Containers.** `CGameMenu` (custom `vgui2::Menu` subclass, 0x90 bytes, vtable
+`0x10058ddc`, ctor `FUN_10033910`): `CUtlVector` of items (count `+0x64`, array
+`+0x6c`), armed index `+0x80`, embedded `MenuScrollBar` `+0x70`, min-width `+0x60=99`.
+`AddMenuItem` (slot 121, `FUN_10033d90`) `new`s a **`CGameMenuButton`** (0x104=260
+bytes, vtable `0x1005a7ec`, ctor `FUN_1003df70`→`FUN_1003e010`).
+
+**Item style (pinned).** `CGameMenuButton` init sets content alignment **3 = west/left**,
+text inset **(6, 0)** (= scheme `Menu."TextInset" "6"`), font `Vamp_MainFont @44`,
+colors the scheme `Blood*`. Items auto-size to their label.
+
+**Layout & animation (resolved — the key result).**
+- **No slide/fade animation.** `CBasePanel` overrides only 3 vtable slots: [20] dtor,
+  [78] `RunMenuCommand`, [101] `OnThink`. It does **not** override `PerformLayout`.
+- `CBasePanel::OnThink` (`FUN_100040f0`) does one thing: `menu.FindChildByName("SaveGame")
+  .SetEnabled(engine->IsInGame)` — the entire main-menu-vs-pause difference.
+- **No hardcoded x/y/w/h** in any menu class: stock vgui2 vertical auto-layout, spacing
+  from font metrics. The on-screen anchor is **matched visually** (no constant exists).
+- `+0x100..+0x11c` (init `-1`) are engine **interface pointers**, not anim timers.
+- Motion = the **particle scene** + **instant** idle→armed hover-color swap (no
+  `AnimationController` fade in the menu path).
+
+**Address map:** `10003ef0` CreateGameMenu · `10004150` KV loader · `10004250`
+RunMenuCommand · `100040f0` OnThink · `10033910` CGameMenu ctor · `10033d90`
+AddMenuItem · `1003df70`/`1003e010` CGameMenuButton ctor+init · vtables `10058ddc`
+CGameMenu / `1005a7ec` CGameMenuButton / `1004ff3c` CBasePanel.
+
+**Net:** a static, west-aligned `Vamp_MainFont@44` list in Blood colors with instant
+hover, over the live particle scene — no animation to reproduce, anchor matched to
+reference.
+
+---
+
+## 8. In-game vs. main menu
+
+Same `CGameMenu`; `CBasePanel::OnThink` gates `SaveGame` by in-game state. Multiplayer
+is present in `gamemenu.res` but suppressed by the shipped game. Reproduce what the
+game shows: main menu = New Game / Load Game / Save Game(disabled) / Options / Quit;
+pause = Continue / Reload / Load Game / Save Game / Options / Main Menu.
+
+---
+
+## 9. Animated background — the particle scene
+
+`resource/mainmenuparticles.txt` drives a **3D scene**: camera `fov 50`, near 2 /
+far 4096, `default_skybox MM_Skybox`, `music Vampire_Theme.mp3`. Three emitter groups
+at origin `[0,0,-30]`, spawning in a cylinder (θ 0–360, radius 75):
+
+- `M_Clouds_Emmiter`: `M_Clouds` (cloud, drifts down, z 57), `M_Fire` (fire-sprite,
+  rate 400, z −5), `M_Fire2` (starpresence sparks, z 0).
+- `M_Clans_Emmiter`: `M_Bru..M_Tre` (MM_<clan> symbols, z 50, `theta_speed −2` orbit).
+- `M_Cels_Emmiter`: `M_Cels`/`M_Cels2` (BloodCel/BloodCel2, z 45–55).
+
+Each child (`particles/m_*.txt`) is a mini-language: lifetime, sprite, keyframed
+size/rotation/velocity/θ-speed, per-channel RGB + brightness/alpha keyframes, `mask 0`
+= additive.
+
+`MenuBackground3D` renders this on the **CPU as 2D**, not as a `GPUParticles3D` scene.
+The MM_Skybox cubemap sky draws in a 3D `SubViewport` (a cubemap needs a camera to
+sample against), but every particle is simulated and perspective-projected on the CPU
+— the script's per-keyframe random ranges are beyond any `ParticleProcessMaterial` —
+and drawn as one `MultiMeshInstance2D` per type through `shaders/menu_particle.gdshader`.
+2D is required for fidelity, not an optimisation: the 2004 engine summed sRGB-encoded
+values into an 8-bit framebuffer, which Godot's 2D canvas reproduces and its linear-HDR
+3D path does not (it reshapes every additive overlap). The camera sits at the origin
+looking down Source +X and yaws at `camera_rotation` deg/s; emitters sit at `[0,0,-30]`
+and spawn on a radius-75 ring, so only ~14% of each ring is on screen at once. Every
+menu particle is `mask 0` (additive, order-independent). Full detail lives in `CLAUDE.md`
+("VtMB particle scripts") and `Ui/Vgui/{MenuBackground3D,VguiParticles}.cs`.
+
+---
+
+## 10. Runtime architecture (`game/src/`)
+
+New (`Ui/`):
+- **`VguiScheme`** — parse `trackerscheme.res` → colors / font aliases / borders.
+- **`VguiFont`** — build a runtime Godot bitmap font from a `.fnt` + `-pageN` atlas.
+- **`VguiResLoader`** — `.res` KeyValues → skinned `Control` tree in logical space.
+- **`GameMenuPanel`** — render `gamemenu.res` items in Vamp_MainFont@44 + Blood colors,
+  west-aligned, 6px inset, instant hover swap; SaveGame gate; main + pause item sets.
+- **`MenuBackground3D`** / **`VguiParticles`** — the backdrop: MM_Skybox cubemap in a
+  3D `SubViewport`, particles CPU-simulated and drawn as 2D `MultiMeshInstance2D` (§9).
+
+Existing to keep/adapt: `UiContent`/`MenuManifest` (content loading — extend for
+scheme/`.res`/fonts), `GameManager` (already routes Boot→Menu→InGame→Pause; mount the
+panels + background under Menu and Pause states), `MainMenu`, `DevConsole`.
+
+Retire: the pre-baked label-PNG path, the 2D `GpuParticles2D` background, and the
+sampled color constants (`150 18 18`) — superseded by the real font/scheme/scene.
+
+---
+
+## 11. Pipeline — `tools/menu_extract.py`
+
+Writes `game/content/ui/` (bring-your-own; gitignored), reusing
+`tools/{vpk,tex_to_png,vmt,kv,fnt,install}.py`:
+- `resource/` — `trackerscheme.res`, `gamemenu.res`, every dialog `.res`.
+- `fonts/` — the `.fnt` families + `-pageN` atlases (`vamp_mainfont` tiers,
+  `vamp_dialog_base`, `vamp_small`, `tahoma`, `marlett`).
+- `skybox/` — the 6 `MM_Skybox` faces.
+- `sprites/` — the particle sprites (`fire-sprite`, `starpresence`, `cloud`,
+  `bloodcel`, `bloodcel2`, the 15 `mm_<clan>`, `bloodlines2`, `vtm_glow2`).
+- `particles/` — `mainmenuparticles.txt` and the emitter/particle `m_*.txt` graph.
+- `strings.json` (`#GameUI_*` from `gameui_english.txt`), `title.png`, `theme.mp3`,
+  `manifest.json`.
+
+**Not extracted:** the menu SFX (`mm_cursor_over.wav`, `mm_cursor_left.wav`, the select
+click) — so the menu is silent apart from music.
+
+---
+
+## 12. Build order
+
+1. **Pipeline** — extend `menu_extract.py` (§11): scheme, `.res`, `.fnt` families,
+   skybox faces, sprites, strings.
+2. **`VguiScheme` + `VguiFont`** — labels render in the real face at real metrics.
+3. **`VguiResLoader`** — render **New Game** dialog end-to-end (vertical slice), then
+   the rest of the `.res` tree (all inert).
+4. **`GameMenuPanel`** — the item list with decompiled behavior (west align, inset 6,
+   Blood colors, instant hover, SaveGame gate); main + pause item sets.
+5. **`MenuBackground3D`** — the `SubViewport` particle scene; replace the 2D background.
+6. **Wire live actions** — New Game→tutorial, Quit, pause Continue + Main Menu; finalize
+   the menu on-screen anchor visually against reference.
+
+---
+
+## 13. Wired vs. inert in M0
+
+- **Wired:** New Game (→ tutorial), Quit, pause Continue, pause Main Menu.
+- **Rendered but inert:** Load Game, Save Game, all Options panels, difficulty
+  selection, Reload — these open their `.res` but render as **placeholders**, not the
+  real VGUI look (see §0, Missing). Multiplayer is suppressed. Making them live *and*
+  faithful is later work (save/load + options backing, plus the VGUI renderer).
+
+---
+
+## 14. Deliverable / acceptance
+
+Boot to the game's real menu — Vamp_MainFont@44 Blood-colored items, west-aligned,
+instant hover — over the live 3D particle scene with theme music; **New Game** opens
+the faithful difficulty dialog and starts the tutorial; **Esc** in-game opens the
+pause menu (same skin, Continue/Main Menu wired, SaveGame gated); every other dialog
+renders faithfully from its `.res` (inert); Quit exits. Nothing game-sourced committed.
+*Retires the "viewer vs. game" gap.*
+
+---
+
+## 15. Open items
+
+The authoritative done/missing ledger is §0. The work remaining for a faithful menu:
+
+- **Dialogs** — replace the `VguiResDialog` placeholder with a real scheme-driven VGUI
+  renderer: `Borders` bevels, a Frame title bar, Marlett-marked check/radio buttons,
+  beveled button states, Slider/ComboBox/ListPanel/TextEntry widgets, the Options
+  PropertySheet (its `optionssub*.res` tabs), and per-resolution-tier fonts.
+- **Backdrop tuning** — match the cloud, cel, and clan-logo layers against a pinned
+  capture of the running game; today only the fire band is measured. The flying logos
+  in particular are unverified for size/brightness/density/motion.
+- **Menu SFX** — extract and play the hover (`mm_cursor_over`/`_left`) and select sounds.
+- **Loading screen** (New Game → tutorial), **dialog fade-in**, **custom cursor**.

@@ -1,0 +1,27 @@
+# Editor-agnostic formatting rules. Honoured by Visual Studio, Rider, and VS Code.
+# clang-format owns C++ layout; this covers the rest (line endings, whitespace, non-C++).
+root = true
+
+[*]
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Unreal C++ and the C# build files: tabs, width 4 (Epic Coding Standard).
+[*.{h,hpp,inl,c,cpp,cs}]
+indent_style = tab
+indent_size = 4
+tab_width = 4
+
+# Offline pipeline tooling.
+[*.py]
+indent_style = space
+indent_size = 4
+
+# Data / docs: two-space, and keep trailing whitespace in Markdown (hard line breaks).
+[*.{json,yml,yaml,md,ini,uproject,uplugin}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false

@@ -14,7 +14,7 @@ Saved/
 *.VC.opendb
 
 # Visual Studio / Rider project files (generated)
-.vsconfig
+# .vsconfig is committed on purpose: it pins the VS components a fresh checkout needs.
 *.sln
 *.slnx
 *.suo
@@ -26,6 +26,12 @@ Saved/
 
 # Compiled source
 *.pyc
+
+# Offline pipeline: generated content + local env (regenerable from the user's install)
+tools/out/
+tools/.venv/
+tools/__pycache__/
+tools/models/
 
 # Precompiled headers / object files
 *.pch
