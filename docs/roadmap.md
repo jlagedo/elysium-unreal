@@ -106,19 +106,28 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
   1,591 Python** on `Vampire/maps` today (the 16,214/1,621 figure was a stale, unreproducible
   snapshot). Pinned across `entity_io.md`, `python_bridge.md`, `rebuild-strategy.md`,
   `tools/CLAUDE.md`; also recorded the patch-set counts (108 maps → 24,081 outputs).
-- [ ] **0.7 Repo hygiene** — keep `tools/ghidra*/` and `tools/re/` out of the repo
-  (gitignore; they stay local RE references). *Deps:* none.
-- [ ] **0.8 Re-base `entity_io.md` on the patch (engine-loaded) map set** *(RE, small)* — the
-  survey and every table in `entity_io.md` are built on retail `Vampire/maps`, but the runtime
-  resolves maps **patch-first** (`install.map_path`), so the shipped-runtime shape is ~50%
-  heavier: surveying `Unofficial_Patch/maps` (108 maps) gives **71,096 entities / 326 classnames
-  / 24,081 outputs / 6,956 Python** (101 retail names resolved patch-first: 68,430 / 324 / 23,357
-  / 6,591). Re-run `ent_survey.py` against the engine-loaded set and re-base the histograms
-  (classname counts, inputs-by-class, use_icon/StartHidden tables, field-6 breakdown) onto it;
-  keep the retail baseline as a labelled comparison. Decide whether to teach `ent_survey.py` to
-  resolve patch-first by default (via `install.map_path`) rather than glob one dir. *Acceptance:*
-  `entity_io.md` tables reflect the maps the runtime actually loads. *Deps:* none. (Follow-up
-  from 0.6.)
+- [x] **0.7 Repo hygiene** — the entire `tools/ghidra*/` and `tools/re/` trees are now local-only
+  RE references. Untracked the 15 previously-committed hand-authored files (`git rm --cached`: the
+  9 `Dump*/EnableAIF.java` scripts + `run.ps1` + `README.md` + inner `.gitignore` under
+  `tools/ghidra/`; `dll_recon.py` + `ghidra_extract_mechanics.{java,py}` under `tools/re/`) — all
+  kept on disk. Replaced the selective ignore rules with two blanket globs (`tools/ghidra*/`,
+  `tools/re/`) and re-based the docs that called these "tracked/committed"
+  (`tools/CLAUDE.md`, `CLAUDE.md`, `rebuild-strategy.md`, `m0_menu_build.md`). *Deps:* none.
+- [x] **0.8 Re-base `entity_io.md` on the patch (engine-loaded) map set** *(RE, small)* — every
+  table in `entity_io.md` is now the **engine-loaded** set (`Unofficial_Patch/maps`, 108 maps):
+  **71,096 entities / 326 classnames / 24,081 outputs / 6,956 Python** (6,851 Python-only, 105
+  both); the retail set (63,861 / 299 / 16,125 / 1,591) is kept as a labelled comparison.
+  Established the patch `maps/` is a **strict superset** of retail — all 101 retail names
+  (shadowed by heavier patched versions) plus 7 patch-only maps (`hw_chateau_1`, `hw_warrens_2b`,
+  `la_bradbury_1`, `la_library_1`, `la_malkavian_3b`, `sm_coffee_1`, `sm_smoke_1`) — so globbing
+  the patch dir *is* the engine-loaded set (the per-name `map_path` resolution gives the 68,430
+  subset, which drops those 7). Rebased all histograms (classname counts, StartHidden, usable-set
+  incl. the patch-only `prop_doorknob-wesp`, inputs-by-class, field-6 breakdown, most-driven,
+  biggest sources — `events_world`/`events_player` jump into the top output sources), the
+  `sp_tutorial_1` `.ents` example (now 1868 ents / 185 brush / 466 hulls / 1028 outputs), and
+  propagated the 6,956 field-6 Python figure to `python_bridge.md` / `rebuild-strategy.md` /
+  `tools/CLAUDE.md`. **Decision:** `ent_survey.py` keeps the retail default (stable baseline) and
+  gains a `--patch` flag for the engine-loaded set; not defaulted patch-first. *Deps:* none.
 
 ## P1 — Entity substrate *(design: `engine-core.md` — read it; steps here are the tracker)*
 
@@ -391,13 +400,13 @@ dialogue, scripted flow, quests, save/load included.
 | ID | Question | Consumed by | Status |
 |---|---|---|---|
 | RE1 | Trigger/button spawnflag filter bits — `func_button` (`CBaseButton::Spawn`) + `trigger_multiple`/`trigger_once` (`PassesTriggerFilters`) maps confirmed in `entity_io.md` | 4.2, 4.5 | [x] |
-| RE2 | Retail queue-vs-think service order (our queue-first is a recorded choice) | revisit if a chain misbehaves | [P] |
+| RE2 | Retail queue-vs-think service order — **confirmed think-first** (thinks then `ServiceEvents`); our provisional queue-first diverges (see `engine-core.md` Tick note) | 1.4 | [x] |
 | RE3 | `__setattr__` write path + error-to-false + `G` default-0 **all confirmed** | 5.2, 9.1 | [x] |
 | RE4 | Ghidra datamap export (validate our input/field tables vs retail) — method confirmed, CBaseEntity base map extracted | 4.5+ (optional, valuable) | [~] |
 | RE5 | Dice-system vroll golden test | 9.6 | [ ] |
 | RE6 | `ent_survey` count reconciliation — retail = 16,125 outputs / 1,591 Python (16,214/1,621 was stale) | 0.6 | [x] |
 | RE7 | Retail `.sav` block wire format | 10.7 (only for importing retail saves) | [P] |
-| RE8 | Re-base `entity_io.md` survey on the patch (engine-loaded) map set — retail 16,125 outputs vs patch-first 23,357 | 0.8 | [ ] |
+| RE8 | Re-base `entity_io.md` survey on the patch (engine-loaded) map set — patch 24,081 outputs / 6,956 Python (retail 16,125 / 1,591) | 0.8 | [x] |
 
 ### Ghidra extraction — findings + plan *(pass dated 2026-07-22; scripts + dumps in `tools/ghidra/`, `out/re*.txt`)*
 
@@ -471,11 +480,18 @@ Source) — the port must carry them at `CBaseEntity`. Next: `DumpDatamap.java` 
 extraction over every class builder (locate each via its `GetDataDescMap` = vtable `+0x148`, or by
 the builder-call pattern) → JSON per classname; run before 4.5.
 
-**RE2 / RE5 (Ghidra-drivable, still parked/open):** RE2 — decompile the `CEventQueue` service +
-entity think dispatch to confirm the recorded queue-first order (prior dumps `q_think_asm`,
-`x_prethink`); unpark only if a chain misbehaves. RE5 — optionally static-recover the vroll
-resolver in `vampire.dll` to cross-check `recovered/dice-system.md` alongside the running-game
-golden test.
+**RE2 — DONE: retail is think-first.** The `vampire.dll` server frame calls
+`Physics_RunThinkFunctions` (`FUN_1003bdd0` via thunk, call-site `0x1011ac1b`) and *then*, at
+`0x1011ac34`, the sole `CEventQueue::ServiceEvents` (`FUN_100cfac0` → `FUN_100cebb0(g_EventQueue
+0x106e7050)`). ServiceEvents walks `m_pEvents` (head `+0x38`) firing every event with
+`fireTime ≤ curtime` — type 0 Entity I/O via `AcceptInput` (vtable `+0x1d8`), type 1 `ScheduleTask`
+source via `FUN_100ce8a0`, field-6 Python via `FUN_100ce990`, type 2 discipline. So an output
+fired *during* a think is serviced after all thinks that frame. **Implication:** flip task 1.4 to
+think-first to match retail (recorded in `engine-core.md` Tick note) — unless save-determinism
+argues for keeping queue-first; that is the 1.4 tick-order call.
+
+**RE5 (Ghidra-drivable, open):** optionally static-recover the vroll resolver in `vampire.dll` to
+cross-check `recovered/dice-system.md` alongside the running-game golden test.
 
 ## Options — evaluated, not planned (revisit triggers stated)
 
@@ -520,6 +536,11 @@ golden test.
   handles on stable `.ents` indices; one clock + one queue, no `FTimerManager`; two
   instrumented chokepoints; dormancy as one switch. (`engine-core.md`)
 - **2026-07** — Queue-serviced-before-thinks tick order chosen (retail order unknown, RE2).
+- **2026-07-22** — RE2 resolved: **retail is think-first** — `Physics_RunThinkFunctions` then
+  `CEventQueue::ServiceEvents` in the `vampire.dll` server frame (addresses in the RE2 note above).
+  The provisional queue-first choice diverges from retail. Decision for task 1.4: match retail
+  (think-first) unless save-determinism argues for queue-first; `engine-core.md` Tick note now
+  documents think-first.
 - **2026-07** — Debug-substrate-before-M3 sequencing chosen ("foundation now"): P1 → P2 → P4.
 - **Standing (from strategy)** — fully dynamic lighting committed (HWRT Lumen + MegaLights +
   VSM, DX12/SM6 mandatory; no baked GI — lump-8 bake parked as low-end contingency);
