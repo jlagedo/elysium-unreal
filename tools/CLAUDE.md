@@ -282,8 +282,8 @@ Python lives in **four surfaces, two languages**:
   **`dlgexpr`, not Python**: an engine skill-check (implicit `>=`) joined to a Python
   expression by `&`.
 - `maps/*.bsp` — entity outputs carry **7** comma fields, not Source's 5; **field 6 is a
-  Python call string** (1,621 of 16,214 outputs; 1,528 fire only Python). `engine.dll`
-  formats `__main__.%s` around it.
+  Python call string** (1,591 of 16,125 retail outputs; 1,500 fire only Python).
+  `engine.dll` formats `__main__.%s` around it.
 - `logic_pythoncheck` — `python_script` is an expression gating `OnTrue`/`OnFalse` (51).
 
 `vampire.dll` registers module **`vampire`** (11 globals: `FindPlayer`, `FindEntityByName`,

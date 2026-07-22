@@ -18,6 +18,10 @@
 		{
 			"Name": "PythonScriptPlugin",
 			"Enabled": true
+		},
+		{
+			"Name": "Cog",
+			"Enabled": true
 		}
 	]
 }

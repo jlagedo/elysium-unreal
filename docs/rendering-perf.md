@@ -135,9 +135,25 @@ Nuclear brackets to attribute cost: `r.Lumen.HardwareRayTracing 0` (HWRT's share
 
 ## Profiling
 
-`stat unit` (frame/game/GPU ms), `stat GPU` (per-pass GPU time), `ProfileGPU` (one-frame
-pass breakdown), Unreal Insights for a timeline. Profile a **standalone** build
-(`play.bat`), not a PIE editor session — editor overhead skews the numbers.
+**Headless, repeatable, no human in the loop:** `profile.bat <map> [cam]` launches standalone
+at 2560×1440 / SM6 and drives the `-ElysiumProfile` harness
+(`Source/ElysiumUE/Private/ElysiumProfiler.cpp`) — it pins the camera to each fixed vantage
+near spawn (the `GProfileCams[]` table), warms up 120 frames, captures 300 through the CSV
+profiler (`-csvGpuStats` → per-pass GPU ms), dumps one `ProfileGPU` tree to the log, writes a
+JSON summary, and exits. `tools/profile_report.py` turns the CSVs into the per-pass table
+(`tools/out/_profile/<map>_report.md`) and the committed baseline in `roadmap.md` → appendix.
+The harness also logs the SM6/adapter confirmation and MegaLights-vs-ShadowDepths split, so it
+answers roadmap 0.1 **and** 0.2 in one pass. Capture a new vantage by flying there in-game and
+running `elysium.campos` (logs a paste-ready `GProfileCams[]` row with the exact pitch the HUD
+omits).
+
+The fixed vantages double as **rendering-regression test points**: re-run `profile.bat` after
+any render-path change and diff the per-vantage GPU ms against the appendix baseline.
+
+Manual knobs for interactive digging: `stat unit` (frame/game/GPU ms), `stat GPU` (per-pass
+GPU time), `ProfileGPU` (one-frame pass breakdown), Unreal Insights for a timeline. Always
+profile a **standalone** build (`play.bat` / `profile.bat`), not a PIE editor session — editor
+overhead skews the numbers.
 
 ## Sources
 

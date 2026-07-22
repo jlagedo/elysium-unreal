@@ -31,5 +31,16 @@ public class ElysiumUE : ModuleRules
 			// Dev console UI is built directly in Slate.
 			"Slate", "SlateCore"
 		});
+
+		// Cog debug UI (ImGui). CogCommon carries the interfaces that survive a Shipping
+		// build; the rest of Cog is stripped from Shipping (ENABLE_COG = !UE_BUILD_SHIPPING).
+		PublicDependencyModuleNames.Add("CogCommon");
+		if (Target.Configuration != UnrealTargetConfiguration.Shipping)
+		{
+			PrivateDependencyModuleNames.AddRange(new string[]
+			{
+				"Cog", "CogDebug", "CogEngine", "CogImgui"
+			});
+		}
 	}
 }

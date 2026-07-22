@@ -48,7 +48,8 @@ map as world + 3D-skybox PMC actors, MIDs off the single master material `M_VtMB
 tunable by `elysium.EmissiveScale`), DDS-preferred textures (PNG fallback), brush collision
 (`.hulls` convex + `.dispcol` trimesh, render-trimesh fallback), `.emc` parse-cache,
 `.spawn`/`.sky` placement, a Character-movement FPS pawn with noclip, a Canvas debug HUD,
-and `elysium.map` / `elysium.maps` / `elysium.debug` / `elysium.lights` console commands.
+and `elysium.map` / `elysium.maps` / `elysium.debug` / `elysium.lights` / `elysium.campos`
+console commands.
 
 M1 landed so far: the `.env` sky/fog + `.cube` LUT (`M_Sky`), and the **real-time
 `UElysiumLightRig`** — one Unreal light per WORLDLIGHTS source from `.lights` (point/spot
@@ -70,15 +71,19 @@ Only `sp_tutorial_1` is exported today.
 ## Repository facts
 
 - **Engine:** UE 5.8. Module `ElysiumUE` (Runtime, Default loading phase). Plugins:
-  `ProceduralMeshComponent` (runtime), `PythonScriptPlugin` (offline scaffolding only).
-  Module deps: ProceduralMeshComponent, ImageWrapper, ImageCore, RenderCore, RHI,
-  EnhancedInput, Slate, SlateCore.
+  `ProceduralMeshComponent` (runtime), `PythonScriptPlugin` (offline scaffolding only),
+  `Cog` (vendored MIT debug-UI shell under `Plugins/Cog/`; main plugin only — CogImgui/Cog/
+  CogEngine/CogCommon/CogDebug/CogDebugEditor + bundled ImGui/ImPlot/NetImgui; stripped from
+  Shipping via `ENABLE_COG`). Module deps: ProceduralMeshComponent, ImageWrapper, ImageCore,
+  RenderCore, RHI, MeshDescription, StaticMeshDescription, PhysicsCore, EnhancedInput, Slate,
+  SlateCore, CogCommon (all configs) + Cog/CogDebug/CogEngine/CogImgui (non-Shipping only).
 - **Source layout:** `Source/ElysiumUE/Public/*.h` + `Private/*.cpp,*.h`,
   `Source/*.Target.cs`, `Source/ElysiumUE/ElysiumUE.Build.cs`. Key types:
   `UElysiumMapSubsystem`, `AElysiumMapActor`, `AElysiumGameMode`, `AElysiumHUD`,
   `AElysiumPawn`, `UElysiumGameInstance`, `FElysiumObjModel`, `FElysiumTextureCache`,
   `FElysiumMaterialFactory`, `FElysiumStaticMeshBuilder`, `FElysiumContentPaths`,
-  `UElysiumLightRig`.
+  `UElysiumLightRig`, `FElysiumProfileRun` (the headless profiling harness, `-ElysiumProfile`),
+  `UElysiumCogSubsystem` (world subsystem that registers the stock Cog debug windows; `#if ENABLE_COG`).
 - **Committed content (only these):** `Content/Elysium.umap` (empty boot persistent level,
   regenerable via `tools/make_boot_map.py`) and `Content/VtMB/Materials/M_VtMB_World.uasset`
   (master material). No converted game content, no vendored Python.
@@ -120,6 +125,11 @@ your VtMB install.
 - `editor.bat` — open the project in the Unreal editor (PIE via Play).
 - `play.bat [map]` — launch standalone (`-game`, 1600×900); optional map name under
   `tools/out` (default `sp_tutorial_1`). WASD + mouse to fly.
+- `profile.bat [map] [cam]` — **headless render profiling** (roadmap 0.1/0.2). Drives the
+  `-ElysiumProfile` harness (`ElysiumProfiler.cpp`) at 2560×1440/SM6: fixed vantages near
+  spawn, warmup + 300-frame CSV capture (per-pass GPU ms via `-csvGpuStats`), summary, exit —
+  no interaction. `tools/profile_report.py` builds the table; results in `tools/out/_profile/`,
+  baseline in `docs/roadmap.md` appendix. Add a vantage in-game with `elysium.campos`.
 
 ## Coordinate conventions
 

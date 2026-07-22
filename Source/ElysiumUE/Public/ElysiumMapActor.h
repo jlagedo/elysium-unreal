@@ -47,6 +47,10 @@ public:
 	void ToggleProps();
 	bool ArePropsVisible() const;
 
+	// True once the pawn has been placed and its ground collision has finished cooking
+	// (or the spawn-hold timed out). The headless profiler waits on this before capturing.
+	bool IsSpawnDone() const { return bSpawnDone; }
+
 	// Live stats for the debug overlay, filled by LoadMap.
 	FString LoadedMap;
 	int32 WorldSurfaceCount = 0;

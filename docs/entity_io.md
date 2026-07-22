@@ -5,11 +5,21 @@ VtMB drives its world with Source's entity I/O: an entity fires an **output**
 `ScriptUnhide`, …) on a target entity. `tools/ent_survey.py` reports every table
 below from the shipped maps.
 
-Scale across the 101 maps: **63,861 entities**, **299 classnames**, **16,125
-outputs**. `python tools/ent_survey.py [--map <name>]`. (Counts are one
-`ent_survey.py` snapshot; `python_bridge.md`/`rebuild-strategy.md` cite **16,214
-outputs / 1,621 Python calls** from a later run — a few dozen apart, re-run the survey
-to reconcile.)
+Scale across the retail 101 maps (`ent_survey.py`'s default, `Vampire/maps`):
+**63,861 entities**, **299 classnames**, **16,125 outputs**, **1,591 with a Python
+payload**. `python tools/ent_survey.py [--map <name>]`. (These are the retail counts;
+the Unofficial Patch's maps carry ~50% more I/O — see the patch note below.)
+
+Of the 1,591 Python-carrying outputs, **1,500 fire only Python** (no I/O target) and
+**91 do both**.
+
+> **Retail vs. Unofficial Patch.** The numbers above are `Vampire/maps` (the survey
+> default). The runtime resolves maps patch-first (`install.map_path`), and the patch
+> ships its own, heavier maps — surveying `Unofficial_Patch/maps` (108 maps) gives
+> **71,096 entities / 326 classnames / 24,081 outputs / 6,956 Python**, and the same 101
+> retail *names* resolved patch-first give **68,430 / 324 / 23,357 / 6,591**. The tables
+> in this doc are the retail baseline; point `ent_survey.py` at the patch dir to see the
+> shipped-runtime shape.
 
 ## Output format
 
@@ -22,7 +32,7 @@ target , input , param , delay , times , python , extra
 
 **Seven fields, not Source's five.** 16,096 of 16,125 outputs write 7; 29 write 6.
 Fields 0-4 are stock Source (`times` = -1 means unlimited). **Field 5 is a Python
-call string** (~1,591–1,621 outputs carry one across snapshots) which is wrapped as `__main__.%s` — see
+call string** (1,591 outputs carry one) which is wrapped as `__main__.%s` — see
 `docs/python_bridge.md`. The wrap format string lives in **`vampire.dll`**
 (`0x1055e370`, in the event-queue dispatch region), not `engine.dll`. A target of `!activator`/`!self` is a runtime
 reference, not a `targetname`.

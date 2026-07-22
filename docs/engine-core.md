@@ -101,7 +101,7 @@ and `UElysiumGameStateSubsystem` + script host live on the game instance;
 - **Output firing:** an entity fires a named output → for each matching 7-field def
   output whose `times` has not run out: queue the I/O delivery at `now + delay`, and if
   field 6 carries Python, attach the source string — the queue forwards it to the script
-  host at fire time. 1,528 outputs fire *only* Python; the queue entry is still real.
+  host at fire time. 1,500 outputs fire *only* Python; the queue entry is still real.
 - **Tick (map actor Tick, in order):** advance clock (unless paused) → `Service(now)`
   on the queue (deliver everything due; drain zero-delay chains with the loop guard) →
   run due thinks (entities whose next-think ≤ now). Queue-before-thinks is our decision

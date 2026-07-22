@@ -2,10 +2,13 @@
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumMapActor.h"
+#include "ElysiumProfiler.h"
 #include "ElysiumTextureCache.h"
 
 #include "Engine/Engine.h"
+#include "Engine/GameInstance.h"
 #include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/Paths.h"
@@ -44,10 +47,39 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 			}
 		}),
 		ECVF_Cheat));
+
+	// Log the current camera as a paste-ready GProfileCams row, so a new profiling vantage
+	// (with exact pitch, which the HUD omits) can be captured by flying there and running this.
+	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
+		TEXT("elysium.campos"),
+		TEXT("elysium.campos — log current camera as a GProfileCams row (for the headless profiler)"),
+		FConsoleCommandDelegate::CreateWeakLambda(this, [this]()
+		{
+			UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			if (!PC)
+			{
+				return;
+			}
+			FVector Loc; FRotator Rot;
+			PC->GetPlayerViewPoint(Loc, Rot);
+			UE_LOG(LogElysiumMap, Display,
+				TEXT("{ TEXT(\"%s\"), TEXT(\"camN\"), false, FVector(%.0ff, %.0ff, %.0ff), FRotator(%.1ff, %.1ff, %.1ff) },"),
+				*GetCurrentMapName(), Loc.X, Loc.Y, Loc.Z, Rot.Pitch, Rot.Yaw, Rot.Roll);
+		}),
+		ECVF_Cheat));
+
+	// Under -ElysiumProfile, arm the headless profiling harness. It self-drives once the
+	// boot map settles, captures each configured vantage, writes a summary, and exits.
+	if (FElysiumProfileRun::IsRequested())
+	{
+		ProfileRun = MakePimpl<FElysiumProfileRun>(this);
+	}
 }
 
 void UElysiumMapSubsystem::Deinitialize()
 {
+	ProfileRun.Reset();
 	for (IConsoleObject* Obj : ConsoleObjects)
 	{
 		IConsoleManager::Get().UnregisterConsoleObject(Obj);

@@ -42,7 +42,7 @@ no interface is passed anywhere. All binding happens in `vampire.dll`.
 |---|---|---|---|
 | Level scripts | `Vampire/python/**/*.py` (loose) | 27 files, 8,954 lines, **690 functions** | Python 2.1 |
 | Dialogue | `dlg/*.dlg` inside `pack*.vpk` | 138 files, 49,359 rows → **8,355 conditions + 2,988 actions** | `dlgexpr` (not Python) |
-| Entity outputs | `maps/*.bsp` ENTITIES, output **field 6** | **1,621** calls across 101 maps | Python expression |
+| Entity outputs | `maps/*.bsp` ENTITIES, output **field 6** | **1,591** calls across the retail 101 maps | Python expression |
 | Conditional entities | `maps/*.bsp`, `logic_pythoncheck` | **51** | Python expression |
 | *(compiled duplicates)* | `python/*.pyc` inside the VPKs | 24 | **dead — never loaded** |
 
@@ -257,7 +257,7 @@ import-time side effects to emulate.
 | Trigger | Mechanism |
 |---|---|
 | Level-script callback | `PyRun_String` / `PyObject_CallFunction`. **`vampire.dll`** holds the format string **`__main__.%s`** (`0x1055e370`, in the `CEventQueue` dispatch region) — output field 6's `journalPickup()` becomes `__main__.journalPickup()`. (`engine.dll` owns only the VM boot.) |
-| Entity output field 6 | Source's output format is extended from 5 comma fields to **7**; field 6 is a Python call string. 1,621 of 16,214 outputs (10%) carry one; 1,528 fire *only* Python with no I/O target; 93 do both. |
+| Entity output field 6 | Source's output format is extended from 5 comma fields to **7**; field 6 is a Python call string. 1,591 of 16,125 retail outputs (10%) carry one; 1,500 fire *only* Python with no I/O target; 91 do both. |
 | `logic_pythoncheck` | `python_script` keyvalue is an expression → `PyRun_String` → `PyObject_IsTrue` → standard `OnTrue`/`OnFalse` I/O. |
 | Dialogue | `.dlg` field 4 (condition, eval) and field 5 (action, exec). |
 

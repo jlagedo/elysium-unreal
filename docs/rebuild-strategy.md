@@ -167,14 +167,14 @@ All under `tools/out/<map>/`. Formats are fixed by the pipeline and shared with 
 |---|---|---|
 | `<map>.obj/.mtl` + `tex/` | world geometry + materials | OBJ, MTL with VtMB extensions (illum 4 = alphatest, blend, Kd) |
 | `<map>_sky.obj`, `.sky` | 3D skybox + `origin`/`scale` transform | OBJ + text |
-| `.ents` | **all 1,226 entities**: classname, targetname, origin, `start_hidden`, raw keyvalues, brush-entity convex `hulls` + `contents`/`blocks_player`, and 7-field I/O `outputs` (`target, input, param, delay, times, python, name`) | JSON |
+| `.ents` | **all 1,226 entities**: classname, targetname, origin, `start_hidden`, raw keyvalues, brush-entity convex `hulls` + `contents`/`blocks_player`, and 7-field I/O `outputs` (`target, input, param, delay, times, python, name`) | JSON, Unreal cm (origins + entity-local hulls) |
 | `.props` | static props: `safename ox oy oz qx qy qz qw solid`, models in `props/<safename>.obj` | text, Unreal cm + quaternion |
 | `.hulls` / `.dispcol` | world brush convex hulls / displacement collision tris | text, Unreal cm |
 | `.lights` | one line per WORLDLIGHTS source: `type origin dir rgb radius stopdot stopdot2 exponent style` | text |
-| `.sprites` | env_sprite coronas: `texpath pos w h rgb amt orient` | text, Godot metres |
-| `.spawn` | `info_player_start` origin + yaw | text, Source coords |
+| `.sprites` | env_sprite coronas: `texpath pos w h rgb amt orient` | text, Unreal cm (sizes = `scale × texpx × INCH_TO_CM`) |
+| `.spawn` | `info_player_start` origin + yaw | text, Unreal cm (yaw pre-negated) |
 | `.env` | skybox flag/name, fog on/color/start/end | text |
-| `.water` | per-material plane, normalmap, fogcolor/dist, reflecttint | text |
+| `.water` | per-material plane, normalmap, fogcolor/dist, reflecttint | text, Unreal cm (plane Z + fogdist) |
 | `.cube` | color-grade LUT | Adobe .cube |
 | `_decals.obj` | infodecal geometry | OBJ |
 | `npc/*.glb` | skeletal characters (mdl_skel → mdl_gltf) | glTF binary |
@@ -271,7 +271,7 @@ teardown stays trivial):
 ## B2. Source I/O event bus
 
 The backbone. VtMB outputs are **7 fields**: `target, input, param, delay, times,
-python, name` (field 5 is a Python call string — 1,621 across the game).
+python, name` (field 5 is a Python call string — 1,591 across the retail game).
 
 - `FElysiumEventQueue` on the map actor: time-sorted pending events
   `{fire_time, target, input, param, activator, caller}`. Ticked each frame; `times`
@@ -348,7 +348,7 @@ reflection (B2's input table already provides this); the genuinely bespoke surfa
 
 Four script surfaces, in implementation order:
 
-1. **Output field-6 call strings** (1,621) + **`logic_pythoncheck`** (51): a small C++
+1. **Output field-6 call strings** (1,591) + **`logic_pythoncheck`** (51): a small C++
    expression evaluator (recursive-descent; calls, attribute access, literals,
    comparisons, and/or) over: `G.<flag>` (persistent dict, **default 0 on miss**),
    entity lookup by targetname → input table, and native bindings for the 11 globals /

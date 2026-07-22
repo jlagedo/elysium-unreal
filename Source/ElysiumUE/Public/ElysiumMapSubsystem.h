@@ -2,9 +2,11 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "Templates/PimplPtr.h"
 #include "ElysiumMapSubsystem.generated.h"
 
 class AElysiumMapActor;
+class FElysiumProfileRun;
 
 // The only owner of VtMB-map lifecycle inside the single persistent Unreal level.
 // Travel destroys the current AElysiumMapActor (unloading everything map-scoped),
@@ -38,4 +40,8 @@ public:
 private:
 	TWeakObjectPtr<AElysiumMapActor> CurrentMap;
 	TArray<IConsoleObject*> ConsoleObjects;
+
+	// Headless profiling harness (task 0.1/0.2), created only under -ElysiumProfile.
+	// TPimplPtr keeps the deleter type-erased, so the forward declaration suffices.
+	TPimplPtr<FElysiumProfileRun> ProfileRun;
 };

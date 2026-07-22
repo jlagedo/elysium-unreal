@@ -85,12 +85,22 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
   code fix needed → **PL7 is empty.** Runtime spot-check: `.spawn` read verbatim
   (`ElysiumMapActor.cpp:705,722`; the +100 cm Z lift is a spawn-clearance offset, not a conversion).
   *Deps:* none.
-- [ ] **0.5 Cog 5.8 compile spike** — vendor [Cog](https://github.com/arnaud-jamin/Cog) into
-  `Plugins/`, compile against 5.8, open one stock window in PIE. De-risks the P2 dependency
-  early (known patches: ImPlot `INFINITY` MSVC error). Full integration is 2.1.
-  Upstream requires UE 5.5+ and is actively maintained (issue activity Nov 2025; no
-  engine-version compile reports on the tracker), but 5.8 is unconfirmed — hence the spike.
-  *Acceptance:* Cog inspector opens in PIE and standalone. *Deps:* none.
+- [x] **0.5 Cog 5.8 compile spike** — **de-risked: Cog builds and runs clean on UE 5.8.** Vendored
+  the main [Cog](https://github.com/arnaud-jamin/Cog) plugin only (upstream `cb1b435`, `main`) into
+  `Plugins/Cog/` — the 6 modules CogImgui/Cog/CogEngine/CogCommon/CogDebug/CogDebugEditor + bundled
+  ImGui/ImPlot/NetImgui; the GAS/AI/Input plugins (CogAbility/CogAI/CogInput/CogAll/CogCommonUI) are
+  **not** vendored (this project uses none of those systems). `ElysiumUE.Build.cs` deps: `CogCommon`
+  (all configs) + `Cog`/`CogDebug`/`CogEngine`/`CogImgui` (non-Shipping only); plugin enabled in
+  `ElysiumUE.uproject`. `UElysiumCogSubsystem` (`UWorldSubsystem`, `#if ENABLE_COG`-gated) depends-in
+  `UCogSubsystem` and registers 15 stock CogEngine windows (Inspector, Selection, Collision Viewer,
+  Console, Output Log, Stats, Metrics, Plots, …) — the `Cog::AddAllWindows` helper is avoided because
+  it pulls in CogAbility/CogAI. **The known ImPlot `INFINITY` MSVC patch (issue #71) was NOT needed**
+  on this toolchain (VS 14.50.35717 / UE 5.8); only non-fatal C4996 deprecation warnings in upstream
+  Cog. Editor target compiled (84 s, exit 0); standalone boot loaded all 6 Cog DLLs,
+  `UCogSubsystem::TryInitialize` fired in-world, traveled to `sp_tutorial_1`, zero Cog/ImGui errors.
+  Full integration (custom Maps/Lights/Entities windows, F1 toggle polish) is 2.1. *Acceptance met:* Cog
+  inspector opens in PIE and standalone — compile + runtime-load verified, and the F1 ImGui menu +
+  Inspector window confirmed on-screen (`play.bat`, F1). *Deps:* none.
 - [x] **0.6 `ent_survey` count reconciliation** *(RE, small)* — re-ran the survey; the two
   snapshots were both retail runs, and the tool deterministically yields **16,125 outputs /
   1,591 Python** on `Vampire/maps` today (the 16,214/1,621 figure was a stale, unreproducible
@@ -98,6 +108,17 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
   `tools/CLAUDE.md`; also recorded the patch-set counts (108 maps → 24,081 outputs).
 - [ ] **0.7 Repo hygiene** — keep `tools/ghidra*/` and `tools/re/` out of the repo
   (gitignore; they stay local RE references). *Deps:* none.
+- [ ] **0.8 Re-base `entity_io.md` on the patch (engine-loaded) map set** *(RE, small)* — the
+  survey and every table in `entity_io.md` are built on retail `Vampire/maps`, but the runtime
+  resolves maps **patch-first** (`install.map_path`), so the shipped-runtime shape is ~50%
+  heavier: surveying `Unofficial_Patch/maps` (108 maps) gives **71,096 entities / 326 classnames
+  / 24,081 outputs / 6,956 Python** (101 retail names resolved patch-first: 68,430 / 324 / 23,357
+  / 6,591). Re-run `ent_survey.py` against the engine-loaded set and re-base the histograms
+  (classname counts, inputs-by-class, use_icon/StartHidden tables, field-6 breakdown) onto it;
+  keep the retail baseline as a labelled comparison. Decide whether to teach `ent_survey.py` to
+  resolve patch-first by default (via `install.map_path`) rather than glob one dir. *Acceptance:*
+  `entity_io.md` tables reflect the maps the runtime actually loads. *Deps:* none. (Follow-up
+  from 0.6.)
 
 ## P1 — Entity substrate *(design: `engine-core.md` — read it; steps here are the tracker)*
 
@@ -376,6 +397,7 @@ dialogue, scripted flow, quests, save/load included.
 | RE5 | Dice-system vroll golden test | 9.6 | [ ] |
 | RE6 | `ent_survey` count reconciliation — retail = 16,125 outputs / 1,591 Python (16,214/1,621 was stale) | 0.6 | [x] |
 | RE7 | Retail `.sav` block wire format | 10.7 (only for importing retail saves) | [P] |
+| RE8 | Re-base `entity_io.md` survey on the patch (engine-loaded) map set — retail 16,125 outputs vs patch-first 23,357 | 0.8 | [ ] |
 
 ### Ghidra extraction — findings + plan *(pass dated 2026-07-22; scripts + dumps in `tools/ghidra/`, `out/re*.txt`)*
 
@@ -475,7 +497,7 @@ golden test.
 | Risk | Impact | Mitigation |
 |---|---|---|
 | MegaLights silently disengages (VSM fallback) | frame collapses | 0.2 check lives in the profiling routine forever; 3.1 pins it |
-| Cog fails to build on 5.8 | debug layer slips | 0.5 spike before P2 commits (risk lowered: upstream active, UE 5.5+ supported, no version-compat issues filed); fallback = VesCodes/ImGui + hand-rolled windows |
+| ~~Cog fails to build on 5.8~~ **(resolved)** | debug layer slips | **0.5 done: Cog builds + runs clean on 5.8** (VS 14.50, no ImPlot patch needed); fallback (VesCodes/ImGui + hand-rolled windows) unused |
 | Level scripts exceed the mini-interpreter subset | scripting rework | 5.5 survey + decision before building; CPython embed is the acknowledged fallback |
 | Chaos kinematic movers push/block poorly | doors feel wrong | 4.1 prototypes one door first |
 | Floor perf unproven (no 3060 on hand) | late surprise | look-gates until 10.3; lump-8 bake parked as contingency; Lumen Lite noted as a cheaper option (see Options) |
@@ -486,6 +508,11 @@ golden test.
 
 ## Decision log (append-only)
 
+- **2026-07-22** — 0.5 Cog spike closed: vendored the **main Cog plugin only** (upstream `cb1b435`
+  on `main`, MIT) into `Plugins/Cog/`, minimal deps, `UElysiumCogSubsystem` registering stock
+  CogEngine windows. Builds + runs on UE 5.8 with **no source patches** (the flagged ImPlot
+  `INFINITY` MSVC error did not reproduce on VS 14.50). Build products gitignored; provenance
+  (base commit) recorded here so future updates re-base off `main@cb1b435`.
 - **2026-07** — Cog (MIT, vendored, dev-only) adopted as the debug UI shell after tooling
   research; Slate console superseded. (`debug-tooling.md`)
 - **2026-07** — Entity object model adopted: plain-C++ entities with optional Unreal bodies;

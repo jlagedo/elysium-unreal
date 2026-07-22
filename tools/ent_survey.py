@@ -10,7 +10,13 @@ has to satisfy:
   * the visibility subsystem: StartHidden / ScriptHide / ScriptUnhide
 
 Usage:
-    python tools/ent_survey.py [<maps_dir>] [--map <name>]
+    python tools/ent_survey.py [<maps_dir>] [--patch] [--map <name>]
+
+Default is the retail map set (`Vampire/maps`). `--patch` surveys the
+**engine-loaded** set instead (`Unofficial_Patch/maps`, which the runtime resolves
+patch-first) — a strict superset of retail (all retail names, shadowed, plus the
+patch's own maps). docs/entity_io.md tables are based on the patch set; the retail
+default is the labelled comparison baseline.
 
 Findings and the use_icon enum are written up in docs/entity_io.md.
 """
@@ -19,6 +25,7 @@ from collections import Counter, defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bsp
+import install
 
 DEFAULT_MAPS = r"E:\dev_game\Vampire The Masquerade - Bloodlines\Vampire\maps"
 
@@ -100,14 +107,21 @@ def survey(paths):
 
 
 def main():
-    args = [a for a in sys.argv[1:]]
-    maps_dir = DEFAULT_MAPS
+    args = list(sys.argv[1:])
     only = None
     if "--map" in args:
-        only = args[args.index("--map") + 1]
-        args = args[:args.index("--map")]
-    if args:
+        i = args.index("--map")
+        only = args[i + 1]
+        del args[i:i + 2]
+    use_patch = "--patch" in args
+    if use_patch:
+        args.remove("--patch")
+    if use_patch:
+        maps_dir = os.path.join(install.PATCH, "maps")
+    elif args:
         maps_dir = args[0]
+    else:
+        maps_dir = DEFAULT_MAPS
     paths = sorted(glob.glob(os.path.join(maps_dir, "*.bsp")))
     if only:
         paths = [p for p in paths if os.path.basename(p)[:-4] == only]
