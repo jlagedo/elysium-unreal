@@ -21,6 +21,11 @@ Saved/
 *.xcodeproj
 *.xcworkspace
 
+# VSCode project files (generated via UBT -vscode; regenerable)
+.vscode/
+*.code-workspace
+compile_commands.json
+
 # JetBrains Rider
 .idea/
 

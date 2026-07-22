@@ -1,5 +1,11 @@
 """Export a VtMB BSP to a textured OBJ+MTL scene with decoded PNG textures.
 
+UE_* exporter: verified to emit **Unreal-native** intermediates directly — all
+geometry and sidecars are in Unreal space (centimetres, Z-up, left-handed), with
+triangle winding pre-reversed, so the C++ runtime reads every file 1:1 with no
+coordinate conversion. There is no Godot legacy in this file. (Exporters without the
+UE_ prefix still emit the old Godot Y-up/metres space and are flagged for review.)
+
 Pulls together everything we reverse-engineered:
   * geometry  : v17 dface_t (104B) -> surfedges -> edges -> vertexes
   * materials : face -> texinfo(72B) -> texdata(32B) -> string table -> name
@@ -15,9 +21,10 @@ import install, vmt
 import bsp as B
 import mdl as MDL
 from tex_to_png import decode as decode_texture, decode_cubemap
-from bsp import (read_lump, source_to_godot, strings_from_blob, read_pakfile,
-                 read_game_lump, INCH_TO_M, FACE_SIZE, FE_OFS, NE_OFS, TI_OFS, DISP_OFS,
-                 TEXINFO_SIZE, TI_SAXIS, TI_TAXIS, TI_TEXDATA,
+from bsp import (read_lump, source_to_unreal, source_dir_to_unreal, source_angles_to_unreal_quat,
+                 strings_from_blob,
+                 read_pakfile, read_game_lump, INCH_TO_CM, FACE_SIZE, FE_OFS, NE_OFS,
+                 TI_OFS, DISP_OFS, TEXINFO_SIZE, TI_SAXIS, TI_TAXIS, TI_TEXDATA,
                  TEXDATA_SIZE, TD_NAMEID, TD_W, TD_H)
 
 # --- brush collision: convex hulls from the world model's brushes -----------
@@ -69,7 +76,7 @@ def _brush_hull(planes, sides, brushes, bi):
     return cont, (np.array(pts) if len(pts) >= 4 else None)
 
 def write_collision(data, out_dir, base):
-    """Emit `<base>.hulls`: one world brush per line as flat Godot-space verts."""
+    """Emit `<base>.hulls`: one world brush per line as flat Unreal-space verts (cm)."""
     nodes, leafs = read_lump(data, 5), read_lump(data, 10)
     leafbrushes, brushes, sides = read_lump(data, 17), read_lump(data, 18), read_lump(data, 19)
     planes = np.frombuffer(read_lump(data, 1), dtype=np.float32).reshape(-1, 5)[:, :4].copy()
@@ -81,7 +88,7 @@ def write_collision(data, out_dir, base):
             if pts is None or not (cont & BLOCK_MASK):
                 continue
             uniq = {(round(p[0], 1), round(p[1], 1), round(p[2], 1)): p for p in pts}
-            g = [source_to_godot(sx, sy, sz) for sx, sy, sz in uniq.values()]
+            g = [source_to_unreal(sx, sy, sz) for sx, sy, sz in uniq.values()]
             f.write(" ".join(f"{c:.4f}" for v in g for c in v) + "\n")
             n += 1
     print(f"collision hulls: {n} world brushes -> {base}.hulls")
@@ -89,34 +96,33 @@ def write_collision(data, out_dir, base):
 # --- real-time light rig: WORLDLIGHTS (lump 15) -> `<base>.lights` -----------
 
 def write_lights(data, out_dir, base):
-    """Emit `<base>.lights`: one WORLDLIGHTS source per line, in Godot space, for
-    the runtime LightRig to spawn a Godot light per source (the real-time lighting
+    """Emit `<base>.lights`: one WORLDLIGHTS source per line, in Unreal space, for
+    the runtime LightRig to spawn an Unreal light per source (the real-time lighting
     model that replaces the baked lightmap). Intensity stays raw linear RGB - the
     runtime splits it into a normalized colour and a scalar energy.
 
-    Line: type ox oy oz  dx dy dz  ir ig ib  radius_m  stopdot stopdot2 exponent  style
-      type     0 emit_surface, 1 point, 2 spot, 3 skylight, 5 skyambient
-      o*       origin, Godot metres  (sx,sz,-sy)*INCH_TO_M
-      d*       beam direction, Godot unit vector (nx,nz,-ny); 0 0 0 if none
-      i*       intensity, raw linear RGB (colour*brightness)
-      radius_m cutoff radius in metres (0 = no cutoff)
+    Line: type ox oy oz  dx dy dz  ir ig ib  radius_cm  stopdot stopdot2 exponent  style
+      type      0 emit_surface, 1 point, 2 spot, 3 skylight, 5 skyambient
+      o*        origin, Unreal centimetres  (sx,-sy,sz)*INCH_TO_CM
+      d*        beam direction, Unreal unit vector (nx,-ny,nz); 0 0 0 if none
+      i*        intensity, raw linear RGB (colour*brightness)
+      radius_cm cutoff radius in centimetres (0 = no cutoff)
       stopdot/stopdot2/exponent  spot cone (cos inner / cos outer / falloff exp)
-      style    lightstyle index (0 = constant)"""
+      style     lightstyle index (0 = constant)"""
     wl = B.read_worldlights(data)
     with open(os.path.join(out_dir, base + ".lights"), "w") as f:
         for w in wl:
-            ox, oy, oz = source_to_godot(*w["origin"])
-            nx, ny, nz = w["normal"]
-            gx, gy, gz = nx, nz, -ny                    # direction: axis swap, no scale
-            m = (gx * gx + gy * gy + gz * gz) ** 0.5
+            ox, oy, oz = source_to_unreal(*w["origin"])
+            ux, uy, uz = source_dir_to_unreal(*w["normal"])   # direction: Y negate, no scale
+            m = (ux * ux + uy * uy + uz * uz) ** 0.5
             if m > 1e-6:
-                gx, gy, gz = gx / m, gy / m, gz / m
+                ux, uy, uz = ux / m, uy / m, uz / m
             else:
-                gx = gy = gz = 0.0
+                ux = uy = uz = 0.0
             ir, ig, ib = w["intensity"]
             f.write(f"{w['type']} {ox:.4f} {oy:.4f} {oz:.4f} "
-                    f"{gx:.4f} {gy:.4f} {gz:.4f} "
-                    f"{ir:.3f} {ig:.3f} {ib:.3f} {w['radius'] * INCH_TO_M:.4f} "
+                    f"{ux:.4f} {uy:.4f} {uz:.4f} "
+                    f"{ir:.3f} {ig:.3f} {ib:.3f} {w['radius'] * INCH_TO_CM:.4f} "
                     f"{w['stopdot']:.4f} {w['stopdot2']:.4f} {w['exponent']:.3f} "
                     f"{w['style']}\n")
     from collections import Counter
@@ -128,8 +134,8 @@ def write_lights(data, out_dir, base):
 def write_sprites(data, out_dir, base, idx):
     """Emit `<base>.sprites`: env_sprite glow billboards (the soft coronas VtMB places at
     lamps/bulbs). Each sprite's Sprite VMT `$basetexture` is decoded to `tex/spr_*.png`;
-    one line per sprite: `png ox oy oz w_m h_m r g b amt orient`, where the world size is
-    Source's `scale × textureSize` (inches → metres), `r g b`/`amt` are the entity's
+    one line per sprite: `png ox oy oz w_cm h_cm r g b amt orient`, where the world size is
+    Source's `scale × textureSize` (inches → cm), `r g b`/`amt` are the entity's
     `rendercolor`/`renderamt` (additive tint), and orient is 0 (`vp_parallel`, full
     billboard) or 1 (`parallel_upright`, Y-axis only). `start_hidden` sprites are skipped
     (entity I/O that would switch them on is not ported)."""
@@ -179,7 +185,7 @@ def write_sprites(data, out_dir, base, idx):
         if not png:
             continue
         o = d.get("origin", "0 0 0").split()
-        gx, gy, gz = source_to_godot(float(o[0]), float(o[1]), float(o[2]))
+        ux, uy, uz = source_to_unreal(float(o[0]), float(o[1]), float(o[2]))
         try:
             scale = float(d.get("scale", "1") or 1)
         except ValueError:
@@ -191,8 +197,8 @@ def write_sprites(data, out_dir, base, idx):
         except ValueError:
             amt = 255
         orient = 1 if "parallel_upright" in vmt_txt.lower() else 0
-        lines.append(f"tex/{png} {gx:.4f} {gy:.4f} {gz:.4f} "
-                     f"{scale*w*INCH_TO_M:.4f} {scale*h*INCH_TO_M:.4f} "
+        lines.append(f"tex/{png} {ux:.4f} {uy:.4f} {uz:.4f} "
+                     f"{scale*w*INCH_TO_CM:.4f} {scale*h*INCH_TO_CM:.4f} "
                      f"{r} {g} {bb} {amt} {orient}")
 
     if lines:
@@ -236,8 +242,8 @@ def write_entities(data, out_dir, base):
     drop tools/* and StartHidden faces, but those same entities carry the level's
     behaviour, so dropping them from the data too would throw the game away.
 
-    Hulls are entity-local Godot metres and `origin` is the Godot-space offset the
-    engine translates the brush to at spawn; world = origin + hull (source_to_godot
+    Hulls are entity-local Unreal centimetres and `origin` is the Unreal-space offset
+    the engine translates the brush to at spawn; world = origin + hull (source_to_unreal
     is linear, so converting each separately and adding is equivalent). For
     func_door_rotating, `origin` is also the hinge.
     """
@@ -263,7 +269,7 @@ def write_entities(data, out_dir, base):
 
         og = keys.get("origin", "").split()
         so = [float(x) for x in og] if len(og) == 3 else [0.0, 0.0, 0.0]
-        e["origin"] = [round(float(c), 5) for c in source_to_godot(*so)]
+        e["origin"] = [round(float(c), 5) for c in source_to_unreal(*so)]
 
         mdl = keys.get("model", "")
         if mdl.startswith("*"):
@@ -277,7 +283,7 @@ def write_entities(data, out_dir, base):
                         continue
                     cont_or |= cont
                     uniq = {(round(p[0], 1), round(p[1], 1), round(p[2], 1)): p for p in pts}
-                    g = [source_to_godot(sx, sy, sz) for sx, sy, sz in uniq.values()]
+                    g = [source_to_unreal(sx, sy, sz) for sx, sy, sz in uniq.values()]
                     hulls.append([round(float(c), 4) for v in g for c in v])
                 e["model"] = mi
                 e["hulls"] = hulls
@@ -366,10 +372,14 @@ def disp_grid(src, dinfo, dispverts, emit):
 def write_props(data, out_dir, base, idx):
     """Parse GAME_LUMP sprp (VtMB v4, 56B DStaticPropV4): a model-name dict + per-
     prop origin/angles/solid. Decode each unique model once (shared texture cache)
-    into out_dir/props/<safename>.obj, and write <base>.props (one prop per line:
-    `safename ox oy oz pitch yaw roll solid`, Source coords; runtime applies the
-    Source->Godot transform and lights the prop with the real-time LightRig). `solid`
-    (0 = non-solid) gates collision."""
+    into out_dir/props/<safename>.obj (Unreal space), and write <base>.props (one prop
+    per line: `safename ox oy oz qx qy qz qw solid`). `solid` (0 = non-solid) gates
+    collision.
+
+    Unreal-native: the prop meshes are written via mdl.write_obj_scene(ue_space=True)
+    (cm/Z-up/left-handed, winding reversed) and the origin/angles here are converted to
+    source_to_unreal (origin) + source_angles_to_unreal_quat (a unit quaternion). The
+    runtime reads both verbatim -- no coordinate conversion at load."""
     gl = read_game_lump(data)
     if "sprp" not in gl:
         return
@@ -412,7 +422,8 @@ def write_props(data, out_dir, base, idx):
             missing += 1; continue
         try:
             meshes = MDL.decode(*dv)
-            MDL.write_obj_scene(meshes, safe, propdir, MDL.search_paths(dv[0]), read_bytes, tex_cache)
+            MDL.write_obj_scene(meshes, safe, propdir, MDL.search_paths(dv[0]), read_bytes,
+                                tex_cache, ue_space=True)
             valid.add(safe); ok += 1
         except Exception as e:
             print(f"  prop decode failed {model_path}: {e}"); missing += 1
@@ -422,8 +433,10 @@ def write_props(data, out_dir, base, idx):
             if safe not in valid:
                 continue
             solid_n += solid != 0
-            f.write(f"{safe} {ox:.4f} {oy:.4f} {oz:.4f} "
-                    f"{pitch:.4f} {yaw:.4f} {roll:.4f} {solid}\n")
+            ux, uy, uz = source_to_unreal(ox, oy, oz)
+            qx, qy, qz, qw = source_angles_to_unreal_quat(pitch, yaw, roll)
+            f.write(f"{safe} {ux:.4f} {uy:.4f} {uz:.4f} "
+                    f"{qx:.6f} {qy:.6f} {qz:.6f} {qw:.6f} {solid}\n")
     placed = sum(1 for pr in props if pr[0] in valid)
     print(f"props: {placed} placed ({solid_n} solid) / {len(used)} models "
           f"({ok} decoded, {missing} missing) -> {base}.props")
@@ -551,7 +564,7 @@ def main(bsp_path, out_dir):
 
     skipped_tools = 0
     skipped_hidden = 0
-    disp_collision = []   # world-space (godot) disp triangles for concave collision
+    disp_collision = []   # world-space (Unreal cm) disp triangles for concave collision
     # Env-patched materials split into one OBJ group per cubemap: the same base
     # material near two env_cubemaps samples two baked cubemaps, so each becomes its
     # own surface. The group key carries the cubemap ('<mat>@<cube>'); these map it
@@ -600,7 +613,7 @@ def main(bsp_path, out_dir):
         def emit(sx, sy, sz, a=0.0):
             u = (sx*s[0] + sy*s[1] + sz*s[2] + s[3]) / tw   # planar UV projection
             vv = (sx*t[0] + sy*t[1] + sz*t[2] + t[3]) / th
-            positions.append(source_to_godot(sx+ox, sy+oy, sz+oz))  # -> Godot
+            positions.append(source_to_unreal(sx+ox, sy+oy, sz+oz))  # -> Unreal cm
             uvs.append((u, vv))
             blend.append(a)                                 # WVT blend alpha (0 = tex1)
             return len(positions) - 1
@@ -1014,7 +1027,7 @@ def main(bsp_path, out_dir):
             rn = _room_normal(frag.mean(0), fN[jf], c)
             i0 = len(dpos)
             for vtx in frag:
-                dpos.append(source_to_godot(*(vtx + rn * 0.25)))
+                dpos.append(source_to_unreal(*(vtx + rn * 0.25)))
                 duv.append((float((vtx - c) @ s_dir / (2 * hw) + 0.5),
                             float((vtx - c) @ t_dir / (2 * hh) + 0.5)))
             for k in range(1, len(frag) - 1):
@@ -1079,8 +1092,8 @@ def main(bsp_path, out_dir):
         o.write(f"fog {1 if fog_on else 0}\n")
         r, g, b = (max(0.0, c) / 255.0 for c in fog_col)
         o.write(f"fogcolor {r:.4f} {g:.4f} {b:.4f}\n")
-        o.write(f"fogstart {blk_f(scam, 'fogstart') * INCH_TO_M:.4f}\n")   # -> metres
-        o.write(f"fogend {blk_f(scam, 'fogend') * INCH_TO_M:.4f}\n")
+        o.write(f"fogstart {blk_f(scam, 'fogstart') * INCH_TO_CM:.4f}\n")   # -> cm
+        o.write(f"fogend {blk_f(scam, 'fogend') * INCH_TO_CM:.4f}\n")
 
     def write_obj(suffix, scene):
         positions, uvs, groups, blend = scene
@@ -1097,7 +1110,10 @@ def main(bsp_path, out_dir):
                     continue
                 o.write(f"usemtl {mat}\n")
                 for (a, b, c) in tris:
-                    o.write(f"f {a+1}/{a+1} {b+1}/{b+1} {c+1}/{c+1}\n")
+                    # Reverse winding (a, c, b): source_to_unreal negates Y (a reflection),
+                    # so faces built in Source winding must flip to stay front-facing in
+                    # Unreal's left-handed frame. The runtime reads these tris verbatim.
+                    o.write(f"f {a+1}/{a+1} {c+1}/{c+1} {b+1}/{b+1}\n")
         # WorldVertexTransition blend sidecar: one alpha per vertex (v order). Only
         # written when the scene actually carries blend weights (disp terrain); the
         # loader stamps it onto vertex COLOR.r for the shader's tex1/tex2 mix.
@@ -1111,24 +1127,27 @@ def main(bsp_path, out_dir):
     write_obj("_decals", scenes["decal"])
 
     # sky_camera sidecar: the miniature backdrop must be placed at
-    # world(v) = (v - origin) * scale (Source 3D-skybox transform). Emit the raw
-    # Source-space origin + scale; the viewer converts to Godot space.
+    # world(v) = (v - origin) * scale (Source 3D-skybox transform). Origin is emitted in
+    # Unreal cm (same space as the _sky.obj verts), so the runtime applies it directly.
     if sky_anchor is not None and scenes["sky"][0]:
+        sox, soy, soz = source_to_unreal(*sky_anchor)
         with open(os.path.join(out_dir, base + ".sky"), "w") as o:
-            o.write(f"origin {sky_anchor[0]} {sky_anchor[1]} {sky_anchor[2]}\n")
+            o.write(f"origin {sox:.4f} {soy:.4f} {soz:.4f}\n")
             o.write(f"scale {sky_scale}\n")
 
     # player-spawn sidecar: info_player_start origin + yaw (Source angles are
-    # "pitch yaw roll"; yaw is the middle value). The viewer spawns here.
+    # "pitch yaw roll"; yaw is the middle value). Origin is emitted in Unreal cm and yaw
+    # is negated (the Y flip reverses yaw sense), so the runtime spawns here directly.
     for m in re.finditer(r"\{[^{}]*\}", ents):
         if '"info_player_start"' in m.group(0):
             o = re.search(r'"origin"\s+"(-?[\d.]+) (-?[\d.]+) (-?[\d.]+)"', m.group(0))
             a = re.search(r'"angles"\s+"(-?[\d.]+) (-?[\d.]+) (-?[\d.]+)"', m.group(0))
             if o:
                 yaw = float(a.group(2)) if a else 0.0
+                sx2, sy2, sz2 = source_to_unreal(float(o.group(1)), float(o.group(2)), float(o.group(3)))
                 with open(os.path.join(out_dir, base + ".spawn"), "w") as f:
-                    f.write(f"origin {o.group(1)} {o.group(2)} {o.group(3)}\n")
-                    f.write(f"yaw {yaw}\n")
+                    f.write(f"origin {sx2:.4f} {sy2:.4f} {sz2:.4f}\n")
+                    f.write(f"yaw {-yaw}\n")
             break
 
     write_collision(data, out_dir, base)
@@ -1143,28 +1162,27 @@ def main(bsp_path, out_dir):
             for tri in disp_collision:
                 f.write(" ".join(f"{c:.4f}" for p in tri for c in p) + "\n")
         print(f"disp collision: {len(disp_collision)} triangles -> {base}.dispcol")
-    # Water sidecar: per water material a surface plane (Godot Y, metres), the decoded
-    # normal map, and fog/reflection params. Plane height = median Y of the material's
-    # world-scene vertices (water faces are horizontal). The viewer renders these on
-    # water.gdshader and places a planar-reflection mirror per distinct plane. Water
-    # that lives only in the 3D-skybox backdrop (no world faces) is skipped here - it
-    # stays a dark placeholder, since a mirror plane in world space is meaningless for
-    # the scaled miniature.
+    # Water sidecar: per water material a surface plane height (Unreal Z, cm), the decoded
+    # normal map, and fog/reflection params. Plane height = median Z of the material's
+    # world-scene vertices (water faces are horizontal). The runtime renders these as
+    # Single Layer Water at that Z and reflects via Lumen/SSR. Water that lives only in the
+    # 3D-skybox backdrop (no world faces) is skipped here - a mirror plane in world space
+    # is meaningless for the scaled miniature.
     wpositions, wgroups = scenes["world"][0], scenes["world"][2]
-    def plane_y(mat):
-        ys = sorted(wpositions[i][1] for tri in wgroups.get(mat, []) for i in tri)
-        return ys[len(ys) // 2] if ys else None
+    def plane_z(mat):
+        zs = sorted(wpositions[i][2] for tri in wgroups.get(mat, []) for i in tri)
+        return zs[len(zs) // 2] if zs else None
     water_info = {m: w for m, w in water_info.items() if wgroups.get(m)}
     if water_info:
         with open(os.path.join(out_dir, base + ".water"), "w") as f:
             for mat, w in water_info.items():
                 f.write(f"mat {mat}\n")
-                f.write(f"plane {plane_y(mat):.4f}\n")
+                f.write(f"plane {plane_z(mat):.4f}\n")
                 if w["normalmap"]:
                     f.write(f"normalmap tex/{w['normalmap']}\n")
                 fc = w["fogcolor"]
                 f.write(f"fogcolor {fc[0]:.4f} {fc[1]:.4f} {fc[2]:.4f}\n")
-                f.write(f"fogdist {w['fogstart']*INCH_TO_M:.4f} {w['fogend']*INCH_TO_M:.4f}\n")
+                f.write(f"fogdist {w['fogstart']*INCH_TO_CM:.4f} {w['fogend']*INCH_TO_CM:.4f}\n")
                 rt = w["reflecttint"]
                 f.write(f"reflecttint {rt[0]:.4f} {rt[1]:.4f} {rt[2]:.4f}\n")
         print(f"water: {len(water_info)} surfaces -> {base}.water")

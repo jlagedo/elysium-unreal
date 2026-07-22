@@ -6,7 +6,7 @@ class UTexture2D;
 class UTextureCube;
 
 // The `<map>.env` sidecar: 2D skybox flag/name and Source sky_camera fog. Distances are
-// already converted to metres by the exporter; the fog colour is linear 0..1. The runtime
+// already converted to centimetres by the exporter; the fog colour is linear 0..1. The runtime
 // turns these into a per-map colour grade, image-based sky ambient, and height fog.
 struct FElysiumEnvDef
 {
@@ -14,8 +14,8 @@ struct FElysiumEnvDef
 	FString SkyName;               // e.g. "la" (informational; faces are named sky_<face>.png)
 	bool bFog = false;             // sky_camera had fogenable
 	FLinearColor FogColor = FLinearColor::Black;
-	float FogStartMeters = 0.f;
-	float FogEndMeters = 0.f;
+	float FogStartCm = 0.f;
+	float FogEndCm = 0.f;
 
 	static bool Parse(const FString& EnvPath, FElysiumEnvDef& Out);
 };

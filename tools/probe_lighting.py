@@ -20,7 +20,7 @@ Findings (ch_hub_1 / sm_hub_1 / sp_tutorial_1 / hw_hub_1 / la_hub_1):
 import struct, sys, collections
 sys.path.insert(0, "tools")
 import bsp, install
-import bsp_to_scene as B
+import UE_bsp_to_scene as B
 
 FS = 104
 LUMPS = {8: "LIGHTING", 15: "WORLDLIGHTS", 51: "LEAF_AMBIENT_HDR",

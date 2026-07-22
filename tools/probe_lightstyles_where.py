@@ -8,7 +8,7 @@ Quake pattern (how far it swings). A face is "watchable" when a dramatic style
 """
 import struct, sys
 import numpy as np
-import bsp_to_scene as B
+import UE_bsp_to_scene as B
 from install import build_index, read, map_path
 
 FS = 104

@@ -34,11 +34,12 @@ bool FElysiumObjModel::Parse(const FString& ObjPath, FElysiumObjModel& Out)
 			Line.ParseIntoArray(Tok, TEXT(" "), true);
 			if (Tok.Num() >= 4)
 			{
-				const double GX = FCString::Atod(*Tok[1]);
-				const double GY = FCString::Atod(*Tok[2]);
-				const double GZ = FCString::Atod(*Tok[3]);
-				// Godot (metres) -> Unreal (cm): swap Y/Z, scale 100.
-				Out.Positions.Add(FVector(GX, GZ, GY) * 100.0);
+				// UE_bsp_to_scene emits Unreal-space vertices (cm, Z-up, left-handed)
+				// directly, so positions are read verbatim -- no swap, no scale.
+				const double X = FCString::Atod(*Tok[1]);
+				const double Y = FCString::Atod(*Tok[2]);
+				const double Z = FCString::Atod(*Tok[3]);
+				Out.Positions.Add(FVector(X, Y, Z));
 			}
 		}
 		else if (Line.StartsWith(TEXT("vt "), ESearchCase::CaseSensitive))
@@ -65,11 +66,10 @@ bool FElysiumObjModel::Parse(const FString& ObjPath, FElysiumObjModel& Out)
 				const int32 I0 = FaceIndex(Tok[1]);
 				for (int32 K = 2; K < Tok.Num() - 1; ++K)
 				{
-					// Reverse winding (i0, k+1, k) to keep faces front-facing after the
-					// handedness flip from the Y/Z swap.
+					// Winding is already correct: UE_bsp_to_scene reverses it at export.
 					Group.Add(I0);
-					Group.Add(FaceIndex(Tok[K + 1]));
 					Group.Add(FaceIndex(Tok[K]));
+					Group.Add(FaceIndex(Tok[K + 1]));
 				}
 			}
 		}
@@ -116,6 +116,10 @@ void FElysiumObjModel::ParseMtl(const FString& Path, TMap<FString, FElysiumMater
 		else if (Key == TEXT("map_Kd") && Tok.Num() >= 2)
 		{
 			Cur->Albedo = Tok[1];
+		}
+		else if (Key == TEXT("map_Ke") && Tok.Num() >= 2)
+		{
+			Cur->Emissive = Tok[1];
 		}
 		else if (Key == TEXT("illum") && Tok.Num() >= 2 && Tok[1] == TEXT("4"))
 		{

@@ -9,7 +9,7 @@ Usage:
   python tools/export_all.py --skip-existing     # skip maps already exported
 """
 import os, sys, glob, time, traceback
-import bsp_to_scene as B
+import UE_bsp_to_scene as B
 import install
 
 MAPS = os.path.join(install.GAME, "maps")

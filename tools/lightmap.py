@@ -10,7 +10,7 @@ docs/lighting.md.
 """
 import struct, sys
 import numpy as np
-import bsp_to_scene as B
+import UE_bsp_to_scene as B
 
 FS = 104
 LOFS, MINS, SIZE, STYLES = 72, 80, 88, 48

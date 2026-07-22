@@ -10,6 +10,7 @@ struct FElysiumMaterialDef
 {
 	FString Name;
 	FString Albedo;
+	FString Emissive;        // map_Ke -> $selfillum emission mask (RGB x alpha, "*_ke.png")
 	bool bScissor = false;   // illum 4  -> alpha-tested
 	bool bBlend = false;     // blend 1  -> $translucent
 	FLinearColor Color = FLinearColor(0.6f, 0.6f, 0.65f);   // Kd fallback when no albedo

@@ -15,9 +15,11 @@ if not exist "%UE%" (
     exit /b 1
 )
 
+REM -dx12 forces the DX12 RHI so the SM6 features (Lumen, MegaLights, VSM, ray tracing)
+REM run; without it the renderer can fall back to DX11/SM5 and they are all off.
 if "%~1"=="" (
-    "%UE%" "%PROJECT%" -game -windowed -resx=1600 -resy=900
+    "%UE%" "%PROJECT%" -game -dx12 -windowed -resx=1600 -resy=900
 ) else (
-    "%UE%" "%PROJECT%" -game -windowed -resx=1600 -resy=900 -ElysiumMap=%1
+    "%UE%" "%PROJECT%" -game -dx12 -windowed -resx=1600 -resy=900 -ElysiumMap=%1
 )
 endlocal

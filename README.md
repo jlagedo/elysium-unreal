@@ -21,7 +21,7 @@ game-agnostic (an empty boot map + one master material).
 | Path | What |
 |---|---|
 | `Source/ElysiumUE/` | the C++ runtime module (loads intermediates, builds the world) |
-| `tools/` | the offline Python decode/export pipeline (`bsp_to_scene.py`, …) + format docs (`tools/CLAUDE.md`) |
+| `tools/` | the offline Python decode/export pipeline (`UE_bsp_to_scene.py`, …) + format docs (`tools/CLAUDE.md`) |
 | `docs/` | reverse-engineering reference + the rebuild strategy |
 | `Content/` | committed assets only: `Elysium.umap` (boot), `VtMB/Materials/M_VtMB_World` |
 | `CLAUDE.md` | project fact sheet + documentation map (start here after this README) |

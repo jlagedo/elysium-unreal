@@ -2,13 +2,17 @@
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumEnvironment.h"
+#include "ElysiumLightRig.h"
 #include "ElysiumMaterialFactory.h"
 #include "ElysiumObjModel.h"
+#include "ElysiumStaticMesh.h"
 
 #include "Components/DirectionalLightComponent.h"
 #include "Components/ExponentialHeightFogComponent.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Components/PostProcessComponent.h"
 #include "Components/SkyLightComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/Texture2D.h"
 #include "Engine/TextureCube.h"
 #include "GameFramework/Character.h"
@@ -26,10 +30,23 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysium, Log, All);
 
 namespace
 {
-	// Source (inches, right-handed) -> Unreal (cm, left-handed): negate Y, scale 2.54.
-	FVector SourceToUnreal(double SX, double SY, double SZ)
+	// A cube of half-extent H centred on the origin, as PMC section arrays. The sky material
+	// is two-sided and samples by view direction, so winding, normals, and UVs are unused —
+	// the box just has to surround the camera. ~5 km keeps the tutorial map well inside it.
+	void BuildSkyBox(float H, TArray<FVector>& Verts, TArray<int32>& Tris,
+		TArray<FVector>& Normals, TArray<FVector2D>& UVs)
 	{
-		return FVector(SX, -SY, SZ) * 2.54;
+		Verts = {
+			{-H, -H, -H}, {H, -H, -H}, {H, H, -H}, {-H, H, -H},
+			{-H, -H,  H}, {H, -H,  H}, {H, H,  H}, {-H, H,  H} };
+		const int32 Quads[6][4] = {
+			{0, 1, 2, 3}, {7, 6, 5, 4}, {4, 5, 1, 0}, {3, 2, 6, 7}, {1, 5, 6, 2}, {4, 0, 3, 7} };
+		for (const int32(&Q)[4] : Quads)
+		{
+			Tris.Append({ Q[0], Q[1], Q[2], Q[0], Q[2], Q[3] });
+		}
+		Normals.Init(FVector::UpVector, Verts.Num());
+		UVs.Init(FVector2D::ZeroVector, Verts.Num());
 	}
 
 	// ---- mesh cook-cache -----------------------------------------------------
@@ -134,10 +151,19 @@ AElysiumMapActor::AElysiumMapActor()
 	SkyMesh->SetCollisionResponseToAllChannels(ECR_Ignore);
 	SkyMesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 
-	// Placeholder lighting until the .lights rig lands (M1) — owned components, so they
-	// unload with the map. A gentle "soft key + fill" rig for walking around: a soft
-	// directional sun gives geometry some shape, and the sky light supplies a fixed
-	// constant ambient so no surface ever falls fully black.
+	// 2D skybox backdrop. Unlit and drawn on a huge box that surrounds the camera; the
+	// sky material samples the cube by view direction, so it reads as infinitely far. No
+	// collision, no shadows. Hidden until a map's sky faces build the cubemap.
+	SkyDomeMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("SkyDomeMesh"));
+	SkyDomeMesh->SetupAttachment(SceneRoot);
+	SkyDomeMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	SkyDomeMesh->SetCastShadow(false);
+	SkyDomeMesh->SetVisibility(false);
+
+	// Fallback sun for maps with no .lights sidecar — owned components, so they unload
+	// with the map. When the LightRig builds real per-source lights (the usual case),
+	// LoadMap switches this off: a fixed directional sun over interior geometry is exactly
+	// the flat look the per-source rig replaces.
 	SunLight = CreateDefaultSubobject<UDirectionalLightComponent>(TEXT("SunLight"));
 	SunLight->SetupAttachment(SceneRoot);
 	SunLight->SetRelativeRotation(FRotator(-46.f, -45.f, 0.f));
@@ -169,6 +195,10 @@ AElysiumMapActor::AElysiumMapActor()
 	HeightFog = CreateDefaultSubobject<UExponentialHeightFogComponent>(TEXT("HeightFog"));
 	HeightFog->SetupAttachment(SceneRoot);
 	HeightFog->SetVisibility(false);
+
+	// Real-time light rig: one Unreal light per WORLDLIGHTS source (built in LoadMap).
+	LightRig = CreateDefaultSubobject<UElysiumLightRig>(TEXT("LightRig"));
+	LightRig->SetupAttachment(SceneRoot);
 }
 
 void AElysiumMapActor::BeginPlay()
@@ -193,7 +223,22 @@ void AElysiumMapActor::LoadMap()
 		UE_LOG(LogElysium, Log, TEXT("skybox: %d surfaces"), SkySurfaceCount);
 	}
 
+	LoadProps();
+
 	ApplyEnvironment();
+
+	// Real-time lighting: one Unreal light per WORLDLIGHTS source. When the rig has real
+	// lights it owns the scene, so the flat fallback sun is switched off and the SkyLight
+	// drops to a dim ambient fill (tinted by the map's skyambient where present) that only
+	// keeps deep shadows off pure black — the per-source lights do the actual lighting.
+	WorldLightCount = LightRig->Build(FElysiumContentPaths::MapLights(MapName));
+	if (WorldLightCount > 0)
+	{
+		SunLight->SetVisibility(false);
+		SkyLight->LightColor = LightRig->SkyAmbient.ToFColor(true);
+		SkyLight->SetIntensity(LightRig->bHasSkyAmbient ? 0.6f : 0.4f);
+	}
+
 	SkyLight->RecaptureSky();
 
 	if (ReadSpawn(PendingSpawnLoc, PendingSpawnYaw))
@@ -293,6 +338,102 @@ int32 AElysiumMapActor::BuildMeshFromObj(const FString& ObjPath, UProceduralMesh
 	return Section;
 }
 
+void AElysiumMapActor::LoadProps()
+{
+	TArray<FString> Lines;
+	if (!FFileHelper::LoadFileToStringArray(Lines, *FElysiumContentPaths::MapProps(MapName)))
+	{
+		return;   // no .props sidecar: map has no static props
+	}
+	const FString PropsDir = FElysiumContentPaths::MapPropsDir(MapName);
+
+	// Group instances by model so each unique mesh is built once. `safename ox oy oz
+	// qx qy qz qw solid` — all Unreal-space (UE_bsp_to_scene emits it verbatim).
+	struct FInst { FTransform Xform; bool bSolid; };
+	TMap<FString, TArray<FInst>> ByModel;
+	for (const FString& Line : Lines)
+	{
+		TArray<FString> Tok;
+		Line.ParseIntoArray(Tok, TEXT(" "), true);
+		if (Tok.Num() < 9)
+		{
+			continue;
+		}
+		const FVector Loc(FCString::Atod(*Tok[1]), FCString::Atod(*Tok[2]), FCString::Atod(*Tok[3]));
+		const FQuat Rot(FCString::Atod(*Tok[4]), FCString::Atod(*Tok[5]), FCString::Atod(*Tok[6]), FCString::Atod(*Tok[7]));
+		const bool bSolid = FCString::Atoi(*Tok[8]) != 0;
+		ByModel.FindOrAdd(Tok[0]).Add({ FTransform(Rot, Loc), bSolid });
+	}
+
+	for (const TPair<FString, TArray<FInst>>& Entry : ByModel)
+	{
+		FElysiumObjModel Model;
+		if (!FElysiumObjModel::Parse(PropsDir / (Entry.Key + TEXT(".obj")), Model))
+		{
+			UE_LOG(LogElysium, Warning, TEXT("prop model parse failed: %s"), *Entry.Key);
+			continue;
+		}
+
+		const bool bAnySolid = Entry.Value.ContainsByPredicate([](const FInst& I) { return I.bSolid; });
+		UStaticMesh* Mesh = FElysiumStaticMeshBuilder::Build(Model, Model.Dir, bAnySolid, this);
+		if (!Mesh)
+		{
+			continue;
+		}
+		PropMeshes.Add(Mesh);
+		++PropModelCount;
+
+		// One ISM per solidity bucket (shared mesh; only the component's collision differs):
+		// solid props block, non-solid props are visual-only. Most models are all-or-nothing,
+		// so this is usually a single component per model.
+		UInstancedStaticMeshComponent* Buckets[2] = { nullptr, nullptr };
+		for (const FInst& I : Entry.Value)
+		{
+			UInstancedStaticMeshComponent*& ISM = Buckets[I.bSolid ? 1 : 0];
+			if (!ISM)
+			{
+				ISM = NewObject<UInstancedStaticMeshComponent>(this);
+				ISM->SetupAttachment(SceneRoot);
+				ISM->SetMobility(EComponentMobility::Movable);
+				ISM->SetStaticMesh(Mesh);
+				if (I.bSolid)
+				{
+					ISM->SetCollisionProfileName(TEXT("BlockAll"));
+				}
+				else
+				{
+					ISM->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+				}
+				ISM->RegisterComponent();
+				PropComponents.Add(ISM);
+			}
+			// Transforms are map-space; the map actor sits at the origin, so component-local
+			// (the AddInstance default) equals world.
+			ISM->AddInstance(I.Xform);
+			++PropInstanceCount;
+		}
+	}
+
+	UE_LOG(LogElysium, Log, TEXT("props: %d instances / %d models"), PropInstanceCount, PropModelCount);
+}
+
+void AElysiumMapActor::ToggleProps()
+{
+	bPropsVisible = !bPropsVisible;
+	for (UInstancedStaticMeshComponent* ISM : PropComponents)
+	{
+		if (ISM)
+		{
+			ISM->SetVisibility(bPropsVisible);
+		}
+	}
+}
+
+bool AElysiumMapActor::ArePropsVisible() const
+{
+	return bPropsVisible;
+}
+
 void AElysiumMapActor::ToggleSkybox()
 {
 	if (SkyMesh)
@@ -304,6 +445,19 @@ void AElysiumMapActor::ToggleSkybox()
 bool AElysiumMapActor::IsSkyboxVisible() const
 {
 	return SkyMesh && SkyMesh->IsVisible();
+}
+
+void AElysiumMapActor::ToggleLights()
+{
+	if (LightRig)
+	{
+		LightRig->SetLightsVisible(!LightRig->AreLightsVisible());
+	}
+}
+
+bool AElysiumMapActor::AreLightsVisible() const
+{
+	return LightRig && LightRig->AreLightsVisible();
 }
 
 void AElysiumMapActor::ApplySkyTransform()
@@ -323,7 +477,7 @@ void AElysiumMapActor::ApplySkyTransform()
 			Line.ParseIntoArray(Tok, TEXT(" "), true);
 			if (Tok.Num() == 4 && Tok[0] == TEXT("origin"))
 			{
-				OriginUnreal = SourceToUnreal(FCString::Atod(*Tok[1]), FCString::Atod(*Tok[2]), FCString::Atod(*Tok[3]));
+				OriginUnreal = FVector(FCString::Atod(*Tok[1]), FCString::Atod(*Tok[2]), FCString::Atod(*Tok[3]));
 			}
 			else if (Tok.Num() == 2 && Tok[0] == TEXT("scale"))
 			{
@@ -356,17 +510,31 @@ void AElysiumMapActor::ApplyEnvironment()
 		return;   // no .env: keep the placeholder ambient, no fog
 	}
 
-	// Sky IBL: feed the six sky faces to the SkyLight cubemap so ambient/reflections come
-	// from the real sky instead of the flat placeholder colour. (A *visible* sky dome needs
-	// the M_Sky master material; this is ambient only.)
+	// The six sky faces build one cubemap for the visible backdrop (the M_Sky dome). The
+	// SkyLight keeps its flat placeholder ambient for now: these 2D skyboxes are near-black
+	// night skies that integrate to almost nothing, so using the cube as the sole ambient
+	// would leave the (still unlit — no LightRig yet) world invisible. Cube IBL moves onto
+	// the SkyLight once the .lights rig provides the real scene lighting.
 	if (Env.bSky)
 	{
 		if (UTextureCube* Cube = ElysiumEnvironment::BuildSkyCube(FElysiumContentPaths::MapTexDir(MapName)))
 		{
-			SkyLight->SetLightColor(FLinearColor::White);
-			SkyLight->Cubemap = Cube;
-			SkyLight->SetIntensity(1.f);
-			UE_LOG(LogElysium, Log, TEXT("sky IBL cubemap applied (%s)"), *Env.SkyName);
+			if (UMaterialInterface* Master = LoadObject<UMaterialInterface>(nullptr,
+				TEXT("/Game/VtMB/Materials/M_Sky.M_Sky")))
+			{
+				UMaterialInstanceDynamic* Mid = UMaterialInstanceDynamic::Create(Master, this);
+				Mid->SetTextureParameterValue(TEXT("SkyCube"), Cube);
+				Mid->SetScalarParameterValue(TEXT("Brightness"), 4.f);
+
+				TArray<FVector> Verts, Normals;
+				TArray<int32> Tris;
+				TArray<FVector2D> UVs;
+				BuildSkyBox(500000.f, Verts, Tris, Normals, UVs);
+				SkyDomeMesh->CreateMeshSection_LinearColor(0, Verts, Tris, Normals, UVs, {}, {}, false);
+				SkyDomeMesh->SetMaterial(0, Mid);
+				SkyDomeMesh->SetVisibility(true);
+				UE_LOG(LogElysium, Log, TEXT("sky dome applied (%s)"), *Env.SkyName);
+			}
 		}
 	}
 
@@ -376,8 +544,8 @@ void AElysiumMapActor::ApplyEnvironment()
 	HeightFog->SetVisibility(Env.bFog);
 	if (Env.bFog)
 	{
-		const float StartCm = Env.FogStartMeters * 100.f;
-		const float EndCm = FMath::Max(Env.FogEndMeters * 100.f, StartCm + 1.f);
+		const float StartCm = Env.FogStartCm;
+		const float EndCm = FMath::Max(Env.FogEndCm, StartCm + 1.f);
 		HeightFog->SetFogInscatteringColor(Env.FogColor);
 		HeightFog->SetStartDistance(StartCm);
 		HeightFog->SetFogHeightFalloff(0.02f);
@@ -389,16 +557,6 @@ void AElysiumMapActor::ApplyEnvironment()
 
 bool AElysiumMapActor::ReadSpawn(FVector& OutLocation, float& OutYaw) const
 {
-	// Debug spawn override for the tutorial while iterating: a fixed Unreal pose (from the
-	// F1 overlay's UE / look readout) instead of the map's info_player_start.
-	static constexpr bool bDebugSpawn = true;
-	if (bDebugSpawn && MapName == TEXT("sp_tutorial_1"))
-	{
-		OutLocation = FVector(-173.f, 340.f, 323.f);
-		OutYaw = 26.f;
-		return true;
-	}
-
 	TArray<FString> Lines;
 	if (!FFileHelper::LoadFileToStringArray(Lines, *FElysiumContentPaths::MapSpawn(MapName)))
 	{
@@ -415,7 +573,7 @@ bool AElysiumMapActor::ReadSpawn(FVector& OutLocation, float& OutYaw) const
 		Line.ParseIntoArray(Tok, TEXT(" "), true);
 		if (Tok.Num() == 4 && Tok[0] == TEXT("origin"))
 		{
-			Origin = SourceToUnreal(FCString::Atod(*Tok[1]), FCString::Atod(*Tok[2]), FCString::Atod(*Tok[3]));
+			Origin = FVector(FCString::Atod(*Tok[1]), FCString::Atod(*Tok[2]), FCString::Atod(*Tok[3]));
 			bHasOrigin = true;
 		}
 		else if (Tok.Num() == 2 && Tok[0] == TEXT("yaw"))
@@ -431,8 +589,8 @@ bool AElysiumMapActor::ReadSpawn(FVector& OutLocation, float& OutYaw) const
 
 	// Lift off the floor so the pawn's collision capsule clears the ground on spawn.
 	OutLocation = Origin + FVector(0.f, 0.f, 100.f);
-	// Source yaw is measured in the opposite sense once Y is negated.
-	OutYaw = -YawSrc;
+	// .spawn already carries Unreal-space yaw (UE_bsp_to_scene negates it at export).
+	OutYaw = YawSrc;
 	return true;
 }
 

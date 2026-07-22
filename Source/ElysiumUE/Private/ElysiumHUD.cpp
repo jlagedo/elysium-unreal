@@ -37,6 +37,32 @@ void AElysiumHUD::BeginPlay()
 		TEXT("elysium.debug — toggle the debug overlay"),
 		FConsoleCommandDelegate::CreateWeakLambda(this, [this]() { ToggleDebug(); }),
 		ECVF_Cheat);
+
+	// elysium.lights — show/hide the real-time light rig (A/B the world with and without it).
+	LightsCmd = IConsoleManager::Get().RegisterConsoleCommand(
+		TEXT("elysium.lights"),
+		TEXT("elysium.lights — toggle the real-time light rig"),
+		FConsoleCommandDelegate::CreateWeakLambda(this, [this]()
+		{
+			if (AElysiumMapActor* Map = ResolveMapActor())
+			{
+				Map->ToggleLights();
+			}
+		}),
+		ECVF_Cheat);
+
+	// elysium.props — show/hide the static-prop instances.
+	PropsCmd = IConsoleManager::Get().RegisterConsoleCommand(
+		TEXT("elysium.props"),
+		TEXT("elysium.props — toggle the static props"),
+		FConsoleCommandDelegate::CreateWeakLambda(this, [this]()
+		{
+			if (AElysiumMapActor* Map = ResolveMapActor())
+			{
+				Map->ToggleProps();
+			}
+		}),
+		ECVF_Cheat);
 }
 
 void AElysiumHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -45,6 +71,16 @@ void AElysiumHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		IConsoleManager::Get().UnregisterConsoleObject(DebugCmd);
 		DebugCmd = nullptr;
+	}
+	if (LightsCmd)
+	{
+		IConsoleManager::Get().UnregisterConsoleObject(LightsCmd);
+		LightsCmd = nullptr;
+	}
+	if (PropsCmd)
+	{
+		IConsoleManager::Get().UnregisterConsoleObject(PropsCmd);
+		PropsCmd = nullptr;
 	}
 	Super::EndPlay(EndPlayReason);
 }
@@ -108,8 +144,9 @@ void AElysiumHUD::DrawHUD()
 	AElysiumMapActor* MapActor = ResolveMapActor();
 	if (MapActor)
 	{
-		Row(FString::Printf(TEXT("▸ %s    %d surf · %d sky"),
-			*MapActor->LoadedMap, MapActor->WorldSurfaceCount, MapActor->SkySurfaceCount), ColHeader);
+		Row(FString::Printf(TEXT("▸ %s    %d surf · %d sky · %d lights · %d props/%d models"),
+			*MapActor->LoadedMap, MapActor->WorldSurfaceCount, MapActor->SkySurfaceCount,
+			MapActor->WorldLightCount, MapActor->PropInstanceCount, MapActor->PropModelCount), ColHeader);
 	}
 	else
 	{
@@ -124,9 +161,11 @@ void AElysiumHUD::DrawHUD()
 	// Movement mode + skybox state.
 	const bool bNoclip = Cast<AElysiumPawn>(Pawn) && Cast<AElysiumPawn>(Pawn)->IsNoclip();
 	const bool bSky = MapActor && MapActor->IsSkyboxVisible();
-	Row(FString::Printf(TEXT("mode %s    sky %s"),
+	const bool bLights = MapActor && MapActor->AreLightsVisible();
+	Row(FString::Printf(TEXT("mode %s    sky %s    lights %s"),
 		bNoclip ? TEXT("NOCLIP") : TEXT("WALK"),
-		bSky ? TEXT("ON") : TEXT("OFF")), bNoclip ? ColOn : ColValue);
+		bSky ? TEXT("ON") : TEXT("OFF"),
+		bLights ? TEXT("ON") : TEXT("OFF")), bNoclip ? ColOn : ColValue);
 
 	// Crosshair pick: forward trace, report which mesh + where.
 	Row(TEXT("─ aim ─"), ColLabel);

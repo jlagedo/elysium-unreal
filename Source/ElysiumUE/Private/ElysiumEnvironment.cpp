@@ -49,11 +49,11 @@ bool FElysiumEnvDef::Parse(const FString& EnvPath, FElysiumEnvDef& Out)
 		}
 		else if (Key == TEXT("fogstart") && Tok.Num() >= 2)
 		{
-			Out.FogStartMeters = FCString::Atof(*Tok[1]);
+			Out.FogStartCm = FCString::Atof(*Tok[1]);
 		}
 		else if (Key == TEXT("fogend") && Tok.Num() >= 2)
 		{
-			Out.FogEndMeters = FCString::Atof(*Tok[1]);
+			Out.FogEndCm = FCString::Atof(*Tok[1]);
 		}
 	}
 	return true;

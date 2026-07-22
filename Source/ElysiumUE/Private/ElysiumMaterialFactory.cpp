@@ -3,14 +3,25 @@
 #include "ElysiumObjModel.h"
 #include "ElysiumTextureCache.h"
 #include "Engine/Texture2D.h"
+#include "HAL/IConsoleManager.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/StrongObjectPtr.h"
 
+// Emissive brightness for $selfillum surfaces (map_Ke). Multiplies M_VtMB_World's
+// EmissiveScale param (which defaults to 0, so non-selfillum surfaces never glow).
+// Read at material-build time, so re-travel to A/B a value.
+static TAutoConsoleVariable<float> CVarEmissiveScale(
+	TEXT("elysium.EmissiveScale"), 1.5f,
+	TEXT("LightRig-independent self-illum (map_Ke) emissive brightness on M_VtMB_World."),
+	ECVF_Default);
+
 namespace
 {
 	constexpr const TCHAR* MasterPath = TEXT("/Game/VtMB/Materials/M_VtMB_World.M_VtMB_World");
+	const FName EmissiveParam(TEXT("Emissive"));
+	const FName EmissiveScaleParam(TEXT("EmissiveScale"));
 
 	// The hand-authored master material, loaded once and kept alive by a strong ref.
 	UMaterialInterface* GetMaster()
@@ -26,7 +37,9 @@ namespace
 		return Master.Get();
 	}
 
-	// First texture parameter on the master (its albedo slot), discovered once.
+	// The master's albedo texture slot, discovered once by reflection. The master carries two
+	// texture parameters (albedo + Emissive); the albedo is "the one that isn't Emissive", so
+	// this stays correct regardless of the parameter enumeration order.
 	FName GetAlbedoParamName(UMaterialInterface* Master)
 	{
 		static FName Cached = NAME_None;
@@ -36,9 +49,13 @@ namespace
 			TArray<FMaterialParameterInfo> Infos;
 			TArray<FGuid> Ids;
 			Master->GetAllTextureParameterInfo(Infos, Ids);
-			if (Infos.Num() > 0)
+			for (const FMaterialParameterInfo& Info : Infos)
 			{
-				Cached = Infos[0].Name;
+				if (Info.Name != EmissiveParam)
+				{
+					Cached = Info.Name;
+					break;
+				}
 			}
 			bResolved = true;
 		}
@@ -75,6 +92,19 @@ UMaterialInstanceDynamic* FElysiumMaterialFactory::Build(const FElysiumMaterialD
 	if (ParamName != NAME_None && Albedo)
 	{
 		Mid->SetTextureParameterValue(ParamName, Albedo);
+	}
+
+	// $selfillum (map_Ke): bind the alpha-masked emission map and switch the master's
+	// EmissiveScale on. Surfaces without an emissive map leave EmissiveScale at its 0
+	// default, so they never glow.
+	if (Def && !Def->Emissive.IsEmpty())
+	{
+		if (UTexture2D* EmisTex = FElysiumTextureCache::LoadTex(Dir, Def->Emissive))
+		{
+			Mid->SetTextureParameterValue(EmissiveParam, EmisTex);
+			Mid->SetScalarParameterValue(EmissiveScaleParam,
+				FMath::Max(0.f, CVarEmissiveScale.GetValueOnAnyThread()));
+		}
 	}
 
 	return Mid;

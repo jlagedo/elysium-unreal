@@ -222,8 +222,11 @@ rebuild); `flat` swaps every material for a name-hashed colour.
 - **GI is real-time SDFGI, not baked** — an approximation of VtMB's radiosity, tuned by
   capture (energy/cell/cascades above); it can still leak through sub-voxel gaps and needs
   a few frames to converge. No VoxelGI, no `LightmapGI`.
-- **Baked lump 8 (LIGHTING) is not decoded**, nor are the HDR/ambient-cube lumps (empty in
-  VtMB's data anyway). Displacements are lit by the rig like any other world surface.
+- **Baked lump 8 (LIGHTING) is not decoded** *(by the Godot prototype this doc describes)*,
+  nor are the HDR/ambient-cube lumps (empty in VtMB's data anyway). Displacements are lit by
+  the rig like any other world surface. **Elysium-Unreal note:** lump 8 *is* now decoded
+  offline — for lighting *analysis/calibration*, not runtime baking (`tools/lightmap.py`,
+  `tools/probe_light_calibration.py`; see `rendering-perf.md` → "Why Lumen is load-bearing").
 
 ## Related docs
 

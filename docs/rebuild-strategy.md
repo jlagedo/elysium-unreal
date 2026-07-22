@@ -28,7 +28,7 @@ The plan has two tracks that run in parallel:
    - **Offline**: the Python decoders in this repo's `tools/` decode VtMB's proprietary
      formats (BSP v17, MDL v2531, TTH/TTZ, VPK, VMT, .fnt, .res) into portable intermediates
      under `tools/out/<map>/` (gitignored — regenerable from the user's install) — OBJ+MTL+
-     PNG/DDS, glTF `.glb`, and plain-text sidecars. `tools/bsp_to_scene.py` is the exporter;
+     PNG/DDS, glTF `.glb`, and plain-text sidecars. `tools/UE_bsp_to_scene.py` is the exporter;
      `tools/export_all.py` batches it.
    - **Runtime**: the C++ module `ElysiumUE` loads those intermediates from disk at
      map-load time and builds engine objects in code. No import step, no bake, no
@@ -54,7 +54,7 @@ The plan has two tracks that run in parallel:
    state. Un-ported system *source* (for class-for-class porting) remains in the read-only
    Godot repo at `E:\dev\elysium\game\src`.
 
-## Current implementation state (M0 — verified)
+## Current implementation state (M0 verified; M1 in progress)
 
 Working today: boot into the empty persistent level → `UElysiumMapSubsystem::Travel`
 (synchronous) loads a map as two `UProceduralMeshComponent` actors (world 355 sections +
@@ -62,40 +62,116 @@ Working today: boot into the empty persistent level → `UElysiumMapSubsystem::T
 `M_VtMB_World`, DDS-preferred textures with PNG fallback, per-section trimesh collision
 (async-cooked; pawn held until ground exists), `.emc` parse-cache (~1.3s warm load),
 `.sky` transform, `.spawn` placement, Character-movement FPS pawn with noclip, Canvas
-debug HUD, engine-console commands `elysium.map` / `elysium.maps` / `elysium.debug`.
+debug HUD, engine-console commands `elysium.map` / `elysium.maps` / `elysium.debug` /
+`elysium.lights`.
 
-The map actor reads `.env` and `.cube`: the `.cube` grade becomes a per-map color-grading
-LUT (33³ Adobe LUT resampled to Unreal's 16³ neutral-LUT layout) on an unbound
-`UPostProcessComponent`; the six `.env` sky faces become a runtime `UTextureCube` feeding
-the `SkyLight` for image-based ambient (a *visible* sky dome still needs the `M_Sky` master
-material); `.env` fog drives a `UExponentialHeightFogComponent` (off for the tutorial).
-`FElysiumEnvDef` + the LUT/sky-cube builders live in `ElysiumEnvironment.{h,cpp}`.
+All intermediates are read **verbatim** — `UE_bsp_to_scene.py` emits Unreal cm/Z-up/
+left-handed with winding pre-reversed, so no runtime coordinate conversion happens.
 
-Not yet built (sidecars exist unread in `tools/out`): `.hulls`, `.dispcol`, `.lights`,
-`.props`, `.sprites`, `_decals.obj`, `.water`, `.ents`. The direct sun light is a
-placeholder; sky ambient is now `.env`-driven where a map has sky faces.
+The map actor reads `.env` and `.cube` (`ApplyEnvironment`, backed by
+`ElysiumEnvironment.{h,cpp}`): the `.cube` grade becomes a per-map color-grading LUT (33³
+Adobe LUT resampled to Unreal's 16³ neutral-LUT layout) on an unbound `UPostProcessComponent`;
+the six `.env` sky faces build one runtime `UTextureCube` driving the visible 2D backdrop —
+a large unlit inward box (`SkyDomeMesh`) running a `M_Sky` MID that samples the cube by view
+direction, with a tunable `Brightness` scalar (the night skyboxes are near-black); `.env` fog
+drives a `UExponentialHeightFogComponent` (off for the tutorial).
+
+Lighting is the real-time `UElysiumLightRig` (`ElysiumLightRig.{h,cpp}`): it reads `.lights`
+and spawns one Unreal light per WORLDLIGHTS source (396 for the tutorial — point/spot on
+a soft exponent falloff (specular off — VtMB is pure Lambert) with `radius → reach`, a directional sun,
+skyambient tinting the `SkyLight`, lightstyle patterns ticked as intensity curves). The flat
+fallback sun is switched off once real lights load, and the `SkyLight` drops to a dim ambient
+fill. The renderer runs fully dynamic — HWRT Lumen + MegaLights + VSM (`Config/DefaultEngine.ini`),
+which **requires DX12/SM6** (every one of those features silently disables under DX11/SM5).
+
+Calibrating the rig against VtMB's own baked lightmaps (`tools/probe_light_calibration.py`)
+established that VtMB's look is **indirect-bounce-dominated** — a direct-light model, even
+with correct occlusion, has zero correlation with the baked result. So Lumen GI is
+load-bearing, not optional, and the dynamic lights are a modest contributor feeding it. This
+also makes **baking VtMB's lump-8 lighting** the natural low-end/floor path (free GI at
+runtime, the data VtMB shipped). Full render-path notes, the SM6 requirement, tuning, and the
+floor-budget reality are in `docs/rendering-perf.md`.
+
+Static props load: `.props` + `props/*.obj` build one `UStaticMesh` per unique model at
+runtime (`FElysiumStaticMeshBuilder`, `BuildFromMeshDescriptions`), rendered as one
+`UInstancedStaticMeshComponent` per (model, solidity) bucket, materials off `M_VtMB_World`,
+convex collision on solid props. 809 instances / 161 models for the tutorial; `elysium.props`
+toggles them.
+
+Not yet built (sidecars exist unread in `tools/out`): `.hulls`, `.dispcol`,
+`.sprites`, `_decals.obj`, `.water`, `.ents`; and texlight (type-0) clustering in the rig.
 `Travel`'s landmark parameter is accepted and ignored.
 Input bindings are legacy axis/action mappings (EnhancedInput is configured as the
-player-input class but unused). Only one of the planned master materials exists.
-`docs/map-architecture.md`'s async load state machine and Slate console are design,
-not code.
+player-input class but unused). Two of the planned master materials exist (`M_VtMB_World`,
+`M_Sky`); the rest are unbuilt. Movement is stock `UCharacterMovementComponent` (not the
+Source math yet). `docs/map-architecture.md`'s async load state machine and Slate console are
+design, not code.
+
+## M1 — remaining tasks
+
+Done this milestone: tooling migration; the **`UE_` coordinate conversion** (the map
+exporter, now `UE_bsp_to_scene.py`, emits Unreal cm/Z-up/left-handed with winding
+pre-reversed — the runtime reads every file raw); `.env` sky/fog + `.cube` LUT + `M_Sky`;
+and the **light rig + lightstyles** — `UElysiumLightRig` on the map actor spawns one Unreal
+light per `.lights` source (396 for the tutorial: 224 point, 170 spot, 1 sun, 1 skyambient),
+point/spot on a soft exponent falloff with specular killed (`radius → reach`), lightstyle
+patterns as per-frame intensity curves, skyambient tinting the `SkyLight`, and the flat
+fallback sun retired when real lights exist. The renderer is fully dynamic (HWRT Lumen +
+MegaLights + VSM, `Config/DefaultEngine.ini`); `elysium.lights` toggles the rig,
+`elysium.LightScale` tunes point/spot intensity. Texlight (type 0) clustering is the one
+deferred rig piece (none in the tutorial). Reference: `docs/lighting.md`, Godot
+`LightRig.cs` + `Lightstyles.cs`.
+
+Still open, each independent (pick by value):
+
+1. **`.hulls`/`.dispcol` collision** — convex `UBodySetup`/`FKConvexElem` per `.hulls`
+   brush, runtime trimesh from `.dispcol`; replaces render-trimesh as the primary walkable
+   surface. Reference: Godot `BrushCollision.cs`. (Now Unreal cm, ready to consume raw.)
+2. **Source movement component** — port `CGameMovement` (friction/accel/airaccel/StepMove)
+   into a `UCharacterMovementComponent` override. Reference: `docs/source_movement.md`,
+   Godot `SourceMovement.cs`.
+3. **Master-material set (rest)** — `M_World_Masked` (alphatest), `M_World_Translucent`,
+   and grow `M_VtMB_World` toward `M_World_Opaque` (bump, envmap mask + cube,
+   WVT second layer + vertex-color blend). Authored offline like `M_Sky`. (Alpha-masked
+   `$selfillum` emissive — `map_Ke` → `Emissive`/`EmissiveScale` — is done.)
+4. **Texture prewarm off the game thread** — worker-thread batch prewarm in
+   `FElysiumTextureCache` (Godot `Prewarm` shape); load is texture-bound.
+5. **Texlight clustering** — the deferred rig piece: bin type-0 emit_surface patches by
+   `(intensity, normal)`, single-linkage cluster, one shadowless point per surface (Godot
+   `LightRig.SpawnTexlights`). None in the tutorial; needed for other maps.
+
+Cross-cutting polish surfaced this milestone (do opportunistically):
+- **Colour-grade fidelity** — the `.cube` LUT was fit to Godot's linear tonemapper; applied
+  after Unreal's filmic curve it can crush shadows. Neutralise the tone curve or expose the
+  LUT intensity so it grades what it expects.
+- **Sky orientation** — the `BuildSkyCube` face order + `-CameraVector` sign are derived, not
+  visually verified; if the sky reads mirrored/rotated, adjust there.
+- **`elysium.*` debug toggles** for sky / LUT / fog to A/B render features live.
+- **Exclude `tools/ghidra*/` and `tools/re/`** from the repo (untracked; the strategy keeps
+  the RE toolchain out of this repo).
 
 ## Coordinate conventions
 
-The pipeline emits **two spaces**, and the runtime owns both conversions:
+`UE_bsp_to_scene.py` emits **Unreal space** for everything it writes — centimetres, Z-up,
+left-handed — so the runtime reads geometry and sidecars **verbatim** into `FVector`, with
+no swap, scale, or winding flip:
 
-- **OBJ geometry** (world, sky, props, decals) is Godot space (metres, Y-up):
-  Unreal position = `(gx, gz, gy) * 100`, winding reversed
-  (`ElysiumObjModel.cpp`).
-- **Source-space sidecars** (`.spawn`, `.sky`, `.props` origins) are inches, Z-up:
-  Unreal position = `(sx, -sy, sz) * 2.54`.
-- **Godot-space sidecars** (`.lights`, `.sprites` origins, `.ents` origins, `.hulls`,
-  `.dispcol`) are metres, Y-up — same conversion as OBJ. `.lights`/`.sprites` are written
-  by the exporter with `source_to_godot`; the runtime converts them exactly like OBJ verts.
-- **Directions** (`.lights` beam vectors) use the same Y/Z axis swap **without** the ×100
-  metric scale, then re-normalise.
-- Keep named helpers — `GodotToUE()`, `SourceToUE()`, and a `GodotDirToUE()` for direction
-  vectors — and never inline the math. Every sidecar reader states which space its file is in.
+- **Positions** (OBJ world/sky/decals/props, and the `.lights`/`.sprites`/`.ents`/`.hulls`/
+  `.dispcol`/`.props` origins, `.spawn`, `.sky`) = `source_to_unreal(sx,sy,sz) = (sx, -sy, sz) * 2.54`.
+  Both spaces are Z-up; the Y negation flips handedness (Source is right-handed).
+- **Winding**: the Y negation is a reflection (det −1), so `UE_bsp_to_scene.py` (and
+  `mdl.write_obj_scene(ue_space=True)` for prop meshes) reverses triangle winding once, at
+  OBJ-write time. `ElysiumObjModel.cpp` reads tris as-is.
+- **Directions** (`.lights` beam vectors) = `source_dir_to_unreal(x,y,z) = (x, -y, z)`,
+  re-normalised (no scale).
+- **Rotations** (`.props` prop angles) = `source_angles_to_unreal_quat(pitch,yaw,roll)`: the
+  Source QAngle matrix conjugated by the handedness reflection `M=diag(1,-1,1)` (`R_u = M·R·M`),
+  emitted as a unit quaternion `qx qy qz qw` and read straight into `FQuat` — no runtime math.
+- **Scalars**: radii, sprite sizes, and fog distances are emitted in centimetres
+  (`INCH_TO_CM`); `.spawn` yaw is emitted already negated (the Y flip reverses yaw sense).
+- The Source→Unreal math lives once in `tools/bsp.py` — never inline it. Legacy non-`UE_`
+  exporters still emit Godot Y-up/metres (`source_to_godot`) and are flagged for review
+  (see `CLAUDE.md` → "Exporter status — the `UE_` convention").
 
 ## Sidecar contracts (what the runtime consumes)
 
@@ -106,7 +182,7 @@ All under `tools/out/<map>/`. Formats are fixed by the pipeline and shared with 
 | `<map>.obj/.mtl` + `tex/` | world geometry + materials | OBJ, MTL with VtMB extensions (illum 4 = alphatest, blend, Kd) |
 | `<map>_sky.obj`, `.sky` | 3D skybox + `origin`/`scale` transform | OBJ + text |
 | `.ents` | **all 1,226 entities**: classname, targetname, origin, `start_hidden`, raw keyvalues, brush-entity convex `hulls` + `contents`/`blocks_player`, and 7-field I/O `outputs` (`target, input, param, delay, times, python, name`) | JSON |
-| `.props` | static props: `safename ox oy oz pitch yaw roll solid`, models in `props/<safename>.obj` | text, Source coords |
+| `.props` | static props: `safename ox oy oz qx qy qz qw solid`, models in `props/<safename>.obj` | text, Unreal cm + quaternion |
 | `.hulls` / `.dispcol` | world brush convex hulls / displacement collision tris | text, Godot metres |
 | `.lights` | one line per WORLDLIGHTS source: `type origin dir rgb radius stopdot stopdot2 exponent style` | text |
 | `.sprites` | env_sprite coronas: `texpath pos w h rgb amt orient` | text, Godot metres |
@@ -127,7 +203,7 @@ Unreal-native substitutions:
 | Godot (C#) | Unreal (C++) | Mechanism |
 |---|---|---|
 | `ContentPaths.cs` | `FElysiumContentPaths` | Content root at `tools/out` (dev), one-line switch to packaged location later. |
-| `ObjModel.cs` | `FElysiumObjModel` | OBJ+MTL parser. Extend `FElysiumMaterialDef` to the full Godot `MaterialDef` field set: emission/selfillum, envmask, bump, alpha mode, WVT blend, water/decal params. |
+| `ObjModel.cs` | `FElysiumObjModel` | OBJ+MTL parser (albedo `map_Kd`, alpha-masked emissive `map_Ke`, alpha/blend flags). Extend `FElysiumMaterialDef` to the rest of the Godot `MaterialDef` field set: envmask, bump, WVT blend, water/decal params. |
 | `TextureCache.cs` | `FElysiumTextureCache` | DDS (native DXT + mips) preferred, PNG fallback. Add: worker-thread prewarm batch (Godot `Prewarm` shape — load is texture-bound), cubemap load (`UTextureCube` from six faces). |
 | `MaterialFactory.cs` | `FElysiumMaterialFactory` | MIDs off the master-material set below, parameters bound from `MaterialDef`. |
 | `WorldLoader.cs` | `AElysiumMapActor` | PMC sections per material bucket (built). Grows into the per-map owner of all Track B subsystems. |
@@ -151,13 +227,18 @@ Unreal-native substitutions:
 `UMaterial` cannot be created at runtime; everything else can. The repo commits a small,
 game-agnostic set with parameter slots — the analogue of Godot's `.gdshader` files:
 
-- `M_VtMB_World` *(exists)* — grows into `M_World_Opaque` (albedo, selfillum, bump,
-  envmap mask + cube, WVT second layer + vertex-color blend)
+- `M_VtMB_World` *(exists — albedo + alpha-masked selfillum emissive)* — grows into
+  `M_World_Opaque` (bump, envmap mask + cube, WVT second layer + vertex-color blend). The
+  `$selfillum` path: the exporter bakes the base texture's alpha-masked RGB into `*_ke.png`
+  and writes `map_Ke`; the runtime binds it onto the `Emissive` texture parameter and turns
+  `EmissiveScale` on (`elysium.EmissiveScale`, default 1.5; the param defaults to 0 so
+  non-selfillum surfaces never glow). Authored by `tools/add_world_emissive.py`.
 - `M_World_Masked` (alphatest) and `M_World_Translucent`
 - `M_Water` (Single Layer Water)
 - `M_Additive` (coronas / glow props)
 - `M_Decal` (deferred decal domain)
-- `M_Sky` (six-face skybox)
+- `M_Sky` (six-face skybox) *(exists — unlit, two-sided, samples the `SkyCube` param by
+  view direction; authored by `tools/make_sky_material.py`)*
 - `M_VguiGlyph` / UI brushes
 
 These encode shading logic, not game content — they belong in `Content/` permanently.
@@ -366,9 +447,11 @@ toolkit table.
 ## Pipeline & tooling
 
 **Tooling migration — done.** The decode/export pipeline lives in this repo's `tools/`
-(`bsp.py`, `bsp_to_scene.py`, `export_all.py`, `mdl.py`/`mdl_gltf.py`/`mdl_skel.py`, `vmt.py`,
+(`bsp.py`, `UE_bsp_to_scene.py`, `export_all.py`, `mdl.py`/`mdl_gltf.py`/`mdl_skel.py`, `vmt.py`,
 `vpk.py`, `kv.py`, `fnt.py`, `install.py`, `tex_to_png.py`, `retex_dds.py`, `lightmap.py`,
-`build_grade_lut.py`, `menu_extract.py`, `make_boot_map.py`, `make_testmap.py`, `sky_upscale.py`,
+`build_grade_lut.py`, `menu_extract.py`, `make_boot_map.py`, `make_sky_material.py`,
+`add_world_emissive.py`, `set_world_material_usage.py`,
+`make_testmap.py`, `sky_upscale.py`,
 the `probe_*.py`/`*_probe.py` investigators, and `tools/CLAUDE.md`), with `tools/requirements.txt`
 for deps (`Pillow`, `numpy`, `matplotlib` core; `torch`, `torchvision`, `spandrel`, `einops`,
 `safetensors` optional, ESRGAN upscalers only). It is engine-neutral Python; the only "Godot" in
@@ -399,8 +482,9 @@ Vertical slice: **play `sp_tutorial_1` start to finish, then walk into
   trimesh collision, `.emc` cache, free-fly pawn, map switching, debug HUD.
 - **M1 — world parity**: `.hulls`/`.dispcol` collision, Source movement component,
   light rig + lightstyles, `.env` sky/fog, `.cube` LUT, master-material set
-  (alpha modes, WVT, bump/envmap), texture prewarm off the game thread. (The pipeline
-  migration this once gated on is done — see Pipeline & tooling.)
+  (alpha modes, WVT, bump/envmap), texture prewarm off the game thread. (The `UE_`
+  coordinate conversion, `.env` sky/fog, `.cube` LUT, `M_Sky`, and the light rig +
+  lightstyles are done — see "M1 — remaining tasks" for what's left.)
 - **M2 — dressing parity**: props via ISM (+ convex collision), decals, Single Layer
   Water, coronas, A/B match vs. the Godot viewer on tutorial + hub maps.
 - **M3 — entity backbone**: entity world + registry, event queue + input dispatch,
@@ -423,8 +507,9 @@ one part with no Godot reference to fall back on — de-risk it earliest.
 ## Repository facts
 
 - Committed assets: `Content/Elysium.umap` (empty boot persistent level, regenerable via
-  `tools/make_boot_map.py` headless) and `Content/VtMB/Materials/M_VtMB_World` (master
-  material). No converted game content, no vendored Python.
+  `tools/make_boot_map.py` headless) and the master materials `Content/VtMB/Materials/
+  M_VtMB_World` and `M_Sky` (regenerable via `tools/make_sky_material.py` headless). No
+  converted game content, no vendored Python.
 - `Config/DefaultEngine.ini`: boot map `/Game/Elysium`, `AElysiumGameMode` global
   default, `UElysiumGameInstance`. `Config/DefaultInput.ini`: legacy axis/action
   mappings (WASD, mouse-look, Space jump, V noclip, T skybox, F1 debug, F10 console).

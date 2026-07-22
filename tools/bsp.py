@@ -12,6 +12,7 @@ BSP is a container of 64 lumps. Header: `int ident "VBSP"`, `int version (17)`,
 import struct, io, zipfile
 
 INCH_TO_M = 0.0254
+INCH_TO_CM = 2.54
 
 # --- lump indices (the ones we touch) ---------------------------------------
 L_ENTITIES        = 0
@@ -97,8 +98,66 @@ def read_lump(data, i):
 
 
 def source_to_godot(x, y, z):
-    """Source (Z-up, right-handed, inches) -> Godot (Y-up, metres)."""
+    """Source (Z-up, right-handed, inches) -> Godot (Y-up, metres).
+
+    Legacy: only the un-converted (non-UE_) exporters still emit this space.
+    The UE_ pipeline uses source_to_unreal below."""
     return (x * INCH_TO_M, z * INCH_TO_M, -y * INCH_TO_M)
+
+
+def source_to_unreal(x, y, z):
+    """Source (Z-up, right-handed, inches) -> Unreal (Z-up, left-handed, centimetres).
+
+    Both spaces are Z-up, so this is just an inch->cm scale plus a Y negation to flip
+    handedness. The Y negation makes this a reflection (determinant -1), so any
+    triangle geometry emitted through it must have its winding reversed to stay
+    front-facing (the UE_ exporter reverses winding once, at OBJ write time)."""
+    return (x * INCH_TO_CM, -y * INCH_TO_CM, z * INCH_TO_CM)
+
+
+def source_dir_to_unreal(x, y, z):
+    """Direction vector Source -> Unreal: negate Y only (no scale). Re-normalise after."""
+    return (x, -y, z)
+
+
+def source_angles_to_unreal_quat(pitch, yaw, roll):
+    """Source QAngle (pitch, yaw, roll degrees) -> Unreal rotation quaternion
+    (qx, qy, qz, qw), in the reflected Unreal frame source_to_unreal produces.
+
+    Build the Source rotation R (column-vector convention, v' = R*v) from the QAngle,
+    then conjugate by the handedness reflection M = diag(1,-1,1): R_u = M*R*M. Both the
+    prop mesh and its placement pass through the same reflection, so a (reflected) mesh
+    vertex p_u maps to world as R_u*p_u + source_to_unreal(origin). det(M*R*M) = +1, so
+    R_u stays a proper rotation and converts cleanly to a unit quaternion (standard
+    column-convention mat->quat, matching Unreal FQuat::RotateVector = q*v*q^-1)."""
+    import math
+    py, yw, rl = math.radians(pitch), math.radians(yaw), math.radians(roll)
+    sp, cp = math.sin(py), math.cos(py)
+    sy, cy = math.sin(yw), math.cos(yw)
+    sr, cr = math.sin(rl), math.cos(rl)
+    # Source AngleMatrix: YAW about Z, PITCH about Y, ROLL about X (matrix[row][col]).
+    R = [
+        [cp * cy, sr * sp * cy - cr * sy, cr * sp * cy + sr * sy],
+        [cp * sy, sr * sp * sy + cr * cy, cr * sp * sy - sr * cy],
+        [-sp,     sr * cp,                cr * cp],
+    ]
+    s = (1.0, -1.0, 1.0)   # M = diag(1,-1,1); (M R M)[i][j] = s[i]*s[j]*R[i][j]
+    U = [[s[i] * s[j] * R[i][j] for j in range(3)] for i in range(3)]
+    t = U[0][0] + U[1][1] + U[2][2]
+    if t > 0.0:
+        r = math.sqrt(1.0 + t); f = 0.5 / r
+        w, x, y, z = 0.5 * r, (U[2][1] - U[1][2]) * f, (U[0][2] - U[2][0]) * f, (U[1][0] - U[0][1]) * f
+    elif U[0][0] >= U[1][1] and U[0][0] >= U[2][2]:
+        r = math.sqrt(1.0 + U[0][0] - U[1][1] - U[2][2]); f = 0.5 / r
+        w, x, y, z = (U[2][1] - U[1][2]) * f, 0.5 * r, (U[0][1] + U[1][0]) * f, (U[0][2] + U[2][0]) * f
+    elif U[1][1] >= U[2][2]:
+        r = math.sqrt(1.0 - U[0][0] + U[1][1] - U[2][2]); f = 0.5 / r
+        w, x, y, z = (U[0][2] - U[2][0]) * f, (U[0][1] + U[1][0]) * f, 0.5 * r, (U[1][2] + U[2][1]) * f
+    else:
+        r = math.sqrt(1.0 - U[0][0] - U[1][1] + U[2][2]); f = 0.5 / r
+        w, x, y, z = (U[1][0] - U[0][1]) * f, (U[0][2] + U[2][0]) * f, (U[1][2] + U[2][1]) * f, 0.5 * r
+    n = math.sqrt(x * x + y * y + z * z + w * w) or 1.0
+    return (x / n, y / n, z / n, w / n)
 
 
 def point_leaf(data, pt, nodes=None, planes=None):

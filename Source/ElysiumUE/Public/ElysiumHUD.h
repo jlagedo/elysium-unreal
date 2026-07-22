@@ -28,6 +28,8 @@ private:
 	bool bShowDebug = false;
 	float SmoothedFPS = 0.f;
 	IConsoleObject* DebugCmd = nullptr;
+	IConsoleObject* LightsCmd = nullptr;
+	IConsoleObject* PropsCmd = nullptr;
 
 	AElysiumMapActor* ResolveMapActor() const;
 };

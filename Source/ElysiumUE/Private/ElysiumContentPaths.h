@@ -19,4 +19,7 @@ struct FElysiumContentPaths
 	static FString MapSky(const FString& Map) { return MapDir(Map) / (Map + TEXT(".sky")); }
 	static FString MapEnv(const FString& Map) { return MapDir(Map) / (Map + TEXT(".env")); }
 	static FString MapGrade(const FString& Map) { return MapDir(Map) / (Map + TEXT(".cube")); }
+	static FString MapLights(const FString& Map) { return MapDir(Map) / (Map + TEXT(".lights")); }
+	static FString MapProps(const FString& Map) { return MapDir(Map) / (Map + TEXT(".props")); }
+	static FString MapPropsDir(const FString& Map) { return MapDir(Map) / TEXT("props"); }
 };

@@ -25,6 +25,9 @@ public class ElysiumUE : ModuleRules
 			// Runtime asset loading: build meshes in code (no editor bake) and
 			// decode textures from disk into transient UTexture2D.
 			"ProceduralMeshComponent", "ImageWrapper", "ImageCore", "RenderCore", "RHI",
+			// Static props: build UStaticMesh at runtime from mesh descriptions
+			// (BuildFromMeshDescriptions) with manual convex collision for solid props.
+			"MeshDescription", "StaticMeshDescription", "PhysicsCore",
 			// Dev console UI is built directly in Slate.
 			"Slate", "SlateCore"
 		});

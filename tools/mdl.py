@@ -15,6 +15,7 @@ CLI: python tools/mdl.py <model-path-in-vpk> [<out_dir>]
   writes <out_dir>/<name>.obj + .mtl + tex/*.png (Godot-ready, like bsp_to_scene).
 """
 import struct, sys, os, re
+import bsp
 
 STATIC_PROP_FLAG = 0x10
 VSTRIDE = {0: 44, 1: 12, 2: 8}
@@ -256,9 +257,13 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
     return (albedo, emis if info.get("selfillum") else None, additive)
 
 
-def write_obj_scene(meshes, name, out_dir, search, read_bytes, tex_cache):
+def write_obj_scene(meshes, name, out_dir, search, read_bytes, tex_cache, *, ue_space=False):
     """Write out_dir/<name>.obj + .mtl, decoding textures into out_dir/tex/
-    (shared across models via tex_cache). Verts baked to Godot space; UVs as-is."""
+    (shared across models via tex_cache). UVs as-is.
+
+    ue_space=False: Godot Y-up/metres (legacy, the non-UE_ default).
+    ue_space=True:  Unreal cm/Z-up/left-handed via bsp.source_to_unreal, with triangle
+    winding reversed (the Y negation is a reflection) -- read verbatim by the runtime."""
     os.makedirs(os.path.join(out_dir, "tex"), exist_ok=True)
     mat_png = {m.material: _resolve_material(m.material, search, read_bytes, out_dir, tex_cache)
                for m in meshes}
@@ -278,13 +283,21 @@ def write_obj_scene(meshes, name, out_dir, search, read_bytes, tex_cache):
         vbase = 1
         for mesh in meshes:
             for (x, y, z, u, vv) in mesh.verts:
-                f.write(f"v {x*SCALE:.6f} {z*SCALE:.6f} {-y*SCALE:.6f}\n")
+                if ue_space:
+                    ux, uy, uz = bsp.source_to_unreal(x, y, z)
+                    f.write(f"v {ux:.6f} {uy:.6f} {uz:.6f}\n")
+                else:
+                    f.write(f"v {x*SCALE:.6f} {z*SCALE:.6f} {-y*SCALE:.6f}\n")
             for (_, _, _, u, vv) in mesh.verts:
                 f.write(f"vt {u:.6f} {vv:.6f}\n")
             f.write(f"usemtl {sanitize(mesh.material)}\n")
             for (a, b, c) in mesh.tris:
                 a, b, c = a + vbase, b + vbase, c + vbase
-                f.write(f"f {a}/{a} {b}/{b} {c}/{c}\n")
+                # Unreal space is reflected (det -1), so reverse winding to stay front-facing.
+                if ue_space:
+                    f.write(f"f {a}/{a} {c}/{c} {b}/{b}\n")
+                else:
+                    f.write(f"f {a}/{a} {b}/{b} {c}/{c}\n")
             vbase += len(mesh.verts)
     return sum(len(m.verts) for m in meshes), sum(len(m.tris) for m in meshes)
 
