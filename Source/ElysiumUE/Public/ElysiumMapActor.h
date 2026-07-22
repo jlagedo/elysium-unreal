@@ -2,8 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Templates/PimplPtr.h"
 #include "ElysiumMapActor.generated.h"
 
+class FElysiumEntityWorld;
 class UDirectionalLightComponent;
 class UElysiumLightRig;
 class UExponentialHeightFogComponent;
@@ -51,6 +53,10 @@ public:
 	// (or the spawn-hold timed out). The headless profiler waits on this before capturing.
 	bool IsSpawnDone() const { return bSpawnDone; }
 
+	// The live Track-B entity world (P1.4), or null if the map has no `.ents`. Owned by this
+	// actor, so it dies on map unload. The `elysium.world*` verbs reach it through here.
+	FElysiumEntityWorld* GetEntityWorld() const { return EntityWorld.Get(); }
+
 	// Live stats for the debug overlay, filled by LoadMap.
 	FString LoadedMap;
 	int32 WorldSurfaceCount = 0;
@@ -63,6 +69,8 @@ public:
 	int32 HullCount = 0;
 	int32 DispTriCount = 0;
 	bool bBrushCollision = false;
+	// Entity substrate: number of `.ents` records the world spawned (0 if the map has no sidecar).
+	int32 EntityCount = 0;
 
 private:
 	UPROPERTY() TObjectPtr<USceneComponent> SceneRoot;
@@ -88,6 +96,11 @@ private:
 	UPROPERTY() TArray<TObjectPtr<UInstancedStaticMeshComponent>> PropComponents;
 	UPROPERTY() TArray<TObjectPtr<UStaticMesh>> PropMeshes;
 	bool bPropsVisible = true;
+
+	// The Track-B entity substrate for this map (P1.4): parsed defs, live entities, the event
+	// queue, and the debug sinks. A plain C++ object (no UObject) held type-erased so the header
+	// needs only a forward declaration; destroyed with the actor on map unload.
+	TPimplPtr<FElysiumEntityWorld> EntityWorld;
 
 	void LoadMap();
 	void LoadProps();

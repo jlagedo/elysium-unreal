@@ -8,6 +8,10 @@ void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection
 {
 	Super::Initialize(Collection);
 
+	// Field-6 Python has nowhere to run until M4, so the null host stands in from day one — it
+	// logs each payload and returns Void, keeping dispatch complete and observable.
+	ScriptHostPtr = MakeUnique<FElysiumNullScriptHost>();
+
 	// `elysium.g <name> [value]` — inspect/poke the G store by hand. No args dumps every
 	// set flag; one arg reads (miss -> 0); a second arg writes (integer if it parses, else
 	// string; the literal `none` deletes the key, matching G's None-deletes semantics).
@@ -64,8 +68,19 @@ void UElysiumGameStateSubsystem::Deinitialize()
 	Globals.Empty();
 	Quests.Empty();
 	Clock.Reset();
+	ScriptHostPtr.Reset();
 
 	Super::Deinitialize();
+}
+
+void UElysiumGameStateSubsystem::SetScriptHost(TUniquePtr<IElysiumScriptHost> InHost)
+{
+	// M4 swaps the null host for the real evaluator; ignore a null argument so ScriptHost()
+	// always dereferences a live host.
+	if (InHost)
+	{
+		ScriptHostPtr = MoveTemp(InHost);
+	}
 }
 
 FElysiumVariant UElysiumGameStateSubsystem::GetGlobal(const FString& Key) const

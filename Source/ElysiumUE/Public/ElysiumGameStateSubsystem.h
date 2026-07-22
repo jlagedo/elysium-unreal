@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "ElysiumGameClock.h"
+#include "ElysiumScriptHost.h"
 #include "ElysiumVariant.h"
 #include "ElysiumGameStateSubsystem.generated.h"
 
@@ -68,10 +69,18 @@ public:
 	FElysiumGameClock& GameClock() { return Clock; }
 	const FElysiumGameClock& GameClock() const { return Clock; }
 
+	// --- Script host (B6) ----------------------------------------------------------
+	// The seam field-6 Python payloads evaluate through. Initialized to FElysiumNullScriptHost
+	// (logs + returns Void); the M4 evaluator installs itself via SetScriptHost. Lives here (GI
+	// scope) so it persists across map travel, like the entity world's other collaborators.
+	IElysiumScriptHost& ScriptHost() const { return *ScriptHostPtr; }
+	void SetScriptHost(TUniquePtr<IElysiumScriptHost> InHost);
+
 private:
 	FElysiumGlobalMap Globals;
 	FElysiumQuestMap Quests;
 	FElysiumGameClock Clock;
+	TUniquePtr<IElysiumScriptHost> ScriptHostPtr;
 
 	TArray<IConsoleObject*> ConsoleObjects;
 };

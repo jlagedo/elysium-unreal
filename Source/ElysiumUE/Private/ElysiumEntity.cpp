@@ -26,6 +26,13 @@ void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHan
 		}
 	}
 
+	// Seed the per-output `times` counters from the def (the world counts them down as it fires).
+	OutputTimesRemaining.Reserve(InDef.Outputs.Num());
+	for (const FElysiumOutputDef& O : InDef.Outputs)
+	{
+		OutputTimesRemaining.Add(O.Times);
+	}
+
 	// start_hidden — born fully OFF (R6). No prior think to save; the body build (P1.5) skips
 	// collision + draw while bHidden.
 	if (InDef.bStartHidden)

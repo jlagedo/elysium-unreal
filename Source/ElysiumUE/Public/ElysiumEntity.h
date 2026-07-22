@@ -81,6 +81,12 @@ public:
 	bool  bDead = false;
 	float NextThink = ELYSIUM_NEVER_THINK;
 
+	// --- Output firing state (R2) ------------------------------------------------------
+	// The runtime `times` countdown, one entry per Def->Outputs row (the def is immutable, so
+	// the mutable counter lives here). Seeded from each row's `Times` at Construct: -1 stays
+	// unlimited, N counts down to 0 (spent). The entity world decrements it as it fires outputs.
+	TArray<int32> OutputTimesRemaining;
+
 	bool IsHidden() const { return bHidden; }
 	bool IsDead() const { return bDead; }
 	bool IsRecordOnly() const { return bRecordOnly; }

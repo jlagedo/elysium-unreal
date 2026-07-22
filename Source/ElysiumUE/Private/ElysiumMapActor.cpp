@@ -1,11 +1,16 @@
 #include "ElysiumMapActor.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumEntityDefs.h"
+#include "ElysiumEntityWorld.h"
 #include "ElysiumEnvironment.h"
+#include "ElysiumGameStateSubsystem.h"
 #include "ElysiumLightRig.h"
 #include "ElysiumMaterialFactory.h"
 #include "ElysiumObjModel.h"
 #include "ElysiumStaticMesh.h"
+
+#include "Engine/GameInstance.h"
 
 #include "Components/DirectionalLightComponent.h"
 #include "Components/ExponentialHeightFogComponent.h"
@@ -283,6 +288,27 @@ void AElysiumMapActor::LoadMap()
 	if (ReadSpawn(PendingSpawnLoc, PendingSpawnYaw))
 	{
 		bSpawnPending = true;
+	}
+
+	// Track-B entity substrate (P1.4): parse `.ents`, build the live world, run the spawn pass,
+	// and ignite the map-load outputs. The world ticks from AElysiumMapActor::Tick.
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+		{
+			FElysiumEntityDefs EntDefs;
+			if (FElysiumEntityDefs::Parse(FElysiumContentPaths::MapEnts(MapName), EntDefs))
+			{
+				EntityCount = EntDefs.Num();
+				EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState);
+				EntityWorld->Load(MoveTemp(EntDefs));
+				EntityWorld->FireMapLoadOutputs();
+			}
+			else
+			{
+				UE_LOG(LogElysium, Log, TEXT("no %s.ents — entity world not built"), *MapName);
+			}
+		}
 	}
 
 	UE_LOG(LogElysium, Log, TEXT("loaded %s in %.2fs"), *MapName, FPlatformTime::Seconds() - Start);
@@ -726,6 +752,21 @@ bool AElysiumMapActor::ReadSpawn(FVector& OutLocation, float& OutYaw) const
 void AElysiumMapActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+
+	// R4 — advance the single game clock once per frame and drive the entity world think-first
+	// (retail order: due thinks, then the event queue). Runs every frame, independent of the
+	// spawn-hold below, so the map-load I/O chains service immediately.
+	if (EntityWorld)
+	{
+		if (UGameInstance* GI = GetGameInstance())
+		{
+			if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+			{
+				GameState->GameClock().Advance(DeltaSeconds);
+				EntityWorld->Tick(GameState->GameClock().GetNow());
+			}
+		}
+	}
 
 	if (!bSpawnPending || bSpawnDone)
 	{

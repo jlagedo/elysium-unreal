@@ -161,11 +161,26 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
   resolves one classname, dumps its chain-walked tables, and probes the base contract on a
   throwaway entity (fires hide/unhide/kill through the registry). No world/queue yet — that is
   1.4. *Deps:* 1.1.
-- [ ] **1.4 Entity world + event queue + chokepoints** — storage/indices/spawn/teardown,
-  `AcceptInput` + queue `Add` as the only two paths, `times` countdown, think servicing,
-  zero-delay drain with loop guard; **sinks + 1,000-entry ring buffer + `LogElysiumIO` +
-  VLOG land in this same step** (the chokepoints are never uninstrumented);
-  `FElysiumNullScriptHost` behind `IElysiumScriptHost` logs field-6 payloads. *Deps:* 1.2, 1.3.
+- [x] **1.4 Entity world + event queue + chokepoints** — `FElysiumEntityWorld` (plain C++,
+  owned by `AElysiumMapActor` via `TPimplPtr`, dies with the map): one `FElysiumEntity` per def
+  (registry `Create`, inert record when unregistered), name (`TMultiMap`) + classname indices,
+  spawn pass, generation-checked `Resolve` (epoch + not-dead → the falsy-when-dead/stale
+  contract), teardown = epoch-to-0 (invalidates all handles at once). The two chokepoints:
+  `AcceptInput` (resolve `!self`/`!activator`/`!caller`, fan out over non-unique names, walk the
+  class-chain input table, invoke thunk; unknown target/input log-once + counted) and
+  `FElysiumEventQueue::Add` (the only queue entry, reached via `FireOutput`/output-firing with the
+  per-entity `times` countdown seeded from the def). `Tick` is **think-first** (retail order,
+  RE2): `RunThinks(now)` then `ServiceEvents(now)` — the queue drains due events including
+  zero-delay chains queued mid-pass, with a 10k-per-frame loop guard. `FElysiumIOSink` taps both
+  chokepoints from day one: always-on 1,000-entry ring buffer (`FElysiumRingBufferSink`) +
+  `LogElysiumIO` stream + VLOG (`FElysiumLogSink`). `FElysiumNullScriptHost` behind
+  `IElysiumScriptHost` (on `UElysiumGameStateSubsystem`, `SetScriptHost` for M4) logs field-6
+  payloads and returns Void. `FireMapLoadOutputs` ignites `OnMapLoad` at load (P1.7's `logic_auto`
+  supersedes). Verbs: `elysium.world` (histogram/queue/ring/dead-wire summary),
+  `elysium.world.io [n]` (ring dump), `elysium.world.fireinput` (inject an input, test harness).
+  Verified on `sp_tutorial_1`: 1868 entities live, OnMapLoad chains fire through the real queue at
+  their delays and deliver to resolved targets (unregistered classes hit `[no input]` as expected).
+  *Deps:* 1.2, 1.3.
 - [ ] **1.5 Brush bodies** — `UElysiumBrushComponent` per brush entity (convex `UBodySetup`
   from def hulls, handle attached, overlap routing, dormancy-gated). *Deps:* 1.4.
 - [ ] **1.6 Starter classes** — `logic_auto`, `logic_relay`, `trigger_multiple`/`trigger_once`.
@@ -528,6 +543,14 @@ cross-check `recovered/dice-system.md` alongside the running-game golden test.
   than the parked lump-8 bake — but VtMB's look is bounce-dominated and calibrated against
   full Lumen GI, so it risks the look. HWRT commitment unchanged; revisit if 10.3 floor
   validation fails or a sub-DXR audience becomes a goal.
+- **Asset-enhancement track** (offline remaster of VtMB's own art): delight → super-resolve →
+  PBR-synthesize (normal/roughness/AO/envmask), as an `elysium.EnhancedTextures` A/B toggle on
+  top of the faithful set. Tier 0 (delight + upscale) fixes real deficits for a dynamically-
+  relit engine; Tier 1 (PBR synthesis) is style-anchored enhancement. Scaffolding exists
+  (`upscale_bench.py`, `sky_upscale.py`, `retex_dds.py`); `M_VtMB_World`'s normal/envmask slots
+  are the runtime hooks. **Budget-gated** by the 3060/12 GB floor (2× default, 4× hero only;
+  BCn+mips mandatory). Full plan + adjudication test: `asset-enhancement.md`. Revisit after the
+  vertical slice plays (P10-ish); not before — it is polish on a shipped look, not a blocker.
 
 ## Risk register
 
@@ -542,6 +565,7 @@ cross-check `recovered/dice-system.md` alongside the running-game golden test.
 | Sidecar space drift (Godot-era leftovers) | subtle geometry/logic bugs | 0.4 audit before any new consumer |
 | Save determinism erodes | broken saves late | standing rule since P1: no engine timers, own serializable structs |
 | Legal posture | project-ending | bring-your-own-game holds; nothing game-sourced committed — standing constraint on every task |
+| Asset enhancement drifts off-style | silent look regression | `asset-enhancement.md` adjudication test + `elysium.EnhancedTextures` A/B toggle keeps the faithful set as reference; per-family review, not per-texture |
 
 ## Decision log (append-only)
 
@@ -572,6 +596,10 @@ cross-check `recovered/dice-system.md` alongside the running-game golden test.
   The provisional queue-first choice diverges from retail. Decision for task 1.4: match retail
   (think-first) unless save-determinism argues for queue-first; `engine-core.md` Tick note now
   documents think-first.
+- **2026-07-22** — 1.4 tick-order resolved and shipped: **think-first**. No save/load exists yet
+  (M6/P9), so no determinism argument for queue-first; `FElysiumEntityWorld::Tick` runs
+  `RunThinks(now)` then `ServiceEvents(now)`, matching retail. Save-determinism can revisit at P9
+  if needed (the queue and think times both serialize regardless of service order).
 - **2026-07** — Debug-substrate-before-M3 sequencing chosen ("foundation now"): P1 → P2 → P4.
 - **Standing (from strategy)** — fully dynamic lighting committed (HWRT Lumen + MegaLights +
   VSM, DX12/SM6 mandatory; no baked GI — lump-8 bake parked as low-end contingency);
@@ -622,6 +650,20 @@ cross-check `recovered/dice-system.md` alongside the running-game golden test.
   straggler**. The `rebuild-strategy.md` contract table was stale (`.sprites` "Godot metres", `.spawn`
   "Source coords"); corrected, and space made explicit on `.ents`/`.water` too. **PL7 is empty.**
   Runtime `.spawn` reader confirmed verbatim.
+- **2026-07-22** — Asset-enhancement direction accepted (design; not scheduled). Stance:
+  **faithful baseline + opt-in, code-driven remaster layer** that preserves VtMB's grimy
+  gothic-punk art direction, always as an `elysium.EnhancedTextures` A/B toggle. Adjudication
+  test: serve the art direction / fix a technical deficit that fights the dynamic relight → in;
+  invent or override an artist decision → out. Sequence is dictated by the dynamic relight —
+  **delight albedo first** (recover true base color from 2004 painted-in shading), then
+  super-resolve, then derive normal/roughness/AO from the *delit* albedo, metallic by hand-mask
+  only. Tier 0 (delight + upscale) is a real deficit fix; Tier 1 (PBR synthesis) is
+  style-anchored, curated per material family, budget-gated by the 3060/12 GB floor. Scaffolding
+  already exists (`upscale_bench.py`/`sky_upscale.py`/`retex_dds.py`); runtime hooks are
+  `M_VtMB_World`'s planned normal/envmask slots. Written up in `asset-enhancement.md`; strategy
+  principle 6a; Options + risk-register entries added. Web-research pass confirmed the technique
+  set (AI PBR-from-diffuse, de-lighting tools, ESRGAN game-remaster practice) and their caveats
+  (guesswork needing curation; delighters tuned for photoscans, not hand-painted art).
 - **Pending** — 5.5 level-script execution strategy (interpreter vs transpile vs CPython);
   8.2 glTFRuntime confirmation for the skeletal path; 10.6 EnhancedInput migrate-or-remove;
   7.2 decal final path (PMC parity vs `UDecalComponent`) decided after both stages render.

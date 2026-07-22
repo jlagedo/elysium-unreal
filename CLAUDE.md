@@ -89,9 +89,16 @@ Only `sp_tutorial_1` is exported today.
   `FElysiumGameClock`, `UElysiumGameStateSubsystem` (GI subsystem: the `G` store, quest map, clock),
   `FElysiumEntityDef`/`FElysiumEntityDefs` (immutable parsed `.ents` records), `FElysiumEntity`
   (the live base entity: CBaseEntity keyfields + `Kill`/`ScriptHide`/`ScriptUnhide` + one-switch
-  dormancy), and `FElysiumClassDesc`/`FElysiumClassRegistry` (the per-classname descriptor —
-  factory, base-chain link, input + typed field tables — with case-folded chain lookup and an
-  inert-record fallback for unregistered classnames).
+  dormancy + per-output `times` counters), `FElysiumClassDesc`/`FElysiumClassRegistry` (the
+  per-classname descriptor — factory, base-chain link, input + typed field tables — with
+  case-folded chain lookup and an inert-record fallback for unregistered classnames),
+  `FElysiumEntityWorld` (the substrate: one entity per def, name/class indices, spawn pass,
+  generation-checked `Resolve`, the `AcceptInput` + event-queue chokepoints, output firing,
+  think-first tick, epoch teardown; owned by `AElysiumMapActor` via `TPimplPtr`),
+  `FElysiumEventQueue`/`FElysiumIOEvent` (the one time-sorted queue, R4), `IElysiumIOSink` with
+  the always-on `FElysiumRingBufferSink` (1,000-entry I/O history) + `FElysiumLogSink`
+  (`LogElysiumIO` + VLOG), and `IElysiumScriptHost`/`FElysiumNullScriptHost` (the M4 field-6
+  Python seam, on `UElysiumGameStateSubsystem`).
 - **Committed content (only these):** `Content/Elysium.umap` (empty boot persistent level,
   regenerable via `tools/make_boot_map.py`) and `Content/VtMB/Materials/M_VtMB_World.uasset`
   (master material). No converted game content, no vendored Python.
@@ -170,6 +177,8 @@ facts** (valid regardless of target engine):
 - `map-architecture.md` — the Unreal map load/unload/travel design.
 - `rendering-perf.md` — the fully-dynamic render path, the shipped perf cvars, and the
   MegaLights-engagement checklist.
+- `asset-enhancement.md` — the offline, code-driven remaster track (delight → upscale → PBR
+  synthesis), the adjudication test, pipeline hooks, and VRAM budget. Design/not-yet-scheduled.
 - `debug-tooling.md` — the three-layer debug/dev-tooling architecture (engine built-ins,
   the vendored Cog ImGui shell, Source-style `ent_*` verbs on the B2 chokepoints).
 - `engine-core.md` — the entity object model (the "object language": plain-C++ entities

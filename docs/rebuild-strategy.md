@@ -53,6 +53,14 @@ The plan has two tracks that run in parallel:
    `m0_menu_build.md`, and `recovered/dice-system.md`. Do not re-derive what those already
    state. Un-ported system *source* (for class-for-class porting) remains in the read-only
    Godot repo at `E:\dev\elysium\game\src`.
+7. **Faithful baseline, opt-in enhancement layer.** The committed baseline reproduces VtMB
+   faithfully (geometry 1:1, dynamic GI anchored to the baked-lightmap calibration). On top of
+   it, an **offline, code-driven remaster track** may raise asset fidelity *while preserving the
+   art direction* — always as an A/B toggle, never a fork. The adjudication test for any such
+   pass: *does it serve VtMB's grimy gothic-punk direction (or fix a technical deficit that
+   fights the dynamic relight — e.g. delighting albedo), or is it inventing/overriding an artist
+   decision?* Serve/fix → in; invent/override → out. Full plan, tiers, and pipeline hooks:
+   `asset-enhancement.md`. Not yet scheduled (P10-ish); scaffolding exists in `tools/`.
 
 ## Current implementation state (M0 verified; M1 in progress)
 

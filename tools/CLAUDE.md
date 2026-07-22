@@ -265,6 +265,11 @@ models on extracted VtMB textures. Loads any spandrel-supported architecture
 Splits RGB and alpha and upscales each independently (VtMB PNGs carry real RGB
 under transparent pixels and a smooth alpha mask), `--seamless` wraps tiling
 textures before upscaling, and it emits per-model outputs plus contact sheets.
+`sky_upscale.py` is the skybox-aware variant (ring-composite → upscale → re-slice,
+writing `out/<map>/tex_hi/`); `retex_dds.py` emits block-preserving `.dds` siblings
+with mips. These three are the scaffolding for the **asset-enhancement track**
+(delight → super-resolve → PBR synthesis, as an opt-in A/B layer that keeps VtMB's
+style) — plan, sequencing, and the adjudication test in `../docs/asset-enhancement.md`.
 
 ## Game logic (embedded Python 2.1 — `docs/python_bridge.md`)
 
