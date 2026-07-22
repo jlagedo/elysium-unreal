@@ -9,6 +9,7 @@
 #include "ElysiumCogWindow_EventQueue.h"
 #include "ElysiumCogWindow_Inspector.h"
 #include "ElysiumCogWindow_Status.h"
+#include "ElysiumCogWindow_WorldViz.h"
 #include "CogEngineWindow_CollisionViewer.h"
 #include "CogEngineWindow_Console.h"
 #include "CogEngineWindow_DebugSettings.h"
@@ -87,6 +88,7 @@ void UElysiumCogSubsystem::PostInitialize()
 	Cog->AddWindow<FElysiumCogWindow_Entities>("Elysium.Entities");
 	Cog->AddWindow<FElysiumCogWindow_Inspector>("Elysium.Entity Inspector");
 	Cog->AddWindow<FElysiumCogWindow_EventQueue>("Elysium.Event Queue");
+	Cog->AddWindow<FElysiumCogWindow_WorldViz>("Elysium.World Viz");
 
 	// Boot dormant: Cog is compiled in (non-Shipping) and F1 opens it, but nothing
 	// should be on screen until then. Cog restores each window's persisted visibility

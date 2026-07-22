@@ -22,6 +22,7 @@ GENERATORS = [
     "add_world_emissive.py",        # M_VtMB_World.uasset: $selfillum emissive path
     "set_world_material_usage.py",  # M_VtMB_World.uasset: "Used with Instanced Static Meshes"
     "make_sky_material.py",         # M_Sky.uasset: the 2D-skybox cube master material
+    "make_gizmo_material.py",       # M_Gizmo{,_XRay}.uasset: the P2.4 entity-gizmo ISM materials
     "make_boot_map.py",             # Elysium.umap: the empty boot persistent level
 ]
 

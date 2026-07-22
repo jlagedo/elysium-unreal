@@ -6,6 +6,8 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumEventQueue.h"
+#include "ElysiumGizmoColor.h"
+#include "ElysiumGizmoLayer.h"
 #include "ElysiumIOSink.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
@@ -17,6 +19,7 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
+#include "SceneTypes.h"                 // ESceneDepthPriorityGroup (gizmo occlusion vs x-ray)
 #include "Stats/Stats.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumEnt, Log, All);
@@ -91,6 +94,26 @@ namespace
 		if (Ent.IsHidden()) { return FColor(200, 170, 60); }
 		return FColor(80, 200, 120);
 	}
+
+	// A single representative world point for an entity (P2.4 gizmo marker + beam endpoint): the brush
+	// body's world center if it has one, else the def origin (the point/logic entity's placement).
+	FVector EntityAnchor(const FElysiumEntity& Ent)
+	{
+		if (Ent.Body)
+		{
+			return Ent.Body->Bounds.Origin;
+		}
+		return Ent.Def ? Ent.Def->Origin : FVector::ZeroVector;
+	}
+
+	// Coarse classname -> gizmo color lives in ElysiumGizmoColor.h (shared with the retained ISM
+	// layer); ElysiumGizmoClassColor() is used below for the trigger hulls and gizmo labels.
+
+	// Dim a color toward black (hidden/dormant entities read as inactive without changing the hue).
+	FColor Dimmed(const FColor& C, float K)
+	{
+		return FColor(uint8(C.R * K), uint8(C.G * K), uint8(C.B * K), C.A);
+	}
 }
 
 // The chokepoint tap the subsystem installs into each entity world. It is owned by the world (torn
@@ -131,6 +154,8 @@ void UElysiumEntityDebugSubsystem::Initialize(FSubsystemCollectionBase& Collecti
 	Super::Initialize(Collection);
 
 #if !UE_BUILD_SHIPPING
+	GizmoLayer = MakePimpl<FElysiumGizmoLayer>();
+
 	IConsoleManager& CM = IConsoleManager::Get();
 
 	ConsoleObjects.Add(CM.RegisterConsoleCommand(TEXT("elysium.ent_fire"),
@@ -183,6 +208,24 @@ void UElysiumEntityDebugSubsystem::Initialize(FSubsystemCollectionBase& Collecti
 		TEXT("elysium.ent_clear — clear every ent_text / ent_bbox / ent_messages overlay."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>&, UWorld*) { HandleClear(); }),
 		ECVF_Cheat));
+
+	// --- P2.4 world-viz verbs (thin echoes of the World Viz Cog window; they flip VizSettings) -------
+	ConsoleObjects.Add(CM.RegisterConsoleCommand(TEXT("elysium.showtriggers"),
+		TEXT("elysium.showtriggers [0|1] [state] — toggle wireframe trigger-body hulls (no arg = toggle). "
+		     "'state' colors by enabled/dormant instead of by class."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args, UWorld*) { HandleShowTriggers(Args); }),
+		ECVF_Cheat));
+
+	ConsoleObjects.Add(CM.RegisterConsoleCommand(TEXT("elysium.ent_gizmos"),
+		TEXT("elysium.ent_gizmos [off|visible|all] — entity origin gizmos: off, visible (walls occlude), "
+		     "or all (x-ray). No arg cycles off->visible->all->off."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args, UWorld*) { HandleGizmos(Args); }),
+		ECVF_Cheat));
+
+	ConsoleObjects.Add(CM.RegisterConsoleCommand(TEXT("elysium.ent_beams"),
+		TEXT("elysium.ent_beams [0|1] — toggle fading caller->target arrows on each I/O delivery (no arg = toggle)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args, UWorld*) { HandleBeams(Args); }),
+		ECVF_Cheat));
 #endif // !UE_BUILD_SHIPPING
 }
 
@@ -218,6 +261,7 @@ void UElysiumEntityDebugSubsystem::Tick(float DeltaTime)
 		if (HookedEpoch != 0)
 		{
 			ResetState();
+			if (GizmoLayer) { GizmoLayer->Teardown(); }
 			HookedEpoch = 0;
 		}
 		return;
@@ -228,8 +272,23 @@ void UElysiumEntityDebugSubsystem::Tick(float DeltaTime)
 	if (EW->GetEpoch() != HookedEpoch)
 	{
 		ResetState();
+		if (GizmoLayer) { GizmoLayer->Teardown(); }   // the ISM died with the old map actor
 		EW->AddSink(MakeUnique<FElysiumDebugTapSink>(*EW, this));
 		HookedEpoch = EW->GetEpoch();
+	}
+
+	// Drive the retained gizmo ISM layer: build it lazily the first time gizmos are switched on for
+	// this epoch, then just apply the mode (a no-op when unchanged — no per-frame draw cost).
+	if (GizmoLayer)
+	{
+		if (VizSettings.GizmoMode != EGizmoMode::Off && !GizmoLayer->IsBuilt())
+		{
+			GizmoLayer->Rebuild(*EW, EW->GetOwnerActor());
+		}
+		if (GizmoLayer->IsBuilt())
+		{
+			GizmoLayer->SetMode(VizSettings.GizmoMode);
+		}
 	}
 
 	// The fade clock stops while the queue is paused, so ent_break freezes the message evidence.
@@ -239,6 +298,7 @@ void UElysiumEntityDebugSubsystem::Tick(float DeltaTime)
 	}
 
 	RenderOverlays(*EW);
+	RenderWorldViz(*EW);
 #endif // !UE_BUILD_SHIPPING
 }
 
@@ -259,11 +319,14 @@ void UElysiumEntityDebugSubsystem::ResetState()
 {
 	OverlayBits.Empty();
 	Messages.Empty();
+	Beams.Empty();
 	FadeClock = 0.0;
 	bBreakArmed = false;
 	BreakTarget.Empty();
 	BreakHandle = FElysiumEntityHandle::Invalid();
 	BreakInput = NAME_None;
+	// VizSettings (the toggles themselves) survive a map reload — a dev leaves gizmos on across
+	// travels — so it is deliberately not reset here; only the per-epoch beam captures are dropped.
 }
 
 FElysiumEntityHandle UElysiumEntityDebugSubsystem::PickUnderCrosshair(UWorld* World, FElysiumEntityWorld& EW) const
@@ -711,6 +774,71 @@ void UElysiumEntityDebugSubsystem::HandleClear()
 	UE_LOG(LogElysiumEnt, Display, TEXT("ent_clear: all overlays cleared"));
 }
 
+// --- P2.4 world-viz verbs — the scriptable echo of the World Viz Cog window's controls -------------
+
+void UElysiumEntityDebugSubsystem::HandleShowTriggers(const TArray<FString>& Args)
+{
+	// Optional first arg: explicit 0/1 (else toggle). Optional "state" (any position): color by state.
+	bool bWantState = false;
+	TOptional<bool> Explicit;
+	for (const FString& A : Args)
+	{
+		if (A.Equals(TEXT("state"), ESearchCase::IgnoreCase) || A.Equals(TEXT("bystate"), ESearchCase::IgnoreCase))
+		{
+			bWantState = true;
+		}
+		else if (A == TEXT("1") || A.Equals(TEXT("on"), ESearchCase::IgnoreCase))  { Explicit = true; }
+		else if (A == TEXT("0") || A.Equals(TEXT("off"), ESearchCase::IgnoreCase)) { Explicit = false; }
+	}
+	VizSettings.bShowTriggers = Explicit.IsSet() ? Explicit.GetValue() : !VizSettings.bShowTriggers;
+	if (bWantState) { VizSettings.bTriggerColorByState = true; }
+	UE_LOG(LogElysiumEnt, Display, TEXT("showtriggers: %s (color by %s)"),
+		VizSettings.bShowTriggers ? TEXT("on") : TEXT("off"),
+		VizSettings.bTriggerColorByState ? TEXT("state") : TEXT("class"));
+}
+
+void UElysiumEntityDebugSubsystem::HandleGizmos(const TArray<FString>& Args)
+{
+	if (Args.Num() >= 1)
+	{
+		const FString& M = Args[0];
+		if (M.Equals(TEXT("off"), ESearchCase::IgnoreCase))          { VizSettings.GizmoMode = EGizmoMode::Off; }
+		else if (M.Equals(TEXT("visible"), ESearchCase::IgnoreCase)) { VizSettings.GizmoMode = EGizmoMode::Visible; }
+		else if (M.Equals(TEXT("all"), ESearchCase::IgnoreCase))     { VizSettings.GizmoMode = EGizmoMode::All; }
+		else
+		{
+			UE_LOG(LogElysiumEnt, Warning, TEXT("ent_gizmos: expected off|visible|all"));
+			return;
+		}
+	}
+	else
+	{
+		// Cycle off -> visible -> all -> off (F4 in the Godot viewer).
+		switch (VizSettings.GizmoMode)
+		{
+		case EGizmoMode::Off:     VizSettings.GizmoMode = EGizmoMode::Visible; break;
+		case EGizmoMode::Visible: VizSettings.GizmoMode = EGizmoMode::All;     break;
+		default:                  VizSettings.GizmoMode = EGizmoMode::Off;      break;
+		}
+	}
+	const TCHAR* Name = VizSettings.GizmoMode == EGizmoMode::Off ? TEXT("off")
+		: VizSettings.GizmoMode == EGizmoMode::Visible ? TEXT("visible") : TEXT("all");
+	UE_LOG(LogElysiumEnt, Display, TEXT("ent_gizmos: %s"), Name);
+}
+
+void UElysiumEntityDebugSubsystem::HandleBeams(const TArray<FString>& Args)
+{
+	if (Args.Num() >= 1)
+	{
+		VizSettings.bShowBeams = (Args[0] == TEXT("1") || Args[0].Equals(TEXT("on"), ESearchCase::IgnoreCase));
+	}
+	else
+	{
+		VizSettings.bShowBeams = !VizSettings.bShowBeams;
+	}
+	UE_LOG(LogElysiumEnt, Display, TEXT("ent_beams: %s"), VizSettings.bShowBeams ? TEXT("on") : TEXT("off"));
+}
+
 // ============================================================================================
 // Chokepoint tap (ent_break + ent_messages capture)
 // ============================================================================================
@@ -744,6 +872,46 @@ void UElysiumEntityDebugSubsystem::TapDelivered(FElysiumEntityWorld& World, doub
 		M.Text = FString::Printf(TEXT("< %s(%s)  from %s"),
 			*Event.Input.ToString(), *Event.Param.ToString(), *World.DescribeHandle(Event.Caller));
 		Messages.Add(MoveTemp(M));
+	}
+
+	// ent_beams: a fading arrow for this delivery. Normally caller->target (the firing entity to the
+	// receiver). When the caller is the receiver itself (self-delivery — every hand-fire from ent_fire
+	// / the Inspector is this) or unresolvable, fall back to an arrow from the camera to the target, so
+	// a hand-fired test is still visible even on a map with no entity->entity wiring.
+	if (VizSettings.bShowBeams)
+	{
+		const FVector To = EntityAnchor(Target);
+		const FElysiumEntity* Caller = World.Resolve(Event.Caller);
+		FVector From;
+		bool bHaveFrom = false;
+		if (Caller && !EntityAnchor(*Caller).Equals(To, 1.0))
+		{
+			From = EntityAnchor(*Caller);   // real entity -> entity output
+			bHaveFrom = true;
+		}
+		else if (UWorld* W = GetWorld())
+		{
+			if (APlayerController* PC = W->GetFirstPlayerController())
+			{
+				FRotator ViewRot;
+				PC->GetPlayerViewPoint(From, ViewRot);   // self / hand-fire: camera -> target
+				bHaveFrom = true;
+			}
+		}
+		if (bHaveFrom && !From.Equals(To, 1.0))
+		{
+			FBeam B;
+			B.From = From;
+			B.To   = To;
+			B.Time = FadeClock;
+			Beams.Add(B);
+			// Bound the ring so a busy map can't grow it without limit between prunes.
+			constexpr int32 MaxBeams = 256;
+			if (Beams.Num() > MaxBeams)
+			{
+				Beams.RemoveAt(0, Beams.Num() - MaxBeams, EAllowShrinking::No);
+			}
+		}
 	}
 #endif
 }
@@ -833,6 +1001,131 @@ void UElysiumEntityDebugSubsystem::RenderOverlays(FElysiumEntityWorld& EW)
 				DrawDebugString(World, FVector(Center.X, Center.Y, TextZ), M.Text, nullptr, Faded, 0.f, /*bShadow*/ true);
 				TextZ += LineStepZ;
 			}
+		}
+	}
+#endif // ENABLE_DRAW_DEBUG
+}
+
+// ============================================================================================
+// P2.4 world visualization — map-wide layers (entity gizmos, trigger hulls, I/O beams)
+// ============================================================================================
+
+void UElysiumEntityDebugSubsystem::RenderWorldViz(FElysiumEntityWorld& EW)
+{
+#if ENABLE_DRAW_DEBUG
+	// Beams captured while ent_beams was off should not linger; drop them so re-enabling starts clean.
+	if (!VizSettings.bShowBeams)
+	{
+		Beams.Reset();
+	}
+
+	const bool bAnything = VizSettings.GizmoMode != EGizmoMode::Off || VizSettings.bShowTriggers ||
+		VizSettings.bShowBeams || Beams.Num() > 0;
+	UWorld* World = GetWorld();
+	if (!World || !bAnything)
+	{
+		return;
+	}
+
+	// Camera vantage for the distance culls (gizmos would otherwise draw ~1,200 boxes + strings a
+	// frame). No camera (headless) → draw everything; the counts are debug-only.
+	FVector CamLoc = FVector::ZeroVector;
+	bool bHaveCam = false;
+	if (APlayerController* PC = World->GetFirstPlayerController())
+	{
+		FRotator CamRot;
+		PC->GetPlayerViewPoint(CamLoc, CamRot);
+		bHaveCam = true;
+	}
+
+	const TArray<TUniquePtr<FElysiumEntity>>& Entities = EW.Entities();
+
+	// --- Entity gizmo labels ------------------------------------------------------------------------
+	// The gizmo *boxes* are the retained ISM layer (FElysiumGizmoLayer) — built once, updated only on
+	// entity events, zero per-frame draw cost. Only the labels stay immediate-mode (DrawDebugString
+	// has no instanced equivalent), so they are culled hard by distance to keep the string count low.
+	if (VizSettings.GizmoMode != EGizmoMode::Off && VizSettings.bGizmoLabels)
+	{
+		// Labels only within 2 m — you read the name of what you walk up to, and the string count
+		// stays tiny (DrawDebugString has no instanced form). Fixed, not tunable.
+		const float LabelDistSq = FMath::Square(200.f);
+		for (const TUniquePtr<FElysiumEntity>& EntPtr : Entities)
+		{
+			const FElysiumEntity* E = EntPtr.Get();
+			if (!E || E->IsDead() || !E->Def)
+			{
+				continue;
+			}
+			const FVector Anchor = EntityAnchor(*E);
+			if (bHaveCam && FVector::DistSquared(Anchor, CamLoc) > LabelDistSq)
+			{
+				continue;
+			}
+			FColor Color = ElysiumGizmoClassColor(E->Def->Classname);
+			if (E->IsHidden())
+			{
+				Color = Dimmed(Color, 0.45f);
+			}
+			const FString Label = E->TargetName.IsEmpty()
+				? FString::Printf(TEXT("(%s)"), *E->Def->Classname) : E->TargetName;
+			DrawDebugString(World, Anchor + FVector(0, 0, 18.f), Label, nullptr, Color, 0.f, /*bShadow*/ true, /*Scale*/ 1.0f);
+		}
+	}
+
+	// --- Show triggers: the wireframe convex-hull AABBs of every trigger brush entity ---------------
+	// (VtMB triggers are axis-aligned box brushes, so the per-hull AABB is the exact volume.) Colored
+	// by class (the gizmo palette) or by enabled/dormant state.
+	if (VizSettings.bShowTriggers)
+	{
+		for (const TUniquePtr<FElysiumEntity>& EntPtr : Entities)
+		{
+			const FElysiumEntity* E = EntPtr.Get();
+			if (!E || E->IsDead() || !E->Def || !E->Def->IsBrush())
+			{
+				continue;
+			}
+			const bool bTrigger = (E->Body && E->Body->GetSolidity() == EElysiumBrushSolidity::Trigger)
+				|| E->Def->Classname.StartsWith(TEXT("trigger"));
+			if (!bTrigger)
+			{
+				continue;
+			}
+
+			const FColor Color = VizSettings.bTriggerColorByState
+				? (E->IsInert() ? FColor(150, 60, 60) : FColor(80, 220, 120))
+				: ElysiumGizmoClassColor(E->Def->Classname);
+
+			// The body's world transform (handles any placement) or the def origin for a bodiless record.
+			const FTransform Xform = E->Body ? E->Body->GetComponentTransform() : FTransform(E->Def->Origin);
+			for (const FElysiumConvexHull& Hull : E->Def->Hulls)
+			{
+				if (Hull.Vertices.Num() < 4)
+				{
+					continue;
+				}
+				FBox Box(ForceInit);
+				for (const FVector& V : Hull.Vertices)
+				{
+					Box += Xform.TransformPosition(V);
+				}
+				DrawDebugBox(World, Box.GetCenter(), Box.GetExtent(), Color, /*bPersistent*/ false,
+					/*Life*/ -1.f, uint8(SDPG_World), /*Thickness*/ 1.5f);
+			}
+		}
+	}
+
+	// --- I/O beams: fade + draw the captured caller->target arrows (foreground, follow through walls) -
+	if (Beams.Num() > 0)
+	{
+		const double Window = FMath::Max(0.5, double(VizSettings.BeamSeconds));
+		Beams.RemoveAll([&](const FBeam& B) { return FadeClock - B.Time > Window; });
+		for (const FBeam& B : Beams)
+		{
+			const double Age = FMath::Clamp(FadeClock - B.Time, 0.0, Window);
+			const float K = 1.0f - float(Age / Window);
+			const FColor Color(uint8(70 * K + 40), uint8(210 * K + 30), uint8(255 * K), 255);
+			DrawDebugDirectionalArrow(World, B.From, B.To, /*ArrowSize*/ 40.f, Color,
+				/*bPersistent*/ false, /*Life*/ -1.f, uint8(SDPG_Foreground), /*Thickness*/ 2.f);
 		}
 	}
 #endif // ENABLE_DRAW_DEBUG

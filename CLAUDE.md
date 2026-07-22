@@ -77,10 +77,21 @@ Outliner label via `ElysiumEditorObjectName` (`ElysiumEditorLabels.h`): the map 
 `Map:<name>` in an `Elysium` folder, brush bodies are `Body_<idx>_<name>_<class>` (plus the exact
 `#<idx> <name>(<class>)` debug string as a `ComponentTag`), lights are `Light_<idx>_<kind>`, prop
 ISMs are `Props_<model>_<solidity>`; the same canonical debug string (`FElysiumEntity::DebugString`)
-threads every I/O log line. Still planned:
-more entity classes (movers, buttons, doors), Source movement, the rest of the master-material set,
-deeper scripting, audio, menu, dialogue — see `docs/rebuild-strategy.md`. Only `sp_tutorial_1` is
-exported today.
+threads every I/O log line. The **P4.1 mover base** also runs (`ElysiumMover.h/.cpp`):
+`FElysiumMoverBase` is the CBaseToggle primitive — `LinearMove`/`AngularMove` drive the entity's
+brush body at constant velocity (no easing) toward a target transform on the substrate clock/think
+(R4, no engine timers), moving swept so a solid kinematic body pushes the pawn + reports blockers,
+and firing `MoveDone()` on arrival (angular rotation pivots about the def origin = the hinge).
+`FElysiumDoorBase` (registered as the `CBaseDoor` chain node) layers the CBaseDoor 4-state machine
+(`m_toggle_state` AT_TOP/AT_BOTTOM/GOING_UP/GOING_DOWN) — `Open`/`Close`/`Toggle`/`Lock`/`Unlock`/`Use`
+inputs, `OnOpen`/`OnClose`/`OnFullyOpen`/`OnFullyClosed`/`OnLockedUse`/`OnBlockedClosing` outputs,
+`wait` autoclose (`-1` = stay open), the locked path, and blocked-while-closing (deal `dmg` via
+`ApplyDamage`, reverse, `OnBlockedClosing`) — with `speed`/`distance`/`wait`/`lip`/`dmg` as chain
+fields; the prototype leaf `func_door_rotating` swings `distance°` about yaw/Z around the hinge.
+Doors are driven through the I/O inputs (`ent_fire <door> Open`/`Unlock`) until `+use` lands. Still
+planned: the rest of the mover family (`func_button`, sliding `func_door`, elevators, the full
+spawnflag table + `+use`), Source movement, the rest of the master-material set, deeper scripting,
+audio, menu, dialogue — see `docs/rebuild-strategy.md`. Only `sp_tutorial_1` is exported today.
 
 ## Repository facts
 
@@ -108,8 +119,11 @@ exported today.
   inspector**: left open it keeps updating while you play (Cog renders visible windows with the menu closed),
   draws an imgui reticle, and traces the camera ray each frame to report whatever it hits — surface
   (actor/component/mesh/material + textures) *and* the entity, sticky-selected — with Text/Box/Messages
-  overlay + breakpoint toggles that drive `UElysiumEntityDebugSubsystem`) and `FElysiumCogWindow_EventQueue`
-  (pending queue + I/O history ring buffer + pause/step); the inspector's fire buttons and the `ent_fire`
+  overlay + breakpoint toggles that drive `UElysiumEntityDebugSubsystem`), `FElysiumCogWindow_EventQueue`
+  (pending queue + I/O history ring buffer + pause/step), and `FElysiumCogWindow_WorldViz` (the P2.4
+  world-visualization control panel: entity-gizmo off/visible/all + labels + distance sliders + color
+  legend, show-triggers by class/state, I/O-beam toggle + fade window — flipping the same
+  `UElysiumEntityDebugSubsystem::Viz()` state the tick renders); the inspector's fire buttons and the `ent_fire`
   verb both inject through `FElysiumEntityWorld::EnqueueInput` (a hand-made input queued via the real chokepoint).
   `UElysiumEntityDebugSubsystem` (a `UTickableWorldSubsystem`, `#if !UE_BUILD_SHIPPING`) hosts the Source-style
   `elysium.ent_*` verbs — `ent_fire` (targetname/classname/crosshair-picker, discovery-lists inputs when none
@@ -117,7 +131,18 @@ exported today.
   `ent_text`/`ent_bbox`/`ent_messages` per-entity `DrawDebug` overlay bitmask (`ENABLE_DRAW_DEBUG`) — with a
   multi-trace crosshair picker (nearest brush body, else the bodiless logic ent nearest the aim ray);
   `ent_break` + the `ent_messages` capture ride a `FElysiumDebugTapSink` it installs into each world epoch
-  through `FElysiumEntityWorld::AddSink`. The primary interactive surface is the live crosshair inspector
+  through `FElysiumEntityWorld::AddSink`. The same subsystem also hosts the **P2.4 world-visualization
+  layers** as a `FVizSettings` block its always-running tick renders (so a layer left on stays on while you
+  play): color-keyed entity gizmos, wireframe trigger-hull AABBs (by class or enabled/dormant state), and
+  fading caller→target I/O beam arrows captured at the `TapDelivered` chokepoint — driven from the World Viz
+  Cog window (primary) and the `elysium.ent_gizmos`/`showtriggers`/`ent_beams` verbs (echo). The gizmos are a
+  **retained** layer (`FElysiumGizmoLayer`, `#if !UE_BUILD_SHIPPING`): one `UInstancedStaticMeshComponent` of
+  unit cubes built once per epoch (one instance per entity), colour packed into per-instance custom data read
+  by `M_Gizmo`/`M_Gizmo_XRay` (off/visible=depth-tested/all=x-ray via material swap) — so idle frames cost
+  only the instanced draw, and a dormancy/liveness flip re-uploads just that one instance through
+  `FElysiumEntityWorld::SetVisualChangedHook` (fired from `FElysiumEntity::OnDormancyChanged`/`Kill`), never a
+  per-frame rebuild. Only the gizmo labels stay immediate-mode (distance-culled; no instanced text). The primary
+  interactive surface is the live crosshair inspector
   (the Cog Entity Inspector above); the verbs are the scriptable echo. The Track-B entity substrate (plain C++, no reflection): `FElysiumVariant`
   (tagged Void/Bool/Int/Float/String/Vector/Handle), `FElysiumEntityHandle` (`{Index, Epoch}`),
   `FElysiumGameClock`, `UElysiumGameStateSubsystem` (GI subsystem: the `G` store, quest map, clock),
@@ -140,11 +165,13 @@ exported today.
   (`LogElysiumIO` + VLOG), and `IElysiumScriptHost`/`FElysiumNullScriptHost` (the M4 field-6
   Python seam, on `UElysiumGameStateSubsystem`).
 - **Committed content (only these):** `Content/Elysium.umap` (empty boot persistent level),
-  `Content/VtMB/Materials/M_VtMB_World.uasset` (world master material) and
-  `Content/VtMB/Materials/M_Sky.uasset` (2D-skybox cube master material). No converted game
-  content, no vendored Python. A UMaterial graph and a `.umap` can only be compiled by the
-  editor, so these are authored offline by generators under `tools/` and rebuilt as one batch
-  by `content.bat` → `tools/build_content.py` (which the export runs — see Build & run).
+  `Content/VtMB/Materials/M_VtMB_World.uasset` (world master material), `M_Sky.uasset` (2D-skybox
+  cube master material), and `M_Gizmo.uasset` + `M_Gizmo_XRay.uasset` (the P2.4 entity-gizmo ISM
+  masters — unlit/two-sided/translucent, colour+opacity from per-instance custom data; XRay disables
+  the depth test for the x-ray mode). No converted game content, no vendored Python. A UMaterial graph
+  and a `.umap` can only be compiled by the editor, so these are authored offline by generators under
+  `tools/` and rebuilt as one batch by `content.bat` → `tools/build_content.py` (which the export runs
+  — see Build & run).
 - **Content root:** `FElysiumContentPaths::Root()` = `FPaths::ProjectDir()/"tools/out"`
   (in-repo, gitignored). Packaged builds later read a `content/` folder next to the exe.
 - **Config:** `Config/DefaultEngine.ini` (boot map `/Game/Elysium`, `AElysiumGameMode`

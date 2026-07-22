@@ -10,7 +10,8 @@ class IConsoleObject;
 // Debug overlay, toggled by the `elysium.debug` console command (' or ` opens the console)
 // or F1. Hidden on a clean load. Top-left panel: map + surface counts, the view point in
 // metres and Source units, yaw, movement/skybox state, and a crosshair pick reporting the
-// mesh under the aim. A big FPS meter sits top-right; a centre crosshair draws while on.
+// mesh under the aim. A big FPS meter sits top-right. The centre crosshair is always drawn
+// (independent of the overlay toggle and any Cog window), so the aim reticle never flickers.
 UCLASS()
 class AElysiumHUD : public AHUD
 {

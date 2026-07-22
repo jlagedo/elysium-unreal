@@ -780,7 +780,17 @@ void FCogImguiContext::SetEnableInput(const bool InValue)
         
         if (ULocalPlayer* LocalPlayer = GetLocalPlayer())
         {
-            LocalPlayer->GetSlateOperations().CaptureMouse(GameViewport->GetGameViewportWidget().ToSharedRef());
+            // Elysium local patch: fully restore mouselook capture when the Cog menu closes, mirroring
+            // FInputModeGameOnly. Stock Cog restores only CaptureMouse, which drops the high-precision
+            // (raw/relative) mouse movement the game had — so the cursor reverts to absolute-position
+            // and either drifts out of the viewport or, once locked, clamps at the edge ("hard wall")
+            // and turning stops. UseHighPrecisionMouseMovement re-enables recentred relative deltas
+            // (infinite rotation) and implies the widget lock.
+            const TSharedRef<SWidget> ViewportWidget = GameViewport->GetGameViewportWidget().ToSharedRef();
+            LocalPlayer->GetSlateOperations()
+                .CaptureMouse(ViewportWidget)
+                .UseHighPrecisionMouseMovement(ViewportWidget)
+                .LockMouseToWidget(ViewportWidget);
         }
 
         //---------------------------------------------------------------------------------

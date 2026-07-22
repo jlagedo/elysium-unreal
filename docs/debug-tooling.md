@@ -84,6 +84,13 @@ Things Unreal already does that only need hooking up:
 - Maintained (active through 2026), README pins "UE 5.5 or greater", no reported 5.7/5.8
   breakage; budget for minor compile fixes on 5.8 (known trivial patches: the ImPlot
   `INFINITY` MSVC error, issue #71). Integration is a `UWorldSubsystem` + `.Build.cs` deps.
+- **Local behavioral patch (`CogImguiContext.cpp`, `SetEnableInput`):** when the F1 menu closes, fully
+  restore mouselook capture — `.CaptureMouse().UseHighPrecisionMouseMovement().LockMouseToWidget()`,
+  mirroring `FInputModeGameOnly`. Stock Cog restores only `CaptureMouse`, dropping the high-precision
+  (raw/relative) mouse the game had; the cursor then reverts to absolute-position and either drifts out
+  of the viewport or, once locked, clamps at the edge and turning stops. High-precision re-enables
+  recentred relative deltas (infinite rotation) and implies the widget lock. This project is a
+  `LockOnCapture` mouselook game (`Config/DefaultInput.ini`). Re-apply if Cog is updated.
 
 Custom Cog windows grow with the runtime, reading Elysium's own data structures directly
 (ImGui code is plain immediate-mode C++ — no reflection or UI assets needed, which matters
@@ -99,6 +106,14 @@ because tier-1 logic entities are plain C++ objects, not UObjects):
   harness" window.
 - **Event queue** (M3) — pending events with fire times, the I/O history ring buffer,
   pause/step controls (Layer 2).
+- **World Viz** (P2.4) — the control panel for the map-wide in-world layers: entity gizmos
+  (off/visible/all, class-color-keyed), wireframe trigger hulls (by class or state), and fading
+  I/O beam arrows. Every control flips the same `Viz()` state the
+  `elysium.ent_gizmos`/`showtriggers`/`ent_beams` verbs flip. The gizmos are a **retained** layer
+  (`FElysiumGizmoLayer`): a GPU-instanced cube mesh (`M_Gizmo`/`M_Gizmo_XRay`, per-instance-custom-data
+  colour) built once per map and updated per-instance only when an entity's state changes (via the
+  `FElysiumEntityWorld::SetVisualChangedHook` event seam) — no per-frame draw-call round trip. Triggers,
+  beams, and labels stay immediate-mode `DrawDebug` (bounded/near-only, so cheap).
 
 The Slate `UElysiumConsoleSubsystem` designed in `map-architecture.md` is **superseded**:
 UE's built-in console (already bound on `` ` ``/`'`) plus Cog's console/log windows cover it.

@@ -67,6 +67,14 @@ public:
 	// channel (R5). Re-installed by the subsystem whenever a new world epoch appears.
 	void AddSink(TUniquePtr<IElysiumIOSink> InSink);
 
+	// Visual-change seam (P2.4 retained gizmo layer): a callback fired whenever an entity's
+	// dormancy/liveness flips (from FElysiumEntity::OnDormancyChanged / Kill). It lets a retained
+	// visualizer dirty just that one instance on the event instead of polling every entity every
+	// frame. Optional (unset in normal play); the debug subsystem sets it per epoch. Called by the
+	// entity through its World back-pointer.
+	void SetVisualChangedHook(TFunction<void(const FElysiumEntity&)> Hook) { VisualChangedHook = MoveTemp(Hook); }
+	void NotifyVisualChanged(const FElysiumEntity& Ent) const { if (VisualChangedHook) { VisualChangedHook(Ent); } }
+
 	// --- Resolution / iteration --------------------------------------------------------
 	FElysiumEntity* Resolve(const FElysiumEntityHandle& Handle);
 	const FElysiumEntity* Resolve(const FElysiumEntityHandle& Handle) const;
@@ -120,6 +128,7 @@ private:
 	FElysiumEventQueue EventQueue;
 	TArray<TUniquePtr<IElysiumIOSink>> Sinks;
 	FElysiumRingBufferSink* Ring = nullptr;           // owned in Sinks; the always-on history
+	TFunction<void(const FElysiumEntity&)> VisualChangedHook;   // P2.4 gizmo dirty seam (debug-only)
 
 	// Brush bodies (P1.5): the map actor owns them (they are its components); we hold weak refs to
 	// gate them and to destroy them on teardown (the world logically owns the embodiments).

@@ -2,11 +2,13 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
+#include "Templates/PimplPtr.h"
 #include "ElysiumEntityHandle.h"
 #include "ElysiumEntityDebugSubsystem.generated.h"
 
 class FElysiumEntity;
 class FElysiumEntityWorld;
+class FElysiumGizmoLayer;
 struct FElysiumIOEvent;
 struct FElysiumOutputDef;
 class IConsoleObject;
@@ -54,6 +56,29 @@ public:
 		Overlay_Messages = 1 << 2,
 	};
 
+	// --- P2.4 world visualization (map-wide layers; distinct from the per-entity picked overlays) ----
+	// The three layers are driven from the World Viz Cog window (the primary surface) and echoed by the
+	// elysium.showtriggers / ent_gizmos / ent_beams verbs. State lives here (the always-running tick
+	// renders it whether or not any Cog window is open), so it stays on screen while you play.
+
+	// Entity-gizmo display, ported from the Godot viewer: Off, Visible (depth-tested — walls occlude),
+	// All (foreground x-ray — drawn on top of everything).
+	enum class EGizmoMode : uint8 { Off, Visible, All };
+
+	// The whole world-viz control surface, edited in place by the Cog window's ImGui widgets and the
+	// verbs, read each tick by RenderWorldViz. Not a UPROPERTY (no reflection needed) — plain state.
+	struct FVizSettings
+	{
+		EGizmoMode GizmoMode = EGizmoMode::Off;    // color-keyed solid boxes per entity (retained ISM)
+		bool  bGizmoLabels = true;                 // draw targetname/class labels (within 2 m only)
+		bool  bShowTriggers = false;               // wireframe trigger-body hulls
+		bool  bTriggerColorByState = false;        // false = color by class, true = by enabled/dormant
+		bool  bShowBeams = false;                  // fading caller->target arrow on each I/O delivery
+		float BeamSeconds = 4.f;                   // beam fade window (s)
+	};
+	FVizSettings& Viz() { return VizSettings; }
+	const FVizSettings& Viz() const { return VizSettings; }
+
 	// --- UI-facing controls (the Cog Inspector calls these; the ent_* verbs share the state) -----
 	// The entity under the crosshair (resolves world + substrate internally); Invalid if none close.
 	FElysiumEntityHandle PickSelection();
@@ -74,6 +99,15 @@ private:
 		FString Text;
 	};
 
+	// One captured I/O beam: a fading caller->target arrow drawn while ent_beams is on. Time is in
+	// fade-clock seconds (shares the message freeze-while-paused clock).
+	struct FBeam
+	{
+		FVector From = FVector::ZeroVector;
+		FVector To   = FVector::ZeroVector;
+		double  Time = 0.0;
+	};
+
 	// --- Verb handlers ------------------------------------------------------------------
 	void HandleFire(const TArray<FString>& Args, UWorld* World);
 	void HandleDump(const TArray<FString>& Args, UWorld* World);
@@ -83,6 +117,10 @@ private:
 	void HandleBreak(const TArray<FString>& Args, UWorld* World);
 	void HandleOverlay(const TArray<FString>& Args, UWorld* World, uint8 Bit, const TCHAR* Name);
 	void HandleClear();
+	// P2.4 world-viz verbs (thin echoes of the Cog window; they flip VizSettings).
+	void HandleShowTriggers(const TArray<FString>& Args);
+	void HandleGizmos(const TArray<FString>& Args);
+	void HandleBeams(const TArray<FString>& Args);
 
 	// --- Helpers ------------------------------------------------------------------------
 	FElysiumEntityWorld* GetSubstrate() const;
@@ -96,6 +134,8 @@ private:
 	// Drop overlay/break/message state (on world change — handles are per-epoch).
 	void ResetState();
 	void RenderOverlays(FElysiumEntityWorld& EW);
+	// P2.4: draw the map-wide layers (entity gizmos, trigger hulls, I/O beams) per VizSettings.
+	void RenderWorldViz(FElysiumEntityWorld& EW);
 
 	TArray<IConsoleObject*> ConsoleObjects;
 
@@ -111,4 +151,13 @@ private:
 	FString BreakTarget;
 	FElysiumEntityHandle BreakHandle;
 	FName BreakInput = NAME_None;           // NAME_None = any input
+
+	// P2.4 world-viz state (valid for the currently hooked world epoch).
+	FVizSettings VizSettings;
+	TArray<FBeam> Beams;                    // captured at delivery, drawn+pruned each tick
+
+#if !UE_BUILD_SHIPPING
+	// The retained gizmo ISM layer (built lazily on first non-Off mode, per epoch). Debug-only.
+	TPimplPtr<FElysiumGizmoLayer> GizmoLayer;
+#endif
 };

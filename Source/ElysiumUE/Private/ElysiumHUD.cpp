@@ -96,7 +96,20 @@ void AElysiumHUD::DrawHUD()
 {
 	Super::DrawHUD();
 
-	if (!bShowDebug || !Canvas)
+	if (!Canvas)
+	{
+		return;
+	}
+
+	// Centre crosshair — always on, independent of the debug overlay and any Cog window, so the
+	// aim reticle never flickers in/out with what happens to be open. The HUD renders every frame
+	// in -game and PIE, so this is the one reliable always-visible surface.
+	const float CX = Canvas->ClipX * 0.5f;
+	const float CY = Canvas->ClipY * 0.5f;
+	DrawLine(CX - 7.f, CY, CX + 7.f, CY, FLinearColor(1, 1, 1, 0.7f), 1.2f);
+	DrawLine(CX, CY - 7.f, CX, CY + 7.f, FLinearColor(1, 1, 1, 0.7f), 1.2f);
+
+	if (!bShowDebug)
 	{
 		return;
 	}
@@ -108,12 +121,6 @@ void AElysiumHUD::DrawHUD()
 	}
 
 	UFont* Font = GEngine->GetMediumFont();
-	const float CX = Canvas->ClipX * 0.5f;
-	const float CY = Canvas->ClipY * 0.5f;
-
-	// Centre crosshair.
-	DrawLine(CX - 7.f, CY, CX + 7.f, CY, FLinearColor(1, 1, 1, 0.7f), 1.2f);
-	DrawLine(CX, CY - 7.f, CX, CY + 7.f, FLinearColor(1, 1, 1, 0.7f), 1.2f);
 
 	APlayerController* PC = GetOwningPlayerController();
 	APawn* Pawn = PC ? PC->GetPawn() : nullptr;

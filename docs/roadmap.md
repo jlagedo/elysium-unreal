@@ -304,9 +304,29 @@ as script-host log lines; ring buffer holds the session history — observable w
   of Shipping (`#if !UE_BUILD_SHIPPING`); the in-world draws compile out wherever `ENABLE_DRAW_DEBUG` is
   off. Editor target compiles + links
   clean. *Deps:* 1.4–1.6.
-- [ ] **2.4 World visualization** — `elysium.showtriggers` (wireframe hulls by class/state),
-  fading I/O beam arrows on fire, entity gizmos (port the Godot viewer UX: color-keyed
-  boxes + labels, off/visible/all cycle, cone pick). *Deps:* 1.5.
+- [x] **2.4 World visualization** — the three map-wide debug layers land on `UElysiumEntityDebugSubsystem`
+  as a `FVizSettings` block the always-running tick renders (so a layer left on stays on while you play,
+  F1 open or not), fronted by the **`Elysium.World Viz` Cog window** (`FElysiumCogWindow_WorldViz`) as the
+  F1-first surface — every control there flips the same `Viz()` state the three thin `ECVF_Cheat` verbs
+  flip. **Entity gizmos** (Godot viewer port): a color-keyed solid box per live entity as a **retained
+  GPU-instanced layer** (`FElysiumGizmoLayer`) — one `UInstancedStaticMeshComponent` of unit cubes built
+  once per epoch, colour+opacity in per-instance custom data read by the committed `M_Gizmo`/`M_Gizmo_XRay`
+  masters (`ElysiumGizmoClassColor` palette — trigger red / light-sprite yellow / sound-ambient cyan /
+  logic-math-relay magenta / prop-model green / other grey; hidden dimmed, dead transparent) with a
+  targetname/class label, in an **off / visible / all** cycle (Off hides the component, Visible = depth-tested
+  material so walls occlude, All = x-ray material drawn on top). Retained + event-driven: idle frames cost
+  only the instanced draw, and a dormancy/liveness flip re-uploads just that one instance via
+  `FElysiumEntityWorld::SetVisualChangedHook` (fired from `OnDormancyChanged`/`Kill`) — no per-frame rebuild,
+  no distance cull needed. Only the labels stay immediate-mode (distance-culled). `elysium.ent_gizmos
+  [off|visible|all]` (no arg cycles). **Show triggers**: the wireframe per-hull AABBs
+  of every trigger brush entity (exact for VtMB's axis-aligned box brushes), colored by class or by
+  enabled/dormant state (`elysium.showtriggers [0|1] [state]`). **I/O beams**: a fading caller→target
+  arrow captured at the delivery chokepoint tap (`TapDelivered`, reusing the freeze-while-paused fade
+  clock and the `AddSink` seam) and drawn foreground so causality is followable through walls
+  (`elysium.ent_beams`). Gizmo/beam picking rides the existing P2.3 crosshair picker (brush-body trace +
+  nearest-origin logic ent) → the Entity Inspector's shared selection, so no separate cone picker is
+  added. All draws compile out wherever `ENABLE_DRAW_DEBUG` is off; the window is `#if ENABLE_COG`; the
+  verbs `#if !UE_BUILD_SHIPPING`. Editor target compiles + links clean. *Deps:* 1.5.
 - [ ] **2.5 Maps/Lights windows + `elysium.reload` + `UCheatManager` subclass** — absorb the
   Canvas HUD panels (HUD keeps FPS/position); reload = re-`Travel` current map for the
   export→reload hot loop. *Deps:* 2.1.
@@ -353,10 +373,24 @@ M1 leftovers that live in this lane.
 
 ## P4 — Interaction *(design: `engine-core.md` class ladder + `animation_and_movers.md` Part B)*
 
-- [ ] **4.1 Mover base** — `LinearMove`/`AngularMove` (constant velocity, snap, MoveDone) +
-  the shared 4-state toggle machine on kinematic brush bodies; prototype one door **first**
-  to de-risk Chaos kinematic sweeps/blocking (deal `dmg`, reverse, `OnBlockedClosing`).
-  *Deps:* 1.5, 1.6.
+- [x] **4.1 Mover base** — `FElysiumMoverBase` (the CBaseToggle primitive, `ElysiumMover.h/.cpp`):
+  `LinearMove`/`AngularMove` drive the entity's `UElysiumBrushComponent` at **constant velocity**
+  (no easing, B.4) toward a body-relative target, snapping + firing `MoveDone()` on arrival; motion
+  runs on the substrate clock/think (R4 — no `FTimerManager`), re-arming `NextThink` each moving
+  frame, and moves **swept** (`bSweep`) so the solid kinematic body pushes the pawn and reports
+  blockers (the Chaos behaviour this task de-risks). Angular rotation pivots about the body's own
+  origin = the hinge; `LinearMove` unit-converts Source in→cm (ready for 4.3's slide). Layered on it,
+  `FElysiumDoorBase` (registered as the `CBaseDoor` chain node) is the CBaseDoor 4-state machine
+  (`m_toggle_state` {AT_TOP=0, AT_BOTTOM=1, GOING_UP=2, GOING_DOWN=3}): inputs
+  `Open`/`Close`/`Toggle`/`Lock`/`Unlock`/`Use`, outputs
+  `OnOpen`/`OnClose`/`OnFullyOpen`/`OnFullyClosed`/`OnLockedUse`/`OnBlockedClosing`, `wait` autoclose
+  (`-1` = stay open), the locked path (fires `OnLockedUse`, no move), Toggle in-flight reversal, and
+  **blocked-while-closing → `dmg` (`ApplyDamage`) + reverse + `OnBlockedClosing`** (pawn-only
+  blockers; opening into a blocker clamps + retries). `speed`/`distance`/`wait`/`lip`/`dmg` are
+  chain fields on `CBaseDoor`. The prototype leaf `func_door_rotating` (the workhorse: 1236 uses / 22
+  on the tutorial) swings `distance°` about yaw/Z around the hinge, `REVERSE`/`LOCKED`/`START_OPEN`
+  honoured. Driven through the I/O inputs (`ent_fire <door> Open`/`Unlock`) until `+use` (4.4).
+  *Runtime feel of the Chaos push/block still needs an in-game play test.* *Deps:* 1.5, 1.6.
 - [ ] **4.2 `func_button`** — press/latch/spring-back per decompiled spawnflags; `OnPressed`
   + `OnIn`/`OnOut` reticle arming; `StartHidden` disarm/arm. *Deps:* 4.1.
 - [ ] **4.3 `func_door` / `func_door_rotating`** — full spawnflag table (B.5), `wait -1`,
@@ -525,7 +559,7 @@ dialogue, scripted flow, quests, save/load included.
 |---|---|---|
 | PL1 | Export `.ents`-referenced models (`prop_dynamic`/`prop_physics`) | 8.1 |
 | PL2 | Copy loose `.py` → `out/scripts/`, `.dlg` → `out/dlg/` | 5.1 |
-| PL3 | Use-icon atlas export (72-entry enum) | 4.4 |
+| PL3 | Use-icon atlas export (72-entry enum) — `UE_use_icons.py` → `out/hud/use_icons.png`+`.json` | 4.4 [x] |
 | PL4 | Batch NPC export + include-model resolution in `mdl_skel.py` | 8.5 |
 | PL5 | Copy sound schemes (a) + `vdata/system/*.txt` (b) | 6.3, 9.4 |
 | PL6 | Texlight merge in exporter | 3.4 |

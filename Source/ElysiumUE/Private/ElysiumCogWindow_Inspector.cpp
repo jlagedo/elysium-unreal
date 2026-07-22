@@ -82,22 +82,6 @@ namespace
 		FCollisionQueryParams Q(FName(TEXT("ElysiumInspectAim")), /*bTraceComplex*/ true, PC->GetPawn());
 		return W->LineTraceSingleByChannel(OutHit, Loc, End, ECC_Visibility, Q);
 	}
-
-	// A thin crosshair on the imgui foreground, so aiming works without the debug HUD. Cog renders the
-	// foreground list every frame a window is visible — including while the F1 menu is closed.
-	void DrawReticle()
-	{
-		const ImGuiViewport* VP = ImGui::GetMainViewport();
-		if (VP == nullptr)
-		{
-			return;
-		}
-		const ImVec2 C(VP->Pos.x + VP->Size.x * 0.5f, VP->Pos.y + VP->Size.y * 0.5f);
-		ImDrawList* DL = ImGui::GetForegroundDrawList();
-		const ImU32 Col = IM_COL32(255, 255, 255, 180);
-		DL->AddLine(ImVec2(C.x - 8, C.y), ImVec2(C.x + 8, C.y), Col, 1.5f);
-		DL->AddLine(ImVec2(C.x, C.y - 8), ImVec2(C.x, C.y + 8), Col, 1.5f);
-	}
 }
 
 void FElysiumCogWindow_Inspector::Initialize()
@@ -110,7 +94,8 @@ void FElysiumCogWindow_Inspector::RenderHelp()
 {
 	ImGui::Text(
 		"Live crosshair inspector. Leave this window open and it keeps updating while you play (Cog "
-		"renders open windows even with the F1 menu closed), so whatever you aim at appears here — the "
+		"renders open windows even with the F1 menu closed), so whatever you aim at (the always-on HUD "
+		"crosshair marks the aim point) appears here — the "
 		"surface under the crosshair (actor, component, mesh, material + textures) and, if it is a "
 		"brush/logic entity, its full detail: identity, chain-walked fields, raw .ents keyvalues, and "
 		"the 7-field outputs. Fire any input by hand (goes through the real event queue, visible in the "
@@ -126,9 +111,8 @@ void FElysiumCogWindow_Inspector::RenderContent()
 	UWorld* GameWorld = GetWorld();
 	UElysiumEntityDebugSubsystem* Dbg = GameWorld ? GameWorld->GetSubsystem<UElysiumEntityDebugSubsystem>() : nullptr;
 
-	// The window is the crosshair: draw a reticle (works while the F1 menu is closed and the game
-	// runs, because Cog keeps rendering visible windows) and live-inspect whatever the ray hits.
-	DrawReticle();
+	// The reticle is drawn always-on by the HUD (AElysiumHUD::DrawHUD), so aiming works regardless of
+	// which windows are open; this window just live-inspects whatever the camera ray hits.
 
 	// --- Under crosshair: any surface the ray hits — works with or without an .ents substrate. ------
 	ImGui::SeparatorText("Under crosshair");

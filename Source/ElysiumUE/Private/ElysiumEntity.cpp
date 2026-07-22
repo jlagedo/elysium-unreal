@@ -84,7 +84,13 @@ void FElysiumEntity::Kill()
 	NextThink = ELYSIUM_NEVER_THINK;
 	if (!bHidden)
 	{
-		OnDormancyChanged();   // drop the body's collision + draw (no-op until P1.5)
+		OnDormancyChanged();   // drop the body's collision + draw (no-op until P1.5); notifies below
+	}
+	else if (World)
+	{
+		// Already hidden (OnDormancyChanged is skipped), but the visual state still changed
+		// hidden -> dead, so a retained visualizer must still be told.
+		World->NotifyVisualChanged(*this);
 	}
 }
 
@@ -95,6 +101,12 @@ void FElysiumEntity::OnDormancyChanged()
 	if (Body)
 	{
 		Body->SetDormant(IsInert());
+	}
+	// P2.4 — the visual (colour/visibility) changed; let a retained gizmo layer dirty this one
+	// instance on the event rather than polling every entity every frame. No-op in normal play.
+	if (World)
+	{
+		World->NotifyVisualChanged(*this);
 	}
 }
 
