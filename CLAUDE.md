@@ -43,8 +43,8 @@ its callers + docs in the same pass.
 Boot into an empty persistent level → `UElysiumMapSubsystem::Travel` (synchronous) loads a
 map as world + 3D-skybox PMC actors, MIDs off the single master material `M_VtMB_World`
 (albedo + alpha-masked `$selfillum` emissive via `map_Ke` → `Emissive`/`EmissiveScale`,
-tunable by `elysium.EmissiveScale`), DDS-preferred textures (PNG fallback), per-section
-trimesh collision, `.emc` parse-cache,
+tunable by `elysium.EmissiveScale`), DDS-preferred textures (PNG fallback), brush collision
+(`.hulls` convex + `.dispcol` trimesh, render-trimesh fallback), `.emc` parse-cache,
 `.spawn`/`.sky` placement, a Character-movement FPS pawn with noclip, a Canvas debug HUD,
 and `elysium.map` / `elysium.maps` / `elysium.debug` / `elysium.lights` console commands.
 
@@ -57,8 +57,11 @@ props also load: `.props` + `props/*.obj` build one runtime `UStaticMesh` per un
 (`FElysiumStaticMeshBuilder`, `BuildFromMeshDescriptions`), drawn as one
 `UInstancedStaticMeshComponent` per (model, solidity) bucket with MIDs off `M_VtMB_World` and
 convex collision on solid props (`elysium.props` toggles; 809 instances / 161 models for the
-tutorial). Still
-planned: collision from `.hulls`/`.dispcol`, Source movement, the rest of the master-material
+tutorial). **Brush collision** also lands: `AElysiumMapActor` loads `.hulls` (one convex
+`FKConvexElem` per solid world brush, invisible PLAYERCLIP volumes included) and `.dispcol`
+(displacement terrain trimesh) onto collision-only PMCs, replacing the render-mesh trimesh as
+the walkable surface (`elysium.BrushCollision` toggles back to trimesh for A/B). Still
+planned: Source movement, the rest of the master-material
 set, the entity/I-O layer, scripting, audio, menu, dialogue — see `docs/rebuild-strategy.md`.
 Only `sp_tutorial_1` is exported today.
 

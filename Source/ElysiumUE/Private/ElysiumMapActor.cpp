@@ -19,6 +19,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/FileManager.h"
+#include "HAL/IConsoleManager.h"
 #include "KismetProceduralMeshLibrary.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/FileHelper.h"
@@ -27,6 +28,15 @@
 #include "Serialization/MemoryWriter.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysium, Log, All);
+
+// Use the pipeline's brush sidecars (.hulls convex + .dispcol trimesh) as the world collider (1),
+// or fall back to the render-mesh trimesh (0). Brush collision matches retail: it includes the
+// invisible PLAYERCLIP volumes and drops collision on geometry the designer clipped off. Read at
+// map load, so re-travel to A/B a value.
+static TAutoConsoleVariable<int32> CVarBrushCollision(
+	TEXT("elysium.BrushCollision"), 1,
+	TEXT("World collider: 1 = .hulls/.dispcol brush collision, 0 = render-mesh trimesh. Applied at map load."),
+	ECVF_Default);
 
 namespace
 {
@@ -142,6 +152,24 @@ AElysiumMapActor::AElysiumMapActor()
 	WorldMesh->bUseAsyncCooking = true;
 	WorldMesh->SetCollisionProfileName(TEXT("BlockAll"));
 
+	// Convex world collision from .hulls: no render sections (never drawn), simple = convex.
+	// One FKConvexElem per solid brush, so pawn capsule sweeps (which query simple collision)
+	// hit the brushes and their invisible clip volumes. Cooked async like WorldMesh.
+	HullCollision = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("HullCollision"));
+	HullCollision->SetupAttachment(SceneRoot);
+	HullCollision->bUseComplexAsSimpleCollision = false;
+	HullCollision->bUseAsyncCooking = true;
+	HullCollision->SetCollisionProfileName(TEXT("BlockAll"));
+
+	// Displacement terrain collision from .dispcol: one invisible complex-as-simple trimesh
+	// section, so capsule sweeps hit the concave terrain the convex hulls don't represent.
+	DispCollision = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("DispCollision"));
+	DispCollision->SetupAttachment(SceneRoot);
+	DispCollision->bUseComplexAsSimpleCollision = true;
+	DispCollision->bUseAsyncCooking = true;
+	DispCollision->SetCollisionProfileName(TEXT("BlockAll"));
+	DispCollision->SetVisibility(false);
+
 	SkyMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("SkyMesh"));
 	SkyMesh->SetupAttachment(SceneRoot);
 	SkyMesh->bUseAsyncCooking = true;
@@ -212,8 +240,19 @@ void AElysiumMapActor::LoadMap()
 	const double Start = FPlatformTime::Seconds();
 
 	LoadedMap = MapName;
-	WorldSurfaceCount = BuildMeshFromObj(FElysiumContentPaths::MapObj(MapName), WorldMesh, true);
-	UE_LOG(LogElysium, Log, TEXT("world '%s': %d surfaces"), *MapName, WorldSurfaceCount);
+
+	// Prefer real brush collision (.hulls convex + .dispcol trimesh) — it carries the invisible
+	// clip volumes and matches retail walk behaviour. When it loads, the world render mesh is
+	// built without collision. Falls back to the render-mesh trimesh when the sidecar is missing
+	// or elysium.BrushCollision is 0.
+	bBrushCollision = CVarBrushCollision.GetValueOnGameThread() != 0 && LoadHulls();
+	if (bBrushCollision)
+	{
+		LoadDispCol();
+	}
+	WorldSurfaceCount = BuildMeshFromObj(FElysiumContentPaths::MapObj(MapName), WorldMesh, !bBrushCollision);
+	UE_LOG(LogElysium, Log, TEXT("world '%s': %d surfaces (collision: %s)"),
+		*MapName, WorldSurfaceCount, bBrushCollision ? TEXT("brush") : TEXT("trimesh"));
 
 	const FString SkyObj = FElysiumContentPaths::MapSkyObj(MapName);
 	if (FPaths::FileExists(SkyObj))
@@ -336,6 +375,96 @@ int32 AElysiumMapActor::BuildMeshFromObj(const FString& ObjPath, UProceduralMesh
 		++Section;
 	}
 	return Section;
+}
+
+bool AElysiumMapActor::LoadHulls()
+{
+	TArray<FString> Lines;
+	if (!FFileHelper::LoadFileToStringArray(Lines, *FElysiumContentPaths::MapHulls(MapName)))
+	{
+		return false;   // no .hulls sidecar: keep the render-mesh trimesh fallback
+	}
+
+	// Each line is one solid world brush as a flat, unordered point cloud in Unreal cm:
+	// x y z x y z ...  (>= 4 verts). UE builds the convex hull from the points, so order is
+	// irrelevant. The sidecar is pre-filtered at export to player-blocking contents
+	// (SOLID|WINDOW|GRATE|MOVEABLE|PLAYERCLIP), so invisible clip brushes are in and passable
+	// water/monsterclip is out.
+	TArray<TArray<FVector>> Hulls;
+	Hulls.Reserve(Lines.Num());
+	for (const FString& Line : Lines)
+	{
+		TArray<FString> Tok;
+		Line.ParseIntoArray(Tok, TEXT(" "), true);
+		if (Tok.Num() < 12 || Tok.Num() % 3 != 0)
+		{
+			continue;   // need >= 4 verts, whole (x,y,z) triples
+		}
+		TArray<FVector> Verts;
+		Verts.Reserve(Tok.Num() / 3);
+		for (int32 I = 0; I + 2 < Tok.Num(); I += 3)
+		{
+			Verts.Emplace(FCString::Atod(*Tok[I]), FCString::Atod(*Tok[I + 1]), FCString::Atod(*Tok[I + 2]));
+		}
+		Hulls.Add(MoveTemp(Verts));
+	}
+	if (Hulls.Num() == 0)
+	{
+		return false;
+	}
+
+	HullCount = Hulls.Num();
+	// Set the whole convex set in one call: SetCollisionConvexMeshes replaces the elements and
+	// cooks collision once (AddCollisionConvexMesh would re-cook per hull).
+	HullCollision->SetCollisionConvexMeshes(MoveTemp(Hulls));
+	UE_LOG(LogElysium, Log, TEXT("brush collision: %d convex hulls"), HullCount);
+	return true;
+}
+
+void AElysiumMapActor::LoadDispCol()
+{
+	TArray<FString> Lines;
+	if (!FFileHelper::LoadFileToStringArray(Lines, *FElysiumContentPaths::MapDispCol(MapName)))
+	{
+		return;   // no .dispcol: map has no displacements
+	}
+
+	// Each line is one collision triangle: 9 Unreal-cm floats = A,B,C. Concave terrain, so it
+	// becomes one complex-as-simple trimesh section. Winding is irrelevant (Chaos trimesh is
+	// two-sided). The section stays invisible (component visibility off).
+	TArray<FVector> Verts;
+	TArray<int32> Tris;
+	Verts.Reserve(Lines.Num() * 3);
+	Tris.Reserve(Lines.Num() * 3);
+	for (const FString& Line : Lines)
+	{
+		TArray<FString> Tok;
+		Line.ParseIntoArray(Tok, TEXT(" "), true);
+		if (Tok.Num() != 9)
+		{
+			continue;
+		}
+		const int32 Base = Verts.Num();
+		for (int32 V = 0; V < 3; ++V)
+		{
+			Verts.Emplace(FCString::Atod(*Tok[V * 3]), FCString::Atod(*Tok[V * 3 + 1]), FCString::Atod(*Tok[V * 3 + 2]));
+		}
+		Tris.Add(Base);
+		Tris.Add(Base + 1);
+		Tris.Add(Base + 2);
+	}
+	if (Tris.Num() == 0)
+	{
+		return;
+	}
+
+	DispTriCount = Tris.Num() / 3;
+	const TArray<FVector> NoNormals;
+	const TArray<FVector2D> NoUVs;
+	const TArray<FLinearColor> NoColors;
+	const TArray<FProcMeshTangent> NoTangents;
+	DispCollision->CreateMeshSection_LinearColor(0, Verts, Tris, NoNormals, NoUVs, NoColors, NoTangents, true);
+	UE_LOG(LogElysium, Log, TEXT("displacement collision: %d triangles"), DispTriCount);
 }
 
 void AElysiumMapActor::LoadProps()

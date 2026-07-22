@@ -54,10 +54,21 @@ public:
 	int32 WorldLightCount = 0;
 	int32 PropInstanceCount = 0;
 	int32 PropModelCount = 0;
+	// Brush collision (.hulls/.dispcol): convex-hull count, displacement-triangle count, and
+	// whether brush collision is the active world collider (vs. the render-mesh trimesh).
+	int32 HullCount = 0;
+	int32 DispTriCount = 0;
+	bool bBrushCollision = false;
 
 private:
 	UPROPERTY() TObjectPtr<USceneComponent> SceneRoot;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> WorldMesh;
+	// Collision-only world colliders built from the pipeline's brush sidecars, preferred over
+	// WorldMesh's render-trimesh: HullCollision holds one convex element per solid world brush
+	// (.hulls, invisible clip brushes included); DispCollision is the displacement terrain
+	// trimesh (.dispcol). Both invisible.
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> HullCollision;
+	UPROPERTY() TObjectPtr<UProceduralMeshComponent> DispCollision;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> SkyMesh;
 	// The 2D six-face skybox backdrop: a large inward box sampling the sky cubemap through
 	// M_Sky. Distinct from SkyMesh (the 3D skybox miniature geometry).
@@ -76,6 +87,14 @@ private:
 
 	void LoadMap();
 	void LoadProps();
+	// Build convex world collision from <map>.hulls (one FKConvexElem per solid brush) onto
+	// HullCollision. Returns true when at least one hull loaded — the caller then drops the
+	// render-mesh trimesh, making the brushes (with their invisible clip volumes) the walkable
+	// surface. False (sidecar missing/empty) leaves the trimesh fallback in place.
+	bool LoadHulls();
+	// Build the displacement terrain trimesh from <map>.dispcol onto DispCollision. Only meaningful
+	// alongside brush collision; no-op when the sidecar is absent (map has no displacements).
+	void LoadDispCol();
 	int32 BuildMeshFromObj(const FString& ObjPath, UProceduralMeshComponent* Mesh, bool bCollision);
 	void ApplySkyTransform();
 	// Per-map colour grade (.cube), sky IBL ambient + height fog (.env). Sets the SkyLight

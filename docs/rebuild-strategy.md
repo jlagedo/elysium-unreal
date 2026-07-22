@@ -59,7 +59,8 @@ The plan has two tracks that run in parallel:
 Working today: boot into the empty persistent level → `UElysiumMapSubsystem::Travel`
 (synchronous) loads a map as two `UProceduralMeshComponent` actors (world 355 sections +
 3D skybox 84 sections for `sp_tutorial_1`), one MID per material off the single master
-`M_VtMB_World`, DDS-preferred textures with PNG fallback, per-section trimesh collision
+`M_VtMB_World`, DDS-preferred textures with PNG fallback, brush collision (`.hulls` convex
+hulls + `.dispcol` displacement trimesh) as the walkable surface with a render-trimesh fallback
 (async-cooked; pawn held until ground exists), `.emc` parse-cache (~1.3s warm load),
 `.sky` transform, `.spawn` placement, Character-movement FPS pawn with noclip, Canvas
 debug HUD, engine-console commands `elysium.map` / `elysium.maps` / `elysium.debug` /
@@ -98,8 +99,8 @@ runtime (`FElysiumStaticMeshBuilder`, `BuildFromMeshDescriptions`), rendered as 
 convex collision on solid props. 809 instances / 161 models for the tutorial; `elysium.props`
 toggles them.
 
-Not yet built (sidecars exist unread in `tools/out`): `.hulls`, `.dispcol`,
-`.sprites`, `_decals.obj`, `.water`, `.ents`; and texlight (type-0) clustering in the rig.
+Not yet built (sidecars exist unread in `tools/out`): `.sprites`, `_decals.obj`,
+`.water`, `.ents`; and texlight (type-0) clustering in the rig.
 `Travel`'s landmark parameter is accepted and ignored.
 Input bindings are legacy axis/action mappings (EnhancedInput is configured as the
 player-input class but unused). Two of the planned master materials exist (`M_VtMB_World`,
@@ -122,21 +123,26 @@ MegaLights + VSM, `Config/DefaultEngine.ini`); `elysium.lights` toggles the rig,
 deferred rig piece (none in the tutorial). Reference: `docs/lighting.md`, Godot
 `LightRig.cs` + `Lightstyles.cs`.
 
+Also done: **`.hulls`/`.dispcol` brush collision** — `AElysiumMapActor::LoadHulls`/`LoadDispCol`
+build one convex `FKConvexElem` per solid `.hulls` brush (via `SetCollisionConvexMeshes`, one
+cook; invisible PLAYERCLIP volumes included) and the `.dispcol` triangle soup as a displacement
+trimesh, both on collision-only `UProceduralMeshComponent`s. When they load, the world render
+mesh is built with no collision so the brushes are the walkable surface; `elysium.BrushCollision`
+flips back to the render-trimesh for A/B. The sidecars are already Unreal cm (read verbatim).
+Reference: Godot `BrushCollision.cs`.
+
 Still open, each independent (pick by value):
 
-1. **`.hulls`/`.dispcol` collision** — convex `UBodySetup`/`FKConvexElem` per `.hulls`
-   brush, runtime trimesh from `.dispcol`; replaces render-trimesh as the primary walkable
-   surface. Reference: Godot `BrushCollision.cs`. (Now Unreal cm, ready to consume raw.)
-2. **Source movement component** — port `CGameMovement` (friction/accel/airaccel/StepMove)
+1. **Source movement component** — port `CGameMovement` (friction/accel/airaccel/StepMove)
    into a `UCharacterMovementComponent` override. Reference: `docs/source_movement.md`,
    Godot `SourceMovement.cs`.
-3. **Master-material set (rest)** — `M_World_Masked` (alphatest), `M_World_Translucent`,
+2. **Master-material set (rest)** — `M_World_Masked` (alphatest), `M_World_Translucent`,
    and grow `M_VtMB_World` toward `M_World_Opaque` (bump, envmap mask + cube,
    WVT second layer + vertex-color blend). Authored offline like `M_Sky`. (Alpha-masked
    `$selfillum` emissive — `map_Ke` → `Emissive`/`EmissiveScale` — is done.)
-4. **Texture prewarm off the game thread** — worker-thread batch prewarm in
+3. **Texture prewarm off the game thread** — worker-thread batch prewarm in
    `FElysiumTextureCache` (Godot `Prewarm` shape); load is texture-bound.
-5. **Texlight clustering** — the deferred rig piece: bin type-0 emit_surface patches by
+4. **Texlight clustering** — the deferred rig piece: bin type-0 emit_surface patches by
    `(intensity, normal)`, single-linkage cluster, one shadowless point per surface (Godot
    `LightRig.SpawnTexlights`). None in the tutorial; needed for other maps.
 
@@ -183,7 +189,7 @@ All under `tools/out/<map>/`. Formats are fixed by the pipeline and shared with 
 | `<map>_sky.obj`, `.sky` | 3D skybox + `origin`/`scale` transform | OBJ + text |
 | `.ents` | **all 1,226 entities**: classname, targetname, origin, `start_hidden`, raw keyvalues, brush-entity convex `hulls` + `contents`/`blocks_player`, and 7-field I/O `outputs` (`target, input, param, delay, times, python, name`) | JSON |
 | `.props` | static props: `safename ox oy oz qx qy qz qw solid`, models in `props/<safename>.obj` | text, Unreal cm + quaternion |
-| `.hulls` / `.dispcol` | world brush convex hulls / displacement collision tris | text, Godot metres |
+| `.hulls` / `.dispcol` | world brush convex hulls / displacement collision tris | text, Unreal cm |
 | `.lights` | one line per WORLDLIGHTS source: `type origin dir rgb radius stopdot stopdot2 exponent style` | text |
 | `.sprites` | env_sprite coronas: `texpath pos w h rgb amt orient` | text, Godot metres |
 | `.spawn` | `info_player_start` origin + yaw | text, Source coords |
@@ -483,8 +489,9 @@ Vertical slice: **play `sp_tutorial_1` start to finish, then walk into
 - **M1 — world parity**: `.hulls`/`.dispcol` collision, Source movement component,
   light rig + lightstyles, `.env` sky/fog, `.cube` LUT, master-material set
   (alpha modes, WVT, bump/envmap), texture prewarm off the game thread. (The `UE_`
-  coordinate conversion, `.env` sky/fog, `.cube` LUT, `M_Sky`, and the light rig +
-  lightstyles are done — see "M1 — remaining tasks" for what's left.)
+  coordinate conversion, `.env` sky/fog, `.cube` LUT, `M_Sky`, the light rig +
+  lightstyles, and `.hulls`/`.dispcol` brush collision are done — see "M1 — remaining
+  tasks" for what's left.)
 - **M2 — dressing parity**: props via ISM (+ convex collision), decals, Single Layer
   Water, coronas, A/B match vs. the Godot viewer on tutorial + hub maps.
 - **M3 — entity backbone**: entity world + registry, event queue + input dispatch,
