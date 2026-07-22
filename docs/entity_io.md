@@ -122,10 +122,11 @@ that would lose 110 of 147 brush entities, including 55 trigger volumes.
 ]}
 ```
 
-- `origin` — Godot metres. For `func_door_rotating` it is also the hinge.
-- `hulls` — convex hulls in **entity-local** Godot metres, one flat `x y z ...` list
+- `origin` — Unreal centimetres (`source_to_unreal`; the JSON above shows Godot-era
+  metre values for illustration). For `func_door_rotating` it is also the hinge.
+- `hulls` — convex hulls in **entity-local** Unreal centimetres, one flat `x y z ...` list
   each, built by walking the brush entity's own headnode (`dmodel_t` @36) through
-  `_model_brushes`. World = `origin + hull`; `source_to_godot` is linear, so
+  `_model_brushes`. World = `origin + hull`; `source_to_unreal` is linear, so
   converting each separately and adding is equivalent. Brush entities are authored
   about their origin, so a button's hull centre is (0,0,0).
 - `contents` — the OR of the brushes' CONTENTS flags; `blocks_player` is
@@ -183,19 +184,41 @@ volume, which is what arms the icon. `soundgroup` names the sound set
 `CBaseEntity` datamap builder `FUN_100a22f0`, `vampire.dll`). `CBaseButton::Spawn`
 (`FUN_100c8d60`) reads it and wires up the button:
 
-| Bit | Spawn behaviour |
+| Bit | Behaviour |
 | --- | --- |
 | `0x1` | **DONTMOVE** — pressed position is forced equal to the start position (matches stock `SF_BUTTON_DONTMOVE`) |
+| `0x20` | **TOGGLE** — in the touch handler (`0x100c9250`) it gates the down-activation from the rest state; also read by the direction helper `0x100c93b0`. Touch toggles up↔down |
 | `0x40` | spawn-time timed/animate setup (schedules a think at `spawn + Δ`) |
-| `0x100` | assigns the **use/activate** handler (`m_pfn` at `+0x1ec` ← `0x10002cd4`) + one vtable call (`+0x37c`) |
-| `0x400` | assigns the **touch** handler (`m_pfn` at `+0x1f0` ← `0x100111da`) — touch-activates |
+| `0x100` | assigns the **use/activate** handler (`m_pfn` at `+0x1ec` ← `0x100c9430`) + one vtable call (`+0x37c`) |
+| `0x400` | assigns the **touch** handler (`m_pfn` at `+0x1f0` ← `0x100c9250`) — touch-activates |
 | `0x800` | **starts locked** — sets the locked byte `+0x5c4` (the one `GetUseIcon` reads to pick `locked_icon`) |
-| `0x1000` | sets a secondary state byte `+0x5c5` |
+| `0x1000` | sets `+0x5c5`, a secondary use-gate: the use handler (`0x100c9430`) only fires if the activator carries a matching flag (`activator[0x13]` bit 2) |
 
-Bits **`0x20`** (in 33/1056/1057) and **`0x2000`** (in 8193/9217) are **not** tested in
-`Spawn` — they are handled in the use/touch handlers or the base class (still to decompile).
-VtMB diverges from modern Source elsewhere (`fieldtype_t`, `dface_t`), so the values above are
-read from this build, not assumed from stock `SF_BUTTON_*`.
+Bit `0x20`/`0x1000` are read in `CBaseButton::Spawn` (`FUN_100c8d60`) and the use/touch handlers
+(thunks `0x10002cd4`/`0x100111da` → `0x100c9430`/`0x100c9250`). Bit **`0x2000`** (in 8193/9217)
+is **not** tested anywhere in the button class — it is inert for `func_button` (a base-entity or
+engine bit). VtMB diverges from modern Source on buttons, so the values above are read from this
+build, not assumed from stock `SF_BUTTON_*`.
+
+## Trigger activation filter (`trigger_multiple` / `trigger_once`)
+
+`CBaseTrigger::PassesTriggerFilters` (`FUN_101c5460`, `vampire.dll`) decides whether a touching
+entity may fire the trigger. Called from the StartTouch handler (`FUN_101c6410`); a `false`
+return routes to the reject/cleanup path. It reads `m_spawnflags` (`+0x204`) and — unlike the
+button — **matches stock Source** exactly:
+
+| Bit | Meaning |
+| --- | --- |
+| `0x1` | ALLOW_CLIENTS — toucher's `GetFlags()` (`+0x434`) client bit |
+| `0x2` | ALLOW_NPCS — `GetFlags() & 0x2000` |
+| `0x4` | ALLOW_PUSHABLES — movetype/class check (`0x101c53d0`) |
+| `0x8` | ALLOW_PHYSICS — `GetMoveType() == 7` (`MOVETYPE_VPHYSICS`) (`0x101c5420`) |
+
+A toucher passes if **any** enabled class bit matches; then, if a **filter entity** is set
+(`m_hFilter` at `+0x564`), its `PassesFilter` (vtable `+0x3c4`) is the final say. Separately,
+spawnflag bit `0x80` (tested in the wait-over think as `(char)m_spawnflags < 0`) makes the trigger
+**remove itself after firing** (the `trigger_once` behaviour; `trigger_once` is a distinct factory
+`FUN_101c6a30`/vftable `0x1047dee4` over the same `CBaseTrigger` base `0x1047d08c`).
 
 ## use_icon enum
 
