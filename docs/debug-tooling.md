@@ -12,6 +12,24 @@ from. The editor is a *viewer* we get for free during PIE, never an authoring su
 The architecture is three layers. Everything is development-only (compiled out of or disabled
 in Shipping); nothing here touches the bring-your-own-game posture.
 
+**Interaction principle — F1-first (load-bearing).** The Cog F1 UI is *the* surface the developer
+touches. Every debug capability must be reachable and operable from a Cog window with **nothing to
+memorize** — a button, checkbox, or list entry, not a remembered command. The `elysium.*` console
+verbs are a *thin scriptable layer over the same runtime state* (for `-ExecCmds` automation, cron/
+headless runs, and Source-modder muscle memory) — never the only way to reach a feature, and never the
+primary surface. New tooling ships its Cog controls first; a verb without a Cog equivalent is
+incomplete. (Concretely: the P2.3 `ent_*` picker/overlays/breakpoint are driven point-and-click from
+the Entity Inspector, and the verbs just flip the same `UElysiumEntityDebugSubsystem` state.)
+
+Corollary — **a Cog window left open keeps live-updating while you play**, because Cog renders every
+*visible* window each frame regardless of the F1 menu (only the menu bar is gated by input capture). So a
+"what am I looking at" readout does not need a separate HUD: the Entity Inspector *is* the live crosshair
+inspector — leave it open, and while you move/aim with the game it traces the camera ray every frame and
+shows the surface + entity under the crosshair (it even draws its own imgui reticle). Open F1 only to
+*click* its controls (fire / overlays / break) — doing so freezes the camera, which conveniently pins the
+aim on the current target. Reserve deliberate mouse interaction for that menu-open moment; the passive
+readout needs no menu at all.
+
 ---
 
 ## Layer 0 — engine built-ins, wired in (near-zero cost)

@@ -8,7 +8,8 @@
 # and leaves the BaseColor / OpacityMask graph untouched. EmissiveScale defaults to 0, so
 # surfaces without a bound emissive map never glow. Idempotent (skips if already present).
 #
-# Run headless (no game-module code needed):
+# Normally rebuilt by the umbrella (content.bat -> tools/build_content.py, which the export
+# runs); also runnable standalone:
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript -script="tools/add_world_emissive.py" -unattended -nosplash -nopause
 import unreal
 

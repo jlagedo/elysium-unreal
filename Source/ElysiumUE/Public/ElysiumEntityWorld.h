@@ -50,9 +50,22 @@ public:
 	// way outputs become queue entries.
 	void FireOutput(FElysiumEntity& Source, FName OutputName, const FElysiumEntityHandle& Activator);
 
+	// Debug/console injection (P2.2 inspector fire buttons, P2.3 `ent_fire`): queue a hand-made
+	// input delivery through the real event queue (chokepoint 2) at now + delay — the same code
+	// path a game output takes, so manual tests are faithful, show up in the queue window, and are
+	// single-steppable. Targeting one specific entity uses Target "!self" with Caller = its handle.
+	void EnqueueInput(const FString& Target, FName Input, const FElysiumVariant& Param, double Delay,
+		const FElysiumEntityHandle& Activator, const FElysiumEntityHandle& Caller);
+
 	// Overlap routing (P1.5): a brush body's begin/end overlap lands here. Resolve the brush
 	// entity, skip if inert (R6), and call its OnTouchStart/OnTouchEnd (P1.6 triggers override).
 	void RouteBrushTouch(const FElysiumEntityHandle& Brush, const FElysiumEntityHandle& Activator, bool bBegin);
+
+	// Debug tap seam (P2.3 `ent_*`): install an extra I/O sink, owned by the world and torn down
+	// with it. The ent_* debug subsystem taps the two chokepoints for its overlay/break tooling
+	// through the same sink interface the ring buffer and log stream already use — no I/O side
+	// channel (R5). Re-installed by the subsystem whenever a new world epoch appears.
+	void AddSink(TUniquePtr<IElysiumIOSink> InSink);
 
 	// --- Resolution / iteration --------------------------------------------------------
 	FElysiumEntity* Resolve(const FElysiumEntityHandle& Handle);

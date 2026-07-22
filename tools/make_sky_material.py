@@ -4,7 +4,8 @@
 # parameter). It is unlit and two-sided, and samples the cube along the per-pixel view ray so
 # the sky reads as infinitely far regardless of the mesh it is drawn on.
 #
-# Run headless (no game-module code needed):
+# Normally rebuilt by the umbrella (content.bat -> tools/build_content.py, which the export
+# runs); also runnable standalone:
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript -script="tools/make_sky_material.py" -unattended -nosplash -nopause
 import unreal
 

@@ -236,15 +236,74 @@ as script-host log lines; ring buffer holds the session history — observable w
 
 ## P2 — Debug layer *(design: `debug-tooling.md` Layers 1–2)*
 
-- [ ] **2.1 Cog integration** — world subsystem, window toggle, dev-only posture (out of
-  Shipping). *Deps:* 0.5.
-- [ ] **2.2 Entity windows** — browser (filter/histogram/dormancy), inspector (keyvalues,
-  live fields via field tables, 7-field outputs, fire-input buttons), event-queue window
-  (pending + history + pause/step). *Deps:* 2.1, 1.4.
-- [ ] **2.3 `ent_*` verbs** — `ent_fire` (real queue), `ent_dump`/`ent_info` (off the
-  tables), `ent_pause`/`ent_step`, `ent_break`, `ent_text`/`ent_bbox`/`ent_messages`
-  bitmask overlays; **picker fallback** (no arg = under crosshair via body handles;
-  nearest-origin for bodiless logic ents). *Deps:* 1.4–1.6.
+- [x] **2.1 Cog integration** — the custom-window foundation on top of the 0.5 spike (which
+  already vendored Cog, stood up `UElysiumCogSubsystem` with the 15 stock CogEngine windows, the
+  `#if ENABLE_COG` out-of-Shipping posture, and proved the F1 menu renders in PIE + standalone).
+  **`FElysiumCogWindow`** (`Private/ElysiumCogWindow.{h,cpp}`) is the base for every Elysium window:
+  it hands derived windows the live handles Cog's UObject-reflection inspector can't reach —
+  `GetMapActor()`/`GetEntityWorld()`/`GetGameState()`, resolved off the window's world — because the
+  Track-B entities are plain C++, not UObjects. **`FElysiumCogWindow_Status`** (registered
+  `"Elysium.Status"`, so an **"Elysium"** category appears in the F1 menu beside "Engine") is the
+  first window: a live read-only summary in four sections — Map (name / surface / sky / light / prop
+  counts), Collision (brush vs. trimesh, hulls, disp tris), Entities (records, brush bodies, event-queue
+  depth, I/O ring-buffer fill, touch + dead-wire tallies), Clock (now / scale / paused) — reading the
+  map actor's stat fields and the entity world's chokepoint counters directly. Every file is fully
+  `#if ENABLE_COG` (compiles to nothing in Shipping); no public-API surface added (headers live in
+  `Private/`). Cog's ImGui layout + `Config=Cog` UPROPERTYs persist under the gitignored `Saved/`
+  (`Saved/ImGui/imgui.ini`, `Saved/Config/.../Cog.ini`) — nothing runtime-generated is tracked (only
+  the vendored `Plugins/Cog/Config/DefaultCog.ini`). Editor target compiles + links clean. 2.2 (entity
+  windows) and 2.5 (Maps/Lights) derive from `FElysiumCogWindow` the same way. *Deps:* 0.5.
+- [x] **2.2 Entity windows** — three custom windows derive from `FElysiumCogWindow` under the
+  `Elysium` F1 group. **Entities** (`FElysiumCogWindow_Entities`): a filterable, clipper-paged list
+  of every substrate record (live + inert unhandled classnames), a targetname/classname search bar,
+  live/hidden/dead/record include toggles, a per-classname histogram, and a colour-coded state
+  column; clicking a row sets the shared selection. **Entity Inspector**
+  (`FElysiumCogWindow_Inspector`, the B2 "primary test harness"): the selected entity's identity +
+  dormancy, its chain-walked live fields (name/type/keyable/value off the class field tables), its
+  raw `.ents` keyvalues, and its 7-field outputs (name, target, input, param, delay, times
+  remaining/total, python); a param box + a fire button per chain-resolved input that injects
+  through the real queue. **Event Queue** (`FElysiumCogWindow_EventQueue`): the pending time-sorted
+  deliveries (relative fire time, target, input, param, caller, python flag), the always-on I/O
+  history ring buffer (tail-following), and Pause / Step / Step-10 controls driving the queue's
+  pause/step flags. The shared browser→inspector selection is a `static FElysiumEntityHandle` on
+  `FElysiumCogWindow` (self-clears on reload via epoch mismatch). A new public chokepoint-respecting
+  seam, **`FElysiumEntityWorld::EnqueueInput`** (queue a hand-made input at now+delay through
+  `AddEvent`), backs the inspector's fire buttons and will back 2.3's `ent_fire`; the inspector
+  targets one specific record via `!self` + `Caller = its handle`. All files `#if ENABLE_COG`;
+  editor target compiles + links clean. *Deps:* 2.1, 1.4.
+- [x] **2.3 `ent_*` verbs** — the Source-style verb set lands as `UElysiumEntityDebugSubsystem`
+  (a `UTickableWorldSubsystem`, `Private/ElysiumEntityDebugSubsystem.{h,cpp}`): it registers the
+  `elysium.ent_*` console commands (`ECVF_Cheat`), reaches the live world through the map subsystem's
+  current map actor, and ticks to draw the overlays. **`ent_fire`** injects through the real queue via
+  `EnqueueInput` (`!self` + Caller = each resolved handle, so shared targetnames still hit the exact
+  record) — target matches targetname **or** classname (fans out over the class), no target = the
+  crosshair picker, no input = list the target's chain-resolved inputs (safe discovery, no fire).
+  **`ent_dump`** dumps one entity's live state / chain-resolved fields / raw keyvalues / 7-field
+  outputs off the class tables; **`ent_info <class>`** dumps a class's base chain + chain-resolved
+  inputs and typed fields (outputs are per-entity `.ents` data, not a class schema). **`ent_pause`**
+  toggles the queue pause; **`ent_step [n]`** arms n single-steps (pausing first). **`ent_break
+  [target] [input]`** pauses the queue when a matching input is delivered (handle-scoped when armed via
+  the picker, else targetname/classname string; `ent_break` alone clears or arms on the crosshair).
+  **`ent_text`/`ent_bbox`/`ent_messages`** toggle a per-entity overlay bitmask (identity/state text,
+  colour-coded collision-bounds box, fading I/O message lines), `ent_clear`/`<verb> off` clear them;
+  the fade freezes while the queue is paused so a breakpoint's evidence stays put. The **picker** is a
+  multi-trace that returns the nearest brush body (solids block, triggers overlap) else the bodiless
+  logic entity whose origin is nearest the aim ray. **The primary surface is the Cog Entity Inspector as a
+  live crosshair inspector** (`FElysiumCogWindow_Inspector`): left open it keeps updating while you play
+  (Cog renders visible windows even with the F1 menu closed), draws its own imgui reticle, and each frame
+  traces the camera ray to report **whatever it hits — surface *and* entity**: actor / component / mesh /
+  material + bound textures (so any wall/prop/texture is inspectable, not just entities), and if the hit is
+  a brush/logic entity its full detail (identity, chain-walked fields, raw keyvalues, 7-field outputs).
+  Selection is sticky (a plain surface keeps the last entity), and Text / Box / Messages overlay + break
+  toggles + fire buttons sit right there; opening F1 to click them freezes the aim on the current entity.
+  `ent_break` + the `ent_messages` capture ride a `FElysiumDebugTapSink` the subsystem installs into each
+  new world epoch through the new public `FElysiumEntityWorld::AddSink` seam — the same sink interface the
+  ring buffer and log use, so there is no I/O side channel (R5). The console verbs are the scriptable /
+  Source-muscle-memory layer, not the only surface — F1 covers the whole flow (Entities browse → Inspector
+  live-inspect + fire + overlays + break → Event Queue pause/step). Registration + tick compile out
+  of Shipping (`#if !UE_BUILD_SHIPPING`); the in-world draws compile out wherever `ENABLE_DRAW_DEBUG` is
+  off. Editor target compiles + links
+  clean. *Deps:* 1.4–1.6.
 - [ ] **2.4 World visualization** — `elysium.showtriggers` (wireframe hulls by class/state),
   fading I/O beam arrows on fire, entity gizmos (port the Godot viewer UX: color-keyed
   boxes + labels, off/visible/all cycle, cone pick). *Deps:* 1.5.

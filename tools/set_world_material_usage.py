@@ -4,7 +4,8 @@
 # — without it, every prop falls back to the default (grey) material (and a packaged build,
 # with no shader compiler, cannot recover it at runtime). One-time asset edit.
 #
-# Run headless (no game-module code needed):
+# Normally rebuilt by the umbrella (content.bat -> tools/build_content.py, which the export
+# runs); also runnable standalone:
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript -script="tools/set_world_material_usage.py" -unattended -nosplash -nopause
 import unreal
 

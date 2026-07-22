@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Containers/Ticker.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "ElysiumCogSubsystem.generated.h"
 
@@ -10,8 +11,9 @@
 // ImGui render) is driven by UCogSubsystem; this class only decides which windows
 // appear. Entirely compiled out of Shipping (ENABLE_COG = !UE_BUILD_SHIPPING).
 //
-// Custom Elysium windows (Maps/Lights/Entities) are added here in roadmap 2.1; this
-// spike (0.5) registers only the stock engine windows to prove Cog builds on 5.8.
+// Custom Elysium windows (FElysiumCogWindow subclasses) are registered here alongside the
+// stock ones: roadmap 2.1 adds the Status window; the entity browser/inspector (2.2) and
+// Maps/Lights windows (2.5) follow the same pattern.
 UCLASS()
 class UElysiumCogSubsystem : public UWorldSubsystem
 {
@@ -21,8 +23,14 @@ public:
 	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void PostInitialize() override;
+	virtual void Deinitialize() override;
 
 private:
 	UPROPERTY()
 	TWeakObjectPtr<USubsystem> CogSubsystem;
+
+	// Startup ticker (and its elapsed clock) that keeps Cog's windows closed for the
+	// first second so the game boots dormant — Cog stays available via F1. ENABLE_COG only.
+	FTSTicker::FDelegateHandle StartupHideTicker;
+	float StartupHideElapsed = 0.f;
 };

@@ -155,6 +155,16 @@ void FElysiumEntityWorld::BuildBrushBody(FElysiumEntity& Ent)
 	}
 }
 
+void FElysiumEntityWorld::AddSink(TUniquePtr<IElysiumIOSink> InSink)
+{
+	// Appended to the live sink list, so it is notified at the same points as the always-on ring
+	// buffer and log sinks. Owned here; Teardown frees it with the rest when the world dies.
+	if (InSink)
+	{
+		Sinks.Add(MoveTemp(InSink));
+	}
+}
+
 void FElysiumEntityWorld::RouteBrushTouch(const FElysiumEntityHandle& Brush,
 	const FElysiumEntityHandle& Activator, bool bBegin)
 {
@@ -294,6 +304,22 @@ void FElysiumEntityWorld::FireOutput(FElysiumEntity& Source, FName OutputName, c
 		Ev.Caller = Source.Handle;
 		AddEvent(MoveTemp(Ev));
 	}
+}
+
+void FElysiumEntityWorld::EnqueueInput(const FString& Target, FName Input, const FElysiumVariant& Param,
+	double Delay, const FElysiumEntityHandle& Activator, const FElysiumEntityHandle& Caller)
+{
+	// Hand-made injection through chokepoint 2: build the event and hand it to AddEvent, exactly as
+	// FireOutput does for a game output. No Def row, so nothing counts down; the target string is
+	// resolved (with !self/!activator) at dispatch, same as any queued delivery.
+	FElysiumIOEvent Ev;
+	Ev.FireTime = NowSeconds() + FMath::Max(0.0, Delay);
+	Ev.Target = Target;
+	Ev.Input = Input;
+	Ev.Param = Param;
+	Ev.Activator = Activator;
+	Ev.Caller = Caller;
+	AddEvent(MoveTemp(Ev));
 }
 
 void FElysiumEntityWorld::AcceptInput(const FString& Target, FName Input, const FElysiumVariant& Param,

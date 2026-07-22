@@ -4,15 +4,22 @@ Runs the full scene export (geometry, textures + DDS, lightmap, collision, sky,
 water, static props) for each map, isolating failures so one bad map doesn't abort
 the run.
 
+Every run also rebuilds the committed Content/ assets (the sky material, world material and
+boot map) via content.bat, so an offline asset generator can never be forgotten and go stale
+-- pass --no-content to skip that (fast geometry-only iteration).
+
 Usage:
   python tools/export_all.py                 # the test bench (maps.ini [test])
   python tools/export_all.py --all           # every .bsp in the install (~101 maps)
   python tools/export_all.py ch_hub_1 la_hub_1   # only the named maps
   python tools/export_all.py --skip-existing     # skip maps already exported
+  python tools/export_all.py --no-content        # skip the committed-asset rebuild
 """
-import os, sys, glob, time, traceback
+import os, sys, glob, time, subprocess, traceback
 import UE_bsp_to_scene as B
 import install
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 MAPS = os.path.join(install.GAME, "maps")
 OUT = "out"
@@ -33,9 +40,25 @@ def load_test_maps(ini_path=MAPS_INI):
     return maps
 
 
+def build_content():
+    """Rebuild the committed Content/ assets by running content.bat (a headless editor
+    session driving tools/build_content.py). Kept out of the per-map loop -- these assets
+    are map-independent, so they are rebuilt once, after the maps."""
+    bat = os.path.join(REPO, "content.bat")
+    if sys.platform != "win32" or not os.path.exists(bat):
+        print(f"\n[content] skipped (need Windows + {bat})", flush=True)
+        return
+    print("\n[content] rebuilding committed assets (sky/world material, boot map) ...", flush=True)
+    t0 = time.time()
+    rc = subprocess.run(["cmd", "/c", bat]).returncode
+    status = "ok" if rc == 0 else f"FAILED (exit {rc})"
+    print(f"[content] {status}  ({time.time()-t0:.0f}s)", flush=True)
+
+
 def main():
     args = sys.argv[1:]
     skip_existing = "--skip-existing" in args
+    skip_content = "--no-content" in args
     export_all = "--all" in args
     only = [a for a in args if not a.startswith("--")]
 
@@ -83,6 +106,9 @@ def main():
     for name, status, dt in results:
         print(f"  {name:26} {status[:48]:48} {dt:6.1f}s")
     print(f"\nok={ok}  fail={fail}  skip={skip}  of {len(results)}")
+
+    if not skip_content:
+        build_content()
 
 
 if __name__ == "__main__":

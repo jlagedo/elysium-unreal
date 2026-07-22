@@ -122,9 +122,11 @@ UTexture2D* FElysiumTextureCache::LoadTex(const FString& Dir, const FString& Rel
 	};
 
 	// Prefer a .dds sibling (original DXT blocks + mips, no decode); fall back to PNG.
+	// The probe is speculative — many textures (e.g. the _ke self-illum maps) ship as PNG
+	// only — so read it FILEREAD_Silent to keep an expected miss out of the log.
 	const FString DdsPath = FPaths::ChangeExtension(Path, TEXT("dds"));
 	TArray<uint8> FileData;
-	if (FFileHelper::LoadFileToArray(FileData, *DdsPath))
+	if (FFileHelper::LoadFileToArray(FileData, *DdsPath, FILEREAD_Silent))
 	{
 		if (UTexture2D* Dds = LoadDDS(FileData))
 		{

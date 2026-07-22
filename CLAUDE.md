@@ -97,8 +97,28 @@ exported today.
   `AElysiumPawn`, `UElysiumGameInstance`, `FElysiumObjModel`, `FElysiumTextureCache`,
   `FElysiumMaterialFactory`, `FElysiumStaticMeshBuilder`, `FElysiumContentPaths`,
   `UElysiumLightRig`, `FElysiumProfileRun` (the headless profiling harness, `-ElysiumProfile`),
-  `UElysiumCogSubsystem` (world subsystem that registers the stock Cog debug windows; `#if ENABLE_COG`),
-  and the Track-B entity substrate (plain C++, no reflection): `FElysiumVariant`
+  `UElysiumCogSubsystem` (world subsystem that registers the 15 stock CogEngine debug windows plus the
+  custom Elysium windows under an `Elysium` F1-menu group; `#if ENABLE_COG`), `FElysiumCogWindow` (the
+  base for those custom windows — hands them `GetMapActor`/`GetEntityWorld`/`GetGameState` since Track-B
+  entities are plain C++, invisible to Cog's UObject inspector, plus a shared `static` browser→inspector
+  entity selection), `FElysiumCogWindow_Status` (a live read-only map + entity-substrate summary),
+  `FElysiumCogWindow_Entities` (a filter/histogram/dormancy browser over every record; sets the shared
+  selection), `FElysiumCogWindow_Inspector` (the selected entity's identity, chain-walked live fields, raw
+  keyvalues, 7-field outputs, and a fire-button-per-input test harness — and doubles as a **live crosshair
+  inspector**: left open it keeps updating while you play (Cog renders visible windows with the menu closed),
+  draws an imgui reticle, and traces the camera ray each frame to report whatever it hits — surface
+  (actor/component/mesh/material + textures) *and* the entity, sticky-selected — with Text/Box/Messages
+  overlay + breakpoint toggles that drive `UElysiumEntityDebugSubsystem`) and `FElysiumCogWindow_EventQueue`
+  (pending queue + I/O history ring buffer + pause/step); the inspector's fire buttons and the `ent_fire`
+  verb both inject through `FElysiumEntityWorld::EnqueueInput` (a hand-made input queued via the real chokepoint).
+  `UElysiumEntityDebugSubsystem` (a `UTickableWorldSubsystem`, `#if !UE_BUILD_SHIPPING`) hosts the Source-style
+  `elysium.ent_*` verbs — `ent_fire` (targetname/classname/crosshair-picker, discovery-lists inputs when none
+  given), `ent_dump`/`ent_info` (off the class tables), `ent_pause`/`ent_step`, `ent_break`, and the
+  `ent_text`/`ent_bbox`/`ent_messages` per-entity `DrawDebug` overlay bitmask (`ENABLE_DRAW_DEBUG`) — with a
+  multi-trace crosshair picker (nearest brush body, else the bodiless logic ent nearest the aim ray);
+  `ent_break` + the `ent_messages` capture ride a `FElysiumDebugTapSink` it installs into each world epoch
+  through `FElysiumEntityWorld::AddSink`. The primary interactive surface is the live crosshair inspector
+  (the Cog Entity Inspector above); the verbs are the scriptable echo. The Track-B entity substrate (plain C++, no reflection): `FElysiumVariant`
   (tagged Void/Bool/Int/Float/String/Vector/Handle), `FElysiumEntityHandle` (`{Index, Epoch}`),
   `FElysiumGameClock`, `UElysiumGameStateSubsystem` (GI subsystem: the `G` store, quest map, clock),
   `FElysiumEntityDef`/`FElysiumEntityDefs` (immutable parsed `.ents` records), `FElysiumEntity`
@@ -109,8 +129,9 @@ exported today.
   case-folded chain lookup and an inert-record fallback for unregistered classnames),
   `FElysiumEntityWorld` (the substrate: one entity per def, name/class indices, spawn pass that
   also builds brush bodies, generation-checked `Resolve`, the `AcceptInput` + event-queue
-  chokepoints, output firing, `RouteBrushTouch` overlap routing, think-first tick, epoch teardown;
-  owned by `AElysiumMapActor` via `TPimplPtr`), `UElysiumBrushComponent` (the per-brush-entity
+  chokepoints, output firing, `RouteBrushTouch` overlap routing, think-first tick, epoch teardown,
+  an `AddSink` seam for extra debug taps; owned by `AElysiumMapActor` via `TPimplPtr`),
+  `UElysiumBrushComponent` (the per-brush-entity
   body: collision-only `UPrimitiveComponent` with a convex `UBodySetup` cooked from the def hulls,
   handle-carrying, dormancy-gated, solidity by classname — trigger/solid/none — routing begin/end
   overlaps back to the world; `elysium.BrushBodies` A/Bs it),
@@ -118,9 +139,12 @@ exported today.
   the always-on `FElysiumRingBufferSink` (1,000-entry I/O history) + `FElysiumLogSink`
   (`LogElysiumIO` + VLOG), and `IElysiumScriptHost`/`FElysiumNullScriptHost` (the M4 field-6
   Python seam, on `UElysiumGameStateSubsystem`).
-- **Committed content (only these):** `Content/Elysium.umap` (empty boot persistent level,
-  regenerable via `tools/make_boot_map.py`) and `Content/VtMB/Materials/M_VtMB_World.uasset`
-  (master material). No converted game content, no vendored Python.
+- **Committed content (only these):** `Content/Elysium.umap` (empty boot persistent level),
+  `Content/VtMB/Materials/M_VtMB_World.uasset` (world master material) and
+  `Content/VtMB/Materials/M_Sky.uasset` (2D-skybox cube master material). No converted game
+  content, no vendored Python. A UMaterial graph and a `.umap` can only be compiled by the
+  editor, so these are authored offline by generators under `tools/` and rebuilt as one batch
+  by `content.bat` → `tools/build_content.py` (which the export runs — see Build & run).
 - **Content root:** `FElysiumContentPaths::Root()` = `FPaths::ProjectDir()/"tools/out"`
   (in-repo, gitignored). Packaged builds later read a `content/` folder next to the exe.
 - **Config:** `Config/DefaultEngine.ini` (boot map `/Game/Elysium`, `AElysiumGameMode`
@@ -156,6 +180,10 @@ your VtMB install.
 
 - `build.bat` — compile `ElysiumUEEditor` (Win64 Development) via UnrealBuildTool
   (`rebuild` / `clean` / `analyze` subcommands; extra args pass through).
+- `content.bat` — rebuild all committed `Content/` assets in one headless editor session
+  (`tools/build_content.py` runs every offline asset generator: world + sky master materials,
+  boot map). `python tools/export_all.py` invokes this at the end of a run (skip with
+  `--no-content`), so a generator can't be forgotten and go stale.
 - `editor.bat` — open the project in the Unreal editor (PIE via Play).
 - `play.bat [map]` — launch standalone (`-game`, 1600×900); optional map name under
   `tools/out` (default `sp_tutorial_1`). WASD + mouse to fly.

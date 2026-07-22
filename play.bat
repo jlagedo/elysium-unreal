@@ -19,6 +19,7 @@ REM -dx12 forces the DX12 RHI so the SM6 features (Lumen, MegaLights, VSM, ray t
 REM run; without it the renderer can fall back to DX11/SM5 and they are all off.
 REM -log opens a live external log window; -LogCmds raises the entity-world category to
 REM Verbose from boot so the brush-body touch routing (RouteBrushTouch) prints as you play.
+REM Cog is compiled in (non-Shipping) but boots dormant — press F1 to open it.
 if "%~1"=="" (
     "%UE%" "%PROJECT%" -game -dx12 -windowed -resx=1600 -resy=900 -log -LogCmds="LogElysiumWorld Verbose"
 ) else (
