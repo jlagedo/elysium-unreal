@@ -60,16 +60,20 @@ The phases below are **vertical slices** — each ends with something observable
 
 Cheap tasks that unblock or de-risk everything downstream. Do these before/alongside P1.
 
-- [ ] **0.1 Profiling baseline** *(was L0.1)* — standalone `play.bat` (not PIE): `stat unit`,
-  `stat GPU`, `ProfileGPU` on `sp_tutorial_1`; record Lumen/MegaLights/ShadowDepths/VSM ms.
-  *Acceptance:* baseline table committed below (appendix); window title `PCD3D_SM6`. *Deps:* none.
-- [ ] **0.2 MegaLights engagement check** *(was L0.2)* — `r.MegaLights.Debug 1` + pass
-  comparison (`rendering-perf.md` checklist). The catastrophic failure mode is silent VSM
-  fallback. *Acceptance:* MegaLights pass dominates, VSM ≈ 0 for local lights; if not, 3.1
-  becomes the immediate next task. *Deps:* 0.1.
-- [ ] **0.3 Export a second map** *(was X1)* — `sm_pawnshop_1` (the travel target) + one hub
-  via `export_all.py`. Unblocks texlights (3.4), travel (4.6), calibration (10.1), A/B (7.8),
-  and kills the tutorial-only bias. *Acceptance:* both maps load and walk. *Deps:* none.
+- [x] **0.1 Profiling baseline** *(was L0.1)* — **automated & headless.** `profile.bat` drives
+  the `-ElysiumProfile` harness (`ElysiumProfiler.cpp`): fixed vantages near spawn, warmup +
+  300-frame CSV capture (`-csvGpuStats` per-pass GPU ms) + a `ProfileGPU` log dump, then exit;
+  `tools/profile_report.py` emits the table. Baseline for `sp_tutorial_1` **and** `sm_hub_1`
+  committed in the appendix below; `PCD3D_SM6` confirmed. Add a vantage in-game with
+  `elysium.campos`. *(Dev card RTX 5070 Ti — proportions/regression, not floor fps.)* *Deps:* none.
+- [x] **0.2 MegaLights engagement check** *(was L0.2)* — **answered by the 0.1 harness** (it logs
+  MegaLights vs ShadowDepths every run). MegaLights dominates and the many-light cost is flat
+  (395 vs 687 lights → same ~1 ms); ShadowDepths never blows up (≈0 on sm_hub_1). No silent VSM
+  fallback → **3.1 is not the immediate next task.** See appendix "0.2 verdict". *Deps:* 0.1.
+- [ ] **0.3 Export a second map** *(was X1)* — `sm_hub_1` is exported and profiles/walks (687
+  lights); the harness's fixed vantages cover it. Still to do: `sm_pawnshop_1` (the travel
+  target) via `export_all.py`. Unblocks texlights (3.4), travel (4.6), calibration (10.1), A/B
+  (7.8), and kills the tutorial-only bias. *Acceptance:* both maps load and walk. *Deps:* none.
 - [ ] **0.4 Sidecar space audit** *(was X2 + engine-core P1 step 1)* — verify every sidecar the
   next phases consume is emitted by `UE_bsp_to_scene.py` in Unreal space: `.ents` (origins
   **and** entity-local hulls), `.sprites`, `.spawn`, `.water`, `_decals.obj`. The contract
@@ -358,9 +362,9 @@ dialogue, scripted flow, quests, save/load included.
 
 | ID | Question | Consumed by | Status |
 |---|---|---|---|
-| RE1 | Trigger/button spawnflag filter bits (un-decompiled; don't assume stock Source) | 4.2, 4.5 | [~] |
+| RE1 | Trigger/button spawnflag filter bits — `CBaseButton::Spawn` map recovered; button bits `0x20`/`0x2000` + `trigger_multiple` filter remain | 4.2, 4.5 | [~] |
 | RE2 | Retail queue-vs-think service order (our queue-first is a recorded choice) | revisit if a chain misbehaves | [P] |
-| RE3 | `__setattr__` write path + error-to-false **confirmed**; `G` default-0 pending | 5.2, 9.1 | [~] |
+| RE3 | `__setattr__` write path + error-to-false + `G` default-0 **all confirmed** | 5.2, 9.1 | [x] |
 | RE4 | Ghidra datamap export (validate our input/field tables vs retail) — method confirmed, CBaseEntity base map extracted | 4.5+ (optional, valuable) | [~] |
 | RE5 | Dice-system vroll golden test | 9.6 | [ ] |
 | RE6 | `ent_survey` count reconciliation | 0.6 | [ ] |
@@ -394,29 +398,31 @@ All addresses are `vampire.dll` (image base `0x10000000`) unless noted. Structur
   entity `+0x5c8`/`+0x5cc` with `GetUseIcon` = `FUN_100c8940` (returns locked_icon when the locked
   byte `+0x5c4` is set); `CBaseButton` vftable `0x1045293c`, object size `0x5d0`; ScriptHide/Unhide
   are vtable slots [77]/[78] = `0x100a8710`/`0x100a8990` (cross-checks `entity_io.md`).
-- **`G` default-0 — pending (advanced).** G's C **`PyMethodDef` table entry** for `ClearAll` sits
-  at `0x1058f5d0` (sibling of the Entity table `0x1058f778`), so G is a real C type; its `tp_getattr`
-  (the default-0 path) is what remains. **Blocked** like RE1 below: the type object + `tp_getattr`
-  are loaded by immediates Ghidra's auto-analysis never turned into references, so xref discovery
-  stalls (`0x1058f5d0` has 0 code refs). Unblock via the shared path below. Seeds still valid:
-  G console cmds `FUN_1019aad0`(`gclearall`) / `FUN_1019ab40`(`CC_GClearDialog`, runs `G.ClearAll()`
-  through `PyRun_SimpleString`).
+- **`G` default-0 — CONFIRMED** (recorded in `python_bridge.md` → "G — the global flag bag"). G is
+  the engine type **`PyDataManager`**, backed by a flag dict (`0x1072b370`) + a `morgue` dict
+  (`0x1072b374`). `tp_getattr` (`0x1019b3d0`) resolves `InitMode`→int, `morgue`→dict,
+  `Py_FindMethod`(table `0x1058f5d0`)→method, `PyDict_GetItemString(flagdict, name)`→value, and on a
+  **miss does `PyErr_Clear()` then `PyInt_FromLong(0)`** — so `G.Story_State` unset returns integer
+  `0`, never raises. `tp_setattr` (`0x1019b570`) mirrors it (morgue/methods read-only; `None` deletes;
+  else `PyDict_SetItemString`); G is pickled for saves (`FUN_1019b130`, `cPickle`).
 
-**RE1 — partial; spawnflag map still open.** Recovered the `func_button` object layout + vftable
-(`0x1045293c`) and the use-icon/locked logic above, but the observed spawnflags (33=`0x21`,
-256=`0x100`, 1024=`0x400`, 1056=`0x420`, 1057=`0x421`, 8193=`0x2001`, 9217=`0x2401`) are tested in
-the **Use/Touch/Spawn handlers**, not the getters. Provisional (stock-Source-adjacent, **not yet
-confirmed**): `0x1`=DONTMOVE, `0x20`=TOGGLE, `0x100`=touch-activates, `0x400`=use-activates, with
-`0x2000` a VtMB-specific bit. **Blocked:** those handlers are `m_pfn*` member-pointer / vtable
-reached (trace strings `CBaseButtonButtonUse`@`0x1055c98c`, `…TriggerAndWait`@`0x1055c9e4`,
-`…ButtonTouch`@`0x1055ca20` have **no** recorded references), so xref discovery finds nothing.
+**RE1 — `CBaseButton::Spawn` map recovered; two bits remain.** `m_spawnflags` is a `FIELD_INTEGER`
+at entity `+0x204` (confirmed in the datamap builder `FUN_100a22f0`). `CBaseButton::Spawn`
+(`FUN_100c8d60`, reached via the button vftable `0x1045293c`) reads it and wires the button — the
+confirmed bit→behaviour map is in `entity_io.md`: `0x1`=DONTMOVE (pressed pos = start pos, matches
+stock `SF_BUTTON_DONTMOVE`), `0x40`=spawn-time timed setup, `0x100`=use/activate handler
+(`m_pfn`@`+0x1ec`←`0x10002cd4`), `0x400`=touch handler (`m_pfn`@`+0x1f0`←`0x100111da`),
+`0x800`=starts-locked (sets the `+0x5c4` byte `GetUseIcon` reads), `0x1000`=secondary state (`+0x5c5`).
+**Still open:** bits `0x20` (in 33/1056/1057) and `0x2000` (in 8193/9217) are **not** tested in Spawn
+— they live in the use/touch handlers (`0x10002cd4`/`0x100111da`) or the base class; decompile those
+next, and repeat the exercise for `trigger_multiple`'s filter.
 
-**Shared blocker (RE1 + `G`):** the target functions are reached only through data pointers /
-immediates, which the default analyzers leave without references. Unblock with **one of**:
-(a) re-import `vampire.dll` with the `EnableAIF` pre-script (`run.ps1 -Import … -PreScript EnableAIF`)
-so vtable/pointer-only code gets disassembled + referenced, then re-run the xrefs; or (b) parse the
-PE `.data` directly (the method-table / type-object approach in `python_bridge.md` → *Reproduction*)
-to read the `PyMethodDef` tables and vtable slots without relying on Ghidra's reference DB.
+**Method note (unblocked):** RE1 + `G` were both stalled because their targets are reached via
+`m_pfn*`/vtable/immediate loads the default analyzers leave un-referenced. **Re-importing `vampire.dll`
+with the `EnableAIF` pre-script** (`run.ps1 -Import … -PreScript EnableAIF`) disassembled the
+pointer-only code and unblocked both — G fully, RE1's `Spawn` via the vftable region (the `m_pfn`
+handler-string refs stayed absent, so `Spawn` was reached through the vtable rather than the trace
+strings). The AIF DB is the current project state; further per-class work rides on it.
 
 **RE4 — datamap export: method CONFIRMED + CBaseEntity base map extracted.** VtMB builds datamaps
 **at runtime** (no static `DEFINE_FIELD` arrays), so the export decompiles the per-class **datamap
@@ -514,6 +520,13 @@ golden test.
   **`G` default-0** both hit the same wall — their target functions are `m_pfn*`/vtable/immediate-
   reached and carry no references in Ghidra's DB, so xref discovery stalls; unblock via an
   `EnableAIF` re-import or direct PE method-table/vtable parsing (recorded as the "shared blocker").
+- **2026-07-22 (cont. 2)** — `EnableAIF` re-import of `vampire.dll` ran and unblocked both stalled
+  items. **`G` default-0 CONFIRMED** → RE3 fully closed (`[x]`): G is `PyDataManager`; `tp_getattr`
+  `0x1019b3d0` returns `PyInt_FromLong(0)` on a flag miss. **RE1 `CBaseButton::Spawn` map recovered**
+  (`m_spawnflags`@`+0x204`; `FUN_100c8d60`) — bits `0x1`/`0x40`/`0x100`/`0x400`/`0x800`/`0x1000`
+  decoded into `entity_io.md`; bits `0x20`/`0x2000` + `trigger_multiple` filter still to do (RE1 stays
+  `[~]`). Findings live in `python_bridge.md` (G) + `entity_io.md` (button); the AIF-analyzed DB is now
+  the project baseline.
 - **Pending** — 5.5 level-script execution strategy (interpreter vs transpile vs CPython);
   8.2 glTFRuntime confirmation for the skeletal path; 10.6 EnhancedInput migrate-or-remove;
   7.2 decal final path (PMC parity vs `UDecalComponent`) decided after both stages render.
@@ -534,12 +547,52 @@ golden test.
 | X1 / X2 | 0.3 / 0.4 |
 | engine-core Phase 1 / Phase 2 | P1 / P2 |
 
-## Appendix — profiling baseline (0.1 fills this in)
+## Appendix — profiling baseline (0.1)
 
-| Pass | ms @1080p (dev GPU) | Notes |
-|---|---|---|
-| Lumen GI | — | |
-| Lumen reflections | — | |
-| MegaLights | — | |
-| ShadowDepths / VSM | — | |
-| Total GPU | — | |
+Captured **headless** by `profile.bat` → the `-ElysiumProfile` harness
+(`Source/ElysiumUE/Private/ElysiumProfiler.cpp`) → `tools/profile_report.py`. The harness
+pins the camera to each fixed vantage near spawn, warms up, captures per-pass GPU stats
+through the CSV profiler, and exits — no manual console typing. Full per-vantage reports
+(incl. the heaviest-pass breakdown) regenerate at `tools/out/_profile/<map>_report.md`.
+Re-run any time with `profile.bat <map> [cam]`; add a vantage with `elysium.campos` in-game.
+
+**Dev GPU: RTX 5070 Ti · D3D12 / `PCD3D_SM6` · 2560×1440 · warmup 120 / capture 300 frames.**
+This card is far above the RTX 3060 floor, so read these for **pass proportions and
+regression tracking**, not floor frame rate (the floor is judged by *look* — see
+`rendering-perf.md`). Vantage coordinates are baked in `GProfileCams[]` and echoed in each
+report's vantage headers.
+
+### sp_tutorial_1 — 395 world lights — GPU ms per vantage
+
+| Pass | spawn | t1 | t2 | t3 | t4 |
+|---|---|---|---|---|---|
+| Lumen GI (ScreenProbeGather) | 0.01 | 0.01 | 0.01 | 0.01 | 0.01 |
+| Lumen reflections | 0.06 | 0.07 | 0.06 | 0.06 | 0.06 |
+| MegaLights | 1.06 | 1.08 | 1.00 | 1.34 | 1.15 |
+| ShadowDepths / VSM | 0.83 | 0.88 | 1.02 | 1.11 | 1.03 |
+| **Total GPU** (whole frame) | **4.87** | **5.25** | **5.32** | **5.72** | **5.43** |
+
+### sm_hub_1 — 687 world lights — GPU ms per vantage
+
+| Pass | spawn | h1 | h2 |
+|---|---|---|---|
+| Lumen GI (ScreenProbeGather) | 0.01 | 0.01 | 0.01 |
+| Lumen reflections | 0.05 | 0.05 | 0.05 |
+| MegaLights | 1.05 | 1.12 | 1.26 |
+| ShadowDepths / VSM | 0.00 | 0.00 | 0.00 |
+| **Total GPU** (whole frame) | **3.82** | **4.40** | **4.49** |
+
+**0.2 verdict — MegaLights is engaging, no VSM blow-up.** MegaLights (~1.0–1.3 ms) meets or
+beats ShadowDepths on every vantage, and the many-light cost is ~**flat**: 687 lights
+(sm_hub_1) cost the same ~1 ms as 395 (sp_tutorial_1). ShadowDepths never dominates and
+sm_hub_1's is ~0. MegaLights is carrying the local lights as designed — 3.1 is **not** the
+immediate next task. (The `[VSM] Non-Nanite Marking Job Queue overflow` HUD warning appears
+transiently but does not translate into a ShadowDepths blow-up in steady state — worth a
+glance if ShadowDepths ever spikes in a future capture.)
+
+**Other reads.** TemporalSuperResolution (~1.1 ms) ties/leads MegaLights as the single
+heaviest pass at every vantage — the expected upscale cost of `r.ScreenPercentage=66`. Lumen
+GI is ~free here (0.01 ms) *on this card*; on the 3060 floor HWRT Lumen is the dominant cost
+(`rendering-perf.md` → "Floor reality"), so this near-zero is a fast-GPU artifact, not proof
+Lumen is cheap. Render-thread time collapses to ~0 (idle-waiting on the GPU): the title is
+GPU-bound, as expected.
