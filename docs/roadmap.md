@@ -361,7 +361,7 @@ dialogue, scripted flow, quests, save/load included.
 | RE1 | Trigger/button spawnflag filter bits (un-decompiled; don't assume stock Source) | 4.2, 4.5 | [~] |
 | RE2 | Retail queue-vs-think service order (our queue-first is a recorded choice) | revisit if a chain misbehaves | [P] |
 | RE3 | `__setattr__` write path + error-to-false **confirmed**; `G` default-0 pending | 5.2, 9.1 | [~] |
-| RE4 | Ghidra datamap JSON export (validate our input/field tables vs retail) | 4.5+ (optional, valuable) | [P] |
+| RE4 | Ghidra datamap export (validate our input/field tables vs retail) — method confirmed, CBaseEntity base map extracted | 4.5+ (optional, valuable) | [~] |
 | RE5 | Dice-system vroll golden test | 9.6 | [ ] |
 | RE6 | `ent_survey` count reconciliation | 0.6 | [ ] |
 | RE7 | Retail `.sav` block wire format | 10.7 (only for importing retail saves) | [P] |
@@ -394,27 +394,45 @@ All addresses are `vampire.dll` (image base `0x10000000`) unless noted. Structur
   entity `+0x5c8`/`+0x5cc` with `GetUseIcon` = `FUN_100c8940` (returns locked_icon when the locked
   byte `+0x5c4` is set); `CBaseButton` vftable `0x1045293c`, object size `0x5d0`; ScriptHide/Unhide
   are vtable slots [77]/[78] = `0x100a8710`/`0x100a8990` (cross-checks `entity_io.md`).
-- **`G` default-0 — still pending.** Seeds: G console cmds `FUN_1019aad0`(`gclearall`) /
-  `FUN_1019ab40`(`CC_GClearAll`, string `"G.ClearAll()"` @`0x10591ab0`) reach the G global object →
-  decompile its type's `tp_getattr` and confirm the miss path returns `PyInt_FromLong(0)`. (Hard-
-  coded story pokes like `"__main__.G.Story_State=666"` @`0x105b4f08` run through `FUN_100ce8a0`.)
+- **`G` default-0 — pending (advanced).** G's C **`PyMethodDef` table entry** for `ClearAll` sits
+  at `0x1058f5d0` (sibling of the Entity table `0x1058f778`), so G is a real C type; its `tp_getattr`
+  (the default-0 path) is what remains. **Blocked** like RE1 below: the type object + `tp_getattr`
+  are loaded by immediates Ghidra's auto-analysis never turned into references, so xref discovery
+  stalls (`0x1058f5d0` has 0 code refs). Unblock via the shared path below. Seeds still valid:
+  G console cmds `FUN_1019aad0`(`gclearall`) / `FUN_1019ab40`(`CC_GClearDialog`, runs `G.ClearAll()`
+  through `PyRun_SimpleString`).
 
 **RE1 — partial; spawnflag map still open.** Recovered the `func_button` object layout + vftable
 (`0x1045293c`) and the use-icon/locked logic above, but the observed spawnflags (33=`0x21`,
 256=`0x100`, 1024=`0x400`, 1056=`0x420`, 1057=`0x421`, 8193=`0x2001`, 9217=`0x2401`) are tested in
-the **Use/Touch/Spawn handlers**, not the getters. Next seeds: xref the button trace strings
-`CBaseButtonButtonUse`@`0x1055c98c`, `CBaseButtonTriggerAndWait`@`0x1055c9e4`,
-`CBaseButtonButtonTouch`@`0x1055ca20` → decompile each → read the `m_spawnflags & <bit>` tests;
-repeat for `trigger_multiple` (classname string, then its `Spawn`/`PassesTriggerFilters`). Deliver
-a bit→behavior table into `entity_io.md` (which currently flags these bits as unsettled).
+the **Use/Touch/Spawn handlers**, not the getters. Provisional (stock-Source-adjacent, **not yet
+confirmed**): `0x1`=DONTMOVE, `0x20`=TOGGLE, `0x100`=touch-activates, `0x400`=use-activates, with
+`0x2000` a VtMB-specific bit. **Blocked:** those handlers are `m_pfn*` member-pointer / vtable
+reached (trace strings `CBaseButtonButtonUse`@`0x1055c98c`, `…TriggerAndWait`@`0x1055c9e4`,
+`…ButtonTouch`@`0x1055ca20` have **no** recorded references), so xref discovery finds nothing.
 
-**RE4 — datamap JSON export (planned; needs a new script).** Write `tools/ghidra/DumpDatamap.java`:
-for each `CBaseEntity`-derived vftable, resolve `GetDataDescMap` (slot `+0x148`) to the static
-`datamap_t*`, walk `baseMap` (@`0xC`) up the class chain, and for each 44-byte record emit
-`{fieldType@0, flags@0x12, fieldOffset@8, externalName@0x14→str, inputFunc@0x1C→thunk-target}` as
-JSON per classname. The runtime walker `FUN_10195940` already proves the exact record layout and
-chain traversal to mirror. Output validates the P1 class registry's input/field tables (1.3)
-against retail — de-risks all of P1; run it before 4.5.
+**Shared blocker (RE1 + `G`):** the target functions are reached only through data pointers /
+immediates, which the default analyzers leave without references. Unblock with **one of**:
+(a) re-import `vampire.dll` with the `EnableAIF` pre-script (`run.ps1 -Import … -PreScript EnableAIF`)
+so vtable/pointer-only code gets disassembled + referenced, then re-run the xrefs; or (b) parse the
+PE `.data` directly (the method-table / type-object approach in `python_bridge.md` → *Reproduction*)
+to read the `PyMethodDef` tables and vtable slots without relying on Ghidra's reference DB.
+
+**RE4 — datamap export: method CONFIRMED + CBaseEntity base map extracted.** VtMB builds datamaps
+**at runtime** (no static `DEFINE_FIELD` arrays), so the export decompiles the per-class **datamap
+builder** functions, not a static `.data` walk. The CBaseEntity builder is **`FUN_100a22f0`** (1075
+lines); each record carries the internal (`m_spawnflags`) *and* external/Hammer (`spawnflags`) name,
+`fieldType`, `fieldOffset`, `flags` (bit `0x8` = keyable/writable, per RE3), and `inputFunc`.
+Extracted base contract (validates the P1 base entity, task 1.3): **keyfields** = `angles, model,
+target, targetname, spawnflags, health, max_health, flags, velocity, avelocity, basevelocity,
+gravity, friction, ltime, waterlevel, watertype, soundgroup, usescript, npc_transparent,
+blocks_traces, dmg_filter_name, use_filter_name`; **inputs** = `Kill, ScriptHide, ScriptUnhide,
+Use, SetParent, ClearParent, Alpha, Color, SetSoundOverrideEnt, SetFakeSilence`; **outputs** =
+`OnUseBegin, OnUseEnd`. `usescript`/`soundgroup`/`npc_transparent`/`blocks_traces`/`SetFakeSilence`/
+`SetSoundOverrideEnt`/`ScriptHide`/`ScriptUnhide` are **VtMB-specific base fields** (not stock
+Source) — the port must carry them at `CBaseEntity`. Next: `DumpDatamap.java` batches the same
+extraction over every class builder (locate each via its `GetDataDescMap` = vtable `+0x148`, or by
+the builder-call pattern) → JSON per classname; run before 4.5.
 
 **RE2 / RE5 (Ghidra-drivable, still parked/open):** RE2 — decompile the `CEventQueue` service +
 entity think dispatch to confirm the recorded queue-first order (prior dumps `q_think_asm`,
@@ -489,6 +507,13 @@ golden test.
   **RE1 partially** recovered (`CBaseButton` layout/vftable `0x1045293c`, use-icon offsets), spawnflag
   bit→behavior map still pending the Use/Touch handlers. **RE4** (datamap JSON export) and **RE3 `G`
   default-0** scoped with exact seeds — see "Ghidra extraction — findings + plan" above.
+- **2026-07-22 (cont.)** — Ghidra pass continued. **RE4 method confirmed**: VtMB datamaps are
+  runtime-built, so the export decompiles per-class **datamap builders** (`CBaseEntity` =
+  `FUN_100a22f0`), not a static `.data` walk; the CBaseEntity base keyfield/input/output contract is
+  extracted and recorded in `python_bridge.md` (RE4 → `[~]`). **RE1** (button spawnflag bits) and
+  **`G` default-0** both hit the same wall — their target functions are `m_pfn*`/vtable/immediate-
+  reached and carry no references in Ghidra's DB, so xref discovery stalls; unblock via an
+  `EnableAIF` re-import or direct PE method-table/vtable parsing (recorded as the "shared blocker").
 - **Pending** — 5.5 level-script execution strategy (interpreter vs transpile vs CPython);
   8.2 glTFRuntime confirmation for the skeletal path; 10.6 EnhancedInput migrate-or-remove;
   7.2 decal final path (PMC parity vs `UDecalComponent`) decided after both stages render.

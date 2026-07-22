@@ -176,6 +176,31 @@ datamap walk** (`FUN_10195940`) and then:
 So `pc.clan = 3` and the I/O wire that writes a keyfield are one path, exactly as the read side
 unifies attribute reads with input dispatch.
 
+## Datamaps are built at runtime — the base `CBaseEntity` contract
+
+VtMB has **no static `DEFINE_FIELD` arrays**; each class's `datamap_t` is populated at init by a
+per-class **builder** that writes 44-byte `typedescription_t` records into `.data`. The
+`CBaseEntity` builder is **`FUN_100a22f0`**; every record carries the internal name (`m_spawnflags`),
+the external/Hammer name (`spawnflags`), `fieldType`, `fieldOffset`, the `flags` byte (bit `0x8` =
+keyable/writable), and — for inputs — the `inputFunc`. Reading a datamap out of the binary therefore
+means decompiling these builders, not walking a static table.
+
+The base `CBaseEntity` contract every entity inherits (from `FUN_100a22f0`):
+
+- **Keyfields** — `angles, model, target, targetname, spawnflags, health, max_health, flags,
+  velocity, avelocity, basevelocity, gravity, friction, ltime, waterlevel, watertype, soundgroup,
+  usescript, npc_transparent, blocks_traces, dmg_filter_name, use_filter_name`.
+- **Inputs** — `Kill, ScriptHide, ScriptUnhide, Use, SetParent, ClearParent, Alpha, Color,
+  SetSoundOverrideEnt, SetFakeSilence`.
+- **Outputs** — `OnUseBegin, OnUseEnd`.
+
+`usescript`, `soundgroup`, `npc_transparent`, `blocks_traces`, `SetFakeSilence`,
+`SetSoundOverrideEnt`, and `ScriptHide`/`ScriptUnhide` are **VtMB additions** to the base entity
+(not stock Source), so the port registers them once on the base class. The ScriptHide save-state
+fields (`m_bScriptHidden`, `m_ScriptSavedSolid`, `m_ScriptSavedMoveType`, `m_ScriptSavedSolidFlags`,
+`m_fScriptSavedEffects`, `m_pfnScriptSavedThink`) are in the same base map — the persisted form of
+the whole-entity OFF switch described in `entity_io.md`.
+
 ## Divergence — VtMB's `fieldtype_t` is not modern Source's
 
 The marshalling switch keys off `fieldtype_t`. **Modern `datamap.h` codes do not apply.**
