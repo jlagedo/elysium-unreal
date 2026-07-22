@@ -131,30 +131,10 @@ mesh is built with no collision so the brushes are the walkable surface; `elysiu
 flips back to the render-trimesh for A/B. The sidecars are already Unreal cm (read verbatim).
 Reference: Godot `BrushCollision.cs`.
 
-Still open, each independent (pick by value):
-
-1. **Source movement component** — port `CGameMovement` (friction/accel/airaccel/StepMove)
-   into a `UCharacterMovementComponent` override. Reference: `docs/source_movement.md`,
-   Godot `SourceMovement.cs`.
-2. **Master-material set (rest)** — `M_World_Masked` (alphatest), `M_World_Translucent`,
-   and grow `M_VtMB_World` toward `M_World_Opaque` (bump, envmap mask + cube,
-   WVT second layer + vertex-color blend). Authored offline like `M_Sky`. (Alpha-masked
-   `$selfillum` emissive — `map_Ke` → `Emissive`/`EmissiveScale` — is done.)
-3. **Texture prewarm off the game thread** — worker-thread batch prewarm in
-   `FElysiumTextureCache` (Godot `Prewarm` shape); load is texture-bound.
-4. **Texlight clustering** — the deferred rig piece: bin type-0 emit_surface patches by
-   `(intensity, normal)`, single-linkage cluster, one shadowless point per surface (Godot
-   `LightRig.SpawnTexlights`). None in the tutorial; needed for other maps.
-
-Cross-cutting polish surfaced this milestone (do opportunistically):
-- **Colour-grade fidelity** — the `.cube` LUT was fit to Godot's linear tonemapper; applied
-  after Unreal's filmic curve it can crush shadows. Neutralise the tone curve or expose the
-  LUT intensity so it grades what it expects.
-- **Sky orientation** — the `BuildSkyCube` face order + `-CameraVector` sign are derived, not
-  visually verified; if the sky reads mirrored/rotated, adjust there.
-- **`elysium.*` debug toggles** for sky / LUT / fog to A/B render features live.
-- **Exclude `tools/ghidra*/` and `tools/re/`** from the repo (untracked; the strategy keeps
-  the RE toolchain out of this repo).
+The remaining M1 tasks and the cross-cutting polish items are tracked in
+**`docs/roadmap.md`** (the single source of truth work tracker): Source movement → 4.7,
+master-material set → 7.4, texture prewarm → 3.8, texlight clustering → 3.4, colour-grade
+fidelity + sky orientation + A/B toggles → 3.7, repo hygiene → 0.7.
 
 ## Coordinate conventions
 
@@ -255,7 +235,9 @@ These encode shading logic, not game content — they belong in `Content/` perma
 
 Everything in this track consumes data that is **already exported** (`.ents` carries the
 complete entity/I/O surface) but has no runtime consumer in either engine. Design targets
-come from the decompile-backed docs in `docs/`, not from Godot code.
+come from the decompile-backed docs in `docs/`, not from Godot code. The concrete object
+model for B1/B2 (core types, interaction flows, and the two-phase substrate→debug-layer
+build plan) is `docs/engine-core.md`; the debug layer itself is `docs/debug-tooling.md`.
 
 ## B1. Entity substrate
 
@@ -468,18 +450,18 @@ vendored Ghidra install are gitignored. `FElysiumContentPaths::Root()` resolves 
 toolchain (Crowbar/TemplePlus/VAMPTools/source-engine) and the `tools/ghidra/` workspace are
 present as read-only RE references.
 
-New sidecar formats and decoder fixes land in `tools/` from now on:
-
-1. Export models referenced by `.ents` entities (`prop_dynamic`/`prop_physics` model
-   keyvalues) — static-lump props only today.
-2. Copy loose level scripts → `out/scripts/`, `.dlg` files → `out/dlg/`.
-3. Use-icon atlas export (the 72-entry `use_icon` set).
-4. Include-model resolution in `mdl_skel.py` (shared animation banks); batch NPC export.
-5. Later: sound scheme/`.txt` and `vdata/system/*.txt` copies for audio and RPG data.
-
-Everything else the runtime needs is already exported.
+New sidecar formats and decoder fixes land in `tools/` from now on. The pipeline backlog
+(entity-model export, script/`.dlg` copies, use-icon atlas, NPC batch export +
+include-model resolution, sound-scheme/`vdata` copies, texlight merge, space fixes) is
+tracked as **PL1–PL7 in `docs/roadmap.md`**. Everything else the runtime needs is already
+exported.
 
 ## Milestones
+
+**Sequencing and status live in `docs/roadmap.md`** (the single source of truth work
+tracker; its traceability table maps M-numbers to roadmap phases — M3 → P1+P2+P4, M4 →
+P5+P6, etc.). The M-numbers below remain the shared vocabulary for what each milestone
+*means*.
 
 Vertical slice: **play `sp_tutorial_1` start to finish, then walk into
 `sm_pawnshop_1`.**

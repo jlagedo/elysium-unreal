@@ -156,6 +156,26 @@ return 0;
 - `cop.Kill` written **without parentheses** (present in retail) manufactures a callable
   and discards it — the input never fires.
 
+## The write path — `Entity.__setattr__`
+
+Thunk `0x10013c3c` → body **`0x10195a10`**, the mirror of `__getattr__`. It runs the **same
+datamap walk** (`FUN_10195940`) and then:
+
+1. `_entity_ptr_` is **read-only** — assigning it raises `AttributeError` ("%s is read only").
+2. A name that **misses the datamap falls through to the instance `__dict__`**
+   (`PyDict_SetItemString`) — entities are property bags on the write side too, symmetric with
+   the read fall-through.
+3. A datamap field is writable only if its **`flags` byte (`+0x12`) has bit `0x8` set**; a
+   non-keyable field raises the same read-only error.
+4. The value is **marshalled into `entity + fieldOffset` by `fieldType`**, using the same shifted
+   enum: `1`/`15` float (`FLOAT`/`TIME`), `2`/`16`/`17` string (interned through the engine string
+   pool), `3`/`14` 3-vector, `4` integer, `5` boolean (`PyObject_IsTrue`), `8` `COLOR32` (4-tuple
+   of bytes), `11`/`12`/`13` entity-handle variants; any other code raises
+   `TypeError` ("%s.%s has unhandled type %d").
+
+So `pc.clan = 3` and the I/O wire that writes a keyfield are one path, exactly as the read side
+unifies attribute reads with input dispatch.
+
 ## Divergence — VtMB's `fieldtype_t` is not modern Source's
 
 The marshalling switch keys off `fieldtype_t`. **Modern `datamap.h` codes do not apply.**
@@ -220,12 +240,16 @@ import-time side effects to emulate.
 `"levelscript" "chinatown"` loads `python/chinatown/chinatown.py`. Several maps share one
 module.
 
-**Error handling.** `vampire.dll` imports `PyErr_Occurred` / `PyErr_Print` / `PyErr_Clear`
-and holds a `Python Error!` banner. The 89 malformed `.dlg` snippets (smart quotes,
-unbalanced parens, legacy `<>`, `=` in a condition) almost certainly raise, get cleared,
-and evaluate **false** — silently hiding those lines in retail. The Unofficial Patch fixes
-most of them. **Not yet confirmed in Ghidra**; it gates content either way, so a faithful
-port must reproduce error-to-false rather than repair the snippets.
+**Error handling — error-to-false, confirmed.** The `logic_pythoncheck` evaluator
+(`FUN_10135290`) runs `PyRun_String(python_script, Py_eval_input, __main__, __main__)` with the
+result **seeded to `0`**; on a raise it calls `PyErr_Print()` (dumps the traceback to console) and
+returns `local_4 != 0` = **false**, and a non-`int` result is false as well. The exec/call paths
+swallow the same way — `FUN_100ce8a0` (exec a source string; `ScheduleTask` / level callbacks) and
+`FUN_100ce990` (the `"__main__.%s"` field-6 call, format string `0x1055e370`) both `PyErr_Print()`
+and continue, never aborting the map. The 89 malformed `.dlg` snippets (smart quotes, unbalanced
+parens, legacy `<>`, `=` in a condition) therefore raise, print, and evaluate **false**, silently
+hiding those lines in retail — the same engine and the same `PyRun_String` eval, so the port
+reproduces error-to-false rather than repairing the snippets. The Unofficial Patch fixes most.
 
 ## `G` — the global flag bag
 
@@ -348,10 +372,8 @@ Useful IAT slots in `vampire.dll`: `Py_InitModule4` `0x109f370c`, `Py_FindMethod
 
 ## Open
 
-- **`G` default-on-miss** — assumed `0`; confirm in Ghidra. Silently changes story branching.
-- **Error-to-false** — the `PyErr_Clear` path around `PyRun_String`; confirm the 89
-  malformed dialogue snippets evaluate false rather than aborting the row.
-- **`__setattr__`** (`0x10013c3c`) not yet decompiled — the datamap-write path and its
-  fall-through to the instance `__dict__` are inferred from `__getattr__`'s symmetry and
-  the method's own doc string.
+- **`G` default-on-miss** — assumed `0`; not yet confirmed in Ghidra. Silently changes story
+  branching. Seeds: the G console commands `FUN_1019aad0` (`gclearall`) / `FUN_1019ab40`
+  (`CC_GClearAll`) reach the G global object — decompile its type's `tp_getattr` and confirm the
+  miss path returns `PyInt_FromLong(0)`.
 - **The `read`/`readline` table** (`0x1058f620`) — an unidentified file-like type.

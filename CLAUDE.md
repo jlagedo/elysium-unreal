@@ -5,8 +5,10 @@ playable game on **Unreal Engine 5.8 + C++**. The runtime loads engine-neutral
 intermediates produced by this repo's own offline decode/export pipeline and builds all
 engine objects in code at map-load time — no `.uasset` baking, no editor content loop.
 
-**`docs/rebuild-strategy.md` is the master plan** (north star, the two-track roadmap, the
-M0–M6 milestones). Read it first. This file is the quick-orientation fact sheet.
+**`docs/roadmap.md` is the single source of truth work tracker** (all phases, tasks,
+status, pipeline/RE backlogs, risks, decision log). **`docs/rebuild-strategy.md` is the
+strategy reference** (north star, principles, the two tracks, sidecar contracts, system
+designs). Read those two first. This file is the quick-orientation fact sheet.
 
 ## Bring-your-own-game (load-bearing)
 
@@ -134,7 +136,11 @@ still emit Godot Y-up/metres (`source_to_godot`) — see the `UE_` convention ab
 `docs/` — the reverse-engineering reference this project builds on. **Engine-neutral VtMB
 facts** (valid regardless of target engine):
 
-- `rebuild-strategy.md` — **master plan** (tracks, milestones, sidecar contracts).
+- `roadmap.md` — **the work tracker** (single source of truth: phases P0–P10, task status,
+  pipeline + RE backlogs, risk register, decision log). All other docs' plan sections
+  point here.
+- `rebuild-strategy.md` — strategy reference (tracks, milestone vocabulary, sidecar
+  contracts, per-system design targets).
 - `game_runtime.md` — main loop, three-layer split, RPG data model, the opening flow.
 - `entity_io.md` — the Source I/O bus (7-field outputs, ScriptHide/Unhide, `use_icon`).
 - `python_bridge.md` — the CPython 2.1 embedding, datamap reflection, the four call paths, `G`.
@@ -146,6 +152,11 @@ facts** (valid regardless of target engine):
 - `map-architecture.md` — the Unreal map load/unload/travel design.
 - `rendering-perf.md` — the fully-dynamic render path, the shipped perf cvars, and the
   MegaLights-engagement checklist.
+- `debug-tooling.md` — the three-layer debug/dev-tooling architecture (engine built-ins,
+  the vendored Cog ImGui shell, Source-style `ent_*` verbs on the B2 chokepoints).
+- `engine-core.md` — the entity object model (the "object language": plain-C++ entities
+  with Unreal bodies, class registry, handles, one clock/queue, two chokepoints) and the
+  two-phase build plan (core substrate, then the debug layer).
 - `recovered/dice-system.md` — the World-of-Darkness d10 resolver (unverified; needs a
   golden test against the running game).
 
