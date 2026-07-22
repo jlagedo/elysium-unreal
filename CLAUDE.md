@@ -83,7 +83,15 @@ Only `sp_tutorial_1` is exported today.
   `AElysiumPawn`, `UElysiumGameInstance`, `FElysiumObjModel`, `FElysiumTextureCache`,
   `FElysiumMaterialFactory`, `FElysiumStaticMeshBuilder`, `FElysiumContentPaths`,
   `UElysiumLightRig`, `FElysiumProfileRun` (the headless profiling harness, `-ElysiumProfile`),
-  `UElysiumCogSubsystem` (world subsystem that registers the stock Cog debug windows; `#if ENABLE_COG`).
+  `UElysiumCogSubsystem` (world subsystem that registers the stock Cog debug windows; `#if ENABLE_COG`),
+  and the Track-B entity substrate (plain C++, no reflection): `FElysiumVariant`
+  (tagged Void/Bool/Int/Float/String/Vector/Handle), `FElysiumEntityHandle` (`{Index, Epoch}`),
+  `FElysiumGameClock`, `UElysiumGameStateSubsystem` (GI subsystem: the `G` store, quest map, clock),
+  `FElysiumEntityDef`/`FElysiumEntityDefs` (immutable parsed `.ents` records), `FElysiumEntity`
+  (the live base entity: CBaseEntity keyfields + `Kill`/`ScriptHide`/`ScriptUnhide` + one-switch
+  dormancy), and `FElysiumClassDesc`/`FElysiumClassRegistry` (the per-classname descriptor —
+  factory, base-chain link, input + typed field tables — with case-folded chain lookup and an
+  inert-record fallback for unregistered classnames).
 - **Committed content (only these):** `Content/Elysium.umap` (empty boot persistent level,
   regenerable via `tools/make_boot_map.py`) and `Content/VtMB/Materials/M_VtMB_World.uasset`
   (master material). No converted game content, no vendored Python.
@@ -177,7 +185,8 @@ detail is porting reference): `lighting.md`, `entity_visuals.md`, `color_gamma.m
 `source_movement.md` / `animation_and_movers.md`.
 
 `tools/CLAUDE.md` — the VtMB input formats and their standalone decoders.
-`tools/ghidra/README.md` — the headless-Ghidra RE workspace.
+`tools/ghidra/README.md` — the headless-Ghidra RE workspace (local-only; the whole
+`tools/ghidra*/` + `tools/re/` trees are gitignored RE references, not in the repo).
 
 ## The Godot project (`E:\dev\elysium`)
 

@@ -38,27 +38,14 @@ tools/.venv/
 tools/__pycache__/
 tools/models/
 
-# Ghidra: vendored distribution + RE workspace derived from the user's own game
-# binaries (bring-your-own, never committed). Only the .java scripts, run.ps1, and
-# README under tools/ghidra/ are tracked (see tools/ghidra/.gitignore).
-tools/ghidra_12.1.2_PUBLIC/
-tools/ghidra/project/
-tools/ghidra/out/
-
-# RE reference clones under tools/re/ (read-only, cloned; not ours to ship). The
-# tracked scripts there (dll_recon.py, ghidra_extract_mechanics.*) stay committed.
-tools/re/out/
-# Third-party reference parsers (cloned read-only; used as .mdl layout references).
-tools/re/VAMPTools/
-tools/re/Crowbar/
-# TemplePlus: Troika's Temple of Elemental Evil (2003) reimplementation. Same
-# studio one year before VtMB and the same particle-script lineage, so its
-# ParticleSystems/ is a readable cross-check on the VtMB engine decompile.
-tools/re/TemplePlus/
-# Valve's VGUI2 + GameUI sources (sparse checkout) — the menu/scheme/font runtime
-# this project ports. VtMBFontEditor is a community .fnt reverse-engineering.
-tools/re/source-engine/
-tools/re/VtMBFontEditor/
+# Ghidra + RE workspace: the entire tools/ghidra*/ and tools/re/ trees are local-only
+# RE references, never committed. This covers the hand-authored scripts (Dump*.java,
+# run.ps1, README, dll_recon.py, ghidra_extract_mechanics.*), the vendored Ghidra
+# 12.1.2 distro, the analyzed DB + decompilation dumps derived from the user's own game
+# binaries (bring-your-own), and the read-only reference clones (VAMPTools, Crowbar,
+# TemplePlus, source-engine, VtMBFontEditor).
+tools/ghidra*/
+tools/re/
 
 # Precompiled headers / object files
 *.pch

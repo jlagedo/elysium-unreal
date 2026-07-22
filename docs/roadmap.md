@@ -131,15 +131,36 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
 
 ## P1 — Entity substrate *(design: `engine-core.md` — read it; steps here are the tracker)*
 
-- [ ] **1.1 Currency types + persistent state** — `FElysiumVariant`, `FElysiumEntityHandle`
-  (stable `.ents` index + epoch), `FElysiumGameClock`; `UElysiumGameStateSubsystem` with the
-  `G` store (variant-valued, **default 0 on miss**) and quest map. *Deps:* none.
-- [ ] **1.2 `.ents` defs parser** — `FElysiumEntityDefs` (immutable records incl. 7-field
-  outputs, hulls, `start_hidden`). *Deps:* 0.4.
-- [ ] **1.3 Class registry + base entity** — per-classname descriptor (input table + field
-  table, case-folded, base-chain walk); `FElysiumEntity` with `Kill`/`ScriptHide`/
-  `ScriptUnhide` and one-switch dormancy (solid+think+draw); inert-record fallback for
-  unhandled classnames. *Deps:* 1.1.
+- [x] **1.1 Currency types + persistent state** — `FElysiumVariant` (Void/Bool/Int/Float/
+  String/Vector/Handle, total coercions), `FElysiumEntityHandle` (stable `.ents` index +
+  epoch; falsy-on-resolve is the world's job in 1.4), `FElysiumGameClock` (pausable/scalable
+  curtime, passive until the map-actor tick advances it); `UElysiumGameStateSubsystem` (GI
+  subsystem) with the `G` store (variant-valued, **default 0 on miss**, None-deletes,
+  **case-sensitive** keys) + quest string→int map + the clock, and an `elysium.g` verb.
+  *Deps:* none.
+- [x] **1.2 `.ents` defs parser** — `FElysiumEntityDefs::Parse` reads `<map>.ents` (one JSON
+  blob, via the `Json` module) into immutable `FElysiumEntityDef` records: classname,
+  targetname, Unreal-space origin (verbatim — UE_ convention), raw `Keys{}`, brush fields
+  (`Model`/`Hulls` as entity-local `FElysiumConvexHull` point clouds/`Contents`/
+  `bBlocksPlayer`), `bStartHidden`, and 7-field `FElysiumOutputDef` outputs
+  (name/target/input/param/delay/times/python; field-6 "extra" is dropped at export, so not
+  carried). `IsBrush`/`IsPythonOnly` helpers. `MapEnts` path added to `FElysiumContentPaths`.
+  `elysium.ents [map]` verifies the round-trip off disk (entity/brush/hull/output/py-only/
+  start_hidden/classname counts) without spawning anything. *Deps:* 0.4.
+- [x] **1.3 Class registry + base entity** — `FElysiumClassDesc`/`FElysiumClassRegistry`:
+  per-classname descriptor (factory + base-class link + input table + typed field table),
+  registered by module-static `FElysiumClassRegistrar`; case-folded (FName-keyed) lookup that
+  walks the base chain (derived shadows base) for both inputs and fields. `FElysiumEntity`
+  (plain C++, non-copyable) carries the CBaseEntity keyfield contract (22 base keyfields from
+  `python_bridge.md`), the three base inputs (`Kill`/`ScriptHide`/`ScriptUnhide`), and the
+  one-switch dormancy (R6: `bHidden` → non-solid + next-think-never + undrawn via
+  `OnDormancyChanged` body hook, saved/restored think; `Kill` terminal). `Construct` applies
+  raw `.ents` keyvalues through the chain field table (honouring `start_hidden`);
+  `FElysiumClassRegistry::Create` builds the leaf class or an **inert base record** for
+  unregistered classnames (`bRecordOnly`). `elysium.classes [classname]` lists the registry or
+  resolves one classname, dumps its chain-walked tables, and probes the base contract on a
+  throwaway entity (fires hide/unhide/kill through the registry). No world/queue yet — that is
+  1.4. *Deps:* 1.1.
 - [ ] **1.4 Entity world + event queue + chokepoints** — storage/indices/spawn/teardown,
   `AcceptInput` + queue `Add` as the only two paths, `times` countdown, think servicing,
   zero-delay drain with loop guard; **sinks + 1,000-entry ring buffer + `LogElysiumIO` +
@@ -524,6 +545,16 @@ cross-check `recovered/dice-system.md` alongside the running-game golden test.
 
 ## Decision log (append-only)
 
+- **2026-07-22** — 1.1 landed. Currency types are plain C++ structs (R1, no reflection):
+  `FElysiumVariant` carries the seven runtime categories with total, never-throwing
+  coercions (a Void variant is the falsy / error-to-false case). `FElysiumEntityHandle` is
+  the value only — `IsSet()` is structural; true falsy-when-dead/stale is decided by
+  `FElysiumEntityWorld::Resolve` (1.4), not here. **The `G` store and quest map key
+  case-sensitively** (custom `KeyFuncs` + `FCrc::StrCrc32`) because they mirror Python dicts;
+  UE's default `FString`/`FName` maps are case-insensitive, which would silently merge
+  distinct flags. `G` is variant-valued, default-0-on-miss, and assigning Void deletes the
+  key (decompiled `tp_getattr`/`tp_setattr`, `python_bridge.md`). Clock + `G` + quests live on
+  the GI subsystem so they survive travel.
 - **2026-07-22** — 0.5 Cog spike closed: vendored the **main Cog plugin only** (upstream `cb1b435`
   on `main`, MIT) into `Plugins/Cog/`, minimal deps, `UElysiumCogSubsystem` registering stock
   CogEngine windows. Builds + runs on UE 5.8 with **no source patches** (the flagged ImPlot

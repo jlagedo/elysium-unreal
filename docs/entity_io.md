@@ -5,21 +5,25 @@ VtMB drives its world with Source's entity I/O: an entity fires an **output**
 `ScriptUnhide`, …) on a target entity. `tools/ent_survey.py` reports every table
 below from the shipped maps.
 
-Scale across the retail 101 maps (`ent_survey.py`'s default, `Vampire/maps`):
-**63,861 entities**, **299 classnames**, **16,125 outputs**, **1,591 with a Python
-payload**. `python tools/ent_survey.py [--map <name>]`. (These are the retail counts;
-the Unofficial Patch's maps carry ~50% more I/O — see the patch note below.)
+Scale across the **engine-loaded map set** — the 108 maps the runtime resolves
+patch-first (`Unofficial_Patch/maps`; `python tools/ent_survey.py --patch [--map <name>]`):
+**71,096 entities**, **326 classnames**, **24,081 outputs**, **6,956 with a Python
+payload**. Every table below is based on this set. The retail set (`Vampire/maps`, 101
+maps, the tool's default) is **63,861 / 299 / 16,125 / 1,591** — carried through as a
+labelled comparison, since the patch's maps carry ~50% more I/O.
 
-Of the 1,591 Python-carrying outputs, **1,500 fire only Python** (no I/O target) and
-**91 do both**.
+Of the 6,956 Python-carrying outputs, **6,851 fire only Python** (no I/O target) and
+**105 do both** (retail: 1,500 / 91).
 
-> **Retail vs. Unofficial Patch.** The numbers above are `Vampire/maps` (the survey
-> default). The runtime resolves maps patch-first (`install.map_path`), and the patch
-> ships its own, heavier maps — surveying `Unofficial_Patch/maps` (108 maps) gives
-> **71,096 entities / 326 classnames / 24,081 outputs / 6,956 Python**, and the same 101
-> retail *names* resolved patch-first give **68,430 / 324 / 23,357 / 6,591**. The tables
-> in this doc are the retail baseline; point `ent_survey.py` at the patch dir to see the
-> shipped-runtime shape.
+> **Why the patch set is the baseline.** The runtime resolves every map patch-first
+> (`install.map_path`), so the shipped-runtime shape is the patch's, not retail's. The
+> patch's `maps/` is a strict superset of retail: all 101 retail names (shadowed by
+> heavier patched versions) **plus 7 patch-only maps** (`hw_chateau_1`, `hw_warrens_2b`,
+> `la_bradbury_1`, `la_library_1`, `la_malkavian_3b`, `sm_coffee_1`, `sm_smoke_1`), so
+> globbing `Unofficial_Patch/maps` (108 maps) *is* the engine-loaded set. `ent_survey.py`
+> defaults to the retail set (the labelled comparison); `--patch` surveys the
+> engine-loaded set. (Resolving just the 101 retail *names* patch-first — excluding the 7
+> new maps — gives **68,430 / 324 / 23,357 / 6,591**, a subset, not the full runtime set.)
 
 ## Output format
 
@@ -30,9 +34,10 @@ target , input , param , delay , times , python , extra
    0       1       2       3       4       5        6
 ```
 
-**Seven fields, not Source's five.** 16,096 of 16,125 outputs write 7; 29 write 6.
+**Seven fields, not Source's five.** 24,065 of 24,081 outputs write 7; 14 write 6
+(one writes 5, one 8). (Retail: 16,096 of 16,125 write 7, 29 write 6.)
 Fields 0-4 are stock Source (`times` = -1 means unlimited). **Field 5 is a Python
-call string** (1,591 outputs carry one) which is wrapped as `__main__.%s` — see
+call string** (6,956 outputs carry one) which is wrapped as `__main__.%s` — see
 `docs/python_bridge.md`. The wrap format string lives in **`vampire.dll`**
 (`0x1055e370`, in the event-queue dispatch region), not `engine.dll`. A target of `!activator`/`!self` is a runtime
 reference, not a `targetname`.
@@ -51,7 +56,7 @@ VtMB's own system and has no equivalent in Source SDK 2013.
 
 - `StartHidden` `1` — the entity spawns OFF. A keyvalue on any entity, not just
   brush entities (NPCs, props and `func_brush` all use it).
-- `ScriptUnhide` (1,191 wires) / `ScriptHide` (536) — turn on / off at runtime.
+- `ScriptUnhide` (1,333 wires) / `ScriptHide` (626) — turn on / off at runtime.
 
 Verified in `Vampire/dlls/vampire.dll` (image base `0x10000000`). The datamap is
 built at runtime by `FUN_100a22f0`, which writes 44-byte `typedescription_t`
@@ -119,7 +124,7 @@ stay hidden until the game (once ported) reveals them:
 deliberately **unfiltered**: the render pass drops `tools/*` and `StartHidden`
 faces, but those same entities carry the level's behaviour, so filtering the data
 the way the render is filtered would throw the game away. In `sp_tutorial_1` alone
-that would lose 110 of 147 brush entities, including 55 trigger volumes.
+that would lose most of the 185 brush entities, including all 97 trigger volumes.
 
 ```json
 {"map":"sp_tutorial_1","entities":[
@@ -144,7 +149,7 @@ that would lose 110 of 147 brush entities, including 55 trigger volumes.
   `start_hidden` (a hidden entity is `SOLID_NONE`).
 - `keys` — every remaining keyvalue, verbatim.
 
-`sp_tutorial_1`: 1226 entities, 147 brush, 300 hulls, 872 outputs, 533 KB. All 147
+`sp_tutorial_1`: 1868 entities, 185 brush, 466 hulls, 1028 outputs, 811 KB. All 185
 brush entities yield at least one hull.
 
 **Only the debug layer consumes it so far** — the F1 debug-mode entity gizmos +
@@ -165,31 +170,40 @@ this is built for:
 Only these classnames carry `use_icon`/`locked_icon` — i.e. only these are things
 the player can look at and use:
 
-| classname | typical use_icon / locked_icon |
-| --- | --- |
-| `func_door_rotating` | 10 portal / 3 intrusion |
-| `prop_doorknob` | 10 portal / 3 intrusion |
-| `func_door` | 10 portal / 3 intrusion |
-| `prop_switch` | 12 switchable, 13 sewer / 12 |
-| `func_button` | 12 switchable / 12 |
-| `prop_button` | 31 button_up, 32 button_down, 30 button_locked |
-| `prop_doorknob_electronic` | 53 electroniclock / 54 electroniclocked |
-| `prop_sign` | 18 note, 56 bustopmap, 41 printedpapers |
-| `item_container_animated` | 6 lootable |
-| `item_container_lock` | 3 intrusion |
-| `prop_padlock` | 3 intrusion |
-| `item_container_one_item_filtered` | 61 pedestal |
-| `item_container` | 6 lootable |
+| classname | wires | typical use_icon / locked_icon |
+| --- | --- | --- |
+| `func_door_rotating` | 2470 | 10 portal / 3 intrusion (also 59 door_transition, 73 valve) |
+| `prop_doorknob` | 1434 | 10 portal / 3 intrusion |
+| `func_door` | 428 | 10 portal / 3 intrusion (rare 6 lootable) |
+| `prop_switch` | 334 | 12 switchable, 13 sewer / 12, 13 |
+| `func_button` | 324 | 12 switchable, 3 intrusion / 12 |
+| `prop_button` | 156 | 31 button_up, 32 button_down / 30 button_locked |
+| `prop_doorknob_electronic` | 110 | 53 electroniclock / 54 electroniclocked |
+| `prop_sign` | 100 | 18 note, 41 printedpapers, 56 bustopmap |
+| `item_container_animated` | 78 | 6 lootable |
+| `prop_doorknob-wesp` | 40 | 10 portal / 3 intrusion |
+| `item_container_lock` | 24 | 3 intrusion / 54 electroniclocked |
+| `prop_dynamic` | 6 | 10 portal / 3 intrusion |
+| `prop_padlock` | 5 | 3 intrusion |
+| `item_container_one_item_filtered` | 4 | 61 pedestal |
+| `trigger_multiple` | 3 | 73 valve |
+| `func_monitor` | 1 | 73 valve |
+| `item_container` | 1 | 6 lootable |
 
 `use_icon` is the cursor when usable; `locked_icon` when locked. `3`/`intrusion` is
 a padlock — it names the Intrusion (lockpicking) skill the player would need.
+`prop_doorknob-wesp` is a patch-only variant (the `-wesp` suffix is the Unofficial
+Patch author); it behaves as `prop_doorknob`. `func_door_rotating`, `func_monitor` and
+a few `trigger_multiple` in the patch pick up `73 valve`, absent from retail.
 
-`func_button` emits three outputs: **`OnPressed`** (124), **`OnIn`** (86) and
-**`OnOut`** (74) — `OnIn`/`OnOut` fire as the look-cursor enters and leaves the
-volume, which is what arms the icon. `soundgroup` names the sound set
-(`standard_door` 1028, `small_metal_switch` 141, `elevator_button` 100).
+`func_button` emits three outputs: **`OnPressed`** (168), **`OnIn`** (167) and
+**`OnOut`** (154) — `OnIn`/`OnOut` fire as the look-cursor enters and leaves the
+volume, which is what arms the icon. `soundgroup` names the sound set — most
+`func_button`s use `small_metal_switch` (127), the rest a mix (`tv`, `manhole_cover`,
+`Wall Light Switch`, `standard_door`, `large_metal_lever`).
 
-`func_button` spawnflags seen: 1056, 1057, 1025, 8193, 9217, 256, 1024, 33.
+`func_button` spawnflags seen: 1056, 1057, 8193, 1025, 9217, 256, 1024, 3073, 1280,
+8225, 9249, 33, 9729.
 `m_spawnflags` is a `FIELD_INTEGER` at entity offset **`0x204`** (confirmed in the
 `CBaseEntity` datamap builder `FUN_100a22f0`, `vampire.dll`). `CBaseButton::Spawn`
 (`FUN_100c8d60`) reads it and wires up the button:
@@ -272,21 +286,24 @@ The icon materials are `UnlitGeneric` + `$translucent` + `$ignorez` +
 
 ## Most-driven inputs
 
-`Trigger` 1444, `Kill` 1274, `ScriptUnhide` 1191, `Enable` 673, `Disable` 652,
-`PlaySound` 635, `ScriptHide` 536, `BeginSequence` 461, `TurnOn` 442, `TurnOff`
-427, `Skin` 289, `Unlock` 279, `ChangeNow` 275, `Open` 260, `Lock` 248,
-`StopSound` 240, `TweakParam` 236, `HideSprite` 224, `Close` 190.
+`Trigger` 1757, `Kill` 1647, `ScriptUnhide` 1333, `PlaySound` 920, `Disable` 710,
+`Enable` 692, `ScriptHide` 626, `BeginSequence` 533, `TurnOn` 520, `TurnOff` 490,
+`Unlock` 365, `Skin` 354, `ChangeNow` 308, `Open` 299, `Lock` 292, `StopSound` 257,
+`TweakParam` 246, `FadeIn` 221, `HideSprite` 219, `SetRelationship` 200.
 
 ## Biggest output sources
 
-`logic_relay` 5418 (`OnTrigger`), `trigger_multiple` 1811 (`OnStartTouch`,
-`OnTrigger`, `OnEndTouch`), `trigger_once` 1055, `npc_VHumanCombatant` 780
-(`OnDeath`, `OnFoundPlayer`), `func_door_rotating` 736, `scripted_sequence` 602,
-`logic_auto` 414 (`OnMapLoad`), `prop_switch` 381, `logic_timer` 355,
-`func_button` 284.
+`logic_relay` 5957 (`OnTrigger`), `events_world` 2551, `events_player` 2290,
+`trigger_multiple` 1958 (`OnStartTouch`, `OnTrigger`, `OnEndTouch`), `trigger_once`
+1185, `npc_VHumanCombatant` 1051 (`OnDeath`, `OnFoundPlayer`), `func_door_rotating`
+833, `scripted_sequence` 738, `logic_auto` 678 (`OnMapLoad`), `prop_switch` 544,
+`logic_timer` 500, `func_button` 489.
 
 `logic_relay` is the indirection layer: a quarter of all wires pass through one,
-so it is the highest-value class to implement early.
+so it is the highest-value class to implement early. The patch's added scripting also
+pushes `events_world` (2,551) and `events_player` (2,290) — the world/player event
+buses (`SetSafeArea`, `CreateControllerNPC`, discipline/mobility control) — high up the
+list, where retail barely used them; both are load-bearing for the shipped runtime.
 
 ## Input surface per class
 
@@ -297,26 +314,27 @@ Counts are wires observed across all maps.
 
 | classname | inputs it receives |
 | --- | --- |
-| `logic_relay` | Trigger(1403) Disable(82) Enable(67) Kill(60) ScriptUnhide(11) ScriptHide(3) |
-| `ambient_generic` | PlaySound(618) StopSound(230) Kill(70) Volume(33) FadeIn(2) FadeOut(2) |
-| `npc_VHumanCombatant` | 28 inputs — ScriptUnhide(144) TweakParam(137) FollowPatrolPath(89) SetupPatrolType(89) SetRelationship(88) SetInvestigateMode*(130) StayEntrenched(53) WillTalk(24) StartPlayerDialog(18) … |
-| `prop_dynamic` | Skin(268) ScriptUnhide(146) Kill(98) SetAnimation(74) Break(58) ScriptHide(46) |
-| `trigger_multiple` | Disable(189) Enable(168) Kill(156) ScriptUnhide(62) ScriptHide(50) |
-| `scripted_sequence` | BeginSequence(440) Kill(84) CancelSequence(70) ScriptHide(15) ScriptUnhide(14) |
-| `env_sprite` | HideSprite(223) ShowSprite(111) TurnOn(92) TurnOff(53) Kill(13) ToggleSprite(2) |
-| `func_door_rotating` | Unlock(86) Open(73) Lock(61) Close(50) ScriptUnhide(27) Toggle(4) |
-| `func_door` | Open(128) Close(96) Unlock(15) Lock(12) Toggle(4) Kill(4) |
-| `prop_button` | Lock(111) Unlock(98) SetState(49) Kill(2) |
-| `trigger_changelevel` | ChangeNow(245) ScriptUnhide(15) ScriptHide(4) Kill(1) |
-| `env_particle` | TurnOn(146) TurnOff(69) Kill(23) SetParent(4) SetRateScale(3) |
-| `func_brush` | ScriptUnhide(99) ScriptHide(92) Kill(31) Enable(3) Disable(2) |
-| `light` | TurnOff(71) TurnOn(40) Kill(23) SetPattern(20) FadeToPattern(7) Toggle(4) |
-| `point_teleport` | Teleport(125) Kill(7) |
-| `logic_timer` | Enable(71) Disable(70) Kill(12) FireTimer(2) |
-| `camera_track` | PlayAsCameraPosition(76) PlayAsCameraTarget(70) RestoreCameraToPlayerControl(41) |
-| `events_player` | CreateControllerNPC(67) RemoveControllerNPC(60) ImmobilizePlayer(13) MobilizePlayer(13) RemoveDisciplines*(23) AwardExp(2) |
-| `ambient_soundscheme` | FadeIn(141) FadeOut(112) Kill(1) |
-| `npc_maker` | Spawn(88) Enable(65) Disable(50) Kill(12) |
+| `logic_relay` | Trigger(1704) Disable(84) Kill(74) Enable(66) ScriptUnhide(12) ScriptHide(3) |
+| `ambient_generic` | PlaySound(903) Kill(254) StopSound(248) Volume(36) FadeIn(2) FadeOut(2) ScriptUnhide(2) |
+| `npc_VHumanCombatant` | 29 inputs — ScriptUnhide(175) TweakParam(140) SetRelationship(107) FollowPatrolPath(95) SetupPatrolType(95) SetInvestigateMode*(130) StayEntrenched(65) WillTalk(36) ScriptHide(32) Kill(25) StartPlayerDialog(19) … |
+| `prop_dynamic` | Skin(332) ScriptUnhide(176) Kill(94) SetAnimation(81) ScriptHide(67) Break(65) |
+| `scripted_sequence` | BeginSequence(515) CancelSequence(93) Kill(92) ScriptHide(15) ScriptUnhide(14) |
+| `trigger_multiple` | Disable(197) Enable(171) Kill(170) ScriptUnhide(60) ScriptHide(45) |
+| `env_sprite` | HideSprite(218) ShowSprite(108) TurnOn(96) TurnOff(62) ScriptUnhide(11) Kill(11) ScriptHide(10) |
+| `func_door_rotating` | Unlock(102) Open(82) Lock(69) Close(58) ScriptUnhide(31) ScriptHide(7) Toggle(6) Kill(4) |
+| `prop_button` | Lock(137) Unlock(105) SetState(69) Kill(2) |
+| `env_particle` | TurnOn(180) TurnOff(85) Kill(27) SetRateScale(5) JetLength(2) ScriptUnhide(2) SetParent(1) |
+| `trigger_changelevel` | ChangeNow(273) ScriptUnhide(18) ScriptHide(6) Enable(1) Kill(1) |
+| `func_door` | Open(157) Close(93) Unlock(15) Lock(12) Toggle(4) Kill(4) ScriptHide(2) |
+| `func_brush` | ScriptHide(104) ScriptUnhide(101) Kill(30) Disable(3) Enable(3) |
+| `ambient_soundscheme` | FadeIn(205) FadeOut(179) Kill(1) Disable(1) |
+| `light` | TurnOff(81) TurnOn(46) Kill(25) SetPattern(20) Toggle(7) FadeToPattern(7) ScriptUnhide(2) |
+| `point_teleport` | Teleport(140) Kill(9) |
+| `light_spot` | TurnOff(63) TurnOn(58) FadeToPattern(30) SetPattern(7) ScriptHide(5) ScriptUnhide(5) Toggle(1) |
+| `logic_timer` | Disable(79) Enable(75) Kill(12) FireTimer(6) RefireTimer(5) ScriptUnhide(2) ScriptHide(2) |
+| `camera_track` | PlayAsCameraPosition(87) PlayAsCameraTarget(80) RestoreCameraToPlayerControl(46) Kill(2) |
+| `events_player` | CreateControllerNPC(77) RemoveControllerNPC(68) RemoveDisciplines*(29) ImmobilizePlayer(14) MobilizePlayer(13) ClearDialogCombatTimers(8) AwardExp(4) |
+| `npc_maker` | Spawn(91) Enable(69) Disable(53) Kill(14) ScriptUnhide(4) TweakParam(3) |
 
 `events_player` is the player-side handle the maps address for camera, mobility,
 disciplines and XP.

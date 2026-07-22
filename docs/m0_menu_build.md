@@ -216,7 +216,7 @@ advanced}`, `confirmdialog`, `notifydialog`, `textentrydialog`, `contentcontrold
 ## 7. Decompile findings — `GameUI.dll` (resolved)
 
 Ghidra 12.1.2; MSVC RTTI recovered the C++ class names. Imagebase `0x10000000`.
-Tooling + dumps under `tools/ghidra/` (scripts committed; DB + dumps gitignored).
+Tooling + dumps under `tools/ghidra/` (local-only; the whole tree is gitignored, never committed).
 
 **Build path.** `CBasePanel::CreateGameMenu` (`FUN_10003ef0`) loads
 `Resource/GameMenu.res` via KeyValues → recursive loader (`FUN_10004150`; reads

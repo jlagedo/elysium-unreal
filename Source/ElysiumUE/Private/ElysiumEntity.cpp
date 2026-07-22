@@ -1,0 +1,87 @@
+#include "ElysiumEntity.h"
+
+#include "ElysiumClassRegistry.h"
+#include "ElysiumEntityDefs.h"
+
+void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHandle InHandle, const FElysiumClassDesc& InClass)
+{
+	Def = &InDef;
+	Handle = InHandle;
+	Class = &InClass;
+	TargetName = InDef.TargetName;
+
+	// Apply the raw keyvalues through the class chain field table (R2). Only mapped base/leaf
+	// fields are copied onto members; unmapped keys stay on the def (property-bag reads land
+	// with the script host later). Spawn-time application ignores bKeyable — the write-gate is
+	// for runtime Python/I/O, not the map's own keyvalues.
+	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+	for (const TPair<FString, FString>& KV : InDef.Keys)
+	{
+		if (const FElysiumFieldAccessor* Acc = Reg.FindField(InClass, FName(*KV.Key)))
+		{
+			if (Acc->Set)
+			{
+				Acc->Set(*this, FElysiumVariant::String(KV.Value));
+			}
+		}
+	}
+
+	// start_hidden — born fully OFF (R6). No prior think to save; the body build (P1.5) skips
+	// collision + draw while bHidden.
+	if (InDef.bStartHidden)
+	{
+		bHidden = true;
+		NextThink = ELYSIUM_NEVER_THINK;
+	}
+}
+
+void FElysiumEntity::ScriptHide()
+{
+	// CBaseEntity::ScriptHide (entity_io.md): early-out if already hidden; save the prior
+	// think; next-think = never; go non-solid + undrawn (the body, via OnDormancyChanged).
+	if (bHidden)
+	{
+		return;
+	}
+	bHidden = true;
+	SavedNextThink = NextThink;
+	NextThink = ELYSIUM_NEVER_THINK;
+	OnDormancyChanged();
+}
+
+void FElysiumEntity::ScriptUnhide()
+{
+	// The exact inverse: restore the saved think and clear the hidden flag; the body restores
+	// its prior solidity + draw.
+	if (!bHidden)
+	{
+		return;
+	}
+	bHidden = false;
+	NextThink = SavedNextThink;
+	OnDormancyChanged();
+}
+
+void FElysiumEntity::Kill()
+{
+	// Terminal: mark dead and go inert immediately (a killed-but-not-yet-reaped entity must
+	// not touch, trace, or think). The slot removal + handle invalidation is the world's job
+	// in P1.4; this only flips the entity's own state.
+	if (bDead)
+	{
+		return;
+	}
+	bDead = true;
+	NextThink = ELYSIUM_NEVER_THINK;
+	if (!bHidden)
+	{
+		OnDormancyChanged();   // drop the body's collision + draw (no-op until P1.5)
+	}
+}
+
+FString FElysiumEntity::DebugString() const
+{
+	const FString Name = TargetName.IsEmpty() ? TEXT("<noname>") : TargetName;
+	const FString Cls = Def ? Def->Classname : (Class ? Class->ClassName.ToString() : TEXT("<?>"));
+	return FString::Printf(TEXT("#%d %s(%s)"), Handle.Index, *Name, *Cls);
+}

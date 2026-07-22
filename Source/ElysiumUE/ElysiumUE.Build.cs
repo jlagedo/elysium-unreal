@@ -28,6 +28,8 @@ public class ElysiumUE : ModuleRules
 			// Static props: build UStaticMesh at runtime from mesh descriptions
 			// (BuildFromMeshDescriptions) with manual convex collision for solid props.
 			"MeshDescription", "StaticMeshDescription", "PhysicsCore",
+			// The `.ents` entity sidecar is one JSON blob (unlike the line-based sidecars).
+			"Json",
 			// Dev console UI is built directly in Slate.
 			"Slate", "SlateCore"
 		});

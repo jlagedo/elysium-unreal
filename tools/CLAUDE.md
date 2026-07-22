@@ -282,7 +282,7 @@ Python lives in **four surfaces, two languages**:
   **`dlgexpr`, not Python**: an engine skill-check (implicit `>=`) joined to a Python
   expression by `&`.
 - `maps/*.bsp` — entity outputs carry **7** comma fields, not Source's 5; **field 6 is a
-  Python call string** (1,591 of 16,125 retail outputs; 1,500 fire only Python).
+  Python call string** (6,956 of 24,081 engine-loaded outputs, 1,591 of 16,125 retail).
   `engine.dll` formats `__main__.%s` around it.
 - `logic_pythoncheck` — `python_script` is an expression gating `OnTrue`/`OnFalse` (51).
 
@@ -319,9 +319,10 @@ format or runtime behavior can't be settled from data alone. Self-contained: the
 install needed; only Java 21+ on PATH. `tools/re/ghidra_extract_mechanics.{java,py}` is a
 standalone mechanics extractor.
 
-`tools/ghidra/run.ps1` is the headless runner. Tracked artifacts: `run.ps1`, `README.md`, and
-the `.java` scripts. `project/` (the analyzed Ghidra DB) and `out/` (decompilation dumps) are
-derived from the user's own binaries — gitignored, present locally as prior-analysis reference.
+`tools/ghidra/run.ps1` is the headless runner. The whole `tools/ghidra/` tree is a local-only
+RE reference — gitignored, never committed: the hand-authored scripts (`run.ps1`, `README.md`,
+the `.java` scripts) alongside `project/` (the analyzed Ghidra DB) and `out/` (decompilation
+dumps) derived from the user's own binaries. `tools/re/` is the same — local-only, gitignored.
 
 Scripts (`-Script <name>`, no `.java`): `DumpMenu` (recon — RTTI classes, menu strings + xrefs,
 seed decompiles), `DumpGrep` (regex recon over strings/classes/func names → decompile matches),

@@ -271,7 +271,8 @@ teardown stays trivial):
 ## B2. Source I/O event bus
 
 The backbone. VtMB outputs are **7 fields**: `target, input, param, delay, times,
-python, name` (field 5 is a Python call string — 1,591 across the retail game).
+python, name` (field 5 is a Python call string — 6,956 across the engine-loaded
+maps, 1,591 retail).
 
 - `FElysiumEventQueue` on the map actor: time-sorted pending events
   `{fire_time, target, input, param, activator, caller}`. Ticked each frame; `times`
@@ -348,7 +349,7 @@ reflection (B2's input table already provides this); the genuinely bespoke surfa
 
 Four script surfaces, in implementation order:
 
-1. **Output field-6 call strings** (1,591) + **`logic_pythoncheck`** (51): a small C++
+1. **Output field-6 call strings** (6,956; 1,591 retail) + **`logic_pythoncheck`** (51): a small C++
    expression evaluator (recursive-descent; calls, attribute access, literals,
    comparisons, and/or) over: `G.<flag>` (persistent dict, **default 0 on miss**),
    entity lookup by targetname → input table, and native bindings for the 11 globals /
@@ -445,10 +446,10 @@ for deps (`Pillow`, `numpy`, `matplotlib` core; `torch`, `torchvision`, `spandre
 `safetensors` optional, ESRGAN upscalers only). It is engine-neutral Python; the only "Godot" in
 it is the `source_to_godot` coordinate convention baked into the intermediates, which the runtime
 converts. `tools/out/` (generated), `tools/.venv/`, `tools/__pycache__/`, `tools/models/`, and the
-vendored Ghidra install are gitignored. `FElysiumContentPaths::Root()` resolves to
+entire `tools/ghidra*/` + `tools/re/` RE trees are gitignored. `FElysiumContentPaths::Root()` resolves to
 `FPaths::ProjectDir()/"tools/out"` (in-repo), and `sp_tutorial_1` is exported there. The `re/` RE
 toolchain (Crowbar/TemplePlus/VAMPTools/source-engine) and the `tools/ghidra/` workspace are
-present as read-only RE references.
+local-only, read-only RE references (never committed).
 
 New sidecar formats and decoder fixes land in `tools/` from now on. The pipeline backlog
 (entity-model export, script/`.dlg` copies, use-icon atlas, NPC batch export +
