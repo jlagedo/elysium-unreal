@@ -43,7 +43,7 @@ The plan has two tracks that run in parallel:
 4. **Bring-your-own-game holds.** Nothing game-sourced is committed to this repo. This is
    the load-bearing legal posture — prior community rebuilds died to a C&D, not to
    technical failure.
-5. **Prove everything on `sp_tutorial_1`** (1,868 entities, 88 classnames — VtMB's own
+5. **Prove everything on `sp_tutorial_1`** (1,226 entities, 75 classnames — VtMB's own
    vertical slice exercising every system), then scale horizontally across the ~100 maps.
 6. **Reference documentation lives in this repo's `docs/`.** The deep RE work this plan
    builds on is here: `entity_io.md` (I/O surface), `python_bridge.md` (scripting),
@@ -64,9 +64,17 @@ Working today: boot into the empty persistent level → `UElysiumMapSubsystem::T
 `.sky` transform, `.spawn` placement, Character-movement FPS pawn with noclip, Canvas
 debug HUD, engine-console commands `elysium.map` / `elysium.maps` / `elysium.debug`.
 
+The map actor reads `.env` and `.cube`: the `.cube` grade becomes a per-map color-grading
+LUT (33³ Adobe LUT resampled to Unreal's 16³ neutral-LUT layout) on an unbound
+`UPostProcessComponent`; the six `.env` sky faces become a runtime `UTextureCube` feeding
+the `SkyLight` for image-based ambient (a *visible* sky dome still needs the `M_Sky` master
+material); `.env` fog drives a `UExponentialHeightFogComponent` (off for the tutorial).
+`FElysiumEnvDef` + the LUT/sky-cube builders live in `ElysiumEnvironment.{h,cpp}`.
+
 Not yet built (sidecars exist unread in `tools/out`): `.hulls`, `.dispcol`, `.lights`,
-`.props`, `.sprites`, `.env`, `.cube`, `_decals.obj`, `.water`, `.ents`. Lighting is a
-placeholder sun + skylight. `Travel`'s landmark parameter is accepted and ignored.
+`.props`, `.sprites`, `_decals.obj`, `.water`, `.ents`. The direct sun light is a
+placeholder; sky ambient is now `.env`-driven where a map has sky faces.
+`Travel`'s landmark parameter is accepted and ignored.
 Input bindings are legacy axis/action mappings (EnhancedInput is configured as the
 player-input class but unused). Only one of the planned master materials exists.
 `docs/map-architecture.md`'s async load state machine and Slate console are design,
@@ -97,7 +105,7 @@ All under `tools/out/<map>/`. Formats are fixed by the pipeline and shared with 
 |---|---|---|
 | `<map>.obj/.mtl` + `tex/` | world geometry + materials | OBJ, MTL with VtMB extensions (illum 4 = alphatest, blend, Kd) |
 | `<map>_sky.obj`, `.sky` | 3D skybox + `origin`/`scale` transform | OBJ + text |
-| `.ents` | **all 1,868 entities**: classname, targetname, origin, `start_hidden`, raw keyvalues, brush-entity convex `hulls` + `contents`/`blocks_player`, and 7-field I/O `outputs` (`target, input, param, delay, times, python, name`) | JSON |
+| `.ents` | **all 1,226 entities**: classname, targetname, origin, `start_hidden`, raw keyvalues, brush-entity convex `hulls` + `contents`/`blocks_player`, and 7-field I/O `outputs` (`target, input, param, delay, times, python, name`) | JSON |
 | `.props` | static props: `safename ox oy oz pitch yaw roll solid`, models in `props/<safename>.obj` | text, Source coords |
 | `.hulls` / `.dispcol` | world brush convex hulls / displacement collision tris | text, Godot metres |
 | `.lights` | one line per WORLDLIGHTS source: `type origin dir rgb radius stopdot stopdot2 exponent style` | text |
@@ -171,7 +179,7 @@ teardown stays trivial):
   keys, hulls, outputs, start_hidden).
 - **Registry**: `TMultiMap<FName /*targetname*/, entity>` — targetnames are not unique;
   `Target("foo")` fans out. Plus classname index for debug/queries.
-- **Spawn policy — three tiers**, not one actor per entity (1,868 entities/map):
+- **Spawn policy — three tiers**, not one actor per entity (1,226 entities/map):
   1. **Logic entities** (`logic_relay` ×107, `math_counter`, `logic_timer`, `logic_case`,
      `logic_auto`, `logic_pythoncheck`, `env_fade`, …): plain C++ objects
      (`FElysiumLogicEnt` subclasses), no actor, no transform. Cheap, serializable.
@@ -357,25 +365,19 @@ toolkit table.
 
 ## Pipeline & tooling
 
-**Tooling migration — do first (M1 prerequisite).** Move the decode/export pipeline from the
-Godot repo into this repo's `tools/`. It is engine-neutral Python; the only "Godot" in it is the
-`source_to_godot` coordinate convention baked into the intermediates, which the runtime already
-converts. Concretely:
-
-- **Copy** the core pipeline: `bsp.py`, `bsp_to_scene.py`, `export_all.py`, `mdl.py`,
-  `mdl_gltf.py`, `mdl_skel.py`, `vmt.py`, `vpk.py`, `kv.py`, `fnt.py`, `install.py`,
-  `tex_to_png.py`, `retex_dds.py`, `lightmap.py`, `build_grade_lut.py`, `menu_extract.py`,
-  `make_testmap.py`, `sky_upscale.py`, and `tools/CLAUDE.md`. Bring the `probe_*.py` / `*_probe.py`
-  investigation scripts along too (small, and useful for format spelunking).
-- **Exclude**: the bundled Godot engine (`godot/`), the Ghidra installs (`ghidra*/`), the `re/`
-  RE toolchain (Crowbar/TemplePlus/VAMPTools — stays in the read-only Godot repo as the RE
-  archive), ML upscaler weights (`models/*.pth`, ~hundreds of MB — fetch on demand), `.venv/`,
-  `__pycache__/`, and generated `out/` content.
-- **Add** `tools/requirements.txt`: `Pillow`, `numpy`, `matplotlib` (core); `torch`,
-  `torchvision`, `spandrel`, `einops`, `safetensors` optional, only for the ESRGAN upscalers.
-- `.gitignore` `tools/out/`, `tools/.venv/`, `tools/__pycache__/`, `tools/models/`.
-- Then repoint `FElysiumContentPaths::Root()` from `E:/dev/elysium/tools/out` to the in-repo
-  `tools/out`, and regenerate `sp_tutorial_1` there to verify parity.
+**Tooling migration — done.** The decode/export pipeline lives in this repo's `tools/`
+(`bsp.py`, `bsp_to_scene.py`, `export_all.py`, `mdl.py`/`mdl_gltf.py`/`mdl_skel.py`, `vmt.py`,
+`vpk.py`, `kv.py`, `fnt.py`, `install.py`, `tex_to_png.py`, `retex_dds.py`, `lightmap.py`,
+`build_grade_lut.py`, `menu_extract.py`, `make_boot_map.py`, `make_testmap.py`, `sky_upscale.py`,
+the `probe_*.py`/`*_probe.py` investigators, and `tools/CLAUDE.md`), with `tools/requirements.txt`
+for deps (`Pillow`, `numpy`, `matplotlib` core; `torch`, `torchvision`, `spandrel`, `einops`,
+`safetensors` optional, ESRGAN upscalers only). It is engine-neutral Python; the only "Godot" in
+it is the `source_to_godot` coordinate convention baked into the intermediates, which the runtime
+converts. `tools/out/` (generated), `tools/.venv/`, `tools/__pycache__/`, `tools/models/`, and the
+vendored Ghidra install are gitignored. `FElysiumContentPaths::Root()` resolves to
+`FPaths::ProjectDir()/"tools/out"` (in-repo), and `sp_tutorial_1` is exported there. The `re/` RE
+toolchain (Crowbar/TemplePlus/VAMPTools/source-engine) and the `tools/ghidra/` workspace are
+present as read-only RE references.
 
 New sidecar formats and decoder fixes land in `tools/` from now on:
 
@@ -395,10 +397,10 @@ Vertical slice: **play `sp_tutorial_1` start to finish, then walk into
 
 - **M0 — first pixels** *(done, verified)*: world + skybox rendering, DDS/PNG textures,
   trimesh collision, `.emc` cache, free-fly pawn, map switching, debug HUD.
-- **M1 — world parity**: pipeline migrated into this repo's `tools/` (prerequisite; see
-  Pipeline & tooling), then `.hulls`/`.dispcol` collision, Source movement component,
+- **M1 — world parity**: `.hulls`/`.dispcol` collision, Source movement component,
   light rig + lightstyles, `.env` sky/fog, `.cube` LUT, master-material set
-  (alpha modes, WVT, bump/envmap), texture prewarm off the game thread.
+  (alpha modes, WVT, bump/envmap), texture prewarm off the game thread. (The pipeline
+  migration this once gated on is done — see Pipeline & tooling.)
 - **M2 — dressing parity**: props via ISM (+ convex collision), decals, Single Layer
   Water, coronas, A/B match vs. the Godot viewer on tutorial + hub maps.
 - **M3 — entity backbone**: entity world + registry, event queue + input dispatch,
@@ -431,8 +433,8 @@ one part with no Godot reference to fall back on — de-risk it earliest.
   RenderCore, RHI, EnhancedInput, Slate, SlateCore.
 - Content root: dev builds read `tools/out` in this repo (gitignored), generated by the
   in-repo pipeline (`-ElysiumMap=` selects the boot map). `FElysiumContentPaths::Root()`
-  still points at the Godot project's `tools/out` until the tooling migration above repoints
-  it. Packaged builds later read a `content/` folder next to the executable, populated by the
-  user running the pipeline against their own install.
+  resolves to `FPaths::ProjectDir()/"tools/out"`. Packaged builds later read a `content/`
+  folder next to the executable, populated by the user running the pipeline against their
+  own install.
 - Map lifecycle details: `docs/map-architecture.md` (note: its async-travel state
   machine and Slate console are design targets, not current code).

@@ -1,5 +1,12 @@
 # Color & gamma
 
+> **Reference — VtMB facts + Godot prototype.** The VtMB analysis (DX8/LDR gamma-space render,
+> `mat_overbright`, the ConVar defaults) is engine-neutral and load-bearing. The "What the
+> pipeline does now" / "Matching…" sections describe the read-only Godot prototype at
+> `E:\dev\elysium` (`shaded.gdshader`, `GameScene`, SDFGI, Godot tonemap) — porting reference,
+> not Elysium-Unreal's current state (only **M0** is built; see `docs/rebuild-strategy.md`). Bare
+> `CLAUDE.md`/`docs/archive/…` paths are in the Godot repo.
+
 How VtMB (2004, DX8-era Source fork) produces its final on-screen color, why the
 Elysium viewer looked too bright / washed-out / high-contrast by comparison, and
 what the pipeline does to match. **Every VtMB constant here is read from the game's

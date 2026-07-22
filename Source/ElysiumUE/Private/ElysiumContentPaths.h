@@ -12,8 +12,11 @@ struct FElysiumContentPaths
 	static FString Root() { return FPaths::ProjectDir() / TEXT("tools/out"); }
 
 	static FString MapDir(const FString& Map) { return Root() / Map; }
+	static FString MapTexDir(const FString& Map) { return MapDir(Map) / TEXT("tex"); }
 	static FString MapObj(const FString& Map) { return MapDir(Map) / (Map + TEXT(".obj")); }
 	static FString MapSkyObj(const FString& Map) { return MapDir(Map) / (Map + TEXT("_sky.obj")); }
 	static FString MapSpawn(const FString& Map) { return MapDir(Map) / (Map + TEXT(".spawn")); }
 	static FString MapSky(const FString& Map) { return MapDir(Map) / (Map + TEXT(".sky")); }
+	static FString MapEnv(const FString& Map) { return MapDir(Map) / (Map + TEXT(".env")); }
+	static FString MapGrade(const FString& Map) { return MapDir(Map) / (Map + TEXT(".cube")); }
 };

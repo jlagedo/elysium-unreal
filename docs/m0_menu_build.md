@@ -1,5 +1,13 @@
 # M0 — Full-Fidelity Menu Rebuild
 
+> **Reference — Godot prototype, not this repo's live state.** This is the **Godot** prototype's
+> menu build spec: its `game/src/Ui/*.cs`, `game/content/ui/`, Godot `SubViewport`/
+> `MultiMeshInstance2D`, and the §0 "done/partial/missing" ledger all describe the read-only
+> prototype at `E:\dev\elysium`. In Elysium-Unreal the menu is **not yet built** — the VGUI port
+> is milestone **M5** (Slate/UMG) in `docs/rebuild-strategy.md`. The `GameUI.dll` decompile
+> findings (§7), the source-data inventory (§2), and the VGUI/scheme/`.fnt`/particle facts are
+> engine-neutral and carry to the Unreal port. Bare `CLAUDE.md` paths are in the Godot repo.
+
 **Goal:** rebuild the VtMB main menu + in-game pause menu as a faithful port of the
 original Valve **VGUI2** UI — real fonts, real scheme, real `.res` layouts, real 3D
 particle scene — not a hand-composited look-alike. Actions may be stubbed

@@ -1,5 +1,13 @@
 # Real-time lighting
 
+> **Reference — Godot prototype, not this repo's live state.** This document describes the
+> read-only Godot prototype at `E:\dev\elysium` (its C#/Godot code, `.gdshader`, Godot nodes,
+> and any "shipped/done" status below are the prototype's). Elysium-Unreal has only **M0** built
+> so far — see `docs/rebuild-strategy.md` for the Unreal plan and current state. The
+> **engine-neutral VtMB facts** here (WORLDLIGHTS lump, `dworldlight_t`, lightstyles, texlights)
+> are valid and load-bearing; the Godot implementation detail is kept as the porting reference.
+> Bare `CLAUDE.md` and `docs/archive/…` paths mentioned below are in the Godot repo.
+
 How Elysium lights the world: **in real time by Godot lights**, one light per VtMB
 **WORLDLIGHTS (lump 15)** source. There is no baked lightmap, no lightmap atlas, no UV2,
 and no lightstyle atlas recomposite — VtMB's baked light *transport* (lump 8) is present
@@ -11,7 +19,7 @@ Sources: `tools/bsp.py` (`read_worldlights`), `tools/bsp_to_scene.py` (`write_li
 `game/src/Assets/MaterialFactory.cs`, `game/shaders/shaded.gdshader`.
 
 Design rationale and the phase-by-phase migration record (baked → real-time) live in
-`docs/archive/lighting_refactor.md` (archived, complete). CLAUDE.md → "Real-time lighting
+`docs/archive/lighting_refactor.md` **(Godot repo)**. Its CLAUDE.md → "Real-time lighting
 (WORLDLIGHTS lump 15 → LightRig)" is the concise fact summary; this doc is the detail.
 
 ## The input — WORLDLIGHTS (lump 15)
@@ -219,7 +227,7 @@ rebuild); `flat` swaps every material for a name-hashed colour.
 
 ## Related docs
 
-`docs/archive/lighting_refactor.md` (design rationale + completed migration record),
-`docs/color_gamma.md` (VtMB gamma/overbright — the LDR look), `docs/entity_visuals.md`
+`docs/archive/lighting_refactor.md` **(Godot repo)** (design rationale + completed migration
+record), `docs/color_gamma.md` (VtMB gamma/overbright — the LDR look), `docs/entity_visuals.md`
 (env_sprite substrate + R6 switchable-light I/O), `docs/entity_io.md` (the light-toggling
 inputs), CLAUDE.md ("Real-time lighting", "Material fidelity", "env_sprite coronas").

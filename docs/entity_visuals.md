@@ -1,5 +1,13 @@
 # Entity visuals — rendering plan & I/O-ready substrate
 
+> **Reference — Godot prototype, not this repo's live state.** This document (its `game/src/*.cs`
+> code, `CoronaField`/`LightRig`, `.gdshader`, Godot capture commands, and the R0–R6 "shipped/
+> done" statuses) describes the read-only Godot prototype at `E:\dev\elysium`. Elysium-Unreal has
+> only **M0** built so far — see `docs/rebuild-strategy.md` (Track B) for the Unreal-native entity
+> substrate plan. The **engine-neutral facts** (entity/`.ents` schema, the additive/seams design,
+> the fact base in §3) carry over; the C#/Godot specifics are porting reference. Bare `CLAUDE.md`
+> and `docs/archive/…` paths mentioned below are in the Godot repo.
+
 Governing design doc for rendering the map's **entity-placed visuals** (glow sprites,
 dynamic-model props, ropes, particles, signs) that the pipeline currently drops. Scope
 is **visuals only** — no gameplay behavior (triggers, logic, Python, NPCs). But the code
@@ -365,7 +373,7 @@ the decal mesh path). Small, cosmetic; last.
 
 **Objective:** let entity I/O drive the two lighting states the real-time rig currently pins
 open. This is the only unfinished item from the completed baked→real-time lighting refactor
-(archived at `docs/archive/lighting_refactor.md`, Phase 8); it was always blocked on the same
+(archived at `docs/archive/lighting_refactor.md`, Phase 8 — **Godot repo**); it was always blocked on the same
 unported entity-I/O layer this doc's substrate (R0) provides, which is why it lives here now,
 not in the lighting layer.
 

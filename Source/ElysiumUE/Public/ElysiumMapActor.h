@@ -5,6 +5,8 @@
 #include "ElysiumMapActor.generated.h"
 
 class UDirectionalLightComponent;
+class UExponentialHeightFogComponent;
+class UPostProcessComponent;
 class UProceduralMeshComponent;
 class USceneComponent;
 class USkyLightComponent;
@@ -45,10 +47,15 @@ private:
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> SkyMesh;
 	UPROPERTY() TObjectPtr<UDirectionalLightComponent> SunLight;
 	UPROPERTY() TObjectPtr<USkyLightComponent> SkyLight;
+	UPROPERTY() TObjectPtr<UPostProcessComponent> PostProcess;
+	UPROPERTY() TObjectPtr<UExponentialHeightFogComponent> HeightFog;
 
 	void LoadMap();
 	int32 BuildMeshFromObj(const FString& ObjPath, UProceduralMeshComponent* Mesh, bool bCollision);
 	void ApplySkyTransform();
+	// Per-map colour grade (.cube), sky IBL ambient + height fog (.env). Sets the SkyLight
+	// cubemap but leaves RecaptureSky to the caller.
+	void ApplyEnvironment();
 	bool ReadSpawn(FVector& OutLocation, float& OutYaw) const;
 
 	// The player pawn may not exist yet in BeginPlay, so the teleport is deferred to Tick;

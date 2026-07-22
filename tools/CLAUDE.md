@@ -15,7 +15,9 @@ are emitted in a right-handed Y-up metric space (`source_to_godot`), which the r
 coordinate helpers convert to Unreal's left-handed Z-up centimetres.
 
 The deep reverse-engineering reference docs (`entity_io.md`, `python_bridge.md`, etc.)
-live in the read-only Godot project at `E:\dev\elysium\docs\`.
+live in this repo's `../docs/`. (The read-only Godot project at `E:\dev\elysium` holds
+an earlier copy plus the un-ported C#/Godot runtime — consulted as a porting reference,
+not the source of truth for these docs.)
 
 ## Asset resolution (`tools/install.py`)
 
@@ -275,3 +277,35 @@ so every code from 4 up is shifted (4=`INTEGER`, 5=`BOOLEAN`, 14=`POSITION_VECTO
 `fieldType`@0, `fieldOffset`@8, `externalName`@0x14, `inputFunc`@0x1C. `datamap_t.baseMap`
 @0xC; `GetDataDescMap()` is vtable +0x148. Reading VtMB with a modern `datamap.h`
 corrupts every typed field.
+
+## Ghidra RE workspace (`tools/ghidra/`)
+
+Headless-Ghidra workspace for decompiling the VtMB engine/game binaries (`Bin/engine.dll`,
+`Vampire/cl_dlls/GameUI.dll`, `Vampire/dlls/vampire.dll`, `Bin/StudioRender.dll`, …) when a
+format or runtime behavior can't be settled from data alone. Self-contained: the full Ghidra
+**12.1.2** distribution is vendored at `tools/ghidra_12.1.2_PUBLIC/` (gitignored) — no external
+install needed; only Java 21+ on PATH. `tools/re/ghidra_extract_mechanics.{java,py}` is a
+standalone mechanics extractor.
+
+`tools/ghidra/run.ps1` is the headless runner. Tracked artifacts: `run.ps1`, `README.md`, and
+the `.java` scripts. `project/` (the analyzed Ghidra DB) and `out/` (decompilation dumps) are
+derived from the user's own binaries — gitignored, present locally as prior-analysis reference.
+
+Scripts (`-Script <name>`, no `.java`): `DumpMenu` (recon — RTTI classes, menu strings + xrefs,
+seed decompiles), `DumpGrep` (regex recon over strings/classes/func names → decompile matches),
+`DumpFuncs` (targeted decompiler — follows seed funcs + callees + vftables → C pseudocode),
+`DumpAsm` (raw disassembly of a function or flat run), `DumpXrefs` (every ref to an address +
+containing function), `DumpConst` (dword at an address as hex/int/float), `DumpFieldRefs`,
+`DumpInfo`, `EnableAIF` (pre-script: enables analysis for vtable-only-reached code).
+
+```powershell
+tools/ghidra/run.ps1 -Import "<game>\Vampire\cl_dlls\GameUI.dll"   # one-time import + auto-analyze
+tools/ghidra/run.ps1 -Script DumpMenu                              # recon → out/menu_recon.txt
+tools/ghidra/run.ps1 -Script DumpFuncs -Args "funcs=10003ef0 vtables=1004ff3c out=$PWD\tools\ghidra\out\basepanel.txt"
+```
+
+`-Program` picks the imported binary (`engine.dll`, `GameUI.dll`, …). **Multi-value args take one
+address per run** — the arg string is re-split by `run.ps1`, `analyzeHeadless`, and Ghidra, so a
+`funcs=a;b` list mis-pairs every following `key=value` and writes to the default `out=`. Give each
+address its own run and its own `out=`. `README.md` holds the full arg reference, decompiler
+caveats, and known GameUI.dll addresses.

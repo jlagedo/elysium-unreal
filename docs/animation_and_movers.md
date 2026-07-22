@@ -411,6 +411,13 @@ only `0x8` = NOT_SOLID is tested.
 
 # Part C — Mapping to Godot 4
 
+> **Godot-target mapping (reference).** Part C maps Parts A/B onto the read-only Godot prototype
+> (`E:\dev\elysium`: `mdl_skel.py`/`mdl_gltf.py` glTF bake, `Skeleton3D`, `AnimatableBody3D`, the
+> `GameScene` playback — the "shipped" statuses are the prototype's). It is porting reference, not
+> the Unreal target — see `docs/rebuild-strategy.md` (§B3 movers, §B5 NPCs via glTFRuntime). The
+> glTF-bake decision and the coordinate/skin/attachment facts carry over; only the runtime host
+> changes. Parts A and B above are engine-neutral.
+
 ## C.1 Skeletal models → `Skeleton3D` + `Skin` + `AnimationPlayer`
 
 Skeletal models need a **richer container than the world's runtime-OBJ path** — OBJ

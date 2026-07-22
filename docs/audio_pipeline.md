@@ -261,6 +261,11 @@ The map viewer's job is *atmosphere first*, story audio later. Priority order:
 
 ## 11. Mapping to Godot 4
 
+> **Godot-target mapping (reference).** This section maps the facts above onto the read-only Godot
+> prototype's nodes/APIs (`E:\dev\elysium`). It is porting reference, not the Unreal target — see
+> `docs/rebuild-strategy.md` (§B8 Audio) for the Unreal-native plan (MS-ADPCM/MP3 decode in C++,
+> `USoundWaveProcedural`, submixes, MetaSounds).
+
 Verified against Godot 4 docs (this project runs 4.7.1).
 
 **Codec / import.** Godot decodes **MP3** (`AudioStreamMP3`) and **Ogg Vorbis**

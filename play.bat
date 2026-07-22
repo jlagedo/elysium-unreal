@@ -1,5 +1,5 @@
 @echo off
-REM Launch Elysium (Unreal). Optional first arg = map name under E:\dev\elysium\tools\out.
+REM Launch Elysium (Unreal). Optional first arg = map name under this repo's tools\out.
 REM   play.bat                 -> sp_tutorial_1 (the exported vertical slice)
 REM   play.bat sp_tutorial_1   -> that map explicitly
 REM WASD + E/Q (or Space/Ctrl) to fly, mouse to look. Only sp_tutorial_1 is exported today.

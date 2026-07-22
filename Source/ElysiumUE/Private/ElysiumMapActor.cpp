@@ -1,11 +1,16 @@
 #include "ElysiumMapActor.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumEnvironment.h"
 #include "ElysiumMaterialFactory.h"
 #include "ElysiumObjModel.h"
 
 #include "Components/DirectionalLightComponent.h"
+#include "Components/ExponentialHeightFogComponent.h"
+#include "Components/PostProcessComponent.h"
 #include "Components/SkyLightComponent.h"
+#include "Engine/Texture2D.h"
+#include "Engine/TextureCube.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
@@ -152,6 +157,18 @@ AElysiumMapActor::AElysiumMapActor()
 	SkyLight->bLowerHemisphereIsBlack = false;
 	SkyLight->LightColor = FLinearColor(0.55f, 0.58f, 0.65f).ToFColor(true);
 	SkyLight->SetIntensity(1.5f);
+
+	// Per-map colour grade from the .cube LUT. Unbound so it grades the whole view
+	// regardless of where the camera is; unloads with the map.
+	PostProcess = CreateDefaultSubobject<UPostProcessComponent>(TEXT("PostProcess"));
+	PostProcess->SetupAttachment(SceneRoot);
+	PostProcess->bUnbound = true;
+
+	// Source sky_camera fog. Approximated with height fog (Unreal has no linear depth-fog
+	// component); hidden until a map's .env turns fog on. Unloads with the map.
+	HeightFog = CreateDefaultSubobject<UExponentialHeightFogComponent>(TEXT("HeightFog"));
+	HeightFog->SetupAttachment(SceneRoot);
+	HeightFog->SetVisibility(false);
 }
 
 void AElysiumMapActor::BeginPlay()
@@ -176,6 +193,7 @@ void AElysiumMapActor::LoadMap()
 		UE_LOG(LogElysium, Log, TEXT("skybox: %d surfaces"), SkySurfaceCount);
 	}
 
+	ApplyEnvironment();
 	SkyLight->RecaptureSky();
 
 	if (ReadSpawn(PendingSpawnLoc, PendingSpawnYaw))
@@ -316,6 +334,57 @@ void AElysiumMapActor::ApplySkyTransform()
 
 	SkyMesh->SetRelativeScale3D(FVector(Scale));
 	SkyMesh->SetRelativeLocation(-Scale * OriginUnreal);
+}
+
+void AElysiumMapActor::ApplyEnvironment()
+{
+	// Colour grade (.cube): a per-map 3D LUT into the unbound post-process. Independent of
+	// the rest of .env, so it applies even when a map has no sky/fog.
+	if (UTexture2D* Lut = ElysiumEnvironment::BuildColorGradeLUT(FElysiumContentPaths::MapGrade(MapName)))
+	{
+		FPostProcessSettings& PP = PostProcess->Settings;
+		PP.bOverride_ColorGradingLUT = true;
+		PP.ColorGradingLUT = Lut;
+		PP.bOverride_ColorGradingIntensity = true;
+		PP.ColorGradingIntensity = 1.f;
+		UE_LOG(LogElysium, Log, TEXT("colour grade LUT applied"));
+	}
+
+	FElysiumEnvDef Env;
+	if (!FElysiumEnvDef::Parse(FElysiumContentPaths::MapEnv(MapName), Env))
+	{
+		return;   // no .env: keep the placeholder ambient, no fog
+	}
+
+	// Sky IBL: feed the six sky faces to the SkyLight cubemap so ambient/reflections come
+	// from the real sky instead of the flat placeholder colour. (A *visible* sky dome needs
+	// the M_Sky master material; this is ambient only.)
+	if (Env.bSky)
+	{
+		if (UTextureCube* Cube = ElysiumEnvironment::BuildSkyCube(FElysiumContentPaths::MapTexDir(MapName)))
+		{
+			SkyLight->SetLightColor(FLinearColor::White);
+			SkyLight->Cubemap = Cube;
+			SkyLight->SetIntensity(1.f);
+			UE_LOG(LogElysium, Log, TEXT("sky IBL cubemap applied (%s)"), *Env.SkyName);
+		}
+	}
+
+	// Height fog approximates Source's linear depth fog (start/end in metres -> cm). A small
+	// falloff keeps it near height-independent; density is tuned so the far distance reads as
+	// mostly fogged. Off maps (fog 0, e.g. the tutorial) leave the component hidden.
+	HeightFog->SetVisibility(Env.bFog);
+	if (Env.bFog)
+	{
+		const float StartCm = Env.FogStartMeters * 100.f;
+		const float EndCm = FMath::Max(Env.FogEndMeters * 100.f, StartCm + 1.f);
+		HeightFog->SetFogInscatteringColor(Env.FogColor);
+		HeightFog->SetStartDistance(StartCm);
+		HeightFog->SetFogHeightFalloff(0.02f);
+		// exp fog factor 1-e^{-density*dist}; density for ~0.95 opacity by the far plane.
+		HeightFog->SetFogDensity(FMath::Clamp(3.f / EndCm, 0.0001f, 0.05f));
+		UE_LOG(LogElysium, Log, TEXT("fog on: %.0f-%.0f cm"), StartCm, EndCm);
+	}
 }
 
 bool AElysiumMapActor::ReadSpawn(FVector& OutLocation, float& OutYaw) const

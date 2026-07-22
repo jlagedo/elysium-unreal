@@ -188,6 +188,12 @@ animation should use — they are simply wired to nothing in the retail build.
 
 ## Godot mapping
 
+> **Godot-target mapping (reference).** This section maps the constants above onto the read-only
+> Godot prototype (`E:\dev\elysium`: `CharacterBody3D`, `PlayerController.StepMove`). It is porting
+> reference, not the Unreal target — see `docs/rebuild-strategy.md` (Track A: custom
+> `UCharacterMovementComponent`, port `CGameMovement` line-by-line). The unit factor and the
+> box-hull / step-move requirements carry over unchanged.
+
 1 unit = 0.0254 m (`Assets`/`World` use the same factor).
 
 | Quantity | Source | Godot |
