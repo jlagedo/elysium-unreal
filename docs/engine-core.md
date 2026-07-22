@@ -102,11 +102,16 @@ and `UElysiumGameStateSubsystem` + script host live on the game instance;
   output whose `times` has not run out: queue the I/O delivery at `now + delay`, and if
   field 6 carries Python, attach the source string — the queue forwards it to the script
   host at fire time. 1,500 outputs fire *only* Python; the queue entry is still real.
-- **Tick (map actor Tick, in order):** advance clock (unless paused) → `Service(now)`
-  on the queue (deliver everything due; drain zero-delay chains with the loop guard) →
-  run due thinks (entities whose next-think ≤ now). Queue-before-thinks is our decision
-  — the retail order is unconfirmed (`game_runtime.md` §7); recorded as a deliberate
-  choice, revisit only if a real chain misbehaves.
+- **Tick (map actor Tick, in order):** advance clock (unless paused) → run due thinks
+  (entities whose next-think ≤ now) → `Service(now)` on the queue (deliver everything due;
+  drain zero-delay chains with the loop guard). **Retail is think-first** — confirmed in
+  `vampire.dll`: the server frame calls `Physics_RunThinkFunctions` (`FUN_1003bdd0`,
+  `0x1011ac1b`) and *then*, at `0x1011ac34`, the single `CEventQueue::ServiceEvents`
+  (`FUN_100cebb0`, fires each event with `fireTime ≤ curtime`: Entity I/O via `AcceptInput`
+  vtable `+0x1d8`, field-6 Python via `FUN_100ce990`, `ScheduleTask` source via `FUN_100ce8a0`).
+  So an output fired *during* a think is serviced after all thinks that frame, not interleaved.
+  (Earlier we recorded queue-before-thinks as a provisional choice; retail says think-first —
+  match it unless a determinism reason argues otherwise. RE2 in `roadmap.md`.)
 - **Touch/use:** brush bodies raise begin/end overlap → entity world translates to
   `OnStartTouch`/`OnEndTouch` outputs (trigger classes), respecting dormancy. `+use` is
   a camera trace against a use-only collision channel on usable bodies (13 classnames
@@ -202,12 +207,16 @@ M3 writes its first mover.
 
 ## Open items (tracked, non-blocking)
 
-- **Trigger spawnflag semantics** (filter bits) are un-decompiled — an RE task when
-  trigger filtering first matters; do not assume stock Source bits.
-- **Retail queue-vs-think order** unconfirmed; our order is a recorded choice.
-- **Ghidra datamap export**: no machine-readable entity DB exists in `tools/ghidra/out`;
-  a script that walks vampire.dll's `typedescription_t` arrays and emits JSON per
-  classname is buildable and would let us *validate* our hand-written input/field
-  tables against retail — optional, valuable once class coverage widens.
-- **`G` default-0 and dialogue error-to-false** are load-bearing but Ghidra-unconfirmed
-  (`python_bridge.md` Open) — implement as documented, flag in code comments.
+- **Trigger/button spawnflag semantics** — **decompiled** (RE1): `func_button`
+  (`CBaseButton::Spawn`) and `trigger_multiple`/`trigger_once`
+  (`CBaseTrigger::PassesTriggerFilters`) bit maps are in `entity_io.md`. Trigger filter
+  matches stock Source (`0x1`=clients … `0x8`=physics + `m_hFilter`); the button does not.
+- **Retail queue-vs-think order** — **confirmed think-first** (RE2, see the Tick note above):
+  thinks run, then `CEventQueue::ServiceEvents`.
+- **Ghidra datamap export** — method confirmed (RE4): VtMB datamaps are runtime-built by
+  per-class builders (`CBaseEntity` = `FUN_100a22f0`); the base keyfield/input/output contract
+  is extracted (`python_bridge.md`). A batch `DumpDatamap` over the builders → JSON per classname
+  is still to build — optional, valuable once class coverage widens.
+- **`G` default-0 and dialogue error-to-false** — **confirmed** (RE3, `python_bridge.md`):
+  `G.tp_getattr` returns `PyInt(0)` on a miss; `logic_pythoncheck`/exec paths clear errors and
+  evaluate false. Implement as documented.
