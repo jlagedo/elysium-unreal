@@ -6,6 +6,8 @@
 
 struct FElysiumEntityDef;
 struct FElysiumClassDesc;
+class FElysiumEntityWorld;
+class UElysiumBrushComponent;
 
 // Next-think sentinel: an entity with this next-think never runs Think(). Matches VtMB's
 // `0x7f7fffff` (FLT_MAX) write in CBaseEntity::ScriptHide (entity_io.md).
@@ -45,6 +47,15 @@ public:
 	const FElysiumEntityDef* Def = nullptr;
 	const FElysiumClassDesc* Class = nullptr;   // resolved descriptor; base desc when a record
 	bool bRecordOnly = false;                   // no leaf class registered — inert record (set by the registry)
+
+	// The world that owns this entity, bound at Load before Spawn(). The seam an entity uses to
+	// reach world services — firing outputs (FireOutput) above all. Null on a throwaway probe
+	// entity (elysium.classes), so every world call guards on it.
+	FElysiumEntityWorld* World = nullptr;
+
+	// The brush body (P1.5), or null for point/logic entities (R1: logic ents never get a body).
+	// Owned by the map actor; the entity only gates its collision on dormancy (R6). Non-owning.
+	UElysiumBrushComponent* Body = nullptr;
 
 	// --- Base keyfields — the CBaseEntity contract (python_bridge.md) -------------------
 	// Registered once on the base class field table; every subclass inherits them through
@@ -98,6 +109,15 @@ public:
 	void ScriptHide();    // whole-entity OFF (saves prior think; body gated in P1.5)
 	void ScriptUnhide();  // the exact inverse
 
+	// Fire a named output through the world (R2 → the event queue). No-op on a worldless probe
+	// entity. Leaf classes (P1.6+) call this from their inputs and touch hooks.
+	void FireOutput(FName Output, const FElysiumEntityHandle& Activator);
+
+	// Overlap terminus (P1.5 routing): a brush body's begin/end overlap lands here. Base no-op;
+	// P1.6 trigger classes override to fire OnStartTouch/OnEndTouch (respecting spawnflags).
+	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) {}
+	virtual void OnTouchEnd(const FElysiumEntityHandle& Activator) {}
+
 	// --- Lifecycle --------------------------------------------------------------------
 	// Bind identity and copy the base keyfields out of the def's raw keys through the class
 	// chain field table (R2), honouring start_hidden. The world's spawn pass (P1.4) calls
@@ -106,9 +126,9 @@ public:
 	virtual void Spawn() {}
 	virtual void Think() {}
 
-	// Body hook (P1.5): mirror dormancy onto the attached body's collision + visibility.
-	// No-op while an entity has no body (all of P1.3).
-	virtual void OnDormancyChanged() {}
+	// Body hook (R6): mirror dormancy onto the attached body's collision. No-op while an entity
+	// has no body (all point/logic entities).
+	virtual void OnDormancyChanged();
 
 	// `#<idx> <targetname>(<classname>)` — the canonical debug string (R3), used everywhere.
 	FString DebugString() const;

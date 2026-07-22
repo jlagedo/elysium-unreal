@@ -17,9 +17,11 @@ if not exist "%UE%" (
 
 REM -dx12 forces the DX12 RHI so the SM6 features (Lumen, MegaLights, VSM, ray tracing)
 REM run; without it the renderer can fall back to DX11/SM5 and they are all off.
+REM -log opens a live external log window; -LogCmds raises the entity-world category to
+REM Verbose from boot so the brush-body touch routing (RouteBrushTouch) prints as you play.
 if "%~1"=="" (
-    "%UE%" "%PROJECT%" -game -dx12 -windowed -resx=1600 -resy=900
+    "%UE%" "%PROJECT%" -game -dx12 -windowed -resx=1600 -resy=900 -log -LogCmds="LogElysiumWorld Verbose"
 ) else (
-    "%UE%" "%PROJECT%" -game -dx12 -windowed -resx=1600 -resy=900 -ElysiumMap=%1
+    "%UE%" "%PROJECT%" -game -dx12 -windowed -resx=1600 -resy=900 -log -LogCmds="LogElysiumWorld Verbose" -ElysiumMap=%1
 )
 endlocal

@@ -1,7 +1,9 @@
 #include "ElysiumEntity.h"
 
+#include "ElysiumBrushComponent.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityDefs.h"
+#include "ElysiumEntityWorld.h"
 
 void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHandle InHandle, const FElysiumClassDesc& InClass)
 {
@@ -83,6 +85,24 @@ void FElysiumEntity::Kill()
 	if (!bHidden)
 	{
 		OnDormancyChanged();   // drop the body's collision + draw (no-op until P1.5)
+	}
+}
+
+void FElysiumEntity::OnDormancyChanged()
+{
+	// R6 — one reversible switch. Inert (hidden or dead) drops the body's collision so it cannot
+	// be touched or traced; active restores its built solidity. Idempotent (SetDormant re-applies).
+	if (Body)
+	{
+		Body->SetDormant(IsInert());
+	}
+}
+
+void FElysiumEntity::FireOutput(FName Output, const FElysiumEntityHandle& Activator)
+{
+	if (World)
+	{
+		World->FireOutput(*this, Output, Activator);
 	}
 }
 

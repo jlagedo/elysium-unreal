@@ -63,10 +63,24 @@ convex collision on solid props (`elysium.props` toggles; 809 instances / 161 mo
 tutorial). **Brush collision** also lands: `AElysiumMapActor` loads `.hulls` (one convex
 `FKConvexElem` per solid world brush, invisible PLAYERCLIP volumes included) and `.dispcol`
 (displacement terrain trimesh) onto collision-only PMCs, replacing the render-mesh trimesh as
-the walkable surface (`elysium.BrushCollision` toggles back to trimesh for A/B). Still
-planned: Source movement, the rest of the master-material
-set, the entity/I-O layer, scripting, audio, menu, dialogue — see `docs/rebuild-strategy.md`.
-Only `sp_tutorial_1` is exported today.
+the walkable surface (`elysium.BrushCollision` toggles back to trimesh for A/B). The **Track-B
+entity substrate** also runs at map load: `.ents` parse → one `FElysiumEntity` per def through the
+class registry → spawn pass → per-brush-entity `UElysiumBrushComponent` collision/overlap bodies
+(185 on the tutorial) → spawn pass, all through the two chokepoints with the I/O ring buffer + log
+sinks. The **starter leaf classes** also run (`ElysiumStarterClasses.cpp`): `logic_auto` fires
+`OnMapLoad` on its first-think ignition; `logic_relay` re-fires `OnTrigger` (Enable/Disable/Toggle-
+gated); `trigger_multiple`/`trigger_once` (over a shared `CBaseTrigger` chain node) turn a brush
+body's begin/end overlap into `OnStartTouch`/`OnEndTouch`/`OnTrigger`, filtered to the ALLOW_CLIENTS
+spawnflag (the player toucher), with `trigger_once` self-`Kill`ing after first touch. Every
+runtime spawn path also carries an editor-only (`#if WITH_EDITOR`, compiled out of Shipping) World
+Outliner label via `ElysiumEditorObjectName` (`ElysiumEditorLabels.h`): the map actor is
+`Map:<name>` in an `Elysium` folder, brush bodies are `Body_<idx>_<name>_<class>` (plus the exact
+`#<idx> <name>(<class>)` debug string as a `ComponentTag`), lights are `Light_<idx>_<kind>`, prop
+ISMs are `Props_<model>_<solidity>`; the same canonical debug string (`FElysiumEntity::DebugString`)
+threads every I/O log line. Still planned:
+more entity classes (movers, buttons, doors), Source movement, the rest of the master-material set,
+deeper scripting, audio, menu, dialogue — see `docs/rebuild-strategy.md`. Only `sp_tutorial_1` is
+exported today.
 
 ## Repository facts
 
@@ -89,12 +103,17 @@ Only `sp_tutorial_1` is exported today.
   `FElysiumGameClock`, `UElysiumGameStateSubsystem` (GI subsystem: the `G` store, quest map, clock),
   `FElysiumEntityDef`/`FElysiumEntityDefs` (immutable parsed `.ents` records), `FElysiumEntity`
   (the live base entity: CBaseEntity keyfields + `Kill`/`ScriptHide`/`ScriptUnhide` + one-switch
-  dormancy + per-output `times` counters), `FElysiumClassDesc`/`FElysiumClassRegistry` (the
+  dormancy that gates the brush body + per-output `times` counters + a `World` back-pointer and
+  `FireOutput` seam + `OnTouchStart`/`OnTouchEnd` overlap hooks), `FElysiumClassDesc`/`FElysiumClassRegistry` (the
   per-classname descriptor — factory, base-chain link, input + typed field tables — with
   case-folded chain lookup and an inert-record fallback for unregistered classnames),
-  `FElysiumEntityWorld` (the substrate: one entity per def, name/class indices, spawn pass,
-  generation-checked `Resolve`, the `AcceptInput` + event-queue chokepoints, output firing,
-  think-first tick, epoch teardown; owned by `AElysiumMapActor` via `TPimplPtr`),
+  `FElysiumEntityWorld` (the substrate: one entity per def, name/class indices, spawn pass that
+  also builds brush bodies, generation-checked `Resolve`, the `AcceptInput` + event-queue
+  chokepoints, output firing, `RouteBrushTouch` overlap routing, think-first tick, epoch teardown;
+  owned by `AElysiumMapActor` via `TPimplPtr`), `UElysiumBrushComponent` (the per-brush-entity
+  body: collision-only `UPrimitiveComponent` with a convex `UBodySetup` cooked from the def hulls,
+  handle-carrying, dormancy-gated, solidity by classname — trigger/solid/none — routing begin/end
+  overlaps back to the world; `elysium.BrushBodies` A/Bs it),
   `FElysiumEventQueue`/`FElysiumIOEvent` (the one time-sorted queue, R4), `IElysiumIOSink` with
   the always-on `FElysiumRingBufferSink` (1,000-entry I/O history) + `FElysiumLogSink`
   (`LogElysiumIO` + VLOG), and `IElysiumScriptHost`/`FElysiumNullScriptHost` (the M4 field-6

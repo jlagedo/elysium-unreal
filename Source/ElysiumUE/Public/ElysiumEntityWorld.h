@@ -9,6 +9,7 @@
 #include "ElysiumVariant.h"
 
 class AActor;
+class UElysiumBrushComponent;
 class UElysiumGameStateSubsystem;
 
 // R1/R5 — the Track-B substrate: one plain-C++ object per map, owned by AElysiumMapActor, that
@@ -34,10 +35,6 @@ public:
 	// Build one entity per def via the registry (inert record when the classname is
 	// unregistered), index names/classes, run the spawn pass (Spawn() on each).
 	void Load(FElysiumEntityDefs&& InDefs);
-	// P1.4 bootstrap for logic_auto ignition: fire every entity's `OnMapLoad` output through the
-	// queue at map load (only logic_auto carries one in the data). P1.7's logic_auto class Spawn()
-	// supersedes this — the mechanism (data-driven output firing) is identical either way.
-	void FireMapLoadOutputs();
 
 	// Per-frame drive (map actor Tick). Think-first: RunThinks(Now) then ServiceEvents(Now).
 	void Tick(double Now);
@@ -52,6 +49,10 @@ public:
 	// count it down and queue the delivery at now + delay (attaching field-6 Python). The only
 	// way outputs become queue entries.
 	void FireOutput(FElysiumEntity& Source, FName OutputName, const FElysiumEntityHandle& Activator);
+
+	// Overlap routing (P1.5): a brush body's begin/end overlap lands here. Resolve the brush
+	// entity, skip if inert (R6), and call its OnTouchStart/OnTouchEnd (P1.6 triggers override).
+	void RouteBrushTouch(const FElysiumEntityHandle& Brush, const FElysiumEntityHandle& Activator, bool bBegin);
 
 	// --- Resolution / iteration --------------------------------------------------------
 	FElysiumEntity* Resolve(const FElysiumEntityHandle& Handle);
@@ -69,6 +70,9 @@ public:
 	double NowSeconds() const;
 	int32 UnknownTargets() const { return UnknownTargetCount; }
 	int32 UnknownInputs() const { return UnknownInputCount; }
+	int32 NumBrushBodies() const { return Bodies.Num(); }
+	int32 TouchBegins() const { return TouchBeginCount; }
+	int32 TouchEnds() const { return TouchEndCount; }
 
 	// --- Formatting (used by the sinks; resolves handles to the canonical debug string) ----
 	// `#<idx> <name>(<class>)` for a handle, or `#<null>` / `#<stale>` when it cannot resolve.
@@ -79,6 +83,10 @@ public:
 
 private:
 	void Teardown();
+	// Build the brush body (P1.5) for one entity, if it is a brush with hulls: cook the convex
+	// UBodySetup from the def, place it at the def origin, attach it to the owner actor, store it
+	// on the entity, and start it dormant when born hidden. Point/logic entities get no body (R1).
+	void BuildBrushBody(FElysiumEntity& Ent);
 	// The queue.Add wrapper: assigns time/serial upstream, notifies OnQueued.
 	void AddEvent(FElysiumIOEvent&& Event);
 	void ServiceEvents(double Now);
@@ -99,6 +107,12 @@ private:
 	FElysiumEventQueue EventQueue;
 	TArray<TUniquePtr<IElysiumIOSink>> Sinks;
 	FElysiumRingBufferSink* Ring = nullptr;           // owned in Sinks; the always-on history
+
+	// Brush bodies (P1.5): the map actor owns them (they are its components); we hold weak refs to
+	// gate them and to destroy them on teardown (the world logically owns the embodiments).
+	TArray<TWeakObjectPtr<UElysiumBrushComponent>> Bodies;
+	int32 TouchBeginCount = 0;
+	int32 TouchEndCount = 0;
 
 	// Unknown target/input aggregation: log once per unique (target.Input), count the rest.
 	TSet<FString> UnknownLogged;

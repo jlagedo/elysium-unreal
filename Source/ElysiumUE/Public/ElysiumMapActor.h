@@ -69,8 +69,10 @@ public:
 	int32 HullCount = 0;
 	int32 DispTriCount = 0;
 	bool bBrushCollision = false;
-	// Entity substrate: number of `.ents` records the world spawned (0 if the map has no sidecar).
+	// Entity substrate: number of `.ents` records the world spawned (0 if the map has no sidecar),
+	// and how many of them got a P1.5 brush body (convex collision / trigger overlap volume).
 	int32 EntityCount = 0;
+	int32 BrushBodyCount = 0;
 
 private:
 	UPROPERTY() TObjectPtr<USceneComponent> SceneRoot;

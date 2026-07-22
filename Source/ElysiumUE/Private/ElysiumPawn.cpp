@@ -15,6 +15,10 @@ AElysiumPawn::AElysiumPawn()
 
 	// Source player hull ~ 32u wide x 72u tall -> radius 40.6cm, half-height 91.4cm.
 	GetCapsuleComponent()->InitCapsuleSize(40.6f, 91.4f);
+	// The capsule must raise overlaps so trigger brush bodies (P1.5) see the player begin/end
+	// touch. Its Block-of-WorldDynamic is not a mutual block against a trigger's overlap response,
+	// so the player passes through and the overlap fires rather than being stopped.
+	GetCapsuleComponent()->SetGenerateOverlapEvents(true);
 
 	// Body yaws with the controller; pitch is applied to the camera only.
 	bUseControllerRotationYaw = true;

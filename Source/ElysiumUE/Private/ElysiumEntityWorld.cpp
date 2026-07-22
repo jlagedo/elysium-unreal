@@ -1,17 +1,28 @@
 #include "ElysiumEntityWorld.h"
 
+#include "ElysiumBrushComponent.h"
 #include "ElysiumClassRegistry.h"
+#include "ElysiumEditorLabels.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumScriptHost.h"
 
+#include "Components/SceneComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "HAL/IConsoleManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumWorld, Log, All);
+
+// A/B toggle for the P1.5 brush bodies (per-entity convex collision + trigger overlaps). Read at
+// Load, so it takes effect on the next map load (like elysium.BrushCollision for the world hulls).
+static TAutoConsoleVariable<int32> CVarBrushBodies(
+	TEXT("elysium.BrushBodies"),
+	1,
+	TEXT("Build per-brush-entity collision/overlap bodies at map load (1, default) or skip them (0)."),
+	ECVF_Default);
 
 namespace
 {
@@ -67,6 +78,7 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 		const FElysiumEntityDef& D = Defs.Defs[i];
 		// The handle index IS the def-array index (R3): stable, never recycled.
 		TUniquePtr<FElysiumEntity> Ent = FElysiumClassRegistry::Get().Create(D, FElysiumEntityHandle(i, Epoch));
+		Ent->World = this;   // the seam an entity uses to fire outputs (set before Spawn)
 
 		if (!D.TargetName.IsEmpty())
 		{
@@ -77,32 +89,92 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 	}
 
 	// Spawn pass — keyvalues are already applied (Construct); Spawn() is the leaf class's own
-	// wiring (no-op for base/inert records in P1.4; bodies attach in P1.5).
+	// wiring (no-op for base/inert records in P1.4). Then attach the brush body (P1.5): after
+	// Spawn() so a leaf class can have adjusted its own state first.
+	const bool bBuildBodies = CVarBrushBodies.GetValueOnGameThread() != 0;
 	for (const TUniquePtr<FElysiumEntity>& Ent : EntityList)
 	{
 		if (Ent)
 		{
 			Ent->Spawn();
+			if (bBuildBodies)
+			{
+				BuildBrushBody(*Ent);
+			}
 		}
 	}
 
-	UE_LOG(LogElysiumWorld, Log, TEXT("world '%s' live: %d entities, epoch %u"),
-		*Defs.MapName, EntityList.Num(), Epoch);
+	UE_LOG(LogElysiumWorld, Log, TEXT("world '%s' live: %d entities (%d brush bodies), epoch %u"),
+		*Defs.MapName, EntityList.Num(), Bodies.Num(), Epoch);
 }
 
-void FElysiumEntityWorld::FireMapLoadOutputs()
+void FElysiumEntityWorld::BuildBrushBody(FElysiumEntity& Ent)
 {
-	// Data-driven ignition: fire every entity's OnMapLoad output. Only logic_auto carries one,
-	// so this is logic_auto's map-load behaviour without hard-coding the classname; P1.7's
-	// logic_auto::Spawn() takes over the same FireOutput call.
-	static const FName MapLoad(TEXT("OnMapLoad"));
-	for (const TUniquePtr<FElysiumEntity>& Ent : EntityList)
+	// R1 — only brush entities get a body; point/logic entities never do. A killed entity (a
+	// class Spawn() may have self-destructed) gets nothing.
+	if (!Owner || !Ent.Def || !Ent.Def->IsBrush() || Ent.Def->Hulls.Num() == 0 || Ent.IsDead())
 	{
-		if (Ent && !Ent->IsInert())
-		{
-			FireOutput(*Ent, MapLoad, Ent->Handle);
-		}
+		return;
 	}
+	USceneComponent* Root = Owner->GetRootComponent();
+	if (!Root)
+	{
+		return;
+	}
+
+	const EElysiumBrushSolidity Sol = ElysiumBrushSolidityForClass(Ent.Def->Classname);
+
+	// Standard runtime-component recipe: NewObject → cook the setup + place → SetupAttachment →
+	// RegisterComponent (which creates the physics body from the now-valid setup, at the origin).
+	// P1.7 — a readable Outliner name (Body_<idx>_<name>_<class>); the exact canonical debug string
+	// rides along as a component tag (engine-core.md: labels mirror the debug string).
+	FName BodyName = NAME_None;
+#if WITH_EDITOR
+	const FString EntName = Ent.TargetName.IsEmpty() ? TEXT("noname") : Ent.TargetName;
+	BodyName = ElysiumEditorObjectName(FString::Printf(TEXT("Body_%d_%s_%s"),
+		Ent.Handle.Index, *EntName, *Ent.Def->Classname));
+#endif
+	UElysiumBrushComponent* Body = NewObject<UElysiumBrushComponent>(Owner, BodyName);
+	Body->InitBrush(Ent.Handle, Ent.Def->Hulls, Sol);
+	Body->SetupAttachment(Root);
+	Body->SetRelativeLocation(Ent.Def->Origin);   // hulls are entity-local; origin places them
+	Body->RegisterComponent();
+	Owner->AddInstanceComponent(Body);            // shows the body in the editor Outliner
+#if WITH_EDITOR
+	Body->ComponentTags.Add(FName(*Ent.DebugString()));
+#endif
+
+	Ent.Body = Body;
+	Bodies.Add(Body);
+
+	// Born hidden (R6) → the body starts non-solid/untouchable. Construct set bHidden without a
+	// body to gate; do it now.
+	if (Ent.IsInert())
+	{
+		Body->SetDormant(true);
+	}
+}
+
+void FElysiumEntityWorld::RouteBrushTouch(const FElysiumEntityHandle& Brush,
+	const FElysiumEntityHandle& Activator, bool bBegin)
+{
+	FElysiumEntity* E = Resolve(Brush);
+	if (!E || E->IsInert())
+	{
+		return;   // a dormant/dead brush cannot be touched (R6)
+	}
+	if (bBegin)
+	{
+		++TouchBeginCount;
+		E->OnTouchStart(Activator);
+	}
+	else
+	{
+		++TouchEndCount;
+		E->OnTouchEnd(Activator);
+	}
+	UE_LOG(LogElysiumWorld, Verbose, TEXT("(%8.3f) touch %s %s"),
+		NowSeconds(), bBegin ? TEXT("begin") : TEXT("end"), *E->DebugString());
 }
 
 // --- Tick (think-first, retail order) ---------------------------------------------------
@@ -430,6 +502,18 @@ void FElysiumEntityWorld::Teardown()
 	EventQueue.Reset();
 	NameIndex.Empty();
 	ClassIndex.Empty();
+
+	// Bodies are the world's embodiments — destroy them with the world. (The map actor also frees
+	// them when it is destroyed; this handles a world rebuild on a surviving actor, e.g. reload.)
+	for (const TWeakObjectPtr<UElysiumBrushComponent>& Body : Bodies)
+	{
+		if (UElysiumBrushComponent* B = Body.Get())
+		{
+			B->DestroyComponent();
+		}
+	}
+	Bodies.Empty();
+
 	EntityList.Empty();
 	Ring = nullptr;
 	Sinks.Empty();
@@ -499,6 +583,8 @@ static FAutoConsoleCommandWithWorldAndArgs GElysiumWorldCmd(
 			EW->Queue().Num(), EW->Queue().IsPaused() ? TEXT(" (paused)") : TEXT(""),
 			EW->RingBuffer().Num(), EW->RingBuffer().Capacity(),
 			EW->UnknownTargets(), EW->UnknownInputs());
+		UE_LOG(LogElysiumWorld, Display, TEXT("brush bodies: %d | touches: %d begin, %d end"),
+			EW->NumBrushBodies(), EW->TouchBegins(), EW->TouchEnds());
 	}));
 
 static FAutoConsoleCommandWithWorldAndArgs GElysiumWorldIoCmd(

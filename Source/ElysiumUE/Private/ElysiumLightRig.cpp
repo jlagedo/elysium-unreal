@@ -1,5 +1,7 @@
 #include "ElysiumLightRig.h"
 
+#include "ElysiumEditorLabels.h"
+
 #include "Components/DirectionalLightComponent.h"
 #include "Components/LightComponent.h"
 #include "Components/PointLightComponent.h"
@@ -162,9 +164,16 @@ int32 UElysiumLightRig::Build(const FString& LightsPath)
 		float BaseIntensity = 0.f;
 		bool bShadow = false;
 
+		// P1.7 — readable Outliner name (Light_<idx>_<kind>); auto-named in Shipping.
+		FName LightName = NAME_None;
+#if WITH_EDITOR
+		const TCHAR* Kind = Type == 2 ? TEXT("spot") : Type == 3 ? TEXT("sun") : Type == 0 ? TEXT("tex") : TEXT("point");
+		LightName = ElysiumEditorObjectName(FString::Printf(TEXT("Light_%d_%s"), LightCount, Kind));
+#endif
+
 		if (Type == 1 || Type == 0)
 		{
-			UPointLightComponent* PL = NewObject<UPointLightComponent>(Owner);
+			UPointLightComponent* PL = NewObject<UPointLightComponent>(Owner, LightName);
 			PL->SetAttenuationRadius(Reach);
 			// Non-inverse-square: gentle exponent falloff (VtMB/Godot soft look).
 			PL->bUseInverseSquaredFalloff = false;
@@ -176,7 +185,7 @@ int32 UElysiumLightRig::Build(const FString& LightsPath)
 		}
 		else if (Type == 2)
 		{
-			USpotLightComponent* SL = NewObject<USpotLightComponent>(Owner);
+			USpotLightComponent* SL = NewObject<USpotLightComponent>(Owner, LightName);
 			SL->SetAttenuationRadius(Reach);
 			SL->bUseInverseSquaredFalloff = false;
 			SL->SetLightFalloffExponent(FalloffExponent);
@@ -191,7 +200,7 @@ int32 UElysiumLightRig::Build(const FString& LightsPath)
 		}
 		else if (Type == 3)
 		{
-			UDirectionalLightComponent* DL = NewObject<UDirectionalLightComponent>(Owner);
+			UDirectionalLightComponent* DL = NewObject<UDirectionalLightComponent>(Owner, LightName);
 			BaseIntensity = FMath::Max(Mag * SunScaleLux, 0.01f);   // lux
 			DL->SetIntensity(BaseIntensity);
 			bShadow = bSunShadows;

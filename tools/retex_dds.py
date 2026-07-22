@@ -1,14 +1,16 @@
 """Emit .dds siblings for a map's exported albedo PNGs, preserving the original
 DXT blocks and mip chain from the game's .tth/.ttz textures (no re-encode).
 
-The exported tex/<flat>.png files decompress the game's DXT data to RGBA and drop
-the mip chain; engines that can sample DXT directly (Unreal loads these at runtime)
-get smaller uploads, real mips, and bit-identical texels by reading the original
-blocks instead. PNGs stay as the reference/fallback (and cover generated textures
-with no .tth source: _ke self-illum, _envmask, normal maps).
+The exported tex/<flat>.png files (world surfaces) and props/tex/<flat>.png files
+(static props) decompress the game's DXT data to RGBA and drop the mip chain; engines
+that can sample DXT directly (Unreal loads these at runtime) get smaller uploads, real
+mips, and bit-identical texels by reading the original blocks instead. PNGs stay as the
+reference/fallback (and cover generated textures with no .tth source: _ke self-illum,
+_envmask, normal maps).
 
   py retex_dds.py [map ...]      default: every exported map under tools/out
 """
+import glob
 import os
 import struct
 import sys
@@ -91,16 +93,14 @@ def albedo_pngs(mtl_path):
     return sorted(refs)
 
 
-def emit_map(idx, flat, dropped, map_name):
-    map_dir = os.path.join(OUT, map_name)
-    mtl = os.path.join(map_dir, map_name + ".mtl")
-    if not os.path.isfile(mtl):
-        print(f"  {map_name}: no .mtl, skipped")
-        return
+def emit_refs(idx, flat, dropped, refs, tex_dir):
+    """Emit a .dds sibling into tex_dir for each 'tex/<stem>.png' albedo ref,
+    reading the original DXT blocks from that stem's .tth/.ttz. Returns
+    (done, skipped_non_dxt, missing)."""
     done = skipped = missing = 0
-    for rel in albedo_pngs(mtl):
+    for rel in refs:
         stem = os.path.splitext(os.path.basename(rel))[0]
-        dds_path = os.path.join(map_dir, "tex", stem + ".dds")
+        dds_path = os.path.join(tex_dir, stem + ".dds")
         if os.path.isfile(dds_path):
             done += 1
             continue
@@ -122,7 +122,34 @@ def emit_map(idx, flat, dropped, map_name):
         with open(dds_path, "wb") as f:
             f.write(make_dds_mipchain(mips, mips[0][1], mips[0][2], fourcc))
         done += 1
-    print(f"  {map_name}: {done} dds, {skipped} non-dxt, {missing} unsourced")
+    return done, skipped, missing
+
+
+def emit_dir(idx, flat, dropped, map_dir, base):
+    """Emit DDS siblings for one exported map directory: world <base>.mtl -> tex/
+    and every props/*.mtl -> props/tex/. Callable from the exporter (which passes
+    the install index it already built) or from this module's map-name CLI."""
+    mtl = os.path.join(map_dir, base + ".mtl")
+    if not os.path.isfile(mtl):
+        print(f"  {base}: no .mtl, skipped")
+        return
+
+    done, skipped, missing = emit_refs(
+        idx, flat, dropped, albedo_pngs(mtl), os.path.join(map_dir, "tex"))
+    print(f"  {base}: {done} dds, {skipped} non-dxt, {missing} unsourced")
+
+    # Props share one props/tex/ across their per-model .mtl files (many models
+    # reference the same texture, so the refs are deduped before emitting).
+    prop_mtls = sorted(glob.glob(os.path.join(map_dir, "props", "*.mtl")))
+    if prop_mtls:
+        refs = sorted({r for m in prop_mtls for r in albedo_pngs(m)})
+        pdone, pskipped, pmissing = emit_refs(
+            idx, flat, dropped, refs, os.path.join(map_dir, "props", "tex"))
+        print(f"    props: {pdone} dds, {pskipped} non-dxt, {pmissing} unsourced")
+
+
+def emit_map(idx, flat, dropped, map_name):
+    emit_dir(idx, flat, dropped, os.path.join(OUT, map_name), map_name)
 
 
 def main():

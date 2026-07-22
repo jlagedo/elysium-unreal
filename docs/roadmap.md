@@ -181,12 +181,53 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
   Verified on `sp_tutorial_1`: 1868 entities live, OnMapLoad chains fire through the real queue at
   their delays and deliver to resolved targets (unregistered classes hit `[no input]` as expected).
   *Deps:* 1.2, 1.3.
-- [ ] **1.5 Brush bodies** — `UElysiumBrushComponent` per brush entity (convex `UBodySetup`
-  from def hulls, handle attached, overlap routing, dormancy-gated). *Deps:* 1.4.
-- [ ] **1.6 Starter classes** — `logic_auto`, `logic_relay`, `trigger_multiple`/`trigger_once`.
-  *Deps:* 1.4, 1.5.
-- [ ] **1.7 Labels & debug strings** — `#if WITH_EDITOR` labels/folders on all spawn paths
-  (bodies + existing map/light/prop actors); canonical `#<idx> <name>(<class>)` in every log.
+- [x] **1.5 Brush bodies** — `UElysiumBrushComponent` (`UPrimitiveComponent`, collision-only,
+  no scene proxy) per brush entity: a convex `UBodySetup` cooked from the def's entity-local
+  hulls (`CTF_UseSimpleAsComplex`, one `FKConvexElem` per hull), placed at the def origin,
+  carrying its owning `FElysiumEntityHandle`. Runtime solidity is per-classname
+  (`ElysiumBrushSolidityForClass`, since the export's `contents`/`blocks_player` don't
+  discriminate): `trigger_*` → `OverlapAllDynamic` overlap volume, `func_illusionary` →
+  `NoCollision`, everything else → `BlockAll` solid blocker. Overlap routing: begin/end overlap
+  → the component (via the owning `AElysiumMapActor`, so no stale-world pointer) →
+  `FElysiumEntityWorld::RouteBrushTouch` → the resolved brush entity's `OnTouchStart`/`OnTouchEnd`
+  (base no-ops; P1.6 triggers override to fire `OnStartTouch`/`OnEndTouch`). Dormancy-gated (R6):
+  the base `FElysiumEntity::OnDormancyChanged` drops the body's collision when inert (born dormant
+  when `start_hidden`) and restores the built solidity on unhide. Bodies built in the world's spawn
+  pass (after `Spawn()`), owned by the map actor, destroyed on world teardown; the entity gains a
+  `World` back-pointer + `FireOutput` seam (set at Load) so leaf classes can fire outputs, and the
+  pawn capsule raises overlap events. `elysium.BrushBodies` cvar A/Bs body building; `elysium.world`
+  reports body + touch counts; the HUD collision line shows `ents/bodies`. Verified on
+  `sp_tutorial_1`: 1868 entities → 185 brush bodies, no cook stall. *Deps:* 1.4.
+- [x] **1.6 Starter classes** — the four leaf classes that make the substrate fire visibly
+  (`Source/ElysiumUE/Private/ElysiumStarterClasses.cpp`, plain-C++ `FElysiumEntity` subclasses via
+  module-static registrars). **`logic_auto`** owns map-load ignition: `Spawn()` schedules a one-shot
+  think at t=0, `Think()` fires `OnMapLoad` once on the first world tick (superseding the generic
+  `FireMapLoadOutputs`, now removed). **`logic_relay`** (the indirection layer) takes
+  `Trigger`→re-fire `OnTrigger` (activator propagated), `Enable`/`Disable`/`Toggle` gate it, field
+  `StartDisabled`. **`trigger_multiple`/`trigger_once`** derive from a shared **`CBaseTrigger`** chain
+  node (never in the data — pure registry base) carrying `Enable`/`Disable`/`Toggle` + `StartDisabled`/
+  `wait` fields; `OnTouchStart`/`OnTouchEnd` overrides translate the P1.5 brush-body overlap into
+  `OnStartTouch`/`OnEndTouch` and (`wait`-debounced) `OnTrigger`; the filter reduces to the
+  `ALLOW_CLIENTS` (0x1) spawnflag since the only P1.6 toucher is the player (43/44 tutorial
+  `trigger_multiple` + all `trigger_once` carry it; the lone `0x8` physics-only trigger correctly
+  ignores the player); `trigger_once` `Kill()`s itself after the first successful touch.
+  Subclass-field marshalling is a local `AddSubclassField<TClass>` (static_cast accessor; the base
+  `Field()` only takes `FElysiumEntity` members). Stock-Source remove-on-fire / fast-retrigger
+  spawnflags are **not** modelled (unconfirmed for VtMB, which diverges on buttons; per-output `times`
+  already caps re-fires). Verified headless on `sp_tutorial_1`: all 5 `logic_auto` fire `OnMapLoad`
+  once through the real queue at their delays; injecting `Trigger→elev_up` cascades relay→relay
+  (`elev_up`→`logic_closealldoors`→6 door `Close()`); `trigger_multiple` chain-resolves 6 inputs /
+  24 fields; no loop-guard trips. *Deps:* 1.4, 1.5.
+- [x] **1.7 Labels & debug strings** — editor-only (`#if WITH_EDITOR`) World Outliner affordance
+  (debug-tooling.md Layer 0) on every runtime spawn path, via the shared `ElysiumEditorObjectName`
+  helper (`ElysiumEditorLabels.h`, FName-safe fold; compiled out of Shipping so it keeps
+  auto-names). `AElysiumMapActor` labels itself `Map:<name>` + drops into an `Elysium` Outliner
+  folder; brush bodies name `Body_<idx>_<name>_<class>` and carry the exact canonical debug string
+  as a `ComponentTag`; light-rig lights name `Light_<idx>_<point|spot|sun|tex>`; prop ISMs name
+  `Props_<model>_<solid|nonsolid>`. Call sites gate the whole label build behind `#if WITH_EDITOR`,
+  so a Development editor build reads as a live scene browser (F8 Eject, Details inspection) at zero
+  Shipping cost. The canonical `#<idx> <name>(<class>)` string (`FElysiumEntity::DebugString`)
+  already threads every I/O log line (the sinks + `RouteBrushTouch`), so logging needed no change.
   *Deps:* 1.5.
 
 **Slice acceptance:** loading `sp_tutorial_1` fires the `logic_auto` chains through real
@@ -569,6 +610,20 @@ cross-check `recovered/dice-system.md` alongside the running-game golden test.
 
 ## Decision log (append-only)
 
+- **2026-07-22** — 1.6 landed (starter classes). **`logic_auto` owns map-load ignition** via a
+  one-shot think (first world tick), replacing the generic `FElysiumEntityWorld::FireMapLoadOutputs`
+  bootstrap (removed) — matches retail (logic_auto fires on the first server think, after every
+  target has spawned) and exercises the think path. **`CBaseTrigger` is a registry-only chain node**
+  (no entity carries that classname) so `trigger_multiple`/`trigger_once` share Enable/Disable/Toggle
+  + StartDisabled/wait through one base; this is the pattern the P4.5 trigger family extends.
+  **Trigger activation filter reduces to the `ALLOW_CLIENTS` (0x1) bit** in P1.6 because the only
+  toucher is the player and its activator is unresolved (the pawn is not an entity until P4);
+  empirically the tutorial's triggers carry 0x1 (43/44 `trigger_multiple`, all `trigger_once`), and
+  the one `0x8` physics-only trigger *should* ignore the player — so the reduction is faithful, not a
+  shortcut. **Remove-on-fire / fast-retrigger spawnflags left unmodelled** for `logic_relay`/
+  `logic_auto`: those bits are unconfirmed for VtMB (RE1 only covered button + trigger flags, and
+  buttons diverge from stock), and firing `Kill()` on a wrong bit is a worse failure than a spurious
+  re-fire, which per-output `times` already bounds. Revisit if a tutorial relay over-fires.
 - **2026-07-22** — 1.1 landed. Currency types are plain C++ structs (R1, no reflection):
   `FElysiumVariant` carries the seven runtime categories with total, never-throwing
   coercions (a Void variant is the falsy / error-to-false case). `FElysiumEntityHandle` is

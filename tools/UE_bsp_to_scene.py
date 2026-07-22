@@ -20,6 +20,7 @@ import numpy as np
 import install, vmt
 import bsp as B
 import mdl as MDL
+import retex_dds
 from tex_to_png import decode as decode_texture, decode_cubemap
 from bsp import (read_lump, source_to_unreal, source_dir_to_unreal, source_angles_to_unreal_quat,
                  strings_from_blob,
@@ -1233,6 +1234,13 @@ def main(bsp_path, out_dir):
     print(f"wrote {obj_path}")
     print(f"      {mtl_path}")
     print(f"      {os.path.join(out_dir,'tex')}/  ({decoded} PNGs)")
+
+    # DDS siblings (original DXT blocks + mips) for every albedo the runtime prefers
+    # over its PNG - world tex/ and props/tex/. Reuses the install index already built
+    # above. PNG stays the fallback: a texture with no DXT source (generated _ke maps,
+    # BGR888) gets none and the runtime's "failed to read .dds" log flags it unoptimized.
+    flat, dropped = retex_dds.flat_index(idx)
+    retex_dds.emit_dir(idx, flat, dropped, out_dir, base)
 
 # The maps we actively test against. `python bsp_to_scene.py --all` re-exports the
 # whole set (use it after any pipeline change so no scene is left stale); keep it in

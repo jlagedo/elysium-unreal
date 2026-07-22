@@ -1,6 +1,7 @@
 #include "ElysiumMapActor.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumEditorLabels.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumEnvironment.h"
@@ -246,6 +247,13 @@ void AElysiumMapActor::LoadMap()
 
 	LoadedMap = MapName;
 
+	// P1.7 — label the map actor and drop it in an Elysium Outliner folder, so the PIE World
+	// Outliner reads as a live scene browser (debug-tooling.md Layer 0).
+#if WITH_EDITOR
+	SetActorLabel(FString::Printf(TEXT("Map:%s"), *MapName));
+	SetFolderPath(TEXT("Elysium"));
+#endif
+
 	// Prefer real brush collision (.hulls convex + .dispcol trimesh) — it carries the invisible
 	// clip volumes and matches retail walk behaviour. When it loads, the world render mesh is
 	// built without collision. Falls back to the render-mesh trimesh when the sidecar is missing
@@ -290,8 +298,9 @@ void AElysiumMapActor::LoadMap()
 		bSpawnPending = true;
 	}
 
-	// Track-B entity substrate (P1.4): parse `.ents`, build the live world, run the spawn pass,
-	// and ignite the map-load outputs. The world ticks from AElysiumMapActor::Tick.
+	// Track-B entity substrate (P1.4): parse `.ents`, build the live world, run the spawn pass.
+	// Map-load ignition (OnMapLoad) is the logic_auto class's own first-think (P1.6), not a
+	// separate pass. The world ticks from AElysiumMapActor::Tick.
 	if (UGameInstance* GI = GetGameInstance())
 	{
 		if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
@@ -302,7 +311,7 @@ void AElysiumMapActor::LoadMap()
 				EntityCount = EntDefs.Num();
 				EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState);
 				EntityWorld->Load(MoveTemp(EntDefs));
-				EntityWorld->FireMapLoadOutputs();
+				BrushBodyCount = EntityWorld->NumBrushBodies();
 			}
 			else
 			{
@@ -547,7 +556,12 @@ void AElysiumMapActor::LoadProps()
 			UInstancedStaticMeshComponent*& ISM = Buckets[I.bSolid ? 1 : 0];
 			if (!ISM)
 			{
-				ISM = NewObject<UInstancedStaticMeshComponent>(this);
+				FName IsmName = NAME_None;
+#if WITH_EDITOR
+				IsmName = ElysiumEditorObjectName(FString::Printf(TEXT("Props_%s_%s"),
+					*Entry.Key, I.bSolid ? TEXT("solid") : TEXT("nonsolid")));
+#endif
+				ISM = NewObject<UInstancedStaticMeshComponent>(this, IsmName);
 				ISM->SetupAttachment(SceneRoot);
 				ISM->SetMobility(EComponentMobility::Movable);
 				ISM->SetStaticMesh(Mesh);
@@ -649,15 +663,16 @@ void AElysiumMapActor::ApplyEnvironment()
 {
 	// Colour grade (.cube): a per-map 3D LUT into the unbound post-process. Independent of
 	// the rest of .env, so it applies even when a map has no sky/fog.
-	if (UTexture2D* Lut = ElysiumEnvironment::BuildColorGradeLUT(FElysiumContentPaths::MapGrade(MapName)))
-	{
-		FPostProcessSettings& PP = PostProcess->Settings;
-		PP.bOverride_ColorGradingLUT = true;
-		PP.ColorGradingLUT = Lut;
-		PP.bOverride_ColorGradingIntensity = true;
-		PP.ColorGradingIntensity = 1.f;
-		UE_LOG(LogElysium, Log, TEXT("colour grade LUT applied"));
-	}
+	// TEMP: disabled for a test — see the raw (un-graded) scene colour.
+	// if (UTexture2D* Lut = ElysiumEnvironment::BuildColorGradeLUT(FElysiumContentPaths::MapGrade(MapName)))
+	// {
+	// 	FPostProcessSettings& PP = PostProcess->Settings;
+	// 	PP.bOverride_ColorGradingLUT = true;
+	// 	PP.ColorGradingLUT = Lut;
+	// 	PP.bOverride_ColorGradingIntensity = true;
+	// 	PP.ColorGradingIntensity = 1.f;
+	// 	UE_LOG(LogElysium, Log, TEXT("colour grade LUT applied"));
+	// }
 
 	FElysiumEnvDef Env;
 	if (!FElysiumEnvDef::Parse(FElysiumContentPaths::MapEnv(MapName), Env))

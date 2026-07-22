@@ -147,9 +147,10 @@ void AElysiumHUD::DrawHUD()
 		Row(FString::Printf(TEXT("▸ %s    %d surf · %d sky · %d lights · %d props/%d models"),
 			*MapActor->LoadedMap, MapActor->WorldSurfaceCount, MapActor->SkySurfaceCount,
 			MapActor->WorldLightCount, MapActor->PropInstanceCount, MapActor->PropModelCount), ColHeader);
-		Row(FString::Printf(TEXT("  collision: %s · %d hulls · %d disp tris"),
+		Row(FString::Printf(TEXT("  collision: %s · %d hulls · %d disp tris · %d ents/%d bodies"),
 			MapActor->bBrushCollision ? TEXT("brush") : TEXT("trimesh"),
-			MapActor->HullCount, MapActor->DispTriCount), ColHeader);
+			MapActor->HullCount, MapActor->DispTriCount,
+			MapActor->EntityCount, MapActor->BrushBodyCount), ColHeader);
 	}
 	else
 	{
