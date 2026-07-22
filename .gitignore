@@ -69,6 +69,10 @@ tools/re/VtMBFontEditor/
 Saved/StagedBuilds/
 Saved/Cooked/
 
+# Valve Source SDK sources kept locally as an entity/I-O reverse-engineering
+# reference (proprietary, Copyright Valve — never ours to ship or commit).
+/sdk/
+
 # OS files
 .DS_Store
 Thumbs.db
