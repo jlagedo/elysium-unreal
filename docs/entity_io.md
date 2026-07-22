@@ -179,9 +179,23 @@ volume, which is what arms the icon. `soundgroup` names the sound set
 (`standard_door` 1028, `small_metal_switch` 141, `elevator_button` 100).
 
 `func_button` spawnflags seen: 1056, 1057, 1025, 8193, 9217, 256, 1024, 33.
-Bit *names* are not settled — VtMB diverges from modern Source elsewhere
-(`fieldtype_t`, `dface_t`), so do not assume stock `SF_BUTTON_*` values without
-checking the decompile.
+`m_spawnflags` is a `FIELD_INTEGER` at entity offset **`0x204`** (confirmed in the
+`CBaseEntity` datamap builder `FUN_100a22f0`, `vampire.dll`). `CBaseButton::Spawn`
+(`FUN_100c8d60`) reads it and wires up the button:
+
+| Bit | Spawn behaviour |
+| --- | --- |
+| `0x1` | **DONTMOVE** — pressed position is forced equal to the start position (matches stock `SF_BUTTON_DONTMOVE`) |
+| `0x40` | spawn-time timed/animate setup (schedules a think at `spawn + Δ`) |
+| `0x100` | assigns the **use/activate** handler (`m_pfn` at `+0x1ec` ← `0x10002cd4`) + one vtable call (`+0x37c`) |
+| `0x400` | assigns the **touch** handler (`m_pfn` at `+0x1f0` ← `0x100111da`) — touch-activates |
+| `0x800` | **starts locked** — sets the locked byte `+0x5c4` (the one `GetUseIcon` reads to pick `locked_icon`) |
+| `0x1000` | sets a secondary state byte `+0x5c5` |
+
+Bits **`0x20`** (in 33/1056/1057) and **`0x2000`** (in 8193/9217) are **not** tested in
+`Spawn` — they are handled in the use/touch handlers or the base class (still to decompile).
+VtMB diverges from modern Source elsewhere (`fieldtype_t`, `dface_t`), so the values above are
+read from this build, not assumed from stock `SF_BUTTON_*`.
 
 ## use_icon enum
 

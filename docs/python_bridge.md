@@ -278,21 +278,29 @@ reproduces error-to-false rather than repairing the snippets. The Unofficial Pat
 
 ## `G` — the global flag bag
 
-`G` is engine-owned (a C type with `ClearAll` and `keys`), injected into `__main__`, and
-**never constructed in Python**. It is one flat, int-valued namespace: **345 distinct
-flags** referenced by retail scripts (549 with the patch), **~900** by dialogue.
+`G` is engine-owned (a C type **`PyDataManager`** with `ClearAll`/`keys`/`has_key`), injected
+into `__main__`, and **never constructed in Python**. It is one flat, int-valued namespace:
+**345 distinct flags** referenced by retail scripts (549 with the patch), **~900** by dialogue.
 
 **208 of the 345 flags the scripts read are never assigned in Python** — dialogue writes
 them. Level scripts and dialogue are not separable systems.
 
 Shapes are overwhelmingly small ints (`G.x = G.x + 1`); the only exceptions across the
 whole retail corpus are 3 lists, 1 dict (`G.morgue`, only `[name]=1` / `has_key`), and 3
-strings. Scripts never initialize `G.Story_State`, so **`G` must return a default (`0`)
-for unset attributes rather than raise** — assumed, not yet confirmed in Ghidra, and
-load-bearing for story branching.
+strings.
+
+**Default-on-miss = `0`, confirmed.** `G` is backed by two engine dict globals — the flag
+dict `0x1072b370` and the `morgue` dict `0x1072b374`. Its `tp_getattr` (`0x1019b3d0`) resolves
+a name in order: `InitMode` → an int field on the object; `morgue` → the morgue dict;
+`Py_FindMethod` against the method table `0x1058f5d0` → a bound method; then
+`PyDict_GetItemString(flagdict, name)` → the stored value; **else `PyErr_Clear()` then
+`PyInt_FromLong(0)`** — so `G.Story_State` on an unset flag returns integer `0`, never raises.
+`tp_setattr` (`0x1019b570`) mirrors it: `InitMode` sets the int, `morgue` and the method names
+are read-only, everything else is `PyDict_SetItemString` (a `None`/NULL value deletes the key).
 
 `G` is the save unit: `vampire.dll` carries `CPython_SaveRestoreBlockHandler` and
-`CPyObjStrSaveRestoreDataOps`, and the game ships `pickle.py` + `copy_reg.py` for it.
+`CPyObjStrSaveRestoreDataOps`, pickles the flag + morgue dicts (`FUN_1019b130`, `cPickle`), and
+the game ships `pickle.py` + `copy_reg.py` for it.
 
 ## The two languages
 
@@ -397,8 +405,4 @@ Useful IAT slots in `vampire.dll`: `Py_InitModule4` `0x109f370c`, `Py_FindMethod
 
 ## Open
 
-- **`G` default-on-miss** — assumed `0`; not yet confirmed in Ghidra. Silently changes story
-  branching. Seeds: the G console commands `FUN_1019aad0` (`gclearall`) / `FUN_1019ab40`
-  (`CC_GClearAll`) reach the G global object — decompile its type's `tp_getattr` and confirm the
-  miss path returns `PyInt_FromLong(0)`.
 - **The `read`/`readline` table** (`0x1058f620`) — an unidentified file-like type.
