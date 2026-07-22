@@ -1,0 +1,41 @@
+# Unreal Engine generated/intermediate folders
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+.vs/
+
+# Per-user files
+*.opensdf
+*.sdf
+*.sln.docstates
+*.VC.db
+*.VC.opendb
+
+# Visual Studio / Rider project files (generated)
+.vsconfig
+*.sln
+*.slnx
+*.suo
+*.xcodeproj
+*.xcworkspace
+
+# JetBrains Rider
+.idea/
+
+# Compiled source
+*.pyc
+
+# Precompiled headers / object files
+*.pch
+*.obj
+*.o
+
+# Packaging / cook output
+Saved/StagedBuilds/
+Saved/Cooked/
+
+# OS files
+.DS_Store
+Thumbs.db
