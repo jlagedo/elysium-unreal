@@ -11,7 +11,9 @@ THIRD_PARTY_INCLUDES_START
 #include "dr_mp3.h"
 THIRD_PARTY_INCLUDES_END
 
-DEFINE_LOG_CATEGORY_STATIC(LogElysiumAudio, Log, All);
+// File-unique static category (the audio subsystem's TU defines its own LogElysiumAudio; a shared
+// unity blob can't hold two DEFINE_LOG_CATEGORY_STATIC of the same name). This is the decode layer.
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumSoundCache, Log, All);
 
 // The audio engine treats a wave whose Duration is >= this sentinel as endlessly looping. Mirrors
 // AudioMixerCore's INDEFINITELY_LOOPING_DURATION (10000.0f) without pulling in that module's header.
@@ -174,11 +176,11 @@ const FElysiumSoundCache::FDecoded* FElysiumSoundCache::LoadSoundDecoded(const F
 
 	if (!Info.Error.IsEmpty())
 	{
-		UE_LOG(LogElysiumAudio, Warning, TEXT("Sound decode failed: %s -- %s"), *Path, *Info.Error);
+		UE_LOG(LogElysiumSoundCache, Warning, TEXT("Sound decode failed: %s -- %s"), *Path, *Info.Error);
 	}
 	else
 	{
-		UE_LOG(LogElysiumAudio, Verbose, TEXT("Decoded %s: %s %dch %dHz %lld frames (%.2f ms)"),
+		UE_LOG(LogElysiumSoundCache, Verbose, TEXT("Decoded %s: %s %dch %dHz %lld frames (%.2f ms)"),
 			*Path, *Info.FormatName(), Info.Channels, Info.SampleRate, Info.FrameCount, Info.DecodeMilliseconds);
 	}
 	return CacheAndReturn();

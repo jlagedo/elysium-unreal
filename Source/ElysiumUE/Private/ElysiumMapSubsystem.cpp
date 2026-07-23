@@ -23,7 +23,8 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	// Engine-console mirrors of the dev-console commands, handy for -ExecCmds automation.
 	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
 		TEXT("elysium.map"),
-		TEXT("elysium.map <name>|next — travel to an exported VtMB map"),
+		TEXT("elysium.map <name>|next [landmark] — travel to an exported VtMB map (optional landmark = "
+			"spawn at that info_landmark instead of info_player_start; the P4.6 direct-entry path)"),
 		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
 		{
 			if (Args.Num() == 0)
@@ -32,7 +33,8 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 				return;
 			}
 			const FString Target = (Args[0] == TEXT("next")) ? NextMapName() : Args[0];
-			Travel(Target);
+			const FString Landmark = (Args.Num() > 1) ? Args[1] : FString();
+			Travel(Target, Landmark);
 		}),
 		ECVF_Cheat));
 

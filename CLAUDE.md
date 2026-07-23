@@ -251,9 +251,21 @@ clip single-node, driven by `elysium.npc.load`/`clear`/`list` and the Cog **`Ely
 self-describing, so glTFRuntime's default config (`SceneScale 100`, `TransformBaseType::Default`,
 `bAllowExternalFiles`) does the glTF→Unreal basis/scale change — **no `UE_` pre-conversion** (that rule is
 for dumb containers, not a self-describing one the loader reorients). `export_all.py --npc` regenerates the
-test glb (`gangmember_male_2`, 69 bones). Still planned: elevators + keyframe movers, Source movement,
-the rest of the master-material set, the real `vampire` C bindings + level-script auto-load (9.3), menu,
-dialogue — see `docs/rebuild-strategy.md`. Only `sp_tutorial_1` is exported today.
+test glb (`gangmember_male_2`, 69 bones). The **P4.6 landmark transition** also runs: `trigger_changelevel`
+(a `CBaseTrigger` leaf with `map`/`landmark` keyfields, `SF_CHANGELEVEL_NOTOUCH 0x2` decode, `OnChangeLevel`)
+captures the player's offset from the **source** `info_landmark` and requests a deferred cross-map travel;
+`UElysiumMapSubsystem::RequestLandmarkTravel` runs it on a next-tick timer (Travel destroys the entity world
+mid-touch, so it can't run inline), and `AElysiumMapActor::ResolveLandmarkSpawn` seats the player at
+`dest_landmark.Origin + offset` (translation-only, view yaw preserved), fires the dest landmark's
+`OnEnterMapHere`, and falls back to `info_player_start` if the landmark is missing. `info_landmark` is a
+first-class leaf; the scripted `ChangeMap(delay, landmark, trigger)` binding (`ElysiumExpr.cpp`) enqueues the
+named trigger's `ChangeLevel` input; `elysium.map <map> [landmark]` gains a direct/console landmark entry
+(offset zero, lifted onto the landmark, facing its angles). A **Transitions** section in the `Elysium.Maps`
+Cog window boards it (per-changelevel "Change now", landmarks + origins, pending-travel banner, "Entered via").
+Still planned: elevators + keyframe movers, Source movement, the rest of the master-material set, the real
+`vampire` C bindings + level-script auto-load (9.3), menu, dialogue — see `docs/rebuild-strategy.md`.
+`sp_tutorial_1` is the canonical vertical slice; `sm_pawnshop_1` (the tutorial's `newgame` landmark target)
+and several other maps are also exported, so cross-map landmark travel is exercisable end to end.
 
 ## Repository facts
 

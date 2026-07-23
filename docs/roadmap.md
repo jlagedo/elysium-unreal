@@ -495,9 +495,33 @@ M1 leftovers that live in this lane.
   screen-fade the HUD is drawing. Deferred as unbuilt-system stubs (left inert records):
   `trigger_stealth_mod`, `trigger_inventory_check`, `trigger_environmental_audio` (need stealth /
   inventory / RoomDSP). **RE1** (trigger spawnflag filters) already `[x]`. *Deps:* 1.6.
-- [ ] **4.6 `trigger_changelevel` + landmark travel** — `Travel(map, landmark)` finally uses
-  the landmark: new pos = dest landmark + (player − src landmark); `point_teleport` and
-  scripted `ChangeNow` ride the same paths. *Deps:* 1.6, 0.3.
+- [x] **4.6 `trigger_changelevel` + landmark travel** — cross-map travel through a shared
+  `info_landmark`, translation-only (level_transitions.md path 2). **`trigger_changelevel`**
+  (`ElysiumStarterClasses.cpp`, a `CBaseTrigger` leaf grounded in the decompiled `CChangeLevel`
+  `FUN_101c71f0`/TouchChangeLevel `FUN_101c7890`/FindLandmark `FUN_101c7690`) carries `map` +
+  `landmark` keyfields; a player touch (unless `SF_CHANGELEVEL_NOTOUCH 0x2` — the scripted-only bit
+  the tutorial's changelevels carry) fires `OnChangeLevel` (the field-5 Python exit hooks, e.g.
+  `werewolfBloodHavenExit()`), captures the player's offset from the **source** `info_landmark` +
+  their view yaw, and requests a deferred landmark travel. It drops `CBaseTrigger`'s ALLOW_CLIENTS
+  (0x1) gate — a changelevel's own Touch fires for the player directly. **`info_landmark`** is now a
+  first-class leaf (inspectable; fires `OnEnterMapHere` when entered here). Travel can't run inline
+  (it destroys the entity world mid-touch + force-GCs), so `UElysiumMapSubsystem::RequestLandmarkTravel`
+  queues it and runs it on a **next-tick timer** (`SetTimerForNextTick`); the fresh map's
+  `AElysiumMapActor::ResolveLandmarkSpawn` seats the player at `dest_landmark.Origin + offset` (view yaw
+  preserved), fires the dest landmark's `OnEnterMapHere`, and falls back to `info_player_start` if the
+  landmark is missing. The **scripted path** is real: `ChangeMap(delay, landmark, trigger)` (was a 5.3
+  stub) enqueues the named trigger's `ChangeLevel` input through the event queue (`ElysiumExpr.cpp`); the
+  same input is the console/debug force-fire. `point_teleport` already shares the player-placement seam
+  (`GetPlayerPawn`). `elysium.map <map> [landmark]` gains an optional landmark for a direct/console entry
+  (offset zero, lifted onto the landmark, facing its angles). **Debug:** a **Transitions** section in the
+  `Elysium.Maps` Cog window (each changelevel → dest @ landmark with a "Change now" fire button, the
+  landmarks + origins, a pending-travel banner, "Entered via"), `GetDebugState` for both classes in the
+  Inspector, and the transition I/O in the Event Queue window. **Verified headless:** firing
+  `trig_leave_tutorial_short.ChangeLevel` on `sp_tutorial_1` queued the travel (offset from the source
+  `newgame`), the next-tick swap loaded `sm_pawnshop_1` and placed the player at `dest_newgame + offset`
+  (`-4945,25212,873`) with `newgame(info_landmark) -> Radio2.Deactivate()` firing; the direct entry
+  `elysium.map sm_pawnshop_1 newgame` seated the player at the landmark `(-5003.8, 6568.4, 388.6)+100`
+  lift and released on ground. *Deps:* 1.6, 0.3.
 - [ ] **4.7 Source movement component** *(was M1.1; parallel-capable)* — port `CGameMovement`
   friction/accel/airaccel/StepMove into a `UCharacterMovementComponent` override
   (`source_movement.md`, Godot `SourceMovement.cs`). *Deps:* none.

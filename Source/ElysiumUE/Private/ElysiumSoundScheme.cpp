@@ -46,7 +46,7 @@ static TAutoConsoleVariable<float> CVarSchemeRandomBase(
 
 namespace
 {
-	constexpr float ElysiumSourceInchToCm = 2.54f;
+	constexpr float SchemeInchToCm = 2.54f;
 
 	// -------- Minimal Source KeyValues parser (schemes are the .res/.vmt grammar) --------
 	// Quoted or bare tokens; `//` line comments (outside quotes); `{ }` nest. Keys fold to lower
@@ -395,8 +395,8 @@ void FElysiumSoundSchemeManager::TickRandom(UElysiumAudioSubsystem* Audio, const
 		if (Active.RandomVoices.Num() < Cap)
 		{
 			// Polar placement around the anchor (Source units → cm). Angle arc wraps when Max < Min.
-			const float Dist = FMath::FRandRange(R.DistMin, R.DistMax) * ElysiumSourceInchToCm;
-			const float Height = FMath::FRandRange(R.HeightMin, R.HeightMax) * ElysiumSourceInchToCm;
+			const float Dist = FMath::FRandRange(R.DistMin, R.DistMax) * SchemeInchToCm;
+			const float Height = FMath::FRandRange(R.HeightMin, R.HeightMax) * SchemeInchToCm;
 			float AMin = R.AngleMin, AMax = R.AngleMax;
 			if (AMax < AMin) { AMax += 360.f; }
 			const float Ang = FMath::DegreesToRadians(FMath::FRandRange(AMin, AMax));
@@ -407,7 +407,7 @@ void FElysiumSoundSchemeManager::TickRandom(UElysiumAudioSubsystem* Audio, const
 			P.Pitch = FMath::FRandRange((float)R.PitchMin, (float)R.PitchMax) / 100.f;
 			P.bLooping = false;
 			P.b3D = true;
-			P.AttenuationRadiusCm = R.AudibleRadius * ElysiumSourceInchToCm;
+			P.AttenuationRadiusCm = R.AudibleRadius * SchemeInchToCm;
 			P.Location = Loc;
 			const FElysiumAudioVoiceHandle H = Audio->PlayVoice(R.Filename, P);
 			if (H.IsValid())

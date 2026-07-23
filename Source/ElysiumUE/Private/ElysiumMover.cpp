@@ -32,7 +32,7 @@ namespace
 {
 	// Source keyvalues (speed, lip, distance-as-inches) are raw Source inches; the exporter emits
 	// geometry in cm (the UE_ convention). Linear travel must convert; angular (degrees) does not.
-	constexpr float ElysiumSourceInchToCm = 2.54f;
+	constexpr float MoverInchToCm = 2.54f;
 
 	// Door spawnflag bits (B.5 — decompiled, per-bit confirmed against CBaseDoor::Spawn FUN_100ef260 /
 	// CBaseDoor::Use FUN_100efc90). Every value observed across the exported maps decodes from these.
@@ -737,14 +737,14 @@ protected:
 		}
 		const FVector Size = HullLocalBounds(Def).GetSize();   // full width in cm
 		const double Span = FMath::Abs(FVector::DotProduct(Size, Dir.GetAbs()));
-		const double Travel = FMath::Max(0.0, Span - Lip * ElysiumSourceInchToCm);
+		const double Travel = FMath::Max(0.0, Span - Lip * MoverInchToCm);
 
 		OutOpenLoc = ClosedLoc + Dir * Travel;
 		OutOpenRot = ClosedRot;   // a slide does not rotate
 	}
 
-	virtual void IssueMoveToOpen() override   { LinearMove(OpenLoc,   Speed * ElysiumSourceInchToCm); }   // Speed = in/s
-	virtual void IssueMoveToClosed() override { LinearMove(ClosedLoc, Speed * ElysiumSourceInchToCm); }
+	virtual void IssueMoveToOpen() override   { LinearMove(OpenLoc,   Speed * MoverInchToCm); }   // Speed = in/s
+	virtual void IssueMoveToClosed() override { LinearMove(ClosedLoc, Speed * MoverInchToCm); }
 };
 
 // ============================================================================================
@@ -925,7 +925,7 @@ private:
 		else
 		{
 			ButtonState = EState::Pressing;
-			LinearMove(PressedLoc, Speed * ElysiumSourceInchToCm);   // MoveDone -> TriggerAndWait
+			LinearMove(PressedLoc, Speed * MoverInchToCm);   // MoveDone -> TriggerAndWait
 		}
 	}
 
@@ -958,7 +958,7 @@ private:
 		else
 		{
 			ButtonState = EState::Returning;
-			LinearMove(RestLoc, Speed * ElysiumSourceInchToCm);   // MoveDone -> ButtonBackHome
+			LinearMove(RestLoc, Speed * MoverInchToCm);   // MoveDone -> ButtonBackHome
 		}
 	}
 
@@ -993,7 +993,7 @@ private:
 		// good enough for the axis-aligned press this approximates until content exercises it.
 		const FVector Ext = Body->Bounds.BoxExtent;
 		const double Depth = 2.0 * FMath::Abs(FVector::DotProduct(Ext, Dir.GetAbs()));
-		const double Travel = FMath::Max(0.0, Depth - Lip * ElysiumSourceInchToCm);
+		const double Travel = FMath::Max(0.0, Depth - Lip * MoverInchToCm);
 		PressedLoc = RestLoc + Dir * Travel;
 	}
 

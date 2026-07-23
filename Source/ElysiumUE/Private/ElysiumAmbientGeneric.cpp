@@ -26,10 +26,12 @@ namespace
 
 	// Source keyvalue `radius`/`pitch` are raw Source units; geometry (origins) is already cm (the
 	// UE_ convention). Radius converts inches→cm; pitch is a ratio, unitless.
-	constexpr float ElysiumSourceInchToCm = 2.54f;
+	constexpr float AmbientInchToCm = 2.54f;
 
 	// A raw keyvalue read (the value stays on the def when the key isn't a mapped base field).
-	float KeyFloat(const FElysiumEntityDef* Def, const TCHAR* Key, float Default)
+	// File-unique names (Ambient*) so this TU can share a unity blob with the other class files'
+	// identical helpers (KeyFloat in ElysiumLogicClasses, the mover's inch-to-cm, ...).
+	float AmbientKeyFloat(const FElysiumEntityDef* Def, const TCHAR* Key, float Default)
 	{
 		if (Def)
 		{
@@ -40,7 +42,7 @@ namespace
 		}
 		return Default;
 	}
-	bool KeyBool(const FElysiumEntityDef* Def, const TCHAR* Key)
+	bool AmbientKeyBool(const FElysiumEntityDef* Def, const TCHAR* Key)
 	{
 		const FString* V = Def ? Def->Keys.Find(Key) : nullptr;
 		return V && FCString::Atoi(**V) != 0;
@@ -77,14 +79,14 @@ public:
 	{
 		SoundRel = Def ? Def->Keys.FindRef(TEXT("message")).Replace(TEXT("\\"), TEXT("/")) : FString();
 		// `health` is repurposed as VOLUME 0–10 (§7). Missing → full (Source default 10).
-		Volume = FMath::Clamp(KeyFloat(Def, TEXT("health"), 10.f) / 10.f, 0.f, 1.f);
-		RadiusCm = FMath::Max(KeyFloat(Def, TEXT("radius"), 1250.f) * ElysiumSourceInchToCm, 1.f);
-		Pitch = FMath::Max(KeyFloat(Def, TEXT("pitch"), 100.f) / 100.f, 0.01f);
+		Volume = FMath::Clamp(AmbientKeyFloat(Def, TEXT("health"), 10.f) / 10.f, 0.f, 1.f);
+		RadiusCm = FMath::Max(AmbientKeyFloat(Def, TEXT("radius"), 1250.f) * AmbientInchToCm, 1.f);
+		Pitch = FMath::Max(AmbientKeyFloat(Def, TEXT("pitch"), 100.f) / 100.f, 0.01f);
 		SourceEntityName = Def ? Def->Keys.FindRef(TEXT("SourceEntityName")) : FString();
 
 		bEverywhere = (SpawnFlags & SF_AMBIENT_EVERYWHERE) != 0;
 		// Loops unless explicitly NOT_LOOPED, or forced by the VtMB `flag_force_looping` key.
-		bLoop = KeyBool(Def, TEXT("flag_force_looping")) || (SpawnFlags & SF_AMBIENT_NOT_LOOPED) == 0;
+		bLoop = AmbientKeyBool(Def, TEXT("flag_force_looping")) || (SpawnFlags & SF_AMBIENT_NOT_LOOPED) == 0;
 
 		// Play on spawn unless Start Silent (§7) or born hidden (StartHidden). A start-silent sound
 		// waits for a PlaySound input; a hidden one plays when ScriptUnhide reveals it (if desired).
@@ -198,7 +200,7 @@ private:
 	FString SoundRel;
 	FString SourceEntityName;
 	float   Volume = 1.f;        // 0..1 linear
-	float   RadiusCm = 1250.f * ElysiumSourceInchToCm;
+	float   RadiusCm = 1250.f * AmbientInchToCm;
 	float   Pitch = 1.f;
 	bool    bEverywhere = false;
 	bool    bLoop = true;
