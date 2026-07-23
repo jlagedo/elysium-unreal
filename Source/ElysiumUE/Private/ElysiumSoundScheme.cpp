@@ -13,6 +13,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumKeyValues.h"
 #include "ElysiumMapActor.h"
 
 #include "HAL/IConsoleManager.h"
@@ -48,89 +49,11 @@ namespace
 {
 	constexpr float SchemeInchToCm = 2.54f;
 
-	// -------- Minimal Source KeyValues parser (schemes are the .res/.vmt grammar) --------
-	// Quoted or bare tokens; `//` line comments (outside quotes); `{ }` nest. Keys fold to lower
-	// (Source KV is case-insensitive); values keep case. Repeated block keys (RandomSound) collect.
-	struct FKvNode
-	{
-		TMap<FString, FString> Values;                     // leaf key -> value (last wins)
-		TArray<TPair<FString, TSharedPtr<FKvNode>>> Kids;  // ordered child blocks (repeatable keys)
-
-		const FString* Value(const TCHAR* Key) const { return Values.Find(FString(Key).ToLower()); }
-		FString Str(const TCHAR* Key, const FString& Def) const { const FString* V = Value(Key); return V ? *V : Def; }
-		float   Flt(const TCHAR* Key, float Def) const { const FString* V = Value(Key); return V ? FCString::Atof(**V) : Def; }
-		int32   Int(const TCHAR* Key, int32 Def) const { const FString* V = Value(Key); return V ? FCString::Atoi(**V) : Def; }
-		bool    Bool(const TCHAR* Key, bool Def) const { const FString* V = Value(Key); return V ? (FCString::Atoi(**V) != 0) : Def; }
-
-		const FKvNode* Child(const TCHAR* Key) const
-		{
-			const FString L = FString(Key).ToLower();
-			for (const TPair<FString, TSharedPtr<FKvNode>>& K : Kids) { if (K.Key == L) { return K.Value.Get(); } }
-			return nullptr;
-		}
-	};
-
-	void Tokenize(const FString& Text, TArray<FString>& Out)
-	{
-		TArray<FString> Lines;
-		Text.ParseIntoArrayLines(Lines, /*bCullEmpty*/ false);
-		for (FString Line : Lines)
-		{
-			// Strip a `//` comment when it is not inside a quoted string (VtMB data has no quoted //).
-			int32 Q = Line.Find(TEXT("//"));
-			if (Q != INDEX_NONE)
-			{
-				int32 Quotes = 0;
-				for (int32 i = 0; i < Q; ++i) { if (Line[i] == '\"') { ++Quotes; } }
-				if ((Quotes % 2) == 0) { Line = Line.Left(Q); }
-			}
-			int32 i = 0;
-			const int32 N = Line.Len();
-			while (i < N)
-			{
-				const TCHAR C = Line[i];
-				if (FChar::IsWhitespace(C)) { ++i; continue; }
-				if (C == '{' || C == '}') { Out.Add(FString(1, &C)); ++i; continue; }
-				if (C == '\"')
-				{
-					++i; FString Tok;
-					while (i < N && Line[i] != '\"') { Tok.AppendChar(Line[i]); ++i; }
-					++i;   // closing quote
-					Out.Add(Tok);
-					continue;
-				}
-				FString Tok;
-				while (i < N && !FChar::IsWhitespace(Line[i]) && Line[i] != '{' && Line[i] != '}')
-				{
-					Tok.AppendChar(Line[i]); ++i;
-				}
-				Out.Add(Tok);
-			}
-		}
-	}
-
-	TSharedPtr<FKvNode> ParseBlock(const TArray<FString>& Toks, int32& Pos)
-	{
-		TSharedPtr<FKvNode> Node = MakeShared<FKvNode>();
-		while (Pos < Toks.Num())
-		{
-			const FString& T = Toks[Pos];
-			if (T == TEXT("}")) { ++Pos; break; }
-			const FString Key = T.ToLower();
-			++Pos;
-			if (Pos < Toks.Num() && Toks[Pos] == TEXT("{"))
-			{
-				++Pos;
-				Node->Kids.Emplace(Key, ParseBlock(Toks, Pos));
-			}
-			else if (Pos < Toks.Num())
-			{
-				Node->Values.Add(Key, Toks[Pos]);
-				++Pos;
-			}
-		}
-		return Node;
-	}
+	// The Source KeyValues reader lives in ElysiumKeyValues.h (shared with the P4.10 sign
+	// definitions); pull its names into this file's anonymous namespace unchanged.
+	using ElysiumKeyValues::FKvNode;
+	using ElysiumKeyValues::Tokenize;
+	using ElysiumKeyValues::ParseBlock;
 
 	// Parse a Music/Combat/Alert/Ambient block, applying the retail defaults (§12). bDryDefault /
 	// bNoPauseDefault differ per block (Ambient NoPause defaults 0; the music trio default 1).

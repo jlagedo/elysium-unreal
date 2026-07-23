@@ -58,7 +58,6 @@ private:
 	FString LastEvalSource;               // the last run source (for the result line)
 	FString LastEvalResult;               // Describe() of the value, or the error text
 	bool bLastEvalError = false;          // colour the result line
-	bool bLastEvalWasExec = false;        // label the result line (eval vs exec)
 
 	// 5.2 G store editing.
 	ImGuiTextFilter GFilter;              // filters the G flag table

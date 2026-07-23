@@ -5,9 +5,11 @@ C++**. The runtime decodes the original game's proprietary formats into engine-n
 intermediates (offline, in `tools/`) and builds all engine objects in code at map-load time
 — no asset baking, no editor content pipeline.
 
-**Status: M0** — world + 3D-skybox geometry, textures, trimesh collision, a free-fly pawn,
-map switching, and a debug HUD, proven on VtMB's tutorial map. The full plan (parity with a
-prior prototype, then the game layer: entities, I/O, scripting, audio, dialogue) lives in
+**Status: M0 verified, M1 in progress** — world + lighting + props, the entity/I-O substrate,
+brush movers (doors/buttons), signs/popups, decoded audio + sound schemes, an expression and
+embedded-CPython scripting host, a glTFRuntime NPC skeletal-mesh spike, and cross-map landmark
+travel, all proven on VtMB's tutorial map and several neighbors. Full phase-by-phase status
+lives in **[`docs/roadmap.md`](docs/roadmap.md)**; the strategy/design reference is
 **[`docs/rebuild-strategy.md`](docs/rebuild-strategy.md)**.
 
 ## Bring your own game
@@ -23,7 +25,7 @@ game-agnostic (an empty boot map + one master material).
 | `Source/ElysiumUE/` | the C++ runtime module (loads intermediates, builds the world) |
 | `tools/` | the offline Python decode/export pipeline (`UE_bsp_to_scene.py`, …) + format docs (`tools/CLAUDE.md`) |
 | `docs/` | reverse-engineering reference + the rebuild strategy |
-| `Content/` | committed assets only: `Elysium.umap` (boot), `VtMB/Materials/M_VtMB_World` |
+| `Content/` | committed assets only: `Elysium.umap` (boot) + the `M_VtMB_World`/`M_Sky`/`M_Gizmo*` master materials |
 | `CLAUDE.md` | project fact sheet + documentation map (start here after this README) |
 
 ## Build & run (Windows, UE 5.8)

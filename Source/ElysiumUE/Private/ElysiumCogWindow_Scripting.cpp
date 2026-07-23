@@ -160,6 +160,23 @@ void FElysiumCogWindow_Scripting::RenderContent()
 			{
 				ImGui::SetTooltip("%s", COG_TCHAR_TO_CHAR(*File));
 			}
+
+			// 9.3 — the map load imports this automatically; report what actually happened.
+			if (const UElysiumGameStateSubsystem* State = GetGameState())
+			{
+				ImGui::Text("  import:");
+				ImGui::SameLine();
+				if (State->IsLevelScriptLoaded())
+				{
+					ImGui::TextColored(GColorGood, "loaded at map load into host '%s'",
+						COG_TCHAR_TO_CHAR(State->ScriptHost().Name()));
+				}
+				else
+				{
+					ImGui::TextColored(GColorBad, "NOT loaded — %s",
+						COG_TCHAR_TO_CHAR(*State->LevelScriptError()));
+				}
+			}
 		}
 	}
 
@@ -239,28 +256,31 @@ void FElysiumCogWindow_Scripting::RenderCPythonPanel()
 		}
 	}
 
-	// Load a real level script.
+	// Re-load a level script by hand. The map load already imports this map's own module (9.3);
+	// this is for pulling in a different map's script, or re-importing after editing one on disk.
 	ImGui::Spacing();
-	FCogWidgets::InputTextWithHint("##PyLoad", "tutorial", PyLoadTarget);
+	const FString MapModule = CurrentLevelScript();
+	const FString HintModule = MapModule.IsEmpty() ? TEXT("tutorial") : MapModule;
+	FCogWidgets::InputTextWithHint("##PyLoad", COG_TCHAR_TO_CHAR(*HintModule), PyLoadTarget);
 	ImGui::SameLine();
 	if (ImGui::Button("Load level script"))
 	{
-		if (State) { VM.SetGameState(State); }
-		const FString Map = PyLoadTarget.TrimStartAndEnd().IsEmpty() ? TEXT("tutorial") : PyLoadTarget.TrimStartAndEnd();
-		const FString Abs = FPaths::ConvertRelativePathToFull(FPaths::Combine(
-			FPaths::ProjectDir(), TEXT("tools/out/scripts"), Map, Map + TEXT(".py")));
-		FString ModName, Err;
-		if (VM.LoadLevelScript(Abs, ModName, Err))
+		const FString Module = PyLoadTarget.TrimStartAndEnd().IsEmpty()
+			? HintModule : PyLoadTarget.TrimStartAndEnd();
+		LastPySource = FString::Printf(TEXT("load %s"), *Module);
+		if (State)
 		{
-			LastPySource = FString::Printf(TEXT("load %s"), *Map);
-			LastPyResult = FString::Printf(TEXT("imported module '%s'"), *ModName);
-			bLastPyError = false;
+			// Through the subsystem, so the tracked module + outcome above stay truthful.
+			bLastPyError = !State->LoadLevelScript(Module);
+			LastPyResult = bLastPyError ? State->LevelScriptError()
+				: FString::Printf(TEXT("imported module '%s'"), *Module);
 		}
 		else
 		{
-			LastPySource = FString::Printf(TEXT("load %s"), *Map);
-			LastPyResult = Err;
-			bLastPyError = true;
+			const FString Abs = FPaths::ConvertRelativePathToFull(FElysiumContentPaths::ScriptModuleFile(Module));
+			FString ModName, Err;
+			bLastPyError = !VM.LoadLevelScript(Abs, ModName, Err);
+			LastPyResult = bLastPyError ? Err : FString::Printf(TEXT("imported module '%s'"), *ModName);
 		}
 	}
 	ImGui::SameLine();
@@ -357,34 +377,26 @@ void FElysiumCogWindow_Scripting::RenderEvalPanel()
 		ImGui::TextColored(GColorDim, "No map loaded — G reads/writes work; entity names won't resolve.");
 	}
 
-	// The eval/exec input box. Enter (or the Eval button) runs it as an expression; Exec runs it as a
-	// statement (assignment / bare call). Both go through UElysiumGameStateSubsystem::EvalScript.
+	// The eval input box. Expression and statement shapes both run down one path — the installed
+	// host (UElysiumGameStateSubsystem::EvalScript), so this resolves what a field-6 payload does.
 	FCogWidgets::InputTextWithHint("##EvalInput", "G.Tut_Elev = 1   |   1 + 2   |   G.Story_State", EvalInput);
 	ImGui::BeginDisabled(EvalInput.TrimStartAndEnd().IsEmpty());
-	const auto RunEval = [this, State](bool bExec)
+	if (ImGui::Button("Run"))
 	{
 		const FString Src = EvalInput.TrimStartAndEnd();
 		FString Err;
-		const FElysiumVariant R = State->EvalScript(Src, bExec, Err);
+		const FElysiumVariant R = State->EvalScript(Src, Err);
 		LastEvalSource = Src;
 		bLastEvalError = !Err.IsEmpty();
-		bLastEvalWasExec = bExec;
 		LastEvalResult = bLastEvalError ? Err : R.Describe();
-	};
-	if (ImGui::Button("Eval (expression)"))
-	{
-		RunEval(false);
 	}
 	ImGui::SameLine();
-	if (ImGui::Button("Exec (statement)"))
-	{
-		RunEval(true);
-	}
+	ImGui::TextColored(GColorDim, "(host: %s)", COG_TCHAR_TO_CHAR(State->ScriptHost().Name()));
 	ImGui::EndDisabled();
 
 	if (!LastEvalSource.IsEmpty())
 	{
-		ImGui::Text("%s", bLastEvalWasExec ? "exec" : "eval");
+		ImGui::TextUnformatted("eval");
 		ImGui::SameLine();
 		ImGui::TextColored(GColorName, "%s", COG_TCHAR_TO_CHAR(*LastEvalSource));
 		ImGui::SameLine();

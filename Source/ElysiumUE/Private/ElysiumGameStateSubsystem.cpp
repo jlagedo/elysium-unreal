@@ -10,14 +10,68 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumState, Log, All);
 
+namespace
+{
+	// Indexed by the level-script encoding pc.clan uses: 2 = Brujah … 8 = Ventrue.
+	const TCHAR* GClanNames[] = { TEXT("?"), TEXT("?"), TEXT("Brujah"), TEXT("Gangrel"),
+		TEXT("Malkavian"), TEXT("Nosferatu"), TEXT("Toreador"), TEXT("Tremere"), TEXT("Ventrue") };
+	constexpr int32 GClanMin = 2;
+	constexpr int32 GClanMax = 8;
+}
+
+const TCHAR* FElysiumPlayerSheet::ClanName(int32 Clan)
+{
+	return (Clan >= GClanMin && Clan <= GClanMax) ? GClanNames[Clan] : TEXT("(unset)");
+}
+
+int32 FElysiumPlayerSheet::ClanFromName(const FString& Name)
+{
+	// A bare number is taken as the 2..8 encoding directly, so both forms work.
+	if (Name.IsNumeric())
+	{
+		const int32 N = FCString::Atoi(*Name);
+		return (N >= GClanMin && N <= GClanMax) ? N : 0;
+	}
+	for (int32 i = GClanMin; i <= GClanMax; ++i)
+	{
+		if (Name.Equals(GClanNames[i], ESearchCase::IgnoreCase))
+		{
+			return i;
+		}
+	}
+	return 0;
+}
+
+void UElysiumGameStateSubsystem::BeginNewGame(int32 Clan, bool bMale)
+{
+	// A fresh run starts from a clean bag: travel keeps `G` alive (R8), so without this a second
+	// New Game would inherit the previous run's beat counter and latches.
+	ClearAllGlobals();
+	Quests.Reset();
+
+	Sheet = FElysiumPlayerSheet{};
+	Sheet.Clan  = (Clan >= GClanMin && Clan <= GClanMax) ? Clan : 2;
+	Sheet.bMale = bMale;
+
+	SetGlobalInt(TEXT("Story_State"), -4);
+	SetGlobalInt(TEXT("Tut_Jack"), 0);
+	SetGlobalInt(TEXT("Tut_Patch"), 0);
+	SetGlobalInt(TEXT("Linux_Wine"), 1);
+
+	UE_LOG(LogElysiumState, Display,
+		TEXT("new game: clan %d (%s), %s — Story_State=-4, Tut_Jack=0, Tut_Patch=0, Linux_Wine=1"),
+		Sheet.Clan, FElysiumPlayerSheet::ClanName(Sheet.Clan), Sheet.bMale ? TEXT("male") : TEXT("female"));
+}
+
 void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 
-	// P5 5.4 — the real expression evaluator is the map-load default: field-6 payloads,
-	// logic_pythoncheck gates, and ScheduleTask deferred sources all run live. `elysium.script.live 0`
-	// swaps in the null host (logs + Void) for A/B — the whole scripting surface goes dark together.
-	ScriptHostPtr = MakeUnique<FElysiumExprScriptHost>(this);
+	// P5 5.4 / P9 9.3 — real evaluation is the map-load default: field-6 payloads, logic_pythoncheck
+	// gates, and ScheduleTask deferred sources all run live, through the embedded CPython VM when it
+	// is available (so level-script names resolve) and the expression evaluator otherwise.
+	// `elysium.script.live 0` swaps in the null host — the whole surface goes dark together.
+	ScriptHostPtr = MakePreferredScriptHost();
 
 	// `elysium.g <name> [value]` — inspect/poke the G store by hand. No args dumps every
 	// set flag; one arg reads (miss -> 0); a second arg writes (integer if it parses, else
@@ -74,7 +128,7 @@ void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection
 			const FString Src = FString::Join(Args, TEXT(" ")).TrimStartAndEnd();
 			if (Src.IsEmpty()) { UE_LOG(LogElysiumState, Display, TEXT("usage: elysium.eval <expression>")); return; }
 			FString Err;
-			const FElysiumVariant R = EvalScript(Src, /*bExec*/ false, Err);
+			const FElysiumVariant R = EvalScript(Src, Err);
 			if (Err.IsEmpty()) { UE_LOG(LogElysiumState, Display, TEXT("eval %s = %s"), *Src, *R.Describe()); }
 			else { UE_LOG(LogElysiumState, Warning, TEXT("eval %s -> error: %s"), *Src, *Err); }
 		}),
@@ -90,7 +144,7 @@ void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection
 			const FString Src = FString::Join(Args, TEXT(" ")).TrimStartAndEnd();
 			if (Src.IsEmpty()) { UE_LOG(LogElysiumState, Display, TEXT("usage: elysium.exec <statement>")); return; }
 			FString Err;
-			const FElysiumVariant R = EvalScript(Src, /*bExec*/ true, Err);
+			const FElysiumVariant R = EvalScript(Src, Err);
 			if (Err.IsEmpty()) { UE_LOG(LogElysiumState, Display, TEXT("exec %s -> %s"), *Src, *R.Describe()); }
 			else { UE_LOG(LogElysiumState, Warning, TEXT("exec %s -> error: %s"), *Src, *Err); }
 		}),
@@ -117,9 +171,9 @@ void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection
 		ECVF_Cheat));
 
 	// `elysium.script.cpython [0|1]` — swap the field-6/pythoncheck host between the embedded
-	// CPython 2.7 VM (1) and the ElysiumExpr evaluator (0, the default). The CPython host resolves
-	// level-script names the expr host cannot (`cCelerity`, callbacks); load a script first with
-	// `elysium.py.load`. No arg reports the current host.
+	// CPython 2.7 VM (1, the default where available) and the ElysiumExpr evaluator (0), for A/B.
+	// Either way the current map's level script is re-imported into the new host. No arg reports
+	// the current host.
 	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
 		TEXT("elysium.script.cpython"),
 		TEXT("elysium.script.cpython [0|1] — route scripting through embedded CPython 2.7 (1) or ElysiumExpr (0)"),
@@ -139,8 +193,9 @@ void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection
 			{
 				SetScriptHost(MakeUnique<FElysiumExprScriptHost>(this));
 			}
-			UE_LOG(LogElysiumState, Display, TEXT("script host -> %s"),
-				ScriptHostPtr ? ScriptHostPtr->Name() : TEXT("none"));
+			UE_LOG(LogElysiumState, Display, TEXT("script host -> %s (level script '%s': %s)"),
+				ScriptHostPtr ? ScriptHostPtr->Name() : TEXT("none"), *LevelScriptModule,
+				bLevelScriptLoaded ? TEXT("loaded") : *LevelScriptLoadError);
 		}),
 		ECVF_Cheat));
 }
@@ -168,10 +223,67 @@ void UElysiumGameStateSubsystem::SetScriptHost(TUniquePtr<IElysiumScriptHost> In
 {
 	// M4 swaps the null host for the real evaluator; ignore a null argument so ScriptHost()
 	// always dereferences a live host.
-	if (InHost)
+	if (!InHost)
 	{
-		ScriptHostPtr = MoveTemp(InHost);
+		return;
 	}
+	ScriptHostPtr = MoveTemp(InHost);
+
+	// A new host starts with an empty namespace, so re-import the current map's level script into
+	// it. Without this, toggling `elysium.script.cpython` mid-map would leave the CPython host
+	// evaluating against a bare __main__ and every level constant would read as NameError.
+	if (!LevelScriptModule.IsEmpty())
+	{
+		LoadLevelScript(LevelScriptModule);
+	}
+}
+
+TUniquePtr<IElysiumScriptHost> UElysiumGameStateSubsystem::MakePreferredScriptHost()
+{
+	if (FElysiumCPythonScriptHost::IsAvailable())
+	{
+		TUniquePtr<FElysiumCPythonScriptHost> Py = MakeUnique<FElysiumCPythonScriptHost>(this);
+		if (Py->IsUsable())
+		{
+			return Py;
+		}
+		// The interpreter did not come up (missing python27.dll, bad PythonHome). Its evals would
+		// all be Void, which reads as error-to-false everywhere — quieter and far more misleading
+		// than falling back to the evaluator that does work.
+		UE_LOG(LogElysiumState, Warning,
+			TEXT("CPython VM failed to start — falling back to the ElysiumExpr host"));
+	}
+	return MakeUnique<FElysiumExprScriptHost>(this);
+}
+
+bool UElysiumGameStateSubsystem::LoadLevelScript(const FString& Module)
+{
+	LevelScriptModule = Module.TrimStartAndEnd();
+	bLevelScriptLoaded = false;
+	LevelScriptLoadError.Reset();
+
+	if (LevelScriptModule.IsEmpty())
+	{
+		return false;   // the map's worldspawn names no level script; nothing to import
+	}
+	if (!ScriptHostPtr)
+	{
+		LevelScriptLoadError = TEXT("no script host");
+		return false;
+	}
+
+	bLevelScriptLoaded = ScriptHostPtr->LoadLevelScript(LevelScriptModule, LevelScriptLoadError);
+	if (bLevelScriptLoaded)
+	{
+		UE_LOG(LogElysiumState, Display, TEXT("level script '%s' loaded into host '%s'"),
+			*LevelScriptModule, ScriptHostPtr->Name());
+	}
+	else
+	{
+		UE_LOG(LogElysiumState, Warning, TEXT("level script '%s' not loaded: %s"),
+			*LevelScriptModule, *LevelScriptLoadError);
+	}
+	return bLevelScriptLoaded;
 }
 
 FElysiumVariant UElysiumGameStateSubsystem::GetGlobal(const FString& Key) const
@@ -240,7 +352,7 @@ void UElysiumGameStateSubsystem::SetLiveScriptEval(bool bEnable)
 	}
 	if (bEnable)
 	{
-		SetScriptHost(MakeUnique<FElysiumExprScriptHost>(this));
+		SetScriptHost(MakePreferredScriptHost());
 	}
 	else
 	{
@@ -262,15 +374,22 @@ FElysiumEntityWorld* UElysiumGameStateSubsystem::CurrentEntityWorld() const
 	return Map ? Map->GetEntityWorld() : nullptr;
 }
 
-FElysiumVariant UElysiumGameStateSubsystem::EvalScript(const FString& Source, bool bExec, FString& OutError)
+FElysiumVariant UElysiumGameStateSubsystem::EvalScript(const FString& Source, FString& OutError)
 {
-	ElysiumExpr::FEnv Env;
-	Env.State = this;
-	Env.Ctx.World = CurrentEntityWorld();   // Self/Activator stay Invalid for a hand-run eval
-	const FElysiumVariant Result = bExec ? ElysiumExpr::Exec(Source, Env) : ElysiumExpr::Eval(Source, Env);
-	OutError = Env.bError ? Env.Error : FString();
-	RecordEval(Source, Result, Env.bError, Env.Error);
-	return Result;
+	// Through the installed host, so a hand-run eval sees exactly what a field-6 payload sees —
+	// same evaluator, same namespace (the loaded level script), same error-to-false. Routing this
+	// straight to ElysiumExpr would report NameError for the level constants the game resolves.
+	// Both the expression and statement shapes go down one path: the CPython host tries
+	// Py_eval_input then Py_file_input, and ElysiumExpr::Exec returns its last statement's value.
+	OutError.Reset();
+	if (!ScriptHostPtr)
+	{
+		OutError = TEXT("no script host");
+		return FElysiumVariant::Void();
+	}
+	FElysiumScriptContext Ctx;
+	Ctx.World = CurrentEntityWorld();   // Self/Activator stay Invalid for a hand-run eval
+	return ScriptHostPtr->Eval(Source, Ctx, &OutError);   // the host records into the eval ring
 }
 
 void UElysiumGameStateSubsystem::RecordEval(const FString& Source, const FElysiumVariant& Result,

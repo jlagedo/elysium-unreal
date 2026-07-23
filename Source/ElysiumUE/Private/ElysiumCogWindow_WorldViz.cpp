@@ -79,7 +79,7 @@ void FElysiumCogWindow_WorldViz::RenderContent()
 	V.GizmoMode = static_cast<EGizmoMode>(Mode);
 
 	ImGui::BeginDisabled(V.GizmoMode == EGizmoMode::Off);
-	ImGui::Checkbox("Labels (within 2 m)", &V.bGizmoLabels);
+	ImGui::Checkbox("Labels (within 6 m)", &V.bGizmoLabels);
 	ImGui::SameLine();
 	FCogWidgets::HelpMarker("Boxes are a retained GPU instanced-mesh layer (built once, updated only "
 		"when an entity's state changes) — no per-frame cost, so all entities show. Labels are the "

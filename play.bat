@@ -1,7 +1,8 @@
 @echo off
 REM Launch Elysium (Unreal). Optional first arg = map name under this repo's tools\out.
-REM   play.bat                 -> sp_tutorial_1 (the exported vertical slice)
-REM   play.bat sp_tutorial_1   -> that map explicitly
+REM   play.bat                 -> New Game: seed a fresh story context and enter sp_tutorial_1
+REM                               at its `tutorial` landmark (add -ElysiumNewGame=0 to boot it bare)
+REM   play.bat sp_tutorial_1   -> that map explicitly, unseeded (the dev path)
 REM WASD + E/Q (or Space/Ctrl) to fly, mouse to look. Only sp_tutorial_1 is exported today.
 
 setlocal

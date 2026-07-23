@@ -1046,9 +1046,9 @@ void UElysiumEntityDebugSubsystem::RenderWorldViz(FElysiumEntityWorld& EW)
 	// has no instanced equivalent), so they are culled hard by distance to keep the string count low.
 	if (VizSettings.GizmoMode != EGizmoMode::Off && VizSettings.bGizmoLabels)
 	{
-		// Labels only within 2 m — you read the name of what you walk up to, and the string count
+		// Labels only within 6 m — you read the name of what you walk up to, and the string count
 		// stays tiny (DrawDebugString has no instanced form). Fixed, not tunable.
-		const float LabelDistSq = FMath::Square(200.f);
+		const float LabelDistSq = FMath::Square(600.f);
 		for (const TUniquePtr<FElysiumEntity>& EntPtr : Entities)
 		{
 			const FElysiumEntity* E = EntPtr.Get();

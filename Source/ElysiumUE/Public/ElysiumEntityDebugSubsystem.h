@@ -70,7 +70,7 @@ public:
 	struct FVizSettings
 	{
 		EGizmoMode GizmoMode = EGizmoMode::Off;    // color-keyed solid boxes per entity (retained ISM)
-		bool  bGizmoLabels = true;                 // draw targetname/class labels (within 2 m only)
+		bool  bGizmoLabels = true;                 // draw targetname/class labels (within 6 m only)
 		bool  bShowTriggers = false;               // wireframe trigger-body hulls
 		bool  bTriggerColorByState = false;        // false = color by class, true = by enabled/dormant
 		bool  bShowBeams = false;                  // fading caller->target arrow on each I/O delivery

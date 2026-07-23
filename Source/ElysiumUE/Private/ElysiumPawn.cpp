@@ -99,6 +99,29 @@ void AElysiumPawn::SetupPlayerInputComponent(UInputComponent* Input)
 	Input->BindAction(TEXT("ToggleSky"), IE_Pressed, this, &AElysiumPawn::ToggleSky);
 	Input->BindAction(TEXT("ToggleDebug"), IE_Pressed, this, &AElysiumPawn::ToggleDebug);
 	Input->BindAction(TEXT("Use"), IE_Pressed, this, &AElysiumPawn::OnUsePressed);
+	// P4.10 — dismissing a sign/popup window. Bound to the key directly rather than through a named
+	// action: DefaultInput.ini has no primary-fire mapping, and every VtMB popup instructs
+	// "left-click to continue", so the binding is the panel's, not a weapon's.
+	Input->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &AElysiumPawn::OnPrimaryClick);
+}
+
+void AElysiumPawn::OnPrimaryClick()
+{
+	// Only meaningful while a sign is up; the world no-ops otherwise. MinShowTime holds the panel
+	// briefly so a click already in flight when it opened cannot skip it (CSignUI's Rules block).
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UElysiumMapSubsystem* Maps = GI->GetSubsystem<UElysiumMapSubsystem>())
+		{
+			if (AElysiumMapActor* Map = Maps->GetCurrentMap())
+			{
+				if (FElysiumEntityWorld* World = Map->GetEntityWorld())
+				{
+					World->PlayerDismissSign();
+				}
+			}
+		}
+	}
 }
 
 void AElysiumPawn::OnUsePressed()

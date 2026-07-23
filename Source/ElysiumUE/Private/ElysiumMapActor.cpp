@@ -328,6 +328,13 @@ void AElysiumMapActor::LoadMap()
 			if (FElysiumEntityDefs::Parse(FElysiumContentPaths::MapEnts(MapName), EntDefs))
 			{
 				EntityCount = EntDefs.Num();
+
+				// P9 9.3 — import this map's `worldspawn.levelscript` module before anything can
+				// evaluate against it. VtMB's own load order: the level script's top-level code
+				// (constants like cCelerity, `from vamputil import *`, the On* defs) runs first,
+				// then entities spawn and fire their field-6 payloads into that namespace.
+				GameState->LoadLevelScript(EntDefs.LevelScriptModule());
+
 				EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState);
 				// The scheme manager must exist before the spawn pass: a start_enabled
 				// ambient_soundscheme fades its scheme in from its own Spawn() (P6.3).

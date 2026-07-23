@@ -15,12 +15,14 @@ Usage:
   python tools/export_all.py --skip-existing     # skip maps already exported
   python tools/export_all.py --no-content        # skip the committed-asset rebuild
   python tools/export_all.py --no-scripts        # skip the script/dialogue copy
+  python tools/export_all.py --no-signs          # skip the sign definition/background copy
   python tools/export_all.py --npc               # also export the P8 8.2 test NPC glb(s)
 """
 import os, sys, glob, time, subprocess, traceback
 import UE_bsp_to_scene as B
 import UE_extract_sounds as S
 import UE_extract_scripts as SC
+import UE_extract_signs as SG
 import install
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -73,6 +75,7 @@ def main():
     skip_content = "--no-content" in args
     skip_sound = "--no-sound" in args
     skip_scripts = "--no-scripts" in args
+    skip_signs = "--no-signs" in args
     export_all = "--all" in args
     only = [a for a in args if not a.startswith("--")]
 
@@ -143,6 +146,17 @@ def main():
             SC.main()
         except Exception as e:
             print(f"[scripts] FAILED: {e}", flush=True)
+            traceback.print_exc()
+
+    # Copy the sign/popup definitions (vdata/Signs) + decode their background art into
+    # out/signs. Whole-game like the script mirror, so it runs once after the loop and on a
+    # zero-map invocation too.
+    if not skip_signs:
+        print("\n[signs] copying sign definitions + backgrounds ...", flush=True)
+        try:
+            SG.main()
+        except Exception as e:
+            print(f"[signs] FAILED: {e}", flush=True)
             traceback.print_exc()
 
     # Export the P8 8.2 test NPC(s) to out/npc as glTF 2.0 (.glb: mesh + StudioBone skeleton + one

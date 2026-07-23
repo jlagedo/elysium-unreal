@@ -528,6 +528,78 @@ M1 leftovers that live in this lane.
 - [ ] **4.8 Rotating/linear/elevator family** — `func_rotating` (spin-up/down, hurt-touch),
   `func_movelinear`, `func_elevator` (`GotoFloor`, floor Z table), keyframed movers if the
   tutorial needs them. *Deps:* 4.1.
+- [x] **4.9 Event-bus classes (`events_player` / `events_world`)** — the two singleton entities
+  every map carries, and the seam level scripts hang their world/player event callbacks off
+  (0.8 flagged them as top output sources; no task had owned them). Both land as plain-C++ leaves
+  in `ElysiumEventClasses.cpp`. **Datamaps recovered from the decompile** (new `DumpDatamap.java`;
+  see the Ghidra findings below): **`CPlayerEvents`** (factory `FUN_10226630`, vftable `0x1048d844`,
+  datamap `0x105b28c0` → 36 records) = **12 inputs** (EnableOutputs/DisableOutputs,
+  CreateControllerNPC/RemoveControllerNPC, AwardExp, ClearDialogCombatTimers, ImmobilizePlayer/
+  MobilizePlayer, RemoveDisciplines/RemoveDisciplinesNow, MakePlayerUnkillable/MakePlayerKillable),
+  **23 outputs** (OnFrenzyBegin/End, OnWolfMorphBegin/End, OnPlayerTookDamage, OnPlayerKilled,
+  OnPlayerSoundLoud, 16 × `OnActivate<Discipline>`), one keyfield `enabled`;
+  **`CWorldEvents`** (factory `FUN_1023cf80`, vftable `0x10496acc`, datamap `0x105c2a50` → 31
+  records) = **10 inputs** (SetSafeArea, SetCopWaitArea, SetCopGrace, SetNosferatuTolerant,
+  SetNoFrenzyArea, AIEnable, FadeGlobalWetness, Hide/UnhideCutsceneInterferingEntities,
+  PlayEndCredits) and **21 outputs** (cop pursuit/alert, 5 × masquerade level + changed,
+  OnPlayerHasNoBlood, combat/alert/normal music start+end). Both chain to the shared CBaseEntity
+  map `0x10552e18`, which is where the `OnUseBegin`/`OnUseEnd` the tutorial's `world` wires come
+  from. **Scope:** the input/field surface is complete and faithful and policy state is latched +
+  surfaced through `GetDebugState`; the *outputs* are fired by systems that don't exist yet
+  (disciplines, frenzy, morph, cop/masquerade AI, music scoring), so this lands the bus, not its
+  drivers — each such input records state and logs rather than silently no-opping.
+  **Verified headless on `sp_tutorial_1`:** `elysium.classes` resolves 15/13 chain inputs
+  (12/10 own + 3 base) and 25/24 fields; the `logic_auto` `OnMapLoad` chain now delivers
+  `pc_0(events_player).MakePlayerUnkillable()` and `world(events_world).SetNoFrenzyArea(1)`
+  through the real queue instead of hitting `[no input]`. *Next (not in scope here):* fire
+  `events_world`'s six music outputs from the P6.3 `EElysiumMusicState` machine, giving it its
+  first real driver. *Deps:* 1.6.
+- [~] **4.10 `game_sign` / `prop_sign` — sign windows** — **`game_sign` + PL5c landed; `prop_sign`
+  and the pixel-faithful panel remain.** Shipped: `UE_extract_signs.py` mirrors all 278 definitions
+  + decodes the 57 background materials into `out/signs/`; `ElysiumKeyValues.h` is the shared Source
+  KeyValues reader (lifted out of `ElysiumSoundScheme.cpp`, tokenizer rewritten as a character
+  stream — 127 of the 187 loose definitions carry a quoted value spanning lines, which the old
+  line-based scan truncated); `FElysiumSignData` parses `SignData` + the first-true
+  `Sign { dependency; filename }` redirect through `EvalCondition`; `game_sign`
+  (`ElysiumSignClasses.cpp`) implements `OpenWindow`/`CloseWindow`/`ChangeFile` +
+  `OnUseBegin`/`OnUseEnd`; the panel rides one open-sign state on `FElysiumEntityWorld` (the
+  `env_fade` pattern) and `AElysiumHUD` draws background + word-wrapped text blocks, dismissed by
+  left-click through `PlayerDismissSign` (honouring `CloseOnLeftClick` + `MinShowTime`).
+  **The draw model is RE-verified** — see the decision-log entry below. Verified on the tutorial:
+  `popup_3` → click → `OnUseEnd` → `popup_4` through the real chokepoint, and the panel rect
+  measures within 1–2 px of prediction on all four edges. Still open: `prop_sign` + its `+use`
+  path, `NewspaperData`/multi-column, `ClientCommand` execution, real `.fnt` type (8.8), and
+  `fade_out` (dismissal tears the panel down immediately — a fading-out panel needs a lingering
+  copy). Original scope follows.
+  **73 `game_sign`** (71 of them on
+  `sp_tutorial_1`, named `popup_1`…`popup_59`) + **100 `prop_sign`** across the patch map set (35 maps
+  carry signs); today every one is an inert record, so the **51 `OpenWindow` wires** (+4 `Kill`) drop
+  on the floor and `tutorial.py`'s beat machine — `Find("popup_11").OpenWindow()` ×23 plus `ChangeFile`
+  ×22 in `SetClanPopups()` — has nothing to drive once 9.3 runs the level scripts. Both land as leaf
+  classes over `FElysiumEntity`: keyfields `definition_file` + `fade_in`/`fade_out`/`pause`/`spawnflags`
+  (`game_sign`, bodiless) and `model`/`skin`/`use_icon`/`crossfade_skin_time` (`prop_sign`, whose model
+  8.1 already exports); inputs **`OpenWindow`/`CloseWindow`/`ChangeFile`**; outputs
+  **`OnUseBegin`/`OnUseEnd`/`OnReadBegin`**; `prop_sign` opens on `+use` through the 4.4 look-cursor
+  (its `use_icon`s — 36 × 18 `note`, 31 × 41 `printedpapers`, 22 × 56 `bustopmap` — already resolve to
+  HUD reticle icons). **Definition-file loading is RE-grounded** (`run.ps1 -Script DumpGrep` on
+  `vampire.dll`): `CGameSign::LoadSignData` `FUN_10212da0` (factory `FUN_10212430`, object `0x474`,
+  `definition_file` @`+0x454`) and `CPropSign::LoadSignData` `FUN_10212200` (factory `FUN_102118a0`,
+  object `0x770`, @`+0x730`) are the same routine — parse the file as KeyValues rooted **`SignData`**,
+  walk its `Sign` sub-blocks, and take the **first** whose `dependency` string evaluates true
+  (`PyRun_String(dep, 0x102 = Py_eval_input)`, the RE3 error-to-false eval), redirecting to that
+  block's `filename`. Those dependencies are plain `G` reads (`"G.Story_State == 20 and G.Dane_Kills
+  >= 3"`), i.e. already within `ElysiumExpr` via the installed script host; **24 of the 278 sign files**
+  are such dispatch wrappers (`newspaper_all.txt` is the pattern). The panel this task draws is the
+  **substrate-grade** one: parse `SignData` with the existing runtime KeyValues reader
+  (`FElysiumSoundScheme`'s), draw `BackgroundImage` + the `TextBlock`/`Label` boxes on `AElysiumHUD`
+  (Canvas, following the `env_fade` screen-state pattern), honour `fade_in`/`fade_out`, and close on
+  left-click. Full VGUI fidelity is **8.8**. **To settle while implementing:** `pause` (`1` on all 71
+  tutorial popups) is presumed *pause the game clock while open* — confirm against `CGameSign`; and
+  `game_sign` `spawnflags 5` is undecoded. **Acceptance** on `sp_tutorial_1`: `elysium.ent_fire popup_2
+  OpenWindow` shows the blood-pool panel; walking into `trig_popup_feed` opens `popup_3` and its
+  `OnUseEnd` chains `popup_4`; `+use` on `sign_chopshop_upstairs` reads *"password: chopshop"*; and a
+  sign whose file is a dispatch wrapper picks its variant from `G`. *Deps:* 4.4, 1.6, PL5c; 5.2 for the
+  `dependency` redirect.
 
 **Slice acceptance** *(M3 criterion)*: the tutorial elevator chain works — button →
 `Unlock`/`Trigger` → doors open → `thug_2` `ScriptUnhide` — and walking out of the tutorial
@@ -769,11 +841,38 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
   origins via glTFRuntime; play-anim-at-marker handler (×51) long before real AI.
   *Pipeline:* **PL4 batch NPC export + `mdl_skel.py` include-model resolution** (shared
   animation banks). *Deps:* 8.2, PL4.
+- [x] **8.6a New Game context + story entry** *(carve-out of 8.6, so the game context isn't blocked
+  behind the menu port)* — the minimal state a fresh story run starts from, and the boot path that
+  enters the tutorial in it. `FElysiumPlayerSheet` (clan in the level-script 2..8 encoding, gender,
+  an open `Stats` map 9.4 fills from `vdata/system/*.txt`) + `UElysiumGameStateSubsystem::BeginNewGame`
+  seed it: `Story_State=-4` (the intro spine's post-theatre value), `Tut_Jack=0`, `Tut_Patch=0`
+  (arms the patch's beat-1 relocation), `Linux_Wine=1` — the last set by **both** `vamputil.setBasic()`
+  and `setPlus()`, i.e. by the patch-type selection, without which `logic_pythoncheck linux_check`
+  fires `OnFalse -> popup_linux`. The `Patch_Plus` family is left at `G`'s default 0 = the patch's
+  "Basic" profile. `UElysiumMapSubsystem::NewGame` then travels to the story entry —
+  **`sp_tutorial_1` @ the `tutorial` `info_landmark`, offset zero** — the same landmark a real
+  `trigger_changelevel` from `sp_theatre` uses (4.6's path), so chargen + the choreographed intro
+  (8.6 / P9) are stood in for rather than faked. **Boot default is New Game**: a bare launch starts
+  the story; `-ElysiumMap=<name>` (`play.bat <map>`) keeps the unseeded dev path unchanged, and
+  `-ElysiumNewGame=0` boots the story map bare for A/B. `elysium.newgame [clan] [m|f]` is the console
+  form (clan by name or 2..8) and the seam 8.6's menu will call. **Verified headless:** default boot
+  logs the seed, seats the player at `tutorial + 100 cm` lift (`-35.56, -19029.68, -296.24`, yaw
+  -270) and releases on ground; `popup_linux` no longer fires; `-ElysiumMap=sm_pawnshop_1` still
+  travels bare with no seeding. *Deps:* 4.6, 4.9, 1.1.
 - [ ] **8.6 VGUI menu + New Game flow** — Slate/UMG port of the complete Godot
-  implementation (`KeyValues`/`VguiScheme`/`VguiFont`/`.res` parsers, 640×480 scale box).
+  implementation (`KeyValues`/`VguiScheme`/`VguiFont`/`.res` parsers, 640×480 scale box). The menu's
+  New Game item calls 8.6a's `UElysiumMapSubsystem::NewGame` seam (chargen writes the sheet first).
   *Deps:* none.
 - [ ] **8.7 Ropes** — `keyframe_rope`/`move_rope` (×107 in tutorial) → Cable Components.
   *Deps:* none.
+- [ ] **8.8 Sign window — VGUI fidelity** — 4.10's Canvas panel re-drawn on 8.6's ported VGUI stack,
+  which is where the sign format's remaining half lives: `resource/TrackerScheme.res` fonts
+  (`ParagraphText` 185 uses / `Newsprint` 113 / `Trebuchet` 105 / `Headline` 36 / `Vamp_Handwriting1`
+  27 / `Tahoma`), the 640×480 scale box plus the patch's `//ws-fix` widescreen coordinate pairs,
+  `Label` justification (`Alignment`) vs `TextBlock` word-wrap, `TextRGBA`/`BackgroundRGBA`, `Tiled`
+  backgrounds, `Image` sub-blocks, the **`NewspaperData`** root (30 files) and its `Columns`, and the
+  panel keys `CloseOnLeftClick`/`MinShowTime`/`ClientCommand` + the per-resolution `Font_640`…
+  `Font_1600` overrides. *Deps:* 8.6, 4.10.
 
 ## P9 — Dialogue & persistence *(design: `game_runtime.md`, `rebuild-strategy.md` B7/B9)*
 
@@ -782,9 +881,55 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
   snippets (RE3 confirms; implement as documented regardless). *Deps:* 5.2.
 - [ ] **9.2 Conversation UI + audio-by-path** — UMG dialogue screen, line audio via 6.2.
   *Deps:* 9.1, 6.2, 8.6.
-- [ ] **9.3 Level-script execution** — implement the 5.5 decision; `ScheduleTask` strings
-  must evaluate at arbitrary later times against a live `__main__`-equivalent namespace.
-  *Deps:* 5.5.
+- [x] **9.3a Level-script wiring — CPython is the default host + auto-load at map load.**
+  `UElysiumGameStateSubsystem::MakePreferredScriptHost` installs `FElysiumCPythonScriptHost` when the
+  module carries the vendored SDK **and the interpreter actually starts**, falling back to the expr
+  host otherwise (a dead VM would make every eval Void = error-to-false, indistinguishable from a
+  working host and silently wrong). `FElysiumEntityDefs::LevelScriptModule()` reads
+  `worldspawn.levelscript` off the **parsed defs**, and `AElysiumMapActor` imports it through
+  `UElysiumGameStateSubsystem::LoadLevelScript` **before the spawn pass** — VtMB's own order, so the
+  module's top-level code (constants, `from vamputil import *`, the `On*` defs) is in place before any
+  entity can evaluate a field-6 payload against it. Importing is a host capability
+  (`IElysiumScriptHost::LoadLevelScript`, default "cannot import"), and the module name is remembered,
+  so `SetScriptHost` re-imports into any newly installed host — swapping hosts mid-session never
+  leaves the new one with a bare `__main__`. `EvalScript` (the `elysium.eval`/`exec` verbs + the Cog
+  eval box) now routes through the **installed host** instead of hard-wiring ElysiumExpr, so a
+  hand-run eval resolves exactly what a field-6 payload resolves; `IElysiumScriptHost::Eval` gains an
+  optional `OutError` for it (a return value alone cannot separate "evaluated to None" from "raised").
+  Verified in the built game on `sp_tutorial_1`: `tutorial` imports at map load into host `cpython`,
+  `elysium.eval cCelerity` = **8**, `G.Tutorial_Discflags |= cCelerity` flips `G` to **8** — the 5.5
+  acceptance, now on the default path — `elysium.script.cpython 0` A/Bs back to expr (NameError again),
+  and travel re-imports per map. *Deps:* 5.5.
+- [ ] **9.3 Level-script execution** — the remainder of the 5.5 decision: replace the Python
+  bootstrap's native stubs with the real C `vampire` bindings, and make `ScheduleTask` strings
+  evaluate at arbitrary later times against a live `__main__`-equivalent namespace.
+  **Do `Entity.__getattr__`/`__setattr__` first** (2 of the 54 table entries): they are a datamap
+  traversal over the P1 class-chain field tables, they resolve ~55 of the 109 methods scripts call,
+  and every `ScriptHide`/`Trigger`/`Kill`/`Unlock` is an entity *input* reached only through them —
+  no amount of porting the 11 globals + 24 Character methods gets there. Then fill stubs
+  demand-driven off the Scripting window's native-call counters. Known gap surfaced by 9.3a: the
+  bootstrap's `vamputil` stub lacks `RandomLine`, so `santamonica` (and the other maps whose scripts
+  import it) fails to import — logged, non-fatal, map load continues. *Deps:* 9.3a.
+- [ ] **9.3b Console bridge — `ccmd` + the `cfg` alias table** *(the fifth scripting surface)* —
+  the scripts drive the engine console, and the console drives the scripts back. `__main__.ccmd`
+  is a console-command object whose *attribute assignment* executes a command:
+  `c = __main__.ccmd; c.patchtype = ""` runs the console alias `patchtype`. Aliases and settings
+  come from `cfg/user.cfg` (`alias patchtype "setPlus()"`, `vchar_skip_intro`, `torchlight_*`,
+  the `run`/`walk`/`automove` movement aliases, …), and a command the console does not recognise
+  falls through to Python — so the round trip is **Python → alias → Python**.
+  **This is how the Unofficial Patch selects Basic vs Plus**: the installer writes one of two
+  `user.cfg` files differing only in whether `patchtype` expands to `setBasic()` or `setPlus()`,
+  and one shared script tree asks the console which install it is running under. Nothing in any
+  `.py`/`.ents`/`.dlg`/`.bsp` names `setPlus`/`setBasic` — the only reference in the whole install
+  is that one `.cfg` line, which is why it reads as dead code until you search the config tree.
+  **Load-bearing, and it starts on map load:** `logic_auto.OnMapLoad -> unhidePlus()` is wired on
+  **107 of 108 maps** (`sp_tutorial_1` included), and `setPlus()` is what arms `trig_popup_move`
+  (the 4.10 movement-popup gate, `StartDisabled 1`) plus the haven/beachhouse/condom
+  ScriptHide/Unhide sets and the `plus_handle*` door locks. Today `unhidePlus()` evaluates,
+  hits the unbound `ccmd`, and dies error-to-false — so those entities stay dormant and
+  `G.Patch_Plus` stays 0, silently selecting Basic-mode behaviour everywhere.
+  Scope: bind `ccmd` (attribute-set = execute), a cvar/alias store seeded from a **PL5d** copy of
+  `cfg/*.cfg`, and the console→Python fallthrough. *Deps:* 9.3; needed by 4.10's trigger arming.
 - [ ] **9.4 Quests/XP + RPG sheet data** — quest map is live since 1.1; load
   `vdata/system/*.txt` (**PL5b copies**) into the sheet; XP awards. *Deps:* 1.1.
 - [ ] **9.5 Save/load** — the four blocks (entity save-fields via the field tables, event
@@ -829,7 +974,8 @@ dialogue, scripted flow, quests, save/load included.
 | PL2 | Copy loose `.py` → `out/scripts/`, `.dlg` → `out/dlg/` — `UE_extract_scripts.py` | 5.1 [x] |
 | PL3 | Use-icon atlas export (72-entry enum) — `UE_use_icons.py` → `out/hud/use_icons.png`+`.json` | 4.4 [x] |
 | PL4 | Batch NPC export + include-model resolution in `mdl_skel.py` | 8.5 |
-| PL5 | Copy sound schemes (a) [x] + `vdata/system/*.txt` (b) | 6.3, 9.4 |
+| PL5 | Copy sound schemes (a) [x] + `vdata/system/*.txt` (b) + `vdata/Signs/*.txt` ×278 + the 57 referenced background materials (`hud/signs/*`, `interface/Pop_Ups/*`) → `out/signs/` — `UE_extract_signs.py` (c) [x] | 6.3, 9.4, 4.10 |
+| PL5d | Copy `cfg/*.cfg` (the alias/cvar tables — `user.cfg` carries the Basic/Plus `patchtype` alias) → `out/cfg/` | 9.3b |
 | PL6 | Texlight merge in exporter | 3.4 |
 | PL7 | Sidecar space fixes surfaced by the audit — **none (0.4: all sidecars already Unreal cm)** | 0.4 [x] |
 
@@ -902,6 +1048,20 @@ pointer-only code and unblocked both — G fully, RE1's `Spawn` via the vftable 
 handler-string refs stayed absent, so `Spawn` was reached through the vtable rather than the trace
 strings). The AIF DB is the current project state; further per-class work rides on it.
 
+**RE4 — `DumpDatamap.java` landed (the batched extractor the plan called for).** Give it
+`map=<datamap_t>` or `vtable=<vftable>` (it reads slot `+0x148`, follows the 5-byte JMP thunk, and
+parses the `MOV EAX,imm32; RET` body) and it walks the 44-byte `typedescription_t` records —
+external/internal name, fieldType, offset, flags, `inputFunc` — splitting them into
+inputs / outputs / fields and following the `baseMap` chain. **Key shape fact:** VtMB datamaps are
+**half static**. The leading records (inputs + keyfields) are statically initialised in `.data`, but
+the trailing output records *and the `datamap_t`'s own `dataDesc`/`numFields`* are written at
+static-init by a builder function — so a raw image read reports `numFields 0` and the input-name
+strings carry **no xrefs**. Workflow: `DumpXrefs` the `datamap_t` address → the WRITE site names the
+builder → decompile it for the runtime-built output names, and read `_DAT_<map>+0 / +4` at its tail
+for the record base + count → re-run `DumpDatamap` with `recs=`/`count=` for the static half.
+Proven on `CPlayerEvents` (builder `FUN_10226700`, records `0x105b2904`, 36 = 14 static + 22 built)
+and `CWorldEvents` (builder `FUN_1023d050`, records `0x105c2a94`, 31 = 11 static + 20 built) for 4.9.
+
 **RE4 — datamap export: method CONFIRMED + CBaseEntity base map extracted.** VtMB builds datamaps
 **at runtime** (no static `DEFINE_FIELD` arrays), so the export decompiles the per-class **datamap
 builder** functions, not a static `.data` walk. The CBaseEntity builder is **`FUN_100a22f0`** (1075
@@ -927,6 +1087,19 @@ source via `FUN_100ce8a0`, field-6 Python via `FUN_100ce990`, type 2 discipline.
 fired *during* a think is serviced after all thinks that frame. **Implication:** flip task 1.4 to
 think-first to match retail (recorded in `engine-core.md` Tick note) — unless save-determinism
 argues for keeping queue-first; that is the 1.4 tick-order call.
+
+**`OnEnterMapHere` — CONFIRMED `info_landmark`-only.** The string pair `OnEnterMapHere`
+(`0x10559aa0`) / `m_OnEnterMapHere` (`0x10559ab4`) has exactly **one** referencing function in
+`vampire.dll`: the `CBaseLandmark` datamap builder **`FUN_100b7220`** (the same map that declares
+`OnSpawnOneCopCar` / `OnSpawnTwoCopCars` / `OnDelaySpawn*` / `OnCopsInPursuit` /
+`OnHeightenedAlert`, at field offsets `0x468`–`0x4f8`, output fieldtype `10`). `point_teleport`
+(`FUN_1018d940`, object `0x468`, vftable `0x10472e94`) is a plain `CPointEntity` and declares no
+outputs — so the three exported `point_teleport` entities carrying an `OnEnterMapHere` wire
+(`sp_tutorial_1`'s `teleport_very_beginning` ×2, `sm_hub_1`'s `sewerB2_street` ×2) are **inert map
+data**: the keyvalue lookup finds no such output on the class and drops the wire. **4.6's placement
+of the fire on the resolved `info_landmark` is therefore correct as shipped — no change.**
+Consequence for the tutorial: nothing fires on arrival; the first beat is armed by
+`trig_off_porch`'s `OnEndTouch` (`game_runtime.md` §4, corrected).
 
 **RE5 (Ghidra-drivable, open):** optionally static-recover the vroll resolver in `vampire.dll` to
 cross-check `recovered/dice-system.md` alongside the running-game golden test.
@@ -960,7 +1133,8 @@ cross-check `recovered/dice-system.md` alongside the running-game golden test.
 |---|---|---|
 | MegaLights silently disengages (VSM fallback) | frame collapses | 0.2 check lives in the profiling routine forever; 3.1 pins it |
 | ~~Cog fails to build on 5.8~~ **(resolved)** | debug layer slips | **0.5 done: Cog builds + runs clean on 5.8** (VS 14.50, no ImPlot patch needed); fallback (VesCodes/ImGui + hand-rolled windows) unused |
-| Level scripts exceed the mini-interpreter subset | scripting rework | 5.5 survey + decision before building; CPython embed is the acknowledged fallback |
+| ~~Level scripts exceed the mini-interpreter subset~~ **(resolved)** | scripting rework | **5.5 + 9.3a done: CPython 2.7.18 is embedded and is the map-load default host**, importing the map's own `worldspawn.levelscript` — retail's scripts run as written |
+| Embedded VM fails to start in a packaged build | whole scripting surface silently error-to-false | 9.3a: `MakePreferredScriptHost` checks the VM actually started and falls back to the expr host, logging a warning, rather than leaving every eval Void |
 | Chaos kinematic movers push/block poorly | doors feel wrong | 4.1 prototypes one door first |
 | Floor perf unproven (no 3060 on hand) | late surprise | look-gates until 10.3; lump-8 bake parked as contingency; Lumen Lite noted as a cheaper option (see Options) |
 | Tutorial-only calibration bias | rework on other maps | 0.3 second map early; all calibration provisional until 10.1 |
@@ -971,6 +1145,86 @@ cross-check `recovered/dice-system.md` alongside the running-game golden test.
 
 ## Decision log (append-only)
 
+- **2026-07-23** — **9.3a: the level scripts are wired; CPython is the default host.** The 5.5 PoC
+  proved the embed offline but nothing connected it to a map — `LoadLevelScript` was reachable only
+  from `elysium.py.load` and the Cog button, and the map-load host was still ElysiumExpr. Three
+  decisions closed that:
+  **(1) The import happens off the parsed `.ents`, before the spawn pass** — not off the live entity
+  world after it. VtMB runs the level script's top-level code first and spawns entities into that
+  namespace; doing it after `FElysiumEntityWorld::Load` would leave a spawn-time field-6 payload
+  evaluating against a module that does not exist yet. Hence `FElysiumEntityDefs::LevelScriptModule()`
+  rather than a worldspawn walk over the built world.
+  **(2) Importing is a host capability, and the module name is remembered.**
+  `IElysiumScriptHost::LoadLevelScript` defaults to "this host cannot import", which the expr and null
+  hosts inherit truthfully; `SetScriptHost` re-imports the remembered module into whatever host is
+  installed next. Without that, `elysium.script.cpython 1` mid-map would install a CPython host with a
+  bare `__main__` and every level constant would read NameError — an A/B that lies.
+  **(3) A CPython VM that fails to start falls back to the expr host.** Its evals would all be Void,
+  which is exactly what error-to-false looks like (RE3) — so a missing `python27.dll` in a packaged
+  build would degrade the entire scripting surface **silently and plausibly**. `MakePreferredScriptHost`
+  checks `IsUsable()` and warns.
+  Routing `EvalScript` through the installed host came with it: the console verbs and the Cog eval box
+  hard-wired ElysiumExpr, so with CPython live they would report NameError for names the game itself
+  resolves — a debug surface contradicting the runtime. `IElysiumScriptHost::Eval` gains an optional
+  `OutError` (a Void return cannot distinguish "evaluated to None" from "raised"), and the eval/exec
+  split collapses to one path: the CPython host already tries `Py_eval_input` then `Py_file_input`, and
+  `ElysiumExpr::Exec` returns its last statement's value.
+  Verified in the built game, not offline: `sp_tutorial_1` imports `tutorial` at map load into host
+  `cpython`; `elysium.eval cCelerity` = **8**; `G.Tutorial_Discflags |= cCelerity` flips `G` to **8**;
+  `elysium.script.cpython 0` returns NameError; travel to `sm_pawnshop_1` re-imports per map.
+  That last one surfaced the first real gap: `santamonica` raises `ImportError: cannot import name
+  RandomLine` — the bootstrap's `vamputil` stub is thinner than the retail module. Logged, non-fatal,
+  map load continues. It is 9.3 work, and it is evidence for doing `Entity.__getattr__` and a real
+  `vamputil` before hand-porting the 24 Character methods.
+
+- **2026-07-23** — **There is a fifth scripting surface: the console (9.3b + PL5d).**
+  `python_bridge.md` lists four Python surfaces (level scripts, `.dlg`, entity field-6,
+  `logic_pythoncheck`); the console is a fifth path and it is **bidirectional**. Scripts execute
+  console commands by attribute-assigning on `__main__.ccmd` (`c.patchtype = ""`), and a command
+  the console cannot resolve falls through to Python. The Unofficial Patch uses that round trip as
+  its whole Basic/Plus switch — the install variant lives in `cfg/user.cfg`
+  (`alias patchtype "setPlus()"`), not in any script or map, so `setPlus`/`setBasic` appear
+  uncalled to any search of `.py`/`.ents`/`.dlg`/`.bsp`. Found while asking why `trig_popup_move`
+  never fires: `logic_auto.OnMapLoad -> unhidePlus()` is wired on 107 of 108 maps and is the
+  ignition for the whole chain, so with `ccmd` unbound every Plus-mode entity tweak silently
+  no-ops and `G.Patch_Plus` stays 0. Tracked as **9.3b**, with the cfg copy as **PL5d**.
+- **2026-07-23** — **The sign panel draws on a 1024×768 canvas, uniformly scaled by height (4.10).**
+  The layout is **client.dll's `CSignUI`**, not `vampire.dll` — the game DLL owns only the entity and
+  `LoadSignData`, which is why the earlier `sign.txt` dump had the file resolution but no paint code.
+  `FUN_10061520` parses; `FUN_10061830` (background) and `FUN_10060560` (text block) map the authored
+  rect through the doubles at `0x10227ec8` = 1/1024 and `0x10227eb8` = 1/768 and call SetPos/SetSize
+  (`FUN_101a9950`). Three findings the data alone could not give:
+  (1) **The scale is uniform, driven by height** — `FUN_100cd100`, which the width math divides by
+  1024, is a 4:3-proportional width (`ScreenH·4/3`), not the backbuffer width, so `Wide·A/1024`
+  collapses to `Wide·ScreenH/768`. The canvas keeps its aspect and letterboxes horizontally rather
+  than stretching. Measured against the retail game on 16:9: panel width is **1.513×** the screen
+  width, where a stretch model predicts 2.0× and this one predicts 1.50×.
+  (2) **Text blocks are children of the panel**, so `XPos`/`YPos` are offsets inside the
+  `BackgroundImage` rect, not screen coordinates — `FUN_10061830` is a `CSignUI` method setting the
+  panel's own bounds. The shipped data corroborates: the patch moved `tutorial_popup_moving1`'s body
+  text 324 → 836 in the same edit that widened the background 1024 → 2048, and a centred 2048-wide
+  panel starts at virtual −512, so −512+836 lands on retail's original pixel.
+  (3) When `XPos + YPos == 0` the background takes a **centring branch**, which is why
+  `interface/Pop_Ups/general` at `2048×1024` deliberately overscans and bleeds off every edge.
+  Three keys the entity-side survey had missed also turned up: **`HideHUD`**, and **`ClientCommand`**
+  inside a **`Rules`** block (with `CloseOnLeftClick`, whose retail default is the panel's constructed
+  value = **true**, and `MinShowTime`). Fonts pick by *exact* screen-width match on
+  640/800/1024/1280/1600, else the plain `Font`, else `"Default"`.
+- **2026-07-23** — **Sign windows tracked, split substrate/UI (4.10 + 8.8 + PL5c).** `game_sign` /
+  `prop_sign` had no task: the only mention anywhere was `entity_visuals.md` R5, which called them
+  "textured quads/decals… small, cosmetic; last" — wrong, and the reason they were never scheduled.
+  The decompile settles what they are (`CGameSign::LoadSignData` `FUN_10212da0` /
+  `CPropSign::LoadSignData` `FUN_10212200`): a **full-screen VGUI window** whose `definition_file`
+  is a `SignData` KeyValues panel, opened by `OpenWindow` or `+use`, with a first-true `Sign
+  { dependency filename }` redirect evaluated as Python (`Py_eval_input`, error-to-false) — i.e. a
+  UI + scripting subsystem, not geometry. They are also **load-bearing for the tutorial**: 71 of the
+  73 `game_sign` in the game sit on `sp_tutorial_1` as the `popup_*` help windows, and `tutorial.py`'s
+  beat machine opens/rewrites them directly, so "tutorial completable as retail" (P9) can't be met
+  without them. **Split:** the entity classes + a Canvas panel land in P4 as **4.10** (so the
+  substrate is complete and the tutorial's 51 `OpenWindow` wires stop dropping, before P5's scripts
+  start firing them), and the pixel-faithful panel waits for the VGUI stack the menu port brings, as
+  **8.8**. The definitions + background materials export as **PL5c**. R5 in `entity_visuals.md` is
+  corrected to point here.
 - **2026-07-22** — **5.5 decided: embed CPython 2.x (option c), plus a working PoC.** The survey
   settles it. The 36 loose level scripts (out/scripts, **16,473 lines** excl. the bundled 2.1 stdlib)
   are full Python 2.1, not an expression dialect: **1,119 `def`, 45 old-style `class`, 345 `for` /

@@ -35,10 +35,19 @@ struct FElysiumContentPaths
 	// Scripting (P5). VtMB's level scripts + dialogue are game-global loose plain-text,
 	// mirrored verbatim under out/scripts and out/dlg by tools/UE_extract_scripts.py. A
 	// worldspawn `levelscript` value (e.g. "tutorial") names the hub module, which lives at
-	// scripts/<module>/<module>.py. No runtime host consumes these yet (roadmap 5.2+).
+	// scripts/<module>/<module>.py — imported into the embedded CPython VM at map load (9.3a).
 	static FString ScriptsDir() { return Root() / TEXT("scripts"); }
 	static FString DlgDir() { return Root() / TEXT("dlg"); }
 	static FString ScriptModuleFile(const FString& Module) { return ScriptsDir() / Module / (Module + TEXT(".py")); }
+
+	// Signs (P4.10 / PL5c). VtMB's sign+popup panels are game-global `SignData` KeyValues files,
+	// mirrored flat and lowercased under out/signs by tools/UE_extract_signs.py (a `definition_file`
+	// keyvalue's `vdata/Signs/` prefix and authored case are dropped). Their `BackgroundImage`
+	// materials decode to out/signs/tex/, keyed by out/signs/backgrounds.json.
+	static FString SignsDir() { return Root() / TEXT("signs"); }
+	static FString SignFile(const FString& Leaf) { return SignsDir() / Leaf; }
+	static FString SignTexDir() { return SignsDir() / TEXT("tex"); }
+	static FString SignBackgrounds() { return SignsDir() / TEXT("backgrounds.json"); }
 
 	// NPCs (P8 8.2). Skeletal characters export as one standard glTF 2.0 file per model (mesh +
 	// StudioBone skeleton + one animation) under out/npc, written by tools/mdl_gltf.py. The runtime

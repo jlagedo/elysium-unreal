@@ -29,7 +29,20 @@ public:
 	virtual ~IElysiumScriptHost() = default;
 
 	// Evaluate a call string as `__main__.<Source>`; returns the result (Void on error/none).
-	virtual FElysiumVariant Eval(const FString& Source, const FElysiumScriptContext& Ctx) = 0;
+	// OutError, when given, receives the failure reason — empty on success. The return value alone
+	// cannot distinguish "evaluated to None" from "raised", and the debug layer needs to.
+	virtual FElysiumVariant Eval(const FString& Source, const FElysiumScriptContext& Ctx,
+		FString* OutError = nullptr) = 0;
+
+	// Import the map's level-script module (worldspawn.levelscript) so subsequent evals resolve its
+	// names. Only a host with a real interpreter can honour this; the others report false with a
+	// reason, which is not an error — a map's field-6 payloads still evaluate, just without level
+	// constants. Called at map load and again whenever a host is installed (roadmap 9.3).
+	virtual bool LoadLevelScript(const FString& Module, FString& OutError)
+	{
+		OutError = FString::Printf(TEXT("host '%s' cannot import level scripts"), Name());
+		return false;
+	}
 
 	// Short identity for logs (e.g. "null").
 	virtual const TCHAR* Name() const = 0;
@@ -42,7 +55,8 @@ public:
 class FElysiumNullScriptHost final : public IElysiumScriptHost
 {
 public:
-	virtual FElysiumVariant Eval(const FString& Source, const FElysiumScriptContext& Ctx) override;
+	virtual FElysiumVariant Eval(const FString& Source, const FElysiumScriptContext& Ctx,
+		FString* OutError = nullptr) override;
 	virtual const TCHAR* Name() const override { return TEXT("null"); }
 };
 
@@ -56,7 +70,8 @@ class FElysiumExprScriptHost final : public IElysiumScriptHost
 {
 public:
 	explicit FElysiumExprScriptHost(UElysiumGameStateSubsystem* InState) : State(InState) {}
-	virtual FElysiumVariant Eval(const FString& Source, const FElysiumScriptContext& Ctx) override;
+	virtual FElysiumVariant Eval(const FString& Source, const FElysiumScriptContext& Ctx,
+		FString* OutError = nullptr) override;
 	virtual const TCHAR* Name() const override { return TEXT("expr"); }
 
 private:
@@ -73,9 +88,19 @@ class FElysiumCPythonScriptHost final : public IElysiumScriptHost
 {
 public:
 	explicit FElysiumCPythonScriptHost(UElysiumGameStateSubsystem* InState);
-	virtual FElysiumVariant Eval(const FString& Source, const FElysiumScriptContext& Ctx) override;
+	virtual FElysiumVariant Eval(const FString& Source, const FElysiumScriptContext& Ctx,
+		FString* OutError = nullptr) override;
+	virtual bool LoadLevelScript(const FString& Module, FString& OutError) override;
 	virtual const TCHAR* Name() const override { return TEXT("cpython"); }
+
+	// True when the embedded VM actually came up. A failed init leaves every eval Void, which is
+	// indistinguishable from error-to-false — so the subsystem checks this before making this host
+	// the map-load default and falls back to the expr host instead of silently going dark.
+	bool IsUsable() const { return bVmStarted; }
+
+	static bool IsAvailable();  // module built with the vendored CPython SDK
 
 private:
 	UElysiumGameStateSubsystem* State = nullptr;
+	bool bVmStarted = false;
 };

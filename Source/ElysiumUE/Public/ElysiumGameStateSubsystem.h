@@ -46,6 +46,31 @@ struct FElysiumNativeCallRecord
 	bool bStub = false;    // true when the call only logged (no backing system yet)
 };
 
+// The player's character sheet, as far as the opening needs it. VtMB keeps the numeric sheet as
+// datamap fields on the player entity (`game_runtime.md` §2: numbers on the entity, story in `G`,
+// progress in quests) and `ccmd.createplayer` writes it during chargen on `sp_genesisdevice_1`.
+// There is no player entity and no chargen yet (P8/P9), so this stands in for both: the minimum
+// the tutorial's own scripts read off `pc`.
+//
+// `Clan` uses the LEVEL-SCRIPT indexing 2..8 (Brujah 2 … Ventrue 8) that `pc.clan` carries — not
+// the 1..7 `ClanNameFunc` display enum, and not `clandoc`'s ordering. `game_runtime.md` §3 records
+// that two indexings exist; the scripts (`IsClan`, `unhidePlus`'s 9/10/11 patch-type sentinels)
+// speak this one.
+//
+// `Stats` is the open-ended remainder (`base_<discipline>`, attributes, abilities). 9.4 loads
+// `vdata/system/*.txt` into it; until then it stays empty and readers fall back to their defaults.
+struct FElysiumPlayerSheet
+{
+	int32 Clan = 2;                  // pc.clan (2..8)
+	bool bMale = true;               // pc.IsMale()
+	TMap<FName, int32> Stats;        // base_<name> -> rating (9.4)
+
+	// Clan display names indexed by the 2..8 encoding; index 0/1 unused.
+	static const TCHAR* ClanName(int32 Clan);
+	// Case-insensitive name -> 2..8, or 0 when unrecognised (drives `elysium.newgame brujah`).
+	static int32 ClanFromName(const FString& Name);
+};
+
 // Persistent-across-travel game state (R8). Owns the three things that outlive any single
 // map load: the `G` global flag store, the quest string->int map, and the game clock. The
 // entity world and its event queue die with AElysiumMapActor; this lives on the game
@@ -89,6 +114,28 @@ public:
 	bool HasQuest(const FString& Quest) const;
 	const FElysiumQuestMap& GetQuests() const { return Quests; }
 
+	// --- Player sheet + New Game ---------------------------------------------------
+	const FElysiumPlayerSheet& PlayerSheet() const { return Sheet; }
+	FElysiumPlayerSheet& PlayerSheet() { return Sheet; }
+
+	// Seed the state a fresh story run starts from. New Game in retail is four maps
+	// (`level_transitions.md`): chargen on `sp_genesisdevice_1` writes the sheet, then the theatre
+	// embrace + trial, then a landmark transition into `sp_tutorial_1`. Chargen (8.6) and the
+	// choreographed intro (P9) are unbuilt, so this seeds exactly what survives that chain and is
+	// read afterwards, and the caller travels straight to the story entry.
+	//
+	// Seeded flags, and why each one:
+	//   Story_State = -4   the intro spine's "theatre done" value (chargen -5, leaving tutorial -2)
+	//   Tut_Jack    =  0   the tutorial beat counter DialogPostProcess dispatches on
+	//   Tut_Patch   =  0   arms the patch's beat-1 relocation (teleport_fade -> the retail start)
+	//   Linux_Wine  =  1   set by BOTH vamputil.setBasic() and setPlus(), i.e. by the patch-type
+	//                      selection; `logic_pythoncheck linux_check` fires OnFalse -> popup_linux
+	//                      without it, so seeding it stands in for having configured the patch
+	// The Patch_Plus family (PP / Patch_Plus / Jack_Extra / Flynn_Extra / Extra_Lines) is left at
+	// G's default 0 = the patch's "Basic" profile, the closest to retail. `G` is default-0 on miss
+	// (RE3), so the zeros need no explicit seeding; only the non-zero flags are written.
+	void BeginNewGame(int32 Clan, bool bMale);
+
 	// --- Clock ---------------------------------------------------------------------
 	FElysiumGameClock& GameClock() { return Clock; }
 	const FElysiumGameClock& GameClock() const { return Clock; }
@@ -100,20 +147,42 @@ public:
 	IElysiumScriptHost& ScriptHost() const { return *ScriptHostPtr; }
 	void SetScriptHost(TUniquePtr<IElysiumScriptHost> InHost);
 
-	// --- Live field-6 evaluation (P5 5.2, opt-in) ----------------------------------------
-	// Arm/disarm the real expression evaluator on the field-6 path: on -> swap in the expr host,
-	// off -> restore the null host. Default off (the null host stands in at boot); 5.4 makes the
-	// expr host the unconditional default and adds logic_pythoncheck + ScheduleTask. Driven by the
-	// `elysium.script.live` verb and the Scripting Cog window checkbox.
+	// --- Level script (P9 9.3) -----------------------------------------------------------
+	// Import the map's `worldspawn.levelscript` module into the installed host. AElysiumMapActor
+	// calls this once per map load, before the spawn pass, so the module's top-level code (its
+	// constants, imports and class defs) is in place before any entity evaluates a field-6 payload
+	// against it. The module name is remembered, so installing a different host re-imports it there
+	// — swapping hosts mid-session never leaves the new one with an empty namespace.
+	// Reports false with a reason when the host has no interpreter or the import raised; that is a
+	// logged condition, not a failure of map load (payloads still evaluate, minus level names).
+	bool LoadLevelScript(const FString& Module);
+	const FString& CurrentLevelScriptModule() const { return LevelScriptModule; }
+
+	// Outcome of the last LoadLevelScript, for the debug layer. Empty error = loaded.
+	bool IsLevelScriptLoaded() const { return bLevelScriptLoaded; }
+	const FString& LevelScriptError() const { return LevelScriptLoadError; }
+
+	// --- Live script evaluation (P5 5.4) --------------------------------------------------
+	// Arm/disarm real evaluation on the whole scripting surface (field-6, logic_pythoncheck,
+	// ScheduleTask): on -> the preferred real host, off -> the null host (logs + Void). Live is the
+	// map-load default. Driven by the `elysium.script.live` verb and the Scripting Cog window.
 	void SetLiveScriptEval(bool bEnable);
 	bool IsLiveScriptEval() const;
 
+	// The real host installed when evaluation is live: the embedded CPython VM when the module was
+	// built with it and the interpreter comes up, else the ElysiumExpr evaluator. `elysium.script.
+	// cpython [0|1]` overrides the choice for A/B; a CPython VM that fails to start falls back
+	// rather than leaving every eval Void, which would be indistinguishable from error-to-false.
+	TUniquePtr<IElysiumScriptHost> MakePreferredScriptHost();
+
 	// --- Expression-eval convenience + debug history (P5 5.2) ----------------------------
-	// Evaluate/execute a script string against the CURRENT map's entity world + this G store, for
-	// the console verbs and the Cog window. Eval = a single expression (returns its value); Exec =
-	// statement(s) (assignment / bare call). Both record into the recent-eval log. Total (never
-	// throws): on error OutError carries the reason and the result is Void.
-	FElysiumVariant EvalScript(const FString& Source, bool bExec, FString& OutError);
+	// Evaluate a script string against the CURRENT map's entity world + this G store, for the
+	// console verbs and the Cog window. Runs through the installed host, so it resolves exactly what
+	// a field-6 payload resolves — including the loaded level script's names. Expression and
+	// statement shapes both work; the value is the expression's, or the last statement's. Records
+	// into the recent-eval log. Total (never throws): on error OutError carries the reason and the
+	// result is Void (error-to-false, RE3).
+	FElysiumVariant EvalScript(const FString& Source, FString& OutError);
 
 	// Push one evaluation onto the recent-eval ring (called by the expr host + EvalScript).
 	void RecordEval(const FString& Source, const FElysiumVariant& Result, bool bError, const FString& Error);
@@ -135,8 +204,14 @@ public:
 private:
 	FElysiumGlobalMap Globals;
 	FElysiumQuestMap Quests;
+	FElysiumPlayerSheet Sheet;
 	FElysiumGameClock Clock;
 	TUniquePtr<IElysiumScriptHost> ScriptHostPtr;
+
+	// The current map's level-script module + the last import's outcome (P9 9.3).
+	FString LevelScriptModule;
+	FString LevelScriptLoadError;
+	bool bLevelScriptLoaded = false;
 
 	// Recent-eval ring (debug-only), newest last; capped at EvalHistoryMax.
 	static constexpr int32 EvalHistoryMax = 64;

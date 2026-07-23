@@ -385,10 +385,19 @@ rows.
 
 Entered via landmark `tutorial`. Two `logic_auto`s init on `OnMapLoad`:
 `pc_0,MakePlayerUnkillable`; `Jack,WillTalk 0` (silent until cued);
-`world,SetNoFrenzyArea 1`; `ccmd.wc_create` (runtime cubemap bake). A `point_teleport
-"teleport_very_beginning"` (`OnEnterMapHere → Jack,StartPlayerDialogRemote` at +1.2s +
-fade) places the player and **auto-starts Jack's dialogue** (`dlg/Main
-Characters/jack_tutorial.dlg`) on arrival.
+`world,SetNoFrenzyArea 1`; `ccmd.wc_create` (runtime cubemap bake). Nothing fires on
+arrival itself: the first beat is armed by the `trig_off_porch` `trigger_multiple`, whose
+`OnEndTouch` (walking off the theatre porch) sets `Jack,WillTalk 1`, calls
+`Jack,StartPlayerDialogRemote 256` — opening `dlg/Main Characters/jack_tutorial.dlg` —
+and spawns `blueblood_maker` plus `pc_0,CreateControllerNPC`.
+
+> **`OnEnterMapHere` is an `info_landmark`-only output** **[VtMB]**. Its datamap builder
+> (`FUN_100b7220`, the `CBaseLandmark` map alongside `OnSpawnOneCopCar` /
+> `OnCopsInPursuit` / `OnHeightenedAlert`) holds the sole reference to the
+> `OnEnterMapHere` / `m_OnEnterMapHere` string pair in `vampire.dll`. Map data that hangs
+> the output on a `point_teleport` — `sp_tutorial_1`'s `teleport_very_beginning`,
+> `sm_hub_1`'s `sewerB2_street` — is **inert**: the class declares no such output, so the
+> keyvalue lookup drops the wire.
 
 **The tutorial is a beat machine keyed on one integer.** Jack's NPC `OnDialogEnd` fires
 `DialogPostProcess()` (field-6 python), which dispatches on **`G.Tut_Jack`** (a 0→18
@@ -421,7 +430,8 @@ real game start.
 | trial | `start_courtroom` trigger_once | `courtroom_scene_relay,Trigger` + `courtroomSire()` |
 | trial → walk-out | camera keyframe | `OnReachedKeyframe → scene_over_relay → walk_out_relay` |
 | **theatre → tutorial** | `walk_out_cam_k` final keyframe | `tutorial_change,ScriptUnhide` + `controls,Deactivate` + `fade_to_tutorial,Fade`; then the (StartHidden) `tutorial_change` trigger_changelevel transitions. **Not** `tutorialLoad()`. |
-| tutorial entry | `teleport_very_beginning` point_teleport | `OnEnterMapHere → Jack,StartPlayerDialogRemote` (+1.2s) + fade |
+| tutorial entry | landmark `tutorial` placement (nothing fires on arrival) | Jack stands cued-silent (`WillTalk 0`); `teleport_very_beginning`'s `OnEnterMapHere` wires are inert (output is `info_landmark`-only) |
+| tutorial first beat | `trig_off_porch` trigger_multiple | `OnEndTouch → Jack,WillTalk 1` + `Jack,StartPlayerDialogRemote 256` + `blueblood_maker,Spawn` + `pc_0,CreateControllerNPC` |
 | tutorial beats | Jack `OnDialogEnd → DialogPostProcess()` | branch on `G.Tut_Jack`; + `logic_set_clan_stuff`, per-beat `scripted_sequence`/`ScheduleTask` |
 | tutorial → Santa Monica | `LeaveTutorial()` → `ChangeMap` | `trig_leave_tutorial` → `sm_pawnshop_1`, landmark `newgame` |
 

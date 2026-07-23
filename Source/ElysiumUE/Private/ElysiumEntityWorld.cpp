@@ -8,6 +8,7 @@
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumScriptHost.h"
+#include "ElysiumSignData.h"
 #include "ElysiumUseIcons.h"
 
 #include "Components/SceneComponent.h"
@@ -349,6 +350,74 @@ bool FElysiumEntityWorld::GetScreenFade(FLinearColor& OutColor) const
 	OutColor = ScreenFade.Color;
 	OutColor.A = FMath::Clamp(Alpha, 0.0f, 1.0f);
 	return OutColor.A > KINDA_SMALL_NUMBER;
+}
+
+// --- Open sign window (P4.10) -----------------------------------------------------------
+
+void FElysiumEntityWorld::OpenSign(const FElysiumEntityHandle& NewOwner,
+	TSharedPtr<const FElysiumSignData> Data, float FadeInSeconds)
+{
+	// A second OpenWindow replaces the first (CSignUI keeps one panel). The outgoing sign closes
+	// silently: retail does not fire OnUseEnd for a panel the player never dismissed.
+	if (OpenSignOwner.IsSet() && OpenSignOwner != NewOwner)
+	{
+		CloseSign(/*bSilent*/ true);
+	}
+	OpenSignOwner = NewOwner;
+	OpenSignData = MoveTemp(Data);
+	OpenSignFadeIn = FMath::Max(FadeInSeconds, 0.0f);
+	OpenSignTime = NowSeconds();
+}
+
+void FElysiumEntityWorld::CloseSign(bool bSilent)
+{
+	if (!OpenSignOwner.IsSet())
+	{
+		return;
+	}
+	const FElysiumEntityHandle Closing = OpenSignOwner;
+	OpenSignOwner = FElysiumEntityHandle();
+	OpenSignData.Reset();
+	OpenSignFadeIn = 0.0f;
+	OpenSignTime = 0.0;
+
+	if (!bSilent)
+	{
+		// OnUseEnd is the tutorial's whole progression hook (popup_3 -> popup_4, popup_6 ->
+		// chopdoor_brush.ScriptHide). Fire it through the entity so it takes the real output path.
+		if (FElysiumEntity* Ent = Resolve(Closing))
+		{
+			static const FName OnUseEnd(TEXT("OnUseEnd"));
+			Ent->FireOutput(OnUseEnd, FElysiumEntityHandle());
+		}
+	}
+}
+
+void FElysiumEntityWorld::PlayerDismissSign()
+{
+	if (!OpenSignOwner.IsSet() || !OpenSignData.IsValid())
+	{
+		return;
+	}
+	if (!OpenSignData->bCloseOnLeftClick)
+	{
+		return;   // a Rules block can opt out (the panel then waits for a scripted CloseWindow)
+	}
+	if (OpenSignData->MinShowTime > 0.0f &&
+		(NowSeconds() - OpenSignTime) < double(OpenSignData->MinShowTime))
+	{
+		return;   // still inside the enforced dwell
+	}
+	CloseSign(/*bSilent*/ false);
+}
+
+FElysiumEntityHandle FElysiumEntityWorld::GetOpenSign(double* OutOpenTime) const
+{
+	if (OutOpenTime)
+	{
+		*OutOpenTime = OpenSignTime;
+	}
+	return OpenSignOwner;
 }
 
 APawn* FElysiumEntityWorld::GetPlayerPawn() const

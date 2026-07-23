@@ -38,11 +38,16 @@ The chain, all via landmarks:
 New Game
   → map sp_genesisdevice_1            (chargen; levelscript "demo")
   → trigger_changelevel "boogieout"   → sp_theatre        landmark newgame
-  → theatre.py tutorialLoad():
-      ChangeMap(2.5, "tutorial", "tutorial_change")
+  → walk_out_cam_k final keyframe:
+      tutorial_change,ScriptUnhide + controls,Deactivate + fade_to_tutorial,Fade
   → sp_theatre trigger_changelevel "tutorial_change"
                                        → sp_tutorial_1     landmark tutorial
 ```
+
+The theatre→tutorial handoff is driven **entirely by entities**. `theatre.py`'s
+`tutorialLoad()` (`ChangeMap(2.5, "tutorial", "tutorial_change")`) is a parallel/legacy
+path with **no caller** — no theatre entity output and no `.dlg` row invokes it
+(`game_runtime.md` §4).
 
 So the player enters the tutorial through the **`tutorial` landmark**, and where
 they land is `info_landmark "tutorial"`, not `info_player_start`. On this map both

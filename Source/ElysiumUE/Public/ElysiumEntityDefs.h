@@ -69,6 +69,13 @@ struct FElysiumEntityDefs
 
 	int32 Num() const { return Defs.Num(); }
 
+	// The map's `worldspawn.levelscript` value (e.g. "tutorial"), or empty when worldspawn carries
+	// no such key. Names the hub Python module at scripts/<module>/<module>.py, which the runtime
+	// imports at map load (roadmap 9.3). Read off the parsed defs rather than the live world so the
+	// import happens before the spawn pass — a level script's module-level code must be in place
+	// before any entity can evaluate a field-6 payload against it.
+	FString LevelScriptModule() const;
+
 	// Parse `<map>.ents` (JSON) from disk into Out. Returns false (leaving Out empty) if the
 	// file is missing or not valid `.ents` JSON. Every field is read verbatim — the exporter
 	// already emits Unreal space (the UE_ convention), so there is no conversion here.

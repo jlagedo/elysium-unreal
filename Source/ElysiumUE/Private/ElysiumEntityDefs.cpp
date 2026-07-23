@@ -29,6 +29,18 @@ namespace
 	}
 }
 
+FString FElysiumEntityDefs::LevelScriptModule() const
+{
+	for (const FElysiumEntityDef& Def : Defs)
+	{
+		if (Def.Classname.Equals(TEXT("worldspawn"), ESearchCase::IgnoreCase))
+		{
+			return Def.Keys.FindRef(TEXT("levelscript")).TrimStartAndEnd();
+		}
+	}
+	return FString();
+}
+
 bool FElysiumEntityDefs::Parse(const FString& EntsPath, FElysiumEntityDefs& Out)
 {
 	Out.MapName.Reset();

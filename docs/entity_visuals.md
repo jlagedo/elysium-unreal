@@ -363,9 +363,16 @@ Lowest visual priority; may land last.
 
 ### R5 — signs (`game_sign` / `prop_sign`)
 
-**Objective:** signage. `game_sign` (72) / `prop_sign` (38) — textured quads/decals.
-**Export:** resolve the sign material/texture + placement. **Runtime:** a textured quad (or reuse
-the decal mesh path). Small, cosmetic; last.
+**Not a visuals item — signs are a UI subsystem.** Both classes render a **full-screen VGUI
+window**, not world geometry: each carries a `definition_file` naming a `vdata/Signs/*.txt`
+KeyValues panel (`SignData` → `BackgroundImage` + `TextBlock`/`Label`, fonts from
+`resource/TrackerScheme.res`), opened by the `OpenWindow` input or a `+use` on the prop.
+`game_sign` (73 across the patch map set) is bodiless — the tutorial's `popup_*` help windows;
+`prop_sign` (100) is a world `.mdl` (note, bus-stop sign, newspaper) whose model is already
+exported by roadmap 8.1 and whose `use_icon` already resolves through the 4.4 use-cursor. The
+window itself is tracked in `roadmap.md` **4.10** (entity classes + panel) and **8.8**
+(VGUI-fidelity panel on 8.6's infrastructure), with **PL5c** exporting the definitions; nothing
+about signs belongs to this doc's quad/decal path.
 
 ---
 

@@ -36,7 +36,7 @@ Troika added exactly **three** symbols:
 `\vampire\python` and can run a string. **The name `Py_SetGameInterface` is a decoy** —
 no interface is passed anywhere. All binding happens in `vampire.dll`.
 
-## Where the Python lives — four surfaces, two languages
+## Where the Python lives — five surfaces, two languages
 
 | Surface | Location | Volume | Language |
 |---|---|---|---|
@@ -44,7 +44,22 @@ no interface is passed anywhere. All binding happens in `vampire.dll`.
 | Dialogue | `dlg/*.dlg` inside `pack*.vpk` | 138 files, 49,359 rows → **8,355 conditions + 2,988 actions** | `dlgexpr` (not Python) |
 | Entity outputs | `maps/*.bsp` ENTITIES, output **field 6** | **6,956** calls across the engine-loaded maps (1,591 retail) | Python expression |
 | Conditional entities | `maps/*.bsp`, `logic_pythoncheck` | **51** | Python expression |
+| **Console / cfg** | `cfg/*.cfg` aliases ↔ `__main__.ccmd` | the Basic/Plus switch + the movement aliases | console commands ↔ Python |
 | *(compiled duplicates)* | `python/*.pyc` inside the VPKs | 24 | **dead — never loaded** |
+
+**The console surface is bidirectional**, which is easy to miss. Scripts run console commands by
+*assigning an attribute* on the console object — `c = __main__.ccmd; c.patchtype = ""` executes the
+alias `patchtype` — and a command the console cannot resolve **falls through to Python**. So a
+`.cfg` alias can name a Python function and a Python function can trigger a `.cfg` alias.
+
+The Unofficial Patch's entire Basic/Plus switch rides on this: its installer writes one of two
+`cfg/user.cfg` files differing only in `alias patchtype "setBasic()"` vs `"setPlus()"`, and the one
+shared script tree asks the console which install it is running under. Consequently **nothing in any
+`.py`, `.ents`, `.dlg` or `.bsp` ever names `setPlus`/`setBasic`** — the sole reference in the whole
+install is that `.cfg` line, so both functions read as dead code to any search of the script and map
+trees. Ignition is `logic_auto.OnMapLoad -> unhidePlus()`, wired on **107 of 108 maps**, which
+`ScheduleTask`s the `c.patchtype = ""` assignment. Port task: roadmap **9.3b** (+ **PL5d** for the
+cfg copy).
 
 The Unofficial Patch shadows all of it (loose search paths resolve before the VPKs, per
 `## Asset resolution` in CLAUDE.md): **21 of the 26 shared scripts differ**, plus 9

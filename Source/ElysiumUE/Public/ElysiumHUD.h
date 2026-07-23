@@ -48,4 +48,17 @@ private:
 	TStrongObjectPtr<UTexture2D> UseAtlas;
 	FBox2D UseRingUV = FBox2D(ForceInit);   // context_icon_ring frame (drawn around every usable)
 	TMap<int32, FBox2D> UseIconUV;          // use_icon index (1-based) -> atlas UV rect
+
+	// --- Sign / popup window (P4.10) ---------------------------------------------------------
+	// The one open game_sign panel, polled off the entity world each frame (same seam as the
+	// env_fade screen state). Layout is CSignUI's 1024x768 virtual canvas stretched to the
+	// viewport — see ElysiumSignData.h for the decompile this reproduces.
+	void DrawSignPanel();
+	// Background art by material name (e.g. "interface/pop_ups/general"), decoded from the PL5c
+	// mirror on first use. A miss caches null so a missing PNG is not retried every frame.
+	UTexture2D* GetSignBackground(const FString& ImageName);
+
+	bool bSignManifestLoaded = false;
+	TMap<FString, FString> SignBackgroundFiles;                  // material name -> png filename
+	TMap<FString, TStrongObjectPtr<UTexture2D>> SignBackgrounds;  // material name -> texture (null = failed)
 };

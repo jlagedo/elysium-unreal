@@ -297,7 +297,7 @@ API version 1010). `engine.dll` boots the VM (5 unique symbols; the `Py_SetGameI
 export is a dead `RET` stub); **`Vampire/dlls/vampire.dll` owns the entire script API** (44).
 The scripting is all readable data; the rules it calls are compiled in `vampire.dll`.
 
-Python lives in **four surfaces, two languages**:
+Python lives in **five surfaces, two languages**:
 - `Vampire/python/**/*.py` — 27 level scripts, 690 functions, **loose plain text**. The
   VPKs' 24 `.pyc` are stale and unreachable (CPython 2.1 predates `zipimport`, and can't
   read a VPK); the loose tree is what runs. `worldspawn.levelscript` names the hub module
@@ -309,6 +309,13 @@ Python lives in **four surfaces, two languages**:
   Python call string** (6,956 of 24,081 engine-loaded outputs, 1,591 of 16,125 retail).
   `engine.dll` formats `__main__.%s` around it.
 - `logic_pythoncheck` — `python_script` is an expression gating `OnTrue`/`OnFalse` (51).
+- `cfg/*.cfg` ↔ `__main__.ccmd` — the **bidirectional console surface**. A script executes a
+  console command by attribute-assigning on the console object (`c.patchtype = ""` runs the
+  alias `patchtype`), and an unrecognised console command falls through to Python. The
+  Unofficial Patch's Basic/Plus switch is exactly this: two `user.cfg` variants differing only
+  in `alias patchtype "setBasic()"` vs `"setPlus()"`, so `setPlus`/`setBasic` are named nowhere
+  in the `.py`/`.ents`/`.dlg`/`.bsp` trees. Ignition is `logic_auto.OnMapLoad -> unhidePlus()`
+  on 107 of 108 maps. Not yet copied offline — roadmap PL5d / 9.3b.
 
 **Offline delivery (`UE_extract_scripts.py`, roadmap 5.1 / PL2).** The two plain-text script
 surfaces are copied **verbatim** into the runtime's mirror — `python/**/*.py` → `out/scripts/`

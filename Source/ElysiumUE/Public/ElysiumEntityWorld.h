@@ -8,6 +8,8 @@
 #include "ElysiumIOSink.h"
 #include "ElysiumVariant.h"
 
+struct FElysiumSignData;
+
 class AActor;
 class APawn;
 class UElysiumAudioSubsystem;
@@ -106,6 +108,32 @@ public:
 	// Fills OutColor (rgb = fade colour, a = current 0..1 alpha) and returns true while a fade is
 	// visible; false when idle. Const — the HUD polls it; a finished non-stayout fade reports idle.
 	bool GetScreenFade(FLinearColor& OutColor) const;
+
+	// --- Open sign window (P4.10 game_sign) --------------------------------------------
+	// The one sign panel currently on screen, driven by game_sign's OpenWindow/CloseWindow and
+	// drawn by AElysiumHUD (which polls GetOpenSign each frame). Same shape as the screen fade:
+	// held on the world so it dies with the map, one at a time (a second OpenWindow replaces the
+	// first, matching CSignUI's single panel). The handle identifies the owning entity so dismissal
+	// can fire its OnUseEnd back through the real output path.
+	// `Data` is the owning entity's parsed panel, shared so the HUD can draw it without knowing the
+	// sign entity type (the class is file-local to ElysiumSignClasses.cpp).
+	// `FadeInSeconds` is the owner's `fade_in` keyfield (an entity property, not panel content).
+	void OpenSign(const FElysiumEntityHandle& Owner, TSharedPtr<const FElysiumSignData> Data,
+		float FadeInSeconds);
+	// Dismiss the open panel (left-click, CloseWindow, or the owner dying). Fires the owner's
+	// OnUseEnd unless bSilent — a Kill/teardown must not resurrect outputs.
+	void CloseSign(bool bSilent = false);
+	// The entity whose sign is open, or Invalid. `OutOpenTime` is the game time it opened at
+	// (the HUD derives fade-in and MinShowTime from it).
+	FElysiumEntityHandle GetOpenSign(double* OutOpenTime = nullptr) const;
+	// The open panel's parsed content, or null when nothing is open. What AElysiumHUD draws.
+	const FElysiumSignData* GetOpenSignData() const { return OpenSignData.Get(); }
+	// The player's left-click. Dismisses the open panel when its Rules allow it (CloseOnLeftClick)
+	// and it has been up for at least MinShowTime; no-op when no sign is open. Firing OnUseEnd is
+	// what advances the tutorial, so this is a game path, not a UI convenience.
+	void PlayerDismissSign();
+	// The open sign's `fade_in` seconds (0 = appear instantly).
+	float GetOpenSignFadeIn() const { return OpenSignFadeIn; }
 
 	// The player's pawn via the owning world's first controller, or null. The seam point_teleport /
 	// trigger_hurt use to reach the player from the plain-C++ substrate (the player is not an entity).
@@ -213,6 +241,13 @@ private:
 		double       StartTime = 0.0;
 	};
 	FScreenFade ScreenFade;
+
+	// P4.10 open-sign state (one at a time). The panel content itself is parsed and cached on the
+	// game_sign entity; the world only tracks which entity owns the screen and since when.
+	FElysiumEntityHandle OpenSignOwner;
+	double OpenSignTime = 0.0;
+	TSharedPtr<const FElysiumSignData> OpenSignData;   // incomplete here; freed in the .cpp
+	float OpenSignFadeIn = 0.0f;
 
 	// Unknown target/input aggregation: log once per unique (target.Input), count the rest.
 	TSet<FString> UnknownLogged;

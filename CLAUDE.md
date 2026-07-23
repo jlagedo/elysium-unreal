@@ -42,15 +42,23 @@ its callers + docs in the same pass.
 
 ## Current state — M0 verified, M1 in progress
 
-Boot into an empty persistent level → `UElysiumMapSubsystem::Travel` (synchronous) loads a
+Boot into an empty persistent level → **New Game** (`UElysiumMapSubsystem::NewGame`): seed a
+fresh story context and enter the story entry, `sp_tutorial_1` at its `tutorial` `info_landmark`.
+`-ElysiumMap=<name>` (`play.bat <map>`) instead loads that map bare and unseeded — the dev path —
+and `-ElysiumNewGame=0` boots the story map bare. Either way `UElysiumMapSubsystem::Travel`
+(synchronous) loads the
 map as world + 3D-skybox PMC actors, MIDs off the single master material `M_VtMB_World`
 (albedo + alpha-masked `$selfillum` emissive via `map_Ke` → `Emissive`/`EmissiveScale`,
 tunable by `elysium.EmissiveScale`), DDS-preferred textures (PNG fallback), brush collision
 (`.hulls` convex + `.dispcol` trimesh, render-trimesh fallback), `.emc` parse-cache,
 `.spawn`/`.sky` placement, a Character-movement FPS pawn with noclip, a trimmed Canvas HUD
 (always-on FPS/position overlay only — map/light counts live in the Cog windows), and
-`elysium.map` / `elysium.maps` / `elysium.reload` / `elysium.debug` / `elysium.lights` /
-`elysium.campos` console commands. Player-centric dev cheats live on `UElysiumCheatManager` (a
+`elysium.newgame` / `elysium.map` / `elysium.maps` / `elysium.reload` / `elysium.debug` /
+`elysium.lights` / `elysium.campos` console commands. The New Game context lives on
+`UElysiumGameStateSubsystem`: `FElysiumPlayerSheet` (clan in the level-script 2..8 encoding,
+gender, an open `Stats` map) plus `BeginNewGame`, which seeds `Story_State=-4`, `Tut_Jack=0`,
+`Tut_Patch=0`, `Linux_Wine=1` — the flags the tutorial's own scripts read once chargen and the
+theatre intro are skipped. Player-centric dev cheats live on `UElysiumCheatManager` (a
 `UCheatManager` subclass hosted by `AElysiumPlayerController`): `Noclip` + `ElysiumTeleport`
 plus the stock `UCheatManager` execs, autocompleted.
 
@@ -145,7 +153,26 @@ wins. Every P4.5 class implements `GetDebugState` (Cog Inspector Live state), an
 `Elysium.Logic` window** (`FElysiumCogWindow_Logic`) boards them all — per-class live state, an Inspect
 button, a quick-fire of each primary input, and the current env_fade screen-fade the HUD is drawing.
 `trigger_stealth_mod`/`trigger_inventory_check`/`trigger_environmental_audio` stay inert records (their
-stealth/inventory/RoomDSP systems are unbuilt). The **P6 audio decode foundation** also runs: `FElysiumSoundCache` decodes VtMB's sounds to interleaved int16 PCM at
+stealth/inventory/RoomDSP systems are unbuilt). The **P4.10 `game_sign` sign/popup window** also runs —
+the tutorial's teaching layer, which its progression is wired through (`popup_3.OnUseEnd` opens
+`popup_4`, `popup_6.OnUseEnd` unhides the chop-shop door). Offline `UE_extract_signs.py` (**PL5c**)
+mirrors all 278 `vdata/Signs/*.txt` definitions verbatim into `out/signs/` (flat + lowercased) and
+decodes the 57 referenced `BackgroundImage` materials to `out/signs/tex/` behind a `backgrounds.json`
+manifest. At runtime `FElysiumSignData` parses the `SignData` KeyValues panel over the shared
+`ElysiumKeyValues.h` reader and resolves the first-true `Sign { dependency; filename }` redirect
+through `EvalCondition` (the same error-to-false host path `logic_pythoncheck` uses); `game_sign`
+(`ElysiumSignClasses.cpp`) is a bodiless leaf carrying `definition_file`/`fade_in`/`fade_out`/`pause`
+with `OpenWindow`/`CloseWindow`/`ChangeFile` inputs and `OnUseBegin`/`OnUseEnd` outputs; the open
+panel is one screen state on `FElysiumEntityWorld` (the `env_fade` pattern, so it dies with the map)
+that `AElysiumHUD` draws — background tile + word-wrapped text blocks — dismissed by left-click via
+`PlayerDismissSign` (honouring `CloseOnLeftClick` + `MinShowTime`, `HideHUD` suppressing the reticle).
+The layout is **client.dll's `CSignUI`**, RE-verified: a **1024×768 virtual canvas scaled uniformly by
+`ScreenH/768`** (the width factor's `FUN_100cd100` is a 4:3-proportional width, so the canvas
+letterboxes horizontally instead of stretching), text blocks positioned **relative to the panel rect**
+rather than the screen, and a centring branch when `XPos + YPos == 0` — which is why
+`interface/Pop_Ups/general` at 2048×1024 deliberately overscans off every edge. `prop_sign`, the
+`NewspaperData` multi-column layout, `ClientCommand` execution, `fade_out`, and pixel-faithful VGUI
+type stay on 4.10/8.8. The **P6 audio decode foundation** also runs: `FElysiumSoundCache` decodes VtMB's sounds to interleaved int16 PCM at
 runtime — WAV (MS-ADPCM/IMA/PCM) via vendored `dr_wav` (6.1) and loose dialogue/music/radio MP3 via
 vendored `dr_mp3` (6.2), dispatched by file extension (`LoadSoundDecoded`) — feeding a
 `USoundWaveProcedural` per play (Unreal has no runtime path for loose WAV/MP3). `UElysiumAudioSubsystem`
@@ -209,9 +236,10 @@ name case-insensitively (`CanonicalStatName`). A single static `GNativeBindings`
 membership and the debug view. `UElysiumGameStateSubsystem` gains a native-call ring
 (`RecordNativeCall` + per-name counters); the `Elysium.Scripting` window grows a **Native bindings**
 table (name/kind/backing-status/live call-count) and a **Recent native calls** log. Level-script
-functions/constants (`cCelerity`, the level's `On*` callbacks) are 5.5 (NameError until then, so
-`G.x |= cCelerity` still no-ops). The **P5 5.4 live host** also runs: `FElysiumExprScriptHost` is now
-the **map-load default** (not opt-in), so field-6 payloads run live at map load (the tutorial's
+functions/constants (`cCelerity`, the level's `On*` callbacks) resolve only under the CPython host
+(9.3a below); under `elysium.script.cpython 0` they are NameError, so `G.x |= cCelerity` no-ops.
+The **P5 5.4 live host** also runs: real evaluation is the **map-load default** (not opt-in), so
+field-6 payloads run live at map load (the tutorial's
 `G.x = ...` outputs flip visibly); `elysium.script.live 0` swaps in the null host for A/B and turns the
 **whole** scripting surface (field-6 + pythoncheck + ScheduleTask) dark together. **`logic_pythoncheck`**
 is a leaf class (`ElysiumStarterClasses.cpp`): its `python_script` keyfield expression is evaluated by
@@ -236,13 +264,29 @@ UE's own embedded Python 3), and a `vampire` C-module whose one **real** binding
 `UElysiumGameStateSubsystem`** (attribute get/set = flag read/write, default-0 / assign-None-deletes,
 `keys`/`has_key`/`ClearAll`); a Python bootstrap stands up forgiving stubs for the natives 9.3 makes C
 (`FindPlayer`/… + a stub `vamputil`) and routes Python stdout/stderr to the UE log. `FElysiumCPythonScriptHost`
-slots into the same `IElysiumScriptHost` seam (`elysium.script.cpython [0|1]`), with `elysium.py.smoke`/
+slots into the same `IElysiumScriptHost` seam, with `elysium.py.smoke`/
 `exec`/`load`/`fire`/`poc` verbs and a **CPython panel in the `Elysium.Scripting` Cog window** (status,
-host toggle, load-level-script, fire the On* callbacks, python exec box). Validated end-to-end in the
-built game (`elysium.py.poc` → ALL PASS): real `tutorial.py` imports, `OnKillDisc1()` runs, and
-`G.Tutorial_Discflags |= cCelerity` resolves the level constant to 8 — the acceptance `ElysiumExpr` can't
-meet. The SDK is fetched, not committed (`tools/fetch_cpython27.py`; gitignored under
-`Source/ElysiumUE/ThirdParty/CPython27/`). The **P8 8.2 glTFRuntime spike** also lands: the MIT
+host toggle, load-level-script, fire the On* callbacks, python exec box). The SDK is fetched, not
+committed (`tools/fetch_cpython27.py`; gitignored under
+`Source/ElysiumUE/ThirdParty/CPython27/`). **P9 9.3a wires the scripts in:** the CPython host is the
+**map-load default** wherever the module carries the SDK *and* the interpreter starts —
+`UElysiumGameStateSubsystem::MakePreferredScriptHost` falls back to the expr host when it doesn't,
+because a dead VM's all-Void evals are indistinguishable from error-to-false. `AElysiumMapActor` reads
+`worldspawn.levelscript` off the parsed defs (`FElysiumEntityDefs::LevelScriptModule()`) and imports it
+through `UElysiumGameStateSubsystem::LoadLevelScript` **before the spawn pass**, matching VtMB's order:
+the module's top-level code (constants, `from vamputil import *`, the `On*` defs) is in place before any
+entity evaluates a field-6 payload against it. Importing is a host capability
+(`IElysiumScriptHost::LoadLevelScript`; the expr/null hosts report that they cannot), and the module
+name is remembered so `SetScriptHost` re-imports into any newly installed host — an `elysium.script.
+cpython` swap mid-map never leaves the new host with a bare `__main__`. `EvalScript` (the
+`elysium.eval`/`exec` verbs and the Cog eval box) runs through the **installed host**, so a hand-run
+eval resolves exactly what a field-6 payload resolves; `IElysiumScriptHost::Eval` carries an optional
+`OutError` for it, since a Void return cannot separate "evaluated to None" from "raised". In the built
+game on `sp_tutorial_1`: `tutorial` imports at map load into host `cpython`, `elysium.eval cCelerity` =
+8, and `G.Tutorial_Discflags |= cCelerity` flips `G` to 8 — the acceptance `ElysiumExpr` can't meet.
+Maps whose scripts need more of `vamputil` than the bootstrap stub provides (e.g. `santamonica` →
+`RandomLine`) log an ImportError and load fine without their script; the real C `vampire` bindings and
+`Entity.__getattr__` are 9.3. The **P8 8.2 glTFRuntime spike** also lands: the MIT
 `rdeioris/glTFRuntime` plugin is vendored (`Plugins/glTFRuntime`) + wired into the module, loading a VtMB
 NPC exported to `out/npc/<stem>.glb` (`mdl_gltf.py`: mesh + StudioBone skeleton + one animation, standard
 glTF 2.0) through `UElysiumNpcSubsystem` (GI-scoped) — `glTFLoadAssetFromFilename` → `LoadSkeletalMesh(0,0)`
@@ -287,7 +331,11 @@ and several other maps are also exported, so cross-map landmark travel is exerci
   `UElysiumLightRig`, `UElysiumAudioSubsystem` (decode registry + voice pool) + `FElysiumSoundCache` (the
   P6 runtime WAV/MP3 decode-to-PCM path, vendored `dr_wav`/`dr_mp3`), `FElysiumSoundSchemeManager` +
   `FElysiumSoundScheme` (the P6.3 scheme parser/playback — ambient bed, music state machine, polar random
-  scheduler; owned by the map actor), `UElysiumNpcSubsystem` (the P8 8.2 GI-scoped glTFRuntime skeletal-path
+  scheduler; owned by the map actor), `ElysiumKeyValues.h` (the shared Source KeyValues reader — a
+  whole-file character-stream tokenizer, so a quoted value may span lines; used by the sound schemes and
+  the sign definitions), `FElysiumSignData` (the P4.10 `SignData` panel + the `CSignUI` 1024×768
+  uniform-scale coordinate model, `ElysiumSign::RectToScreen`),
+  `UElysiumNpcSubsystem` (the P8 8.2 GI-scoped glTFRuntime skeletal-path
   harness — `.glb` NPC → runtime USkeletalMesh + UAnimSequence spawned near the player, `elysium.npc.*`),
   `FElysiumProfileRun` (the headless profiling harness, `-ElysiumProfile`),
   `UElysiumCogSubsystem` (world subsystem that registers the 15 stock CogEngine debug windows plus the
@@ -361,8 +409,10 @@ and several other maps are also exported, so cross-map landmark travel is exerci
   the always-on `FElysiumRingBufferSink` (1,000-entry I/O history) + `FElysiumLogSink`
   (`LogElysiumIO` + VLOG), `IElysiumScriptHost` (the field-6 Python seam on
   `UElysiumGameStateSubsystem`) with `FElysiumNullScriptHost` (logs + Void), `FElysiumExprScriptHost`
-  (the 5.2 evaluator, map-load default), and `FElysiumCPythonScriptHost` (routes field-6/pythoncheck
-  through the embedded VM; `elysium.script.cpython`), `ElysiumExpr` (the standalone expression evaluator
+  (the 5.2 evaluator; the fallback when CPython is absent or fails to start), and
+  `FElysiumCPythonScriptHost` (routes field-6/pythoncheck/`EvalScript` through the embedded VM and
+  imports the map's level script; the map-load default, `elysium.script.cpython` A/Bs
+  it), `ElysiumExpr` (the standalone expression evaluator
   — lexer + recursive-descent AST parser + tree-walk, `Eval`/`Exec`), and `FElysiumPythonVM` (the P5.5
   embedded CPython 2.7.18 VM — `Py_Initialize` + the `vampire` C-module with `G` proxied onto the game
   state; vendored under `Source/ElysiumUE/ThirdParty/CPython27/`, `ELYSIUM_WITH_CPYTHON` Win64-only,
