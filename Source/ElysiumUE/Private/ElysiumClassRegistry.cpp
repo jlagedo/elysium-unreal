@@ -143,6 +143,8 @@ static FElysiumClassRegistrar GRegBaseEntity(
 		D.Field(TEXT("blocks_traces"),   &FElysiumEntity::bBlocksTraces);
 		D.Field(TEXT("dmg_filter_name"), &FElysiumEntity::DamageFilterName);
 		D.Field(TEXT("use_filter_name"), &FElysiumEntity::UseFilterName);
+		D.Field(TEXT("use_icon"),        &FElysiumEntity::UseIcon);
+		D.Field(TEXT("locked_icon"),     &FElysiumEntity::LockedIcon);
 	});
 
 // --- Verification command ---------------------------------------------------------------

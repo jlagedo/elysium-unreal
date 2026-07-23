@@ -1,5 +1,6 @@
 #include "ElysiumEntityWorld.h"
 
+#include "ElysiumAudioSubsystem.h"
 #include "ElysiumBrushComponent.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEditorLabels.h"
@@ -7,11 +8,14 @@
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumScriptHost.h"
+#include "ElysiumUseIcons.h"
 
 #include "Components/SceneComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumWorld, Log, All);
@@ -61,6 +65,21 @@ FElysiumEntityWorld::~FElysiumEntityWorld()
 double FElysiumEntityWorld::NowSeconds() const
 {
 	return GameState ? GameState->GameClock().GetNow() : 0.0;
+}
+
+UElysiumMapSubsystem* FElysiumEntityWorld::MapSubsystem() const
+{
+	// The map-lifecycle owner (Travel + the P4.6 landmark-transition queue). Reached through the
+	// owning actor's GameInstance — the seam trigger_changelevel uses to request a deferred travel.
+	const UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
+	return GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
+}
+
+UElysiumAudioSubsystem* FElysiumEntityWorld::AudioSubsystem() const
+{
+	const UWorld* W = Owner ? Owner->GetWorld() : nullptr;
+	const UGameInstance* GI = W ? W->GetGameInstance() : nullptr;
+	return GI ? GI->GetSubsystem<UElysiumAudioSubsystem>() : nullptr;
 }
 
 // --- Load / spawn -----------------------------------------------------------------------
@@ -187,6 +206,158 @@ void FElysiumEntityWorld::RouteBrushTouch(const FElysiumEntityHandle& Brush,
 		NowSeconds(), bBegin ? TEXT("begin") : TEXT("end"), *E->DebugString());
 }
 
+// --- +use look-cursor (P4.2) ------------------------------------------------------------
+
+namespace
+{
+	// Arm's-reach for the look-cursor pick. VtMB's player use radius is ~80 Source units; 200 cm is
+	// that in Unreal space. P4.4 calibrates it against the retail reach when the use-icon HUD lands.
+	constexpr double GElysiumUseReachCm = 200.0;
+}
+
+void FElysiumEntityWorld::UpdateUseCursor()
+{
+	UWorld* UW = Owner ? Owner->GetWorld() : nullptr;
+	APlayerController* PC = UW ? UW->GetFirstPlayerController() : nullptr;
+
+	// Camera-ray-pick the nearest usable, non-inert brush entity within reach. A single blocking
+	// trace naturally handles occlusion: a wall (or any solid) closer than the button ends the ray,
+	// and func_button bodies are Solid (BlockAll), so they block ECC_Visibility like the world does.
+	FElysiumEntityHandle Hit;
+	if (PC)
+	{
+		FVector Loc; FRotator Rot;
+		PC->GetPlayerViewPoint(Loc, Rot);
+		const FVector End = Loc + Rot.Vector() * GElysiumUseReachCm;
+
+		FCollisionQueryParams Params(FName(TEXT("ElysiumUseCursor")), /*bTraceComplex*/ false);
+		Params.AddIgnoredActor(PC->GetPawn());
+		FHitResult H;
+		// The dedicated +use channel (ELYSIUM_USE_CHANNEL, default-Block): world + solid bodies
+		// occlude the ray, so a wall between the player and a button ends it, while staying isolated
+		// from ECC_Visibility. func_button/func_door bodies are Solid (BlockAll), so they block it.
+		if (UW->LineTraceSingleByChannel(H, Loc, End, ELYSIUM_USE_CHANNEL, Params))
+		{
+			if (const UElysiumBrushComponent* B = Cast<UElysiumBrushComponent>(H.GetComponent()))
+			{
+				const FElysiumEntity* E = Resolve(B->GetOwningEntity());
+				if (E && E->IsUsable() && !E->IsInert())
+				{
+					Hit = E->Handle;
+				}
+			}
+		}
+	}
+
+	if (Hit == AimedUsable)
+	{
+		return;   // no transition — nothing to fire
+	}
+
+	// Leave the old, enter the new (either may be empty). Resolve guards stale/dead handles, so an
+	// entity that was killed or hidden while aimed at silently drops out without a spurious OnOut.
+	if (FElysiumEntity* Old = Resolve(AimedUsable))
+	{
+		Old->OnUseCursorLeave();
+	}
+	AimedUsable = Hit;
+	if (FElysiumEntity* New = Resolve(AimedUsable))
+	{
+		New->OnUseCursorEnter();
+	}
+
+	// The look-cursor transition is otherwise invisible when a button does not wire OnIn/OnOut
+	// (the tutorial buttons don't), so trace it — `log LogElysiumWorld Verbose` surfaces the aim
+	// enter/leave for UAT and confirms the pick even without a wired output.
+	UE_LOG(LogElysiumWorld, Verbose, TEXT("(%8.3f) use-cursor -> %s"),
+		NowSeconds(), AimedUsable.IsSet() ? *DescribeHandle(AimedUsable) : TEXT("<none>"));
+}
+
+void FElysiumEntityWorld::PlayerUse()
+{
+	// Press whatever the cursor settled on this frame. The player is not an entity yet, so the
+	// activator is Invalid (matching the trigger touch path); P4-later makes the pawn an entity.
+	if (FElysiumEntity* E = Resolve(AimedUsable))
+	{
+		E->Use(FElysiumEntityHandle::Invalid());
+	}
+}
+
+int32 FElysiumEntityWorld::GetAimedUseIcon() const
+{
+	// The reticle icon the HUD draws this frame: the aimed usable's GetUseIcon() (locked_icon when
+	// use-locked, else use_icon), or 0 when nothing usable is under the cursor. Const-resolves the
+	// sticky AimedUsable handle set by the last UpdateUseCursor.
+	const FElysiumEntity* E = Resolve(AimedUsable);
+	return E ? E->GetUseIcon() : 0;
+}
+
+// --- Screen fade (P4.5 env_fade) --------------------------------------------------------
+
+void FElysiumEntityWorld::StartScreenFade(const FLinearColor& Color, float Duration, float HoldTime,
+	float MaxAlpha, bool bReverse, bool bStayOut)
+{
+	ScreenFade.bActive   = true;
+	ScreenFade.Color     = Color;
+	ScreenFade.MaxAlpha  = FMath::Clamp(MaxAlpha, 0.0f, 1.0f);
+	ScreenFade.Duration  = FMath::Max(Duration, 0.0f);
+	ScreenFade.HoldTime  = FMath::Max(HoldTime, 0.0f);
+	ScreenFade.bReverse  = bReverse;
+	ScreenFade.bStayOut  = bStayOut;
+	ScreenFade.StartTime = NowSeconds();
+}
+
+bool FElysiumEntityWorld::GetScreenFade(FLinearColor& OutColor) const
+{
+	if (!ScreenFade.bActive)
+	{
+		return false;
+	}
+	const double T = NowSeconds() - ScreenFade.StartTime;
+	const float Dur = ScreenFade.Duration;
+	float Alpha;
+	if (ScreenFade.bReverse)
+	{
+		// SF_FADE_IN: reveal. Start opaque at MaxAlpha and clear over Duration, then idle.
+		if (T >= Dur)
+		{
+			return false;
+		}
+		Alpha = (Dur > KINDA_SMALL_NUMBER) ? FMath::Lerp(ScreenFade.MaxAlpha, 0.0f, (float)(T / Dur)) : 0.0f;
+	}
+	else
+	{
+		const float HoldEnd = Dur + ScreenFade.HoldTime;
+		const float ReturnEnd = HoldEnd + Dur;
+		if (T < Dur)                                   // covering: 0 -> MaxAlpha
+		{
+			Alpha = (Dur > KINDA_SMALL_NUMBER) ? FMath::Lerp(0.0f, ScreenFade.MaxAlpha, (float)(T / Dur)) : ScreenFade.MaxAlpha;
+		}
+		else if (T < HoldEnd || ScreenFade.bStayOut)   // holding (or staying out forever)
+		{
+			Alpha = ScreenFade.MaxAlpha;
+		}
+		else if (T < ReturnEnd)                        // fading back: MaxAlpha -> 0
+		{
+			Alpha = (Dur > KINDA_SMALL_NUMBER) ? FMath::Lerp(ScreenFade.MaxAlpha, 0.0f, (float)((T - HoldEnd) / Dur)) : 0.0f;
+		}
+		else
+		{
+			return false;                              // finished, faded back to clear
+		}
+	}
+	OutColor = ScreenFade.Color;
+	OutColor.A = FMath::Clamp(Alpha, 0.0f, 1.0f);
+	return OutColor.A > KINDA_SMALL_NUMBER;
+}
+
+APawn* FElysiumEntityWorld::GetPlayerPawn() const
+{
+	const UWorld* W = Owner ? Owner->GetWorld() : nullptr;
+	const APlayerController* PC = W ? W->GetFirstPlayerController() : nullptr;
+	return PC ? PC->GetPawn() : nullptr;
+}
+
 // --- Tick (think-first, retail order) ---------------------------------------------------
 
 void FElysiumEntityWorld::Tick(double Now)
@@ -263,7 +434,8 @@ void FElysiumEntityWorld::AddEvent(FElysiumIOEvent&& Event)
 	EventQueue.Add(MoveTemp(Event));
 }
 
-void FElysiumEntityWorld::FireOutput(FElysiumEntity& Source, FName OutputName, const FElysiumEntityHandle& Activator)
+void FElysiumEntityWorld::FireOutput(FElysiumEntity& Source, FName OutputName, const FElysiumEntityHandle& Activator,
+	const FElysiumVariant& ValueOverride)
 {
 	if (!Source.Def)
 	{
@@ -298,7 +470,10 @@ void FElysiumEntityWorld::FireOutput(FElysiumEntity& Source, FName OutputName, c
 		Ev.FireTime = Now + O.Delay;
 		Ev.Target = O.Target;
 		Ev.Input = FName(*O.Input);
-		Ev.Param = FElysiumVariant::String(O.Param);
+		// A Source COutput<T> fires with its runtime value only where the map author left the param
+		// blank; a specified param always wins. Void override => keep the (possibly empty) map param.
+		Ev.Param = (!O.Param.IsEmpty() || ValueOverride.IsVoid())
+			? FElysiumVariant::String(O.Param) : ValueOverride;
 		Ev.PythonSrc = O.Python;
 		Ev.Activator = Activator;
 		Ev.Caller = Source.Handle;
@@ -320,6 +495,37 @@ void FElysiumEntityWorld::EnqueueInput(const FString& Target, FName Input, const
 	Ev.Activator = Activator;
 	Ev.Caller = Caller;
 	AddEvent(MoveTemp(Ev));
+}
+
+void FElysiumEntityWorld::EnqueuePython(const FString& Source, double Delay,
+	const FElysiumEntityHandle& Activator, const FElysiumEntityHandle& Caller)
+{
+	// ScheduleTask(delay, "<source>") (P5 5.4): a python-only deferred event — no I/O target, just a
+	// field-6 source string that DeliverEvent hands to the script host at fire time. Same chokepoint
+	// (2) and same queue as a delayed output, so it single-steps and serializes like everything else.
+	FElysiumIOEvent Ev;
+	Ev.FireTime = NowSeconds() + FMath::Max(0.0, Delay);
+	Ev.PythonSrc = Source;
+	Ev.Activator = Activator;
+	Ev.Caller = Caller;
+	AddEvent(MoveTemp(Ev));
+}
+
+FElysiumVariant FElysiumEntityWorld::EvalCondition(const FString& Source,
+	const FElysiumEntityHandle& Self, const FElysiumEntityHandle& Activator)
+{
+	// logic_pythoncheck's Test (and, later, dlg conditions): evaluate the expression through the
+	// installed script host so it obeys the same live/off switch as field-6 and lands in the eval
+	// log. Empty source or no host -> Void (error-to-false -> the caller reads OnFalse).
+	if (Source.IsEmpty() || !GameState)
+	{
+		return FElysiumVariant::Void();
+	}
+	FElysiumScriptContext Ctx;
+	Ctx.Self = Self;
+	Ctx.Activator = Activator;
+	Ctx.World = this;
+	return GameState->ScriptHost().Eval(Source, Ctx);
 }
 
 void FElysiumEntityWorld::AcceptInput(const FString& Target, FName Input, const FElysiumVariant& Param,
@@ -399,6 +605,7 @@ void FElysiumEntityWorld::DeliverEvent(const FElysiumIOEvent& Event, double Now)
 		FElysiumScriptContext Ctx;
 		Ctx.Self = Event.Caller;
 		Ctx.Activator = Event.Activator;
+		Ctx.World = this;
 		const FElysiumVariant Result = GameState->ScriptHost().Eval(Event.PythonSrc, Ctx);
 		for (const TUniquePtr<IElysiumIOSink>& Sink : Sinks)
 		{
@@ -470,6 +677,28 @@ FElysiumEntity* FElysiumEntityWorld::FindByName(const FString& Name)
 		{
 			FElysiumEntity* E = EntityList[It.Value()].Get();
 			if (E && !E->IsDead())
+			{
+				return E;
+			}
+		}
+	}
+	return nullptr;
+}
+
+FElysiumEntity* FElysiumEntityWorld::FindLandmark(const FString& Name)
+{
+	// info_landmark lookup for the P4.6 landmark transition (the source-map anchor a
+	// trigger_changelevel measures the player against, and the dest-map anchor the next load places
+	// against). Same name index as FindByName, but filtered to the info_landmark classname so a
+	// coincidental targetname reuse can't be mistaken for the landmark.
+	static const FString LandmarkClass(TEXT("info_landmark"));
+	const FName N(*Name);
+	for (auto It = NameIndex.CreateConstKeyIterator(N); It; ++It)
+	{
+		if (EntityList.IsValidIndex(It.Value()))
+		{
+			FElysiumEntity* E = EntityList[It.Value()].Get();
+			if (E && !E->IsDead() && E->Def && E->Def->Classname == LandmarkClass)
 			{
 				return E;
 			}

@@ -8,6 +8,7 @@ struct FElysiumEntityDef;
 struct FElysiumClassDesc;
 class FElysiumEntityWorld;
 class UElysiumBrushComponent;
+class FElysiumDoorBase;
 
 // Next-think sentinel: an entity with this next-think never runs Think(). Matches VtMB's
 // `0x7f7fffff` (FLT_MAX) write in CBaseEntity::ScriptHide (entity_io.md).
@@ -82,6 +83,8 @@ public:
 	bool    bBlocksTraces = false;                   // blocks_traces
 	FString DamageFilterName;                        // dmg_filter_name
 	FString UseFilterName;                           // use_filter_name
+	int32   UseIcon = 0;                             // use_icon — reticle icon index (1-based; 0 = none)
+	int32   LockedIcon = 0;                          // locked_icon — reticle icon when use-locked
 
 	// --- Dormancy (R6) + liveness (R3) -------------------------------------------------
 	// ScriptHide/StartHidden is one reversible whole-entity OFF switch: non-solid, undrawn,
@@ -113,10 +116,43 @@ public:
 	// entity. Leaf classes (P1.6+) call this from their inputs and touch hooks.
 	void FireOutput(FName Output, const FElysiumEntityHandle& Activator);
 
+	// Value-carrying variant (P4.5): a Source COutput<T> fires with a runtime value that fills any
+	// wire whose map-authored param is empty (math_counter OutValue, logic_case OnCaseNN, …). Wires
+	// that DID specify a param keep their override. `Value` is ignored (Void) by the plain overload.
+	void FireOutput(FName Output, const FElysiumEntityHandle& Activator, const FElysiumVariant& Value);
+
 	// Overlap terminus (P1.5 routing): a brush body's begin/end overlap lands here. Base no-op;
 	// P1.6 trigger classes override to fire OnStartTouch/OnEndTouch (respecting spawnflags).
 	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) {}
 	virtual void OnTouchEnd(const FElysiumEntityHandle& Activator) {}
+
+	// --- +use look-cursor terminus (P4.2) ----------------------------------------------
+	// The minimal look-cursor the entity world runs each frame (a camera-ray pick against the
+	// usable brush bodies in range) routes here. Base is un-usable and no-ops; func_button (P4.2)
+	// overrides IsUsable and translates cursor enter/leave into its OnIn/OnOut outputs and a +use
+	// (or the E key / a fired Press input) into a press. The full use-only trace channel + the
+	// use-icon HUD land in P4.4 — this is the activation + OnIn/OnOut slice it builds on.
+	virtual bool IsUsable() const { return false; }
+	virtual void OnUseCursorEnter() {}                                  // look-cursor entered (OnIn)
+	virtual void OnUseCursorLeave() {}                                  // look-cursor left (OnOut)
+	virtual void Use(const FElysiumEntityHandle& Activator) {}          // +use / Press pressed it
+
+	// The reticle icon this entity shows while it is the +use look-cursor target (P4.4). VtMB's
+	// GetUseIcon (FUN_100c8940) returns locked_icon when the locked byte +0x5c4 is set, else
+	// use_icon; IsUseLocked() is the leaf's locked flag (doors/buttons). 0 = draw no icon.
+	virtual bool IsUseLocked() const { return false; }
+	int32 GetUseIcon() const { return (IsUseLocked() && LockedIcon != 0) ? LockedIcon : UseIcon; }
+
+	// --- Debug introspection (P4.3) ----------------------------------------------------
+	// Runtime, non-keyfield state a leaf class wants surfaced in the Cog inspector's "Live state"
+	// section (mover toggle-state, current move, resolved links, spawnflag decode) — the fields the
+	// registry tables don't carry because they are internal state, not keyvalues. Base emits nothing.
+	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const {}
+
+	// No-RTTI downcast to the door base (UE builds compile without RTTI, so no dynamic_cast). Base
+	// returns null; FElysiumDoorBase overrides to return itself, so a resolved `linked_door` name can
+	// be recognised as a door without reflection.
+	virtual FElysiumDoorBase* AsDoorBase() { return nullptr; }
 
 	// --- Lifecycle --------------------------------------------------------------------
 	// Bind identity and copy the base keyfields out of the def's raw keys through the class

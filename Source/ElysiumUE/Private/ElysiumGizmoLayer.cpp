@@ -25,7 +25,9 @@ namespace
 	constexpr const TCHAR* XRayPath  = TEXT("/Game/VtMB/Materials/M_Gizmo_XRay.M_Gizmo_XRay");
 	constexpr float GizmoScale = 0.28f;
 
-	FVector EntityAnchor(const FElysiumEntity& Ent)
+	// File-unique name: a same-named helper lives in ElysiumEntityDebugSubsystem.cpp, and both
+	// can land in one unity blob.
+	FVector GizmoEntityAnchor(const FElysiumEntity& Ent)
 	{
 		if (Ent.Body)
 		{
@@ -111,7 +113,7 @@ void FElysiumGizmoLayer::Rebuild(FElysiumEntityWorld& World, AActor* Owner)
 		{
 			continue;
 		}
-		const FTransform Xform(FQuat::Identity, EntityAnchor(*E), FVector(GizmoScale));
+		const FTransform Xform(FQuat::Identity, GizmoEntityAnchor(*E), FVector(GizmoScale));
 		const int32 InstanceIndex = Component->AddInstance(Xform);
 		ComputeRGBA(*E, Data);
 		Component->SetCustomData(InstanceIndex, TArrayView<const float>(Data, 4), /*bMarkRenderStateDirty*/ false);

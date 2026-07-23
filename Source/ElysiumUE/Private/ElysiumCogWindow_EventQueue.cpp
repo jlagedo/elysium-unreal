@@ -20,7 +20,9 @@ void FElysiumCogWindow_EventQueue::RenderHelp()
 	ImGui::Text(
 		"The Track-B event queue: the pending time-sorted I/O deliveries with their fire times, the "
 		"always-on I/O history ring buffer, and pause / single-step controls. Pausing holds the "
-		"queue's service loop; Step releases one due event at a time for causality debugging.");
+		"queue's service loop; Step releases one due event at a time for causality debugging.\n\n"
+		"A row with Target '(python)' is a field-6 payload or a ScheduleTask deferred source (5.4) — it "
+		"carries no I/O input, just the Python string in the last column, evaluated at its fire time.");
 }
 
 void FElysiumCogWindow_EventQueue::RenderContent()
@@ -80,7 +82,7 @@ void FElysiumCogWindow_EventQueue::RenderContent()
 		ImGui::TableSetupColumn("Input");
 		ImGui::TableSetupColumn("Param");
 		ImGui::TableSetupColumn("Caller");
-		ImGui::TableSetupColumn("Py");
+		ImGui::TableSetupColumn("Python (field-6 / ScheduleTask)");
 		ImGui::TableHeadersRow();
 
 		for (const FElysiumIOEvent& Ev : Pending)
@@ -97,7 +99,12 @@ void FElysiumCogWindow_EventQueue::RenderContent()
 			ImGui::TableNextColumn();
 			ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*World->DescribeHandle(Ev.Caller)));
 			ImGui::TableNextColumn();
-			ImGui::TextUnformatted(Ev.PythonSrc.IsEmpty() ? "" : "py");
+			// The deferred field-6 / ScheduleTask source, verbatim (a python-only event has no Target,
+			// so it shows "(python)" in the Target column and its source here).
+			if (!Ev.PythonSrc.IsEmpty())
+			{
+				ImGui::TextColored(ImVec4(0.80f, 0.75f, 0.45f, 1.f), "%s", COG_TCHAR_TO_CHAR(*Ev.PythonSrc));
+			}
 		}
 		ImGui::EndTable();
 	}

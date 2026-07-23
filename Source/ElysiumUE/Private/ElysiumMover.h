@@ -13,10 +13,12 @@
 //
 // FElysiumDoorBase layers the CBaseDoor 4-state machine (m_toggle_state) + the Open/Close/Toggle/
 // Lock/Unlock inputs + the OnOpen/OnClose/OnFullyOpen/OnFullyClosed outputs + `wait` autoclose +
-// the locked path (OnLockedUse) + blocked-while-closing (deal `dmg`, reverse, OnBlockedClosing).
-// A leaf (func_door_rotating here; func_door slides in at P4.3) supplies only how it computes its
-// open transform and which primitive it issues. Registered as the "CBaseDoor" chain node so both
-// door leaves inherit the inputs/fields through one case-folded chain walk (R2).
+// the locked path (OnLockedUse) + blocked-while-closing (deal `dmg`, reverse, OnBlockedClosing) +
+// the full spawnflag table (B.5) + `linked_door` (the paired leaf) + the +use doorknob path. Two
+// leaves derive from it: func_door_rotating (swings `distance` about the hinge) and func_door
+// (slides `movedir` by its own depth, P4.3). A leaf supplies only how it computes its open transform
+// and which primitive it issues. Registered as the "CBaseDoor" chain node so both leaves inherit the
+// inputs/fields through one case-folded chain walk (R2).
 
 class UElysiumBrushComponent;
 
@@ -62,7 +64,40 @@ protected:
 	// pose (START_OPEN) before any motion.
 	void SnapBody(const FVector& RelLoc, const FRotator& RelRot);
 
+	// --- Mover sounds (P6.4) -----------------------------------------------------------------
+	// VtMB resolves a mover's `soundgroup` token by directory convention (no data file): the WAVs
+	// live under sound/usable/<Category>/<soundgroup>/<subkey>.wav (RE: CBaseDoor::Spawn @0x100ef060
+	// reads open/close/swing/locked; CBaseButton::Spawn @0x100c8810 reads on/off). InitMoverSounds
+	// reads the `soundgroup` key + the SILENT spawnflag and resolves the shipped subkeys from the
+	// offline manifest (out/sound/usable/soundgroups.json). Call from the leaf's Spawn(). Category is
+	// "openable" (doors) or "switches" (buttons); SilentFlag is the SF bit that mutes the mover (0 = none).
+	void InitMoverSounds(const TCHAR* Category, int32 SilentFlag);
+
+	// Play a resolved subkey one-shot (open/close/on/off/locked) at the body — 3D, attached so it
+	// tracks the mover, sphere attenuation. No-op if silent, the subkey isn't shipped, or bodiless.
+	void PlayMoverSound(FName Sub);
+	// Play an explicit WAV (sound-relative, e.g. button `unlocked_sound`) the same way. No-op if empty.
+	void PlayMoverSoundRel(const FString& Rel);
+	// The looping "moving" sound (door `swing`): started on motion, stopped on arrival. Tracks its
+	// voice so StopMoverLoop can end it; StartMoverLoop replaces any running loop.
+	void StartMoverLoop(FName Sub);
+	void StopMoverLoop();
+
+	// Append the mover-sound state (group/category/silent/resolved subkeys/last played) to a debug
+	// list — the leaf's GetDebugState calls this so the Cog inspector shows what will play.
+	void AppendSoundDebug(TArray<TPair<FString, FString>>& Out) const;
+
+	// The `soundgroup` token (lower-cased; empty = none) and which usable/ subtree it draws from.
+	FString SoundGroup;
+	FString SoundCategory;
+	bool    bMoverSilent = false;              // the SILENT spawnflag was set
+	TMap<FName, FString> SoundSubs;            // resolved subkey -> sound-relative WAV (shipped only)
+	FString LastMoverSound;                    // debug: the last sound played (rel), or empty
+
 private:
+	int32 MoverLoopVoiceId = 0;                // the looping moving voice id (0 = none), for StopMoverLoop
+
+
 	EMoveKind CurrentMove = EMoveKind::None;
 	FVector  MoveStartLoc = FVector::ZeroVector;
 	FVector  MoveDestLoc  = FVector::ZeroVector;
@@ -91,6 +126,12 @@ public:
 
 	bool  bLocked  = false;    // Lock/Unlock + LOCKED spawnflag (0x800)
 
+	// `linked_door` (B.2, 485 uses): the targetname of the paired leaf of a double door. Movement I/O
+	// (Open/Close) is wired to both leaves by the map data; the runtime link is the +use doorknob —
+	// a player +use on one leaf toggles both (VtMB's CBaseDoor::DoorknobUse). Resolved lazily.
+	FString LinkedDoorName;
+	FElysiumEntityHandle LinkedDoor;   // cached partner handle; resolved on first Use
+
 	// The activator that last opened the door — propagated onto its outputs (Source m_hActivator).
 	FElysiumEntityHandle LastActivator;
 
@@ -102,6 +143,19 @@ public:
 	void InputToggle(const FElysiumEntityHandle& Activator);
 	void InputLock()   { bLocked = true; }
 	void InputUnlock() { bLocked = false; }
+	// The +use doorknob path (CBaseDoor::DoorknobUse): toggle this leaf and, if a `linked_door` is
+	// set, its partner too — the double-door swing. Reached by the +use look-cursor and `ent_fire Use`.
+	void DoorUse(const FElysiumEntityHandle& Activator);
+
+	// --- +use / debug hooks (P4.3) -----------------------------------------------------
+	// PUSE (0x100) is the dominant door bit (105 doors): it arms the +use look-cursor. Doors fire no
+	// OnIn/OnOut (those are button-only outputs), so the cursor enter/leave stays a base no-op — only
+	// activation and the reticle-arming (world-side) matter.
+	virtual bool IsUsable() const override;
+	virtual bool IsUseLocked() const override { return bLocked; }   // locked_icon on the reticle (P4.4)
+	virtual void Use(const FElysiumEntityHandle& Activator) override { DoorUse(Activator); }
+	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
+	virtual FElysiumDoorBase* AsDoorBase() override { return this; }
 
 	// --- Lifecycle ---------------------------------------------------------------------
 	virtual void Spawn() override;
@@ -122,6 +176,13 @@ protected:
 
 	void DoorGoUp(const FElysiumEntityHandle& Activator);
 	void DoorGoDown(const FElysiumEntityHandle& Activator);
+
+	// Resolve `LinkedDoorName` to the paired door leaf through the world name index (cached, no-RTTI
+	// downcast via AsDoorBase). Null when unset or the partner is missing/not a door.
+	FElysiumDoorBase* ResolveLinkedDoor();
+
+	// True when the door rests open with no autoclose: `wait -1` or the NO_AUTO_RETURN (0x20) flag.
+	bool StaysOpen() const;
 
 	EToggleState ToggleState = EToggleState::AtBottom;
 

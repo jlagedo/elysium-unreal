@@ -1,0 +1,2 @@
+cpython-2.7.18+20260109 (qnox/python-2.7), x86_64-pc-windows-msvc, MSC v.1944
+sha256 tarball: 0eab8de590076f74a17802d8b613ad74ec050b0081ccd0e2c7a47432c9b169b8

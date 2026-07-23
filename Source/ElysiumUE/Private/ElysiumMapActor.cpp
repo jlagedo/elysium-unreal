@@ -1,11 +1,15 @@
 #include "ElysiumMapActor.h"
 
+#include "ElysiumAudioSubsystem.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumEditorLabels.h"
+#include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumMapSubsystem.h"
 #include "ElysiumEnvironment.h"
 #include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSoundScheme.h"
 #include "ElysiumLightRig.h"
 #include "ElysiumMaterialFactory.h"
 #include "ElysiumObjModel.h"
@@ -245,6 +249,16 @@ void AElysiumMapActor::LoadMap()
 {
 	const double Start = FPlatformTime::Seconds();
 
+	// Per-phase timing for the Maps Cog window: stamp closes the running phase and opens the next.
+	LoadPhases.Reset();
+	double PhaseStart = Start;
+	auto Phase = [this, &PhaseStart](const TCHAR* Name)
+	{
+		const double Now = FPlatformTime::Seconds();
+		LoadPhases.Add({ Name, (Now - PhaseStart) * 1000.0 });
+		PhaseStart = Now;
+	};
+
 	LoadedMap = MapName;
 
 	// P1.7 — label the map actor and drop it in an Elysium Outliner folder, so the PIE World
@@ -266,6 +280,7 @@ void AElysiumMapActor::LoadMap()
 	WorldSurfaceCount = BuildMeshFromObj(FElysiumContentPaths::MapObj(MapName), WorldMesh, !bBrushCollision);
 	UE_LOG(LogElysium, Log, TEXT("world '%s': %d surfaces (collision: %s)"),
 		*MapName, WorldSurfaceCount, bBrushCollision ? TEXT("brush") : TEXT("trimesh"));
+	Phase(TEXT("World + collision"));
 
 	const FString SkyObj = FElysiumContentPaths::MapSkyObj(MapName);
 	if (FPaths::FileExists(SkyObj))
@@ -274,10 +289,13 @@ void AElysiumMapActor::LoadMap()
 		ApplySkyTransform();
 		UE_LOG(LogElysium, Log, TEXT("skybox: %d surfaces"), SkySurfaceCount);
 	}
+	Phase(TEXT("Skybox"));
 
 	LoadProps();
+	Phase(TEXT("Props"));
 
 	ApplyEnvironment();
+	Phase(TEXT("Environment"));
 
 	// Real-time lighting: one Unreal light per WORLDLIGHTS source. When the rig has real
 	// lights it owns the scene, so the flat fallback sun is switched off and the SkyLight
@@ -292,6 +310,7 @@ void AElysiumMapActor::LoadMap()
 	}
 
 	SkyLight->RecaptureSky();
+	Phase(TEXT("Lights"));
 
 	if (ReadSpawn(PendingSpawnLoc, PendingSpawnYaw))
 	{
@@ -310,6 +329,9 @@ void AElysiumMapActor::LoadMap()
 			{
 				EntityCount = EntDefs.Num();
 				EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState);
+				// The scheme manager must exist before the spawn pass: a start_enabled
+				// ambient_soundscheme fades its scheme in from its own Spawn() (P6.3).
+				SchemeManager = MakePimpl<FElysiumSoundSchemeManager>();
 				EntityWorld->Load(MoveTemp(EntDefs));
 				BrushBodyCount = EntityWorld->NumBrushBodies();
 			}
@@ -320,7 +342,15 @@ void AElysiumMapActor::LoadMap()
 		}
 	}
 
-	UE_LOG(LogElysium, Log, TEXT("loaded %s in %.2fs"), *MapName, FPlatformTime::Seconds() - Start);
+	// P4.6 — a landmark transition places the player against the destination info_landmark instead of
+	// info_player_start. Runs after the entity world is built (the landmark is one of its entities).
+	ResolveLandmarkSpawn();
+
+	Phase(TEXT("Entities"));
+
+	const double TotalMs = (FPlatformTime::Seconds() - Start) * 1000.0;
+	LoadPhases.Add({ TEXT("Total"), TotalMs });
+	UE_LOG(LogElysium, Log, TEXT("loaded %s in %.2fs"), *MapName, TotalMs / 1000.0);
 }
 
 int32 AElysiumMapActor::BuildMeshFromObj(const FString& ObjPath, UProceduralMeshComponent* Mesh, bool bCollision)
@@ -764,6 +794,79 @@ bool AElysiumMapActor::ReadSpawn(FVector& OutLocation, float& OutYaw) const
 	return true;
 }
 
+void AElysiumMapActor::ResolveLandmarkSpawn()
+{
+	UGameInstance* GI = GetGameInstance();
+	UElysiumMapSubsystem* Maps = GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
+	if (!Maps || !EntityWorld)
+	{
+		return;
+	}
+
+	FString Landmark; FVector Offset; float Yaw; bool bHasYaw;
+	if (!Maps->ConsumeLandmarkSpawn(Landmark, Offset, Yaw, bHasYaw))
+	{
+		return;   // not a landmark transition — keep the info_player_start placement (ReadSpawn)
+	}
+
+	FElysiumEntity* Lm = EntityWorld->FindLandmark(Landmark);
+	if (!Lm || !Lm->Def)
+	{
+		// Both maps must carry an info_landmark of the same name; a missing one is a data error.
+		// Fall back to info_player_start rather than dumping the player at the origin (matches the
+		// decompiled "can't find landmark" warning path).
+		UE_LOG(LogElysium, Warning,
+			TEXT("landmark '%s' not found in %s — spawning at info_player_start"), *Landmark, *MapName);
+		return;
+	}
+
+	// new pos = destination landmark origin + the offset captured at the source landmark. The offset
+	// already carries the player's capsule-centre height above the landmark, so a real transition
+	// needs no extra lift; a direct/console landmark entry (offset zero) seats the capsule centre by
+	// lifting off the landmark's feet origin, and faces the landmark's own angles.
+	PendingSpawnLoc = Lm->Def->Origin + Offset;
+	if (bHasYaw)
+	{
+		PendingSpawnYaw = Yaw;   // preserve the player's view yaw across the transition
+	}
+	else
+	{
+		PendingSpawnLoc.Z += 100.0f;   // lift the capsule off the landmark feet (as ReadSpawn does)
+		PendingSpawnYaw = -Lm->Angles.Y;   // face the landmark's angles (Source yaw negated to Unreal)
+	}
+	bSpawnPending = true;
+	EntryLandmark = Landmark;
+
+	// Fire the landmark's OnEnterMapHere (e.g. pawnshop's newgame/haven -> Radio2.Deactivate). The
+	// spawn pass is complete, so every wire target exists; FireOutput queues it on the event queue,
+	// serviced on the first tick (after any logic_auto OnMapLoad, matching the map-enter ordering).
+	static const FName OnEnterMapHere(TEXT("OnEnterMapHere"));
+	Lm->FireOutput(OnEnterMapHere, Lm->Handle);
+
+	UE_LOG(LogElysium, Log, TEXT("landmark spawn: %s @ %s -> %s (yaw %.0f)"),
+		*MapName, *Landmark, *PendingSpawnLoc.ToString(), PendingSpawnYaw);
+}
+
+void AElysiumMapActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// The audio subsystem is GameInstance-scoped and outlives this map actor, but every voice it
+	// holds is map-scoped (ambient_generic + the scheme bed/music/random one-shots). Stop them all
+	// on unload so nothing bleeds into the next map. StopAllVoices also covers the scheme voices, so
+	// the scheme manager only needs to drop its (now-dead) handles.
+	if (const UGameInstance* GI = GetGameInstance())
+	{
+		if (UElysiumAudioSubsystem* Audio = GI->GetSubsystem<UElysiumAudioSubsystem>())
+		{
+			if (SchemeManager)
+			{
+				SchemeManager->StopAll(Audio);
+			}
+			Audio->StopAllVoices();
+		}
+	}
+	Super::EndPlay(EndPlayReason);
+}
+
 void AElysiumMapActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
@@ -779,6 +882,28 @@ void AElysiumMapActor::Tick(float DeltaSeconds)
 			{
 				GameState->GameClock().Advance(DeltaSeconds);
 				EntityWorld->Tick(GameState->GameClock().GetNow());
+				// P4.2 — the minimal +use look-cursor: re-pick the aimed usable each frame and fire
+				// OnIn/OnOut on the transitions. Runs after the world tick so the outputs it fires
+				// enqueue against the same `now`. The E key drives PlayerUse (AElysiumPawn).
+				EntityWorld->UpdateUseCursor();
+
+				// P6.3 — reap finished voices, then advance the SoundScheme manager (random-one-shot
+				// scheduler + music crossfade) with the listener position for polar placement/attenuation.
+				if (UElysiumAudioSubsystem* Audio = GI->GetSubsystem<UElysiumAudioSubsystem>())
+				{
+					Audio->TickAudio(DeltaSeconds);
+					if (SchemeManager)
+					{
+						FVector ListenerLoc = GetActorLocation();
+						if (const APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
+						{
+							FVector VLoc; FRotator VRot;
+							PC->GetPlayerViewPoint(VLoc, VRot);
+							ListenerLoc = VLoc;
+						}
+						SchemeManager->Tick(Audio, ListenerLoc, DeltaSeconds);
+					}
+				}
 			}
 		}
 	}

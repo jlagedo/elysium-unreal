@@ -211,18 +211,23 @@ volume, which is what arms the icon. `soundgroup` names the sound set — most
 | Bit | Behaviour |
 | --- | --- |
 | `0x1` | **DONTMOVE** — pressed position is forced equal to the start position (matches stock `SF_BUTTON_DONTMOVE`) |
-| `0x20` | **TOGGLE** — in the touch handler (`0x100c9250`) it gates the down-activation from the rest state; also read by the direction helper `0x100c93b0`. Touch toggles up↔down |
-| `0x40` | spawn-time timed/animate setup (schedules a think at `spawn + Δ`) |
-| `0x100` | assigns the **use/activate** handler (`m_pfn` at `+0x1ec` ← `0x100c9430`) + one vtable call (`+0x37c`) |
-| `0x400` | assigns the **touch** handler (`m_pfn` at `+0x1f0` ← `0x100c9250`) — touch-activates |
+| `0x20` | **TOGGLE** — read by both activation handlers + the direction helper `0x100c93b0`; presses toggle up↔down and a re-use from the pressed state springs back |
+| `0x40` | spawn-time timed/animate setup (schedules a think at `spawn + Δ` — the spark path) |
+| `0x100` | **TOUCH_ACTIVATES** — assigns the touch handler (`m_pfn` at `+0x1ec` ← `0x100c9430`), the one that checks the toucher's caps + the `0x1000` gate (not the use filter) |
+| `0x200` | **DAMAGE_ACTIVATES** — shootable; the damage handler `0x100c8b80` tests `0x200` and presses when the button takes damage |
+| `0x400` | **USE_ACTIVATES** — assigns the +use handler (`m_pfn` at `+0x1f0` ← `0x100c9250`), the one that gates on `CBaseEntity::PassesUseFilter` (`0x100a7bd0`) — the +use path |
 | `0x800` | **starts locked** — sets the locked byte `+0x5c4` (the one `GetUseIcon` reads to pick `locked_icon`) |
-| `0x1000` | sets `+0x5c5`, a secondary use-gate: the use handler (`0x100c9430`) only fires if the activator carries a matching flag (`activator[0x13]` bit 2) |
+| `0x1000` | sets `+0x5c5`, a secondary use-gate: the touch handler (`0x100c9430`) only fires if the activator carries a matching flag (`activator[0x13]` bit 2) |
 
-Bit `0x20`/`0x1000` are read in `CBaseButton::Spawn` (`FUN_100c8d60`) and the use/touch handlers
+Bit `0x20`/`0x1000` are read in `CBaseButton::Spawn` (`FUN_100c8d60`) and the touch/use handlers
 (thunks `0x10002cd4`/`0x100111da` → `0x100c9430`/`0x100c9250`). Bit **`0x2000`** (in 8193/9217)
 is **not** tested anywhere in the button class — it is inert for `func_button` (a base-entity or
-engine bit). VtMB diverges from modern Source on buttons, so the values above are read from this
-build, not assumed from stock `SF_BUTTON_*`.
+engine bit). **On buttons VtMB keeps the stock layout: `0x100`=touch, `0x400`=use** — verified by
+decompile, not assumed: the `0x400`-armed handler (`0x100c9250`) gates on `PassesUseFilter` (the use
+path), and all six `sp_tutorial_1` `func_button`s are `spawnflags 1057` (`0x400` + `use_icon 12`),
+i.e. +use switches. This corrects an earlier reading here that had `0x100`/`0x400` swapped; the
+offsets/addresses above were right, only the use/touch labels were reversed. Matches
+`animation_and_movers.md` B.5.
 
 ## Trigger activation filter (`trigger_multiple` / `trigger_once`)
 

@@ -1,0 +1,10 @@
+# The vendored CPython 2.7 SDK (~37 MB) is open source (PSF), not game-sourced, and regenerable
+# via tools/fetch_cpython27.py -- so it is fetched, not committed (same posture as tools/out).
+# Keep only the provenance marker + this file tracked.
+/include/
+/libs/
+/bin/
+/PythonHome/
+/_extract/
+!VERSION.txt
+!.gitignore

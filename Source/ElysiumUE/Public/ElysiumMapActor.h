@@ -6,6 +6,7 @@
 #include "ElysiumMapActor.generated.h"
 
 class FElysiumEntityWorld;
+class FElysiumSoundSchemeManager;
 class UDirectionalLightComponent;
 class UElysiumLightRig;
 class UExponentialHeightFogComponent;
@@ -31,6 +32,7 @@ public:
 	AElysiumMapActor();
 
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void Tick(float DeltaSeconds) override;
 
 	// Map name under FElysiumContentPaths::Root() (a folder holding <MapName>.obj).
@@ -49,6 +51,10 @@ public:
 	void ToggleProps();
 	bool ArePropsVisible() const;
 
+	// The real-time light rig for this map (the Lights Cog window's source list + live tuning), or
+	// null before the map is built.
+	UElysiumLightRig* GetLightRig() const { return LightRig; }
+
 	// True once the pawn has been placed and its ground collision has finished cooking
 	// (or the spawn-hold timed out). The headless profiler waits on this before capturing.
 	bool IsSpawnDone() const { return bSpawnDone; }
@@ -56,6 +62,11 @@ public:
 	// The live Track-B entity world (P1.4), or null if the map has no `.ents`. Owned by this
 	// actor, so it dies on map unload. The `elysium.world*` verbs reach it through here.
 	FElysiumEntityWorld* GetEntityWorld() const { return EntityWorld.Get(); }
+
+	// The P6.3 SoundScheme playback manager (ambient bed + music state machine + random scheduler)
+	// for this map, or null if the map has no entity world. Owned by this actor (dies on unload); the
+	// ambient_soundscheme entities and the Cog Sound Schemes window reach it through here.
+	FElysiumSoundSchemeManager* GetSchemeManager() const { return SchemeManager.Get(); }
 
 	// Live stats for the debug overlay, filled by LoadMap.
 	FString LoadedMap;
@@ -73,6 +84,19 @@ public:
 	// and how many of them got a P1.5 brush body (convex collision / trigger overlap volume).
 	int32 EntityCount = 0;
 	int32 BrushBodyCount = 0;
+
+	// P4.6 — the `info_landmark` this map load entered through (a landmark transition / direct
+	// landmark Travel), or empty for a plain info_player_start spawn. Shown in the Maps Cog window.
+	FString EntryLandmark;
+
+	// Per-phase load timings (milliseconds), filled by LoadMap in build order, for the Maps Cog
+	// window. The last entry is always the "Total". Empty until the first load completes.
+	struct FLoadPhase
+	{
+		FString Name;
+		double Milliseconds = 0.0;
+	};
+	TArray<FLoadPhase> LoadPhases;
 
 private:
 	UPROPERTY() TObjectPtr<USceneComponent> SceneRoot;
@@ -104,6 +128,11 @@ private:
 	// needs only a forward declaration; destroyed with the actor on map unload.
 	TPimplPtr<FElysiumEntityWorld> EntityWorld;
 
+	// The P6.3 SoundScheme manager (plain C++, owned here). Constructed alongside EntityWorld so the
+	// ambient_soundscheme entities can reach it during their spawn pass; ticked from Tick with the
+	// player location; its voices are stopped on unload (EndPlay).
+	TPimplPtr<FElysiumSoundSchemeManager> SchemeManager;
+
 	void LoadMap();
 	void LoadProps();
 	// Build convex world collision from <map>.hulls (one FKConvexElem per solid brush) onto
@@ -120,6 +149,12 @@ private:
 	// cubemap but leaves RecaptureSky to the caller.
 	void ApplyEnvironment();
 	bool ReadSpawn(FVector& OutLocation, float& OutYaw) const;
+	// P4.6 — if this load is a landmark transition (the map subsystem has a queued landmark spawn),
+	// override the info_player_start placement: resolve the destination `info_landmark` in the just-
+	// built entity world and seat the player at landmark origin + the carried offset. Fires the
+	// landmark's OnEnterMapHere. No-op (keeps the .spawn placement) for a plain load or a missing
+	// landmark. Called by LoadMap after the entity world is built.
+	void ResolveLandmarkSpawn();
 
 	// The player pawn may not exist yet in BeginPlay, so the teleport is deferred to Tick;
 	// the pawn is then held frozen until the async collision cook yields ground beneath it.

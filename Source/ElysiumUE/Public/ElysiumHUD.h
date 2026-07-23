@@ -2,10 +2,12 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/HUD.h"
+#include "UObject/StrongObjectPtr.h"
 #include "ElysiumHUD.generated.h"
 
 class AElysiumMapActor;
 class IConsoleObject;
+class UTexture2D;
 
 // Debug overlay, toggled by the `elysium.debug` console command (' or ` opens the console)
 // or F1. Hidden on a clean load. Top-left panel: map + surface counts, the view point in
@@ -33,4 +35,17 @@ private:
 	IConsoleObject* PropsCmd = nullptr;
 
 	AElysiumMapActor* ResolveMapActor() const;
+
+	// --- +use context-icon reticle (P4.4) ----------------------------------------------------
+	// The reticle swaps to VtMB's context cursor while the +use look-cursor is on a usable entity:
+	// the ring frame + the entity's GetUseIcon() cell (locked_icon when locked). Atlas + per-icon
+	// UVs come from the offline `out/hud/use_icons.png` + `.json` (PL3); loaded once, lazily, on the
+	// first DrawHUD (BeginPlay is too early for a reliable file read on some launch paths).
+	void EnsureUseIconAtlas();
+	void DrawUseReticle(float CenterX, float CenterY, int32 IconIndex);
+
+	bool bUseAtlasLoadAttempted = false;
+	TStrongObjectPtr<UTexture2D> UseAtlas;
+	FBox2D UseRingUV = FBox2D(ForceInit);   // context_icon_ring frame (drawn around every usable)
+	TMap<int32, FBox2D> UseIconUV;          // use_icon index (1-based) -> atlas UV rect
 };

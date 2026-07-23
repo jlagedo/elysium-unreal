@@ -29,6 +29,9 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 
 	bool IsNoclip() const { return bNoclip; }
+	// Enter/leave noclip (fly through geometry). Drives collision + movement mode; the V key and
+	// the `Noclip` cheat both route here.
+	void SetNoclip(bool bEnable);
 
 protected:
 	virtual void SetupPlayerInputComponent(UInputComponent* Input) override;
@@ -54,4 +57,7 @@ private:
 	void ToggleNoclip();
 	void ToggleSky();
 	void ToggleDebug();
+	// E — +use: press whatever the entity world's look-cursor is aimed at (P4.2). The full
+	// use-icon HUD + use-only trace channel land in P4.4; this fires the aimed button's press.
+	void OnUsePressed();
 };

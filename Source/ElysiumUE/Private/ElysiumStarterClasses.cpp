@@ -8,12 +8,21 @@
 // keyfields with no per-class boilerplate. The classes are file-local — nothing outside the
 // registry references them, so they need no header.
 
+#include "ElysiumBrushComponent.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumMapSubsystem.h"
+
+#include "GameFramework/DamageType.h"
+#include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
+#include "Kismet/GameplayStatics.h"
 
 #include <type_traits>
+
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumTrigger, Log, All);
 
 namespace
 {
@@ -46,6 +55,12 @@ namespace
 			Acc.Type = EElysiumVariantType::Int;
 			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Int(static_cast<const TClass&>(E).*Member); };
 			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt(); };
+		}
+		else if constexpr (std::is_same_v<TMember, FString>)
+		{
+			Acc.Type = EElysiumVariantType::String;
+			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::String(static_cast<const TClass&>(E).*Member); };
+			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToString(); };
 		}
 		else
 		{
@@ -166,6 +181,364 @@ public:
 };
 
 // ============================================================================================
+// trigger_hurt (P4.5) — CTriggerHurt (2 on the tutorial). Deals `damage` to the player every
+// 0.5 s while it stands in the volume, on the substrate clock (R4). Enable/Disable + StartDisabled
+// come from CBaseTrigger; the overlap hooks track the player and drive the damage think.
+// ============================================================================================
+
+class FElysiumTriggerHurt final : public FElysiumTriggerBase
+{
+public:
+	float Damage = 0.0f;      // damage — points per tick
+	int32 DamageType = 0;     // damagetype — bitfield (logged; the WoD damage model lands later)
+
+	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) override
+	{
+		if (bDisabled || IsInert() || !PlayerPasses())
+		{
+			return;
+		}
+		bPlayerInside = true;
+		LastActivator = Activator;
+		HurtNow();
+		NextThink = (World ? World->NowSeconds() : 0.0) + DamageIntervalSeconds;
+	}
+
+	virtual void OnTouchEnd(const FElysiumEntityHandle& /*Activator*/) override
+	{
+		bPlayerInside = false;
+		NextThink = ELYSIUM_NEVER_THINK;
+	}
+
+	virtual void Think() override
+	{
+		if (!bPlayerInside || bDisabled || IsInert())
+		{
+			NextThink = ELYSIUM_NEVER_THINK;
+			return;
+		}
+		HurtNow();
+		NextThink = (World ? World->NowSeconds() : 0.0) + DamageIntervalSeconds;
+	}
+
+	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
+	{
+		Out.Emplace(TEXT("Damage"), FString::Printf(TEXT("%.0f / %.2fs"), Damage, DamageIntervalSeconds));
+		Out.Emplace(TEXT("Damage type"), FString::Printf(TEXT("0x%x"), DamageType));
+		Out.Emplace(TEXT("Player inside"), bPlayerInside ? TEXT("yes") : TEXT("no"));
+		Out.Emplace(TEXT("Enabled"), bDisabled ? TEXT("no") : TEXT("yes"));
+	}
+
+private:
+	static constexpr double DamageIntervalSeconds = 0.5;   // Source trigger_hurt damage cadence
+
+	void HurtNow()
+	{
+		APawn* Pawn = World ? World->GetPlayerPawn() : nullptr;
+		if (Pawn && Damage > 0.0f)
+		{
+			UGameplayStatics::ApplyDamage(Pawn, Damage, nullptr,
+				Body ? Body->GetOwner() : nullptr, UDamageType::StaticClass());
+		}
+	}
+
+	bool bPlayerInside = false;
+	FElysiumEntityHandle LastActivator;
+};
+
+// ============================================================================================
+// trigger_look (P4.5) — CTriggerLook (4 on the tutorial). Fires OnTrigger once the player, standing
+// in the volume, looks at the `target` entity within `FieldOfView` (a forward-dot threshold) for a
+// cumulative `LookTime` seconds. Self-contained (needs only the pawn camera + the target origin);
+// fires once, then disables (the common Source case).
+// ============================================================================================
+
+class FElysiumTriggerLook final : public FElysiumTriggerBase
+{
+public:
+	float LookTime = 0.5f;      // LookTime — required cumulative look seconds
+	float FieldOfView = 0.9f;   // FieldOfView — min forward·dir dot (1 = dead-on, 0 = 90°)
+
+	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) override
+	{
+		if (bDisabled || IsInert() || !PlayerPasses())
+		{
+			return;
+		}
+		bPlayerInside = true;
+		LastActivator = Activator;
+		LookElapsed = 0.0f;
+		LastThinkTime = World ? World->NowSeconds() : 0.0;
+		NextThink = LastThinkTime;   // per-frame while inside
+	}
+
+	virtual void OnTouchEnd(const FElysiumEntityHandle& /*Activator*/) override
+	{
+		bPlayerInside = false;
+		LookElapsed = 0.0f;
+		NextThink = ELYSIUM_NEVER_THINK;
+	}
+
+	virtual void Think() override
+	{
+		const double Now = World ? World->NowSeconds() : 0.0;
+		const float Dt = (float)FMath::Max(0.0, Now - LastThinkTime);
+		LastThinkTime = Now;
+
+		if (!bPlayerInside || bDisabled || IsInert())
+		{
+			NextThink = ELYSIUM_NEVER_THINK;
+			return;
+		}
+		if (IsLookingAtTarget())
+		{
+			LookElapsed += Dt;
+			if (LookElapsed >= LookTime)
+			{
+				static const FName OnTrigger(TEXT("OnTrigger"));
+				FireOutput(OnTrigger, LastActivator);
+				bDisabled = true;            // fire once
+				NextThink = ELYSIUM_NEVER_THINK;
+				return;
+			}
+		}
+		else
+		{
+			LookElapsed = 0.0f;              // must be a continuous look (Source resets on look-away)
+		}
+		NextThink = Now;                     // keep polling each frame
+	}
+
+	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
+	{
+		Out.Emplace(TEXT("Target"), Target.IsEmpty() ? TEXT("(none)") : Target);
+		Out.Emplace(TEXT("FieldOfView"), FString::Printf(TEXT("%.2f"), FieldOfView));
+		Out.Emplace(TEXT("Look progress"), FString::Printf(TEXT("%.2f / %.2f s"), LookElapsed, LookTime));
+		Out.Emplace(TEXT("Player inside"), bPlayerInside ? TEXT("yes") : TEXT("no"));
+	}
+
+private:
+	bool IsLookingAtTarget() const
+	{
+		APawn* Pawn = World ? World->GetPlayerPawn() : nullptr;
+		const FElysiumEntity* Tgt = World ? World->FindByName(Target) : nullptr;
+		if (!Pawn || !Tgt || !Tgt->Def)
+		{
+			return false;
+		}
+		FVector ViewLoc; FRotator ViewRot;
+		if (const APlayerController* PC = Cast<APlayerController>(Pawn->GetController()))
+		{
+			PC->GetPlayerViewPoint(ViewLoc, ViewRot);
+		}
+		else
+		{
+			ViewLoc = Pawn->GetActorLocation();
+			ViewRot = Pawn->GetActorRotation();
+		}
+		const FVector ToTarget = (Tgt->Def->Origin - ViewLoc).GetSafeNormal();
+		return FVector::DotProduct(ViewRot.Vector(), ToTarget) >= FieldOfView;
+	}
+
+	bool   bPlayerInside = false;
+	float  LookElapsed = 0.0f;
+	double LastThinkTime = 0.0;
+	FElysiumEntityHandle LastActivator;
+};
+
+// ============================================================================================
+// trigger_autosave (P4.5) — CTriggerAutosave (1 on the tutorial). A checkpoint volume: the player
+// entering it triggers a save. Saves land in P10, so this logs the checkpoint and fires once
+// (then disables) so it doesn't spam every frame the player lingers.
+// ============================================================================================
+
+class FElysiumTriggerAutosave final : public FElysiumTriggerBase
+{
+public:
+	virtual void OnTouchStart(const FElysiumEntityHandle& /*Activator*/) override
+	{
+		if (bDisabled || IsInert() || !PlayerPasses())
+		{
+			return;
+		}
+		++TriggerCount;
+		UE_LOG(LogElysiumTrigger, Log, TEXT("%s: autosave checkpoint reached (save deferred to P10)"),
+			*DebugString());
+		bDisabled = true;   // one-shot per arming; a ScriptUnhide/Enable re-arms it
+	}
+
+	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
+	{
+		Out.Emplace(TEXT("Triggered"), FString::Printf(TEXT("%d time(s)"), TriggerCount));
+		Out.Emplace(TEXT("Armed"), bDisabled ? TEXT("no") : TEXT("yes"));
+		Out.Emplace(TEXT("Save"), TEXT("deferred to P10"));
+	}
+
+private:
+	int32 TriggerCount = 0;
+};
+
+// ============================================================================================
+// info_landmark (P4.6) — CBaseLandmark (FUN_100b7590). A bodiless anchor point shared by name
+// between two maps: a trigger_changelevel measures the player's offset from the SOURCE map's
+// landmark, and the DESTINATION map re-adds that offset to its own same-named landmark to place
+// the player (level_transitions.md path 2). The runtime placement lives in the map subsystem +
+// AElysiumMapActor::ResolveLandmarkSpawn; this leaf exists so the landmark is a first-class entity
+// (not an inert record) with inspectable state and its own OnEnterMapHere output (fired by the map
+// actor when the player enters here — e.g. pawnshop's newgame/haven landmarks silence Radio2).
+// ============================================================================================
+
+class FElysiumInfoLandmark final : public FElysiumEntity
+{
+public:
+	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
+	{
+		Out.Emplace(TEXT("Origin"), (Def ? Def->Origin : FVector::ZeroVector).ToString());
+		Out.Emplace(TEXT("Facing"), FString::Printf(TEXT("yaw %.0f"), -Angles.Y));
+	}
+};
+
+// ============================================================================================
+// trigger_changelevel (P4.6) — CChangeLevel (FUN_101c71f0). A brush trigger over CBaseTrigger that
+// carries a `map` (destination) + `landmark` (the shared info_landmark name). When the player is in
+// the volume, TouchChangeLevel (FUN_101c7890) fires the transition; VtMB defers the actual swap to
+// end-of-frame, so we request a deferred landmark travel through the map subsystem (the swap can't
+// run inside this touch — it destroys this very entity world). The player's offset from the SOURCE
+// landmark and their view yaw are captured here and re-applied against the destination landmark. The
+// scripted path (level-script `ChangeMap(delay, landmark, trigger)` -> the ChangeLevel input) forces
+// the same transition without a touch. OnChangeLevel (field-5 Python on some triggers, e.g.
+// werewolfBloodHavenExit()) fires just before the swap.
+// ============================================================================================
+
+class FElysiumChangeLevel final : public FElysiumTriggerBase
+{
+public:
+	FString DestMap;        // `map` — the destination map name (an exported folder under tools/out)
+	FString LandmarkName;   // `landmark` — the info_landmark shared with the destination map
+
+	// SF_CHANGELEVEL_NOTOUCH (stock Source `0x0002`): the transition fires only via a scripted input,
+	// never on player touch — the tutorial's changelevels carry this (spawnflags 2) and are activated
+	// by the level scripts' ChangeMap. A changelevel WITHOUT the bit (e.g. pawnshop's togenesis) fires
+	// on walk-in. NB: trigger_changelevel does NOT use CBaseTrigger's ALLOW_CLIENTS (0x1) convention —
+	// its own Touch fires for the player directly — so PlayerPasses() is bypassed here.
+	static constexpr int32 SF_NOTOUCH = 0x0002;
+
+	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) override
+	{
+		if (bDisabled || IsInert() || (SpawnFlags & SF_NOTOUCH) != 0)
+		{
+			return;
+		}
+		DoChangeLevel();
+	}
+
+	// The scripted / forced entry (ChangeMap's ChangeLevel input): transition regardless of whether
+	// the player is stood in the volume. The offset is still landmark-relative, so a remote fire lands
+	// the player correctly at the destination.
+	void ForceChangeLevel() { DoChangeLevel(); }
+
+	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
+	{
+		Out.Emplace(TEXT("Destination"), FString::Printf(TEXT("%s @ %s"),
+			DestMap.IsEmpty() ? TEXT("(none)") : *DestMap,
+			LandmarkName.IsEmpty() ? TEXT("(none)") : *LandmarkName));
+		Out.Emplace(TEXT("Enabled"), bDisabled ? TEXT("no") : TEXT("yes"));
+		Out.Emplace(TEXT("Trigger"), (SpawnFlags & SF_NOTOUCH) ? TEXT("scripted (NOTOUCH)") : TEXT("player touch"));
+		Out.Emplace(TEXT("State"), bChanging ? TEXT("changing") : TEXT("armed"));
+	}
+
+private:
+	bool bChanging = false;   // latched once the transition is requested (ignore further touches)
+
+	void DoChangeLevel()
+	{
+		if (bChanging || IsInert())
+		{
+			return;
+		}
+		if (DestMap.IsEmpty())
+		{
+			UE_LOG(LogElysiumTrigger, Warning, TEXT("%s: trigger_changelevel with no map key"), *DebugString());
+			return;
+		}
+
+		// OnChangeLevel wires fire first (the field-5 Python exit hooks: werewolfBloodHavenExit(), …).
+		static const FName OnChangeLevel(TEXT("OnChangeLevel"));
+		FireOutput(OnChangeLevel, Handle);
+
+		// Capture the player's offset from THIS map's landmark + their view yaw. The destination map
+		// re-adds the offset to its same-named landmark (translation only; the player keeps their yaw).
+		FVector Offset = FVector::ZeroVector;
+		float   Yaw = 0.0f;
+		if (APawn* Pawn = World ? World->GetPlayerPawn() : nullptr)
+		{
+			if (const APlayerController* PC = Cast<APlayerController>(Pawn->GetController()))
+			{
+				Yaw = PC->GetControlRotation().Yaw;
+			}
+			if (const FElysiumEntity* Src = World ? World->FindLandmark(LandmarkName) : nullptr)
+			{
+				if (Src->Def)
+				{
+					Offset = Pawn->GetActorLocation() - Src->Def->Origin;
+				}
+			}
+			else if (!LandmarkName.IsEmpty())
+			{
+				UE_LOG(LogElysiumTrigger, Warning,
+					TEXT("%s: source landmark '%s' not found — player placed at destination landmark"),
+					*DebugString(), *LandmarkName);
+			}
+		}
+
+		if (UElysiumMapSubsystem* Maps = World ? World->MapSubsystem() : nullptr)
+		{
+			Maps->RequestLandmarkTravel(DestMap, LandmarkName, Offset, Yaw);
+			bChanging = true;
+		}
+	}
+};
+
+// ============================================================================================
+// logic_pythoncheck (P5 5.4) — a Python expression gate (51 game-wide). Its `python_script`
+// keyvalue is an expression (e.g. `G.Story_State < 110`); the `Test` input evaluates it and fires
+// OnTrue when the result is truthy, OnFalse otherwise — the standard VtMB branch node
+// (FUN_10135290, entity_io.md / python_bridge.md). Evaluation runs through the world's script host
+// (EvalCondition), so error-to-false (a raise / an unresolved name) reads OnFalse, and disabling
+// live eval (`elysium.script.live 0`) makes every gate fail closed — matching retail's Py_eval_input
+// path. The incoming activator is propagated onto the fired branch (Source I/O convention).
+// ============================================================================================
+
+class FElysiumPythonCheck final : public FElysiumEntity
+{
+public:
+	FString PythonScript;                     // `python_script` — the gating expression
+
+	// Test's last outcome, for the Cog inspector's Live state (not a keyfield).
+	bool bLastResult = false;
+	bool bEverTested = false;
+
+	void RunTest(const FElysiumEntityHandle& Activator)
+	{
+		static const FName OnTrue(TEXT("OnTrue"));
+		static const FName OnFalse(TEXT("OnFalse"));
+
+		const FElysiumVariant R = World ? World->EvalCondition(PythonScript, Handle, Activator)
+			: FElysiumVariant::Void();
+		bLastResult = R.ToBool();   // Void (no host / error-to-false) -> false -> OnFalse
+		bEverTested = true;
+		FireOutput(bLastResult ? OnTrue : OnFalse, Activator);
+	}
+
+	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
+	{
+		Out.Emplace(TEXT("python_script"), PythonScript.IsEmpty() ? TEXT("(none)") : PythonScript);
+		Out.Emplace(TEXT("last Test"),
+			bEverTested ? (bLastResult ? TEXT("OnTrue") : TEXT("OnFalse")) : TEXT("(not tested yet)"));
+	}
+};
+
+// ============================================================================================
 // Registration
 // ============================================================================================
 
@@ -174,6 +547,12 @@ static TUniquePtr<FElysiumEntity> MakeLogicRelay()      { return MakeUnique<FEly
 static TUniquePtr<FElysiumEntity> MakeTriggerBase()     { return MakeUnique<FElysiumTriggerBase>(); }
 static TUniquePtr<FElysiumEntity> MakeTriggerMultiple() { return MakeUnique<FElysiumTriggerMultiple>(); }
 static TUniquePtr<FElysiumEntity> MakeTriggerOnce()     { return MakeUnique<FElysiumTriggerOnce>(); }
+static TUniquePtr<FElysiumEntity> MakeTriggerHurt()     { return MakeUnique<FElysiumTriggerHurt>(); }
+static TUniquePtr<FElysiumEntity> MakeTriggerLook()     { return MakeUnique<FElysiumTriggerLook>(); }
+static TUniquePtr<FElysiumEntity> MakeTriggerAutosave() { return MakeUnique<FElysiumTriggerAutosave>(); }
+static TUniquePtr<FElysiumEntity> MakeInfoLandmark()    { return MakeUnique<FElysiumInfoLandmark>(); }
+static TUniquePtr<FElysiumEntity> MakeChangeLevel()     { return MakeUnique<FElysiumChangeLevel>(); }
+static TUniquePtr<FElysiumEntity> MakePythonCheck()     { return MakeUnique<FElysiumPythonCheck>(); }
 
 // The Enable/Disable/Toggle input set shared by CBaseTrigger. Free function (not a captured
 // lambda) so the module-static registrars can reference it without static-init ordering hazards.
@@ -231,3 +610,54 @@ static FElysiumClassRegistrar GRegTriggerMultiple(
 static FElysiumClassRegistrar GRegTriggerOnce(
 	TEXT("trigger_once"), FName(TEXT("CBaseTrigger")), &MakeTriggerOnce,
 	[](FElysiumClassDesc& /*D*/) { /* inherits everything from CBaseTrigger via the chain */ });
+
+// The P4.5 trigger family — CBaseTrigger leaves (Enable/Disable/Toggle + StartDisabled inherited).
+static FElysiumClassRegistrar GRegTriggerHurt(
+	TEXT("trigger_hurt"), FName(TEXT("CBaseTrigger")), &MakeTriggerHurt,
+	[](FElysiumClassDesc& D)
+	{
+		AddSubclassField(D, TEXT("damage"),     &FElysiumTriggerHurt::Damage);
+		AddSubclassField(D, TEXT("damagetype"), &FElysiumTriggerHurt::DamageType);
+	});
+
+static FElysiumClassRegistrar GRegTriggerLook(
+	TEXT("trigger_look"), FName(TEXT("CBaseTrigger")), &MakeTriggerLook,
+	[](FElysiumClassDesc& D)
+	{
+		AddSubclassField(D, TEXT("LookTime"),    &FElysiumTriggerLook::LookTime);
+		AddSubclassField(D, TEXT("FieldOfView"), &FElysiumTriggerLook::FieldOfView);
+	});
+
+static FElysiumClassRegistrar GRegTriggerAutosave(
+	TEXT("trigger_autosave"), FName(TEXT("CBaseTrigger")), &MakeTriggerAutosave,
+	[](FElysiumClassDesc& /*D*/) { /* inherits the CBaseTrigger inputs/fields via the chain */ });
+
+// info_landmark — a plain base-class leaf (no inputs; the transition math reads its origin/angles).
+static FElysiumClassRegistrar GRegInfoLandmark(
+	TEXT("info_landmark"), ElysiumBaseClassName(), &MakeInfoLandmark,
+	[](FElysiumClassDesc& /*D*/) { /* bodiless anchor — placement + OnEnterMapHere driven by the map actor */ });
+
+// trigger_changelevel — CBaseTrigger leaf (Enable/Disable/Toggle inherited via the chain). `map` +
+// `landmark` are its own keyfields; ChangeLevel is the scripted/forced transition input.
+static FElysiumClassRegistrar GRegChangeLevel(
+	TEXT("trigger_changelevel"), FName(TEXT("CBaseTrigger")), &MakeChangeLevel,
+	[](FElysiumClassDesc& D)
+	{
+		D.Input(TEXT("ChangeLevel"), [](FElysiumEntity& E, const FElysiumInputArgs&)
+		{
+			static_cast<FElysiumChangeLevel&>(E).ForceChangeLevel();
+		});
+		AddSubclassField(D, TEXT("map"),      &FElysiumChangeLevel::DestMap);
+		AddSubclassField(D, TEXT("landmark"), &FElysiumChangeLevel::LandmarkName);
+	});
+
+static FElysiumClassRegistrar GRegPythonCheck(
+	TEXT("logic_pythoncheck"), ElysiumBaseClassName(), &MakePythonCheck,
+	[](FElysiumClassDesc& D)
+	{
+		D.Input(TEXT("Test"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{
+			static_cast<FElysiumPythonCheck&>(E).RunTest(Args.Activator);
+		});
+		AddSubclassField(D, TEXT("python_script"), &FElysiumPythonCheck::PythonScript);
+	});

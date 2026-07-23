@@ -114,7 +114,15 @@ void FElysiumEntity::FireOutput(FName Output, const FElysiumEntityHandle& Activa
 {
 	if (World)
 	{
-		World->FireOutput(*this, Output, Activator);
+		World->FireOutput(*this, Output, Activator, FElysiumVariant::Void());
+	}
+}
+
+void FElysiumEntity::FireOutput(FName Output, const FElysiumEntityHandle& Activator, const FElysiumVariant& Value)
+{
+	if (World)
+	{
+		World->FireOutput(*this, Output, Activator, Value);
 	}
 }
 

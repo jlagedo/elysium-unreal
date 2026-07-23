@@ -5,9 +5,16 @@
 
 #if ENABLE_COG
 #include "CogSubsystem.h"
+#include "ElysiumCogWindow_Audio.h"
 #include "ElysiumCogWindow_Entities.h"
 #include "ElysiumCogWindow_EventQueue.h"
 #include "ElysiumCogWindow_Inspector.h"
+#include "ElysiumCogWindow_Lights.h"
+#include "ElysiumCogWindow_Logic.h"
+#include "ElysiumCogWindow_Maps.h"
+#include "ElysiumCogWindow_Npc.h"
+#include "ElysiumCogWindow_Scripting.h"
+#include "ElysiumCogWindow_SoundScheme.h"
 #include "ElysiumCogWindow_Status.h"
 #include "ElysiumCogWindow_WorldViz.h"
 #include "CogEngineWindow_CollisionViewer.h"
@@ -83,12 +90,18 @@ void UElysiumCogSubsystem::PostInitialize()
 	// Custom Elysium windows, grouped under an "Elysium" main-menu category (the "Elysium."
 	// name prefix). They read Elysium's own runtime data structures directly — the Track-B
 	// entities are plain C++, invisible to Cog's UObject reflection — via FElysiumCogWindow.
-	// The Maps/Lights windows (2.5) are added here the same way.
 	Cog->AddWindow<FElysiumCogWindow_Status>("Elysium.Status");
+	Cog->AddWindow<FElysiumCogWindow_Maps>("Elysium.Maps");
+	Cog->AddWindow<FElysiumCogWindow_Lights>("Elysium.Lights");
 	Cog->AddWindow<FElysiumCogWindow_Entities>("Elysium.Entities");
 	Cog->AddWindow<FElysiumCogWindow_Inspector>("Elysium.Entity Inspector");
+	Cog->AddWindow<FElysiumCogWindow_Logic>("Elysium.Logic");
 	Cog->AddWindow<FElysiumCogWindow_EventQueue>("Elysium.Event Queue");
 	Cog->AddWindow<FElysiumCogWindow_WorldViz>("Elysium.World Viz");
+	Cog->AddWindow<FElysiumCogWindow_Audio>("Elysium.Audio");
+	Cog->AddWindow<FElysiumCogWindow_SoundScheme>("Elysium.Sound Schemes");
+	Cog->AddWindow<FElysiumCogWindow_Npc>("Elysium.NPC");
+	Cog->AddWindow<FElysiumCogWindow_Scripting>("Elysium.Scripting");
 
 	// Boot dormant: Cog is compiled in (non-Shipping) and F1 opens it, but nothing
 	// should be on screen until then. Cog restores each window's persisted visibility

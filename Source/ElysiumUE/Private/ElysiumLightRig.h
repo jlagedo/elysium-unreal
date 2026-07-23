@@ -38,6 +38,28 @@ public:
 	void SetLightsVisible(bool bShow);
 	bool AreLightsVisible() const { return bLightsVisible; }
 
+	// One spawned light plus the raw source data needed to re-derive its intensity/reach live
+	// (so the Lights Cog window's tuning sliders apply without a map reload). Populated by Build.
+	struct FLightSource
+	{
+		TWeakObjectPtr<ULightComponent> Light;
+		int32 Type = 1;             // 0 texlight, 1 point, 2 spot, 3 sun/directional
+		float Mag = 0.f;            // raw linear intensity magnitude (max of rgb)
+		float RadiusCm = 0.f;       // authored cutoff radius (0 -> FallbackRadiusCm)
+		float FitMult = 1.f;        // per-area .lightfit rebalance multiplier
+		int32 Style = 0;            // animated lightstyle index (0 = unanimated)
+		float BaseIntensity = 0.f;  // current pre-style intensity (styled lights scale this per frame)
+	};
+
+	// The spawned light sources, for the Lights window's source list. Skyambient (type 5) is
+	// not a light and is absent here.
+	const TArray<FLightSource>& Sources() const { return LightSources; }
+
+	// Re-derive every light's intensity, reach, falloff exponent, and specular from the current
+	// tuning fields (PointSpotScale, MaxBrightness, RadiusScale, FalloffExponent, SunScaleLux,
+	// SpecularScale). Lets the Lights window tune the live rig without re-travelling the map.
+	void ApplyLiveTuning();
+
 	// Filled by Build, read by the debug HUD / the map actor.
 	int32 LightCount = 0;
 	bool bHasSun = false;
@@ -70,15 +92,10 @@ public:
 private:
 	UPROPERTY() TArray<TObjectPtr<ULightComponent>> Lights;
 
-	// Styled lights (style 1-11): their base intensity and pattern index, scaled per
-	// frame by the lightstyle curve so fluorescents/candles flicker.
-	struct FAnimatedLight
-	{
-		TWeakObjectPtr<ULightComponent> Light;
-		float BaseIntensity = 0.f;
-		int32 Style = 0;
-	};
-	TArray<FAnimatedLight> Animated;
+	// Every spawned light plus its raw source data. Styled sources (Style 1-11) are scaled per
+	// frame by the lightstyle curve so fluorescents/candles flicker; all sources can be re-tuned
+	// live from this data (ApplyLiveTuning).
+	TArray<FLightSource> LightSources;
 	float StyleTime = 0.f;
 	bool bLightsVisible = true;
 };

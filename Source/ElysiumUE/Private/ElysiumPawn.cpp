@@ -1,11 +1,13 @@
 #include "ElysiumPawn.h"
 
 #include "ElysiumHUD.h"
+#include "ElysiumEntityWorld.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
 
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Engine/GameInstance.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 
@@ -96,6 +98,27 @@ void AElysiumPawn::SetupPlayerInputComponent(UInputComponent* Input)
 	Input->BindAction(TEXT("ToggleNoclip"), IE_Pressed, this, &AElysiumPawn::ToggleNoclip);
 	Input->BindAction(TEXT("ToggleSky"), IE_Pressed, this, &AElysiumPawn::ToggleSky);
 	Input->BindAction(TEXT("ToggleDebug"), IE_Pressed, this, &AElysiumPawn::ToggleDebug);
+	Input->BindAction(TEXT("Use"), IE_Pressed, this, &AElysiumPawn::OnUsePressed);
+}
+
+void AElysiumPawn::OnUsePressed()
+{
+	// Route +use to the current map's entity world (P4.2). E doubles as noclip-ascend, but MoveUp
+	// only acts while noclipping, so in normal play E is the use key. PlayerUse no-ops when the
+	// look-cursor is on nothing.
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UElysiumMapSubsystem* Maps = GI->GetSubsystem<UElysiumMapSubsystem>())
+		{
+			if (AElysiumMapActor* Map = Maps->GetCurrentMap())
+			{
+				if (FElysiumEntityWorld* World = Map->GetEntityWorld())
+				{
+					World->PlayerUse();
+				}
+			}
+		}
+	}
 }
 
 void AElysiumPawn::MoveForward(float Value)
@@ -157,7 +180,12 @@ void AElysiumPawn::OnJumpReleased()
 
 void AElysiumPawn::ToggleNoclip()
 {
-	bNoclip = !bNoclip;
+	SetNoclip(!bNoclip);
+}
+
+void AElysiumPawn::SetNoclip(bool bEnable)
+{
+	bNoclip = bEnable;
 
 	UCharacterMovementComponent* Move = GetCharacterMovement();
 	SetActorEnableCollision(!bNoclip);

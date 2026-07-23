@@ -234,9 +234,44 @@ def _split_output(value):
             "python": f[5].strip() if len(f) > 5 else ""}
 
 
-def write_entities(data, out_dir, base):
+def decode_prop_models(idx, model_paths, propdir, tex_cache, valid):
+    """Decode each unique `.mdl` in `model_paths` into `propdir/<safe>.obj` (Unreal
+    space, winding reversed) sharing `tex_cache`, and return `{model_path: safe}` for
+    the models that decoded. A model whose stem is already in `valid` (decoded earlier
+    this run, e.g. by the other prop path) is reused, not re-decoded; each new decode
+    adds its stem to `valid`. Prints one line per failure. Shared by the GAME_LUMP
+    static-prop path (`write_props`) and the `.ents`-referenced prop path
+    (`write_entities`) so a model referenced by both decodes once into one `props/` dir."""
+    os.makedirs(propdir, exist_ok=True)
+    read_bytes = lambda key: install.read(idx, key)
+    resolved, ok, missing = {}, 0, 0
+    for model_path in sorted(set(model_paths)):
+        stem = model_path[:-4] if model_path.endswith(".mdl") else model_path
+        safe = MDL.sanitize(stem)
+        if safe in valid:                       # already decoded this run
+            resolved[model_path] = safe; ok += 1; continue
+        dv = MDL.load(idx, model_path)
+        if not dv:
+            missing += 1; continue
+        try:
+            meshes = MDL.decode(*dv)
+            MDL.write_obj_scene(meshes, safe, propdir, MDL.search_paths(dv[0]), read_bytes,
+                                tex_cache, ue_space=True)
+            valid.add(safe); resolved[model_path] = safe; ok += 1
+        except Exception as e:
+            print(f"  prop decode failed {model_path}: {e}"); missing += 1
+    return resolved, ok, missing
+
+
+def write_entities(data, out_dir, base, idx, propdir, tex_cache, valid):
     """Emit `<base>.ents` (JSON): every entity's keyvalues + outputs, and for brush
     entities ("model" "*N") their brush volumes as convex hulls.
+
+    Entities carrying a static `.mdl` `model` key (prop_dynamic/prop_physics and the
+    prop_button/prop_doorknob/prop_sign/prop_switch/prop_hacking/item_container family)
+    also get that model decoded into `props/` (shared with the GAME_LUMP static props)
+    and the entity annotated with `model_mesh` = the decoded OBJ stem. Skeletal `npc_*`
+    models are excluded — they belong to the glTFRuntime NPC track (roadmap 8.2/8.5).
 
     This is the data the runtime needs to spawn the interaction layer - trigger
     volumes, use volumes, doors. It is deliberately *unfiltered*: the render passes
@@ -301,10 +336,31 @@ def write_entities(data, out_dir, base):
         e["keys"] = keys
         out.append(e)
 
+    # Static-mesh props referenced by entities: decode each model once into props/ and
+    # annotate the entity with `model_mesh` (the decoded OBJ stem). Filter to `.mdl`
+    # `model` keys (skips brush "*N" and sprite "materials/*.vmt") and drop skeletal
+    # npc_* (the NPC/glTFRuntime track owns those).
+    ent_model_of = {}                            # index in `out` -> model_path
+    model_paths = set()
+    for i, e in enumerate(out):
+        if e["classname"].lower().startswith("npc_"):
+            continue
+        mk = e["keys"].get("model", "").replace("\\", "/").lower()
+        if mk.endswith(".mdl"):
+            model_paths.add(mk); ent_model_of[i] = mk
+    resolved, pok, pmiss = decode_prop_models(idx, model_paths, propdir, tex_cache, valid)
+    n_prop = 0
+    for i, mk in ent_model_of.items():
+        safe = resolved.get(mk)
+        if safe:
+            out[i]["model_mesh"] = safe; n_prop += 1
+
     path = os.path.join(out_dir, base + ".ents")
     with open(path, "w") as f:
         json.dump({"map": base, "entities": out}, f, separators=(",", ":"))
     print(f"entities: {len(out)} ({n_brush} brush, {n_hull} hulls, {n_out} outputs) -> {base}.ents")
+    print(f"entity props: {n_prop} placed / {len(model_paths)} models "
+          f"({pok} decoded, {pmiss} missing)")
 
 
 def base_material(name):
@@ -370,7 +426,7 @@ def disp_grid(src, dinfo, dispverts, emit):
 
 
 # --- static props: GAME_LUMP sprp -> .props sidecar + props/ model OBJs -----
-def write_props(data, out_dir, base, idx):
+def write_props(data, out_dir, base, idx, propdir, tex_cache, valid):
     """Parse GAME_LUMP sprp (VtMB v4, 56B DStaticPropV4): a model-name dict + per-
     prop origin/angles/solid. Decode each unique model once (shared texture cache)
     into out_dir/props/<safename>.obj (Unreal space), and write <base>.props (one prop
@@ -395,8 +451,8 @@ def write_props(data, out_dir, base, idx):
     prop_count = struct.unpack_from("<i", payload, p)[0]; p += 4
     size = (len(payload) - p) // prop_count if prop_count else 0
 
-    props = []          # (safename, origin, angles, solid)
-    used = {}           # model_path -> safename
+    props = []          # (model_path, origin, angles, solid)
+    model_paths = set()
     for i in range(prop_count):
         po = p + i * size
         origin = struct.unpack_from("<3f", payload, po)
@@ -406,40 +462,23 @@ def write_props(data, out_dir, base, idx):
         if prop_type >= len(names):
             continue
         model_path = names[prop_type].replace("\\", "/").lower()
-        stem = model_path[:-4] if model_path.endswith(".mdl") else model_path
-        safe = MDL.sanitize(stem)
-        used[model_path] = safe
-        props.append((safe, origin, angles, solid))
+        model_paths.add(model_path)
+        props.append((model_path, origin, angles, solid))
 
-    propdir = os.path.join(out_dir, "props")
-    os.makedirs(propdir, exist_ok=True)
-    read_bytes = lambda key: install.read(idx, key)
-    tex_cache, ok, missing = {}, 0, 0
-    valid = set()               # models this run decoded; an .obj left over from an
-                                # earlier export must not stand in for a failed decode
-    for model_path, safe in sorted(used.items()):
-        dv = MDL.load(idx, model_path)
-        if not dv:
-            missing += 1; continue
-        try:
-            meshes = MDL.decode(*dv)
-            MDL.write_obj_scene(meshes, safe, propdir, MDL.search_paths(dv[0]), read_bytes,
-                                tex_cache, ue_space=True)
-            valid.add(safe); ok += 1
-        except Exception as e:
-            print(f"  prop decode failed {model_path}: {e}"); missing += 1
+    resolved, ok, missing = decode_prop_models(idx, model_paths, propdir, tex_cache, valid)
     solid_n = 0
     with open(os.path.join(out_dir, base + ".props"), "w") as f:
-        for safe, (ox, oy, oz), (pitch, yaw, roll), solid in props:
-            if safe not in valid:
-                continue
+        for model_path, (ox, oy, oz), (pitch, yaw, roll), solid in props:
+            safe = resolved.get(model_path)
+            if safe is None:                 # an .obj left over from an earlier export
+                continue                     # must not stand in for a failed decode
             solid_n += solid != 0
             ux, uy, uz = source_to_unreal(ox, oy, oz)
             qx, qy, qz, qw = source_angles_to_unreal_quat(pitch, yaw, roll)
             f.write(f"{safe} {ux:.4f} {uy:.4f} {uz:.4f} "
                     f"{qx:.6f} {qy:.6f} {qz:.6f} {qw:.6f} {solid}\n")
-    placed = sum(1 for pr in props if pr[0] in valid)
-    print(f"props: {placed} placed ({solid_n} solid) / {len(used)} models "
+    placed = sum(1 for pr in props if pr[0] in resolved)
+    print(f"props: {placed} placed ({solid_n} solid) / {len(model_paths)} models "
           f"({ok} decoded, {missing} missing) -> {base}.props")
 
 
@@ -1151,8 +1190,14 @@ def main(bsp_path, out_dir):
                     f.write(f"yaw {-yaw}\n")
             break
 
+    # Shared prop-model decode state: one props/ dir + texture cache + decoded-stem set
+    # feed both the GAME_LUMP static-prop path (write_props) and the .ents-referenced
+    # prop path (write_entities), so a model referenced by both decodes once.
+    propdir = os.path.join(out_dir, "props")
+    prop_tex_cache, prop_valid = {}, set()
+
     write_collision(data, out_dir, base)
-    write_entities(data, out_dir, base)
+    write_entities(data, out_dir, base, idx, propdir, prop_tex_cache, prop_valid)
     write_lights(data, out_dir, base)
     write_sprites(data, out_dir, base, idx)
     # Concave displacement collision: one triangle per line (9 godot floats).
@@ -1191,7 +1236,7 @@ def main(bsp_path, out_dir):
     # --- static props (GAME_LUMP sprp) -> props/ OBJs + <base>.props ----------
     # Per-prop ambient comes from WORLDLIGHTS (lump 15), the way the engine's lightcache
     # lights props (write_props → tint_at); the baked world lightmap is for surfaces.
-    write_props(data, out_dir, base, idx)
+    write_props(data, out_dir, base, idx, propdir, prop_tex_cache, prop_valid)
 
     obj_path = os.path.join(out_dir, base + ".obj")
     with open(mtl_path, "w") as m:

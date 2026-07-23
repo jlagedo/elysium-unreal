@@ -22,6 +22,10 @@
 		{
 			"Name": "Cog",
 			"Enabled": true
+		},
+		{
+			"Name": "glTFRuntime",
+			"Enabled": true
 		}
 	]
 }

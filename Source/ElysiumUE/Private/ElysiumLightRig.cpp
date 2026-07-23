@@ -94,6 +94,9 @@ int32 UElysiumLightRig::Build(const FString& LightsPath)
 			Scale = CVar->GetFloat();
 		}
 	}
+	// Fold the resolved boot scale back into the tunable field, so the Lights window's slider
+	// reflects what the rig actually built with (and live re-tuning stays consistent).
+	PointSpotScale = Scale;
 
 	// Optional per-area rebalance: one multiplier per `.lights` line, in the same order.
 	TArray<float> Fit;
@@ -230,14 +233,18 @@ int32 UElysiumLightRig::Build(const FString& LightsPath)
 		Lights.Add(Light);
 		++LightCount;
 
-		if (Style >= 1 && Style < LsCount)
-		{
-			Animated.Add({ Light, BaseIntensity, Style });
-		}
+		const int32 SrcStyle = (Style >= 1 && Style < LsCount) ? Style : 0;
+		LightSources.Add({ Light, Type, Mag, RadiusCm, FitMult, SrcStyle, BaseIntensity });
+	}
+
+	int32 AnimatedNum = 0;
+	for (const FLightSource& S : LightSources)
+	{
+		AnimatedNum += (S.Style >= 1) ? 1 : 0;
 	}
 
 	UE_LOG(LogElysiumLights, Log, TEXT("LightRig: %d lights (%d animated)%s%s%s"),
-		LightCount, Animated.Num(),
+		LightCount, AnimatedNum,
 		bHasSun ? TEXT(" +sun") : TEXT(""),
 		bHasSkyAmbient ? TEXT(" +skyambient") : TEXT(""),
 		bApplyFit ? *FString::Printf(TEXT(" +lightfit(%d nudged)"), FitApplied) : TEXT(""));
@@ -256,20 +263,54 @@ void UElysiumLightRig::SetLightsVisible(bool bShow)
 	}
 }
 
+void UElysiumLightRig::ApplyLiveTuning()
+{
+	for (FLightSource& S : LightSources)
+	{
+		ULightComponent* Light = S.Light.Get();
+		if (Light == nullptr)
+		{
+			continue;
+		}
+
+		if (S.Type == 3)
+		{
+			// Sun/directional: lux scaled off the raw magnitude, no falloff/reach.
+			S.BaseIntensity = FMath::Max(S.Mag * SunScaleLux, 0.01f);
+		}
+		else
+		{
+			const float Reach = (S.RadiusCm > 1.f ? S.RadiusCm : FallbackRadiusCm) * RadiusScale;
+			S.BaseIntensity = FMath::Min(S.Mag * PointSpotScale * S.FitMult, MaxBrightness);
+			if (UPointLightComponent* PL = Cast<UPointLightComponent>(Light))
+			{
+				PL->SetAttenuationRadius(Reach);
+				PL->SetLightFalloffExponent(FalloffExponent);
+			}
+			else if (USpotLightComponent* SL = Cast<USpotLightComponent>(Light))
+			{
+				SL->SetAttenuationRadius(Reach);
+				SL->SetLightFalloffExponent(FalloffExponent);
+			}
+		}
+
+		Light->SpecularScale = SpecularScale;
+		// Styled lights get their per-frame flicker off this new base next tick; set the base now
+		// so unanimated lights update immediately (and animated ones don't stall on a paused clock).
+		Light->SetIntensity(S.BaseIntensity);
+	}
+}
+
 void UElysiumLightRig::TickComponent(float DeltaTime, ELevelTick TickType,
 	FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	if (Animated.Num() == 0)
-	{
-		return;
-	}
 	StyleTime += DeltaTime;
-	for (const FAnimatedLight& A : Animated)
+	for (const FLightSource& S : LightSources)
 	{
-		if (A.Light.IsValid())
+		if (S.Style >= 1 && S.Light.IsValid())
 		{
-			A.Light->SetIntensity(A.BaseIntensity * StyleIntensity(A.Style, StyleTime));
+			S.Light->SetIntensity(S.BaseIntensity * StyleIntensity(S.Style, StyleTime));
 		}
 	}
 }

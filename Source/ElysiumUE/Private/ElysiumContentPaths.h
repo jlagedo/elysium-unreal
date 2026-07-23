@@ -25,4 +25,25 @@ struct FElysiumContentPaths
 	static FString MapEnts(const FString& Map) { return MapDir(Map) / (Map + TEXT(".ents")); }
 	static FString MapHulls(const FString& Map) { return MapDir(Map) / (Map + TEXT(".hulls")); }
 	static FString MapDispCol(const FString& Map) { return MapDir(Map) / (Map + TEXT(".dispcol")); }
+
+	// Audio (P6). WAVs are game-global (shared across maps), so they live in one mirror of
+	// VtMB's `sound/` tree, not per-map. Rel is the engine-relative path under sound/ (e.g.
+	// "Environmental/Fire/Fire_Roaring.wav"), matching an ambient_generic `message` value.
+	static FString SoundDir() { return Root() / TEXT("sound"); }
+	static FString SoundFile(const FString& Rel) { return SoundDir() / Rel; }
+
+	// Scripting (P5). VtMB's level scripts + dialogue are game-global loose plain-text,
+	// mirrored verbatim under out/scripts and out/dlg by tools/UE_extract_scripts.py. A
+	// worldspawn `levelscript` value (e.g. "tutorial") names the hub module, which lives at
+	// scripts/<module>/<module>.py. No runtime host consumes these yet (roadmap 5.2+).
+	static FString ScriptsDir() { return Root() / TEXT("scripts"); }
+	static FString DlgDir() { return Root() / TEXT("dlg"); }
+	static FString ScriptModuleFile(const FString& Module) { return ScriptsDir() / Module / (Module + TEXT(".py")); }
+
+	// NPCs (P8 8.2). Skeletal characters export as one standard glTF 2.0 file per model (mesh +
+	// StudioBone skeleton + one animation) under out/npc, written by tools/mdl_gltf.py. The runtime
+	// loads them through glTFRuntime (glTF is self-describing, so no UE_-style pre-conversion — the
+	// plugin does the glTF->UE basis/scale change). Stem is the model name, e.g. "gangmember_male_2".
+	static FString NpcDir() { return Root() / TEXT("npc"); }
+	static FString NpcGlb(const FString& Stem) { return NpcDir() / (Stem + TEXT(".glb")); }
 };

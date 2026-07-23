@@ -223,6 +223,43 @@ Fired by presence (looping beds), by I/O, or from Python via the datamap-bound
 `Entity.PlaySound()` / `StopSound()` (phone rings, sirens, buzzers) [script]. The
 stock LFO/spin envelope block (`lfotype`/`lforate`/`spinup`…) is present but zeroed.
 
+## 7b. Mover sounds — the `soundgroup` convention
+
+Doors (`func_door`, `func_door_rotating`) and buttons (`func_button`) carry a
+**`soundgroup`** keyvalue — a token like `standard_door`, `small_metal_switch`,
+`metal_file_cabinet`. **There is no soundgroup *data file*** [VtMB, RE-verified]: an
+exhaustive scan of all ~67k install files finds these tokens *only* inside `.bsp`
+entity lumps, and the soundscript system that would name them (`game_sounds*.txt`) is
+commented out (§9). The token resolves **by directory convention** — the WAVs live
+under `sound/usable/<category>/<token>/<subkey>.wav`:
+
+| Category (dir) | Class | Subkeys (files) |
+|---|---|---|
+| `openable` | doors | `open`, `close`, `swing`, `locked` |
+| `switches` | buttons | `on`, `off` |
+| `computers` | keypads/terminals (P-later) | `access`, `accept`, `error`, `typing` |
+
+Retail ships **22 openable + 8 switch + 4 computer** groups; a group may omit a subkey
+(`standard_door` has no `swing` in retail — the patch adds one). The same token can exist
+in two categories (`manhole_cover` is both an openable and a switch); the **class** picks
+the subtree.
+
+**Decompile provenance** (`vampire.dll`, base `0x10000000`) [VtMB]:
+
+| Address | What |
+|---|---|
+| `0x100ef060` | `CBaseDoor::Spawn` sound resolve — strcmpi's the group's child keys for `close`/`open`/`swing`/`locked`, caching each sound index (`DAT_106eb3dc`/`e0`/`e8`/`e4`) |
+| `0x100c8810` | `CBaseButton::Spawn` sound resolve — caches `on`/`off` (`DAT_106e6f78`/`f7c`) |
+| `0x100ee4e0` | door-sound player — gates on the SILENT spawnflag (`m_spawnflags & 0x1000`) and routes `swing` to the movement channel (4), others to channel 3 |
+| `0x100efc90` | `CBaseDoor::Use` — plays the `locked` index on the locked `+use` path |
+| `0x101f55a0` | the soundgroup→emitter name resolver (`this+0x20[lang]`; also handles NPC voice-set `soundgroup`s like `Young_Thug`, and the `Female_PC_Override`) |
+
+Buttons also carry explicit **`locked_sound`/`unlocked_sound`** — direct WAV paths (e.g.
+`environmental/electronic/button_beep.wav`), the press-success/press-denied feedback,
+independent of the soundgroup. `soundgroup` is a **base-`CBaseEntity`** field
+(`m_iszVSoundGroup` @`0x0c0`), so NPCs reuse it for a voice actor's line set — those tokens
+(`Bertram`, `Young_Thug`, …) resolve through `FUN_101f55a0`'s voice path, not `usable/`.
+
 ## 8. Sentences and surface sounds (footsteps / impacts)
 
 - **Sentences** [VtMB + data]: `CSentence` in `engine.dll`; the `!`-prefix path
@@ -325,10 +362,27 @@ Voice(ducks SFX/Ambient)}`, matching VtMB's ducking and dry/wet split.
 | `0x20131dd0` | `DSP_LoadPresetFile` (`scripts/dsp_presets.txt`) |
 | `0x20131c40` / `0x20131cc0` | DSP preset counter / processor-name→id table |
 | `0x20139d60` | `CAudioSourceWave` ctor |
+| `0x201b3c48` | `CAudioMixerWaveADPCM` RTTI (`.?AVCAudioMixerWaveADPCM@@`) — the MS-ADPCM decode mixer, reached via vtable; decode is stock/standard (dr_wav reproduces it) |
+
+**SoundScheme system — `vampire.dll` (base `0x10000000`)** [VtMB, decompiled]. The
+scheme parser and `ambient_soundscheme` entity are now pinned (`tools/ghidra/out/aud_scheme_*`):
+
+| Address | Symbol / role |
+|---|---|
+| `0x1022a930` | `CSoundScheme` KeyValues parser — walks `SchemeParams`/`Music`/`Combat`/`Alert`/`Ambient`/`RandomSound` blocks (else `"Unrecognized section '%s' in soundscheme"`); reads the RandomSound polar fields |
+| `0x10229ff0` / `0x1022ce80` | `ambient_soundscheme` entity (spawn / datamap) |
+| `0x102282e0` | combat-music timing (`soundscheme_combat_music_time`) |
+| `0x1022b290` / `0x1022cf20` | `soundscheme_randomness` / `soundscheme_toggledebug` cvars |
+| `0x105b4494` / `0x105b4594` | `CSoundSchemeManager` / `CSoundScheme` RTTI; `CSoundSchemePlayingThink` (str `0x105b4400`) |
+| `0x1000e8a9` / `0x1000ef8e` / `0x10010ce9` | `ambient_generic` / `ambient_soundscheme` / `env_soundscape` class registration |
+
+**Retail RandomSound defaults** (from `0x1022a930`) [VtMB, decompiled]: `Volume` 20,
+`Frequency` 10, `PitchMin`/`PitchMax` 100/100, `AudibleRadius` 1600, `DistMin`/`DistMax`
+800/1400, `HeightMin`/`HeightMax` 20/20, `AngleMin`/`AngleMax` 0/360; `NoPause` sets a
+keep-playing flag, `Dry` routes to the dry bus. These are the values an omitted key takes.
 
 Owners: **`engine.dll`** = Miles mixer, codecs (PCM/MS-ADPCM/MP3), DSP graph,
 sentences. **`vampire.dll`** = SoundScheme parser + `ambient_soundscheme` +
-combat/radio signalling (+ dormant `CSoundscapeSystem`). **`client.dll`** =
-music-state cross-fader, `RoomDSP` application, wet/dry, ducking. The scheme-parser
-and music-state addresses in `vampire.dll`/`client.dll` are not yet pinned (only
-`engine.dll` was imported into Ghidra) — importing those two would pin them.
+combat/radio signalling (+ dormant `CSoundscapeSystem`) — **imported and pinned above**.
+**`client.dll`** = music-state cross-fader, `RoomDSP` application, wet/dry, ducking —
+the music-state addresses there are not yet pinned (importing `client.dll` would pin them).

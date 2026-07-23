@@ -2,24 +2,28 @@
 
 #if ENABLE_COG
 
+#include "ElysiumAudioSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
+#include "ElysiumNpcSubsystem.h"
 
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 
 FElysiumEntityHandle FElysiumCogWindow::Selection;
 
-AElysiumMapActor* FElysiumCogWindow::GetMapActor() const
+UElysiumMapSubsystem* FElysiumCogWindow::GetMapSubsystem() const
 {
 	const UWorld* World = GetWorld();
-	const UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
-	if (const UElysiumMapSubsystem* Maps = GameInstance ? GameInstance->GetSubsystem<UElysiumMapSubsystem>() : nullptr)
-	{
-		return Maps->GetCurrentMap();
-	}
-	return nullptr;
+	UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+	return GameInstance ? GameInstance->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
+}
+
+AElysiumMapActor* FElysiumCogWindow::GetMapActor() const
+{
+	const UElysiumMapSubsystem* Maps = GetMapSubsystem();
+	return Maps ? Maps->GetCurrentMap() : nullptr;
 }
 
 FElysiumEntityWorld* FElysiumCogWindow::GetEntityWorld() const
@@ -33,6 +37,20 @@ UElysiumGameStateSubsystem* FElysiumCogWindow::GetGameState() const
 	const UWorld* World = GetWorld();
 	const UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
 	return GameInstance ? GameInstance->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr;
+}
+
+UElysiumAudioSubsystem* FElysiumCogWindow::GetAudioSubsystem() const
+{
+	const UWorld* World = GetWorld();
+	const UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+	return GameInstance ? GameInstance->GetSubsystem<UElysiumAudioSubsystem>() : nullptr;
+}
+
+UElysiumNpcSubsystem* FElysiumCogWindow::GetNpcSubsystem() const
+{
+	const UWorld* World = GetWorld();
+	const UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+	return GameInstance ? GameInstance->GetSubsystem<UElysiumNpcSubsystem>() : nullptr;
 }
 
 #endif // ENABLE_COG

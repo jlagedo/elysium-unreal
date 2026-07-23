@@ -14,9 +14,13 @@ Usage:
   python tools/export_all.py ch_hub_1 la_hub_1   # only the named maps
   python tools/export_all.py --skip-existing     # skip maps already exported
   python tools/export_all.py --no-content        # skip the committed-asset rebuild
+  python tools/export_all.py --no-scripts        # skip the script/dialogue copy
+  python tools/export_all.py --npc               # also export the P8 8.2 test NPC glb(s)
 """
 import os, sys, glob, time, subprocess, traceback
 import UE_bsp_to_scene as B
+import UE_extract_sounds as S
+import UE_extract_scripts as SC
 import install
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -24,6 +28,14 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MAPS = os.path.join(install.GAME, "maps")
 OUT = "out"
 MAPS_INI = os.path.join(os.path.dirname(os.path.abspath(__file__)), "maps.ini")
+
+# P8 8.2 glTFRuntime spike: the reproducible test NPC(s), each (model-path-in-VPK, anim-name),
+# exported to out/npc/<stem>.glb by mdl_gltf.py for the runtime skeletal path. gangmember_male_2
+# is a self-contained biped (69 bones) with the clip embedded in the model -- no shared-library
+# include resolution (that is PL4). Batch NPC export is PL4; this list is just the spike asset.
+TEST_NPCS = [
+    ("models/character/npc/common/gangmember_male_2/gangmember_male_2.mdl", "patron_barstand"),
+]
 
 
 def load_test_maps(ini_path=MAPS_INI):
@@ -59,6 +71,8 @@ def main():
     args = sys.argv[1:]
     skip_existing = "--skip-existing" in args
     skip_content = "--no-content" in args
+    skip_sound = "--no-sound" in args
+    skip_scripts = "--no-scripts" in args
     export_all = "--all" in args
     only = [a for a in args if not a.startswith("--")]
 
@@ -106,6 +120,44 @@ def main():
     for name, status, dt in results:
         print(f"  {name:26} {status[:48]:48} {dt:6.1f}s")
     print(f"\nok={ok}  fail={fail}  skip={skip}  of {len(results)}")
+
+    # Extract the sounds (WAV/MP3) the exported maps reference (verbatim copy, no transcode)
+    # into out/sound/. Runs on the maps that produced a .ents this run (ok + skip), so a
+    # geometry-only re-export still fills audio. Map-independent, so once after the loop.
+    if not skip_sound:
+        done = [name for name, status, _ in results if status in ("ok", "skip")]
+        if done:
+            print("\n[sound] extracting referenced sounds (WAV/MP3) ...", flush=True)
+            try:
+                S.main(done)
+            except Exception as e:
+                print(f"[sound] FAILED: {e}", flush=True)
+                traceback.print_exc()
+
+    # Copy the loose Python level scripts + dialogue verbatim into out/scripts and
+    # out/dlg. Whole-game (not map-scoped), so once after the loop, independent of which
+    # maps ran. Runs even on a zero-map invocation -- the mirror is map-independent.
+    if not skip_scripts:
+        print("\n[scripts] copying level scripts + dialogue ...", flush=True)
+        try:
+            SC.main()
+        except Exception as e:
+            print(f"[scripts] FAILED: {e}", flush=True)
+            traceback.print_exc()
+
+    # Export the P8 8.2 test NPC(s) to out/npc as glTF 2.0 (.glb: mesh + StudioBone skeleton + one
+    # animation) for the runtime glTFRuntime skeletal path. Opt-in (--npc): batch NPC export is PL4;
+    # this is just the spike's reproducible test asset. mdl_gltf writes standard glTF (self-describing
+    # space), loaded via glTFRuntime's default config, so no UE_-style pre-conversion is needed.
+    if "--npc" in args:
+        print("\n[npc] exporting test NPC glb(s) -> out/npc ...", flush=True)
+        try:
+            import mdl_gltf
+            for model, anim in TEST_NPCS:
+                mdl_gltf.export(model, anim, os.path.join(OUT, "npc"))
+        except Exception as e:
+            print(f"[npc] FAILED: {e}", flush=True)
+            traceback.print_exc()
 
     if not skip_content:
         build_content()

@@ -10,7 +10,10 @@
 
 class AElysiumMapActor;
 class FElysiumEntityWorld;
+class UElysiumAudioSubsystem;
 class UElysiumGameStateSubsystem;
+class UElysiumMapSubsystem;
+class UElysiumNpcSubsystem;
 
 // Shared base for Elysium's custom Cog windows. Cog's stock inspector is reflection-driven, so
 // it only sees UObjects — but Track B's entities, event queue, and clock are plain C++, invisible
@@ -23,12 +26,18 @@ class FElysiumCogWindow : public FCogWindow
 	typedef FCogWindow Super;
 
 protected:
+	// The map-lifecycle subsystem (Travel / Reload / exported-map list), or null.
+	UElysiumMapSubsystem* GetMapSubsystem() const;
 	// The live map actor for the current world, or null between/without a loaded map.
 	AElysiumMapActor* GetMapActor() const;
 	// The Track-B entity substrate for the current map, or null if the map has none loaded.
 	FElysiumEntityWorld* GetEntityWorld() const;
 	// The persistent game-state subsystem (the `G` store, quests, and the game clock), or null.
 	UElysiumGameStateSubsystem* GetGameState() const;
+	// The audio subsystem (WAV decode registry + preview playback), or null.
+	UElysiumAudioSubsystem* GetAudioSubsystem() const;
+	// The NPC skeletal-test subsystem (P8 8.2 glTFRuntime spike), or null.
+	UElysiumNpcSubsystem* GetNpcSubsystem() const;
 
 	// Shared debug selection across the Elysium windows: the browser sets it, the inspector reads
 	// it. Debug-only state (one browser + one inspector instance), so a plain static is enough. A

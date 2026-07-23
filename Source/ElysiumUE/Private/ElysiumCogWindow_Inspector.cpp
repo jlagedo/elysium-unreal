@@ -8,6 +8,7 @@
 #include "ElysiumEntityDebugSubsystem.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumUseIcons.h"
 
 #include "CogLocalizationConfig.h"   // COG_TCHAR_TO_CHAR
 #include "CogWidgets.h"
@@ -23,7 +24,9 @@
 
 namespace
 {
-	const char* VariantTypeName(EElysiumVariantType T)
+	// File-unique name: a same-named helper (const TCHAR* variant) lives in
+	// ElysiumEntityDebugSubsystem.cpp, and both can land in one unity blob.
+	const char* InspectorVariantTypeName(EElysiumVariantType T)
 	{
 		switch (T)
 		{
@@ -225,6 +228,39 @@ void FElysiumCogWindow_Inspector::RenderContent()
 		? FString(TEXT("never")) : FString::Printf(TEXT("%.2f s"), Ent->NextThink));
 	Row("Origin", Ent->Def->Origin.ToString());
 
+	// --- +use (P4.4) — the context-icon reticle state. Shown for anything the player can look-and-use
+	// or that carries an icon: whether the +use trace is armed on it, the use_icon/locked_icon it
+	// names, its live lock, and the icon GetUseIcon() resolves to (= exactly what the HUD draws).
+	if (Ent->IsUsable() || Ent->UseIcon != 0 || Ent->LockedIcon != 0)
+	{
+		ImGui::SeparatorText("+use");
+		auto IconLabel = [](int32 N) -> FString
+		{
+			return N == 0 ? FString(TEXT("(none)"))
+				: FString::Printf(TEXT("%d (%s)"), N, ElysiumUseIconName(N));
+		};
+		Row("Usable", Ent->IsUsable() ? TEXT("yes (+use armed)") : TEXT("no"));
+		Row("Locked", Ent->IsUseLocked() ? TEXT("yes") : TEXT("no"));
+		Row("use_icon", IconLabel(Ent->UseIcon));
+		Row("locked_icon", IconLabel(Ent->LockedIcon));
+		Row("Reticle now", IconLabel(Ent->GetUseIcon()));
+		const bool bAimed = World->GetAimedUsable() == Ent->Handle;
+		Row("Look-cursor", bAimed ? TEXT("ON THIS (aimed)") : TEXT("not aimed"));
+	}
+
+	// --- Live state (P4.3) — runtime, non-keyfield state a leaf surfaces (mover toggle-state, current
+	// move, resolved links, spawnflag decode). Empty for classes that don't override GetDebugState.
+	TArray<TPair<FString, FString>> DebugState;
+	Ent->GetDebugState(DebugState);
+	if (DebugState.Num() > 0)
+	{
+		ImGui::SeparatorText("Live state");
+		for (const TPair<FString, FString>& KV : DebugState)
+		{
+			Row(COG_TCHAR_TO_CHAR(*KV.Key), KV.Value);
+		}
+	}
+
 	// --- In-world debug (drives the same overlays/breakpoint as the ent_* verbs) ------------
 	if (Dbg != nullptr)
 	{
@@ -270,7 +306,7 @@ void FElysiumCogWindow_Inspector::RenderContent()
 				ImGui::TableNextColumn();
 				ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*N.ToString()));
 				ImGui::TableNextColumn();
-				ImGui::TextUnformatted(Acc ? VariantTypeName(Acc->Type) : "?");
+				ImGui::TextUnformatted(Acc ? InspectorVariantTypeName(Acc->Type) : "?");
 				ImGui::TableNextColumn();
 				ImGui::TextUnformatted(Acc && Acc->bKeyable ? "yes" : "");
 				ImGui::TableNextColumn();

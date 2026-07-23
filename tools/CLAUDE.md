@@ -21,7 +21,14 @@ convert + rename it before treating its output as Unreal space. (`mdl.py`'s `wri
 takes a keyword `ue_space=True` that emits Unreal cm/Z-up/left-handed with winding reversed;
 `UE_bsp_to_scene.py`'s prop path uses it, so prop meshes + the `.props` sidecar are now
 Unreal-native and runtime-consumed. `mdl.py` still defaults to Godot space for its other
-callers, so it keeps the non-`UE_` name.)
+callers, so it keeps the non-`UE_` name.) **`mdl_gltf.py` is exempt from the pre-conversion
+rule**: its `.glb` (mesh + StudioBone skeleton + one animation, `out/npc/<stem>.glb`) is a
+**standard glTF 2.0** file — self-describing Y-up/metres/right-handed — so the runtime's
+glTFRuntime loader applies the glTF→Unreal basis/scale change itself (default config:
+`SceneScale 100`, `TransformBaseType::Default`). The `UE_` pre-conversion is only for dumb
+containers (OBJ, plain sidecars) the runtime reads verbatim; a self-describing container the
+loader reorients does not need it, so `mdl_gltf.py` keeps its non-`UE_` name while feeding the
+P8 NPC path directly.
 
 The deep reverse-engineering reference docs (`entity_io.md`, `python_bridge.md`, etc.)
 live in this repo's `../docs/`. (The read-only Godot project at `E:\dev\elysium` holds
@@ -247,6 +254,18 @@ gates collision. Props carry **no per-prop
 tint/colour** — like the world, they are lit at runtime by the `LightRig`'s real Godot
 lights.
 
+`.ents`-**referenced** static-mesh models decode through the **same** path
+(`decode_prop_models` shared by `write_props` and `write_entities`, one `props/` dir + one
+texture cache, so a model referenced by both a GAME_LUMP prop and an entity decodes once).
+Every `.ents` entity whose `model` key is a static `.mdl` — `prop_dynamic`/`prop_physics`
+plus the `prop_button`/`prop_doorknob(_electronic)`/`prop_sign`/`prop_switch`/`prop_hacking`/
+`item_container(_animated/_lock)` family — gets that model decoded into `props/<safe>.obj`
+and is annotated in `<map>.ents` with **`model_mesh`** = the decoded OBJ stem (present only
+when the decode succeeded; the transform stays the entity's own `origin`/`angles`, not a
+`.props` line). Skeletal `npc_*` models are **excluded** — they belong to the glTFRuntime
+NPC track (roadmap 8.2/8.5), not this static-geometry path. Tutorial: 160 entity props / 64
+unique models. The runtime consumer is roadmap 8.3 (dynamic) / 8.4 (physics).
+
 `WorldLoader.LoadProps` groups instances by model, builds each unique model's mesh + a
 convex hull once, and renders each model as one **`MultiMeshInstance3D`** — per-instance
 transform (Source→Godot `basis = M·AngleMatrix(pitch,yaw,roll)·M⁻¹`, origin
@@ -290,6 +309,14 @@ Python lives in **four surfaces, two languages**:
   Python call string** (6,956 of 24,081 engine-loaded outputs, 1,591 of 16,125 retail).
   `engine.dll` formats `__main__.%s` around it.
 - `logic_pythoncheck` — `python_script` is an expression gating `OnTrue`/`OnFalse` (51).
+
+**Offline delivery (`UE_extract_scripts.py`, roadmap 5.1 / PL2).** The two plain-text script
+surfaces are copied **verbatim** into the runtime's mirror — `python/**/*.py` → `out/scripts/`
+(41 files: 35 patch + 6 retail-only; the 24 VPK `.pyc` are stale/unreachable and ignored),
+`dlg/**/*.dlg` → `out/dlg/` (147; the patch's loose `dlg/` fully overlays the 138 VPK) —
+resolved patch-first (patch loose > retail loose > VPK), no parse/transcode. Whole-game, not
+map-scoped, so `export_all.py` runs it once at the end of a run (`--no-scripts` to skip). The
+runtime scripting host (roadmap 5.2+) reads `out/scripts` + `out/dlg` from disk.
 
 `vampire.dll` registers module **`vampire`** (11 globals: `FindPlayer`, `FindEntityByName`,
 `ChangeMap`, `ScheduleTask`, …) plus old-style classes `Entity` (`__getattr__`/`__setattr__`

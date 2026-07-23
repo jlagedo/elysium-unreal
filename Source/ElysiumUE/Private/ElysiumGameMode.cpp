@@ -3,11 +3,13 @@
 #include "ElysiumHUD.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPawn.h"
+#include "ElysiumPlayerController.h"
 
 AElysiumGameMode::AElysiumGameMode()
 {
 	DefaultPawnClass = AElysiumPawn::StaticClass();
 	HUDClass = AElysiumHUD::StaticClass();
+	PlayerControllerClass = AElysiumPlayerController::StaticClass();
 }
 
 void AElysiumGameMode::BeginPlay()

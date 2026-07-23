@@ -47,9 +47,12 @@ map as world + 3D-skybox PMC actors, MIDs off the single master material `M_VtMB
 (albedo + alpha-masked `$selfillum` emissive via `map_Ke` → `Emissive`/`EmissiveScale`,
 tunable by `elysium.EmissiveScale`), DDS-preferred textures (PNG fallback), brush collision
 (`.hulls` convex + `.dispcol` trimesh, render-trimesh fallback), `.emc` parse-cache,
-`.spawn`/`.sky` placement, a Character-movement FPS pawn with noclip, a Canvas debug HUD,
-and `elysium.map` / `elysium.maps` / `elysium.debug` / `elysium.lights` / `elysium.campos`
-console commands.
+`.spawn`/`.sky` placement, a Character-movement FPS pawn with noclip, a trimmed Canvas HUD
+(always-on FPS/position overlay only — map/light counts live in the Cog windows), and
+`elysium.map` / `elysium.maps` / `elysium.reload` / `elysium.debug` / `elysium.lights` /
+`elysium.campos` console commands. Player-centric dev cheats live on `UElysiumCheatManager` (a
+`UCheatManager` subclass hosted by `AElysiumPlayerController`): `Noclip` + `ElysiumTeleport`
+plus the stock `UCheatManager` execs, autocompleted.
 
 M1 landed so far: the `.env` sky/fog + `.cube` LUT (`M_Sky`), and the **real-time
 `UElysiumLightRig`** — one Unreal light per WORLDLIGHTS source from `.lights` (point/spot
@@ -86,12 +89,171 @@ and firing `MoveDone()` on arrival (angular rotation pivots about the def origin
 (`m_toggle_state` AT_TOP/AT_BOTTOM/GOING_UP/GOING_DOWN) — `Open`/`Close`/`Toggle`/`Lock`/`Unlock`/`Use`
 inputs, `OnOpen`/`OnClose`/`OnFullyOpen`/`OnFullyClosed`/`OnLockedUse`/`OnBlockedClosing` outputs,
 `wait` autoclose (`-1` = stay open), the locked path, and blocked-while-closing (deal `dmg` via
-`ApplyDamage`, reverse, `OnBlockedClosing`) — with `speed`/`distance`/`wait`/`lip`/`dmg` as chain
-fields; the prototype leaf `func_door_rotating` swings `distance°` about yaw/Z around the hinge.
-Doors are driven through the I/O inputs (`ent_fire <door> Open`/`Unlock`) until `+use` lands. Still
-planned: the rest of the mover family (`func_button`, sliding `func_door`, elevators, the full
-spawnflag table + `+use`), Source movement, the rest of the master-material set, deeper scripting,
-audio, menu, dialogue — see `docs/rebuild-strategy.md`. Only `sp_tutorial_1` is exported today.
+`ApplyDamage`, reverse, `OnBlockedClosing`) — with `speed`/`distance`/`wait`/`lip`/`dmg`/`linked_door`
+as chain fields. **P4.3** completes the door family with both leaves: `func_door_rotating` swings
+`distance°` about yaw/Z around the hinge, and the sliding `func_door` (`FElysiumFuncDoor`) translates
+along `angles` by its own depth minus `lip` (open pose `pos + movedir·(|size·movedir| − lip)`, matching
+decompiled `CBaseDoor::Spawn`; `SourceAnglesToUnrealDir` for the movedir, `speed` in/s via `LinearMove`).
+The **full spawnflag table (B.5)** is decoded/honoured — `START_OPEN`/`REVERSE`/`LOCKED` +
+`NO_AUTO_RETURN` (0x20, stay-open) + **`PUSE` (0x100)**, the dominant bit (105 doors) that arms the +use
+look-cursor (`IsUsable`) and runs the **doorknob path** `DoorUse` (toggle this leaf, locked →
+`OnLockedUse`, and mirror onto the **`linked_door`** partner for the double-door swing); the rest
+(`PASSABLE`/`ONEWAY`/`NONPCS`/`SILENT`/`USE_CLOSES`/`PTOUCH`) are labelled but deferred. Movers surface
+runtime state through `FElysiumEntity::GetDebugState` in the Cog Inspector's **Live state** section
+(door toggle-state/move/poses/link/spawnflag decode; button press-state/latch/flags). Doors are driven
+through the I/O inputs (`elysium.ent_fire <door> Open`/`Unlock`/`Use`) and the +use look-cursor. The
+**P4.2 `func_button`** (`FElysiumButton`) also runs: a concrete `CBaseButton` over the same mover
+primitive — press → `TriggerAndWait` (fire `OnPressed`) → autoclose/spring-back or latch (`wait -1`)/
+toggle, spawnflags reconciled against the decompiled `CBaseButton::Spawn` (`0x100`=touch, `0x400`=use
+— VtMB keeps the stock layout, correcting an `entity_io.md` swap; `0x1` DONTMOVE = the logical no-slide
+path every exported button uses, `0x20` TOGGLE, `0x800` LOCKED), with `Press`/`Lock`/`Unlock` inputs.
+The **+use look-cursor** lands with it (`FElysiumEntityWorld::UpdateUseCursor`/`PlayerUse`, from the
+map-actor tick + the pawn `E` key): a per-frame camera-ray pick over the usable, non-inert brush
+bodies in reach fires `OnIn`/`OnOut` on aim enter/leave and presses the aimed button — so
+`StartHidden`→`ScriptUnhide` arm/disarm gates reticle + collision together. **P4.4** completes it:
+the pick runs on a **dedicated use-only trace channel** (`ELYSIUM_USE_CHANNEL` =
+`ECC_GameTraceChannel1` = "ElysiumUse" in `Config/DefaultEngine.ini`, default-Block so world + solid
+bodies occlude the ray, isolated from `ECC_Visibility`), and the **use-icon HUD** draws VtMB's context
+cursor over the crosshair while a usable is aimed: `use_icon`/`locked_icon` parse onto the base entity
+(`FElysiumEntity::UseIcon`/`LockedIcon`), `GetUseIcon()` resolves locked → `locked_icon` (via
+`IsUseLocked()`, overridden by door/button `bLocked`), and `AElysiumHUD` draws the ring frame + that
+icon cell from the PL3 atlas (`out/hud/use_icons.png` + `.json`, lazily loaded, `FCanvasTileItem`), else
+the plain aim cross. The 72-entry icon-name table + the channel constant live in `ElysiumUseIcons.h`;
+the Cog **Entity Inspector** grows a `+use` section (usable/locked, `use_icon`/`locked_icon` named, the
+resolved reticle icon = what the HUD draws, look-cursor on-this). The **P4.5 tutorial-logic classes**
+also run (`ElysiumLogicClasses.cpp` + three trigger leaves in `ElysiumStarterClasses.cpp`), each
+grounded in the decompiled `vampire.dll` (`tools/ghidra/run.ps1 -Script DumpGrep`): **`math_counter`**
+(stock — Add/Subtract/Multiply/Divide/SetValue/SetValueNoFire/SetHitMax/SetHitMin/GetValue, clamps to
+`[min,max]` only when a bound is set, edge-fires `OnHitMax`/`OnHitMin`, `OutValue` carries the value),
+**`logic_timer`** (stock — `OnTimer` every `RefireTime` on the substrate clock, `UseRandomTime` band,
+Enable/Disable/Toggle/FireTimer), **`logic_case`** (stock value-match `InValue`→`OnCaseNN`/`OnDefault` +
+PickRandom) **and `logic_case_toggle`** (the VtMB divergence `FUN_101344f0`/`FUN_101346e0`: `InValue` is
+a *delta* that advances a current-case pointer that many **configured** cases — skipping empty slots,
+wrapping 0..15 — then fires that case; `InitialCase` seeds it; the class is 4 bytes larger for the
+current-index int), **`env_fade`** (`Fade`/`ReverseFade` full-screen colour fade — `SF_FADE_IN` reveal,
+`SF_FADE_STAYOUT` hold-covered — held as one screen-fade state on `FElysiumEntityWorld` and drawn by
+`AElysiumHUD`), **`func_brush`** (Enable/Disable/Toggle + `Solidity` never/always/toggle, folded with
+dormancy through the body's one `SetDormant`), **`point_teleport`** (`Teleport` moves `!player` to
+origin+`angles` yaw via the world's `GetPlayerPawn()` seam, capsule-lifted), and the trigger family over
+`CBaseTrigger`: **`trigger_hurt`** (`damage` every 0.5 s while stood in it, `ApplyDamage`),
+**`trigger_look`** (fires `OnTrigger` once the player looks at `target` within `FieldOfView` for
+`LookTime` cumulative seconds), and **`trigger_autosave`** (checkpoint volume — logs + fires once; the
+save is P10). A Source `COutput<T>` value seam lands with it —
+`FElysiumEntity::FireOutput(name, activator, value)` fills any wire whose map-param is empty (so
+`math_counter.OutValue` passes its value/delta to `logic_case_toggle.InValue`), else the authored param
+wins. Every P4.5 class implements `GetDebugState` (Cog Inspector Live state), and a new **Cog
+`Elysium.Logic` window** (`FElysiumCogWindow_Logic`) boards them all — per-class live state, an Inspect
+button, a quick-fire of each primary input, and the current env_fade screen-fade the HUD is drawing.
+`trigger_stealth_mod`/`trigger_inventory_check`/`trigger_environmental_audio` stay inert records (their
+stealth/inventory/RoomDSP systems are unbuilt). The **P6 audio decode foundation** also runs: `FElysiumSoundCache` decodes VtMB's sounds to interleaved int16 PCM at
+runtime — WAV (MS-ADPCM/IMA/PCM) via vendored `dr_wav` (6.1) and loose dialogue/music/radio MP3 via
+vendored `dr_mp3` (6.2), dispatched by file extension (`LoadSoundDecoded`) — feeding a
+`USoundWaveProcedural` per play (Unreal has no runtime path for loose WAV/MP3). `UElysiumAudioSubsystem`
+(GI-scope) owns the decode registry + `PreviewSound2D` + a **voice pool** (`PlayVoice`/`StopVoice`/
+`SetVoiceVolume`/`SetVoicePitch` over a `UAudioComponent` per voice, 3D sphere attenuation / 2D beds /
+`SourceEntityName` attach / built-in fades / **looping** via `MakeWave(bLoop)` re-queuing on
+`OnSoundWaveProceduralUnderflow`, reaped in `TickAudio` from the map actor) + the `elysium.playsound`/
+`elysium.sound_info` verbs, surfaced in the **Cog `Elysium.Audio` window** (path input + Play, this
+map's `ambient_generic` refs, live per-decode metadata + live-voices tables). **P6.3 entity-driven
+audio** also runs: **`ambient_generic`** (`ElysiumAmbientGeneric.cpp`) is a leaf class playing its
+`message` WAV/MP3 at the def origin — `health` = volume 0–10, `radius`→cm attenuation, `pitch`,
+`SourceEntityName` parents to a mover body, Source spawnflags (0x1 everywhere / 0x10 start-silent /
+0x20 not-looped), wiring `PlaySound`/`StopSound`/`ToggleSound`/`Volume`/`FadeIn`/`FadeOut`; the
+**SoundScheme** system (`ElysiumSoundScheme.h/.cpp`) is a runtime KeyValues scheme parser (fields +
+retail defaults from the decompiled `CSoundScheme` @0x1022a930), the **`ambient_soundscheme`** anchor
+entity (`start_enabled` + `FadeIn`/`FadeOut`/`Disable` crossfade), and `FElysiumSoundSchemeManager`
+(owned by `AElysiumMapActor`, ticked with the listener pos): a looping ambient bed, the **music state
+machine** (explore/combat/alert stems started phase-locked + volume-crossfaded on `EElysiumMusicState`,
+cvar/Cog-driven until combat scoring lands in P9), and the **polar RandomSound scheduler** (per-sound
+Frequency cadence, `RandomSoundCount` cap, Dist/Height/Angle placement around the anchor) — surfaced in
+the **Cog `Elysium.Sound Schemes` window** (active scheme + stems + randoms + music-state buttons + per-
+anchor FadeIn/FadeOut). RoomDSP reverb submixes are deferred (P-later). **P6.4 mover sounds** also run:
+doors/buttons carry a `soundgroup` token that VtMB resolves *by directory convention* (RE-verified — no
+data file) to `sound/usable/<category>/<token>/<subkey>.wav` — `openable` doors use open/close/swing/locked,
+`switches` buttons use on/off (`CBaseDoor::Spawn`@`0x100ef060`, `CBaseButton::Spawn`@`0x100c8810`);
+`ElysiumMover.cpp`'s `FElysiumMoverBase` loads the offline manifest once (`ElysiumMoverSoundManifest`) and
+the door/button state machines play through the 6.3 voice pool at the body — door open/close one-shots on
+motion start with the looping `swing` moving sound stopped on arrival, `locked` on the locked `+use` path
+(honouring the SILENT spawnflag 0x1000); button `on`/`off` on press/spring-back, with the explicit
+`locked_sound`/`unlocked_sound` WAVs overriding on a locked/unlocked press. Offline `UE_extract_sounds.py`
+verbatim-copies each map's `.ents`-referenced WAV/MP3 into `out/sound/` (no transcode; `--radio` adds
+the loose radio loops as MP3 test material), mirrors each map's `ambient_soundscheme` `.txt` schemes + the
+music/ambient assets they reference (**PL5a**; `--no-schemes` to skip), and mirrors each referenced mover
+soundgroup's `usable/…` WAVs + writes the `out/sound/usable/soundgroups.json` manifest the runtime resolves
+tokens through (**6.4**). Mover sounds surface in the Cog **Entity Inspector** Live-state (soundgroup/
+resolved subkeys/last-played) and the **Audio window**'s new *Mover soundgroups* browser (per-category tree,
+Play any subkey 2D) + live-voices table. The **P5 5.2 expression evaluator** also runs: `ElysiumExpr` (a
+self-contained lexer + recursive-descent AST parser + exception-free tree-walk) evaluates the
+restricted Python-2.1 expression subset VtMB scripts speak — int/float/str/`None` literals,
+`+ - * / % | & ^ << >> **` (Python-2 floor int div/mod, string `+`/`%`), chained comparisons,
+short-circuit `and`/`or`/`not`, and assignment — collapsing every error to Void (error-to-false,
+RE3). Binding is one namespace, no new dispatch: `G.<flag>` reads/writes the game-state bag
+(default-0; `None` deletes) with `has_key`/`keys`/`ClearAll`, and a bare targetname resolves to an
+entity whose `.Input()` fires through the real chokepoints and whose `.field` reads/writes the P1
+class-chain field table. `FElysiumExprScriptHost` implements the B6 field-6 seam via
+`ElysiumExpr::Exec` but is **opt-in** (`elysium.script.live`; the null host stays the map-load
+default until 5.4). `UElysiumGameStateSubsystem` gains `EvalScript` + a recent-eval ring; the
+`Elysium.Scripting` Cog window grows a live `G` table, an eval/exec box, and an eval log, echoed by
+`elysium.eval`/`elysium.exec`. The **P5 5.3 native bindings** also run: the engine `vampire`-module
+surface in `ElysiumExpr` — the **11 module globals** resolve as bare names (ahead of targetnames) and
+the **24 Character methods** dispatch off a character object. `FindPlayer()` returns the PC (a
+`Character` value; no player entity yet), `FindEntityByName` resolves a targetname to a handle, and
+`SetQuest`/`GetQuestState` route to the real quest map; `ScheduleTask` defers a source on the event
+queue (5.4, below); every other global/method **logs a stub and returns a plausible default**
+(predicate globals read false; `ChangeMap` stays a stub for its phase owner P4). An **unlisted** method
+still binds off the character (so
+`FindPlayer().ClearActiveDisciplines()` dispatches to the generic stub, not a raise), and NPC entity
+handles accept Character methods too; `self`/`activator` resolve to the eval's I/O provenance when
+bound (below the globals, so nothing real is shadowed); `BumpStat`/`CalcFeat` normalise their stat
+name case-insensitively (`CanonicalStatName`). A single static `GNativeBindings` table drives both
+membership and the debug view. `UElysiumGameStateSubsystem` gains a native-call ring
+(`RecordNativeCall` + per-name counters); the `Elysium.Scripting` window grows a **Native bindings**
+table (name/kind/backing-status/live call-count) and a **Recent native calls** log. Level-script
+functions/constants (`cCelerity`, the level's `On*` callbacks) are 5.5 (NameError until then, so
+`G.x |= cCelerity` still no-ops). The **P5 5.4 live host** also runs: `FElysiumExprScriptHost` is now
+the **map-load default** (not opt-in), so field-6 payloads run live at map load (the tutorial's
+`G.x = ...` outputs flip visibly); `elysium.script.live 0` swaps in the null host for A/B and turns the
+**whole** scripting surface (field-6 + pythoncheck + ScheduleTask) dark together. **`logic_pythoncheck`**
+is a leaf class (`ElysiumStarterClasses.cpp`): its `python_script` keyfield expression is evaluated by
+the **`Test`** input through `FElysiumEntityWorld::EvalCondition` (via the installed host) and fires
+**`OnTrue`**/`OnFalse` on truthiness (Void/error → `OnFalse`, retail's error-to-false), activator
+propagated. **`ScheduleTask(delay, "<source>")`** is real (`FElysiumEntityWorld::EnqueuePython`): a
+python-only deferred event (no I/O target, just the source) rides the one event queue at `now+delay`,
+delivered through `DeliverEvent`'s Python half — single-steppable + serializable (R8); sources resolve
+against 5.3's binding surface (retail's `__main__.`-prefixed forms NameError until 5.5, but
+`ScheduleTask(1.0, "G.Foo = 42")` works today). `AddSubclassField` gains FString support. Debug: the
+Event Queue window shows the deferred source verbatim in the last column (a `(python)` Target row); the
+`Elysium.Scripting` window's **Live script eval** checkbox toggles the surface; the Native bindings row
+for `ScheduleTask` is non-stub with a call count; a pythoncheck's `python_script` + last `Test` outcome
+show in the Cog Inspector's Live-state (`GetDebugState`). **P5 5.5 is decided + has a working PoC**: the
+36 loose level scripts (16,473 lines — 1,119 defs, 45 classes, try/except, imports, `exec`) are full
+Python 2.1, past `ElysiumExpr`, and the 2.1→2.7 delta is ~0 (no string-exceptions, no `__future__`), so
+the runtime **embeds a maintained CPython 2.7.18** (`qnox/python-2.7`) to run VtMB's own scripts 1:1 —
+implementation completes in 9.3. The embed (`FElysiumPythonVM`, Win64 `ELYSIUM_WITH_CPYTHON`): loads the
+vendored `python27.dll` (linked via `python27.lib`, staged next to the module binary — data-symbol
+imports rule out delay-load), `Py_SetPythonHome` at the vendored stdlib, `Py_Initialize` (isolated from
+UE's own embedded Python 3), and a `vampire` C-module whose one **real** binding is **`G` proxied onto
+`UElysiumGameStateSubsystem`** (attribute get/set = flag read/write, default-0 / assign-None-deletes,
+`keys`/`has_key`/`ClearAll`); a Python bootstrap stands up forgiving stubs for the natives 9.3 makes C
+(`FindPlayer`/… + a stub `vamputil`) and routes Python stdout/stderr to the UE log. `FElysiumCPythonScriptHost`
+slots into the same `IElysiumScriptHost` seam (`elysium.script.cpython [0|1]`), with `elysium.py.smoke`/
+`exec`/`load`/`fire`/`poc` verbs and a **CPython panel in the `Elysium.Scripting` Cog window** (status,
+host toggle, load-level-script, fire the On* callbacks, python exec box). Validated end-to-end in the
+built game (`elysium.py.poc` → ALL PASS): real `tutorial.py` imports, `OnKillDisc1()` runs, and
+`G.Tutorial_Discflags |= cCelerity` resolves the level constant to 8 — the acceptance `ElysiumExpr` can't
+meet. The SDK is fetched, not committed (`tools/fetch_cpython27.py`; gitignored under
+`Source/ElysiumUE/ThirdParty/CPython27/`). The **P8 8.2 glTFRuntime spike** also lands: the MIT
+`rdeioris/glTFRuntime` plugin is vendored (`Plugins/glTFRuntime`) + wired into the module, loading a VtMB
+NPC exported to `out/npc/<stem>.glb` (`mdl_gltf.py`: mesh + StudioBone skeleton + one animation, standard
+glTF 2.0) through `UElysiumNpcSubsystem` (GI-scoped) — `glTFLoadAssetFromFilename` → `LoadSkeletalMesh(0,0)`
+→ `LoadSkeletalAnimation` → an `AActor` + `USkeletalMeshComponent` spawned at the player's feet playing the
+clip single-node, driven by `elysium.npc.load`/`clear`/`list` and the Cog **`Elysium.NPC`** window. glTF is
+self-describing, so glTFRuntime's default config (`SceneScale 100`, `TransformBaseType::Default`,
+`bAllowExternalFiles`) does the glTF→Unreal basis/scale change — **no `UE_` pre-conversion** (that rule is
+for dumb containers, not a self-describing one the loader reorients). `export_all.py --npc` regenerates the
+test glb (`gangmember_male_2`, 69 bones). Still planned: elevators + keyframe movers, Source movement,
+the rest of the master-material set, the real `vampire` C bindings + level-script auto-load (9.3), menu,
+dialogue — see `docs/rebuild-strategy.md`. Only `sp_tutorial_1` is exported today.
 
 ## Repository facts
 
@@ -99,22 +261,34 @@ audio, menu, dialogue — see `docs/rebuild-strategy.md`. Only `sp_tutorial_1` i
   `ProceduralMeshComponent` (runtime), `PythonScriptPlugin` (offline scaffolding only),
   `Cog` (vendored MIT debug-UI shell under `Plugins/Cog/`; main plugin only — CogImgui/Cog/
   CogEngine/CogCommon/CogDebug/CogDebugEditor + bundled ImGui/ImPlot/NetImgui; stripped from
-  Shipping via `ENABLE_COG`). Module deps: ProceduralMeshComponent, ImageWrapper, ImageCore,
-  RenderCore, RHI, MeshDescription, StaticMeshDescription, PhysicsCore, EnhancedInput, Slate,
-  SlateCore, CogCommon (all configs) + Cog/CogDebug/CogEngine/CogImgui (non-Shipping only).
+  Shipping via `ENABLE_COG`), `glTFRuntime` (vendored MIT runtime glTF loader under
+  `Plugins/glTFRuntime/`; the P8 NPC skeletal path — USkeletalMesh + UAnimSequence from `.glb` at
+  runtime, no editor import). Module deps: ProceduralMeshComponent, ImageWrapper, ImageCore,
+  RenderCore, RHI, MeshDescription, StaticMeshDescription, PhysicsCore, glTFRuntime, EnhancedInput,
+  Slate, SlateCore, CogCommon (all configs) + Cog/CogDebug/CogEngine/CogImgui (non-Shipping only).
 - **Source layout:** `Source/ElysiumUE/Public/*.h` + `Private/*.cpp,*.h`,
   `Source/*.Target.cs`, `Source/ElysiumUE/ElysiumUE.Build.cs`. Key types:
   `UElysiumMapSubsystem`, `AElysiumMapActor`, `AElysiumGameMode`, `AElysiumHUD`,
-  `AElysiumPawn`, `UElysiumGameInstance`, `FElysiumObjModel`, `FElysiumTextureCache`,
+  `AElysiumPawn`, `AElysiumPlayerController`, `UElysiumCheatManager`, `UElysiumGameInstance`,
+  `FElysiumObjModel`, `FElysiumTextureCache`,
   `FElysiumMaterialFactory`, `FElysiumStaticMeshBuilder`, `FElysiumContentPaths`,
-  `UElysiumLightRig`, `FElysiumProfileRun` (the headless profiling harness, `-ElysiumProfile`),
+  `UElysiumLightRig`, `UElysiumAudioSubsystem` (decode registry + voice pool) + `FElysiumSoundCache` (the
+  P6 runtime WAV/MP3 decode-to-PCM path, vendored `dr_wav`/`dr_mp3`), `FElysiumSoundSchemeManager` +
+  `FElysiumSoundScheme` (the P6.3 scheme parser/playback — ambient bed, music state machine, polar random
+  scheduler; owned by the map actor), `UElysiumNpcSubsystem` (the P8 8.2 GI-scoped glTFRuntime skeletal-path
+  harness — `.glb` NPC → runtime USkeletalMesh + UAnimSequence spawned near the player, `elysium.npc.*`),
+  `FElysiumProfileRun` (the headless profiling harness, `-ElysiumProfile`),
   `UElysiumCogSubsystem` (world subsystem that registers the 15 stock CogEngine debug windows plus the
   custom Elysium windows under an `Elysium` F1-menu group; `#if ENABLE_COG`), `FElysiumCogWindow` (the
   base for those custom windows — hands them `GetMapActor`/`GetEntityWorld`/`GetGameState` since Track-B
   entities are plain C++, invisible to Cog's UObject inspector, plus a shared `static` browser→inspector
-  entity selection), `FElysiumCogWindow_Status` (a live read-only map + entity-substrate summary),
-  `FElysiumCogWindow_Entities` (a filter/histogram/dormancy browser over every record; sets the shared
-  selection), `FElysiumCogWindow_Inspector` (the selected entity's identity, chain-walked live fields, raw
+  entity selection, plus `GetMapSubsystem` for the lifecycle windows), `FElysiumCogWindow_Status` (a live
+  read-only map + entity-substrate summary), `FElysiumCogWindow_Maps` (the P2.5 map-lifecycle window: the
+  exported-map list with per-row Travel buttons + a Reload button, and the current map's counts + per-phase
+  load-timing table), `FElysiumCogWindow_Lights` (the P2.5 light-rig window: rig-visibility toggle, source-
+  type breakdown, a clipper-paged per-source list, and live calibration sliders that re-tune the running rig
+  in place via `UElysiumLightRig::ApplyLiveTuning()` — no reload), `FElysiumCogWindow_Entities` (a filter/
+  histogram/dormancy browser over every record; sets the shared selection), `FElysiumCogWindow_Inspector` (the selected entity's identity, chain-walked live fields, raw
   keyvalues, 7-field outputs, and a fire-button-per-input test harness — and doubles as a **live crosshair
   inspector**: left open it keeps updating while you play (Cog renders visible windows with the menu closed),
   draws an imgui reticle, and traces the camera ray each frame to report whatever it hits — surface
@@ -123,7 +297,18 @@ audio, menu, dialogue — see `docs/rebuild-strategy.md`. Only `sp_tutorial_1` i
   (pending queue + I/O history ring buffer + pause/step), and `FElysiumCogWindow_WorldViz` (the P2.4
   world-visualization control panel: entity-gizmo off/visible/all + labels + distance sliders + color
   legend, show-triggers by class/state, I/O-beam toggle + fade window — flipping the same
-  `UElysiumEntityDebugSubsystem::Viz()` state the tick renders); the inspector's fire buttons and the `ent_fire`
+  `UElysiumEntityDebugSubsystem::Viz()` state the tick renders), `FElysiumCogWindow_Audio` (the P6.1/6.2
+  audio decoder harness: play a WAV/MP3 by path or from this map's `ambient_generic` refs, with a live
+  per-decode metadata table + a live-voices table over the audio subsystem's voice pool), and
+  `FElysiumCogWindow_SoundScheme` (the P6.3 scheme runtime: the active scheme's ambient bed/music stems/random
+  one-shots, the Explore/Combat/Alert music-state buttons, and this map's `ambient_soundscheme` anchors with
+  FadeIn/FadeOut), and `FElysiumCogWindow_Logic` (the P4.5 logic board: math_counter/logic_timer/logic_case
+  /env_fade/func_brush/point_teleport + the trigger family, each with live `GetDebugState`, an Inspect
+  button, and a quick-fire of its primary input, plus the current env_fade screen-fade the HUD draws), and
+  `FElysiumCogWindow_Npc` (the P8 8.2 glTFRuntime spike board: pick a `.glb` under `out/npc`, choose a clip,
+  Load through `UElysiumNpcSubsystem`, and read back bone-count/anims/applied-clip/load-ms/spawn-location +
+  per-clip re-play);
+  the inspector's fire buttons and the `ent_fire`
   verb both inject through `FElysiumEntityWorld::EnqueueInput` (a hand-made input queued via the real chokepoint).
   `UElysiumEntityDebugSubsystem` (a `UTickableWorldSubsystem`, `#if !UE_BUILD_SHIPPING`) hosts the Source-style
   `elysium.ent_*` verbs — `ent_fire` (targetname/classname/crosshair-picker, discovery-lists inputs when none
@@ -162,8 +347,14 @@ audio, menu, dialogue — see `docs/rebuild-strategy.md`. Only `sp_tutorial_1` i
   overlaps back to the world; `elysium.BrushBodies` A/Bs it),
   `FElysiumEventQueue`/`FElysiumIOEvent` (the one time-sorted queue, R4), `IElysiumIOSink` with
   the always-on `FElysiumRingBufferSink` (1,000-entry I/O history) + `FElysiumLogSink`
-  (`LogElysiumIO` + VLOG), and `IElysiumScriptHost`/`FElysiumNullScriptHost` (the M4 field-6
-  Python seam, on `UElysiumGameStateSubsystem`).
+  (`LogElysiumIO` + VLOG), `IElysiumScriptHost` (the field-6 Python seam on
+  `UElysiumGameStateSubsystem`) with `FElysiumNullScriptHost` (logs + Void), `FElysiumExprScriptHost`
+  (the 5.2 evaluator, map-load default), and `FElysiumCPythonScriptHost` (routes field-6/pythoncheck
+  through the embedded VM; `elysium.script.cpython`), `ElysiumExpr` (the standalone expression evaluator
+  — lexer + recursive-descent AST parser + tree-walk, `Eval`/`Exec`), and `FElysiumPythonVM` (the P5.5
+  embedded CPython 2.7.18 VM — `Py_Initialize` + the `vampire` C-module with `G` proxied onto the game
+  state; vendored under `Source/ElysiumUE/ThirdParty/CPython27/`, `ELYSIUM_WITH_CPYTHON` Win64-only,
+  fetched via `tools/fetch_cpython27.py`).
 - **Committed content (only these):** `Content/Elysium.umap` (empty boot persistent level),
   `Content/VtMB/Materials/M_VtMB_World.uasset` (world master material), `M_Sky.uasset` (2D-skybox
   cube master material), and `M_Gizmo.uasset` + `M_Gizmo_XRay.uasset` (the P2.4 entity-gizmo ISM
@@ -175,8 +366,8 @@ audio, menu, dialogue — see `docs/rebuild-strategy.md`. Only `sp_tutorial_1` i
 - **Content root:** `FElysiumContentPaths::Root()` = `FPaths::ProjectDir()/"tools/out"`
   (in-repo, gitignored). Packaged builds later read a `content/` folder next to the exe.
 - **Config:** `Config/DefaultEngine.ini` (boot map `/Game/Elysium`, `AElysiumGameMode`
-  default, `UElysiumGameInstance`); `Config/DefaultInput.ini` (legacy axis/action mappings —
-  EnhancedInput is configured but unused).
+  default, `UElysiumGameInstance`, the `ElysiumUse` +use trace channel = `ECC_GameTraceChannel1`);
+  `Config/DefaultInput.ini` (legacy axis/action mappings — EnhancedInput is configured but unused).
 
 ## Target hardware
 
