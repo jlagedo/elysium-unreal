@@ -234,6 +234,14 @@ bool glTFRuntime::FillSkeletalMeshRenderData(FSkeletalMeshRenderData* RenderData
 		int32 LODIndex = RenderData->LODRenderData.Add(LodRenderData);
 
 		LodRenderData->RenderSections.SetNumUninitialized(LOD->Primitives.Num());
+		// Elysium local fix: construct every section up front. This function can early-return mid-loop
+		// (e.g. an unmapped skin bone below) and would otherwise leave the trailing sections as raw
+		// uninitialized memory; the orphaned half-built USkeletalMesh then faults in
+		// ~FDuplicatedVerticesBuffer (releasing a garbage RHI ref) when GC later destroys it.
+		for (int32 SectionIndex = 0; SectionIndex < LodRenderData->RenderSections.Num(); SectionIndex++)
+		{
+			new(&LodRenderData->RenderSections[SectionIndex]) FSkelMeshRenderSection();
+		}
 
 		bool bUseHighPrecisionUVs = false;
 		bool bUseHighPrecisionWeights = false;
@@ -287,7 +295,6 @@ bool glTFRuntime::FillSkeletalMeshRenderData(FSkeletalMeshRenderData* RenderData
 		{
 			FglTFRuntimePrimitive& Primitive = LOD->Primitives[PrimitiveIndex];
 
-			new(&LodRenderData->RenderSections[PrimitiveIndex]) FSkelMeshRenderSection();
 			FSkelMeshRenderSection& MeshSection = LodRenderData->RenderSections[PrimitiveIndex];
 
 			MeshSection.MaterialIndex = PrimitiveIndex;

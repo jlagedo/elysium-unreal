@@ -16,6 +16,7 @@ class UElysiumAudioSubsystem;
 class UElysiumBrushComponent;
 class UElysiumGameStateSubsystem;
 class UElysiumMapSubsystem;
+class UPhysicsConstraintComponent;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
 
@@ -92,6 +93,10 @@ public:
 	// 8.3 — register a dynamic-prop body (built by AElysiumMapActor::BuildPropVisual) so the world
 	// tears it down with the map, exactly like NPC bodies. The FElysiumProp leaf calls this from Spawn().
 	void RegisterPropBody(UStaticMeshComponent* Component);
+
+	// 8.4 — register a physics constraint (built by a phys_hinge leaf) so the world tears it down
+	// with the map, like the prop/NPC bodies. The FElysiumPhysHinge leaf calls this from PostSpawn().
+	void RegisterConstraintBody(UPhysicsConstraintComponent* Component);
 
 	// P5 5.4 — ScheduleTask(delay, "<source>"): defer a field-6 Python source string on the same
 	// event queue, evaluated at now+delay through the installed script host (DeliverEvent's Python
@@ -258,6 +263,9 @@ private:
 	// 8.3 dynamic-prop bodies (built on the map actor, gated/moved by their FElysiumProp leaf): weak
 	// refs held so a world rebuild on a surviving actor destroys them, like NpcBodies.
 	TArray<TWeakObjectPtr<UStaticMeshComponent>> PropBodies;
+	// 8.4 phys_hinge constraints (built on the map actor by the leaf's PostSpawn): weak refs held so
+	// a world rebuild on a surviving actor destroys them, like PropBodies.
+	TArray<TWeakObjectPtr<UPhysicsConstraintComponent>> Constraints;
 	int32 TouchBeginCount = 0;
 	int32 TouchEndCount = 0;
 

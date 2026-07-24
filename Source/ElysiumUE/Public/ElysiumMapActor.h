@@ -94,6 +94,15 @@ public:
 	// Rotation is the exporter's pre-converted Unreal-space model_quat, read verbatim.
 	UStaticMeshComponent* BuildPropVisual(const FString& Stem, const FVector& Location, const FQuat& Rotation);
 
+	// 8.4 — build one physics-prop body: like BuildPropVisual but the mesh is cooked with convex
+	// collision (the decomposed props/<Stem>.hulls sidecar, one FKConvexElem per part, or a single
+	// whole-model hull when absent), the collision-cooked mesh cached under a distinct key so a model
+	// shared with a non-solid prop_dynamic does not clash. The returned component carries the
+	// PhysicsActor profile with collision enabled but is NOT yet simulating — the FElysiumPhysProp
+	// leaf drives SetSimulatePhysics / mass / the elysium.PhysicsProps gate. Registered for teardown
+	// (RegisterPropBody) like a dynamic prop.
+	UStaticMeshComponent* BuildPhysPropVisual(const FString& Stem, const FVector& Location, const FQuat& Rotation);
+
 	// Live stats for the debug overlay, filled by LoadMap.
 	FString LoadedMap;
 	int32 WorldSurfaceCount = 0;

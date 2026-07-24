@@ -19,6 +19,7 @@
 #include "GameFramework/Actor.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "PhysicsEngine/PhysicsConstraintComponent.h"
 #include "HAL/IConsoleManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumWorld, Log, All);
@@ -127,6 +128,16 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 		}
 	}
 
+	// Second pass (Source's Activate()): every entity has Spawn()'d and every body exists, so a
+	// constraint (phys_hinge) can now resolve and wire its attached bodies.
+	for (const TUniquePtr<FElysiumEntity>& Ent : EntityList)
+	{
+		if (Ent && !Ent->IsDead())
+		{
+			Ent->PostSpawn();
+		}
+	}
+
 	UE_LOG(LogElysiumWorld, Log, TEXT("world '%s' live: %d entities (%d brush bodies), epoch %u"),
 		*Defs.MapName, EntityList.Num(), Bodies.Num(), Epoch);
 }
@@ -227,6 +238,9 @@ void FElysiumEntityWorld::CallEntitySpawn(FElysiumEntity& Ent)
 	{
 		BuildBrushBody(Ent);
 	}
+	// A runtime-spawned entity has no "all entities" barrier to wait on; its attach targets (if any)
+	// already exist, so run its second-phase init immediately after Spawn().
+	Ent.PostSpawn();
 	UE_LOG(LogElysiumWorld, Log, TEXT("(%8.3f) runtime spawn %s"), NowSeconds(), *Ent.DebugString());
 }
 
@@ -269,6 +283,14 @@ void FElysiumEntityWorld::RegisterPropBody(UStaticMeshComponent* Component)
 	if (Component)
 	{
 		PropBodies.Add(Component);
+	}
+}
+
+void FElysiumEntityWorld::RegisterConstraintBody(UPhysicsConstraintComponent* Component)
+{
+	if (Component)
+	{
+		Constraints.Add(Component);
 	}
 }
 
@@ -960,6 +982,16 @@ void FElysiumEntityWorld::Teardown()
 		}
 	}
 	PropBodies.Empty();
+
+	// phys_hinge constraints (8.4): destroyed with the map, like the bodies they wired.
+	for (const TWeakObjectPtr<UPhysicsConstraintComponent>& Comp : Constraints)
+	{
+		if (UPhysicsConstraintComponent* C = Comp.Get())
+		{
+			C->DestroyComponent();
+		}
+	}
+	Constraints.Empty();
 
 	EntityList.Empty();
 	RuntimeDefs.Empty();

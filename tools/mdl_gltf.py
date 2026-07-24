@@ -256,15 +256,28 @@ def _build_skinned(g, idx, d, v, model_path, out_dir):
 def _assemble_skinned(built, animations):
     """glTF dict for a skinned mesh + skeleton + the given animations."""
     bones = built["bones"]
-    root = next(b.index for b in bones if b.parent == -1)
+    nodes = built["nodes"]
+    roots = [b.index for b in bones if b.parent == -1]
+    # glTFRuntime traverses the skeleton from a SINGLE root down `children`, so any bone not
+    # reachable from that root is dropped from its bone map -- a vertex weighted to it then aborts
+    # the whole mesh load (and leaves a half-built USkeletalMesh that faults on GC). A few VtMB
+    # skeletons have more than one parent-less bone (e.g. regular_cop bones 0/1, prophet bones 0/59),
+    # so unify them under one synthetic root. It is appended AFTER the mesh node (preserving the
+    # node-index == bone-index invariant _bake_animation targets) and is NOT a joint (skin.joints
+    # stays range(len(bones)), so JOINTS_0 values still map 1:1 to the real bones).
+    if len(roots) > 1:
+        skel_root = len(nodes)
+        nodes.append({"name": "__elysium_skeleton_root", "children": list(roots)})
+    else:
+        skel_root = roots[0]
     gltf = {
         "asset": {"version": "2.0", "generator": "elysium mdl_gltf"},
         "scene": 0,
-        "scenes": [{"nodes": [root, built["mesh_node"]]}],
-        "nodes": built["nodes"],
+        "scenes": [{"nodes": [skel_root, built["mesh_node"]]}],
+        "nodes": nodes,
         "meshes": [{"primitives": built["primitives"]}],
         "skins": [{"inverseBindMatrices": built["ibm_acc"],
-                   "joints": list(range(len(bones))), "skeleton": root}],
+                   "joints": list(range(len(bones))), "skeleton": skel_root}],
         "materials": built["materials"],
     }
     if animations:
@@ -275,7 +288,7 @@ def _assemble_skinned(built, animations):
         gltf["samplers"] = [{}]
         for t in built["textures"]:
             t["sampler"] = 0
-    return gltf, root
+    return gltf, skel_root
 
 
 def export_npc(idx, model_path, out_dir, stem=None):

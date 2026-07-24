@@ -277,6 +277,18 @@ present only when the decode succeeded; the origin stays the entity's own conver
 NPC track (roadmap 8.2/8.5), not this static-geometry path. Tutorial: 160 entity props / 64
 unique models. The runtime consumer is roadmap 8.3 (`prop_dynamic` → `FElysiumProp`) / 8.4 (physics).
 
+**Physics collision (8.4).** Each `prop_physics`-referenced model additionally gets a
+`props/<stem>.hulls` sidecar (`prop_collision.py`): its decoded OBJ is approximate-convex-decomposed
+with **CoACD** into convex parts, written in the **world-collider format** (one hull per line, flat
+Unreal-cm verts) so the runtime cooks one `FKConvexElem` per line — a tighter proxy for concave props
+(a chair → dozens of hulls) than a single hull. CoACD is an **optional** dep (`pip install coacd`);
+absent or failing on a model, the sidecar falls back to one whole-model hull (the baseline spec), so the
+pipeline never hard-fails. `phys_hinge` (and the `phys_*` constraint family) additionally get
+**`hinge_axis`** in `<map>.ents` = the normalized Unreal-space hinge direction
+(`source_dir_to_unreal` of the raw-Source `origin`→`hingeaxis` line), read verbatim; the pivot is the
+entity's already-converted `origin`. (CoACD decomposes per map, not cross-map — a scaling cost for the
+full export, tracked for P10.)
+
 `WorldLoader.LoadProps` groups instances by model, builds each unique model's mesh + a
 convex hull once, and renders each model as one **`MultiMeshInstance3D`** — per-instance
 transform (Source→Godot `basis = M·AngleMatrix(pitch,yaw,roll)·M⁻¹`, origin
@@ -301,7 +313,11 @@ retarget by bone name with no proportion rig.
 `npc_export.py` is the batch driver (`export_all.py --npc`, the heaviest offline pass). It scans
 `out/*/*.ents` for `npc_*` `model` keys and writes under `out/npc/`:
 
-- **`<npc>.glb`** (`mdl_gltf.export_npc`) — skinned mesh + skeleton + the NPC's **own** clips.
+- **`<npc>.glb`** (`mdl_gltf.export_npc`) — skinned mesh + skeleton + the NPC's **own** clips. A
+  skeleton with more than one parent-less bone (`regular_cop`, `prophet`) is unified under a synthetic
+  `__elysium_skeleton_root` node so glTFRuntime's single-root bone-map traversal reaches every bone —
+  it is appended after the mesh node (keeping node-index == bone-index) and is not a `skin.joints`
+  entry, so `JOINTS_0` still maps 1:1.
 - **`banks/<bank>.glb`** (`mdl_gltf.export_bank`) — a shared bank's skeleton + all its clips,
   **no mesh**; decoded once and shared by every NPC. Bank stems keep the sub-path
   (`character_shared_male_misc`) so the male/female (and clan) banks that share a basename stay

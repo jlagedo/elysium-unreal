@@ -952,6 +952,52 @@ Records are verbatim moves out of `roadmap.md`: where one says "the decision log
     bodies without crash and the captures show the placed models (cage-lights, palms, beds, barrels, the
     ceiling fan) standing. `elysium.PropBodies 0` A/Bs the bodies off (I/O still resolves). *Deps:* 8.1, 1.3.
 
+- [x] **8.4 Physics props** — `prop_physics` (54 in the patch tutorial, 18 unique models) as simulating
+  Chaos rigid bodies and `phys_hinge` (12) as hinge constraints. A "straight Unreal win" — the simulation
+  is Unreal-native; only the I/O surface is reproduced.
+  - **RE (Ghidra, `vampire.dll`)** — datamaps recovered by vtable (CPhysicsProp `0x10474c44`, CPhysHinge
+    `0x10447a54`; `DumpGrep`/`DumpDatamap` over the persisted `vtmb` project). **Key divergence from later
+    Source:** CPhysicsProp/CBreakableProp has **`Wake`** (`InputWake`), `Break`, and the skin inputs — no
+    `EnableMotion`/`DisableMotion`/`OnMotionEnabled` (added later) and **no `InputSleep` symbol exists** in
+    the binary (every `Sleep` hit is NPC AI). Outputs: `OnBreak` + the undriven `OnBreakLevel1..8`/
+    `OnBreakLastLevel`/`OnBreakConstraint` gib chain. CPhysHinge/CPhysConstraint: fields
+    `attach1`/`attach2`/`forcelimit`/`torquelimit`/`hingefriction`/`hingeaxis`; inputs `TurnOn`/`TurnOff`/
+    `Break`; output `OnBreak`. Full record: `decisions.md` 2026-07-24.
+  - **Exporter** — `UE_bsp_to_scene` emits `hinge_axis` (normalized `source_dir_to_unreal` of the raw-Source
+    `origin`→`hingeaxis` line; pivot = the converted top-level origin) for `phys_hinge`. `prop_collision.py`
+    convex-decomposes each `prop_physics` model (**CoACD**, optional dep) into `props/<stem>.hulls` in the
+    world-collider format (one hull per line, flat Unreal-cm verts). Params tuned for pipeline speed
+    (`threshold=0.2` + lowered MCTS/voxel resolutions — CoACD's default 0.05 cost ~150 s on one 2.5k-vert
+    chair; the tuned set is ~10 s for an 8-hull proxy), plus a **skip-if-fresh cache** (`.hulls` newer than
+    its `.obj` is reused) so a re-export is instant and `export_all` pays per model once. CoACD absent/failing
+    → single whole-model hull line (the baseline spec) — the pipeline never hard-fails.
+  - **Runtime** — `FElysiumPhysProp` (`ElysiumPropClasses.cpp`) stands a per-entity `UStaticMeshComponent` via
+    `AElysiumMapActor::BuildPhysPropVisual` (mesh cooked with convex collision from the `.hulls`, one
+    `FKConvexElem` per line, else a single whole-model hull; cached under a `#phys` key so a model shared with
+    a non-solid `prop_dynamic` doesn't clash), `PhysicsActor` profile, `SetSimulatePhysics` + `override_mass`
+    (>0 overrides, −1 keeps computed). `FElysiumStaticMeshBuilder::Build` gained a hull-list param +
+    `LoadConvexHulls`. `Wake`→`WakeAllRigidBodies`, `Break`→hide+`OnBreak`, skin inputs are stubs (skin 0 only
+    exported). `FElysiumPhysHinge` builds a `UPhysicsConstraintComponent` (twist on `Def->HingeAxis`,
+    swings/linear locked → one DOF; `forcelimit`/`torquelimit`=0 → unbreakable) in a new **`PostSpawn()` pass**
+    (`FElysiumEntityWorld::Load` second loop = Source's `Activate()`, run after every entity spawns so both
+    attach bodies exist), wiring `attach1`↔`attach2`/world via `SetConstrainedComponents`; `TurnOn`/`TurnOff`/
+    `Break`, `OnBreak`. `FElysiumEntity::GetAttachBody` is the seam (base = brush body; phys prop = simulating
+    mesh). Teardown: `RegisterConstraintBody` + the existing `RegisterPropBody`. World `.hulls`/`.dispcol`
+    colliders are `BlockAll`, so bodies rest on the floor. `elysium.PhysicsProps` A/Bs simulation (0 = static
+    non-solid, visual parity).
+  - **Deferred (recorded)** — physics-driven constraint break firing `OnBreak` (the `OnConstraintBroken`
+    delegate needs a UObject; the plain-C++ leaf fires `OnBreak` only on the explicit input); the gib
+    `OnBreakLevel*` chain (no decomposition-into-pieces system); runtime multi-convex for later maps if
+    concave furniture becomes gameplay-relevant (the offline path already covers it).
+  - **Verified** — `build.bat` green; re-export writes `hinge_axis` (12/12) + 18 decomposed `.hulls`
+    (66 hulls: `bottle`→1, `chairoffice`/`retro_chair`/`trashgarage` multi-hull); `test.bat` Content +
+    Substrate green with a new `Elysium.Content.TutorialEnts` assertion (prop_physics/phys_hinge register,
+    prop_physics carry `model_mesh` + a `.hulls` sidecar on disk, phys_hinge carry `hinge_axis`); a
+    timeboxed `play.bat sp_tutorial_1` load built all bodies + all 12 hinges (`attach1 <-> world`) with no
+    crash (`world 'sp_tutorial_1' live: 1868 entities`). The Chaos settle/push feel + hinge swing await an
+    owner in-game play test (like 4.1 — physics feel is the one thing headless coverage can't judge).
+    *Deps:* 8.1.
+
 - [~] **8.5 NPC presence + `scripted_sequence` minimal** — spawn `npc_*`/`npc_maker` at
   origins via glTFRuntime; play-anim-at-marker handler (×51) long before real AI.
   *Presence slice landed in **B3*** — `npc_*`/`npc_maker` register, stand their glTF body at origin

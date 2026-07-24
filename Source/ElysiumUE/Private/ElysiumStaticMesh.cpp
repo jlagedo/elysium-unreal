@@ -5,13 +5,14 @@
 
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Misc/FileHelper.h"
 #include "MeshDescription.h"
 #include "PhysicsEngine/BodySetup.h"
 #include "StaticMeshAttributes.h"
 #include "StaticMeshOperations.h"
 
 UStaticMesh* FElysiumStaticMeshBuilder::Build(const FElysiumObjModel& Model, const FString& Dir,
-	bool bConvexCollision, UObject* Outer)
+	bool bConvexCollision, UObject* Outer, const TArray<TArray<FVector>>* ConvexHulls)
 {
 	if (Model.Positions.Num() == 0)
 	{
@@ -100,26 +101,70 @@ UStaticMesh* FElysiumStaticMeshBuilder::Build(const FElysiumObjModel& Model, con
 	const TArray<const FMeshDescription*> Descs = { &MeshDesc };
 	Mesh->BuildFromMeshDescriptions(Descs, Params);
 
-	// Solid props: one convex hull of the whole model (matches the Godot prop collision),
-	// cooked now so instances collide without an offline cook step.
+	// Solid props: cook convex collision. Physics props (8.4) pass a decomposed hull set —
+	// one FKConvexElem per part, a tighter fit for concave shapes than a single hull; every
+	// other solid prop (and a physics prop whose decomposition is absent) gets one hull of the
+	// whole model (matches the Godot prop collision). Cooked now so instances collide/simulate
+	// without an offline cook step.
 	if (bConvexCollision)
 	{
 		Mesh->CreateBodySetup();
 		if (UBodySetup* BS = Mesh->GetBodySetup())
 		{
 			BS->CollisionTraceFlag = CTF_UseSimpleAsComplex;
-			FKConvexElem Convex;
-			Convex.VertexData.Reserve(Model.Positions.Num());
-			for (const FVector& P : Model.Positions)
+			auto AddHull = [BS](const TArray<FVector>& Verts)
 			{
-				Convex.VertexData.Add(P);
+				FKConvexElem Convex;
+				Convex.VertexData = Verts;
+				Convex.UpdateElemBox();
+				BS->AggGeom.ConvexElems.Add(MoveTemp(Convex));
+			};
+			if (ConvexHulls && ConvexHulls->Num() > 0)
+			{
+				for (const TArray<FVector>& Hull : *ConvexHulls)
+				{
+					if (Hull.Num() >= 4)
+					{
+						AddHull(Hull);
+					}
+				}
 			}
-			Convex.UpdateElemBox();
-			BS->AggGeom.ConvexElems.Add(MoveTemp(Convex));
+			if (BS->AggGeom.ConvexElems.Num() == 0)   // no sidecar / all hulls degenerate → single hull
+			{
+				AddHull(Model.Positions);
+			}
 			BS->InvalidatePhysicsData();
 			BS->CreatePhysicsMeshes();
 		}
 	}
 
 	return Mesh;
+}
+
+bool FElysiumStaticMeshBuilder::LoadConvexHulls(const FString& Path, TArray<TArray<FVector>>& Out)
+{
+	TArray<FString> Lines;
+	if (!FFileHelper::LoadFileToStringArray(Lines, *Path))
+	{
+		return false;
+	}
+	// One convex hull per line: flat Unreal-cm verts (x y z x y z ...), >= 4 verts, order
+	// irrelevant — the cooker builds the hull. Same format the world collider reads (LoadHulls).
+	for (const FString& Line : Lines)
+	{
+		TArray<FString> Tok;
+		Line.ParseIntoArray(Tok, TEXT(" "), true);
+		if (Tok.Num() < 12 || Tok.Num() % 3 != 0)
+		{
+			continue;
+		}
+		TArray<FVector> Verts;
+		Verts.Reserve(Tok.Num() / 3);
+		for (int32 I = 0; I + 2 < Tok.Num(); I += 3)
+		{
+			Verts.Emplace(FCString::Atod(*Tok[I]), FCString::Atod(*Tok[I + 1]), FCString::Atod(*Tok[I + 2]));
+		}
+		Out.Add(MoveTemp(Verts));
+	}
+	return Out.Num() > 0;
 }

@@ -95,6 +95,11 @@ void FElysiumEntity::Kill()
 	}
 }
 
+UPrimitiveComponent* FElysiumEntity::GetAttachBody() const
+{
+	return Body;   // a brush entity's body; null for point/logic ents (a physics prop overrides this)
+}
+
 void FElysiumEntity::OnDormancyChanged()
 {
 	// R6 — one reversible switch. Inert (hidden or dead) drops the body's collision so it cannot

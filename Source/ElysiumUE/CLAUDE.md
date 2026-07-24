@@ -101,8 +101,8 @@ Class implementations live in `ElysiumStarterClasses.cpp` (logic_auto/relay, tri
 `ElysiumAmbientGeneric.cpp`, `ElysiumEventClasses.cpp` (`events_player`/`events_world`),
 `ElysiumNpcClasses.cpp` (B3 — the AI-free `FElysiumNpc` character leaf for the living `npc_*`
 classnames and `FElysiumNpcMaker` for `npc_maker`/`npc_maker_fleshpile`), and
-`ElysiumPropClasses.cpp` (8.3 — the `FElysiumProp` static-mesh leaf for `prop_dynamic` /
-`prop_dynamic_ornament`).
+`ElysiumPropClasses.cpp` (8.3 `FElysiumProp` for `prop_dynamic`/`prop_dynamic_ornament`; 8.4
+`FElysiumPhysProp` for `prop_physics` and `FElysiumPhysHinge` for `phys_hinge`).
 
 NPCs (B3, no AI) stand a real glTF skeletal body at their origin: `ElysiumNpcVisual.{h,cpp}` is the
 shared glb→`USkeletalMesh` loader (the 8.2 path, reused by the `UElysiumNpcSubsystem` test harness),
@@ -125,6 +125,23 @@ gates the body on dormancy/`start_hidden`, follows `SetOrigin`/`SetAngles`/`SetM
 (hide + `OnBreak`); `Skin`/`SetAnimation` log a stub (the decode is LOD0 static geometry, skin 0 only).
 `World->RegisterPropBody` tracks it for teardown like NPC bodies; `elysium.PropBodies` A/Bs the bodies
 (I/O still resolves without them).
+
+Physics props (8.4) stand a **simulating** Chaos body: `FElysiumPhysProp` (`prop_physics`) calls
+`AElysiumMapActor::BuildPhysPropVisual` — the same per-stem mesh build but cooked with convex collision
+(the exporter's decomposed `props/<stem>.hulls` sidecar, one `FKConvexElem` per line — the world-collider
+format — or a single whole-model hull when absent), cached under a `#phys` key so a model shared with a
+non-solid `prop_dynamic` doesn't clash. The component takes the `PhysicsActor` profile; the leaf drives
+`SetSimulatePhysics` + `override_mass` (>0 overrides, −1 keeps the density-computed mass). The RE'd I/O
+surface (decisions.md 2026-07-24) is `Wake` (real), `Break` (hide + `OnBreak`), and `Skin`/`SetSkin`/
+`FadeToSkin`/`SetSkinFadeTime` (skin-0 stubs) — VtMB has **no** `EnableMotion`/`DisableMotion`/`Sleep`.
+`FElysiumPhysHinge` (`phys_hinge`) is a bodiless constraint: in a **second `PostSpawn()` pass** (Source's
+`Activate()`, run after every entity has `Spawn()`'d so both attach bodies exist) it builds a
+`UPhysicsConstraintComponent` at the pivot with its twist axis on the exporter's pre-converted
+`Def->HingeAxis` (swings/linear locked → one rotational DOF), wiring `attach1`↔`attach2` (empty → world);
+`forcelimit`/`torquelimit` = 0 → unbreakable; inputs `TurnOn`/`TurnOff`/`Break`, output `OnBreak`.
+`World->RegisterConstraintBody` tears the constraint down; `elysium.PhysicsProps` A/Bs simulation
+(0 = static/non-solid body, visual parity). `FElysiumEntity::GetAttachBody` is the seam a constraint reaches
+a target's physics body through (base returns the brush body; `FElysiumPhysProp` returns its simulating mesh).
 
 `+use` picks on the dedicated `ELYSIUM_USE_CHANNEL` (`ECC_GameTraceChannel1` = "ElysiumUse",
 default-Block so world + solid bodies occlude the ray, isolated from `ECC_Visibility`). The
@@ -308,7 +325,7 @@ volume, so a flip re-applies in one pass (voices already fading out toward a rea
 
 Lifecycle `elysium.newgame` / `map` / `maps` / `reload`; inspection `elysium.campos` /
 `lights` / `props` / `ents` / `classes` / `world` / `world.io` / `world.fireinput` / `g`;
-A/B toggles `elysium.BrushCollision` / `BrushBodies` / `NpcBodies` / `PropBodies` / `Decals` (+ `DecalDepth`) / `EmissiveScale` /
+A/B toggles `elysium.BrushCollision` / `BrushBodies` / `NpcBodies` / `PropBodies` / `PhysicsProps` / `Decals` (+ `DecalDepth`) / `EmissiveScale` /
 `BumpScale` / `EnvReflect` / `LightScale` / `LightFit` / `CogTheme`; entity debug `elysium.ent_*` / `showtriggers`; scripting `elysium.eval` / `exec` /
 `script.live` / `script.cpython` / `py.*` (`py.smoke` / `exec` / `load` / `fire`, plus the two
 single-token acceptance harnesses `py.poc` and `py.firstbeat`); audio `elysium.Mute` / `playsound` / `sound_info` /

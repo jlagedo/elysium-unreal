@@ -6,6 +6,11 @@ Pillow
 numpy
 matplotlib
 
+# Optional: physics-prop collision (prop_collision.py, roadmap 8.4). CoACD approximate-
+# convex-decomposes prop_physics meshes into multi-hull `.hulls` sidecars; absent, the
+# exporter falls back to a single whole-model hull (the baseline spec), so this is optional.
+#   pip install coacd
+#
 # Optional: only the ESRGAN texture/sky upscalers (upscale_bench.py, sky_upscale.py)
 # need the torch stack. Skip unless you are running the upscale passes; the ML weights
 # live in tools/models/ (gitignored, fetched on demand).

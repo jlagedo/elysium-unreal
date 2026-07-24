@@ -39,6 +39,13 @@ namespace
 		int32 PropDynamic = 0;
 		int32 PropDynamicWithMesh = 0;
 		FString AnyPropStem;
+		// 8.4 — prop_physics carry the same model_mesh annotation plus a decomposed `.hulls`
+		// sidecar; phys_hinge carry the pre-converted hinge_axis. Sample stems confirm on disk.
+		int32 PropPhysics = 0;
+		int32 PropPhysicsWithMesh = 0;
+		FString AnyPhysStem;
+		int32 PhysHinge = 0;
+		int32 PhysHingeWithAxis = 0;
 
 		int32 CountClass(const TCHAR* Class) const
 		{
@@ -82,6 +89,23 @@ namespace
 				{
 					++Out.PropDynamicWithMesh;
 					Out.AnyPropStem = Def.ModelMesh;
+				}
+			}
+			if (Def.Classname.Equals(TEXT("prop_physics"), ESearchCase::IgnoreCase))
+			{
+				++Out.PropPhysics;
+				if (!Def.ModelMesh.IsEmpty())
+				{
+					++Out.PropPhysicsWithMesh;
+					Out.AnyPhysStem = Def.ModelMesh;
+				}
+			}
+			if (Def.Classname.Equals(TEXT("phys_hinge"), ESearchCase::IgnoreCase))
+			{
+				++Out.PhysHinge;
+				if (!Def.HingeAxis.IsNearlyZero())
+				{
+					++Out.PhysHingeWithAxis;
 				}
 			}
 		}
@@ -146,6 +170,30 @@ bool FElysiumTutorialEntsTest::RunTest(const FString&)
 	}
 	AddInfo(FString::Printf(TEXT("sp_tutorial_1 prop_dynamic: %d (%d with model_mesh)"),
 		Survey.PropDynamic, Survey.PropDynamicWithMesh));
+
+	// 8.4 — physics props/hinges. prop_physics/phys_hinge register; a prop_physics record carries a
+	// decoded model_mesh + a `.hulls` collision sidecar (single or decomposed), and phys_hinge carries
+	// the pre-converted hinge_axis. Guarded on presence so the tier holds on any current export.
+	TestNotNull(TEXT("prop_physics registered"), Reg.Find(FName(TEXT("prop_physics"))));
+	TestNotNull(TEXT("phys_hinge registered"), Reg.Find(FName(TEXT("phys_hinge"))));
+	if (Survey.PropPhysics > 0)
+	{
+		TestTrue(TEXT("prop_physics records carry a model_mesh"), Survey.PropPhysicsWithMesh > 0);
+		if (!Survey.AnyPhysStem.IsEmpty())
+		{
+			const FString Dir = FElysiumContentPaths::MapPropsDir(TEXT("sp_tutorial_1"));
+			TestTrue(TEXT("a prop_physics model_mesh resolves to an OBJ on disk"),
+				IFileManager::Get().FileExists(*(Dir / (Survey.AnyPhysStem + TEXT(".obj")))));
+			TestTrue(TEXT("a prop_physics model carries a .hulls collision sidecar"),
+				IFileManager::Get().FileExists(*(Dir / (Survey.AnyPhysStem + TEXT(".hulls")))));
+		}
+	}
+	if (Survey.PhysHinge > 0)
+	{
+		TestTrue(TEXT("phys_hinge records carry a pre-converted hinge_axis"), Survey.PhysHingeWithAxis > 0);
+	}
+	AddInfo(FString::Printf(TEXT("sp_tutorial_1 prop_physics: %d (%d with model_mesh); phys_hinge: %d (%d with axis)"),
+		Survey.PropPhysics, Survey.PropPhysicsWithMesh, Survey.PhysHinge, Survey.PhysHingeWithAxis));
 
 	return true;
 }

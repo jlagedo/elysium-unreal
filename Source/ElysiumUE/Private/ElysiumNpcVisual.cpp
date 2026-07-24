@@ -34,7 +34,14 @@ namespace ElysiumNpcVisual
 			return nullptr;
 		}
 
+		// Skip skin joints that don't resolve in the skeleton's bone map instead of aborting the whole
+		// mesh. Some VtMB MDL->glTF exports reference a joint index the skeleton doesn't carry (e.g.
+		// regular_cop bone 7, prophet bone 59); without this glTFRuntime returns null AND leaves a
+		// half-built USkeletalMesh whose trailing FSkelMeshRenderSections are never constructed — the
+		// next GC (a map switch) then faults releasing garbage RHI pointers in ~FDuplicatedVerticesBuffer.
+		// Dropping the unmapped influence rebinds those verts to their next valid bone (weights re-normalized).
 		FglTFRuntimeSkeletalMeshConfig SkeletalMeshConfig;
+		SkeletalMeshConfig.bIgnoreMissingBones = true;
 		USkeletalMesh* Mesh = Asset->LoadSkeletalMesh(0, 0, SkeletalMeshConfig);
 		if (Mesh == nullptr)
 		{

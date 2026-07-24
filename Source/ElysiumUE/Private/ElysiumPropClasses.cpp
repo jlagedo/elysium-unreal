@@ -21,6 +21,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/Paths.h"
+#include "PhysicsEngine/PhysicsConstraintComponent.h"
 
 #include <type_traits>
 
@@ -33,6 +34,15 @@ static TAutoConsoleVariable<int32> CVarPropBodies(
 	TEXT("elysium.PropBodies"),
 	1,
 	TEXT("Stand dynamic-prop static-mesh bodies at their placements at map load (1, default) or skip them (0)."),
+	ECVF_Default);
+
+// A/B toggle for prop_physics simulation (8.4). 1 (default) simulates the body as a Chaos rigid
+// body; 0 leaves it standing as a static, non-solid mesh (visual parity, like a prop_dynamic), so
+// a map can be compared with and without physics. Read in the leaf's Spawn — takes effect next load.
+static TAutoConsoleVariable<int32> CVarPhysicsProps(
+	TEXT("elysium.PhysicsProps"),
+	1,
+	TEXT("Simulate prop_physics bodies as Chaos rigid bodies (1, default) or stand them static/non-solid (0)."),
 	ECVF_Default);
 
 namespace
@@ -206,9 +216,307 @@ private:
 	}
 };
 
+// ============================================================================================
+// FElysiumPhysProp — the `prop_physics` leaf: a Chaos rigid body. Stands the same decoded mesh as
+// a dynamic prop but cooked with convex collision (the 8.4 `.hulls` decomposition) and simulating.
+// Faithful I/O surface (RE'd from CPhysicsProp/CBreakableProp datamaps, decisions.md 2026-07-24):
+// `Wake` wakes the body; `Break` hides it + fires OnBreak (no gib system — the OnBreakLevel1..8 chain
+// stays undriven); `Skin`/`SetSkin`/`FadeToSkin`/`SetSkinFadeTime` are skin stubs (skin 0 only
+// exported, as 8.3). VtMB's prop has **no** EnableMotion/DisableMotion/Sleep — those don't exist here.
+// ============================================================================================
+
+class FElysiumPhysProp final : public FElysiumEntity
+{
+public:
+	UStaticMeshComponent* Visual = nullptr;   // the simulating body, or null (gated off / decode failed)
+	bool  bBroken = false;
+	int32 Skin = 0;
+	bool  bSimulating = false;                // elysium.PhysicsProps decided sim on at spawn
+
+	virtual void Spawn() override
+	{
+		BuildBody();
+	}
+
+	// A constraint (phys_hinge) attaches to the simulating body, not the brush body.
+	virtual UPrimitiveComponent* GetAttachBody() const override { return Visual; }
+
+	virtual void OnDormancyChanged() override
+	{
+		FElysiumEntity::OnDormancyChanged();
+		GateBody();
+	}
+
+	// SetOrigin/SetAngles from a script teleport the body (no sweep — a simulating body is moved
+	// directly, then physics resumes from the new pose).
+	virtual void OnRuntimeTransformChanged() override
+	{
+		FElysiumEntity::OnRuntimeTransformChanged();
+		if (Visual)
+		{
+			Visual->SetWorldLocationAndRotation(Origin, FQuat(FRotator(0.0f, -Angles.Y, 0.0f)), /*bSweep=*/false);
+		}
+	}
+
+	virtual void OnRuntimeModelChanged() override
+	{
+		if (Visual)
+		{
+			Visual->DestroyComponent();
+			Visual = nullptr;
+		}
+		BuildBody();
+	}
+
+	void InputWake(const FElysiumInputArgs&)
+	{
+		if (Visual && bSimulating)
+		{
+			Visual->WakeAllRigidBodies();
+		}
+	}
+
+	// Break: drop the prop (hide + no collision + stop simulating) and fire OnBreak. Idempotent.
+	// Source spawns gibs and fires the OnBreakLevel* chain here; no gib system exists, so the body
+	// simply goes down (matches the 8.3 prop_dynamic Break).
+	void InputBreak(const FElysiumInputArgs& Args)
+	{
+		if (bBroken)
+		{
+			return;
+		}
+		bBroken = true;
+		GateBody();
+		static const FName OnBreak(TEXT("OnBreak"));
+		FireOutput(OnBreak, Args.Activator);
+		UE_LOG(LogElysiumProp, Verbose, TEXT("%s Break"), *DebugString());
+	}
+
+	void InputSkin(const FElysiumInputArgs& Args)
+	{
+		Skin = Args.Param.ToInt();
+		UE_LOG(LogElysiumProp, Log, TEXT("%s Skin %d — no alternate skin families exported (8.4 stub)"),
+			*DebugString(), Skin);
+	}
+
+	void InputSkinStub(const FElysiumInputArgs& Args, const TCHAR* Which)
+	{
+		UE_LOG(LogElysiumProp, Log, TEXT("%s %s — skin-only decode, no alternate skins (8.4 stub)"),
+			*DebugString(), Which);
+	}
+
+	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
+	{
+		Out.Emplace(TEXT("Model"), Model.IsEmpty() ? TEXT("(none)") : Model);
+		Out.Emplace(TEXT("Body"), Visual ? TEXT("physics mesh") : TEXT("(none)"));
+		Out.Emplace(TEXT("Simulating"), bSimulating && !bBroken && !IsInert() ? TEXT("yes") : TEXT("no"));
+		Out.Emplace(TEXT("Broken"), bBroken ? TEXT("yes") : TEXT("no"));
+	}
+
+private:
+	void BuildBody()
+	{
+		if (CVarPropBodies.GetValueOnGameThread() == 0 || !World || !Def || Def->ModelMesh.IsEmpty())
+		{
+			return;   // gated off, bare test world, or a record with no decoded prop mesh
+		}
+		AElysiumMapActor* Map = Cast<AElysiumMapActor>(World->GetOwnerActor());
+		if (!Map)
+		{
+			return;
+		}
+		Visual = Map->BuildPhysPropVisual(Def->ModelMesh, Def->Origin, Def->ModelQuat);
+		if (!Visual)
+		{
+			return;
+		}
+		World->RegisterPropBody(Visual);
+
+		// Simulate (or stand static under the A/B toggle). override_mass > 0 overrides the density-
+		// computed mass; -1 (the common case) keeps the computed mass.
+		bSimulating = CVarPhysicsProps.GetValueOnGameThread() != 0;
+		if (bSimulating)
+		{
+			const float OverrideMass = FCString::Atof(*Def->Keys.FindRef(TEXT("override_mass")));
+			if (OverrideMass > 0.0f)
+			{
+				Visual->SetMassOverrideInKg(NAME_None, OverrideMass, true);
+			}
+			Visual->SetSimulatePhysics(true);
+		}
+		else
+		{
+			Visual->SetCollisionEnabled(ECollisionEnabled::NoCollision);   // static, non-solid parity
+		}
+
+		if (IsInert() || bBroken)
+		{
+			GateBody();   // born hidden (start_hidden / a Spawn()-time Kill)
+		}
+	}
+
+	// Hidden/broken → undrawn, non-colliding, not simulating. Live → restore draw + (if enabled)
+	// simulation. Mirrors the whole-entity dormancy switch onto the physics body.
+	void GateBody()
+	{
+		if (!Visual)
+		{
+			return;
+		}
+		const bool bDown = IsInert() || bBroken;
+		Visual->SetVisibility(!bDown);
+		if (bDown)
+		{
+			Visual->SetSimulatePhysics(false);
+			Visual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		}
+		else if (bSimulating)
+		{
+			Visual->SetCollisionProfileName(TEXT("PhysicsActor"));
+			Visual->SetSimulatePhysics(true);
+		}
+	}
+};
+
+// ============================================================================================
+// FElysiumPhysHinge — the `phys_hinge` leaf: a Chaos hinge constraint (one free rotational DOF)
+// between attach1's body and attach2's (or the world). Bodiless. RE'd from CPhysHinge/CPhysConstraint
+// (decisions.md 2026-07-24): fields attach1/attach2/forcelimit/torquelimit/hingefriction/hingeaxis;
+// inputs TurnOn/TurnOff/Break; output OnBreak. The axis is the exporter's pre-converted Def->HingeAxis.
+// ============================================================================================
+
+class FElysiumPhysHinge final : public FElysiumEntity
+{
+public:
+	UPhysicsConstraintComponent* Constraint = nullptr;
+
+	// Second-phase init (both attached bodies must already exist — see FElysiumEntity::PostSpawn).
+	virtual void PostSpawn() override
+	{
+		if (!World || !Def)
+		{
+			return;
+		}
+		AElysiumMapActor* Map = Cast<AElysiumMapActor>(World->GetOwnerActor());
+		USceneComponent* Root = Map ? Map->GetRootComponent() : nullptr;
+		if (!Root)
+		{
+			return;
+		}
+
+		UPrimitiveComponent* Body1 = ResolveBody(TEXT("attach1"));
+		UPrimitiveComponent* Body2 = ResolveBody(TEXT("attach2"));
+		if (!Body1 && !Body2)
+		{
+			UE_LOG(LogElysiumProp, Log, TEXT("%s: no attach body resolved — constraint skipped"), *DebugString());
+			return;
+		}
+
+		FVector Axis = Def->HingeAxis;
+		if (!Axis.Normalize())
+		{
+			Axis = FVector::UpVector;   // degenerate / absent axis → world Z
+		}
+
+		Constraint = NewObject<UPhysicsConstraintComponent>(Map);
+		Constraint->SetupAttachment(Root);
+		// The constraint's local +X is the twist axis; orient the frame so it lies along the hinge axis.
+		// The map actor sits at world origin, so relative == world for these Unreal-space values.
+		Constraint->SetRelativeLocationAndRotation(Def->Origin, FRotationMatrix::MakeFromX(Axis).ToQuat());
+		Constraint->RegisterComponent();
+		Map->AddInstanceComponent(Constraint);
+
+		ConfigureAsHinge();
+		Constraint->SetConstrainedComponents(Body1, NAME_None, Body2, NAME_None);
+		World->RegisterConstraintBody(Constraint);
+		UE_LOG(LogElysiumProp, Verbose, TEXT("%s hinge: %s <-> %s"), *DebugString(),
+			Body1 ? TEXT("attach1") : TEXT("world"), Body2 ? TEXT("attach2") : TEXT("world"));
+	}
+
+	// TurnOff/TurnOn enable-disable the constraint; Break is permanent + fires OnBreak.
+	void InputTurnOff(const FElysiumInputArgs&) { if (Constraint) { Constraint->BreakConstraint(); } }
+	void InputTurnOn(const FElysiumInputArgs&)  { ReinitConstraint(); }
+
+	void InputBreak(const FElysiumInputArgs& Args)
+	{
+		if (Constraint)
+		{
+			Constraint->BreakConstraint();
+		}
+		static const FName OnBreak(TEXT("OnBreak"));
+		FireOutput(OnBreak, Args.Activator);
+	}
+
+	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
+	{
+		Out.Emplace(TEXT("attach1"), Def ? Def->Keys.FindRef(TEXT("attach1")) : FString());
+		Out.Emplace(TEXT("attach2"), Def ? Def->Keys.FindRef(TEXT("attach2")) : FString());
+		Out.Emplace(TEXT("Axis"), Def ? Def->HingeAxis.ToString() : FString());
+		Out.Emplace(TEXT("Constraint"), Constraint ? TEXT("live") : TEXT("(none)"));
+	}
+
+private:
+	UPrimitiveComponent* ResolveBody(const TCHAR* Key)
+	{
+		const FString Name = Def->Keys.FindRef(Key);
+		if (Name.IsEmpty())
+		{
+			return nullptr;   // empty attach → the world frame
+		}
+		FElysiumEntity* Found = World->FindByName(Name);
+		return Found ? Found->GetAttachBody() : nullptr;
+	}
+
+	void ConfigureAsHinge()
+	{
+		// One free rotational DOF about the twist axis; everything else locked.
+		Constraint->SetLinearXLimit(LCM_Locked, 0.0f);
+		Constraint->SetLinearYLimit(LCM_Locked, 0.0f);
+		Constraint->SetLinearZLimit(LCM_Locked, 0.0f);
+		Constraint->SetAngularSwing1Limit(EAngularConstraintMotion::ACM_Locked, 0.0f);
+		Constraint->SetAngularSwing2Limit(EAngularConstraintMotion::ACM_Locked, 0.0f);
+		Constraint->SetAngularTwistLimit(EAngularConstraintMotion::ACM_Free, 0.0f);
+
+		// forcelimit/torquelimit = 0 → unbreakable (Source semantics); > 0 → break threshold.
+		const float ForceLimit = FCString::Atof(*Def->Keys.FindRef(TEXT("forcelimit")));
+		const float TorqueLimit = FCString::Atof(*Def->Keys.FindRef(TEXT("torquelimit")));
+		if (ForceLimit > 0.0f)
+		{
+			Constraint->SetLinearBreakable(true, ForceLimit);
+		}
+		if (TorqueLimit > 0.0f)
+		{
+			Constraint->SetAngularBreakable(true, TorqueLimit);
+		}
+
+		// hingefriction → resist rotation via a zero-velocity twist drive damped by the friction.
+		const float HingeFric = FCString::Atof(*Def->Keys.FindRef(TEXT("hingefriction")));
+		if (HingeFric > 0.0f)
+		{
+			Constraint->SetAngularVelocityDriveTwistAndSwing(true, false);
+			Constraint->SetAngularDriveParams(0.0f, HingeFric, 0.0f);
+		}
+	}
+
+	// Re-wire a TurnOff'd (broken) constraint from the stored attach targets.
+	void ReinitConstraint()
+	{
+		if (!Constraint)
+		{
+			return;
+		}
+		UPrimitiveComponent* Body1 = ResolveBody(TEXT("attach1"));
+		UPrimitiveComponent* Body2 = ResolveBody(TEXT("attach2"));
+		ConfigureAsHinge();
+		Constraint->SetConstrainedComponents(Body1, NAME_None, Body2, NAME_None);
+	}
+};
+
 // --- Registration -----------------------------------------------------------------------------
 
 static TUniquePtr<FElysiumEntity> MakeProp() { return MakeUnique<FElysiumProp>(); }
+static TUniquePtr<FElysiumEntity> MakePhysProp() { return MakeUnique<FElysiumPhysProp>(); }
+static TUniquePtr<FElysiumEntity> MakePhysHinge() { return MakeUnique<FElysiumPhysHinge>(); }
 
 static void BuildPropClass(FElysiumClassDesc& D)
 {
@@ -224,8 +532,39 @@ static void BuildPropClass(FElysiumClassDesc& D)
 	AddPropField(D, TEXT("skin"), &FElysiumProp::Skin);
 }
 
-// One shared leaf per dynamic-prop classname (class-for-class registration, so the registry's exact
-// case-folded Find resolves each). prop_physics (8.4) and the +use prop_* family (4.10/8.8) are not here.
+// prop_physics (8.4): the RE'd CPhysicsProp/CBreakableProp input surface. Wake + Break are real;
+// the skin inputs are stubs (skin 0 only exported); no EnableMotion/DisableMotion/Sleep exist in VtMB.
+static void BuildPhysPropClass(FElysiumClassDesc& D)
+{
+	D.Input(TEXT("Wake"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumPhysProp&>(E).InputWake(Args); });
+	D.Input(TEXT("Break"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumPhysProp&>(E).InputBreak(Args); });
+	D.Input(TEXT("Skin"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumPhysProp&>(E).InputSkin(Args); });
+	D.Input(TEXT("SetSkin"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumPhysProp&>(E).InputSkin(Args); });
+	D.Input(TEXT("FadeToSkin"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumPhysProp&>(E).InputSkinStub(Args, TEXT("FadeToSkin")); });
+	D.Input(TEXT("SetSkinFadeTime"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumPhysProp&>(E).InputSkinStub(Args, TEXT("SetSkinFadeTime")); });
+
+	AddPropField(D, TEXT("skin"), &FElysiumPhysProp::Skin);
+}
+
+// phys_hinge (8.4): the RE'd CPhysHinge/CPhysConstraint input surface.
+static void BuildPhysHingeClass(FElysiumClassDesc& D)
+{
+	D.Input(TEXT("TurnOn"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumPhysHinge&>(E).InputTurnOn(Args); });
+	D.Input(TEXT("TurnOff"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumPhysHinge&>(E).InputTurnOff(Args); });
+	D.Input(TEXT("Break"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumPhysHinge&>(E).InputBreak(Args); });
+}
+
+// One shared leaf per classname (class-for-class registration, so the registry's exact case-folded
+// Find resolves each). The +use prop_* family (4.10/8.8) is not here.
 struct FElysiumPropRegistrar
 {
 	FElysiumPropRegistrar()
@@ -238,6 +577,8 @@ struct FElysiumPropRegistrar
 		{
 			BuildPropClass(Reg.Register(FName(Name), ElysiumBaseClassName(), &MakeProp));
 		}
+		BuildPhysPropClass(Reg.Register(FName(TEXT("prop_physics")), ElysiumBaseClassName(), &MakePhysProp));
+		BuildPhysHingeClass(Reg.Register(FName(TEXT("phys_hinge")), ElysiumBaseClassName(), &MakePhysHinge));
 	}
 };
 

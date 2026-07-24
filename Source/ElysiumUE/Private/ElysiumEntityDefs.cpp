@@ -187,6 +187,14 @@ bool FElysiumEntityDefs::Parse(const FString& EntsPath, FElysiumEntityDefs& Out)
 			Def.ModelQuat = ParseQuat(*QuatArr);
 		}
 
+		// Constraint axis (8.4): the pre-converted, normalized Unreal-space hinge axis, read
+		// verbatim like origin. Present only on phys_* constraints carrying `hingeaxis`.
+		const TArray<TSharedPtr<FJsonValue>>* AxisArr = nullptr;
+		if (E->TryGetArrayField(TEXT("hinge_axis"), AxisArr))
+		{
+			Def.HingeAxis = ParseVec3(*AxisArr);
+		}
+
 		Out.Defs.Add(MoveTemp(Def));
 	}
 

@@ -20,6 +20,7 @@ import numpy as np
 import install, vmt
 import bsp as B
 import mdl as MDL
+import prop_collision
 import retex_dds
 from tex_to_png import decode as decode_texture, decode_cubemap
 from bsp import (read_lump, source_to_unreal, source_dir_to_unreal, source_angles_to_unreal_quat,
@@ -309,6 +310,16 @@ def write_entities(data, out_dir, base, idx, propdir, tex_cache, valid):
         so = [float(x) for x in og] if len(og) == 3 else [0.0, 0.0, 0.0]
         e["origin"] = [round(float(c), 5) for c in source_to_unreal(*so)]
 
+        # phys_hinge (and the phys_* constraint family): `hingeaxis` is a second Source point;
+        # the hinge axis is the line origin->hingeaxis. Pre-convert its *direction* to Unreal
+        # here (runtime reads verbatim, never converts) — source_dir_to_unreal of the delta,
+        # normalized. Coincident points -> world Z. (roadmap 8.4; keys are raw Source.)
+        ha = keys.get("hingeaxis", "").split()
+        if len(ha) == 3 and len(og) == 3:
+            d = np.array(source_dir_to_unreal(float(ha[0]) - so[0], float(ha[1]) - so[1], float(ha[2]) - so[2]))
+            nrm = float(np.linalg.norm(d))
+            e["hinge_axis"] = [round(float(c), 6) for c in (d / nrm)] if nrm > 1e-6 else [0.0, 0.0, 1.0]
+
         mdl = keys.get("model", "")
         if mdl.startswith("*"):
             mi = int(mdl[1:])
@@ -352,10 +363,13 @@ def write_entities(data, out_dir, base, idx, propdir, tex_cache, valid):
             model_paths.add(mk); ent_model_of[i] = mk
     resolved, pok, pmiss = decode_prop_models(idx, model_paths, propdir, tex_cache, valid)
     n_prop = 0
+    phys_stems = set()                               # 8.4: models a prop_physics places (get .hulls)
     for i, mk in ent_model_of.items():
         safe = resolved.get(mk)
         if safe:
             out[i]["model_mesh"] = safe; n_prop += 1
+            if out[i]["classname"].lower() == "prop_physics":
+                phys_stems.add(safe)
             # Pre-convert the entity's Source QAngle to an Unreal rotation quaternion here (the
             # same source_angles_to_unreal_quat the .props path uses), so the runtime reads it 1:1
             # with no coordinate math — origin is already Unreal-space, this makes orientation so
@@ -363,6 +377,10 @@ def write_entities(data, out_dir, base, idx, propdir, tex_cache, valid):
             ang = out[i]["keys"].get("angles", "").split()
             pyr = [float(x) for x in ang] if len(ang) == 3 else [0.0, 0.0, 0.0]
             out[i]["model_quat"] = [round(float(c), 6) for c in source_angles_to_unreal_quat(*pyr)]
+
+    # 8.4: convex-decompose each prop_physics model into a `<stem>.hulls` sidecar (same
+    # format as the world collider), so the runtime cooks a Chaos body from convex parts.
+    prop_collision.write_physics_hulls(propdir, phys_stems)
 
     path = os.path.join(out_dir, base + ".ents")
     with open(path, "w") as f:

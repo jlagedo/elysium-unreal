@@ -171,6 +171,11 @@ public:
 	// registry tables don't carry because they are internal state, not keyvalues. Base emits nothing.
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const {}
 
+	// The primitive body a physics constraint (phys_hinge) should attach to (8.4). Base returns the
+	// brush body (a movable brush entity can be constrained); a physics prop overrides to its
+	// simulating static-mesh body. Null = nothing to constrain (attach to world / skip).
+	virtual class UPrimitiveComponent* GetAttachBody() const;
+
 	// No-RTTI downcast to the door base (UE builds compile without RTTI, so no dynamic_cast). Base
 	// returns null; FElysiumDoorBase overrides to return itself, so a resolved `linked_door` name can
 	// be recognised as a door without reflection.
@@ -182,6 +187,12 @@ public:
 	// this, then Spawn(); a leaf class overrides Spawn() for its own wiring.
 	void Construct(const FElysiumEntityDef& InDef, FElysiumEntityHandle InHandle, const FElysiumClassDesc& InClass);
 	virtual void Spawn() {}
+
+	// Second-phase init, run after EVERY entity on the map has Spawn()'d (Source's Activate()
+	// pass). A constraint (phys_hinge) resolves and wires its attached bodies here, because they
+	// must already exist — a Spawn()-time resolve would race the def order. Base no-op.
+	virtual void PostSpawn() {}
+
 	virtual void Think() {}
 
 	// Body hook (R6): mirror dormancy onto the attached body's collision. No-op while an entity

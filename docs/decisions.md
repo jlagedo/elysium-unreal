@@ -6,6 +6,45 @@ trigger. A behavioural divergence from retail lands here carrying both the faith
 chosen behaviour (`remaster-direction.md`'s governing rule). Entries are never rewritten —
 append a correction as a new entry.
 
+- **2026-07-24** — **8.4: physics props/hinges are Chaos bodies + constraints; the RE'd I/O surface
+  diverges from later Source; collision is convex-decomposed offline.** Five calls landed with the
+  `prop_physics` / `phys_hinge` runtime. **(1) RE divergence — VtMB has `Wake`, not `EnableMotion`/
+  `DisableMotion`/`Sleep`.** Datamaps recovered from `vampire.dll` (CPhysicsProp vtable `0x10474c44`,
+  CPhysHinge `0x10447a54`; `DumpGrep`/`DumpDatamap` over the persisted `vtmb` Ghidra project):
+  `CPhysicsProp`/`CBreakableProp` exposes **`Wake`** (`InputWake`), `Break`, and the skin inputs
+  (`Skin`/`SetSkin`/`FadeToSkin`/`SetSkinFadeTime`) — **`EnableMotion`/`DisableMotion`/`OnMotionEnabled`
+  do not exist** (added in later Source), and **no `InputSleep` symbol exists** in the binary (every
+  `Sleep` hit is NPC AI). So the leaf exposes `Wake` only; motion is not script-toggled. Outputs: `OnBreak`
+  (fired), plus the `OnBreakLevel1..8`/`OnBreakLastLevel`/`OnBreakConstraint` gib chain (declared by the
+  datamap, **undriven** — no gib decomposition system). `CPhysHinge`/`CPhysConstraint`: fields
+  `attach1`/`attach2`/`forcelimit`/`torquelimit`/`hingefriction`/`hingeaxis`; inputs `TurnOn`/`TurnOff`/
+  `Break`; output `OnBreak`. **(2) Convex-from-render-mesh is decomposed offline (owner call, opted for
+  the multi-hull path over the single-hull spec baseline).** A single whole-model hull is coarse for
+  concave props (chairs, furniture — `chairoffice`→27 hulls, `retro_chair`→32, `trashgarage`→30 vs a
+  `bottle`→1 once decomposed). `prop_collision.py` runs **CoACD** (approximate convex decomposition,
+  optional dep) over each `prop_physics` model's decoded OBJ and emits a `props/<stem>.hulls` sidecar in
+  the **exact world-collider format** (one hull per line, flat Unreal-cm verts); the runtime cooks one
+  `FKConvexElem` per line. Deterministic, free at runtime (the exporter-side-merge pattern). CoACD absent
+  or failing → a single whole-model hull line (the baseline spec), so the pipeline never hard-fails. **(3)
+  `hinge_axis` converts at export.** `phys_hinge.hingeaxis` is a second raw-Source point left unconverted
+  in `keys`; `UE_bsp_to_scene` now emits `hinge_axis` = normalized `source_dir_to_unreal(origin→hingeaxis)`,
+  read verbatim (the "convert at export, never at runtime" rule) — the pivot is the already-converted
+  top-level origin. **(4) A second `PostSpawn()` pass (Source's `Activate()`).** A constraint must resolve
+  its `attach1`/`attach2` bodies *after* every entity has `Spawn()`'d, so `FElysiumEntityWorld::Load`
+  runs a `PostSpawn()` pass after the spawn loop; the hinge builds a `UPhysicsConstraintComponent` there
+  (twist axis = `hinge_axis`, swings/linear locked → one rotational DOF; `forcelimit`/`torquelimit` = 0 →
+  unbreakable). **(5) Per-entity simulating body, A/B-gated.** `prop_physics` stands a per-entity
+  `UStaticMeshComponent` (convex-cooked, `PhysicsActor` profile) via `BuildPhysPropVisual`, cached under a
+  `#phys` key so a model shared with a non-solid `prop_dynamic` doesn't clash; `SetSimulatePhysics` +
+  `override_mass` (>0 overrides, −1 keeps computed). New `elysium.PhysicsProps` (default 1) A/Bs
+  simulation — 0 stands the body static/non-solid (visual parity). World `.hulls`/`.dispcol` colliders are
+  `BlockAll`, so bodies land on the floor. **Deferred (recorded):** physics-driven constraint break firing
+  `OnBreak` (the `OnConstraintBroken` delegate needs a UObject; the plain-C++ leaf fires `OnBreak` only on
+  the explicit `Break`/`TurnOff` input); the gib `OnBreakLevel*` chain; runtime multi-convex for later maps
+  if concave furniture becomes gameplay-relevant (the offline path already covers it). Verified: `build.bat`
+  green; re-export emits `hinge_axis` + decomposed `.hulls`; `test.bat` Content/Substrate green. The
+  Chaos settle/push feel + hinge swing await an owner in-game play test (like 4.1's mover note — physics
+  feel is the one thing headless coverage can't judge).
 - **2026-07-24** — **8.3: dynamic props render per-entity; orientation converts at export; Skin/anim are
   deferred stubs.** Three owner calls landed with the `prop_dynamic` render path. **(1) Per-entity
   `UStaticMeshComponent`, not shared ISMs.** The roadmap text ("the ISM path grows per-instance
@@ -600,5 +639,22 @@ append a correction as a new entry.
   principle 6a; Options + risk-register entries added. Web-research pass confirmed the technique
   set (AI PBR-from-diffuse, de-lighting tools, ESRGAN game-remaster practice) and their caveats
   (guesswork needing curation; delighters tuned for photoscans, not hand-painted art).
+- **2026-07-24 (cont.)** — **NPC skeletal crash fixed** (map-switch GC fault in
+  `~FDuplicatedVerticesBuffer` → `FRHIResource::Release` on a garbage RHI pointer). Root cause: a few
+  VtMB `.mdl` skeletons carry **more than one parent-less bone** (`regular_cop` bones 0/1, `prophet`
+  bones 0/59), but `mdl_gltf._assemble_skinned` emitted only the first as the glTF scene +
+  `skin.skeleton` root. glTFRuntime builds its bone map by traversing from that single root down
+  `children`, so bones under any other root are absent from the map; a vertex weighted to one makes
+  `FillSkeletalMeshRenderData` bail mid-loop, and because it `SetNumUninitialized`s the render-section
+  array up front, the aborted build leaves a half-built `USkeletalMesh` whose trailing
+  `FSkelMeshRenderSection`s are never constructed — the next GC (a map switch) faults destructing them.
+  Three-layer fix: **(1) export** — `_assemble_skinned` unifies multiple roots under one synthetic
+  `__elysium_skeleton_root` node, appended after the mesh node so node-index==bone-index holds and left
+  out of `skin.joints` so `JOINTS_0` still maps 1:1; re-export drops the whole NPC set to 0/45 multi-root.
+  **(2) runtime** — `ElysiumNpcVisual::LoadMesh` sets `bIgnoreMissingBones=true`, so any future unmapped
+  bone degrades (weight rebinds to the next valid bone) instead of aborting the mesh. **(3) vendored
+  glTFRuntime** — `FillSkeletalMeshRenderData` constructs all render sections up front, so any early
+  return is crash-safe. `regular_cop`/`prophet` re-exported; the other 43 were already single-root. **8.2
+  glTFRuntime skeletal path confirmed.**
 - **Pending** — 5.5 level-script execution strategy (interpreter vs transpile vs CPython);
-  8.2 glTFRuntime confirmation for the skeletal path; 10.6 EnhancedInput migrate-or-remove.
+  10.6 EnhancedInput migrate-or-remove.

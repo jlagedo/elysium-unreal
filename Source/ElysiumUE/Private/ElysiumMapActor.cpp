@@ -486,6 +486,54 @@ UStaticMeshComponent* AElysiumMapActor::BuildPropVisual(const FString& Stem, con
 	return Comp;
 }
 
+UStaticMeshComponent* AElysiumMapActor::BuildPhysPropVisual(const FString& Stem, const FVector& Location, const FQuat& Rotation)
+{
+	USceneComponent* Root = GetRootComponent();
+	if (Stem.IsEmpty() || Root == nullptr)
+	{
+		return nullptr;
+	}
+
+	// Cache key distinct from the non-solid prop_dynamic mesh (BuildPropVisual) so a model placed
+	// by both a prop_dynamic (no collision) and a prop_physics (convex collision) gets one mesh each.
+	const FString CacheKey = Stem + TEXT("#phys");
+	const TObjectPtr<UStaticMesh>* Cached = PropMeshCache.Find(CacheKey);
+	UStaticMesh* Mesh = Cached ? Cached->Get() : nullptr;
+	if (Mesh == nullptr)
+	{
+		FElysiumObjModel Model;
+		if (!FElysiumObjModel::Parse(FElysiumContentPaths::MapPropsDir(MapName) / (Stem + TEXT(".obj")), Model))
+		{
+			UE_LOG(LogElysium, Warning, TEXT("BuildPhysPropVisual '%s': prop model parse failed"), *Stem);
+			return nullptr;
+		}
+		// Prefer the decomposed convex parts (8.4 exporter); absent, Build cooks a single whole-model
+		// hull — the baseline spec, coarser for concave shapes.
+		TArray<TArray<FVector>> Hulls;
+		const bool bHaveHulls = FElysiumStaticMeshBuilder::LoadConvexHulls(
+			FElysiumContentPaths::MapPropsDir(MapName) / (Stem + TEXT(".hulls")), Hulls);
+		Mesh = FElysiumStaticMeshBuilder::Build(Model, Model.Dir, /*bConvexCollision=*/true, this,
+			bHaveHulls ? &Hulls : nullptr);
+		if (Mesh == nullptr)
+		{
+			return nullptr;
+		}
+		PropMeshCache.Add(CacheKey, Mesh);
+	}
+
+	UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(this);
+	Comp->SetMobility(EComponentMobility::Movable);
+	Comp->SetStaticMesh(Mesh);
+	Comp->SetupAttachment(Root);
+	Comp->SetRelativeLocationAndRotation(Location, Rotation);
+	// Collide as a physics body (blocks the world's BlockAll hull colliders). Simulation, mass and
+	// the elysium.PhysicsProps gate are the leaf's call — the body stands here inert until it decides.
+	Comp->SetCollisionProfileName(TEXT("PhysicsActor"));
+	Comp->RegisterComponent();
+	AddInstanceComponent(Comp);
+	return Comp;
+}
+
 int32 AElysiumMapActor::BuildMeshFromObj(const FString& ObjPath, UProceduralMeshComponent* Mesh, bool bCollision)
 {
 	const FString Dir = FPaths::GetPath(ObjPath);

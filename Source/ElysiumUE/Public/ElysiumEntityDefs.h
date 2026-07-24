@@ -61,6 +61,12 @@ struct FElysiumEntityDef
 	FString ModelMesh;
 	FQuat ModelQuat = FQuat::Identity;
 
+	// Constraint axis (8.4 export → phys_hinge consumer). Present only on phys_* constraint
+	// entities carrying `hingeaxis`: the pre-converted, normalized Unreal-space hinge axis
+	// direction (source_dir_to_unreal of the origin→hingeaxis line, read verbatim). Zero vector
+	// = not a constraint / no axis (the leaf falls back to world Z).
+	FVector HingeAxis = FVector::ZeroVector;
+
 	TArray<FElysiumOutputDef> Outputs;
 
 	bool IsBrush() const { return Model != INDEX_NONE; }

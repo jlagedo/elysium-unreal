@@ -491,8 +491,19 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
   rotation reads the exporter's new `model_quat` verbatim (no runtime angle math). `elysium.PropBodies`
   A/Bs. *Verified:* tutorial loads all 78 `prop_dynamic` without crash, `test.bat` Content+Substrate
   green (a new prop content-assertion included), headless shots show them standing. *Deps:* 8.1, 1.3.
-- [ ] **8.4 Physics props** — `prop_physics` ×54 / `phys_hinge` ×12 as Chaos bodies +
-  constraints, convex from render mesh. *Deps:* 8.1.
+- [x] **8.4 Physics props** — `prop_physics` ×54 / `phys_hinge` ×12 as Chaos rigid bodies +
+  hinge constraints. Physics props stand a simulating per-entity `UStaticMeshComponent`
+  (`FElysiumPhysProp` → `BuildPhysPropVisual`, `PhysicsActor` profile, `override_mass`), collision
+  cooked from **offline convex decomposition** (`prop_collision.py`/CoACD → `props/<stem>.hulls`, the
+  world-collider format, one `FKConvexElem` per line; single-hull fallback when CoACD is absent).
+  `phys_hinge` (`FElysiumPhysHinge`) builds a `UPhysicsConstraintComponent` (twist on the exporter's
+  pre-converted `hinge_axis`, one rotational DOF) in a new `PostSpawn()`/Activate pass, wiring
+  `attach1`↔`attach2`/world. The RE'd VtMB I/O surface (Ghidra: `Wake`, **not**
+  EnableMotion/DisableMotion/Sleep; `TurnOn`/`TurnOff`/`Break`; `OnBreak`) is in `decisions.md`
+  (2026-07-24). `elysium.PhysicsProps` A/Bs simulation. *Verified:* `build.bat` + `test.bat`
+  Content/Substrate green (54 prop_physics / 12 phys_hinge assertions); re-export emits `hinge_axis`
+  + 18 decomposed `.hulls`; `sp_tutorial_1` loads with all bodies + hinges built, no crash. **Chaos
+  settle/push feel + hinge swing await an owner in-game play test** (like 4.1). *Deps:* 8.1.
 - [~] **8.5 NPC presence + `scripted_sequence` minimal** — the presence slice landed in **B3**
   (bodies at origin via `BuildNpcVisual`, `npc_maker` runtime spawn, dialog-gating inputs) and
   **PL4 is done** (per-NPC glbs + shared animation-bank glbs + `npc_manifest.json`).
