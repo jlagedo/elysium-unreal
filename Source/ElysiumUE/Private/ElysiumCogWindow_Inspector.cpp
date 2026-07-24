@@ -4,6 +4,7 @@
 
 #include "ElysiumBrushComponent.h"
 #include "ElysiumClassRegistry.h"
+#include "ElysiumCogStyle.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDebugSubsystem.h"
 #include "ElysiumEntityDefs.h"
@@ -134,11 +135,14 @@ namespace
 		}
 	};
 
+	// One hue per pick kind, so what is outlined is legible without reading the label. Kept inside the
+	// window's palette (blood / gold / absinthe) but at full saturation: these are drawn over the
+	// world, not over a panel, and they have to survive a dark scene and a bright one.
 	void PickColors(EElysiumPickKind Kind, bool bHover, ImU32& OutLine, ImU32& OutFill)
 	{
-		int32 R = 255, G = 150, B = 40;              // entity: orange
-		if (Kind == EElysiumPickKind::WorldSurface) { R = 255; G = 210; B = 70; }   // amber
-		if (Kind == EElysiumPickKind::PropInstance) { R = 80;  G = 220; B = 255; }  // cyan
+		int32 R = 235, G = 62, B = 60;               // entity: blood
+		if (Kind == EElysiumPickKind::WorldSurface) { R = 240; G = 195; B = 110; }  // world: gold
+		if (Kind == EElysiumPickKind::PropInstance) { R = 150; G = 220; B = 110; }  // prop: absinthe
 		OutLine = IM_COL32(R, G, B, bHover ? 140 : 255);
 		OutFill = IM_COL32(R, G, B, bHover ? 22 : 56);
 	}
@@ -207,7 +211,7 @@ void FElysiumCogWindow_Inspector::RenderHelp()
 		"Click-to-select inspector. Open the F1 menu and left-click anything in the world: the click "
 		"resolves to a brush/logic entity, a world surface, or a single prop instance, and the "
 		"selection is highlighted in place (translucent fill + outline + label). Right-click clears "
-		"it. The game is not paused — it keeps running under the cursor; stop it yourself from the "
+		"it. The game is not paused - it keeps running under the cursor; stop it yourself from the "
 		"Time Scale window if you want it still. Picking works with this window closed, so you can "
 		"click first and open the inspector after.\n\n"
 		"The pick is exact where physics cannot be: the world render mesh carries no collision under "
@@ -215,7 +219,7 @@ void FElysiumCogWindow_Inspector::RenderHelp()
 		"model, so surfaces and props are ray-cast on the CPU against their real triangles. A world "
 		"pick highlights the whole BSP face, not just the triangle under the cursor.\n\n"
 		"Below: the selected surface (component, mesh, material + textures, section/instance/"
-		"triangle) and, when the pick is an entity, its full detail — identity, chain-walked fields, "
+		"triangle) and, when the pick is an entity, its full detail - identity, chain-walked fields, "
 		"raw .ents keyvalues, and the 7-field outputs. Fire any input by hand (it goes through the "
 		"real event queue, so it shows up in the Event Queue window and is single-steppable); the "
 		"In-world debug row toggles the overhead text / bounds box / fading I/O message overlays and "
@@ -346,7 +350,7 @@ void FElysiumCogWindow_Inspector::RenderPickDetails(const FElysiumPickResult& In
 		FElysiumEntityWorld* EW = GetEntityWorld();
 		const bool bHaveEntity = EW != nullptr && EW->Resolve(GetSelection()) != nullptr;
 		ImGui::TextDisabled(bHaveEntity
-			? "Nothing picked — the entity below is the last selection (kept until you pick another)."
+			? "Nothing picked - the entity below is the last selection (kept until you pick another)."
 			: "Nothing picked. Open F1 and left-click something in the world.");
 		return;
 	}
@@ -355,28 +359,36 @@ void FElysiumCogWindow_Inspector::RenderPickDetails(const FElysiumPickResult& In
 	const char* Kind = InPick.Kind == EElysiumPickKind::Entity
 		? (InPick.bHasComponent ? "entity (brush body)" : "entity (bodiless)")
 		: PickKindName(InPick.Kind);
-	ImGui::Text("kind       %s%s", Kind, InPick.bViaGizmo ? "  via gizmo marker" : "");
-	ImGui::Text("what       %s", COG_TCHAR_TO_CHAR(*InPick.Label));
-	ImGui::Text("component  %s (%s)",
-		Comp ? COG_TCHAR_TO_CHAR(*Comp->GetName()) : "(none)",
-		Comp ? COG_TCHAR_TO_CHAR(*Comp->GetClass()->GetName()) : "-");
-	ImGui::Text("distance   %.2f m", InPick.Distance / 100.0);
-	ImGui::Text("hit point  %s", COG_TCHAR_TO_CHAR(*InPick.HitPoint.ToCompactString()));
+
+	// A real value column rather than spaces baked into the format string — the font is proportional,
+	// so "kind       " and "hit point  " do not end at the same X.
+	const float ValueColumn = GetDpiScale() * 84.0f;
+	auto Row = [ValueColumn](const char* Label, const FString& Value)
+	{
+		ElysiumCogStyle::LabelValue(Label, COG_TCHAR_TO_CHAR(*Value), ValueColumn);
+	};
+
+	Row("kind", FString::Printf(TEXT("%hs%s"), Kind, InPick.bViaGizmo ? TEXT("  via gizmo marker") : TEXT("")));
+	Row("what", InPick.Label);
+	Row("component", Comp
+		? FString::Printf(TEXT("%s (%s)"), *Comp->GetName(), *Comp->GetClass()->GetName())
+		: FString(TEXT("(none)")));
+	Row("distance", FString::Printf(TEXT("%.2f m"), InPick.Distance / 100.0));
+	Row("hit point", InPick.HitPoint.ToCompactString());
 
 	switch (InPick.Kind)
 	{
 	case EElysiumPickKind::WorldSurface:
-		ImGui::Text("section    %d  (obj group '%s')", InPick.Section,
-			COG_TCHAR_TO_CHAR(*InPick.MaterialName));
-		ImGui::Text("triangle   %d", InPick.Triangle);
-		ImGui::Text("normal     %s", COG_TCHAR_TO_CHAR(*InPick.HitNormal.ToCompactString()));
+		Row("section", FString::Printf(TEXT("%d  (obj group '%s')"), InPick.Section, *InPick.MaterialName));
+		Row("triangle", FString::Printf(TEXT("%d"), InPick.Triangle));
+		Row("normal", InPick.HitNormal.ToCompactString());
 		break;
 
 	case EElysiumPickKind::PropInstance:
-		ImGui::Text("model      %s", COG_TCHAR_TO_CHAR(*InPick.ModelName));
-		ImGui::Text("instance   %d of %d", InPick.Instance,
-			Comp ? Cast<UInstancedStaticMeshComponent>(Comp)->GetInstanceCount() : 0);
-		ImGui::Text("triangle   %d", InPick.Triangle);
+		Row("model", InPick.ModelName);
+		Row("instance", FString::Printf(TEXT("%d of %d"), InPick.Instance,
+			Comp ? Cast<UInstancedStaticMeshComponent>(Comp)->GetInstanceCount() : 0));
+		Row("triangle", FString::Printf(TEXT("%d"), InPick.Triangle));
 		break;
 
 	default:
@@ -387,7 +399,7 @@ void FElysiumCogWindow_Inspector::RenderPickDetails(const FElysiumPickResult& In
 	// and the textures bound into it — "what am I looking at".
 	if (UMaterialInterface* Mat = InPick.Material.Get())
 	{
-		ImGui::Text("material   %s", COG_TCHAR_TO_CHAR(*Mat->GetName()));
+		Row("material", Mat->GetName());
 		TArray<FMaterialParameterInfo> Infos;
 		TArray<FGuid> Ids;
 		Mat->GetAllTextureParameterInfo(Infos, Ids);
@@ -404,8 +416,8 @@ void FElysiumCogWindow_Inspector::RenderPickDetails(const FElysiumPickResult& In
 	else if (InPick.Kind == EElysiumPickKind::Entity)
 	{
 		ImGui::TextDisabled(Comp != nullptr
-			? "    (brush body — collision only, nothing rendered)"
-			: "    (bodiless entity — the gizmo marker is its only representation)");
+			? "    (brush body - collision only, nothing rendered)"
+			: "    (bodiless entity - the gizmo marker is its only representation)");
 	}
 }
 
@@ -470,12 +482,12 @@ void FElysiumCogWindow_Inspector::RenderEntityDetails(FElysiumEntity& EntRef, FE
 	UElysiumEntityDebugSubsystem* Dbg = GameWorld ? GameWorld->GetSubsystem<UElysiumEntityDebugSubsystem>() : nullptr;
 
 	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+	// Wide enough for "locked_icon" / "Reticle now" / "Next think", and overlap-safe for whatever
+	// key a leaf class returns from GetDebugState.
 	const float ValueColumn = GetDpiScale() * 110.0f;
 	auto Row = [ValueColumn](const char* Label, const FString& Value)
 	{
-		ImGui::TextUnformatted(Label);
-		ImGui::SameLine(ValueColumn);
-		ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*Value));
+		ElysiumCogStyle::LabelValue(Label, COG_TCHAR_TO_CHAR(*Value), ValueColumn);
 	};
 
 	// --- Identity --------------------------------------------------------------------------
@@ -484,11 +496,15 @@ void FElysiumCogWindow_Inspector::RenderEntityDetails(FElysiumEntity& EntRef, FE
 	Row("Targetname", Ent->TargetName.IsEmpty() ? TEXT("(none)") : Ent->TargetName);
 	Row("Class", FString::Printf(TEXT("%s%s"), *Ent->Def->Classname,
 		Ent->IsRecordOnly() ? TEXT("  (inert record)") : TEXT("")));
-	Row("State", Ent->IsDead() ? TEXT("dead") : Ent->IsHidden() ? TEXT("hidden") : TEXT("live"));
+	// Same colour key as the Entities browser's State column: dead / hidden / live.
+	const ImVec4& StateColor = Ent->IsDead() ? ElysiumCogStyle::ColError
+		: Ent->IsHidden() ? ElysiumCogStyle::ColWarn : ElysiumCogStyle::ColOk;
+	ElysiumCogStyle::LabelValue("State",
+		Ent->IsDead() ? "dead" : Ent->IsHidden() ? "hidden" : "live", ValueColumn, &StateColor);
 	Row("Body", Ent->Body ? TEXT("brush body") : TEXT("(none)"));
 	Row("Next think", Ent->NextThink == ELYSIUM_NEVER_THINK
 		? FString(TEXT("never")) : FString::Printf(TEXT("%.2f s"), Ent->NextThink));
-	Row("Origin", Ent->Def->Origin.ToString());
+	Row("Origin", Ent->Def->Origin.ToCompactString());   // same shape as the pick's "hit point"
 
 	// --- +use (P4.4) — the context-icon reticle state. Shown for anything the player can look-and-use
 	// or that carries an icon: whether the +use trace is armed on it, the use_icon/locked_icon it
@@ -629,7 +645,7 @@ void FElysiumCogWindow_Inspector::RenderEntityDetails(FElysiumEntity& EntRef, FE
 		}
 		if (bHideDefaultFields && FieldsSet == 0)
 		{
-			ImGui::TextDisabled("Every inherited field is at its default — this record's data is "
+			ImGui::TextDisabled("Every inherited field is at its default - this record's data is "
 				"in Keyvalues below.");
 		}
 	}
@@ -683,37 +699,49 @@ void FElysiumCogWindow_Inspector::RenderEntityDetails(FElysiumEntity& EntRef, FE
 		{
 			ImGui::TextDisabled("No outputs.");
 		}
-		else if (ImGui::BeginTable("##Outputs", 7,
-			ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollX |
-			ImGuiTableFlags_SizingFixedFit))
+		else
 		{
-			ImGui::TableSetupColumn("Output");
-			ImGui::TableSetupColumn("Target");
-			ImGui::TableSetupColumn("Input");
-			ImGui::TableSetupColumn("Param");
-			ImGui::TableSetupColumn("Delay");
-			ImGui::TableSetupColumn("Times");
-			ImGui::TableSetupColumn("Python");
-			ImGui::TableHeadersRow();
+			// ScrollX makes this a scrolling region, and an outer height of 0 on one of those means
+			// "take the host's remaining height" - which, inside the detail child that is itself
+			// scrolling, is nothing: the table collapsed to its own horizontal scrollbar. Size it to
+			// its rows instead, exact up to the cap and scrolling past it.
+			const ImGuiStyle& Style = ImGui::GetStyle();
+			const float RowHeight = ImGui::GetTextLineHeight() + Style.CellPadding.y * 2.0f;
+			const float TableHeight = RowHeight * (FMath::Min(Outputs.Num(), 12) + 1)   // + header row
+				+ Style.ScrollbarSize + Style.CellPadding.y * 2.0f;
 
-			for (int32 i = 0; i < Outputs.Num(); ++i)
+			if (ImGui::BeginTable("##Outputs", 7,
+				ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollX |
+				ImGuiTableFlags_SizingFixedFit, ImVec2(0.0f, TableHeight)))
 			{
-				const FElysiumOutputDef& O = Outputs[i];
-				const int32 Remaining = Ent->OutputTimesRemaining.IsValidIndex(i)
-					? Ent->OutputTimesRemaining[i] : O.Times;
+				ImGui::TableSetupColumn("Output");
+				ImGui::TableSetupColumn("Target");
+				ImGui::TableSetupColumn("Input");
+				ImGui::TableSetupColumn("Param");
+				ImGui::TableSetupColumn("Delay");
+				ImGui::TableSetupColumn("Times");
+				ImGui::TableSetupColumn("Python");
+				ImGui::TableHeadersRow();
 
-				ImGui::TableNextRow();
-				ImGui::TableNextColumn(); ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*O.Name));
-				ImGui::TableNextColumn(); ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*O.Target));
-				ImGui::TableNextColumn(); ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*O.Input));
-				ImGui::TableNextColumn(); ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*O.Param));
-				ImGui::TableNextColumn(); ImGui::Text("%.2f", O.Delay);
-				ImGui::TableNextColumn();
-				ImGui::TextUnformatted(O.Times < 0
-					? "inf" : COG_TCHAR_TO_CHAR(*FString::Printf(TEXT("%d/%d"), Remaining, O.Times)));
-				ImGui::TableNextColumn(); ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*O.Python));
+				for (int32 i = 0; i < Outputs.Num(); ++i)
+				{
+					const FElysiumOutputDef& O = Outputs[i];
+					const int32 Remaining = Ent->OutputTimesRemaining.IsValidIndex(i)
+						? Ent->OutputTimesRemaining[i] : O.Times;
+
+					ImGui::TableNextRow();
+					ImGui::TableNextColumn(); ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*O.Name));
+					ImGui::TableNextColumn(); ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*O.Target));
+					ImGui::TableNextColumn(); ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*O.Input));
+					ImGui::TableNextColumn(); ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*O.Param));
+					ImGui::TableNextColumn(); ImGui::Text("%.2f", O.Delay);
+					ImGui::TableNextColumn();
+					ImGui::TextUnformatted(O.Times < 0
+						? "inf" : COG_TCHAR_TO_CHAR(*FString::Printf(TEXT("%d/%d"), Remaining, O.Times)));
+					ImGui::TableNextColumn(); ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*O.Python));
+				}
+				ImGui::EndTable();
 			}
-			ImGui::EndTable();
 		}
 	}
 
@@ -729,7 +757,7 @@ void FElysiumCogWindow_Inspector::RenderEntityDetails(FElysiumEntity& EntRef, FE
 	if (InputNames.Num() == 0)
 	{
 		ImGui::TextDisabled(Ent->IsRecordOnly()
-			? "Inert record — no class is registered for this classname, so it answers no inputs."
+			? "Inert record - no class is registered for this classname, so it answers no inputs."
 			: "This class registers no inputs.");
 	}
 	else

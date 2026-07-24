@@ -4,6 +4,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMapActor.h"
 
+#include "GameFramework/Pawn.h"
 #include "PhysicsEngine/BodySetup.h"
 
 EElysiumBrushSolidity ElysiumBrushSolidityForClass(const FString& Classname)
@@ -113,24 +114,45 @@ FBoxSphereBounds UElysiumBrushComponent::CalcBounds(const FTransform& LocalToWor
 	return FBoxSphereBounds(LocalToWorld.GetLocation(), FVector::ZeroVector, 0.f);
 }
 
-void UElysiumBrushComponent::HandleBeginOverlap(UPrimitiveComponent*, AActor*, UPrimitiveComponent*,
-	int32, bool, const FHitResult&)
+void UElysiumBrushComponent::HandleBeginOverlap(UPrimitiveComponent*, AActor* OtherActor,
+	UPrimitiveComponent*, int32, bool, const FHitResult&)
 {
-	RouteTouch(/*bBegin*/ true);
+	RouteTouch(OtherActor, /*bBegin*/ true);
 }
 
-void UElysiumBrushComponent::HandleEndOverlap(UPrimitiveComponent*, AActor*, UPrimitiveComponent*, int32)
+void UElysiumBrushComponent::HandleEndOverlap(UPrimitiveComponent*, AActor* OtherActor,
+	UPrimitiveComponent*, int32)
 {
-	RouteTouch(/*bBegin*/ false);
+	RouteTouch(OtherActor, /*bBegin*/ false);
 }
 
-void UElysiumBrushComponent::RouteTouch(bool bBegin) const
+void UElysiumBrushComponent::RouteTouch(const AActor* Toucher, bool bBegin) const
 {
+	// A touch needs someone to do the touching. Every brush body on a map is a component of the
+	// SAME map actor, so a trigger volume that merely intersects another trigger volume (or a solid
+	// brush) arrives here with Toucher == our own owner — geometry overlapping geometry, which VtMB
+	// never treats as a touch. Without this test a map teardown/rebuild fires begin/end overlap for
+	// every such pair at once, and the tutorial answers by running scripted beats nobody walked into:
+	// `elysium.newgame` from a loaded map tripped `trig_feed_fix.OnStartTouch -> fix_fade.Fade ->
+	// teleport_player.Teleport` and warped the player off the porch into the downtown alley.
+	// Only movers touch. The player pawn is the only one today; NPC pawns pass the same test (8.5),
+	// and physics props widen it when they exist (8.4).
+	if (!Toucher || !Toucher->IsA<APawn>())
+	{
+		return;
+	}
+
 	// Reach the world through the owning map actor: on map unload the actor drops its world
 	// (TPimplPtr reset) before destroying its components, so a late overlap sees a null world
 	// rather than a dangling pointer.
 	const AElysiumMapActor* Map = Cast<AElysiumMapActor>(GetOwner());
 	if (!Map)
+	{
+		return;
+	}
+	// Until this map has seated the pawn, it is still standing wherever the previous map left it,
+	// and any volume it lands inside is an accident of the old position, not an entered trigger.
+	if (!Map->IsPlayerSeated())
 	{
 		return;
 	}

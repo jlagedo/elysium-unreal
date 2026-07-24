@@ -18,6 +18,7 @@ class FElysiumCogWindow_Logic : public FElysiumCogWindow
 	typedef FElysiumCogWindow Super;
 
 protected:
+	virtual void Initialize() override;
 	virtual void RenderHelp() override;
 	virtual void RenderContent() override;
 

@@ -2,6 +2,7 @@
 
 #if ENABLE_COG
 
+#include "ElysiumCogStyle.h"
 #include "ElysiumNpcSubsystem.h"
 
 #include "CogLocalizationConfig.h"   // COG_TCHAR_TO_CHAR
@@ -48,13 +49,22 @@ void FElysiumCogWindow_Npc::RenderContent()
 	}
 
 	// --- Load an NPC ------------------------------------------------------------------------
+	// Both boxes stretch to the window, minus the Rescan button beside the first, so the two fields
+	// line up at the same right edge instead of at ImGui's default 65%-of-window item width.
 	ImGui::SeparatorText("Load an NPC  (.glb under out/npc)");
+	const float RescanWidth = ImGui::CalcTextSize("Rescan").x + ImGui::GetStyle().FramePadding.x * 2.0f
+		+ ImGui::GetStyle().ItemSpacing.x;
+	const float FieldWidth = FMath::Max(GetDpiScale() * 120.0f,
+		ImGui::GetContentRegionAvail().x - RescanWidth);
+
+	ImGui::SetNextItemWidth(FieldWidth);
 	FCogWidgets::InputTextWithHint("##Stem", "gangmember_male_2", PendingStem);
 	ImGui::SameLine();
 	if (ImGui::SmallButton("Rescan"))
 	{
 		bStemsDirty = true;
 	}
+	ImGui::SetNextItemWidth(FieldWidth);
 	FCogWidgets::InputTextWithHint("##Anim", "(first animation)", PendingAnim);
 
 	ImGui::BeginDisabled(PendingStem.IsEmpty());
@@ -74,7 +84,7 @@ void FElysiumCogWindow_Npc::RenderContent()
 	}
 	if (!LastError.IsEmpty())
 	{
-		ImGui::TextColored(ImVec4(1.f, 0.4f, 0.35f, 1.f), "%s", COG_TCHAR_TO_CHAR(*LastError));
+		ImGui::TextColored(ElysiumCogStyle::ColError, "%s", COG_TCHAR_TO_CHAR(*LastError));
 	}
 
 	// --- Available assets (one-click Load) --------------------------------------------------
@@ -84,8 +94,12 @@ void FElysiumCogWindow_Npc::RenderContent()
 		ImGui::TextDisabled("No .glb under out/npc. Export one:");
 		ImGui::TextDisabled("  python tools/mdl_gltf.py <model.mdl> <anim> out/npc");
 	}
-	else if (ImGui::BeginChild("##Stems", ImVec2(0, GetDpiScale() * 90.f), ImGuiChildFlags_Borders))
+	else
 	{
+		// EndChild pairs with BeginChild unconditionally: BeginChild returns false when the region is
+		// fully clipped (scrolled out of view), and skipping EndChild on that frame trips ImGui's
+		// begin/end balance assert.
+		ImGui::BeginChild("##Stems", ImVec2(0, GetDpiScale() * 90.f), ImGuiChildFlags_Borders);
 		for (int32 i = 0; i < Stems.Num(); ++i)
 		{
 			ImGui::PushID(i);
@@ -96,7 +110,7 @@ void FElysiumCogWindow_Npc::RenderContent()
 				Npc->LoadTestNpc(Stems[i], PendingAnim, LastError);
 			}
 			ImGui::SameLine();
-			if (ImGui::Selectable(COG_TCHAR_TO_CHAR(*Stems[i])))
+			if (ImGui::Selectable(COG_TCHAR_TO_CHAR(*Stems[i]), PendingStem == Stems[i]))
 			{
 				PendingStem = Stems[i];
 			}
@@ -145,11 +159,20 @@ void FElysiumCogWindow_Npc::RenderContent()
 	if (Last.AnimNames.Num() > 0)
 	{
 		ImGui::SeparatorText(COG_TCHAR_TO_CHAR(*FString::Printf(TEXT("Clips in %s  (re-load with clip)"), *Last.Stem)));
+		// Wrap on the measured width rather than a fixed count per row: clip names run from "idle" to
+		// "combat_knife_attack2", so four-per-row overflows for some models and wastes a third of the
+		// window for others.
+		const float ClipsRight = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
 		for (int32 i = 0; i < Last.AnimNames.Num(); ++i)
 		{
-			if (i % 4 != 0)
+			if (i > 0)
 			{
-				ImGui::SameLine();
+				const float NextWidth = ImGui::CalcTextSize(COG_TCHAR_TO_CHAR(*Last.AnimNames[i])).x
+					+ ImGui::GetStyle().FramePadding.x * 2.0f;
+				if (ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x + NextWidth < ClipsRight)
+				{
+					ImGui::SameLine();
+				}
 			}
 			ImGui::PushID(i);
 			if (ImGui::SmallButton(COG_TCHAR_TO_CHAR(*Last.AnimNames[i])))

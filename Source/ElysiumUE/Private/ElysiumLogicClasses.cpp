@@ -382,25 +382,37 @@ private:
 };
 
 // ============================================================================================
-// env_fade — CEnvFade (1 on the tutorial, 22 Fade wires). Its Fade input starts a full-screen
-// colour fade on the entity world (drawn by AElysiumHUD). SF_FADE_IN reveals, SF_FADE_STAYOUT
-// holds at full after covering (the map-transition fade-to-black the tutorial's `fade_out` uses).
+// env_fade — CEnvFade (8 on the tutorial: 27 Fade wires in, 16 OnBeginFade out). Its one input,
+// Fade, starts a full-screen colour fade on the entity world (drawn by AElysiumHUD) and then fires
+// its one output, OnBeginFade, with no delay — the whole class, per its 4-record datamap
+// (duration/holdtime/Fade/OnBeginFade). The tutorial's warp to the downtown alley hangs off those
+// OnBeginFade wires.
+//
+// SF_FADE_STAYOUT is the flag that makes the fade come *back*: CEnvFade::InputFade maps it to the
+// client's auto-reverse bit, which FadeCalculate uses to flip a finished fade into a fade-in rather
+// than dropping it. Without it the fade is simply dropped when its hold expires. The client's
+// stay-covered-forever bit is a different one that env_fade never sets.
 // ============================================================================================
 
 class FElysiumEnvFade final : public FElysiumEntity
 {
 public:
-	static constexpr int32 SF_FADE_IN       = 0x1;   // reveal (fade FROM the colour back to normal)
+	static constexpr int32 SF_FADE_IN       = 0x1;   // hold the colour flat, no ramp (see GetScreenFade)
 	static constexpr int32 SF_FADE_MODULATE = 0x2;   // modulate blend (deferred — drawn as alpha)
-	static constexpr int32 SF_FADE_STAYOUT  = 0x8;   // stay covered at full after the fade-in
+	static constexpr int32 SF_FADE_ONLYONE  = 0x4;   // fade the activator alone — the player, in one-player
+	static constexpr int32 SF_FADE_STAYOUT  = 0x8;   // uncover again once the hold expires
 
 	float    Duration = 2.0f;   // duration
 	float    HoldTime = 0.0f;   // holdtime
 	FLinearColor Color = FLinearColor::Black;
 	float    MaxAlpha = 1.0f;
 
-	void InputFade(const FElysiumInputArgs&)        { StartFade(false); }
-	void InputReverseFade(const FElysiumInputArgs&) { StartFade(true); }
+	void InputFade(const FElysiumInputArgs& A)
+	{
+		StartFade();
+		static const FName OnBeginFade(TEXT("OnBeginFade"));
+		FireOutput(OnBeginFade, A.Activator);
+	}
 
 	virtual void Spawn() override
 	{
@@ -418,20 +430,23 @@ public:
 		TArray<FString> FlagNames;
 		if (SpawnFlags & SF_FADE_IN)       { FlagNames.Add(TEXT("FADE_IN")); }
 		if (SpawnFlags & SF_FADE_MODULATE) { FlagNames.Add(TEXT("MODULATE")); }
+		if (SpawnFlags & SF_FADE_ONLYONE)  { FlagNames.Add(TEXT("ONLYONE")); }
 		if (SpawnFlags & SF_FADE_STAYOUT)  { FlagNames.Add(TEXT("STAYOUT")); }
 		Out.Emplace(TEXT("Spawnflags"), FlagNames.Num() ? FString::Join(FlagNames, TEXT(" | ")) : TEXT("(none)"));
 	}
 
 private:
-	void StartFade(bool bForceReverse)
+	void StartFade()
 	{
 		if (!World)
 		{
 			return;
 		}
-		const bool bReverse = bForceReverse || (SpawnFlags & SF_FADE_IN) != 0;
-		const bool bStayOut = (SpawnFlags & SF_FADE_STAYOUT) != 0;
-		World->StartScreenFade(Color, Duration, HoldTime, MaxAlpha, bReverse, bStayOut);
+		// SF_FADE_ONLYONE restricts the fade to the activator; the only client is the player, so it
+		// lands on the same screen either way and needs no branch here.
+		const bool bFadeIn = (SpawnFlags & SF_FADE_IN) != 0;
+		const bool bAutoReverse = !bFadeIn && (SpawnFlags & SF_FADE_STAYOUT) != 0;
+		World->StartScreenFade(Color, Duration, HoldTime, MaxAlpha, bFadeIn, bAutoReverse);
 	}
 
 	static FLinearColor ParseColor255(const FString& S)
@@ -654,8 +669,12 @@ static FElysiumClassRegistrar GRegEnvFade(
 	TEXT("env_fade"), ElysiumBaseClassName(), &MakeEnvFade,
 	[](FElysiumClassDesc& D)
 	{
-		D.Input(TEXT("Fade"),        [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumEnvFade&>(E).InputFade(A); });
-		D.Input(TEXT("ReverseFade"), [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumEnvFade&>(E).InputReverseFade(A); });
+		// `Fade` is the whole input surface — CEnvFade's datamap carries exactly one input func.
+		D.Input(TEXT("Fade"), [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumEnvFade&>(E).InputFade(A); });
+		// The other two of the datamap's four records (dataDesc 0x10568c54): both keyable, so a
+		// script reaches them by name through the Entity attribute namespace, not just at spawn.
+		AddLogicField(D, TEXT("duration"), &FElysiumEnvFade::Duration);
+		AddLogicField(D, TEXT("holdtime"), &FElysiumEnvFade::HoldTime);
 	});
 
 static FElysiumClassRegistrar GRegFuncBrush(

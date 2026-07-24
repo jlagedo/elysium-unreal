@@ -82,8 +82,8 @@ void FElysiumCogWindow_WorldViz::RenderContent()
 	ImGui::Checkbox("Labels (within 6 m)", &V.bGizmoLabels);
 	ImGui::SameLine();
 	FCogWidgets::HelpMarker("Boxes are a retained GPU instanced-mesh layer (built once, updated only "
-		"when an entity's state changes) — no per-frame cost, so all entities show. Labels are the "
-		"exception (no instanced text), so they render only for gizmos within 2 m of the camera.");
+		"when an entity's state changes) - no per-frame cost, so all entities show. Labels are the "
+		"exception (no instanced text), so they render only for gizmos within 6 m of the camera.");
 
 	if (ImGui::CollapsingHeader("Color legend"))
 	{
@@ -106,10 +106,12 @@ void FElysiumCogWindow_WorldViz::RenderContent()
 	ImGui::SeparatorText("I/O beams");
 	ImGui::Checkbox("Fading caller->target arrows on fire", &V.bShowBeams);
 	ImGui::BeginDisabled(!V.bShowBeams);
-	ImGui::SetNextItemWidth(GetDpiScale() * 200.0f);
+	// Stretch minus a gutter for the label ImGui draws to the slider's right (see the Lights window).
+	ImGui::SetNextItemWidth(FMath::Max(GetDpiScale() * 110.0f, ImGui::GetContentRegionAvail().x
+		- ImGui::CalcTextSize("Fade window").x - ImGui::GetStyle().ItemInnerSpacing.x));
 	ImGui::SliderFloat("Fade window", &V.BeamSeconds, 0.5f, 15.0f, "%.1f s");
 	ImGui::EndDisabled();
-	ImGui::TextDisabled("Beams follow I/O delivery — hand-fire from the Entity Inspector to see one.");
+	ImGui::TextDisabled("Beams follow I/O delivery - hand-fire from the Entity Inspector to see one.");
 
 	// --- Live counts (a quick sense of what the layers are drawing) ------------------------
 	const TArray<TUniquePtr<FElysiumEntity>>& Entities = World->Entities();

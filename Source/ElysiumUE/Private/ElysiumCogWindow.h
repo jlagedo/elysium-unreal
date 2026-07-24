@@ -27,6 +27,12 @@ class FElysiumCogWindow : public FCogWindow
 	typedef FCogWindow Super;
 
 protected:
+	// Keeps the VtMB skin installed in ImGui's global style. GameTick runs for every window (visible
+	// or not) inside Cog's context scope but before the frame opens, so the theme is already in place
+	// when the main menu bar and the stock Cog windows submit. ElysiumCogStyle::EnsureApplied is a
+	// no-op once the style is ours, so paying it once per Elysium window per tick costs nothing.
+	virtual void GameTick(float DeltaTime) override;
+
 	// The map-lifecycle subsystem (Travel / Reload / exported-map list), or null.
 	UElysiumMapSubsystem* GetMapSubsystem() const;
 	// The live map actor for the current world, or null between/without a loaded map.

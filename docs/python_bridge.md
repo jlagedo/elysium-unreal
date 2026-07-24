@@ -100,9 +100,9 @@ NULL-terminated. Every `ml_meth` points into an **MSVC incremental-link thunk ta
 |---|---|---|
 | `0x1058f7a8` | 11 | module `vampire` — global functions |
 | `0x1058f778` | 2 | `Entity.__getattr__`, `Entity.__setattr__` |
-| `0x1058f698` | 13 | `Entity` base methods (`__init__`, `GetOrigin`/`SetOrigin`, `GetAngles`/`SetAngles`, `GetCenter`, `GetAngleVectors`, `Get`/`SetModelName`, `SetModel`, `Get`/`SetName`, `IsAlive`) |
+| `0x1058f698` | 13 | `Entity` base methods — in table order: `__init__`, `GetOrigin`, `GetAngles`, `GetCenter`, `GetModelName`, `GetAngleVectors`, **`GetCenter` again**, `SetOrigin`, `SetAngles`, `SetModel`, `SetName`, `GetName`, `IsAlive`. 13 records but **12 distinct names** (`GetCenter` is duplicated), and there is **no `SetModelName`** — `SetModel` is the only model writer. |
 | `0x1058f868` | 24 | Character (player + NPC) |
-| `0x1058f5d0` | 2 | `G` — `ClearAll`, `keys` |
+| `0x1058f5d0` | 2 | `G` — `ClearAll`, `keys`. **No `has_key`**: `G.has_key` falls past `Py_FindMethod` to the flag dict and reads integer 0. (`morgue` is a real dict, so `G.morgue.has_key(...)` — the only form any script uses — works.) |
 | `0x1058f620` | 2 | file-like — `read`, `readline` |
 
 **Total: 54 table entries. Scripts call 109 methods.** The other ~55 are not bound
@@ -112,6 +112,14 @@ anywhere — see the next section.
 `FindEntitiesByClass`, `ScheduleTask`, `SquadSeesPlayer`, `CreateEntityNoSpawn`,
 `CallEntitySpawn`, `ChangeMap`, `OneOfSet`, `IsPCMalk`. (`SquadSeesPlayer` is called by no
 shipped script — the tables include API the content never used.)
+
+Their `ml_doc` strings pin the contracts the scripts rely on:
+**`FindEntityByName`** — *"Find a single entity by its targetname field. **Returns None if not
+found.** It is an error if multiple entities have the same name."* That `None` is what every
+`if ent:` guard in the shipped scripts actually tests — an Entity instance itself is **always
+truthy** (no `__nonzero__` in the base table), and a reference to a *deleted* entity raises
+`AttributeError` on access rather than turning falsy. **`FindPlayer`** — *"Find the first player
+entity, or NULL if there is not one spawned"*. **`FindEntitiesByName`/`ByClass`** return lists.
 
 **Character (24):** `React`, `SetExpression`, `SetDisposition`, `SetGesture`, `HasItem`,
 `GiveItem`, `RemoveItem`, `AmmoCount`, `GiveAmmo`, `HasWeaponEquipped`, `StartBarter`,
@@ -267,6 +275,17 @@ translation cannot serve this.
 Module-level code in every level script is only aliasing plus a `print`; there are no
 import-time side effects to emulate.
 
+**The level script's own top-level names end up in `__main__` too.** The field-6 dispatch wraps
+the payload in `__main__.%s` (`0x1055e370`), so a payload's *leading* name is resolved as an
+attribute of `__main__` — `journalPickup()` runs as `__main__.journalPickup()`, and that only
+resolves if the level script's `def`s are attributes of `__main__`. Two independent checks agree:
+`tutorial.py`'s `__main__.Level = __name__` only carries information if `__name__` is the script's
+own module name (so it is imported as a module, then merged — not exec'd into `__main__`), and
+`hw_609_1` fires a bare **`FindPlayer().ClearActiveDisciplines()`** while its level script
+(`hollywood.py`, unlike `tutorial.py`) never aliases `FindPlayer` at module level — only
+`__main__` can answer that name. A host that evaluates payloads in the level module's namespace
+instead resolves the script's own functions but not the engine globals the script did not alias.
+
 ## The four call paths
 
 | Trigger | Mechanism |
@@ -312,6 +331,30 @@ a name in order: `InitMode` → an int field on the object; `morgue` → the mor
 `PyInt_FromLong(0)`** — so `G.Story_State` on an unset flag returns integer `0`, never raises.
 `tp_setattr` (`0x1019b570`) mirrors it: `InitMode` sets the int, `morgue` and the method names
 are read-only, everything else is `PyDict_SetItemString` (a `None`/NULL value deletes the key).
+
+**`G[k]` is `G.k` — subscripting is the attribute path.** `PyDataManager`'s type object
+(`0x1058fa08`; `tp_name` `0x1058fccc`, `tp_basicsize` 12 = the header plus the `InitMode` int)
+carries a **`tp_as_mapping`** at `0x1058f9f8`, and both accessors are thin adapters over the
+attribute slots:
+
+```c
+// mp_subscript 0x1019b4a0
+if (key->ob_type == &PyString_Type)          // 0x109f37d0
+    return tp_getattr(self, PyString_AsString(key));   // literal tail JMP to 0x1019b3d0
+return PyInt_FromLong(0);                    // a non-string key reads as integer 0
+
+// mp_ass_subscript 0x1019b720
+if (key->ob_type == &PyString_Type)
+    return tp_setattr(self, PyString_AsString(key), value);   // CALL 0x1019b570
+// non-string key: tail-jumps PyDict_SetItem(self, key, value) — the MANAGER object in the dict
+// slot, i.e. a latent bug. Unreachable: every G key in the corpus is a string.
+```
+
+So subscripting inherits everything the attribute path has, default-on-miss `0` included, and
+`mp_length` (`0x1019b790`) reports the flag count. This is load-bearing rather than decorative:
+`tutorial.py`'s `saveState()` — the **first** thing `DialogPostProcess()` calls — is
+`for k in G.keys(): G_tut[k] = G[k]`, and `state()` writes back with `G[k] = ...`. Four scripts
+subscript `G` (`tutorial`, `temple`, `zvtool_file`, `zvtool_pc`).
 
 `G` is the save unit: `vampire.dll` carries `CPython_SaveRestoreBlockHandler` and
 `CPyObjStrSaveRestoreDataOps`, pickles the flag + morgue dicts (`FUN_1019b130`, `cPickle`), and

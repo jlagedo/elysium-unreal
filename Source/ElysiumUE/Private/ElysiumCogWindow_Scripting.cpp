@@ -2,15 +2,16 @@
 
 #if ENABLE_COG
 
+#include "ElysiumCogStyle.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumExpr.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumPythonVM.h"
 #include "ElysiumScriptHost.h"
+#include "ElysiumScriptNatives.h"
 
 #include "HAL/FileManager.h"
 #include "Misc/Paths.h"
@@ -21,10 +22,10 @@
 
 namespace
 {
-	const ImVec4 GColorGood(0.45f, 0.85f, 0.45f, 1.f);
-	const ImVec4 GColorBad(1.f, 0.40f, 0.35f, 1.f);
-	const ImVec4 GColorName(0.60f, 0.80f, 1.00f, 1.f);
-	const ImVec4 GColorDim(0.65f, 0.65f, 0.65f, 1.f);
+	const ImVec4& GColorGood = ElysiumCogStyle::ColOk;
+	const ImVec4& GColorBad = ElysiumCogStyle::ColError;
+	const ImVec4& GColorName = ElysiumCogStyle::ColName;
+	const ImVec4& GColorDim = ElysiumCogStyle::ColDim;
 }
 
 void FElysiumCogWindow_Scripting::Initialize()
@@ -38,22 +39,22 @@ void FElysiumCogWindow_Scripting::RenderHelp()
 	ImGui::Text(
 		"VtMB's story runs on loose plain-text Python 2.1 level scripts (out/scripts) and dlgexpr "
 		"dialogue (out/dlg), copied verbatim from the install by tools/UE_extract_scripts.py.\n\n"
-		"5.1 (top): a read-only delivery pre-flight — confirms the mirror is on disk and resolves the "
+		"5.1 (top): a read-only delivery pre-flight - confirms the mirror is on disk and resolves the "
 		"current map's worldspawn.levelscript module.\n\n"
 		"5.2 (runtime): the expression evaluator + the G flag store. Type an expression and Eval it "
 		"(G.Tut_Elev, 1+2, ent.field) or a statement and Exec it (G.Tut_Elev = 1). Poke the G flags "
 		"directly in the table.\n\n"
-		"5.4: live script eval is ON by default — field-6 payloads (mostly G.x = ... on this map), "
+		"5.4: live script eval is ON by default - field-6 payloads (mostly G.x = ... on this map), "
 		"logic_pythoncheck gates (Test -> OnTrue/OnFalse), and ScheduleTask(delay, \"src\") deferred "
 		"sources all run during play. Watch the flags flip; deferred tasks appear in the Event Queue "
 		"window as '(python)' rows. Un-check 'Live script eval' to swap in the null host (everything goes "
 		"dark) for A/B.\n\n"
-		"5.3 (native bindings): the engine 'vampire' module — 11 globals + 24 Character methods. "
+		"5.3 (native bindings): the engine 'vampire' module - 11 globals + 24 Character methods. "
 		"FindPlayer() returns the PC; FindPlayer().RemoveItem(...) and friends dispatch and log (most are "
 		"stubs until their backing systems land; SetQuest/GetQuestState route to the quest map). The "
 		"'Native bindings' table lists the surface + live call counts; 'Recent native calls' logs each "
-		"dispatch. Level-script functions/constants (cCelerity, the level's On* callbacks) are still 5.5 "
-		"— those names read as errors (error-to-false) until then.");
+		"dispatch. Level-script functions/constants (cCelerity, the level's On* callbacks) are still 5.5 - "
+		"those names read as errors (error-to-false) until then.");
 }
 
 void FElysiumCogWindow_Scripting::Rescan()
@@ -104,18 +105,23 @@ void FElysiumCogWindow_Scripting::RenderContent()
 
 	// --- Mirror presence (out/scripts + out/dlg) ------------------------------------------
 	ImGui::SeparatorText("Script + dialogue mirror");
-	const auto MirrorLine = [](const char* Label, bool bExists, int32 Count, const char* Ext,
+	// A fixed value column, not "%-8s": ImGui's font is proportional, so space padding does not line
+	// the two rows up.
+	const float MirrorColumn = GetDpiScale() * 64.0f;
+	const auto MirrorLine = [MirrorColumn](const char* Label, bool bExists, int32 Count, const char* Ext,
 		const FString& Dir)
 	{
-		ImGui::Text("%-8s", Label);
-		ImGui::SameLine();
+		ImGui::TextUnformatted(Label);
+		ImGui::SameLine(0.0f, 0.0f);
+		ImGui::SetCursorPosX(FMath::Max(
+			ImGui::GetCursorPosX() + ImGui::GetStyle().ItemSpacing.x, MirrorColumn));
 		if (bExists)
 		{
 			ImGui::TextColored(GColorGood, "%d %s present", Count, Ext);
 		}
 		else
 		{
-			ImGui::TextColored(GColorBad, "missing — run tools/UE_extract_scripts.py");
+			ImGui::TextColored(GColorBad, "missing - run tools/UE_extract_scripts.py");
 		}
 		if (ImGui::IsItemHovered())
 		{
@@ -173,7 +179,7 @@ void FElysiumCogWindow_Scripting::RenderContent()
 				}
 				else
 				{
-					ImGui::TextColored(GColorBad, "NOT loaded — %s",
+					ImGui::TextColored(GColorBad, "NOT loaded - %s",
 						COG_TCHAR_TO_CHAR(*State->LevelScriptError()));
 				}
 			}
@@ -261,6 +267,12 @@ void FElysiumCogWindow_Scripting::RenderCPythonPanel()
 	ImGui::Spacing();
 	const FString MapModule = CurrentLevelScript();
 	const FString HintModule = MapModule.IsEmpty() ? TEXT("tutorial") : MapModule;
+	// Sized so the button beside it always fits: at ImGui's default item width (65% of the window)
+	// the button ran off the right edge at any usable window size.
+	const float LoadButtonWidth = ImGui::CalcTextSize("Load level script").x
+		+ ImGui::GetStyle().FramePadding.x * 2.0f + ImGui::GetStyle().ItemSpacing.x;
+	ImGui::SetNextItemWidth(FMath::Max(GetDpiScale() * 100.0f,
+		ImGui::GetContentRegionAvail().x - LoadButtonWidth));
 	FCogWidgets::InputTextWithHint("##PyLoad", COG_TCHAR_TO_CHAR(*HintModule), PyLoadTarget);
 	ImGui::SameLine();
 	if (ImGui::Button("Load level script"))
@@ -283,7 +295,6 @@ void FElysiumCogWindow_Scripting::RenderCPythonPanel()
 			LastPyResult = bLastPyError ? Err : FString::Printf(TEXT("imported module '%s'"), *ModName);
 		}
 	}
-	ImGui::SameLine();
 	ImGui::TextColored(GColorDim, "(tools/out/scripts/<name>/<name>.py)");
 
 	const FString Loaded = VM.GetLoadedModule();
@@ -294,10 +305,10 @@ void FElysiumCogWindow_Scripting::RenderCPythonPanel()
 		ImGui::TextColored(GColorName, "%s", COG_TCHAR_TO_CHAR(*Loaded));
 
 		// The On* callbacks, each with a Fire button.
-		CallableFilter.Draw("Filter callbacks", GetDpiScale() * 160.0f);
+		FCogWidgets::SearchBar("##CallableFilter", CallableFilter, GetDpiScale() * 160.0f);
 		const TArray<FString> Callables = VM.GetModuleCallables(TEXT(""));
 		int32 Shown = 0;
-		if (ImGui::BeginChild("##Callables", ImVec2(0, GetDpiScale() * 150.0f), true))
+		if (ImGui::BeginChild("##Callables", ImVec2(0, GetDpiScale() * 150.0f), ImGuiChildFlags_Borders))
 		{
 			for (const FString& Fn : Callables)
 			{
@@ -326,8 +337,8 @@ void FElysiumCogWindow_Scripting::RenderCPythonPanel()
 
 	// A python exec box (runs against the loaded namespace, else __main__).
 	ImGui::Spacing();
+	ImGui::SetNextItemWidth(-FLT_MIN);
 	FCogWidgets::InputTextWithHint("##PyExec", "G.Tut_Jack = cCelerity   |   FindPlayer()   |   G.keys()", PyExecInput);
-	ImGui::SameLine();
 	ImGui::BeginDisabled(PyExecInput.TrimStartAndEnd().IsEmpty());
 	if (ImGui::Button("Run (python)"))
 	{
@@ -374,11 +385,12 @@ void FElysiumCogWindow_Scripting::RenderEvalPanel()
 	const bool bHaveWorld = GetEntityWorld() != nullptr;
 	if (!bHaveWorld)
 	{
-		ImGui::TextColored(GColorDim, "No map loaded — G reads/writes work; entity names won't resolve.");
+		ImGui::TextColored(GColorDim, "No map loaded - G reads/writes work; entity names won't resolve.");
 	}
 
 	// The eval input box. Expression and statement shapes both run down one path — the installed
 	// host (UElysiumGameStateSubsystem::EvalScript), so this resolves what a field-6 payload does.
+	ImGui::SetNextItemWidth(-FLT_MIN);
 	FCogWidgets::InputTextWithHint("##EvalInput", "G.Tut_Elev = 1   |   1 + 2   |   G.Story_State", EvalInput);
 	ImGui::BeginDisabled(EvalInput.TrimStartAndEnd().IsEmpty());
 	if (ImGui::Button("Run"))
@@ -390,9 +402,11 @@ void FElysiumCogWindow_Scripting::RenderEvalPanel()
 		bLastEvalError = !Err.IsEmpty();
 		LastEvalResult = bLastEvalError ? Err : R.Describe();
 	}
+	// The disabled scope covers the button only. Inside it, the host name — which is a fact about
+	// the runtime, not a control — was greyed out whenever the box happened to be empty.
+	ImGui::EndDisabled();
 	ImGui::SameLine();
 	ImGui::TextColored(GColorDim, "(host: %s)", COG_TCHAR_TO_CHAR(State->ScriptHost().Name()));
-	ImGui::EndDisabled();
 
 	if (!LastEvalSource.IsEmpty())
 	{
@@ -423,7 +437,7 @@ void FElysiumCogWindow_Scripting::RenderGStore()
 		State->ClearAllGlobals();
 	}
 
-	GFilter.Draw("Filter", GetDpiScale() * 160.0f);
+	FCogWidgets::SearchBar("##GFilter", GFilter, GetDpiScale() * 160.0f);
 
 	// Sorted, filtered flag table. Int/Bool flags get an inline editor (the overwhelming shape);
 	// other types show read-only. The × button deletes the key (None-assign semantics).
@@ -527,7 +541,7 @@ void FElysiumCogWindow_Scripting::RenderNativeBindings()
 		"The engine 'vampire' module: 11 globals + 24 Character methods. Most log a stub (no backing "
 		"system yet); SetQuest/GetQuestState route to the quest map. FindPlayer() returns the PC.");
 
-	NativeFilter.Draw("Filter", GetDpiScale() * 160.0f);
+	FCogWidgets::SearchBar("##NativeFilter", NativeFilter, GetDpiScale() * 160.0f);
 
 	const ImGuiTableFlags TableFlags =
 		ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY |
@@ -542,7 +556,7 @@ void FElysiumCogWindow_Scripting::RenderNativeBindings()
 		ImGui::TableSetupColumn("Calls", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 44.0f);
 		ImGui::TableHeadersRow();
 
-		for (const ElysiumExpr::FNativeBinding& B : ElysiumExpr::NativeBindings())
+		for (const ElysiumScriptNatives::FNativeBinding& B : ElysiumScriptNatives::NativeBindings())
 		{
 			if (!NativeFilter.PassFilter(COG_TCHAR_TO_CHAR(B.Name)))
 			{

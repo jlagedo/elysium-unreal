@@ -7,6 +7,7 @@
 
 class AElysiumMapActor;
 class FElysiumProfileRun;
+class FElysiumShotRun;
 
 // The only owner of VtMB-map lifecycle inside the single persistent Unreal level.
 // Travel destroys the current AElysiumMapActor (unloading everything map-scoped),
@@ -112,4 +113,7 @@ private:
 	// Headless profiling harness (task 0.1/0.2), created only under -ElysiumProfile.
 	// TPimplPtr keeps the deleter type-erased, so the forward declaration suffices.
 	TPimplPtr<FElysiumProfileRun> ProfileRun;
+
+	// Headless screenshot-regression harness (P2.9), created only under -ElysiumShots.
+	TPimplPtr<FElysiumShotRun> ShotRun;
 };

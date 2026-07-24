@@ -51,6 +51,111 @@ The phases below are **vertical slices** — each ends with something observable
 | **P9 — Dialogue & persistence** | **tutorial completable as retail**, save/load works | — |
 | **P10 — Scale & ship-shape** | all maps, floor validated, packaged story | ongoing after P4 |
 
+## The first-beat path (B*) — landing → the second warp point
+
+The cross-phase priority ladder for the first *playable* game beat: the player lands on
+`sp_tutorial_1` and the tutorial's opening runs unassisted up to the second warp. The tutorial's
+"warp points" are its teleport stations. **Warp #1** is where the player already lands: the porch
+at `teleport_very_beginning` (the `tutorial` `info_landmark` — 8.6a seats the player there).
+**Warp #2** is the patch's relocation to the downtown alley: `teleport_fade` (an `env_fade`) fires
+`OnBeginFade -> teleport_player.Teleport` + `teleport_jack.Teleport`.
+
+**The data flow** (traced from `sp_tutorial_1.ents` + `tutorial.py`, patch flow):
+
+1. **Map load** — `logic_auto.OnMapLoad -> unhidePlus()` → `ccmd.patchtype` → `setPlus()` arms
+   `trig_popup_move` (`StartDisabled 1`). Dies today at the unbound `ccmd` (9.3b), so the
+   movement popup never arms.
+2. **Step forward** — `trig_popup_move -> popup_1.OpenWindow` (movement popup). Trigger +
+   `game_sign` already work.
+3. **Walk off the porch** — `trig_off_porch.OnEndTouch` → `Jack.WillTalk(1)` +
+   `Jack.StartPlayerDialogRemote(256)` + `blueblood_maker.Spawn` + `pc_0` bus inputs. The
+   trigger fires today; `Jack` (`npc_VVampire`) and `npc_maker` are inert records, so every NPC
+   input drops as `[no input]`.
+4. **Jack's dialogue** — `jack_tutorial.dlg` field-5 actions set `G.Tut_Jack = 1`; `OnDialogEnd`
+   fires the field-6 payload `DialogPostProcess()`. No dialogue system exists yet (9.1/9.2).
+5. **`DialogPostProcess()`** (tutorial.py, on the CPython host) — the
+   `Tut_Jack==1 and Tut_Patch==0` branch calls `Find("teleport_fade").Fade()` → **warp #2**;
+   the follow-up branch opens `popup_2` (blood pool) and sets `G.Tutorial_Feeding = 1`.
+
+Ordered so each step is independently observable with the existing debug layer — after B1 the
+warp is console-fireable, after B2 the script warps the player, after B3 Jack stands there and
+takes his inputs, after B4 walking off the porch runs the whole beat unassisted, after B5 the
+first popup arms itself:
+
+- [x] **B1 `env_fade` fires `OnBeginFade`** — landed. `Fade` starts the screen fade and then fires
+  `OnBeginFade` with no delay, activator passed through — which is the *whole* class: the
+  decompiled `CEnvFade` datamap (`0x10568c10` → dataDesc `0x10568c54`, baseMap `0x10552e18`) is
+  exactly four records, `duration` (`m_Duration` +0x450), `holdtime` (`m_HoldTime` +0x454), input
+  `Fade` (`0x10100F90`), output `OnBeginFade` (+0x458). **`OnEndFade` and `ReverseFade` do not
+  exist in VtMB** — neither string is in `vampire.dll`; the `ReverseFade` input 4.5 carried over
+  from a later stock SDK is removed. The same pass corrected the fade curve, which 4.5 had
+  inverted: `SF_FADE_STAYOUT` is what makes the screen come *back*, not what holds it out (see
+  the decision log). *Acceptance met:* `elysium.ent_fire teleport_fade Fade` fires all six
+  `OnBeginFade` wires with their authored delays, covers over `duration 1`, holds `holdtime 2`,
+  uncovers over another second, and lands the player in the downtown alley — verified frame by
+  frame under `-benchmark -fps=10 -dumpmovie` (cover frames 31→40, black 40→60, uncover 61→70)
+  with the HUD readout going `src (-14, 7493, -106)` → `src (-256, -176, 25)`, i.e.
+  `teleport_player`'s `-256 -176 -32` plus the capsule lift. `teleport_jack.Teleport` resolves
+  and no-ops, and Jack's own inputs still land as `[no input]` — both are B3. *Deps:* none.
+- [x] **B2 Real entity objects in CPython** *(= 9.3's "do `Entity.__getattr__`/`__setattr__`
+  first" slice)* — landed. The bootstrap's `_StubEnt` is gone; `vampire` now carries a real
+  **`Entity`** type (`ElysiumPythonEntity.cpp`) plus **`Player`** and all **11 module globals**.
+  `Entity` holds a generation-checked handle, not a pointer, so a reference kept across a `Kill`
+  or a map travel reports retail's `AttributeError: game entity has been deleted` (verified: a
+  stashed `teleport_fade` reprs as `#1366 <stale>` after travelling to `sm_pawnshop_1`, and any
+  attribute on it raises). `__getattr__` resolves the type methods + instance `__dict__` first
+  (what an old-style class does before calling `__getattr__` at all), then walks the P1
+  class-chain tables — an **input** name manufactures a bound callable that fires through
+  `EnqueueInput` (so a script call, `ent_fire`, and a map's own wire are one path), a **field**
+  name marshals the live value. `__setattr__` is the documented mirror: datamap first, instance
+  `__dict__` only on a miss; a non-keyable field *or an input* is `"<name> is read only"` (letting
+  an input reach the property bag would shadow it permanently). The 13-entry base-method table is
+  there with its readers live (`GetOrigin`/`GetCenter`/`GetAngles`/`GetAngleVectors`/`GetName`/
+  `GetModelName`/`IsAlive`, in Unreal cm — the runtime never converts) and its four writers
+  recording a native-call stub. `FindPlayer()` returns a sheet-backed `Player`: `clan`, `base_*`
+  and any loaded stat read as data (miss → 0, like `G`), every other name binds as a Character
+  method, which is what makes retail's unlisted calls (`ClearActiveDisciplines`,
+  `MakePlayerKillable`, `Bloodgain`) run instead of raising.
+  Two supporting changes came out of it. **The native surface moved to
+  `ElysiumScriptNatives.{h,cpp}`**, shared by both hosts — one table, one set of stub defaults,
+  one Cog call-counter set, so `elysium.script.cpython 0/1` no longer changes what a name does.
+  And **`G` gained its mapping protocol** (`G[k]`/`G[k]=v`/`len`), which the RE shows is literally
+  the attribute path (see the decision log): without it `DialogPostProcess()` dies on its first
+  line, inside `saveState()`. The `__main__` merge also settles 5.3's open `OneOfSet` precedence
+  caveat by construction: a level script's `from vamputil import *` lands in that script's module
+  dict, which merges over `__main__`, so the script definition shadows the native one, as retail
+  does. *Acceptance met:* `elysium.py.firstbeat` (one token, survives
+  `-ExecCmds`) seeds `G.Tut_Jack=1`/`Tut_Patch=0`, runs `DialogPostProcess()` through the installed
+  host with no error, and reports `G.Tut_Patch=1` + `#1366 teleport_fade(env_fade) -> !self.Fade()`
+  on the queue; the I/O log then shows all six `OnBeginFade` wires and
+  `#1362 teleport_player(point_teleport).Teleport()` delivered at t=1.402 — B1's verified warp,
+  now driven by the script instead of the console. `elysium.py.poc` still reports ALL PASS.
+  Jack's inputs remain `[no input]` (B3). *Deps:* B1, 9.3a.
+- [ ] **B3 Minimal NPC presence** *(the 8.5 carve-out this beat needs)* — an `npc_*` leaf that
+  stands the model at its origin (8.2 glTF path; placeholder body acceptable first), latches
+  `WillTalk`/`UseInteresting`, accepts `StartPlayerDialogRemote` (hands off to B4), fires
+  `OnDialogBegin`/`OnDialogEnd`; `npc_maker` `Spawn` spawns its `NPCTargetname` entity.
+  No AI. *Acceptance:* Jack stands on the porch; `trig_off_porch` outputs resolve instead of
+  `[no input]`; `blueblood_maker.Spawn` produces `blueblood`. *Deps:* 8.2.
+- [ ] **B4 `.dlg` parser + minimal dialogue runner** *(the 9.1 core, pulled forward; UI is
+  interim)* — parse `jack_tutorial.dlg`, eval field-4 (dlgexpr on the installed host), **exec
+  field-5** (what writes `G.Tut_Jack`), fire `OnDialogEnd` on exit; a substrate-grade Canvas
+  panel (the 4.10 sign-panel pattern) until 8.6/9.2 replace it. *Acceptance:* walking off the
+  porch → Jack's dialogue → exit → `G.Tut_Jack=1` → `DialogPostProcess()` → warp #2, unassisted.
+  *Deps:* B2, B3.
+- [ ] **B5 `ccmd` + the `cfg` alias table** *(= 9.3b + PL5d)* — `unhidePlus()` resolves, `setPlus()`
+  arms `trig_popup_move` and the Plus gates. *Acceptance:* fresh New Game shows `popup_1` on the
+  first steps. *Deps:* 9.3.
+- [ ] **B6 Feed interaction (post-warp-2 continuation)** — `+use` feed on the blueblood fires
+  `OnFedUponBegin`/`OnFedUponEnd`; the maker's `OnFedUponEnd` wires set `G.Tutorial_Blueblood=1`
+  and enable `trig_dialog_outside_chopshop`, opening the `Tut_Jack=2` chopshop beat.
+  *Acceptance:* feeding on the blueblood enables the chopshop dialogue trigger. *Deps:* B3.
+
+Parallel, non-blocking: 4.7 Source movement (the current pawn walks the beat fine),
+`PlayDialogFile` audio (decode is 6.2-done; the call path lands with B4), PL4 batch NPC export
+for Jack's real model. B-tasks that are slices of phase tasks (B2/B4/B5) flip here **and** feed
+their parent task's status in the same change.
+
 ## Done foundation (verified, compressed — details in `rebuild-strategy.md`)
 
 - [x] M0: world+skybox PMC rendering, DDS/PNG textures, `.emc` cache, fly pawn, map
@@ -359,6 +464,51 @@ as script-host log lines; ring buffer holds the session history — observable w
   counts moved to the Maps + Status windows and "what am I aiming at" to the Entity Inspector's live
   crosshair. All windows `#if ENABLE_COG`; the cheat manager compiles only where cheats are enabled.
   Editor target compiles + links clean (full unity). *Deps:* 2.1.
+- [x] **2.7 Agent-facing MCP surface** *(design: `debug-tooling.md` Layer 3)* — the debug
+  layer's console verbs get a third consumer beside the human (Cog) and `-ExecCmds`: an
+  MCP server an AI agent (Claude Code, Cursor, the MCP Inspector) drives over loopback HTTP.
+  **`UElysiumMcpSubsystem`** (`Private/ElysiumMcpSubsystem.{h,cpp}`, a `UEngineSubsystem`)
+  registers **20 `elysium_*` tools** through the engine's experimental `ModelContextProtocol`
+  plugin via `IModelContextProtocolModule::AddTool()` — the direct-registration path, so the
+  tools work in `-game`/PIE/cooked, not only the editor-only Toolset-Registry adapter. Tools
+  (`Private/ElysiumMcpTools.cpp`) are thin structured wrappers over the same runtime state the
+  Cog windows render, resolving the live world at **call** time (one stable tool list across
+  travel/PIE/idle): map lifecycle (`maps_list`/`map_load`/`map_reload`/`new_game`), player
+  (`player_get`/`teleport`/`noclip`), entities (`entity_list` w/ histogram + paging /
+  `entity_get` full chain+fields+outputs / `entity_fire` through the real `EnqueueInput`
+  chokepoint), queue (`queue_get`/`pause`/`step`), `io_history`, `script_eval` + `g_dump`,
+  `audio_state`, `screenshot` (viewport PNG, overlay excluded, shared capture path with 2.9),
+  and the escape hatches `console_exec` (runs any verb, merges Ar + log-tap output) +
+  `log_tail` (`FElysiumLogTap`, a 2,000-line always-on `FOutputDevice` ring). **On by default in
+  dev builds** — auto-starts wherever the (editor-only) plugin is present; `-NoElysiumMcp` opts out,
+  `-ElysiumMcp=<port>` pins a port, `elysium.mcp.start`/`stop` toggle it live; binds `127.0.0.1`
+  no-auth. An agent connects via the repo-root `.mcp.json` (server `elysium`, port 8000).
+  Editor-gated dep (`ELYSIUM_WITH_MCP`, `.uproject` pins the plugin + `AutomationTestToolset` +
+  `LiveCodingToolset` to the Editor target); compiles to an empty shell elsewhere. Verified
+  end to end: server binds, 20 tools list, `player_get` round-trips live data, `entity_fire`
+  drives the substrate. *Deps:* 2.3.
+- [x] **2.8 Automation tests (both tiers)** — the first automation suite, inside the module
+  (`Private/Tests/`, no `ELYSIUMUE_API` needed to reach the substrate). **Content-free tier**
+  (`ElysiumSubstrateTests.cpp`, app-context mask so it runs under `-nullrhi`): variant coercions
+  + truthiness, `ElysiumExpr` eval incl. the error-to-false contract (RE3), the KeyValues reader
+  (multi-line quoted value, nesting, comments, present-but-empty), event-queue ordering/FIFO/
+  cancel/pause-step, the class-registry case-folded base-chain walk, and one **end-to-end I/O
+  chain** (`logic_relay`→`math_counter` on a bare `FElysiumEntityWorld`, no PIE/content — drives
+  both chokepoints + the "falsy when dead" identity contract). **Content-gated tier**
+  (`ElysiumContentTests.cpp`): parses the real exported `sp_tutorial_1.ents` (1,868 records / 80
+  classnames — asserts a band, load-bearing classes, the `tutorial` landmark) and
+  `sm_pawnshop_1.ents` (parses + offers a travel landmark); **self-skips** (logs + passes) when a
+  map is unexported, so an empty `tools/out` stays green. `test.bat` drives
+  `Automation RunTest Elysium.<...>` headless with a JSON+HTML report. All 8 tests pass. *Deps:* 1.4, 5.2.
+- [x] **2.9 Screenshot-regression harness** — `FElysiumShotRun`
+  (`Private/ElysiumShotRun.{h,cpp}`), sibling to `FElysiumProfileRun`: `-ElysiumShots` self-drives
+  once the boot map settles, visits the **same fixed vantages as the profiler** (extracted into the
+  shared `ElysiumVantages.h`, so a look regression and a cost regression line up frame-for-frame),
+  pins the camera, settles (Lumen accumulation + shader compile), captures the viewport (overlay
+  excluded) to `tools/out/_shots/<map>/` + a manifest, and exits. Baselines are derived from the
+  user's own install → gitignored, never committed. Shares `ElysiumScreenshot.{h,cpp}` (deferred
+  capture + PNG encode/save) with the `elysium_screenshot` MCP tool. `shots.bat` mirrors
+  `profile.bat`. Verified: a real 2560×1392 rendered frame written. *Deps:* 0.1, 2.7.
 
 **Slice acceptance:** in standalone — browse entities, pick the elevator call button through
 the crosshair, hand-`ent_fire` its chain, watch beams + queue window, pause/single-step,
@@ -485,9 +635,9 @@ M1 leftovers that live in this lane.
   divergence `FUN_101344f0`/`FUN_101346e0`: InValue is a *delta* that advances a current-case pointer
   that many **configured** cases — skipping empty slots, wrapping 0..15 — then fires that case;
   `InitialCase` seeds the pointer; the 4-byte-larger class carries the extra current-index int),
-  **`env_fade`** (`FUN_10100e10` — the `Fade`/`ReverseFade` full-screen colour fade, `SF_FADE_IN`
-  reveal + `SF_FADE_STAYOUT` hold-covered, rendered by `AElysiumHUD` off a single screen-fade state on
-  the entity world), **`func_brush`** (`FUN_1013dd30` — Enable/Disable/Toggle + `Solidity`
+  **`env_fade`** (`FUN_10100e10` — the `Fade` full-screen colour fade, rendered by `AElysiumHUD` off a
+  single screen-fade state on the entity world; its output, spawnflag mapping and fade curve are B1),
+  **`func_brush`** (`FUN_1013dd30` — Enable/Disable/Toggle + `Solidity`
   never/always/toggle, unified with dormancy through the body's one `SetDormant` switch;
   ScriptHide/ScriptUnhide/Kill were already the base path the tutorial wires), **`point_teleport`**
   (`FUN_1018d940` — `Teleport` moves `!player` to origin + `angles` yaw via the world's `GetPlayerPawn`
@@ -663,7 +813,8 @@ loads `sm_pawnshop_1` at the landmark.
   provenance when bound (below the module globals, so nothing real is shadowed — no exported field-6
   actually references them, they are I/O *targets*). **Case-insensitive stat names** normalise through
   `CanonicalStatName` (BumpStat/CalcFeat). One static `GNativeBindings` table is the single source of
-  truth (membership tests + the debug view). Debug: the `Elysium.Scripting` Cog window grows a
+  truth (membership tests + the debug view) — B2 moved it, with the stub dispatch and the call log,
+  out of `ElysiumExpr.cpp` into `ElysiumScriptNatives.{h,cpp}` so the CPython host shares it. Debug: the `Elysium.Scripting` Cog window grows a
   **Native bindings** table (name / kind / backing status / live call-count) and a **Recent native
   calls** log; `UElysiumGameStateSubsystem` owns the native-call ring (`RecordNativeCall` +
   per-name counters). `ScheduleTask` (deferred source = 5.4) and `ChangeMap` (travel = P4) stay
@@ -761,7 +912,9 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
   `EElysiumMusicState` — cvar/Cog-driven until combat scoring lands in P9), and the **polar RandomSound
   scheduler** (per-sound Frequency cadence, `RandomSoundCount` concurrency cap, DistMin/Max·Height·Angle
   placement around the anchor). Debug: **Cog `Elysium.Sound Schemes`** (active scheme + stems + randoms +
-  music-state buttons + per-anchor FadeIn/FadeOut) and the **Audio window's live-voices table**. Music-stem
+  music-state buttons + per-anchor FadeIn/FadeOut) and the **Audio window's live-voices table**, which also
+  carries the **global mute** (`elysium.Mute`, default 1 = muted — a gain gate over the whole voice pool,
+  previews included; voices keep running at zero gain so unmuting rejoins the ambience mid-stream). Music-stem
   crossfade timing/DSP-room reverb are documented deferrals (client.dll music-state RE is landmark/soundscape
   level; RoomDSP submixes are P-later). **PL5a: scheme file copies** — `UE_extract_sounds.py` now mirrors each
   map's `ambient_soundscheme` `.txt` verbatim into `out/sound/Schemes/` and folds their `Filename` music/
@@ -901,9 +1054,9 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
   continuously. *Deps:* 8.6, 4.10.
 - [ ] **8.9 HUD on the UI foundation** — retire the Canvas HUD as the player-facing surface:
   the +use reticle/use-icon (4.4), blood/health and status, the sign/screen-fade states, and a
-  subtitle slot, composed on 8.6's stack with the same design tokens. The always-on
-  FPS/position overlay stays a dev affordance, separate from the game HUD. Use-icon art comes
-  from the PL3 atlas, upscaled under the presentation test. *Deps:* 8.6, 4.4, 4.10.
+  subtitle slot, composed on 8.6's stack with the same design tokens. Player pose/mode/FPS is
+  dev-only and already lives in the Cog Maps window, separate from the game HUD. Use-icon art
+  comes from the PL3 atlas, upscaled under the presentation test. *Deps:* 8.6, 4.4, 4.10.
 - [ ] **8.10 Accessibility & options backing** *(`remaster-direction.md` axis 4 — additive only;
   changes what the player can configure and perceive, never what the game does)* — full
   key/button remapping + gamepad navigation across the 8.6 component set; UI text scaling;
@@ -944,16 +1097,29 @@ draw on the same stack; NPCs stand in the world at their entity origins.
   `elysium.eval cCelerity` = **8**, `G.Tutorial_Discflags |= cCelerity` flips `G` to **8** — the 5.5
   acceptance, now on the default path — `elysium.script.cpython 0` A/Bs back to expr (NameError again),
   and travel re-imports per map. *Deps:* 5.5.
-- [ ] **9.3 Level-script execution** — the remainder of the 5.5 decision: replace the Python
-  bootstrap's native stubs with the real C `vampire` bindings, and make `ScheduleTask` strings
-  evaluate at arbitrary later times against a live `__main__`-equivalent namespace.
-  **Do `Entity.__getattr__`/`__setattr__` first** (2 of the 54 table entries): they are a datamap
-  traversal over the P1 class-chain field tables, they resolve ~55 of the 109 methods scripts call,
-  and every `ScriptHide`/`Trigger`/`Kill`/`Unlock` is an entity *input* reached only through them —
-  no amount of porting the 11 globals + 24 Character methods gets there. Then fill stubs
-  demand-driven off the Scripting window's native-call counters. Known gap surfaced by 9.3a: the
-  bootstrap's `vamputil` stub lacks `RandomLine`, so `santamonica` (and the other maps whose scripts
-  import it) fails to import — logged, non-fatal, map load continues. *Deps:* 9.3a.
+- [ ] **9.3 Level-script execution** — the remainder of the 5.5 decision. **B2 landed the core**:
+  `Entity.__getattr__`/`__setattr__` over the P1 class-chain tables, the `Player` object, all 11
+  module globals as real C bindings, `G`'s mapping protocol, and the `__main__` namespace
+  (`LoadLevelScript` merges the level module's public names into `__main__` and payloads evaluate
+  there, matching the `__main__.%s` dispatch — so `ScheduleTask`'s deferred strings already resolve
+  against a live `__main__`). What is left:
+  - **Fill the remaining stubs demand-driven** off the Scripting window's native-call counters —
+    the 22 unbacked Character methods (inventory, disposition, camera, barter, feats) and the four
+    spawn/query globals (`CreateEntityNoSpawn`, `CallEntitySpawn`, `OneOfSet`, `SquadSeesPlayer`),
+    plus `Entity`'s four writers (`SetOrigin`/`SetAngles`/`SetModel`/`SetName`), which need a body
+    to move, a name index to re-key, and a model to swap.
+  - **Field-table audit** *(surfaced by B2)* — the Entity attribute namespace is only as complete
+    as the class field tables, and they are **input-complete but not field-complete**: a leaf class
+    that reads a keyvalue straight at `Spawn()` without a `Field(...)` registration is invisible to
+    a script. `env_fade` was the proven case (`duration`/`holdtime` — its four-record datamap is
+    fully RE'd, so B2 registered them); walk the other registered classes for the same shape. Where
+    the retail datamap has not been decompiled, RE it rather than guessing which fields are keyable.
+  - **`vamputil` for real** — the bootstrap's stub module lacks `RandomLine`, so `santamonica` (and
+    the other maps whose scripts import it) still fails to import; logged, non-fatal, map load
+    continues. The real file cannot import until `ccmd`/`cvar` are bound, i.e. **9.3b**, which is
+    also why `IsClan`/`IsIdling` are still bootstrap stubs (now returning 0, so a clan gate falls
+    to its `else` instead of always taking the first branch).
+  *Deps:* 9.3a, B2.
 - [ ] **9.3b Console bridge — `ccmd` + the `cfg` alias table** *(the fifth scripting surface)* —
   the scripts drive the engine console, and the console drives the scripts back. `__main__.ccmd`
   is a console-command object whose *attribute assignment* executes a command:
@@ -1036,6 +1202,7 @@ dialogue, scripted flow, quests, save/load included.
 | RE6 | `ent_survey` count reconciliation — retail = 16,125 outputs / 1,591 Python (16,214/1,621 was stale) | 0.6 | [x] |
 | RE7 | Retail `.sav` block wire format | 10.7 (only for importing retail saves) | [P] |
 | RE8 | Re-base `entity_io.md` survey on the patch (engine-loaded) map set — patch 24,081 outputs / 6,956 Python (retail 16,125 / 1,591) | 0.8 | [x] |
+| RE9 | Screen-fade flag semantics — the client owns the curve, not `env_fade`. `CEnvFade::InputFade` `0x10100F90` (spawnflags → fade flags), `CViewEffects::Fade` `client.dll 0x10196FE0` (builds `FadeEnd`/`FadeReset`/speed), `CViewEffects::FadeCalculate` `client.dll 0x10197190` (the per-frame alpha + the `0x20` auto-reverse). **`SF_FADE_STAYOUT` uncovers again; the permanent bit is a different one env_fade never sets. No `OnEndFade`/`ReverseFade` exists.** | B1 | [x] |
 
 ### Ghidra extraction — findings + plan *(pass dated 2026-07-22; scripts + dumps in `tools/ghidra/`, `out/re*.txt`)*
 
@@ -1196,6 +1363,99 @@ cross-check `recovered/dice-system.md` alongside the running-game golden test.
 
 ## Decision log (append-only)
 
+- **2026-07-24** — **Brush touch requires a pawn toucher, and waits until the pawn is seated.**
+  Bug fix. `elysium.newgame` (or any travel) *from an already-loaded map* warped the player off
+  the tutorial porch into the downtown alley and looked like the spawn "moving to the next spawn".
+  Cause: two unrelated things collided. (1) Every brush body on a map is a component of the one
+  `AElysiumMapActor`, so when the new map builds its bodies, Unreal fires begin/end overlap for
+  every trigger∩trigger and trigger∩solid pair at once — and `UElysiumBrushComponent::RouteTouch`
+  forwarded *all* of them as touches, since it never checked who was touching. (2) The pawn carries
+  over from the previous map and is placed at the new map's spawn only on the first tick *after*
+  the entity world exists, so for a moment it stands wherever the old map left it. Together, the
+  phantom geometry-overlap touches ran real scripted beats — `trig_feed_fix.OnStartTouch ->
+  fix_fade.Fade -> teleport_player.Teleport` — and teleported the player. Fix: `RouteTouch` now
+  routes only when the overlapping actor `IsA<APawn>` (VtMB never treats geometry∩geometry as a
+  touch — only movers touch), and only once `AElysiumMapActor::IsPlayerSeated()` is true (the pawn
+  has been moved to this map's info_player_start/landmark, or this map requested no placement).
+  Verified: `elysium.newgame` from a loaded `sp_tutorial_1` now produces zero `teleport_player`
+  deliveries, zero `fix_fade`/`trig_feed_fix` fires, and exactly one legitimate touch — the player
+  genuinely standing in the (inert, StartDisabled-on-arrival) `trig_theater_to_tutorial` changelevel
+  volume at the porch, which fires nothing. Do not remove either guard. When NPC pawns (8.5) and
+  physics props (8.4) can trip triggers, widen the `APawn` test rather than dropping it.
+- **2026-07-24** — **Agentic QA is Layer 3 of the debug architecture, not a new track (P2.7–2.9).**
+  `debug-tooling.md` already framed the `elysium.*` console verbs as "the thin scriptable layer for
+  `-ExecCmds` automation and headless runs" — the third consumer beside the human (Cog) and the
+  script. An AI agent is that third consumer made first-class: the same runtime state, reached
+  through structured MCP tools instead of parsed console text. Owner call — chosen shape and why:
+  (1) **Direct `AddTool()` registration, not the Toolset-Registry adapter** — the adapter is
+  editor-only, but this project's whole loop is `-game`/cooked with no editor content loop, so tools
+  register through `IModelContextProtocolModule::AddTool()`, which serves in every target. (2)
+  **Tools live inside `ElysiumUE`, not a separate module** — `FElysiumEntityWorld` and the substrate
+  carry no `ELYSIUMUE_API` exports (plain C++, Unreal supplies bodies only), so a sibling module
+  couldn't link them; the MCP layer follows the vendored-Cog precedent (non-Shipping/editor private
+  dep). (3) **On-by-default in dev, loopback + no-auth** — the server auto-starts wherever the plugin
+  is present (editor target only, so never in Shipping/Test), because a QA surface you must remember
+  to enable is one you forget; `-NoElysiumMcp` opts out. (4) **Two-tier tests** — a `-nullrhi` content-free suite that is the real
+  regression net (substrate paths), plus a content-gated suite that self-skips on an empty
+  `tools/out` so a fresh checkout stays green; the LLM is never the oracle — it *drives* Unreal's own
+  automation runner. (5) **Screenshots share the profiler's vantages** (`ElysiumVantages.h`) so a
+  look regression and a cost regression are the same frame; baselines are game-derived → gitignored.
+  Industry survey that informed this (Epic's in-box `ModelContextProtocol` plugin, the community
+  `unreal-mcp` servers, Gauntlet vs. functional-test guidance, the fire→screenshot→assert playtest
+  loop): the editor-centric MCP toolsets buy little here, so only `AutomationTestToolset` +
+  `LiveCodingToolset` are enabled beside ours; Gauntlet is deferred (single platform, no net
+  sessions). Full design: `debug-tooling.md` Layer 3.
+- **2026-07-24** — **Field-6 payloads evaluate in `__main__`, not the level module (B2 revises
+  9.3a).** RE first. `G`'s type object (`PyDataManager`, `0x1058fa08`) carries a `tp_as_mapping`
+  (`0x1058f9f8`) whose `mp_subscript` (`0x1019b4a0`) literally **tail-jumps into `tp_getattr`**
+  after `PyString_AsString`, and whose `mp_ass_subscript` (`0x1019b720`) calls `tp_setattr` the
+  same way — so `G[k]` **is** `G.k`, default-on-miss 0 and all. Reproduced, because
+  `DialogPostProcess()` calls `saveState()` (`for k in G.keys(): G_tut[k] = G[k]`) on its first
+  line and would otherwise never reach the beat branch. Two knowing divergences on that surface:
+  a **non-string key on assignment raises `TypeError`** where retail tail-calls `PyDict_SetItem`
+  with the manager object in the dict slot (a latent bug no shipped script reaches — every G key
+  is a string), and our proxy keeps a **`has_key` method** that retail's 2-entry table does not
+  have (retail resolves `G.has_key` to a flag read of 0; no script calls it, and the method
+  predates this task on the expr host's G surface too).
+  The namespace change is the second half. 9.3a evaluated payloads in the **level module's** dict;
+  VtMB wraps every payload as `__main__.%s` (`0x1055e370`), which resolves the leading name as an
+  attribute of `__main__` — so the level script's own `def`s must be *in* `__main__`, and so must
+  the engine globals. Measured over the 10 exported maps' 363 field-6 payloads, the module-dict
+  choice breaks 2 of them: `hw_609_1` fires a bare `FindPlayer().ClearActiveDisciplines()` and
+  `hollywood.py`, unlike `tutorial.py`, never aliases `FindPlayer` at module level. `LoadLevelScript`
+  now merges the imported module's public top-level names into `__main__` and everything evaluates
+  there. A function keeps its defining module's globals, so `DialogPostProcess` still reads its own
+  `G_tut`/`Find`/`statemap`; only the entry-point lookup moved. `__main__.Level = __name__` is the
+  cross-check that retail imports-then-merges rather than exec'ing into `__main__` — the assignment
+  only carries information if `__name__` is the script's own module name.
+  Third, smaller call: the bootstrap's `IsClan`/`IsIdling` stubs (vamputil's, not engine API — they
+  exist only so `tutorial.py`'s import-time guard resolves) now return **0** instead of a truthy
+  stub object. A truthy predicate made every clan gate take its *first* branch, i.e. silently play
+  as Brujah; 0 falls to the `else`, which is the honest "no clan matched". Real behaviour arrives
+  with the real `vamputil` in 9.3b/B5.
+- **2026-07-23** — **B1 landed, and `SF_FADE_STAYOUT` is the flag that brings the screen *back*.**
+  RE first, over `vampire.dll` + `client.dll`. `CEnvFade::InputFade` (`0x10100F90`) maps
+  spawnflags to the client's fade flags as `SF_FADE_IN`(0x1) → **0**, else `0x2` (`FFADE_OUT`)
+  `| 0x20` when `SF_FADE_STAYOUT`(0x8); `SF_FADE_MODULATE`(0x2) → `|0x4`; `SF_FADE_ONLYONE`(0x4)
+  sends to the activator alone. It then fires `OnBeginFade` at delay 0 and returns — no think, no
+  second output. `CViewEffects::FadeCalculate` (`client.dll` `0x10197190`) is where the meaning of
+  `0x20` lives: when a fade passes both `FadeEnd` and `FadeReset` it is normally **dropped**, but
+  with `0x20` it instead flips to a fade-in (`flags &= ~0x22 | 0x1`), negates its speed and takes
+  one more `duration` to uncover. The client's genuinely-permanent bit is `0x8` (which re-pushes
+  `FadeReset` to `curtime + 0.1` every frame) and `env_fade` never sets it; `0x40` disconnects to
+  the menu when the fade ends. **4.5 had this backwards** — it held `STAYOUT` covered forever and
+  ramped the plain fade back — which would have left warp #2 on a black screen through Jack's
+  dialogue. Corrected: cover over `duration`, hold `holdtime`, then uncover over `duration` only
+  when `SF_FADE_STAYOUT`, else expire. That reproduces `teleport_fade`'s authored timing exactly
+  (`duration 1`, `holdtime 2`, clear at t=4 — precisely when its `Jack.StartPlayerDialogRemote`
+  wire fires). **`OnEndFade` and `ReverseFade` are not VtMB** (no such string in `vampire.dll`);
+  the `ReverseFade` input is removed rather than kept as a debug affordance, so the Inspector's
+  input list stays a faithful mirror of the datamap. `SF_FADE_IN`'s flag-0 path is reproduced
+  as-is including its quirk — `FadeCalculate`'s `flags & 0x3` test fails, so the colour sits flat
+  at full alpha for `holdtime + duration` and then snaps clear, with no ramp either way; no
+  tutorial `env_fade` sets it. The fade stays **one slot** rather than VtMB's fade list: the list
+  sums colours and maxes alphas, which is indistinguishable from one slot while every fade on a
+  map is the same colour, and all seven on the tutorial are black.
 - **2026-07-23** — **Inspection is click-to-select, not crosshair-follow (P2.6).** Owner call. The
   live crosshair inspector is removed: the Entity Inspector no longer traces the camera ray every
   frame. Instead, while the Cog menu owns the mouse, LMB over the world picks whatever is under the

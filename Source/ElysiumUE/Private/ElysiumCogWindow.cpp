@@ -3,6 +3,7 @@
 #if ENABLE_COG
 
 #include "ElysiumAudioSubsystem.h"
+#include "ElysiumCogStyle.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
@@ -13,6 +14,12 @@
 
 FElysiumEntityHandle FElysiumCogWindow::Selection;
 FElysiumPickResult FElysiumCogWindow::Pick;
+
+void FElysiumCogWindow::GameTick(float DeltaTime)
+{
+	Super::GameTick(DeltaTime);
+	ElysiumCogStyle::EnsureApplied(GetDpiScale());
+}
 
 UElysiumMapSubsystem* FElysiumCogWindow::GetMapSubsystem() const
 {

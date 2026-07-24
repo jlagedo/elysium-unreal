@@ -96,6 +96,17 @@ public:
 	void SetVoiceLocation(FElysiumAudioVoiceHandle Handle, const FVector& Location);
 	bool IsVoicePlaying(FElysiumAudioVoiceHandle Handle) const;
 
+	// --- Global mute ---------------------------------------------------------------------------
+	// One gate over every voice this subsystem owns (ambient_generic, scheme bed/music/randoms,
+	// mover sounds, Cog previews) — nothing plays audio any other way. Muting scales every voice's
+	// gain to zero *without* stopping it, so the scheme beds and music stems keep running in sync
+	// and unmuting drops back into the mix mid-stream. Backed by `elysium.Mute`, which defaults to
+	// 1: a fresh run is silent until audio is asked for.
+	bool IsMuted() const;
+	void SetMuted(bool bInMuted);
+	// The multiplier every requested volume passes through (0 muted, 1 audible).
+	float MasterGain() const { return IsMuted() ? 0.f : 1.f; }
+
 	// Per-frame maintenance: reap drained one-shots and voices whose fade-out has completed. Called
 	// from AElysiumMapActor::Tick (the one place the map is ticked); safe to call with no world.
 	void TickAudio(float DeltaSeconds);
@@ -113,6 +124,9 @@ private:
 	const FElysiumSoundCache::FDecoded* LoadAndRecord(const FString& Rel);
 	// Find a voice by handle id (linear scan — the pool is small, tens at most).
 	FElysiumAudioVoice* FindVoice(FElysiumAudioVoiceHandle Handle);
+	// Re-apply MasterGain() to every live voice (a mute flip). Voices already fading out toward a
+	// reap are skipped — re-setting their volume would make a dying sound audible again.
+	void ApplyMasterGain();
 
 	// Rel -> last decode metadata (the browser/verbs read this).
 	TMap<FString, FElysiumSoundInfo> DecodeResults;

@@ -296,56 +296,60 @@ int32 FElysiumEntityWorld::GetAimedUseIcon() const
 // --- Screen fade (P4.5 env_fade) --------------------------------------------------------
 
 void FElysiumEntityWorld::StartScreenFade(const FLinearColor& Color, float Duration, float HoldTime,
-	float MaxAlpha, bool bReverse, bool bStayOut)
+	float MaxAlpha, bool bFadeIn, bool bAutoReverse)
 {
-	ScreenFade.bActive   = true;
-	ScreenFade.Color     = Color;
-	ScreenFade.MaxAlpha  = FMath::Clamp(MaxAlpha, 0.0f, 1.0f);
-	ScreenFade.Duration  = FMath::Max(Duration, 0.0f);
-	ScreenFade.HoldTime  = FMath::Max(HoldTime, 0.0f);
-	ScreenFade.bReverse  = bReverse;
-	ScreenFade.bStayOut  = bStayOut;
-	ScreenFade.StartTime = NowSeconds();
+	ScreenFade.bActive      = true;
+	ScreenFade.Color        = Color;
+	ScreenFade.MaxAlpha     = FMath::Clamp(MaxAlpha, 0.0f, 1.0f);
+	ScreenFade.Duration     = FMath::Max(Duration, 0.0f);
+	ScreenFade.HoldTime     = FMath::Max(HoldTime, 0.0f);
+	ScreenFade.bFadeIn      = bFadeIn;
+	ScreenFade.bAutoReverse = bAutoReverse;
+	ScreenFade.StartTime    = NowSeconds();
 }
 
 bool FElysiumEntityWorld::GetScreenFade(FLinearColor& OutColor) const
 {
-	if (!ScreenFade.bActive)
+	// The curve is the one CViewEffects::FadeCalculate runs (client.dll FUN_10197190) over the fade
+	// CViewEffects::Fade built (FUN_10196fe0), in closed form: alpha ramps against FadeEnd, holds
+	// until FadeReset, and the fade is then *dropped* — unless its auto-reverse bit is set, which
+	// flips it to a fade-in and gives it one more Duration to uncover. `Fade` with a zero duration
+	// never rebases FadeEnd/FadeReset onto the clock, so such a fade dies on its first frame.
+	if (!ScreenFade.bActive || ScreenFade.Duration <= KINDA_SMALL_NUMBER)
 	{
 		return false;
 	}
-	const double T = NowSeconds() - ScreenFade.StartTime;
+	const float T = (float)(NowSeconds() - ScreenFade.StartTime);
 	const float Dur = ScreenFade.Duration;
+	const float Max = ScreenFade.MaxAlpha;
+	const float HoldEnd = Dur + ScreenFade.HoldTime;
 	float Alpha;
-	if (ScreenFade.bReverse)
+	if (ScreenFade.bFadeIn)
 	{
-		// SF_FADE_IN: reveal. Start opaque at MaxAlpha and clear over Duration, then idle.
-		if (T >= Dur)
+		// SF_FADE_IN clears every animating bit rather than setting one (CEnvFade::InputFade leaves
+		// fadeFlags at 0), so FadeCalculate takes its flat branch: the colour sits at full alpha for
+		// HoldTime + Duration and then vanishes. Reproduced as-is — no tutorial env_fade sets it.
+		if (T > ScreenFade.HoldTime + Dur)
 		{
 			return false;
 		}
-		Alpha = (Dur > KINDA_SMALL_NUMBER) ? FMath::Lerp(ScreenFade.MaxAlpha, 0.0f, (float)(T / Dur)) : 0.0f;
+		Alpha = Max;
+	}
+	else if (T < Dur)                                          // covering: 0 -> MaxAlpha
+	{
+		Alpha = Max * (T / Dur);
+	}
+	else if (T <= HoldEnd)                                     // held covered
+	{
+		Alpha = Max;
+	}
+	else if (ScreenFade.bAutoReverse && T < HoldEnd + Dur)     // uncovering: MaxAlpha -> 0
+	{
+		Alpha = Max * ((HoldEnd + Dur - T) / Dur);
 	}
 	else
 	{
-		const float HoldEnd = Dur + ScreenFade.HoldTime;
-		const float ReturnEnd = HoldEnd + Dur;
-		if (T < Dur)                                   // covering: 0 -> MaxAlpha
-		{
-			Alpha = (Dur > KINDA_SMALL_NUMBER) ? FMath::Lerp(0.0f, ScreenFade.MaxAlpha, (float)(T / Dur)) : ScreenFade.MaxAlpha;
-		}
-		else if (T < HoldEnd || ScreenFade.bStayOut)   // holding (or staying out forever)
-		{
-			Alpha = ScreenFade.MaxAlpha;
-		}
-		else if (T < ReturnEnd)                        // fading back: MaxAlpha -> 0
-		{
-			Alpha = (Dur > KINDA_SMALL_NUMBER) ? FMath::Lerp(ScreenFade.MaxAlpha, 0.0f, (float)((T - HoldEnd) / Dur)) : 0.0f;
-		}
-		else
-		{
-			return false;                              // finished, faded back to clear
-		}
+		return false;                                          // expired
 	}
 	OutColor = ScreenFade.Color;
 	OutColor.A = FMath::Clamp(Alpha, 0.0f, 1.0f);

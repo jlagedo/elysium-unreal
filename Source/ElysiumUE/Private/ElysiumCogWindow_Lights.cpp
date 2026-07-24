@@ -90,18 +90,26 @@ void FElysiumCogWindow_Lights::RenderContent()
 	const float PrevSpecular = Rig->SpecularScale;
 	const float PrevSunLux = Rig->SunScaleLux;
 
-	ImGui::SetNextItemWidth(GetDpiScale() * 220.0f);
+	// The sliders stretch with the window, minus a gutter sized to the longest label — an ImGui
+	// slider draws its label to its right, so a fixed slider width pushes that label off the edge of
+	// a narrow window. The floor keeps the track grabbable when the window is dragged very narrow.
+	const float LabelGutter = ImGui::CalcTextSize("Point/spot scale").x + ImGui::GetStyle().ItemInnerSpacing.x;
+	const float SliderWidth = FMath::Max(GetDpiScale() * 110.0f,
+		ImGui::GetContentRegionAvail().x - LabelGutter);
+
+	ImGui::SetNextItemWidth(SliderWidth);
 	FCogWidgets::SliderWithReset("Point/spot scale", &Rig->PointSpotScale, 0.0001f, 0.02f, 0.003f, "%.4f");
-	ImGui::SetNextItemWidth(GetDpiScale() * 220.0f);
+	ImGui::SetNextItemWidth(SliderWidth);
 	FCogWidgets::SliderWithReset("Max brightness", &Rig->MaxBrightness, 0.5f, 20.0f, 8.0f, "%.1f");
-	ImGui::SetNextItemWidth(GetDpiScale() * 220.0f);
+	ImGui::SetNextItemWidth(SliderWidth);
 	FCogWidgets::SliderWithReset("Falloff exponent", &Rig->FalloffExponent, 0.2f, 8.0f, 1.0f, "%.2f");
-	ImGui::SetNextItemWidth(GetDpiScale() * 220.0f);
+	ImGui::SetNextItemWidth(SliderWidth);
 	FCogWidgets::SliderWithReset("Reach scale", &Rig->RadiusScale, 0.25f, 4.0f, 1.0f, "%.2f");
-	ImGui::SetNextItemWidth(GetDpiScale() * 220.0f);
+	ImGui::SetNextItemWidth(SliderWidth);
 	FCogWidgets::SliderWithReset("Specular scale", &Rig->SpecularScale, 0.0f, 1.0f, 0.0f, "%.2f");
-	ImGui::SetNextItemWidth(GetDpiScale() * 220.0f);
+	ImGui::SetNextItemWidth(SliderWidth);
 	FCogWidgets::SliderWithReset("Sun lux scale", &Rig->SunScaleLux, 0.5f, 30.0f, 8.0f, "%.1f");
+	ImGui::TextDisabled("right-click a slider to reset it");
 
 	const bool bChanged =
 		PrevPointSpot != Rig->PointSpotScale || PrevMaxBright != Rig->MaxBrightness ||
@@ -127,7 +135,8 @@ void FElysiumCogWindow_Lights::RenderContent()
 		ImGui::TableSetupScrollFreeze(0, 1);
 		ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 34.0f);
 		ImGui::TableSetupColumn("type", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 44.0f);
-		ImGui::TableSetupColumn("colour", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 90.0f);
+		// Swatch + the raw WORLDLIGHTS magnitude the swatch was derived from, so the header names both.
+		ImGui::TableSetupColumn("colour/mag", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 92.0f);
 		ImGui::TableSetupColumn("intensity", ImGuiTableColumnFlags_WidthStretch);
 		ImGui::TableSetupColumn("style", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 44.0f);
 		ImGui::TableHeadersRow();
@@ -150,9 +159,11 @@ void FElysiumCogWindow_Lights::RenderContent()
 
 				ImGui::TableNextColumn();
 				const FLinearColor Col = Light ? Light->GetLightColor() : FLinearColor::Black;
+				// Sized to the text line so the swatch and the magnitude beside it share a baseline
+				// at any font scale.
+				const float Swatch = ImGui::GetTextLineHeight();
 				ImGui::ColorButton("##c", ImVec4(Col.R, Col.G, Col.B, 1.0f),
-					ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoPicker,
-					ImVec2(GetDpiScale() * 14.0f, GetDpiScale() * 14.0f));
+					ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoPicker, ImVec2(Swatch, Swatch));
 				ImGui::SameLine();
 				ImGui::TextDisabled("%.0f", S.Mag);
 

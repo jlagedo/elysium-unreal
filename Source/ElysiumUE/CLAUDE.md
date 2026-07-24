@@ -58,7 +58,8 @@ map epoch; tears down on travel).
 | `FElysiumStaticMeshBuilder` | runtime `UStaticMesh` per unique prop model (`BuildFromMeshDescriptions`), drawn as one ISM per (model, solidity) |
 | `UElysiumLightRig` | one Unreal light per WORLDLIGHTS `.lights` source; soft exponent falloff, specular off (VtMB is pure Lambert), sun, skyambient, lightstyle animation, live retune via `ApplyLiveTuning()` |
 | `ElysiumEnvironment.{h,cpp}` | `.env` sky/fog + `.cube` LUT onto `M_Sky` + post-process |
-| `FElysiumProfileRun` | the headless profiling harness |
+| `FElysiumProfileRun` | the headless profiling harness (`-ElysiumProfile`) |
+| `FElysiumShotRun` | the headless screenshot-regression harness (`-ElysiumShots`); shares the vantage table (`ElysiumVantages.h`) with the profiler and the capture path (`ElysiumScreenshot.{h,cpp}`) with the MCP screenshot tool |
 
 Collision comes from `.hulls` (one convex `FKConvexElem` per solid world brush, PLAYERCLIP
 included) + `.dispcol` (displacement trimesh) on collision-only PMCs; `elysium.BrushCollision`
@@ -66,8 +67,8 @@ A/Bs back to the render trimesh.
 
 Player-facing actors: `AElysiumGameMode`, `AElysiumPlayerController` (+ `UElysiumCheatManager`
 — `Noclip`, `ElysiumTeleport`, plus stock `UCheatManager` execs), `AElysiumPawn`
-(Character-movement FPS pawn with noclip), `AElysiumHUD` (Canvas: FPS/position overlay, the
-use-icon reticle, `env_fade` screen fade, sign panels).
+(Character-movement FPS pawn with noclip), `AElysiumHUD` (Canvas: the use-icon reticle,
+`env_fade` screen fade, sign panels — player pose/mode/FPS live in the Cog Maps window).
 
 ## The entity substrate (Track B)
 
@@ -101,19 +102,44 @@ Class implementations live in `ElysiumStarterClasses.cpp` (logic_auto/relay, tri
 default-Block so world + solid bodies occlude the ray, isolated from `ECC_Visibility`). The
 72-entry icon-name table and the channel constant live in `ElysiumUseIcons.h`.
 
+**Brush touch requires a pawn toucher (`UElysiumBrushComponent::RouteTouch`).** Only a pawn
+overlapping a trigger volume raises `OnStartTouch`/`OnEndTouch`; a volume that merely intersects
+another brush body — every body on a map is a component of the *same* map actor, so trigger∩trigger
+and trigger∩solid overlaps fire begin/end at map-build time — is filtered out, matching VtMB (geometry
+overlapping geometry is never a touch). A second gate suppresses touches until the map has seated the
+pawn (`AElysiumMapActor::IsPlayerSeated`): on `elysium.newgame`/travel from an already-loaded map the
+pawn briefly stands where the *previous* map left it, and any volume it lands inside then is an
+artifact of the old position, not an entered trigger.
+
 ## Scripting hosts
 
 `IElysiumScriptHost` is the one seam (installed on `UElysiumGameStateSubsystem`; covers field-6
 payloads, `logic_pythoncheck`, `EvalScript`, `ScheduleTask`, level-script import):
 
 - `FElysiumCPythonScriptHost` over `FElysiumPythonVM` — the **map-load default**: embedded
-  CPython 2.7.18 running VtMB's own level scripts 1:1, with a `vampire` C-module whose `G` is
-  proxied onto the game state. `MakePreferredScriptHost` falls back when the SDK is absent or
-  the VM fails to start (a dead VM's all-Void evals are indistinguishable from error-to-false).
-  The map's `worldspawn.levelscript` imports **before the spawn pass**, matching VtMB's order.
+  CPython 2.7.18 running VtMB's own level scripts 1:1. `MakePreferredScriptHost` falls back when
+  the SDK is absent or the VM fails to start (a dead VM's all-Void evals are indistinguishable
+  from error-to-false). The map's `worldspawn.levelscript` imports **before the spawn pass**,
+  matching VtMB's order, and `LoadLevelScript` then merges the module's public top-level names
+  into `__main__`. Everything — field-6 payloads, `ScheduleTask` sources, callbacks, the console
+  verbs — evaluates in `__main__`, which is where VtMB evaluates them (its dispatch wraps the
+  payload as `__main__.%s`, so the leading name is an attribute of the bus).
+- `ElysiumPythonEntity.{h,cpp}` is the `vampire` module's object surface: the **`Entity`** type
+  (a generation-checked handle, not a pointer — a reference kept across a `Kill` or a travel
+  raises "game entity has been deleted"), the sheet-backed **`Player`**, and the 11 module
+  globals. `Entity.__getattr__` resolves the type methods and instance `__dict__` first, then
+  walks the class-chain tables — an **input** name manufactures a bound callable that fires
+  through `EnqueueInput`, a **field** name marshals the live value; `__setattr__` is the mirror
+  (datamap first, `__dict__` on a miss; an input or a non-keyable field is read-only). `G` is
+  proxied onto the game state with both the attribute *and* mapping protocols, because VtMB's
+  `G[k]` is its `G.k`. `FElysiumPythonVM` itself owns only the interpreter.
+- `ElysiumScriptNatives.{h,cpp}` is the engine `vampire` surface both hosts share: the binding
+  table the Cog Scripting window renders, the stub defaults, the Character-method dispatch, and
+  the native-call log. It lives outside either host so `elysium.script.cpython 0/1` swaps the
+  interpreter without changing what a name does.
 - `FElysiumExprScriptHost` over `ElysiumExpr` — the self-contained lexer + recursive-descent
   parser + tree-walk for VtMB's restricted expression subset; every error collapses to Void
-  (error-to-false). Also carries the native-binding table (`GNativeBindings`).
+  (error-to-false).
 - `FElysiumNullScriptHost` — logs + Void. `elysium.script.live 0` installs it to darken the
   whole scripting surface for A/B; `elysium.script.cpython` swaps CPython/expr.
 
@@ -128,6 +154,12 @@ payloads, `logic_pythoncheck`, `EvalScript`, `ScheduleTask`, level-script import
 `FElysiumSoundScheme` (owned by the map actor) run the ambient bed, the music state machine,
 and the polar RandomSound scheduler. RoomDSP reverb submixes are not built.
 
+Every voice passes through the subsystem's **global mute** (`elysium.Mute`, **default 1 = muted**;
+`IsMuted`/`SetMuted`/`MasterGain`, mirrored by the Cog Audio window's Mute checkbox). It is a gain
+multiplier, not a stop: a muted voice keeps playing at zero gain, so beds and music stems stay in
+sync and unmuting rejoins the mix mid-stream. `FElysiumAudioVoice::Volume` holds the *requested*
+volume, so a flip re-applies in one pass (voices already fading out toward a reap are skipped).
+
 ## Shared readers
 
 - `ElysiumKeyValues.h` — the Source KeyValues reader (whole-file character-stream tokenizer, so
@@ -140,13 +172,23 @@ and the polar RandomSound scheduler. RoomDSP reverb submixes are not built.
 ## Debug layer (non-Shipping)
 
 - `UElysiumCogSubsystem` (`#if ENABLE_COG`) registers the stock CogEngine windows plus the
-  custom ones under an `Elysium` F1-menu group. `FElysiumCogWindow` is their base — it hands
-  them `GetMapActor`/`GetEntityWorld`/`GetGameState`/`GetMapSubsystem` (Track-B entities are
+  custom ones under an `Elysium` F1-menu group. Stock `CogEngineWindow_ImGui` (the Dear ImGui /
+  ImPlot demo, metrics, debug-log and style-editor toggles) is not registered. `FElysiumCogWindow`
+  is their base — it hands them
+  `GetMapActor`/`GetEntityWorld`/`GetGameState`/`GetMapSubsystem` (Track-B entities are
   plain C++ and invisible to Cog's UObject inspector) plus a shared static browser→inspector
-  selection. Windows: `_Status`, `_Maps` (travel + load timings + transitions), `_Lights`
+  selection. Windows: `_Status`, `_Maps` (travel + load timings + transitions + player pose/mode/FPS),
+  `_Lights`
   (live calibration sliders), `_Entities` (filter/histogram/dormancy browser), `_Inspector`,
   `_EventQueue` (pending queue + history + pause/step), `_WorldViz`, `_Audio`, `_SoundScheme`,
   `_Logic`, `_Scripting`, `_Npc`.
+- `ElysiumCogStyle.{h,cpp}` is the debug UI's skin and its one palette: blood/bone/ink colours,
+  the ImGui style built from them, semantic aliases (`ColOk`/`ColWarn`/`ColError`/`ColName`/
+  `ColDim`/`ColInert`/`ColSelected`) that every window uses instead of literal `ImVec4`s, and
+  `LabelValue` — the overlap-safe label/value row the key/value sections share. The style is
+  global ImGui state, so it also covers the stock Cog windows and the F1 menu bar;
+  `FElysiumCogWindow::GameTick` re-installs it whenever Cog rebuilds the style (a DPI change).
+  `elysium.CogTheme 0` restores stock ImGui dark.
 - Selection is **by click** (`ElysiumPick.{h,cpp}`, `#if !UE_BUILD_SHIPPING`): while the Cog
   menu owns the mouse, LMB over the world (not over an imgui window) picks, RMB clears. The
   game is not paused. `ElysiumPick::Trace` returns the world-space fill triangles + outline
@@ -207,6 +249,24 @@ and the polar RandomSound scheduler. RoomDSP reverb submixes are not built.
   per-frame rebuild. Only the distance-culled labels stay immediate-mode.
 - Debug injection always uses the real chokepoint (`FElysiumEntityWorld::EnqueueInput`) — the
   Inspector's fire buttons and `ent_fire` are the same path a map's own I/O takes.
+- **Layer 3 — the agent-facing MCP surface** (`debug-tooling.md` Layer 3): `UElysiumMcpSubsystem`
+  (`UEngineSubsystem`, editor-gated by `ELYSIUM_WITH_MCP`) registers ~20 `elysium_*` MCP tools
+  (`ElysiumMcpTools.cpp`) through the engine's `ModelContextProtocol` plugin via
+  `IModelContextProtocolModule::AddTool()` (direct registration → works in `-game`/PIE/cooked, not
+  only the editor-only Toolset adapter). The tools are structured wrappers over the same runtime
+  state the Cog windows read, resolving the live world at call time; `entity_fire` goes through
+  `EnqueueInput` like everything else. `console_exec`/`log_tail` read `FElysiumLogTap` (an always-on
+  2,000-line `FOutputDevice` ring). **On by default in dev builds** (auto-starts wherever the plugin
+  is present — editor target only, so never in Shipping/Test); `-NoElysiumMcp` opts out,
+  `-ElysiumMcp=<port>` pins a port, `elysium.mcp.start`/`stop` toggle it live. Loopback + no-auth;
+  an agent connects via the repo-root `.mcp.json` (server `elysium`, port 8000). Compiles to an empty
+  shell on a non-Editor target. The plugin, plus `AutomationTestToolset` + `LiveCodingToolset`, are
+  `TargetAllowList: [Editor]` in the `.uproject`.
+- **Automation tests** live in `Private/Tests/` (inside the module — the plain-C++ substrate carries
+  no `ELYSIUMUE_API` exports for a separate test module): `ElysiumSubstrateTests.cpp` (content-free,
+  app-context so it runs under `-nullrhi` — variant/expr/KeyValues/queue/registry + an end-to-end
+  `logic_relay→math_counter` I/O chain on a bare `FElysiumEntityWorld`) and `ElysiumContentTests.cpp`
+  (parses real exported `.ents`, self-skips when `tools/out` is empty). Run headless via `test.bat`.
 - Editor-only World Outliner labels (`ElysiumEditorLabels.h`, `#if WITH_EDITOR`): map actor
   `Map:<name>` in an `Elysium` folder, brush bodies `Body_<idx>_<name>_<class>` (plus the exact
   `#<idx> <name>(<class>)` debug string as a `ComponentTag`), lights `Light_<idx>_<kind>`, prop
@@ -218,6 +278,8 @@ and the polar RandomSound scheduler. RoomDSP reverb submixes are not built.
 Lifecycle `elysium.newgame` / `map` / `maps` / `reload`; inspection `elysium.campos` /
 `lights` / `props` / `ents` / `classes` / `world` / `world.io` / `world.fireinput` / `g`;
 A/B toggles `elysium.BrushCollision` / `BrushBodies` / `EmissiveScale` / `LightScale` /
-`LightFit`; entity debug `elysium.ent_*` / `showtriggers`; scripting `elysium.eval` / `exec` /
-`script.live` / `script.cpython` / `py.*`; audio `elysium.playsound` / `sound_info` /
-`MusicState` / `MusicCrossfade` / `SchemeRandom*`; NPC `elysium.npc.load` / `clear` / `list`.
+`LightFit` / `CogTheme`; entity debug `elysium.ent_*` / `showtriggers`; scripting `elysium.eval` / `exec` /
+`script.live` / `script.cpython` / `py.*` (`py.smoke` / `exec` / `load` / `fire`, plus the two
+single-token acceptance harnesses `py.poc` and `py.firstbeat`); audio `elysium.Mute` / `playsound` / `sound_info` /
+`MusicState` / `MusicCrossfade` / `SchemeRandom*`; NPC `elysium.npc.load` / `clear` / `list`; MCP
+`elysium.mcp.start` / `stop` / `status` / `tools` (Layer 3 — the agent server, opt-in).

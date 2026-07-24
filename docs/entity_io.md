@@ -249,6 +249,48 @@ spawnflag bit `0x80` (tested in the wait-over think as `(char)m_spawnflags < 0`)
 **remove itself after firing** (the `trigger_once` behaviour; `trigger_once` is a distinct factory
 `FUN_101c6a30`/vftable `0x1047dee4` over the same `CBaseTrigger` base `0x1047d08c`).
 
+## Screen fade (`env_fade` spawnflags)
+
+`CEnvFade`'s datamap (`vampire.dll` `0x10568c10` → dataDesc `0x10568c54`, base map
+`0x10552e18`) is four records and nothing else: `duration` (`m_Duration`, `+0x450`), `holdtime`
+(`m_HoldTime`, `+0x454`), the input **`Fade`** (`0x10100F90`) and the output **`OnBeginFade`**
+(`+0x458`). There is no `OnEndFade` and no `ReverseFade` — neither string exists in the binary.
+Colour and opacity come from the base map's `rendercolor`/`renderamt`.
+
+`InputFade` starts the fade, then fires `OnBeginFade` at delay 0 with the incoming activator and
+itself as caller. It has no think, so every downstream timing in a map is an authored output
+delay measured from the moment `Fade` is accepted.
+
+It translates spawnflags into the **client's** fade flags, which are not the same numbers:
+
+| Spawnflag | Client flag | Effect |
+| --- | --- | --- |
+| `0x1` SF_FADE_IN | **`0`** — clears every bit | flat, no ramp (see below) |
+| `0x2` SF_FADE_MODULATE | `0x4` | modulate instead of blend |
+| `0x4` SF_FADE_ONLYONE | — | send to the activator alone, when it is a client |
+| `0x8` SF_FADE_STAYOUT | `0x20` | uncover again once the hold expires |
+| *(none of the above)* | `0x2` FFADE_OUT | cover over `duration` |
+
+The curve itself lives in the client. `CViewEffects::Fade` (`client.dll` `0x10196FE0`) reads
+`duration`/`holdtime` as 12-bit fixed point (`×1/4096`) and, for `FFADE_OUT`, sets
+`speed = -alpha/duration`, `FadeEnd = now + duration`, `FadeReset = FadeEnd + holdtime`.
+`CViewEffects::FadeCalculate` (`0x10197190`) then runs each frame:
+
+- **alpha** — `(FadeEnd - now) * speed`, plus `alpha` when `FFADE_OUT`, clamped to `[0, alpha]`;
+  fades whose flags carry neither ramp bit (`0x1`/`0x2`) sit flat at full `alpha` instead.
+- **expiry** — once `now` passes *both* `FadeEnd` and `FadeReset` the fade is normally deleted.
+  With `0x20` it is instead flipped to a fade-in (`flags &= ~0x22`, `|= 0x1`), its speed negated
+  and `FadeEnd` pushed to `now + alpha/speed` — so it takes one more `duration` to uncover, then
+  expires. **`SF_FADE_STAYOUT` is therefore what brings the screen back**, not what holds it out.
+- The genuinely-permanent flag is `0x8`, which re-pushes `FadeReset` to `curtime + 0.1` every
+  frame; `env_fade` never sets it. `0x10` purges the other fades; `0x40` runs `disconnect` when
+  the fade ends. A map that wants to stay covered uses a huge `holdtime` instead (the tutorial's
+  `end_fade` holds 5000 s).
+
+`SF_FADE_IN` maps to flags `0`, which fails `FadeCalculate`'s `flags & 0x3` ramp test — so it
+holds the colour flat at full alpha for `holdtime + duration` and then snaps clear, with no ramp
+in either direction. Fades are kept in a list whose colours **sum** and whose alphas **max**.
+
 ## use_icon enum
 
 `use_icon`/`locked_icon` index a 72-entry table of `hud/Context_Icons/<name>`

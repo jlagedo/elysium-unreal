@@ -5,6 +5,7 @@
 #include "ElysiumEntityHandle.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
+#include "ElysiumScriptNatives.h"
 
 #include <initializer_list>
 
@@ -487,84 +488,11 @@ namespace
 	};
 
 	// --- Native binding surface (5.3) ----------------------------------------------------------
-	// The engine `vampire` module: 11 global functions + 24 Character methods (python_bridge.md).
-	// This one static table is the single source of truth — the interpreter tests membership against
-	// it and the Scripting Cog window renders it. Most rows have no backing system yet, so they log a
-	// stub and return a sensible default; SetQuest/GetQuestState route to the real quest map.
-	const ElysiumExpr::FNativeBinding GNativeBindings[] = {
-		// 11 module globals
-		{ TEXT("FindPlayer"),          false, TEXT("player object") },
-		{ TEXT("FindEntityByName"),    false, TEXT("entity lookup") },
-		{ TEXT("FindEntitiesByName"),  false, TEXT("stub (needs list type, 5.5)") },
-		{ TEXT("FindEntitiesByClass"), false, TEXT("stub (needs list type, 5.5)") },
-		{ TEXT("ScheduleTask"),        false, TEXT("defers source on the event queue") },
-		{ TEXT("SquadSeesPlayer"),     false, TEXT("stub (unused by shipped scripts)") },
-		{ TEXT("CreateEntityNoSpawn"), false, TEXT("stub (spawn API later)") },
-		{ TEXT("CallEntitySpawn"),     false, TEXT("stub (spawn API later)") },
-		{ TEXT("ChangeMap"),           false, TEXT("fires a trigger_changelevel after delay") },
-		{ TEXT("OneOfSet"),            false, TEXT("stub") },
-		{ TEXT("IsPCMalk"),            false, TEXT("stub (no clan system)") },
-		// 24 Character methods
-		{ TEXT("React"),               true,  TEXT("stub") },
-		{ TEXT("SetExpression"),       true,  TEXT("stub") },
-		{ TEXT("SetDisposition"),      true,  TEXT("stub") },
-		{ TEXT("SetGesture"),          true,  TEXT("stub") },
-		{ TEXT("HasItem"),             true,  TEXT("stub (no inventory)") },
-		{ TEXT("GiveItem"),            true,  TEXT("stub (no inventory)") },
-		{ TEXT("RemoveItem"),          true,  TEXT("stub (no inventory)") },
-		{ TEXT("AmmoCount"),           true,  TEXT("stub (no inventory)") },
-		{ TEXT("GiveAmmo"),            true,  TEXT("stub (no inventory)") },
-		{ TEXT("HasWeaponEquipped"),   true,  TEXT("stub (no inventory)") },
-		{ TEXT("StartBarter"),         true,  TEXT("stub") },
-		{ TEXT("WorldMap"),            true,  TEXT("stub") },
-		{ TEXT("SewerMap"),            true,  TEXT("stub") },
-		{ TEXT("SetQuest"),            true,  TEXT("quest map") },
-		{ TEXT("CurrentMoney"),        true,  TEXT("stub (no character sheet)") },
-		{ TEXT("IsMale"),              true,  TEXT("stub (no character sheet)") },
-		{ TEXT("SeductiveFeed"),       true,  TEXT("stub") },
-		{ TEXT("SetCamera"),           true,  TEXT("stub") },
-		{ TEXT("CalcFeat"),            true,  TEXT("stub (no character sheet)") },
-		{ TEXT("DialogDiscipline"),    true,  TEXT("stub") },
-		{ TEXT("BumpStat"),            true,  TEXT("stub (no character sheet)") },
-		{ TEXT("GetMasqueradeLevel"),  true,  TEXT("stub (no masquerade meter)") },
-		{ TEXT("GetQuestState"),       true,  TEXT("quest map") },
-		{ TEXT("IsFollowerOf"),        true,  TEXT("stub") },
-	};
-
-	const ElysiumExpr::FNativeBinding* FindNativeBinding(const FString& Name, bool bWantMethod)
-	{
-		for (const ElysiumExpr::FNativeBinding& B : GNativeBindings)
-		{
-			if (B.bMethod == bWantMethod && Name.Equals(B.Name, ESearchCase::CaseSensitive)) { return &B; }
-		}
-		return nullptr;
-	}
-	bool IsNativeGlobal(const FString& Name) { return FindNativeBinding(Name, /*bWantMethod*/ false) != nullptr; }
-	bool IsCharacterMethod(const FString& Name) { return FindNativeBinding(Name, /*bWantMethod*/ true) != nullptr; }
-
-	// Case-insensitive stat/skill name normalisation (python_bridge.md: retail casing is
-	// inconsistent — `Humanity`/`humanity`, `F_Seduction`, ...). BumpStat/CalcFeat canonicalise their
-	// name argument through this so the debug log reads one spelling; an unknown name passes through.
-	FString CanonicalStatName(const FString& Raw)
-	{
-		static const TCHAR* const Known[] = {
-			// attributes / feats
-			TEXT("Strength"), TEXT("Dexterity"), TEXT("Stamina"), TEXT("Charisma"),
-			TEXT("Manipulation"), TEXT("Appearance"), TEXT("Perception"), TEXT("Intelligence"),
-			TEXT("Wits"), TEXT("Humanity"),
-			// skills / disciplines used in checks
-			TEXT("Persuasion"), TEXT("Seduction"), TEXT("Intimidate"), TEXT("Dominate"),
-			TEXT("Dementation"), TEXT("Haggle"), TEXT("Firearms"), TEXT("Research"),
-			TEXT("Brawl"), TEXT("Melee"), TEXT("Dodge"), TEXT("Stealth"), TEXT("Security"),
-			TEXT("Lockpick"), TEXT("Hacking"), TEXT("Scholarship"), TEXT("Awareness"),
-			TEXT("Inspection"), TEXT("Blood"), TEXT("Health"),
-		};
-		for (const TCHAR* K : Known)
-		{
-			if (Raw.Equals(K, ESearchCase::IgnoreCase)) { return FString(K); }
-		}
-		return Raw;   // unknown stat: keep as written
-	}
+	// The engine `vampire` module — the table, the stub defaults, and the call log — lives in
+	// ElysiumScriptNatives, shared with the CPython host so a name cannot stub differently
+	// depending on which host is installed. The evaluator only adapts its own object model to it.
+	using ElysiumScriptNatives::IsCharacterMethod;
+	using ElysiumScriptNatives::IsNativeGlobal;
 
 	// --- Runtime values ------------------------------------------------------------------------
 	// The evaluator carries values richer than FElysiumVariant during a walk: besides a plain
@@ -811,132 +739,33 @@ namespace
 		}
 
 		// --- Native binding dispatch (5.3) -----------------------------------------------------
-		// Comma-joined Describe() of the call arguments, for the native-call log line.
-		FString DescribeArgs(const TArray<FElysiumVariant>& Args) const
-		{
-			FString Out;
-			for (int32 i = 0; i < Args.Num(); ++i)
-			{
-				if (i > 0) { Out += TEXT(", "); }
-				Out += Args[i].Describe();
-			}
-			return Out;
-		}
-
-		// Log the native call + push it onto the game-state subsystem's native-call ring so the debug
-		// layer shows what the running content exercised. `bStub` flags a pure-logging call (no backing).
-		void RecordNative(FName Name, const FString& Display, const FElysiumVariant& Result, bool bStub)
-		{
-			UE_LOG(LogElysiumExpr, Verbose, TEXT("[native%s] %s -> %s"),
-				bStub ? TEXT(" stub") : TEXT(""), *Display, *Result.Describe());
-			if (Env.State) { Env.State->RecordNativeCall(Display, Result, bStub, Name); }
-		}
-
+		// Only the two globals whose result is an evaluator-side object (the PC object and an entity
+		// handle) are resolved here; everything else — ScheduleTask, ChangeMap, the unbacked stubs,
+		// and the whole Character surface — goes through the shared ElysiumScriptNatives module, so
+		// the CPython host and this one cannot drift.
 		FVal EvalNativeGlobal(FName Name, const TArray<FElysiumVariant>& Args)
 		{
-			const FString Display = FString::Printf(TEXT("%s(%s)"), *Name.ToString(), *DescribeArgs(Args));
-
 			if (Name == FName(TEXT("FindPlayer")))
 			{
-				RecordNative(Name, Display, FElysiumVariant::String(TEXT("<player>")), /*bStub*/ false);
+				const FString Display = FString::Printf(TEXT("FindPlayer(%s)"), *ElysiumScriptNatives::DescribeArgs(Args));
+				ElysiumScriptNatives::Record(Env.State, Name, Display,
+					FElysiumVariant::String(TEXT("<player>")), /*bStub*/ false);
 				return FVal::MakeCharacter(FElysiumEntityHandle::Invalid());   // the PC (no player entity yet)
 			}
 			if (Name == FName(TEXT("FindEntityByName")))
 			{
+				const FString Display = FString::Printf(TEXT("FindEntityByName(%s)"), *ElysiumScriptNatives::DescribeArgs(Args));
 				FElysiumEntity* E = (Args.Num() > 0 && World()) ? World()->FindByName(Args[0].ToString()) : nullptr;
 				const FElysiumVariant R = E ? FElysiumVariant::Handle(E->Handle) : FElysiumVariant::Void();
-				RecordNative(Name, Display, R, /*bStub*/ false);
+				ElysiumScriptNatives::Record(Env.State, Name, Display, R, /*bStub*/ false);
 				return FVal::FromVar(R);
 			}
-			if (Name == FName(TEXT("ChangeMap")))
-			{
-				// ChangeMap(delay, landmark, trigger) (P4.6): the scripted map transition. After `delay`
-				// seconds, activate the named trigger_changelevel — it carries the destination map + the
-				// landmark, so this reduces to path 2 (level_transitions.md). Enqueue its ChangeLevel input
-				// through the real event queue (chokepoint 2), so it single-steps in the Event Queue window
-				// and the transition runs deferred (not inside this eval). Arg 1 (landmark) is the trigger's
-				// own landmark key — carried only for the log; the trigger reads its own map/landmark.
-				if (FElysiumEntityWorld* W = World(); W && Args.Num() >= 3)
-				{
-					W->EnqueueInput(Args[2].ToString(), FName(TEXT("ChangeLevel")), FElysiumVariant::Void(),
-						Args[0].ToFloat(), Env.Ctx.Activator, Env.Ctx.Self);
-				}
-				RecordNative(Name, Display, FElysiumVariant::Void(), /*bStub*/ false);
-				return Void();
-			}
-			if (Name == FName(TEXT("ScheduleTask")))
-			{
-				// ScheduleTask(delay, "<source>") (5.4): defer the source string on the event queue,
-				// evaluated at now+delay against the same host — the real deferred-task mechanism, not a
-				// stub. Provenance is this eval's `!self` (the scheduling entity). Whether the source's
-				// names resolve is 5.3/5.5's concern; an unresolvable one just error-to-falses at delivery.
-				if (FElysiumEntityWorld* W = World(); W && Args.Num() >= 2)
-				{
-					W->EnqueuePython(Args[1].ToString(), Args[0].ToFloat(), Env.Ctx.Activator, Env.Ctx.Self);
-				}
-				RecordNative(Name, Display, FElysiumVariant::Void(), /*bStub*/ false);
-				return Void();
-			}
-
-			// The rest have no backing yet — log a stub and return a plausible default. Predicate-shaped
-			// globals read false so a gate over them fails closed (error-to-false's spirit).
-			FElysiumVariant R = FElysiumVariant::Void();
-			if (Name == FName(TEXT("SquadSeesPlayer")) || Name == FName(TEXT("IsPCMalk")) || Name == FName(TEXT("OneOfSet")))
-			{
-				R = FElysiumVariant::Bool(false);
-			}
-			RecordNative(Name, Display, R, /*bStub*/ true);
-			return FVal::FromVar(R);
-		}
-
-		// The default return for a stubbed Character method (no backing system yet).
-		static FElysiumVariant CharMethodStubResult(FName Method)
-		{
-			if (Method == FName(TEXT("IsMale"))) { return FElysiumVariant::Bool(true); }   // PC default
-			if (Method == FName(TEXT("HasItem")) || Method == FName(TEXT("HasWeaponEquipped"))
-				|| Method == FName(TEXT("IsFollowerOf"))) { return FElysiumVariant::Bool(false); }
-			if (Method == FName(TEXT("AmmoCount")) || Method == FName(TEXT("CurrentMoney"))
-				|| Method == FName(TEXT("CalcFeat")) || Method == FName(TEXT("GetMasqueradeLevel"))
-				|| Method == FName(TEXT("DialogDiscipline"))) { return FElysiumVariant::Int(0); }
-			return FElysiumVariant::Void();
+			return FVal::FromVar(ElysiumScriptNatives::CallSimpleGlobal(Env.State, World(), Env.Ctx, Name, Args));
 		}
 
 		FVal EvalCharMethod(const FElysiumEntityHandle& Self, FName Method, const TArray<FElysiumVariant>& Args)
 		{
-			// Receiver label: the PC (FindPlayer()) or the resolved NPC handle.
-			FString Recv = TEXT("FindPlayer()");
-			if (Self.IsSet()) { Recv = World() ? World()->DescribeHandle(Self) : Self.ToString(); }
-
-			// Stat-taking methods normalise their (case-inconsistent) stat name so the log reads one
-			// spelling — the case-insensitive stat-name requirement (python_bridge.md).
-			TArray<FElysiumVariant> LogArgs = Args;
-			if ((Method == FName(TEXT("BumpStat")) || Method == FName(TEXT("CalcFeat")))
-				&& LogArgs.Num() > 0 && LogArgs[0].IsString())
-			{
-				LogArgs[0] = FElysiumVariant::String(CanonicalStatName(LogArgs[0].AsString));
-			}
-			const FString Display = FString::Printf(TEXT("%s.%s(%s)"), *Recv, *Method.ToString(), *DescribeArgs(LogArgs));
-
-			// Real backing: the quest map on the game-state subsystem.
-			if (Method == FName(TEXT("SetQuest")))
-			{
-				if (Env.State && Args.Num() >= 2) { Env.State->SetQuestState(Args[0].ToString(), Args[1].ToInt()); }
-				RecordNative(Method, Display, FElysiumVariant::Void(), /*bStub*/ false);
-				return Void();
-			}
-			if (Method == FName(TEXT("GetQuestState")))
-			{
-				const int32 S = (Env.State && Args.Num() >= 1) ? Env.State->GetQuestState(Args[0].ToString()) : 0;
-				const FElysiumVariant R = FElysiumVariant::Int(S);
-				RecordNative(Method, Display, R, /*bStub*/ false);
-				return FVal::FromVar(R);
-			}
-
-			// Everything else logs a stub and returns its default (an unlisted method — the receiver
-			// bound any name — falls here too, so e.g. ClearActiveDisciplines runs without raising).
-			const FElysiumVariant R = CharMethodStubResult(Method);
-			RecordNative(Method, Display, R, /*bStub*/ true);
-			return FVal::FromVar(R);
+			return FVal::FromVar(ElysiumScriptNatives::CallCharacterMethod(Env.State, World(), Self, Method, Args));
 		}
 
 		FVal EvalUnary(const FNode& N)
@@ -1170,11 +999,6 @@ namespace
 
 namespace ElysiumExpr
 {
-	TArrayView<const FNativeBinding> NativeBindings()
-	{
-		return MakeArrayView(GNativeBindings, UE_ARRAY_COUNT(GNativeBindings));
-	}
-
 	FElysiumVariant Eval(const FString& Source, FEnv& Env)
 	{
 		Env.bError = false;

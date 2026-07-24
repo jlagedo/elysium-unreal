@@ -12,6 +12,14 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumAudio, Log, All);
 
+// The global mute gate. Defaults to muted: audio is opt-in per session, flipped from the Cog Audio
+// window's Mute checkbox (the same state) or from here. A muted voice keeps playing at zero gain, so
+// the ambient bed / music stems stay in sync and unmuting rejoins the mix mid-stream.
+static TAutoConsoleVariable<int32> CVarMute(
+	TEXT("elysium.Mute"), 1,
+	TEXT("Global audio mute: 1 = every voice at zero gain (default), 0 = audible."),
+	ECVF_Default);
+
 namespace
 {
 	// Build the sphere attenuation for a 3D voice from a VtMB radius (already in cm). NaturalSound is
@@ -36,6 +44,15 @@ void UElysiumAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	Super::Initialize(Collection);
 
 	IConsoleManager& CM = IConsoleManager::Get();
+
+	// `elysium.Mute` is the mute state itself, so a console flip has to reach the voices already
+	// running. Weak-bound: the callback drops out with the subsystem, and Deinitialize clears it.
+	CVarMute->SetOnChangedCallback(FConsoleVariableDelegate::CreateWeakLambda(this,
+		[this](IConsoleVariable* Var)
+		{
+			ApplyMasterGain();
+			UE_LOG(LogElysiumAudio, Display, TEXT("audio %s"), Var->GetInt() != 0 ? TEXT("muted") : TEXT("unmuted"));
+		}));
 
 	// elysium.playsound <rel> — decode the WAV/MP3 under out/sound/<rel> and preview it 2D. The
 	// scriptable echo of the Cog Audio window's Play button (F1-first: the window is primary).
@@ -92,6 +109,8 @@ void UElysiumAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UElysiumAudioSubsystem::Deinitialize()
 {
+	CVarMute->SetOnChangedCallback(FConsoleVariableDelegate());
+
 	for (IConsoleObject* Obj : ConsoleObjects)
 	{
 		IConsoleManager::Get().UnregisterConsoleObject(Obj);
@@ -151,8 +170,11 @@ FElysiumAudioVoiceHandle UElysiumAudioSubsystem::PlayVoice(const FString& Rel, c
 		return FElysiumAudioVoiceHandle::Invalid();
 	}
 
-	// Start silent when fading in, then ramp to the target volume; otherwise start at volume.
-	const float StartVol = Params.FadeInSeconds > 0.f ? 0.f : Params.Volume;
+	// Start silent when fading in, then ramp to the target volume; otherwise start at volume. Every
+	// component-level volume below is the requested volume times the master gain — Voice.Volume keeps
+	// the *requested* value, so a mute flip is one re-apply and nothing loses its own level.
+	const float Gain = MasterGain();
+	const float StartVol = (Params.FadeInSeconds > 0.f ? 0.f : Params.Volume) * Gain;
 
 	UAudioComponent* Comp = nullptr;
 	if (!Params.b3D)
@@ -185,7 +207,7 @@ FElysiumAudioVoiceHandle UElysiumAudioSubsystem::PlayVoice(const FString& Rel, c
 	}
 	if (Params.FadeInSeconds > 0.f)
 	{
-		Comp->AdjustVolume(Params.FadeInSeconds, Params.Volume);
+		Comp->AdjustVolume(Params.FadeInSeconds, Params.Volume * Gain);
 	}
 
 	const double Now = World->GetTimeSeconds();
@@ -241,7 +263,38 @@ void UElysiumAudioSubsystem::SetVoiceVolume(FElysiumAudioVoiceHandle Handle, flo
 		return;
 	}
 	Voice->Volume = Volume;
-	Voice->Comp->AdjustVolume(FMath::Max(FadeSeconds, 0.f), Volume);   // 0 duration == set instantly
+	// 0 duration == set instantly.
+	Voice->Comp->AdjustVolume(FMath::Max(FadeSeconds, 0.f), Volume * MasterGain());
+}
+
+bool UElysiumAudioSubsystem::IsMuted() const
+{
+	return CVarMute.GetValueOnGameThread() != 0;
+}
+
+void UElysiumAudioSubsystem::SetMuted(bool bInMuted)
+{
+	if (bInMuted == IsMuted())
+	{
+		return;
+	}
+	// The cvar is the state; its change callback re-applies the gain to the live pool. Set at console
+	// priority — this is a user action, and a lower priority is silently dropped once the cvar has
+	// been touched from the console.
+	CVarMute->Set(bInMuted ? 1 : 0, ECVF_SetByConsole);
+}
+
+void UElysiumAudioSubsystem::ApplyMasterGain()
+{
+	const float Gain = MasterGain();
+	for (FElysiumAudioVoice& V : Voices)
+	{
+		if (V.DestroyWorldTime >= 0.0 || !IsValid(V.Comp))
+		{
+			continue;   // already fading out toward a reap — leave it dying
+		}
+		V.Comp->AdjustVolume(0.f, V.Volume * Gain);
+	}
 }
 
 void UElysiumAudioSubsystem::SetVoicePitch(FElysiumAudioVoiceHandle Handle, float Pitch)

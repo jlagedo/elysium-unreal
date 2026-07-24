@@ -4,6 +4,7 @@
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumProfiler.h"
+#include "ElysiumShotRun.h"
 #include "ElysiumTextureCache.h"
 
 #include "Engine/Engine.h"
@@ -116,11 +117,17 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	{
 		ProfileRun = MakePimpl<FElysiumProfileRun>(this);
 	}
+	// Under -ElysiumShots, arm the headless screenshot-regression harness (same vantages).
+	if (FElysiumShotRun::IsRequested())
+	{
+		ShotRun = MakePimpl<FElysiumShotRun>(this);
+	}
 }
 
 void UElysiumMapSubsystem::Deinitialize()
 {
 	ProfileRun.Reset();
+	ShotRun.Reset();
 	for (IConsoleObject* Obj : ConsoleObjects)
 	{
 		IConsoleManager::Get().UnregisterConsoleObject(Obj);

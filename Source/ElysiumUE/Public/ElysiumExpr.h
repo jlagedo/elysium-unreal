@@ -58,17 +58,4 @@ namespace ElysiumExpr
 	// expression) and return the last statement's value. This is the field-6 / dlg-action path.
 	// A statement that errors aborts the rest of the sequence (error-to-false).
 	FElysiumVariant Exec(const FString& Source, FEnv& Env);
-
-	// --- Native binding metadata (5.3) — for the debug layer -------------------------------------
-	// One row per bound engine name: the 11 `vampire`-module globals + the 24 Character methods.
-	// The Scripting Cog window renders this table (name, kind, backing status) so the native surface
-	// is inspectable without reading source. `Status` is a short human note ("player object",
-	// "quest map", "stub", ...).
-	struct FNativeBinding
-	{
-		const TCHAR* Name;
-		bool bMethod;         // true = Character method (dispatched off an object); false = module global
-		const TCHAR* Status;  // short backing note
-	};
-	TArrayView<const FNativeBinding> NativeBindings();
 }

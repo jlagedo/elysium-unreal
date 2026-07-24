@@ -2,6 +2,7 @@
 
 #if ENABLE_COG
 
+#include "ElysiumCogStyle.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -11,18 +12,13 @@
 
 namespace
 {
-	const ImVec4 ColLive(0.40f, 0.85f, 0.40f, 1.0f);
-	const ImVec4 ColHidden(0.95f, 0.75f, 0.20f, 1.0f);
-	const ImVec4 ColDead(0.90f, 0.35f, 0.35f, 1.0f);
-	const ImVec4 ColRecord(0.60f, 0.60f, 0.60f, 1.0f);
-
 	// live > hidden > dead ordering matches IsInert(): a record can be several of these at once,
 	// so the strongest state wins the label. Record-only is orthogonal (shown by dimming).
 	const char* StateLabel(const FElysiumEntity& Ent, ImVec4& OutColor)
 	{
-		if (Ent.IsDead())   { OutColor = ColDead;   return "dead"; }
-		if (Ent.IsHidden()) { OutColor = ColHidden; return "hidden"; }
-		OutColor = ColLive;
+		if (Ent.IsDead())   { OutColor = ElysiumCogStyle::ColError; return "dead"; }
+		if (Ent.IsHidden()) { OutColor = ElysiumCogStyle::ColWarn;  return "hidden"; }
+		OutColor = ElysiumCogStyle::ColOk;
 		return "live";
 	}
 }
@@ -166,7 +162,7 @@ void FElysiumCogWindow_Entities::RenderContent()
 				ImGui::TableNextColumn();
 				if (Ent.IsRecordOnly())
 				{
-					ImGui::PushStyleColor(ImGuiCol_Text, ColRecord);
+					ImGui::PushStyleColor(ImGuiCol_Text, ElysiumCogStyle::ColInert);
 					ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*Ent.Def->Classname));
 					ImGui::PopStyleColor();
 				}

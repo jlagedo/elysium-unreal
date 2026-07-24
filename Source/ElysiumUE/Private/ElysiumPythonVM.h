@@ -15,10 +15,11 @@ struct FElysiumScriptContext;
 // the language (ElysiumExpr is an expression evaluator; these scripts have 1,119 defs, 45 classes,
 // try/except, imports, exec -- past what any hand-rolled subset can carry).
 //
-// This owns: the vendored PythonHome + Py_Initialize/Finalize, the `vampire` C-module exposing the
-// one *real* binding -- `G` proxied onto UElysiumGameStateSubsystem -- and a Python bootstrap that
-// stands up forgiving stubs for the natives 9.3 will replace with C bindings (FindPlayer, ...), so
-// a real level script (tutorial.py + vamputil) imports and its On* callbacks run today.
+// This owns: the vendored PythonHome + Py_Initialize/Finalize and the `vampire` C-module -- `G`
+// proxied onto UElysiumGameStateSubsystem (attribute AND mapping protocol, since VtMB's `G[k]` is
+// its `G.k`), plus the entity/native object surface in ElysiumPythonEntity (the Entity and Player
+// types and the 11 module globals) -- and the Python bootstrap that star-imports that module into
+// `__main__`, which is the bus every level script reaches the engine through.
 //
 // Win64 only. When ELYSIUM_WITH_CPYTHON==0 every method is inert (EnsureStarted fails, Eval returns
 // Void) and the existing null / expr script hosts stand in unchanged.

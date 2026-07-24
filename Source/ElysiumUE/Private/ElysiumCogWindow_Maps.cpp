@@ -2,14 +2,18 @@
 
 #if ENABLE_COG
 
+#include "ElysiumCogStyle.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
+#include "ElysiumPawn.h"
 
 #include "CogLocalizationConfig.h"   // COG_TCHAR_TO_CHAR
 #include "CogWidgets.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
 #include "imgui.h"
 
 void FElysiumCogWindow_Maps::Initialize()
@@ -73,7 +77,7 @@ void FElysiumCogWindow_Maps::RenderContent()
 			ImGui::TableNextColumn();
 			if (bCurrent)
 			{
-				ImGui::TextColored(ImVec4(0.40f, 0.85f, 0.40f, 1.0f), "%s", COG_TCHAR_TO_CHAR(*MapName));
+				ImGui::TextColored(ElysiumCogStyle::ColOk, "%s", COG_TCHAR_TO_CHAR(*MapName));
 				ImGui::SameLine();
 				ImGui::TextDisabled("(current)");
 			}
@@ -103,12 +107,10 @@ void FElysiumCogWindow_Maps::RenderContent()
 		return;
 	}
 
-	const float ValueColumn = GetDpiScale() * 120.0f;
+	const float ValueColumn = GetDpiScale() * 96.0f;
 	auto Row = [ValueColumn](const char* Label, const FString& Value)
 	{
-		ImGui::TextUnformatted(Label);
-		ImGui::SameLine(ValueColumn);
-		ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*Value));
+		ElysiumCogStyle::LabelValue(Label, COG_TCHAR_TO_CHAR(*Value), ValueColumn);
 	};
 
 	ImGui::SeparatorText("Current map");
@@ -122,6 +124,9 @@ void FElysiumCogWindow_Maps::RenderContent()
 	Row("Entities", FString::Printf(TEXT("%d rec · %d bodies"), Map->EntityCount, Map->BrushBodyCount));
 	Row("Entered via", Map->EntryLandmark.IsEmpty()
 		? FString(TEXT("info_player_start")) : FString::Printf(TEXT("landmark %s"), *Map->EntryLandmark));
+
+	// --- Player pose + FPS (the removed elysium.debug overlay's readout) ------------------------
+	RenderPlayer();
 
 	// --- P4.6 transitions (trigger_changelevel + info_landmark) ---------------------------------
 	RenderTransitions();
@@ -141,7 +146,7 @@ void FElysiumCogWindow_Maps::RenderContent()
 				ImGui::TableNextColumn();
 				if (bTotal)
 				{
-					ImGui::TextColored(ImVec4(1.0f, 0.82f, 0.50f, 1.0f), "%s", COG_TCHAR_TO_CHAR(*P.Name));
+					ImGui::TextColored(ElysiumCogStyle::ColWarn, "%s", COG_TCHAR_TO_CHAR(*P.Name));
 				}
 				else
 				{
@@ -153,6 +158,52 @@ void FElysiumCogWindow_Maps::RenderContent()
 			ImGui::EndTable();
 		}
 	}
+}
+
+void FElysiumCogWindow_Maps::RenderPlayer()
+{
+	UWorld* World = GetWorld();
+	const APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+	if (PC == nullptr)
+	{
+		return;
+	}
+
+	FVector ViewLoc = FVector::ZeroVector;
+	FRotator ViewRot = FRotator::ZeroRotator;
+	PC->GetPlayerViewPoint(ViewLoc, ViewRot);
+	const FVector Met = ViewLoc / 100.0;
+	// Unreal (cm, left-handed) -> Source (inches, right-handed): the inverse of the
+	// (sx,-sy,sz)*2.54 load transform.
+	const FVector Src(ViewLoc.X / 2.54, -ViewLoc.Y / 2.54, ViewLoc.Z / 2.54);
+
+	const float Dt = World->GetDeltaSeconds();
+	if (Dt > 0.f)
+	{
+		SmoothedFPS = FMath::FInterpTo(SmoothedFPS, 1.f / Dt, Dt, 4.f);
+	}
+
+	const AElysiumPawn* Pawn = Cast<AElysiumPawn>(PC->GetPawn());
+	const bool bNoclip = Pawn && Pawn->IsNoclip();
+	const AElysiumMapActor* Map = GetMapActor();
+	const bool bSky = Map && Map->IsSkyboxVisible();
+	const bool bLights = Map && Map->AreLightsVisible();
+
+	ImGui::SeparatorText("Player");
+	const float ValueColumn = GetDpiScale() * 96.0f;
+	auto Row = [ValueColumn](const char* Label, const FString& Value, const ImVec4* Color = nullptr)
+	{
+		ElysiumCogStyle::LabelValue(Label, COG_TCHAR_TO_CHAR(*Value), ValueColumn, Color);
+	};
+
+	Row("Position", FString::Printf(TEXT("(%.1f, %.1f, %.1f) m   yaw %.0f°"),
+		Met.X, Met.Y, Met.Z, ViewRot.Yaw));
+	Row("Source units", FString::Printf(TEXT("(%.0f, %.0f, %.0f)"), Src.X, Src.Y, Src.Z));
+	Row("Mode", bNoclip ? FString(TEXT("NOCLIP")) : FString(TEXT("WALK")),
+		bNoclip ? &ElysiumCogStyle::ColOk : nullptr);
+	Row("Sky / Lights", FString::Printf(TEXT("%s / %s"),
+		bSky ? TEXT("ON") : TEXT("OFF"), bLights ? TEXT("ON") : TEXT("OFF")));
+	Row("FPS", FString::Printf(TEXT("%.0f"), SmoothedFPS), &ElysiumCogStyle::ColOk);
 }
 
 void FElysiumCogWindow_Maps::RenderTransitions()
@@ -191,12 +242,13 @@ void FElysiumCogWindow_Maps::RenderTransitions()
 	// Pending deferred travel (a trigger fired / ChangeMap scheduled, swap on the next tick).
 	if (UElysiumMapSubsystem* Maps = GetMapSubsystem(); Maps && Maps->HasPendingTravel())
 	{
-		ImGui::TextColored(ImVec4(1.0f, 0.82f, 0.50f, 1.0f), "PENDING: %s",
+		ImGui::TextColored(ElysiumCogStyle::ColWarn, "PENDING: %s",
 			COG_TCHAR_TO_CHAR(*Maps->PendingTravelDesc()));
 	}
 
-	// trigger_changelevel rows: destination + a button that fires the ChangeLevel input (the scripted
-	// path), so a transition is testable without walking into the volume.
+	// Buttons lead, text follows: a destination is "<map> @ <landmark>" and a landmark origin is
+	// three floats, both long enough to push a trailing button off the right edge of a narrow window.
+	// With the fixed-width widgets first it is the least critical text that truncates instead.
 	int32 RowId = 0;
 	for (FElysiumEntity* Ent : Changes)
 	{
@@ -205,9 +257,22 @@ void FElysiumCogWindow_Maps::RenderTransitions()
 		const FString Dest = FString::Printf(TEXT("-> %s @ %s"),
 			*Ent->Def->Keys.FindRef(TEXT("map")), *Ent->Def->Keys.FindRef(TEXT("landmark")));
 
+		if (ImGui::SmallButton("Inspect"))
+		{
+			SetSelection(Ent->Handle);
+		}
+		ImGui::SameLine();
+		// Fires the ChangeLevel input (the scripted path), so a transition is testable without
+		// walking into the volume.
+		if (ImGui::SmallButton("Change now"))
+		{
+			World->EnqueueInput(TEXT("!self"), FName(TEXT("ChangeLevel")), FElysiumVariant::Void(), 0.0,
+				FElysiumEntityHandle::Invalid(), Ent->Handle);
+		}
+		ImGui::SameLine();
 		if (Ent->IsInert())
 		{
-			ImGui::TextColored(ImVec4(0.7f, 0.5f, 0.4f, 1.0f), "%s", COG_TCHAR_TO_CHAR(*RowName));
+			ImGui::TextColored(ElysiumCogStyle::ColInert, "%s", COG_TCHAR_TO_CHAR(*RowName));
 		}
 		else
 		{
@@ -215,18 +280,6 @@ void FElysiumCogWindow_Maps::RenderTransitions()
 		}
 		ImGui::SameLine();
 		ImGui::TextDisabled("%s", COG_TCHAR_TO_CHAR(*Dest));
-
-		ImGui::SameLine();
-		if (ImGui::SmallButton("Inspect"))
-		{
-			SetSelection(Ent->Handle);
-		}
-		ImGui::SameLine();
-		if (ImGui::SmallButton("Change now"))
-		{
-			World->EnqueueInput(TEXT("!self"), FName(TEXT("ChangeLevel")), FElysiumVariant::Void(), 0.0,
-				FElysiumEntityHandle::Invalid(), Ent->Handle);
-		}
 		ImGui::PopID();
 	}
 
@@ -238,14 +291,14 @@ void FElysiumCogWindow_Maps::RenderTransitions()
 		{
 			ImGui::PushID(RowId++);
 			const FString RowName = Ent->TargetName.IsEmpty() ? TEXT("(unnamed)") : Ent->TargetName;
-			ImGui::BulletText("%s", COG_TCHAR_TO_CHAR(*RowName));
-			ImGui::SameLine();
-			ImGui::TextDisabled("%s", COG_TCHAR_TO_CHAR(*Ent->Def->Origin.ToString()));
-			ImGui::SameLine();
 			if (ImGui::SmallButton("Inspect"))
 			{
 				SetSelection(Ent->Handle);
 			}
+			ImGui::SameLine();
+			ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*RowName));
+			ImGui::SameLine();
+			ImGui::TextDisabled("%s", COG_TCHAR_TO_CHAR(*Ent->Def->Origin.ToCompactString()));
 			ImGui::PopID();
 		}
 	}

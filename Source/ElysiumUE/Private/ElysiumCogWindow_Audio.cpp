@@ -3,6 +3,7 @@
 #if ENABLE_COG
 
 #include "ElysiumAudioSubsystem.h"
+#include "ElysiumCogStyle.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -23,12 +24,16 @@ void FElysiumCogWindow_Audio::Initialize()
 void FElysiumCogWindow_Audio::RenderHelp()
 {
 	ImGui::Text(
+		"Mute is the global audio gate (cvar elysium.Mute) and defaults to ON: every voice - "
+		"ambient_generic, scheme beds/music/randoms, mover sounds and the previews below - plays at "
+		"zero gain until it is cleared. Muting does not stop anything, so unmuting rejoins the "
+		"ambience mid-stream.\n\n"
 		"Runtime audio decoder test harness (P6.1 WAV / P6.2 MP3). Type a path under out/sound/ (or "
 		"click one of this map's ambient_generic references) and Play it 2D, or Info to decode without "
 		"playing. dr_wav decodes VtMB's Microsoft ADPCM, IMA ADPCM and PCM WAVs; dr_mp3 decodes the loose "
-		"dialogue/music/radio MP3s (.mp3) — both into a procedural sound wave (Unreal has no runtime path "
+		"dialogue/music/radio MP3s (.mp3) - both into a procedural sound wave (Unreal has no runtime path "
 		"for loose MP3s). The table lists every decode this session with its codec/on-disk format, "
-		"channels, sample rate, bit depth, frame count, duration and decode time — the same registry the "
+		"channels, sample rate, bit depth, frame count, duration and decode time - the same registry the "
 		"elysium.playsound / elysium.sound_info verbs write.");
 }
 
@@ -72,8 +77,30 @@ void FElysiumCogWindow_Audio::RenderContent()
 		return;
 	}
 
+	// --- Global mute --------------------------------------------------------------------------
+	// The gate over every voice the subsystem owns, previews included. Muted is the default, so this
+	// is the first thing the window shows: a silent Play button otherwise reads as a broken decoder.
+	ImGui::SeparatorText("Output");
+	bool bMuted = Audio->IsMuted();
+	if (ImGui::Checkbox("Mute all audio", &bMuted))
+	{
+		Audio->SetMuted(bMuted);
+	}
+	ImGui::SameLine();
+	if (bMuted)
+	{
+		ImGui::TextColored(ElysiumCogStyle::ColWarn, "muted - voices keep running at zero gain");
+	}
+	else
+	{
+		ImGui::TextColored(ElysiumCogStyle::ColOk, "audible");
+	}
+	ImGui::SameLine();
+	ImGui::TextDisabled("(elysium.Mute)");
+
 	// --- Play a clip by path ---------------------------------------------------------------
 	ImGui::SeparatorText("Play a clip  (WAV/MP3 path under out/sound/)");
+	ImGui::SetNextItemWidth(-FLT_MIN);   // full width: these are long relative paths
 	FCogWidgets::InputTextWithHint("##Path", "Environmental/Fire/Fire_Roaring.wav", PendingPath);
 	ImGui::BeginDisabled(PendingPath.IsEmpty());
 	if (ImGui::Button("Play"))
@@ -104,13 +131,13 @@ void FElysiumCogWindow_Audio::RenderContent()
 	}
 	else
 	{
-		Filter.Draw("Filter", GetDpiScale() * 180.0f);
+		FCogWidgets::SearchBar("##RefFilter", RefFilter, GetDpiScale() * 180.0f);
 		if (ImGui::BeginChild("##Refs", ImVec2(0, GetDpiScale() * 130.0f), ImGuiChildFlags_Borders))
 		{
 			for (int32 i = 0; i < MapRefs.Num(); ++i)
 			{
 				const FString& Ref = MapRefs[i];
-				if (!Filter.PassFilter(COG_TCHAR_TO_CHAR(*Ref)))
+				if (!RefFilter.PassFilter(COG_TCHAR_TO_CHAR(*Ref)))
 				{
 					continue;
 				}
@@ -255,9 +282,22 @@ void FElysiumCogWindow_Audio::RenderContent()
 		}
 	}
 
+	// Two lines: the totals, then the codec mix. One line ran to ~110 characters and was clipped at
+	// every window width this thing is actually used at.
 	ImGui::SeparatorText("Decoded this session");
-	ImGui::Text("%d decoded  ·  MS-ADPCM %d · IMA %d · PCM %d · MP3 %d · other %d  ·  %d failed  ·  %.1f ms total",
-		Results.Num(), NumMsAdpcm, NumImaAdpcm, NumPcm, NumMp3, NumOther, NumFailed, TotalDecodeMs);
+	ImGui::Text("%d decoded  ·  %.1f ms total", Results.Num(), TotalDecodeMs);
+	if (NumFailed > 0)
+	{
+		ImGui::SameLine();
+		ImGui::TextColored(ElysiumCogStyle::ColError, "·  %d failed", NumFailed);
+	}
+	ImGui::TextDisabled("MS-ADPCM %d · IMA %d · PCM %d · MP3 %d · other %d",
+		NumMsAdpcm, NumImaAdpcm, NumPcm, NumMp3, NumOther);
+
+	// Its own filter: this table is populated by every decode this session, the reference list above
+	// only by this map's ambient_generic keys. One shared filter left the table silently narrowed by
+	// a search box that is not even drawn on a map with no ambient_generic references.
+	FCogWidgets::SearchBar("##DecodeFilter", DecodeFilter, GetDpiScale() * 180.0f);
 
 	TArray<FString> Keys;
 	Results.GetKeys(Keys);
@@ -272,9 +312,9 @@ void FElysiumCogWindow_Audio::RenderContent()
 		ImGui::TableSetupScrollFreeze(0, 1);
 		ImGui::TableSetupColumn("Path");
 		ImGui::TableSetupColumn("Format", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 78.0f);
-		ImGui::TableSetupColumn("Ch", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 24.0f);
+		ImGui::TableSetupColumn("Ch", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 30.0f);
 		ImGui::TableSetupColumn("Rate", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 52.0f);
-		ImGui::TableSetupColumn("Bits", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 34.0f);
+		ImGui::TableSetupColumn("Bits", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 38.0f);
 		ImGui::TableSetupColumn("Frames", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 66.0f);
 		ImGui::TableSetupColumn("Dur", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 52.0f);
 		ImGui::TableSetupColumn("ms", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 48.0f);
@@ -282,7 +322,7 @@ void FElysiumCogWindow_Audio::RenderContent()
 
 		for (const FString& Key : Keys)
 		{
-			if (!Filter.PassFilter(COG_TCHAR_TO_CHAR(*Key)))
+			if (!DecodeFilter.PassFilter(COG_TCHAR_TO_CHAR(*Key)))
 			{
 				continue;
 			}
@@ -300,7 +340,7 @@ void FElysiumCogWindow_Audio::RenderContent()
 			ImGui::TableNextColumn();
 			if (bError)
 			{
-				ImGui::TextColored(ImVec4(1.f, 0.4f, 0.35f, 1.f), "error");
+				ImGui::TextColored(ElysiumCogStyle::ColError, "error");
 				if (ImGui::IsItemHovered())
 				{
 					ImGui::SetTooltip("%s", COG_TCHAR_TO_CHAR(*Info.Error));

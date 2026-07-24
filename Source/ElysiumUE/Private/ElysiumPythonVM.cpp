@@ -1,6 +1,8 @@
 #include "ElysiumPythonVM.h"
 
+#include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
+#include "ElysiumPythonEntity.h"
 #include "ElysiumScriptHost.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/IConsoleManager.h"
@@ -22,67 +24,11 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumPy, Log, All);
 
 namespace
 {
-	// --- marshaling: FElysiumVariant <-> PyObject (new reference out / borrowed in) ------------
-
-	PyObject* VariantToPy(const FElysiumVariant& V)
-	{
-		if (V.IsVoid())   { Py_RETURN_NONE; }
-		if (V.IsBool())   { return PyBool_FromLong(V.ToBool() ? 1 : 0); }
-		if (V.IsInt())    { return PyInt_FromLong(V.ToInt()); }
-		if (V.IsFloat())  { return PyFloat_FromDouble(V.ToFloat()); }
-		// String / Vector / Handle all round-trip through their text form (the scripts only ever
-		// store ints/strings in G; the rest is for completeness / debug echo).
-		return PyString_FromString(TCHAR_TO_UTF8(*V.ToString()));
-	}
-
-	FElysiumVariant PyToVariant(PyObject* O)
-	{
-		if (!O || O == Py_None)      { return FElysiumVariant::Void(); }
-		if (PyBool_Check(O))         { return FElysiumVariant::Bool(O == Py_True); }
-		if (PyInt_Check(O))          { return FElysiumVariant::Int(static_cast<int32>(PyInt_AsLong(O))); }
-		if (PyLong_Check(O))         { return FElysiumVariant::Int(static_cast<int32>(PyLong_AsLong(O))); }
-		if (PyFloat_Check(O))        { return FElysiumVariant::Float(static_cast<float>(PyFloat_AsDouble(O))); }
-		if (PyString_Check(O))       { return FElysiumVariant::String(FString(UTF8_TO_TCHAR(PyString_AsString(O)))); }
-		// Fall back to repr() so a bound entity / odd type is at least visible in G.
-		PyObject* R = PyObject_Repr(O);
-		FElysiumVariant Out = FElysiumVariant::String(R ? FString(UTF8_TO_TCHAR(PyString_AsString(R))) : FString(TEXT("<obj>")));
-		Py_XDECREF(R);
-		return Out;
-	}
-
-	// Pull the pending exception into a "Type: message" string and clear it. Never throws.
-	FString FetchPyError()
-	{
-		if (!PyErr_Occurred())
-		{
-			return FString();
-		}
-		PyObject *Type = nullptr, *Value = nullptr, *Traceback = nullptr;
-		PyErr_Fetch(&Type, &Value, &Traceback);
-		PyErr_NormalizeException(&Type, &Value, &Traceback);
-
-		FString TypeName, Message;
-		if (Type)
-		{
-			if (PyObject* N = PyObject_GetAttrString(Type, "__name__"))
-			{
-				TypeName = FString(UTF8_TO_TCHAR(PyString_AsString(N)));
-				Py_DECREF(N);
-			}
-		}
-		if (Value)
-		{
-			if (PyObject* S = PyObject_Str(Value))
-			{
-				Message = FString(UTF8_TO_TCHAR(PyString_AsString(S)));
-				Py_DECREF(S);
-			}
-		}
-		Py_XDECREF(Type);
-		Py_XDECREF(Value);
-		Py_XDECREF(Traceback);
-		return TypeName.IsEmpty() ? Message : FString::Printf(TEXT("%s: %s"), *TypeName, *Message);
-	}
+	// Marshalling + error fetch live with the entity/native bindings (ElysiumPythonEntity), since
+	// a marshalled value may itself be an entity object.
+	using ElysiumPy::FetchPyError;
+	using ElysiumPy::PyToVariant;
+	using ElysiumPy::VariantToPy;
 
 	// --- the `vampire.G` proxy type: attribute access <-> the C++ game-state store -------------
 	// A data-less PyObject; every read/write forwards to the current UElysiumGameStateSubsystem.
@@ -184,6 +130,44 @@ namespace
 		{ nullptr, nullptr, 0, nullptr }
 	};
 
+	// --- G's mapping protocol: `G[k]` IS `G.k` -------------------------------------------------
+	// PyDataManager carries a tp_as_mapping (type object 0x1058fa08 -> 0x1058f9f8), and both slots
+	// are thin adapters over the attribute path: mp_subscript (0x1019b4a0) checks the key is a
+	// PyString, converts it with PyString_AsString, and TAIL-JUMPS into tp_getattr; mp_ass_subscript
+	// (0x1019b720) calls tp_setattr the same way. So subscripting inherits everything the attribute
+	// path has — the method table, default-on-miss integer 0 — and needs no store of its own.
+	// This is load-bearing for the tutorial: DialogPostProcess's first act is saveState(), which is
+	// `for k in G.keys(): G_tut[k] = G[k]`.
+
+	PyObject* PyG_subscript(PyObject* Self, PyObject* Key)
+	{
+		if (!PyString_Check(Key))
+		{
+			return PyInt_FromLong(0);   // retail: a non-string key returns integer 0
+		}
+		return PyG_getattro(Self, Key);
+	}
+
+	int PyG_ass_subscript(PyObject* Self, PyObject* Key, PyObject* Value)
+	{
+		if (!PyString_Check(Key))
+		{
+			// Retail tail-calls PyDict_SetItem with the manager object in the dict slot — a latent
+			// bug no shipped script reaches (every G key is a string). Raise instead of reproducing it.
+			PyErr_SetString(PyExc_TypeError, "G keys must be strings");
+			return -1;
+		}
+		return PyG_setattro(Self, Key, Value);
+	}
+
+	Py_ssize_t PyG_length(PyObject*)
+	{
+		UElysiumGameStateSubsystem* S = GStore();
+		return S ? static_cast<Py_ssize_t>(S->GlobalKeys().Num()) : 0;
+	}
+
+	PyMappingMethods GMapping = { PyG_length, PyG_subscript, PyG_ass_subscript };
+
 	// Head-init + the two sized fields; every other slot is zeroed and filled in InitVampireModule.
 	PyTypeObject GType =
 	{
@@ -216,11 +200,12 @@ namespace
 
 	bool InitVampireModule(FString& OutError)
 	{
-		GType.tp_flags     = Py_TPFLAGS_DEFAULT;
-		GType.tp_getattro  = PyG_getattro;
-		GType.tp_setattro  = PyG_setattro;
-		GType.tp_methods   = GMethods;
-		GType.tp_doc       = "VtMB global flag store (G) -- proxied onto UElysiumGameStateSubsystem";
+		GType.tp_flags      = Py_TPFLAGS_DEFAULT;
+		GType.tp_getattro   = PyG_getattro;
+		GType.tp_setattro   = PyG_setattro;
+		GType.tp_as_mapping = &GMapping;
+		GType.tp_methods    = GMethods;
+		GType.tp_doc        = "VtMB global flag store (G) -- proxied onto UElysiumGameStateSubsystem";
 		if (PyType_Ready(&GType) < 0)
 		{
 			OutError = FString::Printf(TEXT("PyType_Ready(vampire.G) failed: %s"), *FetchPyError());
@@ -228,7 +213,7 @@ namespace
 		}
 
 		PyObject* Module = Py_InitModule3("vampire", VampireMethods,
-			"Elysium VtMB bridge (PoC: real G store; natives stubbed in the Python bootstrap)");
+			"Elysium VtMB bridge: the G store, the Entity/Player objects, and the 11 module globals");
 		if (!Module)
 		{
 			OutError = FString::Printf(TEXT("Py_InitModule3(vampire) failed: %s"), *FetchPyError());
@@ -245,12 +230,20 @@ namespace
 
 		Py_INCREF(Py_None);
 		PyModule_AddObject(Module, "null", Py_None); // VtMB scripts use bare `null`
-		return true;
+
+		// The entity/native surface (9.3 B2): vampire.Entity, vampire.Player, and the 11 globals.
+		return ElysiumPy::InstallEntityBindings(Module, OutError);
 	}
 
-	// The bootstrap: the ONE real binding (__main__.G = vampire.G) plus forgiving stubs for every
-	// native 9.3 will replace with a C binding, and a stub `vamputil` so `from vamputil import *`
-	// is a cheap success. This is the exact surface that let the offline harness import tutorial.py.
+	// The bootstrap: star-import the `vampire` module into `__main__` (python_bridge.md — there is
+	// no `import vampire` in any script; everything reaches the engine through `__main__`), then
+	// stand up what is still missing.
+	//
+	// All 11 module globals and `G` are real C bindings now. What remains stubbed is NOT engine
+	// API: `IsClan`/`IsIdling` belong to vamputil.py, which cannot import for real until `ccmd`
+	// and `cvar` are bound (roadmap 9.3b/B5) — so a stub `vamputil` module still stands in, and
+	// tutorial.py's `if __main__.IsClan or ...` guard (which is what triggers its own
+	// `from vamputil import *`) still needs those two names to exist.
 	const char* const BOOTSTRAP =
 		"import sys, types, vampire, __main__\n"
 		"class _Log(object):\n"
@@ -264,18 +257,15 @@ namespace
 		"sys.stdout = _Log(0); sys.stderr = _Log(1)\n"
 		"__main__.G = vampire.G\n"
 		"__main__.null = None\n"
-		"class _StubEnt(object):\n"
-		"    def __getattr__(s, k): return _StubEnt._c\n"
-		"    @staticmethod\n"
-		"    def _c(*a, **k): return _StubEnt()\n"
-		"    def __nonzero__(s): return True\n"
-		"    def __repr__(s): return '<stub-entity>'\n"
-		"def _mk(nm):\n"
-		"    def f(*a, **k): return _StubEnt()\n"
-		"    f.__name__ = nm; return f\n"
+		"__main__.Entity = vampire.Entity\n"
 		"for _nm in ('FindPlayer','FindEntityByName','FindEntitiesByName','FindEntitiesByClass',\n"
-		"            'ScheduleTask','ChangeMap','OneOfSet','IsClan','IsIdling','IsPCMalk',\n"
-		"            'CreateEntityNoSpawn','CallEntitySpawn','SquadSeesPlayer'):\n"
+		"            'ScheduleTask','SquadSeesPlayer','CreateEntityNoSpawn','CallEntitySpawn',\n"
+		"            'ChangeMap','OneOfSet','IsPCMalk'):\n"
+		"    setattr(__main__, _nm, getattr(vampire, _nm))\n"
+		"def _mk(nm):\n"
+		"    def f(*a, **k): return 0\n"
+		"    f.__name__ = nm; return f\n"
+		"for _nm in ('IsClan','IsIdling'):\n"
 		"    setattr(__main__, _nm, _mk(_nm))\n"
 		"if 'vamputil' not in sys.modules:\n"
 		"    _vu = types.ModuleType('vamputil'); _vu.__all__ = []; sys.modules['vamputil'] = _vu\n";
@@ -398,8 +388,20 @@ bool FElysiumPythonVM::EnsureStarted(FString& OutError)
 
 namespace
 {
-	// The dict to eval field-6 / callbacks in: the loaded level module, else __main__. Borrowed.
-	PyObject* EvalNamespace(const FString& LoadedModule)
+	// The dict field-6 payloads, ScheduleTask sources, and callbacks evaluate in: `__main__`.
+	// That is where VtMB evaluates them — its dispatch wraps the payload in the format string
+	// `__main__.%s` (0x1055e370), so every leading name resolves as an attribute of `__main__`,
+	// engine globals and level-script functions alike. LoadLevelScript merges the imported
+	// module's public names in, which is what makes `__main__.journalPickup()` resolvable at all.
+	// Borrowed.
+	PyObject* EvalNamespace()
+	{
+		PyObject* Main = PyImport_AddModule("__main__");
+		return Main ? PyModule_GetDict(Main) : nullptr;
+	}
+
+	// The loaded level module's own dict (not the merge), for listing what that script defines.
+	PyObject* ModuleNamespace(const FString& LoadedModule)
 	{
 		if (!LoadedModule.IsEmpty())
 		{
@@ -408,8 +410,7 @@ namespace
 				return PyModule_GetDict(Mod); // borrowed
 			}
 		}
-		PyObject* Main = PyImport_AddModule("__main__");
-		return Main ? PyModule_GetDict(Main) : nullptr;
+		return EvalNamespace();
 	}
 }
 
@@ -422,13 +423,18 @@ bool FElysiumPythonVM::RunSimpleString(const FString& Code, FString& OutError)
 	return RunRaw(Code, OutError);
 }
 
-FElysiumVariant FElysiumPythonVM::Eval(const FString& Source, const FElysiumScriptContext& /*Ctx*/, FString& OutError)
+FElysiumVariant FElysiumPythonVM::Eval(const FString& Source, const FElysiumScriptContext& Ctx, FString& OutError)
 {
 	if (!EnsureStarted(OutError))
 	{
 		return FElysiumVariant::Void();
 	}
-	PyObject* Ns = EvalNamespace(LoadedModule);
+	// Bind the payload's provenance for the duration: entity lookups resolve against the world that
+	// is delivering, and anything this eval defers (ScheduleTask/ChangeMap) is attributed to the
+	// firing entity as `!self`. Restored on scope exit, so nesting is safe.
+	const ElysiumPy::FScopedContext ScopedCtx(Ctx);
+
+	PyObject* Ns = EvalNamespace();
 	if (!Ns)
 	{
 		OutError = TEXT("no eval namespace");
@@ -477,6 +483,34 @@ bool FElysiumPythonVM::LoadLevelScript(const FString& AbsPath, FString& OutModul
 		OutError = FetchPyError();
 		return false;
 	}
+
+	// Merge the module's public top-level names into `__main__`. VtMB's field-6 dispatch wraps the
+	// payload as `__main__.%s`, so a payload naming a level-script function (`journalPickup()`) only
+	// resolves if that function is an attribute of `__main__` — the level script's namespace and the
+	// bus are the same namespace as far as a payload can see. Merging is also what keeps the ENGINE
+	// globals reachable from a payload: `hw_609_1` fires a bare `FindPlayer()`, and hollywood.py
+	// (unlike tutorial.py) never aliases it, so only `__main__` can answer.
+	// Underscore-prefixed names are skipped, which also leaves __name__/__builtins__/__main__ alone.
+	// A function keeps its own module's globals, so a merged `DialogPostProcess` still reads its
+	// script's `G_tut`/`Find`/`statemap`; only the entry-point lookup moves.
+	if (PyObject* MainDict = EvalNamespace())
+	{
+		PyObject* ModDict = PyModule_GetDict(Mod);   // borrowed
+		PyObject *Key = nullptr, *Value = nullptr;
+		Py_ssize_t Pos = 0;
+		int32 Merged = 0;
+		while (ModDict && PyDict_Next(ModDict, &Pos, &Key, &Value))
+		{
+			const char* K = (Key && PyString_Check(Key)) ? PyString_AsString(Key) : nullptr;
+			if (K && K[0] != '_')
+			{
+				PyDict_SetItem(MainDict, Key, Value);
+				++Merged;
+			}
+		}
+		UE_LOG(LogElysiumPy, Verbose, TEXT("merged %d names from '%s' into __main__"), Merged, *ModName);
+	}
+
 	Py_DECREF(Mod);
 	LoadedModule   = ModName;
 	OutModuleName  = ModName;
@@ -490,7 +524,7 @@ bool FElysiumPythonVM::FireCallback(const FString& FuncName, FString& OutError)
 	{
 		return false;
 	}
-	PyObject* Ns = EvalNamespace(LoadedModule);
+	PyObject* Ns = EvalNamespace();
 	PyObject* Fn = Ns ? PyDict_GetItemString(Ns, TCHAR_TO_UTF8(*FuncName)) : nullptr; // borrowed
 	if (!Fn || !PyCallable_Check(Fn))
 	{
@@ -549,7 +583,7 @@ TArray<FString> FElysiumPythonVM::GetModuleCallables(const FString& Filter) cons
 	{
 		return Out;
 	}
-	PyObject* Ns = EvalNamespace(LoadedModule);
+	PyObject* Ns = ModuleNamespace(LoadedModule);
 	if (!Ns || !PyDict_Check(Ns))
 	{
 		return Out;
@@ -715,7 +749,9 @@ static FAutoConsoleCommandWithWorldAndArgs GElysiumPyPoc(
 		UE_LOG(LogElysiumPy, Display, TEXT("POC 3/5 load tutorial.py: %s  %s"),
 			bLoad ? TEXT("PASS") : TEXT("FAIL"), bLoad ? *ModName : *Err);
 
-		// 4) fire a real On* callback (its body runs; stub natives absorb the entity calls)
+		// 4) fire a real On* callback. Its body now runs against REAL entity objects (B2), so this
+		// step needs sp_tutorial_1 loaded: OnKillDisc1 falls through its clan gates to
+		// Find("logic_disc1_nodisc").Trigger(), and off-map that Find is None -> AttributeError.
 		const bool bFire = VM.FireCallback(TEXT("OnKillDisc1"), Err);
 		bAll &= bFire;
 		UE_LOG(LogElysiumPy, Display, TEXT("POC 4/5 fire OnKillDisc1(): %s  %s"),
@@ -732,6 +768,59 @@ static FAutoConsoleCommandWithWorldAndArgs GElysiumPyPoc(
 			bField6 ? TEXT("PASS") : TEXT("FAIL"), Disc);
 
 		UE_LOG(LogElysiumPy, Display, TEXT("POC VERDICT: %s"), bAll ? TEXT("ALL PASS") : TEXT("FAILURES ABOVE"));
+	}));
+
+// The B2 acceptance, as one token so it survives -ExecCmds: seed the tutorial's first beat, run
+// the level script's own dispatcher through the INSTALLED host (the same path `elysium.exec
+// DialogPostProcess()` takes), and check what the script did. The three checks are the ones that
+// resolve synchronously; the warp itself is B1's already-verified `env_fade` chain, which runs
+// off the queued Fade this reports (watch the position readout, or `elysium.ent_messages 1`).
+static FAutoConsoleCommandWithWorldAndArgs GElysiumPyFirstBeat(
+	TEXT("elysium.py.firstbeat"),
+	TEXT("Run the B2 first-beat acceptance on sp_tutorial_1 and log a PASS/FAIL summary."),
+	FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>&, UWorld* World)
+	{
+		UElysiumGameStateSubsystem* S = ResolveGameState(World);
+		FElysiumEntityWorld* W = S ? S->CurrentEntityWorld() : nullptr;
+		if (!S || !W)
+		{
+			UE_LOG(LogElysiumPy, Error, TEXT("firstbeat: needs a loaded map (sp_tutorial_1)"));
+			return;
+		}
+		FElysiumPythonVM::Get().SetGameState(S);
+
+		// 1) the state the beat dispatches on: Jack's dialogue has been had, the patch relocation
+		// has not run yet. Seeded here rather than played so the check is one console token.
+		S->SetGlobalInt(TEXT("Tut_Jack"), 1);
+		S->SetGlobalInt(TEXT("Tut_Patch"), 0);
+		UE_LOG(LogElysiumPy, Display, TEXT("FIRSTBEAT 1/3 seed: G.Tut_Jack=1 G.Tut_Patch=0 (host %s, script '%s')"),
+			S->ScriptHost().Name(), *S->CurrentLevelScriptModule());
+
+		// 2) tutorial.py's DialogPostProcess() — reaches saveState() (`G_tut[k] = G[k]`, the mapping
+		// protocol) before it ever gets to the beat branch.
+		FString Err;
+		S->EvalScript(TEXT("DialogPostProcess()"), Err);
+		const bool bRan = Err.IsEmpty();
+		UE_LOG(LogElysiumPy, Display, TEXT("FIRSTBEAT 2/3 DialogPostProcess(): %s  %s"),
+			bRan ? TEXT("PASS") : TEXT("FAIL"), bRan ? TEXT("") : *Err);
+
+		// 3) what the branch did: set the patch flag, and fire the fade through the real chokepoint.
+		const bool bPatch = S->GetGlobalInt(TEXT("Tut_Patch")) == 1;
+		FString FadeLine;
+		for (const FElysiumIOEvent& E : W->Queue().Pending())
+		{
+			if (E.Input == FName(TEXT("Fade")))
+			{
+				FadeLine = W->FormatEventLine(S->GameClock().GetNow(), E, E.Target, TEXT(""));
+				break;
+			}
+		}
+		const bool bQueued = !FadeLine.IsEmpty();
+		UE_LOG(LogElysiumPy, Display, TEXT("FIRSTBEAT 3/3 G.Tut_Patch=%d, teleport_fade.Fade queued: %s  %s"),
+			S->GetGlobalInt(TEXT("Tut_Patch")), bQueued ? TEXT("PASS") : TEXT("FAIL"), *FadeLine);
+
+		UE_LOG(LogElysiumPy, Display, TEXT("FIRSTBEAT VERDICT: %s"),
+			(bRan && bPatch && bQueued) ? TEXT("ALL PASS") : TEXT("FAILURES ABOVE"));
 	}));
 
 static FAutoConsoleCommandWithWorldAndArgs GElysiumPyFire(

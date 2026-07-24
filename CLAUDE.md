@@ -98,8 +98,13 @@ registry → brush bodies → spawn pass, everything through the two chokepoints
 queue. Live classes cover the logic/trigger family, doors + buttons + the `+use` look-cursor
 and use-icon HUD, `game_sign` popups, `ambient_generic` + SoundSchemes + mover sounds, and
 `trigger_changelevel` landmark travel. Scripting runs on an embedded CPython 2.7 VM (the
-map's level script imports before the spawn pass), with an expression-evaluator fallback.
-Debug lives in the vendored Cog ImGui shell plus Source-style `elysium.ent_*` verbs.
+map's level script imports before the spawn pass, then merges into `__main__`, where payloads
+evaluate), with an expression-evaluator fallback. Scripts hold **real entity objects**: an
+attribute is either an entity input — fired through the same chokepoint a map's own I/O wire
+uses — or a live field, one namespace, as VtMB's datamap reflection does it.
+Debug lives in the vendored Cog ImGui shell plus Source-style `elysium.ent_*` verbs, with an MCP
+server (on by default in dev builds; `-NoElysiumMcp` to disable) exposing the same runtime state as
+~20 `elysium_*` tools so an AI agent can drive QA and tests; automation tests run via `test.bat`.
 
 `sp_tutorial_1` is the canonical vertical slice; `sm_pawnshop_1` and several other maps are
 exported, so cross-map landmark travel is exercisable end to end.
@@ -140,6 +145,13 @@ your VtMB install.
   warmup + 300-frame CSV capture (per-pass GPU ms), summary, exit — no interaction.
   `tools/profile_report.py` builds the table; results in `tools/out/_profile/`, baseline in
   `docs/roadmap.md`'s appendix. Add a vantage in-game with `elysium.campos`.
+- `shots.bat [map] [cam]` — headless screenshot-regression capture at 2560×1440/SM6 over the
+  **same** vantages as `profile.bat` (`-ElysiumShots`); PNGs + manifest under `tools/out/_shots/`
+  (gitignored — game-derived baselines). Diff a run against a kept baseline to catch a look regression.
+- `test.bat [filter]` — run the automation suite headless (`Substrate`/`Content` shorthands, or a
+  full dotted test name; default = all). The `Substrate` tier runs under `-nullrhi`; the `Content`
+  tier reads `tools/out` and self-skips unexported maps. JSON+HTML report under `tools/out/_tests/`.
+  Requires the editor target built first.
 
 **VS Code IntelliSense:** `python tools/setup_vscode.py` regenerates the local editor config —
 it runs UBT's `-projectfiles -vscode` generator, then mirrors the module's include paths +

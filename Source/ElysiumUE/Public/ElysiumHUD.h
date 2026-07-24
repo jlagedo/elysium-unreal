@@ -9,10 +9,9 @@ class AElysiumMapActor;
 class IConsoleObject;
 class UTexture2D;
 
-// The game HUD. Always-on: a small top-left panel with the view point in metres and Source
-// units, yaw and movement/skybox/light state, a big FPS meter top-right, and the centre
-// crosshair (or the +use context cursor). Everything else the developer needs — map, light,
-// entity and I/O state — lives in the Cog windows (`docs/debug-tooling.md`).
+// The game HUD. Always-on: the centre crosshair (or the +use context cursor), the sign/popup
+// panel, and the env_fade screen fade. Player pose, FPS, and movement/skybox/light state live
+// in the Cog Maps window's Player section (`docs/debug-tooling.md`), not here.
 UCLASS()
 class AElysiumHUD : public AHUD
 {
@@ -24,7 +23,6 @@ public:
 	virtual void DrawHUD() override;
 
 private:
-	float SmoothedFPS = 0.f;
 	IConsoleObject* LightsCmd = nullptr;
 	IConsoleObject* PropsCmd = nullptr;
 

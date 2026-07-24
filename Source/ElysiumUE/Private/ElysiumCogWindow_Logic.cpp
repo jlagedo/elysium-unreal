@@ -2,12 +2,19 @@
 
 #if ENABLE_COG
 
+#include "ElysiumCogStyle.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 
 #include "CogLocalizationConfig.h"   // COG_TCHAR_TO_CHAR
 #include "imgui.h"
+
+void FElysiumCogWindow_Logic::Initialize()
+{
+	Super::Initialize();
+	bHasMenu = false;
+}
 
 void FElysiumCogWindow_Logic::RenderHelp()
 {
@@ -35,14 +42,16 @@ void FElysiumCogWindow_Logic::RenderContent()
 	FLinearColor FadeColor;
 	if (World->GetScreenFade(FadeColor))
 	{
-		ImGui::TextColored(ImVec4(0.45f, 1.0f, 0.62f, 1.0f), "ACTIVE");
+		// Swatch first, then the numbers: the rgb/alpha string is the part that may run past a narrow
+		// window edge, and it is the part you can read off the swatch anyway.
+		const ImVec4 Swatch(FadeColor.R, FadeColor.G, FadeColor.B, 1.0f);
+		ImGui::ColorButton("##fadecol", Swatch, ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop,
+			ImVec2(ImGui::GetTextLineHeight(), ImGui::GetTextLineHeight()));
+		ImGui::SameLine();
+		ImGui::TextColored(ElysiumCogStyle::ColOk, "ACTIVE");
 		ImGui::SameLine();
 		ImGui::Text("rgb (%.0f %.0f %.0f)  alpha %.2f",
 			FadeColor.R * 255.f, FadeColor.G * 255.f, FadeColor.B * 255.f, FadeColor.A);
-		ImGui::SameLine();
-		ImVec4 Swatch(FadeColor.R, FadeColor.G, FadeColor.B, 1.0f);
-		ImGui::ColorButton("##fadecol", Swatch, ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop,
-			ImVec2(ImGui::GetTextLineHeight(), ImGui::GetTextLineHeight()));
 	}
 	else
 	{
@@ -100,21 +109,8 @@ void FElysiumCogWindow_Logic::RenderClassSection(const char* Label, const TCHAR*
 		const bool bSelected = (GetSelection() == Ent->Handle);
 		const FString RowName = Ent->TargetName.IsEmpty() ? TEXT("(unnamed)") : Ent->TargetName;
 
-		// Name (coloured while inert so a hidden/dead logic node is obvious).
-		if (Ent->IsInert())
-		{
-			ImGui::TextColored(ImVec4(0.7f, 0.5f, 0.4f, 1.0f), "%s", COG_TCHAR_TO_CHAR(*RowName));
-		}
-		else if (bSelected)
-		{
-			ImGui::TextColored(ImVec4(0.45f, 1.0f, 0.62f, 1.0f), "%s", COG_TCHAR_TO_CHAR(*RowName));
-		}
-		else
-		{
-			ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*RowName));
-		}
-
-		ImGui::SameLine();
+		// Fixed-width buttons lead so a long targetname truncates against the window edge instead of
+		// pushing them out of reach.
 		if (ImGui::SmallButton("Inspect"))
 		{
 			SetSelection(Ent->Handle);
@@ -132,14 +128,34 @@ void FElysiumCogWindow_Logic::RenderClassSection(const char* Label, const TCHAR*
 			}
 		}
 
-		// Live state (GetDebugState), indented under the row.
+		// Name (coloured while inert so a hidden/dead logic node is obvious, and while selected so
+		// the row the Entity Inspector is holding is findable in a long board).
+		ImGui::SameLine();
+		if (Ent->IsInert())
+		{
+			ImGui::TextColored(ElysiumCogStyle::ColInert, "%s", COG_TCHAR_TO_CHAR(*RowName));
+		}
+		else if (bSelected)
+		{
+			ImGui::TextColored(ElysiumCogStyle::ColSelected, "%s", COG_TCHAR_TO_CHAR(*RowName));
+		}
+		else
+		{
+			ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*RowName));
+		}
+
+		// Live state (GetDebugState), indented under the row on one value column so a section of
+		// several entities reads as a table rather than as ragged prose.
 		TArray<TPair<FString, FString>> State;
 		Ent->GetDebugState(State);
 		ImGui::Indent();
+		const float ValueColumn = ImGui::GetCursorPosX() + GetDpiScale() * 104.0f;
 		for (const TPair<FString, FString>& KV : State)
 		{
 			ImGui::TextDisabled("%s:", COG_TCHAR_TO_CHAR(*KV.Key));
-			ImGui::SameLine();
+			ImGui::SameLine(0.0f, 0.0f);
+			ImGui::SetCursorPosX(FMath::Max(
+				ImGui::GetCursorPosX() + ImGui::GetStyle().ItemSpacing.x, ValueColumn));
 			ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*KV.Value));
 		}
 		ImGui::Unindent();

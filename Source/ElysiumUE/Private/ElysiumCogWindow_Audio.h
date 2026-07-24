@@ -29,7 +29,8 @@ private:
 	TArray<FString> CollectMapAudioRefs() const;
 
 	FString PendingPath;                 // the path in the input box
-	ImGuiTextFilter Filter;              // filters both the reference list and the results table
+	ImGuiTextFilter RefFilter;           // filters the map's ambient_generic reference list
+	ImGuiTextFilter DecodeFilter;        // filters the decode-results table
 	bool bRefsDirty = true;              // recollect the reference list on map change / first open
 	TArray<FString> MapRefs;             // cached ambient_generic WAV/MP3 references
 	FString LastMap;                     // map name the refs were collected for

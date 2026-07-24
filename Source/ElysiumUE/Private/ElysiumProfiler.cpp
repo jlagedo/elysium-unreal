@@ -3,6 +3,7 @@
 #include "ElysiumContentPaths.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
+#include "ElysiumVantages.h"
 
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
@@ -22,50 +23,10 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumProfile, Log, All);
 
-// ---------------------------------------------------------------------------
-// Vantage table. The frame cost of a VtMB scene is view-dependent (how many of the
-// map's hundreds of lights are in frustum), so a repeatable baseline needs a fixed
-// camera. Each entry is keyed to a map (empty Map = any map). The map-agnostic
-// "spawn" entry holds wherever the .spawn point drops the pawn; hand-picked vantages
-// carry explicit world-cm position + rotation.
-//
-// The hand-picked points below were read off the debug HUD, which reports metres +
-// yaw only, so position is metres*100 and pitch/roll default to level (0). Refine any
-// point in-game with the `elysium.campos` console command, which logs a paste-ready
-// line carrying the exact pitch.
-// ---------------------------------------------------------------------------
+// The fixed camera vantages live in ElysiumVantages.h, shared with the screenshot harness so a
+// perf sample and a screenshot come from the exact same viewpoint.
 namespace
 {
-	struct FProfileCam
-	{
-		const TCHAR* Map;         // empty: applies to any map
-		const TCHAR* Name;
-		bool         bUseSpawn;   // true: read the live pawn transform instead of Loc/Rot
-		FVector      Loc;         // world centimetres
-		FRotator     Rot;         // pitch, yaw, roll (degrees)
-	};
-
-	const FProfileCam GProfileCams[] =
-	{
-		{ TEXT(""),             TEXT("spawn"), true,  FVector::ZeroVector,        FRotator::ZeroRotator },
-
-		// sp_tutorial_1 — four vantages near spawn (HUD "you" metres -> cm, yaw only).
-		{ TEXT("sp_tutorial_1"), TEXT("t1"),   false, FVector( -60.f,  680.f,  70.f), FRotator(0.f, -138.f, 0.f) },
-		{ TEXT("sp_tutorial_1"), TEXT("t2"),   false, FVector(1320.f,  270.f,  60.f), FRotator(0.f,  149.f, 0.f) },
-		{ TEXT("sp_tutorial_1"), TEXT("t3"),   false, FVector(-1030.f, -100.f, 70.f), FRotator(0.f,  -49.f, 0.f) },
-		{ TEXT("sp_tutorial_1"), TEXT("t4"),   false, FVector(-2760.f, -600.f, 160.f), FRotator(0.f, -154.f, 0.f) },
-
-		// sm_hub_1 — two vantages.
-		{ TEXT("sm_hub_1"),      TEXT("h1"),   false, FVector(-4220.f, 6170.f, -120.f), FRotator(0.f,  -40.f, 0.f) },
-		{ TEXT("sm_hub_1"),      TEXT("h2"),   false, FVector(-4760.f, -1180.f, -120.f), FRotator(0.f,   29.f, 0.f) },
-
-		// sm_pawnshop_1 — three interior vantages (HUD "you" metres -> cm, yaw only).
-		{ TEXT("sm_pawnshop_1"), TEXT("p1"),   false, FVector(-4490.f, 6720.f, 530.f), FRotator(0.f, -139.f, 0.f) },
-		{ TEXT("sm_pawnshop_1"), TEXT("p2"),   false, FVector(-5160.f, 6300.f, 550.f), FRotator(0.f,   95.f, 0.f) },
-		{ TEXT("sm_pawnshop_1"), TEXT("p3"),   false, FVector(-5350.f, 6280.f, 530.f), FRotator(0.f,  127.f, 0.f) },
-	};
-	constexpr int32 NumProfileCams = UE_ARRAY_COUNT(GProfileCams);
-
 	// Number of frames after the spawn settles before the first warmup begins, to let
 	// the first-frame stalls (async collision cook, streaming) drain out of the average.
 	constexpr int32 SettleFrames = 30;
@@ -130,56 +91,13 @@ void FElysiumProfileRun::ResolveRunList()
 	const UElysiumMapSubsystem* Sub = Subsystem.Get();
 	const FString Map = Sub ? Sub->GetCurrentMapName() : FString();
 
-	// Candidate cams: those keyed to this map, plus the map-agnostic ones.
-	TArray<int32> Candidates;
-	for (int32 i = 0; i < NumProfileCams; ++i)
-	{
-		const FString CamMap = GProfileCams[i].Map;
-		if (CamMap.IsEmpty() || CamMap == Map)
-		{
-			Candidates.Add(i);
-		}
-	}
-
-	// Narrow to a single vantage if -ProfileCam=<index|name> selected one.
-	if (!CamSelector.IsEmpty() && CamSelector != TEXT("all"))
-	{
-		int32 Found = INDEX_NONE;
-		if (CamSelector.IsNumeric())
-		{
-			const int32 Idx = FCString::Atoi(*CamSelector);
-			if (Candidates.IsValidIndex(Idx))
-			{
-				Found = Candidates[Idx];
-			}
-		}
-		else
-		{
-			for (int32 i : Candidates)
-			{
-				if (CamSelector.Equals(GProfileCams[i].Name, ESearchCase::IgnoreCase))
-				{
-					Found = i;
-					break;
-				}
-			}
-		}
-		if (Found != INDEX_NONE)
-		{
-			RunList = { Found };
-			return;
-		}
-		UE_LOG(LogElysiumProfile, Warning,
-			TEXT("-ProfileCam=%s not found for map %s; running all its vantages."), *CamSelector, *Map);
-	}
-
-	RunList = MoveTemp(Candidates);
+	ElysiumVantages::Resolve(Map, CamSelector, RunList);
 	UE_LOG(LogElysiumProfile, Log, TEXT("map %s: %d vantage(s) to profile."), *Map, RunList.Num());
 }
 
 void FElysiumProfileRun::ArmCamera(int32 InCamIndex)
 {
-	const FProfileCam& Cam = GProfileCams[RunList[InCamIndex]];
+	const FElysiumVantage& Cam = ElysiumVantages::Table[RunList[InCamIndex]];
 	if (Cam.bUseSpawn)
 	{
 		// Hold wherever the .spawn point placed the pawn, looking along its view.
@@ -224,7 +142,7 @@ void FElysiumProfileRun::BeginCsvCapture()
 
 	const UElysiumMapSubsystem* Sub = Subsystem.Get();
 	const FString Map = Sub ? Sub->GetCurrentMapName() : TEXT("unknown");
-	const FString CamName = GProfileCams[RunList[CamIndex]].Name;
+	const FString CamName = ElysiumVantages::Table[RunList[CamIndex]].Name;
 
 #if CSV_PROFILER
 	const FString Folder = FElysiumContentPaths::Root() / TEXT("_profile");
@@ -238,7 +156,7 @@ void FElysiumProfileRun::BeginCsvCapture()
 
 void FElysiumProfileRun::PushRow()
 {
-	const FProfileCam& Cam = GProfileCams[RunList[CamIndex]];
+	const FElysiumVantage& Cam = ElysiumVantages::Table[RunList[CamIndex]];
 	const UElysiumMapSubsystem* Sub = Subsystem.Get();
 	const FString Map = Sub ? Sub->GetCurrentMapName() : TEXT("unknown");
 

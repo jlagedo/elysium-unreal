@@ -2,6 +2,7 @@
 
 #if ENABLE_COG
 
+#include "ElysiumCogStyle.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameClock.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -37,13 +38,12 @@ void FElysiumCogWindow_Status::RenderContent()
 		return;
 	}
 
-	// One value column for every section, so labels and values line up down the whole window.
-	const float ValueColumn = GetDpiScale() * 120.0f;
+	// One value column for every section, so labels and values line up down the whole window. Wide
+	// enough for "Brush bodies" / "Queue pending", the longest labels here.
+	const float ValueColumn = GetDpiScale() * 124.0f;
 	auto Row = [ValueColumn](const char* Label, const FString& Value)
 	{
-		ImGui::TextUnformatted(Label);
-		ImGui::SameLine(ValueColumn);
-		ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*Value));
+		ElysiumCogStyle::LabelValue(Label, COG_TCHAR_TO_CHAR(*Value), ValueColumn);
 	};
 
 	ImGui::SeparatorText("Map");

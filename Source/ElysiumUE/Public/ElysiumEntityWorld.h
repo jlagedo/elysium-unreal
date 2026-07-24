@@ -100,13 +100,14 @@ public:
 	// --- Screen fade (P4.5 env_fade) ---------------------------------------------------
 	// A full-screen colour fade driven by env_fade's `Fade` input, advanced off the game clock and
 	// drawn by AElysiumHUD (which polls GetScreenFade each frame). Held on the world so it dies with
-	// the map. One active fade at a time — a new Fade replaces the running one, matching Source's
-	// single g_pScreenFade. `bReverse` = SF_FADE_IN (reveal: start opaque, clear over Duration);
-	// `bStayOut` = SF_FADE_STAYOUT (hold at MaxAlpha after covering, never fade back).
+	// the map. One active fade at a time — a new Fade replaces the running one; VtMB keeps a fade
+	// *list*, but its colours sum and its alphas max, which is indistinguishable from one slot while
+	// every fade on a map is the same colour (all of them are black on the tutorial).
+	// `bFadeIn` = SF_FADE_IN, `bAutoReverse` = SF_FADE_STAYOUT — see GetScreenFade for the curve.
 	void StartScreenFade(const FLinearColor& Color, float Duration, float HoldTime, float MaxAlpha,
-		bool bReverse, bool bStayOut);
+		bool bFadeIn, bool bAutoReverse);
 	// Fills OutColor (rgb = fade colour, a = current 0..1 alpha) and returns true while a fade is
-	// visible; false when idle. Const — the HUD polls it; a finished non-stayout fade reports idle.
+	// visible; false when idle. Const — the HUD polls it; an expired fade reports idle.
 	bool GetScreenFade(FLinearColor& OutColor) const;
 
 	// --- Open sign window (P4.10 game_sign) --------------------------------------------
@@ -227,17 +228,17 @@ private:
 	FElysiumEntityHandle AimedUsable;
 
 	// P4.5 env_fade screen-fade state (one at a time). GetScreenFade derives the current alpha from
-	// NowSeconds() against StartTime, so no per-frame advance is needed; a finished non-stayout fade
-	// simply reports idle (bActive stays set but the phase math returns false past its return ramp).
+	// NowSeconds() against StartTime, so no per-frame advance is needed; an expired fade simply
+	// reports idle (bActive stays set but the phase math returns false past the last phase).
 	struct FScreenFade
 	{
 		bool         bActive = false;
 		FLinearColor Color = FLinearColor::Black;
-		float        MaxAlpha = 1.0f;   // 0..1 (renderamt/255)
-		float        Duration = 0.0f;   // fade-in (and fade-back) seconds
-		float        HoldTime = 0.0f;   // seconds held at MaxAlpha before fading back
-		bool         bReverse = false;  // SF_FADE_IN: reveal (opaque -> clear), no hold/return
-		bool         bStayOut = false;  // SF_FADE_STAYOUT: hold at MaxAlpha forever after covering
+		float        MaxAlpha = 1.0f;       // 0..1 (renderamt/255)
+		float        Duration = 0.0f;       // seconds to cover (and to uncover again when bAutoReverse)
+		float        HoldTime = 0.0f;       // seconds held at MaxAlpha once covered
+		bool         bFadeIn = false;       // SF_FADE_IN: hold the colour flat, no ramp either way
+		bool         bAutoReverse = false;  // SF_FADE_STAYOUT: uncover again once the hold expires
 		double       StartTime = 0.0;
 	};
 	FScreenFade ScreenFade;

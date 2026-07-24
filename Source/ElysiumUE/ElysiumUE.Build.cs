@@ -56,6 +56,25 @@ public class ElysiumUE : ModuleRules
 			});
 		}
 
+		// P2.7 -- the agent-facing MCP surface (debug-tooling.md Layer 3). The engine's
+		// experimental ModelContextProtocol plugin is NoRedist and its toolset->MCP adapter is
+		// editor-only, so the .uproject pins it to the Editor target; this dep follows that pin.
+		// ELYSIUM_WITH_MCP gates every call site, so the module still compiles for a Game/Shipping
+		// target with no MCP plugin present.
+		if (Target.Type == TargetType.Editor)
+		{
+			PublicDefinitions.Add("ELYSIUM_WITH_MCP=1");
+			PrivateDependencyModuleNames.AddRange(new string[]
+			{
+				// JsonUtilities carries FJsonObjectWrapper, the base of FModelContextProtocolToolResult.
+				"ModelContextProtocol", "ModelContextProtocolEngine", "JsonUtilities"
+			});
+		}
+		else
+		{
+			PublicDefinitions.Add("ELYSIUM_WITH_MCP=0");
+		}
+
 		// P5.5 / 9.3 -- embedded CPython 2.7.18 (qnox/python-2.7) for VtMB level scripts.
 		// VtMB's VM is stock CPython 2.1 (vampire_python21.dll); the 2.1->2.7 script delta is ~0
 		// (no string-exceptions, no __future__ -- verified against all 36 loose scripts). We link

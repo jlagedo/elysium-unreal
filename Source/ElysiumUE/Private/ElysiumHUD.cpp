@@ -4,7 +4,6 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
-#include "ElysiumPawn.h"
 #include "ElysiumSignData.h"
 
 #include "CanvasItem.h"
@@ -13,7 +12,6 @@
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
 #include "Engine/Texture2D.h"
-#include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
 #include "IImageWrapper.h"
 #include "IImageWrapperModule.h"
@@ -27,17 +25,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumHUD, Log, All);
 
 namespace
 {
-	// Unreal (cm, left-handed) -> Source (inches, right-handed): the inverse of the
-	// (sx,-sy,sz)*2.54 load transform.
-	FVector UnrealToSource(const FVector& U)
-	{
-		return FVector(U.X / 2.54, -U.Y / 2.54, U.Z / 2.54);
-	}
-
-	const FLinearColor ColLabel(0.60f, 0.66f, 0.74f);
-	const FLinearColor ColValue(0.86f, 0.94f, 1.00f);
-	const FLinearColor ColOn(0.45f, 1.00f, 0.62f);
-
 	// Decode a PNG off disk into a transient BGRA texture. Shared by the PL3 use-icon atlas and the
 	// PL5c sign backgrounds — both are offline-decoded RGBA sheets read 1:1, not game-content
 	// textures (those go through FElysiumTextureCache). Returns null on any failure.
@@ -190,59 +177,6 @@ void AElysiumHUD::DrawHUD()
 		}
 	}
 
-	const float Dt = GetWorld()->GetDeltaSeconds();
-	if (Dt > 0.f)
-	{
-		SmoothedFPS = FMath::FInterpTo(SmoothedFPS, 1.f / Dt, Dt, 4.f);
-	}
-
-	UFont* Font = GEngine->GetMediumFont();
-
-	APlayerController* PC = GetOwningPlayerController();
-	APawn* Pawn = PC ? PC->GetPawn() : nullptr;
-
-	FVector ViewLoc = FVector::ZeroVector;
-	FRotator ViewRot = FRotator::ZeroRotator;
-	if (PC)
-	{
-		PC->GetPlayerViewPoint(ViewLoc, ViewRot);
-	}
-	const FVector Met = ViewLoc / 100.0;
-	const FVector Src = UnrealToSource(ViewLoc);
-
-	// Always-on position overlay. The map/collision/light counts live in the Maps + Status Cog
-	// windows, and "what am I aiming at" in the Entity Inspector's live crosshair readout
-	// (debug-tooling.md: the HUD keeps only the FPS/position overlay).
-	const float X = 16.f;
-	float Y = 16.f;
-	const float LineH = 18.f;
-	const int32 NumLines = 3;
-	DrawRect(FLinearColor(0, 0, 0, 0.62f), X - 8.f, Y - 8.f, 360.f, NumLines * LineH + 16.f);
-
-	auto Row = [&](const FString& Text, const FLinearColor& Color)
-	{
-		DrawText(Text, Color, X, Y, Font);
-		Y += LineH;
-	};
-
-	// Player pose: metres + look, then the Source-unit position.
-	Row(FString::Printf(TEXT("you  (%.1f, %.1f, %.1f) m    yaw %.0f°"),
-		Met.X, Met.Y, Met.Z, ViewRot.Yaw), ColValue);
-	Row(FString::Printf(TEXT("src  (%.0f, %.0f, %.0f)"), Src.X, Src.Y, Src.Z), ColLabel);
-
-	// Movement mode + skybox state.
-	AElysiumMapActor* MapActor = ResolveMapActor();
-	const bool bNoclip = Cast<AElysiumPawn>(Pawn) && Cast<AElysiumPawn>(Pawn)->IsNoclip();
-	const bool bSky = MapActor && MapActor->IsSkyboxVisible();
-	const bool bLights = MapActor && MapActor->AreLightsVisible();
-	Row(FString::Printf(TEXT("mode %s    sky %s    lights %s"),
-		bNoclip ? TEXT("NOCLIP") : TEXT("WALK"),
-		bSky ? TEXT("ON") : TEXT("OFF"),
-		bLights ? TEXT("ON") : TEXT("OFF")), bNoclip ? ColOn : ColValue);
-
-	// FPS: a big green number top-right, so a frame-rate hit is obvious at a glance.
-	UFont* Big = GEngine->GetLargeFont();
-	DrawText(FString::Printf(TEXT("%.0f"), SmoothedFPS), ColOn, Canvas->ClipX - 96.f, 12.f, Big);
 }
 
 // --- +use context-icon reticle (P4.4) -------------------------------------------------------

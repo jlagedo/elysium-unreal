@@ -123,8 +123,9 @@ Custom Cog windows grow with the runtime, reading Elysium's own data structures 
 (ImGui code is plain immediate-mode C++ — no reflection or UI assets needed, which matters
 because tier-1 logic entities are plain C++ objects, not UObjects):
 
-- **Maps** — map list, travel, `elysium.reload`, load-phase timings (subsumes most of the
-  Canvas HUD; the HUD keeps only the always-available FPS/position overlay).
+- **Maps** — map list, travel, `elysium.reload`, load-phase timings, and the player pose
+  (metres/Source units/yaw), movement/skybox/light state, and FPS readout (the Canvas HUD
+  itself keeps only the reticle, sign panels, and the `env_fade` screen fade).
 - **Lights** — the rig's source list, per-style intensity curves, live scale tuning.
 - **Entities** (M3) — browser over `FElysiumEntityWorld`'s registry: all 1,226 records
   including inert unhandled classnames, filter by classname/targetname, histogram.
@@ -141,6 +142,15 @@ because tier-1 logic entities are plain C++ objects, not UObjects):
   colour) built once per map and updated per-instance only when an entity's state changes (via the
   `FElysiumEntityWorld::SetVisualChangedHook` event seam) — no per-frame draw-call round trip. Triggers,
   beams, and labels stay immediate-mode `DrawDebug` (bounded/near-only, so cheap).
+
+The debug UI carries VtMB's skin (`ElysiumCogStyle`): near-black warm grounds, blood red as the one
+accent, bone text, with candle amber / absinthe green / wound red reserved for the three data states
+that must read at a glance. It is installed into ImGui's *global* style, so it covers the stock Cog
+windows and the F1 menu bar too, and every window draws its state colours from the shared semantic
+names rather than from literals. `elysium.CogTheme 0` restores stock ImGui dark for an A/B. Stock
+Cog's `CogEngineWindow_ImGui` — the Dear ImGui / ImPlot demo, metrics, debug-log and style-editor
+toggles — is deliberately not registered: it is ImGui's own showcase, not this project's debug
+surface.
 
 The Slate `UElysiumConsoleSubsystem` designed in `map-architecture.md` is **superseded**:
 UE's built-in console (already bound on `` ` ``/`'`) plus Cog's console/log windows cover it.
@@ -176,6 +186,64 @@ What lands with M3 (names mirror Source so the muscle memory transfers):
 | `elysium.ent_break <target> [input]` | Auto-`ent_pause` when a matching input is delivered — breakpoint-on-entity-event; trivial given the chokepoint, and better than any surveyed prior art. |
 
 Each dispatch also emits `UE_VLOG` events (Layer 0) for offline scrubbing.
+
+## Layer 3 — the agent-facing surface (P2.7, MCP)
+
+The `elysium.*` console verbs were always described here as *a thin scriptable layer over the same
+runtime state* — for `-ExecCmds` automation and headless runs. Layer 3 makes the third consumer
+(after the human at Cog and the script) first-class: an **AI agent** driving the game for QA and
+tests. It reads and writes exactly the state Layers 1–2 expose, through structured **MCP tools**
+instead of parsed console text — no new dispatch, no I/O side channel (the fire path is still
+`FElysiumEntityWorld::EnqueueInput`, the same chokepoint the Inspector and `ent_fire` use).
+
+**Transport.** UE 5.8 ships an experimental `ModelContextProtocol` plugin that embeds an MCP HTTP
+server in the process; any MCP client (Claude Code, Cursor, the MCP Inspector) connects over
+loopback. `UElysiumMcpSubsystem` (a `UEngineSubsystem`) registers the Elysium tools through
+`IModelContextProtocolModule::AddTool()` — the **direct** path, deliberately not the plugin's
+Toolset-Registry→MCP adapter, because that adapter is editor-only and this project's whole loop is
+`-game`/cooked with no editor content loop. Direct registration serves the tools in editor, PIE,
+`-game`, and (with an explicit `StartServer()` call) a cooked build alike. The subsystem is
+engine-scoped and resolves the live world at **call** time, so one connected agent keeps a stable
+tool list across map travel, PIE start/stop, and an idle editor.
+
+**The tools mirror the Cog windows** (~20): map lifecycle (list/load/reload/new-game), player
+(pose/teleport/noclip), entities (paged+filtered list with a class histogram, full detail = the
+chain-walked fields + accepted inputs + 7-field outputs with live `times`, and `entity_fire`
+through the real queue), the event queue (read/pause/step), the I/O history ring, `script_eval` +
+the `G` dump, audio state, a viewport `screenshot` (overlay excluded), and two escape hatches —
+`console_exec` (runs any `elysium.*`/engine verb, merging the exec output device with a delta of an
+always-on log-tap ring so verbs that report through `UE_LOG` are captured) and `log_tail`. Anything
+without a typed tool is still reachable through `console_exec`, so the surface is complete by
+construction. Each tool returns structured JSON (`MakeStructuredContentResult`); handlers run on the
+game thread (the server serializes tool calls there), so they touch the substrate directly.
+
+**Posture.** The server is **on by default in dev builds** — it auto-starts whenever the plugin is
+present, which is editor-target-only (the dependency is gated by `ELYSIUM_WITH_MCP`, defined `1`
+only for the Editor target, so nothing self-starts in a Game/Shipping/Test build — every call site
+compiles to an empty shell there). `-NoElysiumMcp` opts out; `-ElysiumMcp=<port>` pins a port;
+`elysium.mcp.start`/`stop` toggle it live. It binds `127.0.0.1` with no authentication (the plugin's
+own posture): a local dev tool, nothing else. An agent connects via the repo-root `.mcp.json`
+(server name `elysium`, `http://127.0.0.1:8000/mcp`) — launch the game, then run `claude` from the
+repo root. Two stock engine
+toolsets are enabled beside ours — `AutomationTestToolset` (the agent runs/reads automation tests
+in-editor) and `LiveCodingToolset` (agent-triggered hot recompile); the ~28 actor/Niagara/PCG/etc.
+toolsets are skipped, having nothing to act on in a project that builds no editor content.
+
+**What the agent asserts against — not itself (P2.8).** The LLM is never the test oracle. It
+*drives* Unreal's own automation framework, which is the oracle. Two tiers live in
+`Source/ElysiumUE/Private/Tests/` (inside the module, because the plain-C++ substrate carries no
+`ELYSIUMUE_API` exports for a separate test module to link): a **content-free** suite under
+`-nullrhi` (variant/expr/KeyValues/queue/registry + one end-to-end `logic_relay→math_counter` I/O
+chain on a bare entity world) that is the real regression net, and a **content-gated** suite that
+parses the real exported `.ents` and **self-skips** when `tools/out` is empty. `test.bat` runs them
+headless with a JSON+HTML report; the design and flags are in `roadmap.md` P2.8.
+
+**Closing the loop visually (P2.9).** `FElysiumShotRun` (`-ElysiumShots`, `shots.bat`) is the
+screenshot-regression sibling of the profiler — it visits the *same* fixed vantages
+(`ElysiumVantages.h`, shared so a look regression and a cost regression are the same frame),
+captures the viewport to the gitignored `tools/out/_shots/` (baselines are game-derived), and shares
+its capture path (`ElysiumScreenshot.{h,cpp}`) with the `elysium_screenshot` MCP tool — the
+fire→screenshot→assert loop the agent runs live and the harness runs headless are one code path.
 
 ## Build order
 

@@ -3,6 +3,7 @@
 #if ENABLE_COG
 
 #include "ElysiumAudioSubsystem.h"
+#include "ElysiumCogStyle.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -25,7 +26,7 @@ void FElysiumCogWindow_SoundScheme::RenderHelp()
 		"P6.3 SoundScheme runtime. Shows the active scheme (ambient bed + music stems + polar random "
 		"one-shots) driven by this map's ambient_soundscheme anchors, and drives the music state "
 		"machine (Explore/Combat/Alert). VtMB crossfades schemes with Source I/O (FadeIn/FadeOut); the "
-		"buttons below fire the same path. Combat scoring will own the music state in P9 — for now it "
+		"buttons below fire the same path. Combat scoring will own the music state in P9 - for now it "
 		"is the elysium.MusicState debug echo set here.");
 }
 
@@ -60,7 +61,7 @@ void FElysiumCogWindow_SoundScheme::RenderContent()
 	auto StateButton = [&](const char* Label, EElysiumMusicState Target, int32 Cv)
 	{
 		const bool bOn = State == Target;
-		if (bOn) { ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.45f, 0.25f, 1.f)); }
+		if (bOn) { ImGui::PushStyleColor(ImGuiCol_Button, ElysiumCogStyle::Blood); }
 		if (ImGui::Button(Label)) { SetMusicStateCvar(Cv); }
 		if (bOn) { ImGui::PopStyleColor(); }
 	};
@@ -79,17 +80,18 @@ void FElysiumCogWindow_SoundScheme::RenderContent()
 		}
 		else
 		{
-			ImGui::TextColored(ImVec4(1.f, 0.6f, 0.35f, 1.f), "%s", COG_TCHAR_TO_CHAR(*Rel));
-			ImGui::TextDisabled("scheme file missing/unparsed — run PL5a (UE_extract_sounds.py) to mirror it.");
+			ImGui::TextColored(ElysiumCogStyle::ColWarn, "%s", COG_TCHAR_TO_CHAR(*Rel));
+			ImGui::TextDisabled("scheme file missing/unparsed - run PL5a (UE_extract_sounds.py) to mirror it.");
 		}
 	}
 	else
 	{
 		const FElysiumSoundScheme& S = Mgr->ActiveScheme();
-		ImGui::Text("%s", COG_TCHAR_TO_CHAR(*Mgr->ActiveSchemeRel()));
+		ImGui::TextColored(ElysiumCogStyle::ColName, "%s", COG_TCHAR_TO_CHAR(*Mgr->ActiveSchemeRel()));
 		const FVector A = Mgr->ActiveAnchor();
-		ImGui::Text("anchor (%.0f, %.0f, %.0f)  ·  RandomSoundCount %d  ·  RoomDSP %d  ·  active randoms %d",
-			A.X, A.Y, A.Z, S.RandomSoundCount, S.RoomDSP, Mgr->ActiveRandomVoiceCount());
+		ImGui::TextDisabled("anchor (%.0f, %.0f, %.0f)", A.X, A.Y, A.Z);
+		ImGui::TextDisabled("RandomSoundCount %d · RoomDSP %d · active randoms %d",
+			S.RandomSoundCount, S.RoomDSP, Mgr->ActiveRandomVoiceCount());
 
 		auto SoundRow = [](const char* Label, const FElysiumSchemeSound& Snd)
 		{
@@ -174,7 +176,7 @@ void FElysiumCogWindow_SoundScheme::RenderContent()
 			Mgr->FadeOutScheme(Audio, Rel, 2.f);
 		}
 		ImGui::SameLine();
-		if (bActive) { ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.f), "%s", COG_TCHAR_TO_CHAR(*Rel)); }
+		if (bActive) { ImGui::TextColored(ElysiumCogStyle::ColOk, "%s", COG_TCHAR_TO_CHAR(*Rel)); }
 		else         { ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*Rel)); }
 		if (!E->TargetName.IsEmpty())
 		{

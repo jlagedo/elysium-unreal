@@ -2,6 +2,7 @@
 
 #if ENABLE_COG
 
+#include "ElysiumCogStyle.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumEventQueue.h"
 #include "ElysiumIOSink.h"
@@ -21,7 +22,7 @@ void FElysiumCogWindow_EventQueue::RenderHelp()
 		"The Track-B event queue: the pending time-sorted I/O deliveries with their fire times, the "
 		"always-on I/O history ring buffer, and pause / single-step controls. Pausing holds the "
 		"queue's service loop; Step releases one due event at a time for causality debugging.\n\n"
-		"A row with Target '(python)' is a field-6 payload or a ScheduleTask deferred source (5.4) — it "
+		"A row with Target '(python)' is a field-6 payload or a ScheduleTask deferred source (5.4) - it "
 		"carries no I/O input, just the Python string in the last column, evaluated at its fire time.");
 }
 
@@ -57,11 +58,17 @@ void FElysiumCogWindow_EventQueue::RenderContent()
 		Queue.RequestSteps(10);
 	}
 	ImGui::EndDisabled();
+
+	// Its own line: three buttons plus this status string is wider than the window at any sane size.
+	ImGui::Text("now %.2f s  ·", Now);
 	ImGui::SameLine();
-	ImGui::Text("now %.2f s  ·  %s%s", Now,
-		bPaused ? "PAUSED" : "running",
-		(bPaused && Queue.StepsPending() > 0)
-			? COG_TCHAR_TO_CHAR(*FString::Printf(TEXT("  (%d step armed)"), Queue.StepsPending())) : "");
+	ImGui::TextColored(bPaused ? ElysiumCogStyle::ColWarn : ElysiumCogStyle::ColOk, "%s",
+		bPaused ? "PAUSED" : "running");
+	if (bPaused && Queue.StepsPending() > 0)
+	{
+		ImGui::SameLine();
+		ImGui::TextDisabled("(%d step armed)", Queue.StepsPending());
+	}
 
 	// --- Pending events --------------------------------------------------------------------
 	const TArray<FElysiumIOEvent>& Pending = Queue.Pending();
@@ -103,7 +110,7 @@ void FElysiumCogWindow_EventQueue::RenderContent()
 			// so it shows "(python)" in the Target column and its source here).
 			if (!Ev.PythonSrc.IsEmpty())
 			{
-				ImGui::TextColored(ImVec4(0.80f, 0.75f, 0.45f, 1.f), "%s", COG_TCHAR_TO_CHAR(*Ev.PythonSrc));
+				ImGui::TextColored(ElysiumCogStyle::ColName, "%s", COG_TCHAR_TO_CHAR(*Ev.PythonSrc));
 			}
 		}
 		ImGui::EndTable();

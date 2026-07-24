@@ -73,5 +73,5 @@ private:
 	void HandleEndOverlap(UPrimitiveComponent* OverlappedComp, AActor* OtherActor,
 		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
 
-	void RouteTouch(bool bBegin) const;
+	void RouteTouch(const AActor* Toucher, bool bBegin) const;
 };

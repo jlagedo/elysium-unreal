@@ -59,6 +59,12 @@ public:
 	// (or the spawn-hold timed out). The headless profiler waits on this before capturing.
 	bool IsSpawnDone() const { return bSpawnDone; }
 
+	// True once the pawn stands where this map wants it: either it has been moved to the
+	// info_player_start / landmark, or this map asked for no placement at all. Until then the pawn
+	// is still standing wherever the PREVIOUS map left it, so a trigger volume it happens to
+	// intersect is not something the player walked into — brush touch routing waits on this.
+	bool IsPlayerSeated() const { return !bSpawnPending || bSpawnPlaced; }
+
 	// The live Track-B entity world (P1.4), or null if the map has no `.ents`. Owned by this
 	// actor, so it dies on map unload. The `elysium.world*` verbs reach it through here.
 	FElysiumEntityWorld* GetEntityWorld() const { return EntityWorld.Get(); }

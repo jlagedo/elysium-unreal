@@ -20,7 +20,6 @@
 #include "CogEngineWindow_CollisionViewer.h"
 #include "CogEngineWindow_Console.h"
 #include "CogEngineWindow_DebugSettings.h"
-#include "CogEngineWindow_ImGui.h"
 #include "CogEngineWindow_Inspector.h"
 #include "CogEngineWindow_Levels.h"
 #include "CogEngineWindow_LogCategories.h"
@@ -70,7 +69,10 @@ void UElysiumCogSubsystem::PostInitialize()
 
 	// Stock CogEngine windows. No GAS/AI/Input windows (this project uses none of
 	// those systems), so Cog::AddAllWindows (which pulls in CogAbility/CogAI) is
-	// intentionally not used. Press F1 in PIE/standalone to open the main menu.
+	// intentionally not used. Nor is CogEngineWindow_ImGui: its whole content is the
+	// Dear ImGui / ImPlot demo, metrics, debug-log and style-editor toggles, which are
+	// ImGui's own showcase, not this project's debug surface. Press F1 in PIE/standalone
+	// to open the main menu.
 	Cog->AddWindow<FCogEngineWindow_Inspector>("Engine.Inspector");
 	Cog->AddWindow<FCogEngineWindow_Selection>("Engine.Selection");
 	Cog->AddWindow<FCogEngineWindow_CollisionViewer>("Engine.Collision Viewer");
@@ -85,7 +87,6 @@ void UElysiumCogSubsystem::PostInitialize()
 	Cog->AddWindow<FCogEngineWindow_TimeScale>("Engine.Time Scale");
 	Cog->AddWindow<FCogEngineWindow_Scalability>("Engine.Scalability");
 	Cog->AddWindow<FCogEngineWindow_DebugSettings>("Engine.Debug Settings");
-	Cog->AddWindow<FCogEngineWindow_ImGui>("Engine.ImGui");
 
 	// Custom Elysium windows, grouped under an "Elysium" main-menu category (the "Elysium."
 	// name prefix). They read Elysium's own runtime data structures directly — the Track-B
