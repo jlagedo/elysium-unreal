@@ -60,6 +60,9 @@ Saved/Cooked/
 # reference (proprietary, Copyright Valve — never ours to ship or commit).
 /sdk/
 
+# Build / export logs
+*.log
+
 # OS files
 .DS_Store
 Thumbs.db
