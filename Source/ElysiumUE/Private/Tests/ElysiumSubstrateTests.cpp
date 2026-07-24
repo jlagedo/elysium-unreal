@@ -12,6 +12,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumClassRegistry.h"
+#include "ElysiumDecals.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -19,6 +20,8 @@
 #include "ElysiumExpr.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumVariant.h"
+
+#include "Math/RotationMatrix.h"
 
 // One context flag (runs anywhere) + the product filter (this project's own suite bucket).
 // EAutomationTestFlags is a strong enum in 5.8, so the constant carries that type (ENUM_CLASS_FLAGS
@@ -368,6 +371,172 @@ bool FElysiumIOChainTest::RunTest(const FString&)
 		World.Tick(0.0);
 	}
 	TestNull(TEXT("killed handle resolves to null"), World.Resolve(CounterHandle));
+
+	return true;
+}
+
+// =====================================================================================
+// FElysiumDecals — the `.decals` projector sidecar parser + the orientation contract the
+// map actor builds each UDecalComponent from (7.2). Pure data + math, no RHI.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDecalsTest, "Elysium.Substrate.Decals", GElysiumTestFlags)
+bool FElysiumDecalsTest::RunTest(const FString&)
+{
+	// --- parse: 15 tokens -> one def with fields in order; malformed lines dropped ---
+	TArray<FString> Lines;
+	Lines.Add(TEXT("decals/blood1 10.0 20.0 30.0 1 0 0 0 1 0 0 0 1 12.5 7.5"));
+	Lines.Add(TEXT("# too few tokens -> skipped"));
+	Lines.Add(TEXT("decals/blood2 0 0 0 0 0 1 1 0 0 0 -1 0 4 4"));
+	Lines.Add(FString());   // blank -> skipped
+
+	TArray<FElysiumDecalDef> Defs;
+	FElysiumDecals::ParseLines(Lines, Defs);
+	TestEqual(TEXT("two valid decals parsed (two junk lines dropped)"), Defs.Num(), 2);
+
+	if (Defs.Num() >= 1)
+	{
+		const FElysiumDecalDef& D = Defs[0];
+		TestEqual(TEXT("material name"), D.Mat, FString(TEXT("decals/blood1")));
+		TestTrue(TEXT("loc parsed"), D.Loc.Equals(FVector(10, 20, 30)));
+		TestTrue(TEXT("normal parsed"), D.Normal.Equals(FVector(1, 0, 0)));
+		TestTrue(TEXT("s_dir parsed"), D.SDir.Equals(FVector(0, 1, 0)));
+		TestTrue(TEXT("t_dir parsed"), D.TDir.Equals(FVector(0, 0, 1)));
+		TestEqual(TEXT("half-width"), D.HalfW, 12.5f);
+		TestEqual(TEXT("half-height"), D.HalfH, 7.5f);
+	}
+
+	// --- orientation: BuildDecals rotates each decal by MakeFromXZ(Normal, SDir). A deferred decal
+	// maps texture U -> local Z and V -> local Y, so the surface horizontal (SDir, the U axis) goes
+	// on local Z; local +X stays the room normal, so the component's -X (its projection axis) fires
+	// into the wall. ---
+	const FVector Normal(1, 0, 0), SDir(0, -1, 0);   // wall decal facing +X, U axis along -Y
+	const FMatrix R = FRotationMatrix::MakeFromXZ(Normal, SDir);
+	TestTrue(TEXT("local +X aligns with the room normal (projection is -X into the wall)"),
+		R.GetUnitAxis(EAxis::X).Equals(Normal));
+	TestTrue(TEXT("local +Z aligns with the surface horizontal / texture U (SDir)"),
+		R.GetUnitAxis(EAxis::Z).Equals(SDir));
+	// The three axes stay orthonormal (a valid rotation, not the exporter's reflected frame).
+	TestTrue(TEXT("Y is orthonormal to X and Z"),
+		FMath::IsNearlyZero(FVector::DotProduct(R.GetUnitAxis(EAxis::Y), Normal)) &&
+		FMath::IsNearlyZero(FVector::DotProduct(R.GetUnitAxis(EAxis::Y), SDir)));
+
+	return true;
+}
+
+// =====================================================================================
+// FElysiumNpc / npc_maker (B3) — registry coverage, npc_maker.Spawn creating a live child
+// on a bare world (Owner null, so the visual build no-ops), and the WillTalk latch +
+// OnDialogBegin fire. No RHI, no glTF: this is the AI-free substrate half of the beat.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcTest, "Elysium.Substrate.Npc", GElysiumTestFlags)
+bool FElysiumNpcTest::RunTest(const FString&)
+{
+	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+
+	// The character leaf is registered for the beat's class and resolves its dialog-gating inputs.
+	const FElysiumClassDesc* Vamp = Reg.Find(FName(TEXT("npc_VVampire")));
+	if (!TestNotNull(TEXT("npc_VVampire registered"), Vamp))
+	{
+		return false;
+	}
+	for (const TCHAR* In : { TEXT("WillTalk"), TEXT("UseInteresting"), TEXT("StartPlayerDialogRemote"),
+		TEXT("EndDialog"), TEXT("Kill") })
+	{
+		TestNotNull(FString::Printf(TEXT("npc_VVampire.%s resolves"), In),
+			reinterpret_cast<const void*>(Reg.FindInput(*Vamp, FName(In))));
+	}
+
+	// The maker leaf resolves Spawn/Enable.
+	const FElysiumClassDesc* MakerDesc = Reg.Find(FName(TEXT("npc_maker")));
+	if (!TestNotNull(TEXT("npc_maker registered"), MakerDesc))
+	{
+		return false;
+	}
+	TestNotNull(TEXT("npc_maker.Spawn resolves"),
+		reinterpret_cast<const void*>(Reg.FindInput(*MakerDesc, FName(TEXT("Spawn")))));
+	TestNotNull(TEXT("npc_maker.Enable resolves"),
+		reinterpret_cast<const void*>(Reg.FindInput(*MakerDesc, FName(TEXT("Enable")))));
+
+	// --- A bare world: Jack, a counter wired off his OnDialogBegin, and the blueblood maker ---
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__npc_test__");
+
+	FElysiumEntityDef Jack;
+	Jack.Classname = TEXT("npc_VVampire");
+	Jack.TargetName = TEXT("Jack");
+	{
+		FElysiumOutputDef Wire;   // OnDialogBegin -> counter.Add(1), to observe the fire
+		Wire.Name = TEXT("OnDialogBegin");
+		Wire.Target = TEXT("dlgcount");
+		Wire.Input = TEXT("Add");
+		Wire.Param = TEXT("1");
+		Jack.Outputs.Add(Wire);
+	}
+	Defs.Defs.Add(MoveTemp(Jack));
+
+	FElysiumEntityDef Counter;
+	Counter.Classname = TEXT("math_counter");
+	Counter.TargetName = TEXT("dlgcount");
+	Defs.Defs.Add(MoveTemp(Counter));
+
+	FElysiumEntityDef BluebloodMaker;
+	BluebloodMaker.Classname = TEXT("npc_maker");
+	BluebloodMaker.TargetName = TEXT("blueblood_maker");
+	BluebloodMaker.Keys.Add(TEXT("NPCType"), TEXT("npc_VPedestrian"));
+	BluebloodMaker.Keys.Add(TEXT("NPCTargetname"), TEXT("blueblood"));
+	BluebloodMaker.Keys.Add(TEXT("model"), TEXT("models/character/npc/common/blueblood/male/Blueblood_Male.mdl"));
+	Defs.Defs.Add(MoveTemp(BluebloodMaker));
+
+	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
+	World.Load(MoveTemp(Defs));
+
+	FElysiumEntity* JackEnt = World.FindByName(TEXT("Jack"));
+	FElysiumEntity* MakerEnt = World.FindByName(TEXT("blueblood_maker"));
+	if (!TestNotNull(TEXT("Jack resolved"), JackEnt) || !TestNotNull(TEXT("maker resolved"), MakerEnt))
+	{
+		return false;
+	}
+	TestFalse(TEXT("Jack is a real class, not an inert record"), JackEnt->IsRecordOnly());
+	const FElysiumEntityHandle JackHandle = JackEnt->Handle;
+
+	// npc_maker.Spawn produces the child NPC (the acceptance case).
+	TestNull(TEXT("blueblood absent before Spawn"), World.FindByName(TEXT("blueblood")));
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("Spawn")), FElysiumVariant::Void(), 0.0,
+		FElysiumEntityHandle::Invalid(), MakerEnt->Handle);
+	for (int32 i = 0; i < 4; ++i) { World.Tick(0.0); }
+
+	FElysiumEntity* Blueblood = World.FindByName(TEXT("blueblood"));
+	if (TestNotNull(TEXT("blueblood spawned via npc_maker.Spawn"), Blueblood))
+	{
+		TestEqual(TEXT("blueblood is npc_VPedestrian"), Blueblood->Def->Classname, FString(TEXT("npc_VPedestrian")));
+		TestFalse(TEXT("blueblood is a real NPC, not an inert record"), Blueblood->IsRecordOnly());
+		TestNotNull(TEXT("blueblood handle resolves"), World.Resolve(Blueblood->Handle));
+	}
+
+	// WillTalk latch + StartPlayerDialogRemote fires OnDialogBegin.
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("WillTalk")), FElysiumVariant::Int(1), 0.0,
+		FElysiumEntityHandle::Invalid(), JackHandle);
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("StartPlayerDialogRemote")), FElysiumVariant::Int(256), 0.0,
+		FElysiumEntityHandle::Invalid(), JackHandle);
+	for (int32 i = 0; i < 4; ++i) { World.Tick(0.0); }
+
+	// Read a keyed debug row (the concrete leaf is file-local, so its state surfaces via GetDebugState).
+	auto DebugRow = [](const FElysiumEntity* E, const TCHAR* Key) -> FString
+	{
+		TArray<TPair<FString, FString>> Rows;
+		E->GetDebugState(Rows);
+		for (const TPair<FString, FString>& Row : Rows)
+		{
+			if (Row.Key == Key) { return Row.Value; }
+		}
+		return FString();
+	};
+
+	TestEqual(TEXT("WillTalk latched"), DebugRow(World.Resolve(JackHandle), TEXT("WillTalk")), FString(TEXT("yes")));
+	TestEqual(TEXT("OnDialogBegin fired once (counter=1)"),
+		FCString::Atof(*DebugRow(World.FindByName(TEXT("dlgcount")), TEXT("Value"))), 1.0f);
 
 	return true;
 }

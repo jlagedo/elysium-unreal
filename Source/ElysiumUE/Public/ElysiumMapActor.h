@@ -7,7 +7,11 @@
 
 class FElysiumEntityWorld;
 class FElysiumSoundSchemeManager;
+class UAnimSequence;
+class UDecalComponent;
 class UDirectionalLightComponent;
+class USkeletalMesh;
+class USkeletalMeshComponent;
 class UElysiumLightRig;
 class UExponentialHeightFogComponent;
 class UInstancedStaticMeshComponent;
@@ -74,6 +78,14 @@ public:
 	// ambient_soundscheme entities and the Cog Sound Schemes window reach it through here.
 	FElysiumSoundSchemeManager* GetSchemeManager() const { return SchemeManager.Get(); }
 
+	// B3 — build one NPC skeletal body: load (cached per stem) out/npc/<Stem>.glb through glTFRuntime
+	// and stand a movable USkeletalMeshComponent on this map actor at the given transform, playing its
+	// idle clip when the glb carries one (else the reference pose). Returns the component, or null on a
+	// missing/failed glb or empty stem. The FElysiumNpc leaf calls this from its Spawn() and registers
+	// the result with the entity world for teardown. Meshes/anims are cached on this actor (freed on
+	// unload) so a model shared by several NPCs (three Sabbat share shovelhead) loads once.
+	USkeletalMeshComponent* BuildNpcVisual(const FString& Stem, const FVector& Location, const FRotator& Rotation);
+
 	// Live stats for the debug overlay, filled by LoadMap.
 	FString LoadedMap;
 	int32 WorldSurfaceCount = 0;
@@ -90,6 +102,9 @@ public:
 	// and how many of them got a P1.5 brush body (convex collision / trigger overlap volume).
 	int32 EntityCount = 0;
 	int32 BrushBodyCount = 0;
+	// Decals (7.2): number of deferred UDecalComponents built from <map>.decals (0 if the map has
+	// no decals or elysium.Decals is off).
+	int32 DecalCount = 0;
 
 	// P4.6 — the `info_landmark` this map load entered through (a landmark transition / direct
 	// landmark Travel), or empty for a plain info_player_start spawn. Shown in the Maps Cog window.
@@ -157,6 +172,17 @@ private:
 	UPROPERTY() TArray<TObjectPtr<UStaticMesh>> PropMeshes;
 	bool bPropsVisible = true;
 
+	// Decals (7.2): one deferred UDecalComponent per <map>.decals line, kept alive for the map's
+	// lifetime (freed on unload). MIDs off M_Decal, projected onto the world by their box transform.
+	UPROPERTY() TArray<TObjectPtr<UDecalComponent>> Decals;
+
+	// B3 NPC skeletal bodies: per-stem mesh + idle-anim cache, GC-rooted here so a model shared by
+	// several NPCs loads once and survives until unload. The USkeletalMeshComponents themselves are
+	// components of this actor (rooted via AddInstanceComponent), freed with it. An idle entry may be
+	// null (the glb has no idle clip → reference pose); the stem is still cached to avoid re-scanning.
+	UPROPERTY() TMap<FString, TObjectPtr<USkeletalMesh>> NpcMeshCache;
+	UPROPERTY() TMap<FString, TObjectPtr<UAnimSequence>> NpcIdleCache;
+
 #if !UE_BUILD_SHIPPING
 	// P2.6 click-pick CPU geometry, filled during the build and freed with the actor.
 	TArray<FPropPickSoup> PropPickSoups;
@@ -186,6 +212,10 @@ private:
 	// alongside brush collision; no-op when the sidecar is absent (map has no displacements).
 	void LoadDispCol();
 	int32 BuildMeshFromObj(const FString& ObjPath, UProceduralMeshComponent* Mesh, bool bCollision);
+	// Build the deferred decals from <map>.decals (7.2): one UDecalComponent per line, oriented so
+	// its -X projects into the wall along the decal's room normal, sized to the on-surface extents,
+	// with a MID off M_Decal. No-op when the sidecar is absent or elysium.Decals is 0.
+	void BuildDecals();
 	void ApplySkyTransform();
 	// Per-map colour grade (.cube), sky IBL ambient + height fog (.env). Sets the SkyLight
 	// cubemap but leaves RecaptureSky to the caller.

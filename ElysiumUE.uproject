@@ -1,6 +1,6 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "{8BC97AE8-413B-590F-88D3-7A8333007088}",
+	"EngineAssociation": "5.8",
 	"Category": "",
 	"Description": "Elysium — VtMB rebuilt on Unreal Engine 5.8 via runtime-loaded intermediates",
 	"Modules": [
@@ -25,22 +25,29 @@
 		},
 		{
 			"Name": "glTFRuntime",
-			"Enabled": true
+			"Enabled": true,
+			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/d2ed3709933d4608a3a8dd746cbc045d"
 		},
 		{
 			"Name": "ModelContextProtocol",
 			"Enabled": true,
-			"TargetAllowList": [ "Editor" ]
+			"TargetAllowList": [
+				"Editor"
+			]
 		},
 		{
 			"Name": "AutomationTestToolset",
 			"Enabled": true,
-			"TargetAllowList": [ "Editor" ]
+			"TargetAllowList": [
+				"Editor"
+			]
 		},
 		{
 			"Name": "LiveCodingToolset",
 			"Enabled": true,
-			"TargetAllowList": [ "Editor" ]
+			"TargetAllowList": [
+				"Editor"
+			]
 		}
 	]
 }

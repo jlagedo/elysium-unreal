@@ -285,6 +285,33 @@ full-bright self-lit. Props Source marks solid get a shared `ConvexPolygonShape3
 the render mesh) on a per-instance `StaticBody3D`. ch_hub_1 = 500 props / 124 models
 (331 solid).
 
+## Skeletal NPCs (`.mdl` v2531 — `mdl_skel.py` / `mdl_gltf.py` / `npc_export.py`)
+
+The animated half of the `.mdl` (bones, skin, RLE animation tracks) decodes in `mdl_skel.py`;
+the full struct map is `docs/animation_and_movers.md` Part A. VtMB NPCs carry only their own
+clips (mostly dialogue) and pull locomotion/combat/idle from **shared animation banks** via the
+studiohdr include-model mechanism — a recursive DAG (`NumIncludeModels`@404 /
+`IncludeModelIndex`@408 → `StudioModelGroup[]`, stride 116). `mdl_skel.resolve_tree` walks it
+(cycle-deduped) and `local_sequences` reads each model's own clips (`StudioSeqDesc` label →
+`anim[0][0]` → local anim). Every bank bone name is present in the NPC skeleton, so clips
+retarget by bone name with no proportion rig.
+
+`npc_export.py` is the batch driver (`export_all.py --npc`, the heaviest offline pass). It scans
+`out/*/*.ents` for `npc_*` `model` keys and writes under `out/npc/`:
+
+- **`<npc>.glb`** (`mdl_gltf.export_npc`) — skinned mesh + skeleton + the NPC's **own** clips.
+- **`banks/<bank>.glb`** (`mdl_gltf.export_bank`) — a shared bank's skeleton + all its clips,
+  **no mesh**; decoded once and shared by every NPC. Bank stems keep the sub-path
+  (`character_shared_male_misc`) so the male/female (and clan) banks that share a basename stay
+  distinct.
+- **`npc_manifest.json`** — per NPC, `{clip → owning-stem}` (own clips point at the NPC itself),
+  plus a `banks` index. The runtime (roadmap 8.5) reads this, loads a clip's owning glb once, and
+  applies it to the NPC skeletal mesh by bone name via glTFRuntime — VtMB's virtualmodel
+  bank-sharing, not a per-NPC monolith (which would be ~94 MB × the cast ≈ 4.2 GB; the shared set
+  is ~410 MB: 45 NPCs / 62 banks). `mdl_gltf` writes **standard glTF 2.0** (self-describing space),
+  so it keeps its non-`UE_` name and needs no pre-conversion. `mdl_gltf.export` (single clip) is
+  the 8.2 spike/CLI probe.
+
 ## Texture upscaling (`upscale_bench.py`)
 
 Standalone tuning tool, not part of the map pipeline. Compares super-resolution

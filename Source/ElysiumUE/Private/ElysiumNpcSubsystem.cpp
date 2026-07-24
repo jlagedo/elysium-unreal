@@ -1,9 +1,9 @@
 #include "ElysiumNpcSubsystem.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumNpcVisual.h"
 
 #include "glTFRuntimeAsset.h"
-#include "glTFRuntimeFunctionLibrary.h"
 #include "glTFRuntimeParser.h"
 
 #include "Animation/AnimSequence.h"
@@ -102,34 +102,15 @@ AActor* UElysiumNpcSubsystem::LoadTestNpc(const FString& Stem, const FString& An
 		return nullptr;
 	}
 
-	const FString FullPath = FElysiumContentPaths::NpcGlb(Stem);
-	if (!FPaths::FileExists(FullPath))
-	{
-		OutError = FString::Printf(TEXT("not found: %s"), *FullPath);
-		return nullptr;
-	}
-
 	const double StartSeconds = FPlatformTime::Seconds();
 
-	// glTF is self-describing (Y-up, metres, right-handed); glTFRuntime's default config converts it
-	// to UE space (Z-up, cm, left-handed) -- SceneScale 100 (m->cm), TransformBaseType::Default, and
-	// bAllowExternalFiles so the sibling tex/*.png resolve relative to the .glb. So the standard glb
-	// mdl_gltf.py writes loads 1:1 with no UE_-style pre-conversion (the raw-OBJ path's convention
-	// applies only to dumb container formats, not a self-describing one the loader can reorient).
-	FglTFRuntimeConfig Config;
-	UglTFRuntimeAsset* Asset = UglTFRuntimeFunctionLibrary::glTFLoadAssetFromFilename(FullPath, false, Config);
-	if (Asset == nullptr)
-	{
-		OutError = TEXT("glTFRuntime could not parse the .glb");
-		return nullptr;
-	}
-
-	FglTFRuntimeSkeletalMeshConfig SkeletalMeshConfig;
-	USkeletalMesh* Mesh = Asset->LoadSkeletalMesh(0, 0, SkeletalMeshConfig);
+	// Load the mesh through the shared glTF path (ElysiumNpcVisual) -- the same loader the game NPC
+	// bodies (B3) use. The parsed asset comes back so this harness can still audition any clip.
+	UglTFRuntimeAsset* Asset = nullptr;
+	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(Stem, Asset, OutError);
 	if (Mesh == nullptr)
 	{
-		OutError = TEXT("LoadSkeletalMesh(mesh 0, skin 0) returned null");
-		return nullptr;
+		return nullptr;   // OutError set by LoadMesh
 	}
 
 	// Animation: by name when asked, else the first clip. Void on failure just leaves the mesh in its

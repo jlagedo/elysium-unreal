@@ -12,6 +12,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "HAL/IConsoleManager.h"
 #include "HAL/PlatformMisc.h"
 #include "Misc/CommandLine.h"
 #include "Misc/FileHelper.h"
@@ -49,6 +50,13 @@ FElysiumShotRun::FElysiumShotRun(UElysiumMapSubsystem* InSubsystem)
 	FParse::Value(FCommandLine::Get(), TEXT("ShotSettle="), SettleFrames);
 	FParse::Value(FCommandLine::Get(), TEXT("ShotCam="), CamSelector);
 	SettleFrames = FMath::Max(1, SettleFrames);
+
+	// Clean plates: suppress game_sign/popup panels so a map-load popup (the tutorial's Loader.exe
+	// warning) does not cover every shot. The regression baseline is the world, not gameplay UI.
+	if (IConsoleVariable* DrawSigns = IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.DrawSigns")))
+	{
+		DrawSigns->Set(0, ECVF_SetByCode);
+	}
 
 	UE_LOG(LogElysiumShots, Log, TEXT("headless screenshot run armed: settle %d frames."), SettleFrames);
 

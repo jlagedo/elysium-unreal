@@ -1,5 +1,6 @@
 #include "ElysiumGameMode.h"
 
+#include "ElysiumGameStateSubsystem.h"
 #include "ElysiumHUD.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPawn.h"
@@ -28,6 +29,16 @@ void AElysiumGameMode::BeginPlay()
 		}
 		else
 		{
+			// Bare dev load (play.bat <map> / -ElysiumNewGame=0): no New Game seed runs, so `Linux_Wine`
+			// is unset. The tutorial's `linux_check` (logic_pythoncheck `G.Linux_Wine == 1`) then reads
+			// OnFalse and opens `popup_linux` — the Unofficial Patch's "your Python didn't compile / you
+			// are in a Linux Wine environment" warning. That is a false alarm here: the embedded CPython
+			// always runs. Seed the sentinel to 1 (as BeginNewGame does) before the map builds, so the
+			// check takes OnTrue and the popup stays down on the dev path.
+			if (UElysiumGameStateSubsystem* State = GetGameInstance()->GetSubsystem<UElysiumGameStateSubsystem>())
+			{
+				State->SetGlobalInt(TEXT("Linux_Wine"), 1);
+			}
 			Maps->Travel(Maps->ResolveBootMap());
 		}
 	}

@@ -16,6 +16,7 @@ class UElysiumAudioSubsystem;
 class UElysiumBrushComponent;
 class UElysiumGameStateSubsystem;
 class UElysiumMapSubsystem;
+class USkeletalMeshComponent;
 
 // R1/R5 — the Track-B substrate: one plain-C++ object per map, owned by AElysiumMapActor, that
 // dies with it. It parses `.ents` into live entities, indexes them by name and class, and routes
@@ -63,6 +64,18 @@ public:
 	// single-steppable. Targeting one specific entity uses Target "!self" with Caller = its handle.
 	void EnqueueInput(const FString& Target, FName Input, const FElysiumVariant& Param, double Delay,
 		const FElysiumEntityHandle& Activator, const FElysiumEntityHandle& Caller);
+
+	// B3 — runtime entity creation (npc_maker.Spawn): synthesize a live entity from a def built at
+	// runtime rather than parsed from the map. The def is stored (the entity holds Def*), the handle
+	// index continues past the map's def array (Resolve indexes EntityList directly), name/class
+	// indices are updated so the new entity is a live I/O target immediately, then Spawn() runs — a
+	// leaf builds its body/visual there. Returns the new entity's handle (Invalid on a bad def).
+	FElysiumEntityHandle SpawnRuntimeEntity(FElysiumEntityDef Def);
+
+	// B3 — register an NPC skeletal body (built by AElysiumMapActor::BuildNpcVisual) so the world tears
+	// it down with the map. The FElysiumNpc leaf calls this from Spawn(); mirrors how brush bodies are
+	// tracked, so a world rebuild on a surviving actor (reload) does not leak the components.
+	void RegisterNpcBody(USkeletalMeshComponent* Component);
 
 	// P5 5.4 — ScheduleTask(delay, "<source>"): defer a field-6 Python source string on the same
 	// event queue, evaluated at now+delay through the installed script host (DeliverEvent's Python
@@ -208,7 +221,10 @@ private:
 	uint32 Epoch = 0;
 
 	FElysiumEntityDefs Defs;
-	TArray<TUniquePtr<FElysiumEntity>> EntityList;    // parallel to Defs.Defs; index = handle index
+	// Defs synthesized at runtime (npc_maker.Spawn): held so an entity's Def* stays valid past the
+	// map's immutable def array. Cleared on teardown.
+	TArray<TUniquePtr<FElysiumEntityDef>> RuntimeDefs;
+	TArray<TUniquePtr<FElysiumEntity>> EntityList;    // Defs.Defs then runtime-spawned; index = handle index
 	TMultiMap<FName, int32> NameIndex;                // targetname -> entity index (non-unique)
 	TMultiMap<FName, int32> ClassIndex;               // classname  -> entity index
 
@@ -220,6 +236,9 @@ private:
 	// Brush bodies (P1.5): the map actor owns them (they are its components); we hold weak refs to
 	// gate them and to destroy them on teardown (the world logically owns the embodiments).
 	TArray<TWeakObjectPtr<UElysiumBrushComponent>> Bodies;
+	// B3 NPC skeletal bodies (built on the map actor, gated by their leaf on dormancy): weak refs held
+	// so a world rebuild on a surviving actor destroys them, like Bodies.
+	TArray<TWeakObjectPtr<USkeletalMeshComponent>> NpcBodies;
 	int32 TouchBeginCount = 0;
 	int32 TouchEndCount = 0;
 

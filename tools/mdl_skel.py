@@ -6,9 +6,13 @@ weights, and the `{valid,total}` RLE animation tracks (7 channels/bone: posXYZ +
 quat XYZW). Positions/rotations stay in **Source** coordinates (inches, Z-up); the
 glTF writer applies the Source->glTF/Godot basis change.
 
-Not decoded here: procedural bones (`ProcType`!=0), IK, blend spaces (`numblends`>1),
-root motion, and include-model banks (an NPC that idles from a shared library needs
-transitive include resolution — the self-contained clips are handled).
+Include-model banks (the shared animation libraries an NPC idles/moves/fights from) are
+resolved here: `resolve_tree` walks the studiohdr include tree transitively and
+`local_sequences` reads each model's own clips, so the caller can bake an NPC's own clips
+and each shared bank's clips into separate glTF assets keyed by bone name (A.7).
+
+Not decoded here: procedural bones (`ProcType`!=0), IK, blend spaces (`numblends`>1 — the
+`[0][0]` base cell is taken), and root motion (clips bake in place).
 """
 import struct
 
@@ -95,6 +99,87 @@ def find_anim(d, name):
         if nm == want:
             return ab, _i32(d, ab + 12), _f32(d, ab + 4)
     return None
+
+
+# --- include-model banks (shared animation libraries) -----------------------------
+# An NPC .mdl carries only its own clips (mostly dialogue); locomotion, combat and idle
+# come from shared banks pulled in by the studiohdr include-model mechanism, which forms
+# a recursive tree (docs/animation_and_movers.md A.7). NumIncludeModels@404 /
+# IncludeModelIndex@408 -> StudioModelGroup[] (stride 116: int FilenameIndex@0 relative to
+# the group-entry base, int LabelIndex@4, int Filler[27]). Every bank bone name is present
+# in the NPC's Biped skeleton, so a clip decoded on its owning model's own bones plays on
+# any NPC by name-matching the tracks to the skeleton at load time (glTFRuntime does this).
+_MODELGROUP_STRIDE = 116
+
+
+def read_includes(d):
+    """Direct include-model paths (StudioModelGroup[NumIncludeModels]@404), each normalized
+    to a `models/`-rooted, forward-slashed key. One level deep -- walk transitively via
+    `resolve_tree`."""
+    n = _i32(d, 404)
+    base = _i32(d, 408)
+    out = []
+    for i in range(n):
+        gb = base + i * _MODELGROUP_STRIDE
+        p = _cstr(d, gb + _i32(d, gb)).replace("\\", "/")
+        if p:
+            out.append(p if p.startswith("models/") else "models/" + p)
+    return out
+
+
+def local_sequences(d):
+    """This model's own game-facing sequences -> [(label, animdesc_base, numframes, fps)].
+
+    StudioSeqDesc[NumLocalSeq@272] (stride 764): label@0 (rel. seq base), anim[0][0]@56 (the
+    blend grid's base cell) -> a local anim index into LocalAnims. For VtMB NPC/bank models
+    the mapping is 1 seq <-> 1 anim (numblends 1), so the grid beyond [0][0] is ignored and a
+    label whose base cell is out of range is skipped. Deduped by lowercased label (first wins);
+    the label is the name the game references (scripted_sequence `m_iszPlay`, activities)."""
+    ns = _i32(d, 272); sbase = _i32(d, 276)
+    na = _i32(d, 264); abase = _i32(d, 268)
+    out, seen = [], set()
+    for i in range(ns):
+        sb = sbase + i * 764
+        label = _cstr(d, sb + _i32(d, sb))
+        a0 = _h16(d, sb + 56)
+        key = label.lower()
+        if not label or key in seen or not (0 <= a0 < na):
+            continue
+        seen.add(key)
+        ab = abase + a0 * 72
+        out.append((label, ab, _i32(d, ab + 12), _f32(d, ab + 4)))
+    return out
+
+
+def resolve_tree(load, model_key):
+    """Depth-first include-model resolution with cycle dedup -> ordered [(key, d), ...]: the
+    NPC model first, then its banks transitively (docs/animation_and_movers.md A.7).
+
+    `load(key)` returns the model's raw `.mdl` bytes (or None if it cannot be read). A model
+    reachable by several include paths (frenzy / pc_idles) is visited exactly once, so the
+    order also fixes clip ownership: the first model that defines a label owns it."""
+    order, seen = [], set()
+
+    def visit(key):
+        k = key.lower()
+        if k in seen:
+            return
+        seen.add(k)
+        d = load(key)
+        if d is None:
+            return
+        order.append((key, d))
+        for inc in read_includes(d):
+            visit(inc)
+
+    visit(model_key)
+    return order
+
+
+def bone_names(d):
+    """Bone names in header order (for name-keyed retarget diagnostics)."""
+    n = _i32(d, 240); base = _i32(d, 244)
+    return [_cstr(d, base + i * 160 + _i32(d, base + i * 160)) for i in range(n)]
 
 
 def _rle_channel(v, p, numframes):

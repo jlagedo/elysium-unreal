@@ -121,6 +121,7 @@ void FElysiumCogWindow_Maps::RenderContent()
 		: FString(TEXT("render trimesh")));
 	Row("Lights", FString::Printf(TEXT("%d"), Map->WorldLightCount));
 	Row("Props", FString::Printf(TEXT("%d inst · %d models"), Map->PropInstanceCount, Map->PropModelCount));
+	Row("Decals", FString::Printf(TEXT("%d"), Map->DecalCount));
 	Row("Entities", FString::Printf(TEXT("%d rec · %d bodies"), Map->EntityCount, Map->BrushBodyCount));
 	Row("Entered via", Map->EntryLandmark.IsEmpty()
 		? FString(TEXT("info_player_start")) : FString::Printf(TEXT("landmark %s"), *Map->EntryLandmark));

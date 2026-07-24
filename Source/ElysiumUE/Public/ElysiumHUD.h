@@ -2,10 +2,12 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/HUD.h"
+#include "Templates/PimplPtr.h"
 #include "UObject/StrongObjectPtr.h"
 #include "ElysiumHUD.generated.h"
 
 class AElysiumMapActor;
+class FElysiumSignFontLibrary;
 class IConsoleObject;
 class UTexture2D;
 
@@ -53,4 +55,10 @@ private:
 	bool bSignManifestLoaded = false;
 	TMap<FString, FString> SignBackgroundFiles;                  // material name -> png filename
 	TMap<FString, TStrongObjectPtr<UTexture2D>> SignBackgrounds;  // material name -> texture (null = failed)
+
+	// The panel's typeface set (Content/Fonts OFL faces keyed by VtMB's authored face names). Built
+	// lazily on the first sign draw; see ElysiumSignFonts.h. TPimplPtr (not TUniquePtr) so a
+	// forward-declared incomplete type works as a UCLASS member — it carries its own deleter, so
+	// UHT's generated constructors don't need the complete type here.
+	TPimplPtr<FElysiumSignFontLibrary> SignFonts;
 };

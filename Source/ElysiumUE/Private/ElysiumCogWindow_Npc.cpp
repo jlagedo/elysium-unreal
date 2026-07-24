@@ -3,6 +3,9 @@
 #if ENABLE_COG
 
 #include "ElysiumCogStyle.h"
+#include "ElysiumEntity.h"
+#include "ElysiumEntityDefs.h"
+#include "ElysiumEntityWorld.h"
 #include "ElysiumNpcSubsystem.h"
 
 #include "CogLocalizationConfig.h"   // COG_TCHAR_TO_CHAR
@@ -27,9 +30,74 @@ void FElysiumCogWindow_Npc::RenderHelp()
 		"re-play any animation; Clear destroys the spawned NPCs. Same path the elysium.npc.* verbs drive.");
 }
 
+// The live `npc_*` / `npc_maker` entities in the loaded map (B3): what stands where and its latch
+// state. Distinct from the glTF test harness below — these are the map's own characters, driven by
+// the entity substrate, not by the elysium.npc.load spike.
+void FElysiumCogWindow_Npc::RenderLiveNpcs()
+{
+	FElysiumEntityWorld* EW = GetEntityWorld();
+	ImGui::SeparatorText("Live NPCs  (map entities)");
+	if (EW == nullptr)
+	{
+		ImGui::TextDisabled("No entity world (load a map).");
+		return;
+	}
+
+	// Collect npc_*/npc_maker entities off the world's entity list.
+	TArray<const FElysiumEntity*> Npcs;
+	for (const TUniquePtr<FElysiumEntity>& EntPtr : EW->Entities())
+	{
+		const FElysiumEntity* E = EntPtr.Get();
+		if (E && E->Def && E->Def->Classname.StartsWith(TEXT("npc_")))
+		{
+			Npcs.Add(E);
+		}
+	}
+
+	ImGui::Text("%d NPC entities", Npcs.Num());
+	if (Npcs.Num() == 0)
+	{
+		return;
+	}
+
+	const ImGuiTableFlags TableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
+		ImGuiTableFlags_ScrollY | ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchProp;
+	if (ImGui::BeginTable("##LiveNpcs", 3, TableFlags, ImVec2(0, GetDpiScale() * 130.f)))
+	{
+		ImGui::TableSetupScrollFreeze(0, 1);
+		ImGui::TableSetupColumn("Name");
+		ImGui::TableSetupColumn("Class");
+		ImGui::TableSetupColumn("State");
+		ImGui::TableHeadersRow();
+		for (const FElysiumEntity* E : Npcs)
+		{
+			// Join the leaf's debug rows into one compact "k=v · k=v" cell — generic over both the
+			// character leaf (WillTalk/UseInteresting/In dialog/...) and the maker (Enabled/NPCType/...).
+			TArray<TPair<FString, FString>> Rows;
+			E->GetDebugState(Rows);
+			FString State;
+			for (const TPair<FString, FString>& Row : Rows)
+			{
+				if (!State.IsEmpty()) { State += TEXT("  ·  "); }
+				State += FString::Printf(TEXT("%s=%s"), *Row.Key, *Row.Value);
+			}
+
+			ImGui::TableNextRow();
+			ImGui::TableNextColumn();
+			ImGui::TextColored(E->IsInert() ? ElysiumCogStyle::ColDim : ElysiumCogStyle::ColName,
+				"%s", COG_TCHAR_TO_CHAR(E->TargetName.IsEmpty() ? TEXT("(noname)") : *E->TargetName));
+			ImGui::TableNextColumn(); ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*E->Def->Classname));
+			ImGui::TableNextColumn(); ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*State));
+		}
+		ImGui::EndTable();
+	}
+}
+
 void FElysiumCogWindow_Npc::RenderContent()
 {
 	Super::RenderContent();
+
+	RenderLiveNpcs();
 
 	UElysiumNpcSubsystem* Npc = GetNpcSubsystem();
 	if (Npc == nullptr)

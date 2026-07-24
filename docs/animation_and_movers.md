@@ -239,9 +239,27 @@ mechanism — and the includes form a recursive tree** [data-verified].
 `shared/female/npc_allsequences.mdl`, which is a **0-anim/0-seq aggregator** that
 itself includes the leaf banks `shared/female/{stances,conversations,allsequences}.mdl`;
 those leaves hold the real animation banks (`male/move_and_ranged.mdl` = 722 anims /
-602 seqs). So the decoder **must resolve include-models transitively and merge their
-sequences** onto the NPC's own skeleton — an NPC's playable set is *own anims ∪
-(recursively) all included banks*, keyed by bone name against a shared Biped skeleton.
+602 seqs). So the decoder **resolves include-models transitively** — an NPC's playable set
+is *own anims ∪ (recursively) all included banks*, keyed by bone name against a shared Biped
+skeleton.
+
+**On-disk** [data-verified]: `NumIncludeModels`@404 / `IncludeModelIndex`@408 →
+`StudioModelGroup[]` (**stride 116**: `int FilenameIndex`@0 relative to the group-entry base,
+`int LabelIndex`@4, `int Filler[27]`). The tree is a DAG — `frenzy`/`pc_idles` reappear via
+several parents — so resolution dedups by path. Every bank bone name is present in the NPC's
+skeleton (verified: `move_and_ranged` 60 / `stances` 53 bones, **0 missing** in a 69-bone
+gangmember), so no proportion retarget is needed — tracks bind to the skeleton by bone name.
+`m_iszPlay` and friends name a **sequence label** (`StudioSeqDesc.szlabel`@0 → `anim[0][0]`@56 →
+local anim); the pipeline keys clips by that label.
+
+**Pipeline** (`tools/mdl_skel.resolve_tree`/`local_sequences`, `tools/mdl_gltf.export_npc`/
+`export_bank`, `tools/npc_export.py`; roadmap PL4): rather than merge every bank into each NPC
+(a ~94 MB / ~90k-accessor monolith × the cast ≈ 4.2 GB), each model's own clips bake **once** —
+the NPC's dialogue into `out/npc/<npc>.glb`, each shared bank into `out/npc/banks/<bank>.glb`
+(skeleton + clips, no mesh) — and `npc_manifest.json` records the per-NPC `clip → owning-stem`
+resolution. The runtime loads a bank glb once and applies its clips to any NPC skeletal mesh by
+bone name (glTFRuntime `LoadSkeletalAnimation(mesh, …)`), which is VtMB's own virtualmodel
+bank-sharing. Full cast: 45 NPCs / 62 banks / ~410 MB.
 
 ## A.8 Deviations from modern Source (v44–49) [ref/SDK]
 

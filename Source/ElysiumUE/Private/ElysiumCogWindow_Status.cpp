@@ -51,6 +51,7 @@ void FElysiumCogWindow_Status::RenderContent()
 	Row("Surfaces", FString::Printf(TEXT("%d world · %d sky"), Map->WorldSurfaceCount, Map->SkySurfaceCount));
 	Row("Lights", FString::Printf(TEXT("%d"), Map->WorldLightCount));
 	Row("Props", FString::Printf(TEXT("%d inst · %d models"), Map->PropInstanceCount, Map->PropModelCount));
+	Row("Decals", FString::Printf(TEXT("%d"), Map->DecalCount));
 
 	ImGui::SeparatorText("Collision");
 	Row("Collider", Map->bBrushCollision ? TEXT("brush hulls") : TEXT("render trimesh"));

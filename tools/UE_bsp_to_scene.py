@@ -596,11 +596,12 @@ def main(bsp_path, out_dir):
         for f in range(ff, ff + nf):
             face_offset[f] = off
 
-    # Three scenes: "world" (playable map), "sky" (3D skybox miniature), "decal".
-    # Per scene: positions, uvs (albedo), groups (material->tris), and blend
-    # (per-vertex WorldVertexTransition alpha, 0..1; 0 for every non-displacement or
-    # non-blend vertex). blend rides a `.blend` sidecar and becomes vertex COLOR.r.
-    scenes = {"world": ([], [], {}, []), "sky": ([], [], {}, []), "decal": ([], [], {}, [])}
+    # Two scenes: "world" (playable map) and "sky" (3D skybox miniature). Per scene:
+    # positions, uvs (albedo), groups (material->tris), and blend (per-vertex
+    # WorldVertexTransition alpha, 0..1; 0 for every non-displacement or non-blend
+    # vertex). blend rides a `.blend` sidecar and becomes vertex COLOR.r. (Decals are
+    # not meshed -- they ride the `.decals` projector sidecar; see the infodecal block.)
+    scenes = {"world": ([], [], {}, []), "sky": ([], [], {}, [])}
 
     skipped_tools = 0
     skipped_hidden = 0
@@ -877,26 +878,23 @@ def main(bsp_path, out_dir):
     # VtMB leaves the OVERLAYS lump (45) empty; every poster/stain/sign/spray is an
     # `infodecal` entity (a `texture` + `origin`). The engine projects it onto the
     # surfaces within the decal's radius (engine.dll R_DecalShoot -> R_DecalNode ->
-    # R_DecalCreate). We attach each to the single visible face its origin projects
-    # squarely onto (nearest by plane distance), size the quad by the material's
-    # texture dims x $decalscale (R_DecalSize: GetMappingWidth/Height * $decalScale),
-    # and orient it to that face's texture axes. The decal mesh is lit like any world
-    # surface by the real-time LightRig. docs/map_completion_plan.md E.
+    # R_DecalCreate). We recover each decal's projector -- the visible face its origin
+    # projects squarely onto (nearest by plane distance), the room-facing normal, the
+    # face's texture axes, and the half-extents (texture dims x $decalscale; R_DecalSize:
+    # GetMappingWidth/Height * $decalScale) -- and write one line per decal to a
+    # `<base>.decals` sidecar. The runtime (roadmap 7.2) builds one deferred
+    # UDecalComponent per line, so the decal is lit exactly like the wall it projects
+    # onto (Lumen indirect included). docs/map_completion_plan.md E.
     decal_mats = set()
-    dpos, duv, dgroups, _dblend = scenes["decal"]
+    decal_lines = []   # one projector line per placed decal -> <base>.decals
     planes = np.frombuffer(read_lump(data, 1), dtype=np.float32).reshape(-1, 5)
 
     # A decal's host face is drawn double-sided (world CullMode = Disabled), so VtMB
     # authors the wall with arbitrary winding -- the face normal may point into the
-    # sealed interior, away from the alley the decal is meant to be seen from. Nudging
-    # blindly along that normal buries the decal in solid space, occluded by the opaque
-    # wall. Resolve the room side from BSP leaf solidity and face the decal that way.
+    # sealed interior, away from the room the decal is meant to be seen from. Resolve
+    # the room side from BSP leaf solidity and face the decal that way.
     d_nodes, d_leafs = read_lump(data, 5), read_lump(data, 10)
     LEAF_SZ = 32
-    # How far a decal projects onto faces off its primary plane (source units) -- lets
-    # it wrap around corners and across coplanar face splits. Kept shallow so the
-    # perpendicular-wall smear stays a seam filler, not a deep streak.
-    WRAP_DEPTH = float(os.environ.get("ELYSIUM_DECAL_WRAP", "4.0"))
     def _leaf_solid(pt):
         li = B.point_leaf(data, pt, d_nodes, planes)
         return bool(struct.unpack_from("<i", d_leafs, li * LEAF_SZ)[0] & 1)  # CONTENTS_SOLID
@@ -912,7 +910,7 @@ def main(bsp_path, out_dir):
         return -nrm if s < -1e-3 else nrm
 
     # index every visible (non-tools) face in Source space for the projection search
-    fN, fD, fPoly, fBasis, f3D = [], [], [], [], []
+    fN, fD, fPoly, fBasis = [], [], [], []
     for fi in range(n_faces):
         fb = fi * FACE_SIZE
         ne = struct.unpack_from("<h", faces_l, fb + NE_OFS)[0]
@@ -934,26 +932,10 @@ def main(bsp_path, out_dir):
             nrm, dd = -nrm, -dd
         a = pts[1] - pts[0]; a = a / np.linalg.norm(a); bax = np.cross(nrm, a)
         poly2 = np.array([[np.dot(x - pts[0], a), np.dot(x - pts[0], bax)] for x in pts])
-        fN.append(nrm); fD.append(dd); fPoly.append(poly2); f3D.append(pts)
+        fN.append(nrm); fD.append(dd); fPoly.append(poly2)
         fBasis.append((pts[0], a, bax, fi, off, np.array(sax[:3]), np.array(tax[:3])))
     fN = np.array(fN) if fN else np.zeros((0, 3))
     fD = np.array(fD) if fD else np.zeros((0,))
-    # per-face bounding sphere (source space) for the wrap radius pre-filter
-    f_ctr = np.array([p.mean(0) for p in f3D]) if f3D else np.zeros((0, 3))
-    f_rad = np.array([np.linalg.norm(p - c0, axis=1).max() for p, c0 in zip(f3D, f_ctr)]) \
-        if f3D else np.zeros((0,))
-
-    def _clip_hs(poly, n, d):
-        """Sutherland-Hodgman clip of a 3D polygon to the halfspace dot(v,n) <= d."""
-        out = []
-        for i in range(len(poly)):
-            a_, b_ = poly[i], poly[(i + 1) % len(poly)]
-            da, db = float(np.dot(a_, n)) - d, float(np.dot(b_, n)) - d
-            if da <= 1e-6:
-                out.append(a_)
-            if (da <= 1e-6) != (db <= 1e-6):
-                out.append(a_ + (b_ - a_) * (da / (da - db)))
-        return out
 
     def _inplane(poly2, q):
         """distance from 2D point q to convex polygon (0 if inside; seam-tolerant)."""
@@ -1027,10 +1009,10 @@ def main(bsp_path, out_dir):
         p0, av, bv, fi, off, sax, tax = fBasis[best[1]]
         nrm = fN[best[1]]
         # project the origin onto the face plane, then face the decal toward the open
-        # side and nudge it that way (toward the room -- beats z-fight, avoids burial)
+        # (room) side. The runtime aims the UDecalComponent's -X (its projection axis)
+        # into the wall along -nrm, so nrm is the room-facing outward normal.
         proj = p - nrm * (float(np.dot(nrm, p)) - fD[best[1]])
         nrm = _room_normal(proj, nrm, p)
-        c = proj + nrm * 0.25
         # decal basis = the face's texture axes made perpendicular to the normal.
         # The texinfo s/t sign is authored per face, so normalise it: t_dir (V) stays
         # as authored (keeps text upright), and s_dir (U) is signed so the frame is
@@ -1041,42 +1023,20 @@ def main(bsp_path, out_dir):
         if np.dot(np.cross(s_dir, t_dir), nrm) > 0:
             s_dir = -s_dir
         hw, hh = tw * scale / 2.0, th * scale / 2.0
-        # Project the decal the way the engine does (R_DecalNode): clip every face
-        # within reach to the projector box (the s/t footprint x a shallow depth) and
-        # lay a fragment on each. A decal now wraps across coplanar face splits and
-        # around corners, and is clipped at silhouette edges instead of poking a single
-        # flat quad out past the wall. UVs come from the shared s/t projection so the
-        # texture stays continuous across the fragments.
-        cs, ct, cn = float(c @ s_dir), float(c @ t_dir), float(c @ nrm)
-        box = [(s_dir, cs + hw), (-s_dir, -cs + hw), (t_dir, ct + hh),
-               (-t_dir, -ct + hh), (nrm, cn + WRAP_DEPTH), (-nrm, -cn + WRAP_DEPTH)]
-        reach = float(np.hypot(np.hypot(hw, hh), WRAP_DEPTH))
-        tris = dgroups.setdefault(base_material(tm.group(1)), [])
-        placed_frag = False
-        for jf in np.where(np.linalg.norm(f_ctr - c, axis=1) <= reach + f_rad)[0]:
-            poly = list(f3D[jf])
-            for (nn, dd) in box:
-                poly = _clip_hs(poly, nn, dd)
-                if len(poly) < 3:
-                    break
-            if len(poly) < 3:
-                continue
-            frag = np.array(poly)
-            if jf != best[1] and _leaf_solid(0.5 * (c + frag.mean(0))):
-                continue                       # wrap face sits across solid from the decal
-            rn = _room_normal(frag.mean(0), fN[jf], c)
-            i0 = len(dpos)
-            for vtx in frag:
-                dpos.append(source_to_unreal(*(vtx + rn * 0.25)))
-                duv.append((float((vtx - c) @ s_dir / (2 * hw) + 0.5),
-                            float((vtx - c) @ t_dir / (2 * hh) + 0.5)))
-            for k in range(1, len(frag) - 1):
-                tris.append((i0, i0 + k, i0 + k + 1))
-            placed_frag = True
-        if not placed_frag:
-            n_decal_miss += 1
-            continue
+        # Emit the projector for a runtime deferred UDecalComponent (roadmap 7.2): the
+        # projected centre, the room normal (projection axis), the two surface tangent
+        # axes, and the half-extents -- all in Unreal space (point via source_to_unreal,
+        # unit directions via source_dir_to_unreal, extents inch->cm). One line per decal.
+        lx, ly, lz = source_to_unreal(*proj)
+        nx, ny, nz = source_dir_to_unreal(*nrm)
+        sx_, sy_, sz_ = source_dir_to_unreal(*s_dir)
+        tx_, ty_, tz_ = source_dir_to_unreal(*t_dir)
+        decal_lines.append(
+            f"{base_material(tm.group(1))} {lx:.4f} {ly:.4f} {lz:.4f} "
+            f"{nx:.6f} {ny:.6f} {nz:.6f} {sx_:.6f} {sy_:.6f} {sz_:.6f} "
+            f"{tx_:.6f} {ty_:.6f} {tz_:.6f} {hw * INCH_TO_CM:.4f} {hh * INCH_TO_CM:.4f}")
         n_decal += 1
+    assert len(decal_lines) == n_decal, "decal sidecar line count != placed count"
     print(f"decals: {n_decal} placed, {n_decal_miss} unmatched, {len(decal_mats)} materials")
 
     # --- write OBJ (world + skybox) + shared MTL ---
@@ -1164,7 +1124,14 @@ def main(bsp_path, out_dir):
 
     write_obj("", scenes["world"])
     write_obj("_sky", scenes["sky"])
-    write_obj("_decals", scenes["decal"])
+
+    # Decal projector sidecar (roadmap 7.2): one line per placed infodecal, consumed by
+    # the runtime as a deferred UDecalComponent (material + centre + normal + s/t axes +
+    # half-extents, Unreal cm). Built in the infodecal block above; materials ride the
+    # shared <base>.mtl (map_Kd / map_Ke / decal 1). Absent when the map has no decals.
+    if decal_lines:
+        with open(os.path.join(out_dir, base + ".decals"), "w") as o:
+            o.write("\n".join(decal_lines) + "\n")
 
     # sky_camera sidecar: the miniature backdrop must be placed at
     # world(v) = (v - origin) * scale (Source 3D-skybox transform). Origin is emitted in

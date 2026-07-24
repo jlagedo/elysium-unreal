@@ -10,9 +10,10 @@ REM   shots.bat sm_pawnshop_1       one map's vantages
 REM   shots.bat sp_tutorial_1 t2    a single vantage (index or name)
 REM
 REM Shots land under tools\out\_shots\<map>\ (gitignored — derived from the user's own VtMB
-REM install, never committed). A real GPU/RHI is required (SM6/DX12); this is NOT -nullrhi, a
-REM window renders, it just needs nobody at the keyboard. Fixed 2560x1440 so shots are comparable
-REM over time. Diff a run against a kept baseline to catch a look regression.
+REM install, never committed). A real GPU/RHI is required (SM6/DX12); this is NOT -nullrhi. It
+REM renders OFF-SCREEN (-RenderOffScreen), so no game window pops up or steals focus — the capture
+REM still runs at the fixed 2560x1440 so shots stay comparable over time. Diff a run against a kept
+REM baseline to catch a look regression.
 
 setlocal
 set "UE=D:\Epic\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe"
@@ -30,8 +31,8 @@ if not exist "%UE%" (
 set "CAMARG="
 if not "%CAM%"=="" set "CAMARG=-ShotCam=%CAM%"
 
-echo [shots] map=%MAP% cam=%CAM% (2560x1440, SM6/DX12)
-"%UE%" "%PROJECT%" -game -dx12 -windowed -resx=2560 -resy=1440 ^
+echo [shots] map=%MAP% cam=%CAM% (2560x1440, SM6/DX12, off-screen)
+"%UE%" "%PROJECT%" -game -dx12 -RenderOffScreen -ForceRes -windowed -ResX=2560 -ResY=1440 ^
     -ElysiumMap=%MAP% -ElysiumShots %CAMARG% ^
     -unattended -nosplash -nopause -stdout -FullStdOutLogOutput
 

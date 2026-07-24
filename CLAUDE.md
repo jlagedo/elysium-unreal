@@ -90,8 +90,8 @@ rules: `docs/rebuild-strategy.md` → "Coordinate conventions".
 
 Map load builds world + 3D-skybox geometry as `UProceduralMeshComponent` actors with MIDs off
 the master material `M_VtMB_World`, DDS-preferred textures, `.hulls`/`.dispcol` brush
-collision as the walkable surface, ISM static props, the real-time `UElysiumLightRig` on a
-fully dynamic renderer, and `.env` sky/fog + `.cube` LUT.
+collision as the walkable surface, ISM static props, deferred `UDecalComponent` decals off
+`M_Decal`, the real-time `UElysiumLightRig` on a fully dynamic renderer, and `.env` sky/fog + `.cube` LUT.
 
 The Track-B entity substrate runs with it: `.ents` → one entity per def through the class
 registry → brush bodies → spawn pass, everything through the two chokepoints and one event

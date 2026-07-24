@@ -23,6 +23,10 @@ protected:
 	virtual void RenderContent() override;
 
 private:
+	// The map's live npc_*/npc_maker entities (B3) — what stands where and its latch state. Rendered
+	// above the glTF test harness; reads the entity world, not the elysium.npc.load spike.
+	void RenderLiveNpcs();
+
 	FString PendingStem;             // stem in the input box (glb under out/npc)
 	FString PendingAnim;             // clip name in the input box ("" = first animation)
 	FString LastError;               // last Load failure, shown inline

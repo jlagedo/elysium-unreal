@@ -12,6 +12,7 @@
 #include "ElysiumUseIcons.h"
 
 #include "Components/SceneComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
@@ -172,6 +173,51 @@ void FElysiumEntityWorld::BuildBrushBody(FElysiumEntity& Ent)
 	if (Ent.IsInert())
 	{
 		Body->SetDormant(true);
+	}
+}
+
+FElysiumEntityHandle FElysiumEntityWorld::SpawnRuntimeEntity(FElysiumEntityDef Def)
+{
+	if (Def.Classname.IsEmpty())
+	{
+		return FElysiumEntityHandle::Invalid();
+	}
+
+	// The synthesized def outlives the entity (it holds Def*), so own it here. Moving the unique_ptr
+	// into RuntimeDefs does not move the pointed-to object, so a Def* taken before the move stays valid.
+	TUniquePtr<FElysiumEntityDef> Owned = MakeUnique<FElysiumEntityDef>(MoveTemp(Def));
+	const FElysiumEntityDef& Ref = *Owned;
+
+	// The handle index continues past the map's def array; Resolve indexes EntityList directly, so an
+	// append is all identity needs. (ResolveTargets copies target pointers before firing, so appending
+	// mid-delivery — the maker's Spawn input runs during ServiceEvents — never invalidates a live scan.)
+	const int32 Idx = EntityList.Num();
+	TUniquePtr<FElysiumEntity> Ent = FElysiumClassRegistry::Get().Create(Ref, FElysiumEntityHandle(Idx, Epoch));
+	Ent->World = this;
+
+	if (!Ref.TargetName.IsEmpty())
+	{
+		NameIndex.Add(FName(*Ref.TargetName), Idx);
+	}
+	ClassIndex.Add(FName(*Ref.Classname), Idx);
+
+	FElysiumEntity* Raw = Ent.Get();
+	EntityList.Add(MoveTemp(Ent));
+	RuntimeDefs.Add(MoveTemp(Owned));
+
+	// Spawn() is the leaf's own wiring (the FElysiumNpc leaf stands its body/visual here). A runtime
+	// brush entity would want BuildBrushBody, but makers only spawn point NPCs, so it is not needed.
+	Raw->Spawn();
+
+	UE_LOG(LogElysiumWorld, Log, TEXT("(%8.3f) runtime spawn %s"), NowSeconds(), *Raw->DebugString());
+	return Raw->Handle;
+}
+
+void FElysiumEntityWorld::RegisterNpcBody(USkeletalMeshComponent* Component)
+{
+	if (Component)
+	{
+		NpcBodies.Add(Component);
 	}
 }
 
@@ -842,7 +888,19 @@ void FElysiumEntityWorld::Teardown()
 	}
 	Bodies.Empty();
 
+	// NPC skeletal bodies (B3): components of the map actor, destroyed here for the same reason as
+	// Bodies — a world rebuild on a surviving actor (reload) must not leak them.
+	for (const TWeakObjectPtr<USkeletalMeshComponent>& Comp : NpcBodies)
+	{
+		if (USkeletalMeshComponent* C = Comp.Get())
+		{
+			C->DestroyComponent();
+		}
+	}
+	NpcBodies.Empty();
+
 	EntityList.Empty();
+	RuntimeDefs.Empty();
 	Ring = nullptr;
 	Sinks.Empty();
 }

@@ -16,7 +16,7 @@ Usage:
   python tools/export_all.py --no-content        # skip the committed-asset rebuild
   python tools/export_all.py --no-scripts        # skip the script/dialogue copy
   python tools/export_all.py --no-signs          # skip the sign definition/background copy
-  python tools/export_all.py --npc               # also export the P8 8.2 test NPC glb(s)
+  python tools/export_all.py --npc               # also batch-export NPC glbs + shared banks
 """
 import os, sys, glob, time, subprocess, traceback
 import UE_bsp_to_scene as B
@@ -30,15 +30,6 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MAPS = os.path.join(install.GAME, "maps")
 OUT = "out"
 MAPS_INI = os.path.join(os.path.dirname(os.path.abspath(__file__)), "maps.ini")
-
-# P8 8.2 glTFRuntime spike: the reproducible test NPC(s), each (model-path-in-VPK, anim-name),
-# exported to out/npc/<stem>.glb by mdl_gltf.py for the runtime skeletal path. gangmember_male_2
-# is a self-contained biped (69 bones) with the clip embedded in the model -- no shared-library
-# include resolution (that is PL4). Batch NPC export is PL4; this list is just the spike asset.
-TEST_NPCS = [
-    ("models/character/npc/common/gangmember_male_2/gangmember_male_2.mdl", "patron_barstand"),
-]
-
 
 def load_test_maps(ini_path=MAPS_INI):
     """The [test] bench map names from maps.ini (one per line; `;`/`#` comments)."""
@@ -159,16 +150,16 @@ def main():
             print(f"[signs] FAILED: {e}", flush=True)
             traceback.print_exc()
 
-    # Export the P8 8.2 test NPC(s) to out/npc as glTF 2.0 (.glb: mesh + StudioBone skeleton + one
-    # animation) for the runtime glTFRuntime skeletal path. Opt-in (--npc): batch NPC export is PL4;
-    # this is just the spike's reproducible test asset. mdl_gltf writes standard glTF (self-describing
-    # space), loaded via glTFRuntime's default config, so no UE_-style pre-conversion is needed.
+    # Batch-export the NPCs the exported maps reference (PL4): per-NPC mesh glbs (mesh + skeleton +
+    # own clips), the shared animation banks each once, and out/npc/npc_manifest.json. Opt-in (--npc):
+    # the include-tree decode is the heaviest offline pass. Standard glTF (self-describing space),
+    # loaded via glTFRuntime, retargeted onto NPC skeletons by bone name at runtime (roadmap 8.5).
+    # Scans out/*/*.ents, so it runs after the map loop.
     if "--npc" in args:
-        print("\n[npc] exporting test NPC glb(s) -> out/npc ...", flush=True)
+        print("\n[npc] batch NPC export (mesh glbs + shared banks + manifest) ...", flush=True)
         try:
-            import mdl_gltf
-            for model, anim in TEST_NPCS:
-                mdl_gltf.export(model, anim, os.path.join(OUT, "npc"))
+            import npc_export
+            npc_export.main()
         except Exception as e:
             print(f"[npc] FAILED: {e}", flush=True)
             traceback.print_exc()

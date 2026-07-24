@@ -13,8 +13,11 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "ElysiumClassRegistry.h"
 #include "ElysiumContentPaths.h"
+#include "ElysiumDecals.h"
 #include "ElysiumEntityDefs.h"
+#include "ElysiumObjModel.h"
 #include "HAL/FileManager.h"
 
 static constexpr EAutomationTestFlags GElysiumContentTestFlags =
@@ -103,6 +106,14 @@ bool FElysiumTutorialEntsTest::RunTest(const FString&)
 	TestTrue(TEXT("carries the 'tutorial' info_landmark"),
 		Survey.LandmarkNames.Contains(TEXT("tutorial")));
 
+	// B3 — the beat's NPCs are in the slice and their classes now register (Jack + the maker resolve
+	// to real leaves, not inert records, so trig_off_porch's wires deliver instead of `[no input]`).
+	TestTrue(TEXT("slice has npc_VVampire (Jack)"), Survey.Classnames.Contains(TEXT("npc_VVampire")));
+	TestTrue(TEXT("slice has npc_maker (blueblood_maker)"), Survey.Classnames.Contains(TEXT("npc_maker")));
+	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+	TestNotNull(TEXT("npc_VVampire registered"), Reg.Find(FName(TEXT("npc_VVampire"))));
+	TestNotNull(TEXT("npc_maker registered"), Reg.Find(FName(TEXT("npc_maker"))));
+
 	return true;
 }
 
@@ -124,6 +135,60 @@ bool FElysiumPawnshopEntsTest::RunTest(const FString&)
 	TestTrue(TEXT("has entities"), Survey.Total > 0);
 	// The travel target needs at least one info_landmark to seat the incoming player on.
 	TestTrue(TEXT("offers a landmark to travel to"), Survey.LandmarkNames.Num() > 0);
+
+	return true;
+}
+
+// =====================================================================================
+// Decals (7.2) — the `<map>.decals` projector sidecar. Validates that every line is a
+// well-formed projector (unit normal, positive extents) and that its material resolves in
+// the shared `<map>.mtl`, so the runtime always finds a texture for each UDecalComponent.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTutorialDecalsTest,
+	"Elysium.Content.TutorialDecals", GElysiumContentTestFlags)
+bool FElysiumTutorialDecalsTest::RunTest(const FString&)
+{
+	const TCHAR* Map = TEXT("sp_tutorial_1");
+	const FString Path = FElysiumContentPaths::MapDecals(Map);
+	if (!IFileManager::Get().FileExists(*Path))
+	{
+		AddInfo(FString::Printf(
+			TEXT("skipping %s decals: no exported .decals at %s (run the pipeline to enable)"), Map, *Path));
+		return true;   // not exported — skip, stay green
+	}
+
+	TArray<FElysiumDecalDef> Defs;
+	if (!TestTrue(TEXT("decals sidecar parses"), FElysiumDecals::Parse(Path, Defs)))
+	{
+		return true;
+	}
+	TestTrue(TEXT("tutorial carries decals"), Defs.Num() > 0);
+
+	// Materials ride the shared world MTL — the same file the runtime's BuildDecals reads.
+	TMap<FString, FElysiumMaterialDef> Materials;
+	FElysiumObjModel::ParseMtl(
+		FElysiumContentPaths::MapDir(Map) / (FString(Map) + TEXT(".mtl")), Materials);
+
+	int32 BadNormal = 0, BadExtent = 0, Unresolved = 0;
+	for (const FElysiumDecalDef& D : Defs)
+	{
+		if (!FMath::IsNearlyEqual(static_cast<float>(D.Normal.Size()), 1.0f, 1.e-2f))
+		{
+			++BadNormal;
+		}
+		if (D.HalfW <= 0.f || D.HalfH <= 0.f)
+		{
+			++BadExtent;
+		}
+		if (!Materials.Contains(D.Mat))
+		{
+			++Unresolved;
+		}
+	}
+	TestEqual(TEXT("every decal normal is unit length"), BadNormal, 0);
+	TestEqual(TEXT("every decal has positive extents"), BadExtent, 0);
+	TestEqual(TEXT("every decal material resolves in the shared MTL"), Unresolved, 0);
 
 	return true;
 }

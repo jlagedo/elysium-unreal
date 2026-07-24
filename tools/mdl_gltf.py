@@ -1,13 +1,19 @@
-"""Export a VtMB `.mdl` v2531 skeletal model to glTF 2.0 (.glb) for Godot.
+"""Export a VtMB `.mdl` v2531 skeletal model to glTF 2.0 (.glb).
 
-Decodes the skinned mesh (`mdl_skel.decode_skinned`), the `StudioBone` skeleton, and
-one named animation, converts them into glTF/Godot space (Y-up, metres, the same
-`(x,y,z)->(x,z,-y)*0.0254` basis change the props use), and packs a single `.glb`
-with a skin + skeleton node hierarchy + an animation. Godot's glTF importer builds the
-`Skeleton3D`/`Skin`/`AnimationPlayer` natively. Materials reference external PNGs
-decoded by the shared `mdl._resolve_material` pipeline into `<out>/tex/`.
+Decodes the skinned mesh (`mdl_skel.decode_skinned`), the `StudioBone` skeleton, and its
+animation clips, converts them into glTF space (Y-up, metres, the same
+`(x,y,z)->(x,z,-y)*0.0254` basis change the props use), and packs a `.glb` with a skin +
+skeleton node hierarchy + animations. glTFRuntime builds the `USkeletalMesh` + `UAnimSequence`
+at runtime. Materials reference external PNGs decoded by the shared `mdl._resolve_material`
+pipeline into `<out>/tex/`.
 
-CLI: python tools/mdl_gltf.py <model-path-in-vpk> <anim-name> [<out_dir>]
+Two products (`npc_export.py` drives the batch):
+- `export_npc` -> `<out>/<npc>.glb`: mesh + skeleton + the NPC's OWN clips (its dialogue anims).
+- `export_bank` -> `<out>/banks/<bank>.glb`: skeleton + a shared bank's clips, no mesh -- an
+  animation library retargeted onto NPC skeletons by bone name at load (A.7), so shared clips
+  are stored once, not baked into every NPC.
+
+CLI: python tools/mdl_gltf.py <model-path-in-vpk> [<anim-name>] [<out_dir>]  (single-clip probe)
 """
 import json, struct, os, sys
 import numpy as np
@@ -115,28 +121,9 @@ FLOAT, U8, U16, U32 = 5126, 5121, 5123, 5125
 ARRAY_BUFFER, ELEMENT_ARRAY_BUFFER = 34962, 34963
 
 
-def export(model_path, anim_name, out_dir):
-    idx = install.build_index()
-    dv = mdl.load(idx, model_path)
-    if not dv:
-        raise SystemExit(f"model not found: {model_path}")
-    d, v = dv
-    bones = S.read_bones(d)
-    surfaces = S.decode_skinned(d, v)
-    found = S.find_anim(d, anim_name)
-    if not found:
-        raise SystemExit(f"anim not found: {anim_name}")
-    ab, nframes, fps = found
-    frames = S.read_anim(d, bones, ab, nframes)
-
-    os.makedirs(os.path.join(out_dir, "tex"), exist_ok=True)
-    search = mdl.search_paths(d)
-    read_bytes = lambda k: install.read(idx, k)
-    tex_cache = {}
-
-    g = Gltf()
-
-    # --- skeleton nodes (one per bone) ---
+def _skeleton_nodes(bones):
+    """One glTF node per bone (converted bind-local TRS) + parent->children links, in bone
+    order so node index == bone index (what `_bake_animation` targets)."""
     nodes = []
     for b in bones:
         t = conv_pos(b.pos)
@@ -149,24 +136,75 @@ def export(model_path, anim_name, out_dir):
     for i, b in enumerate(bones):
         if b.parent != -1:
             nodes[b.parent].setdefault("children", []).append(i)
+    return nodes
 
-    # global bind (glTF space) via FK over converted locals -> inverse bind matrices
+
+def _inverse_bind_accessor(g, bones):
+    """Inverse-bind matrices (glTF space) from FK over the converted bind locals."""
     Gbind = [None] * len(bones)
     for b in bones:
         lm = quat_to_mat4(conv_quat(b.quat), conv_pos(b.pos))
         Gbind[b.index] = lm if b.parent == -1 else Gbind[b.parent] @ lm
     ibm = np.array([np.linalg.inv(Gbind[i]).T.reshape(16) for i in range(len(bones))],
                    dtype=np.float32)
-    ibm_acc = g.accessor(ibm, FLOAT, "MAT4")
+    return g.accessor(ibm, FLOAT, "MAT4")
+
+
+def _bake_animation(g, d, bones, label, animdesc_base, nframes, fps):
+    """One glTF animation from a decoded clip: a rotation and/or translation sampler per
+    animated bone, targeting the bone's node by index (identity -- the clip bakes against its
+    own model's skeleton; the cross-skeleton retarget is by bone name at load). Returns the
+    animation dict, or None if the clip animates no channel."""
+    frames = S.read_anim(d, bones, animdesc_base, nframes)
+    recs = animdesc_base + struct.unpack_from("<i", d, animdesc_base + 48)[0]
+    times = np.arange(nframes, dtype=np.float32) / (fps or 30.0)
+    time_acc = g.accessor(times.reshape(-1, 1), FLOAT, "SCALAR", mm=True)
+    channels, samplers = [], []
+    for b in bones:
+        offs = struct.unpack_from("<7i", d, recs + b.index * 32 + 4)
+        if any(offs[3:]):
+            qout = np.array([conv_quat(frames[f][b.index][1]) for f in range(nframes)],
+                            dtype=np.float32)
+            samplers.append({"input": time_acc, "output": g.accessor(qout, FLOAT, "VEC4"),
+                             "interpolation": "LINEAR"})
+            channels.append({"sampler": len(samplers) - 1,
+                             "target": {"node": b.index, "path": "rotation"}})
+        if any(offs[:3]):
+            tout = np.array([conv_pos(frames[f][b.index][0]) for f in range(nframes)],
+                            dtype=np.float32)
+            samplers.append({"input": time_acc, "output": g.accessor(tout, FLOAT, "VEC3"),
+                             "interpolation": "LINEAR"})
+            channels.append({"sampler": len(samplers) - 1,
+                             "target": {"node": b.index, "path": "translation"}})
+    if not channels:
+        return None
+    return {"name": label.lstrip("@"), "channels": channels, "samplers": samplers}
+
+
+def _build_skinned(g, idx, d, v, model_path, out_dir):
+    """Skeleton nodes + skin + per-material mesh primitives + materials into `g`.
+
+    Returns a dict the assemblers finish: nodes (with the mesh node appended), meshes, skins,
+    materials, images, textures, bones. The mesh/material path is the game-verified single-clip
+    path, unchanged -- only the animation set differs between products."""
+    bones = S.read_bones(d)
+    surfaces = S.decode_skinned(d, v)
+    os.makedirs(os.path.join(out_dir, "tex"), exist_ok=True)
+    search = mdl.search_paths(d)
+    read_bytes = lambda k: install.read(idx, k)
+    tex_cache = {}
+
+    nodes = _skeleton_nodes(bones)
+    ibm_acc = _inverse_bind_accessor(g, bones)
 
     # --- materials ---
     matnames = list(surfaces.keys())
     images, textures, materials, mat_index = [], [], [], {}
     for mn in matnames:
         albedo, _emis, _add = mdl._resolve_material(mn, search, read_bytes, out_dir, tex_cache)
-        # Double-sided like the rest of the project (world/props render CullMode
-        # Disabled): VtMB character meshes have open/thin geometry (tank-top neck &
-        # armholes, mouth, eye sockets) that shows the culled interior when orbited.
+        # Double-sided like the rest of the project (world/props render CullMode Disabled):
+        # VtMB character meshes have open/thin geometry (tank-top neck & armholes, mouth, eye
+        # sockets) that shows the culled interior when orbited.
         mat = {"name": mdl.sanitize(mn), "doubleSided": True,
                "pbrMetallicRoughness": {"metallicFactor": 0.0, "roughnessFactor": 1.0}}
         if albedo:
@@ -209,65 +247,142 @@ def export(model_path, anim_name, out_dir):
         })
 
     mesh_node = len(nodes)
-    nodes.append({"name": mdl.sanitize(os.path.basename(model_path)),
-                  "mesh": 0, "skin": 0})
+    nodes.append({"name": mdl.sanitize(os.path.basename(model_path)), "mesh": 0, "skin": 0})
+    return dict(bones=bones, nodes=nodes, mesh_node=mesh_node, primitives=primitives,
+                ibm_acc=ibm_acc, materials=materials, images=images, textures=textures,
+                surfaces=surfaces)
 
-    # --- animation ---
-    animidx = struct.unpack_from("<i", d, ab + 48)[0]
-    recs = ab + animidx
-    times = np.arange(nframes, dtype=np.float32) / fps
-    time_acc = g.accessor(times.reshape(-1, 1), FLOAT, "SCALAR", mm=True)
-    channels, samplers = [], []
-    for b in bones:
-        offs = struct.unpack_from("<7i", d, recs + b.index * 32 + 4)
-        rot_anim = any(offs[3:])
-        pos_anim = any(offs[:3])
-        if rot_anim:
-            qout = np.array([conv_quat(frames[f][b.index][1]) for f in range(nframes)],
-                            dtype=np.float32)
-            si = len(samplers)
-            samplers.append({"input": time_acc,
-                             "output": g.accessor(qout, FLOAT, "VEC4"),
-                             "interpolation": "LINEAR"})
-            channels.append({"sampler": si, "target": {"node": b.index, "path": "rotation"}})
-        if pos_anim:
-            tout = np.array([conv_pos(frames[f][b.index][0]) for f in range(nframes)],
-                            dtype=np.float32)
-            si = len(samplers)
-            samplers.append({"input": time_acc,
-                             "output": g.accessor(tout, FLOAT, "VEC3"),
-                             "interpolation": "LINEAR"})
-            channels.append({"sampler": si, "target": {"node": b.index, "path": "translation"}})
 
+def _assemble_skinned(built, animations):
+    """glTF dict for a skinned mesh + skeleton + the given animations."""
+    bones = built["bones"]
     root = next(b.index for b in bones if b.parent == -1)
     gltf = {
         "asset": {"version": "2.0", "generator": "elysium mdl_gltf"},
         "scene": 0,
-        "scenes": [{"nodes": [root, mesh_node]}],
-        "nodes": nodes,
-        "meshes": [{"primitives": primitives}],
-        "skins": [{"inverseBindMatrices": ibm_acc,
+        "scenes": [{"nodes": [root, built["mesh_node"]]}],
+        "nodes": built["nodes"],
+        "meshes": [{"primitives": built["primitives"]}],
+        "skins": [{"inverseBindMatrices": built["ibm_acc"],
                    "joints": list(range(len(bones))), "skeleton": root}],
-        "animations": [{"name": anim_name.lstrip("@"),
-                        "channels": channels, "samplers": samplers}],
-        "materials": materials,
+        "materials": built["materials"],
+    }
+    if animations:
+        gltf["animations"] = animations
+    if built["images"]:
+        gltf["images"] = built["images"]
+        gltf["textures"] = built["textures"]
+        gltf["samplers"] = [{}]
+        for t in built["textures"]:
+            t["sampler"] = 0
+    return gltf, root
+
+
+def export_npc(idx, model_path, out_dir, stem=None):
+    """Write `<out_dir>/<stem>.glb`: skinned mesh + skeleton + the NPC's OWN clips (the
+    dialogue anims that live only in this .mdl). Shared clips come from bank glbs applied by
+    bone name at runtime. Returns {stem, glb, model, bones, clips:[label,...]}."""
+    dv = mdl.load(idx, model_path)
+    if not dv:
+        raise SystemExit(f"model not found: {model_path}")
+    d, v = dv
+    stem = stem or mdl.sanitize(os.path.basename(model_path)[:-4])
+
+    g = Gltf()
+    built = _build_skinned(g, idx, d, v, model_path, out_dir)
+    animations, labels = [], []
+    for label, ab, nf, fps in S.local_sequences(d):
+        anim = _bake_animation(g, d, built["bones"], label, ab, nf, fps)
+        if anim:
+            animations.append(anim)
+            labels.append(label)
+    gltf, _root = _assemble_skinned(built, animations)
+    gltf["accessors"] = g.accessors
+    gltf["bufferViews"] = g.bufferViews
+    gltf["buffers"] = [{"byteLength": len(g.bin)}]
+
+    glb = os.path.join(out_dir, stem + ".glb")
+    _write_glb(gltf, g.bin, glb)
+    tris = sum(len(s["tris"]) for s in built["surfaces"].values())
+    print(f"  npc {stem}: {len(built['bones'])} bones, {tris} tris, {len(labels)} own clips "
+          f"-> {glb} ({os.path.getsize(glb) // 1024} KB)")
+    return dict(stem=stem, glb=os.path.basename(glb), model=model_path,
+                bones=len(built["bones"]), clips=labels)
+
+
+def export_bank(idx, model_path, out_dir, stem):
+    """Write `<out_dir>/banks/<stem>.glb`: the bank skeleton (named bone nodes) + all its
+    clips, no mesh/materials -- an animation library retargeted onto NPC skeletons by bone
+    name at load (A.7). Returns {stem, glb, model, clips:[label,...]} or None if the bank
+    defines no animated clip (aggregator/plumbing models)."""
+    key = model_path[:-4] if model_path.lower().endswith(".mdl") else model_path
+    d = install.read(idx, key + ".mdl")
+    if not d:
+        return None
+    clips = S.local_sequences(d)
+    if not clips:
+        return None
+    bones = S.read_bones(d)
+
+    g = Gltf()
+    nodes = _skeleton_nodes(bones)
+    animations, labels = [], []
+    for label, ab, nf, fps in clips:
+        anim = _bake_animation(g, d, bones, label, ab, nf, fps)
+        if anim:
+            animations.append(anim)
+            labels.append(label)
+    if not animations:
+        return None
+    root = next(b.index for b in bones if b.parent == -1)
+
+    banks_dir = os.path.join(out_dir, "banks")
+    os.makedirs(banks_dir, exist_ok=True)
+    gltf = {
+        "asset": {"version": "2.0", "generator": "elysium mdl_gltf bank"},
+        "scene": 0,
+        "scenes": [{"nodes": [root]}],
+        "nodes": nodes,
+        "animations": animations,
         "accessors": g.accessors,
         "bufferViews": g.bufferViews,
         "buffers": [{"byteLength": len(g.bin)}],
     }
-    if images:
-        gltf["images"] = images
-        gltf["textures"] = textures
-        gltf["samplers"] = [{}]
-        for t in textures:
-            t["sampler"] = 0
+    glb = os.path.join(banks_dir, stem + ".glb")
+    _write_glb(gltf, g.bin, glb)
+    print(f"  bank {stem}: {len(bones)} bones, {len(labels)} clips "
+          f"-> {glb} ({os.path.getsize(glb) // 1024} KB)")
+    return dict(stem=stem, glb="banks/" + os.path.basename(glb), model=model_path, clips=labels)
 
-    _write_glb(gltf, g.bin, os.path.join(out_dir, mdl.sanitize(
-        os.path.basename(model_path)[:-4]) + ".glb"))
+
+def export(model_path, anim_name, out_dir):
+    """Single-clip probe (the CLI / 8.2 spike): mesh + skeleton + one named clip, found by
+    sequence label first, then by raw anim name."""
+    idx = install.build_index()
+    dv = mdl.load(idx, model_path)
+    if not dv:
+        raise SystemExit(f"model not found: {model_path}")
+    d, v = dv
+    clip = next((c for c in S.local_sequences(d) if c[0].lower() == anim_name.lstrip("@").lower()), None)
+    if clip is None:
+        found = S.find_anim(d, anim_name)
+        if not found:
+            raise SystemExit(f"anim not found: {anim_name}")
+        ab, nframes, fps = found
+        clip = (anim_name, ab, nframes, fps)
+
+    g = Gltf()
+    built = _build_skinned(g, idx, d, v, model_path, out_dir)
+    anim = _bake_animation(g, d, built["bones"], clip[0], clip[1], clip[2], clip[3])
+    gltf, _root = _assemble_skinned(built, [anim] if anim else [])
+    gltf["accessors"] = g.accessors
+    gltf["bufferViews"] = g.bufferViews
+    gltf["buffers"] = [{"byteLength": len(g.bin)}]
     name = mdl.sanitize(os.path.basename(model_path)[:-4])
-    print(f"wrote {out_dir}/{name}.glb  ({len(bones)} bones, {len(surfaces)} materials, "
-          f"{sum(len(s['tris']) for s in surfaces.values())} tris, "
-          f"anim '{anim_name}' {nframes}f @ {fps:.0f}fps)")
+    _write_glb(gltf, g.bin, os.path.join(out_dir, name + ".glb"))
+    tris = sum(len(s["tris"]) for s in built["surfaces"].values())
+    print(f"wrote {out_dir}/{name}.glb  ({len(built['bones'])} bones, "
+          f"{len(built['materials'])} materials, {tris} tris, anim '{clip[0]}' {clip[2]}f)")
 
 
 def _write_glb(gltf, bin_data, path):

@@ -34,7 +34,6 @@ namespace ElysiumVantages
 		{ TEXT("sp_tutorial_1"), TEXT("t2"),   false, FVector(1320.f,  270.f,  60.f),   FRotator(0.f,  149.f, 0.f) },
 		{ TEXT("sp_tutorial_1"), TEXT("t3"),   false, FVector(-1030.f, -100.f, 70.f),   FRotator(0.f,  -49.f, 0.f) },
 		{ TEXT("sp_tutorial_1"), TEXT("t4"),   false, FVector(-2760.f, -600.f, 160.f),  FRotator(0.f, -154.f, 0.f) },
-
 		// sm_hub_1 — two vantages.
 		{ TEXT("sm_hub_1"),      TEXT("h1"),   false, FVector(-4220.f, 6170.f, -120.f), FRotator(0.f,  -40.f, 0.f) },
 		{ TEXT("sm_hub_1"),      TEXT("h2"),   false, FVector(-4760.f, -1180.f, -120.f),FRotator(0.f,   29.f, 0.f) },

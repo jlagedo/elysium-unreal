@@ -42,8 +42,9 @@ UE 5.8. Module `ElysiumUE` (Runtime, Default loading phase).
   configured as the player-input class but unused.
 - Boot paths: **New Game** (`UElysiumMapSubsystem::NewGame`) seeds a story context and enters
   the story entry at its `info_landmark`; `-ElysiumMap=<name>` (`play.bat <map>`) loads a map
-  bare and unseeded (the dev path); `-ElysiumNewGame=0` boots the story map bare.
-  `-ElysiumProfile` runs the headless profiling harness.
+  bare (the dev path — it seeds only `Linux_Wine=1`, so the tutorial's `linux_check`
+  logic_pythoncheck reads OnTrue and the Wine-warning `popup_linux` stays down); `-ElysiumNewGame=0`
+  boots the story map bare. `-ElysiumProfile` runs the headless profiling harness.
 
 ## Map load path
 
@@ -56,6 +57,7 @@ map epoch; tears down on travel).
 | `FElysiumTextureCache` | DDS-preferred texture load, PNG fallback |
 | `FElysiumMaterialFactory` | MIDs off the master materials |
 | `FElysiumStaticMeshBuilder` | runtime `UStaticMesh` per unique prop model (`BuildFromMeshDescriptions`), drawn as one ISM per (model, solidity) |
+| `FElysiumDecals` + `FElysiumMaterialFactory::BuildDecal` | 7.2 decals: parse the `.decals` projector sidecar → one deferred `UDecalComponent` per `infodecal`, MID off `M_Decal`. Orient `MakeFromXZ(Normal, SDir)` — local +X = room normal (so −X projects into the wall), and since a deferred decal maps texture **U→local Z, V→local Y**, the surface horizontal `SDir` goes on local Z with `DecalSize = depth×HalfH×HalfW`. `elysium.Decals` A/Bs the pass, `elysium.DecalDepth` the depth, `elysium.DecalFlipU` mirrors U |
 | `UElysiumLightRig` | one Unreal light per WORLDLIGHTS `.lights` source; soft exponent falloff, specular off (VtMB is pure Lambert), sun, skyambient, lightstyle animation, live retune via `ApplyLiveTuning()` |
 | `ElysiumEnvironment.{h,cpp}` | `.env` sky/fog + `.cube` LUT onto `M_Sky` + post-process |
 | `FElysiumProfileRun` | the headless profiling harness (`-ElysiumProfile`) |
@@ -81,7 +83,7 @@ Plain C++, no UObject reflection — Unreal supplies bodies only. Design: `docs/
 | `FElysiumEntityDef`/`FElysiumEntityDefs` | immutable parsed `.ents` records |
 | `FElysiumEntity` | the live base entity: CBaseEntity keyfields, `Kill`/`ScriptHide`/`ScriptUnhide`, one-switch dormancy gating the brush body, per-output `times` counters, `FireOutput` (Source `COutput<T>` value seam — fills any wire whose map-param is empty), `OnTouchStart`/`OnTouchEnd`, `GetDebugState` |
 | `FElysiumClassDesc`/`FElysiumClassRegistry` | per-classname descriptor — factory, base-chain link, input + typed field tables; case-folded chain lookup, inert-record fallback for unregistered classnames |
-| `FElysiumEntityWorld` | the substrate: one entity per def, name/class indices, spawn pass (also builds brush bodies), the `AcceptInput` + event-queue **chokepoints**, output firing, `RouteBrushTouch`, `UpdateUseCursor`/`PlayerUse`, think-first tick, epoch teardown, `AddSink` seam. Owned by `AElysiumMapActor` via `TPimplPtr` |
+| `FElysiumEntityWorld` | the substrate: one entity per def, name/class indices, spawn pass (also builds brush bodies), `SpawnRuntimeEntity` (B3 runtime creation for `npc_maker.Spawn`), the `AcceptInput` + event-queue **chokepoints**, output firing, `RouteBrushTouch`, `UpdateUseCursor`/`PlayerUse`, think-first tick, epoch teardown, `AddSink` seam. Owned by `AElysiumMapActor` via `TPimplPtr` |
 | `UElysiumBrushComponent` | the per-brush-entity body: collision-only `UPrimitiveComponent`, convex `UBodySetup` cooked from def hulls, handle-carrying, dormancy-gated, solidity by classname (trigger/solid/none); `elysium.BrushBodies` A/Bs it |
 | `FElysiumEventQueue`/`FElysiumIOEvent` | the one time-sorted queue (R4 — no engine timers) |
 | `IElysiumIOSink` | always-on `FElysiumRingBufferSink` (1,000-entry history) + `FElysiumLogSink` (`LogElysiumIO` + VLOG) |
@@ -96,7 +98,20 @@ Class implementations live in `ElysiumStarterClasses.cpp` (logic_auto/relay, tri
 + the VtMB `logic_case_toggle` divergence, env_fade, func_brush, point_teleport),
 `ElysiumMover.{h,cpp}` (`FElysiumMoverBase` = CBaseToggle, `FElysiumDoorBase` = the CBaseDoor
 4-state machine, `FElysiumFuncDoor`, `FElysiumButton`), `ElysiumSignClasses.cpp` (`game_sign`),
-`ElysiumAmbientGeneric.cpp`, `ElysiumEventClasses.cpp` (`events_player`/`events_world`).
+`ElysiumAmbientGeneric.cpp`, `ElysiumEventClasses.cpp` (`events_player`/`events_world`),
+`ElysiumNpcClasses.cpp` (B3 — the AI-free `FElysiumNpc` character leaf for the living `npc_*`
+classnames and `FElysiumNpcMaker` for `npc_maker`/`npc_maker_fleshpile`).
+
+NPCs (B3, no AI) stand a real glTF skeletal body at their origin: `ElysiumNpcVisual.{h,cpp}` is the
+shared glb→`USkeletalMesh` loader (the 8.2 path, reused by the `UElysiumNpcSubsystem` test harness),
+and `AElysiumMapActor::BuildNpcVisual` caches the mesh + idle clip per stem and stands a
+`USkeletalMeshComponent` on the map actor (`elysium.NpcBodies` A/Bs the bodies; I/O still resolves
+without them). `FElysiumNpc` latches `WillTalk`/`UseInteresting` and turns `StartPlayerDialogRemote`
+into `OnDialogBegin` + a manual `EndDialog`→`OnDialogEnd` seam (B4 replaces it with the `.dlg`
+runner). `npc_maker.Spawn` creates its `NPCTargetname` child through
+**`FElysiumEntityWorld::SpawnRuntimeEntity`** — a runtime-synthesized def stored past the map's
+immutable def array, appended to `EntityList` (identity needs only the append). Runtime NPC bodies are
+tracked for teardown like brush bodies.
 
 `+use` picks on the dedicated `ELYSIUM_USE_CHANNEL` (`ECC_GameTraceChannel1` = "ElysiumUse",
 default-Block so world + solid bodies occlude the ray, isolated from `ECC_Visibility`). The
@@ -277,8 +292,8 @@ volume, so a flip re-applies in one pass (voices already fading out toward a rea
 
 Lifecycle `elysium.newgame` / `map` / `maps` / `reload`; inspection `elysium.campos` /
 `lights` / `props` / `ents` / `classes` / `world` / `world.io` / `world.fireinput` / `g`;
-A/B toggles `elysium.BrushCollision` / `BrushBodies` / `EmissiveScale` / `LightScale` /
-`LightFit` / `CogTheme`; entity debug `elysium.ent_*` / `showtriggers`; scripting `elysium.eval` / `exec` /
+A/B toggles `elysium.BrushCollision` / `BrushBodies` / `NpcBodies` / `Decals` (+ `DecalDepth`) / `EmissiveScale` /
+`LightScale` / `LightFit` / `CogTheme`; entity debug `elysium.ent_*` / `showtriggers`; scripting `elysium.eval` / `exec` /
 `script.live` / `script.cpython` / `py.*` (`py.smoke` / `exec` / `load` / `fire`, plus the two
 single-token acceptance harnesses `py.poc` and `py.firstbeat`); audio `elysium.Mute` / `playsound` / `sound_info` /
 `MusicState` / `MusicCrossfade` / `SchemeRandom*`; NPC `elysium.npc.load` / `clear` / `list`; MCP

@@ -2,6 +2,7 @@
 
 #include "ElysiumAudioSubsystem.h"
 #include "ElysiumContentPaths.h"
+#include "ElysiumDecals.h"
 #include "ElysiumEditorLabels.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
@@ -12,16 +13,21 @@
 #include "ElysiumSoundScheme.h"
 #include "ElysiumLightRig.h"
 #include "ElysiumMaterialFactory.h"
+#include "ElysiumNpcVisual.h"
 #include "ElysiumObjModel.h"
 #include "ElysiumStaticMesh.h"
 
 #include "Engine/GameInstance.h"
 
+#include "Animation/AnimSequence.h"
+#include "Components/DecalComponent.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/ExponentialHeightFogComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/PostProcessComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/SkyLightComponent.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture2D.h"
 #include "Engine/TextureCube.h"
@@ -46,6 +52,25 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysium, Log, All);
 static TAutoConsoleVariable<int32> CVarBrushCollision(
 	TEXT("elysium.BrushCollision"), 1,
 	TEXT("World collider: 1 = .hulls/.dispcol brush collision, 0 = render-mesh trimesh. Applied at map load."),
+	ECVF_Default);
+
+// Build the map's projected decals (1) or skip them (0), for A/B. Read at map load, so re-travel
+// to toggle. The projection depth (cm) is the decal box's reach into/out of the wall along the
+// projection axis; kept shallow so a decal catches its host wall but not the geometry behind it.
+static TAutoConsoleVariable<int32> CVarDecals(
+	TEXT("elysium.Decals"), 1,
+	TEXT("Build the map's deferred decals from <map>.decals (1) or skip (0). Applied at map load."),
+	ECVF_Default);
+static TAutoConsoleVariable<float> CVarDecalDepth(
+	TEXT("elysium.DecalDepth"), 16.0f,
+	TEXT("Deferred-decal projection half-depth (cm) along the projection axis. Applied at map load."),
+	ECVF_Default);
+// Horizontal mirror knob: flips the decal's U axis (local Z). The exporter's s-axis sign was
+// verified against the mesh path, not the deferred-decal UV convention, so this stays adjustable.
+// Applied at map load — re-travel (elysium.reload) to A/B without recompiling.
+static TAutoConsoleVariable<int32> CVarDecalFlipU(
+	TEXT("elysium.DecalFlipU"), 0,
+	TEXT("Mirror decals along their horizontal (U) axis (1) or not (0). Applied at map load."),
 	ECVF_Default);
 
 namespace
@@ -291,6 +316,9 @@ void AElysiumMapActor::LoadMap()
 	}
 	Phase(TEXT("Skybox"));
 
+	BuildDecals();
+	Phase(TEXT("Decals"));
+
 	LoadProps();
 	Phase(TEXT("Props"));
 
@@ -358,6 +386,59 @@ void AElysiumMapActor::LoadMap()
 	const double TotalMs = (FPlatformTime::Seconds() - Start) * 1000.0;
 	LoadPhases.Add({ TEXT("Total"), TotalMs });
 	UE_LOG(LogElysium, Log, TEXT("loaded %s in %.2fs"), *MapName, TotalMs / 1000.0);
+}
+
+USkeletalMeshComponent* AElysiumMapActor::BuildNpcVisual(const FString& Stem, const FVector& Location, const FRotator& Rotation)
+{
+	USceneComponent* Root = GetRootComponent();
+	if (Stem.IsEmpty() || Root == nullptr)
+	{
+		return nullptr;
+	}
+
+	// Cache-checked load: mesh + idle anim per stem, so a shared model (three Sabbat share shovelhead)
+	// loads once. A stem that failed once is not re-cached (Mesh stays null), so it retries — cheap,
+	// and a genuinely missing glb is a one-line warning per NPC, not per frame.
+	const TObjectPtr<USkeletalMesh>* Cached = NpcMeshCache.Find(Stem);
+	USkeletalMesh* Mesh = Cached ? Cached->Get() : nullptr;
+	UAnimSequence* Idle = nullptr;
+	if (Mesh == nullptr)
+	{
+		UglTFRuntimeAsset* Asset = nullptr;
+		FString Error;
+		Mesh = ElysiumNpcVisual::LoadMesh(Stem, Asset, Error);
+		if (Mesh == nullptr)
+		{
+			UE_LOG(LogElysium, Warning, TEXT("BuildNpcVisual '%s': %s"), *Stem, *Error);
+			return nullptr;
+		}
+		FString AppliedAnim;
+		Idle = ElysiumNpcVisual::LoadIdleAnim(Asset, Mesh, AppliedAnim);
+		NpcMeshCache.Add(Stem, Mesh);
+		NpcIdleCache.Add(Stem, Idle);   // may be null → reference pose; cached either way
+	}
+	else if (const TObjectPtr<UAnimSequence>* CachedIdle = NpcIdleCache.Find(Stem))
+	{
+		Idle = CachedIdle->Get();
+	}
+
+	// Standard runtime-component recipe (mirrors BuildBrushBody): NewObject → attach → place →
+	// RegisterComponent. The hulls-body path uses relative placement against the root at world origin;
+	// NPC origins are the same Unreal-space verbatim values, so relative == world here.
+	USkeletalMeshComponent* Comp = NewObject<USkeletalMeshComponent>(this);
+	Comp->SetMobility(EComponentMobility::Movable);
+	Comp->SetSkeletalMeshAsset(Mesh);
+	Comp->SetupAttachment(Root);
+	Comp->SetRelativeLocation(Location);
+	Comp->SetRelativeRotation(Rotation);
+	Comp->RegisterComponent();
+	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);   // no AI, no physics body (B3)
+	AddInstanceComponent(Comp);
+	if (Idle != nullptr)
+	{
+		Comp->PlayAnimation(Idle, /*bLooping=*/true);
+	}
+	return Comp;
 }
 
 int32 AElysiumMapActor::BuildMeshFromObj(const FString& ObjPath, UProceduralMeshComponent* Mesh, bool bCollision)
@@ -457,6 +538,64 @@ int32 AElysiumMapActor::BuildMeshFromObj(const FString& ObjPath, UProceduralMesh
 		++Section;
 	}
 	return Section;
+}
+
+void AElysiumMapActor::BuildDecals()
+{
+	DecalCount = 0;
+	if (CVarDecals.GetValueOnGameThread() == 0)
+	{
+		return;
+	}
+
+	TArray<FElysiumDecalDef> Defs;
+	if (!FElysiumDecals::Parse(FElysiumContentPaths::MapDecals(MapName), Defs) || Defs.Num() == 0)
+	{
+		return;
+	}
+
+	// Decal albedo/emissive textures ride the shared world MTL (<map>.mtl), the same file the
+	// world sections resolve against; textures are "tex/..." relative to the map dir.
+	const FString Dir = FElysiumContentPaths::MapDir(MapName);
+	TMap<FString, FElysiumMaterialDef> Materials;
+	FElysiumObjModel::ParseMtl(Dir / (MapName + TEXT(".mtl")), Materials);
+
+	// DecalSize is the box half-size: X = projection reach into/out of the wall, Y/Z = the
+	// on-surface half-extents. The map actor sits at the origin, so the sidecar's Unreal-space
+	// point/axes are used as component-relative directly.
+	const float HalfDepth = FMath::Max(1.f, CVarDecalDepth.GetValueOnGameThread());
+
+	Decals.Reserve(Defs.Num());
+	for (const FElysiumDecalDef& D : Defs)
+	{
+		const FElysiumMaterialDef* MatDef = Materials.Find(D.Mat);
+		UMaterialInstanceDynamic* Mid = FElysiumMaterialFactory::BuildDecal(MatDef, Dir, this);
+		if (!Mid)
+		{
+			continue;   // M_Decal master missing — skip rather than draw the wrong material domain
+		}
+
+		UDecalComponent* Dc = NewObject<UDecalComponent>(this);
+		Dc->SetupAttachment(SceneRoot);
+		// Orient so the component's -X projects into the wall (local +X = the room-facing Normal).
+		// A deferred decal maps its texture U to the component's local Z and V to local Y (not the
+		// intuitive Y=U/Z=V), so the surface's horizontal axis (SDir, the U/s texture axis) goes on
+		// local Z and the vertical (TDir) is the derived Y. DecalSize is the box HALF-size
+		// (X = projection reach, Y = vertical/V half-extent = HalfH, Z = horizontal/U half-extent =
+		// HalfW). MakeFromXZ builds a valid right-handed rotation from Normal + SDir (the exporter's
+		// s/t frame is left-handed w.r.t. the normal, so a 3-axis FMatrix would be reflected).
+		const bool bFlipU = CVarDecalFlipU.GetValueOnGameThread() != 0;
+		const FVector UpHint = bFlipU ? -D.SDir : D.SDir;
+		const FRotator Rot = FRotationMatrix::MakeFromXZ(D.Normal, UpHint).Rotator();
+		Dc->SetRelativeLocationAndRotation(D.Loc, Rot);
+		Dc->DecalSize = FVector(HalfDepth, D.HalfH, D.HalfW);
+		Dc->SetFadeScreenSize(0.f);   // VtMB decals persist at any distance
+		Dc->SetDecalMaterial(Mid);
+		Dc->RegisterComponent();
+		Decals.Add(Dc);
+	}
+	DecalCount = Decals.Num();
+	UE_LOG(LogElysium, Log, TEXT("decals: %d"), DecalCount);
 }
 
 bool AElysiumMapActor::LoadHulls()

@@ -20,8 +20,10 @@ static TAutoConsoleVariable<float> CVarEmissiveScale(
 namespace
 {
 	constexpr const TCHAR* MasterPath = TEXT("/Game/VtMB/Materials/M_VtMB_World.M_VtMB_World");
+	constexpr const TCHAR* DecalMasterPath = TEXT("/Game/VtMB/Materials/M_Decal.M_Decal");
 	const FName EmissiveParam(TEXT("Emissive"));
 	const FName EmissiveScaleParam(TEXT("EmissiveScale"));
+	const FName AlbedoParam(TEXT("Albedo"));
 
 	// The hand-authored master material, loaded once and kept alive by a strong ref.
 	UMaterialInterface* GetMaster()
@@ -30,6 +32,20 @@ namespace
 		if (!Master.IsValid())
 		{
 			if (UMaterialInterface* Loaded = LoadObject<UMaterialInterface>(nullptr, MasterPath))
+			{
+				Master.Reset(Loaded);
+			}
+		}
+		return Master.Get();
+	}
+
+	// The deferred-decal master (M_Decal), loaded once and pinned like GetMaster.
+	UMaterialInterface* GetDecalMaster()
+	{
+		static TStrongObjectPtr<UMaterialInterface> Master;
+		if (!Master.IsValid())
+		{
+			if (UMaterialInterface* Loaded = LoadObject<UMaterialInterface>(nullptr, DecalMasterPath))
 			{
 				Master.Reset(Loaded);
 			}
@@ -97,6 +113,52 @@ UMaterialInstanceDynamic* FElysiumMaterialFactory::Build(const FElysiumMaterialD
 	// $selfillum (map_Ke): bind the alpha-masked emission map and switch the master's
 	// EmissiveScale on. Surfaces without an emissive map leave EmissiveScale at its 0
 	// default, so they never glow.
+	if (Def && !Def->Emissive.IsEmpty())
+	{
+		if (UTexture2D* EmisTex = FElysiumTextureCache::LoadTex(Dir, Def->Emissive))
+		{
+			Mid->SetTextureParameterValue(EmissiveParam, EmisTex);
+			Mid->SetScalarParameterValue(EmissiveScaleParam,
+				FMath::Max(0.f, CVarEmissiveScale.GetValueOnAnyThread()));
+		}
+	}
+
+	return Mid;
+}
+
+UMaterialInstanceDynamic* FElysiumMaterialFactory::BuildDecal(const FElysiumMaterialDef* Def, const FString& Dir, UObject* Outer)
+{
+	UMaterialInterface* Master = GetDecalMaster();
+	if (!Master)
+	{
+		// Master asset missing: no fallback (the engine default is not a decal domain), so the
+		// caller must skip this decal rather than draw garbage.
+		return nullptr;
+	}
+
+	UMaterialInstanceDynamic* Mid = UMaterialInstanceDynamic::Create(Master, Outer);
+	if (!Mid)
+	{
+		return nullptr;
+	}
+
+	// Albedo drives BaseColor (RGB) and Opacity (alpha coverage) by fixed parameter name — the
+	// decal master is authored with an "Albedo" parameter, so no reflection probe is needed.
+	UTexture2D* Albedo = nullptr;
+	if (Def && !Def->Albedo.IsEmpty())
+	{
+		Albedo = FElysiumTextureCache::LoadTex(Dir, Def->Albedo);
+	}
+	if (!Albedo)
+	{
+		Albedo = FElysiumTextureCache::SolidTex(Def ? Def->Color : FLinearColor(0.6f, 0.6f, 0.65f));
+	}
+	if (Albedo)
+	{
+		Mid->SetTextureParameterValue(AlbedoParam, Albedo);
+	}
+
+	// $selfillum decal (map_Ke): same alpha-masked emissive path as the world master.
 	if (Def && !Def->Emissive.IsEmpty())
 	{
 		if (UTexture2D* EmisTex = FElysiumTextureCache::LoadTex(Dir, Def->Emissive))

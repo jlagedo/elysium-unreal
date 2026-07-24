@@ -113,8 +113,8 @@ Design targets in this doc that are **not** code are marked where they appear �
 left-handed — so the runtime reads geometry and sidecars **verbatim** into `FVector`, with
 no swap, scale, or winding flip:
 
-- **Positions** (OBJ world/sky/decals/props, and the `.lights`/`.sprites`/`.ents`/`.hulls`/
-  `.dispcol`/`.props` origins, `.spawn`, `.sky`) = `source_to_unreal(sx,sy,sz) = (sx, -sy, sz) * 2.54`.
+- **Positions** (OBJ world/sky/props, and the `.lights`/`.sprites`/`.ents`/`.hulls`/`.dispcol`/
+  `.props`/`.decals` origins, `.spawn`, `.sky`) = `source_to_unreal(sx,sy,sz) = (sx, -sy, sz) * 2.54`.
   Both spaces are Z-up; the Y negation flips handedness (Source is right-handed).
 - **Winding**: the Y negation is a reflection (det −1), so `UE_bsp_to_scene.py` (and
   `mdl.write_obj_scene(ue_space=True)` for prop meshes) reverses triangle winding once, at
@@ -147,7 +147,7 @@ All under `tools/out/<map>/`. Formats are fixed by the pipeline and shared with 
 | `.env` | skybox flag/name, fog on/color/start/end | text |
 | `.water` | per-material plane, normalmap, fogcolor/dist, reflecttint | text, Unreal cm (plane Z + fogdist) |
 | `.cube` | color-grade LUT | Adobe .cube |
-| `_decals.obj` | infodecal geometry | OBJ |
+| `.decals` | infodecal projectors: `material centre normal s_dir t_dir hw hh` (one deferred UDecalComponent per line) | text, Unreal cm (dirs unit; extents cm) |
 | `npc/*.glb` | skeletal characters (mdl_skel → mdl_gltf) | glTF binary |
 
 ---
@@ -168,7 +168,7 @@ Unreal-native substitutions:
 | `LightRig.cs` + `Lightstyles.cs` | `UElysiumLightRig` (component on map actor) | Point/spot/directional from `.lights`; lightstyle patterns ticked as intensity curves; texlight clustering per the Godot implementation. |
 | `CoronaField.cs` | billboard `UMaterialBillboardComponent`s or one Niagara system fed `.sprites` | additive glow sprites. |
 | `WaterReflector.cs` (SubViewport mirror) | **Single Layer Water** material + Lumen/SSR reflections | no manual mirror camera — strict upgrade. |
-| decals (corner-wrapped quads) | `_decals.obj` as translucent PMC sections first (parity), **`UDecalComponent`** projection as the upgrade | deferred decals handle angles/displacements the Godot path deferred. |
+| decals (corner-wrapped quads) | **`UDecalComponent`** deferred projection from the `.decals` sidecar (`M_Decal`, `DBM_TRANSLUCENT`) | went straight to deferred (the PMC-parity stage was skipped): a GBuffer decal is lit like its host wall, Lumen indirect included. |
 | `.cube` LUT | post-process Color Grading LUT (transient `UTexture` into per-map `FPostProcessSettings`) | native. |
 | `.env` | sky material from six sky PNGs + `UExponentialHeightFogComponent` | native. |
 | `SourceMovement.cs` / `PlayerController.cs` | custom `UCharacterMovementComponent` override | port the Source `CGameMovement` math line-by-line — `SourceMovement.cs` + `docs/source_movement.md` are the reference. Friction/accel/airaccel/StepMove constants verified against the decompile. |

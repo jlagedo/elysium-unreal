@@ -25,6 +25,9 @@ struct FElysiumContentPaths
 	static FString MapEnts(const FString& Map) { return MapDir(Map) / (Map + TEXT(".ents")); }
 	static FString MapHulls(const FString& Map) { return MapDir(Map) / (Map + TEXT(".hulls")); }
 	static FString MapDispCol(const FString& Map) { return MapDir(Map) / (Map + TEXT(".dispcol")); }
+	// Decals (7.2): one deferred-decal projector per line (material + centre + normal + s/t axes +
+	// half-extents, Unreal cm), written by UE_bsp_to_scene.py. Materials ride the shared <map>.mtl.
+	static FString MapDecals(const FString& Map) { return MapDir(Map) / (Map + TEXT(".decals")); }
 
 	// Audio (P6). WAVs are game-global (shared across maps), so they live in one mirror of
 	// VtMB's `sound/` tree, not per-map. Rel is the engine-relative path under sound/ (e.g.
@@ -48,6 +51,12 @@ struct FElysiumContentPaths
 	static FString SignFile(const FString& Leaf) { return SignsDir() / Leaf; }
 	static FString SignTexDir() { return SignsDir() / TEXT("tex"); }
 	static FString SignBackgrounds() { return SignsDir() / TEXT("backgrounds.json"); }
+
+	// Fonts. The sign/popup panel's typeface set — hand-authored/game-agnostic OFL faces committed
+	// under Content/Fonts (NOT the game-derived out/ mirror), mapping VtMB's authored face names
+	// (ParagraphText/Newsprint/Headline/...) onto vector type. Read verbatim off disk at draw time.
+	static FString FontsDir() { return FPaths::ProjectContentDir() / TEXT("Fonts"); }
+	static FString FontFile(const FString& File) { return FontsDir() / File; }
 
 	// NPCs (P8 8.2). Skeletal characters export as one standard glTF 2.0 file per model (mesh +
 	// StudioBone skeleton + one animation) under out/npc, written by tools/mdl_gltf.py. The runtime

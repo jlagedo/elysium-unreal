@@ -5,6 +5,7 @@
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumSignData.h"
+#include "ElysiumSignFonts.h"
 
 #include "CanvasItem.h"
 #include "Components/PrimitiveComponent.h"
@@ -12,6 +13,8 @@
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
 #include "Engine/Texture2D.h"
+#include "Fonts/FontMeasure.h"
+#include "Framework/Application/SlateApplication.h"
 #include "HAL/IConsoleManager.h"
 #include "IImageWrapper.h"
 #include "IImageWrapperModule.h"
@@ -22,6 +25,15 @@
 #include "TextureResource.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumHUD, Log, All);
+
+// Draw game_sign / popup panels (1) or suppress them (0). Signs are gameplay UI, so this defaults
+// on; the headless screenshot harness turns it off so a map-load popup does not cover every capture
+// (e.g. the tutorial's linux_check logic_pythoncheck warns when its Python scripts were not compiled
+// under a Linux/Wine environment, and fires a game_sign every load).
+static TAutoConsoleVariable<int32> CVarDrawSigns(
+	TEXT("elysium.DrawSigns"), 1,
+	TEXT("Draw game_sign/popup panels (1) or suppress them (0)."),
+	ECVF_Default);
 
 namespace
 {
@@ -307,6 +319,10 @@ UTexture2D* AElysiumHUD::GetSignBackground(const FString& ImageName)
 
 void AElysiumHUD::DrawSignPanel()
 {
+	if (CVarDrawSigns.GetValueOnGameThread() == 0)
+	{
+		return;
+	}
 	const AElysiumMapActor* Map = ResolveMapActor();
 	const FElysiumEntityWorld* World = Map ? Map->GetEntityWorld() : nullptr;
 	if (!World)
@@ -361,11 +377,22 @@ void AElysiumHUD::DrawSignPanel()
 	}
 
 	// --- text blocks -----------------------------------------------------------------------
-	// Substrate-grade type: the authored face names (ParagraphText, Trebuchet, Newsprint, ...)
-	// resolve against trackerscheme.res and its .fnt atlases, which is 8.8. Until then an engine
-	// font scaled by the panel's vertical stretch keeps the layout proportional at any resolution.
-	UFont* Font = GEngine->GetMediumFont();
-	const float TextScale = ScreenH / ElysiumSign::VirtualHeight;
+	// Vector type: each block's authored face name (ParagraphText, Newsprint, Headline, ...) resolves
+	// through the font library to a committed OFL face as a FSlateFontInfo already sized in pixels for
+	// this viewport (SignFonts::ResolveFace scales the face's virtual size by ScaleFor(ScreenH)), so
+	// the layout stays proportional at any resolution with no per-item Canvas scale. Measurement and
+	// wrapping run through the Slate font-measure service to match what is rasterised.
+	if (!SignFonts.IsValid())
+	{
+		SignFonts = MakePimpl<FElysiumSignFontLibrary>();
+	}
+	if (!FSlateApplication::IsInitialized() || !FSlateApplication::Get().GetRenderer())
+	{
+		return;   // no Slate renderer (e.g. a headless path) — nothing to measure or draw against
+	}
+	const TSharedRef<FSlateFontMeasure> FontMeasure =
+		FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
+	const int32 ScreenWpx = FMath::RoundToInt(ScreenW);
 
 	for (const FElysiumSignTextBlock& Block : Sign->Blocks)
 	{
@@ -390,6 +417,9 @@ void AElysiumHUD::DrawSignPanel()
 		FLinearColor TextColor = Block.TextColor;
 		TextColor.A *= Alpha;
 
+		const FSlateFontInfo BlockFont = SignFonts->ResolveFace(Block.ResolveFont(ScreenWpx), ScreenH);
+		const float LineHeight = float(FontMeasure->GetMaxCharacterHeight(BlockFont));
+
 		// Authored newlines are hard breaks; each resulting paragraph word-wraps to the block width.
 		TArray<FString> Paragraphs;
 		Block.Text.ParseIntoArray(Paragraphs, TEXT("\n"), /*CullEmpty*/ false);
@@ -408,27 +438,22 @@ void AElysiumHUD::DrawSignPanel()
 			{
 				if (Line.IsEmpty())
 				{
-					float EmptyW = 0.f, EmptyH = 0.f;
-					Canvas->StrLen(Font, TEXT(" "), EmptyW, EmptyH);
-					LineY += EmptyH * TextScale;
+					LineY += LineHeight;   // a blank paragraph advances one line
 					return;
 				}
-				float LW = 0.f, LH = 0.f;
-				Canvas->StrLen(Font, Line, LW, LH);
-				const float DrawX = bCentreText ? Pos.X + (Size.X - LW * TextScale) * 0.5f : Pos.X;
-				FCanvasTextItem Item(FVector2D(DrawX, LineY), FText::FromString(Line), Font, TextColor);
-				Item.Scale = FVector2D(TextScale, TextScale);
+				const float LineW = float(FontMeasure->Measure(Line, BlockFont).X);
+				const float DrawX = bCentreText ? Pos.X + (Size.X - LineW) * 0.5f : Pos.X;
+				FCanvasTextItem Item(FVector2D(DrawX, LineY), FText::FromString(Line), BlockFont, TextColor);
 				Canvas->DrawItem(Item);
-				LineY += LH * TextScale;
+				LineY += LineHeight;
 				Line.Reset();
 			};
 
 			for (const FString& Word : Words)
 			{
 				const FString Candidate = Line.IsEmpty() ? Word : Line + TEXT(" ") + Word;
-				float CW = 0.f, CH = 0.f;
-				Canvas->StrLen(Font, Candidate, CW, CH);
-				if (!Line.IsEmpty() && CW * TextScale > Size.X)
+				const float CandidateW = float(FontMeasure->Measure(Candidate, BlockFont).X);
+				if (!Line.IsEmpty() && CandidateW > Size.X)
 				{
 					FlushLine();
 					Line = Word;

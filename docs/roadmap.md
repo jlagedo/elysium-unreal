@@ -131,12 +131,30 @@ first popup arms itself:
   `#1362 teleport_player(point_teleport).Teleport()` delivered at t=1.402 — B1's verified warp,
   now driven by the script instead of the console. `elysium.py.poc` still reports ALL PASS.
   Jack's inputs remain `[no input]` (B3). *Deps:* B1, 9.3a.
-- [ ] **B3 Minimal NPC presence** *(the 8.5 carve-out this beat needs)* — an `npc_*` leaf that
-  stands the model at its origin (8.2 glTF path; placeholder body acceptable first), latches
-  `WillTalk`/`UseInteresting`, accepts `StartPlayerDialogRemote` (hands off to B4), fires
-  `OnDialogBegin`/`OnDialogEnd`; `npc_maker` `Spawn` spawns its `NPCTargetname` entity.
-  No AI. *Acceptance:* Jack stands on the porch; `trig_off_porch` outputs resolve instead of
-  `[no input]`; `blueblood_maker.Spawn` produces `blueblood`. *Deps:* 8.2.
+- [x] **B3 Minimal NPC presence** *(the 8.5 carve-out this beat needs)* — landed.
+  `ElysiumNpcClasses.cpp` registers one AI-free character leaf **`FElysiumNpc`** (for `npc_VVampire`,
+  `npc_VPedestrian`, `npc_VHumanCombatant`, `npc_VRat`, and 10 more living-NPC classnames; `npc_VCamera`
+  is a bodiless camera control, left inert) and **`FElysiumNpcMaker`** (`npc_maker`/`npc_maker_fleshpile`).
+  An NPC stands its real glTF skeletal body at its origin through the 8.2 path —
+  `AElysiumMapActor::BuildNpcVisual` loads `out/npc/<stem>.glb` (stem = the model file's lowercased
+  basename, verified 1:1 for every tutorial NPC — no manifest lookup), caches the `USkeletalMesh` + idle
+  clip per stem (a model three Sabbat share loads once), and stands a movable `USkeletalMeshComponent` on
+  the map actor playing the glb's idle clip (or the reference pose). `elysium.NpcBodies 0` A/Bs the bodies
+  (I/O still resolves; only the visual is gated). It latches `WillTalk`/`UseInteresting`, and
+  `StartPlayerDialogRemote` opens a dialog session (fires `OnDialogBegin`, keeps the param for B4); a
+  manual **`EndDialog`** input (fireable via `ent_fire`, superseded by B4's `.dlg` runner) fires
+  `OnDialogEnd` — Jack's `OnDialogEnd` wire runs `DialogPostProcess()` (B2) → warp #2. `npc_maker.Spawn`
+  synthesizes one child NPC at runtime through the new **`FElysiumEntityWorld::SpawnRuntimeEntity`** (a
+  runtime def stored past the map's immutable def array; the child takes its class from `NPCType`, name
+  from `NPCTargetname`, and the maker's `model`) — ignoring `Flag_StartDisabled`/`SpawnFrequency`/
+  `MaxLiveChildren` (retail fires `blueblood_maker.Spawn` without enabling it; No AI). The Cog NPC window
+  gained a "Live NPCs" section over the entity world. *Acceptance met:* on `sp_tutorial_1`,
+  `elysium.classes npc_VVampire`/`npc_maker` resolve; Jack + the Sabbat/sheriff stand their models;
+  `ent_fire Jack WillTalk 1 / StartPlayerDialogRemote 256 / EndDialog` deliver (not `[no input]`), the last
+  warping the player; `ent_fire blueblood_maker Spawn` produces `blueblood(npc_VPedestrian)` at the maker
+  origin (the downtown alley). `Elysium.Substrate.Npc` proves the registry, the runtime spawn, the WillTalk
+  latch, and the OnDialogBegin fire on a bare world. **Feeds but does not close 8.5** (its
+  `scripted_sequence` anim-at-marker ×51 and animation-bank retargeting stay open). *Deps:* 8.2, PL4 [x].
 - [ ] **B4 `.dlg` parser + minimal dialogue runner** *(the 9.1 core, pulled forward; UI is
   interim)* — parse `jack_tutorial.dlg`, eval field-4 (dlgexpr on the installed host), **exec
   field-5** (what writes `G.Tut_Jack`), fire `OnDialogEnd` on exit; a substrate-grade Canvas
@@ -944,8 +962,25 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
 
 - [ ] **7.1 Coronas** *(was L3.3 / M2)* — `.sprites` consumer: additive depth-tested
   billboards (Godot `CoronaField.cs`), StartOff spawnflag filtering. *Deps:* 0.4.
-- [ ] **7.2 Decals** *(M2)* — `_decals.obj` as translucent PMC sections (parity) →
-  `UDecalComponent` projection upgrade later (tracked as one task, two stages). *Deps:* 0.4.
+- [x] **7.2 Decals** *(M2)* — VtMB `infodecal`s as **deferred `UDecalComponent`s** (owner call:
+  went straight to the projection path, skipped the PMC-parity stage — a deferred decal writes the
+  GBuffer before lighting, so it is lit exactly like its host wall, Lumen indirect included, which
+  the PMC translucent path cannot do). **Offline:** the exporter's decal projection
+  (`UE_bsp_to_scene.py`) now discards the clipped mesh and instead writes a **`<map>.decals`**
+  projector sidecar — one line per placed decal, `material + centre + room-normal + s/t axes +
+  half-extents`, all Unreal cm (point via `source_to_unreal`, unit dirs via `source_dir_to_unreal`,
+  extents inch→cm); the materials still ride the shared `<map>.mtl` (`map_Kd`/`map_Ke`/`decal 1`).
+  **Content:** a new `M_Decal` master (`tools/make_decal_material.py`, in the `build_content.py`
+  umbrella): deferred-decal domain, `DBM_TRANSLUCENT`, `Albedo` RGB→BaseColor + A→Opacity, plus the
+  `M_VtMB_World` selfillum path (`Emissive`×`EmissiveScale`). **Runtime:** `FElysiumDecals` parses
+  the sidecar; `AElysiumMapActor::BuildDecals` spawns one `UDecalComponent` per line with a MID off
+  `M_Decal` via `FElysiumMaterialFactory::BuildDecal`. Orientation: `MakeFromXZ(Normal, SDir)` — local
+  +X = the room normal (so −X projects into the wall), and because a deferred decal maps texture
+  **U→local Z, V→local Y**, the surface horizontal `SDir` goes on local Z with
+  `DecalSize = depth×HalfH×HalfW` (`FadeScreenSize 0`; `elysium.DecalFlipU` mirrors U).
+  `elysium.Decals` (default 1) A/Bs the pass, `elysium.DecalDepth` tunes projection depth; the Cog
+  Maps/Status windows show the count. **Tests:** `Elysium.Substrate.Decals` (parser + orientation
+  math, nullrhi) + `Elysium.Content.TutorialDecals` (real sidecar vs the `.mtl`). *Deps:* 0.4.
 - [ ] **7.3 Water** *(M2)* — `.water` → `M_Water` Single Layer Water + Lumen reflections
   (no mirror cameras). Known engine facts: Lumen reflections on Single Layer Water are
   **forced mirror** (roughness only scales brightness — acceptable for VtMB's mirror-like
@@ -1004,10 +1039,17 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
   *Deps:* 8.1, 1.3.
 - [ ] **8.4 Physics props** — `prop_physics` ×54 / `phys_hinge` ×12 as Chaos bodies +
   constraints, convex from render mesh. *Deps:* 8.1.
-- [ ] **8.5 NPC presence + `scripted_sequence` minimal** — spawn `npc_*`/`npc_maker` at
+- [~] **8.5 NPC presence + `scripted_sequence` minimal** — spawn `npc_*`/`npc_maker` at
   origins via glTFRuntime; play-anim-at-marker handler (×51) long before real AI.
-  *Pipeline:* **PL4 batch NPC export + `mdl_skel.py` include-model resolution** (shared
-  animation banks). *Deps:* 8.2, PL4.
+  *Presence slice landed in **B3*** — `npc_*`/`npc_maker` register, stand their glTF body at origin
+  (`AElysiumMapActor::BuildNpcVisual`, per-stem cache), `npc_maker.Spawn` creates the child via
+  `FElysiumEntityWorld::SpawnRuntimeEntity`, and the dialog-gating inputs latch. **Remaining:** the
+  `scripted_sequence` play-anim-at-marker handler (×51) and animation-bank retargeting.
+  *Pipeline done (PL4):* the batch emits per-NPC mesh glbs + shared animation-bank glbs +
+  `out/npc/npc_manifest.json` (`clip → owning-stem`). The bank work is loading a clip's bank glb
+  (cached, shared) and applying it to the NPC skeletal mesh by bone name
+  (`bank->LoadSkeletalAnimationByName(npcMesh, clip)`) — the manifest hides the include mechanism.
+  *Deps:* 8.2, PL4 [x].
 - [x] **8.6a New Game context + story entry** *(carve-out of 8.6, so the game context isn't blocked
   behind the UI work)* — the minimal state a fresh story run starts from, and the boot path that
   enters the tutorial in it. `FElysiumPlayerSheet` (clan in the level-script 2..8 encoding, gender,
@@ -1183,7 +1225,7 @@ dialogue, scripted flow, quests, save/load included.
 | PL1 | Export `.ents`-referenced models (`prop_dynamic`/`prop_physics`) — `model_mesh` in `.ents` | 8.1 [x] |
 | PL2 | Copy loose `.py` → `out/scripts/`, `.dlg` → `out/dlg/` — `UE_extract_scripts.py` | 5.1 [x] |
 | PL3 | Use-icon atlas export (72-entry enum) — `UE_use_icons.py` → `out/hud/use_icons.png`+`.json` | 4.4 [x] |
-| PL4 | Batch NPC export + include-model resolution in `mdl_skel.py` | 8.5 |
+| PL4 | Batch NPC export + include-model resolution — `mdl_skel.resolve_tree`/`local_sequences` (includes@404/408, `StudioModelGroup` stride 116) → shared-bank glbs + `npc_manifest.json` via `npc_export.py`; 45 NPCs / 62 banks / ~410 MB (decision log 2026-07-24) | 8.5 [x] |
 | PL5 | Copy sound schemes (a) [x] + `vdata/system/*.txt` (b) + `vdata/Signs/*.txt` ×278 + the 57 referenced background materials (`hud/signs/*`, `interface/Pop_Ups/*`) → `out/signs/` — `UE_extract_signs.py` (c) [x] | 6.3, 9.4, 4.10 |
 | PL5d | Copy `cfg/*.cfg` (the alias/cvar tables — `user.cfg` carries the Basic/Plus `patchtype` alias) → `out/cfg/` | 9.3b |
 | PL6 | Texlight merge in exporter | 3.4 |
@@ -1363,6 +1405,79 @@ cross-check `recovered/dice-system.md` alongside the running-game golden test.
 
 ## Decision log (append-only)
 
+- **2026-07-24** — **The dev boot path seeds `Linux_Wine=1` to suppress `popup_linux`.** The tutorial's
+  `linux_check` (`logic_pythoncheck`, `python_script "G.Linux_Wine == 1"`) fires `OnFalse ->
+  popup_linux.OpenWindow` — the Unofficial Patch's "an important Python script has not compiled
+  correctly / you are in a Linux Wine environment, run Loader.exe" warning — whenever `G.Linux_Wine`
+  is not 1 when `logic_auto.OnMapLoad -> linux_check.Test` fires (t=0.1). `Linux_Wine=1` is the patch's
+  "Python works" sentinel (set by `vamputil.setBasic`/`setPlus`); `BeginNewGame` already seeds it, but
+  the **bare `-ElysiumMap` dev path** (`play.bat`/`profile.bat`) skips `BeginNewGame`, so the check read
+  `OnFalse` and the popup fired. Our embedded CPython always runs, so the warning is a false alarm on
+  that path — `AElysiumGameMode::BeginPlay` now seeds `Linux_Wine=1` before the bare `Travel`, so
+  `linux_check` reads `OnTrue`. (The value is a *suppressor*: setting it to 0 would *show* the popup, on
+  New Game too.) Verified headless: no `popup_linux.OpenWindow` delivery on a bare `sp_tutorial_1` load.
+- **2026-07-24** — **B3 minimal NPC presence: real glTF bodies for all `npc_*`, and runtime entity
+  spawn.** Owner call (four forks). (1) NPCs stand their **real** `out/npc/<stem>.glb` skeletal body
+  (not a placeholder) — PL4 already emitted the glbs and 8.2 the loader, so the faithful result is the
+  cheap one; the model→stem map is the lowercased basename of the `.mdl` key, verified 1:1 for every
+  tutorial NPC, so no `npc_manifest.json` lookup. (2) **All** `npc_*` with a model get a body at load
+  (cached per stem, gated by `elysium.NpcBodies`), not just the beat's two — "stands the model at its
+  origin" applies to every character. (3) `StartPlayerDialogRemote` fires `OnDialogBegin` only and leaves
+  the session open; a manual **`EndDialog`** input (fireable via `ent_fire`) fires `OnDialogEnd`, keeping
+  B3/B4 cleanly split until B4's `.dlg` runner replaces the manual close. (4) `npc_maker.Spawn` spawns
+  exactly one child and **ignores `Flag_StartDisabled`** (retail fires `blueblood_maker.Spawn` without
+  enabling it) — `SpawnFrequency`/`MaxLiveChildren`/`MaxNPCCount` are unmodelled (No AI). **Substrate
+  consequence:** the entity world gained `SpawnRuntimeEntity` — a runtime-synthesized def stored past the
+  map's immutable def array, appended to `EntityList` (Resolve indexes it directly, so identity needs only
+  the append; `ResolveTargets` copies target pointers before firing, so a maker spawning mid-delivery is
+  safe). The NPC skeletal body is a `USkeletalMeshComponent` on the map actor (not a separate actor),
+  torn down with the world like the brush bodies. Facing uses the entity `angles` yaw (negated for the
+  Source→Unreal Y reflection); exact facing is cosmetic and left to a later feel pass. **Feeds 8.5**
+  (→ `[~]`); its `scripted_sequence` anim-at-marker and bank retargeting stay open.
+- **2026-07-24** — **7.2 decals: deferred `UDecalComponent` chosen; the PMC-parity stage skipped.**
+  Owner call. The task was framed as two stages (translucent PMC mesh for parity → `UDecalComponent`
+  later, decide after both render); we built only the deferred path. A deferred decal writes the
+  GBuffer *before* the lighting pass, so it is lit exactly like its host wall — **Lumen indirect
+  bounce included** — which VtMB's bounce-dominated look needs and the PMC translucent path cannot
+  give. Building the endgame path once avoids maintaining a throwaway. **Pipeline consequence:** the
+  exporter no longer meshes decals — the `infodecal` projection now emits a `<map>.decals` projector
+  sidecar (material + centre + room-normal + s/t axes + half-extents, Unreal cm) instead of
+  `_decals.obj`; the runtime builds one `UDecalComponent` per line off a new `M_Decal` deferred
+  master (regular `BLEND_Translucent` — the old `DecalBlendMode` is deprecated/no-op since UE 5.2).
+  `M_Decal` is authored here even though it is listed under 7.4's master-material set, because the
+  decal path needs it now; 7.4 still owns the rest (`M_World_*`, water, etc.). **Orientation took two
+  capture passes to settle** (the API docs don't spell out the decal UV frame): a deferred decal maps
+  texture **U→local Z, V→local Y** (not the intuitive U→Y), so `BuildDecals` uses
+  `MakeFromXZ(Normal, SDir)` with the surface horizontal `SDir` on local Z and
+  `DecalSize = depth×HalfH×HalfW`; and because V (local +Y) points up while VtMB authors V top-down,
+  `M_Decal` samples at `(U, 1-V)` to un-flip vertically. The first attempt (`TDir` on Z) rendered
+  decals rotated 90° + stretched; the second was upright but upside-down. `elysium.DecalFlipU` remains
+  a horizontal-mirror knob. A/B via `elysium.Decals`; depth via `elysium.DecalDepth`. **Screenshot
+  tooling:** `AElysiumHUD::DrawSignPanel` now gates on `elysium.DrawSigns` (the shot harness sets it 0
+  so a map-load `game_sign` popup — the tutorial's `linux_check` Python-compile warning — does not
+  cover every plate), and `shots.bat` renders **off-screen** (`-RenderOffScreen -ForceRes`), so no
+  game window opens.
+- **2026-07-24** — **PL4 done: shared-bank NPC format over the per-NPC monolith.** Include-model
+  resolution cracked from data + VAMPTools: `NumIncludeModels`@404 / `IncludeModelIndex`@408 →
+  `StudioModelGroup[]` (**stride 116**, not the naive 8 — `int Filler[27]` after the two index
+  fields; `FilenameIndex`@0 relative to the group-entry base). The include tree is a recursive DAG
+  (`frenzy`/`pc_idles` reappear), resolved cycle-deduped. Every bank bone name is present in the
+  NPC skeleton (`move_and_ranged` 60 / `stances` 53 bones, 0 missing in a 69-bone gangmember), so
+  clips retarget by **bone name** with no proportion rig. **Format decision (informed by measured
+  cost):** baking the full include tree into each NPC glb measured **~94 MB / ~90k accessors per
+  NPC** (81 MB anim payload + 13 MB JSON) → ~4.2 GB for 45 NPCs and ~1 GB resident on a busy map.
+  Rejected. Adopted the shared-bank decomposition instead — which is also how modern engines and
+  VtMB's own `virtualmodel` handle it: `out/npc/<npc>.glb` (mesh + skeleton + own clips),
+  `out/npc/banks/<bank>.glb` (skeleton + a shared bank's clips, no mesh, decoded once),
+  `npc_manifest.json` (`clip → owning-stem`). The runtime (8.5) loads a bank once and applies its
+  clips to any NPC skeletal mesh by bone name via glTFRuntime — verified in the vendored plugin
+  source (`LoadSkeletalAnimationFromTracksAndMorphTargets` binds tracks to the ref skeleton by
+  `FindBoneIndex(BoneName)`, and `LoadSkeletalAnimation(mesh, …)` takes an external mesh). Full
+  cast: **45 NPCs / 62 banks / ~410 MB** (243 MB shared banks + 149 MB meshes + 31 MB textures) in
+  ~3.5 min, vs 4.2 GB. Bank stems keep the sub-path so male/female (and clan) banks that share a
+  basename stay distinct. Pipeline: `mdl_skel.resolve_tree`/`local_sequences`,
+  `mdl_gltf.export_npc`/`export_bank`, `npc_export.py` (`export_all.py --npc`). Runtime consumption
+  is 8.5. *Feeds:* 8.5.
 - **2026-07-24** — **Brush touch requires a pawn toucher, and waits until the pawn is seated.**
   Bug fix. `elysium.newgame` (or any travel) *from an already-loaded map* warped the player off
   the tutorial porch into the downtown alley and looked like the spawn "moving to the next spawn".
@@ -1831,8 +1946,7 @@ cross-check `recovered/dice-system.md` alongside the running-game golden test.
   set (AI PBR-from-diffuse, de-lighting tools, ESRGAN game-remaster practice) and their caveats
   (guesswork needing curation; delighters tuned for photoscans, not hand-painted art).
 - **Pending** — 5.5 level-script execution strategy (interpreter vs transpile vs CPython);
-  8.2 glTFRuntime confirmation for the skeletal path; 10.6 EnhancedInput migrate-or-remove;
-  7.2 decal final path (PMC parity vs `UDecalComponent`) decided after both stages render.
+  8.2 glTFRuntime confirmation for the skeletal path; 10.6 EnhancedInput migrate-or-remove.
 
 ## Traceability (old plan IDs → this doc)
 
@@ -1841,7 +1955,7 @@ cross-check `recovered/dice-system.md` alongside the running-game golden test.
 | M0 | Done foundation |
 | M1.1 Source movement / M1.2 materials / M1.3 prewarm / M1.4 texlights | 4.7 / 7.4 / 3.8 / 3.4 |
 | M1 polish (grade, sky orientation, A/B toggles, repo hygiene) | 3.7, 0.7 |
-| M2 (props done; decals, water, coronas, A/B) | done / 7.2 / 7.3 / 7.1 / 7.8 |
+| M2 (props + decals done; water, coronas, A/B) | done / done / 7.3 / 7.1 / 7.8 |
 | M3 | P1 + P2 + P4 |
 | M4 | P5 + P6 |
 | M5 | P8 |
