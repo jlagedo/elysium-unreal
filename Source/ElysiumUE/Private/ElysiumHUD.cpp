@@ -78,14 +78,6 @@ void AElysiumHUD::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// `elysium.debug` mirrors F1: type it in the engine console (' or `) to toggle the
-	// overlay. Namespaced alongside elysium.map / elysium.maps for shared autocomplete.
-	DebugCmd = IConsoleManager::Get().RegisterConsoleCommand(
-		TEXT("elysium.debug"),
-		TEXT("elysium.debug — toggle the debug overlay"),
-		FConsoleCommandDelegate::CreateWeakLambda(this, [this]() { ToggleDebug(); }),
-		ECVF_Cheat);
-
 	// elysium.lights — show/hide the real-time light rig (A/B the world with and without it).
 	LightsCmd = IConsoleManager::Get().RegisterConsoleCommand(
 		TEXT("elysium.lights"),
@@ -115,11 +107,6 @@ void AElysiumHUD::BeginPlay()
 
 void AElysiumHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	if (DebugCmd)
-	{
-		IConsoleManager::Get().UnregisterConsoleObject(DebugCmd);
-		DebugCmd = nullptr;
-	}
 	if (LightsCmd)
 	{
 		IConsoleManager::Get().UnregisterConsoleObject(LightsCmd);
@@ -190,8 +177,7 @@ void AElysiumHUD::DrawHUD()
 	DrawSignPanel();
 
 	// P4.5 env_fade — a full-screen colour quad over everything (reticle included), driven by the
-	// entity world's single screen-fade state (Fade input). Drawn before the debug overlay's early
-	// return so it shows regardless of the debug toggle; the fade covers the whole viewport.
+	// entity world's single screen-fade state (Fade input); the fade covers the whole viewport.
 	if (const AElysiumMapActor* MapForFade = ResolveMapActor())
 	{
 		FLinearColor FadeColor;
@@ -202,11 +188,6 @@ void AElysiumHUD::DrawHUD()
 				DrawRect(FadeColor, 0.f, 0.f, Canvas->ClipX, Canvas->ClipY);
 			}
 		}
-	}
-
-	if (!bShowDebug)
-	{
-		return;
 	}
 
 	const float Dt = GetWorld()->GetDeltaSeconds();
@@ -229,9 +210,9 @@ void AElysiumHUD::DrawHUD()
 	const FVector Met = ViewLoc / 100.0;
 	const FVector Src = UnrealToSource(ViewLoc);
 
-	// Always-available position overlay. The map/collision/light counts moved to the Maps + Status
-	// Cog windows, and "what am I aiming at" to the Entity Inspector's live crosshair readout
-	// (debug-tooling.md: the HUD keeps only the FPS/position overlay, always visible in -game).
+	// Always-on position overlay. The map/collision/light counts live in the Maps + Status Cog
+	// windows, and "what am I aiming at" in the Entity Inspector's live crosshair readout
+	// (debug-tooling.md: the HUD keeps only the FPS/position overlay).
 	const float X = 16.f;
 	float Y = 16.f;
 	const float LineH = 18.f;

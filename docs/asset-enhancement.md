@@ -1,16 +1,22 @@
 # Asset enhancement — code-driven remaster of VtMB's own art
 
-Forward-looking design doc. **Not yet scheduled** — an accepted *direction* to build once the
-vertical slice plays (P10-ish). Scaffolding already exists in `tools/` (see "What exists
-today"). This doc is the plan of record so the choice is made deliberately, not by drift.
+**Remaster axis 2** (`remaster-direction.md`) — in scope, **scheduled at P10**, after the
+vertical slice plays: it is polish on a shipped look, not a blocker. Scaffolding already exists
+in `tools/` (see "What exists today"). This doc is the plan of record so the choice is made
+deliberately, not by drift.
 
 ## North star
 
-The baseline rebuild is **faithful** — dynamic GI anchored to VtMB's own baked lightmaps
+The **world** baseline is faithful — dynamic GI anchored to VtMB's own baked lightmaps
 (`rendering-perf.md` → the calibration), geometry and placement read 1:1. On top of that
-baseline sits an **opt-in enhancement layer**: raise the *fidelity* of VtMB's assets with
-offline, code-driven passes while **preserving its art direction**. This is a *remaster*
-stance (fix + enrich the shipped art), not a *remake* (re-author it).
+baseline sits this **enhancement layer**: raise the *fidelity* of VtMB's assets with offline,
+code-driven passes while **preserving its art direction**. This is a *remaster* stance (fix +
+enrich the shipped art), not a *remake* (re-author it) — the same stance the whole project
+takes (`remaster-direction.md`), applied to surfaces.
+
+(The **UI** is the one place with no faithful path to sit on: its 2004 craft is a hardware
+constraint rather than an art decision, so it is re-skinned outright rather than toggled —
+`remaster-direction.md` axis 1. Surfaces are not that case; the faithful set stays.)
 
 The layer is always a **toggle**, never a fork — the same A/B discipline as
 `elysium.BrushCollision` / `elysium.props` / `elysium.lights`. The faithful set stays the

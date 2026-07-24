@@ -428,6 +428,13 @@ int32 AElysiumMapActor::BuildMeshFromObj(const FString& ObjPath, UProceduralMesh
 
 	int32 Section = 0;
 	const TArray<FLinearColor> NoColors;
+#if !UE_BUILD_SHIPPING
+	// Section index -> OBJ group key, for the click-pick's surface readout (the PMC keeps the
+	// geometry but not the material name it came from).
+	TArray<FString>& SectionNames = (Mesh == SkyMesh) ? SkySectionNames : WorldSectionNames;
+	SectionNames.Reset();
+	SectionNames.Reserve(Sections.Num());
+#endif
 	for (FCookedSection& S : Sections)
 	{
 		TArray<FProcMeshTangent> Tangents;
@@ -438,6 +445,9 @@ int32 AElysiumMapActor::BuildMeshFromObj(const FString& ObjPath, UProceduralMesh
 		}
 
 		Mesh->CreateMeshSection_LinearColor(Section, S.Verts, S.Tris, S.Normals, S.UVs, NoColors, Tangents, bCollision);
+#if !UE_BUILD_SHIPPING
+		SectionNames.Add(S.Mat);
+#endif
 
 		const FElysiumMaterialDef* Def = Materials.Find(S.Mat);
 		if (UMaterialInstanceDynamic* Mid = FElysiumMaterialFactory::Build(Def, Dir, this))
@@ -584,6 +594,20 @@ void AElysiumMapActor::LoadProps()
 		PropMeshes.Add(Mesh);
 		++PropModelCount;
 
+#if !UE_BUILD_SHIPPING
+		// Keep the parsed triangle soup for the click-pick: the mesh's cooked collision is one
+		// convex hull of the whole model, so nothing downstream can tell which part of a prop was
+		// clicked. Positions + indices only (UVs/normals are not needed to cast a ray).
+		const int32 SoupIndex = PropPickSoups.Num();
+		FPropPickSoup& Soup = PropPickSoups.AddDefaulted_GetRef();
+		Soup.Model = Entry.Key;
+		Soup.Positions = Model.Positions;
+		for (const TPair<FString, TArray<int32>>& Group : Model.Groups)
+		{
+			Soup.Tris.Append(Group.Value);
+		}
+#endif
+
 		// One ISM per solidity bucket (shared mesh; only the component's collision differs):
 		// solid props block, non-solid props are visual-only. Most models are all-or-nothing,
 		// so this is usually a single component per model.
@@ -612,6 +636,9 @@ void AElysiumMapActor::LoadProps()
 				}
 				ISM->RegisterComponent();
 				PropComponents.Add(ISM);
+#if !UE_BUILD_SHIPPING
+				PropSoupByComponent.Add(ISM, SoupIndex);   // both solidity buckets share one soup
+#endif
 			}
 			// Transforms are map-space; the map actor sits at the origin, so component-local
 			// (the AddInstance default) equals world.
@@ -622,6 +649,21 @@ void AElysiumMapActor::LoadProps()
 
 	UE_LOG(LogElysium, Log, TEXT("props: %d instances / %d models"), PropInstanceCount, PropModelCount);
 }
+
+#if !UE_BUILD_SHIPPING
+int32 AElysiumMapActor::GetPropSoupIndex(const UInstancedStaticMeshComponent* Ism) const
+{
+	const int32* Found = PropSoupByComponent.Find(Ism);
+	return Found ? *Found : INDEX_NONE;
+}
+
+const FString& AElysiumMapActor::GetSectionMaterialName(const UProceduralMeshComponent* Mesh, int32 Section) const
+{
+	static const FString Empty;
+	const TArray<FString>& Names = (Mesh == SkyMesh) ? SkySectionNames : WorldSectionNames;
+	return Names.IsValidIndex(Section) ? Names[Section] : Empty;
+}
+#endif
 
 void AElysiumMapActor::ToggleProps()
 {

@@ -89,6 +89,34 @@ public:
 	// landmark Travel), or empty for a plain info_player_start spawn. Shown in the Maps Cog window.
 	FString EntryLandmark;
 
+#if !UE_BUILD_SHIPPING
+	// --- P2.6 click-pick surface -------------------------------------------------------------
+	// The debug pick (ElysiumPick.h) ray-casts the mesh data on the CPU, because physics cannot
+	// answer what it needs: the world render mesh carries no collision under the default
+	// elysium.BrushCollision 1, and a solid prop's cooked collision is one convex hull of the
+	// whole model. These accessors hand it the CPU-side geometry; all of it is non-Shipping.
+
+	// One unique prop model's triangle soup, retained past LoadProps for triangle-exact picking
+	// (~3 MB across the tutorial's 161 models). Positions are model-local; Tris indexes them.
+	struct FPropPickSoup
+	{
+		FString Model;
+		TArray<FVector> Positions;
+		TArray<int32> Tris;
+	};
+
+	UProceduralMeshComponent* GetWorldMesh() const { return WorldMesh; }
+	UProceduralMeshComponent* GetSkyMesh() const { return SkyMesh; }
+	const TArray<TObjectPtr<UInstancedStaticMeshComponent>>& GetPropComponents() const { return PropComponents; }
+	const TArray<FPropPickSoup>& GetPropPickSoups() const { return PropPickSoups; }
+	// The soup index backing an ISM's model, or INDEX_NONE. Both solidity buckets of one model
+	// map to the same soup.
+	int32 GetPropSoupIndex(const UInstancedStaticMeshComponent* Ism) const;
+	// The OBJ group key ("<material>@<cubemap>") behind a mesh section, or empty. The section
+	// index is the one CreateMeshSection was called with, so it indexes these 1:1.
+	const FString& GetSectionMaterialName(const UProceduralMeshComponent* Mesh, int32 Section) const;
+#endif
+
 	// Per-phase load timings (milliseconds), filled by LoadMap in build order, for the Maps Cog
 	// window. The last entry is always the "Total". Empty until the first load completes.
 	struct FLoadPhase
@@ -122,6 +150,14 @@ private:
 	UPROPERTY() TArray<TObjectPtr<UInstancedStaticMeshComponent>> PropComponents;
 	UPROPERTY() TArray<TObjectPtr<UStaticMesh>> PropMeshes;
 	bool bPropsVisible = true;
+
+#if !UE_BUILD_SHIPPING
+	// P2.6 click-pick CPU geometry, filled during the build and freed with the actor.
+	TArray<FPropPickSoup> PropPickSoups;
+	TMap<const UInstancedStaticMeshComponent*, int32> PropSoupByComponent;
+	TArray<FString> WorldSectionNames;   // WorldMesh section index -> OBJ group key
+	TArray<FString> SkySectionNames;     // SkyMesh section index   -> OBJ group key
+#endif
 
 	// The Track-B entity substrate for this map (P1.4): parsed defs, live entities, the event
 	// queue, and the debug sinks. A plain C++ object (no UObject) held type-erased so the header

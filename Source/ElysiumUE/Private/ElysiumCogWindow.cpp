@@ -12,6 +12,7 @@
 #include "Engine/World.h"
 
 FElysiumEntityHandle FElysiumCogWindow::Selection;
+FElysiumPickResult FElysiumCogWindow::Pick;
 
 UElysiumMapSubsystem* FElysiumCogWindow::GetMapSubsystem() const
 {

@@ -1,12 +1,21 @@
 # M0 — Full-Fidelity Menu Rebuild
 
-> **Reference — Godot prototype, not this repo's live state.** This is the **Godot** prototype's
-> menu build spec: its `game/src/Ui/*.cs`, `game/content/ui/`, Godot `SubViewport`/
-> `MultiMeshInstance2D`, and the §0 "done/partial/missing" ledger all describe the read-only
-> prototype at `E:\dev\elysium`. In Elysium-Unreal the menu is **not yet built** — the VGUI port
-> is milestone **M5** (Slate/UMG) in `docs/rebuild-strategy.md`. The `GameUI.dll` decompile
-> findings (§7), the source-data inventory (§2), and the VGUI/scheme/`.fnt`/particle facts are
-> engine-neutral and carry to the Unreal port. Bare `CLAUDE.md` paths are in the Godot repo.
+> **Reference, not a port target.** Two things at once:
+>
+> 1. **It describes the Godot prototype**, not this repo's live state: `game/src/Ui/*.cs`,
+>    `game/content/ui/`, Godot `SubViewport`/`MultiMeshInstance2D`, and the §0
+>    "done/partial/missing" ledger all describe the read-only prototype at `E:\dev\elysium`.
+> 2. **Elysium-Unreal does not port VGUI.** The direction is *remaster*
+>    (`docs/remaster-direction.md` axis 1): VtMB's screen **structure** — inventory, panel
+>    anatomy, reading order, palette, iconography, strings — is kept and re-skinned on a modern
+>    resolution-independent Slate/UMG stack with vector type (roadmap **8.6**). There is no
+>    classic UI mode, no 640×480 scale box, and no runtime `.fnt` bitmap atlas.
+>
+> What this doc is **for**, then: the authoritative record of *what the original UI contains and
+> why* — the `GameUI.dll` decompile findings (§7), the source-data inventory (§2), the scheme
+> and `.res` semantics, the font roles and their metrics, the particle background. That is the
+> design intent every re-skinned screen is checked against, and the spec `menu_extract.py`
+> (PL8) extracts to. Bare `CLAUDE.md` paths are in the Godot repo.
 
 **Goal:** rebuild the VtMB main menu + in-game pause menu as a faithful port of the
 original Valve **VGUI2** UI — real fonts, real scheme, real `.res` layouts, real 3D

@@ -95,16 +95,9 @@ namespace
 		return FColor(80, 200, 120);
 	}
 
-	// A single representative world point for an entity (P2.4 gizmo marker + beam endpoint): the brush
-	// body's world center if it has one, else the def origin (the point/logic entity's placement).
-	FVector EntityAnchor(const FElysiumEntity& Ent)
-	{
-		if (Ent.Body)
-		{
-			return Ent.Body->Bounds.Origin;
-		}
-		return Ent.Def ? Ent.Def->Origin : FVector::ZeroVector;
-	}
+	// The gizmo marker / beam endpoint / label anchor is ElysiumGizmoAnchor (ElysiumGizmoColor.h),
+	// shared with the retained ISM layer and the click-pick.
+	using ::ElysiumGizmoAnchor;
 
 	// Coarse classname -> gizmo color lives in ElysiumGizmoColor.h (shared with the retained ISM
 	// layer); ElysiumGizmoClassColor() is used below for the trigger hulls and gizmo labels.
@@ -880,13 +873,13 @@ void UElysiumEntityDebugSubsystem::TapDelivered(FElysiumEntityWorld& World, doub
 	// a hand-fired test is still visible even on a map with no entity->entity wiring.
 	if (VizSettings.bShowBeams)
 	{
-		const FVector To = EntityAnchor(Target);
+		const FVector To = ElysiumGizmoAnchor(Target);
 		const FElysiumEntity* Caller = World.Resolve(Event.Caller);
 		FVector From;
 		bool bHaveFrom = false;
-		if (Caller && !EntityAnchor(*Caller).Equals(To, 1.0))
+		if (Caller && !ElysiumGizmoAnchor(*Caller).Equals(To, 1.0))
 		{
-			From = EntityAnchor(*Caller);   // real entity -> entity output
+			From = ElysiumGizmoAnchor(*Caller);   // real entity -> entity output
 			bHaveFrom = true;
 		}
 		else if (UWorld* W = GetWorld())
@@ -1056,7 +1049,7 @@ void UElysiumEntityDebugSubsystem::RenderWorldViz(FElysiumEntityWorld& EW)
 			{
 				continue;
 			}
-			const FVector Anchor = EntityAnchor(*E);
+			const FVector Anchor = ElysiumGizmoAnchor(*E);
 			if (bHaveCam && FVector::DistSquared(Anchor, CamLoc) > LabelDistSq)
 			{
 				continue;

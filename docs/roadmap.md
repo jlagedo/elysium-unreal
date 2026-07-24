@@ -21,10 +21,19 @@ decisions**. If a task exists anywhere, it exists here.
 
 ## North star and the slice ladder
 
-Rebuild VtMB as a playable game on UE 5.8 + C++, runtime-loading this repo's exported
-intermediates — no game content in `.uasset`s, bring-your-own-game holds (strategy and
+Rebuild VtMB as a playable game **— remastered —** on UE 5.8 + C++, runtime-loading this repo's
+exported intermediates — no game content in `.uasset`s, bring-your-own-game holds (strategy and
 principles: `rebuild-strategy.md`). Everything is proven on `sp_tutorial_1` first
 (1,226 entities, 75 classnames — VtMB's own vertical slice), then scaled across ~100 maps.
+
+**Direction (`remaster-direction.md` — read it):** keep VtMB's tone, ambience, feel and logic;
+raise the craft. **Presentation** (UI, type, HUD, textures, post) modernizes freely under the
+art-direction test. **Feel** (movement, camera, combat) is built faithful first and polished
+only by explicit call. **Logic and content** is reproduced — a behavioural divergence requires
+the faithful behaviour to be RE'd and understood *first*, plus a dated owner decision in the
+log below. Default is always reproduce. The UI has no classic mode (VtMB's screen structure,
+re-skinned with vector type on a resolution-independent stack); the **world** keeps its
+faithful baseline with enhancement as an A/B toggle.
 
 The phases below are **vertical slices** — each ends with something observable/playable:
 
@@ -38,7 +47,7 @@ The phases below are **vertical slices** — each ends with something observable
 | **P5 — Scripting foundation** | tutorial's Python payloads actually run | P6, P7 |
 | **P6 — Audio foundation** | doors/buttons/ambience are audible | P5, P7 |
 | **P7 — Dressing & parity** | A/B match vs Godot viewer on tutorial + hubs | P4–P6 |
-| **P8 — Characters & menu** | NPCs stand in the world; New Game from a real menu | P7 tail |
+| **P8 — Characters & UI** | NPCs stand in the world; New Game from a real, modern menu | P7 tail |
 | **P9 — Dialogue & persistence** | **tutorial completable as retail**, save/load works | — |
 | **P10 — Scale & ship-shape** | all maps, floor validated, packaged story | ongoing after P4 |
 
@@ -524,7 +533,12 @@ M1 leftovers that live in this lane.
   lift and released on ground. *Deps:* 1.6, 0.3.
 - [ ] **4.7 Source movement component** *(was M1.1; parallel-capable)* — port `CGameMovement`
   friction/accel/airaccel/StepMove into a `UCharacterMovementComponent` override
-  (`source_movement.md`, Godot `SourceMovement.cs`). *Deps:* none.
+  (`source_movement.md`, Godot `SourceMovement.cs`). **Faithful first** — this is the feel
+  layer's known-good baseline and the thing every later tuning delta is measured against, so it
+  lands line-by-line from the decompile and stays A/B-able (`remaster-direction.md` axis 3).
+  Frame-rate independence, high-polling-rate mouse input and FOV control ride along (identical
+  behaviour, modern plumbing); any *behavioural* delta — accel curves, air control, step feel —
+  is a separate, owner-approved decision after this runs. *Deps:* none.
 - [ ] **4.8 Rotating/linear/elevator family** — `func_rotating` (spin-up/down, hurt-touch),
   `func_movelinear`, `func_elevator` (`GotoFloor`, floor Z table), keyframed movers if the
   tutorial needs them. *Deps:* 4.1.
@@ -799,7 +813,7 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
 **Slice acceptance** *(Track A criterion)*: side-by-side A/B match with the Godot viewer on
 `sp_tutorial_1` + hub maps.
 
-## P8 — Characters & menu *(design: `rebuild-strategy.md` B5, `m0_menu_build.md`)*
+## P8 — Characters & UI *(design: `rebuild-strategy.md` B5, `remaster-direction.md` axis 1; `m0_menu_build.md` = structural reference, not a port target)*
 
 - [x] **8.1 PL1: entity-model export** — `UE_bsp_to_scene.py` decodes every `.ents`
   entity carrying a static `.mdl` `model` key (prop_dynamic/prop_physics + the
@@ -842,7 +856,7 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
   *Pipeline:* **PL4 batch NPC export + `mdl_skel.py` include-model resolution** (shared
   animation banks). *Deps:* 8.2, PL4.
 - [x] **8.6a New Game context + story entry** *(carve-out of 8.6, so the game context isn't blocked
-  behind the menu port)* — the minimal state a fresh story run starts from, and the boot path that
+  behind the UI work)* — the minimal state a fresh story run starts from, and the boot path that
   enters the tutorial in it. `FElysiumPlayerSheet` (clan in the level-script 2..8 encoding, gender,
   an open `Stats` map 9.4 fills from `vdata/system/*.txt`) + `UElysiumGameStateSubsystem::BeginNewGame`
   seed it: `Story_State=-4` (the intro spine's post-theatre value), `Tut_Jack=0`, `Tut_Patch=0`
@@ -859,28 +873,58 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
   logs the seed, seats the player at `tutorial + 100 cm` lift (`-35.56, -19029.68, -296.24`, yaw
   -270) and releases on ground; `popup_linux` no longer fires; `-ElysiumMap=sm_pawnshop_1` still
   travels bare with no seeding. *Deps:* 4.6, 4.9, 1.1.
-- [ ] **8.6 VGUI menu + New Game flow** — Slate/UMG port of the complete Godot
-  implementation (`KeyValues`/`VguiScheme`/`VguiFont`/`.res` parsers, 640×480 scale box). The menu's
-  New Game item calls 8.6a's `UElysiumMapSubsystem::NewGame` seam (chargen writes the sheet first).
-  *Deps:* none.
+- [ ] **8.6 UI foundation — design system + shell** *(replaces the VGUI port)* — the modern UI
+  stack every other screen sits on. **Not** a `.res`-driven VGUI renderer: a Slate/UMG component
+  set with **vector/SDF type**, resolution-independent layout (real widescreen/ultrawide, DPI
+  scaling, no 640×480 canvas, no `//ws-fix` pairs), and a design-token layer (palette, type
+  ramp, spacing, panel treatments) carrying VtMB's paper/ink/blood language. Structure and
+  content come from the original — screen inventory, panel anatomy, reading order, iconography,
+  strings — read off `.res`/`trackerscheme.res` as **intent** (PL8), not executed as layout.
+  Ships with it: the main menu + pause menu on the new stack, and the New Game flow calling
+  8.6a's `UElysiumMapSubsystem::NewGame` seam (chargen writes the sheet first).
+  **Acceptance:** main menu and pause menu are legible and correctly proportioned at 1080p,
+  1440p, 4K and 21:9 with no letterboxing or bitmap-font blur; New Game enters `sp_tutorial_1`
+  through the 8.6a seam. *Deps:* PL8; 8.6a for the seam.
 - [ ] **8.7 Ropes** — `keyframe_rope`/`move_rope` (×107 in tutorial) → Cable Components.
   *Deps:* none.
-- [ ] **8.8 Sign window — VGUI fidelity** — 4.10's Canvas panel re-drawn on 8.6's ported VGUI stack,
-  which is where the sign format's remaining half lives: `resource/TrackerScheme.res` fonts
-  (`ParagraphText` 185 uses / `Newsprint` 113 / `Trebuchet` 105 / `Headline` 36 / `Vamp_Handwriting1`
-  27 / `Tahoma`), the 640×480 scale box plus the patch's `//ws-fix` widescreen coordinate pairs,
-  `Label` justification (`Alignment`) vs `TextBlock` word-wrap, `TextRGBA`/`BackgroundRGBA`, `Tiled`
-  backgrounds, `Image` sub-blocks, the **`NewspaperData`** root (30 files) and its `Columns`, and the
-  panel keys `CloseOnLeftClick`/`MinShowTime`/`ClientCommand` + the per-resolution `Font_640`…
-  `Font_1600` overrides. *Deps:* 8.6, 4.10.
+- [ ] **8.8 Sign / popup panels on the UI foundation** — 4.10's Canvas panel re-drawn on 8.6's
+  stack. The **authored layout is honoured as proportion and grouping** (block rects, ordering,
+  emphasis) and re-set with vector type on the resolution-independent layout — the `CSignUI`
+  1024×768 uniform-scale canvas model (decision log, 2026-07-23) stays the *reference* for what
+  the author intended, not the runtime coordinate system. Carries the rest of the sign format:
+  the `resource/TrackerScheme.res` font roles mapped onto the type ramp (`ParagraphText` 185 uses
+  / `Newsprint` 113 / `Trebuchet` 105 / `Headline` 36 / `Vamp_Handwriting1` 27 / `Tahoma`),
+  `Label` justification (`Alignment`) vs `TextBlock` word-wrap, `TextRGBA`/`BackgroundRGBA`,
+  `Tiled` backgrounds, `Image` sub-blocks, the **`NewspaperData`** root (30 files) and its
+  `Columns`, and the panel keys `CloseOnLeftClick`/`MinShowTime`/`ClientCommand`. The
+  per-resolution `Font_640`…`Font_1600` overrides are **dropped** — vector type scales
+  continuously. *Deps:* 8.6, 4.10.
+- [ ] **8.9 HUD on the UI foundation** — retire the Canvas HUD as the player-facing surface:
+  the +use reticle/use-icon (4.4), blood/health and status, the sign/screen-fade states, and a
+  subtitle slot, composed on 8.6's stack with the same design tokens. The always-on
+  FPS/position overlay stays a dev affordance, separate from the game HUD. Use-icon art comes
+  from the PL3 atlas, upscaled under the presentation test. *Deps:* 8.6, 4.4, 4.10.
+- [ ] **8.10 Accessibility & options backing** *(`remaster-direction.md` axis 4 — additive only;
+  changes what the player can configure and perceive, never what the game does)* — full
+  key/button remapping + gamepad navigation across the 8.6 component set; UI text scaling;
+  subtitle size/background controls; colourblind-safe status colours + a high-contrast option;
+  FOV control; real graphics/audio options screens backing settings the engine already exposes.
+  Difficulty and balance are **not** in scope here — those are the logic layer.
+  *Deps:* 8.6, 10.6 (input path decided).
+
+**Slice acceptance** *(M5 criterion)*: New Game starts from a real, modern menu that is legible
+and correctly proportioned from 1080p to 4K and at 21:9; the HUD and the tutorial's popup signs
+draw on the same stack; NPCs stand in the world at their entity origins.
 
 ## P9 — Dialogue & persistence *(design: `game_runtime.md`, `rebuild-strategy.md` B7/B9)*
 
 - [ ] **9.1 `.dlg` parser + dlgexpr** — 13-field CRLF Latin-1 parser + branch machine; the
   dlgexpr grammar on the 5.2 evaluator; **error-to-false** on the 89 malformed retail
   snippets (RE3 confirms; implement as documented regardless). *Deps:* 5.2.
-- [ ] **9.2 Conversation UI + audio-by-path** — UMG dialogue screen, line audio via 6.2.
-  *Deps:* 9.1, 6.2, 8.6.
+- [ ] **9.2 Conversation UI + audio-by-path** — dialogue screen on the 8.6 UI foundation, line
+  audio via 6.2. Content is **reproduced verbatim** (lines, conditions, branch structure,
+  ordering); presentation modernizes — vector type, reflowing line lists, speaker/emotion cues,
+  the 8.10 subtitle path. *Deps:* 9.1, 6.2, 8.6.
 - [x] **9.3a Level-script wiring — CPython is the default host + auto-load at map load.**
   `UElysiumGameStateSubsystem::MakePreferredScriptHost` installs `FElysiumCPythonScriptHost` when the
   module carries the vendored SDK **and the interpreter actually starts**, falling back to the expr
@@ -978,6 +1022,7 @@ dialogue, scripted flow, quests, save/load included.
 | PL5d | Copy `cfg/*.cfg` (the alias/cvar tables — `user.cfg` carries the Basic/Plus `patchtype` alias) → `out/cfg/` | 9.3b |
 | PL6 | Texlight merge in exporter | 3.4 |
 | PL7 | Sidecar space fixes surfaced by the audit — **none (0.4: all sidecars already Unreal cm)** | 0.4 [x] |
+| PL8 | UI source inventory for the re-skin — extend `menu_extract.py` to mirror `.res` layouts, `trackerscheme.res`, UI bitmaps and strings into `out/ui/` as **design intent + source art** (screen inventory, panel anatomy, palette, iconography). The `.fnt` bitmap atlases are extracted for reference/metrics only — they are not the runtime type. | 8.6 |
 
 ## RE backlog (reverse-engineering work; each cited where consumed)
 
@@ -1118,14 +1163,17 @@ cross-check `recovered/dice-system.md` alongside the running-game golden test.
   than the parked lump-8 bake — but VtMB's look is bounce-dominated and calibrated against
   full Lumen GI, so it risks the look. HWRT commitment unchanged; revisit if 10.3 floor
   validation fails or a sub-DXR audience becomes a goal.
-- **Asset-enhancement track** (offline remaster of VtMB's own art): delight → super-resolve →
-  PBR-synthesize (normal/roughness/AO/envmask), as an `elysium.EnhancedTextures` A/B toggle on
-  top of the faithful set. Tier 0 (delight + upscale) fixes real deficits for a dynamically-
-  relit engine; Tier 1 (PBR synthesis) is style-anchored enhancement. Scaffolding exists
-  (`upscale_bench.py`, `sky_upscale.py`, `retex_dds.py`); `M_VtMB_World`'s normal/envmask slots
-  are the runtime hooks. **Budget-gated** by the 3060/12 GB floor (2× default, 4× hero only;
-  BCn+mips mandatory). Full plan + adjudication test: `asset-enhancement.md`. Revisit after the
-  vertical slice plays (P10-ish); not before — it is polish on a shipped look, not a blocker.
+- ~~**Asset-enhancement track**~~ — **no longer an option; it is in scope** as remaster axis 2
+  (`remaster-direction.md`). Delight → super-resolve → PBR-synthesize
+  (normal/roughness/AO/envmask), as an `elysium.EnhancedTextures` A/B toggle on top of the
+  faithful world set (the toggle stays — it is the regression guard, and the faithful set stays
+  the reference forever). Tier 0 (delight + upscale) fixes real deficits for a dynamically-relit
+  engine; Tier 1 (PBR synthesis) is style-anchored enhancement; Tier 2 is out of bounds.
+  Scaffolding exists (`upscale_bench.py`, `sky_upscale.py`, `retex_dds.py`); `M_VtMB_World`'s
+  normal/envmask slots are the runtime hooks. **Budget-gated** by the 3060/12 GB floor (2×
+  default, 4× hero only; BCn+mips mandatory). Full plan + adjudication test:
+  `asset-enhancement.md`. **Sequencing is unchanged** — scheduled at P10, after the vertical
+  slice plays; it is polish on a shipped look, not a blocker.
 
 ## Risk register
 
@@ -1142,8 +1190,100 @@ cross-check `recovered/dice-system.md` alongside the running-game golden test.
 | Save determinism erodes | broken saves late | standing rule since P1: no engine timers, own serializable structs |
 | Legal posture | project-ending | bring-your-own-game holds; nothing game-sourced committed — standing constraint on every task |
 | Asset enhancement drifts off-style | silent look regression | `asset-enhancement.md` adjudication test + `elysium.EnhancedTextures` A/B toggle keeps the faithful set as reference; per-family review, not per-texture |
+| Modern UI loses VtMB's voice (reads generic/AAA) | the remaster stops feeling like VtMB | 8.6 keeps the original's structure, palette and iconography and re-skins only the craft; presentation test applied per screen; `m0_menu_build.md` + extracted `.res`/scheme (PL8) are the intent reference every screen is checked against |
+| "Polish" leaks into the logic layer | silent divergence from retail behaviour, unfindable later | `remaster-direction.md`'s governing rule: RE first, owner's call, dated decision-log entry recording faithful *and* chosen behaviour; default is reproduce, and layer assignment happens before the work, not after |
+| No classic-UI mode to A/B against | a UI regression has no reference | the original's structure is captured as data (PL8) and in `m0_menu_build.md`, so screens are checked against intent rather than pixels; the *world* keeps its faithful A/B path unchanged |
 
 ## Decision log (append-only)
+
+- **2026-07-23** — **Inspection is click-to-select, not crosshair-follow (P2.6).** Owner call. The
+  live crosshair inspector is removed: the Entity Inspector no longer traces the camera ray every
+  frame. Instead, while the Cog menu owns the mouse, LMB over the world picks whatever is under the
+  cursor and RMB clears — no pause (the world keeps running under the cursor; Time Scale stops it
+  when wanted). The pick lives in `RenderTick`, which Cog runs for every window regardless of
+  visibility, so it works with the inspector closed. Three things this settled:
+  **(1) Physics cannot answer the pick, so two of the three sources are CPU ray-casts.** Under the
+  default `elysium.BrushCollision 1` the world *render* mesh is built with collision off — the
+  `.hulls` convex set is the collider, and it carries no material and no face, so a trace could
+  never name the surface it hit (the old crosshair readout only worked at all under
+  `elysium.BrushCollision 0`). Separately, a solid prop's cooked collision is a **single convex hull
+  of the whole model**, and non-solid props have none. So `ElysiumPick::Trace` physics-traces only
+  the entity bodies (`LineTraceMulti` on `ECC_Visibility`, which returns trigger overlaps too) and
+  CPU-casts the prop instances and the world/sky sections against their real triangles. The map
+  actor retains the geometry for it (`FPropPickSoup` per unique model, ~3 MB on the tutorial; a
+  section → OBJ-group-key table), all `#if !UE_BUILD_SHIPPING`.
+  **(2) A world pick highlights the BSP face, and that falls out of the exporter for free.**
+  `UE_bsp_to_scene.py`'s `emit()` appends a fresh vertex per face corner (no dedup across faces) and
+  `BuildMeshFromObj` remaps sections keyed on the *global* index, so the triangles of one face share
+  local indices and adjacent faces share none. Flooding across shared edges therefore stops exactly
+  at the face boundary — no position weld, no normal threshold, no bleeding around a corner. The
+  coplanarity guard only bites on displacement grids, where one face is a whole curved patch. The
+  flood costs an edge map over the section, so it runs on click; hover previews the single triangle.
+  **(3) The highlight is imgui, not scene geometry.** Considered and rejected: custom-depth stencil
+  outline (best silhouette, but cannot outline an invisible trigger volume and lights every instance
+  of a prop model at once), a retained x-ray box (bounds-only, coarse on a world section), and a
+  material tint/checkerboard on `M_VtMB_World` (cheapest code, worst granularity — the world OBJ is
+  grouped per material, so it would highlight every face sharing that texture map-wide). Projected
+  fill + outline + label is the only one exact for all three target kinds, needs no assets, and
+  keeps drawing when the world is time-scaled to a stop, since Cog's render tick is not the game
+  tick. Known bound: an entity's highlight is one box per def hull (the hulls are vertex sets with
+  no faces) — exact for the axis-aligned box brushes nearly every trigger and door is made of.
+  **(4) A World Viz gizmo marker outranks the geometry it is drawn over.** Owner call. The marker is
+  a deliberate "select me" handle, and it is the *only* clickable representation the ~1,000 bodiless
+  entities on a map have (on `sp_tutorial_1`, 394 of 1,868 records are `light`/`light_spot` alone —
+  they are in the `.ents` lump as inert records, so they carry gizmos). Three sub-calls: **drawn is
+  the whole test** — `Visible` depth-tests the cubes so one behind geometry does not pick, `All` is
+  x-ray so any does, `Off` skips the source — which needs the nearest *rendered* hit tracked apart
+  from the pick winner, since brush bodies render nothing and must not occlude a marker behind them;
+  **the hit test is the exact 28 cm cube**, not a screen-space tolerance, so dense clusters stay
+  separable at the cost of distant markers being small targets; and **clicking a cluster again
+  cycles** to the next marker behind the current one, wrapping. With gizmos on, the bodiless-entity
+  perpendicular fallback (2 m, inherited from the `ent_*` picker) is suppressed — it is far looser
+  than the cube and would undo the precision — and stays armed only with gizmos off. The marker's
+  anchor and size are consolidated into one definition (`ElysiumGizmoColor.h`) shared by the ISM
+  layer, the label/beam overlays and the pick; they had been duplicated in two files, and the
+  what-you-see-is-what-you-click rule only holds if they cannot drift.
+  The `ent_fire` crosshair picker and the HUD's `+use` reticle are unaffected; they are separate
+  systems.
+
+- **2026-07-23** — **Direction: VtMB *remastered*, not a pixel-perfect recreation.** Owner call.
+  Tone, ambience, feel and game logic are kept; craft is raised with tools 2004 did not have.
+  Written up as `docs/remaster-direction.md` (the charter); `rebuild-strategy.md` principle 7
+  and this doc's north star restated to match. Four decisions carry the weight:
+  **(1) Three change layers, three rules.** *Presentation* (UI, type, HUD, textures, post) modernizes
+  freely under the art-direction test, no approval gate. *Feel* (movement, camera, combat) is
+  built faithful first, kept A/B-able, and polished one delta at a time by explicit call.
+  *Logic and content* (entity semantics, I/O, scripts, dialogue, stats, saves) is reproduced.
+  Layer assignment happens before the work, not after — the boundary is *game state*, not
+  visibility.
+  **(2) The governing rule: we only change what we understand, and only on an explicit call.**
+  RE comes first — a behavioural divergence may only be *proposed* once the faithful behaviour
+  is known and recorded, and it lands only with a dated owner decision in this log carrying both
+  the faithful and the chosen behaviour. Default resolves to reproduce. This is why the RE
+  backlog does not shrink under a remaster direction: you cannot judge what to keep until you
+  know what is there.
+  **(3) The UI drops its faithful path; the world keeps its.** The pixel-faithful VGUI port is
+  **not built** — there is no classic UI mode. VtMB's screen structure (inventory, panel
+  anatomy, reading order, palette, iconography, strings) is kept and **re-skinned**: vector/SDF
+  type replacing the `.fnt` bitmap atlases, resolution-independent layout replacing the 640×480
+  proportional canvas and the patch's `//ws-fix` pairs, restrained motion, gamepad-navigable
+  components. The bitmap fonts are the loudest defect in the game on a modern display, and
+  illegibility was hardware, not art direction. `m0_menu_build.md` and the `.res`/scheme/`.fnt`
+  decoders become **reference and extraction machinery** (PL8), not a runtime layout stack. The
+  world is untouched by this: geometry/placement/lighting stay anchored to VtMB's data and the
+  lightmap calibration, with `elysium.EnhancedTextures` as the A/B toggle on top.
+  **(4) Asset enhancement leaves the Options list and becomes scope** (remaster axis 2), with
+  its tiers, its per-family curation and its A/B toggle unchanged, and its **P10 sequencing
+  unchanged** — it is polish on a shipped look, not a blocker.
+  Task deltas: P8 renamed *Characters & UI*; **8.6** recast from "VGUI menu port" to the UI
+  foundation (design system + shell + menus + New Game); **8.8** recast from "sign window — VGUI
+  fidelity" to sign/popup panels on that foundation (the `CSignUI` 1024×768 canvas model stays
+  the *intent* reference, not the runtime coordinate system; the `Font_640`…`Font_1600`
+  per-resolution overrides are dropped — vector type scales continuously); **8.9** (HUD on the
+  foundation) and **8.10** (accessibility & options backing) added; **4.7** gains the
+  faithful-first feel-layer note; **9.2** dialogue content verbatim, presentation modern;
+  **PL8** added for the UI source inventory. Three risks registered: UI losing VtMB's voice,
+  polish leaking into the logic layer, and having no classic mode to A/B against.
 
 - **2026-07-23** — **9.3a: the level scripts are wired; CPython is the default host.** The 5.5 PoC
   proved the embed offline but nothing connected it to a map — `LoadLevelScript` was reachable only

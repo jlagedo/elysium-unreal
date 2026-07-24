@@ -56,7 +56,6 @@ private:
 	void OnJumpReleased();
 	void ToggleNoclip();
 	void ToggleSky();
-	void ToggleDebug();
 	// E — +use: press whatever the entity world's look-cursor is aimed at (P4.2). The full
 	// use-icon HUD + use-only trace channel land in P4.4; this fires the aimed button's press.
 	void OnUsePressed();

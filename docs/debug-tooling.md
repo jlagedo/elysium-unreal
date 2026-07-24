@@ -22,13 +22,40 @@ incomplete. (Concretely: the P2.3 `ent_*` picker/overlays/breakpoint are driven 
 the Entity Inspector, and the verbs just flip the same `UElysiumEntityDebugSubsystem` state.)
 
 Corollary — **a Cog window left open keeps live-updating while you play**, because Cog renders every
-*visible* window each frame regardless of the F1 menu (only the menu bar is gated by input capture). So a
-"what am I looking at" readout does not need a separate HUD: the Entity Inspector *is* the live crosshair
-inspector — leave it open, and while you move/aim with the game it traces the camera ray every frame and
-shows the surface + entity under the crosshair (it even draws its own imgui reticle). Open F1 only to
-*click* its controls (fire / overlays / break) — doing so freezes the camera, which conveniently pins the
-aim on the current target. Reserve deliberate mouse interaction for that menu-open moment; the passive
-readout needs no menu at all.
+*visible* window each frame regardless of the F1 menu (only the menu bar is gated by input capture), and
+it runs every window's `RenderTick` whether or not that window is visible. So a "what am I looking at"
+readout does not need a separate HUD, and the tool that answers it does not need its own window open.
+
+**Selection is by click.** With the F1 menu up, LMB anywhere over the world (i.e. not over an imgui
+window) picks whatever is under the cursor, RMB clears, and the Entity Inspector highlights the result in
+place. The game is **not** paused — it keeps running under the cursor; stop it from the Time Scale window
+when you want it still. Because the pick lives in `RenderTick`, it works with the inspector closed: click
+first, open the window after.
+
+**A World Viz gizmo marker outranks everything it is drawn over.** The marker is a deliberate "select
+me" handle, and for the ~1,000 bodiless entities on a map — lights, `ambient_generic`, logic — it is the
+only clickable representation there is. Whether a marker counts as drawn follows the gizmo mode, so what
+you see is what you click: *Visible* depth-tests the cubes, so one behind geometry does not pick;
+*All* draws them x-ray, so any of them does; *Off* skips the source entirely. The pick tests the exact
+28 cm cube — deliberately not a screen-space tolerance, so a dense cluster stays separable — and clicking
+the same cluster again steps to the next marker behind the current one, wrapping. With gizmos on, the
+`ent_*` picker's 2 m perpendicular fallback for bodiless entities is suppressed; it would undo that
+precision. With gizmos off it is still the only way to reach one.
+
+Failing a gizmo, the pick resolves three geometry sources and takes the nearest — brush entity bodies
+(physics, so invisible trigger volumes are pickable), prop instances, and world/sky surfaces. The last
+two are **CPU ray-casts against the real triangles**, not physics traces, because physics cannot answer
+them: under the default
+`elysium.BrushCollision 1` the world render mesh is built with collision off (the `.hulls` convex set is
+the collider, and it carries no material and no face), and a solid prop's cooked collision is a single
+convex hull of the whole model. A world pick highlights the whole BSP face — the exporter emits a fresh
+vertex per face corner and `BuildMeshFromObj` remaps sections on the global index, so triangles of one
+face share local indices and adjacent faces share none; flooding across shared edges stops at the face
+boundary on its own.
+
+The highlight is drawn with imgui (projected fill + outline + label), not scene geometry. That buys three
+things: it costs no assets, it reaches things with no renderable mesh at all (trigger volumes), and it
+keeps drawing when the world is time-scaled to a stop, since Cog's render tick is not the game tick.
 
 ---
 

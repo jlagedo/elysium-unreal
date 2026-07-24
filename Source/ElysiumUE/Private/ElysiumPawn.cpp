@@ -1,6 +1,5 @@
 #include "ElysiumPawn.h"
 
-#include "ElysiumHUD.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
@@ -97,7 +96,6 @@ void AElysiumPawn::SetupPlayerInputComponent(UInputComponent* Input)
 	Input->BindAction(TEXT("Jump"), IE_Released, this, &AElysiumPawn::OnJumpReleased);
 	Input->BindAction(TEXT("ToggleNoclip"), IE_Pressed, this, &AElysiumPawn::ToggleNoclip);
 	Input->BindAction(TEXT("ToggleSky"), IE_Pressed, this, &AElysiumPawn::ToggleSky);
-	Input->BindAction(TEXT("ToggleDebug"), IE_Pressed, this, &AElysiumPawn::ToggleDebug);
 	Input->BindAction(TEXT("Use"), IE_Pressed, this, &AElysiumPawn::OnUsePressed);
 	// P4.10 — dismissing a sign/popup window. Bound to the key directly rather than through a named
 	// action: DefaultInput.ini has no primary-fire mapping, and every VtMB popup instructs
@@ -223,17 +221,6 @@ void AElysiumPawn::ToggleSky()
 		if (AElysiumMapActor* Map = Maps->GetCurrentMap())
 		{
 			Map->ToggleSkybox();
-		}
-	}
-}
-
-void AElysiumPawn::ToggleDebug()
-{
-	if (const APlayerController* PC = Cast<APlayerController>(GetController()))
-	{
-		if (AElysiumHUD* HUD = Cast<AElysiumHUD>(PC->GetHUD()))
-		{
-			HUD->ToggleDebug();
 		}
 	}
 }

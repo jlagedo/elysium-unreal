@@ -20,21 +20,11 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumGizmo, Log, All);
 namespace
 {
 	// A 100 cm engine cube, scaled to a ~28 cm gizmo marker (matches the old immediate-mode box).
+	// The scale and the anchor live in ElysiumGizmoColor.h so the click-pick tests the same box
+	// this draws.
 	constexpr const TCHAR* CubePath  = TEXT("/Engine/BasicShapes/Cube.Cube");
 	constexpr const TCHAR* DepthPath = TEXT("/Game/VtMB/Materials/M_Gizmo.M_Gizmo");
 	constexpr const TCHAR* XRayPath  = TEXT("/Game/VtMB/Materials/M_Gizmo_XRay.M_Gizmo_XRay");
-	constexpr float GizmoScale = 0.28f;
-
-	// File-unique name: a same-named helper lives in ElysiumEntityDebugSubsystem.cpp, and both
-	// can land in one unity blob.
-	FVector GizmoEntityAnchor(const FElysiumEntity& Ent)
-	{
-		if (Ent.Body)
-		{
-			return Ent.Body->Bounds.Origin;
-		}
-		return Ent.Def ? Ent.Def->Origin : FVector::ZeroVector;
-	}
 }
 
 FElysiumGizmoLayer::~FElysiumGizmoLayer()
@@ -113,7 +103,7 @@ void FElysiumGizmoLayer::Rebuild(FElysiumEntityWorld& World, AActor* Owner)
 		{
 			continue;
 		}
-		const FTransform Xform(FQuat::Identity, GizmoEntityAnchor(*E), FVector(GizmoScale));
+		const FTransform Xform(FQuat::Identity, ElysiumGizmoAnchor(*E), FVector(ElysiumGizmoScale));
 		const int32 InstanceIndex = Component->AddInstance(Xform);
 		ComputeRGBA(*E, Data);
 		Component->SetCustomData(InstanceIndex, TArrayView<const float>(Data, 4), /*bMarkRenderStateDirty*/ false);

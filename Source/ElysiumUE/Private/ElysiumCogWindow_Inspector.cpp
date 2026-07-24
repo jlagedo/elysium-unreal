@@ -8,18 +8,20 @@
 #include "ElysiumEntityDebugSubsystem.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumPick.h"
 #include "ElysiumUseIcons.h"
 
+#include "CogImguiContext.h"
+#include "CogImguiHelper.h"
 #include "CogLocalizationConfig.h"   // COG_TCHAR_TO_CHAR
+#include "CogSubsystem.h"
 #include "CogWidgets.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Components/PrimitiveComponent.h"
-#include "Components/StaticMeshComponent.h"
-#include "Engine/HitResult.h"
-#include "Engine/StaticMesh.h"
 #include "Engine/Texture.h"
 #include "Engine/World.h"
-#include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInterface.h"
 
 namespace
@@ -70,20 +72,126 @@ namespace
 		Out.Sort([](const FName& A, const FName& B) { return A.LexicalLess(B); });
 	}
 
-	// The camera-ray hit under the crosshair (Visibility, complex, ignoring the pawn). This is what
-	// makes the window inspect *any* surface — walls, props, brush bodies — not just entities.
-	bool TraceCrosshair(UWorld* W, FHitResult& OutHit)
+	const char* PickKindName(EElysiumPickKind K)
 	{
-		APlayerController* PC = W ? W->GetFirstPlayerController() : nullptr;
-		if (PC == nullptr)
+		switch (K)
 		{
-			return false;
+		case EElysiumPickKind::Entity:       return "entity";   // the caller distinguishes bodiless
+		case EElysiumPickKind::WorldSurface: return "world surface";
+		case EElysiumPickKind::PropInstance: return "prop instance";
+		default:                             return "nothing";
 		}
-		FVector Loc; FRotator Rot;
-		PC->GetPlayerViewPoint(Loc, Rot);
-		const FVector End = Loc + Rot.Vector() * 100000.0;
-		FCollisionQueryParams Q(FName(TEXT("ElysiumInspectAim")), /*bTraceComplex*/ true, PC->GetPawn());
-		return W->LineTraceSingleByChannel(OutHit, Loc, End, ECC_Visibility, Q);
+	}
+
+	// --- selection overlay -------------------------------------------------------------------
+	// The highlight is drawn with imgui rather than as scene geometry, which buys three things the
+	// project needs: it costs no assets, it reaches things with no renderable mesh at all (trigger
+	// volumes), and it keeps drawing if the world is time-scaled to a stop — Cog's render tick is
+	// not the game tick.
+
+	// World -> imgui screen, with the near-plane handling the projection helpers do not do.
+	struct FProjector
+	{
+		APlayerController* PC = nullptr;
+		ImVec2 Origin = ImVec2(0.0f, 0.0f);   // imgui viewport origin
+		FVector CamPos = FVector::ZeroVector;
+		FVector CamFwd = FVector::ForwardVector;
+
+		static constexpr double NearEps = 12.0;   // cm in front of the eye
+
+		double Depth(const FVector& P) const { return (P - CamPos) | CamFwd; }
+
+		bool Project(const FVector& P, ImVec2& Out) const
+		{
+			FVector2D Screen;
+			if (!UGameplayStatics::ProjectWorldToScreen(PC, P, Screen, /*bPlayerViewportRelative*/ false))
+			{
+				return false;
+			}
+			Out = ImVec2(Origin.x + static_cast<float>(Screen.X), Origin.y + static_cast<float>(Screen.Y));
+			return true;
+		}
+
+		// Trim a segment to the near plane so an edge running past the camera still draws its
+		// visible part instead of vanishing. False when the whole segment is behind.
+		bool ClipSegment(FVector& A, FVector& B) const
+		{
+			const double DA = Depth(A);
+			const double DB = Depth(B);
+			if (DA < NearEps && DB < NearEps)
+			{
+				return false;
+			}
+			if (DA < NearEps)
+			{
+				A = FMath::Lerp(A, B, (NearEps - DA) / (DB - DA));
+			}
+			else if (DB < NearEps)
+			{
+				B = FMath::Lerp(B, A, (NearEps - DB) / (DA - DB));
+			}
+			return true;
+		}
+	};
+
+	void PickColors(EElysiumPickKind Kind, bool bHover, ImU32& OutLine, ImU32& OutFill)
+	{
+		int32 R = 255, G = 150, B = 40;              // entity: orange
+		if (Kind == EElysiumPickKind::WorldSurface) { R = 255; G = 210; B = 70; }   // amber
+		if (Kind == EElysiumPickKind::PropInstance) { R = 80;  G = 220; B = 255; }  // cyan
+		OutLine = IM_COL32(R, G, B, bHover ? 140 : 255);
+		OutFill = IM_COL32(R, G, B, bHover ? 22 : 56);
+	}
+
+	void DrawPickOverlay(const FProjector& Proj, const FElysiumPickResult& P, bool bHover)
+	{
+		ImDrawList* DrawList = ImGui::GetBackgroundDrawList(ImGui::GetMainViewport());
+		if (DrawList == nullptr)
+		{
+			return;
+		}
+		ImU32 LineColor, FillColor;
+		PickColors(P.Kind, bHover, LineColor, FillColor);
+
+		// Fill: a triangle with any vertex behind the eye is dropped rather than clipped — the
+		// fill is decorative, and the outline (which does clip) carries the shape.
+		for (int32 I = 0; I + 2 < P.FillTris.Num(); I += 3)
+		{
+			ImVec2 A, B, C;
+			if (Proj.Depth(P.FillTris[I]) < FProjector::NearEps
+				|| Proj.Depth(P.FillTris[I + 1]) < FProjector::NearEps
+				|| Proj.Depth(P.FillTris[I + 2]) < FProjector::NearEps)
+			{
+				continue;
+			}
+			if (Proj.Project(P.FillTris[I], A) && Proj.Project(P.FillTris[I + 1], B)
+				&& Proj.Project(P.FillTris[I + 2], C))
+			{
+				DrawList->AddTriangleFilled(A, B, C, FillColor);
+			}
+		}
+
+		const float Thickness = bHover ? 1.5f : 2.5f;
+		for (int32 I = 0; I + 1 < P.OutlineSegs.Num(); I += 2)
+		{
+			FVector S = P.OutlineSegs[I];
+			FVector E = P.OutlineSegs[I + 1];
+			ImVec2 A, B;
+			if (Proj.ClipSegment(S, E) && Proj.Project(S, A) && Proj.Project(E, B))
+			{
+				DrawList->AddLine(A, B, LineColor, Thickness);
+			}
+		}
+
+		if (!bHover && !P.Label.IsEmpty() && Proj.Depth(P.Center) >= FProjector::NearEps)
+		{
+			ImVec2 At;
+			if (Proj.Project(P.Center, At))
+			{
+				FCogWidgets::AddTextWithShadow(DrawList, ImVec2(At.x + 8.0f, At.y - 8.0f),
+					LineColor, COG_TCHAR_TO_CHAR(*P.Label));
+			}
+		}
 	}
 }
 
@@ -96,116 +204,270 @@ void FElysiumCogWindow_Inspector::Initialize()
 void FElysiumCogWindow_Inspector::RenderHelp()
 {
 	ImGui::Text(
-		"Live crosshair inspector. Leave this window open and it keeps updating while you play (Cog "
-		"renders open windows even with the F1 menu closed), so whatever you aim at (the always-on HUD "
-		"crosshair marks the aim point) appears here — the "
-		"surface under the crosshair (actor, component, mesh, material + textures) and, if it is a "
-		"brush/logic entity, its full detail: identity, chain-walked fields, raw .ents keyvalues, and "
-		"the 7-field outputs. Fire any input by hand (goes through the real event queue, visible in the "
-		"Event Queue window and single-steppable); the In-world debug row toggles the overhead text / "
-		"bounds box / fading I/O message overlays and a per-entity breakpoint. Open F1 to click these "
-		"controls (that also freezes your aim on the current entity).");
+		"Click-to-select inspector. Open the F1 menu and left-click anything in the world: the click "
+		"resolves to a brush/logic entity, a world surface, or a single prop instance, and the "
+		"selection is highlighted in place (translucent fill + outline + label). Right-click clears "
+		"it. The game is not paused — it keeps running under the cursor; stop it yourself from the "
+		"Time Scale window if you want it still. Picking works with this window closed, so you can "
+		"click first and open the inspector after.\n\n"
+		"The pick is exact where physics cannot be: the world render mesh carries no collision under "
+		"elysium.BrushCollision 1, and a solid prop's collision is one convex hull of the whole "
+		"model, so surfaces and props are ray-cast on the CPU against their real triangles. A world "
+		"pick highlights the whole BSP face, not just the triangle under the cursor.\n\n"
+		"Below: the selected surface (component, mesh, material + textures, section/instance/"
+		"triangle) and, when the pick is an entity, its full detail — identity, chain-walked fields, "
+		"raw .ents keyvalues, and the 7-field outputs. Fire any input by hand (it goes through the "
+		"real event queue, so it shows up in the Event Queue window and is single-steppable); the "
+		"In-world debug row toggles the overhead text / bounds box / fading I/O message overlays and "
+		"a per-entity breakpoint.");
+}
+
+void FElysiumCogWindow_Inspector::PreBegin(ImGuiWindowFlags& WindowFlags)
+{
+	Super::PreBegin(WindowFlags);
+
+	// Cap the window to the viewport. Without this a window sized (or restored from the ImGui ini)
+	// taller than the screen simply runs off the bottom edge, with no way to reach the controls at
+	// the end of the content. Constrained, the detail region scrolls instead.
+	const ImGuiViewport* Viewport = ImGui::GetMainViewport();
+	if (Viewport == nullptr)
+	{
+		return;
+	}
+	const ImVec2 MinSize(GetDpiScale() * 300.0f, GetDpiScale() * 180.0f);
+	const ImVec2 MaxSize(Viewport->WorkSize.x * 0.95f, Viewport->WorkSize.y * 0.85f);
+	ImGui::SetNextWindowSizeConstraints(MinSize, MaxSize);
+}
+
+void FElysiumCogWindow_Inspector::RenderTick(float DeltaTime)
+{
+	Super::RenderTick(DeltaTime);
+
+	UWorld* World = GetWorld();
+	APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+	const ImGuiViewport* Viewport = ImGui::GetMainViewport();
+	if (PC == nullptr || Viewport == nullptr)
+	{
+		return;
+	}
+
+	// Drop a pick the previous map took with it: either its component was destroyed, or — for a
+	// bodiless entity, which has no component to test — its handle no longer resolves against the
+	// current epoch.
+	if (GetPick().IsStale())
+	{
+		ClearPick();
+	}
+	else if (GetPick().Entity.IsSet() && !GetPick().bHasComponent)
+	{
+		FElysiumEntityWorld* EW = GetEntityWorld();
+		if (EW == nullptr || EW->Resolve(GetPick().Entity) == nullptr)
+		{
+			ClearPick();
+		}
+	}
+
+	FProjector Proj;
+	Proj.PC = PC;
+	Proj.Origin = Viewport->Pos;
+	FRotator ViewRot;
+	PC->GetPlayerViewPoint(Proj.CamPos, ViewRot);
+	Proj.CamFwd = ViewRot.Vector();
+
+	// Armed only while Cog owns the mouse and the cursor is over the world rather than over an
+	// imgui window — so clicking a button in any Cog window never also picks the world behind it.
+	const UCogSubsystem* Cog = GetOwner();
+	const bool bOverWorld = bClickToSelect && Cog != nullptr
+		&& Cog->GetContext().GetEnableInput() && !ImGui::GetIO().WantCaptureMouse;
+
+	if (bOverWorld)
+	{
+		if (ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+		{
+			ClearPick();
+		}
+
+		// Do not use ImGui::GetMousePos(): it is invalid over NetImgui (as Cog's own selection
+		// window notes), and the context's copy is the one the deproject agrees with.
+		const ImVec2 MousePos = Cog->GetContext().GetImguiMousePos();
+		FVector RayOrigin, RayDir;
+		if (UGameplayStatics::DeprojectScreenToWorld(PC,
+			FCogImguiHelper::ToFVector2D(MousePos - Viewport->Pos), RayOrigin, RayDir))
+		{
+			// The face flood costs an edge map over the whole section, so it runs on commit only;
+			// the hover preview shows the single triangle under the cursor.
+			const bool bCommit = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+			FElysiumPickResult Hit;
+			if (bCommit || bHoverPreview)
+			{
+				// Committing passes the current selection so a second click into a cluster of
+				// gizmos steps to the next marker behind it; the hover preview passes nothing, so
+				// it always shows the nearest and does not flicker through the stack.
+				const FElysiumEntityHandle CycleAfter = bCommit
+					? GetPick().Entity : FElysiumEntityHandle::Invalid();
+				if (ElysiumPick::Trace(World, RayOrigin, RayDir, Hit, /*bBuildFaceOutline*/ bCommit,
+					CycleAfter))
+				{
+					if (bCommit)
+					{
+						SetPick(Hit);
+						if (Hit.Entity.IsSet())
+						{
+							SetSelection(Hit.Entity);
+						}
+					}
+					else if (bDrawHighlight)
+					{
+						DrawPickOverlay(Proj, Hit, /*bHover*/ true);
+					}
+				}
+				else if (bCommit)
+				{
+					ClearPick();   // clicked empty space
+				}
+			}
+		}
+	}
+
+	if (bDrawHighlight && GetPick().IsSet())
+	{
+		DrawPickOverlay(Proj, GetPick(), /*bHover*/ false);
+	}
+}
+
+void FElysiumCogWindow_Inspector::RenderPickDetails(const FElysiumPickResult& InPick)
+{
+	ImGui::SeparatorText("Selection");
+	if (!InPick.IsSet())
+	{
+		// The entity below can outlive a pick, and can exist without one at all — the Entities
+		// browser sets it directly. Say which, so an empty pick over a populated Entity section
+		// reads as deliberate rather than broken.
+		FElysiumEntityWorld* EW = GetEntityWorld();
+		const bool bHaveEntity = EW != nullptr && EW->Resolve(GetSelection()) != nullptr;
+		ImGui::TextDisabled(bHaveEntity
+			? "Nothing picked — the entity below is the last selection (kept until you pick another)."
+			: "Nothing picked. Open F1 and left-click something in the world.");
+		return;
+	}
+
+	const UPrimitiveComponent* Comp = InPick.Component.Get();
+	const char* Kind = InPick.Kind == EElysiumPickKind::Entity
+		? (InPick.bHasComponent ? "entity (brush body)" : "entity (bodiless)")
+		: PickKindName(InPick.Kind);
+	ImGui::Text("kind       %s%s", Kind, InPick.bViaGizmo ? "  via gizmo marker" : "");
+	ImGui::Text("what       %s", COG_TCHAR_TO_CHAR(*InPick.Label));
+	ImGui::Text("component  %s (%s)",
+		Comp ? COG_TCHAR_TO_CHAR(*Comp->GetName()) : "(none)",
+		Comp ? COG_TCHAR_TO_CHAR(*Comp->GetClass()->GetName()) : "-");
+	ImGui::Text("distance   %.2f m", InPick.Distance / 100.0);
+	ImGui::Text("hit point  %s", COG_TCHAR_TO_CHAR(*InPick.HitPoint.ToCompactString()));
+
+	switch (InPick.Kind)
+	{
+	case EElysiumPickKind::WorldSurface:
+		ImGui::Text("section    %d  (obj group '%s')", InPick.Section,
+			COG_TCHAR_TO_CHAR(*InPick.MaterialName));
+		ImGui::Text("triangle   %d", InPick.Triangle);
+		ImGui::Text("normal     %s", COG_TCHAR_TO_CHAR(*InPick.HitNormal.ToCompactString()));
+		break;
+
+	case EElysiumPickKind::PropInstance:
+		ImGui::Text("model      %s", COG_TCHAR_TO_CHAR(*InPick.ModelName));
+		ImGui::Text("instance   %d of %d", InPick.Instance,
+			Comp ? Cast<UInstancedStaticMeshComponent>(Comp)->GetInstanceCount() : 0);
+		ImGui::Text("triangle   %d", InPick.Triangle);
+		break;
+
+	default:
+		break;
+	}
+
+	// The material the pick actually landed on (the section's MID, not the component's slot 0)
+	// and the textures bound into it — "what am I looking at".
+	if (UMaterialInterface* Mat = InPick.Material.Get())
+	{
+		ImGui::Text("material   %s", COG_TCHAR_TO_CHAR(*Mat->GetName()));
+		TArray<FMaterialParameterInfo> Infos;
+		TArray<FGuid> Ids;
+		Mat->GetAllTextureParameterInfo(Infos, Ids);
+		for (const FMaterialParameterInfo& Info : Infos)
+		{
+			UTexture* Tex = nullptr;
+			if (Mat->GetTextureParameterValue(Info, Tex) && Tex != nullptr)
+			{
+				ImGui::Text("    %s: %s", COG_TCHAR_TO_CHAR(*Info.Name.ToString()),
+					COG_TCHAR_TO_CHAR(*Tex->GetName()));
+			}
+		}
+	}
+	else if (InPick.Kind == EElysiumPickKind::Entity)
+	{
+		ImGui::TextDisabled(Comp != nullptr
+			? "    (brush body — collision only, nothing rendered)"
+			: "    (bodiless entity — the gizmo marker is its only representation)");
+	}
 }
 
 void FElysiumCogWindow_Inspector::RenderContent()
 {
 	Super::RenderContent();
 
-	UWorld* GameWorld = GetWorld();
-	UElysiumEntityDebugSubsystem* Dbg = GameWorld ? GameWorld->GetSubsystem<UElysiumEntityDebugSubsystem>() : nullptr;
+	// --- Pick controls + what the last click resolved to --------------------------------------
+	ImGui::Checkbox("Click to select", &bClickToSelect);
+	ImGui::SetItemTooltip("LMB over the world picks; RMB clears. Armed whenever the Cog menu owns "
+		"the mouse, including with this window closed.");
+	ImGui::SameLine();
+	ImGui::Checkbox("Highlight", &bDrawHighlight);
+	ImGui::SetItemTooltip("Draw the translucent fill + outline + label on the selection.");
+	ImGui::SameLine();
+	ImGui::Checkbox("Hover", &bHoverPreview);
+	ImGui::SetItemTooltip("Outline whatever the cursor is over before you commit. Costs one CPU "
+		"ray-cast per frame while the menu is open.");
 
-	// The reticle is drawn always-on by the HUD (AElysiumHUD::DrawHUD), so aiming works regardless of
-	// which windows are open; this window just live-inspects whatever the camera ray hits.
-
-	// --- Under crosshair: any surface the ray hits — works with or without an .ents substrate. ------
-	ImGui::SeparatorText("Under crosshair");
-	FElysiumEntityHandle HitEntity;
-	FHitResult Hit;
-	if (TraceCrosshair(GameWorld, Hit))
+	// Everything below the control row lives in a scrolling region, so the window's height is
+	// whatever the user dragged it to rather than however tall this entity's data happens to be —
+	// a door with 21 keyvalues and 7 outputs would otherwise run off the bottom of the screen.
+	if (!ImGui::BeginChild("##Detail", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None,
+		ImGuiWindowFlags_HorizontalScrollbar))
 	{
-		const UPrimitiveComponent* Comp = Hit.GetComponent();
-		const AActor* HitActor = Hit.GetActor();
-		ImGui::Text("actor      %s", HitActor ? COG_TCHAR_TO_CHAR(*HitActor->GetName()) : "?");
-		ImGui::Text("component  %s (%s)",
-			Comp ? COG_TCHAR_TO_CHAR(*Comp->GetName()) : "?",
-			Comp ? COG_TCHAR_TO_CHAR(*Comp->GetClass()->GetName()) : "?");
-		ImGui::Text("distance   %.2f m", Hit.Distance / 100.0f);
-
-		if (const UStaticMeshComponent* SMC = Cast<UStaticMeshComponent>(Comp))
-		{
-			if (const UStaticMesh* SM = SMC->GetStaticMesh())
-			{
-				ImGui::Text("mesh       %s", COG_TCHAR_TO_CHAR(*SM->GetName()));
-			}
-		}
-
-		// Material(s) on the hit surface and each one's bound textures — "what am I looking at".
-		if (Comp != nullptr)
-		{
-			const int32 NumMat = Comp->GetNumMaterials();
-			for (int32 m = 0; m < NumMat; ++m)
-			{
-				UMaterialInterface* Mat = Comp->GetMaterial(m);
-				if (Mat == nullptr)
-				{
-					continue;
-				}
-				ImGui::Text("material%-2d %s", m, COG_TCHAR_TO_CHAR(*Mat->GetName()));
-				TArray<FMaterialParameterInfo> Infos;
-				TArray<FGuid> Ids;
-				Mat->GetAllTextureParameterInfo(Infos, Ids);
-				for (const FMaterialParameterInfo& Info : Infos)
-				{
-					UTexture* Tex = nullptr;
-					if (Mat->GetTextureParameterValue(Info, Tex) && Tex != nullptr)
-					{
-						ImGui::Text("    %s: %s", COG_TCHAR_TO_CHAR(*Info.Name.ToString()),
-							COG_TCHAR_TO_CHAR(*Tex->GetName()));
-					}
-				}
-			}
-			if (NumMat == 0)
-			{
-				ImGui::TextDisabled("    (collision-only, no material)");
-			}
-		}
-
-		if (const UElysiumBrushComponent* Body = Cast<UElysiumBrushComponent>(Comp))
-		{
-			HitEntity = Body->GetOwningEntity();
-		}
-	}
-	else
-	{
-		ImGui::TextDisabled("nothing under the crosshair");
+		ImGui::EndChild();
+		return;
 	}
 
-	// Entity half: the hit brush entity, else the nearest bodiless logic ent under the aim. Sticky —
-	// aiming at a plain surface keeps the last entity selected so you can still work on it.
+	RenderPickDetails(GetPick());
+
+	// The entity half is sticky: picking a wall or a prop leaves the last entity selected, so a
+	// half-finished test harness survives a stray click.
 	FElysiumEntityWorld* World = GetEntityWorld();
-	if (World != nullptr)
-	{
-		const FElysiumEntityHandle Pick = HitEntity.IsSet()
-			? HitEntity : (Dbg ? Dbg->PickSelection() : FElysiumEntityHandle::Invalid());
-		if (Pick.IsSet())
-		{
-			SetSelection(Pick);
-		}
-	}
 
 	ImGui::SeparatorText("Entity");
+	FElysiumEntity* Ent = World ? World->Resolve(GetSelection()) : nullptr;
 	if (World == nullptr)
 	{
 		ImGui::TextDisabled("No .ents substrate on this map (surface inspect only).");
-		return;
+	}
+	else if (Ent == nullptr)
+	{
+		ImGui::TextDisabled("No entity selected. Click one in the world (F1 open), or pick from the Entities window.");
+	}
+	else
+	{
+		const bool bSelectionChanged = !(LastDetailSelection == Ent->Handle);
+		LastDetailSelection = Ent->Handle;
+		RenderEntityDetails(*Ent, *World, bSelectionChanged);
 	}
 
-	FElysiumEntity* Ent = World->Resolve(GetSelection());
-	if (Ent == nullptr)
-	{
-		ImGui::TextDisabled("No entity under the crosshair. Aim at one, or pick from the Entities window.");
-		return;
-	}
+	ImGui::EndChild();
+}
+
+void FElysiumCogWindow_Inspector::RenderEntityDetails(FElysiumEntity& EntRef, FElysiumEntityWorld& WorldRef,
+	bool bSelectionChanged)
+{
+	FElysiumEntity* Ent = &EntRef;
+	FElysiumEntityWorld* World = &WorldRef;
+	UWorld* GameWorld = GetWorld();
+	UElysiumEntityDebugSubsystem* Dbg = GameWorld ? GameWorld->GetSubsystem<UElysiumEntityDebugSubsystem>() : nullptr;
 
 	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
 	const float ValueColumn = GetDpiScale() * 110.0f;
@@ -284,10 +546,58 @@ void FElysiumCogWindow_Inspector::RenderContent()
 	}
 
 	// --- Live fields (chain-resolved) ------------------------------------------------------
-	if (Ent->Class != nullptr && ImGui::CollapsingHeader("Fields", ImGuiTreeNodeFlags_DefaultOpen))
+	// Every record inherits the CBaseEntity chain whether or not its class uses it, so an inert
+	// record like info_node (3 keyvalues on disk) shows ~20 fields, all at their default. The
+	// values are collected first so the header can carry the set/total count and the table can
+	// drop the untouched ones — otherwise the useful rows are buried in zeros.
+	struct FFieldRow
+	{
+		FName Name;
+		const FElysiumFieldAccessor* Acc = nullptr;
+		FString Value;
+		bool bSet = false;
+	};
+	TArray<FFieldRow> FieldRows;
+	int32 FieldsSet = 0;
+	if (Ent->Class != nullptr)
 	{
 		TArray<FName> FieldNames;
 		CollectFields(*Ent->Class, Reg, FieldNames);
+		FieldRows.Reserve(FieldNames.Num());
+		for (const FName& N : FieldNames)
+		{
+			FFieldRow FR;
+			FR.Name = N;
+			FR.Acc = Reg.FindField(*Ent->Class, N);
+			if (FR.Acc != nullptr)
+			{
+				const FElysiumVariant V = FR.Acc->Get(*Ent);
+				FR.Value = V.ToString();
+				// Python truthiness is exactly the "has this been touched" test: 0, empty string,
+				// zero vector, unbound handle and Void all read false.
+				FR.bSet = V.ToBool();
+			}
+			FieldsSet += FR.bSet ? 1 : 0;
+			FieldRows.Add(MoveTemp(FR));
+		}
+	}
+
+	// A real class leads with its fields; an inert record leads with its keyvalues, which are the
+	// only data it has. Re-seated only when the selection changes, so toggling a section by hand
+	// sticks while you work on one entity.
+	if (bSelectionChanged)
+	{
+		ImGui::SetNextItemOpen(!Ent->IsRecordOnly() && FieldRows.Num() > 0, ImGuiCond_Always);
+	}
+	// The "###Fields" suffix pins the ImGui ID so the changing count in the label does not reset
+	// the section's open state.
+	const FString FieldsLabel = FString::Printf(TEXT("Fields  (%d of %d set)###Fields"),
+		FieldsSet, FieldRows.Num());
+	if (FieldRows.Num() > 0 && ImGui::CollapsingHeader(COG_TCHAR_TO_CHAR(*FieldsLabel)))
+	{
+		ImGui::Checkbox("Hide unset", &bHideDefaultFields);
+		ImGui::SetItemTooltip("Drop fields still at their zero / empty default. Most records inherit "
+			"the whole CBaseEntity chain and use almost none of it.");
 
 		const ImGuiTableFlags Flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
 			ImGuiTableFlags_SizingStretchProp;
@@ -299,25 +609,41 @@ void FElysiumCogWindow_Inspector::RenderContent()
 			ImGui::TableSetupColumn("Value");
 			ImGui::TableHeadersRow();
 
-			for (const FName& N : FieldNames)
+			for (const FFieldRow& FR : FieldRows)
 			{
-				const FElysiumFieldAccessor* Acc = Reg.FindField(*Ent->Class, N);
+				if (bHideDefaultFields && !FR.bSet)
+				{
+					continue;
+				}
 				ImGui::TableNextRow();
 				ImGui::TableNextColumn();
-				ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*N.ToString()));
+				ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*FR.Name.ToString()));
 				ImGui::TableNextColumn();
-				ImGui::TextUnformatted(Acc ? InspectorVariantTypeName(Acc->Type) : "?");
+				ImGui::TextUnformatted(FR.Acc ? InspectorVariantTypeName(FR.Acc->Type) : "?");
 				ImGui::TableNextColumn();
-				ImGui::TextUnformatted(Acc && Acc->bKeyable ? "yes" : "");
+				ImGui::TextUnformatted(FR.Acc && FR.Acc->bKeyable ? "yes" : "");
 				ImGui::TableNextColumn();
-				ImGui::TextUnformatted(Acc ? COG_TCHAR_TO_CHAR(*Acc->Get(*Ent).ToString()) : "");
+				ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*FR.Value));
 			}
 			ImGui::EndTable();
+		}
+		if (bHideDefaultFields && FieldsSet == 0)
+		{
+			ImGui::TextDisabled("Every inherited field is at its default — this record's data is "
+				"in Keyvalues below.");
 		}
 	}
 
 	// --- Raw keyvalues ---------------------------------------------------------------------
-	if (ImGui::CollapsingHeader("Keyvalues"))
+	// The verbatim `.ents` record. For the inert majority (light, info_node, infodecal, env_sprite)
+	// this is the whole of what the map author wrote, so it opens by default for them.
+	if (bSelectionChanged)
+	{
+		ImGui::SetNextItemOpen(Ent->IsRecordOnly() || FieldsSet == 0, ImGuiCond_Always);
+	}
+	const FString KeysLabel = FString::Printf(TEXT("Keyvalues  (%d)###Keyvalues"),
+		Ent->Def->Keys.Num());
+	if (ImGui::CollapsingHeader(COG_TCHAR_TO_CHAR(*KeysLabel)))
 	{
 		const ImGuiTableFlags Flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
 			ImGuiTableFlags_SizingStretchProp;
@@ -344,9 +670,15 @@ void FElysiumCogWindow_Inspector::RenderContent()
 	}
 
 	// --- Outputs (7 fields: name, target, input, param, delay, times, python) --------------
-	if (ImGui::CollapsingHeader("Outputs", ImGuiTreeNodeFlags_DefaultOpen))
+	// Most records wire nothing, so the section only opens for the ones that do.
+	const TArray<FElysiumOutputDef>& Outputs = Ent->Def->Outputs;
+	if (bSelectionChanged)
 	{
-		const TArray<FElysiumOutputDef>& Outputs = Ent->Def->Outputs;
+		ImGui::SetNextItemOpen(Outputs.Num() > 0, ImGuiCond_Always);
+	}
+	const FString OutputsLabel = FString::Printf(TEXT("Outputs  (%d)###Outputs"), Outputs.Num());
+	if (ImGui::CollapsingHeader(COG_TCHAR_TO_CHAR(*OutputsLabel)))
+	{
 		if (Outputs.Num() == 0)
 		{
 			ImGui::TextDisabled("No outputs.");
@@ -386,25 +718,29 @@ void FElysiumCogWindow_Inspector::RenderContent()
 	}
 
 	// --- Fire input (through the real queue, targeting this entity) ------------------------
-	ImGui::SeparatorText("Fire input");
-	ImGui::SetNextItemWidth(GetDpiScale() * 160.0f);
-	FCogWidgets::InputTextWithHint("##Param", "param", PendingParam);
-	ImGui::SameLine();
-	ImGui::SetNextItemWidth(GetDpiScale() * 90.0f);
-	ImGui::InputFloat("delay", &PendingDelay, 0.0f, 0.0f, "%.2f");
-	PendingDelay = FMath::Max(0.0f, PendingDelay);
-
+	// An inert record answers no inputs at all, which is the common case; skip the param/delay
+	// widgets entirely for it rather than showing controls that drive nothing.
 	TArray<FName> InputNames;
 	if (Ent->Class != nullptr)
 	{
 		CollectInputs(*Ent->Class, Reg, InputNames);
 	}
+	ImGui::SeparatorText("Fire input");
 	if (InputNames.Num() == 0)
 	{
-		ImGui::TextDisabled("This class registers no inputs.");
+		ImGui::TextDisabled(Ent->IsRecordOnly()
+			? "Inert record — no class is registered for this classname, so it answers no inputs."
+			: "This class registers no inputs.");
 	}
 	else
 	{
+		ImGui::SetNextItemWidth(GetDpiScale() * 160.0f);
+		FCogWidgets::InputTextWithHint("##Param", "param", PendingParam);
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(GetDpiScale() * 90.0f);
+		ImGui::InputFloat("delay", &PendingDelay, 0.0f, 0.0f, "%.2f");
+		PendingDelay = FMath::Max(0.0f, PendingDelay);
+
 		// Fire "!self" with Caller = this entity, so the input reaches exactly the inspected
 		// record regardless of targetname sharing. Activator is unset (hand-fired, no activator).
 		const FElysiumEntityHandle Handle = Ent->Handle;

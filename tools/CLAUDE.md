@@ -71,6 +71,15 @@ becomes the control's *minimum* and a smaller rect silently clamps up to it. The
 overlay (`GameManager`) reuses `GameMenuPanel`(pause) over a dimmed world. Both fall
 back to a plain neutral menu when `content/ui/` is absent.
 
+That composition and those VGUI scaling rules describe the **Godot prototype's** faithful port.
+Elysium-Unreal does not port VGUI: the UI is re-skinned on a modern resolution-independent stack
+(`docs/remaster-direction.md` axis 1, roadmap 8.6). What `menu_extract` produces is therefore
+consumed as **design intent + source art** — screen inventory, panel anatomy, palette,
+iconography, strings, and the title/background art — not as a runtime layout description. The
+`.res` coordinates and the `.fnt` bitmap pages stay worth extracting as proportion and metric
+reference; the runtime type is vector, so the glyph atlases never ship. Roadmap **PL8** is the
+task that widens the extract to that whole inventory.
+
 ## VPK archives (original VtMB format)
 
 `pack000.vpk … pack103.vpk` in the game's `Vampire\` folder. ~67,469 files indexed.

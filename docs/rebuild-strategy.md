@@ -1,10 +1,16 @@
 # Elysium-Unreal — Rebuild Strategy
 
-North star: rebuild VtMB as a **playable game** in Unreal Engine 5.8 + C++, consuming
-engine-neutral intermediates produced by this repo's own decode/export pipeline (`tools/`).
-**No original game content is ever converted into `.uasset`s.** The only assets committed to
-`Content/` are hand-authored, game-agnostic scaffolding (master materials, input configs,
-empty maps).
+North star: rebuild VtMB as a **playable game — remastered** — in Unreal Engine 5.8 + C++,
+consuming engine-neutral intermediates produced by this repo's own decode/export pipeline
+(`tools/`). **No original game content is ever converted into `.uasset`s.** The only assets
+committed to `Content/` are hand-authored, game-agnostic scaffolding (master materials, input
+configs, empty maps).
+
+**Remaster, not pixel-perfect recreation.** Tone, ambience, feel and game logic are kept; craft
+is raised with tools 2004 did not have — modern UI and typography first, then assets, feel, and
+quality-of-life. The stance, the three change layers (presentation / feel / logic), the two adjudication
+tests, and the rule that **every behavioural divergence needs the RE done first and an explicit
+owner's call** live in **`docs/remaster-direction.md`** — read it with this doc.
 
 Unreal is the committed implementation. The Godot project (`E:\dev\elysium`) was the first
 attempt and is now a **read-only reference**: no further work lands there. It is consulted for
@@ -14,9 +20,10 @@ falls away entirely.
 The plan has two tracks that run in parallel:
 
 - **Track A — parity**: reach the Godot prototype's rendering/walking state
-  (world, props, lights, water, decals, movement, menu). The Godot viewer is the
+  (world, props, lights, water, decals, movement). The Godot viewer is the
   reference implementation; every system here has a proven design and exact data
-  formats to copy.
+  formats to copy. **The UI is not a parity target** — its Godot VGUI port is structural
+  reference for the modern re-skin, not a thing to reproduce (principle 8).
 - **Track B — the game layer**: entities, Source I/O, triggers, movers, +use,
   travel, NPCs, scripting, dialogue, the main game loop. The Godot prototype
   **never built this** — it exists only as reverse-engineering docs and exported
@@ -50,99 +57,55 @@ The plan has two tracks that run in parallel:
    `animation_and_movers.md` (skeletal + doors/buttons/elevators), `game_runtime.md` (main
    loop, RPG data, dialogue format), `audio_pipeline.md`, `source_movement.md`, `lighting.md`,
    `mdl_v2531.md`, `entity_visuals.md`, `color_gamma.md`, `level_transitions.md`,
-   `m0_menu_build.md`, and `recovered/dice-system.md`. Do not re-derive what those already
+   `m0_menu_build.md` (the original UI's structure + `GameUI.dll` findings — reference for the
+   re-skin, not a port target), and `recovered/dice-system.md`. Do not re-derive what those already
    state. Un-ported system *source* (for class-for-class porting) remains in the read-only
    Godot repo at `E:\dev\elysium\game\src`.
-7. **Faithful baseline, opt-in enhancement layer.** The committed baseline reproduces VtMB
-   faithfully (geometry 1:1, dynamic GI anchored to the baked-lightmap calibration). On top of
-   it, an **offline, code-driven remaster track** may raise asset fidelity *while preserving the
-   art direction* — always as an A/B toggle, never a fork. The adjudication test for any such
-   pass: *does it serve VtMB's grimy gothic-punk direction (or fix a technical deficit that
-   fights the dynamic relight — e.g. delighting albedo), or is it inventing/overriding an artist
-   decision?* Serve/fix → in; invent/override → out. Full plan, tiers, and pipeline hooks:
-   `asset-enhancement.md`. Not yet scheduled (P10-ish); scaffolding exists in `tools/`.
+7. **Remaster: modernize presentation, reproduce behaviour.** Three change layers, three rules
+   (`remaster-direction.md`): **presentation** (UI, type, HUD, textures, post) modernizes freely
+   under the art-direction test; **feel** (movement, camera, combat) is built faithful first and
+   polished only by explicit call; **logic and content** (entity semantics, I/O, scripts,
+   dialogue, stats, saves) is reproduced, and any divergence requires the faithful behaviour to
+   be RE'd and understood *first* plus a dated owner decision in `roadmap.md`'s log. Default is
+   always reproduce.
+8. **The world keeps its faithful baseline; the UI does not.** Geometry 1:1 and dynamic GI
+   anchored to the baked-lightmap calibration stay the reference, with the **offline,
+   code-driven asset-enhancement track** as an A/B toggle on top, never a fork — adjudicated by
+   *does it serve VtMB's grimy gothic-punk direction (or fix a technical deficit that fights the
+   dynamic relight — e.g. delighting albedo), or is it inventing/overriding an artist decision?*
+   Serve/fix → in; invent/override → out. Full plan, tiers, and pipeline hooks:
+   `asset-enhancement.md` (in scope; scheduled P10-ish, scaffolding exists in `tools/`). The UI
+   has **no classic mode** — the pixel-faithful VGUI port is not built; VtMB's screen structure
+   is re-skinned with vector type on a resolution-independent stack.
 
-## Current implementation state (M0 verified; M1 in progress)
+## Implementation state
 
-Working today: boot into the empty persistent level → `UElysiumMapSubsystem::Travel`
-(synchronous) loads a map as two `UProceduralMeshComponent` actors (world 355 sections +
-3D skybox 84 sections for `sp_tutorial_1`), one MID per material off the single master
-`M_VtMB_World`, DDS-preferred textures with PNG fallback, brush collision (`.hulls` convex
-hulls + `.dispcol` displacement trimesh) as the walkable surface with a render-trimesh fallback
-(async-cooked; pawn held until ground exists), `.emc` parse-cache (~1.3s warm load),
-`.sky` transform, `.spawn` placement, Character-movement FPS pawn with noclip, Canvas
-debug HUD, engine-console commands `elysium.map` / `elysium.maps` / `elysium.debug` /
-`elysium.lights`.
+**Authoritative status lives in `docs/roadmap.md`** — the single source of truth work tracker
+(per-task detail, what landed, what is next). Nothing is mirrored here. What exists in code
+right now, and where it lives, is documented next to the code: `../Source/ElysiumUE/CLAUDE.md`
+(runtime types, entity substrate, scripting hosts, debug layer), `../tools/CLAUDE.md`
+(decoders), `../Content/CLAUDE.md` (committed assets).
 
-All intermediates are read **verbatim** — `UE_bsp_to_scene.py` emits Unreal cm/Z-up/
-left-handed with winding pre-reversed, so no runtime coordinate conversion happens.
+Two implementation facts this doc owns, because they shape every downstream design:
 
-The map actor reads `.env` and `.cube` (`ApplyEnvironment`, backed by
-`ElysiumEnvironment.{h,cpp}`): the `.cube` grade becomes a per-map color-grading LUT (33³
-Adobe LUT resampled to Unreal's 16³ neutral-LUT layout) on an unbound `UPostProcessComponent`;
-the six `.env` sky faces build one runtime `UTextureCube` driving the visible 2D backdrop —
-a large unlit inward box (`SkyDomeMesh`) running a `M_Sky` MID that samples the cube by view
-direction, with a tunable `Brightness` scalar (the night skyboxes are near-black); `.env` fog
-drives a `UExponentialHeightFogComponent` (off for the tutorial).
+- **Intermediates are read verbatim.** `UE_bsp_to_scene.py` emits Unreal cm/Z-up/left-handed
+  with winding pre-reversed, so no runtime coordinate conversion happens anywhere (rules
+  below).
+- **VtMB's look is indirect-bounce-dominated.** Calibrating the runtime light rig against
+  VtMB's own baked lightmaps (`tools/probe_light_calibration.py`) established that a
+  direct-light model — even with correct occlusion — has zero correlation with the baked
+  result. So Lumen GI is load-bearing, not optional, and the dynamic lights are a modest
+  contributor feeding it. This also makes **baking VtMB's lump-8 lighting** the natural
+  low-end/floor path (free GI at runtime, from the data VtMB shipped). Render path, the SM6
+  requirement, tuning, and the floor budget: `rendering-perf.md`.
 
-Lighting is the real-time `UElysiumLightRig` (`ElysiumLightRig.{h,cpp}`): it reads `.lights`
-and spawns one Unreal light per WORLDLIGHTS source (396 for the tutorial — point/spot on
-a soft exponent falloff (specular off — VtMB is pure Lambert) with `radius → reach`, a directional sun,
-skyambient tinting the `SkyLight`, lightstyle patterns ticked as intensity curves). The flat
-fallback sun is switched off once real lights load, and the `SkyLight` drops to a dim ambient
-fill. The renderer runs fully dynamic — HWRT Lumen + MegaLights + VSM (`Config/DefaultEngine.ini`),
-which **requires DX12/SM6** (every one of those features silently disables under DX11/SM5).
+The M1 remainder maps onto roadmap tasks: Source movement → 4.7, master-material set → 7.4,
+texture prewarm → 3.8, texlight clustering → 3.4, colour-grade fidelity + sky orientation +
+A/B toggles → 3.7.
 
-Calibrating the rig against VtMB's own baked lightmaps (`tools/probe_light_calibration.py`)
-established that VtMB's look is **indirect-bounce-dominated** — a direct-light model, even
-with correct occlusion, has zero correlation with the baked result. So Lumen GI is
-load-bearing, not optional, and the dynamic lights are a modest contributor feeding it. This
-also makes **baking VtMB's lump-8 lighting** the natural low-end/floor path (free GI at
-runtime, the data VtMB shipped). Full render-path notes, the SM6 requirement, tuning, and the
-floor-budget reality are in `docs/rendering-perf.md`.
+Design targets in this doc that are **not** code are marked where they appear — chiefly
+`map-architecture.md`'s async-travel state machine and its Slate console.
 
-Static props load: `.props` + `props/*.obj` build one `UStaticMesh` per unique model at
-runtime (`FElysiumStaticMeshBuilder`, `BuildFromMeshDescriptions`), rendered as one
-`UInstancedStaticMeshComponent` per (model, solidity) bucket, materials off `M_VtMB_World`,
-convex collision on solid props. 809 instances / 161 models for the tutorial; `elysium.props`
-toggles them.
-
-Not yet built (sidecars exist unread in `tools/out`): `.sprites`, `_decals.obj`,
-`.water`, `.ents`; and texlight (type-0) clustering in the rig.
-`Travel`'s landmark parameter is accepted and ignored.
-Input bindings are legacy axis/action mappings (EnhancedInput is configured as the
-player-input class but unused). Two of the planned master materials exist (`M_VtMB_World`,
-`M_Sky`); the rest are unbuilt. Movement is stock `UCharacterMovementComponent` (not the
-Source math yet). `docs/map-architecture.md`'s async load state machine and Slate console are
-design, not code.
-
-## M1 — remaining tasks
-
-Done this milestone: tooling migration; the **`UE_` coordinate conversion** (the map
-exporter, now `UE_bsp_to_scene.py`, emits Unreal cm/Z-up/left-handed with winding
-pre-reversed — the runtime reads every file raw); `.env` sky/fog + `.cube` LUT + `M_Sky`;
-and the **light rig + lightstyles** — `UElysiumLightRig` on the map actor spawns one Unreal
-light per `.lights` source (396 for the tutorial: 224 point, 170 spot, 1 sun, 1 skyambient),
-point/spot on a soft exponent falloff with specular killed (`radius → reach`), lightstyle
-patterns as per-frame intensity curves, skyambient tinting the `SkyLight`, and the flat
-fallback sun retired when real lights exist. The renderer is fully dynamic (HWRT Lumen +
-MegaLights + VSM, `Config/DefaultEngine.ini`); `elysium.lights` toggles the rig,
-`elysium.LightScale` tunes point/spot intensity. Texlight (type 0) clustering is the one
-deferred rig piece (none in the tutorial). Reference: `docs/lighting.md`, Godot
-`LightRig.cs` + `Lightstyles.cs`.
-
-Also done: **`.hulls`/`.dispcol` brush collision** — `AElysiumMapActor::LoadHulls`/`LoadDispCol`
-build one convex `FKConvexElem` per solid `.hulls` brush (via `SetCollisionConvexMeshes`, one
-cook; invisible PLAYERCLIP volumes included) and the `.dispcol` triangle soup as a displacement
-trimesh, both on collision-only `UProceduralMeshComponent`s. When they load, the world render
-mesh is built with no collision so the brushes are the walkable surface; `elysium.BrushCollision`
-flips back to the render-trimesh for A/B. The sidecars are already Unreal cm (read verbatim).
-Reference: Godot `BrushCollision.cs`.
-
-The remaining M1 tasks and the cross-cutting polish items are tracked in
-**`docs/roadmap.md`** (the single source of truth work tracker): Source movement → 4.7,
-master-material set → 7.4, texture prewarm → 3.8, texlight clustering → 3.4, colour-grade
-fidelity + sky orientation + A/B toggles → 3.7, repo hygiene → 0.7.
 
 ## Coordinate conventions
 
@@ -165,7 +128,7 @@ no swap, scale, or winding flip:
   (`INCH_TO_CM`); `.spawn` yaw is emitted already negated (the Y flip reverses yaw sense).
 - The Source→Unreal math lives once in `tools/bsp.py` — never inline it. Legacy non-`UE_`
   exporters still emit Godot Y-up/metres (`source_to_godot`) and are flagged for review
-  (see `CLAUDE.md` → "Exporter status — the `UE_` convention").
+  (see `../CLAUDE.md` → "The `UE_` exporter convention", and `../tools/CLAUDE.md`).
 
 ## Sidecar contracts (what the runtime consumes)
 
@@ -210,7 +173,7 @@ Unreal-native substitutions:
 | `.env` | sky material from six sky PNGs + `UExponentialHeightFogComponent` | native. |
 | `SourceMovement.cs` / `PlayerController.cs` | custom `UCharacterMovementComponent` override | port the Source `CGameMovement` math line-by-line — `SourceMovement.cs` + `docs/source_movement.md` are the reference. Friction/accel/airaccel/StepMove constants verified against the decompile. |
 | props (`MultiMesh`) | `UInstancedStaticMeshComponent` per unique model | static mesh built at runtime from `props/*.obj` (`FStaticMeshRenderData` path or PMC per model); `solid != 0` instances get convex collision from the render mesh. |
-| VGUI2 menu (`Ui/Vgui/*`) | Slate/UMG port | `KeyValues`, `VguiScheme`, `VguiFont`, `.res` layout parsers to C++; glyph atlas-region draws; 640×480 logical space in a scale box. The Godot implementation is complete and is the porting reference. |
+| VGUI2 menu (`Ui/Vgui/*`) | **modern Slate/UMG UI** (not a VGUI port) | Screen inventory, panel anatomy, hierarchy and iconography carry over from `.res`/`trackerscheme.res`; the runtime is a resolution-independent Slate/UMG stack with vector type. No 640×480 scale box, no bitmap `.fnt` atlas, no classic mode. `remaster-direction.md` → axis 1; the Godot VGUI implementation and `m0_menu_build.md` are structural reference. |
 | `DevConsole.cs` | engine console commands now; Slate console only if it earns its keep | `elysium.*` commands cover current needs. |
 
 **Success criterion for Track A**: side-by-side A/B match with the Godot viewer on
@@ -233,7 +196,8 @@ game-agnostic set with parameter slots — the analogue of Godot's `.gdshader` f
 - `M_Decal` (deferred decal domain)
 - `M_Sky` (six-face skybox) *(exists — unlit, two-sided, samples the `SkyCube` param by
   view direction; authored by `tools/make_sky_material.py`)*
-- `M_VguiGlyph` / UI brushes
+- UI brushes / materials for the modern UI stack (vector-type rendering is Slate's own; these
+  cover panel treatments — grain, ink bleed, vignette — that carry the paper/blood language)
 
 These encode shading logic, not game content — they belong in `Content/` permanently.
 
@@ -413,10 +377,12 @@ Fully RE'd in `audio_pipeline.md`, zero runtime exists in either engine:
 ## B9. Dialogue and beyond
 
 `.dlg` format (13-field CRLF Latin-1) is column-verified in `game_runtime.md`; no
-parser exists anywhere yet. Parser + branch machine + UMG conversation UI + dlgexpr
-(B6.2) + audio-by-path. Chargen, combat, and the full RPG sheet come after the
-tutorial plays end-to-end — `rebuild-strategy.md` in the Godot repo holds the long-tail
-toolkit table.
+parser exists anywhere yet. Parser + branch machine + conversation UI on the modern UI
+foundation + dlgexpr (B6.2) + audio-by-path. The **dialogue content is reproduced verbatim**
+(lines, conditions, branch structure, the 89 malformed snippets' error-to-false behaviour);
+only its presentation modernizes — legible type, reflowing line lists, subtitles, and a layout
+that is not bound to 640×480. Chargen, combat, and the full RPG sheet come after the tutorial
+plays end-to-end — `rebuild-strategy.md` in the Godot repo holds the long-tail toolkit table.
 
 ---
 
@@ -493,8 +459,10 @@ Vertical slice: **play `sp_tutorial_1` start to finish, then walk into
 - **M4 — scripting + audio foundation**: expression evaluator + `G` + native bindings
   (field-6 calls, `logic_pythoncheck`), MS-ADPCM/MP3 decode, `ambient_generic`,
   sound schemes, door/button sounds.
-- **M5 — menu + characters**: VGUI menu port (Slate/UMG), New Game flow, NPCs spawned
-  from entity data via glTFRuntime, `scripted_sequence` minimal handler, dynamic props.
+- **M5 — UI + characters**: the modern UI foundation (design system, vector type,
+  resolution-independent Slate/UMG stack) carrying the main/pause menus and New Game flow, the
+  HUD and sign panels re-skinned onto it, accessibility/options backing, NPCs spawned from
+  entity data via glTFRuntime, `scripted_sequence` minimal handler, dynamic props.
 - **M6 — dialogue + game state**: `.dlg` parser + UI + dlgexpr, level-script execution,
   quest/XP basics, save/load. *Success: the tutorial is completable as in retail.*
 
@@ -504,20 +472,14 @@ one part with no Godot reference to fall back on — de-risk it earliest.
 
 ## Repository facts
 
-- Committed assets: `Content/Elysium.umap` (empty boot persistent level, regenerable via
-  `tools/make_boot_map.py` headless) and the master materials `Content/VtMB/Materials/
-  M_VtMB_World` and `M_Sky` (regenerable via `tools/make_sky_material.py` headless). No
-  converted game content, no vendored Python.
-- `Config/DefaultEngine.ini`: boot map `/Game/Elysium`, `AElysiumGameMode` global
-  default, `UElysiumGameInstance`. `Config/DefaultInput.ini`: legacy axis/action
-  mappings (WASD, mouse-look, Space jump, V noclip, T skybox, F1 debug, F10 console).
-- Enabled plugins: `ProceduralMeshComponent` (runtime), `PythonScriptPlugin` (offline
-  scaffolding only). Module deps: ProceduralMeshComponent, ImageWrapper, ImageCore,
-  RenderCore, RHI, EnhancedInput, Slate, SlateCore.
-- Content root: dev builds read `tools/out` in this repo (gitignored), generated by the
-  in-repo pipeline (`-ElysiumMap=` selects the boot map). `FElysiumContentPaths::Root()`
-  resolves to `FPaths::ProjectDir()/"tools/out"`. Packaged builds later read a `content/`
-  folder next to the executable, populated by the user running the pipeline against their
-  own install.
-- Map lifecycle details: `docs/map-architecture.md` (note: its async-travel state
-  machine and Slate console are design targets, not current code).
+Module, plugins, dependencies, source layout, config, content root, and the committed asset
+list are documented next to the code they describe:
+
+- `../Source/ElysiumUE/CLAUDE.md` — the C++ runtime (module + deps, key types, entity
+  substrate, scripting hosts, audio, debug layer, console commands, `Config/` facts).
+- `../Content/CLAUDE.md` — the committed `.uasset`s and their offline generators.
+- `../tools/CLAUDE.md` — the VtMB input formats and their decoders.
+- The repo-root `CLAUDE.md` — orientation, the load-bearing rules, build & run.
+
+Map lifecycle design: `map-architecture.md` (its async-travel state machine and Slate console
+are design targets, not current code).

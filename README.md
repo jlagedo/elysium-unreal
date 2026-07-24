@@ -22,11 +22,11 @@ game-agnostic (an empty boot map + one master material).
 
 | Path | What |
 |---|---|
-| `Source/ElysiumUE/` | the C++ runtime module (loads intermediates, builds the world) |
+| `Source/ElysiumUE/` | the C++ runtime module (loads intermediates, builds the world) + runtime facts (`Source/ElysiumUE/CLAUDE.md`) |
 | `tools/` | the offline Python decode/export pipeline (`UE_bsp_to_scene.py`, …) + format docs (`tools/CLAUDE.md`) |
 | `docs/` | reverse-engineering reference + the rebuild strategy |
 | `Content/` | committed assets only: `Elysium.umap` (boot) + the `M_VtMB_World`/`M_Sky`/`M_Gizmo*` master materials |
-| `CLAUDE.md` | project fact sheet + documentation map (start here after this README) |
+| `CLAUDE.md` | project fact sheet + documentation index (start here after this README) |
 
 ## Build & run (Windows, UE 5.8)
 
@@ -39,5 +39,6 @@ editor.bat           # open in the Unreal editor (Play = PIE)
 play.bat [map]       # launch standalone (default: sp_tutorial_1); WASD + mouse to fly
 ```
 
-See **[`CLAUDE.md`](CLAUDE.md)** for engine/module facts, the runtime types, coordinate
-conventions, and the full documentation map.
+See **[`CLAUDE.md`](CLAUDE.md)** for the project fact sheet, the load-bearing rules, and the
+documentation index; **[`Source/ElysiumUE/CLAUDE.md`](Source/ElysiumUE/CLAUDE.md)** for
+engine/module facts and the runtime types.

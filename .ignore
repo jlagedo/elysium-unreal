@@ -1,28 +1,13 @@
-# Search-tool ignores (ripgrep / fd). Keeps large generated, cache, and vendored
-# trees out of code searches. Not a substitute for .gitignore.
-
-# Git internals + IDE caches
 /.git
 /.vs
 /.vscode
-/.idea
-
-# Unreal generated / build output
-/Binaries
 /Content
 /DerivedDataCache
+/docs
 /Intermediate
 /Saved
-
-# Offline pipeline: generated content + local env (regenerable)
-/tools/out
-/tools/.venv
-/tools/__pycache__
-/tools/models
-
-# Ghidra + RE workspace: vendored distro, decompilation dumps, reference clones
-/tools/ghidra*
-/tools/re
-
-# Valve Source SDK: local RE reference only
 /sdk
+/tools
+/Plugins/Cog/Intermediate
+/Plugins/glTFRuntime/Content
+/Plugins/glTFRuntime/Intermediate

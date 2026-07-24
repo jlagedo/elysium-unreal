@@ -7,6 +7,7 @@
 #include "CoreMinimal.h"
 #include "CogWindow.h"
 #include "ElysiumEntityHandle.h"
+#include "ElysiumPick.h"
 
 class AElysiumMapActor;
 class FElysiumEntityWorld;
@@ -45,8 +46,16 @@ protected:
 	static const FElysiumEntityHandle& GetSelection() { return Selection; }
 	static void SetSelection(const FElysiumEntityHandle& InHandle) { Selection = InHandle; }
 
+	// P2.6 — what the last click in the world resolved to (entity body, world surface, or prop
+	// instance) and the geometry the inspector's overlay highlights. Shares the selection's
+	// debug-only single-instance assumption. A pick whose component died reports IsStale().
+	static const FElysiumPickResult& GetPick() { return Pick; }
+	static void SetPick(const FElysiumPickResult& InPick) { Pick = InPick; }
+	static void ClearPick() { Pick.Reset(); }
+
 private:
 	static FElysiumEntityHandle Selection;
+	static FElysiumPickResult Pick;
 };
 
 #endif // ENABLE_COG
