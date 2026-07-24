@@ -41,20 +41,22 @@ UE 5.8. Module `ElysiumUE` (Runtime, Default loading phase).
   jump, Q/E/Ctrl vertical, V noclip, T skybox, E use; F1 is Cog's). EnhancedInput is
   configured as the player-input class but unused.
 - Boot paths: **New Game** (`UElysiumMapSubsystem::NewGame`) seeds a story context and enters
-  the story entry at its `info_landmark`; `-ElysiumMap=<name>` (`play.bat <map>`) loads a map
-  bare (the dev path — it seeds only `Linux_Wine=1`, so the tutorial's `linux_check`
-  logic_pythoncheck reads OnTrue and the Wine-warning `popup_linux` stays down); `-ElysiumNewGame=0`
-  boots the story map bare. `-ElysiumProfile` runs the headless profiling harness.
+  the story entry at its `info_landmark`; `-ElysiumMap=<name>` (`play.bat <map>`) loads the named
+  map and seeds a **mock character** (`BeginNewGame(Tremere, male)` — interim stand-in for chargen,
+  9.4) so the player sheet the dialogue gates read exists. `-ElysiumProfile` runs the headless
+  profiling harness.
 
 ## Map load path
 
-`UElysiumMapSubsystem` (travel, synchronous) → `AElysiumMapActor` (owns everything for one
-map epoch; tears down on travel).
+`UElysiumMapSubsystem` (UE5 hard travel: `Travel` stows the target + `OpenLevel`s the reused
+shell; the fresh world's game mode calls `SpawnPendingMap`) → `AElysiumMapActor` (owns everything
+for one map epoch; the engine tears the world down on travel and GC frees it — no manual flush,
+no force-GC). `map-architecture.md` has the model; roadmap 10.8.
 
 | Type | Role |
 |---|---|
 | `FElysiumObjModel` | OBJ/MTL reader; `.emc` parse-cache |
-| `FElysiumTextureCache` | DDS-preferred texture load, PNG fallback |
+| `FElysiumTextureCache` | DDS-preferred texture load, PNG fallback; a per-map decoded-texture dedup index owned by the map actor (a plain member), so its strong texture refs drop when the actor is torn down and GC reclaims them — threaded into the material factory / static-mesh builder |
 | `FElysiumMaterialFactory` | one MID per OBJ surface (world + prop ISMs). The material's blend flags pick the master — `M_World_Opaque` / `_Masked` (`illum 4`) / `_Translucent` (`blend 1`) / `M_Additive` (`additive 1`) — then bind its named params: `Albedo`, `Emissive`+`EmissiveScale`, `BumpMap`+`BumpAmount` (linear), `EnvMask`+`EnvStrength` ($envmap → Lumen roughness, uniform white mask when unmasked), `BaseTex2`+`BlendAmount` (WVT). `elysium.BumpScale` / `EnvReflect` / `EmissiveScale` tune the three feature scalars |
 | `FElysiumStaticMeshBuilder` | runtime `UStaticMesh` per unique prop model (`BuildFromMeshDescriptions`), drawn as one ISM per (model, solidity) |
 | `FElysiumDecals` + `FElysiumMaterialFactory::BuildDecal` | 7.2 decals: parse the `.decals` projector sidecar → one deferred `UDecalComponent` per `infodecal`, MID off `M_Decal`. Orient `MakeFromXZ(Normal, SDir)` — local +X = room normal (so −X projects into the wall), and since a deferred decal maps texture **U→local Z, V→local Y**, the surface horizontal `SDir` goes on local Z with `DecalSize = depth×HalfH×HalfW`. `elysium.Decals` A/Bs the pass, `elysium.DecalDepth` the depth, `elysium.DecalFlipU` mirrors U |
@@ -70,7 +72,8 @@ A/Bs back to the render trimesh.
 Player-facing actors: `AElysiumGameMode`, `AElysiumPlayerController` (+ `UElysiumCheatManager`
 — `Noclip`, `ElysiumTeleport`, plus stock `UCheatManager` execs), `AElysiumPawn`
 (Character-movement FPS pawn with noclip), `AElysiumHUD` (Canvas: the use-icon reticle,
-`env_fade` screen fade, sign panels — player pose/mode/FPS live in the Cog Maps window).
+`env_fade` screen fade, sign panels — player pose/mode/FPS live in the Cog Maps window; it also
+ticks the native-Slate dialogue box off the world's open-conversation state, B4).
 
 ## The entity substrate (Track B)
 
@@ -108,12 +111,31 @@ NPCs (B3, no AI) stand a real glTF skeletal body at their origin: `ElysiumNpcVis
 shared glb→`USkeletalMesh` loader (the 8.2 path, reused by the `UElysiumNpcSubsystem` test harness),
 and `AElysiumMapActor::BuildNpcVisual` caches the mesh + idle clip per stem and stands a
 `USkeletalMeshComponent` on the map actor (`elysium.NpcBodies` A/Bs the bodies; I/O still resolves
-without them). `FElysiumNpc` latches `WillTalk`/`UseInteresting` and turns `StartPlayerDialogRemote`
-into `OnDialogBegin` + a manual `EndDialog`→`OnDialogEnd` seam (B4 replaces it with the `.dlg`
-runner). `npc_maker.Spawn` creates its `NPCTargetname` child through
+without them). `FElysiumNpc` latches `WillTalk`/`UseInteresting`; `StartPlayerDialogRemote` fires `OnDialogBegin` then
+opens the NPC's `.dlg` conversation (B4 — its `dialogname` keyfield names the file). `npc_maker.Spawn`
+creates its `NPCTargetname` child through
 **`FElysiumEntityWorld::SpawnRuntimeEntity`** — a runtime-synthesized def stored past the map's
 immutable def array, appended to `EntityList` (identity needs only the append). Runtime NPC bodies are
 tracked for teardown like brush bodies.
+
+**Dialogue (9.1 / B4).** `ElysiumDlg.{h,cpp}` is the engine-neutral core: the 13-field `.dlg` parser
+(`FElysiumDlgFile`), the `dlgexpr` front-normalizer (`ElysiumDlgExpr` — skill-checks → `CalcFeat(...) >=`,
+condition `&`/`|` → `and`/`or`, action `&` → `;`, else verbatim; the host then error-to-falses anything
+malformed), and the host-agnostic branch machine (`FElysiumDlgConversation`, injected condition/action
+callbacks). Text columns: col-1/2 are the gendered spoken text, **col-12 is the Malkavian-PC variant** of the
+same line (`TextMalkavian`, not a short label — 97% of the 9,576 rows that carry it differ from col-1). Raw
+`Text(bMale)`/`RawFor(bMale,bMalk)` are verbatim; `DisplayText(bMale,bMalk)` picks the Malkavian variant when
+the player is Malkavian and strips the `[...]` VO stage directions (`ElysiumDlgText::StripStageDirections`) the
+way VtMB does on screen — the box (subtitle + choices) uses it, keyed off the sheet's clan/gender. An NPC's
+`StartPlayerDialogRemote` loads its `dialogname` `.dlg`, builds a conversation whose
+callbacks route through `FElysiumEntityWorld::EvalCondition` (the installed CPython/expr host — field-5
+writes hit the same `G` the level script reads), and hands it to the world's open-dialogue seam
+(`OpenDialog`/`GetOpenDialog`/`PlayerDialogChoose`/`PlayerDialogAdvance`/`CloseDialog`, one at a time like
+the sign slot). Closing routes `EndDialog` to the owner via `!self`, firing `OnDialogEnd` (→
+`DialogPostProcess`). NPC col-4 = action, PC col-4 = gate. The interim UI is a native-Slate visual-novel
+box (`SElysiumDialogueBox`, `ElysiumDialogueWidget.{h,cpp}`) the HUD adds to the viewport under
+`FInputModeUIOnly`; `elysium.dlg`/`.choose`/`.advance` are its scriptable echo (`ElysiumDlgConsole.cpp`).
+9.2 replaces the box on the 8.6 UI stack.
 
 Dynamic props (8.3, no physics) stand a static-mesh body the same way: `FElysiumProp`
 (`prop_dynamic`/`prop_dynamic_ornament`) calls `AElysiumMapActor::BuildPropVisual` — parse
@@ -151,10 +173,9 @@ default-Block so world + solid bodies occlude the ray, isolated from `ECC_Visibi
 overlapping a trigger volume raises `OnStartTouch`/`OnEndTouch`; a volume that merely intersects
 another brush body — every body on a map is a component of the *same* map actor, so trigger∩trigger
 and trigger∩solid overlaps fire begin/end at map-build time — is filtered out, matching VtMB (geometry
-overlapping geometry is never a touch). A second gate suppresses touches until the map has seated the
-pawn (`AElysiumMapActor::IsPlayerSeated`): on `elysium.newgame`/travel from an already-loaded map the
-pawn briefly stands where the *previous* map left it, and any volume it lands inside then is an
-artifact of the old position, not an entered trigger.
+overlapping geometry is never a touch). Under OpenLevel hard travel each map builds in a fresh world
+with a fresh pawn, so there is no stale previous-map pawn position to guard against (the earlier
+`IsPlayerSeated` gate is retired, roadmap 10.8).
 
 ## Scripting hosts
 
@@ -171,8 +192,9 @@ payloads, `logic_pythoncheck`, `EvalScript`, `ScheduleTask`, level-script import
   payload as `__main__.%s`, so the leading name is an attribute of the bus).
 - `ElysiumPythonEntity.{h,cpp}` is the `vampire` module's object surface: the **`Entity`** type
   (a generation-checked handle, not a pointer — a reference kept across a `Kill` or a travel
-  raises "game entity has been deleted"), the sheet-backed **`Player`**, and the 11 module
-  globals. `Entity.__getattr__` resolves the type methods and instance `__dict__` first, then
+  raises "game entity has been deleted"), the sheet-backed **`Player`**, the 11 module
+  globals, and the console objects **`ccmd`/`cvar`** (9.3b). `Entity.__getattr__` resolves the type
+  methods and instance `__dict__` first, then
   walks the class-chain tables — an **input** name manufactures a bound callable that fires
   through `EnqueueInput`, a **field** name marshals the live value; `__setattr__` is the mirror
   (datamap first, `__dict__` on a miss; an input or a non-keyable field is read-only). The base
@@ -180,11 +202,24 @@ payloads, `logic_pythoncheck`, `EvalScript`, `ScheduleTask`, level-script import
   (and follow the NPC body / re-key the name index), and `CreateEntityNoSpawn`/`CallEntitySpawn` are
   the host's real two-phase spawn (they return/take an `Entity`, like `Find*`). `G` is proxied onto
   the game state with both the attribute *and* mapping protocols, because VtMB's `G[k]` is its `G.k`.
-  `FElysiumPythonVM` itself owns only the interpreter.
+  `ccmd` executes a console command on attribute-*set* (`c.patchtype=""` → alias → Python fallthrough),
+  reads back `""` on get; `cvar` get/set reads/writes a value string. `FElysiumPythonVM` owns the
+  interpreter and the **`FElysiumConsole`** store (`ElysiumConsole.{h,cpp}`, plain C++): the alias/cvar
+  tables parsed from `out/cfg` and the `Execute` path (alias-expand → cvar-set → Python fallthrough). The
+  VM points its `nt.getcwd`/`sys.moddir` at `out/` so VtMB's `getcwd()+moddir` file paths (e.g.
+  `FixKeyBindings` reading `cfg/config.cfg`) resolve into the content mirror, and binds a mutable
+  `Character` compatibility stub so the real `vamputil.py` imports (the patch monkeypatches `Character`;
+  our 24 Character methods dispatch off the getattro, not a shared class — `decisions.md` 2026-07-24).
 - `ElysiumScriptNatives.{h,cpp}` is the engine `vampire` surface both hosts share: the binding
   table the Cog Scripting window renders, the stub defaults, the Character-method dispatch, and
   the native-call log. It lives outside either host so `elysium.script.cpython 0/1` swaps the
-  interpreter without changing what a name does.
+  interpreter without changing what a name does. `IsClan`/`IsPCMalk` and `IsMale` are real (they
+  read the player sheet clan/gender); the rest of the character surface (inventory, money, blood,
+  humanity/XP, `CalcFeat`) is a logged stub until 9.4.
+- Both hosts bind the two names the dialogue gates and level scripts read off the sheet: **`pc`**
+  (the sheet-backed `Player` — CPython binds it once at VM start, the expr host resolves it as the
+  Invalid-handle Character) and **`npc`** (the firing entity, per-eval from `Ctx.Self` — the
+  conversation partner a `.dlg` action mutates).
 - `FElysiumExprScriptHost` over `ElysiumExpr` — the self-contained lexer + recursive-descent
   parser + tree-walk for VtMB's restricted expression subset; every error collapses to Void
   (error-to-false).
@@ -307,9 +342,16 @@ volume, so a flip re-applies in one pass (voices already fading out toward a rea
   2,000-line `FOutputDevice` ring). **On by default in dev builds** (auto-starts wherever the plugin
   is present — editor target only, so never in Shipping/Test); `-NoElysiumMcp` opts out,
   `-ElysiumMcp=<port>` pins a port, `elysium.mcp.start`/`stop` toggle it live. Loopback + no-auth;
-  an agent connects via the repo-root `.mcp.json` (server `elysium`, port 8000). Compiles to an empty
-  shell on a non-Editor target. The plugin, plus `AutomationTestToolset` + `LiveCodingToolset`, are
-  `TargetAllowList: [Editor]` in the `.uproject`.
+  the server listens on port 8000. Compiles to an empty shell on a non-Editor target. The plugin, plus
+  `AutomationTestToolset` + `LiveCodingToolset`, are `TargetAllowList: [Editor]` in the `.uproject`.
+  Because that HTTP server dies with the game process, Claude Code connects **through a reconnecting
+  stdio proxy** — `tools/mcp_proxy.py`, registered in the repo-root `.mcp.json` as server `elysium`
+  (`type: "stdio"`). Claude Code keeps the proxy alive for the whole session while it bridges to the
+  in-game HTTP endpoint, connecting lazily so the link survives the game's rebuild/relaunch cycles: the
+  tool list stays visible (served from a cached `tools/out/_mcp/tools_cache.json` when the game is down),
+  a `tools/call` while down returns a clean "game not running" result, and a relaunch reconnects on the
+  next call and refreshes the list via a `tools/list_changed` notification — no manual `/mcp` reconnect.
+  Point it at a non-default port with `ELYSIUM_MCP_URL` in the `.mcp.json` `env` block.
 - **Automation tests** live in `Private/Tests/` (inside the module — the plain-C++ substrate carries
   no `ELYSIUMUE_API` exports for a separate test module): `ElysiumSubstrateTests.cpp` (content-free,
   app-context so it runs under `-nullrhi` — variant/expr/KeyValues/queue/registry + an end-to-end
@@ -328,6 +370,7 @@ Lifecycle `elysium.newgame` / `map` / `maps` / `reload`; inspection `elysium.cam
 A/B toggles `elysium.BrushCollision` / `BrushBodies` / `NpcBodies` / `PropBodies` / `PhysicsProps` / `Decals` (+ `DecalDepth`) / `EmissiveScale` /
 `BumpScale` / `EnvReflect` / `LightScale` / `LightFit` / `CogTheme`; entity debug `elysium.ent_*` / `showtriggers`; scripting `elysium.eval` / `exec` /
 `script.live` / `script.cpython` / `py.*` (`py.smoke` / `exec` / `load` / `fire`, plus the two
-single-token acceptance harnesses `py.poc` and `py.firstbeat`); audio `elysium.Mute` / `playsound` / `sound_info` /
+single-token acceptance harnesses `py.poc` and `py.firstbeat`); dialogue `elysium.dlg` / `dlg.choose` /
+`dlg.advance` (the scriptable echo of the box); audio `elysium.Mute` / `playsound` / `sound_info` /
 `MusicState` / `MusicCrossfade` / `SchemeRandom*`; NPC `elysium.npc.load` / `clear` / `list`; MCP
 `elysium.mcp.start` / `stop` / `status` / `tools` (Layer 3 — the agent server, opt-in).

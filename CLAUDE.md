@@ -106,7 +106,10 @@ bodies, and `trigger_changelevel` landmark travel. Scripting runs on an embedded
 map's level script imports before the spawn pass, then merges into `__main__`, where payloads
 evaluate), with an expression-evaluator fallback. Scripts hold **real entity objects**: an
 attribute is either an entity input — fired through the same chokepoint a map's own I/O wire
-uses — or a live field, one namespace, as VtMB's datamap reflection does it.
+uses — or a live field, one namespace, as VtMB's datamap reflection does it. The `ccmd`/`cvar`
+console bridge is live too — `c.patchtype=""` runs the `cfg` alias and falls through to Python — so
+the Unofficial Patch's real `vamputil.py` imports and the map-load `unhidePlus()`/`setPlus()` chain
+arms the Plus gates.
 Debug lives in the vendored Cog ImGui shell plus Source-style `elysium.ent_*` verbs, with an MCP
 server (on by default in dev builds; `-NoElysiumMcp` to disable) exposing the same runtime state as
 ~20 `elysium_*` tools so an AI agent can drive QA and tests; automation tests run via `test.bat`.
@@ -199,7 +202,8 @@ facts, valid regardless of target engine. Organisation and maintenance rules: `d
 | `rendering-perf.md` | the dynamic render path, perf cvars, MegaLights checklist |
 | `debug-tooling.md` | the three-layer debug/dev-tooling architecture |
 | `asset-enhancement.md` | the offline surface track (delight → upscale → PBR synthesis) |
-| `recovered/dice-system.md` | the World-of-Darkness d10 resolver (unverified) |
+| `vdata-catalog.md` | the `vdata/` rulebook inventory — each table → system → roadmap task |
+| `recovered/dice-system.md` | the World-of-Darkness d10 resolver (verified: decompile + `DiceRolls.txt`) |
 
 Godot-prototype reference docs carry a banner — see `docs/CLAUDE.md`.
 `tools/ghidra/README.md` documents the headless-Ghidra RE workspace (the whole

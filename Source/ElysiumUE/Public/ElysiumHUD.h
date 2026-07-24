@@ -7,8 +7,10 @@
 #include "ElysiumHUD.generated.h"
 
 class AElysiumMapActor;
+class FElysiumDlgConversation;
 class FElysiumSignFontLibrary;
 class IConsoleObject;
+class SElysiumDialogueBox;
 class UTexture2D;
 
 // The game HUD. Always-on: the centre crosshair (or the +use context cursor), the sign/popup
@@ -20,15 +22,33 @@ class AElysiumHUD : public AHUD
 	GENERATED_BODY()
 
 public:
+	AElysiumHUD();
+
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void DrawHUD() override;
+	virtual void Tick(float DeltaSeconds) override;
 
 private:
 	IConsoleObject* LightsCmd = nullptr;
 	IConsoleObject* PropsCmd = nullptr;
 
 	AElysiumMapActor* ResolveMapActor() const;
+
+	// --- Dialogue box (P9 9.1 / B4) ----------------------------------------------------------
+	// The visual-novel `.dlg` panel, a native Slate widget added to the viewport while a conversation
+	// is open on the entity world. Ticked (not drawn on the Canvas): each frame the HUD polls the
+	// world's open conversation and rebuilds the box when the turn changes, tearing it down when the
+	// conversation ends. While it is up the player controller is in UI-only input (the VN freezes the
+	// world); a pick routes back through the world's PlayerDialogChoose chokepoint.
+	void UpdateDialogue();
+	void TeardownDialogue();
+	void OnDialogueChoice(int32 VisibleIndex);   // -1 = advance a terminal line
+
+	TSharedPtr<SElysiumDialogueBox> DialogueWidget;
+	FElysiumDlgConversation* DialogueConv = nullptr;   // identity/revision compare only; owned by the world
+	uint32 DialogueRev = 0;
+	bool bDialogueInput = false;                       // the UI-only input mode is currently installed
 
 	// --- +use context-icon reticle (P4.4) ----------------------------------------------------
 	// The reticle swaps to VtMB's context cursor while the +use look-cursor is on a usable entity:

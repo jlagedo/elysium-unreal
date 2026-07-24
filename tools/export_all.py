@@ -10,24 +10,27 @@ boot map) via content.bat, so an offline asset generator can never be forgotten 
 
 Usage:
   python tools/export_all.py                 # the test bench (maps.ini [test])
-  python tools/export_all.py --all           # every .bsp in the install (~101 maps)
+  python tools/export_all.py --all           # every map in the install, patch-first (108)
   python tools/export_all.py ch_hub_1 la_hub_1   # only the named maps
   python tools/export_all.py --skip-existing     # skip maps already exported
   python tools/export_all.py --no-content        # skip the committed-asset rebuild
   python tools/export_all.py --no-scripts        # skip the script/dialogue copy
   python tools/export_all.py --no-signs          # skip the sign definition/background copy
+  python tools/export_all.py --no-vdata          # skip the vdata rulebook copy
+  python tools/export_all.py --no-cfg            # skip the console cfg copy
   python tools/export_all.py --npc               # also batch-export NPC glbs + shared banks
 """
-import os, sys, glob, time, subprocess, traceback
+import os, sys, time, subprocess, traceback
 import UE_bsp_to_scene as B
 import UE_extract_sounds as S
 import UE_extract_scripts as SC
 import UE_extract_signs as SG
+import UE_extract_vdata as VD
+import UE_extract_cfg as CF
 import install
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-MAPS = os.path.join(install.GAME, "maps")
 OUT = "out"
 MAPS_INI = os.path.join(os.path.dirname(os.path.abspath(__file__)), "maps.ini")
 
@@ -67,40 +70,43 @@ def main():
     skip_sound = "--no-sound" in args
     skip_scripts = "--no-scripts" in args
     skip_signs = "--no-signs" in args
+    skip_vdata = "--no-vdata" in args
+    skip_cfg = "--no-cfg" in args
     export_all = "--all" in args
     only = [a for a in args if not a.startswith("--")]
 
-    all_bsps = sorted(glob.glob(os.path.join(MAPS, "*.bsp")))
+    # Enumerate map NAMES from the patch-first union of the search path (all 108, patch-only
+    # maps included), not a glob of the retail tree. Each name resolves patch-first through
+    # install.map_path in B.main, so we export the .bsp the engine actually loads — passing a
+    # full retail path here would be "honoured as-is" and silently export retail instead.
+    all_names = install.all_map_names()
     if only:
         wanted, scope = set(only), "named maps"
     elif export_all:
-        wanted, scope = None, f"all {len(all_bsps)} maps"
+        wanted, scope = None, f"all {len(all_names)} maps"
     else:
         wanted, scope = set(load_test_maps()), "test bench (maps.ini)"
 
-    bsps = all_bsps if wanted is None else \
-        [b for b in all_bsps if os.path.splitext(os.path.basename(b))[0] in wanted]
+    names = all_names if wanted is None else [n for n in all_names if n in wanted]
 
-    # Surface any requested map that has no .bsp in the install (typo / not installed).
+    # Surface any requested map that has no .bsp anywhere in the install (typo / not installed).
     if wanted is not None:
-        found = {os.path.splitext(os.path.basename(b))[0] for b in bsps}
-        for miss in sorted(wanted - found):
-            print(f"  ! {miss}: no .bsp in {MAPS} - skipped")
+        for miss in sorted(wanted - set(names)):
+            print(f"  ! {miss}: no .bsp in the install - skipped")
 
-    print(f"exporting {len(bsps)} maps ({scope}) -> {OUT}/<name>/", flush=True)
+    print(f"exporting {len(names)} maps ({scope}) -> {OUT}/<name>/", flush=True)
     results = []
     t_start = time.time()
-    for i, bsp in enumerate(bsps, 1):
-        name = os.path.splitext(os.path.basename(bsp))[0]
+    for i, name in enumerate(names, 1):
         out_dir = os.path.join(OUT, name)
         if skip_existing and os.path.exists(os.path.join(out_dir, name + ".obj")):
-            print(f"[{i}/{len(bsps)}] {name}: skip (exists)", flush=True)
+            print(f"[{i}/{len(names)}] {name}: skip (exists)", flush=True)
             results.append((name, "skip", 0.0)); continue
-        print(f"\n[{i}/{len(bsps)}] {name} ...", flush=True)
+        print(f"\n[{i}/{len(names)}] {name} ...", flush=True)
         t0 = time.time()
         try:
             os.makedirs(out_dir, exist_ok=True)
-            B.main(bsp, out_dir)
+            B.main(install.map_path(name), out_dir)   # patch-first .bsp for this name
             results.append((name, "ok", time.time() - t0))
         except Exception as e:
             results.append((name, f"FAIL: {e}", time.time() - t0))
@@ -148,6 +154,30 @@ def main():
             SG.main()
         except Exception as e:
             print(f"[signs] FAILED: {e}", flush=True)
+            traceback.print_exc()
+
+    # Copy the vdata rulebook (stats/feats/rules/dice/clans/quests/items/weapons/vendors/
+    # stealth/disposition/sound-schemes/strings/camera/hacking) verbatim into out/vdata.
+    # Whole-game like the script/sign mirrors, so it runs once after the loop and on a
+    # zero-map invocation too. Consumers per docs/vdata-catalog.md.
+    if not skip_vdata:
+        print("\n[vdata] copying data tables ...", flush=True)
+        try:
+            VD.main()
+        except Exception as e:
+            print(f"[vdata] FAILED: {e}", flush=True)
+            traceback.print_exc()
+
+    # Copy the console config files (cfg/*.cfg -- the alias/cvar tables, incl. user.cfg's
+    # Basic/Plus `patchtype` alias) verbatim into out/cfg. Whole-game like the other mirrors,
+    # so once after the loop and on a zero-map invocation too. The runtime console bridge
+    # (roadmap 9.3b) seeds its alias/cvar store from this; consumer per docs/python_bridge.md.
+    if not skip_cfg:
+        print("\n[cfg] copying console config files ...", flush=True)
+        try:
+            CF.main()
+        except Exception as e:
+            print(f"[cfg] FAILED: {e}", flush=True)
             traceback.print_exc()
 
     # Batch-export the NPCs the exported maps reference (PL4): per-NPC mesh glbs (mesh + skeleton +

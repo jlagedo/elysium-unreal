@@ -32,8 +32,10 @@ the maintenance contract.
 - **Facts, present tense.** These docs describe how VtMB works and what the design is — not
   how a doc changed, not what a decision replaced. Migration narrative and rationale-for-a-
   past-decision belong in `decisions.md`, if anywhere.
-- **Mark confidence.** An unverified reconstruction says so in the doc (see
-  `recovered/dice-system.md`, which still needs a golden test against the running game).
+- **Mark confidence.** An unverified reconstruction says so in the doc, and states what would
+  verify it (the `recovered/` folder holds these; each carries a status line — e.g.
+  `recovered/dice-system.md` records that it was verified by decompilation + the shipped
+  `DiceRolls.txt`, so no running-game golden test was needed).
 - **Correct in place.** When RE contradicts a doc, fix the doc in the same pass and note the
   correction in the roadmap task that found it.
 

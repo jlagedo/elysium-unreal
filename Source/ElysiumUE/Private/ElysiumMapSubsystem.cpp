@@ -5,7 +5,6 @@
 #include "ElysiumMapActor.h"
 #include "ElysiumProfiler.h"
 #include "ElysiumShotRun.h"
-#include "ElysiumTextureCache.h"
 
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
@@ -13,10 +12,14 @@
 #include "GameFramework/PlayerController.h"
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
+#include "Kismet/GameplayStatics.h"
 #include "Misc/Paths.h"
-#include "TimerManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumMap, Log, All);
+
+// The one reused shell level every hard travel re-opens (an empty UWorld to build content into;
+// tools/make_boot_map.py generates it). Also the project's GameDefaultMap.
+static const TCHAR* GElysiumShellLevel = TEXT("/Game/Elysium");
 
 void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -150,41 +153,67 @@ bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
 		return false;
 	}
 
-	const double Start = FPlatformTime::Seconds();
-
 	// A direct Travel(map, landmark) (console / debug UI) with no transition already queued places the
 	// player AT the destination landmark facing its angles (offset zero, lift onto it). A transition
-	// (FlushPendingTravel) has already filled NextLandmarkSpawn with the real offset/yaw, so leave it.
+	// (RequestLandmarkTravel) has already filled NextLandmarkSpawn with the real offset/yaw, so leave it.
 	if (!Landmark.IsEmpty() && !NextLandmarkSpawn.bValid)
 	{
 		NextLandmarkSpawn = FLandmarkSpawn{ true, Landmark, FVector::ZeroVector, 0.0f, /*bHasYaw*/ false };
 	}
 
-	// Unload: the map actor owns everything map-scoped, so destroying it is the unload.
-	// The texture cache then drops its strong refs and GC reclaims the memory.
-	if (AElysiumMapActor* Old = CurrentMap.Get())
+	// Stow the target for the world that builds it. This subsystem is GI-scoped, so PendingMapLoad
+	// (and NextLandmarkSpawn) survive the OpenLevel below.
+	PendingMapLoad = FPendingMapLoad{ true, Map, Landmark };
+
+	// A live map means a real travel: hand world teardown + GC to the engine via hard travel. The
+	// fresh shell world's game mode spawns the pending map on BeginPlay (SpawnPendingMap). On cold
+	// boot there is no map yet and we are already sitting in the empty shell world, so spawn the map
+	// directly rather than redundantly re-opening the same level.
+	if (CurrentMap.IsValid())
 	{
-		Old->Destroy();
 		CurrentMap = nullptr;
-		FElysiumTextureCache::FlushAll();
-		GEngine->ForceGarbageCollection(true);
+		UE_LOG(LogElysiumMap, Log, TEXT("hard travel -> %s%s"), *Map,
+			Landmark.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" @ %s"), *Landmark));
+		UGameplayStatics::OpenLevel(World, FName(GElysiumShellLevel));
+	}
+	else
+	{
+		SpawnPendingMap();
+	}
+	return true;
+}
+
+void UElysiumMapSubsystem::SpawnPendingMap()
+{
+	if (!PendingMapLoad.bValid)
+	{
+		return;
+	}
+	const FPendingMapLoad P = PendingMapLoad;
+	PendingMapLoad = FPendingMapLoad{};
+
+	UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
+	if (!World)
+	{
+		return;
 	}
 
-	// Load: spawn deferred so MapName is set before BeginPlay builds the map.
+	const double Start = FPlatformTime::Seconds();
+
+	// Spawn deferred so MapName is set before BeginPlay builds the map.
 	FTransform Xf = FTransform::Identity;
 	AElysiumMapActor* NewMap = World->SpawnActorDeferred<AElysiumMapActor>(AElysiumMapActor::StaticClass(), Xf);
 	if (!NewMap)
 	{
-		return false;
+		return;
 	}
-	NewMap->MapName = Map;
+	NewMap->MapName = P.Map;
 	NewMap->FinishSpawning(Xf);
 	CurrentMap = NewMap;
 
-	UE_LOG(LogElysiumMap, Log, TEXT("travel -> %s%s (%.2fs total)"), *Map,
-		Landmark.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" @ %s"), *Landmark),
+	UE_LOG(LogElysiumMap, Log, TEXT("built %s%s (%.2fs)"), *P.Map,
+		P.Landmark.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" @ %s"), *P.Landmark),
 		FPlatformTime::Seconds() - Start);
-	return true;
 }
 
 void UElysiumMapSubsystem::RequestLandmarkTravel(const FString& Map, const FString& Landmark,
@@ -195,39 +224,23 @@ void UElysiumMapSubsystem::RequestLandmarkTravel(const FString& Map, const FStri
 		UE_LOG(LogElysiumMap, Warning, TEXT("landmark travel requested with empty map name"));
 		return;
 	}
-	if (PendingTravel.bValid)
+	if (PendingMapLoad.bValid)
 	{
 		return;   // one transition per frame; the first to fire wins (retail defers to end-of-frame)
 	}
-	PendingTravel = FPendingTravel{ true, Map, Landmark, PlayerOffset, PlayerYaw };
-	UE_LOG(LogElysiumMap, Log, TEXT("landmark travel queued -> %s @ %s (offset %s)"),
+
+	// Fill the placement the destination map will consume (dest = landmark origin + offset, keep the
+	// player's view yaw). Travel below won't overwrite it (its direct-entry fallback only fires when
+	// NextLandmarkSpawn is empty), then OpenLevels — safe from inside the tick (teardown is deferred).
+	NextLandmarkSpawn = FLandmarkSpawn{ true, Landmark, PlayerOffset, PlayerYaw, /*bHasYaw*/ true };
+	UE_LOG(LogElysiumMap, Log, TEXT("landmark travel -> %s @ %s (offset %s)"),
 		*Map, *Landmark, *PlayerOffset.ToString());
 
-	// Defer to the next engine tick: the caller is inside AElysiumMapActor::Tick -> the entity-world
-	// tick, and Travel destroys that actor (and its world) + force-GCs. Running it on a next-tick
-	// timer executes the swap after all actor ticks have unwound, so nothing is freed under the stack.
-	if (UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr)
-	{
-		World->GetTimerManager().SetTimerForNextTick(this, &UElysiumMapSubsystem::FlushPendingTravel);
-	}
-}
-
-void UElysiumMapSubsystem::FlushPendingTravel()
-{
-	if (!PendingTravel.bValid)
-	{
-		return;
-	}
-	const FPendingTravel P = PendingTravel;
-	PendingTravel = FPendingTravel{};
-
-	// Hand the placement to the map load (dest = destination landmark origin + P.Offset, keep view yaw).
-	NextLandmarkSpawn = FLandmarkSpawn{ true, P.Landmark, P.Offset, P.Yaw, /*bHasYaw*/ true };
-	if (!Travel(P.Map, P.Landmark))
+	if (!Travel(Map, Landmark))
 	{
 		// Destination map isn't exported — drop the placement so it can't leak onto a later travel.
 		NextLandmarkSpawn = FLandmarkSpawn{};
-		UE_LOG(LogElysiumMap, Warning, TEXT("landmark travel to '%s' failed (map not exported)"), *P.Map);
+		UE_LOG(LogElysiumMap, Warning, TEXT("landmark travel to '%s' failed (map not exported)"), *Map);
 	}
 }
 
@@ -248,13 +261,13 @@ bool UElysiumMapSubsystem::ConsumeLandmarkSpawn(FString& OutLandmark, FVector& O
 
 FString UElysiumMapSubsystem::PendingTravelDesc() const
 {
-	if (!PendingTravel.bValid)
+	if (!PendingMapLoad.bValid)
 	{
 		return FString();
 	}
-	return PendingTravel.Landmark.IsEmpty()
-		? PendingTravel.Map
-		: FString::Printf(TEXT("%s @ %s"), *PendingTravel.Map, *PendingTravel.Landmark);
+	return PendingMapLoad.Landmark.IsEmpty()
+		? PendingMapLoad.Map
+		: FString::Printf(TEXT("%s @ %s"), *PendingMapLoad.Map, *PendingMapLoad.Landmark);
 }
 
 bool UElysiumMapSubsystem::Reload()

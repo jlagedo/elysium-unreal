@@ -467,23 +467,26 @@ Troika typo in `kiki.dlg`; tolerate it.)
 | Col | Role |
 |---|---|
 | **0** | **Line ID** (int, unique in file). Convention: NPC lines are "tens" (1, 11, 21…); PC choices fill the gaps. |
-| **1** | **Spoken text — male-PC variant** (the on-screen **subtitle** for NPC lines; the full **choice text** for PC lines). Inline `[stage directions]` are part of the string. |
+| **1** | **Spoken text — male-PC variant** (the on-screen **subtitle** for NPC lines; the full **choice text** for PC lines). Inline `[stage directions]` are VO-recording director notes (emotion/delivery like `[sarcastic]`, pacing like `[pause]`, and speaker attributions like `[Cop Buddy2:]` on multi-VO lines) that shipped inside the localized strings — free-form English, not an engine cue vocabulary. The engine **strips them at display**; the parser keeps them (raw `Text()` is verbatim, `DisplayText()` strips). |
 | **2** | **Spoken text — female-PC variant** (engine picks 1 vs 2 by `pc.IsMale()`; usually identical). |
 | **3** | **Link / branch**: `#` = this is an **NPC line**; a number **N** = this is a **PC choice** that jumps to NPC line N; **`0` = END**; empty = padding. |
 | **4** | **Condition (eval)** for PC choices — a `dlgexpr` gate; **or** an **NPC-speak action** for NPC lines. |
 | **5** | **Action (exec)** run when the line is chosen/spoken (`;`-separated). |
 | 6–11 | unused (always empty). |
-| **12** | **Short choice-menu label** (the abbreviated text in the response list; falls back to col 1/2). |
+| **12** | **Malkavian-PC line** — the Malkavian variant of this row's text (NPC subtitle or PC choice), shown *instead of* col 1/2 when the player is Malkavian (empty = no variant). Not a "short label": across the corpus 9,576 rows carry both and col 12 differs from col 1 in **97%**, and the differences are Malkavian-speak ("Behave, I am your kind of monster" vs "Calm down, I'm not one of them"). |
 
 Animation/camera/gesture are **not** in the `.dlg` (cols 6–11 empty) — they live in the
 `.vcd` (§cinematics).
 
 ### Runtime / branching
 
-1. Open at the first NPC line whose col-4 condition passes.
+1. Open at the first NPC line with content (the leading blank NPC lines are not real turns).
+   An NPC line's col-4 is an **action**, run with col-5 when the line is spoken — not a gate
+   (9.1, resolved by data; see §7). VtMB's exact opener-selection among gated leading NPC lines
+   is not yet RE'd; the runtime uses the first-with-text rule as an interim.
 2. After an NPC line **N** is spoken (running its col-4/5 actions), gather the contiguous
    run of PC rows after it (N+1, N+2, … up to the next `#`). Show each PC row whose col-4
-   condition is true as a menu entry (label = col 12, else col 1/2).
+   condition is true as a menu entry (text = the Malkavian col 12 when the PC is Malkavian, else col 1/2).
 3. Player picks → its col-5 action runs → jump to the NPC line in its col-3 link → repeat.
 4. **Link `0` ends** the conversation. `(Auto-End)`/`(Auto-Link)` are editor-generated
    silent-transition placeholders.
@@ -596,8 +599,11 @@ Consolidated from the four investigations; each gates a real decision.
   mods, feeding restrictions (named as trait-effects, enforced in code).
 
 **Dialogue**
-- Whether the NPC-line col-4 "action" slot is ever evaluated as a *condition* (idiomatically
-  it holds a call, but the field is the eval slot) — matters for faithful ordering.
+- ~~Whether the NPC-line col-4 "action" slot is ever evaluated as a *condition*.~~ **Resolved (9.1,
+  by data):** it is an **action (exec)**, not a gate. `jack_tutorial.dlg`'s entry line carries col-4
+  `G.Story_State = -3` — an assignment, which would syntax-error if evaluated as a condition. So an NPC
+  line runs col-4 + col-5 when spoken; only a PC choice's col-4 is the eval gate. (`decisions.md`
+  2026-07-24.)
 
 **Save**
 - The exact `.sav` block order/format if import of original saves is ever wanted (the four

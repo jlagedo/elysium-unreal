@@ -12,7 +12,9 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumClassRegistry.h"
+#include "ElysiumConsole.h"
 #include "ElysiumDecals.h"
+#include "ElysiumDlg.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -110,6 +112,62 @@ bool FElysiumExprTest::RunTest(const FString&)
 	{
 		const FElysiumVariant V = Eval(TEXT("undefined_flag"));
 		TestFalse(TEXT("NameError is falsy"), V.ToBool());
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// FElysiumConsole — VtMB's console surface (9.3b): cfg alias/cvar parse + the ccmd execute
+// path (alias expansion -> cvar set -> Python fallthrough). Content-free: no Python, no world.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumConsoleTest, "Elysium.Substrate.Console", GElysiumTestFlags)
+bool FElysiumConsoleTest::RunTest(const FString&)
+{
+	FElysiumConsole C;
+	// A slice of real cfg syntax: a full-line comment, the patch's Basic/Plus alias, a movement
+	// alias whose body is a `;`-terminated engine command, two cvar settings, and a keybind.
+	C.ParseText(TEXT(
+		"// Plus user.cfg\n"
+		"alias patchtype \"setPlus()\"\n"
+		"alias run \"-speed;\"\n"
+		"fps_max \"65\"\n"
+		"vchar_skip_intro \"1\"\n"
+		"bind \"TAB\" \"+wpn_secondaryatk\"\n"));
+
+	TestEqual(TEXT("two aliases parsed"), C.NumAliases(), 2);
+	TestTrue(TEXT("patchtype alias present"), C.HasAlias(TEXT("patchtype")));
+	TestFalse(TEXT("a keybind is not an alias"), C.HasAlias(TEXT("TAB")));
+	TestEqual(TEXT("cvar fps_max"), C.GetCvar(TEXT("fps_max")), FString(TEXT("65")));
+	TestEqual(TEXT("cvar lookup is case-insensitive"), C.GetCvar(TEXT("FPS_MAX")), FString(TEXT("65")));
+	TestEqual(TEXT("missing cvar reads empty"), C.GetCvar(TEXT("nope")), FString());
+
+	// The load-bearing path: `c.patchtype=""` -> alias patchtype -> "setPlus()" -> Python fallthrough.
+	TArray<FString> Fell;
+	C.SetPythonSink([&Fell](const FString& Line) { Fell.Add(Line); return true; });
+	C.Execute(TEXT("patchtype"));
+	TestEqual(TEXT("one Python fallthrough"), Fell.Num(), 1);
+	if (Fell.Num() == 1)
+	{
+		TestEqual(TEXT("setPlus() reached Python"), Fell[0], FString(TEXT("setPlus()")));
+	}
+
+	// A known cvar with an argument sets it and does NOT fall through to Python.
+	Fell.Reset();
+	C.Execute(TEXT("fps_max 30"));
+	TestEqual(TEXT("cvar set does not fall through"), Fell.Num(), 0);
+	TestEqual(TEXT("cvar updated"), C.GetCvar(TEXT("fps_max")), FString(TEXT("30")));
+
+	// An alias body that is an engine command (`-speed;`) expands to one non-empty statement and
+	// falls through; the sink reporting "not Python" is how such commands are dropped.
+	Fell.Reset();
+	C.SetPythonSink([&Fell](const FString& Line) { Fell.Add(Line); return false; });
+	C.Execute(TEXT("run"));
+	TestEqual(TEXT("run expands to one non-empty statement"), Fell.Num(), 1);
+	if (Fell.Num() == 1)
+	{
+		TestEqual(TEXT("engine command reached the sink"), Fell[0], FString(TEXT("-speed")));
 	}
 
 	return true;
@@ -669,6 +727,212 @@ bool FElysiumRuntimeSpawnTest::RunTest(const FString&)
 	{
 		TestTrue(TEXT("fused path is spawned on return"), E2->bSpawnCalled);
 	}
+
+	return true;
+}
+
+// =====================================================================================
+// 9.1 / B4 — `.dlg` parser, the dlgexpr normalizer, and the branch state machine. All
+// content-free: a synthetic in-memory `.dlg` and injected condition/action callbacks, so
+// the branch logic is tested independently of both the normalizer and the script host.
+// =====================================================================================
+
+namespace
+{
+	// Build one 13-field `.dlg` row in the on-disk shape (`{ TAB content TAB }` concatenated) from the
+	// fields the tests care about; cols 6-11 are empty. Handy so the fixtures read like the data.
+	FString ElysiumDlgRow(int32 Id, const FString& Text, const FString& Link,
+		const FString& Cond, const FString& Action, const FString& Malk = FString())
+	{
+		auto F = [](const FString& S) { return FString::Printf(TEXT("{\t%s\t}"), *S); };
+		FString R;
+		R += F(FString::FromInt(Id)); // 0
+		R += F(Text);                 // 1 male
+		R += F(Text);                 // 2 female (same)
+		R += F(Link);                 // 3
+		R += F(Cond);                 // 4
+		R += F(Action);               // 5
+		for (int32 i = 6; i <= 11; ++i) { R += F(FString()); }
+		R += F(Malk);                 // 12 — Malkavian-PC variant
+		return R;
+	}
+
+	TArray<uint8> ElysiumDlgBytes(const TArray<FString>& Rows)
+	{
+		FString Joined = FString::Join(Rows, TEXT("\r\n")) + TEXT("\r\n");
+		TArray<uint8> Bytes;
+		Bytes.Reserve(Joined.Len());
+		for (const TCHAR C : Joined) { Bytes.Add(static_cast<uint8>(C)); }   // Latin-1 round-trip
+		return Bytes;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgParseTest, "Elysium.Substrate.DlgParse", GElysiumTestFlags)
+bool FElysiumDlgParseTest::RunTest(const FString&)
+{
+	TArray<FString> Rows;
+	Rows.Add(ElysiumDlgRow(11, TEXT("Greeting."), TEXT("#"), TEXT("G.Story_State = -3"), TEXT("")));
+	Rows.Add(ElysiumDlgRow(12, TEXT("Who are you?"), TEXT("21"), TEXT("not IsClan(pc,\"Malkavian\")"), TEXT(""), TEXT("The rain of ages?")));
+	Rows.Add(ElysiumDlgRow(13, TEXT("Padding"), TEXT(""), TEXT(""), TEXT("")));   // empty link = padding
+
+	FElysiumDlgFile File;
+	TestTrue(TEXT("parses"), FElysiumDlgFile::ParseBytes(ElysiumDlgBytes(Rows), File));
+	TestEqual(TEXT("row count"), File.Lines.Num(), 3);
+
+	const FElysiumDlgLine* Npc = File.FindById(11);
+	if (TestNotNull(TEXT("finds id 11"), Npc))
+	{
+		TestTrue(TEXT("11 is an NPC line"), Npc->IsNpcLine());
+		TestEqual(TEXT("11 text"), Npc->Text(true), FString(TEXT("Greeting.")));
+		TestEqual(TEXT("11 col-4 kept raw"), Npc->Condition, FString(TEXT("G.Story_State = -3")));
+	}
+	const FElysiumDlgLine* Pc = File.FindById(12);
+	if (TestNotNull(TEXT("finds id 12"), Pc))
+	{
+		TestTrue(TEXT("12 is a PC choice"), Pc->IsPcChoice());
+		TestEqual(TEXT("12 link target"), Pc->LinkTarget(), 21);
+		// col-12 is the Malkavian variant: a non-Malkavian sees col-1, a Malkavian sees col-12.
+		TestEqual(TEXT("12 normal text (non-malk)"), Pc->RawFor(true, false), FString(TEXT("Who are you?")));
+		TestEqual(TEXT("12 malkavian variant"), Pc->RawFor(true, true), FString(TEXT("The rain of ages?")));
+	}
+	TestTrue(TEXT("13 is padding"), File.FindById(13)->Role == EElysiumDlgRole::Padding);
+
+	// 14-field tolerance (the kiki.dlg typo): a valid 13-field prefix parses, the extra is ignored.
+	FString FourteenField = ElysiumDlgRow(1, TEXT("hi"), TEXT("#"), TEXT(""), TEXT("")) + TEXT("{\textra\t}");
+	FElysiumDlgFile Wide;
+	TestTrue(TEXT("14-field row parses"), FElysiumDlgFile::ParseBytes(ElysiumDlgBytes({ FourteenField }), Wide));
+	TestEqual(TEXT("14-field row yields one line"), Wide.Lines.Num(), 1);
+	TestEqual(TEXT("14-field text intact"), Wide.Lines[0].Text(true), FString(TEXT("hi")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgExprTest, "Elysium.Substrate.DlgExpr", GElysiumTestFlags)
+bool FElysiumDlgExprTest::RunTest(const FString&)
+{
+	using namespace ElysiumDlgExpr;
+
+	// A skill-only condition: implicit `>=`, wrapped in CalcFeat.
+	TestEqual(TEXT("bare skillcheck"), ConditionToPython(TEXT("Seduction 7")),
+		FString(TEXT("CalcFeat(\"Seduction\") >= 7")));
+	// Explicit relop preserved.
+	TestEqual(TEXT("skillcheck relop"), ConditionToPython(TEXT("Humanity >= 5")),
+		FString(TEXT("CalcFeat(\"Humanity\") >= 5")));
+	// Skillcheck joined to a python expr by `&` -> `and`.
+	TestEqual(TEXT("skillcheck & expr"), ConditionToPython(TEXT("Seduction 7 & G.Johnny_Dead == 0")),
+		FString(TEXT("CalcFeat(\"Seduction\") >= 7 and G.Johnny_Dead == 0")));
+	// `|` -> `or`.
+	TestEqual(TEXT("pipe -> or"), ConditionToPython(TEXT("Persuasion 7 | G.x == 1")),
+		FString(TEXT("CalcFeat(\"Persuasion\") >= 7 or G.x == 1")));
+	// A pure python condition (no skillcheck) round-trips (normalised spacing).
+	TestEqual(TEXT("pure python"), ConditionToPython(TEXT("G.Patch_Plus == 0")),
+		FString(TEXT("G.Patch_Plus == 0")));
+	// A member/call ident that happens to precede a number is NOT a skillcheck.
+	TestEqual(TEXT("member not skillcheck"), ConditionToPython(TEXT("pc.humanity >= 5")),
+		FString(TEXT("pc.humanity >= 5")));
+	TestEqual(TEXT("call not skillcheck"), ConditionToPython(TEXT("OneOfSet(1,4)")),
+		FString(TEXT("OneOfSet(1,4)")));
+	// Empty -> empty.
+	TestEqual(TEXT("empty condition"), ConditionToPython(TEXT("")), FString());
+
+	// Actions: `&` between statements -> `;`; a lone assignment round-trips.
+	TestEqual(TEXT("action assign"), ActionToPython(TEXT("G.Tut_Jack = 1")),
+		FString(TEXT("G.Tut_Jack = 1")));
+	TestEqual(TEXT("action &-join -> ;"), ActionToPython(TEXT("G.a = 1 & G.b = 2")),
+		FString(TEXT("G.a = 1 ; G.b = 2")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgDisplayTest, "Elysium.Substrate.DlgDisplay", GElysiumTestFlags)
+bool FElysiumDlgDisplayTest::RunTest(const FString&)
+{
+	using ElysiumDlgText::StripStageDirections;
+
+	// The real jack_tutorial line 11 opener: a leading `[...]` and an interior one, no space after either.
+	TestEqual(TEXT("jack opener stripped"),
+		StripStageDirections(TEXT("[laughing at something no one else thinks is funny]What a scene, man! [chuckle]How 'bout that?")),
+		FString(TEXT("What a scene, man! How 'bout that?")));
+	// A direction between words leaves a single space, not a doubled one.
+	TestEqual(TEXT("interior collapse"), StripStageDirections(TEXT("a [nods] b")), FString(TEXT("a b")));
+	// No brackets -> verbatim (fast path).
+	TestEqual(TEXT("no directions"), StripStageDirections(TEXT("Who are you?")), FString(TEXT("Who are you?")));
+	// An unterminated `[` is kept (not a stage direction).
+	TestEqual(TEXT("unterminated bracket kept"), StripStageDirections(TEXT("cost is [50")), FString(TEXT("cost is [50")));
+	// A direction-only string strips to empty.
+	TestEqual(TEXT("direction-only -> empty"), StripStageDirections(TEXT("[sighs]")), FString());
+
+	// The line accessor path: raw Text() keeps the direction, DisplayText() drops it. col-12 (Malkavian)
+	// replaces the text for a Malkavian player, and is stage-direction-stripped the same way.
+	FElysiumDlgLine Line;
+	Line.TextMale = TEXT("[chuckle]Hey there.");
+	Line.TextMalkavian = TEXT("[cackles]The walls whisper hello.");
+	Line.Role = EElysiumDlgRole::NpcLine;
+	TestEqual(TEXT("raw text verbatim"), Line.Text(true), FString(TEXT("[chuckle]Hey there.")));
+	TestEqual(TEXT("display non-malk stripped"), Line.DisplayText(true, false), FString(TEXT("Hey there.")));
+	TestEqual(TEXT("display malk variant stripped"), Line.DisplayText(true, true), FString(TEXT("The walls whisper hello.")));
+	// A line with no col-12 falls back to the gendered text even for a Malkavian.
+	FElysiumDlgLine Plain;
+	Plain.TextMale = TEXT("Plain.");
+	TestEqual(TEXT("no malk variant -> col-1"), Plain.DisplayText(true, true), FString(TEXT("Plain.")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgBranchTest, "Elysium.Substrate.DlgBranch", GElysiumTestFlags)
+bool FElysiumDlgBranchTest::RunTest(const FString&)
+{
+	// A miniature of the jack_tutorial shape: two blank leading NPC lines, then the real entry (11),
+	// a gated + an ungated choice, a follow NPC line (21) with a choice that sets a flag and ends.
+	TArray<FString> Rows;
+	Rows.Add(ElysiumDlgRow(1, TEXT(""), TEXT("#"), TEXT(""), TEXT("")));            // blank opener - skipped
+	Rows.Add(ElysiumDlgRow(11, TEXT("Greeting."), TEXT("#"), TEXT("SPEAK_11"), TEXT("")));
+	Rows.Add(ElysiumDlgRow(12, TEXT("Gated"), TEXT("21"), TEXT("SHOW"), TEXT("PICK_12")));
+	Rows.Add(ElysiumDlgRow(13, TEXT("Hidden"), TEXT("31"), TEXT("HIDE"), TEXT("")));
+	Rows.Add(ElysiumDlgRow(14, TEXT("Always"), TEXT("21"), TEXT(""), TEXT("")));    // ungated
+	Rows.Add(ElysiumDlgRow(21, TEXT("More."), TEXT("#"), TEXT(""), TEXT("")));
+	Rows.Add(ElysiumDlgRow(22, TEXT("Set flag & bye"), TEXT("0"), TEXT(""), TEXT("SET_FLAG")));
+
+	TSharedRef<FElysiumDlgFile> File = MakeShared<FElysiumDlgFile>();
+	if (!TestTrue(TEXT("fixture parses"), FElysiumDlgFile::ParseBytes(ElysiumDlgBytes(Rows), File.Get())))
+	{
+		return false;
+	}
+
+	// Record actions; a condition passes unless it is the string "HIDE".
+	TArray<FString> Ran;
+	auto Cond = [](const FString& C) { return C != TEXT("HIDE"); };
+	auto Act = [&Ran](const FString& A) { Ran.Add(A); };
+
+	FElysiumDlgConversation Conv(File, /*bMale*/ true, /*bMalk*/ false, Cond, Act);
+	Conv.Start();
+
+	// Entry skips the blank line 1 and opens at 11, running its col-4 action.
+	if (TestNotNull(TEXT("opened on an NPC line"), Conv.CurrentNpcLine()))
+	{
+		TestEqual(TEXT("entry is line 11"), Conv.CurrentNpcLine()->Id, 11);
+	}
+	TestTrue(TEXT("ran SPEAK_11"), Ran.Contains(TEXT("SPEAK_11")));
+
+	// Two of the three following rows are visible (gated SHOW passes, HIDE fails, ungated shows).
+	TestEqual(TEXT("visible choice count"), Conv.VisibleChoices().Num(), 2);
+	TestEqual(TEXT("first visible is 12"), Conv.VisibleChoice(0)->Id, 12);
+	TestEqual(TEXT("second visible is 14"), Conv.VisibleChoice(1)->Id, 14);
+
+	// Pick the first choice -> its action runs, jump to NPC 21.
+	Conv.Choose(0);
+	TestTrue(TEXT("ran PICK_12"), Ran.Contains(TEXT("PICK_12")));
+	if (TestNotNull(TEXT("advanced to a line"), Conv.CurrentNpcLine()))
+	{
+		TestEqual(TEXT("now on line 21"), Conv.CurrentNpcLine()->Id, 21);
+	}
+
+	// Line 21 offers one ending choice; picking it runs the flag action then ends the conversation.
+	TestEqual(TEXT("21 has one choice"), Conv.VisibleChoices().Num(), 1);
+	Conv.Choose(0);
+	TestTrue(TEXT("ran SET_FLAG"), Ran.Contains(TEXT("SET_FLAG")));
+	TestTrue(TEXT("conversation is over"), Conv.IsOver());
+	TestNull(TEXT("no current line after end"), Conv.CurrentNpcLine());
 
 	return true;
 }

@@ -43,8 +43,11 @@ layer all resolve `Unofficial_Patch\` before `Vampire\` and the VPKs.
 `install.build_index(dirs)` merges the install into one table keyed by lowercase,
 forward-slashed, install-relative paths, with loose entries shadowing VPK ones;
 `install.read(idx, key)` fetches the bytes from wherever they live, and
-`install.map_path(name)` resolves a map name to the `.bsp` the engine would load.
-Every read in `menu_extract`, `bsp_to_scene`, and `mdl` goes through it. Over the
+`install.map_path(name)` resolves a map **name** to the `.bsp` the engine would load
+(patch shadows retail); a caller-supplied *path* is honoured as-is, so batch callers must
+enumerate names, not glob a tree — `install.all_map_names()` returns the patch-first union of
+map stems (all 108, patch-only maps included), and `export_all.py` resolves each through
+`map_path`. Every read in `menu_extract`, `bsp_to_scene`, and `mdl` goes through it. Over the
 converters' trees (materials, models, maps, resource, particles, scripts, vdata)
 the merge is 69,708 files: 3,620 patch overrides shadow the VPKs and 2,239 exist
 only in the patch.
@@ -369,7 +372,8 @@ Python lives in **five surfaces, two languages**:
   Unofficial Patch's Basic/Plus switch is exactly this: two `user.cfg` variants differing only
   in `alias patchtype "setBasic()"` vs `"setPlus()"`, so `setPlus`/`setBasic` are named nowhere
   in the `.py`/`.ents`/`.dlg`/`.bsp` trees. Ignition is `logic_auto.OnMapLoad -> unhidePlus()`
-  on 107 of 108 maps. Not yet copied offline — roadmap PL5d / 9.3b.
+  on 107 of 108 maps. Mirrored offline by `UE_extract_cfg.py` (PL5d); the runtime console bridge is
+  roadmap 9.3b.
 
 **Offline delivery (`UE_extract_scripts.py`, roadmap 5.1 / PL2).** The two plain-text script
 surfaces are copied **verbatim** into the runtime's mirror — `python/**/*.py` → `out/scripts/`
@@ -378,6 +382,23 @@ surfaces are copied **verbatim** into the runtime's mirror — `python/**/*.py` 
 resolved patch-first (patch loose > retail loose > VPK), no parse/transcode. Whole-game, not
 map-scoped, so `export_all.py` runs it once at the end of a run (`--no-scripts` to skip). The
 runtime scripting host (roadmap 5.2+) reads `out/scripts` + `out/dlg` from disk.
+
+**Offline delivery (`UE_extract_vdata.py`, roadmap PL5b).** VtMB's whole RPG/rules layer is
+Valve-KeyValues **text** under `vdata/` (stats/feats/rules/dice/clans/quests/items/weapons/
+vendors/stealth/disposition/sound-schemes/strings/camera/hacking). This copies it **verbatim**
+→ `out/vdata/` (465 files: `system` 97 + `items` 244 + `camerashots` 66 + `hackterminals` 57 +
+`precache` 1), patch-first, no parse/transcode; `vdata/signs/` (owned by `UE_extract_signs.py`)
+and `stealth.xls` excluded. Whole-game, so `export_all.py` runs it once at end of a run
+(`--no-vdata` to skip). The engine (`vampire.dll`) loads each table by name; the per-table
+consumer + roadmap-task map is `docs/vdata-catalog.md`. Runtime consumers are built task by
+task (9.4 sheet/quests/XP, 9.6 dice, 10.7 the rest).
+
+**Offline delivery (`UE_extract_cfg.py`, roadmap PL5d).** The `cfg/*.cfg` alias + cvar tables (Valve
+console syntax) copied **verbatim** → `out/cfg/`, patch-first, no parse/transcode — `user.cfg` carries
+the Basic/Plus `patchtype` alias. Whole-game, so `export_all.py` runs it once at end of a run
+(`--no-cfg` to skip). The runtime console bridge (`FElysiumConsole`, roadmap 9.3b) seeds its alias/cvar
+store from this mirror, and the CPython VM points its `nt.getcwd`/`sys.moddir` at `out/` so VtMB's
+file-touching scripts (`FixKeyBindings` reads `cfg/config.cfg`) resolve here.
 
 `vampire.dll` registers module **`vampire`** (11 globals: `FindPlayer`, `FindEntityByName`,
 `ChangeMap`, `ScheduleTask`, …) plus old-style classes `Entity` (`__getattr__`/`__setattr__`

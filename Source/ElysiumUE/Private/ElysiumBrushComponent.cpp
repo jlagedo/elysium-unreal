@@ -150,12 +150,6 @@ void UElysiumBrushComponent::RouteTouch(const AActor* Toucher, bool bBegin) cons
 	{
 		return;
 	}
-	// Until this map has seated the pawn, it is still standing wherever the previous map left it,
-	// and any volume it lands inside is an accident of the old position, not an entered trigger.
-	if (!Map->IsPlayerSeated())
-	{
-		return;
-	}
 	if (FElysiumEntityWorld* World = Map->GetEntityWorld())
 	{
 		// The player pawn is not yet an entity, so the activator is unresolved (Invalid). P1.6

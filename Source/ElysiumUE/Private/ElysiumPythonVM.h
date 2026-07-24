@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumConsole.h"
 #include "ElysiumVariant.h"
 
 class UElysiumGameStateSubsystem;
@@ -61,6 +62,15 @@ public:
 	// Call a top-level callback (e.g. "OnMasqueradeEnd") in the loaded level script.
 	bool FireCallback(const FString& FuncName, FString& OutError);
 
+	// --- Console bridge (9.3b) -----------------------------------------------------------
+	// The alias/cvar store the `vampire.ccmd` / `vampire.cvar` objects drive. Seeded from
+	// out/cfg at EnsureStarted; the ccmd attribute-set path calls Console().Execute(...).
+	FElysiumConsole& Console() { return ConsoleStore; }
+	// The console->Python fallthrough sink: exec a command line in __main__. Returns true when it
+	// was Python (parsed with all names defined -- even if the body then raised, which PyErr_Prints
+	// error-to-false), false on NameError/SyntaxError (an engine cvar/command we do not model).
+	bool ExecConsoleLine(const FString& Line);
+
 	// --- Cog / debug introspection -------------------------------------------------------
 	FString GetVersion() const;
 	TArray<FString> GetSysPath() const;
@@ -75,5 +85,6 @@ private:
 	bool bStarted = false;
 	void* DllHandle = nullptr;
 	FString LoadedModule;
+	FElysiumConsole ConsoleStore;
 	TWeakObjectPtr<UElysiumGameStateSubsystem> GameStateWeak;
 };

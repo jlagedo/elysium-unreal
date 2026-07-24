@@ -16,6 +16,7 @@
 #include "ElysiumNpcVisual.h"
 #include "ElysiumObjModel.h"
 #include "ElysiumStaticMesh.h"
+#include "ElysiumTextureCache.h"
 
 #include "Engine/GameInstance.h"
 
@@ -287,6 +288,10 @@ void AElysiumMapActor::LoadMap()
 
 	LoadedMap = MapName;
 
+	// This map's texture dedup index. Must exist before the first material is built (the world
+	// mesh below), and lives for the actor's lifetime so a runtime prop/NPC spawn reuses it.
+	TextureCache = MakePimpl<FElysiumTextureCache>();
+
 	// P1.7 — label the map actor and drop it in an Elysium Outliner folder, so the PIE World
 	// Outliner reads as a live scene browser (debug-tooling.md Layer 0).
 #if WITH_EDITOR
@@ -465,7 +470,7 @@ UStaticMeshComponent* AElysiumMapActor::BuildPropVisual(const FString& Stem, con
 		}
 		// Non-solid: 8.3 is visual parity; prop_physics collision (Chaos convex) is 8.4, so no hull
 		// is cooked here (matches entity_visuals R2 "collision optional for visuals").
-		Mesh = FElysiumStaticMeshBuilder::Build(Model, Model.Dir, /*bConvexCollision=*/false, this);
+		Mesh = FElysiumStaticMeshBuilder::Build(Model, Model.Dir, /*bConvexCollision=*/false, this, *TextureCache);
 		if (Mesh == nullptr)
 		{
 			return nullptr;
@@ -478,10 +483,14 @@ UStaticMeshComponent* AElysiumMapActor::BuildPropVisual(const FString& Stem, con
 	UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(this);
 	Comp->SetMobility(EComponentMobility::Movable);
 	Comp->SetStaticMesh(Mesh);
+	// Disable collision before RegisterComponent: BuildFromMeshDescriptions always leaves the mesh a
+	// default-flag body setup with collision-enabled sections, so registering with collision on would
+	// cook a trimesh from render data that carries no CPU copy (bAllowCPUAccess off) — the noisy
+	// GetPhysicsTriMeshData/GetCookInfo warning pair. Non-solid props never collide anyway (8.4 owns it).
+	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Comp->SetupAttachment(Root);
 	Comp->SetRelativeLocationAndRotation(Location, Rotation);
 	Comp->RegisterComponent();
-	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	AddInstanceComponent(Comp);
 	return Comp;
 }
@@ -512,7 +521,7 @@ UStaticMeshComponent* AElysiumMapActor::BuildPhysPropVisual(const FString& Stem,
 		TArray<TArray<FVector>> Hulls;
 		const bool bHaveHulls = FElysiumStaticMeshBuilder::LoadConvexHulls(
 			FElysiumContentPaths::MapPropsDir(MapName) / (Stem + TEXT(".hulls")), Hulls);
-		Mesh = FElysiumStaticMeshBuilder::Build(Model, Model.Dir, /*bConvexCollision=*/true, this,
+		Mesh = FElysiumStaticMeshBuilder::Build(Model, Model.Dir, /*bConvexCollision=*/true, this, *TextureCache,
 			bHaveHulls ? &Hulls : nullptr);
 		if (Mesh == nullptr)
 		{
@@ -654,7 +663,7 @@ int32 AElysiumMapActor::BuildMeshFromObj(const FString& ObjPath, UProceduralMesh
 #endif
 
 		const FElysiumMaterialDef* Def = Materials.Find(S.Mat);
-		if (UMaterialInstanceDynamic* Mid = FElysiumMaterialFactory::Build(Def, Dir, this))
+		if (UMaterialInstanceDynamic* Mid = FElysiumMaterialFactory::Build(Def, Dir, this, *TextureCache))
 		{
 			Mesh->SetMaterial(Section, Mid);
 		}
@@ -692,7 +701,7 @@ void AElysiumMapActor::BuildDecals()
 	for (const FElysiumDecalDef& D : Defs)
 	{
 		const FElysiumMaterialDef* MatDef = Materials.Find(D.Mat);
-		UMaterialInstanceDynamic* Mid = FElysiumMaterialFactory::BuildDecal(MatDef, Dir, this);
+		UMaterialInstanceDynamic* Mid = FElysiumMaterialFactory::BuildDecal(MatDef, Dir, this, *TextureCache);
 		if (!Mid)
 		{
 			continue;   // M_Decal master missing — skip rather than draw the wrong material domain
@@ -848,7 +857,7 @@ void AElysiumMapActor::LoadProps()
 		}
 
 		const bool bAnySolid = Entry.Value.ContainsByPredicate([](const FInst& I) { return I.bSolid; });
-		UStaticMesh* Mesh = FElysiumStaticMeshBuilder::Build(Model, Model.Dir, bAnySolid, this);
+		UStaticMesh* Mesh = FElysiumStaticMeshBuilder::Build(Model, Model.Dir, bAnySolid, this, *TextureCache);
 		if (!Mesh)
 		{
 			continue;

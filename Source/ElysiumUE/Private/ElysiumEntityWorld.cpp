@@ -3,6 +3,7 @@
 #include "ElysiumAudioSubsystem.h"
 #include "ElysiumBrushComponent.h"
 #include "ElysiumClassRegistry.h"
+#include "ElysiumDlg.h"
 #include "ElysiumEditorLabels.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMapActor.h"
@@ -541,6 +542,81 @@ FElysiumEntityHandle FElysiumEntityWorld::GetOpenSign(double* OutOpenTime) const
 		*OutOpenTime = OpenSignTime;
 	}
 	return OpenSignOwner;
+}
+
+// --- Open dialogue (P9 9.1 / B4) ------------------------------------------------------------
+
+void FElysiumEntityWorld::OpenDialog(const FElysiumEntityHandle& NewOwner,
+	TSharedRef<FElysiumDlgConversation> Conversation)
+{
+	// A second StartPlayerDialogRemote replaces the running one silently (its NPC's OnDialogEnd is not
+	// fired — the player never finished that conversation), mirroring the sign's replace-silently rule.
+	if (OpenDialogOwner.IsSet() && OpenDialogOwner != NewOwner)
+	{
+		EndDialogSession(/*bSilent*/ true);
+	}
+	OpenDialogOwner = NewOwner;
+	OpenDialogConv = Conversation;
+
+	// A conversation that opened already closed (no content NPC line) ends at once, so the beat still
+	// advances (OnDialogEnd -> DialogPostProcess) rather than hanging on an empty panel.
+	if (OpenDialogConv->IsOver())
+	{
+		EndDialogSession(/*bSilent*/ false);
+	}
+}
+
+void FElysiumEntityWorld::PlayerDialogChoose(int32 VisibleIndex)
+{
+	if (!OpenDialogConv.IsValid())
+	{
+		return;
+	}
+	OpenDialogConv->Choose(VisibleIndex);
+	if (OpenDialogConv->IsOver())
+	{
+		EndDialogSession(/*bSilent*/ false);
+	}
+}
+
+void FElysiumEntityWorld::PlayerDialogAdvance()
+{
+	if (!OpenDialogConv.IsValid())
+	{
+		return;
+	}
+	OpenDialogConv->AdvanceTerminal();
+	if (OpenDialogConv->IsOver())
+	{
+		EndDialogSession(/*bSilent*/ false);
+	}
+}
+
+void FElysiumEntityWorld::CloseDialog(bool bSilent)
+{
+	if (!OpenDialogConv.IsValid())
+	{
+		return;
+	}
+	OpenDialogConv->Close();
+	EndDialogSession(bSilent);
+}
+
+void FElysiumEntityWorld::EndDialogSession(bool bSilent)
+{
+	const FElysiumEntityHandle Closing = OpenDialogOwner;
+	OpenDialogOwner = FElysiumEntityHandle();
+	OpenDialogConv.Reset();
+
+	if (!bSilent && Closing.IsSet())
+	{
+		// Route EndDialog to exactly the owning NPC (its InputEndDialog clears bInDialog and fires
+		// OnDialogEnd -> DialogPostProcess). Queued through chokepoint 2 like every other input, with
+		// the owner as `!self` so no name lookup can hit a same-named entity.
+		static const FName EndDialogInput(TEXT("EndDialog"));
+		EnqueueInput(GSelfTarget, EndDialogInput, FElysiumVariant::Void(), 0.0,
+			FElysiumEntityHandle(), Closing);
+	}
 }
 
 APawn* FElysiumEntityWorld::GetPlayerPawn() const

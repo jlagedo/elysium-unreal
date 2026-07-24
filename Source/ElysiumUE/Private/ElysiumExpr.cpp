@@ -599,6 +599,12 @@ namespace
 			if (Name == TEXT("self") && Env.Ctx.Self.IsSet()) { return FVal::FromVar(FElysiumVariant::Handle(Env.Ctx.Self)); }
 			if (Name == TEXT("activator") && Env.Ctx.Activator.IsSet()) { return FVal::FromVar(FElysiumVariant::Handle(Env.Ctx.Activator)); }
 
+			// `pc` = the player Character (sheet-backed; the Invalid handle is the PC, per FindPlayer);
+			// `npc` = the firing entity (Self) in a dialogue/entity context. The two names the dialogue
+			// gates and level scripts actually read, mirroring the CPython host.
+			if (Name == TEXT("pc")) { return FVal::MakeCharacter(FElysiumEntityHandle::Invalid()); }
+			if (Name == TEXT("npc") && Env.Ctx.Self.IsSet()) { return FVal::FromVar(FElysiumVariant::Handle(Env.Ctx.Self)); }
+
 			// Otherwise a bare name resolves to an entity by targetname (the one namespace, 5.2). Level-
 			// script functions/constants (cCelerity, the level's On* callbacks) are 5.5 — NameError here.
 			if (FElysiumEntityWorld* W = World())

@@ -42,6 +42,17 @@ struct FElysiumContentPaths
 	static FString ScriptsDir() { return Root() / TEXT("scripts"); }
 	static FString DlgDir() { return Root() / TEXT("dlg"); }
 	static FString ScriptModuleFile(const FString& Module) { return ScriptsDir() / Module / (Module + TEXT(".py")); }
+	// Console config (PL5d / 9.3b). VtMB's `cfg/*.cfg` alias + cvar tables (Valve console syntax),
+	// mirrored verbatim under out/cfg by tools/UE_extract_cfg.py. The runtime console bridge
+	// (FElysiumConsole) seeds its alias/cvar store from these; `user.cfg` carries the Basic/Plus
+	// `patchtype` alias. Because VtMB's file-touching scripts resolve `getcwd()/moddir/...`, the
+	// CPython VM points its `nt.getcwd`/`sys.moddir` at Root() so `cfg/config.cfg` resolves here.
+	static FString CfgDir() { return Root() / TEXT("cfg"); }
+	static FString CfgFile(const FString& File) { return CfgDir() / File; }
+	// An NPC's `dialogname` keyfield already carries the `dlg/` prefix ("dlg/Main Characters/
+	// jack_tutorial.dlg"), so it resolves straight under the content root. Case differs from the
+	// lowercased on-disk mirror, but the Windows target's file system is case-insensitive.
+	static FString DlgFromDialogname(const FString& DialogName) { return Root() / DialogName; }
 
 	// Signs (P4.10 / PL5c). VtMB's sign+popup panels are game-global `SignData` KeyValues files,
 	// mirrored flat and lowercased under out/signs by tools/UE_extract_signs.py (a `definition_file`

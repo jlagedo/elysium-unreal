@@ -22,7 +22,8 @@ namespace
 		{ TEXT("CallEntitySpawn"),     false, TEXT("runtime spawn (cpython host)") },
 		{ TEXT("ChangeMap"),           false, TEXT("fires a trigger_changelevel after delay") },
 		{ TEXT("OneOfSet"),            false, TEXT("stub") },
-		{ TEXT("IsPCMalk"),            false, TEXT("stub (no clan system)") },
+		{ TEXT("IsClan"),              false, TEXT("player sheet clan") },
+		{ TEXT("IsPCMalk"),            false, TEXT("player sheet clan") },
 		// 24 Character methods
 		{ TEXT("React"),               true,  TEXT("stub") },
 		{ TEXT("SetExpression"),       true,  TEXT("stub") },
@@ -205,10 +206,24 @@ namespace ElysiumScriptNatives
 			return FElysiumVariant::Void();
 		}
 
+		// IsClan(character, "ClanName") / IsPCMalk() read the player sheet clan (the 2..8 encoding).
+		// Only the PC carries a sheet in this slice — NPCs have no clan model yet — so both answer for
+		// the player; the character argument is accepted (and logged) but not otherwise consulted.
+		if (Name == FName(TEXT("IsClan")) || Name == FName(TEXT("IsPCMalk")))
+		{
+			const int32 Have = State ? State->PlayerSheet().Clan : 0;
+			const int32 Want = (Name == FName(TEXT("IsPCMalk")))
+				? FElysiumPlayerSheet::ClanFromName(TEXT("Malkavian"))
+				: (Args.Num() >= 2 ? FElysiumPlayerSheet::ClanFromName(Args.Last().ToString()) : 0);
+			const FElysiumVariant Clan = FElysiumVariant::Bool(Want != 0 && Have == Want);
+			Record(State, Name, Display, Clan, /*bStub*/ false);
+			return Clan;
+		}
+
 		// The rest have no backing yet — log a stub and return a plausible default. Predicate-shaped
 		// globals read false so a gate over them fails closed (error-to-false's spirit).
 		FElysiumVariant R = FElysiumVariant::Void();
-		if (Name == FName(TEXT("SquadSeesPlayer")) || Name == FName(TEXT("IsPCMalk")) || Name == FName(TEXT("OneOfSet")))
+		if (Name == FName(TEXT("SquadSeesPlayer")) || Name == FName(TEXT("OneOfSet")))
 		{
 			R = FElysiumVariant::Bool(false);
 		}

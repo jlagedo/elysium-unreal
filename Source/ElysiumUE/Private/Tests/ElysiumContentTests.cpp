@@ -16,6 +16,7 @@
 #include "ElysiumClassRegistry.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumDecals.h"
+#include "ElysiumDlg.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumObjModel.h"
 #include "HAL/FileManager.h"
@@ -332,6 +333,240 @@ bool FElysiumTutorialMaterialsTest::RunTest(const FString&)
 	AddInfo(FString::Printf(
 		TEXT("%s materials: %d total, %d albedo | masked %d, translucent %d, additive %d, reflective %d, bump %d, wvt %d"),
 		Map, Materials.Num(), WithAlbedo, Masked, Translucent, Additive, Reflective, Bumped, Wvt));
+
+	return true;
+}
+
+// =====================================================================================
+// 9.1 / B4 — the `.dlg` parser + branch machine against the real jack_tutorial.dlg. Self-skips when
+// the dialogue mirror has not been exported (out/dlg). Confirms the physical-format parse holds and
+// that the branch machine can drive Jack's beat from entry to the `G.Tut_Jack = 1` action and END.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgJackTutorialTest, "Elysium.Content.DlgJackTutorial",
+	GElysiumContentTestFlags)
+bool FElysiumDlgJackTutorialTest::RunTest(const FString&)
+{
+	const FString Path = FElysiumContentPaths::DlgFromDialogname(TEXT("dlg/Main Characters/jack_tutorial.dlg"));
+	if (!IFileManager::Get().FileExists(*Path))
+	{
+		AddInfo(FString::Printf(TEXT("skipping: no exported dialogue at %s (run the pipeline to enable)"), *Path));
+		return true;
+	}
+
+	TSharedRef<FElysiumDlgFile> File = MakeShared<FElysiumDlgFile>();
+	FString Err;
+	if (!TestTrue(TEXT("jack_tutorial.dlg parses"), FElysiumDlgFile::LoadFile(Path, File.Get(), &Err)))
+	{
+		AddError(Err);
+		return false;
+	}
+	// Every row is a 13-field record, so the parse should recover them all (1116 at time of writing;
+	// assert a floor rather than an exact count so a patch revision does not brittle-fail the test).
+	TestTrue(TEXT("recovered a full conversation"), File->Lines.Num() > 1000);
+
+	const FElysiumDlgLine* Entry = File->FindById(11);
+	if (TestNotNull(TEXT("entry line 11 present"), Entry))
+	{
+		TestTrue(TEXT("11 is an NPC line"), Entry->IsNpcLine());
+		TestFalse(TEXT("11 has spoken text"), Entry->Text(true).IsEmpty());
+		// The datum that settles NPC col-4 = action (an assignment, not a gate).
+		TestTrue(TEXT("11 col-4 is the Story_State assignment"), Entry->Condition.Contains(TEXT("G.Story_State")));
+	}
+
+	// col-12 is the Malkavian-PC variant (real datum: id 23's "Okay. I could use the help." / Malkavian
+	// "I shall undertake your dark tutelage."). A non-Malkavian must read col-1, a Malkavian col-12.
+	const FElysiumDlgLine* Malk = File->FindById(23);
+	if (TestNotNull(TEXT("choice 23 present"), Malk))
+	{
+		TestTrue(TEXT("23 has a col-12 Malkavian variant"), !Malk->TextMalkavian.IsEmpty());
+		TestEqual(TEXT("23 non-malk reads col-1"), Malk->RawFor(true, false), Malk->Text(true));
+		TestEqual(TEXT("23 malk reads col-12"), Malk->RawFor(true, true), Malk->TextMalkavian);
+		TestNotEqual(TEXT("23 col-12 differs from col-1"), Malk->TextMalkavian, Malk->Text(true));
+	}
+
+	// Drive the branch machine to the acceptance action. Condition callback: pass every gate (so the
+	// full choice set shows regardless of clan/patch state); at each turn prefer a choice that advances
+	// Tut_Jack, else the first, so the walk is deterministic and cannot loop.
+	TArray<FString> Ran;
+	auto Cond = [](const FString&) { return true; };
+	auto Act = [&Ran](const FString& A) { Ran.Add(A); };
+
+	FElysiumDlgConversation Conv(File, /*bMale*/ true, /*bMalk*/ false, Cond, Act);
+	Conv.Start();
+	if (TestNotNull(TEXT("conversation opened"), Conv.CurrentNpcLine()))
+	{
+		TestEqual(TEXT("opened at entry line 11"), Conv.CurrentNpcLine()->Id, 11);
+	}
+
+	bool bSawTutJack1 = false;
+	for (int32 Guard = 0; Guard < 64 && !Conv.IsOver(); ++Guard)
+	{
+		if (Conv.IsTerminalLine())
+		{
+			Conv.AdvanceTerminal();
+			continue;
+		}
+		int32 Pick = 0;
+		for (int32 v = 0; v < Conv.VisibleChoices().Num(); ++v)
+		{
+			if (Conv.VisibleChoice(v)->Action.Contains(TEXT("Tut_Jack = 1")))
+			{
+				Pick = v;
+				break;
+			}
+		}
+		const int32 Before = Ran.Num();
+		Conv.Choose(Pick);
+		for (int32 k = Before; k < Ran.Num(); ++k)
+		{
+			if (Ran[k].Contains(TEXT("Tut_Jack = 1"))) { bSawTutJack1 = true; }
+		}
+	}
+
+	TestTrue(TEXT("branch walk reached the G.Tut_Jack = 1 action"), bSawTutJack1);
+	TestTrue(TEXT("conversation terminated"), Conv.IsOver());
+	AddInfo(FString::Printf(TEXT("jack_tutorial.dlg: %d rows, ran %d actions to reach the beat"),
+		File->Lines.Num(), Ran.Num()));
+
+	return true;
+}
+
+// =====================================================================================
+// 9.1 / B4 — the whole NPC dialogue corpus of the exported test-bench maps: every `.dlg` an NPC's
+// `dialogname` (or an npc_maker's) points at. Confirms the physical-format parser recovers each file
+// and the branch machine drives every one to completion (or a bounded, non-crashing walk) — a broad
+// robustness pass over real data, including the malformed-snippet / error-to-false conditions.
+// Self-skips when out/dlg / the .ents mirror have not been exported.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgCorpusTest, "Elysium.Content.DlgCorpus", GElysiumContentTestFlags)
+bool FElysiumDlgCorpusTest::RunTest(const FString&)
+{
+	// Discover every exported map's `.ents` and collect the distinct `dialogname` values NPCs reference.
+	TArray<FString> EntsFiles;
+	IFileManager::Get().FindFilesRecursive(EntsFiles, *FElysiumContentPaths::Root(), TEXT("*.ents"),
+		/*Files*/ true, /*Dirs*/ false);
+	if (EntsFiles.Num() == 0)
+	{
+		AddInfo(TEXT("skipping: no exported maps under tools/out (run the pipeline to enable)"));
+		return true;
+	}
+
+	TSet<FString> DialogNames;
+	TMap<FString, FString> FirstMapOf;   // dialogname -> a map that referenced it (for diagnostics)
+	for (const FString& EntsPath : EntsFiles)
+	{
+		FElysiumEntityDefs Defs;
+		if (!FElysiumEntityDefs::Parse(EntsPath, Defs))
+		{
+			continue;
+		}
+		const FString MapName = FPaths::GetBaseFilename(EntsPath);
+		for (const FElysiumEntityDef& Def : Defs.Defs)
+		{
+			if (const FString* Dn = Def.Keys.Find(TEXT("dialogname")))
+			{
+				if (!Dn->IsEmpty())
+				{
+					DialogNames.Add(*Dn);
+					if (!FirstMapOf.Contains(*Dn)) { FirstMapOf.Add(*Dn, MapName); }
+				}
+			}
+		}
+	}
+
+	if (DialogNames.Num() == 0)
+	{
+		AddInfo(TEXT("skipping: no NPC dialognames in the exported maps"));
+		return true;
+	}
+
+	int32 Parsed = 0, ParsedWithNpc = 0, TotalRows = 0, TotalChoices = 0, DanglingLinks = 0, Opened = 0;
+	FString WorstDangling;
+
+	for (const FString& Dn : DialogNames)
+	{
+		const FString Path = FElysiumContentPaths::DlgFromDialogname(Dn);
+		if (!IFileManager::Get().FileExists(*Path))
+		{
+			AddError(FString::Printf(TEXT("%s references '%s' but it is not on disk"), *FirstMapOf[Dn], *Dn));
+			continue;
+		}
+
+		TSharedRef<FElysiumDlgFile> File = MakeShared<FElysiumDlgFile>();
+		FString Err;
+		if (!TestTrue(FString::Printf(TEXT("%s parses"), *Dn), FElysiumDlgFile::LoadFile(Path, File.Get(), &Err)))
+		{
+			AddError(Err);
+			continue;
+		}
+		++Parsed;
+		TotalRows += File->Lines.Num();
+		const bool bHasNpcLine = File->Lines.ContainsByPredicate([](const FElysiumDlgLine& L) { return L.IsNpcLine(); });
+		TestTrue(FString::Printf(TEXT("%s has an NPC line"), *Dn), bHasNpcLine);
+
+		// Every PC choice's link must resolve to an existing NPC line, or be 0 (END). A dangling link is
+		// a data quirk, not a parser fault, so it is counted + reported rather than failed.
+		for (const FElysiumDlgLine& L : File->Lines)
+		{
+			if (!L.IsPcChoice()) { continue; }
+			const int32 Target = L.LinkTarget();
+			if (Target == 0) { continue; }
+			const FElysiumDlgLine* To = File->FindById(Target);
+			if (!To || !To->IsNpcLine())
+			{
+				++DanglingLinks;
+				if (WorstDangling.IsEmpty()) { WorstDangling = FString::Printf(TEXT("%s id %d -> %d"), *Dn, L.Id, Target); }
+			}
+		}
+
+		// Drive a bounded, deterministic branch walk (pass every gate; prefer an as-yet-unentered NPC
+		// line so the walk explores rather than loops; a hard cap backstops a genuine cycle). The point
+		// is that the machine never crashes and always returns a valid current line / choice set on real
+		// data — not that every dialogue is exhaustively covered.
+		auto Cond = [](const FString&) { return true; };
+		auto Act = [](const FString&) {};
+		FElysiumDlgConversation Conv(File, /*bMale*/ true, /*bMalk*/ false, Cond, Act);
+		Conv.Start();
+		if (bHasNpcLine)
+		{
+			TestNotNull(FString::Printf(TEXT("%s opens on an NPC line"), *Dn), Conv.CurrentNpcLine());
+			if (Conv.CurrentNpcLine() != nullptr) { ++Opened; }
+			++ParsedWithNpc;
+		}
+
+		TSet<int32> Visited;
+		for (int32 Guard = 0; Guard < 512 && !Conv.IsOver(); ++Guard)
+		{
+			if (const FElysiumDlgLine* Cur = Conv.CurrentNpcLine())
+			{
+				Visited.Add(Cur->Id);
+			}
+			if (Conv.IsTerminalLine())
+			{
+				Conv.AdvanceTerminal();
+				continue;
+			}
+			// Prefer a choice leading to an unvisited NPC line (or an END), else the first choice.
+			int32 Pick = 0;
+			for (int32 v = 0; v < Conv.VisibleChoices().Num(); ++v)
+			{
+				const int32 Target = Conv.VisibleChoice(v)->LinkTarget();
+				if (Target == 0 || !Visited.Contains(Target)) { Pick = v; break; }
+			}
+			TotalChoices += (Conv.VisibleChoices().Num() > 0) ? 1 : 0;
+			Conv.Choose(Pick);
+		}
+	}
+
+	AddInfo(FString::Printf(
+		TEXT("dlg corpus: %d referenced, %d parsed, %d rows, %d opened, %d turns walked, %d dangling links%s"),
+		DialogNames.Num(), Parsed, TotalRows, Opened, TotalChoices, DanglingLinks,
+		WorstDangling.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" (e.g. %s)"), *WorstDangling)));
+
+	TestEqual(TEXT("every referenced dialog parsed"), Parsed, DialogNames.Num());
+	TestEqual(TEXT("every dialog with an NPC line opened"), Opened, ParsedWithNpc);
 
 	return true;
 }

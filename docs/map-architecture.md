@@ -22,11 +22,6 @@ The one `.umap` in the project is `Content/Elysium.umap`: an empty level (genera
 by `tools/make_boot_map.py`) that exists only because Unreal must open *some* level to create a
 `UWorld`. It is never edited and never multiplied — every travel re-opens it.
 
-> **Implementation status.** The seam (`UElysiumMapSubsystem::Travel` / `RequestLandmarkTravel`
-> with the `NextLandmarkSpawn` / `PendingTravel` carry-over) and the landmark placement are wired
-> today; the mechanism underneath is mid-migration from the earlier persistent-world content-swap
-> to OpenLevel (roadmap 10.8). The ownership and async sections below describe the target design.
-
 ## The travel model is VtMB's own
 
 The `.ents` sidecar for every map already contains the original game's transition graph:
@@ -43,12 +38,11 @@ No invented mechanism; the data drives it.
 
 ## Components
 
-Implemented today: `UElysiumGameInstance`, `UElysiumMapSubsystem` (Travel/unload/ExportedMaps
+Implemented today: `UElysiumGameInstance`, `UElysiumMapSubsystem` (Travel/OpenLevel/ExportedMaps
 plus `elysium.map` / `elysium.maps` engine-console mirrors), `AElysiumMapActor`, and the
-dev console (`UElysiumConsoleSubsystem`, Slate drop-down on ` / ', with `maps`, `map <name>`,
-`map next`, Tab completion, and Up/Down history). Loading is synchronous except collision
-(async Chaos cook; the pawn is held frozen until ground exists under the spawn, ~0.4s).
-Landmark travel and changelevel volumes await entity decoding.
+dev console. `trigger_changelevel` volumes + scripted `ChangeMap` drive landmark travel through
+the same seam. Loading is synchronous except collision (async Chaos cook; the pawn is held frozen
+until ground exists under the spawn, ~0.4s); the time-sliced build is roadmap 10.4.
 
 ```
 UElysiumGameInstance            process lifetime — session state
@@ -59,34 +53,36 @@ UElysiumGameInstance            process lifetime — session state
          └─ entity actors (changelevel triggers, …)   (M1+)
 ```
 
-- **`UElysiumGameInstance`** — state that must survive map changes: the pending travel
-  request, and later the character sheet, quest/story state, and save-game serialization.
-  A save file is (GameInstance state + current map + landmark/position).
+- **`UElysiumGameInstance`** — anchors the GI-scoped subsystems, the state that must survive a
+  travel. A save file is (GameInstance state + current map + landmark/position).
 - **`UElysiumMapSubsystem`** (`UGameInstanceSubsystem`) — the only owner of map lifecycle.
-  API: `Travel(FString Map, FString Landmark)`, `GetCurrentMap()`. Runs the transition
-  state machine: `Active → FadeOut → Unload → Load (async) → Spawn → FadeIn → Active`.
-  Shows the loading screen (UMG overlay; later the VtMB loading art). Registers the
-  `elysium.map <name> [landmark]` console command.
-- **`AElysiumMapActor`** — "one loaded VtMB map", spawned by the subsystem, never by the
-  game mode. Everything map-scoped is a component of it or a UPROPERTY it owns, so
-  **destroying the actor unloads the map** — meshes and MIDs die with it, and owned
-  transient textures become GC-collectable. No manual teardown lists.
+  API: `Travel(FString Map, FString Landmark)`, `GetCurrentMap()`. `Travel` stows the target in
+  GI-scoped `PendingMapLoad` and `OpenLevel`s the shell (or, on cold boot, spawns the map
+  directly in the already-empty shell); the fresh world's game mode calls `SpawnPendingMap`.
+  Registers the `elysium.map <name> [landmark]` console command.
+- **`AElysiumMapActor`** — "one loaded VtMB map", spawned by the subsystem (via
+  `SpawnPendingMap`) into the fresh world. Everything map-scoped is a component of it or a
+  UPROPERTY / plain member it owns, so **the actor dying with its world unloads the map** —
+  meshes, MIDs, and the map's texture cache die with it. No manual teardown lists.
 
-The game mode stays thin: pawn + HUD classes, and on BeginPlay asks the subsystem to run
-the boot travel (today: straight into a map; with M3: into the menu instead).
+The game mode stays thin: pawn + HUD classes, and on BeginPlay either builds the pending map
+(post-travel) or runs the boot decision (New Game / a bare dev load).
 
 ## Ownership and memory across transitions
 
-The texture cache stays a process-wide *index*, but **ownership moves to the map**: each
-`AElysiumMapActor` holds strong (UPROPERTY) references to the textures decoded for it; the
-cache itself holds weak entries. Unload = destroy the actor → GC frees its textures; assets
-shared across maps (UI, NPCs later) live in an explicit global scope instead. Meshes,
-materials, collision, and entity actors are components/outer'd objects of the map actor and
-need no accounting at all.
+`OpenLevel` (`UEngine::LoadMap`) tears down the current `UWorld` and runs GC; everything the map
+actor owns — meshes, materials, collision, entity actors, and the per-map texture cache — is
+released with it, no bespoke flush. The **texture cache is a plain member of the map actor**
+(`FElysiumTextureCache`), a per-map decoded-texture dedup index holding strong refs; those refs
+drop when the actor is destroyed, so GC reclaims the textures. It is not a process-wide cache —
+under hard travel only one map is resident at a time, so nothing is shared across maps (assets
+that genuinely need to persist, like UI, live in an explicit global scope instead).
 
 ## Async loading (removing the load hitch)
 
-Map load splits into two stages:
+The time-sliced build is **roadmap 10.4** (not built yet); it lands on the OpenLevel foundation —
+the heavy build runs in the fresh shell world's `BeginPlay` behind a loading screen, not inside
+`LoadMap`. Map load splits into two stages:
 
 1. **Task threads** — file IO, OBJ/MTL/sidecar parsing, PNG decode. Pure data, fans out
    across cores (the Godot viewer's `Prewarm` equivalent).
@@ -94,8 +90,8 @@ Map load splits into two stages:
    creation, actor spawns, budgeted per frame behind the loading screen so the world
    never hard-freezes.
 
-The subsystem drives both from its `Load` state; a travel that happens to hit an
-already-loaded map (later: cached parse results) just runs stage 2.
+A travel that happens to hit an already-loaded map (later: cached parse results) just
+runs stage 2.
 
 ## Evolution to the final game
 

@@ -80,6 +80,22 @@ def map_path(name):
     raise FileNotFoundError(f"no map '{stem}' in the install")
 
 
+def all_map_names():
+    """Every map stem the engine could load — the patch-first union of `<root>/maps/*.bsp`
+    across the search path, deduped by stem. Patch-only maps are included; a name here
+    resolves patch-first through `map_path` (the patch `.bsp` shadows retail's). Returns the
+    names, not paths, so callers export what the engine runs, not what the retail tree holds."""
+    names = set()
+    for root in LOOSE_ROOTS + [GAME]:
+        d = os.path.join(root, "maps")
+        if not os.path.isdir(d):
+            continue
+        for fn in os.listdir(d):
+            if fn.lower().endswith(".bsp"):
+                names.add(fn[:-4])
+    return sorted(names)
+
+
 if __name__ == "__main__":
     import sys
     idx = build_index()

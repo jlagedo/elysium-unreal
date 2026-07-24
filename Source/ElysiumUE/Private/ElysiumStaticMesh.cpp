@@ -12,7 +12,8 @@
 #include "StaticMeshOperations.h"
 
 UStaticMesh* FElysiumStaticMeshBuilder::Build(const FElysiumObjModel& Model, const FString& Dir,
-	bool bConvexCollision, UObject* Outer, const TArray<TArray<FVector>>* ConvexHulls)
+	bool bConvexCollision, UObject* Outer, FElysiumTextureCache& Cache,
+	const TArray<TArray<FVector>>* ConvexHulls)
 {
 	if (Model.Positions.Num() == 0)
 	{
@@ -55,7 +56,7 @@ UStaticMesh* FElysiumStaticMeshBuilder::Build(const FElysiumObjModel& Model, con
 		SlotNames[PG] = SlotName;
 
 		const FElysiumMaterialDef* Def = Model.Materials.Find(Group.Key);
-		Slots.Add({ SlotName, FElysiumMaterialFactory::Build(Def, Dir, Outer) });
+		Slots.Add({ SlotName, FElysiumMaterialFactory::Build(Def, Dir, Outer, Cache) });
 
 		for (int32 T = 0; T + 2 < Idx.Num(); T += 3)
 		{

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 
 struct FElysiumObjModel;
+struct FElysiumTextureCache;
 class UStaticMesh;
 
 // Builds a UStaticMesh at runtime from a parsed OBJ model, for InstancedStaticMeshComponent
@@ -17,7 +18,7 @@ class UStaticMesh;
 struct FElysiumStaticMeshBuilder
 {
 	static UStaticMesh* Build(const FElysiumObjModel& Model, const FString& Dir,
-		bool bConvexCollision, UObject* Outer,
+		bool bConvexCollision, UObject* Outer, FElysiumTextureCache& Cache,
 		const TArray<TArray<FVector>>* ConvexHulls = nullptr);
 
 	// Read a `.hulls` sidecar (the world-collider format: one convex hull per line, flat

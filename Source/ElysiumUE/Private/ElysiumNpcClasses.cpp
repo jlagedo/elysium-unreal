@@ -15,9 +15,12 @@
 // MaxLiveChildren / MaxNPCCount are ignored — a maker spawns exactly one child per Spawn input.
 
 #include "ElysiumClassRegistry.h"
+#include "ElysiumContentPaths.h"
+#include "ElysiumDlg.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMapActor.h"
 
 #include "Components/SkeletalMeshComponent.h"
@@ -96,8 +99,9 @@ public:
 	void InputWillTalk(const FElysiumInputArgs& Args)        { bWillTalk = Args.Param.ToInt() != 0; }
 	void InputUseInteresting(const FElysiumInputArgs& Args)  { bUseInteresting = Args.Param.ToInt() != 0; }
 
-	// StartPlayerDialogRemote opens a dialog session: fire OnDialogBegin once. B3 has no dialogue UI —
-	// the session ends on a manual EndDialog (fireable via ent_fire), which B4's .dlg runner replaces.
+	// StartPlayerDialogRemote opens a dialog session: fire OnDialogBegin, then run the NPC's `.dlg`
+	// conversation (B4). When the `dialogname` file is missing/unloadable the session falls back to the
+	// B3 seam — it waits for a manual EndDialog (ent_fire), so the beat is still driveable by hand.
 	void InputStartDialog(const FElysiumInputArgs& Args)
 	{
 		if (IsInert() || bInDialog)
@@ -109,10 +113,14 @@ public:
 		static const FName OnDialogBegin(TEXT("OnDialogBegin"));
 		FireOutput(OnDialogBegin, Args.Activator);
 		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s StartPlayerDialogRemote(%d)"), *DebugString(), DialogFlags);
+
+		OpenConversation(Args.Activator);
 	}
 
-	// B3 dialog-exit seam (superseded by B4's real dialogue runner): fire OnDialogEnd. Jack's
-	// OnDialogEnd wires DialogPostProcess() (B2's path), which warps the player to warp #2.
+	// The dialog session ends: increment times_talked and fire OnDialogEnd. Reached both by the runner
+	// (World::EndDialogSession routes EndDialog to `!self` when the conversation closes) and by a manual
+	// ent_fire. Jack's OnDialogEnd wires DialogPostProcess(), which reads the `G` flags the dialogue's
+	// field-5 actions wrote and warps the player.
 	void InputEndDialog(const FElysiumInputArgs& Args)
 	{
 		if (!bInDialog)
@@ -120,9 +128,64 @@ public:
 			return;
 		}
 		bInDialog = false;
+		++TimesTalked;
 		static const FName OnDialogEnd(TEXT("OnDialogEnd"));
 		FireOutput(OnDialogEnd, Args.Activator);
-		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s EndDialog"), *DebugString());
+		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s EndDialog (times_talked=%d)"), *DebugString(), TimesTalked);
+	}
+
+	// Load this NPC's `dialogname` `.dlg`, open a branch conversation bound to the installed script host,
+	// and hand it to the world (the visual-novel box renders it; the runner fires EndDialog on close).
+	// Returns false when there is no dialogue to run, leaving bInDialog latched for the B3 manual seam.
+	bool OpenConversation(const FElysiumEntityHandle& Activator)
+	{
+		if (!World || !Def)
+		{
+			return false;
+		}
+		const FString DialogName = Def->Keys.FindRef(TEXT("dialogname"));
+		if (DialogName.IsEmpty())
+		{
+			return false;   // an NPC with no dialogue file — nothing to open
+		}
+
+		const FString Path = FElysiumContentPaths::DlgFromDialogname(DialogName);
+		TSharedRef<FElysiumDlgFile> DlgFile = MakeShared<FElysiumDlgFile>();
+		FString Err;
+		if (!FElysiumDlgFile::LoadFile(Path, DlgFile.Get(), &Err))
+		{
+			UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s dialog load failed: %s"), *DebugString(), *Err);
+			return false;
+		}
+
+		// Player gender + clan drive text selection: VtMB shows col-2 for a female PC, and the col-12
+		// Malkavian variant for a Malkavian PC. Clan is the 2..8 sheet encoding (Malkavian = 4).
+		const UElysiumGameStateSubsystem* GameState = World->GetGameState();
+		const bool bMale = GameState ? GameState->PlayerSheet().bMale : true;
+		const bool bMalk = GameState
+			&& GameState->PlayerSheet().Clan == FElysiumPlayerSheet::ClanFromName(TEXT("Malkavian"));
+		const FElysiumEntityHandle Self = Handle;
+		FElysiumEntityWorld* W = World;
+
+		// Field-4 conditions eval, field-4(NPC)/field-5 actions exec — both through the installed host
+		// (EvalCondition also execs statements), so they land in the same `G` the level script reads and
+		// obey the same live/off switch and eval log as field-6. dlgexpr -> Python via the normalizer.
+		auto Cond = [W, Self, Activator](const FString& Raw) -> bool
+		{
+			return W->EvalCondition(ElysiumDlgExpr::ConditionToPython(Raw), Self, Activator).ToBool();
+		};
+		auto Act = [W, Self, Activator](const FString& Raw)
+		{
+			W->EvalCondition(ElysiumDlgExpr::ActionToPython(Raw), Self, Activator);
+		};
+
+		TSharedRef<FElysiumDlgConversation> Conv =
+			MakeShared<FElysiumDlgConversation>(DlgFile, bMale, bMalk, MoveTemp(Cond), MoveTemp(Act));
+		Conv->Start();
+		World->OpenDialog(Self, Conv);
+		UE_LOG(LogElysiumNpcEnt, Log, TEXT("%s opened dialogue '%s' (%d rows)"),
+			*DebugString(), *DialogName, DlgFile->Lines.Num());
+		return true;
 	}
 
 	virtual void Spawn() override

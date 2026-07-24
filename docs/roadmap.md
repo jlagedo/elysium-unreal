@@ -73,8 +73,8 @@ at `teleport_very_beginning` (the `tutorial` `info_landmark` — 8.6a seats the 
 **The data flow** (traced from `sp_tutorial_1.ents` + `tutorial.py`, patch flow):
 
 1. **Map load** — `logic_auto.OnMapLoad -> unhidePlus()` → `ccmd.patchtype` → `setPlus()` arms
-   `trig_popup_move` (`StartDisabled 1`). Dies today at the unbound `ccmd` (9.3b), so the
-   movement popup never arms.
+   `trig_popup_move` (`StartDisabled 1`). Live end to end (B5): the console bridge runs the whole
+   chain unassisted on a fresh New Game.
 2. **Step forward** — `trig_popup_move -> popup_1.OpenWindow` (movement popup). Trigger +
    `game_sign` already work.
 3. **Walk off the porch** — `trig_off_porch.OnEndTouch` → `Jack.WillTalk(1)` +
@@ -114,15 +114,20 @@ first popup arms itself:
   `FElysiumEntityWorld::SpawnRuntimeEntity`. *Verified:* Jack + the Sabbat stand their models;
   `ent_fire Jack … EndDialog` warps the player; `blueblood_maker.Spawn` produces the blueblood.
   Feeds but does not close 8.5. *Deps:* 8.2, PL4 [x].
-- [ ] **B4 `.dlg` parser + minimal dialogue runner** *(the 9.1 core, pulled forward; UI is
-  interim)* — parse `jack_tutorial.dlg`, eval field-4 (dlgexpr on the installed host), **exec
-  field-5** (what writes `G.Tut_Jack`), fire `OnDialogEnd` on exit; a substrate-grade Canvas
-  panel (the 4.10 sign-panel pattern) until 8.6/9.2 replace it. *Acceptance:* walking off the
-  porch → Jack's dialogue → exit → `G.Tut_Jack=1` → `DialogPostProcess()` → warp #2, unassisted.
-  *Deps:* B2, B3.
-- [ ] **B5 `ccmd` + the `cfg` alias table** *(= 9.3b + PL5d)* — `unhidePlus()` resolves, `setPlus()`
-  arms `trig_popup_move` and the Plus gates. *Acceptance:* fresh New Game shows `popup_1` on the
-  first steps. *Deps:* 9.3.
+- [x] **B4 `.dlg` parser + dialogue runner** *(9.1's core made playable; UI is interim)* — an NPC's
+  `dialogname` opens a `FElysiumDlgConversation` on `StartPlayerDialogRemote`; field-4 evals / field-5
+  execs route through the installed host (`FElysiumEntityWorld::EvalCondition`), and the world's open-
+  dialogue seam (`OpenDialog`/`PlayerDialogChoose`/`PlayerDialogAdvance`) fires the owner's `OnDialogEnd`
+  (→ `DialogPostProcess()`) on close. The interim UI is a **purpose-built native-Slate visual-novel box**
+  (`SElysiumDialogueBox`, HUD-driven, `FInputModeUIOnly`, number-key/click) — not the sign path; 9.2
+  replaces it. `elysium.dlg` / `.choose` / `.advance` are the scriptable echo. *Acceptance met (built
+  game):* `Jack.StartPlayerDialogRemote` → box renders line 11 + the live-gated "Who are you?" → 11→21→id-22
+  → `G.Tut_Jack==1` → `OnDialogEnd`/`DialogPostProcess`. As-built: `roadmap-archive.md` B4. *Deps:* B2, B3.
+- [x] **B5 `ccmd` + the `cfg` alias table** *(= 9.3b + PL5d)* — `unhidePlus()` resolves, `setPlus()`
+  arms `trig_popup_move` and the Plus gates. *Verified in the built game (fresh New Game):* the
+  map-load `logic_auto` fires `unhidePlus()`, whose `ScheduleTask`'d `c.patchtype=""` → alias
+  `patchtype` → `setPlus()` (real vamputil) → `trig_popup_move.Enable()`, all in the I/O history
+  with no manual injection. As-built: `roadmap-archive.md` B5. *Deps:* 9.3.
 - [ ] **B6 Feed interaction (post-warp-2 continuation)** — `+use` feed on the blueblood fires
   `OnFedUponBegin`/`OnFedUponEnd`; the maker's `OnFedUponEnd` wires set `G.Tutorial_Blueblood=1`
   and enable `trig_dialog_outside_chopshop`, opening the `Tut_Jack=2` chopshop beat.
@@ -563,9 +568,15 @@ draw on the same stack; NPCs stand in the world at their entity origins.
 
 ## P9 — Dialogue & persistence *(design: `game_runtime.md`, `rebuild-strategy.md` B7/B9)*
 
-- [ ] **9.1 `.dlg` parser + dlgexpr** — 13-field CRLF Latin-1 parser + branch machine; the
-  dlgexpr grammar on the 5.2 evaluator; **error-to-false** on the 89 malformed retail
-  snippets (RE3 confirms; implement as documented regardless). *Deps:* 5.2.
+- [x] **9.1 `.dlg` parser + dlgexpr** — `ElysiumDlg.{h,cpp}`: the 13-field CRLF/Latin-1 parser
+  (`FElysiumDlgFile`, 14-field `kiki.dlg` tolerance), the `dlgexpr` front-normalizer
+  (`ElysiumDlgExpr` — skill-checks → `CalcFeat(...) >=`, condition `&`/`|` → `and`/`or`, action `&` →
+  `;`) over the 5.2 evaluator/installed host, and the host-agnostic branch machine
+  (`FElysiumDlgConversation`). **error-to-false** rides the host (RE3). NPC col-4 = action, PC col-4 =
+  gate (resolved by data — `decisions.md` 2026-07-24). *Verified:* unit tests (parse / normalize /
+  branch) + a Content sweep over **all 25 NPC dialogues of the test-bench maps** (10,949 rows, every
+  one parsed + walked, 0 dangling links) + the jack_tutorial beat to `G.Tut_Jack=1`/END. As-built:
+  `roadmap-archive.md` 9.1. *Deps:* 5.2.
 - [ ] **9.2 Conversation UI + audio-by-path** — dialogue screen on the 8.6 UI foundation, line
   audio via 6.2. Content is **reproduced verbatim** (lines, conditions, branch structure,
   ordering); presentation modernizes — vector type, reflowing line lists, speaker/emotion cues,
@@ -600,39 +611,41 @@ draw on the same stack; NPCs stand in the world at their entity origins.
     `BumpStat`/`GetMasqueradeLevel`) are **9.4**; **disposition/camera/barter** are B-track / later.
     `OneOfSet`/`SquadSeesPlayer` stay stubs (`OneOfSet` is really a `vamputil` helper; `SquadSeesPlayer`
     is called by no shipped script).
-  - **`vamputil` for real** — still blocked: the bootstrap's stub module lacks `RandomLine`, so
-    `santamonica` (and the other maps whose scripts import it) fails to import (logged, non-fatal, map
-    load continues). The real file cannot import until `ccmd`/`cvar` are bound, i.e. **9.3b**, which is
-    also why `IsClan`/`IsIdling` are still bootstrap stubs (returning 0).
-  *Deps:* 9.3a, B2. *Remaining blocked on:* the inventory follow-up, 9.4, 9.3b, B4.
-- [ ] **9.3b Console bridge — `ccmd` + the `cfg` alias table** *(the fifth scripting surface)* —
-  the scripts drive the engine console, and the console drives the scripts back. `__main__.ccmd`
-  is a console-command object whose *attribute assignment* executes a command:
-  `c = __main__.ccmd; c.patchtype = ""` runs the console alias `patchtype`. Aliases and settings
-  come from `cfg/user.cfg` (`alias patchtype "setPlus()"`, `vchar_skip_intro`, `torchlight_*`,
-  the `run`/`walk`/`automove` movement aliases, …), and a command the console does not recognise
-  falls through to Python — so the round trip is **Python → alias → Python**.
-  **This is how the Unofficial Patch selects Basic vs Plus**: the installer writes one of two
-  `user.cfg` files differing only in whether `patchtype` expands to `setBasic()` or `setPlus()`,
-  and one shared script tree asks the console which install it is running under. Nothing in any
-  `.py`/`.ents`/`.dlg`/`.bsp` names `setPlus`/`setBasic` — the only reference in the whole install
-  is that one `.cfg` line, which is why it reads as dead code until you search the config tree.
-  **Load-bearing, and it starts on map load:** `logic_auto.OnMapLoad -> unhidePlus()` is wired on
-  **107 of 108 maps** (`sp_tutorial_1` included), and `setPlus()` is what arms `trig_popup_move`
-  (the 4.10 movement-popup gate, `StartDisabled 1`) plus the haven/beachhouse/condom
-  ScriptHide/Unhide sets and the `plus_handle*` door locks. Today `unhidePlus()` evaluates,
-  hits the unbound `ccmd`, and dies error-to-false — so those entities stay dormant and
-  `G.Patch_Plus` stays 0, silently selecting Basic-mode behaviour everywhere.
-  Scope: bind `ccmd` (attribute-set = execute), a cvar/alias store seeded from a **PL5d** copy of
-  `cfg/*.cfg`, and the console→Python fallthrough. *Deps:* 9.3; needed by 4.10's trigger arming.
-- [ ] **9.4 Quests/XP + RPG sheet data** — quest map is live since 1.1; load
-  `vdata/system/*.txt` (**PL5b copies**) into the sheet; XP awards. *Deps:* 1.1.
+  - [x] **`vamputil` for real** *(9.3b)* — with `ccmd`/`cvar` bound (its top-level `c = __main__.ccmd`
+    no longer throws), the real `vamputil.py` imports: its `zvtool` DAG, `fileutil`, and the 46 helpers
+    (`IsClan`/`IsIdling`/`RandomLine`/`unhidePlus`/`setPlus`/…) load, and `tutorial`'s `from vamputil
+    import *` merges them into `__main__`. One shim was needed: `vampire` binds a mutable **`Character`**
+    class the patch monkeypatches (`Character.Near = _Near`); ours is a compatibility stub (the 24
+    Character methods still dispatch off the Entity/Player getattro), see `decisions.md`. The four
+    `from vamputil import RandomLine` maps (`santamonica`, `chinatown`, `gallery`, `fusyndicate`) now
+    resolve that name. *Verified live via MCP.*
+  *Deps:* 9.3a, B2. *Remaining blocked on:* the inventory follow-up, 9.4.
+- [x] **9.3b Console bridge — `ccmd` + the `cfg` alias table** *(the fifth scripting surface)* —
+  `vampire.ccmd` (attribute-set = execute) and `vampire.cvar`, backed by a host-agnostic
+  `FElysiumConsole` alias/cvar store seeded from a **PL5d** `out/cfg` mirror, with the
+  console→Python fallthrough (`Python → alias → Python`). Binding `ccmd`/`cvar` lets the **real
+  `vamputil.py` import** (its top-level `c = __main__.ccmd`); the VM's file layer points at `out/`
+  (`sys.moddir='.'` + `nt.getcwd` redirect) so `FixKeyBindings` finds `cfg/config.cfg` and
+  `setPlus` reaches its Tutorial branch. This is the Unofficial Patch's Basic/Plus switch —
+  `user.cfg`'s `alias patchtype "setPlus()"`, named nowhere in the `.py`/`.ents`/`.dlg`/`.bsp`
+  trees. *Verified:* fresh New Game runs `unhidePlus()` → `c.patchtype=""` → `setPlus()` →
+  `trig_popup_move.Enable()`. Full record + the `Character`-shim divergence: `roadmap-archive.md`
+  9.3b, `decisions.md` 2026-07-24. *Deps:* 9.3.
+- [ ] **9.4 Quests/XP + RPG sheet data** — quest map is live since 1.1; the `vdata/` rulebook is
+  on disk (**PL5b [x]**, `out/vdata/`); load `system/stats/feats/traiteffects/rules` into the
+  sheet, `quests_*` + `experience_table` for XP. Table→system map: `docs/vdata-catalog.md`.
+  *Deps:* 1.1.
 - [ ] **9.5 Save/load** — the four blocks (entity save-fields via the field tables, event
   queue incl. deferred strings, think times, `G` blob) into a `USaveGame` container.
   *Deps:* 1.4, 5.4.
-- [ ] **9.6 Dice resolver + golden test** *(RE5)* — port in `recovered/dice-system.md` is
-  unverified; run the vroll golden test against the running game before it becomes
-  canonical. *Deps:* none (test needs retail game).
+- [ ] **9.6 Dice resolver** *(RE5 [x])* — **mechanic verified** by decompiling the full roll
+  cluster (ctor `FUN_101d88b0`, roller `FUN_101d8b40`, `vroll` handler `0x100d7040`, RNG/table
+  path, loader `FUN_101d92b0`) **plus reading `vdata/system/DiceRolls.txt`** — no running game
+  needed (the golden-test premise was void: the face distribution is data-driven by that file).
+  `recovered/dice-system.md` is now canonical. `DiceRolls.txt` is on disk (**PL5b [x]**,
+  `out/vdata/system/`). **Remaining build work:** the C++ resolver loading its
+  `TableWeightings`/`HealthModifiers` (shipped tables are uniform d10, so `rng(0..9)` matches
+  today). *Deps:* none.
 
 **Slice acceptance** *(M6 criterion)*: `sp_tutorial_1` is completable as in retail —
 dialogue, scripted flow, quests, save/load included.
@@ -654,22 +667,39 @@ dialogue, scripted flow, quests, save/load included.
   Shipping config sweep (debug layer compiled out). *Deps:* none until first package.
 - [ ] **10.6 EnhancedInput decision** — configured but unused; migrate the legacy mappings
   or remove the plugin. *Deps:* none.
-- [P] **10.7 Long tail** *(post-tutorial; promote to tasks when reached)* — combat + full
-  RPG sheet + chargen; real NPC AI (runtime NavMesh + BT/StateTree replacing `info_node`);
-  ragdoll/IK/anim blends; MetaSounds; `.emc`-style cache for `.ents` if parse time bites;
-  lump-8 lighting bake as a low-end contingency (parked with the dynamic-path commitment);
-  retail `.sav` import (needs RE7 wire format — currently a non-goal). For the low-end
-  contingency, **Lumen Lite** (5.8's medium-quality irradiance-field GI, ~2× faster, runs
-  on PC) is noted as a cheaper alternative to a lump-8 bake path — see Options.
-- [ ] **10.8 OpenLevel map-lifecycle migration** — move map change from the bespoke
-  persistent-world content-swap to UE5 hard travel (`OpenLevel` → `LoadMap` into a single
-  reused shell `.umap`; `AElysiumMapActor` reads the target map + landmark from GI-scoped
-  state and builds in code on `BeginPlay`). Retires the per-travel `ForceGarbageCollection(true)`,
-  `FElysiumTextureCache::FlushAll`-on-travel, the `RequestLandmarkTravel` next-tick defer, and
-  the `IsPlayerSeated` stale-pawn gate; keeps the `Travel`/`RequestLandmarkTravel` seam and its
-  `NextLandmarkSpawn`/`PendingTravel` carry-over. Verify all cross-map state survives `LoadMap`
-  (map/game-state/audio subsystems, CPython VM). Owner call: `decisions.md` 2026-07-24.
-  *Deps:* 4.6. *Trigger:* next map-lifecycle work, ahead of 10.4.
+- [P] **10.7 Long tail** *(post-tutorial; promote to tasks when reached)* — combat (weapons,
+  `vdata/items/`) + full RPG sheet + chargen; real NPC AI (runtime NavMesh + BT/StateTree
+  replacing `info_node`); ragdoll/IK/anim blends; MetaSounds; `.emc`-style cache for `.ents` if
+  parse time bites; lump-8 lighting bake as a low-end contingency (parked with the dynamic-path
+  commitment); retail `.sav` import (needs RE7 wire format — currently a non-goal). For the
+  low-end contingency, **Lumen Lite** (5.8's medium-quality irradiance-field GI, ~2× faster,
+  runs on PC) is noted as a cheaper alternative to a lump-8 bake path — see Options.
+  **vdata-driven gameplay systems** — data already on disk (PL5b, `out/vdata/`); each table's
+  consumer + schema is mapped in `docs/vdata-catalog.md`, and these are the systems that read
+  them: **disciplines/vampire powers** (`disciplinetgt_*`, ~300 KB — the largest, only latched
+  stubs today: `ClearActiveDisciplines` etc.), **stealth** (`stealth`/`stealthkillrules`; only
+  the inert `trigger_stealth_mod` exists), the **hacking minigame** (`hackterminals/`),
+  **economy/vendors** (`vendors`, item `worth`), **NPC disposition + reactions**
+  (`dispositiontable`/`reaction*`), **data-driven conversation camera** (`camerashots/`),
+  **radio + TV-news ambient content** (`radio_data`/`newscaster_*` — only 6.2's audio decode
+  exists), **impact FX** (`particleimpacttable`), **per-category entity sound schemes + volume**
+  (`sndscheme_*`/`sound_volume_table`, distinct from PL5a's map SoundSchemes), and the **minor UI
+  content tables** (`loadingtips`/`infobartypes`/`mapnames_localized`/`keynames`/
+  `interestingplacetypelist`). Promote any to its own task when reached.
+- [x] **10.8 OpenLevel map-lifecycle migration** — map change is UE5 hard travel: `Travel` stows
+  the target map + landmark in the GI-scoped `PendingMapLoad` and `OpenLevel`s the one reused shell
+  `.umap` (on cold boot, already in the shell, it spawns the map directly — no redundant re-open);
+  the fresh world's game mode calls `SpawnPendingMap`, whose `AElysiumMapActor` reads the target from
+  GI state and builds in code on `BeginPlay`. Retired the per-travel `ForceGarbageCollection(true)`,
+  `FlushAll`-on-travel, the `RequestLandmarkTravel` next-tick defer (`OpenLevel` self-defers teardown
+  to end of frame, so it's safe mid entity-tick), and the `IsPlayerSeated` gate; kept the
+  `Travel`/`RequestLandmarkTravel` seam + `NextLandmarkSpawn` carry-over. The texture cache was also
+  re-scoped from a process-wide strong-ref table to a **per-map instance owned by the map actor**, so
+  GC frees it with the world — the whole point of handing teardown to the engine. Cross-map state
+  verified GI-scoped (map/game-state/audio subsystems, CPython VM — the script host resolves the live
+  entity world each call, so the persistent VM tracks the fresh world). *Verified:* clean build,
+  Substrate tests green. Owner call + as-built: `decisions.md` 2026-07-24. As-built detail:
+  `roadmap-archive.md`. *Deps:* 4.6.
 
 ## Pipeline backlog (indexed; owned by phases above)
 
@@ -679,8 +709,9 @@ dialogue, scripted flow, quests, save/load included.
 | PL2 | Copy loose `.py` → `out/scripts/`, `.dlg` → `out/dlg/` — `UE_extract_scripts.py` | 5.1 [x] |
 | PL3 | Use-icon atlas export (72-entry enum) — `UE_use_icons.py` → `out/hud/use_icons.png`+`.json` | 4.4 [x] |
 | PL4 | Batch NPC export + include-model resolution — `mdl_skel.resolve_tree`/`local_sequences` (includes@404/408, `StudioModelGroup` stride 116) → shared-bank glbs + `npc_manifest.json` via `npc_export.py`; 45 NPCs / 62 banks / ~410 MB (`decisions.md` 2026-07-24) | 8.5 [x] |
-| PL5 | Copy sound schemes (a) [x] + `vdata/system/*.txt` (b) + `vdata/Signs/*.txt` ×278 + the 57 referenced background materials (`hud/signs/*`, `interface/Pop_Ups/*`) → `out/signs/` — `UE_extract_signs.py` (c) [x] | 6.3, 9.4, 4.10 |
-| PL5d | Copy `cfg/*.cfg` (the alias/cvar tables — `user.cfg` carries the Basic/Plus `patchtype` alias) → `out/cfg/` | 9.3b |
+| PL5 | Copy sound schemes (a) [x] + the full `vdata/` rulebook (b) [x] + `vdata/Signs/*.txt` ×278 + the 57 referenced background materials (`hud/signs/*`, `interface/Pop_Ups/*`) → `out/signs/` — `UE_extract_signs.py` (c) [x] | 6.3, 9.4, 4.10 |
+| PL5b | Mirror the whole `vdata/` rulebook (`system` 97 + `items` 244 + `camerashots` 66 + `hackterminals` 57 + `precache` 1 = 465) verbatim → `out/vdata/` — `UE_extract_vdata.py`, patch-first, `signs`/`.xls` excluded. Consumer map: `docs/vdata-catalog.md` | 9.4, 9.6, 10.7 [x] |
+| PL5d | Copy `cfg/*.cfg` (the alias/cvar tables — `user.cfg` carries the Basic/Plus `patchtype` alias) verbatim → `out/cfg/` — `UE_extract_cfg.py`, patch-first, wired into `export_all.py` (`--no-cfg`) [x] | 9.3b [x] |
 | PL6 | Texlight merge in exporter | 3.4 |
 | PL7 | Sidecar space fixes surfaced by the audit — **none (0.4: all sidecars already Unreal cm)** | 0.4 [x] |
 | PL8 | UI source inventory for the re-skin — extend `menu_extract.py` to mirror `.res` layouts, `trackerscheme.res`, UI bitmaps and strings into `out/ui/` as **design intent + source art** (screen inventory, panel anatomy, palette, iconography). The `.fnt` bitmap atlases are extracted for reference/metrics only — they are not the runtime type. | 8.6 |
@@ -693,7 +724,7 @@ dialogue, scripted flow, quests, save/load included.
 | RE2 | Retail queue-vs-think service order — **confirmed think-first** (thinks then `ServiceEvents`); our provisional queue-first diverges (see `engine-core.md` Tick note) | 1.4 | [x] |
 | RE3 | `__setattr__` write path + error-to-false + `G` default-0 **all confirmed** | 5.2, 9.1 | [x] |
 | RE4 | Ghidra datamap export (validate our input/field tables vs retail) — method confirmed, CBaseEntity base map extracted. **4.5 proved the fast path: `run.ps1 -Script DumpGrep` (str=/cls= anchors) over the persisted `vtmb` project, no re-import — recovered every P4.5 class factory/datamap and settled `logic_case_toggle`'s delta-advance divergence.** | 4.5+ (optional, valuable) | [~] |
-| RE5 | Dice-system vroll golden test | 9.6 | [ ] |
+| RE5 | Dice-system verified by decompilation + `vdata/system/DiceRolls.txt` (data-driven face weightings, shipped tables uniform d10; difficulty is human-scale; `[4]`/`[6]`/`[0xe]` + pool source all confirmed) — no running game needed; `recovered/dice-system.md` canonical | 9.6 | [x] |
 | RE6 | `ent_survey` count reconciliation — retail = 16,125 outputs / 1,591 Python (16,214/1,621 was stale) | 0.6 | [x] |
 | RE7 | Retail `.sav` block wire format | 10.7 (only for importing retail saves) | [P] |
 | RE8 | Re-base `entity_io.md` survey on the patch (engine-loaded) map set — patch 24,081 outputs / 6,956 Python (retail 16,125 / 1,591) | 0.8 | [x] |

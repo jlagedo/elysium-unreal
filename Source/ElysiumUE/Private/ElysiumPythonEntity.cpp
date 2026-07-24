@@ -640,6 +640,7 @@ namespace
 	PyObject* Mod_SquadSeesPlayer(PyObject*, PyObject* A)     { return CallSimple(TEXT("SquadSeesPlayer"), A); }
 	PyObject* Mod_OneOfSet(PyObject*, PyObject* A)            { return CallSimple(TEXT("OneOfSet"), A); }
 	PyObject* Mod_IsPCMalk(PyObject*, PyObject* A)            { return CallSimple(TEXT("IsPCMalk"), A); }
+	PyObject* Mod_IsClan(PyObject*, PyObject* A)              { return CallSimple(TEXT("IsClan"), A); }
 
 	// CreateEntityNoSpawn(classname, origin, angles) (9.3): build a runtime def, append a live-but-
 	// unspawned entity, and return the Entity object so the script can SetModel/SetName/SetOrigin on it
@@ -710,7 +711,97 @@ namespace
 		{ "ChangeMap",           Mod_ChangeMap,           METH_VARARGS, "Changes to the map and sets the player at the specified landmark" },
 		{ "OneOfSet",            Mod_OneOfSet,            METH_VARARGS, "" },
 		{ "IsPCMalk",            Mod_IsPCMalk,            METH_VARARGS, "Returns 1 if the player is Malkavian, otherwise returns 0." },
+		{ "IsClan",              Mod_IsClan,              METH_VARARGS, "Returns 1 if the character is of the named clan, otherwise 0." },
 		{ nullptr, nullptr, 0, nullptr }
+	};
+
+	// --- vampire.ccmd : the console command object (python_bridge.md, the fifth surface) --------
+	// Attribute-ASSIGN executes a console command through the shared FElysiumConsole: `c.patchtype
+	// = ""` runs the alias `patchtype`, which the Unofficial Patch's user.cfg defines as `setPlus()`
+	// -> the console falls through to Python -> the level-script function. The assigned value, if
+	// non-empty, is the command's argument string (the corpus only ever assigns ""). Attribute-GET
+	// does NOT execute (retail's documented SET-only semantics) -- it returns "" so a bare field-6
+	// `ccmd.wc_create` is a harmless no-op rather than a NameError.
+	PyObject* Ccmd_getattro(PyObject* Self, PyObject* NameObj)
+	{
+		if (PyObject* Generic = PyObject_GenericGetAttr(Self, NameObj))
+		{
+			return Generic; // __class__/__doc__/... resolve normally
+		}
+		if (!PyErr_ExceptionMatches(PyExc_AttributeError))
+		{
+			return nullptr;
+		}
+		PyErr_Clear();
+		return PyString_FromString(""); // reading a command name is a no-op, not an execute
+	}
+
+	int Ccmd_setattro(PyObject* /*Self*/, PyObject* NameObj, PyObject* Value)
+	{
+		const char* Name = PyString_AsString(NameObj);
+		if (!Name)
+		{
+			return -1;
+		}
+		FString Line(UTF8_TO_TCHAR(Name));
+		if (Value && Value != Py_None)
+		{
+			const FString Arg = PyToVariant(Value).ToString();
+			if (!Arg.IsEmpty())
+			{
+				Line += TEXT(" ") + Arg;
+			}
+		}
+		FElysiumPythonVM::Get().Console().Execute(Line);
+		return 0;
+	}
+
+	PyTypeObject GCcmdType =
+	{
+		PyVarObject_HEAD_INIT(nullptr, 0)
+		"vampire.ccmd",     // tp_name
+		sizeof(PyObject),   // tp_basicsize
+	};
+
+	// --- vampire.cvar : console variables ------------------------------------------------------
+	// Attribute-GET reads a cvar value as a string (empty on a miss; never raises -- `cvar.name`
+	// is read by setPlus's haven personalization); attribute-SET stores it.
+	PyObject* Cvar_getattro(PyObject* Self, PyObject* NameObj)
+	{
+		if (PyObject* Generic = PyObject_GenericGetAttr(Self, NameObj))
+		{
+			return Generic;
+		}
+		if (!PyErr_ExceptionMatches(PyExc_AttributeError))
+		{
+			return nullptr;
+		}
+		PyErr_Clear();
+		const char* Name = PyString_AsString(NameObj);
+		const FString V = Name
+			? FElysiumPythonVM::Get().Console().GetCvar(FString(UTF8_TO_TCHAR(Name)))
+			: FString();
+		return PyString_FromString(TCHAR_TO_UTF8(*V));
+	}
+
+	int Cvar_setattro(PyObject* /*Self*/, PyObject* NameObj, PyObject* Value)
+	{
+		const char* Name = PyString_AsString(NameObj);
+		if (!Name)
+		{
+			return -1;
+		}
+		const FString Key(UTF8_TO_TCHAR(Name));
+		const FString Val = (Value && Value != Py_None) ? PyToVariant(Value).ToString() : FString();
+		FElysiumPythonVM::Get().Console().SetCvar(Key, Val);
+		return 0;
+	}
+
+	PyTypeObject GCvarType =
+	{
+		PyVarObject_HEAD_INIT(nullptr, 0)
+		"vampire.cvar",     // tp_name
+		sizeof(PyObject),   // tp_basicsize
 	};
 }   // anonymous namespace
 
@@ -829,6 +920,33 @@ bool InstallEntityBindings(PyObject* Module, FString& OutError)
 	PyModule_AddObject(Module, "Entity", reinterpret_cast<PyObject*>(&GEntityType));
 	Py_INCREF(&GPlayerType);
 	PyModule_AddObject(Module, "Player", reinterpret_cast<PyObject*>(&GPlayerType));
+
+	// The console objects (9.3b): vampire.ccmd (attribute-set executes) + vampire.cvar. Both are
+	// data-less singletons forwarding to FElysiumPythonVM's FElysiumConsole.
+	GCcmdType.tp_flags    = Py_TPFLAGS_DEFAULT;
+	GCcmdType.tp_getattro = Ccmd_getattro;
+	GCcmdType.tp_setattro = Ccmd_setattro;
+	GCcmdType.tp_doc      = "VtMB console command object -- assigning an attribute runs that command.";
+	GCvarType.tp_flags    = Py_TPFLAGS_DEFAULT;
+	GCvarType.tp_getattro = Cvar_getattro;
+	GCvarType.tp_setattro = Cvar_setattro;
+	GCvarType.tp_doc      = "VtMB console variables -- attribute get/set reads/writes a cvar value.";
+	if (PyType_Ready(&GCcmdType) < 0 || PyType_Ready(&GCvarType) < 0)
+	{
+		OutError = FString::Printf(TEXT("PyType_Ready(vampire.ccmd/cvar) failed: %s"), *FetchPyError());
+		return false;
+	}
+	PyObject* Ccmd = PyObject_New(PyObject, &GCcmdType);
+	PyObject* Cvar = PyObject_New(PyObject, &GCvarType);
+	if (!Ccmd || !Cvar)
+	{
+		Py_XDECREF(Ccmd);
+		Py_XDECREF(Cvar);
+		OutError = TEXT("PyObject_New(vampire.ccmd/cvar) failed");
+		return false;
+	}
+	PyModule_AddObject(Module, "ccmd", Ccmd); // steals the reference
+	PyModule_AddObject(Module, "cvar", Cvar); // steals the reference
 
 	// The module globals are added after Py_InitModule3 rather than through its table, so this
 	// file owns the whole entity/native surface and ElysiumPythonVM.cpp owns only the VM.

@@ -9,11 +9,13 @@ class AElysiumMapActor;
 class FElysiumProfileRun;
 class FElysiumShotRun;
 
-// The only owner of VtMB-map lifecycle inside the single persistent Unreal level.
-// Travel destroys the current AElysiumMapActor (unloading everything map-scoped),
-// flushes the texture cache, and spawns a fresh map actor for the target. The P4.6
-// landmark transition (trigger_changelevel / scripted ChangeMap) places the player at
-// the destination `info_landmark`, preserving their offset from the source landmark.
+// The only owner of VtMB-map lifecycle. Map change is UE5 hard travel (roadmap 10.8): Travel
+// stows the target map + landmark in this GI-scoped state and OpenLevels the one reused shell
+// `.umap`; the engine tears down the current UWorld and runs GC, and the fresh world's game mode
+// spawns the AElysiumMapActor for the pending map (SpawnPendingMap), which reads the map + landmark
+// from here on BeginPlay. Cross-map state lives at GameInstance scope and survives the travel. The
+// P4.6 landmark transition (trigger_changelevel / scripted ChangeMap) places the player at the
+// destination `info_landmark`, preserving their offset from the source landmark.
 UCLASS()
 class UElysiumMapSubsystem : public UGameInstanceSubsystem
 {
@@ -28,18 +30,27 @@ public:
 	// landmark's facing) instead of info_player_start — the console/direct entry to the P4.6 path.
 	bool Travel(const FString& Map, const FString& Landmark = FString());
 
-	// P4.6 — request a deferred landmark transition (from a trigger_changelevel touch / scripted
-	// ChangeMap). The travel can't run inline: the caller is inside the entity-world tick that Travel
-	// destroys, so this stores the request and schedules it for the next engine tick. `PlayerOffset`
-	// is the player's position relative to the SOURCE landmark; the fresh map re-adds it to the
-	// destination landmark. `PlayerYaw` is the player's view yaw, preserved across the transition.
+	// P4.6 — a landmark transition (from a trigger_changelevel touch / scripted ChangeMap). Safe to
+	// call from inside the entity-world tick: it records the destination placement and Travels, and
+	// OpenLevel defers the actual world teardown to end of frame (UEngine::TickWorldTravel), so
+	// nothing is freed under the caller's stack. `PlayerOffset` is the player's position relative to
+	// the SOURCE landmark; the fresh map re-adds it to the destination landmark. `PlayerYaw` is the
+	// player's view yaw, preserved across the transition. First transition per frame wins.
 	void RequestLandmarkTravel(const FString& Map, const FString& Landmark,
 		const FVector& PlayerOffset, float PlayerYaw);
 
-	// True while a RequestLandmarkTravel is queued (the Maps Cog window shows it pending).
-	bool HasPendingTravel() const { return PendingTravel.bValid; }
-	// The queued transition's destination, for the debug UI ("<map> @ <landmark>" or empty).
+	// True while a map load is pending (Travel has stowed a target that a fresh world's game mode
+	// will spawn). HasPendingTravel is the debug-UI alias; SpawnPendingMap consumes it.
+	bool HasPendingMapLoad() const { return PendingMapLoad.bValid; }
+	bool HasPendingTravel() const { return PendingMapLoad.bValid; }
+	// The pending load's destination, for the debug UI ("<map> @ <landmark>" or empty).
 	FString PendingTravelDesc() const;
+
+	// Spawn the AElysiumMapActor for the pending map into the current world and consume the pending
+	// state. Called by the game mode on BeginPlay after a Travel OpenLevel lands in the fresh shell
+	// world (and directly by Travel on cold boot, when we are already in an empty shell). No-op with
+	// no pending load.
+	void SpawnPendingMap();
 
 	// Consumed once by the freshly-loaded map actor (P4.6): if this load is a landmark transition,
 	// returns true and fills the destination `info_landmark` name + the player offset/yaw to place
@@ -80,26 +91,21 @@ public:
 	static const TCHAR* StoryEntryLandmark() { return TEXT("tutorial"); }
 
 private:
-	// Run a queued landmark transition (next-tick timer target, set by RequestLandmarkTravel). Moves
-	// PendingTravel into the landmark-spawn slot, then Travels — safely, outside any actor tick.
-	void FlushPendingTravel();
-
 	TWeakObjectPtr<AElysiumMapActor> CurrentMap;
 	TArray<IConsoleObject*> ConsoleObjects;
 
-	// A landmark transition requested mid-tick, run on the next engine tick (FlushPendingTravel).
-	struct FPendingTravel
+	// The map Travel stowed for the fresh world to build. Set by Travel (survives OpenLevel — this
+	// subsystem is GI-scoped); consumed by SpawnPendingMap when the new world's game mode runs.
+	struct FPendingMapLoad
 	{
 		bool    bValid = false;
 		FString Map;
 		FString Landmark;
-		FVector Offset = FVector::ZeroVector;   // player pos relative to the source landmark
-		float   Yaw = 0.0f;                     // player view yaw, preserved
 	};
-	FPendingTravel PendingTravel;
+	FPendingMapLoad PendingMapLoad;
 
 	// The landmark placement the next map load consumes (dest = landmark origin + Offset). Set by a
-	// transition (FlushPendingTravel) or by a direct Travel(map, landmark); cleared on consume.
+	// transition (RequestLandmarkTravel) or by a direct Travel(map, landmark); cleared on consume.
 	struct FLandmarkSpawn
 	{
 		bool    bValid = false;

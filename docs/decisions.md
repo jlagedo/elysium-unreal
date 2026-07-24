@@ -6,6 +6,178 @@ trigger. A behavioural divergence from retail lands here carrying both the faith
 chosen behaviour (`remaster-direction.md`'s governing rule). Entries are never rewritten —
 append a correction as a new entry.
 
+- **2026-07-24** — **9.3b/B5 as-built: the console bridge, and three calls it forced.** The `ccmd`/`cvar`
+  console surface (`FElysiumConsole` + the two `vampire` objects) is a faithful port — `ccmd`
+  attribute-set executes, `user.cfg`'s `alias patchtype "setPlus()"` drives the Basic/Plus switch, the
+  round trip is Python→alias→Python. Three sub-decisions worth recording:
+  1. **File-root redirect (reproduce, via an interpreter-local shim).** VtMB's file-touching scripts
+     resolve paths as `nt.getcwd() + "\\" + sys.moddir + "\\<tree>\\…"`. Rather than emulate a `Vampire/`
+     install dir or `chdir` the UE process (which UE relative-path logic, logs, and crash dumps ride on),
+     the VM sets `sys.moddir = "."` and monkeypatches **its own** `nt.getcwd` to the absolute `out/` root.
+     VtMB's file layer then reads/writes into our content mirror — `out/` *is* the mod dir — contained to
+     the interpreter. `setPlus`'s `FixKeyBindings` finds `out/cfg/config.cfg` and no-ops cleanly, so
+     `setPlus` reaches its Tutorial branch. **Not covered:** the handful of call sites that use `moddir`
+     *alone* without `getcwd()` (the haven-PC `open("./vdata/hackterminals/haven_pc.txt")`); those stay
+     process-cwd-relative and IOError → error-to-false. Inconsequential on `sp_tutorial_1` (post-`Enable`),
+     tracked as a gap for maps that depend on the haven personalization / hunter asset-swap file I/O.
+  2. **`Character` is a compatibility stub (divergence, reproduce-with-caveat).** VtMB's `vampire` binds a
+     mutable old-style **`Character`** class (player+NPC), and the patch monkeypatches it
+     (`vamputil.py:3270` `Character.Near = _Near`). Our 24 Character methods dispatch off the
+     `Entity`/`Player` C getattro, not a shared class, and a C extension type rejects attribute assignment —
+     so `Character` is bound as a mutable old-style Python stub that absorbs the import + monkeypatch. The
+     **faithful** behaviour is that `Near` becomes a real method on characters; **ours** is that the patch
+     lands on the stub and does not reach live C entity instances. The only corpus use is the unused
+     `AnimalRadar` path, so nothing observable regresses, and the import completing is what unblocks the
+     entire real `vamputil.py`. A future unification of NPCs under a mutable Character type would close this.
+  3. **Console→Python fallthrough noise policy.** VtMB resolves a console word against its ConVar/ConCommand
+     registry, else falls through to Python. We have no engine registry, so the rule is: cfg alias → expand;
+     known cfg cvar → set; else try Python. A `NameError`/`SyntaxError` means "not Python" → an engine
+     cvar/command we do not model (`rope_shake`, `+speed`, `cl_detailfade`) → dropped with a **Verbose** log,
+     not a traceback; a Python body that *runs* and raises PyErr_Prints error-to-false like every other eval.
+  *Verified:* fresh New Game runs `unhidePlus() → c.patchtype="" → setPlus() → trig_popup_move.Enable()`
+  unassisted (MCP I/O history); `Elysium.Substrate.Console` unit test green. As-built: `roadmap-archive.md`
+  9.3b / B5.
+
+- **2026-07-24** — **RE correction: `.dlg` column 12 is the Malkavian-PC line, not a "short menu label"; shown
+  only to a Malkavian player.** A side-by-side (Tremere PC) showed our choice text as the Malkavian variants
+  ("I shall undertake your dark tutelage") where retail shows the normal lines ("Okay. I could use the help.").
+  Root cause: our field map called col-12 an abbreviated menu label and `MenuLabel()` *always preferred* it, so
+  every PC saw Malkavian text. **RE (`tools/out/dlg`):** 9,576 rows carry both col-1 and col-12; col-12 differs
+  from col-1 in **97%**, and the differences are unmistakable Malkavian-speak ("Behave, I am your kind of
+  monster" vs "Calm down, I'm not one of them"; "Are we fleeing or complaining?" vs "Alright, let's just get
+  out of here"). So col-12 is the **Malkavian variant of the row's text** (NPC subtitle or PC choice), shown
+  *instead of* col-1/2 when the PC is Malkavian — VtMB's "Madness (unique dialog)" clan feature. This is
+  distinct from the separate-row Malkavian mechanism (e.g. `jack_tutorial` id 12 "Who are you?" gated
+  `not IsClan` vs id 13 "The rain of ages" gated `IsClan`, which *branch* differently); col-12 is the inline
+  variant used when the Malkavian line goes to the same place. **Decision (reproduce):** `FElysiumDlgLine`
+  renames the field to `TextMalkavian`; `RawFor(bMale,bMalk)`/`DisplayText(bMale,bMalk)` pick col-12 iff the
+  player is Malkavian (else the gendered col-1/2); the conversation carries `bMalk` (from the sheet clan ==
+  Malkavian), and the box uses it for both subtitle and choices. Raw `Text()` still returns col-1/2 verbatim
+  for tests/RE. Corrects `game_runtime.md` §5 (col-12 row + the branching step). Covered by
+  `Elysium.Substrate.Dlg{Parse,Display}` and a real-data `Elysium.Content.DlgJackTutorial` assertion (id 23).
+- **2026-07-24** — **`pc`/`npc` bound in scripting + `IsClan` made real + a Tremere dev-boot mock; player-sheet
+  consumption surveyed across the test bench.** The bare `play.bat <map>` boot skipped chargen, so `pc` was
+  unbound and every clan/gender/stat-gated dialogue choice error-to-falsed (the "Who are you?" vs `[Continue]`
+  symptom). Fixes: (1) both script hosts now bind **`pc`** (the sheet-backed player Character) and **`npc`**
+  (the firing entity / conversation partner) — CPython binds `pc` once at VM start (`__main__.pc = FindPlayer()`)
+  and `npc` per-eval from `Ctx.Self`; the ElysiumExpr host resolves both names alongside `self`/`activator`.
+  (2) **`IsClan`/`IsPCMalk` are now real** (in the shared `ElysiumScriptNatives` table): they read the player
+  sheet clan (2..8 encoding) instead of the old return-0 / false stub — `IsClan` was previously not even in
+  the table. (3) The dev boot seeds a **mock character via `BeginNewGame(Tremere, male)`** (interim stand-in
+  for chargen, 9.4) so the sheet the gates read exists; per owner call this is always-on for `play.bat <map>`
+  (the unseeded A/B path is dropped). `CalcFeat` stays a stub (9.4), so skill-gated lines remain hidden;
+  clan/gender/`base_*` gating now works. Covered by the green Substrate tier (CPythonWriters, Expr).
+
+  **Player-sheet consumption survey (`tools/dlg_sheet_survey.py`) — 10 exported test-bench maps, 25 NPC
+  `.dlg` (each byte-identical to the UP install), tutorial-first.** Drives the 9.4 sheet/Character-API build
+  order.
+  - **A. Reads that gate dialogue (build first):** **clan** (`IsClan`, 258 refs, #1, tutorial) — full set across
+    the bench is Malkavian/Nosferatu/Ventrue/Toreador/Tremere/Brujah/Gangrel; **skill-checks** Persuasion/
+    Intimidate/Seduction (tutorial) + explicit `CalcFeat("inspection"/"haggle")` — all gated by `CalcFeat` (9.4);
+    **gender** `pc.IsMale()` (34, sm_hub — *real*, reads the sheet); **attribute/ability reads** `pc.intelligence`/
+    `wits`/`computers`/`charisma`/`manipulation`/`humanity`/`bloodpool`; **disciplines** — all eleven `base_<disc>`
+    via one predicate, `jack_tutorial` id 1081's starting-condition sum.
+  - **B. State mutations the dialogues drive (the Character-API surface — findings):** **Quests** `SetQuest`(66),
+    `GetQuestState`(10) — *real* (quest map). **Inventory** `HasItem`(72), `RemoveItem`(26), `GiveItem`(10),
+    `AmmoCount`, `GiveAmmo`, `HasWeaponEquipped` — *stubbed* (no inventory system). **Money** `CurrentMoney`(17),
+    `MoneyRemove`(15), `MoneyAdd`(13) — *stubbed* (no sheet money). **Vitae/frenzy** `Bloodloss`(12),
+    `SeductiveFeed`(10), `FrenzyTrigger`(3), `bloodpool` — *stubbed*. **Humanity/XP** `HumanityAdd`,
+    `AwardExperience`, `BumpStat` — *stubbed*. **Faction** `IsFollowerOf`(5) — *stubbed*; `getattr` (reflection).
+    Backing status is the `ElysiumScriptNatives` table: quests + `IsMale`/clan/`base_*` are live; everything else
+    in B is a logged stub, and that stub list is the concrete 9.4 work-list (inventory, money, blood/frenzy,
+    humanity/XP as the four backing systems).
+
+- **2026-07-24** — **Dialogue `[stage directions]` are stripped on screen, kept in the data.** Comparing
+  the live game (Unofficial Patch) against ours on `jack_tutorial` line 11 surfaced two of them rendered
+  raw: `[laughing at something no one else thinks is funny]` and `[chuckle]`. **RE:** the corpus carries
+  2,303 such spans; every one is free-form English VO-recording direction — emotion/delivery (`[sarcastic]`,
+  `[Blows smoke]`), pacing (`[pause]`), or a speaker attribution on a multi-VO line (`[Cop Buddy2:]`,
+  `[Therese]`) — with hand-typo variants of the same note (`[cough cough]`/`[cough, cough]`/`[Cough,
+  cough]`), i.e. authored for a human reader, not an engine token set. **Not consumed by lip-sync or the
+  expression engine** — VtMB drives both from **separate per-line files resolved by path**, not from the
+  subtitle string: lip-sync from `sound/character/dlg/<hub>/<stem>/line<ID>_col_e.lip` (Source phoneme data,
+  `VERSION 1.2`), expression/gesture from the sibling `.vcd` (Faceposer choreography channels) — see
+  `game_runtime.md` §4/§5, *"one subtitle source, the `.dlg` text field."* Verified concretely on the exact
+  flagged line: `jack_tutorial/line11_col_e.lip`'s `PLAINTEXT` block reads `"What a scene man! … whattaya
+  say?"` with the brackets **already absent** (and even normalized differently from the subtitle — "plop you
+  out"/"whattaya say" vs "plop ya out"/"Whaddya say?"), and its `WORDS` phoneme table is built from that
+  cleaned text, so `[laughing…]`/`[chuckle]` never enter the lip/vcd path. The display layer strips them
+  from the subtitle (confirmed by the retail/UP screenshot). `game_runtime.md` already named col-1's
+  `[stage directions]` as "part of the string" (a parse fact); this adds the **display** fact. **Data-mismatch ruled out first (per the owner's prompt):** our
+  `out/dlg/main characters/jack_tutorial.dlg` is **byte-identical** (same md5) to the install's
+  `Unofficial_Patch/dlg/…` copy — the extractor is patch-first, so we already carry the UP text; the UP
+  file itself still contains the brackets, so this is a display transform, not a version gap. **Decision
+  (reproduce):** strip `[...]` for display only — the parser stays verbatim (tests/RE compare raw), and
+  `FElysiumDlgLine::DisplayText()`/`DisplayMenuLabel()` (via `ElysiumDlgText::StripStageDirections`, which
+  drops each `[...]` span, collapses the whitespace, and leaves an unterminated `[` intact) feed the box.
+  Nothing is destroyed — a future remaster expression layer could still read the raw `[Amused]`. Covered
+  by `Elysium.Substrate.DlgDisplay`. (Separately confirmed *not* a bug: the same comparison showed our box
+  offering `[ Continue ]` where retail offers "Who are you?" — both of line 11's PC choices are clan-gated
+  (`not IsClan(pc,"Malkavian")` / `IsClan(pc,"Malkavian")`), and a bare `play.bat` boot skips chargen so
+  `pc` is unbound → both gates error-to-false → terminal. Faithful data; boot through New Game to bind `pc`.)
+- **2026-07-24** — **RE5 resolved without the running game: VtMB dice are data-driven; the golden-test
+  premise was void.** The plan was a `vroll` golden test against retail. Decompiling the full roll
+  cluster (ctor `FUN_101d88b0`, roller `FUN_101d8b40`, `vroll` handler `0x100d7040`, the RNG/table
+  path, loader `FUN_101d92b0`) showed the only RNG-dependent step — the die-face distribution — is a
+  **100-entry weighting table loaded from `vdata/system/DiceRolls.txt`**, so the ground truth is a
+  shipped data file readable offline (no retail run). Findings: (1) the console difficulty is
+  **human-scale** — `vroll` passes `atoi(arg2)` raw, ctor stores `[0xb] = diff − 1`, die succeeds when
+  physical face ≥ difficulty; (2) each face = `WeightTable[RandomInt(0,99)]`, and the shipped
+  `Normal`/`Heavy`/`Light` tables are **all uniform d10** (`face = r99/10`), so `rng(0..9)` is faithful
+  today, but the mechanism is genuinely data-driven ("make your own", per the file's own comment);
+  (3) `RollResult` tier names confirmed 1:1 (`Botched/Failure/Partial Success/Success/Critical
+  Success`); (4) `HealthModifiers` (`[0xe]`) is data-driven and all-0 in this install; (5) the pool is
+  computed from the character sheet (`f(attribute+ability)`), not a CLI arg. **Decision:** the runtime
+  resolver (9.6) will *load* `DiceRolls.txt` (its `TableWeightings`/`HealthModifiers`) rather than
+  hard-code uniformity, so a data mod that reweights a die is honoured — matching the engine. New
+  extract task **PL9** copies the file into the offline mirror. `recovered/dice-system.md` promoted to
+  canonical; RE5 closed `[x]`. Ghidra dumps under `tools/ghidra/out/re5_*` (local-only).
+- **2026-07-24** — **9.1 + B4 as-built: `.dlg` parser + dlgexpr + branch machine, and the in-game
+  conversation runner with a visual-novel dialogue box.** Shipped together (B4 is 9.1's core made
+  playable). Several calls worth recording:
+  - **NPC-line col-4 is an *action* (exec), not a condition — resolved by data.** `game_runtime.md`
+    §7 left open whether an NPC line's col-4 is ever evaluated as a gate. `jack_tutorial.dlg`'s entry
+    line (id 11) carries col-4 `G.Story_State = -3` — an **assignment**. Evaluating that "as a
+    condition" would syntax-error → error-to-false → the entry line would be wrongly skipped. So NPC
+    col-4 (with col-5) is executed when the line is spoken; only a **PC choice**'s col-4 is the eval
+    gate. `game_runtime.md` §5/§7 corrected in the same pass.
+  - **Entry-point selection is interim, flagged pending RE.** The branch machine opens at the first
+    NPC line with non-empty display text (the blank leading NPC lines 1–4 are not real turns). VtMB's
+    exact opener-selection among gated leading NPC lines is not yet RE'd; the test-bench maps each have
+    a single content opener, so this is faithful there. Recorded as a known limitation, not a divergence.
+  - **dlgexpr rides the one evaluator, via a front-normalizer.** 9.1 does not add a second grammar to
+    `ElysiumExpr`; it rewrites the dlgexpr surface into the pure-Python subset the installed host already
+    speaks — skill-checks (`Seduction 7`) → `CalcFeat("Seduction") >= 7` (implicit `>=`), and the
+    condition-level `&`/`|` → `and`/`or` (dlgexpr has no bitwise operators), the action-level `&` → `;`.
+    Conditions/actions then route through `FElysiumEntityWorld::EvalCondition` (the installed CPython/expr
+    host), so field-5 writes land in the same `G` the level script reads and inherit error-to-false (RE3).
+  - **`CalcFeat` stays a stub (Int 0) until 9.4**, so skill-gated PC choices evaluate false and stay
+    hidden. Faithful once feats exist; the tutorial beat is `G.`/`IsClan`-gated, so unaffected. Noted,
+    not worked around.
+  - **The interim dialogue UI is a purpose-built native-Slate visual-novel box, not the sign path and
+    not VGUI.** Owner call ("visual-novel simple, geometry + transparency, as much native UE5 as we
+    can"): `SElysiumDialogueBox` (translucent slab + numbered `SButton` rows, engine fonts, no art),
+    added to the viewport by the HUD while a conversation is open, with the controller in
+    `FInputModeUIOnly` (the VN freezes the world) and number-key/click selection. It is explicitly
+    interim — 9.2 replaces it on the 8.6 UI stack. *Verified in the built game:* firing
+    `Jack.StartPlayerDialogRemote` opens `jack_tutorial.dlg`, the box renders line 11 + the live-gated
+    "Who are you?" choice, walking 11→21→id-22 runs the field-5 action to `G.Tut_Jack == 1`, and closing
+    fires `OnDialogEnd → DialogPostProcess`. As-built detail: `roadmap-archive.md` 9.1 / B4.
+- **2026-07-24** — **10.8 as-built: OpenLevel migration landed; texture cache re-scoped to the map
+  actor (one correction to the plan below).** The migration shipped as scoped — hard travel via
+  `OpenLevel`, the next-tick defer and `IsPlayerSeated` gate retired, cross-map state confirmed
+  GI-scoped (the CPython host resolves the live entity world each call). **One correction:** the plan
+  (and `map-architecture.md`'s old "Ownership" section) assumed `FElysiumTextureCache` was a
+  process-wide *weak* index with the map actor holding the strong refs, so engine GC would free
+  textures once `FlushAll`-on-travel was retired. It was actually a process-wide *strong*-ref static
+  table whose only release was `FlushAll` — dropping `FlushAll` with no replacement would have leaked
+  every map's textures. Resolution (owner-approved during the work): make the cache a **per-map
+  instance owned by the map actor**, threaded into the material factory / static-mesh builder, so its
+  strong refs drop with the actor and GC reclaims the textures. This keeps the intra-map dedup (each
+  unique texture decoded once — the engine has no path-keyed cache for loose transient textures, its
+  dedup being at the `.uasset`/`LoadObject` layer this project bypasses) while making freeing the
+  engine's job. The weak-process-index model is moot under hard travel (only one map ever resident),
+  so it was dropped rather than built. As-built detail: `roadmap-archive.md` 10.8.
 - **2026-07-24** — **Map-lifecycle model: adopt OpenLevel (engine hard travel); retire the bespoke
   persistent-world content-swap.** Owner call. **Decision:** the target map-lifecycle model is UE5
   standard hard travel (`UGameplayStatics::OpenLevel` → `UEngine::LoadMap`) into a single reused shell

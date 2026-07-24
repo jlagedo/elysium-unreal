@@ -92,6 +92,44 @@ Records are verbatim moves out of `roadmap.md`: where one says "the decision log
   latch, and the OnDialogBegin fire on a bare world. **Feeds but does not close 8.5** (its
   `scripted_sequence` anim-at-marker ×51 and animation-bank retargeting stay open). *Deps:* 8.2, PL4 [x].
 
+- [x] **B4 `.dlg` parser + dialogue runner** *(9.1's core made playable; UI is interim)* — landed. The
+  reusable core is **9.1** (`ElysiumDlg.{h,cpp}`, its own archive entry below); B4 is the in-game wiring.
+  **NPC leaf:** `FElysiumNpc::InputStartDialog` now, after `OnDialogBegin`, reads the NPC's `dialogname`
+  keyfield (`dlg/Main Characters/jack_tutorial.dlg`), loads the `FElysiumDlgFile`, builds a
+  `FElysiumDlgConversation` whose condition/action callbacks normalise dlgexpr (`ElysiumDlgExpr`) and route
+  through `FElysiumEntityWorld::EvalCondition` (the installed CPython/expr host — so field-5 writes land in
+  the same `G` the level script reads, and inherit error-to-false), `Start()`s it, and hands it to the world;
+  a missing/unloadable file falls back to the B3 manual-`EndDialog` seam. `InputEndDialog` now increments
+  `times_talked`. **World seam:** an open-dialogue slot mirroring the sign slot — `OpenDialog`,
+  `GetOpenDialog`/`GetOpenDialogOwner`, `PlayerDialogChoose`/`PlayerDialogAdvance`, `CloseDialog`, and
+  `EndDialogSession`, which routes `EndDialog` to the owner via `!self` so its `OnDialogEnd` (→
+  `DialogPostProcess()`) fires through the real chokepoint on close (a teardown/replacement closes silently).
+  **UI:** a purpose-built native-Slate **visual-novel box** `SElysiumDialogueBox` (`ElysiumDialogueWidget.{h,cpp}`)
+  — a translucent slab + numbered `SButton` rows, engine fonts, geometry-and-transparency only (no art, no
+  sign machinery, no VGUI). `AElysiumHUD` ticks it: it polls the world's open conversation, (re)builds the box
+  on a turn change, tears it down on close, and holds the player in `FInputModeUIOnly` while it is up (the VN
+  freezes the world); a pick routes back through `PlayerDialogChoose`. Number keys 1–9 and clicks both select.
+  **Debug:** `elysium.dlg` / `elysium.dlg.choose <n>` / `elysium.dlg.advance` are the scriptable echo
+  (`ElysiumDlgConsole.cpp`, non-Shipping), so a headless/MCP agent can walk a beat with no UI. **One bug found
+  + fixed during the in-game smoke:** `SButton` stores its `FButtonStyle` by pointer, so a `Construct`-local
+  style dangled and crashed on the first paint — the style is now a widget member (`ChoiceRowStyle`). *Acceptance
+  met (built game):* firing `Jack.StartPlayerDialogRemote 256` opens `jack_tutorial.dlg` (1116 rows), the box
+  renders line 11 with the live-`IsClan`-gated "Who are you?" choice, walking 11→21→id-22 runs the field-5
+  action to `eval G.Tut_Jack = Int(1)`, and closing a line fires `OnDialogEnd → DialogPostProcess() →` travel.
+  *Deps:* B2, B3.
+- [x] **B5 `ccmd` + the `cfg` alias table** *(= 9.3b + PL5d)* — landed. The console bridge is the fifth
+  scripting surface; its full as-built is the **9.3b** record in the P5 section below. In B-track terms:
+  binding `vampire.ccmd`/`cvar` lets the real `vamputil.py` import, so `unhidePlus()`/`setPlus()` resolve,
+  and the VM's file layer now resolves VtMB's `getcwd()+moddir` paths into `out/` so `setPlus`'s
+  `FixKeyBindings` reads `out/cfg/config.cfg` and reaches its Tutorial branch. *Verified in the built game
+  (fresh New Game, MCP I/O history):* map load fires `logic_auto → unhidePlus() → ScheduleTask(1.0,
+  'c.patchtype="")` → the console runs alias `patchtype` → `setPlus()` (real vamputil) →
+  `trig_popup_move.Enable()` + `events_player_plus.EnableOutputs()`, all unassisted; `cubemaps_builder`'s
+  field-6 `ccmd.wc_create` reads back `""` (a no-op, since only attribute-*set* executes). The one traceback
+  is the documented post-`Enable` gap — `setPlus`'s haven-PC `open("./vdata/hackterminals/haven_pc.txt")`
+  (a `moddir`-relative-only path the redirect does not cover) IOErrors and error-to-falses, inconsequential
+  on `sp_tutorial_1` because it follows the `Enable`. *Deps:* 9.3.
+
 ## P0 — Ground truth & de-risk
 
 - [x] **0.1 Profiling baseline** *(was L0.1)* — **automated & headless.** `profile.bat` drives
@@ -1050,6 +1088,62 @@ Records are verbatim moves out of `roadmap.md`: where one says "the decision log
   `elysium.eval cCelerity` = **8**, `G.Tutorial_Discflags |= cCelerity` flips `G` to **8** — the 5.5
   acceptance, now on the default path — `elysium.script.cpython 0` A/Bs back to expr (NameError again),
   and travel re-imports per map. *Deps:* 5.5.
+- [x] **9.3b Console bridge — `ccmd` + the `cfg` alias table** *(the fifth scripting surface)* — landed.
+  **Store:** `FElysiumConsole` (`ElysiumConsole.{h,cpp}`, plain C++, no Python/UObject) parses `out/cfg`
+  into an alias table + a cvar table (load order `default → config → autoexec → user`, later shadows
+  earlier — so `user.cfg`'s `alias patchtype "setPlus()"` wins), and `Execute(cmd)` resolves each
+  `;`-split word: an alias expands (recursively, depth-capped), a known cvar with an arg is set, else the
+  word falls through to Python. Owned by `FElysiumPythonVM`, seeded at `EnsureStarted`, its Python sink
+  wired to `ExecConsoleLine` (exec in `__main__`; a `NameError`/`SyntaxError` reports "not Python" so an
+  engine cvar/command we do not model — `rope_shake`, `+speed` — is dropped with a Verbose note, while a
+  real body that raises PyErr_Prints error-to-false like every eval). **Objects:** `vampire.ccmd`
+  (attribute-*set* executes `name` + optional arg; attribute-*get* returns `""` and does **not** execute,
+  matching retail's SET-only semantics, so a bare `ccmd.wc_create` field-6 is a harmless no-op) and
+  `vampire.cvar` (get reads a value as a string — `cvar.name` returned `"Noa"` from `config.cfg`; set
+  stores), both data-less singletons in `ElysiumPythonEntity.cpp` forwarding to the console.
+  **Bootstrap:** `__main__.ccmd`/`cvar` bound; the stub `vamputil` dropped so the **real `vamputil.py`
+  imports**; and a `Character` compatibility class bound (see the divergence below). **File-root
+  redirect:** VtMB's scripts touch files as `nt.getcwd() + "\\" + sys.moddir + "\\<tree>\\…"`, so the VM
+  sets `sys.moddir = "."` and monkeypatches its own `nt.getcwd` to the absolute `out/` root — contained to
+  the interpreter, the UE process cwd untouched — so `setPlus`'s `FixKeyBindings` finds `out/cfg/config.cfg`
+  (no `vdiscipline_last`/`feed` binds → empty `data` → no write, no `execonsole`) and returns cleanly,
+  letting `setPlus` reach its Tutorial branch. **PL5d** (`UE_extract_cfg.py`, wired into `export_all.py`,
+  `--no-cfg`) mirrors `cfg/*.cfg` verbatim, patch-first, into `out/cfg`. **Divergence (`decisions.md`
+  2026-07-24):** `vampire` binds a mutable **`Character`** class the patch monkeypatches
+  (`vamputil.py:3270` `from __main__ import Character`; `Character.Near = _Near`). A C extension type
+  rejects attribute assignment, and our 24 Character methods dispatch off the `Entity`/`Player` getattro
+  (not a shared class), so `Character` is a mutable old-style compatibility stub — the monkeypatched `Near`
+  does not reach live C entity instances (only the unused `AnimalRadar` path uses it), but the import
+  completing is what unblocks the whole real vamputil. **Verified (built game, fresh New Game via MCP):**
+  the boot log shows `loading tutorial level script → :::: ZVTOOL LOADED → Loaded level script: tutorial`
+  (no `ImportError`) then `Plus Patch` (`setPlus`'s own print); the I/O history shows, unassisted,
+  `unhidePlus() → c.patchtype="" → events_player_plus.EnableOutputs() → trig_popup_move.Enable()`, and
+  `ccmd.wc_create → ""`; a `Elysium.Substrate.Console` unit test covers the parse + alias→Python fallthrough
+  + cvar-set path. *Deps:* 9.3.
+
+- [x] **9.1 `.dlg` parser + dlgexpr** — landed as `ElysiumDlg.{h,cpp}`, three separable, unit-testable
+  pieces. **Parser** (`FElysiumDlgFile::ParseBytes`/`LoadFile`): Latin-1 decode, CRLF rows, `}{`-joined
+  13-field records → `FElysiumDlgLine` (id / M+F text / link / col-4 / col-5 / short label) with an
+  id→index map; tolerates the corpus-wide 14-field `kiki.dlg` typo and skips a stray non-13-field row
+  without aborting the file. Roles from col-3: `#`=NPC line, a number=PC choice (`0`=END), empty=padding.
+  **dlgexpr normalizer** (`ElysiumDlgExpr::ConditionToPython`/`ActionToPython`): a total string→string
+  front layer that rewrites the engine grammar into the pure-Python subset the installed host evaluates —
+  a skill-check run `IDENT [relop] INT` (bare ident, not member/call, not a keyword) → `CalcFeat("IDENT")
+  relop INT` (implicit `>=`), the condition-level `&`/`|` → `and`/`or`, the action-level `&` → `;`;
+  everything else is copied verbatim (source-span rebuild, so pass-through spacing is exact), and a shape
+  it cannot classify falls through to the host's error-to-false (RE3). dlgexpr has no bitwise operators,
+  which is what makes the `&`/`|` rewrite unambiguous. **Branch machine** (`FElysiumDlgConversation`):
+  host-agnostic (injected condition-eval + action-exec callbacks, so it drives from a unit test with a
+  fake `G` or in-game through `EvalCondition`). Opens at the first NPC line with non-empty text (blank
+  leading NPC lines are not real turns — interim entry rule, `decisions.md`); an NPC line's col-4 **and**
+  col-5 are executed when spoken (NPC col-4 = action, resolved by the entry line's `G.Story_State = -3`
+  assignment); it gathers the contiguous following PC rows whose col-4 gate passes; a pick runs col-5 and
+  follows the col-3 link (`0` or a dangling link ends); a no-choice line is terminal. `game_runtime.md`
+  §5/§7 corrected in the same pass (NPC col-4 = action). **Verified:** `Elysium.Substrate.DlgParse` /
+  `DlgExpr` / `DlgBranch` (parse incl. 14-field tolerance, skill-check/join rewrites, a synthetic branch
+  walk), `Elysium.Content.DlgCorpus` (**every NPC dialogue of the exported test-bench maps — 25 files,
+  10,949 rows, all parsed + branch-walked, 0 dangling links**), and `Elysium.Content.DlgJackTutorial` (the
+  1116-row beat, walked to the `G.Tut_Jack=1` action and END). Consumed in-game by **B4**. *Deps:* 5.2.
 
 ## Ghidra extraction — findings + plan *(pass dated 2026-07-22; scripts + dumps in `tools/ghidra/`, `out/re*.txt`)*
 
@@ -1162,3 +1256,55 @@ Consequence for the tutorial: nothing fires on arrival; the first beat is armed 
 
 **RE5 (Ghidra-drivable, open):** optionally static-recover the vroll resolver in `vampire.dll` to
 cross-check `recovered/dice-system.md` alongside the running-game golden test.
+
+## P10 — Scale & ship-shape
+
+- [x] **10.8 OpenLevel map-lifecycle migration** — retired the bespoke persistent-world
+  content-swap (destroy the map actor in-place, `FElysiumTextureCache::FlushAll`,
+  `ForceGarbageCollection(true)`, respawn a fresh actor in the same `UWorld`) for UE5 standard hard
+  travel. **The seam is unchanged:** `UElysiumMapSubsystem::Travel(map, landmark)` and
+  `RequestLandmarkTravel` stay the entry points, and the `NextLandmarkSpawn` carry-over still hands
+  the destination placement (`dest landmark origin + source offset`, view yaw) to the fresh map's
+  `ResolveLandmarkSpawn`. **What changed underneath:** `Travel` stows the target in a GI-scoped
+  `PendingMapLoad` and calls `UGameplayStatics::OpenLevel` on the one reused shell (`/Game/Elysium`,
+  `make_boot_map.py`); the engine's `LoadMap` tears down the world and GCs; the fresh world's
+  `AElysiumGameMode::BeginPlay` sees `HasPendingMapLoad()` and calls `SpawnPendingMap`, which spawns
+  the `AElysiumMapActor` (deferred, `MapName` set before `BeginPlay`) that reads the target from GI
+  state and builds in code. **Cold boot** skips the redundant re-open: with no map yet loaded,
+  `Travel` spawns directly into the already-empty boot shell.
+  - **Next-tick defer removed.** `RequestLandmarkTravel` fired from inside the entity-world tick used
+    to schedule `FlushPendingTravel` on a next-tick timer because the old `Travel` destroyed the
+    ticking actor under the stack. `OpenLevel` sets a travel URL that `UEngine::TickWorldTravel`
+    processes at end of frame, so it is safe to call mid-tick — the defer (and the `FPendingTravel`
+    struct) are gone. The "one transition per frame, first wins" guard is preserved (a second
+    `RequestLandmarkTravel` sees `PendingMapLoad` already valid and bails).
+  - **`IsPlayerSeated` gate removed.** It suppressed brush touches while the *persistent* pawn still
+    stood at the previous map's coordinates after an in-place swap. A fresh world + fresh pawn per
+    map has no such stale position, so the gate (and `AElysiumMapActor::IsPlayerSeated` +
+    `ElysiumBrushComponent`'s check) are retired. Residual to watch: the fresh pawn spawns at the
+    shell's origin before the map actor teleports it to the landmark, so a trigger volume containing
+    origin could in principle fire a one-frame touch — flagged for play-test verification.
+  - **Texture cache re-scoped (the freeing half of "hand teardown to the engine").** The cache was a
+    process-wide static `TStrongObjectPtr` table whose *only* release was `FlushAll` — retiring
+    `FlushAll` alone would have leaked every map's textures forever. So `FElysiumTextureCache` became
+    a **per-map instance owned by the map actor** (a `TPimplPtr` member, created at the top of
+    `LoadMap`), threaded into `FElysiumMaterialFactory::Build`/`BuildDecal` and
+    `FElysiumStaticMeshBuilder::Build`; its strong refs drop when the actor is torn down and GC
+    reclaims the textures. It stays an intra-map dedup index (each unique texture decoded/uploaded
+    once, shared by every surface) — the engine's own dedup lives at the `.uasset`/`LoadObject` layer
+    this project bypasses by decoding loose PNG/DDS into transient textures. The weak-process-index
+    model the old `map-architecture.md` "Ownership" section described was never built and is moot
+    under hard travel (only one map is ever resident).
+  - **Cross-map state verified GI-scoped.** `UElysiumMapSubsystem`, `UElysiumGameStateSubsystem`
+    (`G`/quest/sheet + the script host + the embedded CPython VM), and `UElysiumAudioSubsystem` are
+    GameInstance subsystems and survive `LoadMap`; the MCP subsystem is an engine subsystem. The
+    CPython host resolves the live entity world each call (`CurrentEntityWorld()` → the current map
+    actor's world), so the persistent VM tracks the fresh world after travel — the same resolution
+    the old swap already relied on. Generation-checked `Entity` handles correctly report "deleted"
+    for the torn-down world.
+  - *Verified:* `build.bat` clean (editor target); `test.bat` Substrate tier green. Automation does
+    not directly drive a travel (it needs a live world), so the migration's correctness rests on the
+    build + the logic above; the `Content.TutorialEnts` red in the run was a pre-existing local
+    export mismatch (a retail `sp_tutorial_1` export, 1226 entities / 75 classnames, vs the test's
+    patch-calibrated 1600–2100 band), unrelated to this task. Owner call + as-built correction:
+    `decisions.md` 2026-07-24.

@@ -7,6 +7,7 @@
 
 class FElysiumEntityWorld;
 class FElysiumSoundSchemeManager;
+struct FElysiumTextureCache;
 class UAnimSequence;
 class UDecalComponent;
 class UDirectionalLightComponent;
@@ -62,12 +63,6 @@ public:
 	// True once the pawn has been placed and its ground collision has finished cooking
 	// (or the spawn-hold timed out). The headless profiler waits on this before capturing.
 	bool IsSpawnDone() const { return bSpawnDone; }
-
-	// True once the pawn stands where this map wants it: either it has been moved to the
-	// info_player_start / landmark, or this map asked for no placement at all. Until then the pawn
-	// is still standing wherever the PREVIOUS map left it, so a trigger volume it happens to
-	// intersect is not something the player walked into — brush touch routing waits on this.
-	bool IsPlayerSeated() const { return !bSpawnPending || bSpawnPlaced; }
 
 	// The live Track-B entity world (P1.4), or null if the map has no `.ents`. Owned by this
 	// actor, so it dies on map unload. The `elysium.world*` verbs reach it through here.
@@ -213,6 +208,12 @@ private:
 	TArray<FString> WorldSectionNames;   // WorldMesh section index -> OBJ group key
 	TArray<FString> SkySectionNames;     // SkyMesh section index   -> OBJ group key
 #endif
+
+	// This map's decoded-texture dedup index (one UTexture2D per unique path, shared across the
+	// map's material instances). A plain C++ object owned here, so its strong texture refs drop
+	// when the actor is torn down on unload and GC reclaims the textures — no process-wide cache,
+	// no manual flush. Created at the top of LoadMap, before any material is built.
+	TPimplPtr<FElysiumTextureCache> TextureCache;
 
 	// The Track-B entity substrate for this map (P1.4): parsed defs, live entities, the event
 	// queue, and the debug sinks. A plain C++ object (no UObject) held type-erased so the header

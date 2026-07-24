@@ -1,0 +1,65 @@
+#pragma once
+
+#include "CoreMinimal.h"
+
+// VtMB's console surface -- the fifth scripting surface (docs/python_bridge.md). It is a table of
+// **aliases** and **cvars** parsed from `out/cfg/*.cfg` (Valve console syntax), plus the execute
+// path a `ccmd` attribute-set drives: a script runs `c.patchtype = ""` and the console executes
+// the command `patchtype`. Resolution, per command word:
+//
+//   * an **alias** -> recursively execute its expansion (`;`-separated commands, aliases nest);
+//   * a known **cvar** with args -> set it; with no args -> a no-op (retail prints the value);
+//   * otherwise -> **fall through to Python** (the sink evals the line in `__main__`).
+//
+// The Unofficial Patch's Basic/Plus switch rides on exactly this: `user.cfg` carries
+// `alias patchtype "setPlus()"`, so `c.patchtype = ""` -> alias -> `setPlus()` -> Python fallthrough
+// -> the level-script function. `setPlus`/`setBasic` are named nowhere else in the install.
+//
+// Plain C++, no Python/UObject dependency, so it is unit-testable and the ccmd/cvar PyObjects
+// (ElysiumPythonEntity) forward into it. It is owned by FElysiumPythonVM, which supplies the sink.
+class FElysiumConsole
+{
+public:
+	// The Python fallthrough: an unresolved command line is exec'd in `__main__`. Returns true if
+	// it WAS Python (parsed + defined, whether or not its body then raised); false if it is neither
+	// a known alias/cvar nor valid Python -- an engine cvar/command we do not model (e.g.
+	// `rope_shake 0`, `+speed`), which the console then drops with a Verbose log.
+	using FPythonSink = TFunction<bool(const FString& /*CommandLine*/)>;
+	void SetPythonSink(FPythonSink InSink) { PythonSink = MoveTemp(InSink); }
+
+	// Parse default.cfg, config.cfg, autoexec.cfg, user.cfg (in that order; later shadows earlier)
+	// from `CfgDir`. Missing files are skipped. Clears the tables first, so it is safe to re-seed.
+	void LoadFromCfgDir(const FString& CfgDir);
+
+	// Parse cfg text (one directive per line) into the alias/cvar tables, additively. Used by
+	// LoadFromCfgDir; exposed for unit tests.
+	void ParseText(const FString& CfgText);
+
+	// Execute one console command line (a `ccmd` attribute-set forms `name` + optional " " + value).
+	// Splits on top-level `;`, resolves each part (alias / cvar / Python fallthrough).
+	void Execute(const FString& CommandLine);
+
+	// The `cvar` object surface. Get returns the stored value, or empty on a miss (never raises).
+	FString GetCvar(const FString& Name) const;
+	void SetCvar(const FString& Name, const FString& Value);
+
+	// Introspection (Cog / tests).
+	bool HasAlias(const FString& Name) const { return Aliases.Contains(Name.ToLower()); }
+	const FString* FindAlias(const FString& Name) const { return Aliases.Find(Name.ToLower()); }
+	int32 NumAliases() const { return Aliases.Num(); }
+	int32 NumCvars() const { return Cvars.Num(); }
+
+private:
+	void ParseLine(const FString& Line);
+	// Execute a single `;`-free statement; Depth guards runaway alias recursion.
+	void ExecuteStatement(const FString& Statement, int32 Depth);
+
+	// Split a console line into words, honouring double-quoted runs (which may hold spaces and `;`).
+	static void Tokenize(const FString& Line, TArray<FString>& OutTokens);
+	// Split a command string on `;` that are NOT inside double quotes.
+	static void SplitStatements(const FString& Line, TArray<FString>& OutParts);
+
+	TMap<FString, FString> Aliases; // name (lowercased) -> command expansion
+	TMap<FString, FString> Cvars;   // name (lowercased) -> value
+	FPythonSink PythonSink;
+};

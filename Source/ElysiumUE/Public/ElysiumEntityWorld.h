@@ -10,6 +10,7 @@
 
 struct FElysiumSignData;
 
+class FElysiumDlgConversation;
 class AActor;
 class APawn;
 class UElysiumAudioSubsystem;
@@ -170,6 +171,28 @@ public:
 	// The open sign's `fade_in` seconds (0 = appear instantly).
 	float GetOpenSignFadeIn() const { return OpenSignFadeIn; }
 
+	// --- Open dialogue (P9 9.1 / B4 `.dlg` conversation) --------------------------------
+	// The one conversation currently on screen, driven by an NPC's StartPlayerDialogRemote and drawn
+	// by the visual-novel Slate box (AElysiumHUD polls GetOpenDialog each frame — same held-on-the-
+	// world lifetime as the sign/fade). The owning NPC's OnDialogEnd fires when it closes (the beat
+	// machine's hinge — DialogPostProcess reads the `G` flags the dialogue's field-5 actions wrote).
+	void OpenDialog(const FElysiumEntityHandle& Owner, TSharedRef<FElysiumDlgConversation> Conversation);
+	// The live conversation, or null when none is open. What the dialogue box renders.
+	FElysiumDlgConversation* GetOpenDialog() const { return OpenDialogConv.Get(); }
+	// The NPC the open conversation belongs to (Invalid when none is open).
+	FElysiumEntityHandle GetOpenDialogOwner() const { return OpenDialogOwner; }
+	// Player picked the Nth visible PC choice: advance the branch machine; end the session (firing the
+	// owner's OnDialogEnd) if the pick closed it. No-op when no conversation is open.
+	void PlayerDialogChoose(int32 VisibleIndex);
+	// Player advanced past a terminal NPC line (the "continue" affordance) — ends the session.
+	void PlayerDialogAdvance();
+	// Force-close the open conversation. bSilent suppresses OnDialogEnd (a Kill/teardown must not
+	// resurrect the beat machine); a normal close fires it.
+	void CloseDialog(bool bSilent = false);
+
+	// The game-state subsystem (the `G`/quest store, player sheet, script host). Outlives the world.
+	UElysiumGameStateSubsystem* GetGameState() const { return GameState; }
+
 	// The player's pawn via the owning world's first controller, or null. The seam point_teleport /
 	// trigger_hurt use to reach the player from the plain-C++ substrate (the player is not an entity).
 	APawn* GetPlayerPawn() const;
@@ -295,6 +318,14 @@ private:
 	double OpenSignTime = 0.0;
 	TSharedPtr<const FElysiumSignData> OpenSignData;   // incomplete here; freed in the .cpp
 	float OpenSignFadeIn = 0.0f;
+
+	// 9.1 / B4 open-dialogue state (one at a time). The conversation owns the branch cursor; the world
+	// tracks which NPC it belongs to so ending it can fire that NPC's OnDialogEnd.
+	FElysiumEntityHandle OpenDialogOwner;
+	TSharedPtr<FElysiumDlgConversation> OpenDialogConv;   // incomplete here; freed in the .cpp
+	// End the open session: clear the slot and (unless bSilent) enqueue the owner's EndDialog input so
+	// OnDialogEnd fires through the real chokepoint (the B3 seam the runner reuses).
+	void EndDialogSession(bool bSilent);
 
 	// Unknown target/input aggregation: log once per unique (target.Input), count the rest.
 	TSet<FString> UnknownLogged;

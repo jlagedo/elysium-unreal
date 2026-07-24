@@ -130,6 +130,29 @@ namespace ElysiumMcpImpl
 		return MakeStructuredContentResult(TSharedPtr<FJsonValue>(MakeShared<FJsonValueObject>(Body)));
 	}
 
+	// Report the result of a Travel/Reload/NewGame the same way across the three map tools. Under
+	// hard travel a live world's swap is an end-of-frame OpenLevel, so the new map is not built when
+	// the tool returns: PendingMapLoad is set and there is no current map yet. Surface pending=true +
+	// pending_travel so the caller knows to poll elysium_maps_list. Only a cold boot (no world to tear
+	// down) builds in-call, in which case the map actor is already live and its counts are readable.
+	void AddTravelOutcome(const TSharedRef<FJsonObject>& Body, UElysiumMapSubsystem* Maps)
+	{
+		if (Maps->HasPendingMapLoad())
+		{
+			Body->SetBoolField(TEXT("pending"), true);
+			Body->SetStringField(TEXT("pending_travel"), Maps->PendingTravelDesc());
+			Body->SetStringField(TEXT("note"),
+				TEXT("deferred hard travel — poll elysium_maps_list until pending_travel clears and spawn_done is true"));
+		}
+		else if (AElysiumMapActor* Actor = Maps->GetCurrentMap())
+		{
+			Body->SetBoolField(TEXT("pending"), false);
+			Body->SetStringField(TEXT("current"), Maps->GetCurrentMapName());
+			Body->SetNumberField(TEXT("entity_count"), Actor->EntityCount);
+			Body->SetStringField(TEXT("entry_landmark"), Actor->EntryLandmark);
+		}
+	}
+
 	FString ParamStr(const TSharedPtr<FJsonObject>& Params, const TCHAR* Key, const FString& Default = FString())
 	{
 		FString Value;
@@ -510,7 +533,7 @@ namespace ElysiumMcpImpl
 			Schema.Add(TEXT("map"), TEXT("string"), TEXT("Map name as listed by elysium_maps_list, e.g. sp_tutorial_1."), true)
 				.Add(TEXT("landmark"), TEXT("string"), TEXT("Optional info_landmark targetname to enter at, instead of info_player_start. This is the P4.6 landmark-transition entry."));
 			Out.Add(MakeTool(TEXT("elysium_map_load"),
-				TEXT("Travel to a map, replacing the current one (synchronous — the tool returns after the map is built). Optionally enter at a named info_landmark. Does NOT seed story state; use elysium_new_game for the story entry."),
+				TEXT("Hard-travel to a map, replacing the current one; optionally enter at a named info_landmark. Does NOT seed story state — use elysium_new_game for the story entry. Deferred: when a map is already loaded the travel is an end-of-frame UE OpenLevel, so this returns pending=true BEFORE the new world exists — poll elysium_maps_list until pending_travel clears and spawn_done is true. Only a cold boot (no map loaded) builds in-call (pending=false, with entity_count)."),
 				Schema,
 				[](const TSharedPtr<FJsonObject>& Params) -> FModelContextProtocolToolResult
 				{
@@ -529,16 +552,11 @@ namespace ElysiumMcpImpl
 
 					TSharedRef<FJsonObject> Body = Obj();
 					Body->SetBoolField(TEXT("ok"), bOk);
-					Body->SetStringField(TEXT("current"), Maps->GetCurrentMapName());
+					AddTravelOutcome(Body, Maps);
 					if (!bOk)
 					{
 						Body->SetStringField(TEXT("error"),
 							FString::Printf(TEXT("map '%s' has no exported .obj under tools/out"), *Map));
-					}
-					else if (AElysiumMapActor* Actor = Maps->GetCurrentMap())
-					{
-						Body->SetNumberField(TEXT("entity_count"), Actor->EntityCount);
-						Body->SetStringField(TEXT("entry_landmark"), Actor->EntryLandmark);
 					}
 					return Structured(Body);
 				}));
@@ -547,7 +565,7 @@ namespace ElysiumMcpImpl
 		{
 			FSchema Schema;
 			Out.Add(MakeTool(TEXT("elysium_map_reload"),
-				TEXT("Re-travel the current map. This is the export->reload hot loop: re-run the offline exporter, then call this to pick up the new intermediates without restarting."),
+				TEXT("Re-travel the current map (the export->reload hot loop: re-run the offline exporter, then call this to pick up the new intermediates without restarting). Deferred hard travel — returns pending=true before the rebuilt world exists; poll elysium_maps_list until pending_travel clears and spawn_done is true."),
 				Schema,
 				[](const TSharedPtr<FJsonObject>&) -> FModelContextProtocolToolResult
 				{
@@ -558,7 +576,7 @@ namespace ElysiumMcpImpl
 					}
 					TSharedRef<FJsonObject> Body = Obj();
 					Body->SetBoolField(TEXT("ok"), Maps->Reload());
-					Body->SetStringField(TEXT("current"), Maps->GetCurrentMapName());
+					AddTravelOutcome(Body, Maps);
 					return Structured(Body);
 				}));
 		}
@@ -568,7 +586,7 @@ namespace ElysiumMcpImpl
 			Schema.Add(TEXT("clan"), TEXT("integer"), TEXT("Clan in the level-script 2..8 encoding (2 Brujah .. 8 Ventrue). Default 2."))
 				.Add(TEXT("male"), TEXT("boolean"), TEXT("Player sex. Default true."));
 			Out.Add(MakeTool(TEXT("elysium_new_game"),
-				TEXT("Seed a fresh story context (G flags, quest map, player sheet) and travel to the story entry: sp_tutorial_1 at its `tutorial` info_landmark. This is the boot path play.bat takes with no map argument — use it when a test needs the seeded flags the tutorial's own scripts read."),
+				TEXT("Seed a fresh story context (G flags, quest map, player sheet) and travel to the story entry: sp_tutorial_1 at its `tutorial` info_landmark. This is the boot path play.bat takes with no map argument — use it when a test needs the seeded flags the tutorial's own scripts read. The story state is seeded synchronously (clan/clan_name are valid immediately), but the map travel is deferred when a map is already loaded — returns pending=true; poll elysium_maps_list until pending_travel clears and spawn_done is true."),
 				Schema,
 				[](const TSharedPtr<FJsonObject>& Params) -> FModelContextProtocolToolResult
 				{
@@ -582,9 +600,9 @@ namespace ElysiumMcpImpl
 
 					TSharedRef<FJsonObject> Body = Obj();
 					Body->SetBoolField(TEXT("ok"), Maps->NewGame(Clan, bMale));
-					Body->SetStringField(TEXT("current"), Maps->GetCurrentMapName());
 					Body->SetNumberField(TEXT("clan"), Clan);
 					Body->SetStringField(TEXT("clan_name"), FElysiumPlayerSheet::ClanName(Clan));
+					AddTravelOutcome(Body, Maps);
 					return Structured(Body);
 				}));
 		}

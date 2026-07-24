@@ -1,8 +1,12 @@
 {
 	"mcpServers": {
 		"elysium": {
-			"type": "http",
-			"url": "http://127.0.0.1:8000/mcp"
+			"type": "stdio",
+			"command": "python",
+			"args": ["${CLAUDE_PROJECT_DIR:-.}/tools/mcp_proxy.py"],
+			"env": {
+				"PYTHONUNBUFFERED": "1"
+			}
 		}
 	}
 }

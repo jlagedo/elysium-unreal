@@ -1,11 +1,18 @@
 #include "ElysiumHUD.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumDialogueWidget.h"
+#include "ElysiumDlg.h"
+#include "ElysiumEntity.h"
+#include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumSignData.h"
 #include "ElysiumSignFonts.h"
+
+#include "Engine/GameViewportClient.h"
+#include "GameFramework/PlayerController.h"
 
 #include "CanvasItem.h"
 #include "Components/PrimitiveComponent.h"
@@ -73,6 +80,13 @@ namespace
 	}
 }
 
+AElysiumHUD::AElysiumHUD()
+{
+	// The HUD ticks so it can manage the Slate dialogue box (add/refresh/remove) off the entity world's
+	// open-conversation state, independent of the Canvas DrawHUD pass.
+	PrimaryActorTick.bCanEverTick = true;
+}
+
 void AElysiumHUD::BeginPlay()
 {
 	Super::BeginPlay();
@@ -116,7 +130,14 @@ void AElysiumHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		IConsoleManager::Get().UnregisterConsoleObject(PropsCmd);
 		PropsCmd = nullptr;
 	}
+	TeardownDialogue();
 	Super::EndPlay(EndPlayReason);
+}
+
+void AElysiumHUD::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	UpdateDialogue();
 }
 
 AElysiumMapActor* AElysiumHUD::ResolveMapActor() const
@@ -465,5 +486,128 @@ void AElysiumHUD::DrawSignPanel()
 			}
 			FlushLine();
 		}
+	}
+}
+
+// --- Dialogue box (P9 9.1 / B4) -------------------------------------------------------------
+
+void AElysiumHUD::UpdateDialogue()
+{
+	AElysiumMapActor* Map = ResolveMapActor();
+	FElysiumEntityWorld* World = Map ? Map->GetEntityWorld() : nullptr;
+	FElysiumDlgConversation* Conv = World ? World->GetOpenDialog() : nullptr;
+
+	if (!Conv)
+	{
+		if (DialogueWidget.IsValid())
+		{
+			TeardownDialogue();
+		}
+		return;
+	}
+
+	// Nothing changed since the last rebuild — leave the retained widget alone.
+	if (Conv == DialogueConv && Conv->Revision() == DialogueRev && DialogueWidget.IsValid())
+	{
+		return;
+	}
+
+	// Snapshot this turn: the speaker, the current NPC line, and its visible choice labels.
+	FString Speaker;
+	if (const FElysiumEntity* OwnerEnt = World->Resolve(World->GetOpenDialogOwner()))
+	{
+		Speaker = OwnerEnt->Def ? OwnerEnt->Def->TargetName : FString();
+	}
+	const bool bMale = Conv->PlayerMale();
+	const bool bMalk = Conv->PlayerMalkavian();
+	const FElysiumDlgLine* NpcLine = Conv->CurrentNpcLine();
+	const FString LineText = NpcLine ? NpcLine->DisplayText(bMale, bMalk) : FString();
+
+	TArray<FString> Choices;
+	for (int32 v = 0; v < Conv->VisibleChoices().Num(); ++v)
+	{
+		if (const FElysiumDlgLine* Choice = Conv->VisibleChoice(v))
+		{
+			Choices.Add(Choice->DisplayText(bMale, bMalk));
+		}
+	}
+	const bool bTerminal = Conv->IsTerminalLine();
+
+	// Rebuild the box for the new turn (turns are user-paced, so a full rebuild is cheap).
+	if (UGameViewportClient* Viewport = GetWorld() ? GetWorld()->GetGameViewport() : nullptr)
+	{
+		if (DialogueWidget.IsValid())
+		{
+			Viewport->RemoveViewportWidgetContent(DialogueWidget.ToSharedRef());
+		}
+		DialogueWidget = SNew(SElysiumDialogueBox)
+			.Speaker(Speaker)
+			.Line(LineText)
+			.Choices(Choices)
+			.bTerminal(bTerminal)
+			.OnChoose(FElysiumOnDlgChoice::CreateUObject(this, &AElysiumHUD::OnDialogueChoice));
+		Viewport->AddViewportWidgetContent(DialogueWidget.ToSharedRef(), /*ZOrder*/ 100);
+	}
+
+	// Freeze the world into UI-only input and give the box keyboard focus (number-key selection), once,
+	// for the life of the conversation.
+	if (!bDialogueInput && PlayerOwner)
+	{
+		FInputModeUIOnly Mode;
+		if (DialogueWidget.IsValid())
+		{
+			Mode.SetWidgetToFocus(DialogueWidget);
+		}
+		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		PlayerOwner->SetInputMode(Mode);
+		PlayerOwner->bShowMouseCursor = true;
+		bDialogueInput = true;
+	}
+	else if (DialogueWidget.IsValid())
+	{
+		FSlateApplication::Get().SetKeyboardFocus(DialogueWidget);
+	}
+
+	DialogueConv = Conv;
+	DialogueRev = Conv->Revision();
+}
+
+void AElysiumHUD::TeardownDialogue()
+{
+	if (DialogueWidget.IsValid())
+	{
+		if (UGameViewportClient* Viewport = GetWorld() ? GetWorld()->GetGameViewport() : nullptr)
+		{
+			Viewport->RemoveViewportWidgetContent(DialogueWidget.ToSharedRef());
+		}
+		DialogueWidget.Reset();
+	}
+	if (bDialogueInput && PlayerOwner)
+	{
+		PlayerOwner->SetInputMode(FInputModeGameOnly());
+		PlayerOwner->bShowMouseCursor = false;
+		bDialogueInput = false;
+	}
+	DialogueConv = nullptr;
+	DialogueRev = 0;
+}
+
+void AElysiumHUD::OnDialogueChoice(int32 VisibleIndex)
+{
+	AElysiumMapActor* Map = ResolveMapActor();
+	FElysiumEntityWorld* World = Map ? Map->GetEntityWorld() : nullptr;
+	if (!World)
+	{
+		return;
+	}
+	// -1 is the terminal "continue"; otherwise the Nth visible PC choice. Both route through the world
+	// chokepoint; the next Tick reflects the new turn (or tears the box down when the conversation ends).
+	if (VisibleIndex < 0)
+	{
+		World->PlayerDialogAdvance();
+	}
+	else
+	{
+		World->PlayerDialogChoose(VisibleIndex);
 	}
 }

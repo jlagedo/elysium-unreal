@@ -1,5 +1,6 @@
 #include "ElysiumPythonVM.h"
 
+#include "ElysiumContentPaths.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumPythonEntity.h"
@@ -239,13 +240,17 @@ namespace
 	// no `import vampire` in any script; everything reaches the engine through `__main__`), then
 	// stand up what is still missing.
 	//
-	// All 11 module globals and `G` are real C bindings now. What remains stubbed is NOT engine
-	// API: `IsClan`/`IsIdling` belong to vamputil.py, which cannot import for real until `ccmd`
-	// and `cvar` are bound (roadmap 9.3b/B5) — so a stub `vamputil` module still stands in, and
-	// tutorial.py's `if __main__.IsClan or ...` guard (which is what triggers its own
-	// `from vamputil import *`) still needs those two names to exist.
+	// All 11 module globals, `G`, and now the console objects `ccmd`/`cvar` (9.3b) are real
+	// bindings. With `ccmd`/`cvar` bound, the REAL vamputil.py imports (its module top-level does
+	// `c = __main__.ccmd; cvar = __main__.cvar`), so there is no stub vamputil module any more —
+	// tutorial.py's `from vamputil import *` pulls in the real `unhidePlus`/`setPlus`/`IsClan`/...
+	// The `IsClan` binding here is a pre-import fallback so tutorial's `if __main__.IsClan or ...`
+	// guard (what triggers that import) short-circuits true before it reaches `IsIdling`; the merge
+	// then overrides both with vamputil's real definitions. `sys.moddir` + the `nt.getcwd` redirect
+	// are appended below (they need the runtime content-root path), so vamputil's file-touching
+	// helpers (FixKeyBindings reads cfg/config.cfg) resolve into out/ instead of raising.
 	const char* const BOOTSTRAP =
-		"import sys, types, vampire, __main__\n"
+		"import sys, vampire, __main__\n"
 		"class _Log(object):\n"
 		"    def __init__(s, l): s.l = l; s.b = ''\n"
 		"    def write(s, t):\n"
@@ -258,17 +263,31 @@ namespace
 		"__main__.G = vampire.G\n"
 		"__main__.null = None\n"
 		"__main__.Entity = vampire.Entity\n"
+		"__main__.ccmd = vampire.ccmd\n"
+		"__main__.cvar = vampire.cvar\n"
+		// `Character` is VtMB's player/NPC method class (python_bridge.md). Our 24 Character methods
+		// dispatch off the Entity/Player getattro (ElysiumScriptNatives::CallCharacterMethod), not a
+		// shared class, so this is a compatibility shim: a mutable old-style class that lets vamputil's
+		// `from __main__ import Character` resolve and its `Character.Near = _Near` monkeypatch land
+		// (a C extension type would reject attribute assignment). The monkeypatched methods do not
+		// reach live C entity instances — the only such patch is `Near`, used by the unused
+		// AnimalRadar path — but the import completing is what unblocks the whole real vamputil.
+		"class Character: pass\n"
+		"__main__.Character = Character\n"
 		"for _nm in ('FindPlayer','FindEntityByName','FindEntitiesByName','FindEntitiesByClass',\n"
 		"            'ScheduleTask','SquadSeesPlayer','CreateEntityNoSpawn','CallEntitySpawn',\n"
-		"            'ChangeMap','OneOfSet','IsPCMalk'):\n"
+		"            'ChangeMap','OneOfSet','IsPCMalk','IsClan'):\n"
 		"    setattr(__main__, _nm, getattr(vampire, _nm))\n"
 		"def _mk(nm):\n"
 		"    def f(*a, **k): return 0\n"
 		"    f.__name__ = nm; return f\n"
-		"for _nm in ('IsClan','IsIdling'):\n"
+		"for _nm in ('IsIdling',):\n"
 		"    setattr(__main__, _nm, _mk(_nm))\n"
-		"if 'vamputil' not in sys.modules:\n"
-		"    _vu = types.ModuleType('vamputil'); _vu.__all__ = []; sys.modules['vamputil'] = _vu\n";
+		// `pc` = the player Character, the name every dialogue gate and level script reads (pc.clan,
+		// pc.base_*, IsClan(pc,...)). The object proxies the live player sheet, so binding it once here
+		// is enough — it reflects whatever BeginNewGame later seeds. (`npc` is bound per-eval, from the
+		// firing entity, in Eval().)
+		"__main__.pc = FindPlayer()\n";
 
 	// Run a code block in __main__; capture any exception text. Returns true on success.
 	bool RunRaw(const FString& Code, FString& OutError)
@@ -381,6 +400,27 @@ bool FElysiumPythonVM::EnsureStarted(FString& OutError)
 		return false;
 	}
 
+	// Point VtMB's file layer at the content mirror. Its scripts resolve files as
+	// `nt.getcwd() + "\\" + sys.moddir + "\\<tree>\\..."` (FixKeyBindings reads cfg/config.cfg;
+	// others touch vdata/scripts). Set moddir to "." and redirect the VM's `nt.getcwd` to the
+	// absolute out/ root, so those compose to out/<tree>/... . Contained to the interpreter — the
+	// UE process cwd is untouched. (moddir-relative-only paths, e.g. the haven-PC write, are not
+	// covered; they error-to-false, which on sp_tutorial_1 is post-Enable and inconsequential.)
+	const FString OutRoot = FPaths::ConvertRelativePathToFull(FElysiumContentPaths::Root())
+		.Replace(TEXT("\\"), TEXT("/"));
+	FString RedirectErr;
+	if (!RunRaw(FString::Printf(
+			TEXT("import sys, nt\nsys.moddir = '.'\n_elysium_root = u'%s'\nnt.getcwd = lambda: _elysium_root\n"),
+			*OutRoot), RedirectErr))
+	{
+		UE_LOG(LogElysiumPy, Warning, TEXT("file-root redirect failed (VtMB file I/O may raise): %s"), *RedirectErr);
+	}
+
+	// Seed the console alias/cvar store from out/cfg and wire its Python fallthrough back to us, so
+	// `ccmd.patchtype=""` -> alias `patchtype` -> `setPlus()` -> exec in __main__ (9.3b).
+	ConsoleStore.SetPythonSink([this](const FString& Line) { return this->ExecConsoleLine(Line); });
+	ConsoleStore.LoadFromCfgDir(FElysiumContentPaths::CfgDir());
+
 	bStarted = true;
 	UE_LOG(LogElysiumPy, Display, TEXT("Embedded CPython VM started: %s"), *GetVersion());
 	return true;
@@ -439,6 +479,24 @@ FElysiumVariant FElysiumPythonVM::Eval(const FString& Source, const FElysiumScri
 	{
 		OutError = TEXT("no eval namespace");
 		return FElysiumVariant::Void();
+	}
+
+	// `npc` = the firing entity (Self) for this eval — what a dialogue action (`npc.SetDisposition`,
+	// `npc.times_talked`) and many level-script payloads read. Bound per-eval from the delivery
+	// context (None when there is no firing entity, e.g. a hand-run eval), and left in `__main__`
+	// after — harmless, and it matches VtMB keeping `npc` as the last conversation partner. `pc` is
+	// bound once at startup (bootstrap) since it always proxies the live sheet.
+	if (Ctx.Self.IsSet())
+	{
+		if (PyObject* NpcObj = ElysiumPy::NewEntity(Ctx.Self))
+		{
+			PyDict_SetItemString(Ns, "npc", NpcObj);
+			Py_DECREF(NpcObj);
+		}
+	}
+	else
+	{
+		PyDict_SetItemString(Ns, "npc", Py_None);
 	}
 
 	// Try as an expression (pythoncheck gates); fall back to a statement block (field-6 assigns).
@@ -542,6 +600,37 @@ bool FElysiumPythonVM::FireCallback(const FString& FuncName, FString& OutError)
 	return true;
 }
 
+bool FElysiumPythonVM::ExecConsoleLine(const FString& Line)
+{
+	FString Err;
+	if (!EnsureStarted(Err))
+	{
+		return false;
+	}
+	PyObject* Ns = EvalNamespace(); // __main__
+	if (!Ns)
+	{
+		return false;
+	}
+	PyObject* R = PyRun_String(TCHAR_TO_UTF8(*Line), Py_file_input, Ns, Ns);
+	if (R)
+	{
+		Py_DECREF(R);
+		return true; // parsed + ran (a level-script function like setPlus())
+	}
+	// A NameError/SyntaxError means the word is not Python we can run -- it is an engine
+	// cvar/command we do not model; report "not Python" so the console drops it quietly.
+	if (PyErr_ExceptionMatches(PyExc_NameError) || PyErr_ExceptionMatches(PyExc_SyntaxError))
+	{
+		PyErr_Clear();
+		return false;
+	}
+	// It WAS Python (all names resolved) but the body raised -- e.g. setPlus()'s unbacked file I/O.
+	// Error-to-false, matching every other script eval path: print the traceback and continue.
+	PyErr_Print();
+	return true;
+}
+
 FString FElysiumPythonVM::GetVersion() const
 {
 	if (!bStarted)
@@ -617,6 +706,7 @@ bool FElysiumPythonVM::RunSimpleString(const FString&, FString& OutError) { OutE
 FElysiumVariant FElysiumPythonVM::Eval(const FString&, const FElysiumScriptContext&, FString& OutError) { OutError = TEXT("no cpython"); return FElysiumVariant::Void(); }
 bool FElysiumPythonVM::LoadLevelScript(const FString&, FString&, FString& OutError) { OutError = TEXT("no cpython"); return false; }
 bool FElysiumPythonVM::FireCallback(const FString&, FString& OutError) { OutError = TEXT("no cpython"); return false; }
+bool FElysiumPythonVM::ExecConsoleLine(const FString&) { return false; }
 FString FElysiumPythonVM::GetVersion() const { return TEXT("(no cpython)"); }
 TArray<FString> FElysiumPythonVM::GetSysPath() const { return {}; }
 TArray<FString> FElysiumPythonVM::GetModuleCallables(const FString&) const { return {}; }

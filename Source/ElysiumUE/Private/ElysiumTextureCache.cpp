@@ -10,12 +10,6 @@
 
 namespace
 {
-	// Strong references keep decoded textures alive for the process lifetime. nullptr
-	// entries record a miss so a broken path is only hit once. M0 loads a single map,
-	// so unbounded caching is fine; lifetime management arrives with map unloading.
-	TMap<FString, TStrongObjectPtr<UTexture2D>> GTexCache;
-	TMap<FString, TStrongObjectPtr<UTexture2D>> GSolidCache;
-
 	// Minimal DDS reader for the pipeline's retex_dds.py output: DXT1/3/5 fourCC with an
 	// optional mip chain. Returns nullptr for anything else (PNG fallback covers it).
 	// Loading the original game's DXT blocks directly means no decode cost, ~4-8x less
@@ -113,14 +107,14 @@ UTexture2D* FElysiumTextureCache::LoadTex(const FString& Dir, const FString& Rel
 	// The sRGB flag is part of the key: a normal map and an albedo could in principle share a
 	// path but must not share a cached texture (linear vs gamma-decoded).
 	const FString Key = bSRGB ? Path : Path + TEXT("#lin");
-	if (const TStrongObjectPtr<UTexture2D>* Found = GTexCache.Find(Key))
+	if (const TStrongObjectPtr<UTexture2D>* Found = TexCache.Find(Key))
 	{
 		return Found->Get();
 	}
 
-	auto CacheAndReturn = [&Key](UTexture2D* Tex) -> UTexture2D*
+	auto CacheAndReturn = [this, &Key](UTexture2D* Tex) -> UTexture2D*
 	{
-		GTexCache.Add(Key, TStrongObjectPtr<UTexture2D>(Tex));
+		TexCache.Add(Key, TStrongObjectPtr<UTexture2D>(Tex));
 		return Tex;
 	};
 
@@ -159,16 +153,10 @@ UTexture2D* FElysiumTextureCache::LoadTex(const FString& Dir, const FString& Rel
 	return CacheAndReturn(MakeTexture(Wrapper->GetWidth(), Wrapper->GetHeight(), Raw, bSRGB));
 }
 
-void FElysiumTextureCache::FlushAll()
-{
-	GTexCache.Empty();
-	GSolidCache.Empty();
-}
-
 UTexture2D* FElysiumTextureCache::SolidTex(const FLinearColor& Color)
 {
 	const FString Key = Color.ToString();
-	if (const TStrongObjectPtr<UTexture2D>* Found = GSolidCache.Find(Key))
+	if (const TStrongObjectPtr<UTexture2D>* Found = SolidCache.Find(Key))
 	{
 		return Found->Get();
 	}
@@ -177,6 +165,6 @@ UTexture2D* FElysiumTextureCache::SolidTex(const FLinearColor& Color)
 	TArray64<uint8> Bgra;
 	Bgra.Append({ C.B, C.G, C.R, C.A });   // PF_B8G8R8A8 byte order
 	UTexture2D* Tex = MakeTexture(1, 1, Bgra);
-	GSolidCache.Add(Key, TStrongObjectPtr<UTexture2D>(Tex));
+	SolidCache.Add(Key, TStrongObjectPtr<UTexture2D>(Tex));
 	return Tex;
 }

@@ -17,29 +17,42 @@ void AElysiumGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Boot: the map subsystem owns all map lifecycle from here on. The default boot is New Game —
-	// seed a fresh story context and enter the tutorial at its landmark — so a bare launch starts
-	// the story rather than a bare map load. An explicit -ElysiumMap= (play.bat <map>) keeps the
-	// unseeded dev path, and -ElysiumNewGame=0 boots the story map bare for A/B.
-	if (UElysiumMapSubsystem* Maps = GetGameInstance()->GetSubsystem<UElysiumMapSubsystem>())
+	// Boot: the map subsystem owns all map lifecycle from here on. Under OpenLevel hard travel this
+	// BeginPlay runs in every fresh world, so first check whether we arrived here from a Travel: if a
+	// map load is pending, this world is the shell the engine re-opened for it — build that map and
+	// stop (no boot decision, no re-seed).
+	UElysiumMapSubsystem* Maps = GetGameInstance()->GetSubsystem<UElysiumMapSubsystem>();
+	if (!Maps)
 	{
-		if (Maps->ShouldBootNewGame())
+		return;
+	}
+	if (Maps->HasPendingMapLoad())
+	{
+		Maps->SpawnPendingMap();
+		return;
+	}
+
+	// Cold boot (no pending load). The default is New Game — seed a fresh story context and enter the
+	// tutorial at its landmark — so a bare launch starts the story rather than a bare map load. An
+	// explicit -ElysiumMap= (play.bat <map>) keeps the unseeded dev path, and -ElysiumNewGame=0 boots
+	// the story map bare for A/B. Both go through Travel, which on this empty shell world spawns the
+	// map directly (no redundant re-open).
+	if (Maps->ShouldBootNewGame())
+	{
+		Maps->NewGame();
+	}
+	else
+	{
+		// Bare dev load (play.bat <map>). Chargen is not built yet (game_runtime.md §6), so seed a
+		// mock character the same way the New Game command does its initial game data — clan Tremere,
+		// male — via BeginNewGame. This binds the player sheet the dialogue gates read (`IsClan(pc,…)`,
+		// `pc.base_*`), sets Story_State=-4/Tut_Jack=0/Tut_Patch=0, and seeds Linux_Wine=1 (which also
+		// keeps the tutorial's `linux_check` popup down). BeginNewGame only seeds state — it does not
+		// travel — so the dev map load below still runs. Interim stand-in for chargen (9.4).
+		if (UElysiumGameStateSubsystem* State = GetGameInstance()->GetSubsystem<UElysiumGameStateSubsystem>())
 		{
-			Maps->NewGame();
+			State->BeginNewGame(FElysiumPlayerSheet::ClanFromName(TEXT("Tremere")), /*bMale*/ true);
 		}
-		else
-		{
-			// Bare dev load (play.bat <map> / -ElysiumNewGame=0): no New Game seed runs, so `Linux_Wine`
-			// is unset. The tutorial's `linux_check` (logic_pythoncheck `G.Linux_Wine == 1`) then reads
-			// OnFalse and opens `popup_linux` — the Unofficial Patch's "your Python didn't compile / you
-			// are in a Linux Wine environment" warning. That is a false alarm here: the embedded CPython
-			// always runs. Seed the sentinel to 1 (as BeginNewGame does) before the map builds, so the
-			// check takes OnTrue and the popup stays down on the dev path.
-			if (UElysiumGameStateSubsystem* State = GetGameInstance()->GetSubsystem<UElysiumGameStateSubsystem>())
-			{
-				State->SetGlobalInt(TEXT("Linux_Wine"), 1);
-			}
-			Maps->Travel(Maps->ResolveBootMap());
-		}
+		Maps->Travel(Maps->ResolveBootMap());
 	}
 }

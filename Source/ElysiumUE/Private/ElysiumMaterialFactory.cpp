@@ -81,7 +81,8 @@ namespace
 	}
 }
 
-UMaterialInstanceDynamic* FElysiumMaterialFactory::Build(const FElysiumMaterialDef* Def, const FString& Dir, UObject* Outer)
+UMaterialInstanceDynamic* FElysiumMaterialFactory::Build(const FElysiumMaterialDef* Def, const FString& Dir,
+	UObject* Outer, FElysiumTextureCache& Cache)
 {
 	UMaterialInterface* Master = GetMaster(SelectWorldMaster(Def));
 	if (!Master)
@@ -100,11 +101,11 @@ UMaterialInstanceDynamic* FElysiumMaterialFactory::Build(const FElysiumMaterialD
 	UTexture2D* Albedo = nullptr;
 	if (Def && !Def->Albedo.IsEmpty())
 	{
-		Albedo = FElysiumTextureCache::LoadTex(Dir, Def->Albedo);
+		Albedo = Cache.LoadTex(Dir, Def->Albedo);
 	}
 	if (!Albedo)
 	{
-		Albedo = FElysiumTextureCache::SolidTex(Def ? Def->Color : FLinearColor(0.6f, 0.6f, 0.65f));
+		Albedo = Cache.SolidTex(Def ? Def->Color : FLinearColor(0.6f, 0.6f, 0.65f));
 	}
 	if (Albedo)
 	{
@@ -122,7 +123,7 @@ UMaterialInstanceDynamic* FElysiumMaterialFactory::Build(const FElysiumMaterialD
 	// without an emissive map leave EmissiveScale at its 0 default, so they never glow.
 	if (Def && !Def->Emissive.IsEmpty())
 	{
-		if (UTexture2D* EmisTex = FElysiumTextureCache::LoadTex(Dir, Def->Emissive))
+		if (UTexture2D* EmisTex = Cache.LoadTex(Dir, Def->Emissive))
 		{
 			Mid->SetTextureParameterValue(EmissiveParam, EmisTex);
 			Mid->SetScalarParameterValue(EmissiveScaleParam,
@@ -134,7 +135,7 @@ UMaterialInstanceDynamic* FElysiumMaterialFactory::Build(const FElysiumMaterialD
 	// 0 in the master, so a surface with no bump stays geometrically smooth.
 	if (Def && !Def->Bump.IsEmpty())
 	{
-		if (UTexture2D* BumpTex = FElysiumTextureCache::LoadTex(Dir, Def->Bump, /*bSRGB=*/false))
+		if (UTexture2D* BumpTex = Cache.LoadTex(Dir, Def->Bump, /*bSRGB=*/false))
 		{
 			Mid->SetTextureParameterValue(BumpMapParam, BumpTex);
 			Mid->SetScalarParameterValue(BumpAmountParam,
@@ -148,8 +149,8 @@ UMaterialInstanceDynamic* FElysiumMaterialFactory::Build(const FElysiumMaterialD
 	if (Def && Def->bEnvmap)
 	{
 		UTexture2D* Mask = Def->EnvMask.IsEmpty()
-			? FElysiumTextureCache::SolidTex(FLinearColor::White)
-			: FElysiumTextureCache::LoadTex(Dir, Def->EnvMask, /*bSRGB=*/false);
+			? Cache.SolidTex(FLinearColor::White)
+			: Cache.LoadTex(Dir, Def->EnvMask, /*bSRGB=*/false);
 		if (Mask)
 		{
 			Mid->SetTextureParameterValue(EnvMaskParam, Mask);
@@ -163,7 +164,7 @@ UMaterialInstanceDynamic* FElysiumMaterialFactory::Build(const FElysiumMaterialD
 	// blend weights on COLOR.r) mixes in the second texture.
 	if (Def && !Def->BaseTex2.IsEmpty())
 	{
-		if (UTexture2D* Tex2 = FElysiumTextureCache::LoadTex(Dir, Def->BaseTex2))
+		if (UTexture2D* Tex2 = Cache.LoadTex(Dir, Def->BaseTex2))
 		{
 			Mid->SetTextureParameterValue(BaseTex2Param, Tex2);
 			Mid->SetScalarParameterValue(BlendAmountParam, 1.0f);
@@ -173,7 +174,8 @@ UMaterialInstanceDynamic* FElysiumMaterialFactory::Build(const FElysiumMaterialD
 	return Mid;
 }
 
-UMaterialInstanceDynamic* FElysiumMaterialFactory::BuildDecal(const FElysiumMaterialDef* Def, const FString& Dir, UObject* Outer)
+UMaterialInstanceDynamic* FElysiumMaterialFactory::BuildDecal(const FElysiumMaterialDef* Def, const FString& Dir,
+	UObject* Outer, FElysiumTextureCache& Cache)
 {
 	UMaterialInterface* Master = GetMaster(DecalMasterPath);
 	if (!Master)
@@ -193,11 +195,11 @@ UMaterialInstanceDynamic* FElysiumMaterialFactory::BuildDecal(const FElysiumMate
 	UTexture2D* Albedo = nullptr;
 	if (Def && !Def->Albedo.IsEmpty())
 	{
-		Albedo = FElysiumTextureCache::LoadTex(Dir, Def->Albedo);
+		Albedo = Cache.LoadTex(Dir, Def->Albedo);
 	}
 	if (!Albedo)
 	{
-		Albedo = FElysiumTextureCache::SolidTex(Def ? Def->Color : FLinearColor(0.6f, 0.6f, 0.65f));
+		Albedo = Cache.SolidTex(Def ? Def->Color : FLinearColor(0.6f, 0.6f, 0.65f));
 	}
 	if (Albedo)
 	{
@@ -207,7 +209,7 @@ UMaterialInstanceDynamic* FElysiumMaterialFactory::BuildDecal(const FElysiumMate
 	// $selfillum decal (map_Ke): same alpha-masked emissive path as the world master.
 	if (Def && !Def->Emissive.IsEmpty())
 	{
-		if (UTexture2D* EmisTex = FElysiumTextureCache::LoadTex(Dir, Def->Emissive))
+		if (UTexture2D* EmisTex = Cache.LoadTex(Dir, Def->Emissive))
 		{
 			Mid->SetTextureParameterValue(EmissiveParam, EmisTex);
 			Mid->SetScalarParameterValue(EmissiveScaleParam,
