@@ -6,6 +6,36 @@ trigger. A behavioural divergence from retail lands here carrying both the faith
 chosen behaviour (`remaster-direction.md`'s governing rule). Entries are never rewritten —
 append a correction as a new entry.
 
+- **2026-07-24** — **Map-lifecycle model: adopt OpenLevel (engine hard travel); retire the bespoke
+  persistent-world content-swap.** Owner call. **Decision:** the target map-lifecycle model is UE5
+  standard hard travel (`UGameplayStatics::OpenLevel` → `UEngine::LoadMap`) into a single reused shell
+  `.umap`; on load, `AElysiumMapActor` reads the target VtMB map + landmark from GI-scoped state and
+  builds all content in code (async behind a loading screen). This replaces `UElysiumMapSubsystem::Travel`'s
+  in-place swap (destroy the old map actor, `FElysiumTextureCache::FlushAll`, `ForceGarbageCollection(true)`,
+  spawn a fresh actor in the same persistent `UWorld`). **Options weighed:** (A) harden the swap;
+  (B) OpenLevel hard travel — **chosen**; (C) seamless travel — rejected (multiplayer machinery; its one
+  payoff, no hitch, is unavailable because the transition floor is the synchronous content build, not the
+  travel). **Level streaming / World Partition are rejected outright:** both stream *authored `.umap`
+  assets*, and this project builds every map in code from `tools/out/` intermediates — there is no asset to
+  stream. **Why B:** it is the UE5 standard for a discrete-map single-player game, which is VtMB's own model
+  (`trigger_changelevel` + loading screen), so faithful by the charter's default-to-reproduce. It hands world
+  teardown + GC to the engine, retiring bespoke lifecycle code: the per-travel `ForceGarbageCollection(true)`
+  (non-idiomatic — the engine expects incremental GC — and the trigger that detonated the orphaned half-built
+  skeletal mesh), `FlushAll`-on-travel, the `RequestLandmarkTravel` next-tick defer (teardown no longer runs
+  under the actor tick), and the `IsPlayerSeated` stale-pawn gate (a fresh world + pawn per map has no stale
+  position). The swap's only unique upside — seamless / double-buffered transitions — is a modernization VtMB
+  has no faithful version of; it is deferred behind an explicit future owner call if ever wanted. **Latency is
+  model-independent:** the async/time-sliced build (roadmap 10.4) works under OpenLevel — the heavy build runs
+  in the shell world's `BeginPlay` behind a loading screen, not inside `LoadMap`; OpenLevel forfeits only
+  keeping the previous map resident during load (double-buffering, 2× memory), which VtMB never did.
+  **Preconditions (already true; verified during migration):** all cross-map state is GI-scoped and must
+  survive `LoadMap` — `UElysiumMapSubsystem` (incl. the `NextLandmarkSpawn`/`PendingTravel` carry-over),
+  `UElysiumGameStateSubsystem` (`G`/quest/sheet), `UElysiumAudioSubsystem`, the CPython VM / script host. The
+  generation-checked `Entity` handles correctly report "deleted" for a torn-down world (desired). World-attached
+  audio voices die on travel (faithful — the discrete loading screen breaks audio continuity anyway).
+  **Status:** a deliberate refactor, not a bug fix (the crash that prompted the review was fixed at source and
+  was not a swap-architecture flaw). Scoped as roadmap **10.8**; trigger = the next map-lifecycle work, ahead
+  of 10.4 (async travel now builds on the OpenLevel foundation).
 - **2026-07-24** — **8.4: physics props/hinges are Chaos bodies + constraints; the RE'd I/O surface
   diverges from later Source; collision is convex-decomposed offline.** Five calls landed with the
   `prop_physics` / `phys_hinge` runtime. **(1) RE divergence — VtMB has `Wake`, not `EnableMotion`/

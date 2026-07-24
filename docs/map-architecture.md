@@ -1,21 +1,31 @@
 # Map load/unload architecture
 
 How Elysium-Unreal represents, loads, unloads, and travels between VtMB maps. The design
-goal: **one Unreal level, ever** — every VtMB map is runtime data inside it, and the same
-machinery scales from today's debug viewer to the finished game (menu → new game → hub
-traversal → save/load).
+goal: **one authored `.umap`, reused** — a single empty shell that every VtMB map builds its
+runtime content into, and the same machinery scales from today's debug viewer to the finished
+game (menu → new game → hub traversal → save/load).
 
-## Why not Unreal levels
+## The lifecycle model: OpenLevel hard travel
 
-UE's level streaming and World Partition manage *authored `.umap` assets*. Elysium maps are
-built at runtime from the pipeline intermediates, so there is no asset to stream. VtMB is
-also a discrete-map game — Source `trigger_changelevel` + loading screen, not seamless
-streaming — so a single persistent world with explicit load/unload matches both the engine
-reality and the original game's own model.
+Map change uses UE5 **standard hard travel** — `UGameplayStatics::OpenLevel` → `UEngine::LoadMap`
+— into the one reused shell `.umap`. `LoadMap` tears down the current `UWorld` and runs GC; the
+fresh world's `AElysiumMapActor` reads the target VtMB map + landmark from GI-scoped state and
+builds all content in code on `BeginPlay`. Cross-map state lives at GameInstance scope and
+survives the travel; per-map state dies with the world. This is the UE5 standard for a
+discrete-map single-player game, and it *is* VtMB's own model (`trigger_changelevel` + loading
+screen). Owner call, with the options weighed and the migration scope: `decisions.md` 2026-07-24
+(roadmap 10.8). *Level streaming and World Partition are rejected outright:* both stream
+*authored `.umap` assets*, and Elysium maps are built at runtime from the pipeline
+intermediates, so there is no asset to stream.
 
-The one `.umap` in the project is `Content/Elysium.umap`: an empty persistent level
-(generated from source by `tools/make_boot_map.py`) that exists only because Unreal must
-boot into *some* level to create a `UWorld`. It is never edited and never multiplied.
+The one `.umap` in the project is `Content/Elysium.umap`: an empty level (generated from source
+by `tools/make_boot_map.py`) that exists only because Unreal must open *some* level to create a
+`UWorld`. It is never edited and never multiplied — every travel re-opens it.
+
+> **Implementation status.** The seam (`UElysiumMapSubsystem::Travel` / `RequestLandmarkTravel`
+> with the `NextLandmarkSpawn` / `PendingTravel` carry-over) and the landmark placement are wired
+> today; the mechanism underneath is mid-migration from the earlier persistent-world content-swap
+> to OpenLevel (roadmap 10.8). The ownership and async sections below describe the target design.
 
 ## The travel model is VtMB's own
 

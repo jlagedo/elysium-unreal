@@ -647,8 +647,9 @@ dialogue, scripted flow, quests, save/load included.
 - [ ] **10.3 Floor validation `[needs 3060]`** *(was L5.3)* — 1080p/60 on a real RTX
   3060-class card; the one gate look can't judge. *Deps:* P3, 10.2.
 - [ ] **10.4 Async travel state machine** — `map-architecture.md` design (fade → unload →
-  task-thread parse → spawn → fade in); **trigger: when synchronous hitches start to
-  matter, not before.** *Deps:* 4.6.
+  task-thread parse → spawn → fade in), built on the 10.8 OpenLevel foundation (the heavy
+  build runs in the shell world's `BeginPlay` behind a loading screen); **trigger: when
+  synchronous hitches start to matter, not before.** *Deps:* 4.6, 10.8.
 - [ ] **10.5 Packaged-build content path** — `content/` next to the exe, packaging story,
   Shipping config sweep (debug layer compiled out). *Deps:* none until first package.
 - [ ] **10.6 EnhancedInput decision** — configured but unused; migrate the legacy mappings
@@ -660,6 +661,15 @@ dialogue, scripted flow, quests, save/load included.
   retail `.sav` import (needs RE7 wire format — currently a non-goal). For the low-end
   contingency, **Lumen Lite** (5.8's medium-quality irradiance-field GI, ~2× faster, runs
   on PC) is noted as a cheaper alternative to a lump-8 bake path — see Options.
+- [ ] **10.8 OpenLevel map-lifecycle migration** — move map change from the bespoke
+  persistent-world content-swap to UE5 hard travel (`OpenLevel` → `LoadMap` into a single
+  reused shell `.umap`; `AElysiumMapActor` reads the target map + landmark from GI-scoped
+  state and builds in code on `BeginPlay`). Retires the per-travel `ForceGarbageCollection(true)`,
+  `FElysiumTextureCache::FlushAll`-on-travel, the `RequestLandmarkTravel` next-tick defer, and
+  the `IsPlayerSeated` stale-pawn gate; keeps the `Travel`/`RequestLandmarkTravel` seam and its
+  `NextLandmarkSpawn`/`PendingTravel` carry-over. Verify all cross-map state survives `LoadMap`
+  (map/game-state/audio subsystems, CPython VM). Owner call: `decisions.md` 2026-07-24.
+  *Deps:* 4.6. *Trigger:* next map-lifecycle work, ahead of 10.4.
 
 ## Pipeline backlog (indexed; owned by phases above)
 
