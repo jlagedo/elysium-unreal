@@ -1,5 +1,5 @@
 @echo off
-REM Rebuild every committed Content/ asset (M_VtMB_World, M_Sky, Elysium.umap) by running
+REM Rebuild every committed Content/ asset (M_World_*, M_Additive, M_Sky, Elysium.umap) by running
 REM tools/build_content.py in one headless editor session -- the umbrella so no offline
 REM asset generator is forgotten. Run it standalone, or let export_all.py invoke it (default).
 REM   content.bat          -> rebuild all committed assets

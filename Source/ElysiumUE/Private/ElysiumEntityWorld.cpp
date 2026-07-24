@@ -13,6 +13,7 @@
 
 #include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
@@ -117,6 +118,7 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 	{
 		if (Ent)
 		{
+			Ent->bSpawnCalled = true;
 			Ent->Spawn();
 			if (bBuildBodies)
 			{
@@ -158,7 +160,7 @@ void FElysiumEntityWorld::BuildBrushBody(FElysiumEntity& Ent)
 	UElysiumBrushComponent* Body = NewObject<UElysiumBrushComponent>(Owner, BodyName);
 	Body->InitBrush(Ent.Handle, Ent.Def->Hulls, Sol);
 	Body->SetupAttachment(Root);
-	Body->SetRelativeLocation(Ent.Def->Origin);   // hulls are entity-local; origin places them
+	Body->SetRelativeLocation(Ent.Origin);   // hulls are entity-local; the live origin places them
 	Body->RegisterComponent();
 	Owner->AddInstanceComponent(Body);            // shows the body in the editor Outliner
 #if WITH_EDITOR
@@ -176,7 +178,7 @@ void FElysiumEntityWorld::BuildBrushBody(FElysiumEntity& Ent)
 	}
 }
 
-FElysiumEntityHandle FElysiumEntityWorld::SpawnRuntimeEntity(FElysiumEntityDef Def)
+FElysiumEntityHandle FElysiumEntityWorld::CreateRuntimeEntityNoSpawn(FElysiumEntityDef Def)
 {
 	if (Def.Classname.IsEmpty())
 	{
@@ -205,12 +207,53 @@ FElysiumEntityHandle FElysiumEntityWorld::SpawnRuntimeEntity(FElysiumEntityDef D
 	EntityList.Add(MoveTemp(Ent));
 	RuntimeDefs.Add(MoveTemp(Owned));
 
-	// Spawn() is the leaf's own wiring (the FElysiumNpc leaf stands its body/visual here). A runtime
-	// brush entity would want BuildBrushBody, but makers only spawn point NPCs, so it is not needed.
-	Raw->Spawn();
-
-	UE_LOG(LogElysiumWorld, Log, TEXT("(%8.3f) runtime spawn %s"), NowSeconds(), *Raw->DebugString());
+	// The entity is live for I/O and findable immediately, but NOT yet Spawn()'d — CreateEntityNoSpawn's
+	// contract, so a script can SetModel/SetName/SetOrigin on it before CallEntitySpawn runs its wiring.
+	UE_LOG(LogElysiumWorld, Log, TEXT("(%8.3f) runtime create (no spawn) %s"), NowSeconds(), *Raw->DebugString());
 	return Raw->Handle;
+}
+
+void FElysiumEntityWorld::CallEntitySpawn(FElysiumEntity& Ent)
+{
+	if (Ent.bSpawnCalled || Ent.IsDead())
+	{
+		return;   // idempotent: CallEntitySpawn on an already-spawned (or killed) entity is a no-op
+	}
+	Ent.bSpawnCalled = true;
+	// Spawn() is the leaf's own wiring (the FElysiumNpc leaf stands its body/visual here); then attach a
+	// brush body if this runtime entity is a brush (point NPCs/props/items early-out of BuildBrushBody).
+	Ent.Spawn();
+	if (CVarBrushBodies.GetValueOnGameThread() != 0)
+	{
+		BuildBrushBody(Ent);
+	}
+	UE_LOG(LogElysiumWorld, Log, TEXT("(%8.3f) runtime spawn %s"), NowSeconds(), *Ent.DebugString());
+}
+
+FElysiumEntityHandle FElysiumEntityWorld::SpawnRuntimeEntity(FElysiumEntityDef Def)
+{
+	// The fused form (npc_maker.Spawn): create + spawn in one call.
+	const FElysiumEntityHandle H = CreateRuntimeEntityNoSpawn(MoveTemp(Def));
+	if (FElysiumEntity* E = Resolve(H))
+	{
+		CallEntitySpawn(*E);
+	}
+	return H;
+}
+
+void FElysiumEntityWorld::RenameEntity(FElysiumEntity& Ent, const FString& NewName)
+{
+	const int32 Idx = Ent.Handle.Index;
+	if (!Ent.TargetName.IsEmpty())
+	{
+		NameIndex.RemoveSingle(FName(*Ent.TargetName), Idx);
+	}
+	Ent.TargetName = NewName;
+	if (!NewName.IsEmpty())
+	{
+		NameIndex.Add(FName(*NewName), Idx);
+	}
+	NotifyVisualChanged(Ent);   // the debug label carries the name
 }
 
 void FElysiumEntityWorld::RegisterNpcBody(USkeletalMeshComponent* Component)
@@ -218,6 +261,14 @@ void FElysiumEntityWorld::RegisterNpcBody(USkeletalMeshComponent* Component)
 	if (Component)
 	{
 		NpcBodies.Add(Component);
+	}
+}
+
+void FElysiumEntityWorld::RegisterPropBody(UStaticMeshComponent* Component)
+{
+	if (Component)
+	{
+		PropBodies.Add(Component);
 	}
 }
 
@@ -898,6 +949,17 @@ void FElysiumEntityWorld::Teardown()
 		}
 	}
 	NpcBodies.Empty();
+
+	// Dynamic-prop bodies (8.3): same reason as NpcBodies — components of the map actor, destroyed
+	// here so a world rebuild on a surviving actor (reload) does not leak them.
+	for (const TWeakObjectPtr<UStaticMeshComponent>& Comp : PropBodies)
+	{
+		if (UStaticMeshComponent* C = Comp.Get())
+		{
+			C->DestroyComponent();
+		}
+	}
+	PropBodies.Empty();
 
 	EntityList.Empty();
 	RuntimeDefs.Empty();

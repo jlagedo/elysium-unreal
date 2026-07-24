@@ -71,6 +71,9 @@ public:
 	FVector Velocity = FVector::ZeroVector;
 	FVector AngularVelocity = FVector::ZeroVector;   // avelocity
 	FVector BaseVelocity = FVector::ZeroVector;      // basevelocity
+	// The live origin, seeded from Def->Origin at Construct (the def's is immutable). GetOrigin and
+	// the body placement read this, so SetOrigin moves the entity for real (VtMB's Entity.SetOrigin).
+	FVector Origin = FVector::ZeroVector;
 	FVector Angles = FVector::ZeroVector;
 	float   Gravity = 0.0f;
 	float   Friction = 0.0f;
@@ -93,6 +96,9 @@ public:
 	// = never); the queue services thinks in P1.4.
 	bool  bHidden = false;
 	bool  bDead = false;
+	// Spawn() has run. The world's spawn pass and the two-phase runtime create (CreateEntityNoSpawn
+	// → CallEntitySpawn) both gate on this so an entity is never Spawn()'d twice.
+	bool  bSpawnCalled = false;
 	float NextThink = ELYSIUM_NEVER_THINK;
 
 	// --- Output firing state (R2) ------------------------------------------------------
@@ -120,6 +126,22 @@ public:
 	// wire whose map-authored param is empty (math_counter OutValue, logic_case OnCaseNN, …). Wires
 	// that DID specify a param keep their override. `Value` is ignored (Void) by the plain overload.
 	void FireOutput(FName Output, const FElysiumEntityHandle& Activator, const FElysiumVariant& Value);
+
+	// --- Runtime writers (9.3 — VtMB's Entity.SetOrigin/SetAngles/SetModel) ------------
+	// Scripts move, re-face, and re-skin live entities. These mutate the authoritative field
+	// (so GetOrigin/GetAngles/GetModelName reflect it and other entities' logic reads it), then
+	// hand off to the body-follow hook. SetName re-keys the world name index and so lives on the
+	// world (FElysiumEntityWorld::RenameEntity), not here.
+	void SetRuntimeOrigin(const FVector& NewOrigin);
+	void SetRuntimeAngles(const FVector& NewAngles);
+	void SetRuntimeModel(const FString& NewModel);
+
+	// Body-follow hooks the runtime writers call after mutating the field. Base: a brush/point
+	// entity's body is static, so only notify the visualizer (the field is what logic reads).
+	// A leaf with a movable body (FElysiumNpc) overrides OnRuntimeTransformChanged to move/re-face
+	// its skeletal component and OnRuntimeModelChanged to rebuild it with the new model.
+	virtual void OnRuntimeTransformChanged();
+	virtual void OnRuntimeModelChanged() {}
 
 	// Overlap terminus (P1.5 routing): a brush body's begin/end overlap lands here. Base no-op;
 	// P1.6 trigger classes override to fire OnStartTouch/OnEndTouch (respecting spawnflags).

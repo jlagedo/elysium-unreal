@@ -6,15 +6,17 @@ the maintenance contract.
 
 ## Where a given fact belongs
 
-- **Status, plans, task breakdowns, dates, "what landed"** → `roadmap.md`, the single source of
-  truth work tracker. It owns phases P0–P10, per-task as-built detail, the pipeline (PL*) and
-  RE backlogs, the risk register, and the append-only **decision log**. Never mirror status
-  into another doc — link to the task instead. Other docs' plan sections point here.
+- **Status, plans, task breakdowns, dates, "what landed"** → the roadmap set. `roadmap.md`
+  is the single source of truth work tracker (phases P0–P10, per-task status, the pipeline
+  (PL*) and RE backlogs, the risk register); `roadmap-archive.md` holds the full as-built
+  record of every completed task (moved there, verbatim, when a task lands — the roadmap
+  keeps a short summary); `decisions.md` is the append-only **decision log**. Never mirror
+  status into another doc — link to the task instead. Other docs' plan sections point here.
 - **Strategy** (tracks, milestone vocabulary, sidecar contracts, per-system design targets) →
   `rebuild-strategy.md`.
 - **What may be modernized vs must be reproduced** → `remaster-direction.md`. A behavioural
   divergence needs the faithful behaviour RE'd and recorded *plus* a dated entry in
-  `roadmap.md`'s decision log.
+  `decisions.md`.
 - **A new VtMB format/behaviour finding** → the topic doc that owns it (`entity_io.md`,
   `python_bridge.md`, `audio_pipeline.md`, `mdl_v2531.md`, `source_movement.md`,
   `level_transitions.md`, `animation_and_movers.md`, `game_runtime.md`). Cite where it came
@@ -29,7 +31,7 @@ the maintenance contract.
 
 - **Facts, present tense.** These docs describe how VtMB works and what the design is — not
   how a doc changed, not what a decision replaced. Migration narrative and rationale-for-a-
-  past-decision belong in `roadmap.md`'s decision log, if anywhere.
+  past-decision belong in `decisions.md`, if anywhere.
 - **Mark confidence.** An unverified reconstruction says so in the doc (see
   `recovered/dice-system.md`, which still needs a golden test against the running game).
 - **Correct in place.** When RE contradicts a doc, fix the doc in the same pass and note the

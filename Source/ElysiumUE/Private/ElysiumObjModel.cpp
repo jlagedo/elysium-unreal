@@ -90,7 +90,11 @@ void FElysiumObjModel::ParseMtl(const FString& Path, TMap<FString, FElysiumMater
 	{
 		return;
 	}
+	ParseMtlLines(Lines, Mats);
+}
 
+void FElysiumObjModel::ParseMtlLines(const TArray<FString>& Lines, TMap<FString, FElysiumMaterialDef>& Mats)
+{
 	FElysiumMaterialDef* Cur = nullptr;
 	TArray<FString> Tok;
 
@@ -128,6 +132,28 @@ void FElysiumObjModel::ParseMtl(const FString& Path, TMap<FString, FElysiumMater
 		else if (Key == TEXT("blend") && Tok.Num() >= 2 && Tok[1] == TEXT("1"))
 		{
 			Cur->bBlend = true;
+		}
+		else if (Key == TEXT("additive") && Tok.Num() >= 2 && Tok[1] == TEXT("1"))
+		{
+			Cur->bAdditive = true;
+		}
+		else if (Key == TEXT("bumpmap") && Tok.Num() >= 2)
+		{
+			Cur->Bump = Tok[1];
+		}
+		else if (Key == TEXT("envmapmask") && Tok.Num() >= 2)
+		{
+			Cur->EnvMask = Tok[1];
+		}
+		else if (Key == TEXT("envmap") && Tok.Num() >= 2)
+		{
+			// The Lumen path ignores the baked cube id; presence of the line marks the
+			// surface reflective (its Roughness drops so Lumen reflections appear).
+			Cur->bEnvmap = true;
+		}
+		else if (Key == TEXT("basetex2") && Tok.Num() >= 2)
+		{
+			Cur->BaseTex2 = Tok[1];
 		}
 		else if (Key == TEXT("Kd") && Tok.Num() >= 4)
 		{

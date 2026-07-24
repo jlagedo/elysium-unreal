@@ -54,6 +54,13 @@ struct FElysiumEntityDef
 	// Spawns fully OFF — non-solid, non-thinking, undrawn — until a ScriptUnhide (R6).
 	bool bStartHidden = false;
 
+	// Static-mesh render annotation (8.1 export → 8.3 consumer). Present only when this entity's
+	// `model` key is a static `.mdl` that decoded: `ModelMesh` is the decoded OBJ stem under
+	// `props/` (so the runtime skips re-deriving it), `ModelQuat` the Unreal-space placement
+	// rotation (source_angles_to_unreal_quat of `angles`, read verbatim). Empty stem = no prop body.
+	FString ModelMesh;
+	FQuat ModelQuat = FQuat::Identity;
+
 	TArray<FElysiumOutputDef> Outputs;
 
 	bool IsBrush() const { return Model != INDEX_NONE; }

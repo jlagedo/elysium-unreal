@@ -577,7 +577,7 @@ public:
 	}
 
 private:
-	void TeleportPawn(const FVector& Origin, float Yaw)
+	void TeleportPawn(const FVector& DestOrigin, float Yaw)
 	{
 		APawn* Pawn = World ? World->GetPlayerPawn() : nullptr;
 		if (!Pawn)
@@ -586,7 +586,7 @@ private:
 		}
 		// Source places the entity's absorigin (feet); an Unreal capsule is centred, so lift by the
 		// capsule half-height to seat the player on the destination rather than in the floor.
-		FVector Dest = Origin;
+		FVector Dest = DestOrigin;
 		if (const ACharacter* Char = Cast<ACharacter>(Pawn))
 		{
 			Dest.Z += Char->GetDefaultHalfHeight();

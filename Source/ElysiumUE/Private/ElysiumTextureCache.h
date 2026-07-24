@@ -11,8 +11,10 @@ class UTexture2D;
 // never collects them out from under the material instances that sample them.
 struct FElysiumTextureCache
 {
-	// Decode (or fetch cached) the texture at Dir/Rel. Returns nullptr on miss.
-	static UTexture2D* LoadTex(const FString& Dir, const FString& Rel);
+	// Decode (or fetch cached) the texture at Dir/Rel. Returns nullptr on miss. bSRGB=false
+	// loads linear data (normal maps, reflectivity masks) so the bytes aren't gamma-decoded;
+	// it is part of the cache key, so the same path can be fetched both ways.
+	static UTexture2D* LoadTex(const FString& Dir, const FString& Rel, bool bSRGB = true);
 
 	// A 1x1 texture of a solid colour, cached per colour.
 	static UTexture2D* SolidTex(const FLinearColor& Color);

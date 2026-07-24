@@ -19,6 +19,9 @@
 #include "ElysiumEventQueue.h"
 #include "ElysiumExpr.h"
 #include "ElysiumKeyValues.h"
+#include "ElysiumObjModel.h"
+#include "ElysiumPythonVM.h"
+#include "ElysiumScriptHost.h"
 #include "ElysiumVariant.h"
 
 #include "Math/RotationMatrix.h"
@@ -425,6 +428,73 @@ bool FElysiumDecalsTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// 7.4 world material set — ParseMtlLines reads every channel/flag the master-selection and
+// param-binding depend on, and the blend flags stay mutually exclusive (the exporter writes at
+// most one). No RHI, no assets: the factory's master choice is a pure function of these fields.
+// =====================================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWorldMaterialsTest, "Elysium.Substrate.WorldMaterials", GElysiumTestFlags)
+bool FElysiumWorldMaterialsTest::RunTest(const FString&)
+{
+	TArray<FString> Lines;
+	// opaque with every optional feature channel present at once
+	Lines.Add(TEXT("newmtl brick"));
+	Lines.Add(TEXT("map_Kd tex/brick.png"));
+	Lines.Add(TEXT("map_Ke tex/brick_ke.png"));
+	Lines.Add(TEXT("bumpmap tex/brick_n.png"));
+	Lines.Add(TEXT("envmap c0_0_0"));
+	Lines.Add(TEXT("envmapmask tex/brick_envmask.png"));
+	Lines.Add(TEXT("basetex2 tex/grass.png"));
+	// masked (illum 4)
+	Lines.Add(TEXT("newmtl fence"));
+	Lines.Add(TEXT("map_Kd tex/fence.png"));
+	Lines.Add(TEXT("illum 4"));
+	// translucent (blend 1)
+	Lines.Add(TEXT("newmtl glass"));
+	Lines.Add(TEXT("map_Kd tex/glass.png"));
+	Lines.Add(TEXT("blend 1"));
+	// additive
+	Lines.Add(TEXT("newmtl neon"));
+	Lines.Add(TEXT("map_Kd tex/neon.png"));
+	Lines.Add(TEXT("additive 1"));
+	// reflective, no explicit mask (uniform reflectivity)
+	Lines.Add(TEXT("newmtl marble"));
+	Lines.Add(TEXT("map_Kd tex/marble.png"));
+	Lines.Add(TEXT("envmap cubemapdefault"));
+
+	TMap<FString, FElysiumMaterialDef> Mats;
+	FElysiumObjModel::ParseMtlLines(Lines, Mats);
+	TestEqual(TEXT("five materials parsed"), Mats.Num(), 5);
+
+	if (const FElysiumMaterialDef* B = Mats.Find(TEXT("brick")))
+	{
+		TestEqual(TEXT("brick albedo"), B->Albedo, FString(TEXT("tex/brick.png")));
+		TestEqual(TEXT("brick emissive"), B->Emissive, FString(TEXT("tex/brick_ke.png")));
+		TestEqual(TEXT("brick bump"), B->Bump, FString(TEXT("tex/brick_n.png")));
+		TestEqual(TEXT("brick envmask"), B->EnvMask, FString(TEXT("tex/brick_envmask.png")));
+		TestEqual(TEXT("brick basetex2"), B->BaseTex2, FString(TEXT("tex/grass.png")));
+		TestTrue(TEXT("brick is reflective"), B->bEnvmap);
+		TestTrue(TEXT("brick is opaque (no blend flag)"), !B->bBlend && !B->bScissor && !B->bAdditive);
+	}
+	if (const FElysiumMaterialDef* F = Mats.Find(TEXT("fence")))
+	{
+		TestTrue(TEXT("fence is masked"), F->bScissor && !F->bBlend && !F->bAdditive);
+	}
+	if (const FElysiumMaterialDef* G = Mats.Find(TEXT("glass")))
+	{
+		TestTrue(TEXT("glass is translucent"), G->bBlend && !G->bScissor && !G->bAdditive);
+	}
+	if (const FElysiumMaterialDef* N = Mats.Find(TEXT("neon")))
+	{
+		TestTrue(TEXT("neon is additive"), N->bAdditive && !N->bBlend && !N->bScissor);
+	}
+	if (const FElysiumMaterialDef* M = Mats.Find(TEXT("marble")))
+	{
+		TestTrue(TEXT("marble is reflective with no explicit mask"), M->bEnvmap && M->EnvMask.IsEmpty());
+	}
+	return true;
+}
+
+// =====================================================================================
 // FElysiumNpc / npc_maker (B3) — registry coverage, npc_maker.Spawn creating a live child
 // on a bare world (Owner null, so the visual build no-ops), and the WillTalk latch +
 // OnDialogBegin fire. No RHI, no glTF: this is the AI-free substrate half of the beat.
@@ -447,6 +517,10 @@ bool FElysiumNpcTest::RunTest(const FString&)
 		TestNotNull(FString::Printf(TEXT("npc_VVampire.%s resolves"), In),
 			reinterpret_cast<const void*>(Reg.FindInput(*Vamp, FName(In))));
 	}
+	// 9.3 field-table audit: `npc.times_talked` is a script-read field (santamonica et al.), so it must
+	// resolve as a datamap field — otherwise the read raises AttributeError instead of returning 0.
+	TestNotNull(TEXT("npc_VVampire.times_talked resolves as a field"),
+		reinterpret_cast<const void*>(Reg.FindField(*Vamp, FName(TEXT("times_talked")))));
 
 	// The maker leaf resolves Spawn/Enable.
 	const FElysiumClassDesc* MakerDesc = Reg.Find(FName(TEXT("npc_maker")));
@@ -540,5 +614,138 @@ bool FElysiumNpcTest::RunTest(const FString&)
 
 	return true;
 }
+
+// =====================================================================================
+// 9.3 scripted entity manipulation — the two-phase runtime create (CreateEntityNoSpawn ->
+// CallEntitySpawn), Entity.SetName re-keying the name index, and the runtime origin backing
+// SetOrigin. A bare world (Owner null) exercises the substrate half; bodies no-op.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRuntimeSpawnTest, "Elysium.Substrate.RuntimeSpawn", GElysiumTestFlags)
+bool FElysiumRuntimeSpawnTest::RunTest(const FString&)
+{
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__spawn_test__");
+	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
+	World.Load(MoveTemp(Defs));   // empty map — everything here is runtime-created
+
+	// --- Phase 1: CreateEntityNoSpawn appends a live, findable, NOT-yet-spawned entity ---
+	FElysiumEntityDef D;
+	D.Classname = TEXT("math_counter");
+	D.TargetName = TEXT("c1");
+	D.Origin = FVector(1, 2, 3);
+	const FElysiumEntityHandle H = World.CreateRuntimeEntityNoSpawn(MoveTemp(D));
+	FElysiumEntity* E = World.Resolve(H);
+	if (!TestNotNull(TEXT("create returned a live entity"), E))
+	{
+		return false;
+	}
+	TestFalse(TEXT("not spawned yet"), E->bSpawnCalled);
+	TestEqual(TEXT("findable by its targetname immediately"), World.FindByName(TEXT("c1")), E);
+	TestTrue(TEXT("runtime origin seeded from the def"), E->Origin.Equals(FVector(1, 2, 3)));
+
+	// --- SetName re-keys the name index: old name drops, new name resolves ---
+	World.RenameEntity(*E, TEXT("c2"));
+	TestNull(TEXT("old name no longer resolves"), World.FindByName(TEXT("c1")));
+	TestEqual(TEXT("new name resolves to the same entity"), World.FindByName(TEXT("c2")), E);
+
+	// --- SetOrigin mutates the live origin (what GetOrigin reads back) ---
+	E->SetRuntimeOrigin(FVector(9, 9, 9));
+	TestTrue(TEXT("SetOrigin moved the live origin"), E->Origin.Equals(FVector(9, 9, 9)));
+
+	// --- Phase 2: CallEntitySpawn runs Spawn() once; a second call is an idempotent no-op ---
+	World.CallEntitySpawn(*E);
+	TestTrue(TEXT("spawned after CallEntitySpawn"), E->bSpawnCalled);
+	World.CallEntitySpawn(*E);   // must not crash or re-spawn
+	TestTrue(TEXT("still spawned (idempotent)"), E->bSpawnCalled);
+
+	// --- The fused SpawnRuntimeEntity (npc_maker's path) spawns immediately ---
+	FElysiumEntityDef D2;
+	D2.Classname = TEXT("math_counter");
+	D2.TargetName = TEXT("c3");
+	const FElysiumEntityHandle H2 = World.SpawnRuntimeEntity(MoveTemp(D2));
+	FElysiumEntity* E2 = World.Resolve(H2);
+	if (TestNotNull(TEXT("fused spawn returned a live entity"), E2))
+	{
+		TestTrue(TEXT("fused path is spawned on return"), E2->bSpawnCalled);
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// 9.3 CPython end-to-end — the writers and the two-phase spawn driven through the REAL
+// Python glue (arg parsing, __getattr__ dispatch, the module globals), not just the C++
+// substrate. Self-skips when the embedded VM is unavailable, so it never yields a false
+// failure on a non-CPython build/host.
+// =====================================================================================
+
+#if defined(ELYSIUM_WITH_CPYTHON) && ELYSIUM_WITH_CPYTHON
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCPythonWritersTest, "Elysium.Substrate.CPythonWriters", GElysiumTestFlags)
+bool FElysiumCPythonWritersTest::RunTest(const FString&)
+{
+	FElysiumPythonVM& VM = FElysiumPythonVM::Get();
+	FString Err;
+	if (!VM.EnsureStarted(Err))
+	{
+		AddInfo(FString::Printf(TEXT("embedded CPython unavailable (%s) — skipping"), *Err));
+		return true;   // self-skip: never a false failure where the SDK is absent
+	}
+
+	// A bare world (Owner null, so no bodies/visuals) with one named entity to drive through Python.
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__py_test__");
+	FElysiumEntityDef Relay;
+	Relay.Classname = TEXT("logic_relay");
+	Relay.TargetName = TEXT("wr_target");
+	Relay.Origin = FVector(1, 2, 3);
+	Defs.Defs.Add(MoveTemp(Relay));
+	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
+	World.Load(MoveTemp(Defs));
+
+	// Ctx.World is what CurrentWorld() resolves against for the duration of each eval.
+	FElysiumScriptContext Ctx;
+	Ctx.World = &World;
+	auto Eval = [&](const TCHAR* Src)
+	{
+		FString E;
+		const FElysiumVariant V = VM.Eval(FString(Src), Ctx, E);
+		if (!E.IsEmpty()) { AddError(FString::Printf(TEXT("eval '%s' raised: %s"), Src, *E)); }
+		return V;
+	};
+
+	// SetName re-keys through the glue: old targetname stops resolving, the new one resolves.
+	Eval(TEXT("FindEntityByName(\"wr_target\").SetName(\"wr_renamed\")"));
+	TestNull(TEXT("old name gone after SetName"), World.FindByName(TEXT("wr_target")));
+	FElysiumEntity* Renamed = World.FindByName(TEXT("wr_renamed"));
+	if (!TestNotNull(TEXT("new name resolves after SetName"), Renamed))
+	{
+		return false;
+	}
+
+	// SetOrigin (tuple-arg form) mutates the runtime origin.
+	Eval(TEXT("FindEntityByName(\"wr_renamed\").SetOrigin((7,8,9))"));
+	TestTrue(TEXT("SetOrigin moved the runtime origin"), Renamed->Origin.Equals(FVector(7, 8, 9)));
+
+	// SetModel + GetModelName round-trip through the glue (clean string, no repr).
+	Eval(TEXT("FindEntityByName(\"wr_renamed\").SetModel(\"models/test/foo.mdl\")"));
+	const FElysiumVariant Model = Eval(TEXT("FindEntityByName(\"wr_renamed\").GetModelName()"));
+	TestEqual(TEXT("GetModelName reflects SetModel"), Model.ToString(), FString(TEXT("models/test/foo.mdl")));
+
+	// Two-phase spawn end to end: CreateEntityNoSpawn -> SetName -> CallEntitySpawn.
+	Eval(TEXT("__pytest_e = CreateEntityNoSpawn(\"math_counter\", (4,5,6), (0,0,0))"));
+	Eval(TEXT("__pytest_e.SetName(\"pytest_spawned\")"));
+	FElysiumEntity* Spawned = World.FindByName(TEXT("pytest_spawned"));
+	if (TestNotNull(TEXT("CreateEntityNoSpawn made a findable entity"), Spawned))
+	{
+		TestFalse(TEXT("not spawned before CallEntitySpawn"), Spawned->bSpawnCalled);
+		TestTrue(TEXT("origin came from the create args"), Spawned->Origin.Equals(FVector(4, 5, 6)));
+		Eval(TEXT("CallEntitySpawn(__pytest_e)"));
+		TestTrue(TEXT("spawned after CallEntitySpawn"), Spawned->bSpawnCalled);
+	}
+
+	return true;
+}
+#endif // ELYSIUM_WITH_CPYTHON
 
 #endif // WITH_DEV_AUTOMATION_TESTS

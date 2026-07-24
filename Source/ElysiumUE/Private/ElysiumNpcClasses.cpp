@@ -54,6 +54,12 @@ namespace
 			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Bool(static_cast<const TClass&>(E).*Member); };
 			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt() != 0; };
 		}
+		else if constexpr (std::is_same_v<TMember, int32>)
+		{
+			Acc.Type = EElysiumVariantType::Int;
+			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Int(static_cast<const TClass&>(E).*Member); };
+			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt(); };
+		}
 		else if constexpr (std::is_same_v<TMember, FString>)
 		{
 			Acc.Type = EElysiumVariantType::String;
@@ -80,6 +86,7 @@ public:
 	bool  bUseInteresting = false;    // use_interesting — the NPC is a look/use target (seeded from the key)
 	bool  bInDialog = false;          // a dialog session is open (OnDialogBegin fired, OnDialogEnd pending)
 	int32 DialogFlags = 0;            // the StartPlayerDialogRemote param, kept for B4's runner
+	int32 TimesTalked = 0;            // times_talked — dialogue interaction count (engine-written; script-read)
 	FString StatTemplate;             // stattemplate — the RPG stat block name (data only in B3)
 
 	// The standing skeletal body, or null (bodiless npc_* like npc_VCamera, elysium.NpcBodies 0, or a
@@ -156,11 +163,60 @@ public:
 		GateVisual();
 	}
 
+	// SetOrigin/SetAngles: the skeletal body is Movable, so follow it (bradbury/cemetery/downtown warp
+	// and re-face NPCs). Source `angles` is [pitch yaw roll]; a standing NPC needs yaw, negated by the
+	// Source->Unreal Y reflection (matches the Spawn()-time facing).
+	virtual void OnRuntimeTransformChanged() override
+	{
+		FElysiumEntity::OnRuntimeTransformChanged();
+		if (Visual)
+		{
+			Visual->SetRelativeLocation(Origin);
+			Visual->SetRelativeRotation(FRotator(0.0f, -Angles.Y, 0.0f));
+		}
+	}
+
+	// SetModel: swap the NPC's appearance (bradbury Heather goth/normal, cemetery prostitute, downtown
+	// Nines). Tear the old body down and stand the new model at the same origin/facing — BuildNpcVisual
+	// caches meshes per stem, so a repeated swap is cheap.
+	virtual void OnRuntimeModelChanged() override
+	{
+		if (!World)
+		{
+			return;
+		}
+		AElysiumMapActor* Map = Cast<AElysiumMapActor>(World->GetOwnerActor());
+		if (!Map)
+		{
+			return;   // bare test world — the logical Model field is still updated
+		}
+		if (Visual)
+		{
+			Visual->DestroyComponent();
+			Visual = nullptr;
+		}
+		if (CVarNpcBodies.GetValueOnGameThread() == 0 || Model.IsEmpty())
+		{
+			return;   // gated off or now modelless
+		}
+		const FString Stem = FPaths::GetBaseFilename(Model).ToLower();
+		Visual = Map->BuildNpcVisual(Stem, Origin, FRotator(0.0f, -Angles.Y, 0.0f));
+		if (Visual)
+		{
+			World->RegisterNpcBody(Visual);
+			if (IsInert())
+			{
+				GateVisual();
+			}
+		}
+	}
+
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
 	{
 		Out.Emplace(TEXT("WillTalk"), bWillTalk ? TEXT("yes") : TEXT("no"));
 		Out.Emplace(TEXT("UseInteresting"), bUseInteresting ? TEXT("yes") : TEXT("no"));
 		Out.Emplace(TEXT("In dialog"), bInDialog ? FString::Printf(TEXT("YES (flags %d)"), DialogFlags) : TEXT("no"));
+		Out.Emplace(TEXT("Times talked"), FString::FromInt(TimesTalked));
 		if (!StatTemplate.IsEmpty())
 		{
 			Out.Emplace(TEXT("Stat template"), StatTemplate);
@@ -268,6 +324,10 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 
 	AddNpcField(D, TEXT("use_interesting"), &FElysiumNpc::bUseInteresting);
 	AddNpcField(D, TEXT("stattemplate"),    &FElysiumNpc::StatTemplate);
+	// times_talked: santamonica/chinatown/e3/demo read `npc.times_talked` to branch first-vs-repeat
+	// dialogue. Register it read-only (engine-written, script-read) so the read resolves to a defined
+	// value instead of raising AttributeError. B4's dialogue runner drives the count; it stays 0 until then.
+	AddNpcField(D, TEXT("times_talked"), &FElysiumNpc::TimesTalked, /*bKeyable*/ false);
 }
 
 static void BuildNpcMakerClass(FElysiumClassDesc& D)

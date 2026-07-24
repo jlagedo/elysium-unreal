@@ -15,12 +15,11 @@ import unreal
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-# Ordered by dependency: the master world material first (base + its two additive edits),
-# then the sky master material, then the empty boot level. Every generator is idempotent --
-# re-running reproduces the same committed asset.
+# Ordered by dependency: the world master-material set first, then the sky master material,
+# then the empty boot level. Every generator is idempotent -- re-running reproduces the same
+# committed asset.
 GENERATORS = [
-    "add_world_emissive.py",        # M_VtMB_World.uasset: $selfillum emissive path
-    "set_world_material_usage.py",  # M_VtMB_World.uasset: "Used with Instanced Static Meshes"
+    "make_world_materials.py",      # M_World_{Opaque,Masked,Translucent}.uasset + M_Additive.uasset (7.4)
     "make_sky_material.py",         # M_Sky.uasset: the 2D-skybox cube master material
     "make_gizmo_material.py",       # M_Gizmo{,_XRay}.uasset: the P2.4 entity-gizmo ISM materials
     "make_decal_material.py",       # M_Decal.uasset: the 7.2 deferred-decal master material

@@ -9,8 +9,10 @@ loop.
 ## Read first
 
 - **`docs/roadmap.md`** — the single source of truth work tracker: phases P0–P10, per-task
-  status and as-built detail, pipeline + RE backlogs, risk register, dated decision log.
-  **Status and history live there and nowhere else** — including this file.
+  status, pipeline + RE backlogs, risk register. Its two companions carry the history:
+  `docs/roadmap-archive.md` (the full as-built record of every completed task) and
+  `docs/decisions.md` (the dated, append-only decision log). **Status and history live in
+  that three-file set and nowhere else** — including this file.
 - **`docs/rebuild-strategy.md`** — the strategy reference: north star, principles, the two
   tracks, sidecar contracts, per-system design targets.
 - **`docs/remaster-direction.md`** — the direction charter: what may be modernized, what must
@@ -44,7 +46,7 @@ recreation. Three change layers, three rules:
 
 **The governing rule: only change what we understand, and only on an explicit owner call.** RE
 comes first; a behavioural divergence needs the faithful behaviour known and recorded, plus a
-dated decision in `roadmap.md`'s log. Default resolves to reproduce. The **world** keeps its
+dated decision in `docs/decisions.md`. Default resolves to reproduce. The **world** keeps its
 faithful baseline (lightmap calibration, plus the planned `elysium.EnhancedTextures` A/B
 toggle); only the UI drops its.
 Full charter: `docs/remaster-direction.md`.
@@ -89,15 +91,18 @@ rules: `docs/rebuild-strategy.md` → "Coordinate conventions".
 ## What runs today
 
 Map load builds world + 3D-skybox geometry as `UProceduralMeshComponent` actors with MIDs off
-the master material `M_VtMB_World`, DDS-preferred textures, `.hulls`/`.dispcol` brush
-collision as the walkable surface, ISM static props, deferred `UDecalComponent` decals off
-`M_Decal`, the real-time `UElysiumLightRig` on a fully dynamic renderer, and `.env` sky/fog + `.cube` LUT.
+the world master-material set (`M_World_Opaque`/`_Masked`/`_Translucent`/`M_Additive`, picked per
+surface by blend flag; bump, $envmap→Lumen roughness, and WorldVertexTransition blend on the lit
+masters), DDS-preferred textures, `.hulls`/`.dispcol` brush collision as the walkable surface, ISM
+static props, deferred `UDecalComponent` decals off `M_Decal`, the real-time `UElysiumLightRig` on a
+fully dynamic renderer, and `.env` sky/fog + `.cube` LUT.
 
 The Track-B entity substrate runs with it: `.ents` → one entity per def through the class
 registry → brush bodies → spawn pass, everything through the two chokepoints and one event
 queue. Live classes cover the logic/trigger family, doors + buttons + the `+use` look-cursor
-and use-icon HUD, `game_sign` popups, `ambient_generic` + SoundSchemes + mover sounds, and
-`trigger_changelevel` landmark travel. Scripting runs on an embedded CPython 2.7 VM (the
+and use-icon HUD, `game_sign` popups, `ambient_generic` + SoundSchemes + mover sounds,
+`prop_dynamic` static-mesh bodies (per-entity, addressable — hide/move/`Break`), NPC skeletal
+bodies, and `trigger_changelevel` landmark travel. Scripting runs on an embedded CPython 2.7 VM (the
 map's level script imports before the spawn pass, then merges into `__main__`, where payloads
 evaluate), with an expression-evaluator fallback. Scripts hold **real entity objects**: an
 attribute is either an entity input — fired through the same chokepoint a map's own I/O wire
@@ -144,7 +149,7 @@ your VtMB install.
 - `profile.bat [map] [cam]` — headless render profiling at 2560×1440/SM6: fixed vantages,
   warmup + 300-frame CSV capture (per-pass GPU ms), summary, exit — no interaction.
   `tools/profile_report.py` builds the table; results in `tools/out/_profile/`, baseline in
-  `docs/roadmap.md`'s appendix. Add a vantage in-game with `elysium.campos`.
+  `docs/rendering-perf.md` → "Profiling baseline". Add a vantage in-game with `elysium.campos`.
 - `shots.bat [map] [cam]` — headless screenshot-regression capture at 2560×1440/SM6 over the
   **same** vantages as `profile.bat` (`-ElysiumShots`); PNGs + manifest under `tools/out/_shots/`
   (gitignored — game-derived baselines). Diff a run against a kept baseline to catch a look regression.
@@ -176,7 +181,9 @@ facts, valid regardless of target engine. Organisation and maintenance rules: `d
 
 | Doc | Topic |
 |---|---|
-| `roadmap.md` | **the work tracker** — phases, status, backlogs, risks, decision log |
+| `roadmap.md` | **the work tracker** — phases, status, backlogs, risks |
+| `roadmap-archive.md` | as-built records of completed roadmap tasks (same IDs) |
+| `decisions.md` | the dated, append-only decision log |
 | `rebuild-strategy.md` | tracks, milestone vocabulary, sidecar contracts, per-system design targets |
 | `remaster-direction.md` | the direction charter — the three layers, the two adjudication tests |
 | `engine-core.md` | the entity object model and its two-phase build plan |

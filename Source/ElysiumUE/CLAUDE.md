@@ -55,7 +55,7 @@ map epoch; tears down on travel).
 |---|---|
 | `FElysiumObjModel` | OBJ/MTL reader; `.emc` parse-cache |
 | `FElysiumTextureCache` | DDS-preferred texture load, PNG fallback |
-| `FElysiumMaterialFactory` | MIDs off the master materials |
+| `FElysiumMaterialFactory` | one MID per OBJ surface (world + prop ISMs). The material's blend flags pick the master — `M_World_Opaque` / `_Masked` (`illum 4`) / `_Translucent` (`blend 1`) / `M_Additive` (`additive 1`) — then bind its named params: `Albedo`, `Emissive`+`EmissiveScale`, `BumpMap`+`BumpAmount` (linear), `EnvMask`+`EnvStrength` ($envmap → Lumen roughness, uniform white mask when unmasked), `BaseTex2`+`BlendAmount` (WVT). `elysium.BumpScale` / `EnvReflect` / `EmissiveScale` tune the three feature scalars |
 | `FElysiumStaticMeshBuilder` | runtime `UStaticMesh` per unique prop model (`BuildFromMeshDescriptions`), drawn as one ISM per (model, solidity) |
 | `FElysiumDecals` + `FElysiumMaterialFactory::BuildDecal` | 7.2 decals: parse the `.decals` projector sidecar → one deferred `UDecalComponent` per `infodecal`, MID off `M_Decal`. Orient `MakeFromXZ(Normal, SDir)` — local +X = room normal (so −X projects into the wall), and since a deferred decal maps texture **U→local Z, V→local Y**, the surface horizontal `SDir` goes on local Z with `DecalSize = depth×HalfH×HalfW`. `elysium.Decals` A/Bs the pass, `elysium.DecalDepth` the depth, `elysium.DecalFlipU` mirrors U |
 | `UElysiumLightRig` | one Unreal light per WORLDLIGHTS `.lights` source; soft exponent falloff, specular off (VtMB is pure Lambert), sun, skyambient, lightstyle animation, live retune via `ApplyLiveTuning()` |
@@ -81,9 +81,9 @@ Plain C++, no UObject reflection — Unreal supplies bodies only. Design: `docs/
 | `FElysiumVariant` | tagged Void/Bool/Int/Float/String/Vector/Handle |
 | `FElysiumEntityHandle` | `{Index, Epoch}`, generation-checked through `Resolve` |
 | `FElysiumEntityDef`/`FElysiumEntityDefs` | immutable parsed `.ents` records |
-| `FElysiumEntity` | the live base entity: CBaseEntity keyfields, `Kill`/`ScriptHide`/`ScriptUnhide`, one-switch dormancy gating the brush body, per-output `times` counters, `FireOutput` (Source `COutput<T>` value seam — fills any wire whose map-param is empty), `OnTouchStart`/`OnTouchEnd`, `GetDebugState` |
+| `FElysiumEntity` | the live base entity: CBaseEntity keyfields + a runtime `Origin` (seeded from `Def->Origin`; `SetRuntimeOrigin`/`SetRuntimeAngles`/`SetRuntimeModel` back `Entity.SetOrigin`/`SetAngles`/`SetModel` and hand off to the `OnRuntimeTransformChanged`/`OnRuntimeModelChanged` body-follow hooks), `Kill`/`ScriptHide`/`ScriptUnhide`, one-switch dormancy gating the brush body, per-output `times` counters, `FireOutput` (Source `COutput<T>` value seam — fills any wire whose map-param is empty), `OnTouchStart`/`OnTouchEnd`, `GetDebugState` |
 | `FElysiumClassDesc`/`FElysiumClassRegistry` | per-classname descriptor — factory, base-chain link, input + typed field tables; case-folded chain lookup, inert-record fallback for unregistered classnames |
-| `FElysiumEntityWorld` | the substrate: one entity per def, name/class indices, spawn pass (also builds brush bodies), `SpawnRuntimeEntity` (B3 runtime creation for `npc_maker.Spawn`), the `AcceptInput` + event-queue **chokepoints**, output firing, `RouteBrushTouch`, `UpdateUseCursor`/`PlayerUse`, think-first tick, epoch teardown, `AddSink` seam. Owned by `AElysiumMapActor` via `TPimplPtr` |
+| `FElysiumEntityWorld` | the substrate: one entity per def, name/class indices, spawn pass (also builds brush bodies), `SpawnRuntimeEntity` (B3 runtime creation for `npc_maker.Spawn`) = the scripted two-phase `CreateRuntimeEntityNoSpawn` + `CallEntitySpawn` (9.3 `CreateEntityNoSpawn`/`CallEntitySpawn`) fused, `RenameEntity` (`Entity.SetName` name-index re-key), the `AcceptInput` + event-queue **chokepoints**, output firing, `RouteBrushTouch`, `UpdateUseCursor`/`PlayerUse`, think-first tick, epoch teardown, `AddSink` seam. Owned by `AElysiumMapActor` via `TPimplPtr` |
 | `UElysiumBrushComponent` | the per-brush-entity body: collision-only `UPrimitiveComponent`, convex `UBodySetup` cooked from def hulls, handle-carrying, dormancy-gated, solidity by classname (trigger/solid/none); `elysium.BrushBodies` A/Bs it |
 | `FElysiumEventQueue`/`FElysiumIOEvent` | the one time-sorted queue (R4 — no engine timers) |
 | `IElysiumIOSink` | always-on `FElysiumRingBufferSink` (1,000-entry history) + `FElysiumLogSink` (`LogElysiumIO` + VLOG) |
@@ -100,7 +100,9 @@ Class implementations live in `ElysiumStarterClasses.cpp` (logic_auto/relay, tri
 4-state machine, `FElysiumFuncDoor`, `FElysiumButton`), `ElysiumSignClasses.cpp` (`game_sign`),
 `ElysiumAmbientGeneric.cpp`, `ElysiumEventClasses.cpp` (`events_player`/`events_world`),
 `ElysiumNpcClasses.cpp` (B3 — the AI-free `FElysiumNpc` character leaf for the living `npc_*`
-classnames and `FElysiumNpcMaker` for `npc_maker`/`npc_maker_fleshpile`).
+classnames and `FElysiumNpcMaker` for `npc_maker`/`npc_maker_fleshpile`), and
+`ElysiumPropClasses.cpp` (8.3 — the `FElysiumProp` static-mesh leaf for `prop_dynamic` /
+`prop_dynamic_ornament`).
 
 NPCs (B3, no AI) stand a real glTF skeletal body at their origin: `ElysiumNpcVisual.{h,cpp}` is the
 shared glb→`USkeletalMesh` loader (the 8.2 path, reused by the `UElysiumNpcSubsystem` test harness),
@@ -112,6 +114,17 @@ runner). `npc_maker.Spawn` creates its `NPCTargetname` child through
 **`FElysiumEntityWorld::SpawnRuntimeEntity`** — a runtime-synthesized def stored past the map's
 immutable def array, appended to `EntityList` (identity needs only the append). Runtime NPC bodies are
 tracked for teardown like brush bodies.
+
+Dynamic props (8.3, no physics) stand a static-mesh body the same way: `FElysiumProp`
+(`prop_dynamic`/`prop_dynamic_ornament`) calls `AElysiumMapActor::BuildPropVisual` — parse
+`props/<stem>.obj` once (the 8.1 `model_mesh` annotation names the stem), build a `UStaticMesh` through
+`FElysiumStaticMeshBuilder`, cache it per stem, and stand a movable **non-solid** `UStaticMeshComponent`
+(a per-entity component, not a shared ISM — the GAME_LUMP `.props` path keeps the grouped ISMs; collision
+is 8.4). Placement rotation is the exporter's pre-converted `model_quat` (read verbatim). The leaf
+gates the body on dormancy/`start_hidden`, follows `SetOrigin`/`SetAngles`/`SetModel`, and takes `Break`
+(hide + `OnBreak`); `Skin`/`SetAnimation` log a stub (the decode is LOD0 static geometry, skin 0 only).
+`World->RegisterPropBody` tracks it for teardown like NPC bodies; `elysium.PropBodies` A/Bs the bodies
+(I/O still resolves without them).
 
 `+use` picks on the dedicated `ELYSIUM_USE_CHANNEL` (`ECC_GameTraceChannel1` = "ElysiumUse",
 default-Block so world + solid bodies occlude the ray, isolated from `ECC_Visibility`). The
@@ -145,9 +158,12 @@ payloads, `logic_pythoncheck`, `EvalScript`, `ScheduleTask`, level-script import
   globals. `Entity.__getattr__` resolves the type methods and instance `__dict__` first, then
   walks the class-chain tables — an **input** name manufactures a bound callable that fires
   through `EnqueueInput`, a **field** name marshals the live value; `__setattr__` is the mirror
-  (datamap first, `__dict__` on a miss; an input or a non-keyable field is read-only). `G` is
-  proxied onto the game state with both the attribute *and* mapping protocols, because VtMB's
-  `G[k]` is its `G.k`. `FElysiumPythonVM` itself owns only the interpreter.
+  (datamap first, `__dict__` on a miss; an input or a non-keyable field is read-only). The base
+  method table is real, not stubbed: `SetOrigin`/`SetAngles`/`SetModel`/`SetName` mutate live state
+  (and follow the NPC body / re-key the name index), and `CreateEntityNoSpawn`/`CallEntitySpawn` are
+  the host's real two-phase spawn (they return/take an `Entity`, like `Find*`). `G` is proxied onto
+  the game state with both the attribute *and* mapping protocols, because VtMB's `G[k]` is its `G.k`.
+  `FElysiumPythonVM` itself owns only the interpreter.
 - `ElysiumScriptNatives.{h,cpp}` is the engine `vampire` surface both hosts share: the binding
   table the Cog Scripting window renders, the stub defaults, the Character-method dispatch, and
   the native-call log. It lives outside either host so `elysium.script.cpython 0/1` swaps the
@@ -292,8 +308,8 @@ volume, so a flip re-applies in one pass (voices already fading out toward a rea
 
 Lifecycle `elysium.newgame` / `map` / `maps` / `reload`; inspection `elysium.campos` /
 `lights` / `props` / `ents` / `classes` / `world` / `world.io` / `world.fireinput` / `g`;
-A/B toggles `elysium.BrushCollision` / `BrushBodies` / `NpcBodies` / `Decals` (+ `DecalDepth`) / `EmissiveScale` /
-`LightScale` / `LightFit` / `CogTheme`; entity debug `elysium.ent_*` / `showtriggers`; scripting `elysium.eval` / `exec` /
+A/B toggles `elysium.BrushCollision` / `BrushBodies` / `NpcBodies` / `PropBodies` / `Decals` (+ `DecalDepth`) / `EmissiveScale` /
+`BumpScale` / `EnvReflect` / `LightScale` / `LightFit` / `CogTheme`; entity debug `elysium.ent_*` / `showtriggers`; scripting `elysium.eval` / `exec` /
 `script.live` / `script.cpython` / `py.*` (`py.smoke` / `exec` / `load` / `fire`, plus the two
 single-token acceptance harnesses `py.poc` and `py.firstbeat`); audio `elysium.Mute` / `playsound` / `sound_info` /
 `MusicState` / `MusicCrossfade` / `SchemeRandom*`; NPC `elysium.npc.load` / `clear` / `list`; MCP

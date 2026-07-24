@@ -17,6 +17,7 @@ class UElysiumBrushComponent;
 class UElysiumGameStateSubsystem;
 class UElysiumMapSubsystem;
 class USkeletalMeshComponent;
+class UStaticMeshComponent;
 
 // R1/R5 — the Track-B substrate: one plain-C++ object per map, owned by AElysiumMapActor, that
 // dies with it. It parses `.ents` into live entities, indexes them by name and class, and routes
@@ -72,10 +73,25 @@ public:
 	// leaf builds its body/visual there. Returns the new entity's handle (Invalid on a bad def).
 	FElysiumEntityHandle SpawnRuntimeEntity(FElysiumEntityDef Def);
 
+	// 9.3 — the scripted two-phase create (VtMB's CreateEntityNoSpawn / CallEntitySpawn). Phase 1
+	// appends a live entity from a runtime def and indexes it by name/class WITHOUT running Spawn(),
+	// so the script can SetModel/SetName/SetOrigin on it first; phase 2 runs Spawn() (once, gated by
+	// bSpawnCalled) and builds its brush body. SpawnRuntimeEntity is the two fused (npc_maker's path).
+	FElysiumEntityHandle CreateRuntimeEntityNoSpawn(FElysiumEntityDef Def);
+	void CallEntitySpawn(FElysiumEntity& Ent);
+
+	// 9.3 — VtMB's Entity.SetName: re-key the name index so the renamed entity is immediately findable
+	// under its new targetname (and no longer under the old). Empty names are handled (add/remove skip).
+	void RenameEntity(FElysiumEntity& Ent, const FString& NewName);
+
 	// B3 — register an NPC skeletal body (built by AElysiumMapActor::BuildNpcVisual) so the world tears
 	// it down with the map. The FElysiumNpc leaf calls this from Spawn(); mirrors how brush bodies are
 	// tracked, so a world rebuild on a surviving actor (reload) does not leak the components.
 	void RegisterNpcBody(USkeletalMeshComponent* Component);
+
+	// 8.3 — register a dynamic-prop body (built by AElysiumMapActor::BuildPropVisual) so the world
+	// tears it down with the map, exactly like NPC bodies. The FElysiumProp leaf calls this from Spawn().
+	void RegisterPropBody(UStaticMeshComponent* Component);
 
 	// P5 5.4 — ScheduleTask(delay, "<source>"): defer a field-6 Python source string on the same
 	// event queue, evaluated at now+delay through the installed script host (DeliverEvent's Python
@@ -239,6 +255,9 @@ private:
 	// B3 NPC skeletal bodies (built on the map actor, gated by their leaf on dormancy): weak refs held
 	// so a world rebuild on a surviving actor destroys them, like Bodies.
 	TArray<TWeakObjectPtr<USkeletalMeshComponent>> NpcBodies;
+	// 8.3 dynamic-prop bodies (built on the map actor, gated/moved by their FElysiumProp leaf): weak
+	// refs held so a world rebuild on a surviving actor destroys them, like NpcBodies.
+	TArray<TWeakObjectPtr<UStaticMeshComponent>> PropBodies;
 	int32 TouchBeginCount = 0;
 	int32 TouchEndCount = 0;
 

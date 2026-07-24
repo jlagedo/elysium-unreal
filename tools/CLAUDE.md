@@ -269,11 +269,13 @@ texture cache, so a model referenced by both a GAME_LUMP prop and an entity deco
 Every `.ents` entity whose `model` key is a static `.mdl` — `prop_dynamic`/`prop_physics`
 plus the `prop_button`/`prop_doorknob(_electronic)`/`prop_sign`/`prop_switch`/`prop_hacking`/
 `item_container(_animated/_lock)` family — gets that model decoded into `props/<safe>.obj`
-and is annotated in `<map>.ents` with **`model_mesh`** = the decoded OBJ stem (present only
-when the decode succeeded; the transform stays the entity's own `origin`/`angles`, not a
-`.props` line). Skeletal `npc_*` models are **excluded** — they belong to the glTFRuntime
+and is annotated in `<map>.ents` with **`model_mesh`** = the decoded OBJ stem and **`model_quat`**
+= the Unreal-space placement rotation (`source_angles_to_unreal_quat` of the entity's `angles`, so
+the runtime reads orientation verbatim like it does `origin`; identity when `angles` is absent). Both
+present only when the decode succeeded; the origin stays the entity's own converted `origin`, not a
+`.props` line. Skeletal `npc_*` models are **excluded** — they belong to the glTFRuntime
 NPC track (roadmap 8.2/8.5), not this static-geometry path. Tutorial: 160 entity props / 64
-unique models. The runtime consumer is roadmap 8.3 (dynamic) / 8.4 (physics).
+unique models. The runtime consumer is roadmap 8.3 (`prop_dynamic` → `FElysiumProp`) / 8.4 (physics).
 
 `WorldLoader.LoadProps` groups instances by model, builds each unique model's mesh + a
 convex hull once, and renders each model as one **`MultiMeshInstance3D`** — per-instance

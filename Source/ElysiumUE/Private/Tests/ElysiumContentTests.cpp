@@ -19,6 +19,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumObjModel.h"
 #include "HAL/FileManager.h"
+#include "Misc/Paths.h"
 
 static constexpr EAutomationTestFlags GElysiumContentTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -33,6 +34,11 @@ namespace
 		int32 WithOutputs = 0;
 		TSet<FString> Classnames;
 		TSet<FString> LandmarkNames;
+		// 8.3 — prop_dynamic coverage: how many carry the 8.1 model_mesh annotation the runtime
+		// renders through, and one sample stem to confirm its decoded OBJ exists on disk.
+		int32 PropDynamic = 0;
+		int32 PropDynamicWithMesh = 0;
+		FString AnyPropStem;
 
 		int32 CountClass(const TCHAR* Class) const
 		{
@@ -68,6 +74,15 @@ namespace
 			if (Def.Classname.Equals(TEXT("info_landmark"), ESearchCase::IgnoreCase) && !Def.TargetName.IsEmpty())
 			{
 				Out.LandmarkNames.Add(Def.TargetName);
+			}
+			if (Def.Classname.Equals(TEXT("prop_dynamic"), ESearchCase::IgnoreCase))
+			{
+				++Out.PropDynamic;
+				if (!Def.ModelMesh.IsEmpty())
+				{
+					++Out.PropDynamicWithMesh;
+					Out.AnyPropStem = Def.ModelMesh;
+				}
 			}
 		}
 		return true;
@@ -113,6 +128,24 @@ bool FElysiumTutorialEntsTest::RunTest(const FString&)
 	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
 	TestNotNull(TEXT("npc_VVampire registered"), Reg.Find(FName(TEXT("npc_VVampire"))));
 	TestNotNull(TEXT("npc_maker registered"), Reg.Find(FName(TEXT("npc_maker"))));
+
+	// 8.3 — dynamic props render through the model_mesh annotation. The class registers, and the
+	// slice's prop_dynamic records carry a decoded OBJ the runtime can stand (the annotation is 8.1's,
+	// so this holds on any current export; model_quat defaults to identity on an older one).
+	TestNotNull(TEXT("prop_dynamic registered"), Reg.Find(FName(TEXT("prop_dynamic"))));
+	if (Survey.PropDynamic > 0)
+	{
+		TestTrue(TEXT("prop_dynamic records carry a model_mesh"), Survey.PropDynamicWithMesh > 0);
+		if (!Survey.AnyPropStem.IsEmpty())
+		{
+			const FString Obj =
+				FElysiumContentPaths::MapPropsDir(TEXT("sp_tutorial_1")) / (Survey.AnyPropStem + TEXT(".obj"));
+			TestTrue(TEXT("a prop_dynamic model_mesh resolves to an OBJ on disk"),
+				IFileManager::Get().FileExists(*Obj));
+		}
+	}
+	AddInfo(FString::Printf(TEXT("sp_tutorial_1 prop_dynamic: %d (%d with model_mesh)"),
+		Survey.PropDynamic, Survey.PropDynamicWithMesh));
 
 	return true;
 }
@@ -189,6 +222,68 @@ bool FElysiumTutorialDecalsTest::RunTest(const FString&)
 	TestEqual(TEXT("every decal normal is unit length"), BadNormal, 0);
 	TestEqual(TEXT("every decal has positive extents"), BadExtent, 0);
 	TestEqual(TEXT("every decal material resolves in the shared MTL"), Unresolved, 0);
+
+	return true;
+}
+
+// 7.4 — the world MTL the runtime feeds FElysiumMaterialFactory. Asserts the parse contract holds
+// on real exported data: materials resolve albedo, the blend flags stay mutually exclusive (so the
+// factory picks exactly one master), and every referenced texture channel exists on disk.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTutorialMaterialsTest,
+	"Elysium.Content.TutorialMaterials", GElysiumContentTestFlags)
+bool FElysiumTutorialMaterialsTest::RunTest(const FString&)
+{
+	const TCHAR* Map = TEXT("sp_tutorial_1");
+	const FString Dir = FElysiumContentPaths::MapDir(Map);
+	const FString Path = Dir / (FString(Map) + TEXT(".mtl"));
+	if (!IFileManager::Get().FileExists(*Path))
+	{
+		AddInfo(FString::Printf(
+			TEXT("skipping %s materials: no exported .mtl at %s (run the pipeline to enable)"), Map, *Path));
+		return true;   // not exported — skip, stay green
+	}
+
+	TMap<FString, FElysiumMaterialDef> Materials;
+	FElysiumObjModel::ParseMtl(Path, Materials);
+	if (!TestTrue(TEXT("world MTL carries materials"), Materials.Num() > 0))
+	{
+		return true;
+	}
+
+	int32 WithAlbedo = 0, MultiBlend = 0, MissingTex = 0;
+	int32 Masked = 0, Translucent = 0, Additive = 0, Reflective = 0, Bumped = 0, Wvt = 0;
+	auto TexMissing = [&Dir](const FString& Rel)
+	{
+		return !Rel.IsEmpty() && !IFileManager::Get().FileExists(*(Dir / Rel));
+	};
+	for (const TPair<FString, FElysiumMaterialDef>& Pair : Materials)
+	{
+		const FElysiumMaterialDef& M = Pair.Value;
+		if (!M.Albedo.IsEmpty()) { ++WithAlbedo; }
+		// At most one blend flag may be set — the factory maps them to disjoint masters.
+		if (int32(M.bScissor) + int32(M.bBlend) + int32(M.bAdditive) > 1) { ++MultiBlend; }
+		if (M.bScissor) { ++Masked; }
+		if (M.bBlend) { ++Translucent; }
+		if (M.bAdditive) { ++Additive; }
+		if (M.bEnvmap) { ++Reflective; }
+		if (!M.Bump.IsEmpty()) { ++Bumped; }
+		if (!M.BaseTex2.IsEmpty()) { ++Wvt; }
+		// Every named channel must resolve to a real file (the .dds sibling or the .png itself).
+		for (const FString& Rel : { M.Albedo, M.Emissive, M.Bump, M.EnvMask, M.BaseTex2 })
+		{
+			if (TexMissing(Rel) && TexMissing(FPaths::ChangeExtension(Rel, TEXT("dds"))))
+			{
+				++MissingTex;
+			}
+		}
+	}
+
+	TestTrue(TEXT("most materials resolve an albedo"), WithAlbedo > Materials.Num() / 2);
+	TestEqual(TEXT("blend flags are mutually exclusive"), MultiBlend, 0);
+	TestEqual(TEXT("every referenced texture channel exists on disk"), MissingTex, 0);
+	AddInfo(FString::Printf(
+		TEXT("%s materials: %d total, %d albedo | masked %d, translucent %d, additive %d, reflective %d, bump %d, wvt %d"),
+		Map, Materials.Num(), WithAlbedo, Masked, Translucent, Additive, Reflective, Bumped, Wvt));
 
 	return true;
 }

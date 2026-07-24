@@ -58,9 +58,11 @@ namespace ElysiumScriptNatives
 		const FElysiumEntityHandle& Self, FName Method, TArrayView<const FElysiumVariant> Args);
 
 	// The module globals whose result is a plain value: ScheduleTask and ChangeMap (both real —
-	// they go through the event queue) plus the five that have no backing yet (SquadSeesPlayer,
-	// CreateEntityNoSpawn, CallEntitySpawn, OneOfSet, IsPCMalk). `Ctx` supplies the provenance the
-	// deferred work is attributed to. Records the call. A name this does not know logs as a stub.
+	// they go through the event queue) plus the three with no backing here (SquadSeesPlayer, OneOfSet,
+	// IsPCMalk). CreateEntityNoSpawn/CallEntitySpawn return/take an Entity object, so — like the Find*
+	// globals — the CPython host implements them directly (ElysiumPythonEntity) and only the expr
+	// fallback lands here as a stub. `Ctx` supplies the provenance the deferred work is attributed to.
+	// Records the call. A name this does not know logs as a stub.
 	FElysiumVariant CallSimpleGlobal(UElysiumGameStateSubsystem* State, FElysiumEntityWorld* World,
 		const FElysiumScriptContext& Ctx, FName Name, TArrayView<const FElysiumVariant> Args);
 }

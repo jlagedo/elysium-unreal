@@ -86,6 +86,14 @@ public:
 	// unload) so a model shared by several NPCs (three Sabbat share shovelhead) loads once.
 	USkeletalMeshComponent* BuildNpcVisual(const FString& Stem, const FVector& Location, const FRotator& Rotation);
 
+	// 8.3 — build one dynamic-prop body: parse props/<Stem>.obj (cached per stem, built once
+	// through FElysiumStaticMeshBuilder like LoadProps) and stand a movable UStaticMeshComponent on
+	// this map actor at the given transform. Non-solid (visual parity first; prop_physics collision
+	// is 8.4). Returns the component, or null on an empty stem / missing/failed OBJ. The FElysiumProp
+	// leaf calls this from Spawn() and registers the result with the entity world for teardown. The
+	// Rotation is the exporter's pre-converted Unreal-space model_quat, read verbatim.
+	UStaticMeshComponent* BuildPropVisual(const FString& Stem, const FVector& Location, const FQuat& Rotation);
+
 	// Live stats for the debug overlay, filled by LoadMap.
 	FString LoadedMap;
 	int32 WorldSurfaceCount = 0;
@@ -182,6 +190,12 @@ private:
 	// null (the glb has no idle clip → reference pose); the stem is still cached to avoid re-scanning.
 	UPROPERTY() TMap<FString, TObjectPtr<USkeletalMesh>> NpcMeshCache;
 	UPROPERTY() TMap<FString, TObjectPtr<UAnimSequence>> NpcIdleCache;
+
+	// 8.3 dynamic-prop static meshes: per-stem cache, GC-rooted here so a model placed by several
+	// prop entities builds once and survives until unload. The UStaticMeshComponents themselves are
+	// components of this actor (AddInstanceComponent), gated/moved by their FElysiumProp leaf, and
+	// torn down by the entity world (RegisterPropBody), mirroring the NPC bodies.
+	UPROPERTY() TMap<FString, TObjectPtr<UStaticMesh>> PropMeshCache;
 
 #if !UE_BUILD_SHIPPING
 	// P2.6 click-pick CPU geometry, filled during the build and freed with the actor.

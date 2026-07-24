@@ -5,10 +5,11 @@
 struct FElysiumMaterialDef;
 class UMaterialInstanceDynamic;
 
-// Builds a material instance for one OBJ surface: a dynamic instance of the hand-authored
-// master material M_VtMB_World with the surface's albedo texture bound. The master's
-// texture parameter name is discovered by reflection, so the factory does not depend on a
-// hard-coded parameter name. Surfaces with no albedo get a 1x1 solid fallback (Kd colour).
+// Builds a material instance for one OBJ surface. The OBJ material's blend flags pick one of the
+// four hand-authored world masters (M_World_Opaque / _Masked / _Translucent / M_Additive); the
+// surface's textures bind that master's named parameters (Albedo, Emissive, BumpMap, EnvMask,
+// BaseTex2) with the feature scalars switched on only where a channel is present. Surfaces with no
+// albedo get a 1x1 solid fallback (Kd colour). Used by both the world mesh and the prop ISMs.
 struct FElysiumMaterialFactory
 {
 	static UMaterialInstanceDynamic* Build(const FElysiumMaterialDef* Def, const FString& Dir, UObject* Outer);

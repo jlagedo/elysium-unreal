@@ -141,19 +141,81 @@ at 2560×1440 / SM6 and drives the `-ElysiumProfile` harness
 near spawn (the `GProfileCams[]` table), warms up 120 frames, captures 300 through the CSV
 profiler (`-csvGpuStats` → per-pass GPU ms), dumps one `ProfileGPU` tree to the log, writes a
 JSON summary, and exits. `tools/profile_report.py` turns the CSVs into the per-pass table
-(`tools/out/_profile/<map>_report.md`) and the committed baseline in `roadmap.md` → appendix.
+(`tools/out/_profile/<map>_report.md`) and the committed baseline below ("Profiling
+baseline").
 The harness also logs the SM6/adapter confirmation and MegaLights-vs-ShadowDepths split, so it
 answers roadmap 0.1 **and** 0.2 in one pass. Capture a new vantage by flying there in-game and
 running `elysium.campos` (logs a paste-ready `GProfileCams[]` row with the exact pitch the HUD
 omits).
 
 The fixed vantages double as **rendering-regression test points**: re-run `profile.bat` after
-any render-path change and diff the per-vantage GPU ms against the appendix baseline.
+any render-path change and diff the per-vantage GPU ms against the committed baseline below.
 
 Manual knobs for interactive digging: `stat unit` (frame/game/GPU ms), `stat GPU` (per-pass
 GPU time), `ProfileGPU` (one-frame pass breakdown), Unreal Insights for a timeline. Always
 profile a **standalone** build (`play.bat` / `profile.bat`), not a PIE editor session — editor
 overhead skews the numbers.
+
+## Profiling baseline (roadmap 0.1)
+
+Captured **headless** by `profile.bat` → the `-ElysiumProfile` harness
+(`Source/ElysiumUE/Private/ElysiumProfiler.cpp`) → `tools/profile_report.py`. The harness
+pins the camera to each fixed vantage near spawn, warms up, captures per-pass GPU stats
+through the CSV profiler, and exits — no manual console typing. Full per-vantage reports
+(incl. the heaviest-pass breakdown) regenerate at `tools/out/_profile/<map>_report.md`.
+Re-run any time with `profile.bat <map> [cam]`; add a vantage with `elysium.campos` in-game.
+
+**Dev GPU: RTX 5070 Ti · D3D12 / `PCD3D_SM6` · 2560×1440 · warmup 120 / capture 300 frames.**
+This card is far above the RTX 3060 floor, so read these for **pass proportions and
+regression tracking**, not floor frame rate (the floor is judged by *look* — see "Floor
+reality" above). Vantage coordinates are baked in `GProfileCams[]` and echoed in each
+report's vantage headers.
+
+### sp_tutorial_1 — 395 world lights — GPU ms per vantage
+
+| Pass | spawn | t1 | t2 | t3 | t4 |
+|---|---|---|---|---|---|
+| Lumen GI (ScreenProbeGather) | 0.01 | 0.01 | 0.01 | 0.01 | 0.01 |
+| Lumen reflections | 0.06 | 0.07 | 0.06 | 0.06 | 0.06 |
+| MegaLights | 1.06 | 1.08 | 1.00 | 1.34 | 1.15 |
+| ShadowDepths / VSM | 0.83 | 0.88 | 1.02 | 1.11 | 1.03 |
+| **Total GPU** (whole frame) | **4.87** | **5.25** | **5.32** | **5.72** | **5.43** |
+
+### sm_hub_1 — 687 world lights — GPU ms per vantage
+
+| Pass | spawn | h1 | h2 |
+|---|---|---|---|
+| Lumen GI (ScreenProbeGather) | 0.01 | 0.01 | 0.01 |
+| Lumen reflections | 0.05 | 0.05 | 0.05 |
+| MegaLights | 1.05 | 1.12 | 1.26 |
+| ShadowDepths / VSM | 0.00 | 0.00 | 0.00 |
+| **Total GPU** (whole frame) | **3.82** | **4.40** | **4.49** |
+
+### sm_pawnshop_1 — 161 world lights — GPU ms per vantage
+
+| Pass | spawn | p1 | p2 | p3 |
+|---|---|---|---|---|
+| Lumen GI (ScreenProbeGather) | 0.01 | 0.01 | 0.01 | 0.01 |
+| Lumen reflections | 0.06 | 0.05 | 0.06 | 0.05 |
+| MegaLights | 1.28 | 1.32 | 1.27 | 1.23 |
+| ShadowDepths / VSM | 0.00 | 0.00 | 0.00 | 0.00 |
+| **Total GPU** (whole frame) | **3.96** | **4.31** | **4.30** | **4.27** |
+
+**0.2 verdict — MegaLights is engaging, no VSM blow-up.** MegaLights (~1.0–1.3 ms) meets or
+beats ShadowDepths on every vantage, and the many-light cost is ~**flat**: 687 lights
+(sm_hub_1) and 161 (sm_pawnshop_1) both cost the same ~1 ms as 395 (sp_tutorial_1).
+ShadowDepths never dominates and is ~0 on both `sm_` maps. MegaLights is carrying the local lights as designed — 3.1 is **not** the
+immediate next task. (The `[VSM] Non-Nanite Marking Job Queue overflow` HUD warning appears
+transiently but does not translate into a ShadowDepths blow-up in steady state — worth a
+glance if ShadowDepths ever spikes in a future capture.)
+
+**Other reads.** TemporalSuperResolution (~1.1 ms) ties/leads MegaLights as the single
+heaviest pass at every vantage — the expected upscale cost of `r.ScreenPercentage=66`. Lumen
+GI is ~free here (0.01 ms) *on this card*; on the 3060 floor HWRT Lumen is the dominant cost
+("Floor reality" above), so this near-zero is a fast-GPU artifact, not proof
+Lumen is cheap. Render-thread time collapses to ~0 (idle-waiting on the GPU): the title is
+GPU-bound, as expected.
+
 
 ## Sources
 

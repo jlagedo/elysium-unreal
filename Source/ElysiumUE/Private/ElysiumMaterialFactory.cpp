@@ -9,79 +9,81 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/StrongObjectPtr.h"
 
-// Emissive brightness for $selfillum surfaces (map_Ke). Multiplies M_VtMB_World's
+// Emissive brightness for $selfillum surfaces (map_Ke). Multiplies the world master's
 // EmissiveScale param (which defaults to 0, so non-selfillum surfaces never glow).
 // Read at material-build time, so re-travel to A/B a value.
 static TAutoConsoleVariable<float> CVarEmissiveScale(
 	TEXT("elysium.EmissiveScale"), 1.5f,
-	TEXT("LightRig-independent self-illum (map_Ke) emissive brightness on M_VtMB_World."),
+	TEXT("LightRig-independent self-illum (map_Ke) emissive brightness on the world masters."),
+	ECVF_Default);
+
+// $bumpmap strength: blends the master's Normal from flat (0) to the full tangent-space normal (1).
+static TAutoConsoleVariable<float> CVarBumpScale(
+	TEXT("elysium.BumpScale"), 1.0f,
+	TEXT("$bumpmap normal-map strength on the world masters (0 = flat, 1 = full)."),
+	ECVF_Default);
+
+// $envmap reflectivity: scales how far a reflective surface's Roughness drops toward glossy, so
+// the Lumen reflection appears. 0 disables the reflection channel entirely (A/B the whole path).
+static TAutoConsoleVariable<float> CVarEnvReflect(
+	TEXT("elysium.EnvReflect"), 1.0f,
+	TEXT("$envmap reflectivity (Lumen roughness path) on the world masters. 0 = matte (off)."),
 	ECVF_Default);
 
 namespace
 {
-	constexpr const TCHAR* MasterPath = TEXT("/Game/VtMB/Materials/M_VtMB_World.M_VtMB_World");
+	// The hand-authored masters (make_world_materials.py / make_decal_material.py). Selected per
+	// surface by the OBJ material's blend flags.
+	constexpr const TCHAR* OpaqueMasterPath = TEXT("/Game/VtMB/Materials/M_World_Opaque.M_World_Opaque");
+	constexpr const TCHAR* MaskedMasterPath = TEXT("/Game/VtMB/Materials/M_World_Masked.M_World_Masked");
+	constexpr const TCHAR* TranslucentMasterPath = TEXT("/Game/VtMB/Materials/M_World_Translucent.M_World_Translucent");
+	constexpr const TCHAR* AdditiveMasterPath = TEXT("/Game/VtMB/Materials/M_Additive.M_Additive");
 	constexpr const TCHAR* DecalMasterPath = TEXT("/Game/VtMB/Materials/M_Decal.M_Decal");
+
+	// Parameter names, identical across the four world masters (build_world_graph authors them).
+	const FName AlbedoParam(TEXT("Albedo"));
 	const FName EmissiveParam(TEXT("Emissive"));
 	const FName EmissiveScaleParam(TEXT("EmissiveScale"));
-	const FName AlbedoParam(TEXT("Albedo"));
+	const FName BumpMapParam(TEXT("BumpMap"));
+	const FName BumpAmountParam(TEXT("BumpAmount"));
+	const FName EnvMaskParam(TEXT("EnvMask"));
+	const FName EnvStrengthParam(TEXT("EnvStrength"));
+	const FName BaseTex2Param(TEXT("BaseTex2"));
+	const FName BlendAmountParam(TEXT("BlendAmount"));
 
-	// The hand-authored master material, loaded once and kept alive by a strong ref.
-	UMaterialInterface* GetMaster()
+	// Load a master by path once and pin it with a strong ref (indexed by path so each of the
+	// five masters gets its own cached slot).
+	UMaterialInterface* GetMaster(const TCHAR* Path)
 	{
-		static TStrongObjectPtr<UMaterialInterface> Master;
-		if (!Master.IsValid())
+		static TMap<FString, TStrongObjectPtr<UMaterialInterface>> Cache;
+		TStrongObjectPtr<UMaterialInterface>& Slot = Cache.FindOrAdd(Path);
+		if (!Slot.IsValid())
 		{
-			if (UMaterialInterface* Loaded = LoadObject<UMaterialInterface>(nullptr, MasterPath))
+			if (UMaterialInterface* Loaded = LoadObject<UMaterialInterface>(nullptr, Path))
 			{
-				Master.Reset(Loaded);
+				Slot.Reset(Loaded);
 			}
 		}
-		return Master.Get();
+		return Slot.Get();
 	}
 
-	// The deferred-decal master (M_Decal), loaded once and pinned like GetMaster.
-	UMaterialInterface* GetDecalMaster()
+	// The world master this surface's blend flags select. Additive is the most specific (unlit,
+	// added onto the framebuffer); then translucent, then masked; opaque is the common default.
+	const TCHAR* SelectWorldMaster(const FElysiumMaterialDef* Def)
 	{
-		static TStrongObjectPtr<UMaterialInterface> Master;
-		if (!Master.IsValid())
+		if (Def)
 		{
-			if (UMaterialInterface* Loaded = LoadObject<UMaterialInterface>(nullptr, DecalMasterPath))
-			{
-				Master.Reset(Loaded);
-			}
+			if (Def->bAdditive) { return AdditiveMasterPath; }
+			if (Def->bBlend)    { return TranslucentMasterPath; }
+			if (Def->bScissor)  { return MaskedMasterPath; }
 		}
-		return Master.Get();
-	}
-
-	// The master's albedo texture slot, discovered once by reflection. The master carries two
-	// texture parameters (albedo + Emissive); the albedo is "the one that isn't Emissive", so
-	// this stays correct regardless of the parameter enumeration order.
-	FName GetAlbedoParamName(UMaterialInterface* Master)
-	{
-		static FName Cached = NAME_None;
-		static bool bResolved = false;
-		if (!bResolved && Master)
-		{
-			TArray<FMaterialParameterInfo> Infos;
-			TArray<FGuid> Ids;
-			Master->GetAllTextureParameterInfo(Infos, Ids);
-			for (const FMaterialParameterInfo& Info : Infos)
-			{
-				if (Info.Name != EmissiveParam)
-				{
-					Cached = Info.Name;
-					break;
-				}
-			}
-			bResolved = true;
-		}
-		return Cached;
+		return OpaqueMasterPath;
 	}
 }
 
 UMaterialInstanceDynamic* FElysiumMaterialFactory::Build(const FElysiumMaterialDef* Def, const FString& Dir, UObject* Outer)
 {
-	UMaterialInterface* Master = GetMaster();
+	UMaterialInterface* Master = GetMaster(SelectWorldMaster(Def));
 	if (!Master)
 	{
 		// Master asset missing: fall back to the engine default so geometry still draws.
@@ -94,6 +96,7 @@ UMaterialInstanceDynamic* FElysiumMaterialFactory::Build(const FElysiumMaterialD
 		return nullptr;
 	}
 
+	// Albedo: the base colour, on every master. A 1x1 Kd fallback keeps an unresolved surface drawn.
 	UTexture2D* Albedo = nullptr;
 	if (Def && !Def->Albedo.IsEmpty())
 	{
@@ -103,16 +106,20 @@ UMaterialInstanceDynamic* FElysiumMaterialFactory::Build(const FElysiumMaterialD
 	{
 		Albedo = FElysiumTextureCache::SolidTex(Def ? Def->Color : FLinearColor(0.6f, 0.6f, 0.65f));
 	}
-
-	const FName ParamName = GetAlbedoParamName(Master);
-	if (ParamName != NAME_None && Albedo)
+	if (Albedo)
 	{
-		Mid->SetTextureParameterValue(ParamName, Albedo);
+		Mid->SetTextureParameterValue(AlbedoParam, Albedo);
 	}
 
-	// $selfillum (map_Ke): bind the alpha-masked emission map and switch the master's
-	// EmissiveScale on. Surfaces without an emissive map leave EmissiveScale at its 0
-	// default, so they never glow.
+	// The additive master is unlit (Emissive = Albedo x its own EmissiveScale default); it carries
+	// none of the lit feature parameters below, so binding stops at the albedo.
+	if (Def && Def->bAdditive)
+	{
+		return Mid;
+	}
+
+	// $selfillum (map_Ke): bind the alpha-masked emission map and switch EmissiveScale on. Surfaces
+	// without an emissive map leave EmissiveScale at its 0 default, so they never glow.
 	if (Def && !Def->Emissive.IsEmpty())
 	{
 		if (UTexture2D* EmisTex = FElysiumTextureCache::LoadTex(Dir, Def->Emissive))
@@ -123,12 +130,52 @@ UMaterialInstanceDynamic* FElysiumMaterialFactory::Build(const FElysiumMaterialD
 		}
 	}
 
+	// $bumpmap: tangent-space normal map (loaded linear, not gamma-decoded). BumpAmount defaults to
+	// 0 in the master, so a surface with no bump stays geometrically smooth.
+	if (Def && !Def->Bump.IsEmpty())
+	{
+		if (UTexture2D* BumpTex = FElysiumTextureCache::LoadTex(Dir, Def->Bump, /*bSRGB=*/false))
+		{
+			Mid->SetTextureParameterValue(BumpMapParam, BumpTex);
+			Mid->SetScalarParameterValue(BumpAmountParam,
+				FMath::Max(0.f, CVarBumpScale.GetValueOnAnyThread()));
+		}
+	}
+
+	// $envmap: the modern Lumen path. The mask's .r lowers Roughness so the fully-dynamic Lumen
+	// reflection appears (roadmap 7.5 tunes it). A reflective surface with no $envmapmask reflects
+	// uniformly, so a 1x1 white mask stands in. Masks are linear reflectivity, not colour.
+	if (Def && Def->bEnvmap)
+	{
+		UTexture2D* Mask = Def->EnvMask.IsEmpty()
+			? FElysiumTextureCache::SolidTex(FLinearColor::White)
+			: FElysiumTextureCache::LoadTex(Dir, Def->EnvMask, /*bSRGB=*/false);
+		if (Mask)
+		{
+			Mid->SetTextureParameterValue(EnvMaskParam, Mask);
+			Mid->SetScalarParameterValue(EnvStrengthParam,
+				FMath::Max(0.f, CVarEnvReflect.GetValueOnAnyThread()));
+		}
+	}
+
+	// WorldVertexTransition ($basetexture2): the master blends lerp(Albedo, BaseTex2, VertexColor.r x
+	// BlendAmount). BlendAmount defaults to 0, so only a WVT surface (which also carries per-vertex
+	// blend weights on COLOR.r) mixes in the second texture.
+	if (Def && !Def->BaseTex2.IsEmpty())
+	{
+		if (UTexture2D* Tex2 = FElysiumTextureCache::LoadTex(Dir, Def->BaseTex2))
+		{
+			Mid->SetTextureParameterValue(BaseTex2Param, Tex2);
+			Mid->SetScalarParameterValue(BlendAmountParam, 1.0f);
+		}
+	}
+
 	return Mid;
 }
 
 UMaterialInstanceDynamic* FElysiumMaterialFactory::BuildDecal(const FElysiumMaterialDef* Def, const FString& Dir, UObject* Outer)
 {
-	UMaterialInterface* Master = GetDecalMaster();
+	UMaterialInterface* Master = GetMaster(DecalMasterPath);
 	if (!Master)
 	{
 		// Master asset missing: no fallback (the engine default is not a decal domain), so the
@@ -142,8 +189,7 @@ UMaterialInstanceDynamic* FElysiumMaterialFactory::BuildDecal(const FElysiumMate
 		return nullptr;
 	}
 
-	// Albedo drives BaseColor (RGB) and Opacity (alpha coverage) by fixed parameter name — the
-	// decal master is authored with an "Albedo" parameter, so no reflection probe is needed.
+	// Albedo drives BaseColor (RGB) and Opacity (alpha coverage) by fixed parameter name.
 	UTexture2D* Albedo = nullptr;
 	if (Def && !Def->Albedo.IsEmpty())
 	{

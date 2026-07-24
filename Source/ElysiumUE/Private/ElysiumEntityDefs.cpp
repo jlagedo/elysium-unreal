@@ -27,6 +27,17 @@ namespace
 		}
 		return V;
 	}
+
+	// Read a JSON [x, y, z, w] number array into an FQuat (identity on any other shape). The
+	// exporter emits it via source_angles_to_unreal_quat, already Unreal-space (8.3).
+	FQuat ParseQuat(const TArray<TSharedPtr<FJsonValue>>& Arr)
+	{
+		if (Arr.Num() == 4)
+		{
+			return FQuat(Arr[0]->AsNumber(), Arr[1]->AsNumber(), Arr[2]->AsNumber(), Arr[3]->AsNumber());
+		}
+		return FQuat::Identity;
+	}
 }
 
 FString FElysiumEntityDefs::LevelScriptModule() const
@@ -165,6 +176,15 @@ bool FElysiumEntityDefs::Parse(const FString& EntsPath, FElysiumEntityDefs& Out)
 				O->TryGetStringField(TEXT("python"), OutDef.Python);
 				Def.Outputs.Add(MoveTemp(OutDef));
 			}
+		}
+
+		// Static-mesh render annotation (8.1 → 8.3): the decoded OBJ stem + its Unreal-space
+		// placement rotation. Present only for point entities whose `.mdl` decoded.
+		E->TryGetStringField(TEXT("model_mesh"), Def.ModelMesh);
+		const TArray<TSharedPtr<FJsonValue>>* QuatArr = nullptr;
+		if (E->TryGetArrayField(TEXT("model_quat"), QuatArr))
+		{
+			Def.ModelQuat = ParseQuat(*QuatArr);
 		}
 
 		Out.Defs.Add(MoveTemp(Def));

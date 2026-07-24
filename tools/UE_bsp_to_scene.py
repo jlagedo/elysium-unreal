@@ -270,8 +270,10 @@ def write_entities(data, out_dir, base, idx, propdir, tex_cache, valid):
     Entities carrying a static `.mdl` `model` key (prop_dynamic/prop_physics and the
     prop_button/prop_doorknob/prop_sign/prop_switch/prop_hacking/item_container family)
     also get that model decoded into `props/` (shared with the GAME_LUMP static props)
-    and the entity annotated with `model_mesh` = the decoded OBJ stem. Skeletal `npc_*`
-    models are excluded — they belong to the glTFRuntime NPC track (roadmap 8.2/8.5).
+    and the entity annotated with `model_mesh` = the decoded OBJ stem plus `model_quat` =
+    the Unreal-space placement rotation (source_angles_to_unreal_quat of the entity's
+    `angles`, so the runtime reads orientation verbatim like it does origin). Skeletal
+    `npc_*` models are excluded — they belong to the glTFRuntime NPC track (roadmap 8.2/8.5).
 
     This is the data the runtime needs to spawn the interaction layer - trigger
     volumes, use volumes, doors. It is deliberately *unfiltered*: the render passes
@@ -354,6 +356,13 @@ def write_entities(data, out_dir, base, idx, propdir, tex_cache, valid):
         safe = resolved.get(mk)
         if safe:
             out[i]["model_mesh"] = safe; n_prop += 1
+            # Pre-convert the entity's Source QAngle to an Unreal rotation quaternion here (the
+            # same source_angles_to_unreal_quat the .props path uses), so the runtime reads it 1:1
+            # with no coordinate math — origin is already Unreal-space, this makes orientation so
+            # too. Absent/short `angles` -> identity. (roadmap 8.3; keys.angles is raw Source.)
+            ang = out[i]["keys"].get("angles", "").split()
+            pyr = [float(x) for x in ang] if len(ang) == 3 else [0.0, 0.0, 0.0]
+            out[i]["model_quat"] = [round(float(c), 6) for c in source_angles_to_unreal_quat(*pyr)]
 
     path = os.path.join(out_dir, base + ".ents")
     with open(path, "w") as f:
@@ -728,7 +737,8 @@ def main(bsp_path, out_dir):
         bt = info["basetexture"]
         alphatest = info["alphatest"]
         translucent = info["translucent"]
-        keep_alpha = alphatest or translucent   # both modes need the alpha channel
+        additive = info.get("additive", False)
+        keep_alpha = alphatest or translucent or additive   # each blend mode reads the alpha channel
         albedo_png = emis_png = None
         if bt:
             img = get_img(bt)
@@ -850,7 +860,7 @@ def main(bsp_path, out_dir):
                     normal_cache[bump] = nfn
                 bump_info[gkey] = normal_cache[bump]
 
-        mat_info[gkey] = (albedo_png, emis_png, alphatest, translucent)
+        mat_info[gkey] = (albedo_png, emis_png, alphatest, translucent, additive)
 
         # validate: a rendered non-water material must resolve to an albedo.
         if not info["water"]:
@@ -977,7 +987,7 @@ def main(bsp_path, out_dir):
         unlit = (info["shader"] or "").startswith("unlit")
         res = (albedo_cache[bt], emis_png, img.size[0], img.size[1], info["decalscale"], unlit)
         decal_cache[tex] = res
-        mat_info[tex] = (albedo_cache[bt], emis_png, False, True)   # alpha-blended
+        mat_info[tex] = (albedo_cache[bt], emis_png, False, True, False)   # alpha-blended, not additive
         decal_mats.add(tex)
         return res
 
@@ -1207,7 +1217,7 @@ def main(bsp_path, out_dir):
 
     obj_path = os.path.join(out_dir, base + ".obj")
     with open(mtl_path, "w") as m:
-        for mat, (albedo_png, emis_png, alphatest, translucent) in mat_info.items():
+        for mat, (albedo_png, emis_png, alphatest, translucent, additive) in mat_info.items():
             m.write(f"newmtl {mat}\n")
             if albedo_png:
                 m.write(f"map_Kd tex/{albedo_png}\n")
@@ -1219,6 +1229,8 @@ def main(bsp_path, out_dir):
                 m.write(f"map_Ke tex/{emis_png}\n")   # alpha-masked self-illum
             if mat in water_info:
                 m.write("water 1\n")                   # our flag: water shader surface
+            elif additive:
+                m.write("additive 1\n")                # our flag: additive glow overlay (unlit)
             elif translucent:
                 m.write("blend 1\n")                   # our flag: alpha-blended
             elif alphatest:

@@ -7,7 +7,10 @@ game-agnostic; converted VtMB content lives only in the gitignored `tools/out/` 
 | Asset | Role |
 |---|---|
 | `Elysium.umap` | the empty boot persistent level |
-| `VtMB/Materials/M_VtMB_World.uasset` | the world master material — albedo + alpha-masked `$selfillum` emissive (`map_Ke` → `Emissive`/`EmissiveScale`), usable with ISMs |
+| `VtMB/Materials/M_World_Opaque.uasset` | the opaque world master — albedo + alpha-masked `$selfillum` emissive + `$bumpmap` normal + `$envmap`→Lumen roughness + WorldVertexTransition `basetexture2` blend; usable with ISMs. The common surface case |
+| `VtMB/Materials/M_World_Masked.uasset` | the `$alphatest` scissor variant — same graph, `BLEND_Masked`, two-sided (fences, grates, foliage cards) |
+| `VtMB/Materials/M_World_Translucent.uasset` | the `$translucent` variant — same graph, `BLEND_Translucent`, per-pixel lit (glass) |
+| `VtMB/Materials/M_Additive.uasset` | the `$additive` glow-overlay master — unlit, `BLEND_Additive`, `Albedo`→Emissive (light-fixture "on" panes, neon) |
 | `VtMB/Materials/M_Sky.uasset` | the 2D-skybox cube master material (samples a runtime `UTextureCube` by view direction) |
 | `VtMB/Materials/M_Decal.uasset` | the 7.2 deferred-decal master — `MD_DeferredDecal` + `BLEND_Translucent`, `Albedo` RGB→BaseColor + A→Opacity, alpha-masked `$selfillum` emissive, samples at `(U, 1-V)` (VtMB V is top-down); one MID per projected `infodecal` on a `UDecalComponent` |
 | `VtMB/Materials/M_Gizmo.uasset` + `M_Gizmo_XRay.uasset` | the entity-gizmo ISM masters — unlit, two-sided, translucent, colour + opacity from per-instance custom data; `_XRay` disables the depth test |
@@ -43,12 +46,11 @@ Never hand-edit these in the editor and commit the result — edit the generator
 `content.bat` → `tools/build_content.py` rebuilds all of them in one headless editor session,
 in dependency order:
 
-1. `add_world_emissive.py` — `M_VtMB_World`, the `$selfillum` emissive path
-2. `set_world_material_usage.py` — `M_VtMB_World`, "Used with Instanced Static Meshes"
-3. `make_sky_material.py` — `M_Sky`
-4. `make_gizmo_material.py` — `M_Gizmo` + `M_Gizmo_XRay`
-5. `make_decal_material.py` — `M_Decal`
-6. `make_boot_map.py` — `Elysium.umap`
+1. `make_world_materials.py` — `M_World_Opaque` + `_Masked` + `_Translucent` + `M_Additive` (one shared graph; deletes the old `M_VtMB_World`)
+2. `make_sky_material.py` — `M_Sky`
+3. `make_gizmo_material.py` — `M_Gizmo` + `M_Gizmo_XRay`
+4. `make_decal_material.py` — `M_Decal`
+5. `make_boot_map.py` — `Elysium.umap`
 
 Every generator is idempotent and also runnable standalone as a `-script`.
 `python tools/export_all.py` invokes the umbrella at the end of a run (skip with
@@ -61,5 +63,6 @@ The `Fonts/` TTFs are the exception: they are static freely-licensed files, not 
 `.uasset`s, so they have no generator and `content.bat` does not touch them. They are committed
 once and only change when a face is added or replaced by hand.
 
-The rest of the master-material set (masked/translucent world variants, water, etc.) is not
-built yet — see `docs/roadmap.md` P7.
+`M_Water` (Single Layer Water) is the one world-surface master still unbuilt — see `docs/roadmap.md`
+7.3. The `$envmap` reflection channel authored into `M_World_Opaque` is a Lumen roughness path, not a
+baked-cube sample; 7.5 tunes it.

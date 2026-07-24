@@ -20,7 +20,7 @@ namespace
 	// optional mip chain. Returns nullptr for anything else (PNG fallback covers it).
 	// Loading the original game's DXT blocks directly means no decode cost, ~4-8x less
 	// GPU memory than BGRA8, real mips, and bit-identical texels.
-	UTexture2D* LoadDDS(const TArray<uint8>& File)
+	UTexture2D* LoadDDS(const TArray<uint8>& File, bool bSRGB)
 	{
 		if (File.Num() < 128 + 8 || FMemory::Memcmp(File.GetData(), "DDS ", 4) != 0)
 		{
@@ -49,7 +49,7 @@ namespace
 		{
 			return nullptr;
 		}
-		Tex->SRGB = true;
+		Tex->SRGB = bSRGB;
 		Tex->NeverStream = true;
 
 		FTexturePlatformData* PD = Tex->GetPlatformData();
@@ -83,7 +83,7 @@ namespace
 		return Tex;
 	}
 
-	UTexture2D* MakeTexture(int32 Width, int32 Height, const TArray64<uint8>& Bgra)
+	UTexture2D* MakeTexture(int32 Width, int32 Height, const TArray64<uint8>& Bgra, bool bSRGB = true)
 	{
 		if (Width <= 0 || Height <= 0 || Bgra.Num() < int64(Width) * Height * 4)
 		{
@@ -95,7 +95,7 @@ namespace
 		{
 			return nullptr;
 		}
-		Tex->SRGB = true;
+		Tex->SRGB = bSRGB;
 		Tex->NeverStream = true;
 
 		FTexturePlatformData* PlatformData = Tex->GetPlatformData();
@@ -107,17 +107,20 @@ namespace
 	}
 }
 
-UTexture2D* FElysiumTextureCache::LoadTex(const FString& Dir, const FString& Rel)
+UTexture2D* FElysiumTextureCache::LoadTex(const FString& Dir, const FString& Rel, bool bSRGB)
 {
 	const FString Path = FPaths::Combine(Dir, Rel);
-	if (const TStrongObjectPtr<UTexture2D>* Found = GTexCache.Find(Path))
+	// The sRGB flag is part of the key: a normal map and an albedo could in principle share a
+	// path but must not share a cached texture (linear vs gamma-decoded).
+	const FString Key = bSRGB ? Path : Path + TEXT("#lin");
+	if (const TStrongObjectPtr<UTexture2D>* Found = GTexCache.Find(Key))
 	{
 		return Found->Get();
 	}
 
-	auto CacheAndReturn = [&Path](UTexture2D* Tex) -> UTexture2D*
+	auto CacheAndReturn = [&Key](UTexture2D* Tex) -> UTexture2D*
 	{
-		GTexCache.Add(Path, TStrongObjectPtr<UTexture2D>(Tex));
+		GTexCache.Add(Key, TStrongObjectPtr<UTexture2D>(Tex));
 		return Tex;
 	};
 
@@ -128,7 +131,7 @@ UTexture2D* FElysiumTextureCache::LoadTex(const FString& Dir, const FString& Rel
 	TArray<uint8> FileData;
 	if (FFileHelper::LoadFileToArray(FileData, *DdsPath, FILEREAD_Silent))
 	{
-		if (UTexture2D* Dds = LoadDDS(FileData))
+		if (UTexture2D* Dds = LoadDDS(FileData, bSRGB))
 		{
 			return CacheAndReturn(Dds);
 		}
@@ -153,7 +156,7 @@ UTexture2D* FElysiumTextureCache::LoadTex(const FString& Dir, const FString& Rel
 		return CacheAndReturn(nullptr);
 	}
 
-	return CacheAndReturn(MakeTexture(Wrapper->GetWidth(), Wrapper->GetHeight(), Raw));
+	return CacheAndReturn(MakeTexture(Wrapper->GetWidth(), Wrapper->GetHeight(), Raw, bSRGB));
 }
 
 void FElysiumTextureCache::FlushAll()

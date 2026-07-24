@@ -11,6 +11,7 @@ void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHan
 	Handle = InHandle;
 	Class = &InClass;
 	TargetName = InDef.TargetName;
+	Origin = InDef.Origin;   // the live copy; the def's is immutable (SetOrigin moves this one)
 
 	// Apply the raw keyvalues through the class chain field table (R2). Only mapped base/leaf
 	// fields are copied onto members; unmapped keys stay on the def (property-bag reads land
@@ -104,6 +105,36 @@ void FElysiumEntity::OnDormancyChanged()
 	}
 	// P2.4 — the visual (colour/visibility) changed; let a retained gizmo layer dirty this one
 	// instance on the event rather than polling every entity every frame. No-op in normal play.
+	if (World)
+	{
+		World->NotifyVisualChanged(*this);
+	}
+}
+
+void FElysiumEntity::SetRuntimeOrigin(const FVector& NewOrigin)
+{
+	Origin = NewOrigin;
+	OnRuntimeTransformChanged();
+}
+
+void FElysiumEntity::SetRuntimeAngles(const FVector& NewAngles)
+{
+	Angles = NewAngles;
+	OnRuntimeTransformChanged();
+}
+
+void FElysiumEntity::SetRuntimeModel(const FString& NewModel)
+{
+	Model = NewModel;
+	OnRuntimeModelChanged();
+}
+
+void FElysiumEntity::OnRuntimeTransformChanged()
+{
+	// A brush body is cooked static at build (BuildBrushBody never sets it Movable), and scripts only
+	// SetOrigin/SetAngles point entities (props/items/NPCs) in practice — so the base does not move the
+	// body. The authoritative Origin/Angles fields are already updated; a leaf with a movable body
+	// overrides this to follow. Tell a retained visualizer the transform changed either way.
 	if (World)
 	{
 		World->NotifyVisualChanged(*this);

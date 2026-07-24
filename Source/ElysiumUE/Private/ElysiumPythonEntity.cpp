@@ -91,6 +91,40 @@ namespace
 		return Out;
 	}
 
+	// A 3-sequence PyObject (tuple/list, or None) -> FVector. Used for the origin/angles args of
+	// CreateEntityNoSpawn. Ints coerce through nb_float. Returns false (Out untouched) on a bad arg.
+	bool ParseVec3Obj(PyObject* O, FVector& Out)
+	{
+		if (!O || O == Py_None || !PySequence_Check(O) || PySequence_Size(O) != 3)
+		{
+			return false;
+		}
+		PyObject* Seq = PySequence_Fast(O, "vec3");
+		if (!Seq)
+		{
+			PyErr_Clear();
+			return false;
+		}
+		Out.X = static_cast<float>(PyFloat_AsDouble(PySequence_Fast_GET_ITEM(Seq, 0)));
+		Out.Y = static_cast<float>(PyFloat_AsDouble(PySequence_Fast_GET_ITEM(Seq, 1)));
+		Out.Z = static_cast<float>(PyFloat_AsDouble(PySequence_Fast_GET_ITEM(Seq, 2)));
+		Py_DECREF(Seq);
+		PyErr_Clear();   // a non-numeric element left an error; treat the vec as parsed-with-zeros
+		return true;
+	}
+
+	// The call args of SetOrigin/SetAngles as a vec3, accepting both shapes scripts pass: three
+	// scalars SetOrigin(x, y, z) and one 3-tuple SetOrigin((x, y, z)) (GetOrigin returns a tuple).
+	bool ArgsToVec3(PyObject* Args, FVector& Out)
+	{
+		float X = 0.0f, Y = 0.0f, Z = 0.0f;
+		if (PyArg_ParseTuple(Args, "fff", &X, &Y, &Z)) { Out = FVector(X, Y, Z); return true; }
+		PyErr_Clear();
+		if (PyArg_ParseTuple(Args, "(fff)", &X, &Y, &Z)) { Out = FVector(X, Y, Z); return true; }
+		PyErr_Clear();
+		return false;
+	}
+
 	// --- bound entity input --------------------------------------------------------------------
 	// `ent.<Input>` manufactures a callable on the spot, exactly as VtMB's __getattr__ does with
 	// PyCFunction_New over a generic thunk (python_bridge.md step 4). Self is the (entity, name)
@@ -244,29 +278,64 @@ namespace
 		return E ? PyInt_FromLong(E->IsDead() ? 0 : 1) : nullptr;
 	}
 
-	// One shared body for the four writers: record the stub against the calling entity so the
-	// Scripting window shows what content actually needs, then no-op.
-	PyObject* Entity_stub_setter(PyObject* Self, PyObject* Args, const TCHAR* MethodName)
+	// Log a writer against the calling entity so the Scripting window still counts it (not a stub now).
+	void RecordWriter(FElysiumEntity* E, const TCHAR* Method, PyObject* Args)
+	{
+		FElysiumEntityWorld* W = CurrentWorld();
+		const FString Display = FString::Printf(TEXT("%s.%s(%s)"),
+			W ? *W->DescribeHandle(E->Handle) : *E->Handle.ToString(), Method,
+			*ElysiumScriptNatives::DescribeArgs(ArgsToVariants(Args)));
+		ElysiumScriptNatives::Record(State(), FName(Method), Display, FElysiumVariant::Void(), /*bStub*/ false);
+	}
+
+	// The four writers, real (9.3): mutate the authoritative field, move/re-skin any body that follows,
+	// re-key the name index. GetOrigin/GetAngles/GetModelName/GetName read the mutated state back.
+	PyObject* Entity_SetOrigin(PyObject* Self, PyObject* Args)
 	{
 		FElysiumEntity* E = ResolveOrRaise(Self);
-		if (!E)
-		{
-			return nullptr;
-		}
-		FElysiumEntityWorld* W = CurrentWorld();
-		const TArray<FElysiumVariant> Vals = ArgsToVariants(Args);
-		const FString Display = FString::Printf(TEXT("%s.%s(%s)"),
-			W ? *W->DescribeHandle(E->Handle) : *E->Handle.ToString(), MethodName,
-			*ElysiumScriptNatives::DescribeArgs(Vals));
-		ElysiumScriptNatives::Record(State(), FName(MethodName), Display,
-			FElysiumVariant::Void(), /*bStub*/ true);
+		if (!E) { return nullptr; }
+		FVector V;
+		if (!ArgsToVec3(Args, V)) { PyErr_SetString(PyExc_TypeError, "SetOrigin expects (x, y, z)"); return nullptr; }
+		E->SetRuntimeOrigin(V);
+		RecordWriter(E, TEXT("SetOrigin"), Args);
 		Py_RETURN_NONE;
 	}
 
-	PyObject* Entity_SetOrigin(PyObject* S, PyObject* A) { return Entity_stub_setter(S, A, TEXT("SetOrigin")); }
-	PyObject* Entity_SetAngles(PyObject* S, PyObject* A) { return Entity_stub_setter(S, A, TEXT("SetAngles")); }
-	PyObject* Entity_SetModel(PyObject* S, PyObject* A) { return Entity_stub_setter(S, A, TEXT("SetModel")); }
-	PyObject* Entity_SetName(PyObject* S, PyObject* A) { return Entity_stub_setter(S, A, TEXT("SetName")); }
+	PyObject* Entity_SetAngles(PyObject* Self, PyObject* Args)
+	{
+		FElysiumEntity* E = ResolveOrRaise(Self);
+		if (!E) { return nullptr; }
+		FVector V;
+		if (!ArgsToVec3(Args, V)) { PyErr_SetString(PyExc_TypeError, "SetAngles expects (pitch, yaw, roll)"); return nullptr; }
+		E->SetRuntimeAngles(V);
+		RecordWriter(E, TEXT("SetAngles"), Args);
+		Py_RETURN_NONE;
+	}
+
+	PyObject* Entity_SetModel(PyObject* Self, PyObject* Args)
+	{
+		FElysiumEntity* E = ResolveOrRaise(Self);
+		if (!E) { return nullptr; }
+		const char* Path = nullptr;
+		if (!PyArg_ParseTuple(Args, "s", &Path)) { return nullptr; }
+		E->SetRuntimeModel(FString(UTF8_TO_TCHAR(Path)));
+		RecordWriter(E, TEXT("SetModel"), Args);
+		Py_RETURN_NONE;
+	}
+
+	PyObject* Entity_SetName(PyObject* Self, PyObject* Args)
+	{
+		FElysiumEntity* E = ResolveOrRaise(Self);
+		if (!E) { return nullptr; }
+		const char* Name = nullptr;
+		if (!PyArg_ParseTuple(Args, "s", &Name)) { return nullptr; }
+		if (FElysiumEntityWorld* W = CurrentWorld())
+		{
+			W->RenameEntity(*E, FString(UTF8_TO_TCHAR(Name)));
+		}
+		RecordWriter(E, TEXT("SetName"), Args);
+		Py_RETURN_NONE;
+	}
 
 	PyMethodDef GEntityMethods[] =
 	{
@@ -277,10 +346,10 @@ namespace
 		{ "GetModelName",    Entity_GetModelName,    METH_VARARGS, "Returns the entity's model filename" },
 		{ "GetName",         Entity_GetName,         METH_VARARGS, "Returns the entity's name" },
 		{ "IsAlive",         Entity_IsAlive,         METH_VARARGS, "Returns 1 if the entity is alive, otherwise 0" },
-		{ "SetOrigin",       Entity_SetOrigin,       METH_VARARGS, "Sets the origin of this entity (stub)" },
-		{ "SetAngles",       Entity_SetAngles,       METH_VARARGS, "Sets the direction this entity is facing (stub)" },
-		{ "SetModel",        Entity_SetModel,        METH_VARARGS, "Sets the entity's model to the supplied filename (stub)" },
-		{ "SetName",         Entity_SetName,         METH_VARARGS, "Sets the entity's name to the supplied string (stub)" },
+		{ "SetOrigin",       Entity_SetOrigin,       METH_VARARGS, "Sets the origin of this entity" },
+		{ "SetAngles",       Entity_SetAngles,       METH_VARARGS, "Sets the direction this entity is facing" },
+		{ "SetModel",        Entity_SetModel,        METH_VARARGS, "Sets the entity's model to the supplied filename" },
+		{ "SetName",         Entity_SetName,         METH_VARARGS, "Sets the entity's name to the supplied string" },
 		{ nullptr, nullptr, 0, nullptr }
 	};
 
@@ -569,10 +638,63 @@ namespace
 	PyObject* Mod_ScheduleTask(PyObject*, PyObject* A)        { return CallSimple(TEXT("ScheduleTask"), A); }
 	PyObject* Mod_ChangeMap(PyObject*, PyObject* A)           { return CallSimple(TEXT("ChangeMap"), A); }
 	PyObject* Mod_SquadSeesPlayer(PyObject*, PyObject* A)     { return CallSimple(TEXT("SquadSeesPlayer"), A); }
-	PyObject* Mod_CreateEntityNoSpawn(PyObject*, PyObject* A) { return CallSimple(TEXT("CreateEntityNoSpawn"), A); }
-	PyObject* Mod_CallEntitySpawn(PyObject*, PyObject* A)     { return CallSimple(TEXT("CallEntitySpawn"), A); }
 	PyObject* Mod_OneOfSet(PyObject*, PyObject* A)            { return CallSimple(TEXT("OneOfSet"), A); }
 	PyObject* Mod_IsPCMalk(PyObject*, PyObject* A)            { return CallSimple(TEXT("IsPCMalk"), A); }
+
+	// CreateEntityNoSpawn(classname, origin, angles) (9.3): build a runtime def, append a live-but-
+	// unspawned entity, and return the Entity object so the script can SetModel/SetName/SetOrigin on it
+	// before CallEntitySpawn. Classes with no leaf (item_*, prop_*) become logic-valid but bodiless
+	// entities — findable, I/O-wired, no mesh — until a per-entity prop/item render path lands.
+	PyObject* Mod_CreateEntityNoSpawn(PyObject*, PyObject* Args)
+	{
+		const char* Cls = nullptr;
+		PyObject* OriginObj = nullptr;
+		PyObject* AnglesObj = nullptr;
+		if (!PyArg_ParseTuple(Args, "s|OO", &Cls, &OriginObj, &AnglesObj))
+		{
+			return nullptr;
+		}
+		FVector Origin = FVector::ZeroVector, Angles = FVector::ZeroVector;
+		ParseVec3Obj(OriginObj, Origin);
+		ParseVec3Obj(AnglesObj, Angles);
+
+		FElysiumEntityHandle H = FElysiumEntityHandle::Invalid();
+		if (FElysiumEntityWorld* W = CurrentWorld())
+		{
+			FElysiumEntityDef Def;
+			Def.Classname = FString(UTF8_TO_TCHAR(Cls));
+			Def.Origin = Origin;
+			H = W->CreateRuntimeEntityNoSpawn(MoveTemp(Def));
+			if (FElysiumEntity* E = W->Resolve(H)) { E->Angles = Angles; }
+		}
+		ElysiumScriptNatives::Record(State(), FName(TEXT("CreateEntityNoSpawn")),
+			FString::Printf(TEXT("CreateEntityNoSpawn(\"%s\")"), UTF8_TO_TCHAR(Cls)),
+			H.IsSet() ? FElysiumVariant::Handle(H) : FElysiumVariant::Void(), /*bStub*/ false);
+		return NewEntity(H);
+	}
+
+	// CallEntitySpawn(entity) (9.3): run the deferred Spawn() (+ brush body) on the entity that
+	// CreateEntityNoSpawn made. Forgiving on a None/non-entity arg (a create under no world), so a map
+	// script never aborts on it — error-to-false's spirit.
+	PyObject* Mod_CallEntitySpawn(PyObject*, PyObject* Args)
+	{
+		PyObject* EntObj = nullptr;
+		if (!PyArg_ParseTuple(Args, "O", &EntObj))
+		{
+			return nullptr;
+		}
+		FElysiumVariant R = FElysiumVariant::Void();
+		if (IsEntity(EntObj))
+		{
+			FElysiumEntity* E = ResolveOrRaise(EntObj);
+			if (!E) { return nullptr; }   // deleted handle: ResolveOrRaise set the AttributeError
+			if (FElysiumEntityWorld* W = CurrentWorld()) { W->CallEntitySpawn(*E); }
+			R = FElysiumVariant::Handle(E->Handle);
+		}
+		ElysiumScriptNatives::Record(State(), FName(TEXT("CallEntitySpawn")),
+			FString::Printf(TEXT("CallEntitySpawn(%s)"), *R.Describe()), R, /*bStub*/ false);
+		Py_RETURN_NONE;
+	}
 
 	// The module table, in `vampire.dll`'s own order (python_bridge.md, table 0x1058f7a8).
 	PyMethodDef GModuleGlobals[] =

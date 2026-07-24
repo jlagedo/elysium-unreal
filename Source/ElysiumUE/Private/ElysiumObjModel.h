@@ -2,17 +2,22 @@
 
 #include "CoreMinimal.h"
 
-// One OBJ material: the fields the runtime binds onto a material instance. M0 uses
-// only Albedo (+ the alpha/flag fields, parsed and carried for M1). The named texture
-// channels are install-relative paths (e.g. "tex/brick_building1c.png") resolved
-// against the model's Dir by the texture cache.
+// One OBJ material: the fields the runtime binds onto a material instance. The blend flags
+// (bScissor/bBlend/bAdditive) pick which world master the factory instances; the texture
+// channels bind its named parameters. All channel paths are install-relative (e.g.
+// "tex/brick_building1c.png"), resolved against the model's Dir by the texture cache.
 struct FElysiumMaterialDef
 {
 	FString Name;
 	FString Albedo;
-	FString Emissive;        // map_Ke -> $selfillum emission mask (RGB x alpha, "*_ke.png")
-	bool bScissor = false;   // illum 4  -> alpha-tested
-	bool bBlend = false;     // blend 1  -> $translucent
+	FString Emissive;        // map_Ke  -> $selfillum emission mask (RGB x alpha, "*_ke.png")
+	FString Bump;            // bumpmap -> $bumpmap tangent-space normal map
+	FString EnvMask;         // envmapmask -> $envmap reflectivity mask (empty = uniform when bEnvmap)
+	FString BaseTex2;        // basetex2 -> WorldVertexTransition second albedo
+	bool bScissor = false;   // illum 4    -> $alphatest (masked master)
+	bool bBlend = false;     // blend 1    -> $translucent (translucent master)
+	bool bAdditive = false;  // additive 1 -> $additive glow overlay (additive master, unlit)
+	bool bEnvmap = false;    // envmap     -> $envmap reflective (Lumen roughness path)
 	FLinearColor Color = FLinearColor(0.6f, 0.6f, 0.65f);   // Kd fallback when no albedo
 };
 
@@ -37,6 +42,9 @@ struct FElysiumObjModel
 	// Parse just an MTL into material defs (used by the mesh cook-cache path, which
 	// skips the OBJ but still needs materials).
 	static void ParseMtl(const FString& Path, TMap<FString, FElysiumMaterialDef>& Mats);
+
+	// The line-oriented core of ParseMtl (file already read), so tests can drive it in memory.
+	static void ParseMtlLines(const TArray<FString>& Lines, TMap<FString, FElysiumMaterialDef>& Mats);
 
 	// The mtllib filename referenced by the OBJ (set by Parse).
 	FString MtlName;

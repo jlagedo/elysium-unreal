@@ -25,7 +25,7 @@ game-agnostic (an empty boot map + one master material).
 | `Source/ElysiumUE/` | the C++ runtime module (loads intermediates, builds the world) + runtime facts (`Source/ElysiumUE/CLAUDE.md`) |
 | `tools/` | the offline Python decode/export pipeline (`UE_bsp_to_scene.py`, …) + format docs (`tools/CLAUDE.md`) |
 | `docs/` | reverse-engineering reference + the rebuild strategy |
-| `Content/` | committed assets only: `Elysium.umap` (boot) + the `M_VtMB_World`/`M_Sky`/`M_Gizmo*` master materials |
+| `Content/` | committed assets only: `Elysium.umap` (boot) + the `M_World_*`/`M_Additive`/`M_Sky`/`M_Decal`/`M_Gizmo*` master materials |
 | `CLAUDE.md` | project fact sheet + documentation index (start here after this README) |
 
 ## Build & run (Windows, UE 5.8)

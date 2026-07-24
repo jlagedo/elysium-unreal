@@ -98,7 +98,7 @@ namespace
 	// OBJ parse + tangent generation are cooked once into Saved/ElysiumCache/<stem>.emc
 	// (validated against the OBJ's size+mtime); later loads read flat buffers instead.
 
-	constexpr uint32 MeshCacheMagic = 0x31434D45;   // 'EMC1'
+	constexpr uint32 MeshCacheMagic = 0x32434D45;   // 'EMC2' (bumped: sections now carry Colors)
 
 	struct FCookedSection
 	{
@@ -109,10 +109,11 @@ namespace
 		TArray<FVector> TanX;
 		TArray<uint8> TanFlip;
 		TArray<int32> Tris;
+		TArray<FColor> Colors;   // WVT blend weight on R (empty for a non-blend section)
 
 		void Serialize(FArchive& Ar)
 		{
-			Ar << Mat << Verts << UVs << Normals << TanX << TanFlip << Tris;
+			Ar << Mat << Verts << UVs << Normals << TanX << TanFlip << Tris << Colors;
 		}
 	};
 
@@ -441,6 +442,50 @@ USkeletalMeshComponent* AElysiumMapActor::BuildNpcVisual(const FString& Stem, co
 	return Comp;
 }
 
+UStaticMeshComponent* AElysiumMapActor::BuildPropVisual(const FString& Stem, const FVector& Location, const FQuat& Rotation)
+{
+	USceneComponent* Root = GetRootComponent();
+	if (Stem.IsEmpty() || Root == nullptr)
+	{
+		return nullptr;
+	}
+
+	// Cache-checked build: one UStaticMesh per stem, so a model placed by several prop entities builds
+	// once (mirrors LoadProps' per-model build + BuildNpcVisual's per-stem cache). A stem that failed
+	// once is not cached, so it retries — a genuinely missing OBJ is one warning per entity, not per frame.
+	const TObjectPtr<UStaticMesh>* Cached = PropMeshCache.Find(Stem);
+	UStaticMesh* Mesh = Cached ? Cached->Get() : nullptr;
+	if (Mesh == nullptr)
+	{
+		FElysiumObjModel Model;
+		if (!FElysiumObjModel::Parse(FElysiumContentPaths::MapPropsDir(MapName) / (Stem + TEXT(".obj")), Model))
+		{
+			UE_LOG(LogElysium, Warning, TEXT("BuildPropVisual '%s': prop model parse failed"), *Stem);
+			return nullptr;
+		}
+		// Non-solid: 8.3 is visual parity; prop_physics collision (Chaos convex) is 8.4, so no hull
+		// is cooked here (matches entity_visuals R2 "collision optional for visuals").
+		Mesh = FElysiumStaticMeshBuilder::Build(Model, Model.Dir, /*bConvexCollision=*/false, this);
+		if (Mesh == nullptr)
+		{
+			return nullptr;
+		}
+		PropMeshCache.Add(Stem, Mesh);
+	}
+
+	// Standard runtime-component recipe (mirrors BuildNpcVisual): NewObject → mesh → attach → place →
+	// register. The map actor sits at the origin, so relative == world for these Unreal-space values.
+	UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(this);
+	Comp->SetMobility(EComponentMobility::Movable);
+	Comp->SetStaticMesh(Mesh);
+	Comp->SetupAttachment(Root);
+	Comp->SetRelativeLocationAndRotation(Location, Rotation);
+	Comp->RegisterComponent();
+	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	AddInstanceComponent(Comp);
+	return Comp;
+}
+
 int32 AElysiumMapActor::BuildMeshFromObj(const FString& ObjPath, UProceduralMeshComponent* Mesh, bool bCollision)
 {
 	const FString Dir = FPaths::GetPath(ObjPath);
@@ -462,6 +507,29 @@ int32 AElysiumMapActor::BuildMeshFromObj(const FString& ObjPath, UProceduralMesh
 		}
 		MtlName = Model.MtlName;
 		Materials = MoveTemp(Model.Materials);
+
+		// WorldVertexTransition blend weights: one alpha per global vertex (v-order), stamped onto
+		// vertex COLOR.r for the master's lerp(Albedo, BaseTex2, VertexColor.r x BlendAmount). Only
+		// displacement terrain writes a .blend sidecar; every other map has none (Colors stay empty).
+		TArray<float> Blend;
+		{
+			TArray<FString> BlendLines;
+			if (FFileHelper::LoadFileToStringArray(BlendLines, *FPaths::ChangeExtension(ObjPath, TEXT("blend"))))
+			{
+				Blend.Reserve(BlendLines.Num());
+				for (const FString& L : BlendLines)
+				{
+					if (!L.IsEmpty())
+					{
+						Blend.Add(FCString::Atof(*L));
+					}
+				}
+				if (Blend.Num() != Model.Positions.Num())
+				{
+					Blend.Reset();   // count mismatch: ignore rather than misalign the weights
+				}
+			}
+		}
 
 		for (const TPair<FString, TArray<int32>>& Group : Model.Groups)
 		{
@@ -489,6 +557,11 @@ int32 AElysiumMapActor::BuildMeshFromObj(const FString& ObjPath, UProceduralMesh
 					Remap.Add(GI, Local);
 					S.Verts.Add(Model.Positions.IsValidIndex(GI) ? Model.Positions[GI] : FVector::ZeroVector);
 					S.UVs.Add(Model.Uvs.IsValidIndex(GI) ? Model.Uvs[GI] : FVector2D::ZeroVector);
+					if (Blend.IsValidIndex(GI))
+					{
+						const uint8 W = uint8(FMath::Clamp(Blend[GI], 0.f, 1.f) * 255.f + 0.5f);
+						S.Colors.Add(FColor(W, W, W, 255));
+					}
 				}
 				S.Tris.Add(Local);
 			}
@@ -508,7 +581,6 @@ int32 AElysiumMapActor::BuildMeshFromObj(const FString& ObjPath, UProceduralMesh
 	}
 
 	int32 Section = 0;
-	const TArray<FLinearColor> NoColors;
 #if !UE_BUILD_SHIPPING
 	// Section index -> OBJ group key, for the click-pick's surface readout (the PMC keeps the
 	// geometry but not the material name it came from).
@@ -525,7 +597,10 @@ int32 AElysiumMapActor::BuildMeshFromObj(const FString& ObjPath, UProceduralMesh
 			Tangents.Emplace(S.TanX[I], S.TanFlip.IsValidIndex(I) && S.TanFlip[I] != 0);
 		}
 
-		Mesh->CreateMeshSection_LinearColor(Section, S.Verts, S.Tris, S.Normals, S.UVs, NoColors, Tangents, bCollision);
+		// The FColor overload stores the WVT weights verbatim (no linear<->sRGB round trip), so
+		// VertexColor.r in the master is exactly the exported blend alpha. S.Colors is empty for a
+		// non-blend section, which the component treats as unset (white).
+		Mesh->CreateMeshSection(Section, S.Verts, S.Tris, S.Normals, S.UVs, S.Colors, Tangents, bCollision);
 #if !UE_BUILD_SHIPPING
 		SectionNames.Add(S.Mat);
 #endif
