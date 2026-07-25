@@ -4,6 +4,7 @@
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumProfiler.h"
+#include "ElysiumCardRun.h"
 #include "ElysiumShotRun.h"
 
 #include "Engine/Engine.h"
@@ -125,12 +126,19 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	{
 		ShotRun = MakePimpl<FElysiumShotRun>(this);
 	}
+	// Under -ElysiumCards, arm the headless Lumen-card bake: walk the map list, fit cards to what
+	// each map built, write <map>.cards. Editor builds only.
+	if (FElysiumCardRun::IsRequested())
+	{
+		CardRun = MakePimpl<FElysiumCardRun>(this);
+	}
 }
 
 void UElysiumMapSubsystem::Deinitialize()
 {
 	ProfileRun.Reset();
 	ShotRun.Reset();
+	CardRun.Reset();
 	for (IConsoleObject* Obj : ConsoleObjects)
 	{
 		IConsoleManager::Get().UnregisterConsoleObject(Obj);

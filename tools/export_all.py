@@ -6,7 +6,9 @@ the run.
 
 Every run also rebuilds the committed Content/ assets (the sky material, world material and
 boot map) via content.bat, so an offline asset generator can never be forgotten and go stale
--- pass --no-content to skip that (fast geometry-only iteration).
+-- pass --no-content to skip that (fast geometry-only iteration) -- and then bakes each
+re-exported map's Lumen card sidecar via cards.bat (--no-cards to skip; ~35 s per map, the
+long tail of a full export).
 
 Usage:
   python tools/export_all.py                 # the test bench (maps.ini [test])
@@ -14,6 +16,7 @@ Usage:
   python tools/export_all.py ch_hub_1 la_hub_1   # only the named maps
   python tools/export_all.py --skip-existing     # skip maps already exported
   python tools/export_all.py --no-content        # skip the committed-asset rebuild
+  python tools/export_all.py --no-cards          # skip the Lumen card bake
   python tools/export_all.py --no-scripts        # skip the script/dialogue copy
   python tools/export_all.py --no-signs          # skip the sign definition/background copy
   python tools/export_all.py --no-vdata          # skip the vdata rulebook copy
@@ -63,10 +66,45 @@ def build_content():
     print(f"[content] {status}  ({time.time()-t0:.0f}s)", flush=True)
 
 
+def bake_cards(maps):
+    """Bake each exported map's Lumen card sidecar by running cards.bat (a headless engine
+    session driving the -ElysiumCards harness). Per map, unlike content.bat: the cards are
+    fitted to that map's own geometry, so a re-export invalidates exactly the maps it touched.
+
+    This is an engine step rather than a tools/ decoder because the card builder
+    (IMeshUtilities::GenerateCardRepresentationData) ray-traces through Embree and exists only
+    in the editor -- baking here is what keeps Embree out of the shipping build. It stays an
+    offline step: the runtime only ever reads out/<map>/<map>.cards. See
+    docs/lumen-coverage-spike.md.
+
+    Roughly 35 s per map, so this is the long tail of a full export -- --no-cards skips it,
+    at the cost of every re-exported map falling back to bounds cards until it is re-run."""
+    bat = os.path.join(REPO, "cards.bat")
+    if sys.platform != "win32" or not os.path.exists(bat):
+        print(f"\n[cards] skipped (need Windows + {bat})", flush=True)
+        return
+    if not maps:
+        print("\n[cards] skipped (no maps exported this run)", flush=True)
+        return
+    print(f"\n[cards] baking Lumen cards for {len(maps)} map(s) ...", flush=True)
+    t0 = time.time()
+    failed = []
+    for i, name in enumerate(maps, 1):
+        t1 = time.time()
+        rc = subprocess.run(["cmd", "/c", bat, name]).returncode
+        status = "ok" if rc == 0 else f"FAILED (exit {rc})"
+        if rc != 0:
+            failed.append(name)
+        print(f"[cards] [{i}/{len(maps)}] {name:26} {status}  ({time.time()-t1:.0f}s)", flush=True)
+    tail = f", {len(failed)} failed: {', '.join(failed)}" if failed else ""
+    print(f"[cards] done ({time.time()-t0:.0f}s{tail})", flush=True)
+
+
 def main():
     args = sys.argv[1:]
     skip_existing = "--skip-existing" in args
     skip_content = "--no-content" in args
+    skip_cards = "--no-cards" in args
     skip_sound = "--no-sound" in args
     skip_scripts = "--no-scripts" in args
     skip_signs = "--no-signs" in args
@@ -196,6 +234,12 @@ def main():
 
     if not skip_content:
         build_content()
+
+    # Last: the Lumen card bake. It loads each map in the engine, so it needs the committed
+    # Content/ assets (the master materials the map build binds) to be current -- hence after
+    # build_content. Only the maps that actually re-exported this run need re-baking.
+    if not skip_cards:
+        bake_cards([name for name, status, _ in results if status == "ok"])
 
 
 if __name__ == "__main__":

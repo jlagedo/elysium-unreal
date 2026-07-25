@@ -72,10 +72,17 @@ public class ElysiumUE : ModuleRules
 				// JsonUtilities carries FJsonObjectWrapper, the base of FModelContextProtocolToolResult.
 				"ModelContextProtocol", "ModelContextProtocolEngine", "JsonUtilities"
 			});
+			// Lumen card baking (docs/lumen-coverage-spike.md). IMeshUtilities::GenerateCardRepresentationData
+			// is the real surfel-fitted card builder; it ray-traces the mesh through Embree, so it only
+			// exists in the editor. The bake runs here and writes a sidecar the runtime deserializes,
+			// which is what keeps Embree out of the shipping build.
+			PublicDefinitions.Add("ELYSIUM_WITH_CARDGEN=1");
+			PrivateDependencyModuleNames.Add("MeshUtilities");
 		}
 		else
 		{
 			PublicDefinitions.Add("ELYSIUM_WITH_MCP=0");
+			PublicDefinitions.Add("ELYSIUM_WITH_CARDGEN=0");
 		}
 
 		// P5.5 / 9.3 -- embedded CPython 2.7.18 (qnox/python-2.7) for VtMB level scripts.

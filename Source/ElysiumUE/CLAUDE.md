@@ -368,6 +368,7 @@ volume, so a flip re-applies in one pass (voices already fading out toward a rea
 
 Lifecycle `elysium.newgame` / `map` / `maps` / `reload`; inspection `elysium.campos` /
 `lights` / `props` / `ents` / `classes` / `world` / `world.io` / `world.fireinput` / `g`;
+`elysium.pick` (the click-pick's scriptable echo — aims down the camera ray and logs the hit);
 A/B toggles `elysium.BrushCollision` / `BrushBodies` / `NpcBodies` / `PropBodies` / `PhysicsProps` / `Decals` (+ `DecalDepth`) / `Ropes` / `EmissiveScale` /
 `BumpScale` / `EnvReflect` / `LightScale` / `LightFit` / `CogTheme`; entity debug `elysium.ent_*` / `showtriggers`; scripting `elysium.eval` / `exec` /
 `script.live` / `script.cpython` / `py.*` (`py.smoke` / `exec` / `load` / `fire`, plus the two

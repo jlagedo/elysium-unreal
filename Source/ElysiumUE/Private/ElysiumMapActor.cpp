@@ -41,8 +41,13 @@
 #include "HAL/IConsoleManager.h"
 #include "KismetProceduralMeshLibrary.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "ElysiumCardBake.h"
+#include "MeshCardRepresentation.h"
+#include "MeshDescription.h"
 #include "Misc/FileHelper.h"
 #include "ProceduralMeshComponent.h"
+#include "StaticMeshAttributes.h"
+#include "StaticMeshOperations.h"
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
 
@@ -55,6 +60,18 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysium, Log, All);
 static TAutoConsoleVariable<int32> CVarBrushCollision(
 	TEXT("elysium.BrushCollision"), 1,
 	TEXT("World collider: 1 = .hulls/.dispcol brush collision, 0 = render-mesh trimesh. Applied at map load."),
+	ECVF_Default);
+
+// Edge length (cm) of one world chunk on the Lumen-cards path (docs/lumen-coverage-spike.md).
+// Lumen builds a mesh's cards from its bounds, so this is the trade: smaller cells give cards
+// that hug the geometry but multiply draw calls and surface-cache pages; larger cells are cheaper
+// but their cards float further from the surfaces they stand for. Read at map load.
+// 2048 measures best on sp_tutorial_1: below it the buckets fall under Lumen's
+// MeshCardsMinSize cull and vanish from the scene; above it one bucket spans several
+// same-facing surfaces at different depths and the single card catches only the nearest.
+static TAutoConsoleVariable<float> CVarLumenCardCellCm(
+	TEXT("elysium.LumenCardCellCm"), 2048.0f,
+	TEXT("World-chunk edge length in cm on the elysium.LumenCards path. Applied at map load."),
 	ECVF_Default);
 
 // Build the map's projected decals (1) or skip them (0), for A/B. Read at map load, so re-travel
@@ -126,6 +143,18 @@ namespace
 			Ar << Mat << Verts << UVs << Normals << TanX << TanFlip << Tris << Colors;
 		}
 	};
+
+	// What a prop model's build needs to resolve its Lumen cards: the sidecar entry to look up,
+	// and (during a bake) where to record the mesh so the harness can fit cards to it.
+	FElysiumStaticMeshBuilder::FPropCards PropCards(const FString& Stem,
+		const FElysiumCardStore* Store, TArray<FElysiumCardBakeItem>& BakeItems)
+	{
+		FElysiumStaticMeshBuilder::FPropCards Cards;
+		Cards.Stem = Stem;
+		Cards.Store = Store;
+		Cards.BakeItems = ElysiumCardBake::IsBaking() ? &BakeItems : nullptr;
+		return Cards;
+	}
 
 	FString MeshCachePath(const FString& ObjPath)
 	{
@@ -301,6 +330,15 @@ void AElysiumMapActor::LoadMap()
 	// mesh below), and lives for the actor's lifetime so a runtime prop/NPC spawn reuses it.
 	TextureCache = MakePimpl<FElysiumTextureCache>();
 
+	// The map's baked Lumen cards, before any mesh is built. Absent is normal and supported —
+	// every mesh then falls back to the bounds cards AttachLumenCards stands in.
+	Cards = MakePimpl<FElysiumCardContext>();
+	Cards->BakeItems.Reset();
+	if (FElysiumStaticMeshBuilder::LumenCardsEnabled() && FElysiumStaticMeshBuilder::BakedCardsEnabled())
+	{
+		Cards->Store.Load(FElysiumContentPaths::MapCards(MapName));
+	}
+
 	// P1.7 — label the map actor and drop it in an Elysium Outliner folder, so the PIE World
 	// Outliner reads as a live scene browser (debug-tooling.md Layer 0).
 #if WITH_EDITOR
@@ -317,7 +355,19 @@ void AElysiumMapActor::LoadMap()
 	{
 		LoadDispCol();
 	}
-	WorldSurfaceCount = BuildMeshFromObj(FElysiumContentPaths::MapObj(MapName), WorldMesh, !bBrushCollision);
+	// The world renders either as one PMC (the default shape) or, on the Lumen-cards path, as a
+	// grid of chunked static meshes that the surface cache can actually see. Chunks only stand in
+	// when the brush collider is carrying collision — with elysium.BrushCollision 0 the world
+	// collider *is* the render mesh, which only the PMC path builds.
+	const FString WorldObj = FElysiumContentPaths::MapObj(MapName);
+	if (FElysiumStaticMeshBuilder::LumenCardsEnabled() && bBrushCollision)
+	{
+		WorldSurfaceCount = BuildWorldChunks(WorldObj);
+	}
+	if (WorldSurfaceCount == 0)
+	{
+		WorldSurfaceCount = BuildMeshFromObj(WorldObj, WorldMesh, !bBrushCollision);
+	}
 	UE_LOG(LogElysium, Log, TEXT("world '%s': %d surfaces (collision: %s)"),
 		*MapName, WorldSurfaceCount, bBrushCollision ? TEXT("brush") : TEXT("trimesh"));
 	Phase(TEXT("World + collision"));
@@ -401,6 +451,22 @@ void AElysiumMapActor::LoadMap()
 
 	Phase(TEXT("Entities"));
 
+	// How much of the map is on fitted cards vs the bounds fallback. One line per load rather
+	// than per mesh, because "the bake silently stopped matching" is otherwise invisible: a
+	// missed lookup still renders, just with the leaky box cards the bake exists to replace.
+	if (Cards->Store.Installed + Cards->Store.Missed + Cards->Store.Stale > 0)
+	{
+		const int32 Fallback = Cards->Store.Missed + Cards->Store.Stale;
+		UE_LOG(LogElysium, Log, TEXT("cards: %d meshes on fitted cards, %d on bounds cards (%d absent, %d stale)"),
+			Cards->Store.Installed, Fallback, Cards->Store.Missed, Cards->Store.Stale);
+		if (Cards->Store.Stale > 0)
+		{
+			UE_LOG(LogElysium, Warning,
+				TEXT("cards: %d entries were fitted to different geometry (a re-export since the "
+				     "last bake) — re-run cards.bat %s."), Cards->Store.Stale, *MapName);
+		}
+	}
+
 	const double TotalMs = (FPlatformTime::Seconds() - Start) * 1000.0;
 	LoadPhases.Add({ TEXT("Total"), TotalMs });
 	UE_LOG(LogElysium, Log, TEXT("loaded %s in %.2fs"), *MapName, TotalMs / 1000.0);
@@ -482,7 +548,9 @@ UStaticMeshComponent* AElysiumMapActor::BuildPropVisual(const FString& Stem, con
 		}
 		// Non-solid: 8.3 is visual parity; prop_physics collision (Chaos convex) is 8.4, so no hull
 		// is cooked here (matches entity_visuals R2 "collision optional for visuals").
-		Mesh = FElysiumStaticMeshBuilder::Build(Model, Model.Dir, /*bConvexCollision=*/false, this, *TextureCache);
+		const FElysiumStaticMeshBuilder::FPropCards ModelCards = PropCards(Stem, &Cards->Store, Cards->BakeItems);
+		Mesh = FElysiumStaticMeshBuilder::Build(Model, Model.Dir, /*bConvexCollision=*/false, this, *TextureCache,
+			/*ConvexHulls=*/nullptr, &ModelCards);
 		if (Mesh == nullptr)
 		{
 			return nullptr;
@@ -533,8 +601,9 @@ UStaticMeshComponent* AElysiumMapActor::BuildPhysPropVisual(const FString& Stem,
 		TArray<TArray<FVector>> Hulls;
 		const bool bHaveHulls = FElysiumStaticMeshBuilder::LoadConvexHulls(
 			FElysiumContentPaths::MapPropsDir(MapName) / (Stem + TEXT(".hulls")), Hulls);
+		const FElysiumStaticMeshBuilder::FPropCards ModelCards = PropCards(Stem, &Cards->Store, Cards->BakeItems);
 		Mesh = FElysiumStaticMeshBuilder::Build(Model, Model.Dir, /*bConvexCollision=*/true, this, *TextureCache,
-			bHaveHulls ? &Hulls : nullptr);
+			bHaveHulls ? &Hulls : nullptr, &ModelCards);
 		if (Mesh == nullptr)
 		{
 			return nullptr;
@@ -555,12 +624,13 @@ UStaticMeshComponent* AElysiumMapActor::BuildPhysPropVisual(const FString& Stem,
 	return Comp;
 }
 
-int32 AElysiumMapActor::BuildMeshFromObj(const FString& ObjPath, UProceduralMeshComponent* Mesh, bool bCollision)
+// Cook (or load from the .emc cache) one OBJ into per-material sections, and parse the MTL the
+// sections resolve against. Shared by the PMC world path and the chunked static-mesh path.
+static bool CookObjSections(const FString& ObjPath, TArray<FCookedSection>& Sections,
+	TMap<FString, FElysiumMaterialDef>& Materials)
 {
 	const FString Dir = FPaths::GetPath(ObjPath);
-	TArray<FCookedSection> Sections;
 	FString MtlName;
-	TMap<FString, FElysiumMaterialDef> Materials;
 
 	if (LoadMeshCache(ObjPath, Sections, MtlName))
 	{
@@ -572,7 +642,7 @@ int32 AElysiumMapActor::BuildMeshFromObj(const FString& ObjPath, UProceduralMesh
 		if (!FElysiumObjModel::Parse(ObjPath, Model))
 		{
 			UE_LOG(LogElysium, Warning, TEXT("failed to parse %s"), *ObjPath);
-			return 0;
+			return false;
 		}
 		MtlName = Model.MtlName;
 		Materials = MoveTemp(Model.Materials);
@@ -649,6 +719,19 @@ int32 AElysiumMapActor::BuildMeshFromObj(const FString& ObjPath, UProceduralMesh
 		SaveMeshCache(ObjPath, Sections, MtlName);
 	}
 
+	return Sections.Num() > 0;
+}
+
+int32 AElysiumMapActor::BuildMeshFromObj(const FString& ObjPath, UProceduralMeshComponent* Mesh, bool bCollision)
+{
+	const FString Dir = FPaths::GetPath(ObjPath);
+	TArray<FCookedSection> Sections;
+	TMap<FString, FElysiumMaterialDef> Materials;
+	if (!CookObjSections(ObjPath, Sections, Materials))
+	{
+		return 0;
+	}
+
 	int32 Section = 0;
 #if !UE_BUILD_SHIPPING
 	// Section index -> OBJ group key, for the click-pick's surface readout (the PMC keeps the
@@ -682,6 +765,250 @@ int32 AElysiumMapActor::BuildMeshFromObj(const FString& ObjPath, UProceduralMesh
 		++Section;
 	}
 	return Section;
+}
+
+int32 AElysiumMapActor::BuildWorldChunks(const FString& ObjPath)
+{
+	const FString Dir = FPaths::GetPath(ObjPath);
+	TArray<FCookedSection> Sections;
+	TMap<FString, FElysiumMaterialDef> Materials;
+	if (!CookObjSections(ObjPath, Sections, Materials))
+	{
+		return 0;
+	}
+
+	// Lumen builds a mesh's cards from its bounds — six axis-aligned views, each capturing only
+	// the nearest surface along its direction. A cube of city therefore resolves to whatever faces
+	// outward and nothing behind it, which is Epic's documented rule: "walls, floors, and ceilings
+	// should all be separate meshes". So the cut is not purely spatial. Bin each triangle by BOTH
+	// the cell its centroid falls in AND the axis its face normal points down, which lands every
+	// bucket as a set of same-facing surfaces — a wall bucket, a floor bucket, a ceiling bucket.
+	// The bucket's bounds is then a thin slab and the one card facing it sits right on the geometry
+	// instead of boxing a room.
+	const double CellCm = FMath::Max(128.0, static_cast<double>(CVarLumenCardCellCm.GetValueOnGameThread()));
+	struct FChunkTri { int32 Section; int32 Tri; };
+	struct FBucket { TArray<FChunkTri> Tris; FBox Bounds = FBox(ForceInit); };
+	// Key: cell x/y/z + the axis-aligned direction index (0..5) of the face normal.
+	TMap<FIntVector4, FBucket> Buckets;
+
+	for (int32 SectionIdx = 0; SectionIdx < Sections.Num(); ++SectionIdx)
+	{
+		const FCookedSection& S = Sections[SectionIdx];
+		for (int32 T = 0; T + 2 < S.Tris.Num(); T += 3)
+		{
+			const FVector& A = S.Verts[S.Tris[T + 0]];
+			const FVector& B = S.Verts[S.Tris[T + 1]];
+			const FVector& C = S.Verts[S.Tris[T + 2]];
+			const FVector Centroid = (A + B + C) / 3.0;
+			const FVector Normal = ((B - A) ^ (C - A)).GetSafeNormal();
+			const int32 NormalDir = MeshCardRepresentation::GetAxisAlignedDirectionIndex(FVector3f(Normal));
+
+			const FIntVector4 Key(
+				FMath::FloorToInt(Centroid.X / CellCm),
+				FMath::FloorToInt(Centroid.Y / CellCm),
+				FMath::FloorToInt(Centroid.Z / CellCm),
+				NormalDir);
+			FBucket& Bucket = Buckets.FindOrAdd(Key);
+			Bucket.Tris.Add({ SectionIdx, T });
+			Bucket.Bounds += A;
+			Bucket.Bounds += B;
+			Bucket.Bounds += C;
+		}
+	}
+
+	// One MID per material, shared by every chunk that carries a triangle of it — the chunking is
+	// a spatial cut, not a material one, so a wall crossing three cells still resolves to one
+	// material instance.
+	TMap<FString, UMaterialInterface*> Mids;
+	auto MidFor = [this, &Dir, &Materials, &Mids](const FString& Mat) -> UMaterialInterface*
+	{
+		if (UMaterialInterface** Found = Mids.Find(Mat))
+		{
+			return *Found;
+		}
+		const FElysiumMaterialDef* Def = Materials.Find(Mat);
+		UMaterialInterface* Mid = FElysiumMaterialFactory::Build(Def, Dir, this, *TextureCache);
+		Mids.Add(Mat, Mid);
+		return Mid;
+	};
+
+	int32 SectionsBuilt = 0;
+	for (const TPair<FIntVector4, FBucket>& Cell : Buckets)
+	{
+		// The component sits at the bucket's own bounds centre and the vertices are written
+		// relative to it, so the mesh's local bounds hug the geometry rather than carrying its
+		// offset from the map origin (cards are built in local space, so an off-centre mesh would
+		// spawn cards far larger than the surfaces they stand for).
+		const FVector CellCentre = Cell.Value.Bounds.GetCenter();
+
+		FMeshDescription MeshDesc;
+		FStaticMeshAttributes Attr(MeshDesc);
+		Attr.Register();
+		Attr.GetVertexInstanceUVs().SetNumChannels(1);
+		TVertexAttributesRef<FVector3f> Positions = Attr.GetVertexPositions();
+		TVertexInstanceAttributesRef<FVector2f> UVs = Attr.GetVertexInstanceUVs();
+		TVertexInstanceAttributesRef<FVector4f> VertColors = Attr.GetVertexInstanceColors();
+		TPolygonGroupAttributesRef<FName> SlotNames = Attr.GetPolygonGroupMaterialSlotNames();
+
+		// One polygon group (= material slot) per material present in this cell, in first-seen order.
+		TMap<int32, FPolygonGroupID> GroupBySection;
+		TArray<UMaterialInterface*> SlotMats;
+
+		// The content hash the `<map>.cards` entry for this bucket is keyed on: the bucket's
+		// triangles in local space, in build order. Geometry only — the cell key already carries
+		// where the bucket is, and materials do not affect a card fit.
+		FElysiumCardHasher Hasher;
+
+#if !UE_BUILD_SHIPPING
+		// The click-pick's CPU copy of this chunk, filled slot-for-slot alongside the render mesh
+		// (a runtime UStaticMesh keeps nothing on the CPU to cast against). PickRemap is per slot:
+		// source section vertex index -> soup vertex index, so the source section's index *sharing*
+		// survives the chunk cut and the pick's face flood still terminates at the face boundary.
+		FWorldChunkPickSoup PickSoup;
+		TArray<TMap<int32, int32>> PickRemap;
+#endif
+
+		for (const FChunkTri& CT : Cell.Value.Tris)
+		{
+			const FCookedSection& S = Sections[CT.Section];
+
+			FPolygonGroupID PG;
+			if (const FPolygonGroupID* Found = GroupBySection.Find(CT.Section))
+			{
+				PG = *Found;
+			}
+			else
+			{
+				PG = MeshDesc.CreatePolygonGroup();
+				const FName SlotName(*FString::Printf(TEXT("%s#%d"), *S.Mat, SlotMats.Num()));
+				SlotNames[PG] = SlotName;
+				GroupBySection.Add(CT.Section, PG);
+				SlotMats.Add(MidFor(S.Mat));
+#if !UE_BUILD_SHIPPING
+				PickSoup.Sections.AddDefaulted_GetRef().Mat = S.Mat;
+				PickRemap.AddDefaulted();
+#endif
+			}
+
+			// A fresh vertex per corner: the exporter already emits unshared face corners, so there
+			// is no welding to preserve and this keeps the chunk cut from merging anything.
+			FVertexInstanceID Tri[3];
+			for (int32 K = 0; K < 3; ++K)
+			{
+				const int32 LI = S.Tris[CT.Tri + K];
+				const FVertexID V = MeshDesc.CreateVertex();
+				Hasher.Add(S.Verts[LI] - CellCentre);
+				Positions[V] = FVector3f(S.Verts[LI] - CellCentre);
+				const FVertexInstanceID Inst = MeshDesc.CreateVertexInstance(V);
+				UVs.Set(Inst, 0, S.UVs.IsValidIndex(LI) ? FVector2f(S.UVs[LI]) : FVector2f::ZeroVector);
+				// WVT blend weight rides COLOR.r exactly as it does on the PMC path.
+				if (S.Colors.IsValidIndex(LI))
+				{
+					const float W = S.Colors[LI].R / 255.f;
+					VertColors[Inst] = FVector4f(W, W, W, 1.f);
+				}
+				Tri[K] = Inst;
+#if !UE_BUILD_SHIPPING
+				// Polygon groups are created 0..N-1 in slot order, which is what the slot-name
+				// lookup below relies on too.
+				const int32 Slot = PG.GetValue();
+				FWorldChunkPickSection& PS = PickSoup.Sections[Slot];
+				TMap<int32, int32>& Remap = PickRemap[Slot];
+				const int32* Mapped = Remap.Find(LI);
+				if (Mapped == nullptr)
+				{
+					const FVector Local = S.Verts[LI] - CellCentre;
+					Mapped = &Remap.Add(LI, PS.Positions.Num());
+					PS.Positions.Add(Local);
+					PS.Bounds += Local;
+				}
+				PS.Tris.Add(*Mapped);
+#endif
+			}
+			MeshDesc.CreatePolygon(PG, { Tri[0], Tri[1], Tri[2] });
+		}
+
+		if (MeshDesc.Polygons().Num() == 0)
+		{
+			continue;
+		}
+
+		// The fast build path does not derive normals/tangents, and the OBJ carries neither.
+		FStaticMeshOperations::ComputeTriangleTangentsAndNormals(MeshDesc);
+		FStaticMeshOperations::ComputeTangentsAndNormals(MeshDesc,
+			EComputeNTBsFlags::Normals | EComputeNTBsFlags::Tangents | EComputeNTBsFlags::WeightedNTBs);
+
+		UStaticMesh* Mesh = NewObject<UStaticMesh>(this, NAME_None, RF_Transient);
+		Mesh->SetLightingGuid();
+		for (int32 Slot = 0; Slot < SlotMats.Num(); ++Slot)
+		{
+			const FName SlotName = SlotNames[FPolygonGroupID(Slot)];
+			Mesh->GetStaticMaterials().Add(FStaticMaterial(SlotMats[Slot], SlotName, SlotName));
+		}
+
+		UStaticMesh::FBuildMeshDescriptionsParams Params;
+		Params.bFastBuild = true;
+		Params.bBuildSimpleCollision = false;
+		Params.bCommitMeshDescription = false;
+		Params.bMarkPackageDirty = false;
+		Params.bUseHashAsGuid = true;
+		// A -ElysiumCards run needs the built LOD readable on the CPU — the card builder
+		// ray-traces the index/vertex buffers. Dead memory in any other run.
+		Params.bAllowCpuAccess = ElysiumCardBake::IsBaking();
+		const TArray<const FMeshDescription*> Descs = { &MeshDesc };
+		Mesh->BuildFromMeshDescriptions(Descs, Params);
+
+		// Baked cards sit on the real surfaces; the bounds fallback wraps the bucket in a box,
+		// which is what leaks light from an exterior wall back into the room behind it.
+		const uint64 Hash = Hasher.Finalize();
+		if (!Cards->Store.InstallWorld(Cell.Key, Hash, Mesh))
+		{
+			FElysiumStaticMeshBuilder::AttachLumenCards(Mesh);
+		}
+		if (ElysiumCardBake::IsBaking())
+		{
+			FElysiumCardBakeItem& Item = Cards->BakeItems.AddDefaulted_GetRef();
+			Item.Key = Cell.Key;
+			Item.Hash = Hash;
+			Item.Mesh = Mesh;
+		}
+
+		UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(this, NAME_None, RF_Transient);
+		Comp->SetupAttachment(SceneRoot);
+		Comp->SetStaticMesh(Mesh);
+		// Collision is the .hulls brush collider, as on the PMC path — the chunks are render-only.
+		Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Comp->SetMobility(EComponentMobility::Movable);
+		Comp->SetRelativeLocation(CellCentre);
+		for (int32 Slot = 0; Slot < SlotMats.Num(); ++Slot)
+		{
+			Comp->SetMaterial(Slot, SlotMats[Slot]);
+		}
+		Comp->RegisterComponent();
+		AddInstanceComponent(Comp);
+
+		WorldChunkMeshes.Add(Mesh);
+		WorldChunks.Add(Comp);
+#if !UE_BUILD_SHIPPING
+		for (const FWorldChunkPickSection& PS : PickSoup.Sections)
+		{
+			PickSoup.Bounds += PS.Bounds;
+		}
+		WorldChunkPickSoups.Add(MoveTemp(PickSoup));   // index-aligned with WorldChunks
+#endif
+		SectionsBuilt += SlotMats.Num();
+	}
+
+	UE_LOG(LogElysium, Log, TEXT("world chunks: %d buckets (%.0f cm cell x face normal), %d sections, Lumen cards on"),
+		WorldChunks.Num(), CellCm, SectionsBuilt);
+	if (!Cards->Store.IsEmpty() && Cards->Store.CellCm != static_cast<float>(CellCm))
+	{
+		UE_LOG(LogElysium, Warning,
+			TEXT("world chunks: cards baked at %.0f cm but elysium.LumenCardCellCm is %.0f — every "
+			     "bucket key misses, falling back to bounds cards. Re-run cards.bat at this cell size."),
+			Cards->Store.CellCm, CellCm);
+	}
+	return SectionsBuilt;
 }
 
 void AElysiumMapActor::BuildDecals()
@@ -971,7 +1298,9 @@ void AElysiumMapActor::LoadProps()
 		}
 
 		const bool bAnySolid = Entry.Value.ContainsByPredicate([](const FInst& I) { return I.bSolid; });
-		UStaticMesh* Mesh = FElysiumStaticMeshBuilder::Build(Model, Model.Dir, bAnySolid, this, *TextureCache);
+		const FElysiumStaticMeshBuilder::FPropCards ModelCards = PropCards(Entry.Key, &Cards->Store, Cards->BakeItems);
+		UStaticMesh* Mesh = FElysiumStaticMeshBuilder::Build(Model, Model.Dir, bAnySolid, this, *TextureCache,
+			/*ConvexHulls=*/nullptr, &ModelCards);
 		if (!Mesh)
 		{
 			continue;

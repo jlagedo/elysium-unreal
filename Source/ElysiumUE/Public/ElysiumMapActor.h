@@ -7,6 +7,7 @@
 
 class FElysiumEntityWorld;
 class FElysiumSoundSchemeManager;
+struct FElysiumCardContext;
 struct FElysiumTextureCache;
 class UAnimSequence;
 class UDecalComponent;
@@ -21,6 +22,7 @@ class UProceduralMeshComponent;
 class USceneComponent;
 class USkyLightComponent;
 class UStaticMesh;
+class UStaticMeshComponent;
 
 // One loaded VtMB map, built at runtime from the shared Python-pipeline intermediates
 // (no imported .uasset content): the exported OBJ as one procedural-mesh section per
@@ -141,8 +143,33 @@ public:
 		TArray<int32> Tris;
 	};
 
+	// One world chunk's CPU geometry, retained past BuildWorldChunks for triangle-exact picking on
+	// the Lumen-cards path: a chunk is a runtime UStaticMesh, which keeps no CPU-side section data
+	// the way a procedural mesh does. Positions are component-local (the chunk's own bounds
+	// centre); the split into sections mirrors the chunk's material slots 1:1, so a hit names the
+	// same OBJ group key the PMC path reports. Vertex indices are remapped from the source OBJ
+	// section, preserving exactly where it shared them — which is what lets the pick's face flood
+	// stop at the BSP face boundary.
+	struct FWorldChunkPickSection
+	{
+		FString Mat;                     // OBJ group key ("<material>@<cubemap>")
+		TArray<FVector> Positions;
+		TArray<int32> Tris;
+		FBox Bounds = FBox(ForceInit);
+	};
+	struct FWorldChunkPickSoup
+	{
+		TArray<FWorldChunkPickSection> Sections;
+		FBox Bounds = FBox(ForceInit);
+	};
+
 	UProceduralMeshComponent* GetWorldMesh() const { return WorldMesh; }
 	UProceduralMeshComponent* GetSkyMesh() const { return SkyMesh; }
+	// The chunked world, on the Lumen-cards path. Index-aligned: WorldChunks[i] is described by
+	// GetWorldChunkPickSoups()[i]. Both empty on the PMC world path, where GetWorldMesh() carries
+	// the geometry instead.
+	const TArray<TObjectPtr<UStaticMeshComponent>>& GetWorldChunks() const { return WorldChunks; }
+	const TArray<FWorldChunkPickSoup>& GetWorldChunkPickSoups() const { return WorldChunkPickSoups; }
 	const TArray<TObjectPtr<UInstancedStaticMeshComponent>>& GetPropComponents() const { return PropComponents; }
 	const TArray<FPropPickSoup>& GetPropPickSoups() const { return PropPickSoups; }
 	// The soup index backing an ISM's model, or INDEX_NONE. Both solidity buckets of one model
@@ -152,6 +179,11 @@ public:
 	// index is the one CreateMeshSection was called with, so it indexes these 1:1.
 	const FString& GetSectionMaterialName(const UProceduralMeshComponent* Mesh, int32 Section) const;
 #endif
+
+	// Lumen cards for this map (docs/lumen-coverage-spike.md): the `<map>.cards` sidecar the
+	// build installed fits from, plus the bake items a `-ElysiumCards` run recorded. Null before
+	// the map is built.
+	const FElysiumCardContext* GetCards() const { return Cards.Get(); }
 
 	// Per-phase load timings (milliseconds), filled by LoadMap in build order, for the Maps Cog
 	// window. The last entry is always the "Total". Empty until the first load completes.
@@ -180,6 +212,13 @@ private:
 	UPROPERTY() TObjectPtr<UElysiumLightRig> LightRig;
 	UPROPERTY() TObjectPtr<UPostProcessComponent> PostProcess;
 	UPROPERTY() TObjectPtr<UExponentialHeightFogComponent> HeightFog;
+
+	// The world as spatially-chunked static meshes, built instead of WorldMesh when the Lumen-cards
+	// path is active (docs/lumen-coverage-spike.md): one UStaticMesh per occupied grid cell, each
+	// carrying a bounds-derived Lumen card representation so the surface cache can see the world.
+	// Both arrays keep the objects alive for the map's lifetime (freed on map unload).
+	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> WorldChunks;
+	UPROPERTY() TArray<TObjectPtr<UStaticMesh>> WorldChunkMeshes;
 
 	// Static props: one ISM per (unique model, solidity) bucket, over runtime-built meshes.
 	// Both arrays keep the objects alive for the map's lifetime (freed on map unload).
@@ -215,7 +254,16 @@ private:
 	TMap<const UInstancedStaticMeshComponent*, int32> PropSoupByComponent;
 	TArray<FString> WorldSectionNames;   // WorldMesh section index -> OBJ group key
 	TArray<FString> SkySectionNames;     // SkyMesh section index   -> OBJ group key
+	// One soup per world chunk, appended in lockstep with WorldChunks (~2.5 MB on the tutorial's
+	// 29.5k triangles). Empty on the PMC world path.
+	TArray<FWorldChunkPickSoup> WorldChunkPickSoups;
 #endif
+
+	// The map's baked Lumen cards, read from `<map>.cards` at the top of LoadMap so the world and
+	// prop builders can install per-mesh fits instead of bounds cards. Empty when the map has no
+	// bake, which is a supported state (bounds cards everywhere). Plain C++, held type-erased so
+	// the header needs only a forward declaration.
+	TPimplPtr<FElysiumCardContext> Cards;
 
 	// This map's decoded-texture dedup index (one UTexture2D per unique path, shared across the
 	// map's material instances). A plain C++ object owned here, so its strong texture refs drop
@@ -244,6 +292,11 @@ private:
 	// alongside brush collision; no-op when the sidecar is absent (map has no displacements).
 	void LoadDispCol();
 	int32 BuildMeshFromObj(const FString& ObjPath, UProceduralMeshComponent* Mesh, bool bCollision);
+	// Build the world as a grid of chunked UStaticMeshComponents carrying Lumen card
+	// representations (docs/lumen-coverage-spike.md), instead of the single WorldMesh PMC — which
+	// no card can describe and which the card-capture pass cannot draw from at all. Returns the
+	// number of render sections built, 0 on failure so the caller can fall back to the PMC path.
+	int32 BuildWorldChunks(const FString& ObjPath);
 	// Build the deferred decals from <map>.decals (7.2): one UDecalComponent per line, oriented so
 	// its -X projects into the wall along the decal's room normal, sized to the on-surface extents,
 	// with a MID off M_Decal. No-op when the sidecar is absent or elysium.Decals is 0.

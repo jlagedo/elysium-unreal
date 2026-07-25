@@ -29,6 +29,12 @@ struct FElysiumContentPaths
 	// half-extents, Unreal cm), written by UE_bsp_to_scene.py. Materials ride the shared <map>.mtl.
 	static FString MapDecals(const FString& Map) { return MapDir(Map) / (Map + TEXT(".decals")); }
 	static FString MapRopes(const FString& Map) { return MapDir(Map) / (Map + TEXT(".ropes")); }
+	// Lumen cards (docs/lumen-coverage-spike.md): surfel-fitted card representations for this map's
+	// world chunks and prop models, written by the -ElysiumCards bake (cards.bat). Unlike every
+	// other file here this one is produced by the engine, not the Python exporter — the card
+	// builder is editor-only C++ — but it lives with the export because a packaged build cannot
+	// regenerate it. Absent or stale entries fall back to bounds cards.
+	static FString MapCards(const FString& Map) { return MapDir(Map) / (Map + TEXT(".cards")); }
 
 	// Audio (P6). WAVs are game-global (shared across maps), so they live in one mirror of
 	// VtMB's `sound/` tree, not per-map. Rel is the engine-relative path under sound/ (e.g.

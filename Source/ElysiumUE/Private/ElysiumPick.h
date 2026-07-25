@@ -14,7 +14,7 @@ enum class EElysiumPickKind : uint8
 {
 	None,
 	Entity,         // a brush entity's body (UElysiumBrushComponent) — includes invisible triggers
-	WorldSurface,   // one BSP face of the world/sky procedural mesh
+	WorldSurface,   // one BSP face of the world (procedural mesh or chunked static mesh) or sky
 	PropInstance,   // one instance of one static-prop model
 };
 
@@ -45,7 +45,7 @@ struct FElysiumPickResult
 	FString ModelName;      // PropInstance: the .props model stem
 	FString MaterialName;   // WorldSurface: the OBJ group key ("<material>@<cubemap>")
 
-	int32 Section = INDEX_NONE;    // WorldSurface: procedural-mesh section index
+	int32 Section = INDEX_NONE;    // WorldSurface: section index within the picked component
 	int32 Instance = INDEX_NONE;   // PropInstance: ISM instance index
 	int32 Triangle = INDEX_NONE;   // the triangle actually hit, within the section / model
 
@@ -85,6 +85,9 @@ namespace ElysiumPick
 	// elysium.BrushCollision 1 the world *render* mesh is built with collision off (the .hulls
 	// convex set is the collider), and a solid prop's cooked collision is a single convex hull of
 	// the whole model — neither can name the surface or the part of the prop that was clicked.
+	// The world cast covers both shapes the world renders in — the single procedural mesh, and the
+	// elysium.LumenCards path's chunked static meshes (whose CPU geometry the map actor retains,
+	// since a runtime UStaticMesh keeps none).
 	//
 	// bBuildFaceOutline flows the WorldSurface highlight from the single hit triangle out to the
 	// whole BSP face (see the flood in the .cpp). It costs an edge map over the section, so the

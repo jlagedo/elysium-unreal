@@ -7,6 +7,7 @@
 
 class AElysiumMapActor;
 class FElysiumProfileRun;
+class FElysiumCardRun;
 class FElysiumShotRun;
 
 // The only owner of VtMB-map lifecycle. Map change is UE5 hard travel (roadmap 10.8): Travel
@@ -122,4 +123,7 @@ private:
 
 	// Headless screenshot-regression harness (P2.9), created only under -ElysiumShots.
 	TPimplPtr<FElysiumShotRun> ShotRun;
+
+	// Headless Lumen-card bake (docs/lumen-coverage-spike.md), created only under -ElysiumCards.
+	TPimplPtr<FElysiumCardRun> CardRun;
 };
