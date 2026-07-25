@@ -758,28 +758,39 @@ void AElysiumMapActor::BuildRopes()
 
 	const FString Dir = FElysiumContentPaths::MapDir(MapName);
 
-	// One MID per unique rope texture (every cable/cable rope shares one). Built off M_World_Opaque
-	// via the same factory the world/prop surfaces use — a lit opaque strand, no blend flags. A "-"
-	// tex (decode failed) yields a solid dark-cable fallback from the def's Kd colour.
+	// One MID per unique rope texture (every cable/cable rope shares one; the exporter names the PNG
+	// after the material, so the albedo path identifies the material). Built through the same factory
+	// the world/prop surfaces use, so the sidecar's matflags pick the master: `cable/chain`/`chainb`
+	// are $alphatest over a texture that is ~47% cut out, and instancing them opaque fills the gaps
+	// between the links in — a chain then reads as a solid tube with a chain painted on it. A "-" tex
+	// (decode failed) yields a solid dark-cable fallback from the def's Kd colour.
 	TMap<FString, UMaterialInstanceDynamic*> MidByTex;
-	auto MidFor = [&](const FString& Tex) -> UMaterialInstanceDynamic*
+	auto MidFor = [&](const FElysiumRopeDef& D) -> UMaterialInstanceDynamic*
 	{
-		if (UMaterialInstanceDynamic** Found = MidByTex.Find(Tex))
+		if (UMaterialInstanceDynamic** Found = MidByTex.Find(D.Tex))
 		{
 			return *Found;
 		}
 		FElysiumMaterialDef MatDef;
 		MatDef.Name = TEXT("rope");
-		if (Tex != TEXT("-"))
+		if (D.Tex != TEXT("-"))
 		{
-			MatDef.Albedo = Tex;
+			MatDef.Albedo = D.Tex;
 		}
 		else
 		{
 			MatDef.Color = FLinearColor(0.05f, 0.05f, 0.05f);
 		}
+		if (D.Bump != TEXT("-"))
+		{
+			MatDef.Bump = D.Bump;
+		}
+		MatDef.bScissor = (D.MatFlags & FElysiumRopeDef::Masked) != 0;
+		MatDef.bBlend = (D.MatFlags & FElysiumRopeDef::Translucent) != 0;
+		// $envmap with no separate mask ($normalmapalphaenvmapmask) — the uniform-reflectivity path.
+		MatDef.bEnvmap = (D.MatFlags & FElysiumRopeDef::Envmap) != 0;
 		UMaterialInstanceDynamic* Mid = FElysiumMaterialFactory::Build(&MatDef, Dir, this, *TextureCache);
-		MidByTex.Add(Tex, Mid);
+		MidByTex.Add(D.Tex, Mid);
 		return Mid;
 	};
 
@@ -789,23 +800,40 @@ void AElysiumMapActor::BuildRopes()
 		UCableComponent* Cable = NewObject<UCableComponent>(this);
 		Cable->SetupAttachment(SceneRoot);
 		// The map actor sits at the origin, so a component-relative location is the world point.
-		// Start is fixed at A (the component's own location); the end is fixed at B, given as a
-		// component-local offset (identity rotation → B is world B). The rest length exceeds the
-		// straight A→B distance by the sidecar's slack, so gravity sags it into a catenary.
+		// Start is fixed at A (the component's own location). The end needs care: EndLocation is
+		// resolved against `AttachEndTo.GetComponent(GetOwner())`, and with AttachEndTo unset
+		// FComponentReference does NOT return null — `ExtractComponent` falls back to the owner's
+		// ROOT component (EngineTypes.cpp), i.e. SceneRoot, not the cable. (The stock CableActor
+		// never notices because its cable IS the root.) SceneRoot sits at identity, so EndLocation
+		// is in world space: it must be B itself. A `B - A` offset here reads as an absolute point
+		// near the world origin and drags every cable's far end across the map into one spot.
 		Cable->SetRelativeLocation(D.A);
-		Cable->EndLocation = D.B - D.A;
+		Cable->EndLocation = D.B;
 		Cable->bAttachStart = true;
-		Cable->bAttachEnd = true;
-		const float Dist = static_cast<float>(FVector::Dist(D.A, D.B));
-		Cable->CableLength = Dist + D.SlackCm;
+		// `Dangling` clears ROPE_LOCK_END_POINT, so the far end swings free instead of being
+		// pinned to B.
+		Cable->bAttachEnd = (D.Flags & FElysiumRopeDef::Dangling) == 0;
+		// The sidecar already carries the RE'd rest length, so it goes in unmodified: the surplus
+		// over the straight A→B distance is the whole sag. VtMB's `RecomputeSprings` subtracts a
+		// flat 100 units from it, which at VtMB's authored slack (0..100 game-wide) usually puts
+		// the rest length at or *below* the span — those cables hang taut, and the solver simply
+		// stretches them along the chord.
+		Cable->CableLength = D.RestCm;
 		Cable->CableWidth = FMath::Max(0.1f, D.WidthCm);
 		Cable->NumSides = 4;                                           // thin round tube
-		Cable->NumSegments = FMath::Clamp(D.Subdiv * 3, 4, 16);       // Verlet segments along the span
-		Cable->SolverIterations = 2;
+		// VtMB simulates `Nodes` points, so `Nodes - 1` spans. The Type-2 case (Nodes == 2) is
+		// load-bearing: one span between two locked points is a straight line and cannot sag,
+		// which is how the taut steel cables and hanging-lamp chains are meant to read.
+		Cable->NumSegments = FMath::Max(1, D.Nodes - 1);
+		// Enough relaxation passes that the shape settles on its catenary instead of hanging
+		// somewhere short of it — the sag then follows from the authored slack alone.
+		Cable->SolverIterations = 8;
 		// Tile the strand texture along the cable so it does not stretch: repeats scale with length
-		// (metres) times the authored TextureScale.
-		Cable->TileMaterial = FMath::Max(0.1f, (Cable->CableLength / 100.f) * D.TexScale);
-		if (UMaterialInstanceDynamic* Mid = MidFor(D.Tex))
+		// (metres) times the authored TextureScale. Measure the drawn strand, not the rest length —
+		// a taut cable is drawn along the chord, which is longer.
+		const float Dist = static_cast<float>(FVector::Dist(D.A, D.B));
+		Cable->TileMaterial = FMath::Max(0.1f, (FMath::Max(Dist, D.RestCm) / 100.f) * D.TexScale);
+		if (UMaterialInstanceDynamic* Mid = MidFor(D))
 		{
 			Cable->SetMaterial(0, Mid);
 		}

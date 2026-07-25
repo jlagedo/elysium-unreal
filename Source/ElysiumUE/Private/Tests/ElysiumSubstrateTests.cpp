@@ -494,16 +494,18 @@ bool FElysiumDecalsTest::RunTest(const FString&)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRopesTest, "Elysium.Substrate.Ropes", GElysiumTestFlags)
 bool FElysiumRopesTest::RunTest(const FString&)
 {
-	// --- parse: 11 tokens -> one def with fields in order; malformed lines dropped ---
+	// --- parse: 14 tokens -> one def with fields in order; malformed lines dropped ---
 	TArray<FString> Lines;
-	Lines.Add(TEXT("tex/rope_cable_cable.png 0 0 300 400 0 300 2.54 203.2 2 0.2"));
+	Lines.Add(TEXT("tex/rope_cable_cable.png 0 0 300 400 0 300 2.54 203.2 10 0.2 0 tex/rope_cable_cable_n.png 0"));
 	Lines.Add(TEXT("# too few tokens -> skipped"));
-	Lines.Add(TEXT("- 0 0 0 0 0 100 5 0 3 1"));   // "-" = no decoded texture (still valid)
+	// "-" = no decoded texture; Type-2 + Dangling; $alphatest + $envmap (the cable/chain case)
+	Lines.Add(TEXT("- 0 0 0 0 0 100 5 0 2 1 1 - 5"));
+	Lines.Add(TEXT("- 0 0 0 0 0 100 5 0 99 1 0 - 0"));  // out-of-range node count -> clamped to 10
 	Lines.Add(FString());   // blank -> skipped
 
 	TArray<FElysiumRopeDef> Defs;
 	FElysiumRopes::ParseLines(Lines, Defs);
-	TestEqual(TEXT("two valid ropes parsed (two junk lines dropped)"), Defs.Num(), 2);
+	TestEqual(TEXT("three valid ropes parsed (two junk lines dropped)"), Defs.Num(), 3);
 
 	if (Defs.Num() >= 1)
 	{
@@ -512,21 +514,45 @@ bool FElysiumRopesTest::RunTest(const FString&)
 		TestTrue(TEXT("endpoint A parsed"), D.A.Equals(FVector(0, 0, 300)));
 		TestTrue(TEXT("endpoint B parsed"), D.B.Equals(FVector(400, 0, 300)));
 		TestEqual(TEXT("width cm"), D.WidthCm, 2.54f);
-		TestEqual(TEXT("slack cm"), D.SlackCm, 203.2f);
-		TestEqual(TEXT("subdiv"), D.Subdiv, 2);
+		TestEqual(TEXT("rest cm"), D.RestCm, 203.2f);
+		TestEqual(TEXT("nodes"), D.Nodes, 10);
 		TestEqual(TEXT("texscale"), D.TexScale, 0.2f);
+		TestEqual(TEXT("flags"), static_cast<int32>(D.Flags), 0);
+		TestEqual(TEXT("bump path"), D.Bump, FString(TEXT("tex/rope_cable_cable_n.png")));
+		TestEqual(TEXT("matflags"), static_cast<int32>(D.MatFlags), 0);
 
-		// --- rest-length contract: BuildRopes sets CableLength = straight distance + slack, so the
-		// slack is exactly the extra length that makes the cable hang. Endpoints 4 m apart + 2.032 m
-		// slack -> 6.032 m rest length. ---
-		const float RestLength = static_cast<float>(FVector::Dist(D.A, D.B)) + D.SlackCm;
-		TestEqual(TEXT("cable rest length = distance + slack"), RestLength, 400.f + 203.2f);
+		// --- rest-length contract: BuildRopes feeds RestCm straight into CableLength, and the
+		// exporter has already resolved VtMB's own arithmetic into it. Rest *below* the straight
+		// span is the normal case, not a bug: `RecomputeSprings` subtracts a flat 100 units, so a
+		// 4 m span at 2.032 m rest is a taut cable the solver draws along the chord. ---
+		TestTrue(TEXT("rest length below the span -> taut, no sag"),
+			D.RestCm < static_cast<float>(FVector::Dist(D.A, D.B)));
 	}
 
 	if (Defs.Num() >= 2)
 	{
+		const FElysiumRopeDef& D = Defs[1];
 		TestEqual(TEXT("dashed texture kept verbatim (runtime falls back to a plain MID)"),
-			Defs[1].Tex, FString(TEXT("-")));
+			D.Tex, FString(TEXT("-")));
+		// A Type-2 rope has two nodes, so BuildRopes gives it one span — a straight line that
+		// cannot sag, which is the whole point of the type.
+		TestEqual(TEXT("Type-2 rope keeps two nodes"), D.Nodes, 2);
+		TestEqual(TEXT("Type-2 rope is one cable span"), FMath::Max(1, D.Nodes - 1), 1);
+		TestTrue(TEXT("Dangling flag parsed"), (D.Flags & FElysiumRopeDef::Dangling) != 0);
+		// $alphatest must survive to the runtime or BuildRopes instances the opaque master and
+		// fills in the ~47% of the chain texture that is cut out between the links.
+		TestTrue(TEXT("Masked matflag parsed"), (D.MatFlags & FElysiumRopeDef::Masked) != 0);
+		TestTrue(TEXT("Envmap matflag parsed"), (D.MatFlags & FElysiumRopeDef::Envmap) != 0);
+		TestFalse(TEXT("Translucent matflag not set"),
+			(D.MatFlags & FElysiumRopeDef::Translucent) != 0);
+		TestEqual(TEXT("dashed bump kept verbatim"), D.Bump, FString(TEXT("-")));
+	}
+
+	if (Defs.Num() >= 3)
+	{
+		// Activate() clamps m_nSegments to [2, 10]; the parser holds the same bound so a bad
+		// sidecar cannot ask for an unbounded Verlet chain.
+		TestEqual(TEXT("node count clamped to VtMB's ROPE_MAX_SEGMENTS"), Defs[2].Nodes, 10);
 	}
 
 	return true;

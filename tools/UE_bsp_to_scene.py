@@ -212,19 +212,60 @@ def write_ropes(data, out_dir, base, idx):
     """Emit `<base>.ropes`: the overhead cables VtMB strings between poles/buildings.
 
     A rope is a chain of `move_rope`/`keyframe_rope` nodes linked by `NextKey` (a node's
-    `NextKey` = the targetname of the next node). The chain *start* is the node no other
-    node's `NextKey` points at (the 31 `move_rope` in the tutorial are exactly these starts;
-    the roles are resolved topologically here, not by classname, so a mislabelled chain still
-    links). Each consecutive pair is one sagging cable segment; the runtime (roadmap 8.7)
-    builds one `UCableComponent` per line.
+    `NextKey` = the targetname of the next node). Both classnames construct the *same*
+    `CRopeKeyframe` (vampire.dll factories `0x1019d680`/`0x1019d6f0`), so the roles are
+    resolved topologically here, not by classname. Each consecutive pair is one cable
+    segment; the runtime (roadmap 8.7) builds one `UCableComponent` per line.
 
-    One line per segment: `tex ax ay az bx by bz width_cm slack_cm subdiv texscale`, where
-    `tex` is the decoded `RopeMaterial` PNG (`tex/rope_*.png`) or `-` when it fails to decode,
-    `a`/`b` are the two node origins (Unreal cm, source_to_unreal like `.ents`), and the segment
-    parameters come from the *start* node A: `Width`/`Slack` are lengths (inches -> cm), `Subdiv`
-    the node subdivision count, `TextureScale` the along-length tiling factor. The cable rest
-    length is `dist(a,b) + slack_cm`, so the extra slack is what makes it hang (the runtime feeds
-    it to the Verlet cable). `MoveSpeed`/`MoveTime`/`Tension` are behaviour -> rendered at rest.
+    One line per segment, 14 whitespace-separated tokens:
+      `tex ax ay az bx by bz width_cm rest_cm nodes texscale flags bump matflags`
+
+    `tex`/`bump` are the decoded rope material PNGs (`tex/rope_*.png`, `tex/rope_*_n.png`) or `-`
+    when absent or undecodable, `a`/`b` are the two node origins (Unreal cm, source_to_unreal like
+    `.ents`), and the segment parameters come from the *start* node A.
+
+    The parameters are the RE'd `CRopeKeyframe` state, not the raw keyvalues:
+
+    - `width_cm` — `Width`, inches -> cm (ctor default 2).
+    - `rest_cm` — the **simulated rest length** of the strand, i.e. the total length of rope
+      the solver has to place between the two endpoints. Any surplus over the straight span
+      is the entire sag, so this is the one number the look depends on. It is *not* the raw
+      `Slack`; it comes out of a two-stage computation split across the server and client
+      halves of `CRopeKeyframe` (all offsets from its datamap at `0x1019d8d0`):
+
+        `m_RopeLength = (int)|B-A| + m_Slack`     RopeThink,        vampire.dll 0x1019efb0
+        `springDist   = (m_RopeLength + m_Slack - 100) / (nodes - 1)`
+                                                  RecomputeSprings, client.dll  0x100bf1a0
+        `m_flSpringDist = max(0, springDist)`      ResetSpringLength, client.dll 0x10128ae0
+        `rest = springDist * (nodes - 1)`
+
+      Three things fall out of that and none are guessable from the keyvalues: `Slack` is
+      applied **twice** (once server-side into `m_RopeLength`, again client-side); a flat
+      **-100 units** is then subtracted; and the divide is an *integer* one, so the per-segment
+      length truncates. The -100 dominates at VtMB's scale — authored `Slack` is 0..100 across
+      the whole game, so most ropes come out at or below their straight span and hang taut.
+      The `max(0, ...)` floor lets a short rope collapse to a dead-straight chord.
+    - `nodes` — the simulated node count `m_nSegments`. It comes from the **`Type`** keyvalue,
+      not `Subdiv`: `CRopeKeyframe::KeyValue` (`0x1019f2b0`) maps Type 0 -> 10, 1 -> 4,
+      anything else -> 2, and `Activate` (`0x1019e310`) clamps it to [2, 10]. With no `Type` at
+      all the ctor default 5 stands. A `Type 2` rope therefore has **two** nodes — one straight
+      segment between two locked points, which cannot sag at all. `Subdiv` is the *client-side
+      render* tessellation between those nodes (capped by the `rope_subdiv` cvar in client.dll),
+      not the simulation resolution, so it is not emitted.
+    - `texscale` — `TextureScale`, the along-length tiling factor (ctor default 4, datamap-
+      clamped to [0.1, 10]).
+    - `flags` — the RE'd bits `KeyValue` sets: 1 = `Dangling` (clears `ROPE_LOCK_END_POINT` in
+      `m_fLockedPoints`, so the far end hangs free), 2 = `Collide`, 4 = `Barbed`, 8 = `Breakable`.
+    - `matflags` — the rope VMT's shader mode, so the runtime instances the right world master
+      rather than assuming opaque: 1 = `$alphatest`, 2 = `$translucent`, 4 = `$envmap`. This is
+      load-bearing for chains — `cable/chain` and `cable/chainb` are `$alphatest 1` over a texture
+      that is ~47% cut out (the gaps between the links), so rendering them opaque turns a chain
+      into a solid tube with a chain painted on it. Their `$envmap` mask is the normal map's alpha
+      (`$normalmapalphaenvmapmask`), which needs no separate texture.
+
+    `RopeShader` (0/1/2 -> `cable/cable`, `cable/rope`, `cable/chain`) overrides `RopeMaterial`
+    when present, matching `KeyValue`. `MoveSpeed`/`MoveTime`/`Tension`/`PositionInterpolator`
+    are keyframe-path behaviour the rope renderer ignores -> rendered at rest.
     """
     blocks = _parse_ent_blocks(read_lump(data, 0).decode("ascii", "replace"))
     pak = read_pakfile(data)
@@ -237,27 +278,60 @@ def write_ropes(data, out_dir, base, idx):
         b = read_bytes(key)
         return b.decode("ascii", "replace") if b is not None else None
 
-    tex_cache = {}   # RopeMaterial name -> png filename | None
+    tex_cache = {}   # rope material name -> png filename | None
 
-    def decode_rope_tex(mat):
+    # RopeShader index -> material, from CRopeKeyframe::KeyValue (0x1019f2b0).
+    ROPE_SHADER = {0: "cable/cable", 1: "cable/rope", 2: "cable/chain"}
+    # Type -> m_nSegments, same function; every other value falls to 2. With no Type key the
+    # ctor default (0x1019dc80: `MOV [ESI+0x468], 5`) stands.
+    TYPE_NODES = {0: 10, 1: 4}
+    DEFAULT_NODES = 5
+    # The flat shortening RecomputeSprings applies, in Source units (client.dll 0x100bf1a1:
+    # `LEA EAX,[EAX + EDX*0x1 + -0x64]`).
+    SLACK_FUDGE = -100
+    # `matflags` bits — the rope VMT's shader mode, mirroring the .mtl's illum 4 / blend / envmap.
+    MAT_MASKED, MAT_TRANSLUCENT, MAT_ENVMAP = 1, 2, 4
+
+    def decode_rope_png(stem, key):
+        """Decode one TTH/TTZ pair to `tex/<stem>.png`, RGBA. Returns the filename or None."""
+        tth, ttz = read_bytes(f"materials/{key}.tth"), read_bytes(f"materials/{key}.ttz")
+        if not (tth and ttz):
+            return None
+        try:
+            img = decode_texture(tth, ttz).convert("RGBA")
+        except Exception:
+            return None
+        fn = stem + ".png"
+        img.save(os.path.join(out_dir, "tex", fn))
+        return fn
+
+    def decode_rope_mat(mat):
+        """Rope material -> (albedo_png, bump_png, matflags). Both PNGs may be None.
+
+        The rope VMTs are not plain opaque: `cable/chain` and `cable/chainb` are `$alphatest 1`
+        with a texture that is ~47% cut out (the gaps between the links), and every one of them
+        carries a `$bumpmap`. Dropping those renders a chain as a solid tube with a chain painted
+        on it, so the shader flags travel with the segment.
+        """
         if mat not in tex_cache:
-            out = None
+            albedo = bump = None
+            flags = 0
             vmt_txt = read_text(f"materials/{mat}.vmt")
             if vmt_txt:
                 info = vmt.parse(vmt_txt, resolve_include=lambda p: read_text(
                     p if p.lower().endswith(".vmt") else p + ".vmt"))
-                bt = info.get("basetexture")
-                if bt:
-                    tth, ttz = read_bytes(f"materials/{bt}.tth"), read_bytes(f"materials/{bt}.ttz")
-                    if tth and ttz:
-                        try:
-                            img = decode_texture(tth, ttz).convert("RGBA")
-                            fn = "rope_" + sanitize(mat) + ".png"
-                            img.save(os.path.join(out_dir, "tex", fn))
-                            out = fn
-                        except Exception:
-                            pass
-            tex_cache[mat] = out
+                stem = "rope_" + sanitize(mat)
+                if info.get("basetexture"):
+                    albedo = decode_rope_png(stem, info["basetexture"])
+                if info.get("bumpmap"):
+                    bump = decode_rope_png(stem + "_n", info["bumpmap"])
+                flags = ((MAT_MASKED if info.get("alphatest") else 0)
+                         | (MAT_TRANSLUCENT if info.get("translucent") else 0)
+                         # $envmap on a rope is always `env_cubemap` and the mask is the normal
+                         # map's alpha ($normalmapalphaenvmapmask), so there is no separate mask
+                         # texture to emit — the runtime's uniform-envmap path covers it.
+                         | (MAT_ENVMAP if info.get("envmap") else 0))
+            tex_cache[mat] = (albedo, bump, flags)
         return tex_cache[mat]
 
     # Collect every rope node, and index by targetname for NextKey lookup. A node may itself lack a
@@ -281,24 +355,37 @@ def write_ropes(data, out_dir, base, idx):
             if tn and tn not in by_name:
                 by_name[tn] = d
 
+    def atof(s, default=0.0):
+        """C `atof` semantics: parse the leading numeric prefix, ignore the rest.
+
+        Hammer wrote a few origins with a comma decimal separator (`hw_jewelry_1`'s
+        chandelier ropes are `"-3496,92 -3147,1 140"`). The engine reads those through
+        `atof`, which stops at the comma -> -3496 / -3147; a bare `float()` raises and
+        takes the whole map export down with it."""
+        m = re.match(r"\s*[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?", s or "")
+        return float(m.group(0)) if m else float(default)
+
     def origin_of(d):
         o = d.get("origin", "0 0 0").split()
-        return source_to_unreal(float(o[0]), float(o[1]), float(o[2])) if len(o) == 3 else None
+        return source_to_unreal(*(atof(c) for c in o)) if len(o) == 3 else None
 
     def fnum(d, key, default):
-        try:
-            return float(d.get(key, default) or default)
-        except ValueError:
-            return float(default)
+        v = d.get(key, "")
+        return atof(v, default) if v else float(default)
 
     lines = []
+    dangling = []
     for a in rope_nodes:
         nk = a.get("nextkey", "")
         if not nk:
             continue                          # chain end -> no outgoing segment
         b = by_name.get(nk)                    # engine's FindEntityByName(NULL,...): first of that name
         if b is None:
-            continue                          # dangling NextKey -> no segment
+            # The map itself names a node that does not exist (a mapper typo — 122 of these
+            # across the 108 maps). The engine warns and draws nothing; so do we, but say so
+            # rather than dropping it silently, because it looks identical to a linking bug.
+            dangling.append(f"{a.get('targetname', '?')}->{nk}")
+            continue
         pa, pb = origin_of(a), origin_of(b)
         if pa is None or pb is None:
             continue
@@ -306,21 +393,40 @@ def write_ropes(data, out_dir, base, idx):
         # nothing; drop it so every emitted segment has a real span.
         if sum((x - y) ** 2 for x, y in zip(pa, pb)) < 1.0:   # < 1 cm apart
             continue
-        mat = (a.get("ropematerial") or "cable/cable").replace("\\", "/").lower()
-        png = decode_rope_tex(mat)
+        if "ropeshader" in a:
+            mat = ROPE_SHADER.get(int(fnum(a, "ropeshader", "0")), "cable/cable")
+        else:
+            mat = (a.get("ropematerial") or "cable/cable").replace("\\", "/").lower()
+        png, bump_png, matflags = decode_rope_mat(mat)
         width_cm = fnum(a, "width", "2") * INCH_TO_CM
-        slack_cm = fnum(a, "slack", "25") * INCH_TO_CM
-        subdiv = int(fnum(a, "subdiv", "2"))
-        texscale = fnum(a, "texturescale", "1")
+        nodes = (max(2, min(10, TYPE_NODES.get(int(fnum(a, "type", "0")), 2)))
+                 if "type" in a else DEFAULT_NODES)
+        # Rest length, in Source units throughout — the engine's arithmetic is integral and
+        # the truncation is load-bearing, so do it before converting to cm (see the docstring).
+        span_u = sum((x - y) ** 2 for x, y in zip(pa, pb)) ** 0.5 / INCH_TO_CM
+        slack_u = int(fnum(a, "slack", "0"))
+        rope_len_u = int(span_u) + slack_u
+        # C integer division truncates toward zero, so int(x / y), not x // y.
+        spring_u = max(0, int((rope_len_u + slack_u + SLACK_FUDGE) / (nodes - 1)))
+        rest_cm = spring_u * (nodes - 1) * INCH_TO_CM
+        texscale = min(10.0, max(0.1, fnum(a, "texturescale", "4")))
+        flags = ((1 if fnum(a, "dangling", "0") else 0)
+                 | (2 if fnum(a, "collide", "0") else 0)
+                 | (4 if fnum(a, "barbed", "0") else 0)
+                 | (8 if fnum(a, "breakable", "0") else 0))
         lines.append(f"{('tex/' + png) if png else '-'} "
                      f"{pa[0]:.4f} {pa[1]:.4f} {pa[2]:.4f} {pb[0]:.4f} {pb[1]:.4f} {pb[2]:.4f} "
-                     f"{width_cm:.4f} {slack_cm:.4f} {subdiv} {texscale:.4f}")
+                     f"{width_cm:.4f} {rest_cm:.4f} {nodes} {texscale:.4f} {flags} "
+                     f"{('tex/' + bump_png) if bump_png else '-'} {matflags}")
 
     if lines:
         with open(os.path.join(out_dir, base + ".ropes"), "w") as f:
             f.write("\n".join(lines) + "\n")
     print(f"ropes: {len(lines)} cable segments ({len(rope_nodes)} nodes, "
           f"{sum(1 for v in tex_cache.values() if v)} textures) -> {base}.ropes")
+    if dangling:
+        print(f"  ! {len(dangling)} NextKey name(s) match no rope node (map data): "
+              f"{', '.join(dangling[:6])}{' ...' if len(dangling) > 6 else ''}")
 
 # --- entities: the Source I/O layer (docs/entity_io.md) ---------------------
 

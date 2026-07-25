@@ -106,7 +106,7 @@ Entity data is **fully exported** but **only drawn as debug gizmos**:
 | `env_sprite` StartOn (`spawnflags` bit0) | 1113 on / 135 off / 3 flag=2 | Must filter by spawn flag; `start_hidden` is 0 on all sprites |
 | `env_sprite` materials | glowa 900, volumelighta 96, candle 42, coplights 41, coplightsb 37, volumelighta_proxyfade 32 | Coronas **and** volumetric beams **and** candle flames **and** cop flashers |
 | `prop_dynamic`/`prop_physics`/`_ornament` | 425, all `.mdl`; 242 named; 116 `start_hidden` | Reuse prop decoder; skip hidden; keep identity for future I/O |
-| `keyframe_rope`/`move_rope` | 562; keys `NextKey`,`Subdiv`,`Width`,`Slack`,`RopeMaterial`(`cable/cable`),`TextureScale`,`Type` | Catenary computable from chain + slack |
+| `keyframe_rope`/`move_rope` | 562; keys `NextKey`,`Subdiv`,`Width`,`Slack`,`RopeMaterial`(`cable/cable`),`TextureScale`,`Type` | Rest length computable from chain + slack (server and client halves both apply, see R3); `Type` sets the node count |
 | `env_particle` | 125; keys `particle_definition`,`active`,`attach_type`,`bounds`,`ramp_scale` | Needs particle-system resolution — investigate first |
 | Switchable lights (have `targetname`) | 8 of 2841 | Lighting is real-time (`LightRig`); switchable styles 32+ are held ON until entity I/O lands (see R6) |
 
@@ -330,27 +330,85 @@ count logged; hidden props absent; no double-draw with GAME_LUMP static props.
 **Objective:** the overhead wires — 562 catenary cables.
 
 > **Shipped in Elysium-Unreal (roadmap 8.7), the Cable-Component way, not this catenary-sample
-> plan.** The exporter's `write_ropes` writes a `<map>.ropes` segment sidecar and the runtime stands
-> one Verlet `UCableComponent` per segment (rest length = span + slack → it hangs on its own, so no
-> offline catenary sampling). See `roadmap-archive.md` 8.7. The chain-resolution facts below are the
-> reference the Unreal work was built from.
+> plan.** The exporter's `write_ropes` writes a `<map>.ropes` segment sidecar carrying the RE'd rest
+> length per segment, and the runtime stands one Verlet `UCableComponent` per segment (it hangs on its
+> own, so no offline catenary sampling). See `roadmap-archive.md` 8.7. The chain-resolution facts below
+> are the reference the Unreal work was built from.
 
-**Export:** resolve rope chains (each node's `NextKey` → the `targetname` of the next node;
-**`move_rope` is the chain start, `keyframe_rope` a mid/end node** — verified from `sp_tutorial_1`,
-where the 31 `move_rope` are exactly the 31 topological starts). `keyframe_rope`/`move_rope` are stock
-Source **`CRopeKeyframe`** (RE'd in `vampire.dll`), so `NextKey` resolves the engine way —
-`FindEntityByName(NULL, name)`, the **first** entity of that name in spawn/entity order — which matters
-because a map can reuse rope names across installations (`sp_tutorial_1` reuses `tele4..tele9` twice,
-~200 m apart). For each segment sample a catenary
-between the two node origins using `Slack` (sag) and `Subdiv` (segment count); decode
-`RopeMaterial` (`cable/cable`) → `tex/`. Write derived geometry to `<map>.ropes` (polyline
-points in Godot metres + `Width` + `TextureScale` + material), keyed to the start entity.
+**Export:** resolve rope chains (each node's `NextKey` → the `targetname` of the next node).
+`keyframe_rope` and `move_rope` construct the **same** class — stock Source **`CRopeKeyframe`**
+(`vampire.dll` factories `0x1019d680` / `0x1019d6f0`, both `operator new(0x49c)` + the one ctor
+`0x1019dc80`) — so the two classnames carry no behavioural difference and chain roles are
+topological, not classname-derived. `NextKey` resolves the engine way, `FindEntityByName(NULL, name)`
+= the **first** entity of that name in spawn/entity order (= entity-lump order), which matters because
+a map can reuse rope names across installations (`sp_tutorial_1` reuses `tele4..tele9` twice, ~200 m
+apart). A `NextKey` naming no rope node is a mapper typo the engine warns about and draws nothing for —
+there are **122** of them across the 108 maps.
 
-**Runtime** (handler): build a tube or 2-quad billboard strip per rope from the polyline, width
-`Width`, tiling by `TextureScale`, unshaded/lit as appropriate; the `cable/cable` material is
-opaque. `move_rope` motion (`MoveSpeed`) is behavior → static for now (render at rest).
+**The rope's shape comes from three fields, and only one of them is the one the FGD name suggests:**
 
-**Acceptance:** cables hang between poles/buildings with correct sag; material tiles along length.
+- **`Slack`** feeds the sag, but the rest length is **not** `span + Slack` — it is computed in two
+  halves that live in different DLLs, and reading only the server half overstates every rope's sag:
+
+  | step | where | expression |
+  |---|---|---|
+  | `RecalculateLength` | vampire.dll `0x1019e5d0` | `m_RopeLength = (int)\|B − A\|` |
+  | `RopeThink` (gated on `m_RopeFlags & 1`, every 0.1 s) | vampire.dll `0x1019efb0` | `m_RopeLength = (int)\|B − A\| + m_Slack` |
+  | `RecomputeSprings` (the `m_Slack`/`m_RopeLength` RecvProxy `0x100be290` tail-jumps here) | client.dll `0x100bf1a0` | `springDist = (m_RopeLength + m_Slack − 100) / (nodes − 1)` |
+  | `CBaseRopePhysics::ResetSpringLength` | client.dll `0x10128ae0` | `m_flSpringDist = max(0, springDist)` |
+
+  Three things fall out and none are guessable from the FGD: `Slack` is applied **twice** (server-side
+  into `m_RopeLength`, then again client-side); a flat **−100 units** is subtracted; and the divide is
+  an *integer* one (`CDQ`/`IDIV`), so the per-segment length truncates. The rest length is therefore
+  `springDist × (nodes − 1)`, i.e. roughly `(int)|B − A| + 2·Slack − 100`.
+
+  The −100 dominates at VtMB's scale — authored `Slack` runs 0..100 across the whole game — so **most
+  ropes come out at or below their straight span and hang taut**, and the `max(0, …)` floor lets a
+  short rope collapse to a dead-straight chord. Only the short, high-slack links (chophouse meat-hook
+  chains at `Slack` 60–100 over ~1 m spans) keep a real loop. Both endpoints are locked by default
+  (`m_fLockedPoints = 3` in the ctor), so whatever surplus survives is forced into a catenary.
+
+  The sag is simulated, not authored: `C_RopeKeyframe::Init` (`0x100c04d0`) lerps the nodes evenly
+  along the straight A→B chord, then — when `m_RopeFlags & 0x40` is set, which the ctor default `0x48`
+  does — runs `RunRopeSimulation(5.0f)` (`0x100bf360`) so the strand has settled before it is first
+  drawn.
+- **`Type`** — not `Subdiv` — sets the simulated node count. `CRopeKeyframe::KeyValue` (`0x1019f2b0`)
+  maps `Type` 0 → `m_nSegments` 10, 1 → 4, **anything else → 2**, and `Activate` (`0x1019e310`) clamps
+  to `[2, 10]`. A `Type 2` rope therefore has **two** nodes: one span between two locked points, which
+  cannot sag at all — that is how the taut steel cables and rigid hanging chains read. **677 of the
+  game's 2,688 rope nodes (25%) are `Type 2`.**
+- **`Subdiv`** is the *client-side render* tessellation between physics nodes (capped by client.dll's
+  `rope_subdiv` cvar, alongside `rope_collide` / `rope_shake` / `r_drawropes` / `rope_drawlines`). It
+  is not the simulation resolution.
+
+The remaining `KeyValue` branches: `Dangling` 1 clears `ROPE_LOCK_END_POINT` in `m_fLockedPoints`, so
+the far end hangs free (**51** nodes game-wide); `Collide` 1 → `m_RopeFlags |= 0x04`; `Barbed` → `0x02`;
+`Breakable` → `0x10`; `RopeShader` 0/1/2 selects `cable/cable.vmt` / `cable/rope.vmt` /
+`cable/chain.vmt`, overriding `RopeMaterial`. `MoveSpeed` / `MoveTime` / `Tension` /
+`PositionInterpolator` are keyframe-path fields the rope renderer ignores → render at rest.
+
+Ctor defaults (`0x1019dc80`): `Slack` 0, `Width` 2, `TextureScale` 4, `m_nSegments` 5, `Subdiv` 2,
+`m_RopeLength` 20, `m_fLockedPoints` 3, `m_RopeFlags` 0x48, `m_bCreatedFromMapFile` 1. `DT_RopeKeyframe`
+(`0x1019d8d0`) offsets: `m_RopeFlags` 0x454, `m_Slack` 0x45c, `m_Width` 0x460, `m_TextureScale` 0x464,
+`m_nSegments` 0x468, `m_iRopeMaterialModel` 0x46c, `m_Subdiv` 0x470, `m_RopeLength` 0x474,
+`m_fLockedPoints` 0x478, `m_flScrollSpeed` 0x484, `m_hStartPoint` 0x490, `m_hEndPoint` 0x494,
+`m_iStartAttachment` 0x498, `m_iEndAttachment` 0x49a. `SetupHangDistance` (`0x1019e110`) is the
+code-created-rope path only: `CalcRopeStartingConditions(v1, v2, ROPE_MAX_SEGMENTS = 10, hangDist)`.
+
+`C_RopeKeyframe`'s own offsets differ — the recv table (`0x100be3d0`) puts `m_flScrollSpeed` 0x448,
+`m_RopeFlags` 0x44c, `m_iRopeMaterialModel` 0x450, `m_nSegments` 0x6b8, `m_hStartPoint` 0x6bc,
+`m_hEndPoint` 0x6c0, `m_iStartAttachment` 0x6c4, `m_iEndAttachment` 0x6c6, `m_Subdiv` 0x6c8,
+`m_RopeLength` 0x6cc, `m_Slack` 0x6d0, `m_TextureScale` 0x6d4, `m_fLockedPoints` 0x6d8, `m_Width` 0x6dc.
+The embedded `CRopePhysics<10>` starts at 0x458, so its node count is 0x464 and its node array 0x460.
+
+Decode the selected rope material → `tex/`, and emit per-segment endpoints keyed to the start node.
+
+**Runtime** (handler): build a tube or 2-quad billboard strip per rope, width `Width`, tiling by
+`TextureScale`, `Type`-derived node count, unshaded/lit as appropriate; the `cable/cable` material is
+opaque.
+
+**Acceptance:** cables hang between poles/buildings with correct sag; `Type 2` cables are dead straight;
+material tiles along length.
 
 ---
 

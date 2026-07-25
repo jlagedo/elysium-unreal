@@ -198,6 +198,7 @@ facts, valid regardless of target engine. Organisation and maintenance rules: `d
 | `audio_pipeline.md` | codecs, mixer, DSP, the SoundScheme system |
 | `source_movement.md` | `CGameMovement` constants + formulas |
 | `controls.md` | the input surface — keynames, bindable commands, default binds, cfg load order, control options UI |
+| `input-architecture.md` | the Unreal input design — the four planes, Enhanced Input over the command bus, remapping, gamepad, reserved keys |
 | `camera-view-modes.md` | the first↔third-person camera — blend weight, solver, cvars, the Unreal design |
 | `level_transitions.md` | the three spawn mechanisms + the opening map chain |
 | `savegame_format.md` | the `.sav` container, `.HL1/2/3` sections, and the game state they hold |

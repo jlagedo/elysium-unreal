@@ -542,11 +542,27 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
   each of `sp_tutorial_1`'s two reused `tele4..tele9` installations local) into per-segment
   `<map>.ropes` lines + decodes the `RopeMaterial`
   texture; the runtime's `AElysiumMapActor::BuildRopes` stands one Verlet `UCableComponent` per
-  segment (fixed both ends, rest length = span + slack → it hangs, MID off `M_World_Opaque`).
+  segment (`CableLength` = the sidecar's RE'd rest length, MID off `M_World_Opaque`), start pinned
+  and end pinned unless `Dangling`. Rest length is *not* `span + Slack`: half the computation lives
+  in `client.dll`, where `RecomputeSprings` applies `Slack` a second time, subtracts a flat 100
+  units and integer-divides — so most ropes sit at or below their straight span and hang taut
+  (`decisions.md` 2026-07-25 cont. 2). Node count is VtMB's `m_nSegments`, which `CRopeKeyframe::KeyValue`
+  derives from **`Type`** (0 → 10, 1 → 4, else → 2, clamped `[2, 10]`) — **not** `Subdiv`, which is
+  client-side render tessellation; a `Type 2` rope is one span and cannot sag, which is 25% of the
+  game's rope nodes (`decisions.md` 2026-07-25).
   Stock `CableComponent` plugin enabled (`decisions.md` 2026-07-24). `elysium.Ropes` A/Bs.
-  *Verified:* build + `test.bat` Substrate/Content green (new `Ropes` parse + sidecar tests); the
-  tutorial loads **70 cables** (72 chain links − 2 coincident-node artifacts dropped) and they hang
-  with correct sag across the alley in-game. As-built: `roadmap-archive.md` 8.7. *Deps:* none.
+  *Verified:* build + `test.bat` green (full suite); export audited against the entity lump on all
+  seven exported maps — endpoints match the BSP 1:1, first-wins `NextKey` binding agrees with a
+  nearest-position heuristic on every segment, and a 108-map sweep finds no rope node inside any
+  `sky_camera` room. The tutorial loads **70 cables** (72 chain links − 2 coincident-node artifacts
+  dropped), placement verified in-game by MCP screenshot after fixing `UCableComponent`'s
+  unset-`AttachEndTo` root-component fallback (`decisions.md` 2026-07-25 cont.); sag depth verified
+  in-game after RE'ing the client half of the rest-length computation — chophouse chains hang
+  vertical with a short loop at the hook, street wires droop gently pole-to-pole. *Open:* the shape
+  reproduces VtMB's own arithmetic exactly but has **not** been put side by side with the running
+  original; `Subdiv` (client-side render tessellation) has nowhere to go on `UCableComponent`, so a
+  short high-slack link is drawn as a `nodes − 1` polyline where VtMB draws a Catmull-Rom spline.
+  As-built: `roadmap-archive.md` 8.7. *Deps:* none.
 - [ ] **8.8 Sign / popup panels on the UI foundation** — 4.10's Canvas panel re-drawn on 8.6's
   stack. The **authored layout is honoured as proportion and grouping** (block rects, ordering,
   emphasis) and re-set with vector type on the resolution-independent layout — the `CSignUI`
@@ -569,8 +585,12 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
   key/button remapping + gamepad navigation across the 8.6 component set; UI text scaling;
   subtitle size/background controls; colourblind-safe status colours + a high-contrast option;
   FOV control; real graphics/audio options screens backing settings the engine already exposes.
-  Difficulty and balance are **not** in scope here — those are the logic layer.
-  *Deps:* 8.6, 10.6 (input path decided).
+  Difficulty and balance are **not** in scope here — those are the logic layer. The remapping
+  screen is the **10.6g** carve-out: it drives `UElysiumInputUserSettings` —
+  `QueryMapKeyInActiveContextSet` for conflicts, `MapPlayerKey` per slot, `ResetAllPlayerKeysInRow`
+  for Use Defaults — over three columns (Key/Button, Alternate, Gamepad) and filters its key
+  selector against `FElysiumReservedKeys` (`input-architecture.md`).
+  *Deps:* 8.6, 10.6 (input path built).
 
 **Slice acceptance** *(M5 criterion)*: New Game starts from a real, modern menu that is legible
 and correctly proportioned from 1080p to 4K and at 21:9; the HUD and the tutorial's popup signs
@@ -674,9 +694,46 @@ dialogue, scripted flow, quests, save/load included.
   build runs in the shell world's `BeginPlay` behind a loading screen); **trigger: when
   synchronous hitches start to matter, not before.** *Deps:* 4.6, 10.8.
 - [ ] **10.5 Packaged-build content path** — `content/` next to the exe, packaging story,
-  Shipping config sweep (debug layer compiled out). *Deps:* none until first package.
-- [ ] **10.6 EnhancedInput decision** — configured but unused; migrate the legacy mappings
-  or remove the plugin. *Deps:* none.
+  Shipping config sweep (debug layer compiled out), and the **`GameInputRedist.msi`** prerequisite
+  10.6e introduces (Windows 10 19H1 floor). *Deps:* none until first package.
+- [ ] **10.6 Input path — Enhanced Input, remapping, first-party gamepad** *(design:
+  `input-architecture.md`; VtMB facts: `controls.md`)* — retire the legacy `DefaultInput.ini`
+  axis/action block for the four-plane model: **Enhanced Input is the driver, the VtMB console
+  command string stays the action's identity.** One `UInputAction` per bindable command from the
+  `kb_act.lst` inventory, `UPlayerMappableKeySettings.Name` = a stable id, the command string
+  carried beside it and executed through `FElysiumConsole` on `Started`/`Completed` (so the
+  patch's *aliases* bind exactly like compiled verbs, and `-ExecCmds`/MCP/level scripts can fire
+  any player action by name). Movement/look stay first-class analog actions with per-device
+  modifier stacks. `EPlayerMappableKeySlot` First/Second/Third = VtMB's Key/Alternate + Gamepad.
+  Sub-steps, in build order:
+  - **a. Action table + generator** — hand-authored `Config/ElysiumInputActions.csv` (the
+    committed spec; **not** generated from the user's `kb_act.lst`, which is game-derived) →
+    `IA_*`/`IMC_*` assets emitted by `tools/build_content.py`, so `content.bat` keeps them in
+    lockstep.
+  - **b. `IMC_Player_KBM` + analog actions + `UElysiumInputRouter`** — retires the legacy
+    mappings and `bEnableLegacyInputScales`; contexts replace VtMB's `CClientMode*` split
+    (`IMC_Dialogue`/`_Menu`/`_Cinematic`), with `bIgnoreAllPressedKeysUntilRelease` settling the
+    held-input-into-conversation question on our side of the port.
+  - **c. Reserved keys** — console back to `` ` `` (VtMB's own `toggleconsole` key; frees F10 for
+    `snapshot`), Cog's shell shortcuts to `Ctrl+F1`–`Ctrl+F4`, all other dev keys on
+    `BindDebugKey`. Enforced by a **Substrate-tier test** over every generated IMC, not by
+    convention; `elysium.input.ReserveDebugKeys 0` A/Bs it in dev builds.
+  - **d. `UElysiumMouseSensitivity` modifier** — reads `sensitivity`/`m_pitch`/`m_yaw`/`m_filter`
+    off `FElysiumConsole` for VtMB's 0.066°/count; the options slider writes the cvar.
+  - **e. `GameInputWindows` + PS device configs + `IMC_Player_Gamepad`** — Xbox needs no config;
+    DS4/DualSense get `FGameInputDeviceConfiguration` entries (VID `054C`) mapping onto standard
+    `Gamepad_*` keys plus an overridden hardware-device id for glyph swapping. `GameInputRedist.msi`
+    joins 10.5's packaging story. Adaptive triggers/haptics deferred.
+  - **f. `UElysiumInputUserSettings` + `config.cfg` projection** — the key profile is
+    authoritative; `FElysiumConfigWriter` emits Valve-format text into `out/cfg/config.cfg` so
+    `vamputil.py`'s `FixKeyBindings` reads a faithful view (one-way; imported once on first run).
+    Rebinding works headlessly before any UI exists.
+  - **g. Remapping screen** — lands with **8.10** on the 8.6 stack, not here.
+
+  **Acceptance:** the tutorial is playable start to finish on keyboard+mouse and on an Xbox *and*
+  a DualSense pad with no third-party driver; every action rebindable to primary/alternate/gamepad
+  and surviving a restart; the reserved-key test green. Defaults are the **Patch 11.5** set
+  (`decisions.md` 2026-07-25). *Deps:* 9.3b (the console bus); 8.6/8.10 for the screen only.
 - [P] **10.7 Long tail** *(post-tutorial; promote to tasks when reached)* — combat (weapons,
   `vdata/items/`) + full RPG sheet + chargen; real NPC AI (runtime NavMesh + BT/StateTree
   replacing `info_node`); ragdoll/IK/anim blends; MetaSounds; `.emc`-style cache for `.ents` if
@@ -785,6 +842,7 @@ extraction"; durable format/behaviour facts fold into the owning topic docs
 | Sidecar space drift (Godot-era leftovers) | subtle geometry/logic bugs | 0.4 audit before any new consumer |
 | Save determinism erodes | broken saves late | standing rule since P1: no engine timers, own serializable structs |
 | Legal posture | project-ending | bring-your-own-game holds; nothing game-sourced committed — standing constraint on every task |
+| `GameInputWindows` is a beta plugin with a redist prerequisite | PlayStation pads regress or fail to enumerate on a player's machine | 10.6e authors device configs against the documented VID/PID set and keeps the mapping in `Config/DefaultGameInput.ini` (data, not code); Xbox/XInput remains the fallback path, so a GameInput failure degrades to "PS pads need Steam Input" rather than to no gamepad; `GameInputRedist.msi` is tracked as a 10.5 packaging prerequisite |
 | Asset enhancement drifts off-style | silent look regression | `asset-enhancement.md` adjudication test + `elysium.EnhancedTextures` A/B toggle keeps the faithful set as reference; per-family review, not per-texture |
 | Modern UI loses VtMB's voice (reads generic/AAA) | the remaster stops feeling like VtMB | 8.6 keeps the original's structure, palette and iconography and re-skins only the craft; presentation test applied per screen; `m0_menu_build.md` + extracted `.res`/scheme (PL8) are the intent reference every screen is checked against |
 | "Polish" leaks into the logic layer | silent divergence from retail behaviour, unfindable later | `remaster-direction.md`'s governing rule: RE first, owner's call, dated decision-log entry recording faithful *and* chosen behaviour; default is reproduce, and layer assignment happens before the work, not after |

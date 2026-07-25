@@ -193,7 +193,7 @@ private:
 
 	// Ropes (8.7): one Verlet UCableComponent per <map>.ropes segment (an overhead cable), kept
 	// alive for the map's lifetime (freed on unload). MIDs off M_World_Opaque bound to the decoded
-	// RopeMaterial texture; the cable's fixed endpoints and slack come straight from the sidecar.
+	// RopeMaterial texture; the cable's fixed endpoints and rest length come straight from the sidecar.
 	UPROPERTY() TArray<TObjectPtr<class UCableComponent>> Ropes;
 
 	// B3 NPC skeletal bodies: per-stem mesh + idle-anim cache, GC-rooted here so a model shared by
@@ -249,7 +249,8 @@ private:
 	// with a MID off M_Decal. No-op when the sidecar is absent or elysium.Decals is 0.
 	void BuildDecals();
 	// Build the overhead cables from <map>.ropes (8.7): one Verlet UCableComponent per segment,
-	// fixed at both endpoints, rest length = straight distance + slack (so it hangs), width/texture
+	// fixed at both endpoints, rest length straight off the sidecar (below the span for a taut cable,
+	// above it for one that hangs), width/texture
 	// from the sidecar, material a MID off M_World_Opaque. No-op when the sidecar is absent or
 	// elysium.Ropes is 0.
 	void BuildRopes();

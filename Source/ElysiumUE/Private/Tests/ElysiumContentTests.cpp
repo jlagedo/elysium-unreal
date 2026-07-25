@@ -278,7 +278,8 @@ bool FElysiumTutorialDecalsTest::RunTest(const FString&)
 
 // =====================================================================================
 // Ropes (8.7) — the `<map>.ropes` cable sidecar. Validates that every segment is a well-formed
-// cable (distinct endpoints, positive width, non-negative slack, at least one subdivision) and
+// cable (distinct endpoints, positive width, non-negative slack, a node count inside VtMB's
+// [2, 10] ROPE_MAX_SEGMENTS bound) and
 // that its decoded RopeMaterial texture exists on disk, so the runtime's BuildRopes always finds
 // an albedo for each UCableComponent. The tutorial strings its telephone lines this way.
 // =====================================================================================
@@ -304,7 +305,7 @@ bool FElysiumTutorialRopesTest::RunTest(const FString&)
 	TestTrue(TEXT("tutorial carries cable segments"), Defs.Num() > 0);
 
 	const FString Dir = FElysiumContentPaths::MapDir(Map);
-	int32 Degenerate = 0, BadWidth = 0, BadSlack = 0, BadSubdiv = 0, MissingTex = 0;
+	int32 Degenerate = 0, BadWidth = 0, BadRest = 0, BadNodes = 0, MissingTex = 0, Masked = 0;
 	for (const FElysiumRopeDef& D : Defs)
 	{
 		if (FVector::DistSquared(D.A, D.B) < 1.0)   // endpoints < 1 cm apart — no cable to draw
@@ -315,24 +316,37 @@ bool FElysiumTutorialRopesTest::RunTest(const FString&)
 		{
 			++BadWidth;
 		}
-		if (D.SlackCm < 0.f)
+		// Rest length may legitimately fall below the span (that is a taut cable), but never
+		// below zero — `ResetSpringLength` floors the per-segment spring at 0.
+		if (D.RestCm < 0.f)
 		{
-			++BadSlack;
+			++BadRest;
 		}
-		if (D.Subdiv < 1)
+		if (D.Nodes < 2 || D.Nodes > 10)
 		{
-			++BadSubdiv;
+			++BadNodes;
 		}
 		// A "-" tex is a legitimate decode miss (runtime uses a plain MID); a named tex must exist.
 		if (D.Tex != TEXT("-") && !IFileManager::Get().FileExists(*(Dir / D.Tex)))
 		{
 			++MissingTex;
 		}
+		if (D.Bump != TEXT("-") && !IFileManager::Get().FileExists(*(Dir / D.Bump)))
+		{
+			++MissingTex;
+		}
+		// The chains are the reason matflags exists — assert the tutorial still carries a masked
+		// rope, so a regression that flattens every material back to opaque fails here.
+		if ((D.MatFlags & FElysiumRopeDef::Masked) != 0)
+		{
+			++Masked;
+		}
 	}
+	TestTrue(TEXT("tutorial carries at least one $alphatest (chain) rope"), Masked > 0);
 	TestEqual(TEXT("every cable has distinct endpoints"), Degenerate, 0);
 	TestEqual(TEXT("every cable has positive width"), BadWidth, 0);
-	TestEqual(TEXT("every cable has non-negative slack"), BadSlack, 0);
-	TestEqual(TEXT("every cable has at least one subdivision"), BadSubdiv, 0);
+	TestEqual(TEXT("every cable has non-negative rest length"), BadRest, 0);
+	TestEqual(TEXT("every cable's node count is inside VtMB's [2, 10] bound"), BadNodes, 0);
 	TestEqual(TEXT("every named rope texture exists on disk"), MissingTex, 0);
 
 	return true;

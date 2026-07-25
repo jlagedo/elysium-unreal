@@ -1,0 +1,4 @@
+# Windows batch files must be CRLF: cmd.exe seeks by byte offset assuming \r\n,
+# so an LF-only .bat is parsed with drifting offsets and leading characters are lost.
+*.bat text eol=crlf
+*.cmd text eol=crlf

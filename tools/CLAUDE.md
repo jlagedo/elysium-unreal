@@ -10,13 +10,27 @@ The export pipeline, the sidecar contracts each writer emits, and the runtime th
 consumes them are described in `../docs/rebuild-strategy.md`. `UE_bsp_to_scene.py` (the
 flagship map exporter) and its per-feature sidecar writers (world/material/lighting/
 water/decal/skybox/rope) write the intermediates the runtime reads back. `write_ropes` resolves
-each `move_rope`/`keyframe_rope` chain (`NextKey` linkage; `move_rope` is the chain start) into
-per-segment `<map>.ropes` cable lines and decodes the `RopeMaterial` texture, dropping
-coincident-node (zero-length) links; the runtime builds one `UCableComponent` per line (roadmap 8.7).
-`NextKey` binds **first-match by entity-lump order** — the engine's `FindEntityByName(NULL, …)` rule
-(RE-confirmed: `keyframe_rope`/`move_rope` are stock Source `CRopeKeyframe` in `vampire.dll`). A map
-can reuse rope targetnames across separate installations (`sp_tutorial_1` reuses `tele4..tele9` twice,
-~200 m apart); a last-wins index cross-linked them into map-spanning cables, so first-wins is used.
+each `move_rope`/`keyframe_rope` chain (`NextKey` linkage) into per-segment `<map>.ropes` cable lines
+(12 tokens: `tex ax ay az bx by bz width_cm rest_cm nodes texscale flags`) and decodes the rope
+material texture, dropping coincident-node (zero-length) links; the runtime builds one
+`UCableComponent` per line (roadmap 8.7). Both classnames construct the same stock Source
+`CRopeKeyframe` (RE'd in `vampire.dll`), so chain roles are topological, not classname-derived.
+`NextKey` binds **first-match by entity-lump order** — the engine's `FindEntityByName(NULL, …)` rule.
+A map can reuse rope targetnames across separate installations (`sp_tutorial_1` reuses `tele4..tele9`
+twice, ~200 m apart); a last-wins index cross-linked them into map-spanning cables, so first-wins is
+used. The emitted numbers are the RE'd `CRopeKeyframe` state, not the raw keyvalues: `nodes` is
+`m_nSegments`, which VtMB derives from **`Type`** (0 → 10, 1 → 4, else → 2, clamped `[2, 10]`) — not
+from `Subdiv`, which is client-side render tessellation — so a `Type 2` rope is one span between two
+locked points and cannot sag; `rest_cm` is the *simulated rest length*, resolved offline because the
+engine's arithmetic is integral and spans both DLLs (`RopeThink` folds `Slack` into `m_RopeLength`,
+then `RecomputeSprings` adds `Slack` a second time, subtracts a flat 100 units, and integer-divides
+by `nodes − 1`) — most ropes land at or under their straight span and hang taut, so `rest_cm` below
+`|B − A|` is expected; `flags` carries `Dangling` (1, unpins the far end), `Collide` (2),
+`Barbed` (4), `Breakable` (8); `RopeShader` overrides `RopeMaterial` when present. Numbers parse with
+C `atof` semantics (a leading-prefix parse), because Hammer wrote a few origins with a comma decimal
+separator (`hw_jewelry_1`'s chandelier ropes) that a bare `float()` rejects. A `NextKey` naming no
+node is map-data breakage (122 across the 108 maps) and is logged, not silently dropped. Full RE:
+`../docs/entity_visuals.md` R3.
 
 **The `UE_` convention.** An exporter prefixed `UE_` emits **Unreal-native** output —
 centimetres, Z-up, left-handed, triangle winding pre-reversed — so the C++ runtime reads

@@ -6,6 +6,59 @@ trigger. A behavioural divergence from retail lands here carrying both the faith
 chosen behaviour (`remaster-direction.md`'s governing rule). Entries are never rewritten —
 append a correction as a new entry.
 
+- **2026-07-25** — **The input path: four owner calls settling roadmap 10.6.** Design:
+  `docs/input-architecture.md`. Enhanced Input becomes the driver while **the VtMB console command
+  string stays the action's identity** — one `UInputAction` per bindable command, executed through
+  `FElysiumConsole` on `Started`/`Completed`, so an action bound to a patch *alias* (`vm_feed` →
+  `checkFeed()`) is indistinguishable from one bound to a compiled verb, as in VtMB. Four calls:
+  1. **First-party PlayStation support via `GameInputWindows` (new work, Feel/Presentation axis).**
+     The engine's beta GameInput plugin replaces XInput+RawInput; Xbox pads need no configuration,
+     DS4/DualSense arrive as `GameInputFamilyHid` and get hand-authored `FGameInputDeviceConfiguration`
+     entries (VID `054C`; PIDs `05C4`/`09CC`/`0CE6`/`0DF2`) mapping onto standard `Gamepad_*` keys plus
+     `bOverrideHardwareDeviceIdString` for glyph swapping. **`WinDualShock` is ruled out**: its
+     `Build.cs` reflects on `LibScePad` and compiles to `DUALSHOCK4_SUPPORT=0` without the licensed
+     Sony platform extension. Consequences accepted: `GameInputRedist.msi` ships with the game
+     (Win10 19H1 floor, joins 10.5), and adaptive triggers/haptics are deferred (the seam is the
+     plugin's `GameInputHapticAudioDevice`). A third-party FAB plugin was rejected — the project
+     vendors only MIT code. **No original to reproduce**: `controls.md` records that VtMB ships raw
+     joystick cvars, no UI, no default binds, and a `joystick.cfg` that does not exist.
+  2. **Binding state lives in `UEnhancedInputUserSettings`; `cfg/config.cfg` is a one-way
+     projection.** The key profile is authoritative (slots, conflict query, SaveGame persistence
+     keyed by `MappingName`, all engine-supported). `FElysiumConfigWriter` emits Valve-format text
+     into `out/cfg/config.cfg` on every `ApplySettings`, mirroring `Host_WriteConfiguration`, so
+     `vamputil.py`'s `FixKeyBindings` and any bind-reading level script resolve a faithful view
+     through the 9.3b `nt.getcwd` redirect. An existing `config.cfg` with no profile beside it is
+     imported once on first run. **Faithful behaviour:** the text file *is* the settings model and
+     the engine rewrites it on exit. **Ours:** the profile is the model and the text is a view —
+     rejected dual ownership over fidelity to a storage format, since nothing in VtMB's logic layer
+     depends on the file being writable by the game.
+  3. **Defaults are the Unofficial Patch 11.5 set** (64 actions), not retail's 39 — the richer,
+     better-labelled, already-grouped inventory that is the players' mental model: arrows strafe,
+     `,`/`.` turn, ten `vhotkey` slots, numpad camera verbs, `+lookup`/`+lookdown`, `autospeed`/
+     `automove`, `skip`. Two carve-outs, both divergences from *both* shipped default sets:
+     **`vphysicshand` is dropped** (dead bind — the item exists, the console verb appears in no
+     binary, and the patch rebinds `p` to `skip` regardless), and **`kb_def.lst`'s disagreements
+     with `default.cfg`** (the `[`/`]` swap, retail's double-bound `,` landing on `pause`, the
+     patch's double-bound `p`) resolve to the `default.cfg` reading — we have one defaults source
+     where VtMB has two that were never generated from each other, so "Use Defaults" reproduces a
+     fresh config rather than VtMB's divergent one.
+  4. **The dev layer occupies no bare key a player can bind, and a test enforces it.** Console
+     returns to `` ` `` — VtMB's own `toggleconsole` key, and already one console via the 9.3b
+     bridge — which frees F10 for `snapshot`; Cog's shell shortcuts move to `Ctrl+F1`–`Ctrl+F4`
+     (`FCogInputChord` derives from `FInputChord`, so this is configuration); every other dev key
+     uses `UEnhancedInputComponent::BindDebugKey`, which takes an `FInputChord` directly and never
+     enters a mapping context. Reserving `` ` `` and `ESCAPE` costs the player nothing: neither
+     `toggleconsole` nor `cancelselect` appears in `kb_act.lst` in retail *or* the patch, so VtMB
+     itself treats them as non-rebindable. `FElysiumReservedKeys` is consumed by the rebinding
+     widget's key filter, a **Substrate-tier test** asserting no default mapping in any generated
+     IMC lands on a reserved key, and a dev-build startup collision check — so a future action with
+     `DefaultPrimary=F1` fails `test.bat` rather than silently shadowing the debug menu. This trades
+     `debug-tooling.md`'s bare-F1 ergonomic for the player's defaults staying undistorted by a dev
+     tool. `elysium.input.ReserveDebugKeys 0` A/Bs it in dev builds.
+  **Deferred, not decided:** CommonUI/CommonInput adoption. It owns gamepad UI focus/back-routing
+  and the glyph swap that consumes call 1's hardware-device id, and it shapes the UI foundation
+  rather than bolting onto it — so the call belongs to **8.6**, not 10.6.
+
 - **2026-07-24** — **9.3b/B5 as-built: the console bridge, and three calls it forced.** The `ccmd`/`cvar`
   console surface (`FElysiumConsole` + the two `vampire` objects) is a faithful port — `ccmd`
   attribute-set executes, `user.cfg`'s `alias patchtype "setPlus()"` drives the Basic/Plus switch, the
@@ -882,5 +935,98 @@ append a correction as a new entry.
   uses **first-wins**. First-wins and a nearest-position heuristic give the identical 70 segments on the
   tutorial (each installation is lump-contiguous); first-wins is the faithful engine rule. Also drops
   coincident-endpoint (< 1 cm) links — zero-length chain artifacts.
+- **2026-07-25** — **Rope shape is driven by `Type`, not `Subdiv` (roadmap 8.7 follow-up).** A
+  full audit of the rope pipeline, export → in-game placement, after the cables still read wrong.
+  **Placement is not the defect and never was:** re-derived every rope node straight from the
+  entity lump on all seven exported maps and the emitted endpoints match the BSP 1:1; first-wins
+  `NextKey` binding and a nearest-position heuristic pick the **same** target for every emitted
+  segment on every map (`differs = 0`), so the 2026-07-24 first-wins fix holds. The 3D-skybox
+  hypothesis is also cleared: a sweep of all 108 maps finds **no** rope node inside any
+  `sky_camera` room, so no rope needs the `world(v) = scale · (v − origin)` miniature transform
+  that `SkyMesh` carries — the `.ropes` path correctly bypasses it. The remaining apparent
+  "broken links" are **map-data typos** (`chop06 → chop7`, `tele8 → tele9`, …): 122 dangling
+  `NextKey` names across the 108 maps, which the engine also warns about and draws nothing for.
+  The exporter now logs them instead of dropping them silently, since silent drops are
+  indistinguishable from a linking bug.
+  **What was actually wrong — RE'd in `vampire.dll` (`CRopeKeyframe`, addresses in
+  `entity_visuals.md` R3):** the simulated node count `m_nSegments` comes from the **`Type`**
+  keyvalue (`KeyValue` `0x1019f2b0`: 0 → 10, 1 → 4, else → 2; `Activate` `0x1019e310` clamps to
+  `[2, 10]`), **not** from `Subdiv` — `Subdiv` is client-side render tessellation between physics
+  nodes, capped by client.dll's `rope_subdiv`. The runtime had been inventing
+  `NumSegments = clamp(Subdiv × 3, 4, 16)`, which both used the wrong field and exceeded VtMB's
+  hard max of 10. The consequence is structural, not cosmetic: **677 of the game's 2,688 rope
+  nodes (25%) are `Type 2` = two nodes = one span between two locked points, which cannot sag at
+  all** — the observatory's lift cables, the hanging-lamp and crucifix chains. We were giving them
+  nine Verlet spans and gravity; a 48.8 m `Type 2` cable was drooping ~5 m. `Dangling` was dropped
+  too (`KeyValue` clears `ROPE_LOCK_END_POINT`, so the far end must swing free — 51 nodes
+  game-wide), as were `RopeShader` (overrides `RopeMaterial`), `Collide`, `Barbed`, `Breakable`.
+  Sidecar widened to 12 tokens (`nodes` replaces `subdiv`, `flags` added — `UCableComponent` has no
+  separate render tessellation, so `Subdiv` has nowhere to go); runtime sets
+  `NumSegments = nodes − 1` and `bAttachEnd = !Dangling`, and raises `SolverIterations` 2 → 8 so
+  the shape settles on its catenary rather than short of it.
+  **`CableLength = span + slack` is confirmed, not assumed:** `RecalculateLength` (`0x1019e5d0`)
+  sets `m_RopeLength = (int)|B − A|` and `RopeThink` (`0x1019efb0`) sets
+  `m_RopeLength = (int)|B − A| + m_Slack`, with both endpoints locked by ctor default
+  (`m_fLockedPoints = 3`). **Left faithful, flagged as the open question:** that rest length forces
+  a deep catenary — replaying UE's exact Verlet solve over the real data gives a median **4.0 m**
+  sag on `sm_hub_1`'s 25–28 m street wires (`Slack 80` = 2.03 m of surplus over a ~26 m span), and
+  it converges on the analytic catenary, so it is the authored slack talking, not solver error.
+  That is the dominant remaining visual difference and it is **not** yet A/B'd against the running
+  original; if it turns out too deep, the divergence needs its own dated entry here.
+  **Also fixed:** `write_ropes` parsed origins with a bare `float()`, so `hw_jewelry_1`'s
+  comma-decimal chandelier origins (`"-3496,92 -3147,1 140"`) raised `ValueError` and took that
+  map's whole export down. Now parsed with C `atof` semantics, matching what the engine reads.
+- **2026-07-25 (cont.)** — **The rope misplacement itself was a runtime bug: `UCableComponent`'s
+  unset `AttachEndTo` resolves to the owner's ROOT component, not the cable.** In-game verification
+  of the morning's `Type`/flags fix (MCP screenshots against the rope-node gizmos) showed every
+  cable still wrong the same way the user reported: starts pinned correctly on the pole insulators,
+  far ends all converging into the chophouse — the room that happens to sit next to the world
+  origin. Root cause read from engine source (`EngineTypes.cpp`,
+  `FBaseComponentReference::ExtractComponent`): with no `OtherActor`, no `ComponentProperty`, and no
+  `PathToComponent`, `AttachEndTo.GetComponent(GetOwner())` returns **`GetRootComponent()`** — it is
+  never null, so `GetEndPositions`' `EndComponent = this` fallback is dead code. Our cables hang off
+  the map actor's `SceneRoot` (identity, world origin), so `EndLocation = B − A` was read as the
+  **absolute world point `B − A`**: every one of the 70 cables' far ends landed within ~20 m of the
+  origin, hundreds of metres from its pole ("connecting across the map"), and no cable ever reached
+  its next node ("close ropes don't connect"). The stock `CableActor` never trips this because its
+  cable IS the root component, making the fallback self-referential and accidentally correct — which
+  is why the standard usage pattern hid the bug. Fix: `EndLocation = B` (SceneRoot space **is**
+  world space; one line, `BuildRopes`). Verified in-game at three sites: the chophouse chains hang
+  dead vertical, the spawn-street wires sag pole-to-pole, the alley network threads its node chain.
+  The 2026-07-25 entry's export-side verdict stands: the sidecar endpoints were correct all along —
+  the earlier in-game symptom was this runtime bug, not the chain resolution.
+- **2026-07-25 (cont. 2)** — **Correction: rope rest length is not `span + Slack`. Half the
+  computation lives in `client.dll`, and it shortens every rope by 100 units.** The two entries
+  above assert `CableLength = span + slack` "confirmed, not assumed" from the server half alone,
+  and flag the resulting deep catenary as the open question. Both are wrong, and the flagged
+  question is now answered by RE rather than by an A/B. `C_RopeKeyframe::RecomputeSprings`
+  (client.dll `0x100bf1a0`, reached from the shared `m_Slack`/`m_RopeLength` RecvProxy `0x100be290`)
+  computes `springDist = (m_RopeLength + m_Slack − 100) / (nodes − 1)`, and
+  `CBaseRopePhysics::ResetSpringLength` (`0x10128ae0`) floors it at 0. Three consequences, none
+  visible from the server side or the FGD: **`Slack` is applied twice** (once server-side into
+  `m_RopeLength` by `RopeThink`, again here), a flat **−100 units** is subtracted (`LEA EAX,[EAX +
+  EDX*0x1 + -0x64]`), and the divide is an **integer** one (`CDQ`/`IDIV`), so the per-segment
+  length truncates. Rest length is therefore `springDist × (nodes − 1)` ≈ `(int)|B − A| + 2·Slack −
+  100`, not `span + Slack`.
+  The −100 dominates at VtMB's scale: authored `Slack` runs 0..100 across the whole game, so **most
+  ropes come out at or below their straight span and hang taut**, and the `max(0, …)` floor lets a
+  short one collapse to a dead-straight chord. On `sp_tutorial_1` that reclassifies 26 of 70 cables
+  from sagging to taut and cuts the chophouse meat-hook links from 2.6× their span to 1.5×; the
+  Santa Monica street wires drop from ~12% surplus to ~9%, a visible droop rather than a swag.
+  Sag was never a solver artefact and is genuinely simulated: `C_RopeKeyframe::Init` (`0x100c04d0`)
+  lerps the nodes along the straight chord, then runs `RunRopeSimulation(5.0f)` (`0x100bf360`)
+  because the ctor's `m_RopeFlags = 0x48` sets bit `0x40`.
+  **The rest length is resolved offline, in the exporter**, and the sidecar's column 9 changes
+  meaning from `slack_cm` to `rest_cm` (still 12 tokens). The arithmetic is integral and in Source
+  units, which is where the exporter already works; putting it at runtime would mean converting cm
+  back to inches to reproduce a truncation. `BuildRopes` now assigns `CableLength = RestCm`
+  verbatim, and `RestCm < |B − A|` is the normal case, not an error.
+  **Also corrected — the exporter's keyvalue defaults, read from the ctor (`0x1019dc80`) instead of
+  guessed:** `Slack` 0 (was 25), `TextureScale` 4 and datamap-clamped to `[0.1, 10]` (was 1), and a
+  rope with no `Type` key at all keeps `m_nSegments` 5 (was being treated as `Type 0` → 10).
+  Verified in-game by MCP screenshot: the chophouse chains hang vertical with a short loop at the
+  hook instead of a deep V, and the spawn-street wires droop gently from the pole.
+  **Still not A/B'd against the running original** — this is the engine's own arithmetic reproduced
+  exactly, so it needs no divergence entry, but nobody has put the two side by side.
 - **Pending** — 5.5 level-script execution strategy (interpreter vs transpile vs CPython);
   10.6 EnhancedInput migrate-or-remove.

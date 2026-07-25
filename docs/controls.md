@@ -416,8 +416,9 @@ cvar layer and nothing else.
 
 ## Notes for Elysium-Unreal
 
-Facts that constrain the rebuild, not decisions (the input-path decision is roadmap **10.6**;
-the options-screen work is **8.6**):
+Facts that constrain the rebuild, not decisions. The Unreal design they feed is
+**`input-architecture.md`** (build task: roadmap **10.6**; the remapping screen is **8.10** on
+**8.6**'s stack):
 
 - **The action set is the whitelist in `kb_act.lst`**, and the patch's version is the richer,
   better-labelled one. It is the natural source for a remapping screen's action list — it is
@@ -427,12 +428,16 @@ the options-screen work is **8.6**):
 - `+`/`-` button pairs map cleanly onto Unreal's pressed/released events; the one-key-owns-the-
   press rule matters for overlapping keys.
 - The `,`/`.` ↔ arrow-key swap, the ten `vhotkey` slots, and the numpad camera verbs are
-  **patch** behaviour, not retail. Per `remaster-direction.md` the logic layer reproduces; which
-  of the two default sets ships is an owner call needing a `decisions.md` entry.
+  **patch** behaviour, not retail. The **patch set is the one that ships** — with `vphysicshand`
+  dropped and the `kb_def.lst`/`default.cfg` disagreements resolved to `default.cfg`
+  (`decisions.md` 2026-07-25).
 - `config.cfg` round-tripping (`unbindall` + `bind` lines + archived cvars) is what the embedded
   CPython VM's `FixKeyBindings` reads — the VM's `nt.getcwd`/`sys.moddir` redirect to
-  `tools/out/` exists so that read resolves (roadmap 9.3b, `python_bridge.md`).
+  `tools/out/` exists so that read resolves (roadmap 9.3b, `python_bridge.md`). The rebuild keeps
+  that file as a **one-way projection** of the Enhanced Input key profile, not as the settings
+  model (`decisions.md` 2026-07-25).
 - Auto-aim (`sv_aim`) defaults to **off**.
 - Gamepad support has no original to reproduce — VtMB ships raw joystick cvars, no UI, no
   default binds, and a `joystick.cfg` that does not exist. Anything here is new work under the
-  Presentation/Feel axes rather than a port.
+  Presentation/Feel axes rather than a port; the device layer is the engine's `GameInputWindows`
+  plugin with authored PlayStation device configs (`input-architecture.md` § Gamepad).

@@ -2,10 +2,10 @@
 REM Run the Elysium automation tests headless (roadmap P2.8). Drives Unreal's own automation
 REM runner over the ElysiumUE test suite and exports a JSON+HTML report.
 REM
-REM   test.bat                 -> the whole Elysium suite (Substrate + Content)
-REM   test.bat Substrate       -> just the content-free tier (variant/expr/kv/queue/registry/IO)
-REM   test.bat Content         -> just the content-gated tier (real .ents parse; self-skips if unexported)
-REM   test.bat Elysium.Substrate.Expr   -> one test by its full dotted name
+REM   test.bat                 : the whole Elysium suite (Substrate + Content)
+REM   test.bat Substrate       : just the content-free tier (variant/expr/kv/queue/registry/IO)
+REM   test.bat Content         : just the content-gated tier (real .ents parse; self-skips if unexported)
+REM   test.bat Elysium.Substrate.Expr   : one test by its full dotted name
 REM
 REM The Substrate tier runs under -nullrhi (no GPU, no content). The Content tier reads the
 REM exported maps under tools\out and self-skips any map the pipeline has not exported, so a

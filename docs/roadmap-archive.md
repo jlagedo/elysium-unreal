@@ -1081,10 +1081,63 @@ Records are verbatim moves out of `roadmap.md`: where one says "the decision log
     `.ents`: `Width`, `Slack`, `Subdiv`, `TextureScale`, `RopeMaterial` (`cable/cable` /
     `cable/chain` / `cable/chainb` in the tutorial) present on all 107 nodes; `MoveSpeed`/`MoveTime`/
     `Tension` (the animated-rope behaviour) rendered at rest.
+  - **Follow-up audit + `Type` fix (2026-07-25).** The cables still read wrong in game, so the whole
+    pipeline was re-audited export → placement. **Placement was never the defect:** every rope node
+    re-derived straight from the entity lump on all seven exported maps matches the emitted endpoints
+    1:1; first-wins `NextKey` binding and a nearest-position heuristic agree on **every** emitted
+    segment on every map; and a sweep of all 108 maps finds no rope node inside any `sky_camera` room,
+    so nothing needed the 3D-skybox miniature transform. The apparent broken links are map-data typos
+    (122 dangling `NextKey` names game-wide) the engine also draws nothing for — now logged instead of
+    silently dropped.
+    The real defect was the node count. RE'd in `vampire.dll`: `m_nSegments` comes from **`Type`**
+    (`CRopeKeyframe::KeyValue` `0x1019f2b0` — 0 → 10, 1 → 4, else → 2; `Activate` `0x1019e310` clamps
+    `[2, 10]`), **not** `Subdiv`, which is client-side render tessellation capped by client.dll's
+    `rope_subdiv`. The runtime had invented `clamp(Subdiv × 3, 4, 16)`, which used the wrong field and
+    exceeded VtMB's max of 10. **25% of the game's 2,688 rope nodes are `Type 2` = two nodes = one
+    span between two locked points, which cannot sag** (observatory lift cables, hanging-lamp and
+    crucifix chains); they were being given nine Verlet spans and gravity, drooping ~5 m over a 48.8 m
+    run. `Dangling` (clears `ROPE_LOCK_END_POINT` — 51 nodes game-wide), `RopeShader`, `Collide`,
+    `Barbed` and `Breakable` were dropped entirely. Sidecar widened to 12 tokens (`nodes` replaces
+    `subdiv`, `flags` added); runtime sets `NumSegments = nodes − 1`, `bAttachEnd = !Dangling`, and
+    `SolverIterations` 2 → 8 so the shape settles on its catenary. `CableLength = span + slack` was
+    **confirmed** against `RecalculateLength` (`0x1019e5d0`) and `RopeThink` (`0x1019efb0`) rather
+    than assumed. Also fixed a latent export crash: `write_ropes` used a bare `float()` on origins, so
+    `hw_jewelry_1`'s comma-decimal chandelier origins (`"-3496,92 …"`) raised `ValueError` and took
+    that map's entire export down; now parsed with C `atof` semantics like the engine. **Open:** the
+    sag depth `Slack` forces (median ~4.0 m on `sm_hub_1`'s 25–28 m street wires) matches the RE'd
+    rest length and converges on the analytic catenary, but is not yet A/B'd against the running
+    original. Full RE + field map: `entity_visuals.md` R3; `decisions.md` 2026-07-25.
+  - **The actual misplacement was a second, runtime bug (2026-07-25 cont.):** `UCableComponent`
+    resolves `EndLocation` against `AttachEndTo.GetComponent(GetOwner())`, and an unset
+    `FComponentReference` falls back to the owner's **root** component (`ExtractComponent`,
+    `EngineTypes.cpp`) — never null — so the `EndComponent = this` fallback in `GetEndPositions`
+    is unreachable. With cables attached under `SceneRoot` (identity), `EndLocation = B − A` was an
+    absolute world point: all 70 cable far-ends converged near the world origin. Fix:
+    `EndLocation = B` (SceneRoot space is world space). Verified in-game by MCP screenshot at three
+    sites against the rope-node gizmo boxes. `decisions.md` 2026-07-25 (cont.).
+  - **Rest length: the client half (2026-07-25 cont. 2).** With placement fixed, the cables sagged
+    far deeper than the original. `CableLength = span + slack` — asserted "confirmed" above from the
+    server side alone — is wrong: half the computation is in `client.dll`.
+    `C_RopeKeyframe::RecomputeSprings` (`0x100bf1a0`, reached from the shared `m_Slack`/`m_RopeLength`
+    RecvProxy `0x100be290`) computes `springDist = (m_RopeLength + m_Slack − 100) / (nodes − 1)` and
+    `CBaseRopePhysics::ResetSpringLength` (`0x10128ae0`) floors it at 0. So `Slack` is applied
+    **twice**, a flat **−100 units** is subtracted (`LEA EAX,[EAX + EDX*0x1 + -0x64]`), and the
+    divide is **integer** (`CDQ`/`IDIV`) — rest ≈ `(int)|B − A| + 2·Slack − 100`. Authored `Slack` is
+    0..100 game-wide, so the −100 dominates and **most ropes hang taut**: 26 of `sp_tutorial_1`'s 70
+    cables now rest below their span, the chophouse meat-hook links drop from 2.6× span to 1.5×, and
+    the street wires from ~12% surplus to ~9%. Sag is genuinely simulated — `C_RopeKeyframe::Init`
+    (`0x100c04d0`) lerps nodes along the chord then runs `RunRopeSimulation(5.0f)` (`0x100bf360`),
+    which the ctor's `m_RopeFlags = 0x48` enables. The arithmetic is integral and in Source units, so
+    it is resolved **in the exporter**: sidecar column 9 changes meaning from `slack_cm` to `rest_cm`
+    (still 12 tokens) and `BuildRopes` assigns `CableLength = RestCm` verbatim, with
+    `RestCm < |B − A|` the normal case. Exporter keyvalue defaults also corrected from the ctor
+    (`0x1019dc80`): `Slack` 0 (was 25), `TextureScale` 4 clamped `[0.1, 10]` (was 1), and no `Type`
+    key keeps `m_nSegments` 5 (was treated as `Type 0` → 10). Verified in-game by MCP screenshot.
+    `decisions.md` 2026-07-25 (cont. 2).
   - **Exporter** (`UE_bsp_to_scene.py::write_ropes`, run in `main()` next to `write_sprites`):
     collects every rope node, indexes by targetname, and for each node with a `NextKey` emits one
-    `<map>.ropes` segment — `tex ax ay az bx by bz width_cm slack_cm subdiv texscale`. Endpoints are
-    the two node origins via `source_to_unreal` (as `.ents` does); `Width`/`Slack` are lengths
+    `<map>.ropes` segment — `tex ax ay az bx by bz width_cm rest_cm nodes texscale flags`. Endpoints
+    are the two node origins via `source_to_unreal` (as `.ents` does); `Width` is a length
     (`× INCH_TO_CM`). A node whose start lacks a targetname is still iterated (it can only be a chain
     start), so no segment is lost.
     - **`NextKey` resolves first-match by entity order** — the fix for wires "all over the place,"
