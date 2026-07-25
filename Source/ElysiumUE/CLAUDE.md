@@ -278,10 +278,11 @@ volume, so a flip re-applies in one pass (voices already fading out toward a rea
   global ImGui state, so it also covers the stock Cog windows and the F1 menu bar;
   `FElysiumCogWindow::GameTick` re-installs it whenever Cog rebuilds the style (a DPI change).
   `elysium.CogTheme 0` restores stock ImGui dark.
-- Selection is **by click** (`ElysiumPick.{h,cpp}`, `#if !UE_BUILD_SHIPPING`): while the Cog
-  menu owns the mouse, LMB over the world (not over an imgui window) picks, RMB clears. The
-  game is not paused. `ElysiumPick::Trace` returns the world-space fill triangles + outline
-  segments the overlay draws, from four sources. **A World Viz gizmo marker wins outright**
+- Selection is **by click** (`ElysiumPick.{h,cpp}`, `#if !UE_BUILD_SHIPPING`): while the
+  Inspector window is open **and** the Cog menu owns the mouse, LMB over the world (not over an
+  imgui window) picks, RMB clears. The game is not paused. `ElysiumPick::Trace` returns the
+  world-space fill triangles + outline segments the overlay draws, from four sources.
+  **A World Viz gizmo marker wins outright**
   whenever it is drawn — it is the only clickable representation a bodiless entity (light,
   `ambient_generic`, logic) has. "Drawn" follows the mode: `Visible` depth-tests the markers,
   so one behind geometry does not pick (tested against the nearest *rendered* hit, since brush
@@ -289,23 +290,24 @@ volume, so a flip re-applies in one pass (voices already fading out toward a rea
   skips the source. The test is the exact 28 cm cube, and passing the current selection as
   `CycleAfter` steps to the next marker behind it, so clicking a cluster walks through it.
   With gizmos on, the bodiless-entity perpendicular fallback is suppressed (2 m tolerance
-  would undo the marker's precision). Failing a gizmo, the nearest of three geometry sources
+  would undo the marker's precision). Failing a gizmo, the nearest of two geometry sources
   wins — brush entity bodies (a `LineTraceMulti` on `ECC_Visibility`, so invisible trigger
-  volumes are pickable), prop instances, and world/sky surfaces. Props and surfaces are **CPU ray-casts
-  against the real triangles**, because physics cannot answer them: with the default
-  `elysium.BrushCollision 1` the world render mesh is built with collision off (the `.hulls`
-  collider carries no material and no face), and a solid prop's cooked collision is one convex
-  hull of the whole model. The map actor keeps the CPU geometry for this — `FPropPickSoup` per
-  unique model (~3 MB on the tutorial) and a section-index → OBJ-group-key table. A world pick
-  highlights the whole BSP face: the exporter emits a fresh vertex per face corner and
-  `BuildMeshFromObj` remaps sections on the global index, so triangles of one face share local
-  indices and adjacent faces share none, and an edge flood stops at the face boundary by
-  itself (a coplanarity test bounds displacement patches). An entity's highlight is one box
-  per def hull — the hulls are vertex sets with no faces, so it is exact for the axis-aligned
-  box brushes nearly every trigger and door is made of, and a tight bound otherwise.
-- The **Inspector** runs the pick from `RenderTick`, which Cog calls for every window whether
-  or not it is visible — so picking and the highlight work with the window closed. The
-  highlight is drawn with imgui (projected translucent fill + outline + label, near-plane
+  volumes are pickable) and the baked level's render geometry (one `LineTraceSingle` on
+  `ELYSIUM_PICK_CHANNEL` with `bTraceComplex` + `bReturnFaceIndex`, resolved to a material slot
+  through `GetMaterialFromCollisionFaceIndex`). The dedicated channel is what separates the two:
+  the walkable surface is the `.hulls` brush collider, which carries no material and no face, so
+  a pick on a shared channel would report the invisible clip volume instead of the wall clicked.
+  A surface/prop highlight is an oriented patch on the impact normal plus the component's
+  bounds — a baked static mesh keeps no CPU-side section geometry, so the exact BSP face is not
+  recoverable. An entity's highlight is one box per def hull — the hulls are vertex sets with no
+  faces, so it is exact for the axis-aligned box brushes nearly every trigger and door is made
+  of, and a tight bound otherwise.
+- The **Inspector** runs the pick from `RenderTick`, which Cog calls for every window whether or
+  not it is visible, so the two halves gate separately: **arming** needs the window open, since
+  the click-pick is a tool of this window and not a global mode (opening World Viz or Lights
+  must leave LMB alone), while the **committed selection and its highlight** survive closing the
+  window and the menu both — a pick is dropped only by RMB, the next pick, or the map going
+  away. The highlight is drawn with imgui (projected translucent fill + outline + label, near-plane
   clipped), not scene geometry: no assets, it reaches meshless trigger volumes, and it keeps
   drawing when the world is time-scaled to a stop. The window shows the picked surface
   (component / material + textures / section / instance / triangle) above the entity detail,

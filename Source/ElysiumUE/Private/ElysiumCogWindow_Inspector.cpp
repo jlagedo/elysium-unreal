@@ -208,16 +208,17 @@ void FElysiumCogWindow_Inspector::Initialize()
 void FElysiumCogWindow_Inspector::RenderHelp()
 {
 	ImGui::Text(
-		"Click-to-select inspector. Open the F1 menu and left-click anything in the world: the click "
-		"resolves to a brush/logic entity, a world surface, or a single prop instance, and the "
-		"selection is highlighted in place (translucent fill + outline + label). Right-click clears "
-		"it. The game is not paused - it keeps running under the cursor; stop it yourself from the "
-		"Time Scale window if you want it still. Picking works with this window closed, so you can "
-		"click first and open the inspector after.\n\n"
-		"The pick is exact where physics cannot be: the world render mesh carries no collision under "
-		"elysium.BrushCollision 1, and a solid prop's collision is one convex hull of the whole "
-		"model, so surfaces and props are ray-cast on the CPU against their real triangles. A world "
-		"pick highlights the whole BSP face, not just the triangle under the cursor.\n\n"
+		"Click-to-select inspector. Open the F1 menu with this window open and left-click anything in "
+		"the world: the click resolves to a brush/logic entity, a world surface, or a single prop "
+		"instance, and the selection is highlighted in place (translucent fill + outline + label). "
+		"Right-click clears it. The game is not paused - it keeps running under the cursor; stop it "
+		"yourself from the Time Scale window if you want it still.\n\n"
+		"LMB is only taken while this window is open, so working in World Viz or Lights leaves the "
+		"click alone, and F1 disarms it. What is already selected stays selected through both - close "
+		"the menu and the highlight is still on it.\n\n"
+		"The baked level's geometry is real static meshes, so a surface or prop pick is one physics "
+		"trace on the dedicated ElysiumPick channel; the hit face resolves back to a material slot. "
+		"Brush bodies and gizmo markers are separate sources - see the tooltips.\n\n"
 		"Below: the selected surface (component, mesh, material + textures, section/instance/"
 		"triangle) and, when the pick is an entity, its full detail - identity, chain-walked fields, "
 		"raw .ents keyvalues, and the 7-field outputs. Fire any input by hand (it goes through the "
@@ -278,13 +279,20 @@ void FElysiumCogWindow_Inspector::RenderTick(float DeltaTime)
 	PC->GetPlayerViewPoint(Proj.CamPos, ViewRot);
 	Proj.CamFwd = ViewRot.Vector();
 
-	// Armed only while Cog owns the mouse and the cursor is over the world rather than over an
-	// imgui window — so clicking a button in any Cog window never also picks the world behind it.
+	// Armed only while this window is open, Cog owns the mouse, and the cursor is over the world
+	// rather than over an imgui window. The window gate is what makes the click-pick an Inspector
+	// tool rather than a mode: opening World Viz or Lights to read values leaves LMB alone, and
+	// closing the menu with F1 disarms it. The last-in gate keeps a click on a Cog button from
+	// also picking the world behind it.
+	//
+	// The committed selection outlives all three — it is dropped by RMB, by the next pick, or by
+	// the map that owned it going away, never by a window or the menu closing — so the highlight
+	// below keeps drawing on a closed menu.
 	const UCogSubsystem* Cog = GetOwner();
-	const bool bOverWorld = bClickToSelect && Cog != nullptr
+	const bool bArmed = bClickToSelect && GetIsVisible() && Cog != nullptr
 		&& Cog->GetContext().GetEnableInput() && !ImGui::GetIO().WantCaptureMouse;
 
-	if (bOverWorld)
+	if (bArmed)
 	{
 		if (ImGui::IsMouseClicked(ImGuiMouseButton_Right))
 		{
@@ -427,8 +435,8 @@ void FElysiumCogWindow_Inspector::RenderContent()
 
 	// --- Pick controls + what the last click resolved to --------------------------------------
 	ImGui::Checkbox("Click to select", &bClickToSelect);
-	ImGui::SetItemTooltip("LMB over the world picks; RMB clears. Armed whenever the Cog menu owns "
-		"the mouse, including with this window closed.");
+	ImGui::SetItemTooltip("LMB over the world picks; RMB clears. Armed only while this window is "
+		"open and the Cog menu owns the mouse. The selection itself survives closing either.");
 	ImGui::SameLine();
 	ImGui::Checkbox("Highlight", &bDrawHighlight);
 	ImGui::SetItemTooltip("Draw the translucent fill + outline + label on the selection.");

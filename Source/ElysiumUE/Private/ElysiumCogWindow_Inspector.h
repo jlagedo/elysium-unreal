@@ -17,11 +17,15 @@ struct FElysiumPickResult;
 // (FElysiumEntityWorld::EnqueueInput) so the delivery shows up in the Event Queue window and is
 // single-steppable. Everything but the fire buttons is read-only.
 //
-// Selection is by click (P2.6): while the Cog menu owns the mouse, LMB anywhere over the world
-// picks whatever is under the cursor — brush entity, world surface, or prop instance — and the
-// window draws a translucent highlight on it. RMB clears. The game is not paused; it keeps
-// running under the cursor. The pick runs from RenderTick, which Cog calls for every window
-// whether or not it is visible, so picking and the highlight work with this window closed.
+// Selection is by click (P2.6): while this window is open and the Cog menu owns the mouse, LMB
+// anywhere over the world picks whatever is under the cursor — brush entity, world surface, or
+// prop instance — and the window draws a translucent highlight on it. RMB clears. The game is not
+// paused; it keeps running under the cursor.
+//
+// The pick runs from RenderTick, which Cog calls for every window whether or not it is visible, so
+// the two halves are gated separately: arming needs the window open (the click-pick is a tool of
+// this window, not a global mode — opening World Viz must not take LMB), while the committed
+// selection and its highlight survive closing the window and the menu both.
 class FElysiumCogWindow_Inspector : public FElysiumCogWindow
 {
 	typedef FElysiumCogWindow Super;
