@@ -16,11 +16,4 @@ struct FElysiumMaterialFactory
 	// Cache is the owning map's texture dedup index (all textures bound here belong to that map).
 	static UMaterialInstanceDynamic* Build(const FElysiumMaterialDef* Def, const FString& Dir,
 		UObject* Outer, FElysiumTextureCache& Cache);
-
-	// A dynamic instance of the deferred-decal master M_Decal for one projected decal (7.2),
-	// with the decal's albedo bound to the Albedo parameter (RGB -> BaseColor, A -> Opacity) and,
-	// when the decal carries a `map_Ke` mask, the Emissive parameter + EmissiveScale switched on.
-	// Set on a UDecalComponent via SetDecalMaterial.
-	static UMaterialInstanceDynamic* BuildDecal(const FElysiumMaterialDef* Def, const FString& Dir,
-		UObject* Outer, FElysiumTextureCache& Cache);
 };

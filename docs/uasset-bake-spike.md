@@ -19,7 +19,7 @@ either earns a `decisions.md` entry or gets discarded.
 
 | | |
 |---|---|
-| **Baked** — real assets in the `.umap` | world + 3D-skybox geometry, materials, textures, static props, lights, sky light, height fog |
+| **Baked** — real assets in the `.umap` | world + 3D-skybox geometry, materials, textures, static props, projected decals, lights, sky light, height fog |
 | **Runtime** — built by `AElysiumMapActor` | `.hulls`/`.dispcol` collision, `.ropes` cables, the sky cubemap + backdrop, the `.ents` entity substrate and every entity-driven body, NPC glTF skeletals, audio, dialogue, scripting |
 
 `UElysiumMapSubsystem::Travel` opens `/ElysiumBaked/<map>/<map>` directly — each map is its own
@@ -45,11 +45,11 @@ bake_verify.py              reads the result back off the assets, not off the ba
 | Stage | Reads | Writes |
 |---|---|---|
 | `textures` | `.mtl` + `tex/`, `props/tex/` | `Texture2D`, sRGB/`TC_NORMALMAP`/`TC_MASKS` by role |
-| `materials` | `.mtl` | `MaterialInstanceConstant` off the four committed masters |
+| `materials` | `.mtl` | `MaterialInstanceConstant` off the five committed masters — a `decal 1` surface is a projector, not geometry, so it splits off onto `M_Decal` in its own package |
 | `world` | `.obj`, `.blend` | one `SM_World_*` per 2048 cm cell |
 | `sky` | `_sky.obj` | `SM_Sky_*` |
 | `props` | `props/*.obj` | one `SM_*` per model |
-| `level` | `.props`, `.lights`, `.env`, `.sky`, `.spawn` | the `.umap` |
+| `level` | `.props`, `.decals`, `.lights`, `.env`, `.sky`, `.spawn` | the `.umap` |
 
 Material selection and parameter names are lifted from `FElysiumMaterialFactory`. Light *values* are
 not: the bake writes a reasonable starting point, and `UElysiumLightRig::Adopt` re-derives every
@@ -60,11 +60,11 @@ load agree exactly.
 ## What it produces
 
 ```
-MaterialInstanceConstant     710      level: 1324 actors
+MaterialInstanceConstant     710      level: 1447 actors
 StaticMesh                   339        StaticMeshActor 927   PointLight 224
-Texture2D                    694        SpotLight 170         DirectionalLight 1
-World                          1        SkyLight 1            PlayerStart 1
-meshes 339, Nanite on 311, off 28
+Texture2D                    694        SpotLight 170         DecalActor 123
+World                          1        DirectionalLight 1    SkyLight 1
+meshes 339, Nanite on 311, off 28      PlayerStart 1
 1379 material slots (0 unbound)
 ```
 
@@ -87,7 +87,7 @@ LightRig: adopted 395 baked lights (10 animated) +sun +skyambient
 brush collision: 2561 convex hulls / displacement collision: 3584 triangles
 ropes: 70 cables
 sky 'la': cubemap IBL + backdrop
-baked 'sp_tutorial_1': 1323 actors (116 world, 2 sky, 809 props), 395 lights, 2561 hulls
+baked 'sp_tutorial_1': 1446 actors (116 world, 2 sky, 809 props, 123 decals), 395 lights, 2561 hulls
 world 'sp_tutorial_1' live: 1868 entities (185 brush bodies), epoch 1
 loaded sp_tutorial_1 in 2.50s
 ```
@@ -144,6 +144,10 @@ quoted. `profile.bat` has not been run against the baked level.
   `(b − a) × (c − a)`. With the wrong sign the map lights inside-out while looking perfect unlit.
 - **`GeometryScriptCreateNewStaticMeshAssetOptions.enable_nanite` does not reach the asset.** Set
   `nanite_settings` on the `UStaticMesh` after creation; the assignment runs `PostEditChange`.
+- **The bake overwrites; it does not prune.** Re-baking after a change that moves or drops an
+  asset leaves the old one on the mount, unreferenced but still in the registry. The material
+  stage authors a package's whole set in one pass, so it now sweeps whatever else is in there;
+  the mesh stages do not, and a shrunken export still leaves orphan `SM_*`.
 - **A fresh commandlet has not indexed a new mount.** `does_asset_exist` reports False for assets
   already on disk and `create_asset` then trips the unattended overwrite guard. Scan the mount with
   `AssetRegistry.scan_paths_synchronous(force_rescan=True)` first.
@@ -173,10 +177,34 @@ What is lost: the exact BSP-face flood highlight. A baked static mesh keeps no C
 geometry, so the highlight is now an oriented patch at the impact point plus the component's bounds.
 The gizmo and brush-body sources are unchanged.
 
+## The decals
+
+VtMB's `infodecal` layer — blood, bullet holes, graffiti, band posters, rust stains — is 123
+projectors on `sp_tutorial_1`, exported as a `.decals` sidecar of 15-token lines. The bake places
+one `ADecalActor` each.
+
+A decal surface is flagged `decal 1` in the shared `<map>.mtl`, and the material stage splits those
+off onto `M_Decal` in `Materials/Decals/`: an `infodecal` is a projector, not geometry, so instancing
+it off a world master would author 27 translucent material instances nothing can use. The textures
+are already in the map's texture package, since they ride the same `.mtl` the world surfaces do.
+
+Orientation is the runtime path's, verbatim. A deferred decal maps texture **U → local Z** and
+**V → local Y**, not the intuitive Y=U/Z=V, so the surface horizontal (`SDir`, the U/s texture axis)
+goes on local Z and the vertical falls out as the derived Y. `MakeRotFromXZ(Normal, SDir)` builds a
+valid right-handed rotation from the two; a three-axis matrix would be reflected, because the
+exporter's s/t frame is left-handed with respect to the normal. Local +X is the room-facing normal,
+so the component projects along its −X into the wall, and `DecalSize` is the box **half**-size
+(X = 16 cm projection reach, Y = vertical, Z = horizontal). `FadeScreenSize 0` — VtMB decals persist
+at any distance.
+
+Sort order is the sidecar's own line order, so two decals on one wall layer the way the map author
+stacked them rather than in undefined order. Deferred decals write into the GBuffer before the
+lighting pass, so each is lit exactly like the wall it lands on, Lumen bounce included, and Nanite
+receives them normally.
+
 ## Gaps
 
-- **Decals** (123) and **sprites** (96) are not placed. Ropes are; decals were dropped with the
-  runtime world build and have no baked equivalent yet.
+- **Sprites** (96) are not placed. Decals and ropes are.
 - **Post-process**: no `.cube` colour-grade LUT. Note the runtime path does not grade either — its
   LUT block was commented out with `// TEMP: disabled for a test` and never restored. Deliberately
   left off (owner call) until the sky/ambient recalibration settles.

@@ -4,9 +4,13 @@
 
 // One projected decal recovered from a map's `.decals` sidecar (roadmap 7.2). All vectors are
 // Unreal space (cm, Z-up, left-handed) — the exporter (UE_bsp_to_scene.py) already converted them,
-// so the runtime reads them verbatim. The runtime builds one deferred UDecalComponent per def:
-// Normal is the room-facing projection axis, SDir/TDir the surface tangent frame, HalfW/HalfH the
-// on-surface half-extents. Mat keys into the shared <map>.mtl for the albedo/emissive textures.
+// so every consumer reads them verbatim: Normal is the room-facing projection axis, SDir/TDir the
+// surface tangent frame, HalfW/HalfH the on-surface half-extents. Mat keys into the shared
+// <map>.mtl for the albedo/emissive textures.
+//
+// The bake (tools/bake_map.py) is what consumes the sidecar — one ADecalActor per def in the
+// .umap. This parser is the sidecar's C++ spec, and what the content test validates the export
+// against; the orientation contract it documents is the one the placer implements.
 struct FElysiumDecalDef
 {
 	FString Mat;

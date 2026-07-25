@@ -32,13 +32,12 @@ static TAutoConsoleVariable<float> CVarEnvReflect(
 
 namespace
 {
-	// The hand-authored masters (make_world_materials.py / make_decal_material.py). Selected per
-	// surface by the OBJ material's blend flags.
+	// The hand-authored masters (make_world_materials.py). Selected per surface by the OBJ
+	// material's blend flags.
 	constexpr const TCHAR* OpaqueMasterPath = TEXT("/Game/VtMB/Materials/M_World_Opaque.M_World_Opaque");
 	constexpr const TCHAR* MaskedMasterPath = TEXT("/Game/VtMB/Materials/M_World_Masked.M_World_Masked");
 	constexpr const TCHAR* TranslucentMasterPath = TEXT("/Game/VtMB/Materials/M_World_Translucent.M_World_Translucent");
 	constexpr const TCHAR* AdditiveMasterPath = TEXT("/Game/VtMB/Materials/M_Additive.M_Additive");
-	constexpr const TCHAR* DecalMasterPath = TEXT("/Game/VtMB/Materials/M_Decal.M_Decal");
 
 	// Parameter names, identical across the four world masters (build_world_graph authors them).
 	const FName AlbedoParam(TEXT("Albedo"));
@@ -52,7 +51,7 @@ namespace
 	const FName BlendAmountParam(TEXT("BlendAmount"));
 
 	// Load a master by path once and pin it with a strong ref (indexed by path so each of the
-	// five masters gets its own cached slot).
+	// four masters gets its own cached slot).
 	UMaterialInterface* GetMaster(const TCHAR* Path)
 	{
 		static TMap<FString, TStrongObjectPtr<UMaterialInterface>> Cache;
@@ -168,52 +167,6 @@ UMaterialInstanceDynamic* FElysiumMaterialFactory::Build(const FElysiumMaterialD
 		{
 			Mid->SetTextureParameterValue(BaseTex2Param, Tex2);
 			Mid->SetScalarParameterValue(BlendAmountParam, 1.0f);
-		}
-	}
-
-	return Mid;
-}
-
-UMaterialInstanceDynamic* FElysiumMaterialFactory::BuildDecal(const FElysiumMaterialDef* Def, const FString& Dir,
-	UObject* Outer, FElysiumTextureCache& Cache)
-{
-	UMaterialInterface* Master = GetMaster(DecalMasterPath);
-	if (!Master)
-	{
-		// Master asset missing: no fallback (the engine default is not a decal domain), so the
-		// caller must skip this decal rather than draw garbage.
-		return nullptr;
-	}
-
-	UMaterialInstanceDynamic* Mid = UMaterialInstanceDynamic::Create(Master, Outer);
-	if (!Mid)
-	{
-		return nullptr;
-	}
-
-	// Albedo drives BaseColor (RGB) and Opacity (alpha coverage) by fixed parameter name.
-	UTexture2D* Albedo = nullptr;
-	if (Def && !Def->Albedo.IsEmpty())
-	{
-		Albedo = Cache.LoadTex(Dir, Def->Albedo);
-	}
-	if (!Albedo)
-	{
-		Albedo = Cache.SolidTex(Def ? Def->Color : FLinearColor(0.6f, 0.6f, 0.65f));
-	}
-	if (Albedo)
-	{
-		Mid->SetTextureParameterValue(AlbedoParam, Albedo);
-	}
-
-	// $selfillum decal (map_Ke): same alpha-masked emissive path as the world master.
-	if (Def && !Def->Emissive.IsEmpty())
-	{
-		if (UTexture2D* EmisTex = Cache.LoadTex(Dir, Def->Emissive))
-		{
-			Mid->SetTextureParameterValue(EmissiveParam, EmisTex);
-			Mid->SetScalarParameterValue(EmissiveScaleParam,
-				FMath::Max(0.f, CVarEmissiveScale.GetValueOnAnyThread()));
 		}
 	}
 

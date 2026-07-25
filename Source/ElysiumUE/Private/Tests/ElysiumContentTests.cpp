@@ -225,7 +225,7 @@ bool FElysiumPawnshopEntsTest::RunTest(const FString&)
 // =====================================================================================
 // Decals (7.2) — the `<map>.decals` projector sidecar. Validates that every line is a
 // well-formed projector (unit normal, positive extents) and that its material resolves in
-// the shared `<map>.mtl`, so the runtime always finds a texture for each UDecalComponent.
+// the shared `<map>.mtl`, so the bake always finds a texture for each ADecalActor it places.
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTutorialDecalsTest,
@@ -248,7 +248,7 @@ bool FElysiumTutorialDecalsTest::RunTest(const FString&)
 	}
 	TestTrue(TEXT("tutorial carries decals"), Defs.Num() > 0);
 
-	// Materials ride the shared world MTL — the same file the runtime's BuildDecals reads.
+	// Materials ride the shared world MTL — the same file the bake's material stage reads.
 	TMap<FString, FElysiumMaterialDef> Materials;
 	FElysiumObjModel::ParseMtl(
 		FElysiumContentPaths::MapDir(Map) / (FString(Map) + TEXT(".mtl")), Materials);

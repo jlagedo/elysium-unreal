@@ -438,8 +438,8 @@ bool FElysiumIOChainTest::RunTest(const FString&)
 }
 
 // =====================================================================================
-// FElysiumDecals — the `.decals` projector sidecar parser + the orientation contract the
-// map actor builds each UDecalComponent from (7.2). Pure data + math, no RHI.
+// FElysiumDecals — the `.decals` projector sidecar parser + the orientation contract the bake
+// places each ADecalActor by (7.2). Pure data + math, no RHI.
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDecalsTest, "Elysium.Substrate.Decals", GElysiumTestFlags)
@@ -468,7 +468,7 @@ bool FElysiumDecalsTest::RunTest(const FString&)
 		TestEqual(TEXT("half-height"), D.HalfH, 7.5f);
 	}
 
-	// --- orientation: BuildDecals rotates each decal by MakeFromXZ(Normal, SDir). A deferred decal
+	// --- orientation: the bake rotates each decal by MakeRotFromXZ(Normal, SDir). A deferred decal
 	// maps texture U -> local Z and V -> local Y, so the surface horizontal (SDir, the U axis) goes
 	// on local Z; local +X stays the room normal, so the component's -X (its projection axis) fires
 	// into the wall. ---

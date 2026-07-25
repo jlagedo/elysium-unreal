@@ -190,8 +190,8 @@ void AElysiumMapActor::LoadMap()
 	Phase(TEXT("Environment"));
 
 	UE_LOG(LogElysium, Log,
-		TEXT("baked '%s': %d actors (%d world, %d sky, %d props), %d lights, %d hulls"),
-		*MapName, Adopted, WorldActors.Num(), SkyActors.Num(), PropActors.Num(),
+		TEXT("baked '%s': %d actors (%d world, %d sky, %d props, %d decals), %d lights, %d hulls"),
+		*MapName, Adopted, WorldActors.Num(), SkyActors.Num(), PropActors.Num(), DecalCount,
 		WorldLightCount, HullCount);
 
 	if (ReadSpawn(PendingSpawnLoc, PendingSpawnYaw))
@@ -255,6 +255,7 @@ int32 AElysiumMapActor::AdoptBakedLevel()
 	PropActors.Reset();
 	SkyLight = nullptr;
 	HeightFog = nullptr;
+	DecalCount = 0;
 
 	// One pass over the level. A light's `.lights` line index rides a second tag, so the rig can
 	// bind each actor back to the source row it re-derives intensity and reach from.

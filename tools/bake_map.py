@@ -37,6 +37,7 @@ MASTERS = {
     "masked": "/Game/VtMB/Materials/M_World_Masked.M_World_Masked",
     "translucent": "/Game/VtMB/Materials/M_World_Translucent.M_World_Translucent",
     "additive": "/Game/VtMB/Materials/M_Additive.M_Additive",
+    "decal": "/Game/VtMB/Materials/M_Decal.M_Decal",
 }
 
 # World chunk edge, centimetres. Triangles are binned by centroid cell; each cell yields one
@@ -70,6 +71,11 @@ TAG_PROP = "elysium.prop"
 TAG_LIGHT = "elysium.light"
 TAG_SKYLIGHT = "elysium.skylight"
 TAG_FOG = "elysium.fog"
+TAG_DECAL = "elysium.decal"
+
+# A deferred decal's projection box reaches this far (cm) either way along its projection
+# axis. Kept shallow so a decal catches its host wall and not the geometry behind it.
+DECAL_HALF_DEPTH = 16.0
 
 ALL_STAGES = ("textures", "materials", "world", "sky", "props", "level")
 
@@ -112,6 +118,7 @@ class Bake(object):
         self.pkg = "%s/%s" % (MOUNT, map_name)
         self.tex_pkg = "%s/Textures" % self.pkg
         self.mat_pkg = "%s/Materials" % self.pkg
+        self.decal_mat_pkg = "%s/Materials/Decals" % self.pkg
         self.mesh_pkg = "%s/Meshes" % self.pkg
         self.prop_pkg = "%s/Props" % self.pkg
         self.prop_tex_pkg = "%s/Props/Textures" % self.pkg
@@ -120,6 +127,7 @@ class Bake(object):
         self.world_obj = None            # ObjModel
         self.world_mats = {}             # name -> MatDef
         self.blend = []                  # per-vertex WVT weight
+        self.decals = []                 # DecalDef, in sidecar order
         self.textures = {}               # (package, asset name) -> Texture2D
         self.materials = {}              # (package, material key) -> MaterialInstanceConstant
         self.prop_models = {}            # stem -> ObjModel
@@ -147,9 +155,11 @@ class Bake(object):
         self.world_obj = bl.read_obj(obj_path)
         self.world_mats = bl.read_mtl(os.path.join(self.dir, "%s.mtl" % self.map))
         self.blend = bl.read_floats(os.path.join(self.dir, "%s.blend" % self.map))
-        log("world: %d verts / %d tris / %d groups / %d materials (%.1fs)" % (
+        self.decals = bl.read_decals(os.path.join(self.dir, "%s.decals" % self.map))
+        log("world: %d verts / %d tris / %d groups / %d materials / %d decals (%.1fs)" % (
             len(self.world_obj.positions), self.world_obj.tri_count,
-            len(self.world_obj.groups), len(self.world_mats), time.time() - start))
+            len(self.world_obj.groups), len(self.world_mats), len(self.decals),
+            time.time() - start))
 
         prop_dir = os.path.join(self.dir, "props")
         if os.path.isdir(prop_dir):
@@ -223,7 +233,22 @@ class Bake(object):
 
     # --------------------------------------------------------------- materials
 
+    def _material_sets(self):
+        """(materials, material package, texture package) for every set the bake authors.
+
+        Decal-flagged world materials are split off into their own package: an `infodecal`
+        surface is a projector, not geometry, so it instances the deferred-decal master. They
+        share the world's texture package, since they ride the same `<map>.mtl`."""
+        world, decals = {}, {}
+        for key, mat in self.world_mats.items():
+            (decals if mat.decal else world)[key] = mat
+        return ((world, self.mat_pkg, self.tex_pkg),
+                (decals, self.decal_mat_pkg, self.tex_pkg),
+                (self._all_prop_mats(), self.prop_mat_pkg, self.prop_tex_pkg))
+
     def _master_for(self, mat):
+        if mat.decal:
+            return self.masters["decal"]
         if mat.additive:
             return self.masters["additive"]
         if mat.blend:
@@ -249,6 +274,10 @@ class Bake(object):
         if emissive:
             bl.set_tex_param(mic, "Emissive", emissive)
             bl.set_scalar_param(mic, "EmissiveScale", EMISSIVE_SCALE)
+        # M_Decal carries only the albedo (RGB -> BaseColor, A -> Opacity) and that same
+        # alpha-masked self-illum path; the surface it projects onto owns the rest.
+        if mat.decal:
+            return
         bump = tex(mat.bump)
         if bump:
             bl.set_tex_param(mic, "BumpMap", bump)
@@ -266,11 +295,12 @@ class Bake(object):
             bl.set_scalar_param(mic, "BlendAmount", 1.0)
 
     def stage_materials(self):
-        for mats, mat_pkg, tex_pkg in (
-                (self.world_mats, self.mat_pkg, self.tex_pkg),
-                (self._all_prop_mats(), self.prop_mat_pkg, self.prop_tex_pkg)):
+        for mats, mat_pkg, tex_pkg in self._material_sets():
+            if not mats:
+                continue
             start = time.time()
             made = 0
+            wanted = set()
             for key, mat in sorted(mats.items()):
                 name = "MI_" + bl.safe_name(key)
                 mic = bl.make_material_instance(name, mat_pkg, self._master_for(mat))
@@ -280,8 +310,15 @@ class Bake(object):
                 self._bind(mic, mat, tex_pkg)
                 self.materials[(mat_pkg, key)] = mic
                 self.saved.append("%s/%s" % (mat_pkg, name))
+                wanted.add(name)
                 made += 1
-            log("materials: %d into %s (%.1fs)" % (made, mat_pkg, time.time() - start))
+            # This stage authors a package's whole material set in one pass, so anything else
+            # left in it is from an earlier bake of a different export -- an unreferenced asset
+            # the level would never load but the registry still carries.
+            pruned = bl.prune_package(mat_pkg, wanted)
+            log("materials: %d into %s%s (%.1fs)" % (
+                made, mat_pkg, ", %d stale pruned" % pruned if pruned else "",
+                time.time() - start))
 
     def resolve_textures(self):
         """Load already-imported textures into the lookup, so the material stage can bind
@@ -297,10 +334,9 @@ class Bake(object):
                     self.textures[(package, name)] = unreal.EditorAssetLibrary.load_asset(path)
 
     def resolve_materials(self):
-        """Load already-baked material instances into the lookup, so a mesh stage can run
-        without re-authoring the materials it binds."""
-        for mats, mat_pkg in ((self.world_mats, self.mat_pkg),
-                              (self._all_prop_mats(), self.prop_mat_pkg)):
+        """Load already-baked material instances into the lookup, so a mesh or level stage can
+        run without re-authoring the materials it binds."""
+        for mats, mat_pkg, _ in self._material_sets():
             for key in mats:
                 if (mat_pkg, key) in self.materials:
                     continue
@@ -656,6 +692,7 @@ class Bake(object):
         log("level: %d world/sky actors" % placed)
 
         log("level: %d prop actors" % self._place_props(actors))
+        log("level: %d decal actors" % self._place_decals(actors))
         lights, sky_ambient = self._place_lights(actors)
         log("level: %d light actors" % lights)
         self._place_sky(actors, sky_ambient)
@@ -717,6 +754,48 @@ class Bake(object):
                 actor.tags = [TAG_PROP]
                 actor.set_folder_path("Props")
                 placed += 1
+        return placed
+
+    def _place_decals(self, actors):
+        """One ADecalActor per `.decals` line -- VtMB's `infodecal` layer (blood, bullet holes,
+        graffiti, posters, stains).
+
+        A deferred decal maps its texture U to the component's local Z and V to local Y, not the
+        intuitive Y=U/Z=V, so the surface's horizontal axis (SDir, the U/s texture axis) goes on
+        local Z and the vertical (TDir) falls out as the derived Y. MakeRotFromXZ builds a valid
+        right-handed rotation from Normal + SDir; a 3-axis matrix would be reflected, because the
+        exporter's s/t frame is left-handed with respect to the normal. Local +X is the
+        room-facing normal, so the component projects along its -X into the wall, and DecalSize
+        is the box HALF-size (X = projection reach, Y = vertical, Z = horizontal).
+
+        Sort order is the sidecar's own line order, so two decals on the same wall layer the way
+        the map author stacked them instead of in undefined order."""
+        if not self.decals:
+            return 0
+        placed = 0
+        missing = set()
+        for index, decal in enumerate(self.decals):
+            mic = self.materials.get((self.decal_mat_pkg, decal.mat))
+            if not mic:
+                missing.add(decal.mat)
+                continue
+            rotation = unreal.MathLibrary.make_rot_from_xz(decal.normal, decal.s_dir)
+            actor = actors.spawn_actor_from_class(unreal.DecalActor, decal.loc, rotation)
+            if not actor:
+                continue
+            component = actor.decal
+            component.set_decal_material(mic)
+            component.set_editor_property("decal_size", unreal.Vector(
+                DECAL_HALF_DEPTH, decal.half_h, decal.half_w))
+            # VtMB decals persist at any distance -- no screen-size fade-out.
+            component.set_fade_screen_size(0.0)
+            component.set_sort_order(index)
+            actor.set_actor_label("Decal_%d_%s" % (index, bl.safe_name(decal.mat)))
+            actor.tags = [TAG_DECAL]
+            actor.set_folder_path("Decals")
+            placed += 1
+        for name in sorted(missing):
+            fail("decal material has no baked instance: %s" % name)
         return placed
 
     def _place_player_start(self, actors):

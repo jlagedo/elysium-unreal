@@ -12,7 +12,7 @@ game-agnostic; converted VtMB content lives only in the gitignored `tools/out/` 
 | `VtMB/Materials/M_World_Translucent.uasset` | the `$translucent` variant — same graph, `BLEND_Translucent`, per-pixel lit (glass) |
 | `VtMB/Materials/M_Additive.uasset` | the `$additive` glow-overlay master — unlit, `BLEND_Additive`, `Albedo`→Emissive (light-fixture "on" panes, neon) |
 | `VtMB/Materials/M_Sky.uasset` | the 2D-skybox cube master material (samples a runtime `UTextureCube` by view direction) |
-| `VtMB/Materials/M_Decal.uasset` | the 7.2 deferred-decal master — `MD_DeferredDecal` + `BLEND_Translucent`, `Albedo` RGB→BaseColor + A→Opacity, alpha-masked `$selfillum` emissive, samples at `(U, 1-V)` (VtMB V is top-down); one MID per projected `infodecal` on a `UDecalComponent` |
+| `VtMB/Materials/M_Decal.uasset` | the 7.2 deferred-decal master — `MD_DeferredDecal` + `BLEND_Translucent`, `Albedo` RGB→BaseColor + A→Opacity, alpha-masked `$selfillum` emissive, samples at `(U, 1-V)` (VtMB V is top-down); the bake instances it once per decal material and hangs those on the level's `ADecalActor`s |
 | `VtMB/Materials/M_Gizmo.uasset` + `M_Gizmo_XRay.uasset` | the entity-gizmo ISM masters — unlit, two-sided, translucent, colour + opacity from per-instance custom data; `_XRay` disables the depth test |
 | `Fonts/*.ttf` (+ `Fonts/OFL-*.txt`) | the sign/popup typeface set — loose SIL OFL 1.1 TTFs read verbatim off disk at draw time, not `.uasset`s |
 

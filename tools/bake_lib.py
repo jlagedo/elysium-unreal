@@ -30,7 +30,7 @@ class MatDef(object):
     and binds the same named parameters the runtime factory does."""
 
     __slots__ = ("name", "albedo", "emissive", "bump", "env_mask", "base_tex2",
-                 "scissor", "blend", "additive", "envmap", "color")
+                 "scissor", "blend", "additive", "envmap", "decal", "color")
 
     def __init__(self, name):
         self.name = name
@@ -43,6 +43,7 @@ class MatDef(object):
         self.blend = False        # blend 1    -> translucent master
         self.additive = False     # additive 1 -> additive master
         self.envmap = False
+        self.decal = False        # decal 1    -> deferred-decal master
         self.color = (0.6, 0.6, 0.65)
 
     @property
@@ -78,6 +79,8 @@ def read_mtl(path):
                 cur.blend = True
             elif key == "additive" and len(tok) >= 2 and tok[1] == "1":
                 cur.additive = True
+            elif key == "decal" and len(tok) >= 2 and tok[1] == "1":
+                cur.decal = True
             elif key == "bumpmap" and len(tok) >= 2:
                 cur.bump = tok[1]
             elif key == "envmapmask" and len(tok) >= 2:
@@ -152,6 +155,40 @@ def read_obj(path):
                             model.uvs.append((0.0, 0.0))
                     cur.append(idx)
     return model
+
+
+class DecalDef(object):
+    """One projected decal from a `.decals` line, mirroring FElysiumDecalDef. Every vector is
+    Unreal space already, so the placer reads them verbatim: `normal` is the room-facing
+    projection axis, `s_dir`/`t_dir` the surface tangent frame, `half_w`/`half_h` the
+    on-surface half-extents in cm. `mat` keys into the shared `<map>.mtl`."""
+
+    __slots__ = ("mat", "loc", "normal", "s_dir", "t_dir", "half_w", "half_h")
+
+
+def read_decals(path):
+    """Parse a `.decals` sidecar into [DecalDef]:
+       `<material> lx ly lz  nx ny nz  sx sy sz  tx ty tz  hw hh`
+    15 whitespace-separated tokens; malformed lines are skipped."""
+    out = []
+    if not os.path.isfile(path):
+        return out
+    with open(path, "r", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            tok = line.split()
+            if len(tok) != 15:
+                continue
+            value = [float(t) for t in tok[1:]]
+            decal = DecalDef()
+            decal.mat = tok[0]
+            decal.loc = unreal.Vector(value[0], value[1], value[2])
+            decal.normal = unreal.Vector(value[3], value[4], value[5])
+            decal.s_dir = unreal.Vector(value[6], value[7], value[8])
+            decal.t_dir = unreal.Vector(value[9], value[10], value[11])
+            decal.half_w = value[12]
+            decal.half_h = value[13]
+            out.append(decal)
+    return out
 
 
 def read_floats(path):
@@ -272,6 +309,22 @@ def make_material_instance(name, package, parent):
     if mic:
         _mel.set_material_instance_parent(mic, parent)
     return mic
+
+
+def prune_package(package, keep):
+    """Delete every asset directly in `package` whose object name is not in `keep`. Only safe
+    for a package one stage owns outright and re-authors in full. Returns the number deleted."""
+    if not unreal.EditorAssetLibrary.does_directory_exist(package):
+        return 0
+    gone = 0
+    for path in unreal.EditorAssetLibrary.list_assets(package, recursive=False,
+                                                      include_folder=False):
+        name = path.rsplit("/", 1)[-1].split(".")[0]
+        if name in keep:
+            continue
+        if unreal.EditorAssetLibrary.delete_asset(path):
+            gone += 1
+    return gone
 
 
 def set_tex_param(mic, param, texture):
