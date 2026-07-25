@@ -122,8 +122,8 @@ where they live: `Source/ElysiumUE/CLAUDE.md`.
 
 ## Target hardware
 
-- **Minimum floor:** NVIDIA **RTX 3060-class** desktop GPU (12 GB), **1080p** — the shipped
-  config targets this floor (we develop against min-spec). **Recommended:** RTX 4070/5070-class.
+- **Minimum floor:** NVIDIA **RTX 4060-class** desktop GPU with **16 GB**, **1440p native** — the
+  shipped config targets this floor. **Recommended:** RTX 4070/5070-class.
 - **DX12/SM6 is mandatory.** The render path is fully dynamic — HWRT Lumen, MegaLights, VSM
   (`Config/DefaultEngine.ini`). Every one of those silently disables under DX11/SM5 (no error,
   just a CPU-bound slideshow). The window title must read `PCD3D_SM6`. There is no non-RT

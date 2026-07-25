@@ -1028,5 +1028,34 @@ append a correction as a new entry.
   hook instead of a deep V, and the spawn-street wires droop gently from the pole.
   **Still not A/B'd against the running original** — this is the engine's own arithmetic reproduced
   exactly, so it needs no divergence entry, but nobody has put the two side by side.
+- **2026-07-25 (cont. 3)** — **The hardware floor rises to an RTX 4060-class / 16 GB GPU at 1440p
+  native, and the shipped render tier becomes stock Epic scalability.** Owner call. The previous
+  config targeted an RTX 3060 at 1080p and paid for it with settings that were compensation, not
+  tuning: `r.ScreenPercentage=66` plus a `r.Tonemapper.Sharpen=0.5` pass to claw back what the
+  upscale lost, `ScreenProbeGather.TracingOctahedronResolution=2` (against 8 at *both* High and
+  Epic in UE 5.8's `BaseScalability.ini` — below every shipped bucket), `DownsampleFactor=32`
+  (Medium), quarter-res reflections, and `IntegrateDownsampleFactor=2`, which Epic documents as
+  enabled by *no* default scalability or device preset because it "can cause extra noise and soften
+  normals".
+  Three of those existed only to serve constraints the `.uasset` bake removed. **Hit lighting**
+  (`r.Lumen.Reflections.HardwareRayTracing.HitLighting=1`) was the fix for a *totally empty* surface
+  cache — every reflection ray read back black against runtime-built `UProceduralMeshComponent`
+  geometry that could never hold cards. The baked level has full DDC-fitted card coverage, and Epic's
+  own guidance is "we don't recommend using it for games". The **VSM directional LOD bias** (`1.0`)
+  worked around the non-Nanite marking-job-queue overflow caused by huge single-section PMC world
+  surfaces; the world is Nanite now, and a full profile run logs **zero** overflows with the bias
+  gone. `r.Lumen.HardwareRayTracing.MaxTraceDistance` was never a real cvar — it does not appear
+  anywhere in the 5.8 renderer source, so the line did nothing.
+  The tier is now Epic (3) across all eleven `sg.` groups rather than a hand-rolled cvar set,
+  following Epic's guidance that the stock buckets are tuned to hold indirect lighting consistent as
+  they scale; only three deviations remain (HWRT scene culling, 16x anisotropy, a 3 GB streaming
+  pool). `[SystemSettings]` stays the home for it because `ECVF_SetBySystemSettingsIni` (0x05)
+  outranks `ECVF_SetByScalability` (0x02) and `ECVF_SetByGameSetting` (0x03), so neither the
+  first-run hardware benchmark nor a future settings menu can pull the tier down.
+  Measured on `sp_tutorial_1`, RTX 5070 Ti, 2560x1440 **native**: total GPU 5.08 / 5.86 / 5.89 /
+  6.18 / 6.11 ms across the five vantages, against 4.87 / 5.25 / 5.32 / 5.72 / 5.43 for the old
+  config at 66% of the same output — **+0.2 to +0.7 ms for 2.3x the pixels and Medium→Epic Lumen.**
+  The 4060 figure is extrapolated from that card, not measured; validating the floor still needs
+  4060-class hardware.
 - **Pending** — 5.5 level-script execution strategy (interpreter vs transpile vs CPython);
   10.6 EnhancedInput migrate-or-remove.

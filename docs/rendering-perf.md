@@ -50,48 +50,45 @@ a modest contributor feeding it. Re-run the tool on any map; interior-only maps 
 
 ## Shipped defaults
 
-Target hardware is in `CLAUDE.md` → "Target hardware": **RTX 3060-class floor, RTX
-4070/5070 recommended.** The shipped config is tuned for the **floor** — we develop against
-min-spec, so a stronger dev GPU renders exactly what the floor sees (a scale-UP tier for
-better GPUs comes later via the scalability system, not by shipping high defaults).
+Target hardware is in `CLAUDE.md` → "Target hardware": **RTX 4060-class / 16 GB floor at 1440p
+native, RTX 4070/5070 recommended.** One forced tier ships; there is no quality ladder yet.
 
 - Feature enables: `Config/DefaultEngine.ini` → `[/Script/Engine.RendererSettings]`
   (`r.DynamicGlobalIlluminationMethod=1`, `r.ReflectionMethod=1`, `r.RayTracing=True`,
   `r.SkinCache.CompileShaders=True`, `r.Lumen.HardwareRayTracing=True`,
   `r.MegaLights.EnableForProject=True`, `r.Shadow.Virtual.Enable=1`).
-- Quality cvars: `Config/DefaultEngine.ini` → `[SystemSettings]` (floor budget:
-  `r.ScreenPercentage=66`, `r.MegaLights.NumSamplesPerPixel=2`, Lumen probe/reflection
-  downsampled). `[SystemSettings]` (not `DefaultScalability.ini`) is the right home for
-  *forced* values — it applies at startup and overrides the auto-detected scalability level,
-  so the budget is deterministic; `DefaultScalability.ini` only defines what each quality
-  *level* means and is subject to the first-run hardware benchmark.
-- `r.ScreenPercentage` is the main quality/perf dial: bump to 100 live in console to preview
-  what a stronger GPU could show. Floor-fps must be validated on an actual 3060 — a fast dev
-  GPU always clears it, so here the floor is judged by *look*, not frame rate.
+- Quality tier: `Config/DefaultEngine.ini` → `[SystemSettings]`, all eleven `sg.` scalability
+  groups pinned to **Epic (3)** with `sg.ResolutionQuality=100`. Each `sg.` line pulls in the
+  matching block of `Engine/Config/BaseScalability.ini` — ~45 cvars for GI alone — which is Epic's
+  own recommendation over a hand-rolled cvar set, because the buckets are tuned to hold indirect
+  lighting consistent as they scale.
+- Three deliberate deviations sit under the `sg.` block: HWRT scene culling
+  (`r.RayTracing.Culling` 3 / Radius 15000 / Angle 0.5), 16x anisotropy (the Epic bucket stops at
+  8), and a 3 GB texture streaming pool (Epic bucket 1000 MB).
+- `[SystemSettings]` (not `DefaultScalability.ini`) is the right home for *forced* values:
+  `ECVF_SetBySystemSettingsIni` is priority 0x05, above `ECVF_SetByScalability` (0x02) and
+  `ECVF_SetByGameSetting` (0x03), so neither the first-run hardware benchmark nor a settings menu
+  can pull the tier down. `DefaultScalability.ini` only defines what each quality *level* means.
+- `sg.ResolutionQuality` is the main quality/perf dial — it maps directly to `r.ScreenPercentage`.
+  Drop it live in console to trade image for frames.
 
-## Floor reality (RTX 3060 tier) — validated, and tight
+## Floor reality (RTX 4060 tier)
 
-Cross-checked against UE dev guidance for the 3060/mid-range RT tier:
+- **Software Lumen is off the table.** It needs mesh distance fields, and the baked meshes carry
+  Nanite but no DFs. HWRT is the only tracing path — no cheaper GI fallback, no non-RT mode.
+- **There is real headroom:** 5.1–6.2 ms total GPU at 1440p **native** with Epic-tier Lumen
+  (baseline below). The bake is what affords it — Nanite world geometry plus full DDC-fitted Lumen
+  card coverage, so no reflection ray needs a hit-lighting second trace to find a lit surface.
+- **VRAM:** the floor assumes **16 GB**, which is what lets the streaming pool run at 3 GB and
+  leaves the Lumen surface-cache atlas at the Epic bucket's 4096.
+- **The 4060 number is extrapolated, not measured.** Every capture here is on a 5070 Ti, which
+  clears the budget comfortably; validating the floor needs actual 4060-class hardware. Until then
+  the floor is judged by *look* plus the pass proportions below.
 
-- **Software Lumen is off the table for us.** Guidance recommends software RT below the
-  3060+ tier, but software Lumen needs mesh distance fields, which our *runtime-built* PMC
-  meshes don't have. HWRT is forced — we can't take the cheaper GI path.
-- **The budget is razor-thin.** On a 3060 at 1080p, HWRT Lumen alone runs ~10–14 ms of the
-  16.6 ms (60 fps) frame, leaving ~3–6 ms for everything else. We pair the *weakest* RT card
-  with the *expensive* GI path, so the aggressive Lumen downsampling + 66% TSR aren't polish,
-  they're what makes 60 fps possible at all. There is essentially no margin.
-- **Bucket alignment:** Epic's `BaseScalability.ini` sets `ScreenProbeGather.DownsampleFactor`
-  to Medium=32, High=16, Cine=8. The floor uses **32 (Medium)**; 16 is the High/console tier,
-  too rich for the minimum RT card.
-- **VRAM:** the floor assumes the **12 GB** 3060 (avoid the 8 GB variant).
-- **Can't measure floor fps on a fast dev GPU** — validate the floor by *look*; real
-  floor-frame-rate needs an actual 3060-class card, or a conservative margin.
-
-**The honest structural takeaway:** because the look is bounce-dominated (see the calibration
-above) *and* HWRT-Lumen-on-a-3060 has no headroom, the sustainable floor answer is **baking
-VtMB's lump-8 lighting** — free GI at runtime, runs on anything, and it's literally the data
-VtMB shipped. The HWRT path works but lives on the edge; baked GI is the real floor solution
-(or honestly raise the floor to 3060 Ti / 4060 for an RT-required game).
+**Structural note:** the look is bounce-dominated (see the calibration above), so Lumen GI is
+load-bearing rather than polish. Baking VtMB's own lump-8 lighting remains the fallback if the
+floor ever has to drop below an RT-capable card — free at runtime, and literally the data VtMB
+shipped — but at the 4060 floor the HWRT path is no longer living on the edge.
 
 ## Is MegaLights actually engaging? (do this first)
 
@@ -119,15 +116,18 @@ a big FPS drop, so confirm engagement before touching any other knob:
 
 ## Tuning ladder (paste live, cheapest win first)
 
+The shipped tier is Epic across the board, so tuning **down** is the direction of travel. Prefer
+moving a whole `sg.` group over hand-picking cvars — the buckets are internally consistent.
+
 | cvar | try | effect |
 |---|---|---|
-| `r.ScreenPercentage` | `66` → `50` | render lower + TSR upscale — the biggest single win |
-| `r.MegaLights.NumSamplesPerPixel` | `2` | many-light shadow-ray budget (cost ~flat in light count) |
-| `r.Lumen.ScreenProbeGather.TracingOctahedronResolution` | `2` | *highest-impact* Lumen GI knob |
-| `r.Lumen.ScreenProbeGather.DownsampleFactor` | `32` | fewer GI probes (Epic buckets: 32 Med / 16 High / 8 Cine) |
-| `r.Lumen.Reflections.DownsampleFactor` | `2` | quarter-res reflections |
+| `sg.ResolutionQuality` | `100` → `77` → `66` | render lower + TSR upscale — the biggest single win |
+| `sg.GlobalIlluminationQuality` / `sg.ReflectionQuality` | `3` → `2` | whole Lumen tier down one step (~half the cost per step) |
+| `r.Lumen.ScreenProbeGather.TracingOctahedronResolution` | `8` → `4` | *highest-impact* single Lumen GI knob (buckets: 8 High/Epic, 16 Cine) |
+| `r.Lumen.ScreenProbeGather.DownsampleFactor` | `16` → `32` | fewer GI probes (buckets: 32 Med / 16 Epic / 8 Cine) |
+| `r.Lumen.Reflections.DownsampleFactor` | `1` → `2` | quarter-res reflections |
 | `r.Lumen.Reflections.Allow` | `0` | drop Lumen reflections → SSR (~20-30% back) |
-| `sg.GlobalIlluminationQuality` / `sg.ReflectionQuality` | `1` | medium Lumen scalability |
+| `r.MegaLights.NumSamplesPerPixel` | `4` → `2` | many-light shadow-ray budget (cost ~flat in light count) |
 | `elysium.lights` | — | toggle the whole rig off to isolate lighting cost |
 
 Nuclear brackets to attribute cost: `r.Lumen.HardwareRayTracing 0` (HWRT's share),
@@ -165,21 +165,35 @@ through the CSV profiler, and exits — no manual console typing. Full per-vanta
 (incl. the heaviest-pass breakdown) regenerate at `tools/out/_profile/<map>_report.md`.
 Re-run any time with `profile.bat <map> [cam]`; add a vantage with `elysium.campos` in-game.
 
-**Dev GPU: RTX 5070 Ti · D3D12 / `PCD3D_SM6` · 2560×1440 · warmup 120 / capture 300 frames.**
-This card is far above the RTX 3060 floor, so read these for **pass proportions and
+**Dev GPU: RTX 5070 Ti · D3D12 / `PCD3D_SM6` · 2560×1440 **native** · warmup 120 / capture 300
+frames.** This card is far above the RTX 4060 floor, so read these for **pass proportions and
 regression tracking**, not floor frame rate (the floor is judged by *look* — see "Floor
 reality" above). Vantage coordinates are baked in `GProfileCams[]` and echoed in each
 report's vantage headers.
 
+**Resolution caveat.** The harness does not record the resolution it rendered at, and
+`Saved/Config/WindowsEditor/GameUserSettings.ini` overrides `profile.bat`'s `-resx/-resy/-windowed`
+— its `FullscreenMode=1` makes the window borderless, so on a 4K display the 1440p backbuffer is
+composited up to fill the screen and *looks* native 4K. Confirm the real backbuffer by reading the
+pixel dimensions of a `shots.bat` PNG (`tools/out/_shots/<map>/`); the captures below were
+verified 2560×1440 that way.
+
 ### sp_tutorial_1 — 395 world lights — GPU ms per vantage
+
+Epic-tier Lumen at 1440p native, on the baked level.
 
 | Pass | spawn | t1 | t2 | t3 | t4 |
 |---|---|---|---|---|---|
-| Lumen GI (ScreenProbeGather) | 0.01 | 0.01 | 0.01 | 0.01 | 0.01 |
-| Lumen reflections | 0.06 | 0.07 | 0.06 | 0.06 | 0.06 |
-| MegaLights | 1.06 | 1.08 | 1.00 | 1.34 | 1.15 |
-| ShadowDepths / VSM | 0.83 | 0.88 | 1.02 | 1.11 | 1.03 |
-| **Total GPU** (whole frame) | **4.87** | **5.25** | **5.32** | **5.72** | **5.43** |
+| Lumen GI (ScreenProbeGather) | 0.01 | 0.02 | 0.02 | 0.02 | 0.02 |
+| Lumen reflections | 0.25 | 0.18 | 0.21 | 0.18 | 0.19 |
+| MegaLights | 0.97 | 1.05 | 1.10 | 1.26 | 1.33 |
+| ShadowDepths / VSM | 0.61 | 0.79 | 0.75 | 0.92 | 0.76 |
+| **Total GPU** (whole frame) | **5.08** | **5.86** | **5.89** | **6.18** | **6.11** |
+
+The two tables below are **not comparable** to the one above: they were captured at 66% screen
+percentage with Medium-tier Lumen on the runtime `UProceduralMeshComponent` path, and neither map
+is baked. Kept only for the many-light cost reading in the 0.2 verdict; re-capture once those maps
+are baked.
 
 ### sm_hub_1 — 687 world lights — GPU ms per vantage
 
@@ -204,17 +218,20 @@ report's vantage headers.
 **0.2 verdict — MegaLights is engaging, no VSM blow-up.** MegaLights (~1.0–1.3 ms) meets or
 beats ShadowDepths on every vantage, and the many-light cost is ~**flat**: 687 lights
 (sm_hub_1) and 161 (sm_pawnshop_1) both cost the same ~1 ms as 395 (sp_tutorial_1).
-ShadowDepths never dominates and is ~0 on both `sm_` maps. MegaLights is carrying the local lights as designed — 3.1 is **not** the
-immediate next task. (The `[VSM] Non-Nanite Marking Job Queue overflow` HUD warning appears
-transiently but does not translate into a ShadowDepths blow-up in steady state — worth a
-glance if ShadowDepths ever spikes in a future capture.)
+ShadowDepths never dominates and is ~0 on both `sm_` maps. MegaLights is carrying the local lights
+as designed — 3.1 is **not** the immediate next task.
 
-**Other reads.** TemporalSuperResolution (~1.1 ms) ties/leads MegaLights as the single
-heaviest pass at every vantage — the expected upscale cost of `r.ScreenPercentage=66`. Lumen
-GI is ~free here (0.01 ms) *on this card*; on the 3060 floor HWRT Lumen is the dominant cost
-("Floor reality" above), so this near-zero is a fast-GPU artifact, not proof
-Lumen is cheap. Render-thread time collapses to ~0 (idle-waiting on the GPU): the title is
-GPU-bound, as expected.
+**The `[VSM] Non-Nanite Marking Job Queue overflow` warning is gone.** It was driven by huge
+single-section PMC world surfaces each covering a large shadow page area; with the world baked as
+Nanite static meshes, a full five-vantage capture logs **zero** overflows even with the
+`ResolutionLodBiasDirectional` workaround removed.
+
+**Other reads.** MegaLights (~1.0–1.3 ms) is now the single heaviest pass at every vantage;
+TemporalSuperResolution drops to ~0.48 ms, since at `sg.ResolutionQuality=100` it is doing
+anti-aliasing rather than a 66%→100% upscale. Nanite adds its own passes (NaniteBasePass ~0.38,
+NaniteVisBuffer ~0.28) which the PMC path did not have. Lumen GI reads ~free (0.02 ms) *on this
+card* — a fast-GPU artifact, not proof Lumen is cheap. Render-thread time collapses to ~0
+(idle-waiting on the GPU): the title is GPU-bound, as expected.
 
 
 ## Sources
@@ -227,4 +244,5 @@ GPU-bound, as expected.
 - [Lumen vs Lumen Lite in UE 5.8 — StraySpark](https://www.strayspark.studio/blog/lumen-vs-lumen-lite-ue5-8-performance)
 - [r.Lumen.ScreenProbeGather.DownsampleFactor bucket values — UE CVar Wiki](https://indxzero.github.io/ue544cvarwiki/articles/r.lumen.screenprobegather.downsamplefactor/)
 - [Lumen Lighting for Indies (software vs hardware RT) — Hyperdense](https://medium.com/@sarah.hyperdense/lumen-lighting-for-indies-good-results-without-melting-your-gpu-517cfe83c6c7)
-- [Is RTX 3060 enough for Unreal? (RT entry card, 12 GB) — GLS](https://www.gameslearningsociety.org/wiki/is-rtx-3060-enough-for-unreal/)
+- [Ray Tracing Performance Guide — Epic (UE5.8)](https://dev.epicgames.com/documentation/unreal-engine/ray-tracing-performance-guide-in-unreal-engine)
+- `Engine/Config/BaseScalability.ini` — the authoritative per-tier cvar buckets
