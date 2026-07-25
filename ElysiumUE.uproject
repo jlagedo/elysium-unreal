@@ -24,6 +24,14 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GeometryScripting",
+			"Enabled": true
+		},
+		{
+			"Name": "ElysiumBaked",
+			"Enabled": true
+		},
+		{
 			"Name": "Cog",
 			"Enabled": true
 		},

@@ -1,0 +1,344 @@
+# Readers and asset factories shared by the .uasset bake (tools/bake_map.py).
+#
+# Everything here runs inside a headless Unreal editor session, so `import unreal` is
+# mandatory -- this module is not standalone-importable. The readers are plain Python over
+# the export's sidecars, which are already Unreal space (cm, Z-up, left-handed, winding
+# reversed at export), so every number is passed through verbatim. The factories wrap the
+# editor asset APIs the bake needs: texture import, material instances, static meshes.
+import os
+import re
+
+import unreal
+
+_tools = unreal.AssetToolsHelpers.get_asset_tools()
+_mel = unreal.MaterialEditingLibrary
+
+# Package-name-safe: Unreal object names allow letters, digits and underscore.
+_UNSAFE = re.compile(r"[^A-Za-z0-9_]+")
+
+
+def safe_name(text):
+    """An OBJ material / texture path turned into a legal Unreal object name."""
+    return _UNSAFE.sub("_", text).strip("_") or "unnamed"
+
+
+# ---------------------------------------------------------------------------- sidecars
+
+
+class MatDef(object):
+    """One OBJ material, mirroring FElysiumMaterialDef so the bake selects the same master
+    and binds the same named parameters the runtime factory does."""
+
+    __slots__ = ("name", "albedo", "emissive", "bump", "env_mask", "base_tex2",
+                 "scissor", "blend", "additive", "envmap", "color")
+
+    def __init__(self, name):
+        self.name = name
+        self.albedo = ""
+        self.emissive = ""
+        self.bump = ""
+        self.env_mask = ""
+        self.base_tex2 = ""
+        self.scissor = False      # illum 4    -> masked master
+        self.blend = False        # blend 1    -> translucent master
+        self.additive = False     # additive 1 -> additive master
+        self.envmap = False
+        self.color = (0.6, 0.6, 0.65)
+
+    @property
+    def opaque(self):
+        """True when this surface can carry Nanite (Nanite is opaque/masked only)."""
+        return not (self.blend or self.additive)
+
+
+def read_mtl(path):
+    """Parse an exported .mtl into {name: MatDef}. Mirrors FElysiumObjModel::ParseMtlLines."""
+    mats = {}
+    cur = None
+    if not os.path.isfile(path):
+        return mats
+    with open(path, "r", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            tok = line.split()
+            if not tok:
+                continue
+            key = tok[0]
+            if key == "newmtl" and len(tok) >= 2:
+                cur = MatDef(tok[1])
+                mats[tok[1]] = cur
+            elif cur is None:
+                continue
+            elif key == "map_Kd" and len(tok) >= 2:
+                cur.albedo = tok[1]
+            elif key == "map_Ke" and len(tok) >= 2:
+                cur.emissive = tok[1]
+            elif key == "illum" and len(tok) >= 2 and tok[1] == "4":
+                cur.scissor = True
+            elif key == "blend" and len(tok) >= 2 and tok[1] == "1":
+                cur.blend = True
+            elif key == "additive" and len(tok) >= 2 and tok[1] == "1":
+                cur.additive = True
+            elif key == "bumpmap" and len(tok) >= 2:
+                cur.bump = tok[1]
+            elif key == "envmapmask" and len(tok) >= 2:
+                cur.env_mask = tok[1]
+            elif key == "envmap" and len(tok) >= 2:
+                cur.envmap = True
+            elif key == "basetex2" and len(tok) >= 2:
+                cur.base_tex2 = tok[1]
+            elif key == "Kd" and len(tok) >= 4:
+                cur.color = (float(tok[1]), float(tok[2]), float(tok[3]))
+    return mats
+
+
+class ObjModel(object):
+    """A parsed OBJ: one flat vertex list keyed on the file's own `v/vt` corner tokens, plus
+    per-material triangle index triples into it.
+
+    Corners are de-duplicated on the raw token, so vertices stay shared exactly where the
+    exporter shared them -- which is what makes recomputed normals come out flat across a BSP
+    face boundary and smooth within one, matching the runtime build."""
+
+    __slots__ = ("positions", "uvs", "groups", "mtl_name", "path")
+
+    def __init__(self):
+        self.positions = []            # [(x, y, z)]
+        self.uvs = []                  # [(u, v)]
+        self.groups = {}               # material name -> [i0, i1, i2, ...]
+        self.mtl_name = ""
+        self.path = ""
+
+    @property
+    def tri_count(self):
+        return sum(len(v) for v in self.groups.values()) // 3
+
+
+def read_obj(path):
+    """Parse an exported OBJ. Positions and UVs are read verbatim (already Unreal space);
+    faces are already triangles with export-reversed winding."""
+    model = ObjModel()
+    model.path = path
+    raw_pos = []
+    raw_uv = []
+    corners = {}
+    cur = None
+    with open(path, "r", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            tok = line.split()
+            if not tok:
+                continue
+            key = tok[0]
+            if key == "v":
+                raw_pos.append((float(tok[1]), float(tok[2]), float(tok[3])))
+            elif key == "vt":
+                raw_uv.append((float(tok[1]), float(tok[2])))
+            elif key == "usemtl" and len(tok) >= 2:
+                cur = model.groups.setdefault(tok[1], [])
+            elif key == "mtllib" and len(tok) >= 2:
+                model.mtl_name = tok[1]
+            elif key == "f":
+                if cur is None:
+                    cur = model.groups.setdefault("__default", [])
+                for token in tok[1:4]:
+                    idx = corners.get(token)
+                    if idx is None:
+                        idx = len(model.positions)
+                        corners[token] = idx
+                        parts = token.split("/")
+                        model.positions.append(raw_pos[int(parts[0]) - 1])
+                        if len(parts) > 1 and parts[1]:
+                            model.uvs.append(raw_uv[int(parts[1]) - 1])
+                        else:
+                            model.uvs.append((0.0, 0.0))
+                    cur.append(idx)
+    return model
+
+
+def read_floats(path):
+    """One float per line (the `.blend` per-vertex WorldVertexTransition weight sidecar)."""
+    if not os.path.isfile(path):
+        return []
+    with open(path, "r", encoding="utf-8", errors="replace") as handle:
+        return [float(line) for line in handle if line.strip()]
+
+
+def vertex_normals(positions, index_lists):
+    """Area-weighted vertex normals accumulated over the model's own shared indices -- the
+    same thing FStaticMeshOperations::ComputeTangentsAndNormals produces on the runtime
+    build, so shading matches. Returns a list parallel to `positions`.
+
+    The winding is Unreal's: `source_to_unreal` negates Y, which is a reflection, so the
+    exporter reverses triangle winding at OBJ-write time. The outward normal is therefore
+    (c - a) x (b - a), not the right-handed (b - a) x (c - a) -- with the latter every
+    triangle on the map's floor plane points straight down."""
+    acc = [[0.0, 0.0, 0.0] for _ in positions]
+    for indices in index_lists:
+        for base in range(0, len(indices), 3):
+            i0, i1, i2 = indices[base], indices[base + 1], indices[base + 2]
+            ax, ay, az = positions[i0]
+            bx, by, bz = positions[i1]
+            cx, cy, cz = positions[i2]
+            ux, uy, uz = cx - ax, cy - ay, cz - az
+            vx, vy, vz = bx - ax, by - ay, bz - az
+            # Cross product magnitude is twice the triangle area, so an unnormalized
+            # accumulation is already area-weighted.
+            nx = uy * vz - uz * vy
+            ny = uz * vx - ux * vz
+            nz = ux * vy - uy * vx
+            for i in (i0, i1, i2):
+                slot = acc[i]
+                slot[0] += nx
+                slot[1] += ny
+                slot[2] += nz
+    out = []
+    for nx, ny, nz in acc:
+        length = (nx * nx + ny * ny + nz * nz) ** 0.5
+        if length > 1e-12:
+            out.append((nx / length, ny / length, nz / length))
+        else:
+            out.append((0.0, 0.0, 1.0))
+    return out
+
+
+# ---------------------------------------------------------------------------- assets
+
+
+def ensure_dir(package):
+    if not unreal.EditorAssetLibrary.does_directory_exist(package):
+        unreal.EditorAssetLibrary.make_directory(package)
+
+
+def import_textures(jobs, package):
+    """Batch-import texture source files. `jobs` is [(abs_path, asset_name)]; returns
+    {asset_name: Texture2D}. Existing assets are reused, so a re-run is cheap."""
+    ensure_dir(package)
+    tasks = []
+    have = {}
+    for src, name in jobs:
+        target = "%s/%s" % (package, name)
+        if unreal.EditorAssetLibrary.does_asset_exist(target):
+            have[name] = unreal.EditorAssetLibrary.load_asset(target)
+            continue
+        task = unreal.AssetImportTask()
+        task.filename = src
+        task.destination_path = package
+        task.destination_name = name
+        task.automated = True
+        task.replace_existing = True
+        task.replace_existing_settings = True
+        task.save = False
+        tasks.append(task)
+    if tasks:
+        _tools.import_asset_tasks(tasks)
+        for task in tasks:
+            target = "%s/%s" % (package, task.destination_name)
+            asset = unreal.EditorAssetLibrary.load_asset(target)
+            if asset:
+                have[task.destination_name] = asset
+    return have
+
+
+def configure_texture(texture, role):
+    """Set the compression/colour-space a texture's role needs. `role` is one of
+    'albedo' (sRGB colour + alpha), 'normal' (tangent-space bump) or 'mask' (linear
+    single-channel reflectivity)."""
+    if role == "normal":
+        texture.set_editor_property("srgb", False)
+        texture.set_editor_property("compression_settings",
+                                    unreal.TextureCompressionSettings.TC_NORMALMAP)
+    elif role == "mask":
+        texture.set_editor_property("srgb", False)
+        texture.set_editor_property("compression_settings",
+                                    unreal.TextureCompressionSettings.TC_MASKS)
+    else:
+        texture.set_editor_property("srgb", True)
+        texture.set_editor_property("compression_settings",
+                                    unreal.TextureCompressionSettings.TC_DEFAULT)
+
+
+def make_material_instance(name, package, parent):
+    """A MaterialInstanceConstant parented to one of the committed masters. An existing asset
+    is reused with its parameters cleared, so a re-run re-authors it in place rather than
+    fighting the unattended overwrite prompt."""
+    ensure_dir(package)
+    target = "%s/%s" % (package, name)
+    if unreal.EditorAssetLibrary.does_asset_exist(target):
+        mic = unreal.EditorAssetLibrary.load_asset(target)
+        if mic:
+            _mel.clear_all_material_instance_parameters(mic)
+    else:
+        mic = _tools.create_asset(name, package, unreal.MaterialInstanceConstant,
+                                  unreal.MaterialInstanceConstantFactoryNew())
+    if mic:
+        _mel.set_material_instance_parent(mic, parent)
+    return mic
+
+
+def set_tex_param(mic, param, texture):
+    _mel.set_material_instance_texture_parameter_value(mic, param, texture)
+
+
+def set_scalar_param(mic, param, value):
+    _mel.set_material_instance_scalar_parameter_value(mic, param, value)
+
+
+def build_dynamic_mesh(sections):
+    """Build one UDynamicMesh from `sections` = [(positions, normals, uvs, colors, tris)],
+    each appended under its own material id (its index in the list)."""
+    mesh = unreal.DynamicMesh()
+    for slot, (positions, normals, uvs, colors, tris) in enumerate(sections):
+        buffers = unreal.GeometryScriptSimpleMeshBuffers()
+        buffers.vertices = [unreal.Vector(p[0], p[1], p[2]) for p in positions]
+        buffers.normals = [unreal.Vector(n[0], n[1], n[2]) for n in normals]
+        buffers.uv0 = [unreal.Vector2D(t[0], t[1]) for t in uvs]
+        if colors:
+            buffers.vertex_colors = [unreal.LinearColor(c, c, c, 1.0) for c in colors]
+        buffers.triangles = [unreal.IntVector(tris[i], tris[i + 1], tris[i + 2])
+                             for i in range(0, len(tris), 3)]
+        result = unreal.GeometryScript_MeshEdits.append_buffers_to_mesh(
+            mesh, buffers, material_id=slot, defer_change_notifications=True)
+        # The node returns (TargetMesh, NewTriangleIndicesList); older signatures return the
+        # mesh alone.
+        mesh = result[0] if isinstance(result, tuple) else result
+    return mesh
+
+
+def mesh_triangle_count(mesh):
+    """Triangles the UDynamicMesh actually holds. FDynamicMesh3 refuses any triangle that
+    would make the topology non-manifold, so this is the count that must be checked against
+    the source -- a rejection is only a log line otherwise."""
+    return unreal.GeometryScript_MeshQueries.get_num_triangle_i_ds(mesh)
+
+
+def create_static_mesh(mesh, asset_path, materials, slot_names, nanite):
+    """Write a UDynamicMesh out as a real StaticMesh asset and bind its material slots.
+    Returns the asset, or None when the build failed."""
+    if unreal.EditorAssetLibrary.does_asset_exist(asset_path):
+        unreal.EditorAssetLibrary.delete_asset(asset_path)
+    nanite_settings = unreal.MeshNaniteSettings()
+    nanite_settings.set_editor_property("enabled", nanite)
+    options = unreal.GeometryScriptCreateNewStaticMeshAssetOptions()
+    options.enable_recompute_normals = False
+    options.enable_recompute_tangents = True
+    options.enable_nanite = nanite
+    options.nanite_settings = nanite_settings
+    options.enable_collision = False
+    # BSP soup is non-manifold; keeping the source vertex order stops the build from welding
+    # face-boundary corners back together and smoothing the flat shading away.
+    options.use_original_vertex_order = True
+    result = unreal.GeometryScript_NewAssetUtils.create_new_static_mesh_asset_from_mesh(
+        mesh, asset_path, options)
+    static_mesh = result[0] if isinstance(result, tuple) else result
+    if not static_mesh:
+        return None
+    # The creation option alone does not land on the asset, so set the settings struct on the
+    # mesh as well; assigning it runs PostEditChange, which rebuilds with Nanite.
+    static_mesh.set_editor_property("nanite_settings", nanite_settings)
+    static_mesh.set_editor_property("static_materials", [
+        unreal.StaticMaterial(material_interface=mat, material_slot_name=name)
+        for mat, name in zip(materials, slot_names)])
+    return static_mesh
+
+
+def save(asset_path):
+    return unreal.EditorAssetLibrary.save_asset(asset_path, only_if_is_dirty=False)

@@ -34,6 +34,9 @@ compile_commands.json
 
 # Offline pipeline: generated content + local env (regenerable from the user's install)
 tools/out/
+# Baked .uasset content decoded from the user's own VtMB install (tools/bake_map.py).
+# Game-derived and regenerable, so it is never committed; only the .uplugin descriptor is.
+Plugins/ElysiumBaked/Content/
 tools/.venv/
 tools/__pycache__/
 tools/models/
