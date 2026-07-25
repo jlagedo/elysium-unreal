@@ -1,4 +1,4 @@
-# Spike: baking `sp_tutorial_1` into native Unreal assets
+# Spike: `sp_tutorial_1` as native Unreal content
 
 Branch `spike/uasset-bake`, stacked on `spike/lumen-cards`. **Exploratory — not a decision.**
 
@@ -8,28 +8,29 @@ bought no measurable quality. The wall behind that result is that a runtime `USt
 `BuildFromMeshDescriptions(bFastBuild)` can never have what the editor build produces — DDC-fitted
 surfel cards, Nanite, distance fields, real LODs, BC7/BC5 compression.
 
-This spike asks what the map looks like when it stops fighting that wall: `sp_tutorial_1` decoded
-once, offline, into real `.uasset` content and a real `.umap`, with Nanite and Lumen on everything
-the engine allows. It deliberately contradicts two of `CLAUDE.md`'s load-bearing rules — *"no
-`.uasset` baking, no editor content loop"* and *"build all engine objects in code at map-load
-time"* — to measure what those rules cost. Nothing here is wired into the shipping path and there
-are no A/B flags: the branch either earns a `decisions.md` entry or gets discarded.
+This spike stops fighting that wall. `sp_tutorial_1` is decoded once, offline, into real `.uasset`
+content and a real `.umap`, and **the game runs on it**: `play.bat` opens the baked level and every
+system the project has runs against it. It deliberately contradicts two of `CLAUDE.md`'s
+load-bearing rules — *"no `.uasset` baking, no editor content loop"* and *"build all engine objects
+in code at map-load time"* — to measure what those rules cost. There are no A/B flags: the branch
+either earns a `decisions.md` entry or gets discarded.
 
-## Shape
+## The split
 
-Four choices frame it:
-
-| Question | Answer |
+| | |
 |---|---|
-| What becomes saved editor content | The whole **look** — geometry, materials, textures, props, lights, sky. The `.ents` entity substrate still runs at runtime. |
-| How meshes are authored | **Geometry Script, in-editor**, straight from the existing sidecars. No new export format; the vertices are the ones the runtime path uses today, so the comparison is apples-to-apples. |
-| World mesh granularity | **Spatial cells only, 2048 cm.** The cell × face-normal split from the previous spike was a workaround for the bounds-card fallback, which the DDC surfel fit replaces. |
-| Where the assets live | A **gitignored plugin content mount**, `Plugins/ElysiumBaked/Content/` → `/ElysiumBaked/`. |
+| **Baked** — real assets in the `.umap` | world + 3D-skybox geometry, materials, textures, static props, lights, sky light, height fog |
+| **Runtime** — built by `AElysiumMapActor` | `.hulls`/`.dispcol` collision, `.ropes` cables, the sky cubemap + backdrop, the `.ents` entity substrate and every entity-driven body, NPC glTF skeletals, audio, dialogue, scripting |
+
+`UElysiumMapSubsystem::Travel` opens `/ElysiumBaked/<map>/<map>` directly — each map is its own
+level, and the `/Game/Elysium` shell is now only the boot world. The map actor is spawned into that
+level and **adopts** it: one pass over the actors, bucketed by the tag the bake stamped on them
+(`ElysiumBakedTags.h` ↔ `TAG_*` in `bake_map.py`). Tags rather than Outliner folders, because folder
+paths are editor-only metadata and vanish in a `-game` build.
 
 The mount is the bring-your-own-game posture applied to a new artefact class: the baked assets are
-derived from the user's own VtMB install, so they are gitignored and regenerable exactly like
-`tools/out/`. Only `ElysiumBaked.uplugin` is committed. Keeping them in a separate plugin rather
-than under `Content/` means the committed tree and the derived tree cannot be confused.
+derived from the user's own VtMB install, so `Plugins/ElysiumBaked/Content/` is gitignored and
+regenerable exactly like `tools/out/`. Only `ElysiumBaked.uplugin` is committed.
 
 ## The pipeline
 
@@ -41,8 +42,6 @@ bake.bat [map] [stages]
 bake_verify.py              reads the result back off the assets, not off the bake's own log
 ```
 
-Stages, each independently runnable (`bake.bat sp_tutorial_1 world,level`):
-
 | Stage | Reads | Writes |
 |---|---|---|
 | `textures` | `.mtl` + `tex/`, `props/tex/` | `Texture2D`, sRGB/`TC_NORMALMAP`/`TC_MASKS` by role |
@@ -50,29 +49,24 @@ Stages, each independently runnable (`bake.bat sp_tutorial_1 world,level`):
 | `world` | `.obj`, `.blend` | one `SM_World_*` per 2048 cm cell |
 | `sky` | `_sky.obj` | `SM_Sky_*` |
 | `props` | `props/*.obj` | one `SM_*` per model |
-| `level` | `.props`, `.lights`, `.env`, `.spawn` | the `.umap` |
+| `level` | `.props`, `.lights`, `.env`, `.sky`, `.spawn` | the `.umap` |
 
-Material selection, parameter names and light calibration are lifted verbatim from
-`FElysiumMaterialFactory` and `UElysiumLightRig`, so a baked instance lands on the same values the
-runtime MID would have bound.
+Material selection and parameter names are lifted from `FElysiumMaterialFactory`. Light *values* are
+not: the bake writes a reasonable starting point, and `UElysiumLightRig::Adopt` re-derives every
+intensity, reach, falloff and specular from the raw `.lights` row at load. So the live calibration —
+not whatever the bake happened to write — is what the map renders, and a Cog slider drag and a fresh
+load agree exactly.
 
 ## What it produces
 
-Verified by `bake_verify.py` reading the assets back:
-
 ```
-MaterialInstanceConstant     710
-StaticMesh                   339
-Texture2D                    694
-World                          1
+MaterialInstanceConstant     710      level: 1324 actors
+StaticMesh                   339        StaticMeshActor 927   PointLight 224
+Texture2D                    694        SpotLight 170         DirectionalLight 1
+World                          1        SkyLight 1            PlayerStart 1
 meshes 339, Nanite on 311, off 28
 1379 material slots (0 unbound)
-level: 1324 actors
-  StaticMeshActor 927   PointLight 224   SpotLight 170
-  DirectionalLight 1    SkyLight 1       PlayerStart 1
 ```
-
-Geometry, with a per-mesh triangle count checked against the source:
 
 | | meshes | triangles | dropped |
 |---|---|---|---|
@@ -80,96 +74,131 @@ Geometry, with a per-mesh triangle count checked against the source:
 | sky | 2 | 3,494 | 0 |
 | props | 221 | 134,006 | 0 |
 
-The 28 non-Nanite meshes are exactly the translucent + additive surfaces (52 `blend 1` materials in
-this map). Nanite is a whole-mesh setting and does not support translucency, so the world chunker
-splits each cell into a Nanite bucket and a non-Nanite sibling, and a prop model with any
-translucent slot falls back wholesale.
+The 28 non-Nanite meshes are exactly the translucent + additive surfaces. Nanite is a whole-mesh
+setting and does not support translucency, so the world chunker splits each cell into a Nanite bucket
+and a non-Nanite sibling, and a prop model with any translucent slot falls back wholesale.
 
-Cost, cold: textures 14 s, materials 7 s, world 94 s, sky 3 s, props 137 s, level 2 s — **about
-4 minutes** for one map, once.
+Cost, cold: **about 4 minutes** for one map, once.
+
+At load, with everything running:
+
+```
+LightRig: adopted 395 baked lights (10 animated) +sun +skyambient
+brush collision: 2561 convex hulls / displacement collision: 3584 triangles
+ropes: 70 cables
+sky 'la': cubemap IBL + backdrop
+baked 'sp_tutorial_1': 1323 actors (116 world, 2 sky, 809 props), 395 lights, 2561 hulls
+world 'sp_tutorial_1' live: 1868 entities (185 brush bodies), epoch 1
+loaded sp_tutorial_1 in 2.50s
+```
 
 ## What it changes
 
-**Lumen surface-cache coverage is total and free.** `r.Lumen.Visualize.CardPlacement 1` shows
-fitted cards on every wall, floor, prop and ornament. This is the entire `.cards` sidecar from the
-previous spike — the offline surfel fit, the content hashing, the `-ElysiumCards` harness — replaced
-by the DDC doing its normal job. Epic's own wording confirms the mechanism: *"Unlike static meshes,
-[skeletal meshes] don't have offline generated cards."* Static mesh assets do, and it needs no
-Nanite.
+**Lumen surface-cache coverage is total and free.** `r.Lumen.Visualize.CardPlacement 1` shows fitted
+cards on every wall, floor, prop and ornament. This is the entire `.cards` sidecar from the previous
+spike — the offline surfel fit, the content hashing, the `-ElysiumCards` harness — replaced by the
+DDC doing its normal job. That harness is deleted on this branch.
 
-**The look changes substantially**, and that is the headline. With real card coverage the indirect
-bounce Lumen produces is far stronger than on the runtime path; the same alley vantage goes from
-moody and mostly black to bright and filled. VtMB's look is indirect-bounce-dominated
-(`rendering-perf.md`), so this is the bounce finally arriving — but the light rig's constants
-(`PointSpotScale 0.003`, `MaxBrightness 8.0`, skylight fill 0.6) were calibrated against a scene
-that had almost no bounce. They now over-light. Any decision to adopt this owes a recalibration
-pass against the baked lightmaps, not a straight port of the current numbers.
+**The sky finally lights the world.** The sky light was `SLS_SpecifiedCubemap` with *no cubemap*,
+which resolves to a flat constant ambient — unshadowed fill reaching every interior through solid
+walls. It now takes the map's real sky cubemap with the lower hemisphere black, so Lumen does real
+sky occlusion and an interior is dark because it cannot see the sky. Epic's own wording is the
+argument: *"A Sky Light should be used instead of the Ambient Cubemap to represent the sky's light
+because Sky Lights support local shadowing, which prevents indoor areas from getting light from the
+sky."*
 
-**Nanite costs nothing and buys nothing here.** 101 FPS with it on, 100 without, at the same
-vantage — expected at ~30k world triangles. Its value is not throughput; it is that the ISM/Lumen
-question the previous spike could not settle stops mattering.
+**The look changes substantially, and it over-lights.** Real card coverage means far more indirect
+bounce than the runtime path ever had, and the light rig's constants (`PointSpotScale 0.003`,
+`MaxBrightness 8.0`) were calibrated against a scene with almost no bounce. Adoption owes a
+recalibration pass, which is why the Lights Cog window now also owns the sky and fog: how much the
+sky contributes and how much the per-source rig must carry is one decision, not two.
 
-**The baked path is slower than the runtime path at the same vantage** — 96 FPS baked vs 123
-runtime at the alley spawn. 927 `StaticMeshActor`s and 395 light actors replace a handful of
-components and one ISM per model, and full card coverage means far more surface cache to keep
-updated. This is a real cost and not yet investigated.
+**Nanite costs nothing and buys nothing here.** Expected at ~30k world triangles. Its value is not
+throughput; it is that the ISM/Lumen question the previous spike could not settle stops mattering.
+
+**Perf is unmeasured on this branch.** The earlier 96-vs-123 FPS reading predates every change here
+(sky-transform fix, ray-tracing exclusion, collision profiles, cubemap IBL) and should not be
+quoted. `profile.bat` has not been run against the baked level.
 
 ## Engine facts this pinned down
 
-- **`FDynamicMesh3` silently drops non-manifold triangles.** `AppendBuffersToMesh` refuses any
-  triangle that would make an edge non-manifold, logging to `LogGeometry` and continuing. VtMB prop
-  models share vertices freely, so an indexed append loses faces. Emitting every triangle with its
-  own three vertices makes the soup manifold-by-construction; shading is unaffected because normals
-  are accumulated over the model's original shared indices first. **Any bake must check the mesh's
-  triangle count against its source** — the drop is otherwise invisible.
+- **A master material needs `bUsedWithNanite`.** Outside the editor no new shader permutation can be
+  compiled, so a Nanite mesh whose material lacks the flag renders in **default grey** — 545
+  warnings and a grey map. The editor hides this by compiling on demand. Exactly the same failure
+  mode as the existing `used_with_instanced_static_meshes` flag, and it is silent in PIE.
+- **Only a collision *profile name* survives a `.umap` save/load.** Per-channel responses set
+  alongside it are discarded when loading re-applies the profile — the actors came back with
+  `ECR_Ignore` on the pick channel and the debug pick silently found nothing. Declare a named
+  profile in `DefaultEngine.ini` and set that. List every channel explicitly: an omitted one falls
+  back to its `DefaultResponse`, and for `ElysiumUse`/`Visibility` that is Block.
+- **Python binds a game trace channel under its configured `Name`**, not its slot:
+  `unreal.CollisionChannel.ECC_ELYSIUM_PICK`, not `ECC_GAME_TRACE_CHANNEL2`. The response enum is
+  `unreal.CollisionResponseType`; `unreal.CollisionResponse` is a struct.
+- **`FDynamicMesh3` silently drops non-manifold triangles.** VtMB prop models share vertices freely,
+  so an indexed append loses faces. Emitting every triangle with its own three vertices makes the
+  soup manifold-by-construction; shading is unaffected because normals are accumulated over the
+  model's original shared indices first. **Any bake must check the mesh's triangle count against its
+  source** — the drop is otherwise invisible.
 - **Face-normal sign.** `source_to_unreal` negates Y, a reflection, so the exporter reverses winding
-  at OBJ-write time. The outward normal is therefore `(c − a) × (b − a)`, not the right-handed
-  `(b − a) × (c − a)`. With the wrong sign every triangle on the map's floor plane points straight
-  down and the map lights inside-out — geometry and materials look perfect in unlit view, which
-  makes it easy to misread as a lighting bug.
+  at OBJ-write time. The outward normal is `(c − a) × (b − a)`, not the right-handed
+  `(b − a) × (c − a)`. With the wrong sign the map lights inside-out while looking perfect unlit.
 - **`GeometryScriptCreateNewStaticMeshAssetOptions.enable_nanite` does not reach the asset.** Set
-  `nanite_settings` on the `UStaticMesh` after creation; the assignment runs `PostEditChange`, which
-  rebuilds with Nanite. A verification pass caught this — the bake reported success on all 339
-  meshes while every one had Nanite off.
+  `nanite_settings` on the `UStaticMesh` after creation; the assignment runs `PostEditChange`.
 - **A fresh commandlet has not indexed a new mount.** `does_asset_exist` reports False for assets
-  already on disk, and `create_asset` then trips the unattended overwrite guard. Scan the mount with
+  already on disk and `create_asset` then trips the unattended overwrite guard. Scan the mount with
   `AssetRegistry.scan_paths_synchronous(force_rescan=True)` first.
-- **`ADirectionalLight` and `ASkyLight` expose only `ALight::LightComponent`** as `light_component`;
-  only point and spot get the typed accessor.
+- **`ADirectionalLight`/`ASkyLight` expose only `ALight::LightComponent`** as `light_component`.
 - **`unreal.StaticMaterial` takes no `imported_material_slot_name` keyword.**
-- **A `SkyLight` with `SLS_SpecifiedCubemap` and no cubemap** resolves to flat constant ambient of
-  its light colour, independent of any capture. A captured-scene skylight samples VtMB's near-black
-  2D sky and leaves the map unlit — the map actor's existing choice, and the bake has to copy it.
-- **`cmd` splits arguments on commas** regardless of quoting from PowerShell, so a comma-separated
-  stage list arrives as separate `%n` tokens and must be rejoined.
+- **`cmd` splits arguments on commas** regardless of quoting, so a stage list arrives as separate
+  `%n` tokens and must be rejoined.
+- **Epic on hardware-ray-traced Lumen:** *"Large meshes that overlap the entire scene are a
+  performance issue, such as a skybox. These meshes should have Visible in Ray Tracing disabled."*
+  The 3D skybox is scaled 16× and encloses the playable space, so it and the backdrop dome are both
+  excluded. Also: *"Lumen Scene Lighting selects a small subset of the most important lights per
+  surface cache tile, which makes its performance less sensitive to the total number of lights"* —
+  so 395 lights is not the cost driver.
+
+## The debug pick
+
+World and prop surface picking moved from CPU triangle casts to one physics line trace on a
+dedicated `ElysiumPick` channel (`ECC_GameTraceChannel2`, default Ignore), resolving the material via
+`GetMaterialFromCollisionFaceIndex`. The channel is separate from `ECC_Visibility` because the
+walkable surface is the `.hulls` brush collider, which carries no material and no face — a pick on a
+shared channel reports the invisible clip volume instead of the wall that was clicked.
+
+Verified in-game: `pick: world surface 'plaster_socwllb [slot 8]'` — the slot name is the same OBJ
+group key the runtime path reported.
+
+What is lost: the exact BSP-face flood highlight. A baked static mesh keeps no CPU-side section
+geometry, so the highlight is now an oriented patch at the impact point plus the component's bounds.
+The gizmo and brush-body sources are unchanged.
 
 ## Gaps
 
-Nothing below is baked; the level is the map's look, not the map.
-
-- **Collision** is whatever the static-mesh build produced, not the `.hulls` / `.dispcol` brush
-  collider the project treats as the walkable surface. The pawn stands and walks in the yard but
-  falls through at the spawn point.
-- **Decals** (123), **ropes** (70), **sprites** (96) — not placed.
-- **Post-process**: no `.cube` colour-grade LUT volume, so the baked level is ungraded where the
-  runtime path is graded. Part of the brightness delta is this, not GI.
-- **Lightstyle animation**: styled sources (flicker, fluorescent) are placed at their unanimated
-  base intensity. A baked light actor has nowhere to run the curve.
-- **3D skybox transform**: sky meshes are placed at their raw exported coordinates; the `.sky`
-  sidecar's origin/scale are not applied.
-- **The entity substrate** does not run against this level — no doors, triggers, scripting, NPCs,
-  `+use`. The runtime would have to spawn into the baked world rather than build it.
+- **Decals** (123) and **sprites** (96) are not placed. Ropes are; decals were dropped with the
+  runtime world build and have no baked equivalent yet.
+- **Post-process**: no `.cube` colour-grade LUT. Note the runtime path does not grade either — its
+  LUT block was commented out with `// TEMP: disabled for a test` and never restored. Deliberately
+  left off (owner call) until the sky/ambient recalibration settles.
+- **Volumetric fog** is enabled on the baked height fog, but only maps whose `.env` turns fog on get
+  a fog actor at all — and `sp_tutorial_1` has fog off, so it shows nothing there.
+- **`prop_physics`** stays on the runtime build: simulation needs the CoACD-decomposed
+  `props/<stem>.hulls` as a per-asset body setup. `prop_dynamic` loads the baked mesh.
+- **NPCs** stay on glTFRuntime. Skeletal meshes get no offline cards anyway.
+- **Perf** is unmeasured (above).
 - **One map.** Nothing has been said about the other 107, their bake cost, or the DDC/asset-registry
-  scale of ~1,000 assets per map.
+  scale of ~1,700 assets per map.
 
 ## Repro
 
 ```
+content.bat                                  # masters need bUsedWithNanite
 bake.bat sp_tutorial_1                       # all stages, ~4 min cold
 bake.bat sp_tutorial_1 world,level           # re-run a subset
 tools/bake_verify.py                         # read the result back off the assets
-UnrealEditor.exe ElysiumUE.uproject /ElysiumBaked/sp_tutorial_1/sp_tutorial_1 -game -dx12 -ElysiumNewGame=0
+play.bat sp_tutorial_1                       # the game, on the baked level
 ```
 
 Requires the `GeometryScripting` and `ElysiumBaked` plugins (both enabled in the `.uproject`) and an
-export of the map under `tools/out/`.
+export of the map under `tools/out/`. A map with no bake is refused by `Travel` with the command to
+run. Note the running game holds the `.umap` open — quit before re-baking the `level` stage.

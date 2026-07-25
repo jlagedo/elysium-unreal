@@ -310,6 +310,26 @@ def mesh_triangle_count(mesh):
     return unreal.GeometryScript_MeshQueries.get_num_triangle_i_ds(mesh)
 
 
+def set_complex_collision(static_mesh):
+    """Make the render triangles themselves the mesh's collision.
+
+    Two things need this. A solid GAME_LUMP prop has to block the pawn, and the trimesh is a
+    truer blocker than the single convex hull the runtime builder cooked. And the debug
+    click-pick wants a face index it can turn back into a material slot, which simple collision
+    cannot give. Safe for every baked mesh because none of them simulate -- prop_physics goes
+    through the runtime path, which needs a body setup of its own anyway.
+
+    World and sky geometry carries this too but ignores every channel except the pick one, so
+    walking is still decided entirely by the .hulls brush collider."""
+    body = static_mesh.get_editor_property("body_setup")
+    if body is None:
+        static_mesh.create_body_setup()
+        body = static_mesh.get_editor_property("body_setup")
+    if body is not None:
+        body.set_editor_property(
+            "collision_trace_flag", unreal.CollisionTraceFlag.CTF_USE_COMPLEX_AS_SIMPLE)
+
+
 def create_static_mesh(mesh, asset_path, materials, slot_names, nanite):
     """Write a UDynamicMesh out as a real StaticMesh asset and bind its material slots.
     Returns the asset, or None when the build failed."""
@@ -322,7 +342,8 @@ def create_static_mesh(mesh, asset_path, materials, slot_names, nanite):
     options.enable_recompute_tangents = True
     options.enable_nanite = nanite
     options.nanite_settings = nanite_settings
-    options.enable_collision = False
+    # A body setup has to exist before either collision helper above can touch it.
+    options.enable_collision = True
     # BSP soup is non-manifold; keeping the source vertex order stops the build from welding
     # face-boundary corners back together and smoothing the flat shading away.
     options.use_original_vertex_order = True

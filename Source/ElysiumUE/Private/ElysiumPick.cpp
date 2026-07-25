@@ -2,6 +2,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "ElysiumBakedTags.h"
 #include "ElysiumBrushComponent.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDebugSubsystem.h"
@@ -11,7 +12,6 @@
 #include "ElysiumMapActor.h"
 
 #include "Camera/PlayerCameraManager.h"
-#include "Components/InstancedStaticMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/HitResult.h"
 #include "Engine/StaticMesh.h"
@@ -20,53 +20,14 @@
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
 #include "Materials/MaterialInterface.h"
-#include "ProceduralMeshComponent.h"
-#include "Templates/Function.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumPick, Log, All);
 
 namespace
 {
 	constexpr double PickReach = 100000.0;   // 1 km, the same reach as the ent_* crosshair picker
-	constexpr int32  MaxFloodTris = 4096;    // bound the face flood (a displacement patch is one face)
 
 	// --- ray primitives ----------------------------------------------------------------------
-
-	// Moller-Trumbore, two-sided: a click through the back of a face should still resolve rather
-	// than fall through to whatever is behind it. Returns the ray parameter, so `t` stays
-	// comparable across the local spaces each caster works in.
-	bool RayTri(const FVector& O, const FVector& D,
-		const FVector& A, const FVector& B, const FVector& C, double& OutT)
-	{
-		const FVector E1 = B - A;
-		const FVector E2 = C - A;
-		const FVector P = D ^ E2;
-		const double Det = E1 | P;
-		if (FMath::Abs(Det) < UE_DOUBLE_SMALL_NUMBER)
-		{
-			return false;   // ray parallel to the triangle plane
-		}
-		const double Inv = 1.0 / Det;
-		const FVector T = O - A;
-		const double U = (T | P) * Inv;
-		if (U < 0.0 || U > 1.0)
-		{
-			return false;
-		}
-		const FVector Q = T ^ E1;
-		const double V = (D | Q) * Inv;
-		if (V < 0.0 || U + V > 1.0)
-		{
-			return false;
-		}
-		const double Dist = (E2 | Q) * Inv;
-		if (Dist <= 0.0)
-		{
-			return false;
-		}
-		OutT = Dist;
-		return true;
-	}
 
 	// Slab test, reporting the entry parameter. D is never normalized here (it comes through
 	// inverse transforms unnormalized so `t` stays in the world parameterization), so the
@@ -91,12 +52,6 @@ namespace
 		}
 		OutT = T0;
 		return T1 >= T0;
-	}
-
-	bool RayBox(const FVector& O, const FVector& D, const FBox& Box, double MaxT)
-	{
-		double Unused;
-		return RayBoxEnter(O, D, Box, MaxT, Unused);
 	}
 
 	// --- highlight geometry ------------------------------------------------------------------
@@ -140,297 +95,62 @@ namespace
 		}
 	}
 
-	uint64 EdgeKey(int32 A, int32 B)
-	{
-		const uint32 Lo = static_cast<uint32>(FMath::Min(A, B));
-		const uint32 Hi = static_cast<uint32>(FMath::Max(A, B));
-		return (static_cast<uint64>(Hi) << 32) | Lo;
-	}
+	// --- the geometry caster -----------------------------------------------------------------
 
-	// Flood from the hit triangle to the whole BSP face it belongs to, and emit that face's
-	// boundary as a line list.
-	//
-	// The geometry comes in as accessors because the two world sources hold it differently — a
-	// procedural mesh section (FProcMeshVertex + a uint32 index buffer) and a world chunk's pick
-	// soup (plain positions + int32 indices).
-	//
-	// This works on shared vertex indices alone because of how the geometry is produced:
-	// UE_bsp_to_scene.py's `emit()` appends a fresh vertex per face corner (no dedup across
-	// faces), and both world builders key a section's vertices on the *global* index — so the
-	// triangles of one face share local indices and adjacent faces share none. The flood
-	// therefore stops at the face boundary on its own; no position weld, no risk of running
-	// around a corner into the next wall. The coplanarity test only bites on displacement grids,
-	// where one "face" is a whole curved patch.
-	//
-	// On the chunked world path a face whose triangles fall in different chunks floods only within
-	// the chunk that was hit: the halves are separate meshes and share no indices, so the
-	// highlight covers the part of the face that is actually in the picked component.
-	void FloodFace(int32 NumTris, TFunctionRef<int32(int32)> IndexAt,
-		TFunctionRef<FVector(int32)> PositionAt, int32 HitTri,
-		TArray<int32>& OutTris, TArray<int32>& OutBoundary)
+	// What the ray hit in the baked level. The map's geometry is real static-mesh assets now, so
+	// this is one physics trace on the dedicated ElysiumPick channel rather than the CPU triangle
+	// casts the runtime-built world needed. Complex tracing gives a face index, which is what turns
+	// the hit back into a material slot — the string the Inspector actually reports.
+	struct FBakedHit
 	{
-		if (HitTri < 0 || HitTri >= NumTris)
+		UStaticMeshComponent* Comp = nullptr;
+		bool bProp = false;                  // elysium.prop, vs a world/sky cell
+		int32 Section = INDEX_NONE;          // material-slot index behind the hit face
+		UMaterialInterface* Material = nullptr;
+		FVector Point = FVector::ZeroVector;
+		FVector Normal = FVector::ZeroVector;
+
+		bool IsSet() const { return Comp != nullptr; }
+	};
+
+	void CastBaked(UWorld* World, const FVector& O, const FVector& D, double& BestT, FBakedHit& Out)
+	{
+		FCollisionQueryParams Params(FName(TEXT("ElysiumPickGeo")), /*bTraceComplex*/ true);
+		Params.bReturnFaceIndex = true;
+		if (const APlayerController* PC = World->GetFirstPlayerController())
+		{
+			Params.AddIgnoredActor(PC->GetPawn());
+		}
+
+		FHitResult Hit;
+		if (!World->LineTraceSingleByChannel(Hit, O, O + D * PickReach, ELYSIUM_PICK_CHANNEL, Params))
+		{
+			return;
+		}
+		UStaticMeshComponent* Comp = Cast<UStaticMeshComponent>(Hit.GetComponent());
+		const AActor* Actor = Hit.GetActor();
+		if (Comp == nullptr || Actor == nullptr)
+		{
+			return;
+		}
+		const double T = Hit.Distance > 0.0 ? Hit.Distance : FVector::Dist(O, Hit.ImpactPoint);
+		if (T >= BestT)
 		{
 			return;
 		}
 
-		auto TriNormal = [&IndexAt, &PositionAt](int32 Tri)
-		{
-			const FVector A = PositionAt(IndexAt(Tri * 3 + 0));
-			const FVector B = PositionAt(IndexAt(Tri * 3 + 1));
-			const FVector C = PositionAt(IndexAt(Tri * 3 + 2));
-			return ((B - A) ^ (C - A)).GetSafeNormal();
-		};
-
-		TMultiMap<uint64, int32> EdgeToTri;
-		EdgeToTri.Reserve(NumTris * 3);
-		for (int32 T = 0; T < NumTris; ++T)
-		{
-			for (int32 K = 0; K < 3; ++K)
-			{
-				EdgeToTri.Add(EdgeKey(IndexAt(T * 3 + K), IndexAt(T * 3 + (K + 1) % 3)), T);
-			}
-		}
-
-		const FVector FaceNormal = TriNormal(HitTri);
-		TSet<int32> Visited;
-		TArray<int32> Frontier;
-		Visited.Add(HitTri);
-		Frontier.Add(HitTri);
-
-		TArray<int32> Neighbours;
-		while (Frontier.Num() > 0 && Visited.Num() < MaxFloodTris)
-		{
-			const int32 T = Frontier.Pop(EAllowShrinking::No);
-			for (int32 K = 0; K < 3; ++K)
-			{
-				Neighbours.Reset();
-				EdgeToTri.MultiFind(EdgeKey(IndexAt(T * 3 + K), IndexAt(T * 3 + (K + 1) % 3)), Neighbours);
-				for (int32 N : Neighbours)
-				{
-					if (Visited.Contains(N))
-					{
-						continue;
-					}
-					if (FMath::Abs(TriNormal(N) | FaceNormal) < 0.9995)
-					{
-						continue;   // displacement curvature: stop at the coplanar patch
-					}
-					Visited.Add(N);
-					Frontier.Add(N);
-				}
-			}
-		}
-
-		OutTris = Visited.Array();
-
-		// Boundary = every edge used by exactly one triangle of the flooded set.
-		TMap<uint64, int32> Uses;
-		for (int32 T : OutTris)
-		{
-			for (int32 K = 0; K < 3; ++K)
-			{
-				Uses.FindOrAdd(EdgeKey(IndexAt(T * 3 + K), IndexAt(T * 3 + (K + 1) % 3)))++;
-			}
-		}
-		for (int32 T : OutTris)
-		{
-			for (int32 K = 0; K < 3; ++K)
-			{
-				const int32 A = IndexAt(T * 3 + K);
-				const int32 B = IndexAt(T * 3 + (K + 1) % 3);
-				if (Uses[EdgeKey(A, B)] == 1)
-				{
-					OutBoundary.Add(A);
-					OutBoundary.Add(B);
-				}
-			}
-		}
-	}
-
-	// --- the three casters -------------------------------------------------------------------
-
-	// A world/sky surface hit, from either shape the world renders in: the single procedural mesh
-	// (Mesh) or one of the Lumen-cards path's chunked static meshes (Chunk + the index of its CPU
-	// soup). Exactly one of the two is ever set; Section indexes that source's own section list.
-	struct FSurfaceHit
-	{
-		UProceduralMeshComponent* Mesh = nullptr;
-		UStaticMeshComponent* Chunk = nullptr;
-		int32 ChunkIndex = INDEX_NONE;
+		BestT = T;
+		Out.Comp = Comp;
+		Out.bProp = Actor->ActorHasTag(ElysiumBakedTags::Prop);
+		Out.Point = Hit.ImpactPoint;
+		Out.Normal = Hit.ImpactNormal;
+		// Face index -> material slot. A mesh with no complex collision reports INDEX_NONE, which
+		// still leaves a usable component-level hit.
 		int32 Section = INDEX_NONE;
-		int32 Triangle = INDEX_NONE;
-
-		bool IsSet() const { return Mesh != nullptr || Chunk != nullptr; }
-		void Reset() { *this = FSurfaceHit(); }
-	};
-
-	// CPU cast against a procedural mesh's CPU-side sections. Needed because with the default
-	// elysium.BrushCollision 1 the world render mesh is built with collision off — physics can
-	// only report the .hulls collider, which carries no material and no face.
-	void CastProcMesh(UProceduralMeshComponent* Mesh, const FVector& O, const FVector& D,
-		double& BestT, FSurfaceHit& Out)
-	{
-		if (Mesh == nullptr || !Mesh->IsVisible())
-		{
-			return;
-		}
-		const FTransform Xform = Mesh->GetComponentTransform();
-		const FVector LO = Xform.InverseTransformPosition(O);
-		const FVector LD = Xform.InverseTransformVector(D);
-
-		for (int32 SecIdx = 0; SecIdx < Mesh->GetNumSections(); ++SecIdx)
-		{
-			const FProcMeshSection* S = Mesh->GetProcMeshSection(SecIdx);
-			if (S == nullptr || !S->bSectionVisible || S->ProcIndexBuffer.Num() < 3)
-			{
-				continue;
-			}
-			if (!RayBox(LO, LD, S->SectionLocalBox, BestT))
-			{
-				continue;
-			}
-			const TArray<uint32>& Idx = S->ProcIndexBuffer;
-			const TArray<FProcMeshVertex>& Verts = S->ProcVertexBuffer;
-			const int32 NumTris = Idx.Num() / 3;
-			for (int32 T = 0; T < NumTris; ++T)
-			{
-				double Hit;
-				if (RayTri(LO, LD,
-					Verts[Idx[T * 3 + 0]].Position,
-					Verts[Idx[T * 3 + 1]].Position,
-					Verts[Idx[T * 3 + 2]].Position, Hit) && Hit < BestT)
-				{
-					BestT = Hit;
-					Out.Reset();
-					Out.Mesh = Mesh;
-					Out.Section = SecIdx;
-					Out.Triangle = T;
-				}
-			}
-		}
-	}
-
-	// CPU cast against the chunked world (the elysium.LumenCards path). The chunks are runtime
-	// UStaticMeshes with collision off, and a static mesh keeps nothing on the CPU to cast
-	// against, so the map actor retains a per-chunk triangle soup for exactly this — the same
-	// arrangement the props use.
-	void CastWorldChunks(const AElysiumMapActor& Map, const FVector& O, const FVector& D,
-		double& BestT, FSurfaceHit& Out)
-	{
-		const TArray<AElysiumMapActor::FWorldChunkPickSoup>& Soups = Map.GetWorldChunkPickSoups();
-		const TArray<TObjectPtr<UStaticMeshComponent>>& Chunks = Map.GetWorldChunks();
-		for (int32 ChunkIdx = 0; ChunkIdx < Chunks.Num(); ++ChunkIdx)
-		{
-			UStaticMeshComponent* Comp = Chunks[ChunkIdx];
-			if (Comp == nullptr || !Comp->IsVisible() || !Soups.IsValidIndex(ChunkIdx))
-			{
-				continue;
-			}
-			const AElysiumMapActor::FWorldChunkPickSoup& Soup = Soups[ChunkIdx];
-			const FTransform Xform = Comp->GetComponentTransform();
-			const FVector LO = Xform.InverseTransformPosition(O);
-			const FVector LD = Xform.InverseTransformVector(D);
-			if (!RayBox(LO, LD, Soup.Bounds, BestT))
-			{
-				continue;   // the whole chunk is off the ray, or behind what already won
-			}
-
-			for (int32 SecIdx = 0; SecIdx < Soup.Sections.Num(); ++SecIdx)
-			{
-				const AElysiumMapActor::FWorldChunkPickSection& S = Soup.Sections[SecIdx];
-				if (S.Tris.Num() < 3 || !RayBox(LO, LD, S.Bounds, BestT))
-				{
-					continue;
-				}
-				const int32 NumTris = S.Tris.Num() / 3;
-				for (int32 T = 0; T < NumTris; ++T)
-				{
-					double Hit;
-					if (RayTri(LO, LD,
-						S.Positions[S.Tris[T * 3 + 0]],
-						S.Positions[S.Tris[T * 3 + 1]],
-						S.Positions[S.Tris[T * 3 + 2]], Hit) && Hit < BestT)
-					{
-						BestT = Hit;
-						Out.Reset();
-						Out.Chunk = Comp;
-						Out.ChunkIndex = ChunkIdx;
-						Out.Section = SecIdx;
-						Out.Triangle = T;
-					}
-				}
-			}
-		}
-	}
-
-	struct FPropHit
-	{
-		UInstancedStaticMeshComponent* Ism = nullptr;
-		int32 Soup = INDEX_NONE;
-		int32 Instance = INDEX_NONE;
-		int32 Triangle = INDEX_NONE;
-		FTransform Xform;
-	};
-
-	// CPU cast against every prop instance, triangle-exact. A solid prop's cooked collision is a
-	// single convex hull of the whole model (ElysiumStaticMesh.cpp) and non-solid props have none
-	// at all, so physics can neither pick a non-solid prop nor tell a railing from its bounding
-	// blob. The ray goes into instance space so `t` stays comparable with the other casters.
-	void CastProps(const AElysiumMapActor& Map, const FVector& O, const FVector& D,
-		double& BestT, FPropHit& Out)
-	{
-		const TArray<AElysiumMapActor::FPropPickSoup>& Soups = Map.GetPropPickSoups();
-		for (UInstancedStaticMeshComponent* Ism : Map.GetPropComponents())
-		{
-			if (Ism == nullptr || !Ism->IsVisible() || Ism->GetStaticMesh() == nullptr)
-			{
-				continue;
-			}
-			const int32 SoupIdx = Map.GetPropSoupIndex(Ism);
-			if (!Soups.IsValidIndex(SoupIdx))
-			{
-				continue;
-			}
-			const AElysiumMapActor::FPropPickSoup& Soup = Soups[SoupIdx];
-			const FBox LocalBounds = Ism->GetStaticMesh()->GetBounds().GetBox();
-
-			const int32 NumInst = Ism->GetInstanceCount();
-			for (int32 I = 0; I < NumInst; ++I)
-			{
-				FTransform Xform;
-				if (!Ism->GetInstanceTransform(I, Xform, /*bWorldSpace*/ true))
-				{
-					continue;
-				}
-				const FVector LO = Xform.InverseTransformPosition(O);
-				const FVector LD = Xform.InverseTransformVector(D);
-				if (!RayBox(LO, LD, LocalBounds, BestT))
-				{
-					continue;
-				}
-				for (int32 T = 0; T + 2 < Soup.Tris.Num(); T += 3)
-				{
-					const int32 A = Soup.Tris[T], B = Soup.Tris[T + 1], C = Soup.Tris[T + 2];
-					if (!Soup.Positions.IsValidIndex(A) || !Soup.Positions.IsValidIndex(B)
-						|| !Soup.Positions.IsValidIndex(C))
-					{
-						continue;
-					}
-					double Hit;
-					if (RayTri(LO, LD, Soup.Positions[A], Soup.Positions[B], Soup.Positions[C], Hit)
-						&& Hit < BestT)
-					{
-						BestT = Hit;
-						Out.Ism = Ism;
-						Out.Soup = SoupIdx;
-						Out.Instance = I;
-						Out.Triangle = T / 3;
-						Out.Xform = Xform;
-					}
-				}
-			}
-		}
+		Out.Material = (Hit.FaceIndex != INDEX_NONE)
+			? Comp->GetMaterialFromCollisionFaceIndex(Hit.FaceIndex, Section)
+			: Comp->GetMaterial(0);
+		Out.Section = Section;
 	}
 
 	AElysiumMapActor* FindMapActor(UWorld* World)
@@ -489,22 +209,13 @@ bool ElysiumPick::Trace(UWorld* World, const FVector& Origin, const FVector& Dir
 	AElysiumMapActor* Map = FindMapActor(World);
 	FElysiumEntityWorld* EW = Map ? Map->GetEntityWorld() : nullptr;
 
-	// --- 1) prop instances + world/sky surfaces (CPU) ----------------------------------------
-	// These run first and share one cap, so RenderT ends up as the distance to the nearest thing
-	// that actually renders. The gizmo depth test below needs exactly that: brush bodies draw
-	// nothing, so an invisible trigger volume must not occlude a gizmo marker behind it.
+	// --- 1) the baked level's geometry -------------------------------------------------------
+	// This runs first so RenderT ends up as the distance to the nearest thing that actually
+	// renders. The gizmo depth test below needs exactly that: brush bodies draw nothing, so an
+	// invisible trigger volume must not occlude a gizmo marker behind it.
 	double RenderT = PickReach;
-	FPropHit Prop;
-	FSurfaceHit Surface;
-	if (Map != nullptr)
-	{
-		CastProps(*Map, Origin, D, RenderT, Prop);
-		// The world is one or the other: the PMC carries no sections on the chunked path, and the
-		// chunk arrays are empty on the PMC path. The sky is always a PMC.
-		CastProcMesh(Map->GetWorldMesh(), Origin, D, RenderT, Surface);
-		CastWorldChunks(*Map, Origin, D, RenderT, Surface);
-		CastProcMesh(Map->GetSkyMesh(), Origin, D, RenderT, Surface);
-	}
+	FBakedHit Baked;
+	CastBaked(World, Origin, D, RenderT, Baked);
 
 	// --- 2) entity brush bodies (physics) ----------------------------------------------------
 	// A multi-trace returns trigger overlaps as well as blocking hits in near->far order, so an
@@ -613,14 +324,13 @@ bool ElysiumPick::Trace(UWorld* World, const FVector& Origin, const FVector& Dir
 		}
 	}
 
-	// Nearest of the three geometry sources wins. Surface and Prop shared one cap, so at most one
-	// of them can be the nearest; a body only wins if it beat both.
+	// Nearest of the two geometry sources wins. A brush body only wins if it beat the baked
+	// geometry the ray passed through.
 	double BestT = RenderT;
 	if (BodyT < RenderT)
 	{
 		BestT = BodyT;
-		Prop.Ism = nullptr;
-		Surface.Reset();
+		Baked = FBakedHit();
 		Out.HitPoint = BodyPoint;
 		Out.HitNormal = BodyNormal;
 	}
@@ -628,138 +338,59 @@ bool ElysiumPick::Trace(UWorld* World, const FVector& Origin, const FVector& Dir
 	{
 		HitBody = nullptr;
 	}
-	if (Surface.IsSet())
-	{
-		Prop.Ism = nullptr;
-	}
 
 	// --- resolve the winner into a result ----------------------------------------------------
-	if (Surface.IsSet())
+	if (Baked.IsSet())
 	{
-		// One view over whichever world source won, so the flood and the highlight below are
-		// written once. Accessors rather than a copy: the hover pick runs every frame and a
-		// section can hold thousands of vertices.
-		TFunction<int32(int32)> IndexAt;
-		TFunction<FVector(int32)> PositionAt;
-		int32 NumTris = 0;
-		FTransform Xform;
-		UPrimitiveComponent* Comp = nullptr;
-
-		if (Surface.Mesh != nullptr)
-		{
-			const FProcMeshSection* S = Surface.Mesh->GetProcMeshSection(Surface.Section);
-			if (S == nullptr)
-			{
-				return false;
-			}
-			IndexAt = [S](int32 I) { return static_cast<int32>(S->ProcIndexBuffer[I]); };
-			PositionAt = [S](int32 V) { return S->ProcVertexBuffer[V].Position; };
-			NumTris = S->ProcIndexBuffer.Num() / 3;
-			Comp = Surface.Mesh;
-			Xform = Surface.Mesh->GetComponentTransform();
-			Out.Material = Surface.Mesh->GetMaterial(Surface.Section);
-			Out.MaterialName = Map->GetSectionMaterialName(Surface.Mesh, Surface.Section);
-		}
-		else
-		{
-			const TArray<AElysiumMapActor::FWorldChunkPickSoup>& Soups = Map->GetWorldChunkPickSoups();
-			if (!Soups.IsValidIndex(Surface.ChunkIndex)
-				|| !Soups[Surface.ChunkIndex].Sections.IsValidIndex(Surface.Section))
-			{
-				return false;
-			}
-			const AElysiumMapActor::FWorldChunkPickSection& S =
-				Soups[Surface.ChunkIndex].Sections[Surface.Section];
-			IndexAt = [&S](int32 I) { return S.Tris[I]; };
-			PositionAt = [&S](int32 V) { return S.Positions[V]; };
-			NumTris = S.Tris.Num() / 3;
-			Comp = Surface.Chunk;
-			Xform = Surface.Chunk->GetComponentTransform();
-			// The soup's sections are the chunk's material slots 1:1, and Mat is the OBJ group
-			// key the chunk was cut from — the same string the PMC path reports.
-			Out.Material = Surface.Chunk->GetMaterial(Surface.Section);
-			Out.MaterialName = S.Mat;
-		}
-
-		Out.Kind = EElysiumPickKind::WorldSurface;
-		Out.Component = Comp;
+		Out.Kind = Baked.bProp ? EElysiumPickKind::PropInstance : EElysiumPickKind::WorldSurface;
+		Out.Component = Baked.Comp;
 		Out.bHasComponent = Out.Component.IsValid();
-		Out.Section = Surface.Section;
-		Out.Triangle = Surface.Triangle;
-		Out.HitPoint = Origin + D * BestT;
+		Out.Material = Baked.Material;
+		Out.Section = Baked.Section;
+		Out.HitPoint = Baked.Point;
+		Out.HitNormal = Baked.Normal;
 		Out.Distance = BestT;
 
-		TArray<int32> FaceTris;
-		TArray<int32> Boundary;
-		if (bBuildFaceOutline)
+		// The bake names each material slot after the OBJ group key ("<material>@<cubemap>"), so
+		// the slot name is the same string the runtime-built world used to report.
+		UStaticMesh* Mesh = Baked.Comp->GetStaticMesh();
+		if (Mesh != nullptr)
 		{
-			FloodFace(NumTris, IndexAt, PositionAt, Surface.Triangle, FaceTris, Boundary);
-		}
-		if (FaceTris.Num() == 0)
-		{
-			FaceTris.Add(Surface.Triangle);   // hover / flood failure: just the hit triangle
-			for (int32 K = 0; K < 3; ++K)
+			if (Mesh->GetStaticMaterials().IsValidIndex(Baked.Section))
 			{
-				Boundary.Add(IndexAt(Surface.Triangle * 3 + K));
-				Boundary.Add(IndexAt(Surface.Triangle * 3 + (K + 1) % 3));
+				Out.MaterialName = Mesh->GetStaticMaterials()[Baked.Section].MaterialSlotName.ToString();
 			}
+			Out.ModelName = Mesh->GetName();
 		}
 
-		FVector Centroid = FVector::ZeroVector;
-		Out.FillTris.Reserve(FaceTris.Num() * 3);
-		for (int32 T : FaceTris)
+		// Highlight: the hit patch plus the actor's bounds. A baked static mesh keeps no CPU-side
+		// geometry, so the exact BSP face the runtime path flood-filled is not recoverable here —
+		// an oriented patch on the impact normal says precisely where the ray landed, and the box
+		// says which cell or prop owns it.
 		{
-			for (int32 K = 0; K < 3; ++K)
-			{
-				const FVector P = Xform.TransformPosition(PositionAt(IndexAt(T * 3 + K)));
-				Out.FillTris.Add(P);
-				Centroid += P;
-			}
+			const FVector N = Baked.Normal.GetSafeNormal();
+			FVector U, V;
+			N.FindBestAxisVectors(U, V);
+			constexpr double Patch = 16.0;
+			// Lifted off the surface so the fill does not z-fight the wall it describes.
+			const FVector C = Baked.Point + N * 0.5;
+			const FVector P00 = C - U * Patch - V * Patch;
+			const FVector P10 = C + U * Patch - V * Patch;
+			const FVector P11 = C + U * Patch + V * Patch;
+			const FVector P01 = C - U * Patch + V * Patch;
+			Out.FillTris = { P00, P10, P11, P00, P11, P01 };
+			Out.OutlineSegs = { P00, P10, P10, P11, P11, P01, P01, P00 };
+
+			const FBoxSphereBounds Bounds = Baked.Comp->Bounds;
+			AppendBox(FBox(-Bounds.BoxExtent, Bounds.BoxExtent),
+				FTransform(Bounds.Origin), Out.OutlineSegs, nullptr);
+			Out.Center = Baked.Point;
 		}
-		Out.Center = Out.FillTris.Num() > 0 ? Centroid / Out.FillTris.Num() : Out.HitPoint;
-		Out.OutlineSegs.Reserve(Boundary.Num());
-		for (int32 V : Boundary)
-		{
-			Out.OutlineSegs.Add(Xform.TransformPosition(PositionAt(V)));
-		}
 
-		const FVector A = PositionAt(IndexAt(Surface.Triangle * 3 + 0));
-		const FVector B = PositionAt(IndexAt(Surface.Triangle * 3 + 1));
-		const FVector C = PositionAt(IndexAt(Surface.Triangle * 3 + 2));
-		Out.HitNormal = Xform.TransformVectorNoScale(((B - A) ^ (C - A)).GetSafeNormal());
-
-		Out.Label = FString::Printf(TEXT("%s  [section %d, %d tri]"),
-			Out.MaterialName.IsEmpty() ? TEXT("(world surface)") : *Out.MaterialName,
-			Surface.Section, FaceTris.Num());
-		return true;
-	}
-
-	if (Prop.Ism != nullptr)
-	{
-		const AElysiumMapActor::FPropPickSoup& Soup = Map->GetPropPickSoups()[Prop.Soup];
-		Out.Kind = EElysiumPickKind::PropInstance;
-		Out.Component = Prop.Ism;
-		Out.bHasComponent = Out.Component.IsValid();
-		Out.Material = Prop.Ism->GetMaterial(0);
-		Out.ModelName = Soup.Model;
-		Out.Instance = Prop.Instance;
-		Out.Triangle = Prop.Triangle;
-		Out.HitPoint = Origin + D * BestT;
-		Out.Distance = BestT;
-
-		// The box says which prop; the lit triangle says exactly where the ray landed on it.
-		const FBox LocalBounds = Prop.Ism->GetStaticMesh()->GetBounds().GetBox();
-		AppendBox(LocalBounds, Prop.Xform, Out.OutlineSegs, nullptr);
-		Out.Center = Prop.Xform.TransformPosition(LocalBounds.GetCenter());
-		const int32 T = Prop.Triangle * 3;
-		if (Soup.Tris.IsValidIndex(T + 2))
-		{
-			for (int32 K = 0; K < 3; ++K)
-			{
-				Out.FillTris.Add(Prop.Xform.TransformPosition(Soup.Positions[Soup.Tris[T + K]]));
-			}
-		}
-		Out.Label = FString::Printf(TEXT("%s  #%d"), *Soup.Model, Prop.Instance);
+		Out.Label = Baked.bProp
+			? FString::Printf(TEXT("%s"), *Out.ModelName)
+			: FString::Printf(TEXT("%s  [slot %d]"),
+				Out.MaterialName.IsEmpty() ? TEXT("(world surface)") : *Out.MaterialName, Baked.Section);
 		return true;
 	}
 

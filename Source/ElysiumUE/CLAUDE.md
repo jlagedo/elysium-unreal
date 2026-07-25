@@ -1,9 +1,12 @@
 # Elysium — the C++ runtime (`Source/ElysiumUE/`)
 
-The runtime half of the two clean halves (see the repo-root `CLAUDE.md`). It reads the
-offline pipeline's intermediates from disk at map-load time and builds every engine object in
-code — geometry, materials, textures, collision, lights, entities. No `.uasset` baking, no
-editor content loop, no coordinate conversion (sidecars are already Unreal cm/Z-up/LH).
+The runtime half of the two clean halves (see the repo-root `CLAUDE.md`). A map's **look** is
+offline-baked into real `.uasset` content and a real `.umap` under the `/ElysiumBaked` mount
+(`tools/bake_map.py`, `docs/uasset-bake-spike.md`), which the map subsystem opens directly; the
+runtime is spawned into that level, adopts its actors, and builds everything the bake cannot hold
+— brush collision, ropes, the entity substrate, entity-driven bodies, the sky cubemap. It reads
+the offline pipeline's intermediates from disk for all of that, with no coordinate conversion
+(sidecars are already Unreal cm/Z-up/LH).
 
 This file is the runtime fact sheet: what exists and where. **Per-task status and as-built
 narrative live in `docs/roadmap.md`.** Design intent lives in `docs/engine-core.md` (entity
@@ -48,10 +51,12 @@ UE 5.8. Module `ElysiumUE` (Runtime, Default loading phase).
 
 ## Map load path
 
-`UElysiumMapSubsystem` (UE5 hard travel: `Travel` stows the target + `OpenLevel`s the reused
-shell; the fresh world's game mode calls `SpawnPendingMap`) → `AElysiumMapActor` (owns everything
-for one map epoch; the engine tears the world down on travel and GC frees it — no manual flush,
-no force-GC). `map-architecture.md` has the model; roadmap 10.8.
+`UElysiumMapSubsystem` (UE5 hard travel: `Travel` stows the target + `OpenLevel`s the map's own
+baked `.umap`; the fresh world's game mode calls `SpawnPendingMap`) → `AElysiumMapActor`
+(`AdoptBakedLevel` buckets the level's actors by the tags in `ElysiumBakedTags.h`, then builds the
+runtime half; owns it for one map epoch — the engine tears the world down on travel and GC frees
+it, no manual flush, no force-GC). `/Game/Elysium` is only the boot world now.
+`map-architecture.md` has the model; roadmap 10.8.
 
 | Type | Role |
 |---|---|

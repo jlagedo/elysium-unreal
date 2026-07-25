@@ -1,7 +1,6 @@
 #include "ElysiumStaticMesh.h"
 
 #include "ElysiumMaterialFactory.h"
-#include "ElysiumCardBake.h"
 #include "ElysiumObjModel.h"
 
 #include "Engine/StaticMesh.h"
@@ -15,40 +14,6 @@
 #include "StaticMeshAttributes.h"
 #include "StaticMeshOperations.h"
 #include "StaticMeshResources.h"
-
-// Lumen surface-cache coverage for runtime-built meshes (docs/lumen-coverage-spike.md).
-// Read at mesh-build time, so re-travel or `elysium.reload` to A/B a change.
-static TAutoConsoleVariable<int32> CVarLumenCards(
-	TEXT("elysium.LumenCards"), 1,
-	TEXT("Give runtime-built meshes a bounds-derived Lumen card representation, so they enter "
-	     "Lumen's surface cache. 0 = off (the mesh stays invisible to Lumen GI/reflections)."),
-	ECVF_Default);
-
-// A/B the two card sources: 1 = install the `<map>.cards` bake where it matches (surfel-fitted,
-// sits on the real surfaces), 0 = ignore the sidecar entirely and give every mesh the bounds
-// fallback. The comparison the spike is about, without moving files. Read at map load.
-static TAutoConsoleVariable<int32> CVarLumenCardsBaked(
-	TEXT("elysium.LumenCardsBaked"), 1,
-	TEXT("Use the <map>.cards bake (1) or force bounds cards everywhere (0). Applied at map load."),
-	ECVF_Default);
-
-bool FElysiumStaticMeshBuilder::BakedCardsEnabled()
-{
-	return CVarLumenCardsBaked.GetValueOnAnyThread() != 0;
-}
-
-// How many cards the offline builder may fit to one mesh (`cards.bat`). Epic's own default for a
-// static mesh asset; raising it is their documented answer to leftover uncovered area, at the cost
-// of surface-cache pages. Read by the bake only — the runtime just installs what was written.
-static TAutoConsoleVariable<int32> CVarLumenCardMax(
-	TEXT("elysium.LumenCardMax"), 12,
-	TEXT("Max Lumen cards the -ElysiumCards bake fits per mesh. Applied at bake time."),
-	ECVF_Default);
-
-bool FElysiumStaticMeshBuilder::LumenCardsEnabled()
-{
-	return CVarLumenCards.GetValueOnAnyThread() != 0;
-}
 
 // A runtime-built UStaticMesh carries no card representation: the offline builder that produces
 // one is editor-only, so LODResources[0].CardRepresentationData is null and Lumen drops the
@@ -81,20 +46,9 @@ void FElysiumStaticMeshBuilder::AttachLumenCards(UStaticMesh* Mesh)
 	MeshCardRepresentation::SetCardsFromBounds(CardData, ELumenCardDilationMode::DilateOneTexel);
 }
 
-uint64 FElysiumStaticMeshBuilder::HashPropGeometry(const FElysiumObjModel& Model)
-{
-	FElysiumCardHasher Hasher;
-	Hasher.Add(Model.Positions);
-	for (const TPair<FString, TArray<int32>>& Group : Model.Groups)
-	{
-		Hasher.Add(Group.Value);
-	}
-	return Hasher.Finalize();
-}
-
 UStaticMesh* FElysiumStaticMeshBuilder::Build(const FElysiumObjModel& Model, const FString& Dir,
 	bool bConvexCollision, UObject* Outer, FElysiumTextureCache& Cache,
-	const TArray<TArray<FVector>>* ConvexHulls, const FPropCards* Cards)
+	const TArray<TArray<FVector>>* ConvexHulls)
 {
 	if (Model.Positions.Num() == 0)
 	{
@@ -179,32 +133,14 @@ UStaticMesh* FElysiumStaticMeshBuilder::Build(const FElysiumObjModel& Model, con
 	Params.bCommitMeshDescription = false;
 	Params.bMarkPackageDirty = false;
 	Params.bUseHashAsGuid = true;
-	// A -ElysiumCards run needs the built LOD readable on the CPU: the card builder ray-traces
-	// the index/vertex buffers. Off in every other run, where it would be dead memory.
-	Params.bAllowCpuAccess = ElysiumCardBake::IsBaking();
 
 	const TArray<const FMeshDescription*> Descs = { &MeshDesc };
 	Mesh->BuildFromMeshDescriptions(Descs, Params);
 
-	if (LumenCardsEnabled())
-	{
-		// Baked cards follow the real surface; the bounds fallback boxes the mesh. A prop is
-		// small enough that the box is usually close, but the bake is still the better fit.
-		const uint64 Hash = Cards ? HashPropGeometry(Model) : 0;
-		const bool bBaked = Cards && Cards->Store
-			&& Cards->Store->InstallProp(Cards->Stem, Hash, Mesh);
-		if (!bBaked)
-		{
-			AttachLumenCards(Mesh);
-		}
-		if (Cards && Cards->BakeItems)
-		{
-			FElysiumCardBakeItem& Item = Cards->BakeItems->AddDefaulted_GetRef();
-			Item.Stem = Cards->Stem;
-			Item.Hash = Hash;
-			Item.Mesh = Mesh;
-		}
-	}
+	// Without a card representation Lumen drops the primitive from its scene entirely
+	// (LumenMeshCards.cpp AddMeshCards -> bValidMeshCards false), so it contributes no GI and
+	// receives none. A bounds fit is all a runtime build can offer.
+	AttachLumenCards(Mesh);
 
 	// Solid props: cook convex collision. Physics props (8.4) pass a decomposed hull set —
 	// one FKConvexElem per part, a tighter fit for concave shapes than a single hull; every

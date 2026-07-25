@@ -78,11 +78,19 @@ UElysiumLightRig::UElysiumLightRig()
 	PrimaryComponentTick.bCanEverTick = true;
 }
 
-int32 UElysiumLightRig::Build(const FString& LightsPath)
+int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FString& LightsPath)
 {
+	Lights.Reset();
+	LightSources.Reset();
+	LightCount = 0;
+	bHasSun = false;
+	bHasSkyAmbient = false;
+
 	TArray<FString> Lines;
 	if (!FFileHelper::LoadFileToStringArray(Lines, *LightsPath))
 	{
+		UE_LOG(LogElysiumLights, Warning, TEXT("LightRig: no %s — baked lights left as authored"),
+			*LightsPath);
 		return 0;
 	}
 
@@ -95,7 +103,7 @@ int32 UElysiumLightRig::Build(const FString& LightsPath)
 		}
 	}
 	// Fold the resolved boot scale back into the tunable field, so the Lights window's slider
-	// reflects what the rig actually built with (and live re-tuning stays consistent).
+	// reflects what the rig actually applied (and live re-tuning stays consistent).
 	PointSpotScale = Scale;
 
 	// Optional per-area rebalance: one multiplier per `.lights` line, in the same order.
@@ -116,28 +124,29 @@ int32 UElysiumLightRig::Build(const FString& LightsPath)
 		}
 	}
 	const bool bApplyFit = Fit.Num() > 0;
-	int32 FitApplied = 0;
 
-	AActor* Owner = GetOwner();
-	int32 LineIdx = -1;
-	for (const FString& Line : Lines)
+	// The sidecar row behind each line, indexed the way the bake tagged its actors. Type 5
+	// (skyambient) is not a light and never has an actor; it only tints the sky fallback.
+	struct FRow
 	{
-		++LineIdx;   // advance for every line (incl. skipped) to stay aligned with .lightfit
+		int32 Type = 1;
+		float Mag = 0.f;
+		float RadiusCm = 0.f;
+		int32 Style = 0;
+		FLinearColor Color = FLinearColor::White;
+	};
+	TArray<FRow> Rows;
+	Rows.SetNum(Lines.Num());
+	for (int32 LineIdx = 0; LineIdx < Lines.Num(); ++LineIdx)
+	{
 		TArray<FString> P;
-		Line.ParseIntoArray(P, TEXT(" "), true);
+		Lines[LineIdx].ParseIntoArray(P, TEXT(" "), true);
 		if (P.Num() < 15)
 		{
 			continue;
 		}
 		const int32 Type = FCString::Atoi(*P[0]);
-		const FVector Origin(FCString::Atod(*P[1]), FCString::Atod(*P[2]), FCString::Atod(*P[3]));
-		const FVector Dir(FCString::Atod(*P[4]), FCString::Atod(*P[5]), FCString::Atod(*P[6]));
 		const FVector Inten(FCString::Atod(*P[7]), FCString::Atod(*P[8]), FCString::Atod(*P[9]));
-		const float RadiusCm = FCString::Atof(*P[10]);
-		const float StopDot2 = FCString::Atof(*P[12]);   // cos(outer half-angle)
-		const int32 Style = FCString::Atoi(*P[14]);
-
-		// Split raw linear intensity into a normalized colour + a scalar magnitude.
 		const float Mag = FMath::Max3(Inten.X, Inten.Y, Inten.Z);
 		if (Mag <= 0.f)
 		{
@@ -145,7 +154,6 @@ int32 UElysiumLightRig::Build(const FString& LightsPath)
 		}
 		const FLinearColor Color(Inten.X / Mag, Inten.Y / Mag, Inten.Z / Mag);
 
-		// Skyambient (type 5) is not a light — it tints the map actor's SkyLight.
 		if (Type == 5)
 		{
 			SkyAmbient = Color;
@@ -153,103 +161,59 @@ int32 UElysiumLightRig::Build(const FString& LightsPath)
 			continue;
 		}
 
-		// Soft unitless brightness (clamped), and reach extended past the raw radius so
-		// rooms don't fall to black between lights.
-		const float Reach = (RadiusCm > 1.f ? RadiusCm : FallbackRadiusCm) * RadiusScale;
-		const float FitMult = (bApplyFit && Fit.IsValidIndex(LineIdx)) ? Fit[LineIdx] : 1.f;
-		if (bApplyFit && !FMath::IsNearlyEqual(FitMult, 1.f))
-		{
-			++FitApplied;
-		}
-		const float SoftIntensity = FMath::Min(Mag * Scale * FitMult, MaxBrightness);
+		FRow& Row = Rows[LineIdx];
+		Row.Type = Type;
+		Row.Mag = Mag;
+		Row.RadiusCm = FCString::Atof(*P[10]);
+		const int32 Style = FCString::Atoi(*P[14]);
+		Row.Style = (Style >= 1 && Style < LsCount) ? Style : 0;
+		Row.Color = Color;
+	}
 
-		ULightComponent* Light = nullptr;
-		float BaseIntensity = 0.f;
-		bool bShadow = false;
-
-		// P1.7 — readable Outliner name (Light_<idx>_<kind>); auto-named in Shipping.
-		FName LightName = NAME_None;
-#if WITH_EDITOR
-		const TCHAR* Kind = Type == 2 ? TEXT("spot") : Type == 3 ? TEXT("sun") : Type == 0 ? TEXT("tex") : TEXT("point");
-		LightName = ElysiumEditorObjectName(FString::Printf(TEXT("Light_%d_%s"), LightCount, Kind));
-#endif
-
-		if (Type == 1 || Type == 0)
-		{
-			UPointLightComponent* PL = NewObject<UPointLightComponent>(Owner, LightName);
-			PL->SetAttenuationRadius(Reach);
-			// Non-inverse-square: gentle exponent falloff (VtMB/Godot soft look).
-			PL->bUseInverseSquaredFalloff = false;
-			PL->SetLightFalloffExponent(FalloffExponent);
-			BaseIntensity = SoftIntensity;
-			PL->SetIntensity(BaseIntensity);
-			bShadow = bPointShadows && Type != 0;   // texlights stay shadowless
-			Light = PL;
-		}
-		else if (Type == 2)
-		{
-			USpotLightComponent* SL = NewObject<USpotLightComponent>(Owner, LightName);
-			SL->SetAttenuationRadius(Reach);
-			SL->bUseInverseSquaredFalloff = false;
-			SL->SetLightFalloffExponent(FalloffExponent);
-			BaseIntensity = SoftIntensity;
-			SL->SetIntensity(BaseIntensity);
-			float Outer = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(StopDot2, -1.f, 1.f)));
-			Outer = FMath::Clamp(Outer, 1.f, 80.f);
-			SL->SetOuterConeAngle(Outer);
-			SL->SetInnerConeAngle(FMath::Max(1.f, Outer * 0.6f));
-			bShadow = bSpotShadows;
-			Light = SL;
-		}
-		else if (Type == 3)
-		{
-			UDirectionalLightComponent* DL = NewObject<UDirectionalLightComponent>(Owner, LightName);
-			BaseIntensity = FMath::Max(Mag * SunScaleLux, 0.01f);   // lux
-			DL->SetIntensity(BaseIntensity);
-			bShadow = bSunShadows;
-			bHasSun = true;
-			Light = DL;
-		}
-		else
+	int32 Unmatched = 0;
+	for (const FAdoptedLight& Entry : Adopted)
+	{
+		if (Entry.Light == nullptr)
 		{
 			continue;
 		}
-
-		Light->SetMobility(EComponentMobility::Movable);
-		Light->SetLightColor(Color);
-		// VtMB world is pure Lambert — kill the specular so lights don't glare.
-		Light->SpecularScale = SpecularScale;
-		Light->SetCastShadows(bShadow);
-		Light->SetupAttachment(this);
-		Light->RegisterComponent();
-		Light->SetWorldLocation(Origin);
-
-		// Unreal spot/directional lights emit along their +X axis; aim it down the beam.
-		if ((Type == 2 || Type == 3) && !Dir.IsNearlyZero())
+		if (!Rows.IsValidIndex(Entry.SourceIndex) || Rows[Entry.SourceIndex].Mag <= 0.f)
 		{
-			Light->SetWorldRotation(Dir.Rotation());
+			// A light with no readable source row keeps whatever the bake gave it, but it cannot
+			// be tuned or animated — so say so rather than silently leaving a dead light.
+			++Unmatched;
+			continue;
 		}
+		const FRow& Row = Rows[Entry.SourceIndex];
+		const float FitMult = (bApplyFit && Fit.IsValidIndex(Entry.SourceIndex)) ? Fit[Entry.SourceIndex] : 1.f;
 
-		Lights.Add(Light);
+		// Colour is fixed data, so it is set once here; everything derived from the calibration
+		// constants is left to ApplyLiveTuning, which is the single place those live.
+		Entry.Light->SetLightColor(Row.Color);
+		Lights.Add(Entry.Light);
+		LightSources.Add({ Entry.Light, Row.Type, Row.Mag, Row.RadiusCm, FitMult, Row.Style, 0.f });
+		bHasSun |= (Row.Type == 3);
 		++LightCount;
-
-		const int32 SrcStyle = (Style >= 1 && Style < LsCount) ? Style : 0;
-		LightSources.Add({ Light, Type, Mag, RadiusCm, FitMult, SrcStyle, BaseIntensity });
 	}
+
+	// One pass derives every intensity/reach/falloff/specular from the current tuning fields —
+	// the same call the Lights window makes, so a fresh load and a slider drag agree exactly.
+	ApplyLiveTuning();
 
 	int32 AnimatedNum = 0;
 	for (const FLightSource& S : LightSources)
 	{
 		AnimatedNum += (S.Style >= 1) ? 1 : 0;
 	}
-
-	UE_LOG(LogElysiumLights, Log, TEXT("LightRig: %d lights (%d animated)%s%s%s"),
+	UE_LOG(LogElysiumLights, Log, TEXT("LightRig: adopted %d baked lights (%d animated)%s%s%s%s"),
 		LightCount, AnimatedNum,
 		bHasSun ? TEXT(" +sun") : TEXT(""),
 		bHasSkyAmbient ? TEXT(" +skyambient") : TEXT(""),
-		bApplyFit ? *FString::Printf(TEXT(" +lightfit(%d nudged)"), FitApplied) : TEXT(""));
+		bApplyFit ? TEXT(" +lightfit") : TEXT(""),
+		Unmatched > 0 ? *FString::Printf(TEXT(" (%d unmatched)"), Unmatched) : TEXT(""));
 	return LightCount;
 }
+
 
 void UElysiumLightRig::SetLightsVisible(bool bShow)
 {

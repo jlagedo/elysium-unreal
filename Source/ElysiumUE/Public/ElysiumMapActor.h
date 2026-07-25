@@ -5,31 +5,30 @@
 #include "Templates/PimplPtr.h"
 #include "ElysiumMapActor.generated.h"
 
+class AStaticMeshActor;
 class FElysiumEntityWorld;
 class FElysiumSoundSchemeManager;
-struct FElysiumCardContext;
 struct FElysiumTextureCache;
 class UAnimSequence;
-class UDecalComponent;
-class UDirectionalLightComponent;
 class USkeletalMesh;
 class USkeletalMeshComponent;
 class UElysiumLightRig;
 class UExponentialHeightFogComponent;
-class UInstancedStaticMeshComponent;
-class UPostProcessComponent;
 class UProceduralMeshComponent;
 class USceneComponent;
 class USkyLightComponent;
 class UStaticMesh;
 class UStaticMeshComponent;
 
-// One loaded VtMB map, built at runtime from the shared Python-pipeline intermediates
-// (no imported .uasset content): the exported OBJ as one procedural-mesh section per
-// material with its albedo texture, the 3D skybox, placeholder lighting, and the player
-// spawn. Everything map-scoped is a component of (or outer'd to) this actor, so destroying
-// it unloads the map. Spawned only by UElysiumMapSubsystem (deferred, MapName set before
-// FinishSpawning); BeginPlay builds the map.
+// One loaded VtMB map. The map's *look* — world and 3D-skybox geometry, materials, textures,
+// static props, lights, fog — is baked offline into real .uasset content and a real .umap
+// (tools/bake_map.py), which UElysiumMapSubsystem::Travel opens; this actor is spawned into that
+// level and adopts its actors. What it still builds at load time is everything the bake cannot
+// hold: brush collision from .hulls/.dispcol (the walkable surface — baked geometry carries none),
+// the .ropes cables, the sky cubemap and backdrop, the Track-B entity substrate and every
+// entity-driven body. Everything it builds is a component of (or outer'd to) this actor, so
+// destroying it unloads that half. Spawned only by UElysiumMapSubsystem (deferred, MapName set
+// before FinishSpawning); BeginPlay builds the map.
 UCLASS()
 class AElysiumMapActor : public AActor
 {
@@ -100,15 +99,16 @@ public:
 	// (RegisterPropBody) like a dynamic prop.
 	UStaticMeshComponent* BuildPhysPropVisual(const FString& Stem, const FVector& Location, const FQuat& Rotation);
 
-	// Live stats for the debug overlay, filled by LoadMap.
+	// Live stats for the debug overlay, filled by LoadMap. The geometry counts are actors adopted
+	// from the baked level, not surfaces built at runtime.
 	FString LoadedMap;
 	int32 WorldSurfaceCount = 0;
 	int32 SkySurfaceCount = 0;
 	int32 WorldLightCount = 0;
 	int32 PropInstanceCount = 0;
 	int32 PropModelCount = 0;
-	// Brush collision (.hulls/.dispcol): convex-hull count, displacement-triangle count, and
-	// whether brush collision is the active world collider (vs. the render-mesh trimesh).
+	// Brush collision (.hulls/.dispcol): convex-hull count and displacement-triangle count. The
+	// baked world meshes carry no gameplay collision, so these are the only world collider.
 	int32 HullCount = 0;
 	int32 DispTriCount = 0;
 	bool bBrushCollision = false;
@@ -116,8 +116,7 @@ public:
 	// and how many of them got a P1.5 brush body (convex collision / trigger overlap volume).
 	int32 EntityCount = 0;
 	int32 BrushBodyCount = 0;
-	// Decals (7.2): number of deferred UDecalComponents built from <map>.decals (0 if the map has
-	// no decals or elysium.Decals is off).
+	// Decals (7.2): number of deferred decal actors adopted from the baked level.
 	int32 DecalCount = 0;
 	// Ropes (8.7): number of UCableComponents built from <map>.ropes (0 if the map has no ropes or
 	// elysium.Ropes is off).
@@ -127,63 +126,19 @@ public:
 	// landmark Travel), or empty for a plain info_player_start spawn. Shown in the Maps Cog window.
 	FString EntryLandmark;
 
-#if !UE_BUILD_SHIPPING
-	// --- P2.6 click-pick surface -------------------------------------------------------------
-	// The debug pick (ElysiumPick.h) ray-casts the mesh data on the CPU, because physics cannot
-	// answer what it needs: the world render mesh carries no collision under the default
-	// elysium.BrushCollision 1, and a solid prop's cooked collision is one convex hull of the
-	// whole model. These accessors hand it the CPU-side geometry; all of it is non-Shipping.
+	// --- The baked level's actors ------------------------------------------------------------
+	// The map's look is real .uasset content in the .umap this actor was spawned into
+	// (tools/bake_map.py). AdoptBakedLevel buckets those actors by the tag the bake stamped on
+	// them, so the runtime can address them: hide/show them, drive the lights, and let the debug
+	// pick name what it hit. Empty until BeginPlay has run.
+	const TArray<TObjectPtr<AStaticMeshActor>>& GetWorldActors() const { return WorldActors; }
+	const TArray<TObjectPtr<AStaticMeshActor>>& GetSkyActors() const { return SkyActors; }
+	const TArray<TObjectPtr<AStaticMeshActor>>& GetPropActors() const { return PropActors; }
 
-	// One unique prop model's triangle soup, retained past LoadProps for triangle-exact picking
-	// (~3 MB across the tutorial's 161 models). Positions are model-local; Tris indexes them.
-	struct FPropPickSoup
-	{
-		FString Model;
-		TArray<FVector> Positions;
-		TArray<int32> Tris;
-	};
-
-	// One world chunk's CPU geometry, retained past BuildWorldChunks for triangle-exact picking on
-	// the Lumen-cards path: a chunk is a runtime UStaticMesh, which keeps no CPU-side section data
-	// the way a procedural mesh does. Positions are component-local (the chunk's own bounds
-	// centre); the split into sections mirrors the chunk's material slots 1:1, so a hit names the
-	// same OBJ group key the PMC path reports. Vertex indices are remapped from the source OBJ
-	// section, preserving exactly where it shared them — which is what lets the pick's face flood
-	// stop at the BSP face boundary.
-	struct FWorldChunkPickSection
-	{
-		FString Mat;                     // OBJ group key ("<material>@<cubemap>")
-		TArray<FVector> Positions;
-		TArray<int32> Tris;
-		FBox Bounds = FBox(ForceInit);
-	};
-	struct FWorldChunkPickSoup
-	{
-		TArray<FWorldChunkPickSection> Sections;
-		FBox Bounds = FBox(ForceInit);
-	};
-
-	UProceduralMeshComponent* GetWorldMesh() const { return WorldMesh; }
-	UProceduralMeshComponent* GetSkyMesh() const { return SkyMesh; }
-	// The chunked world, on the Lumen-cards path. Index-aligned: WorldChunks[i] is described by
-	// GetWorldChunkPickSoups()[i]. Both empty on the PMC world path, where GetWorldMesh() carries
-	// the geometry instead.
-	const TArray<TObjectPtr<UStaticMeshComponent>>& GetWorldChunks() const { return WorldChunks; }
-	const TArray<FWorldChunkPickSoup>& GetWorldChunkPickSoups() const { return WorldChunkPickSoups; }
-	const TArray<TObjectPtr<UInstancedStaticMeshComponent>>& GetPropComponents() const { return PropComponents; }
-	const TArray<FPropPickSoup>& GetPropPickSoups() const { return PropPickSoups; }
-	// The soup index backing an ISM's model, or INDEX_NONE. Both solidity buckets of one model
-	// map to the same soup.
-	int32 GetPropSoupIndex(const UInstancedStaticMeshComponent* Ism) const;
-	// The OBJ group key ("<material>@<cubemap>") behind a mesh section, or empty. The section
-	// index is the one CreateMeshSection was called with, so it indexes these 1:1.
-	const FString& GetSectionMaterialName(const UProceduralMeshComponent* Mesh, int32 Section) const;
-#endif
-
-	// Lumen cards for this map (docs/lumen-coverage-spike.md): the `<map>.cards` sidecar the
-	// build installed fits from, plus the bake items a `-ElysiumCards` run recorded. Null before
-	// the map is built.
-	const FElysiumCardContext* GetCards() const { return Cards.Get(); }
+	// The baked sky light and height fog, adopted from the level so the Lights Cog window can tune
+	// the map's ambience live. Null if the bake did not place them.
+	USkyLightComponent* GetSkyLight() const { return SkyLight; }
+	UExponentialHeightFogComponent* GetHeightFog() const { return HeightFog; }
 
 	// Per-phase load timings (milliseconds), filled by LoadMap in build order, for the Maps Cog
 	// window. The last entry is always the "Total". Empty until the first load completes.
@@ -196,39 +151,30 @@ public:
 
 private:
 	UPROPERTY() TObjectPtr<USceneComponent> SceneRoot;
-	UPROPERTY() TObjectPtr<UProceduralMeshComponent> WorldMesh;
-	// Collision-only world colliders built from the pipeline's brush sidecars, preferred over
-	// WorldMesh's render-trimesh: HullCollision holds one convex element per solid world brush
-	// (.hulls, invisible clip brushes included); DispCollision is the displacement terrain
-	// trimesh (.dispcol). Both invisible.
+	// Collision-only world colliders built from the pipeline's brush sidecars. The baked world
+	// meshes carry no gameplay collision, so these ARE the walkable surface: HullCollision holds
+	// one convex element per solid world brush (.hulls, invisible clip brushes included);
+	// DispCollision is the displacement terrain trimesh (.dispcol). Both invisible.
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> HullCollision;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> DispCollision;
-	UPROPERTY() TObjectPtr<UProceduralMeshComponent> SkyMesh;
-	// The 2D six-face skybox backdrop: a large inward box sampling the sky cubemap through
-	// M_Sky. Distinct from SkyMesh (the 3D skybox miniature geometry).
+	// The 2D six-face skybox backdrop: a large inward box sampling the sky cubemap through M_Sky.
+	// Built at runtime because its cubemap is assembled from the six exported face images, which
+	// is also what feeds the SkyLight's IBL. Distinct from the baked 3D-skybox miniature geometry.
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> SkyDomeMesh;
-	UPROPERTY() TObjectPtr<UDirectionalLightComponent> SunLight;
-	UPROPERTY() TObjectPtr<USkyLightComponent> SkyLight;
 	UPROPERTY() TObjectPtr<UElysiumLightRig> LightRig;
-	UPROPERTY() TObjectPtr<UPostProcessComponent> PostProcess;
+
+	// Adopted from the baked level (not owned): the map's ambience. Their tuning fields are driven
+	// by the light rig so the Lights Cog window reaches them.
+	UPROPERTY() TObjectPtr<USkyLightComponent> SkyLight;
 	UPROPERTY() TObjectPtr<UExponentialHeightFogComponent> HeightFog;
 
-	// The world as spatially-chunked static meshes, built instead of WorldMesh when the Lumen-cards
-	// path is active (docs/lumen-coverage-spike.md): one UStaticMesh per occupied grid cell, each
-	// carrying a bounds-derived Lumen card representation so the surface cache can see the world.
-	// Both arrays keep the objects alive for the map's lifetime (freed on map unload).
-	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> WorldChunks;
-	UPROPERTY() TArray<TObjectPtr<UStaticMesh>> WorldChunkMeshes;
-
-	// Static props: one ISM per (unique model, solidity) bucket, over runtime-built meshes.
-	// Both arrays keep the objects alive for the map's lifetime (freed on map unload).
-	UPROPERTY() TArray<TObjectPtr<UInstancedStaticMeshComponent>> PropComponents;
-	UPROPERTY() TArray<TObjectPtr<UStaticMesh>> PropMeshes;
+	// The baked level's geometry actors, bucketed by the bake's tags. Not owned — they belong to
+	// the level and die with it; these are handles for visibility toggles and the debug pick.
+	UPROPERTY() TArray<TObjectPtr<AStaticMeshActor>> WorldActors;
+	UPROPERTY() TArray<TObjectPtr<AStaticMeshActor>> SkyActors;
+	UPROPERTY() TArray<TObjectPtr<AStaticMeshActor>> PropActors;
 	bool bPropsVisible = true;
-
-	// Decals (7.2): one deferred UDecalComponent per <map>.decals line, kept alive for the map's
-	// lifetime (freed on unload). MIDs off M_Decal, projected onto the world by their box transform.
-	UPROPERTY() TArray<TObjectPtr<UDecalComponent>> Decals;
+	bool bSkyVisible = true;
 
 	// Ropes (8.7): one Verlet UCableComponent per <map>.ropes segment (an overhead cable), kept
 	// alive for the map's lifetime (freed on unload). MIDs off M_World_Opaque bound to the decoded
@@ -248,23 +194,6 @@ private:
 	// torn down by the entity world (RegisterPropBody), mirroring the NPC bodies.
 	UPROPERTY() TMap<FString, TObjectPtr<UStaticMesh>> PropMeshCache;
 
-#if !UE_BUILD_SHIPPING
-	// P2.6 click-pick CPU geometry, filled during the build and freed with the actor.
-	TArray<FPropPickSoup> PropPickSoups;
-	TMap<const UInstancedStaticMeshComponent*, int32> PropSoupByComponent;
-	TArray<FString> WorldSectionNames;   // WorldMesh section index -> OBJ group key
-	TArray<FString> SkySectionNames;     // SkyMesh section index   -> OBJ group key
-	// One soup per world chunk, appended in lockstep with WorldChunks (~2.5 MB on the tutorial's
-	// 29.5k triangles). Empty on the PMC world path.
-	TArray<FWorldChunkPickSoup> WorldChunkPickSoups;
-#endif
-
-	// The map's baked Lumen cards, read from `<map>.cards` at the top of LoadMap so the world and
-	// prop builders can install per-mesh fits instead of bounds cards. Empty when the map has no
-	// bake, which is a supported state (bounds cards everywhere). Plain C++, held type-erased so
-	// the header needs only a forward declaration.
-	TPimplPtr<FElysiumCardContext> Cards;
-
 	// This map's decoded-texture dedup index (one UTexture2D per unique path, shared across the
 	// map's material instances). A plain C++ object owned here, so its strong texture refs drop
 	// when the actor is torn down on unload and GC reclaims the textures — no process-wide cache,
@@ -282,7 +211,11 @@ private:
 	TPimplPtr<FElysiumSoundSchemeManager> SchemeManager;
 
 	void LoadMap();
-	void LoadProps();
+	// Walk the baked level once and bucket its actors by the tag tools/bake_map.py stamped on them
+	// (elysium.world / .sky / .prop / .light / .skylight / .fog), filling WorldActors, SkyActors,
+	// PropActors, SkyLight and HeightFog and handing the light rig its sources to adopt. Returns
+	// the number of tagged actors found; 0 means this world is not a baked level.
+	int32 AdoptBakedLevel();
 	// Build convex world collision from <map>.hulls (one FKConvexElem per solid brush) onto
 	// HullCollision. Returns true when at least one hull loaded — the caller then drops the
 	// render-mesh trimesh, making the brushes (with their invisible clip volumes) the walkable
@@ -291,25 +224,16 @@ private:
 	// Build the displacement terrain trimesh from <map>.dispcol onto DispCollision. Only meaningful
 	// alongside brush collision; no-op when the sidecar is absent (map has no displacements).
 	void LoadDispCol();
-	int32 BuildMeshFromObj(const FString& ObjPath, UProceduralMeshComponent* Mesh, bool bCollision);
-	// Build the world as a grid of chunked UStaticMeshComponents carrying Lumen card
-	// representations (docs/lumen-coverage-spike.md), instead of the single WorldMesh PMC — which
-	// no card can describe and which the card-capture pass cannot draw from at all. Returns the
-	// number of render sections built, 0 on failure so the caller can fall back to the PMC path.
-	int32 BuildWorldChunks(const FString& ObjPath);
-	// Build the deferred decals from <map>.decals (7.2): one UDecalComponent per line, oriented so
-	// its -X projects into the wall along the decal's room normal, sized to the on-surface extents,
-	// with a MID off M_Decal. No-op when the sidecar is absent or elysium.Decals is 0.
-	void BuildDecals();
 	// Build the overhead cables from <map>.ropes (8.7): one Verlet UCableComponent per segment,
 	// fixed at both endpoints, rest length straight off the sidecar (below the span for a taut cable,
 	// above it for one that hangs), width/texture
 	// from the sidecar, material a MID off M_World_Opaque. No-op when the sidecar is absent or
 	// elysium.Ropes is 0.
 	void BuildRopes();
-	void ApplySkyTransform();
-	// Per-map colour grade (.cube), sky IBL ambient + height fog (.env). Sets the SkyLight
-	// cubemap but leaves RecaptureSky to the caller.
+	// Assemble the six exported sky faces into one UTextureCube and use it twice: as the visible
+	// backdrop on SkyDomeMesh (through M_Sky), and as the adopted SkyLight's IBL source. A real
+	// cubemap on the sky light is what gives Lumen sky occlusion — interiors then darken because
+	// they cannot see the sky, instead of receiving a constant fill through solid walls.
 	void ApplyEnvironment();
 	bool ReadSpawn(FVector& OutLocation, float& OutYaw) const;
 	// P4.6 — if this load is a landmark transition (the map subsystem has a queued landmark spawn),

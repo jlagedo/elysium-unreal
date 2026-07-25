@@ -6,9 +6,12 @@
 
 class ULightComponent;
 
-// Real-time light rig: one Unreal light per VtMB WORLDLIGHTS source, read from a
-// `<map>.lights` sidecar (UE_bsp_to_scene, already Unreal cm / Z-up / left-handed).
-// A component on the map actor, so it unloads with the map.
+// Real-time light rig: one Unreal light per VtMB WORLDLIGHTS source. The light *actors* are baked
+// into the map's level (tools/bake_map.py, one per `<map>.lights` line, tagged with its line
+// index); this rig adopts them and owns their behaviour — it re-derives every intensity and reach
+// from the raw sidecar row at load, animates the lightstyles, and re-applies the whole calibration
+// on demand so the Lights Cog window can tune the map live. The sidecar (UE_bsp_to_scene) is
+// already Unreal cm / Z-up / left-handed. A component on the map actor, so it unloads with the map.
 //
 //   type 1 point      -> UPointLightComponent
 //   type 2 spot       -> USpotLightComponent   (cone from stopdot2)
@@ -31,8 +34,18 @@ public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
 		FActorComponentTickFunction* ThisTickFunction) override;
 
-	// Parse the sidecar and spawn the lights. Returns the number of lights created.
-	int32 Build(const FString& LightsPath);
+	// One light actor the baked level offered up, with the `<map>.lights` line it was baked from.
+	struct FAdoptedLight
+	{
+		ULightComponent* Light = nullptr;
+		int32 SourceIndex = INDEX_NONE;
+	};
+
+	// Bind the baked level's light components to their sidecar rows and take ownership of their
+	// values: every intensity, reach and falloff is re-derived here from the raw source data, so
+	// the live calibration — not whatever the bake happened to write — is what the map renders.
+	// Returns the number of lights bound.
+	int32 Adopt(const TArray<FAdoptedLight>& Adopted, const FString& LightsPath);
 
 	// Show/hide every spawned light (bound to elysium.lights / the pawn's L key).
 	void SetLightsVisible(bool bShow);

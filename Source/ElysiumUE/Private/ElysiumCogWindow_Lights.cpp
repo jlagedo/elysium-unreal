@@ -5,8 +5,11 @@
 #include "ElysiumLightRig.h"
 #include "ElysiumMapActor.h"
 
+#include "Components/ExponentialHeightFogComponent.h"
 #include "Components/LightComponent.h"
+#include "Components/SkyLightComponent.h"
 #include "CogWidgets.h"
+#include "Engine/TextureCube.h"
 #include "imgui.h"
 
 namespace
@@ -118,6 +121,100 @@ void FElysiumCogWindow_Lights::RenderContent()
 	if (bChanged)
 	{
 		Rig->ApplyLiveTuning();
+	}
+
+	// --- Ambience ------------------------------------------------------------------------------
+	// The sky light and height fog are actors baked into the level, adopted by the map actor. They
+	// belong here because they are the other half of the same calibration: with a real cubemap on
+	// the sky light Lumen occludes it properly, so how much the sky contributes and how much the
+	// per-source rig has to carry are one decision, not two.
+	ImGui::SeparatorText("Ambience (live)");
+
+	if (USkyLightComponent* Sky = Map->GetSkyLight())
+	{
+		float Intensity = Sky->Intensity;
+		ImGui::SetNextItemWidth(SliderWidth);
+		FCogWidgets::SliderWithReset("Sky intensity", &Intensity, 0.0f, 4.0f, 1.0f, "%.2f");
+		if (Intensity != Sky->Intensity)
+		{
+			Sky->SetIntensity(Intensity);
+		}
+
+		FLinearColor Color = Sky->GetLightColor();
+		ImGui::SetNextItemWidth(SliderWidth);
+		if (ImGui::ColorEdit3("Sky colour", &Color.R))
+		{
+			Sky->SetLightColor(Color);
+		}
+
+		// Cubemap off falls back to a flat constant ambient of the light colour — what the sky
+		// light did before it was given the real sky. Kept togglable because it is the A/B that
+		// shows what sky occlusion is actually buying while the map is being recalibrated.
+		bool bUseCube = Sky->Cubemap != nullptr;
+		const bool bCanToggle = bUseCube || SkyCubemap.IsValid();
+		if (bCanToggle && ImGui::Checkbox("Sky cubemap (occluded IBL)", &bUseCube))
+		{
+			if (bUseCube)
+			{
+				Sky->Cubemap = SkyCubemap.Get();
+			}
+			else
+			{
+				SkyCubemap = Sky->Cubemap;
+				Sky->Cubemap = nullptr;
+			}
+			Sky->RecaptureSky();
+		}
+
+		bool bLowerBlack = Sky->bLowerHemisphereIsBlack;
+		if (ImGui::Checkbox("Lower hemisphere black", &bLowerBlack))
+		{
+			Sky->bLowerHemisphereIsBlack = bLowerBlack;
+			Sky->RecaptureSky();
+		}
+	}
+	else
+	{
+		ImGui::TextDisabled("No sky light in this level.");
+	}
+
+	if (UExponentialHeightFogComponent* Fog = Map->GetHeightFog())
+	{
+		float Density = Fog->FogDensity;
+		ImGui::SetNextItemWidth(SliderWidth);
+		FCogWidgets::SliderWithReset("Fog density", &Density, 0.0f, 0.05f, 0.002f, "%.4f");
+		if (Density != Fog->FogDensity)
+		{
+			Fog->SetFogDensity(Density);
+		}
+
+		float Start = Fog->StartDistance;
+		ImGui::SetNextItemWidth(SliderWidth);
+		FCogWidgets::SliderWithReset("Fog start (cm)", &Start, 0.0f, 20000.0f, 0.0f, "%.0f");
+		if (Start != Fog->StartDistance)
+		{
+			Fog->SetStartDistance(Start);
+		}
+
+		bool bVolumetric = Fog->bEnableVolumetricFog;
+		if (ImGui::Checkbox("Volumetric fog", &bVolumetric))
+		{
+			Fog->SetVolumetricFog(bVolumetric);
+		}
+		if (bVolumetric)
+		{
+			float Extinction = Fog->VolumetricFogExtinctionScale;
+			ImGui::SetNextItemWidth(SliderWidth);
+			FCogWidgets::SliderWithReset("Volumetric extinction", &Extinction, 0.0f, 10.0f, 1.0f, "%.2f");
+			if (Extinction != Fog->VolumetricFogExtinctionScale)
+			{
+				Fog->SetVolumetricFogExtinctionScale(Extinction);
+			}
+		}
+	}
+	else
+	{
+		ImGui::TextDisabled("No height fog in this level (the map's .env has fog off).");
 	}
 
 	// --- Per-source list -----------------------------------------------------------------------

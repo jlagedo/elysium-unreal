@@ -11,6 +11,25 @@ struct FElysiumContentPaths
 {
 	static FString Root() { return FPaths::ProjectDir() / TEXT("tools/out"); }
 
+	// --- Baked content (tools/bake_map.py) ---------------------------------------------
+	// The look of a map — world + sky geometry, materials, textures, props, lights, fog — is
+	// offline-baked into real .uasset content under the /ElysiumBaked plugin mount, and the map
+	// IS a real .umap the engine opens. These are package paths (a virtual content root), not
+	// filesystem paths, so they take no FPaths::ProjectDir. The mount's Content/ is game-derived
+	// and gitignored exactly like Root(); only the .uplugin descriptor is committed.
+	static FString BakedMount() { return TEXT("/ElysiumBaked"); }
+	static FString BakedMapDir(const FString& Map) { return BakedMount() / Map; }
+	// The .umap UElysiumMapSubsystem::Travel opens for this map.
+	static FString BakedLevel(const FString& Map) { return BakedMapDir(Map) / Map; }
+	// One baked prop model, by the same OBJ stem the .props sidecar and `model_mesh` name. The
+	// exporter already emits safe stems, so the bake's own safe_name() is a no-op on them and the
+	// stem maps to the asset name verbatim. Package path is <dir>/SM_<stem>.SM_<stem>.
+	static FString BakedPropMesh(const FString& Map, const FString& Stem)
+	{
+		const FString Asset = TEXT("SM_") + Stem;
+		return BakedMapDir(Map) / TEXT("Props") / Asset + TEXT(".") + Asset;
+	}
+
 	static FString MapDir(const FString& Map) { return Root() / Map; }
 	static FString MapTexDir(const FString& Map) { return MapDir(Map) / TEXT("tex"); }
 	static FString MapObj(const FString& Map) { return MapDir(Map) / (Map + TEXT(".obj")); }
@@ -29,12 +48,6 @@ struct FElysiumContentPaths
 	// half-extents, Unreal cm), written by UE_bsp_to_scene.py. Materials ride the shared <map>.mtl.
 	static FString MapDecals(const FString& Map) { return MapDir(Map) / (Map + TEXT(".decals")); }
 	static FString MapRopes(const FString& Map) { return MapDir(Map) / (Map + TEXT(".ropes")); }
-	// Lumen cards (docs/lumen-coverage-spike.md): surfel-fitted card representations for this map's
-	// world chunks and prop models, written by the -ElysiumCards bake (cards.bat). Unlike every
-	// other file here this one is produced by the engine, not the Python exporter — the card
-	// builder is editor-only C++ — but it lives with the export because a packaged build cannot
-	// regenerate it. Absent or stale entries fall back to bounds cards.
-	static FString MapCards(const FString& Map) { return MapDir(Map) / (Map + TEXT(".cards")); }
 
 	// Audio (P6). WAVs are game-global (shared across maps), so they live in one mirror of
 	// VtMB's `sound/` tree, not per-map. Rel is the engine-relative path under sound/ (e.g.

@@ -19,8 +19,8 @@ void AElysiumGameMode::BeginPlay()
 
 	// Boot: the map subsystem owns all map lifecycle from here on. Under OpenLevel hard travel this
 	// BeginPlay runs in every fresh world, so first check whether we arrived here from a Travel: if a
-	// map load is pending, this world is the shell the engine re-opened for it — build that map and
-	// stop (no boot decision, no re-seed).
+	// map load is pending, this world is the baked level the engine opened for it — spawn that map's
+	// actor and stop (no boot decision, no re-seed).
 	UElysiumMapSubsystem* Maps = GetGameInstance()->GetSubsystem<UElysiumMapSubsystem>();
 	if (!Maps)
 	{
@@ -35,8 +35,7 @@ void AElysiumGameMode::BeginPlay()
 	// Cold boot (no pending load). The default is New Game — seed a fresh story context and enter the
 	// tutorial at its landmark — so a bare launch starts the story rather than a bare map load. An
 	// explicit -ElysiumMap= (play.bat <map>) keeps the unseeded dev path, and -ElysiumNewGame=0 boots
-	// the story map bare for A/B. Both go through Travel, which on this empty shell world spawns the
-	// map directly (no redundant re-open).
+	// the story map bare for A/B. Both go through Travel, which opens the map's baked level.
 	if (Maps->ShouldBootNewGame())
 	{
 		Maps->NewGame();

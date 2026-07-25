@@ -63,6 +63,10 @@ def _fresh(name):
     # Static props render as ISMs; without this usage flag UE compiles no ISM permutation and
     # every prop falls back to the default grey material (unrecoverable in a packaged build).
     mat.set_editor_property("used_with_instanced_static_meshes", True)
+    # The baked level's world and prop meshes are Nanite, and the same rule applies: outside the
+    # editor no new permutation can be compiled, so a master without this flag renders the whole
+    # map in default grey. The editor hides it by compiling on demand.
+    mat.set_editor_property("used_with_nanite", True)
     return mat, asset
 
 

@@ -9,6 +9,13 @@ class UMaterialInterface;
 class UPrimitiveComponent;
 class UWorld;
 
+// The channel the baked level's render geometry blocks, and nothing else does. Declared in
+// Config/DefaultEngine.ini as ECC_GameTraceChannel2 = "ElysiumPick", a trace type whose default
+// response is Ignore. Keep the two in sync. It is deliberately separate from ECC_Visibility: the
+// walkable surface is the .hulls brush collider, which carries no material and no face, so a pick
+// on a shared channel would report an invisible clip volume instead of the wall that was clicked.
+inline constexpr ECollisionChannel ELYSIUM_PICK_CHANNEL = ECC_GameTraceChannel2;
+
 // What a click resolved to. Ordered by how the pick reports it, not by priority.
 enum class EElysiumPickKind : uint8
 {

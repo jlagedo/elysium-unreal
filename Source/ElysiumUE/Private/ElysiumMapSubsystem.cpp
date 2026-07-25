@@ -4,7 +4,6 @@
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumProfiler.h"
-#include "ElysiumCardRun.h"
 #include "ElysiumShotRun.h"
 
 #include "Engine/Engine.h"
@@ -14,13 +13,14 @@
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
 #include "Kismet/GameplayStatics.h"
+#include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumMap, Log, All);
 
-// The one reused shell level every hard travel re-opens (an empty UWorld to build content into;
-// tools/make_boot_map.py generates it). Also the project's GameDefaultMap.
-static const TCHAR* GElysiumShellLevel = TEXT("/Game/Elysium");
+// The game boots into /Game/Elysium (Config/DefaultEngine.ini GameDefaultMap), an empty UWorld it
+// sits in until the first Travel. Map travel does not come back through it — each VtMB map is its
+// own baked .umap under the /ElysiumBaked mount, and Travel opens that level directly.
 
 void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -126,19 +126,12 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	{
 		ShotRun = MakePimpl<FElysiumShotRun>(this);
 	}
-	// Under -ElysiumCards, arm the headless Lumen-card bake: walk the map list, fit cards to what
-	// each map built, write <map>.cards. Editor builds only.
-	if (FElysiumCardRun::IsRequested())
-	{
-		CardRun = MakePimpl<FElysiumCardRun>(this);
-	}
 }
 
 void UElysiumMapSubsystem::Deinitialize()
 {
 	ProfileRun.Reset();
 	ShotRun.Reset();
-	CardRun.Reset();
 	for (IConsoleObject* Obj : ConsoleObjects)
 	{
 		IConsoleManager::Get().UnregisterConsoleObject(Obj);
@@ -155,6 +148,15 @@ bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
 		return false;
 	}
 
+	const FString Level = FElysiumContentPaths::BakedLevel(Map);
+	if (!FPackageName::DoesPackageExist(Level))
+	{
+		UE_LOG(LogElysiumMap, Warning,
+			TEXT("no baked level for '%s' (%s) — run: bake.bat %s"), *Map, *Level, *Map);
+		return false;
+	}
+	// The sidecars the runtime still reads (.ents, .hulls, .ropes, .spawn) live beside the export,
+	// so a baked level with no export would build a world with no entities at all.
 	if (!FPaths::FileExists(FElysiumContentPaths::MapObj(Map)))
 	{
 		UE_LOG(LogElysiumMap, Warning, TEXT("no exported map '%s' under %s"), *Map, *FElysiumContentPaths::Root());
@@ -173,21 +175,14 @@ bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
 	// (and NextLandmarkSpawn) survive the OpenLevel below.
 	PendingMapLoad = FPendingMapLoad{ true, Map, Landmark };
 
-	// A live map means a real travel: hand world teardown + GC to the engine via hard travel. The
-	// fresh shell world's game mode spawns the pending map on BeginPlay (SpawnPendingMap). On cold
-	// boot there is no map yet and we are already sitting in the empty shell world, so spawn the map
-	// directly rather than redundantly re-opening the same level.
-	if (CurrentMap.IsValid())
-	{
-		CurrentMap = nullptr;
-		UE_LOG(LogElysiumMap, Log, TEXT("hard travel -> %s%s"), *Map,
-			Landmark.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" @ %s"), *Landmark));
-		UGameplayStatics::OpenLevel(World, FName(GElysiumShellLevel));
-	}
-	else
-	{
-		SpawnPendingMap();
-	}
+	// Hard travel into the map's own baked level: the engine tears the current UWorld down and runs
+	// GC, then the fresh world's game mode spawns the map actor on BeginPlay (SpawnPendingMap). The
+	// destination world differs per map, so this runs on cold boot too — unlike the boot level, a
+	// baked level cannot be "already open" for a map we have not entered.
+	CurrentMap = nullptr;
+	UE_LOG(LogElysiumMap, Log, TEXT("hard travel -> %s%s"), *Map,
+		Landmark.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" @ %s"), *Landmark));
+	UGameplayStatics::OpenLevel(World, FName(*Level));
 	return true;
 }
 
@@ -314,7 +309,11 @@ TArray<FString> UElysiumMapSubsystem::ExportedMaps() const
 	FM.FindFiles(Dirs, *(FElysiumContentPaths::Root() / TEXT("*")), false, true);
 	for (const FString& Dir : Dirs)
 	{
-		if (FPaths::FileExists(FElysiumContentPaths::MapObj(Dir)))
+		// Both halves are required to enter a map: the baked level carries the look, the export
+		// carries the sidecars the runtime still reads. An export with no bake is listed nowhere,
+		// because Travel would refuse it.
+		if (FPaths::FileExists(FElysiumContentPaths::MapObj(Dir))
+			&& FPackageName::DoesPackageExist(FElysiumContentPaths::BakedLevel(Dir)))
 		{
 			Names.Add(Dir);
 		}

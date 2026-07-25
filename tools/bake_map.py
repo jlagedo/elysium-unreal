@@ -58,11 +58,27 @@ RADIUS_SCALE = 1.0
 SPECULAR_SCALE = 0.0
 SUN_SCALE_LUX = 8.0
 FALLBACK_RADIUS_CM = 2500.0
-SKYLIGHT_INTENSITY = 0.4          # ambient fill with no skyambient in the .lights sidecar
-SKYAMBIENT_INTENSITY = 0.6        # ambient fill when the map names one
+SKYLIGHT_INTENSITY = 1.0
 SKYLIGHT_FALLBACK_COLOR = unreal.LinearColor(0.12, 0.13, 0.18, 1.0)
 
+# The actor tags AElysiumMapActor::AdoptBakedLevel buckets the level by. Keep in sync with
+# Source/ElysiumUE/Public/ElysiumBakedTags.h -- tags rather than Outliner folders because
+# folder paths are editor-only metadata and do not survive into a -game build.
+TAG_WORLD = "elysium.world"
+TAG_SKY = "elysium.sky"
+TAG_PROP = "elysium.prop"
+TAG_LIGHT = "elysium.light"
+TAG_SKYLIGHT = "elysium.skylight"
+TAG_FOG = "elysium.fog"
+
 ALL_STAGES = ("textures", "materials", "world", "sky", "props", "level")
+
+
+# Both are named profiles from Config/DefaultEngine.ini rather than per-channel edits, because
+# only the profile name survives the .umap save/load round-trip: loading re-applies the profile
+# and discards custom responses set alongside it.
+PROFILE_PICK_ONLY = "ElysiumPickOnly"    # drawn, but touched by nothing except the debug pick
+PROFILE_PROP_SOLID = "ElysiumPropSolid"  # blocks the pawn, occludes +use, pickable
 
 
 def log(msg):
@@ -302,6 +318,7 @@ class Bake(object):
         if not static_mesh:
             fail("mesh build failed: %s" % asset_path)
             return 0, want
+        bl.set_complex_collision(static_mesh)
         self.saved.append(asset_path)
         return got, want - got
 
@@ -523,17 +540,24 @@ class Bake(object):
                 component.set_mobility(unreal.ComponentMobility.MOVABLE)
                 actor.set_actor_label("Light_%d_%s" % (
                     index, {0: "tex", 1: "point", 2: "spot", 3: "sun"}[kind]))
+                # The line index is the binding UElysiumLightRig::Adopt needs: it re-derives
+                # every intensity and reach from this row at load, so the values written above
+                # are only what the level looks like in the editor before the game runs.
+                actor.tags = [TAG_LIGHT, "elysium.src=%d" % index]
                 actor.set_folder_path("Lights")
                 placed += 1
         return placed, sky_ambient
 
     def _place_sky(self, actors, sky_ambient):
-        """The dim ambient fill plus the map's height fog, as AElysiumMapActor sets them.
+        """The sky light and the map's height fog.
 
-        SLS_SpecifiedCubemap with no cubemap resolves to a flat constant ambient of the light
-        colour -- a fixed fill independent of any scene capture, with the lower hemisphere lit
-        so undersides and floor-facing faces read. A captured-scene skylight would sample the
-        near-black 2D sky and leave the map unlit."""
+        The sky light is placed empty here and handed its real cubemap at load
+        (AElysiumMapActor::ApplyEnvironment), because the cube is assembled from the six
+        exported sky face images rather than being an asset. What matters is that it is a
+        cubemap sky light at all: that is what gives Lumen sky occlusion, so an interior goes
+        dark because it cannot see the sky instead of being washed by a constant fill through
+        solid walls. Lower hemisphere black, or the sky would light the world's undersides and
+        defeat the occlusion."""
         actor = actors.spawn_actor_from_class(unreal.SkyLight, unreal.Vector(0.0, 0.0, 0.0))
         if actor:
             component = actor.light_component
@@ -541,13 +565,11 @@ class Bake(object):
             component.set_editor_property("source_type",
                                           unreal.SkyLightSourceType.SLS_SPECIFIED_CUBEMAP)
             component.set_editor_property("cubemap", None)
-            component.set_editor_property("lower_hemisphere_is_black", False)
-            # The per-source rig owns the scene, so the fill only keeps deep shadows off
-            # pure black: 0.6 when the map names a skyambient, 0.4 when it does not.
-            component.set_editor_property(
-                "intensity", SKYAMBIENT_INTENSITY if sky_ambient else SKYLIGHT_INTENSITY)
+            component.set_editor_property("lower_hemisphere_is_black", True)
+            component.set_editor_property("intensity", SKYLIGHT_INTENSITY)
             component.set_light_color(sky_ambient or SKYLIGHT_FALLBACK_COLOR)
             actor.set_actor_label("SkyLight")
+            actor.tags = [TAG_SKYLIGHT]
             actor.set_folder_path("Environment")
 
         env = {}
@@ -572,7 +594,13 @@ class Bake(object):
                 component.set_editor_property("fog_height_falloff", 0.02)
                 component.set_editor_property(
                     "fog_density", max(0.0001, min(0.05, 3.0 / end_cm)))
+                # Volumetric fog turns the map's hundreds of dynamic lights into real shafts and
+                # haze rather than a flat depth tint (decisions.md -- a Presentation-layer call).
+                component.set_editor_property("volumetric_fog", True)
+                component.set_editor_property("volumetric_fog_scattering_distribution", 0.2)
+                component.set_editor_property("volumetric_fog_extinction_scale", 1.0)
                 fog.set_actor_label("HeightFog")
+                fog.tags = [TAG_FOG]
                 fog.set_folder_path("Environment")
 
     # ------------------------------------------------------------------- level
@@ -585,6 +613,12 @@ class Bake(object):
             return
         actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
 
+        # The 3D skybox is a miniature authored at 1/scale in a corner of the map, with the
+        # sky_camera origin standing for world (0,0,0): world(v) = scale * (v - origin). A sky
+        # mesh's verts are already re-based on its cell pivot, so the actor takes uniform scale
+        # and sits at scale * (pivot - origin).
+        sky_scale, sky_origin = self._read_sky()
+
         placed = 0
         for asset_path in sorted(unreal.EditorAssetLibrary.list_assets(
                 self.mesh_pkg, recursive=False, include_folder=False)):
@@ -593,15 +627,31 @@ class Bake(object):
                 continue
             name = asset_path.rsplit("/", 1)[-1].split(".")[0]
             parts = name.split("_")
-            cell = CELL_CM * (4 if name.startswith("SM_Sky") else 1)
+            is_sky = name.startswith("SM_Sky")
+            cell = CELL_CM * (4 if is_sky else 1)
             cx, cy, cz = (int(v) for v in parts[-3:])
-            location = unreal.Vector((cx + 0.5) * cell, (cy + 0.5) * cell, (cz + 0.5) * cell)
+            pivot = ((cx + 0.5) * cell, (cy + 0.5) * cell, (cz + 0.5) * cell)
+            if is_sky:
+                location = unreal.Vector(*[sky_scale * (pivot[i] - sky_origin[i])
+                                           for i in range(3)])
+            else:
+                location = unreal.Vector(*pivot)
             actor = actors.spawn_actor_from_class(unreal.StaticMeshActor, location)
             if not actor:
                 continue
             actor.set_actor_label(name)
-            actor.static_mesh_component.set_static_mesh(static_mesh)
-            actor.set_folder_path("Sky" if name.startswith("SM_Sky") else "World")
+            component = actor.static_mesh_component
+            component.set_static_mesh(static_mesh)
+            component.set_collision_profile_name(PROFILE_PICK_ONLY)
+            actor.tags = [TAG_SKY if is_sky else TAG_WORLD]
+            if is_sky:
+                actor.set_actor_scale3d(unreal.Vector(sky_scale, sky_scale, sky_scale))
+                # Blown up 16x the 3D skybox encloses the playable space, and a mesh that
+                # overlaps the whole scene is the canonical hardware-ray-tracing cost -- Epic
+                # names skyboxes explicitly. It is backdrop, so it casts nothing either.
+                component.set_editor_property("visible_in_ray_tracing", False)
+                component.set_cast_shadow(False)
+            actor.set_folder_path("Sky" if is_sky else "World")
             placed += 1
         log("level: %d world/sky actors" % placed)
 
@@ -617,6 +667,22 @@ class Bake(object):
         else:
             fail("level save failed: %s" % map_path)
 
+    def _read_sky(self):
+        """(scale, origin) from the .sky sidecar. 16 / world origin is the Source default."""
+        scale = 16.0
+        origin = (0.0, 0.0, 0.0)
+        path = os.path.join(self.dir, "%s.sky" % self.map)
+        if not os.path.isfile(path):
+            return scale, origin
+        with open(path, "r", encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                tok = line.split()
+                if len(tok) == 4 and tok[0] == "origin":
+                    origin = (float(tok[1]), float(tok[2]), float(tok[3]))
+                elif len(tok) == 2 and tok[0] == "scale":
+                    scale = float(tok[1])
+        return scale, origin
+
     def _place_props(self, actors):
         """One StaticMeshActor per .props line: `stem x y z qx qy qz qw solid`."""
         path = os.path.join(self.dir, "%s.props" % self.map)
@@ -627,7 +693,7 @@ class Bake(object):
         with open(path, "r", encoding="utf-8", errors="replace") as handle:
             for line in handle:
                 tok = line.split()
-                if len(tok) < 8:
+                if len(tok) < 9:
                     continue
                 stem = tok[0]
                 mesh = cache.get(stem)
@@ -643,7 +709,12 @@ class Bake(object):
                 actor = actors.spawn_actor_from_class(unreal.StaticMeshActor, location, rotation)
                 if not actor:
                     continue
-                actor.static_mesh_component.set_static_mesh(mesh)
+                component = actor.static_mesh_component
+                component.set_static_mesh(mesh)
+                # Field 9 is Source's own `solid` byte: a solid prop blocks, the rest is dressing.
+                component.set_collision_profile_name(
+                    PROFILE_PROP_SOLID if int(tok[8]) != 0 else PROFILE_PICK_ONLY)
+                actor.tags = [TAG_PROP]
                 actor.set_folder_path("Props")
                 placed += 1
         return placed

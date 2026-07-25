@@ -1,8 +1,8 @@
 #include "ElysiumMapActor.h"
 
 #include "ElysiumAudioSubsystem.h"
+#include "ElysiumBakedTags.h"
 #include "ElysiumContentPaths.h"
-#include "ElysiumDecals.h"
 #include "ElysiumEditorLabels.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
@@ -23,74 +23,37 @@
 
 #include "Animation/AnimSequence.h"
 #include "CableComponent.h"
-#include "Components/DecalComponent.h"
-#include "Components/DirectionalLightComponent.h"
 #include "Components/ExponentialHeightFogComponent.h"
-#include "Components/InstancedStaticMeshComponent.h"
-#include "Components/PostProcessComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/SkyLightComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/ExponentialHeightFog.h"
+#include "Engine/Light.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/SkyLight.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
 #include "Engine/Texture2D.h"
 #include "Engine/TextureCube.h"
+#include "EngineUtils.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
-#include "KismetProceduralMeshLibrary.h"
 #include "Materials/MaterialInstanceDynamic.h"
-#include "ElysiumCardBake.h"
-#include "MeshCardRepresentation.h"
-#include "MeshDescription.h"
 #include "Misc/FileHelper.h"
 #include "ProceduralMeshComponent.h"
-#include "StaticMeshAttributes.h"
-#include "StaticMeshOperations.h"
-#include "Serialization/MemoryReader.h"
-#include "Serialization/MemoryWriter.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysium, Log, All);
 
-// Use the pipeline's brush sidecars (.hulls convex + .dispcol trimesh) as the world collider (1),
-// or fall back to the render-mesh trimesh (0). Brush collision matches retail: it includes the
-// invisible PLAYERCLIP volumes and drops collision on geometry the designer clipped off. Read at
-// map load, so re-travel to A/B a value.
+// Build the world collider from the pipeline's brush sidecars (.hulls convex + .dispcol trimesh)
+// (1), or leave the map with no walkable surface (0, for debugging noclip flythroughs). Brush
+// collision matches retail: it includes the invisible PLAYERCLIP volumes and drops collision on
+// geometry the designer clipped off. Read at map load, so re-travel to apply a value.
 static TAutoConsoleVariable<int32> CVarBrushCollision(
 	TEXT("elysium.BrushCollision"), 1,
-	TEXT("World collider: 1 = .hulls/.dispcol brush collision, 0 = render-mesh trimesh. Applied at map load."),
-	ECVF_Default);
-
-// Edge length (cm) of one world chunk on the Lumen-cards path (docs/lumen-coverage-spike.md).
-// Lumen builds a mesh's cards from its bounds, so this is the trade: smaller cells give cards
-// that hug the geometry but multiply draw calls and surface-cache pages; larger cells are cheaper
-// but their cards float further from the surfaces they stand for. Read at map load.
-// 2048 measures best on sp_tutorial_1: below it the buckets fall under Lumen's
-// MeshCardsMinSize cull and vanish from the scene; above it one bucket spans several
-// same-facing surfaces at different depths and the single card catches only the nearest.
-static TAutoConsoleVariable<float> CVarLumenCardCellCm(
-	TEXT("elysium.LumenCardCellCm"), 2048.0f,
-	TEXT("World-chunk edge length in cm on the elysium.LumenCards path. Applied at map load."),
-	ECVF_Default);
-
-// Build the map's projected decals (1) or skip them (0), for A/B. Read at map load, so re-travel
-// to toggle. The projection depth (cm) is the decal box's reach into/out of the wall along the
-// projection axis; kept shallow so a decal catches its host wall but not the geometry behind it.
-static TAutoConsoleVariable<int32> CVarDecals(
-	TEXT("elysium.Decals"), 1,
-	TEXT("Build the map's deferred decals from <map>.decals (1) or skip (0). Applied at map load."),
-	ECVF_Default);
-static TAutoConsoleVariable<float> CVarDecalDepth(
-	TEXT("elysium.DecalDepth"), 16.0f,
-	TEXT("Deferred-decal projection half-depth (cm) along the projection axis. Applied at map load."),
-	ECVF_Default);
-// Horizontal mirror knob: flips the decal's U axis (local Z). The exporter's s-axis sign was
-// verified against the mesh path, not the deferred-decal UV convention, so this stays adjustable.
-// Applied at map load — re-travel (elysium.reload) to A/B without recompiling.
-static TAutoConsoleVariable<int32> CVarDecalFlipU(
-	TEXT("elysium.DecalFlipU"), 0,
-	TEXT("Mirror decals along their horizontal (U) axis (1) or not (0). Applied at map load."),
+	TEXT("Build the .hulls/.dispcol world collider (1) or skip it (0). Applied at map load."),
 	ECVF_Default);
 
 // Build the map's overhead cables (1) or skip them (0), for A/B. Read at map load, so re-travel
@@ -121,94 +84,6 @@ namespace
 		UVs.Init(FVector2D::ZeroVector, Verts.Num());
 	}
 
-	// ---- mesh cook-cache -----------------------------------------------------
-	// OBJ parse + tangent generation are cooked once into Saved/ElysiumCache/<stem>.emc
-	// (validated against the OBJ's size+mtime); later loads read flat buffers instead.
-
-	constexpr uint32 MeshCacheMagic = 0x32434D45;   // 'EMC2' (bumped: sections now carry Colors)
-
-	struct FCookedSection
-	{
-		FString Mat;
-		TArray<FVector> Verts;
-		TArray<FVector2D> UVs;
-		TArray<FVector> Normals;
-		TArray<FVector> TanX;
-		TArray<uint8> TanFlip;
-		TArray<int32> Tris;
-		TArray<FColor> Colors;   // WVT blend weight on R (empty for a non-blend section)
-
-		void Serialize(FArchive& Ar)
-		{
-			Ar << Mat << Verts << UVs << Normals << TanX << TanFlip << Tris << Colors;
-		}
-	};
-
-	// What a prop model's build needs to resolve its Lumen cards: the sidecar entry to look up,
-	// and (during a bake) where to record the mesh so the harness can fit cards to it.
-	FElysiumStaticMeshBuilder::FPropCards PropCards(const FString& Stem,
-		const FElysiumCardStore* Store, TArray<FElysiumCardBakeItem>& BakeItems)
-	{
-		FElysiumStaticMeshBuilder::FPropCards Cards;
-		Cards.Stem = Stem;
-		Cards.Store = Store;
-		Cards.BakeItems = ElysiumCardBake::IsBaking() ? &BakeItems : nullptr;
-		return Cards;
-	}
-
-	FString MeshCachePath(const FString& ObjPath)
-	{
-		return FPaths::ProjectSavedDir() / TEXT("ElysiumCache") / FPaths::GetBaseFilename(ObjPath) + TEXT(".emc");
-	}
-
-	void SourceStamp(const FString& ObjPath, int64& OutSize, int64& OutTicks)
-	{
-		OutSize = IFileManager::Get().FileSize(*ObjPath);
-		OutTicks = IFileManager::Get().GetTimeStamp(*ObjPath).GetTicks();
-	}
-
-	bool LoadMeshCache(const FString& ObjPath, TArray<FCookedSection>& OutSections, FString& OutMtlName)
-	{
-		TArray<uint8> Data;
-		if (!FFileHelper::LoadFileToArray(Data, *MeshCachePath(ObjPath)))
-		{
-			return false;
-		}
-		FMemoryReader Ar(Data);
-		uint32 Magic = 0;
-		int64 SrcSize = 0, SrcTicks = 0, CurSize = 0, CurTicks = 0;
-		Ar << Magic << SrcSize << SrcTicks;
-		SourceStamp(ObjPath, CurSize, CurTicks);
-		if (Magic != MeshCacheMagic || SrcSize != CurSize || SrcTicks != CurTicks)
-		{
-			return false;
-		}
-		int32 Count = 0;
-		Ar << OutMtlName << Count;
-		OutSections.SetNum(Count);
-		for (FCookedSection& S : OutSections)
-		{
-			S.Serialize(Ar);
-		}
-		return !Ar.IsError();
-	}
-
-	void SaveMeshCache(const FString& ObjPath, TArray<FCookedSection>& Sections, const FString& MtlName)
-	{
-		TArray<uint8> Data;
-		FMemoryWriter Ar(Data);
-		uint32 Magic = MeshCacheMagic;
-		int64 SrcSize = 0, SrcTicks = 0;
-		SourceStamp(ObjPath, SrcSize, SrcTicks);
-		int32 Count = Sections.Num();
-		FString Mtl = MtlName;
-		Ar << Magic << SrcSize << SrcTicks << Mtl << Count;
-		for (FCookedSection& S : Sections)
-		{
-			S.Serialize(Ar);
-		}
-		FFileHelper::SaveArrayToFile(Data, *MeshCachePath(ObjPath));
-	}
 }
 
 AElysiumMapActor::AElysiumMapActor()
@@ -218,18 +93,10 @@ AElysiumMapActor::AElysiumMapActor()
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	RootComponent = SceneRoot;
 
-	WorldMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("WorldMesh"));
-	WorldMesh->SetupAttachment(SceneRoot);
-	WorldMesh->bUseComplexAsSimpleCollision = true;
-	// Chaos trimesh cooking is the dominant load cost (hundreds of sections cooked
-	// synchronously stall the game thread for ~10s); async cooking moves it to task
-	// threads. The spawn teleport waits for ground collision (see Tick).
-	WorldMesh->bUseAsyncCooking = true;
-	WorldMesh->SetCollisionProfileName(TEXT("BlockAll"));
-
 	// Convex world collision from .hulls: no render sections (never drawn), simple = convex.
 	// One FKConvexElem per solid brush, so pawn capsule sweeps (which query simple collision)
-	// hit the brushes and their invisible clip volumes. Cooked async like WorldMesh.
+	// hit the brushes and their invisible clip volumes. Cooked async (hundreds of synchronous
+	// Chaos cooks stall the game thread); the spawn teleport waits for ground (see Tick).
 	HullCollision = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("HullCollision"));
 	HullCollision->SetupAttachment(SceneRoot);
 	HullCollision->bUseComplexAsSimpleCollision = false;
@@ -245,15 +112,6 @@ AElysiumMapActor::AElysiumMapActor()
 	DispCollision->SetCollisionProfileName(TEXT("BlockAll"));
 	DispCollision->SetVisibility(false);
 
-	SkyMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("SkyMesh"));
-	SkyMesh->SetupAttachment(SceneRoot);
-	SkyMesh->bUseAsyncCooking = true;
-	// Query-only, blocking the Visibility trace channel only: the debug crosshair pick can
-	// identify skybox geometry, but the sky never obstructs the player.
-	SkyMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-	SkyMesh->SetCollisionResponseToAllChannels(ECR_Ignore);
-	SkyMesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
-
 	// 2D skybox backdrop. Unlit and drawn on a huge box that surrounds the camera; the
 	// sky material samples the cube by view direction, so it reads as infinitely far. No
 	// collision, no shadows. Hidden until a map's sky faces build the cubemap.
@@ -263,43 +121,10 @@ AElysiumMapActor::AElysiumMapActor()
 	SkyDomeMesh->SetCastShadow(false);
 	SkyDomeMesh->SetVisibility(false);
 
-	// Fallback sun for maps with no .lights sidecar — owned components, so they unload
-	// with the map. When the LightRig builds real per-source lights (the usual case),
-	// LoadMap switches this off: a fixed directional sun over interior geometry is exactly
-	// the flat look the per-source rig replaces.
-	SunLight = CreateDefaultSubobject<UDirectionalLightComponent>(TEXT("SunLight"));
-	SunLight->SetupAttachment(SceneRoot);
-	SunLight->SetRelativeRotation(FRotator(-46.f, -45.f, 0.f));
-	SunLight->SetMobility(EComponentMobility::Movable);
-	SunLight->SetIntensity(3.f);
-	SunLight->SetLightColor(FLinearColor(1.0f, 0.98f, 0.92f));
+	// The sun, sky light and height fog are actors in the baked level, adopted in LoadMap —
+	// this actor owns no lighting components of its own.
 
-	// SLS_SpecifiedCubemap with no cubemap resolves to a flat constant ambient of the
-	// light colour — a fixed fill that does not depend on any scene capture (the sky
-	// isn't rendered yet at load time, so SLS_CapturedScene would capture black). Lower
-	// hemisphere lit too, so undersides and floor-facing faces also read.
-	SkyLight = CreateDefaultSubobject<USkyLightComponent>(TEXT("SkyLight"));
-	SkyLight->SetupAttachment(SceneRoot);
-	SkyLight->SetMobility(EComponentMobility::Movable);
-	SkyLight->SourceType = SLS_SpecifiedCubemap;
-	SkyLight->Cubemap = nullptr;
-	SkyLight->bLowerHemisphereIsBlack = false;
-	SkyLight->LightColor = FLinearColor(0.55f, 0.58f, 0.65f).ToFColor(true);
-	SkyLight->SetIntensity(1.5f);
-
-	// Per-map colour grade from the .cube LUT. Unbound so it grades the whole view
-	// regardless of where the camera is; unloads with the map.
-	PostProcess = CreateDefaultSubobject<UPostProcessComponent>(TEXT("PostProcess"));
-	PostProcess->SetupAttachment(SceneRoot);
-	PostProcess->bUnbound = true;
-
-	// Source sky_camera fog. Approximated with height fog (Unreal has no linear depth-fog
-	// component); hidden until a map's .env turns fog on. Unloads with the map.
-	HeightFog = CreateDefaultSubobject<UExponentialHeightFogComponent>(TEXT("HeightFog"));
-	HeightFog->SetupAttachment(SceneRoot);
-	HeightFog->SetVisibility(false);
-
-	// Real-time light rig: one Unreal light per WORLDLIGHTS source (built in LoadMap).
+	// Real-time light rig: adopts the baked level's light actors (built in LoadMap).
 	LightRig = CreateDefaultSubobject<UElysiumLightRig>(TEXT("LightRig"));
 	LightRig->SetupAttachment(SceneRoot);
 }
@@ -326,18 +151,9 @@ void AElysiumMapActor::LoadMap()
 
 	LoadedMap = MapName;
 
-	// This map's texture dedup index. Must exist before the first material is built (the world
-	// mesh below), and lives for the actor's lifetime so a runtime prop/NPC spawn reuses it.
+	// This map's texture dedup index. Must exist before the first material is built (the sky cube
+	// below), and lives for the actor's lifetime so a runtime prop/NPC spawn reuses it.
 	TextureCache = MakePimpl<FElysiumTextureCache>();
-
-	// The map's baked Lumen cards, before any mesh is built. Absent is normal and supported —
-	// every mesh then falls back to the bounds cards AttachLumenCards stands in.
-	Cards = MakePimpl<FElysiumCardContext>();
-	Cards->BakeItems.Reset();
-	if (FElysiumStaticMeshBuilder::LumenCardsEnabled() && FElysiumStaticMeshBuilder::BakedCardsEnabled())
-	{
-		Cards->Store.Load(FElysiumContentPaths::MapCards(MapName));
-	}
 
 	// P1.7 — label the map actor and drop it in an Elysium Outliner folder, so the PIE World
 	// Outliner reads as a live scene browser (debug-tooling.md Layer 0).
@@ -346,67 +162,37 @@ void AElysiumMapActor::LoadMap()
 	SetFolderPath(TEXT("Elysium"));
 #endif
 
-	// Prefer real brush collision (.hulls convex + .dispcol trimesh) — it carries the invisible
-	// clip volumes and matches retail walk behaviour. When it loads, the world render mesh is
-	// built without collision. Falls back to the render-mesh trimesh when the sidecar is missing
-	// or elysium.BrushCollision is 0.
+	// The look is already here — this actor was spawned into the map's baked level. Take hold of
+	// its actors so the runtime can address them, and hand the light rig its sources.
+	const int32 Adopted = AdoptBakedLevel();
+	Phase(TEXT("Adopt baked level"));
+
+	// The walkable surface. Baked world geometry carries no gameplay collision, so the brush
+	// sidecars are the only world collider: .hulls convex (which carries the invisible PLAYERCLIP
+	// volumes and drops geometry the designer clipped off) plus the .dispcol displacement trimesh.
 	bBrushCollision = CVarBrushCollision.GetValueOnGameThread() != 0 && LoadHulls();
 	if (bBrushCollision)
 	{
 		LoadDispCol();
 	}
-	// The world renders either as one PMC (the default shape) or, on the Lumen-cards path, as a
-	// grid of chunked static meshes that the surface cache can actually see. Chunks only stand in
-	// when the brush collider is carrying collision — with elysium.BrushCollision 0 the world
-	// collider *is* the render mesh, which only the PMC path builds.
-	const FString WorldObj = FElysiumContentPaths::MapObj(MapName);
-	if (FElysiumStaticMeshBuilder::LumenCardsEnabled() && bBrushCollision)
+	else
 	{
-		WorldSurfaceCount = BuildWorldChunks(WorldObj);
+		UE_LOG(LogElysium, Warning,
+			TEXT("no brush collision for '%s' — the map has no walkable surface"), *MapName);
 	}
-	if (WorldSurfaceCount == 0)
-	{
-		WorldSurfaceCount = BuildMeshFromObj(WorldObj, WorldMesh, !bBrushCollision);
-	}
-	UE_LOG(LogElysium, Log, TEXT("world '%s': %d surfaces (collision: %s)"),
-		*MapName, WorldSurfaceCount, bBrushCollision ? TEXT("brush") : TEXT("trimesh"));
-	Phase(TEXT("World + collision"));
-
-	const FString SkyObj = FElysiumContentPaths::MapSkyObj(MapName);
-	if (FPaths::FileExists(SkyObj))
-	{
-		SkySurfaceCount = BuildMeshFromObj(SkyObj, SkyMesh, true);
-		ApplySkyTransform();
-		UE_LOG(LogElysium, Log, TEXT("skybox: %d surfaces"), SkySurfaceCount);
-	}
-	Phase(TEXT("Skybox"));
-
-	BuildDecals();
-	Phase(TEXT("Decals"));
+	Phase(TEXT("Collision"));
 
 	BuildRopes();
 	Phase(TEXT("Ropes"));
 
-	LoadProps();
-	Phase(TEXT("Props"));
-
+	// Sky cubemap + backdrop, and the sky light's IBL off the same cube.
 	ApplyEnvironment();
 	Phase(TEXT("Environment"));
 
-	// Real-time lighting: one Unreal light per WORLDLIGHTS source. When the rig has real
-	// lights it owns the scene, so the flat fallback sun is switched off and the SkyLight
-	// drops to a dim ambient fill (tinted by the map's skyambient where present) that only
-	// keeps deep shadows off pure black — the per-source lights do the actual lighting.
-	WorldLightCount = LightRig->Build(FElysiumContentPaths::MapLights(MapName));
-	if (WorldLightCount > 0)
-	{
-		SunLight->SetVisibility(false);
-		SkyLight->LightColor = LightRig->SkyAmbient.ToFColor(true);
-		SkyLight->SetIntensity(LightRig->bHasSkyAmbient ? 0.6f : 0.4f);
-	}
-
-	SkyLight->RecaptureSky();
-	Phase(TEXT("Lights"));
+	UE_LOG(LogElysium, Log,
+		TEXT("baked '%s': %d actors (%d world, %d sky, %d props), %d lights, %d hulls"),
+		*MapName, Adopted, WorldActors.Num(), SkyActors.Num(), PropActors.Num(),
+		WorldLightCount, HullCount);
 
 	if (ReadSpawn(PendingSpawnLoc, PendingSpawnYaw))
 	{
@@ -451,25 +237,109 @@ void AElysiumMapActor::LoadMap()
 
 	Phase(TEXT("Entities"));
 
-	// How much of the map is on fitted cards vs the bounds fallback. One line per load rather
-	// than per mesh, because "the bake silently stopped matching" is otherwise invisible: a
-	// missed lookup still renders, just with the leaky box cards the bake exists to replace.
-	if (Cards->Store.Installed + Cards->Store.Missed + Cards->Store.Stale > 0)
-	{
-		const int32 Fallback = Cards->Store.Missed + Cards->Store.Stale;
-		UE_LOG(LogElysium, Log, TEXT("cards: %d meshes on fitted cards, %d on bounds cards (%d absent, %d stale)"),
-			Cards->Store.Installed, Fallback, Cards->Store.Missed, Cards->Store.Stale);
-		if (Cards->Store.Stale > 0)
-		{
-			UE_LOG(LogElysium, Warning,
-				TEXT("cards: %d entries were fitted to different geometry (a re-export since the "
-				     "last bake) — re-run cards.bat %s."), Cards->Store.Stale, *MapName);
-		}
-	}
-
 	const double TotalMs = (FPlatformTime::Seconds() - Start) * 1000.0;
 	LoadPhases.Add({ TEXT("Total"), TotalMs });
 	UE_LOG(LogElysium, Log, TEXT("loaded %s in %.2fs"), *MapName, TotalMs / 1000.0);
+}
+
+int32 AElysiumMapActor::AdoptBakedLevel()
+{
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return 0;
+	}
+
+	WorldActors.Reset();
+	SkyActors.Reset();
+	PropActors.Reset();
+	SkyLight = nullptr;
+	HeightFog = nullptr;
+
+	// One pass over the level. A light's `.lights` line index rides a second tag, so the rig can
+	// bind each actor back to the source row it re-derives intensity and reach from.
+	TArray<UElysiumLightRig::FAdoptedLight> Adopted;
+	int32 Tagged = 0;
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		AActor* Actor = *It;
+		if (Actor == nullptr || Actor->Tags.Num() == 0)
+		{
+			continue;
+		}
+		if (Actor->ActorHasTag(ElysiumBakedTags::World))
+		{
+			WorldActors.Add(Cast<AStaticMeshActor>(Actor));
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::Sky))
+		{
+			SkyActors.Add(Cast<AStaticMeshActor>(Actor));
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::Prop))
+		{
+			PropActors.Add(Cast<AStaticMeshActor>(Actor));
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::Light))
+		{
+			if (ALight* Light = Cast<ALight>(Actor))
+			{
+				Adopted.Add({ Light->GetLightComponent(),
+					ElysiumBakedTags::ParseSourceIndex(Actor->Tags) });
+			}
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::SkyLight))
+		{
+			if (ASkyLight* Sky = Cast<ASkyLight>(Actor))
+			{
+				SkyLight = Sky->GetLightComponent();
+			}
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::Fog))
+		{
+			if (AExponentialHeightFog* Fog = Cast<AExponentialHeightFog>(Actor))
+			{
+				HeightFog = Fog->GetComponent();
+			}
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::Decal))
+		{
+			++DecalCount;
+		}
+		else
+		{
+			continue;
+		}
+		++Tagged;
+	}
+
+	// A Cast that failed leaves a null slot; drop those rather than null-check at every use.
+	WorldActors.RemoveAll([](const TObjectPtr<AStaticMeshActor>& A) { return A == nullptr; });
+	SkyActors.RemoveAll([](const TObjectPtr<AStaticMeshActor>& A) { return A == nullptr; });
+	PropActors.RemoveAll([](const TObjectPtr<AStaticMeshActor>& A) { return A == nullptr; });
+
+	WorldSurfaceCount = WorldActors.Num();
+	SkySurfaceCount = SkyActors.Num();
+	PropInstanceCount = PropActors.Num();
+	// Unique models behind those instances, so the stat still reads as it did on the runtime path.
+	TSet<const UStaticMesh*> Models;
+	for (const TObjectPtr<AStaticMeshActor>& Prop : PropActors)
+	{
+		if (const UStaticMeshComponent* Comp = Prop->GetStaticMeshComponent())
+		{
+			Models.Add(Comp->GetStaticMesh());
+		}
+	}
+	PropModelCount = Models.Num();
+
+	WorldLightCount = LightRig->Adopt(Adopted, FElysiumContentPaths::MapLights(MapName));
+
+	if (Tagged == 0)
+	{
+		UE_LOG(LogElysium, Warning,
+			TEXT("'%s' has no baked actors — this world is not a baked level (run: bake.bat %s)"),
+			*MapName, *MapName);
+	}
+	return Tagged;
 }
 
 USkeletalMeshComponent* AElysiumMapActor::BuildNpcVisual(const FString& Stem, const FVector& Location, const FRotator& Rotation)
@@ -533,26 +403,19 @@ UStaticMeshComponent* AElysiumMapActor::BuildPropVisual(const FString& Stem, con
 		return nullptr;
 	}
 
-	// Cache-checked build: one UStaticMesh per stem, so a model placed by several prop entities builds
-	// once (mirrors LoadProps' per-model build + BuildNpcVisual's per-stem cache). A stem that failed
-	// once is not cached, so it retries — a genuinely missing OBJ is one warning per entity, not per frame.
+	// The bake already produced this model as a real asset — Nanite, compressed textures, and the
+	// DDC-fitted Lumen cards a runtime-built mesh can never have — so an entity prop stands the
+	// same mesh the level's static props do. Cached per stem so a model placed by several entities
+	// resolves once; a stem that failed is not cached, so it retries.
 	const TObjectPtr<UStaticMesh>* Cached = PropMeshCache.Find(Stem);
 	UStaticMesh* Mesh = Cached ? Cached->Get() : nullptr;
 	if (Mesh == nullptr)
 	{
-		FElysiumObjModel Model;
-		if (!FElysiumObjModel::Parse(FElysiumContentPaths::MapPropsDir(MapName) / (Stem + TEXT(".obj")), Model))
-		{
-			UE_LOG(LogElysium, Warning, TEXT("BuildPropVisual '%s': prop model parse failed"), *Stem);
-			return nullptr;
-		}
-		// Non-solid: 8.3 is visual parity; prop_physics collision (Chaos convex) is 8.4, so no hull
-		// is cooked here (matches entity_visuals R2 "collision optional for visuals").
-		const FElysiumStaticMeshBuilder::FPropCards ModelCards = PropCards(Stem, &Cards->Store, Cards->BakeItems);
-		Mesh = FElysiumStaticMeshBuilder::Build(Model, Model.Dir, /*bConvexCollision=*/false, this, *TextureCache,
-			/*ConvexHulls=*/nullptr, &ModelCards);
+		Mesh = LoadObject<UStaticMesh>(nullptr, *FElysiumContentPaths::BakedPropMesh(MapName, Stem));
 		if (Mesh == nullptr)
 		{
+			UE_LOG(LogElysium, Warning, TEXT("BuildPropVisual '%s': no baked mesh (run: bake.bat %s props)"),
+				*Stem, *MapName);
 			return nullptr;
 		}
 		PropMeshCache.Add(Stem, Mesh);
@@ -563,10 +426,8 @@ UStaticMeshComponent* AElysiumMapActor::BuildPropVisual(const FString& Stem, con
 	UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(this);
 	Comp->SetMobility(EComponentMobility::Movable);
 	Comp->SetStaticMesh(Mesh);
-	// Disable collision before RegisterComponent: BuildFromMeshDescriptions always leaves the mesh a
-	// default-flag body setup with collision-enabled sections, so registering with collision on would
-	// cook a trimesh from render data that carries no CPU copy (bAllowCPUAccess off) — the noisy
-	// GetPhysicsTriMeshData/GetCookInfo warning pair. Non-solid props never collide anyway (8.4 owns it).
+	// prop_dynamic is visual-only (8.3); prop_physics owns collision (8.4). The baked mesh carries
+	// collision geometry for the props that do need it, so it is switched off here per component.
 	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Comp->SetupAttachment(Root);
 	Comp->SetRelativeLocationAndRotation(Location, Rotation);
@@ -583,8 +444,10 @@ UStaticMeshComponent* AElysiumMapActor::BuildPhysPropVisual(const FString& Stem,
 		return nullptr;
 	}
 
-	// Cache key distinct from the non-solid prop_dynamic mesh (BuildPropVisual) so a model placed
-	// by both a prop_dynamic (no collision) and a prop_physics (convex collision) gets one mesh each.
+	// Physics props stay on the runtime build: simulation needs the exporter's CoACD-decomposed
+	// props/<stem>.hulls as one FKConvexElem per part, which is a per-asset body setup the shared
+	// baked mesh cannot carry (it is also placed by non-simulating props). Cache key is distinct
+	// from BuildPropVisual's so a model used by both resolves to one mesh each.
 	const FString CacheKey = Stem + TEXT("#phys");
 	const TObjectPtr<UStaticMesh>* Cached = PropMeshCache.Find(CacheKey);
 	UStaticMesh* Mesh = Cached ? Cached->Get() : nullptr;
@@ -601,9 +464,8 @@ UStaticMeshComponent* AElysiumMapActor::BuildPhysPropVisual(const FString& Stem,
 		TArray<TArray<FVector>> Hulls;
 		const bool bHaveHulls = FElysiumStaticMeshBuilder::LoadConvexHulls(
 			FElysiumContentPaths::MapPropsDir(MapName) / (Stem + TEXT(".hulls")), Hulls);
-		const FElysiumStaticMeshBuilder::FPropCards ModelCards = PropCards(Stem, &Cards->Store, Cards->BakeItems);
 		Mesh = FElysiumStaticMeshBuilder::Build(Model, Model.Dir, /*bConvexCollision=*/true, this, *TextureCache,
-			bHaveHulls ? &Hulls : nullptr, &ModelCards);
+			bHaveHulls ? &Hulls : nullptr);
 		if (Mesh == nullptr)
 		{
 			return nullptr;
@@ -622,451 +484,6 @@ UStaticMeshComponent* AElysiumMapActor::BuildPhysPropVisual(const FString& Stem,
 	Comp->RegisterComponent();
 	AddInstanceComponent(Comp);
 	return Comp;
-}
-
-// Cook (or load from the .emc cache) one OBJ into per-material sections, and parse the MTL the
-// sections resolve against. Shared by the PMC world path and the chunked static-mesh path.
-static bool CookObjSections(const FString& ObjPath, TArray<FCookedSection>& Sections,
-	TMap<FString, FElysiumMaterialDef>& Materials)
-{
-	const FString Dir = FPaths::GetPath(ObjPath);
-	FString MtlName;
-
-	if (LoadMeshCache(ObjPath, Sections, MtlName))
-	{
-		FElysiumObjModel::ParseMtl(Dir / MtlName, Materials);
-	}
-	else
-	{
-		FElysiumObjModel Model;
-		if (!FElysiumObjModel::Parse(ObjPath, Model))
-		{
-			UE_LOG(LogElysium, Warning, TEXT("failed to parse %s"), *ObjPath);
-			return false;
-		}
-		MtlName = Model.MtlName;
-		Materials = MoveTemp(Model.Materials);
-
-		// WorldVertexTransition blend weights: one alpha per global vertex (v-order), stamped onto
-		// vertex COLOR.r for the master's lerp(Albedo, BaseTex2, VertexColor.r x BlendAmount). Only
-		// displacement terrain writes a .blend sidecar; every other map has none (Colors stay empty).
-		TArray<float> Blend;
-		{
-			TArray<FString> BlendLines;
-			if (FFileHelper::LoadFileToStringArray(BlendLines, *FPaths::ChangeExtension(ObjPath, TEXT("blend"))))
-			{
-				Blend.Reserve(BlendLines.Num());
-				for (const FString& L : BlendLines)
-				{
-					if (!L.IsEmpty())
-					{
-						Blend.Add(FCString::Atof(*L));
-					}
-				}
-				if (Blend.Num() != Model.Positions.Num())
-				{
-					Blend.Reset();   // count mismatch: ignore rather than misalign the weights
-				}
-			}
-		}
-
-		for (const TPair<FString, TArray<int32>>& Group : Model.Groups)
-		{
-			const TArray<int32>& GlobalIdx = Group.Value;
-			if (GlobalIdx.Num() == 0)
-			{
-				continue;
-			}
-
-			// Remap the group's global vertex indices into a compact per-section buffer.
-			FCookedSection S;
-			S.Mat = Group.Key;
-			TMap<int32, int32> Remap;
-			S.Tris.Reserve(GlobalIdx.Num());
-			for (int32 GI : GlobalIdx)
-			{
-				int32 Local;
-				if (const int32* Existing = Remap.Find(GI))
-				{
-					Local = *Existing;
-				}
-				else
-				{
-					Local = S.Verts.Num();
-					Remap.Add(GI, Local);
-					S.Verts.Add(Model.Positions.IsValidIndex(GI) ? Model.Positions[GI] : FVector::ZeroVector);
-					S.UVs.Add(Model.Uvs.IsValidIndex(GI) ? Model.Uvs[GI] : FVector2D::ZeroVector);
-					if (Blend.IsValidIndex(GI))
-					{
-						const uint8 W = uint8(FMath::Clamp(Blend[GI], 0.f, 1.f) * 255.f + 0.5f);
-						S.Colors.Add(FColor(W, W, W, 255));
-					}
-				}
-				S.Tris.Add(Local);
-			}
-
-			TArray<FProcMeshTangent> Tangents;
-			UKismetProceduralMeshLibrary::CalculateTangentsForMesh(S.Verts, S.Tris, S.UVs, S.Normals, Tangents);
-			S.TanX.Reserve(Tangents.Num());
-			S.TanFlip.Reserve(Tangents.Num());
-			for (const FProcMeshTangent& T : Tangents)
-			{
-				S.TanX.Add(FVector(T.TangentX));
-				S.TanFlip.Add(T.bFlipTangentY ? 1 : 0);
-			}
-			Sections.Add(MoveTemp(S));
-		}
-		SaveMeshCache(ObjPath, Sections, MtlName);
-	}
-
-	return Sections.Num() > 0;
-}
-
-int32 AElysiumMapActor::BuildMeshFromObj(const FString& ObjPath, UProceduralMeshComponent* Mesh, bool bCollision)
-{
-	const FString Dir = FPaths::GetPath(ObjPath);
-	TArray<FCookedSection> Sections;
-	TMap<FString, FElysiumMaterialDef> Materials;
-	if (!CookObjSections(ObjPath, Sections, Materials))
-	{
-		return 0;
-	}
-
-	int32 Section = 0;
-#if !UE_BUILD_SHIPPING
-	// Section index -> OBJ group key, for the click-pick's surface readout (the PMC keeps the
-	// geometry but not the material name it came from).
-	TArray<FString>& SectionNames = (Mesh == SkyMesh) ? SkySectionNames : WorldSectionNames;
-	SectionNames.Reset();
-	SectionNames.Reserve(Sections.Num());
-#endif
-	for (FCookedSection& S : Sections)
-	{
-		TArray<FProcMeshTangent> Tangents;
-		Tangents.Reserve(S.TanX.Num());
-		for (int32 I = 0; I < S.TanX.Num(); ++I)
-		{
-			Tangents.Emplace(S.TanX[I], S.TanFlip.IsValidIndex(I) && S.TanFlip[I] != 0);
-		}
-
-		// The FColor overload stores the WVT weights verbatim (no linear<->sRGB round trip), so
-		// VertexColor.r in the master is exactly the exported blend alpha. S.Colors is empty for a
-		// non-blend section, which the component treats as unset (white).
-		Mesh->CreateMeshSection(Section, S.Verts, S.Tris, S.Normals, S.UVs, S.Colors, Tangents, bCollision);
-#if !UE_BUILD_SHIPPING
-		SectionNames.Add(S.Mat);
-#endif
-
-		const FElysiumMaterialDef* Def = Materials.Find(S.Mat);
-		if (UMaterialInstanceDynamic* Mid = FElysiumMaterialFactory::Build(Def, Dir, this, *TextureCache))
-		{
-			Mesh->SetMaterial(Section, Mid);
-		}
-		++Section;
-	}
-	return Section;
-}
-
-int32 AElysiumMapActor::BuildWorldChunks(const FString& ObjPath)
-{
-	const FString Dir = FPaths::GetPath(ObjPath);
-	TArray<FCookedSection> Sections;
-	TMap<FString, FElysiumMaterialDef> Materials;
-	if (!CookObjSections(ObjPath, Sections, Materials))
-	{
-		return 0;
-	}
-
-	// Lumen builds a mesh's cards from its bounds — six axis-aligned views, each capturing only
-	// the nearest surface along its direction. A cube of city therefore resolves to whatever faces
-	// outward and nothing behind it, which is Epic's documented rule: "walls, floors, and ceilings
-	// should all be separate meshes". So the cut is not purely spatial. Bin each triangle by BOTH
-	// the cell its centroid falls in AND the axis its face normal points down, which lands every
-	// bucket as a set of same-facing surfaces — a wall bucket, a floor bucket, a ceiling bucket.
-	// The bucket's bounds is then a thin slab and the one card facing it sits right on the geometry
-	// instead of boxing a room.
-	const double CellCm = FMath::Max(128.0, static_cast<double>(CVarLumenCardCellCm.GetValueOnGameThread()));
-	struct FChunkTri { int32 Section; int32 Tri; };
-	struct FBucket { TArray<FChunkTri> Tris; FBox Bounds = FBox(ForceInit); };
-	// Key: cell x/y/z + the axis-aligned direction index (0..5) of the face normal.
-	TMap<FIntVector4, FBucket> Buckets;
-
-	for (int32 SectionIdx = 0; SectionIdx < Sections.Num(); ++SectionIdx)
-	{
-		const FCookedSection& S = Sections[SectionIdx];
-		for (int32 T = 0; T + 2 < S.Tris.Num(); T += 3)
-		{
-			const FVector& A = S.Verts[S.Tris[T + 0]];
-			const FVector& B = S.Verts[S.Tris[T + 1]];
-			const FVector& C = S.Verts[S.Tris[T + 2]];
-			const FVector Centroid = (A + B + C) / 3.0;
-			const FVector Normal = ((B - A) ^ (C - A)).GetSafeNormal();
-			const int32 NormalDir = MeshCardRepresentation::GetAxisAlignedDirectionIndex(FVector3f(Normal));
-
-			const FIntVector4 Key(
-				FMath::FloorToInt(Centroid.X / CellCm),
-				FMath::FloorToInt(Centroid.Y / CellCm),
-				FMath::FloorToInt(Centroid.Z / CellCm),
-				NormalDir);
-			FBucket& Bucket = Buckets.FindOrAdd(Key);
-			Bucket.Tris.Add({ SectionIdx, T });
-			Bucket.Bounds += A;
-			Bucket.Bounds += B;
-			Bucket.Bounds += C;
-		}
-	}
-
-	// One MID per material, shared by every chunk that carries a triangle of it — the chunking is
-	// a spatial cut, not a material one, so a wall crossing three cells still resolves to one
-	// material instance.
-	TMap<FString, UMaterialInterface*> Mids;
-	auto MidFor = [this, &Dir, &Materials, &Mids](const FString& Mat) -> UMaterialInterface*
-	{
-		if (UMaterialInterface** Found = Mids.Find(Mat))
-		{
-			return *Found;
-		}
-		const FElysiumMaterialDef* Def = Materials.Find(Mat);
-		UMaterialInterface* Mid = FElysiumMaterialFactory::Build(Def, Dir, this, *TextureCache);
-		Mids.Add(Mat, Mid);
-		return Mid;
-	};
-
-	int32 SectionsBuilt = 0;
-	for (const TPair<FIntVector4, FBucket>& Cell : Buckets)
-	{
-		// The component sits at the bucket's own bounds centre and the vertices are written
-		// relative to it, so the mesh's local bounds hug the geometry rather than carrying its
-		// offset from the map origin (cards are built in local space, so an off-centre mesh would
-		// spawn cards far larger than the surfaces they stand for).
-		const FVector CellCentre = Cell.Value.Bounds.GetCenter();
-
-		FMeshDescription MeshDesc;
-		FStaticMeshAttributes Attr(MeshDesc);
-		Attr.Register();
-		Attr.GetVertexInstanceUVs().SetNumChannels(1);
-		TVertexAttributesRef<FVector3f> Positions = Attr.GetVertexPositions();
-		TVertexInstanceAttributesRef<FVector2f> UVs = Attr.GetVertexInstanceUVs();
-		TVertexInstanceAttributesRef<FVector4f> VertColors = Attr.GetVertexInstanceColors();
-		TPolygonGroupAttributesRef<FName> SlotNames = Attr.GetPolygonGroupMaterialSlotNames();
-
-		// One polygon group (= material slot) per material present in this cell, in first-seen order.
-		TMap<int32, FPolygonGroupID> GroupBySection;
-		TArray<UMaterialInterface*> SlotMats;
-
-		// The content hash the `<map>.cards` entry for this bucket is keyed on: the bucket's
-		// triangles in local space, in build order. Geometry only — the cell key already carries
-		// where the bucket is, and materials do not affect a card fit.
-		FElysiumCardHasher Hasher;
-
-#if !UE_BUILD_SHIPPING
-		// The click-pick's CPU copy of this chunk, filled slot-for-slot alongside the render mesh
-		// (a runtime UStaticMesh keeps nothing on the CPU to cast against). PickRemap is per slot:
-		// source section vertex index -> soup vertex index, so the source section's index *sharing*
-		// survives the chunk cut and the pick's face flood still terminates at the face boundary.
-		FWorldChunkPickSoup PickSoup;
-		TArray<TMap<int32, int32>> PickRemap;
-#endif
-
-		for (const FChunkTri& CT : Cell.Value.Tris)
-		{
-			const FCookedSection& S = Sections[CT.Section];
-
-			FPolygonGroupID PG;
-			if (const FPolygonGroupID* Found = GroupBySection.Find(CT.Section))
-			{
-				PG = *Found;
-			}
-			else
-			{
-				PG = MeshDesc.CreatePolygonGroup();
-				const FName SlotName(*FString::Printf(TEXT("%s#%d"), *S.Mat, SlotMats.Num()));
-				SlotNames[PG] = SlotName;
-				GroupBySection.Add(CT.Section, PG);
-				SlotMats.Add(MidFor(S.Mat));
-#if !UE_BUILD_SHIPPING
-				PickSoup.Sections.AddDefaulted_GetRef().Mat = S.Mat;
-				PickRemap.AddDefaulted();
-#endif
-			}
-
-			// A fresh vertex per corner: the exporter already emits unshared face corners, so there
-			// is no welding to preserve and this keeps the chunk cut from merging anything.
-			FVertexInstanceID Tri[3];
-			for (int32 K = 0; K < 3; ++K)
-			{
-				const int32 LI = S.Tris[CT.Tri + K];
-				const FVertexID V = MeshDesc.CreateVertex();
-				Hasher.Add(S.Verts[LI] - CellCentre);
-				Positions[V] = FVector3f(S.Verts[LI] - CellCentre);
-				const FVertexInstanceID Inst = MeshDesc.CreateVertexInstance(V);
-				UVs.Set(Inst, 0, S.UVs.IsValidIndex(LI) ? FVector2f(S.UVs[LI]) : FVector2f::ZeroVector);
-				// WVT blend weight rides COLOR.r exactly as it does on the PMC path.
-				if (S.Colors.IsValidIndex(LI))
-				{
-					const float W = S.Colors[LI].R / 255.f;
-					VertColors[Inst] = FVector4f(W, W, W, 1.f);
-				}
-				Tri[K] = Inst;
-#if !UE_BUILD_SHIPPING
-				// Polygon groups are created 0..N-1 in slot order, which is what the slot-name
-				// lookup below relies on too.
-				const int32 Slot = PG.GetValue();
-				FWorldChunkPickSection& PS = PickSoup.Sections[Slot];
-				TMap<int32, int32>& Remap = PickRemap[Slot];
-				const int32* Mapped = Remap.Find(LI);
-				if (Mapped == nullptr)
-				{
-					const FVector Local = S.Verts[LI] - CellCentre;
-					Mapped = &Remap.Add(LI, PS.Positions.Num());
-					PS.Positions.Add(Local);
-					PS.Bounds += Local;
-				}
-				PS.Tris.Add(*Mapped);
-#endif
-			}
-			MeshDesc.CreatePolygon(PG, { Tri[0], Tri[1], Tri[2] });
-		}
-
-		if (MeshDesc.Polygons().Num() == 0)
-		{
-			continue;
-		}
-
-		// The fast build path does not derive normals/tangents, and the OBJ carries neither.
-		FStaticMeshOperations::ComputeTriangleTangentsAndNormals(MeshDesc);
-		FStaticMeshOperations::ComputeTangentsAndNormals(MeshDesc,
-			EComputeNTBsFlags::Normals | EComputeNTBsFlags::Tangents | EComputeNTBsFlags::WeightedNTBs);
-
-		UStaticMesh* Mesh = NewObject<UStaticMesh>(this, NAME_None, RF_Transient);
-		Mesh->SetLightingGuid();
-		for (int32 Slot = 0; Slot < SlotMats.Num(); ++Slot)
-		{
-			const FName SlotName = SlotNames[FPolygonGroupID(Slot)];
-			Mesh->GetStaticMaterials().Add(FStaticMaterial(SlotMats[Slot], SlotName, SlotName));
-		}
-
-		UStaticMesh::FBuildMeshDescriptionsParams Params;
-		Params.bFastBuild = true;
-		Params.bBuildSimpleCollision = false;
-		Params.bCommitMeshDescription = false;
-		Params.bMarkPackageDirty = false;
-		Params.bUseHashAsGuid = true;
-		// A -ElysiumCards run needs the built LOD readable on the CPU — the card builder
-		// ray-traces the index/vertex buffers. Dead memory in any other run.
-		Params.bAllowCpuAccess = ElysiumCardBake::IsBaking();
-		const TArray<const FMeshDescription*> Descs = { &MeshDesc };
-		Mesh->BuildFromMeshDescriptions(Descs, Params);
-
-		// Baked cards sit on the real surfaces; the bounds fallback wraps the bucket in a box,
-		// which is what leaks light from an exterior wall back into the room behind it.
-		const uint64 Hash = Hasher.Finalize();
-		if (!Cards->Store.InstallWorld(Cell.Key, Hash, Mesh))
-		{
-			FElysiumStaticMeshBuilder::AttachLumenCards(Mesh);
-		}
-		if (ElysiumCardBake::IsBaking())
-		{
-			FElysiumCardBakeItem& Item = Cards->BakeItems.AddDefaulted_GetRef();
-			Item.Key = Cell.Key;
-			Item.Hash = Hash;
-			Item.Mesh = Mesh;
-		}
-
-		UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(this, NAME_None, RF_Transient);
-		Comp->SetupAttachment(SceneRoot);
-		Comp->SetStaticMesh(Mesh);
-		// Collision is the .hulls brush collider, as on the PMC path — the chunks are render-only.
-		Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		Comp->SetMobility(EComponentMobility::Movable);
-		Comp->SetRelativeLocation(CellCentre);
-		for (int32 Slot = 0; Slot < SlotMats.Num(); ++Slot)
-		{
-			Comp->SetMaterial(Slot, SlotMats[Slot]);
-		}
-		Comp->RegisterComponent();
-		AddInstanceComponent(Comp);
-
-		WorldChunkMeshes.Add(Mesh);
-		WorldChunks.Add(Comp);
-#if !UE_BUILD_SHIPPING
-		for (const FWorldChunkPickSection& PS : PickSoup.Sections)
-		{
-			PickSoup.Bounds += PS.Bounds;
-		}
-		WorldChunkPickSoups.Add(MoveTemp(PickSoup));   // index-aligned with WorldChunks
-#endif
-		SectionsBuilt += SlotMats.Num();
-	}
-
-	UE_LOG(LogElysium, Log, TEXT("world chunks: %d buckets (%.0f cm cell x face normal), %d sections, Lumen cards on"),
-		WorldChunks.Num(), CellCm, SectionsBuilt);
-	if (!Cards->Store.IsEmpty() && Cards->Store.CellCm != static_cast<float>(CellCm))
-	{
-		UE_LOG(LogElysium, Warning,
-			TEXT("world chunks: cards baked at %.0f cm but elysium.LumenCardCellCm is %.0f — every "
-			     "bucket key misses, falling back to bounds cards. Re-run cards.bat at this cell size."),
-			Cards->Store.CellCm, CellCm);
-	}
-	return SectionsBuilt;
-}
-
-void AElysiumMapActor::BuildDecals()
-{
-	DecalCount = 0;
-	if (CVarDecals.GetValueOnGameThread() == 0)
-	{
-		return;
-	}
-
-	TArray<FElysiumDecalDef> Defs;
-	if (!FElysiumDecals::Parse(FElysiumContentPaths::MapDecals(MapName), Defs) || Defs.Num() == 0)
-	{
-		return;
-	}
-
-	// Decal albedo/emissive textures ride the shared world MTL (<map>.mtl), the same file the
-	// world sections resolve against; textures are "tex/..." relative to the map dir.
-	const FString Dir = FElysiumContentPaths::MapDir(MapName);
-	TMap<FString, FElysiumMaterialDef> Materials;
-	FElysiumObjModel::ParseMtl(Dir / (MapName + TEXT(".mtl")), Materials);
-
-	// DecalSize is the box half-size: X = projection reach into/out of the wall, Y/Z = the
-	// on-surface half-extents. The map actor sits at the origin, so the sidecar's Unreal-space
-	// point/axes are used as component-relative directly.
-	const float HalfDepth = FMath::Max(1.f, CVarDecalDepth.GetValueOnGameThread());
-
-	Decals.Reserve(Defs.Num());
-	for (const FElysiumDecalDef& D : Defs)
-	{
-		const FElysiumMaterialDef* MatDef = Materials.Find(D.Mat);
-		UMaterialInstanceDynamic* Mid = FElysiumMaterialFactory::BuildDecal(MatDef, Dir, this, *TextureCache);
-		if (!Mid)
-		{
-			continue;   // M_Decal master missing — skip rather than draw the wrong material domain
-		}
-
-		UDecalComponent* Dc = NewObject<UDecalComponent>(this);
-		Dc->SetupAttachment(SceneRoot);
-		// Orient so the component's -X projects into the wall (local +X = the room-facing Normal).
-		// A deferred decal maps its texture U to the component's local Z and V to local Y (not the
-		// intuitive Y=U/Z=V), so the surface's horizontal axis (SDir, the U/s texture axis) goes on
-		// local Z and the vertical (TDir) is the derived Y. DecalSize is the box HALF-size
-		// (X = projection reach, Y = vertical/V half-extent = HalfH, Z = horizontal/U half-extent =
-		// HalfW). MakeFromXZ builds a valid right-handed rotation from Normal + SDir (the exporter's
-		// s/t frame is left-handed w.r.t. the normal, so a 3-axis FMatrix would be reflected).
-		const bool bFlipU = CVarDecalFlipU.GetValueOnGameThread() != 0;
-		const FVector UpHint = bFlipU ? -D.SDir : D.SDir;
-		const FRotator Rot = FRotationMatrix::MakeFromXZ(D.Normal, UpHint).Rotator();
-		Dc->SetRelativeLocationAndRotation(D.Loc, Rot);
-		Dc->DecalSize = FVector(HalfDepth, D.HalfH, D.HalfW);
-		Dc->SetFadeScreenSize(0.f);   // VtMB decals persist at any distance
-		Dc->SetDecalMaterial(Mid);
-		Dc->RegisterComponent();
-		Decals.Add(Dc);
-	}
-	DecalCount = Decals.Num();
-	UE_LOG(LogElysium, Log, TEXT("decals: %d"), DecalCount);
 }
 
 void AElysiumMapActor::BuildRopes()
@@ -1261,133 +678,12 @@ void AElysiumMapActor::LoadDispCol()
 	UE_LOG(LogElysium, Log, TEXT("displacement collision: %d triangles"), DispTriCount);
 }
 
-void AElysiumMapActor::LoadProps()
-{
-	TArray<FString> Lines;
-	if (!FFileHelper::LoadFileToStringArray(Lines, *FElysiumContentPaths::MapProps(MapName)))
-	{
-		return;   // no .props sidecar: map has no static props
-	}
-	const FString PropsDir = FElysiumContentPaths::MapPropsDir(MapName);
-
-	// Group instances by model so each unique mesh is built once. `safename ox oy oz
-	// qx qy qz qw solid` — all Unreal-space (UE_bsp_to_scene emits it verbatim).
-	struct FInst { FTransform Xform; bool bSolid; };
-	TMap<FString, TArray<FInst>> ByModel;
-	for (const FString& Line : Lines)
-	{
-		TArray<FString> Tok;
-		Line.ParseIntoArray(Tok, TEXT(" "), true);
-		if (Tok.Num() < 9)
-		{
-			continue;
-		}
-		const FVector Loc(FCString::Atod(*Tok[1]), FCString::Atod(*Tok[2]), FCString::Atod(*Tok[3]));
-		const FQuat Rot(FCString::Atod(*Tok[4]), FCString::Atod(*Tok[5]), FCString::Atod(*Tok[6]), FCString::Atod(*Tok[7]));
-		const bool bSolid = FCString::Atoi(*Tok[8]) != 0;
-		ByModel.FindOrAdd(Tok[0]).Add({ FTransform(Rot, Loc), bSolid });
-	}
-
-	for (const TPair<FString, TArray<FInst>>& Entry : ByModel)
-	{
-		FElysiumObjModel Model;
-		if (!FElysiumObjModel::Parse(PropsDir / (Entry.Key + TEXT(".obj")), Model))
-		{
-			UE_LOG(LogElysium, Warning, TEXT("prop model parse failed: %s"), *Entry.Key);
-			continue;
-		}
-
-		const bool bAnySolid = Entry.Value.ContainsByPredicate([](const FInst& I) { return I.bSolid; });
-		const FElysiumStaticMeshBuilder::FPropCards ModelCards = PropCards(Entry.Key, &Cards->Store, Cards->BakeItems);
-		UStaticMesh* Mesh = FElysiumStaticMeshBuilder::Build(Model, Model.Dir, bAnySolid, this, *TextureCache,
-			/*ConvexHulls=*/nullptr, &ModelCards);
-		if (!Mesh)
-		{
-			continue;
-		}
-		PropMeshes.Add(Mesh);
-		++PropModelCount;
-
-#if !UE_BUILD_SHIPPING
-		// Keep the parsed triangle soup for the click-pick: the mesh's cooked collision is one
-		// convex hull of the whole model, so nothing downstream can tell which part of a prop was
-		// clicked. Positions + indices only (UVs/normals are not needed to cast a ray).
-		const int32 SoupIndex = PropPickSoups.Num();
-		FPropPickSoup& Soup = PropPickSoups.AddDefaulted_GetRef();
-		Soup.Model = Entry.Key;
-		Soup.Positions = Model.Positions;
-		for (const TPair<FString, TArray<int32>>& Group : Model.Groups)
-		{
-			Soup.Tris.Append(Group.Value);
-		}
-#endif
-
-		// One ISM per solidity bucket (shared mesh; only the component's collision differs):
-		// solid props block, non-solid props are visual-only. Most models are all-or-nothing,
-		// so this is usually a single component per model.
-		UInstancedStaticMeshComponent* Buckets[2] = { nullptr, nullptr };
-		for (const FInst& I : Entry.Value)
-		{
-			UInstancedStaticMeshComponent*& ISM = Buckets[I.bSolid ? 1 : 0];
-			if (!ISM)
-			{
-				FName IsmName = NAME_None;
-#if WITH_EDITOR
-				IsmName = ElysiumEditorObjectName(FString::Printf(TEXT("Props_%s_%s"),
-					*Entry.Key, I.bSolid ? TEXT("solid") : TEXT("nonsolid")));
-#endif
-				ISM = NewObject<UInstancedStaticMeshComponent>(this, IsmName);
-				ISM->SetupAttachment(SceneRoot);
-				ISM->SetMobility(EComponentMobility::Movable);
-				ISM->SetStaticMesh(Mesh);
-				if (I.bSolid)
-				{
-					ISM->SetCollisionProfileName(TEXT("BlockAll"));
-				}
-				else
-				{
-					ISM->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-				}
-				ISM->RegisterComponent();
-				PropComponents.Add(ISM);
-#if !UE_BUILD_SHIPPING
-				PropSoupByComponent.Add(ISM, SoupIndex);   // both solidity buckets share one soup
-#endif
-			}
-			// Transforms are map-space; the map actor sits at the origin, so component-local
-			// (the AddInstance default) equals world.
-			ISM->AddInstance(I.Xform);
-			++PropInstanceCount;
-		}
-	}
-
-	UE_LOG(LogElysium, Log, TEXT("props: %d instances / %d models"), PropInstanceCount, PropModelCount);
-}
-
-#if !UE_BUILD_SHIPPING
-int32 AElysiumMapActor::GetPropSoupIndex(const UInstancedStaticMeshComponent* Ism) const
-{
-	const int32* Found = PropSoupByComponent.Find(Ism);
-	return Found ? *Found : INDEX_NONE;
-}
-
-const FString& AElysiumMapActor::GetSectionMaterialName(const UProceduralMeshComponent* Mesh, int32 Section) const
-{
-	static const FString Empty;
-	const TArray<FString>& Names = (Mesh == SkyMesh) ? SkySectionNames : WorldSectionNames;
-	return Names.IsValidIndex(Section) ? Names[Section] : Empty;
-}
-#endif
-
 void AElysiumMapActor::ToggleProps()
 {
 	bPropsVisible = !bPropsVisible;
-	for (UInstancedStaticMeshComponent* ISM : PropComponents)
+	for (const TObjectPtr<AStaticMeshActor>& Prop : PropActors)
 	{
-		if (ISM)
-		{
-			ISM->SetVisibility(bPropsVisible);
-		}
+		Prop->SetActorHiddenInGame(!bPropsVisible);
 	}
 }
 
@@ -1398,15 +694,22 @@ bool AElysiumMapActor::ArePropsVisible() const
 
 void AElysiumMapActor::ToggleSkybox()
 {
-	if (SkyMesh)
+	// Both halves of the sky read as one thing to the eye, so they toggle together: the baked
+	// 3D-skybox miniature and the backdrop dome that stands in for the 2D sky behind it.
+	bSkyVisible = !bSkyVisible;
+	for (const TObjectPtr<AStaticMeshActor>& Sky : SkyActors)
 	{
-		SkyMesh->SetVisibility(!SkyMesh->IsVisible());
+		Sky->SetActorHiddenInGame(!bSkyVisible);
+	}
+	if (SkyDomeMesh)
+	{
+		SkyDomeMesh->SetVisibility(bSkyVisible && SkyDomeMesh->GetNumSections() > 0);
 	}
 }
 
 bool AElysiumMapActor::IsSkyboxVisible() const
 {
-	return SkyMesh && SkyMesh->IsVisible();
+	return bSkyVisible;
 }
 
 void AElysiumMapActor::ToggleLights()
@@ -1422,99 +725,54 @@ bool AElysiumMapActor::AreLightsVisible() const
 	return LightRig && LightRig->AreLightsVisible();
 }
 
-void AElysiumMapActor::ApplySkyTransform()
-{
-	// The 3D skybox is a miniature authored at 1/scale in a corner of the map; sky_camera
-	// origin maps to world (0,0,0). Blow it up: world(v) = scale * (v - origin). Verts are
-	// already in Unreal space, so the component gets uniform scale and translation -scale*origin.
-	float Scale = 16.f;
-	FVector OriginUnreal = FVector::ZeroVector;
-
-	TArray<FString> Lines;
-	if (FFileHelper::LoadFileToStringArray(Lines, *FElysiumContentPaths::MapSky(MapName)))
-	{
-		for (const FString& Line : Lines)
-		{
-			TArray<FString> Tok;
-			Line.ParseIntoArray(Tok, TEXT(" "), true);
-			if (Tok.Num() == 4 && Tok[0] == TEXT("origin"))
-			{
-				OriginUnreal = FVector(FCString::Atod(*Tok[1]), FCString::Atod(*Tok[2]), FCString::Atod(*Tok[3]));
-			}
-			else if (Tok.Num() == 2 && Tok[0] == TEXT("scale"))
-			{
-				Scale = FCString::Atof(*Tok[1]);
-			}
-		}
-	}
-
-	SkyMesh->SetRelativeScale3D(FVector(Scale));
-	SkyMesh->SetRelativeLocation(-Scale * OriginUnreal);
-}
-
 void AElysiumMapActor::ApplyEnvironment()
 {
-	// Colour grade (.cube): a per-map 3D LUT into the unbound post-process. Independent of
-	// the rest of .env, so it applies even when a map has no sky/fog.
-	// TEMP: disabled for a test — see the raw (un-graded) scene colour.
-	// if (UTexture2D* Lut = ElysiumEnvironment::BuildColorGradeLUT(FElysiumContentPaths::MapGrade(MapName)))
-	// {
-	// 	FPostProcessSettings& PP = PostProcess->Settings;
-	// 	PP.bOverride_ColorGradingLUT = true;
-	// 	PP.ColorGradingLUT = Lut;
-	// 	PP.bOverride_ColorGradingIntensity = true;
-	// 	PP.ColorGradingIntensity = 1.f;
-	// 	UE_LOG(LogElysium, Log, TEXT("colour grade LUT applied"));
-	// }
-
 	FElysiumEnvDef Env;
-	if (!FElysiumEnvDef::Parse(FElysiumContentPaths::MapEnv(MapName), Env))
+	if (!FElysiumEnvDef::Parse(FElysiumContentPaths::MapEnv(MapName), Env) || !Env.bSky)
 	{
-		return;   // no .env: keep the placeholder ambient, no fog
+		return;   // no .env, or a map with no sky: the baked sky light keeps its authored fill
 	}
 
-	// The six sky faces build one cubemap for the visible backdrop (the M_Sky dome). The
-	// SkyLight keeps its flat placeholder ambient for now: these 2D skyboxes are near-black
-	// night skies that integrate to almost nothing, so using the cube as the sole ambient
-	// would leave the (still unlit — no LightRig yet) world invisible. Cube IBL moves onto
-	// the SkyLight once the .lights rig provides the real scene lighting.
-	if (Env.bSky)
+	UTextureCube* Cube = ElysiumEnvironment::BuildSkyCube(FElysiumContentPaths::MapTexDir(MapName));
+	if (Cube == nullptr)
 	{
-		if (UTextureCube* Cube = ElysiumEnvironment::BuildSkyCube(FElysiumContentPaths::MapTexDir(MapName)))
-		{
-			if (UMaterialInterface* Master = LoadObject<UMaterialInterface>(nullptr,
-				TEXT("/Game/VtMB/Materials/M_Sky.M_Sky")))
-			{
-				UMaterialInstanceDynamic* Mid = UMaterialInstanceDynamic::Create(Master, this);
-				Mid->SetTextureParameterValue(TEXT("SkyCube"), Cube);
-				Mid->SetScalarParameterValue(TEXT("Brightness"), 4.f);
-
-				TArray<FVector> Verts, Normals;
-				TArray<int32> Tris;
-				TArray<FVector2D> UVs;
-				BuildSkyBox(500000.f, Verts, Tris, Normals, UVs);
-				SkyDomeMesh->CreateMeshSection_LinearColor(0, Verts, Tris, Normals, UVs, {}, {}, false);
-				SkyDomeMesh->SetMaterial(0, Mid);
-				SkyDomeMesh->SetVisibility(true);
-				UE_LOG(LogElysium, Log, TEXT("sky dome applied (%s)"), *Env.SkyName);
-			}
-		}
+		return;
 	}
 
-	// Height fog approximates Source's linear depth fog (start/end in metres -> cm). A small
-	// falloff keeps it near height-independent; density is tuned so the far distance reads as
-	// mostly fogged. Off maps (fog 0, e.g. the tutorial) leave the component hidden.
-	HeightFog->SetVisibility(Env.bFog);
-	if (Env.bFog)
+	// The cube does two jobs. As the SkyLight's IBL source it is what gives Lumen real sky
+	// occlusion: an interior stops receiving ambient because it cannot see the sky, instead of
+	// being washed by a constant fill through solid walls (the cubemap-less SLS_SpecifiedCubemap
+	// this replaced). VtMB night skies integrate to nearly nothing, which is the point — the
+	// .lights rig and Lumen's bounce off the baked surface cache carry the room now.
+	if (SkyLight)
 	{
-		const float StartCm = Env.FogStartCm;
-		const float EndCm = FMath::Max(Env.FogEndCm, StartCm + 1.f);
-		HeightFog->SetFogInscatteringColor(Env.FogColor);
-		HeightFog->SetStartDistance(StartCm);
-		HeightFog->SetFogHeightFalloff(0.02f);
-		// exp fog factor 1-e^{-density*dist}; density for ~0.95 opacity by the far plane.
-		HeightFog->SetFogDensity(FMath::Clamp(3.f / EndCm, 0.0001f, 0.05f));
-		UE_LOG(LogElysium, Log, TEXT("fog on: %.0f-%.0f cm"), StartCm, EndCm);
+		SkyLight->SourceType = SLS_SpecifiedCubemap;
+		SkyLight->Cubemap = Cube;
+		// A sky that lit the undersides of the world would defeat the occlusion above.
+		SkyLight->bLowerHemisphereIsBlack = true;
+		SkyLight->SetMobility(EComponentMobility::Movable);
+		SkyLight->RecaptureSky();
+	}
+
+	// And as the visible backdrop: a huge two-sided box around the camera sampling the cube by
+	// view direction, so it reads as infinitely far. Excluded from ray tracing — a mesh that
+	// encloses the whole scene is the canonical Lumen hardware-ray-tracing overlap cost.
+	if (UMaterialInterface* Master = LoadObject<UMaterialInterface>(nullptr,
+		TEXT("/Game/VtMB/Materials/M_Sky.M_Sky")))
+	{
+		UMaterialInstanceDynamic* Mid = UMaterialInstanceDynamic::Create(Master, this);
+		Mid->SetTextureParameterValue(TEXT("SkyCube"), Cube);
+		Mid->SetScalarParameterValue(TEXT("Brightness"), 4.f);
+
+		TArray<FVector> Verts, Normals;
+		TArray<int32> Tris;
+		TArray<FVector2D> UVs;
+		BuildSkyBox(500000.f, Verts, Tris, Normals, UVs);
+		SkyDomeMesh->CreateMeshSection_LinearColor(0, Verts, Tris, Normals, UVs, {}, {}, false);
+		SkyDomeMesh->SetMaterial(0, Mid);
+		SkyDomeMesh->SetVisibleInRayTracing(false);
+		SkyDomeMesh->SetVisibility(bSkyVisible);
+		UE_LOG(LogElysium, Log, TEXT("sky '%s': cubemap IBL + backdrop"), *Env.SkyName);
 	}
 }
 

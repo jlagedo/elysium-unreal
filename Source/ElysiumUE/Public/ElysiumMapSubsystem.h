@@ -7,14 +7,15 @@
 
 class AElysiumMapActor;
 class FElysiumProfileRun;
-class FElysiumCardRun;
 class FElysiumShotRun;
 
 // The only owner of VtMB-map lifecycle. Map change is UE5 hard travel (roadmap 10.8): Travel
-// stows the target map + landmark in this GI-scoped state and OpenLevels the one reused shell
-// `.umap`; the engine tears down the current UWorld and runs GC, and the fresh world's game mode
-// spawns the AElysiumMapActor for the pending map (SpawnPendingMap), which reads the map + landmark
-// from here on BeginPlay. Cross-map state lives at GameInstance scope and survives the travel. The
+// stows the target map + landmark in this GI-scoped state and OpenLevels the map's own baked
+// `.umap` under /ElysiumBaked (which carries the map's whole look as real assets); the engine tears
+// down the current UWorld and runs GC, and the fresh world's game mode spawns the AElysiumMapActor
+// for the pending map (SpawnPendingMap), which reads the map + landmark from here on BeginPlay and
+// builds what is not baked — collision, ropes, the entity substrate, entity-driven bodies.
+// Cross-map state lives at GameInstance scope and survives the travel. The
 // P4.6 landmark transition (trigger_changelevel / scripted ChangeMap) places the player at the
 // destination `info_landmark`, preserving their offset from the source landmark.
 UCLASS()
@@ -26,7 +27,8 @@ public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
 
-	// Load a map, replacing the current one. Returns false if the map has no exported .obj. A
+	// Load a map, replacing the current one. Returns false unless the map has both a baked level
+	// and an export (the runtime reads sidecars from the export beside the baked look). A
 	// non-empty Landmark makes the fresh map place the player at that `info_landmark` (at the
 	// landmark's facing) instead of info_player_start — the console/direct entry to the P4.6 path.
 	bool Travel(const FString& Map, const FString& Landmark = FString());
@@ -48,9 +50,8 @@ public:
 	FString PendingTravelDesc() const;
 
 	// Spawn the AElysiumMapActor for the pending map into the current world and consume the pending
-	// state. Called by the game mode on BeginPlay after a Travel OpenLevel lands in the fresh shell
-	// world (and directly by Travel on cold boot, when we are already in an empty shell). No-op with
-	// no pending load.
+	// state. Called by the game mode on BeginPlay after a Travel OpenLevel lands in the map's baked
+	// level. No-op with no pending load.
 	void SpawnPendingMap();
 
 	// Consumed once by the freshly-loaded map actor (P4.6): if this load is a landmark transition,
@@ -69,7 +70,7 @@ public:
 	AElysiumMapActor* GetCurrentMap() const { return CurrentMap.Get(); }
 	FString GetCurrentMapName() const;
 
-	// Names of maps the pipeline has exported (a folder under Root holding <name>.obj).
+	// Names of maps that are both exported and baked — i.e. the maps Travel will accept.
 	TArray<FString> ExportedMaps() const;
 
 	// The map to boot into: -ElysiumMap=<name> (play.bat <name>) or the default.
@@ -123,7 +124,4 @@ private:
 
 	// Headless screenshot-regression harness (P2.9), created only under -ElysiumShots.
 	TPimplPtr<FElysiumShotRun> ShotRun;
-
-	// Headless Lumen-card bake (docs/lumen-coverage-spike.md), created only under -ElysiumCards.
-	TPimplPtr<FElysiumCardRun> CardRun;
 };
