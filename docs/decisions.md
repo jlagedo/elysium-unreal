@@ -858,5 +858,29 @@ append a correction as a new entry.
   glTFRuntime** — `FillSkeletalMeshRenderData` constructs all render sections up front, so any early
   return is crash-safe. `regular_cop`/`prophet` re-exported; the other 43 were already single-root. **8.2
   glTFRuntime skeletal path confirmed.**
+- **2026-07-24** — **Ropes render on the stock `CableComponent` plugin (roadmap 8.7).** New
+  dependency accepted: `UCableComponent` (the roadmap's stated target) over an offline-catenary
+  `UProceduralMesh` alternative. Rationale: `CableComponent` is a **first-party, enabled-by-default,
+  non-beta** UE 5.8 plugin (read from the installed `CableComponent.uplugin`: `IsBetaVersion:false`,
+  `EnabledByDefault:true`, already-compiled `UnrealEditor-CableComponent.dll`) — low-risk, and its
+  Verlet strand hangs into a catenary on its own from `CableLength = span + slack`, so no offline sag
+  math. Enabled in `ElysiumUE.uproject` + `Build.cs`. Accepted trade-off: cables **simulate each tick**
+  (settle from straight over ~1 s; trivial CPU cost at 70 cables), vs the alternative's static
+  deterministic geometry. Built as a pure-visual `.ropes` sidecar → `AElysiumMapActor::BuildRopes`
+  (the 7.2-decal pattern), **not** the entity substrate — a cable spans two entities and rope nodes
+  have no meaningful I/O, so they stay inert `.ents` records. **RE finding recorded:**
+  `entity_visuals.md` R3 had the node roles backwards — from `sp_tutorial_1`, **`move_rope` is the
+  chain start** (31 nodes = the 31 topological starts), `keyframe_rope` the continuations (76);
+  resolution is topological (start = untargeted by any `NextKey`), so it is classname-independent.
+  Doc corrected in place. **`NextKey` resolution — grounded in the decompile, not guessed:**
+  `sp_tutorial_1` reuses the rope names `tele4..tele9` across **two separate wire installations ~200 m
+  apart** (both in the playable world — the `sky_camera` PVS classifier confirms neither sits in the
+  3D skybox), and a last-wins name index cross-linked them into six ~199 m cables slashing across the
+  map. RE (vampire.dll via Ghidra): `keyframe_rope`/`move_rope` are stock Source **`CRopeKeyframe`**,
+  and `Activate` resolves `NextKey` with **`FindEntityByName(NULL, m_iNextLinkName)` = the first entity
+  of that name in spawn/entity order** (= the entity-lump order the exporter iterates), so the exporter
+  uses **first-wins**. First-wins and a nearest-position heuristic give the identical 70 segments on the
+  tutorial (each installation is lump-contiguous); first-wins is the faithful engine rule. Also drops
+  coincident-endpoint (< 1 cm) links — zero-length chain artifacts.
 - **Pending** — 5.5 level-script execution strategy (interpreter vs transpile vs CPython);
   10.6 EnhancedInput migrate-or-remove.

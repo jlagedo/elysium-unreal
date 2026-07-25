@@ -535,8 +535,18 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
   **Acceptance:** main menu and pause menu are legible and correctly proportioned at 1080p,
   1440p, 4K and 21:9 with no letterboxing or bitmap-font blur; New Game enters `sp_tutorial_1`
   through the 8.6a seam. *Deps:* PL8; 8.6a for the seam.
-- [ ] **8.7 Ropes** — `keyframe_rope`/`move_rope` (×107 in tutorial) → Cable Components.
-  *Deps:* none.
+- [x] **8.7 Ropes** — VtMB's overhead cables. The exporter's `write_ropes` resolves each
+  `move_rope`/`keyframe_rope` chain (topologically — `move_rope` is the start, not `keyframe_rope`
+  as `entity_visuals.md` had it; `NextKey` binds **first-match by entity order** — the engine's
+  `FindEntityByName`, RE-confirmed against the stock `CRopeKeyframe` in `vampire.dll` — which keeps
+  each of `sp_tutorial_1`'s two reused `tele4..tele9` installations local) into per-segment
+  `<map>.ropes` lines + decodes the `RopeMaterial`
+  texture; the runtime's `AElysiumMapActor::BuildRopes` stands one Verlet `UCableComponent` per
+  segment (fixed both ends, rest length = span + slack → it hangs, MID off `M_World_Opaque`).
+  Stock `CableComponent` plugin enabled (`decisions.md` 2026-07-24). `elysium.Ropes` A/Bs.
+  *Verified:* build + `test.bat` Substrate/Content green (new `Ropes` parse + sidecar tests); the
+  tutorial loads **70 cables** (72 chain links − 2 coincident-node artifacts dropped) and they hang
+  with correct sag across the alley in-game. As-built: `roadmap-archive.md` 8.7. *Deps:* none.
 - [ ] **8.8 Sign / popup panels on the UI foundation** — 4.10's Canvas panel re-drawn on 8.6's
   stack. The **authored layout is honoured as proportion and grouping** (block rects, ordering,
   emphasis) and re-set with vector type on the resolution-independent layout — the `CSignUI`

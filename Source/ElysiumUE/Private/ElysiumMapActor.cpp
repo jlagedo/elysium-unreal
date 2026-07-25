@@ -15,12 +15,14 @@
 #include "ElysiumMaterialFactory.h"
 #include "ElysiumNpcVisual.h"
 #include "ElysiumObjModel.h"
+#include "ElysiumRopes.h"
 #include "ElysiumStaticMesh.h"
 #include "ElysiumTextureCache.h"
 
 #include "Engine/GameInstance.h"
 
 #include "Animation/AnimSequence.h"
+#include "CableComponent.h"
 #include "Components/DecalComponent.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/ExponentialHeightFogComponent.h"
@@ -72,6 +74,13 @@ static TAutoConsoleVariable<float> CVarDecalDepth(
 static TAutoConsoleVariable<int32> CVarDecalFlipU(
 	TEXT("elysium.DecalFlipU"), 0,
 	TEXT("Mirror decals along their horizontal (U) axis (1) or not (0). Applied at map load."),
+	ECVF_Default);
+
+// Build the map's overhead cables (1) or skip them (0), for A/B. Read at map load, so re-travel
+// (elysium.reload) to toggle.
+static TAutoConsoleVariable<int32> CVarRopes(
+	TEXT("elysium.Ropes"), 1,
+	TEXT("Build the map's cables from <map>.ropes (1) or skip (0). Applied at map load."),
 	ECVF_Default);
 
 namespace
@@ -324,6 +333,9 @@ void AElysiumMapActor::LoadMap()
 
 	BuildDecals();
 	Phase(TEXT("Decals"));
+
+	BuildRopes();
+	Phase(TEXT("Ropes"));
 
 	LoadProps();
 	Phase(TEXT("Props"));
@@ -728,6 +740,80 @@ void AElysiumMapActor::BuildDecals()
 	}
 	DecalCount = Decals.Num();
 	UE_LOG(LogElysium, Log, TEXT("decals: %d"), DecalCount);
+}
+
+void AElysiumMapActor::BuildRopes()
+{
+	RopeCount = 0;
+	if (CVarRopes.GetValueOnGameThread() == 0)
+	{
+		return;
+	}
+
+	TArray<FElysiumRopeDef> Defs;
+	if (!FElysiumRopes::Parse(FElysiumContentPaths::MapRopes(MapName), Defs) || Defs.Num() == 0)
+	{
+		return;
+	}
+
+	const FString Dir = FElysiumContentPaths::MapDir(MapName);
+
+	// One MID per unique rope texture (every cable/cable rope shares one). Built off M_World_Opaque
+	// via the same factory the world/prop surfaces use — a lit opaque strand, no blend flags. A "-"
+	// tex (decode failed) yields a solid dark-cable fallback from the def's Kd colour.
+	TMap<FString, UMaterialInstanceDynamic*> MidByTex;
+	auto MidFor = [&](const FString& Tex) -> UMaterialInstanceDynamic*
+	{
+		if (UMaterialInstanceDynamic** Found = MidByTex.Find(Tex))
+		{
+			return *Found;
+		}
+		FElysiumMaterialDef MatDef;
+		MatDef.Name = TEXT("rope");
+		if (Tex != TEXT("-"))
+		{
+			MatDef.Albedo = Tex;
+		}
+		else
+		{
+			MatDef.Color = FLinearColor(0.05f, 0.05f, 0.05f);
+		}
+		UMaterialInstanceDynamic* Mid = FElysiumMaterialFactory::Build(&MatDef, Dir, this, *TextureCache);
+		MidByTex.Add(Tex, Mid);
+		return Mid;
+	};
+
+	Ropes.Reserve(Defs.Num());
+	for (const FElysiumRopeDef& D : Defs)
+	{
+		UCableComponent* Cable = NewObject<UCableComponent>(this);
+		Cable->SetupAttachment(SceneRoot);
+		// The map actor sits at the origin, so a component-relative location is the world point.
+		// Start is fixed at A (the component's own location); the end is fixed at B, given as a
+		// component-local offset (identity rotation → B is world B). The rest length exceeds the
+		// straight A→B distance by the sidecar's slack, so gravity sags it into a catenary.
+		Cable->SetRelativeLocation(D.A);
+		Cable->EndLocation = D.B - D.A;
+		Cable->bAttachStart = true;
+		Cable->bAttachEnd = true;
+		const float Dist = static_cast<float>(FVector::Dist(D.A, D.B));
+		Cable->CableLength = Dist + D.SlackCm;
+		Cable->CableWidth = FMath::Max(0.1f, D.WidthCm);
+		Cable->NumSides = 4;                                           // thin round tube
+		Cable->NumSegments = FMath::Clamp(D.Subdiv * 3, 4, 16);       // Verlet segments along the span
+		Cable->SolverIterations = 2;
+		// Tile the strand texture along the cable so it does not stretch: repeats scale with length
+		// (metres) times the authored TextureScale.
+		Cable->TileMaterial = FMath::Max(0.1f, (Cable->CableLength / 100.f) * D.TexScale);
+		if (UMaterialInstanceDynamic* Mid = MidFor(D.Tex))
+		{
+			Cable->SetMaterial(0, Mid);
+		}
+		Cable->RegisterComponent();
+		Ropes.Add(Cable);
+	}
+	RopeCount = Ropes.Num();
+	UE_LOG(LogElysium, Log, TEXT("ropes: %d cables"), RopeCount);
 }
 
 bool AElysiumMapActor::LoadHulls()

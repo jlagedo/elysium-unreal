@@ -94,7 +94,7 @@ Map load builds world + 3D-skybox geometry as `UProceduralMeshComponent` actors 
 the world master-material set (`M_World_Opaque`/`_Masked`/`_Translucent`/`M_Additive`, picked per
 surface by blend flag; bump, $envmap→Lumen roughness, and WorldVertexTransition blend on the lit
 masters), DDS-preferred textures, `.hulls`/`.dispcol` brush collision as the walkable surface, ISM
-static props, deferred `UDecalComponent` decals off `M_Decal`, the real-time `UElysiumLightRig` on a
+static props, deferred `UDecalComponent` decals off `M_Decal`, `UCableComponent` overhead ropes, the real-time `UElysiumLightRig` on a
 fully dynamic renderer, and `.env` sky/fog + `.cube` LUT.
 
 The Track-B entity substrate runs with it: `.ents` → one entity per def through the class
@@ -197,7 +197,10 @@ facts, valid regardless of target engine. Organisation and maintenance rules: `d
 | `mdl_v2531.md` | the static-geometry `.mdl` struct map |
 | `audio_pipeline.md` | codecs, mixer, DSP, the SoundScheme system |
 | `source_movement.md` | `CGameMovement` constants + formulas |
+| `controls.md` | the input surface — keynames, bindable commands, default binds, cfg load order, control options UI |
+| `camera-view-modes.md` | the first↔third-person camera — blend weight, solver, cvars, the Unreal design |
 | `level_transitions.md` | the three spawn mechanisms + the opening map chain |
+| `savegame_format.md` | the `.sav` container, `.HL1/2/3` sections, and the game state they hold |
 | `map-architecture.md` | the Unreal map load/unload/travel design |
 | `rendering-perf.md` | the dynamic render path, perf cvars, MegaLights checklist |
 | `debug-tooling.md` | the three-layer debug/dev-tooling architecture |

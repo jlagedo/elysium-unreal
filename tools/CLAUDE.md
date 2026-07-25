@@ -9,7 +9,14 @@ reverse-engineered specs the converters read.
 The export pipeline, the sidecar contracts each writer emits, and the runtime that
 consumes them are described in `../docs/rebuild-strategy.md`. `UE_bsp_to_scene.py` (the
 flagship map exporter) and its per-feature sidecar writers (world/material/lighting/
-water/decal/skybox) write the intermediates the runtime reads back.
+water/decal/skybox/rope) write the intermediates the runtime reads back. `write_ropes` resolves
+each `move_rope`/`keyframe_rope` chain (`NextKey` linkage; `move_rope` is the chain start) into
+per-segment `<map>.ropes` cable lines and decodes the `RopeMaterial` texture, dropping
+coincident-node (zero-length) links; the runtime builds one `UCableComponent` per line (roadmap 8.7).
+`NextKey` binds **first-match by entity-lump order** — the engine's `FindEntityByName(NULL, …)` rule
+(RE-confirmed: `keyframe_rope`/`move_rope` are stock Source `CRopeKeyframe` in `vampire.dll`). A map
+can reuse rope targetnames across separate installations (`sp_tutorial_1` reuses `tele4..tele9` twice,
+~200 m apart); a last-wins index cross-linked them into map-spanning cables, so first-wins is used.
 
 **The `UE_` convention.** An exporter prefixed `UE_` emits **Unreal-native** output —
 centimetres, Z-up, left-handed, triangle winding pre-reversed — so the C++ runtime reads
@@ -424,6 +431,38 @@ so every code from 4 up is shifted (4=`INTEGER`, 5=`BOOLEAN`, 14=`POSITION_VECTO
 @0xC; `GetDataDescMap()` is vtable +0x148. Reading VtMB with a modern `datamap.h`
 corrupts every typed field.
 
+## Savegames (`.sav` — `tools/sav.py` / `tools/probe_sav.py`)
+
+`sav.py` decodes a VtMB savegame; `probe_sav.py` is the CLI over it. Both read a save file the
+caller points them at and touch no game install, so they are **not** part of the export pipeline —
+they are RE instruments for the save/load design. Full format spec: `../docs/savegame_format.md`.
+
+A `.sav` is early-Source `CSaveRestore` output: `'JSAV'`, version 117, a 16383-slot sparse symbol
+table, a six-field global header (`mapName`, `mapCount`, `comment`, `userName`, `GLOBAL`), then one
+embedded section per visited map × 3 (`.HL1` server, `.HL2` client, `.HL3` transition list). Two
+Troika divergences from stock Source: every section is **zlib-deflated in ≤512 KiB chunks**
+(`section := char name[260]; int rawLen; (int compLen; byte zlib[compLen])*` — loop on `rawLen`,
+never assume one stream), and a fifth save-restore block handler, `CPython_SaveRestoreBlockHandler`
+(RTTI, `vampire.dll`), carries the script layer's `G` namespace as a **protocol-0 pickle**
+alongside `Entities`/`EventQueue`/`Physics`/`AI`.
+
+Inside a section everything is one flat record stream — `short size; short token; byte data[size]`
+— where `token` indexes the symbol table, so the field names are the game's own datamap
+`externalName` strings (`m_iVAttributesBase[ v_attribute_strength ]`, `m_QuestList`); a save is a
+self-describing datamap dump. The writer **omits any all-zero field**, so readers match by name,
+never by position. `.HL1` block bodies are addressed relative to `baseFilePos = dataSize -
+bodySpan`, which is where the global `Save Header`/`ADJACENCY`/`LIGHTSTYLE` preamble ends.
+
+```
+python tools/probe_sav.py <file.sav>                 # container + section summary
+python tools/probe_sav.py <file.sav> --map sm_hub_1  # preamble, blocks, classname census
+python tools/probe_sav.py <file.sav> --entity player # every field of matching entities
+python tools/probe_sav.py <file.sav> --python        # the pickled script namespaces
+python tools/probe_sav.py <file.sav> --extract DIR   # inflated .HL1/.HL2/.HL3 sections
+```
+
+Pickles load through a restricted unpickler that refuses class construction.
+
 ## Ghidra RE workspace (`tools/ghidra/`)
 
 Headless-Ghidra workspace for decompiling the VtMB engine/game binaries (`Bin/engine.dll`,
@@ -442,7 +481,9 @@ Scripts (`-Script <name>`, no `.java`): `DumpMenu` (recon — RTTI classes, menu
 seed decompiles), `DumpGrep` (regex recon over strings/classes/func names → decompile matches),
 `DumpFuncs` (targeted decompiler — follows seed funcs + callees + vftables → C pseudocode),
 `DumpAsm` (raw disassembly of a function or flat run), `DumpXrefs` (every ref to an address +
-containing function), `DumpConst` (dword at an address as hex/int/float), `DumpFieldRefs`,
+containing function), `DumpConst` (dword at an address as hex/int/float), `DumpConVars` (the
+ConVar/ConCommand registration table for one ctor — object address ↔ name ↔ default, the lookup
+that turns an anonymous `DAT_` global in a decompilation back into a cvar name), `DumpFieldRefs`,
 `DumpInfo`, `EnableAIF` (pre-script: enables analysis for vtable-only-reached code).
 
 ```powershell

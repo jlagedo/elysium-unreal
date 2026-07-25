@@ -28,6 +28,7 @@ struct FElysiumContentPaths
 	// Decals (7.2): one deferred-decal projector per line (material + centre + normal + s/t axes +
 	// half-extents, Unreal cm), written by UE_bsp_to_scene.py. Materials ride the shared <map>.mtl.
 	static FString MapDecals(const FString& Map) { return MapDir(Map) / (Map + TEXT(".decals")); }
+	static FString MapRopes(const FString& Map) { return MapDir(Map) / (Map + TEXT(".ropes")); }
 
 	// Audio (P6). WAVs are game-global (shared across maps), so they live in one mirror of
 	// VtMB's `sound/` tree, not per-map. Rel is the engine-relative path under sound/ (e.g.

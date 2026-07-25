@@ -23,6 +23,7 @@
 #include "ElysiumKeyValues.h"
 #include "ElysiumObjModel.h"
 #include "ElysiumPythonVM.h"
+#include "ElysiumRopes.h"
 #include "ElysiumScriptHost.h"
 #include "ElysiumVariant.h"
 
@@ -481,6 +482,52 @@ bool FElysiumDecalsTest::RunTest(const FString&)
 	TestTrue(TEXT("Y is orthonormal to X and Z"),
 		FMath::IsNearlyZero(FVector::DotProduct(R.GetUnitAxis(EAxis::Y), Normal)) &&
 		FMath::IsNearlyZero(FVector::DotProduct(R.GetUnitAxis(EAxis::Y), SDir)));
+
+	return true;
+}
+
+// =====================================================================================
+// FElysiumRopes — the `.ropes` cable sidecar parser + the rest-length contract BuildRopes builds
+// each UCableComponent from (8.7). Pure data + math, no RHI.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRopesTest, "Elysium.Substrate.Ropes", GElysiumTestFlags)
+bool FElysiumRopesTest::RunTest(const FString&)
+{
+	// --- parse: 11 tokens -> one def with fields in order; malformed lines dropped ---
+	TArray<FString> Lines;
+	Lines.Add(TEXT("tex/rope_cable_cable.png 0 0 300 400 0 300 2.54 203.2 2 0.2"));
+	Lines.Add(TEXT("# too few tokens -> skipped"));
+	Lines.Add(TEXT("- 0 0 0 0 0 100 5 0 3 1"));   // "-" = no decoded texture (still valid)
+	Lines.Add(FString());   // blank -> skipped
+
+	TArray<FElysiumRopeDef> Defs;
+	FElysiumRopes::ParseLines(Lines, Defs);
+	TestEqual(TEXT("two valid ropes parsed (two junk lines dropped)"), Defs.Num(), 2);
+
+	if (Defs.Num() >= 1)
+	{
+		const FElysiumRopeDef& D = Defs[0];
+		TestEqual(TEXT("texture path"), D.Tex, FString(TEXT("tex/rope_cable_cable.png")));
+		TestTrue(TEXT("endpoint A parsed"), D.A.Equals(FVector(0, 0, 300)));
+		TestTrue(TEXT("endpoint B parsed"), D.B.Equals(FVector(400, 0, 300)));
+		TestEqual(TEXT("width cm"), D.WidthCm, 2.54f);
+		TestEqual(TEXT("slack cm"), D.SlackCm, 203.2f);
+		TestEqual(TEXT("subdiv"), D.Subdiv, 2);
+		TestEqual(TEXT("texscale"), D.TexScale, 0.2f);
+
+		// --- rest-length contract: BuildRopes sets CableLength = straight distance + slack, so the
+		// slack is exactly the extra length that makes the cable hang. Endpoints 4 m apart + 2.032 m
+		// slack -> 6.032 m rest length. ---
+		const float RestLength = static_cast<float>(FVector::Dist(D.A, D.B)) + D.SlackCm;
+		TestEqual(TEXT("cable rest length = distance + slack"), RestLength, 400.f + 203.2f);
+	}
+
+	if (Defs.Num() >= 2)
+	{
+		TestEqual(TEXT("dashed texture kept verbatim (runtime falls back to a plain MID)"),
+			Defs[1].Tex, FString(TEXT("-")));
+	}
 
 	return true;
 }

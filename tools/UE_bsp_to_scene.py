@@ -208,6 +208,120 @@ def write_sprites(data, out_dir, base, idx):
             f.write("\n".join(lines) + "\n")
     print(f"sprites: {len(lines)} env_sprite coronas ({len(tex_cache)} textures) -> {base}.sprites")
 
+def write_ropes(data, out_dir, base, idx):
+    """Emit `<base>.ropes`: the overhead cables VtMB strings between poles/buildings.
+
+    A rope is a chain of `move_rope`/`keyframe_rope` nodes linked by `NextKey` (a node's
+    `NextKey` = the targetname of the next node). The chain *start* is the node no other
+    node's `NextKey` points at (the 31 `move_rope` in the tutorial are exactly these starts;
+    the roles are resolved topologically here, not by classname, so a mislabelled chain still
+    links). Each consecutive pair is one sagging cable segment; the runtime (roadmap 8.7)
+    builds one `UCableComponent` per line.
+
+    One line per segment: `tex ax ay az bx by bz width_cm slack_cm subdiv texscale`, where
+    `tex` is the decoded `RopeMaterial` PNG (`tex/rope_*.png`) or `-` when it fails to decode,
+    `a`/`b` are the two node origins (Unreal cm, source_to_unreal like `.ents`), and the segment
+    parameters come from the *start* node A: `Width`/`Slack` are lengths (inches -> cm), `Subdiv`
+    the node subdivision count, `TextureScale` the along-length tiling factor. The cable rest
+    length is `dist(a,b) + slack_cm`, so the extra slack is what makes it hang (the runtime feeds
+    it to the Verlet cable). `MoveSpeed`/`MoveTime`/`Tension` are behaviour -> rendered at rest.
+    """
+    blocks = _parse_ent_blocks(read_lump(data, 0).decode("ascii", "replace"))
+    pak = read_pakfile(data)
+
+    def read_bytes(key):
+        key = key.lower()
+        return pak[key] if key in pak else install.read(idx, key)
+
+    def read_text(key):
+        b = read_bytes(key)
+        return b.decode("ascii", "replace") if b is not None else None
+
+    tex_cache = {}   # RopeMaterial name -> png filename | None
+
+    def decode_rope_tex(mat):
+        if mat not in tex_cache:
+            out = None
+            vmt_txt = read_text(f"materials/{mat}.vmt")
+            if vmt_txt:
+                info = vmt.parse(vmt_txt, resolve_include=lambda p: read_text(
+                    p if p.lower().endswith(".vmt") else p + ".vmt"))
+                bt = info.get("basetexture")
+                if bt:
+                    tth, ttz = read_bytes(f"materials/{bt}.tth"), read_bytes(f"materials/{bt}.ttz")
+                    if tth and ttz:
+                        try:
+                            img = decode_texture(tth, ttz).convert("RGBA")
+                            fn = "rope_" + sanitize(mat) + ".png"
+                            img.save(os.path.join(out_dir, "tex", fn))
+                            out = fn
+                        except Exception:
+                            pass
+            tex_cache[mat] = out
+        return tex_cache[mat]
+
+    # Collect every rope node, and index by targetname for NextKey lookup. A node may itself lack a
+    # targetname (it can only be a chain *start* then, never a NextKey target) — so iterate all nodes
+    # as potential segment starts, but resolve B through the name index.
+    #
+    # A targetname can **repeat across separate wire installations** (sp_tutorial_1 reuses tele4..tele9
+    # in two areas ~200 m apart). The engine (CRopeKeyframe::Activate in vampire.dll — a stock Source
+    # rope) resolves NextKey with FindEntityByName(NULL, name), i.e. the **first** entity of that name
+    # in spawn/entity order — which is the entity-lump order, i.e. the order these blocks appear. So the
+    # index is **first-wins** (not last-wins, which cross-linked the two installations into 200 m
+    # cables, and not a nearest-position heuristic — though on the tutorial first-wins and nearest give
+    # the identical result, because the lump orders each installation's nodes contiguously).
+    rope_nodes = []
+    by_name = {}   # targetname -> FIRST node with that name (entity-lump order = engine spawn order)
+    for b in blocks:
+        d = {k.lower(): v for k, v in b}
+        if d.get("classname") in ("keyframe_rope", "move_rope"):
+            rope_nodes.append(d)
+            tn = d.get("targetname", "")
+            if tn and tn not in by_name:
+                by_name[tn] = d
+
+    def origin_of(d):
+        o = d.get("origin", "0 0 0").split()
+        return source_to_unreal(float(o[0]), float(o[1]), float(o[2])) if len(o) == 3 else None
+
+    def fnum(d, key, default):
+        try:
+            return float(d.get(key, default) or default)
+        except ValueError:
+            return float(default)
+
+    lines = []
+    for a in rope_nodes:
+        nk = a.get("nextkey", "")
+        if not nk:
+            continue                          # chain end -> no outgoing segment
+        b = by_name.get(nk)                    # engine's FindEntityByName(NULL,...): first of that name
+        if b is None:
+            continue                          # dangling NextKey -> no segment
+        pa, pb = origin_of(a), origin_of(b)
+        if pa is None or pb is None:
+            continue
+        # Coincident nodes (a chain artifact — same origin) make a zero-length cable that renders
+        # nothing; drop it so every emitted segment has a real span.
+        if sum((x - y) ** 2 for x, y in zip(pa, pb)) < 1.0:   # < 1 cm apart
+            continue
+        mat = (a.get("ropematerial") or "cable/cable").replace("\\", "/").lower()
+        png = decode_rope_tex(mat)
+        width_cm = fnum(a, "width", "2") * INCH_TO_CM
+        slack_cm = fnum(a, "slack", "25") * INCH_TO_CM
+        subdiv = int(fnum(a, "subdiv", "2"))
+        texscale = fnum(a, "texturescale", "1")
+        lines.append(f"{('tex/' + png) if png else '-'} "
+                     f"{pa[0]:.4f} {pa[1]:.4f} {pa[2]:.4f} {pb[0]:.4f} {pb[1]:.4f} {pb[2]:.4f} "
+                     f"{width_cm:.4f} {slack_cm:.4f} {subdiv} {texscale:.4f}")
+
+    if lines:
+        with open(os.path.join(out_dir, base + ".ropes"), "w") as f:
+            f.write("\n".join(lines) + "\n")
+    print(f"ropes: {len(lines)} cable segments ({len(rope_nodes)} nodes, "
+          f"{sum(1 for v in tex_cache.values() if v)} textures) -> {base}.ropes")
+
 # --- entities: the Source I/O layer (docs/entity_io.md) ---------------------
 
 def _parse_ent_blocks(text):
@@ -1195,6 +1309,7 @@ def main(bsp_path, out_dir):
     write_entities(data, out_dir, base, idx, propdir, prop_tex_cache, prop_valid)
     write_lights(data, out_dir, base)
     write_sprites(data, out_dir, base, idx)
+    write_ropes(data, out_dir, base, idx)
     # Concave displacement collision: one triangle per line (9 godot floats).
     # Convex brushes can't represent sculpted terrain, so the viewer loads these
     # as a ConcavePolygonShape3D alongside the .hulls convex bodies.

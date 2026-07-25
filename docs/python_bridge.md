@@ -312,7 +312,8 @@ reproduces error-to-false rather than repairing the snippets. The Unofficial Pat
 
 ## `G` — the global flag bag
 
-`G` is engine-owned (a C type **`PyDataManager`** with `ClearAll`/`keys`/`has_key`), injected
+`G` is engine-owned (a C type **`PyDataManager`** whose method table holds exactly two entries,
+`ClearAll` `0x1019b7b0` and `keys` `0x1019b7e0` — see the note on `0x1058f5d0` above), injected
 into `__main__`, and **never constructed in Python**. It is one flat, int-valued namespace:
 **345 distinct flags** referenced by retail scripts (549 with the patch), **~900** by dialogue.
 
@@ -357,8 +358,26 @@ So subscripting inherits everything the attribute path has, default-on-miss `0` 
 subscript `G` (`tutorial`, `temple`, `zvtool_file`, `zvtool_pc`).
 
 `G` is the save unit: `vampire.dll` carries `CPython_SaveRestoreBlockHandler` and
-`CPyObjStrSaveRestoreDataOps`, pickles the flag + morgue dicts (`FUN_1019b130`, `cPickle`), and
-the game ships `pickle.py` + `copy_reg.py` for it.
+`CPyObjStrSaveRestoreDataOps`, pickles the flag + morgue dicts (`cPickle`), and the game ships
+`pickle.py` + `copy_reg.py` for it. The handler's vftable is `0x10476ac8`: slot 0 `GetBlockName`
+returns `"Python"`, slot 2 `Save` is `0x1019adc0`, slot 7 `Restore` is `0x1019b130`; the other six
+slots are empty stubs. `Save` imports `cPickle`, takes its `dump`, and calls
+`cPickle.dump(dict, file)` twice — flag dict first, morgue second — against a file-like adapter
+over the `ISave` buffer, framing each as `byte tag; int len; pickle[len]`. On-disk layout:
+`savegame_format.md`.
+
+Two console commands operate on the pair: `gclearall` (`CC_GClearAll` → `G.ClearAll()`, "Resets
+all state flags" — `PyDict_New`s both dicts, `0x10199e20`) and `gcleardialog` ("Resets all dialog
+state flags"). The cvar `show_python_variable_changes` logs every assignment
+(`"Setting Variable: G.%s = %s"` / `"Clearing Variable: G.%s"`), and `PyDataManager_Log`
+(`0x1019b800`) dumps both dicts under the headings `Global Variables:` and `Morgue Entries:`.
+
+**`G.morgue` is the dead-character registry**, keyed by NPC targetname → `1`. The shipped
+`vamputil.py` is the whole public API over it — `IsDead(charname)` is
+`__main__.G.morgue.has_key(charname)` and `MarkAsDead(charname)` is `__main__.G.morgue[charname] = 1`
+— and story scripts gate content on it (`IsDead("Milligan")`, `IsDead("Pisha")`,
+`IsDead("Heather")`). Because insertion is a script/dialogue call rather than an engine death
+hook, an entry does not imply the entity is mechanically dead in the map's saved state.
 
 ## The two languages
 

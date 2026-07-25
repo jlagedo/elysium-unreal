@@ -18,7 +18,7 @@ the maintenance contract.
   divergence needs the faithful behaviour RE'd and recorded *plus* a dated entry in
   `decisions.md`.
 - **A new VtMB format/behaviour finding** → the topic doc that owns it (`entity_io.md`,
-  `python_bridge.md`, `audio_pipeline.md`, `mdl_v2531.md`, `source_movement.md`,
+  `python_bridge.md`, `audio_pipeline.md`, `mdl_v2531.md`, `source_movement.md`, `controls.md`,
   `level_transitions.md`, `animation_and_movers.md`, `game_runtime.md`). Cite where it came
   from — decompiled address, `tools/ghidra/run.ps1 -Script DumpGrep` output, or the data file.
 - **Design intent for an Unreal system** → `engine-core.md` (entity object model),

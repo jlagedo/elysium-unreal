@@ -19,6 +19,7 @@
 #include "ElysiumDlg.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumObjModel.h"
+#include "ElysiumRopes.h"
 #include "HAL/FileManager.h"
 #include "Misc/Paths.h"
 
@@ -271,6 +272,68 @@ bool FElysiumTutorialDecalsTest::RunTest(const FString&)
 	TestEqual(TEXT("every decal normal is unit length"), BadNormal, 0);
 	TestEqual(TEXT("every decal has positive extents"), BadExtent, 0);
 	TestEqual(TEXT("every decal material resolves in the shared MTL"), Unresolved, 0);
+
+	return true;
+}
+
+// =====================================================================================
+// Ropes (8.7) — the `<map>.ropes` cable sidecar. Validates that every segment is a well-formed
+// cable (distinct endpoints, positive width, non-negative slack, at least one subdivision) and
+// that its decoded RopeMaterial texture exists on disk, so the runtime's BuildRopes always finds
+// an albedo for each UCableComponent. The tutorial strings its telephone lines this way.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTutorialRopesTest,
+	"Elysium.Content.TutorialRopes", GElysiumContentTestFlags)
+bool FElysiumTutorialRopesTest::RunTest(const FString&)
+{
+	const TCHAR* Map = TEXT("sp_tutorial_1");
+	const FString Path = FElysiumContentPaths::MapRopes(Map);
+	if (!IFileManager::Get().FileExists(*Path))
+	{
+		AddInfo(FString::Printf(
+			TEXT("skipping %s ropes: no exported .ropes at %s (run the pipeline to enable)"), Map, *Path));
+		return true;   // not exported — skip, stay green
+	}
+
+	TArray<FElysiumRopeDef> Defs;
+	if (!TestTrue(TEXT("ropes sidecar parses"), FElysiumRopes::Parse(Path, Defs)))
+	{
+		return true;
+	}
+	TestTrue(TEXT("tutorial carries cable segments"), Defs.Num() > 0);
+
+	const FString Dir = FElysiumContentPaths::MapDir(Map);
+	int32 Degenerate = 0, BadWidth = 0, BadSlack = 0, BadSubdiv = 0, MissingTex = 0;
+	for (const FElysiumRopeDef& D : Defs)
+	{
+		if (FVector::DistSquared(D.A, D.B) < 1.0)   // endpoints < 1 cm apart — no cable to draw
+		{
+			++Degenerate;
+		}
+		if (D.WidthCm <= 0.f)
+		{
+			++BadWidth;
+		}
+		if (D.SlackCm < 0.f)
+		{
+			++BadSlack;
+		}
+		if (D.Subdiv < 1)
+		{
+			++BadSubdiv;
+		}
+		// A "-" tex is a legitimate decode miss (runtime uses a plain MID); a named tex must exist.
+		if (D.Tex != TEXT("-") && !IFileManager::Get().FileExists(*(Dir / D.Tex)))
+		{
+			++MissingTex;
+		}
+	}
+	TestEqual(TEXT("every cable has distinct endpoints"), Degenerate, 0);
+	TestEqual(TEXT("every cable has positive width"), BadWidth, 0);
+	TestEqual(TEXT("every cable has non-negative slack"), BadSlack, 0);
+	TestEqual(TEXT("every cable has at least one subdivision"), BadSubdiv, 0);
+	TestEqual(TEXT("every named rope texture exists on disk"), MissingTex, 0);
 
 	return true;
 }

@@ -148,6 +148,7 @@ All under `tools/out/<map>/`. Formats are fixed by the pipeline and shared with 
 | `.water` | per-material plane, normalmap, fogcolor/dist, reflecttint | text, Unreal cm (plane Z + fogdist) |
 | `.cube` | color-grade LUT | Adobe .cube |
 | `.decals` | infodecal projectors: `material centre normal s_dir t_dir hw hh` (one deferred UDecalComponent per line) | text, Unreal cm (dirs unit; extents cm) |
+| `.ropes` | move_rope/keyframe_rope cables, chain-resolved to segments: `tex ax ay az bx by bz width_cm slack_cm subdiv texscale` (one UCableComponent per line) | text, Unreal cm (width/slack cm; `-` tex = decode miss) |
 | `npc/*.glb` | skeletal characters (mdl_skel → mdl_gltf) | glTF binary |
 
 ---

@@ -16,6 +16,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "CableComponent",
+			"Enabled": true
+		},
+		{
 			"Name": "PythonScriptPlugin",
 			"Enabled": true
 		},

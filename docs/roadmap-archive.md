@@ -1067,6 +1067,69 @@ Records are verbatim moves out of `roadmap.md`: where one says "the decision log
   -270) and releases on ground; `popup_linux` no longer fires; `-ElysiumMap=sm_pawnshop_1` still
   travels bare with no seeding. *Deps:* 4.6, 4.9, 1.1.
 
+- [x] **8.7 Ropes** — VtMB strings its overhead wires as chains of `move_rope`/`keyframe_rope`
+  nodes linked by `NextKey`; each link is one sagging cable. Rendered with the stock UE 5.8
+  **`CableComponent`** plugin's `UCableComponent` (Verlet strand), the roadmap's stated target.
+  Built the pure-visual sidecar→map-actor way (like 7.2 decals), **not** the entity substrate — a
+  cable spans two entities and the rope nodes carry no meaningful I/O, so they stay inert records in
+  `.ents`.
+  - **RE correction.** `entity_visuals.md` R3 stated "`keyframe_rope` is a start node, `move_rope`
+    a mid/end node." The tutorial data is the opposite: the 31 `move_rope` are exactly the 31
+    topological chain starts (a node no other node's `NextKey` targets); the 76 `keyframe_rope` are
+    continuations. Chain resolution is **topological** (start = untargeted), so it is correct
+    regardless of classname; the doc was fixed. Source rope keys confirmed from the exported
+    `.ents`: `Width`, `Slack`, `Subdiv`, `TextureScale`, `RopeMaterial` (`cable/cable` /
+    `cable/chain` / `cable/chainb` in the tutorial) present on all 107 nodes; `MoveSpeed`/`MoveTime`/
+    `Tension` (the animated-rope behaviour) rendered at rest.
+  - **Exporter** (`UE_bsp_to_scene.py::write_ropes`, run in `main()` next to `write_sprites`):
+    collects every rope node, indexes by targetname, and for each node with a `NextKey` emits one
+    `<map>.ropes` segment — `tex ax ay az bx by bz width_cm slack_cm subdiv texscale`. Endpoints are
+    the two node origins via `source_to_unreal` (as `.ents` does); `Width`/`Slack` are lengths
+    (`× INCH_TO_CM`). A node whose start lacks a targetname is still iterated (it can only be a chain
+    start), so no segment is lost.
+    - **`NextKey` resolves first-match by entity order** — the fix for wires "all over the place,"
+      grounded in the decompile. `sp_tutorial_1` has **two separate telephone-wire installations that
+      reuse the names `tele4`..`tele9`** (one near `[1300, 2600, 900]`, another ~200 m away near
+      `[3000, −19000, 400]` — both in the playable world; the `sky_camera` PVS confirms **neither is in
+      the 3D skybox**). A last-wins name index cross-linked a node in one installation to the
+      same-named node in the other, producing six ~199 m cables slashing across the map. **RE
+      (vampire.dll, Ghidra):** `keyframe_rope`/`move_rope` are stock Source **`CRopeKeyframe`**
+      (factories `FUN_1019d680`/`6f0`; keyfields `Slack`/`Width`/`TextureScale`/`Subdiv`/`RopeMaterial`
+      → `RopeShader` 0/1/2 = `cable/cable`|`cable/rope`|`cable/chain`; networked `m_hStartPoint`/
+      `m_hEndPoint`), and `Activate` resolves `NextKey` via `FindEntityByName(NULL, m_iNextLinkName)` —
+      the **first** entity of that name in spawn/entity order, i.e. the entity-lump order the exporter
+      already iterates. So the index is **first-wins** (not last-wins). Verified: first-wins and a
+      nearest-position heuristic give the **identical** 70 segments here (the lump orders each
+      installation contiguously), so the faithful engine rule is used; longest span 27 m ≪ the 200 m
+      gap, nothing bridges the two.
+    - **Coincident endpoints (< 1 cm apart) are dropped** — a chain artifact that would build a
+      zero-length cable.
+    The `RopeMaterial` `$basetexture` is decoded to `tex/rope_*.png` (the `write_sprites` VMT→TTH/TTZ
+    path); a decode miss writes `-` and the runtime falls back to a plain MID. Tutorial: **70 segments**
+    (72 links − 2 coincident) / 107 nodes / 3 textures.
+  - **Runtime.** `ElysiumRopes.{h,cpp}` (`FElysiumRopeDef` + `Parse`/`ParseLines`, the file-free
+    core mirroring `ElysiumDecals`). `AElysiumMapActor::BuildRopes` (after `BuildDecals`, its own
+    `Phase("Ropes")`): parses `<map>.ropes` and per segment builds/caches a MID off **`M_World_Opaque`**
+    (a lit opaque strand — `FElysiumMaterialDef{Albedo=tex}` through the world material factory, one
+    MID per unique texture) and stands a `UCableComponent` on `SceneRoot` — relative location `A`,
+    `EndLocation = B − A`, both ends fixed (`bAttachStart`/`bAttachEnd`), `CableLength = dist(A,B) +
+    SlackCm` (the slack is exactly the extra length that makes it hang), `CableWidth = WidthCm`,
+    `NumSides = 4` (thin tube), `NumSegments` from `Subdiv`, `TileMaterial` length-proportional ×
+    `TexScale` (no stretch), no collision. Kept in a `UPROPERTY TArray<TObjectPtr<UCableComponent>>
+    Ropes` — freed with the map actor (the map-epoch teardown, no manual cleanup), `RopeCount` for the
+    Maps window. `MapRopes()` content path; `elysium.Ropes` cvar A/Bs the pass at map load.
+  - **Dependency.** `CableComponent` added to `ElysiumUE.Build.cs` (`PrivateDependencyModuleNames`)
+    and enabled in `ElysiumUE.uproject`. It is a stock, enabled-by-default, non-beta first-party UE
+    5.8 plugin (`decisions.md` 2026-07-24).
+  - **Verified.** `build.bat` clean; `test.bat` Substrate + Content green — new
+    `Elysium.Substrate.Ropes` (11-token parse + the `CableLength = distance + slack` contract) and
+    `Elysium.Content.TutorialRopes` (every segment has distinct endpoints / positive width /
+    non-negative slack / ≥1 subdivision, and every named texture exists on disk). In-game
+    (`play.bat sp_tutorial_1`) the map logs `ropes: 70 cables` and the wires hang between the
+    utility pole and wall brackets with correct catenary sag. **Cable Verlet settle** (cables
+    initialise straight and sag over ~1 s) and finer texture-tiling tuning are cosmetic follow-ups.
+    *Deps:* none.
+
 ## P9 — Dialogue & persistence *(design: `game_runtime.md`, `rebuild-strategy.md` B7/B9)*
 
 - [x] **9.3a Level-script wiring — CPython is the default host + auto-load at map load.**

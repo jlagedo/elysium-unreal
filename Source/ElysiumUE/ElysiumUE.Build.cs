@@ -33,6 +33,9 @@ public class ElysiumUE : ModuleRules
 			// (out/npc, standard glTF 2.0) at runtime -- no editor import. Vendored under
 			// Plugins/glTFRuntime; a runtime module, so it stays in every config.
 			"glTFRuntime",
+			// 8.7 ropes: the stock (enabled-by-default) CableComponent plugin's UCableComponent
+			// renders each overhead cable as a Verlet-simulated strand built at map load.
+			"CableComponent",
 			// The `.ents` entity sidecar is one JSON blob (unlike the line-based sidecars).
 			"Json",
 			// Dev console UI is built directly in Slate.

@@ -60,6 +60,7 @@ no force-GC). `map-architecture.md` has the model; roadmap 10.8.
 | `FElysiumMaterialFactory` | one MID per OBJ surface (world + prop ISMs). The material's blend flags pick the master — `M_World_Opaque` / `_Masked` (`illum 4`) / `_Translucent` (`blend 1`) / `M_Additive` (`additive 1`) — then bind its named params: `Albedo`, `Emissive`+`EmissiveScale`, `BumpMap`+`BumpAmount` (linear), `EnvMask`+`EnvStrength` ($envmap → Lumen roughness, uniform white mask when unmasked), `BaseTex2`+`BlendAmount` (WVT). `elysium.BumpScale` / `EnvReflect` / `EmissiveScale` tune the three feature scalars |
 | `FElysiumStaticMeshBuilder` | runtime `UStaticMesh` per unique prop model (`BuildFromMeshDescriptions`), drawn as one ISM per (model, solidity) |
 | `FElysiumDecals` + `FElysiumMaterialFactory::BuildDecal` | 7.2 decals: parse the `.decals` projector sidecar → one deferred `UDecalComponent` per `infodecal`, MID off `M_Decal`. Orient `MakeFromXZ(Normal, SDir)` — local +X = room normal (so −X projects into the wall), and since a deferred decal maps texture **U→local Z, V→local Y**, the surface horizontal `SDir` goes on local Z with `DecalSize = depth×HalfH×HalfW`. `elysium.Decals` A/Bs the pass, `elysium.DecalDepth` the depth, `elysium.DecalFlipU` mirrors U |
+| `FElysiumRopes` + `AElysiumMapActor::BuildRopes` | 8.7 ropes: parse the `.ropes` cable sidecar (chain-resolved segments) → one Verlet `UCableComponent` per line, fixed at both endpoints, `CableLength = span + slack` (so it hangs), width/tube/tiling from the sidecar, MID off `M_World_Opaque` (one per unique rope texture). `elysium.Ropes` A/Bs the pass |
 | `UElysiumLightRig` | one Unreal light per WORLDLIGHTS `.lights` source; soft exponent falloff, specular off (VtMB is pure Lambert), sun, skyambient, lightstyle animation, live retune via `ApplyLiveTuning()` |
 | `ElysiumEnvironment.{h,cpp}` | `.env` sky/fog + `.cube` LUT onto `M_Sky` + post-process |
 | `FElysiumProfileRun` | the headless profiling harness (`-ElysiumProfile`) |
@@ -367,7 +368,7 @@ volume, so a flip re-applies in one pass (voices already fading out toward a rea
 
 Lifecycle `elysium.newgame` / `map` / `maps` / `reload`; inspection `elysium.campos` /
 `lights` / `props` / `ents` / `classes` / `world` / `world.io` / `world.fireinput` / `g`;
-A/B toggles `elysium.BrushCollision` / `BrushBodies` / `NpcBodies` / `PropBodies` / `PhysicsProps` / `Decals` (+ `DecalDepth`) / `EmissiveScale` /
+A/B toggles `elysium.BrushCollision` / `BrushBodies` / `NpcBodies` / `PropBodies` / `PhysicsProps` / `Decals` (+ `DecalDepth`) / `Ropes` / `EmissiveScale` /
 `BumpScale` / `EnvReflect` / `LightScale` / `LightFit` / `CogTheme`; entity debug `elysium.ent_*` / `showtriggers`; scripting `elysium.eval` / `exec` /
 `script.live` / `script.cpython` / `py.*` (`py.smoke` / `exec` / `load` / `fire`, plus the two
 single-token acceptance harnesses `py.poc` and `py.firstbeat`); dialogue `elysium.dlg` / `dlg.choose` /

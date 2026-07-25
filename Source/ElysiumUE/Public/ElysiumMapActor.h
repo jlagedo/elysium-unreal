@@ -117,6 +117,9 @@ public:
 	// Decals (7.2): number of deferred UDecalComponents built from <map>.decals (0 if the map has
 	// no decals or elysium.Decals is off).
 	int32 DecalCount = 0;
+	// Ropes (8.7): number of UCableComponents built from <map>.ropes (0 if the map has no ropes or
+	// elysium.Ropes is off).
+	int32 RopeCount = 0;
 
 	// P4.6 — the `info_landmark` this map load entered through (a landmark transition / direct
 	// landmark Travel), or empty for a plain info_player_start spawn. Shown in the Maps Cog window.
@@ -188,6 +191,11 @@ private:
 	// lifetime (freed on unload). MIDs off M_Decal, projected onto the world by their box transform.
 	UPROPERTY() TArray<TObjectPtr<UDecalComponent>> Decals;
 
+	// Ropes (8.7): one Verlet UCableComponent per <map>.ropes segment (an overhead cable), kept
+	// alive for the map's lifetime (freed on unload). MIDs off M_World_Opaque bound to the decoded
+	// RopeMaterial texture; the cable's fixed endpoints and slack come straight from the sidecar.
+	UPROPERTY() TArray<TObjectPtr<class UCableComponent>> Ropes;
+
 	// B3 NPC skeletal bodies: per-stem mesh + idle-anim cache, GC-rooted here so a model shared by
 	// several NPCs loads once and survives until unload. The USkeletalMeshComponents themselves are
 	// components of this actor (rooted via AddInstanceComponent), freed with it. An idle entry may be
@@ -240,6 +248,11 @@ private:
 	// its -X projects into the wall along the decal's room normal, sized to the on-surface extents,
 	// with a MID off M_Decal. No-op when the sidecar is absent or elysium.Decals is 0.
 	void BuildDecals();
+	// Build the overhead cables from <map>.ropes (8.7): one Verlet UCableComponent per segment,
+	// fixed at both endpoints, rest length = straight distance + slack (so it hangs), width/texture
+	// from the sidecar, material a MID off M_World_Opaque. No-op when the sidecar is absent or
+	// elysium.Ropes is 0.
+	void BuildRopes();
 	void ApplySkyTransform();
 	// Per-map colour grade (.cube), sky IBL ambient + height fog (.env). Sets the SkyLight
 	// cubemap but leaves RecaptureSky to the caller.

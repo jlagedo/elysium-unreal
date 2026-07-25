@@ -329,8 +329,19 @@ count logged; hidden props absent; no double-draw with GAME_LUMP static props.
 
 **Objective:** the overhead wires — 562 catenary cables.
 
+> **Shipped in Elysium-Unreal (roadmap 8.7), the Cable-Component way, not this catenary-sample
+> plan.** The exporter's `write_ropes` writes a `<map>.ropes` segment sidecar and the runtime stands
+> one Verlet `UCableComponent` per segment (rest length = span + slack → it hangs on its own, so no
+> offline catenary sampling). See `roadmap-archive.md` 8.7. The chain-resolution facts below are the
+> reference the Unreal work was built from.
+
 **Export:** resolve rope chains (each node's `NextKey` → the `targetname` of the next node;
-`keyframe_rope` is a start node, `move_rope` a mid/end node). For each segment sample a catenary
+**`move_rope` is the chain start, `keyframe_rope` a mid/end node** — verified from `sp_tutorial_1`,
+where the 31 `move_rope` are exactly the 31 topological starts). `keyframe_rope`/`move_rope` are stock
+Source **`CRopeKeyframe`** (RE'd in `vampire.dll`), so `NextKey` resolves the engine way —
+`FindEntityByName(NULL, name)`, the **first** entity of that name in spawn/entity order — which matters
+because a map can reuse rope names across installations (`sp_tutorial_1` reuses `tele4..tele9` twice,
+~200 m apart). For each segment sample a catenary
 between the two node origins using `Slack` (sag) and `Subdiv` (segment count); decode
 `RopeMaterial` (`cable/cable`) → `tex/`. Write derived geometry to `<map>.ropes` (polyline
 points in Godot metres + `Width` + `TextureScale` + material), keyed to the start entity.
