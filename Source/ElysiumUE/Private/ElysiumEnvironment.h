@@ -44,6 +44,11 @@ namespace ElysiumEnvironment
 	// Prefix = "sky_".
 	UTextureCube* BuildSkyCubeFrom(const FString& Dir, const FString& Prefix);
 
+	// True when all six `<Prefix><face>.png` exist in Dir — the test for "is there an enhanced
+	// face set for this map", asked before BuildSkyCubeFrom so a partial set falls back to the
+	// faithful one rather than failing the sky outright.
+	bool HasSkyFaces(const FString& Dir, const FString& Prefix);
+
 	// The two halves of the K1 x K2 face->slice transform, exposed so the automation suite can
 	// check them against the conventions they were derived from rather than against themselves.
 	// `Slice` is 0..5 = +X, -X, +Y, -Y, +Z, -Z.

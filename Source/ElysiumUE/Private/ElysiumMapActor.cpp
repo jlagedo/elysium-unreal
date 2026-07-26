@@ -74,6 +74,17 @@ static TAutoConsoleVariable<float> CVarSkyBrightness(
 	TEXT("Debug multiplier on the sky backdrop texel. 1 = parity with VtMB's identity transfer."),
 	ECVF_Default);
 
+// The offline enhancement track's A/B (docs/asset-enhancement.md), off by default: prefer the
+// super-resolved `tex_hi/` set over the faithful `tex/` decode wherever a map has one. The sky
+// is its first consumer; the world/prop texture path joins it as that track lands. Faithful is
+// the default everywhere, per the direction charter — this is an opt-in layer, not a
+// replacement. Read at map load; elysium.reload to apply.
+static TAutoConsoleVariable<int32> CVarEnhancedTextures(
+	TEXT("elysium.EnhancedTextures"), 0,
+	TEXT("Prefer the offline-enhanced tex_hi/ texture set (1) over the faithful decode (0). "
+	     "Applied at map load."),
+	ECVF_Default);
+
 // Assemble the sky cube from the labelled RE-A2 probe faces instead of the map's own (0/1).
 // Each face states its suffix, the axis it belongs on, which way is up and which face each of
 // its edges meets, so a wrong slice binding, a rotation, a mirror and a broken seam are four
@@ -814,10 +825,18 @@ void AElysiumMapActor::ApplyEnvironment()
 			*Env.SkyName, Env.SkyConvention, ElysiumEnvironment::SkyConventionVersion);
 	}
 
+	// Faces come from one of three sets: the labelled probe (B1), the enhanced set (B5), or the
+	// faithful decode. The enhanced set is opt-in and per-map, so a map without one silently
+	// keeps the faithful faces rather than losing its sky.
 	const bool bProbe = CVarSkyProbe.GetValueOnGameThread() != 0 && !Env.SkyName.IsEmpty();
-	UTextureCube* Cube = bProbe
-		? ElysiumEnvironment::BuildSkyCubeFrom(FElysiumContentPaths::SkyProbeDir(), Env.SkyName)
-		: ElysiumEnvironment::BuildSkyCube(FElysiumContentPaths::MapTexDir(MapName));
+	const FString TexHi = FElysiumContentPaths::MapTexHiDir(MapName);
+	const bool bEnhanced = !bProbe && CVarEnhancedTextures.GetValueOnGameThread() != 0
+		&& ElysiumEnvironment::HasSkyFaces(TexHi, TEXT("sky_"));
+
+	UTextureCube* Cube =
+		bProbe    ? ElysiumEnvironment::BuildSkyCubeFrom(FElysiumContentPaths::SkyProbeDir(), Env.SkyName) :
+		bEnhanced ? ElysiumEnvironment::BuildSkyCube(TexHi)
+		          : ElysiumEnvironment::BuildSkyCube(FElysiumContentPaths::MapTexDir(MapName));
 	if (Cube == nullptr)
 	{
 		if (bProbe)
@@ -863,7 +882,8 @@ void AElysiumMapActor::ApplyEnvironment()
 		SkyDomeMesh->SetMaterial(0, Mid);
 		SkyDomeMesh->SetVisibleInRayTracing(false);
 		SkyDomeMesh->SetVisibility(bSkyVisible);
-		UE_LOG(LogElysium, Log, TEXT("sky '%s': cubemap IBL + backdrop"), *Env.SkyName);
+		UE_LOG(LogElysium, Log, TEXT("sky '%s': cubemap IBL + backdrop (%s faces)"), *Env.SkyName,
+			bProbe ? TEXT("labelled probe") : bEnhanced ? TEXT("enhanced") : TEXT("faithful"));
 	}
 }
 

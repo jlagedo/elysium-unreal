@@ -1942,13 +1942,23 @@ The rework is calibrated against data we already hold plus the original game:
   `SkyLight` IBL was re-checked after the B3 fix — a correctly oriented cube changes the
   directional distribution the capture integrates, and C1/C2 take the intensity over from
   there.
-- **B5 — upscaled faces as the enhancement A/B.** Runtime prefers `tex_hi/sky_*.png` when
-  present, behind the planned `elysium.EnhancedTextures`-family toggle
-  (`docs/asset-enhancement.md`); faithful default remains the decoded originals (512², or 256²
-  for `holly` and `chinatown`). RE-A9 adds a hard constraint: the original's transfer is the
-  identity, so an upscaled face must preserve **absolute** texel values, not just structure —
-  a super-resolver that shifts the mean shifts the sky's brightness one-for-one. The upscale
-  pass gets a mean/histogram check against the source face before an output is accepted.
+- **B5 — upscaled faces as the enhancement A/B. Done** (2026-07-26). **`elysium.EnhancedTextures`**
+  (off by default, the family toggle `docs/asset-enhancement.md` names) makes the runtime prefer
+  `tex_hi/sky_*.png`; the faithful default stays the decoded originals (512², or 256² for
+  `holly` and `chinatown`). The preference is per-map and **all-or-nothing**: `HasSkyFaces`
+  tests all six before switching, so a map with no enhanced set — or a partial one — keeps its
+  faithful faces instead of losing its sky. The map-load line names which set was used
+  (`faithful` / `enhanced` / `labelled probe`), so an A/B is never ambiguous. Verified on
+  `sp_tutorial_1` across all three cases: absent, complete, and 5-of-6.
+
+  RE-A9's constraint is now an **acceptance gate, not a note**. Because the original's transfer
+  is the identity, an upscaled face has to preserve **absolute** texel values, not just
+  structure — a model that shifts the mean shifts the sky's brightness one-for-one, and one
+  that reshapes the histogram changes its contrast. `sky_upscale.py` measures both per face
+  against its source (per-channel mean drift, and the worst gap over the 1/5/10/25/50/75/90/95/99
+  percentiles, all in 0–255 texel units) and **writes nothing** if any face exceeds
+  `--max-mean-shift` (1.0) or `--max-hist-shift` (6.0). `--allow-drift` keeps them anyway, still
+  reported. A resolution change may not smuggle in a grade.
 - **B6 — regression baselines.** `shots.bat` baselines for the sky maps once B1–B4 land; a
   sky regression is then a pixel diff, not an eyeball.
 - **B7 — split the whole 3D skybox, not just its world faces** (RE-A8; independent of K2, so it

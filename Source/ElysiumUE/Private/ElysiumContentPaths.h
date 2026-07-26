@@ -40,6 +40,11 @@ struct FElysiumContentPaths
 
 	static FString MapDir(const FString& Map) { return Root() / Map; }
 	static FString MapTexDir(const FString& Map) { return MapDir(Map) / TEXT("tex"); }
+	// The offline enhancement track's parallel texture set (docs/asset-enhancement.md): the
+	// super-resolved siblings of `tex/`, written by tools/sky_upscale.py and its successors.
+	// Optional and per-map; `elysium.EnhancedTextures` selects between the two, faithful by
+	// default. Absent for most maps, which is why every reader tests before preferring it.
+	static FString MapTexHiDir(const FString& Map) { return MapDir(Map) / TEXT("tex_hi"); }
 	static FString MapObj(const FString& Map) { return MapDir(Map) / (Map + TEXT(".obj")); }
 	static FString MapSkyObj(const FString& Map) { return MapDir(Map) / (Map + TEXT("_sky.obj")); }
 	static FString MapSpawn(const FString& Map) { return MapDir(Map) / (Map + TEXT(".spawn")); }

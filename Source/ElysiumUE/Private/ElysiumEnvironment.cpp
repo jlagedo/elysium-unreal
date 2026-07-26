@@ -1,6 +1,7 @@
 #include "ElysiumEnvironment.h"
 
 #include "Engine/TextureCube.h"
+#include "HAL/PlatformFileManager.h"
 #include "IImageWrapper.h"
 #include "IImageWrapperModule.h"
 #include "Misc/FileHelper.h"
@@ -179,6 +180,20 @@ void ElysiumEnvironment::SkySliceSource(int32 Slice, int32 X, int32 Y, int32 N,
 UTextureCube* ElysiumEnvironment::BuildSkyCube(const FString& TexDir)
 {
 	return BuildSkyCubeFrom(TexDir, TEXT("sky_"));
+}
+
+bool ElysiumEnvironment::HasSkyFaces(const FString& Dir, const FString& Prefix)
+{
+	IPlatformFile& Files = FPlatformFileManager::Get().GetPlatformFile();
+	for (int32 F = 0; F < 6; ++F)
+	{
+		const FString Path = Dir / FString::Printf(TEXT("%s%s.png"), *Prefix, SkySlices[F].Face);
+		if (!Files.FileExists(*Path))
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
 UTextureCube* ElysiumEnvironment::BuildSkyCubeFrom(const FString& Dir, const FString& Prefix)

@@ -14,6 +14,12 @@ are already canonically oriented, so the unfolded cross reads left-to-right and 
 in that order with `up` on rt's top edge and `dn` on its bottom (`docs/sky-ambience.md`
 -> "K1 ... (settled)").
 
+Nothing is written until every face passes an **absolute-texel** check against its source.
+VtMB's sky transfer is the identity -- a sky pixel is the decoded texel, unscaled and unfogged
+(`docs/sky-ambience.md` -> "K7 ... (settled)") -- so a model that shifts the mean shifts the
+sky's brightness one-for-one, and one that reshapes the histogram changes its contrast. A
+resolution change may not smuggle in a grade.
+
 Usage:
     python sky_upscale.py --map la_hub_1 --model models/RealESRGAN_x4plus.pth
     # writes out/<map>/tex_hi/sky_*.png and out/<map>_sky_compare.png
@@ -66,6 +72,31 @@ def upscale_face(model: Model, rgb: np.ndarray) -> np.ndarray:
     return big[m * s:-m * s, m * s:-m * s]
 
 
+def texel_fidelity(src: np.ndarray, hi: np.ndarray) -> dict:
+    """How far an upscaled face drifts from the source in ABSOLUTE texel value.
+
+    VtMB's sky transfer is the identity -- a sky pixel IS the decoded texel, unscaled and
+    unfogged (`docs/sky-ambience.md` -> "K7 ... (settled)") -- so a super-resolver that shifts
+    the mean shifts the sky's brightness one-for-one, and one that reshapes the histogram
+    changes the sky's contrast. Structural similarity is not the acceptance test here;
+    preserving the numbers is.
+
+    Returns per-channel mean drift, the worst decile drift, and the largest percentile gap
+    (a cheap histogram distance) -- all in 0..255 units, so the numbers read as texel values.
+    """
+    a = src.astype(np.float64)
+    b = hi.astype(np.float64)
+    qs = [1, 5, 10, 25, 50, 75, 90, 95, 99]
+    pa = np.percentile(a.reshape(-1, a.shape[2]), qs, axis=0)
+    pb = np.percentile(b.reshape(-1, b.shape[2]), qs, axis=0)
+    return {
+        "mean": (b.mean((0, 1)) - a.mean((0, 1))),          # per-channel mean drift
+        "mean_abs": float(np.abs(b.mean((0, 1)) - a.mean((0, 1))).max()),
+        "hist_max": float(np.abs(pb - pa).max()),           # worst percentile gap
+        "hist_at": qs[int(np.abs(pb - pa).max(axis=1).argmax())],
+    }
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--map", required=True)
@@ -74,6 +105,13 @@ def main():
     ap.add_argument("--out-sub", default="tex_hi",
                     help="subdir under out/<map>/ for the upscaled faces")
     ap.add_argument("--cpu", action="store_true")
+    ap.add_argument("--max-mean-shift", type=float, default=1.0,
+                    help="reject a face whose per-channel mean drifts more than this many "
+                         "0..255 units from the source (absolute-texel preservation, RE-A9)")
+    ap.add_argument("--max-hist-shift", type=float, default=6.0,
+                    help="reject a face whose worst percentile gap exceeds this, in 0..255 units")
+    ap.add_argument("--allow-drift", action="store_true",
+                    help="write the faces even when the fidelity check fails (still reported)")
     args = ap.parse_args()
 
     root = Path(args.out_root) / args.map
@@ -99,7 +137,28 @@ def main():
     hi = {n: big[:, i * w * s:(i + 1) * w * s] for i, n in enumerate(RING)}
 
     for n in ("up", "dn"):
-        hi[n] = upscale_face(model, load_face(texdir, n))
+        faces[n] = load_face(texdir, n)
+        hi[n] = upscale_face(model, faces[n])
+
+    # Absolute-texel acceptance (RE-A9): the sky's displayed brightness IS its texel value, so a
+    # face whose mean or histogram has moved is a brightness/contrast change wearing a
+    # resolution change's clothes. Checked before anything is written.
+    print("fidelity (0..255 units, vs the source face):")
+    failed = []
+    for n in ("bk", "rt", "ft", "lf", "up", "dn"):
+        f = texel_fidelity(faces[n], hi[n])
+        bad = f["mean_abs"] > args.max_mean_shift or f["hist_max"] > args.max_hist_shift
+        print("  %-3s mean %+6.2f %+6.2f %+6.2f  worst-percentile %5.2f (p%d)  %s"
+              % (n, *f["mean"], f["hist_max"], f["hist_at"], "FAIL" if bad else "ok"))
+        if bad:
+            failed.append(n)
+    if failed:
+        print("  ! %d face(s) drift beyond the accept thresholds: %s"
+              % (len(failed), ", ".join(failed)))
+        if not args.allow_drift:
+            print("  ! nothing written. Re-run with --allow-drift to keep them anyway, or use a "
+                  "model that preserves absolute values.")
+            raise SystemExit(1)
 
     for n, arr in hi.items():
         Image.fromarray(arr).save(hidir / f"sky_{n}.png")

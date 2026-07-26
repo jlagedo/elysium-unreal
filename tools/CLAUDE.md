@@ -490,9 +490,15 @@ models on extracted VtMB textures. Loads any spandrel-supported architecture
 Splits RGB and alpha and upscales each independently (VtMB PNGs carry real RGB
 under transparent pixels and a smooth alpha mask), `--seamless` wraps tiling
 textures before upscaling, and it emits per-model outputs plus contact sheets.
-`sky_upscale.py` is the skybox-aware variant (ring-composite → upscale → re-slice,
-writing `out/<map>/tex_hi/`); `retex_dds.py` emits block-preserving `.dds` siblings
-with mips. These three are the scaffolding for the **asset-enhancement track**
+`sky_upscale.py` is the skybox-aware variant (ring-composite the four horizon faces
+in the canonical `bk, rt, ft, lf` order → upscale once → re-slice, writing
+`out/<map>/tex_hi/`, which `elysium.EnhancedTextures` selects at runtime). It writes
+nothing until every face passes an **absolute-texel** check against its source —
+per-channel mean drift and the worst percentile gap, in 0–255 units, against
+`--max-mean-shift` / `--max-hist-shift`. VtMB's sky transfer is the identity
+(`../docs/sky-ambience.md` → "K7"), so a model that moves the mean moves the sky's
+brightness one-for-one: a resolution change may not smuggle in a grade.
+`retex_dds.py` emits block-preserving `.dds` siblings with mips. These three are the scaffolding for the **asset-enhancement track**
 (delight → super-resolve → PBR synthesis, as an opt-in A/B layer that keeps VtMB's
 style) — plan, sequencing, and the adjudication test in `../docs/asset-enhancement.md`.
 
