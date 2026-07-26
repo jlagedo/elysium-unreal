@@ -1,21 +1,22 @@
 # Sky & ambience — the RE plan and the Unreal rework
 
-**Status: every unknown (K1–K8) is settled, and the Phase B render fix has landed — the
-backdrop draws correctly** (B3, confirmed in-engine by B1 against the labelled faces). Both
-halves of the orientation chain are recovered: K1, the Source side, out of
-`engine.dll`'s own tables, and K2, the Unreal side, out of UE 5.8's source — together they
-state the transform B3 applies, and B1 confirmed it in-engine. K3/K5 — how the original engine lights models and what it
-does with lump 15 at runtime — are closed by RE-A3; K4 is closed by RE-A4 (there is no
-day/night bake to select between); K6 is closed by RE-A5 — VRAD's photometric transfer is
-recovered exactly, whole-game, and with it **the absolute scale of lump 8**, which this plan
-has never had; and K7 is closed by RE-A9 — the sky's brightness chain is
-the **identity**, an unfogged texel written straight to the framebuffer. **Every ambience
-question, every Source-side render question and our own side of the seam are settled, and the
-owner decision set is resolved (`decisions.md` 2026-07-26: D2–D5, D7, B7's lights; D6
-dissolved); what is left is the rework itself.** This doc is the working plan: the verified facts, the honest unknowns, the RE
-tasks that close them, the rework tasks that follow, and the owner decisions each divergence
-needs. Tasks graduate into `roadmap.md` (RE backlog / phase tasks) as they are picked up;
-decisions get dated entries in `decisions.md` when made.
+**Status: every unknown (K1–K8) is settled and the rework has landed** — Phase A's RE is
+complete bar the owner-run reference captures (RE-A6), and Phases **B and C are done**
+(B1–B8, C0–C5). The backdrop drew wrong when this plan was written; it draws correctly now,
+confirmed in-engine against the labelled faces. Both halves of the orientation chain are
+recovered: K1, the Source side, out of `engine.dll`'s own tables, and K2, the Unreal side, out
+of UE 5.8's source. K3/K5 — how the original engine lights models and what it does with lump 15
+at runtime — are closed by RE-A3; K4 is closed by RE-A4 (there is no day/night bake to select
+between); K6 is closed by RE-A5 — VRAD's photometric transfer is recovered exactly, whole-game,
+and with it **the absolute scale of lump 8**, which this plan never had; and K7 is closed by
+RE-A9 — the sky's brightness chain is the **identity**, an unfogged texel written straight to
+the framebuffer. The owner decision set is resolved (`decisions.md` 2026-07-26: D2–D5, D7, B7's
+lights; D6 dissolved), with one correction the work itself forced: **D3's second knob, Indirect
+Lighting Intensity, is a no-op on this render path** (C3). Two pieces are carved out and named
+rather than dropped — the miniature's own fog term (B8b) and the skyambient's hemisphere
+aperture, which C4 shows is not identifiable from this data. This doc is the working record: the
+verified facts, the RE that established them, the rework that followed, and the owner decisions
+each divergence needed.
 
 Related: `docs/lighting.md` (WORLDLIGHTS facts, Godot-banner), `docs/light-attribution.md`
 (fixture-vs-fill), `docs/rendering-perf.md` (why Lumen is load-bearing), `docs/color_gamma.md`
@@ -2249,9 +2250,28 @@ The rework is calibrated against data we already hold plus the original game:
   3.75. The bounce is not a correction to the map's ambient level — it *is* the map's ambient
   level.
 
-- **C5 — survey interplay.** Re-visit the `sm_hub_1` load-bearing-fill shortlist *after*
-  C2/C3: with sky-glow ambience modelled correctly, the 15-light disagreement may resolve
-  itself. Feeds back into `docs/light-attribution.md`.
+- **C5 — survey interplay. Done** (2026-07-26). The question was whether the `sm_hub_1`
+  15-light disagreement would dissolve once sky-glow ambience was modelled correctly. **It does
+  not, and the premise is now dead: there is no sky glow on that map to model.** `sm_hub_1`
+  carries **no `light_environment`** — it is one of the 83 — so C2's data-driven policy puts its
+  SkyLight at **zero**, where it previously sat at an arbitrary flat 1.0. Correcting the sky made
+  the sky term *smaller*, so its fill is **more** load-bearing than before, not less. The
+  hypothesis in `light-attribution.md` is strengthened, not resolved.
+
+  B7 does not move it either, though it does clean the sample. `sm_hub_1`'s 60 sky-area
+  worldlights are now out of the world rig — they were being measured as if they lit the map,
+  which is exactly the confound RE-A8 flagged — but every one of them sits at X −3868 to −2497,
+  the miniature's own corner, while the shortlist is the **eastern** strip at X > 7000 (206
+  world lights). **None of the 60 is on the shortlist**, so the 15 disagreements survive B7
+  untouched.
+
+  C4 supplies the frame the adjudication needs: direct light explains ~0% of the median lit
+  face, and the bounce floor *is* the map's ambient level. So the doc's own reading — fill is
+  killable only where GI demonstrably replaces it — is the right one, and the fix is the second
+  gate it proposes rather than a better fill detector. What has changed is that there is now a
+  **sanctioned replacement to gate against**: C3's Skylight Leaking is landed and measured
+  working, which is what D3 reserved for exactly this case. The next step is unchanged and
+  unblocked — adjudicate the 15 by in-engine A/B — but its outcome now has somewhere to go.
 
 ## Decisions (all resolved — dated entries in `decisions.md`, 2026-07-26)
 
@@ -2267,21 +2287,26 @@ The rework is calibrated against data we already hold plus the original game:
 
 ## Sequencing
 
-**Phase A is finished except for the owner-run captures.** RE-A1 through RE-A5 and RE-A7 to
-RE-A9 are all done, so nothing in Phase B or Phase C is RE-blocked any more. **RE-A6 is the only
-Phase A task left**, and RE-A9 narrows what it is for: the original's sky transfer is the
-identity, so the captures are wanted for the *world* half of the sky-to-scene ratio, not for the
-sky's own brightness.
+**Phase A is finished except for the owner-run captures** (RE-A6), and **Phases B and C have
+landed** — every task B1–B8 and C0–C5 is done, with two pieces carved out and named rather than
+quietly dropped:
 
-The critical path for "sky looks right" is now **B3 → B1 → B4**: K1 and K2 supply both halves of
-the transform, so B3 is an edit to one function and B1 is the one-session check that it landed,
-with B2 a cheap write-up alongside. The critical
-path for "ambience is right" is now just **C0 → C1–C4**, and RE-A5 changes its character in one
-specific way: the bake's **absolute scale is known**, so C1 and C4 stop being fits with a free
-gain. C1 has a real per-map number to carry, C4 has one fewer degree of freedom and its residual
-becomes a genuine measurement of the bounce term, and C0 grows a de-normalisation step that must
-land with C0(b). With the 2026-07-26 decision set resolved (D2/D3/D7 and B7's lights —
-`decisions.md`), nothing in either phase waits on RE **or** on an owner call: every task has
-its policy stated, and the only decisions still to come are the per-map D3 values C4/C5 will
-propose with evidence. Phase C without Phase A was the state this plan existed to end; that
-state is over.
+- **B8b** — the miniature's own fog as a per-primitive term. The `sky_camera` set is carried in
+  `.env` with its distances already scaled into world units, but one scene and one exponential
+  height fog cannot scope a term the world and the miniature share screen depth with. It needs a
+  distance-fog node in a sky-only material set, which would reproduce Source's planar fog
+  exactly. The same task should calibrate the linear-`start`/`end` → exponential-density mapping,
+  which currently puts nearly all the fog below z ≈ 2 m.
+- **The skyambient's hemisphere aperture** stays open, and C4 explains why it is not merely
+  unmeasured but *unidentifiable* from this data: on an enclosed map the faces that see sky are
+  the faces furthest from the author's fill, so sky visibility carries the fill's sign. RE-A5
+  bounded it at a factor of ~2 and C4 confirms that bound rather than closing it.
+
+What the two phases changed, in one line each: the backdrop draws correctly and at parity (B3,
+B1, B4); the whole 3D skybox is real geometry rather than debris in the playable world (B7);
+world fog comes from `worldspawn` and never touches the backdrop (B8); a sky regression is a
+number (B6); the lump-15 corrections and the material reflectivity the bounce needs are in the
+pipeline (C0); the sky light's level is the map's own authored radiance, zero on the 83 maps
+that authored none (C1, C2); the art-direction knob that can replace load-bearing fill is landed
+and measured (C3); and the bake is now measured in absolute units, which says direct light
+explains ~0% of a median lit face and the bounce floor *is* the ambient level (C4, C5).

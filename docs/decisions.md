@@ -6,6 +6,20 @@ trigger. A behavioural divergence from retail lands here carrying both the faith
 chosen behaviour (`remaster-direction.md`'s governing rule). Entries are never rewritten —
 append a correction as a new entry.
 
+- **2026-07-26** — **D3 correction: the bounce-strength knob is Lumen Diffuse Color Boost, not
+  Indirect Lighting Intensity.** D3 (same day) adopted a per-map PostProcessVolume carrying
+  Skylight Leaking and Indirect Lighting Intensity, neutral by default. Building it (sky-ambience
+  C3) established that **the second knob cannot work on this render path**: `IndirectLightingIntensity`
+  reaches the shaders as `View.PrecomputedIndirectLightingColorScale`, which scales *precomputed*
+  indirect lighting, and no shader under `Engine/Shaders/Private/Lumen/` reads it at all. Our path
+  is fully dynamic with no precomputed lighting, so it is inert — measured, a value of 3 changed
+  not one pixel. The volume carries `LumenDiffuseColorBoost` in its place (Lumen's own control,
+  `pow(albedo, boost)`, below 1 brightens), exposed as `elysium.LumenDiffuseBoost`. **It is
+  carried as unverified:** it produced no measurable change either, live or across a map load, and
+  the reason was not chased. `elysium.SkylightLeaking` and `elysium.SkylightLeakingDistance` *are*
+  verified working — monotone response and an exact revert to the neutral frame. D3's substance is
+  unchanged: the mechanism ships neutral, and a non-neutral per-map value still needs its own dated
+  entry on measured evidence.
 - **2026-07-26** — **The light rig is hand-authored per map; the saved survey auto-applies at
   load.** Owner call, made after surveying `hw_609_1`: VtMB's WORLDLIGHTS are painterly — authored
   for the baked result, not as physical fixtures (sourceless lights mid-room; the fill class

@@ -256,6 +256,20 @@ A 15-light shortlist of the highest-confidence disagreements exists, all in the 
 from lights killed in the west. Resolving those 15 decides whether the rule over-flags on dense
 maps or the survey was uneven.
 
+**What the ambience rework settled (sky-ambience C1–C5, 2026-07-26).** The standing hope was
+that this disagreement would dissolve once sky-glow ambience was modelled properly. It cannot:
+`sm_hub_1` carries **no `light_environment` at all**, so its correct sky contribution is
+**zero** — the SkyLight now sits there by policy rather than at the arbitrary flat 1.0 it used
+to. The sky term got *smaller*, so the fill is more load-bearing, not less. Separately, the
+3D-skybox split took `sm_hub_1`'s 60 sky-area worldlights out of the world rig — they had been
+in the fill-vs-fixture sample while sitting at miniature coordinates, lighting nothing — but all
+60 are at X −3868 to −2497 and the shortlist is the eastern strip at X > 7000, so **the 15
+disagreements are untouched**. Finally, the bake measured in absolute units says direct light
+explains ~0% of the median lit face and the bounce floor *is* the ambient level, which is the
+quantitative form of the framing below. The one thing that did change: there is now a landed,
+measured replacement to gate against — `elysium.SkylightLeaking` on the per-map post-process
+volume.
+
 **The framing under test:** the classifier asks *"was this light authored as fill?"*, but the hand
 survey — made under the live rig, Lumen on — answers *"does the scene survive without it?"*. The
 two diverge where fill is **load-bearing**: a light faking night-sky/city-glow ambient is genuinely
