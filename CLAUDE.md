@@ -134,7 +134,10 @@ your VtMB install.
   illumination. `elysium.lightprobe` runs the same pass live.
 - `shots.bat [map] [cam]` — headless screenshot-regression capture at 2560×1440/SM6 over the
   **same** vantages as `profile.bat` (`-ElysiumShots`); PNGs + manifest under `tools/out/_shots/`
-  (gitignored — game-derived baselines). Diff a run against a kept baseline to catch a look regression.
+  (gitignored — game-derived). `tools/shots_diff.py --save` promotes a run to the baseline and a
+  bare run diffs against it per vantage (mean/p99 difference, percent of pixels moved, a heat map
+  and a non-zero exit for any vantage over threshold) — so a look regression is a number, not an
+  eyeball. `t1sky`/`h1sky` are the sky-framing vantages.
 - `test.bat [filter]` — run the automation suite headless (`Substrate`/`Content` shorthands, or a
   full dotted test name; default = all). The `Substrate` tier runs under `-nullrhi`; the `Content`
   tier reads `tools/out` and self-skips unexported maps. JSON+HTML report under `tools/out/_tests/`.

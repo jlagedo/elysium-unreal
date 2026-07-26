@@ -38,6 +38,13 @@ namespace ElysiumVantages
 		{ TEXT("sm_hub_1"),      TEXT("h1"),   false, FVector(-4220.f, 6170.f, -120.f), FRotator(0.f,  -40.f, 0.f) },
 		{ TEXT("sm_hub_1"),      TEXT("h2"),   false, FVector(-4760.f, -1180.f, -120.f),FRotator(0.f,   29.f, 0.f) },
 
+		// Sky vantages (sky-ambience B6): the level vantages above frame walls, so a sky change
+		// barely moves their pixels. These pitch up from the same two points to put the backdrop
+		// and the 3D-skybox miniature in frame together — the two things a sky regression breaks.
+		// Both maps draw sky (`la` and `pier`) and both run the miniature pass.
+		{ TEXT("sp_tutorial_1"), TEXT("t1sky"), false, FVector( -60.f,  680.f,  70.f),  FRotator(25.f, -138.f, 0.f) },
+		{ TEXT("sm_hub_1"),      TEXT("h1sky"), false, FVector(-4220.f, 6170.f, -120.f),FRotator(28.f,  -40.f, 0.f) },
+
 		// sm_pawnshop_1 — three interior vantages (HUD "you" metres -> cm, yaw only).
 		{ TEXT("sm_pawnshop_1"), TEXT("p1"),   false, FVector(-4490.f, 6720.f, 530.f),  FRotator(0.f, -139.f, 0.f) },
 		{ TEXT("sm_pawnshop_1"), TEXT("p2"),   false, FVector(-5160.f, 6300.f, 550.f),  FRotator(0.f,   95.f, 0.f) },

@@ -1972,8 +1972,24 @@ The rework is calibrated against data we already hold plus the original game:
   percentiles, all in 0–255 texel units) and **writes nothing** if any face exceeds
   `--max-mean-shift` (1.0) or `--max-hist-shift` (6.0). `--allow-drift` keeps them anyway, still
   reported. A resolution change may not smuggle in a grade.
-- **B6 — regression baselines.** `shots.bat` baselines for the sky maps once B1–B4 land; a
-  sky regression is then a pixel diff, not an eyeball.
+- **B6 — regression baselines. Done** (2026-07-26). Two pieces were missing, not one: the
+  harness had no vantage that *frames* sky, and no way to compare two runs.
+
+  **Vantages** — the existing ones frame walls, so a sky change barely moves their pixels.
+  `t1sky` (`sp_tutorial_1`) and `h1sky` (`sm_hub_1`) pitch up from the same two points to put
+  the backdrop **and** the 3D-skybox miniature in one frame — the two things a sky regression
+  breaks. Both maps draw sky (`la`, `pier`) and both run the miniature pass.
+
+  **`tools/shots_diff.py`** — `--save` promotes a run to `out/_shots/_baseline/<map>/`, and a
+  later run diffs against it per vantage: mean and p99 absolute difference, the percentage of
+  pixels moved by more than `--tol` levels, and a heat map written for any vantage over
+  `--max-changed`. Non-zero exit when any does, so it can gate a change rather than just report
+  on one. Baselines live under `out/`, so they are game-derived and gitignored like every
+  capture — a local instrument, not a committed fixture.
+
+  Verified both directions: a run against itself is 0.00% on all 10 vantages, and a +6-level
+  lift over the sky band of one shot is caught at 27.78% of that vantage's pixels with the other
+  three unmoved.
 - **B7 — split the whole 3D skybox, not just its world faces. Done** (2026-07-26; RE-A8).
   The exporter's `SkyScope` computes the miniature's BSP area once — the engine's own
   membership rule, `area(point_leaf(x)) == area(point_leaf(sky_camera.origin))` — and applies
