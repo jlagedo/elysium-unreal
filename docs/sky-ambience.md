@@ -1907,16 +1907,41 @@ The rework is calibrated against data we already hold plus the original game:
   (`s = 2u − 1`, `t = 1 − 2v`). And every slice takes the rotation UE's D3D-derived layout
   requires (K2): **`rt` 90° CCW, `lf` 90° CW, `ft` 180°, `bk` none, `up` 90° CCW, `dn` 90° CCW**
   — a renamed array alone still draws wrong. B1 is the acceptance check.
-- **B4 — backdrop verification + brightness calibration.** `M_Sky` sampling verified against
-  B1; replace the hand `Brightness 4`. RE-A9 removes the VtMB-side unknown: the original's
-  transfer is **texel → framebuffer, 1:1, unfogged**, so there is no sky exposure to measure,
-  and **D7 is decided (2026-07-26, `decisions.md`): parity is the shipped default, the
-  multiplier survives only as an `elysium.*` debug cvar.** What is
-  left to calibrate is our side of the seam — the value that lands an Unreal sky texel at parity
-  with the same texel through VtMB's gamma-space path, given that our world is Lumen +
-  tonemapper rather than `albedo × lightmap × 2`. RE-A6's captures serve that world half.
-  Re-check `SkyLight` IBL after the fix — a correctly oriented cube changes the directional
-  distribution the capture integrates.
+- **B4 — backdrop verification + brightness calibration. Done** (2026-07-26). `M_Sky` sampling
+  is verified by B1, and the hand `Brightness 4` is gone: the shipped default is **parity**
+  (D7), with the multiplier surviving as **`elysium.SkyBrightness`**, a live debug cvar that
+  re-applies to the built backdrop on change.
+
+  The remaining question — what our side of the seam does to a texel — is now **measured**
+  rather than argued. Aim the camera down Unreal +X so one face fills the view, map every
+  screen pixel back to the texel it shows, and compare displayed 8-bit sRGB against source
+  8-bit sRGB (which is exactly what VtMB wrote to its framebuffer, RE-A9). Auto-exposure is
+  off (`r.DefaultFeature.AutoExposure=False`), bloom and fog disabled for the measurement, so
+  what is left between the two is the **tonemapper**:
+
+  | Source texel | 5 | 12 | 27 | 45 | 71 | 96 | 172 | 251 |
+  |---|---|---|---|---|---|---|---|---|
+  | Displayed at `SkyBrightness 1` | 1.0 | 2.3 | 13.7 | 38 | 82 | 112 | 208 | 236 |
+  | ratio | ×0.19 | ×0.19 | ×0.51 | ×0.85 | ×1.17 | ×1.17 | ×1.21 | ×0.94 |
+
+  (`pier` on `sm_hub_1` for the dark half, `la` on `sp_tutorial_1` for the bright half.)
+
+  **The deviation from parity is a curve, not a gain**, so no multiplier can restore it: the
+  filmic toe crushes anything under ~25 by up to ×5, the midtones lift ~20%, and the shoulder
+  rolls off ~6%. Unity crosses parity around source ≈ 60. That is why the old `4` was reached
+  for — VtMB's skies are night skies, and `pier`'s face is p50 0 / p90 54, so **the whole sky
+  lives in the toe**. But 4 does not undo the toe either; measured, it is a ×1.8–2.6
+  *overdrive* across `pier`'s working range. So the residual is the tone curve's, and it
+  belongs to **roadmap 3.6/3.7** (pinned exposure + neutralised tone curve), not to the
+  backdrop multiplier — which is what D7 says.
+
+  Found while measuring, and handed to B8: **our height fog inscatters into the backdrop.**
+  With `sm_hub_1`'s fog on, the sky's displayed mean goes 16.6 → 29.1. RE-A9 is categorical
+  that the 2D backdrop is never fogged, on any map, at any distance.
+
+  `SkyLight` IBL was re-checked after the B3 fix — a correctly oriented cube changes the
+  directional distribution the capture integrates, and C1/C2 take the intensity over from
+  there.
 - **B5 — upscaled faces as the enhancement A/B.** Runtime prefers `tex_hi/sky_*.png` when
   present, behind the planned `elysium.EnhancedTextures`-family toggle
   (`docs/asset-enhancement.md`); faithful default remains the decoded originals (512², or 256²

@@ -63,6 +63,17 @@ static TAutoConsoleVariable<int32> CVarRopes(
 	TEXT("Build the map's cables from <map>.ropes (1) or skip (0). Applied at map load."),
 	ECVF_Default);
 
+// A debug multiplier on the 2D backdrop's texel, default 1 = parity (decisions.md 2026-07-26,
+// D7). VtMB writes a sky texel to the framebuffer unscaled and unfogged — the whole material is
+// `mul r0, t0, v0` against a modulation the engine forces to white (sky-ambience.md -> "K7 ...
+// (settled)") — so any value but 1 is a stated divergence, not a calibration. A night-sky lift
+// goes through the D3 post-process knobs, never through here. Live: re-applies to the backdrop
+// as it changes, so an A/B needs no reload.
+static TAutoConsoleVariable<float> CVarSkyBrightness(
+	TEXT("elysium.SkyBrightness"), 1.f,
+	TEXT("Debug multiplier on the sky backdrop texel. 1 = parity with VtMB's identity transfer."),
+	ECVF_Default);
+
 // Assemble the sky cube from the labelled RE-A2 probe faces instead of the map's own (0/1).
 // Each face states its suffix, the axis it belongs on, which way is up and which face each of
 // its edges meets, so a wrong slice binding, a rotation, a mirror and a broken seam are four
@@ -144,6 +155,13 @@ AElysiumMapActor::AElysiumMapActor()
 void AElysiumMapActor::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// The backdrop multiplier is an A/B knob, so a console flip has to reach the sky already
+	// built. Weak-bound: the callback drops out with the actor at map teardown.
+	CVarSkyBrightness.AsVariable()->SetOnChangedCallback(
+		FConsoleVariableDelegate::CreateWeakLambda(this,
+			[this](IConsoleVariable*) { ApplySkyBrightness(); }));
+
 	LoadMap();
 }
 
@@ -832,13 +850,10 @@ void AElysiumMapActor::ApplyEnvironment()
 	if (UMaterialInterface* Master = LoadObject<UMaterialInterface>(nullptr,
 		TEXT("/Game/VtMB/Materials/M_Sky.M_Sky")))
 	{
-		UMaterialInstanceDynamic* Mid = UMaterialInstanceDynamic::Create(Master, this);
+		SkyMid = UMaterialInstanceDynamic::Create(Master, this);
+		UMaterialInstanceDynamic* Mid = SkyMid;
 		Mid->SetTextureParameterValue(TEXT("SkyCube"), Cube);
-		// A divergence, not a calibration: VtMB writes the sky texel to the framebuffer
-		// unscaled and unfogged (sky-ambience.md → K7), so the faithful value is parity.
-		// The 4x lifts near-black night skies out of the tonemapper; D7 decides whether it
-		// stays.
-		Mid->SetScalarParameterValue(TEXT("Brightness"), 4.f);
+		ApplySkyBrightness();
 
 		TArray<FVector> Verts, Normals;
 		TArray<int32> Tris;
@@ -849,6 +864,14 @@ void AElysiumMapActor::ApplyEnvironment()
 		SkyDomeMesh->SetVisibleInRayTracing(false);
 		SkyDomeMesh->SetVisibility(bSkyVisible);
 		UE_LOG(LogElysium, Log, TEXT("sky '%s': cubemap IBL + backdrop"), *Env.SkyName);
+	}
+}
+
+void AElysiumMapActor::ApplySkyBrightness()
+{
+	if (SkyMid)
+	{
+		SkyMid->SetScalarParameterValue(TEXT("Brightness"), CVarSkyBrightness.GetValueOnGameThread());
 	}
 }
 

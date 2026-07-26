@@ -174,6 +174,8 @@ private:
 	// Built at runtime because its cubemap is assembled from the six exported face images, which
 	// is also what feeds the SkyLight's IBL. Distinct from the baked 3D-skybox miniature geometry.
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> SkyDomeMesh;
+	// The backdrop's own MID (off M_Sky), kept so elysium.SkyBrightness can re-apply live.
+	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> SkyMid;
 	UPROPERTY() TObjectPtr<UElysiumLightRig> LightRig;
 
 	// Adopted from the baked level (not owned): the map's ambience. Their tuning fields are driven
@@ -253,6 +255,9 @@ private:
 	// cubemap on the sky light is what gives Lumen sky occlusion — interiors then darken because
 	// they cannot see the sky, instead of receiving a constant fill through solid walls.
 	void ApplyEnvironment();
+	// Push elysium.SkyBrightness onto the live backdrop MID. The faithful value is 1 (D7): VtMB's
+	// sky transfer is the identity, so this is an A/B knob, not a calibration. No-op with no sky.
+	void ApplySkyBrightness();
 	bool ReadSpawn(FVector& OutLocation, float& OutYaw) const;
 	// P4.6 — if this load is a landmark transition (the map subsystem has a queued landmark spawn),
 	// override the info_player_start placement: resolve the destination `info_landmark` in the just-
