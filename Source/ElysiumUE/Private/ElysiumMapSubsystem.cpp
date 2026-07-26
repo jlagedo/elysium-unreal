@@ -1,7 +1,6 @@
 #include "ElysiumMapSubsystem.h"
 
 #include "ElysiumContentPaths.h"
-#include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumProbeRun.h"
 #include "ElysiumProfiler.h"
@@ -55,35 +54,6 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 				UE_LOG(LogElysiumMap, Display, TEXT("  %s%s"), *Name,
 					Name == GetCurrentMapName() ? TEXT("   <- current") : TEXT(""));
 			}
-		}),
-		ECVF_Cheat));
-
-	// elysium.newgame — seed a fresh story context and enter the tutorial at its landmark. This is
-	// the console form of the boot default; 8.6's menu will call the same NewGame() seam.
-	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
-		TEXT("elysium.newgame"),
-		TEXT("elysium.newgame [clan] [m|f] — seed a new story context and enter the tutorial at its "
-			"landmark. clan = a name (brujah..ventrue) or the 2..8 script encoding; default Brujah male"),
-		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
-		{
-			int32 Clan = 2;
-			if (Args.Num() > 0)
-			{
-				const int32 Parsed = FElysiumPlayerSheet::ClanFromName(Args[0]);
-				if (Parsed == 0)
-				{
-					UE_LOG(LogElysiumMap, Warning,
-						TEXT("elysium.newgame: unknown clan '%s' (brujah|gangrel|malkavian|nosferatu|"
-							"toreador|tremere|ventrue, or 2..8) — using Brujah"), *Args[0]);
-				}
-				else
-				{
-					Clan = Parsed;
-				}
-			}
-			// Anything but an explicit f/female stays male, matching the sheet default.
-			const bool bMale = !(Args.Num() > 1 && (Args[1].StartsWith(TEXT("f"), ESearchCase::IgnoreCase)));
-			NewGame(Clan, bMale);
 		}),
 		ECVF_Cheat));
 
@@ -358,34 +328,4 @@ FString UElysiumMapSubsystem::ResolveBootMap() const
 		return CmdMap;
 	}
 	return StoryEntryMap();
-}
-
-bool UElysiumMapSubsystem::ShouldBootNewGame() const
-{
-	// An explicit map (play.bat <map>) is the dev path: load it bare, exactly as before.
-	FString CmdMap;
-	if (FParse::Value(FCommandLine::Get(), TEXT("ElysiumMap="), CmdMap) && !CmdMap.IsEmpty())
-	{
-		return false;
-	}
-	// -ElysiumNewGame=0 boots the story map unseeded, for A/B against the seeded run.
-	int32 Flag = 1;
-	if (FParse::Value(FCommandLine::Get(), TEXT("ElysiumNewGame="), Flag) && Flag == 0)
-	{
-		return false;
-	}
-	return true;
-}
-
-bool UElysiumMapSubsystem::NewGame(int32 Clan, bool bMale)
-{
-	UGameInstance* GI = GetGameInstance();
-	if (UElysiumGameStateSubsystem* State = GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr)
-	{
-		State->BeginNewGame(Clan, bMale);
-	}
-	// Landmark entry, offset zero — the same path a real trigger_changelevel takes, so the player
-	// is seated on the `tutorial` landmark at its facing rather than at info_player_start. On this
-	// map the two coincide (1 Source unit apart in Y, 8 in Z), but that is a property of the data.
-	return Travel(StoryEntryMap(), StoryEntryLandmark());
 }

@@ -18,7 +18,8 @@ the maintenance contract.
   divergence needs the faithful behaviour RE'd and recorded *plus* a dated entry in
   `decisions.md`.
 - **A new VtMB format/behaviour finding** → the topic doc that owns it (`entity_io.md`,
-  `python_bridge.md`, `audio_pipeline.md`, `mdl_v2531.md`, `source_movement.md`, `controls.md`,
+  `python_bridge.md`, `audio_pipeline.md`, `mdl_v2531.md`, `facial_animation.md`,
+  `source_movement.md`, `controls.md`,
   `level_transitions.md`, `animation_and_movers.md`, `game_runtime.md`). Cite where it came
   from — decompiled address, `tools/ghidra/run.ps1 -Script DumpGrep` output, or the data file.
   `python_bridge.md` ↔ `script_api.md` split the scripting layer the same way the other pairs

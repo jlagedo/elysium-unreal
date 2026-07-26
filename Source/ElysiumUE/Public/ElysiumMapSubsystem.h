@@ -91,22 +91,12 @@ public:
 	// Names of maps that are both exported and baked — i.e. the maps Travel will accept.
 	TArray<FString> ExportedMaps() const;
 
-	// The map to boot into: -ElysiumMap=<name> (play.bat <name>) or the default.
+	// The map to boot into: -ElysiumMap=<name> (play.bat <name>) or the default. The boot *decision*
+	// is UElysiumGameFlowSubsystem's (11.3); this only names the map.
 	FString ResolveBootMap() const;
 
-	// --- New Game (story entry) --------------------------------------------------------
-	// Seed a fresh story context (UElysiumGameStateSubsystem::BeginNewGame) and travel to the
-	// story entry: `sp_tutorial_1` at the `tutorial` info_landmark, offset zero. Retail reaches
-	// that landmark from `sp_theatre`; chargen and the intro are unbuilt (8.6 / P9), so the seeded
-	// context stands in for them and the landmark entry is the same one the real transition uses.
-	// Clan is the level-script 2..8 encoding. Returns false if the entry map isn't exported.
-	bool NewGame(int32 Clan = 2, bool bMale = true);
-
-	// Whether boot should run NewGame rather than a bare Travel. True unless an explicit
-	// -ElysiumMap= was given (play.bat <map> — the dev path, which must stay unseeded) or
-	// -ElysiumNewGame=0 was passed (boot the story map bare, to A/B against the seeded run).
-	bool ShouldBootNewGame() const;
-
+	// The story entry, for the flow subsystem's New Game. Retail reaches this landmark from
+	// `sp_theatre`, and a direct entry uses the same one the real transition does.
 	static const TCHAR* StoryEntryMap() { return TEXT("sp_tutorial_1"); }
 	static const TCHAR* StoryEntryLandmark() { return TEXT("tutorial"); }
 

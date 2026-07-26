@@ -111,9 +111,12 @@ deps below — refresh it whenever a task flips:
    today's `FElysiumPlayerSheet` shim is a migration later. 11.4's other dep, 11.2, is met.
 2. **11.5 → 11.6 → 11.8 → 11.10** — close PP0: scopes, commands + user command, the view seam,
    the play harness.
-3. **RE20 + PL9/PL10** — the remaining P12 unknowns (flex/eyes/`.lip`), spiked in parallel while
-   PP0 lands. *(RE19 [x] — the scene format and event semantics are settled:
-   `docs/choreographed_scenes.md`. PL9's scope is now mechanical; 12.1 is unblocked on its RE dep.)*
+3. **PL10** — the last P12 pipeline unknown: bake the flex data into glb morph targets. *(The
+   P12 RE is now closed on both halves — RE19 [x] `docs/choreographed_scenes.md`, RE20 [x]
+   `docs/facial_animation.md`; **PL9 [x]** mirrored the 5,444 `.vcd` + 7,136 `.lip` to
+   `out/scenes/` + `out/lip/`. One finding reshapes the ladder: **no shipped model carries
+   eyeball data**, so 12.4 has no eye pose to decode and its look-at half needs an owner
+   call.)*
 4. **9.7d** — land `OneOfSet` and the shadowed-name split: 589 dialogue gates currently fail
    closed, the fix needs no backing system, and PP3's dialogue depends on those gates.
 
@@ -1151,9 +1154,17 @@ Save and Load round-trip the run, and `test.bat Play` asserts the whole thing he
 The intro cinematic (`sp_theatre` — embrace + trial) as VtMB plays it: `logic_choreographed_scene`
 driving actors, scripted camera (11.7), line audio, subtitles, and facial animation. The fidelity
 bar is an owner call: the scene is not done until the faces are alive — **eyes and lipsync
-included**. The RE unknowns are front-loaded in "Now" because this is the highest-variance
-work on the path: **RE19 is closed** (the scene format and event semantics —
-`docs/choreographed_scenes.md`), leaving RE20 + PL9/PL10 (flex/eyes/`.lip`).
+included**. The RE unknowns were front-loaded in "Now" because this is the highest-variance
+work on the path, and both halves are now closed: **RE19** (the scene format and event
+semantics — `docs/choreographed_scenes.md`), **PL9** (the corpus on disk at `out/scenes/`,
+`out/lip/`) and **RE20** (the flex/eyeball chunks, the `.lip` grammar and the
+phoneme→controller tables — `docs/facial_animation.md`). Only **PL10** remains unbuilt.
+
+RE20 changes what 12.4 can be: **no model in the install carries eyeball data** — the whole
+cast ships `NumEyeballs == 0`, so there is no authored eye pose, look-at cone or procedural
+lid. Eyes in VtMB are *eyelids*: eight `eyelid` flex controllers driving 16 eyelid flexdescs
+through four RPN rules. Blink and lid shaping are reproducible; gaze is not RE-able because
+it was never authored.
 
 - [ ] **12.1 Choreographed scenes** — `logic_choreographed_scene` as a real class + the scene-file
   parser (PL9) + an event timeline on the game clock, `Start`/`Pause`/`Resume`/`Cancel` inputs and
@@ -1162,20 +1173,35 @@ work on the path: **RE19 is closed** (the scene format and event semantics —
   `expression`, `gesture`, `sequence`, `firetrigger`, `python`, `bodysound`), absolute scene time
   offset by the audio mixahead, `position_start`/`position_end` actor placement, and
   `firetrigger "N"` → `OnTriggerN`. *Acceptance:* the theatre's first scene runs its actors and
-  fires its completion wires in the built game. *Deps:* 8.5, 11.1, RE19 [x], PL9.
+  fires its completion wires in the built game. *Deps:* 8.5, 11.1, RE19 [x], PL9 [x] — a
+  `SceneFile` resolves to `out/scenes/` + the path with its `sound/` prefix stripped.
 - [ ] **12.2 Scene audio + subtitles** — per-line audio through the 6.2 decode path (the
   `PlayDialogFile` file-resolution rules) synced to scene time; a subtitle surface on the view
   state (11.8). *Acceptance:* the scene's lines are audible and subtitled in sync. *Deps:* 12.1,
   6.2, 11.8.
-- [ ] **12.3 Facial flex track** — MDL v2531 flex/morph data decoded (RE20) into glb morph targets
-  (PL10); `UElysiumNpcAnimInstance` grows a morph-track player over the body animation.
-  *Acceptance:* a flex authored in the model moves the face in-game. *Deps:* 8.5, RE20, PL10.
-- [ ] **12.4 Eyes** — the eyeball data (RE20): eye posing / look-at targets + eyelid and blink
-  flexes. *Acceptance:* actors track their look targets and blink through the theatre scene.
-  *Deps:* 12.3.
-- [ ] **12.5 Lipsync** — `.lip` phoneme tracks (RE20; 9.3c already logs the scripts' `.lip`
-  probes as a named divergence) driving mouth flexes against 12.2's line audio. *Acceptance:*
-  mouths move with the words on every theatre line. *Deps:* 12.2, 12.3.
+- [ ] **12.3 Facial flex track** — MDL v2531 flex/morph data decoded (RE20 [x]) into glb morph
+  targets (PL10); `UElysiumNpcAnimInstance` grows a morph-track player over the body animation.
+  It is **three layers, not one**: 44 flex controllers → 60 RPN flex rules → 65 flexdesc weights
+  → the per-mesh `StudioFlex` target ramp → morph targets. Bake the morphs; evaluate the
+  controller/rule layer at runtime, because that is where the eyelid interaction lives. Spec:
+  `docs/facial_animation.md`. *Acceptance:* a flex authored in the model moves the face in-game.
+  *Deps:* 8.5, RE20 [x], PL10.
+- [ ] **12.4 Eyelids** *(was "Eyes")* — blink + lid shaping off the eight `eyelid` controllers
+  and their four rules (`raiser × (1 − droop·0.8) × (1 − blink)` and its complements). **There is
+  no eyeball data to consume** — RE20 found `NumEyeballs == 0` on all 4,444 models, so eye posing
+  and look-at have no faithful baseline. *Acceptance:* actors blink and their lids shape through
+  the theatre scene. *Open owner call:* whether to add gaze/look-at at all — it is an invention
+  under `remaster-direction.md`'s Feel layer, not a reproduction, so it needs a dated
+  `decisions.md` entry before it is built. *Deps:* 12.3.
+- [ ] **12.5 Lipsync** — `.lip` phoneme tracks (RE20 [x]; 9.3c already logs the scripts' `.lip`
+  probes as a named divergence) driving mouth flexes against 12.2's line audio; the 7,136 files
+  are on disk in `out/lip/` (PL9 [x]), keyed by the line's own sound path. A **three-file join
+  per line**: the `.lip` for phoneme timing, `expressions/<model stem>_phonemes.txt` for the
+  phoneme→controller weights (249 tables, chosen by the actor's model basename), and
+  `mstudiomouth_t` for the amplitude-driven jaw that runs alongside. Key on the phoneme
+  *string* — the `.lip` numeric code is not stable across the corpus. Spec:
+  `docs/facial_animation.md`. *Acceptance:* mouths move with the words on every theatre line.
+  *Deps:* 12.2, 12.3. *Pipeline gap:* `expressions/` is not yet mirrored — see PL10.
 
 **Slice acceptance** *(PP2)*: New Game runs genesis, then the full theatre act plays start to
 finish — choreography, camera moves, audible subtitled lines, live faces — and hands the player
@@ -1213,8 +1239,8 @@ retail end to end, and `test.bat Play` proves it headlessly.
 | PL6 | Texlight merge in exporter | 3.4 |
 | PL11 | Remove the dead Lumen-card path the bake superseded (found by 0.9): `export_all.py`'s `bake_cards`/`--no-cards` calls a `cards.bat` that no longer exists and prints a "skipped" line every run; `ElysiumCardGen.cpp` (`ELYSIUM_WITH_CARDGEN`, `elysium.cards.probe`) still builds into editor targets. Nothing depends on either | 0.9 |
 | PL7 | Sidecar space fixes surfaced by the audit — **none (0.4: all sidecars already Unreal cm)** | 0.4 [x] |
-| PL9 | Mirror the choreographed-scene files + `.lip` phoneme files → `out/scenes/`, `out/lip/` — patch-first, verbatim. Scope is settled by RE19: **5,444 `.vcd` + 7,136 `.lip`**, all under `sound/`, plain text needing no transcode (`docs/choreographed_scenes.md`) | 12.1, 12.5 |
-| PL10 | Facial data in the NPC export — flex/eyeball chunks (RE20) decoded by `mdl_skel` into glb **morph targets** + a flex-name manifest per bank | 12.3, 12.4 |
+| PL9 | Mirror the choreographed-scene files + `.lip` phoneme files → `out/scenes/`, `out/lip/` — `UE_extract_scenes.py`, patch-first, verbatim, `sound/` prefix stripped so `SceneFile` reads back 1:1; **5,444 `.vcd`** (4.5 MB) + **7,136 `.lip`** (16.8 MB), wired into `export_all.py` (`--no-scenes`) with a `SceneFile` cross-check over the exported `.ents`. The `.lip` *format* stays RE20 [x] | 12.1, 12.5 |
+| PL10 | Facial data in the NPC export — the flex chunks (RE20 [x]) decoded by `mdl_skel` into glb **morph targets**, one per flexdesc per mesh, plus a manifest carrying the parts a morph target cannot hold: the 44 controllers, the 60 RPN rules, and each flex's four-value target ramp. Needs the unit-vector table extracted from the user's own `StudioRender.dll` at export time (`probe_facial.py --anorms`) — it is game-derived, so it is regenerated, never committed. No eyeball chunk exists to export. Also mirror `expressions/*.txt` → `out/expressions/` for 12.5 | 12.3, 12.4, 12.5 |
 | PL8 ✅ | UI source inventory for the re-skin — **`tools/UE_extract_ui.py`** mirrors `out/ui/`: 25 `.res` layouts + **both** schemes byte-for-byte (`VampireScheme` skins client.dll, `TrackerScheme` skins GameUI.dll — `docs/vtmb-ui.md`), 194 localized strings, the 1024×512 title lockup, the menu particle scene (26 scripts → 22 `.tga` sprites) + the 6 `MM_Skybox` faces, and **503 decoded HUD/interface materials**; `--inventory` adds the ~350 item icons. Zero unresolved. Wired into `export_all.py` (`--no-ui`). The `.fnt` atlases are **not** extracted — vector type is `Content/Fonts` via `tools/fetch_ui_fonts.py`. | 8.6 |
 
 ## RE backlog (reverse-engineering work; each cited where consumed)
@@ -1240,7 +1266,7 @@ retail end to end, and `test.bat Play` proves it headlessly.
 | RE17 | **Owner-run reference captures** *(was sky-ambience RE-A6)* — original-game screenshots at the shared vantages (3–4 sky maps + one sky-only view per skyname), for the **world** half of the display ratio (`albedo × lightmap × 2` beside a sky texel — the sky's own transfer is the identity, RE16) and as 7.8's reference. **Gate:** first settle whether `snapshot` grabs pre- or post-gamma-ramp (the display gamma is a device LUT a back-buffer grab omits) — quantitative use waits on that check | 3.6/3.7, 7.8 | [ ] |
 | RE18 | **The script→engine action surface** — the demand ledger (16,438 call sites / 1,287 names) plus the supply side out of `vampire.dll`: all six `PyMethodDef` tables with their `ml_doc` contracts, and the `CBaseCombatCharacter` / `CAI_BaseNPC` / player datamaps behind the 124 unresolved names. Closes `python_bridge.md`'s file-like open item. Full: `docs/script_api.md` | 9.7, 9.8–9.10, 9.4, 8.5 | [x] |
 | RE19 | **Choreographed-scene format + event semantics** — the `.vcd` grammar (uniform word-list/brace, 14 live tokens of a much larger parser vocabulary), the 19-type `CChoreoEvent` enum with **nine** used by content and `CAMERASHOT` unhandled by the engine, the `CSceneEntity` datamap (4 inputs / 7 outputs; `force_lod` is a dead key), actor binding **by name** (`targetN` is inert — `!targetN` has zero uses), `position_start`/`position_end`, absolute-time playback offset by `snd_mixahead`, and `Start→OnStart` / end→`OnCompletion` / `Cancel`→`OnCanceled` / `firetrigger "N"`→`OnTriggerN`. 5,444 scenes on disk, 105 named by the 122 map entities; the rest are per-line dialogue scenes on `CInstancedSceneEntity`. Full: `docs/choreographed_scenes.md`; probe: `tools/probe_scenes.py` | 12.1, PL9 | [x] |
-| RE20 | **MDL v2531 facial data** — flex descriptors/controllers, the eyeball chunks (posing, look-at, lids), and the `.lip` phoneme file format (9.3c logs the scripts' probes) | 12.3–12.5, PL10 | [ ] |
+| RE20 | **MDL v2531 facial data** — the studiohdr facial block (at **344**, eight bytes past the VAMPTools field walk), `mstudioflexdesc_t` 4B / `mstudioflexcontroller_t` 20B / `mstudioflexrule_t` 12B + 8B RPN ops / `mstudiomouth_t` 20B; `StudioFlex` 32B with its target ramp, and **both** `StudioVertAnim` encodings — the 8B compressed record stores *directions*, two byte offsets into a 5,314-entry unit-vector table in `StudioRender.dll` plus `n/255` magnitudes scaled 8.0/2.0, and a 20B raw form (`mingxiao_transformation` only). **`NumEyeballs` is 0 on all 4,444 models** — no eye pose, look-at or procedural lid was ever authored; eyes are eyelid flexes. `.lip` is plain text (7,136 files, `VERSION`/`PLAINTEXT`/`WORDS`/`EMPHASIS`(always empty)/`CLOSECAPTION`/`OPTIONS`), joined to `expressions/<model stem>_phonemes.vfe` (249 tables) for phoneme→controller weights. Corrects `mdl_v2531.md`: `StudioModel` is **224B** and carries its own de-quantization offset/scale at +0xA0. Full: `docs/facial_animation.md`; probe: `tools/probe_facial.py` | 12.3–12.5, PL10 | [x] |
 | RE21 | **`GameFrame` usercmd order** — is player movement processed before or after the think pass? Settles `runtime-architecture.md` §3's inferred ordering (`DumpFuncs funcs=10571fc0`, the RE2 workflow) | 11.1, 4.7 | [ ] |
 | RE22 | **The ducked hull** — Source's crouch AABB dimensions + `CategorizePosition`/`StepMove` interaction (standing `32×32×72` is recorded in `source_movement.md`; ducked is not, and `IN_DUCK` needs it) | 4.7, 11.6 | [ ] |
 | SKY | **Sky + ambience rework, Phases B + C (B1–B8b, C0–C5)** — landed 2026-07-26: backdrop correct + at parity with standing tests (`Elysium.Substrate.SkyCube`/`FogPack`); the whole 3D skybox split by BSP area and placed under its transform; fog from its real owners + Source's own linear distance fog as a per-primitive material term (B8b, D4 amended); the sky light at the map's own authored level (**zero on the 83 no-pair maps**); the bake measured in absolute units — direct light explains ~0% of a median lit face, the bounce floor *is* the ambient level. Open residue promoted to **3.10–3.13 + RE17**. Facts: `sky-ambience.md`; full as-built: `roadmap-archive.md` → SKY | 3.6/3.7 | [x] |
@@ -1297,7 +1323,7 @@ extraction"; durable format/behaviour facts fold into the owning topic docs
 | No classic-UI mode to A/B against | a UI regression has no reference | the original's structure is captured as data (PL8) and in `m0_menu_build.md`, so screens are checked against intent rather than pixels; the *world* keeps its faithful A/B path unchanged |
 | The player stays a pawn + a sheet struct while 9.4/9.8/9.9/9.10/9.5 land on it | five systems built against a shim, then a five-way migration with saves already in the wild | 11.4 is sequenced ahead of all five and named the hinge in "Now"; the target shape is VtMB's own (`savegame_format.md`, `script_api.md`), so it is a port, not an invention |
 | Modal screens fight over input mode (three independent owners today) | the mouse is unusable in some screen order; Cog can make the game unclickable | 11.5's single arbiter + a Substrate test asserting the scope stack balances across every transition |
-| P12's facial RE (RE20) is unknown-duration work that **blocks PP2 in full** (owner call: eyes + lipsync gate the cinematic) | the playable path stalls behind RE | Front-loading worked on the choreography half: **RE19 closed** with the format, the event semantics and the completion contract settled from data + `vampire.dll`, so 12.1 has a spec and PL9 is mechanical. RE20 + PL9/PL10 stay in "Now", parallel to the PP0 refactor; each 12.x step is observable alone |
+| P12's facial RE was unknown-duration work that **blocks PP2 in full** (owner call: eyes + lipsync gate the cinematic) | the playable path stalls behind RE | **Retired as a risk — front-loading worked on both halves.** RE19 closed the scene format, event semantics and completion contract; PL9 mirrored the 5,444 scenes + 7,136 `.lip`; **RE20 closed the face** — the flex chunks, both vertex-animation encodings, the `.lip` grammar and the phoneme tables, validated across 3.3 M records with zero failures (`docs/facial_animation.md`). Only PL10 (a mechanical bake) is left in "Now". The residual is a *scope* question, not an RE one: no eyeball data was ever authored, so 12.4's look-at half is an owner call, tracked on the task |
 | A shots baseline silently invalidates across a re-bake or content rebuild (measured: up to ~10 mean on bounce-dominated vantages from **byte-identical** inputs) | a look regression hides in toolchain noise — or toolchain noise reads as a regression | B6's measured rule: re-baseline after any bake/content change; A/B a small effect as two runs over one fixed asset set (a cvar A/B), never across a rebuild |
 
 ## Decision log

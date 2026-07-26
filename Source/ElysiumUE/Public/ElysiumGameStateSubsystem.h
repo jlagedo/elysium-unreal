@@ -137,6 +137,13 @@ public:
 	// (RE3), so the zeros need no explicit seeding; only the non-zero flags are written.
 	void BeginNewGame(int32 Clan, bool bMale);
 
+	// Drop the run: `G`, the quest map, the sheet and the clock all go back to their fresh-process
+	// values. Called by UElysiumGameFlowSubsystem::QuitToMenu (11.3) so the menu's backdrop world
+	// cannot be running behind a half-live session, and so the next New Game starts from nothing.
+	// This IS the session record until 11.4/11.9 give it a name — everything a run owns today lives
+	// on this subsystem.
+	void EndSession();
+
 	// --- Clock + time control (S1) -------------------------------------------------
 	// The clock is read-only to everyone but the facade beside it (FElysiumGameClock friends
 	// FElysiumTimeControl and nothing else), so `Now` moves in exactly one place: the map

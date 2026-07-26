@@ -544,6 +544,45 @@ Read-only over the install; produces no runtime intermediate. Findings — the 1
 enum, the nine types content uses, actor binding, the timing model and the output contract —
 are in `../docs/choreographed_scenes.md` (roadmap RE19).
 
+**Offline delivery (`UE_extract_scenes.py`, roadmap PL9).** Both plain-text choreography trees
+are copied **verbatim** out of the `sound/` tree, patch-first, no parse/transcode: the **5,444
+`.vcd`** scenes → `out/scenes/` (5,137 from the VPKs, 307 loose patch files shadowing VPK copies)
+and the **7,136 `.lip`** phoneme sidecars → `out/lip/` (15 VPK, 7,121 loose patch). The `sound/`
+prefix is stripped, so each mirror keeps the sound-relative subtree the engine addresses and a
+`SceneFile "sound/CINEMATIC/tutorial/jack_VS_sabbat.vcd"` reads back as
+`out/scenes/CINEMATIC/tutorial/jack_VS_sabbat.vcd` — the same layout rule as `out/sound/`. Two
+roots rather than one because the consumers are separate (12.1 reads the scenes, 12.5 the
+phonemes) and the sub-paths otherwise interleave file-for-file, `.vcd` beside `.lip` beside
+`.wav`. The run also cross-checks every `SceneFile` in the already-exported `.ents` against the
+mirror and names the ones the install does not ship — map data outliving its assets (RE19 counts
+eight, on three maps), not a format question. Whole-game, so `export_all.py` runs it once at end
+of a run (`--no-scenes` to skip). The `.lip` *format* is RE20; PL9 only puts the bytes on disk.
+
+## Facial animation (`.mdl` flex chunks, `.lip`, `expressions/` — `probe_facial.py`)
+
+**`probe_facial.py`** surveys all three facial surfaces the merged install carries and
+validates the struct map *by the data*: the `.mdl` flex block (65 flex descs / 44 flex
+controllers / 60 RPN flex rules on each of the 201 rigged models, plus the per-mesh
+`StudioFlex` array and its two `StudioVertAnim` encodings), the 7,136 `.lip` phoneme
+documents, and the 249 `expressions/*.vfe` + `.txt` phoneme→controller weight tables. Zero
+failures across 17,960 flex records and 3,314,219 vertex-animation records — flexdesc index
+in range, vertex index inside its mesh, vertanim block contiguous with the flex array.
+
+The compressed 8-byte vertex-animation record stores **directions, not deltas**: its two
+`u16` slots are byte offsets into a 5,314-entry unit-vector table compiled into
+`Bin/StudioRender.dll` at `0x2C06E008`, and the trailing bytes are `n/255` magnitudes scaled
+by 8.0 (position) and 2.0 (normal). That table is game-derived, so nothing from it is
+committed — `--anorms <out>` extracts it from the user's own DLL on demand. `--model <key>`
+dumps one model's rig, `--lip <path>` pretty-prints one phoneme document, `--markdown` emits
+the doc tables, `--json` writes the ledger. Read-only over the install; produces no runtime
+intermediate. Findings — the header offsets (the flex block starts at **344**, eight bytes
+past a naive VAMPTools field walk), both vertex-animation encodings, the flex-rule opcode
+set, the **absence of eyeball data in every shipped model**, the `.lip` grammar, and the
+`expressions/<model stem>_phonemes.vfe` naming rule — are in
+`../docs/facial_animation.md` (roadmap RE20). Two `mdl_v2531.md` corrections fell out of it:
+`StudioModel` is **224 bytes**, and it carries its own de-quantization offset/scale at
++0xA0…+0xB4.
+
 ## Game logic (embedded Python 2.1 — `docs/python_bridge.md`)
 
 VtMB runs its story on a **stock CPython 2.1** (`Bin/vampire_python21.dll`, magic 60202,

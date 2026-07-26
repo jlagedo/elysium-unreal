@@ -11,6 +11,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "ElysiumAppState.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumConsole.h"
 #include "ElysiumDecals.h"
@@ -520,6 +521,97 @@ bool FElysiumTimeControlTest::RunTest(const FString&)
 	TestEqual(TEXT("rewound to the given curtime"), Clock.GetNow(), 42.0);
 	TestEqual(TEXT("rewind restores real time"), Time.GetScale(), 1.0);
 	TestFalse(TEXT("rewind releases the hold"), Time.IsPaused());
+
+	return true;
+}
+
+// =====================================================================================
+// The application state machine (11.3, runtime-architecture.md §10). The transition table is
+// plain C++ with no game instance behind it, so the whole rule set is asserted here rather than
+// inferred from a play-through — including the two rules the acceptance turns on: the front end
+// deliberately does not pause, and Boot is reachable from nowhere.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAppStateTest, "Elysium.Substrate.AppState", GElysiumTestFlags)
+bool FElysiumAppStateTest::RunTest(const FString&)
+{
+	using EState = EElysiumAppState;
+	static const EState All[] = { EState::Boot, EState::FrontEnd, EState::Loading,
+		EState::Playing, EState::Paused, EState::GameOver };
+
+	// Every state names itself, and every name round-trips — the console verbs and the agent
+	// surface both speak these strings.
+	for (const EState S : All)
+	{
+		EState Parsed = EState::Boot;
+		TestTrue(TEXT("state name parses back"), ElysiumAppState::Parse(ElysiumAppState::Name(S), Parsed));
+		TestEqual(TEXT("round trip"), static_cast<int32>(Parsed), static_cast<int32>(S));
+	}
+	EState Unused = EState::Boot;
+	TestFalse(TEXT("a non-state does not parse"), ElysiumAppState::Parse(TEXT("Menu"), Unused));
+
+	// Every entry point is idempotent: re-entering the state you are in is never an error.
+	for (const EState S : All)
+	{
+		TestTrue(TEXT("self-transition is legal"), ElysiumAppState::CanEnter(S, S));
+	}
+
+	// **Pause is reachable only from Playing.** The front end running a live backdrop behind the
+	// menu is the feature (8.6), so Esc there must be a no-op rather than a hold.
+	TestTrue(TEXT("Playing pauses"), ElysiumAppState::CanEnter(EState::Playing, EState::Paused));
+	TestFalse(TEXT("FrontEnd does not pause"), ElysiumAppState::CanEnter(EState::FrontEnd, EState::Paused));
+	TestFalse(TEXT("Loading does not pause"), ElysiumAppState::CanEnter(EState::Loading, EState::Paused));
+	TestFalse(TEXT("GameOver does not pause"), ElysiumAppState::CanEnter(EState::GameOver, EState::Paused));
+
+	// Boot is decided once, at game-instance init, and never returned to.
+	for (const EState S : All)
+	{
+		if (S != EState::Boot)
+		{
+			TestFalse(TEXT("nothing re-enters Boot"), ElysiumAppState::CanEnter(S, EState::Boot));
+		}
+	}
+
+	// Any state can travel — New Game, Load, Reload, quit-to-menu, and a trigger_changelevel the
+	// substrate fires on its own all pass through Loading.
+	for (const EState S : All)
+	{
+		TestTrue(TEXT("every state can travel"), ElysiumAppState::CanEnter(S, EState::Loading));
+	}
+
+	// A world only becomes playable by arriving in one (or by leaving the pause menu).
+	TestTrue(TEXT("Loading lands in Playing"), ElysiumAppState::CanEnter(EState::Loading, EState::Playing));
+	TestTrue(TEXT("Paused resumes"), ElysiumAppState::CanEnter(EState::Paused, EState::Playing));
+	TestFalse(TEXT("FrontEnd cannot become Playing without a load"),
+		ElysiumAppState::CanEnter(EState::FrontEnd, EState::Playing));
+	TestFalse(TEXT("a lost run cannot simply resume"),
+		ElysiumAppState::CanEnter(EState::GameOver, EState::Playing));
+
+	// The front end is only ever arrived at: cold boot, or a quit-to-menu travel landing in the
+	// backdrop world.
+	TestTrue(TEXT("boot raises the front end"), ElysiumAppState::CanEnter(EState::Boot, EState::FrontEnd));
+	TestTrue(TEXT("quit-to-menu lands in the front end"),
+		ElysiumAppState::CanEnter(EState::Loading, EState::FrontEnd));
+	TestFalse(TEXT("Playing cannot jump to the front end"),
+		ElysiumAppState::CanEnter(EState::Playing, EState::FrontEnd));
+
+	// A run can be lost from play or from the pause menu, and from nowhere else.
+	TestTrue(TEXT("death ends a running run"), ElysiumAppState::CanEnter(EState::Playing, EState::GameOver));
+	TestTrue(TEXT("death ends a held run"), ElysiumAppState::CanEnter(EState::Paused, EState::GameOver));
+	TestFalse(TEXT("the front end cannot die"),
+		ElysiumAppState::CanEnter(EState::FrontEnd, EState::GameOver));
+
+	// The two derived predicates the UI and the time facade read.
+	TestFalse(TEXT("Boot has no session"), ElysiumAppState::IsInSession(EState::Boot));
+	TestFalse(TEXT("FrontEnd has no session"), ElysiumAppState::IsInSession(EState::FrontEnd));
+	TestTrue(TEXT("Playing is a session"), ElysiumAppState::IsInSession(EState::Playing));
+	TestTrue(TEXT("Paused is a session"), ElysiumAppState::IsInSession(EState::Paused));
+	TestTrue(TEXT("GameOver is a session"), ElysiumAppState::IsInSession(EState::GameOver));
+
+	TestTrue(TEXT("Paused holds the world"), ElysiumAppState::HoldsWorld(EState::Paused));
+	TestTrue(TEXT("GameOver holds the world"), ElysiumAppState::HoldsWorld(EState::GameOver));
+	TestFalse(TEXT("Playing runs the world"), ElysiumAppState::HoldsWorld(EState::Playing));
+	TestFalse(TEXT("FrontEnd runs the world"), ElysiumAppState::HoldsWorld(EState::FrontEnd));
 
 	return true;
 }

@@ -1,7 +1,7 @@
 #include "ElysiumMainMenu.h"
 
 #include "ElysiumContentPaths.h"
-#include "ElysiumMapSubsystem.h"
+#include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumUIStrings.h"
 #include "ElysiumUIStyle.h"
 #include "ElysiumUISubsystem.h"
@@ -59,6 +59,9 @@ UElysiumMainMenu::UElysiumMainMenu()
 	// navigation works with no extra wiring.
 	bIsBackHandler = false;
 	bAutoActivate = true;
+	// Required for NativeOnKeyDown to ever run: SObjectWidget::SupportsKeyboardFocus() reports this
+	// flag, and the UI subsystem's FInputModeUIOnly hands focus to this widget.
+	SetIsFocusable(true);
 }
 
 float UElysiumMainMenu::VirtualScale() const
@@ -76,8 +79,9 @@ TArray<UElysiumMainMenu::FMenuEntry> UElysiumMainMenu::BuildItemSet() const
 	// Retail's own two sets. Multiplayer ships in gamemenu.res and is suppressed by the game, so it
 	// is suppressed here too; View Intro / Tutorial / Manual are shipped tokens with no destination
 	// in this rebuild yet and are left out rather than shown dead.
-	if (bPauseMode)
+	switch (Mode)
 	{
+	case EElysiumMenuMode::Pause:
 		return {
 			{ TEXT("VMainMenu_BTN_CONTINUE"), TEXT("Continue"),   EElysiumMenuCommand::Continue, true },
 			{ TEXT("VMainMenu_BTN_RELOAD"),   TEXT("Reload"),     EElysiumMenuCommand::Reload,   true },
@@ -86,51 +90,66 @@ TArray<UElysiumMainMenu::FMenuEntry> UElysiumMainMenu::BuildItemSet() const
 			{ TEXT("VMainMenu_BTN_OPTIONS"),  TEXT("Options"),    EElysiumMenuCommand::Options,  false },
 			{ TEXT("VMainMenu_BTN_MAINMENU"), TEXT("Main Menu"),  EElysiumMenuCommand::MainMenu, true },
 		};
+
+	case EElysiumMenuMode::GameOver:
+		// The run is over: there is nothing to continue, reload without a save is the same dead
+		// run, and saving a corpse is not offered. Load lands with 11.9.
+		return {
+			{ TEXT("VMainMenu_BTN_LOADGAME"), TEXT("Load Game"), EElysiumMenuCommand::LoadGame, false },
+			{ TEXT("VMainMenu_BTN_MAINMENU"), TEXT("Main Menu"), EElysiumMenuCommand::MainMenu, true },
+			{ TEXT("VMainMenu_BTN_QUIT"),     TEXT("Quit"),      EElysiumMenuCommand::Quit,     true },
+		};
+
+	default:
+		// Save Game is disabled out of game — retail's one main-menu/pause difference, reproduced.
+		return {
+			{ TEXT("VMainMenu_BTN_NEWGAME"),  TEXT("New Game"),  EElysiumMenuCommand::NewGame,  true },
+			{ TEXT("VMainMenu_BTN_LOADGAME"), TEXT("Load Game"), EElysiumMenuCommand::LoadGame, false },
+			{ TEXT("VMainMenu_BTN_SAVEGAME"), TEXT("Save Game"), EElysiumMenuCommand::SaveGame, false },
+			{ TEXT("VMainMenu_BTN_OPTIONS"),  TEXT("Options"),   EElysiumMenuCommand::Options,  false },
+			{ TEXT("VMainMenu_BTN_QUIT"),     TEXT("Quit"),      EElysiumMenuCommand::Quit,     true },
+		};
 	}
-	// Save Game is disabled out of game — retail's one main-menu/pause difference, reproduced.
-	return {
-		{ TEXT("VMainMenu_BTN_NEWGAME"),  TEXT("New Game"),  EElysiumMenuCommand::NewGame,  true },
-		{ TEXT("VMainMenu_BTN_LOADGAME"), TEXT("Load Game"), EElysiumMenuCommand::LoadGame, false },
-		{ TEXT("VMainMenu_BTN_SAVEGAME"), TEXT("Save Game"), EElysiumMenuCommand::SaveGame, false },
-		{ TEXT("VMainMenu_BTN_OPTIONS"),  TEXT("Options"),   EElysiumMenuCommand::Options,  false },
-		{ TEXT("VMainMenu_BTN_QUIT"),     TEXT("Quit"),      EElysiumMenuCommand::Quit,     true },
-	};
 }
 
 void UElysiumMainMenu::Run(EElysiumMenuCommand Command)
 {
 	UGameInstance* GI = GetGameInstance();
-	UElysiumMapSubsystem* Maps = GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
-	UElysiumUISubsystem* UI = GI ? GI->GetSubsystem<UElysiumUISubsystem>() : nullptr;
+	UElysiumGameFlowSubsystem* Flow = GI ? GI->GetSubsystem<UElysiumGameFlowSubsystem>() : nullptr;
+	if (!Flow)
+	{
+		return;
+	}
 
-	// Tearing the screen down goes through the subsystem, not DeactivateWidget: the subsystem owns
-	// the input-mode switch, and it is GI-scoped, so it is the thing that survives the travel a
-	// command like New Game triggers.
-	const auto Close = [UI]() { if (UI) { UI->HideMenu(); } };
-
+	// Every item is a call on the flow subsystem, which owns both the app state and the screen: it
+	// tears the menu down, releases the hold and travels in one place. A screen never hides itself
+	// and then hopes the state agrees.
 	switch (Command)
 	{
 	case EElysiumMenuCommand::NewGame:
-		// 8.6a's seam: seeds the fresh-story state and travels to the story entry landmark. The
-		// backdrop world is standing in that same map with no substrate, so this re-opens it for
-		// real — one map load, which is what buys a menu that can never run half a world.
-		if (Maps)
-		{
-			Close();
-			Maps->NewGame();
-		}
+		// The backdrop world is standing in the menu map with no substrate, so this opens the story
+		// entry for real — one map load, which is what buys a menu that can never run half a world.
+		Flow->NewGame(FElysiumNewGameRequest{});
 		break;
 
 	case EElysiumMenuCommand::Continue:
-		Close();
+		Flow->SetPaused(false);
 		break;
 
 	case EElysiumMenuCommand::Reload:
-		if (Maps)
-		{
-			Close();
-			Maps->Reload();
-		}
+		Flow->ReloadMap();
+		break;
+
+	case EElysiumMenuCommand::MainMenu:
+		Flow->QuitToMenu();
+		break;
+
+	case EElysiumMenuCommand::LoadGame:
+		Flow->LoadGame(FString());
+		break;
+
+	case EElysiumMenuCommand::SaveGame:
+		Flow->SaveGame(FString(), EElysiumSaveKind::Manual);
 		break;
 
 	case EElysiumMenuCommand::Quit:
@@ -141,11 +160,33 @@ void UElysiumMainMenu::Run(EElysiumMenuCommand Command)
 		break;
 
 	default:
-		// Load/Save/Options/MainMenu have no backing system yet (9.5 saves, 8.10 options). They are
-		// drawn disabled, so this is only reachable if an item's enabled flag is wrong.
+		// Options has no backing system yet (8.10) and is drawn disabled, so this is only reachable
+		// if an item's enabled flag is wrong.
 		UE_LOG(LogElysiumMenu, Log, TEXT("menu command %d has no destination yet"), int32(Command));
 		break;
 	}
+}
+
+FReply UElysiumMainMenu::NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& KeyEvent)
+{
+	if (KeyEvent.GetKey() == EKeys::Escape)
+	{
+		// Pause is the only mode Escape leaves: the front end has nothing behind it to go back to,
+		// and a lost run is not dismissible. In those two it is still consumed, so the key cannot
+		// reach the game underneath.
+		if (Mode == EElysiumMenuMode::Pause)
+		{
+			if (UGameInstance* GI = GetGameInstance())
+			{
+				if (UElysiumGameFlowSubsystem* Flow = GI->GetSubsystem<UElysiumGameFlowSubsystem>())
+				{
+					Flow->SetPaused(false);
+				}
+			}
+		}
+		return FReply::Handled();
+	}
+	return Super::NativeOnKeyDown(Geometry, KeyEvent);
 }
 
 TSharedRef<SWidget> UElysiumMainMenu::RebuildWidget()
@@ -244,31 +285,52 @@ TSharedRef<SWidget> UElysiumMainMenu::RebuildWidget()
 			];
 	}
 
-	// The title lockup, read from the user's own install. Absent (no export yet) -> the wordmark is
-	// set in type instead, so the menu still reads rather than showing a hole.
+	// The head of the screen. The title lockup is the front door's, read from the user's own install;
+	// the game-over screen states why the run ended instead, because the wordmark is not what that
+	// moment is about.
 	TSharedRef<SWidget> Title = SNullWidget::NullWidget;
-	if (!TitleTexture)
+	if (Mode == EElysiumMenuMode::GameOver)
 	{
-		TitleTexture = ElysiumUI::LoadPngTexture(FElysiumContentPaths::UiTitle());
-	}
-	if (TitleTexture)
-	{
-		TitleBrush = MakeShared<FSlateBrush>();
-		TitleBrush->SetResourceObject(TitleTexture);
-		TitleBrush->ImageSize = FVector2D(TitleVirtualWidth, TitleVirtualWidth / TitleAspect);
-		TitleBrush->DrawAs = ESlateBrushDrawType::Image;
-		Title = SNew(SImage).Image(TitleBrush.Get());
+		const UElysiumGameFlowSubsystem* Flow =
+			GetGameInstance() ? GetGameInstance()->GetSubsystem<UElysiumGameFlowSubsystem>() : nullptr;
+		const bool bMasquerade = Flow
+			&& Flow->LastGameOverReason() == EElysiumGameOverReason::MasqueradeBreach;
+		Title = SNew(STextBlock)
+			.Text(bMasquerade
+				? NSLOCTEXT("Elysium", "GameOverMasquerade", "The Masquerade is broken")
+				: NSLOCTEXT("Elysium", "GameOverKilled", "Final Death"))
+			.Font(Fonts.Font(EElysiumFontRole::Label, EElysiumFontWeight::SemiBold,
+			                 ElysiumUI::Type::Display, 1.0f))
+			.Justification(ETextJustify::Center)
+			.ColorAndOpacity(FSlateColor(ElysiumUI::Palette::Blood));
 	}
 	else
 	{
-		UE_LOG(LogElysiumMenu, Warning,
-			TEXT("no title lockup at %s — run: python tools/UE_extract_ui.py"),
-			*FElysiumContentPaths::UiTitle());
-		Title = SNew(STextBlock)
-			.Text(NSLOCTEXT("Elysium", "TitleFallback", "Elysium"))
-			.Font(Fonts.Font(EElysiumFontRole::Label, EElysiumFontWeight::SemiBold,
-			                 ElysiumUI::Type::Display, 1.0f))
-			.ColorAndOpacity(FSlateColor(ElysiumUI::Palette::GoldLit));
+		// Absent (no export yet) -> the wordmark is set in type instead, so the menu still reads
+		// rather than showing a hole.
+		if (!TitleTexture)
+		{
+			TitleTexture = ElysiumUI::LoadPngTexture(FElysiumContentPaths::UiTitle());
+		}
+		if (TitleTexture)
+		{
+			TitleBrush = MakeShared<FSlateBrush>();
+			TitleBrush->SetResourceObject(TitleTexture);
+			TitleBrush->ImageSize = FVector2D(TitleVirtualWidth, TitleVirtualWidth / TitleAspect);
+			TitleBrush->DrawAs = ESlateBrushDrawType::Image;
+			Title = SNew(SImage).Image(TitleBrush.Get());
+		}
+		else
+		{
+			UE_LOG(LogElysiumMenu, Warning,
+				TEXT("no title lockup at %s — run: python tools/UE_extract_ui.py"),
+				*FElysiumContentPaths::UiTitle());
+			Title = SNew(STextBlock)
+				.Text(NSLOCTEXT("Elysium", "TitleFallback", "Elysium"))
+				.Font(Fonts.Font(EElysiumFontRole::Label, EElysiumFontWeight::SemiBold,
+				                 ElysiumUI::Type::Display, 1.0f))
+				.ColorAndOpacity(FSlateColor(ElysiumUI::Palette::GoldLit));
+		}
 	}
 
 	// A scrim under the whole screen. VtMB needs none — every background colour in VampireScheme is

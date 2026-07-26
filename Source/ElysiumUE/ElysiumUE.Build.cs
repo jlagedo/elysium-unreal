@@ -46,7 +46,12 @@ public class ElysiumUE : ModuleRules
 			// *visual trees* are still built in C++ Slate inside UCommonActivatableWidget
 			// subclasses, so adopting it costs no Widget Blueprint assets -- only the one
 			// CommonUIInputData asset CommonInput requires as config.
-			"UMG", "CommonUI", "CommonInput"
+			"UMG", "CommonUI", "CommonInput",
+			// 11.3 the loading screen. The engine's own movie player is the only thing that can
+			// draw while the game thread is blocked inside LoadMap. It resolves to
+			// FNullGameMoviePlayer in the editor and under -nullrhi, so the hook is an automatic
+			// no-op in PIE and in the headless test tiers.
+			"MoviePlayer"
 		});
 
 		// P6 audio: vendored single-header decoders under Private/ThirdParty (public domain) --

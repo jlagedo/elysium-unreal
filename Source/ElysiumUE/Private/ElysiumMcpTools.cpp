@@ -7,6 +7,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumLogTap.h"
 #include "ElysiumMapActor.h"
@@ -519,6 +520,13 @@ namespace ElysiumMcpImpl
 					Body->SetArrayField(TEXT("maps"), Names);
 					Body->SetStringField(TEXT("current"), Maps->GetCurrentMapName());
 					Body->SetStringField(TEXT("pending_travel"), Maps->PendingTravelDesc());
+					// The app state is what says whether the loaded map is a menu backdrop, a running
+					// session or a held one — the same poll answers "has the travel landed" and "what
+					// kind of world am I in" (11.3).
+					if (const UElysiumGameFlowSubsystem* Flow = Sub<UElysiumGameFlowSubsystem>())
+					{
+						Body->SetStringField(TEXT("app_state"), ElysiumAppState::Name(Flow->AppState()));
+					}
 					if (AElysiumMapActor* Map = Maps->GetCurrentMap())
 					{
 						Body->SetStringField(TEXT("entry_landmark"), Map->EntryLandmark);
@@ -595,15 +603,21 @@ namespace ElysiumMcpImpl
 				[](const TSharedPtr<FJsonObject>& Params) -> FModelContextProtocolToolResult
 				{
 					UElysiumMapSubsystem* Maps = Sub<UElysiumMapSubsystem>();
-					if (!Maps)
+					UElysiumGameFlowSubsystem* Flow = Sub<UElysiumGameFlowSubsystem>();
+					if (!Maps || !Flow)
 					{
 						return MakeErrorResult(TEXT("no game running"));
 					}
 					const int32 Clan = ParamInt(Params, TEXT("clan"), 2);
 					const bool bMale = ParamBool(Params, TEXT("male"), true);
 
+					FElysiumNewGameRequest Request;
+					Request.Clan = Clan;
+					Request.bMale = bMale;
+
 					TSharedRef<FJsonObject> Body = Obj();
-					Body->SetBoolField(TEXT("ok"), Maps->NewGame(Clan, bMale));
+					Body->SetBoolField(TEXT("ok"), Flow->NewGame(Request));
+					Body->SetStringField(TEXT("app_state"), ElysiumAppState::Name(Flow->AppState()));
 					Body->SetNumberField(TEXT("clan"), Clan);
 					Body->SetStringField(TEXT("clan_name"), FElysiumPlayerSheet::ClanName(Clan));
 					AddTravelOutcome(Body, Maps);

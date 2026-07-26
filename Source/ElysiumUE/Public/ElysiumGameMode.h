@@ -4,9 +4,10 @@
 #include "GameFramework/GameModeBase.h"
 #include "ElysiumGameMode.generated.h"
 
-// Boot game mode: spawns a flying/colliding DefaultPawn and, on BeginPlay, the world
-// actor that loads the map from the runtime intermediates. Set as the project's default
-// game mode so an otherwise-empty boot level renders the map.
+// The per-world game mode: the pawn/HUD/controller classes, the no-pawn-on-a-backdrop rule, and
+// one `NotifyWorldReady` on BeginPlay. Boot, the app state machine and the session live on
+// UElysiumGameFlowSubsystem — a game mode is per-world, and all three must survive travel
+// (roadmap 11.3, `docs/runtime-architecture.md` §10).
 UCLASS()
 class AElysiumGameMode : public AGameModeBase
 {
@@ -22,8 +23,4 @@ public:
 	// during PostLogin, which is why the map subsystem latches the mode at Travel time rather than
 	// when the map actor is spawned.
 	virtual UClass* GetDefaultPawnClassForController_Implementation(AController* InController) override;
-
-private:
-	// Stand the menu camera at the vantage `elysium.MenuVantage` names and raise the menu.
-	void EnterMenuBackdrop();
 };

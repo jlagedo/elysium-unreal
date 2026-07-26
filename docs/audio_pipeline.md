@@ -301,8 +301,9 @@ The map viewer's job is *atmosphere first*, story audio later. Priority order:
 4. **Footstep/impact sounds** — needs the player/physics-material layer first.
 5. **Dialogue + sentences + `.vcd`/`.lip`** — deferred with the story/NPC port;
    large (5k+ lines). The `.vcd` half is decoded — grammar, event semantics and the
-   scene entity are in `choreographed_scenes.md`, surveyed by `tools/probe_scenes.py`;
-   `.lip` remains unhandled (roadmap RE20).
+   scene entity are in `choreographed_scenes.md`, surveyed by `tools/probe_scenes.py`; the
+   `.lip` half is decoded in `facial_animation.md` (7,136 plain-text phoneme documents, one
+   per line, surveyed by `tools/probe_facial.py`) but has no runtime consumer yet.
 
 ## 11. Mapping to Godot 4
 

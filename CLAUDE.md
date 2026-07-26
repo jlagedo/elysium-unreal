@@ -182,6 +182,7 @@ facts, valid regardless of target engine. Organisation and maintenance rules: `d
 | `game_runtime.md` | main loop, three-layer split, RPG data model, the opening flow |
 | `animation_and_movers.md` | skeletal `.mdl` v2531 (Part A) + brush movers (Part B) |
 | `choreographed_scenes.md` | the `.vcd` choreo format + `logic_choreographed_scene` — event types, actor binding, timing, the completion contract |
+| `facial_animation.md` | the face — `.mdl` flex/eyeball chunks, the flex-rule RPN, the `.lip` phoneme files, `expressions/` |
 | `mdl_v2531.md` | the static-geometry `.mdl` struct map |
 | `phy_vphysics.md` | the `.phy` collision-model format — convex ledges, authored mass, axis mapping |
 | `audio_pipeline.md` | codecs, mixer, DSP, the SoundScheme system |

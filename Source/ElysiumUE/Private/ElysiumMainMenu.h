@@ -3,6 +3,8 @@
 #include "CommonActivatableWidget.h"
 #include "CoreMinimal.h"
 
+#include "ElysiumUISubsystem.h"
+
 #include "ElysiumMainMenu.generated.h"
 
 class UTexture2D;
@@ -23,9 +25,10 @@ enum class EElysiumMenuCommand : uint8
 	Quit,
 };
 
-// The main / pause menu (roadmap 8.6). A `UCommonActivatableWidget` whose visual tree is built in
-// C++ Slate — CommonUI supplies the activation stack, input routing and focus; no Widget Blueprint
-// asset is involved (`docs/decisions.md` 2026-07-26).
+// The main / pause / game-over menu (roadmap 8.6, driven by the app state machine at 11.3). A
+// `UCommonActivatableWidget` whose visual tree is built in C++ Slate — CommonUI supplies the
+// activation stack, input routing and focus; no Widget Blueprint asset is involved
+// (`docs/decisions.md` 2026-07-26).
 //
 // Layout reproduces `CVMainMenu::PerformLayout` in VtMB's own 1024x768 virtual canvas: every item
 // is sized to the **widest** label plus 20x4 virtual px of padding, stacked at
@@ -40,14 +43,22 @@ class UElysiumMainMenu : public UCommonActivatableWidget
 public:
 	UElysiumMainMenu();
 
-	// Pause mode swaps the item set (Continue/Reload/.../Main Menu) and enables Save Game, which is
-	// the *entire* main-menu-vs-pause difference in retail — `CBasePanel::OnThink` does nothing but
-	// gate `SaveGame` on `IsInGame` (`docs/vtmb-ui.md` §2). Call before the widget is constructed.
-	void SetPauseMode(bool bInPauseMode) { bPauseMode = bInPauseMode; }
+	// Which item set to build. Pause swaps to Continue/Reload/.../Main Menu and enables Save Game,
+	// which is the *entire* main-menu-vs-pause difference in retail — `CBasePanel::OnThink` does
+	// nothing but gate `SaveGame` on `IsInGame` (`docs/vtmb-ui.md` §2). GameOver is ours: the run is
+	// over, so only Load / Main Menu / Quit are offered and the title lockup is replaced by the
+	// reason the run ended. Call before the widget is constructed.
+	void SetMenuMode(EElysiumMenuMode InMode) { Mode = InMode; }
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void ReleaseSlateResources(bool bReleaseChildren) override;
+
+	// Escape closes the pause menu (the same key that opened it) and is swallowed everywhere else a
+	// menu is up, so it can never fall through to the game while a screen owns the screen. The
+	// keyboard route exists because CommonUI's Back action needs the `CommonUIInputData` asset that
+	// 8.6 still owes; when that lands this becomes the back handler instead.
+	virtual FReply NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& KeyEvent) override;
 
 private:
 	struct FMenuEntry
@@ -73,5 +84,5 @@ private:
 	TSharedPtr<FSlateBrush> TitleBrush;
 	TSharedPtr<FSlateBrush> ScrimBrush;
 
-	bool bPauseMode = false;
+	EElysiumMenuMode Mode = EElysiumMenuMode::Main;
 };

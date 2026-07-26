@@ -12,7 +12,8 @@ imagebase `0x10000000`. The data half is surveyed by **`tools/probe_scenes.py`**
 Related: `animation_and_movers.md` (the `.mdl` animation the scenes drive),
 `audio_pipeline.md` (the sound the `speak` events play), `entity_io.md` (the output wires
 the scenes fire), `game_runtime.md` (where the opening cinematic sits in the story flow).
-Facial flex, eyeballs and the `.lip` phoneme files are **not** here — they are RE20.
+Facial flex, eyeballs and the `.lip` phoneme files are **not** here — they are
+`facial_animation.md`.
 
 ## Inventory
 
@@ -21,8 +22,8 @@ Facial flex, eyeballs and the `.lip` phoneme files are **not** here — they are
 | `.vcd` on disk (patch-first merge of VPK + `Unofficial_Patch`) | **5,444** (5,300 VPK, 307 loose patch) |
 | `logic_choreographed_scene` entities across the 108 maps | **122**, on 30 maps |
 | distinct `SceneFile` values they name | 113 — **105 resolve**, 8 do not |
-| `.lip` phoneme files beside the audio | 7,136 (RE20) |
-| `expressions/*.txt` + `*.vfe` flex tables | 249 pairs (RE20) |
+| `.lip` phoneme files beside the audio | 7,136 (`facial_animation.md`) |
+| `expressions/*.txt` + `*.vfe` flex tables | 249 pairs (`facial_animation.md`) |
 
 So **~5,300 of the 5,444 scenes are never named by a map**: they are per-line dialogue
 scenes, one `…/line431_col_e.vcd` beside each `line431_col_e.wav`. The `.vcd` — not the
@@ -160,7 +161,8 @@ both the actor's business.
 event, and their `param` is the event's own duration as a string (`"0.590"` for
 `time 1.110000 1.700000`) — exact on 21,877 of 21,898. They are the **amplitude envelope of
 the line**, cut from the wav at author time: 4,927 of 5,444 scenes carry one. This is
-VtMB's jaw-flap track and is independent of the `.lip` phoneme files (RE20).
+VtMB's jaw-flap track and is independent of the `.lip` phoneme files
+(`facial_animation.md`) — as is `mstudiomouth_t`, the model's own amplitude-driven jaw.
 
 `CAMERASHOT` is registered, named, parsed — and unhandled. `SECTION`, `LOOKAT`, `MOVETO`,
 `FACE`, `FLEXANIMATION`, `SUBSCENE`, `LOOP`, `CAMERAMOVE` and `CAMERARESTORE` all have
@@ -388,14 +390,21 @@ its own flags in place. This is the path the ~5,300 per-line `.vcd`s run on.
   embrace scenes and the two Prince-escort scenes.
 
 Open, and owned elsewhere: what `full_sound` and `force_lod_2` change (both read once each,
-in the speak path and the actor pass), what sets the intro-skip flag, and the whole facial
-layer — `expression`'s flex tables, the eyeballs and the `.lip` phoneme files (**RE20**).
+in the speak path and the actor pass), and what sets the intro-skip flag. The facial layer
+`expression` and the `.lip` files feed is settled in **`facial_animation.md`** — flex
+controllers, the flex-rule RPN, both vertex-animation encodings and the phoneme tables. It
+also settles what is *not* there: **no shipped model carries eyeball data**, so a scene's
+faces are eyelid flexes, not eye poses.
 
 ## Provenance
 
 Data half: `tools/probe_scenes.py` (whole-install `.vcd` survey — grammar, channel/event
 histograms, per-type key and value shapes, map cross-reference). Binary half: the Ghidra
 workspace (`tools/ghidra/README.md`), `vampire.dll`, imagebase `0x10000000`.
+
+The runtime reads the scenes out of the offline mirror `tools/UE_extract_scenes.py` writes
+(roadmap PL9): every `.vcd` under `out/scenes/` and every `.lip` under `out/lip/`, verbatim and
+patch-first, with the `sound/` prefix stripped — so a `SceneFile` is that path minus `sound/`.
 
 | What | Address |
 |---|---|

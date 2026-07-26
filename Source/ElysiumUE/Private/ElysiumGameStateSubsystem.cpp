@@ -63,6 +63,17 @@ void UElysiumGameStateSubsystem::BeginNewGame(int32 Clan, bool bMale)
 		Sheet.Clan, FElysiumPlayerSheet::ClanName(Sheet.Clan), Sheet.bMale ? TEXT("male") : TEXT("female"));
 }
 
+void UElysiumGameStateSubsystem::EndSession()
+{
+	ClearAllGlobals();
+	Quests.Reset();
+	Sheet = FElysiumPlayerSheet{};
+	// The clock is session time (`curtime`), so it rewinds with the run. ResetClock also clears any
+	// hold, scale and armed dev step, and re-stamps the engine side.
+	TimeCtl.ResetClock();
+	UE_LOG(LogElysiumState, Display, TEXT("session ended — G, quests, sheet and clock cleared"));
+}
+
 void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);

@@ -22,6 +22,7 @@ Usage:
   python tools/export_all.py --no-signs          # skip the sign definition/background copy
   python tools/export_all.py --no-vdata          # skip the vdata rulebook copy
   python tools/export_all.py --no-cfg            # skip the console cfg copy
+  python tools/export_all.py --no-scenes         # skip the choreo scene/.lip copy
   python tools/export_all.py --npc               # also batch-export NPC glbs + shared banks
 """
 import os, sys, time, subprocess, shutil, traceback
@@ -31,6 +32,7 @@ import UE_extract_scripts as SC
 import UE_extract_signs as SG
 import UE_extract_vdata as VD
 import UE_extract_cfg as CF
+import UE_extract_scenes as SN
 import UE_extract_ui as UI
 import install
 
@@ -113,6 +115,7 @@ def main():
     skip_signs = "--no-signs" in args
     skip_vdata = "--no-vdata" in args
     skip_cfg = "--no-cfg" in args
+    skip_scenes = "--no-scenes" in args
     skip_ui = "--no-ui" in args
     export_all = "--all" in args
     only = [a for a in args if not a.startswith("--")]
@@ -225,6 +228,18 @@ def main():
             CF.main()
         except Exception as e:
             print(f"[cfg] FAILED: {e}", flush=True)
+            traceback.print_exc()
+
+    # Copy the choreographed scenes (.vcd) + phoneme sidecars (.lip) verbatim into out/scenes
+    # and out/lip. Whole-game like the other mirrors, so once after the loop and on a zero-map
+    # invocation too -- its SceneFile cross-check reads whatever .ents are already exported.
+    # Consumers: the scene player (roadmap 12.1, docs/choreographed_scenes.md) and lipsync (12.5).
+    if not skip_scenes:
+        print("\n[scenes] copying choreographed scenes + phoneme files ...", flush=True)
+        try:
+            SN.main()
+        except Exception as e:
+            print(f"[scenes] FAILED: {e}", flush=True)
             traceback.print_exc()
 
     # Batch-export the NPCs the exported maps reference (PL4): per-NPC mesh glbs (mesh + skeleton +

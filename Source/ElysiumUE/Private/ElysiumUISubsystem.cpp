@@ -15,6 +15,19 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumUI, Log, All);
 
+namespace
+{
+	const TCHAR* MenuModeName(EElysiumMenuMode Mode)
+	{
+		switch (Mode)
+		{
+		case EElysiumMenuMode::Pause:    return TEXT("pause");
+		case EElysiumMenuMode::GameOver: return TEXT("game over");
+		default:                         return TEXT("main");
+		}
+	}
+}
+
 void UElysiumUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
@@ -22,11 +35,23 @@ void UElysiumUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	IConsoleManager& Console = IConsoleManager::Get();
 	ConsoleObjects.Add(Console.RegisterConsoleCommand(
 		TEXT("elysium.menu"),
-		TEXT("Show the menu. 'elysium.menu pause' shows the pause item set."),
+		TEXT("Show the menu. 'elysium.menu pause' / 'elysium.menu gameover' show those item sets. "
+			"This raises the screen only — `elysium.pausemenu` is what actually pauses the run."),
 		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
 		{
-			const bool bPause = Args.Num() > 0 && Args[0].StartsWith(TEXT("p"));
-			ShowMenu(bPause);
+			EElysiumMenuMode Mode = EElysiumMenuMode::Main;
+			if (Args.Num() > 0)
+			{
+				if (Args[0].StartsWith(TEXT("p"), ESearchCase::IgnoreCase))
+				{
+					Mode = EElysiumMenuMode::Pause;
+				}
+				else if (Args[0].StartsWith(TEXT("g"), ESearchCase::IgnoreCase))
+				{
+					Mode = EElysiumMenuMode::GameOver;
+				}
+			}
+			ShowMenu(Mode);
 		}),
 		ECVF_Default));
 
@@ -58,7 +83,16 @@ void UElysiumUISubsystem::ApplyInputMode(bool bUIOnly)
 	}
 	if (bUIOnly)
 	{
-		PC->SetInputMode(FInputModeUIOnly().SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock));
+		FInputModeUIOnly Mode;
+		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		// Focus the screen itself so Escape reaches it. Without this, focus stays on the game
+		// viewport widget and the menu's key handler never runs — the pause menu would open on Esc
+		// and then refuse to close on the same key.
+		if (Menu)
+		{
+			Mode.SetWidgetToFocus(Menu->TakeWidget());
+		}
+		PC->SetInputMode(Mode);
 		PC->SetShowMouseCursor(true);
 #if ENABLE_COG
 		// A game screen outranks the debug UI for the mouse. While Cog holds input, ImGui consumes
@@ -88,12 +122,19 @@ void UElysiumUISubsystem::ApplyInputMode(bool bUIOnly)
 	}
 }
 
-void UElysiumUISubsystem::ShowMenu(bool bPauseMode)
+void UElysiumUISubsystem::ShowMenu(EElysiumMenuMode Mode)
 {
 	if (Menu)
 	{
-		return;
+		if (CurrentMode == Mode)
+		{
+			return;
+		}
+		// A mode change is a different item set, and the tree is built once in RebuildWidget — so
+		// swap the screen rather than trying to mutate it. This is the death-during-pause case.
+		HideMenu();
 	}
+
 	UGameInstance* GI = GetGameInstance();
 	APlayerController* PC = GI ? GI->GetFirstLocalPlayerController() : nullptr;
 	if (!PC)
@@ -108,7 +149,8 @@ void UElysiumUISubsystem::ShowMenu(bool bPauseMode)
 		UE_LOG(LogElysiumUI, Error, TEXT("failed to create the menu widget"));
 		return;
 	}
-	Menu->SetPauseMode(bPauseMode);
+	CurrentMode = Mode;
+	Menu->SetMenuMode(Mode);
 	Menu->AddToViewport(/*ZOrder*/ 100);
 	// A UCommonActivatableWidget is collapsed until it is activated. `bAutoActivate` only fires for
 	// widgets pushed onto a UCommonActivatableWidgetContainer, and this one goes straight to the
@@ -117,7 +159,7 @@ void UElysiumUISubsystem::ShowMenu(bool bPauseMode)
 	Menu->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	ApplyInputMode(/*bUIOnly*/ true);
 
-	UE_LOG(LogElysiumUI, Log, TEXT("menu shown (%s)"), bPauseMode ? TEXT("pause") : TEXT("main"));
+	UE_LOG(LogElysiumUI, Log, TEXT("menu shown (%s)"), MenuModeName(Mode));
 }
 
 void UElysiumUISubsystem::HideMenu()
