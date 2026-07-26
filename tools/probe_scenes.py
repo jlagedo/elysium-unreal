@@ -292,7 +292,9 @@ def main():
             print("| `%s` | %d | %d | %s |" % (t, c, len(s["event_names"][t]), sub or "—"))
         return
 
-    print("scenes on disk (patch-first merge): %d" % len(keys))
+    print("scenes surveyed: %d (%s)" %
+          (len(keys), "map-referenced only" if args.referenced
+           else "every .vcd in the patch-first merge"))
     print("referenced by a logic_choreographed_scene: %d entities, %d distinct SceneFile, "
           "%d resolve" % (len(ents), len(refs), len(resolved)))
     missing = sorted(r for r in refs if r not in idx)

@@ -65,6 +65,12 @@ Played by `Character.PlayDialogFile("Character/dlg/.../lineNNN_col_e.mp3")` [scr
 resolved through the datamap method table (see `python_bridge.md`), with the paired
 `.lip` driving mouth animation and the `.vcd` sequencing the scene.
 
+**The choreo `speak` path resolves `.mp3` first** [VtMB]: `FUN_10081700` in `vampire.dll`
+builds `sound/<param>`, swaps the extension for `.mp3`, and plays `*<name>.mp3` when that
+file exists, falling back to the authored `*<name>` (`.wav`) when it does not — the `*`
+being Source's stream prefix. So a scene authored against a `.wav` normally plays the
+shipped MP3. The scene layer itself: `choreographed_scenes.md`.
+
 ## 3. The engine: mixer, channels, codecs, prefixes (stock Source)
 
 All in `engine.dll`, unchanged from Source [VtMB] cross-checked against
@@ -294,7 +300,9 @@ The map viewer's job is *atmosphere first*, story audio later. Priority order:
 3. **DSP rooms** — optional polish; map `RoomDSP` presets to reverb buses.
 4. **Footstep/impact sounds** — needs the player/physics-material layer first.
 5. **Dialogue + sentences + `.vcd`/`.lip`** — deferred with the story/NPC port;
-   large (5k+ lines, choreography + lipsync unhandled by any current tool).
+   large (5k+ lines). The `.vcd` half is decoded — grammar, event semantics and the
+   scene entity are in `choreographed_scenes.md`, surveyed by `tools/probe_scenes.py`;
+   `.lip` remains unhandled (roadmap RE20).
 
 ## 11. Mapping to Godot 4
 

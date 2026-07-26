@@ -111,8 +111,9 @@ deps below — refresh it whenever a task flips:
    today's `FElysiumPlayerSheet` shim is a migration later. 11.4's other dep, 11.2, is met.
 2. **11.5 → 11.6 → 11.8 → 11.10** — close PP0: scopes, commands + user command, the view seam,
    the play harness.
-3. **RE19/RE20 + PL9/PL10** — front-load the P12 unknowns (scene format, flex/eyes/`.lip`): the
-   highest-variance items on the path, spiked in parallel while PP0 lands.
+3. **RE20 + PL9/PL10** — the remaining P12 unknowns (flex/eyes/`.lip`), spiked in parallel while
+   PP0 lands. *(RE19 [x] — the scene format and event semantics are settled:
+   `docs/choreographed_scenes.md`. PL9's scope is now mechanical; 12.1 is unblocked on its RE dep.)*
 4. **9.7d** — land `OneOfSet` and the shadowed-name split: 589 dialogue gates currently fail
    closed, the fix needs no backing system, and PP3's dialogue depends on those gates.
 
@@ -1150,14 +1151,18 @@ Save and Load round-trip the run, and `test.bat Play` asserts the whole thing he
 The intro cinematic (`sp_theatre` — embrace + trial) as VtMB plays it: `logic_choreographed_scene`
 driving actors, scripted camera (11.7), line audio, subtitles, and facial animation. The fidelity
 bar is an owner call: the scene is not done until the faces are alive — **eyes and lipsync
-included**. RE unknowns are front-loaded (RE19/RE20 + PL9/PL10 in "Now") because this is the
-highest-variance work on the path.
+included**. The RE unknowns are front-loaded in "Now" because this is the highest-variance
+work on the path: **RE19 is closed** (the scene format and event semantics —
+`docs/choreographed_scenes.md`), leaving RE20 + PL9/PL10 (flex/eyes/`.lip`).
 
 - [ ] **12.1 Choreographed scenes** — `logic_choreographed_scene` as a real class + the scene-file
-  parser (PL9) + an event timeline on the game clock (speak / gesture / sequence / move / camera
-  events), `Start`/`Cancel` inputs and the completion outputs; actors resolve by name and play
-  through the 8.5 anim seam. *Acceptance:* the theatre's first scene runs its actors and fires its
-  completion wires in the built game. *Deps:* 8.5, 11.1, RE19, PL9.
+  parser (PL9) + an event timeline on the game clock, `Start`/`Pause`/`Resume`/`Cancel` inputs and
+  the seven outputs; actors resolve **by name** and play through the 8.5 anim seam. Spec:
+  `docs/choreographed_scenes.md` (RE19) — nine live event types (`speak`, `silence`, `loud`,
+  `expression`, `gesture`, `sequence`, `firetrigger`, `python`, `bodysound`), absolute scene time
+  offset by the audio mixahead, `position_start`/`position_end` actor placement, and
+  `firetrigger "N"` → `OnTriggerN`. *Acceptance:* the theatre's first scene runs its actors and
+  fires its completion wires in the built game. *Deps:* 8.5, 11.1, RE19 [x], PL9.
 - [ ] **12.2 Scene audio + subtitles** — per-line audio through the 6.2 decode path (the
   `PlayDialogFile` file-resolution rules) synced to scene time; a subtitle surface on the view
   state (11.8). *Acceptance:* the scene's lines are audible and subtitled in sync. *Deps:* 12.1,
@@ -1208,7 +1213,7 @@ retail end to end, and `test.bat Play` proves it headlessly.
 | PL6 | Texlight merge in exporter | 3.4 |
 | PL11 | Remove the dead Lumen-card path the bake superseded (found by 0.9): `export_all.py`'s `bake_cards`/`--no-cards` calls a `cards.bat` that no longer exists and prints a "skipped" line every run; `ElysiumCardGen.cpp` (`ELYSIUM_WITH_CARDGEN`, `elysium.cards.probe`) still builds into editor targets. Nothing depends on either | 0.9 |
 | PL7 | Sidecar space fixes surfaced by the audit — **none (0.4: all sidecars already Unreal cm)** | 0.4 [x] |
-| PL9 | Mirror the choreographed-scene files + `.lip` phoneme files → `out/scenes/`, `out/lip/` — patch-first, verbatim (format per RE19/RE20) | 12.1, 12.5 |
+| PL9 | Mirror the choreographed-scene files + `.lip` phoneme files → `out/scenes/`, `out/lip/` — patch-first, verbatim. Scope is settled by RE19: **5,444 `.vcd` + 7,136 `.lip`**, all under `sound/`, plain text needing no transcode (`docs/choreographed_scenes.md`) | 12.1, 12.5 |
 | PL10 | Facial data in the NPC export — flex/eyeball chunks (RE20) decoded by `mdl_skel` into glb **morph targets** + a flex-name manifest per bank | 12.3, 12.4 |
 | PL8 ✅ | UI source inventory for the re-skin — **`tools/UE_extract_ui.py`** mirrors `out/ui/`: 25 `.res` layouts + **both** schemes byte-for-byte (`VampireScheme` skins client.dll, `TrackerScheme` skins GameUI.dll — `docs/vtmb-ui.md`), 194 localized strings, the 1024×512 title lockup, the menu particle scene (26 scripts → 22 `.tga` sprites) + the 6 `MM_Skybox` faces, and **503 decoded HUD/interface materials**; `--inventory` adds the ~350 item icons. Zero unresolved. Wired into `export_all.py` (`--no-ui`). The `.fnt` atlases are **not** extracted — vector type is `Content/Fonts` via `tools/fetch_ui_fonts.py`. | 8.6 |
 
@@ -1234,7 +1239,7 @@ retail end to end, and `test.bat Play` proves it headlessly.
 | RE16 | **The sky's brightness chain (K7, RE-A9)** — the identity: a sky pixel is the decoded texel, unscaled, `$nofog` game-wide; the one asymmetry is the world's `albedo × lightmap × 2` (overbright pinned to 2). Full: `sky-ambience.md` → K7 | SKY B4/B5/B8, D7 | [x] |
 | RE17 | **Owner-run reference captures** *(was sky-ambience RE-A6)* — original-game screenshots at the shared vantages (3–4 sky maps + one sky-only view per skyname), for the **world** half of the display ratio (`albedo × lightmap × 2` beside a sky texel — the sky's own transfer is the identity, RE16) and as 7.8's reference. **Gate:** first settle whether `snapshot` grabs pre- or post-gamma-ramp (the display gamma is a device LUT a back-buffer grab omits) — quantitative use waits on that check | 3.6/3.7, 7.8 | [ ] |
 | RE18 | **The script→engine action surface** — the demand ledger (16,438 call sites / 1,287 names) plus the supply side out of `vampire.dll`: all six `PyMethodDef` tables with their `ml_doc` contracts, and the `CBaseCombatCharacter` / `CAI_BaseNPC` / player datamaps behind the 124 unresolved names. Closes `python_bridge.md`'s file-like open item. Full: `docs/script_api.md` | 9.7, 9.8–9.10, 9.4, 8.5 | [x] |
-| RE19 | **Choreographed-scene format + event semantics** — the scene files VtMB ships, `logic_choreographed_scene`/`CChoreoScene`'s event types (speak / gesture / sequence / move / camera), the timing model, and how completion fires | 12.1, PL9 | [ ] |
+| RE19 | **Choreographed-scene format + event semantics** — the `.vcd` grammar (uniform word-list/brace, 14 live tokens of a much larger parser vocabulary), the 19-type `CChoreoEvent` enum with **nine** used by content and `CAMERASHOT` unhandled by the engine, the `CSceneEntity` datamap (4 inputs / 7 outputs; `force_lod` is a dead key), actor binding **by name** (`targetN` is inert — `!targetN` has zero uses), `position_start`/`position_end`, absolute-time playback offset by `snd_mixahead`, and `Start→OnStart` / end→`OnCompletion` / `Cancel`→`OnCanceled` / `firetrigger "N"`→`OnTriggerN`. 5,444 scenes on disk, 105 named by the 122 map entities; the rest are per-line dialogue scenes on `CInstancedSceneEntity`. Full: `docs/choreographed_scenes.md`; probe: `tools/probe_scenes.py` | 12.1, PL9 | [x] |
 | RE20 | **MDL v2531 facial data** — flex descriptors/controllers, the eyeball chunks (posing, look-at, lids), and the `.lip` phoneme file format (9.3c logs the scripts' probes) | 12.3–12.5, PL10 | [ ] |
 | RE21 | **`GameFrame` usercmd order** — is player movement processed before or after the think pass? Settles `runtime-architecture.md` §3's inferred ordering (`DumpFuncs funcs=10571fc0`, the RE2 workflow) | 11.1, 4.7 | [ ] |
 | RE22 | **The ducked hull** — Source's crouch AABB dimensions + `CategorizePosition`/`StepMove` interaction (standing `32×32×72` is recorded in `source_movement.md`; ducked is not, and `IN_DUCK` needs it) | 4.7, 11.6 | [ ] |
@@ -1292,7 +1297,7 @@ extraction"; durable format/behaviour facts fold into the owning topic docs
 | No classic-UI mode to A/B against | a UI regression has no reference | the original's structure is captured as data (PL8) and in `m0_menu_build.md`, so screens are checked against intent rather than pixels; the *world* keeps its faithful A/B path unchanged |
 | The player stays a pawn + a sheet struct while 9.4/9.8/9.9/9.10/9.5 land on it | five systems built against a shim, then a five-way migration with saves already in the wild | 11.4 is sequenced ahead of all five and named the hinge in "Now"; the target shape is VtMB's own (`savegame_format.md`, `script_api.md`), so it is a port, not an invention |
 | Modal screens fight over input mode (three independent owners today) | the mouse is unusable in some screen order; Cog can make the game unclickable | 11.5's single arbiter + a Substrate test asserting the scope stack balances across every transition |
-| P12's choreography/facial RE (RE19/RE20) is unknown-duration work that **blocks PP2 in full** (owner call: eyes + lipsync gate the cinematic) | the playable path stalls behind RE | RE19/RE20 + PL9/PL10 are front-loaded in "Now", parallel to the PP0 refactor, so the unknowns surface earliest; each 12.x step is observable alone |
+| P12's facial RE (RE20) is unknown-duration work that **blocks PP2 in full** (owner call: eyes + lipsync gate the cinematic) | the playable path stalls behind RE | Front-loading worked on the choreography half: **RE19 closed** with the format, the event semantics and the completion contract settled from data + `vampire.dll`, so 12.1 has a spec and PL9 is mechanical. RE20 + PL9/PL10 stay in "Now", parallel to the PP0 refactor; each 12.x step is observable alone |
 | A shots baseline silently invalidates across a re-bake or content rebuild (measured: up to ~10 mean on bounce-dominated vantages from **byte-identical** inputs) | a look regression hides in toolchain noise — or toolchain noise reads as a regression | B6's measured rule: re-baseline after any bake/content change; A/B a small effect as two runs over one fixed asset set (a cvar A/B), never across a rebuild |
 
 ## Decision log

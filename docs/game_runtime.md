@@ -342,7 +342,9 @@ acts:
    male/female VO).
 2. **The Courtroom trial** (LaCroix judges you; your sire is staked) — `start_courtroom`
    fires `courtroom_scene_relay,Trigger` + field-6 `courtroomSire()`. The relay launches
-   **five parallel choreo scenes** (`Courtroom_bip1..bip7`), a camera track, animated
+   **seven parallel choreo scenes** — `courtroom_scene_bip2..bip7` started directly, and
+   `bip1` through a `logic_pythoncheck` on `G.Player_Homo` that picks
+   `courtroom_homo_scene_bip1` or `courtroom_normal_scene_bip1` — a camera track, animated
    props (`stake`/`sword`/`cigar` → `SetAnimation scene`), and `fillSeats()`. Cast:
    `Prince1` (LaCroix), `Jack`, `Nines`, `Damsel`, `Skelter`, `Isaac`, `Therese`, `VV`,
    plus clan seat-filler `Vampire*` NPCs (a `G.Player_Homo` variant swaps some in). A
@@ -540,10 +542,12 @@ multi-statement `pc.SetQuest("Barabus",2); G.Story_State = 55; G.Barrabus_Exit =
 ### Cinematics summary
 
 No pre-rendered story cutscenes. Every cinematic is a **`logic_choreographed_scene`**
-driving a `.vcd` over `.mdl` animation (`BaseAnim`/`MaleAnim`/`FemaleAnim`, `target1..4`
-cast) with scripted `camera_keyframe`/`camera_track` camera (`PlayAsCameraPosition`/
-`PlayAsCameraTarget`, `RestoreCameraToPlayerControl`). Captions = the `.vcd` `speak`
-token → `.dlg` line-id join. Deferred beats use `ScheduleTask(delay, "<pysource>")`.
+driving a `.vcd` over `.mdl` animation (`BaseAnim`/`MaleAnim`/`FemaleAnim` name the shared
+cinematic model; the cast binds **by actor name**, not through `target1..4`) with scripted
+`camera_keyframe`/`camera_track` camera (`PlayAsCameraPosition`/`PlayAsCameraTarget`,
+`RestoreCameraToPlayerControl`) — the scene format's own camera events are unused.
+Captions = the `.vcd` `speak` token → `.dlg` line-id join. Deferred beats use
+`ScheduleTask(delay, "<pysource>")`. Format + event semantics: `choreographed_scenes.md`.
 
 ## 6. Where Elysium is today vs. this (the gap)
 

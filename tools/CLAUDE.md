@@ -528,6 +528,22 @@ brightness one-for-one: a resolution change may not smuggle in a grade.
 (delight → super-resolve → PBR synthesis, as an opt-in A/B layer that keeps VtMB's
 style) — plan, sequencing, and the adjudication test in `../docs/asset-enhancement.md`.
 
+## Choreographed scenes (`.vcd` — `probe_scenes.py`)
+
+**`probe_scenes.py`** surveys every choreographed scene the merged install resolves — 5,444
+`.vcd` under `sound/`, of which the 122 `logic_choreographed_scene` entities across the 108
+maps name only 113 (the rest are per-line dialogue scenes). It parses the format on its one
+uniform rule — *every line is a word list, optionally followed by a `{ … }` block* — so
+`actor`/`channel`/`event` and every sub-block (`event_ramp`, `flexanimations`, `tags`, …)
+fall out without special cases, then reports the version histogram, the top-level and actor/
+channel sub-statement inventories, the event-type histogram with each type's key/flag/
+sub-block shapes and `param` value shapes, and the map cross-reference (which `SceneFile`
+values resolve). `--markdown` emits the doc table, `--dump <path>` pretty-prints one parsed
+scene, `--referenced` restricts the survey to map-named scenes, `--json` writes the ledger.
+Read-only over the install; produces no runtime intermediate. Findings — the 19-type event
+enum, the nine types content uses, actor binding, the timing model and the output contract —
+are in `../docs/choreographed_scenes.md` (roadmap RE19).
+
 ## Game logic (embedded Python 2.1 — `docs/python_bridge.md`)
 
 VtMB runs its story on a **stock CPython 2.1** (`Bin/vampire_python21.dll`, magic 60202,
