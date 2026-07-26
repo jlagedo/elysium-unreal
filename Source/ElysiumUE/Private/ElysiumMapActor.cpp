@@ -192,6 +192,13 @@ void AElysiumMapActor::LoadMap()
 
 	LoadedMap = MapName;
 
+	// B7 — the 3D-skybox miniature's placement transform (`<map>.sky`), read first because three
+	// later steps need it: the light rig scales a miniature source's reach by it, the `.ents`
+	// parser carries sky-scope entities through it, and a miniature body takes its mesh scale
+	// from it. The identity (scale 1) on the 65 maps with no `sky_camera`.
+	SkyDef = FElysiumSkyDef();
+	FElysiumSkyDef::Parse(FElysiumContentPaths::MapSky(MapName), SkyDef);
+
 	// This map's texture dedup index. Must exist before the first material is built (the sky cube
 	// below), and lives for the actor's lifetime so a runtime prop/NPC spawn reuses it.
 	TextureCache = MakePimpl<FElysiumTextureCache>();
@@ -248,7 +255,8 @@ void AElysiumMapActor::LoadMap()
 		if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
 		{
 			FElysiumEntityDefs EntDefs;
-			if (FElysiumEntityDefs::Parse(FElysiumContentPaths::MapEnts(MapName), EntDefs))
+			if (FElysiumEntityDefs::Parse(FElysiumContentPaths::MapEnts(MapName), EntDefs,
+				SkyDef.Scale, SkyDef.OriginCm))
 			{
 				EntityCount = EntDefs.Num();
 
@@ -373,7 +381,7 @@ int32 AElysiumMapActor::AdoptBakedLevel()
 	}
 	PropModelCount = Models.Num();
 
-	WorldLightCount = LightRig->Adopt(Adopted, FElysiumContentPaths::MapLights(MapName));
+	WorldLightCount = LightRig->Adopt(Adopted, FElysiumContentPaths::MapLights(MapName), SkyDef.Scale);
 
 	if (Tagged == 0)
 	{
@@ -384,7 +392,8 @@ int32 AElysiumMapActor::AdoptBakedLevel()
 	return Tagged;
 }
 
-USkeletalMeshComponent* AElysiumMapActor::BuildNpcVisual(const FString& Stem, const FVector& Location, const FRotator& Rotation)
+USkeletalMeshComponent* AElysiumMapActor::BuildNpcVisual(const FString& Stem, const FVector& Location,
+	const FRotator& Rotation, float UniformScale)
 {
 	USceneComponent* Root = GetRootComponent();
 	if (Stem.IsEmpty() || Root == nullptr)
@@ -427,6 +436,10 @@ USkeletalMeshComponent* AElysiumMapActor::BuildNpcVisual(const FString& Stem, co
 	Comp->SetupAttachment(Root);
 	Comp->SetRelativeLocation(Location);
 	Comp->SetRelativeRotation(Rotation);
+	if (UniformScale != 1.f)
+	{
+		Comp->SetRelativeScale3D(FVector(UniformScale));
+	}
 	Comp->RegisterComponent();
 	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);   // no AI, no physics body (B3)
 	AddInstanceComponent(Comp);
@@ -459,7 +472,8 @@ UStaticMesh* AElysiumMapActor::ResolvePropMesh(const FString& Stem)
 	return Mesh;
 }
 
-UStaticMeshComponent* AElysiumMapActor::BuildPropVisual(const FString& Stem, const FVector& Location, const FQuat& Rotation)
+UStaticMeshComponent* AElysiumMapActor::BuildPropVisual(const FString& Stem, const FVector& Location,
+	const FQuat& Rotation, float UniformScale)
 {
 	USceneComponent* Root = GetRootComponent();
 	if (Stem.IsEmpty() || Root == nullptr)
@@ -483,6 +497,16 @@ UStaticMeshComponent* AElysiumMapActor::BuildPropVisual(const FString& Stem, con
 	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Comp->SetupAttachment(Root);
 	Comp->SetRelativeLocationAndRotation(Location, Rotation);
+	// B7 — a 3D-skybox body is the miniature at its own scale: scenery the player can never
+	// reach, so it is never solid, casts nothing, and stays out of the ray-tracing scene (a mesh
+	// blown up 16x overlaps the whole playable space, the canonical HWRT overlap cost).
+	if (UniformScale != 1.f)
+	{
+		Comp->SetRelativeScale3D(FVector(UniformScale));
+		Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Comp->SetCastShadow(false);
+		Comp->SetVisibleInRayTracing(false);
+	}
 	Comp->RegisterComponent();
 	AddInstanceComponent(Comp);
 	return Comp;
@@ -538,7 +562,8 @@ void AElysiumMapActor::ApplyPropSkin(UStaticMeshComponent* Comp, const FString& 
 	}
 }
 
-UStaticMeshComponent* AElysiumMapActor::BuildPhysPropVisual(const FString& Stem, const FVector& Location, const FQuat& Rotation)
+UStaticMeshComponent* AElysiumMapActor::BuildPhysPropVisual(const FString& Stem, const FVector& Location,
+	const FQuat& Rotation, float UniformScale)
 {
 	USceneComponent* Root = GetRootComponent();
 	if (Stem.IsEmpty() || Root == nullptr)
@@ -564,9 +589,24 @@ UStaticMeshComponent* AElysiumMapActor::BuildPhysPropVisual(const FString& Stem,
 	// Collide as a physics body (blocks the world's BlockAll hull colliders). Simulation, mass and
 	// the elysium.PhysicsProps gate are the leaf's call — the body stands here inert until it decides.
 	Comp->SetCollisionProfileName(TEXT("PhysicsActor"));
+	// B7 — a 3D-skybox body is the miniature at its own scale: scenery the player can never
+	// reach, so it is never solid, casts nothing, and stays out of the ray-tracing scene (a mesh
+	// blown up 16x overlaps the whole playable space, the canonical HWRT overlap cost).
+	if (UniformScale != 1.f)
+	{
+		Comp->SetRelativeScale3D(FVector(UniformScale));
+		Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Comp->SetCastShadow(false);
+		Comp->SetVisibleInRayTracing(false);
+	}
 	Comp->RegisterComponent();
 	AddInstanceComponent(Comp);
 	return Comp;
+}
+
+float AElysiumMapActor::BodyScaleFor(const FElysiumEntityDef& Def) const
+{
+	return Def.bSky ? SkyDef.Scale : 1.f;
 }
 
 void AElysiumMapActor::BuildRopes()

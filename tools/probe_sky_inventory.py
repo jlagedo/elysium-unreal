@@ -117,24 +117,10 @@ def vec3(s):
 
 # --- BSP geometry ------------------------------------------------------------
 
-def leaf_areas(data):
-    """np.uint16 array of per-leaf `area` (the low 9 bits at leaf+6)."""
-    import numpy as np
-    leafs = bsp.read_lump(data, bsp.L_LEAFS)
-    raw = np.frombuffer(leafs, dtype=np.uint16)
-    return raw[LEAF_AREA // 2::bsp.LEAF_SIZE // 2] & 0x1FF
-
-
-def area_faces(data, areas, sky_area):
-    """Model-0 face indices whose leaf carries `sky_area` (union of leafface ranges)."""
-    import numpy as np
-    leafs = bsp.read_lump(data, bsp.L_LEAFS)
-    leaffaces = np.frombuffer(bsp.read_lump(data, bsp.L_LEAFFACES), dtype=np.uint16)
-    out = set()
-    for li in np.nonzero(areas == sky_area)[0]:
-        ff, nf = struct.unpack_from("<HH", leafs, int(li) * bsp.LEAF_SIZE + bsp.LF_FIRSTFACE)
-        out.update(int(leaffaces[k]) for k in range(ff, ff + nf))
-    return out
+# The membership rule lives once, in the shared reader, so this probe and the exporter that
+# acts on it can never drift apart.
+leaf_areas = bsp.leaf_areas
+area_faces = bsp.area_faces
 
 
 def face_materials(data):

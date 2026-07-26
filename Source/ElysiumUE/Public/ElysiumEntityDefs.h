@@ -54,6 +54,16 @@ struct FElysiumEntityDef
 	// Spawns fully OFF — non-solid, non-thinking, undrawn — until a ScriptUnhide (R6).
 	bool bStartHidden = false;
 
+	// B7 — this entity lives in the 3D-skybox miniature, not the playable world: the moon and
+	// window-glow `env_sprite`s, the `logic_timer`s that blink them, the cloud-plane
+	// `prop_dynamic`s, the pier's `func_rotating` ferris wheel. It stays a live entity with its
+	// real I/O — only its placement changes. `Origin` and `Hulls` above are **already** carried
+	// through the miniature's transform (`world(v) = scale·(v − skyOrigin)`) by the parser, so
+	// every consumer places it correctly without knowing about the sky; what this bit is still
+	// needed for is the parts a point transform cannot express — a body's uniform mesh scale,
+	// and the fact that miniature geometry is scenery the player can never touch.
+	bool bSky = false;
+
 	// Static-mesh render annotation (8.1 export → 8.3 consumer). Present only when this entity's
 	// `model` key is a static `.mdl` that decoded: `ModelMesh` is the decoded OBJ stem under
 	// `props/` (so the runtime skips re-deriving it), `ModelQuat` the Unreal-space placement
@@ -89,8 +99,18 @@ struct FElysiumEntityDefs
 	// before any entity can evaluate a field-6 payload against it.
 	FString LevelScriptModule() const;
 
+	// The map's 3D-skybox placement, or scale 1 / origin zero when it has none. Held here so the
+	// parser can apply it and the body builders can read it back.
+	float SkyScale = 1.f;
+	FVector SkyOrigin = FVector::ZeroVector;   // Unreal cm
+
 	// Parse `<map>.ents` (JSON) from disk into Out. Returns false (leaving Out empty) if the
 	// file is missing or not valid `.ents` JSON. Every field is read verbatim — the exporter
-	// already emits Unreal space (the UE_ convention), so there is no conversion here.
-	static bool Parse(const FString& EntsPath, FElysiumEntityDefs& Out);
+	// already emits Unreal space (the UE_ convention), so there is no conversion here — with
+	// one exception: a `"sky": true` entity belongs to the 3D-skybox miniature, and its origin
+	// and hulls are carried through the miniature's placement transform, which `SkyScale`/
+	// `SkyOrigin` supply. Pass the map's `.sky` sidecar values, or leave them at the identity
+	// (scale 1, origin zero) to read the sidecar's raw miniature coordinates unchanged.
+	static bool Parse(const FString& EntsPath, FElysiumEntityDefs& Out,
+		float SkyScale = 1.f, const FVector& SkyOrigin = FVector::ZeroVector);
 };

@@ -230,9 +230,17 @@ are bit-exact; `la` is DXT5 and the label edges carry block-compression ringing.
 `noclip` is cheat-flagged (`sv_cheats 1` first; the movement cvars are `sv_noclipspeed` and
 `sv_noclipaccelerate`) and is not needed for any of the six captures.
 
-Removal is `--uninstall`: a manifest records every file written with its sha256, and the
-`pier` originals — the one sky set the Unofficial Patch ships loose — are moved aside on
-install and put back on uninstall.
+Removal is `--uninstall`, **per skyname** (`--status` and `--uninstall` both take `--skyname`
+and default to `pier`, so a set installed under another name is not reported by a bare
+`--status`): a manifest records every file written with its sha256, and the `pier` originals —
+the one sky set the Unofficial Patch ships loose — are moved aside on install and put back on
+uninstall.
+
+**Uninstall before re-exporting.** The probe set is a loose `materials/skybox/` install, and
+the exporter resolves sky faces patch-first through the same index — so a probe left installed
+silently exports its own labelled faces as that map's `tex/sky_*.png`, and every downstream
+consumer believes them. The failure is invisible in the numbers (they are valid images of a
+valid sky set, just not the game's), so the check is to look at a decoded face, not at a count.
 
 **Result (captured 2026-07-26, `pier`): the engine draws all six faces exactly as K1
 predicts** — every face on its predicted axis, upright, unmirrored, unrotated.
@@ -1917,23 +1925,28 @@ The rework is calibrated against data we already hold plus the original game:
   screen pixel back to the texel it shows, and compare displayed 8-bit sRGB against source
   8-bit sRGB (which is exactly what VtMB wrote to its framebuffer, RE-A9). Auto-exposure is
   off (`r.DefaultFeature.AutoExposure=False`), bloom and fog disabled for the measurement, so
-  what is left between the two is the **tonemapper**:
+  what is left between the two is the **tonemapper**.
 
-  | Source texel | 5 | 12 | 27 | 45 | 71 | 96 | 172 | 251 |
-  |---|---|---|---|---|---|---|---|---|
-  | Displayed at `SkyBrightness 1` | 1.0 | 2.3 | 13.7 | 38 | 82 | 112 | 208 | 236 |
-  | ratio | ×0.19 | ×0.19 | ×0.51 | ×0.85 | ×1.17 | ×1.17 | ×1.21 | ×0.94 |
+  One pass would only sample the sky's own value range, and VtMB's skies are night skies — so
+  the multiplier is *swept* instead, and each sweep re-expressed as the effective source texel
+  it is equivalent to (it scales the linear value the emissive gets, so texel `v` at multiplier
+  `k` is the input that texel `sRGB(k·linear(v))` would be at 1). Stitched, that covers the
+  whole range on real texels — 545,300 samples over ×0.25…×16 of `la` on `sp_tutorial_1`:
 
-  (`pier` on `sm_hub_1` for the dark half, `la` on `sp_tutorial_1` for the bright half.)
+  | Effective source | 3 | 6 | 12 | 20 | 27 | 39 | 55 | 77 | 107 | 138 |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | Displayed | 0.3 | 1.3 | 4.7 | 10.3 | 17.3 | 30.3 | 52.3 | 85.3 | 132 | 169 |
+  | ratio | ×0.11 | ×0.23 | ×0.39 | ×0.52 | ×0.63 | ×0.79 | **×0.95** | ×1.11 | ×1.24 | ×1.22 |
 
-  **The deviation from parity is a curve, not a gain**, so no multiplier can restore it: the
-  filmic toe crushes anything under ~25 by up to ×5, the midtones lift ~20%, and the shoulder
-  rolls off ~6%. Unity crosses parity around source ≈ 60. That is why the old `4` was reached
-  for — VtMB's skies are night skies, and `pier`'s face is p50 0 / p90 54, so **the whole sky
-  lives in the toe**. But 4 does not undo the toe either; measured, it is a ×1.8–2.6
-  *overdrive* across `pier`'s working range. So the residual is the tone curve's, and it
-  belongs to **roadmap 3.6/3.7** (pinned exposure + neutralised tone curve), not to the
-  backdrop multiplier — which is what D7 says.
+  **The deviation from parity is a curve, not a gain**, so no multiplier can restore it. The
+  filmic toe crushes everything under ~40 (by ×9 at the bottom), unity crosses at **≈ 55**, and
+  above that the shoulder lifts ~20%. And the decoded skies sit almost entirely below that
+  crossing — `la`'s `rt` face is p50 **0** / p90 **20**, `pier`'s p50 **0** / p90 **43** — so
+  **the whole sky lives in the toe**. That is what the old `4` was reaching for; but 4 does not
+  undo a toe, it just moves the sky up the same curve, landing ~×2.3 *above* parity across
+  `pier`'s working range. The residual is the tone curve's, and it belongs to **roadmap 3.6/3.7**
+  (pinned exposure + neutralised tone curve), not to the backdrop multiplier — which is what D7
+  says.
 
   Found while measuring, and handed to B8: **our height fog inscatters into the backdrop.**
   With `sm_hub_1`'s fog on, the sky's displayed mean goes 16.6 → 29.1. RE-A9 is categorical
@@ -1961,26 +1974,52 @@ The rework is calibrated against data we already hold plus the original game:
   reported. A resolution change may not smuggle in a grade.
 - **B6 — regression baselines.** `shots.bat` baselines for the sky maps once B1–B4 land; a
   sky regression is then a pixel diff, not an eyeball.
-- **B7 — split the whole 3D skybox, not just its world faces** (RE-A8; independent of K2, so it
-  can land before B1). The exporter classifies by `dleaf_t.area == sky area` instead of the
-  `sky_camera`'s PVS, and applies that same test to **static props, entities (point and brush),
-  and worldlights** — each carried to the sidecars as sky-scope rather than world content. The
-  bake then places the sky set under the one transform it already applies to `_sky.obj`
-  (`world(v) = scale·(v − origin)`, uniform scale `scale`, no shadows, no collision), and the
-  lights scale with it. Until this lands, every sky-area prop, sprite, cloud plane and light
-  ships in the playable world at 1/16 size — the floating debris. **Scope settled by the owner
-  (2026-07-26): full reproduce.** Animating sky entities stay live — the `func_rotating` ferris
-  wheel turns, the `logic_timer`-driven `env_sprite` window glows blink. Sky-area worldlights
-  come out of the world rig unconditionally (per RE-A3 they never lit the playable world, and
-  removing them also takes them out of the fill-vs-fixture sample in
-  `docs/light-attribution.md`), and are **re-placed inside the sky transform** — scaled
-  position, reach × `scale` — per the owner call of 2026-07-26 (`decisions.md`): VtMB's light
-  cache lit the miniature's props from exactly those lump-15 rows, so deleting them would
-  un-light authored content. See RE-A8 → "What those lights were actually for". Scaled-down
-  radii may need a floor clamp against degenerate lights. RE-A7 sizes the job game-wide: **43 maps**,
-  35,738 sky world faces, 1,043 static props, 2,275 entities and **1,442 worldlights** —
-  about six times what the ten-map sample showed. `la_malkavian_4` carries **two**
-  `sky_camera`s, so the exporter needs a stated rule rather than "the sky_camera".
+- **B7 — split the whole 3D skybox, not just its world faces. Done** (2026-07-26; RE-A8).
+  The exporter's `SkyScope` computes the miniature's BSP area once — the engine's own
+  membership rule, `area(point_leaf(x)) == area(point_leaf(sky_camera.origin))` — and applies
+  **one test to every content class**: world faces, static props, `env_sprite`s, entities
+  (point *and* brush, a brush entity classifying by its model bbox centre plus its `origin`),
+  worldlights, and the collision brushes. Each carries a sky flag into its sidecar: an 11th
+  `.props` field, a 16th `.lights` field, a 12th `.sprites` field, `"sky": true` in `.ents`.
+  The PVS classifier is retired (it is set up from a player-derived viewpoint and missed up to
+  31 faces per map).
+
+  **Two `sky_camera`s** — `la_malkavian_4` alone — resolve **first by entity-lump order**, the
+  engine's own `FindEntityByName(NULL, …)` first-match rule, the same one the rope chains and
+  VRAD's sky-ambient resolution follow. The exporter says so when it sees more than one.
+
+  Placement is the one transform `_sky.obj` already took, now applied to the whole set:
+  `world(v) = scale · (v − origin)`. The **bake** places sky props and sky lights under it
+  (uniform actor scale, never solid, no shadow, out of the ray-tracing scene), and the
+  **runtime** carries sky-scope entities through it in the `.ents` parser — origin and hulls
+  together, once — so every downstream consumer (brush bodies, prop and NPC bodies, gizmos, the
+  click-pick) is placed correctly without knowing the miniature exists. What the point transform
+  cannot express stays on the `bSky` bit: a body's uniform mesh scale, and that miniature
+  geometry is scenery the player can never touch. Animating sky entities stay live — the
+  `func_rotating` ferris wheel turns, the `logic_timer`-driven window glows blink.
+
+  Sky-area **worldlights** come out of the world rig unconditionally and are re-placed inside
+  the transform — scaled position, reach × `scale`, floored at `MinSkyReachCm` so a degenerate
+  authored radius does not scale to nothing. Deleting them would un-light authored content:
+  VtMB's light cache lit the miniature's props from exactly those lump-15 rows (RE-A3). It also
+  takes them out of the fill-vs-fixture sample in `docs/light-attribution.md`, which had been
+  measuring lights placed at miniature coordinates as if they lit the map.
+
+  Sky-area **collision brushes are dropped** (190 of `sp_tutorial_1`'s 2,561): a hull would
+  collide at the raw miniature coordinates it was authored at, while the geometry is drawn
+  16× away — an invisible wall standing where nothing is drawn.
+
+  Verified against RE-A7/RE-A8's independently measured numbers: `sp_tutorial_1` area 2 /
+  1,680 faces / 30 props / 59 entities / 58 lights, `sm_hub_1` area 4 / 589 / 49 / 123 / 60 /
+  54 sprites, and the whole-game rollup still 1,043 props, 2,275 entities, 1,442 worldlights
+  over 43 maps at `scale` 16. In-engine, the LA skyline stands behind the tutorial alley and
+  the floating debris is gone.
+
+  One consequence of porting the pass as real geometry rather than a second render: VtMB's
+  miniature draws into a cleared depth buffer and so is **always** behind everything, whatever
+  its size. Ours shares one depth buffer, so the miniature can occlude. It does not in practice
+  because the sky area is authored as a sealed shell around its own camera, which scales into a
+  shell around the map — but it is a property of the authoring, not a guarantee of the port.
 - **B8 — fog: world vs skybox** (RE-A8). `<map>.env` takes its fog from `worldspawn`, and the
   `sky_camera` fog becomes a second, skybox-scoped set applied to the miniature. Feeds D4.
   RE-A7 adds the other half of the bug: the `sky_camera` is not just the *wrong* source, on

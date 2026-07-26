@@ -63,6 +63,37 @@ bool FElysiumEnvDef::Parse(const FString& EnvPath, FElysiumEnvDef& Out)
 	return true;
 }
 
+bool FElysiumSkyDef::Parse(const FString& SkyPath, FElysiumSkyDef& Out)
+{
+	TArray<FString> Lines;
+	if (!FFileHelper::LoadFileToStringArray(Lines, *SkyPath))
+	{
+		return false;   // no miniature on this map
+	}
+
+	for (const FString& Line : Lines)
+	{
+		TArray<FString> Tok;
+		Line.ParseIntoArray(Tok, TEXT(" "), true);
+		if (Tok.Num() >= 4 && Tok[0] == TEXT("origin"))
+		{
+			Out.OriginCm = FVector(FCString::Atod(*Tok[1]), FCString::Atod(*Tok[2]),
+				FCString::Atod(*Tok[3]));
+		}
+		else if (Tok.Num() >= 2 && Tok[0] == TEXT("scale"))
+		{
+			Out.Scale = FCString::Atof(*Tok[1]);
+		}
+	}
+	// A zero or negative scale would collapse the miniature onto its own origin.
+	Out.bValid = Out.Scale > 0.f;
+	if (!Out.bValid)
+	{
+		Out.Scale = 1.f;
+	}
+	return Out.bValid;
+}
+
 namespace
 {
 	// Decode a PNG on disk into tightly packed BGRA8. Returns false (and leaves OutSize 0)

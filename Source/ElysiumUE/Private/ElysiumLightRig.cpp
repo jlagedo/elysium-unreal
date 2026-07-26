@@ -91,8 +91,11 @@ UElysiumLightRig::UElysiumLightRig()
 	PrimaryComponentTick.bCanEverTick = true;
 }
 
-int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FString& LightsPath)
+int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FString& LightsPath,
+	float SkyReach)
 {
+	SkyReachScale = SkyReach > 0.f ? SkyReach : 1.f;
+
 	Lights.Reset();
 	LightSources.Reset();
 	LightCount = 0;
@@ -147,6 +150,7 @@ int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FStrin
 		float RadiusCm = 0.f;
 		int32 Style = 0;
 		FLinearColor Color = FLinearColor::White;
+		bool bSky = false;
 	};
 	TArray<FRow> Rows;
 	Rows.SetNum(Lines.Num());
@@ -178,6 +182,8 @@ int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FStrin
 		Row.Type = Type;
 		Row.Mag = Mag;
 		Row.RadiusCm = FCString::Atof(*P[10]);
+		// Field 16 (optional on older exports): the source lights the 3D-skybox miniature.
+		Row.bSky = P.Num() >= 16 && FCString::Atoi(*P[15]) != 0;
 		const int32 Style = FCString::Atoi(*P[14]);
 		Row.Style = (Style >= 1 && Style < LsCount) ? Style : 0;
 		Row.Color = Color;
@@ -205,7 +211,7 @@ int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FStrin
 		Entry.Light->SetLightColor(Row.Color);
 		Lights.Add(Entry.Light);
 		LightSources.Add({ Entry.Light, Entry.SourceIndex, Row.Type, Row.Mag, Row.RadiusCm, FitMult,
-			Row.Style, 0.f, Row.Color });
+			Row.Style, 0.f, Row.Color, false, false, false, Row.bSky });
 		bHasSun |= (Row.Type == 3);
 		++LightCount;
 	}
@@ -486,7 +492,13 @@ void UElysiumLightRig::ApplyToSource(FLightSource& S)
 	}
 	else
 	{
-		const float Reach = (S.RadiusCm > 1.f ? S.RadiusCm : FallbackRadiusCm) * RadiusScale;
+		float Reach = (S.RadiusCm > 1.f ? S.RadiusCm : FallbackRadiusCm) * RadiusScale;
+		// A miniature light's radius is authored in miniature units, so it scales with the
+		// geometry it lights or it reaches a 16th of what it did.
+		if (S.bSky)
+		{
+			Reach = FMath::Max(Reach * SkyReachScale, MinSkyReachCm);
+		}
 		S.BaseIntensity = FMath::Min(S.Mag * PointSpotScale * S.FitMult, MaxBrightness);
 		if (UPointLightComponent* PL = Cast<UPointLightComponent>(Light))
 		{

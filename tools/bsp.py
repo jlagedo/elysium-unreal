@@ -72,6 +72,7 @@ TEXDATA_SIZE, TD_NAMEID, TD_W, TD_H = 32, 12, 16, 20
 # firstleafface H @20, numleaffaces H @22, firstleafbrush H @24.
 NODE_SIZE, ND_PLANE, ND_CHILDREN = 32, 0, 4
 LEAF_SIZE, LF_CLUSTER, LF_FIRSTFACE, LF_NUMFACES, LF_FIRSTBRUSH = 32, 4, 20, 22, 24
+LF_AREA = 6            # uint16 @6: area = the low 9 bits, flags = the top 7
 
 # --- displacements (Phase B) ------------------------------------------------
 # DISPINFO (lump 26): standard 176-byte DDispInfo. VtMB (appID 2600) uses the
@@ -194,6 +195,32 @@ def decompress_vis(vis, offset, numclusters):
             c += 8
         else:
             c += vis[p] * 8; p += 1
+    return out
+
+
+def leaf_areas(data):
+    """Per-leaf BSP `area` (the low 9 bits of the uint16 at leaf+6), as a numpy uint16 array.
+
+    The area is what the engine itself classifies the 3D-skybox pass by: `Draw3dSkyboxworld`
+    builds an area-bit vector holding only `m_skybox3d.area` and hands it to the world render
+    lists, so the pass sees exactly one area's leaves (`../docs/sky-ambience.md` -> "The 3D
+    skybox ... (RE-A8, settled)"). Cheaper and more faithful than a PVS test, which is set up
+    from a player-derived viewpoint and misses up to 31 faces."""
+    import numpy as np
+    leafs = read_lump(data, L_LEAFS)
+    raw = np.frombuffer(leafs, dtype=np.uint16)
+    return (raw[LF_AREA // 2::LEAF_SIZE // 2] & 0x1FF).copy()
+
+
+def area_faces(data, areas, want_area):
+    """Model-0 face indices whose leaf carries `want_area` (the union of the leafface ranges)."""
+    import numpy as np
+    leafs = read_lump(data, L_LEAFS)
+    leaffaces = np.frombuffer(read_lump(data, L_LEAFFACES), dtype=np.uint16)
+    out = set()
+    for li in np.nonzero(areas == want_area)[0]:
+        ff, nf = struct.unpack_from("<HH", leafs, int(li) * LEAF_SIZE + LF_FIRSTFACE)
+        out.update(int(leaffaces[k]) for k in range(ff, ff + nf))
     return out
 
 

@@ -21,6 +21,23 @@ struct FElysiumEnvDef
 	static bool Parse(const FString& EnvPath, FElysiumEnvDef& Out);
 };
 
+// The `<map>.sky` sidecar: where the 3D-skybox miniature goes. VtMB renders the miniature as a
+// second pass through a scaled view; we place it as real geometry instead, under the inverse of
+// that view transform — `world(v) = Scale · (v − OriginCm)`, uniform, no rotation. `Scale` is an
+// integer keyvalue on `sky_camera` and reads 16 on all 43 maps that have one. Absent for the
+// other 65, which leaves the identity (scale 1, origin zero) and no miniature to place.
+struct FElysiumSkyDef
+{
+	bool bValid = false;
+	FVector OriginCm = FVector::ZeroVector;   // the sky_camera's origin, Unreal cm
+	float Scale = 1.f;
+
+	// Carry a raw miniature-space point into world space.
+	FVector ToWorld(const FVector& V) const { return (V - OriginCm) * Scale; }
+
+	static bool Parse(const FString& SkyPath, FElysiumSkyDef& Out);
+};
+
 namespace ElysiumEnvironment
 {
 	// The sky-face orientation contract this build assembles cubes under, matched against the

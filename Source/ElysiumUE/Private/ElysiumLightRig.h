@@ -45,7 +45,13 @@ public:
 	// values: every intensity, reach and falloff is re-derived here from the raw source data, so
 	// the live calibration — not whatever the bake happened to write — is what the map renders.
 	// Returns the number of lights bound.
-	int32 Adopt(const TArray<FAdoptedLight>& Adopted, const FString& LightsPath);
+	//
+	// `SkyReach` is the 3D-skybox miniature's uniform scale (`<map>.sky`, 16 where there is one,
+	// 1 otherwise). A source flagged sky in the sidecar lit the *miniature*, never the playable
+	// world — VtMB's light cache read exactly those lump-15 rows to light the skybox props — so
+	// its reach is authored in miniature units and has to scale with the geometry it lights.
+	// Its position is already scaled by the bake; only the reach is re-derived here.
+	int32 Adopt(const TArray<FAdoptedLight>& Adopted, const FString& LightsPath, float SkyReach = 1.f);
 
 	// Show/hide every spawned light (bound to elysium.lights / the pawn's L key).
 	void SetLightsVisible(bool bShow);
@@ -71,6 +77,7 @@ public:
 		bool bOverridden = false;   // hand-set in the Lights window; the calibration passes skip it
 		bool bDisabled = false;     // switched off by hand in the Lights window
 		bool bReviewed = false;     // survey verdict recorded (kept or killed) in the Lights window
+		bool bSky = false;          // lights the 3D-skybox miniature, not the playable world
 	};
 
 	// The spawned light sources, for the Lights window's source list. Skyambient (type 5) is
@@ -150,6 +157,12 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float SpecularScale = 0.0f;
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float SunScaleLux = 8.0f;
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float FallbackRadiusCm = 2500.f;
+	// B7 — the 3D-skybox miniature's uniform scale, applied to a sky source's reach only (its
+	// position is baked already scaled). Set from `<map>.sky` at Adopt; 1 on a map with no
+	// miniature. MinSkyReachCm floors it, so an authored radius near zero still lights something
+	// after the scale rather than collapsing.
+	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float SkyReachScale = 1.f;
+	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float MinSkyReachCm = 5000.f;
 	// The same calibration shows the moody contrast is driven by *shadowing*, not falloff —
 	// so points shadow too (MegaLights keeps hundreds of shadowed lights ~constant cost).
 	// Drop these to false only if a map is shadow-cost-bound.

@@ -263,7 +263,7 @@ private:
 			Rot  = Def->ModelQuat;
 		}
 
-		Visual = Map->BuildPropVisual(Stem, Loc, Rot);
+		Visual = Map->BuildPropVisual(Stem, Loc, Rot, Map->BodyScaleFor(*Def));
 		if (Visual)
 		{
 			World->RegisterPropBody(Visual);
@@ -433,7 +433,8 @@ private:
 		{
 			return;
 		}
-		Visual = Map->BuildPhysPropVisual(Def->ModelMesh, Def->Origin, Def->ModelQuat);
+		Visual = Map->BuildPhysPropVisual(Def->ModelMesh, Def->Origin, Def->ModelQuat,
+			Map->BodyScaleFor(*Def));
 		if (!Visual)
 		{
 			return;

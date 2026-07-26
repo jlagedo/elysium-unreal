@@ -208,7 +208,7 @@ public:
 		// reflection negates yaw (docs/rebuild-strategy.md); exact facing is cosmetic for B3.
 		const FRotator Rot(0.0f, -Angles.Y, 0.0f);
 
-		Visual = Map->BuildNpcVisual(Stem, Def->Origin, Rot);
+		Visual = Map->BuildNpcVisual(Stem, Def->Origin, Rot, Map->BodyScaleFor(*Def));
 		if (Visual)
 		{
 			World->RegisterNpcBody(Visual);

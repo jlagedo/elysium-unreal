@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Templates/PimplPtr.h"
+#include "ElysiumEnvironment.h"   // FElysiumSkyDef — a plain by-value member
 #include "ElysiumMapActor.generated.h"
 
 class AStaticMeshActor;
@@ -45,6 +46,11 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Elysium")
 	FString MapName = TEXT("sp_tutorial_1");
 
+	// B7 — the uniform scale a body built for this def takes: the 3D-skybox miniature's scale for
+	// a sky-scope entity (its origin and hulls are already carried through the transform by the
+	// def parser, but a mesh's own size is not a point), 1 for everything else.
+	float BodyScaleFor(const struct FElysiumEntityDef& Def) const;
+
 	// Show/hide the 3D skybox mesh (bound to the T key by the pawn).
 	void ToggleSkybox();
 	bool IsSkyboxVisible() const;
@@ -80,7 +86,8 @@ public:
 	// missing/failed glb or empty stem. The FElysiumNpc leaf calls this from its Spawn() and registers
 	// the result with the entity world for teardown. Meshes/anims are cached on this actor (freed on
 	// unload) so a model shared by several NPCs (three Sabbat share shovelhead) loads once.
-	USkeletalMeshComponent* BuildNpcVisual(const FString& Stem, const FVector& Location, const FRotator& Rotation);
+	USkeletalMeshComponent* BuildNpcVisual(const FString& Stem, const FVector& Location, const FRotator& Rotation,
+		float UniformScale = 1.f);
 
 	// The baked SM_<Stem> asset for a prop model, cached per stem (one load per model however many
 	// entities place it). Null + a warning naming the bake command when the map has no such asset.
@@ -93,7 +100,8 @@ public:
 	// null on an empty stem / unbaked model. The FElysiumProp leaf calls this from Spawn() and
 	// registers the result with the entity world for teardown. The Rotation is the exporter's
 	// pre-converted Unreal-space model_quat, read verbatim.
-	UStaticMeshComponent* BuildPropVisual(const FString& Stem, const FVector& Location, const FQuat& Rotation);
+	UStaticMeshComponent* BuildPropVisual(const FString& Stem, const FVector& Location, const FQuat& Rotation,
+		float UniformScale = 1.f);
 
 	// 8.4 — build one physics-prop body: the same baked mesh BuildPropVisual stands, which for a
 	// physics model carries VtMB's own convex collision (one shape per `.phy` ledge, from the
@@ -103,7 +111,8 @@ public:
 	// with collision enabled but is NOT yet simulating — the FElysiumPhysProp leaf drives
 	// SetSimulatePhysics / mass / the elysium.PhysicsProps gate. Registered for teardown
 	// (RegisterPropBody) like a dynamic prop.
-	UStaticMeshComponent* BuildPhysPropVisual(const FString& Stem, const FVector& Location, const FQuat& Rotation);
+	UStaticMeshComponent* BuildPhysPropVisual(const FString& Stem, const FVector& Location, const FQuat& Rotation,
+		float UniformScale = 1.f);
 
 	// Repaint a prop body to one of its model's alternate skin families (VtMB's `skin` keyfield /
 	// `Skin` input -- a material remap over the model's own slots, applied instantly). Family 0 and
@@ -176,6 +185,10 @@ private:
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> SkyDomeMesh;
 	// The backdrop's own MID (off M_Sky), kept so elysium.SkyBrightness can re-apply live.
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> SkyMid;
+	// B7 — the 3D-skybox miniature's placement (`<map>.sky`), or the identity on the 65 maps
+	// with no `sky_camera`. Read at map load and used twice: the def parser carries sky-scope
+	// entities through it, and a miniature body takes its uniform mesh scale from it.
+	FElysiumSkyDef SkyDef;
 	UPROPERTY() TObjectPtr<UElysiumLightRig> LightRig;
 
 	// Adopted from the baked level (not owned): the map's ambience. Their tuning fields are driven

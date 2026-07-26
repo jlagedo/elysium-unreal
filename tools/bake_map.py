@@ -59,6 +59,10 @@ RADIUS_SCALE = 1.0
 SPECULAR_SCALE = 0.0
 SUN_SCALE_LUX = 8.0
 FALLBACK_RADIUS_CM = 2500.0
+# Floor on a 3D-skybox light's reach after the miniature's uniform scale. A miniature light's
+# authored radius is in miniature units and scales with the geometry it lights, but a source
+# authored with a degenerate radius would otherwise scale to a reach that lights nothing at all.
+MIN_SKY_REACH_CM = 5000.0
 SKYLIGHT_INTENSITY = 1.0
 SKYLIGHT_FALLBACK_COLOR = unreal.LinearColor(0.12, 0.13, 0.18, 1.0)
 
@@ -567,17 +571,23 @@ class Bake(object):
 
     # ------------------------------------------------------------------ lights
 
-    def _place_lights(self, actors):
+    def _place_lights(self, actors, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
         """One light actor per WORLDLIGHTS `.lights` line, with UElysiumLightRig's calibration
-        applied verbatim: 15 fields `type x y z dx dy dz r g b radius _ stopdot2 _ style`,
+        applied verbatim: 16 fields `type x y z dx dy dz r g b radius _ stopdot2 _ style sky`,
         soft non-inverse-square falloff, specular killed, everything Movable.
 
         Lightstyle animation (field 15) has no baked equivalent -- a styled source is placed at
-        its unanimated base intensity."""
+        its unanimated base intensity.
+
+        Field 16 marks a source inside the 3D-skybox miniature. Those never lit the playable
+        world, but they were not dead either -- VtMB's light cache read exactly those lump-15
+        rows to light the miniature's props -- so they are carried into the sky transform
+        (position scaled, reach scaled by the same factor) rather than deleted, per the owner
+        call of 2026-07-26. Deleting them would un-light authored content."""
         path = os.path.join(self.dir, "%s.lights" % self.map)
         if not os.path.isfile(path):
-            return 0, None
-        placed = 0
+            return 0, 0, None
+        placed = sky_placed = 0
         sky_ambient = None
         with open(path, "r", encoding="utf-8", errors="replace") as handle:
             for index, line in enumerate(handle):
@@ -585,7 +595,11 @@ class Bake(object):
                 if len(tok) < 15:
                     continue
                 kind = int(tok[0])
-                origin = unreal.Vector(float(tok[1]), float(tok[2]), float(tok[3]))
+                is_sky = len(tok) >= 16 and int(tok[15]) != 0
+                pos = [float(tok[1]), float(tok[2]), float(tok[3])]
+                if is_sky:
+                    pos = [sky_scale * (pos[i] - sky_origin[i]) for i in range(3)]
+                origin = unreal.Vector(*pos)
                 direction = unreal.Vector(float(tok[4]), float(tok[5]), float(tok[6]))
                 rgb = (float(tok[7]), float(tok[8]), float(tok[9]))
                 radius_cm = float(tok[10])
@@ -602,6 +616,11 @@ class Bake(object):
                     continue
 
                 reach = (radius_cm if radius_cm > 1.0 else FALLBACK_RADIUS_CM) * RADIUS_SCALE
+                # A miniature light's reach is authored in miniature units, so it scales with the
+                # geometry it lights or it lights a 16th of what it did. The floor keeps a
+                # degenerate authored radius from collapsing to nothing after the scale.
+                if is_sky:
+                    reach = max(reach * sky_scale, MIN_SKY_REACH_CM)
                 soft = min(mag * POINT_SPOT_SCALE, MAX_BRIGHTNESS)
 
                 if kind in (0, 1):
@@ -645,15 +664,17 @@ class Bake(object):
                 # The VtMB world is pure Lambert -- kill specular so lights do not glare.
                 component.set_editor_property("specular_scale", SPECULAR_SCALE)
                 component.set_mobility(unreal.ComponentMobility.MOVABLE)
-                actor.set_actor_label("Light_%d_%s" % (
-                    index, {0: "tex", 1: "point", 2: "spot", 3: "sun"}[kind]))
+                actor.set_actor_label("Light_%d_%s%s" % (
+                    index, {0: "tex", 1: "point", 2: "spot", 3: "sun"}[kind],
+                    "_sky" if is_sky else ""))
                 # The line index is the binding UElysiumLightRig::Adopt needs: it re-derives
                 # every intensity and reach from this row at load, so the values written above
                 # are only what the level looks like in the editor before the game runs.
                 actor.tags = [TAG_LIGHT, "elysium.src=%d" % index]
-                actor.set_folder_path("Lights")
+                actor.set_folder_path("Sky/Lights" if is_sky else "Lights")
                 placed += 1
-        return placed, sky_ambient
+                sky_placed += is_sky
+        return placed, sky_placed, sky_ambient
 
     def _place_sky(self, actors, sky_ambient):
         """The sky light and the map's height fog.
@@ -762,10 +783,11 @@ class Bake(object):
             placed += 1
         log("level: %d world/sky actors" % placed)
 
-        log("level: %d prop actors" % self._place_props(actors))
+        props, sky_props = self._place_props(actors, sky_scale, sky_origin)
+        log("level: %d prop actors (%d in the 3D skybox)" % (props, sky_props))
         log("level: %d decal actors" % self._place_decals(actors))
-        lights, sky_ambient = self._place_lights(actors)
-        log("level: %d light actors" % lights)
+        lights, sky_lights, sky_ambient = self._place_lights(actors, sky_scale, sky_origin)
+        log("level: %d light actors (%d in the 3D skybox)" % (lights, sky_lights))
         self._place_sky(actors, sky_ambient)
         self._place_player_start(actors)
 
@@ -791,12 +813,12 @@ class Bake(object):
                     scale = float(tok[1])
         return scale, origin
 
-    def _place_props(self, actors):
-        """One StaticMeshActor per .props line: `stem x y z qx qy qz qw solid [skin]`."""
+    def _place_props(self, actors, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
+        """One StaticMeshActor per .props line: `stem x y z qx qy qz qw solid [skin [sky]]`."""
         path = os.path.join(self.dir, "%s.props" % self.map)
         if not os.path.isfile(path):
-            return 0
-        placed = skinned = 0
+            return 0, 0
+        placed = skinned = sky_placed = 0
         cache = {}
         with open(path, "r", encoding="utf-8", errors="replace") as handle:
             for line in handle:
@@ -811,7 +833,14 @@ class Bake(object):
                     cache[stem] = mesh
                 if not mesh:
                     continue
-                location = unreal.Vector(float(tok[1]), float(tok[2]), float(tok[3]))
+                # Field 11 marks a prop inside the 3D-skybox miniature: it is placed under the
+                # same transform the sky world meshes take, `world(v) = scale * (v - origin)`,
+                # rather than at its raw 1/scale coordinates in the middle of the playable map.
+                is_sky = len(tok) >= 11 and int(tok[10]) != 0
+                pos = [float(tok[1]), float(tok[2]), float(tok[3])]
+                if is_sky:
+                    pos = [sky_scale * (pos[i] - sky_origin[i]) for i in range(3)]
+                location = unreal.Vector(*pos)
                 rotation = unreal.Quat(float(tok[4]), float(tok[5]),
                                        float(tok[6]), float(tok[7])).rotator()
                 actor = actors.spawn_actor_from_class(unreal.StaticMeshActor, location, rotation)
@@ -820,20 +849,30 @@ class Bake(object):
                 component = actor.static_mesh_component
                 component.set_static_mesh(mesh)
                 # Field 9 is Source's own `solid` byte: a solid prop blocks, the rest is dressing.
+                # A miniature prop is never solid whatever it says -- it is scenery the player can
+                # never reach, and at 16x it would wall off the map.
                 component.set_collision_profile_name(
-                    PROFILE_PROP_SOLID if int(tok[8]) != 0 else PROFILE_PICK_ONLY)
+                    PROFILE_PROP_SOLID if (int(tok[8]) != 0 and not is_sky) else PROFILE_PICK_ONLY)
                 # Field 10 (DStaticPropV4.skin) names an alternate skin family. A GAME_LUMP prop is
                 # not an entity and never changes skin, so the remap is baked into the placement as
                 # material overrides rather than costing anything at runtime. Older 9-field exports
                 # simply have no skin.
                 if len(tok) >= 10 and int(tok[9]) != 0:
                     skinned += self._apply_prop_skin(component, mesh, stem, int(tok[9]))
-                actor.tags = [TAG_PROP]
-                actor.set_folder_path("Props")
+                if is_sky:
+                    actor.set_actor_scale3d(unreal.Vector(sky_scale, sky_scale, sky_scale))
+                    # Same reasoning as the sky world meshes: blown up 16x the miniature encloses
+                    # the playable space, which is the canonical hardware-ray-tracing overlap cost,
+                    # and it is backdrop, so it casts nothing.
+                    component.set_editor_property("visible_in_ray_tracing", False)
+                    component.set_cast_shadow(False)
+                    sky_placed += 1
+                actor.tags = [TAG_SKY if is_sky else TAG_PROP]
+                actor.set_folder_path("Sky/Props" if is_sky else "Props")
                 placed += 1
         if skinned:
             log("level: %d static props on an alternate skin" % skinned)
-        return placed
+        return placed, sky_placed
 
     def _apply_prop_skin(self, component, mesh, stem, family):
         """Override the material of every slot this model's skin family repaints. Returns 1 when

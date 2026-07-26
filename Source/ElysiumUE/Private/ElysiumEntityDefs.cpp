@@ -52,10 +52,13 @@ FString FElysiumEntityDefs::LevelScriptModule() const
 	return FString();
 }
 
-bool FElysiumEntityDefs::Parse(const FString& EntsPath, FElysiumEntityDefs& Out)
+bool FElysiumEntityDefs::Parse(const FString& EntsPath, FElysiumEntityDefs& Out,
+	float SkyScale, const FVector& SkyOrigin)
 {
 	Out.MapName.Reset();
 	Out.Defs.Reset();
+	Out.SkyScale = SkyScale;
+	Out.SkyOrigin = SkyOrigin;
 
 	FString Raw;
 	if (!FFileHelper::LoadFileToString(Raw, *EntsPath))
@@ -95,6 +98,7 @@ bool FElysiumEntityDefs::Parse(const FString& EntsPath, FElysiumEntityDefs& Out)
 		E->TryGetStringField(TEXT("classname"), Def.Classname);
 		E->TryGetStringField(TEXT("targetname"), Def.TargetName);
 		E->TryGetBoolField(TEXT("start_hidden"), Def.bStartHidden);
+		E->TryGetBoolField(TEXT("sky"), Def.bSky);
 
 		const TArray<TSharedPtr<FJsonValue>>* OriginArr = nullptr;
 		if (E->TryGetArrayField(TEXT("origin"), OriginArr))
@@ -193,6 +197,23 @@ bool FElysiumEntityDefs::Parse(const FString& EntsPath, FElysiumEntityDefs& Out)
 		if (E->TryGetArrayField(TEXT("hinge_axis"), AxisArr))
 		{
 			Def.HingeAxis = ParseVec3(*AxisArr);
+		}
+
+		// B7 — a miniature entity's placement is the 3D-skybox transform of its raw one:
+		// `world(v) = scale * (v - skyOrigin)`. Applied here, once, so every consumer
+		// downstream — brush bodies, prop bodies, gizmos, the click-pick — is placed right
+		// without knowing the miniature exists. Hulls are entity-LOCAL (world = origin +
+		// vertex), so they take the scale but not the translation.
+		if (Def.bSky && SkyScale != 1.f)
+		{
+			Def.Origin = (Def.Origin - SkyOrigin) * SkyScale;
+			for (FElysiumConvexHull& Hull : Def.Hulls)
+			{
+				for (FVector& V : Hull.Vertices)
+				{
+					V *= SkyScale;
+				}
+			}
 		}
 
 		Out.Defs.Add(MoveTemp(Def));

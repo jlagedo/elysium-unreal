@@ -29,6 +29,97 @@ from bsp import (read_lump, source_to_unreal, source_dir_to_unreal, source_angle
                  TI_OFS, DISP_OFS, TEXINFO_SIZE, TI_SAXIS, TI_TAXIS, TI_TEXDATA,
                  TEXDATA_SIZE, TD_NAMEID, TD_W, TD_H)
 
+# --- the 3D skybox: what belongs to the miniature rather than the playable world ---
+
+class SkyScope:
+    """Which of a map's content is 3D-skybox miniature, and the transform that places it.
+
+    The engine's own membership rule, not a proxy for it: `Draw3dSkyboxworld` builds an
+    area-bit vector holding only `m_skybox3d.area` and hands it to the ordinary world +
+    renderable draw path, so the pass sees exactly one BSP area's leaves and everything the
+    client leaf system holds in them -- world brushes, static props, brush entities, sprites,
+    particles, animating props (`../docs/sky-ambience.md` -> "The 3D skybox ... (RE-A8)").
+    So the test is `area(point_leaf(x)) == area(point_leaf(sky_camera.origin))`, applied to
+    every content class alike.
+
+    The placement transform is `world(v) = scale * (v - origin)`, `scale` an integer keyvalue
+    that reads 16 on all 43 maps that have a `sky_camera`.
+
+    **Two `sky_camera`s** (only `la_malkavian_4` in the whole game): the first by entity-lump
+    order wins -- the engine's own `FindEntityByName(NULL, ...)` first-match rule, the same one
+    the rope chains and VRAD's sky-ambient resolution follow.
+    """
+
+    def __init__(self, data, ents):
+        self.ok = False
+        self.faces = set()
+        self.scale = 16.0
+        self.origin_src = None
+        self.areas = None
+        self._nodes = None
+        self._planes = None
+        self.area = -1
+        self._model_bbox = {}
+
+        blocks = [m.group(0) for m in re.finditer(r"\{[^{}]*\}", ents)
+                  if '"sky_camera"' in m.group(0)]
+        if not blocks:
+            return
+        if len(blocks) > 1:
+            print(f"  ! {len(blocks)} sky_camera entities; taking the first (entity-lump order)")
+        o = re.search(r'"origin"\s+"(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)"', blocks[0])
+        if not o:
+            return
+        self.origin_src = tuple(float(x) for x in o.groups())
+        s = re.search(r'"scale"\s+"(-?[\d.]+)"', blocks[0])
+        if s:
+            # CSkyCamera.scale is FIELD_INTEGER, so a fractional authored value truncates.
+            self.scale = float(int(float(s.group(1)))) or 16.0
+
+        # Pre-read the node tree once: point_leaf walks it per classified point, and a map
+        # classifies every prop, entity and worldlight it has.
+        self._nodes = read_lump(data, 5)
+        self._planes = np.frombuffer(read_lump(data, 1), dtype=np.float32).reshape(-1, 5)
+        self.areas = B.leaf_areas(data)
+        self.area = self.area_of(self.origin_src)
+        self.faces = B.area_faces(data, self.areas, self.area)
+        self.ok = True
+
+        # dmodel_t (48 B): mins[3]f maxs[3]f origin[3]f headnode i firstface i numfaces i.
+        # A brush entity's classification point is its model bbox centre PLUS its own `origin`
+        # key: vbsp re-centres the brushes of an entity that carries one, so the stored bbox is
+        # model-local (the sky's func_rotating ferris wheel sits at (0, 0, -15)).
+        models_l = read_lump(data, 14)
+        for mi in range(len(models_l) // 48):
+            mins = struct.unpack_from("<3f", models_l, mi * 48)
+            maxs = struct.unpack_from("<3f", models_l, mi * 48 + 12)
+            self._model_bbox[mi] = tuple((mins[k] + maxs[k]) * 0.5 for k in range(3))
+
+    def area_of(self, src_pt):
+        # point_leaf reads `data` only when nodes/planes are absent, and both are supplied.
+        li = B.point_leaf(None, src_pt, self._nodes, self._planes)
+        return int(self.areas[li]) if 0 <= li < len(self.areas) else -1
+
+    def is_sky(self, src_pt):
+        """Is this Source-space point inside the miniature's BSP area?"""
+        return bool(self.ok) and src_pt is not None and self.area_of(src_pt) == self.area
+
+    def entity_point(self, origin_src, model_key=""):
+        """The Source-space point an entity classifies by.
+
+        A point entity classifies by its own `origin`. A **brush** entity (`model` `*N`)
+        classifies by its model's bbox centre plus that origin, because vbsp re-centres the
+        brushes of an entity that carries an origin -- the stored bbox is model-local, so the
+        bbox alone would put the sky's ferris wheel at (0, 0, -15) and the origin alone would
+        put a brush entity with no origin key at the world origin.
+        """
+        m = re.match(r"\*(\d+)$", (model_key or "").strip())
+        if m:
+            c = self._model_bbox.get(int(m.group(1)))
+            return None if c is None else tuple(origin_src[k] + c[k] for k in range(3))
+        return origin_src
+
+
 # --- brush collision: convex hulls from the world model's brushes -----------
 # CONTENTS flags that block the player: SOLID|WINDOW|GRATE|MOVEABLE|PLAYERCLIP.
 # (Water and pure MONSTERCLIP are intentionally left passable.)
@@ -77,41 +168,59 @@ def _brush_hull(planes, sides, brushes, bi):
                     pts.append(x)
     return cont, (np.array(pts) if len(pts) >= 4 else None)
 
-def write_collision(data, out_dir, base):
-    """Emit `<base>.hulls`: one world brush per line as flat Unreal-space verts (cm)."""
+def write_collision(data, out_dir, base, sky=None):
+    """Emit `<base>.hulls`: one world brush per line as flat Unreal-space verts (cm).
+
+    The 3D-skybox miniature's own brushes are dropped: the miniature is backdrop the player can
+    never reach, and its geometry is drawn at `scale x (v - origin)` while a hull would collide
+    at the raw miniature coordinates it was authored at -- an invisible wall standing where
+    nothing is drawn. A brush is classified by its hull's centroid, the same BSP-area test every
+    other content class uses."""
     nodes, leafs = read_lump(data, 5), read_lump(data, 10)
     leafbrushes, brushes, sides = read_lump(data, 17), read_lump(data, 18), read_lump(data, 19)
     planes = np.frombuffer(read_lump(data, 1), dtype=np.float32).reshape(-1, 5)[:, :4].copy()
     world = _model_brushes(nodes, leafs, leafbrushes, 0)
-    n = 0
+    n = n_sky = 0
     with open(os.path.join(out_dir, base + ".hulls"), "w") as f:
         for bi in sorted(world):
             cont, pts = _brush_hull(planes, sides, brushes, bi)
             if pts is None or not (cont & BLOCK_MASK):
                 continue
+            if sky is not None and sky.is_sky(tuple(np.asarray(pts).mean(axis=0))):
+                n_sky += 1
+                continue
             uniq = {(round(p[0], 1), round(p[1], 1), round(p[2], 1)): p for p in pts}
             g = [source_to_unreal(sx, sy, sz) for sx, sy, sz in uniq.values()]
             f.write(" ".join(f"{c:.4f}" for v in g for c in v) + "\n")
             n += 1
-    print(f"collision hulls: {n} world brushes -> {base}.hulls")
+    print(f"collision hulls: {n} world brushes ({n_sky} skybox brushes dropped) -> {base}.hulls")
 
 # --- real-time light rig: WORLDLIGHTS (lump 15) -> `<base>.lights` -----------
 
-def write_lights(data, out_dir, base):
+def write_lights(data, out_dir, base, sky=None):
     """Emit `<base>.lights`: one WORLDLIGHTS source per line, in Unreal space, for
     the runtime LightRig to spawn an Unreal light per source (the real-time lighting
     model that replaces the baked lightmap). Intensity stays raw linear RGB - the
     runtime splits it into a normalized colour and a scalar energy.
 
-    Line: type ox oy oz  dx dy dz  ir ig ib  radius_cm  stopdot stopdot2 exponent  style
+    Line: type ox oy oz  dx dy dz  ir ig ib  radius_cm  stopdot stopdot2 exponent  style  sky
       type      0 emit_surface, 1 point, 2 spot, 3 skylight, 5 skyambient
       o*        origin, Unreal centimetres  (sx,-sy,sz)*INCH_TO_CM
       d*        beam direction, Unreal unit vector (nx,-ny,nz); 0 0 0 if none
       i*        intensity, raw linear RGB (colour*brightness)
       radius_cm cutoff radius in centimetres (0 = no cutoff)
       stopdot/stopdot2/exponent  spot cone (cos inner / cos outer / falloff exp)
-      style     lightstyle index (0 = constant)"""
+      style     lightstyle index (0 = constant)
+      sky       1 = the source sits inside the 3D-skybox miniature's BSP area
+
+    A `sky` source never lit the playable world -- the miniature is a separate render pass at
+    1/scale in a corner of the map -- but it was not dead data either: VtMB's light cache reads
+    lump 15 to light the miniature's props (`../docs/sky-ambience.md` -> "K3 / K5"). So the flag
+    means "belongs to the miniature", and the consumers carry it into the sky transform rather
+    than deleting it. It also takes those sources out of the fill-vs-fixture sample, which had
+    been measuring lights placed at miniature coordinates as if they lit the map."""
     wl = B.read_worldlights(data)
+    n_sky = 0
     with open(os.path.join(out_dir, base + ".lights"), "w") as f:
         for w in wl:
             ox, oy, oz = source_to_unreal(*w["origin"])
@@ -122,21 +231,25 @@ def write_lights(data, out_dir, base):
             else:
                 ux = uy = uz = 0.0
             ir, ig, ib = w["intensity"]
+            # The sun and the skyambient are directionless global terms, not placed sources, so
+            # they are never miniature content whatever leaf their row's origin happens to fall in.
+            in_sky = int(w["type"] not in (3, 5) and sky is not None and sky.is_sky(w["origin"]))
+            n_sky += in_sky
             f.write(f"{w['type']} {ox:.4f} {oy:.4f} {oz:.4f} "
                     f"{ux:.4f} {uy:.4f} {uz:.4f} "
                     f"{ir:.3f} {ig:.3f} {ib:.3f} {w['radius'] * INCH_TO_CM:.4f} "
                     f"{w['stopdot']:.4f} {w['stopdot2']:.4f} {w['exponent']:.3f} "
-                    f"{w['style']}\n")
+                    f"{w['style']} {in_sky}\n")
     from collections import Counter
     tc = dict(sorted(Counter(w["type"] for w in wl).items()))
-    print(f"lights: {len(wl)} worldlights -> {base}.lights  by type {tc}")
+    print(f"lights: {len(wl)} worldlights ({n_sky} in the sky area) -> {base}.lights  by type {tc}")
 
 # --- env_sprite coronas: glow billboards at light sources -------------------
 
-def write_sprites(data, out_dir, base, idx):
+def write_sprites(data, out_dir, base, idx, sky=None):
     """Emit `<base>.sprites`: env_sprite glow billboards (the soft coronas VtMB places at
     lamps/bulbs). Each sprite's Sprite VMT `$basetexture` is decoded to `tex/spr_*.png`;
-    one line per sprite: `png ox oy oz w_cm h_cm r g b amt orient`, where the world size is
+    one line per sprite: `png ox oy oz w_cm h_cm r g b amt orient sky`, where the world size is
     Source's `scale × textureSize` (inches → cm), `r g b`/`amt` are the entity's
     `rendercolor`/`renderamt` (additive tint), and orient is 0 (`vp_parallel`, full
     billboard) or 1 (`parallel_upright`, Y-axis only). `start_hidden` sprites are skipped
@@ -169,7 +282,7 @@ def write_sprites(data, out_dir, base, idx):
             tex_cache[bt] = out
         return tex_cache[bt]
 
-    lines = []
+    lines, n_sky = [], 0
     for b in blocks:
         d = {k.lower(): v for k, v in b}
         if d.get("classname") != "env_sprite" or d.get("starthidden") == "1":
@@ -199,14 +312,19 @@ def write_sprites(data, out_dir, base, idx):
         except ValueError:
             amt = 255
         orient = 1 if "parallel_upright" in vmt_txt.lower() else 0
+        # The moon and the lit-window glows are miniature content on every Santa Monica map
+        # (54 of sm_hub_1's sprites), so they carry the same sky flag everything else does.
+        in_sky = int(sky is not None and sky.is_sky((float(o[0]), float(o[1]), float(o[2]))))
+        n_sky += in_sky
         lines.append(f"tex/{png} {ux:.4f} {uy:.4f} {uz:.4f} "
                      f"{scale*w*INCH_TO_CM:.4f} {scale*h*INCH_TO_CM:.4f} "
-                     f"{r} {g} {bb} {amt} {orient}")
+                     f"{r} {g} {bb} {amt} {orient} {in_sky}")
 
     if lines:
         with open(os.path.join(out_dir, base + ".sprites"), "w") as f:
             f.write("\n".join(lines) + "\n")
-    print(f"sprites: {len(lines)} env_sprite coronas ({len(tex_cache)} textures) -> {base}.sprites")
+    print(f"sprites: {len(lines)} env_sprite coronas ({n_sky} sky, {len(tex_cache)} textures) "
+          f"-> {base}.sprites")
 
 def write_ropes(data, out_dir, base, idx):
     """Emit `<base>.ropes`: the overhead cables VtMB strings between poles/buildings.
@@ -484,9 +602,15 @@ def decode_prop_models(idx, model_paths, propdir, tex_cache, valid):
     return resolved, ok, missing
 
 
-def write_entities(data, out_dir, base, idx, propdir, tex_cache, valid):
+def write_entities(data, out_dir, base, idx, propdir, tex_cache, valid, sky=None):
     """Emit `<base>.ents` (JSON): every entity's keyvalues + outputs, and for brush
     entities ("model" "*N") their brush volumes as convex hulls.
+
+    An entity inside the 3D-skybox miniature's BSP area is annotated `"sky": true` — the moon
+    and window-glow `env_sprite`s, the `logic_timer`s that blink them, the cloud-plane
+    `prop_dynamic`s, the pier's `func_rotating` ferris wheel. It stays a live entity with its
+    real I/O; only its *placement* moves into the sky transform, so the wheel still turns and
+    the glows still blink (`../docs/sky-ambience.md` -> B7, owner call 2026-07-26).
 
     Entities carrying a static `.mdl` `model` key (prop_dynamic/prop_physics and the
     prop_button/prop_doorknob/prop_sign/prop_switch/prop_hacking/item_container family)
@@ -512,7 +636,7 @@ def write_entities(data, out_dir, base, idx, propdir, tex_cache, valid):
     models_l = read_lump(data, 14)
     ents = read_lump(data, 0).decode("ascii", "replace")
 
-    out, n_brush, n_hull, n_out = [], 0, 0, 0
+    out, n_brush, n_hull, n_out, n_sky = [], 0, 0, 0, 0
     for pairs in _parse_ent_blocks(ents):
         keys, outputs = {}, []
         for k, v in pairs:
@@ -529,6 +653,13 @@ def write_entities(data, out_dir, base, idx, propdir, tex_cache, valid):
         og = keys.get("origin", "").split()
         so = [float(x) for x in og] if len(og) == 3 else [0.0, 0.0, 0.0]
         e["origin"] = [round(float(c), 5) for c in source_to_unreal(*so)]
+
+        # 3D-skybox membership, by the same BSP-area test every other content class uses.
+        if sky is not None:
+            pt = sky.entity_point(so, keys.get("model", ""))
+            if pt is not None and sky.is_sky(pt):
+                e["sky"] = True
+                n_sky += 1
 
         # phys_hinge (and the phys_* constraint family): `hingeaxis` is a second Source point;
         # the hinge axis is the line origin->hingeaxis. Pre-convert its *direction* to Unreal
@@ -605,7 +736,8 @@ def write_entities(data, out_dir, base, idx, propdir, tex_cache, valid):
     path = os.path.join(out_dir, base + ".ents")
     with open(path, "w") as f:
         json.dump({"map": base, "entities": out}, f, separators=(",", ":"))
-    print(f"entities: {len(out)} ({n_brush} brush, {n_hull} hulls, {n_out} outputs) -> {base}.ents")
+    print(f"entities: {len(out)} ({n_brush} brush, {n_hull} hulls, {n_out} outputs, "
+          f"{n_sky} sky) -> {base}.ents")
     print(f"entity props: {n_prop} placed / {len(model_paths)} models "
           f"({pok} decoded, {pmiss} missing)")
 
@@ -673,13 +805,16 @@ def disp_grid(src, dinfo, dispverts, emit):
 
 
 # --- static props: GAME_LUMP sprp -> .props sidecar + props/ model OBJs -----
-def write_props(data, out_dir, base, idx, propdir, tex_cache, valid):
+def write_props(data, out_dir, base, idx, propdir, tex_cache, valid, sky=None):
     """Parse GAME_LUMP sprp (VtMB v4, 56B DStaticPropV4): a model-name dict + per-
     prop origin/angles/solid/skin. Decode each unique model once (shared texture cache)
     into out_dir/props/<safename>.obj (Unreal space), and write <base>.props (one prop
-    per line: `safename ox oy oz qx qy qz qw solid skin`). `solid` (0 = non-solid) gates
+    per line: `safename ox oy oz qx qy qz qw solid skin sky`). `solid` (0 = non-solid) gates
     collision; `skin` names an alternate skin family from the model's own skin table
-    (props/<stem>.skins), which the bake applies as material overrides on the placed actor.
+    (props/<stem>.skins), which the bake applies as material overrides on the placed actor;
+    `sky` marks a prop that belongs to the 3D-skybox miniature, which the bake places under
+    the sky transform instead of in the playable world (roofline cutouts, cloud planes, the
+    pier ferris wheel -- 1,043 props game-wide).
 
     Unreal-native: the prop meshes are written via mdl.write_obj_scene(ue_space=True)
     (cm/Z-up/left-handed, winding reversed) and the origin/angles here are converted to
@@ -718,7 +853,7 @@ def write_props(data, out_dir, base, idx, propdir, tex_cache, valid):
         props.append((model_path, origin, angles, solid, skin))
 
     resolved, ok, missing = decode_prop_models(idx, model_paths, propdir, tex_cache, valid)
-    solid_n = skin_n = 0
+    solid_n = skin_n = sky_n = 0
     with open(os.path.join(out_dir, base + ".props"), "w") as f:
         for model_path, (ox, oy, oz), (pitch, yaw, roll), solid, skin in props:
             safe = resolved.get(model_path)
@@ -726,13 +861,15 @@ def write_props(data, out_dir, base, idx, propdir, tex_cache, valid):
                 continue                     # must not stand in for a failed decode
             solid_n += solid != 0
             skin_n += skin != 0
+            in_sky = int(sky is not None and sky.is_sky((ox, oy, oz)))
+            sky_n += in_sky
             ux, uy, uz = source_to_unreal(ox, oy, oz)
             qx, qy, qz, qw = source_angles_to_unreal_quat(pitch, yaw, roll)
             f.write(f"{safe} {ux:.4f} {uy:.4f} {uz:.4f} "
-                    f"{qx:.6f} {qy:.6f} {qz:.6f} {qw:.6f} {solid} {skin}\n")
+                    f"{qx:.6f} {qy:.6f} {qz:.6f} {qw:.6f} {solid} {skin} {in_sky}\n")
     placed = sum(1 for pr in props if pr[0] in resolved)
-    print(f"props: {placed} placed ({solid_n} solid, {skin_n} skinned) / {len(model_paths)} models "
-          f"({ok} decoded, {missing} missing) -> {base}.props")
+    print(f"props: {placed} placed ({solid_n} solid, {skin_n} skinned, {sky_n} sky) / "
+          f"{len(model_paths)} models ({ok} decoded, {missing} missing) -> {base}.props")
 
 
 def main(bsp_path, out_dir):
@@ -785,34 +922,18 @@ def main(bsp_path, out_dir):
     dispinfos = B.read_dispinfos(data)   # [] on maps without displacements
     dispverts = B.read_dispverts(data)
 
-    # The 3D skybox is what the sky_camera can see: the engine renders that pass
-    # with visibility set up from the sky_camera's origin, and the skybox room is
-    # sealed, so its PVS holds the miniature backdrop and nothing else. Faces the
-    # sky_camera cannot see are the real map. (Distance to the sky_camera is not a
-    # proxy for this: the patch's sp_tutorial_1 moves info_player_start 7,500
-    # units, which swings any anchor bisector across the middle of the map.)
+    # The 3D skybox is one BSP area's worth of content -- the engine's own membership rule,
+    # applied here to every content class alike (world faces, static props, entities and
+    # worldlights), not just to the backdrop geometry. See SkyScope.
     ents = read_lump(data, 0).decode("ascii", "replace")
-    def ent_origin(classname):
-        for m in re.finditer(r"\{[^{}]*\}", ents):
-            if f'"{classname}"' in m.group(0):
-                o = re.search(r'"origin"\s+"(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)"', m.group(0))
-                if o:
-                    return tuple(float(x) for x in o.groups())
-        return None
-    def ent_field(classname, key, default=None):
-        for m in re.finditer(r"\{[^{}]*\}", ents):
-            if f'"{classname}"' in m.group(0):
-                f = re.search(rf'"{key}"\s+"(-?[\d.]+)"', m.group(0))
-                if f:
-                    return float(f.group(1))
-        return default
-    sky_anchor = ent_origin("sky_camera")
-    sky_scale = ent_field("sky_camera", "scale", 16.0)
-    sky_faces = B.pvs_faces(data, sky_anchor) if sky_anchor else None
-    if sky_anchor and sky_faces is None:
-        print("  ! sky_camera sees no PVS - exporting every face as world")
-    sky_faces = sky_faces or set()
-    print(f"3D skybox: {len(sky_faces)} faces in the sky_camera's PVS")
+    sky = SkyScope(data, ents)
+    sky_anchor = sky.origin_src
+    sky_scale = sky.scale
+    sky_faces = sky.faces
+    if sky.ok:
+        print(f"3D skybox: area {sky.area}, {len(sky_faces)} world faces, scale {sky_scale:g}")
+    else:
+        print("3D skybox: no sky_camera - every face exports as world")
 
     # Brush-entity placement: a brush model referenced by an entity ("model" "*N")
     # is authored centered at (0,0,0); the engine translates it to the entity's
@@ -1428,10 +1549,10 @@ def main(bsp_path, out_dir):
     propdir = os.path.join(out_dir, "props")
     prop_tex_cache, prop_valid = {}, set()
 
-    write_collision(data, out_dir, base)
-    write_entities(data, out_dir, base, idx, propdir, prop_tex_cache, prop_valid)
-    write_lights(data, out_dir, base)
-    write_sprites(data, out_dir, base, idx)
+    write_collision(data, out_dir, base, sky)
+    write_entities(data, out_dir, base, idx, propdir, prop_tex_cache, prop_valid, sky)
+    write_lights(data, out_dir, base, sky)
+    write_sprites(data, out_dir, base, idx, sky)
     write_ropes(data, out_dir, base, idx)
     # Concave displacement collision: one triangle per line (9 godot floats).
     # Convex brushes can't represent sculpted terrain, so the viewer loads these
@@ -1469,7 +1590,7 @@ def main(bsp_path, out_dir):
     # --- static props (GAME_LUMP sprp) -> props/ OBJs + <base>.props ----------
     # Per-prop ambient comes from WORLDLIGHTS (lump 15), the way the engine's lightcache
     # lights props (write_props → tint_at); the baked world lightmap is for surfaces.
-    write_props(data, out_dir, base, idx, propdir, prop_tex_cache, prop_valid)
+    write_props(data, out_dir, base, idx, propdir, prop_tex_cache, prop_valid, sky)
 
     obj_path = os.path.join(out_dir, base + ".obj")
     with open(mtl_path, "w") as m:
