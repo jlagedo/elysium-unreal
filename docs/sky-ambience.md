@@ -1,10 +1,10 @@
 # Sky & ambience — the RE plan and the Unreal rework
 
-**Status: every unknown (K1–K8) is settled; no rework has landed.** The current
-sky-cube render path is **known wrong** (the backdrop draws incorrectly — a standing defect),
-but both halves of the orientation chain are now recovered: K1, the Source side, out of
-`engine.dll`'s own tables, and K2, the Unreal side, out of UE 5.8's source — so the render fix
-is a stated transform (B3) and B1 demotes to confirming it. K3/K5 — how the original engine lights models and what it
+**Status: every unknown (K1–K8) is settled, and the Phase B render fix has landed — the
+backdrop draws correctly** (B3, confirmed in-engine by B1 against the labelled faces). Both
+halves of the orientation chain are recovered: K1, the Source side, out of
+`engine.dll`'s own tables, and K2, the Unreal side, out of UE 5.8's source — together they
+state the transform B3 applies, and B1 confirmed it in-engine. K3/K5 — how the original engine lights models and what it
 does with lump 15 at runtime — are closed by RE-A3; K4 is closed by RE-A4 (there is no
 day/night bake to select between); K6 is closed by RE-A5 — VRAD's photometric transfer is
 recovered exactly, whole-game, and with it **the absolute scale of lump 8**, which this plan
@@ -28,14 +28,13 @@ VtMB's ambience was never explored as its own subject — the sky path was built
 was inherited from the Godot prototype's calibration rather than derived from how the original
 engine works. Two things force the revisit:
 
-1. **The sky cube renders wrong.** The decoded faces are correct as images (upright, level
-   horizon — verified by eye on `sp_tutorial_1`'s `la` set), so the defect is in the
+1. **The sky cube rendered wrong.** The decoded faces are correct as images (upright, level
+   horizon — verified by eye on `sp_tutorial_1`'s `la` set), so the defect was in the
    assembly/sampling chain, which stacked *two* unverified conventions (K1 × K2). Both are
-   settled below, and together they name the defect exactly: `BuildSkyCube` binds the Source
-   faces to the wrong world axes (K1) **and** stores every slice without the rotation Unreal's
-   D3D-derived cube layout requires (K2). The fix is B3, and it is a stated six-row transform
-   rather than a rename. `tools/sky_upscale.py` still carries the seam-solver K1 was worked
-   around with, and B2 retires it.
+   settled below, and together they named the defect exactly: `BuildSkyCube` bound the Source
+   faces to the wrong world axes (K1) **and** stored every slice without the rotation Unreal's
+   D3D-derived cube layout requires (K2). B3 fixed both under one six-row transform; B1
+   confirmed it.
 2. **We could not say how the original engine produces its ambient light.** We knew what the
    *compiler* consumed (lump 15) and what it *emitted* (lump 8); the runtime half — what the
    engine itself adds per frame, and to what — was inference from later Source versions, not
@@ -352,13 +351,12 @@ Against that, what ships today is wrong twice over: the face order `ft, bk, rt, 
 binds the horizon ring by an **X↔Y swap** — a reflection, not a yaw, so no camera angle makes it
 line up — and every slice is missing its rotation.
 
-### What B1 becomes
+### What B1 confirmed
 
-A confirmation, not a discovery. Feeding the RE-A2 labelled faces through the corrected binding
-must show every face upright on its predicted axis — the same picture the shipped VtMB engine
-drew (RE-A2). A residual is then a fault in the memory layout or in `M_Sky`'s sampling vector,
-not in the convention, which is a narrow enough failure to be worth one session rather than an
-investigation.
+A confirmation, not a discovery — and it confirmed. Fed the RE-A2 labelled faces through the
+corrected binding, our runtime draws every face upright on its predicted axis, the same picture
+the shipped VtMB engine drew (RE-A2), with no residual in the memory layout or `M_Sky`'s
+sampling vector. Captures and the per-axis table: Phase B → B1.
 
 ## The 3D skybox — what the pass actually draws (RE-A8, settled)
 
@@ -1850,13 +1848,35 @@ The rework is calibrated against data we already hold plus the original game:
 
 ## Phase B — sky rendering rework (K1 and K2 both settled — nothing blocks it)
 
-- **B1 — labelled-cube probe in our runtime.** Feed the RE-A2 labelled faces
-  (`tools/out/_skyprobe/<skyname><suf>.png`) through
-  `BuildSkyCube` + `M_Sky`, screenshot in-engine, and check the observed slice→direction and
-  per-face rotation against K2's table. With K2 settled from UE's source this is the
-  **acceptance check on B3**, not the measurement the plan once waited on: run it after B3 and
-  every face should read upright on its predicted axis. A residual indicts the memory layout or
-  `M_Sky`'s sampling vector, not the convention.
+- **B1 — labelled-cube probe in our runtime. Done** (2026-07-26). `elysium.SkyProbe 1` builds
+  the cube from the RE-A2 labelled faces (`tools/out/_skyprobe/<skyname><suf>.png`) instead of
+  the map's own, so both ends of the orientation chain are checked against **one** set of
+  images — the same six the shipped VtMB engine drew. Captured on `sp_tutorial_1` (`la`) with
+  `ShowFlag.StaticMeshes 0`, which leaves only the backdrop (a PMC) drawing, so all six axes
+  are unoccluded from any standing position.
+
+  **Every face reads upright, unmirrored and on its predicted axis**, and each face's own edge
+  tags name the face actually adjoining it:
+
+  | Look (Unreal) | Face | Its label | Screen-left / right |
+  |---|---|---|---|
+  | +X (yaw 0) | `RT` | `la +X`, look yaw 0 | `bk` / `ft` |
+  | +Y (yaw 90) | `FT` | `la −Y`, look yaw 270 | `rt` / `lf` |
+  | −X (yaw 180) | `LF` | `la −X`, look yaw 180 | `ft` / `bk` |
+  | −Y (yaw 270) | `BK` | `la +Y`, look yaw 90 | `lf` / `rt` |
+  | +Z (pitch +90) | `UP` | `la +Z`, look pitch −90 | `bk` / `ft`, `rt` toward the faced horizon |
+  | −Z (pitch −90) | `DN` | `la −Z`, look pitch +90 | `bk` / `ft`, `rt` toward the faced horizon |
+
+  The Source-axis labels come back **Y-negated** against the Unreal heading (`+Y` reads at
+  Unreal −Y), which is `source_to_unreal` showing up in the picture. The faces are *not*
+  mirrored, because the reflection is exactly cancelled by the handedness change: looking down
+  +X, Source screen-right is −Y and Unreal screen-right is +Y, and those are the same
+  direction.
+
+  So there is no residual, and B1 covers what the `Elysium.Substrate.SkyCube` test cannot —
+  the bulk-data layout (face-major, slice order, rows top-down) and `M_Sky`'s sampling vector.
+  Instrument note: `elysium_player_teleport` grew a `pitch` argument for this, since the two
+  pole captures need one.
 - **B2 — canonical face orientation at export. Done** (2026-07-26). The `UE_` contract now
   covers sky, as a recorded contract rather than a transform: the decoded faces already *are*
   the canonical orientation, so the exporter emits them verbatim and states the convention it

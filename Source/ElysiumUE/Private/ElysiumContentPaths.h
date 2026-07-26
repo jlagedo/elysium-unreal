@@ -103,6 +103,13 @@ struct FElysiumContentPaths
 	static FString NpcDir() { return Root() / TEXT("npc"); }
 	static FString NpcGlb(const FString& Stem) { return NpcDir() / (Stem + TEXT(".glb")); }
 
+	// The labelled sky set (debug, sky-ambience RE-A2/B1). Six self-describing face images —
+	// suffix, predicted axis, TOP banner, up arrow, tagged corners, edge neighbours — authored by
+	// tools/sky_probe.py, which also installs them into the *original* game so the two ends of the
+	// orientation chain are checked against one set of faces. Named `<skyname><face>.png`, unlike
+	// the per-map `tex/sky_<face>.png`. `elysium.SkyProbe 1` builds the cube from these.
+	static FString SkyProbeDir() { return Root() / TEXT("_skyprobe"); }
+
 	// Light-edit sessions (debug). The Lights Cog window's Save writes one JSON per map — the
 	// hand-disabled set plus every hand-set attribute, keyed by `.lights` line index — so a survey
 	// done by eye in-game comes back out as data. One file per map, overwritten each save; under

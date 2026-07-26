@@ -39,6 +39,11 @@ namespace ElysiumEnvironment
 	// Null if any face is missing or the faces are not square and equal-sized.
 	UTextureCube* BuildSkyCube(const FString& TexDir);
 
+	// The same assembly over six faces named `<Prefix><face>.png` in Dir, which is how the
+	// labelled RE-A2 probe set is named (`<skyname>rt.png`, …). BuildSkyCube is this with
+	// Prefix = "sky_".
+	UTextureCube* BuildSkyCubeFrom(const FString& Dir, const FString& Prefix);
+
 	// The two halves of the K1 x K2 face->slice transform, exposed so the automation suite can
 	// check them against the conventions they were derived from rather than against themselves.
 	// `Slice` is 0..5 = +X, -X, +Y, -Y, +Z, -Z.

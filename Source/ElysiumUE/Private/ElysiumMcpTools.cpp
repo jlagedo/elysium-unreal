@@ -665,7 +665,8 @@ namespace ElysiumMcpImpl
 				.Add(TEXT("x"), TEXT("number"), TEXT("World X in Unreal centimetres."))
 				.Add(TEXT("y"), TEXT("number"), TEXT("World Y in Unreal centimetres."))
 				.Add(TEXT("z"), TEXT("number"), TEXT("World Z in Unreal centimetres."))
-				.Add(TEXT("yaw"), TEXT("number"), TEXT("Optional view yaw to face after the move."));
+				.Add(TEXT("yaw"), TEXT("number"), TEXT("Optional view yaw to face after the move."))
+				.Add(TEXT("pitch"), TEXT("number"), TEXT("Optional view pitch after the move; positive looks up, -90..90."));
 			Out.Add(MakeTool(TEXT("elysium_player_teleport"),
 				TEXT("Move the player. Target by info_landmark name, by entity targetname/classname, or by explicit world coordinates. Teleports through physics, so the pawn keeps its collision — enable noclip first if the destination is inside geometry."),
 				Schema,
@@ -729,12 +730,15 @@ namespace ElysiumMcpImpl
 					const bool bMoved = Pawn->TeleportTo(Destination, Pawn->GetActorRotation(),
 						/*bIsATest*/ false, /*bNoCheck*/ true);
 
-					if (HasParam(Params, TEXT("yaw")))
+					if (HasParam(Params, TEXT("yaw")) || HasParam(Params, TEXT("pitch")))
 					{
 						if (APlayerController* Controller = LivePlayerController())
 						{
 							FRotator View = Controller->GetControlRotation();
 							View.Yaw = ParamNum(Params, TEXT("yaw"), View.Yaw);
+							// Straight up/down is what a sky check needs, so clamp to the pole rather
+							// than letting a wrapped pitch roll the view over.
+							View.Pitch = FMath::Clamp(ParamNum(Params, TEXT("pitch"), View.Pitch), -90.0, 90.0);
 							Controller->SetControlRotation(View);
 						}
 					}

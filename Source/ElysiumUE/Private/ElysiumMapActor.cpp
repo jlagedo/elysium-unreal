@@ -63,6 +63,18 @@ static TAutoConsoleVariable<int32> CVarRopes(
 	TEXT("Build the map's cables from <map>.ropes (1) or skip (0). Applied at map load."),
 	ECVF_Default);
 
+// Assemble the sky cube from the labelled RE-A2 probe faces instead of the map's own (0/1).
+// Each face states its suffix, the axis it belongs on, which way is up and which face each of
+// its edges meets, so a wrong slice binding, a rotation, a mirror and a broken seam are four
+// visibly different failures. It is the acceptance check on the B3 assembly, run against the
+// same six images the shipped VtMB engine drew for RE-A2 — so both ends of the orientation
+// chain are checked with one set of faces. Read at map load; elysium.reload to apply.
+static TAutoConsoleVariable<int32> CVarSkyProbe(
+	TEXT("elysium.SkyProbe"), 0,
+	TEXT("Build the sky cube from the labelled tools/out/_skyprobe faces (1) or the map's own (0). "
+	     "Applied at map load."),
+	ECVF_Default);
+
 namespace
 {
 	// A cube of half-extent H centred on the origin, as PMC section arrays. The sky material
@@ -784,9 +796,18 @@ void AElysiumMapActor::ApplyEnvironment()
 			*Env.SkyName, Env.SkyConvention, ElysiumEnvironment::SkyConventionVersion);
 	}
 
-	UTextureCube* Cube = ElysiumEnvironment::BuildSkyCube(FElysiumContentPaths::MapTexDir(MapName));
+	const bool bProbe = CVarSkyProbe.GetValueOnGameThread() != 0 && !Env.SkyName.IsEmpty();
+	UTextureCube* Cube = bProbe
+		? ElysiumEnvironment::BuildSkyCubeFrom(FElysiumContentPaths::SkyProbeDir(), Env.SkyName)
+		: ElysiumEnvironment::BuildSkyCube(FElysiumContentPaths::MapTexDir(MapName));
 	if (Cube == nullptr)
 	{
+		if (bProbe)
+		{
+			UE_LOG(LogElysium, Warning,
+				TEXT("elysium.SkyProbe: no labelled '%s' face set under %s — run tools/sky_probe.py"),
+				*Env.SkyName, *FElysiumContentPaths::SkyProbeDir());
+		}
 		return;
 	}
 

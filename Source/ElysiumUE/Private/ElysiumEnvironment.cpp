@@ -178,12 +178,17 @@ void ElysiumEnvironment::SkySliceSource(int32 Slice, int32 X, int32 Y, int32 N,
 
 UTextureCube* ElysiumEnvironment::BuildSkyCube(const FString& TexDir)
 {
+	return BuildSkyCubeFrom(TexDir, TEXT("sky_"));
+}
+
+UTextureCube* ElysiumEnvironment::BuildSkyCubeFrom(const FString& Dir, const FString& Prefix)
+{
 	// One decoded face per Unreal slice, in slice order, each already assigned its rotation.
 	TArray64<uint8> Faces[6];
 	int32 Size = 0;
 	for (int32 F = 0; F < 6; ++F)
 	{
-		const FString Path = TexDir / FString::Printf(TEXT("sky_%s.png"), SkySlices[F].Face);
+		const FString Path = Dir / FString::Printf(TEXT("%s%s.png"), *Prefix, SkySlices[F].Face);
 		int32 W = 0, H = 0;
 		if (!LoadPngBgra(Path, W, H, Faces[F]) || W <= 0 || W != H)
 		{
