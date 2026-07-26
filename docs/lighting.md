@@ -36,9 +36,12 @@ direction), `type`@40, `style`@44, `stopdot`/`stopdot2`/`exponent`@48/52/56 (spo
 **3** skylight (sun), **5** skyambient. (Type 4 quakelight exists in the enum but is
 unused on the test maps.)
 
-Counts across the test set: point (1) 10–300, spot (2) 12–464, texlight (0) 0–32. Only
-`sp_ninesintro` and `sp_tutorial_1` carry a skylight (3) + skyambient (5); the rest are
-interior-lit, with no sun/sky term.
+Counts across the test set: point (1) 10–300, spot (2) 12–464, texlight (0) 0–32.
+**Sky-pair presence varies by export set:** on the Godot-era test set only `sp_ninesintro` and
+`sp_tutorial_1` carried a skylight (3) + skyambient (5); on Elysium-Unreal's 10-map export set
+it is 6 of 10, `ch_temple_1` carries **three** of each (multiple `light_environment`s), and the
+outdoor `sm_hub_1` carries none (its sky glow is sprayed fill). Inventory + the RE plan:
+`docs/sky-ambience.md`.
 
 ## Export — the `.lights` sidecar (`write_lights`)
 
