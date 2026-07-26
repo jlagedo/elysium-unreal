@@ -2165,15 +2165,45 @@ The rework is calibrated against data we already hold plus the original game:
   1.0 against a near-black `pier` cube was contributing little to begin with, which is itself
   the point: this replaces a term that was arbitrary, not one that was load-bearing.
 
-- **C3 — Lumen art-direction knobs via a per-map PostProcessVolume.** The bake places a
-  tagged, unbound PPV (pattern-matching SkyLight/Fog); `AdoptBakedLevel` adopts it. First
-  payloads: **Skylight Leaking** (+ Full Skylight Leaking Distance) as the sanctioned
-  replacement for load-bearing fill where Lumen has nothing to bounce, and **Indirect Lighting
-  Intensity** as the bounce-strength A/B knob. **The mechanism is adopted (D3, 2026-07-26,
-  `decisions.md`): the PPV ships with neutral defaults**, and a non-neutral value is set only
-  on a measured C4/C5 deficit — one dated decision entry per map when it happens. (Ambient
-  Cubemap stays banned: a flat occlusion-ignoring term is the contrast-killer both Epic and
-  the charter warn against.)
+- **C3 — Lumen art-direction knobs via a per-map PostProcessVolume. Done** (2026-07-26; D3).
+  The bake places one tagged, **unbound** PPV per map (`elysium.ppv`, beside the SkyLight and
+  Fog it pattern-matches) and `AdoptBakedLevel` adopts it. The runtime owns how it *applies* —
+  enabled, unbound, full blend weight — the same way it owns every light's values, because a
+  bounded volume silently doing nothing outside its brush is indistinguishable from a knob that
+  does not work.
+
+  It ships **neutral**: not one `bOverride_` is set, so it changes no pixel. Three cvars reach
+  it live, all on the convention **negative = neutral** (the override is *cleared*, not set to a
+  nominal default, so "not touching this" and "set to what it would have been" stay
+  distinguishable):
+
+  | cvar | what it is | state |
+  |---|---|---|
+  | `elysium.SkylightLeaking` | the sanctioned replacement for VtMB's load-bearing author fill, where Lumen has nothing in the room to bounce off | **works** |
+  | `elysium.SkylightLeakingDistance` | the ramp to full leaking | **works** |
+  | `elysium.LumenDiffuseBoost` | `pow(albedo, boost)` on what the bounce sees — below 1 brightens | **unverified** |
+
+  Measured on `sp_tutorial_1` (frame mean of 255): neutral 80.206 → leaking 0.25 **80.342** →
+  leaking 1.0 **80.763**; adding a 200 m full-leak ramp drops it to **80.500** and a 1 m ramp
+  raises it to **80.885** — monotone, and in the right direction for both (a longer ramp means
+  less leak nearby). Clearing the overrides returns exactly to **80.193**. The mechanism is
+  proven end to end.
+
+  **A correction to D3's payload: Indirect Lighting Intensity cannot do the job it was named
+  for, and is not wired.** It reaches the shaders as `View.PrecomputedIndirectLightingColorScale`
+  — which scales *precomputed* indirect lighting — and **no shader under `Shaders/Private/Lumen/`
+  reads it at all**. Our render path is fully dynamic with no precomputed lighting, so it is a
+  no-op: measured, an `IndirectLightingIntensity` of 3 changed not one pixel. Lumen's own
+  bounce-strength control is `LumenDiffuseColorBoost` (`LumenDiffuseColorBoost.ush`), which is
+  what the third cvar drives instead — but it is carried as **unverified**, not as a working
+  knob: it produced no measurable change here either, live or across a map load, and the reason
+  was not chased. It has no cvar form in 5.8 and is consumed where the surface cache is written,
+  so a live change plausibly cannot re-cache; that is a hypothesis, not a finding. C4/C5 have a
+  proven knob to work with (leaking) and a lead on the second.
+
+  **Ambient Cubemap stays banned**, as D3 says: a flat occlusion-ignoring term is the
+  contrast-killer both Epic and the direction charter warn against.
+
 - **C4 — calibration against the bake.** Extend `probe_light_calibration.py` to fit the
   ambient terms (SkyLight intensity, leaking, indirect intensity) against lump 8 — the one
   bake, per K4 — the same by-data method that settled the point/spot falloff. RE-A5 reshapes
@@ -2195,7 +2225,7 @@ The rework is calibrated against data we already hold plus the original game:
 |---|---|---|
 | D1 | The faithful-ambience target: lump 8 at the shared vantages, measured — not "looks right". **RE-A4 removed the fork:** there is one bake, keyed by `styles[8]`. **RE-A5 gave the target absolute units** (`stored luxel = 255 · intensity / falloff`), so "measured" now means in known units with no free gain — and the measurement must respect the retail-vs-patch provenance split | **Decided 2026-07-26** (`decisions.md`): reproduce — the measured target, in absolute units, retail bakes only |
 | D2 | SkyLight-as-IBL is a modernization. **RE-A3 makes the divergence exact:** the sky lights the *world* only through lump 8, and lights *models* only as the colour of a sky-hitting bounce ray | **Decided 2026-07-26** (`decisions.md`): data-driven — the actor stays everywhere, intensity from the type-5 magnitude at the RE-A5 scale on the 25 pair maps, **zero** on the 83 without |
-| D3 | Skylight Leaking / Indirect Lighting Intensity — non-physical knobs replacing author fill; adjudicated like the light survey (does it serve the direction?) | **Decided 2026-07-26** (`decisions.md`): mechanism lands now with neutral defaults; a non-neutral value only on a measured C4/C5 deficit, one dated entry per map |
+| D3 | Skylight Leaking / a bounce-strength knob — non-physical knobs replacing author fill; adjudicated like the light survey (does it serve the direction?). **C3 corrects the second one:** Indirect Lighting Intensity scales *precomputed* indirect only and no Lumen shader reads it, so it is a no-op on this render path; Lumen's own control is `LumenDiffuseColorBoost` | **Decided 2026-07-26** (`decisions.md`): mechanism lands now with neutral defaults; a non-neutral value only on a measured C4/C5 deficit, one dated entry per map |
 | D4 | Fog model: exponential height + volumetric vs Source's planar distance fog (existing accepted divergence — formalise it) | **Decided 2026-07-26** (`decisions.md`): modernize, with the RE scoping — world fog from `worldspawn`, `sky_camera` fog on the miniature only, the backdrop never fogged |
 | D5 | Enhanced (upscaled) sky faces as default-off A/B layer | **Decided 2026-07-26** (`decisions.md`): modernize behind the toggle, with B5's absolute-texel-preservation acceptance check |
 | D6 | Multi-`light_environment` maps: sum vs first-wins (we currently do silent **last**-wins). **RE-A3 settled the runtime: first-wins, never summed**, for both halves of the pair. **RE-A5 settles the bake and shrinks the decision to nothing:** VRAD resolves the skyambient once, globally, first-entity-wins and writes that same value into every type-5 row, so the ambient half is moot by construction; the sun half is observable on `sp_observatory_2` alone (RE-A7), where summing vs first-wins moves the sun from 3.1% to 5.7% of the median lit face | **No decision needed** — adopt first-wins (C0a), which matches runtime and bake and changes no number |

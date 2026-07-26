@@ -28,6 +28,7 @@
 #include "Components/SkyLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/ExponentialHeightFog.h"
+#include "Engine/PostProcessVolume.h"
 #include "Engine/Light.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/SkyLight.h"
@@ -83,6 +84,44 @@ static TAutoConsoleVariable<int32> CVarEnhancedTextures(
 	TEXT("elysium.EnhancedTextures"), 0,
 	TEXT("Prefer the offline-enhanced tex_hi/ texture set (1) over the faithful decode (0). "
 	     "Applied at map load."),
+	ECVF_Default);
+
+// The two Lumen art-direction knobs D3 sanctions, as live cvars over the map's baked
+// PostProcessVolume. **Negative = neutral**, which is the shipped state: the override is
+// cleared rather than set to a nominal default, so "we are not touching this" and "we set it to
+// what it would have been" stay distinguishable. A non-neutral value is a divergence and wants
+// a dated per-map decision (decisions.md); these exist so C4/C5 can measure whether one is
+// justified without a rebuild.
+//
+// Skylight Leaking is the sanctioned replacement for VtMB's load-bearing author fill — the
+// soft lights it sprays where a real bounce would have come from, which Lumen cannot reproduce
+// where there is nothing in the room to bounce off.
+//
+// The bounce-strength knob is **Lumen Diffuse Color Boost**, not Indirect Lighting Intensity.
+// D3 named the latter, but on this render path it does nothing: it reaches the shaders as
+// `View.PrecomputedIndirectLightingColorScale`, which scales *precomputed* indirect lighting
+// only, and no shader under Lumen/ reads it — measured, an IndirectLightingIntensity of 3
+// changes not one pixel here. `LumenDiffuseColorBoost` is Lumen's own control
+// (`LumenDiffuseColorBoost.ush`: `pow(DiffuseLum, Boost)`, so **below 1 brightens** and 1 is
+// neutral) and it raises the albedo the bounce sees, which is the term VtMB's look actually
+// lives on.
+//
+// Ambient Cubemap is deliberately absent: a flat occlusion-ignoring term is the contrast-killer
+// both Epic and the direction charter warn against.
+static TAutoConsoleVariable<float> CVarSkylightLeaking(
+	TEXT("elysium.SkylightLeaking"), -1.f,
+	TEXT("Lumen skylight leaking on the map's PPV (0..1). Negative = neutral (no override)."),
+	ECVF_Default);
+
+static TAutoConsoleVariable<float> CVarSkylightLeakingDistance(
+	TEXT("elysium.SkylightLeakingDistance"), -1.f,
+	TEXT("Distance (cm) over which skylight leaking reaches full strength. Negative = neutral."),
+	ECVF_Default);
+
+static TAutoConsoleVariable<float> CVarDiffuseColorBoost(
+	TEXT("elysium.LumenDiffuseBoost"), -1.f,
+	TEXT("Lumen diffuse colour boost on the map's PPV: pow(albedo, boost), so below 1 brightens "
+	     "the bounce and 1 is neutral. Negative = neutral (no override)."),
 	ECVF_Default);
 
 // Assemble the sky cube from the labelled RE-A2 probe faces instead of the map's own (0/1).
@@ -187,6 +226,14 @@ void AElysiumMapActor::BeginPlay()
 		FConsoleVariableDelegate::CreateWeakLambda(this,
 			[this](IConsoleVariable*) { ApplySkyBrightness(); }));
 
+	// The D3 knobs are for finding a value by eye against a live scene, so they apply as they
+	// change rather than at load.
+	const FConsoleVariableDelegate Knobs = FConsoleVariableDelegate::CreateWeakLambda(this,
+		[this](IConsoleVariable*) { ApplyPostProcessKnobs(); });
+	CVarSkylightLeaking.AsVariable()->SetOnChangedCallback(Knobs);
+	CVarSkylightLeakingDistance.AsVariable()->SetOnChangedCallback(Knobs);
+	CVarDiffuseColorBoost.AsVariable()->SetOnChangedCallback(Knobs);
+
 	LoadMap();
 }
 
@@ -249,12 +296,14 @@ void AElysiumMapActor::LoadMap()
 
 	// Sky cubemap + backdrop, and the sky light's IBL off the same cube.
 	ApplyEnvironment();
+	ApplyPostProcessKnobs();
 	Phase(TEXT("Environment"));
 
 	UE_LOG(LogElysium, Log,
-		TEXT("baked '%s': %d actors (%d world, %d sky, %d props, %d decals), %d lights, %d hulls"),
+		TEXT("baked '%s': %d actors (%d world, %d sky, %d props, %d decals), %d lights, %d hulls, "
+		     "ppv %s"),
 		*MapName, Adopted, WorldActors.Num(), SkyActors.Num(), PropActors.Num(), DecalCount,
-		WorldLightCount, HullCount);
+		WorldLightCount, HullCount, PostProcess ? TEXT("yes") : TEXT("MISSING"));
 
 	if (ReadSpawn(PendingSpawnLoc, PendingSpawnYaw))
 	{
@@ -318,6 +367,7 @@ int32 AElysiumMapActor::AdoptBakedLevel()
 	PropActors.Reset();
 	SkyLight = nullptr;
 	HeightFog = nullptr;
+	PostProcess = nullptr;
 	DecalCount = 0;
 
 	// One pass over the level. A light's `.lights` line index rides a second tag, so the rig can
@@ -366,6 +416,20 @@ int32 AElysiumMapActor::AdoptBakedLevel()
 				// The world's fog, and only the world's: the 2D backdrop is exempt game-wide
 				// (sky-ambience B8 / RE-A9), and a deferred fog pass has no other way to say so.
 				HeightFog->SetFogCutoffDistance(FogCutoffCm);
+			}
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::PostProcess))
+		{
+			PostProcess = Cast<APostProcessVolume>(Actor);
+			if (PostProcess)
+			{
+				// The runtime owns how the volume applies, the same way it owns every light's
+				// values: the bake only places the actor. Unbound and full weight, so the knobs
+				// reach the camera wherever it is — a bounded volume would silently do nothing
+				// outside its brush, which is indistinguishable from a knob that does not work.
+				PostProcess->bEnabled = true;
+				PostProcess->bUnbound = true;
+				PostProcess->BlendWeight = 1.f;
 			}
 		}
 		else if (Actor->ActorHasTag(ElysiumBakedTags::Decal))
@@ -999,6 +1063,36 @@ float AElysiumMapActor::SkyAmbientIntensity(float CubeUpperMean) const
 		return 0.f;
 	}
 	return Mag / CubeUpperMean;
+}
+
+void AElysiumMapActor::ApplyPostProcessKnobs()
+{
+	if (!PostProcess)
+	{
+		return;
+	}
+	FPostProcessSettings& S = PostProcess->Settings;
+
+	const float Leak = CVarSkylightLeaking.GetValueOnGameThread();
+	S.bOverride_LumenSkylightLeaking = Leak >= 0.f;
+	if (Leak >= 0.f)
+	{
+		S.LumenSkylightLeaking = Leak;
+	}
+
+	const float LeakDist = CVarSkylightLeakingDistance.GetValueOnGameThread();
+	S.bOverride_LumenFullSkylightLeakingDistance = LeakDist >= 0.f;
+	if (LeakDist >= 0.f)
+	{
+		S.LumenFullSkylightLeakingDistance = LeakDist;
+	}
+
+	const float Boost = CVarDiffuseColorBoost.GetValueOnGameThread();
+	S.bOverride_LumenDiffuseColorBoost = Boost >= 0.f;
+	if (Boost >= 0.f)
+	{
+		S.LumenDiffuseColorBoost = Boost;
+	}
 }
 
 void AElysiumMapActor::ApplySkyBrightness()

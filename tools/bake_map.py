@@ -77,6 +77,7 @@ TAG_LIGHT = "elysium.light"
 TAG_SKYLIGHT = "elysium.skylight"
 TAG_FOG = "elysium.fog"
 TAG_DECAL = "elysium.decal"
+TAG_PPV = "elysium.ppv"
 
 # A deferred decal's projection box reaches this far (cm) either way along its projection
 # axis. Kept shallow so a decal catches its host wall and not the geometry behind it.
@@ -743,6 +744,24 @@ class Bake(object):
                 fog.set_actor_label("HeightFog")
                 fog.tags = [TAG_FOG]
                 fog.set_folder_path("Environment")
+
+        # The map's Lumen art-direction volume (D3, decisions.md 2026-07-26). It ships
+        # NEUTRAL -- unbound, and with not a single bOverride_ set -- so it changes no pixel.
+        # What it provides is the place a per-map value goes when C4/C5 measure a deficit that
+        # justifies one: Skylight Leaking (+ its full-leaking distance) as the sanctioned
+        # replacement for load-bearing author fill where Lumen has nothing to bounce off, and
+        # Indirect Lighting Intensity as the bounce-strength A/B. Landing the mechanism now
+        # means such a decision is one number in one place, not new plumbing under time
+        # pressure. Ambient Cubemap is deliberately NOT among them: a flat occlusion-ignoring
+        # term is the contrast-killer both Epic and the direction charter warn against.
+        ppv = actors.spawn_actor_from_class(unreal.PostProcessVolume,
+                                            unreal.Vector(0.0, 0.0, 0.0))
+        if ppv:
+            ppv.set_editor_property("unbound", True)
+            ppv.set_editor_property("priority", 0.0)
+            ppv.set_actor_label("PostProcess")
+            ppv.tags = [TAG_PPV]
+            ppv.set_folder_path("Environment")
 
     # ------------------------------------------------------------------- level
 

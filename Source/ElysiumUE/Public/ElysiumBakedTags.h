@@ -24,6 +24,10 @@ namespace ElysiumBakedTags
 	inline const FName Fog(TEXT("elysium.fog"));
 	// One projected decal.
 	inline const FName Decal(TEXT("elysium.decal"));
+	// The map's unbound PostProcessVolume — where a per-map Lumen art-direction value lives
+	// (D3). It ships neutral: nothing overridden, so it changes no pixel until an owner call
+	// puts a number on it.
+	inline const FName PostProcess(TEXT("elysium.ppv"));
 
 	// The `.lights` line index tag carried alongside Light, e.g. "elysium.src=137".
 	inline FName SourceIndex(int32 Index)

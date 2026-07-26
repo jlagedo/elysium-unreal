@@ -195,6 +195,11 @@ private:
 	// by the light rig so the Lights Cog window reaches them.
 	UPROPERTY() TObjectPtr<USkyLightComponent> SkyLight;
 	UPROPERTY() TObjectPtr<UExponentialHeightFogComponent> HeightFog;
+	// C3/D3 — the map's unbound PostProcessVolume, where a per-map Lumen art-direction value
+	// lives. Baked neutral (nothing overridden), so it changes no pixel until someone puts a
+	// number on it; `elysium.SkylightLeaking` / `elysium.IndirectIntensity` are how C4/C5 try
+	// one without a rebuild.
+	UPROPERTY() TObjectPtr<class APostProcessVolume> PostProcess;
 
 	// The baked level's geometry actors, bucketed by the bake's tags. Not owned — they belong to
 	// the level and die with it; these are handles for visibility toggles and the debug pick.
@@ -273,6 +278,10 @@ private:
 	// pair, zero where the pair authors a zero, and otherwise the factor that makes the cube
 	// deliver VtMB's stated sky radiance. `CubeUpperMean` 0 means "no cube".
 	float SkyAmbientIntensity(float CubeUpperMean) const;
+	// Push the elysium.* art-direction cvars onto the adopted PPV. A negative value means
+	// "leave it neutral" — the override is cleared, not set to a default — so the shipped state
+	// and an experiment are distinguishable rather than merely equal-looking.
+	void ApplyPostProcessKnobs();
 	// Push elysium.SkyBrightness onto the live backdrop MID. The faithful value is 1 (D7): VtMB's
 	// sky transfer is the identity, so this is an A/B knob, not a calibration. No-op with no sky.
 	void ApplySkyBrightness();
