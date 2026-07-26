@@ -1991,6 +1991,20 @@ The rework is calibrated against data we already hold plus the original game:
   Verified both directions: a run against itself is 0.00% on all 10 vantages, and a +6-level
   lift over the sky band of one shot is caught at 27.78% of that vantage's pixels with the other
   three unmoved.
+
+  **One hard limit, measured: a baseline is only valid against a fixed bake.** Re-baking a map
+  from **byte-identical inputs** and re-shooting moves the render by up to **5.4 mean / 55% of
+  pixels** (`sp_tutorial_1` `t1`; `spawn` 1.0/20%, `t3` 1.2/21%, `t4` 0.02/0.05%). The bake
+  builds Nanite meshes and Lumen's surface cards, card packing is order- and DDC-dependent, and
+  on a map where direct light explains ~0% of a median lit face (C4) the bounce carries almost
+  everything — so a reshuffled surface cache moves the whole frame a little. By contrast a map
+  left un-rebaked is stable to **≤ 0.23 mean / ~1% of pixels** across a runtime change
+  (`sm_hub_1`), which is the floor of Lumen's own temporal accumulation.
+
+  So the tool answers "did this runtime or asset change alter the look" — which is what it did
+  cleanly for C2 — and it does **not** answer "did anything change across a re-bake": at that
+  scale its own noise swamps the signal. Re-baseline after any re-bake, and attribute across one
+  only with a margin well above the numbers above.
 - **B7 — split the whole 3D skybox, not just its world faces. Done** (2026-07-26; RE-A8).
   The exporter's `SkyScope` computes the miniature's BSP area once — the engine's own
   membership rule, `area(point_leaf(x)) == area(point_leaf(sky_camera.origin))` — and applies
