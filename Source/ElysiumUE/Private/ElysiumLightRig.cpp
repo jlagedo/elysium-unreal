@@ -191,7 +191,8 @@ int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FStrin
 		// constants is left to ApplyLiveTuning, which is the single place those live.
 		Entry.Light->SetLightColor(Row.Color);
 		Lights.Add(Entry.Light);
-		LightSources.Add({ Entry.Light, Row.Type, Row.Mag, Row.RadiusCm, FitMult, Row.Style, 0.f });
+		LightSources.Add({ Entry.Light, Entry.SourceIndex, Row.Type, Row.Mag, Row.RadiusCm, FitMult,
+			Row.Style, 0.f, Row.Color });
 		bHasSun |= (Row.Type == 3);
 		++LightCount;
 	}
@@ -218,11 +219,13 @@ int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FStrin
 void UElysiumLightRig::SetLightsVisible(bool bShow)
 {
 	bLightsVisible = bShow;
-	for (ULightComponent* Light : Lights)
+	// Driven off LightSources, not the plain Lights array, because a hand-disabled source stays
+	// off through a master flip — the disabled set is survey data, not a display state.
+	for (const FLightSource& S : LightSources)
 	{
-		if (Light)
+		if (ULightComponent* Light = S.Light.Get())
 		{
-			Light->SetVisibility(bShow);
+			Light->SetVisibility(bShow && !S.bDisabled);
 		}
 	}
 }
@@ -231,38 +234,139 @@ void UElysiumLightRig::ApplyLiveTuning()
 {
 	for (FLightSource& S : LightSources)
 	{
-		ULightComponent* Light = S.Light.Get();
-		if (Light == nullptr)
+		// A hand-edited source is deliberately left alone: the sliders drive the rig, the
+		// inspector drives the one light the user is working on.
+		if (!S.bOverridden)
 		{
-			continue;
+			ApplyToSource(S);
 		}
-
-		if (S.Type == 3)
-		{
-			// Sun/directional: lux scaled off the raw magnitude, no falloff/reach.
-			S.BaseIntensity = FMath::Max(S.Mag * SunScaleLux, 0.01f);
-		}
-		else
-		{
-			const float Reach = (S.RadiusCm > 1.f ? S.RadiusCm : FallbackRadiusCm) * RadiusScale;
-			S.BaseIntensity = FMath::Min(S.Mag * PointSpotScale * S.FitMult, MaxBrightness);
-			if (UPointLightComponent* PL = Cast<UPointLightComponent>(Light))
-			{
-				PL->SetAttenuationRadius(Reach);
-				PL->SetLightFalloffExponent(FalloffExponent);
-			}
-			else if (USpotLightComponent* SL = Cast<USpotLightComponent>(Light))
-			{
-				SL->SetAttenuationRadius(Reach);
-				SL->SetLightFalloffExponent(FalloffExponent);
-			}
-		}
-
-		Light->SpecularScale = SpecularScale;
-		// Styled lights get their per-frame flicker off this new base next tick; set the base now
-		// so unanimated lights update immediately (and animated ones don't stall on a paused clock).
-		Light->SetIntensity(S.BaseIntensity);
 	}
+}
+
+ULightComponent* UElysiumLightRig::SourceLight(int32 Index) const
+{
+	return LightSources.IsValidIndex(Index) ? LightSources[Index].Light.Get() : nullptr;
+}
+
+bool UElysiumLightRig::IsSourceOverridden(int32 Index) const
+{
+	return LightSources.IsValidIndex(Index) && LightSources[Index].bOverridden;
+}
+
+void UElysiumLightRig::SetSourceOverridden(int32 Index, bool bOverride)
+{
+	if (LightSources.IsValidIndex(Index))
+	{
+		LightSources[Index].bOverridden = bOverride;
+	}
+}
+
+void UElysiumLightRig::SetSourceIntensity(int32 Index, float Intensity)
+{
+	if (!LightSources.IsValidIndex(Index))
+	{
+		return;
+	}
+	FLightSource& S = LightSources[Index];
+	S.bOverridden = true;
+	// Styled sources scale BaseIntensity per frame, so writing it is what makes a hand-set value
+	// the light's new base rather than something the next tick overwrites.
+	S.BaseIntensity = Intensity;
+	if (ULightComponent* Light = S.Light.Get())
+	{
+		Light->SetIntensity(Intensity);
+	}
+}
+
+void UElysiumLightRig::RevertSource(int32 Index)
+{
+	if (!LightSources.IsValidIndex(Index))
+	{
+		return;
+	}
+	FLightSource& S = LightSources[Index];
+	S.bOverridden = false;
+	// Colour is fixed sidecar data that ApplyToSource does not own, so restore it here — an
+	// inspector colour edit has to come back too, not just the calibrated numbers.
+	if (ULightComponent* Light = S.Light.Get())
+	{
+		Light->SetLightColor(S.Color);
+	}
+	ApplyToSource(S);
+}
+
+void UElysiumLightRig::RevertAllSources()
+{
+	for (int32 Index = 0; Index < LightSources.Num(); ++Index)
+	{
+		RevertSource(Index);
+	}
+}
+
+bool UElysiumLightRig::IsSourceDisabled(int32 Index) const
+{
+	return LightSources.IsValidIndex(Index) && LightSources[Index].bDisabled;
+}
+
+bool UElysiumLightRig::ShouldSourceBeLit(int32 Index) const
+{
+	return bLightsVisible && LightSources.IsValidIndex(Index) && !LightSources[Index].bDisabled;
+}
+
+void UElysiumLightRig::SetSourceDisabled(int32 Index, bool bDisable)
+{
+	if (!LightSources.IsValidIndex(Index))
+	{
+		return;
+	}
+	LightSources[Index].bDisabled = bDisable;
+	if (ULightComponent* Light = LightSources[Index].Light.Get())
+	{
+		Light->SetVisibility(ShouldSourceBeLit(Index));
+	}
+}
+
+void UElysiumLightRig::EnableAllSources()
+{
+	for (int32 Index = 0; Index < LightSources.Num(); ++Index)
+	{
+		SetSourceDisabled(Index, false);
+	}
+}
+
+void UElysiumLightRig::ApplyToSource(FLightSource& S)
+{
+	ULightComponent* Light = S.Light.Get();
+	if (Light == nullptr)
+	{
+		return;
+	}
+
+	if (S.Type == 3)
+	{
+		// Sun/directional: lux scaled off the raw magnitude, no falloff/reach.
+		S.BaseIntensity = FMath::Max(S.Mag * SunScaleLux, 0.01f);
+	}
+	else
+	{
+		const float Reach = (S.RadiusCm > 1.f ? S.RadiusCm : FallbackRadiusCm) * RadiusScale;
+		S.BaseIntensity = FMath::Min(S.Mag * PointSpotScale * S.FitMult, MaxBrightness);
+		if (UPointLightComponent* PL = Cast<UPointLightComponent>(Light))
+		{
+			PL->SetAttenuationRadius(Reach);
+			PL->SetLightFalloffExponent(FalloffExponent);
+		}
+		else if (USpotLightComponent* SL = Cast<USpotLightComponent>(Light))
+		{
+			SL->SetAttenuationRadius(Reach);
+			SL->SetLightFalloffExponent(FalloffExponent);
+		}
+	}
+
+	Light->SpecularScale = SpecularScale;
+	// Styled lights get their per-frame flicker off this new base next tick; set the base now
+	// so unanimated lights update immediately (and animated ones don't stall on a paused clock).
+	Light->SetIntensity(S.BaseIntensity);
 }
 
 void UElysiumLightRig::TickComponent(float DeltaTime, ELevelTick TickType,
@@ -272,7 +376,9 @@ void UElysiumLightRig::TickComponent(float DeltaTime, ELevelTick TickType,
 	StyleTime += DeltaTime;
 	for (const FLightSource& S : LightSources)
 	{
-		if (S.Style >= 1 && S.Light.IsValid())
+		// An overridden source holds the intensity the inspector set, flicker included: the whole
+		// point of the override is that nothing writes over a hand-set value.
+		if (S.Style >= 1 && !S.bOverridden && S.Light.IsValid())
 		{
 			S.Light->SetIntensity(S.BaseIntensity * StyleIntensity(S.Style, StyleTime));
 		}

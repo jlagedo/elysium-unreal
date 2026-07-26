@@ -12,6 +12,7 @@ import unreal
 
 _tools = unreal.AssetToolsHelpers.get_asset_tools()
 _mel = unreal.MaterialEditingLibrary
+_collision = unreal.GeometryScript_Collision
 
 # Package-name-safe: Unreal object names allow letters, digits and underscore.
 _UNSAFE = re.compile(r"[^A-Za-z0-9_]+")
@@ -191,6 +192,59 @@ def read_decals(path):
     return out
 
 
+def read_skins(path):
+    """Parse a `props/<stem>.skins` sidecar into {family index: {authored material: family
+    material}}:
+        `<family> <authored>=<family> [...]`
+    One line per alternate skin family that repaints something; family 0 (the authored set) is
+    never written, and a family that repaints nothing is simply absent. Missing file -> {}."""
+    out = {}
+    if not os.path.isfile(path):
+        return out
+    with open(path, "r", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            tok = line.split()
+            if len(tok) < 2 or not tok[0].isdigit():
+                continue
+            remap = {}
+            for pair in tok[1:]:
+                if "=" in pair:
+                    base, rep = pair.split("=", 1)
+                    remap[base] = rep
+            if remap:
+                out[int(tok[0])] = remap
+    return out
+
+
+def read_phys(path):
+    """Parse a `props/<stem>.phys` sidecar -- VtMB's own VPhysics collision, decoded by
+    `phy.py` -- into {"mass": kg, "hulls": [(verts, tris), ...]}:
+        mass <kg>
+        hull <x y z x y z ...>      flat Unreal-cm verts, one convex hull
+        tris <i j k i j k ...>      its triangles, indexing that hull's verts
+    Two lines per hull, in that order. Missing file -> None, which is the runtime's signal
+    that the model carries no collision at all."""
+    if not os.path.isfile(path):
+        return None
+    mass, hulls, pending = 0.0, [], None
+    with open(path, "r", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            tok = line.split()
+            if not tok:
+                continue
+            if tok[0] == "mass" and len(tok) > 1:
+                mass = float(tok[1])
+            elif tok[0] == "hull":
+                nums = [float(v) for v in tok[1:]]
+                pending = [tuple(nums[i:i + 3]) for i in range(0, len(nums) - 2, 3)]
+            elif tok[0] == "tris" and pending is not None:
+                idx = [int(v) for v in tok[1:]]
+                hulls.append((pending, [tuple(idx[i:i + 3])
+                                        for i in range(0, len(idx) - 2, 3)]))
+                pending = None
+    return {"mass": mass, "hulls": hulls}
+
+
 def read_floats(path):
     """One float per line (the `.blend` per-vertex WorldVertexTransition weight sidecar)."""
     if not os.path.isfile(path):
@@ -311,6 +365,55 @@ def make_material_instance(name, package, parent):
     return mic
 
 
+def make_skin_set(name, package, models):
+    """Author the map's UElysiumPropSkinSet -- the prop-skin table the runtime binds.
+
+    `models` is [(stem, [family_overrides])] where family_overrides is a list indexed by skin
+    family, each a {slot name: UMaterialInterface} (empty for family 0 and for any family that
+    repaints nothing). Storing real material objects is the point: they are hard references, so
+    every alternate material stays reachable from the level and binds at exactly the quality the
+    authored one does.
+
+    Resolved by load-first, then create: does_asset_exist reports False for an asset already on
+    this mount even after a forced rescan, and create_asset then trips the unattended overwrite
+    guard. The whole Models array is overwritten, because a bake that died mid-run leaves a
+    half-populated asset behind. The load goes through `unreal.load_asset` (LoadObject) rather
+    than the EditorAssetLibrary one, which logs a hard *Error* when the registry has no such
+    asset -- on the first bake of a map that is the normal path, and it would make a clean run
+    report failure."""
+    ensure_dir(package)
+    target = "%s/%s" % (package, name)
+    asset = unreal.load_asset(target)
+    if asset is None:
+        factory = unreal.DataAssetFactory()
+        factory.set_editor_property("data_asset_class", unreal.ElysiumPropSkinSet)
+        asset = _tools.create_asset(name, package, unreal.ElysiumPropSkinSet, factory)
+    if asset is None:
+        return None
+
+    entries = []
+    for stem, families in models:
+        rows = []
+        for overrides in families:
+            # A USTRUCT's generated Python type takes no constructor kwargs unless its
+            # properties are Blueprint-exposed, so every field goes in by set_editor_property.
+            row = unreal.ElysiumSkinFamily()
+            items = []
+            for slot, material in sorted(overrides.items()):
+                item = unreal.ElysiumSkinOverride()
+                item.set_editor_property("slot_name", slot)
+                item.set_editor_property("material", material)
+                items.append(item)
+            row.set_editor_property("overrides", items)
+            rows.append(row)
+        entry = unreal.ElysiumPropSkinModel()
+        entry.set_editor_property("stem", stem)
+        entry.set_editor_property("families", rows)
+        entries.append(entry)
+    asset.set_editor_property("models", entries)
+    return asset
+
+
 def prune_package(package, keep):
     """Delete every asset directly in `package` whose object name is not in `keep`. Only safe
     for a package one stage owns outright and re-authors in full. Returns the number deleted."""
@@ -381,6 +484,62 @@ def set_complex_collision(static_mesh):
     if body is not None:
         body.set_editor_property(
             "collision_trace_flag", unreal.CollisionTraceFlag.CTF_USE_COMPLEX_AS_SIMPLE)
+
+
+def set_phy_collision(static_mesh, phys):
+    """Give a physics prop the collision VtMB simulates against: one convex shape per `.phy`
+    ledge, plus the model's authored mass. Returns the shape count.
+
+    Each ledge is already convex (`phy.is_convex` asserts it at export), so it is handed to
+    the hull builder one at a time with `max_convex_hulls_per_mesh = 1` and simplification
+    off -- that reproduces the hull exactly rather than decomposing or approximating it.
+
+    `CTF_UseSimpleAndComplex` rather than the `CTF_UseComplexAsSimple` every other baked mesh
+    carries: a Chaos rigid body can only simulate against *simple* shapes, while the debug
+    pick still wants a per-poly face index (it traces with bTraceComplex). Both shapes get
+    cooked, so the same asset serves a simulating prop and a static placement of the same
+    model.
+
+    Mass rides the body setup's default instance, so it is asset data -- no runtime sidecar
+    read, and it survives the .umap save/load. The entity's own `override_mass` key still
+    outranks it at spawn, which is Source's precedence."""
+    opts = unreal.GeometryScriptCollisionFromMeshOptions()
+    opts.set_editor_property(
+        "method", unreal.GeometryScriptCollisionGenerationMethod.CONVEX_HULLS)
+    opts.set_editor_property("max_convex_hulls_per_mesh", 1)
+    opts.set_editor_property("simplify_hulls", False)
+    opts.set_editor_property("emit_transaction", False)
+
+    parts = []
+    for verts, tris in phys["hulls"]:
+        buffers = unreal.GeometryScriptSimpleMeshBuffers()
+        buffers.vertices = [unreal.Vector(v[0], v[1], v[2]) for v in verts]
+        buffers.triangles = [unreal.IntVector(t[0], t[1], t[2]) for t in tris]
+        hull = unreal.DynamicMesh()
+        result = unreal.GeometryScript_MeshEdits.append_buffers_to_mesh(
+            hull, buffers, material_id=0)
+        hull = result[0] if isinstance(result, tuple) else result
+        parts.append(_collision.generate_collision_from_mesh(hull, opts))
+    if not parts:
+        return 0
+
+    combined = _collision.combine_simple_collision_array(parts)
+    if isinstance(combined, tuple):
+        combined = combined[0]
+    _collision.set_simple_collision_of_static_mesh(
+        combined, static_mesh, unreal.GeometryScriptSetSimpleCollisionOptions(),
+        unreal.GeometryScriptSetStaticMeshCollisionOptions())
+
+    body = static_mesh.get_editor_property("body_setup")
+    if body is not None:
+        body.set_editor_property(
+            "collision_trace_flag", unreal.CollisionTraceFlag.CTF_USE_SIMPLE_AND_COMPLEX)
+        if phys["mass"] > 0.0:
+            instance = body.get_editor_property("default_instance")
+            instance.set_editor_property("override_mass", True)
+            instance.set_editor_property("mass_in_kg_override", phys["mass"])
+            body.set_editor_property("default_instance", instance)
+    return _collision.get_simple_collision_shape_count(combined)
 
 
 def create_static_mesh(mesh, asset_path, materials, slot_names, nanite):

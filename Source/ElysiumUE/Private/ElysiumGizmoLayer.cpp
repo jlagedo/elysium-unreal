@@ -37,13 +37,14 @@ bool FElysiumGizmoLayer::IsBuilt() const
 	return Ism.IsValid();
 }
 
-void FElysiumGizmoLayer::ComputeRGBA(const FElysiumEntity& Ent, float Out[4])
+void FElysiumGizmoLayer::ComputeRGBA(const FElysiumEntity& Ent, uint8 Mask, float Out[4])
 {
 	FColor C = Ent.Def ? ElysiumGizmoClassColor(Ent.Def->Classname) : FColor(191, 191, 199);
 	float Alpha = 0.35f;
-	if (Ent.IsDead())
+	const bool bFiltered = Ent.Def && !ElysiumGizmoClassVisible(Ent.Def->Classname, Mask);
+	if (Ent.IsDead() || bFiltered)
 	{
-		Alpha = 0.0f;                 // killed -> invisible (kept as an instance, just transparent)
+		Alpha = 0.0f;                 // killed or filtered out -> invisible (instance kept, transparent)
 	}
 	else if (Ent.IsHidden())
 	{
@@ -105,12 +106,13 @@ void FElysiumGizmoLayer::Rebuild(FElysiumEntityWorld& World, AActor* Owner)
 		}
 		const FTransform Xform(FQuat::Identity, ElysiumGizmoAnchor(*E), FVector(ElysiumGizmoScale));
 		const int32 InstanceIndex = Component->AddInstance(Xform);
-		ComputeRGBA(*E, Data);
+		ComputeRGBA(*E, AppliedClassMask, Data);
 		Component->SetCustomData(InstanceIndex, TArrayView<const float>(Data, 4), /*bMarkRenderStateDirty*/ false);
 		EntityToInstance[i] = InstanceIndex;
 	}
 	Component->MarkRenderStateDirty();
 
+	BuiltWorld = &World;
 	bModeApplied = false;   // first SetMode after a rebuild always applies
 
 	// Event-driven updates: dormancy/liveness flips now dirty just the one instance.
@@ -127,6 +129,7 @@ void FElysiumGizmoLayer::Teardown()
 	DepthMID.Reset();
 	XRayMID.Reset();
 	EntityToInstance.Empty();
+	BuiltWorld = nullptr;
 	bModeApplied = false;
 	// The world back-pointer's hook (if that world is still alive) is dropped when the next epoch's
 	// Rebuild re-sets it; a torn-down world drops it with itself. Nothing to clear here.
@@ -156,6 +159,37 @@ void FElysiumGizmoLayer::SetMode(UElysiumEntityDebugSubsystem::EGizmoMode Mode)
 	Component->SetVisibility(true);
 }
 
+void FElysiumGizmoLayer::SetClassMask(uint8 Mask)
+{
+	UInstancedStaticMeshComponent* Component = Ism.Get();
+	if (!Component || Mask == AppliedClassMask)
+	{
+		return;   // nothing changed — no per-frame work
+	}
+	AppliedClassMask = Mask;
+	if (BuiltWorld == nullptr)
+	{
+		return;
+	}
+
+	// Re-pack every instance's RGBA. Only the alpha actually moves, but the pack is one function
+	// (ComputeRGBA) so that filtered, dead and dormant never drift apart.
+	const TArray<TUniquePtr<FElysiumEntity>>& Entities = BuiltWorld->Entities();
+	float Data[4];
+	for (int32 i = 0; i < Entities.Num() && i < EntityToInstance.Num(); ++i)
+	{
+		const int32 InstanceIndex = EntityToInstance[i];
+		const FElysiumEntity* E = Entities[i].Get();
+		if (InstanceIndex == INDEX_NONE || !E)
+		{
+			continue;
+		}
+		ComputeRGBA(*E, Mask, Data);
+		Component->SetCustomData(InstanceIndex, TArrayView<const float>(Data, 4), /*bMarkRenderStateDirty*/ false);
+	}
+	Component->MarkRenderStateDirty();
+}
+
 void FElysiumGizmoLayer::OnEntityVisualChanged(const FElysiumEntity& Ent)
 {
 	UInstancedStaticMeshComponent* Component = Ism.Get();
@@ -170,7 +204,7 @@ void FElysiumGizmoLayer::OnEntityVisualChanged(const FElysiumEntity& Ent)
 		return;   // dead-at-build entity, no instance
 	}
 	float Data[4];
-	ComputeRGBA(Ent, Data);
+	ComputeRGBA(Ent, AppliedClassMask, Data);
 	Component->SetCustomData(InstanceIndex, TArrayView<const float>(Data, 4), /*bMarkRenderStateDirty*/ true);
 }
 

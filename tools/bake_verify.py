@@ -40,12 +40,27 @@ def main():
     tris = 0
     slots = 0
     unbound = 0
+    phys_meshes = 0
+    phys_shapes = 0
+    massed = 0
     for data in meshes:
         mesh = data.get_asset()
         if not mesh:
             continue
         if mesh.get_editor_property("nanite_settings").get_editor_property("enabled"):
             nanite_on += 1
+        # A physics prop is the one mesh class carrying real simple collision: VtMB's own
+        # convex hulls, plus its authored mass, plus the trace flag that lets a Chaos body
+        # simulate while the debug pick still gets a per-poly face index.
+        body = mesh.get_editor_property("body_setup")
+        if body is not None and body.get_editor_property("collision_trace_flag") == \
+                unreal.CollisionTraceFlag.CTF_USE_SIMPLE_AND_COMPLEX:
+            phys_meshes += 1
+            phys_shapes += unreal.GeometryScript_Collision.get_simple_collision_shape_count(
+                unreal.GeometryScript_Collision.get_simple_collision_from_static_mesh(mesh))
+            if body.get_editor_property("default_instance").get_editor_property(
+                    "override_mass"):
+                massed += 1
         # The StaticMeshEditorSubsystem is absent in a commandlet, so triangles are
         # best-effort here; the bake's own per-stage counts are the authority.
         try:
@@ -60,6 +75,8 @@ def main():
         len(meshes), nanite_on, len(meshes) - nanite_on))
     unreal.log("[verify] triangles %d across %d material slots (%d unbound)" % (
         tris, slots, unbound))
+    unreal.log("[verify] physics props %d, %d convex collision shapes, %d with authored mass"
+               % (phys_meshes, phys_shapes, massed))
 
     level = "%s/%s" % (package, map_name)
     if unreal.EditorAssetLibrary.does_asset_exist(level):

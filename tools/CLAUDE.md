@@ -254,6 +254,14 @@ KeyValues text. `parse(text, resolve_include)` returns `basetexture` (normalized
 follows one `include`. `$selfillum "1"` means the base texture's **alpha channel is
 the emission mask** — emission = `RGB × (alpha/255)`, only masked pixels glow.
 
+## Collision models (`.phy`, `tools/phy.py`)
+
+A `.mdl` ships with a sibling `.phy` — the VPhysics collision model, a set of authored **convex
+hulls** plus the model's mass. 2,854 in the retail VPKs, more added/replaced loose by the
+Unofficial Patch. VtMB is Source 2003, so it uses the *legacy* surface header (`IVPS` at +0x2C, no
+`VPHY` magic). `phy.py` decodes the ledge tree into hulls and emits `props/<stem>.phys` for
+`prop_physics` models. Format map + the empirically settled axis mapping: `docs/phy_vphysics.md`.
+
 ## Static props / models (`.mdl` v2531, `tools/mdl.py`)
 
 VtMB studio models are **studiomdl version 2531** (an early Source fork, far outside
@@ -279,11 +287,24 @@ per stripgroup. Model texture search paths come with either separator (`/` retai
 patch) and may already end in one, so `mdl._norm` folds both to a single `/` — without
 it the patch's models resolve no material and render flat grey. `bsp_to_scene.write_props`
 reads **GAME_LUMP `sprp`** (v4, 56B `DStaticPropV4`: origin, QAngle angles,
-`propType`→model dict, `solid` byte @30), dedupes the map's unique models, decodes each
+`propType`→model dict, `solid` byte @30, `skin` int @32), dedupes the map's unique models, decodes each
 once into `<out>/props/<safename>.obj` (Unreal space) with a shared `props/tex/`, and writes
-a `<map>.props` sidecar — one prop per line: `safename ox oy oz qx qy qz qw solid`
-(9 fields; origin `source_to_unreal`, rotation `source_angles_to_unreal_quat`). `solid != 0`
-gates collision. Props carry **no per-prop
+a `<map>.props` sidecar — one prop per line: `safename ox oy oz qx qy qz qw solid skin`
+(10 fields; origin `source_to_unreal`, rotation `source_angles_to_unreal_quat`). `solid != 0`
+gates collision; `skin != 0` names an alternate skin family (157 of the install's 6,470 placed
+props), applied offline by the bake as material overrides — a GAME_LUMP prop is not an entity,
+so its skin never changes at runtime.
+
+**Skin families (`props/<stem>.skins`).** `StudioMesh.Material` is a **skinref**, not a texture
+index: `skinTable[family][skinref]` remaps it, which is how one model draws several skins.
+`mdl.skin_table`/`skin_families` decode the table (`NumSkinRefs`@308 / `NumSkinFamilies`@312 /
+`SkinIndex`@316), `decode` resolves a mesh's material through family 0, and `write_obj_scene`
+resolves **every** family's materials into the `.mtl` (so each gets a decoded texture and a baked
+material instance) and writes `props/<stem>.skins` — one line per alternate family that repaints
+something: `<family> <authored material>=<family material> ...`, sanitized names matching the
+`usemtl` keys. Family 0 is the identity row on all 4,445 readable models, so single-family models
+export byte-identically to before; 201 models install-wide carry alternates. Full table + a worked
+example: `../docs/mdl_v2531.md`. Props carry **no per-prop
 tint/colour** — like the world, they are lit at runtime by the `LightRig`'s real Godot
 lights.
 
@@ -302,12 +323,16 @@ NPC track (roadmap 8.2/8.5), not this static-geometry path. Tutorial: 160 entity
 unique models. The runtime consumer is roadmap 8.3 (`prop_dynamic` → `FElysiumProp`) / 8.4 (physics).
 
 **Physics collision (8.4).** Each `prop_physics`-referenced model additionally gets a
-`props/<stem>.hulls` sidecar (`prop_collision.py`): its decoded OBJ is approximate-convex-decomposed
-with **CoACD** into convex parts, written in the **world-collider format** (one hull per line, flat
-Unreal-cm verts) so the runtime cooks one `FKConvexElem` per line — a tighter proxy for concave props
-(a chair → dozens of hulls) than a single hull. CoACD is an **optional** dep (`pip install coacd`);
-absent or failing on a model, the sidecar falls back to one whole-model hull (the baseline spec), so the
-pipeline never hard-fails. `phys_hinge` (and the `phys_*` constraint family) additionally get
+`props/<stem>.phys` sidecar (`phy.py`), decoded from the model's sibling **`.phy`** — VtMB's own
+VPhysics collision model, the convex hulls the original game simulates against, resolved through the
+install index so a patched `.phy` shadows the VPK's. Format: `mass <kg>` then two lines per hull,
+`hull <flat Unreal-cm verts>` + `tris <flat corner indices>`. Every ledge is convex by construction
+and `phy.py` asserts it (`F = 2V − 4`, which holds across all 2,854 retail files / 7,889 hulls), so a
+mis-parse is a hard error rather than a wrong collider. Nothing is decomposed or approximated: the
+bake hands each hull to Geometry Script's hull builder alone and gets the same hull back. Coordinates
+are `(x, −z, −y) × 100`; the keyvalues tail carries the authored per-model mass. Full format map,
+the axis-mapping evidence, and the missing-collision behaviour: **`docs/phy_vphysics.md`**.
+`phys_hinge` (and the `phys_*` constraint family) additionally get
 **`hinge_axis`** in `<map>.ents` = the normalized Unreal-space hinge direction
 (`source_dir_to_unreal` of the raw-Source `origin`→`hingeaxis` line), read verbatim; the pivot is the
 entity's already-converted `origin`. (CoACD decomposes per map, not cross-map — a scaling cost for the
@@ -467,14 +492,6 @@ self-describing datamap dump. The writer **omits any all-zero field**, so reader
 never by position. `.HL1` block bodies are addressed relative to `baseFilePos = dataSize -
 bodySpan`, which is where the global `Save Header`/`ADJACENCY`/`LIGHTSTYLE` preamble ends.
 
-```
-python tools/probe_sav.py <file.sav>                 # container + section summary
-python tools/probe_sav.py <file.sav> --map sm_hub_1  # preamble, blocks, classname census
-python tools/probe_sav.py <file.sav> --entity player # every field of matching entities
-python tools/probe_sav.py <file.sav> --python        # the pickled script namespaces
-python tools/probe_sav.py <file.sav> --extract DIR   # inflated .HL1/.HL2/.HL3 sections
-```
-
 Pickles load through a restricted unpickler that refuses class construction.
 
 ## Ghidra RE workspace (`tools/ghidra/`)
@@ -491,20 +508,8 @@ RE reference — gitignored, never committed: the hand-authored scripts (`run.ps
 the `.java` scripts) alongside `project/` (the analyzed Ghidra DB) and `out/` (decompilation
 dumps) derived from the user's own binaries. `tools/re/` is the same — local-only, gitignored.
 
-Scripts (`-Script <name>`, no `.java`): `DumpMenu` (recon — RTTI classes, menu strings + xrefs,
-seed decompiles), `DumpGrep` (regex recon over strings/classes/func names → decompile matches),
-`DumpFuncs` (targeted decompiler — follows seed funcs + callees + vftables → C pseudocode),
-`DumpAsm` (raw disassembly of a function or flat run), `DumpXrefs` (every ref to an address +
-containing function), `DumpConst` (dword at an address as hex/int/float), `DumpConVars` (the
-ConVar/ConCommand registration table for one ctor — object address ↔ name ↔ default, the lookup
-that turns an anonymous `DAT_` global in a decompilation back into a cvar name), `DumpFieldRefs`,
-`DumpInfo`, `EnableAIF` (pre-script: enables analysis for vtable-only-reached code).
-
-```powershell
-tools/ghidra/run.ps1 -Import "<game>\Vampire\cl_dlls\GameUI.dll"   # one-time import + auto-analyze
-tools/ghidra/run.ps1 -Script DumpMenu                              # recon → out/menu_recon.txt
-tools/ghidra/run.ps1 -Script DumpFuncs -Args "funcs=10003ef0 vtables=1004ff3c out=$PWD\tools\ghidra\out\basepanel.txt"
-```
+Scripts are the `.java` files in `tools/ghidra/`, passed as `-Script <name>` without the
+extension. `EnableAIF` is a pre-script: it enables analysis for vtable-only-reached code.
 
 `-Program` picks the imported binary (`engine.dll`, `GameUI.dll`, …). **Multi-value args take one
 address per run** — the arg string is re-split by `run.ps1`, `analyzeHeadless`, and Ghidra, so a

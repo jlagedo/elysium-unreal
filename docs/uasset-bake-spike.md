@@ -48,7 +48,7 @@ bake_verify.py              reads the result back off the assets, not off the ba
 | `materials` | `.mtl` | `MaterialInstanceConstant` off the five committed masters — a `decal 1` surface is a projector, not geometry, so it splits off onto `M_Decal` in its own package |
 | `world` | `.obj`, `.blend` | one `SM_World_*` per 2048 cm cell |
 | `sky` | `_sky.obj` | `SM_Sky_*` |
-| `props` | `props/*.obj` | one `SM_*` per model |
+| `props` | `props/*.obj`, `props/*.skins`, `props/*.phys` | one `SM_*` per model + `DA_<map>_PropSkins` |
 | `level` | `.props`, `.decals`, `.lights`, `.env`, `.sky`, `.spawn` | the `.umap` |
 
 Material selection and parameter names are lifted from `FElysiumMaterialFactory`. Light *values* are
@@ -150,7 +150,41 @@ quoted. `profile.bat` has not been run against the baked level.
   the mesh stages do not, and a shrunken export still leaves orphan `SM_*`.
 - **A fresh commandlet has not indexed a new mount.** `does_asset_exist` reports False for assets
   already on disk and `create_asset` then trips the unattended overwrite guard. Scan the mount with
-  `AssetRegistry.scan_paths_synchronous(force_rescan=True)` first.
+  `AssetRegistry.scan_paths_synchronous(force_rescan=True)` first — **and that is not always enough**:
+  it still reports False for some assets present on disk, so anything the bake re-authors resolves
+  by load-first-then-create, not by an existence check.
+- **`unreal.EditorAssetLibrary.load_asset` logs a hard `Error` when the registry has no such asset**,
+  which on a first bake is the normal path and makes a clean run report `Failure - 1 error(s)`. Use
+  `unreal.load_asset` (LoadObject) for a load that is allowed to miss.
+- **A bake that dies mid-run still leaves its assets on disk** — the commandlet saves dirty packages
+  on exit, so a half-populated asset survives. Every stage must re-author in full rather than assume
+  a clean slate.
+- **A USTRUCT's generated Python type takes no constructor kwargs** unless its properties are
+  Blueprint-exposed: `unreal.ElysiumSkinOverride(slot_name=…)` raises
+  `TypeError: call() takes at most 0 arguments`. Populate through `set_editor_property`.
+- **Custom `UDataAsset` subclasses are authorable from Python** — `unreal.DataAssetFactory` with
+  `data_asset_class` set, then `create_asset`. Nested USTRUCT arrays holding `TObjectPtr<UObject>`
+  round-trip through save/reload as live hard references, which is what makes the prop skin table
+  (`DA_<map>_PropSkins`) a real asset rather than a text sidecar the runtime parses.
+- **`FKConvexElem` is not authorable from Python.** It is a bare `USTRUCT()` — not `BlueprintType` —
+  so raw hull point sets cannot be pushed into a `UBodySetup` from a bake script. The supported route
+  is Geometry Script: `GeometryScript_Collision.generate_collision_from_mesh` per hull with
+  `ConvexHulls` / `max_convex_hulls_per_mesh = 1` / `simplify_hulls = False` (which returns an
+  already-convex input unchanged), `combine_simple_collision_array`, then
+  `set_simple_collision_of_static_mesh`. Bool options drop the `b` prefix in Python
+  (`simplify_hulls`, `emit_transaction`), and `combine_simple_collision` takes a `UPARAM(ref)`, so it
+  hands the merged struct back rather than mutating in place.
+- **A rigid body needs `CTF_UseSimpleAndComplex`**, not the `CTF_UseComplexAsSimple` the rest of the
+  bake uses: Chaos can only simulate against simple shapes, while the debug pick traces complex for
+  its face index. Both get cooked, so one asset serves a simulating prop and a static placement of
+  the same model.
+- **A `BodySetup`'s mass override does not reach a runtime-built component.**
+  `UBodySetup::CalculateMass` reads the owning primitive's own `FBodyInstance` whenever there is one,
+  and a component created at runtime never seeds that from the asset — so the baked value is ignored
+  and Chaos computes mass from hull volume instead (a 3 kg bin came out 48 kg). The asset is still
+  the right place to *carry* the value; the consumer has to re-apply it with `SetMassOverrideInKg`.
+- **`create_new_static_mesh_asset_from_mesh` asserts `NumUVs > 0`** — a mesh with no UV channel takes
+  the editor down with `Assertion failed: NumUVs > 0` rather than failing gracefully.
 - **`ADirectionalLight`/`ASkyLight` expose only `ALight::LightComponent`** as `light_component`.
 - **`unreal.StaticMaterial` takes no `imported_material_slot_name` keyword.**
 - **`cmd` splits arguments on commas** regardless of quoting, so a stage list arrives as separate
@@ -210,8 +244,6 @@ receives them normally.
   left off (owner call) until the sky/ambient recalibration settles.
 - **Volumetric fog** is enabled on the baked height fog, but only maps whose `.env` turns fog on get
   a fog actor at all — and `sp_tutorial_1` has fog off, so it shows nothing there.
-- **`prop_physics`** stays on the runtime build: simulation needs the CoACD-decomposed
-  `props/<stem>.hulls` as a per-asset body setup. `prop_dynamic` loads the baked mesh.
 - **NPCs** stay on glTFRuntime. Skeletal meshes get no offline cards anyway.
 - **Perf** is unmeasured (above).
 - **One map.** Nothing has been said about the other 107, their bake cost, or the DDC/asset-registry

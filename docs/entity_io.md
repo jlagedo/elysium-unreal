@@ -249,6 +249,30 @@ spawnflag bit `0x80` (tested in the wait-over think as `(char)m_spawnflags < 0`)
 **remove itself after firing** (the `trigger_once` behaviour; `trigger_once` is a distinct factory
 `FUN_101c6a30`/vftable `0x1047dee4` over the same `CBaseTrigger` base `0x1047d08c`).
 
+## Skin families (`skin` / `SetSkin` / `FadeToSkin`)
+
+The datamap records in `vampire.dll` that drive a model's alternate skin family (record layout per
+`python_bridge.md` §252: `flags` is the u16 at `+0x12`, bit `0x8` = INPUT):
+
+| externalName | flags | internal | inputFunc | behaviour |
+|---|---|---|---|---|
+| `skin` | `0xe` SAVE\|KEY\|INPUT | `m_nSkin` @0x670 | **null** | Source `DEFINE_INPUT` — firing it writes the field directly. **Snaps.** |
+| `crossfade_skin_time` | `0x6` SAVE\|KEY | `m_flSkinCrossfadeTime` @0x678 | null | keyfield only — the `skin` input never reads it |
+| `damaged_skin` | `0x6` SAVE\|KEY | `m_nDamagedSkin` @0x730 | null | |
+| `FadeToSkin` | `0x8` INPUT | — | `1008d6d0` | `if (m_nSkin != new) { m_nSkinCrossfade = m_nSkin; m_nSkin = new; }` + `DevMsg("Fading to skin %d over %.2f")` |
+| `SetSkinFadeTime` | `0x8` INPUT | — | `1008d5f0` | `m_flSkinCrossfadeTime = max(t, floor)` |
+| `SetSkin` | `0x8` INPUT | — | `10014646` → `10190810` | CBreakableProp's; vtable-only-reached, **not disassembled** |
+
+**There is no input named `Skin`.** Input matching is case-insensitive (`Q_stricmp`), so a map's
+`Skin` wire binds to the keyfield-input `skin` — a direct `m_nSkin` write. Across the 16 exported
+maps that is the *only* skin input any map fires (18 wires); `FadeToSkin` / `SetSkin` /
+`SetSkinFadeTime` are wired **zero** times.
+
+`m_nSkin` / `m_nSkinCrossfade` / `m_flSkinCrossfadeTime` (0x670/0x674/0x678) are all networked
+SendProps and `FadeToSkin` writes no start time, so the crossfade is rendered **client-side**.
+`crossfade_skin_time` carries no authored signal — it is `2.0` on all 723 entities that have it,
+including `npc_maker` and `npc_VRat`, i.e. an FGD default stamped on everything that animates.
+
 ## Screen fade (`env_fade` spawnflags)
 
 `CEnvFade`'s datamap (`vampire.dll` `0x10568c10` → dataDesc `0x10568c54`, base map

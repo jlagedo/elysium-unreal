@@ -491,24 +491,48 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
   `LoadProps`; per-entity `UStaticMeshComponent`, not shared ISMs — the follow-hooks want per-entity
   addressability), closing the 9.3 "bodiless prop" gap. Per-instance addressable: base
   ScriptHide/ScriptUnhide + the 9.3 SetOrigin/SetAngles/SetModel body-follow + `Break` (hide +
-  `OnBreak`); `Skin`/`SetAnimation` log-a-stub (the decode is LOD0 static geometry, skin 0 only — no
-  alternate skin families or skeleton exported). Non-solid (prop_physics collision is 8.4). Placement
+  `OnBreak`); `SetAnimation` logs a stub (LOD0 static geometry, no skeleton). **Skin families landed
+  2026-07-26** — `mdl.py` decodes the `.mdl` skin table (`StudioMesh.Material` is a *skinref*, not a
+  texture index; `docs/mdl_v2531.md` corrected) and emits `props/<stem>.skins`; the bake resolves it
+  into `DA_<map>_PropSkins` (`UElysiumPropSkinSet`); `ApplyPropSkin` repaints the body's material
+  slots for the `skin` keyfield, the `Skin`/`SetSkin` inputs and a script `.skin =` write. Skins
+  **snap** — VtMB's `skin` is a keyfield-input with a null `inputFunc`, and the crossfading
+  `FadeToSkin` is wired zero times in the 16 exported maps (RE + decision: `decisions.md` 2026-07-26,
+  `entity_io.md` → "Skin families"). GAME_LUMP static props take `DStaticPropV4.skin` (a 10th `.props`
+  field) applied offline by the bake. The `+use` static-mesh family (`prop_button`/`prop_switch`/
+  `prop_sign`/`prop_hacking`/`prop_doorknob(_electronic)`/`item_container(_animated/_lock)`) now stands
+  bodies + skins too, with no invented I/O (their interaction surface stays 4.10/8.8).
+  `elysium.PropSkins` A/Bs. Non-solid (prop_physics collision is 8.4). Placement
   rotation reads the exporter's new `model_quat` verbatim (no runtime angle math). `elysium.PropBodies`
   A/Bs. *Verified:* tutorial loads all 78 `prop_dynamic` without crash, `test.bat` Content+Substrate
   green (a new prop content-assertion included), headless shots show them standing. *Deps:* 8.1, 1.3.
 - [x] **8.4 Physics props** — `prop_physics` ×54 / `phys_hinge` ×12 as Chaos rigid bodies +
   hinge constraints. Physics props stand a simulating per-entity `UStaticMeshComponent`
-  (`FElysiumPhysProp` → `BuildPhysPropVisual`, `PhysicsActor` profile, `override_mass`), collision
-  cooked from **offline convex decomposition** (`prop_collision.py`/CoACD → `props/<stem>.hulls`, the
-  world-collider format, one `FKConvexElem` per line; single-hull fallback when CoACD is absent).
+  (`FElysiumPhysProp` → `BuildPhysPropVisual`, `PhysicsActor` profile) on the **baked** `SM_<stem>`,
+  the same asset every other prop stands. **Collision is VtMB's own** (2026-07-26): `tools/phy.py`
+  decodes the model's sibling `.phy` — the VPhysics convex hulls the original game simulates against —
+  into `props/<stem>.phys`, and the bake reproduces each ledge exactly through Geometry Script's hull
+  builder under `CTF_UseSimpleAndComplex`. Nothing is decomposed or approximated; CoACD and
+  `prop_collision.py` are retired. **Mass** is the `.phy`'s authored value (boulder 2000 kg, crate
+  100 kg, wine glass 1.46 kg) unless the entity's `override_mass` > 0 — which is −1 on every
+  `prop_physics` in the exported maps, so the authored mass is what they all weigh. A model with no
+  collision model stands visible but inert, reproducing `CPhysicsProp::CreateVPhysics`
+  (`docs/phy_vphysics.md`); with the Unofficial Patch installed no prop reaches it (27/27 covered).
+  `FElysiumStaticMeshBuilder` is deleted — nothing builds a `UStaticMesh` at runtime any more.
   `phys_hinge` (`FElysiumPhysHinge`) builds a `UPhysicsConstraintComponent` (twist on the exporter's
   pre-converted `hinge_axis`, one rotational DOF) in a new `PostSpawn()`/Activate pass, wiring
   `attach1`↔`attach2`/world. The RE'd VtMB I/O surface (Ghidra: `Wake`, **not**
   EnableMotion/DisableMotion/Sleep; `TurnOn`/`TurnOff`/`Break`; `OnBreak`) is in `decisions.md`
-  (2026-07-24). `elysium.PhysicsProps` A/Bs simulation. *Verified:* `build.bat` + `test.bat`
-  Content/Substrate green (54 prop_physics / 12 phys_hinge assertions); re-export emits `hinge_axis`
-  + 18 decomposed `.hulls`; `sp_tutorial_1` loads with all bodies + hinges built, no crash. **Chaos
-  settle/push feel + hinge swing await an owner in-game play test** (like 4.1). *Deps:* 8.1.
+  (2026-07-24). **Skins landed 2026-07-26** with 8.3: `Skin`/`SetSkin` repaint the body for real, and
+  `FadeToSkin`/`SetSkinFadeTime` are registered against the RE'd behaviour — they snap, because no
+  exported map fires them (`decisions.md` 2026-07-26).
+  `elysium.PhysicsProps` A/Bs simulation. *Verified:* `build.bat` + `test.bat` Content/Substrate green
+  (54 prop_physics / 12 phys_hinge assertions, plus baked-collision/mass assertions on the asset);
+  `phy.py` decodes all 2,854 retail `.phy` files → 7,889 hulls, every one convex (`F = 2V − 4`, zero
+  exceptions); the bake reports 18 physics meshes / 19 convex shapes / 18 with authored mass, read back
+  off the assets. In-game: bodies simulate with the authored masses exact (trashgarage 3.00, barrela
+  7.00, break_crate 100.00 kg) and `showflag.Collision` shows the hulls hugging each barrel.
+  **Chaos settle/push feel + hinge swing await an owner in-game play test** (like 4.1). *Deps:* 8.1.
 - [~] **8.5 NPC presence + `scripted_sequence` minimal** — the presence slice landed in **B3**
   (bodies at origin via `BuildNpcVisual`, `npc_maker` runtime spawn, dialog-gating inputs) and
   **PL4 is done** (per-NPC glbs + shared animation-bank glbs + `npc_manifest.json`).

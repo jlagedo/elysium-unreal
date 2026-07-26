@@ -6,6 +6,45 @@ trigger. A behavioural divergence from retail lands here carrying both the faith
 chosen behaviour (`remaster-direction.md`'s governing rule). Entries are never rewritten —
 append a correction as a new entry.
 
+- **2026-07-26** — **Prop skin families: skins snap, the crossfade is unreachable, and the skin table
+  ships as a baked data asset.** Closing the `Skin` stub 8.3/8.4 left behind.
+  **(1) RE first, and it inverted the plan.** The intent was to build VtMB's ~2 s skin crossfade,
+  because the traffic lights carry `crossfade_skin_time "2.0"`. The datamap says otherwise
+  (`docs/entity_io.md` → "Skin families"): **there is no input named `Skin`**. `skin` is one record
+  flagged SAVE|KEY|**INPUT** (`0xe`) with a **null `inputFunc`** — Source's `DEFINE_INPUT`, a direct
+  `m_nSkin` write — and input matching is case-insensitive, so every map's `Skin` wire binds there
+  and **snaps**. The crossfading variant is a *different* input, `FadeToSkin`, wired **zero** times
+  across the 16 exported maps (all 18 skin wires are `Skin`). And `crossfade_skin_time` carries no
+  authored signal: it is `2.0` on all 723 entities that have it, including `npc_maker` and
+  `npc_VRat` — an FGD default. **Decision: skins snap.** `FadeToSkin` snaps too, recorded here as a
+  divergence on a path no exported map reaches; the faithful behaviour (`m_nSkinCrossfade` = old
+  skin, client-side blend over `m_flSkinCrossfadeTime` — all three fields are networked SendProps,
+  the server writes no start time) is documented for whoever needs it. Not built, because it costs a
+  change to the four committed world masters for code nothing currently reaches.
+  **(2) The skin table is a `UDataAsset`, not a runtime-parsed sidecar.** The exporter writes
+  `props/<stem>.skins` (the pipeline's file-based seam, engine-neutral like every other sidecar) and
+  the **bake** turns it into `DA_<map>_PropSkins` (`UElysiumPropSkinSet`: stem → family → [slot name,
+  material instance]). The runtime loads the asset and `SetMaterial`s the repainted slots. Rejected:
+  building material instances at runtime from the `.mtl` (a swapped skin would render from decoded
+  PNGs while the base skin renders from a baked BC7 MIC — the same prop visibly changing quality when
+  it changes skin), and appending the alternates as extra unreferenced mesh material slots (works,
+  but it is a trick, and it made asset-registry survival a question to test rather than a property to
+  design in). The data asset also hard-references every alternate material, so they stay reachable.
+  **(3) The `+use` prop family gets bodies now.** `prop_button`/`prop_switch`/`prop_sign`/
+  `prop_hacking`/`prop_doorknob(_electronic)`/`item_container(_animated/_lock)` were inert records
+  with no body — 25 of the tutorial's 39 multi-family prop placements. They now stand the shared
+  `FElysiumProp` body under a class desc registering **only** the `skin` field: no inputs, because
+  their real datamap I/O is not RE'd and asserting `prop_dynamic`'s would advertise inputs they may
+  not have. Their interaction surface stays 4.10/8.8.
+  **(4) `StudioMesh.Material` is a skinref — `docs/mdl_v2531.md` corrected.** It was documented as a
+  texture index. Family 0 is the identity row on all 4,445 readable models in the install, so the old
+  reading produced the right skin-0 material by coincidence, not by correctness. Verified: re-decoding
+  91 models through the skin table reproduced every `.obj` byte-for-byte and every single-family
+  `.mtl` unchanged.
+  Verified: `build.bat` + `test.bat` (24/24, new content assertions), both maps re-exported and
+  re-baked (0 unresolved materials, 0 bake errors), and in-game on `sm_hub_1` — firing `Skin 0/1/3`
+  at a traffic light moves it red → green+walk → amber, albedo and `$selfillum` glow together.
+
 - **2026-07-25** — **The input path: four owner calls settling roadmap 10.6.** Design:
   `docs/input-architecture.md`. Enhanced Input becomes the driver while **the VtMB console command
   string stays the action's identity** — one `UInputAction` per bindable command, executed through
@@ -1057,5 +1096,38 @@ append a correction as a new entry.
   config at 66% of the same output — **+0.2 to +0.7 ms for 2.3x the pixels and Medium→Epic Lumen.**
   The 4060 figure is extrapolated from that card, not measured; validating the floor still needs
   4060-class hardware.
+- **2026-07-26 (cont.)** — **Physics-prop collision comes from VtMB's own `.phy` files; CoACD is
+  retired.** Owner call, taken after the RE contradicted the plan that preceded it.
+  1. **The game ships its collision.** A `.mdl` has a sibling `.phy` holding the VPhysics convex
+     hulls the original simulates against — 2,854 in the retail VPKs, and the Unofficial Patch
+     supplies or replaces 19 of the 27 `prop_physics` models as loose files, so it must be read
+     through the install index, not a VPK. We had been approximating data the game already contains.
+     `tools/phy.py` decodes it to `props/<stem>.phys`; `prop_collision.py`, the CoACD dependency and
+     the per-prop `.hulls` sidecar are deleted. The world's `.hulls` are a different producer and are
+     untouched.
+  2. **The engine's own convex decomposition was considered and rejected.** It was the approved plan
+     for one round — `SetStaticMeshCollisionFromMesh` with `MinVolumeShapes`, the recommended UE5
+     path — and it is strictly an approximation where authored data exists. Under the governing rule
+     (*Logic & content — reproduce*) the authored hulls win. No decomposition method is used anywhere;
+     each `.phy` ledge is already convex, so the bake hands it to the hull builder alone and gets the
+     same hull back. The engine path remains the right answer for content that has no authored
+     collision, should any arise.
+  3. **The decode is evidence-backed, not source-claimed.** Every ledge satisfies Euler's `F = 2V − 4`
+     across all 2,854 files / 7,889 hulls with zero exceptions, which is asserted at export. The
+     coordinate mapping `(x, −z, −y) × 100` is **not** Valve's documented `ConvertPositionToHL` — the
+     phy frame is mirrored — and was settled by scoring all 48 axis-permutation × sign combinations
+     against the verified render-mesh bounds: 0.85 cm/model/axis, the nearest distinct alternative
+     4.6× worse. Details and the table: `docs/phy_vphysics.md`.
+  4. **Authored mass is adopted.** The `.phy` keyvalues carry VtMB's per-model mass (boulder 2000 kg,
+     crate 100 kg, wine glass 1.46 kg). Every `prop_physics` in the exported maps has
+     `override_mass = -1`, so this is the only mass the original ever uses for them; we had been
+     letting Chaos compute from hull volume, an unrecorded divergence. The entity's `override_mass`
+     still outranks it, which is Source's precedence.
+  5. **A `.phy`-less prop stands inert rather than being removed.** `CPhysicsProp::CreateVPhysics`
+     (`vampire.dll` @`10191510`, vtable `0x10474c44` slot 223) drops such a prop to `SOLID_NONE` +
+     `MOVETYPE_NONE`, warns, and returns true — where retail Source calls `UTIL_Remove`. This
+     inverted an earlier decision to give those props generated collision. The runtime reproduces it
+     off the asset's empty `AggGeom`; with the patch installed nothing reaches the path (27/27
+     covered), so it is correctness insurance rather than live behaviour.
 - **Pending** — 5.5 level-script execution strategy (interpreter vs transpile vs CPython);
   10.6 EnhancedInput migrate-or-remove.

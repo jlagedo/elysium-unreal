@@ -3,6 +3,7 @@
 #include "ElysiumContentPaths.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMapActor.h"
+#include "ElysiumProbeRun.h"
 #include "ElysiumProfiler.h"
 #include "ElysiumShotRun.h"
 
@@ -126,12 +127,18 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	{
 		ShotRun = MakePimpl<FElysiumShotRun>(this);
 	}
+	// Under -ElysiumProbe, arm the headless light-attribution probe (one map per launch).
+	if (FElysiumProbeRun::IsRequested())
+	{
+		ProbeRun = MakePimpl<FElysiumProbeRun>(this);
+	}
 }
 
 void UElysiumMapSubsystem::Deinitialize()
 {
 	ProfileRun.Reset();
 	ShotRun.Reset();
+	ProbeRun.Reset();
 	for (IConsoleObject* Obj : ConsoleObjects)
 	{
 		IConsoleManager::Get().UnregisterConsoleObject(Obj);

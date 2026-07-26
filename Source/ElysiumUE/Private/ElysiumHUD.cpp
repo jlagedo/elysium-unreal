@@ -6,6 +6,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumLightProbe.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumSignData.h"
@@ -116,6 +117,26 @@ void AElysiumHUD::BeginPlay()
 			}
 		}),
 		ECVF_Cheat);
+
+#if !UE_BUILD_SHIPPING
+	// elysium.lightprobe [rays] — trace every light against the real scene and write the
+	// attribution features (what each light is nearest, and how much of its own patch it lights)
+	// alongside the Lights window's hand survey.
+	LightProbeCmd = IConsoleManager::Get().RegisterConsoleCommand(
+		TEXT("elysium.lightprobe"),
+		TEXT("elysium.lightprobe [rays] — probe every light against the scene, write <map>.probe.json"),
+		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
+		{
+			AElysiumMapActor* Map = ResolveMapActor();
+			const int32 Rays = Args.Num() > 0 ? FCString::Atoi(*Args[0]) : 64;
+			const int32 N = ElysiumLightProbe::Run(GetWorld(), Map, Rays);
+			if (N < 0)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("elysium.lightprobe: no light rig on this map"));
+			}
+		}),
+		ECVF_Cheat);
+#endif
 }
 
 void AElysiumHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -125,6 +146,13 @@ void AElysiumHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		IConsoleManager::Get().UnregisterConsoleObject(LightsCmd);
 		LightsCmd = nullptr;
 	}
+#if !UE_BUILD_SHIPPING
+	if (LightProbeCmd)
+	{
+		IConsoleManager::Get().UnregisterConsoleObject(LightProbeCmd);
+		LightProbeCmd = nullptr;
+	}
+#endif
 	if (PropsCmd)
 	{
 		IConsoleManager::Get().UnregisterConsoleObject(PropsCmd);

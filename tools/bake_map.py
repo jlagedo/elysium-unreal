@@ -132,6 +132,8 @@ class Bake(object):
         self.materials = {}              # (package, material key) -> MaterialInstanceConstant
         self.prop_models = {}            # stem -> ObjModel
         self.prop_mats = {}              # stem -> {name: MatDef}
+        self.prop_skins = {}             # stem -> {family: {authored material: family material}}
+        self.prop_phys = {}              # stem -> {"mass": kg, "hulls": [(verts, tris)]}
         self.masters = {}
         self.saved = []                  # asset paths pending save
 
@@ -172,9 +174,22 @@ class Bake(object):
                 self.prop_models[stem] = model
                 self.prop_mats[stem] = bl.read_mtl(
                     os.path.join(prop_dir, model.mtl_name or (stem + ".mtl")))
+                skins = bl.read_skins(os.path.join(prop_dir, stem + ".skins"))
+                if skins:
+                    self.prop_skins[stem] = skins
+                # A `.phys` marks a prop_physics model and carries VtMB's own convex
+                # collision + authored mass. Its absence is meaningful, not a gap: the
+                # model then has no collision model at all, and the runtime leaves the
+                # prop visible but inert, as CPhysicsProp::CreateVPhysics does.
+                phys = bl.read_phys(os.path.join(prop_dir, stem + ".phys"))
+                if phys and phys["hulls"]:
+                    self.prop_phys[stem] = phys
             tris = sum(m.tri_count for m in self.prop_models.values())
-            log("props: %d models / %d tris (%.1fs)" % (
-                len(self.prop_models), tris, time.time() - start))
+            hulls = sum(len(p["hulls"]) for p in self.prop_phys.values())
+            log("props: %d models / %d tris / %d with alternate skins / "
+                "%d physics (%d convex hulls) (%.1fs)" % (
+                    len(self.prop_models), tris, len(self.prop_skins),
+                    len(self.prop_phys), hulls, time.time() - start))
         return True
 
     # ---------------------------------------------------------------- textures
@@ -344,8 +359,9 @@ class Bake(object):
                 if unreal.EditorAssetLibrary.does_asset_exist(path):
                     self.materials[(mat_pkg, key)] = unreal.EditorAssetLibrary.load_asset(path)
 
-    def _emit(self, asset_path, sections, names, materials, nanite):
-        """Build one StaticMesh from prepared sections. Returns (triangles kept, dropped)."""
+    def _emit(self, asset_path, sections, names, materials, nanite, phys=None):
+        """Build one StaticMesh from prepared sections.
+        Returns (triangles kept, dropped, simple collision shapes)."""
         want = sum(len(s[4]) for s in sections) // 3
         mesh = bl.build_dynamic_mesh(sections)
         got = bl.mesh_triangle_count(mesh)
@@ -353,10 +369,14 @@ class Bake(object):
             mesh, asset_path, materials, [bl.safe_name(n) for n in names], nanite=nanite)
         if not static_mesh:
             fail("mesh build failed: %s" % asset_path)
-            return 0, want
-        bl.set_complex_collision(static_mesh)
+            return 0, want, 0
+        # A physics prop simulates, so it needs real simple collision -- VtMB's own convex
+        # hulls. Everything else makes its render triangles the collision.
+        shapes = bl.set_phy_collision(static_mesh, phys) if phys else 0
+        if not phys:
+            bl.set_complex_collision(static_mesh)
         self.saved.append(asset_path)
-        return got, want - got
+        return got, want - got, shapes
 
     # ------------------------------------------------------------------- world
 
@@ -426,7 +446,7 @@ class Bake(object):
             asset_path = "%s/SM_World_%s%d_%d_%d" % (
                 self.mesh_pkg, "" if opaque else "T_", cx, cy, cz)
             materials = [self.materials.get((self.mat_pkg, name)) for name in names]
-            kept, lost = self._emit(asset_path, sections, names, materials, nanite=opaque)
+            kept, lost, _ = self._emit(asset_path, sections, names, materials, nanite=opaque)
             tris += kept
             dropped += lost
             built += 1 if kept else 0
@@ -456,7 +476,7 @@ class Bake(object):
             asset_path = "%s/SM_Sky_%s%d_%d_%d" % (
                 self.mesh_pkg, "" if opaque else "T_", cx, cy, cz)
             materials = [self.materials.get((self.mat_pkg, name)) for name in names]
-            kept, lost = self._emit(asset_path, sections, names, materials, nanite=opaque)
+            kept, lost, _ = self._emit(asset_path, sections, names, materials, nanite=opaque)
             tris += kept
             dropped += lost
             built += 1 if kept else 0
@@ -471,6 +491,8 @@ class Bake(object):
         built = 0
         tris = 0
         dropped = 0
+        phys_meshes = 0
+        phys_shapes = 0
         for stem in sorted(self.prop_models.keys()):
             model = self.prop_models[stem]
             mats = self.prop_mats.get(stem, {})
@@ -485,14 +507,63 @@ class Bake(object):
                 key = self._prop_mat_key(stem, name, mat) if mat else name
                 materials.append(self.materials.get((self.prop_mat_pkg, key)))
             # A prop model whose materials are all opaque/masked can be Nanite; a mixed model
-            # cannot (Nanite is a whole-mesh setting), so it falls back wholesale.
-            nanite = all((mats[n].opaque if n in mats else True) for n in names)
-            kept, lost = self._emit(asset_path, sections, names, materials, nanite=nanite)
+            # cannot (Nanite is a whole-mesh setting), so it falls back wholesale. The test spans
+            # the alternate skin families too: a skin swaps whole material instances, so a family
+            # that brings in a translucent/additive surface would leave one on a Nanite mesh --
+            # and outside the editor no permutation can be compiled, which renders default grey.
+            skinned = set(names) | {rep for remap in self.prop_skins.get(stem, {}).values()
+                                    for rep in remap.values()}
+            nanite = all((mats[n].opaque if n in mats else True) for n in skinned)
+            phys = self.prop_phys.get(stem)
+            kept, lost, shapes = self._emit(asset_path, sections, names, materials,
+                                            nanite=nanite, phys=phys)
             tris += kept
             dropped += lost
             built += 1 if kept else 0
-        log("props: %d meshes / %d tris / %d dropped (%.1fs)" % (
-            built, tris, dropped, time.time() - start))
+            if phys:
+                phys_meshes += 1
+                phys_shapes += shapes
+                if shapes != len(phys["hulls"]):
+                    fail("%s: %d hulls in the sidecar but %d collision shapes"
+                         % (stem, len(phys["hulls"]), shapes))
+        log("props: %d meshes / %d tris / %d dropped / %d physics (%d convex shapes) (%.1fs)"
+            % (built, tris, dropped, phys_meshes, phys_shapes, time.time() - start))
+        self._author_skin_set()
+
+    def _author_skin_set(self):
+        """Author the map's UElysiumPropSkinSet from the `.skins` sidecars, resolving each family
+        material to the instance the material stage already made. The runtime looks an override up
+        by mesh material *slot* name, which is the authored material's name -- the same key the
+        sidecar uses -- so no naming rule has to be reproduced on either side."""
+        if not self.prop_skins:
+            return
+        models, overrides, unresolved = [], 0, 0
+        for stem in sorted(self.prop_skins):
+            families = self.prop_skins[stem]
+            mats = self.prop_mats.get(stem, {})
+            rows = [{} for _ in range(max(families) + 1)]   # index = VtMB's skin number
+            for family, remap in families.items():
+                for slot, rep in remap.items():
+                    mat = mats.get(rep)
+                    mic = self.materials.get(
+                        (self.prop_mat_pkg, self._prop_mat_key(stem, rep, mat))) if mat else None
+                    if mic is None:
+                        unresolved += 1
+                        log("  ! %s skin %d: no material instance for %r" % (stem, family, rep))
+                        continue
+                    # Keyed by the mesh's material *slot* name, which is safe_name of the authored
+                    # material (create_static_mesh names the slots that way) -- so the runtime
+                    # looks up what the asset actually carries and reproduces no naming rule.
+                    rows[family][bl.safe_name(slot)] = mic
+                    overrides += 1
+            models.append((stem, rows))
+        asset = bl.make_skin_set("DA_%s_PropSkins" % self.map, self.prop_pkg, models)
+        if asset is None:
+            fail("prop skin set failed: %s" % self.prop_pkg)
+            return
+        self.saved.append("%s/DA_%s_PropSkins" % (self.prop_pkg, self.map))
+        log("prop skins: %d models / %d overrides%s" % (
+            len(models), overrides, ", %d unresolved" % unresolved if unresolved else ""))
 
     # ------------------------------------------------------------------ lights
 
@@ -632,7 +703,7 @@ class Bake(object):
                     "fog_density", max(0.0001, min(0.05, 3.0 / end_cm)))
                 # Volumetric fog turns the map's hundreds of dynamic lights into real shafts and
                 # haze rather than a flat depth tint (decisions.md -- a Presentation-layer call).
-                component.set_editor_property("volumetric_fog", True)
+                component.set_editor_property("enable_volumetric_fog", True)
                 component.set_editor_property("volumetric_fog_scattering_distribution", 0.2)
                 component.set_editor_property("volumetric_fog_extinction_scale", 1.0)
                 fog.set_actor_label("HeightFog")
@@ -721,11 +792,11 @@ class Bake(object):
         return scale, origin
 
     def _place_props(self, actors):
-        """One StaticMeshActor per .props line: `stem x y z qx qy qz qw solid`."""
+        """One StaticMeshActor per .props line: `stem x y z qx qy qz qw solid [skin]`."""
         path = os.path.join(self.dir, "%s.props" % self.map)
         if not os.path.isfile(path):
             return 0
-        placed = 0
+        placed = skinned = 0
         cache = {}
         with open(path, "r", encoding="utf-8", errors="replace") as handle:
             for line in handle:
@@ -751,10 +822,40 @@ class Bake(object):
                 # Field 9 is Source's own `solid` byte: a solid prop blocks, the rest is dressing.
                 component.set_collision_profile_name(
                     PROFILE_PROP_SOLID if int(tok[8]) != 0 else PROFILE_PICK_ONLY)
+                # Field 10 (DStaticPropV4.skin) names an alternate skin family. A GAME_LUMP prop is
+                # not an entity and never changes skin, so the remap is baked into the placement as
+                # material overrides rather than costing anything at runtime. Older 9-field exports
+                # simply have no skin.
+                if len(tok) >= 10 and int(tok[9]) != 0:
+                    skinned += self._apply_prop_skin(component, mesh, stem, int(tok[9]))
                 actor.tags = [TAG_PROP]
                 actor.set_folder_path("Props")
                 placed += 1
+        if skinned:
+            log("level: %d static props on an alternate skin" % skinned)
         return placed
+
+    def _apply_prop_skin(self, component, mesh, stem, family):
+        """Override the material of every slot this model's skin family repaints. Returns 1 when
+        anything was applied. An out-of-range family is not an error -- Source's `skin` is an
+        unclamped int, and a map can name a family the model does not have."""
+        remap = self.prop_skins.get(stem, {}).get(family)
+        if not remap:
+            return 0
+        slots = [str(s.get_editor_property("material_slot_name"))
+                 for s in mesh.get_editor_property("static_materials")]
+        applied = 0
+        for slot, rep in sorted(remap.items()):
+            name = bl.safe_name(slot)
+            if name not in slots:
+                continue
+            mat = self.prop_mats.get(stem, {}).get(rep)
+            mic = self.materials.get(
+                (self.prop_mat_pkg, self._prop_mat_key(stem, rep, mat))) if mat else None
+            if mic is not None:
+                component.set_material(slots.index(name), mic)
+                applied += 1
+        return 1 if applied else 0
 
     def _place_decals(self, actors):
         """One ADecalActor per `.decals` line -- VtMB's `infodecal` layer (blood, bullet holes,

@@ -56,17 +56,55 @@ public:
 	struct FLightSource
 	{
 		TWeakObjectPtr<ULightComponent> Light;
+		// The `<map>.lights` line this came from — the stable identity of a source. Not the same as
+		// this entry's position in the array: sources are appended in the order the baked level
+		// offered its actors up, and the skyambient row and any unmatched row are skipped, so the
+		// two only look alike. Anything joining back to the sidecar keys on this.
+		int32 SourceIndex = INDEX_NONE;
 		int32 Type = 1;             // 0 texlight, 1 point, 2 spot, 3 sun/directional
 		float Mag = 0.f;            // raw linear intensity magnitude (max of rgb)
 		float RadiusCm = 0.f;       // authored cutoff radius (0 -> FallbackRadiusCm)
 		float FitMult = 1.f;        // per-area .lightfit rebalance multiplier
 		int32 Style = 0;            // animated lightstyle index (0 = unanimated)
 		float BaseIntensity = 0.f;  // current pre-style intensity (styled lights scale this per frame)
+		FLinearColor Color = FLinearColor::White;   // the sidecar's normalized hue, for revert
+		bool bOverridden = false;   // hand-set in the Lights window; the calibration passes skip it
+		bool bDisabled = false;     // switched off by hand in the Lights window
 	};
 
 	// The spawned light sources, for the Lights window's source list. Skyambient (type 5) is
 	// not a light and is absent here.
 	const TArray<FLightSource>& Sources() const { return LightSources; }
+
+	// --- per-source live override ----------------------------------------------------------------
+	// The Lights window's per-light inspector edits one source by hand. Such a source is marked
+	// overridden, which takes it out of both passes that would otherwise write over the edit: the
+	// global calibration (ApplyLiveTuning, which every calibration slider triggers) and the
+	// per-frame lightstyle animation. The rest of the rig keeps following the sliders as usual.
+	// Nothing here persists — a map reload re-derives every source from the sidecar.
+	ULightComponent* SourceLight(int32 Index) const;
+	bool IsSourceOverridden(int32 Index) const;
+	void SetSourceOverridden(int32 Index, bool bOverride);
+	// Set one source's intensity by hand, marking it overridden. Goes through the rig rather than
+	// straight to the component so the list's readout and the styled base stay in step with it.
+	void SetSourceIntensity(int32 Index, float Intensity);
+	// Re-derive one source from its sidecar row + the current calibration, and drop its override.
+	// The disable switch below is a separate axis and survives a revert.
+	void RevertSource(int32 Index);
+	void RevertAllSources();
+
+	// --- per-source disable ----------------------------------------------------------------------
+	// Switching one source off by hand, orthogonal to the override: it changes no value, so a
+	// disabled light keeps its calibrated intensity/reach and comes back exactly as it was. This is
+	// the switch the fill-light survey is driven from (the Lights window saves the disabled set),
+	// so it outranks the master toggle and the window's isolate both — nothing turns a
+	// hand-disabled light back on but enabling it.
+	bool IsSourceDisabled(int32 Index) const;
+	void SetSourceDisabled(int32 Index, bool bDisable);
+	void EnableAllSources();
+	// Should this source be lit right now, per the master toggle and its own disable? The Lights
+	// window's isolate pass restores visibility through this rather than to a plain "on".
+	bool ShouldSourceBeLit(int32 Index) const;
 
 	// Re-derive every light's intensity, reach, falloff exponent, and specular from the current
 	// tuning fields (PointSpotScale, MaxBrightness, RadiusScale, FalloffExponent, SunScaleLux,
@@ -111,4 +149,8 @@ private:
 	TArray<FLightSource> LightSources;
 	float StyleTime = 0.f;
 	bool bLightsVisible = true;
+
+	// Derive one source's intensity, reach, falloff and specular from the tuning constants. The
+	// single place that math lives; ApplyLiveTuning is this over every non-overridden source.
+	void ApplyToSource(FLightSource& S);
 };

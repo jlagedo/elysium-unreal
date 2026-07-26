@@ -90,33 +90,6 @@ rules: `docs/rebuild-strategy.md` → "Coordinate conventions".
 
 ## What runs today
 
-Map load builds world + 3D-skybox geometry as `UProceduralMeshComponent` actors with MIDs off
-the world master-material set (`M_World_Opaque`/`_Masked`/`_Translucent`/`M_Additive`, picked per
-surface by blend flag; bump, $envmap→Lumen roughness, and WorldVertexTransition blend on the lit
-masters), DDS-preferred textures, `.hulls`/`.dispcol` brush collision as the walkable surface, ISM
-static props, deferred `UDecalComponent` decals off `M_Decal`, `UCableComponent` overhead ropes, the real-time `UElysiumLightRig` on a
-fully dynamic renderer, and `.env` sky/fog + `.cube` LUT.
-
-The Track-B entity substrate runs with it: `.ents` → one entity per def through the class
-registry → brush bodies → spawn pass, everything through the two chokepoints and one event
-queue. Live classes cover the logic/trigger family, doors + buttons + the `+use` look-cursor
-and use-icon HUD, `game_sign` popups, `ambient_generic` + SoundSchemes + mover sounds,
-`prop_dynamic` static-mesh bodies (per-entity, addressable — hide/move/`Break`), NPC skeletal
-bodies, and `trigger_changelevel` landmark travel. Scripting runs on an embedded CPython 2.7 VM (the
-map's level script imports before the spawn pass, then merges into `__main__`, where payloads
-evaluate), with an expression-evaluator fallback. Scripts hold **real entity objects**: an
-attribute is either an entity input — fired through the same chokepoint a map's own I/O wire
-uses — or a live field, one namespace, as VtMB's datamap reflection does it. The `ccmd`/`cvar`
-console bridge is live too — `c.patchtype=""` runs the `cfg` alias and falls through to Python — so
-the Unofficial Patch's real `vamputil.py` imports and the map-load `unhidePlus()`/`setPlus()` chain
-arms the Plus gates.
-Debug lives in the vendored Cog ImGui shell plus Source-style `elysium.ent_*` verbs, with an MCP
-server (on by default in dev builds; `-NoElysiumMcp` to disable) exposing the same runtime state as
-~20 `elysium_*` tools so an AI agent can drive QA and tests; automation tests run via `test.bat`.
-
-`sp_tutorial_1` is the canonical vertical slice; `sm_pawnshop_1` and several other maps are
-exported, so cross-map landmark travel is exercisable end to end.
-
 **Per-task status, as-built detail, and what is next: `docs/roadmap.md`.** Runtime types and
 where they live: `Source/ElysiumUE/CLAUDE.md`.
 
@@ -153,6 +126,12 @@ your VtMB install.
   warmup + 300-frame CSV capture (per-pass GPU ms), summary, exit — no interaction.
   `tools/profile_report.py` builds the table; results in `tools/out/_profile/`, baseline in
   `docs/rendering-perf.md` → "Profiling baseline". Add a vantage in-game with `elysium.campos`.
+- `probe.bat [map...]` — headless light-attribution probe (`-ElysiumProbe`, one process per map;
+  default = every exported map). Traces a ray fan from each WORLDLIGHTS source against the real
+  built scene and writes `tools/out/_lights/<map>.probe.json`: what each light is nearest, whether
+  that surface emits, how enclosed it is, and its share of the light reaching what it lights. The
+  data behind separating real fixtures from the soft fill VtMB sprays in place of global
+  illumination. `elysium.lightprobe` runs the same pass live.
 - `shots.bat [map] [cam]` — headless screenshot-regression capture at 2560×1440/SM6 over the
   **same** vantages as `profile.bat` (`-ElysiumShots`); PNGs + manifest under `tools/out/_shots/`
   (gitignored — game-derived baselines). Diff a run against a kept baseline to catch a look regression.
@@ -160,16 +139,6 @@ your VtMB install.
   full dotted test name; default = all). The `Substrate` tier runs under `-nullrhi`; the `Content`
   tier reads `tools/out` and self-skips unexported maps. JSON+HTML report under `tools/out/_tests/`.
   Requires the editor target built first.
-
-**VS Code IntelliSense:** `python tools/setup_vscode.py` regenerates the local editor config —
-it runs UBT's `-projectfiles -vscode` generator, then mirrors the module's include paths +
-forced includes into `.vscode/settings.json` as `C_Cpp.default.*` (the fallback for every file
-the compile database does not name, i.e. all headers). `settings.json` is separate because UBT
-overwrites `c_cpp_properties.json` and the `.code-workspace` on every run but never touches it.
-Re-run after adding a module dependency, plugin, or unresolvable source file. Open
-`ElysiumUE.code-workspace`, not the bare folder — it mounts the engine tree as a second
-workspace folder, which is what makes go-to-definition reach engine source. Forced includes are
-build products, so the editor target must have been built at least once.
 
 ## Git workflow
 
@@ -195,6 +164,7 @@ facts, valid regardless of target engine. Organisation and maintenance rules: `d
 | `game_runtime.md` | main loop, three-layer split, RPG data model, the opening flow |
 | `animation_and_movers.md` | skeletal `.mdl` v2531 (Part A) + brush movers (Part B) |
 | `mdl_v2531.md` | the static-geometry `.mdl` struct map |
+| `phy_vphysics.md` | the `.phy` collision-model format — convex ledges, authored mass, axis mapping |
 | `audio_pipeline.md` | codecs, mixer, DSP, the SoundScheme system |
 | `source_movement.md` | `CGameMovement` constants + formulas |
 | `controls.md` | the input surface — keynames, bindable commands, default binds, cfg load order, control options UI |
@@ -204,6 +174,7 @@ facts, valid regardless of target engine. Organisation and maintenance rules: `d
 | `savegame_format.md` | the `.sav` container, `.HL1/2/3` sections, and the game state they hold |
 | `map-architecture.md` | the Unreal map load/unload/travel design |
 | `rendering-perf.md` | the dynamic render path, perf cvars, MegaLights checklist |
+| `light-attribution.md` | telling VtMB's real fixtures from its GI-substitute fill lights — the probe, the surveys, what discriminates and what does not |
 | `debug-tooling.md` | the three-layer debug/dev-tooling architecture |
 | `asset-enhancement.md` | the offline surface track (delight → upscale → PBR synthesis) |
 | `vdata-catalog.md` | the `vdata/` rulebook inventory — each table → system → roadmap task |

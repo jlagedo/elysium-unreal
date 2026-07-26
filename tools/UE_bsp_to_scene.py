@@ -20,7 +20,7 @@ import numpy as np
 import install, vmt
 import bsp as B
 import mdl as MDL
-import prop_collision
+import phy
 import retex_dds
 from tex_to_png import decode as decode_texture, decode_cubemap
 from bsp import (read_lump, source_to_unreal, source_dir_to_unreal, source_angles_to_unreal_quat,
@@ -477,7 +477,7 @@ def decode_prop_models(idx, model_paths, propdir, tex_cache, valid):
         try:
             meshes = MDL.decode(*dv)
             MDL.write_obj_scene(meshes, safe, propdir, MDL.search_paths(dv[0]), read_bytes,
-                                tex_cache, ue_space=True)
+                                tex_cache, ue_space=True, skins=MDL.skin_families(dv[0]))
             valid.add(safe); resolved[model_path] = safe; ok += 1
         except Exception as e:
             print(f"  prop decode failed {model_path}: {e}"); missing += 1
@@ -583,13 +583,13 @@ def write_entities(data, out_dir, base, idx, propdir, tex_cache, valid):
             model_paths.add(mk); ent_model_of[i] = mk
     resolved, pok, pmiss = decode_prop_models(idx, model_paths, propdir, tex_cache, valid)
     n_prop = 0
-    phys_stems = set()                               # 8.4: models a prop_physics places (get .hulls)
+    phys_models = {}                            # 8.4: stem -> .mdl key, for the .phy sidecar
     for i, mk in ent_model_of.items():
         safe = resolved.get(mk)
         if safe:
             out[i]["model_mesh"] = safe; n_prop += 1
             if out[i]["classname"].lower() == "prop_physics":
-                phys_stems.add(safe)
+                phys_models[safe] = mk
             # Pre-convert the entity's Source QAngle to an Unreal rotation quaternion here (the
             # same source_angles_to_unreal_quat the .props path uses), so the runtime reads it 1:1
             # with no coordinate math — origin is already Unreal-space, this makes orientation so
@@ -598,9 +598,9 @@ def write_entities(data, out_dir, base, idx, propdir, tex_cache, valid):
             pyr = [float(x) for x in ang] if len(ang) == 3 else [0.0, 0.0, 0.0]
             out[i]["model_quat"] = [round(float(c), 6) for c in source_angles_to_unreal_quat(*pyr)]
 
-    # 8.4: convex-decompose each prop_physics model into a `<stem>.hulls` sidecar (same
-    # format as the world collider), so the runtime cooks a Chaos body from convex parts.
-    prop_collision.write_physics_hulls(propdir, phys_stems)
+    # 8.4: emit each prop_physics model's own VPhysics collision -- the convex hulls VtMB
+    # simulates against, straight out of the model's sibling `.phy` -- as `<stem>.phys`.
+    phy.write_physics_phys(idx, propdir, phys_models)
 
     path = os.path.join(out_dir, base + ".ents")
     with open(path, "w") as f:
@@ -675,10 +675,11 @@ def disp_grid(src, dinfo, dispverts, emit):
 # --- static props: GAME_LUMP sprp -> .props sidecar + props/ model OBJs -----
 def write_props(data, out_dir, base, idx, propdir, tex_cache, valid):
     """Parse GAME_LUMP sprp (VtMB v4, 56B DStaticPropV4): a model-name dict + per-
-    prop origin/angles/solid. Decode each unique model once (shared texture cache)
+    prop origin/angles/solid/skin. Decode each unique model once (shared texture cache)
     into out_dir/props/<safename>.obj (Unreal space), and write <base>.props (one prop
-    per line: `safename ox oy oz qx qy qz qw solid`). `solid` (0 = non-solid) gates
-    collision.
+    per line: `safename ox oy oz qx qy qz qw solid skin`). `solid` (0 = non-solid) gates
+    collision; `skin` names an alternate skin family from the model's own skin table
+    (props/<stem>.skins), which the bake applies as material overrides on the placed actor.
 
     Unreal-native: the prop meshes are written via mdl.write_obj_scene(ue_space=True)
     (cm/Z-up/left-handed, winding reversed) and the origin/angles here are converted to
@@ -698,7 +699,7 @@ def write_props(data, out_dir, base, idx, propdir, tex_cache, valid):
     prop_count = struct.unpack_from("<i", payload, p)[0]; p += 4
     size = (len(payload) - p) // prop_count if prop_count else 0
 
-    props = []          # (model_path, origin, angles, solid)
+    props = []          # (model_path, origin, angles, solid, skin)
     model_paths = set()
     for i in range(prop_count):
         po = p + i * size
@@ -706,26 +707,31 @@ def write_props(data, out_dir, base, idx, propdir, tex_cache, valid):
         angles = struct.unpack_from("<3f", payload, po + 12)
         prop_type = struct.unpack_from("<H", payload, po + 24)[0]
         solid = struct.unpack_from("<B", payload, po + 30)[0]
+        # DStaticPropV4.skin @32 -- the alternate skin family this placement draws (157 of the
+        # install's 6,470 placed props use one). Applied offline by the bake: a GAME_LUMP prop is
+        # not an entity, so its skin never changes at runtime.
+        skin = struct.unpack_from("<i", payload, po + 32)[0]
         if prop_type >= len(names):
             continue
         model_path = names[prop_type].replace("\\", "/").lower()
         model_paths.add(model_path)
-        props.append((model_path, origin, angles, solid))
+        props.append((model_path, origin, angles, solid, skin))
 
     resolved, ok, missing = decode_prop_models(idx, model_paths, propdir, tex_cache, valid)
-    solid_n = 0
+    solid_n = skin_n = 0
     with open(os.path.join(out_dir, base + ".props"), "w") as f:
-        for model_path, (ox, oy, oz), (pitch, yaw, roll), solid in props:
+        for model_path, (ox, oy, oz), (pitch, yaw, roll), solid, skin in props:
             safe = resolved.get(model_path)
             if safe is None:                 # an .obj left over from an earlier export
                 continue                     # must not stand in for a failed decode
             solid_n += solid != 0
+            skin_n += skin != 0
             ux, uy, uz = source_to_unreal(ox, oy, oz)
             qx, qy, qz, qw = source_angles_to_unreal_quat(pitch, yaw, roll)
             f.write(f"{safe} {ux:.4f} {uy:.4f} {uz:.4f} "
-                    f"{qx:.6f} {qy:.6f} {qz:.6f} {qw:.6f} {solid}\n")
+                    f"{qx:.6f} {qy:.6f} {qz:.6f} {qw:.6f} {solid} {skin}\n")
     placed = sum(1 for pr in props if pr[0] in resolved)
-    print(f"props: {placed} placed ({solid_n} solid) / {len(model_paths)} models "
+    print(f"props: {placed} placed ({solid_n} solid, {skin_n} skinned) / {len(model_paths)} models "
           f"({ok} decoded, {missing} missing) -> {base}.props")
 
 

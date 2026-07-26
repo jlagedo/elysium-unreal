@@ -126,7 +126,21 @@ because tier-1 logic entities are plain C++ objects, not UObjects):
 - **Maps** — map list, travel, `elysium.reload`, load-phase timings, and the player pose
   (metres/Source units/yaw), movement/skybox/light state, and FPS readout (the Canvas HUD
   itself keeps only the reticle, sign panels, and the `env_fade` screen fade).
-- **Lights** — the rig's source list, per-style intensity curves, live scale tuning.
+- **Lights** — the rig's source list, per-style intensity curves, live scale tuning, and a
+  per-light inspector. One source is selected at a time — from the list, or by clicking its marker
+  in the world — and its intensity, colour, reach, falloff, cone, shadows and scattering are edited
+  directly, with a `FCogDebug_Gizmo` on its transform and an isolate toggle that hides the rest.
+  Editing marks the source overridden in the rig, which takes it out of both passes that would
+  write back over it (the global calibration and the lightstyle animation). A per-source **Enabled**
+  switch is the orthogonal axis: it changes no value, so a light comes back exactly as it was, and
+  it outranks both the rig's master toggle and the isolate pass — the switch a fill-light survey is
+  walked with. **Save** writes that survey out as JSON to `tools/out/_lights/<map>.json` (one file
+  per map, overwritten each save): the counts, the calibration the judgement was made under, and one
+  record per edited source keyed by `.lights` line index, so the untouched complement joins back from
+  the sidecar. Nothing else persists — the edits live in the running rig, so a map reload restores
+  the sidecar's calibration.
+  Lights carry no collision, so the world pick is a screen-space nearest-marker test rather than
+  `ElysiumPick` — which is also what makes a light embedded in solid geometry selectable.
 - **Entities** (M3) — browser over `FElysiumEntityWorld`'s registry: all 1,226 records
   including inert unhandled classnames, filter by classname/targetname, histogram.
 - **Entity inspector** (M3) — one entity's keyvalues, outputs (all 7 fields), tier, spawn

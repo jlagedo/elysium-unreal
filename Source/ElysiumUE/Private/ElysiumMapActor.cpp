@@ -15,8 +15,8 @@
 #include "ElysiumMaterialFactory.h"
 #include "ElysiumNpcVisual.h"
 #include "ElysiumObjModel.h"
+#include "ElysiumPropSkins.h"
 #include "ElysiumRopes.h"
-#include "ElysiumStaticMesh.h"
 #include "ElysiumTextureCache.h"
 
 #include "Engine/GameInstance.h"
@@ -396,6 +396,28 @@ USkeletalMeshComponent* AElysiumMapActor::BuildNpcVisual(const FString& Stem, co
 	return Comp;
 }
 
+// The bake already produced every prop model as a real asset — Nanite, compressed textures, and the
+// DDC-fitted Lumen cards a runtime-built mesh can never have — so an entity prop stands the same mesh
+// the level's static props do. Cached per stem so a model placed by several entities resolves once; a
+// stem that failed is not cached, so it retries.
+UStaticMesh* AElysiumMapActor::ResolvePropMesh(const FString& Stem)
+{
+	const TObjectPtr<UStaticMesh>* Cached = PropMeshCache.Find(Stem);
+	if (UStaticMesh* Mesh = Cached ? Cached->Get() : nullptr)
+	{
+		return Mesh;
+	}
+	UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, *FElysiumContentPaths::BakedPropMesh(MapName, Stem));
+	if (Mesh == nullptr)
+	{
+		UE_LOG(LogElysium, Warning, TEXT("prop '%s': no baked mesh (run: bake.bat %s props)"),
+			*Stem, *MapName);
+		return nullptr;
+	}
+	PropMeshCache.Add(Stem, Mesh);
+	return Mesh;
+}
+
 UStaticMeshComponent* AElysiumMapActor::BuildPropVisual(const FString& Stem, const FVector& Location, const FQuat& Rotation)
 {
 	USceneComponent* Root = GetRootComponent();
@@ -404,22 +426,10 @@ UStaticMeshComponent* AElysiumMapActor::BuildPropVisual(const FString& Stem, con
 		return nullptr;
 	}
 
-	// The bake already produced this model as a real asset — Nanite, compressed textures, and the
-	// DDC-fitted Lumen cards a runtime-built mesh can never have — so an entity prop stands the
-	// same mesh the level's static props do. Cached per stem so a model placed by several entities
-	// resolves once; a stem that failed is not cached, so it retries.
-	const TObjectPtr<UStaticMesh>* Cached = PropMeshCache.Find(Stem);
-	UStaticMesh* Mesh = Cached ? Cached->Get() : nullptr;
+	UStaticMesh* Mesh = ResolvePropMesh(Stem);
 	if (Mesh == nullptr)
 	{
-		Mesh = LoadObject<UStaticMesh>(nullptr, *FElysiumContentPaths::BakedPropMesh(MapName, Stem));
-		if (Mesh == nullptr)
-		{
-			UE_LOG(LogElysium, Warning, TEXT("BuildPropVisual '%s': no baked mesh (run: bake.bat %s props)"),
-				*Stem, *MapName);
-			return nullptr;
-		}
-		PropMeshCache.Add(Stem, Mesh);
+		return nullptr;
 	}
 
 	// Standard runtime-component recipe (mirrors BuildNpcVisual): NewObject → mesh → attach → place →
@@ -437,6 +447,56 @@ UStaticMeshComponent* AElysiumMapActor::BuildPropVisual(const FString& Stem, con
 	return Comp;
 }
 
+// A/B toggle for the prop skin pass (8.3/8.4). 1 applies alternate skin families; 0 leaves every
+// prop on its authored materials, so a look change can be attributed. Read per apply, so it takes
+// effect on the next Skin input without a reload.
+static TAutoConsoleVariable<int32> CVarPropSkins(
+	TEXT("elysium.PropSkins"),
+	1,
+	TEXT("Apply alternate prop skin families (1, default) or keep every prop on skin 0 (0)."),
+	ECVF_Default);
+
+void AElysiumMapActor::ApplyPropSkin(UStaticMeshComponent* Comp, const FString& Stem, int32 Family)
+{
+	UStaticMesh* Mesh = Comp ? Comp->GetStaticMesh() : nullptr;
+	if (!Mesh || CVarPropSkins.GetValueOnGameThread() == 0)
+	{
+		return;
+	}
+
+	if (!bPropSkinsLoaded)
+	{
+		bPropSkinsLoaded = true;
+		PropSkins = LoadObject<UElysiumPropSkinSet>(
+			nullptr, *FElysiumContentPaths::BakedPropSkins(MapName));
+	}
+
+	// Restore first, so a swap back to skin 0 -- or to a family this model does not carry, which
+	// Source draws as the authored set -- undoes whatever the previous skin painted. Clearing the
+	// overrides puts every slot back on the mesh's own material.
+	Comp->EmptyOverrideMaterials();
+	const FElysiumSkinFamily* Row = PropSkins ? PropSkins->Find(FName(*Stem), Family) : nullptr;
+	if (!Row)
+	{
+		return;
+	}
+
+	for (const FElysiumSkinOverride& Override : Row->Overrides)
+	{
+		if (!Override.Material)
+		{
+			continue;
+		}
+		// Every prop body stands a baked mesh, whose slots the bake named safe_name(material) --
+		// the same key the skin table is written with, so the slot name resolves directly.
+		const int32 Slot = Mesh->GetMaterialIndex(Override.SlotName);
+		if (Slot != INDEX_NONE)
+		{
+			Comp->SetMaterial(Slot, Override.Material);
+		}
+	}
+}
+
 UStaticMeshComponent* AElysiumMapActor::BuildPhysPropVisual(const FString& Stem, const FVector& Location, const FQuat& Rotation)
 {
 	USceneComponent* Root = GetRootComponent();
@@ -445,33 +505,14 @@ UStaticMeshComponent* AElysiumMapActor::BuildPhysPropVisual(const FString& Stem,
 		return nullptr;
 	}
 
-	// Physics props stay on the runtime build: simulation needs the exporter's CoACD-decomposed
-	// props/<stem>.hulls as one FKConvexElem per part, which is a per-asset body setup the shared
-	// baked mesh cannot carry (it is also placed by non-simulating props). Cache key is distinct
-	// from BuildPropVisual's so a model used by both resolves to one mesh each.
-	const FString CacheKey = Stem + TEXT("#phys");
-	const TObjectPtr<UStaticMesh>* Cached = PropMeshCache.Find(CacheKey);
-	UStaticMesh* Mesh = Cached ? Cached->Get() : nullptr;
+	// The same baked asset every other prop stands: the bake gave a physics model VtMB's own
+	// convex collision (props/<stem>.phys, one shape per `.phy` ledge) and its authored mass on
+	// the body setup, under CTF_UseSimpleAndComplex — so one mesh serves both a simulating body
+	// and a static placement of the same model, and the cache is shared with BuildPropVisual.
+	UStaticMesh* Mesh = ResolvePropMesh(Stem);
 	if (Mesh == nullptr)
 	{
-		FElysiumObjModel Model;
-		if (!FElysiumObjModel::Parse(FElysiumContentPaths::MapPropsDir(MapName) / (Stem + TEXT(".obj")), Model))
-		{
-			UE_LOG(LogElysium, Warning, TEXT("BuildPhysPropVisual '%s': prop model parse failed"), *Stem);
-			return nullptr;
-		}
-		// Prefer the decomposed convex parts (8.4 exporter); absent, Build cooks a single whole-model
-		// hull — the baseline spec, coarser for concave shapes.
-		TArray<TArray<FVector>> Hulls;
-		const bool bHaveHulls = FElysiumStaticMeshBuilder::LoadConvexHulls(
-			FElysiumContentPaths::MapPropsDir(MapName) / (Stem + TEXT(".hulls")), Hulls);
-		Mesh = FElysiumStaticMeshBuilder::Build(Model, Model.Dir, /*bConvexCollision=*/true, this, *TextureCache,
-			bHaveHulls ? &Hulls : nullptr);
-		if (Mesh == nullptr)
-		{
-			return nullptr;
-		}
-		PropMeshCache.Add(CacheKey, Mesh);
+		return nullptr;
 	}
 
 	UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(this);

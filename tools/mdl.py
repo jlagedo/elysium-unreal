@@ -7,9 +7,11 @@ three embedded-vertex formats are documented in `docs/mdl_v2531.md` and validate
 
 API:
   decode(mdl_bytes, vtx_bytes) -> list[Mesh]
-    Mesh.material : str        material name (index into the mdl texture list)
+    Mesh.material : str        material name, resolved through skin family 0
+    Mesh.skinref  : int        the skin-table row index an alternate family remaps
     Mesh.verts    : [(x,y,z,u,v), ...]   deduped, Source coords
     Mesh.tris     : [(i,j,k), ...]       indices into verts
+  skin_families(mdl_bytes) -> [[material name per skinref], ...]   index 0 = the authored set
 
 CLI: python tools/mdl.py <model-path-in-vpk> [<out_dir>]
   writes <out_dir>/<name>.obj + .mtl + tex/*.png (Godot-ready, like bsp_to_scene).
@@ -51,10 +53,11 @@ def _cstr(b, o): return b[o:b.index(b"\0", o)].decode("ascii", "replace")
 
 
 class Mesh:
-    __slots__ = ("material", "verts", "tris")
+    __slots__ = ("material", "skinref", "verts", "tris")
 
-    def __init__(self, material):
+    def __init__(self, material, skinref=None):
         self.material = material
+        self.skinref = skinref      # StudioMesh.Material -- the row index a skin family remaps
         self.verts = []
         self.tris = []
 
@@ -105,18 +108,55 @@ def _vtable_form(v, vtable, numverts, mesh_numverts):
     return best
 
 
+def materials(d):
+    """The model's texture list -- material names, indexed by texture index.
+    (StudioTexture stride 20; NameIndex rel. to the struct base.)"""
+    num_textures, texture_index = _i32(d, 292), _i32(d, 296)
+    out = []
+    for i in range(num_textures):
+        to = texture_index + i * 20
+        out.append(_cstr(d, to + _i32(d, to)))
+    return out
+
+
+def skin_table(d):
+    """The skin table: `skinTable[family][skinref]` -> texture index.
+
+    `StudioMesh.Material` is a **skinref**, not a texture index -- the family row remaps it,
+    which is how one model draws several skins (a traffic light's red/walk/flashing/yellow, a
+    doorknob's locked/unlocked, a laser emitter's armed/idle). Family 0 is the identity row on
+    every readable model in the install, which is why reading a mesh's material index directly
+    yielded the right skin-0 material and nothing else.
+
+    `NumSkinRefs`@308, `NumSkinFamilies`@312, `SkinIndex`@316; the table is
+    `short skinref[families][refs]`. A model whose table is absent or unreadable (12 in the
+    install) yields a single identity row, so callers need no special case."""
+    n_refs, n_fams, base = _i32(d, 308), _i32(d, 312), _i32(d, 316)
+    n_tex = _i32(d, 292)
+    if (n_refs < 1 or n_fams < 1 or base <= 0
+            or base + n_fams * n_refs * 2 > len(d)):
+        return [list(range(max(n_refs, n_tex, 1)))]
+    return [list(struct.unpack_from(f"<{n_refs}h", d, base + f * n_refs * 2))
+            for f in range(n_fams)]
+
+
+def skin_families(d):
+    """`skin_table` resolved through the texture list: per family, the material name for each
+    skinref. Index 0 is the authored set -- what the OBJ's own `usemtl` groups are named."""
+    mats = materials(d)
+    return [[mats[t] if 0 <= t < len(mats) else f"mat{t}" for t in row]
+            for row in skin_table(d)]
+
+
 def decode(d, v):
     """Decode mdl bytes `d` + vtx bytes `v` → list[Mesh] (LOD0, Source coords)."""
     assert d[0:4] == b"IDST", f"bad ident {d[0:4]!r}"
     assert v is not None, "missing .dx80.vtx"
     hmin, hmax = _vec3(d, 180), _vec3(d, 192)
-    num_textures = _i32(d, 292)
-    texture_index = _i32(d, 296)
-    # material names (StudioTexture stride 20; NameIndex rel. to the struct base)
-    materials = []
-    for i in range(num_textures):
-        to = texture_index + i * 20
-        materials.append(_cstr(d, to + _i32(d, to)))
+    mats = materials(d)
+    # A mesh names a skinref; family 0 maps it to the texture it draws with (identity on every
+    # readable model, so this is a no-op there -- but it is the correct lookup, not a coincidence).
+    fam0 = skin_table(d)[0]
     num_bodyparts = _i32(d, 320)
     bodypart_index = _i32(d, 324)
     vtx_bp_off = _i32(v, 32)
@@ -148,7 +188,8 @@ def decode(d, v):
                 num_sg = _u16(v, vmesh + 0)
                 sg_off = _i32(v, vmesh + 4)         # rel to mesh
 
-                out = Mesh(materials[material] if material < len(materials) else f"mat{material}")
+                tex = fam0[material] if 0 <= material < len(fam0) else material
+                out = Mesh(mats[tex] if 0 <= tex < len(mats) else f"mat{tex}", material)
                 remap = {}                          # global vert id -> local index
                 for sg in range(num_sg):
                     sgb = vmesh + sg_off + sg * STRIPGROUP_STRIDE
@@ -257,16 +298,80 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
     return (albedo, emis if info.get("selfillum") else None, additive)
 
 
-def write_obj_scene(meshes, name, out_dir, search, read_bytes, tex_cache, *, ue_space=False):
+def _skin_remaps(meshes, skins):
+    """Per alternate family, [(authored material, this family's material)] for the slots it
+    actually repaints. Only skinrefs the model's meshes draw are considered -- a skin table row
+    covers every skinref, including ones no LOD0 mesh uses. Keyed by the authored material name,
+    because that is the OBJ group (and so the mesh material slot) the swap targets; on the rare
+    model where two skinrefs share one authored material, the first wins."""
+    if not skins or len(skins) < 2:
+        return {}
+    refs = sorted({m.skinref for m in meshes if m.skinref is not None})
+    base = skins[0]
+    out = {}
+    for f in range(1, len(skins)):
+        row, pairs, seen = skins[f], [], set()
+        for r in refs:
+            if r >= len(base) or r >= len(row) or base[r] == row[r]:
+                continue
+            if base[r] in seen:
+                continue
+            seen.add(base[r])
+            pairs.append((base[r], row[r]))
+        if pairs:
+            out[f] = pairs
+    return out
+
+
+def _skin_materials(meshes, skins):
+    """Every material an alternate family draws -- these need a .mtl entry (and so a decoded
+    texture and a baked material instance) even though no triangle references them at skin 0."""
+    return {rep for pairs in _skin_remaps(meshes, skins).values() for _, rep in pairs}
+
+
+def _write_skins(meshes, skins, name, out_dir):
+    """out_dir/<name>.skins -- one line per alternate family that repaints something:
+
+        <family> <authored material>=<family material> ...
+
+    Names are sanitized, so they match the `usemtl`/`newmtl` keys and the baked mesh's material
+    slot names 1:1. Families that repaint nothing are simply absent (the leading token carries
+    the family number, so gaps are fine). No file is written for a single-family model."""
+    remaps = _skin_remaps(meshes, skins)
+    path = os.path.join(out_dir, name + ".skins")
+    if not remaps:
+        if os.path.exists(path):
+            os.remove(path)   # a model that lost its families must not keep a stale sidecar
+        return
+    with open(path, "w") as f:
+        for fam in sorted(remaps):
+            pairs = " ".join(f"{sanitize(a)}={sanitize(b)}" for a, b in remaps[fam])
+            f.write(f"{fam} {pairs}\n")
+
+
+def write_obj_scene(meshes, name, out_dir, search, read_bytes, tex_cache, *, ue_space=False,
+                    skins=None):
     """Write out_dir/<name>.obj + .mtl, decoding textures into out_dir/tex/
     (shared across models via tex_cache). UVs as-is.
 
     ue_space=False: Godot Y-up/metres (legacy, the non-UE_ default).
     ue_space=True:  Unreal cm/Z-up/left-handed via bsp.source_to_unreal, with triangle
-    winding reversed (the Y negation is a reflection) -- read verbatim by the runtime."""
+    winding reversed (the Y negation is a reflection) -- read verbatim by the runtime.
+
+    skins: `skin_families(d)` -- when the model has alternate families, every material any of
+    them names is resolved into the .mtl too (so the bake authors a material instance for it),
+    and out_dir/<name>.skins records the remap. A single-family model writes exactly what it
+    always did, byte for byte."""
     os.makedirs(os.path.join(out_dir, "tex"), exist_ok=True)
-    mat_png = {m.material: _resolve_material(m.material, search, read_bytes, out_dir, tex_cache)
-               for m in meshes}
+
+    # The .mtl carries the authored set first, in the order the meshes name it (so a model with
+    # no alternate families is unchanged), then any material only an alternate family draws.
+    names = list(dict.fromkeys(m.material for m in meshes))
+    extra = _skin_materials(meshes, skins) - set(names)
+    names += sorted(extra)
+
+    mat_png = {n: _resolve_material(n, search, read_bytes, out_dir, tex_cache) for n in names}
+    _write_skins(meshes, skins, name, out_dir)
     with open(os.path.join(out_dir, name + ".mtl"), "w") as f:
         for mat, (albedo, emis, additive) in mat_png.items():
             f.write(f"newmtl {sanitize(mat)}\n")
@@ -326,5 +431,7 @@ if __name__ == "__main__":
     meshes = decode(d, v)
     name = os.path.splitext(os.path.basename(mp))[0]
     read_bytes = lambda key: install.read(idx, key)
-    verts, tris = write_obj_scene(meshes, name, out, search_paths(d), read_bytes, {})
-    print(f"{name}: {len(meshes)} meshes, {verts} verts, {tris} tris -> {out}")
+    fams = skin_families(d)
+    verts, tris = write_obj_scene(meshes, name, out, search_paths(d), read_bytes, {}, skins=fams)
+    print(f"{name}: {len(meshes)} meshes, {verts} verts, {tris} tris, "
+          f"{len(fams)} skin famil{'y' if len(fams) == 1 else 'ies'} -> {out}")

@@ -20,8 +20,10 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumObjModel.h"
 #include "ElysiumRopes.h"
+#include "Engine/StaticMesh.h"
 #include "HAL/FileManager.h"
 #include "Misc/Paths.h"
+#include "PhysicsEngine/BodySetup.h"
 
 static constexpr EAutomationTestFlags GElysiumContentTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -41,8 +43,8 @@ namespace
 		int32 PropDynamic = 0;
 		int32 PropDynamicWithMesh = 0;
 		FString AnyPropStem;
-		// 8.4 — prop_physics carry the same model_mesh annotation plus a decomposed `.hulls`
-		// sidecar; phys_hinge carry the pre-converted hinge_axis. Sample stems confirm on disk.
+		// 8.4 — prop_physics carry the same model_mesh annotation plus a `.phys` collision sidecar;
+		// phys_hinge carry the pre-converted hinge_axis. Sample stems confirm on disk.
 		int32 PropPhysics = 0;
 		int32 PropPhysicsWithMesh = 0;
 		FString AnyPhysStem;
@@ -174,8 +176,9 @@ bool FElysiumTutorialEntsTest::RunTest(const FString&)
 		Survey.PropDynamic, Survey.PropDynamicWithMesh));
 
 	// 8.4 — physics props/hinges. prop_physics/phys_hinge register; a prop_physics record carries a
-	// decoded model_mesh + a `.hulls` collision sidecar (single or decomposed), and phys_hinge carries
-	// the pre-converted hinge_axis. Guarded on presence so the tier holds on any current export.
+	// decoded model_mesh + a `.phys` collision sidecar (VtMB's own convex hulls, out of the model's
+	// `.phy`), and phys_hinge carries the pre-converted hinge_axis. Guarded on presence so the tier
+	// holds on any current export.
 	TestNotNull(TEXT("prop_physics registered"), Reg.Find(FName(TEXT("prop_physics"))));
 	TestNotNull(TEXT("phys_hinge registered"), Reg.Find(FName(TEXT("phys_hinge"))));
 	if (Survey.PropPhysics > 0)
@@ -186,8 +189,34 @@ bool FElysiumTutorialEntsTest::RunTest(const FString&)
 			const FString Dir = FElysiumContentPaths::MapPropsDir(TEXT("sp_tutorial_1"));
 			TestTrue(TEXT("a prop_physics model_mesh resolves to an OBJ on disk"),
 				IFileManager::Get().FileExists(*(Dir / (Survey.AnyPhysStem + TEXT(".obj")))));
-			TestTrue(TEXT("a prop_physics model carries a .hulls collision sidecar"),
-				IFileManager::Get().FileExists(*(Dir / (Survey.AnyPhysStem + TEXT(".hulls")))));
+			TestTrue(TEXT("a prop_physics model carries a .phys collision sidecar"),
+				IFileManager::Get().FileExists(*(Dir / (Survey.AnyPhysStem + TEXT(".phys")))));
+
+			// The invariant that actually has to hold at run time: a physics prop's *baked* mesh
+			// carries simple collision a Chaos body can simulate against, under a trace flag that
+			// cooks it alongside the per-poly shape the debug pick traces. Self-skips when the map
+			// has not been baked, the same way the tier self-skips an unexported map.
+			UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr,
+				*FElysiumContentPaths::BakedPropMesh(TEXT("sp_tutorial_1"), Survey.AnyPhysStem));
+			if (Mesh == nullptr)
+			{
+				AddInfo(FString::Printf(
+					TEXT("skipping the baked-collision assertions: no baked mesh for '%s' ")
+					TEXT("(run: bake.bat sp_tutorial_1 props)"), *Survey.AnyPhysStem));
+			}
+			else if (UBodySetup* Body = Mesh->GetBodySetup())
+			{
+				TestTrue(TEXT("a baked physics-prop mesh carries simple collision"),
+					Body->AggGeom.GetElementCount() > 0);
+				TestEqual(TEXT("a baked physics-prop mesh cooks simple AND complex collision"),
+					Body->CollisionTraceFlag, CTF_UseSimpleAndComplex);
+				TestTrue(TEXT("a baked physics-prop mesh carries the model's authored mass"),
+					Body->DefaultInstance.bOverrideMass && Body->DefaultInstance.GetMassOverride() > 0.0f);
+			}
+			else
+			{
+				AddError(TEXT("a baked physics-prop mesh has no body setup at all"));
+			}
 		}
 	}
 	if (Survey.PhysHinge > 0)
@@ -196,6 +225,55 @@ bool FElysiumTutorialEntsTest::RunTest(const FString&)
 	}
 	AddInfo(FString::Printf(TEXT("sp_tutorial_1 prop_physics: %d (%d with model_mesh); phys_hinge: %d (%d with axis)"),
 		Survey.PropPhysics, Survey.PropPhysicsWithMesh, Survey.PhysHinge, Survey.PhysHingeWithAxis));
+
+	// 8.3/8.4 skin families — the `+use` static-mesh family stands a body and takes a skin, the
+	// exporter emits a `props/<stem>.skins` sidecar for every model carrying alternate families,
+	// and `.props` carries DStaticPropV4.skin as a tenth field.
+	for (const TCHAR* Name : { TEXT("prop_button"), TEXT("prop_sign"), TEXT("prop_doorknob"),
+							   TEXT("item_container_animated") })
+	{
+		TestNotNull(*FString::Printf(TEXT("%s registered"), Name), Reg.Find(FName(Name)));
+	}
+
+	const FString PropsDir = FElysiumContentPaths::MapPropsDir(TEXT("sp_tutorial_1"));
+	TArray<FString> SkinFiles;
+	IFileManager::Get().FindFiles(SkinFiles, *(PropsDir / TEXT("*.skins")), true, false);
+	AddInfo(FString::Printf(TEXT("sp_tutorial_1 models with alternate skin families: %d"), SkinFiles.Num()));
+	if (SkinFiles.Num() > 0)
+	{
+		// Every line is `<family> <authored>=<family> ...`: a family number > 0 (family 0 is the
+		// authored set and is never written) and at least one remap pair.
+		TArray<FString> Lines;
+		FFileHelper::LoadFileToStringArray(Lines, *(PropsDir / SkinFiles[0]));
+		TestTrue(TEXT("a .skins sidecar carries at least one family"), Lines.Num() > 0);
+		for (const FString& Line : Lines)
+		{
+			TArray<FString> Tok;
+			Line.ParseIntoArray(Tok, TEXT(" "), true);
+			TestTrue(TEXT(".skins line names a non-zero family and at least one remap"),
+				Tok.Num() >= 2 && FCString::Atoi(*Tok[0]) > 0 && Tok[1].Contains(TEXT("=")));
+		}
+	}
+
+	TArray<FString> PropLines;
+	if (FFileHelper::LoadFileToStringArray(PropLines, *FElysiumContentPaths::MapProps(TEXT("sp_tutorial_1")))
+		&& PropLines.Num() > 0)
+	{
+		int32 TenField = 0, Skinned = 0;
+		for (const FString& Line : PropLines)
+		{
+			TArray<FString> Tok;
+			Line.ParseIntoArray(Tok, TEXT(" "), true);
+			if (Tok.Num() >= 10)
+			{
+				++TenField;
+				Skinned += FCString::Atoi(*Tok[9]) != 0 ? 1 : 0;
+			}
+		}
+		TestEqual(TEXT("every .props line carries the skin field"), TenField, PropLines.Num());
+		AddInfo(FString::Printf(TEXT("sp_tutorial_1 static props on an alternate skin: %d of %d"),
+			Skinned, PropLines.Num()));
+	}
 
 	return true;
 }

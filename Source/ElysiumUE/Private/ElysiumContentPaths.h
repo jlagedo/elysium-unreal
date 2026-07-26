@@ -29,6 +29,14 @@ struct FElysiumContentPaths
 		const FString Asset = TEXT("SM_") + Stem;
 		return BakedMapDir(Map) / TEXT("Props") / Asset + TEXT(".") + Asset;
 	}
+	// The map's prop skin table (UElysiumPropSkinSet) -- every alternate skin family of every
+	// prop model it places, as material instances resolved at bake time. Absent for a map whose
+	// models all carry a single family.
+	static FString BakedPropSkins(const FString& Map)
+	{
+		const FString Asset = TEXT("DA_") + Map + TEXT("_PropSkins");
+		return BakedMapDir(Map) / TEXT("Props") / Asset + TEXT(".") + Asset;
+	}
 
 	static FString MapDir(const FString& Map) { return Root() / Map; }
 	static FString MapTexDir(const FString& Map) { return MapDir(Map) / TEXT("tex"); }
@@ -95,4 +103,11 @@ struct FElysiumContentPaths
 	// plugin does the glTF->UE basis/scale change). Stem is the model name, e.g. "gangmember_male_2".
 	static FString NpcDir() { return Root() / TEXT("npc"); }
 	static FString NpcGlb(const FString& Stem) { return NpcDir() / (Stem + TEXT(".glb")); }
+
+	// Light-edit sessions (debug). The Lights Cog window's Save writes one JSON per map — the
+	// hand-disabled set plus every hand-set attribute, keyed by `.lights` line index — so a survey
+	// done by eye in-game comes back out as data. One file per map, overwritten each save; under
+	// Root(), so it is game-derived and gitignored like the rest.
+	static FString LightEditsDir() { return Root() / TEXT("_lights"); }
+	static FString LightEdits(const FString& Map) { return LightEditsDir() / (Map + TEXT(".json")); }
 };

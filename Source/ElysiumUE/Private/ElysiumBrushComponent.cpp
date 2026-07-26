@@ -39,8 +39,8 @@ void UElysiumBrushComponent::InitBrush(const FElysiumEntityHandle& InOwner,
 	OwningEntity = InOwner;
 	BuiltSolidity = Solidity;
 
-	// One convex element per hull, cooked once. Same recipe as the world .hulls and the static-prop
-	// collision (ElysiumStaticMesh.cpp): simple-as-complex, verts verbatim (entity-local cm).
+	// One convex element per hull, cooked once. Same recipe as the world .hulls: simple-as-complex,
+	// verts verbatim (entity-local cm).
 	BrushBodySetup = NewObject<UBodySetup>(this);
 	BrushBodySetup->CollisionTraceFlag = CTF_UseSimpleAsComplex;
 	BrushBodySetup->bGenerateMirroredCollision = false;

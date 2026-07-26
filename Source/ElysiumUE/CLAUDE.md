@@ -23,12 +23,6 @@ UE 5.8. Module `ElysiumUE` (Runtime, Default loading phase).
   stripped from Shipping via `ENABLE_COG`), `glTFRuntime` (vendored MIT runtime glTF loader
   under `Plugins/glTFRuntime/`; the NPC skeletal path — `USkeletalMesh` + `UAnimSequence` from
   `.glb` at runtime, no editor import).
-- **Module deps:** ProceduralMeshComponent, ImageWrapper, ImageCore, RenderCore, RHI,
-  MeshDescription, StaticMeshDescription, PhysicsCore, glTFRuntime, EnhancedInput, Slate,
-  SlateCore, CogCommon (all configs) + Cog/CogDebug/CogEngine/CogImgui (non-Shipping only).
-- **Layout:** `Public/*.h` (types other code includes) + `Private/*.cpp,*.h` (everything
-  else, including per-window Cog headers). Targets: `Source/*.Target.cs`; build rules:
-  `ElysiumUE.Build.cs`.
 - **Third party:** vendored single-header `dr_wav`/`dr_mp3`; CPython 2.7.18 SDK under
   `ThirdParty/CPython27/` (**fetched, not committed** — `tools/fetch_cpython27.py`,
   gitignored, `ELYSIUM_WITH_CPYTHON` Win64-only).
@@ -61,15 +55,15 @@ it, no manual flush, no force-GC). `/Game/Elysium` is only the boot world now.
 | Type | Role |
 |---|---|
 | `FElysiumObjModel` | OBJ/MTL reader; `.emc` parse-cache |
-| `FElysiumTextureCache` | DDS-preferred texture load, PNG fallback; a per-map decoded-texture dedup index owned by the map actor (a plain member), so its strong texture refs drop when the actor is torn down and GC reclaims them — threaded into the material factory / static-mesh builder |
+| `FElysiumTextureCache` | DDS-preferred texture load, PNG fallback; a per-map decoded-texture dedup index owned by the map actor (a plain member), so its strong texture refs drop when the actor is torn down and GC reclaims them — threaded into the material factory |
 | `FElysiumMaterialFactory` | one MID per OBJ surface (world + prop ISMs). The material's blend flags pick the master — `M_World_Opaque` / `_Masked` (`illum 4`) / `_Translucent` (`blend 1`) / `M_Additive` (`additive 1`) — then bind its named params: `Albedo`, `Emissive`+`EmissiveScale`, `BumpMap`+`BumpAmount` (linear), `EnvMask`+`EnvStrength` ($envmap → Lumen roughness, uniform white mask when unmasked), `BaseTex2`+`BlendAmount` (WVT). `elysium.BumpScale` / `EnvReflect` / `EmissiveScale` tune the three feature scalars |
-| `FElysiumStaticMeshBuilder` | runtime `UStaticMesh` per unique prop model (`BuildFromMeshDescriptions`), drawn as one ISM per (model, solidity) |
 | `FElysiumDecals` | 7.2 decals: the C++ spec for the `.decals` projector sidecar, and what the content test validates the export against. The bake consumes it — one `ADecalActor` per `infodecal` in the `.umap`, MIC off `M_Decal`, oriented `MakeRotFromXZ(Normal, SDir)`: local +X = room normal (so −X projects into the wall), and since a deferred decal maps texture **U→local Z, V→local Y**, the surface horizontal `SDir` goes on local Z with `DecalSize = depth×HalfH×HalfW` |
 | `FElysiumRopes` + `AElysiumMapActor::BuildRopes` | 8.7 ropes: parse the `.ropes` cable sidecar (chain-resolved segments) → one Verlet `UCableComponent` per line, `CableLength = RestCm` verbatim (the sidecar already carries VtMB's RE'd rest length, which is usually *below* the straight span — most ropes hang taut, not slack), `NumSegments = nodes − 1` off the sidecar's RE'd `m_nSegments` (VtMB takes it from `Type`, so a `Type 2` rope is **one** span — a straight line that cannot sag), start always pinned and end pinned unless the `Dangling` flag is set, width/tube/tiling from the sidecar, MID off `M_World_Opaque` (one per unique rope texture). `EndLocation` is the **world** endpoint B, because an unset `AttachEndTo` resolves to the owner's root component (`SceneRoot`, identity) — never to the cable itself. `elysium.Ropes` A/Bs the pass |
-| `UElysiumLightRig` | one Unreal light per WORLDLIGHTS `.lights` source; soft exponent falloff, specular off (VtMB is pure Lambert), sun, skyambient, lightstyle animation, live retune via `ApplyLiveTuning()` |
+| `UElysiumLightRig` | one Unreal light per WORLDLIGHTS `.lights` source; soft exponent falloff, specular off (VtMB is pure Lambert), sun, skyambient, lightstyle animation, live retune via `ApplyLiveTuning()`, per-source hand override (`SetSourceIntensity`/`RevertSource`) that the calibration and style passes skip, and a per-source disable (`SetSourceDisabled`/`ShouldSourceBeLit`) that changes no value and outranks the master toggle |
 | `ElysiumEnvironment.{h,cpp}` | `.env` sky/fog + `.cube` LUT onto `M_Sky` + post-process |
 | `FElysiumProfileRun` | the headless profiling harness (`-ElysiumProfile`) |
 | `FElysiumShotRun` | the headless screenshot-regression harness (`-ElysiumShots`); shares the vantage table (`ElysiumVantages.h`) with the profiler and the capture path (`ElysiumScreenshot.{h,cpp}`) with the MCP screenshot tool |
+| `ElysiumLightProbe` + `FElysiumProbeRun` | the light-attribution probe: a ray fan per `UElysiumLightRig` source traced on `ELYSIUM_PICK_CHANNEL` against the real built scene, recording what each light is nearest, whether that surface's bound MID emits (`EmissiveScale > 0`), how enclosed the light is, and its `share` of the illumination reaching the points it lights. `elysium.lightprobe [rays]` runs it live; `-ElysiumProbe` is the headless one-map-per-launch harness `probe.bat` walks every map with. Writes `tools/out/_lights/<map>.probe.json` |
 
 Collision comes from `.hulls` (one convex `FKConvexElem` per solid world brush, PLAYERCLIP
 included) + `.dispcol` (displacement trimesh) on collision-only PMCs; `elysium.BrushCollision`
@@ -144,22 +138,45 @@ box (`SElysiumDialogueBox`, `ElysiumDialogueWidget.{h,cpp}`) the HUD adds to the
 9.2 replaces the box on the 8.6 UI stack.
 
 Dynamic props (8.3, no physics) stand a static-mesh body the same way: `FElysiumProp`
-(`prop_dynamic`/`prop_dynamic_ornament`) calls `AElysiumMapActor::BuildPropVisual` — parse
-`props/<stem>.obj` once (the 8.1 `model_mesh` annotation names the stem), build a `UStaticMesh` through
-`FElysiumStaticMeshBuilder`, cache it per stem, and stand a movable **non-solid** `UStaticMeshComponent`
-(a per-entity component, not a shared ISM — the GAME_LUMP `.props` path keeps the grouped ISMs; collision
-is 8.4). Placement rotation is the exporter's pre-converted `model_quat` (read verbatim). The leaf
+(`prop_dynamic`/`prop_dynamic_ornament`) calls `AElysiumMapActor::BuildPropVisual` — resolve the baked
+`SM_<stem>` through `ResolvePropMesh` (the 8.1 `model_mesh` annotation names the stem; cached per stem,
+one load however many entities place it) and stand a movable **non-solid** `UStaticMeshComponent` (a
+per-entity component, not a shared ISM — the GAME_LUMP `.props` path keeps its own baked actors).
+Placement rotation is the exporter's pre-converted `model_quat` (read verbatim). The leaf
 gates the body on dormancy/`start_hidden`, follows `SetOrigin`/`SetAngles`/`SetModel`, and takes `Break`
-(hide + `OnBreak`); `Skin`/`SetAnimation` log a stub (the decode is LOD0 static geometry, skin 0 only).
+(hide + `OnBreak`); `SetAnimation` logs a stub (the decode is LOD0 static geometry, no skeleton).
+The same leaf also stands bodies for the `+use` static-mesh family (`prop_button`/`prop_switch`/
+`prop_sign`/`prop_hacking`/`prop_doorknob(_electronic)`/`item_container(_animated/_lock)`) under a
+class desc that registers **only** the `skin` field — a body and its skin, no invented I/O; their
+interaction surface is 4.10/8.8.
+
+**Skin families.** `Skin`/`SetSkin` and the `skin` keyfield/script write all repaint the body through
+`AElysiumMapActor::ApplyPropSkin`, which loads the map's baked `UElysiumPropSkinSet`
+(`ElysiumPropSkins.h` — `Stem -> family -> [slot name, UMaterialInterface]`, authored by
+`bake_map.py` from the exporter's `props/<stem>.skins`) and `SetMaterial`s each repainted slot,
+resolving the slot by name through `UStaticMesh::GetMaterialIndex`. Overrides are cleared first, so
+skin 0 — or a family the model does not carry, which Source draws as the authored set — restores the
+authored materials. The bound materials are the map's own baked instances, so a swapped skin renders
+at exactly the quality the base one does, emission included. Skin changes **snap**: VtMB's `skin` is
+one datamap record flagged both KEY and INPUT with a null `inputFunc`, so the keyvalue, the wire and
+`.skin =` are the same direct write (`docs/entity_io.md`). `elysium.PropSkins` A/Bs the pass.
 `World->RegisterPropBody` tracks it for teardown like NPC bodies; `elysium.PropBodies` A/Bs the bodies
 (I/O still resolves without them).
 
 Physics props (8.4) stand a **simulating** Chaos body: `FElysiumPhysProp` (`prop_physics`) calls
-`AElysiumMapActor::BuildPhysPropVisual` — the same per-stem mesh build but cooked with convex collision
-(the exporter's decomposed `props/<stem>.hulls` sidecar, one `FKConvexElem` per line — the world-collider
-format — or a single whole-model hull when absent), cached under a `#phys` key so a model shared with a
-non-solid `prop_dynamic` doesn't clash. The component takes the `PhysicsActor` profile; the leaf drives
-`SetSimulatePhysics` + `override_mass` (>0 overrides, −1 keeps the density-computed mass). The RE'd I/O
+`AElysiumMapActor::BuildPhysPropVisual` — the same baked `SM_<stem>` every other prop stands, resolved
+through the shared `ResolvePropMesh`. For a physics model the bake gave that asset **VtMB's own convex
+collision** (one shape per `.phy` ledge, from `props/<stem>.phys`) under `CTF_UseSimpleAndComplex`, so a
+Chaos body simulates against the simple shapes while the debug pick still gets a per-poly face index —
+one asset serves both a simulating body and a static placement of the same model. The component takes
+the `PhysicsActor` profile; the leaf drives `SetSimulatePhysics` and mass. **Mass** is the model's
+authored `.phy` value unless the entity's `override_mass` > 0 (Source's precedence; `override_mass` is
+−1 on every `prop_physics` in the exported maps). The leaf re-applies it to the *component*:
+`UBodySetup::CalculateMass` reads the owning primitive's own `FBodyInstance` whenever there is one, and
+a runtime-built component never seeds that from the asset. A model with **no** collision model stands
+visible but non-solid and non-simulating — `CPhysicsProp::CreateVPhysics` drops such a prop to
+`SOLID_NONE`/`MOVETYPE_NONE` rather than removing it (`docs/phy_vphysics.md`); the runtime reads that
+off the asset's empty `AggGeom`. The RE'd I/O
 surface (decisions.md 2026-07-24) is `Wake` (real), `Break` (hide + `OnBreak`), and `Skin`/`SetSkin`/
 `FadeToSkin`/`SetSkinFadeTime` (skin-0 stubs) — VtMB has **no** `EnableMotion`/`DisableMotion`/`Sleep`.
 `FElysiumPhysHinge` (`phys_hinge`) is a bodiless constraint: in a **second `PostSpawn()` pass** (Source's
@@ -268,7 +285,9 @@ volume, so a flip re-applies in one pass (voices already fading out toward a rea
   plain C++ and invisible to Cog's UObject inspector) plus a shared static browser→inspector
   selection. Windows: `_Status`, `_Maps` (travel + load timings + transitions + player pose/mode/FPS),
   `_Lights`
-  (live calibration sliders), `_Entities` (filter/histogram/dormancy browser), `_Inspector`,
+  (live calibration sliders + a per-light inspector: world markers, click-select, attribute edits,
+  a per-source enable switch and a transform gizmo on one source, with Save writing the map's edits
+  to `tools/out/_lights/<map>.json`), `_Entities` (filter/histogram/dormancy browser), `_Inspector`,
   `_EventQueue` (pending queue + history + pause/step), `_WorldViz`, `_Audio`, `_SoundScheme`,
   `_Logic`, `_Scripting`, `_Npc`.
 - `ElysiumCogStyle.{h,cpp}` is the debug UI's skin and its one palette: blood/bone/ink colours,
@@ -373,13 +392,6 @@ volume, so a flip re-applies in one pass (voices already fading out toward a rea
 
 ## Console commands
 
-Lifecycle `elysium.newgame` / `map` / `maps` / `reload`; inspection `elysium.campos` /
-`lights` / `props` / `ents` / `classes` / `world` / `world.io` / `world.fireinput` / `g`;
-`elysium.pick` (the click-pick's scriptable echo — aims down the camera ray and logs the hit);
-A/B toggles `elysium.BrushCollision` / `BrushBodies` / `NpcBodies` / `PropBodies` / `PhysicsProps` / `Ropes` / `EmissiveScale` /
-`BumpScale` / `EnvReflect` / `LightScale` / `LightFit` / `CogTheme`; entity debug `elysium.ent_*` / `showtriggers`; scripting `elysium.eval` / `exec` /
-`script.live` / `script.cpython` / `py.*` (`py.smoke` / `exec` / `load` / `fire`, plus the two
-single-token acceptance harnesses `py.poc` and `py.firstbeat`); dialogue `elysium.dlg` / `dlg.choose` /
-`dlg.advance` (the scriptable echo of the box); audio `elysium.Mute` / `playsound` / `sound_info` /
-`MusicState` / `MusicCrossfade` / `SchemeRandom*`; NPC `elysium.npc.load` / `clear` / `list`; MCP
-`elysium.mcp.start` / `stop` / `status` / `tools` (Layer 3 — the agent server, opt-in).
+Every runtime verb is an `elysium.*` console command; the live set is whatever the module
+registers (`FAutoConsoleCommand`/`FAutoConsoleVariableRef`). `elysium.mcp.*` gates the Layer 3
+agent server.

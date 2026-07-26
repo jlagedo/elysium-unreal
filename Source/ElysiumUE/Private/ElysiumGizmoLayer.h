@@ -38,12 +38,17 @@ public:
 	// x-ray material (drawn on top). Cheap: no-ops when the mode has not changed.
 	void SetMode(UElysiumEntityDebugSubsystem::EGizmoMode Mode);
 
+	// Apply the World Viz class filter (one bit per EElysiumGizmoClass). A filtered-out class goes
+	// to zero alpha, which is the same lever a dead entity already uses — so this is a custom-data
+	// re-upload over the existing instances, never a rebuild. No-ops when the mask has not changed.
+	void SetClassMask(uint8 Mask);
+
 private:
 	// The world's visual-change hook target: recompute + re-upload this one entity's instance.
 	void OnEntityVisualChanged(const FElysiumEntity& Ent);
 	// Pack an entity's current colour+opacity (class colour; dimmed when hidden; transparent when
-	// dead) into the 4 per-instance custom-data floats.
-	static void ComputeRGBA(const FElysiumEntity& Ent, float Out[4]);
+	// dead or filtered out by Mask) into the 4 per-instance custom-data floats.
+	static void ComputeRGBA(const FElysiumEntity& Ent, uint8 Mask, float Out[4]);
 
 	TWeakObjectPtr<UInstancedStaticMeshComponent> Ism;
 	TStrongObjectPtr<UMaterialInstanceDynamic> DepthMID;   // Visible mode (depth-tested)
@@ -51,4 +56,7 @@ private:
 	TArray<int32> EntityToInstance;                        // entity index -> ISM instance (INDEX_NONE = none)
 	UElysiumEntityDebugSubsystem::EGizmoMode AppliedMode = UElysiumEntityDebugSubsystem::EGizmoMode::Off;
 	bool bModeApplied = false;                             // force the first SetMode to apply
+	uint8 AppliedClassMask = 0x3F;                         // ElysiumGizmoClassMaskAll
+	// The world the instances were built from, so a mask change can re-read every entity's class.
+	FElysiumEntityWorld* BuiltWorld = nullptr;
 };

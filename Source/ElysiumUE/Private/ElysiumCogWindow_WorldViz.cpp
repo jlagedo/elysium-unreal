@@ -7,26 +7,12 @@
 #include "ElysiumEntityDebugSubsystem.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumGizmoColor.h"
 
 #include "CogLocalizationConfig.h"   // COG_TCHAR_TO_CHAR
 #include "CogWidgets.h"
 #include "Engine/World.h"
 #include "imgui.h"
-
-namespace
-{
-	// Mirror of the subsystem's GizmoClassColor palette, for the on-screen legend (0-1 floats).
-	struct FLegendEntry { const char* Label; ImVec4 Color; };
-	const FLegendEntry Legend[] =
-	{
-		{ "trigger*",              ImVec4(1.00f, 0.35f, 0.30f, 1.f) },
-		{ "light* / env_sprite",   ImVec4(1.00f, 0.90f, 0.30f, 1.f) },
-		{ "*sound* / *ambient*",   ImVec4(0.40f, 0.85f, 1.00f, 1.f) },
-		{ "logic* / math* / relay",ImVec4(1.00f, 0.40f, 1.00f, 1.f) },
-		{ "*prop* / *model*",      ImVec4(0.40f, 1.00f, 0.50f, 1.f) },
-		{ "(other)",               ImVec4(0.75f, 0.75f, 0.78f, 1.f) },
-	};
-}
 
 void FElysiumCogWindow_WorldViz::Initialize()
 {
@@ -39,7 +25,8 @@ void FElysiumCogWindow_WorldViz::RenderHelp()
 	ImGui::Text(
 		"World-visualization layers, drawn in-world by the entity debug subsystem every frame (they "
 		"stay on while you play, F1 menu closed or not). Entity gizmos: a color-keyed origin marker "
-		"per entity, off / visible (walls occlude) / all (x-ray). Show triggers: the wireframe hulls "
+		"per entity, off / visible (walls occlude) / all (x-ray), filterable by class - the filter "
+		"rows are drawn in each class's own gizmo colour, so they double as the legend. Show triggers: the wireframe hulls "
 		"of every trigger brush, by class or by enabled/dormant state. I/O beams: a fading caller->"
 		"target arrow on each I/O delivery. These are the same toggles as elysium.ent_gizmos / "
 		"showtriggers / ent_beams. Aim at a gizmo and open the Entity Inspector to select it.");
@@ -85,11 +72,39 @@ void FElysiumCogWindow_WorldViz::RenderContent()
 		"when an entity's state changes) - no per-frame cost, so all entities show. Labels are the "
 		"exception (no instanced text), so they render only for gizmos within 6 m of the camera.");
 
-	if (ImGui::CollapsingHeader("Color legend"))
+	// Filter by class. Doubles as the colour legend it replaces — each row is drawn in the colour
+	// that class's gizmos are, so reading the key and choosing what to show is one control.
+	if (ImGui::CollapsingHeader("Filter by type", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		for (const FLegendEntry& E : Legend)
+		if (ImGui::SmallButton("Select all"))
 		{
-			ImGui::TextColored(E.Color, "%s", E.Label);
+			V.GizmoClassMask = ElysiumGizmoClassMaskAll;
+		}
+		ImGui::SameLine();
+		if (ImGui::SmallButton("Clear"))
+		{
+			V.GizmoClassMask = 0;
+		}
+		ImGui::SameLine();
+		ImGui::TextDisabled("(%d/%d)", FMath::CountBits(V.GizmoClassMask),
+			int32(EElysiumGizmoClass::Count));
+
+		for (uint8 i = 0; i < uint8(EElysiumGizmoClass::Count); ++i)
+		{
+			const EElysiumGizmoClass Cls = EElysiumGizmoClass(i);
+			const uint8 Bit = ElysiumGizmoClassBit(Cls);
+			bool bOn = (V.GizmoClassMask & Bit) != 0;
+
+			const FColor C = ElysiumGizmoClassColor(Cls);
+			ImGui::PushStyleColor(ImGuiCol_Text,
+				ImVec4(C.R / 255.f, C.G / 255.f, C.B / 255.f, 1.f));
+			ImGui::PushID(i);
+			if (ImGui::Checkbox(COG_TCHAR_TO_CHAR(ElysiumGizmoClassLabel(Cls)), &bOn))
+			{
+				V.GizmoClassMask = bOn ? (V.GizmoClassMask | Bit) : (V.GizmoClassMask & ~Bit);
+			}
+			ImGui::PopID();
+			ImGui::PopStyleColor();
 		}
 		ImGui::TextDisabled("(hidden/dormant entities draw dimmed)");
 	}

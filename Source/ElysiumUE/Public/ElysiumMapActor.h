@@ -82,22 +82,35 @@ public:
 	// unload) so a model shared by several NPCs (three Sabbat share shovelhead) loads once.
 	USkeletalMeshComponent* BuildNpcVisual(const FString& Stem, const FVector& Location, const FRotator& Rotation);
 
-	// 8.3 — build one dynamic-prop body: parse props/<Stem>.obj (cached per stem, built once
-	// through FElysiumStaticMeshBuilder like LoadProps) and stand a movable UStaticMeshComponent on
-	// this map actor at the given transform. Non-solid (visual parity first; prop_physics collision
-	// is 8.4). Returns the component, or null on an empty stem / missing/failed OBJ. The FElysiumProp
-	// leaf calls this from Spawn() and registers the result with the entity world for teardown. The
-	// Rotation is the exporter's pre-converted Unreal-space model_quat, read verbatim.
+	// The baked SM_<Stem> asset for a prop model, cached per stem (one load per model however many
+	// entities place it). Null + a warning naming the bake command when the map has no such asset.
+	// Shared by both prop build paths, so a model used by a dynamic and a physics prop loads once.
+	UStaticMesh* ResolvePropMesh(const FString& Stem);
+
+	// 8.3 — build one dynamic-prop body: stand a movable UStaticMeshComponent on this map actor at
+	// the given transform, drawing the baked prop mesh. Non-solid — a prop_dynamic is dressing, and
+	// the mesh's own collision belongs to the physics props that share it. Returns the component, or
+	// null on an empty stem / unbaked model. The FElysiumProp leaf calls this from Spawn() and
+	// registers the result with the entity world for teardown. The Rotation is the exporter's
+	// pre-converted Unreal-space model_quat, read verbatim.
 	UStaticMeshComponent* BuildPropVisual(const FString& Stem, const FVector& Location, const FQuat& Rotation);
 
-	// 8.4 — build one physics-prop body: like BuildPropVisual but the mesh is cooked with convex
-	// collision (the decomposed props/<Stem>.hulls sidecar, one FKConvexElem per part, or a single
-	// whole-model hull when absent), the collision-cooked mesh cached under a distinct key so a model
-	// shared with a non-solid prop_dynamic does not clash. The returned component carries the
-	// PhysicsActor profile with collision enabled but is NOT yet simulating — the FElysiumPhysProp
-	// leaf drives SetSimulatePhysics / mass / the elysium.PhysicsProps gate. Registered for teardown
+	// 8.4 — build one physics-prop body: the same baked mesh BuildPropVisual stands, which for a
+	// physics model carries VtMB's own convex collision (one shape per `.phy` ledge, from the
+	// props/<Stem>.phys sidecar) and its authored mass on the body setup, under
+	// CTF_UseSimpleAndComplex so a Chaos body can simulate against the simple shapes while the debug
+	// pick still gets a per-poly face index. The returned component carries the PhysicsActor profile
+	// with collision enabled but is NOT yet simulating — the FElysiumPhysProp leaf drives
+	// SetSimulatePhysics / mass / the elysium.PhysicsProps gate. Registered for teardown
 	// (RegisterPropBody) like a dynamic prop.
 	UStaticMeshComponent* BuildPhysPropVisual(const FString& Stem, const FVector& Location, const FQuat& Rotation);
+
+	// Repaint a prop body to one of its model's alternate skin families (VtMB's `skin` keyfield /
+	// `Skin` input -- a material remap over the model's own slots, applied instantly). Family 0 and
+	// any family the model does not carry restore the authored materials, which is what Source does
+	// with an out-of-range skin. Safe on any prop body from either build path. `elysium.PropSkins 0`
+	// disables the whole pass.
+	void ApplyPropSkin(UStaticMeshComponent* Comp, const FString& Stem, int32 Family);
 
 	// Live stats for the debug overlay, filled by LoadMap. The geometry counts are actors adopted
 	// from the baked level, not surfaces built at runtime.
@@ -193,6 +206,11 @@ private:
 	// components of this actor (AddInstanceComponent), gated/moved by their FElysiumProp leaf, and
 	// torn down by the entity world (RegisterPropBody), mirroring the NPC bodies.
 	UPROPERTY() TMap<FString, TObjectPtr<UStaticMesh>> PropMeshCache;
+	// The map's baked prop skin table, loaded once on first use. bPropSkinsLoaded separates
+	// "not looked for yet" from "this map has none" (most maps have none, and a miss must not
+	// re-hit LoadObject per prop).
+	UPROPERTY() TObjectPtr<class UElysiumPropSkinSet> PropSkins;
+	bool bPropSkinsLoaded = false;
 
 	// This map's decoded-texture dedup index (one UTexture2D per unique path, shared across the
 	// map's material instances). A plain C++ object owned here, so its strong texture refs drop

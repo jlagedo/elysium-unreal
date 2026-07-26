@@ -1,9 +1,9 @@
 // Lumen card baking, editor side (docs/lumen-coverage-spike.md).
 //
 // A runtime-built UStaticMesh has no card representation, so Lumen drops it from the surface
-// cache. `FElysiumStaticMeshBuilder::AttachLumenCards` stands in six cards on the mesh bounds,
-// which covers a prop but not architecture: a box card captures only the nearest surface along
-// its axis, so anything behind it reads as missing coverage.
+// cache. Standing in six cards on the mesh bounds covers a prop but not architecture: a box card
+// captures only the nearest surface along its axis, so anything behind it reads as missing
+// coverage.
 //
 // The real builder is `IMeshUtilities::GenerateCardRepresentationData` — surfel clustering that
 // fits up to MaxLumenMeshCards to the actual surface. It ray-traces the mesh through Embree, so

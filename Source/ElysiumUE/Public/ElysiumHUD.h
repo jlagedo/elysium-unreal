@@ -32,6 +32,7 @@ public:
 private:
 	IConsoleObject* LightsCmd = nullptr;
 	IConsoleObject* PropsCmd = nullptr;
+	IConsoleObject* LightProbeCmd = nullptr;
 
 	AElysiumMapActor* ResolveMapActor() const;
 

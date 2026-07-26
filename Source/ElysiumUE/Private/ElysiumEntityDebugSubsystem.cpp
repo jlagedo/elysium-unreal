@@ -281,6 +281,7 @@ void UElysiumEntityDebugSubsystem::Tick(float DeltaTime)
 		if (GizmoLayer->IsBuilt())
 		{
 			GizmoLayer->SetMode(VizSettings.GizmoMode);
+			GizmoLayer->SetClassMask(VizSettings.GizmoClassMask);
 		}
 	}
 
@@ -1048,6 +1049,10 @@ void UElysiumEntityDebugSubsystem::RenderWorldViz(FElysiumEntityWorld& EW)
 			if (!E || E->IsDead() || !E->Def)
 			{
 				continue;
+			}
+			if (!ElysiumGizmoClassVisible(E->Def->Classname, VizSettings.GizmoClassMask))
+			{
+				continue;   // the class filter hides the label with the box it belongs to
 			}
 			const FVector Anchor = ElysiumGizmoAnchor(*E);
 			if (bHaveCam && FVector::DistSquared(Anchor, CamLoc) > LabelDistSq)

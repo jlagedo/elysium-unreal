@@ -19,13 +19,45 @@
 #include "ElysiumMapActor.h"
 
 #include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/Paths.h"
+#include "PhysicsEngine/BodySetup.h"
 #include "PhysicsEngine/PhysicsConstraintComponent.h"
 
 #include <type_traits>
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumProp, Log, All);
+
+namespace
+{
+	const UBodySetup* PropBodySetup(const UStaticMeshComponent* Comp)
+	{
+		const UStaticMesh* Mesh = Comp ? Comp->GetStaticMesh() : nullptr;
+		return Mesh ? Mesh->GetBodySetup() : nullptr;
+	}
+
+	// Does this body's mesh carry simple collision a Chaos rigid body can simulate against? The
+	// bake writes one convex shape per `.phy` ledge, so an empty AggGeom means the model shipped
+	// no VPhysics collision model at all.
+	bool HasSimpleCollision(const UStaticMeshComponent* Comp)
+	{
+		const UBodySetup* Body = PropBodySetup(Comp);
+		return Body && Body->AggGeom.GetElementCount() > 0;
+	}
+
+	// The model's authored `.phy` mass in kg, which the bake stored on the mesh's body setup, or
+	// 0 when the model carries none. It has to be re-applied to the *component*: UBodySetup's
+	// mass override is read off the owning primitive's own FBodyInstance whenever there is one
+	// (UBodySetup::CalculateMass), and a component built at runtime never seeds that from the
+	// asset — leaving Chaos to compute mass from hull volume instead (a 3 kg bin came out 48 kg).
+	float AuthoredMassKg(const UStaticMeshComponent* Comp)
+	{
+		const UBodySetup* Body = PropBodySetup(Comp);
+		return Body && Body->DefaultInstance.bOverrideMass
+			? Body->DefaultInstance.GetMassOverride() : 0.0f;
+	}
+}
 
 // A/B toggle for the dynamic-prop bodies (mirrors elysium.NpcBodies). Read in the leaf's Spawn, so it
 // takes effect on the next map load: 1 stands the meshes, 0 leaves the props bodiless records (their
@@ -61,6 +93,21 @@ namespace
 		Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Int(static_cast<const TClass&>(E).*Member); };
 		Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt(); };
 		D.Fields.Add(FName(Name), MoveTemp(Acc));
+	}
+
+	// The `skin` field, whose setter repaints the body rather than only storing the number. VtMB
+	// makes no distinction: `skin` is one datamap record flagged both KEY and INPUT with a null
+	// inputFunc, so the keyvalue, the `Skin` wire and a script's `.skin =` all land in the same
+	// direct write. Templated over the leaf because both prop leaves own their own Skin member.
+	template <typename TClass>
+	void AddPropSkinField(FElysiumClassDesc& D)
+	{
+		FElysiumFieldAccessor Acc;
+		Acc.bKeyable = true;
+		Acc.Type = EElysiumVariantType::Int;
+		Acc.Get = [](const FElysiumEntity& E) { return FElysiumVariant::Int(static_cast<const TClass&>(E).Skin); };
+		Acc.Set = [](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).SetSkin(V.ToInt()); };
+		D.Fields.Add(FName(TEXT("skin")), MoveTemp(Acc));
 	}
 }
 
@@ -130,13 +177,33 @@ public:
 		UE_LOG(LogElysiumProp, Verbose, TEXT("%s Break"), *DebugString());
 	}
 
-	// Skin: faithfully selects an alternate skin family. The prop decode is skin 0 only (no alternate
-	// texture sets exported), so this records the request and logs (roadmap 8.3 deferral).
+	// Skin: select an alternate skin family. VtMB's datamap exposes `skin` as a keyfield-input with a
+	// null inputFunc (flags 0xe: SAVE|KEY|INPUT), i.e. Source's DEFINE_INPUT -- firing it writes
+	// m_nSkin directly, so it snaps. Input matching is case-insensitive, which is why every map's
+	// `Skin` wire binds here. The crossfading variant is a separate input (FadeToSkin), see below.
 	void InputSkin(const FElysiumInputArgs& Args)
 	{
-		Skin = Args.Param.ToInt();
-		UE_LOG(LogElysiumProp, Log, TEXT("%s Skin %d — no alternate skin families exported (8.3 stub)"),
-			*DebugString(), Skin);
+		SetSkin(Args.Param.ToInt());
+	}
+
+	// The `skin` keyfield and a script's `.skin` write land here too (5 such writes across VtMB's
+	// own scripts), so the body follows a field write exactly as it follows an input.
+	void SetSkin(int32 Family)
+	{
+		Skin = Family;
+		ApplySkin();
+	}
+
+	void ApplySkin()
+	{
+		if (!Visual || !World || !Def)
+		{
+			return;
+		}
+		if (AElysiumMapActor* Map = Cast<AElysiumMapActor>(World->GetOwnerActor()))
+		{
+			Map->ApplyPropSkin(Visual, Def->ModelMesh, Skin);
+		}
 	}
 
 	// SetAnimation: prop_dynamic can be skeletal in Source; the decode here is LOD0 static geometry (no
@@ -200,6 +267,12 @@ private:
 		if (Visual)
 		{
 			World->RegisterPropBody(Visual);
+			// The `skin` keyfield is already applied, so a prop authored on an alternate family
+			// stands on it from the first frame rather than popping on the first Skin input.
+			if (Skin != 0)
+			{
+				Map->ApplyPropSkin(Visual, Stem, Skin);
+			}
 			if (IsInert() || bBroken)
 			{
 				GateVisual();   // born hidden (start_hidden / a Spawn()-time Kill) or already broken
@@ -231,6 +304,7 @@ public:
 	UStaticMeshComponent* Visual = nullptr;   // the simulating body, or null (gated off / decode failed)
 	bool  bBroken = false;
 	int32 Skin = 0;
+	float SkinFadeTime = 0.0f;                // m_flSkinCrossfadeTime — stored, unread (skins snap)
 	bool  bSimulating = false;                // elysium.PhysicsProps decided sim on at spawn
 
 	virtual void Spawn() override
@@ -292,17 +366,47 @@ public:
 		UE_LOG(LogElysiumProp, Verbose, TEXT("%s Break"), *DebugString());
 	}
 
+	// Skin / SetSkin: snap to an alternate skin family (see FElysiumProp::InputSkin for the datamap
+	// evidence that VtMB's `skin` input is a direct field write).
 	void InputSkin(const FElysiumInputArgs& Args)
 	{
-		Skin = Args.Param.ToInt();
-		UE_LOG(LogElysiumProp, Log, TEXT("%s Skin %d — no alternate skin families exported (8.4 stub)"),
-			*DebugString(), Skin);
+		SetSkin(Args.Param.ToInt());
 	}
 
-	void InputSkinStub(const FElysiumInputArgs& Args, const TCHAR* Which)
+	void SetSkin(int32 Family)
 	{
-		UE_LOG(LogElysiumProp, Log, TEXT("%s %s — skin-only decode, no alternate skins (8.4 stub)"),
-			*DebugString(), Which);
+		Skin = Family;
+		ApplySkin();
+	}
+
+	void ApplySkin()
+	{
+		if (!Visual || !World || !Def)
+		{
+			return;
+		}
+		if (AElysiumMapActor* Map = Cast<AElysiumMapActor>(World->GetOwnerActor()))
+		{
+			Map->ApplyPropSkin(Visual, Def->ModelMesh, Skin);
+		}
+	}
+
+	// FadeToSkin: CBaseAnimating::FadeToSkin (vampire.dll @1008d6d0) sets m_nSkinCrossfade to the
+	// old skin, m_nSkin to the new one, and leaves the blend to the client -- all three fields are
+	// networked SendProps and the server writes no start time. We snap instead: no exported map
+	// fires this input (18 skin wires across the 16 exported maps are all `Skin`, which snaps in
+	// VtMB too), so the crossfade is engine code no map data reaches. Recorded in decisions.md.
+	void InputFadeToSkin(const FElysiumInputArgs& Args)
+	{
+		SetSkin(Args.Param.ToInt());
+	}
+
+	// SetSkinFadeTime: CBaseAnimating::SetSkinFadeTime (@1008d5f0) clamps to a floor and stores
+	// m_flSkinCrossfadeTime, which only the crossfade reads. Stored for fidelity of the field, but
+	// nothing consumes it while skin changes snap.
+	void InputSetSkinFadeTime(const FElysiumInputArgs& Args)
+	{
+		SkinFadeTime = Args.Param.ToFloat();
 	}
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
@@ -311,6 +415,10 @@ public:
 		Out.Emplace(TEXT("Body"), Visual ? TEXT("physics mesh") : TEXT("(none)"));
 		Out.Emplace(TEXT("Simulating"), bSimulating && !bBroken && !IsInert() ? TEXT("yes") : TEXT("no"));
 		Out.Emplace(TEXT("Broken"), bBroken ? TEXT("yes") : TEXT("no"));
+		// The mass Chaos is actually using, so the model's authored `.phy` mass can be checked
+		// against the body rather than inferred from the asset.
+		Out.Emplace(TEXT("Mass"), Visual
+			? FString::Printf(TEXT("%.2f kg"), Visual->GetMass()) : TEXT("(none)"));
 	}
 
 private:
@@ -331,22 +439,48 @@ private:
 			return;
 		}
 		World->RegisterPropBody(Visual);
-
-		// Simulate (or stand static under the A/B toggle). override_mass > 0 overrides the density-
-		// computed mass; -1 (the common case) keeps the computed mass.
-		bSimulating = CVarPhysicsProps.GetValueOnGameThread() != 0;
-		if (bSimulating)
+		if (Skin != 0)
 		{
-			const float OverrideMass = FCString::Atof(*Def->Keys.FindRef(TEXT("override_mass")));
-			if (OverrideMass > 0.0f)
-			{
-				Visual->SetMassOverrideInKg(NAME_None, OverrideMass, true);
-			}
-			Visual->SetSimulatePhysics(true);
+			Map->ApplyPropSkin(Visual, Def->ModelMesh, Skin);   // authored on an alternate family
 		}
+
+		// A model with no collision model cannot simulate, and VtMB does not remove the entity over
+		// it: CPhysicsProp::CreateVPhysics (vampire.dll @10191510) warns, drops the prop to
+		// SOLID_NONE + MOVETYPE_NONE and returns true, leaving it standing as inert scenery. The
+		// baked mesh carries that fact — no `.phy` meant no simple collision shapes — so read it off
+		// the asset rather than tracking a second flag.
+		if (!HasSimpleCollision(Visual))
+		{
+			UE_LOG(LogElysiumProp, Log,
+				TEXT("%s model '%s' has no collision model — standing inert (VtMB parity)"),
+				*DebugString(), *Def->ModelMesh);
+			Visual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			bSimulating = false;
+		}
+		// Simulate (or stand static under the A/B toggle). Mass is the model's authored `.phy` value
+		// (baked onto the mesh) unless the entity's own override_mass > 0, which outranks it —
+		// Source's precedence. override_mass is -1 on every prop_physics in the exported maps, so
+		// the authored mass is what nearly all of them weigh.
 		else
 		{
-			Visual->SetCollisionEnabled(ECollisionEnabled::NoCollision);   // static, non-solid parity
+			bSimulating = CVarPhysicsProps.GetValueOnGameThread() != 0;
+			if (bSimulating)
+			{
+				float Mass = FCString::Atof(*Def->Keys.FindRef(TEXT("override_mass")));
+				if (Mass <= 0.0f)
+				{
+					Mass = AuthoredMassKg(Visual);
+				}
+				if (Mass > 0.0f)
+				{
+					Visual->SetMassOverrideInKg(NAME_None, Mass, true);
+				}
+				Visual->SetSimulatePhysics(true);
+			}
+			else
+			{
+				Visual->SetCollisionEnabled(ECollisionEnabled::NoCollision);   // static, non-solid parity
+			}
 		}
 
 		if (IsInert() || bBroken)
@@ -527,9 +661,19 @@ static void BuildPropClass(FElysiumClassDesc& D)
 	D.Input(TEXT("SetAnimation"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumProp&>(E).InputSetAnimation(Args); });
 
-	// `skin` keyfield / script `.skin`: registered read/write so the initial skin applies and a script
-	// read/write resolves to a real field instead of the instance __dict__ (closes the 9.3 `.skin` note).
-	AddPropField(D, TEXT("skin"), &FElysiumProp::Skin);
+	// `skin` keyfield / script `.skin`: a write repaints the body, mirroring VtMB, where the input
+	// and the keyfield are the *same* datamap record and both just write m_nSkin.
+	AddPropSkinField<FElysiumProp>(D);
+}
+
+// The static-mesh prop classes that carry a model and a skin but whose interaction surface is not
+// built yet (the `+use` family, roadmap 4.10/8.8). They stand the same body and honour the same
+// `skin` keyfield -- 25 of the tutorial's 39 multi-family prop placements are these, and without a
+// body they were inert records with nothing to draw. Deliberately no inputs: their real datamap I/O
+// is not RE'd, and asserting prop_dynamic's here would advertise inputs they may not have.
+static void BuildPropBodyClass(FElysiumClassDesc& D)
+{
+	AddPropSkinField<FElysiumProp>(D);
 }
 
 // prop_physics (8.4): the RE'd CPhysicsProp/CBreakableProp input surface. Wake + Break are real;
@@ -545,11 +689,11 @@ static void BuildPhysPropClass(FElysiumClassDesc& D)
 	D.Input(TEXT("SetSkin"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumPhysProp&>(E).InputSkin(Args); });
 	D.Input(TEXT("FadeToSkin"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
-		{ static_cast<FElysiumPhysProp&>(E).InputSkinStub(Args, TEXT("FadeToSkin")); });
+		{ static_cast<FElysiumPhysProp&>(E).InputFadeToSkin(Args); });
 	D.Input(TEXT("SetSkinFadeTime"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
-		{ static_cast<FElysiumPhysProp&>(E).InputSkinStub(Args, TEXT("SetSkinFadeTime")); });
+		{ static_cast<FElysiumPhysProp&>(E).InputSetSkinFadeTime(Args); });
 
-	AddPropField(D, TEXT("skin"), &FElysiumPhysProp::Skin);
+	AddPropSkinField<FElysiumPhysProp>(D);
 }
 
 // phys_hinge (8.4): the RE'd CPhysHinge/CPhysConstraint input surface.
@@ -564,7 +708,7 @@ static void BuildPhysHingeClass(FElysiumClassDesc& D)
 }
 
 // One shared leaf per classname (class-for-class registration, so the registry's exact case-folded
-// Find resolves each). The +use prop_* family (4.10/8.8) is not here.
+// Find resolves each).
 struct FElysiumPropRegistrar
 {
 	FElysiumPropRegistrar()
@@ -576,6 +720,18 @@ struct FElysiumPropRegistrar
 		for (const TCHAR* Name : PropClasses)
 		{
 			BuildPropClass(Reg.Register(FName(Name), ElysiumBaseClassName(), &MakeProp));
+		}
+		// The `+use` static-mesh family: a body and its skin, no interaction surface (4.10/8.8).
+		// The exporter already decodes their models (8.1), so without this they were logic-valid
+		// but invisible records.
+		static const TCHAR* const PropBodyClasses[] = {
+			TEXT("prop_button"), TEXT("prop_switch"), TEXT("prop_sign"), TEXT("prop_hacking"),
+			TEXT("prop_doorknob"), TEXT("prop_doorknob_electronic"),
+			TEXT("item_container"), TEXT("item_container_animated"), TEXT("item_container_lock"),
+		};
+		for (const TCHAR* Name : PropBodyClasses)
+		{
+			BuildPropBodyClass(Reg.Register(FName(Name), ElysiumBaseClassName(), &MakeProp));
 		}
 		BuildPhysPropClass(Reg.Register(FName(TEXT("prop_physics")), ElysiumBaseClassName(), &MakePhysProp));
 		BuildPhysHingeClass(Reg.Register(FName(TEXT("phys_hinge")), ElysiumBaseClassName(), &MakePhysHinge));

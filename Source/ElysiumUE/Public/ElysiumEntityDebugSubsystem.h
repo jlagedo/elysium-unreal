@@ -71,6 +71,11 @@ public:
 	{
 		EGizmoMode GizmoMode = EGizmoMode::Off;    // color-keyed solid boxes per entity (retained ISM)
 		bool  bGizmoLabels = true;                 // draw targetname/class labels (within 6 m only)
+		// One bit per EElysiumGizmoClass (ElysiumGizmoColor.h): a cleared bit hides that class's
+		// gizmo boxes and their labels. Filtering is an alpha re-upload on the retained ISM, not a
+		// rebuild, so toggling a class costs nothing. The trigger-hull layer below is not filtered
+		// by it — that layer is one class and already has its own switch.
+		uint8 GizmoClassMask = 0x3F;               // ElysiumGizmoClassMaskAll — all six categories
 		bool  bShowTriggers = false;               // wireframe trigger-body hulls
 		bool  bTriggerColorByState = false;        // false = color by class, true = by enabled/dormant
 		bool  bShowBeams = false;                  // fading caller->target arrow on each I/O delivery
