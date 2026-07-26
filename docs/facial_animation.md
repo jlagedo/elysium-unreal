@@ -404,22 +404,92 @@ line audio envelope ──►  mstudiomouth_t  ──►  the `mouth` flexdesc
 (`choreographed_scenes.md`), so expression and lipsync meet at the controller layer, not at
 the vertex layer.
 
+## The offline export (PL10)
+
+`tools/npc_export.py` bakes each rigged NPC's flexes into its own `.glb` as glTF **morph
+targets** and writes everything above them to `out/npc/facial/<stem>.json`. The split follows
+what a morph target is: a vertex displacement. Everything between a controller value and that
+displacement — the rules, the ramps — is arithmetic, so it ships as data and 12.3 replays it.
+The decoders are `mdl_skel.py`'s (`flex_descs`, `flex_controllers`, `flex_rules`, `mouths`,
+`mesh_flexes`, `vert_anims`, `read_anorms`); `probe_facial.py` is the survey over the same
+code, so a layout fixed for one is fixed for both.
+
+### The morph target is a flex *record*, not a flexdesc
+
+One target per distinct `(flexdesc, target ramp)` over the whole model. A flexdesc can carry
+two flexes on one mesh under different ramps — that is exactly how the eyelid pairs hinge one
+flexdesc into a lower and an upper half around a sentinel value — and the ramp decides which
+half a given weight drives, so they are two morphs. The shipped 65-flexdesc rig yields **53**
+of them: 45 flexdescs that a mesh actually deforms, plus eight second ramps.
+
+Names are the flexdesc's FACS name, with a `#k` suffix on the second and later ramp of the
+same flexdesc (`AU12R`, `AU12R#1`). Uniqueness is load-bearing — glTFRuntime keys a
+`UMorphTarget` by name.
+
+### A morph spans materials
+
+VtMB's face is not one mesh. `AU27Z` (the wide jaw drop) on `nines` moves 382 head vertices,
+145 molar, 265 lower-teeth, 27 tongue and one neck seam vertex on the body — five of the
+model's eight material primitives.
+
+glTF weights are mesh-level, so the target list is **unified across every primitive** and
+written in the same order on each; that is what lets `mesh.extras.targetNames` name them
+positionally. A primitive a target does not touch still carries it, as a one-entry zero
+sparse accessor (glTFRuntime applies the names first and drops the empty ones after, under
+`bIgnoreEmptyMorphTargets`). A target that spans two materials therefore arrives as one
+same-named piece per primitive, so the consumer **must** load with
+`MorphTargetsDuplicateStrategy::Merge` — the default, `Ignore`, keeps the first piece and
+silently drops the rest, which would move a jaw and leave its teeth behind.
+
+### The encoding
+
+Each target attribute is a **sparse accessor with no `bufferView`** — base implicitly zero,
+only the moved vertices stored — carrying `POSITION` and `NORMAL` deltas in glTF space
+(`(x,y,z)→(x,z,−y)`, ×0.0254 for the position, unscaled for the normal). The `POSITION` and
+`NORMAL` accessors of one target share their sparse *indices* view, since a flex moves the
+same vertex set in both; the *values* views are never shared, because glTFRuntime reads
+`sparse.values.byteOffset` and then never applies it.
+
+The mesh's base normals are regenerated from face normals at export (the `.mdl`'s own vertex
+normals are not carried), so a normal delta lands on a recomputed base rather than the
+authored one.
+
+### What ships beside it
+
+`out/npc/facial/<stem>.json`, index-aligned with the glb, named by
+`npc_index.json`'s `npcs[stem].facial`:
+
+| Field | Holds |
+|---|---|
+| `flexdescs` | the 65 FACS names, index = flexdesc id |
+| `controllers` | the 44 `{name, type, min, max}` rows, index = the `FETCH1` operand |
+| `rules` | 60 × `{flexdesc, ops}`; an op is `[name]`, or `[name, operand]` for `CONST` (float) and `FETCH1`/`FETCH2` (controller index) |
+| `mouths` | `{bone, forward, flexdesc}` — the amplitude jaw, for 12.5 |
+| `morphs` | `{name, flexdesc, targets}` per glTF morph target, in order; `targets` is the four-value ramp |
+
+Not exported: **eyeballs** (none authored anywhere in the install) and the `.vfe` expression
+tables — `UE_extract_scenes.py` mirrors the readable `.txt` twins to `out/expressions/`
+instead.
+
+Across the NPC set the exported maps place, **78 of 101 models are rigged**, carrying **4,015
+morph targets** (53 each on 68 of them; `mercurio`'s family 51–52) and 1.3 MB of manifests.
+The morph data costs **0.33–0.53 MB per rigged NPC** — near-constant, since every face runs
+the same rig over comparable geometry — so it is a rounding error against a glb whose size is
+set by its dialogue clips (`heather` +2.4 %) and the whole of a glb that has none
+(`copper` +95 %).
+
 ## What this settles for the rebuild
 
-- **PL10** can bake morph targets: every flex decodes to an exact `(vertex, Δpos, Δnormal)`
-  set once the `anorms` table is extracted. A flexdesc maps to one glTF morph target per
-  mesh; the flex *targets* are a runtime remap and belong in the manifest, not baked in.
 - **12.3** needs the controller → rule → flexdesc evaluation at runtime, not a flat morph
   list: 44 controllers drive 65 morphs through 60 RPN rules, and the rules are where the
-  eyelid interaction lives.
+  eyelid interaction lives. The morphs themselves are baked (PL10).
 - **12.4** has no eyeball data to consume. Eyes are the eight `eyelid` controllers plus the
   16 eyelid flexdescs; gaze must come from bones or from a deliberate remaster addition
   under `remaster-direction.md`'s rule.
 - **12.5** is a three-file join per line — `.lip` for timing, `expressions/<stem>_phonemes`
   for the weights, `mstudiomouth_t` for the amplitude jaw — with the phoneme *string* as the
-  key.
-- **PL9** mirrors the `.lip` verbatim; `expressions/*.txt` should ride along with it, since
-  the `.vfe` is the compiled form of the same data and the `.txt` is what a rebuild reads.
+  key. All three are on disk: `out/lip/`, `out/expressions/`, and `mouths` in the facial
+  manifest.
 
 ## Provenance
 

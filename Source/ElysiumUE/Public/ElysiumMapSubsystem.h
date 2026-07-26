@@ -91,10 +91,6 @@ public:
 	// Names of maps that are both exported and baked — i.e. the maps Travel will accept.
 	TArray<FString> ExportedMaps() const;
 
-	// The map to boot into: -ElysiumMap=<name> (play.bat <name>) or the default. The boot *decision*
-	// is UElysiumGameFlowSubsystem's (11.3); this only names the map.
-	FString ResolveBootMap() const;
-
 	// The story entry, for the flow subsystem's New Game. Retail reaches this landmark from
 	// `sp_theatre`, and a direct entry uses the same one the real transition does.
 	static const TCHAR* StoryEntryMap() { return TEXT("sp_tutorial_1"); }

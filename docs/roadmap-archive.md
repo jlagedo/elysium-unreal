@@ -2410,3 +2410,106 @@ explains ~0% of a median lit face and the bounce floor *is* the ambient level (C
 
   *Not in scope, named:* `IElysiumPresenter`'s production side (11.8) and the player-entity rehoming
   of the player-body calls (11.4).
+
+- [x] **11.3 App state machine + pause + loading + game over** *(landed 2026-07-26)* —
+  `runtime-architecture.md` §10 built: the application stopped being a decision tree inside a
+  per-world game mode.
+
+  **The state is plain C++.** `Public/ElysiumAppState.h` holds `EElysiumAppState` and the whole rule
+  set as free functions — `Name`/`Parse`, `IsInSession`, `HoldsWorld`, and `CanEnter(From, To)`. No
+  UObject reflection, so `Elysium.Substrate.AppState` asserts the entire table with no game instance,
+  no world and no RHI. Two rows are the ones the acceptance turns on: **Paused is reachable only from
+  Playing** (the front end deliberately does not pause — the live backdrop behind the menu is the
+  feature, 8.6) and **Boot is reachable from nowhere** (the boot decision is made once). Every state
+  can enter Loading, because a `trigger_changelevel` the substrate fires on its own must be as legal
+  as a menu click.
+
+  **`UElysiumGameFlowSubsystem`** (GI-scoped) is the only writer of that state and the only owner of
+  boot, the session entry points and the loading screen. `BootFromCommandLine()` runs at
+  `Initialize` and *decides* — `-ElysiumMap=` / `-ElysiumNewGame=0` → DevMap, else `elysium.BootMenu`
+  → Menu or NewGame — storing a plan the first `NotifyWorldReady` executes; a world does not exist
+  at GI init, so decide-then-execute is what "decided once, at GI init" costs. `NotifyWorldReady` is
+  the game mode's one call: with a pending load it spawns the map and settles into `FrontEnd`
+  (backdrop: seat the `elysium.MenuVantage` camera) or `Playing`; with none it is the boot world and
+  runs the plan.
+
+  **What moved off what.** `AElysiumGameMode::BeginPlay` went from 58 lines of boot tree to one
+  `Flow->NotifyWorldReady(this)`; the mode keeps only the pawn/HUD/controller classes and
+  `GetDefaultPawnClassForController` (null on a backdrop). `UElysiumMapSubsystem::NewGame`,
+  `ShouldBootNewGame` and `ResolveBootMap` are gone — New Game is a session decision, not a map one,
+  and call **(G)** put all three command-line parses in one place — with `elysium.newgame`
+  re-registered on the flow subsystem with an added entry-point argument. `EnterMenuBackdrop` and the
+  `elysium.MenuMap`/`MenuVantage`/`BootMenu` cvars came with it.
+
+  **The screen is a pure function of the state.** `ApplyMenuForState`, called from the one state
+  writer, maps FrontEnd/Paused/GameOver → the matching menu mode and everything else → hidden. No
+  call site closes a menu. That is what makes the *raw dev verbs* correct for free: `elysium.map` and
+  `elysium.reload` travel without going through the flow, and the `Loading` transition their
+  `OpenLevel` raises through `PreLoadMap` is what takes a stale pause menu off the dying world's
+  viewport — the bug that motivated the rule was exactly that (reload from the pause menu left
+  `UElysiumUISubsystem` holding a widget whose viewport had been destroyed).
+  `UElysiumUISubsystem::ShowMenu` now takes `EElysiumMenuMode` (Main/Pause/GameOver) and rebuilds on
+  a mode change, which is the death-during-pause case.
+
+  **The loading screen hooks `OnPrepareLoadingScreen`, not `PreLoadMap`.** `FDefaultGameMoviePlayer`
+  binds `PreLoadMap` itself during engine init — ahead of any game-instance subsystem — and calls
+  `PlayMovie()` from there, so a `SetupLoadingScreen` in our own `PreLoadMap` handler is always one
+  load too late. `OnPrepareLoadingScreen` is broadcast from *inside* `PlayMovie` when no attributes
+  are prepared, which is order-independent; the engine clears the attributes after every finish, so
+  it fires each time. The widget is **pure Slate with no UObjects** — `FCoreStyle` type and brushes,
+  `ElysiumUI::Palette` constants — because it is rendered by `FSlateLoadingSynchronizationMechanism`
+  on another thread while the game thread is blocked inside `LoadMap`, which is also where GC runs.
+  `IsMoviePlayerEnabled()` is false under `GIsEditor` and `GUsingNullRHI`, so PIE and the headless
+  tiers get `FNullGameMoviePlayer` and the hook is an automatic no-op.
+
+  **Esc has two halves.** `AElysiumPlayerController::SetupInputComponent` binds the key with
+  `bExecuteWhenPaused` (on the controller, not the pawn — a backdrop world seats no pawn and the key
+  must still be swallowed there) and calls `TogglePause`. While the menu is up the input mode is
+  UI-only and the controller sees nothing, so the *closing* half is the menu's own
+  `NativeOnKeyDown`; `FInputModeUIOnly::SetWidgetToFocus` on the menu widget plus
+  `SetIsFocusable(true)` is what makes that fire at all. Escape is consumed in every menu mode, so it
+  can never fall through to the game. 11.5 replaces both with the input scope stack.
+
+  **Pause holds the world, and only the world it put a hold on.** `SetPaused` drives
+  `FElysiumTimeControl::SetPaused` (both halves — engine pause and the clock hold, S1). Leaving a
+  run — New Game, quit-to-menu, reload — calls `ReleasePauseHold`, which is deliberately a **no-op
+  from a running state**: a hand `elysium.pause` on a Playing world is the dev's, and 11.1's
+  hold-survives-travel property stays intact.
+
+  **Game over is a real state with no driver yet.** `TriggerGameOver(Killed|MasqueradeBreach)` holds
+  the world and raises a third menu mode (Load / Main Menu / Quit) whose headline names the reason.
+  The callers that will fire it are the combat character's death path (11.4/9.4) and the masquerade
+  meter; `events_player`'s `MakePlayerUnkillable` latch is the *damage system's* gate, not the flow's.
+  `elysium.gameover [killed|masquerade]` is the named command that makes it reachable today (S10).
+
+  **New Game is data.** `FElysiumNewGameRequest` carries clan/sex/history/spends and an
+  `EntryPoint` — `story` | `tutorial` | `<map>[@<landmark>]`. `elysium.SkipIntro` (default 1)
+  rewrites `story` to the tutorial landmark, the same one the real `sp_theatre` transition arrives
+  at, so P12 flips a default rather than re-plumbing the flow. The destination is checked against
+  `ExportedMaps()` **before** `BeginNewGame` runs, because seeding is destructive and a New Game that
+  cannot travel must not have thrown the current run away on the way to failing.
+
+  `UElysiumGameStateSubsystem::EndSession` (clear `G`, quests, sheet; rewind the clock) is the
+  session record until 11.4/11.9 name it.
+
+  *Acceptance.* Live on the built game: cold boot logs `boot plan: menu over the backdrop` and goes
+  `Boot → Loading → FrontEnd` with the menu over `sm_hub_1`; New Game seeds and lands
+  `Loading → Playing` on `sp_tutorial_1 @ tutorial`; `elysium.pausemenu` holds the world with the
+  clock frozen at the same `now` across two polls and the pause item set up, and resuming advances it
+  again; `elysium.pausemenu 1` in `FrontEnd` is a logged no-op with the world still running;
+  `elysium.gameover masquerade` raises the game-over screen; `elysium.quittomenu` returns to the
+  backdrop with `G.Story_State` back to its default; `elysium.reload` from the pause menu tears the
+  menu down and lands in a running `Playing`; `LogMoviePlayer` shows PreLoadMap→PlayMovie→PostLoadMap
+  on every travel. Both halves of the entry-point switch were exercised: with `sp_genesisdevice_1`
+  still unbaked, `elysium.SkipIntro 0` + a `story` entry refused **and left the session untouched**
+  (the pre-check before `BeginNewGame`); once it was baked, the same command travelled there.
+  `Elysium.Substrate.AppState` green with the rest of the Substrate tier.
+
+  *Not in scope, named:* `LoadGame`/`SaveGame` are logged seams until **11.9**. The game-over
+  screen's copy ("Final Death" / "The Masquerade is broken") is **invented** — VtMB's own death
+  screen is un-RE'd, so `vtmb-ui.md` has no wording to reproduce and this needs checking against
+  retail when it is. The loading screen covers the level-load flush only; the map actor's build pass
+  runs after `PostLoadMapWithWorld` and is still a visible hitch (**10.4**'s time-sliced build).
+  Esc's *keystroke* is unverified headlessly — the binding and the widget handler are in place and
+  the `TogglePause` path they call is verified through the console verb; the key itself lands in the
+  Play tier (**11.10**).

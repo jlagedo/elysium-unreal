@@ -37,16 +37,17 @@ UE 5.8. Module `ElysiumUE` (Runtime, Default loading phase).
 - `Config/DefaultInput.ini` — legacy axis/action mappings (WASD + arrows, mouse-look, Space
   jump, Q/E/Ctrl vertical, V noclip, T skybox, E use; F1 is Cog's). EnhancedInput is
   configured as the player-input class but unused.
-- Boot paths: **New Game** (`UElysiumMapSubsystem::NewGame`) seeds a story context and enters
-  the story entry at its `info_landmark`; `-ElysiumMap=<name>` (`play.bat <map>`) loads the named
-  map and seeds a **mock character** (`BeginNewGame(Tremere, male)` — interim stand-in for chargen,
-  9.4) so the player sheet the dialogue gates read exists. `-ElysiumProfile` runs the headless
-  profiling harness.
+- Boot is decided once, at game-instance init, by `UElysiumGameFlowSubsystem::BootFromCommandLine`
+  (below): the menu over a backdrop by default, **New Game** under `elysium.BootMenu 0`, or a bare
+  **dev map** under `-ElysiumMap=<name>` (`play.bat <map>`) / `-ElysiumNewGame=0`, which also seeds a
+  **mock character** (`BeginNewGame(Tremere, male)` — interim stand-in for chargen, 9.4) so the
+  player sheet the dialogue gates read exists. `-ElysiumProfile` runs the headless profiling harness.
 
 ## Map load path
 
 `UElysiumMapSubsystem` (UE5 hard travel: `Travel` stows the target + `OpenLevel`s the map's own
-baked `.umap`; the fresh world's game mode calls `SpawnPendingMap`) → `AElysiumMapActor`
+baked `.umap`; the fresh world's game mode hands off to `UElysiumGameFlowSubsystem::NotifyWorldReady`,
+which calls `SpawnPendingMap`) → `AElysiumMapActor`
 (`AdoptBakedLevel` buckets the level's actors by the tags in `ElysiumBakedTags.h`, then builds the
 runtime half; owns it for one map epoch — the engine tears the world down on travel and GC frees
 it, no manual flush, no force-GC). `/Game/Elysium` is only the boot world now.
@@ -73,8 +74,65 @@ Collision comes from `.hulls` (one convex `FKConvexElem` per solid world brush, 
 included) + `.dispcol` (displacement trimesh) on collision-only PMCs; `elysium.BrushCollision`
 A/Bs back to the render trimesh.
 
-Player-facing actors: `AElysiumGameMode`, `AElysiumPlayerController` (+ `UElysiumCheatManager`
-— `Noclip`, `ElysiumTeleport`, plus stock `UCheatManager` execs), `AElysiumPawn`
+## The app state machine (11.3)
+
+Design: `docs/runtime-architecture.md` §10. **`UElysiumGameFlowSubsystem`** (GI-scoped) owns
+`EElysiumAppState` — Boot / FrontEnd / Loading / Playing / Paused / GameOver — and is its only
+writer. The state, its names and its **transition table** are plain C++ free functions in
+`Public/ElysiumAppState.h` (`CanEnter`, `IsInSession`, `HoldsWorld`), so the whole rule set is
+asserted with no game instance, no world and no RHI — `Elysium.Substrate.AppState`. Two rows carry
+weight: **Paused is reachable only from Playing** (the front end deliberately does not pause — the
+live backdrop behind the menu is the feature) and **Boot is reachable from nowhere**.
+
+| Entry point | Does |
+|---|---|
+| `BootFromCommandLine()` | at GI `Initialize`: *decides* the boot plan (dev map / new game / menu). No world exists yet, so the first `NotifyWorldReady` executes it, once |
+| `NotifyWorldReady(Mode)` | the game mode's one `BeginPlay` call. A pending load → `SpawnPendingMap` then `FrontEnd` (backdrop: seat the `elysium.MenuVantage` camera) or `Playing`; no pending load → this is the boot world, run the plan |
+| `NewGame(FElysiumNewGameRequest)` | clan/sex/history/spends + an `EntryPoint` (`story` \| `tutorial` \| `<map>[@<landmark>]`). The destination is checked against `ExportedMaps()` **before** `BeginNewGame` runs, because seeding is destructive. `elysium.SkipIntro` (default 1) rewrites `story` to the tutorial landmark until P12 lands the theatre act |
+| `LoadGame` / `SaveGame` | the seam every caller (menu, `trigger_autosave`, quicksave, MCP) goes through. Logged stubs until **11.9** |
+| `QuitToMenu()` | travel the backdrop map, then `UElysiumGameStateSubsystem::EndSession` (clear `G`, quests, sheet; rewind the clock) — the session record until 11.4/11.9 name it |
+| `ReloadMap()` / `SetPaused` / `TogglePause` / `TriggerGameOver` | the rest of the surface; `OnAppStateChanged` is the delegate the UI and (at 11.5) the input scope stack listen on |
+
+**The screen is a pure function of the state** (`ApplyMenuForState`, called from the one state
+writer): FrontEnd/Paused/GameOver map to the matching `EElysiumMenuMode`, everything else hides. No
+call site closes a menu — which is also what keeps the raw `elysium.map`/`elysium.reload` verbs
+correct, since the `Loading` transition their `OpenLevel` raises takes a stale menu off the dying
+world's viewport.
+
+**Pause holds the world through `FElysiumTimeControl` (both halves, S1).** Leaving a run releases
+that hold, but `ReleasePauseHold` is a deliberate no-op from a running state, so a hand
+`elysium.pause` still survives a travel the way 11.1 says it does.
+
+**The loading screen hooks `IGameMoviePlayer::OnPrepareLoadingScreen`, not
+`FCoreUObjectDelegates::PreLoadMap`** — the movie player binds `PreLoadMap` itself at engine init,
+ahead of any GI subsystem, and calls `PlayMovie()` from there, so setting attributes in our own
+`PreLoadMap` handler is always one load too late. `OnPrepareLoadingScreen` is broadcast from *inside*
+`PlayMovie` when none are prepared. The widget is **pure Slate with no UObjects** (`FCoreStyle` type
+and brushes, `ElysiumUI::Palette` constants): it is drawn by `FSlateLoadingSynchronizationMechanism`
+on another thread while the game thread is blocked in `LoadMap`, which is also where GC runs.
+`IsMoviePlayerEnabled()` is false under `GIsEditor`/`GUsingNullRHI`, so PIE and the headless tiers
+get `FNullGameMoviePlayer` and the hook no-ops. It covers the level-load flush only — the map
+actor's build pass runs after `PostLoadMapWithWorld` (10.4).
+
+**Esc has two halves.** `AElysiumPlayerController` binds the key (`bExecuteWhenPaused`; on the
+controller, not the pawn — a backdrop world seats no pawn and the key must still be swallowed) and
+calls `TogglePause`. While a menu is up the input mode is UI-only and the controller sees nothing, so
+the closing half is `UElysiumMainMenu::NativeOnKeyDown` — reachable only because
+`FInputModeUIOnly::SetWidgetToFocus` targets the menu and the widget is `SetIsFocusable(true)`.
+Escape is consumed in every menu mode. 11.5 replaces both with the input scope stack.
+
+`GameOver` is a real state with no driver yet: `TriggerGameOver(Killed|MasqueradeBreach)` holds the
+world and raises the third menu mode, and `elysium.gameover` is the named command that reaches it.
+The combat character's death path and the masquerade meter (11.4 / 9.4) are what will call it; the
+`MakePlayerUnkillable` latch on `events_player` is the damage system's gate, not the flow's.
+
+Verbs: `elysium.appstate`, `.pausemenu [0|1]`, `.newgame [clan] [m|f] [entry]`, `.quittomenu`,
+`.gameover [killed|masquerade]`, `.SkipIntro`, `.BootMenu`, `.MenuMap`, `.MenuVantage`,
+`.LoadingScreen`, `.LoadingScreenMinTime`.
+
+Player-facing actors: `AElysiumGameMode` (pawn/HUD/controller classes, the no-pawn-on-a-backdrop
+rule, and one `NotifyWorldReady`), `AElysiumPlayerController` (+ `UElysiumCheatManager`
+— `Noclip`, `ElysiumTeleport`, plus stock `UCheatManager` execs; and the Esc binding), `AElysiumPawn`
 (Character-movement FPS pawn with noclip), `AElysiumHUD` (Canvas: the use-icon reticle,
 `env_fade` screen fade, sign panels — player pose/mode/FPS live in the Cog Maps window; it also
 ticks the native-Slate dialogue box off the world's open-conversation state, B4).
@@ -94,7 +152,7 @@ Plain C++, no UObject reflection — Unreal supplies bodies only. Design: `docs/
 | `UElysiumBrushComponent` | the per-brush-entity body: collision-only `UPrimitiveComponent`, convex `UBodySetup` cooked from def hulls, handle-carrying, dormancy-gated, solidity by classname (trigger/solid/none); `elysium.BrushBodies` A/Bs it |
 | `FElysiumEventQueue`/`FElysiumIOEvent` | the one time-sorted queue (R4 — no engine timers) |
 | `IElysiumIOSink` | always-on `FElysiumRingBufferSink` (1,000-entry history) + `FElysiumLogSink` (`LogElysiumIO` + VLOG) |
-| `FElysiumGameClock`, `FElysiumTimeControl`, `UElysiumGameStateSubsystem` | the substrate clock + the one pause/time-scale facade over it (below); the GI-scoped `G` store, quest map, player sheet (`FElysiumPlayerSheet`), `BeginNewGame` |
+| `FElysiumGameClock`, `FElysiumTimeControl`, `UElysiumGameStateSubsystem` | the substrate clock + the one pause/time-scale facade over it (below); the GI-scoped `G` store, quest map, player sheet (`FElysiumPlayerSheet`), `BeginNewGame`/`EndSession` |
 
 **Two rules that hold everywhere:** every input goes through `AcceptInput`/the event queue (so
 it is loggable, pausable, single-steppable, serializable), and time comes from the substrate
@@ -198,7 +256,7 @@ resolves that DAG offline; the runtime looks a label up and is told which glb ow
 
 | Type | Role |
 |---|---|
-| `ElysiumNpcClips.{h,cpp}` | plain-C++ readers for the two runtime sidecars: `FElysiumNpcIndex` (`out/npc/npc_index.json`, ~22 KB — every NPC and bank with its glb and counts) and `FElysiumNpcClipSet` (`out/npc/clips/<stem>.json`, ~90 KB — one NPC's whole resolved vocabulary, ~1,540 clips). A slice interns its owner stems and activity literals, storing each clip as `[owner_i, activity_i, weight, flags, frames, fps]`. The 5.5 MB `npc_manifest.json` is **not** read at runtime — it is the offline probes' file, and a map places only 17–22 distinct models |
+| `ElysiumNpcClips.{h,cpp}` | plain-C++ readers for the two runtime sidecars: `FElysiumNpcIndex` (`out/npc/npc_index.json`, ~34 KB — every NPC and bank with its glb, counts and facial sidecar) and `FElysiumNpcClipSet` (`out/npc/clips/<stem>.json`, ~92 KB — one NPC's whole resolved vocabulary, ~1,360 clips). A slice interns its owner stems and activity literals, storing each clip as `[owner_i, activity_i, weight, flags, frames, fps]`. The 10.1 MB `npc_manifest.json` is **not** read at runtime — it is the offline probes' file, and a map places only 17–22 distinct models |
 | `UElysiumNpcAnimSubsystem` | GI-scoped owner of everything skeleton-**in**dependent and expensive: the parsed bank `UglTFRuntimeAsset`s (2–35 MB each, session-lifetime because the same two stances banks serve essentially every map), the clip vocabularies, and the disposition table. `ResolveClip` finds a label's owning glb and retargets it onto a mesh; `PickIdleClip`/`IdleCandidates` run the default-idle policy and report which rule fired (`EElysiumIdleTier`) |
 | `FElysiumDispositionTable` (`ElysiumDisposition.{h,cpp}`) | `vdata/system/dispositiontable.txt` — per disposition, the `Animation Name` that keys its stance clips plus the fidget/stance-change chances and thresholds. Shared: **8.5** reads `AnimName`, **9.9** (2,862 calls, `SetDisposition` alone 2,510) needs the same rows for the emotional-state model |
 | `UElysiumNpcAnimInstance` (`ElysiumNpcAnimInstance.{h,cpp}`) | the animation host: a native anim instance (no Blueprint, no anim-graph asset) whose proxy runs two `FAnimNode_SequencePlayer_Standalone`s and lerps between them, so a clip change crossfades (0.25 s) instead of popping. It exists because VtMB's stance banks ship almost no authored transitions — one `Stance_<D>_Trans_<a>_<b>` across 21 dispositions × 2 gendered banks — so a stance change cannot route through an authored blend. The proxy must implement **`UpdateAnimationNode`**: a sequence player that is never `Update_AnyThread`'d holds its start frame forever, and the base `Update(float)` does not drive it. `elysium.NpcAnim 0` drops back to the single-node instance |
@@ -347,8 +405,8 @@ no editor content loop (`docs/decisions.md` 2026-07-26). Design + the constraint
 
 | Type | Role |
 |---|---|
-| `UElysiumUISubsystem` | GI-scoped owner of the screens: create/show/hide plus the input-mode switch. GI-scoped because the menu outlives any one world. `elysium.menu [pause]` / `elysium.menu.close` |
-| `UElysiumMainMenu` | the main / pause menu (`UCommonActivatableWidget`). Layout is `CVMainMenu::PerformLayout` verbatim in a 1024×768 virtual canvas — every item sized to the widest label + `20×4`, `pitch = height + 2`, centred — under one `SDPIScaler` at `ScreenH/768`. **A `UCommonActivatableWidget` added straight to the viewport stays collapsed until `ActivateWidget()`** (`bAutoActivate` only fires inside a `UCommonActivatableWidgetContainer`) |
+| `UElysiumUISubsystem` | GI-scoped owner of the screens: create/show/hide plus the input-mode switch (which focuses the menu widget, so it can see Escape). GI-scoped because the menu outlives any one world. *When* a screen is up is not its call — `UElysiumGameFlowSubsystem` drives it from the app state. `elysium.menu [pause\|gameover]` / `elysium.menu.close` |
+| `UElysiumMainMenu` | the main / pause / game-over menu (`UCommonActivatableWidget`), one `EElysiumMenuMode` per item set; a mode change rebuilds the screen. Layout is `CVMainMenu::PerformLayout` verbatim in a 1024×768 virtual canvas — every item sized to the widest label + `20×4`, `pitch = height + 2`, centred — under one `SDPIScaler` at `ScreenH/768`. Every item calls the flow subsystem. **A `UCommonActivatableWidget` added straight to the viewport stays collapsed until `ActivateWidget()`** (`bAutoActivate` only fires inside a `UCommonActivatableWidgetContainer`) |
 | `ElysiumUIStyle.{h,cpp}` | design tokens — the `VampireScheme.res` palette (gold chrome, blood accent, cyan active tab), the type ramp and spacing in virtual px, `ElysiumUI::ScaleFor` — plus `FElysiumUIFontLibrary`, which composes the committed `UFontFace` assets under `/Game/VtMB/UI/Fonts` into one runtime `UFont` per role (`FSlateFontInfo` resolves a composite font, not a bare face) |
 | `ElysiumUIStrings.{h,cpp}` | the authored string table (`out/ui/strings.json`). Menu labels are **`VMainMenu_BTN_*`** tokens with retail English as the fallback — what `CVMainMenu` itself does |
 | `ElysiumUITexture.{h,cpp}` | PNG → transient BGRA texture, shared by the PL3 use-icon atlas, the PL5c sign backgrounds and the PL8 title lockup |
@@ -356,10 +414,11 @@ no editor content loop (`docs/decisions.md` 2026-07-26). Design + the constraint
 **The menu backdrop.** `UElysiumMapSubsystem::TravelForMenu` loads `elysium.MenuMap` (default
 `sm_hub_1`) as an ordinary map build **minus the player**: the substrate builds in full, because the
 NPCs idling in frame are entities. `AElysiumGameMode` seats no pawn
-(`GetDefaultPawnClassForController` → null) and makes an `ACameraActor` at `elysium.MenuVantage` the
-view target. The mode is latched at **Travel** time, not at map-actor spawn, because `PostLogin`
-decides the pawn before `BeginPlay` runs. Leaving it is an ordinary Travel. `elysium.BootMenu 0`
-boots straight into play; `elysium.MenuScrim` dials how far the scene is knocked back behind the type.
+(`GetDefaultPawnClassForController` → null) and `UElysiumGameFlowSubsystem::EnterMenuBackdrop` makes
+an `ACameraActor` at `elysium.MenuVantage` the view target. The mode is latched at **Travel** time,
+not at map-actor spawn, because `PostLogin` decides the pawn before `BeginPlay` runs. Leaving it is
+an ordinary Travel. `elysium.BootMenu 0` boots straight into play; `elysium.MenuScrim` dials how far
+the scene is knocked back behind the type.
 
 Because the map's own logic runs behind the menu, **`AElysiumHUD` stands the player-facing HUD down
 while a menu is up** (`IsMenuUp()`): no reticle, no sign panel, no dialogue box. `sm_hub_1`'s

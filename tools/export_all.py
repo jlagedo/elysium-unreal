@@ -22,7 +22,7 @@ Usage:
   python tools/export_all.py --no-signs          # skip the sign definition/background copy
   python tools/export_all.py --no-vdata          # skip the vdata rulebook copy
   python tools/export_all.py --no-cfg            # skip the console cfg copy
-  python tools/export_all.py --no-scenes         # skip the choreo scene/.lip copy
+  python tools/export_all.py --no-scenes         # skip the choreo scene/.lip/expressions copy
   python tools/export_all.py --npc               # also batch-export NPC glbs + shared banks
 """
 import os, sys, time, subprocess, shutil, traceback
@@ -230,12 +230,13 @@ def main():
             print(f"[cfg] FAILED: {e}", flush=True)
             traceback.print_exc()
 
-    # Copy the choreographed scenes (.vcd) + phoneme sidecars (.lip) verbatim into out/scenes
-    # and out/lip. Whole-game like the other mirrors, so once after the loop and on a zero-map
-    # invocation too -- its SceneFile cross-check reads whatever .ents are already exported.
-    # Consumers: the scene player (roadmap 12.1, docs/choreographed_scenes.md) and lipsync (12.5).
+    # Copy the choreographed scenes (.vcd), phoneme sidecars (.lip) and phoneme->controller
+    # expression tables verbatim into out/scenes, out/lip and out/expressions. Whole-game like
+    # the other mirrors, so once after the loop and on a zero-map invocation too -- its SceneFile
+    # cross-check reads whatever .ents are already exported. Consumers: the scene player (roadmap
+    # 12.1, docs/choreographed_scenes.md) and lipsync (12.5, docs/facial_animation.md).
     if not skip_scenes:
-        print("\n[scenes] copying choreographed scenes + phoneme files ...", flush=True)
+        print("\n[scenes] copying choreo scenes, phoneme files + expression tables ...", flush=True)
         try:
             SN.main()
         except Exception as e:

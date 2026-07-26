@@ -471,8 +471,9 @@ the render mesh) on a per-instance `StaticBody3D`. ch_hub_1 = 500 props / 124 mo
 
 ## Skeletal NPCs (`.mdl` v2531 — `mdl_skel.py` / `mdl_gltf.py` / `npc_export.py`)
 
-The animated half of the `.mdl` (bones, skin, RLE animation tracks) decodes in `mdl_skel.py`;
-the full struct map is `docs/animation_and_movers.md` Part A. VtMB NPCs carry only their own
+The animated half of the `.mdl` (bones, skin, RLE animation tracks, and the facial flex block)
+decodes in `mdl_skel.py`; the full struct map is `docs/animation_and_movers.md` Part A and
+`docs/facial_animation.md`. VtMB NPCs carry only their own
 clips (mostly dialogue) and pull locomotion/combat/idle from **shared animation banks** via the
 studiohdr include-model mechanism — a recursive DAG (`NumIncludeModels`@404 /
 `IncludeModelIndex`@408 → `StudioModelGroup[]`, stride 116). `mdl_skel.resolve_tree` walks it
@@ -485,7 +486,8 @@ so clips retarget by bone name with no proportion rig.
 `npc_export.py` is the batch driver (`export_all.py --npc`, the heaviest offline pass). It scans
 `out/*/*.ents` for `npc_*` `model` keys and writes under `out/npc/`:
 
-- **`<npc>.glb`** (`mdl_gltf.export_npc`) — skinned mesh + skeleton + the NPC's **own** clips. A
+- **`<npc>.glb`** (`mdl_gltf.export_npc`) — skinned mesh + skeleton + the NPC's **own** clips +
+  its **facial morph targets** (below). A
   skeleton with more than one parent-less bone (`regular_cop`, `prophet`) is unified under a synthetic
   `__elysium_skeleton_root` node so glTFRuntime's single-root bone-map traversal reaches every bone —
   it is appended after the mesh node (keeping node-index == bone-index) and is not a `skin.joints`
@@ -494,7 +496,13 @@ so clips retarget by bone name with no proportion rig.
   **no mesh**; decoded once and shared by every NPC. Bank stems keep the sub-path
   (`character_shared_male_misc`) so the male/female (and clan) banks that share a basename stay
   distinct.
-- **`npc_manifest.json`** (`manifest_version` 2) — `npcs[stem].clips` is the resolution map
+- **`facial/<npc>.json`** (`mdl_gltf.facial_rig`, roadmap PL10) — the three layers above the
+  morph targets, which are vertex displacements and cannot hold them: the 44 flex controllers,
+  the 60 RPN flex rules that combine them into flexdesc weights, and each morph's four-value
+  target ramp. `morphs[i]` describes glTF morph target *i* of the sibling glb, in order. Split
+  out of the manifest for the same reason the clip vocabularies are — a map places 17–22 NPC
+  models, so only those are parsed.
+- **`npc_manifest.json`** (`manifest_version` 3) — `npcs[stem].clips` is the resolution map
   `{clip label → owning stem}` (own clips point at the NPC itself). Per-clip metadata
   (`activity`, `weight`, `flags`, `frames`, `fps`) lives **once on the owner** —
   `banks[owner].clips` for a shared clip, `npcs[stem].own_clips` for the NPC's own — because a
@@ -502,11 +510,20 @@ so clips retarget by bone name with no proportion rig.
   ~69k. A final reconcile pass drops any label whose owner did not actually bake it, so a hit
   in `clips` is a promise the owning glb can answer. The runtime (roadmap 8.5) reads this, loads
   a clip's owning glb once, and applies it to the NPC skeletal mesh by bone name via
-  glTFRuntime — VtMB's virtualmodel bank-sharing, not a per-NPC monolith (which would be
-  ~94 MB × the cast ≈ 4.2 GB; the shared set is 243 MB of banks + 149 MB of meshes across
-  62 banks / 54 NPCs). `mdl_gltf` writes **standard glTF 2.0** (self-describing space), so it
-  keeps its non-`UE_` name and needs no pre-conversion. `mdl_gltf.export` (single clip) is the
-  8.2 spike/CLI probe.
+  glTFRuntime — VtMB's virtualmodel bank-sharing, not a per-NPC monolith (the shared set is
+  251 MB of banks + 296 MB of meshes across 64 banks / 101 NPCs; inlining each NPC's resolved
+  vocabulary instead would be an order of magnitude more). `mdl_gltf` writes **standard glTF
+  2.0** (self-describing space), so it keeps its non-`UE_` name and needs no pre-conversion.
+  `mdl_gltf.export` (single clip) is the 8.2 spike/CLI probe.
+
+**Morph targets (PL10).** A rigged NPC's glb carries one morph target per `StudioFlex`
+*record* — 53 on the shipped rig, 78 of the 101 NPCs, 4,015 in total, +0.33–0.53 MB each. They
+are **sparse** accessors (base implicitly zero, only the moved vertices stored), unified across
+every primitive so `mesh.extras.targetNames` names them positionally, with untouched primitives
+carrying a one-entry zero. Two consequences for the loader: a morph that spans materials arrives
+as one same-named piece per primitive (needs `MorphTargetsDuplicateStrategy::Merge`), and the
+ramp that remaps a flexdesc's weight into a morph weight is *not* baked — it is in
+`facial/<npc>.json`. Shape and rationale: `../docs/facial_animation.md` → "The offline export".
 
 ## Texture upscaling (`upscale_bench.py`)
 
@@ -544,24 +561,34 @@ Read-only over the install; produces no runtime intermediate. Findings — the 1
 enum, the nine types content uses, actor binding, the timing model and the output contract —
 are in `../docs/choreographed_scenes.md` (roadmap RE19).
 
-**Offline delivery (`UE_extract_scenes.py`, roadmap PL9).** Both plain-text choreography trees
-are copied **verbatim** out of the `sound/` tree, patch-first, no parse/transcode: the **5,444
-`.vcd`** scenes → `out/scenes/` (5,137 from the VPKs, 307 loose patch files shadowing VPK copies)
-and the **7,136 `.lip`** phoneme sidecars → `out/lip/` (15 VPK, 7,121 loose patch). The `sound/`
-prefix is stripped, so each mirror keeps the sound-relative subtree the engine addresses and a
-`SceneFile "sound/CINEMATIC/tutorial/jack_VS_sabbat.vcd"` reads back as
-`out/scenes/CINEMATIC/tutorial/jack_VS_sabbat.vcd` — the same layout rule as `out/sound/`. Two
-roots rather than one because the consumers are separate (12.1 reads the scenes, 12.5 the
-phonemes) and the sub-paths otherwise interleave file-for-file, `.vcd` beside `.lip` beside
-`.wav`. The run also cross-checks every `SceneFile` in the already-exported `.ents` against the
-mirror and names the ones the install does not ship — map data outliving its assets (RE19 counts
-eight, on three maps), not a format question. Whole-game, so `export_all.py` runs it once at end
-of a run (`--no-scenes` to skip). The `.lip` *format* is RE20; PL9 only puts the bytes on disk.
+**Offline delivery (`UE_extract_scenes.py`, roadmap PL9 + PL10).** Three plain-text trees are
+copied **verbatim**, patch-first, no parse/transcode: the **5,444 `.vcd`** scenes →
+`out/scenes/` (5,137 from the VPKs, 307 loose patch files shadowing VPK copies), the **7,136
+`.lip`** phoneme sidecars → `out/lip/` (15 VPK, 7,121 loose patch), both out of `sound/`, and
+the **249 `expressions/*.txt`** phoneme→controller tables → `out/expressions/` (PL10; the
+sibling `.vfe` is Faceposer's compiled form of the same data, so only the readable `.txt` is
+mirrored). Each tree's own root prefix is stripped, so a mirror keeps the subtree the engine
+addresses and a `SceneFile "sound/CINEMATIC/tutorial/jack_VS_sabbat.vcd"` reads back as
+`out/scenes/CINEMATIC/tutorial/jack_VS_sabbat.vcd` — the same layout rule as `out/sound/`. The
+two `sound/` extensions get separate mirrors because the consumers are separate (12.1 reads the
+scenes, 12.5 the phonemes) and the sub-paths otherwise interleave file-for-file, `.vcd` beside
+`.lip` beside `.wav`. The run also cross-checks every `SceneFile` in the already-exported
+`.ents` against the mirror and names the ones the install does not ship — map data outliving
+its assets (RE19 counts eight, on three maps), not a format question. Whole-game, so
+`export_all.py` runs it once at end of a run (`--no-scenes` to skip). This only puts the bytes
+on disk; the `.lip` and `expressions/` *formats* are `probe_facial.py` /
+`../docs/facial_animation.md` (below).
 
-## Facial animation (`.mdl` flex chunks, `.lip`, `expressions/` — `probe_facial.py`)
+## Facial animation (`.mdl` flex chunks, `.lip`, `expressions/` — `mdl_skel.py` / `probe_facial.py`)
+
+The `.mdl` half decodes in **`mdl_skel.py`** beside the skeleton — the studiohdr flex block
+(`flex_descs`, `flex_controllers`, `flex_rules`, `mouths`), the per-mesh `StudioFlex` array
+(`mesh_flexes`) and both `StudioVertAnim` encodings (`vert_anims`), plus `read_anorms` for the
+unit-vector table those records index. One decoder, two consumers: the export bakes it, the
+probe surveys it.
 
 **`probe_facial.py`** surveys all three facial surfaces the merged install carries and
-validates the struct map *by the data*: the `.mdl` flex block (65 flex descs / 44 flex
+validates that struct map *by the data*: the `.mdl` flex block (65 flex descs / 44 flex
 controllers / 60 RPN flex rules on each of the 201 rigged models, plus the per-mesh
 `StudioFlex` array and its two `StudioVertAnim` encodings), the 7,136 `.lip` phoneme
 documents, and the 249 `expressions/*.vfe` + `.txt` phoneme→controller weight tables. Zero
@@ -572,7 +599,8 @@ The compressed 8-byte vertex-animation record stores **directions, not deltas**:
 `u16` slots are byte offsets into a 5,314-entry unit-vector table compiled into
 `Bin/StudioRender.dll` at `0x2C06E008`, and the trailing bytes are `n/255` magnitudes scaled
 by 8.0 (position) and 2.0 (normal). That table is game-derived, so nothing from it is
-committed — `--anorms <out>` extracts it from the user's own DLL on demand. `--model <key>`
+committed — the NPC export reads it out of the user's own DLL at export time, and `--anorms
+<out>` dumps it as JSON for RE. `--model <key>`
 dumps one model's rig, `--lip <path>` pretty-prints one phoneme document, `--markdown` emits
 the doc tables, `--json` writes the ledger. Read-only over the install; produces no runtime
 intermediate. Findings — the header offsets (the flex block starts at **344**, eight bytes
@@ -580,8 +608,13 @@ past a naive VAMPTools field walk), both vertex-animation encodings, the flex-ru
 set, the **absence of eyeball data in every shipped model**, the `.lip` grammar, and the
 `expressions/<model stem>_phonemes.vfe` naming rule — are in
 `../docs/facial_animation.md` (roadmap RE20). Two `mdl_v2531.md` corrections fell out of it:
-`StudioModel` is **224 bytes**, and it carries its own de-quantization offset/scale at
-+0xA0…+0xB4.
+`StudioModel` is **224 bytes** (the stride `mdl_skel` walks bodyparts with), and it carries
+its own de-quantization offset/scale at +0xA0…+0xB4.
+
+**Offline delivery (roadmap PL10).** The flexes bake into glTF **morph targets** in each NPC's
+own glb, and the rig above them into `out/npc/facial/<stem>.json` — see the *Skeletal NPCs*
+section above for the product, and `../docs/facial_animation.md` → "The offline export" for
+the shape and the two load contracts it fixes.
 
 ## Game logic (embedded Python 2.1 — `docs/python_bridge.md`)
 

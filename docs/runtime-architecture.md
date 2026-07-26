@@ -616,11 +616,11 @@ roadmap task or a new P11 one.
 | 4 | no chargen | New Game mocks Tremere male; clan-gated content untestable | 9.4 |
 | 5 | no save/load | a session cannot be resumed; `trigger_autosave` is inert | 9.5 on **11.9** |
 | 6 | no vitals HUD (the Canvas HUD covers reticle/signs only) | blood/health/frenzy/masquerade invisible; the sheet has no readout | 8.9 on **11.8** |
-| 7 | pause has no input path | the facade holds the world (11.1), but nothing routes Esc to it and the menu does not use it; no pause input scope | **11.3** |
+| 7 | ~~pause has no input path~~ | closed by **11.3** — Esc on the player controller drives `UElysiumGameFlowSubsystem::TogglePause`, which holds the world and raises the pause menu; the pause *input scope* is still 11.5's | **11.3** |
 | 8 | no camera modes | `togglecamera` unbound and unimplemented; scripted cameras have no channel | **11.7** |
 | 9 | three input-mode owners | modal screens fight over the mouse; Cog can make the game unclickable | **11.5** |
-| 10 | no loading screen | every travel is a visible hitch | **11.3** |
-| 11 | no death / game-over path | `Masquerade 5` and death do nothing | **11.3** + 9.4 |
+| 10 | ~~no loading screen~~ | closed by **11.3** for the level-load flush; the map actor's build pass after it is 10.4's | **11.3** |
+| 11 | no death / game-over path | closed by **11.3** as a *state*: `GameOver` holds the world and raises its screen, reachable by `elysium.gameover`. Nothing drives it yet — the combat character's death path and the masquerade meter are 11.4 / 9.4 | **11.3** + 9.4 |
 | 12 | dialogue line audio unwired | `PlayDialogFile` (41 calls) silent though decode is done | 9.2 |
 | 13 | no `logic_choreographed_scene` | the theatre act cannot run, so the story chain is short-circuited | **12.1** (P12 = PP2) |
 | 14 | no items/containers/barter | 853 script calls fail closed | 9.8 |
@@ -645,9 +645,12 @@ calls as one dated `decisions.md` entry — was recorded 2026-07-26 (cont. 4) an
    recording stub in the module's test folder. *Observable:* `Elysium.Substrate.WorldServices` runs a
    tutorial-shaped `logic_auto` chain end to end with no RHI, no actors and no `tools/out`, and the
    same defs with a null bundle reach the same state.
-3. **11.3 App state machine** — `UElysiumGameFlowSubsystem`, `EElysiumAppState`, boot out of the game
-   mode, loading screen, pause, quit-to-menu, `GameOver`. *Observable:* Esc pauses, the menu holds the
-   world, quit-to-menu returns to the backdrop, travel shows a loading screen.
+3. **11.3 App state machine** *(landed)* — `UElysiumGameFlowSubsystem`, `EElysiumAppState` with its
+   transition table as plain C++, boot out of the game mode, the movie-player loading screen, pause,
+   quit-to-menu, `GameOver`; the screen is a pure function of the state, so no call site closes a
+   menu. *Observable:* `Elysium.Substrate.AppState`, and in the built game Esc pauses, the menu holds
+   the world, quit-to-menu returns to the backdrop with the session cleared, and travel shows a
+   loading screen.
 4. **11.4 The player entity** — `FElysiumAnimating` + `FElysiumCombatCharacter` chain nodes,
    `FElysiumPlayer`, `FElysiumPlayerRecord` with hydrate/dehydrate, the pawn demoted to a body,
    `FindPlayer()`/`pc` returning an `Entity`, `vampire.Player` retired. *Observable:*
@@ -672,8 +675,9 @@ calls as one dated `decisions.md` entry — was recorded 2026-07-26 (cont. 4) an
     and time tools. *Observable:* `test.bat Play` walks the tutorial opening unassisted and fails
     loudly when a beat regresses.
 
-Steps 1–3 are independent of the rest and of each other. Step 4 is the hinge: 9.4, 9.8, 9.9, 9.10 and
-9.5 all sit on it, and every one of them built first would have to be re-based.
+Steps 1–3 are independent of the rest and of each other, and all three have landed. Step 4 is the
+hinge: 9.4, 9.8, 9.9, 9.10 and 9.5 all sit on it, and every one of them built first would have to be
+re-based.
 
 ## 16. Owner calls — decided
 

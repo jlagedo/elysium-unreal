@@ -281,8 +281,26 @@ bool UElysiumGameFlowSubsystem::SetAppState(EElysiumAppState NewState)
 	State = NewState;
 	UE_LOG(LogElysiumFlow, Log, TEXT("app state %s -> %s"),
 		ElysiumAppState::Name(Old), ElysiumAppState::Name(State));
+	ApplyMenuForState(State);
 	AppStateChanged.Broadcast(Old, State);
 	return true;
+}
+
+void UElysiumGameFlowSubsystem::ApplyMenuForState(EElysiumAppState NewState)
+{
+	UElysiumUISubsystem* UI = GetGameInstance()
+		? GetGameInstance()->GetSubsystem<UElysiumUISubsystem>() : nullptr;
+	if (!UI)
+	{
+		return;
+	}
+	switch (NewState)
+	{
+	case EElysiumAppState::FrontEnd: UI->ShowMenu(EElysiumMenuMode::Main);     break;
+	case EElysiumAppState::Paused:   UI->ShowMenu(EElysiumMenuMode::Pause);    break;
+	case EElysiumAppState::GameOver: UI->ShowMenu(EElysiumMenuMode::GameOver); break;
+	default:                         UI->HideMenu();                          break;
+	}
 }
 
 void UElysiumGameFlowSubsystem::ReleasePauseHold()
@@ -437,11 +455,8 @@ void UElysiumGameFlowSubsystem::EnterMenuBackdrop()
 		// Blend time zero: the menu is the first thing on screen, so there is nothing to blend from.
 		PC->SetViewTarget(Camera);
 	}
-
-	if (UElysiumUISubsystem* UI = GetGameInstance()->GetSubsystem<UElysiumUISubsystem>())
-	{
-		UI->ShowMenu(EElysiumMenuMode::Main);
-	}
+	// The menu itself is raised by the FrontEnd transition the caller makes next — one rule, one
+	// place (ApplyMenuForState).
 }
 
 // ================================================================================================
@@ -505,12 +520,23 @@ bool UElysiumGameFlowSubsystem::NewGame(const FElysiumNewGameRequest& Request)
 		return false;
 	}
 
+	// Check the destination before touching the session. BeginNewGame is destructive — it clears
+	// `G`, the quests and the sheet — so a New Game that cannot travel must not have thrown the
+	// current run away on the way to failing. This is Travel's own precondition (an export beside a
+	// baked level), asked in advance.
+	if (!Maps->ExportedMaps().Contains(Map))
+	{
+		UE_LOG(LogElysiumFlow, Warning,
+			TEXT("New Game: entry map '%s' is not exported+baked — session left untouched"), *Map);
+		return false;
+	}
+
 	// Clan 0 means "ask" — chargen (9.4). Until it exists, the mock default stands in, which is what
 	// the boot path and the MCP tool already do.
 	const int32 Clan = (Request.Clan == 0) ? 2 : Request.Clan;
 
-	// Seed first: BeginNewGame clears `G`, the quest map and the sheet, then writes the flags that
-	// survive retail's intro chain. It does not travel.
+	// BeginNewGame clears `G`, the quest map and the sheet, then writes the flags that survive
+	// retail's intro chain. It does not travel.
 	GameState->BeginNewGame(Clan, Request.bMale);
 	if (Request.HistoryId >= 0 || Request.Spends.Num() > 0)
 	{
@@ -523,15 +549,11 @@ bool UElysiumGameFlowSubsystem::NewGame(const FElysiumNewGameRequest& Request)
 
 	if (!Maps->Travel(Map, Landmark))
 	{
-		UE_LOG(LogElysiumFlow, Warning, TEXT("New Game: entry map '%s' is not exported+baked"), *Map);
+		UE_LOG(LogElysiumFlow, Error, TEXT("New Game: travel to '%s' was refused"), *Map);
 		return false;
 	}
 
 	ReleasePauseHold();
-	if (UElysiumUISubsystem* UI = GI->GetSubsystem<UElysiumUISubsystem>())
-	{
-		UI->HideMenu();
-	}
 	SetAppState(EElysiumAppState::Loading);
 	return true;
 }
@@ -578,10 +600,6 @@ bool UElysiumGameFlowSubsystem::QuitToMenu()
 	{
 		GameState->EndSession();
 	}
-	if (UElysiumUISubsystem* UI = GI->GetSubsystem<UElysiumUISubsystem>())
-	{
-		UI->HideMenu();
-	}
 	SetAppState(EElysiumAppState::Loading);
 	return true;
 }
@@ -595,10 +613,6 @@ bool UElysiumGameFlowSubsystem::ReloadMap()
 		return false;
 	}
 	ReleasePauseHold();
-	if (UElysiumUISubsystem* UI = GI->GetSubsystem<UElysiumUISubsystem>())
-	{
-		UI->HideMenu();
-	}
 	SetAppState(EElysiumAppState::Loading);
 	return true;
 }
@@ -629,17 +643,7 @@ void UElysiumGameFlowSubsystem::SetPaused(bool bPaused)
 		// hold freezes thinks, the event queue, movers and ScheduleTask (S1).
 		GameState->TimeControl().SetPaused(bPaused);
 	}
-	if (UElysiumUISubsystem* UI = GI ? GI->GetSubsystem<UElysiumUISubsystem>() : nullptr)
-	{
-		if (bPaused)
-		{
-			UI->ShowMenu(EElysiumMenuMode::Pause);
-		}
-		else
-		{
-			UI->HideMenu();
-		}
-	}
+	// The pause menu follows the state, not this call (ApplyMenuForState).
 	SetAppState(Target);
 }
 
@@ -663,10 +667,7 @@ void UElysiumGameFlowSubsystem::TriggerGameOver(EElysiumGameOverReason Reason)
 	{
 		GameState->TimeControl().SetPaused(true);
 	}
-	if (UElysiumUISubsystem* UI = GI ? GI->GetSubsystem<UElysiumUISubsystem>() : nullptr)
-	{
-		UI->ShowMenu(EElysiumMenuMode::GameOver);
-	}
+	// GameOverReason is set above because the screen the transition raises reads it for its headline.
 	SetAppState(EElysiumAppState::GameOver);
 
 	UE_LOG(LogElysiumFlow, Display, TEXT("game over: %s"),

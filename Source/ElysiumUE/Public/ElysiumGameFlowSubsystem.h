@@ -136,9 +136,15 @@ public:
 	EElysiumGameOverReason LastGameOverReason() const { return GameOverReason; }
 
 private:
-	// The one state writer. Refuses a transition the table forbids (with a warning) and broadcasts
-	// on a real change.
+	// The one state writer. Refuses a transition the table forbids (with a warning), broadcasts on a
+	// real change, and reconciles the screen with the new state.
 	bool SetAppState(EElysiumAppState NewState);
+
+	// Which screen belongs to a state — the one rule, so no call site has to remember to close a
+	// menu. It is also what makes the raw dev verbs correct: `elysium.map` and `elysium.reload`
+	// travel without going through this subsystem, and the Loading transition their OpenLevel
+	// raises is what takes a stale menu off the dying world's viewport.
+	void ApplyMenuForState(EElysiumAppState NewState);
 
 	// Release a hold this subsystem put on (Paused / GameOver) before leaving the state. Deliberately
 	// does nothing from a running state, so a hand `elysium.pause` survives a travel exactly as S1

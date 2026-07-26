@@ -47,7 +47,7 @@ struct FElysiumNpcClip
 	bool IsOwnedBy(const FString& Stem) const { return Owner.Equals(Stem, ESearchCase::IgnoreCase); }
 };
 
-// One NPC's whole resolved vocabulary, off `out/npc/clips/<stem>.json` (~90 KB / ~1,540 clips).
+// One NPC's whole resolved vocabulary, off `out/npc/clips/<stem>.json` (~92 KB / ~1,360 clips).
 struct FElysiumNpcClipSet
 {
 	FString Stem;
@@ -72,7 +72,7 @@ struct FElysiumNpcClipSet
 	bool Load(const FString& InStem, FString& OutError);
 };
 
-// out/npc/npc_index.json — every NPC and bank with its glb and counts, no clip maps (~22 KB).
+// out/npc/npc_index.json — every NPC and bank with its glb and counts, no clip maps (~34 KB).
 struct FElysiumNpcIndexEntry
 {
 	FString Glb;        // relative to out/npc ("gangmember_male_2.glb", "banks/x.glb")

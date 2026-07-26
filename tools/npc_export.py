@@ -3,9 +3,10 @@
 Scans the exported maps for `npc_*` model references, resolves each NPC's include-model tree
 (`docs/animation_and_movers.md` A.7) into shared banks, and writes under `out/npc/`:
 
-  <npc>.glb          skinned mesh + skeleton + the NPC's own clips (its dialogue anims)
+  <npc>.glb          skinned mesh + skeleton + own clips (dialogue anims) + morph targets
   banks/<bank>.glb   a shared bank's skeleton + all its clips, no mesh
   npc_manifest.json  per-NPC {clip -> owning-stem} resolution + a bank/mesh index
+  facial/<npc>.json  the flex rig above the morphs: controllers, rules, ramps (PL10)
 
 The runtime (roadmap 8.5) reads the manifest, loads a clip's owning glb once -- shared across
 every NPC that uses it -- and applies it to the NPC skeletal mesh by bone name via glTFRuntime
@@ -13,12 +14,21 @@ every NPC that uses it -- and applies it to the NPC skeletal mesh by bone name v
 VtMB's own virtualmodel bank-sharing in the modern-engine shape: one skeleton, many meshes, a
 shared animation library keyed by bone name -- not a per-NPC monolith.
 
-Manifest v2 additionally carries each clip's engine-facing selection keys -- the `ACT_*`
-activity literal, its weighted-random `weight`, `flags`, `frames` and `fps` -- stored once on
-the stem that OWNS the clip rather than on every NPC that resolves it. That is what lets a
-consumer ask for an `ACT_IDLE` (or the `ACT_DISPOSITION` stance a `default_disposition`
-names) instead of pattern-matching a label: `regular_cop` resolves 229 clips with "idle" in
-the name, and `Stance_Dead_Idle_1` is not one of the useful ones.
+The manifest carries each clip's engine-facing selection keys -- the `ACT_*` activity
+literal, its weighted-random `weight`, `flags`, `frames` and `fps` -- stored once on the stem
+that OWNS the clip rather than on every NPC that resolves it. That is what lets a consumer
+ask for an `ACT_IDLE` (or the `ACT_DISPOSITION` stance a `default_disposition` names) instead
+of pattern-matching a label: `regular_cop` resolves 229 clips with "idle" in the name, and
+`Stance_Dead_Idle_1` is not one of the useful ones.
+
+Manifest v3 adds the **face** (roadmap PL10). Each rigged NPC's `.mdl` flexes bake into glTF
+morph targets in its own glb, and the three layers that drive them -- 44 flex controllers,
+60 RPN flex rules, and each flex's four-value target ramp -- ride beside it in
+`facial/<stem>.json`, because none of the three is a vertex displacement a morph can hold.
+Baking needs the unit-vector table out of the user's own `Bin/StudioRender.dll`
+(`mdl_skel.read_anorms`, the same one `probe_facial.py --anorms` dumps); it is game-derived,
+so it is read at export time and never committed. No model in the install carries eyeball
+data, so there is none to export. Format: `docs/facial_animation.md`.
 
 CLI:
   python tools/npc_export.py                 # every npc_* model the exported maps reference
@@ -40,6 +50,8 @@ NPC_DIR = os.path.join(OUT, "npc")
 MANIFEST = os.path.join(NPC_DIR, "npc_manifest.json")
 INDEX = os.path.join(NPC_DIR, "npc_index.json")
 CLIPS_DIR = os.path.join(NPC_DIR, "clips")
+FACIAL_DIR = os.path.join(NPC_DIR, "facial")
+MANIFEST_VERSION = 3
 
 
 def npc_models_from_ents(out_root=OUT):
@@ -87,6 +99,29 @@ def _clip_meta(c):
             "frames": c.frames, "fps": round(c.fps, 4)}
 
 
+def write_facial(stem, model, rig):
+    """Write one NPC's flex rig to `facial/<stem>.json` -> the manifest fields naming it.
+
+    Kept out of `npc_manifest.json` for the same reason the clip vocabularies are: the rig is
+    ~65 flexdescs + 44 controllers + 60 rules + a morph row each, and a map places 17-22 NPC
+    models, so the runtime should parse only the ones it places. `{}` for a model with no
+    flex rig -- 14 of the 54 exported NPCs carry none, and `shovelhead` carries the header
+    without a single flex record."""
+    if not rig:
+        return {}
+    os.makedirs(FACIAL_DIR, exist_ok=True)
+    path = os.path.join(FACIAL_DIR, stem + ".json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"stem": stem, "model": model,
+                   "note": "morphs[i] describes glTF morph target i of <stem>.glb, in order. "
+                           "`targets` is the four-value ramp the flexdesc's weight is remapped "
+                           "through before it becomes that morph's weight; the weight itself "
+                           "comes from `rules` (RPN over `controllers`). See "
+                           "docs/facial_animation.md.",
+                   **rig}, f, separators=(",", ":"))
+    return {"facial": "facial/" + os.path.basename(path), "morphs": len(rig["morphs"])}
+
+
 def write_sidecars(manifest):
     """The runtime-facing split of `npc_manifest.json` (roadmap 8.5).
 
@@ -106,10 +141,13 @@ def write_sidecars(manifest):
     os.makedirs(CLIPS_DIR, exist_ok=True)
     index = {
         "manifest_version": manifest["manifest_version"],
-        "note": "counts only; a clip vocabulary lives in clips/<stem>.json. Bank glb paths are "
-                "relative to this file's directory, like the NPC ones.",
+        "note": "counts only; a clip vocabulary lives in clips/<stem>.json and a flex rig in "
+                "facial/<stem>.json. Both paths, like the bank glb paths, are relative to "
+                "this file's directory.",
         "npcs": {s: {"glb": r["glb"], "model": r["model"], "bones": r["bones"],
-                     "clips": len(r["clips"]), "own_clips": len(r["own_clips"])}
+                     "clips": len(r["clips"]), "own_clips": len(r["own_clips"]),
+                     **({"facial": r["facial"], "morphs": r["morphs"]} if r.get("facial")
+                        else {})}
                  for s, r in manifest["npcs"].items()},
         "banks": {s: {"glb": r["glb"], "model": r["model"], "clips": len(r["clips"])}
                   for s, r in manifest["banks"].items()},
@@ -203,12 +241,16 @@ def main(only=None):
                 "clips": {c.label: _clip_meta(c) for c in info["clips"]},
             }
 
-    # Export the NPC mesh glbs (mesh + skeleton + own clips).
+    # Export the NPC mesh glbs (mesh + skeleton + own clips + facial morph targets). The
+    # unit-vector table the compressed vertex-animation records index is read once, from the
+    # user's own StudioRender.dll -- without it the morph magnitudes are unknowable, so the
+    # export ships the meshes and skips the faces rather than baking wrong deltas.
+    anorms = mdl_gltf.load_anorms()
     print(f"[npc] exporting {len(npcs)} NPC mesh glb(s) -> {NPC_DIR}/ ...", flush=True)
     npc_index = {}
     for m in npcs:
         try:
-            info = mdl_gltf.export_npc(idx, m, NPC_DIR, npc_stem[m])
+            info = mdl_gltf.export_npc(idx, m, NPC_DIR, npc_stem[m], anorms)
         except Exception as e:
             print(f"  !! npc {npc_stem[m]} FAILED: {e}")
             continue
@@ -216,6 +258,7 @@ def main(only=None):
             "glb": info["glb"], "model": info["model"], "bones": info["bones"],
             "clips": npc_records.get(m, {}),
             "own_clips": {c.label: _clip_meta(c) for c in info["clips"]},
+            **write_facial(info["stem"], info["model"], info["facial"]),
         }
 
     # Reconcile: a sequence the include tree advertises but whose owner failed to bake (empty
@@ -235,13 +278,14 @@ def main(only=None):
         print(f"[npc] dropped {dropped} unresolvable clip refs (owner did not bake them)")
 
     manifest = {
-        "manifest_version": 2,
+        "manifest_version": MANIFEST_VERSION,
         "note": "npcs[stem].clips maps a clip label -> the stem that OWNS it. If that stem is a "
                 "key in `banks`, load banks/<stem>.glb and retarget onto the NPC skeletal mesh "
                 "by bone name; otherwise it is the NPC's own glb. Per-clip metadata "
                 "(activity/weight/flags/frames/fps) lives once on the owner: banks[owner].clips "
                 "for a bank, npcs[stem].own_clips for the NPC's own. Every label in `clips` is "
-                "backed by a baked animation in the owner's glb.",
+                "backed by a baked animation in the owner's glb. npcs[stem].facial, when "
+                "present, names the flex rig driving that glb's morph targets.",
         "npcs": npc_index,
         "banks": bank_index,
     }
@@ -261,6 +305,9 @@ def main(only=None):
           f"{n_clips} resolved clip refs -> {MANIFEST}")
     print(f"[npc] clips: {len(metas)} distinct baked, {sum(1 for m in metas if m['activity'])} "
           f"carry an activity ({len(acts)} distinct, e.g. ACT_IDLE/ACT_DISPOSITION)")
+    rigged = [r for r in npc_index.values() if r.get("facial")]
+    print(f"[npc] faces: {len(rigged)}/{len(npc_index)} rigged, "
+          f"{sum(r['morphs'] for r in rigged)} morph targets -> {FACIAL_DIR}/")
     print(f"[npc] size: banks {bank_bytes/1e6:.0f} MB (shared) + meshes {npc_bytes/1e6:.0f} MB, "
           f"manifest {os.path.getsize(MANIFEST)/1e6:.1f} MB")
 

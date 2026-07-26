@@ -1,4 +1,4 @@
-"""VtMB `.mdl` v2531 skeletal decode — bones, skin, and animation tracks.
+"""VtMB `.mdl` v2531 skeletal decode — bones, skin, animation tracks, and the face.
 
 Companion to `mdl.py` (static geometry). Decodes the animated half documented in
 `docs/animation_and_movers.md` Part A: the `StudioBone` skeleton, per-vertex skin
@@ -11,10 +11,19 @@ resolved here: `resolve_tree` walks the studiohdr include tree transitively and
 `local_sequences` reads each model's own clips, so the caller can bake an NPC's own clips
 and each shared bank's clips into separate glTF assets keyed by bone name (A.7).
 
+The **facial** half (`docs/facial_animation.md`) decodes here too: the studiohdr flex
+block (flex descs, the 44 flex controllers, the 60-rule RPN, `mstudiomouth_t`), the
+per-mesh `StudioFlex` array, and both `StudioVertAnim` encodings. The compressed record
+stores *directions*, not deltas — `read_anorms` pulls the unit-vector table it indexes out
+of the user's own `StudioRender.dll`. `probe_facial.py` is the survey over the same
+decoders; `mdl_gltf.py` bakes their output into glTF morph targets (roadmap PL10).
+
 Not decoded here: procedural bones (`ProcType`!=0), IK, animation events
 (`numevents`/`eventindex`, located but unread), blend spaces (`numblends`>1 — the `[0][0]`
-base cell is taken), and root motion (clips bake in place).
+base cell is taken), root motion (clips bake in place), and `StudioEyeball` (every shipped
+VtMB model carries `NumEyeballs == 0`, so there is nothing to decode).
 """
+import os
 import struct
 from collections import namedtuple
 
@@ -24,6 +33,13 @@ _h16 = lambda b, o: struct.unpack_from("<h", b, o)[0]
 _f32 = lambda b, o: struct.unpack_from("<f", b, o)[0]
 _vec3 = lambda b, o: struct.unpack_from("<3f", b, o)
 _quat = lambda b, o: struct.unpack_from("<4f", b, o)
+
+#: `StudioModel`, measured off every multi-model bodypart in the install (the flex walk
+#: forced the correction; `docs/facial_animation.md`). Only a bodygroup's second and later
+#: models read differently from the older 160 — 4,423 of 4,444 models have one model per
+#: bodypart, and no VtMB character does.
+MODEL_STRIDE = 224
+MESH_STRIDE = 60
 
 
 def _cstr(b, o):
@@ -276,14 +292,20 @@ def read_anim(d, bones, animdesc_base, numframes):
     return frames
 
 
-def decode_skinned(d, v):
+def decode_skinned(d, v, mesh_map=None):
     """Decode LOD0 geometry per material, carrying skin + the raw vertex id.
 
     Like `mdl.decode` but for skinned characters: returns a dict material -> surface
     where surface = {pos:[(x,y,z)], uv:[(u,v)], joints:[[b0..b3]], weights:[[w..]],
     tris:[(i,j,k)]} in **Source** coords, one deduped vertex list per material. Only
     the SKINNED (44B) vertex format occurs on characters; skin comes from the same
-    StudioVertex BoneWeight this reads positions from."""
+    StudioVertex BoneWeight this reads positions from.
+
+    `mesh_map`, when given a list, is filled with one record per StudioMesh:
+    `{material, model_base, mesh_index, vertex_offset, remap}` where `remap` maps the
+    model-global vertex id to this material's surface index. That is the join the flex
+    bake needs — a `StudioVertAnim` addresses a mesh-local vertex, and the surface
+    dedupes across meshes, so nothing else can line the two up."""
     import mdl
     materials = []
     ntex = _i32(d, 292); tex_index = _i32(d, 296)
@@ -300,7 +322,7 @@ def decode_skinned(d, v):
         vbp = vtx_bp_off + bp * 8
         vtx_model_off = _i32(v, vbp + 4)
         for m in range(num_models):
-            model_base = mbp + model_index + m * 160
+            model_base = mbp + model_index + m * MODEL_STRIDE
             num_meshes = _i32(d, model_base + 136)
             mesh_index = _i32(d, model_base + 140)
             num_verts = _i32(d, model_base + 144)
@@ -312,7 +334,7 @@ def decode_skinned(d, v):
             vlod = vmodel + _i32(v, vmodel + 4)
             vtx_mesh_off = _i32(v, vlod + 4)
             for mi in range(num_meshes):
-                mesh_base = model_base + mesh_index + mi * 60
+                mesh_base = model_base + mesh_index + mi * MESH_STRIDE
                 material = _i32(d, mesh_base + 0)
                 mesh_numverts = _i32(d, mesh_base + 8)
                 vertex_offset = _i32(d, mesh_base + 12)
@@ -354,6 +376,10 @@ def decode_skinned(d, v):
                                     surf["weights"].append(w4)
                                 tri.append(remap[gvid])
                             surf["tris"].append(tuple(tri))
+                if mesh_map is not None:
+                    mesh_map.append(dict(material=matname, model_base=model_base,
+                                         mesh_index=mi, vertex_offset=vertex_offset,
+                                         remap=remap))
     return surfaces
 
 
@@ -373,4 +399,162 @@ def read_skin(d, model_base, vertex_index, num_vertices):
             infl = [(bn[0], 255)]
         s = sum(x[1] for x in infl) or 1
         out.append(([b for b, _ in infl], [wt / s for _, wt in infl]))
+    return out
+
+
+# --- the face (docs/facial_animation.md) ------------------------------------------
+# The studiohdr facial block starts at 344 -- eight bytes past a naive VAMPTools field
+# walk, which drops two ints between LocalAttachmentIndex@332 and NumFlexDescs. These are
+# the offsets every array closes on (count x stride exactly, on all 4,444 models).
+H_NUM_FLEXDESC, H_FLEXDESC = 344, 348
+H_NUM_FLEXCTRL, H_FLEXCTRL = 352, 356
+H_NUM_FLEXRULE, H_FLEXRULE = 360, 364
+H_NUM_MOUTH, H_MOUTH = 376, 380
+
+FLEX_STRIDE = 32            # StudioFlex
+VA_STRIDE = {1: 8, 0: 20}   # StudioFlex.VertAnimType -> StudioVertAnim stride
+
+#: Source's `StudioFlexOp_t`. Only codes 1-7 appear across the 201 rigged VtMB models.
+FLEX_OPS = {1: "CONST", 2: "FETCH1", 3: "FETCH2", 4: "ADD", 5: "SUB", 6: "MUL",
+            7: "DIV", 8: "NEG", 9: "EXP", 10: "OPEN", 11: "CLOSE", 12: "COMMA",
+            13: "MAX", 14: "MIN"}
+
+# StudioRender.dll (imagebase 0x2C000000): the 5,314-entry unit-vector table a compressed
+# vertex-animation record indexes by BYTE offset, and the two magnitude scales
+# (`8.0` at 0x2C06C4FC for position, the `FADD ST0,ST0` doubling on the normal path).
+ANORM_VA = 0x2C06E008
+ANORM_COUNT = 5314
+DELTA_SCALE = 8.0
+NDELTA_SCALE = 2.0
+
+
+def read_anorms(dll_path=None):
+    """The unit-vector table out of the user's own `Bin/StudioRender.dll` -> [(x,y,z)] in
+    Source space, indexed by `u16 // 12`.
+
+    It is compiled into the renderer, not shipped as data, so it is game-derived like every
+    other VtMB byte: extracted on demand at export time, never committed. Raises if the DLL
+    is absent or the address falls outside every section."""
+    if dll_path is None:
+        import install
+        dll_path = os.path.join(install.GAME_ROOT, "Bin", "StudioRender.dll")
+    with open(dll_path, "rb") as f:
+        data = f.read()
+    pe = struct.unpack_from("<I", data, 0x3C)[0]
+    nsec = struct.unpack_from("<H", data, pe + 6)[0]
+    optsz = struct.unpack_from("<H", data, pe + 20)[0]
+    imgbase = struct.unpack_from("<I", data, pe + 24 + 28)[0]
+    base = pe + 24 + optsz
+    for i in range(nsec):
+        s = base + i * 40
+        va = imgbase + struct.unpack_from("<I", data, s + 12)[0]
+        span = max(struct.unpack_from("<I", data, s + 8)[0],
+                   struct.unpack_from("<I", data, s + 16)[0])
+        if va <= ANORM_VA < va + span:
+            off = struct.unpack_from("<I", data, s + 20)[0] + (ANORM_VA - va)
+            return [struct.unpack_from("<3f", data, off + i * 12) for i in range(ANORM_COUNT)]
+    raise RuntimeError(f"{dll_path}: no section holds {ANORM_VA:#x}")
+
+
+def flex_descs(d):
+    """`mstudioflexdesc_t[NumFlexDescs]` (4 B) -> the FACS names, index = flexdesc id.
+    Every rigged VtMB character ships the same 65 in the same order."""
+    n, base = _i32(d, H_NUM_FLEXDESC), _i32(d, H_FLEXDESC)
+    return [_cstr_rel(d, base + i * 4, 0) for i in range(n)]
+
+
+def flex_controllers(d):
+    """`mstudioflexcontroller_t[NumFlexControllers]` (20 B) -> [(type, name, min, max)].
+
+    Both string indices are relative to the record base. `localToGlobal`@8 is -1 on disk
+    (the engine remaps it at load), so it is not carried. The 44 shipped controllers group
+    by type into eyelid/brow/nose/mouth/phoneme."""
+    n, base = _i32(d, H_NUM_FLEXCTRL), _i32(d, H_FLEXCTRL)
+    out = []
+    for i in range(n):
+        b = base + i * 20
+        out.append((_cstr_rel(d, b, 0), _cstr_rel(d, b, 4), _f32(d, b + 12), _f32(d, b + 16)))
+    return out
+
+
+def flex_rules(d):
+    """`mstudioflexrule_t[NumFlexRules]` (12 B + an 8 B op array) -> [(flexdesc, ops)].
+
+    An op is `(opname, int_operand, float_operand)`; the same 4 bytes read both ways, since
+    `CONST` carries a float and `FETCH1`/`FETCH2` a controller index. The stack machine
+    evaluates left to right and its final value is the weight of the rule's flexdesc."""
+    n, base = _i32(d, H_NUM_FLEXRULE), _i32(d, H_FLEXRULE)
+    out = []
+    for i in range(n):
+        b = base + i * 12
+        numops, opidx = _i32(d, b + 4), _i32(d, b + 8)
+        ops = []
+        for q in range(numops):
+            ob = b + opidx + q * 8
+            code = _i32(d, ob)
+            ops.append((FLEX_OPS.get(code, f"op{code}"), _i32(d, ob + 4), _f32(d, ob + 4)))
+        out.append((_i32(d, b), ops))
+    return out
+
+
+def mouths(d):
+    """`mstudiomouth_t[NumMouths]` (20 B) -> [(bone, forward, flexdesc)]. One per rigged
+    character, pointing at the `mouth` flexdesc: Source's audio-amplitude jaw, driven by the
+    envelope of the line rather than by the phoneme track."""
+    n, base = _i32(d, H_NUM_MOUTH), _i32(d, H_MOUTH)
+    return [(_i32(d, base + i * 20), _vec3(d, base + i * 20 + 4), _i32(d, base + i * 20 + 16))
+            for i in range(n)]
+
+
+def mesh_flexes(d, model_base, mesh_index):
+    """One `StudioMesh`'s `StudioFlex[]` -> [{flexdesc, targets[4], numverts, vertanimtype}].
+
+    `StudioMesh.NumFlexes`@16 / `FlexIndex`@20, the latter relative to the mesh record;
+    `base` is kept because `StudioFlex.VertIndex` is in turn relative to the flex record.
+    `targets` is the trapezoid the flexdesc's weight is remapped through at draw time — a
+    runtime remap, so it rides in the manifest rather than being baked into the morph."""
+    mshb = model_base + _i32(d, model_base + 140) + mesh_index * MESH_STRIDE
+    n, rel = _i32(d, mshb + 16), _i32(d, mshb + 20)
+    out = []
+    for i in range(max(n, 0)):
+        b = mshb + rel + i * FLEX_STRIDE
+        out.append(dict(base=b, flexdesc=_i32(d, b),
+                        targets=[_f32(d, b + 4 + 4 * q) for q in range(4)],
+                        numverts=_i32(d, b + 20), vertindex=_i32(d, b + 24),
+                        vertanimtype=_i32(d, b + 28)))
+    return out
+
+
+def vert_anims(d, flex, anorms=None):
+    """One flex's `StudioVertAnim[]` -> [(mesh-local vertex, delta, ndelta)] in Source inches.
+
+    Type 1 (8 B, 17,846 of 17,960 flexes) stores **directions, not deltas**: two u16 byte
+    offsets into `anorms` plus two `n/255` magnitudes, scaled by 8.0 (position) and 2.0
+    (normal). Type 0 (20 B, only `mingxiao_transformation`) stores the position delta as a
+    plain Vector, past the 8-inch ceiling the compressed form can reach. Without `anorms`
+    only the vertex indices come back."""
+    stride = VA_STRIDE.get(flex["vertanimtype"])
+    if stride is None:
+        return []
+    out = []
+    for q in range(flex["numverts"]):
+        vb = flex["base"] + flex["vertindex"] + q * stride
+        if vb + stride > len(d):
+            break
+        idx = _u16(d, vb)
+        if flex["vertanimtype"] == 1:
+            if anorms is None:
+                out.append((idx, None, None))
+                continue
+            dm = d[vb + 6] / 255.0 * DELTA_SCALE
+            nm = d[vb + 7] / 255.0 * NDELTA_SCALE
+            dv = anorms[_u16(d, vb + 2) // 12]
+            nv = anorms[_u16(d, vb + 4) // 12]
+            out.append((idx, tuple(c * dm for c in dv), tuple(c * nm for c in nv)))
+        else:
+            nv = None
+            if anorms is not None:
+                nm = d[vb + 18] / 255.0 * NDELTA_SCALE
+                nv = tuple(c * nm for c in anorms[_u16(d, vb + 16) // 12])
+            out.append((idx, _vec3(d, vb + 4), nv))
     return out

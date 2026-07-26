@@ -320,12 +320,3 @@ TArray<FString> UElysiumMapSubsystem::ExportedMaps() const
 	return Names;
 }
 
-FString UElysiumMapSubsystem::ResolveBootMap() const
-{
-	FString CmdMap;
-	if (FParse::Value(FCommandLine::Get(), TEXT("ElysiumMap="), CmdMap) && !CmdMap.IsEmpty())
-	{
-		return CmdMap;
-	}
-	return StoryEntryMap();
-}

@@ -1,14 +1,15 @@
 """Export a VtMB `.mdl` v2531 skeletal model to glTF 2.0 (.glb).
 
-Decodes the skinned mesh (`mdl_skel.decode_skinned`), the `StudioBone` skeleton, and its
-animation clips, converts them into glTF space (Y-up, metres, the same
+Decodes the skinned mesh (`mdl_skel.decode_skinned`), the `StudioBone` skeleton, its
+animation clips and its facial flexes, converts them into glTF space (Y-up, metres, the same
 `(x,y,z)->(x,z,-y)*0.0254` basis change the props use), and packs a `.glb` with a skin +
-skeleton node hierarchy + animations. glTFRuntime builds the `USkeletalMesh` + `UAnimSequence`
-at runtime. Materials reference external PNGs decoded by the shared `mdl._resolve_material`
-pipeline into `<out>/tex/`.
+skeleton node hierarchy + animations + morph targets. glTFRuntime builds the `USkeletalMesh`
++ `UAnimSequence` + `UMorphTarget`s at runtime. Materials reference external PNGs decoded by
+the shared `mdl._resolve_material` pipeline into `<out>/tex/`.
 
 Two products (`npc_export.py` drives the batch):
-- `export_npc` -> `<out>/<npc>.glb`: mesh + skeleton + the NPC's OWN clips (its dialogue anims).
+- `export_npc` -> `<out>/<npc>.glb`: mesh + skeleton + the NPC's OWN clips (its dialogue
+  anims) + one morph target per flex record (roadmap PL10).
 - `export_bank` -> `<out>/banks/<bank>.glb`: skeleton + a shared bank's clips, no mesh -- an
   animation library retargeted onto NPC skeletons by bone name at load (A.7), so shared clips
   are stored once, not baked into every NPC.
@@ -16,6 +17,7 @@ Two products (`npc_export.py` drives the batch):
 CLI: python tools/mdl_gltf.py <model-path-in-vpk> [<anim-name>] [<out_dir>]  (single-clip probe)
 """
 import json, struct, os, sys
+from collections import Counter
 import numpy as np
 import install, mdl, mdl_skel as S
 
@@ -26,6 +28,25 @@ M = np.array([[1, 0, 0], [0, 0, 1], [0, -1, 0]], dtype=np.float64)
 
 def conv_pos(p):
     return (p[0] * SCALE, p[2] * SCALE, -p[1] * SCALE)
+
+
+def conv_dir(p):
+    """The same basis change without the inch->metre scale, for a direction (a normal, or a
+    flex's normal delta) rather than a point."""
+    return (p[0], p[2], -p[1])
+
+
+def load_anorms():
+    """The unit-vector table a compressed vertex-animation record indexes, or None with a
+    warning if the user's `StudioRender.dll` cannot be read. It is compiled into the renderer
+    rather than shipped as data, so it is extracted from the install at export time and never
+    committed; without it the flexes have directions but no magnitudes, and the export drops
+    morph targets rather than baking wrong ones."""
+    try:
+        return S.read_anorms()
+    except (OSError, RuntimeError, struct.error) as e:
+        print(f"  ! no unit-vector table ({e}) - exporting without morph targets")
+        return None
 
 
 def rot_matrix(q):
@@ -116,6 +137,26 @@ class Gltf:
         self.accessors.append(acc)
         return len(self.accessors) - 1
 
+    def sparse_accessor(self, count, indices_view, values):
+        """A VEC3 float accessor of `count` elements that is zero everywhere except at the
+        vertices `indices_view` names -- a morph target, where a flex moves a few hundred of
+        a mesh's vertices and leaves the rest alone. Omitting `bufferView` on the accessor
+        makes the base implicitly zero, so only the moved vertices are stored.
+
+        `indices_view` is shared between a target's POSITION and NORMAL accessors: one flex
+        moves the same vertex set in both. It must sit at byteOffset 0 -- glTFRuntime reads
+        `sparse.values.byteOffset` but never applies it, so values views are never shared."""
+        values = np.ascontiguousarray(values, dtype=np.float32)
+        self.accessors.append({
+            "componentType": FLOAT, "count": count, "type": "VEC3",
+            "sparse": {"count": int(values.shape[0]),
+                       "indices": {"bufferView": indices_view, "byteOffset": 0,
+                                   "componentType": U32},
+                       "values": {"bufferView": self._view(values.tobytes()),
+                                  "byteOffset": 0}},
+        })
+        return len(self.accessors) - 1
+
 
 FLOAT, U8, U16, U32 = 5126, 5121, 5123, 5125
 ARRAY_BUFFER, ELEMENT_ARRAY_BUFFER = 34962, 34963
@@ -181,14 +222,130 @@ def _bake_animation(g, d, bones, label, animdesc_base, nframes, fps):
     return {"name": label.lstrip("@"), "channels": channels, "samplers": samplers}
 
 
-def _build_skinned(g, idx, d, v, model_path, out_dir):
+def _morph_names(descs, slots):
+    """Unique per-model morph-target names: the flexdesc's FACS name, suffixed `#k` when a
+    flexdesc contributes more than one ramp.
+
+    Uniqueness is load-bearing. glTFRuntime keys a `UMorphTarget` by name and its `Merge`
+    duplicate strategy fuses same-named pieces, which is exactly how a target that spans two
+    materials is reunited -- so two *different* ramps sharing a name would fuse as well."""
+    seen, out = Counter(), []
+    for flexdesc, _ramp in slots:
+        nm = descs[flexdesc] if 0 <= flexdesc < len(descs) else f"flex{flexdesc}"
+        out.append(nm if not seen[nm] else f"{nm}#{seen[nm]}")
+        seen[nm] += 1
+    return out
+
+
+def _build_morphs(g, d, built, anorms):
+    """Bake the model's `StudioFlex` records into per-primitive glTF morph targets (PL10).
+
+    One target per distinct `(flexdesc, target ramp)` across the whole model -- the flex
+    *record*, not the flexdesc. A flexdesc can carry two flexes on one mesh under different
+    ramps (the eyelid pairs hinge one flexdesc into a lower and an upper half), and the ramp
+    is a runtime remap of that morph's weight, so the two are separate morphs. The ramp
+    itself is not baked: it rides in the facial manifest, where 12.3 evaluates it.
+
+    The target list is unified over every primitive and written in the same order on each,
+    which is what glTF requires (weights are mesh-level) and what lets
+    `mesh.extras.targetNames` name them positionally. A primitive a target does not touch
+    still carries it, as a one-entry zero sparse accessor -- glTFRuntime applies the names
+    first and drops the empty ones after (`bIgnoreEmptyMorphTargets`). A target that spans
+    two materials therefore lands as one same-named piece per primitive, which the runtime
+    reunites with `MorphTargetsDuplicateStrategy::Merge`.
+
+    Returns the manifest rows, index-aligned with the morph targets written into
+    `built["primitives"]`."""
+    descs = S.flex_descs(d)
+    slot_of, slots = {}, []
+    deltas = {}                                  # (slot, material) -> {vertex: [dp3, dn3]}
+    for rec in built["mesh_map"]:
+        remap = rec["remap"]
+        for fx in S.mesh_flexes(d, rec["model_base"], rec["mesh_index"]):
+            key = (fx["flexdesc"], tuple(fx["targets"]))
+            if key not in slot_of:
+                slot_of[key] = len(slots)
+                slots.append(key)
+            bucket = deltas.setdefault((slot_of[key], rec["material"]), {})
+            for local, dv, nv in S.vert_anims(d, fx, anorms):
+                # A vertex no triangle references never entered the surface (decode_skinned
+                # dedupes on use), so it has no morph slot either.
+                si = remap.get(rec["vertex_offset"] + local)
+                if si is None:
+                    continue
+                e = bucket.setdefault(si, [0.0] * 6)
+                if dv:
+                    for k, c in enumerate(conv_pos(dv)):
+                        e[k] += c
+                if nv:
+                    for k, c in enumerate(conv_dir(nv)):
+                        e[3 + k] += c
+    if not slots:
+        return []
+
+    for pi, mn in enumerate(built["matnames"]):
+        nvert = len(built["surfaces"][mn]["pos"])
+        zero, targets = None, []
+        for slot in range(len(slots)):
+            bucket = deltas.get((slot, mn))
+            if not bucket:
+                if zero is None:
+                    # One accessor for both attributes of every untouched target of this
+                    # primitive: a single zero delta at vertex 0 (`sparse.count` must be >= 1).
+                    z = g.sparse_accessor(nvert, g._view(np.zeros(1, np.uint32).tobytes()),
+                                          np.zeros((1, 3), np.float32))
+                    zero = {"POSITION": z, "NORMAL": z}
+                targets.append(zero)
+                continue
+            keys = sorted(bucket)
+            iv = g._view(np.array(keys, dtype=np.uint32).tobytes())
+            vals = np.array([bucket[k] for k in keys], dtype=np.float32)
+            targets.append({"POSITION": g.sparse_accessor(nvert, iv, vals[:, :3]),
+                            "NORMAL": g.sparse_accessor(nvert, iv, vals[:, 3:])})
+        built["primitives"][pi]["targets"] = targets
+
+    names = _morph_names(descs, slots)
+    built["target_names"] = names
+    return [{"name": nm, "flexdesc": fd, "targets": [round(t, 6) for t in ramp]}
+            for nm, (fd, ramp) in zip(names, slots)]
+
+
+def facial_rig(d, morphs):
+    """The half of the face a morph target cannot hold (`docs/facial_animation.md`).
+
+    A morph is a vertex displacement; VtMB drives it through three layers above that --
+    44 flex controllers, 60 RPN flex rules that combine them into flexdesc weights, and the
+    per-flex trapezoid each weight is remapped through. All three are runtime evaluation, so
+    they ship as data beside the glb and 12.3 replays them. `mouth` is Source's
+    amplitude-driven jaw, which runs off the line's audio envelope rather than the rules."""
+    return {
+        "flexdescs": S.flex_descs(d),
+        "controllers": [{"name": nm, "type": t, "min": lo, "max": hi}
+                        for t, nm, lo, hi in S.flex_controllers(d)],
+        # An op is `[name]`, or `[name, operand]` for the three that take one: CONST carries a
+        # float, FETCH1/FETCH2 a flex-controller index. The other opcodes read their arguments
+        # off the stack, and the 4 bytes their union would occupy are undefined -- so they are
+        # not carried.
+        "rules": [{"flexdesc": fd,
+                   "ops": [[op] if op not in ("CONST", "FETCH1", "FETCH2")
+                           else [op, fv if op == "CONST" else iv] for op, iv, fv in ops]}
+                  for fd, ops in S.flex_rules(d)],
+        "mouths": [{"bone": b, "forward": list(f), "flexdesc": fd} for b, f, fd in S.mouths(d)],
+        "morphs": morphs,
+    }
+
+
+def _build_skinned(g, idx, d, v, model_path, out_dir, anorms=None):
     """Skeleton nodes + skin + per-material mesh primitives + materials into `g`.
 
     Returns a dict the assemblers finish: nodes (with the mesh node appended), meshes, skins,
     materials, images, textures, bones. The mesh/material path is the game-verified single-clip
-    path, unchanged -- only the animation set differs between products."""
+    path, unchanged -- only the animation set differs between products. With `anorms` (the
+    unit-vector table out of the user's own `StudioRender.dll`) the model's flexes are baked
+    into morph targets as well, and `facial` carries the rows describing them."""
     bones = S.read_bones(d)
-    surfaces = S.decode_skinned(d, v)
+    mesh_map = []
+    surfaces = S.decode_skinned(d, v, mesh_map)
     os.makedirs(os.path.join(out_dir, "tex"), exist_ok=True)
     search = mdl.search_paths(d)
     read_bytes = lambda k: install.read(idx, k)
@@ -248,9 +405,12 @@ def _build_skinned(g, idx, d, v, model_path, out_dir):
 
     mesh_node = len(nodes)
     nodes.append({"name": mdl.sanitize(os.path.basename(model_path)), "mesh": 0, "skin": 0})
-    return dict(bones=bones, nodes=nodes, mesh_node=mesh_node, primitives=primitives,
-                ibm_acc=ibm_acc, materials=materials, images=images, textures=textures,
-                surfaces=surfaces)
+    built = dict(bones=bones, nodes=nodes, mesh_node=mesh_node, primitives=primitives,
+                 ibm_acc=ibm_acc, materials=materials, images=images, textures=textures,
+                 surfaces=surfaces, matnames=matnames, mesh_map=mesh_map, target_names=[])
+    built["facial"] = (facial_rig(d, _build_morphs(g, d, built, anorms))
+                       if anorms and S.flex_descs(d) else None)
+    return built
 
 
 def _assemble_skinned(built, animations):
@@ -270,12 +430,19 @@ def _assemble_skinned(built, animations):
         nodes.append({"name": "__elysium_skeleton_root", "children": list(roots)})
     else:
         skel_root = roots[0]
+    # Morph weights are mesh-level in glTF, so the target NAMES are too: `extras.targetNames`
+    # is read positionally against each primitive's target list, which is why every primitive
+    # carries the same targets in the same order (`_build_morphs`).
+    mesh = {"primitives": built["primitives"]}
+    if built.get("target_names"):
+        mesh["weights"] = [0.0] * len(built["target_names"])
+        mesh["extras"] = {"targetNames": built["target_names"]}
     gltf = {
         "asset": {"version": "2.0", "generator": "elysium mdl_gltf"},
         "scene": 0,
         "scenes": [{"nodes": [skel_root, built["mesh_node"]]}],
         "nodes": nodes,
-        "meshes": [{"primitives": built["primitives"]}],
+        "meshes": [mesh],
         "skins": [{"inverseBindMatrices": built["ibm_acc"],
                    "joints": list(range(len(bones))), "skeleton": skel_root}],
         "materials": built["materials"],
@@ -291,11 +458,13 @@ def _assemble_skinned(built, animations):
     return gltf, skel_root
 
 
-def export_npc(idx, model_path, out_dir, stem=None):
+def export_npc(idx, model_path, out_dir, stem=None, anorms=None):
     """Write `<out_dir>/<stem>.glb`: skinned mesh + skeleton + the NPC's OWN clips (the
-    dialogue anims that live only in this .mdl). Shared clips come from bank glbs applied by
-    bone name at runtime. Returns {stem, glb, model, bones, clips:[mdl_skel.Seq,...]} — the
-    clip list is what actually baked, so a sequence whose tracks came out empty is absent."""
+    dialogue anims that live only in this .mdl) + its facial morph targets. Shared clips come
+    from bank glbs applied by bone name at runtime. Returns
+    {stem, glb, model, bones, clips:[mdl_skel.Seq,...], facial} — the clip list is what
+    actually baked, so a sequence whose tracks came out empty is absent, and `facial` is None
+    for a model with no flex rig (or when the `anorms` table could not be read)."""
     dv = mdl.load(idx, model_path)
     if not dv:
         raise SystemExit(f"model not found: {model_path}")
@@ -303,7 +472,7 @@ def export_npc(idx, model_path, out_dir, stem=None):
     stem = stem or mdl.sanitize(os.path.basename(model_path)[:-4])
 
     g = Gltf()
-    built = _build_skinned(g, idx, d, v, model_path, out_dir)
+    built = _build_skinned(g, idx, d, v, model_path, out_dir, anorms)
     animations, labels = [], []
     for c in S.local_sequences(d):
         anim = _bake_animation(g, d, built["bones"], c.label, c.base, c.frames, c.fps)
@@ -318,10 +487,12 @@ def export_npc(idx, model_path, out_dir, stem=None):
     glb = os.path.join(out_dir, stem + ".glb")
     _write_glb(gltf, g.bin, glb)
     tris = sum(len(s["tris"]) for s in built["surfaces"].values())
-    print(f"  npc {stem}: {len(built['bones'])} bones, {tris} tris, {len(labels)} own clips "
-          f"-> {glb} ({os.path.getsize(glb) // 1024} KB)")
+    face = built["facial"]
+    morphs = f", {len(face['morphs'])} morphs" if face and face["morphs"] else ""
+    print(f"  npc {stem}: {len(built['bones'])} bones, {tris} tris, {len(labels)} own clips"
+          f"{morphs} -> {glb} ({os.path.getsize(glb) // 1024} KB)")
     return dict(stem=stem, glb=os.path.basename(glb), model=model_path,
-                bones=len(built["bones"]), clips=labels)
+                bones=len(built["bones"]), clips=labels, facial=face)
 
 
 def export_bank(idx, model_path, out_dir, stem):
@@ -388,7 +559,7 @@ def export(model_path, anim_name, out_dir):
                      activity="", actweight=0, flags=0)
 
     g = Gltf()
-    built = _build_skinned(g, idx, d, v, model_path, out_dir)
+    built = _build_skinned(g, idx, d, v, model_path, out_dir, load_anorms())
     anim = _bake_animation(g, d, built["bones"], clip.label, clip.base, clip.frames, clip.fps)
     gltf, _root = _assemble_skinned(built, [anim] if anim else [])
     gltf["accessors"] = g.accessors
@@ -398,7 +569,8 @@ def export(model_path, anim_name, out_dir):
     _write_glb(gltf, g.bin, os.path.join(out_dir, name + ".glb"))
     tris = sum(len(s["tris"]) for s in built["surfaces"].values())
     print(f"wrote {out_dir}/{name}.glb  ({len(built['bones'])} bones, "
-          f"{len(built['materials'])} materials, {tris} tris, anim '{clip[0]}' {clip[2]}f)")
+          f"{len(built['materials'])} materials, {tris} tris, anim '{clip[0]}' {clip[2]}f, "
+          f"{len(built['target_names'])} morph targets)")
 
 
 def _write_glb(gltf, bin_data, path):

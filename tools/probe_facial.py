@@ -40,42 +40,29 @@ from collections import Counter, defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import install
+import mdl_skel as S
 import vpk
 
-# --- studiohdr facial block (byte offsets from the header base) -------------------
-# The VAMPTools field walk is 8 bytes short here (it drops two ints between
-# LocalAttachmentIndex and the flex block); these offsets are the ones the array
-# arithmetic closes on -- see docs/facial_animation.md.
-H_NUM_FLEXDESC, H_FLEXDESC = 344, 348
-H_NUM_FLEXCTRL, H_FLEXCTRL = 352, 356
-H_NUM_FLEXRULE, H_FLEXRULE = 360, 364
+# The struct map lives once, in the decoder the NPC export uses (`mdl_skel`); the probe is
+# the survey over it, so a layout fixed here is fixed for the bake too. Re-exported under
+# the probe's own names because the doc tables and the CLI quote them.
+from mdl_skel import (ANORM_COUNT, ANORM_VA, DELTA_SCALE, FLEX_OPS, FLEX_STRIDE,
+                      H_FLEXCTRL, H_FLEXDESC, H_FLEXRULE, H_MOUTH, MESH_STRIDE,
+                      MODEL_STRIDE, NDELTA_SCALE, H_NUM_FLEXCTRL, H_NUM_FLEXDESC,
+                      H_NUM_FLEXRULE, H_NUM_MOUTH, VA_STRIDE, flex_controllers,
+                      flex_descs, flex_rules, mesh_flexes, mouths, read_anorms, vert_anims)
+
+# Located by the same field walk but read only here -- the export has no consumer for them.
 H_NUM_IKCHAIN, H_IKCHAIN = 368, 372
-H_NUM_MOUTH, H_MOUTH = 376, 380
 H_NUM_POSEPARAM, H_POSEPARAM = 384, 388
 H_SURFACEPROP = 392
 
-MODEL_STRIDE = 224          # StudioModel, measured from multi-model bodyparts
-MESH_STRIDE = 60            # StudioMesh
-FLEX_STRIDE = 32            # StudioFlex
 EYEBALL_STRIDE = 140        # StudioEyeball
-VA_STRIDE = {1: 8, 0: 20}   # StudioFlex.VertAnimType -> StudioVertAnim stride
-
-# StudioRender.dll constants (see docs/facial_animation.md "The unit-vector table").
-ANORM_VA = 0x2C06E008       # 5314 x Vector, indexed by a *byte offset*
-ANORM_COUNT = 5314
-DELTA_SCALE = 8.0           # float at 0x2C06C4FC -- position-delta magnitude scale
-NDELTA_SCALE = 2.0          # the `FADD ST0,ST0` on the normal path
 
 _i32 = lambda b, o: struct.unpack_from("<i", b, o)[0]
 _u16 = lambda b, o: struct.unpack_from("<H", b, o)[0]
 _f32 = lambda b, o: struct.unpack_from("<f", b, o)[0]
 _v3 = lambda b, o: struct.unpack_from("<3f", b, o)
-
-# The flex-rule RPN opcodes (Source's StudioFlexOp_t; confirmed by replaying the
-# shipped eyelid rules -- see docs/facial_animation.md).
-FLEX_OPS = {1: "CONST", 2: "FETCH1", 3: "FETCH2", 4: "ADD", 5: "SUB",
-            6: "MUL", 7: "DIV", 8: "NEG", 9: "EXP", 10: "OPEN", 11: "CLOSE",
-            12: "COMMA", 13: "MAX", 14: "MIN"}
 
 
 def _cstr(b, o):
@@ -88,74 +75,7 @@ def _cstr_rel(b, base, field=0):
     return _cstr(b, base + rel) if rel else ""
 
 
-# --- the unit-vector table --------------------------------------------------------
-
-def read_anorms(dll_path=None):
-    """The 5314-entry unit-vector table StudioRender.dll indexes with the u16
-    'packed normal' slot -- shared by StudioVertex2/3 and by the compressed
-    vertex-animation record. Returns a list of (x, y, z) in Source space."""
-    dll_path = dll_path or os.path.join(install.GAME_ROOT, "Bin", "StudioRender.dll")
-    data = open(dll_path, "rb").read()
-    pe = struct.unpack_from("<I", data, 0x3C)[0]
-    nsec = struct.unpack_from("<H", data, pe + 6)[0]
-    optsz = struct.unpack_from("<H", data, pe + 20)[0]
-    imgbase = struct.unpack_from("<I", data, pe + 24 + 28)[0]
-    base = pe + 24 + optsz
-    off = None
-    for i in range(nsec):
-        s = base + i * 40
-        va = imgbase + struct.unpack_from("<I", data, s + 12)[0]
-        vsz = struct.unpack_from("<I", data, s + 8)[0]
-        rawsz = struct.unpack_from("<I", data, s + 16)[0]
-        raw = struct.unpack_from("<I", data, s + 20)[0]
-        if va <= ANORM_VA < va + max(vsz, rawsz):
-            off = raw + (ANORM_VA - va)
-            break
-    if off is None:
-        raise RuntimeError(f"{dll_path}: no section holds {ANORM_VA:#x}")
-    return [struct.unpack_from("<3f", data, off + i * 12) for i in range(ANORM_COUNT)]
-
-
 # --- the .mdl facial chunks -------------------------------------------------------
-
-def flex_descs(d):
-    n, base = _i32(d, H_NUM_FLEXDESC), _i32(d, H_FLEXDESC)
-    return [_cstr_rel(d, base + i * 4) for i in range(n)]
-
-
-def flex_controllers(d):
-    """[(type, name, localToGlobal, min, max)] -- stride 20."""
-    n, base = _i32(d, H_NUM_FLEXCTRL), _i32(d, H_FLEXCTRL)
-    out = []
-    for i in range(n):
-        b = base + i * 20
-        out.append((_cstr_rel(d, b, 0), _cstr_rel(d, b, 4),
-                    _i32(d, b + 8), _f32(d, b + 12), _f32(d, b + 16)))
-    return out
-
-
-def flex_rules(d):
-    """[(flexdesc, [(opname, int_operand, float_operand)])] -- rule 12B, op 8B."""
-    n, base = _i32(d, H_NUM_FLEXRULE), _i32(d, H_FLEXRULE)
-    out = []
-    for i in range(n):
-        b = base + i * 12
-        flex, numops, opidx = _i32(d, b), _i32(d, b + 4), _i32(d, b + 8)
-        ops = []
-        for q in range(numops):
-            ob = b + opidx + q * 8
-            code = _i32(d, ob)
-            ops.append((FLEX_OPS.get(code, f"op{code}"), _i32(d, ob + 4), _f32(d, ob + 4)))
-        out.append((flex, ops))
-    return out
-
-
-def mouths(d):
-    """[(bone, forward, flexdesc)] -- stride 20."""
-    n, base = _i32(d, H_NUM_MOUTH), _i32(d, H_MOUTH)
-    return [(_i32(d, base + i * 20), _v3(d, base + i * 20 + 4), _i32(d, base + i * 20 + 16))
-            for i in range(n)]
-
 
 def eyeballs(d, model_base):
     """[dict] -- StudioEyeball, stride 140. Empty on every shipped VtMB model."""
@@ -188,63 +108,6 @@ def walk_models(d):
         nmod, modi = _i32(d, bpb + 4), _i32(d, bpb + 12)
         for m in range(nmod):
             yield bp, m, bpb + modi + m * MODEL_STRIDE
-
-
-def mesh_flexes(d, model_base, mesh_index):
-    """[dict] for one mesh's StudioFlex array (FlexIndex is relative to the mesh)."""
-    mshb = model_base + _i32(d, model_base + 140) + mesh_index * MESH_STRIDE
-    n, rel = _i32(d, mshb + 16), _i32(d, mshb + 20)
-    out = []
-    for i in range(max(n, 0)):
-        b = mshb + rel + i * FLEX_STRIDE
-        out.append(dict(
-            base=b, flexdesc=_i32(d, b),
-            targets=[_f32(d, b + 4 + 4 * q) for q in range(4)],
-            numverts=_i32(d, b + 20), vertindex=_i32(d, b + 24),
-            vertanimtype=_i32(d, b + 28),
-        ))
-    return out
-
-
-def vert_anims(d, flex, anorms=None):
-    """Decode one flex's vertex animation.
-
-    Type 1 (8B, compressed): u16 index, u16 delta-direction, u16 ndelta-direction,
-    byte delta magnitude, byte ndelta magnitude. Both u16 are byte offsets into the
-    unit-vector table; the magnitudes are `byte/255` scaled by 8.0 (position) and
-    2.0 (normal), then by the flex weight.
-
-    Type 0 (20B, uncompressed): u16 index, pad, Vector delta, u16 ndelta-direction,
-    byte ndelta magnitude, pad.
-
-    Returns [(vertex_index, delta_xyz_or_None, ndelta_xyz_or_None)] in Source inches.
-    """
-    stride = VA_STRIDE.get(flex["vertanimtype"])
-    if stride is None:
-        return []
-    out = []
-    for q in range(flex["numverts"]):
-        vb = flex["base"] + flex["vertindex"] + q * stride
-        if vb + stride > len(d):
-            break
-        idx = _u16(d, vb)
-        if flex["vertanimtype"] == 1:
-            if anorms is None:
-                out.append((idx, None, None))
-                continue
-            dm = d[vb + 6] / 255.0 * DELTA_SCALE
-            nm = d[vb + 7] / 255.0 * NDELTA_SCALE
-            dv = anorms[_u16(d, vb + 2) // 12]
-            nv = anorms[_u16(d, vb + 4) // 12]
-            out.append((idx, tuple(c * dm for c in dv), tuple(c * nm for c in nv)))
-        else:
-            dv = _v3(d, vb + 4)
-            nv = None
-            if anorms is not None:
-                nm = d[vb + 18] / 255.0 * NDELTA_SCALE
-                nv = tuple(c * nm for c in anorms[_u16(d, vb + 16) // 12])
-            out.append((idx, dv, nv))
-    return out
 
 
 # --- .lip -------------------------------------------------------------------------
@@ -390,7 +253,7 @@ def survey_models(anorms, verbose=True):
         s["with_flex"] += 1
         for nm in flex_descs(d):
             s["flexdesc_names"][nm] += 1
-        for t, nm, _l2g, _lo, _hi in flex_controllers(d):
+        for t, nm, _lo, _hi in flex_controllers(d):
             s["ctrl_types"][t] += 1
             s["ctrl_names"][nm] += 1
         for _flex, ops in flex_rules(d):
@@ -590,8 +453,8 @@ def main():
         fd = flex_descs(d)
         print(f"\nflex descs ({len(fd)}):\n  {fd}")
         print(f"\nflex controllers ({_i32(d, H_NUM_FLEXCTRL)}):")
-        for i, (t, nm, l2g, lo, hi) in enumerate(flex_controllers(d)):
-            print(f"  [{i:2d}] {t:<8s} {nm:<24s} localToGlobal={l2g} range=[{lo}, {hi}]")
+        for i, (t, nm, lo, hi) in enumerate(flex_controllers(d)):
+            print(f"  [{i:2d}] {t:<8s} {nm:<24s} range=[{lo}, {hi}]")
         print(f"\nflex rules ({_i32(d, H_NUM_FLEXRULE)}), first 6:")
         for flex, ops in flex_rules(d)[:6]:
             rpn = " ".join(f"{op}({iv})" if op == "FETCH1" else

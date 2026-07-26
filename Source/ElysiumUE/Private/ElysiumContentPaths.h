@@ -136,8 +136,8 @@ struct FElysiumContentPaths
 	// carries only its own clips — mostly dialogue — and pulls idle/locomotion/combat from banks
 	// through the studiohdr include DAG, so a bank glb is a skeleton + clips with no mesh, applied
 	// to any NPC by bone name. `npc_index.json` names every NPC and bank with its glb and counts
-	// (~22 KB, read once); `clips/<stem>.json` is one NPC's whole resolved vocabulary (~90 KB),
-	// read only for the stems a map actually places — the full npc_manifest.json is 5.5 MB and
+	// (~34 KB, read once); `clips/<stem>.json` is one NPC's whole resolved vocabulary (~92 KB),
+	// read only for the stems a map actually places — the full npc_manifest.json is 10.1 MB and
 	// exists for the offline probes. NpcBankGlb takes the index's own relative path ("banks/x.glb").
 	static FString NpcIndex() { return NpcDir() / TEXT("npc_index.json"); }
 	static FString NpcClips(const FString& Stem) { return NpcDir() / TEXT("clips") / (Stem + TEXT(".json")); }

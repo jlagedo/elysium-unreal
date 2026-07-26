@@ -1,29 +1,38 @@
-"""Copy VtMB's choreographed scenes + phoneme files verbatim into out/scenes and out/lip.
+"""Copy VtMB's choreo scenes, phoneme files and expression tables verbatim into out/.
 
-Asset-delivery step for the choreography track (roadmap PL9). Both trees live under the
-install's `sound/` tree and are plain text needing no transcode:
+Asset-delivery step for the choreography + lipsync track (roadmap PL9, PL10). All three
+trees are plain text needing no transcode:
 
-  * **`.vcd`** -- Faceposer choreo scenes, the unit of a cinematic *and* of a spoken line
-    (a `logic_choreographed_scene`'s `SceneFile`, or the per-line scene the engine plays
-    through `CInstancedSceneEntity`). Uniform word-list/brace grammar, no binary decode, no
-    coordinate space. Format + event semantics: `docs/choreographed_scenes.md` (RE19).
-  * **`.lip`** -- the phoneme sidecar beside a line's audio (`<line>.wav` -> `<line>.lip`).
-    The format itself is RE20; the bytes are mirrored here so the decode has them on disk.
+  * **`sound/**/*.vcd`** -> `out/scenes/` -- Faceposer choreo scenes, the unit of a cinematic
+    *and* of a spoken line (a `logic_choreographed_scene`'s `SceneFile`, or the per-line scene
+    the engine plays through `CInstancedSceneEntity`). Uniform word-list/brace grammar, no
+    binary decode, no coordinate space. Format + event semantics:
+    `docs/choreographed_scenes.md` (RE19).
+  * **`sound/**/*.lip`** -> `out/lip/` -- the phoneme sidecar beside a line's audio
+    (`<line>.wav` -> `<line>.lip`): which phoneme is on screen when.
+  * **`expressions/*.txt`** -> `out/expressions/` -- the phoneme -> flex-controller weight
+    tables, chosen by the actor's model basename (`lacroix.mdl` ->
+    `lacroix_phonemes.txt`). The shipped `.vfe` is Faceposer's compiled form of the same
+    data, so only the readable `.txt` is mirrored.
+
+The last two are two thirds of 12.5's per-line join (the third is the model's own
+`mstudiomouth_t`, which rides in the NPC export); both formats are RE20, and only the bytes
+are delivered here.
 
 Copied **verbatim** -- no parse, no transcode -- same bring-your-own-game posture as the
 script/dialogue/sign/vdata/cfg mirrors: output lives under out/ (gitignored, regenerable),
-resolved patch-first (patch loose > retail loose > VPK), the engine's own search order. The
-`sound/` prefix is stripped, so each mirror keeps the sound-relative subtree the engine
-addresses: `SceneFile "sound/CINEMATIC/tutorial/jack_VS_sabbat.vcd"` ->
+resolved patch-first (patch loose > retail loose > VPK), the engine's own search order. Each
+tree's own root prefix is stripped, so a mirror keeps the subtree the engine addresses:
+`SceneFile "sound/CINEMATIC/tutorial/jack_VS_sabbat.vcd"` ->
 `out/scenes/CINEMATIC/tutorial/jack_VS_sabbat.vcd`, matching how `out/sound/` is laid out.
-The two extensions get separate roots because they are separate consumers -- 12.1 reads the
-scenes, 12.5 the phonemes -- and their sub-paths otherwise interleave file-for-file.
+The two `sound/` extensions get separate mirrors because they are separate consumers -- 12.1
+reads the scenes, 12.5 the phonemes -- and their sub-paths otherwise interleave file-for-file.
 
 Whole-game, not map-scoped, so `export_all.py` runs it once at the end of a run
 (`--no-scenes` to skip).
 
 Usage:
-  python tools/UE_extract_scenes.py            # copy scenes + phoneme files
+  python tools/UE_extract_scenes.py            # copy scenes + phonemes + expressions
   python tools/UE_extract_scenes.py --force    # re-copy even files already present
 """
 import glob
@@ -37,36 +46,38 @@ import vpk
 TOOLS = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(TOOLS, "out")
 
-ROOT = "sound"
-# extension -> mirror root under out/. One walk fills both.
-TREES = ((".vcd", "scenes"), (".lip", "lip"))
+SCENE_ROOT = "sound"
+#: (install root, extension, mirror name under out/). Roots are walked once each.
+TREES = ((SCENE_ROOT, ".vcd", "scenes"), (SCENE_ROOT, ".lip", "lip"),
+         ("expressions", ".txt", "expressions"))
 
 
 def collect():
-    """Merged {ext: {install-rel-key -> (dest_rel, kind, ref)}} for every `.vcd`/`.lip`
-    under `sound/`, resolved patch-first (patch loose > retail loose > VPK). `dest_rel`
-    is the path under the mirror root (the `sound/` prefix stripped), so each mirror
-    preserves the engine's own subtree; loose sources keep their authored case, VPK
-    sources use the lowercased index key."""
-    exts = tuple(e for e, _ in TREES)
-    prefix = ROOT + "/"
-    picked = {e: {} for e in exts}
+    """Merged {(root, ext): {install-rel-key -> (dest_rel, kind, ref)}} for every tree,
+    resolved patch-first (patch loose > retail loose > VPK). `dest_rel` is the path under the
+    mirror root (the install root prefix stripped), so each mirror preserves the engine's own
+    subtree; loose sources keep their authored case, VPK sources use the lowercased index
+    key."""
+    picked = {(r, e): {} for r, e, _ in TREES}
+    roots = {r for r, _, _ in TREES}
     # Lowest precedence: the VPKs (keys already lowercased by vpk.index_all).
     for key, entry in vpk.index_all(install.GAME).items():
+        root = key.split("/", 1)[0]
         ext = os.path.splitext(key)[1]
-        if ext in picked and key.startswith(prefix):
-            picked[ext][key] = (key[len(prefix):], "vpk", entry)
+        if (root, ext) in picked and key.startswith(root + "/"):
+            picked[(root, ext)][key] = (key[len(root) + 1:], "vpk", entry)
     # Then retail loose, then patch loose -- each root shadows the one before it.
     for base_root in (install.GAME, install.PATCH):
-        base = os.path.join(base_root, ROOT)
-        for dirpath, _, files in os.walk(base):
-            for fn in files:
-                ext = os.path.splitext(fn)[1].lower()
-                if ext not in picked:
-                    continue
-                p = os.path.join(dirpath, fn)
-                rel = os.path.relpath(p, base).replace("\\", "/")
-                picked[ext][(prefix + rel).lower()] = (rel, "loose", p)
+        for root in sorted(roots):
+            base = os.path.join(base_root, root)
+            for dirpath, _, files in os.walk(base):
+                for fn in files:
+                    ext = os.path.splitext(fn)[1].lower()
+                    if (root, ext) not in picked:
+                        continue
+                    p = os.path.join(dirpath, fn)
+                    rel = os.path.relpath(p, base).replace("\\", "/")
+                    picked[(root, ext)][f"{root}/{rel}".lower()] = (rel, "loose", p)
     return picked
 
 
@@ -111,7 +122,7 @@ def check_referenced(scenes):
                                       set()).add(os.path.basename(p)[:-len(".ents")])
     if not referenced:
         return
-    prefix = ROOT + "/"
+    prefix = SCENE_ROOT + "/"
     missing = {k: v for k, v in referenced.items()
                if not (k.startswith(prefix) and k[len(prefix):] in scenes)}
     print(f"[scenes] {len(referenced)} SceneFile value(s) named by the exported maps, "
@@ -123,8 +134,8 @@ def check_referenced(scenes):
 def main(force=False):
     picked = collect()
     scenes = set()
-    for ext, out_name in TREES:
-        files = picked[ext]
+    for root, ext, out_name in TREES:
+        files = picked[(root, ext)]
         dest_root = os.path.join(OUT, out_name)
         written, cached = extract(files, dest_root, force=force)
         print(f"[{out_name}] {len(files)} files ({written} copied, {cached} already present) "

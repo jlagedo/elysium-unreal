@@ -58,15 +58,17 @@ UElysiumGameInstance            process lifetime — session state
 - **`UElysiumMapSubsystem`** (`UGameInstanceSubsystem`) — the only owner of map lifecycle.
   API: `Travel(FString Map, FString Landmark)`, `GetCurrentMap()`. `Travel` stows the target in
   GI-scoped `PendingMapLoad` and `OpenLevel`s the shell (or, on cold boot, spawns the map
-  directly in the already-empty shell); the fresh world's game mode calls `SpawnPendingMap`.
+  directly in the already-empty shell); `UElysiumGameFlowSubsystem::NotifyWorldReady`, called from
+  the fresh world's game mode, calls `SpawnPendingMap`.
   Registers the `elysium.map <name> [landmark]` console command.
 - **`AElysiumMapActor`** — "one loaded VtMB map", spawned by the subsystem (via
   `SpawnPendingMap`) into the fresh world. Everything map-scoped is a component of it or a
   UPROPERTY / plain member it owns, so **the actor dying with its world unloads the map** —
   meshes, MIDs, and the map's texture cache die with it. No manual teardown lists.
 
-The game mode stays thin: pawn + HUD classes, and on BeginPlay either builds the pending map
-(post-travel) or runs the boot decision (New Game / a bare dev load).
+The game mode stays thin: pawn + HUD classes, and one `NotifyWorldReady` on BeginPlay. The app state
+machine behind that call is what builds the pending map (post-travel) or runs the boot decision
+(menu / New Game / a bare dev load) — `runtime-architecture.md` §10.
 
 ## Ownership and memory across transitions
 

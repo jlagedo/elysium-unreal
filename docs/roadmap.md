@@ -86,7 +86,7 @@ it waits. Three standing rules:
 
 | Rung | Delivers | Tasks (in order) |
 |---|---|---|
-| **PP0 — the core refactor** | the spine: one clock/frame, world services, app states + pause, the player entity, input scopes, commands + user command, the view seam, the play harness | 11.3, 11.4, 11.5, 11.6, 11.8, 11.10 *(11.0, 11.1, 11.2 [x])* |
+| **PP0 — the core refactor** | the spine: one clock/frame, world services, app states + pause, the player entity, input scopes, commands + user command, the view seam, the play harness | 11.4, 11.5, 11.6, 11.8, 11.10 *(11.0, 11.1, 11.2, 11.3 [x])* |
 | **PP1 — New Game & genesis** | chargen for real: clan, **name**, sex, spends — onto the player entity, Python-readable; `sp_genesisdevice_1` played, not skipped | 9.4 (+ `sp_genesisdevice_1` export/bake), 9.7d, 8.6's New Game click path |
 | **PP2 — the theatre cinematic** | the intro plays start to finish: choreography, scripted camera, line audio, subtitles, **eyes and lipsync — all block** (cont. 5) | 11.7, 12.1–12.5 (+ `sp_theatre` export/bake) |
 | **PP3 — land the tutorial** | the chain hands the player to Jack; the first conversation runs with sound and reactions | 9.2, 9.9 |
@@ -106,19 +106,19 @@ work.)*
 The open tasks whose dependencies are met, in the order they pay off. Regenerable from the
 deps below — refresh it whenever a task flips:
 
-1. **11.3** — the last independent structural step *(11.1, 11.2 [x])*; then **11.4 (the player
-   entity), the hinge**: 9.4, 9.5, 9.8, 9.9 and 9.10 all sit on it, and each one built against
-   today's `FElysiumPlayerSheet` shim is a migration later. 11.4's other dep, 11.2, is met.
+1. **11.4 (the player entity), the hinge** *(11.0, 11.2 [x]; the three independent structural
+   steps 11.1–11.3 are all landed)*: 9.4, 9.5, 9.8, 9.9 and 9.10 all sit on it, and each one
+   built against today's `FElysiumPlayerSheet` shim is a migration later.
 2. **11.5 → 11.6 → 11.8 → 11.10** — close PP0: scopes, commands + user command, the view seam,
-   the play harness.
-3. **PL10** — the last P12 pipeline unknown: bake the flex data into glb morph targets. *(The
-   P12 RE is now closed on both halves — RE19 [x] `docs/choreographed_scenes.md`, RE20 [x]
-   `docs/facial_animation.md`; **PL9 [x]** mirrored the 5,444 `.vcd` + 7,136 `.lip` to
-   `out/scenes/` + `out/lip/`. One finding reshapes the ladder: **no shipped model carries
-   eyeball data**, so 12.4 has no eye pose to decode and its look-at half needs an owner
-   call.)*
-4. **9.7d** — land `OneOfSet` and the shadowed-name split: 589 dialogue gates currently fail
+   the play harness. 11.5's dep (11.3) is met, so it can start in parallel with 11.4.
+3. **9.7d** — land `OneOfSet` and the shadowed-name split: 589 dialogue gates currently fail
    closed, the fix needs no backing system, and PP3's dialogue depends on those gates.
+
+**P12 is fully sourced** — everything left on it is runtime work. RE19 [x] and RE20 [x] closed
+the format half; **PL9 [x]** mirrored the 5,444 `.vcd` + 7,136 `.lip`, and **PL10 [x]** the
+morph targets, the flex rigs and the 249 `expressions/` tables. One finding reshapes the
+ladder: **no shipped model carries eyeball data**, so 12.4 has no eye pose to decode and its
+look-at half needs an owner call.
 
 The lighting/look lane (3.1–3.13, 7.x remainder) is **frozen** under playable-path rule 2.
 
@@ -687,11 +687,11 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   dialogue. As-built: `roadmap-archive.md` 8.5. *Deps:* 8.2, PL4 [x].
 - [x] **8.6a New Game context + story entry** *(carve-out of 8.6)* — `FElysiumPlayerSheet` +
   `UElysiumGameStateSubsystem::BeginNewGame` seed the fresh-story state (`Story_State=-4`,
-  `Tut_Jack=0`, `Tut_Patch=0`, `Linux_Wine=1`); `UElysiumMapSubsystem::NewGame` travels to
-  **`sp_tutorial_1` @ the `tutorial` landmark** through the 4.6 path. Boot default is New Game
-  (`-ElysiumMap` keeps the bare dev path; `-ElysiumNewGame=0` A/Bs);
-  `elysium.newgame [clan] [m|f]` is the seam 8.6's menu will call. Verified headless.
-  *Deps:* 4.6, 4.9, 1.1.
+  `Tut_Jack=0`, `Tut_Patch=0`, `Linux_Wine=1`) and travel to **`sp_tutorial_1` @ the `tutorial`
+  landmark** through the 4.6 path. `-ElysiumMap` keeps the bare dev path; `-ElysiumNewGame=0` A/Bs.
+  `elysium.newgame [clan] [m|f]` is the seam the menu calls. Verified headless. *(The New Game
+  entry point moved to `UElysiumGameFlowSubsystem::NewGame` with 11.3 — `BeginNewGame` is unchanged
+  and still the seeder.)* *Deps:* 4.6, 4.9, 1.1.
 - [~] **8.6 UI foundation — design system + shell** *(replaces the VGUI port)* — the modern UI
   stack every other screen sits on. **Not** a `.res`-driven VGUI renderer: a **CommonUI**
   component set with **vector type**, resolution-independent layout (real widescreen/ultrawide,
@@ -699,7 +699,8 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   ramp, spacing, panel treatments). Structure and content come from the original — screen
   inventory, panel anatomy, reading order, iconography, strings — read off `.res`/the schemes as
   **intent** (PL8), not executed as layout. Ships with it: the main menu + pause menu on the new
-  stack, and the New Game flow calling 8.6a's `UElysiumMapSubsystem::NewGame` seam.
+  stack, and the New Game flow calling 8.6a's New Game seam (now `UElysiumGameFlowSubsystem::NewGame`,
+  11.3).
 
   **Landed — the main menu runs.** Verified in the built game by screenshot: the title lockup from
   the user's own install over **`sm_hub_1` (the Asylum frontage) as a live backdrop — NPCs idling,
@@ -723,11 +724,11 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   `bShowUI` flag because the harness's UI-free capture silently omits every Slate widget — the MCP
   tool now passes true, the regression harness keeps false so baselines hold.
 
-  **Remaining:** the `CommonUIInputData` config asset + gamepad/keyboard nav pass; Esc → pause
-  binding (the pause item set exists and `elysium.menu pause` raises it); New Game click path
-  untested end to end (the seam is wired, the console equivalent works); chargen ahead of New Game
-  (9.4). **Open risk:** `shots.bat` cannot see the UI layer, so 8.9's HUD needs UI-inclusive
-  vantages or its regressions go unwatched.
+  **Remaining:** the `CommonUIInputData` config asset + gamepad/keyboard nav pass (11.3 routes Esc
+  through the player controller and the menu's own `NativeOnKeyDown` precisely because CommonUI's
+  Back action needs that asset); New Game click path untested end to end (the seam is wired, the
+  console equivalent works); chargen ahead of New Game (9.4). **Open risk:** `shots.bat` cannot see
+  the UI layer, so 8.9's HUD needs UI-inclusive vantages or its regressions go unwatched.
 
   **Acceptance:** main menu and pause menu are legible and correctly proportioned at 1080p,
   1440p, 4K and 21:9 with no letterboxing or bitmap-font blur; New Game enters `sp_tutorial_1`
@@ -1086,13 +1087,28 @@ Steps are ordered so each compiles, ships and is observable alone. **11.4 is the
   end against the stub with no RHI, no actors and no `tools/out`, then re-runs the same defs with a
   null bundle and reaches the same counter — the seam's actual claim. As-built:
   `roadmap-archive.md` 11.2. *Deps:* 1.4.
-- [ ] **11.3 App state machine + pause + loading + game over** — `UElysiumGameFlowSubsystem` owning
-  `EElysiumAppState` (Boot/FrontEnd/Loading/Playing/Paused/GameOver), `NewGame`/`LoadGame`/`SaveGame`/
-  `QuitToMenu`/`SetPaused`, the `PreLoadMap` movie-player loading screen, and the death /
-  `Masquerade == 5` path; `AElysiumGameMode::BeginPlay` shrinks to one `NotifyWorldReady`.
-  *Acceptance:* Esc pauses and holds the world (`FrontEnd` deliberately does not — the backdrop is
-  the feature), quit-to-menu returns to the backdrop with the session cleared, travel shows a loading
-  screen, boot is decided once at GI init. *Deps:* 11.1, 8.6.
+- [x] **11.3 App state machine + pause + loading + game over** — `UElysiumGameFlowSubsystem` owning
+  `EElysiumAppState` (Boot/FrontEnd/Loading/Playing/Paused/GameOver) with its transition table as
+  plain C++ (`ElysiumAppState.h`), plus `BootFromCommandLine`/`NotifyWorldReady`/`NewGame`/`LoadGame`/
+  `SaveGame`/`QuitToMenu`/`ReloadMap`/`SetPaused`/`TriggerGameOver` and `OnAppStateChanged`.
+  `AElysiumGameMode::BeginPlay` is one `NotifyWorldReady(this)`; the boot decision, the backdrop
+  camera and New Game moved off the game mode and the map subsystem. **The screen is a pure function
+  of the state** (`ApplyMenuForState`), which is also what makes the raw `elysium.map`/`.reload`
+  verbs correct — the Loading transition their OpenLevel raises takes a stale menu off the dying
+  world. The loading screen is the engine movie player hooked at `OnPrepareLoadingScreen` (not
+  `PreLoadMap` — the movie player binds that itself at engine init, ahead of any GI subsystem). Esc
+  on the player controller (`bExecuteWhenPaused`) opens the pause menu; the menu's own
+  `NativeOnKeyDown` closes it. `FElysiumNewGameRequest` carries the retail chain as data with
+  `elysium.SkipIntro` as the entry-point switch. New verbs: `elysium.appstate`, `.pausemenu`,
+  `.quittomenu`, `.gameover`, `.newgame` (moved), `.SkipIntro`, `.LoadingScreen[MinTime]`; MCP
+  reports `app_state`. **Remaining:** `LoadGame`/`SaveGame` are logged seams until 11.9; the
+  game-over screen's copy is invented (VtMB's own death screen is un-RE'd); the loading screen
+  covers the level-load flush only — the map actor's build pass after it is 10.4's. *Acceptance met:*
+  Esc pauses and holds the world (clock frozen; `FrontEnd` deliberately does not — verified a no-op),
+  quit-to-menu returns to the backdrop with `G`/quests/sheet/clock cleared, travel plays the loading
+  screen (`LogMoviePlayer` PlayMovie→PostLoadMap), boot is decided once at GI init.
+  `Elysium.Substrate.AppState` asserts the whole transition table. As-built:
+  `roadmap-archive.md`. *Deps:* 11.1, 8.6.
 - [ ] **11.4 The player entity** *(S3 — the hinge)* — `FElysiumAnimating` + `FElysiumCombatCharacter`
   as real registry chain nodes matching VtMB's datamap chain, `FElysiumPlayer` under them, and
   `FElysiumPlayerRecord` (session lifetime) with hydrate-at-map-build / dehydrate-at-travel. The pawn
@@ -1158,7 +1174,9 @@ included**. The RE unknowns were front-loaded in "Now" because this is the highe
 work on the path, and both halves are now closed: **RE19** (the scene format and event
 semantics — `docs/choreographed_scenes.md`), **PL9** (the corpus on disk at `out/scenes/`,
 `out/lip/`) and **RE20** (the flex/eyeball chunks, the `.lip` grammar and the
-phoneme→controller tables — `docs/facial_animation.md`). Only **PL10** remains unbuilt.
+phoneme→controller tables — `docs/facial_animation.md`). **PL10** then baked the faces into
+the NPC export — morph targets in each glb, the flex rig in `out/npc/facial/<stem>.json`,
+and `out/expressions/`. Every remaining task here is runtime work.
 
 RE20 changes what 12.4 can be: **no model in the install carries eyeball data** — the whole
 cast ships `NumEyeballs == 0`, so there is no authored eye pose, look-at cone or procedural
@@ -1179,13 +1197,16 @@ it was never authored.
   `PlayDialogFile` file-resolution rules) synced to scene time; a subtitle surface on the view
   state (11.8). *Acceptance:* the scene's lines are audible and subtitled in sync. *Deps:* 12.1,
   6.2, 11.8.
-- [ ] **12.3 Facial flex track** — MDL v2531 flex/morph data decoded (RE20 [x]) into glb morph
-  targets (PL10); `UElysiumNpcAnimInstance` grows a morph-track player over the body animation.
-  It is **three layers, not one**: 44 flex controllers → 60 RPN flex rules → 65 flexdesc weights
-  → the per-mesh `StudioFlex` target ramp → morph targets. Bake the morphs; evaluate the
-  controller/rule layer at runtime, because that is where the eyelid interaction lives. Spec:
-  `docs/facial_animation.md`. *Acceptance:* a flex authored in the model moves the face in-game.
-  *Deps:* 8.5, RE20 [x], PL10.
+- [ ] **12.3 Facial flex track** — the morph targets are baked (PL10 [x]); what is left is the
+  three layers above them, which are runtime evaluation: 44 flex controllers → 60 RPN flex rules
+  → 65 flexdesc weights → the per-flex target ramp → the morph weight. All four inputs are in
+  `out/npc/facial/<stem>.json`, index-aligned with the glb's morph targets;
+  `UElysiumNpcAnimInstance` grows a morph-track player over the body animation. Two load
+  contracts the bake fixes: a morph that spans two materials arrives as one same-named piece per
+  primitive, so the skeletal-mesh config must set `MorphTargetsDuplicateStrategy::Merge`, and a
+  morph target is one *flex record*, not one flexdesc — the eyelid pairs hinge a single flexdesc
+  into two ramps. Spec: `docs/facial_animation.md`. *Acceptance:* a flex authored in the model
+  moves the face in-game. *Deps:* 8.5, RE20 [x], PL10 [x].
 - [ ] **12.4 Eyelids** *(was "Eyes")* — blink + lid shaping off the eight `eyelid` controllers
   and their four rules (`raiser × (1 − droop·0.8) × (1 − blink)` and its complements). **There is
   no eyeball data to consume** — RE20 found `NumEyeballs == 0` on all 4,444 models, so eye posing
@@ -1199,9 +1220,10 @@ it was never authored.
   per line**: the `.lip` for phoneme timing, `expressions/<model stem>_phonemes.txt` for the
   phoneme→controller weights (249 tables, chosen by the actor's model basename), and
   `mstudiomouth_t` for the amplitude-driven jaw that runs alongside. Key on the phoneme
-  *string* — the `.lip` numeric code is not stable across the corpus. Spec:
-  `docs/facial_animation.md`. *Acceptance:* mouths move with the words on every theatre line.
-  *Deps:* 12.2, 12.3. *Pipeline gap:* `expressions/` is not yet mirrored — see PL10.
+  *string* — the `.lip` numeric code is not stable across the corpus. All three inputs are on
+  disk: `out/lip/`, `out/expressions/` (the 249 `.txt` tables, PL10 [x]) and `mouths` in
+  `out/npc/facial/<stem>.json`. Spec: `docs/facial_animation.md`. *Acceptance:* mouths move
+  with the words on every theatre line. *Deps:* 12.2, 12.3.
 
 **Slice acceptance** *(PP2)*: New Game runs genesis, then the full theatre act plays start to
 finish — choreography, camera moves, audible subtitled lines, live faces — and hands the player
@@ -1239,8 +1261,8 @@ retail end to end, and `test.bat Play` proves it headlessly.
 | PL6 | Texlight merge in exporter | 3.4 |
 | PL11 | Remove the dead Lumen-card path the bake superseded (found by 0.9): `export_all.py`'s `bake_cards`/`--no-cards` calls a `cards.bat` that no longer exists and prints a "skipped" line every run; `ElysiumCardGen.cpp` (`ELYSIUM_WITH_CARDGEN`, `elysium.cards.probe`) still builds into editor targets. Nothing depends on either | 0.9 |
 | PL7 | Sidecar space fixes surfaced by the audit — **none (0.4: all sidecars already Unreal cm)** | 0.4 [x] |
-| PL9 | Mirror the choreographed-scene files + `.lip` phoneme files → `out/scenes/`, `out/lip/` — `UE_extract_scenes.py`, patch-first, verbatim, `sound/` prefix stripped so `SceneFile` reads back 1:1; **5,444 `.vcd`** (4.5 MB) + **7,136 `.lip`** (16.8 MB), wired into `export_all.py` (`--no-scenes`) with a `SceneFile` cross-check over the exported `.ents`. The `.lip` *format* stays RE20 [x] | 12.1, 12.5 |
-| PL10 | Facial data in the NPC export — the flex chunks (RE20 [x]) decoded by `mdl_skel` into glb **morph targets**, one per flexdesc per mesh, plus a manifest carrying the parts a morph target cannot hold: the 44 controllers, the 60 RPN rules, and each flex's four-value target ramp. Needs the unit-vector table extracted from the user's own `StudioRender.dll` at export time (`probe_facial.py --anorms`) — it is game-derived, so it is regenerated, never committed. No eyeball chunk exists to export. Also mirror `expressions/*.txt` → `out/expressions/` for 12.5 | 12.3, 12.4, 12.5 |
+| PL9 ✅ | Mirror the choreographed-scene files + `.lip` phoneme files → `out/scenes/`, `out/lip/` — `UE_extract_scenes.py`, patch-first, verbatim, `sound/` prefix stripped so `SceneFile` reads back 1:1; **5,444 `.vcd`** (4.5 MB) + **7,136 `.lip`** (16.8 MB), wired into `export_all.py` (`--no-scenes`) with a `SceneFile` cross-check over the exported `.ents`. The `.lip` *format* stays RE20 [x] | 12.1, 12.5 |
+| PL10 ✅ | Facial data in the NPC export — the flex chunks (RE20 [x]) decoded by **`mdl_skel`** (one decoder, now shared with `probe_facial.py`) into glb **morph targets** in each rigged NPC's own glb, plus `out/npc/facial/<stem>.json` carrying what a morph target cannot hold: the 44 controllers, the 60 RPN rules, each morph's four-value ramp and `mstudiomouth_t`. **78 of 101 NPCs rigged, 4,015 morph targets**, +0.33–0.53 MB per rigged glb (manifest v3; the manifest names the sidecar). The unit-vector table comes out of the user's own `StudioRender.dll` at export time (`mdl_skel.read_anorms`; `probe_facial.py --anorms` still dumps it for RE) — game-derived, so regenerated, never committed; without it the export ships meshes and skips faces rather than baking wrong deltas. Two corrections to the plan: the unit is the flex **record**, not the flexdesc (a flexdesc splits into two ramps — 53 targets from 45 flexdescs), and a morph **spans materials**, so it lands as one same-named piece per primitive and the consumer must load with `MorphTargetsDuplicateStrategy::Merge` (12.3; 8.5's loader still takes the default `Ignore`). No eyeball chunk exists to export. `UE_extract_scenes.py` also mirrors the 249 `expressions/*.txt` → `out/expressions/`. Full shape: `docs/facial_animation.md` → "The offline export" | 12.3, 12.4, 12.5 |
 | PL8 ✅ | UI source inventory for the re-skin — **`tools/UE_extract_ui.py`** mirrors `out/ui/`: 25 `.res` layouts + **both** schemes byte-for-byte (`VampireScheme` skins client.dll, `TrackerScheme` skins GameUI.dll — `docs/vtmb-ui.md`), 194 localized strings, the 1024×512 title lockup, the menu particle scene (26 scripts → 22 `.tga` sprites) + the 6 `MM_Skybox` faces, and **503 decoded HUD/interface materials**; `--inventory` adds the ~350 item icons. Zero unresolved. Wired into `export_all.py` (`--no-ui`). The `.fnt` atlases are **not** extracted — vector type is `Content/Fonts` via `tools/fetch_ui_fonts.py`. | 8.6 |
 
 ## RE backlog (reverse-engineering work; each cited where consumed)

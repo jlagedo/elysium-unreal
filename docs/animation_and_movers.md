@@ -21,7 +21,9 @@ confirmed. All counts are over the **patched** install.
 `mdl_v2531.md` decodes the static half (header, bodyparts, meshes, three vertex
 formats, materials) and deliberately **raises** on the ~485 `models/character/**`
 skeletal models. This part fills that gap: bones, sequences, the compressed
-animation tracks, skinning, and attachments — enough to rig and play a clip.
+animation tracks, skinning, and attachments — enough to rig and play a clip. The **face**
+— flex/morph data, the flex-controller and flex-rule layers, the (absent) eyeball chunks and
+the `.lip` phoneme files — is `facial_animation.md`.
 
 **Scale** [data]: **427** `character/**` `.mdl` in the VPKs (485 merged with the
 patch); **377 are true skeletons** (>5 bones), median **67 bones**, up to 270
@@ -314,6 +316,8 @@ bank-sharing. Full cast: 45 NPCs / 62 banks / ~410 MB.
 | seqdesc blends | variable `blend[]` | fixed `short anim[16][16]` (512B) |
 | attachment / hitbox | 92B / 68B | **60B / 32B** |
 | skin `NumBones` byte | reliable | **unused (0)** — derive from weights |
+| `mstudioflex_t` / vertanim | 60B / 16B `short delta[3]` + `short ndelta[3]` | **32B / 8B**, and the 8B record stores *directions* into a renderer-side unit-vector table (`facial_animation.md`) |
+| `mstudioeyeball_t` | 168B, authored on every speaking character | **140B, and never authored** — `NumEyeballs` is 0 on all 4,444 models |
 
 ---
 
