@@ -291,8 +291,8 @@ boots straight into play; `elysium.MenuScrim` dials how far the scene is knocked
 Because the map's own logic runs behind the menu, **`AElysiumHUD` stands the player-facing HUD down
 while a menu is up** (`IsMenuUp()`): no reticle, no sign panel, no dialogue box. `sm_hub_1`'s
 `havenbum` opens a conversation unprompted, so the B4 box would otherwise draw over the menu; the
-conversation still runs in the entity world, only its UI is withheld. The `env_fade` quad still
-draws — a screen effect, not a HUD element.
+conversation still runs in the entity world, only its UI is withheld. The `env_fade` quad is
+suppressed too — the menu-up early-return in `DrawHUD` precedes it.
 
 `ElysiumScreenshot::Request` takes **`bShowUI`** (default false): the regression harness keeps the
 UI-free capture so baselines hold, the MCP screenshot tool passes true so it shows what the player

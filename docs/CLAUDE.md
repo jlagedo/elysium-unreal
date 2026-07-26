@@ -7,8 +7,8 @@ the maintenance contract.
 ## Where a given fact belongs
 
 - **Status, plans, task breakdowns, dates, "what landed"** → the roadmap set. `roadmap.md`
-  is the single source of truth work tracker (phases P0–P10, per-task status, the pipeline
-  (PL*) and RE backlogs, the risk register); `roadmap-archive.md` holds the full as-built
+  is the single source of truth work tracker (the playable-path ladder PP0–PP6, phases P0–P13,
+  per-task status, the pipeline (PL*) and RE backlogs, the risk register); `roadmap-archive.md` holds the full as-built
   record of every completed task (moved there, verbatim, when a task lands — the roadmap
   keeps a short summary); `decisions.md` is the append-only **decision log**. Never mirror
   status into another doc — link to the task instead. Other docs' plan sections point here.
@@ -28,12 +28,16 @@ the maintenance contract.
   `ui-architecture.md` split the UI the same way — the first owns what VtMB's own screens are
   (which code owns them, the two schemes, the 1024×768 canvas law, the HUD class inventory), the
   second owns the Unreal re-skin's stack and design tokens.
-- **Design intent for an Unreal system** → `engine-core.md` (entity object model),
+- **Design intent for an Unreal system** → `runtime-architecture.md` (the spine: lifetimes, the
+  frame, the player object, the session, the seams), `engine-core.md` (entity object model),
   `debug-tooling.md` (debug layers), `map-architecture.md` (map lifecycle),
   `rendering-perf.md` (render path + tuning), `asset-enhancement.md` (offline surface track),
-  `input-architecture.md` (input path), `ui-architecture.md` (the CommonUI/Slate UI stack). Each
-  has a VtMB-facts counterpart it must not duplicate — `input-architecture.md` ↔ `controls.md` and
-  `ui-architecture.md` ↔ `vtmb-ui.md`, for instance.
+  `input-architecture.md` (input path), `ui-architecture.md` (the CommonUI/Slate UI stack),
+  `save-architecture.md` (persistence). Each has a VtMB-facts counterpart it must not duplicate —
+  `input-architecture.md` ↔ `controls.md`, `ui-architecture.md` ↔ `vtmb-ui.md`,
+  `save-architecture.md` ↔ `savegame_format.md`, `runtime-architecture.md` ↔ `game_runtime.md`.
+  `runtime-architecture.md` is the one that *integrates* the others: it may state which system owns
+  a seam, never how that system works internally.
 - **What exists in code right now** → the directory `CLAUDE.md` next to that code
   (`Source/ElysiumUE/CLAUDE.md`, `tools/CLAUDE.md`, `Content/CLAUDE.md`), not a doc here.
 

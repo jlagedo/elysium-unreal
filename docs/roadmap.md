@@ -64,6 +64,37 @@ The phases below are **vertical slices** — each ends with something observable
 | **P8 — Characters & UI** | NPCs stand in the world; New Game from a real, modern menu | P7 tail |
 | **P9 — Dialogue & persistence** | **tutorial completable as retail**, save/load works | — |
 | **P10 — Scale & ship-shape** | all maps, floor validated, packaged story | ongoing after P4 |
+| **P11 — Runtime spine** | New Game boots, plays, pauses, saves and loads on one clear API | P4, P8, P9 |
+| **P12 — The theatre** | the intro cinematic plays for real — choreo, camera, audio, subtitles, live faces | P8 tail |
+| **P13 — Tutorial mechanics** | stealth, disciplines, firearms — every retail tutorial beat | P9 |
+
+## The playable path (PP0–PP6) — the master sequence
+
+**Owner call, 2026-07-26 (`decisions.md` cont. 5).** One path to a real, played game drives all
+sequencing: **menu boot → New Game (genesis chargen) → the theatre cinematic → land on the
+tutorial with Jack → complete the tutorial.** Everything on the path lands first; everything off
+it waits. Three standing rules:
+
+1. **Logic and interactions first.** Gameplay systems outrank everything else.
+2. **Graphics are frozen.** No look-polish work (P3/P7 open tasks, 10.1–10.3, asset enhancement)
+   until the path lands — a simple-but-working screen beats a polished absence. The render path
+   stays as configured; only gameplay-blocking rendering bugs are exceptions.
+3. **Acceptance is played, not injected.** A rung completes when its beats run from real input in
+   the built game, beat-scripted in the Play tier (11.10) so the claim is a CI run — console
+   state-injection and dev shortcuts are implementation aids, never acceptance evidence.
+
+| Rung | Delivers | Tasks (in order) |
+|---|---|---|
+| **PP0 — the core refactor** | the spine: one clock/frame, world services, app states + pause, the player entity, input scopes, commands + user command, the view seam, the play harness | 0.9 → 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.8, 11.10 *(11.0 [x])* |
+| **PP1 — New Game & genesis** | chargen for real: clan, **name**, sex, spends — onto the player entity, Python-readable; `sp_genesisdevice_1` played, not skipped | 9.4 (+ `sp_genesisdevice_1` export/bake), 9.7d, 8.6's New Game click path |
+| **PP2 — the theatre cinematic** | the intro plays start to finish: choreography, scripted camera, line audio, subtitles, **eyes and lipsync — all block** (cont. 5) | 11.7, 12.1–12.5 (+ `sp_theatre` export/bake) |
+| **PP3 — land the tutorial** | the chain hands the player to Jack; the first conversation runs with sound and reactions | 9.2, 9.9 |
+| **PP4 — core mechanics** | faithful movement (owner call: **in** the path), camera modes, feeding, items + object interaction, dice, the vitals HUD | 4.7, 10.6, B6, 9.8, 9.6, 8.9 |
+| **PP5 — persistence** | save / quick / autosave + load mid-run; `trigger_autosave` live | 11.9 (= 9.5) |
+| **PP6 — complete the tutorial** | stealth, disciplines, firearms — every retail beat to the exit, proven headlessly | 13.1, 13.2, 13.3 → P9's slice acceptance as `test.bat Play` |
+
+**After PP6 (the thaw):** 9.10 economy/barter, 8.8, 8.10, the P3/P7 look lanes, 10.1–10.5 and
+asset enhancement — re-sequenced then.
 
 ## Now — the unblocked front
 
@@ -72,19 +103,17 @@ deps below — refresh it whenever a task flips:
 
 1. **0.9** — record the uasset-bake architecture call, fix the charter docs, land
    `spike/uasset-bake` on `main`. Everything below is stacked on that branch.
-2. **B6** — the feed interaction: the next first-beat gameplay step. 9.7 recovered the outputs it
-   fires (`OnFedUponBegin`/`OnFedUponEnd` on `CAI_BaseNPC`).
-3. **9.7d** — land `OneOfSet` and the shadowed-name split: 589 dialogue gates currently fail
-   closed, and the fix needs no backing system. Then **9.8/9.9/9.10** in demand order.
-4. **3.6 → 3.7** — pinned exposure, then tone-curve fidelity. B4 measured the filmic toe
-   crushing a night sky by up to ×9 with unity only at source ≈ 55 — the one remaining
-   *visible* gap to VtMB display parity, now fully sized.
-5. **3.12** — adjudicate `sm_hub_1`'s 15 fill-light disagreements in-engine; C3's Skylight
-   Leaking knob is landed and measured, so the A/B finally has both sides.
-6. **3.1–3.4, 3.10, 3.11** — the lighting/perf lane: independent, parallel-capable.
-7. **4.7** — Source movement (the feel baseline; parallel-capable).
-8. **PL8 → 8.6** — the UI-source inventory, then the UI foundation; unlocks 8.8/8.9/9.2 and
-   the 9.x ladder behind them.
+2. **11.1 / 11.2 / 11.3** — the three independent structural steps, parallel-capable; then
+   **11.4 (the player entity), the hinge**: 9.4, 9.5, 9.8, 9.9 and 9.10 all sit on it, and each
+   one built against today's `FElysiumPlayerSheet` shim is a migration later.
+3. **11.5 → 11.6 → 11.8 → 11.10** — close PP0: scopes, commands + user command, the view seam,
+   the play harness.
+4. **RE19/RE20 + PL9/PL10** — front-load the P12 unknowns (scene format, flex/eyes/`.lip`): the
+   highest-variance items on the path, spiked in parallel while PP0 lands.
+5. **9.7d** — land `OneOfSet` and the shadowed-name split: 589 dialogue gates currently fail
+   closed, the fix needs no backing system, and PP3's dialogue depends on those gates.
+
+The lighting/look lane (3.1–3.13, 7.x remainder) is **frozen** under playable-path rule 2.
 
 ## The first-beat path (B*) — landing → the second warp point
 
@@ -174,7 +203,7 @@ their parent task's status in the same change.
   (walkable); static props (originally runtime `UStaticMesh` + ISM — now baked `SM_*`
   assets, see 0.9).
 - [x] Designs adopted: `engine-core.md` (entity object model), `debug-tooling.md`
-  (three-layer debug architecture), `map-architecture.md` (map lifecycle; async travel is
+  (the layered debug architecture), `map-architecture.md` (map lifecycle; async travel is
   design-only → R10.4).
 
 ---
@@ -323,7 +352,7 @@ Deferred (tracked, not scheduled): dynamic console autocomplete of targetnames
 (`UConsole::BuildRuntimeAutoCompleteList` via custom viewport client); Gameplay Debugger
 category; Remote Control channel; NetImgui remote — see Options.
 
-## P3 — Lighting correct & engaged *(parallel lane; detail: `rendering-perf.md`, `lighting.md`)*
+## P3 — Lighting correct & engaged *(parallel lane; detail: `rendering-perf.md`, `lighting.md`)* — **FROZEN** *(playable-path rule 2; gameplay-blocking rendering bugs excepted)*
 
 Fix-the-frame tasks absorbed from the lighting roadmap (its "broken/missing" findings), plus
 M1 leftovers that live in this lane.
@@ -434,7 +463,15 @@ M1 leftovers that live in this lane.
   lands line-by-line from the decompile and stays A/B-able (`remaster-direction.md` axis 3).
   Frame-rate independence, high-polling-rate mouse input and FOV control ride along (identical
   behaviour, modern plumbing); any *behavioural* delta — accel curves, air control, step feel —
-  is a separate, owner-approved decision after this runs. *Deps:* none.
+  is a separate, owner-approved decision after this runs. **The body must be a box, so this is not a
+  `UCharacterMovementComponent` override**: `ACharacter` creates a capsule root that cannot be
+  substituted, and a capsule's rounded bottom reports ~0.65 against `StepMove`'s `0.7` standable test,
+  rejecting every climb (`source_movement.md`). **11.6** re-bases the pawn to `APawn` + box +
+  `UElysiumMovementComponent` and supplies the `FElysiumUserCmd` this consumes. Sequenced **in
+  the playable path (PP4)** by owner call (`decisions.md` 2026-07-26 cont. 5) — the tutorial is
+  played with VtMB feel, not UE feel. Open RE it needs: **RE22** (the ducked hull's dimensions —
+  `IN_DUCK` is in the user command with nothing sizing it) and **RE21** (where usercmd
+  processing sits in `GameFrame` relative to the think pass). *Deps:* 11.6.
 - [ ] **4.8 Rotating/linear/elevator family** — `func_rotating` (spin-up/down, hurt-touch),
   `func_movelinear`, `func_elevator` (`GotoFloor`, floor Z table), keyframed movers if the
   tutorial needs them. *Deps:* 4.1.
@@ -517,7 +554,7 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
   `soundgroups.json`; the door/button state machines play through the voice pool at the body; a
   Mover-soundgroups browser in the Audio window. *Deps:* 4.1–4.3, 6.1.
 
-## P7 — Dressing & parity *(Track A completion; parallel lane)*
+## P7 — Dressing & parity *(Track A completion; parallel lane)* — **open tasks FROZEN** *(playable-path rule 2)*
 
 - [ ] **7.1 Coronas** *(was L3.3 / M2)* — `.sprites` consumer: additive depth-tested
   billboards (Godot `CoronaField.cs`), StartOff spawnflag filtering. *Deps:* 0.4.
@@ -735,7 +772,9 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   the +use reticle/use-icon (4.4), blood/health and status, the sign/screen-fade states, and a
   subtitle slot, composed on 8.6's stack with the same design tokens. Player pose/mode/FPS is
   dev-only and already lives in the Cog Maps window, separate from the game HUD. Use-icon art
-  comes from the PL3 atlas, upscaled under the presentation test. *Deps:* 8.6, 4.4, 4.10.
+  comes from the PL3 atlas, upscaled under the presentation test. It reads **`FElysiumViewState`**
+  (**11.8**), not the substrate — the blood/health/frenzy/masquerade meters come off the player
+  entity's sheet (**11.4**). *Deps:* 8.6, 4.4, 4.10, 11.8.
 - [ ] **8.10 Accessibility & options backing** *(`remaster-direction.md` axis 4 — additive only;
   changes what the player can configure and perceive, never what the game does)* — full
   key/button remapping + gamepad navigation across the 8.6 component set; UI text scaling;
@@ -885,10 +924,21 @@ draw on the same stack; NPCs stand in the world at their entity origins.
   (`AwardExperience` 77 / `HumanityAdd` 69 / `CalcFeat` 53 / `ChangeMasqueradeLevel` 44 /
   `Bloodloss` / `BumpStat` / `GetMasqueradeLevel`), the counters are INTEGER datamap inputs on the
   combat character, and **`AwardExperience` takes a STRING** — it names an experience-table entry,
-  so it cannot be modelled as an integer add (`script_api.md`). *Deps:* 1.1, 9.7c.
-- [ ] **9.5 Save/load** — the four blocks (entity save-fields via the field tables, event
-  queue incl. deferred strings, think times, `G` blob) into a `USaveGame` container.
-  *Deps:* 1.4, 5.4.
+  so it cannot be modelled as an integer add (`script_api.md`). The sheet's home is
+  `FElysiumCombatCharacter` (live) + `FElysiumPlayerRecord` (durable), **not** today's
+  `FElysiumPlayerSheet` shim — target the new one directly (`runtime-architecture.md` §5).
+  Chargen lands here too — clan, **name**, sex, history, attribute/ability/discipline spends —
+  as the screen behind `ccmd.createplayer` (a registered 11.6 command) that VtMB's own
+  `sp_genesisdevice_1` already fires (`game_runtime.md` §4); `sp_genesisdevice_1` joins the
+  export/bake set so genesis is **played, not skipped** (PP1). *Acceptance (PP1):* New Game
+  walks genesis from real input, the created character lands on the player entity, and
+  `pc.clan`/`pc.strength` read back from Python. *Deps:* 1.1, 9.7c, 11.4, 11.6.
+- [ ] **9.5 Save/load** *(design: `save-architecture.md`; built as **11.9**)* — the four blocks
+  (Session / Player / Maps / World) over the R2 field walk, the per-map snapshot lifecycle with the
+  absent-entity set, the event queue incl. deferred script strings, think times, `G` + morgue, and
+  owned RNG streams, inside a `UElysiumSaveGame` shell over a versioned compressed payload.
+  *Deps:* 1.4, 5.4, **11.4** (the player and its inventory are entities — persistence is entity
+  persistence, `savegame_format.md`).
 - [ ] **9.6 Dice resolver** *(RE5 [x])* — **mechanic verified** by decompiling the full roll
   cluster (ctor `FUN_101d88b0`, roller `FUN_101d8b40`, `vroll` handler `0x100d7040`, RNG/table
   path, loader `FUN_101d92b0`) **plus reading `vdata/system/DiceRolls.txt`** — no running game
@@ -960,9 +1010,12 @@ dialogue, scripted flow, quests, save/load included.
   **Acceptance:** the tutorial is playable start to finish on keyboard+mouse and on an Xbox *and*
   a DualSense pad with no third-party driver; every action rebindable to primary/alternate/gamepad
   and surviving a restart; the reserved-key test green. Defaults are the **Patch 11.5** set
-  (`decisions.md` 2026-07-25). *Deps:* 9.3b (the console bus); 8.6/8.10 for the screen only.
-- [P] **10.7 Long tail** *(post-tutorial; promote to tasks when reached)* — combat (weapons,
-  `vdata/items/`) + full RPG sheet + chargen; real NPC AI (runtime NavMesh + BT/StateTree
+  (`decisions.md` 2026-07-25). *Deps:* 9.3b (the console bus); **11.5** (the input scope stack the
+  contexts are pushed through) and **11.6** (the command registry every action's string resolves
+  against, and the `FElysiumUserCmd` the analog actions fill); 8.6/8.10 for the screen only.
+- [P] **10.7 Long tail** *(post-tutorial; promote to tasks when reached — **promoted 2026-07-26:**
+  stealth → **13.1**, disciplines → **13.2**, weapons/combat basics → **13.3**, chargen → **9.4**,
+  choreography → **P12**)* — full combat AI (beyond 13.3's basics); real NPC AI (runtime NavMesh + BT/StateTree
   replacing `info_node`); ragdoll/IK/anim blends; MetaSounds; `.emc`-style cache for `.ents` if
   parse time bites; lump-8 lighting bake as a low-end contingency (parked with the dynamic-path
   commitment); retail `.sav` import (needs RE7 wire format — currently a non-goal). For the
@@ -970,9 +1023,8 @@ dialogue, scripted flow, quests, save/load included.
   runs on PC) is noted as a cheaper alternative to a lump-8 bake path — see Options.
   **vdata-driven gameplay systems** — data already on disk (PL5b, `out/vdata/`); each table's
   consumer + schema is mapped in `docs/vdata-catalog.md`, and these are the systems that read
-  them: **disciplines/vampire powers** (`disciplinetgt_*`, ~300 KB — the largest, only latched
-  stubs today: `ClearActiveDisciplines` etc.), **stealth** (`stealth`/`stealthkillrules`; only
-  the inert `trigger_stealth_mod` exists), the **hacking minigame** (`hackterminals/`),
+  them: **disciplines/vampire powers** (`disciplinetgt_*`, ~300 KB — the largest; → **13.2**),
+  **stealth** (`stealth`/`stealthkillrules`; → **13.1**), the **hacking minigame** (`hackterminals/`),
   **economy/vendors** (`vendors`, item `worth`), **NPC disposition + reactions**
   (`dispositiontable`/`reaction*`), **data-driven conversation camera** (`camerashots/`),
   **radio + TV-news ambient content** (`radio_data`/`newscaster_*` — only 6.2's audio decode
@@ -995,6 +1047,149 @@ dialogue, scripted flow, quests, save/load included.
   Substrate tests green. Owner call + as-built: `decisions.md` 2026-07-24. As-built detail:
   `roadmap-archive.md`. *Deps:* 4.6.
 
+## P11 — Runtime spine *(design: `runtime-architecture.md` + `save-architecture.md` — read them; steps here are the tracker)*
+
+The structure *between* the systems P1–P10 design: lifetimes, the frame, the player object, the
+session, and the seams. It exists because the slice ladder now reaches "boot a New Game and play it",
+and that is the one thing no current doc owns. Its rules are **S1–S10** (`runtime-architecture.md`
+§13), orthogonal to `engine-core.md`'s R1–R8.
+
+Steps are ordered so each compiles, ships and is observable alone. **11.4 is the hinge** — 9.4, 9.5,
+9.8, 9.9 and 9.10 all sit on it.
+
+- [x] **11.0 Adopt the spine** — all seven `runtime-architecture.md` §16 owner calls recorded as
+  one dated entry (`decisions.md` 2026-07-26 cont. 4), with the amendments from a four-way
+  verification sweep (source state, VtMB-facts docs, design docs, tracker) folded in: the
+  four-map chain named in full, health as an entity field, the dilation single-application rule,
+  the input scope stack over CommonUI's action router. Both design docs flipped to adopted; new
+  RE opened (RE21 usercmd order, RE22 crouch hull). As-built: `roadmap-archive.md` 11.0.
+  *Deps:* none.
+- [ ] **11.1 Frame + clock ownership** *(S1, S2)* — the canonical tick table pinned with tick groups
+  and tick prerequisites; `AElysiumMapActor` split into a `TG_PrePhysics` gameplay tick and a
+  `TG_PostPhysics` post-move tick (the `+use` cursor moves there, so it traces against the frame's
+  final positions); `FElysiumTimeControl` as the one pause/time-scale facade over the clock **and**
+  engine time dilation. *Acceptance:* a Substrate-tier frame-order assertion; `elysium.timescale 0.25`
+  slows movers, the queue, animation and the camera blend together; `bTickEvenWhenPaused` is false on
+  gameplay and true on presentation. *Deps:* none.
+- [ ] **11.2 World services** *(the substrate's outbound seam)* — `FElysiumWorldServices`
+  (`IElysiumEmbodiment`/`IElysiumAudio`/`IElysiumTravel`/`IElysiumPresenter`) injected into
+  `FElysiumEntityWorld`, replacing the `AElysiumMapActor` back-pointer and the
+  `GetWorld()->GetFirstPlayerController()` reach; a recording stub in the test module. Every call site
+  already handles a null body (`elysium.NpcBodies 0`), so null-service is the existing A/B formalised.
+  *Acceptance:* a Substrate-tier test runs the tutorial's `logic_auto` chain end to end with no RHI,
+  no actors and no `tools/out`. *Deps:* 1.4.
+- [ ] **11.3 App state machine + pause + loading + game over** — `UElysiumGameFlowSubsystem` owning
+  `EElysiumAppState` (Boot/FrontEnd/Loading/Playing/Paused/GameOver), `NewGame`/`LoadGame`/`SaveGame`/
+  `QuitToMenu`/`SetPaused`, the `PreLoadMap` movie-player loading screen, and the death /
+  `Masquerade == 5` path; `AElysiumGameMode::BeginPlay` shrinks to one `NotifyWorldReady`.
+  *Acceptance:* Esc pauses and holds the world (`FrontEnd` deliberately does not — the backdrop is
+  the feature), quit-to-menu returns to the backdrop with the session cleared, travel shows a loading
+  screen, boot is decided once at GI init. *Deps:* 11.1, 8.6.
+- [ ] **11.4 The player entity** *(S3 — the hinge)* — `FElysiumAnimating` + `FElysiumCombatCharacter`
+  as real registry chain nodes matching VtMB's datamap chain, `FElysiumPlayer` under them, and
+  `FElysiumPlayerRecord` (session lifetime) with hydrate-at-map-build / dehydrate-at-travel. The pawn
+  demotes to a body (no `+use` routing, no sign dismissal, no key polling, no
+  GI→Map→Actor→World chains). `FindPlayer()` and `pc` return an ordinary `Entity`; `vampire.Player`
+  retires; the 25 `CBaseCombatCharacter` + 11 player datamap inputs register on the chain
+  (`script_api.md`), fail-closed until their systems land. *Acceptance:* `pc.MoneyAdd(50)` and
+  `elysium.ent_fire !player MoneyAdd 50` land on the same field through the same R2 walk; a trigger
+  the player walks into resolves `!activator` to a real handle; `point_teleport` moves the player
+  through `SetRuntimeOrigin` like any other entity. *Deps:* 11.0 (call A), 11.2.
+- [ ] **11.5 Input scope stack** *(S6)* — `UElysiumInputSubsystem` (LocalPlayer) owning a priority
+  stack of `FElysiumInputScope` (mode, cursor, mapping contexts, pauses-game); menus, dialogue, signs,
+  cinematics, chargen and Cog all push/pop instead of setting `FInputMode*` — retiring the three
+  independent owners that exist today (`UElysiumUISubsystem`, `AElysiumHUD`, Cog's ImGui capture).
+  *Acceptance:* opening any screen over any other restores exactly the mode it found; a Substrate test
+  asserts the stack is balanced across every screen transition; Cog can never eat a menu click.
+  *Deps:* 11.3.
+- [ ] **11.6 Command registry + user command** *(S5, S7)* — `FElysiumCommands` (every VtMB
+  bindable verb registered by name, `+`/`-` pairs included) with `FElysiumConsole::Execute`'s
+  precedence stated and tested (**command → alias → cvar → Python**); `FElysiumUserCmd` filled by the
+  router and consumed by movement, camera and the bus, so nothing polls a key; `AElysiumPawn` re-based
+  to `APawn` with a **box** collision component and a `UElysiumMovementComponent` shell
+  (`source_movement.md`: `ACharacter` cannot take a box root, and the box is a recovered requirement,
+  not a preference), the capsule pawn kept behind `elysium.SourceMovement 0`. *Acceptance:* every
+  bindable verb fires by name from console, level script, `.dlg` action and MCP; a recorded command
+  stream replays identically. *Deps:* 11.1. *Feeds:* 10.6, 4.7.
+- [ ] **11.7 Camera component** — `UElysiumCameraComponent` holding VtMB's four weights with
+  `AElysiumPawn::CalcCamera` as the single apply point (delegating to `GetCameraView` first), the
+  cvar surface reproduced verbatim, and the scripted-shot channel (`SetCamera`, `camera_keyframe`,
+  conversation and feed cameras) as one push/pop seam. Design + the recovered solve:
+  `camera-view-modes.md`. Sequenced in **PP2** — the scripted-shot channel is the theatre's
+  camera. *Acceptance:* its weight-driver automation test passes (0→1 in 0.5 s, time-scaled,
+  symmetric resume mid-blend); `togglecamera` works from a binding; `SetCamera` has a landing
+  site. *Deps:* 11.6.
+- [ ] **11.8 Presentation seam** *(S8)* — `UElysiumPresentationSubsystem` publishing
+  `FElysiumViewState` once per frame plus discrete delegates; `AElysiumHUD`, the dialogue box and the
+  8.6 screens re-based onto it. The front-end gating (`IsMenuUp()` checks scattered through the HUD)
+  becomes one rule in the publisher. *Acceptance:* no widget references `FElysiumEntityWorld`; the
+  HUD renders from a hand-built view state in a test. *Deps:* 11.3. *Feeds:* 8.9, 9.2.
+- [ ] **11.9 Save/load** *(= 9.5, on this spine)* — `save-architecture.md` in full: the
+  `UElysiumSaveGame` shell over a versioned compressed payload, the four blocks, `EElysiumField::Save`
+  on the class-chain field tables (enumeration is the R2 walk, matched by name, zero-omitted), the
+  per-map snapshot lifecycle with the absent-entity set, the event queue + think times, `G`/morgue,
+  owned RNG streams, and the slot/quick/autosave ring. *Acceptance:* save mid-tutorial, quit to menu,
+  load, and the beat machine continues; the round-trip digest test is green. *Deps:* 11.4, 5.4.
+- [ ] **11.10 Play test tier** *(S10)* — a fourth automation tier that drives a real headless world:
+  the beat-script driver (`do`/`wait`/`assert`/`shot` over the command registry, injected input, `G`/
+  quest/entity predicates and the 2.9 shot baseline), command-stream replay, the save round-trip, and
+  the matching MCP tools (`input_inject`, `beat_run`, `save`/`load`, `time`). *Acceptance:*
+  `test.bat Play` walks the tutorial opening unassisted and fails loudly when a beat regresses — P9's
+  slice acceptance becomes a CI run rather than a manual play-through. *Deps:* 11.6, 2.7, 2.9.
+
+**Slice acceptance:** from a cold launch — the menu comes up over the backdrop, New Game runs chargen
+and enters the story, the tutorial's opening beats play on rebindable controls with a HUD, Esc pauses,
+Save and Load round-trip the run, and `test.bat Play` asserts the whole thing headlessly.
+
+## P12 — The theatre: choreography & faces *(the PP2 rung — everything blocks, `decisions.md` 2026-07-26 cont. 5)*
+
+The intro cinematic (`sp_theatre` — embrace + trial) as VtMB plays it: `logic_choreographed_scene`
+driving actors, scripted camera (11.7), line audio, subtitles, and facial animation. The fidelity
+bar is an owner call: the scene is not done until the faces are alive — **eyes and lipsync
+included**. RE unknowns are front-loaded (RE19/RE20 + PL9/PL10 in "Now") because this is the
+highest-variance work on the path.
+
+- [ ] **12.1 Choreographed scenes** — `logic_choreographed_scene` as a real class + the scene-file
+  parser (PL9) + an event timeline on the game clock (speak / gesture / sequence / move / camera
+  events), `Start`/`Cancel` inputs and the completion outputs; actors resolve by name and play
+  through the 8.5 anim seam. *Acceptance:* the theatre's first scene runs its actors and fires its
+  completion wires in the built game. *Deps:* 8.5, 11.1, RE19, PL9.
+- [ ] **12.2 Scene audio + subtitles** — per-line audio through the 6.2 decode path (the
+  `PlayDialogFile` file-resolution rules) synced to scene time; a subtitle surface on the view
+  state (11.8). *Acceptance:* the scene's lines are audible and subtitled in sync. *Deps:* 12.1,
+  6.2, 11.8.
+- [ ] **12.3 Facial flex track** — MDL v2531 flex/morph data decoded (RE20) into glb morph targets
+  (PL10); `UElysiumNpcAnimInstance` grows a morph-track player over the body animation.
+  *Acceptance:* a flex authored in the model moves the face in-game. *Deps:* 8.5, RE20, PL10.
+- [ ] **12.4 Eyes** — the eyeball data (RE20): eye posing / look-at targets + eyelid and blink
+  flexes. *Acceptance:* actors track their look targets and blink through the theatre scene.
+  *Deps:* 12.3.
+- [ ] **12.5 Lipsync** — `.lip` phoneme tracks (RE20; 9.3c already logs the scripts' `.lip`
+  probes as a named divergence) driving mouth flexes against 12.2's line audio. *Acceptance:*
+  mouths move with the words on every theatre line. *Deps:* 12.2, 12.3.
+
+**Slice acceptance** *(PP2)*: New Game runs genesis, then the full theatre act plays start to
+finish — choreography, camera moves, audible subtitled lines, live faces — and hands the player
+to the tutorial chain, unassisted, from real input.
+
+## P13 — Tutorial mechanics: stealth, disciplines, firearms *(the PP6 rung; promoted out of 10.7)*
+
+- [ ] **13.1 Stealth** — `vdata/stealth` + `stealthkillrules` loaded; sneak mode (movement +
+  posture + the stealth readout on 8.9's stack), NPC detection against it, `trigger_stealth_mod`
+  becomes real. *Acceptance:* the tutorial's stealth lesson completes as retail. *Deps:* 9.4,
+  4.7, 11.4.
+- [ ] **13.2 Disciplines** — activation/deactivation over `vdata/disciplinetgt_*`, blood cost
+  through the sheet, timed effects on the one queue (R4), the tutorial's discipline lesson
+  (`ClearActiveDisciplines` and friends become real). *Acceptance:* the tutorial's discipline
+  lesson completes as retail. *Deps:* 9.4, 11.4.
+- [ ] **13.3 Firearms & melee basics** — weapons off `vdata/items/`, equip/holster, the attack
+  path through the dice resolver (9.6, `CalcFeat`), damage onto `FElysiumCombatCharacter`, the
+  gun-range and melee lessons. Full combat AI stays 10.7. *Acceptance:* the tutorial's range +
+  melee lessons complete as retail. *Deps:* 9.8, 9.6, 11.4.
+
+**Slice acceptance** *(PP6 = P9's criterion, mechanised)*: `sp_tutorial_1` is completable as in
+retail end to end, and `test.bat Play` proves it headlessly.
+
 ## Pipeline backlog (indexed; owned by phases above)
 
 | ID | Task | Needed by |
@@ -1008,6 +1203,8 @@ dialogue, scripted flow, quests, save/load included.
 | PL5d | Copy `cfg/*.cfg` (the alias/cvar tables — `user.cfg` carries the Basic/Plus `patchtype` alias) verbatim → `out/cfg/` — `UE_extract_cfg.py`, patch-first, wired into `export_all.py` (`--no-cfg`) [x] | 9.3b [x] |
 | PL6 | Texlight merge in exporter | 3.4 |
 | PL7 | Sidecar space fixes surfaced by the audit — **none (0.4: all sidecars already Unreal cm)** | 0.4 [x] |
+| PL9 | Mirror the choreographed-scene files + `.lip` phoneme files → `out/scenes/`, `out/lip/` — patch-first, verbatim (format per RE19/RE20) | 12.1, 12.5 |
+| PL10 | Facial data in the NPC export — flex/eyeball chunks (RE20) decoded by `mdl_skel` into glb **morph targets** + a flex-name manifest per bank | 12.3, 12.4 |
 | PL8 ✅ | UI source inventory for the re-skin — **`tools/UE_extract_ui.py`** mirrors `out/ui/`: 25 `.res` layouts + **both** schemes byte-for-byte (`VampireScheme` skins client.dll, `TrackerScheme` skins GameUI.dll — `docs/vtmb-ui.md`), 194 localized strings, the 1024×512 title lockup, the menu particle scene (26 scripts → 22 `.tga` sprites) + the 6 `MM_Skybox` faces, and **503 decoded HUD/interface materials**; `--inventory` adds the ~350 item icons. Zero unresolved. Wired into `export_all.py` (`--no-ui`). The `.fnt` atlases are **not** extracted — vector type is `Content/Fonts` via `tools/fetch_ui_fonts.py`. | 8.6 |
 
 ## RE backlog (reverse-engineering work; each cited where consumed)
@@ -1032,6 +1229,10 @@ dialogue, scripted flow, quests, save/load included.
 | RE16 | **The sky's brightness chain (K7, RE-A9)** — the identity: a sky pixel is the decoded texel, unscaled, `$nofog` game-wide; the one asymmetry is the world's `albedo × lightmap × 2` (overbright pinned to 2). Full: `sky-ambience.md` → K7 | SKY B4/B5/B8, D7 | [x] |
 | RE17 | **Owner-run reference captures** *(was sky-ambience RE-A6)* — original-game screenshots at the shared vantages (3–4 sky maps + one sky-only view per skyname), for the **world** half of the display ratio (`albedo × lightmap × 2` beside a sky texel — the sky's own transfer is the identity, RE16) and as 7.8's reference. **Gate:** first settle whether `snapshot` grabs pre- or post-gamma-ramp (the display gamma is a device LUT a back-buffer grab omits) — quantitative use waits on that check | 3.6/3.7, 7.8 | [ ] |
 | RE18 | **The script→engine action surface** — the demand ledger (16,438 call sites / 1,287 names) plus the supply side out of `vampire.dll`: all six `PyMethodDef` tables with their `ml_doc` contracts, and the `CBaseCombatCharacter` / `CAI_BaseNPC` / player datamaps behind the 124 unresolved names. Closes `python_bridge.md`'s file-like open item. Full: `docs/script_api.md` | 9.7, 9.8–9.10, 9.4, 8.5 | [x] |
+| RE19 | **Choreographed-scene format + event semantics** — the scene files VtMB ships, `logic_choreographed_scene`/`CChoreoScene`'s event types (speak / gesture / sequence / move / camera), the timing model, and how completion fires | 12.1, PL9 | [ ] |
+| RE20 | **MDL v2531 facial data** — flex descriptors/controllers, the eyeball chunks (posing, look-at, lids), and the `.lip` phoneme file format (9.3c logs the scripts' probes) | 12.3–12.5, PL10 | [ ] |
+| RE21 | **`GameFrame` usercmd order** — is player movement processed before or after the think pass? Settles `runtime-architecture.md` §3's inferred ordering (`DumpFuncs funcs=10571fc0`, the RE2 workflow) | 11.1, 4.7 | [ ] |
+| RE22 | **The ducked hull** — Source's crouch AABB dimensions + `CategorizePosition`/`StepMove` interaction (standing `32×32×72` is recorded in `source_movement.md`; ducked is not, and `IN_DUCK` needs it) | 4.7, 11.6 | [ ] |
 | SKY | **Sky + ambience rework, Phases B + C (B1–B8b, C0–C5)** — landed 2026-07-26: backdrop correct + at parity with standing tests (`Elysium.Substrate.SkyCube`/`FogPack`); the whole 3D skybox split by BSP area and placed under its transform; fog from its real owners + Source's own linear distance fog as a per-primitive material term (B8b, D4 amended); the sky light at the map's own authored level (**zero on the 83 no-pair maps**); the bake measured in absolute units — direct light explains ~0% of a median lit face, the bounce floor *is* the ambient level. Open residue promoted to **3.10–3.13 + RE17**. Facts: `sky-ambience.md`; full as-built: `roadmap-archive.md` → SKY | 3.6/3.7 | [x] |
 
 The Ghidra extraction findings behind the closed rows (the RE1/RE2/RE3/RE4 detail:
@@ -1085,6 +1286,9 @@ extraction"; durable format/behaviour facts fold into the owning topic docs
 | "Polish" leaks into the logic layer | silent divergence from retail behaviour, unfindable later | `remaster-direction.md`'s governing rule: RE first, owner's call, dated decision-log entry recording faithful *and* chosen behaviour; default is reproduce, and layer assignment happens before the work, not after |
 | No classic-UI mode to A/B against | a UI regression has no reference | the original's structure is captured as data (PL8) and in `m0_menu_build.md`, so screens are checked against intent rather than pixels; the *world* keeps its faithful A/B path unchanged |
 | The uasset-bake architecture is de-facto adopted but unrecorded (spike branch, stale charter docs) | tracker/docs diverge from the running code; the unmerged-branch debt compounds | 0.9 is the standing top task: decision entry + `CLAUDE.md`/`rebuild-strategy.md` update + merge to `main` |
+| The player stays a pawn + a sheet struct while 9.4/9.8/9.9/9.10/9.5 land on it | five systems built against a shim, then a five-way migration with saves already in the wild | 11.4 is sequenced ahead of all five and named the hinge in "Now"; the target shape is VtMB's own (`savegame_format.md`, `script_api.md`), so it is a port, not an invention |
+| Modal screens fight over input mode (three independent owners today) | the mouse is unusable in some screen order; Cog can make the game unclickable | 11.5's single arbiter + a Substrate test asserting the scope stack balances across every transition |
+| P12's choreography/facial RE (RE19/RE20) is unknown-duration work that **blocks PP2 in full** (owner call: eyes + lipsync gate the cinematic) | the playable path stalls behind RE | RE19/RE20 + PL9/PL10 are front-loaded in "Now", parallel to the PP0 refactor, so the unknowns surface earliest; each 12.x step is observable alone |
 | A shots baseline silently invalidates across a re-bake or content rebuild (measured: up to ~10 mean on bounce-dominated vantages from **byte-identical** inputs) | a look regression hides in toolchain noise — or toolchain noise reads as a regression | B6's measured rule: re-baseline after any bake/content change; A/B a small effect as two runs over one fixed asset set (a cvar A/B), never across a rebuild |
 
 ## Decision log

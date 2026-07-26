@@ -574,8 +574,11 @@ Jack dialogue, no beat machine, no landmark chain** yet. Mapping the real flow o
 Consolidated from the four investigations; each gates a real decision.
 
 **Loop / runtime**
-- `CServerGameDLL::GameFrame` body ordering — is the event queue drained before or after
-  `Physics_RunThinkFunctions`? Affects fire ordering. (`DumpFuncs funcs=10571fc0`.)
+- ~~`GameFrame` body ordering (queue vs thinks)~~ — **resolved: think-first** (RE2,
+  `roadmap-archive.md`: `Physics_RunThinkFunctions` at `0x1011ac1b`, then the sole
+  `CEventQueue::ServiceEvents` at `0x1011ac34`). Still open in the same body: where usercmd
+  processing (player movement) sits relative to the think pass — **RE21**
+  (`DumpFuncs funcs=10571fc0`).
 - Confirm `ScheduleTask` truly enqueues into `CEventQueue` (vs. a separate list) — decompile
   the thunk behind PyMethodDef `ScheduleTask` `0x10590530`.
 - Fixed vs. variable step is settled as **variable** from cvar absence; a port may still

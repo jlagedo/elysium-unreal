@@ -2229,3 +2229,26 @@ pipeline (C0); the sky light's level is the map's own authored radiance, zero on
 that authored none (C1, C2); the art-direction knob that can replace load-bearing fill is landed
 and measured (C3); and the bake is now measured in absolute units, which says direct light
 explains ~0% of a median lit face and the bounce floor *is* the ambient level (C4, C5).
+
+---
+
+## P11 — Runtime spine
+
+- [x] **11.0 Adopt the spine** *(landed 2026-07-26)* — the seven `runtime-architecture.md` §16
+  owner calls recorded as one dated entry (`decisions.md` 2026-07-26 cont. 4): player as entity
+  (A), box pawn on `APawn` (B), the sheet to `FElysiumCombatCharacter` + `FElysiumPlayerRecord`
+  (C), the four-map New Game chain with the theatre owned by P12 (D), pause = engine pause +
+  clock hold with the single-application dilation rule (E), the view-state seam with the input
+  scope stack as sole input-mode authority over CommonUI's action router (F), boot out of the
+  game mode (G). Adoption followed a four-way verification sweep (source state, VtMB-facts docs,
+  design docs, tracker) that corrected the doc set in the same pass: think-first re-cited to RE2
+  and `game_runtime.md` §7's stale open question retired; the movement-order claim demoted to
+  inferred (new RE21); the chain's fourth map named (`sm_pawnshop_1`); `m_lifeState` removed
+  from 4.9's latched surface; the player record reconciled with the save Player block (health
+  stays a `Save`-flagged entity field; email flags + equipped handles added; owned RNG streams
+  on the session record); the Play-tier beat test separated from the Substrate-tier digest
+  compare; `debug-tooling.md`'s "three layers" corrected to four (0–3); "no HUD" corrected to
+  "no vitals HUD"; `logic_choreographed_scene` given a real owner (P12); the `env_fade`-under-menu
+  comment fixed to match the code (the quad is suppressed too). Both design docs flipped to
+  adopted. Same day, `decisions.md` cont. 5 made the playable path (PP0–PP6) the master
+  sequence, with P11 as its PP0 rung.

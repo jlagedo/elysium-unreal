@@ -6,6 +6,81 @@ trigger. A behavioural divergence from retail lands here carrying both the faith
 chosen behaviour (`remaster-direction.md`'s governing rule). Entries are never rewritten —
 append a correction as a new entry.
 
+- **2026-07-26 (cont. 5)** — **The playable path (PP0–PP6) is the master sequence.** Owner call.
+  One path to a real, played game now drives all roadmap sequencing: **menu boot → New Game
+  (genesis chargen: clan, name, spends) → the theatre cinematic → land on `sp_tutorial_1` with
+  Jack → complete the tutorial.** Task IDs stay; a new ladder (`roadmap.md` → "The playable
+  path") sequences them, with new phases **P12** (theatre choreography & faces) and **P13**
+  (tutorial stealth/disciplines/firearms) for the work nothing owned. Three standing rules,
+  all owner calls:
+
+  1. **Logic and interactions outrank everything.** Gameplay systems land first.
+  2. **Graphics are frozen** — no look-polish work (P3/P7 open tasks, 10.1–10.3, asset
+     enhancement) until the path lands. A simple-but-working screen beats a polished absence;
+     only gameplay-blocking rendering bugs are exceptions. The render path itself is unchanged.
+  3. **Acceptance is played, not injected.** A path phase completes only when its beats run from
+     real input in the built game (beat-scripted in the 11.10 Play tier so the claim is a CI
+     run). Console state-injection and dev shortcuts remain implementation aids, never
+     acceptance evidence.
+
+  Two sequencing calls decided against the reviewer's recommendation, deliberately: **4.7 (the
+  faithful Source movement port) is in the path** at PP4 — the tutorial is to be played with
+  VtMB feel, not UE feel, accepting the schedule cost; and **PP2 blocks on the full cinematic
+  fidelity bar** — choreography, scripted camera, line audio, subtitles, **eyes and lipsync all
+  gate it** (no still-mouthed or dead-eyed first pass). The known cost: P12's facial/choreo RE
+  (RE19/RE20) is the highest-variance item on the path, so its RE + pipeline spikes are
+  front-loaded parallel to the PP0 refactor.
+
+- **2026-07-26 (cont. 4)** — **The runtime spine is adopted: all seven `runtime-architecture.md`
+  §16 owner calls (= roadmap 11.0), with the verification-review amendments folded in.** Owner
+  call, taken on a four-way verification sweep (source state, VtMB-facts docs, design docs,
+  tracker) that confirmed every load-bearing claim and corrected the doc in the same pass.
+
+  - **(A) The player is an entity; the pawn is its body.** Faithful: this *is* VtMB's own
+    architecture (`FENTTABLE_PLAYER`, the 277-field save chain, the player/combat-character
+    datamap inputs). No divergence. The `vampire.Player` Python type retires; `FindPlayer()`
+    returns an ordinary `Entity`. Cost re-measured at 11 `PlayerSheet()` call sites (not ~15).
+  - **(B) The pawn re-bases to `APawn` with a box root** + `UElysiumMovementComponent`.
+    Faithful: Source's hull is an AABB (`32×32×72`) and `StepMove` requires it
+    (`source_movement.md`); `ACharacter` cannot take a box root. The capsule pawn stays behind
+    `elysium.SourceMovement 0` until 4.7 reaches parity. Open RE recorded: the ducked hull's
+    dimensions are unrecovered (**RE22**).
+  - **(C) The sheet moves** to `FElysiumCombatCharacter` (live) + `FElysiumPlayerRecord`
+    (durable). Reconciled with `save-architecture.md` §3/§4: **health stays a `Save`-flagged
+    entity field** on the combat character (the chain walk saves it — VtMB's own placement),
+    not a record field; the record gains **email flags** and **equipped handles**; the session
+    record explicitly carries the **owned RNG streams** (load-bearing for save determinism and
+    replay).
+  - **(D) New Game reproduces the retail chain as data** — the four-map chain
+    `sp_genesisdevice_1` → `sp_theatre` → `sp_tutorial_1` → `sm_pawnshop_1`
+    (`game_runtime.md` §4; the doc's earlier wording named only three). `ccmd.createplayer`
+    becomes a registered command whose screen is 9.4's chargen. The theatre act is owned by
+    **P12** and blocks the path's PP2 in full (see cont. 5) — `elysium.SkipIntro` stays the dev
+    shortcut until it lands; the skip is a recorded, reversible divergence, not a rewrite.
+  - **(E) Pause = engine pause + clock hold, behind one facade** (`FElysiumTimeControl`);
+    time scale likewise one call. **Single-application rule:** engine dilation already scales
+    the tick's `DeltaSeconds`, so the clock consumes dilated dt and applies no factor of its
+    own — never scale twice. `FrontEnd` deliberately runs unpaused (the live backdrop is the
+    feature — implied by cont. 3, decided here); `Paused` holds both.
+  - **(F) UI reads a published view state** (`FElysiumViewState`, `UElysiumPresentationSubsystem`).
+    Pointer fields are valid until the next publish and never stored. **The input scope stack
+    (S6) is the sole input-mode authority**: CommonUI's `UCommonUIActionRouterBase` (a fourth
+    writer no doc had modelled) is subordinated — Elysium's activatable widgets return no
+    desired input config, and screens push/pop scopes instead.
+  - **(G) Boot moves off the game mode** into `UElysiumGameFlowSubsystem::BootFromCommandLine`,
+    including the command-line parsing currently in `UElysiumMapSubsystem`
+    (`ShouldBootNewGame`/`ResolveBootMap`). A per-world object cannot own an
+    application-lifetime decision.
+
+  Doc corrections applied with the adoption (the review's findings): think-first re-cited to
+  **RE2** (`game_runtime.md` §1 never established it and its §7 still posed it as open — now
+  retired); the "movement runs after thinks in VtMB" claim demoted to *inferred* pending
+  **RE21**; `m_lifeState` removed from 4.9's latched surface (it is a save field, not a
+  `CPlayerEvents` input); "no HUD" corrected to "no *vitals* HUD"; the Play-tier save test
+  (same beats fire) separated from the Substrate-tier digest compare; `debug-tooling.md`'s
+  stale "three layers" corrected to four (0–3); `logic_choreographed_scene` given a real owner
+  (P12). Both design docs (`runtime-architecture.md`, `save-architecture.md`) flip to adopted.
+
 - **2026-07-26 (cont. 3)** — **Correction to the same day's UI entry, point (4): the menu backdrop
   builds the map in full, entity substrate included.** Owner call, on seeing the first working
   menu.

@@ -8,8 +8,9 @@ loop.
 
 ## Read first
 
-- **`docs/roadmap.md`** — the single source of truth work tracker: phases P0–P10, per-task
-  status, pipeline + RE backlogs, risk register. Its two companions carry the history:
+- **`docs/roadmap.md`** — the single source of truth work tracker: the playable-path ladder
+  (PP0–PP6, the master sequence), phases P0–P13, per-task status, pipeline + RE backlogs, risk
+  register. Its two companions carry the history:
   `docs/roadmap-archive.md` (the full as-built record of every completed task) and
   `docs/decisions.md` (the dated, append-only decision log). **Status and history live in
   that three-file set and nowhere else** — including this file.
@@ -161,6 +162,7 @@ facts, valid regardless of target engine. Organisation and maintenance rules: `d
 | `decisions.md` | the dated, append-only decision log |
 | `rebuild-strategy.md` | tracks, milestone vocabulary, sidecar contracts, per-system design targets |
 | `remaster-direction.md` | the direction charter — the three layers, the two adjudication tests |
+| `runtime-architecture.md` | **the game spine** — lifetimes, the object graph, the frame, the player object, the session/boot state machine, the control surface, the seams |
 | `engine-core.md` | the entity object model and its two-phase build plan |
 | `entity_io.md` | the Source I/O bus — 7-field outputs, ScriptHide/Unhide, `use_icon` |
 | `python_bridge.md` | the CPython embedding, datamap reflection, the four call paths, `G` |
@@ -178,12 +180,13 @@ facts, valid regardless of target engine. Organisation and maintenance rules: `d
 | `camera-view-modes.md` | the first↔third-person camera — blend weight, solver, cvars, the Unreal design |
 | `level_transitions.md` | the three spawn mechanisms + the opening map chain |
 | `savegame_format.md` | the `.sav` container, `.HL1/2/3` sections, and the game state they hold |
+| `save-architecture.md` | the Unreal persistence design — the four blocks, the field walk, per-map snapshots |
 | `map-architecture.md` | the Unreal map load/unload/travel design |
 | `rendering-perf.md` | the dynamic render path, perf cvars, MegaLights checklist |
 | `reflections.md` | `$envmap` — VtMB's own composite read out of its shipped DX8 shaders, the whole-game authoring survey, and the Unreal reflection channel |
 | `light-attribution.md` | telling VtMB's real fixtures from its GI-substitute fill lights — the probe, the surveys, what discriminates and what does not |
 | `sky-ambience.md` | the sky + ambient-light RE plan and Unreal rework — the unknowns, the labelled-cube probes, the calibration path |
-| `debug-tooling.md` | the three-layer debug/dev-tooling architecture |
+| `debug-tooling.md` | the layered (0–3) debug/dev-tooling architecture |
 | `asset-enhancement.md` | the offline surface track (delight → upscale → PBR synthesis) |
 | `vdata-catalog.md` | the `vdata/` rulebook inventory — each table → system → roadmap task |
 | `recovered/dice-system.md` | the World-of-Darkness d10 resolver (verified: decompile + `DiceRolls.txt`) |

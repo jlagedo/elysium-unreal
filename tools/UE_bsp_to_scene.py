@@ -986,7 +986,7 @@ def main(bsp_path, out_dir):
     # material near two env_cubemaps samples two baked cubemaps, so each becomes its
     # own surface. The group key carries the cubemap ('<mat>@<cube>'); these map it
     # back to the base material (for VMT/texture lookup) and the cubemap stem.
-    gkey_base, gkey_cube = {}, {}
+    gkey_base, gkey_cube, gkey_raw = {}, {}, {}
     n_faces = len(faces_l) // FACE_SIZE
     for fi in range(n_faces):
         base = fi * FACE_SIZE
@@ -1008,6 +1008,7 @@ def main(bsp_path, out_dir):
         gkey = f"{mat}@{cube}" if cube else mat
         gkey_base[gkey] = mat
         gkey_cube[gkey] = cube
+        gkey_raw[gkey] = raw_name.lower().replace("\\", "/").strip("/")
 
         # gather source-space corners first (for UVs and classification)
         src = []
@@ -1102,6 +1103,15 @@ def main(bsp_path, out_dir):
         mat = gkey_base.get(gkey, gkey)     # base material for VMT/texture lookup
         cube = gkey_cube.get(gkey)          # baked cubemap stem, or None
         vmt_txt = read_material_text(f"materials/{mat}.vmt")
+        if vmt_txt is None:
+            # Not every 'maps/<mapname>/<mat>' name is a cubemap patch of a generically-named
+            # base material -- some (e.g. VBSP's per-water-volume depth-blend instances) are
+            # genuinely map-local materials that exist ONLY under their full path in this map's
+            # own PAKFILE, with no base-name equivalent anywhere in the install. Retry under the
+            # untouched raw name before giving up.
+            raw = gkey_raw.get(gkey)
+            if raw and raw != mat:
+                vmt_txt = read_material_text(f"materials/{raw}.vmt")
         info = {"basetexture": None, "selfillum": False, "translucent": False, "alphatest": False,
                 "water": False, "normalmap": None, "fogcolor": None, "fogstart": None,
                 "fogend": None, "reflecttint": None}

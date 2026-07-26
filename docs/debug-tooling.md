@@ -9,8 +9,8 @@ editor would be overwritten by the next pipeline export anyway. Debug tooling th
 **in-process, in the running game**, reading the same runtime data structures the game plays
 from. The editor is a *viewer* we get for free during PIE, never an authoring surface.
 
-The architecture is three layers. Everything is development-only (compiled out of or disabled
-in Shipping); nothing here touches the bring-your-own-game posture.
+The architecture is four layers, numbered 0–3. Everything is development-only (compiled out of or
+disabled in Shipping); nothing here touches the bring-your-own-game posture.
 
 **Interaction principle — F1-first (load-bearing).** The Cog F1 UI is *the* surface the developer
 touches. Every debug capability must be reachable and operable from a Cog window with **nothing to

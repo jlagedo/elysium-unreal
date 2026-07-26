@@ -178,8 +178,7 @@ void AElysiumHUD::DrawHUD()
 
 	// 8.6 — while a menu screen is up the player-facing HUD is not: no aim reticle over a menu, and
 	// no sign/popup panel drawing behind it (a menu backdrop builds the whole map, so its scripts
-	// can legitimately open one). The env_fade quad below still draws — it is a screen effect, not
-	// a HUD element.
+	// can legitimately open one). This also suppresses the env_fade quad below.
 	if (IsMenuUp())
 	{
 		return;

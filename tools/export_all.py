@@ -15,6 +15,7 @@ Usage:
   python tools/export_all.py --all           # every map in the install, patch-first (108)
   python tools/export_all.py ch_hub_1 la_hub_1   # only the named maps
   python tools/export_all.py --skip-existing     # skip maps already exported
+  python tools/export_all.py --clean             # wipe each targeted map's out/<name>/ first
   python tools/export_all.py --no-content        # skip the committed-asset rebuild
   python tools/export_all.py --no-cards          # skip the Lumen card bake
   python tools/export_all.py --no-scripts        # skip the script/dialogue copy
@@ -23,7 +24,7 @@ Usage:
   python tools/export_all.py --no-cfg            # skip the console cfg copy
   python tools/export_all.py --npc               # also batch-export NPC glbs + shared banks
 """
-import os, sys, time, subprocess, traceback
+import os, sys, time, subprocess, shutil, traceback
 import UE_bsp_to_scene as B
 import UE_extract_sounds as S
 import UE_extract_scripts as SC
@@ -35,7 +36,7 @@ import install
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-OUT = "out"
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
 MAPS_INI = os.path.join(os.path.dirname(os.path.abspath(__file__)), "maps.ini")
 
 def load_test_maps(ini_path=MAPS_INI):
@@ -103,6 +104,7 @@ def bake_cards(maps):
 
 def main():
     args = sys.argv[1:]
+    clean = "--clean" in args
     skip_existing = "--skip-existing" in args
     skip_content = "--no-content" in args
     skip_cards = "--no-cards" in args
@@ -145,10 +147,15 @@ def main():
         print(f"\n[{i}/{len(names)}] {name} ...", flush=True)
         t0 = time.time()
         try:
+            if clean and os.path.exists(out_dir):
+                shutil.rmtree(out_dir)
             os.makedirs(out_dir, exist_ok=True)
             B.main(install.map_path(name), out_dir)   # patch-first .bsp for this name
             results.append((name, "ok", time.time() - t0))
-        except Exception as e:
+        except (Exception, SystemExit) as e:
+            # SystemExit: UE_bsp_to_scene.py hard-aborts a map on a validation failure (e.g. an
+            # unresolvable material) by raising it directly, not via sys.exit(code) -- so it
+            # must be caught here too, or one bad map kills the whole batch (see module docstring).
             results.append((name, f"FAIL: {e}", time.time() - t0))
             print(f"  !! {name} FAILED: {e}")
             traceback.print_exc()

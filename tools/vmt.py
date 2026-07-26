@@ -63,6 +63,17 @@ def _find_f(text, key):
     except ValueError:
         return None
 
+def _norm_path(s):
+    """Normalize a texture-path value: backslash->forward slash, lowercase, collapse
+    doubled slashes, strip a leading/trailing slash. VtMB ships at least one shipped VMT
+    with a stray leading '/' on $basetexture (models/scenery/vehicles/trailer/trailer_lm.vmt);
+    left un-stripped it builds a 'materials//...' lookup key that matches nothing, even
+    though the real texture is on disk under the correct path."""
+    if not s:
+        return None
+    n = s.replace("\\", "/").lower()
+    return re.sub(r"/+", "/", n).strip("/")
+
 def parse(text, resolve_include=None):
     """text: VMT contents. resolve_include: fn(path)->text for patch shaders.
     Returns dict with basetexture (normalized), selfillum, translucent, alphatest."""
@@ -76,7 +87,7 @@ def parse(text, resolve_include=None):
                 parent = parse(base, resolve_include)
                 bt = _find(text, "basetexture")
                 if bt:
-                    parent["basetexture"] = bt.replace("\\", "/").lower()
+                    parent["basetexture"] = _norm_path(bt)
                 return parent
 
     bt = _find(text, "basetexture")
@@ -87,7 +98,7 @@ def parse(text, resolve_include=None):
     bt2 = _find(text, "basetexture2")
     bump = _find(text, "bumpmap")
     return {
-        "basetexture": bt.replace("\\", "/").lower() if bt else None,
+        "basetexture": _norm_path(bt),
         "selfillum": _find(text, "selfillum") == "1",
         "translucent": _find(text, "translucent") == "1",
         "alphatest": _find(text, "alphatest") == "1",
@@ -109,19 +120,19 @@ def parse(text, resolve_include=None):
         # additive (confirmed against stdshader_dx8.dll: no Fresnel on the world
         # path), reflection = cube(reflect(v,n)) * mask * tint, with optional
         # contrast (mix toward squared) and saturation (mix from grayscale).
-        "envmap": env.replace("\\", "/").lower() if env else None,
-        "envmapmask": envmask.replace("\\", "/").lower() if envmask else None,
+        "envmap": _norm_path(env),
+        "envmapmask": _norm_path(envmask),
         "basealphaenvmapmask": _find(text, "basealphaenvmapmask") == "1",
         "envmaptint": _vec3(_find(text, "envmaptint")),        # [r,g,b] or None (=1,1,1)
         "envmapcontrast": _find_f(text, "envmapcontrast"),     # default 0 (no-op)
         "envmapsaturation": _find_f(text, "envmapsaturation"), # default 1 (no-op)
         # WorldVertexTransition (terrain 2-texture blend keyed by vertex/disp alpha).
-        "basetexture2": bt2.replace("\\", "/").lower() if bt2 else None,
+        "basetexture2": _norm_path(bt2),
         # $bumpmap: tangent-space normal map (2% of world materials).
-        "bumpmap": bump.replace("\\", "/").lower() if bump else None,
+        "bumpmap": _norm_path(bump),
         # water (the "Water" shader): no $basetexture; a normal map + fog params.
         "water": is_water,
-        "normalmap": nm.replace("\\", "/").lower() if nm else None,
+        "normalmap": _norm_path(nm),
         "fogcolor": _vec3(_find(text, "fogcolor")),      # [r,g,b] 0-1, or None
         "fogstart": _find_f(text, "fogstart"),           # Source units (inches)
         "fogend": _find_f(text, "fogend"),

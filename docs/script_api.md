@@ -265,6 +265,10 @@ what roadmap B6's feed interaction fires. Keyfields include `squadname` and `hin
 | `SetSupernaturalLevel` | INTEGER | 0 | `LAB_10007fb3` |
 | `Holster` | VOID | 0 | `LAB_100138ef` |
 
+The datamap header states **11** inputs; this table enumerates **10** — one input was not
+recovered from the builder dump and is still unidentified (re-run
+`parse_datamap_builder.py` over `FUN_1015af10` to close it).
+
 Two consequences for the port:
 
 - **`GiveItem` exists twice** — as a Character *method* (`10199100`) and as a player datamap
