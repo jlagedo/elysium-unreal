@@ -49,7 +49,8 @@ private:
 	// is selected — they act on the whole rig, not on the selection.
 	void RenderEditActions(UElysiumLightRig& Rig, const FString& MapName);
 	// Write the map's edits to FElysiumContentPaths::LightEdits(MapName), overwriting any previous
-	// save. Returns false and fills OutMessage on failure.
+	// save. Returns false and fills OutMessage on failure. (The Load button is the rig's own
+	// LoadSurvey — the same pass Adopt auto-applies at map load.)
 	static bool SaveEdits(UElysiumLightRig& Rig, const FString& MapName, FString& OutMessage);
 	// Draw a marker per light over the world and, when armed, note which one a click would take.
 	void TickMarkersAndPick(UElysiumLightRig& Rig);

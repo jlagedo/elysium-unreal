@@ -20,7 +20,7 @@ namespace
 	// Let the map settle before tracing. The spawn pass is done by then, but prop bodies and
 	// collision cook on the first frames; probing into a half-built scene would report "nothing
 	// near" for lights whose fixture had not landed yet.
-	constexpr int32 SettleFrames = 30;
+	constexpr int32 ProbeSettleFrames = 30;
 }
 
 bool FElysiumProbeRun::IsRequested()
@@ -62,7 +62,7 @@ bool FElysiumProbeRun::Tick(float /*DeltaSeconds*/)
 	{
 		return true;
 	}
-	if (++FrameInPhase < SettleFrames)
+	if (++FrameInPhase < ProbeSettleFrames)
 	{
 		return true;
 	}

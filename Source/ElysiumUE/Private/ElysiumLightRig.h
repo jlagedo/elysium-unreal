@@ -70,6 +70,7 @@ public:
 		FLinearColor Color = FLinearColor::White;   // the sidecar's normalized hue, for revert
 		bool bOverridden = false;   // hand-set in the Lights window; the calibration passes skip it
 		bool bDisabled = false;     // switched off by hand in the Lights window
+		bool bReviewed = false;     // survey verdict recorded (kept or killed) in the Lights window
 	};
 
 	// The spawned light sources, for the Lights window's source list. Skyambient (type 5) is
@@ -105,6 +106,22 @@ public:
 	// Should this source be lit right now, per the master toggle and its own disable? The Lights
 	// window's isolate pass restores visibility through this rather than to a plain "on".
 	bool ShouldSourceBeLit(int32 Index) const;
+
+	// --- per-source reviewed mark ----------------------------------------------------------------
+	// The survey's "judged" bit, distinct from the disable: a save records disabled lights only, so
+	// without it a kept light and a never-visited one are indistinguishable. Disabling a source
+	// marks it reviewed by itself (a kill is a verdict); re-enabling does not clear the mark (that
+	// is a deliberate keep). Pure bookkeeping — no visual effect, nothing reads it but the save.
+	bool IsSourceReviewed(int32 Index) const;
+	void SetSourceReviewed(int32 Index, bool bReviewed);
+
+	// Re-apply the map's saved survey (`_lights/<map>.json`, written by the Lights window) to the
+	// running rig: the disabled set and the reviewed marks, joined on the `.lights` line index.
+	// Additive — it sets marks, never clears them — and attribute overrides are not restored.
+	// Adopt runs this automatically when a save exists (elysium.LightSurvey 0 turns that off), so
+	// the survey is the map's standing hand-authored light state; the Lights window's Load button
+	// is the same call mid-session. Returns false and fills OutMessage on failure.
+	bool LoadSurvey(FString& OutMessage);
 
 	// Re-derive every light's intensity, reach, falloff exponent, and specular from the current
 	// tuning fields (PointSpotScale, MaxBrightness, RadiusScale, FalloffExponent, SunScaleLux,
@@ -149,6 +166,9 @@ private:
 	TArray<FLightSource> LightSources;
 	float StyleTime = 0.f;
 	bool bLightsVisible = true;
+
+	// The map this rig adopted (the `.lights` base name), which keys the survey save file.
+	FString SurveyMapName;
 
 	// Derive one source's intensity, reach, falloff and specular from the tuning constants. The
 	// single place that math lives; ApplyLiveTuning is this over every non-overridden source.

@@ -1,13 +1,17 @@
 #include "ElysiumLightRig.h"
 
+#include "ElysiumContentPaths.h"
 #include "ElysiumEditorLabels.h"
 
 #include "Components/DirectionalLightComponent.h"
 #include "Components/LightComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/SpotLightComponent.h"
+#include "Dom/JsonObject.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/FileHelper.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumLights, Log, All);
 
@@ -25,6 +29,15 @@ static TAutoConsoleVariable<float> CVarLightScale(
 static TAutoConsoleVariable<int32> CVarLightFit(
 	TEXT("elysium.LightFit"), 0,
 	TEXT("Apply the <map>.lightfit per-area brightness rebalance to the LightRig (0/1)."),
+	ECVF_Default);
+
+// The map's saved light survey (`_lights/<map>.json`, written by the Lights window) is applied
+// at map load when it exists: hand-killed lights come up switched off, reviewed marks restored.
+// That makes the survey the map's standing hand-authored light state; 0 loads the full faithful
+// rig, which is the A/B back to VtMB's as-authored source set.
+static TAutoConsoleVariable<int32> CVarLightSurvey(
+	TEXT("elysium.LightSurvey"), 1,
+	TEXT("Auto-apply the saved light survey (disabled set + reviewed marks) at map load (0/1)."),
 	ECVF_Default);
 
 namespace
@@ -212,7 +225,114 @@ int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FStrin
 		bHasSkyAmbient ? TEXT(" +skyambient") : TEXT(""),
 		bApplyFit ? TEXT(" +lightfit") : TEXT(""),
 		Unmatched > 0 ? *FString::Printf(TEXT(" (%d unmatched)"), Unmatched) : TEXT(""));
+
+	// The standing hand-authored light state: apply the map's saved survey whenever one exists.
+	// A missing file is the normal case and stays silent; a file that fails to apply is a warning.
+	SurveyMapName = FPaths::GetBaseFilename(LightsPath);
+	if (CVarLightSurvey.GetValueOnAnyThread() != 0
+		&& FPaths::FileExists(FElysiumContentPaths::LightEdits(SurveyMapName)))
+	{
+		FString SurveyMessage;
+		if (LoadSurvey(SurveyMessage))
+		{
+			UE_LOG(LogElysiumLights, Log, TEXT("LightRig: %s"), *SurveyMessage);
+		}
+		else
+		{
+			UE_LOG(LogElysiumLights, Warning, TEXT("LightRig: %s"), *SurveyMessage);
+		}
+	}
 	return LightCount;
+}
+
+bool UElysiumLightRig::LoadSurvey(FString& OutMessage)
+{
+	const FString Path = FElysiumContentPaths::LightEdits(SurveyMapName);
+	FString Json;
+	if (!FFileHelper::LoadFileToString(Json, *Path))
+	{
+		OutMessage = FString::Printf(TEXT("no save at %s"), *Path);
+		return false;
+	}
+	TSharedPtr<FJsonObject> Root;
+	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Json), Root) || !Root.IsValid())
+	{
+		OutMessage = FString::Printf(TEXT("parse failed: %s"), *Path);
+		return false;
+	}
+
+	// The save keys on the `.lights` line; this rig arrays by adoption order. Join through
+	// SourceIndex — a saved index with no live source (a re-export changed the sidecar) is
+	// counted, not guessed at.
+	TMap<int32, int32> RowBySource;
+	RowBySource.Reserve(LightSources.Num());
+	for (int32 Row = 0; Row < LightSources.Num(); ++Row)
+	{
+		RowBySource.Add(LightSources[Row].SourceIndex, Row);
+	}
+
+	int32 NumDisabled = 0, NumReviewed = 0, NumUnmatched = 0;
+
+	const TArray<TSharedPtr<FJsonValue>>* Edits = nullptr;
+	if (Root->TryGetArrayField(TEXT("edits"), Edits))
+	{
+		for (const TSharedPtr<FJsonValue>& Value : *Edits)
+		{
+			const TSharedPtr<FJsonObject>* Edit = nullptr;
+			if (!Value.IsValid() || !Value->TryGetObject(Edit))
+			{
+				continue;
+			}
+			bool bDisabled = false;
+			if (!(*Edit)->TryGetBoolField(TEXT("disabled"), bDisabled) || !bDisabled)
+			{
+				continue;
+			}
+			int32 SourceIndex = INDEX_NONE;
+			if (!(*Edit)->TryGetNumberField(TEXT("index"), SourceIndex))
+			{
+				continue;
+			}
+			if (const int32* Row = RowBySource.Find(SourceIndex))
+			{
+				SetSourceDisabled(*Row, true);   // also marks it reviewed
+				++NumDisabled;
+			}
+			else
+			{
+				++NumUnmatched;
+			}
+		}
+	}
+
+	// Older saves carry no reviewed list; their disabled restore above still marks those reviewed.
+	const TArray<TSharedPtr<FJsonValue>>* Reviewed = nullptr;
+	if (Root->TryGetArrayField(TEXT("reviewed"), Reviewed))
+	{
+		for (const TSharedPtr<FJsonValue>& Value : *Reviewed)
+		{
+			int32 SourceIndex = INDEX_NONE;
+			if (!Value.IsValid() || !Value->TryGetNumber(SourceIndex))
+			{
+				continue;
+			}
+			if (const int32* Row = RowBySource.Find(SourceIndex))
+			{
+				SetSourceReviewed(*Row, true);
+				++NumReviewed;
+			}
+			else
+			{
+				++NumUnmatched;
+			}
+		}
+	}
+
+	OutMessage = FString::Printf(TEXT("loaded %d off · %d reviewed%s from %s"),
+		NumDisabled, NumReviewed,
+		NumUnmatched > 0 ? *FString::Printf(TEXT(" · %d unmatched"), NumUnmatched) : TEXT(""),
+		*Path);
+	return true;
 }
 
 
@@ -320,9 +440,26 @@ void UElysiumLightRig::SetSourceDisabled(int32 Index, bool bDisable)
 		return;
 	}
 	LightSources[Index].bDisabled = bDisable;
+	if (bDisable)
+	{
+		LightSources[Index].bReviewed = true;
+	}
 	if (ULightComponent* Light = LightSources[Index].Light.Get())
 	{
 		Light->SetVisibility(ShouldSourceBeLit(Index));
+	}
+}
+
+bool UElysiumLightRig::IsSourceReviewed(int32 Index) const
+{
+	return LightSources.IsValidIndex(Index) && LightSources[Index].bReviewed;
+}
+
+void UElysiumLightRig::SetSourceReviewed(int32 Index, bool bReviewed)
+{
+	if (LightSources.IsValidIndex(Index))
+	{
+		LightSources[Index].bReviewed = bReviewed;
 	}
 }
 

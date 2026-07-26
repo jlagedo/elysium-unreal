@@ -6,6 +6,17 @@ trigger. A behavioural divergence from retail lands here carrying both the faith
 chosen behaviour (`remaster-direction.md`'s governing rule). Entries are never rewritten —
 append a correction as a new entry.
 
+- **2026-07-26** — **The light rig is hand-authored per map; the saved survey auto-applies at
+  load.** Owner call, made after surveying `hw_609_1`: VtMB's WORLDLIGHTS are painterly — authored
+  for the baked result, not as physical fixtures (sourceless lights mid-room; the fill class
+  `docs/light-attribution.md` measures) — so under real GI the per-map light set is curated **by
+  hand** in the Lights Cog window, not by the classifier (which stays a candidate-ranker/advisor).
+  The window's survey save (`tools/out/_lights/<map>.json`, disabled set + reviewed coverage
+  marks) is the standing hand-authored state: `UElysiumLightRig::Adopt` auto-applies it whenever
+  the file exists. **Faithful behaviour**: every `.lights` source lit, exactly as VtMB authored —
+  kept one cvar away (`elysium.LightSurvey 0`; default 1 applies the survey), and a map with no
+  save file is unchanged. The saves are bring-your-own (gitignored, derived from the user's own
+  install walk), so nothing game-sourced lands in the repo.
 - **2026-07-26** — **Prop skin families: skins snap, the crossfade is unreachable, and the skin table
   ships as a baked data asset.** Closing the `Skin` stub 8.3/8.4 left behind.
   **(1) RE first, and it inverted the plan.** The intent was to build VtMB's ~2 s skin crossfade,

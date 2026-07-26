@@ -1,10 +1,14 @@
 # Light attribution — separating VtMB's real fixtures from its fill lights
 
-**Status: investigation open, tooling landed.** The measurement tools, the data format, and four
-hand surveys exist and are reusable. The classifier works on three of four surveyed maps and fails
-on the fourth; no behavioural change has been made to the light rig, and none should be until the
-open question at the bottom is closed. Nothing here is a decision — see `docs/decisions.md` for
-what would have to be recorded before any light is actually removed.
+**Status: hand authoring decided; the classifier investigation is parked.** The measurement
+tools, the data format, and four hand surveys exist and are reusable. The classifier works on
+three of four surveyed maps and fails on the fourth. The standing decision
+(`docs/decisions.md` 2026-07-26) is that the per-map light set is curated **by hand** in the
+Lights Cog window — VtMB's lights are authored like a painting, for the baked result rather than
+as physical fixtures, so no automatic rule ships — and the saved survey auto-applies at map load
+(`elysium.LightSurvey 0` restores the full faithful rig). The classifier remains a
+candidate-ranker/advisor for that hand pass; any *classifier-driven* removal would still need the
+open question at the bottom closed first.
 
 ## The question
 
@@ -33,14 +37,30 @@ changes no value, so a light comes back exactly as it was, and it outranks both 
 toggle and the window's isolate pass. Walking a map flipping that switch is how a labelled set is
 produced.
 
+Each source also carries a **Reviewed** mark — the "judged" bit, distinct from disabled: switching
+a light off marks it reviewed by itself (a kill is a verdict), a kept light is marked by hand, and
+re-enabling clears nothing. Copy-pasted lights (an identical colour/mag/radius/type/style tuple)
+form a **batch** the selected light's panel acts on in one go — off, on, reviewed, or cycling the
+members — matching the authored-batches finding below. **Next unreviewed** selects the nearest
+unjudged light.
+
+The save is the map's **standing hand-authored light state**: map load auto-applies its disabled +
+reviewed sets (`UElysiumLightRig::LoadSurvey`; `elysium.LightSurvey 0` turns that off and loads
+the full faithful rig — the A/B back to VtMB's as-authored source set), and the window's **Load**
+button runs the same pass mid-session. The apply is additive — it sets marks, never clears them —
+and attribute overrides are not restored either way.
+
 **Save** writes `tools/out/_lights/<map>.json` — one file per map, overwritten each save:
 
-- `counts` (sources / disabled / overridden) — the denominator, so "how many were left on" is
-  answerable from the file alone
+- `counts` (sources / disabled / overridden / reviewed) — the denominator, so "how many were left
+  on" and coverage are answerable from the file alone
 - `calibration` — the rig tuning the judgement was made under. Which lights read as redundant
   depends on how hard the rig was driving all of them, so the verdict is uninterpretable without it
 - `edits[]` — only the edited sources, each with `index`, `row`, colour, position, magnitude,
-  radius, style, intensity
+  radius, style, intensity, and the disabled/overridden/reviewed flags
+- `reviewed[]` — every reviewed source's `.lights` line index, disabled ones included. The
+  coverage record: a source absent here was never judged, so scoring restricts to this list
+  instead of inferring coverage from where the disabled lights sit
 
 `index` is the source's **`<map>.lights` line**; `row` is its position in the window's list. They
 are not the same — the skyambient row is skipped and sources are appended in the order the baked
@@ -133,6 +153,24 @@ batch. On `sp_tutorial_1`, **83 of 85 batches are unanimous** in the hand verdic
 effectively made per batch, not per light. Batch signatures do **not** transfer between maps (exact
 colour tuples are per-map; zero cross-map matches on nine maps).
 
+### The worldlight `type` and `style` columns
+
+The sidecar's `type` (0 emit_surface, 1 point, 2 spot) and `style` fields carry signal the
+geometric features do not; the current classifier reads neither.
+
+- **`emit_surface` (type 0) is a texlight** — VRAD derives it from an emissive face, so it is
+  attached to a visible source *by construction*. `sm_hub_1` has 20; 0 disabled. Auto-protect,
+  no geometry test needed.
+- **Spotlights are almost never fill on the failing map.** `sm_hub_1` kill rates: 1% of spots
+  (2 of 367) vs 11% of points. 32 of its 104 fill candidates are spots and 31 of those were
+  hand-kept — restricting fill to `type == point` alone lifts hub precision 20% → 28%. The
+  semantics back it: a spot has an authored aim direction; fill-for-bounce is omnidirectional.
+  A per-map **prior**, not a rule — spots are killed at 13–16% on `sp_giovanni_1` /
+  `sm_oceanhouse_1`.
+- **Styled lights are never fill in the surveys** — 11 across the four maps (10 on
+  `sp_tutorial_1`, 1 on `sm_hub_1`), 0 disabled. Small sample, strong prior: a flicker pattern
+  is an authored effect on a specific source.
+
 ### Per-map normalisation is mandatory
 
 Absolute centimetre thresholds do not transfer — a 256 cm rule fitted on `sp_tutorial_1` scores 85%
@@ -157,6 +195,18 @@ Recorded so these are not re-derived:
   there have wider reach and more peers than the ones killed.
 - **A separate unvisited area on `sm_hub_1`.** Tested and rejected — single-link clustering (1500 cm)
   finds one connected 531-light region plus a 96-light area at z ≈ −148 m.
+- **Per-light NNLS deconvolution of the bake.** Solving per-light weights so the rig's direct
+  irradiance reproduces the baked lightmap (lump 8) collapses: direct kernels are decorrelated
+  from a bounce-dominated bake, so the solver dumps everything into a flat ambient and rails the
+  weights to the clamp. Per-**light** attribution against the bake is ill-posed; per-**area**
+  balancing is well-posed and is what `probe_light_attribution.py` ships as (the `.lightfit`
+  per-cell rebalance). Full method and caveats in that tool's docstring.
+- **Per-light `emissive_frac` as a killed-vs-kept separator inside the fill class.** The
+  load-bearing-fill hypothesis — hand-kept fill sits where there is no emissive surface for
+  Lumen to bounce — does not show at per-light scale: on `sm_hub_1`, killed-fill median 0.040 vs
+  kept-fill 0.031, AUC 0.39 (slightly inverted). The **regional** form is untested and still
+  plausible — the eastern strip (X > 7000) has half the west's median emissive surroundings
+  (0.135 vs 0.313) — but a light's own ray fan does not measure it.
 
 ## Traps
 
@@ -168,10 +218,11 @@ Recorded so these are not re-derived:
 - **A map can hold more than one playable area.** `sp_tutorial_1` has a second one at ~170 m
   (125 lights) that the survey never covered; `sm_hub_1` has one at −148 m. Scoring must be
   restricted to the surveyed band or precision is measured against lights nobody looked at.
-- **"Kept" is not the same as "judged".** The save records disabled lights only, so an unvisited
-  light is indistinguishable from an examined-and-approved one. Coverage on `sp_tutorial_1` was
-  verified after the fact (disabled lights span the full extent, 18 of 25 grid cells). A survey of a
-  large map cannot be trusted this way without an explicit reviewed mark, which does not exist yet.
+- **"Kept" is not the same as "judged" in the four existing surveys.** They predate the reviewed
+  mark, so in their saves an unvisited light is indistinguishable from an examined-and-approved
+  one. Coverage on `sp_tutorial_1` was verified after the fact (disabled lights span the full
+  extent, 18 of 25 grid cells); the other three carry no such check. A survey made with the
+  reviewed mark records coverage as data — score it against `reviewed[]` only.
 
 ## Current classifier and its scores
 
@@ -205,16 +256,34 @@ A 15-light shortlist of the highest-confidence disagreements exists, all in the 
 from lights killed in the west. Resolving those 15 decides whether the rule over-flags on dense
 maps or the survey was uneven.
 
-Other threads, in rough value order:
+**The framing under test:** the classifier asks *"was this light authored as fill?"*, but the hand
+survey — made under the live rig, Lumen on — answers *"does the scene survive without it?"*. The
+two diverge where fill is **load-bearing**: a light faking night-sky/city-glow ambient is genuinely
+fill, yet Lumen cannot replace it where there is nothing emissive to bounce. A dense outdoor street
+with a sparse-emissive strip — `sm_hub_1` east — is the candidate case. If this holds, the fix is
+not a better fill detector but a second gate: fill is only killable where GI demonstrably replaces
+it.
 
-1. Survey one more map to break the 3-of-4 tie — `hw_609_1` is the most informative (lowest
-   protected share, highest abstention).
-2. Add a **reviewed** mark to the save, distinct from disabled, so coverage stops being an inference.
-3. Batch-level voting (classify the authored batch, not the light) — 83/85 unanimity on
+Threads, in rough value order:
+
+1. **Adjudicate the `sm_hub_1` 15-light shortlist** — the MCP server's teleport + screenshot makes
+   the on/off A/B automatable per light; the survey save shows disabled lights across the full X
+   range, so an eastern coverage *gap* is not the default explanation, but that save predates the
+   reviewed mark, so kept ≠ judged there.
+2. **Survey `hw_609_1`** to break the 3-of-4 tie — most informative (lowest protected share, 45%
+   abstention). Survey per authored batch with the reviewed mark on.
+3. **Re-score with the `type`/`style` clauses** (type-0 auto-protect, styled protect, per-map spot
+   prior) against all surveys once 1–2 add labels.
+4. **In-engine counterfactual per batch** — the direct measurement every feature above only
+   proxies: toggle an authored batch off headless, let Lumen settle, sample luminance at fixed
+   points against the bake-referenced target (`probe_light_attribution.py` already reconstructs
+   per-luxel baked luminance). ~85 batches per map keeps it tractable; the analytic NNLS failure
+   does not apply because the engine supplies the bounce. Confirms or vetoes each fill batch
+   individually and demotes the classifier to a candidate-ranker.
+5. **Batch-level voting** (classify the authored batch, not the light) — 83/85 unanimity on
    `sp_tutorial_1` suggests it would raise precision, untested elsewhere.
-4. Visual adjudication: the MCP server exposes teleport + screenshot, so the disagreement cases can
-   be inspected directly rather than argued from scalars.
 
-**No change to the light rig is justified yet.** Any actual removal or attenuation of a light class
-is a behavioural divergence from VtMB and needs the faithful behaviour recorded plus a dated entry
-in `docs/decisions.md`, per the remaster charter.
+**No classifier-driven change to the light rig is justified yet.** Hand-authored curation is
+decided and running (`docs/decisions.md` 2026-07-26, `elysium.LightSurvey`); an *automatic*
+removal or attenuation of a light class would be a further divergence needing this question closed
+and its own dated decision, per the remaster charter.

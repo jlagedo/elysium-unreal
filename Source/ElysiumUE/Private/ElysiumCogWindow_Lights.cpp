@@ -42,6 +42,16 @@ namespace
 		}
 	}
 
+	// Level authors copy-paste lights, so an exact raw-attribute tuple identifies one authored
+	// decision — on sp_tutorial_1, 83 of 85 such batches were unanimous in the hand survey
+	// (docs/light-attribution.md). Exact float equality is the point: batch members come from
+	// identical sidecar rows, so their derived values are bit-identical.
+	bool SameBatch(const UElysiumLightRig::FLightSource& A, const UElysiumLightRig::FLightSource& B)
+	{
+		return A.Type == B.Type && A.Style == B.Style && A.Mag == B.Mag
+			&& A.RadiusCm == B.RadiusCm && A.Color == B.Color;
+	}
+
 	// World -> imgui screen for the per-light markers. Same shape as the inspector's projector, in
 	// its simplest form: markers are points, so there is no segment to clip — anything at or behind
 	// the near plane is just dropped.
@@ -89,11 +99,18 @@ void FElysiumCogWindow_Lights::RenderHelp()
 		"quickest way to find which fixture a row is.\n\n"
 		"Enabled switches one light out of the map (x) without touching a single value, so it comes "
 		"back exactly as it was — the switch for walking a map deciding which sources are real "
-		"fixtures and which are fill. Save writes that verdict out: the switched-off set plus every "
-		"hand-set attribute, keyed by .lights line index, to tools/out/_lights/<map>.json. One file "
-		"per map, overwritten each save.\n\n"
-		"Nothing else persists. The edits live in the running rig only; reloading the map brings back "
-		"the sidecar's calibrated values (the saved JSON stays).");
+		"fixtures and which are fill. Reviewed records that a light was judged at all: switching one "
+		"off marks it reviewed by itself, a kept light is marked by hand, so coverage is data rather "
+		"than an inference. Copy-pasted lights (an identical colour/mag/radius/type/style tuple) form "
+		"a batch, and the selected light's batch can be switched off or marked reviewed in one go.\n\n"
+		"Save writes the verdict out: the switched-off set plus every hand-set attribute, and the "
+		"reviewed index list, keyed by .lights line index, to tools/out/_lights/<map>.json. One file "
+		"per map, overwritten each save. The save is the map's standing hand-authored light state: "
+		"map load auto-applies its disabled + reviewed sets (elysium.LightSurvey 0 turns that off, "
+		"loading the full faithful rig), and the Load button is the same pass mid-session. Attribute "
+		"overrides are not restored either way.\n\n"
+		"Nothing else persists across a reload — attribute edits live in the running rig only, and "
+		"the sidecar's calibrated values come back (the saved JSON stays).");
 }
 
 void FElysiumCogWindow_Lights::RenderTick(float DeltaTime)
@@ -557,6 +574,10 @@ void FElysiumCogWindow_Lights::RenderContent()
 				{
 					ImGui::TextColored(ElysiumCogStyle::ColWarn, "%d*", Row);
 				}
+				else if (S.bReviewed)
+				{
+					ImGui::TextColored(ElysiumCogStyle::ColOk, "%d", Row);
+				}
 				else
 				{
 					ImGui::Text("%d", Row);
@@ -607,7 +628,7 @@ void FElysiumCogWindow_Lights::RenderContent()
 		ImGui::EndTable();
 	}
 	bScrollToSelected = false;
-	ImGui::TextDisabled("* overridden · x switched off");
+	ImGui::TextDisabled("* overridden · x switched off · green = reviewed & kept");
 
 	// After the gizmo, so a click that grabbed a handle is not also read as a new selection.
 	CommitPendingPick();
@@ -616,11 +637,12 @@ void FElysiumCogWindow_Lights::RenderContent()
 void FElysiumCogWindow_Lights::RenderEditActions(UElysiumLightRig& Rig, const FString& MapName)
 {
 	const TArray<UElysiumLightRig::FLightSource>& Sources = Rig.Sources();
-	int32 NumDisabled = 0, NumOverridden = 0;
+	int32 NumDisabled = 0, NumOverridden = 0, NumReviewed = 0;
 	for (const UElysiumLightRig::FLightSource& S : Sources)
 	{
 		NumDisabled += S.bDisabled ? 1 : 0;
 		NumOverridden += S.bOverridden ? 1 : 0;
+		NumReviewed += S.bReviewed ? 1 : 0;
 	}
 
 	if (ImGui::Button("Save edits"))
@@ -629,9 +651,21 @@ void FElysiumCogWindow_Lights::RenderEditActions(UElysiumLightRig& Rig, const FS
 		bSaveFailed = !SaveEdits(Rig, MapName, Message);
 		SaveStatus = Message;
 	}
-	ImGui::SetItemTooltip("Write the switched-off set and every hand-set attribute to "
-		"tools/out/_lights/<map>.json, keyed by .lights line index. One file per map, overwritten "
-		"each save.");
+	ImGui::SetItemTooltip("Write the switched-off set, every hand-set attribute, and the reviewed "
+		"index list to tools/out/_lights/<map>.json, keyed by .lights line index. One file per map, "
+		"overwritten each save.");
+
+	ImGui::SameLine();
+	if (ImGui::Button("Load"))
+	{
+		FString Message;
+		bSaveFailed = !Rig.LoadSurvey(Message);
+		SaveStatus = Message;
+	}
+	ImGui::SetItemTooltip("Re-apply the saved disabled + reviewed sets. The same pass runs by "
+		"itself at map load when a save exists (elysium.LightSurvey 0 turns that off), so this is "
+		"for re-applying mid-session. Additive — nothing currently off or reviewed is cleared. "
+		"Attribute overrides are not restored.");
 
 	ImGui::SameLine();
 	ImGui::BeginDisabled(NumOverridden == 0);
@@ -650,11 +684,51 @@ void FElysiumCogWindow_Lights::RenderEditActions(UElysiumLightRig& Rig, const FS
 		Rig.EnableAllSources();
 	}
 	ImGui::EndDisabled();
-	ImGui::SetItemTooltip("Switch every hand-disabled light back on — clears the survey.");
+	ImGui::SetItemTooltip("Switch every hand-disabled light back on. Reviewed marks stay.");
+
+	ImGui::SameLine();
+	if (ImGui::Button("Next unreviewed"))
+	{
+		// The closest light not yet judged — the walking order for finishing a survey.
+		FVector Cam = FVector::ZeroVector;
+		if (const APlayerController* PC = GetLocalPlayerController())
+		{
+			if (PC->PlayerCameraManager != nullptr)
+			{
+				Cam = PC->PlayerCameraManager->GetCameraLocation();
+			}
+		}
+		int32 Best = INDEX_NONE;
+		double BestDistSq = TNumericLimits<double>::Max();
+		for (int32 I = 0; I < Sources.Num(); ++I)
+		{
+			const ULightComponent* Light = Sources[I].Light.Get();
+			if (Sources[I].bReviewed || Light == nullptr)
+			{
+				continue;
+			}
+			const double DistSq = FVector::DistSquared(Cam, Light->GetComponentLocation());
+			if (DistSq < BestDistSq)
+			{
+				BestDistSq = DistSq;
+				Best = I;
+			}
+		}
+		if (Best != INDEX_NONE)
+		{
+			SelectedSource = Best;
+			bScrollToSelected = true;
+		}
+	}
+	ImGui::SetItemTooltip("Select the nearest light with no reviewed mark yet.");
 
 	ImGui::SameLine();
 	ImGui::TextColored(NumDisabled + NumOverridden > 0 ? ElysiumCogStyle::ColWarn : ElysiumCogStyle::ColDim,
 		"%d off · %d overridden", NumDisabled, NumOverridden);
+	ImGui::SameLine();
+	ImGui::TextColored(NumReviewed == Sources.Num() && Sources.Num() > 0
+		? ElysiumCogStyle::ColOk : ElysiumCogStyle::ColDim,
+		"· %d/%d reviewed", NumReviewed, Sources.Num());
 
 	if (!SaveStatus.IsEmpty())
 	{
@@ -668,11 +742,12 @@ bool FElysiumCogWindow_Lights::SaveEdits(UElysiumLightRig& Rig, const FString& M
 {
 	const TArray<UElysiumLightRig::FLightSource>& Sources = Rig.Sources();
 
-	int32 NumDisabled = 0, NumOverridden = 0;
+	int32 NumDisabled = 0, NumOverridden = 0, NumReviewed = 0;
 	for (const UElysiumLightRig::FLightSource& S : Sources)
 	{
 		NumDisabled += S.bDisabled ? 1 : 0;
 		NumOverridden += S.bOverridden ? 1 : 0;
+		NumReviewed += S.bReviewed ? 1 : 0;
 	}
 
 	FString Json;
@@ -688,6 +763,7 @@ bool FElysiumCogWindow_Lights::SaveEdits(UElysiumLightRig& Rig, const FString& M
 	W->WriteValue(TEXT("sources"), Sources.Num());
 	W->WriteValue(TEXT("disabled"), NumDisabled);
 	W->WriteValue(TEXT("overridden"), NumOverridden);
+	W->WriteValue(TEXT("reviewed"), NumReviewed);
 	W->WriteObjectEnd();
 
 	// The calibration the survey was made under: which lights read as redundant depends on how
@@ -722,6 +798,7 @@ bool FElysiumCogWindow_Lights::SaveEdits(UElysiumLightRig& Rig, const FString& M
 		W->WriteValue(TEXT("type"), FString(ANSI_TO_TCHAR(TypeLabel(S.Type))));
 		W->WriteValue(TEXT("disabled"), S.bDisabled);
 		W->WriteValue(TEXT("overridden"), S.bOverridden);
+		W->WriteValue(TEXT("reviewed"), S.bReviewed);
 		// Raw sidecar row, so a light is identifiable without the join.
 		W->WriteValue(TEXT("mag"), S.Mag);
 		W->WriteValue(TEXT("radius_cm"), S.RadiusCm);
@@ -747,6 +824,19 @@ bool FElysiumCogWindow_Lights::SaveEdits(UElysiumLightRig& Rig, const FString& M
 		W->WriteObjectEnd();
 	}
 	W->WriteArrayEnd();
+
+	// Every reviewed source, disabled ones included, as a flat `.lights`-line index list. This is
+	// the coverage record: a source absent here was never judged, so scoring restricts to it
+	// instead of inferring coverage from where the disabled lights happen to sit.
+	W->WriteArrayStart(TEXT("reviewed"));
+	for (const UElysiumLightRig::FLightSource& S : Sources)
+	{
+		if (S.bReviewed)
+		{
+			W->WriteValue(S.SourceIndex);
+		}
+	}
+	W->WriteArrayEnd();
 	W->WriteObjectEnd();
 	W->Close();
 
@@ -757,8 +847,9 @@ bool FElysiumCogWindow_Lights::SaveEdits(UElysiumLightRig& Rig, const FString& M
 		OutMessage = FString::Printf(TEXT("save failed: %s"), *Path);
 		return false;
 	}
-	OutMessage = FString::Printf(TEXT("saved %d edit%s to %s"), NumDisabled + NumOverridden,
-		NumDisabled + NumOverridden == 1 ? TEXT("") : TEXT("s"), *Path);
+	OutMessage = FString::Printf(TEXT("saved %d edit%s · %d reviewed to %s"),
+		NumDisabled + NumOverridden, NumDisabled + NumOverridden == 1 ? TEXT("") : TEXT("s"),
+		NumReviewed, *Path);
 	return true;
 }
 
@@ -798,7 +889,17 @@ void FElysiumCogWindow_Lights::RenderSelectedSource(UElysiumLightRig& Rig, int32
 		Rig.SetSourceDisabled(Index, !bEnabled);
 	}
 	ImGui::SetItemTooltip("Take this one light out of the map without touching its values. Held "
-		"against the rig's master toggle and against Isolate, and written to the save file.");
+		"against the rig's master toggle and against Isolate, and written to the save file. "
+		"Switching a light off also marks it reviewed.");
+	ImGui::SameLine();
+	bool bReviewed = S.bReviewed;
+	if (ImGui::Checkbox("Reviewed", &bReviewed))
+	{
+		Rig.SetSourceReviewed(Index, bReviewed);
+	}
+	ImGui::SetItemTooltip("This light was judged — kept or killed — so survey coverage is recorded "
+		"rather than inferred. A kill checks it by itself; a keep is checked by hand (or per batch, "
+		"below). Written to the save file.");
 	ImGui::SameLine();
 	if (ImGui::Button("Revert"))
 	{
@@ -810,6 +911,76 @@ void FElysiumCogWindow_Lights::RenderSelectedSource(UElysiumLightRig& Rig, int32
 	ImGui::Checkbox("Isolate", &bIsolate);
 	ImGui::SetItemTooltip("Hide every other light, to see what this one alone is doing. Lifted "
 		"automatically while this window is closed.");
+
+	// --- The authored batch ----------------------------------------------------------------------
+	// The survey's real unit: copy-pasted lights share one authored decision, so the verdict is
+	// offered per batch. Recomputed per frame — a few hundred tuple compares.
+	{
+		const TArray<UElysiumLightRig::FLightSource>& All = Rig.Sources();
+		TArray<int32> Batch;
+		for (int32 I = 0; I < All.Num(); ++I)
+		{
+			if (SameBatch(All[I], S))
+			{
+				Batch.Add(I);
+			}
+		}
+		if (Batch.Num() > 1)
+		{
+			int32 NumOff = 0, NumRev = 0;
+			for (const int32 I : Batch)
+			{
+				NumOff += All[I].bDisabled ? 1 : 0;
+				NumRev += All[I].bReviewed ? 1 : 0;
+			}
+			ImGui::Text("batch x%d", Batch.Num());
+			ImGui::SetItemTooltip("Lights whose raw colour/mag/radius/type/style tuple is identical "
+				"to this one's — a copy-pasted authored batch. Verdicts are near-unanimous within a "
+				"batch, so it is offered as the unit of the survey.");
+			ImGui::SameLine();
+			ImGui::TextDisabled("(%d off · %d reviewed)", NumOff, NumRev);
+			ImGui::SameLine();
+			if (ImGui::Button("Next in batch"))
+			{
+				const int32 At = Batch.IndexOfByKey(Index);
+				SelectedSource = Batch[(At + 1) % Batch.Num()];
+				bScrollToSelected = true;
+			}
+			ImGui::SetItemTooltip("Step the selection through the batch's members, to eyeball each "
+				"placement before judging them together.");
+			ImGui::SameLine();
+			if (ImGui::Button("Batch off"))
+			{
+				for (const int32 I : Batch)
+				{
+					Rig.SetSourceDisabled(I, true);
+				}
+			}
+			ImGui::SetItemTooltip("Switch the whole batch off (which also marks it reviewed).");
+			ImGui::SameLine();
+			if (ImGui::Button("Batch on"))
+			{
+				for (const int32 I : Batch)
+				{
+					Rig.SetSourceDisabled(I, false);
+				}
+			}
+			ImGui::SetItemTooltip("Switch the whole batch back on. Reviewed marks stay.");
+			ImGui::SameLine();
+			if (ImGui::Button("Batch reviewed"))
+			{
+				for (const int32 I : Batch)
+				{
+					Rig.SetSourceReviewed(I, true);
+				}
+			}
+			ImGui::SetItemTooltip("Mark the whole batch judged-and-kept in one go.");
+		}
+		else
+		{
+			ImGui::TextDisabled("no batch — this tuple is unique on the map");
+		}
+	}
 
 	const float LabelGutter = ImGui::CalcTextSize("Volumetric scatter").x + ImGui::GetStyle().ItemInnerSpacing.x;
 	const float Width = FMath::Max(GetDpiScale() * 110.0f, ImGui::GetContentRegionAvail().x - LabelGutter);
