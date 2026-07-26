@@ -307,9 +307,14 @@ Each texture is a pair under `materials/`: `<name>.tth` (header) + `<name>.ttz` 
 - `.tth`: `"TTH\0"` sig, a mip offset/size table, then an **embedded standard VTF
   header** starting at the `"VTF\0"` marker. Relative to that marker: `width` uint16 @16,
   `height` uint16 @18, `reflectivity` float[3] @32, `highResFormat` uint32 @52,
-  `mipCount` uint8 @56. `reflectivity` is the average albedo `vtex` computed from the texture;
-  VtMB's engine multiplies every bounce ray by it when building a model's ambient cube
+  `mipCount` uint8 @56. `reflectivity` is the **linear** average albedo `vtex` computed from the
+  texture; VtMB's engine multiplies every bounce ray by it when building a model's ambient cube
   (`../docs/sky-ambience.md` → "K3 / K5"), so it is a decodable input, not dead header space.
+  `tex_to_png.reflectivity(tth)` reads it and `UE_bsp_to_scene` writes it into the `.mtl` as
+  `reflectivity r g b`. Over `sp_tutorial_1`'s 412 materials it correlates with the decoded
+  texture's own mean **linear** albedo at 1.0000 (0.9597 against the gamma-encoded mean) — which
+  is both the decode's proof and the proof that the average is linear. No render path reads it;
+  it is the bounce term's input for the ambience calibration.
 - `.ttz`: zlib-compressed (`78 da`) raw image data = DXT mip pyramid, ordered
   **smallest→largest** (full-res mip is LAST).
 - Formats seen: DXT5 (enum 15, most common), DXT1 (13), DXT3 (14), BGR888 (3),
