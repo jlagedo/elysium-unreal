@@ -99,6 +99,20 @@ static TAutoConsoleVariable<int32> CVarSkyProbe(
 
 namespace
 {
+	// Half-extent of the backdrop box, centred on the map actor. It only has to enclose every
+	// map (the largest is a few hundred metres) plus the 3D-skybox miniature blown up 16x.
+	constexpr float SkyDomeHalfExtentCm = 500000.f;
+
+	// Where the world's height fog stops. RE-A9 is categorical that VtMB's 2D backdrop is never
+	// fogged — every sky face in the game carries `$nofog 1`, which the shader turns into
+	// FogMode(0) — but our backdrop is ordinary opaque geometry, and Unreal's deferred fog pass
+	// fogs by depth alone, so without this the fog inscatters straight into the sky (measured on
+	// sm_hub_1: the sky's displayed mean goes 16.6 -> 29.1). Epic's own documented use for the
+	// cutoff is exactly this. It sits far outside anything real — the world and the miniature
+	// both live within a few hundred metres — and far inside the dome, so no camera position
+	// inside the map can put the two on the wrong sides of it.
+	constexpr float FogCutoffCm = SkyDomeHalfExtentCm * 0.5f;
+
 	// A cube of half-extent H centred on the origin, as PMC section arrays. The sky material
 	// is two-sided and samples by view direction, so winding, normals, and UVs are unused —
 	// the box just has to surround the camera. ~5 km keeps the tutorial map well inside it.
@@ -349,6 +363,9 @@ int32 AElysiumMapActor::AdoptBakedLevel()
 			if (AExponentialHeightFog* Fog = Cast<AExponentialHeightFog>(Actor))
 			{
 				HeightFog = Fog->GetComponent();
+				// The world's fog, and only the world's: the 2D backdrop is exempt game-wide
+				// (sky-ambience B8 / RE-A9), and a deferred fog pass has no other way to say so.
+				HeightFog->SetFogCutoffDistance(FogCutoffCm);
 			}
 		}
 		else if (Actor->ActorHasTag(ElysiumBakedTags::Decal))
@@ -917,7 +934,7 @@ void AElysiumMapActor::ApplyEnvironment()
 		TArray<FVector> Verts, Normals;
 		TArray<int32> Tris;
 		TArray<FVector2D> UVs;
-		BuildSkyBox(500000.f, Verts, Tris, Normals, UVs);
+		BuildSkyBox(SkyDomeHalfExtentCm, Verts, Tris, Normals, UVs);
 		SkyDomeMesh->CreateMeshSection_LinearColor(0, Verts, Tris, Normals, UVs, {}, {}, false);
 		SkyDomeMesh->SetMaterial(0, Mid);
 		SkyDomeMesh->SetVisibleInRayTracing(false);

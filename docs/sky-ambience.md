@@ -74,7 +74,7 @@ engine works. Two things force the revisit:
 | Sky faces live at `materials/skybox/<skyname>{up,dn,lf,rt,ft,bk}` in the standard TTH/TTZ pair | `tools/UE_bsp_to_scene.py` |
 | The retail sky sets are DXT5; `pier` is the one set the Unofficial Patch replaces loose, as an uncompressed BGR888 re-export | install index, measured 2026-07-26 |
 | The 3D skybox is a **second full render of one BSP area** — world brushes, static props, brush entities, sprites, particles — not just backdrop geometry; transform `world(v) = scale·(v − origin)`, membership = `dleaf_t.area == sky_camera's area` | RE-A8 (below), `client.dll` + `vampire.dll` |
-| `sky_camera` carries the fog of the **skybox pass only**; the world's own fog is on `worldspawn`. 43 maps have a `sky_camera` (`scale` 16 on every one) and on 31 of them the two fog sets disagree; the 65 maps without one export no fog at all today, 12 of them against a `worldspawn` that enables it | RE-A8 + RE-A7 |
+| `sky_camera` carries the fog of the **skybox pass only**; the world's own fog is on `worldspawn`. 43 maps have a `sky_camera` (`scale` 16 on every one) and on 27 of them the two fog sets disagree in colour/range/enable (30 counting `fogcolor2`/`fogdir`); 12 maps enable `worldspawn` fog but have no `sky_camera`, and 6 have a fogging `sky_camera` over a `worldspawn` that does not | RE-A8 + RE-A7 |
 | `TOOLS/toolsskybox` faces mark where the engine draws sky; the exporter skips them | `tools/CLAUDE.md` |
 
 The `sm_hub_1` datum matters beyond inventory: an outdoor night street whose sky contributes
@@ -2020,17 +2020,45 @@ The rework is calibrated against data we already hold plus the original game:
   its size. Ours shares one depth buffer, so the miniature can occlude. It does not in practice
   because the sky area is authored as a sealed shell around its own camera, which scales into a
   shell around the map — but it is a property of the authoring, not a guarantee of the port.
-- **B8 — fog: world vs skybox** (RE-A8). `<map>.env` takes its fog from `worldspawn`, and the
-  `sky_camera` fog becomes a second, skybox-scoped set applied to the miniature. Feeds D4.
-  RE-A7 adds the other half of the bug: the `sky_camera` is not just the *wrong* source, on
-  **65 maps it is a missing one** — no `sky_camera`, so `.env` gets no fog at all, and 12 of
-  those maps have `worldspawn fogenable 1`. Sourcing world fog from `worldspawn` fixes the
-  dropped 12 and the 5 maps we currently fog against a `worldspawn` that never asked.
-  RE-A9 adds the rule that decides the scoping: **the 2D backdrop is never fogged and the
-  miniature always is.** Every shipped sky face carries `$nofog 1`, which the shader turns into
-  `FogMode(0)`, while the miniature draws through the ordinary material path under
-  `Enable3dSkyboxFog`. So the `sky_camera` set belongs to the miniature *only* — a single fog
-  volume spanning backdrop and miniature reproduces neither.
+- **B8 — fog: world vs skybox. Mostly done** (2026-07-26; RE-A8/RE-A9). `<map>.env` now carries
+  **both** sets, from their real owners: `fog*` off **`worldspawn`** (the world's), and
+  `skyfog*` off **`sky_camera`** (the 3D-skybox pass's own), the latter with its distances
+  already ×`scale` into world units — the pass renders at 1/scale, so a skybox-space distance is
+  `scale` times as far in the world. Both are read by `FElysiumEnvDef`.
+
+  Measured over all 108 maps, sourcing the world's fog from `worldspawn` changes three things:
+  **12 maps regain fog** they authored and never got (`ch_temple_4`, `hw_ash_sewer_1`,
+  `hw_sinbin_1`, `la_chantry_1`, `la_crackhouse_1`, `la_empire_1`, `sm_bailbonds_1`,
+  `sm_pawnshop_2`, `sm_smoke_1`, `sm_tattoo`, `sm_warehouse_1`, `sp_genesisdevice_1`), **6 stop
+  being fogged** against a `worldspawn` that never asked (`la_parkinggarage_1`,
+  `sm_oceanhouse_1`, `sp_endsequences_a`, `sp_endsequences_b`, `sp_soc_2`, `sp_theatre`), and
+  of the 43 maps carrying both, **27** were using the wrong numbers. *(This corrects two RE-A7
+  counts: 6 wrongly-fogged maps, not 5; and 27 disagreeing sets on the render-relevant fields —
+  30 if `fogcolor2`/`fogdir` are counted, which nothing we ship reads.)*
+
+  **The backdrop is now exempt, game-wide.** RE-A9's rule is categorical — every sky face
+  carries `$nofog 1` → `FogMode(0)` — but our backdrop is ordinary opaque geometry and Unreal's
+  deferred fog pass fogs by depth alone, so the world's fog was inscattering straight into the
+  sky. The fix is `FogCutoffDistance`, set from the backdrop box's own half-extent so the two
+  cannot drift apart (Epic documents that knob for exactly this). Measured on `sm_hub_1`: the
+  sky's displayed mean was 16.6 unfogged against 29.1 fogged; it is now **16.5 either way**,
+  while the world keeps its fog.
+
+  **What is not done, and why.** The `sky_camera` set is carried but is not yet a second render
+  term on the miniature. VtMB can scope it trivially because the miniature is a separate pass
+  with its own fog push/pop; ours is one scene and one exponential height fog, and the world and
+  the miniature **overlap in screen depth** (the placed miniature spans the same few hundred
+  metres the world does), so no distance-based mechanism — `FogCutoffDistance`, a
+  `LocalFogVolume`, a second fog actor — can separate them. It needs a *per-primitive* term:
+  a distance-fog node in a sky-only material set, which would also reproduce Source's planar
+  fog exactly. That is a material-stack task, not a sidecar one, and it is the remaining piece
+  of D4's scoping.
+
+  Noted while measuring, for the same D4 follow-up: the Source-linear-`start`/`end` →
+  exponential-density mapping is uncalibrated. `fog_density = 3/end` with
+  `fog_height_falloff = 0.02` puts almost all the fog below z ≈ 2 m, so a map's near fog is far
+  thinner than authored while its far distances saturate — which is why the backdrop was the
+  first place the defect showed.
 
 ## Phase C — ambience rework (K3/K4/K5/K6 settled — no RE blocks it)
 

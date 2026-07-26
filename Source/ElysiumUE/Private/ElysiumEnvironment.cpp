@@ -47,6 +47,23 @@ bool FElysiumEnvDef::Parse(const FString& EnvPath, FElysiumEnvDef& Out)
 		{
 			Out.bFog = Tok[1] == TEXT("1");
 		}
+		else if (Key == TEXT("skyfog") && Tok.Num() >= 2)
+		{
+			Out.bSkyFog = Tok[1] == TEXT("1");
+		}
+		else if (Key == TEXT("skyfogcolor") && Tok.Num() >= 4)
+		{
+			Out.SkyFogColor = FLinearColor(FCString::Atof(*Tok[1]), FCString::Atof(*Tok[2]),
+				FCString::Atof(*Tok[3]));
+		}
+		else if (Key == TEXT("skyfogstart") && Tok.Num() >= 2)
+		{
+			Out.SkyFogStartCm = FCString::Atof(*Tok[1]);
+		}
+		else if (Key == TEXT("skyfogend") && Tok.Num() >= 2)
+		{
+			Out.SkyFogEndCm = FCString::Atof(*Tok[1]);
+		}
 		else if (Key == TEXT("fogcolor") && Tok.Num() >= 4)
 		{
 			Out.FogColor = FLinearColor(FCString::Atof(*Tok[1]), FCString::Atof(*Tok[2]), FCString::Atof(*Tok[3]));

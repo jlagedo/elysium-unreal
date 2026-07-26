@@ -4,19 +4,31 @@
 
 class UTextureCube;
 
-// The `<map>.env` sidecar: 2D skybox flag/name and Source sky_camera fog. Distances are
-// already converted to centimetres by the exporter; the fog colour is linear 0..1. The runtime
-// turns these into image-based sky ambient and height fog.
+// The `<map>.env` sidecar: the 2D skybox flag/name, the face-orientation convention, and the
+// map's TWO fog sets — `worldspawn`'s (the world's) and `sky_camera`'s (the 3D-skybox pass's
+// own). Distances are already centimetres and the colours linear 0..1. The runtime turns these
+// into image-based sky ambient and height fog.
 struct FElysiumEnvDef
 {
 	bool bSky = false;             // six sky_*.png faces were decoded (skybox 1)
 	FString SkyName;               // e.g. "la" (informational; faces are named sky_<face>.png)
 	int32 SkyConvention = 0;       // the sky-face orientation contract version (skyconv); 0 = absent
 
-	bool bFog = false;             // sky_camera had fogenable
+	// The WORLD's fog, off `worldspawn`. What the player stands in.
+	bool bFog = false;
 	FLinearColor FogColor = FLinearColor::Black;
 	float FogStartCm = 0.f;
 	float FogEndCm = 0.f;
+
+	// The 3D-SKYBOX PASS's own fog, off `sky_camera` — a second, separately-scoped set, with its
+	// distances already carried into world units (the pass renders at 1/scale, so the exporter
+	// multiplies by `scale`). VtMB pushes this for the miniature's draw and pops it again; the
+	// 2D backdrop is fogged by neither. Carried here; see docs/sky-ambience.md -> B8 for what
+	// the render can and cannot yet scope.
+	bool bSkyFog = false;
+	FLinearColor SkyFogColor = FLinearColor::Black;
+	float SkyFogStartCm = 0.f;
+	float SkyFogEndCm = 0.f;
 
 	static bool Parse(const FString& EnvPath, FElysiumEnvDef& Out);
 };

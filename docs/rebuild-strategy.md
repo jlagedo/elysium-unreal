@@ -144,7 +144,7 @@ All under `tools/out/<map>/`. Formats are fixed by the pipeline and shared with 
 | `.lights` | one line per WORLDLIGHTS source: `type origin dir rgb radius stopdot stopdot2 exponent style sky` | text |
 | `.sprites` | env_sprite coronas: `texpath pos w h rgb amt orient sky` | text, Unreal cm (sizes = `scale × texpx × INCH_TO_CM`) |
 | `.spawn` | `info_player_start` origin + yaw | text, Unreal cm (yaw pre-negated) |
-| `.env` | skybox flag/name, sky-face orientation convention (`skyconv`), fog on/color/start/end | text |
+| `.env` | skybox flag/name, sky-face orientation convention (`skyconv`), and **two** fog sets — `fog*` from `worldspawn` (the world's) and `skyfog*` from `sky_camera` (the 3D-skybox pass's own, distances ×`scale` into world units) | text, Unreal cm |
 | `.water` | per-material plane, normalmap, fogcolor/dist, reflecttint | text, Unreal cm (plane Z + fogdist) |
 | `.cube` | color-grade LUT | Adobe .cube |
 | `.decals` | infodecal projectors: `material centre normal s_dir t_dir hw hh` (one deferred UDecalComponent per line) | text, Unreal cm (dirs unit; extents cm) |

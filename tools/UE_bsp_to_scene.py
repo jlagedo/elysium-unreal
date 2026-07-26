@@ -1467,19 +1467,46 @@ def main(bsp_path, out_dir):
         sky_ok = got == 6
         print(f"sky '{skyname}': {got}/6 faces decoded")
 
+    # Fog is TWO different things, and they belong to two different renders (RE-A8/RE-A9):
+    #
+    #   worldspawn's set is the WORLD's fog. It is what the player stands in.
+    #   sky_camera's set is the 3D-SKYBOX PASS's own fog -- `Enable3dSkyboxFog` pushes it for the
+    #     miniature's draw and pops it again -- and its distances are in miniature units, so a
+    #     world-space equivalent is `x scale`.
+    #   The 2D backdrop is fogged by NEITHER: every sky face in the game carries `$nofog 1`,
+    #     which the shader turns into FogMode(0), so no fog reaches it at any distance.
+    #
+    # Sourcing the world's fog from the sky_camera (which is what this wrote before) is wrong
+    # three ways: it fogs 5 maps whose worldspawn never asked, it drops fog on 12 maps that did
+    # ask but have no sky_camera at all, and on 31 of the 43 maps that have both, it uses the
+    # wrong numbers.
+    wspawn = ent_block("worldspawn")
     scam = ent_block("sky_camera")
-    fog_on = blk_f(scam, "fogenable") >= 1.0
-    fog_col = blk_vec(scam, "fogcolor") or [0.0, 0.0, 0.0]
+
+    def fog_block(blk, dist_scale):
+        col = blk_vec(blk, "fogcolor") or [0.0, 0.0, 0.0]
+        return {"on": blk_f(blk, "fogenable") >= 1.0,
+                "rgb": [max(0.0, c) / 255.0 for c in col],
+                "start": blk_f(blk, "fogstart") * dist_scale * INCH_TO_CM,
+                "end": blk_f(blk, "fogend") * dist_scale * INCH_TO_CM}
+
+    world_fog = fog_block(wspawn, 1.0)
+    sky_fog = fog_block(scam, sky_scale if sky.ok else 1.0)
+
     with open(os.path.join(out_dir, base + ".env"), "w") as o:
         o.write(f"skybox {1 if sky_ok else 0}\n")
         if skyname:
             o.write(f"skyname {skyname}\n")
         o.write(f"skyconv {SKY_CONVENTION}\n")
-        o.write(f"fog {1 if fog_on else 0}\n")
-        r, g, b = (max(0.0, c) / 255.0 for c in fog_col)
-        o.write(f"fogcolor {r:.4f} {g:.4f} {b:.4f}\n")
-        o.write(f"fogstart {blk_f(scam, 'fogstart') * INCH_TO_CM:.4f}\n")   # -> cm
-        o.write(f"fogend {blk_f(scam, 'fogend') * INCH_TO_CM:.4f}\n")
+        for prefix, f in (("", world_fog), ("sky", sky_fog)):
+            o.write(f"{prefix}fog {1 if f['on'] else 0}\n")
+            o.write(f"{prefix}fogcolor {f['rgb'][0]:.4f} {f['rgb'][1]:.4f} {f['rgb'][2]:.4f}\n")
+            o.write(f"{prefix}fogstart {f['start']:.4f}\n")   # cm; the sky set is x scale
+            o.write(f"{prefix}fogend {f['end']:.4f}\n")
+    print(f"fog: world {'on' if world_fog['on'] else 'off'} "
+          f"{world_fog['start']:.0f}->{world_fog['end']:.0f}cm, "
+          f"skybox {'on' if sky_fog['on'] else 'off'} "
+          f"{sky_fog['start']:.0f}->{sky_fog['end']:.0f}cm")
 
     def write_obj(suffix, scene):
         positions, uvs, groups, blend = scene
