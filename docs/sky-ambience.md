@@ -1857,11 +1857,15 @@ The rework is calibrated against data we already hold plus the original game:
   **acceptance check on B3**, not the measurement the plan once waited on: run it after B3 and
   every face should read upright on its predicted axis. A residual indicts the memory layout or
   `M_Sky`'s sampling vector, not the convention.
-- **B2 — canonical face orientation at export.** Extend the `UE_` contract to sky. K1 makes
-  this cheap: the decoded faces already *are* the canonical orientation — no face needs a
-  rotation or a flip — so B2 is a recorded contract, not a transform. The `.env` sidecar
-  states the convention version, and `sky_upscale.py` drops its seam-solver (its ring order is
-  `bk, rt, ft, lf`, unflipped).
+- **B2 — canonical face orientation at export. Done** (2026-07-26). The `UE_` contract now
+  covers sky, as a recorded contract rather than a transform: the decoded faces already *are*
+  the canonical orientation, so the exporter emits them verbatim and states the convention it
+  emitted them under — **`skyconv 1`** in `<map>.env`, against
+  `ElysiumEnvironment::SkyConventionVersion`, which `ApplyEnvironment` warns on a mismatch of.
+  `sky_upscale.py`'s seam-solver is retired for the constant `bk, rt, ft, lf`, unflipped; the
+  seam error it used to minimise survives as a one-line **read** on the input faces
+  (`ring_seam_err`), printed before the upscale so faces that are not what the contract says
+  are caught up front rather than silently stitched.
 - **B3 — correct cube assembly.** `BuildSkyCube` packs the canonical faces into UE slices with
   the exact per-slice transform K1 × K2 fixes, documented face by face in the code. Two errors
   to fix, not one. The code binds Source `ft/bk/rt/lf` to Unreal `+X/−X/+Y/−Y`, but under

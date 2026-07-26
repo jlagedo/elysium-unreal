@@ -1318,6 +1318,16 @@ def main(bsp_path, out_dir):
         except ValueError:
             return None
 
+    # Sky-face orientation contract (the `UE_` convention extended to sky, sky-ambience B2).
+    # The decoded PNGs are emitted VERBATIM, and that is already the canonical orientation:
+    # VtMB's own draw tables bind rt=+X, lf=-X, bk=+Y, ft=-Y, up=+Z, dn=-Z in Source space,
+    # image row 0 is the top of the face, and no face carries a rotation or a mirror
+    # (docs/sky-ambience.md -> "K1 ... (settled)"). The horizon ring reads bk -> rt -> ft -> lf
+    # left-to-right and cyclically; `up` joins rt's top edge and `dn` its bottom.
+    # `skyconv` is the version of that contract, so a consumer that assembles a cube
+    # (BuildSkyCube) can refuse a sidecar written under a convention it does not know.
+    SKY_CONVENTION = 1
+
     sky_m = re.search(r'"skyname"\s+"([^"]+)"', ents, re.I)
     skyname = sky_m.group(1).lower() if sky_m else None
     sky_ok = False
@@ -1343,6 +1353,7 @@ def main(bsp_path, out_dir):
         o.write(f"skybox {1 if sky_ok else 0}\n")
         if skyname:
             o.write(f"skyname {skyname}\n")
+        o.write(f"skyconv {SKY_CONVENTION}\n")
         o.write(f"fog {1 if fog_on else 0}\n")
         r, g, b = (max(0.0, c) / 255.0 for c in fog_col)
         o.write(f"fogcolor {r:.4f} {g:.4f} {b:.4f}\n")

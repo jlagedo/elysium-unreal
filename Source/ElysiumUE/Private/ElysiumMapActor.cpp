@@ -775,6 +775,15 @@ void AElysiumMapActor::ApplyEnvironment()
 		return;   // no .env, or a map with no sky: the baked sky light keeps its authored fill
 	}
 
+	// The faces are read verbatim under the export-side orientation contract; a sidecar written
+	// under a different one would assemble into a silently wrong cube.
+	if (Env.SkyConvention != ElysiumEnvironment::SkyConventionVersion)
+	{
+		UE_LOG(LogElysium, Warning,
+			TEXT("sky '%s': .env states orientation convention %d, this build assembles %d"),
+			*Env.SkyName, Env.SkyConvention, ElysiumEnvironment::SkyConventionVersion);
+	}
+
 	UTextureCube* Cube = ElysiumEnvironment::BuildSkyCube(FElysiumContentPaths::MapTexDir(MapName));
 	if (Cube == nullptr)
 	{

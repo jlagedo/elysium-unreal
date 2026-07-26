@@ -262,14 +262,22 @@ produce no runtime intermediate:
 
 ## Sky-face orientation (offline check)
 
-**`probe_sky_orientation.py`** verifies the RE'd Source sky convention against the decoded
-`out/<map>/tex/sky_*.png`: it scores the horizon ring over every cyclic order × per-face
+The `UE_` contract covers sky as a **recorded convention**, not a transform: `UE_bsp_to_scene`
+writes the six decoded faces verbatim to `out/<map>/tex/sky_<face>.png` and states the
+convention they were written under as **`skyconv 1`** in `<map>.env`. Version 1 is the Source
+canonical orientation — face→axis binding `rt`=+X, `lf`=−X, `bk`=+Y, `ft`=−Y, `up`=+Z,
+`dn`=−Z, image row 0 the top of the face, **no face rotated or mirrored** — with the horizon
+ring reading `bk → rt → ft → lf` left-to-right and cyclically, `up` on `rt`'s top edge and
+`dn` on its bottom. The runtime matches it against
+`ElysiumEnvironment::SkyConventionVersion` before assembling a cube. Written up in
+`../docs/sky-ambience.md` → "K1 … (settled)"; the Unreal half of the assembly (each slice's
+own rotation) is "K2 … (settled)" and lives in the runtime, not here.
+
+**`probe_sky_orientation.py`** verifies that convention against the decoded faces
+independently of the decompile: it scores the horizon ring over every cyclic order × per-face
 mirror and `up`/`dn` over all eight dihedral transforms, by seam error against the cube the
 `engine.dll` tables predict, and reports the winner's margin so a low-contrast face reads as a
-tie rather than a match. The convention itself — face→axis binding (`rt`=+X, `lf`=−X, `bk`=+Y,
-`ft`=−Y, `up`=+Z, `dn`=−Z), the per-face basis, the `1 − t` texcoord flip, and the fact that
-**no face needs a rotation or mirror** — is written up in `../docs/sky-ambience.md` → "K1 …
-(settled)". The decoded faces are therefore already the canonical orientation.
+tie rather than a match.
 
 **`probe_sky_inventory.py`** is the whole-game sky/ambience inventory (RE-A7, K8): per map, the
 `skyname` and whether its six faces resolve, the `light_environment` rows, the WORLDLIGHTS type

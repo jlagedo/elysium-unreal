@@ -38,6 +38,10 @@ bool FElysiumEnvDef::Parse(const FString& EnvPath, FElysiumEnvDef& Out)
 		{
 			Out.SkyName = Tok[1];
 		}
+		else if (Key == TEXT("skyconv") && Tok.Num() >= 2)
+		{
+			Out.SkyConvention = FCString::Atoi(*Tok[1]);
+		}
 		else if (Key == TEXT("fog") && Tok.Num() >= 2)
 		{
 			Out.bFog = Tok[1] == TEXT("1");

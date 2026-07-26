@@ -9,17 +9,16 @@ horizontally (closes the loop seam) and reflect-pad vertically, upscale the whol
 strip once, then re-slice. up/dn are upscaled on their own (up = smooth sky,
 dn = near-black ground -> low seam risk).
 
-The cyclic order + per-face horizontal flip of the ring is auto-detected by minimising
-the pixel difference across each seam. The convention it recovers is `bk, rt, ft, lf`
-unflipped — the decoded faces are already canonically oriented (`docs/sky-ambience.md`
--> "K1 ... (settled)"); sky-ambience B2 replaces this solver with that constant.
+The ring order is the RE'd constant `bk, rt, ft, lf`, no face flipped: the decoded faces
+are already canonically oriented, so the unfolded cross reads left-to-right and cyclically
+in that order with `up` on rt's top edge and `dn` on its bottom (`docs/sky-ambience.md`
+-> "K1 ... (settled)").
 
 Usage:
     python sky_upscale.py --map la_hub_1 --model models/RealESRGAN_x4plus.pth
     # writes out/<map>/tex_hi/sky_*.png and out/<map>_sky_compare.png
 """
 import argparse
-from itertools import permutations
 from pathlib import Path
 
 import numpy as np
@@ -27,7 +26,7 @@ from PIL import Image
 
 from upscale_bench import Model  # reuse the spandrel runner
 
-RING = ["ft", "rt", "bk", "lf"]          # nominal angular order (auto-refined)
+RING = ["bk", "rt", "ft", "lf"]           # the canonical angular order (K1)
 MARGIN = 32                               # bleed context in source px
 
 
@@ -39,31 +38,14 @@ def seam_err(a_right: np.ndarray, b_left: np.ndarray) -> float:
     return float(np.abs(a_right.astype(int) - b_left.astype(int)).mean())
 
 
-def best_ring(faces: dict[str, np.ndarray]):
-    """Find (ordered names, flip flags) minimising total seam error around the loop.
+def ring_seam_err(faces: dict[str, np.ndarray]) -> float:
+    """Mean pixel error across the four RING seams, as a sanity read on the input faces.
 
-    Faces are assumed upright (horizon level); only left-right order and optional
-    horizontal flip per face vary. ft is pinned first, unflipped, to fix the frame.
+    Not a solver: the order is fixed. A large value means the decoded faces are not what
+    the contract says they are, which is worth printing before an hour of upscaling.
     """
-    names = RING
-    others = [n for n in names if n != "ft"]
-    best = None
-    for perm in permutations(others):
-        order = ["ft", *perm]
-        for bits in range(1 << len(order)):
-            flips = [(bits >> i) & 1 for i in range(len(order))]
-            if flips[0]:                      # keep ft unflipped (canonical frame)
-                continue
-            arr = [faces[n][:, ::-1] if f else faces[n]
-                   for n, f in zip(order, flips)]
-            total = 0.0
-            for i in range(len(arr)):
-                a = arr[i][:, -1]
-                b = arr[(i + 1) % len(arr)][:, 0]
-                total += seam_err(a, b)
-            if best is None or total < best[0]:
-                best = (total, order, flips)
-    return best
+    return sum(seam_err(faces[RING[i]][:, -1], faces[RING[(i + 1) % len(RING)]][:, 0])
+               for i in range(len(RING))) / len(RING)
 
 
 def upscale_strip(model: Model, rgb: np.ndarray) -> np.ndarray:
@@ -105,41 +87,31 @@ def main():
     print(f"model  : {model.name} (x{model.scale}, fp16={model.fp16})")
 
     faces = {n: load_face(texdir, n) for n in RING}
-    err, order, flips = best_ring(faces)
-    print(f"ring   : {list(zip(order, flips))}  seam-err={err:.2f}")
+    print(f"ring   : {'-'.join(RING)} (canonical)  seam-err={ring_seam_err(faces):.2f}")
 
     # Build the continuous strip and record each face's slot for re-slicing.
-    w = faces["ft"].shape[1]
-    strip = np.concatenate(
-        [faces[n][:, ::-1] if f else faces[n] for n, f in zip(order, flips)], axis=1)
+    w = faces["bk"].shape[1]
+    strip = np.concatenate([faces[n] for n in RING], axis=1)
     print(f"strip  : {strip.shape[1]}x{strip.shape[0]} -> upscaling")
     big = upscale_strip(model, strip)
     s = model.scale
 
-    hi = {}
-    for i, (n, f) in enumerate(zip(order, flips)):
-        seg = big[:, i * w * s:(i + 1) * w * s]
-        if f:
-            seg = seg[:, ::-1]                 # undo the flip -> original orientation
-        hi[n] = seg
+    hi = {n: big[:, i * w * s:(i + 1) * w * s] for i, n in enumerate(RING)}
 
     for n in ("up", "dn"):
         hi[n] = upscale_face(model, load_face(texdir, n))
 
     for n, arr in hi.items():
         Image.fromarray(arr).save(hidir / f"sky_{n}.png")
-    print(f"wrote  : {hidir}/sky_*.png  ({hi['ft'].shape[1]}x{hi['ft'].shape[0]})")
+    print(f"wrote  : {hidir}/sky_*.png  ({hi['bk'].shape[1]}x{hi['bk'].shape[0]})")
 
-    _compare_sheet(faces, hi, order, flips, s, root / f"{args.map}_sky_compare.png")
+    _compare_sheet(faces, hi, root / f"{args.map}_sky_compare.png")
 
 
-def _compare_sheet(faces, hi, order, flips, s, path):
+def _compare_sheet(faces, hi, path):
     """Ring strip: original (nearest-upscaled) over upscaled, same pixel size."""
-    w = faces["ft"].shape[1]
-    orig = np.concatenate(
-        [faces[n][:, ::-1] if f else faces[n] for n, f in zip(order, flips)], axis=1)
-    up = np.concatenate(
-        [(hi[n][:, ::-1] if f else hi[n]) for n, f in zip(order, flips)], axis=1)
+    orig = np.concatenate([faces[n] for n in RING], axis=1)
+    up = np.concatenate([hi[n] for n in RING], axis=1)
     orig_big = np.asarray(Image.fromarray(orig).resize(
         (up.shape[1], up.shape[0]), Image.NEAREST))
     gap = np.full((16, up.shape[1], 3), 30, np.uint8)
