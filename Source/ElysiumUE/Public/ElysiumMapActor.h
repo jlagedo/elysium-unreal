@@ -3,7 +3,8 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Templates/PimplPtr.h"
-#include "ElysiumEnvironment.h"   // FElysiumSkyDef — a plain by-value member
+#include "ElysiumEnvironment.h"    // FElysiumSkyDef — a plain by-value member
+#include "ElysiumWorldServices.h"  // the four interfaces this actor implements
 #include "ElysiumMapActor.generated.h"
 
 class AStaticMeshActor;
@@ -21,6 +22,32 @@ class USceneComponent;
 class USkyLightComponent;
 class UStaticMesh;
 class UStaticMeshComponent;
+class AElysiumMapActor;
+
+// S2 — the map's post-move tick (runtime-architecture.md §3, step 7). A second tick function on
+// the same actor, in TG_PostPhysics, carrying the work that must see the frame's FINAL positions:
+// the `+use` look cursor traces against where a door actually ended up this frame, not where it
+// was before its swept move and the pawn's. Two tick functions on one actor is the engine's own
+// answer to work that straddles physics — splitting into two actors would reintroduce the
+// ordering question tick groups solve.
+USTRUCT()
+struct FElysiumPostMoveTickFunction : public FTickFunction
+{
+	GENERATED_USTRUCT_BODY()
+
+	AElysiumMapActor* Target = nullptr;
+
+	virtual void ExecuteTick(float DeltaTime, ELevelTick TickType, ENamedThreads::Type CurrentThread,
+		const FGraphEventRef& MyCompletionGraphEvent) override;
+	virtual FString DiagnosticMessage() override;
+	virtual FName DiagnosticContext(bool bDetailed) override;
+};
+
+template <>
+struct TStructOpsTypeTraits<FElysiumPostMoveTickFunction> : public TStructOpsTypeTraitsBase2<FElysiumPostMoveTickFunction>
+{
+	enum { WithCopy = false };
+};
 
 // One loaded VtMB map. The map's *look* — world and 3D-skybox geometry, materials, textures,
 // static props, lights, fog — is baked offline into real .uasset content and a real .umap
@@ -31,8 +58,17 @@ class UStaticMeshComponent;
 // entity-driven body. Everything it builds is a component of (or outer'd to) this actor, so
 // destroying it unloads that half. Spawned only by UElysiumMapSubsystem (deferred, MapName set
 // before FinishSpawning); BeginPlay builds the map.
+//
+// It is also the substrate's engine side (11.2): it implements three of the four
+// FElysiumWorldServices interfaces and hands the bundle to FElysiumEntityWorld at construction, so
+// the plain-C++ half below it never casts back up here. IElysiumPresenter is the fourth and has no
+// production implementation until 11.8 — the world's fade/sign/dialogue state is still polled by
+// AElysiumHUD.
 UCLASS()
-class AElysiumMapActor : public AActor
+class AElysiumMapActor : public AActor,
+	public IElysiumEmbodiment,
+	public IElysiumAudio,
+	public IElysiumTravel
 {
 	GENERATED_BODY()
 
@@ -41,7 +77,19 @@ public:
 
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void RegisterActorTickFunctions(bool bRegister) override;
+
+	// S2 — the frame's gameplay pass (TG_PrePhysics, steps 2-4): advance the one clock, run the
+	// substrate think-first, then the audio/scheme pass. Runs before physics and before the pawn's
+	// move, so a mover's swept move for this frame is issued before anything is moved against it.
 	virtual void Tick(float DeltaSeconds) override;
+
+	// S2 — the frame's post-move pass (TG_PostPhysics, step 7), driven by PostMoveTickFunction.
+	void PostMoveTick(float DeltaSeconds);
+
+	// Step 7's tick function. Public so a test can read the declared frame order off the class.
+	UPROPERTY()
+	FElysiumPostMoveTickFunction PostMoveTickFunction;
 
 	// Map name under FElysiumContentPaths::Root() (a folder holding <MapName>.obj).
 	UPROPERTY(EditAnywhere, Category = "Elysium")
@@ -50,7 +98,7 @@ public:
 	// B7 — the uniform scale a body built for this def takes: the 3D-skybox miniature's scale for
 	// a sky-scope entity (its origin and hulls are already carried through the transform by the
 	// def parser, but a mesh's own size is not a point), 1 for everything else.
-	float BodyScaleFor(const struct FElysiumEntityDef& Def) const;
+	virtual float BodyScaleFor(const struct FElysiumEntityDef& Def) const override;
 
 	// Show/hide the 3D skybox mesh (bound to the T key by the pawn).
 	void ToggleSkybox();
@@ -90,21 +138,21 @@ public:
 	// empty stem. The FElysiumNpc leaf calls this from its Spawn() and registers the result with the
 	// entity world for teardown. Meshes/anims are cached on this actor (freed on unload) so a model
 	// shared by several NPCs (three Sabbat share shovelhead) loads once.
-	USkeletalMeshComponent* BuildNpcVisual(const FString& Stem, const FVector& Location, const FRotator& Rotation,
-		float UniformScale = 1.f, const FString& Disposition = FString(), int32 IdleVariant = 0);
+	virtual USkeletalMeshComponent* BuildNpcVisual(const FString& Stem, const FVector& Location,
+		const FRotator& Rotation, float UniformScale, const FString& Disposition, int32 IdleVariant) override;
 
 	// Re-run the default-idle policy on a live body and crossfade to the result. The seam a
 	// disposition change reaches animation through: 9.9's `SetDisposition` is 2,510 calls, 2,467
 	// of them a .dlg line's action, so an NPC's stance follows the conversation.
-	bool RefreshNpcIdle(USkeletalMeshComponent* Body, const FString& Stem, const FString& Disposition,
-		int32 IdleVariant = 0);
+	virtual bool RefreshNpcIdle(USkeletalMeshComponent* Body, const FString& Stem,
+		const FString& Disposition, int32 IdleVariant) override;
 
 	// Crossfade a live NPC body to a named clip, resolved through the manifest. Returns false when
 	// the name resolves nothing. The seam `SetAnimation` / `SetGesture` / `m_iszPlay` use.
 	// OutSeconds receives the clip's authored length — what a `scripted_sequence` schedules its
 	// `OnEndSequence` off, since the action animation is what gives the beat its duration.
-	bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
-		bool bLoop = true, float* OutSeconds = nullptr);
+	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
+		bool bLoop, float* OutSeconds) override;
 
 	// Retarget one named clip onto an already-built NPC model's skeleton, cached per (stem, clip).
 	// The clip may live in the NPC's own glb or in any shared bank — the manifest says which, and
@@ -124,8 +172,8 @@ public:
 	// null on an empty stem / unbaked model. The FElysiumProp leaf calls this from Spawn() and
 	// registers the result with the entity world for teardown. The Rotation is the exporter's
 	// pre-converted Unreal-space model_quat, read verbatim.
-	UStaticMeshComponent* BuildPropVisual(const FString& Stem, const FVector& Location, const FQuat& Rotation,
-		float UniformScale = 1.f);
+	virtual UStaticMeshComponent* BuildPropVisual(const FString& Stem, const FVector& Location,
+		const FQuat& Rotation, float UniformScale) override;
 
 	// 8.4 — build one physics-prop body: the same baked mesh BuildPropVisual stands, which for a
 	// physics model carries VtMB's own convex collision (one shape per `.phy` ledge, from the
@@ -135,15 +183,43 @@ public:
 	// with collision enabled but is NOT yet simulating — the FElysiumPhysProp leaf drives
 	// SetSimulatePhysics / mass / the elysium.PhysicsProps gate. Registered for teardown
 	// (RegisterPropBody) like a dynamic prop.
-	UStaticMeshComponent* BuildPhysPropVisual(const FString& Stem, const FVector& Location, const FQuat& Rotation,
-		float UniformScale = 1.f);
+	virtual UStaticMeshComponent* BuildPhysPropVisual(const FString& Stem, const FVector& Location,
+		const FQuat& Rotation, float UniformScale) override;
 
 	// Repaint a prop body to one of its model's alternate skin families (VtMB's `skin` keyfield /
 	// `Skin` input -- a material remap over the model's own slots, applied instantly). Family 0 and
 	// any family the model does not carry restore the authored materials, which is what Source does
 	// with an out-of-range skin. Safe on any prop body from either build path. `elysium.PropSkins 0`
 	// disables the whole pass.
-	void ApplyPropSkin(UStaticMeshComponent* Comp, const FString& Stem, int32 Family);
+	virtual void ApplyPropSkin(UStaticMeshComponent* Comp, const FString& Stem, int32 Family) override;
+
+	// --- IElysiumEmbodiment: the player's body ----------------------------------------------
+	// All five resolve the pawn through this world's first player controller and report false /
+	// no-op when there is none (the menu backdrop seats no pawn). They are the substrate's only
+	// route to the player until 11.4 makes the player an entity, at which point they become
+	// ordinary entity operations and these overrides shrink to the pawn's own transform.
+	virtual bool GetPlayerViewPoint(FVector& OutLocation, FRotator& OutRotation) const override;
+	virtual bool GetPlayerOrigin(FVector& OutLocation, float& OutYaw) const override;
+	virtual void TeleportPlayer(const FVector& FeetOrigin, float Yaw) override;
+	virtual void DamagePlayer(float Amount) override;
+	virtual FElysiumEntityHandle TraceUseCursor(const FVector& Start, const FVector& End) const override;
+
+	// --- IElysiumAudio ----------------------------------------------------------------------
+	// Voices forward to the GI-scoped UElysiumAudioSubsystem; the scheme calls drive this map's own
+	// FElysiumSoundSchemeManager. All no-op safely with no subsystem / no scheme manager.
+	virtual FElysiumAudioVoiceHandle PlayVoice(const FString& Rel, const FElysiumPlayParams& Params) override;
+	virtual void StopVoice(FElysiumAudioVoiceHandle Handle, float FadeSeconds) override;
+	virtual void SetVoiceVolume(FElysiumAudioVoiceHandle Handle, float Volume) override;
+	virtual bool IsVoicePlaying(FElysiumAudioVoiceHandle Handle) const override;
+	virtual void FadeInScheme(const FString& SchemeRel, const FVector& Anchor, float FadeSeconds) override;
+	virtual void FadeOutScheme(const FString& SchemeRel, float FadeSeconds) override;
+	virtual FString ActiveSchemeRel() const override;
+
+	// --- IElysiumTravel ---------------------------------------------------------------------
+	// Both forward to the GI-scoped UElysiumMapSubsystem, which owns when the travel happens.
+	virtual void RequestLandmarkTravel(const FString& Map, const FString& Landmark,
+		const FVector& Offset, float Yaw) override;
+	virtual void ChangeMap(const FString& Map) override;
 
 	// Live stats for the debug overlay, filled by LoadMap. The geometry counts are actors adopted
 	// from the baked level, not surfaces built at runtime.
@@ -196,6 +272,13 @@ public:
 	TArray<FLoadPhase> LoadPhases;
 
 private:
+	// Service plumbing: the objects the four interfaces forward to. Each may be absent (no pawn on
+	// the menu backdrop, no subsystem in a bare world), which is what makes every service call
+	// safely no-op rather than conditional at the call site.
+	class APawn* ResolvePlayerPawn() const;
+	class UElysiumAudioSubsystem* GetAudioSubsystem() const;
+	class UElysiumMapSubsystem* GetMapSubsystem() const;
+
 	UPROPERTY() TObjectPtr<USceneComponent> SceneRoot;
 	// Collision-only world colliders built from the pipeline's brush sidecars. The baked world
 	// meshes carry no gameplay collision, so these ARE the walkable surface: HullCollision holds
@@ -349,6 +432,16 @@ private:
 	// landmark's OnEnterMapHere. No-op (keeps the .spawn placement) for a plain load or a missing
 	// landmark. Called by LoadMap after the entity world is built.
 	void ResolveLandmarkSpawn();
+
+	// S2 — declare the frame order rather than observe it: the gameplay tick runs after the player
+	// controller's input sample (step 1), and the pawn's movement component runs after the gameplay
+	// tick (step 5), so the pawn is moved against the positions this frame's thinks produced. Both
+	// ends appear later than BeginPlay (no controller yet on a fresh world, no pawn at all on the
+	// menu backdrop), so this re-checks each gameplay tick until each end is bound, and rebinds if
+	// the pawn is replaced.
+	void EnsureTickPrerequisites();
+	TWeakObjectPtr<class APlayerController> PrereqController;
+	TWeakObjectPtr<class UPawnMovementComponent> PrereqMovement;
 
 	// The player pawn may not exist yet in BeginPlay, so the teleport is deferred to Tick;
 	// the pawn is then held frozen until the async collision cook yields ground beneath it.

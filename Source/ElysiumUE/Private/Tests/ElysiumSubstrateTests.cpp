@@ -22,12 +22,17 @@
 #include "ElysiumFog.h"
 #include "ElysiumEventQueue.h"
 #include "ElysiumExpr.h"
+#include "ElysiumGameClock.h"
+#include "ElysiumHUD.h"
 #include "ElysiumKeyValues.h"
+#include "ElysiumMapActor.h"
 #include "ElysiumObjModel.h"
 #include "ElysiumPythonVM.h"
 #include "ElysiumRopes.h"
 #include "ElysiumScriptFS.h"
 #include "ElysiumScriptHost.h"
+#include "ElysiumTestServices.h"
+#include "ElysiumTimeControl.h"
 #include "ElysiumVariant.h"
 
 #include "Math/RotationMatrix.h"
@@ -433,6 +438,191 @@ bool FElysiumEventQueueTest::RunTest(const FString&)
 	Queue.Resume();
 	TestFalse(TEXT("resumed"), Queue.IsPaused());
 	TestEqual(TEXT("resume clears steps"), Queue.StepsPending(), 0);
+
+	return true;
+}
+
+// =====================================================================================
+// S1 — the one clock and the one pause/time-scale facade over it (11.1).
+// FElysiumGameClock keeps its writers private and friends only FElysiumTimeControl, so this
+// exercises the facade, which is the only way the clock moves anywhere. Unbound (no game
+// instance), so only the clock half applies — exactly the headless case.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTimeControlTest, "Elysium.Substrate.TimeControl", GElysiumTestFlags)
+bool FElysiumTimeControlTest::RunTest(const FString&)
+{
+	FElysiumGameClock Clock;
+	FElysiumTimeControl Time(Clock);
+
+	TestEqual(TEXT("clock starts at 0"), Clock.GetNow(), 0.0);
+	TestEqual(TEXT("scale starts at 1"), Time.GetScale(), 1.0);
+	TestFalse(TEXT("starts running"), Time.IsPaused());
+
+	// A frame advances by exactly the delta it is handed.
+	TestEqual(TEXT("a frame applies its whole delta"), Time.AdvanceFrame(0.5), 0.5);
+	TestEqual(TEXT("now advanced"), Clock.GetNow(), 0.5);
+
+	// Scale is applied EXACTLY ONCE (runtime-architecture.md §4). Engine dilation has already
+	// scaled the tick's delta by the time it reaches AdvanceFrame, so the clock must multiply by
+	// nothing: at 0.25x a 0.4 s delta is still 0.4 s of game time, not 0.1.
+	Time.SetScale(0.25);
+	TestEqual(TEXT("scale recorded on the clock"), Time.GetScale(), 0.25);
+	TestEqual(TEXT("the clock adds no factor of its own"), Time.AdvanceFrame(0.4), 0.4);
+	TestEqual(TEXT("now advanced by the dilated delta"), Clock.GetNow(), 0.9);
+	Time.SetScale(1.0);
+
+	// A negative scale is meaningless; time never runs backwards.
+	Time.SetScale(-2.0);
+	TestEqual(TEXT("negative scale clamps to 0"), Time.GetScale(), 0.0);
+	Time.SetScale(1.0);
+
+	// A hold stops the clock dead; the frame still ticks, it just buys no game time.
+	Time.SetPaused(true);
+	TestTrue(TEXT("held"), Time.IsPaused());
+	TestEqual(TEXT("a held frame applies nothing"), Time.AdvanceFrame(1.0), 0.0);
+	TestEqual(TEXT("now unmoved while held"), Clock.GetNow(), 0.9);
+
+	// Stepping releases exactly N frames and holds again. EndFrame is the tail of a released
+	// frame (the map actor's post-move tick), so one step = one Advance + one EndFrame.
+	Time.StepFrames(2);
+	TestFalse(TEXT("stepping releases the hold"), Time.IsPaused());
+	TestEqual(TEXT("2 steps armed"), Time.StepsPending(), 2);
+
+	Time.AdvanceFrame(0.1);
+	Time.EndFrame();
+	TestFalse(TEXT("still released after the first step"), Time.IsPaused());
+	TestEqual(TEXT("1 step left"), Time.StepsPending(), 1);
+
+	Time.AdvanceFrame(0.1);
+	Time.EndFrame();
+	TestTrue(TEXT("the last step re-holds the world"), Time.IsPaused());
+	TestEqual(TEXT("no steps left"), Time.StepsPending(), 0);
+	TestEqual(TEXT("exactly two frames of time bought"), Clock.GetNow(), 1.1);
+	TestEqual(TEXT("held again, so nothing more"), Time.AdvanceFrame(1.0), 0.0);
+
+	// Stepping a running world is meaningless — there is nothing to release.
+	Time.SetPaused(false);
+	Time.StepFrames(3);
+	TestEqual(TEXT("no steps armed against a running world"), Time.StepsPending(), 0);
+
+	// A hand pause/resume outranks a countdown: the steps were only holding the world open.
+	Time.SetPaused(true);
+	Time.StepFrames(5);
+	Time.SetPaused(false);
+	TestEqual(TEXT("resume clears armed steps"), Time.StepsPending(), 0);
+	TestFalse(TEXT("resumed"), Time.IsPaused());
+
+	// A rewind (fresh session / load restoring a saved curtime) clears everything.
+	Time.SetScale(0.5);
+	Time.SetPaused(true);
+	Time.ResetClock(42.0);
+	TestEqual(TEXT("rewound to the given curtime"), Clock.GetNow(), 42.0);
+	TestEqual(TEXT("rewind restores real time"), Time.GetScale(), 1.0);
+	TestFalse(TEXT("rewind releases the hold"), Time.IsPaused());
+
+	return true;
+}
+
+// =====================================================================================
+// S2 — the frame order (11.1, runtime-architecture.md §3), asserted at both levels it is
+// declared at: the engine tick table (tick groups + the pause split, read off the class
+// defaults — the prerequisites themselves are wired at registration and belong to the Play
+// tier), and the substrate's own think-before-queue order inside one world tick.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFrameOrderTest, "Elysium.Substrate.FrameOrder", GElysiumTestFlags)
+bool FElysiumFrameOrderTest::RunTest(const FString&)
+{
+	// --- the tick table: declared with tick groups, never inferred from registration order ---
+	const AElysiumMapActor* Map = GetDefault<AElysiumMapActor>();
+	if (!TestNotNull(TEXT("map actor class defaults"), Map))
+	{
+		return false;
+	}
+
+	// Steps 2-4 run before physics: the clock advances, then thinks issue their swept moves,
+	// then the queue services — all before anything is moved against them.
+	TestTrue(TEXT("the gameplay pass ticks"), Map->PrimaryActorTick.bCanEverTick);
+	TestEqual(TEXT("the gameplay pass is TG_PrePhysics"),
+		static_cast<int32>(Map->PrimaryActorTick.TickGroup), static_cast<int32>(TG_PrePhysics));
+
+	// Step 7 runs after physics, on the same actor: the +use cursor traces against the frame's
+	// final positions. Two tick functions, not two actors — one actor keeps the order declarable.
+	TestTrue(TEXT("the post-move pass ticks"), Map->PostMoveTickFunction.bCanEverTick);
+	TestTrue(TEXT("the post-move pass starts enabled"), Map->PostMoveTickFunction.bStartWithTickEnabled);
+	TestEqual(TEXT("the post-move pass is TG_PostPhysics"),
+		static_cast<int32>(Map->PostMoveTickFunction.TickGroup), static_cast<int32>(TG_PostPhysics));
+
+	// §4 — a hold stops the world and keeps the screen alive. Gameplay ticks are false on both
+	// passes; the HUD, which is presentation, is true.
+	TestFalse(TEXT("the gameplay pass stops when held"), Map->PrimaryActorTick.bTickEvenWhenPaused);
+	TestFalse(TEXT("the post-move pass stops when held"), Map->PostMoveTickFunction.bTickEvenWhenPaused);
+
+	const AElysiumHUD* Hud = GetDefault<AElysiumHUD>();
+	if (TestNotNull(TEXT("HUD class defaults"), Hud))
+	{
+		TestTrue(TEXT("presentation keeps ticking when held"), Hud->PrimaryActorTick.bTickEvenWhenPaused);
+	}
+
+	// --- steps 3-4: think first, then service the queue (RE2's retail order) ---------------
+	// A logic_timer due this frame fires OnTimer from its Think; the wire it fires lands in the
+	// queue at zero delay. Think-first means the same tick's queue pass delivers it, so the
+	// counter has moved after ONE tick. Queue-first would leave it for the next frame.
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__test_frame__");
+
+	FElysiumEntityDef Timer;
+	Timer.Classname = TEXT("logic_timer");
+	Timer.TargetName = TEXT("timer1");
+	Timer.Keys.Add(TEXT("RefireTime"), TEXT("1"));
+	{
+		FElysiumOutputDef Wire;
+		Wire.Name = TEXT("OnTimer");
+		Wire.Target = TEXT("counter1");
+		Wire.Input = TEXT("Add");
+		Wire.Param = TEXT("5");
+		Timer.Outputs.Add(Wire);
+	}
+	Defs.Defs.Add(MoveTemp(Timer));
+
+	FElysiumEntityDef Counter;
+	Counter.Classname = TEXT("math_counter");
+	Counter.TargetName = TEXT("counter1");
+	Defs.Defs.Add(MoveTemp(Counter));
+
+	// Null game state, so the world's own Now() reads 0 and the tick's `Now` is whatever the
+	// caller passes — which is what lets the test place the think's due time by hand.
+	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
+	World.Load(MoveTemp(Defs));
+
+	FElysiumEntity* CounterEntity = World.FindByName(TEXT("counter1"));
+	if (!TestNotNull(TEXT("counter1 resolved"), CounterEntity))
+	{
+		return false;
+	}
+	auto CounterValue = [](const FElysiumEntity* Entity) -> float
+	{
+		TArray<TPair<FString, FString>> State;
+		Entity->GetDebugState(State);
+		for (const TPair<FString, FString>& Row : State)
+		{
+			if (Row.Key == TEXT("Value"))
+			{
+				return FCString::Atof(*Row.Value);
+			}
+		}
+		return -1.f;
+	};
+
+	// Before the timer is due nothing thinks and nothing is queued.
+	World.Tick(0.5);
+	TestEqual(TEXT("nothing before the think is due"), CounterValue(CounterEntity), 0.f);
+
+	// The frame the think is due: its output is delivered in that same frame's queue pass.
+	World.Tick(1.0);
+	TestEqual(TEXT("the think's wire lands in the same frame's queue pass"),
+		CounterValue(CounterEntity), 5.f);
 
 	return true;
 }
@@ -1559,6 +1749,225 @@ bool FElysiumScriptedSequenceTest::RunTest(const FString&)
 			World2.Tick(0.0);
 		}
 		TestEqual(TEXT("a player-targeted beat still fires OnEndSequence"), CounterValue(Count2), 9.f);
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// FElysiumWorldServices (11.2) — the substrate's outbound seam. Runs the shape of the
+// tutorial's own logic_auto chain end to end against the recording stub: no RHI, no actors,
+// no `tools/out`. sp_tutorial_1's five logic_autos fire OnMapLoad at an NPC (WillTalk), a
+// door (Lock), a math_counter and a delayed wire; this reproduces that shape and adds one
+// entity per service, so all four seams are exercised by the same ignition.
+//
+// The second half is the contract that makes the first half meaningful: the SAME defs on a
+// world with NO services must reach the SAME logical state. Embodiment, audio, travel and
+// presentation are outputs of the logic, never inputs to it.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWorldServicesTest, "Elysium.Substrate.WorldServices", GElysiumTestFlags)
+bool FElysiumWorldServicesTest::RunTest(const FString&)
+{
+	// One map's worth of defs, built twice (Load consumes them).
+	auto BuildDefs = []()
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__test__");
+
+		auto Wire = [](FElysiumEntityDef& On, const TCHAR* Output, const TCHAR* Target,
+			const TCHAR* Input, const TCHAR* Param, float Delay)
+		{
+			FElysiumOutputDef W;
+			W.Name = Output;
+			W.Target = Target;
+			W.Input = Input;
+			W.Param = Param;
+			W.Delay = Delay;
+			W.Times = -1;
+			On.Outputs.Add(W);
+		};
+
+		// The ignition, shaped like the tutorial's own: an NPC latch, an NPC animation, a door
+		// lock, an ambient sound, a screen fade, and one delayed counter wire.
+		FElysiumEntityDef Auto;
+		Auto.Classname = TEXT("logic_auto");
+		Wire(Auto, TEXT("OnMapLoad"), TEXT("Jack"),      TEXT("WillTalk"),     TEXT("0"),          0.0f);
+		Wire(Auto, TEXT("OnMapLoad"), TEXT("Jack"),      TEXT("SetAnimation"), TEXT("cower_idle"), 0.0f);
+		Wire(Auto, TEXT("OnMapLoad"), TEXT("frontdoor"), TEXT("Lock"),         TEXT(""),           0.0f);
+		Wire(Auto, TEXT("OnMapLoad"), TEXT("amb1"),      TEXT("PlaySound"),    TEXT(""),           0.0f);
+		Wire(Auto, TEXT("OnMapLoad"), TEXT("fade1"),     TEXT("Fade"),         TEXT(""),           0.0f);
+		Wire(Auto, TEXT("OnMapLoad"), TEXT("counter1"),  TEXT("Add"),          TEXT("5"),          0.1f);
+		Defs.Defs.Add(MoveTemp(Auto));
+
+		FElysiumEntityDef Npc;
+		Npc.Classname = TEXT("npc_VVampire");
+		Npc.TargetName = TEXT("Jack");
+		Npc.Origin = FVector(100.f, 200.f, 300.f);
+		Npc.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
+		Npc.Keys.Add(TEXT("default_disposition"), TEXT("Neutral"));
+		Defs.Defs.Add(MoveTemp(Npc));
+
+		// A door with no hulls: the class runs, no brush body is built (there is no owner actor
+		// to build one on either), and `Lock` still lands.
+		FElysiumEntityDef Door;
+		Door.Classname = TEXT("func_door");
+		Door.TargetName = TEXT("frontdoor");
+		Defs.Defs.Add(MoveTemp(Door));
+
+		FElysiumEntityDef Amb;
+		Amb.Classname = TEXT("ambient_generic");
+		Amb.TargetName = TEXT("amb1");
+		Amb.Keys.Add(TEXT("message"), TEXT("ambient\\tutorial\\hum.wav"));
+		Amb.Keys.Add(TEXT("health"), TEXT("8"));          // VtMB VOLUME 0-10 -> 0.8 linear
+		Defs.Defs.Add(MoveTemp(Amb));
+
+		// start_enabled: the scheme fades in from the entity's own Spawn(), which is why the
+		// audio service has to be live before the spawn pass rather than after it.
+		FElysiumEntityDef Scheme;
+		Scheme.Classname = TEXT("ambient_soundscheme");
+		Scheme.TargetName = TEXT("scheme1");
+		Scheme.Keys.Add(TEXT("scheme_file"), TEXT("sound/Schemes/Tutorial.txt"));
+		Scheme.Keys.Add(TEXT("start_enabled"), TEXT("1"));
+		Defs.Defs.Add(MoveTemp(Scheme));
+
+		// SF_FADE_IN (1): the colour sits flat at MaxAlpha instead of ramping, so the fade is
+		// already visible at its own start time — which is what makes it assertable against a
+		// clock that never advances (a bare world has no game state, so `now` is always 0).
+		FElysiumEntityDef Fade;
+		Fade.Classname = TEXT("env_fade");
+		Fade.TargetName = TEXT("fade1");
+		Fade.Keys.Add(TEXT("duration"), TEXT("2.5"));
+		Fade.Keys.Add(TEXT("holdtime"), TEXT("1.5"));
+		Fade.Keys.Add(TEXT("spawnflags"), TEXT("1"));
+		Wire(Fade, TEXT("OnBeginFade"), TEXT("counter1"), TEXT("Add"), TEXT("3"), 0.0f);
+		Defs.Defs.Add(MoveTemp(Fade));
+
+		FElysiumEntityDef Change;
+		Change.Classname = TEXT("trigger_changelevel");
+		Change.TargetName = TEXT("toalley");
+		Change.Keys.Add(TEXT("map"), TEXT("la_hub_1"));
+		Change.Keys.Add(TEXT("landmark"), TEXT("lm_alley"));
+		Defs.Defs.Add(MoveTemp(Change));
+
+		FElysiumEntityDef Counter;
+		Counter.Classname = TEXT("math_counter");
+		Counter.TargetName = TEXT("counter1");
+		Defs.Defs.Add(MoveTemp(Counter));
+
+		return Defs;
+	};
+
+	auto CounterValue = [](const FElysiumEntity* Entity) -> float
+	{
+		TArray<TPair<FString, FString>> State;
+		Entity->GetDebugState(State);
+		for (const TPair<FString, FString>& Row : State)
+		{
+			if (Row.Key == TEXT("Value"))
+			{
+				return FCString::Atof(*Row.Value);
+			}
+		}
+		return -1.f;
+	};
+
+	// --- With services: the chain reaches all four seams ---------------------------------
+	FElysiumRecordingServices Rec;
+	Rec.bHasPlayer = true;
+	Rec.PlayerLocation = FVector(1000.f, 0.f, 0.f);
+	Rec.PlayerRotation = FRotator(0.f, 90.f, 0.f);
+
+	{
+		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Rec.Bundle());
+		World.Load(BuildDefs());
+
+		// Spawn-time reaches: the NPC stood a body, the start_enabled scheme faded in.
+		TestTrue(TEXT("the NPC stood a body through the embodiment"),
+			Rec.Saw(TEXT("BuildNpcVisual jack")));
+		TestTrue(TEXT("start_enabled ambient_soundscheme faded in at spawn"),
+			Rec.Saw(TEXT("FadeInScheme sound/Schemes/Tutorial.txt")));
+		TestEqual(TEXT("the ambient_soundscheme reports itself active"),
+			Rec.ActiveSchemeRel(), FString(TEXT("sound/Schemes/Tutorial.txt")));
+
+		// logic_auto ignites on the first tick; the 0.1 s wire lands on a later one.
+		World.Tick(0.0);
+		for (int32 i = 0; i < 4; ++i)
+		{
+			World.Tick(0.2);
+		}
+
+		FElysiumEntity* Counter = World.FindByName(TEXT("counter1"));
+		if (!TestNotNull(TEXT("counter1 resolved"), Counter))
+		{
+			return false;
+		}
+		// 5 from the delayed OnMapLoad wire + 3 from env_fade's own OnBeginFade.
+		TestEqual(TEXT("the delayed OnMapLoad wire and the fade's own output both drained"),
+			CounterValue(Counter), 8.f);
+
+		TestTrue(TEXT("SetAnimation reached the embodiment"),
+			Rec.Saw(TEXT("PlayNpcClip jack cower_idle")));
+		TestTrue(TEXT("ambient_generic played a voice through the audio service"),
+			Rec.Saw(TEXT("PlayVoice ambient/tutorial/hum.wav")));
+		TestTrue(TEXT("env_fade announced the fade to the presenter"),
+			Rec.Saw(TEXT("StartFade dur=2.50 hold=1.50")));
+
+		// The travel seam: a forced ChangeLevel captures the player's placement from the
+		// embodiment and asks the travel service for the transition. This map has no source
+		// landmark, so the offset stays zero — the warning path — and the yaw is the body's.
+		FElysiumEntity* Change = World.FindByName(TEXT("toalley"));
+		if (TestNotNull(TEXT("toalley resolved"), Change))
+		{
+			AddExpectedError(TEXT("source landmark"), EAutomationExpectedErrorFlags::Contains, 0);
+			World.EnqueueInput(TEXT("!self"), FName(TEXT("ChangeLevel")), FElysiumVariant::Void(), 0.0,
+				FElysiumEntityHandle::Invalid(), Change->Handle);
+			World.Tick(1.0);
+			TestTrue(TEXT("trigger_changelevel asked the travel service for the transition"),
+				Rec.Saw(TEXT("RequestLandmarkTravel la_hub_1@lm_alley")));
+			TestTrue(TEXT("the transition carried the player's yaw"), Rec.Log().Contains(TEXT("yaw=90.0")));
+		}
+	}
+
+	// Every service call the run made, so a failure message is worth reading.
+	AddInfo(FString::Printf(TEXT("service calls: %s"), *Rec.Log()));
+
+	// --- Without services: the same logic, the same state --------------------------------
+	// A default bundle is four null pointers. Nothing may crash, and the logic layer must land
+	// exactly where it did above — that is the whole claim of the seam, and it is also the
+	// `elysium.NpcBodies 0` / `elysium.BrushBodies 0` A/B path the game already ships.
+	{
+		FElysiumEntityWorld Bare(/*Owner*/ nullptr, /*GameState*/ nullptr);
+		Bare.Load(BuildDefs());
+
+		TestNull(TEXT("a bare world has no embodiment"), Bare.Embodiment());
+		TestNull(TEXT("a bare world has no audio"), Bare.Audio());
+		TestNull(TEXT("a bare world has no travel"), Bare.Travel());
+		TestNull(TEXT("a bare world has no presenter"), Bare.Presenter());
+
+		Bare.Tick(0.0);
+		for (int32 i = 0; i < 4; ++i)
+		{
+			Bare.Tick(0.2);
+		}
+
+		FElysiumEntity* Counter = Bare.FindByName(TEXT("counter1"));
+		if (TestNotNull(TEXT("counter1 resolved without services"), Counter))
+		{
+			TestEqual(TEXT("the chain reaches the same state with no services at all"),
+				CounterValue(Counter), 8.f);
+		}
+		// The fade is still world state, held for AElysiumHUD to poll, whether or not a presenter
+		// heard about it — 11.8 is what moves that state onto the published view state.
+		FLinearColor Faded;
+		TestTrue(TEXT("the screen fade is still world state, not presenter state"),
+			Bare.GetScreenFade(Faded));
+
+		// The +use cursor with no embodiment: no view point, so nothing is ever aimed at, and
+		// pressing use is a safe no-op rather than a null deref.
+		Bare.UpdateUseCursor();
+		TestFalse(TEXT("no embodiment means no use cursor"), Bare.GetAimedUsable().IsSet());
+		Bare.PlayerUse();
 	}
 
 	return true;

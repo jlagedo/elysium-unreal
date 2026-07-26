@@ -7,16 +7,14 @@
 #include "ElysiumEventQueue.h"
 #include "ElysiumIOSink.h"
 #include "ElysiumVariant.h"
+#include "ElysiumWorldServices.h"
 
 struct FElysiumSignData;
 
 class FElysiumDlgConversation;
 class AActor;
-class APawn;
-class UElysiumAudioSubsystem;
 class UElysiumBrushComponent;
 class UElysiumGameStateSubsystem;
-class UElysiumMapSubsystem;
 class UPhysicsConstraintComponent;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
@@ -31,10 +29,16 @@ class UStaticMeshComponent;
 // mints carries that epoch, and Resolve returns null for a stale-epoch, out-of-range, or dead
 // handle — the "falsy when dead/stale" contract VtMB scripts rely on. Teardown bumps the epoch,
 // invalidating all outstanding handles at once.
+//
+// Everything it needs *from* the engine arrives as FElysiumWorldServices (11.2, S-seam): bodies,
+// voices, travel and presentation. `InOwner` is not a fifth service — it is the component outer and
+// the VLOG context, nothing more. No code under this class casts it to a map actor or walks it to a
+// subsystem, which is what lets the whole substrate run with `nullptr, nullptr, {}`.
 class FElysiumEntityWorld
 {
 public:
-	FElysiumEntityWorld(AActor* InOwner, UElysiumGameStateSubsystem* InGameState);
+	FElysiumEntityWorld(AActor* InOwner, UElysiumGameStateSubsystem* InGameState,
+		const FElysiumWorldServices& InServices = FElysiumWorldServices());
 	~FElysiumEntityWorld();
 
 	FElysiumEntityWorld(const FElysiumEntityWorld&) = delete;
@@ -193,9 +197,15 @@ public:
 	// The game-state subsystem (the `G`/quest store, player sheet, script host). Outlives the world.
 	UElysiumGameStateSubsystem* GetGameState() const { return GameState; }
 
-	// The player's pawn via the owning world's first controller, or null. The seam point_teleport /
-	// trigger_hurt use to reach the player from the plain-C++ substrate (the player is not an entity).
-	APawn* GetPlayerPawn() const;
+	// --- The outbound seam (11.2) ------------------------------------------------------
+	// The four services, injected at construction. **Every one may be null** — a headless world has
+	// none, `elysium.NpcBodies 0` runs without an embodiment, and Presenter has no production
+	// implementation until 11.8. Call sites check; the world never manufactures a substitute.
+	const FElysiumWorldServices& Services() const { return WorldServices; }
+	IElysiumEmbodiment* Embodiment() const { return WorldServices.Embodiment; }
+	IElysiumAudio*      Audio() const      { return WorldServices.Audio; }
+	IElysiumTravel*     Travel() const     { return WorldServices.Travel; }
+	IElysiumPresenter*  Presenter() const  { return WorldServices.Presenter; }
 
 	// Debug tap seam (P2.3 `ent_*`): install an extra I/O sink, owned by the world and torn down
 	// with it. The ent_* debug subsystem taps the two chokepoints for its overlay/break tooling
@@ -225,13 +235,9 @@ public:
 	FElysiumEventQueue& Queue() { return EventQueue; }
 	const FElysiumRingBufferSink& RingBuffer() const { return *Ring; }
 	uint32 GetEpoch() const { return Epoch; }
+	// The actor bodies are outer'd to and VLOGs are drawn against, or null in a headless world.
+	// Not a service — nothing reads behaviour off it.
 	AActor* GetOwnerActor() const { return Owner; }
-	// The GameInstance audio subsystem (voice pool + decode cache), or null. The seam ambient_generic
-	// and the SoundScheme manager use to reach playback from the plain-C++ substrate.
-	UElysiumAudioSubsystem* AudioSubsystem() const;
-	// The map-lifecycle subsystem (Travel + the P4.6 deferred landmark-transition queue), or null.
-	// trigger_changelevel reaches it through here to request a travel to another map.
-	UElysiumMapSubsystem* MapSubsystem() const;
 	double NowSeconds() const;
 	int32 UnknownTargets() const { return UnknownTargetCount; }
 	int32 UnknownInputs() const { return UnknownInputCount; }
@@ -260,8 +266,9 @@ private:
 	// Resolve a due event's target string to live entities (skips dead), honouring !self/!activator.
 	void ResolveTargets(const FElysiumIOEvent& Event, TArray<FElysiumEntity*>& Out);
 
-	AActor* Owner = nullptr;                          // for VLOG; not owned
+	AActor* Owner = nullptr;                          // component outer + VLOG context; not owned
 	UElysiumGameStateSubsystem* GameState = nullptr;  // clock + script host; outlives the world
+	FElysiumWorldServices WorldServices;              // the outbound seam (11.2); members may be null
 	uint32 Epoch = 0;
 
 	FElysiumEntityDefs Defs;

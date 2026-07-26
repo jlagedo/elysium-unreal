@@ -90,15 +90,87 @@ Plain C++, no UObject reflection — Unreal supplies bodies only. Design: `docs/
 | `FElysiumEntityDef`/`FElysiumEntityDefs` | immutable parsed `.ents` records |
 | `FElysiumEntity` | the live base entity: CBaseEntity keyfields + a runtime `Origin` (seeded from `Def->Origin`; `SetRuntimeOrigin`/`SetRuntimeAngles`/`SetRuntimeModel` back `Entity.SetOrigin`/`SetAngles`/`SetModel` and hand off to the `OnRuntimeTransformChanged`/`OnRuntimeModelChanged` body-follow hooks), `Kill`/`ScriptHide`/`ScriptUnhide`, one-switch dormancy gating the brush body, per-output `times` counters, `FireOutput` (Source `COutput<T>` value seam — fills any wire whose map-param is empty), `OnTouchStart`/`OnTouchEnd`, `GetDebugState` |
 | `FElysiumClassDesc`/`FElysiumClassRegistry` | per-classname descriptor — factory, base-chain link, input + typed field tables; case-folded chain lookup, inert-record fallback for unregistered classnames |
-| `FElysiumEntityWorld` | the substrate: one entity per def, name/class indices, spawn pass (also builds brush bodies), `SpawnRuntimeEntity` (B3 runtime creation for `npc_maker.Spawn`) = the scripted two-phase `CreateRuntimeEntityNoSpawn` + `CallEntitySpawn` (9.3 `CreateEntityNoSpawn`/`CallEntitySpawn`) fused, `RenameEntity` (`Entity.SetName` name-index re-key), the `AcceptInput` + event-queue **chokepoints**, output firing, `RouteBrushTouch`, `UpdateUseCursor`/`PlayerUse`, think-first tick, epoch teardown, `AddSink` seam. Owned by `AElysiumMapActor` via `TPimplPtr` |
+| `FElysiumEntityWorld` | the substrate: one entity per def, name/class indices, spawn pass (also builds brush bodies), `SpawnRuntimeEntity` (B3 runtime creation for `npc_maker.Spawn`) = the scripted two-phase `CreateRuntimeEntityNoSpawn` + `CallEntitySpawn` (9.3 `CreateEntityNoSpawn`/`CallEntitySpawn`) fused, `RenameEntity` (`Entity.SetName` name-index re-key), the `AcceptInput` + event-queue **chokepoints**, output firing, `RouteBrushTouch`, `UpdateUseCursor`/`PlayerUse`, think-first tick, epoch teardown, `AddSink` seam, and the injected `FElysiumWorldServices` it reaches the engine through (below). Owned by `AElysiumMapActor` via `TPimplPtr` |
 | `UElysiumBrushComponent` | the per-brush-entity body: collision-only `UPrimitiveComponent`, convex `UBodySetup` cooked from def hulls, handle-carrying, dormancy-gated, solidity by classname (trigger/solid/none); `elysium.BrushBodies` A/Bs it |
 | `FElysiumEventQueue`/`FElysiumIOEvent` | the one time-sorted queue (R4 — no engine timers) |
 | `IElysiumIOSink` | always-on `FElysiumRingBufferSink` (1,000-entry history) + `FElysiumLogSink` (`LogElysiumIO` + VLOG) |
-| `FElysiumGameClock`, `UElysiumGameStateSubsystem` | the substrate clock; the GI-scoped `G` store, quest map, player sheet (`FElysiumPlayerSheet`), `BeginNewGame` |
+| `FElysiumGameClock`, `FElysiumTimeControl`, `UElysiumGameStateSubsystem` | the substrate clock + the one pause/time-scale facade over it (below); the GI-scoped `G` store, quest map, player sheet (`FElysiumPlayerSheet`), `BeginNewGame` |
 
 **Two rules that hold everywhere:** every input goes through `AcceptInput`/the event queue (so
 it is loggable, pausable, single-steppable, serializable), and time comes from the substrate
 clock, never `FTimerManager`.
+
+## The outbound seam (11.2)
+
+Everything the substrate needs *from* the engine arrives as **`FElysiumWorldServices`**
+(`ElysiumWorldServices.h`), taken by `FElysiumEntityWorld` at construction. Nothing under the world
+casts its owner to a map actor, walks it to a GI subsystem, or touches
+`GetWorld()->GetFirstPlayerController()`. Design: `docs/runtime-architecture.md` §7.
+
+| Interface | Covers | Implemented by |
+|---|---|---|
+| `IElysiumEmbodiment` | NPC/prop/phys-prop bodies, clips, idles, skins, `BodyScaleFor` — **and the player's body**: view point, origin+yaw, teleport, damage, the `+use` trace | `AElysiumMapActor` |
+| `IElysiumAudio` | `PlayVoice`/`StopVoice`/`SetVoiceVolume`/`IsVoicePlaying` (forwarded to the GI `UElysiumAudioSubsystem`) + `FadeInScheme`/`FadeOutScheme`/`ActiveSchemeRel` (this map's `FElysiumSoundSchemeManager`) | `AElysiumMapActor` |
+| `IElysiumTravel` | `RequestLandmarkTravel`, `ChangeMap` (forwarded to `UElysiumMapSubsystem`) | `AElysiumMapActor` |
+| `IElysiumPresenter` | `StartFade`, `OpenSign`/`CloseSign`, `OpenDialog`/`CloseDialog` | **nothing yet — 11.8** |
+
+**Any member may be null**, and every call site handles it: that is the existing `elysium.NpcBodies 0`
+/ `elysium.BrushBodies 0` A/B formalised, and it is what lets a whole map's logic run headlessly.
+`Presenter` is null in play — the fade / open sign / open conversation are still world state that
+`AElysiumHUD` polls, and the world *announces* to the presenter in addition to holding them, so 11.8
+removes the polling path rather than migrating it.
+
+`AActor* Owner` survives on the world, but only as the component outer (brush bodies, `phys_hinge`
+constraints) and the VLOG context. It is not a fifth service.
+
+The player-body calls live on `IElysiumEmbodiment` because the pawn *is* the player's body (S3);
+11.4 makes the player an entity and they become ordinary entity operations. Two behaviours moved
+into the body with them: `point_teleport`'s capsule half-height lift (Source places feet, an Unreal
+capsule is centred) and the `+use` line trace on `ELYSIUM_USE_CHANNEL` — the substrate hands over a
+segment and gets a handle back, keeping the usability arbitration on its own side.
+
+`Private/Tests/ElysiumTestServices.h` is the recording stub that implements all four (handing back
+real transient components, so the leaf classes take their body-carrying path);
+`Elysium.Substrate.WorldServices` drives a tutorial-shaped `logic_auto` chain through it with no RHI,
+no actors and no `tools/out`, then re-runs the same defs with a null bundle and asserts the same
+logical state.
+
+## The frame and the clock (11.1)
+
+Design: `docs/runtime-architecture.md` §3–4. The canonical order is declared in the engine's tick
+graph (`dumpticks` reads it back), never inferred from registration order:
+
+| # | Stage | Where |
+|---|---|---|
+| 1 | sample input | `APlayerController` (`TG_PrePhysics`) |
+| 2 | advance the clock | `AElysiumMapActor::Tick`, first statement — **the only place `Now` moves** |
+| 3–4 | run due thinks, then service the queue | `FElysiumEntityWorld::Tick` (think-first, RE2's retail order) |
+| 5 | move the pawn | the movement component, prerequisite on the map actor's gameplay tick |
+| 6 | physics + overlaps | engine (`TG_DuringPhysics`) → `RouteBrushTouch` |
+| 7 | post-move gameplay | `AElysiumMapActor::PostMoveTick` (`TG_PostPhysics`) — the `+use` look cursor |
+
+`AElysiumMapActor` carries **two** tick functions: `PrimaryActorTick` (`TG_PrePhysics`) for the
+gameplay pass and `FElysiumPostMoveTickFunction` (`TG_PostPhysics`) for work that must see the
+frame's final positions. The `+use` cursor traces, so it lives in the second — before the pawn's
+move it would pick against last frame's geometry. `EnsureTickPrerequisites` binds the controller and
+the movement component as they appear (a menu backdrop map never seats a pawn) and rebinds if the
+pawn is replaced.
+
+**`FElysiumTimeControl`** (`ElysiumTimeControl.{h,cpp}`, on `UElysiumGameStateSubsystem` beside the
+clock) is the one pause/scale facade over the clock **and** engine time. `FElysiumGameClock` keeps
+`Advance`/`SetPaused`/`SetScale`/`Reset` private and friends only this struct, so the single advance
+site is a compile-time property rather than a convention. Both halves are always set: engine pause
+freezes actor ticks, physics and animation; the clock hold freezes thinks, the queue, movers and
+`ScheduleTask`. **Scale is applied exactly once** — engine dilation has already scaled the tick's
+delta by the time `AdvanceFrame` sees it, so the clock multiplies by nothing; `SetScale` reads the
+dilation back off `AWorldSettings` (which clamps it) before recording it. `ApplyToWorld`, called from
+`BeginPlay`, re-stamps pause and dilation after a travel, since both are per-world state and the
+clock is not. `StepFrames(N)` releases the world and `EndFrame` (the tail of the post-move pass)
+counts the frames back down. Verbs: `elysium.timescale`, `elysium.pause`, `elysium.step`.
+
+`bTickEvenWhenPaused` is **false** on both gameplay passes and **true** on the presentation side —
+`AElysiumHUD` and `UElysiumEntityDebugSubsystem` — so a held world still draws a live HUD and keeps
+its debug overlays, which is exactly when they are read.
 
 Class implementations live in `ElysiumStarterClasses.cpp` (logic_auto/relay, trigger family,
 `logic_pythoncheck`), `ElysiumLogicClasses.cpp` (math_counter, logic_timer, logic_case
@@ -115,7 +187,7 @@ classnames and `FElysiumNpcMaker` for `npc_maker`/`npc_maker_fleshpile`),
 
 NPCs (B3, no AI) stand a real glTF skeletal body at their origin: `ElysiumNpcVisual.{h,cpp}` is the
 shared glb→`USkeletalMesh` loader (the 8.2 path, reused by the `UElysiumNpcSubsystem` test harness)
-plus `LoadAssetFromPath`/`RetargetClip`, and `AElysiumMapActor::BuildNpcVisual` caches the mesh per
+plus `LoadAssetFromPath`/`RetargetClip`, and `IElysiumEmbodiment::BuildNpcVisual` caches the mesh per
 stem and stands a `USkeletalMeshComponent` on the map actor (`elysium.NpcBodies` A/Bs the bodies;
 I/O still resolves without them).
 
@@ -167,7 +239,8 @@ needs decoded animation events.
 
 Resolved `UAnimSequence`s cache on the **map actor** (`NpcAnimCache`, keyed `<stem>|<clip>`), not on
 the subsystem, because glTFRuntime binds each one to a specific `USkeletalMesh`'s `USkeleton` and
-meshes are per-map-epoch. `AElysiumMapActor::ResolveNpcClip`/`PlayNpcClip`/`RefreshNpcIdle` are the
+meshes are per-map-epoch. `IElysiumEmbodiment::PlayNpcClip`/`RefreshNpcIdle` (the map actor's, over its
+private `ResolveNpcClip`) are the
 seams the script surface reaches animation through, via two virtuals on `FElysiumEntity`
 (`PlayAnimClip`, `SetDispositionName` — kept on the base for the same no-RTTI reason as
 `GetAttachBody`), plus `ResetAnimToIdle` for handing a body back to its resting stance. Bound to
@@ -204,7 +277,7 @@ box (`SElysiumDialogueBox`, `ElysiumDialogueWidget.{h,cpp}`) the HUD adds to the
 9.2 replaces the box on the 8.6 UI stack.
 
 Dynamic props (8.3, no physics) stand a static-mesh body the same way: `FElysiumProp`
-(`prop_dynamic`/`prop_dynamic_ornament`) calls `AElysiumMapActor::BuildPropVisual` — resolve the baked
+(`prop_dynamic`/`prop_dynamic_ornament`) calls `IElysiumEmbodiment::BuildPropVisual` — resolve the baked
 `SM_<stem>` through `ResolvePropMesh` (the 8.1 `model_mesh` annotation names the stem; cached per stem,
 one load however many entities place it) and stand a movable **non-solid** `UStaticMeshComponent` (a
 per-entity component, not a shared ISM — the GAME_LUMP `.props` path keeps its own baked actors).
@@ -217,7 +290,7 @@ class desc that registers **only** the `skin` field — a body and its skin, no 
 interaction surface is 4.10/8.8.
 
 **Skin families.** `Skin`/`SetSkin` and the `skin` keyfield/script write all repaint the body through
-`AElysiumMapActor::ApplyPropSkin`, which loads the map's baked `UElysiumPropSkinSet`
+`IElysiumEmbodiment::ApplyPropSkin`, which loads the map's baked `UElysiumPropSkinSet`
 (`ElysiumPropSkins.h` — `Stem -> family -> [slot name, UMaterialInterface]`, authored by
 `bake_map.py` from the exporter's `props/<stem>.skins`) and `SetMaterial`s each repainted slot,
 resolving the slot by name through `UStaticMesh::GetMaterialIndex`. Overrides are cleared first, so
@@ -230,7 +303,7 @@ one datamap record flagged both KEY and INPUT with a null `inputFunc`, so the ke
 (I/O still resolves without them).
 
 Physics props (8.4) stand a **simulating** Chaos body: `FElysiumPhysProp` (`prop_physics`) calls
-`AElysiumMapActor::BuildPhysPropVisual` — the same baked `SM_<stem>` every other prop stands, resolved
+`IElysiumEmbodiment::BuildPhysPropVisual` — the same baked `SM_<stem>` every other prop stands, resolved
 through the shared `ResolvePropMesh`. For a physics model the bake gave that asset **VtMB's own convex
 collision** (one shape per `.phy` ledge, from `props/<stem>.phys`) under `CTF_UseSimpleAndComplex`, so a
 Chaos body simulates against the simple shapes while the debug pick still gets a per-poly face index —

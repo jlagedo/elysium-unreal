@@ -86,7 +86,7 @@ it waits. Three standing rules:
 
 | Rung | Delivers | Tasks (in order) |
 |---|---|---|
-| **PP0 — the core refactor** | the spine: one clock/frame, world services, app states + pause, the player entity, input scopes, commands + user command, the view seam, the play harness | 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.8, 11.10 *(11.0 [x])* |
+| **PP0 — the core refactor** | the spine: one clock/frame, world services, app states + pause, the player entity, input scopes, commands + user command, the view seam, the play harness | 11.3, 11.4, 11.5, 11.6, 11.8, 11.10 *(11.0, 11.1, 11.2 [x])* |
 | **PP1 — New Game & genesis** | chargen for real: clan, **name**, sex, spends — onto the player entity, Python-readable; `sp_genesisdevice_1` played, not skipped | 9.4 (+ `sp_genesisdevice_1` export/bake), 9.7d, 8.6's New Game click path |
 | **PP2 — the theatre cinematic** | the intro plays start to finish: choreography, scripted camera, line audio, subtitles, **eyes and lipsync — all block** (cont. 5) | 11.7, 12.1–12.5 (+ `sp_theatre` export/bake) |
 | **PP3 — land the tutorial** | the chain hands the player to Jack; the first conversation runs with sound and reactions | 9.2, 9.9 |
@@ -106,9 +106,9 @@ work.)*
 The open tasks whose dependencies are met, in the order they pay off. Regenerable from the
 deps below — refresh it whenever a task flips:
 
-1. **11.1 / 11.2 / 11.3** — the three independent structural steps, parallel-capable; then
-   **11.4 (the player entity), the hinge**: 9.4, 9.5, 9.8, 9.9 and 9.10 all sit on it, and each
-   one built against today's `FElysiumPlayerSheet` shim is a migration later.
+1. **11.3** — the last independent structural step *(11.1, 11.2 [x])*; then **11.4 (the player
+   entity), the hinge**: 9.4, 9.5, 9.8, 9.9 and 9.10 all sit on it, and each one built against
+   today's `FElysiumPlayerSheet` shim is a migration later. 11.4's other dep, 11.2, is met.
 2. **11.5 → 11.6 → 11.8 → 11.10** — close PP0: scopes, commands + user command, the view seam,
    the play harness.
 3. **RE19/RE20 + PL9/PL10** — front-load the P12 unknowns (scene format, flex/eyes/`.lip`): the
@@ -1064,20 +1064,24 @@ Steps are ordered so each compiles, ships and is observable alone. **11.4 is the
   the input scope stack over CommonUI's action router. Both design docs flipped to adopted; new
   RE opened (RE21 usercmd order, RE22 crouch hull). As-built: `roadmap-archive.md` 11.0.
   *Deps:* none.
-- [ ] **11.1 Frame + clock ownership** *(S1, S2)* — the canonical tick table pinned with tick groups
-  and tick prerequisites; `AElysiumMapActor` split into a `TG_PrePhysics` gameplay tick and a
-  `TG_PostPhysics` post-move tick (the `+use` cursor moves there, so it traces against the frame's
-  final positions); `FElysiumTimeControl` as the one pause/time-scale facade over the clock **and**
-  engine time dilation. *Acceptance:* a Substrate-tier frame-order assertion; `elysium.timescale 0.25`
-  slows movers, the queue, animation and the camera blend together; `bTickEvenWhenPaused` is false on
-  gameplay and true on presentation. *Deps:* none.
-- [ ] **11.2 World services** *(the substrate's outbound seam)* — `FElysiumWorldServices`
+- [x] **11.1 Frame + clock ownership** *(S1, S2)* — the tick table pinned with tick groups and
+  prerequisites (`dumpticks` shows PC → map gameplay tick → movement → physics → map post-move tick);
+  `AElysiumMapActor` split into a `TG_PrePhysics` gameplay tick and a `TG_PostPhysics` post-move tick
+  that owns the `+use` cursor; `FElysiumTimeControl` as the one pause/scale facade, with
+  `FElysiumGameClock`'s writers made private to it so the single advance site is a compile-time
+  property. `elysium.timescale` / `.pause` / `.step`. As-built: `roadmap-archive.md` 11.1.
+  *Deps:* none.
+- [x] **11.2 World services** *(the substrate's outbound seam)* — `FElysiumWorldServices`
   (`IElysiumEmbodiment`/`IElysiumAudio`/`IElysiumTravel`/`IElysiumPresenter`) injected into
-  `FElysiumEntityWorld`, replacing the `AElysiumMapActor` back-pointer and the
-  `GetWorld()->GetFirstPlayerController()` reach; a recording stub in the test module. Every call site
-  already handles a null body (`elysium.NpcBodies 0`), so null-service is the existing A/B formalised.
-  *Acceptance:* a Substrate-tier test runs the tutorial's `logic_auto` chain end to end with no RHI,
-  no actors and no `tools/out`. *Deps:* 1.4.
+  `FElysiumEntityWorld` at construction; `AElysiumMapActor` implements the first three, and every
+  `Cast<AElysiumMapActor>` and `GetWorld()->GetFirstPlayerController()` under the substrate is gone.
+  `IElysiumPresenter` has **no production implementation until 11.8** — the fade/sign/dialogue state
+  stays on the world for `AElysiumHUD` to poll and the seam is announce-only, non-null in a test.
+  A recording stub (`Private/Tests/ElysiumTestServices.h`) implements all four.
+  *Acceptance met:* `Elysium.Substrate.WorldServices` runs a tutorial-shaped `logic_auto` chain end to
+  end against the stub with no RHI, no actors and no `tools/out`, then re-runs the same defs with a
+  null bundle and reaches the same counter — the seam's actual claim. As-built:
+  `roadmap-archive.md` 11.2. *Deps:* 1.4.
 - [ ] **11.3 App state machine + pause + loading + game over** — `UElysiumGameFlowSubsystem` owning
   `EElysiumAppState` (Boot/FrontEnd/Loading/Playing/Paused/GameOver), `NewGame`/`LoadGame`/`SaveGame`/
   `QuitToMenu`/`SetPaused`, the `PreLoadMap` movie-player loading screen, and the death /

@@ -5,7 +5,7 @@
 // StartPlayerDialogRemote at Jack, Spawn at the maker — instead of dropping as `[no input]`, and so
 // the characters stand their real model on the map. This is the 8.5 carve-out the beat needs: NO AI,
 // no pathing, no combat. An NPC stands its glTF skeletal body (out/npc/<stem>.glb via
-// AElysiumMapActor::BuildNpcVisual, the 8.2 path) at its origin, latches the dialog-gating inputs,
+// IElysiumEmbodiment::BuildNpcVisual, the 8.2 path) at its origin, latches the dialog-gating inputs,
 // and begins/ends a dialog "session" that fires OnDialogBegin/OnDialogEnd. `npc_maker.Spawn`
 // synthesizes one child NPC at runtime.
 //
@@ -21,7 +21,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
-#include "ElysiumMapActor.h"
+#include "ElysiumWorldServices.h"
 
 #include "Components/SkeletalMeshComponent.h"
 #include "HAL/IConsoleManager.h"
@@ -127,12 +127,12 @@ public:
 
 	bool PlayClip(const FString& ClipName, bool bLoop, float* OutSeconds = nullptr)
 	{
-		AElysiumMapActor* Map = World ? Cast<AElysiumMapActor>(World->GetOwnerActor()) : nullptr;
-		if (!Map || !Visual || ClipName.IsEmpty())
+		IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+		if (!Embodiment || !Visual || ClipName.IsEmpty())
 		{
 			return false;
 		}
-		return Map->PlayNpcClip(Visual, FPaths::GetBaseFilename(Model).ToLower(), ClipName, bLoop, OutSeconds);
+		return Embodiment->PlayNpcClip(Visual, FPaths::GetBaseFilename(Model).ToLower(), ClipName, bLoop, OutSeconds);
 	}
 
 	// Re-run the default-idle policy — what a disposition change means for the body. 9.9 owns the
@@ -140,12 +140,13 @@ public:
 	// 2,467 `.dlg` column-4 SetDisposition actions visible.
 	bool RefreshIdle()
 	{
-		AElysiumMapActor* Map = World ? Cast<AElysiumMapActor>(World->GetOwnerActor()) : nullptr;
-		if (!Map || !Visual)
+		IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+		if (!Embodiment || !Visual)
 		{
 			return false;
 		}
-		return Map->RefreshNpcIdle(Visual, FPaths::GetBaseFilename(Model).ToLower(), Disposition, FMath::Max(0, Handle.Index));
+		return Embodiment->RefreshNpcIdle(Visual, FPaths::GetBaseFilename(Model).ToLower(), Disposition,
+			FMath::Max(0, Handle.Index));
 	}
 
 	// The script-facing disposition write. Records the new stance and follows it on the body.
@@ -258,10 +259,10 @@ public:
 		{
 			return;   // gated off, no world, or bodiless npc_* (e.g. npc_VCamera has no model)
 		}
-		AElysiumMapActor* Map = Cast<AElysiumMapActor>(World->GetOwnerActor());
-		if (!Map || !Def)
+		IElysiumEmbodiment* Embodiment = World->Embodiment();
+		if (!Embodiment || !Def)
 		{
-			return;   // bare test world / no map actor to build components on
+			return;   // bare test world / no embodiment to build components on
 		}
 
 		// out/npc/<stem>.glb, stem = the model file's lowercased basename (verified 1:1 for every
@@ -274,7 +275,7 @@ public:
 		// Spread the cast across the three standing idles VtMB authors per disposition. Seeded from
 		// the entity's own index so it is stable across a reload and a save/restore — a cop that
 		// stood with its arms crossed must still be doing so after a load.
-		Visual = Map->BuildNpcVisual(Stem, Def->Origin, Rot, Map->BodyScaleFor(*Def), Disposition,
+		Visual = Embodiment->BuildNpcVisual(Stem, Def->Origin, Rot, Embodiment->BodyScaleFor(*Def), Disposition,
 			/*IdleVariant=*/FMath::Max(0, Handle.Index));
 		if (Visual)
 		{
@@ -315,8 +316,8 @@ public:
 		{
 			return;
 		}
-		AElysiumMapActor* Map = Cast<AElysiumMapActor>(World->GetOwnerActor());
-		if (!Map)
+		IElysiumEmbodiment* Embodiment = World->Embodiment();
+		if (!Embodiment)
 		{
 			return;   // bare test world — the logical Model field is still updated
 		}
@@ -330,7 +331,8 @@ public:
 			return;   // gated off or now modelless
 		}
 		const FString Stem = FPaths::GetBaseFilename(Model).ToLower();
-		Visual = Map->BuildNpcVisual(Stem, Origin, FRotator(0.0f, -Angles.Y, 0.0f));
+		Visual = Embodiment->BuildNpcVisual(Stem, Origin, FRotator(0.0f, -Angles.Y, 0.0f),
+			/*UniformScale=*/1.f, /*Disposition=*/FString(), /*IdleVariant=*/0);
 		if (Visual)
 		{
 			World->RegisterNpcBody(Visual);

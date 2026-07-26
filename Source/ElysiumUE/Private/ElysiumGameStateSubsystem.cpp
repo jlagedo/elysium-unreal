@@ -67,6 +67,10 @@ void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection
 {
 	Super::Initialize(Collection);
 
+	// S1 — the time facade reaches the engine (pause, dilation) through the game instance's
+	// current world, resolved per call so travel never leaves it holding a dead one.
+	TimeCtl.Bind(GetGameInstance());
+
 	// P5 5.4 / P9 9.3 — real evaluation is the map-load default: field-6 payloads, logic_pythoncheck
 	// gates, and ScheduleTask deferred sources all run live, through the embedded CPython VM when it
 	// is available (so level-script names resolve) and the expression evaluator otherwise.
@@ -198,6 +202,57 @@ void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection
 				bLevelScriptLoaded ? TEXT("loaded") : *LevelScriptLoadError);
 		}),
 		ECVF_Cheat));
+
+	// --- S1: the time facade, reachable by name ------------------------------------------
+	// All three drive FElysiumTimeControl, so each moves the clock and engine time together —
+	// thinks, the event queue, movers and ScheduleTask on one side; actor ticks, physics,
+	// animation and the camera blend on the other.
+
+	// `elysium.timescale [scale]` — one knob for game time. 0.25 slows movers, the queue,
+	// animation and the camera blend by the same factor, because there is only one factor.
+	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
+		TEXT("elysium.timescale"),
+		TEXT("elysium.timescale [scale] — read/set game time scale (clock + engine dilation together)"),
+		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
+		{
+			if (Args.Num() > 0)
+			{
+				TimeCtl.SetScale(FCString::Atod(*Args[0]));
+			}
+			UE_LOG(LogElysiumState, Display, TEXT("timescale %.4fx%s (now %.2f s)"),
+				TimeCtl.GetScale(), TimeCtl.IsPaused() ? TEXT("  [paused]") : TEXT(""), Clock.GetNow());
+		}),
+		ECVF_Cheat));
+
+	// `elysium.pause [0|1]` — hold the world with both halves (no arg toggles).
+	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
+		TEXT("elysium.pause"),
+		TEXT("elysium.pause [0|1] — hold/release the world (clock + engine pause; no arg toggles)"),
+		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
+		{
+			const bool bPause = (Args.Num() > 0) ? (FCString::Atoi(*Args[0]) != 0) : !TimeCtl.IsPaused();
+			TimeCtl.SetPaused(bPause);
+			UE_LOG(LogElysiumState, Display, TEXT("world %s (now %.2f s)"),
+				bPause ? TEXT("held") : TEXT("running"), Clock.GetNow());
+		}),
+		ECVF_Cheat));
+
+	// `elysium.step [n]` — release n frames while held, then hold again.
+	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
+		TEXT("elysium.step"),
+		TEXT("elysium.step [n] — release n frames (default 1) while the world is held"),
+		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
+		{
+			if (!TimeCtl.IsPaused())
+			{
+				UE_LOG(LogElysiumState, Display, TEXT("elysium.step: the world is not held (elysium.pause 1 first)"));
+				return;
+			}
+			const int32 Frames = (Args.Num() > 0) ? FMath::Max(1, FCString::Atoi(*Args[0])) : 1;
+			TimeCtl.StepFrames(Frames);
+			UE_LOG(LogElysiumState, Display, TEXT("stepping %d frame(s)"), Frames);
+		}),
+		ECVF_Cheat));
 }
 
 void UElysiumGameStateSubsystem::Deinitialize()
@@ -210,7 +265,10 @@ void UElysiumGameStateSubsystem::Deinitialize()
 
 	Globals.Empty();
 	Quests.Empty();
-	Clock.Reset();
+	// Unbind before the rewind: the game instance is going away, so the facade must not reach
+	// for a world to re-stamp pause/dilation onto.
+	TimeCtl.Bind(nullptr);
+	TimeCtl.ResetClock();
 	EvalHistory.Empty();
 	NativeCallHistory.Empty();
 	NativeCallCounts.Empty();

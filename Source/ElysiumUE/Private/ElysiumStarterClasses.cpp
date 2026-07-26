@@ -13,12 +13,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumMapSubsystem.h"
-
-#include "GameFramework/DamageType.h"
-#include "GameFramework/Pawn.h"
-#include "GameFramework/PlayerController.h"
-#include "Kismet/GameplayStatics.h"
+#include "ElysiumWorldServices.h"
 
 #include <type_traits>
 
@@ -234,11 +229,9 @@ private:
 
 	void HurtNow()
 	{
-		APawn* Pawn = World ? World->GetPlayerPawn() : nullptr;
-		if (Pawn && Damage > 0.0f)
+		if (IElysiumEmbodiment* Player = World ? World->Embodiment() : nullptr)
 		{
-			UGameplayStatics::ApplyDamage(Pawn, Damage, nullptr,
-				Body ? Body->GetOwner() : nullptr, UDamageType::StaticClass());
+			Player->DamagePlayer(Damage);
 		}
 	}
 
@@ -320,21 +313,12 @@ public:
 private:
 	bool IsLookingAtTarget() const
 	{
-		APawn* Pawn = World ? World->GetPlayerPawn() : nullptr;
+		const IElysiumEmbodiment* Player = World ? World->Embodiment() : nullptr;
 		const FElysiumEntity* Tgt = World ? World->FindByName(Target) : nullptr;
-		if (!Pawn || !Tgt || !Tgt->Def)
+		FVector ViewLoc; FRotator ViewRot;
+		if (!Player || !Tgt || !Tgt->Def || !Player->GetPlayerViewPoint(ViewLoc, ViewRot))
 		{
 			return false;
-		}
-		FVector ViewLoc; FRotator ViewRot;
-		if (const APlayerController* PC = Cast<APlayerController>(Pawn->GetController()))
-		{
-			PC->GetPlayerViewPoint(ViewLoc, ViewRot);
-		}
-		else
-		{
-			ViewLoc = Pawn->GetActorLocation();
-			ViewRot = Pawn->GetActorRotation();
 		}
 		const FVector ToTarget = (Tgt->Def->Origin - ViewLoc).GetSafeNormal();
 		return FVector::DotProduct(ViewRot.Vector(), ToTarget) >= FieldOfView;
@@ -470,17 +454,15 @@ private:
 		// re-adds the offset to its same-named landmark (translation only; the player keeps their yaw).
 		FVector Offset = FVector::ZeroVector;
 		float   Yaw = 0.0f;
-		if (APawn* Pawn = World ? World->GetPlayerPawn() : nullptr)
+		FVector PlayerLoc = FVector::ZeroVector;
+		if (const IElysiumEmbodiment* Player = World ? World->Embodiment() : nullptr;
+			Player && Player->GetPlayerOrigin(PlayerLoc, Yaw))
 		{
-			if (const APlayerController* PC = Cast<APlayerController>(Pawn->GetController()))
-			{
-				Yaw = PC->GetControlRotation().Yaw;
-			}
-			if (const FElysiumEntity* Src = World ? World->FindLandmark(LandmarkName) : nullptr)
+			if (const FElysiumEntity* Src = World->FindLandmark(LandmarkName))
 			{
 				if (Src->Def)
 				{
-					Offset = Pawn->GetActorLocation() - Src->Def->Origin;
+					Offset = PlayerLoc - Src->Def->Origin;
 				}
 			}
 			else if (!LandmarkName.IsEmpty())
@@ -491,7 +473,7 @@ private:
 			}
 		}
 
-		if (UElysiumMapSubsystem* Maps = World ? World->MapSubsystem() : nullptr)
+		if (IElysiumTravel* Maps = World ? World->Travel() : nullptr)
 		{
 			Maps->RequestLandmarkTravel(DestMap, LandmarkName, Offset, Yaw);
 			bChanging = true;

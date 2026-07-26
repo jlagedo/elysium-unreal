@@ -15,11 +15,10 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoverSounds.h"
+#include "ElysiumWorldServices.h"
 
 #include "Dom/JsonObject.h"
-#include "GameFramework/DamageType.h"
 #include "GameFramework/Pawn.h"
-#include "Kismet/GameplayStatics.h"
 #include "Misc/FileHelper.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
@@ -357,7 +356,7 @@ void FElysiumMoverBase::PlayMoverSoundRel(const FString& Rel)
 	{
 		return;
 	}
-	UElysiumAudioSubsystem* Audio = World->AudioSubsystem();
+	IElysiumAudio* Audio = World->Audio();
 	if (!Audio)
 	{
 		return;
@@ -388,7 +387,7 @@ void FElysiumMoverBase::StartMoverLoop(FName Sub)
 	{
 		return;
 	}
-	UElysiumAudioSubsystem* Audio = World->AudioSubsystem();
+	IElysiumAudio* Audio = World->Audio();
 	if (!Audio)
 	{
 		return;
@@ -407,9 +406,9 @@ void FElysiumMoverBase::StopMoverLoop()
 {
 	if (MoverLoopVoiceId != 0 && World)
 	{
-		if (UElysiumAudioSubsystem* Audio = World->AudioSubsystem())
+		if (IElysiumAudio* Audio = World->Audio())
 		{
-			Audio->StopVoice(FElysiumAudioVoiceHandle{ MoverLoopVoiceId });
+			Audio->StopVoice(FElysiumAudioVoiceHandle{ MoverLoopVoiceId }, /*FadeSeconds=*/0.f);
 		}
 	}
 	MoverLoopVoiceId = 0;
@@ -622,8 +621,10 @@ void FElysiumDoorBase::OnMoveBlocked(const FHitResult& Hit)
 	{
 		if (Dmg > 0)
 		{
-			UGameplayStatics::ApplyDamage(BlockedPawn, (float)Dmg, nullptr,
-				Body ? Body->GetOwner() : nullptr, UDamageType::StaticClass());
+			if (IElysiumEmbodiment* Player = World ? World->Embodiment() : nullptr)
+			{
+				Player->DamagePlayer((float)Dmg);
+			}
 		}
 		static const FName OnBlockedClosing(TEXT("OnBlockedClosing"));
 		FireOutput(OnBlockedClosing, LastActivator);

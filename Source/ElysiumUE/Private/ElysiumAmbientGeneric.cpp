@@ -14,6 +14,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumWorldServices.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumAmbient, Log, All);
 
@@ -67,7 +68,7 @@ public:
 	void InputVolume(const FElysiumVariant& Param)
 	{
 		Volume = FMath::Clamp(Param.ToFloat() / 10.f, 0.f, 1.f);
-		if (UElysiumAudioSubsystem* Audio = World ? World->AudioSubsystem() : nullptr)
+		if (IElysiumAudio* Audio = World ? World->Audio() : nullptr)
 		{
 			Audio->SetVoiceVolume(VoiceHandle, Volume);   // no-op if no voice is running
 		}
@@ -140,14 +141,14 @@ public:
 private:
 	bool IsPlaying() const
 	{
-		UElysiumAudioSubsystem* Audio = World ? World->AudioSubsystem() : nullptr;
+		const IElysiumAudio* Audio = World ? World->Audio() : nullptr;
 		return Audio && Audio->IsVoicePlaying(VoiceHandle);
 	}
 
 	// (Re)start the voice — stop any prior one first so a repeated PlaySound restarts cleanly.
 	void StartVoice(float FadeInSeconds)
 	{
-		UElysiumAudioSubsystem* Audio = World ? World->AudioSubsystem() : nullptr;
+		IElysiumAudio* Audio = World ? World->Audio() : nullptr;
 		if (!Audio || SoundRel.IsEmpty())
 		{
 			return;
@@ -174,7 +175,7 @@ private:
 
 	void StopActiveVoice(float FadeOutSeconds)
 	{
-		if (UElysiumAudioSubsystem* Audio = World ? World->AudioSubsystem() : nullptr)
+		if (IElysiumAudio* Audio = World ? World->Audio() : nullptr)
 		{
 			Audio->StopVoice(VoiceHandle, FadeOutSeconds);
 		}

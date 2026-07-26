@@ -17,10 +17,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
-
-#include "GameFramework/Character.h"
-#include "GameFramework/Pawn.h"
-#include "GameFramework/PlayerController.h"
+#include "ElysiumWorldServices.h"
 
 #include <type_traits>
 
@@ -579,22 +576,11 @@ public:
 private:
 	void TeleportPawn(const FVector& DestOrigin, float Yaw)
 	{
-		APawn* Pawn = World ? World->GetPlayerPawn() : nullptr;
-		if (!Pawn)
+		// Source places the entity's absorigin (feet); the capsule compensation is the body's own
+		// geometry, so it lives in the embodiment, not here.
+		if (IElysiumEmbodiment* Player = World ? World->Embodiment() : nullptr)
 		{
-			return;
-		}
-		// Source places the entity's absorigin (feet); an Unreal capsule is centred, so lift by the
-		// capsule half-height to seat the player on the destination rather than in the floor.
-		FVector Dest = DestOrigin;
-		if (const ACharacter* Char = Cast<ACharacter>(Pawn))
-		{
-			Dest.Z += Char->GetDefaultHalfHeight();
-		}
-		Pawn->SetActorLocation(Dest, false, nullptr, ETeleportType::TeleportPhysics);
-		if (APlayerController* PC = Cast<APlayerController>(Pawn->GetController()))
-		{
-			PC->SetControlRotation(FRotator(0.0f, Yaw, 0.0f));
+			Player->TeleportPlayer(DestOrigin, Yaw);
 		}
 	}
 };

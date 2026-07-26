@@ -2,6 +2,7 @@
 
 #include "ElysiumAudioSubsystem.h"
 #include "ElysiumBakedTags.h"
+#include "ElysiumBrushComponent.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumEditorLabels.h"
 #include "ElysiumEntity.h"
@@ -22,6 +23,7 @@
 #include "ElysiumReflections.h"
 #include "ElysiumRopes.h"
 #include "ElysiumTextureCache.h"
+#include "ElysiumUseIcons.h"
 
 #include "Engine/GameInstance.h"
 
@@ -43,9 +45,13 @@
 #include "EngineUtils.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/DamageType.h"
+#include "GameFramework/Pawn.h"
+#include "GameFramework/PawnMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
+#include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/FileHelper.h"
 #include "ProceduralMeshComponent.h"
@@ -241,9 +247,48 @@ namespace
 
 }
 
+// ------------------------------------------------------------------------------------------
+// S2 — the post-move tick function (runtime-architecture.md §3, step 7).
+// ------------------------------------------------------------------------------------------
+
+void FElysiumPostMoveTickFunction::ExecuteTick(float DeltaTime, ELevelTick TickType,
+	ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent)
+{
+	if (Target && IsValidChecked(Target) && !Target->IsUnreachable())
+	{
+		FScopeCycleCounterUObject ActorScope(Target);
+		Target->PostMoveTick(DeltaTime);
+	}
+}
+
+FString FElysiumPostMoveTickFunction::DiagnosticMessage()
+{
+	return GetFullNameSafe(Target) + TEXT("[AElysiumMapActor::PostMoveTick]");
+}
+
+FName FElysiumPostMoveTickFunction::DiagnosticContext(bool bDetailed)
+{
+	if (bDetailed)
+	{
+		return FName(*FString::Printf(TEXT("ElysiumMapActorPostMove/%s"), *GetFullNameSafe(Target)));
+	}
+	return FName(TEXT("ElysiumMapActorPostMove"));
+}
+
 AElysiumMapActor::AElysiumMapActor()
 {
+	// S2 — the frame order is declared with tick groups, not left to registration order. The
+	// gameplay pass (clock, thinks, queue) runs before physics; the post-move pass runs after it
+	// and after the pawn's move. Neither ticks while the game is held: pause is meant to stop the
+	// world, and the presentation side is what keeps drawing (§4).
 	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.TickGroup = TG_PrePhysics;
+	PrimaryActorTick.bTickEvenWhenPaused = false;
+
+	PostMoveTickFunction.bCanEverTick = true;
+	PostMoveTickFunction.bStartWithTickEnabled = true;
+	PostMoveTickFunction.TickGroup = TG_PostPhysics;
+	PostMoveTickFunction.bTickEvenWhenPaused = false;
 
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	RootComponent = SceneRoot;
@@ -284,9 +329,68 @@ AElysiumMapActor::AElysiumMapActor()
 	LightRig->SetupAttachment(SceneRoot);
 }
 
+void AElysiumMapActor::RegisterActorTickFunctions(bool bRegister)
+{
+	Super::RegisterActorTickFunctions(bRegister);
+
+	if (bRegister)
+	{
+		if (PostMoveTickFunction.bCanEverTick)
+		{
+			PostMoveTickFunction.Target = this;
+			PostMoveTickFunction.SetTickFunctionEnable(PostMoveTickFunction.bStartWithTickEnabled);
+			PostMoveTickFunction.RegisterTickFunction(GetLevel());
+			// The tick groups already separate the two passes; the prerequisite says so in the
+			// graph as well, so the dependency survives anyone re-grouping either end.
+			PostMoveTickFunction.AddPrerequisite(this, PrimaryActorTick);
+		}
+	}
+	else if (PostMoveTickFunction.IsTickFunctionRegistered())
+	{
+		PostMoveTickFunction.UnRegisterTickFunction();
+	}
+}
+
+void AElysiumMapActor::EnsureTickPrerequisites()
+{
+	UWorld* W = GetWorld();
+	APlayerController* PC = W ? W->GetFirstPlayerController() : nullptr;
+	if (!PC)
+	{
+		return;
+	}
+
+	// Step 1 -> steps 2-4: the frame's input sample lands before the substrate runs.
+	if (PrereqController.Get() != PC)
+	{
+		AddTickPrerequisiteActor(PC);
+		PrereqController = PC;
+	}
+
+	// Steps 2-4 -> step 5: the pawn moves against the positions this frame's thinks produced.
+	// A door's think issues its swept move here; moving the pawn first tunnels it on fast movers.
+	UPawnMovementComponent* Move = PC->GetPawn() ? PC->GetPawn()->GetMovementComponent() : nullptr;
+	if (Move && PrereqMovement.Get() != Move)
+	{
+		Move->PrimaryComponentTick.AddPrerequisite(this, PrimaryActorTick);
+		PrereqMovement = Move;
+	}
+}
+
 void AElysiumMapActor::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Engine pause and time dilation are per-world; the clock is not. Re-stamp them onto this
+	// world so a hold or a time scale set before travel survives the map change (S1).
+	if (const UGameInstance* GI = GetGameInstance())
+	{
+		if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+		{
+			GameState->TimeControl().ApplyToWorld();
+		}
+	}
+	EnsureTickPrerequisites();
 
 	// The backdrop multiplier is an A/B knob, so a console flip has to reach the sky already
 	// built. Weak-bound: the callback drops out with the actor at map teardown.
@@ -434,10 +538,18 @@ void AElysiumMapActor::LoadMap()
 				// then entities spawn and fire their field-6 payloads into that namespace.
 				GameState->LoadLevelScript(EntDefs.LevelScriptModule());
 
-				EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState);
 				// The scheme manager must exist before the spawn pass: a start_enabled
-				// ambient_soundscheme fades its scheme in from its own Spawn() (P6.3).
+				// ambient_soundscheme fades its scheme in from its own Spawn() (P6.3), and it
+				// reaches it through this actor's IElysiumAudio.
 				SchemeManager = MakePimpl<FElysiumSoundSchemeManager>();
+
+				// 11.2 — hand the substrate its outbound seam. This actor is three of the four
+				// services; IElysiumPresenter stays null until 11.8 gives it a real implementation.
+				FElysiumWorldServices Services;
+				Services.Embodiment = this;
+				Services.Audio      = this;
+				Services.Travel     = this;
+				EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState, Services);
 				EntityWorld->Load(MoveTemp(EntDefs));
 				BrushBodyCount = EntityWorld->NumBrushBodies();
 			}
@@ -765,7 +877,7 @@ bool AElysiumMapActor::RefreshNpcIdle(USkeletalMeshComponent* Body, const FStrin
 	}
 	EElysiumIdleTier Tier = EElysiumIdleTier::None;
 	const FString Clip = Anims->PickIdleClip(Stem, Disposition, Tier, IdleVariant);
-	return !Clip.IsEmpty() && PlayNpcClip(Body, Stem, Clip, /*bLoop=*/true);
+	return !Clip.IsEmpty() && PlayNpcClip(Body, Stem, Clip, /*bLoop=*/true, /*OutSeconds=*/nullptr);
 }
 
 USkeletalMeshComponent* AElysiumMapActor::BuildNpcVisual(const FString& Stem, const FVector& Location,
@@ -840,7 +952,7 @@ USkeletalMeshComponent* AElysiumMapActor::BuildNpcVisual(const FString& Stem, co
 	AddInstanceComponent(Comp);
 	if (!IdleClip.IsEmpty())
 	{
-		PlayNpcClip(Comp, Stem, IdleClip, /*bLoop=*/true);
+		PlayNpcClip(Comp, Stem, IdleClip, /*bLoop=*/true, /*OutSeconds=*/nullptr);
 	}
 	return Comp;
 }
@@ -1002,6 +1114,190 @@ UStaticMeshComponent* AElysiumMapActor::BuildPhysPropVisual(const FString& Stem,
 float AElysiumMapActor::BodyScaleFor(const FElysiumEntityDef& Def) const
 {
 	return Def.bSky ? SkyDef.Scale : 1.f;
+}
+
+// ============================================================================================
+// The world services (11.2) — the substrate's engine side. Everything here is a forward: the
+// player's pawn, the GI-scoped audio subsystem, this map's scheme manager, the map subsystem.
+// Nothing under FElysiumEntityWorld knows any of those exist.
+// ============================================================================================
+
+APawn* AElysiumMapActor::ResolvePlayerPawn() const
+{
+	const UWorld* W = GetWorld();
+	const APlayerController* PC = W ? W->GetFirstPlayerController() : nullptr;
+	return PC ? PC->GetPawn() : nullptr;
+}
+
+bool AElysiumMapActor::GetPlayerViewPoint(FVector& OutLocation, FRotator& OutRotation) const
+{
+	const APawn* Pawn = ResolvePlayerPawn();
+	if (!Pawn)
+	{
+		return false;
+	}
+	if (const APlayerController* PC = Cast<APlayerController>(Pawn->GetController()))
+	{
+		PC->GetPlayerViewPoint(OutLocation, OutRotation);
+	}
+	else
+	{
+		// No controller (a detached/possessed-later pawn): the body's own transform is the best
+		// available eye, which is what the trigger_look path has always fallen back to.
+		OutLocation = Pawn->GetActorLocation();
+		OutRotation = Pawn->GetActorRotation();
+	}
+	return true;
+}
+
+bool AElysiumMapActor::GetPlayerOrigin(FVector& OutLocation, float& OutYaw) const
+{
+	const APawn* Pawn = ResolvePlayerPawn();
+	if (!Pawn)
+	{
+		return false;
+	}
+	OutLocation = Pawn->GetActorLocation();
+	const APlayerController* PC = Cast<APlayerController>(Pawn->GetController());
+	OutYaw = PC ? (float)PC->GetControlRotation().Yaw : (float)Pawn->GetActorRotation().Yaw;
+	return true;
+}
+
+void AElysiumMapActor::TeleportPlayer(const FVector& FeetOrigin, float Yaw)
+{
+	APawn* Pawn = ResolvePlayerPawn();
+	if (!Pawn)
+	{
+		return;
+	}
+	// Source places the entity's absorigin (feet); an Unreal capsule is centred, so lift by the
+	// capsule half-height to seat the player on the destination rather than in the floor. This is
+	// the body's own geometry, which is why the compensation lives here and not in point_teleport.
+	FVector Dest = FeetOrigin;
+	if (const ACharacter* Char = Cast<ACharacter>(Pawn))
+	{
+		Dest.Z += Char->GetDefaultHalfHeight();
+	}
+	Pawn->SetActorLocation(Dest, false, nullptr, ETeleportType::TeleportPhysics);
+	if (APlayerController* PC = Cast<APlayerController>(Pawn->GetController()))
+	{
+		PC->SetControlRotation(FRotator(0.0f, Yaw, 0.0f));
+	}
+}
+
+void AElysiumMapActor::DamagePlayer(float Amount)
+{
+	APawn* Pawn = ResolvePlayerPawn();
+	if (Pawn && Amount > 0.f)
+	{
+		// This actor is the damage causer: every entity body is one of its components, so it is
+		// what the old per-call `Body->GetOwner()` resolved to anyway.
+		UGameplayStatics::ApplyDamage(Pawn, Amount, nullptr, const_cast<AElysiumMapActor*>(this),
+			UDamageType::StaticClass());
+	}
+}
+
+FElysiumEntityHandle AElysiumMapActor::TraceUseCursor(const FVector& Start, const FVector& End) const
+{
+	UWorld* W = GetWorld();
+	if (!W)
+	{
+		return FElysiumEntityHandle::Invalid();
+	}
+
+	// A single blocking trace naturally handles occlusion: a wall (or any solid) closer than the
+	// button ends the ray. The dedicated +use channel (ELYSIUM_USE_CHANNEL, default-Block) keeps
+	// world + solid bodies as occluders while staying isolated from ECC_Visibility;
+	// func_button/func_door bodies are Solid (BlockAll), so they block it.
+	FCollisionQueryParams Params(FName(TEXT("ElysiumUseCursor")), /*bTraceComplex*/ false);
+	Params.AddIgnoredActor(ResolvePlayerPawn());
+	FHitResult H;
+	if (W->LineTraceSingleByChannel(H, Start, End, ELYSIUM_USE_CHANNEL, Params))
+	{
+		if (const UElysiumBrushComponent* B = Cast<UElysiumBrushComponent>(H.GetComponent()))
+		{
+			return B->GetOwningEntity();
+		}
+	}
+	return FElysiumEntityHandle::Invalid();
+}
+
+FElysiumAudioVoiceHandle AElysiumMapActor::PlayVoice(const FString& Rel, const FElysiumPlayParams& Params)
+{
+	UElysiumAudioSubsystem* Audio = GetAudioSubsystem();
+	return Audio ? Audio->PlayVoice(Rel, Params) : FElysiumAudioVoiceHandle::Invalid();
+}
+
+void AElysiumMapActor::StopVoice(FElysiumAudioVoiceHandle Handle, float FadeSeconds)
+{
+	if (UElysiumAudioSubsystem* Audio = GetAudioSubsystem())
+	{
+		Audio->StopVoice(Handle, FadeSeconds);
+	}
+}
+
+void AElysiumMapActor::SetVoiceVolume(FElysiumAudioVoiceHandle Handle, float Volume)
+{
+	if (UElysiumAudioSubsystem* Audio = GetAudioSubsystem())
+	{
+		Audio->SetVoiceVolume(Handle, Volume);
+	}
+}
+
+bool AElysiumMapActor::IsVoicePlaying(FElysiumAudioVoiceHandle Handle) const
+{
+	const UElysiumAudioSubsystem* Audio = GetAudioSubsystem();
+	return Audio && Audio->IsVoicePlaying(Handle);
+}
+
+void AElysiumMapActor::FadeInScheme(const FString& SchemeRel, const FVector& Anchor, float FadeSeconds)
+{
+	if (SchemeManager)
+	{
+		SchemeManager->FadeInScheme(GetAudioSubsystem(), SchemeRel, Anchor, FadeSeconds);
+	}
+}
+
+void AElysiumMapActor::FadeOutScheme(const FString& SchemeRel, float FadeSeconds)
+{
+	if (SchemeManager)
+	{
+		SchemeManager->FadeOutScheme(GetAudioSubsystem(), SchemeRel, FadeSeconds);
+	}
+}
+
+FString AElysiumMapActor::ActiveSchemeRel() const
+{
+	return SchemeManager ? SchemeManager->ActiveSchemeRel() : FString();
+}
+
+void AElysiumMapActor::RequestLandmarkTravel(const FString& Map, const FString& Landmark,
+	const FVector& Offset, float Yaw)
+{
+	if (UElysiumMapSubsystem* Maps = GetMapSubsystem())
+	{
+		Maps->RequestLandmarkTravel(Map, Landmark, Offset, Yaw);
+	}
+}
+
+void AElysiumMapActor::ChangeMap(const FString& Map)
+{
+	if (UElysiumMapSubsystem* Maps = GetMapSubsystem())
+	{
+		Maps->Travel(Map);
+	}
+}
+
+UElysiumAudioSubsystem* AElysiumMapActor::GetAudioSubsystem() const
+{
+	const UGameInstance* GI = GetGameInstance();
+	return GI ? GI->GetSubsystem<UElysiumAudioSubsystem>() : nullptr;
+}
+
+UElysiumMapSubsystem* AElysiumMapActor::GetMapSubsystem() const
+{
+	const UGameInstance* GI = GetGameInstance();
+	return GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
 }
 
 void AElysiumMapActor::BuildRopes()
@@ -1582,38 +1878,41 @@ void AElysiumMapActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 
-	// R4 — advance the single game clock once per frame and drive the entity world think-first
-	// (retail order: due thinks, then the event queue). Runs every frame, independent of the
-	// spawn-hold below, so the map-load I/O chains service immediately.
-	if (EntityWorld)
-	{
-		if (UGameInstance* GI = GetGameInstance())
-		{
-			if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
-			{
-				GameState->GameClock().Advance(DeltaSeconds);
-				EntityWorld->Tick(GameState->GameClock().GetNow());
-				// P4.2 — the minimal +use look-cursor: re-pick the aimed usable each frame and fire
-				// OnIn/OnOut on the transitions. Runs after the world tick so the outputs it fires
-				// enqueue against the same `now`. The E key drives PlayerUse (AElysiumPawn).
-				EntityWorld->UpdateUseCursor();
+	// The controller and the pawn appear after this actor does, so keep looking until the frame
+	// order is fully declared (a menu backdrop map never seats a pawn, and that is fine).
+	EnsureTickPrerequisites();
 
-				// P6.3 — reap finished voices, then advance the SoundScheme manager (random-one-shot
-				// scheduler + music crossfade) with the listener position for polar placement/attenuation.
-				if (UElysiumAudioSubsystem* Audio = GI->GetSubsystem<UElysiumAudioSubsystem>())
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+		{
+			// Step 2 — the only place `Now` moves (S1). DeltaSeconds is already dilated by the
+			// engine, and the clock applies no factor of its own, so a time scale is applied once.
+			GameState->TimeControl().AdvanceFrame(DeltaSeconds);
+
+			// Steps 3-4 — the substrate, think-first (retail order: Physics_RunThinkFunctions,
+			// then CEventQueue::ServiceEvents). Runs every frame, independent of the spawn-hold
+			// below, so the map-load I/O chains service immediately.
+			if (EntityWorld)
+			{
+				EntityWorld->Tick(GameState->GameClock().GetNow());
+			}
+
+			// P6.3 — reap finished voices, then advance the SoundScheme manager (random-one-shot
+			// scheduler + music crossfade) with the listener position for polar placement/attenuation.
+			if (UElysiumAudioSubsystem* Audio = GI->GetSubsystem<UElysiumAudioSubsystem>())
+			{
+				Audio->TickAudio(DeltaSeconds);
+				if (SchemeManager)
 				{
-					Audio->TickAudio(DeltaSeconds);
-					if (SchemeManager)
+					FVector ListenerLoc = GetActorLocation();
+					if (const APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
 					{
-						FVector ListenerLoc = GetActorLocation();
-						if (const APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
-						{
-							FVector VLoc; FRotator VRot;
-							PC->GetPlayerViewPoint(VLoc, VRot);
-							ListenerLoc = VLoc;
-						}
-						SchemeManager->Tick(Audio, ListenerLoc, DeltaSeconds);
+						FVector VLoc; FRotator VRot;
+						PC->GetPlayerViewPoint(VLoc, VRot);
+						ListenerLoc = VLoc;
 					}
+					SchemeManager->Tick(Audio, ListenerLoc, DeltaSeconds);
 				}
 			}
 		}
@@ -1659,5 +1958,29 @@ void AElysiumMapActor::Tick(float DeltaSeconds)
 		UE_LOG(LogElysium, Log, TEXT("spawn released after %.2fs (%s)"),
 			SpawnHoldSeconds, bGround ? TEXT("ground ready") : TEXT("timeout"));
 		bSpawnDone = true;
+	}
+}
+
+void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
+{
+	// Step 7 — everything here reads the frame's final positions.
+	//
+	// P4.2 — the minimal +use look-cursor: re-pick the aimed usable and fire OnIn/OnOut on the
+	// transitions. It traces, so it belongs after physics: before the pawn's move it would pick
+	// against last frame's geometry, which reads as a door you cannot use until you stop walking.
+	// Its outputs enqueue against the same `now` the gameplay pass advanced to, so they service on
+	// the next frame's queue pass exactly like any other zero-delay wire.
+	if (EntityWorld)
+	{
+		EntityWorld->UpdateUseCursor();
+	}
+
+	// The tail of a released frame: a dev step spends one here, and the last one re-holds the world.
+	if (const UGameInstance* GI = GetGameInstance())
+	{
+		if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+		{
+			GameState->TimeControl().EndFrame();
+		}
 	}
 }

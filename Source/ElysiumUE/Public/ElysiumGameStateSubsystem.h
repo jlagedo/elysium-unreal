@@ -4,6 +4,7 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "ElysiumGameClock.h"
 #include "ElysiumScriptHost.h"
+#include "ElysiumTimeControl.h"
 #include "ElysiumVariant.h"
 #include "ElysiumGameStateSubsystem.generated.h"
 
@@ -136,9 +137,16 @@ public:
 	// (RE3), so the zeros need no explicit seeding; only the non-zero flags are written.
 	void BeginNewGame(int32 Clan, bool bMale);
 
-	// --- Clock ---------------------------------------------------------------------
-	FElysiumGameClock& GameClock() { return Clock; }
+	// --- Clock + time control (S1) -------------------------------------------------
+	// The clock is read-only to everyone but the facade beside it (FElysiumGameClock friends
+	// FElysiumTimeControl and nothing else), so `Now` moves in exactly one place: the map
+	// actor's gameplay tick, through TimeControl().AdvanceFrame.
 	const FElysiumGameClock& GameClock() const { return Clock; }
+
+	// The one pause / time-scale facade, over the clock and engine time together
+	// (runtime-architecture.md §4). `elysium.pause` / `elysium.timescale` / `elysium.step`.
+	FElysiumTimeControl& TimeControl() { return TimeCtl; }
+	const FElysiumTimeControl& TimeControl() const { return TimeCtl; }
 
 	// --- Script host (B6) ----------------------------------------------------------
 	// The seam field-6 Python payloads evaluate through. Initialized to FElysiumNullScriptHost
@@ -206,6 +214,8 @@ private:
 	FElysiumQuestMap Quests;
 	FElysiumPlayerSheet Sheet;
 	FElysiumGameClock Clock;
+	// Declared after the clock it holds a reference to.
+	FElysiumTimeControl TimeCtl{ Clock };
 	TUniquePtr<IElysiumScriptHost> ScriptHostPtr;
 
 	// The current map's level-script module + the last import's outcome (P9 9.3).

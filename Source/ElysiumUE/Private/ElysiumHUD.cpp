@@ -54,6 +54,10 @@ AElysiumHUD::AElysiumHUD()
 	// The HUD ticks so it can manage the Slate dialogue box (add/refresh/remove) off the entity world's
 	// open-conversation state, independent of the Canvas DrawHUD pass.
 	PrimaryActorTick.bCanEverTick = true;
+	// S2 — this is the presentation side of the frame, so it keeps ticking while the world is held:
+	// a paused game still draws a live HUD, and a menu opening over a conversation must still be able
+	// to take the dialogue box down. Gameplay ticks (the map actor's two) do the opposite.
+	PrimaryActorTick.bTickEvenWhenPaused = true;
 }
 
 void AElysiumHUD::BeginPlay()

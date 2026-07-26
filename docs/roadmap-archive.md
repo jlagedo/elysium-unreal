@@ -2303,3 +2303,110 @@ explains ~0% of a median lit face and the bounce floor *is* the ambient level (C
   comment fixed to match the code (the quad is suppressed too). Both design docs flipped to
   adopted. Same day, `decisions.md` cont. 5 made the playable path (PP0–PP6) the master
   sequence, with P11 as its PP0 rung.
+
+- [x] **11.1 Frame + clock ownership** *(landed 2026-07-26)* — `runtime-architecture.md` §3's tick
+  table pinned in the engine's own tick graph (**S2**), and §4's one pause/time-scale facade over
+  the clock **and** engine time (**S1**).
+
+  **The frame.** `AElysiumMapActor` now registers **two** tick functions. The gameplay pass is
+  `PrimaryActorTick` in `TG_PrePhysics` (steps 2–4: advance the clock, run the substrate think-first,
+  then the audio/scheme pass); the post-move pass is `FElysiumPostMoveTickFunction` in
+  `TG_PostPhysics` (step 7), a `USTRUCT` tick function on the same actor — the engine's own answer to
+  work that straddles physics, where two actors would reintroduce the ordering question tick groups
+  solve. The `+use` look cursor moved to the post-move pass: it traces, so before the pawn's move it
+  picked against last frame's geometry, which reads as a door you cannot use until you stop walking.
+  Order is **declared, not observed** — `AddTickPrerequisiteActor(PlayerController)` on the gameplay
+  tick, the movement component prerequisite on that tick, and the post-move tick prerequisite on it.
+  Both ends appear later than `BeginPlay` (no controller on a fresh world, no pawn at all on the menu
+  backdrop), so `EnsureTickPrerequisites` re-checks each gameplay tick until each is bound and rebinds
+  if the pawn is replaced. `dumpticks` on the running game reads the whole chain back: PC →
+  `ElysiumMapActor[TickActor]` (TG_PrePhysics) → `CharMoveComp` → physics →
+  `ElysiumMapActor[AElysiumMapActor::PostMoveTick]` (TG_PostPhysics).
+
+  **The clock.** `FElysiumGameClock` made `Advance`/`SetPaused`/`SetScale`/`Reset` **private** and
+  friends `FElysiumTimeControl` alone, so "one clock, advanced in one place" stopped being a
+  convention and became a compile-time property; the subsystem exposes the clock read-only beside the
+  facade. `Advance` no longer multiplies by scale: engine dilation has already scaled the tick's
+  delta, and **scale is applied exactly once** (`decisions.md` 2026-07-26 cont. 4, call E). The facade
+  sets both halves and reads the dilation back off `AWorldSettings` (which clamps it) before recording
+  it, so the two can never disagree; `ApplyToWorld`, called from the map actor's `BeginPlay`,
+  re-stamps pause and dilation after a travel, because both are per-world state and the clock is not.
+  `StepFrames(N)` releases the world and the post-move pass counts the frames back down, so a step
+  needs no paused-tick host. Verbs: `elysium.timescale`, `elysium.pause`, `elysium.step`.
+
+  **The pause split.** `bTickEvenWhenPaused` is false on both gameplay passes and true on the
+  presentation side — `AElysiumHUD` (so a held world still draws a live HUD and a menu can still take
+  the dialogue box down) and `UElysiumEntityDebugSubsystem::IsTickableWhenPaused` (overlays, gizmos
+  and I/O beams have to stay on screen through a pause and a frame step, which is exactly when they
+  are read).
+
+  *Acceptance.* Two new Substrate tests: `Elysium.Substrate.TimeControl` (a 0.25x scale still applies
+  a 0.4 s delta whole — the single-application rule as an assertion — plus hold/step/resume/rewind
+  semantics) and `Elysium.Substrate.FrameOrder` (the declared tick groups and the pause split off the
+  class defaults, plus think-before-queue inside one world tick: a `logic_timer` due this frame has
+  its wire delivered in that same frame). Live on `sp_tutorial_1`: over an identical
+  sample-sleep-sample procedure the clock bought 11.33 s at 1x and 2.88 s at 0.25x (ratio 0.254 — one
+  application, not two); `elysium.pause 1` froze `Now` across 9 wall seconds with three inputs left
+  undelivered in the queue and the door unmoved; `elysium.step 1` bought one frame (8 ms) and
+  `elysium.step 30` bought 0.25 s, each re-holding; releasing serviced the queued `Unlock`+`Open`,
+  ran the mover to `AtTop` and scheduled its autoclose think. The HUD drew throughout the hold, and
+  the `+use` cursor resolved `#66 tutchopdoorc(func_door_rotating)` from its new post-physics slot.
+
+- [x] **11.2 World services** *(landed 2026-07-26)* — `runtime-architecture.md` §7's outbound seam:
+  the substrate stopped reaching *up* into the engine.
+
+  **The bundle.** `FElysiumWorldServices` (`Public/ElysiumWorldServices.h`) is four raw pointers —
+  `IElysiumEmbodiment` / `IElysiumAudio` / `IElysiumTravel` / `IElysiumPresenter` — handed to
+  `FElysiumEntityWorld` at construction. `AElysiumMapActor` implements the first three (multiple
+  inheritance off `AActor`, the `UEngine : public UObject, public FExec` pattern) and builds the
+  bundle in `LoadMap`, one line before the world. The `FElysiumSoundSchemeManager` is now constructed
+  *before* the world rather than after, because a `start_enabled` `ambient_soundscheme` fades its
+  scheme in from its own `Spawn()` and now reaches it through `IElysiumAudio`.
+
+  **What moved.** Every `Cast<AElysiumMapActor>(World->GetOwnerActor())` is gone — 4 in
+  `ElysiumNpcClasses.cpp`, 5 in `ElysiumPropClasses.cpp`, 1 in `ElysiumSoundScheme.cpp` — and so are
+  `FElysiumEntityWorld::AudioSubsystem()`, `MapSubsystem()` and `GetPlayerPawn()`, which walked the
+  owner actor to a GI subsystem or to `GetFirstPlayerController()`. `AActor* Owner` stays, but only as
+  the component outer and the VLOG context; nothing reads behaviour off it, which is what lets the
+  whole substrate run on `nullptr, nullptr, {}`. `phys_hinge` now outers its constraint to
+  `World->GetOwnerActor()` rather than to a downcast map actor.
+
+  **The player's body is an embodiment.** `GetPlayerViewPoint` / `GetPlayerOrigin` / `TeleportPlayer` /
+  `DamagePlayer` / `TraceUseCursor` sit on `IElysiumEmbodiment` because the pawn *is* the player's body
+  (**S3**); 11.4 turns them into ordinary entity operations. Two details moved to the body where they
+  belong: `point_teleport`'s capsule half-height lift (Source places feet, an Unreal capsule is
+  centred) and the `+use` trace itself, which needs the pawn to ignore and the engine channel to trace
+  on — the substrate now hands it a segment and gets a handle back, keeping the usability arbitration
+  on its own side. `trigger_hurt` and a door closing on the player both route through `DamagePlayer`,
+  so `UGameplayStatics` left the substrate entirely.
+
+  **Audio is the voice API, not the subsystem pointer.** `IElysiumAudio` exposes
+  `PlayVoice`/`StopVoice`/`SetVoiceVolume`/`IsVoicePlaying` plus `FadeInScheme`/`FadeOutScheme`/
+  `ActiveSchemeRel`; the map actor forwards the voices to the GI-scoped `UElysiumAudioSubsystem` and
+  the scheme calls to its own manager. The manager's own signatures are untouched — it is still
+  handed the subsystem explicitly and still ticked by the map actor.
+
+  **Presenter has no production implementation.** 11.8 is what builds `UElysiumPresentationSubsystem`;
+  until then the bundle's `Presenter` is **null in play**, and the world announces `StartFade` /
+  `OpenSign` / `CloseSign` / `OpenDialog` / `CloseDialog` *in addition to* holding the state
+  `AElysiumHUD` still polls. So 11.8 removes the polling path rather than migrating it, and in the
+  meantime the announcements are what let a headless run assert "the chain faded the screen" with no
+  HUD to look at. Recorded as a deliberate gap, not an oversight.
+
+  *Acceptance.* `Elysium.Substrate.WorldServices` builds a tutorial-shaped `logic_auto` chain by hand
+  — OnMapLoad wires at an NPC (`WillTalk`, `SetAnimation`), a door (`Lock`), an `ambient_generic`
+  (`PlaySound`), an `env_fade` (`Fade`) and a delayed `math_counter` wire — plus a `start_enabled`
+  `ambient_soundscheme` and a `trigger_changelevel`, and runs it against a recording stub
+  (`Private/Tests/ElysiumTestServices.h`, which hands back real transient components so the leaf
+  classes take their body-carrying path). It asserts all four seams were reached, then **re-runs the
+  same defs with a default (all-null) bundle and asserts the counter lands on the same value** — the
+  seam's actual claim, that embodiment/audio/travel/presentation are outputs of the logic and never
+  inputs to it — and that `UpdateUseCursor`/`PlayerUse` with no embodiment are safe no-ops. No RHI,
+  no actors, no `tools/out`. Live on `sp_tutorial_1`: Jack stands his skeletal body, a `prop_physics`
+  simulates at its authored 3.00 kg, the `SP_Tutorial_City` scheme is active with its music state and
+  random voices, 38 `ambient_generic` voices play, `elysium.ent_fire teleport_player Teleport` seats
+  the player at the destination with the capsule lift, and the `+use` cursor resolves
+  `#196 tutwareelevdra(func_door)` with `use_icon 10`.
+
+  *Not in scope, named:* `IElysiumPresenter`'s production side (11.8) and the player-entity rehoming
+  of the player-body calls (11.4).

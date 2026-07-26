@@ -124,18 +124,30 @@ unverified* — **RE21** (the usercmd stage of `GameFrame`) settles it.
 
 ## 4. Time, pause and time scale
 
-`FElysiumGameClock` is the single game-visible clock (**R4**, **S1**). This doc adds the two things it
-does not yet have: **one advance site** and **one facade over engine time**.
+`FElysiumGameClock` is the single game-visible clock (**R4**, **S1**), with **one advance site** and
+**one facade over engine time** (11.1).
 
 ```cpp
 struct FElysiumTimeControl                 // on UElysiumGameStateSubsystem, beside the clock
 {
+    double AdvanceFrame(double Delta);     // the ONE advance site (§3 step 2); Delta is already dilated
+    void   EndFrame();                     // tail of a released frame (§3 step 7): spends one dev step
+
     void  SetPaused(bool bPaused);         // clock hold + UGameplayStatics::SetGamePaused
-    void  SetScale(float Scale);           // clock scale + SetGlobalTimeDilation (Celerity, host_timescale)
+    void  SetScale(double Scale);          // clock scale + SetGlobalTimeDilation (Celerity, host_timescale)
     void  StepFrames(int32 N);             // dev: release N frames while paused
     bool  IsPaused() const;
+    void  ResetClock(double StartSeconds); // fresh session / load restoring a saved curtime
+    void  ApplyToWorld();                  // re-stamp pause + dilation after travel
 };
 ```
+
+The clock keeps `Advance`/`SetPaused`/`SetScale`/`Reset` private and friends this struct alone, so
+"one clock, advanced in one place" is a compile-time property. `SetScale` reads the dilation back
+off `AWorldSettings` (which clamps it) before recording it, so the two halves cannot disagree.
+Engine pause and dilation are per-world state and the clock is not, which is what `ApplyToWorld`
+is for — the map actor calls it from `BeginPlay`. Verbs: `elysium.timescale`, `elysium.pause`,
+`elysium.step`.
 
 - **Pause is one call.** Today the menu does not pause anything; the substrate keeps running behind
   it (which the menu backdrop *wants* — implied by `decisions.md` 2026-07-26 cont. 3, decided as
@@ -250,31 +262,35 @@ classnames as inert records.
 
 ## 7. Services — how the substrate reaches the engine
 
-Today `FElysiumEntityWorld` calls `AElysiumMapActor` directly for bodies, clips, meshes and skins,
-reaches `UElysiumAudioSubsystem` and `UElysiumMapSubsystem` through the owner actor, and resolves the
-player pawn through `GetWorld()->GetFirstPlayerController()`. It works, and it is why the Substrate
-test tier can only exercise a bodiless world.
-
-Replace the back-pointers with a small injected service bundle:
+`FElysiumEntityWorld` reaches the engine through one injected service bundle and nothing else (11.2):
 
 ```cpp
 struct FElysiumWorldServices
 {
-    IElysiumEmbodiment* Embodiment = nullptr;  // build/destroy bodies, resolve meshes, play clips, skins
+    IElysiumEmbodiment* Embodiment = nullptr;  // bodies, meshes, clips, skins, and the player's body
     IElysiumAudio*      Audio      = nullptr;  // PlayVoice/StopVoice/scheme control
     IElysiumTravel*     Travel     = nullptr;  // RequestLandmarkTravel, ChangeMap
     IElysiumPresenter*  Presenter  = nullptr;  // OpenDialog/OpenSign/StartFade -> the view state
 };
 ```
 
-`AElysiumMapActor` implements all four; `FElysiumEntityWorld` takes the bundle at construction. Any
-member may be null, and every call site already has to handle "no body" (`elysium.NpcBodies 0`,
+`AElysiumMapActor` implements the first three and hands the bundle to `FElysiumEntityWorld` at
+construction; **`IElysiumPresenter` has no production implementation until 11.8**, so it is null in
+play and the world announces to it *in addition to* holding the fade/sign/dialogue state `AElysiumHUD`
+still polls. The actor is still the world's component outer and VLOG context — that is not a fifth
+service, and nothing under the world casts it to a map actor or walks it to a subsystem.
+
+The player's body lives on `IElysiumEmbodiment` because the pawn *is* the player's body (**S3**):
+view point, origin, teleport, damage, and the `+use` trace. 11.4 moves the player's *state* onto an
+entity, at which point these become ordinary entity operations.
+
+Any member may be null, and every call site has to handle "no body" (`elysium.NpcBodies 0`,
 `elysium.BrushBodies 0`), so null-service is the existing A/B path formalised.
 
-What this buys, concretely: a **Substrate-tier test can run a whole map's logic headlessly** with a
-recording embodiment stub — the elevator chain, a dialogue tree, a save round-trip — with no RHI, no
-actors, and no `tools/out`. That is the missing middle tier between "variant arithmetic" and "launch
-the game".
+What this buys, concretely: a **Substrate-tier test can run a whole map's logic headlessly** against a
+recording stub — the elevator chain, a dialogue tree, a save round-trip — with no RHI, no actors, and
+no `tools/out`. That is the missing middle tier between "variant arithmetic" and "launch the game",
+and `Elysium.Substrate.WorldServices` is its first occupant.
 
 ## 8. The control surface
 
@@ -600,7 +616,7 @@ roadmap task or a new P11 one.
 | 4 | no chargen | New Game mocks Tremere male; clan-gated content untestable | 9.4 |
 | 5 | no save/load | a session cannot be resumed; `trigger_autosave` is inert | 9.5 on **11.9** |
 | 6 | no vitals HUD (the Canvas HUD covers reticle/signs only) | blood/health/frenzy/masquerade invisible; the sheet has no readout | 8.9 on **11.8** |
-| 7 | no pause | menu does not hold the world; no pause input scope | **11.3** |
+| 7 | pause has no input path | the facade holds the world (11.1), but nothing routes Esc to it and the menu does not use it; no pause input scope | **11.3** |
 | 8 | no camera modes | `togglecamera` unbound and unimplemented; scripted cameras have no channel | **11.7** |
 | 9 | three input-mode owners | modal screens fight over the mouse; Cog can make the game unclickable | **11.5** |
 | 10 | no loading screen | every travel is a visible hitch | **11.3** |
@@ -608,7 +624,7 @@ roadmap task or a new P11 one.
 | 12 | dialogue line audio unwired | `PlayDialogFile` (41 calls) silent though decode is done | 9.2 |
 | 13 | no `logic_choreographed_scene` | the theatre act cannot run, so the story chain is short-circuited | **12.1** (P12 = PP2) |
 | 14 | no items/containers/barter | 853 script calls fail closed | 9.8 |
-| 15 | substrate reaches the engine by back-pointer | logic cannot be tested headlessly above the unit level | **11.2** |
+| 15 | ~~substrate reaches the engine by back-pointer~~ | closed by **11.2** — the seam is `FElysiumWorldServices`, and `Elysium.Substrate.WorldServices` drives a map's logic headlessly | **11.2** |
 | 16 | UI polls the substrate | no view contract; every screen re-invents its gating | **11.8** |
 | 17 | no playthrough harness | "the tutorial is completable" is a manual claim | **11.10** |
 
@@ -618,13 +634,17 @@ Ordered so each step compiles, ships, and is observable on its own — and so no
 re-do an earlier step. Roadmap IDs in **P11**. Step zero — **11.0 Adopt the spine**, the seven §16
 calls as one dated `decisions.md` entry — was recorded 2026-07-26 (cont. 4) and gates the rest.
 
-1. **11.1 Frame + clock ownership** — the §3 tick table pinned with tick groups and prerequisites; the
-   map actor split into gameplay (`TG_PrePhysics`) and post-move (`TG_PostPhysics`) tick functions;
-   `FElysiumTimeControl` as the one pause/scale facade. *Observable:* a frame-order assertion test and
-   a `elysium.timescale 0.25` that slows movers, the queue, the camera blend and animation together.
-2. **11.2 World services** — `FElysiumWorldServices` injected into `FElysiumEntityWorld`; the map
-   actor implements the four interfaces; a recording stub in the test module. *Observable:* a
-   Substrate-tier test that runs the tutorial's `logic_auto` chain end to end with no RHI.
+1. **11.1 Frame + clock ownership** *(landed)* — the §3 tick table pinned with tick groups and
+   prerequisites; the map actor split into gameplay (`TG_PrePhysics`) and post-move
+   (`TG_PostPhysics`) tick functions; `FElysiumTimeControl` as the one pause/scale facade.
+   *Observable:* `Elysium.Substrate.FrameOrder` + `Elysium.Substrate.TimeControl`, and a
+   `elysium.timescale 0.25` that slows movers, the queue and animation together (the camera blend
+   joins them at 11.7, which is where a blend first exists).
+2. **11.2 World services** *(landed)* — `FElysiumWorldServices` injected into `FElysiumEntityWorld`;
+   the map actor implements three of the four interfaces (`IElysiumPresenter` waits for 11.8); a
+   recording stub in the module's test folder. *Observable:* `Elysium.Substrate.WorldServices` runs a
+   tutorial-shaped `logic_auto` chain end to end with no RHI, no actors and no `tools/out`, and the
+   same defs with a null bundle reach the same state.
 3. **11.3 App state machine** — `UElysiumGameFlowSubsystem`, `EElysiumAppState`, boot out of the game
    mode, loading screen, pause, quit-to-menu, `GameOver`. *Observable:* Esc pauses, the menu holds the
    world, quit-to-menu returns to the backdrop, travel shows a loading screen.

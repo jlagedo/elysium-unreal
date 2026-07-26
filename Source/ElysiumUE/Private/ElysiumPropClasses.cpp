@@ -1,7 +1,7 @@
 // 8.3 — Dynamic props: the `prop_dynamic` (+ `prop_dynamic_ornament`) static-mesh leaf.
 //
 // Closes the "bodiless prop" gap (roadmap 9.3): a prop_dynamic record that parsed as an inert entity
-// now stands its decoded static `.mdl` (out/<map>/props/<stem>.obj via AElysiumMapActor::BuildPropVisual,
+// now stands its decoded static `.mdl` (out/<map>/props/<stem>.obj via IElysiumEmbodiment::BuildPropVisual,
 // the shared prop decode 8.1 exports) at its placement, and gains per-instance addressability — the base
 // ScriptHide/ScriptUnhide dormancy, the 9.3 SetOrigin/SetAngles/SetModel writers (body-follow), and the
 // prop_dynamic inputs. `Break` hides the body and fires OnBreak. `Skin`/`SetAnimation` are logged stubs:
@@ -16,9 +16,10 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumMapActor.h"
+#include "ElysiumWorldServices.h"
 
 #include "Components/StaticMeshComponent.h"
+#include "GameFramework/Actor.h"
 #include "Engine/StaticMesh.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/Paths.h"
@@ -200,9 +201,9 @@ public:
 		{
 			return;
 		}
-		if (AElysiumMapActor* Map = Cast<AElysiumMapActor>(World->GetOwnerActor()))
+		if (IElysiumEmbodiment* Embodiment = World->Embodiment())
 		{
-			Map->ApplyPropSkin(Visual, Def->ModelMesh, Skin);
+			Embodiment->ApplyPropSkin(Visual, Def->ModelMesh, Skin);
 		}
 	}
 
@@ -233,8 +234,8 @@ private:
 		{
 			return;   // gated off, no world, or bare test world (no map actor to build on)
 		}
-		AElysiumMapActor* Map = Cast<AElysiumMapActor>(World->GetOwnerActor());
-		if (!Map)
+		IElysiumEmbodiment* Embodiment = World->Embodiment();
+		if (!Embodiment)
 		{
 			return;
 		}
@@ -263,7 +264,7 @@ private:
 			Rot  = Def->ModelQuat;
 		}
 
-		Visual = Map->BuildPropVisual(Stem, Loc, Rot, Map->BodyScaleFor(*Def));
+		Visual = Embodiment->BuildPropVisual(Stem, Loc, Rot, Embodiment->BodyScaleFor(*Def));
 		if (Visual)
 		{
 			World->RegisterPropBody(Visual);
@@ -271,7 +272,7 @@ private:
 			// stands on it from the first frame rather than popping on the first Skin input.
 			if (Skin != 0)
 			{
-				Map->ApplyPropSkin(Visual, Stem, Skin);
+				Embodiment->ApplyPropSkin(Visual, Stem, Skin);
 			}
 			if (IsInert() || bBroken)
 			{
@@ -385,9 +386,9 @@ public:
 		{
 			return;
 		}
-		if (AElysiumMapActor* Map = Cast<AElysiumMapActor>(World->GetOwnerActor()))
+		if (IElysiumEmbodiment* Embodiment = World->Embodiment())
 		{
-			Map->ApplyPropSkin(Visual, Def->ModelMesh, Skin);
+			Embodiment->ApplyPropSkin(Visual, Def->ModelMesh, Skin);
 		}
 	}
 
@@ -428,13 +429,13 @@ private:
 		{
 			return;   // gated off, bare test world, or a record with no decoded prop mesh
 		}
-		AElysiumMapActor* Map = Cast<AElysiumMapActor>(World->GetOwnerActor());
-		if (!Map)
+		IElysiumEmbodiment* Embodiment = World->Embodiment();
+		if (!Embodiment)
 		{
 			return;
 		}
-		Visual = Map->BuildPhysPropVisual(Def->ModelMesh, Def->Origin, Def->ModelQuat,
-			Map->BodyScaleFor(*Def));
+		Visual = Embodiment->BuildPhysPropVisual(Def->ModelMesh, Def->Origin, Def->ModelQuat,
+			Embodiment->BodyScaleFor(*Def));
 		if (!Visual)
 		{
 			return;
@@ -442,7 +443,7 @@ private:
 		World->RegisterPropBody(Visual);
 		if (Skin != 0)
 		{
-			Map->ApplyPropSkin(Visual, Def->ModelMesh, Skin);   // authored on an alternate family
+			Embodiment->ApplyPropSkin(Visual, Def->ModelMesh, Skin);   // authored on an alternate family
 		}
 
 		// A model with no collision model cannot simulate, and VtMB does not remove the entity over
@@ -532,8 +533,10 @@ public:
 		{
 			return;
 		}
-		AElysiumMapActor* Map = Cast<AElysiumMapActor>(World->GetOwnerActor());
-		USceneComponent* Root = Map ? Map->GetRootComponent() : nullptr;
+		// The constraint is a component like every other body: outer'd to the world's owner actor
+		// (11.2 — the actor is the component outer, not a service).
+		AActor* Outer = World->GetOwnerActor();
+		USceneComponent* Root = Outer ? Outer->GetRootComponent() : nullptr;
 		if (!Root)
 		{
 			return;
@@ -553,13 +556,13 @@ public:
 			Axis = FVector::UpVector;   // degenerate / absent axis → world Z
 		}
 
-		Constraint = NewObject<UPhysicsConstraintComponent>(Map);
+		Constraint = NewObject<UPhysicsConstraintComponent>(Outer);
 		Constraint->SetupAttachment(Root);
 		// The constraint's local +X is the twist axis; orient the frame so it lies along the hinge axis.
 		// The map actor sits at world origin, so relative == world for these Unreal-space values.
 		Constraint->SetRelativeLocationAndRotation(Def->Origin, FRotationMatrix::MakeFromX(Axis).ToQuat());
 		Constraint->RegisterComponent();
-		Map->AddInstanceComponent(Constraint);
+		Outer->AddInstanceComponent(Constraint);
 
 		ConfigureAsHinge();
 		Constraint->SetConstrainedComponents(Body1, NAME_None, Body2, NAME_None);

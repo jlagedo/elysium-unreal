@@ -14,7 +14,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumKeyValues.h"
-#include "ElysiumMapActor.h"
+#include "ElysiumWorldServices.h"
 
 #include "HAL/IConsoleManager.h"
 #include "Misc/FileHelper.h"
@@ -380,21 +380,6 @@ void FElysiumSoundSchemeManager::StopAll(UElysiumAudioSubsystem* Audio)
 // ambient_soundscheme — the scheme anchor entity (FadeIn 205 / FadeOut 179; entity_io.md)
 // ============================================================================================
 
-namespace
-{
-	// Reach the map's scheme manager from an entity (owned by the map actor). Null between maps.
-	FElysiumSoundSchemeManager* SchemeManagerFor(const FElysiumEntity& E)
-	{
-		if (E.World)
-		{
-			if (AElysiumMapActor* Map = Cast<AElysiumMapActor>(E.World->GetOwnerActor()))
-			{
-				return Map->GetSchemeManager();
-			}
-		}
-		return nullptr;
-	}
-}
 
 class FElysiumAmbientSoundscheme final : public FElysiumEntity
 {
@@ -409,25 +394,25 @@ public:
 		// constructed before the world's spawn pass, so it is reachable here.
 		if (bStartEnabled && !SchemeRel.IsEmpty() && !IsInert())
 		{
-			if (FElysiumSoundSchemeManager* Mgr = SchemeManagerFor(*this))
+			if (IElysiumAudio* Audio = World ? World->Audio() : nullptr)
 			{
-				Mgr->FadeInScheme(World->AudioSubsystem(), SchemeRel, Def->Origin, /*instant*/ 0.f);
+				Audio->FadeInScheme(SchemeRel, Def->Origin, /*instant*/ 0.f);
 			}
 		}
 	}
 
 	void InputFadeIn(const FElysiumVariant& Param)
 	{
-		if (FElysiumSoundSchemeManager* Mgr = SchemeManagerFor(*this))
+		if (IElysiumAudio* Audio = World ? World->Audio() : nullptr)
 		{
-			Mgr->FadeInScheme(World->AudioSubsystem(), SchemeRel, Def ? Def->Origin : FVector::ZeroVector, FadeTime(Param));
+			Audio->FadeInScheme(SchemeRel, Def ? Def->Origin : FVector::ZeroVector, FadeTime(Param));
 		}
 	}
 	void InputFadeOut(const FElysiumVariant& Param)
 	{
-		if (FElysiumSoundSchemeManager* Mgr = SchemeManagerFor(*this))
+		if (IElysiumAudio* Audio = World ? World->Audio() : nullptr)
 		{
-			Mgr->FadeOutScheme(World->AudioSubsystem(), SchemeRel, FadeTime(Param));
+			Audio->FadeOutScheme(SchemeRel, FadeTime(Param));
 		}
 	}
 
@@ -435,9 +420,9 @@ public:
 	{
 		Out.Emplace(TEXT("Scheme file"), SchemeRel.IsEmpty() ? TEXT("(none)") : SchemeRel);
 		Out.Emplace(TEXT("Start enabled"), bStartEnabled ? TEXT("yes") : TEXT("no"));
-		if (const FElysiumSoundSchemeManager* Mgr = SchemeManagerFor(*this))
+		if (const IElysiumAudio* Audio = World ? World->Audio() : nullptr)
 		{
-			Out.Emplace(TEXT("Active"), Mgr->ActiveSchemeRel() == SchemeRel ? TEXT("yes (this scheme)") : TEXT("no"));
+			Out.Emplace(TEXT("Active"), Audio->ActiveSchemeRel() == SchemeRel ? TEXT("yes (this scheme)") : TEXT("no"));
 		}
 	}
 

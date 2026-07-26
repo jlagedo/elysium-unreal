@@ -35,6 +35,10 @@ public:
 
 	// --- UTickableWorldSubsystem (FTickableGameObject) ----------------------------------
 	virtual void Tick(float DeltaTime) override;
+	// S2 — debug drawing is presentation, so it keeps running while the world is held: the
+	// overlays, gizmos and I/O beams have to stay on screen through a pause and a frame step,
+	// which is exactly when they are read (debug-tooling.md).
+	virtual bool IsTickableWhenPaused() const override { return true; }
 	virtual TStatId GetStatId() const override;
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
 

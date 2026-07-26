@@ -1,6 +1,5 @@
 #include "ElysiumEntityWorld.h"
 
-#include "ElysiumAudioSubsystem.h"
 #include "ElysiumBrushComponent.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumDlg.h"
@@ -18,8 +17,6 @@
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
-#include "GameFramework/Pawn.h"
-#include "GameFramework/PlayerController.h"
 #include "PhysicsEngine/PhysicsConstraintComponent.h"
 #include "HAL/IConsoleManager.h"
 
@@ -49,9 +46,11 @@ namespace
 	const TCHAR* const GActivatorTarget = TEXT("!activator");
 }
 
-FElysiumEntityWorld::FElysiumEntityWorld(AActor* InOwner, UElysiumGameStateSubsystem* InGameState)
+FElysiumEntityWorld::FElysiumEntityWorld(AActor* InOwner, UElysiumGameStateSubsystem* InGameState,
+	const FElysiumWorldServices& InServices)
 	: Owner(InOwner)
 	, GameState(InGameState)
+	, WorldServices(InServices)
 	, Epoch(GElysiumNextWorldEpoch++)
 {
 	// R5 — the chokepoints are never uninstrumented: the ring buffer (always-on history) and
@@ -70,21 +69,6 @@ FElysiumEntityWorld::~FElysiumEntityWorld()
 double FElysiumEntityWorld::NowSeconds() const
 {
 	return GameState ? GameState->GameClock().GetNow() : 0.0;
-}
-
-UElysiumMapSubsystem* FElysiumEntityWorld::MapSubsystem() const
-{
-	// The map-lifecycle owner (Travel + the P4.6 landmark-transition queue). Reached through the
-	// owning actor's GameInstance — the seam trigger_changelevel uses to request a deferred travel.
-	const UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	return GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
-}
-
-UElysiumAudioSubsystem* FElysiumEntityWorld::AudioSubsystem() const
-{
-	const UWorld* W = Owner ? Owner->GetWorld() : nullptr;
-	const UGameInstance* GI = W ? W->GetGameInstance() : nullptr;
-	return GI ? GI->GetSubsystem<UElysiumAudioSubsystem>() : nullptr;
 }
 
 // --- Load / spawn -----------------------------------------------------------------------
@@ -338,35 +322,18 @@ namespace
 
 void FElysiumEntityWorld::UpdateUseCursor()
 {
-	UWorld* UW = Owner ? Owner->GetWorld() : nullptr;
-	APlayerController* PC = UW ? UW->GetFirstPlayerController() : nullptr;
-
-	// Camera-ray-pick the nearest usable, non-inert brush entity within reach. A single blocking
-	// trace naturally handles occlusion: a wall (or any solid) closer than the button ends the ray,
-	// and func_button bodies are Solid (BlockAll), so they block ECC_Visibility like the world does.
+	// Camera-ray-pick the nearest usable, non-inert brush entity within reach. The trace itself is
+	// the embodiment's (it needs the pawn to ignore and the engine channel to trace on); what comes
+	// back is a handle, and the usability arbitration below is the substrate's.
 	FElysiumEntityHandle Hit;
-	if (PC)
+	FVector Loc; FRotator Rot;
+	if (IElysiumEmbodiment* Bodily = Embodiment(); Bodily && Bodily->GetPlayerViewPoint(Loc, Rot))
 	{
-		FVector Loc; FRotator Rot;
-		PC->GetPlayerViewPoint(Loc, Rot);
 		const FVector End = Loc + Rot.Vector() * GElysiumUseReachCm;
-
-		FCollisionQueryParams Params(FName(TEXT("ElysiumUseCursor")), /*bTraceComplex*/ false);
-		Params.AddIgnoredActor(PC->GetPawn());
-		FHitResult H;
-		// The dedicated +use channel (ELYSIUM_USE_CHANNEL, default-Block): world + solid bodies
-		// occlude the ray, so a wall between the player and a button ends it, while staying isolated
-		// from ECC_Visibility. func_button/func_door bodies are Solid (BlockAll), so they block it.
-		if (UW->LineTraceSingleByChannel(H, Loc, End, ELYSIUM_USE_CHANNEL, Params))
+		const FElysiumEntity* E = Resolve(Bodily->TraceUseCursor(Loc, End));
+		if (E && E->IsUsable() && !E->IsInert())
 		{
-			if (const UElysiumBrushComponent* B = Cast<UElysiumBrushComponent>(H.GetComponent()))
-			{
-				const FElysiumEntity* E = Resolve(B->GetOwningEntity());
-				if (E && E->IsUsable() && !E->IsInert())
-				{
-					Hit = E->Handle;
-				}
-			}
+			Hit = E->Handle;
 		}
 	}
 
@@ -426,6 +393,14 @@ void FElysiumEntityWorld::StartScreenFade(const FLinearColor& Color, float Durat
 	ScreenFade.bFadeIn      = bFadeIn;
 	ScreenFade.bAutoReverse = bAutoReverse;
 	ScreenFade.StartTime    = NowSeconds();
+
+	// 11.2 — announce it as well as hold it. AElysiumHUD still polls GetScreenFade; 11.8 moves the
+	// state itself onto the published view state and this becomes the only path.
+	if (IElysiumPresenter* P = Presenter())
+	{
+		P->StartFade(ScreenFade.Color, ScreenFade.Duration, ScreenFade.HoldTime, ScreenFade.MaxAlpha,
+			ScreenFade.bFadeIn, ScreenFade.bAutoReverse);
+	}
 }
 
 bool FElysiumEntityWorld::GetScreenFade(FLinearColor& OutColor) const
@@ -491,6 +466,11 @@ void FElysiumEntityWorld::OpenSign(const FElysiumEntityHandle& NewOwner,
 	OpenSignData = MoveTemp(Data);
 	OpenSignFadeIn = FMath::Max(FadeInSeconds, 0.0f);
 	OpenSignTime = NowSeconds();
+
+	if (IElysiumPresenter* P = Presenter())
+	{
+		P->OpenSign(OpenSignOwner, OpenSignData, OpenSignFadeIn);
+	}
 }
 
 void FElysiumEntityWorld::CloseSign(bool bSilent)
@@ -504,6 +484,11 @@ void FElysiumEntityWorld::CloseSign(bool bSilent)
 	OpenSignData.Reset();
 	OpenSignFadeIn = 0.0f;
 	OpenSignTime = 0.0;
+
+	if (IElysiumPresenter* P = Presenter())
+	{
+		P->CloseSign();
+	}
 
 	if (!bSilent)
 	{
@@ -558,6 +543,11 @@ void FElysiumEntityWorld::OpenDialog(const FElysiumEntityHandle& NewOwner,
 	OpenDialogOwner = NewOwner;
 	OpenDialogConv = Conversation;
 
+	if (IElysiumPresenter* P = Presenter())
+	{
+		P->OpenDialog(OpenDialogOwner, *OpenDialogConv);
+	}
+
 	// A conversation that opened already closed (no content NPC line) ends at once, so the beat still
 	// advances (OnDialogEnd -> DialogPostProcess) rather than hanging on an empty panel.
 	if (OpenDialogConv->IsOver())
@@ -608,6 +598,11 @@ void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 	OpenDialogOwner = FElysiumEntityHandle();
 	OpenDialogConv.Reset();
 
+	if (IElysiumPresenter* P = Presenter())
+	{
+		P->CloseDialog();
+	}
+
 	if (!bSilent && Closing.IsSet())
 	{
 		// Route EndDialog to exactly the owning NPC (its InputEndDialog clears bInDialog and fires
@@ -617,13 +612,6 @@ void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 		EnqueueInput(GSelfTarget, EndDialogInput, FElysiumVariant::Void(), 0.0,
 			FElysiumEntityHandle(), Closing);
 	}
-}
-
-APawn* FElysiumEntityWorld::GetPlayerPawn() const
-{
-	const UWorld* W = Owner ? Owner->GetWorld() : nullptr;
-	const APlayerController* PC = W ? W->GetFirstPlayerController() : nullptr;
-	return PC ? PC->GetPawn() : nullptr;
 }
 
 // --- Tick (think-first, retail order) ---------------------------------------------------
