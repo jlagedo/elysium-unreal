@@ -557,8 +557,10 @@ task (9.4 sheet/quests/XP, 9.6 dice, 10.7 the rest).
 console syntax) copied **verbatim** → `out/cfg/`, patch-first, no parse/transcode — `user.cfg` carries
 the Basic/Plus `patchtype` alias. Whole-game, so `export_all.py` runs it once at end of a run
 (`--no-cfg` to skip). The runtime console bridge (`FElysiumConsole`, roadmap 9.3b) seeds its alias/cvar
-store from this mirror, and the CPython VM points its `nt.getcwd`/`sys.moddir` at `out/` so VtMB's
-file-touching scripts (`FixKeyBindings` reads `cfg/config.cfg`) resolve here.
+store from this mirror, and VtMB's file-touching scripts (`FixKeyBindings` reads `cfg/config.cfg`)
+reach the same tree through the CPython VM's own filesystem namespace, which mounts `cfg/`, `vdata/`,
+`python/`, `dlg/` and `sound/` here read-only and sends every script *write* to a `Saved/` overlay
+instead (`FElysiumScriptFS`; `../docs/python_bridge.md` → "The script file layer").
 
 `vampire.dll` registers module **`vampire`** (11 globals: `FindPlayer`, `FindEntityByName`,
 `ChangeMap`, `ScheduleTask`, …) plus old-style classes `Entity` (`__getattr__`/`__setattr__`

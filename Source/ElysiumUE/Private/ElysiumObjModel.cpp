@@ -151,6 +151,11 @@ void FElysiumObjModel::ParseMtlLines(const TArray<FString>& Lines, TMap<FString,
 			// surface reflective (its Roughness drops so Lumen reflections appear).
 			Cur->bEnvmap = true;
 		}
+		else if (Key == TEXT("envtint") && Tok.Num() >= 4)
+		{
+			Cur->EnvTint = FLinearColor(FCString::Atof(*Tok[1]), FCString::Atof(*Tok[2]),
+				FCString::Atof(*Tok[3]));
+		}
 		else if (Key == TEXT("basetex2") && Tok.Num() >= 2)
 		{
 			Cur->BaseTex2 = Tok[1];

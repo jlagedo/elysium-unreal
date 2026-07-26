@@ -51,6 +51,14 @@ EMISSIVE_SCALE = 1.5
 BUMP_AMOUNT = 1.0
 ENV_STRENGTH = 1.0
 
+# The $envmap reflection channel (roadmap 7.5). Mirrors make_world_materials.py's parameter
+# defaults, and bound only onto materials that actually carry $envmap -- a non-reflective
+# surface keeps the master's own Lambert base (RoughBase 1.0 / SpecBase 0.0) untouched.
+ROUGH_BASE = 1.0
+ROUGH_REFLECT = 0.15
+SPEC_BASE = 0.0
+SPEC_REFLECT = 0.5
+
 # UElysiumLightRig's calibrated constants, so a baked light matches the runtime rig's.
 POINT_SPOT_SCALE = 0.003
 MAX_BRIGHTNESS = 8.0
@@ -361,6 +369,20 @@ class Bake(object):
             # An unmasked reflective surface reflects uniformly; the master's own white
             # default stands in for the runtime's 1x1 white texture.
             bl.set_scalar_param(mic, "EnvStrength", ENV_STRENGTH)
+            bl.set_scalar_param(mic, "RoughBase", ROUGH_BASE)
+            bl.set_scalar_param(mic, "RoughReflect", ROUGH_REFLECT)
+            bl.set_scalar_param(mic, "SpecBase", SPEC_BASE)
+            # $envmaptint splits two ways (docs/reflections.md). Grey -- 362 of the game's
+            # 2,610 reflective materials -- is a reflection-strength dim-down, so its luma
+            # scales the specular level. Chromatic (102) names a metal, and a metal's
+            # reflection colour lives in BaseColor, which is what MetalMask + EnvTint drive;
+            # specular is ignored once Metallic is up, so the two paths do not overlap.
+            if mat.chromatic:
+                bl.set_scalar_param(mic, "MetalMask", 1.0)
+                bl.set_vector_param(mic, "EnvTint", unreal.LinearColor(
+                    mat.env_tint[0], mat.env_tint[1], mat.env_tint[2], 1.0))
+            else:
+                bl.set_scalar_param(mic, "SpecReflect", SPEC_REFLECT * mat.tint_luma)
         tex2 = tex(mat.base_tex2)
         if tex2:
             bl.set_tex_param(mic, "BaseTex2", tex2)

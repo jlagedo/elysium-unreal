@@ -19,9 +19,12 @@
 #include "ElysiumDlg.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumObjModel.h"
+#include "ElysiumReflections.h"
 #include "ElysiumRopes.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/Texture.h"
 #include "HAL/FileManager.h"
+#include "Materials/MaterialInterface.h"
 #include "Misc/Paths.h"
 #include "PhysicsEngine/BodySetup.h"
 
@@ -485,10 +488,82 @@ bool FElysiumTutorialMaterialsTest::RunTest(const FString&)
 	TestTrue(TEXT("most materials resolve an albedo"), WithAlbedo > Materials.Num() / 2);
 	TestEqual(TEXT("blend flags are mutually exclusive"), MultiBlend, 0);
 	TestEqual(TEXT("every referenced texture channel exists on disk"), MissingTex, 0);
+	TestTrue(TEXT("the map has reflective surfaces"), Reflective > 0);
 	AddInfo(FString::Printf(
 		TEXT("%s materials: %d total, %d albedo | masked %d, translucent %d, additive %d, reflective %d, bump %d, wvt %d"),
 		Map, Materials.Num(), WithAlbedo, Masked, Translucent, Additive, Reflective, Bumped, Wvt));
 
+	return true;
+}
+
+// 7.5 — the reflection channel is bound BY NAME from three places (tools/make_world_materials.py
+// authors it, tools/bake_map.py binds it onto each baked instance, FElysiumMaterialFactory and
+// AElysiumMapActor::ApplyMaterialOverrides bind it at runtime). A rename that misses one of them
+// binds nothing and fails silently in the frame, so the contract is asserted here instead: every
+// lit master must carry every parameter ElysiumReflections names.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReflectionParamsTest,
+	"Elysium.Content.ReflectionParams", GElysiumContentTestFlags)
+bool FElysiumReflectionParamsTest::RunTest(const FString&)
+{
+	static const TCHAR* LitMasters[] = {
+		TEXT("/Game/VtMB/Materials/M_World_Opaque.M_World_Opaque"),
+		TEXT("/Game/VtMB/Materials/M_World_Masked.M_World_Masked"),
+		TEXT("/Game/VtMB/Materials/M_World_Translucent.M_World_Translucent"),
+	};
+	static const FName ScalarParams[] = {
+		ElysiumReflections::Params::EnvStrength,
+		ElysiumReflections::Params::MetalMask,
+		ElysiumReflections::Params::RoughBase,
+		ElysiumReflections::Params::RoughReflect,
+		ElysiumReflections::Params::SpecBase,
+		ElysiumReflections::Params::SpecReflect,
+	};
+
+	for (const TCHAR* Path : LitMasters)
+	{
+		UMaterialInterface* Master = LoadObject<UMaterialInterface>(nullptr, Path);
+		if (!TestNotNull(*FString::Printf(TEXT("master loads: %s"), Path), Master))
+		{
+			continue;
+		}
+		for (const FName& Param : ScalarParams)
+		{
+			float Value = 0.f;
+			TestTrue(*FString::Printf(TEXT("%s carries scalar %s"), Path, *Param.ToString()),
+				Master->GetScalarParameterValue(Param, Value));
+		}
+		FLinearColor Tint = FLinearColor::Black;
+		TestTrue(*FString::Printf(TEXT("%s carries vector EnvTint"), Path),
+			Master->GetVectorParameterValue(ElysiumReflections::Params::EnvTint, Tint));
+		// EnvMask must fall back to WHITE, not to the engine placeholder. 228 of the game's
+		// reflective materials carry $envmap with no $envmapmask and reflect uniformly, and
+		// nothing overwrites the sampler for them -- so this default IS their mask.
+		// /Engine/EngineResources/DefaultTexture is 128x128 greenish-grey noise, which would
+		// both dim and mottle exactly those surfaces.
+		UTexture* Mask = nullptr;
+		if (TestTrue(*FString::Printf(TEXT("%s carries texture EnvMask"), Path),
+			Master->GetTextureParameterValue(ElysiumReflections::Params::EnvMask, Mask))
+			&& TestNotNull(TEXT("EnvMask has a fallback texture"), Mask))
+		{
+			TestEqual(*FString::Printf(TEXT("%s EnvMask falls back to white"), Path),
+				Mask->GetPathName(),
+				FString(TEXT("/Engine/EngineResources/WhiteSquareTexture.WhiteSquareTexture")));
+		}
+
+		// The Lambert base is the shipped default, and it is what makes a non-$envmap surface
+		// take no Lumen specular. A master that drifts off it silently re-glosses the world.
+		float RoughBase = -1.f, SpecBase = -1.f;
+		Master->GetScalarParameterValue(ElysiumReflections::Params::RoughBase, RoughBase);
+		Master->GetScalarParameterValue(ElysiumReflections::Params::SpecBase, SpecBase);
+		TestEqual(TEXT("master defaults to the Lambert roughness"),
+			RoughBase, ElysiumReflections::RoughBase, 1e-4f);
+		TestEqual(TEXT("master defaults to the Lambert specular"),
+			SpecBase, ElysiumReflections::SpecBase, 1e-4f);
+		// EnvStrength must default OFF, or every surface instanced off this master reflects.
+		float EnvStrength = -1.f;
+		Master->GetScalarParameterValue(ElysiumReflections::Params::EnvStrength, EnvStrength);
+		TestEqual(TEXT("reflection is off by default"), EnvStrength, 0.f, 1e-4f);
+	}
 	return true;
 }
 

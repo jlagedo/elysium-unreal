@@ -56,7 +56,9 @@ it, no manual flush, no force-GC). `/Game/Elysium` is only the boot world now.
 |---|---|
 | `FElysiumObjModel` | OBJ/MTL reader; `.emc` parse-cache |
 | `FElysiumTextureCache` | DDS-preferred texture load, PNG fallback; a per-map decoded-texture dedup index owned by the map actor (a plain member), so its strong texture refs drop when the actor is torn down and GC reclaims them — threaded into the material factory |
-| `FElysiumMaterialFactory` | one MID per OBJ surface (world + prop ISMs). The material's blend flags pick the master — `M_World_Opaque` / `_Masked` (`illum 4`) / `_Translucent` (`blend 1`) / `M_Additive` (`additive 1`) — then bind its named params: `Albedo`, `Emissive`+`EmissiveScale`, `BumpMap`+`BumpAmount` (linear), `EnvMask`+`EnvStrength` ($envmap → Lumen roughness, uniform white mask when unmasked), `BaseTex2`+`BlendAmount` (WVT). `elysium.BumpScale` / `EnvReflect` / `EmissiveScale` tune the three feature scalars |
+| `FElysiumMaterialFactory` | one MID per OBJ surface. The material's blend flags pick the master — `M_World_Opaque` / `_Masked` (`illum 4`) / `_Translucent` (`blend 1`) / `M_Additive` (`additive 1`) — then bind its named params: `Albedo`, `Emissive`+`EmissiveScale`, `BumpMap`+`BumpAmount` (linear), the reflection channel (below), `BaseTex2`+`BlendAmount` (WVT). **On the baked path only ropes reach this** — world and prop surfaces render the bake's own `MaterialInstanceConstant`s, so `elysium.*` material knobs reach them through `AElysiumMapActor::ApplyMaterialOverrides`, not here |
+| `ElysiumReflections.h` | the `$envmap` reflection channel (7.5), shared by the factory, the map actor's overrides and the tests. `env = saturate(EnvMask.r · EnvStrength)` drives `Roughness = lerp(RoughBase, RoughReflect, env)` and `Specular = lerp(SpecBase, SpecReflect, env)·(1 − f)`; the non-reflective base is **Lambert** (`RoughBase` 1.0 / `SpecBase` 0.0) because that is what VtMB's world is, and `$envmap` is the exception. `$envmaptint`'s grey half scales the specular level and its **chromatic** half drives `Metallic` off the mask — VtMB's own hand-authored metal mask, read not inferred (`FElysiumMaterialDef::IsChromatic`, translucent excluded: those are coloured glass). VtMB's own term is `(base + cube·mask·tint)·lightmap·2` — an albedo term the light multiplies — so the exported `tex/cube/` faces are never sampled; Lumen resolves the reflection. RE + whole-game survey: `docs/reflections.md` |
+| `AElysiumMapActor::ApplyMaterialOverrides` | stands one MID per **unique** baked material in front of the level's instances so the look knobs reach real surfaces (a `MaterialInstanceConstant` has no runtime setter). **Lazy** — with every knob neutral no MID exists and the baked instances render as authored, because a runtime `SetMaterial` drops the primitive's built texture-streaming data and albedo *and* `EnvMask` fall back to a low mip (a near-white `EnvMask` mip mirrors the surface). Each knob reads the baked value and writes it whole, so the pass is idempotent and neutral restores exactly. `elysium.MaterialOverrides` gates it; `RoughBase`/`RoughReflect`/`SpecBase`/`SpecReflect` pin (negative = neutral), `EnvReflect` scales |
 | `FElysiumDecals` | 7.2 decals: the C++ spec for the `.decals` projector sidecar, and what the content test validates the export against. The bake consumes it — one `ADecalActor` per `infodecal` in the `.umap`, MIC off `M_Decal`, oriented `MakeRotFromXZ(Normal, SDir)`: local +X = room normal (so −X projects into the wall), and since a deferred decal maps texture **U→local Z, V→local Y**, the surface horizontal `SDir` goes on local Z with `DecalSize = depth×HalfH×HalfW` |
 | `FElysiumRopes` + `AElysiumMapActor::BuildRopes` | 8.7 ropes: parse the `.ropes` cable sidecar (chain-resolved segments) → one Verlet `UCableComponent` per line, `CableLength = RestCm` verbatim (the sidecar already carries VtMB's RE'd rest length, which is usually *below* the straight span — most ropes hang taut, not slack), `NumSegments = nodes − 1` off the sidecar's RE'd `m_nSegments` (VtMB takes it from `Type`, so a `Type 2` rope is **one** span — a straight line that cannot sag), start always pinned and end pinned unless the `Dangling` flag is set, width/tube/tiling from the sidecar, MID off `M_World_Opaque` (one per unique rope texture). `EndLocation` is the **world** endpoint B, because an unset `AttachEndTo` resolves to the owner's root component (`SceneRoot`, identity) — never to the cable itself. `elysium.Ropes` A/Bs the pass |
 | `UElysiumLightRig` | one Unreal light per WORLDLIGHTS `.lights` source; soft exponent falloff, specular off (VtMB is pure Lambert), sun, skyambient, lightstyle animation, live retune via `ApplyLiveTuning()`, per-source hand override (`SetSourceIntensity`/`RevertSource`) that the calibration and style passes skip, a per-source disable (`SetSourceDisabled`/`ShouldSourceBeLit`) that changes no value and outranks the master toggle, a per-source reviewed mark (`SetSourceReviewed` — the survey's judged bit; disabling implies it), and the saved hand survey (`_lights/<map>.json`) auto-applied at adopt (`LoadSurvey`; `elysium.LightSurvey 0` = full faithful rig) |
@@ -231,10 +233,27 @@ payloads, `logic_pythoncheck`, `EvalScript`, `ScheduleTask`, level-script import
   reads back `""` on get; `cvar` get/set reads/writes a value string. `FElysiumPythonVM` owns the
   interpreter and the **`FElysiumConsole`** store (`ElysiumConsole.{h,cpp}`, plain C++): the alias/cvar
   tables parsed from `out/cfg` and the `Execute` path (alias-expand → cvar-set → Python fallthrough). The
-  VM points its `nt.getcwd`/`sys.moddir` at `out/` so VtMB's `getcwd()+moddir` file paths (e.g.
-  `FixKeyBindings` reading `cfg/config.cfg`) resolve into the content mirror, and binds a mutable
-  `Character` compatibility stub so the real `vamputil.py` imports (the patch monkeypatches `Character`;
-  our 24 Character methods dispatch off the getattro, not a shared class — `decisions.md` 2026-07-24).
+  VM binds a mutable `Character` compatibility stub so the real `vamputil.py` imports (the patch
+  monkeypatches `Character`; our 24 Character methods dispatch off the getattro, not a shared class —
+  `decisions.md` 2026-07-24).
+- **`FElysiumScriptFS`** (`ElysiumScriptFS.{h,cpp}`, plain C++) is the VM's own **filesystem
+  namespace**. VtMB's scripts spell paths three ways and only one of them (`nt.getcwd() + moddir + …`)
+  calls a redirectable function — the other two hand a relative path to the OS, which resolves it
+  against the *process* cwd. That cwd belongs to the engine (`FPaths::EngineDir()` is the literal
+  `"../../../Engine/"`, and UE sets the cwd to BaseDir at startup so it resolves), so the interception
+  sits under `open` and the `nt` surface instead: the `FS_SHIM` bootstrap wraps them to rewrite every
+  path through `vampire._fs_resolve` before the real call, which keeps genuine `file` objects and
+  keeps the whole policy in C++. A path is normalized against the virtual root, has one leading
+  `Vampire/` folded away, and then **reads** resolve overlay-first then through the mount table onto
+  the `out/` mirror (`cfg/`, `vdata/`, `vdata/signs/`→`out/signs`, `python/`→`out/scripts`, `dlg/`,
+  `sound/`), while **writes** always land in the `Saved/Elysium/ScriptFS` overlay — never in `out/`,
+  which a re-export regenerates — with `a`/`r+` copying the mirror's copy up first. Escaping the
+  sandbox is the one hard denial (`IOError` for `open`, re-raised as `OSError` for `nt.*`, because
+  `fileutil` catches `nt.error` and the two are siblings). `sys.moddir` stays at the shipped
+  `"Vampire"` so `fileutil`'s write guard passes as authored. `elysium.script.fs.log` (0/1/2) controls
+  the trace; level 1 names every write and every read with no mirror behind it — which is how the
+  `.lip` dialogue probes that this rebuild cannot answer stay a listed divergence rather than a silent
+  one. Path policy is content-free and tests as `Elysium.Substrate.ScriptFS`.
 - `ElysiumScriptNatives.{h,cpp}` is the engine `vampire` surface both hosts share: the binding
   table the Cog Scripting window renders, the stub defaults, the Character-method dispatch, and
   the native-call log. It lives outside either host so `elysium.script.cpython 0/1` swaps the

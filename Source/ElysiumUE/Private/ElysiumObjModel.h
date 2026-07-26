@@ -18,7 +18,33 @@ struct FElysiumMaterialDef
 	bool bBlend = false;     // blend 1    -> $translucent (translucent master)
 	bool bAdditive = false;  // additive 1 -> $additive glow overlay (additive master, unlit)
 	bool bEnvmap = false;    // envmap     -> $envmap reflective (Lumen roughness path)
+	// envtint -> $envmaptint. Multiplies the reflection in VtMB's own shader, so it is the
+	// reflection's colour and strength in one constant. White when unauthored.
+	FLinearColor EnvTint = FLinearColor::White;
 	FLinearColor Color = FLinearColor(0.6f, 0.6f, 0.65f);   // Kd fallback when no albedo
+
+	// $envmaptint splits two ways, and the population is bimodal rather than a continuum
+	// (docs/reflections.md): grey is a reflection-strength dim-down, chromatic names a metal.
+	// Translucent/additive surfaces are excluded -- the chromatic tints there are coloured
+	// glass, which stays dielectric. Metalness is read off VtMB's authoring, never inferred.
+	static constexpr float ChromaticSpread = 0.02f;
+
+	bool IsChromatic() const
+	{
+		if (!bEnvmap || bBlend || bAdditive)
+		{
+			return false;
+		}
+		const float Lo = FMath::Min3(EnvTint.R, EnvTint.G, EnvTint.B);
+		const float Hi = FMath::Max3(EnvTint.R, EnvTint.G, EnvTint.B);
+		return (Hi - Lo) >= ChromaticSpread;
+	}
+
+	// Rec.709 luma of the tint, the grey half's reflection-strength scale. 1.0 when unauthored.
+	float TintLuma() const
+	{
+		return 0.2126f * EnvTint.R + 0.7152f * EnvTint.G + 0.0722f * EnvTint.B;
+	}
 };
 
 // Parses an exported OBJ + its MTL into raw mesh data: positions, UVs, per-material

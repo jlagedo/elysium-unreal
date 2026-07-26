@@ -510,11 +510,11 @@ static void ElysiumPickCommand(UWorld* World)
 	}
 	const UPrimitiveComponent* Comp = Hit.Component.Get();
 	UE_LOG(LogElysiumPick, Log,
-		TEXT("pick: %s '%s' | component %s (%s) | section %d tri %d | at %s, %.1f cm | %d fill tris"),
+		TEXT("pick: %s '%s' | component %s (%s) | section %d | at %s, %.1f cm | %d fill tris"),
 		Kind, *Hit.Label,
 		Comp ? *Comp->GetName() : TEXT("(none)"),
 		Comp ? *Comp->GetClass()->GetName() : TEXT("-"),
-		Hit.Section, Hit.Triangle, *Hit.HitPoint.ToCompactString(), Hit.Distance,
+		Hit.Section, *Hit.HitPoint.ToCompactString(), Hit.Distance,
 		Hit.FillTris.Num() / 3);
 }
 

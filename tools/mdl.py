@@ -239,13 +239,59 @@ def sanitize(name):
 SCALE = 0.0254   # Source inches -> Godot metres
 
 
+def _envmask_png(info, bt, img, read_bytes, out_dir, tex_cache):
+    """The $envmap reflectivity mask as a grayscale PNG under tex/, or None for a uniform
+    reflector. Two sources, and they are not the same channel:
+
+      $envmapmask <tex>        a separate mask texture, used as-is
+      $basealphaenvmapmask 1   the BASE texture's alpha, INVERTED
+
+    The inversion is the shipped shader's, not a guess: lightmappedgeneric_basealphamaskedenvmap
+    computes `mul r1, t2, 1-t3.a` (docs/reflections.md). Cached under a prefixed key so a mask
+    shared by several models decodes once, in the same dict the albedos use."""
+    from tex_to_png import decode as decode_texture
+    from PIL import Image, ImageChops
+
+    em = info.get("envmapmask")
+    if em:
+        key = "#envmask:" + _norm(em.replace("\\", "/").lstrip("/"))
+        if key not in tex_cache:
+            tex_cache[key] = None
+            src = key[len("#envmask:"):]
+            tth, ttz = read_bytes(f"materials/{src}.tth"), read_bytes(f"materials/{src}.ttz")
+            if tth and ttz:
+                try:
+                    fn = sanitize(src) + "_envmask.png"
+                    decode_texture(tth, ttz).convert("L").save(os.path.join(out_dir, "tex", fn))
+                    tex_cache[key] = fn
+                except Exception:
+                    pass
+        return tex_cache[key]
+
+    if info.get("basealphaenvmapmask") and img is not None:
+        key = "#envmask:" + bt + "#a"
+        if key not in tex_cache:
+            tex_cache[key] = None
+            try:
+                fn = sanitize(bt) + "_envmask.png"
+                alpha = img.convert("RGBA").getchannel("A")
+                ImageChops.invert(alpha).save(os.path.join(out_dir, "tex", fn))
+                tex_cache[key] = fn
+            except Exception:
+                pass
+        return tex_cache[key]
+    return None
+
+
 def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
-    """material name -> (albedo_png, emis_png, additive). The albedo PNG (and the
-    self-illum emission mask derived from its alpha) is decoded once per basetexture
-    and cached; selfillum/additive are per-material (per-VMT), so two materials that
+    """material name -> dict(albedo, emis, additive, envmap, envmask, envtint). The albedo PNG
+    (and the self-illum emission mask derived from its alpha) is decoded once per basetexture
+    and cached; selfillum/additive/envmap are per-material (per-VMT), so two materials that
     share a basetexture but differ in those flags do not inherit each other's."""
     import vmt
     from tex_to_png import decode as decode_texture
+    none = {"albedo": None, "emis": None, "additive": False,
+            "envmap": None, "envmask": None, "envtint": None}
     vmt_txt = None
     for sp in search:
         b = read_bytes(_norm(f"materials/{sp}/{mat}.vmt"))
@@ -255,13 +301,13 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
         b = read_bytes(f"materials/{mat}.vmt")
         vmt_txt = b.decode("ascii", "replace") if b else None
     if not vmt_txt:
-        return (None, None, False)
+        return dict(none)
     info = vmt.parse(vmt_txt, resolve_include=lambda p: (
         lambda bb: bb.decode("ascii", "replace") if bb else None)(
         read_bytes(_norm(p if p.lower().endswith(".vmt") else p + ".vmt"))))
     bt = info.get("basetexture")
     if not bt:
-        return (None, None, False)
+        return dict(none)
     bt = _norm(bt.replace("\\", "/").lstrip("/"))   # prop VMTs carry leading/doubled slashes
     additive = bool(info.get("additive"))
 
@@ -295,7 +341,27 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
         Image.fromarray(masked, "RGB").save(os.path.join(out_dir, "tex", efn))
         ent[1] = emis = efn
 
-    return (albedo, emis if info.get("selfillum") else None, additive)
+    # $envmap. VtMB's models are the LARGER half of the reflective set (1,419 of 2,610
+    # $envmap VMTs are vertexlitgeneric), and vertexlitgeneric_maskedenvmap composites it
+    # exactly as the world's lightmappedgeneric does -- `base + cube*mask*tint`, then times
+    # the lighting -- so props take the same channel the world surfaces do
+    # (docs/reflections.md). The cube ID is carried for the record only; the Lumen path
+    # never samples it, and a prop's $envmap is `env_cubemap` (runtime-resolved) far more
+    # often than a named cube.
+    envmap = envmask = envtint = None
+    if info.get("envmap"):
+        envmap = sanitize(info["envmap"])
+        envmask = _envmask_png(info, bt, img, read_bytes, out_dir, tex_cache)
+        envtint = info.get("envmaptint")
+
+    return {
+        "albedo": albedo,
+        "emis": emis if info.get("selfillum") else None,
+        "additive": additive,
+        "envmap": envmap,
+        "envmask": envmask,
+        "envtint": envtint,
+    }
 
 
 def _skin_remaps(meshes, skins):
@@ -373,16 +439,25 @@ def write_obj_scene(meshes, name, out_dir, search, read_bytes, tex_cache, *, ue_
     mat_png = {n: _resolve_material(n, search, read_bytes, out_dir, tex_cache) for n in names}
     _write_skins(meshes, skins, name, out_dir)
     with open(os.path.join(out_dir, name + ".mtl"), "w") as f:
-        for mat, (albedo, emis, additive) in mat_png.items():
+        for mat, m in mat_png.items():
             f.write(f"newmtl {sanitize(mat)}\n")
-            if albedo:
-                f.write(f"map_Kd tex/{albedo}\n")
+            if m["albedo"]:
+                f.write(f"map_Kd tex/{m['albedo']}\n")
             else:
                 f.write("Kd 0.6 0.6 0.62\n")
-            if emis:
-                f.write(f"map_Ke tex/{emis}\n")
-            if additive:
+            if m["emis"]:
+                f.write(f"map_Ke tex/{m['emis']}\n")
+            if m["additive"]:
                 f.write("additive 1\n")
+            # Same three lines UE_bsp_to_scene writes for a reflective world surface, so one
+            # MTL contract covers world and props. $envmapcontrast/$envmapsaturation are not
+            # emitted: VtMB's shipped shaders carry no term for either (docs/reflections.md).
+            if m["envmap"]:
+                f.write(f"envmap {m['envmap']}\n")
+                if m["envmask"]:
+                    f.write(f"envmapmask tex/{m['envmask']}\n")
+                t = m["envtint"] or [1.0, 1.0, 1.0]
+                f.write(f"envtint {t[0]:.4f} {t[1]:.4f} {t[2]:.4f}\n")
     with open(os.path.join(out_dir, name + ".obj"), "w") as f:
         f.write(f"mtllib {name}.mtl\n")
         vbase = 1

@@ -57,6 +57,12 @@ def connect_property(src, src_out, prop):
 PKG = "/Game/VtMB/Materials"
 DEFAULT_TEX = "/Engine/EngineResources/DefaultTexture.DefaultTexture"
 DEFAULT_NORMAL = "/Engine/EngineMaterials/DefaultNormal.DefaultNormal"
+# EnvMask needs a WHITE default, not DefaultTexture: 228 of the game's reflective materials
+# carry $envmap with no $envmapmask and reflect uniformly, and nothing overwrites the sampler
+# for them. DefaultTexture is a 128x128 greenish-grey noise image (mean RGB 122/140/131), so
+# it would both dim and mottle exactly those surfaces. Matches the runtime factory, which
+# binds a 1x1 white for the same case.
+WHITE_TEX = "/Engine/EngineResources/WhiteSquareTexture.WhiteSquareTexture"
 
 # The $envmap-mask -> Lumen reflection channel (roadmap 7.5). These are the master's parameter
 # DEFAULTS; the bake binds a per-material value over them.
@@ -77,6 +83,7 @@ tools = unreal.AssetToolsHelpers.get_asset_tools()
 # miss both leaves the sampler defaultless and trips the commandlet's error-exit.
 _default_tex = unreal.load_asset(DEFAULT_TEX)
 _default_normal = unreal.load_asset(DEFAULT_NORMAL)
+_white_tex = unreal.load_asset(WHITE_TEX)
 
 
 def _fresh(name):
@@ -98,7 +105,7 @@ def _fresh(name):
     return mat, asset
 
 
-def _tex_param(mat, name, x, y, normal=False):
+def _tex_param(mat, name, x, y, normal=False, white=False):
     n = mel.create_material_expression(mat, unreal.MaterialExpressionTextureSampleParameter2D, x, y)
     n.set_editor_property("parameter_name", name)
     if normal:
@@ -107,8 +114,9 @@ def _tex_param(mat, name, x, y, normal=False):
             n.set_editor_property("texture", _default_normal)
     else:
         n.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR)
-        if _default_tex:
-            n.set_editor_property("texture", _default_tex)
+        fallback = _white_tex if white else _default_tex
+        if fallback:
+            n.set_editor_property("texture", fallback)
     return n
 
 
@@ -140,7 +148,7 @@ def build_world_graph(mat):
     # Computed first because three outputs read it: Roughness, Specular, and -- through the
     # metal branch -- BaseColor. EnvStrength defaults to 0, so a surface with no $envmap is
     # untouched by every one of them.
-    env_mask = _tex_param(mat, "EnvMask", -900, 1060)
+    env_mask = _tex_param(mat, "EnvMask", -900, 1060, white=True)
     env_str = _scalar(mat, "EnvStrength", 0.0, -900, 1240)
     env_amt = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -640, 1100)
     connect(env_mask, "R", env_amt, "A")

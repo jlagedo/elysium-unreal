@@ -17,7 +17,6 @@
 #include "CogLocalizationConfig.h"   // COG_TCHAR_TO_CHAR
 #include "CogSubsystem.h"
 #include "CogWidgets.h"
-#include "Components/InstancedStaticMeshComponent.h"
 #include "Components/PrimitiveComponent.h"
 #include "Engine/Texture.h"
 #include "Engine/World.h"
@@ -384,19 +383,19 @@ void FElysiumCogWindow_Inspector::RenderPickDetails(const FElysiumPickResult& In
 	Row("distance", FString::Printf(TEXT("%.2f m"), InPick.Distance / 100.0));
 	Row("hit point", InPick.HitPoint.ToCompactString());
 
+	// Both geometry kinds resolve to a material slot of a baked static mesh, so they report the
+	// same pair — the slot index and the name the bake gave it (the OBJ group key).
 	switch (InPick.Kind)
 	{
 	case EElysiumPickKind::WorldSurface:
 		Row("section", FString::Printf(TEXT("%d  (obj group '%s')"), InPick.Section, *InPick.MaterialName));
-		Row("triangle", FString::Printf(TEXT("%d"), InPick.Triangle));
 		Row("normal", InPick.HitNormal.ToCompactString());
 		break;
 
 	case EElysiumPickKind::PropInstance:
 		Row("model", InPick.ModelName);
-		Row("instance", FString::Printf(TEXT("%d of %d"), InPick.Instance,
-			Comp ? Cast<UInstancedStaticMeshComponent>(Comp)->GetInstanceCount() : 0));
-		Row("triangle", FString::Printf(TEXT("%d"), InPick.Triangle));
+		Row("section", FString::Printf(TEXT("%d  (slot '%s')"), InPick.Section, *InPick.MaterialName));
+		Row("normal", InPick.HitNormal.ToCompactString());
 		break;
 
 	default:

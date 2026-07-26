@@ -431,6 +431,55 @@ Skills seen: `Humanity` (432), `Persuasion`, `Seduction`, `Intimidate`, `Dominat
 `Dementation`, `Haggle`, `F_Seduction`/`M_Seduction`, `Appearance`, `Firearms`, `Wits`,
 `Intelligence`, `Research`, `Perception`, `Brawl`, `Trip_Name` — case is inconsistent.
 
+## The script file layer — three path spellings and a write guard
+
+The scripts read and write the install tree directly, through stock `open` and the `nt` module.
+Five of the 41 mirrored files touch the filesystem; `fileutil.py` is the game's own abstraction
+over it (`exists`/`isDir`/`isFile`/`list`/`listdir`/`listfiles`/`mkdir`/`readlines`/`writetofile`/
+`appendtofile`/`copyfile`/`removefile`), and callers bypass it freely.
+
+Paths are spelled **three** ways, and only the first goes through a function an embedder can
+redirect:
+
+| | Shape | Example |
+|---|---|---|
+| A | `nt.getcwd() + "\" + moddir + "\<tree>\..."` | `vamputil.FixKeyBindings` reads `cfg\config.cfg` (`vamputil.py:2352`) |
+| B | moddir-relative, no `getcwd` | `open(moddir + "/vdata/hackterminals/haven_pc.txt")` (`vamputil.py:588`) |
+| C | bare relative, no moddir either | `open("zvtool_g_dump.txt", "w")` (`zvtool_file.py:64`) |
+
+B and C hand a relative path straight to the OS, which resolves it against the **process** cwd. In
+the real game all three land in the same place because the process is the game and its cwd is the
+install folder. The style list is not closed — C exists precisely because nothing enforces a
+convention.
+
+`sys.moddir` defaults to `"Vampire"` (`fileutil.py:8-11`; `zvtool_file.py:23-26` defaults it
+lowercase), and mod support is the reason it is a variable at all.
+
+**`fileutil` guards writes by string match.** Every write path — `mkdir`, `writetofile`,
+`appendtofile`, both ends of `copyfile`, `removefile` — refuses unless the path contains
+`"\" + moddir + "\"` (`fileutil.py:81,102,113,127,158`), the stated intent being "to help mitigate
+possibility of damaging non-game related files". So the moddir value is load-bearing for writes,
+not just for reads.
+
+**The scripts write, and not only scratch files:**
+
+- `vamputil.py:588-596` — read-modify-write of `vdata/hackterminals/haven_pc.txt`, replacing line 5
+  with the PC's name so the haven computer's email client addresses the player.
+- `vamputil.py:889-946+` — the Unofficial Patch's hunter mode `copyfile`s `- hunter` variants over
+  shipped assets: `scripts/kb_act.lst`, a `sound/interface/` WAV, `vdata/signs/`+`vdata/system/`+
+  `vdata/items/` tables, and `materials/` `.tth`/`.ttz`/`.vmt` pairs.
+- `zvtool_file.py:200-246` — opens the map's own `.bsp` `"rb+"`, seeks, truncates and appends a
+  modified entity lump (a dev tool, but it is in the shipped tree).
+
+**Existence is also game logic.** `fileutil.isFile()` on a `sound/character/dlg/**/*.lip` gates
+which dialogue line plays (`vamputil.py:1039,1052,1059`; `fusyndicate.py:240`) — a missing file is
+a branch, not an error, so a rebuild that cannot answer the probe silently changes behaviour.
+
+The Unreal answer is a filesystem namespace scoped to the interpreter rather than a redirected
+`getcwd` — reads served from the content mirror, writes into a `Saved/` overlay. Why the process
+cwd is not available, and what the overlay buys: `decisions.md` 2026-07-26, and the design comment
+on `Source/ElysiumUE/Private/ElysiumScriptFS.h`.
+
 ## Implications for the rebuild
 
 **There is no 109-method API to port.** The binding is a reflection layer over the

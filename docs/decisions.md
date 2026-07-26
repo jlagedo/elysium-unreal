@@ -6,6 +6,101 @@ trigger. A behavioural divergence from retail lands here carrying both the faith
 chosen behaviour (`remaster-direction.md`'s governing rule). Entries are never rewritten —
 append a correction as a new entry.
 
+- **2026-07-26** — **9.3: the embedded VM gets its own filesystem namespace; script writes land in
+  a `Saved/` overlay, never in the content mirror.** Owner call, three parts.
+
+  **Faithful (RE'd):** VtMB's scripts run inside a process whose cwd is the install folder and
+  whose `sys.moddir` is `"Vampire"`, and they spell paths three ways — `nt.getcwd() + "\" + moddir
+  + "\cfg\config.cfg"` (`vamputil.FixKeyBindings`), bare moddir-relative (`open(moddir +
+  "/vdata/hackterminals/haven_pc.txt")`, `vamputil.py:588`), and bare cwd-relative with no moddir
+  at all (`open("zvtool_g_dump.txt", "w")`, `zvtool_file.py:64`). Only the first consults a
+  function an embedder can redirect; the other two hand a relative path to the OS.
+
+  **(1) The process cwd is not available, so the interception moves under `open` and `nt.*`.**
+  UE resolves `FPaths::EngineDir()` from the literal relative string `"../../../Engine/"` and sets
+  the process cwd to BaseDir at startup for exactly that reason (`GenericPlatformMisc.cpp`,
+  `MakeEngineDir`), and ships a `DISABLE_CWD_CHANGES` guard that asserts on any attempt to move it.
+  Pointing the cwd at `out/` would fix the relative-path styles by making the whole engine's path
+  resolution collateral. So the VM gets a namespace instead (`FElysiumScriptFS`): every path a
+  script hands to `open` or `nt.*` is rewritten at the interpreter boundary. That closes all three
+  styles — and any fourth — at one point rather than per call site, and it makes the whole path
+  policy unit-testable with no VM (`Elysium.Substrate.ScriptFS`).
+
+  **(2) Writes go to an overlay, because the scripts write and `out/` is regenerable.** Not a
+  read-only concern: `vamputil.py:588` read-modify-writes `haven_pc.txt` to stamp the PC's name
+  into an in-game email client, `vamputil.py:889+` copies the Unofficial Patch's `- hunter` asset
+  variants over the shipped ones, and `zvtool_file.py:200` opens the `.bsp` `"rb+"` and appends.
+  `out/` is game-derived pipeline output that a re-export regenerates, so a script write into it is
+  state that vanishes without warning. Reads are a union mount (overlay first, then the mirror) and
+  `a`/`r+` copy the mirror's copy up, so a read-modify-write sees the shipped bytes and reads back
+  its own edit. The overlay is also the VM's virtual install root, so a path that ever escaped the
+  shim lands in the sandbox rather than in the project tree.
+
+  **(3) `sys.moddir` stays at the shipped `"Vampire"`.** The interim redirect set it to `"."`,
+  which made `fileutil`'s write guard — `path.find("\\"+moddir+"\\")`, refusing any write whose
+  path does not name the mod tree (`fileutil.py:81,102,113,127,158`) — pass by the accident that a
+  `"."` moddir puts `\.\` in the string. At the authored value the guard works as authored, and
+  `dst.replace(getcwd()+"\\"+moddir+"\\", "")` (the scripts' own short-name display) lands.
+
+  One divergence is now **visible rather than silent**: `fileutil.isFile()` on
+  `sound/character/dlg/**/*.lip` gates alternate dialogue lines (`vamputil.py:1039`,
+  `fusyndicate.py:240`), and the mirror carries no `.lip` files, so those branches take the else
+  path. The resolver logs every read with no mirror behind it, which turns that from an invisible
+  behaviour change into a listed one. Unmirrored trees (`materials/`, `models/`, `maps/`, and
+  VtMB's own `scripts/`) answer "missing" for the same reason, so hunter mode's asset copies
+  currently land in the overlay and are inert — the runtime renders baked `.uasset` content and
+  never re-reads them. Implementing hunter mode reads the overlay; it is not blocked by this.
+
+  **Limits, stated:** the shim rewrites *paths* and hands back real `file` objects, so it assumes
+  loose files. Content moving into a pak would need a file-object shim over `IFileHandle` — the
+  seam stays at `vampire._fs_resolve`, but it is a second pass. And the overlay is process-global;
+  when saves land (9.x), `haven_pc.txt` is arguably save state and wants per-slot scoping.
+
+- **2026-07-26** — **7.5: `$envmap` becomes a roughness/specular channel with `Metallic` from
+  VtMB's own tint, and the world's non-reflective base becomes Lambert.** Owner call, four parts.
+
+  **Faithful (RE'd exactly, `docs/reflections.md`):** VtMB's reflection is
+  `(base + cube·mask·tint) · lightmap · 2` — read out of the shipped `lightmappedgeneric*envmap*.psh`
+  / `vertexlitgeneric*envmap*.psh`, which the game ships as readable ps.1.1 assembly. The reflection
+  is an **albedo term the lightmap multiplies**, flat-masked, no Fresnel, sampling one baked cube.
+  This **corrects `lighting.md`**, which recorded it as an additive `EMISSION` term (the Godot
+  prototype's route); the difference matters, because being light-modulated is what stops a
+  22%-reflective game reading as chrome.
+
+  **Chosen:** the cube is not sampled (the 2026-07-24 call stands — the render path is fully
+  dynamic HWRT Lumen and the surface cache is now complete). `$envmapmask` drives
+  `Roughness = lerp(RoughBase, RoughReflect, env)` and `Specular = lerp(SpecBase, SpecReflect, env)`,
+  and **Lumen resolves the reflection against the live scene**. Since VtMB's own term is already
+  light-modulated, this is closer to the original than reproducing an additive overlay would be.
+
+  **(1) The non-reflective world is Lambert** (`RoughBase` 1.0, `SpecBase` 0.0). The previous
+  0.5/0.5 was an unconnected-pin default that 7.4 deliberately preserved, never a calibration, and
+  it contradicted both the material data (`lighting.md`: METALLIC 0, SPECULAR 0, ROUGHNESS 1) and
+  `UElysiumLightRig`, which already sets `specular_scale = 0` on every source. A surface now
+  reflects because its VMT carries `$envmap`, not by default.
+
+  **(2) `Metallic` comes from `$envmaptint`, read and never inferred.** The tint population is
+  bimodal — 2,146 unset, 362 grey (361 at exactly zero channel spread), 102 chromatic, with the
+  next spread value above 0.00 being 0.05. Grey scales the specular level by its luma; chromatic
+  (brass, copper, gold) is VtMB stating *this surface is metal and this is its reflection colour*,
+  so it drives `Metallic` off the mask with the tint on BaseColor. This is the hand-authored metal
+  mask `asset-enhancement.md` requires before anything may go metallic. Tinted **glass** (the
+  blue/teal chromatic entries, all translucent) is excluded and stays dielectric. Divergence
+  recorded: VtMB keeps the base texture's diffuse *and* adds a tinted reflection; `Metallic` in a
+  PBR GBuffer replaces diffuse. The `$envmapmask` is what bounds it — only the masked texels, the
+  brass fittings rather than the whole surface, go metal.
+
+  **(3) `$envmapcontrast` and `$envmapsaturation` are dropped, not deferred.** No term for either
+  exists in any shipped `.psh` — VtMB's renderer never implemented them — and the authoring agrees
+  (0 and 18 of 2,610). They stay parsed offline and consumed by nothing.
+
+  **(4) Props get the channel.** `vertexlitgeneric` is the larger half of the reflective set (1,419
+  of 2,610) and carried none. Its composite is identical to the world's, so no separate call is
+  needed — the omission was a pipeline gap, not a decision.
+
+  Measured: shots re-baselined (`sp_tutorial_1` spawn mean 8.37, `sm_hub_1` 4.53 — the old baseline
+  was invalid against the new bake); Lumen reflections 0.15–0.22 ms against the committed 0.18–0.25.
+
 - **2026-07-26** — **D3 correction: the bounce-strength knob is Lumen Diffuse Color Boost, not
   Indirect Lighting Intensity.** D3 (same day) adopted a per-map PostProcessVolume carrying
   Skylight Leaking and Indirect Lighting Intensity, neutral by default. Building it (sky-ambience
@@ -1231,5 +1326,8 @@ append a correction as a new entry.
   `17 20 25` is 0.067 undecoded — brighter than the world it hangs in — and 0.0021 decoded. The
   residual under-display of a saturated fog is B4/D7's measured tonemapper toe, one named
   calibration for the whole render; nothing here compensates for it locally.
-- **Pending** — 5.5 level-script execution strategy (interpreter vs transpile vs CPython);
-  10.6 EnhancedInput migrate-or-remove.
+- **Pending** — **0.9, the uasset-bake architecture** (`docs/uasset-bake-spike.md`'s own
+  terms: "earns a `decisions.md` entry or gets discarded"; de facto everything since
+  2026-07-25 builds on it — trigger: before `spike/uasset-bake` merges to `main`);
+  CommonUI/CommonInput adoption (deferred with trigger — see the 2026-07-25 input entry).
+  *(Formerly listed here: 5.5 and the 10.6 input path — decided 2026-07-22 and 2026-07-25.)*

@@ -77,10 +77,18 @@ struct FElysiumContentPaths
 	// Console config (PL5d / 9.3b). VtMB's `cfg/*.cfg` alias + cvar tables (Valve console syntax),
 	// mirrored verbatim under out/cfg by tools/UE_extract_cfg.py. The runtime console bridge
 	// (FElysiumConsole) seeds its alias/cvar store from these; `user.cfg` carries the Basic/Plus
-	// `patchtype` alias. Because VtMB's file-touching scripts resolve `getcwd()/moddir/...`, the
-	// CPython VM points its `nt.getcwd`/`sys.moddir` at Root() so `cfg/config.cfg` resolves here.
+	// `patchtype` alias. VtMB's file-touching scripts reach the same tree through the script
+	// filesystem's `cfg/` mount (FElysiumScriptFS), which is what makes `FixKeyBindings` resolve.
 	static FString CfgDir() { return Root() / TEXT("cfg"); }
 	static FString CfgFile(const FString& File) { return CfgDir() / File; }
+
+	// The script filesystem's writable overlay (FElysiumScriptFS). VtMB's scripts write as well as
+	// read — `haven_pc.txt` takes the PC's name, the Unofficial Patch's hunter mode copies `- hunter`
+	// asset variants over the shipped ones — and every one of those writes lands here instead of in
+	// Root(), which is game-derived pipeline output a re-export regenerates. It doubles as the VM's
+	// virtual install root: a path that ever escaped the shim would land inside the sandbox rather
+	// than in the project tree. Under Saved/ because it is per-user mutable state, not content.
+	static FString ScriptFsRoot() { return FPaths::ProjectSavedDir() / TEXT("Elysium/ScriptFS"); }
 	// An NPC's `dialogname` keyfield already carries the `dlg/` prefix ("dlg/Main Characters/
 	// jack_tutorial.dlg"), so it resolves straight under the content root. Case differs from the
 	// lowercased on-disk mirror, but the Windows target's file system is case-insensitive.

@@ -484,6 +484,20 @@ Records are verbatim moves out of `roadmap.md`: where one says "the decision log
   capture + PNG encode/save) with the `elysium_screenshot` MCP tool. `shots.bat` mirrors
   `profile.bat`. Verified: a real 2560×1392 rendered frame written. *Deps:* 0.1, 2.7.
 
+## P3 — Lighting correct & engaged *(parallel lane; detail: `rendering-perf.md`, `lighting.md`)*
+
+- [x] **3.5 Sky IBL onto the SkyLight** *(was L2.1)* — landed inside the SKY rework's C1/C2
+  rather than as a standalone task: `BuildSkyCubeFrom` assigns the correctly-assembled cube
+  (`SLS_SpecifiedCubemap` + `RecaptureSky()`, `ElysiumMapActor.cpp`), and intensity is the
+  map's own type-5 `emit_skyambient` magnitude ÷ the cube's solid-angle-weighted
+  upper-hemisphere mean (`bLowerHemisphereIsBlack`) — **zero on the 83 maps with no
+  `light_environment`** (owner call D2, `decisions.md` 2026-07-26). The original task text's
+  "keep a floor ambient (night skies are near-black)" is superseded by that call: a
+  night-sky lift goes through the D3 knobs (Skylight Leaking, this file → SKY/C3), never a
+  SkyLight floor. Verified on `sm_hub_1` (no pair → intensity 0.000) and `sp_tutorial_1`
+  (`la` cube integrates to 0.00335 against an authored 0.00656 → intensity 1.955). Full
+  record: this file → SKY, C1/C2.
+
 ## P4 — Interaction *(design: `engine-core.md` class ladder + `animation_and_movers.md` Part B)*
 
 - [x] **4.1 Mover base** — `FElysiumMoverBase` (the CBaseToggle primitive, `ElysiumMover.h/.cpp`):
@@ -915,6 +929,78 @@ Records are verbatim moves out of `roadmap.md`: where one says "the decision log
   additive. **Tests:** `Elysium.Substrate.WorldMaterials` (parse of every channel/flag + blend-flag
   exclusivity, nullrhi) + `Elysium.Content.TutorialMaterials` (real MTL: 439 mats — 12 masked, 52
   translucent, 240 reflective, 6 bump, 5 WVT; every texture channel resolves on disk). *Deps:* none.
+
+- [x] **7.5 Real reflections** *(was L3.1)* — the `$envmap` reflection channel: RE'd against VtMB's
+  own shipped shaders, calibrated, and extended to props.
+
+  **RE (the faithful term, exactly).** VtMB ships its DX8 pixel shaders as readable ps.1.1
+  assembly under `materials/dxshaders/*.psh` (the RE-A9 route), so the composite is a file read:
+  `lightmappedgeneric_maskedenvmap.psh` is `(base·vertexColor + cube·mask·tint) · lightmap · 2`.
+  **The reflection is an ALBEDO term the lightmap multiplies, not an additive overlay** — so a
+  reflective surface in an unlit room stays dark, which is why 22% of the game's materials can be
+  reflective without reading as chrome. That is already a light-modulated specular response in all
+  but name, which makes a real reflection channel the faithful port rather than a liberty. It also
+  **corrects `docs/lighting.md`**, which recorded the term as additive-through-`EMISSION` (the
+  Godot prototype's route). `vertexlitgeneric` composites identically, so world and props take one
+  treatment. No Fresnel on either — the mask is flat.
+
+  **`$envmapcontrast`/`$envmapsaturation` do not exist.** No term for either appears in any shipped
+  `.psh`, and the authoring agrees: over 11,624 VMTs, 2,610 carry `$envmap`, of which saturation is
+  authored **0** times and contrast **18** (17× 1.0). Parsed offline, deliberately unconsumed, and
+  no longer emitted to the `.mtl`.
+
+  **Channel.** `tools/make_world_materials.py` gains `RoughBase`/`RoughReflect`/`SpecBase`/
+  `SpecReflect`/`EnvTint`/`MetalMask`; `env = saturate(EnvMask.r · EnvStrength)` drives
+  `Roughness = lerp(RoughBase, RoughReflect, env)` and `Specular = lerp(SpecBase, SpecReflect, env)
+  · (1 − f)` (the fog fade `mat_fog.specular` already established, now parameterised rather than a
+  hardcoded 0.5). **The non-reflective world is Lambert** — `RoughBase` 1.0 / `SpecBase` 0.0 —
+  which is what the material data says (`lighting.md`: METALLIC 0, SPECULAR 0, ROUGHNESS 1) and
+  what `UElysiumLightRig` already assumed with `specular_scale = 0`; the previous 0.5/0.5 was an
+  unconnected-pin default, never calibrated.
+
+  **`$envmaptint` is VtMB's own metal mask.** The population is bimodal, not a continuum: 2,146
+  unset, 362 grey (361 at *exactly* zero channel spread), 102 chromatic — the next spread value
+  above 0.00 is 0.05, so the 0.02 threshold separates them with a clear gap. Grey is a
+  reflection-strength dim-down and its Rec.709 luma scales `SpecReflect`. Chromatic (brass
+  `0.65 0.5 0`, copper `0.74 0.57 0.31`, gold `1 0.7 0`) names a metal, so it drives `Metallic` off
+  the mask with `EnvTint` on BaseColor — metalness is **read, never inferred**, which is what
+  `asset-enhancement.md` requires. Translucent/additive surfaces are excluded: the blue/teal tints
+  there are coloured glass, which stays dielectric.
+
+  **Props gained the channel.** `vertexlitgeneric` is 1,419 of the 2,610 reflective VMTs — the
+  *larger* half — and `props/*.mtl` carried no `envmap` line at all. `mdl.py` now emits
+  `envmap`/`envmapmask`/`envtint` on the same MTL contract the world uses (tutorial: 0 → 147
+  reflective prop materials, 2 metals — `soccurtainrod`, `lantern`).
+
+  **Two exporter corrections.** `$basealphaenvmapmask` masks with **`1 − alpha`**
+  (`lightmappedgeneric_basealphamaskedenvmap.psh`: `mul r1, t2, 1-t3.a`); ours used the alpha
+  uninverted. And reflectivity is no longer gated on the baked cube decoding — the Lumen path never
+  samples `tex/cube/`, so the gate silently matted any surface whose cube failed and every
+  `$envmap env_cubemap` face VBSP left unpatched.
+
+  **Live over the baked instances.** The bake authors `MaterialInstanceConstant`s, which have no
+  runtime setter, so every `elysium.*` material knob was dead on the path that renders.
+  `AElysiumMapActor::ApplyMaterialOverrides` stands one MID per *unique* baked material (≈700 on
+  the tutorial, not 1,400 slot-wise) in front of them. It is **lazy**: with every knob neutral no
+  MID is created and the baked instances render exactly as authored — because a runtime
+  `SetMaterial` drops the primitive's built texture-streaming data and the textures (albedo *and*
+  `EnvMask`, which then reads its near-white 1×1 mip and mirrors the surface) fall back to a low
+  mip. Knobs read the baked value and write it whole, so the pass is idempotent and returning a
+  knob to neutral restores the authored value exactly. `elysium.MaterialOverrides` gates it;
+  `RoughBase`/`RoughReflect`/`SpecBase`/`SpecReflect` pin (negative = neutral) and `EnvReflect`
+  scales.
+
+  **Tests.** `Elysium.Substrate.WorldMaterials` grows the tint parse + the three-way classification
+  (grey / chromatic / chromatic-but-translucent). New **`Elysium.Content.ReflectionParams`** asserts
+  each lit master carries every name the bake and runtime bind — they are bound by string from
+  three places, so a rename that misses one is otherwise silent — plus the Lambert defaults and
+  `EnvStrength` defaulting off.
+
+  *Verified:* `build.bat` + `test.bat` green; all 10 maps re-exported and re-baked; `shots.bat`
+  re-baselined on `sp_tutorial_1` (spawn mean 8.37) and `sm_hub_1` (spawn 4.53) — the old baseline
+  was invalid against the new bake by B6's rule; `profile.bat` Lumen reflections **0.15–0.22 ms**
+  against the committed 0.18–0.25 and Total GPU 5.08–5.54 against 5.08–6.18, so no perf regression.
+  *Deps:* 3.5, 7.4.
 
 ## P8 — Characters & UI *(design: `rebuild-strategy.md` B5, `remaster-direction.md` axis 1; `m0_menu_build.md` = structural reference, not a port target)*
 
@@ -1424,3 +1510,661 @@ cross-check `recovered/dice-system.md` alongside the running-game golden test.
     export mismatch (a retail `sp_tutorial_1` export, 1226 entities / 75 classnames, vs the test's
     patch-calibrated 1600–2100 band), unrelated to this task. Owner call + as-built correction:
     `decisions.md` 2026-07-24.
+
+## RE backlog — the sky + ambience RE set (RE10–RE16 + SKY), verbatim rows
+
+Moved from `roadmap.md` on 2026-07-26, when the set closed; the roadmap keeps
+one-line summaries. Full write-ups: `docs/sky-ambience.md` (K1–K8).
+
+| ID | Question | Consumed by | Status |
+|---|---|---|---|
+| RE10 | **Sky-face orientation convention (K1)** — `R_DrawSkyBox`/`MakeSkyVec` + the three `.rdata` tables give the face→axis binding (`rt`=+X, `lf`=−X, `bk`=+Y, `ft`=−Y), the per-face basis and the texcoord flip; **no face needs a rotation or mirror**, and the current `BuildSkyCube` binds every horizon face to the wrong axis. Cross-checked on the decoded faces by `tools/probe_sky_orientation.py`. Full write-up: `sky-ambience.md` → "K1 … (settled)". `R_DrawSkyBox` applies no colour modulation, so the brightness chain is entirely material-side — split out as RE-A9 (K7: the `stdshader_dx8.dll` sky shader, gamma, fog-over-sky) | 3.7, sky-ambience B2/B3 | [x] |
+| RE11 | **Labelled-sky probe in the original game (RE-A2)** — six self-describing faces installed as a loose `materials/skybox/` set. **The shipped engine draws every face on the axis K1 predicts, upright and unmirrored**, with five three-face corner agreements, two of them on `dn` — the only image evidence `dn` can have, since VtMB's ground plates are uniform black and the seam probe ties at 0.00 across all eight transforms. K1 now rests on the `engine.dll` tables + the seam probe + the in-game draw. Also found: `GetAngles()` returns the body's angles, so its pitch is not the camera's. Tooling: `tools/sky_probe.py` + `tools/tex_from_png.py` (the `.tth`/`.ttz` writer). Full result: `sky-ambience.md` → "The in-game check" | sky-ambience RE-A2, B1 | [x] |
+| RE12 | **Model lighting + the WORLDLIGHTS runtime role (K3, K5 — RE-A3)** — `engine.dll` + `StudioRender.dll`. **World surfaces render from lump 8 alone; lump 15 is runtime data for the model light cache and nothing else** (proved by an exhaustive field scan: the lump-8 and lump-15 consumer sets are disjoint in the binary). A model's ambient term is a **6-face ambient cube** built by a **162-ray radiosity gather** that samples `dface_t.avgLightColor[style]` (not luxels — `avgLightColor` at offset 0 is what the runtime reads) and multiplies by the hit material's **reflectivity**, substituting the `emit_skyambient` intensity on sky hits; on top of it, at most **`r_worldlights` (2)** direct worldlights per model, everything else folded into the cube, plus styled lights/dlights/elights per frame. So VtMB **does** have runtime one-bounce GI — for models. Also settled: the loader's attenuation/exponent/radius fixups, `Engine_WorldLightDistanceFalloff`/`WorldLightAngle`, `mat_fullbright` forced on zero-light maps, and **first-wins** (not last-wins, not summed) for multiple `light_environment`s. Corrections it forces: `lighting.md`'s "the set the engine rendered from", `bake_map.py`'s last-wins type-5, `bsp.read_worldlights`' missing fixups. Full write-up + addresses + ConVar table: `sky-ambience.md` → "K3 / K5 … (settled)" | sky-ambience RE-A3, C0–C2, D2/D6 | [x] |
+| RE13 | **Day/night bake selection (K4 — RE-A4)** — **the premise was wrong: there is no second bake and no selector.** `dface_t.day[8]`@56 and `night[8]`@64 are `0x00` in all 4,538,720 bytes of each across all 108 maps, where `styles[8]`@48 in the same faces carries the `0xFF` unused sentinel plus live indices — untouched memory, not authored-and-empty. Per-face closure of lump 8 confirms one bake: 1 luxel grid per lightstyle (288,848 faces) or 4 + a 4-byte average colour when bumped (111,421), **never the 2 or 8 a day+night pair would cost**. In `engine.dll` the FACES lump has exactly three consumers — `Mod_LoadFaces` (`0x200b73d0`), the face-centroid builder (`0x200b9c30`) and `CMod_LoadDispInfo` (`0x20033b30`), enumerated by decoding the lump index at all 55 call sites of the lump accessor `0x200b6670` — and **none reads offsets 56–71**. No day/night string, ConVar, worldspawn key (full 108-map inventory) or entity key exists; the game's one `m_daylight_level` is a 3-bit networked player field driving a **client screen effect** (`client.dll` `0x1019dd08`/`0x1019dd9d`, gated by `cl_obfuscate_daylight`, default `-100`, set to `0` by `autoexec.cfg`) that never touches lump 8, lump 15 or the light cache. Corrections it forces: `sky-ambience.md`'s and `tools/CLAUDE.md`'s "v17 carries two full bakes" (inherited from bspsrc's field names), and the "night set, pending K4" caveat on D1/C4. Instrument: `tools/probe_daynight.py`. Full write-up: `sky-ambience.md` → "K4 … (settled)" | sky-ambience RE-A4, C4, D1 | [x] |
+| RE14 | **Full-game sky + ambience inventory (K8 — RE-A7)** — all 108 BSPs scanned from data alone. **Every map names a sky** (11 distinct sets; `holly`/`chinatown` 256², the rest 512²) but only **66** have `toolsskybox` brushwork and only **25** carry the type-3/type-5 pair — the other **83 have no `light_environment` at all**, so "no sky pair → no sky light" (C2) is the majority policy, not an `sm_hub_1` special case; a pair always implies brushwork, never the reverse. **43** maps run the 3D-skybox pass, `scale` 16 on every one (`la_malkavian_4` has two `sky_camera`s), holding **1,442 of the game's 19,197 worldlights**, 1,043 static props and 2,275 entities — B7 is ~6× the ten-map sample. Fog: 65 maps have no `sky_camera`, so they export **no fog at all** (12 of them against `worldspawn fogenable 1`), and 5 get fog the `worldspawn` never asked for — B8's second failure direction. D6 moves exactly one map: 5 maps carry several `light_environment`s and only `sp_observatory_2`'s differ in value; first-wins resolves over **lump-15 order** (which `.lights` preserves), not entity order. Corrections it forces: two rows of RE-A8's sky-area table were PVS-classified, not area-classified (`sp_tutorial_1` 30/59/58, `sm_pawnshop_1` 21 props), and brush entities need their `origin` added to the model bbox centre. Open for K6: `sp_soc_2`'s two `light_environment`s emit one pair, and `sp_observatory_2`'s two pairs share one type-5 magnitude. Instrument: `tools/probe_sky_inventory.py`. Full write-up: `sky-ambience.md` → "The full-game inventory" | sky-ambience RE-A7, B7/B8, C1/C2, D6 | [x] |
+| RE15 | **VRAD's sky-pair semantics (K6 — RE-A5)** — data-only: VtMB **ships no map compiler** (the install holds two `.exe`s and no `.fgd`), so there is no rad binary to decompile and never was. Recovered VRAD's photometric transfer exactly — `intensity = (colour/255)^2.2 · (brightness/255) · (const + 100·linear + 10000·quadratic)`, **zero exceptions on 16,378 origin-matched lights across all 108 maps** (worst relative error 2.25e-7). The third factor is the light's own falloff denominator at d = 100 units, so a compiled intensity is that light's radiance at 2.54 m — the `10000` long read as a brightness unit is 100². Lump 8 stores radiance ×255, giving the plan the thing it never had: **lump 8's absolute scale**, `stored luxel = 255 · intensity / falloff`, so a light of brightness `B` lands `(colour/255)^2.2 · B` at 100 units and the authored brightness comes back out of the bake. **The sun measures that scale and confirms its own rule** — `255 · intensity · cos`, gated by a sky-visibility test: on `sp_endsequences_b` the sky-visible luxels give baked/cos p50/p90/p99 = 170.3/170.4/170.6 against a predicted 168.2 (×1.01), carrying the sun's chromaticity (d = 0.019) and not the map's warm fill (d = 0.523). Across all 17 retail maps the colour test partitions the set cleanly: **exactly the three maps whose sun outshines their own fill** (ceilings 203/200/168) land on the prediction — ×1.09, ×0.87, ×1.01, median **1.01** — while every map where the estimator runs away (to ×26.7) has a bright end matching the **fill** instead, `sp_ninesintro` at d = 0.927 to its sun against 0.008 to its fill. The diagnostic fails exactly where it reports failing. So **where sky is visible the pair is a first-class term, not a tint**: the sun's ceiling is a median **332%** of its map's median lit face (max 3811%), the skyambient's **121%** (max 640%) — what limits it is reach, VtMB's maps being mostly enclosed, not magnitude. Multi-`light_environment` bake rule read off `sp_observatory_2`: the ambient is resolved **once, globally, first-entity-wins** and stamped on every type-5 row (its two entities author `_ambient` 20 and 10; both rows read 20/255), while each entity keeps its own type-3 — so **D6 needs no decision**. Also established the **bake provenance split** every future lump-8 measurement needs: the Unofficial Patch recompiles 20 maps and adds 7, with a later VRAD, so 27 of 108 bakes are not Troika's. Corrections it forces: this plan's own RE-A5 target (`sp_tutorial_1` is patch-recompiled and has **no** retail sky pair) and RE-A7's `sp_soc_2` note (retail emits both pairs; the single pair is the patch compiler). Left deliberately **bounded**: the skyambient's cosine-vs-uniform hemisphere weighting is a factor of ~2 that the fill confound and our brush-only occlusion cannot separate — its colour signature confirms it is in the bake, its aperture is not pinned. Instrument: `tools/probe_skyambient.py`. Full write-up: `sky-ambience.md` → "K6 …" | sky-ambience RE-A5, C0–C2/C4, D6 | [x] |
+| RE16 | **The sky's brightness chain (K7 — RE-A9)** — `stdshader_dx8.dll` + `engine.dll` + `MaterialSystem.dll`, plus the shader assembly **VtMB ships as data** (`materials/dxshaders/*.psh` is readable ps.1.1 source with Valve's comments; `shaders/{vsh,psh}/*.vcs` the compiled combos — a file read, not a decompile). **The premise was wrong twice and the answer is the identity.** There is no `SkyBox` shader: all 79 `materials/skybox/*.vmt` are `UnlitGeneric` carrying only `$basetexture` and `$nofog`, and the registered `UnlitGeneric` is an alias whose `GetFallbackShader` (`0x1000fa00`) returns the literal `"UnlitGeneric_DX8"`. And there is no scaling: `R_DrawSkyBox` pushes a (1,1,1) colour modulation into the material (`IMaterial` vtable `+0x78`) before binding it, `SetModulationDynamicState` (`0x10001ca0`) folds `$color`×`$alpha` into vertex constant **c38**, all 8 combos of `unlitgeneric.vcs` do `MOV oD0, c38`, and `unlitgeneric.psh` is `tex t0; mul r0, t0, v0` — **a sky pixel is the decoded texel**. The one sky-vs-world asymmetry is `lightmappedgeneric.psh`'s `mul_x2 … (overbrightFactor/2)`, with the factor **pinned** to 2 by `UpdateMaterialSystemConfig` (`0x200718d0`, which rewrites anything but 1.0/2.0 — and any hardware without overbright support — to 2.0), so **sky = texel, world = albedo × lightmap × 2**. Gamma is frame-wide, never per-material (`gamma`/`texgamma` 2.2, `brightness` 0, `linearFrameBuffer` 0, display value `1.6 − clamp(cl_v_gamma − 1, 0, 3)·0.5` = 1.35 by default). Fog: `$nofog` is material-var flag **bit 14** (name table recovered from `MaterialSystem.dll` `.data`, index cross-checked five ways against the shader code that tests `$model`/`$ignorez`/`$decal`/`$nocull`/`$alphatest`), and all five of `CBaseShader`'s fog helpers (`0x10016ca0`–`0x10016d60`) pass `IShaderShadow::FogMode(0)` when it is set — so with `$nofog 1` on **all 66** faces any map's `skyname` selects, **the `sky_camera`'s fog never touches the backdrop**, while the miniature (RE-A8) is fogged by it. Corroborates `color_gamma.md`'s `base × lightmap × 2` from the shipped shader source and upgrades "defaulted" to "pinned". What it changes: B4 loses its unknown and `Brightness 4` becomes divergence **D7** rather than a pending calibration; B8 gains a hard rule (never fog the backdrop, always fog the miniature); B5 inherits a constraint (an upscaled face must preserve absolute texel values). New local Ghidra script `MakeFuncs.java` — promotes disassembled-but-unowned code into functions, without which a plugin DLL's vtable-only-reached shader classes are invisible to every function-walking tool. Full write-up: `sky-ambience.md` → "K7 …" | sky-ambience RE-A9, B4/B5/B8, D7 | [x] |
+| SKY | **Sky + ambience rework — Phases B and C (`sky-ambience.md`)** — the whole rework the RE set up, landed 2026-07-26. **B:** the backdrop's face→slice binding *and* per-slice rotation fixed under one re-derived table (B3) with a standing `Elysium.Substrate.SkyCube` test and an in-engine labelled-cube confirmation (B1); the export-side orientation contract recorded as `skyconv` (B2); the backdrop shipped at **parity** per D7 with the transfer measured end to end — the tonemapper's toe crushes a night sky up to ×9 and no multiplier can undo a curve, so the residual belongs to 3.6/3.7 (B4); the enhanced-face A/B gated on absolute-texel preservation (B5); the **whole** 3D skybox split by `dleaf_t.area` — props, sprites, entities, worldlights, collision brushes — and placed under the miniature transform, ending the floating debris (B7); world fog re-sourced from `worldspawn`, fixing 12 maps that lost it and 6 that never asked, and the backdrop exempted from fog game-wide (B8); sky-framing vantages plus `shots_diff.py` so a sky regression is a number (B6). **C:** the four RE-A3/RE-A5 pipeline corrections including `.tth` reflectivity, verified against the decoded albedo at r = 1.0000 (C0); the sky light's level driven by the map's own `emit_skyambient` magnitude, scaled through the cube's measured upper-hemisphere mean, and **zero on the 83 maps with no `light_environment`** (C1/C2); the per-map Lumen art-direction PPV, neutral by default (C3); and the bake measured in **absolute units** with no free gain, which says direct light explains ~0% of a median lit face and the bounce floor *is* the ambient level (C4/C5). Corrections it forced: RE-A7's fog counts (6 wrongly-fogged maps, not 5; 27 disagreeing sets, not 31), and **D3's Indirect Lighting Intensity, which is a no-op on this render path** — it scales precomputed indirect only and no Lumen shader reads it. **B8b** closes the fog: the world and the miniature share screen depth — measured, the miniature's bounds sit 0–4,868 cm from the world's against world diagonals of 11,124–40,334 cm, and on 6 of 8 maps it lies *inside* the world's box — so no engine-side mechanism can scope them, and Source's own linear distance fog moves into the material as a per-primitive Custom Primitive Data term (neutral by construction, `Elysium.Substrate.FogPack`), leaving the height fog the volumetric layer alone; the authored fog colour is decoded with a plain 2.2 like every other VtMB colour. It also measured the shots harness's own noise floor — rebuilding **byte-identical** materials moves `sp_tutorial_1` `spawn` by 10.15 mean while the stable `pw` vantage is bit-exact — which retires the unexplained 32.46 residual left open on the same map. Still open and named: the volumetric layer's own calibration, and the skyambient's hemisphere aperture, which C4 shows is not identifiable from this data | 3.7, sky-ambience B1–B8b + C0–C5 | [x] |
+
+## SKY — sky + ambience rework, Phases A–C: the full as-built record
+
+Moved verbatim from `docs/sky-ambience.md` on 2026-07-26, when Phases B and C
+closed; that doc keeps the engine-neutral facts (K1–K8, the inventory, the
+instruments). Task IDs: RE-A1–A9 (Phase A), B1–B8b (Phase B), C0–C5 (Phase C),
+decisions D1–D7 (dated entries: `decisions.md` 2026-07-26). The open residue
+named in "Sequencing" below is promoted to roadmap tasks 3.10–3.13 and RE17.
+
+## Phase A — RE: settle the facts
+
+- **RE-A1 — decompile the sky draw. Done** (2026-07-26). `engine.dll`: the loader, the three
+  `.rdata` tables, `R_DrawSkyBox` and `MakeSkyVec` give the face→axis binding, the per-face
+  basis and the texcoord flip, and establish that the draw applies **no** colour scaling — so
+  the brightness chain is entirely material-side. Closes K1 (with RE-A2). Full write-up above
+  ("K1 …"). The material-side half became **RE-A9**.
+- **RE-A2 — labelled-sky probe in the original game. Done** (captured 2026-07-26). The
+  shipped engine draws all six faces on their predicted axes, upright and unmirrored, with
+  five three-face corner agreements — including two on `dn`, which the seam probe cannot see
+  at all. The set-up, prediction table, capture protocol and full result are above ("The
+  in-game check"). K1 is closed on three independent legs.
+- **RE-A3 — model lighting + worldlight runtime role. Done** (2026-07-26). `engine.dll` +
+  `StudioRender.dll`. World surfaces render from lump 8; lump 15 is runtime data for the model
+  light cache alone. A model's ambient term is a 6-face ambient cube built by a 162-ray
+  radiosity gather that samples `dface_t.avgLightColor` and multiplies by material
+  reflectivity, plus at most `r_worldlights` (2) direct worldlights. Closes K3 and K5, and the
+  runtime half of the multi-`light_environment` question (first-wins). Full write-up above
+  ("K3 / K5 …"); addresses, ConVar table and the consequences for our rig are there.
+- **RE-A4 — day/night selection. Done** (2026-07-26). **There is no reader and no second
+  bake.** `day[8]`/`night[8]` are `0x00` in all 4,538,720 bytes of each, over all 108 maps
+  (against `styles[8]`'s `0xFF` sentinel + live indices in the same faces); lump 8 stores one
+  bake per face, 1 luxel grid per style or 4 + an average colour when bumped, never the 2 or 8
+  a pair would cost; and the FACES lump's three consumers in `engine.dll` — `Mod_LoadFaces`
+  (`0x200b73d0`), the face-centroid builder (`0x200b9c30`) and `CMod_LoadDispInfo`
+  (`0x20033b30`), enumerated by decoding the lump index at all 55 call sites of the lump
+  accessor — read none of offsets 56–71. No day/night string, ConVar, worldspawn key or entity
+  key exists; `m_daylight_level` is a client screen effect gated by `cl_obfuscate_daylight`.
+  Closes K4 and removes the "night set, pending K4" caveat from D1/C4. Instrument:
+  `tools/probe_daynight.py`. Full write-up above ("K4 …").
+- **RE-A5 — VRAD skyambient semantics. Done** (2026-07-26). Data-only: VtMB ships no compiler,
+  so the decompile fallback the task named does not exist. Recovered VRAD's photometric
+  transfer exactly — `(colour/255)^2.2 · (brightness/255) · (const + 100·linear +
+  10000·quadratic)`, zero exceptions on 16,378 lights over all 108 maps — and with it **lump 8's
+  absolute scale**, `stored luxel = 255 · intensity / falloff`, measured off the sun. Confirmed
+  the sun is baked at `255 · intensity · cos` behind a sky-visibility test, by magnitude (×1.01
+  on `sp_endsequences_b`) and by chromaticity (d = 0.019 to the sun, 0.523 to that map's fill).
+  Where sky is visible the pair is a **first-class term**: the sun's ceiling is a median 332% of
+  the map's median lit face, the skyambient's 121%. Settled the multi-`light_environment`
+  bake rule on `sp_observatory_2` (ambient global, first-entity-wins; sun per-entity), and
+  established the retail-vs-patch bake provenance split that any lump-8 work needs. The
+  hemisphere weighting is left **bounded, not exact**, and the write-up says why that is the
+  right call. Closes K6; corrects this plan's own target map (`sp_tutorial_1` is
+  patch-recompiled and has no retail sky pair) and one RE-A7 observation. Full write-up above
+  ("K6 …"); instrument `tools/probe_skyambient.py`.
+- **RE-A6 — reference capture set.** From the user's install: screenshots at the `shots.bat`
+  vantage equivalents on 3–4 sky maps (`sp_tutorial_1`, `sm_hub_1`, `ch_temple_1`,
+  `sm_oceanhouse_1`), plus one sky-only view per skyname. The visual target for Phase B/C
+  calibration. RE-A9 narrows what the captures are for: the sky's own transfer is the
+  identity, so they serve the **world** half of the sky-to-scene ratio (what
+  `albedo × lightmap × 2` looks like next to a sky texel, for B4) and the general look
+  reference — not a sky-brightness measurement. Before any capture is used
+  *quantitatively*, settle the K7 loose end: whether `snapshot` grabs pre- or post-ramp —
+  the display gamma (1.35 at default `cl_v_gamma`) is a device LUT a back-buffer grab would
+  omit, which would make captures comparable to our `shots.bat` PNGs but not to what a
+  player's monitor showed. (Owner-run.)
+- **RE-A7 — full-game inventory scan. Done** (2026-07-26). All 108 BSPs, data only:
+  `skyname` + face resolution, `light_environment` rows, worldlight type histogram, both fog
+  sets, `toolsskybox` faces, and the RE-A8 area columns (sky `area`, its faces, and its
+  prop/entity/worldlight population). Closes K8, and corrects two rows of the RE-A8 content
+  table that had been PVS-classified. What it changes: C2's population is 83 maps, not an
+  `sm_hub_1` special case; B7 is ~6× the sample's size (1,442 sky worldlights game-wide);
+  B8 gains a second failure direction (65 maps export no fog at all, 12 of them against an
+  enabled `worldspawn`); D6 is observable on exactly one map (`sp_observatory_2`), and
+  first-wins resolves over lump 15, not the entity lump. Instrument:
+  `tools/probe_sky_inventory.py`. Full write-up above ("The full-game inventory").
+- **RE-A8 — the 3D-skybox pass. Done** (2026-07-26). `client.dll` + `vampire.dll`: the pass is
+  a second render of one BSP area through the ordinary world + renderable path, the membership
+  rule is `dleaf_t.area`, the placement transform is `world(v) = scale·(v − origin)` with
+  `scale` an integer field, and `sky_camera` fog is the skybox pass's own. Full write-up above
+  ("The 3D skybox — what the pass actually draws"). Feeds B7 and B8.
+- **RE-A9 — the sky's brightness chain. Done** (2026-07-26). `stdshader_dx8.dll` +
+  `engine.dll` + `MaterialSystem.dll`, plus the shader assembly VtMB ships as data. **The
+  transfer is the identity.** There is no `SkyBox` shader: all 79 sky VMTs are `UnlitGeneric`
+  with `$basetexture` (+ `$nofog` on all 66 faces any map actually names), the `UnlitGeneric`
+  shader is an alias whose fallback is the literal `"UnlitGeneric_DX8"`, `R_DrawSkyBox` pushes
+  a (1,1,1) colour modulation into the material before binding it, that reaches the pixel
+  shader as `c38 → oD0 → v0`, and `unlitgeneric.psh` is `tex t0; mul r0, t0, v0` — one
+  multiply by white. No overbright on the unlit path, against `lightmappedgeneric.psh`'s
+  `mul_x2 … (overbrightFactor/2)` with the factor pinned to 2 by `0x200718d0`, which is the
+  single sky-vs-world asymmetry. Gamma (`gamma`/`texgamma` 2.2, `brightness` 0,
+  `linearFrameBuffer` 0, the `1.6 − clamp(cl_v_gamma − 1, 0, 3)·0.5` display value) is
+  frame-wide, never per-material. `$nofog` is flag bit 14 and maps to `IShaderShadow::FogMode(0)`
+  in all five of `CBaseShader`'s fog helpers, so the backdrop is unfogged game-wide while the
+  miniature is fogged by `sky_camera`. Closes K7; turns `Brightness 4` from an uncalibrated
+  constant into a divergence needing a decision, and gives B8 a hard rule. Full write-up above
+  ("K7 …").
+
+## Phase B — sky rendering rework (K1 and K2 both settled — nothing blocks it)
+
+- **B1 — labelled-cube probe in our runtime. Done** (2026-07-26). `elysium.SkyProbe 1` builds
+  the cube from the RE-A2 labelled faces (`tools/out/_skyprobe/<skyname><suf>.png`) instead of
+  the map's own, so both ends of the orientation chain are checked against **one** set of
+  images — the same six the shipped VtMB engine drew. Captured on `sp_tutorial_1` (`la`) with
+  `ShowFlag.StaticMeshes 0`, which leaves only the backdrop (a PMC) drawing, so all six axes
+  are unoccluded from any standing position.
+
+  **Every face reads upright, unmirrored and on its predicted axis**, and each face's own edge
+  tags name the face actually adjoining it:
+
+  | Look (Unreal) | Face | Its label | Screen-left / right |
+  |---|---|---|---|
+  | +X (yaw 0) | `RT` | `la +X`, look yaw 0 | `bk` / `ft` |
+  | +Y (yaw 90) | `FT` | `la −Y`, look yaw 270 | `rt` / `lf` |
+  | −X (yaw 180) | `LF` | `la −X`, look yaw 180 | `ft` / `bk` |
+  | −Y (yaw 270) | `BK` | `la +Y`, look yaw 90 | `lf` / `rt` |
+  | +Z (pitch +90) | `UP` | `la +Z`, look pitch −90 | `bk` / `ft`, `rt` toward the faced horizon |
+  | −Z (pitch −90) | `DN` | `la −Z`, look pitch +90 | `bk` / `ft`, `rt` toward the faced horizon |
+
+  The Source-axis labels come back **Y-negated** against the Unreal heading (`+Y` reads at
+  Unreal −Y), which is `source_to_unreal` showing up in the picture. The faces are *not*
+  mirrored, because the reflection is exactly cancelled by the handedness change: looking down
+  +X, Source screen-right is −Y and Unreal screen-right is +Y, and those are the same
+  direction.
+
+  So there is no residual, and B1 covers what the `Elysium.Substrate.SkyCube` test cannot —
+  the bulk-data layout (face-major, slice order, rows top-down) and `M_Sky`'s sampling vector.
+  Instrument note: `elysium_player_teleport` grew a `pitch` argument for this, since the two
+  pole captures need one.
+- **B2 — canonical face orientation at export. Done** (2026-07-26). The `UE_` contract now
+  covers sky, as a recorded contract rather than a transform: the decoded faces already *are*
+  the canonical orientation, so the exporter emits them verbatim and states the convention it
+  emitted them under — **`skyconv 1`** in `<map>.env`, against
+  `ElysiumEnvironment::SkyConventionVersion`, which `ApplyEnvironment` warns on a mismatch of.
+  `sky_upscale.py`'s seam-solver is retired for the constant `bk, rt, ft, lf`, unflipped; the
+  seam error it used to minimise survives as a one-line **read** on the input faces
+  (`ring_seam_err`), printed before the upscale so faces that are not what the contract says
+  are caught up front rather than silently stitched.
+- **B3 — correct cube assembly. Done** (2026-07-26). `BuildSkyCube` packs the canonical faces
+  into UE slices under one table carrying both halves of the transform — the binding
+  **`rt, lf, ft, bk, up, dn`** for `+X,−X,+Y,−Y,+Z,−Z` *and* each slice's rotation, applied by
+  an index remap at blit time (`RotSource`/`BlitRotated`). Both errors are gone together; the
+  table is documented face by face in the code with its derivation.
+  The transform is **re-derived, not copied**: solving K1's six face directions against K2's
+  six slice directions yields exactly one `(face, rotation)` pair per slice, matching the table
+  below with no residual. That derivation is now a standing test —
+  **`Elysium.Substrate.SkyCube`** re-solves it in C++ over a 7×7 texel grid per slice
+  (`SkySliceFace`/`SkySliceSource` expose the two halves), so a wrong binding, a wrong rotation
+  or a mirror each fail the suite rather than the eye. In Unreal space a face pixel `(u, v)`
+  looks at
+
+  ```
+  rt: ( 1,  s,  t)    lf: (-1, -s,  t)    bk: ( s, -1,  t)
+  ft: (-s,  1,  t)    up: (-t,  s,  1)    dn: ( t,  s, -1)
+  ```
+
+  (`s = 2u − 1`, `t = 1 − 2v`). And every slice takes the rotation UE's D3D-derived layout
+  requires (K2): **`rt` 90° CCW, `lf` 90° CW, `ft` 180°, `bk` none, `up` 90° CCW, `dn` 90° CCW**
+  — a renamed array alone still draws wrong. B1 is the acceptance check.
+- **B4 — backdrop verification + brightness calibration. Done** (2026-07-26). `M_Sky` sampling
+  is verified by B1, and the hand `Brightness 4` is gone: the shipped default is **parity**
+  (D7), with the multiplier surviving as **`elysium.SkyBrightness`**, a live debug cvar that
+  re-applies to the built backdrop on change.
+
+  The remaining question — what our side of the seam does to a texel — is now **measured**
+  rather than argued. Aim the camera down Unreal +X so one face fills the view, map every
+  screen pixel back to the texel it shows, and compare displayed 8-bit sRGB against source
+  8-bit sRGB (which is exactly what VtMB wrote to its framebuffer, RE-A9). Auto-exposure is
+  off (`r.DefaultFeature.AutoExposure=False`), bloom and fog disabled for the measurement, so
+  what is left between the two is the **tonemapper**.
+
+  One pass would only sample the sky's own value range, and VtMB's skies are night skies — so
+  the multiplier is *swept* instead, and each sweep re-expressed as the effective source texel
+  it is equivalent to (it scales the linear value the emissive gets, so texel `v` at multiplier
+  `k` is the input that texel `sRGB(k·linear(v))` would be at 1). Stitched, that covers the
+  whole range on real texels — 545,300 samples over ×0.25…×16 of `la` on `sp_tutorial_1`:
+
+  | Effective source | 3 | 6 | 12 | 20 | 27 | 39 | 55 | 77 | 107 | 138 |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | Displayed | 0.3 | 1.3 | 4.7 | 10.3 | 17.3 | 30.3 | 52.3 | 85.3 | 132 | 169 |
+  | ratio | ×0.11 | ×0.23 | ×0.39 | ×0.52 | ×0.63 | ×0.79 | **×0.95** | ×1.11 | ×1.24 | ×1.22 |
+
+  **The deviation from parity is a curve, not a gain**, so no multiplier can restore it. The
+  filmic toe crushes everything under ~40 (by ×9 at the bottom), unity crosses at **≈ 55**, and
+  above that the shoulder lifts ~20%. And the decoded skies sit almost entirely below that
+  crossing — `la`'s `rt` face is p50 **0** / p90 **20**, `pier`'s p50 **0** / p90 **43** — so
+  **the whole sky lives in the toe**. That is what the old `4` was reaching for; but 4 does not
+  undo a toe, it just moves the sky up the same curve, landing ~×2.3 *above* parity across
+  `pier`'s working range. The residual is the tone curve's, and it belongs to **roadmap 3.6/3.7**
+  (pinned exposure + neutralised tone curve), not to the backdrop multiplier — which is what D7
+  says.
+
+  Found while measuring, and handed to B8: **our height fog inscatters into the backdrop.**
+  With `sm_hub_1`'s fog on, the sky's displayed mean goes 16.6 → 29.1. RE-A9 is categorical
+  that the 2D backdrop is never fogged, on any map, at any distance.
+
+  `SkyLight` IBL was re-checked after the B3 fix — a correctly oriented cube changes the
+  directional distribution the capture integrates, and C1/C2 take the intensity over from
+  there.
+- **B5 — upscaled faces as the enhancement A/B. Done** (2026-07-26). **`elysium.EnhancedTextures`**
+  (off by default, the family toggle `docs/asset-enhancement.md` names) makes the runtime prefer
+  `tex_hi/sky_*.png`; the faithful default stays the decoded originals (512², or 256² for
+  `holly` and `chinatown`). The preference is per-map and **all-or-nothing**: `HasSkyFaces`
+  tests all six before switching, so a map with no enhanced set — or a partial one — keeps its
+  faithful faces instead of losing its sky. The map-load line names which set was used
+  (`faithful` / `enhanced` / `labelled probe`), so an A/B is never ambiguous. Verified on
+  `sp_tutorial_1` across all three cases: absent, complete, and 5-of-6.
+
+  RE-A9's constraint is now an **acceptance gate, not a note**. Because the original's transfer
+  is the identity, an upscaled face has to preserve **absolute** texel values, not just
+  structure — a model that shifts the mean shifts the sky's brightness one-for-one, and one
+  that reshapes the histogram changes its contrast. `sky_upscale.py` measures both per face
+  against its source (per-channel mean drift, and the worst gap over the 1/5/10/25/50/75/90/95/99
+  percentiles, all in 0–255 texel units) and **writes nothing** if any face exceeds
+  `--max-mean-shift` (1.0) or `--max-hist-shift` (6.0). `--allow-drift` keeps them anyway, still
+  reported. A resolution change may not smuggle in a grade.
+- **B6 — regression baselines. Done** (2026-07-26). Two pieces were missing, not one: the
+  harness had no vantage that *frames* sky, and no way to compare two runs.
+
+  **Vantages** — the existing ones frame walls, so a sky change barely moves their pixels.
+  `t1sky` (`sp_tutorial_1`) and `h1sky` (`sm_hub_1`) pitch up from the same two points to put
+  the backdrop **and** the 3D-skybox miniature in one frame — the two things a sky regression
+  breaks. Both maps draw sky (`la`, `pier`) and both run the miniature pass.
+
+  **`tools/shots_diff.py`** — `--save` promotes a run to `out/_shots/_baseline/<map>/`, and a
+  later run diffs against it per vantage: mean and p99 absolute difference, the percentage of
+  pixels moved by more than `--tol` levels, and a heat map written for any vantage over
+  `--max-changed`. Non-zero exit when any does, so it can gate a change rather than just report
+  on one. Baselines live under `out/`, so they are game-derived and gitignored like every
+  capture — a local instrument, not a committed fixture.
+
+  Verified both directions: a run against itself is 0.00% on all 10 vantages, and a +6-level
+  lift over the sky band of one shot is caught at 27.78% of that vantage's pixels with the other
+  three unmoved.
+
+  **One hard limit, measured: a baseline is only valid against a fixed bake.** Re-baking a map
+  from **byte-identical inputs** and re-shooting moves the render by up to **5.4 mean / 55% of
+  pixels** (`sp_tutorial_1` `t1`; `spawn` 1.0/20%, `t3` 1.2/21%, `t4` 0.02/0.05%). The bake
+  builds Nanite meshes and Lumen's surface cards, card packing is order- and DDC-dependent, and
+  on a map where direct light explains ~0% of a median lit face (C4) the bounce carries almost
+  everything — so a reshuffled surface cache moves the whole frame a little. By contrast a map
+  left un-rebaked is stable to **≤ 0.23 mean / ~1% of pixels** across a runtime change
+  (`sm_hub_1`), which is the floor of Lumen's own temporal accumulation.
+
+  **The same limit applies to regenerating the master materials, and B8b pinned the numbers
+  down.** Three runs over one fixed bake of `sp_tutorial_1`, a map that authors no fog at all, so
+  B8b's term is inert on it by data:
+
+  | comparison | `spawn` | `t1` | `t3` | `pw` | `t2` / `t1sky` / `t4` |
+  |---|---|---|---|---|---|
+  | same assets, run twice | — | — | — | 0.00 | — |
+  | with the fog term vs without | 14.75 | 6.60 | 1.68 | **0.00** | 0.40 / 0.37 / 0.03 |
+  | rebuilt **byte-identical** materials | 10.15 | 1.82 | 3.74 | **0.00** | 0.14 / 0.20 / 0.04 |
+
+  Read the last two rows together: authoring a *different* graph and authoring the *same* graph
+  again move the render by the same order, so the movement is the toolchain's, not the change's.
+  Every generator deletes and recreates its asset, which forces a full shader recompile and a
+  Lumen surface-cache recapture, and that recapture is as order-dependent as the bake's card
+  packing. `pw` is the control that makes this legible: it is bit-exact across all three
+  comparisons, so the render itself is deterministic for a fixed set of assets — it is *producing
+  the assets* that re-rolls, and it re-rolls hardest on the vantages whose frame is
+  bounce-dominated.
+
+  This also closes an item left open on 2026-07-26: the unexplained `sp_tutorial_1` `spawn`
+  residual of 32.46 recorded against a re-bake was not a defect in anything. That vantage's Lumen
+  solution is simply the least stable in the set, across bakes and asset rebuilds alike.
+
+  So the tool answers "did this runtime change alter the look" — which is what it did cleanly for
+  C2 — and it does **not** answer "did anything change across a re-bake or a content rebuild": at
+  that scale its own noise swamps the signal. Re-baseline after either, attribute across one only
+  with a margin well above the numbers above, and for a small effect compare **two runs over one
+  fixed set of assets** (a cvar A/B, as B8b used for the fog) rather than against a baseline.
+- **B7 — split the whole 3D skybox, not just its world faces. Done** (2026-07-26; RE-A8).
+  The exporter's `SkyScope` computes the miniature's BSP area once — the engine's own
+  membership rule, `area(point_leaf(x)) == area(point_leaf(sky_camera.origin))` — and applies
+  **one test to every content class**: world faces, static props, `env_sprite`s, entities
+  (point *and* brush, a brush entity classifying by its model bbox centre plus its `origin`),
+  worldlights, and the collision brushes. Each carries a sky flag into its sidecar: an 11th
+  `.props` field, a 16th `.lights` field, a 12th `.sprites` field, `"sky": true` in `.ents`.
+  The PVS classifier is retired (it is set up from a player-derived viewpoint and missed up to
+  31 faces per map).
+
+  **Two `sky_camera`s** — `la_malkavian_4` alone — resolve **first by entity-lump order**, the
+  engine's own `FindEntityByName(NULL, …)` first-match rule, the same one the rope chains and
+  VRAD's sky-ambient resolution follow. The exporter says so when it sees more than one.
+
+  Placement is the one transform `_sky.obj` already took, now applied to the whole set:
+  `world(v) = scale · (v − origin)`. The **bake** places sky props and sky lights under it
+  (uniform actor scale, never solid, no shadow, out of the ray-tracing scene), and the
+  **runtime** carries sky-scope entities through it in the `.ents` parser — origin and hulls
+  together, once — so every downstream consumer (brush bodies, prop and NPC bodies, gizmos, the
+  click-pick) is placed correctly without knowing the miniature exists. What the point transform
+  cannot express stays on the `bSky` bit: a body's uniform mesh scale, and that miniature
+  geometry is scenery the player can never touch. Animating sky entities stay live — the
+  `func_rotating` ferris wheel turns, the `logic_timer`-driven window glows blink.
+
+  Sky-area **worldlights** come out of the world rig unconditionally and are re-placed inside
+  the transform — scaled position, reach × `scale`, floored at `MinSkyReachCm` so a degenerate
+  authored radius does not scale to nothing. Deleting them would un-light authored content:
+  VtMB's light cache lit the miniature's props from exactly those lump-15 rows (RE-A3). It also
+  takes them out of the fill-vs-fixture sample in `docs/light-attribution.md`, which had been
+  measuring lights placed at miniature coordinates as if they lit the map.
+
+  Sky-area **collision brushes are dropped** (190 of `sp_tutorial_1`'s 2,561): a hull would
+  collide at the raw miniature coordinates it was authored at, while the geometry is drawn
+  16× away — an invisible wall standing where nothing is drawn.
+
+  Verified against RE-A7/RE-A8's independently measured numbers: `sp_tutorial_1` area 2 /
+  1,680 faces / 30 props / 59 entities / 58 lights, `sm_hub_1` area 4 / 589 / 49 / 123 / 60 /
+  54 sprites, and the whole-game rollup still 1,043 props, 2,275 entities, 1,442 worldlights
+  over 43 maps at `scale` 16. In-engine, the LA skyline stands behind the tutorial alley and
+  the floating debris is gone.
+
+  One consequence of porting the pass as real geometry rather than a second render: VtMB's
+  miniature draws into a cleared depth buffer and so is **always** behind everything, whatever
+  its size. Ours shares one depth buffer, so the miniature can occlude. It does not in practice
+  because the sky area is authored as a sealed shell around its own camera, which scales into a
+  shell around the map — but it is a property of the authoring, not a guarantee of the port.
+- **B8 — fog: world vs skybox. Mostly done** (2026-07-26; RE-A8/RE-A9). `<map>.env` now carries
+  **both** sets, from their real owners: `fog*` off **`worldspawn`** (the world's), and
+  `skyfog*` off **`sky_camera`** (the 3D-skybox pass's own), the latter with its distances
+  already ×`scale` into world units — the pass renders at 1/scale, so a skybox-space distance is
+  `scale` times as far in the world. Both are read by `FElysiumEnvDef`.
+
+  Measured over all 108 maps, sourcing the world's fog from `worldspawn` changes three things:
+  **12 maps regain fog** they authored and never got (`ch_temple_4`, `hw_ash_sewer_1`,
+  `hw_sinbin_1`, `la_chantry_1`, `la_crackhouse_1`, `la_empire_1`, `sm_bailbonds_1`,
+  `sm_pawnshop_2`, `sm_smoke_1`, `sm_tattoo`, `sm_warehouse_1`, `sp_genesisdevice_1`), **6 stop
+  being fogged** against a `worldspawn` that never asked (`la_parkinggarage_1`,
+  `sm_oceanhouse_1`, `sp_endsequences_a`, `sp_endsequences_b`, `sp_soc_2`, `sp_theatre`), and
+  of the 43 maps carrying both, **27** were using the wrong numbers. *(This corrects two RE-A7
+  counts: 6 wrongly-fogged maps, not 5; and 27 disagreeing sets on the render-relevant fields —
+  30 if `fogcolor2`/`fogdir` are counted, which nothing we ship reads.)*
+
+  **The backdrop is now exempt, game-wide.** RE-A9's rule is categorical — every sky face
+  carries `$nofog 1` → `FogMode(0)` — but our backdrop is ordinary opaque geometry and Unreal's
+  deferred fog pass fogs by depth alone, so the world's fog was inscattering straight into the
+  sky. The fix is `FogCutoffDistance`, set from the backdrop box's own half-extent so the two
+  cannot drift apart (Epic documents that knob for exactly this). Measured on `sm_hub_1`: the
+  sky's displayed mean was 16.6 unfogged against 29.1 fogged; it is now **16.5 either way**,
+  while the world keeps its fog.
+
+  Both sets reach the render in **B8b**, below, which is where the scoping is actually done.
+- **B8b — the miniature's own fog, as a per-primitive term. Done** (2026-07-26; D4 amended,
+  `decisions.md`). Source fogs the world and the miniature with two different linear fogs and can
+  scope them trivially, because the miniature is a separate pass with its own fog push/pop. Ours
+  is one scene, and the two **share screen depth** — measured over the exported set, the placed
+  miniature's bounds sit **0–4,868 cm** from the world's own against world diagonals of
+  **11,124–40,334 cm**, and on **6 of the 8** maps with a miniature the miniature's geometry lies
+  *inside* the world's bounding box (`sm_hub_1`, `sm_pawnshop_1` and `sp_tutorial_1` at distance
+  0). Only `sp_observatory_1` and `sp_soc_1` separate at all. So `FogCutoffDistance`, a
+  `LocalFogVolume` and a second fog actor are all ruled out by data, not by argument, and a
+  deferred fog pass offers nothing else.
+
+  **So the distance fog moved into the material, per primitive.** Custom Primitive Data carries
+  one fog set per primitive — colour, start, `1/(end − start)` — and the term is Source's own
+  `f = saturate((PixelDepth − start) · invRange)`, so it reproduces the original fog rather than
+  approximating it. The bake stamps every world / prop / miniature component (so the level is
+  right when opened in the editor) and `AElysiumMapActor::ApplySceneFog` re-derives it from
+  `<map>.env` at load, the same way the rig re-derives every light. `elysium.Fog` A/Bs it live.
+
+  It is applied as `BaseColor ×= (1−f)`, `Specular = 0.5 · (1−f)`, `Emissive = Emissive·(1−f) +
+  colour·f`, which is exactly `lerp(shaded, fog, f)` for a deferred surface — the specular term
+  is there because scaling BaseColor alone leaves a Lumen reflection shining through the fog at
+  full strength. **Neutral by construction:** an unwritten custom-data slot reads as zero, zero
+  is `invRange`, and `f = 0` passes every output through unchanged — so "not fogged" and "never
+  written" are the same state, with no branch to get wrong. `Elysium.Substrate.FogPack` guards
+  that property.
+
+  Two things it does not cover, both bounded: a `UDecalComponent` is a `USceneComponent` and
+  carries no custom primitive data, so a decal takes the world's set from named parameters the
+  bake binds into its instance instead (a decal is only ever a world surface, so it needs no
+  per-primitive scoping — but `elysium.Fog` does not reach it, and a map with world fog needs a
+  re-bake, not just a reload, for its decals to follow); and the 2D backdrop is exempt game-wide,
+  as RE-A9 requires.
+
+  **The height fog is no longer the map's distance fog.** What is left to it is the volumetric
+  layer — participating media the map's hundreds of dynamic lights shaft through, which is the
+  modernization D4 sanctioned and which no per-surface term can produce. Its analytic
+  contribution is now a residue rather than a design, and a small one: **the engine divides both
+  `FogDensity` and `FogHeightFalloff` by 1000** (`FExponentialHeightFogSceneInfo`, `SceneCore.cpp`),
+  so `3/end` integrates to **under 0.2% across a whole map**, and the backdrop is cut off before
+  it regardless. *(That /1000 also corrects this plan: `fog_height_falloff = 0.02` does not put
+  the fog "below z ≈ 2 m" — it is 2 × 10⁻⁵ per cm, which halves the density every ~500 m and is
+  therefore effectively uniform over a VtMB map. The real defect was never the height profile; it
+  was that the density was ~1000× too thin for the world, which is why the only place it ever
+  showed was the 5 km backdrop.)* Calibrating the volumetric layer for its own sake is open — at
+  this density it, too, is near-invisible.
+
+  **The fog colour is decoded, not used raw.** `.env` transports the authored value verbatim
+  (`/255`); the consumers raise it to 2.2, because VtMB's colours are gamma-encoded and its own
+  math decodes them that way (RE-A5's `(colour/255)^2.2 · …`), and because that is what every
+  other authored colour in this pipeline becomes. The magnitudes settle it: C1 measures a map's
+  own sky radiance at 0.0034–0.0066 and C4 puts a typical lit surface near there, so `sm_hub_1`'s
+  authored `17 20 25` would be **0.067 undecoded — three to thirteen times brighter than the
+  world it hangs in** — against **0.0021 decoded**, a dark haze just under the walls. What this
+  does not close is the display transfer: a linear value still meets the filmic toe B4 measured
+  at up to ×9, so a saturated fog displays under its authored level. That is one named
+  calibration for the whole render (D7, roadmap 3.6/3.7), not a per-term fudge, and nothing here
+  compensates for it.
+
+  Measured on `sm_hub_1` (`worldspawn` 500→5000, `sky_camera` 500→5000 ×16 = 20,320→203,200 cm),
+  fog on against fog off over the same assets: mean **0.23–0.76**, p99 5–12, 5–19% of pixels. The
+  `spawn` vantage barely moves (0.33) because it stands inside `fogstart`, which is the authored
+  behaviour. On `sp_tutorial_1`, which authors no fog, the term is inert.
+
+## Phase C — ambience rework (K3/K4/K5/K6 settled — no RE blocks it)
+
+- **C0 — apply the RE-A3/RE-A5 corrections to the pipeline. Done** (2026-07-26). Four
+  corrections, none of them a divergence:
+
+  **(a) first-wins on the type-5 skyambient**, in both consumers (`bake_map.py` and
+  `UElysiumLightRig::Adopt`), by **lump-15 order** — which `.lights` preserves — not entity
+  order. Both assigned unconditionally in the loop, i.e. silently *last*-wins. D6 needs no
+  decision: first-wins matches the runtime (RE-A3) and the bake (RE-A5) alike, and since VRAD
+  stamps one globally-resolved value on every type-5 row, it changes which row is read, not
+  what is read.
+
+  **(b) the engine's load-time fixups**, in `bsp.read_worldlights`, so anything fitted against
+  lump 15 fits the values the engine actually lit with: zero-attenuation point/spot →
+  `quadratic = 1`, zero-exponent spot → `exponent = 1`, `radius < 1` → `radius = 0` (*no*
+  cutoff, not a tiny one). Measured game-wide, this moves **7 lights of 19,197** — 6 spot
+  exponents and 1 radius, and not one attenuation case. A correctness fix that changes almost
+  nothing, which is worth knowing: the weight of C0 is in (d), not here. `raw_values=True`
+  opts out, for `probe_skyambient.py`, which measures what VRAD *wrote* and whose transfer law
+  is checked against the very attenuations these fixups rewrite.
+
+  **(c) material reflectivity** — `vtex`'s own average albedo, 3 floats at +32 from the `.tth`'s
+  `VTF\0` marker — decoded alongside every texture and written to the `.mtl` as
+  `reflectivity r g b`. It is the missing input for any reproduction of the bounce gather: the
+  light cache multiplies every one of its 162 rays by the reflectivity of the material it hit
+  (RE-A3). Verified by construction: over `sp_tutorial_1`'s 412 materials the decoded value
+  correlates with the mean **linear** albedo of the decoded texture at **1.0000** (0.9597
+  against the gamma-encoded mean — which is how we know it is a linear average). Range 0.000
+  (`effects/black`) to 0.514 (`glass/brbwndwa`), median 0.117. Nothing in the render path reads
+  it; it is data for C4.
+
+  **(d) de-normalisation before fitting.** `dworldlight_t.intensity` is VRAD's radiance
+  *divided* by the light's own falloff denominator at d = 100 units, so it is not comparable
+  across lights until that is multiplied back. `read_worldlights` now returns `falloff` beside
+  it and `probe_light_calibration.py` applies it. It matters: measured over all 108 maps the
+  denominator takes **13 distinct values from 1 to 80,000** — 10,000 on 16,292 of the 16,702
+  point/spot lights, and something else on the other 410, so those were being fitted up to
+  10,000× off. Types 0/3/5 carry no denominator at all (attn is `(0,0,0)` on every texlight,
+  sun and skyambient in the game — a texlight's intensity comes from its material's emission,
+  a `light_environment` has no attenuation keys), so `falloff` reports **1** for them rather
+  than 0; that keeps `intensity × falloff` correct everywhere without each consumer having to
+  remember which types are which. (b) and (d) land together because (b) rewrites the very
+  attenuations (d) is built from.
+- **C1 — skyambient with magnitude. Done** (2026-07-26). Bake and rig both kept only the
+  type-5 *normalized colour* and threw the magnitude away, against a flat
+  `SKYLIGHT_INTENSITY = 1.0`. The magnitude now travels: `UElysiumLightRig::SkyAmbientMag`
+  beside `SkyAmbient`, and the bake writes it onto the SkyLight actor so the editor carries the
+  map's real data rather than a placeholder.
+
+  RE-A5 makes the derivation need no calibration — a type-5 intensity is a lump-8 luxel value
+  ÷ 255 already, because VRAD divides no falloff out of a `light_environment`. What it needs is
+  a *bridge*, because VtMB's sky is one number and ours is an image. The bridge is one line:
+  **scale the cube so its own average radiance is that number.** `BuildSkyCubeFrom` returns the
+  cube's solid-angle-weighted mean linear radiance over the **upper** hemisphere (the part that
+  lights, since the SkyLight runs `bLowerHemisphereIsBlack`), and the intensity is
+  `magnitude / that`. The modernization — a real IBL with real occlusion — sits entirely in the
+  *distribution*; the *level* stays VtMB's own. No free gain, which is what leaves C4 a
+  measurement rather than a fit.
+
+  Measured on `sp_tutorial_1`: the `la` cube integrates to 0.00335 and the map authors 0.00656,
+  giving intensity **1.955** — the sky delivers about twice what the decoded faces alone would.
+  That the two are the same order of magnitude is the first evidence the units line up at all.
+
+  The magnitude also forced a sidecar fix: `.lights` wrote intensity at **three** decimals, so
+  `sp_tutorial_1`'s 0.006558 came back as 0.007 — a 6.7% error on the map's entire ambient
+  level, and worse on the maps authored near 0.005. It writes six now.
+
+  Range and zeros are as RE-A7 states, re-measured: 25 pair maps, type-5 magnitude 0.00500 to
+  0.09804 (1.28 to 25.00 stored-luxel units), authored to exactly **zero** on `hw_chinese_1` and
+  `sp_observatory_1`, with `hw_cemetery_1` zeroing the sun instead. Zero is honoured as a
+  reading, not defaulted away.
+- **C2 — interior SkyLight policy. Done** (2026-07-26; D2). One function,
+  `AElysiumMapActor::SkyAmbientIntensity`, is the whole policy, and it has three cases and no
+  fallback: **no pair → 0**, **pair authoring zero → 0**, **pair → C1's cube-scaled magnitude**.
+  It runs on every map including the ones with no `.env` and no sky faces at all, because the
+  case it exists to remove — the bake's placeholder constant-fill SkyLight — was precisely what
+  a map with no sky kept.
+
+  "Shows sky" and "is lit by sky" are now genuinely independent, as RE-A7 requires: the flag
+  that draws a backdrop is `.env`'s `skybox`, and the level comes from the rig's type-5 row.
+  41 maps draw sky and are lit by none of it.
+
+  Verified on `sm_hub_1` — the doc's own example, an outdoor night street with **no**
+  `light_environment`: `skyambient 0.00000 -> SkyLight intensity 0.000`. The B6 harness measures
+  what that changed: 3 of its 4 vantages moved (h2 most, 3.20% of pixels, p99 12 levels) and the
+  enclosed `spawn` vantage barely at all (0.05%). The change is real but small — the old flat
+  1.0 against a near-black `pier` cube was contributing little to begin with, which is itself
+  the point: this replaces a term that was arbitrary, not one that was load-bearing.
+
+- **C3 — Lumen art-direction knobs via a per-map PostProcessVolume. Done** (2026-07-26; D3).
+  The bake places one tagged, **unbound** PPV per map (`elysium.ppv`, beside the SkyLight and
+  Fog it pattern-matches) and `AdoptBakedLevel` adopts it. The runtime owns how it *applies* —
+  enabled, unbound, full blend weight — the same way it owns every light's values, because a
+  bounded volume silently doing nothing outside its brush is indistinguishable from a knob that
+  does not work.
+
+  It ships **neutral**: not one `bOverride_` is set, so it changes no pixel. Three cvars reach
+  it live, all on the convention **negative = neutral** (the override is *cleared*, not set to a
+  nominal default, so "not touching this" and "set to what it would have been" stay
+  distinguishable):
+
+  | cvar | what it is | state |
+  |---|---|---|
+  | `elysium.SkylightLeaking` | the sanctioned replacement for VtMB's load-bearing author fill, where Lumen has nothing in the room to bounce off | **works** |
+  | `elysium.SkylightLeakingDistance` | the ramp to full leaking | **works** |
+  | `elysium.LumenDiffuseBoost` | `pow(albedo, boost)` on what the bounce sees — below 1 brightens | **unverified** |
+
+  Measured on `sp_tutorial_1` (frame mean of 255): neutral 80.206 → leaking 0.25 **80.342** →
+  leaking 1.0 **80.763**; adding a 200 m full-leak ramp drops it to **80.500** and a 1 m ramp
+  raises it to **80.885** — monotone, and in the right direction for both (a longer ramp means
+  less leak nearby). Clearing the overrides returns exactly to **80.193**. The mechanism is
+  proven end to end.
+
+  **A correction to D3's payload: Indirect Lighting Intensity cannot do the job it was named
+  for, and is not wired.** It reaches the shaders as `View.PrecomputedIndirectLightingColorScale`
+  — which scales *precomputed* indirect lighting — and **no shader under `Shaders/Private/Lumen/`
+  reads it at all**. Our render path is fully dynamic with no precomputed lighting, so it is a
+  no-op: measured, an `IndirectLightingIntensity` of 3 changed not one pixel. Lumen's own
+  bounce-strength control is `LumenDiffuseColorBoost` (`LumenDiffuseColorBoost.ush`), which is
+  what the third cvar drives instead — but it is carried as **unverified**, not as a working
+  knob: it produced no measurable change here either, live or across a map load, and the reason
+  was not chased. It has no cvar form in 5.8 and is consumed where the surface cache is written,
+  so a live change plausibly cannot re-cache; that is a hypothesis, not a finding. C4/C5 have a
+  proven knob to work with (leaking) and a lead on the second.
+
+  **Ambient Cubemap stays banned**, as D3 says: a flat occlusion-ignoring term is the
+  contrast-killer both Epic and the direction charter warn against.
+
+- **C4 — calibration against the bake. Done** (2026-07-26). `probe_light_calibration.py` grows
+  three things RE-A5 made possible.
+
+  **A provenance gate.** The Unofficial Patch recompiles 20 maps and adds 7 with a later Source
+  VRAD, so 27 of 108 bakes measure a different compiler. The probe now names which it is
+  looking at and says plainly when the absolute half does not apply. (`sp_tutorial_1`, its own
+  default map, is one of the patched ones.)
+
+  **An absolute prediction, with no free gain.** Everything the probe did before was a
+  *relative* fit with a fitted scale `a`. RE-A5 removed the need: a light's contribution to a
+  luxel is determined — `255 · intensity / (const + linear·d + quadratic·d²)`, occlusion-traced,
+  in the units lump 8 stores. So the direct term is **predicted**, and what is left over is not
+  residual noise but a measurement of everything else in the bake.
+
+  The result is the old R² ≈ 0 headline restated in a far stronger form. On both retail maps
+  measured, **direct light does not explain the median lit face at all**:
+
+  | map | baked median | predicted direct | residual median |
+  |---|---|---|---|
+  | `ch_fishmarket_1` | 9.76 | **0.00** (p90 17.06) | 7.18 |
+  | `ch_temple_1` | 3.75 | **0.00** (p90 13.34) | 1.69 |
+
+  The median lit face receives *no unoccluded direct light whatsoever* — 71% of face→light rays
+  are blocked — and its brightness is entirely bounce. This is no longer "a direct model fits
+  badly"; it is "the thing being modelled is not what lit the map."
+
+  **A sky-aperture fit — which does not converge, and that is the finding.** RE-A5 left exactly
+  one thing unpinned: the skyambient's hemisphere weighting, cosine vs uniform, a factor of ~2.
+  The probe now regresses the residual on per-face sky visibility (traced with
+  `probe_skyambient`'s own `SURF_SKY` brush tracer — the distinction matters, since a ray that
+  merely leaves the map is *not* sky, and treating "not in solid" as sky reports 0% openness on
+  every map). It gives **0.45× the uniform ceiling on `ch_fishmarket_1`** — which would be
+  cosine weighting — and **−0.62× on `ch_temple_1`**, which is physically impossible.
+
+  So the aperture is **not identifiable from this data**, and C4 confirms RE-A5's bound rather
+  than closing it. The reason is the one RE-A5 named: on a mostly-enclosed map the faces that
+  see sky are also the faces furthest from the author's fill, so sky visibility carries the
+  fill's sign and not the sky's. Closing it needs a map open enough that the two decorrelate,
+  or a fill-subtracted target — not a better regression.
+
+  What the fit *does* give is the bounce floor in absolute units: **12.13** stored-luxel units
+  on `ch_fishmarket_1` against a median lit face of 9.76, and **18.20** on `ch_temple_1` against
+  3.75. The bounce is not a correction to the map's ambient level — it *is* the map's ambient
+  level.
+
+- **C5 — survey interplay. Done** (2026-07-26). The question was whether the `sm_hub_1`
+  15-light disagreement would dissolve once sky-glow ambience was modelled correctly. **It does
+  not, and the premise is now dead: there is no sky glow on that map to model.** `sm_hub_1`
+  carries **no `light_environment`** — it is one of the 83 — so C2's data-driven policy puts its
+  SkyLight at **zero**, where it previously sat at an arbitrary flat 1.0. Correcting the sky made
+  the sky term *smaller*, so its fill is **more** load-bearing than before, not less. The
+  hypothesis in `light-attribution.md` is strengthened, not resolved.
+
+  B7 does not move it either, though it does clean the sample. `sm_hub_1`'s 60 sky-area
+  worldlights are now out of the world rig — they were being measured as if they lit the map,
+  which is exactly the confound RE-A8 flagged — but every one of them sits at X −3868 to −2497,
+  the miniature's own corner, while the shortlist is the **eastern** strip at X > 7000 (206
+  world lights). **None of the 60 is on the shortlist**, so the 15 disagreements survive B7
+  untouched.
+
+  C4 supplies the frame the adjudication needs: direct light explains ~0% of the median lit
+  face, and the bounce floor *is* the map's ambient level. So the doc's own reading — fill is
+  killable only where GI demonstrably replaces it — is the right one, and the fix is the second
+  gate it proposes rather than a better fill detector. What has changed is that there is now a
+  **sanctioned replacement to gate against**: C3's Skylight Leaking is landed and measured
+  working, which is what D3 reserved for exactly this case. The next step is unchanged and
+  unblocked — adjudicate the 15 by in-engine A/B — but its outcome now has somewhere to go.
+
+## Decisions (all resolved — dated entries in `decisions.md`, 2026-07-26)
+
+| # | Decision | Default per charter |
+|---|---|---|
+| D1 | The faithful-ambience target: lump 8 at the shared vantages, measured — not "looks right". **RE-A4 removed the fork:** there is one bake, keyed by `styles[8]`. **RE-A5 gave the target absolute units** (`stored luxel = 255 · intensity / falloff`), so "measured" now means in known units with no free gain — and the measurement must respect the retail-vs-patch provenance split | **Decided 2026-07-26** (`decisions.md`): reproduce — the measured target, in absolute units, retail bakes only |
+| D2 | SkyLight-as-IBL is a modernization. **RE-A3 makes the divergence exact:** the sky lights the *world* only through lump 8, and lights *models* only as the colour of a sky-hitting bounce ray | **Decided 2026-07-26** (`decisions.md`): data-driven — the actor stays everywhere, intensity from the type-5 magnitude at the RE-A5 scale on the 25 pair maps, **zero** on the 83 without |
+| D3 | Skylight Leaking / a bounce-strength knob — non-physical knobs replacing author fill; adjudicated like the light survey (does it serve the direction?). **C3 corrects the second one:** Indirect Lighting Intensity scales *precomputed* indirect only and no Lumen shader reads it, so it is a no-op on this render path; Lumen's own control is `LumenDiffuseColorBoost` | **Decided 2026-07-26** (`decisions.md`): mechanism lands now with neutral defaults; a non-neutral value only on a measured C4/C5 deficit, one dated entry per map |
+| D4 | Fog model: exponential height + volumetric vs Source's planar distance fog (existing accepted divergence — formalise it). **B8b amends it:** the two fogs share screen depth (measured), so no engine-side mechanism can scope them and the exponential height fog cannot be the distance fog | **Decided 2026-07-26**, **amended 2026-07-26** (`decisions.md`): the RE scoping stands — world fog from `worldspawn`, `sky_camera` fog on the miniature only, the backdrop never fogged — but the distance fog is now Source's own linear model as a per-primitive material term, and the height fog keeps the volumetric layer alone |
+| D5 | Enhanced (upscaled) sky faces as default-off A/B layer | **Decided 2026-07-26** (`decisions.md`): modernize behind the toggle, with B5's absolute-texel-preservation acceptance check |
+| D6 | Multi-`light_environment` maps: sum vs first-wins (we currently do silent **last**-wins). **RE-A3 settled the runtime: first-wins, never summed**, for both halves of the pair. **RE-A5 settles the bake and shrinks the decision to nothing:** VRAD resolves the skyambient once, globally, first-entity-wins and writes that same value into every type-5 row, so the ambient half is moot by construction; the sun half is observable on `sp_observatory_2` alone (RE-A7), where summing vs first-wins moves the sun from 3.1% to 5.7% of the median lit face | **No decision needed** — adopt first-wins (C0a), which matches runtime and bake and changes no number |
+| D7 | **Sky backdrop brightness.** RE-A9 makes the faithful transfer exact — a sky pixel is the decoded texel, unscaled and unfogged — so `M_Sky`'s `Brightness 4` is a divergence, not a pending calibration | **Decided 2026-07-26** (`decisions.md`): parity is the shipped default — B4 calibrates the displayed-parity value under our tonemapper — and the multiplier survives only as an `elysium.*` debug cvar; any night-sky lift goes through the D3 knobs, never the backdrop |
+
+## Sequencing
+
+**Phase A is finished except for the owner-run captures** (RE-A6), and **Phases B and C have
+landed** — every task B1–B8b and C0–C5 is done. What is still open, named rather than quietly
+dropped:
+
+- **The volumetric fog layer is uncalibrated.** B8b took the distance fog off the
+  `ExponentialHeightFog` actor and into a per-primitive material term, which leaves the actor
+  owning only the volumetric haze and light shafts. At the density it still carries (`3/end`,
+  which the engine divides by 1000 again) that layer is near-invisible, so the modernization D4
+  sanctioned is present as a mechanism and not yet as a look. Calibrating it is its own task, and
+  it can now be done freely: the distance fog no longer rides on the same number.
+- **A decal does not follow `elysium.Fog`, and needs a re-bake rather than a reload.** Its fog is
+  bound into its baked material instance because a `UDecalComponent` carries no custom primitive
+  data. Correct per map, but not live-tunable with the rest.
+- **The skyambient's hemisphere aperture** stays open, and C4 explains why it is not merely
+  unmeasured but *unidentifiable* from this data: on an enclosed map the faces that see sky are
+  the faces furthest from the author's fill, so sky visibility carries the fill's sign. RE-A5
+  bounded it at a factor of ~2 and C4 confirms that bound rather than closing it.
+
+What the two phases changed, in one line each: the backdrop draws correctly and at parity (B3,
+B1, B4); the whole 3D skybox is real geometry rather than debris in the playable world (B7);
+world fog comes from `worldspawn` and never touches the backdrop (B8); the world and the
+miniature each take their own authored fog, per primitive, in Source's own linear model (B8b); a
+sky regression is a number, with its noise floor measured (B6); the lump-15 corrections and the material reflectivity the bounce needs are in the
+pipeline (C0); the sky light's level is the map's own authored radiance, zero on the 83 maps
+that authored none (C1, C2); the art-direction knob that can replace load-bearing fill is landed
+and measured (C3); and the bake is now measured in absolute units, which says direct light
+explains ~0% of a median lit face and the bounce floor *is* the ambient level (C4, C5).

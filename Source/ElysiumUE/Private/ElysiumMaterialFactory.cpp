@@ -1,6 +1,7 @@
 #include "ElysiumMaterialFactory.h"
 
 #include "ElysiumObjModel.h"
+#include "ElysiumReflections.h"
 #include "ElysiumTextureCache.h"
 #include "Engine/Texture2D.h"
 #include "HAL/IConsoleManager.h"
@@ -45,8 +46,16 @@ namespace
 	const FName EmissiveScaleParam(TEXT("EmissiveScale"));
 	const FName BumpMapParam(TEXT("BumpMap"));
 	const FName BumpAmountParam(TEXT("BumpAmount"));
-	const FName EnvMaskParam(TEXT("EnvMask"));
-	const FName EnvStrengthParam(TEXT("EnvStrength"));
+	// The reflection channel's names live in ElysiumReflections.h, shared with the map actor's
+	// live overrides and the tests, so a rename cannot drift between the three.
+	const FName& EnvMaskParam = ElysiumReflections::Params::EnvMask;
+	const FName& EnvStrengthParam = ElysiumReflections::Params::EnvStrength;
+	const FName& EnvTintParam = ElysiumReflections::Params::EnvTint;
+	const FName& MetalMaskParam = ElysiumReflections::Params::MetalMask;
+	const FName& RoughBaseParam = ElysiumReflections::Params::RoughBase;
+	const FName& RoughReflectParam = ElysiumReflections::Params::RoughReflect;
+	const FName& SpecBaseParam = ElysiumReflections::Params::SpecBase;
+	const FName& SpecReflectParam = ElysiumReflections::Params::SpecReflect;
 	const FName BaseTex2Param(TEXT("BaseTex2"));
 	const FName BlendAmountParam(TEXT("BlendAmount"));
 
@@ -142,9 +151,11 @@ UMaterialInstanceDynamic* FElysiumMaterialFactory::Build(const FElysiumMaterialD
 		}
 	}
 
-	// $envmap: the modern Lumen path. The mask's .r lowers Roughness so the fully-dynamic Lumen
-	// reflection appears (roadmap 7.5 tunes it). A reflective surface with no $envmapmask reflects
-	// uniformly, so a 1x1 white mask stands in. Masks are linear reflectivity, not colour.
+	// $envmap: the modern Lumen path. The mask's .r raises the reflection channel -- Roughness
+	// down, Specular up -- so the fully-dynamic Lumen reflection appears. A reflective surface
+	// with no $envmapmask reflects uniformly, so a 1x1 white mask stands in. Masks are linear
+	// reflectivity, not colour. Non-reflective surfaces never enter here, so they keep the
+	// master's Lambert base (RoughBase 1 / SpecBase 0). Full term: docs/reflections.md.
 	if (Def && Def->bEnvmap)
 	{
 		UTexture2D* Mask = Def->EnvMask.IsEmpty()
@@ -155,6 +166,22 @@ UMaterialInstanceDynamic* FElysiumMaterialFactory::Build(const FElysiumMaterialD
 			Mid->SetTextureParameterValue(EnvMaskParam, Mask);
 			Mid->SetScalarParameterValue(EnvStrengthParam,
 				FMath::Max(0.f, CVarEnvReflect.GetValueOnAnyThread()));
+			Mid->SetScalarParameterValue(RoughBaseParam, ElysiumReflections::RoughBase);
+			Mid->SetScalarParameterValue(RoughReflectParam, ElysiumReflections::RoughReflect);
+			Mid->SetScalarParameterValue(SpecBaseParam, ElysiumReflections::SpecBase);
+			// Grey $envmaptint dims the reflection; a chromatic one names a metal, whose
+			// reflection colour lives in BaseColor via MetalMask + EnvTint. Specular is
+			// ignored once Metallic is up, so the two paths do not overlap.
+			if (Def->IsChromatic())
+			{
+				Mid->SetScalarParameterValue(MetalMaskParam, 1.f);
+				Mid->SetVectorParameterValue(EnvTintParam, Def->EnvTint);
+			}
+			else
+			{
+				Mid->SetScalarParameterValue(SpecReflectParam,
+					ElysiumReflections::SpecReflect * Def->TintLuma());
+			}
 		}
 	}
 

@@ -31,7 +31,13 @@ class MatDef(object):
     and binds the same named parameters the runtime factory does."""
 
     __slots__ = ("name", "albedo", "emissive", "bump", "env_mask", "base_tex2",
-                 "scissor", "blend", "additive", "envmap", "decal", "color")
+                 "scissor", "blend", "additive", "envmap", "env_tint", "decal", "color")
+
+    # Channel spread above which an $envmaptint counts as CHROMATIC rather than a grey
+    # dim-down. The population is bimodal -- 361 of the game's 362 grey tints sit at exactly
+    # zero spread and the next value up is 0.05 -- so this separates them with a clear gap on
+    # either side rather than splitting a continuum (docs/reflections.md).
+    CHROMATIC_SPREAD = 0.02
 
     def __init__(self, name):
         self.name = name
@@ -44,6 +50,7 @@ class MatDef(object):
         self.blend = False        # blend 1    -> translucent master
         self.additive = False     # additive 1 -> additive master
         self.envmap = False
+        self.env_tint = (1.0, 1.0, 1.0)   # envtint -> $envmaptint, white when unauthored
         self.decal = False        # decal 1    -> deferred-decal master
         self.color = (0.6, 0.6, 0.65)
 
@@ -51,6 +58,24 @@ class MatDef(object):
     def opaque(self):
         """True when this surface can carry Nanite (Nanite is opaque/masked only)."""
         return not (self.blend or self.additive)
+
+    @property
+    def chromatic(self):
+        """True when $envmaptint names a metal: VtMB's own hand-authored metal mask.
+
+        Translucent and additive surfaces are excluded even when their tint is chromatic --
+        the blue/teal tints in that population are coloured GLASS, which stays dielectric.
+        Metalness is never inferred here; it is read off the game's own authoring."""
+        if not self.envmap or not self.opaque:
+            return False
+        return max(self.env_tint) - min(self.env_tint) >= self.CHROMATIC_SPREAD
+
+    @property
+    def tint_luma(self):
+        """The grey half of $envmaptint, as a reflection-strength scale. Rec.709 luma of the
+        authored tint; 1.0 when unauthored, so it is neutral by construction."""
+        r, g, b = self.env_tint
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
 
 def read_mtl(path):
@@ -88,6 +113,8 @@ def read_mtl(path):
                 cur.env_mask = tok[1]
             elif key == "envmap" and len(tok) >= 2:
                 cur.envmap = True
+            elif key == "envtint" and len(tok) >= 4:
+                cur.env_tint = (float(tok[1]), float(tok[2]), float(tok[3]))
             elif key == "basetex2" and len(tok) >= 2:
                 cur.base_tex2 = tok[1]
             elif key == "Kd" and len(tok) >= 4:

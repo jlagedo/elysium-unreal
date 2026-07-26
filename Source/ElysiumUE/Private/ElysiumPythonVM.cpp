@@ -4,6 +4,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumPythonEntity.h"
+#include "ElysiumScriptFS.h"
 #include "ElysiumScriptHost.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/IConsoleManager.h"
@@ -193,9 +194,71 @@ namespace
 		Py_RETURN_NONE;
 	}
 
+	// --- the script filesystem natives (FElysiumScriptFS) --------------------------------------
+	// The VM's file layer is a path rewriter, not a file implementation: these hand back a real path
+	// and the shim then calls the real `open`/`nt.*` on it, so script code keeps getting genuine
+	// `file` objects (readlines, binary mode, seek/truncate all work unchanged).
+
+	PyObject* Vampire_fs_resolve(PyObject* /*Self*/, PyObject* Args)
+	{
+		const char* Path = nullptr;
+		const char* Mode = "r";
+		if (!PyArg_ParseTuple(Args, "s|s", &Path, &Mode))
+		{
+			return nullptr;
+		}
+		FString Real, Err;
+		const EElysiumFsAccess Access = FElysiumScriptFS::AccessFromMode(UTF8_TO_TCHAR(Mode));
+		if (!FElysiumScriptFS::Resolve(UTF8_TO_TCHAR(Path), Access, Real, Err))
+		{
+			// Only a sandbox escape lands here. The shim re-raises this as OSError for the `nt.*`
+			// callers, because fileutil catches `nt.error` and IOError is its sibling, not its base.
+			PyErr_SetString(PyExc_IOError, TCHAR_TO_UTF8(*Err));
+			return nullptr;
+		}
+		return PyString_FromString(TCHAR_TO_UTF8(*Real));
+	}
+
+	PyObject* Vampire_fs_getcwd(PyObject* /*Self*/, PyObject* /*Args*/)
+	{
+		return PyString_FromString(TCHAR_TO_UTF8(*FElysiumScriptFS::VirtualRoot()));
+	}
+
+	PyObject* Vampire_fs_listdir(PyObject* /*Self*/, PyObject* Args)
+	{
+		const char* Path = nullptr;
+		if (!PyArg_ParseTuple(Args, "s", &Path))
+		{
+			return nullptr;
+		}
+		TArray<FString> Names;
+		FString Err;
+		if (!FElysiumScriptFS::ListDir(UTF8_TO_TCHAR(Path), Names, Err))
+		{
+			PyErr_SetString(PyExc_IOError, TCHAR_TO_UTF8(*Err));
+			return nullptr;
+		}
+		PyObject* List = PyList_New(Names.Num());
+		if (!List)
+		{
+			return nullptr;
+		}
+		for (int32 i = 0; i < Names.Num(); ++i)
+		{
+			PyList_SET_ITEM(List, i, PyString_FromString(TCHAR_TO_UTF8(*Names[i]))); // steals
+		}
+		return List;
+	}
+
 	PyMethodDef VampireMethods[] =
 	{
 		{ "_log", Vampire_log, METH_VARARGS, "internal: route Python stdout/stderr to the UE log" },
+		{ "_fs_resolve", Vampire_fs_resolve, METH_VARARGS,
+			"internal: rewrite a VM-space path to a real one (raises IOError outside the sandbox)" },
+		{ "_fs_getcwd", Vampire_fs_getcwd, METH_NOARGS,
+			"internal: the VM's virtual install root -- what nt.getcwd() answers" },
+		{ "_fs_listdir", Vampire_fs_listdir, METH_VARARGS,
+			"internal: the overlay+mirror union listing for a virtual directory" },
 		{ nullptr, nullptr, 0, nullptr }
 	};
 
@@ -236,6 +299,64 @@ namespace
 		return ElysiumPy::InstallEntityBindings(Module, OutError);
 	}
 
+	// The file-layer shim (FElysiumScriptFS). VtMB's scripts spell paths three ways and only one of
+	// them calls a function an embedder can redirect, so the interception has to sit under `open`
+	// and the `nt` surface rather than over `getcwd`. Every wrapper does the same thing: rewrite the
+	// path through `vampire._fs_resolve`, then call the original — script code keeps getting real
+	// `file` objects, and the whole policy stays in C++.
+	//
+	// Installed before the main bootstrap so nothing can touch a file unshimmed, and wrapped in a
+	// function because this runs in `__main__` — the bus every script name resolves against, which
+	// must not collect the loop temporaries.
+	const char* const FS_SHIM =
+		"import sys, nt, __builtin__, vampire\n"
+		"sys.moddir = 'Vampire'\n"
+		"def _elysium_install_fs():\n"
+		"    _resolve = vampire._fs_resolve\n"
+		"    _real_open = __builtin__.open\n"
+		"    def _open(name, mode='r', *rest):\n"
+		"        return _real_open(_resolve(name, mode), mode, *rest)\n"
+		"    __builtin__.open = _open\n"
+		// _fs_resolve raises IOError; `nt.*` callers catch `nt.error` (OSError), and the two are
+		// siblings under EnvironmentError, not parent and child -- so fileutil's `except nt.error`
+		// would let a denial through. Re-raise per surface.
+		"    def _res_nt(path, mode):\n"
+		"        try:\n"
+		"            return _resolve(path, mode)\n"
+		"        except IOError as e:\n"
+		"            raise OSError(str(e))\n"
+		"    def _wrap(fn, mode):\n"
+		"        def w(path, *a): return fn(_res_nt(path, mode), *a)\n"
+		"        return w\n"
+		"    def _wrap2(fn, m1, m2):\n"
+		"        def w(src, dst, *a): return fn(_res_nt(src, m1), _res_nt(dst, m2), *a)\n"
+		"        return w\n"
+		// `access` resolves for read on purpose: its one caller guards it with `isFile(dst)`
+		// (fileutil.py:134), so the path that reaches it already exists, and answering against the
+		// mirror copy reports the writability of the write that will actually happen -- into the
+		// overlay. Resolving it for write would answer about a file that is not there yet and turn
+		// every hunter-mode copy into a spurious "readonly" bail.
+		"    for _n, _m in (('stat','r'), ('lstat','r'), ('access','r'), ('utime','w'),\n"
+		"                   ('mkdir','w'), ('rmdir','w'), ('unlink','w'), ('remove','w'), ('chmod','w')):\n"
+		"        if hasattr(nt, _n): setattr(nt, _n, _wrap(getattr(nt, _n), _m))\n"
+		"    if hasattr(nt, 'rename'): nt.rename = _wrap2(nt.rename, 'r', 'w')\n"
+		"    nt.listdir = vampire._fs_listdir\n"
+		"    nt.getcwd = vampire._fs_getcwd\n"
+		"    def _chdir(path): pass\n" // the sandbox has one cwd; no shipped script calls this
+		"    nt.chdir = _chdir\n"
+		// `os` copies nt's names by value at import time, so a copy taken before now would keep the
+		// unshimmed ones. ntpath/genericpath call through `os.` dynamically, so fixing os fixes
+		// os.path.exists with it.
+		"    if 'os' in sys.modules:\n"
+		"        _os = sys.modules['os']\n"
+		"        for _n in ('stat','lstat','access','utime','mkdir','rmdir','unlink','remove',\n"
+		"                   'chmod','rename','listdir','getcwd','chdir'):\n"
+		"            if hasattr(_os, _n): setattr(_os, _n, getattr(nt, _n))\n"
+		"if not hasattr(nt, '_elysium_fs'):\n"
+		"    _elysium_install_fs()\n"
+		"    nt._elysium_fs = 1\n"
+		"del _elysium_install_fs\n";
+
 	// The bootstrap: star-import the `vampire` module into `__main__` (python_bridge.md — there is
 	// no `import vampire` in any script; everything reaches the engine through `__main__`), then
 	// stand up what is still missing.
@@ -246,9 +367,9 @@ namespace
 	// tutorial.py's `from vamputil import *` pulls in the real `unhidePlus`/`setPlus`/`IsClan`/...
 	// The `IsClan` binding here is a pre-import fallback so tutorial's `if __main__.IsClan or ...`
 	// guard (what triggers that import) short-circuits true before it reaches `IsIdling`; the merge
-	// then overrides both with vamputil's real definitions. `sys.moddir` + the `nt.getcwd` redirect
-	// are appended below (they need the runtime content-root path), so vamputil's file-touching
-	// helpers (FixKeyBindings reads cfg/config.cfg) resolve into out/ instead of raising.
+	// then overrides both with vamputil's real definitions. The FS_SHIM above has already given the
+	// VM its own filesystem namespace, so vamputil's file-touching helpers (FixKeyBindings reads
+	// cfg/config.cfg) resolve into the content mirror instead of raising.
 	const char* const BOOTSTRAP =
 		"import sys, vampire, __main__\n"
 		"class _Log(object):\n"
@@ -388,6 +509,18 @@ bool FElysiumPythonVM::EnsureStarted(FString& OutError)
 		return false;
 	}
 
+	// Point VtMB's file layer at the script filesystem before anything can touch a file. The VM gets
+	// its own namespace -- reads served from the content mirror, writes into a Saved/ overlay -- so
+	// all three of the scripts' path spellings resolve, and the UE process cwd stays where the
+	// engine put it (FElysiumScriptFS explains why moving it is not on the table).
+	FElysiumScriptFS::EnsureOverlayRoot();
+	FString FsErr;
+	if (!RunRaw(FString(ANSI_TO_TCHAR(FS_SHIM)), FsErr))
+	{
+		OutError = FString::Printf(TEXT("script filesystem shim failed: %s"), *FsErr);
+		return false;
+	}
+
 	// Shared level-script root on sys.path (per-map dirs are added by LoadLevelScript).
 	const FString ScriptsDir = FPaths::ConvertRelativePathToFull(
 		FPaths::Combine(FPaths::ProjectDir(), TEXT("tools/out/scripts"))).Replace(TEXT("\\"), TEXT("/"));
@@ -398,22 +531,6 @@ bool FElysiumPythonVM::EnsureStarted(FString& OutError)
 	{
 		OutError = FString::Printf(TEXT("bootstrap failed: %s"), *OutError);
 		return false;
-	}
-
-	// Point VtMB's file layer at the content mirror. Its scripts resolve files as
-	// `nt.getcwd() + "\\" + sys.moddir + "\\<tree>\\..."` (FixKeyBindings reads cfg/config.cfg;
-	// others touch vdata/scripts). Set moddir to "." and redirect the VM's `nt.getcwd` to the
-	// absolute out/ root, so those compose to out/<tree>/... . Contained to the interpreter — the
-	// UE process cwd is untouched. (moddir-relative-only paths, e.g. the haven-PC write, are not
-	// covered; they error-to-false, which on sp_tutorial_1 is post-Enable and inconsequential.)
-	const FString OutRoot = FPaths::ConvertRelativePathToFull(FElysiumContentPaths::Root())
-		.Replace(TEXT("\\"), TEXT("/"));
-	FString RedirectErr;
-	if (!RunRaw(FString::Printf(
-			TEXT("import sys, nt\nsys.moddir = '.'\n_elysium_root = u'%s'\nnt.getcwd = lambda: _elysium_root\n"),
-			*OutRoot), RedirectErr))
-	{
-		UE_LOG(LogElysiumPy, Warning, TEXT("file-root redirect failed (VtMB file I/O may raise): %s"), *RedirectErr);
 	}
 
 	// Seed the console alias/cvar store from out/cfg and wire its Python fallthrough back to us, so

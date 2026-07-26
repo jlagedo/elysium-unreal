@@ -26,6 +26,7 @@
 #include "ElysiumObjModel.h"
 #include "ElysiumPythonVM.h"
 #include "ElysiumRopes.h"
+#include "ElysiumScriptFS.h"
 #include "ElysiumScriptHost.h"
 #include "ElysiumVariant.h"
 
@@ -172,6 +173,140 @@ bool FElysiumConsoleTest::RunTest(const FString&)
 	{
 		TestEqual(TEXT("engine command reached the sink"), Fell[0], FString(TEXT("-speed")));
 	}
+
+	return true;
+}
+
+// =====================================================================================
+// FElysiumScriptFS — the embedded VM's filesystem namespace. The path policy is pure string
+// work, so all of it tests here with no VM, no content and no filesystem: normalization,
+// the moddir fold, the sandbox denial, and the three path styles VtMB's scripts actually use.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScriptFSTest, "Elysium.Substrate.ScriptFS", GElysiumTestFlags)
+bool FElysiumScriptFSTest::RunTest(const FString&)
+{
+	const FString Root = FElysiumScriptFS::VirtualRoot();
+	FString Rel;
+
+	// --- the three spellings all land on the same sandbox-relative form ---------------------
+	// Style A (vamputil.FixKeyBindings): getcwd() + "\\" + moddir + "\\cfg\\config.cfg".
+	TestTrue(TEXT("style A normalizes"),
+		FElysiumScriptFS::NormalizeToSandbox(Root + TEXT("\\Vampire\\cfg\\config.cfg"), Rel));
+	TestEqual(TEXT("style A -> cfg/config.cfg"), Rel, FString(TEXT("cfg/config.cfg")));
+
+	// Style B (vamputil.setPlus): moddir + "/vdata/...", relative, forward slashes.
+	TestTrue(TEXT("style B normalizes"),
+		FElysiumScriptFS::NormalizeToSandbox(TEXT("Vampire/vdata/hackterminals/haven_pc.txt"), Rel));
+	TestEqual(TEXT("style B -> vdata/..."), Rel,
+		FString(TEXT("vdata/hackterminals/haven_pc.txt")));
+
+	// Style C (zvtool.zdumpg): bare relative, no moddir and no getcwd at all.
+	TestTrue(TEXT("style C normalizes"),
+		FElysiumScriptFS::NormalizeToSandbox(TEXT("zvtool_g_dump.txt"), Rel));
+	TestEqual(TEXT("style C -> sandbox root"), Rel, FString(TEXT("zvtool_g_dump.txt")));
+
+	// The moddir fold is what makes A and a bare tree path the same file, not two.
+	TestTrue(TEXT("bare tree path normalizes"),
+		FElysiumScriptFS::NormalizeToSandbox(TEXT("cfg/config.cfg"), Rel));
+	TestEqual(TEXT("moddir-less spelling folds together with A"), Rel,
+		FString(TEXT("cfg/config.cfg")));
+
+	// Only the FIRST component, and only one: a `Vampire` deeper in a tree is a real directory.
+	TestTrue(TEXT("nested moddir name survives"),
+		FElysiumScriptFS::NormalizeToSandbox(TEXT("Vampire/vdata/Vampire/x.txt"), Rel));
+	TestEqual(TEXT("only the leading moddir folds"), Rel, FString(TEXT("vdata/Vampire/x.txt")));
+
+	// --- normalization detail ---------------------------------------------------------------
+	TestTrue(TEXT("mixed separators + dot segments"),
+		FElysiumScriptFS::NormalizeToSandbox(TEXT("Vampire\\vdata/./items\\..\\system/x.txt"), Rel));
+	TestEqual(TEXT("dot segments collapse"), Rel, FString(TEXT("vdata/system/x.txt")));
+
+	TestTrue(TEXT("a leading separator reads as sandbox-relative"),
+		FElysiumScriptFS::NormalizeToSandbox(TEXT("/cfg/config.cfg"), Rel));
+	TestEqual(TEXT("leading separator -> cfg/config.cfg"), Rel, FString(TEXT("cfg/config.cfg")));
+
+	// --- the one hard denial: leaving the sandbox --------------------------------------------
+	TestFalse(TEXT("climbing out is denied"),
+		FElysiumScriptFS::NormalizeToSandbox(TEXT("../../../Windows/system32/x.dll"), Rel));
+	TestFalse(TEXT("climbing out through the moddir is denied"),
+		FElysiumScriptFS::NormalizeToSandbox(TEXT("Vampire/../../x"), Rel));
+	TestFalse(TEXT("a foreign absolute path is denied"),
+		FElysiumScriptFS::NormalizeToSandbox(TEXT("C:\\Windows\\system32\\x.dll"), Rel));
+	TestFalse(TEXT("a UNC path is denied"),
+		FElysiumScriptFS::NormalizeToSandbox(TEXT("\\\\server\\share\\x"), Rel));
+	TestFalse(TEXT("empty is denied"), FElysiumScriptFS::NormalizeToSandbox(TEXT(""), Rel));
+	// A sibling directory whose name merely starts with the root's is not inside it.
+	TestFalse(TEXT("root-prefixed sibling is denied"),
+		FElysiumScriptFS::NormalizeToSandbox(Root + TEXT("Other\\x"), Rel));
+
+	// --- mode -> access ----------------------------------------------------------------------
+	// `w`/`w+` truncate (nothing to carry over); `a`, `a+`, `r+` keep the existing bytes and so
+	// need the mirror's copy brought up into the overlay first.
+	TestTrue(TEXT("r reads"),
+		FElysiumScriptFS::AccessFromMode(TEXT("r")) == EElysiumFsAccess::Read);
+	TestTrue(TEXT("rb reads"),
+		FElysiumScriptFS::AccessFromMode(TEXT("rb")) == EElysiumFsAccess::Read);
+	TestTrue(TEXT("empty mode reads"),
+		FElysiumScriptFS::AccessFromMode(TEXT("")) == EElysiumFsAccess::Read);
+	TestTrue(TEXT("w writes"),
+		FElysiumScriptFS::AccessFromMode(TEXT("w")) == EElysiumFsAccess::Write);
+	TestTrue(TEXT("wb writes"),
+		FElysiumScriptFS::AccessFromMode(TEXT("wb")) == EElysiumFsAccess::Write);
+	TestTrue(TEXT("w+ truncates, so it writes rather than updates"),
+		FElysiumScriptFS::AccessFromMode(TEXT("w+")) == EElysiumFsAccess::Write);
+	TestTrue(TEXT("a updates"),
+		FElysiumScriptFS::AccessFromMode(TEXT("a")) == EElysiumFsAccess::Update);
+	TestTrue(TEXT("rb+ updates"),
+		FElysiumScriptFS::AccessFromMode(TEXT("rb+")) == EElysiumFsAccess::Update);
+
+	// --- the mount table ---------------------------------------------------------------------
+	// The trees the offline pipeline mirrors resolve; the ones it does not are reported as absent
+	// rather than mapped somewhere wrong. VtMB's own `scripts/` (kb_act.lst) is NOT out/scripts —
+	// that is its `python/` tree — which is why hunter mode's keybinding copy finds nothing.
+	FString Real;
+	TestTrue(TEXT("cfg is mounted"), FElysiumScriptFS::MapToMirror(TEXT("cfg/config.cfg"), Real));
+	TestTrue(TEXT("cfg maps under out/cfg"), Real.Replace(TEXT("\\"), TEXT("/"))
+		.Contains(TEXT("tools/out/cfg/config.cfg")));
+	TestTrue(TEXT("vdata is mounted"),
+		FElysiumScriptFS::MapToMirror(TEXT("vdata/system/stats.txt"), Real));
+	TestTrue(TEXT("vdata maps under out/vdata"), Real.Replace(TEXT("\\"), TEXT("/"))
+		.Contains(TEXT("tools/out/vdata/system/stats.txt")));
+	TestTrue(TEXT("vdata/signs is mounted ahead of vdata"),
+		FElysiumScriptFS::MapToMirror(TEXT("vdata/signs/death.txt"), Real));
+	TestTrue(TEXT("signs maps under out/signs, not out/vdata"), Real.Replace(TEXT("\\"), TEXT("/"))
+		.Contains(TEXT("tools/out/signs/death.txt")));
+	TestTrue(TEXT("python maps onto out/scripts"),
+		FElysiumScriptFS::MapToMirror(TEXT("python/tutorial/tutorial.py"), Real));
+	TestTrue(TEXT("python -> out/scripts"), Real.Replace(TEXT("\\"), TEXT("/"))
+		.Contains(TEXT("tools/out/scripts/tutorial/tutorial.py")));
+	TestTrue(TEXT("a mount point itself resolves (nt.listdir on a tree)"),
+		FElysiumScriptFS::MapToMirror(TEXT("cfg"), Real));
+	TestFalse(TEXT("VtMB's own scripts/ has no mirror"),
+		FElysiumScriptFS::MapToMirror(TEXT("scripts/kb_act.lst"), Real));
+	TestFalse(TEXT("materials/ has no mirror (baked offline)"),
+		FElysiumScriptFS::MapToMirror(TEXT("materials/hud/new_ui/bloodbar.vmt"), Real));
+	TestFalse(TEXT("maps/ has no mirror"), FElysiumScriptFS::MapToMirror(TEXT("maps/x.bsp"), Real));
+
+	// --- resolve: reads may fall to the mirror, writes never do ------------------------------
+	// Root() is regenerable pipeline output; a script write into it would vanish on the next
+	// export. Every write lands in the Saved/ overlay instead.
+	FString Err;
+	TestTrue(TEXT("a write resolves"), FElysiumScriptFS::Resolve(
+		TEXT("Vampire/vdata/hackterminals/haven_pc.txt"), EElysiumFsAccess::Write, Real, Err));
+	TestTrue(TEXT("the write landed in the overlay"), Real.StartsWith(Root));
+	TestFalse(TEXT("the write did NOT land in the content mirror"),
+		Real.Replace(TEXT("\\"), TEXT("/")).Contains(TEXT("tools/out/vdata")));
+
+	TestFalse(TEXT("an escaping write is denied"), FElysiumScriptFS::Resolve(
+		TEXT("../../../Windows/system32/x.dll"), EElysiumFsAccess::Write, Real, Err));
+	TestTrue(TEXT("the denial carries a reason"), !Err.IsEmpty());
+
+	// A permitted-but-missing path still resolves — the scripts branch on missing files
+	// (`fileutil.isFile(...lip)` gating a dialogue line), so they must keep getting the OS error
+	// rather than an exception from us.
+	TestTrue(TEXT("an unmirrored read still resolves"), FElysiumScriptFS::Resolve(
+		TEXT("Vampire/models/nothing_here.mdl"), EElysiumFsAccess::Read, Real, Err));
 
 	return true;
 }
@@ -593,10 +728,27 @@ bool FElysiumWorldMaterialsTest::RunTest(const FString&)
 	Lines.Add(TEXT("newmtl marble"));
 	Lines.Add(TEXT("map_Kd tex/marble.png"));
 	Lines.Add(TEXT("envmap cubemapdefault"));
+	// 7.5 — a grey $envmaptint: a reflection-strength dim-down, not a metal
+	Lines.Add(TEXT("newmtl dimtile"));
+	Lines.Add(TEXT("map_Kd tex/dimtile.png"));
+	Lines.Add(TEXT("envmap cubemapdefault"));
+	Lines.Add(TEXT("envtint 0.5000 0.5000 0.5000"));
+	// 7.5 — a chromatic $envmaptint: VtMB naming a metal (brass)
+	Lines.Add(TEXT("newmtl brassrail"));
+	Lines.Add(TEXT("map_Kd tex/brassrail.png"));
+	Lines.Add(TEXT("envmap env_cubemap"));
+	Lines.Add(TEXT("envmapmask tex/brassrail_envmask.png"));
+	Lines.Add(TEXT("envtint 0.6500 0.5000 0.0000"));
+	// 7.5 — a chromatic tint on a TRANSLUCENT surface is coloured glass, which stays dielectric
+	Lines.Add(TEXT("newmtl bluepane"));
+	Lines.Add(TEXT("map_Kd tex/bluepane.png"));
+	Lines.Add(TEXT("blend 1"));
+	Lines.Add(TEXT("envmap env_cubemap"));
+	Lines.Add(TEXT("envtint 0.5000 0.6000 0.9000"));
 
 	TMap<FString, FElysiumMaterialDef> Mats;
 	FElysiumObjModel::ParseMtlLines(Lines, Mats);
-	TestEqual(TEXT("five materials parsed"), Mats.Num(), 5);
+	TestEqual(TEXT("eight materials parsed"), Mats.Num(), 8);
 
 	if (const FElysiumMaterialDef* B = Mats.Find(TEXT("brick")))
 	{
@@ -623,6 +775,30 @@ bool FElysiumWorldMaterialsTest::RunTest(const FString&)
 	if (const FElysiumMaterialDef* M = Mats.Find(TEXT("marble")))
 	{
 		TestTrue(TEXT("marble is reflective with no explicit mask"), M->bEnvmap && M->EnvMask.IsEmpty());
+		// An unauthored $envmaptint is white, so the grey path is a multiply by 1.
+		TestEqual(TEXT("marble tint defaults to white"), M->EnvTint, FLinearColor::White);
+		TestEqual(TEXT("marble tint luma is unity"), M->TintLuma(), 1.f, 1e-4f);
+		TestFalse(TEXT("marble is not a metal"), M->IsChromatic());
+	}
+	// 7.5 — $envmaptint splits two ways, and the split is what decides Metallic. The population
+	// is bimodal (docs/reflections.md), so these are the two sides plus the glass exclusion.
+	if (const FElysiumMaterialDef* D = Mats.Find(TEXT("dimtile")))
+	{
+		TestFalse(TEXT("a grey tint is not a metal"), D->IsChromatic());
+		TestEqual(TEXT("grey tint luma dims the reflection"), D->TintLuma(), 0.5f, 1e-3f);
+	}
+	if (const FElysiumMaterialDef* Br = Mats.Find(TEXT("brassrail")))
+	{
+		TestTrue(TEXT("a chromatic tint on an opaque surface is a metal"), Br->IsChromatic());
+		TestEqual(TEXT("brass tint parsed"), Br->EnvTint, FLinearColor(0.65f, 0.5f, 0.f));
+	}
+	if (const FElysiumMaterialDef* Bp = Mats.Find(TEXT("bluepane")))
+	{
+		// Chromatic, but translucent: coloured glass, not brass. Metalness comes off VtMB's own
+		// authoring, and a $translucent surface is never it.
+		TestTrue(TEXT("bluepane tint is chromatic"),
+			(Bp->EnvTint.B - Bp->EnvTint.R) >= FElysiumMaterialDef::ChromaticSpread);
+		TestFalse(TEXT("tinted glass stays dielectric"), Bp->IsChromatic());
 	}
 	return true;
 }

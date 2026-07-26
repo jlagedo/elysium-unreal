@@ -213,6 +213,14 @@ private:
 	bool bPropsVisible = true;
 	bool bSkyVisible = true;
 
+	// One MID per unique baked material, standing in front of the level's own instances so the
+	// look-tuning cvars reach real surfaces. The bake authors MaterialInstanceConstants; a
+	// constant has no runtime setter, so without this every elysium.* material knob is dead on
+	// the path that actually renders. Keyed by the baked material so a material shared by 40
+	// components makes one MID, not 40 — the same one-MID-per-material shape the runtime-built
+	// path had. Populated by ApplyMaterialOverrides at adopt; dropped with the actor on unload.
+	UPROPERTY() TMap<TObjectPtr<UMaterialInterface>, TObjectPtr<UMaterialInstanceDynamic>> MaterialOverrides;
+
 	// Ropes (8.7): one Verlet UCableComponent per <map>.ropes segment (an overhead cable), kept
 	// alive for the map's lifetime (freed on unload). MIDs off M_World_Opaque bound to the decoded
 	// RopeMaterial texture; the cable's fixed endpoints and rest length come straight from the sidecar.
@@ -258,6 +266,12 @@ private:
 	// PropActors, SkyLight and HeightFog and handing the light rig its sources to adopt. Returns
 	// the number of tagged actors found; 0 means this world is not a baked level.
 	int32 AdoptBakedLevel();
+	// Stand a UMaterialInstanceDynamic in front of every unique baked material on the world,
+	// sky and prop components, so the look-tuning cvars can reach them (a baked
+	// MaterialInstanceConstant has no runtime setter). Builds the MID set on the first call and
+	// re-applies the current cvar values on every call, so a cvar callback is just a re-run.
+	// No-op under elysium.MaterialOverrides 0, which leaves the baked values exactly as authored.
+	void ApplyMaterialOverrides();
 	// Build convex world collision from <map>.hulls (one FKConvexElem per solid brush) onto
 	// HullCollision. Returns true when at least one hull loaded — the caller then drops the
 	// render-mesh trimesh, making the brushes (with their invisible clip volumes) the walkable

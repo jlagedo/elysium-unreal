@@ -49,12 +49,10 @@ struct FElysiumPickResult
 	// alone) legitimately has none, so staleness needs this to avoid discarding it every frame.
 	bool bHasComponent = false;
 
-	FString ModelName;      // PropInstance: the .props model stem
-	FString MaterialName;   // WorldSurface: the OBJ group key ("<material>@<cubemap>")
+	FString ModelName;      // PropInstance: the baked mesh asset name ("SM_<stem>")
+	FString MaterialName;   // the hit slot's name — the OBJ group key ("<material>@<cubemap>")
 
-	int32 Section = INDEX_NONE;    // WorldSurface: section index within the picked component
-	int32 Instance = INDEX_NONE;   // PropInstance: ISM instance index
-	int32 Triangle = INDEX_NONE;   // the triangle actually hit, within the section / model
+	int32 Section = INDEX_NONE;    // material-slot index behind the hit face
 
 	FVector HitPoint = FVector::ZeroVector;
 	FVector HitNormal = FVector::ZeroVector;
@@ -85,20 +83,18 @@ namespace ElysiumPick
 	// ambient_generic, or any other bodiless entity. Whether a gizmo counts as drawn follows the
 	// mode: in Visible the markers are depth-tested, so one behind geometry does not pick; in All
 	// they are x-ray, so any of them does. With gizmos Off the source is skipped entirely.
-	// Failing a gizmo, the nearest of entity brush bodies (physics), prop instances (CPU,
-	// triangle-exact) and world/sky surfaces (CPU, triangle-exact) wins.
+	// Failing a gizmo, the nearest of entity brush bodies and the baked level's geometry (world
+	// cells, sky, props) wins.
 	//
-	// The CPU casts exist because physics cannot answer these: under the default
-	// elysium.BrushCollision 1 the world *render* mesh is built with collision off (the .hulls
-	// convex set is the collider), and a solid prop's cooked collision is a single convex hull of
-	// the whole model — neither can name the surface or the part of the prop that was clicked.
-	// The world cast covers both shapes the world renders in — the single procedural mesh, and the
-	// elysium.LumenCards path's chunked static meshes (whose CPU geometry the map actor retains,
-	// since a runtime UStaticMesh keeps none).
+	// The geometry cast runs on the dedicated ElysiumPick channel because the walkable surface is
+	// the .hulls brush collider, which carries no material and no face: a pick on a shared channel
+	// would report the invisible clip volume instead of the wall that was clicked. It traces
+	// complex, so the face index resolves back to a material slot — the string the Inspector
+	// reports.
 	//
-	// bBuildFaceOutline flows the WorldSurface highlight from the single hit triangle out to the
-	// whole BSP face (see the flood in the .cpp). It costs an edge map over the section, so the
-	// caller passes false for per-frame hover and true on commit.
+	// bBuildFaceOutline is inert: it gated a flood-fill from the hit triangle out to the whole BSP
+	// face, which needed the CPU-side section geometry only the runtime-built world had. A baked
+	// static mesh keeps none, so every caller gets the same impact-plane patch.
 	//
 	// CycleAfter steps through stacked gizmos: pass the previously picked entity and the ray
 	// returns the *next* gizmo behind it (wrapping), so clicking a cluster repeatedly walks it.

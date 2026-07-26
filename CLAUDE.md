@@ -177,6 +177,7 @@ facts, valid regardless of target engine. Organisation and maintenance rules: `d
 | `savegame_format.md` | the `.sav` container, `.HL1/2/3` sections, and the game state they hold |
 | `map-architecture.md` | the Unreal map load/unload/travel design |
 | `rendering-perf.md` | the dynamic render path, perf cvars, MegaLights checklist |
+| `reflections.md` | `$envmap` — VtMB's own composite read out of its shipped DX8 shaders, the whole-game authoring survey, and the Unreal reflection channel |
 | `light-attribution.md` | telling VtMB's real fixtures from its GI-substitute fill lights — the probe, the surveys, what discriminates and what does not |
 | `sky-ambience.md` | the sky + ambient-light RE plan and Unreal rework — the unknowns, the labelled-cube probes, the calibration path |
 | `debug-tooling.md` | the three-layer debug/dev-tooling architecture |

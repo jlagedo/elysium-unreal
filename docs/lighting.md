@@ -195,10 +195,17 @@ draws at its authored `renderamt`.
 World and props use `shaded.gdshader` (`shaded_blend.gdshader` for `$translucent`), **lit
 by the rig's real Godot lights** — not `unshaded`, no baked atlas. VtMB world is pure
 Lambert (`METALLIC = 0`, `SPECULAR = 0`, `ROUGHNESS = 1`). The manual material terms
-(`$envmap` additive reflection, WorldVertexTransition albedo blend, `$bumpmap`-perturbed
+(`$envmap` reflection, WorldVertexTransition albedo blend, `$bumpmap`-perturbed
 shading normal, alpha-masked `$selfillum` emission) are unchanged from the baked path and
 documented in CLAUDE.md → "Material fidelity". Props are lit by the rig identically to the
 world — no per-prop baked tint.
+
+**The `$envmap` term is an albedo term, not an additive overlay.** The shipped DX8 assembly
+is `(base + cube·mask·tint) · lightmap · 2` — the reflection is added to the base colour and
+the lightmap then multiplies it, so a reflective surface in an unlit room stays dark. The
+Godot prototype's `EMISSION` route adds it after lighting instead, which is a divergence, not
+a reproduction. Read out of `materials/dxshaders/lightmappedgeneric*envmap*.psh`; full term,
+the `vertexlitgeneric` counterpart, and the whole-game authoring survey: `docs/reflections.md`.
 
 **Emission / exposure.** The `_ke.png` self-illum mask is premultiplied and masked at
 export, so it adds correctly to the lit-but-dim surface with no blow-out.

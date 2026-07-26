@@ -201,7 +201,7 @@ def _build_skinned(g, idx, d, v, model_path, out_dir):
     matnames = list(surfaces.keys())
     images, textures, materials, mat_index = [], [], [], {}
     for mn in matnames:
-        albedo, _emis, _add = mdl._resolve_material(mn, search, read_bytes, out_dir, tex_cache)
+        albedo = mdl._resolve_material(mn, search, read_bytes, out_dir, tex_cache)["albedo"]
         # Double-sided like the rest of the project (world/props render CullMode Disabled):
         # VtMB character meshes have open/thin geometry (tank-top neck & armholes, mouth, eye
         # sockets) that shows the culled interior when orbited.

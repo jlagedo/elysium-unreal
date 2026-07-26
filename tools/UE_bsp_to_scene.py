@@ -1057,7 +1057,7 @@ def main(bsp_path, out_dir):
     # --- resolve + decode each material's texture ---
     # (read_material_bytes/read_material_text + the install index and PAKFILE are
     # defined at the top of main, since the bump-lightmap pre-pass needs them too.)
-    from PIL import Image
+    from PIL import Image, ImageChops
     os.makedirs(os.path.join(out_dir, "tex"), exist_ok=True)
     img_cache = {}       # basetexture -> decoded RGBA PIL image (or None)
     refl_cache = {}      # basetexture -> vtex's average albedo (r,g,b) 0..1, or None
@@ -1156,59 +1156,63 @@ def main(bsp_path, out_dir):
                 "fogend": info["fogend"] or 128.0,
                 "reflecttint": info["reflecttint"] or [1.0, 1.0, 1.0],
             }
-        # $envmap cubemap reflection: decode the baked cube this instance samples
-        # (per-face `cube` from VBSP's patch; else a static named cubemap) into six
-        # face PNGs under tex/cube/, decode its mask ($envmapmask texture, or the
-        # base texture's alpha for $basealphaenvmapmask), and record tint/contrast/
-        # saturation for the shader's additive reflection term.
+        # $envmap. The surface is reflective because its VMT says so -- not because a baked
+        # cube decoded. The runtime resolves the reflection through Lumen and never samples
+        # `tex/cube/` (docs/reflections.md), so gating the channel on the cube would silently
+        # matte any surface whose cube failed to decode, and every `$envmap env_cubemap` face
+        # VBSP left unpatched. The cube is still decoded where one exists, for the record and
+        # for anything that wants the original's own reflection source.
         env_ref = info.get("envmap")
-        if bt and (cube or (env_ref and env_ref != "env_cubemap")):
-            cube_id = cube or sanitize(env_ref)
-            cube_key = f"materials/maps/{lm_base}/{cube}" if cube else f"materials/{env_ref}"
-            if cube_id not in cube_cache:
-                ctth = read_material_bytes(cube_key + ".tth")
-                cttz = read_material_bytes(cube_key + ".ttz")   # None for uncompressed cubes
-                ok = False
-                if ctth:
-                    try:
-                        cdir = os.path.join(out_dir, "tex", "cube")
-                        os.makedirs(cdir, exist_ok=True)
-                        for i, face in enumerate(decode_cubemap(ctth, cttz)):
-                            face.convert("RGB").save(os.path.join(cdir, f"{cube_id}_{i}.png"))
-                        ok = True
-                    except Exception:
-                        ok = False
-                cube_cache[cube_id] = ok
-            if cube_cache[cube_id]:
-                mask_png = None
-                em = info.get("envmapmask")
-                if em:
-                    if em not in mask_cache:
-                        mimg = get_img(em)
-                        mask_cache[em] = None
-                        if mimg is not None:
-                            mfn = sanitize(em) + "_envmask.png"
-                            mimg.convert("L").save(os.path.join(out_dir, "tex", mfn))
-                            mask_cache[em] = mfn
-                    mask_png = mask_cache[em]
-                elif info.get("basealphaenvmapmask"):
-                    mk = bt + "#a"
-                    if mk not in mask_cache:
-                        aimg = get_img(bt)
-                        mask_cache[mk] = None
-                        if aimg is not None:
-                            mfn = sanitize(bt) + "_envmask.png"
-                            aimg.convert("RGBA").getchannel("A").save(os.path.join(out_dir, "tex", mfn))
-                            mask_cache[mk] = mfn
-                    mask_png = mask_cache[mk]
-                sat = info.get("envmapsaturation")
-                env_info[gkey] = {
-                    "cube": cube_id,
-                    "mask": mask_png,
-                    "tint": info.get("envmaptint") or [1.0, 1.0, 1.0],
-                    "contrast": info.get("envmapcontrast") or 0.0,
-                    "saturation": 1.0 if sat is None else sat,
-                }
+        if bt and env_ref:
+            cube_id = cube or (sanitize(env_ref) if env_ref != "env_cubemap" else "env_cubemap")
+            if cube or env_ref != "env_cubemap":
+                cube_key = f"materials/maps/{lm_base}/{cube}" if cube else f"materials/{env_ref}"
+                if cube_id not in cube_cache:
+                    ctth = read_material_bytes(cube_key + ".tth")
+                    cttz = read_material_bytes(cube_key + ".ttz")   # None for uncompressed cubes
+                    ok = False
+                    if ctth:
+                        try:
+                            cdir = os.path.join(out_dir, "tex", "cube")
+                            os.makedirs(cdir, exist_ok=True)
+                            for i, face in enumerate(decode_cubemap(ctth, cttz)):
+                                face.convert("RGB").save(os.path.join(cdir, f"{cube_id}_{i}.png"))
+                            ok = True
+                        except Exception:
+                            ok = False
+                    cube_cache[cube_id] = ok
+            mask_png = None
+            em = info.get("envmapmask")
+            if em:
+                if em not in mask_cache:
+                    mimg = get_img(em)
+                    mask_cache[em] = None
+                    if mimg is not None:
+                        mfn = sanitize(em) + "_envmask.png"
+                        mimg.convert("L").save(os.path.join(out_dir, "tex", mfn))
+                        mask_cache[em] = mfn
+                mask_png = mask_cache[em]
+            elif info.get("basealphaenvmapmask"):
+                # INVERTED: lightmappedgeneric_basealphamaskedenvmap masks the cube with
+                # `1-t3.a`, not the alpha itself (docs/reflections.md).
+                mk = bt + "#a"
+                if mk not in mask_cache:
+                    aimg = get_img(bt)
+                    mask_cache[mk] = None
+                    if aimg is not None:
+                        mfn = sanitize(bt) + "_envmask.png"
+                        alpha = aimg.convert("RGBA").getchannel("A")
+                        ImageChops.invert(alpha).save(os.path.join(out_dir, "tex", mfn))
+                        mask_cache[mk] = mfn
+                mask_png = mask_cache[mk]
+            # $envmapcontrast/$envmapsaturation are parsed but NOT emitted: VtMB's shipped
+            # DX8 shaders carry no term for either (docs/reflections.md), and the whole
+            # game authors saturation zero times and contrast 18 times out of 2,610.
+            env_info[gkey] = {
+                "cube": cube_id,
+                "mask": mask_png,
+                "tint": info.get("envmaptint") or [1.0, 1.0, 1.0],
+            }
         # WorldVertexTransition: second base texture, blended per-vertex against the
         # first by the displacement's DISPVERT alpha (the .blend sidecar).
         bt2 = info.get("basetexture2")
@@ -1251,8 +1255,9 @@ def main(bsp_path, out_dir):
                 problems.append(f"{mat}: $basetexture '{bt}' texture missing/undecodable")
 
     print(f"textures decoded: {decoded}  emission masks: {len(emis_cache)}  failed/missing: {failed}")
-    print(f"envmap: {len(env_info)} surfaces reflect {sum(cube_cache.values())} cubemaps "
-          f"({len(mask_cache)} masks)")
+    _tinted = sum(1 for e in env_info.values() if max(e["tint"]) - min(e["tint"]) >= 0.02)
+    print(f"envmap: {len(env_info)} reflective surfaces ({len(mask_cache)} masks, "
+          f"{_tinted} chromatic tint); {sum(cube_cache.values())} cubemaps decoded")
     for w in warnings:
         print(f"  warning: {w}")
     if problems:
@@ -1654,14 +1659,15 @@ def main(bsp_path, out_dir):
                 m.write("decal 1\n")                   # our flag: projected decal (render above wall)
             if mat in env_info:
                 e = env_info[mat]
-                # cubemap reflection: 'envmap <id>' -> tex/cube/<id>_{0..5}.png (six
-                # faces, VTF order +x,-x,+y,-y,+z,-z), masked/tinted, additive.
+                # $envmap: the surface reflects. 'envmap <id>' names the cube VtMB itself
+                # sampled ('env_cubemap' where VBSP patched none, and the six faces are
+                # under tex/cube/<id>_{0..5}.png where one decoded); the Lumen path uses the
+                # mask and the tint and resolves the reflection against the live scene.
                 m.write(f"envmap {e['cube']}\n")
                 if e["mask"]:
                     m.write(f"envmapmask tex/{e['mask']}\n")
                 t = e["tint"]
                 m.write(f"envtint {t[0]:.4f} {t[1]:.4f} {t[2]:.4f}\n")
-                m.write(f"envparams {e['contrast']:.4f} {e['saturation']:.4f}\n")
             if mat in blend_info:
                 # WorldVertexTransition second texture; mixed by vertex COLOR.r.
                 m.write(f"basetex2 tex/{blend_info[mat]}\n")
