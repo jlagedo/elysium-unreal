@@ -2078,24 +2078,47 @@ The rework is calibrated against data we already hold plus the original game:
 
 ## Phase C — ambience rework (K3/K4/K5/K6 settled — no RE blocks it)
 
-- **C0 — apply the RE-A3 corrections to the pipeline.** Three concrete, independent fixes the
-  RE names: (a) `bake_map.py` picks the **first** type-5 worldlight, not the last (it currently
-  overwrites in the loop, so `ch_temple_1`'s three `light_environment`s resolve to the wrong
-  row) — first by **lump-15 order**, which `.lights` preserves, not by entity order, and per
-  RE-A7 the map it is observable on is `sp_observatory_2`, the one multi-`light_environment`
-  map whose rows differ in value; (b) `bsp.read_worldlights` applies the engine's load-time fixups — zero-attenuation
-  point/spot → `quadratic = 1`, zero-exponent spot → `exponent = 1`, `radius < 1` → `radius = 0`
-  — so anything fitted against lump 15 fits the values the engine used; (c) decode the material
-  **reflectivity** from the `.tth`'s embedded VTF header (3 floats at +32 from the `VTF\0`
-  marker) into the material sidecar, which is the missing input for any reproduction of the
-  bounce gather. All three are corrections, not divergences — (a) included, since
-  D6 resolved to "no decision needed": first-wins matches both the runtime (RE-A3) and the
-  bake (RE-A5), so there is nothing to decide and no `decisions.md` entry to write.
-  **RE-A5 adds (d):** de-normalise `dworldlight_t.intensity` by its own falloff denominator
-  `(const + 100·linear + 10000·quadratic)` before fitting anything against it — that factor is
-  VRAD's normalisation, not brightness, and (b)'s fixups rewrite it, so (b) and (d) must land
-  together. RE-A5 also settles (a) to a no-op in value: every type-5 row in a map carries the
-  same number, so first-wins changes which row we read, not what we read.
+- **C0 — apply the RE-A3/RE-A5 corrections to the pipeline. Done** (2026-07-26). Four
+  corrections, none of them a divergence:
+
+  **(a) first-wins on the type-5 skyambient**, in both consumers (`bake_map.py` and
+  `UElysiumLightRig::Adopt`), by **lump-15 order** — which `.lights` preserves — not entity
+  order. Both assigned unconditionally in the loop, i.e. silently *last*-wins. D6 needs no
+  decision: first-wins matches the runtime (RE-A3) and the bake (RE-A5) alike, and since VRAD
+  stamps one globally-resolved value on every type-5 row, it changes which row is read, not
+  what is read.
+
+  **(b) the engine's load-time fixups**, in `bsp.read_worldlights`, so anything fitted against
+  lump 15 fits the values the engine actually lit with: zero-attenuation point/spot →
+  `quadratic = 1`, zero-exponent spot → `exponent = 1`, `radius < 1` → `radius = 0` (*no*
+  cutoff, not a tiny one). Measured game-wide, this moves **7 lights of 19,197** — 6 spot
+  exponents and 1 radius, and not one attenuation case. A correctness fix that changes almost
+  nothing, which is worth knowing: the weight of C0 is in (d), not here. `raw_values=True`
+  opts out, for `probe_skyambient.py`, which measures what VRAD *wrote* and whose transfer law
+  is checked against the very attenuations these fixups rewrite.
+
+  **(c) material reflectivity** — `vtex`'s own average albedo, 3 floats at +32 from the `.tth`'s
+  `VTF\0` marker — decoded alongside every texture and written to the `.mtl` as
+  `reflectivity r g b`. It is the missing input for any reproduction of the bounce gather: the
+  light cache multiplies every one of its 162 rays by the reflectivity of the material it hit
+  (RE-A3). Verified by construction: over `sp_tutorial_1`'s 412 materials the decoded value
+  correlates with the mean **linear** albedo of the decoded texture at **1.0000** (0.9597
+  against the gamma-encoded mean — which is how we know it is a linear average). Range 0.000
+  (`effects/black`) to 0.514 (`glass/brbwndwa`), median 0.117. Nothing in the render path reads
+  it; it is data for C4.
+
+  **(d) de-normalisation before fitting.** `dworldlight_t.intensity` is VRAD's radiance
+  *divided* by the light's own falloff denominator at d = 100 units, so it is not comparable
+  across lights until that is multiplied back. `read_worldlights` now returns `falloff` beside
+  it and `probe_light_calibration.py` applies it. It matters: measured over all 108 maps the
+  denominator takes **13 distinct values from 1 to 80,000** — 10,000 on 16,292 of the 16,702
+  point/spot lights, and something else on the other 410, so those were being fitted up to
+  10,000× off. Types 0/3/5 carry no denominator at all (attn is `(0,0,0)` on every texlight,
+  sun and skyambient in the game — a texlight's intensity comes from its material's emission,
+  a `light_environment` has no attenuation keys), so `falloff` reports **1** for them rather
+  than 0; that keeps `intensity × falloff` correct everywhere without each consumer having to
+  remember which types are which. (b) and (d) land together because (b) rewrites the very
+  attenuations (d) is built from.
 - **C1 — skyambient with magnitude.** Both bake and rig currently keep only the type-5
   normalized colour and drop its magnitude; `SKYLIGHT_INTENSITY` is a flat 1.0. RE-A5 makes the
   derivation trivial and the expectation honest: the type-5 intensity **is** a lump-8 luxel

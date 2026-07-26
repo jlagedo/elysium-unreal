@@ -22,7 +22,7 @@ import bsp as B
 import mdl as MDL
 import phy
 import retex_dds
-from tex_to_png import decode as decode_texture, decode_cubemap
+from tex_to_png import decode as decode_texture, decode_cubemap, reflectivity as tth_reflectivity
 from bsp import (read_lump, source_to_unreal, source_dir_to_unreal, source_angles_to_unreal_quat,
                  strings_from_blob,
                  read_pakfile, read_game_lump, INCH_TO_CM, FACE_SIZE, FE_OFS, NE_OFS,
@@ -1058,12 +1058,14 @@ def main(bsp_path, out_dir):
     from PIL import Image
     os.makedirs(os.path.join(out_dir, "tex"), exist_ok=True)
     img_cache = {}       # basetexture -> decoded RGBA PIL image (or None)
+    refl_cache = {}      # basetexture -> vtex's average albedo (r,g,b) 0..1, or None
     albedo_cache = {}    # basetexture -> albedo png filename
     emis_cache = {}      # basetexture -> emission png filename
     normal_cache = {}    # normalmap -> normal png filename
     cube_cache = {}      # cube id -> bool (six face PNGs written under tex/cube/)
     mask_cache = {}      # envmapmask source key -> mask png filename (or None)
     mat_info = {}        # gkey -> (albedo_png, emission_png, alphatest, translucent)
+    refl_info = {}       # gkey -> vtex's average albedo (r,g,b), for the bounce term
     env_info = {}        # gkey -> dict(cube, mask, tint, contrast, saturation)
     blend_info = {}      # gkey -> second albedo png (WorldVertexTransition tex2)
     bump_info = {}       # gkey -> normal-map png ($bumpmap; perturbs the reflection)
@@ -1087,6 +1089,11 @@ def main(bsp_path, out_dir):
                 except Exception:
                     img = None
             img_cache[bt] = img
+            # `vtex`'s average albedo, straight off the embedded VTF header. VtMB's light cache
+            # multiplies every bounce ray by the reflectivity of the material it hit when it
+            # builds a model's ambient cube, so it is the missing input for any reproduction of
+            # the bounce term (RE-A3). Free here -- the header is already in hand.
+            refl_cache[bt] = tth_reflectivity(tth) if tth else None
         return img_cache[bt]
 
     for gkey in groups:
@@ -1226,6 +1233,8 @@ def main(bsp_path, out_dir):
                 bump_info[gkey] = normal_cache[bump]
 
         mat_info[gkey] = (albedo_png, emis_png, alphatest, translucent, additive)
+        if bt and refl_cache.get(bt):
+            refl_info[gkey] = refl_cache[bt]
 
         # validate: a rendered non-water material must resolve to an albedo.
         if not info["water"]:
@@ -1657,6 +1666,14 @@ def main(bsp_path, out_dir):
             if mat in bump_info:
                 # normal map: perturbs the reflection normal (needs mesh tangents).
                 m.write(f"bumpmap tex/{bump_info[mat]}\n")
+            if mat in refl_info:
+                # `vtex`'s own average albedo for this surface, off the `.tth`'s embedded VTF
+                # header. VtMB's light cache multiplies every bounce ray by the reflectivity of
+                # the material it hit when it builds a model's ambient cube (RE-A3), so this is
+                # the input any reproduction of the bounce term needs. Nothing in the render
+                # path reads it — it is data for the calibration, carried because it is free.
+                r_, g_, b_ = refl_info[mat]
+                m.write(f"reflectivity {r_:.4f} {g_:.4f} {b_:.4f}\n")
             m.write("\n")
 
     print(f"wrote {obj_path}")

@@ -28,6 +28,23 @@ def parse_tth(tth: bytes):
     mip_count = tth[v + 56]
     return width, height, hi_format, mip_count
 
+
+def reflectivity(tth: bytes):
+    """The texture's average albedo (float[3] at +32 from the `VTF\\0` marker), or None.
+
+    `vtex` computes this at build time and VtMB's engine reads it back: when the light cache
+    builds a model's ambient cube it multiplies every bounce ray by the reflectivity of the
+    material it hit (`../docs/sky-ambience.md` -> "K3 / K5"). So it is the missing input for
+    any reproduction of VtMB's bounce term -- decodable header data, not dead space."""
+    v = tth.find(b"VTF\x00")
+    if v < 0 or len(tth) < v + 44:
+        return None
+    r, g, b = struct.unpack_from("<3f", tth, v + 32)
+    # vtex writes a 0..1 average; anything outside that is a header we have misread.
+    if not all(0.0 <= c <= 1.0 for c in (r, g, b)):
+        return None
+    return (r, g, b)
+
 def mip_byte_size(w, h, fmt):
     if fmt == FMT_DXT1:
         return max(1, (w + 3) // 4) * max(1, (h + 3) // 4) * 8

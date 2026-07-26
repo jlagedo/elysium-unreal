@@ -610,9 +610,14 @@ class Bake(object):
                     continue
                 color = unreal.LinearColor(rgb[0] / mag, rgb[1] / mag, rgb[2] / mag, 1.0)
 
-                # Type 5 skyambient is not a light; it tints the SkyLight.
+                # Type 5 skyambient is not a light; it tints the SkyLight. FIRST wins, by
+                # lump-15 order: VRAD resolves the sky ambient once, globally, first-entity-wins
+                # and stamps that value on every type-5 row, and the engine's own multi-
+                # light_environment rule is first-wins too (RE-A3/RE-A5). Overwriting in the loop
+                # -- last-wins -- read the wrong row on the 5 maps with several.
                 if kind == 5:
-                    sky_ambient = color
+                    if sky_ambient is None:
+                        sky_ambient = color
                     continue
 
                 reach = (radius_cm if radius_cm > 1.0 else FALLBACK_RADIUS_CM) * RADIUS_SCALE

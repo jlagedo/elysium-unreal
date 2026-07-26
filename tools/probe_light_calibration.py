@@ -115,12 +115,22 @@ def main(map_name):
           f"(spread 95/5 = {pc[4]/max(pc[0],1e-6):.1f}x)")
 
     # ---- light sources (lump 15) ----
+    # read_worldlights applies the engine's own load-time fixups (zero attenuation -> quadratic 1,
+    # zero spot exponent -> 1, radius < 1 -> no cutoff), so these are the values the game lit
+    # with rather than the bytes on disk (RE-A3).
     wl = B.read_worldlights(data)
     O, MAG, DIR, TYPE, RAD, STOP2 = [], [], [], [], [], []
     for w in wl:
         if w["type"] not in (0, 1, 2):        # point / spot / texlight only (drop sky terms)
             continue
-        mag = float(np.array(w["intensity"], dtype=np.float64) @ LUM)
+        # De-normalise before fitting (RE-A5). VRAD divides a light's radiance by its own falloff
+        # denominator at d = 100 units on the way into lump 15, so `intensity` is a *normalised*
+        # number, not an emission: two lights of equal brightness but different attenuation
+        # keyvalues land at different intensities. Multiplying it back out gives a quantity that
+        # is comparable across lights, which is what a fit against the bake needs. The factor is
+        # built from the attenuations the fixups above just rewrote, which is why the two land
+        # together.
+        mag = float(np.array(w["intensity"], dtype=np.float64) @ LUM) * w["falloff"]
         if mag <= 0:
             continue
         O.append(w["origin"]); MAG.append(mag); DIR.append(w["normal"])

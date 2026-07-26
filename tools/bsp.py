@@ -376,7 +376,7 @@ def read_dispinfos(data):
     return out
 
 
-def read_worldlights(data):
+def read_worldlights(data, raw_values=False):
     """Lump 15 (WORLDLIGHTS) -> list of dicts, one per light source. VtMB uses the
     standard 88-byte dworldlight_t (verified against real map data): origin@0,
     intensity@12 (linear RGB, colour*brightness), normal@24 (beam direction),
@@ -384,12 +384,31 @@ def read_worldlights(data):
     4 quakelight, 5 skyambient), style@44 (lightstyle index), stopdot@48/stopdot2@52/
     exponent@56 (spot cone), radius@60 (cutoff; 0 = none), constant/linear/quadratic
     attenuation@64/68/72. These are what the engine's lightcache samples to light
-    static props (LEAF_AMBIENT is empty in VtMB), so the prop exporter uses them."""
+    static props (LEAF_AMBIENT is empty in VtMB), so the prop exporter uses them.
+
+    **The engine's own load-time fixups are applied**, because `Mod_LoadWorldlights` is not a
+    straight copy and the values it ends up with are the ones the game actually lit with
+    (`../docs/sky-ambience.md` -> "What the loader changes on the way in", RE-A3):
+
+      * type 1/2 with const == linear == quadratic == 0  ->  quadratic = 1.0
+      * type 2 with exponent == 0                        ->  exponent = 1.0
+      * any light with radius < 1.0                      ->  radius = 0  (NO cutoff, not a tiny one)
+
+    Each dict also carries `falloff` = `const + 100*linear + 10000*quadratic`, computed after
+    the fixups. That is VRAD's own normalisation, not brightness: the compiler divides a light's
+    radiance by its falloff denominator at d = 100 units on the way in, so
+    `intensity * falloff` is what the light actually emits and `255 * intensity / falloff_at(d)`
+    is the luxel it lands (RE-A5). Anything fitted against `intensity` must de-normalise by it
+    first, which is why the fixups and this factor have to travel together — the fixups rewrite
+    the very attenuations it is built from.
+
+    `raw_values=True` returns the lump verbatim, for a probe that means to measure the file
+    rather than the game (`falloff` is still computed, from the raw attenuations)."""
     raw = read_lump(data, 15)
     SZ = 88
     out = []
     for o in range(0, len(raw) - SZ + 1, SZ):
-        out.append({
+        w = {
             "origin":    struct.unpack_from("<3f", raw, o + 0),
             "intensity": struct.unpack_from("<3f", raw, o + 12),
             "normal":    struct.unpack_from("<3f", raw, o + 24),
@@ -400,7 +419,27 @@ def read_worldlights(data):
             "exponent":  struct.unpack_from("<f",  raw, o + 56)[0],
             "radius":    struct.unpack_from("<f",  raw, o + 60)[0],
             "attn":      struct.unpack_from("<3f", raw, o + 64),   # const, linear, quadratic
-        })
+        }
+        if not raw_values:
+            c, l, q = w["attn"]
+            if w["type"] in (1, 2) and c == 0.0 and l == 0.0 and q == 0.0:
+                w["attn"] = (c, l, 1.0)
+            if w["type"] == 2 and w["exponent"] == 0.0:
+                w["exponent"] = 1.0
+            if w["radius"] < 1.0:
+                w["radius"] = 0.0
+        c, l, q = w["attn"]
+        # The denominator VRAD divided this light's radiance by on the way in, evaluated at
+        # d = 100 units. Only types 1/2 have one: measured over all 108 maps it is 10000 on
+        # 16,292 of the 16,702 point/spot lights and one of a dozen other values on the rest
+        # (1 .. 10100), so it genuinely reorders them. Types 0/3/5 carry attn (0,0,0) on every
+        # light in the game -- a texlight's intensity comes from its material's emission and a
+        # `light_environment` has no attenuation keys at all -- and for those the factor to
+        # multiply back is 1, not 0. Reporting 1 keeps every consumer's `intensity * falloff`
+        # correct without each having to remember which types are which.
+        denom = c + 100.0 * l + 10000.0 * q
+        w["falloff"] = denom if denom > 0.0 else 1.0
+        out.append(w)
     return out
 
 

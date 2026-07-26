@@ -61,6 +61,9 @@ SURF_SKY = 0x4
 CONTENTS_SOLID = 0x1
 LUM = np.array([0.2126, 0.7152, 0.0722])
 
+# Every worldlight read in this probe is `raw_values=True`: it measures what VRAD *wrote*, and
+# the engine's load-time fixups (which bsp.read_worldlights applies by default) would rewrite
+# the very attenuations the transfer law is checked against.
 OUT_DIR = Path(__file__).resolve().parent / "out" / "_skyambient"
 
 
@@ -535,7 +538,7 @@ def measure(name, args):
 
     ents = entities(data)
     envs = [e for e in ents if e.get("classname") == "light_environment"]
-    wl = B.read_worldlights(data)
+    wl = B.read_worldlights(data, raw_values=True)
     suns = [w for w in wl if w["type"] == 3]
     ambs = [w for w in wl if w["type"] == 5]
     if not suns and not ambs:
@@ -569,7 +572,7 @@ def measure(name, args):
                      "actual": got.tolist(), "max_err": float(err)})
     # the same law on this map's point/spot lights, whose falloff denominator is not 1
     worst, n_chk = 0.0, 0
-    wl_all = B.read_worldlights(data)
+    wl_all = B.read_worldlights(data, raw_values=True)
     W = np.array([w["origin"] for w in wl_all]) if wl_all else np.zeros((0, 3))
     for e in ents:
         if e.get("classname") not in ("light", "light_spot") or "_light" not in e:
@@ -834,7 +837,7 @@ def inventory():
         if provenance(nm) != "retail":
             continue
         data, _, _ = load(nm)
-        wl = B.read_worldlights(data)
+        wl = B.read_worldlights(data, raw_values=True)
         suns = [w for w in wl if w["type"] == 3]
         ambs = [w for w in wl if w["type"] == 5]
         if not suns and not ambs:
@@ -892,7 +895,7 @@ def sky_pair_maps():
         if provenance(nm) != "retail":
             continue
         data, _, _ = load(nm)
-        wl = B.read_worldlights(data)
+        wl = B.read_worldlights(data, raw_values=True)
         if any(w["type"] in (3, 5) for w in wl):
             out.append(nm)
     return out

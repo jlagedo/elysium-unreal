@@ -173,8 +173,15 @@ int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FStrin
 
 		if (Type == 5)
 		{
-			SkyAmbient = Color;
-			bHasSkyAmbient = true;
+			// FIRST wins, by `.lights` line order (which preserves lump-15 order): VRAD resolves
+			// the sky ambient once, globally, first-entity-wins and stamps it on every type-5
+			// row, and the engine's own multi-light_environment rule is first-wins as well
+			// (RE-A3/RE-A5). Assigning unconditionally read the last row instead.
+			if (!bHasSkyAmbient)
+			{
+				SkyAmbient = Color;
+				bHasSkyAmbient = true;
+			}
 			continue;
 		}
 
