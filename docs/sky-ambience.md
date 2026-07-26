@@ -2204,17 +2204,51 @@ The rework is calibrated against data we already hold plus the original game:
   **Ambient Cubemap stays banned**, as D3 says: a flat occlusion-ignoring term is the
   contrast-killer both Epic and the direction charter warn against.
 
-- **C4 — calibration against the bake.** Extend `probe_light_calibration.py` to fit the
-  ambient terms (SkyLight intensity, leaking, indirect intensity) against lump 8 — the one
-  bake, per K4 — the same by-data method that settled the point/spot falloff. RE-A5 reshapes
-  the fit three ways: the scale is **known** (`stored luxel = 255 · intensity / falloff`), so
-  there is no free gain and the residual is a genuine measurement of the bounce term; the fit
-  presupposes C0(b)+(d) — the loader fixups and the falloff de-normalisation — so C0 lands
-  first; and the target must pass the **provenance check** — only Troika's 81 retail bakes
-  are valid (a patch-recompiled map measures a later compiler, not the authored look), which
-  `probe_skyambient.py --provenance` enumerates. The skyambient's unpinned hemisphere
-  weighting (the K6 residue, a factor of ~2) is absorbed here as a fitted aperture rather
-  than a constant guessed upstream in C1.
+- **C4 — calibration against the bake. Done** (2026-07-26). `probe_light_calibration.py` grows
+  three things RE-A5 made possible.
+
+  **A provenance gate.** The Unofficial Patch recompiles 20 maps and adds 7 with a later Source
+  VRAD, so 27 of 108 bakes measure a different compiler. The probe now names which it is
+  looking at and says plainly when the absolute half does not apply. (`sp_tutorial_1`, its own
+  default map, is one of the patched ones.)
+
+  **An absolute prediction, with no free gain.** Everything the probe did before was a
+  *relative* fit with a fitted scale `a`. RE-A5 removed the need: a light's contribution to a
+  luxel is determined — `255 · intensity / (const + linear·d + quadratic·d²)`, occlusion-traced,
+  in the units lump 8 stores. So the direct term is **predicted**, and what is left over is not
+  residual noise but a measurement of everything else in the bake.
+
+  The result is the old R² ≈ 0 headline restated in a far stronger form. On both retail maps
+  measured, **direct light does not explain the median lit face at all**:
+
+  | map | baked median | predicted direct | residual median |
+  |---|---|---|---|
+  | `ch_fishmarket_1` | 9.76 | **0.00** (p90 17.06) | 7.18 |
+  | `ch_temple_1` | 3.75 | **0.00** (p90 13.34) | 1.69 |
+
+  The median lit face receives *no unoccluded direct light whatsoever* — 71% of face→light rays
+  are blocked — and its brightness is entirely bounce. This is no longer "a direct model fits
+  badly"; it is "the thing being modelled is not what lit the map."
+
+  **A sky-aperture fit — which does not converge, and that is the finding.** RE-A5 left exactly
+  one thing unpinned: the skyambient's hemisphere weighting, cosine vs uniform, a factor of ~2.
+  The probe now regresses the residual on per-face sky visibility (traced with
+  `probe_skyambient`'s own `SURF_SKY` brush tracer — the distinction matters, since a ray that
+  merely leaves the map is *not* sky, and treating "not in solid" as sky reports 0% openness on
+  every map). It gives **0.45× the uniform ceiling on `ch_fishmarket_1`** — which would be
+  cosine weighting — and **−0.62× on `ch_temple_1`**, which is physically impossible.
+
+  So the aperture is **not identifiable from this data**, and C4 confirms RE-A5's bound rather
+  than closing it. The reason is the one RE-A5 named: on a mostly-enclosed map the faces that
+  see sky are also the faces furthest from the author's fill, so sky visibility carries the
+  fill's sign and not the sky's. Closing it needs a map open enough that the two decorrelate,
+  or a fill-subtracted target — not a better regression.
+
+  What the fit *does* give is the bounce floor in absolute units: **12.13** stored-luxel units
+  on `ch_fishmarket_1` against a median lit face of 9.76, and **18.20** on `ch_temple_1` against
+  3.75. The bounce is not a correction to the map's ambient level — it *is* the map's ambient
+  level.
+
 - **C5 — survey interplay.** Re-visit the `sm_hub_1` load-bearing-fill shortlist *after*
   C2/C3: with sky-glow ambience modelled correctly, the 15-light disagreement may resolve
   itself. Feeds back into `docs/light-attribution.md`.

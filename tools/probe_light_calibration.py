@@ -109,6 +109,23 @@ def main(map_name):
         C.append(c); N.append(n); Y.append(y)
     C = np.array(C); N = np.array(N); Y = np.array(Y)
     print(f"map {map_name}: {len(Y)} lit world faces (ground truth)")
+
+    # Whose bake is this? The Unofficial Patch recompiles 20 maps and adds 7 with a LATER Source
+    # VRAD, so 27 of the 108 bakes are not Troika's -- and a fit against one of those measures a
+    # different compiler, not the authored look (RE-A5). This is a warning, not a refusal: the
+    # relative structure below is still informative on a patched map, only the absolute
+    # measurement is not.
+    try:
+        from probe_skyambient import provenance
+        prov = provenance(map_name)
+        if prov != "retail":
+            print(f"  ! PROVENANCE: this bake is '{prov}', not Troika's VRAD -- the absolute")
+            print( "    measurement below is against a different compiler. Treat it as")
+            print( "    indicative, and calibrate on one of the 81 retail bakes.")
+        else:
+            print("  provenance: Troika's own VRAD bake (valid for absolute measurement)")
+    except Exception as exc:
+        print(f"  ! provenance check unavailable ({exc})")
     pc = np.percentile(Y, [5, 25, 50, 75, 95])
     print(f"  baked luminance distribution: 5th {pc[0]:.1f}  25th {pc[1]:.1f}  "
           f"median {pc[2]:.1f}  75th {pc[3]:.1f}  95th {pc[4]:.1f}  "
@@ -277,6 +294,108 @@ def main(map_name):
     rn_best = max(abs(spearman(Ys, Eall[p])) for p in ps)
     print(f"\n  shadowing lifts rank-correlation {rn_best:.2f} -> {rv_best:.2f}"
           f"  ({'CONFIRMED: shadowing drives the contrast' if rv_best > rn_best + 0.15 else 'inconclusive / indirect bounce also matters'})")
+
+    # ---- C4: the ABSOLUTE measurement (RE-A5) --------------------------------------------
+    # Everything above is a *relative* fit with a free scale. RE-A5 removed the need for one:
+    # VRAD's transfer is exactly recoverable, so a light's contribution to a luxel is a
+    # determined number in the units lump 8 stores --
+    #
+    #     stored luxel = 255 * intensity / (const + linear*d + quadratic*d^2)
+    #
+    # with `intensity` the lump-15 value and d in Source units. Nothing here is fitted. So the
+    # direct term can be PREDICTED rather than scaled to fit, and what is left over is not
+    # residual noise -- it is a measurement of everything VRAD put in the bake that direct light
+    # does not explain, which is the radiosity bounce (plus the sky term where sky is visible).
+    #
+    # This is what makes the ambience calibration a measurement instead of a fit: the direct
+    # half has no free gain, so the bounce half cannot absorb its errors.
+    print("\n--- C4: absolute prediction (no free gain, stored-luxel units) ---")
+    ATT = np.array([w["attn"] for w in wl if w["type"] in (0, 1, 2)
+                    and float(np.array(w["intensity"], np.float64) @ LUM) > 0])
+    INT = np.array([float(np.array(w["intensity"], np.float64) @ LUM) for w in wl
+                    if w["type"] in (0, 1, 2)
+                    and float(np.array(w["intensity"], np.float64) @ LUM) > 0])
+    Ldirect = np.zeros(NS)
+    for si, fi in enumerate(sel_idx):
+        c, n = C[fi], N[fi]
+        L = O - c
+        d_in = np.linalg.norm(L, axis=1) + 1e-6
+        Lhat = L / d_in[:, None]
+        ndotl = np.maximum(0.0, Lhat @ n)
+        cos = np.einsum("mj,mj->m", -Lhat, DIR)
+        ok = (ndotl > 0) & ((RAD <= 0) | (d_in <= RAD)) & ~((TYPE == 2) & (cos < STOP2))
+        idxs = np.where(ok)[0]
+        if len(idxs) == 0:
+            continue
+        # VRAD's own falloff denominator, evaluated at the real distance.
+        denom = (ATT[idxs, 0] + ATT[idxs, 1] * d_in[idxs]
+                 + ATT[idxs, 2] * d_in[idxs] ** 2)
+        denom = np.where(denom > 0, denom, 1.0)
+        contrib = 255.0 * INT[idxs] * ndotl[idxs] / denom
+        # Only count what the face can see -- an occluded light contributes nothing to a bake.
+        keep = np.argsort(contrib)[::-1][:12]
+        for k in keep:
+            li = idxs[k]
+            if visible(c, O[li], n):
+                Ldirect[si] += contrib[k]
+
+    resid = Ys - Ldirect
+    frac_over = float((Ldirect > Ys).mean() * 100.0)
+    print(f"  baked      : median {np.median(Ys):8.2f}   p90 {np.percentile(Ys, 90):8.2f}")
+    print(f"  predicted  : median {np.median(Ldirect):8.2f}   p90 {np.percentile(Ldirect, 90):8.2f}"
+          f"   ({frac_over:.0f}% of faces over-predicted)")
+    print(f"  residual   : median {np.median(resid):8.2f}   p10 {np.percentile(resid, 10):8.2f}"
+          f"   p90 {np.percentile(resid, 90):8.2f}")
+    share = float(np.clip(np.median(Ldirect) / max(np.median(Ys), 1e-9), 0, 10) * 100.0)
+    print(f"  => direct light explains ~{share:.0f}% of the median lit face in absolute terms;")
+    print(f"     the rest is the radiosity bounce (and the sky term where sky is visible).")
+
+    # The sky half, where the map authors one. RE-A5 left exactly one thing unpinned: the
+    # skyambient's hemisphere weighting (cosine vs uniform, a factor of ~2). It is fitted here
+    # rather than guessed upstream -- C1 carries the magnitude, this reports the aperture the
+    # bake implies for it.
+    amb = [w for w in wl if w["type"] == 5]
+    if amb:
+        amb_i = float(np.array(amb[0]["intensity"], np.float64) @ LUM)
+        ceiling = 255.0 * amb_i
+        # Sky visibility per sampled face, by the SAME instrument RE-A5 measured it with:
+        # probe_skyambient's vectorised convex-brush tracer, which classifies a hit on the
+        # brush side's `SURF_SKY` flag. That distinction is the whole test -- a ray that simply
+        # leaves the map is NOT sky, it is outside the hull, and treating "not in a solid leaf"
+        # as sky reports 0% openness on every map because every long ray eventually exits.
+        # Cosine-weighted over the face's own hemisphere, which is the weighting a diffuse
+        # surface integrates with.
+        from probe_skyambient import BrushTracer, hemisphere, basis_for
+        tracer = BrushTracer(data)
+        dirs_local, cz = hemisphere(48)
+        skyvis = np.zeros(NS)
+        Csel = C[sel_idx]
+        Nsel = N[sel_idx]
+        TAN, BIT = basis_for(Nsel)          # two (NS,3) tangents, +Z of the frame is the normal
+        wsum = float(cz.sum())
+        for si in range(NS):
+            # local (x, y, z) -> world, with the face normal standing in for +Z.
+            world = (dirs_local[:, 0:1] * TAN[si] + dirs_local[:, 1:2] * BIT[si]
+                     + dirs_local[:, 2:3] * Nsel[si])
+            origins = np.repeat((Csel[si] + Nsel[si] * 2.0)[None, :], len(world), axis=0)
+            _blocked, sky = tracer.trace(origins, world, 1.0e5)
+            skyvis[si] = float((cz * sky).sum() / wsum) if wsum > 0 else 0.0
+        openf = float((skyvis > 0.05).mean() * 100.0)
+        print(f"\nskyambient : intensity {amb_i:.5f} -> ceiling {ceiling:.2f} stored-luxel units")
+        print(f"  sky vis    : {openf:.0f}% of sampled faces see any sky "
+              f"(median openness {np.median(skyvis):.2f})")
+        if openf > 2.0:
+            # resid ~ A*skyvis + Bounce; A/ceiling is the aperture the bake implies.
+            A = np.vstack([skyvis, np.ones_like(skyvis)]).T
+            (ga, gb), *_ = np.linalg.lstsq(A, resid, rcond=None)
+            print(f"  fitted     : residual ~ {ga:.2f} * skyvis + {gb:.2f}")
+            print(f"  => aperture {ga / max(ceiling, 1e-9):.2f}x the full-hemisphere ceiling "
+                  f"(RE-A5 left this a factor of ~2, cosine vs uniform);")
+            print(f"     flat bounce floor {gb:.2f} stored-luxel units.")
+        else:
+            print("  too little sky visibility to separate the sky term from the bounce here.")
+    else:
+        print("\nskyambient : none authored on this map (83 of 108 carry no light_environment)")
 
     # ---- what the baked data says (use robust stats; the linear a/b fit above is
     #      dragged by the huge mag/E outliers, so read the distribution + rank, not b) ----
