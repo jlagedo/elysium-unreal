@@ -39,7 +39,14 @@ public class ElysiumUE : ModuleRules
 			// The `.ents` entity sidecar is one JSON blob (unlike the line-based sidecars).
 			"Json",
 			// Dev console UI is built directly in Slate.
-			"Slate", "SlateCore"
+			"Slate", "SlateCore",
+			// 8.6 the UI foundation. CommonUI is the engine-native game-UI stack: the
+			// activatable-widget stack, input routing, focus and gamepad navigation that
+			// roadmap 8.10 would otherwise hand-roll (decisions.md 2026-07-26). The widget
+			// *visual trees* are still built in C++ Slate inside UCommonActivatableWidget
+			// subclasses, so adopting it costs no Widget Blueprint assets -- only the one
+			// CommonUIInputData asset CommonInput requires as config.
+			"UMG", "CommonUI", "CommonInput"
 		});
 
 		// P6 audio: vendored single-header decoders under Private/ThirdParty (public domain) --

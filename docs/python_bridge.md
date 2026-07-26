@@ -394,8 +394,10 @@ names, `Find("cop_car_%i" % i)`).
 Python **2**, not 3: 285 `print` statements, `has_key`. 3 files mix tabs and spaces
 (`e3.py`, `oceanhouse.py`, patch `vamputil.py`).
 
-`vamputil.py` (46 functions: `IsClan`, `IsDead`, `RandomLine`, `OneOfSet`, …) is exec'd
-into `__main__` and is **not** engine API.
+`vamputil.py` (46 functions: `IsClan`, `IsDead`, `RandomLine`, `Whisper`, …) is exec'd
+into `__main__` and is **not** engine API. Two of its helpers — `Whisper` and `FrenzyTrigger` —
+**share a name with an engine datamap input**, and the receiver decides which runs: bare
+`Whisper(...)` is the script helper, `pc.Whisper(...)` is the input (`script_api.md`).
 
 ### `.dlg` conditions/actions — `dlgexpr`, not Python
 
@@ -529,6 +531,24 @@ Useful IAT slots in `vampire.dll`: `Py_InitModule4` `0x109f370c`, `Py_FindMethod
 `0x109f3724`, `PyCFunction_New` `0x109f3788`, `PyRun_String` `0x109f3758`,
 `PyObject_IsTrue` `0x109f3770`, `PyErr_Clear` `0x109f3768`.
 
-## Open
+The file-like table (`0x1058f620`) is the **`IRestore` buffer adapter** — the read side of the
+same pair `Save` pickles through. `read` (`0x1019bba0`) bounds its request against the restore
+buffer's remaining span and raises `IOError` carrying `"py_obj->irestore->ReadData read …"`;
+`readline` is `0x1019bc80`. It is the file object `cPickle.load` reads `G` back through.
 
-- **The `read`/`readline` table** (`0x1058f620`) — an unidentified file-like type.
+## The action inventory
+
+Which names the shipped content actually calls, how often, what each one's signature and owning
+class are, and which system has to back it: **`script_api.md`**. It carries the whole recovered
+surface — the six method tables with their `ml_doc` contracts, the `CBaseCombatCharacter` /
+`CAI_BaseNPC` / player datamap inputs, and the demand ranking that orders the build. This doc
+stays the mechanism; that one is the inventory.
+
+**Recovering a datamap takes two complementary reads.** An image read (`DumpDatamap`) sees only
+the statically-initialized leading records; everything the per-class builder assigns at
+static-init reads back as zero, so `CBaseCombatCharacter` reports `INPUTS (0)` for a class
+carrying 25. The builder's decompiled assignments are the other half
+(`tools/ghidra/parse_datamap_builder.py` replays them). A class's builder is found by grepping
+any one of its input names — the string table carries both the external name and the
+`Input<Name>` internal name — and each input's handler is found the same way, since every handler
+opens by pushing a profiler marker named `C<Class>::Input<Name>`.

@@ -30,6 +30,7 @@ import UE_extract_scripts as SC
 import UE_extract_signs as SG
 import UE_extract_vdata as VD
 import UE_extract_cfg as CF
+import UE_extract_ui as UI
 import install
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -110,6 +111,7 @@ def main():
     skip_signs = "--no-signs" in args
     skip_vdata = "--no-vdata" in args
     skip_cfg = "--no-cfg" in args
+    skip_ui = "--no-ui" in args
     export_all = "--all" in args
     only = [a for a in args if not a.startswith("--")]
 
@@ -230,6 +232,20 @@ def main():
             npc_export.main()
         except Exception as e:
             print(f"[npc] FAILED: {e}", flush=True)
+            traceback.print_exc()
+
+    # Mirror the UI source (PL8): the .res layouts + both schemes verbatim, the localized
+    # string table, the title lockup, the menu particle scene with its sprites and skybox,
+    # and the HUD/interface art trees decoded to PNG, into out/ui. Whole-game like the other
+    # mirrors, so once after the loop and on a zero-map invocation too. The `.fnt` bitmap
+    # atlases are deliberately not extracted -- vector type lives in Content/Fonts
+    # (tools/fetch_ui_fonts.py). Consumers per docs/vtmb-ui.md and roadmap 8.6.
+    if not skip_ui:
+        print("\n[ui] mirroring UI layouts, strings, menu scene + art ...", flush=True)
+        try:
+            UI.main(inventory="--ui-inventory" in args)
+        except Exception as e:
+            print(f"[ui] FAILED: {e}", flush=True)
             traceback.print_exc()
 
     if not skip_content:

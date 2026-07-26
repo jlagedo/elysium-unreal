@@ -14,6 +14,8 @@
 #include "ElysiumSoundScheme.h"
 #include "ElysiumLightRig.h"
 #include "ElysiumMaterialFactory.h"
+#include "ElysiumNpcAnimInstance.h"
+#include "ElysiumNpcAnimSubsystem.h"
 #include "ElysiumNpcVisual.h"
 #include "ElysiumObjModel.h"
 #include "ElysiumPropSkins.h"
@@ -61,6 +63,14 @@ static TAutoConsoleVariable<int32> CVarBrushCollision(
 
 // Build the map's overhead cables (1) or skip them (0), for A/B. Read at map load, so re-travel
 // (elysium.reload) to toggle.
+// The NPC animation host. 1 = UElysiumNpcAnimInstance (two sequence players + a crossfade), 0 =
+// Unreal's single-node instance, which cannot blend, so every clip change pops. Applied at map
+// load, per body.
+static TAutoConsoleVariable<int32> CVarNpcAnim(
+	TEXT("elysium.NpcAnim"), 1,
+	TEXT("NPC animation host: the crossfading Elysium anim instance (1) or single-node (0). Applied at map load."),
+	ECVF_Default);
+
 static TAutoConsoleVariable<int32> CVarRopes(
 	TEXT("elysium.Ropes"), 1,
 	TEXT("Build the map's cables from <map>.ropes (1) or skip (0). Applied at map load."),
@@ -673,8 +683,73 @@ void AElysiumMapActor::ApplyMaterialOverrides()
 	}
 }
 
+UAnimSequence* AElysiumMapActor::ResolveNpcClip(const FString& Stem, const FString& ClipName)
+{
+	if (Stem.IsEmpty() || ClipName.IsEmpty())
+	{
+		return nullptr;
+	}
+	// Keyed by stem AND clip: one UAnimSequence is bound to one skeleton, so the same bank clip
+	// resolves separately per NPC model. A null entry is a remembered miss.
+	const FString Key = Stem + TEXT("|") + ClipName;
+	if (const TObjectPtr<UAnimSequence>* Cached = NpcAnimCache.Find(Key))
+	{
+		return Cached->Get();
+	}
+
+	UAnimSequence* Anim = nullptr;
+	UGameInstance* GI = GetGameInstance();
+	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	const TObjectPtr<USkeletalMesh>* Mesh = NpcMeshCache.Find(Stem);
+	const TObjectPtr<UglTFRuntimeAsset>* Own = NpcAssetCache.Find(Stem);
+	if (Anims != nullptr && Mesh != nullptr && *Mesh != nullptr)
+	{
+		FString Error;
+		Anim = Anims->ResolveClip(Stem, ClipName, Mesh->Get(), Own ? Own->Get() : nullptr, Error);
+		if (Anim == nullptr)
+		{
+			UE_LOG(LogElysium, Warning, TEXT("npc '%s' clip '%s': %s"), *Stem, *ClipName, *Error);
+		}
+	}
+	NpcAnimCache.Add(Key, Anim);
+	return Anim;
+}
+
+bool AElysiumMapActor::PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
+	const FString& ClipName, bool bLoop)
+{
+	UAnimSequence* Anim = Body ? ResolveNpcClip(Stem, ClipName) : nullptr;
+	if (Anim == nullptr)
+	{
+		return false;
+	}
+	if (UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()))
+	{
+		Inst->PlayClip(Anim, bLoop);
+	}
+	else
+	{
+		Body->PlayAnimation(Anim, bLoop);   // elysium.NpcAnim 0 — single-node A/B, no crossfade
+	}
+	return true;
+}
+
+bool AElysiumMapActor::RefreshNpcIdle(USkeletalMeshComponent* Body, const FString& Stem,
+	const FString& Disposition, int32 IdleVariant)
+{
+	UGameInstance* GI = GetGameInstance();
+	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	if (Body == nullptr || Anims == nullptr)
+	{
+		return false;
+	}
+	EElysiumIdleTier Tier = EElysiumIdleTier::None;
+	const FString Clip = Anims->PickIdleClip(Stem, Disposition, Tier, IdleVariant);
+	return !Clip.IsEmpty() && PlayNpcClip(Body, Stem, Clip, /*bLoop=*/true);
+}
+
 USkeletalMeshComponent* AElysiumMapActor::BuildNpcVisual(const FString& Stem, const FVector& Location,
-	const FRotator& Rotation, float UniformScale)
+	const FRotator& Rotation, float UniformScale, const FString& Disposition, int32 IdleVariant)
 {
 	USceneComponent* Root = GetRootComponent();
 	if (Stem.IsEmpty() || Root == nullptr)
@@ -682,12 +757,11 @@ USkeletalMeshComponent* AElysiumMapActor::BuildNpcVisual(const FString& Stem, co
 		return nullptr;
 	}
 
-	// Cache-checked load: mesh + idle anim per stem, so a shared model (three Sabbat share shovelhead)
-	// loads once. A stem that failed once is not re-cached (Mesh stays null), so it retries — cheap,
-	// and a genuinely missing glb is a one-line warning per NPC, not per frame.
+	// Cache-checked load: mesh per stem, so a shared model (three Sabbat share shovelhead) loads
+	// once. A stem that failed once is not cached (Mesh stays null), so it retries — cheap, and a
+	// genuinely missing glb is a one-line warning per NPC, not per frame.
 	const TObjectPtr<USkeletalMesh>* Cached = NpcMeshCache.Find(Stem);
 	USkeletalMesh* Mesh = Cached ? Cached->Get() : nullptr;
-	UAnimSequence* Idle = nullptr;
 	if (Mesh == nullptr)
 	{
 		UglTFRuntimeAsset* Asset = nullptr;
@@ -698,14 +772,26 @@ USkeletalMeshComponent* AElysiumMapActor::BuildNpcVisual(const FString& Stem, co
 			UE_LOG(LogElysium, Warning, TEXT("BuildNpcVisual '%s': %s"), *Stem, *Error);
 			return nullptr;
 		}
-		FString AppliedAnim;
-		Idle = ElysiumNpcVisual::LoadIdleAnim(Asset, Mesh, AppliedAnim);
 		NpcMeshCache.Add(Stem, Mesh);
-		NpcIdleCache.Add(Stem, Idle);   // may be null → reference pose; cached either way
+		NpcAssetCache.Add(Stem, Asset);   // the NPC's own clips are retargeted off this
 	}
-	else if (const TObjectPtr<UAnimSequence>* CachedIdle = NpcIdleCache.Find(Stem))
+
+	// The standing idle. Two NPCs sharing a model can carry different dispositions and different
+	// variants, so the pick is per (stem, disposition, variant) — but the resolved clip caches per
+	// (stem, clip), so a crowd spread across three stance idles still resolves three sequences,
+	// not one per NPC.
+	FString IdleClip;
+	if (UGameInstance* GI = GetGameInstance())
 	{
-		Idle = CachedIdle->Get();
+		if (UElysiumNpcAnimSubsystem* Anims = GI->GetSubsystem<UElysiumNpcAnimSubsystem>())
+		{
+			EElysiumIdleTier Tier = EElysiumIdleTier::None;
+			IdleClip = Anims->PickIdleClip(Stem, Disposition, Tier, IdleVariant);
+			UE_LOG(LogElysium, Verbose, TEXT("npc '%s' idle: %s (%s, disposition '%s', variant %d)"),
+				*Stem, IdleClip.IsEmpty() ? TEXT("<none>") : *IdleClip,
+				UElysiumNpcAnimSubsystem::TierName(Tier),
+				Disposition.IsEmpty() ? TEXT("<unset>") : *Disposition, IdleVariant);
+		}
 	}
 
 	// Standard runtime-component recipe (mirrors BuildBrushBody): NewObject → attach → place →
@@ -721,12 +807,20 @@ USkeletalMeshComponent* AElysiumMapActor::BuildNpcVisual(const FString& Stem, co
 	{
 		Comp->SetRelativeScale3D(FVector(UniformScale));
 	}
+	// The animation host is installed before the first clip, so it owns the pose from frame one and
+	// every later change (stance, gesture, scripted sequence) crossfades instead of popping.
+	// `elysium.NpcAnim 0` drops back to the single-node instance for an A/B.
+	if (CVarNpcAnim.GetValueOnGameThread() != 0)
+	{
+		Comp->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+		Comp->SetAnimInstanceClass(UElysiumNpcAnimInstance::StaticClass());
+	}
 	Comp->RegisterComponent();
 	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);   // no AI, no physics body (B3)
 	AddInstanceComponent(Comp);
-	if (Idle != nullptr)
+	if (!IdleClip.IsEmpty())
 	{
-		Comp->PlayAnimation(Idle, /*bLooping=*/true);
+		PlayNpcClip(Comp, Stem, IdleClip, /*bLoop=*/true);
 	}
 	return Comp;
 }

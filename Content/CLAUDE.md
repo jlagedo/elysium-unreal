@@ -28,8 +28,31 @@ parameters instead (a `UDecalComponent` is a `USceneComponent` and has no custom
 
 ## Fonts (`Content/Fonts/`)
 
-The `game_sign`/popup panel's vector type. VtMB's authored face names map onto five freely-licensed
-faces (each redistributable under SIL OFL 1.1, whose text ships alongside as `OFL-<family>.txt`):
+Two sets live here, both SIL OFL 1.1 with their licence text alongside as `OFL-<family>.txt`.
+
+### The UI type system — "Nocturne" (roadmap 8.6)
+
+The project-wide ramp, chosen against reference captures of the running game: VtMB's type
+signature is **small-caps serif labels with wide tracking** over plain-sans body copy, and that
+signature is kept even though the bitmap `.fnt` atlases are not (`docs/decisions.md` 2026-07-26,
+`docs/vtmb-ui.md` §4).
+
+| Role | Files | Use |
+|---|---|---|
+| Labels, menu items, headers | `SpectralSC-Regular.ttf`, `SpectralSC-SemiBold.ttf` | the small-caps register |
+| Body copy, signs, subtitles | `Spectral-Regular.ttf`, `-Italic.ttf`, `-SemiBold.ttf` | long-form reading |
+| Data, HUD numerals | `Inter-Regular.ttf`, `Inter-SemiBold.ttf` | tabular figures |
+
+`tools/fetch_ui_fonts.py` puts them here: Spectral and Spectral SC ship real static weights
+upstream and are copied verbatim; Inter ships variable-only, so the two weights are instanced out
+of it with `fontTools` (permitted without renaming — none of the three carries a Reserved Font
+Name). Re-run only when a face is added or replaced.
+
+### The sign/popup set (pre-Nocturne, migrates with 8.8)
+
+VtMB's authored sign face names map onto five faces. This set is what `ElysiumSignFonts.cpp`
+resolves today; 8.8 re-skins the sign panel onto the Nocturne ramp above and retires the overlap
+(`Caveat` stays either way — it is the handwriting slot).
 
 | VtMB face | File | Role |
 |---|---|---|
@@ -70,8 +93,9 @@ Every generator is idempotent and also runnable standalone as a `-script`.
 `tools/build_content.py`, and add a row to the table above.
 
 The `Fonts/` TTFs are the exception: they are static freely-licensed files, not editor-built
-`.uasset`s, so they have no generator and `content.bat` does not touch them. They are committed
-once and only change when a face is added or replaced by hand.
+`.uasset`s, so `content.bat` does not touch them. `tools/fetch_ui_fonts.py` fetches the Nocturne
+set from upstream (network, idempotent); the older sign faces were placed by hand. Either way they
+change only when a face is added or replaced.
 
 `M_Water` (Single Layer Water) is the one world-surface master still unbuilt — see `docs/roadmap.md`
 7.3. The `$envmap` reflection channel authored into `M_World_Opaque` is a Lumen roughness path, not a

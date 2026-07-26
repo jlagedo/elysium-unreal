@@ -164,12 +164,14 @@ facts, valid regardless of target engine. Organisation and maintenance rules: `d
 | `engine-core.md` | the entity object model and its two-phase build plan |
 | `entity_io.md` | the Source I/O bus — 7-field outputs, ScriptHide/Unhide, `use_icon` |
 | `python_bridge.md` | the CPython embedding, datamap reflection, the four call paths, `G` |
+| `script_api.md` | the script→engine **action inventory** — every name the content calls, its signature and owning datamap, demand-ranked |
 | `game_runtime.md` | main loop, three-layer split, RPG data model, the opening flow |
 | `animation_and_movers.md` | skeletal `.mdl` v2531 (Part A) + brush movers (Part B) |
 | `mdl_v2531.md` | the static-geometry `.mdl` struct map |
 | `phy_vphysics.md` | the `.phy` collision-model format — convex ledges, authored mass, axis mapping |
 | `audio_pipeline.md` | codecs, mixer, DSP, the SoundScheme system |
 | `source_movement.md` | `CGameMovement` constants + formulas |
+| `vtmb-ui.md` | **the UI as VtMB builds it** — the two UI stacks, the two schemes, `CVMainMenu`'s 1024×768 layout law, the HUD class inventory, the art trees |
 | `controls.md` | the input surface — keynames, bindable commands, default binds, cfg load order, control options UI |
 | `input-architecture.md` | the Unreal input design — the four planes, Enhanced Input over the command bus, remapping, gamepad, reserved keys |
 | `camera-view-modes.md` | the first↔third-person camera — blend weight, solver, cvars, the Unreal design |

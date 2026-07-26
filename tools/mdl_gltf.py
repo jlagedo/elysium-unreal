@@ -294,7 +294,8 @@ def _assemble_skinned(built, animations):
 def export_npc(idx, model_path, out_dir, stem=None):
     """Write `<out_dir>/<stem>.glb`: skinned mesh + skeleton + the NPC's OWN clips (the
     dialogue anims that live only in this .mdl). Shared clips come from bank glbs applied by
-    bone name at runtime. Returns {stem, glb, model, bones, clips:[label,...]}."""
+    bone name at runtime. Returns {stem, glb, model, bones, clips:[mdl_skel.Seq,...]} — the
+    clip list is what actually baked, so a sequence whose tracks came out empty is absent."""
     dv = mdl.load(idx, model_path)
     if not dv:
         raise SystemExit(f"model not found: {model_path}")
@@ -304,11 +305,11 @@ def export_npc(idx, model_path, out_dir, stem=None):
     g = Gltf()
     built = _build_skinned(g, idx, d, v, model_path, out_dir)
     animations, labels = [], []
-    for label, ab, nf, fps in S.local_sequences(d):
-        anim = _bake_animation(g, d, built["bones"], label, ab, nf, fps)
+    for c in S.local_sequences(d):
+        anim = _bake_animation(g, d, built["bones"], c.label, c.base, c.frames, c.fps)
         if anim:
             animations.append(anim)
-            labels.append(label)
+            labels.append(c)
     gltf, _root = _assemble_skinned(built, animations)
     gltf["accessors"] = g.accessors
     gltf["bufferViews"] = g.bufferViews
@@ -326,8 +327,8 @@ def export_npc(idx, model_path, out_dir, stem=None):
 def export_bank(idx, model_path, out_dir, stem):
     """Write `<out_dir>/banks/<stem>.glb`: the bank skeleton (named bone nodes) + all its
     clips, no mesh/materials -- an animation library retargeted onto NPC skeletons by bone
-    name at load (A.7). Returns {stem, glb, model, clips:[label,...]} or None if the bank
-    defines no animated clip (aggregator/plumbing models)."""
+    name at load (A.7). Returns {stem, glb, model, clips:[mdl_skel.Seq,...]} or None if the
+    bank defines no animated clip (aggregator/plumbing models)."""
     key = model_path[:-4] if model_path.lower().endswith(".mdl") else model_path
     d = install.read(idx, key + ".mdl")
     if not d:
@@ -340,11 +341,11 @@ def export_bank(idx, model_path, out_dir, stem):
     g = Gltf()
     nodes = _skeleton_nodes(bones)
     animations, labels = [], []
-    for label, ab, nf, fps in clips:
-        anim = _bake_animation(g, d, bones, label, ab, nf, fps)
+    for c in clips:
+        anim = _bake_animation(g, d, bones, c.label, c.base, c.frames, c.fps)
         if anim:
             animations.append(anim)
-            labels.append(label)
+            labels.append(c)
     if not animations:
         return None
     root = next(b.index for b in bones if b.parent == -1)
@@ -376,17 +377,19 @@ def export(model_path, anim_name, out_dir):
     if not dv:
         raise SystemExit(f"model not found: {model_path}")
     d, v = dv
-    clip = next((c for c in S.local_sequences(d) if c[0].lower() == anim_name.lstrip("@").lower()), None)
+    want = anim_name.lstrip("@").lower()
+    clip = next((c for c in S.local_sequences(d) if c.label.lower() == want), None)
     if clip is None:
         found = S.find_anim(d, anim_name)
         if not found:
             raise SystemExit(f"anim not found: {anim_name}")
         ab, nframes, fps = found
-        clip = (anim_name, ab, nframes, fps)
+        clip = S.Seq(label=anim_name, base=ab, frames=nframes, fps=fps,
+                     activity="", actweight=0, flags=0)
 
     g = Gltf()
     built = _build_skinned(g, idx, d, v, model_path, out_dir)
-    anim = _bake_animation(g, d, built["bones"], clip[0], clip[1], clip[2], clip[3])
+    anim = _bake_animation(g, d, built["bones"], clip.label, clip.base, clip.frames, clip.fps)
     gltf, _root = _assemble_skinned(built, [anim] if anim else [])
     gltf["accessors"] = g.accessors
     gltf["bufferViews"] = g.bufferViews

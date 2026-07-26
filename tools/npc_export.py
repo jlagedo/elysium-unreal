@@ -13,6 +13,13 @@ every NPC that uses it -- and applies it to the NPC skeletal mesh by bone name v
 VtMB's own virtualmodel bank-sharing in the modern-engine shape: one skeleton, many meshes, a
 shared animation library keyed by bone name -- not a per-NPC monolith.
 
+Manifest v2 additionally carries each clip's engine-facing selection keys -- the `ACT_*`
+activity literal, its weighted-random `weight`, `flags`, `frames` and `fps` -- stored once on
+the stem that OWNS the clip rather than on every NPC that resolves it. That is what lets a
+consumer ask for an `ACT_IDLE` (or the `ACT_DISPOSITION` stance a `default_disposition`
+names) instead of pattern-matching a label: `regular_cop` resolves 229 clips with "idle" in
+the name, and `Stance_Dead_Idle_1` is not one of the useful ones.
+
 CLI:
   python tools/npc_export.py                 # every npc_* model the exported maps reference
   python tools/npc_export.py <model.mdl ...> # only the named models (+ their banks)
@@ -31,6 +38,8 @@ import mdl_skel as S
 OUT = "out"
 NPC_DIR = os.path.join(OUT, "npc")
 MANIFEST = os.path.join(NPC_DIR, "npc_manifest.json")
+INDEX = os.path.join(NPC_DIR, "npc_index.json")
+CLIPS_DIR = os.path.join(NPC_DIR, "clips")
 
 
 def npc_models_from_ents(out_root=OUT):
@@ -65,6 +74,75 @@ def bank_stem(model_key):
 def _basename_stem(model_key):
     return mdl.sanitize(os.path.basename(model_key)[:-4] if model_key.lower().endswith(".mdl")
                         else os.path.basename(model_key))
+
+
+def _clip_meta(c):
+    """One baked clip's engine-facing selection keys (`docs/animation_and_movers.md` A.3).
+
+    `activity` is the `ACT_*` literal the engine selects on (empty on a layer/plumbing
+    sequence), `weight` its weighted-random share among the clips sharing that activity, and
+    `flags` the studio sequence bits. Stored once per owning stem, not per NPC that resolves
+    it -- 45 NPCs x ~1,535 resolved clips would be two orders of magnitude more rows."""
+    return {"activity": c.activity, "weight": c.actweight, "flags": c.flags,
+            "frames": c.frames, "fps": round(c.fps, 4)}
+
+
+def write_sidecars(manifest):
+    """The runtime-facing split of `npc_manifest.json` (roadmap 8.5).
+
+    The whole manifest is 5.5 MB / 71k clip rows because 54 NPCs each resolve ~1,535 clips
+    out of the same shared banks. A map places 17-22 distinct NPC models, so the runtime is
+    made to parse only those:
+
+      npc_index.json      every NPC + bank, glb path and counts, no clip maps (~17 KB)
+      clips/<stem>.json   one NPC's whole resolved vocabulary
+
+    A slice interns its owner stems and activity literals into two small arrays and stores
+    each clip as `[owner_i, activity_i, weight, flags, frames, fps]`. The strings repeat
+    across ~1,535 rows (62 owners, a few hundred activities), so interning pays for the
+    activity column and still lands under the un-interned label->owner map it replaces.
+    Index 0 of `owners` is always the NPC itself; index 0 of `activities` is always `""`
+    (a layer/plumbing sequence the engine composes rather than selects)."""
+    os.makedirs(CLIPS_DIR, exist_ok=True)
+    index = {
+        "manifest_version": manifest["manifest_version"],
+        "note": "counts only; a clip vocabulary lives in clips/<stem>.json. Bank glb paths are "
+                "relative to this file's directory, like the NPC ones.",
+        "npcs": {s: {"glb": r["glb"], "model": r["model"], "bones": r["bones"],
+                     "clips": len(r["clips"]), "own_clips": len(r["own_clips"])}
+                 for s, r in manifest["npcs"].items()},
+        "banks": {s: {"glb": r["glb"], "model": r["model"], "clips": len(r["clips"])}
+                  for s, r in manifest["banks"].items()},
+    }
+    with open(INDEX, "w", encoding="utf-8") as f:
+        json.dump(index, f, indent=1)
+
+    banks, total = manifest["banks"], 0
+    for stem, rec in manifest["npcs"].items():
+        owners, acts = [stem], [""]
+        owner_i, act_i = {stem: 0}, {"": 0}
+        clips = {}
+        for label, owner in rec["clips"].items():
+            meta = (rec["own_clips"] if owner == stem
+                    else banks.get(owner, {}).get("clips", {})).get(label)
+            if meta is None:
+                continue                      # reconcile already dropped these; belt and braces
+            if owner not in owner_i:
+                owner_i[owner] = len(owners); owners.append(owner)
+            act = meta["activity"]
+            if act not in act_i:
+                act_i[act] = len(acts); acts.append(act)
+            clips[label] = [owner_i[owner], act_i[act], meta["weight"], meta["flags"],
+                            meta["frames"], meta["fps"]]
+        path = os.path.join(CLIPS_DIR, stem + ".json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"stem": stem, "owners": owners, "activities": acts,
+                       "fields": ["owner", "activity", "weight", "flags", "frames", "fps"],
+                       "clips": clips}, f, separators=(",", ":"))
+        total += os.path.getsize(path)
+    print(f"[npc] sidecars: {INDEX} ({os.path.getsize(INDEX)/1024:.0f} KB) + "
+          f"{len(manifest['npcs'])} clip slices in {CLIPS_DIR} "
+          f"({total/1e6:.1f} MB total, {total/max(1, len(manifest['npcs']))/1024:.0f} KB each)")
 
 
 def main(only=None):
@@ -102,12 +180,12 @@ def main(only=None):
             seqs = S.local_sequences(d)
             if not is_npc and seqs:
                 banks_needed.setdefault(key, stem)
-            for label, _ab, _nf, _fps in seqs:
-                ll = label.lower()
+            for c in seqs:
+                ll = c.label.lower()
                 if ll in assigned:
                     continue
                 assigned[ll] = stem
-                clips[label] = stem
+                clips[c.label] = stem
         npc_records[m] = clips
 
     # Export the shared banks once each (the heavy decode pass -- ~one 90 MB set shared by all).
@@ -120,8 +198,10 @@ def main(only=None):
             print(f"  !! bank {banks_needed[key]} FAILED: {e}")
             continue
         if info:
-            bank_index[info["stem"]] = {"glb": info["glb"], "model": info["model"],
-                                        "clips": info["clips"]}
+            bank_index[info["stem"]] = {
+                "glb": info["glb"], "model": info["model"],
+                "clips": {c.label: _clip_meta(c) for c in info["clips"]},
+            }
 
     # Export the NPC mesh glbs (mesh + skeleton + own clips).
     print(f"[npc] exporting {len(npcs)} NPC mesh glb(s) -> {NPC_DIR}/ ...", flush=True)
@@ -135,27 +215,62 @@ def main(only=None):
         npc_index[info["stem"]] = {
             "glb": info["glb"], "model": info["model"], "bones": info["bones"],
             "clips": npc_records.get(m, {}),
+            "own_clips": {c.label: _clip_meta(c) for c in info["clips"]},
         }
 
+    # Reconcile: a sequence the include tree advertises but whose owner failed to bake (empty
+    # tracks, or a bank export that raised) must not appear as resolvable. Filtering here is
+    # what lets the runtime treat a hit in `clips` as a promise the glb can answer.
+    bank_baked = {stem: set(rec["clips"]) for stem, rec in bank_index.items()}
+    dropped = 0
+    for stem, rec in npc_index.items():
+        own = set(rec["own_clips"])
+        # Resolve exactly the way the runtime does -- own stem first, then the bank index --
+        # so the two can never disagree even if a bank and an NPC ever share a stem.
+        keep = {lbl: owner for lbl, owner in rec["clips"].items()
+                if lbl in (own if owner == stem else bank_baked.get(owner, ()))}
+        dropped += len(rec["clips"]) - len(keep)
+        rec["clips"] = keep
+    if dropped:
+        print(f"[npc] dropped {dropped} unresolvable clip refs (owner did not bake them)")
+
     manifest = {
-        "note": "clip -> stem; if stem is a key in `banks`, load banks/<stem>.glb and retarget "
-                "to the NPC skeletal mesh by bone name, else the clip is in the NPC's own glb",
+        "manifest_version": 2,
+        "note": "npcs[stem].clips maps a clip label -> the stem that OWNS it. If that stem is a "
+                "key in `banks`, load banks/<stem>.glb and retarget onto the NPC skeletal mesh "
+                "by bone name; otherwise it is the NPC's own glb. Per-clip metadata "
+                "(activity/weight/flags/frames/fps) lives once on the owner: banks[owner].clips "
+                "for a bank, npcs[stem].own_clips for the NPC's own. Every label in `clips` is "
+                "backed by a baked animation in the owner's glb.",
         "npcs": npc_index,
         "banks": bank_index,
     }
     with open(MANIFEST, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=1)
+    write_sidecars(manifest)
 
     n_clips = sum(len(r["clips"]) for r in npc_index.values())
     bank_bytes = sum(os.path.getsize(os.path.join(NPC_DIR, b["glb"]))
                      for b in bank_index.values() if os.path.exists(os.path.join(NPC_DIR, b["glb"])))
     npc_bytes = sum(os.path.getsize(os.path.join(NPC_DIR, n["glb"]))
                     for n in npc_index.values() if os.path.exists(os.path.join(NPC_DIR, n["glb"])))
+    metas = [m for r in bank_index.values() for m in r["clips"].values()]
+    metas += [m for r in npc_index.values() for m in r["own_clips"].values()]
+    acts = {m["activity"] for m in metas if m["activity"]}
     print(f"[npc] done: {len(npc_index)} NPCs, {len(bank_index)} banks, "
           f"{n_clips} resolved clip refs -> {MANIFEST}")
-    print(f"[npc] size: banks {bank_bytes/1e6:.0f} MB (shared) + meshes {npc_bytes/1e6:.0f} MB")
+    print(f"[npc] clips: {len(metas)} distinct baked, {sum(1 for m in metas if m['activity'])} "
+          f"carry an activity ({len(acts)} distinct, e.g. ACT_IDLE/ACT_DISPOSITION)")
+    print(f"[npc] size: banks {bank_bytes/1e6:.0f} MB (shared) + meshes {npc_bytes/1e6:.0f} MB, "
+          f"manifest {os.path.getsize(MANIFEST)/1e6:.1f} MB")
 
 
 if __name__ == "__main__":
+    if "--reindex" in sys.argv:
+        # Re-derive the runtime sidecars from the manifest already on disk. Everything they
+        # carry is a projection of it, so this needs no install and no glb re-bake.
+        with open(MANIFEST, encoding="utf-8") as f:
+            write_sidecars(json.load(f))
+        sys.exit(0)
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     main(only=args or None)

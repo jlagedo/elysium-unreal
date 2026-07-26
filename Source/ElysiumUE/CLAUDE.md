@@ -112,10 +112,52 @@ classnames and `FElysiumNpcMaker` for `npc_maker`/`npc_maker_fleshpile`), and
 `FElysiumPhysProp` for `prop_physics` and `FElysiumPhysHinge` for `phys_hinge`).
 
 NPCs (B3, no AI) stand a real glTF skeletal body at their origin: `ElysiumNpcVisual.{h,cpp}` is the
-shared glb→`USkeletalMesh` loader (the 8.2 path, reused by the `UElysiumNpcSubsystem` test harness),
-and `AElysiumMapActor::BuildNpcVisual` caches the mesh + idle clip per stem and stands a
-`USkeletalMeshComponent` on the map actor (`elysium.NpcBodies` A/Bs the bodies; I/O still resolves
-without them). `FElysiumNpc` latches `WillTalk`/`UseInteresting`; `StartPlayerDialogRemote` fires `OnDialogBegin` then
+shared glb→`USkeletalMesh` loader (the 8.2 path, reused by the `UElysiumNpcSubsystem` test harness)
+plus `LoadAssetFromPath`/`RetargetClip`, and `AElysiumMapActor::BuildNpcVisual` caches the mesh per
+stem and stands a `USkeletalMeshComponent` on the map actor (`elysium.NpcBodies` A/Bs the bodies;
+I/O still resolves without them).
+
+**Animation (8.5).** A VtMB NPC's own `.mdl` carries only its own clips — mostly dialogue — and
+pulls idle/locomotion/combat from **shared animation banks** through the studiohdr include DAG, so
+most NPCs have no idle of their own and would stand in the reference pose. `tools/npc_export.py`
+resolves that DAG offline; the runtime looks a label up and is told which glb owns it.
+
+| Type | Role |
+|---|---|
+| `ElysiumNpcClips.{h,cpp}` | plain-C++ readers for the two runtime sidecars: `FElysiumNpcIndex` (`out/npc/npc_index.json`, ~22 KB — every NPC and bank with its glb and counts) and `FElysiumNpcClipSet` (`out/npc/clips/<stem>.json`, ~90 KB — one NPC's whole resolved vocabulary, ~1,540 clips). A slice interns its owner stems and activity literals, storing each clip as `[owner_i, activity_i, weight, flags, frames, fps]`. The 5.5 MB `npc_manifest.json` is **not** read at runtime — it is the offline probes' file, and a map places only 17–22 distinct models |
+| `UElysiumNpcAnimSubsystem` | GI-scoped owner of everything skeleton-**in**dependent and expensive: the parsed bank `UglTFRuntimeAsset`s (2–35 MB each, session-lifetime because the same two stances banks serve essentially every map), the clip vocabularies, and the disposition table. `ResolveClip` finds a label's owning glb and retargets it onto a mesh; `PickIdleClip`/`IdleCandidates` run the default-idle policy and report which rule fired (`EElysiumIdleTier`) |
+| `FElysiumDispositionTable` (`ElysiumDisposition.{h,cpp}`) | `vdata/system/dispositiontable.txt` — per disposition, the `Animation Name` that keys its stance clips plus the fidget/stance-change chances and thresholds. Shared: **8.5** reads `AnimName`, **9.9** (2,862 calls, `SetDisposition` alone 2,510) needs the same rows for the emotional-state model |
+| `UElysiumNpcAnimInstance` (`ElysiumNpcAnimInstance.{h,cpp}`) | the animation host: a native anim instance (no Blueprint, no anim-graph asset) whose proxy runs two `FAnimNode_SequencePlayer_Standalone`s and lerps between them, so a clip change crossfades (0.25 s) instead of popping. It exists because VtMB's stance banks ship almost no authored transitions — one `Stance_<D>_Trans_<a>_<b>` across 21 dispositions × 2 gendered banks — so a stance change cannot route through an authored blend. The proxy must implement **`UpdateAnimationNode`**: a sequence player that is never `Update_AnyThread`'d holds its start frame forever, and the base `Update(float)` does not drive it. `elysium.NpcAnim 0` drops back to the single-node instance |
+
+**The default-idle policy** is VtMB's own chain, and selects on **activity**, never on a label
+substring: `default_disposition` (on 242 of 243 `npc_*` entities) → the table's `Animation Name` →
+an `ACT_DISPOSITION` clip named `Stance_<Name>_Idle_*` → `ACT_IDLE` by `actweight` → a loose
+idle-named clip → the reference pose. Weight is what discriminates inside a tier: `idle01` carries
+30 against three fidgets at 1. A label read would pick `Stance_Dead_Idle_1` or `Bed_Left_Idle` out
+of the 229 clips `regular_cop` resolves with "idle" in the name. Gender needs no branch — the
+include DAG already bound each NPC to its male or female bank.
+
+Ambient NPCs spread across the three standing idles VtMB authors per disposition, seeded from the
+entity's own `Handle.Index` so the pick survives a reload. They do **not** cycle: every timing rule
+in `dispositiontable.txt` is authored for conversation ("while waiting for the player to make a
+dialog choice"), and nothing there governs an NPC standing alone.
+
+**Root motion is not decoded**, and 66 of `move_and_ranged`'s 722 animdescs carry it (`walk` 23
+records, `run` 9). A locomotion clip therefore plays in place with its feet sliding. Harmless while
+NPCs do not move; the locomotion task has to decode `nummovements`/`movementindex` first.
+
+Resolved `UAnimSequence`s cache on the **map actor** (`NpcAnimCache`, keyed `<stem>|<clip>`), not on
+the subsystem, because glTFRuntime binds each one to a specific `USkeletalMesh`'s `USkeleton` and
+meshes are per-map-epoch. `AElysiumMapActor::ResolveNpcClip`/`PlayNpcClip`/`RefreshNpcIdle` are the
+seams the script surface reaches animation through, via two virtuals on `FElysiumEntity`
+(`PlayAnimClip`, `SetDispositionName` — kept on the base for the same no-RTTI reason as
+`GetAttachBody`). Bound to them: the **`SetAnimation`** input on `FElysiumNpc` (21 call sites), the
+**`SetGesture`** Character method, and the animation half of **`SetDisposition`** — 2,510 calls, all
+of them receiver-qualified (`npc.SetDisposition(...)`; zero bare), 2,467 a `.dlg` line's action, so
+an NPC's stance follows the conversation. 9.9 still owns its emotional-state half, and the natives
+table records it as `stance only` so the coverage report does not overclaim.
+`elysium.npc.play <clip> [index]` plays any resolved clip on a spawned test NPC and
+`elysium.npc.clips <stem> [filter]` lists a model's vocabulary with owner, activity and weight. `FElysiumNpc` latches `WillTalk`/`UseInteresting`; `StartPlayerDialogRemote` fires `OnDialogBegin` then
 opens the NPC's `.dlg` conversation (B4 — its `dialogname` keyfield names the file). `npc_maker.Spawn`
 creates its `NPCTargetname` child through
 **`FElysiumEntityWorld::SpawnRuntimeEntity`** — a runtime-synthesized def stored past the map's

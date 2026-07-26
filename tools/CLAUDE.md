@@ -95,14 +95,27 @@ becomes the control's *minimum* and a smaller rect silently clamps up to it. The
 overlay (`GameManager`) reuses `GameMenuPanel`(pause) over a dimmed world. Both fall
 back to a plain neutral menu when `content/ui/` is absent.
 
-That composition and those VGUI scaling rules describe the **Godot prototype's** faithful port.
-Elysium-Unreal does not port VGUI: the UI is re-skinned on a modern resolution-independent stack
-(`docs/remaster-direction.md` axis 1, roadmap 8.6). What `menu_extract` produces is therefore
-consumed as **design intent + source art** — screen inventory, panel anatomy, palette,
-iconography, strings, and the title/background art — not as a runtime layout description. The
-`.res` coordinates and the `.fnt` bitmap pages stay worth extracting as proportion and metric
-reference; the runtime type is vector, so the glyph atlases never ship. Roadmap **PL8** is the
-task that widens the extract to that whole inventory.
+That composition and those VGUI scaling rules describe the **Godot prototype's** faithful port,
+and `menu_extract.py` is that prototype's extractor — it writes the Godot repo's
+`game/content/ui/` and is not part of this pipeline.
+
+**This repo's UI extractor is `UE_extract_ui.py` (roadmap PL8).** Elysium-Unreal does not port
+VGUI: the UI is re-skinned on a modern resolution-independent stack
+(`docs/remaster-direction.md` axis 1, roadmap 8.6), so what it produces is consumed as **design
+intent + source art** — screen inventory, panel anatomy, palette, iconography, strings, and the
+title/background art — never as a runtime layout description. It mirrors, patch-first and
+whole-game, into `out/ui/`: 25 `.res` layouts plus **both** schemes byte-for-byte, the localized
+string table, the title lockup, the menu particle scene with its `.tga` sprites and `MM_Skybox`
+faces, and the HUD/interface art trees decoded to PNG (`--inventory` adds the item icons).
+`export_all.py` runs it (`--no-ui` skips).
+
+Two facts it encodes, both RE'd in `docs/vtmb-ui.md`: **both schemes are live** —
+`VampireScheme.res` skins `client.dll` (menu, sheet, HUD) and `TrackerScheme.res` skins
+`GameUI.dll`'s dialogs — and the menu particle **sprites are loose `.tga` under `particles/`**,
+not the `.tth/.ttz` pair the rest of the UI art uses.
+
+The `.fnt` glyph atlases are **not** extracted: the runtime type is vector, and the faces live in
+`Content/Fonts` via `tools/fetch_ui_fonts.py` (`fnt.py` remains for metric reference).
 
 ## VPK archives (original VtMB format)
 
@@ -463,9 +476,11 @@ the full struct map is `docs/animation_and_movers.md` Part A. VtMB NPCs carry on
 clips (mostly dialogue) and pull locomotion/combat/idle from **shared animation banks** via the
 studiohdr include-model mechanism — a recursive DAG (`NumIncludeModels`@404 /
 `IncludeModelIndex`@408 → `StudioModelGroup[]`, stride 116). `mdl_skel.resolve_tree` walks it
-(cycle-deduped) and `local_sequences` reads each model's own clips (`StudioSeqDesc` label →
-`anim[0][0]` → local anim). Every bank bone name is present in the NPC skeleton, so clips
-retarget by bone name with no proportion rig.
+(cycle-deduped) and `local_sequences` reads each model's own clips as `Seq` records
+(`StudioSeqDesc` label → `anim[0][0]` → local anim, plus the engine's own selection keys:
+the `ACT_*` `activity` literal@4, `actweight`@16 and `flags`@8 — `activity`@12 is `-1` on
+disk, so the *name* is the durable key). Every bank bone name is present in the NPC skeleton,
+so clips retarget by bone name with no proportion rig.
 
 `npc_export.py` is the batch driver (`export_all.py --npc`, the heaviest offline pass). It scans
 `out/*/*.ents` for `npc_*` `model` keys and writes under `out/npc/`:
@@ -479,13 +494,19 @@ retarget by bone name with no proportion rig.
   **no mesh**; decoded once and shared by every NPC. Bank stems keep the sub-path
   (`character_shared_male_misc`) so the male/female (and clan) banks that share a basename stay
   distinct.
-- **`npc_manifest.json`** — per NPC, `{clip → owning-stem}` (own clips point at the NPC itself),
-  plus a `banks` index. The runtime (roadmap 8.5) reads this, loads a clip's owning glb once, and
-  applies it to the NPC skeletal mesh by bone name via glTFRuntime — VtMB's virtualmodel
-  bank-sharing, not a per-NPC monolith (which would be ~94 MB × the cast ≈ 4.2 GB; the shared set
-  is ~410 MB: 45 NPCs / 62 banks). `mdl_gltf` writes **standard glTF 2.0** (self-describing space),
-  so it keeps its non-`UE_` name and needs no pre-conversion. `mdl_gltf.export` (single clip) is
-  the 8.2 spike/CLI probe.
+- **`npc_manifest.json`** (`manifest_version` 2) — `npcs[stem].clips` is the resolution map
+  `{clip label → owning stem}` (own clips point at the NPC itself). Per-clip metadata
+  (`activity`, `weight`, `flags`, `frames`, `fps`) lives **once on the owner** —
+  `banks[owner].clips` for a shared clip, `npcs[stem].own_clips` for the NPC's own — because a
+  clip resolved by 39 NPCs is one clip, and inlining it per NPC would multiply ~3.5k rows into
+  ~69k. A final reconcile pass drops any label whose owner did not actually bake it, so a hit
+  in `clips` is a promise the owning glb can answer. The runtime (roadmap 8.5) reads this, loads
+  a clip's owning glb once, and applies it to the NPC skeletal mesh by bone name via
+  glTFRuntime — VtMB's virtualmodel bank-sharing, not a per-NPC monolith (which would be
+  ~94 MB × the cast ≈ 4.2 GB; the shared set is 243 MB of banks + 149 MB of meshes across
+  62 banks / 54 NPCs). `mdl_gltf` writes **standard glTF 2.0** (self-describing space), so it
+  keeps its non-`UE_` name and needs no pre-conversion. `mdl_gltf.export` (single clip) is the
+  8.2 spike/CLI probe.
 
 ## Texture upscaling (`upscale_bench.py`)
 
@@ -570,6 +591,19 @@ and `vamputil.py`'s 46 helpers. `ScheduleTask(delay, "<source>")` defers a *stri
 evaluated later against `__main__`, so a live `__main__` dict + runtime evaluator are
 mandatory. `G` is an engine-owned flat int namespace (~900 flags) and the save unit
 (pickled); 208 of the 345 flags the scripts read are written only by `.dlg`.
+
+**`script_api_survey.py` is the demand side of that API.** It surveys what the shipped content
+actually *calls* — `out/scripts/**/*.py`, `out/dlg/**/*.dlg` (columns 4 and 5) and the exported
+maps' field-6 payloads — folding module-level aliases (every level script opens with
+`Find = __main__.FindEntityByName`, hiding 1,911 calls behind one line), excluding
+`out/scripts/lib/` (the shipped CPython stdlib, not game script), and tagging `zvtool/` (Troika's
+own in-game dev tool) apart from game logic. Each name is bucketed against the six engine method
+tables, the registered entity inputs, the corpus's own `def`s and the stdlib, then cross-checked
+against what the runtime binds (`ElysiumScriptNatives.cpp`, the CPython host's `PyMethodDef`
+tables, every `D.Input(TEXT("…"))`), so a row says both what the engine offers and what the
+runtime answers. Read-only over `out/`; `--json` writes the full ranked ledger. Sibling of
+`ent_survey.py` and `dlg_sheet_survey.py`. The recovered per-name reference it feeds is
+`../docs/script_api.md` (roadmap 9.7).
 
 **Entity methods are not bound anywhere.** `Entity.__getattr__` (`0x10195510`) resolves a
 name against the entity's **Source datamap**, walking `baseMap` up the class chain: a field

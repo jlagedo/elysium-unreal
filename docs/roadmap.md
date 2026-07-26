@@ -72,15 +72,18 @@ deps below — refresh it whenever a task flips:
 
 1. **0.9** — record the uasset-bake architecture call, fix the charter docs, land
    `spike/uasset-bake` on `main`. Everything below is stacked on that branch.
-2. **B6** — the feed interaction: the next first-beat gameplay step.
-3. **3.6 → 3.7** — pinned exposure, then tone-curve fidelity. B4 measured the filmic toe
+2. **B6** — the feed interaction: the next first-beat gameplay step. 9.7 recovered the outputs it
+   fires (`OnFedUponBegin`/`OnFedUponEnd` on `CAI_BaseNPC`).
+3. **9.7d** — land `OneOfSet` and the shadowed-name split: 589 dialogue gates currently fail
+   closed, and the fix needs no backing system. Then **9.8/9.9/9.10** in demand order.
+4. **3.6 → 3.7** — pinned exposure, then tone-curve fidelity. B4 measured the filmic toe
    crushing a night sky by up to ×9 with unity only at source ≈ 55 — the one remaining
    *visible* gap to VtMB display parity, now fully sized.
-4. **3.12** — adjudicate `sm_hub_1`'s 15 fill-light disagreements in-engine; C3's Skylight
+5. **3.12** — adjudicate `sm_hub_1`'s 15 fill-light disagreements in-engine; C3's Skylight
    Leaking knob is landed and measured, so the A/B finally has both sides.
-5. **3.1–3.4, 3.10, 3.11** — the lighting/perf lane: independent, parallel-capable.
-6. **4.7** — Source movement (the feel baseline; parallel-capable).
-7. **PL8 → 8.6** — the UI-source inventory, then the UI foundation; unlocks 8.8/8.9/9.2 and
+6. **3.1–3.4, 3.10, 3.11** — the lighting/perf lane: independent, parallel-capable.
+7. **4.7** — Source movement (the feel baseline; parallel-capable).
+8. **PL8 → 8.6** — the UI-source inventory, then the UI foundation; unlocks 8.8/8.9/9.2 and
    the 9.x ladder behind them.
 
 ## The first-beat path (B*) — landing → the second warp point
@@ -637,18 +640,31 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   (`-ElysiumMap` keeps the bare dev path; `-ElysiumNewGame=0` A/Bs);
   `elysium.newgame [clan] [m|f]` is the seam 8.6's menu will call. Verified headless.
   *Deps:* 4.6, 4.9, 1.1.
-- [ ] **8.6 UI foundation — design system + shell** *(replaces the VGUI port)* — the modern UI
-  stack every other screen sits on. **Not** a `.res`-driven VGUI renderer: a Slate/UMG component
-  set with **vector/SDF type**, resolution-independent layout (real widescreen/ultrawide, DPI
-  scaling, no 640×480 canvas, no `//ws-fix` pairs), and a design-token layer (palette, type
-  ramp, spacing, panel treatments) carrying VtMB's paper/ink/blood language. Structure and
-  content come from the original — screen inventory, panel anatomy, reading order, iconography,
-  strings — read off `.res`/`trackerscheme.res` as **intent** (PL8), not executed as layout.
-  Ships with it: the main menu + pause menu on the new stack, and the New Game flow calling
-  8.6a's `UElysiumMapSubsystem::NewGame` seam (chargen writes the sheet first).
+- [~] **8.6 UI foundation — design system + shell** *(replaces the VGUI port)* — the modern UI
+  stack every other screen sits on. **Not** a `.res`-driven VGUI renderer: a **CommonUI**
+  component set with **vector type**, resolution-independent layout (real widescreen/ultrawide,
+  DPI scaling, no 640×480 canvas, no `//ws-fix` pairs), and a design-token layer (palette, type
+  ramp, spacing, panel treatments). Structure and content come from the original — screen
+  inventory, panel anatomy, reading order, iconography, strings — read off `.res`/the schemes as
+  **intent** (PL8), not executed as layout. Ships with it: the main menu + pause menu on the new
+  stack, and the New Game flow calling 8.6a's `UElysiumMapSubsystem::NewGame` seam.
+
+  **Landed (the foundation):** the RE the re-skin is checked against (`docs/vtmb-ui.md` — the
+  two UI stacks, both schemes, `CVMainMenu`'s **1024×768** layout law, the HUD class inventory,
+  and four corrections to `m0_menu_build.md`); **PL8** [x]; the **Nocturne** type set
+  (Spectral SC / Spectral / Inter, SIL OFL, no RFN) in `Content/Fonts` via
+  `tools/fetch_ui_fonts.py`; **CommonUI + CommonInput enabled** (`.uproject` + `Build.cs`) —
+  widget trees stay C++ Slate inside `UCommonActivatableWidget`s, so no Widget Blueprint assets.
+  The five owner calls behind these: `decisions.md` 2026-07-26.
+
+  **Remaining:** the `UFont` asset generator + `build_content.py` registration; the design-token
+  layer; the `CommonUIInputData` config asset; `UElysiumMainMenu` + the item list; the 3D-scene
+  backdrop (real game geometry via the bake, **not** a particle-scene port — see the decision);
+  the title lockup drawn from `out/ui/menu/title.png`; pause menu; `docs/ui-architecture.md`.
+
   **Acceptance:** main menu and pause menu are legible and correctly proportioned at 1080p,
   1440p, 4K and 21:9 with no letterboxing or bitmap-font blur; New Game enters `sp_tutorial_1`
-  through the 8.6a seam. *Deps:* PL8; 8.6a for the seam.
+  through the 8.6a seam. *Deps:* PL8 [x]; 8.6a [x] for the seam.
 - [x] **8.7 Ropes** — VtMB's overhead cables. The exporter's `write_ropes` resolves each
   `move_rope`/`keyframe_rope` chain (topologically — `move_rope` is the start, not `keyframe_rope`
   as `entity_visuals.md` had it; `NextKey` binds **first-match by entity order** — the engine's
@@ -753,8 +769,10 @@ draw on the same stack; NPCs stand in the world at their entity origins.
     **inventory** (`HasItem`/`GiveItem`/`RemoveItem`/`HasWeaponEquipped`/`GiveAmmo`/`AmmoCount`, ~280
     corpus calls — the single largest demand) is a tracked follow-up; **feats/stats** (`CalcFeat`/
     `BumpStat`/`GetMasqueradeLevel`) are **9.4**; **disposition/camera/barter** are B-track / later.
-    `OneOfSet`/`SquadSeesPlayer` stay stubs (`OneOfSet` is really a `vamputil` helper; `SquadSeesPlayer`
-    is called by no shipped script).
+    `SquadSeesPlayer` stays a stub (called by no shipped script). **`OneOfSet` is not a `vamputil`
+    helper** — it is a real module-table global, defined nowhere in the corpus and called 589 times
+    exclusively from dialogue, so its hardcoded-false stub silently fails 589 gates closed; **9.7**
+    RE'd it and owns the fix.
   - [x] **`vamputil` for real** *(9.3b)* — with `ccmd`/`cvar` bound (its top-level `c = __main__.ccmd`
     no longer throws), the real `vamputil.py` imports: its `zvtool` DAG, `fileutil`, and the 46 helpers
     (`IsClan`/`IsIdling`/`RandomLine`/`unhidePlus`/`setPlus`/…) load, and `tutorial`'s `from vamputil
@@ -791,10 +809,57 @@ draw on the same stack; NPCs stand in the world at their entity origins.
   log as a named divergence. Unit tier: `Elysium.Substrate.ScriptFS`. Full record + limits:
   `decisions.md` 2026-07-26; VtMB facts: `docs/python_bridge.md` → "The script file layer".
   *Deps:* 9.3b.
+- [~] **9.7 The script→engine action surface — survey, RE, spec** *(reference: `docs/script_api.md`)* —
+  the demand-side ledger `python_bridge.md` never had: which names the shipped content actually
+  calls, what each does in `vampire.dll`, and which system owes it. Orders every task below it.
+  - [x] **a. The survey** — `tools/script_api_survey.py` over `out/scripts` (36 `.py`),
+    `out/dlg` (147 files / 50,393 rows / cols 4+5) and the exported field-6 payloads, folding
+    module-level aliases (1,911 calls hide behind `Find = __main__.FindEntityByName`) and
+    cross-checking `ElysiumScriptNatives.cpp`, the CPython host's `PyMethodDef` tables and every
+    `D.Input(TEXT("…"))`. **16,438 call sites / 1,287 names; 47 natives bound (24 real / 23 stub);
+    124 names / 1,212 calls resolved to nothing.**
+  - [x] **b. Ghidra recovery** — new `DumpPyMethods.java` (walks a `PyMethodDef` table: names,
+    `ml_doc`, thunk→body, decompiled bodies) + `parse_datamap_builder.py` (replays a builder's
+    assignments, because an image read misses every builder-written record). All **six** method
+    tables dumped, and the three datamaps behind the unresolved names recovered —
+    `CBaseCombatCharacter` (25 inputs), `CAI_BaseNPC` (`SetRelationship` + 16 outputs incl.
+    **`OnFedUponBegin`/`OnFedUponEnd`**, which **B6** needs), the player class (11 inputs).
+  - [x] **c. The spec** — `docs/script_api.md`: per-name signature, arg types off `fieldType`,
+    owning table/datamap, handler address, call count, owning task, and the demand-ranked build
+    order. `python_bridge.md` keeps the mechanism and links to it.
+  - [ ] **d. Land the zero-dependency wins** — **`OneOfSet`** is
+    `(<engine roll> % count) == which - 1`, a 1-based one-of-N selector; its hardcoded-`false`
+    stub fails **589 dialogue gates** closed today. Also the `Whisper`/`FrenzyTrigger`
+    receiver split (a `vamputil` helper shadows an engine input name; bare vs `pc.`-qualified
+    must not collapse to one implementation). *Acceptance:* a `OneOfSet` gate selects one of N in
+    the built game; the shadowed names resolve per call site. *Deps:* none.
+  **Findings that correct existing docs:** `OneOfSet` is a real module global, not a `vamputil`
+  helper (9.3's note fixed); six `ml_doc` strings are copy-paste errors; `GiveItem` exists both as
+  a Character method and as a player datamap input; **`AwardExperience` takes a STRING**, not an
+  amount (constrains 9.4); `HungerCheck` and `FrenzyCheck` share one handler; the file-like table
+  is the `IRestore` adapter, closing `python_bridge.md`'s only open item. *Deps:* 9.3, B2.
+- [ ] **9.8 Inventory & items** — **853 corpus calls**, the largest gap with no owning task:
+  `HasItem` 327 / `RemoveItem` 182 / `GiveItem` 126 / `StartBarter` 108 / `AmmoCount` /
+  `GiveAmmo` / `HasWeaponEquipped`, plus the `Inventory_Remove` input and
+  `SpawnItemInContainer`/`AddEntityToContainer`. String-keyed against `vdata/items/` (244 files,
+  on disk since PL5b); the receiver is the combat character at `+0x9c` (`script_api.md`).
+  `StartBarter` lags the rest — it needs the barter UI (8.6). *Deps:* 9.7c, 9.4.
+- [ ] **9.9 NPC disposition & reactions** — the single largest engine demand in the game,
+  **2,862 calls**: `SetDisposition(name, level)` alone is 2,510, 2,467 of them in `.dlg` column 4
+  (an NPC line's *action*), plus `SetRelationship` 334 on `CAI_BaseNPC` and
+  `React`/`SetExpression`/`SetGesture`. Needs `vdata/dispositiontable` + `reaction*` and an NPC
+  emotional-state model; the dialogue runner (B4) is the caller. *Deps:* 9.7c, B4.
+- [ ] **9.10 Economy** — **250 calls**: `MoneyAdd`/`MoneyRemove` (INTEGER inputs on the combat
+  character) + `CurrentMoney`/`SetMoney`. The smallest self-contained system on the ledger; one
+  integer on the sheet plus vendor `worth` when 9.8 lands. *Deps:* 9.7c.
 - [ ] **9.4 Quests/XP + RPG sheet data** — quest map is live since 1.1; the `vdata/` rulebook is
   on disk (**PL5b [x]**, `out/vdata/`); load `system/stats/feats/traiteffects/rules` into the
   sheet, `quests_*` + `experience_table` for XP. Table→system map: `docs/vdata-catalog.md`.
-  *Deps:* 1.1.
+  9.7 sized and constrained this lane: the sheet-counter demand is **290 calls**
+  (`AwardExperience` 77 / `HumanityAdd` 69 / `CalcFeat` 53 / `ChangeMasqueradeLevel` 44 /
+  `Bloodloss` / `BumpStat` / `GetMasqueradeLevel`), the counters are INTEGER datamap inputs on the
+  combat character, and **`AwardExperience` takes a STRING** — it names an experience-table entry,
+  so it cannot be modelled as an integer add (`script_api.md`). *Deps:* 1.1, 9.7c.
 - [ ] **9.5 Save/load** — the four blocks (entity save-fields via the field tables, event
   queue incl. deferred strings, think times, `G` blob) into a `USaveGame` container.
   *Deps:* 1.4, 5.4.
@@ -917,7 +982,7 @@ dialogue, scripted flow, quests, save/load included.
 | PL5d | Copy `cfg/*.cfg` (the alias/cvar tables — `user.cfg` carries the Basic/Plus `patchtype` alias) verbatim → `out/cfg/` — `UE_extract_cfg.py`, patch-first, wired into `export_all.py` (`--no-cfg`) [x] | 9.3b [x] |
 | PL6 | Texlight merge in exporter | 3.4 |
 | PL7 | Sidecar space fixes surfaced by the audit — **none (0.4: all sidecars already Unreal cm)** | 0.4 [x] |
-| PL8 | UI source inventory for the re-skin — extend `menu_extract.py` to mirror `.res` layouts, `trackerscheme.res`, UI bitmaps and strings into `out/ui/` as **design intent + source art** (screen inventory, panel anatomy, palette, iconography). The `.fnt` bitmap atlases are extracted for reference/metrics only — they are not the runtime type. | 8.6 |
+| PL8 ✅ | UI source inventory for the re-skin — **`tools/UE_extract_ui.py`** mirrors `out/ui/`: 25 `.res` layouts + **both** schemes byte-for-byte (`VampireScheme` skins client.dll, `TrackerScheme` skins GameUI.dll — `docs/vtmb-ui.md`), 194 localized strings, the 1024×512 title lockup, the menu particle scene (26 scripts → 22 `.tga` sprites) + the 6 `MM_Skybox` faces, and **503 decoded HUD/interface materials**; `--inventory` adds the ~350 item icons. Zero unresolved. Wired into `export_all.py` (`--no-ui`). The `.fnt` atlases are **not** extracted — vector type is `Content/Fonts` via `tools/fetch_ui_fonts.py`. | 8.6 |
 
 ## RE backlog (reverse-engineering work; each cited where consumed)
 
@@ -940,6 +1005,7 @@ dialogue, scripted flow, quests, save/load included.
 | RE15 | **VRAD's transfer + lump 8's absolute scale (K6, RE-A5)** — `intensity = (colour/255)^2.2·(B/255)·falloff(100u)`, zero exceptions on 16,378 lights; `stored luxel = 255·intensity/falloff`; the sun confirmed at ×1.01; sky ambient resolved globally first-entity-wins; 27/108 bakes are the patch compiler's (provenance-gate everything). Open residue: the skyambient's hemisphere aperture, bounded ~2× and **unidentifiable from this data** (C4). Full: `sky-ambience.md` → K6 | SKY C0–C4, D1/D6, 10.1 | [x] |
 | RE16 | **The sky's brightness chain (K7, RE-A9)** — the identity: a sky pixel is the decoded texel, unscaled, `$nofog` game-wide; the one asymmetry is the world's `albedo × lightmap × 2` (overbright pinned to 2). Full: `sky-ambience.md` → K7 | SKY B4/B5/B8, D7 | [x] |
 | RE17 | **Owner-run reference captures** *(was sky-ambience RE-A6)* — original-game screenshots at the shared vantages (3–4 sky maps + one sky-only view per skyname), for the **world** half of the display ratio (`albedo × lightmap × 2` beside a sky texel — the sky's own transfer is the identity, RE16) and as 7.8's reference. **Gate:** first settle whether `snapshot` grabs pre- or post-gamma-ramp (the display gamma is a device LUT a back-buffer grab omits) — quantitative use waits on that check | 3.6/3.7, 7.8 | [ ] |
+| RE18 | **The script→engine action surface** — the demand ledger (16,438 call sites / 1,287 names) plus the supply side out of `vampire.dll`: all six `PyMethodDef` tables with their `ml_doc` contracts, and the `CBaseCombatCharacter` / `CAI_BaseNPC` / player datamaps behind the 124 unresolved names. Closes `python_bridge.md`'s file-like open item. Full: `docs/script_api.md` | 9.7, 9.8–9.10, 9.4, 8.5 | [x] |
 | SKY | **Sky + ambience rework, Phases B + C (B1–B8b, C0–C5)** — landed 2026-07-26: backdrop correct + at parity with standing tests (`Elysium.Substrate.SkyCube`/`FogPack`); the whole 3D skybox split by BSP area and placed under its transform; fog from its real owners + Source's own linear distance fog as a per-primitive material term (B8b, D4 amended); the sky light at the map's own authored level (**zero on the 83 no-pair maps**); the bake measured in absolute units — direct light explains ~0% of a median lit face, the bounce floor *is* the ambient level. Open residue promoted to **3.10–3.13 + RE17**. Facts: `sky-ambience.md`; full as-built: `roadmap-archive.md` → SKY | 3.6/3.7 | [x] |
 
 The Ghidra extraction findings behind the closed rows (the RE1/RE2/RE3/RE4 detail:

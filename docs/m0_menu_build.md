@@ -1,5 +1,13 @@
 # M0 — Full-Fidelity Menu Rebuild
 
+> **Partly superseded — read `vtmb-ui.md` first.** This doc decompiles `GameUI.dll`'s
+> `CBasePanel`/`CGameMenu`, which VtMB links but **does not present**. The menu the player sees
+> is `client.dll`'s own `CVMainMenu`. Four claims below are therefore wrong about the shipped
+> menu — the loaded scheme (§2), the label namespace (§5), item alignment and the layout
+> constants (§7). `vtmb-ui.md` §6 tabulates each correction; `decisions.md` (2026-07-26) dates
+> them. Still valid here: the `.fnt` format and face inventory (§3), the TrackerScheme colour
+> and alias tables (§4), the dialog `.res` inventory (§6), and the particle-scene structure (§9).
+
 > **Reference, not a port target.** Two things at once:
 >
 > 1. **It describes the Godot prototype**, not this repo's live state: `game/src/Ui/*.cs`,

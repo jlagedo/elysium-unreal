@@ -1,6 +1,7 @@
 #include "ElysiumNpcSubsystem.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumNpcAnimSubsystem.h"
 #include "ElysiumNpcVisual.h"
 
 #include "glTFRuntimeAsset.h"
@@ -53,6 +54,74 @@ void UElysiumNpcSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 			if (LoadTestNpc(Stem, AnimName, Error) == nullptr)
 			{
 				UE_LOG(LogElysiumNpc, Warning, TEXT("npc.load failed: %s (%s)"), *Stem, *Error);
+			}
+		}),
+		ECVF_Cheat));
+
+	// elysium.npc.play <clip> [index] -- re-apply a clip to an already-spawned test NPC, resolving
+	// it through the manifest so any of its ~1,540 resolved clips plays, not just its own glb's.
+	// This is how a named sequence is checked before wiring it to anything (8.5: scripted_sequence
+	// `m_iszPlay`, the `SetAnimation` input, the `SetGesture` Character method).
+	ConsoleObjects.Add(CM.RegisterConsoleCommand(
+		TEXT("elysium.npc.play"),
+		TEXT("elysium.npc.play <clip> [index] -- play a clip on a spawned test NPC (default: the last one); resolves shared animation banks"),
+		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
+		{
+			if (Args.Num() == 0)
+			{
+				UE_LOG(LogElysiumNpc, Warning, TEXT("npc.play: needs a clip name"));
+				return;
+			}
+			FString Error;
+			const int32 Index = Args.Num() > 1 ? FCString::Atoi(*Args[1]) : Loaded.Num() - 1;
+			if (!PlayClipOn(Index, Args[0], Error))
+			{
+				UE_LOG(LogElysiumNpc, Warning, TEXT("npc.play failed: %s"), *Error);
+			}
+		}),
+		ECVF_Cheat));
+
+	// elysium.npc.clips <stem> [filter] -- what a model can actually play, and where each clip
+	// lives. The filter matches the label or the activity, so `elysium.npc.clips regular_cop
+	// ACT_IDLE` lists exactly the engine's idle set with its weights.
+	ConsoleObjects.Add(CM.RegisterConsoleCommand(
+		TEXT("elysium.npc.clips"),
+		TEXT("elysium.npc.clips <stem> [filter] -- list a model's resolved clips (label, owning glb, activity, weight); filter matches label or activity"),
+		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
+		{
+			UElysiumNpcAnimSubsystem* Anims = GetGameInstance()
+				? GetGameInstance()->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+			const FString Stem = Args.Num() > 0 ? Args[0] : TEXT("gangmember_male_2");
+			const FElysiumNpcClipSet* Set = Anims ? Anims->GetClipSet(Stem) : nullptr;
+			if (Set == nullptr)
+			{
+				UE_LOG(LogElysiumNpc, Warning, TEXT("npc.clips: no vocabulary for '%s'"), *Stem);
+				return;
+			}
+			const FString Filter = Args.Num() > 1 ? Args[1] : FString();
+			EElysiumIdleTier Tier = EElysiumIdleTier::None;
+			const TArray<FString> Idles = Anims->IdleCandidates(Stem, FString(), Tier);
+			UE_LOG(LogElysiumNpc, Display, TEXT("%s: %d clips; idle tier=%s, best='%s'"), *Stem,
+				Set->Clips.Num(), UElysiumNpcAnimSubsystem::TierName(Tier),
+				Idles.Num() > 0 ? *Idles[0] : TEXT("<none>"));
+			int32 Shown = 0;
+			for (const TPair<FString, FElysiumNpcClip>& Pair : Set->Clips)
+			{
+				if (!Filter.IsEmpty()
+					&& !Pair.Key.Contains(Filter, ESearchCase::IgnoreCase)
+					&& !Pair.Value.Activity.Contains(Filter, ESearchCase::IgnoreCase))
+				{
+					continue;
+				}
+				if (++Shown > 60)
+				{
+					UE_LOG(LogElysiumNpc, Display, TEXT("  ... (narrow the filter)"));
+					break;
+				}
+				UE_LOG(LogElysiumNpc, Display, TEXT("  %-34s %-42s %-24s w=%-3d %.2fs"),
+					*Pair.Key, *Pair.Value.Owner,
+					Pair.Value.Activity.IsEmpty() ? TEXT("-") : *Pair.Value.Activity,
+					Pair.Value.Weight, Pair.Value.Seconds());
 			}
 		}),
 		ECVF_Cheat));
@@ -113,27 +182,53 @@ AActor* UElysiumNpcSubsystem::LoadTestNpc(const FString& Stem, const FString& An
 		return nullptr;   // OutError set by LoadMesh
 	}
 
-	// Animation: by name when asked, else the first clip. Void on failure just leaves the mesh in its
-	// ref pose (still a valid spike result -- the mesh + skeleton loaded).
+	// Animation. A named clip resolves through the manifest, so the harness reaches the whole
+	// resolved vocabulary (~1,540 clips per NPC) and not just the handful baked into this glb --
+	// which is the point: an NPC's own clips are mostly dialogue, and idle/locomotion/combat live
+	// in shared banks. With no name, the same default-idle policy the game uses picks one, so what
+	// the harness stands matches what a map stands. Failure leaves the mesh in its ref pose.
 	const TArray<FString> AnimNames = Asset->GetAnimationsNames(true);
-	FglTFRuntimeSkeletalAnimationConfig AnimConfig;
 	UAnimSequence* Anim = nullptr;
 	FString AppliedAnim;
-	if (!AnimName.IsEmpty())
+	UElysiumNpcAnimSubsystem* Anims = GetGameInstance()
+		? GetGameInstance()->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+
+	FString Want = AnimName;
+	if (Want.IsEmpty() && Anims != nullptr)
 	{
-		Anim = Asset->LoadSkeletalAnimationByName(Mesh, AnimName, AnimConfig, /*bCaseSensitive=*/false);
+		EElysiumIdleTier Tier = EElysiumIdleTier::None;
+		Want = Anims->PickIdleClip(Stem, FString(), Tier);
+		if (!Want.IsEmpty())
+		{
+			UE_LOG(LogElysiumNpc, Display, TEXT("npc.load: default idle for %s is '%s' (%s)"),
+				*Stem, *Want, UElysiumNpcAnimSubsystem::TierName(Tier));
+		}
+	}
+	if (!Want.IsEmpty())
+	{
+		FString AnimError;
+		if (Anims != nullptr)
+		{
+			Anim = Anims->ResolveClip(Stem, Want, Mesh, Asset, AnimError);
+		}
+		if (Anim == nullptr)
+		{
+			// No manifest (NPC export not run) -- fall back to this glb's own clips.
+			Anim = ElysiumNpcVisual::RetargetClip(Asset, Mesh, Want, AnimError);
+		}
 		if (Anim != nullptr)
 		{
-			AppliedAnim = AnimName;
+			AppliedAnim = Want;
 		}
 		else
 		{
-			UE_LOG(LogElysiumNpc, Warning, TEXT("npc.load: anim '%s' not in %s (have: %s)"),
-				*AnimName, *Stem, *FString::Join(AnimNames, TEXT(", ")));
+			UE_LOG(LogElysiumNpc, Warning, TEXT("npc.load: clip '%s' on %s: %s (own glb has: %s)"),
+				*Want, *Stem, *AnimError, *FString::Join(AnimNames, TEXT(", ")));
 		}
 	}
 	else if (Asset->GetNumAnimations() > 0)
 	{
+		FglTFRuntimeSkeletalAnimationConfig AnimConfig;
 		Anim = Asset->LoadSkeletalAnimation(Mesh, 0, AnimConfig);
 		AppliedAnim = AnimNames.Num() > 0 ? AnimNames[0] : TEXT("anim0");
 	}
@@ -171,6 +266,7 @@ AActor* UElysiumNpcSubsystem::LoadTestNpc(const FString& Stem, const FString& An
 
 	FElysiumLoadedNpc Record;
 	Record.Actor = Actor;
+	Record.Asset = Asset;
 	Record.Mesh = Mesh;
 	Record.Anim = Anim;
 	Record.Stem = Stem;
@@ -187,6 +283,46 @@ AActor* UElysiumNpcSubsystem::LoadTestNpc(const FString& Stem, const FString& An
 		*Stem, Record.NumBones, Record.NumAnims, *Record.AnimName, *Location.ToCompactString(), LoadMs);
 
 	return Actor;
+}
+
+bool UElysiumNpcSubsystem::PlayClipOn(int32 Index, const FString& ClipName, FString& OutError)
+{
+	OutError.Reset();
+	PruneDead();
+	if (!Loaded.IsValidIndex(Index))
+	{
+		OutError = FString::Printf(TEXT("no test NPC at index %d (%d loaded)"), Index, Loaded.Num());
+		return false;
+	}
+	FElysiumLoadedNpc& Record = Loaded[Index];
+	USkeletalMeshComponent* Component = IsValid(Record.Actor)
+		? Record.Actor->FindComponentByClass<USkeletalMeshComponent>() : nullptr;
+	if (Component == nullptr || Record.Mesh == nullptr)
+	{
+		OutError = TEXT("that test NPC has no live skeletal body");
+		return false;
+	}
+
+	UElysiumNpcAnimSubsystem* Anims = GetGameInstance()
+		? GetGameInstance()->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UAnimSequence* Anim = nullptr;
+	if (Anims != nullptr)
+	{
+		// Resolves the owning glb through the manifest — the NPC's own for a dialogue clip, a
+		// shared bank otherwise, with the bank parsed once per session.
+		Anim = Anims->ResolveClip(Record.Stem, ClipName, Record.Mesh, Record.Asset, OutError);
+	}
+	if (Anim == nullptr)
+	{
+		OutError = FString::Printf(TEXT("'%s' on %s: %s"), *ClipName, *Record.Stem,
+			OutError.IsEmpty() ? TEXT("no animation subsystem") : *OutError);
+		return false;
+	}
+	Component->PlayAnimation(Anim, /*bLooping=*/true);
+	Record.Anim = Anim;
+	Record.AnimName = ClipName;
+	UE_LOG(LogElysiumNpc, Display, TEXT("npc.play: %s -> %s"), *Record.Stem, *ClipName);
+	return true;
 }
 
 void UElysiumNpcSubsystem::ClearNpcs()

@@ -26,6 +26,13 @@ GENERATORS = [
     "make_boot_map.py",             # Elysium.umap: the empty boot persistent level
 ]
 
+# NOT in the umbrella: `make_ui_fonts.py`. Importing a `UFontFace` flushes Slate's font cache,
+# and `FSlateApplication::Get()` asserts in a commandlet -- `-run=pythonscript` never creates a
+# Slate application, with or without `-AllowCommandletRendering`. Running it here would take
+# content.bat (and every `export_all.py` run) down with it. It needs a Slate-enabled editor and
+# is a rare regeneration -- only when a typeface is added or replaced -- so it is invoked by
+# hand; see its header.
+
 
 def run_one(script):
     """Run a generator by filename; return (script, status). SystemExit(0) counts as ok

@@ -21,6 +21,13 @@ the maintenance contract.
   `python_bridge.md`, `audio_pipeline.md`, `mdl_v2531.md`, `source_movement.md`, `controls.md`,
   `level_transitions.md`, `animation_and_movers.md`, `game_runtime.md`). Cite where it came
   from — decompiled address, `tools/ghidra/run.ps1 -Script DumpGrep` output, or the data file.
+  `python_bridge.md` ↔ `script_api.md` split the scripting layer the same way the other pairs
+  split theirs: the first owns the binding **mechanism**, the second the per-name **inventory**
+  (signature, owning datamap, handler address, call demand). A new engine-callable name goes in
+  the second; a new fact about how binding works goes in the first. `vtmb-ui.md` ↔
+  `ui-architecture.md` split the UI the same way — the first owns what VtMB's own screens are
+  (which code owns them, the two schemes, the 1024×768 canvas law, the HUD class inventory), the
+  second owns the Unreal re-skin's stack and design tokens.
 - **Design intent for an Unreal system** → `engine-core.md` (entity object model),
   `debug-tooling.md` (debug layers), `map-architecture.md` (map lifecycle),
   `rendering-perf.md` (render path + tuning), `asset-enhancement.md` (offline surface track),
@@ -52,7 +59,8 @@ only. Keep the banner when editing.
 `m0_menu_build.md` carries a second caveat: the UI is **not** ported from VGUI. That doc is
 the record of what the original UI contains and why (the `GameUI.dll` findings, scheme/`.res`
 semantics, font roles) — the design intent the modern re-skin is checked against, not a port
-target.
+target. It is also **partly superseded**: it decompiles the menu VtMB links but does not present,
+so four of its claims are corrected in `vtmb-ui.md` §6. Keep both banners when editing.
 
 ## Not in this repo
 

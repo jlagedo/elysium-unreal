@@ -176,6 +176,19 @@ public:
 	// simulating static-mesh body. Null = nothing to constrain (attach to world / skip).
 	virtual class UPrimitiveComponent* GetAttachBody() const;
 
+	// The animation seam (8.5). Play a named sequence on this entity's body, resolved through the
+	// NPC clip manifest. Base answers false — only an entity that owns a skeletal body can play
+	// one. Every script-facing animation call lands here: the `SetAnimation` input (21 sites), the
+	// `SetGesture` Character method, and `scripted_sequence`'s `m_iszPlay`. Kept virtual on the base
+	// so the scripting host can reach it without knowing the leaf type (the same no-RTTI reason
+	// `GetAttachBody` is here).
+	virtual bool PlayAnimClip(const FString& ClipName, bool bLoop) { return false; }
+
+	// A disposition write from script — the animation half of `SetDisposition` (2,510 calls, the
+	// largest single engine demand in the game). Re-picks the standing stance; the emotional-state
+	// and reaction half is 9.9's. Base answers false.
+	virtual bool SetDispositionName(const FString& Disposition) { return false; }
+
 	// No-RTTI downcast to the door base (UE builds compile without RTTI, so no dynamic_cast). Base
 	// returns null; FElysiumDoorBase overrides to return itself, so a resolved `linked_door` name can
 	// be recognised as a door without reflection.

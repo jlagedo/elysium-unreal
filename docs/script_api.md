@@ -1,0 +1,313 @@
+# The script → engine action surface
+
+What VtMB's scripts *call*, what each name *does*, and which system has to back it.
+
+`python_bridge.md` owns the **mechanism** — how `vampire.dll` binds Python to the engine, and
+why `Entity.__getattr__` being a datamap walk means there is no fixed method API to port. This
+doc is the **inventory**: one row per name the shipped content actually reaches for, with its
+signature, its owning binding table or datamap, its call count across the whole corpus, and the
+runtime system that must answer it.
+
+**Confidence.** Names, arities, argument *types*, owning class, doc strings and handler
+addresses are read directly out of `vampire.dll` and are exact. Per-handler **semantics** are
+recovered where stated and marked pending otherwise — the handler address is recorded in every
+row, so recovering one is a single `DumpFuncs` run, done by the system task that consumes it.
+
+## How to regenerate
+
+Two halves, both reproducible from the user's own install.
+
+**Demand** — `python tools/script_api_survey.py --json tools/out/_mcp/script_api.json`. Reads
+only `out/` (the gitignored mirror): 36 level scripts, 147 `.dlg` (50,393 rows, columns 4 and 5),
+and the exported maps' output field-6 payloads. It folds module-level aliases — every level
+script opens with `Find = __main__.FindEntityByName`, and 1,911 calls hide behind that one line —
+and cross-checks each name against `ElysiumScriptNatives.cpp`, the CPython host's `PyMethodDef`
+tables, and every `D.Input(TEXT("…"))` in the class registry, so a row says both what the engine
+offers and what the runtime currently answers.
+
+**Supply** — the Ghidra workspace (`tools/ghidra/`, local-only):
+
+```powershell
+# a PyMethodDef table: names, doc strings, thunk -> body, decompiled bodies
+tools/ghidra/run.ps1 -Program vampire.dll -Script DumpPyMethods `
+  -ScriptArgs "table=1058f868 depth=1 out=…/py_character.txt"
+
+# a class datamap: the builder, then replay its assignments
+tools/ghidra/run.ps1 -Program vampire.dll -Script DumpFuncs `
+  -ScriptArgs "funcs=1031a600 depth=0 out=…/bcc_builder.txt"
+python tools/ghidra/parse_datamap_builder.py …/bcc_builder.txt --recs 10616694 --count 305
+```
+
+### Reading a datamap takes both techniques
+
+`DumpDatamap` reads the image; `parse_datamap_builder.py` replays the builder. Neither alone is
+complete, because VtMB's datamaps are **half static**: the leading records ship initialized in
+`.data`, and everything the per-class builder assigns at static-init reads back as **zero** from
+the un-run image. `CBaseCombatCharacter` is the worked case — an image read reports
+`INPUTS (0)` for a class carrying 25, because every input record is builder-written. The builder
+tail names both halves of what the image lacks:
+
+```c
+_DAT_10616650 = 0x131;              // datamap_t.numFields = 305
+_DAT_1061664c = &DAT_10616694;      // datamap_t.dataDesc  = the record array
+return &DAT_1061664c;               // the datamap_t itself
+```
+
+Feed that base and count to the parser. Names come free — Ghidra renders a string pointer as
+`s_<content>_<address>`, so the symbol carries the literal.
+
+**Finding a class's builder:** grep for one of its input names. The string table carries both the
+external name and the `Input<Name>` internal name, and the referencing function is the builder.
+Handler bodies are found the same way — every input handler opens by pushing a profiler marker
+named `C<Class>::Input<Name>`, so a `str=::Input` sweep maps handler names to function addresses
+in one run.
+
+## The demand, in one table
+
+16,438 call sites over 1,287 distinct names. Grouped by the system that has to answer them:
+
+| System | Calls | Leading names | Owning task |
+|---|---|---|---|
+| NPC disposition / reactions | **2,862** | `SetDisposition` 2510, `SetRelationship` 334 | 9.9 |
+| Inventory & items | **853** | `HasItem` 327, `RemoveItem` 182, `GiveItem` 126, `StartBarter` 108 | 9.8 |
+| Random dialogue gates | **589** | `OneOfSet` 589 | 9.7 (solved, below) |
+| Sheet: XP / humanity / masquerade | **290** | `AwardExperience` 77, `HumanityAdd` 69, `CalcFeat` 53 | 9.4 |
+| Economy | **250** | `CurrentMoney` 86, `MoneyAdd` 83, `MoneyRemove` 80 | 9.10 |
+| Sequences & conversation camera | **224** | `SetCamera` 115, `BeginSequence` 72 | 8.5 |
+| AI schedules | 76 | `FleeAndDie`, `SetupPatrolType`, `FollowPatrolPath` | 10.7 |
+| Dialogue audio | 50 | `PlayDialogFile` 41 | 9.2 |
+
+By binding kind: 21 Character methods (4,989 calls), 9 module globals (3,713), 47 registered
+entity inputs (1,798), 11 `Entity` base methods (658), and 124 names (1,212 calls) that resolve
+to nothing the runtime knows — the residue this doc exists to name.
+
+Two names in the tables are called by **no** shipped script: `React` and `SquadSeesPlayer`. The
+tables carry API the content never used.
+
+### A `vamputil` helper can shadow an engine input name
+
+`vamputil.py` defines both `Whisper(soundfile)` and `FrenzyTrigger(char)` — and those are also
+`CBaseCombatCharacter` / player datamap **input** names. Both spellings are live in the corpus,
+and the receiver decides which one runs: a bare `Whisper("Crying")` calls the script helper
+(25 sites), while `pc.Whisper("Crying")` goes through `__getattr__` to the datamap input
+(9 sites); `FrenzyTrigger` splits 1 bare / 6 receiver-qualified. So a name's binding is not a
+property of the name — it is a property of the call site, and a port that resolves either
+spelling to a single implementation changes behaviour. Counts in the tables below are the
+**receiver-qualified** half for these two.
+
+## Module globals — table `0x1058f7a8`, 11 entries
+
+Doc strings are verbatim from `ml_doc`; they are the contract the scripts rely on.
+
+| Name | Body | Calls | Contract |
+|---|---|---|---|
+| `FindEntityByName` | `10196970` | **1,911** | *"Find a single entity by its targetname field. Returns None if not found. It is an error if multiple entities have the same name."* |
+| `FindPlayer` | `10196940` | 531 | *"Find the first player entity, or NULL if there is not one spawned"* |
+| `OneOfSet` | `10196c50` | 589 | **no doc string** — the only global without one. Solved below. |
+| `ScheduleTask` | `10196ea0` | 245 | *"Sets up a task callback."* |
+| `FindEntitiesByName` | `10196d10` | 163 | *"Returns a list of entities matching the name."* |
+| `ChangeMap` | `10196a40` | 76 | *"Changes to the map and sets the player at the specified landmark"* |
+| `FindEntitiesByClass` | `10196de0` | 70 | *"Returns a list of entities matching the class."* |
+| `CreateEntityNoSpawn` | `10197050` | 64 | *"Creates an entity, but does not call it's spawn function"* |
+| `CallEntitySpawn` | `101970f0` | 64 | *"Dispatches the entitie's spawn function"* |
+| `IsPCMalk` | `10196bb0` | — | *"Returns 1 if the player is Malkavian, otherwise returns 0."* |
+| `SquadSeesPlayer` | `10196f30` | 0 | *"Returns 1 if NPCs in the squad can see the player."* |
+
+All eleven are `METH_VARARGS`. `IsPCMalk` compares the player's clan against a lazily-initialized
+`"Player_Malkavian"` lookup and returns `None` — not `0` — when no player is spawned.
+
+### `OneOfSet(which, count)` — solved
+
+589 dialogue gates ride on this and nothing in the script corpus defines it. The body
+(`10196c50`) is:
+
+```c
+PyArg_ParseTuple(args, "ii", &which, &count);
+roll = (**(code **)(*DAT_1070b22c + 0x1e0))();     // engine counter, vtable slot +0x1e0
+return PyInt_FromLong( (roll % count) == (which - 1) );
+```
+
+So it is a **1-based one-of-N selector**: `OneOfSet(2, 4)` is true on exactly one of four
+outcomes. The corpus only ever calls `OneOfSet(1,2)`, `(1,4)` and `(1,6)` — dialogue uses it to
+show one line out of N. *Pending:* the identity of the global at `DAT_1070b22c` whose vtable slot
+`+0x1e0` supplies `roll` — whether it is a per-call RNG or a frame//conversation counter changes
+whether repeated evaluation is stable, which matters for a gate re-evaluated as a menu redraws.
+
+## Character methods — table `0x1058f868`, 24 entries
+
+Every method takes the character as its first parsed argument and resolves it to a
+`CBaseEntity*`; two component pointers on that object carry the whole surface:
+
+- **`+0x98`** — the dialogue/disposition component (`SetDisposition`, expression, gesture).
+- **`+0x9c`** — the *combat character* (inventory, money, stats, feats). `HasItem` also
+  consults a second container at `+0xa8` on it.
+
+A method whose receiver lacks the component it needs raises `AttributeError` with a
+method-specific message (`"SetDisposition needs to be called on …"`, `"invalid combat character
+in CurrentMoney"`), rather than returning a falsy value.
+
+| Name | Body | Args | Calls | Backing today |
+|---|---|---|---|---|
+| `SetDisposition` | `10197e50` | `(char, name:str, level:int)` | **2,510** | stub |
+| `SetQuest` | `10199800` | `(char, quest:str, state:int)` | 732 | real (quest map) |
+| `GetQuestState` | `101987b0` | `(char, quest:str)` | 377 | real (quest map) |
+| `HasItem` | `10198640` | `(char, item:str)` | 327 | stub |
+| `IsMale` | `10199990` | `(char)` | 207 | real (sheet) |
+| `RemoveItem` | `10199240` | `(char, item:str)` | 182 | stub |
+| `GiveItem` | `10199100` | `(char, item:str)` | 126 | stub |
+| `SetCamera` | `10198070` | `(char, shotfile:str)` | 115 | stub |
+| `StartBarter` | `101993c0` | `(char)` | 108 | stub |
+| `CurrentMoney` | `101998c0` | `(char)` | 86 | stub |
+| `SeductiveFeed` | `10198150` | `(char)` | 54 | stub |
+| `CalcFeat` | `10198cc0` | `(char, feat:str)` | 53 | stub |
+| `HasWeaponEquipped` | `101984c0` | `(char, …)` | 27 | stub |
+| `AmmoCount` | `101989b0` | `(char, weapon:str)` | 19 | stub |
+| `GiveAmmo` | `10198b30` | `(char, weapon:str, count:int)` | 19 | stub |
+| `BumpStat` | `10199a70` | `(char, stat:str, …)` | 19 | stub |
+| `WorldMap` | `10199520` | `(char)` | 12 | stub |
+| `IsFollowerOf` | `101988c0` | `(char, …)` | 8 | stub |
+| `SewerMap` | `10199690` | `(char)` | 4 | stub |
+| `SetGesture` | `10197f60` | `(char, sequence:str)` | 2 | stub |
+| `GetMasqueradeLevel` | `10199ce0` | `(char)` | 2 | stub |
+| `DialogDiscipline` | `10198310` | `(char, …)` | — | stub |
+| `SetExpression` | `10197ce0` | `(char, modifier:int, expr:str)` | — | stub |
+| `React` | `10197b00` | `(char, modifier:int, expr:str)` | 0 | stub |
+
+Useful doc strings: `SetCamera` — *"Sets the entity to use the named shot file as their cinematic
+camera mode"* (so its argument keys `vdata/camerashots/`); `DialogDiscipline` — *"Uses a
+discipline in dialog, doesn't deduct blood points"*; `GetQuestState` — *"Returns the state of the
+player's quest, or 0 if this is an NPC.."*.
+
+**Six doc strings are copy-paste errors** — a build fingerprint, and a trap for anyone reading
+them as spec: `CurrentMoney` carries `HasItem`'s text, `HasWeaponEquipped` carries `RemoveItem`'s,
+`IsFollowerOf` carries `GetQuestState`'s, `BumpStat` carries `DialogDiscipline`'s, `SetExpression`
+carries `React`'s, and (in the `Entity` table) `GetModelName` carries `SetModel`'s.
+
+## `Entity` base methods — table `0x1058f698`, 13 records / 12 names
+
+`__init__` *"takes a single PyCObject with a pointer to the entity"*, then `GetOrigin`,
+`GetAngles`, `GetCenter`, `GetModelName`, `GetAngleVectors`, **`GetCenter` again** (record 6 is a
+byte-identical duplicate of record 3 — same `ml_meth`, same doc), `SetOrigin`, `SetAngles`,
+`SetModel`, `SetName`, `GetName`, `IsAlive`. There is **no `SetModelName`**: `SetModel` is the
+only model writer. All twelve are backed for real by the CPython host.
+
+`__getattr__` (`10195510`) / `__setattr__` (`10195a10`) sit in their own two-entry table
+(`0x1058f778`), documented as *"gets attributes of C++ object by their keyvalue name"* and
+*"checks name against members in game datatable"* — the datamap dispatch `python_bridge.md`
+describes.
+
+## The datamap input surface
+
+These are the names the survey could not resolve, and they are **not methods** — they are entity
+inputs, reached by the same `__getattr__` datamap walk that serves a Hammer I/O wire. The
+argument type is the record's `fieldType` (VtMB's shifted enum), which is the marshalling
+contract a port needs.
+
+### `CBaseCombatCharacter` — datamap `0x1061664c`, builder `FUN_1031a600`, 305 records, 25 inputs
+
+| Input | Type | Calls | Handler |
+|---|---|---|---|
+| `MoneyAdd` | INTEGER | 83 | `LAB_1000b4a6` → `FUN_10340c90` |
+| `MoneyRemove` | INTEGER | 80 | `LAB_1000fcef` |
+| `WillTalk` | INTEGER | 79 | `LAB_1000c130` |
+| `HumanityAdd` | INTEGER | 69 | `LAB_1001348f` |
+| `ChangeMasqueradeLevel` | INTEGER | 44 | `LAB_10005e1b` |
+| `Bloodloss` | INTEGER | 18 | `LAB_100128aa` |
+| `FrenzyTrigger` | VOID | 6 | `LAB_10004665` |
+| `Bloodgain` | INTEGER | 4 | `LAB_1000671c` |
+| `ClearActiveDisciplines` | VOID | 3 | `LAB_1000cdba` |
+| `FrenzyCheck` | INTEGER | 1 | `LAB_10002ae0` |
+| `HungerCheck` | INTEGER | 0 | `LAB_10002ae0` — **the same handler as `FrenzyCheck`**; two external names, one behaviour |
+| `Inventory_Remove` | CLASSPTR | 0 | `LAB_1000b370` |
+| `BarterBegin` / `BarterEnd` | VOID | 0 | `LAB_100043b8` / `LAB_10004390` |
+| `BloodHeal` | INTEGER | 0 | `LAB_100100b9` (internal name `BloodHealIn`) |
+| `FrenzyUpdate` | INTEGER | 0 | `LAB_100079dc` |
+| `PlayFloat` | VOID | 0 | `LAB_1000b898` |
+| `SetHeadAsCameraTarget` / `SetBodyAsCameraTarget` | VOID | 0 | `LAB_10004cb4` / `LAB_100044cb` |
+| `FadeHeadAsCameraTarget` / `FadeBodyAsCameraTarget` | FLOAT | 0 | `LAB_1000e917` / `LAB_1001018b` |
+| `LookAtEntityEye` / `Center` / `Origin` | STRING | 0 | `LAB_10014a6f` / `LAB_10012d9b` / `LAB_1000c46e` |
+| `LookAtEntityDefault` | VOID | 0 | `LAB_10009f52` |
+
+Its outputs include `OnSellWeapon` and `OnBarterClose`, plus the save-only custom fields
+`m_tEffectList`, `m_disciplineVisuals` and `m_Relationship`.
+
+**Worked semantics — `InputMoneyAdd` (`FUN_10340c90`):**
+
+```c
+if (inputdata.value.fieldType == 4 && inputdata.value.int != 0)   // 4 = FIELD_INTEGER (VtMB)
+    CBaseCombatCharacter::MoneyAdd(this, inputdata.value.int);    // FUN_10340e50
+```
+
+A zero-valued or wrong-typed input is a silent no-op. The `fieldType == 4` test is VtMB's own
+shifted `fieldtype_t` appearing at the input-dispatch layer, not just in attribute marshalling.
+
+### `CAI_BaseNPC` — datamap `0x105c9814`, builder `FUN_1027a820`, 102 records
+
+One scripted input, `SetRelationship` (**STRING**, 334 calls, `LAB_100073d8`) — the
+third-largest single gap in the game. Its 16 outputs are the NPC event surface:
+`OnDamaged`, `OnDeath`, `OnHalfHealth`, `OnFoundEnemy`, `OnLostEnemyLOS`, `OnLostEnemy`,
+`OnFoundPlayer`, `OnLostPlayerLOS`, `OnLostPlayer`, `OnHearWorld`, `OnHearPlayer`, `OnHearCombat`,
+`OnGrappleBegin`, `OnGrappleEnd`, **`OnFedUponBegin`**, **`OnFedUponEnd`** — the last pair being
+what roadmap B6's feed interaction fires. Keyfields include `squadname` and `hintgroup`.
+
+### The player class — datamap `0x10580edc`, builder `FUN_1015af10`, 157 records, 11 inputs
+
+| Input | Type | Calls | Handler |
+|---|---|---|---|
+| `GiveItem` | **STRING** | 126 | `LAB_10008760` |
+| `AwardExperience` | **STRING** | 77 | `LAB_10006807` |
+| `Whisper` | STRING | 9 | `LAB_100118a6` |
+| `SetCriminalLevel` | INTEGER | 3 | `LAB_100063bb` |
+| `RemoveCamera` | VOID | 3 | `LAB_10001c12` |
+| `PlayHUDParticle` | STRING | 1 | `LAB_1000ff6a` |
+| `StopHUDParticle` | FLOAT | 1 | `FUN_1015f330` |
+| `SetInvestigateLevel` | INTEGER | 0 | `LAB_10007748` |
+| `SetSupernaturalLevel` | INTEGER | 0 | `LAB_10007fb3` |
+| `Holster` | VOID | 0 | `LAB_100138ef` |
+
+Two consequences for the port:
+
+- **`GiveItem` exists twice** — as a Character *method* (`10199100`) and as a player datamap
+  *input* taking a string. A script reaching `pc.GiveItem(...)` resolves the method first
+  (`__getattr__` tries the class method table before the datamap walk), so the input is the I/O
+  wire's path and the method is the script's. Both must exist and they need not share an
+  implementation.
+- **`AwardExperience` takes a STRING, not an amount.** It names an entry the engine looks up
+  (`vdata` experience data), so 9.4 cannot model it as an integer add.
+
+## `G` and the save adapter
+
+`G`'s method table (`0x1058f5d0`) holds exactly `ClearAll` (`1019b7b0`) and `keys` (`1019b7e0`) —
+no `has_key`, which is why `G.has_key` falls past `Py_FindMethod` into the flag dict and reads
+integer `0`. The corpus writes **1,226 distinct `G` flags across 3,782 assignments**.
+
+The two-entry file-like table (`0x1058f620`) — `read` (`1019bba0`), `readline` (`1019bc80`) — is
+the **`IRestore` buffer adapter**: `read` bounds its request against the restore buffer's
+remaining span and raises `IOError` carrying the message `"py_obj->irestore->ReadData read …"`.
+It is the file object `cPickle.load` reads `G` back through, the mirror of the `ISave` adapter
+`CPython_SaveRestoreBlockHandler::Save` pickles into. 9.5 rebuilds both ends.
+
+## Build order
+
+Demand-ranked, with the dependency that actually gates each one:
+
+1. **`OneOfSet`** — solved above, no backing system needed. 589 dialogue gates currently fail
+   closed. Land it with 9.7.
+2. **Disposition / reactions** (2,862) — 9.9. Needs `vdata/dispositiontable` + `reaction*` and an
+   NPC emotional-state model; `SetDisposition(name, level)` and `SetRelationship(str)` are the
+   entry points.
+3. **Inventory & items** (853) — 9.8. Needs the item model behind `vdata/items/` (244 files).
+   `HasItem`/`GiveItem`/`RemoveItem` are string-keyed; `StartBarter` additionally needs the
+   barter UI, so it lags the rest.
+4. **Sheet counters** (290) — 9.4. `HumanityAdd`/`ChangeMasqueradeLevel`/`Bloodloss`/`Bloodgain`
+   are integer inputs over sheet meters and are cheap once the sheet holds them; `CalcFeat` and
+   `AwardExperience` need `vdata/system/feats.txt` and the experience table.
+5. **Economy** (250) — 9.10. `MoneyAdd`/`MoneyRemove`/`CurrentMoney` over one integer on the
+   combat character. The smallest genuinely self-contained system on the list.
+6. **Sequences & camera** (224) — 8.5 / the conversation camera; `SetCamera` keys
+   `vdata/camerashots/`.
+7. **AI schedules** (76) — 10.7, behind real NPC AI.
+
+Everything below that is single-digit demand on classes that do not exist yet
+(`GotoFloor` on an elevator, `StartTimer`/`Show`/`Hide` on a timer, `SetSpeed`, `FadeToPattern`)
+and belongs to its own entity-class task (4.8, 4.10), not to this surface.

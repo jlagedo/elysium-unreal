@@ -15,6 +15,7 @@ class USkeletalMesh;
 class USkeletalMeshComponent;
 class UElysiumLightRig;
 class UExponentialHeightFogComponent;
+class UglTFRuntimeAsset;
 class UProceduralMeshComponent;
 class USceneComponent;
 class USkyLightComponent;
@@ -80,14 +81,35 @@ public:
 	// ambient_soundscheme entities and the Cog Sound Schemes window reach it through here.
 	FElysiumSoundSchemeManager* GetSchemeManager() const { return SchemeManager.Get(); }
 
-	// B3 — build one NPC skeletal body: load (cached per stem) out/npc/<Stem>.glb through glTFRuntime
-	// and stand a movable USkeletalMeshComponent on this map actor at the given transform, playing its
-	// idle clip when the glb carries one (else the reference pose). Returns the component, or null on a
-	// missing/failed glb or empty stem. The FElysiumNpc leaf calls this from its Spawn() and registers
-	// the result with the entity world for teardown. Meshes/anims are cached on this actor (freed on
-	// unload) so a model shared by several NPCs (three Sabbat share shovelhead) loads once.
+	// B3/8.5 — build one NPC skeletal body: load (cached per stem) out/npc/<Stem>.glb through
+	// glTFRuntime and stand a movable USkeletalMeshComponent on this map actor at the given
+	// transform, playing the standing idle its disposition selects (reference pose when nothing
+	// resolves). The idle usually lives in a **shared animation bank**, not the NPC's own glb, and
+	// is retargeted onto this skeleton by bone name — UElysiumNpcAnimSubsystem owns that resolution
+	// and the session-lifetime bank cache. Returns the component, or null on a missing/failed glb or
+	// empty stem. The FElysiumNpc leaf calls this from its Spawn() and registers the result with the
+	// entity world for teardown. Meshes/anims are cached on this actor (freed on unload) so a model
+	// shared by several NPCs (three Sabbat share shovelhead) loads once.
 	USkeletalMeshComponent* BuildNpcVisual(const FString& Stem, const FVector& Location, const FRotator& Rotation,
-		float UniformScale = 1.f);
+		float UniformScale = 1.f, const FString& Disposition = FString(), int32 IdleVariant = 0);
+
+	// Re-run the default-idle policy on a live body and crossfade to the result. The seam a
+	// disposition change reaches animation through: 9.9's `SetDisposition` is 2,510 calls, 2,467
+	// of them a .dlg line's action, so an NPC's stance follows the conversation.
+	bool RefreshNpcIdle(USkeletalMeshComponent* Body, const FString& Stem, const FString& Disposition,
+		int32 IdleVariant = 0);
+
+	// Crossfade a live NPC body to a named clip, resolved through the manifest. Returns false when
+	// the name resolves nothing. The seam `SetAnimation` / `SetGesture` / `m_iszPlay` use.
+	bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
+		bool bLoop = true);
+
+	// Retarget one named clip onto an already-built NPC model's skeleton, cached per (stem, clip).
+	// The clip may live in the NPC's own glb or in any shared bank — the manifest says which, and
+	// the bank is loaded once per session. Null when the stem has no body yet or the name resolves
+	// nothing. This is the seam the script surface reaches animation through (`SetAnimation`,
+	// `SetGesture`, `scripted_sequence.m_iszPlay`).
+	UAnimSequence* ResolveNpcClip(const FString& Stem, const FString& ClipName);
 
 	// The baked SM_<Stem> asset for a prop model, cached per stem (one load per model however many
 	// entities place it). Null + a warning naming the bake command when the map has no such asset.
@@ -226,12 +248,22 @@ private:
 	// RopeMaterial texture; the cable's fixed endpoints and rest length come straight from the sidecar.
 	UPROPERTY() TArray<TObjectPtr<class UCableComponent>> Ropes;
 
-	// B3 NPC skeletal bodies: per-stem mesh + idle-anim cache, GC-rooted here so a model shared by
-	// several NPCs loads once and survives until unload. The USkeletalMeshComponents themselves are
-	// components of this actor (rooted via AddInstanceComponent), freed with it. An idle entry may be
-	// null (the glb has no idle clip → reference pose); the stem is still cached to avoid re-scanning.
+	// B3/8.5 NPC skeletal bodies: per-stem mesh cache and a per-(stem, clip) animation cache,
+	// GC-rooted here so a model shared by several NPCs loads once and survives until unload. The
+	// USkeletalMeshComponents themselves are components of this actor (rooted via
+	// AddInstanceComponent), freed with it.
+	//
+	// The animation cache is keyed `<stem>|<clip>` and lives HERE rather than on the GI-scoped
+	// UElysiumNpcAnimSubsystem, because glTFRuntime binds every UAnimSequence it builds to one
+	// USkeletalMesh's USkeleton — and meshes are per-map-epoch. The subsystem caches what is
+	// skeleton-independent: the parsed bank glbs and the clip vocabularies. An entry may be null
+	// (nothing resolved → reference pose); it is still cached, so a miss is not retried per NPC.
 	UPROPERTY() TMap<FString, TObjectPtr<USkeletalMesh>> NpcMeshCache;
-	UPROPERTY() TMap<FString, TObjectPtr<UAnimSequence>> NpcIdleCache;
+	UPROPERTY() TMap<FString, TObjectPtr<UAnimSequence>> NpcAnimCache;
+
+	// The NPC's own parsed glb, kept for the epoch so a clip it owns itself (its dialogue anims)
+	// can still be retargeted after the mesh is cached — the bank path does not go through it.
+	UPROPERTY() TMap<FString, TObjectPtr<UglTFRuntimeAsset>> NpcAssetCache;
 
 	// 8.3 dynamic-prop static meshes: per-stem cache, GC-rooted here so a model placed by several
 	// prop entities builds once and survives until unload. The UStaticMeshComponents themselves are

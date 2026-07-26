@@ -75,10 +75,10 @@ parent=−1 `pos=(0,0,39.67)`, uniform `posscale=(1/256,…)`, `rotscale ~1e-5`;
 | Off | Type | Field | Note |
 |---|---|---|---|
 | 0 | int | `NameIndex` | names begin `@` (e.g. `@Jeanette_Line1_Col_E`) |
-| 4 | float | `fps` | all probed = 30.0 |
+| 4 | float | `fps` | **not uniform** — 30.0 on 1,436 of 1,502 sequences across six banks, but 18.0 ×54 (incl. `run`), 60.0 ×8, 20.0 ×4. A clip's own rate, so a consumer must read it rather than assume 30 |
 | 8 | int | `flags` | loop/delta |
 | 12 | int | `numframes` | 101–501 on probed clips |
-| 16/20 | int | `nummovements` / `movementindex` | root motion (0 on probed) |
+| 16/20 | int | `nummovements` / `movementindex` | **root motion — present, and load-bearing for locomotion.** 0 on the dialogue clips (jeanette et al.), but **66 of `move_and_ranged`'s 722 animdescs carry it**: `walk` 23 records, `run` 9, `sneak` 1, every weapon walk/run variant. The records are located but **not decoded**, so a locomotion clip bakes in place and its feet slide — a walk cycle on a stationary body reads as moonwalking. Harmless while NPCs do not move (8.5); a blocker for the locomotion task |
 | 24 | Vector | `bbmin` (3f) | per-anim bbox |
 | 36 | Vector | `bbmax` (3f) | |
 | 48 | int | **`animindex`** | → per-bone anim records, rel. animdesc base |
@@ -90,9 +90,9 @@ streaming fields — older HL2-Beta layout.)
 
 **`StudioSeqDesc` (`mstudioseqdesc_t`) — 764 bytes** [data-verified — stride
 confirmed] (`NumLocalSeq`@272 / `LocalSeqIndex`@276). The game-facing entries; each
-references anims through a blend grid: `szlabelindex`@0, `szactivitynameindex`@4
-(e.g. `ACT_DIALOG_SCRIPTED_SEQUENCE`), `flags`@8, `activity`@12 (`-1` until the game
-DLL maps it), `numevents`/`eventindex`@20/24 (anim events), bbox@28, `numblends`@52,
+references anims through a blend grid: `szlabelindex`@0, `szactivitynameindex`@4,
+`flags`@8, `activity`@12, `actweight`@16, `numevents`/`eventindex`@20/24 (anim events),
+bbox@28, `numblends`@52,
 then **`short anim[16][16]`@56** (512B **inline** blend grid; `MAXSTUDIOBLENDS=16`, a
 v2531 fixed-size divergence from modern Source's variable `blend[]` pointer), then a
 **196-byte trailing region** (568..763: `paramindex[2]`, `fadein/out`, autolayers, IK
@@ -103,6 +103,37 @@ stride that resolves every sequence name across models of every size — jeanett
 resolves the names on any model. On these NPCs the mapping is **1 seq ↔ 1 anim,
 blends=1** (`anim[0][0]` → local anim), so a first pass reads
 `seq → anim[0][0] → animdesc` and skips blend interpolation.
+
+### The activity name is the selection key [data-verified]
+
+`activity`@12 reads **`-1` on disk for every sequence** — the game DLL resolves the *name*
+to its enum at model load, so the durable key is the literal at `szactivitynameindex`@4,
+which is present in the shipped bytes and decodes cleanly (`mdl_skel.local_sequences`):
+
+| Model | Sequences | Carrying an activity | What they carry |
+|---|---|---|---|
+| `shared/male/pc_idles` | 1 | 1 | `idle01` = **`ACT_IDLE`** |
+| `shared/male/stances` | 67 | 67 | all **`ACT_DISPOSITION`** — the disposition stance set |
+| `shared/male/move_and_ranged` | 602 | 475 | 461 distinct (`ACT_WALK`, `ACT_RUN`, `ACT_IDLE_GLOCK`, …) |
+
+The 127 sequences in `move_and_ranged` with an **empty** activity are the layer/plumbing
+entries (`baseballbat_bobble_layer`, `claws_aggressive_walk_layer`) — additive helpers the
+engine composes, not clips it selects.
+
+`actweight`@16 is the weighted-random share among the sequences sharing one activity:
+`claws_aggressive_run` carries 7 against its two `_alt` variants at 3 each, so the base run
+plays ~54% of the time. The observed values are 1 (×279), 100 (×177), 0 (×127 — exactly the
+activity-less layers), 20, 30, 7 and 3.
+
+Together these are what lets a consumer ask for *an* `ACT_IDLE` rather than pattern-match a
+label: `regular_cop` resolves 229 clips with "idle" in the name, of which `Stance_Dead_Idle_1`
+and `Bed_Left_Idle` are not idles in any useful sense.
+
+`flags`@8 correlates with looping (`walk`/`run`/`sneak`/every stance = 1; `crouch` = 0), but
+`idle01` reads 0 while being a looping idle, and the values 2 and 0x14 are unmapped — the bit
+meanings are **not** established, so looping is a consumer policy rather than a read of this
+field. `numevents`@20 is non-zero on **124 of `move_and_ranged`'s 602** sequences; the event
+array is located but not decoded.
 
 ## A.4 Animation data — the 32B/bone record + `{valid,total}` RLE [data-verified]
 

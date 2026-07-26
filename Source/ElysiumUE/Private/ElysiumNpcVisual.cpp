@@ -12,25 +12,53 @@
 
 namespace ElysiumNpcVisual
 {
-	USkeletalMesh* LoadMesh(const FString& Stem, UglTFRuntimeAsset*& OutAsset, FString& OutError)
+	UglTFRuntimeAsset* LoadAssetFromPath(const FString& FullPath, FString& OutError)
 	{
-		OutAsset = nullptr;
 		OutError.Reset();
-
-		const FString FullPath = FElysiumContentPaths::NpcGlb(Stem);
 		if (!FPaths::FileExists(FullPath))
 		{
 			OutError = FString::Printf(TEXT("not found: %s"), *FullPath);
 			return nullptr;
 		}
-
-		// Default config: SceneScale 100 (m->cm), TransformBaseType::Default, bAllowExternalFiles so the
-		// sibling tex/*.png resolve relative to the .glb — the raw glb mdl_gltf.py writes loads 1:1.
+		// Default config: SceneScale 100 (m->cm), TransformBaseType::Default, bAllowExternalFiles so
+		// the sibling tex/*.png resolve relative to the .glb — the raw glb mdl_gltf.py writes loads
+		// 1:1. A bank carries no materials, so only the basis/scale half of this applies to one.
 		FglTFRuntimeConfig Config;
 		UglTFRuntimeAsset* Asset = UglTFRuntimeFunctionLibrary::glTFLoadAssetFromFilename(FullPath, false, Config);
 		if (Asset == nullptr)
 		{
-			OutError = TEXT("glTFRuntime could not parse the .glb");
+			OutError = FString::Printf(TEXT("glTFRuntime could not parse %s"), *FPaths::GetCleanFilename(FullPath));
+		}
+		return Asset;
+	}
+
+	UAnimSequence* RetargetClip(UglTFRuntimeAsset* Asset, USkeletalMesh* Mesh, const FString& ClipName,
+		FString& OutError)
+	{
+		OutError.Reset();
+		if (Asset == nullptr || Mesh == nullptr || ClipName.IsEmpty())
+		{
+			OutError = TEXT("null asset/mesh or empty clip name");
+			return nullptr;
+		}
+		FglTFRuntimeSkeletalAnimationConfig AnimConfig;
+		UAnimSequence* Anim = Asset->LoadSkeletalAnimationByName(Mesh, ClipName, AnimConfig,
+			/*bCaseSensitive=*/false);
+		if (Anim == nullptr)
+		{
+			OutError = FString::Printf(TEXT("clip '%s' not in the asset"), *ClipName);
+		}
+		return Anim;
+	}
+
+	USkeletalMesh* LoadMesh(const FString& Stem, UglTFRuntimeAsset*& OutAsset, FString& OutError)
+	{
+		OutAsset = nullptr;
+		OutError.Reset();
+
+		UglTFRuntimeAsset* Asset = LoadAssetFromPath(FElysiumContentPaths::NpcGlb(Stem), OutError);
+		if (Asset == nullptr)
+		{
 			return nullptr;
 		}
 
@@ -53,27 +81,4 @@ namespace ElysiumNpcVisual
 		return Mesh;
 	}
 
-	UAnimSequence* LoadIdleAnim(UglTFRuntimeAsset* Asset, USkeletalMesh* Mesh, FString& OutAppliedName)
-	{
-		OutAppliedName.Reset();
-		if (Asset == nullptr || Mesh == nullptr)
-		{
-			return nullptr;
-		}
-
-		const TArray<FString> AnimNames = Asset->GetAnimationsNames(true);
-		for (const FString& Name : AnimNames)
-		{
-			if (Name.Contains(TEXT("idle"), ESearchCase::IgnoreCase))
-			{
-				FglTFRuntimeSkeletalAnimationConfig AnimConfig;
-				if (UAnimSequence* Anim = Asset->LoadSkeletalAnimationByName(Mesh, Name, AnimConfig, /*bCaseSensitive=*/false))
-				{
-					OutAppliedName = Name;
-					return Anim;
-				}
-			}
-		}
-		return nullptr;   // no idle clip — caller leaves the mesh in its reference pose
-	}
 }

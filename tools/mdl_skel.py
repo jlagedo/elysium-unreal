@@ -11,10 +11,12 @@ resolved here: `resolve_tree` walks the studiohdr include tree transitively and
 `local_sequences` reads each model's own clips, so the caller can bake an NPC's own clips
 and each shared bank's clips into separate glTF assets keyed by bone name (A.7).
 
-Not decoded here: procedural bones (`ProcType`!=0), IK, blend spaces (`numblends`>1 — the
-`[0][0]` base cell is taken), and root motion (clips bake in place).
+Not decoded here: procedural bones (`ProcType`!=0), IK, animation events
+(`numevents`/`eventindex`, located but unread), blend spaces (`numblends`>1 — the `[0][0]`
+base cell is taken), and root motion (clips bake in place).
 """
 import struct
+from collections import namedtuple
 
 _i32 = lambda b, o: struct.unpack_from("<i", b, o)[0]
 _u16 = lambda b, o: struct.unpack_from("<H", b, o)[0]
@@ -27,6 +29,13 @@ _quat = lambda b, o: struct.unpack_from("<4f", b, o)
 def _cstr(b, o):
     e = b.index(b"\0", o)
     return b[o:e].decode("ascii", "replace")
+
+
+def _cstr_rel(b, base, field_off):
+    """A studio string index stored relative to its own record base. Index 0 means unset
+    (Source's convention), which several `StudioSeqDesc.szactivitynameindex` carry."""
+    rel = _i32(b, base + field_off)
+    return _cstr(b, base + rel) if rel else ""
 
 
 def _qmul(a, b):
@@ -127,27 +136,44 @@ def read_includes(d):
     return out
 
 
+_SEQDESC_STRIDE = 764
+
+#: One game-facing sequence. The first four fields are the bake inputs; `activity`,
+#: `actweight` and `flags` are the engine's own selection keys (see `local_sequences`).
+Seq = namedtuple("Seq", "label base frames fps activity actweight flags")
+
+
 def local_sequences(d):
-    """This model's own game-facing sequences -> [(label, animdesc_base, numframes, fps)].
+    """This model's own game-facing sequences -> list[Seq].
 
     StudioSeqDesc[NumLocalSeq@272] (stride 764): label@0 (rel. seq base), anim[0][0]@56 (the
     blend grid's base cell) -> a local anim index into LocalAnims. For VtMB NPC/bank models
     the mapping is 1 seq <-> 1 anim (numblends 1), so the grid beyond [0][0] is ignored and a
     label whose base cell is out of range is skipped. Deduped by lowercased label (first wins);
-    the label is the name the game references (scripted_sequence `m_iszPlay`, activities)."""
+    the label is the name the game references (scripted_sequence `m_iszPlay`, activities).
+
+    Three more fields carry how the *engine* picks a sequence, rather than how content names
+    one. `szactivitynameindex`@4 is the activity literal (`ACT_IDLE`, `ACT_WALK`,
+    `ACT_DISPOSITION`, ...), empty on a layer/plumbing sequence; `actweight`@16 is the
+    weighted-random share among the sequences sharing an activity (`claws_aggressive_run` 7 vs
+    its two alts at 3); `flags`@8 carries the studio sequence bits. The sibling `activity`@12
+    int stays -1 on disk — the game DLL resolves the name to an enum at model load, so the
+    *name* is the durable key. `numevents`/`eventindex`@20/24 are located but not decoded."""
     ns = _i32(d, 272); sbase = _i32(d, 276)
     na = _i32(d, 264); abase = _i32(d, 268)
     out, seen = [], set()
     for i in range(ns):
-        sb = sbase + i * 764
-        label = _cstr(d, sb + _i32(d, sb))
+        sb = sbase + i * _SEQDESC_STRIDE
+        label = _cstr_rel(d, sb, 0)
         a0 = _h16(d, sb + 56)
         key = label.lower()
         if not label or key in seen or not (0 <= a0 < na):
             continue
         seen.add(key)
         ab = abase + a0 * 72
-        out.append((label, ab, _i32(d, ab + 12), _f32(d, ab + 4)))
+        out.append(Seq(label=label, base=ab, frames=_i32(d, ab + 12), fps=_f32(d, ab + 4),
+                       activity=_cstr_rel(d, sb, 4), actweight=_i32(d, sb + 16),
+                       flags=_i32(d, sb + 8)))
     return out
 
 

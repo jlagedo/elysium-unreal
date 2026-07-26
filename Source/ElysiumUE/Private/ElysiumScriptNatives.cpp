@@ -27,8 +27,8 @@ namespace
 		// 24 Character methods
 		{ TEXT("React"),               true,  TEXT("stub") },
 		{ TEXT("SetExpression"),       true,  TEXT("stub") },
-		{ TEXT("SetDisposition"),      true,  TEXT("stub") },
-		{ TEXT("SetGesture"),          true,  TEXT("stub") },
+		{ TEXT("SetDisposition"),      true,  TEXT("stance only (9.9 owns reactions)") },
+		{ TEXT("SetGesture"),          true,  TEXT("plays the named clip") },
 		{ TEXT("HasItem"),             true,  TEXT("stub (no inventory)") },
 		{ TEXT("GiveItem"),            true,  TEXT("stub (no inventory)") },
 		{ TEXT("RemoveItem"),          true,  TEXT("stub (no inventory)") },
@@ -163,6 +163,30 @@ namespace ElysiumScriptNatives
 			const FElysiumVariant R = CharMethodStubResult(Method, State);
 			Record(State, Method, Display, R, /*bStub*/ false);
 			return R;
+		}
+
+		// The animation half of the character surface (8.5). Both reach the receiver's body through
+		// FElysiumEntity's virtual seam, so the host needs no knowledge of the NPC leaf.
+		//
+		// SetGesture(char, sequence) — "Sets the entity to play the named sequence" (ml_doc). A
+		// one-shot: the script names a gesture, not a new resting pose.
+		if (Method == FName(TEXT("SetGesture")) && World && Args.Num() >= 1)
+		{
+			FElysiumEntity* E = World->Resolve(Self);
+			const bool bPlayed = E && E->PlayAnimClip(Args[0].ToString(), /*bLoop=*/true);
+			Record(State, Method, Display, FElysiumVariant::Void(), /*bStub*/ !bPlayed);
+			return FElysiumVariant::Void();
+		}
+		// SetDisposition(char, name, level) — 2,510 calls, 2,467 of them a `.dlg` line's action.
+		// Only the animation half is answered here: the NPC re-picks its standing stance from the
+		// disposition table. The emotional-state model and `level` are 9.9's, so this still records
+		// as a stub — the coverage report must not claim more than it does.
+		if (Method == FName(TEXT("SetDisposition")) && World && Args.Num() >= 1)
+		{
+			FElysiumEntity* E = World->Resolve(Self);
+			if (E) { E->SetDispositionName(Args[0].ToString()); }
+			Record(State, Method, Display, FElysiumVariant::Void(), /*bStub*/ true);
+			return FElysiumVariant::Void();
 		}
 
 		// Everything else logs a stub and returns its default (an unlisted method — the receiver

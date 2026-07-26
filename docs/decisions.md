@@ -6,6 +6,128 @@ trigger. A behavioural divergence from retail lands here carrying both the faith
 chosen behaviour (`remaster-direction.md`'s governing rule). Entries are never rewritten —
 append a correction as a new entry.
 
+- **2026-07-26** — **The UI foundation decision set (roadmap 8.6): the type system, the stack, the
+  backdrop, and four RE corrections that reset what the original UI actually is.** Owner call,
+  taken against reference captures of the running game plus a fresh `client.dll` decompile.
+
+  **(0) The RE first — the documented menu is the wrong menu.** VtMB ships *two* menu
+  implementations, and `m0_menu_build.md` §7 documents the one that does not run.
+  `GameUI.dll`'s stock `CBasePanel`/`CGameMenu` is Source boilerplate; the menu the player sees
+  is **`client.dll`'s own `CVMainMenu`/`CVMenuButton`**. Four facts change as a result, each
+  recorded here because the re-skin is checked against *intent* and the intent was misread:
+
+  - **Both schemes are live and they are not interchangeable.** `CVMainMenu`'s ctor
+    (`FUN_10065700`) loads **`Resource/VampireScheme.res`** — not `TrackerScheme.res`, which
+    `m0_menu_build.md` §2 asserts is the only loaded scheme. VampireScheme carries the gold `V*`
+    palette that skins every client.dll surface (menu, character sheet, HUD); TrackerScheme skins
+    `GameUI.dll`'s dialogs. Its `Fonts` block *is* empty as documented — it supplies colours,
+    `BaseSettings` and `Borders` only.
+  - **Menu labels are `VMainMenu_BTN_*` tokens, not `#GameUI_*`.** `FUN_10065eb0` formats
+    `VMainMenu_%s` from a `BTN_*` table and falls back to a hardcoded English table on a lookup
+    miss. Full set: `BTN_NEWGAME LOADGAME SAVEGAME RELOAD CONTINUE MAINMENU OPTIONS QUIT
+    MULTIPLAYER VIEWINTRO TUTORIAL MANUAL`.
+  - **The column is centred, not west-aligned.** `m0_menu_build.md` §7's content-alignment 3
+    (west) + inset (6,0) belongs to `CGameMenuButton`, the unused menu. `CVMainMenu::PerformLayout`
+    (`FUN_100660e0`) centres: `x = (screenW − btnW)/2`. Confirmed against a capture.
+  - **The canvas is 1024×768, not VGUI's 640×480.** The layout law, constants read out of
+    `.rdata`: `sx = screenW/1024`, `sy = screenH/768`, `btnW = maxLabelW + round(20·sx)`,
+    `btnH = maxLabelH + round(4·sy)`, `pitch = btnH + round(2·sy)`, `y_i = menuY + 2 + i·pitch`.
+    That is **the same virtual canvas `CSignUI` uses** (2026-07-23), so signs, menu and HUD share
+    one authored coordinate model rather than two competing ones. Item colour is hardcoded
+    `0xc00000a8` = RGBA(168,0,0,192), not read from either scheme.
+
+  Also recovered: the menu particle scene spawns two emitters no doc lists —
+  `MM_cursor_emitter` and `MM_menu_emitter` — over defaults `camera_fov 45 / near 2 / far 4096 /
+  default_skybox holylight / music Vampire_Theme_Mono.wav`. The in-game HUD is `client.dll` C++
+  with no `.res` at all (`CBloodBar`, `CFrenzyBar`, `CFeedBar`, `CHealthAnkh`, `CMoneyBar`,
+  `CStealth`, `CAmmoCounter`, `CProgBar`, `CBossHealthBar`, `CDiscipline`, `CHudInfoBar`,
+  `CHudUseIcon`, `CHudAreaIcon`) drawing `materials/hud/**`. Facts doc: `docs/vtmb-ui.md`.
+
+  **(1) The type system is "Nocturne": Spectral SC / Spectral / Inter.** The faithful behaviour,
+  recorded first: VtMB sets its entire UI in **28 bitmap `.fnt` atlases** authored for 640×480,
+  and its type signature is **small-caps serif with wide tracking** for every label, dropping to a
+  plain sans for body copy. The atlases go (`remaster-direction.md` axis 1 — the UI has no classic
+  mode); **the small-caps signature is kept**, because it is an authored art decision and not a
+  hardware constraint. Spectral SC carries the labels, Spectral the body, Inter the data and
+  numerals. Chosen over three alternatives (Cormorant SC, Marcellus SC, Alegreya SC) on one
+  criterion: Spectral is the only surveyed family drawn for screens rather than paper, and it is
+  the label face that has to stay readable at sheet-label and HUD-numeral size on a dark ground.
+  All three are SIL OFL 1.1 with **no Reserved Font Name**, so they are redistributable verbatim
+  and the static weights cut from Inter's variable source need no rename
+  (`tools/fetch_ui_fonts.py`). Caveat keeps the `Vamp_Handwriting1` handwriting slot; the sign
+  panel's current Plex/Zilla/Pirata set migrates onto this ramp with 8.8, not before — it is
+  working today and there is no reason to break it early.
+
+  **(2) The palette is gold-led, not blood-led.** Read from `VampireScheme.res` and confirmed
+  against captures: chrome and labels are `VUnselectedText 171 140 95` rising to
+  `VDesHeaderText 255 240 191`; body text is `BaseText 216 222 211`; the active tab is
+  `BrightControlText 109 207 246` (cyan); blood red is reserved for the menu column, the pips and
+  critical states. An earlier read of this work had red as the ground, which is wrong — red is an
+  accent over a gold-and-bone chrome.
+
+  **(3) CommonUI + CommonInput are adopted — this resolves the pending item from 2026-07-25.**
+  The deferral's trigger was "when a real screen needs focus/navigation", and 8.6 is that screen.
+  It also reverses this session's own earlier lean toward Slate-only-no-assets, on the owner's
+  standing rule that the engine-native path leads: CommonUI supplies the activatable-widget stack,
+  input routing, focus and gamepad navigation that roadmap **8.10** would otherwise hand-roll.
+  **The cost the deferral worried about is avoided**: widget *visual trees* are built in C++ Slate
+  inside `UCommonActivatableWidget` subclasses, so adoption costs **no Widget Blueprint assets and
+  no editor content loop** — only the single `CommonUIInputData` config asset CommonInput requires.
+  The two clean halves and "nothing game-sourced is committed" are untouched.
+
+  **(4) The menu backdrop is a real 3D scene, not a particle port.** VtMB's is a CPU particle
+  field (fire, clouds, cels, 17 orbiting clan logos) over an `MM_Skybox` cubemap. Reproducing that
+  language is rejected: it is a port of a 2004 mini-language whose cloud/cel/logo layers were never
+  matched against ground truth even in the Godot prototype, so "faithful" is not verifiable. The
+  remaster instead stands the menu in front of **real game geometry** through the existing bake +
+  `AElysiumMapActor` path, which is the modernization the direction charter licenses at the
+  presentation layer. The extracted particle scene and sprites are mirrored anyway
+  (`out/ui/menu/`) so an ember/fog layer can quote the original later.
+
+  **(5) The title lockup reuses the game's own art**, decoded from the user's install to
+  `out/ui/menu/title.png` (1024×512) and never committed — bring-your-own is unchanged. Setting
+  the title in type was rejected: it is the single most recognizable image the menu has, and the
+  presentation test asks whether a change serves the art direction, not whether it is newer.
+
+  **(6) Fonts reach the runtime as imported `UFont` assets built by a generator**, not as loose
+  TTFs read at draw time (which is how the sign panel resolves faces today). Engine-native gets
+  the font cache, DPI-aware scaling and clean Slate style-set binding; the generator is registered
+  in `build_content.py` like every other committed asset, so it cannot go stale. The loose-TTF path
+  stays until 8.8 migrates the sign panel.
+
+- **2026-07-26** — **9.7: the script→engine action surface is RE'd and specified before any of it
+  is wired; the per-name inventory gets its own doc.** Owner call, three parts.
+
+  **(1) Scope: RE + spec, wiring delegated.** 9.7 produces the demand ledger, the Ghidra recovery
+  and `docs/script_api.md`, and lands only the fixes that need no backing system (`OneOfSet`, the
+  shadowed-name split). Wiring is demand-ordered system tasks — 9.8 inventory (853 calls), 9.9
+  disposition (2,862), 9.10 economy (250) — each with its own decision point, so a system is built
+  against recovered behaviour rather than inferred from call sites. This is
+  `remaster-direction.md`'s governing rule applied to the largest remaining logic-layer surface:
+  the demand is 5,264 grouped calls, and every one of them is the reproduce layer.
+
+  **(2) `script_api.md` is a sibling of `python_bridge.md`, not a section of it.** The mechanism
+  (how binding works — the datamap walk, `__main__`, the four call paths) and the inventory (which
+  names, what signature, which datamap, how much demand) have different change rates and different
+  readers: the inventory grows a row per recovered name, the mechanism is closed. `docs/CLAUDE.md`
+  records the split so a new fact lands in the right one.
+
+  **(3) Handler semantics are recovered on demand, not up front.** Every row carries its handler
+  address, so recovering one is a single `DumpFuncs` run. Recovering all ~60 now would front-load
+  work against systems that do not exist and whose shape would change what the recovery needs to
+  answer; the contract half (name, arity, argument `fieldType`, owning class) is exact and is what
+  the port binds against today.
+
+  **Findings that corrected standing docs.** `OneOfSet` is a real module-table global, not the
+  `vamputil` helper roadmap 9.3 called it — it is defined nowhere in the corpus and called 589
+  times exclusively from dialogue, so its hardcoded-`false` stub silently fails 589 gates closed.
+  `AwardExperience` takes a **STRING**, constraining 9.4. `GiveItem` exists as both a Character
+  method and a player datamap input. `HungerCheck` and `FrenzyCheck` share one handler. Six
+  `ml_doc` strings are copy-paste errors. `vamputil`'s `Whisper`/`FrenzyTrigger` **shadow engine
+  input names**, and the receiver decides which runs — a port that collapses either spelling to one
+  implementation changes behaviour. The file-like method table is the `IRestore` buffer adapter,
+  closing `python_bridge.md`'s only open item.
+
 - **2026-07-26** — **9.3: the embedded VM gets its own filesystem namespace; script writes land in
   a `Saved/` overlay, never in the content mirror.** Owner call, three parts.
 
@@ -1328,6 +1450,6 @@ append a correction as a new entry.
   calibration for the whole render; nothing here compensates for it locally.
 - **Pending** — **0.9, the uasset-bake architecture** (`docs/uasset-bake-spike.md`'s own
   terms: "earns a `decisions.md` entry or gets discarded"; de facto everything since
-  2026-07-25 builds on it — trigger: before `spike/uasset-bake` merges to `main`);
-  CommonUI/CommonInput adoption (deferred with trigger — see the 2026-07-25 input entry).
-  *(Formerly listed here: 5.5 and the 10.6 input path — decided 2026-07-22 and 2026-07-25.)*
+  2026-07-25 builds on it — trigger: before `spike/uasset-bake` merges to `main`).
+  *(Formerly listed here: 5.5, the 10.6 input path, and CommonUI/CommonInput adoption — decided
+  2026-07-22, 2026-07-25 and 2026-07-26.)*

@@ -82,6 +82,11 @@ struct FElysiumContentPaths
 	static FString CfgDir() { return Root() / TEXT("cfg"); }
 	static FString CfgFile(const FString& File) { return CfgDir() / File; }
 
+	// VtMB's whole RPG/rules layer is Valve-KeyValues text under `vdata/`, mirrored verbatim by
+	// tools/UE_extract_vdata.py (PL5b). Per-table consumer map: `docs/vdata-catalog.md`.
+	static FString VdataDir() { return Root() / TEXT("vdata"); }
+	static FString VdataFile(const FString& Rel) { return VdataDir() / Rel; }
+
 	// The script filesystem's writable overlay (FElysiumScriptFS). VtMB's scripts write as well as
 	// read — `haven_pc.txt` takes the PC's name, the Unofficial Patch's hunter mode copies `- hunter`
 	// asset variants over the shipped ones — and every one of those writes lands here instead of in
@@ -115,6 +120,17 @@ struct FElysiumContentPaths
 	// plugin does the glTF->UE basis/scale change). Stem is the model name, e.g. "gangmember_male_2".
 	static FString NpcDir() { return Root() / TEXT("npc"); }
 	static FString NpcGlb(const FString& Stem) { return NpcDir() / (Stem + TEXT(".glb")); }
+
+	// The shared animation banks and their resolution sidecars (8.5). A VtMB NPC's own .mdl
+	// carries only its own clips — mostly dialogue — and pulls idle/locomotion/combat from banks
+	// through the studiohdr include DAG, so a bank glb is a skeleton + clips with no mesh, applied
+	// to any NPC by bone name. `npc_index.json` names every NPC and bank with its glb and counts
+	// (~22 KB, read once); `clips/<stem>.json` is one NPC's whole resolved vocabulary (~90 KB),
+	// read only for the stems a map actually places — the full npc_manifest.json is 5.5 MB and
+	// exists for the offline probes. NpcBankGlb takes the index's own relative path ("banks/x.glb").
+	static FString NpcIndex() { return NpcDir() / TEXT("npc_index.json"); }
+	static FString NpcClips(const FString& Stem) { return NpcDir() / TEXT("clips") / (Stem + TEXT(".json")); }
+	static FString NpcBankGlb(const FString& RelGlb) { return NpcDir() / RelGlb; }
 
 	// The labelled sky set (debug, sky-ambience RE-A2/B1). Six self-describing face images —
 	// suffix, predicted axis, TOP banner, up arrow, tagged corners, edge neighbours — authored by

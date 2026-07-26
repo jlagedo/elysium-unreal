@@ -1,0 +1,94 @@
+#pragma once
+
+#include "CoreMinimal.h"
+
+// The NPC animation vocabulary, read off the offline sidecars (roadmap 8.5, pipeline PL4).
+//
+// A VtMB NPC's own `.mdl` carries only its own clips (mostly dialogue); idle, locomotion and
+// combat come from shared **animation banks** pulled in through the studiohdr include DAG
+// (`docs/animation_and_movers.md` A.7). `tools/npc_export.py` resolves that DAG offline and
+// writes, per NPC, which stem owns each clip label — so the runtime never walks includes, it
+// looks a label up and is told which glb to load.
+//
+// Plain C++ (no UObject), like the rest of the entity substrate: these types hold *names*, and
+// the UObject-side caches that turn a name into a USkeletalMesh/UAnimSequence live in
+// UElysiumNpcAnimSubsystem (banks, GI-scoped) and AElysiumMapActor (per-map-epoch).
+
+// Well-known activity literals. VtMB stores `StudioSeqDesc.activity` as -1 on disk and lets the
+// game DLL resolve the *name* at model load, so the name is the durable key (A.3).
+namespace ElysiumActivity
+{
+	// The engine's plain resting idle. `pc_idles.idle01` is the canonical one.
+	extern const TCHAR* Idle;
+	// The disposition stance set: `stances.mdl` tags all 67 of its clips with this, named
+	// `Stance_<Disposition>_Idle_<N>` and `Stance_<Disposition>_Trans_<A>_<B>`.
+	extern const TCHAR* Disposition;
+}
+
+// One clip in an NPC's resolved vocabulary.
+struct FElysiumNpcClip
+{
+	// The stem whose glb carries the baked animation — the NPC itself, or a bank.
+	FString Owner;
+	// The `ACT_*` literal the engine selects on; empty on a layer/plumbing sequence (a
+	// `*_layer`/`*_delta` additive the engine composes rather than picks).
+	FString Activity;
+	// Weighted-random share among the clips sharing this activity. `idle01` carries 30 against
+	// three fidgets at 1, which is how VtMB rests on the idle ~91% of the time.
+	int32 Weight = 0;
+	// Studio sequence bits. Bit meanings are NOT established (A.3) — do not read looping off it.
+	int32 Flags = 0;
+	int32 Frames = 0;
+	float Fps = 30.f;
+
+	// Authored duration. The rate is per clip and is not always 30 (54 of 1,502 surveyed
+	// sequences are 18 fps, including `run`), so this is read rather than assumed.
+	float Seconds() const { return Fps > 0.f ? static_cast<float>(Frames) / Fps : 0.f; }
+	bool IsOwnedBy(const FString& Stem) const { return Owner.Equals(Stem, ESearchCase::IgnoreCase); }
+};
+
+// One NPC's whole resolved vocabulary, off `out/npc/clips/<stem>.json` (~90 KB / ~1,540 clips).
+struct FElysiumNpcClipSet
+{
+	FString Stem;
+	// Label -> clip. Keyed case-insensitively: content spells a clip name however it likes
+	// (`m_iszPlay "Jump2"`, `SetAnimation("showguns")`), and the label is the same name.
+	TMap<FString, FElysiumNpcClip> Clips;
+
+	bool IsValid() const { return !Clips.IsEmpty(); }
+	const FElysiumNpcClip* Find(const FString& Label) const { return Clips.Find(Label); }
+
+	// Every clip carrying Activity, unordered.
+	TArray<FString> ByActivity(const FString& Activity) const;
+	// Every ACT_DISPOSITION clip named `Stance_<AnimName>_Idle*` (the standing idles) or, with
+	// bWantTransitions, `Stance_<AnimName>_Trans*` (the authored blends between two of them).
+	TArray<FString> StanceClips(const FString& AnimName, bool bWantTransitions = false) const;
+
+	// Highest Weight first, then label — the engine's resting pick among equals. Stable, so the
+	// same NPC resolves the same clip every load.
+	void SortByWeight(TArray<FString>& Labels) const;
+
+	// Parse out/npc/clips/<Stem>.json. Returns false and fills OutError on any failure.
+	bool Load(const FString& InStem, FString& OutError);
+};
+
+// out/npc/npc_index.json — every NPC and bank with its glb and counts, no clip maps (~22 KB).
+struct FElysiumNpcIndexEntry
+{
+	FString Glb;        // relative to out/npc ("gangmember_male_2.glb", "banks/x.glb")
+	FString Model;      // the source .mdl, for diagnostics
+	int32   Bones = 0;  // NPCs only
+	int32   ClipCount = 0;
+};
+
+struct FElysiumNpcIndex
+{
+	TMap<FString, FElysiumNpcIndexEntry> Npcs;
+	TMap<FString, FElysiumNpcIndexEntry> Banks;
+
+	bool IsValid() const { return !Npcs.IsEmpty(); }
+	bool Load(FString& OutError);
+
+	// Absolute path to a bank's glb, or empty when the stem is not a known bank.
+	FString BankGlbPath(const FString& BankStem) const;
+};

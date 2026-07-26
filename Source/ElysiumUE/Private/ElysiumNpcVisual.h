@@ -20,9 +20,19 @@ namespace ElysiumNpcVisual
 	// harness's own per-clip auditioning). Needs no UWorld — glTFLoadAssetFromFilename is world-free.
 	USkeletalMesh* LoadMesh(const FString& Stem, UglTFRuntimeAsset*& OutAsset, FString& OutError);
 
-	// Pick a resting animation for a static standing NPC (B3 has no AI): the first clip whose name
-	// contains "idle" (case-insensitive), retargeted onto Mesh. Returns null when the glb carries no
-	// idle-named clip — the caller then leaves the mesh in its reference pose (a clean stand), which
-	// reads better than looping an arbitrary gesture/line clip. OutAppliedName is the chosen clip name.
-	UAnimSequence* LoadIdleAnim(UglTFRuntimeAsset* Asset, USkeletalMesh* Mesh, FString& OutAppliedName);
+	// Parse any .glb by absolute path — the shared animation banks (out/npc/banks/<stem>.glb), which
+	// carry a skeleton and clips but no mesh. Same config as LoadMesh, so a bank reorients into
+	// Unreal space identically to the NPC it will be applied to. Caching is the caller's job; this
+	// is the expensive step (a bank is 2-35 MB).
+	UglTFRuntimeAsset* LoadAssetFromPath(const FString& FullPath, FString& OutError);
+
+	// Retarget one named clip from Asset onto Mesh's skeleton, **by bone name**. Asset may be the
+	// NPC's own glb or any bank: glTFRuntime keys its tracks by bone name and resolves each against
+	// the target ref skeleton, skipping a name the skeleton lacks and leaving that bone at its bind
+	// pose (glTFRuntimeParserSkeletalMeshes.cpp, LoadSkeletalAnimationFromTracksAndMorphTargets).
+	// Every bank bone name is present in every VtMB NPC skeleton, so no proportion retarget is
+	// needed — this is VtMB's own virtualmodel bank-sharing (`docs/animation_and_movers.md` A.7).
+	// Returns null and fills OutError when the asset has no clip by that name.
+	UAnimSequence* RetargetClip(UglTFRuntimeAsset* Asset, USkeletalMesh* Mesh, const FString& ClipName,
+		FString& OutError);
 }

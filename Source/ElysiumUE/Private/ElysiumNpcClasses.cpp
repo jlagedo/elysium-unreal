@@ -91,10 +91,69 @@ public:
 	int32 DialogFlags = 0;            // the StartPlayerDialogRemote param, kept for B4's runner
 	int32 TimesTalked = 0;            // times_talked — dialogue interaction count (engine-written; script-read)
 	FString StatTemplate;             // stattemplate — the RPG stat block name (data only in B3)
+	// default_disposition — the NPC's emotional stance toward the player (authored on 242 of the
+	// 243 `npc_*` entities across the exported maps; 239 of them `Neutral`). It selects the
+	// animation set the NPC idles in through `vdata/system/dispositiontable.txt` (8.5). Held as
+	// runtime state rather than a spawn-time constant because 9.9's `SetDisposition` — 2,510 calls,
+	// 2,467 of them a `.dlg` line's action — writes it mid-conversation.
+	FString Disposition;
 
 	// The standing skeletal body, or null (bodiless npc_* like npc_VCamera, elysium.NpcBodies 0, or a
 	// missing glb). Owned by the map actor; the world tears it down. This leaf only gates its visibility.
 	USkeletalMeshComponent* Visual = nullptr;
+
+	// SetAnimation(<clip>) — 21 script call sites, on props (`shelf.SetAnimation("showguns")`) and
+	// on NPCs (`E.SetAnimation("cower_idle")`). On an NPC it is a plain "play this named sequence",
+	// resolved through the manifest so a shared bank's clip plays as readily as one of its own.
+	// Loops: VtMB's SetAnimation sets the model's *current* sequence rather than firing a one-shot
+	// — the arguments the corpus passes are resting poses (`cower_idle`, `cower2_idle`, `dance0N`)
+	// that have to persist. A one-shot would freeze on its last frame instead.
+	void InputSetAnimation(const FElysiumInputArgs& Args) { PlayClip(Args.Param.ToString(), /*bLoop=*/true); }
+
+
+	// Play a named clip on this NPC's body. False when the name resolves nothing (logged by the
+	// resolver), so a caller can fall back. The seam SetAnimation, the SetGesture Character method
+	// and scripted_sequence's m_iszPlay all reach animation through.
+	virtual bool PlayAnimClip(const FString& ClipName, bool bLoop) override { return PlayClip(ClipName, bLoop); }
+	virtual bool SetDispositionName(const FString& NewDisposition) override
+	{
+		SetDispositionFromScript(NewDisposition);
+		return true;
+	}
+
+	bool PlayClip(const FString& ClipName, bool bLoop)
+	{
+		AElysiumMapActor* Map = World ? Cast<AElysiumMapActor>(World->GetOwnerActor()) : nullptr;
+		if (!Map || !Visual || ClipName.IsEmpty())
+		{
+			return false;
+		}
+		return Map->PlayNpcClip(Visual, FPaths::GetBaseFilename(Model).ToLower(), ClipName, bLoop);
+	}
+
+	// Re-run the default-idle policy — what a disposition change means for the body. 9.9 owns the
+	// emotional-state half of SetDisposition; this is its animation half, and it is what makes the
+	// 2,467 `.dlg` column-4 SetDisposition actions visible.
+	bool RefreshIdle()
+	{
+		AElysiumMapActor* Map = World ? Cast<AElysiumMapActor>(World->GetOwnerActor()) : nullptr;
+		if (!Map || !Visual)
+		{
+			return false;
+		}
+		return Map->RefreshNpcIdle(Visual, FPaths::GetBaseFilename(Model).ToLower(), Disposition, FMath::Max(0, Handle.Index));
+	}
+
+	// The script-facing disposition write. Records the new stance and follows it on the body.
+	void SetDispositionFromScript(const FString& NewDisposition)
+	{
+		if (NewDisposition.IsEmpty() || Disposition.Equals(NewDisposition, ESearchCase::IgnoreCase))
+		{
+			return;
+		}
+		Disposition = NewDisposition;
+		RefreshIdle();
+	}
 
 	void InputWillTalk(const FElysiumInputArgs& Args)        { bWillTalk = Args.Param.ToInt() != 0; }
 	void InputUseInteresting(const FElysiumInputArgs& Args)  { bUseInteresting = Args.Param.ToInt() != 0; }
@@ -208,7 +267,11 @@ public:
 		// reflection negates yaw (docs/rebuild-strategy.md); exact facing is cosmetic for B3.
 		const FRotator Rot(0.0f, -Angles.Y, 0.0f);
 
-		Visual = Map->BuildNpcVisual(Stem, Def->Origin, Rot, Map->BodyScaleFor(*Def));
+		// Spread the cast across the three standing idles VtMB authors per disposition. Seeded from
+		// the entity's own index so it is stable across a reload and a save/restore — a cop that
+		// stood with its arms crossed must still be doing so after a load.
+		Visual = Map->BuildNpcVisual(Stem, Def->Origin, Rot, Map->BodyScaleFor(*Def), Disposition,
+			/*IdleVariant=*/FMath::Max(0, Handle.Index));
 		if (Visual)
 		{
 			World->RegisterNpcBody(Visual);
@@ -384,9 +447,12 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 		{ static_cast<FElysiumNpc&>(E).InputStartDialog(Args); });
 	D.Input(TEXT("EndDialog"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumNpc&>(E).InputEndDialog(Args); });
+	D.Input(TEXT("SetAnimation"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumNpc&>(E).InputSetAnimation(Args); });
 
 	AddNpcField(D, TEXT("use_interesting"), &FElysiumNpc::bUseInteresting);
 	AddNpcField(D, TEXT("stattemplate"),    &FElysiumNpc::StatTemplate);
+	AddNpcField(D, TEXT("default_disposition"), &FElysiumNpc::Disposition);
 	// times_talked: santamonica/chinatown/e3/demo read `npc.times_talked` to branch first-vs-repeat
 	// dialogue. Register it read-only (engine-written, script-read) so the read resolves to a defined
 	// value instead of raising AttributeError. B4's dialogue runner drives the count; it stays 0 until then.

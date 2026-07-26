@@ -7,6 +7,7 @@
 class AActor;
 class USkeletalMesh;
 class UAnimSequence;
+class UglTFRuntimeAsset;
 class IConsoleObject;
 
 // One test NPC loaded through the runtime skeletal path (P8 8.2 spike). Records what glTFRuntime
@@ -21,6 +22,9 @@ struct FElysiumLoadedNpc
 	UPROPERTY() TObjectPtr<AActor> Actor = nullptr;
 	UPROPERTY() TObjectPtr<USkeletalMesh> Mesh = nullptr;
 	UPROPERTY() TObjectPtr<UAnimSequence> Anim = nullptr;
+	// The model's own parsed glb, kept so a clip it owns itself (its dialogue anims) can be
+	// re-applied later — the shared-bank path does not go through it.
+	UPROPERTY() TObjectPtr<UglTFRuntimeAsset> Asset = nullptr;
 
 	FString Stem;                 // glb stem under out/npc (e.g. "gangmember_male_2")
 	FString AnimName;             // the clip that was applied ("" if none)
@@ -50,6 +54,11 @@ public:
 	// Load out/npc/<Stem>.glb, apply AnimName (empty = first animation), spawn near the player.
 	// Returns the spawned actor (null on failure; OutError explains why) and records the result.
 	AActor* LoadTestNpc(const FString& Stem, const FString& AnimName, FString& OutError);
+
+	// Re-apply a clip to an already-spawned test NPC, resolving it through the manifest so a shared
+	// bank's clip plays as readily as one of the model's own. Returns false + OutError on a bad
+	// index or an unresolvable name. Drives `elysium.npc.play` and the Cog window's clip browser.
+	bool PlayClipOn(int32 Index, const FString& ClipName, FString& OutError);
 
 	// Destroy every spawned test NPC and drop the records.
 	void ClearNpcs();
