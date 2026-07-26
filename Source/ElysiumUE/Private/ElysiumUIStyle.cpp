@@ -68,7 +68,8 @@ namespace
 				TEXT("UI font face missing: %s — run tools/make_ui_fonts.py in the editor"), AssetPath);
 			return false;
 		}
-		FTypefaceEntry& Entry = Font.CompositeFont.DefaultTypeface.Fonts.AddDefaulted_GetRef();
+		FTypefaceEntry& Entry =
+			Font.GetMutableInternalCompositeFont().DefaultTypeface.Fonts.AddDefaulted_GetRef();
 		Entry.Name = EntryName;
 		// FFontData(const UObject*) takes the face asset itself, so the composite's UPROPERTY graph
 		// keeps it alive with the font and Slate rasterises straight out of the cooked asset.
@@ -95,7 +96,7 @@ UFont* FElysiumUIFontLibrary::FontForRole(EElysiumFontRole Role)
 	bOk &= AddFace(*Font, Faces.SemiBold, TEXT("SemiBold"));
 	bOk &= AddFace(*Font, Faces.Italic, TEXT("Italic"));
 
-	if (!bOk || Font->CompositeFont.DefaultTypeface.Fonts.Num() == 0)
+	if (!bOk || Font->GetCompositeFont()->DefaultTypeface.Fonts.Num() == 0)
 	{
 		bComplete = false;
 		return nullptr;   // Slot stays null: the caller falls back to the default Slate face
@@ -115,7 +116,7 @@ FSlateFontInfo FElysiumUIFontLibrary::Font(EElysiumFontRole Role, EElysiumFontWe
 		FName Name = WeightName(Weight);
 		// A role that ships no italic (Spectral SC, Inter) resolves italic to its regular weight
 		// rather than letting Slate fall through to a synthetic face.
-		const TArray<FTypefaceEntry>& Entries = RoleFont->CompositeFont.DefaultTypeface.Fonts;
+		const TArray<FTypefaceEntry>& Entries = RoleFont->GetCompositeFont()->DefaultTypeface.Fonts;
 		const bool bHas = Entries.ContainsByPredicate(
 			[&Name](const FTypefaceEntry& E) { return E.Name == Name; });
 		if (!bHas)

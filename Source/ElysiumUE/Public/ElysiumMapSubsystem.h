@@ -34,6 +34,23 @@ public:
 	// landmark's facing) instead of info_player_start — the console/direct entry to the P4.6 path.
 	bool Travel(const FString& Map, const FString& Landmark = FString());
 
+	// 8.6 — load a map as the **menu backdrop**: its baked look only. The map actor adopts the
+	// baked level (geometry, lights, sky, post, decals, props) and skips everything gameplay —
+	// the entity substrate, brush collision, the landmark placement. That is not an optimisation:
+	// building the substrate would fire `sp_tutorial_1`'s `logic_auto` behind the menu, arm the
+	// tutorial's popups and let a `game_sign` draw over the title screen. Nothing walks on a
+	// backdrop, so it needs no collider either.
+	//
+	// Leaving this mode is an ordinary Travel: New Game re-opens the same map with the substrate
+	// built. That costs one map load, which is the honest price of never running two half-states
+	// of a world in the same process.
+	bool TravelForMenu(const FString& Map);
+
+	// True while the current world is a menu backdrop (see TravelForMenu). Read by the map actor
+	// to skip the gameplay half of its build, and by the game mode to seat a camera instead of a
+	// pawn.
+	bool IsMenuBackdrop() const { return bCurrentIsMenuBackdrop; }
+
 	// P4.6 — a landmark transition (from a trigger_changelevel touch / scripted ChangeMap). Safe to
 	// call from inside the entity-world tick: it records the destination placement and Travels, and
 	// OpenLevel defers the actual world teardown to end of frame (UEngine::TickWorldTravel), so
@@ -104,8 +121,14 @@ private:
 		bool    bValid = false;
 		FString Map;
 		FString Landmark;
+		bool    bMenuBackdrop = false;   // 8.6: build the look, skip the gameplay half
 	};
 	FPendingMapLoad PendingMapLoad;
+
+	// Mirrors the consumed load's bMenuBackdrop for the lifetime of the built world, so the map
+	// actor and game mode can ask what kind of world this is after SpawnPendingMap has cleared
+	// the pending record.
+	bool bCurrentIsMenuBackdrop = false;
 
 	// The landmark placement the next map load consumes (dest = landmark origin + Offset). Set by a
 	// transition (RequestLandmarkTravel) or by a direct Travel(map, landmark); cleared on consume.

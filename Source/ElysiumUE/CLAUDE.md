@@ -107,7 +107,9 @@ Class implementations live in `ElysiumStarterClasses.cpp` (logic_auto/relay, tri
 4-state machine, `FElysiumFuncDoor`, `FElysiumButton`), `ElysiumSignClasses.cpp` (`game_sign`),
 `ElysiumAmbientGeneric.cpp`, `ElysiumEventClasses.cpp` (`events_player`/`events_world`),
 `ElysiumNpcClasses.cpp` (B3 — the AI-free `FElysiumNpc` character leaf for the living `npc_*`
-classnames and `FElysiumNpcMaker` for `npc_maker`/`npc_maker_fleshpile`), and
+classnames and `FElysiumNpcMaker` for `npc_maker`/`npc_maker_fleshpile`),
+`ElysiumScriptedSequence.cpp` (8.5 — `FElysiumScriptedSequence` for
+`scripted_sequence`/`aiscripted_sequence`), and
 `ElysiumPropClasses.cpp` (8.3 `FElysiumProp` for `prop_dynamic`/`prop_dynamic_ornament`; 8.4
 `FElysiumPhysProp` for `prop_physics` and `FElysiumPhysHinge` for `phys_hinge`).
 
@@ -146,12 +148,30 @@ dialog choice"), and nothing there governs an NPC standing alone.
 records, `run` 9). A locomotion clip therefore plays in place with its feet sliding. Harmless while
 NPCs do not move; the locomotion task has to decode `nummovements`/`movementindex` first.
 
+**`FElysiumScriptedSequence`** (`ElysiumScriptedSequence.cpp`) is the cutscene beat —
+`scripted_sequence` ×104 + `aiscripted_sequence` ×4. `BeginSequence` places the NPC on the marker,
+plays `m_iszPlay` once, and schedules `OnEndSequence` off the clip's own length (`PlayAnimClip`
+reports it through an out-param); the beat then holds `m_iszPostIdle` looping, or returns the NPC to
+its disposition idle when none is authored. `m_iszIdle` is applied in `PostSpawn` (the NPC's own
+`Spawn` must already have built its body), `m_iszNextScript` chains through the real event queue, and
+a beat naming `!playercontroller` runs as a timing shell so the flow continues. Timing is `NextThink`
+on the substrate clock — no `FTimerManager` (R4). **The outputs are the load-bearing half**: 88 wires
+leave these entities across the exported maps, 48 of them `OnEndSequence`, and 67 of the 88 land on
+inputs that already exist. One registered `BeginSequence` serves both the 68 I/O wires and the 68
+receiver-qualified script calls, since a Python attribute and a Hammer input are the same namespace.
+The class is VtMB's `CCineNPC` (HL1 `CCineMonster` lineage), which is what fixes the spawnflag
+meanings — only `NOSCRIPTMOVEMENT` (128) is read, and no exported sequence starts on spawn
+(`docs/entity_io.md`). **Movement is not reproduced**: the NPC is placed on the mark rather than
+walked to it (`elysium.SeqTeleport 0` reverts to animation + outputs), and `OnScriptEvent01..08`
+needs decoded animation events.
+
 Resolved `UAnimSequence`s cache on the **map actor** (`NpcAnimCache`, keyed `<stem>|<clip>`), not on
 the subsystem, because glTFRuntime binds each one to a specific `USkeletalMesh`'s `USkeleton` and
 meshes are per-map-epoch. `AElysiumMapActor::ResolveNpcClip`/`PlayNpcClip`/`RefreshNpcIdle` are the
 seams the script surface reaches animation through, via two virtuals on `FElysiumEntity`
 (`PlayAnimClip`, `SetDispositionName` — kept on the base for the same no-RTTI reason as
-`GetAttachBody`). Bound to them: the **`SetAnimation`** input on `FElysiumNpc` (21 call sites), the
+`GetAttachBody`), plus `ResetAnimToIdle` for handing a body back to its resting stance. Bound to
+them: the **`SetAnimation`** input on `FElysiumNpc` (21 call sites), the
 **`SetGesture`** Character method, and the animation half of **`SetDisposition`** — 2,510 calls, all
 of them receiver-qualified (`npc.SetDisposition(...)`; zero bare), 2,467 a `.dlg` line's action, so
 an NPC's stance follows the conversation. 9.9 still owns its emotional-state half, and the natives
@@ -245,6 +265,38 @@ and trigger∩solid overlaps fire begin/end at map-build time — is filtered ou
 overlapping geometry is never a touch). Under OpenLevel hard travel each map builds in a fresh world
 with a fresh pawn, so there is no stale previous-map pawn position to guard against (the earlier
 `IsPlayerSeated` gate is retired, roadmap 10.8).
+
+## Player-facing UI (8.6)
+
+**CommonUI + CommonInput, with widget trees built in C++ Slate** — no Widget Blueprint assets and
+no editor content loop (`docs/decisions.md` 2026-07-26). Design + the constraints that shaped it:
+`docs/ui-architecture.md`; what VtMB's own UI is: `docs/vtmb-ui.md`.
+
+| Type | Role |
+|---|---|
+| `UElysiumUISubsystem` | GI-scoped owner of the screens: create/show/hide plus the input-mode switch. GI-scoped because the menu outlives any one world. `elysium.menu [pause]` / `elysium.menu.close` |
+| `UElysiumMainMenu` | the main / pause menu (`UCommonActivatableWidget`). Layout is `CVMainMenu::PerformLayout` verbatim in a 1024×768 virtual canvas — every item sized to the widest label + `20×4`, `pitch = height + 2`, centred — under one `SDPIScaler` at `ScreenH/768`. **A `UCommonActivatableWidget` added straight to the viewport stays collapsed until `ActivateWidget()`** (`bAutoActivate` only fires inside a `UCommonActivatableWidgetContainer`) |
+| `ElysiumUIStyle.{h,cpp}` | design tokens — the `VampireScheme.res` palette (gold chrome, blood accent, cyan active tab), the type ramp and spacing in virtual px, `ElysiumUI::ScaleFor` — plus `FElysiumUIFontLibrary`, which composes the committed `UFontFace` assets under `/Game/VtMB/UI/Fonts` into one runtime `UFont` per role (`FSlateFontInfo` resolves a composite font, not a bare face) |
+| `ElysiumUIStrings.{h,cpp}` | the authored string table (`out/ui/strings.json`). Menu labels are **`VMainMenu_BTN_*`** tokens with retail English as the fallback — what `CVMainMenu` itself does |
+| `ElysiumUITexture.{h,cpp}` | PNG → transient BGRA texture, shared by the PL3 use-icon atlas, the PL5c sign backgrounds and the PL8 title lockup |
+
+**The menu backdrop.** `UElysiumMapSubsystem::TravelForMenu` loads `elysium.MenuMap` (default
+`sm_hub_1`) as an ordinary map build **minus the player**: the substrate builds in full, because the
+NPCs idling in frame are entities. `AElysiumGameMode` seats no pawn
+(`GetDefaultPawnClassForController` → null) and makes an `ACameraActor` at `elysium.MenuVantage` the
+view target. The mode is latched at **Travel** time, not at map-actor spawn, because `PostLogin`
+decides the pawn before `BeginPlay` runs. Leaving it is an ordinary Travel. `elysium.BootMenu 0`
+boots straight into play; `elysium.MenuScrim` dials how far the scene is knocked back behind the type.
+
+Because the map's own logic runs behind the menu, **`AElysiumHUD` stands the player-facing HUD down
+while a menu is up** (`IsMenuUp()`): no reticle, no sign panel, no dialogue box. `sm_hub_1`'s
+`havenbum` opens a conversation unprompted, so the B4 box would otherwise draw over the menu; the
+conversation still runs in the entity world, only its UI is withheld. The `env_fade` quad still
+draws — a screen effect, not a HUD element.
+
+`ElysiumScreenshot::Request` takes **`bShowUI`** (default false): the regression harness keeps the
+UI-free capture so baselines hold, the MCP screenshot tool passes true so it shows what the player
+sees. The Canvas HUD draws with the world and appears either way.
 
 ## Scripting hosts
 
@@ -340,6 +392,18 @@ volume, so a flip re-applies in one pass (voices already fading out toward a rea
 
 ## Debug layer (non-Shipping)
 
+- **Cog boots dormant and does not restore state.** `elysium.CogPersist 0` (the default) deletes
+  Cog's ImGui layout ini (`Saved/ImGui/imgui.ini`) in `UElysiumCogSubsystem::Initialize`, *before*
+  the dependency brings Cog up — its context reads that file on first initialise, so clearing it
+  afterwards is a race. A startup ticker then closes any window and drops Cog's input capture for
+  the first second. Both halves are needed: a restored window is cosmetic, but **restored input
+  capture makes the game's own UI unclickable**, because ImGui consumes the click before Slate sees
+  it. Set `elysium.CogPersist 1` to keep a hand-arranged layout across runs. A menu screen coming up
+  also revokes Cog's capture (`UElysiumUISubsystem::ApplyInputMode`).
+  **`FCogImguiContext::SetEnableInput` dereferences the ImGui context**, which Cog creates lazily on
+  its first tick, so every call site guards on `GetEnableInput()` being true first — `bEnableInput`
+  defaults false and only becomes true through a call that already required a live context, which
+  makes it a safe proxy for "initialised". Calling it unguarded at boot crashes outright.
 - `UElysiumCogSubsystem` (`#if ENABLE_COG`) registers the stock CogEngine windows plus the
   custom ones under an `Elysium` F1-menu group. Stock `CogEngineWindow_ImGui` (the Dear ImGui /
   ImPlot demo, metrics, debug-log and style-editor toggles) is not registered. `FElysiumCogWindow`

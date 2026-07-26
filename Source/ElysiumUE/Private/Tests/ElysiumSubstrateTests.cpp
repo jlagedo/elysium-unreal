@@ -1406,4 +1406,162 @@ bool FElysiumFogPackTest::RunTest(const FString&)
 	return true;
 }
 
+// =====================================================================================
+// scripted_sequence (8.5) — the cutscene beat's state machine, driven through the real queue.
+//
+// No skeletal body here, so no action animation: this covers the half every map depends on —
+// placement on the mark, OnBeginSequence/OnEndSequence, and the m_iszNextScript chain. A beat
+// with no `m_iszPlay` is zero-length (59 of the 108 exported sequences are), so the whole chain
+// settles within a few ticks of the null clock.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScriptedSequenceTest,
+	"Elysium.Substrate.ScriptedSequence", GElysiumTestFlags)
+bool FElysiumScriptedSequenceTest::RunTest(const FString&)
+{
+	// Builds one scripted_sequence def. The target is a logic_relay purely because it is a point
+	// entity the world will place — the sequence drives FElysiumEntity::SetRuntimeOrigin, which is
+	// on the base, not on the NPC leaf.
+	auto MakeSeq = [](const TCHAR* Name, const TCHAR* MoveTo, const FVector& At, const TCHAR* SpawnFlags)
+	{
+		FElysiumEntityDef Seq;
+		Seq.Classname = TEXT("scripted_sequence");
+		Seq.TargetName = Name;
+		Seq.Origin = At;
+		Seq.Keys.Add(TEXT("m_iszEntity"), TEXT("mover1"));
+		Seq.Keys.Add(TEXT("m_fMoveTo"), MoveTo);
+		Seq.Keys.Add(TEXT("angles"), TEXT("0 90 0"));
+		Seq.Keys.Add(TEXT("spawnflags"), SpawnFlags);
+		return Seq;
+	};
+	auto Wire = [](FElysiumEntityDef& On, const TCHAR* Output, const TCHAR* Input, const TCHAR* Param)
+	{
+		FElysiumOutputDef W;
+		W.Name = Output;
+		W.Target = TEXT("counter1");
+		W.Input = Input;
+		W.Param = Param;
+		On.Outputs.Add(W);
+	};
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__test__");
+
+	const FVector Mark(100.f, 200.f, 300.f);
+	FElysiumEntityDef Seq1 = MakeSeq(TEXT("seq1"), TEXT("1"), Mark, TEXT("0"));
+	Seq1.Keys.Add(TEXT("m_iszNextScript"), TEXT("seq2"));
+	Wire(Seq1, TEXT("OnBeginSequence"), TEXT("Add"), TEXT("1"));
+	Wire(Seq1, TEXT("OnEndSequence"), TEXT("Add"), TEXT("2"));
+	Defs.Defs.Add(MoveTemp(Seq1));
+
+	// The chained beat. m_fMoveTo 0 means "already in place", so it must NOT move the target — which
+	// is how the test tells the chain fired without also re-placing.
+	FElysiumEntityDef Seq2 = MakeSeq(TEXT("seq2"), TEXT("0"), FVector(-999.f, -999.f, -999.f), TEXT("0"));
+	Wire(Seq2, TEXT("OnEndSequence"), TEXT("Add"), TEXT("4"));
+	Defs.Defs.Add(MoveTemp(Seq2));
+
+	// The mapper's "don't move the NPC" override (HL1 CCineMonster SF_SCRIPT_NOSCRIPTMOVEMENT).
+	FElysiumEntityDef Seq3 = MakeSeq(TEXT("seq3"), TEXT("1"), FVector(-777.f, -777.f, -777.f), TEXT("128"));
+	Defs.Defs.Add(MoveTemp(Seq3));
+
+	FElysiumEntityDef Mover;
+	Mover.Classname = TEXT("logic_relay");
+	Mover.TargetName = TEXT("mover1");
+	Defs.Defs.Add(MoveTemp(Mover));
+
+	FElysiumEntityDef Counter;
+	Counter.Classname = TEXT("math_counter");
+	Counter.TargetName = TEXT("counter1");
+	Defs.Defs.Add(MoveTemp(Counter));
+
+	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
+	World.Load(MoveTemp(Defs));
+
+	FElysiumEntity* Seq = World.FindByName(TEXT("seq1"));
+	FElysiumEntity* Target = World.FindByName(TEXT("mover1"));
+	FElysiumEntity* Count = World.FindByName(TEXT("counter1"));
+	if (!TestNotNull(TEXT("seq1 registers a leaf class"), Seq) ||
+		!TestNotNull(TEXT("mover1 resolved"), Target) ||
+		!TestNotNull(TEXT("counter1 resolved"), Count))
+	{
+		return false;
+	}
+	TestFalse(TEXT("scripted_sequence is not an inert record"), Seq->IsRecordOnly());
+
+	auto CounterValue = [](const FElysiumEntity* Entity) -> float
+	{
+		TArray<TPair<FString, FString>> State;
+		Entity->GetDebugState(State);
+		for (const TPair<FString, FString>& Row : State)
+		{
+			if (Row.Key == TEXT("Value"))
+			{
+				return FCString::Atof(*Row.Value);
+			}
+		}
+		return -1.f;
+	};
+
+	TestTrue(TEXT("the target starts at the origin"), Target->Origin.IsNearlyZero());
+
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), /*Delay*/ 0.0,
+		FElysiumEntityHandle::Invalid(), Seq->Handle);
+	for (int32 i = 0; i < 8; ++i)
+	{
+		World.Tick(0.0);
+	}
+
+	// Both of seq1's outputs fired, then the chain carried seq2's.
+	TestEqual(TEXT("OnBeginSequence + OnEndSequence + the chained beat all fired"),
+		CounterValue(Count), 7.f);
+	// m_fMoveTo 1 placed the target on seq1's mark; seq2's m_fMoveTo 0 left it there.
+	TestTrue(TEXT("the target was placed on the mark"), Target->Origin.Equals(Mark, 0.01));
+	TestTrue(TEXT("the mark's facing was applied"),
+		FMath::IsNearlyEqual(Target->Angles.Y, 90.f, 0.01f));
+
+	// NOSCRIPTMOVEMENT: the beat still runs, but the target stays where it is.
+	FElysiumEntity* NoMove = World.FindByName(TEXT("seq3"));
+	if (TestNotNull(TEXT("seq3 resolved"), NoMove))
+	{
+		World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
+			FElysiumEntityHandle::Invalid(), NoMove->Handle);
+		for (int32 i = 0; i < 4; ++i)
+		{
+			World.Tick(0.0);
+		}
+		TestTrue(TEXT("SF_SCRIPT_NOSCRIPTMOVEMENT left the target on its previous mark"),
+			Target->Origin.Equals(Mark, 0.01));
+	}
+
+	// A sequence naming the player has no body to drive; it must still run as a timing shell so the
+	// map's flow continues rather than dead-ending (10 of the 108 target `!playercontroller`).
+	FElysiumEntityDefs PlayerDefs;
+	PlayerDefs.MapName = TEXT("__test2__");
+	FElysiumEntityDef PlayerSeq = MakeSeq(TEXT("pseq"), TEXT("1"), Mark, TEXT("0"));
+	PlayerSeq.Keys.Add(TEXT("m_iszEntity"), TEXT("!playercontroller"));
+	Wire(PlayerSeq, TEXT("OnEndSequence"), TEXT("Add"), TEXT("9"));
+	PlayerDefs.Defs.Add(MoveTemp(PlayerSeq));
+	FElysiumEntityDef Counter2;
+	Counter2.Classname = TEXT("math_counter");
+	Counter2.TargetName = TEXT("counter1");
+	PlayerDefs.Defs.Add(MoveTemp(Counter2));
+
+	FElysiumEntityWorld World2(nullptr, nullptr);
+	World2.Load(MoveTemp(PlayerDefs));
+	FElysiumEntity* PSeq = World2.FindByName(TEXT("pseq"));
+	FElysiumEntity* Count2 = World2.FindByName(TEXT("counter1"));
+	if (TestNotNull(TEXT("pseq resolved"), PSeq) && TestNotNull(TEXT("counter1 resolved"), Count2))
+	{
+		World2.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
+			FElysiumEntityHandle::Invalid(), PSeq->Handle);
+		for (int32 i = 0; i < 4; ++i)
+		{
+			World2.Tick(0.0);
+		}
+		TestEqual(TEXT("a player-targeted beat still fires OnEndSequence"), CounterValue(Count2), 9.f);
+	}
+
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

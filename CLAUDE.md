@@ -172,6 +172,7 @@ facts, valid regardless of target engine. Organisation and maintenance rules: `d
 | `audio_pipeline.md` | codecs, mixer, DSP, the SoundScheme system |
 | `source_movement.md` | `CGameMovement` constants + formulas |
 | `vtmb-ui.md` | **the UI as VtMB builds it** — the two UI stacks, the two schemes, `CVMainMenu`'s 1024×768 layout law, the HUD class inventory, the art trees |
+| `ui-architecture.md` | the Unreal re-skin — the CommonUI/Slate stack, design tokens, the virtual canvas, the menu backdrop |
 | `controls.md` | the input surface — keynames, bindable commands, default binds, cfg load order, control options UI |
 | `input-architecture.md` | the Unreal input design — the four planes, Enhanced Input over the command bus, remapping, gamepad, reserved keys |
 | `camera-view-modes.md` | the first↔third-person camera — blend weight, solver, cvars, the Unreal design |

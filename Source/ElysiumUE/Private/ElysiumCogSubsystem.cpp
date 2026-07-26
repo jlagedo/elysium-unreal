@@ -4,7 +4,10 @@
 #include "Containers/Ticker.h"
 
 #if ENABLE_COG
+#include "CogImguiHelper.h"
 #include "CogSubsystem.h"
+#include "HAL/FileManager.h"
+#include "HAL/IConsoleManager.h"
 #include "ElysiumCogWindow_Audio.h"
 #include "ElysiumCogWindow_Entities.h"
 #include "ElysiumCogWindow_EventQueue.h"
@@ -47,11 +50,34 @@ bool UElysiumCogSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 #endif
 }
 
+#if ENABLE_COG
+// Whether Cog's ImGui window layout survives between runs. Off by default: a debug UI that
+// restores itself decides what is on screen at boot, and a restored window that holds the mouse
+// makes the game's own menu unclickable. With this off every launch starts dormant and F1 is the
+// only way in. Set to 1 to keep a hand-arranged layout across runs.
+static TAutoConsoleVariable<int32> CVarCogPersist(
+	TEXT("elysium.CogPersist"),
+	0,
+	TEXT("1 = keep Cog's ImGui window layout between runs; 0 = boot dormant every time."),
+	ECVF_Default);
+#endif
+
 void UElysiumCogSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 
 #if ENABLE_COG
+	// Clear the layout before the dependency below brings Cog up: its ImGui context reads this file
+	// when it first initialises, so removing it afterwards would be a race.
+	if (CVarCogPersist.GetValueOnGameThread() == 0)
+	{
+		const FString LayoutIni = FCogImguiHelper::GetIniFilePath(TEXT("imgui"));
+		if (IFileManager::Get().FileExists(*LayoutIni))
+		{
+			IFileManager::Get().Delete(*LayoutIni, /*RequireExists*/ false, /*EvenReadOnly*/ true);
+		}
+	}
+
 	CogSubsystem = Collection.InitializeDependency<UCogSubsystem>();
 #endif
 }
@@ -104,12 +130,15 @@ void UElysiumCogSubsystem::PostInitialize()
 	Cog->AddWindow<FElysiumCogWindow_Npc>("Elysium.NPC");
 	Cog->AddWindow<FElysiumCogWindow_Scripting>("Elysium.Scripting");
 
-	// Boot dormant: Cog is compiled in (non-Shipping) and F1 opens it, but nothing
-	// should be on screen until then. Cog restores each window's persisted visibility
-	// from the ImGui ini on its first rendered frame — a frame or two after this
-	// PostInitialize — so hiding windows here wouldn't stick. Instead run a short
-	// ticker that closes every window each frame until Cog has been up ~1s (well past
-	// that ini restore), then stops so windows opened via F1 during play stay open.
+	// Boot dormant: Cog is compiled in (non-Shipping) and F1 opens it, but nothing should be on
+	// screen until then, and it must not be holding the mouse — a captured cursor makes the game's
+	// own UI unclickable, which is exactly how it presents.
+	//
+	// Closing windows is not enough on its own. Cog restores window visibility from its ImGui ini,
+	// and that restore can land *after* a fixed grace period expires, so a timed hide is a race the
+	// layout sometimes wins. `elysium.CogPersist 0` (the default) removes the layout ini before Cog
+	// reads it, which is what actually makes the boot state deterministic; the ticker below then
+	// only has to cover the frames before the first render.
 	StartupHideElapsed = 0.f;
 	StartupHideTicker = FTSTicker::GetCoreTicker().AddTicker(
 		FTickerDelegate::CreateWeakLambda(this, [this](float DeltaTime)
@@ -118,6 +147,15 @@ void UElysiumCogSubsystem::PostInitialize()
 			if (IsValid(CogToHide))
 			{
 				CogToHide->CloseAllWindows();
+				// The input mode is the half that made the menu unclickable: with it enabled, ImGui
+				// swallows the click before Slate sees it, and no amount of closing windows helps
+				// because the main menu bar alone keeps input captured. Guarded on it already being
+				// enabled — SetEnableInput touches the ImGui context, which Cog creates lazily on
+				// its first tick, and this ticker can run before that.
+				if (CogToHide->GetContext().GetEnableInput())
+				{
+					CogToHide->GetContext().SetEnableInput(false);
+				}
 			}
 
 			StartupHideElapsed += DeltaTime;

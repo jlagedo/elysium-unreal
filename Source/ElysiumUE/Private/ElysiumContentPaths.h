@@ -108,6 +108,17 @@ struct FElysiumContentPaths
 	static FString SignTexDir() { return SignsDir() / TEXT("tex"); }
 	static FString SignBackgrounds() { return SignsDir() / TEXT("backgrounds.json"); }
 
+	// UI source (roadmap PL8, tools/UE_extract_ui.py). The `.res` layouts and both schemes are
+	// mirrored as **design intent** and are not executed as layout; what the runtime actually reads
+	// is the authored string table (menu labels are `VMainMenu_BTN_*` tokens — docs/vtmb-ui.md §2)
+	// and the decoded art (the title lockup, HUD frames, clan icons). Game-derived, so gitignored
+	// and regenerable like every other out/ mirror.
+	static FString UiDir() { return Root() / TEXT("ui"); }
+	static FString UiStrings() { return UiDir() / TEXT("strings.json"); }
+	static FString UiMenuDir() { return UiDir() / TEXT("menu"); }
+	static FString UiTitle() { return UiMenuDir() / TEXT("title.png"); }
+	static FString UiArt(const FString& Rel) { return UiDir() / TEXT("art") / Rel; }
+
 	// Fonts. The sign/popup panel's typeface set — hand-authored/game-agnostic OFL faces committed
 	// under Content/Fonts (NOT the game-derived out/ mirror), mapping VtMB's authored face names
 	// (ParagraphText/Newsprint/Headline/...) onto vector type. Read verbatim off disk at draw time.

@@ -18,6 +18,7 @@
 #include "ElysiumDecals.h"
 #include "ElysiumDlg.h"
 #include "ElysiumEntityDefs.h"
+#include "ElysiumNpcClips.h"
 #include "ElysiumObjModel.h"
 #include "ElysiumReflections.h"
 #include "ElysiumRopes.h"
@@ -797,6 +798,148 @@ bool FElysiumDlgCorpusTest::RunTest(const FString&)
 
 	TestEqual(TEXT("every referenced dialog parsed"), Parsed, DialogNames.Num());
 	TestEqual(TEXT("every dialog with an NPC line opened"), Opened, ParsedWithNpc);
+
+	return true;
+}
+
+// =====================================================================================
+// scripted_sequence × the NPC clip manifest (8.5) — every animation a cutscene beat names must
+// resolve in the vocabulary the offline export gives that NPC. This is the seam that breaks
+// silently: a clip lives in a shared animation bank pulled through the studiohdr include DAG, so
+// an exporter change that drops a bank turns a beat into a no-op with only a runtime warning.
+//
+// Measured over the 10 exported maps: 94 animation references across 108 sequences, 90 resolving.
+// The 4 that do not all name `!playercontroller`, which has no NPC body and is excluded here.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScriptedSequenceClipsTest,
+	"Elysium.Content.ScriptedSequenceClips", GElysiumContentTestFlags)
+bool FElysiumScriptedSequenceClipsTest::RunTest(const FString&)
+{
+	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
+	{
+		AddInfo(TEXT("skipping: no exported out/npc/npc_index.json (run tools/npc_export.py to enable)"));
+		return true;
+	}
+
+	static const TCHAR* const AnimKeys[] = {
+		TEXT("m_iszPlay"), TEXT("m_iszIdle"), TEXT("m_iszPreIdle"), TEXT("m_iszPostIdle"), TEXT("m_iszCustomMove") };
+
+	TMap<FString, TSharedPtr<FElysiumNpcClipSet>> ClipCache;   // stem -> vocabulary (null = no such export)
+	int32 Sequences = 0, Refs = 0, Resolved = 0, NoBody = 0, Unspawned = 0;
+	TArray<FString> Misses;
+
+	for (const TCHAR* Map : { TEXT("sp_tutorial_1"), TEXT("sm_hub_1"), TEXT("sp_giovanni_1"), TEXT("hw_609_1") })
+	{
+		const FString Path = FElysiumContentPaths::MapEnts(Map);
+		if (!IFileManager::Get().FileExists(*Path))
+		{
+			continue;   // not exported — the other maps still cover the contract
+		}
+		FElysiumEntityDefs Defs;
+		if (!TestTrue(FString::Printf(TEXT("%s parses"), Map), FElysiumEntityDefs::Parse(Path, Defs)))
+		{
+			continue;
+		}
+
+		// An NPC is reachable either by its own targetname or as the child an npc_maker will spawn
+		// under `NPCTargetname` — 11 of the exported sequences drive one of those.
+		TMap<FString, const FElysiumEntityDef*> ByName;
+		for (const FElysiumEntityDef& Def : Defs.Defs)
+		{
+			if (!Def.TargetName.IsEmpty())
+			{
+				ByName.FindOrAdd(Def.TargetName.ToLower(), &Def);
+			}
+			if (const FString* Child = Def.Keys.Find(TEXT("NPCTargetname")))
+			{
+				if (!Child->IsEmpty())
+				{
+					ByName.FindOrAdd(Child->ToLower(), &Def);
+				}
+			}
+		}
+
+		for (const FElysiumEntityDef& Def : Defs.Defs)
+		{
+			if (!Def.Classname.Equals(TEXT("scripted_sequence"), ESearchCase::IgnoreCase) &&
+				!Def.Classname.Equals(TEXT("aiscripted_sequence"), ESearchCase::IgnoreCase))
+			{
+				continue;
+			}
+			++Sequences;
+
+			TArray<FString> Wanted;
+			for (const TCHAR* Key : AnimKeys)
+			{
+				if (const FString* V = Def.Keys.Find(Key))
+				{
+					if (!V->IsEmpty())
+					{
+						Wanted.Add(*V);
+					}
+				}
+			}
+			if (Wanted.IsEmpty())
+			{
+				continue;   // a movement-only beat names no animation
+			}
+
+			const FString Target = Def.Keys.FindRef(TEXT("m_iszEntity"));
+			if (Target.IsEmpty() || Target.StartsWith(TEXT("!")))
+			{
+				NoBody += Wanted.Num();   // `!playercontroller` — no NPC skeleton to resolve against
+				continue;
+			}
+			const FElysiumEntityDef* const* Npc = ByName.Find(Target.ToLower());
+			const FString Model = Npc ? (*Npc)->Keys.FindRef(TEXT("model")) : FString();
+			if (Model.IsEmpty())
+			{
+				Unspawned += Wanted.Num();
+				continue;
+			}
+
+			const FString Stem = FPaths::GetBaseFilename(Model).ToLower();
+			if (!ClipCache.Contains(Stem))
+			{
+				TSharedPtr<FElysiumNpcClipSet> Set = MakeShared<FElysiumNpcClipSet>();
+				FString Error;
+				ClipCache.Add(Stem, Set->Load(Stem, Error) ? Set : nullptr);
+			}
+			const TSharedPtr<FElysiumNpcClipSet>& Set = ClipCache[Stem];
+			for (const FString& Clip : Wanted)
+			{
+				++Refs;
+				if (Set.IsValid() && Set->Find(Clip) != nullptr)
+				{
+					++Resolved;
+				}
+				else
+				{
+					Misses.Add(FString::Printf(TEXT("%s: %s.%s -> '%s' (stem %s)"),
+						Map, *Def.TargetName, *Target, *Clip, *Stem));
+				}
+			}
+		}
+	}
+
+	if (Sequences == 0)
+	{
+		AddInfo(TEXT("skipping: no exported map carries a scripted_sequence"));
+		return true;
+	}
+
+	AddInfo(FString::Printf(
+		TEXT("scripted_sequence clips: %d sequences, %d animation refs, %d resolved, %d on the player, %d unspawned"),
+		Sequences, Refs, Resolved, NoBody, Unspawned));
+	for (const FString& Miss : Misses)
+	{
+		AddWarning(FString::Printf(TEXT("unresolved sequence clip — %s"), *Miss));
+	}
+
+	// Every animation an NPC-targeted beat names resolves. A single miss means the bank that owns it
+	// stopped being exported, or its label changed — both silent at runtime.
+	TestEqual(TEXT("every NPC-targeted sequence animation resolves in the manifest"), Resolved, Refs);
 
 	return true;
 }

@@ -16,4 +16,14 @@ public:
 	AElysiumGameMode();
 
 	virtual void BeginPlay() override;
+
+	// 8.6 — a menu backdrop world seats no pawn: the player is looking at a fixed camera while the
+	// menu is up, and a pawn would have nothing to stand on (a backdrop builds no collision). Runs
+	// during PostLogin, which is why the map subsystem latches the mode at Travel time rather than
+	// when the map actor is spawned.
+	virtual UClass* GetDefaultPawnClassForController_Implementation(AController* InController) override;
+
+private:
+	// Stand the menu camera at the vantage `elysium.MenuVantage` names and raise the menu.
+	void EnterMenuBackdrop();
 };

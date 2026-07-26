@@ -181,6 +181,10 @@ bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
 	// Stow the target for the world that builds it. This subsystem is GI-scoped, so PendingMapLoad
 	// (and NextLandmarkSpawn) survive the OpenLevel below.
 	PendingMapLoad = FPendingMapLoad{ true, Map, Landmark };
+	// An ordinary Travel is always a play world. TravelForMenu re-raises this immediately after,
+	// *before* OpenLevel — the game mode reads it during PostLogin (which runs ahead of BeginPlay)
+	// to decide whether to spawn a pawn at all.
+	bCurrentIsMenuBackdrop = false;
 
 	// Hard travel into the map's own baked level: the engine tears the current UWorld down and runs
 	// GC, then the fresh world's game mode spawns the map actor on BeginPlay (SpawnPendingMap). The
@@ -201,6 +205,9 @@ void UElysiumMapSubsystem::SpawnPendingMap()
 	}
 	const FPendingMapLoad P = PendingMapLoad;
 	PendingMapLoad = FPendingMapLoad{};
+	// Latch the kind of world this is before the map actor builds — AElysiumMapActor::BeginPlay
+	// reads it to decide whether to build the gameplay half at all.
+	bCurrentIsMenuBackdrop = P.bMenuBackdrop;
 
 	UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
 	if (!World)
@@ -221,9 +228,23 @@ void UElysiumMapSubsystem::SpawnPendingMap()
 	NewMap->FinishSpawning(Xf);
 	CurrentMap = NewMap;
 
-	UE_LOG(LogElysiumMap, Log, TEXT("built %s%s (%.2fs)"), *P.Map,
+	UE_LOG(LogElysiumMap, Log, TEXT("built %s%s%s (%.2fs)"), *P.Map,
 		P.Landmark.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" @ %s"), *P.Landmark),
+		P.bMenuBackdrop ? TEXT(" [menu backdrop]") : TEXT(""),
 		FPlatformTime::Seconds() - Start);
+}
+
+bool UElysiumMapSubsystem::TravelForMenu(const FString& Map)
+{
+	// Travel does all the validation and the OpenLevel; the only difference is the flag the fresh
+	// world reads, so set it after Travel has stowed the record.
+	if (!Travel(Map))
+	{
+		return false;
+	}
+	PendingMapLoad.bMenuBackdrop = true;
+	bCurrentIsMenuBackdrop = true;
+	return true;
 }
 
 void UElysiumMapSubsystem::RequestLandmarkTravel(const FString& Map, const FString& Landmark,

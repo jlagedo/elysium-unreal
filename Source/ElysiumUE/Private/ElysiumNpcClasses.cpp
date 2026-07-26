@@ -114,21 +114,25 @@ public:
 	// Play a named clip on this NPC's body. False when the name resolves nothing (logged by the
 	// resolver), so a caller can fall back. The seam SetAnimation, the SetGesture Character method
 	// and scripted_sequence's m_iszPlay all reach animation through.
-	virtual bool PlayAnimClip(const FString& ClipName, bool bLoop) override { return PlayClip(ClipName, bLoop); }
+	virtual bool PlayAnimClip(const FString& ClipName, bool bLoop, float* OutSeconds) override
+	{
+		return PlayClip(ClipName, bLoop, OutSeconds);
+	}
+	virtual bool ResetAnimToIdle() override { return RefreshIdle(); }
 	virtual bool SetDispositionName(const FString& NewDisposition) override
 	{
 		SetDispositionFromScript(NewDisposition);
 		return true;
 	}
 
-	bool PlayClip(const FString& ClipName, bool bLoop)
+	bool PlayClip(const FString& ClipName, bool bLoop, float* OutSeconds = nullptr)
 	{
 		AElysiumMapActor* Map = World ? Cast<AElysiumMapActor>(World->GetOwnerActor()) : nullptr;
 		if (!Map || !Visual || ClipName.IsEmpty())
 		{
 			return false;
 		}
-		return Map->PlayNpcClip(Visual, FPaths::GetBaseFilename(Model).ToLower(), ClipName, bLoop);
+		return Map->PlayNpcClip(Visual, FPaths::GetBaseFilename(Model).ToLower(), ClipName, bLoop, OutSeconds);
 	}
 
 	// Re-run the default-idle policy — what a disposition change means for the body. 9.9 owns the
@@ -444,6 +448,12 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	D.Input(TEXT("UseInteresting"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumNpc&>(E).InputUseInteresting(Args); });
 	D.Input(TEXT("StartPlayerDialogRemote"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumNpc&>(E).InputStartDialog(Args); });
+	// The un-suffixed spelling, wired by 4 `scripted_sequence.OnEndSequence` rows (Chunk after the
+	// gallery lockpick, Jack after each tutorial walk) and 19 more across the maps. Routed to the same
+	// session opener. NOT RE-confirmed as identical to the Remote form in VtMB — the assumption is
+	// that both open the NPC's `dialogname` conversation, which is all this runtime does with either.
+	D.Input(TEXT("StartPlayerDialog"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumNpc&>(E).InputStartDialog(Args); });
 	D.Input(TEXT("EndDialog"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumNpc&>(E).InputEndDialog(Args); });

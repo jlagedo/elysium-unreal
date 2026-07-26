@@ -511,7 +511,14 @@ void FElysiumCogWindow_Inspector::RenderEntityDetails(FElysiumEntity& EntRef, FE
 	Row("Body", Ent->Body ? TEXT("brush body") : TEXT("(none)"));
 	Row("Next think", Ent->NextThink == ELYSIUM_NEVER_THINK
 		? FString(TEXT("never")) : FString::Printf(TEXT("%.2f s"), Ent->NextThink));
-	Row("Origin", Ent->Def->Origin.ToCompactString());   // same shape as the pick's "hit point"
+	// The live origin (same shape as the pick's "hit point"). An NPC a `scripted_sequence` placed on
+	// its mark stands somewhere else than it spawned, so the def's origin is a separate row and only
+	// appears once they differ.
+	Row("Origin", Ent->Origin.ToCompactString());
+	if (!Ent->Origin.Equals(Ent->Def->Origin, 0.01))
+	{
+		Row("Spawned at", Ent->Def->Origin.ToCompactString());
+	}
 
 	// --- +use (P4.4) — the context-icon reticle state. Shown for anything the player can look-and-use
 	// or that carries an icon: whether the +use trace is armed on it, the use_icon/locked_icon it

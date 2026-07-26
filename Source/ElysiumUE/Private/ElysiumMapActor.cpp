@@ -369,6 +369,13 @@ void AElysiumMapActor::LoadMap()
 	ApplyMaterialOverrides();
 	Phase(TEXT("Adopt baked level"));
 
+	// 8.6 — a menu backdrop builds the map in full, entity substrate included: the NPCs standing and
+	// idling in frame *are* entities, so a look-only build has no one in it (owner call, see
+	// `docs/decisions.md`). What a backdrop skips is only the player's placement — it seats no pawn.
+	UElysiumMapSubsystem* MapSubsystem =
+		GetGameInstance() ? GetGameInstance()->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
+	const bool bMenuBackdrop = MapSubsystem && MapSubsystem->IsMenuBackdrop();
+
 	// The walkable surface. Baked world geometry carries no gameplay collision, so the brush
 	// sidecars are the only world collider: .hulls convex (which carries the invisible PLAYERCLIP
 	// volumes and drops geometry the designer clipped off) plus the .dispcol displacement trimesh.
@@ -398,9 +405,14 @@ void AElysiumMapActor::LoadMap()
 		*MapName, Adopted, WorldActors.Num(), SkyActors.Num(), PropActors.Num(), DecalCount,
 		WorldLightCount, HullCount, PostProcess ? TEXT("yes") : TEXT("MISSING"));
 
-	if (ReadSpawn(PendingSpawnLoc, PendingSpawnYaw))
+	if (!bMenuBackdrop && ReadSpawn(PendingSpawnLoc, PendingSpawnYaw))
 	{
 		bSpawnPending = true;
+	}
+
+	if (bMenuBackdrop)
+	{
+		UE_LOG(LogElysium, Log, TEXT("menu backdrop '%s': full build, no player placement"), *MapName);
 	}
 
 	// Track-B entity substrate (P1.4): parse `.ents`, build the live world, run the spawn pass.
@@ -437,8 +449,12 @@ void AElysiumMapActor::LoadMap()
 	}
 
 	// P4.6 — a landmark transition places the player against the destination info_landmark instead of
-	// info_player_start. Runs after the entity world is built (the landmark is one of its entities).
-	ResolveLandmarkSpawn();
+	// info_player_start. Runs after the entity world is built (the landmark is one of its entities),
+	// and not at all on a backdrop, which has no entity world and seats no player.
+	if (!bMenuBackdrop)
+	{
+		ResolveLandmarkSpawn();
+	}
 
 	Phase(TEXT("Entities"));
 
@@ -716,12 +732,16 @@ UAnimSequence* AElysiumMapActor::ResolveNpcClip(const FString& Stem, const FStri
 }
 
 bool AElysiumMapActor::PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
-	const FString& ClipName, bool bLoop)
+	const FString& ClipName, bool bLoop, float* OutSeconds)
 {
 	UAnimSequence* Anim = Body ? ResolveNpcClip(Stem, ClipName) : nullptr;
 	if (Anim == nullptr)
 	{
 		return false;
+	}
+	if (OutSeconds != nullptr)
+	{
+		*OutSeconds = Anim->GetPlayLength();
 	}
 	if (UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()))
 	{

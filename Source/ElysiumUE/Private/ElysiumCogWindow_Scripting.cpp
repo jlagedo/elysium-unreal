@@ -481,7 +481,12 @@ void FElysiumCogWindow_Scripting::RenderGStore()
 			{
 				int32 Val = V.ToInt();
 				ImGui::SetNextItemWidth(-FLT_MIN);
-				if (ImGui::InputInt("##v", &Val, 0, 0, ImGuiInputTextFlags_EnterReturnsTrue))
+				// No ImGuiInputTextFlags_EnterReturnsTrue here: InputScalar asserts on it (it owns
+				// that handling internally), which fired a handled-ensure every frame the G table
+				// was on screen. Commit on focus-loss-after-edit instead, which is the same
+				// "don't write on every keystroke" intent.
+				ImGui::InputInt("##v", &Val, 0, 0);
+				if (ImGui::IsItemDeactivatedAfterEdit())
 				{
 					State->SetGlobal(Key, FElysiumVariant::Int(Val));
 				}

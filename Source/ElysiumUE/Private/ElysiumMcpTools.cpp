@@ -338,9 +338,13 @@ namespace ElysiumMcpImpl
 		// for this classname, so the record parses and indexes but does nothing.
 		Out->SetBoolField(TEXT("record_only"), Entity.IsRecordOnly());
 		Out->SetBoolField(TEXT("brush"), Entity.Def && Entity.Def->IsBrush());
-		if (Entity.Def)
+		// The live origin — where the entity actually is. A `scripted_sequence` places its NPC on a
+		// mark and scripts call SetOrigin, so the def's spawn point is a different fact; it is
+		// reported alongside only when the two have diverged.
+		Out->SetObjectField(TEXT("origin"), Vec(Entity.Origin));
+		if (Entity.Def && !Entity.Origin.Equals(Entity.Def->Origin, 0.01))
 		{
-			Out->SetObjectField(TEXT("origin"), Vec(Entity.Def->Origin));
+			Out->SetObjectField(TEXT("spawn_origin"), Vec(Entity.Def->Origin));
 		}
 		return Out;
 	}
@@ -1373,7 +1377,7 @@ namespace ElysiumMcpImpl
 			FSchema Schema;
 			TSharedRef<FAsyncTool> Tool = MakeShared<FAsyncTool>();
 			Tool->Name = TEXT("elysium_screenshot");
-			Tool->Description = TEXT("Capture the game viewport and return it as a PNG image. The debug/ImGui overlay is excluded, so a shot with a Cog window open matches one without. Use it to close the loop — fire an input, then look at what happened.");
+			Tool->Description = TEXT("Capture the game viewport and return it as a PNG image, including the game UI (menus, HUD). Use it to close the loop — fire an input, then look at what happened.");
 			Tool->Schema = Schema.Build();
 			Tool->Handler = [](const TSharedPtr<FJsonObject>&, const IModelContextProtocolTool::FResultCallback& OnComplete)
 			{
@@ -1393,7 +1397,12 @@ namespace ElysiumMcpImpl
 						}
 						OnComplete(MakeImageResult(TEXT("image/png"),
 							TArrayView<uint8>(Png.GetData(), static_cast<int32>(Png.Num()))));
-					});
+					},
+					/*TimeoutFrames*/ 300,
+					// Show Slate: this tool exists to show what the player sees, and since 8.6 the
+					// menu and every other UMG screen are Slate. The regression harness keeps the
+					// UI-free capture so its baselines stay comparable.
+					/*bShowUI*/ true);
 
 				if (!bRequested)
 				{

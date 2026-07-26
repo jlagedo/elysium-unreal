@@ -249,6 +249,61 @@ spawnflag bit `0x80` (tested in the wait-over think as `(char)m_spawnflags < 0`)
 **remove itself after firing** (the `trigger_once` behaviour; `trigger_once` is a distinct factory
 `FUN_101c6a30`/vftable `0x1047dee4` over the same `CBaseTrigger` base `0x1047d08c`).
 
+## Scripted sequences (`scripted_sequence` / `aiscripted_sequence`)
+
+VtMB's cutscene beat: move a named NPC to a marker, play an animation on it, and fire an output on
+either side. The class in `vampire.dll` is **`CCineNPC`** — the `aiscripted_sequence` factory
+(`FUN_101a8fe0`) allocates `0x608c` bytes and installs vftable `10477d1c`, whose datamap
+(`10593628`) names the class; the `scripted_sequence` factory is `FUN_101a6260` over the same
+constructor. `CCineNPC` is an **HL1 `CCineMonster` derivative**, not HL2's `CAI_ScriptedSequence`,
+which is what fixes the spawnflag lineage below.
+
+**Keyfields** (datamap names; the binary carries both `m_iszIdle` and `m_iszPreIdle`, and every
+exported map uses `m_iszIdle`):
+
+| Field | Meaning |
+| --- | --- |
+| `m_iszEntity` | the NPC's targetname. `!playercontroller` on 10 of the 108 exported sequences |
+| `m_iszIdle` | pre-action idle — the pose the NPC waits in from level start until the beat begins |
+| `m_iszPlay` | the action animation; its length is the beat's duration |
+| `m_iszPostIdle` | the resting pose held after the action |
+| `m_iszCustomMove` | the travel animation used when `m_fMoveTo` is 3 |
+| `m_iszNextScript` | the sequence to begin when this one ends |
+| `m_fMoveTo` | 0 No / 1 Walk / 2 Run / 3 Custom movement / 4 Instantaneous / 5 No - Turn to Face |
+| `m_flRadius` | NPC search radius when `m_iszEntity` is not a plain targetname (512 on 81 of 108) |
+| `m_flRepeat` | repeat rate in ms (0 on 104 of 108) |
+
+**Inputs:** `BeginSequence`, `CancelSequence` (plus the base `Kill`/`ScriptHide`/`ScriptUnhide`).
+**Outputs:** `OnBeginSequence`, `OnEndSequence`, and `OnScriptEvent01..08` — the last driven by
+animation events embedded in the clip, so they need decoded `.mdl` events to fire at all.
+
+**Spawnflags** follow the HL1 `CCineMonster` set for bits 1–128; VtMB adds 256, 512, 4096 and 8192,
+whose meanings are **not established**:
+
+| Bit | Meaning |
+| --- | --- |
+| `1` | WAITTILLSEEN |
+| `2` | EXITAGITATED |
+| `4` | REPEATABLE |
+| `8` | LEAVECORPSE |
+| `16` | START_ON_SPAWN — **set on none of the 108 exported sequences** |
+| `32` | NOINTERRUPT |
+| `64` | OVERRIDESTATE |
+| `128` | NOSCRIPTMOVEMENT — do not move the NPC to the mark |
+| `256`, `512`, `4096`, `8192` | VtMB additions; meaning unknown |
+
+That no sequence carries bit 16 is load-bearing: every beat is entered by an explicit
+`BeginSequence` — an I/O wire, a `m_iszNextScript` chain, or a level-script call — and none starts
+itself at map load.
+
+**Demand across the 10 exported maps:** 104 `scripted_sequence` + 4 `aiscripted_sequence`;
+68 `BeginSequence` and 16 `CancelSequence` I/O wires, plus 68 and 8 receiver-qualified script calls
+(`script.BeginSequence()`) that reach the same registered input through the datamap lookup
+(`python_bridge.md`). 88 wires leave these entities — `OnEndSequence` 48, `OnBeginSequence` 35,
+`OnScriptEvent01/02/03` 5 — and they unlock doors, restore cameras, and open conversations, so a
+beat that never ends stalls the map's flow. 94 animation references across the set, of which the
+4 that name no NPC skeleton all belong to `!playercontroller`.
+
 ## Skin families (`skin` / `SetSkin` / `FadeToSkin`)
 
 The datamap records in `vampire.dll` that drive a model's alternate skin family (record layout per

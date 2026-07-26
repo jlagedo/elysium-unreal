@@ -58,7 +58,7 @@ namespace
 	};
 }
 
-bool ElysiumScreenshot::Request(const FOnCaptured& OnCaptured, int32 TimeoutFrames)
+bool ElysiumScreenshot::Request(const FOnCaptured& OnCaptured, int32 TimeoutFrames, bool bShowUI)
 {
 	if (!GEngine || !GEngine->GameViewport || !GEngine->GameViewport->Viewport)
 	{
@@ -104,9 +104,10 @@ bool ElysiumScreenshot::Request(const FOnCaptured& OnCaptured, int32 TimeoutFram
 			return false;
 		});
 
-	// bShowUI false: capture the rendered scene without the debug/ImGui overlay, so a shot taken
-	// with a Cog window open still matches one taken without it.
-	FScreenshotRequest::RequestScreenshot(/*bInShowUI*/ false);
+	// bShowUI false keeps the debug/ImGui overlay out, so a shot taken with a Cog window open still
+	// matches one taken without it — but it drops **all** Slate, game UI included. The regression
+	// harness wants that; a caller looking at what the player sees does not.
+	FScreenshotRequest::RequestScreenshot(bShowUI);
 	return true;
 }
 

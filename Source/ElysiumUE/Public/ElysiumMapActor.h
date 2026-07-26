@@ -101,8 +101,10 @@ public:
 
 	// Crossfade a live NPC body to a named clip, resolved through the manifest. Returns false when
 	// the name resolves nothing. The seam `SetAnimation` / `SetGesture` / `m_iszPlay` use.
+	// OutSeconds receives the clip's authored length — what a `scripted_sequence` schedules its
+	// `OnEndSequence` off, since the action animation is what gives the beat its duration.
 	bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
-		bool bLoop = true);
+		bool bLoop = true, float* OutSeconds = nullptr);
 
 	// Retarget one named clip onto an already-built NPC model's skeleton, cached per (stem, clip).
 	// The clip may live in the NPC's own glb or in any shared bank — the manifest says which, and

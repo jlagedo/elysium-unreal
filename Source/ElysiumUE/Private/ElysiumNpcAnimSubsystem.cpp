@@ -7,7 +7,7 @@
 #include "Engine/SkeletalMesh.h"
 #include "HAL/FileManager.h"
 
-DEFINE_LOG_CATEGORY_STATIC(LogElysium, Log, All);
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumNpcAnim, Log, All);
 
 void UElysiumNpcAnimSubsystem::Deinitialize()
 {
@@ -24,11 +24,11 @@ const FElysiumNpcIndex& UElysiumNpcAnimSubsystem::GetIndex()
 		FString Error;
 		if (!Index.Load(Error))
 		{
-			UE_LOG(LogElysium, Warning, TEXT("npc index: %s"), *Error);
+			UE_LOG(LogElysiumNpcAnim, Warning, TEXT("npc index: %s"), *Error);
 		}
 		else
 		{
-			UE_LOG(LogElysium, Log, TEXT("npc index: %d NPCs, %d animation banks"),
+			UE_LOG(LogElysiumNpcAnim, Log, TEXT("npc index: %d NPCs, %d animation banks"),
 				Index.Npcs.Num(), Index.Banks.Num());
 		}
 	}
@@ -43,7 +43,7 @@ const FElysiumDispositionTable& UElysiumNpcAnimSubsystem::GetDispositions()
 		FString Error;
 		if (!Dispositions.Load(Error))
 		{
-			UE_LOG(LogElysium, Warning, TEXT("disposition table: %s"), *Error);
+			UE_LOG(LogElysiumNpcAnim, Warning, TEXT("disposition table: %s"), *Error);
 		}
 	}
 	return Dispositions;
@@ -64,7 +64,7 @@ const FElysiumNpcClipSet* UElysiumNpcAnimSubsystem::GetClipSet(const FString& St
 	FString Error;
 	if (!Set->Load(Stem, Error))
 	{
-		UE_LOG(LogElysium, Warning, TEXT("npc clips '%s': %s"), *Stem, *Error);
+		UE_LOG(LogElysiumNpcAnim, Warning, TEXT("npc clips '%s': %s"), *Stem, *Error);
 		Set.Reset();   // remembered as a miss, so this is not retried per NPC sharing the stem
 	}
 	ClipSets.Add(Stem, Set);
@@ -96,7 +96,7 @@ UglTFRuntimeAsset* UElysiumNpcAnimSubsystem::GetBankAsset(const FString& BankSte
 		return nullptr;
 	}
 	BankAssets.Add(BankStem, Asset);
-	UE_LOG(LogElysium, Log, TEXT("npc bank '%s' parsed in %.0f ms (%.1f MB)"), *BankStem,
+	UE_LOG(LogElysiumNpcAnim, Log, TEXT("npc bank '%s' parsed in %.0f ms (%.1f MB)"), *BankStem,
 		(FPlatformTime::Seconds() - Start) * 1000.0,
 		static_cast<double>(IFileManager::Get().FileSize(*Path)) / 1e6);
 	return Asset;

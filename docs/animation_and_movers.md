@@ -129,6 +129,16 @@ Together these are what lets a consumer ask for *an* `ACT_IDLE` rather than patt
 label: `regular_cop` resolves 229 clips with "idle" in the name, of which `Stance_Dead_Idle_1`
 and `Bed_Left_Idle` are not idles in any useful sense.
 
+**The enum the names resolve into is in the binary** [decompile-verified]. `FUN_104126e0`
+(`vampire.dll`) registers the whole activity table one name at a time — `("ACT_IDLE", 1)`,
+`("ACT_TRANSITION", 2)`, `("ACT_FIDGET", 3)`, … — **3,045 names recovered from the dump**, indices
+running 1…0xbfe. That is the map `activity`@12 is filled from at model load, and it confirms the
+literal is the stable identifier rather than an artefact: the index space is the DLL's, so it would
+change with a build, while the name is what the `.mdl` ships. Landmarks: `ACT_IDLE` = 1,
+`ACT_SCRIPT_CUSTOM_MOVE` = 0x18 (the activity a `scripted_sequence`'s `m_iszCustomMove` selects),
+`ACT_DISPOSITION` = 0xf1. The tail of the table is a long knockback/ragdoll family
+(`ACT_KNOCKBACK_FLYING_*`), which is why the count is so much larger than any one model's vocabulary.
+
 `flags`@8 correlates with looping (`walk`/`run`/`sneak`/every stance = 1; `crouch` = 0), but
 `idle01` reads 0 while being a looping idle, and the values 2 and 0x14 are unmapped — the bit
 meanings are **not** established, so looping is a consumer policy rather than a read of this

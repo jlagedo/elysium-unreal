@@ -181,8 +181,14 @@ public:
 	// one. Every script-facing animation call lands here: the `SetAnimation` input (21 sites), the
 	// `SetGesture` Character method, and `scripted_sequence`'s `m_iszPlay`. Kept virtual on the base
 	// so the scripting host can reach it without knowing the leaf type (the same no-RTTI reason
-	// `GetAttachBody` is here).
-	virtual bool PlayAnimClip(const FString& ClipName, bool bLoop) { return false; }
+	// `GetAttachBody` is here). OutSeconds receives the clip's authored length — a
+	// `scripted_sequence` times its `OnEndSequence` off it.
+	virtual bool PlayAnimClip(const FString& ClipName, bool bLoop, float* OutSeconds = nullptr) { return false; }
+
+	// Hand the body back to its resting pose — the disposition idle 8.5 picked for it. What a
+	// `scripted_sequence` does to its NPC on `CancelSequence`: VtMB returns the NPC to AI, which
+	// idles it, and the stance idle is the closest thing this runtime has to that. Base answers false.
+	virtual bool ResetAnimToIdle() { return false; }
 
 	// A disposition write from script — the animation half of `SetDisposition` (2,510 calls, the
 	// largest single engine demand in the game). Re-picks the standing stance; the emotional-state

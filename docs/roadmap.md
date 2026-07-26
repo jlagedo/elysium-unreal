@@ -626,13 +626,24 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   off the assets. In-game: bodies simulate with the authored masses exact (trashgarage 3.00, barrela
   7.00, break_crate 100.00 kg) and `showflag.Collision` shows the hulls hugging each barrel.
   **Chaos settle/push feel + hinge swing await an owner in-game play test** (like 4.1). *Deps:* 8.1.
-- [~] **8.5 NPC presence + `scripted_sequence` minimal** — the presence slice landed in **B3**
-  (bodies at origin via `BuildNpcVisual`, `npc_maker` runtime spawn, dialog-gating inputs) and
-  **PL4 is done** (per-NPC glbs + shared animation-bank glbs + `npc_manifest.json`).
-  **Remaining:** the `scripted_sequence` play-anim-at-marker handler (×51) and bank retargeting —
-  load a clip's bank glb (cached, shared) and apply it by bone name
-  (`bank->LoadSkeletalAnimationByName(npcMesh, clip)`; the manifest hides the include mechanism).
-  *Deps:* 8.2, PL4 [x].
+- [x] **8.5 NPC presence + `scripted_sequence` minimal** — presence landed in **B3**, the animation
+  vocabulary in **PL4**, and this closes the rest: NPCs idle on the stance their disposition selects
+  instead of T-posing, and `scripted_sequence` (×104 + 4 `aiscripted_sequence`) runs as a real class.
+  Selection is on the engine's own keys — `mdl_skel.local_sequences` now reads `szactivitynameindex`
+  and `actweight`, so an idle is picked by **activity** (`default_disposition` →
+  `dispositiontable.txt` → `Stance_<Name>_Idle_*`, then `ACT_IDLE` by weight), never by label
+  substring. A native `UElysiumNpcAnimInstance` (two sequence players + a 0.25 s crossfade) plays it,
+  banks are retargeted by bone name and cached per session, and the script seam
+  (`SetAnimation`/`SetGesture`/`SetDisposition`) reaches it through two `FElysiumEntity` virtuals.
+  `scripted_sequence` reproduces the beat's outputs — `OnBeginSequence`/`OnEndSequence`, the
+  `m_iszNextScript` chain, `m_iszIdle` at spawn — which is the half the maps depend on: 67 of its 88
+  wires land on inputs that already exist. RE'd on the way: the class is **`CCineNPC`**, HL1
+  lineage, so **no exported sequence starts on spawn** (`entity_io.md`). **Not reproduced:**
+  locomotion — the NPC is placed on the mark rather than walked to it, and `OnScriptEvent01..08`
+  needs decoded animation events (`decisions.md` 2026-07-26). *Verified:* `Elysium.Substrate.ScriptedSequence`
+  + `Elysium.Content.ScriptedSequenceClips` (106 sequences, 88/88 animation refs resolve); in-game,
+  `script_7b.BeginSequence` places Jack on his mark 187 m away and its `OnEndSequence` opens his
+  dialogue. As-built: `roadmap-archive.md` 8.5. *Deps:* 8.2, PL4 [x].
 - [x] **8.6a New Game context + story entry** *(carve-out of 8.6)* — `FElysiumPlayerSheet` +
   `UElysiumGameStateSubsystem::BeginNewGame` seed the fresh-story state (`Story_State=-4`,
   `Tut_Jack=0`, `Tut_Patch=0`, `Linux_Wine=1`); `UElysiumMapSubsystem::NewGame` travels to
@@ -649,18 +660,33 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   **intent** (PL8), not executed as layout. Ships with it: the main menu + pause menu on the new
   stack, and the New Game flow calling 8.6a's `UElysiumMapSubsystem::NewGame` seam.
 
-  **Landed (the foundation):** the RE the re-skin is checked against (`docs/vtmb-ui.md` — the
-  two UI stacks, both schemes, `CVMainMenu`'s **1024×768** layout law, the HUD class inventory,
-  and four corrections to `m0_menu_build.md`); **PL8** [x]; the **Nocturne** type set
-  (Spectral SC / Spectral / Inter, SIL OFL, no RFN) in `Content/Fonts` via
-  `tools/fetch_ui_fonts.py`; **CommonUI + CommonInput enabled** (`.uproject` + `Build.cs`) —
-  widget trees stay C++ Slate inside `UCommonActivatableWidget`s, so no Widget Blueprint assets.
-  The five owner calls behind these: `decisions.md` 2026-07-26.
+  **Landed — the main menu runs.** Verified in the built game by screenshot: the title lockup from
+  the user's own install over **`sm_hub_1` (the Asylum frontage) as a live backdrop — NPCs idling,
+  streetlights cycling** — with five small-caps items laid out by the RE'd law. The backdrop is a
+  full map build minus the player (the idling NPCs are entities, so a look-only build is an empty
+  street — `decisions.md` 2026-07-26 cont. 3 corrects the original call); the HUD stands down while
+  a menu is up, since `sm_hub_1`'s `havenbum` opens a conversation unprompted. Design: `docs/ui-architecture.md`; the RE it is checked against: `docs/vtmb-ui.md`
+  (the two UI stacks, both schemes, the **1024×768** canvas law, the HUD class inventory, and four
+  corrections to `m0_menu_build.md`). **PL8** [x]. The **Nocturne** type set (Spectral SC /
+  Spectral / Inter, SIL OFL, no RFN) ships as committed `UFontFace` assets
+  (`fetch_ui_fonts.py` → `make_ui_fonts.py`). **CommonUI + CommonInput** adopted with widget trees
+  in C++ Slate, so **no Widget Blueprint assets**. `UElysiumUISubsystem` +
+  `UElysiumMainMenu` + `ElysiumUIStyle`/`Strings`/`Texture`; `elysium.menu [pause]`,
+  `elysium.menu.close`, `elysium.MenuVantage`, `elysium.BootMenu`. Six owner calls:
+  `decisions.md` 2026-07-26.
 
-  **Remaining:** the `UFont` asset generator + `build_content.py` registration; the design-token
-  layer; the `CommonUIInputData` config asset; `UElysiumMainMenu` + the item list; the 3D-scene
-  backdrop (real game geometry via the bake, **not** a particle-scene port — see the decision);
-  the title lockup drawn from `out/ui/menu/title.png`; pause menu; `docs/ui-architecture.md`.
+  Three findings the build forced, all recorded in `ui-architecture.md`: `make_ui_fonts.py`
+  **cannot** run in the `content.bat` umbrella (a `UFontFace` import flushes Slate's font cache and
+  `FSlateApplication::Get()` asserts in a commandlet); a `UCommonActivatableWidget` added straight
+  to the viewport is **collapsed until `ActivateWidget()`**; and `ElysiumScreenshot::Request` grew a
+  `bShowUI` flag because the harness's UI-free capture silently omits every Slate widget — the MCP
+  tool now passes true, the regression harness keeps false so baselines hold.
+
+  **Remaining:** the `CommonUIInputData` config asset + gamepad/keyboard nav pass; Esc → pause
+  binding (the pause item set exists and `elysium.menu pause` raises it); New Game click path
+  untested end to end (the seam is wired, the console equivalent works); chargen ahead of New Game
+  (9.4). **Open risk:** `shots.bat` cannot see the UI layer, so 8.9's HUD needs UI-inclusive
+  vantages or its regressions go unwatched.
 
   **Acceptance:** main menu and pause menu are legible and correctly proportioned at 1080p,
   1440p, 4K and 21:9 with no letterboxing or bitmap-font blur; New Game enters `sp_tutorial_1`

@@ -90,7 +90,7 @@ Records are verbatim moves out of `roadmap.md`: where one says "the decision log
   warping the player; `ent_fire blueblood_maker Spawn` produces `blueblood(npc_VPedestrian)` at the maker
   origin (the downtown alley). `Elysium.Substrate.Npc` proves the registry, the runtime spawn, the WillTalk
   latch, and the OnDialogBegin fire on a bare world. **Feeds but does not close 8.5** (its
-  `scripted_sequence` anim-at-marker ×51 and animation-bank retargeting stay open). *Deps:* 8.2, PL4 [x].
+  `scripted_sequence` handler and animation-bank retargeting land in 8.5 itself). *Deps:* 8.2, PL4 [x].
 
 - [x] **B4 `.dlg` parser + dialogue runner** *(9.1's core made playable; UI is interim)* — landed. The
   reusable core is **9.1** (`ElysiumDlg.{h,cpp}`, its own archive entry below); B4 is the in-game wiring.
@@ -1122,16 +1122,77 @@ Records are verbatim moves out of `roadmap.md`: where one says "the decision log
     owner in-game play test (like 4.1 — physics feel is the one thing headless coverage can't judge).
     *Deps:* 8.1.
 
-- [~] **8.5 NPC presence + `scripted_sequence` minimal** — spawn `npc_*`/`npc_maker` at
-  origins via glTFRuntime; play-anim-at-marker handler (×51) long before real AI.
-  *Presence slice landed in **B3*** — `npc_*`/`npc_maker` register, stand their glTF body at origin
-  (`AElysiumMapActor::BuildNpcVisual`, per-stem cache), `npc_maker.Spawn` creates the child via
-  `FElysiumEntityWorld::SpawnRuntimeEntity`, and the dialog-gating inputs latch. **Remaining:** the
-  `scripted_sequence` play-anim-at-marker handler (×51) and animation-bank retargeting.
-  *Pipeline done (PL4):* the batch emits per-NPC mesh glbs + shared animation-bank glbs +
-  `out/npc/npc_manifest.json` (`clip → owning-stem`). The bank work is loading a clip's bank glb
-  (cached, shared) and applying it to the NPC skeletal mesh by bone name
-  (`bank->LoadSkeletalAnimationByName(npcMesh, clip)`) — the manifest hides the include mechanism.
+- [x] **8.5 NPC presence + `scripted_sequence` minimal** — landed in three parts. **Presence** came
+  with B3 (`npc_*`/`npc_maker` register, stand their glTF body at origin, dialog-gating inputs latch);
+  **the vocabulary** with PL4 (per-NPC mesh glbs + shared animation-bank glbs); this entry is the rest.
+
+  **The problem it fixes.** 25 of `sp_tutorial_1`'s 34 NPCs and 24 of `sm_hub_1`'s 86 stood in the
+  reference T-pose, with 226 bank idle clips available and unused. The cause was the selection rule,
+  not the loading: the old `LoadIdleAnim` took the first clip whose *label contained* "idle" in the
+  NPC's own glb — and an NPC's own `.mdl` carries almost nothing but its dialogue clips.
+
+  **Selection now uses the engine's own keys.** `mdl_skel.local_sequences` reads
+  `StudioSeqDesc.szactivitynameindex` (the `ACT_*` literal — `activity@12` is -1 on disk because the
+  game DLL resolves the name at model load, so the **name** is the durable key) and `actweight`.
+  The runtime picks by activity in three tiers: the NPC's `default_disposition` →
+  `vdata/system/dispositiontable.txt` `Animation Name` → `Stance_<Name>_Idle_*` (ACT_DISPOSITION),
+  then `ACT_IDLE` by weight, then a loose fallback. Label substrings are never matched — `regular_cop`
+  resolves 229 clips containing "idle", including `Stance_Dead_Idle_1` (0.07 s) and `Bed_Left_Idle`.
+  Verified 54/54 NPCs resolve: 44 by stance, 9 by `ACT_IDLE`, 1 loose.
+
+  **Manifest v2** (`npc_index.json` + `clips/<stem>.json`): clip metadata is stored once per *owning*
+  stem rather than per NPC (~3.5k rows instead of 69k), which keeps the manifest at 5.5 MB instead of
+  20+; a map parses ~2.2 MB of per-NPC slices. The idle policy needs 2–3 banks / 25 MB resident, not
+  the 243 MB the full vocabulary references. Measured in-game: 63 ms + 72 ms, map load 2.51 s, no
+  regression.
+
+  **`UElysiumNpcAnimInstance`** — a native C++ anim instance, no Blueprint and no anim-graph asset:
+  two `FAnimNode_SequencePlayer_Standalone` and a lerp, 0.25 s crossfade, `elysium.NpcAnim 0` to A/B
+  against a single node. It exists because VtMB's stance banks ship almost no authored transitions —
+  of 21 dispositions × 2 gendered banks, exactly one carries a `Stance_<D>_Trans_<a>_<b>` clip
+  (`Stance_Neutral_Trans_1_2`, male only) — so a stance change cannot route through an authored blend
+  the way the naming suggests. The proxy **must** implement `UpdateAnimationNode`: a sequence player
+  that is never `Update_AnyThread`'d holds its start frame forever, which is exactly how the first
+  cut shipped — poses changed on request and nothing ever advanced.
+
+  **`scripted_sequence` / `aiscripted_sequence`** (×104 + 4) — `ElysiumScriptedSequence.cpp`. A beat
+  places its NPC on the mark, plays `m_iszPlay` once, holds `m_iszPostIdle` looping, and fires
+  `OnBeginSequence`/`OnEndSequence` either side; `m_iszIdle` is the pose the NPC waits in from map
+  load, `m_iszNextScript` chains the next beat, and a beat naming `!playercontroller` runs as a
+  timing shell so flow continues. The outputs are the point: 88 wires leave these entities, 48 of
+  them `OnEndSequence`, and **67 of the 88 land on inputs that already exist**. `BeginSequence` is one
+  registered input serving both the 68 I/O wires and the 68 receiver-qualified script calls, since a
+  Python attribute and a Hammer input are the same namespace. `StartPlayerDialog` was registered as a
+  second name for `...Remote` so 4 of those `OnEndSequence` wires stop landing on nothing.
+
+  **RE that changed the implementation.** The class is **`CCineNPC`** — an HL1 `CCineMonster`
+  derivative, not HL2's `CAI_ScriptedSequence` (`aiscripted_sequence` factory `FUN_101a8fe0` → vftable
+  `10477d1c` → datamap `10593628`). That fixes spawnflag bits 1–128, under which **no exported
+  sequence carries START_ON_SPAWN**. The HL2 FGD bit order would have auto-started 27 of
+  `sp_tutorial_1`'s 51 at map load. Full field/flag/output tables: `entity_io.md` → "Scripted
+  sequences".
+
+  **Corrections to `animation_and_movers.md`** found on the way: `fps` is not uniformly 30 (1,436@30,
+  54@18 including `run`, 8@60, 4@20 over 1,502 sequences in six banks); a new A.3 records the
+  activity-name selection key and that the sequence `flags` bit meanings are **not** established; and
+  the `nummovements` row was rewritten — **66 of `move_and_ranged`'s 722 animdescs carry root motion**
+  (`walk` 23, `run` 9, `sneak` 1), located but not decoded, which is why a walk clip plays in place
+  and the feet slide.
+
+  **Not reproduced:** locomotion (the NPC is placed on the mark, not walked there),
+  `OnScriptEvent01..08` (needs decoded animation events), and ambient stance cycling (all three
+  `dispositiontable.txt` timing rules are conversation-scoped). All four calls plus the
+  `StartPlayerDialog` assumption: `decisions.md` 2026-07-26.
+
+  *Verified:* `Elysium.Substrate.ScriptedSequence` (placement, both outputs, the chain, the
+  NOSCRIPTMOVEMENT gate, a player-targeted shell) and `Elysium.Content.ScriptedSequenceClips`
+  (106 sequences over 4 maps, 88/88 NPC-targeted animation references resolve); `test.bat` 29/29.
+  In-game on `sp_tutorial_1`: `sJack_waveover` turns Jack to the marker's facing, plays `waveover01`
+  (2.53 s, `ACT_WAVEOVER`, from `character_shared_male_misc`) and settles to his stance idle;
+  `script_7b.BeginSequence` places Jack on his mark 187 m from spawn and its `OnEndSequence` fires
+  `Jack.StartPlayerDialog`, which opens the conversation and re-fires his own `OnDialogBegin`.
+  A debug-reporting bug surfaced and was fixed alongside: `ent_dump`, the MCP entity view and the Cog
+  inspector all printed an entity's **def** origin, so a placed NPC read as still at its spawn point.
   *Deps:* 8.2, PL4 [x].
 
 - [x] **8.6a New Game context + story entry** *(carve-out of 8.6, so the game context isn't blocked

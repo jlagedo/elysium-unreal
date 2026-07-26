@@ -9,7 +9,7 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
-DEFINE_LOG_CATEGORY_STATIC(LogElysium, Log, All);
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumClips, Log, All);
 
 namespace ElysiumActivity
 {
@@ -128,7 +128,7 @@ bool FElysiumNpcClipSet::Load(const FString& InStem, FString& OutError)
 	}
 	if (Malformed > 0)
 	{
-		UE_LOG(LogElysium, Warning, TEXT("npc clips '%s': %d malformed row(s) skipped"),
+		UE_LOG(LogElysiumClips, Warning, TEXT("npc clips '%s': %d malformed row(s) skipped"),
 			*InStem, Malformed);
 	}
 	return !Clips.IsEmpty();

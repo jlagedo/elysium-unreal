@@ -544,11 +544,16 @@ void UElysiumEntityDebugSubsystem::HandleDump(const TArray<FString>& Args, UWorl
 	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
 
 	UE_LOG(LogElysiumEnt, Display, TEXT("== ent_dump %s =="), *E->DebugString());
-	UE_LOG(LogElysiumEnt, Display, TEXT("  state: %s | body: %s | next-think: %s | origin: %s"),
+	// The LIVE origin, not the def's. An entity a `scripted_sequence` placed on its mark, or a script
+	// moved with SetOrigin, is somewhere else entirely — printing the def would report the spawn point
+	// and quietly contradict where the body is standing. The def's is shown alongside once it differs.
+	const bool bMoved = !E->Origin.Equals(E->Def->Origin, 0.01);
+	UE_LOG(LogElysiumEnt, Display, TEXT("  state: %s | body: %s | next-think: %s | origin: %s%s"),
 		E->IsDead() ? TEXT("dead") : E->IsHidden() ? TEXT("hidden") : TEXT("live"),
 		E->Body ? TEXT("brush") : TEXT("(none)"),
 		E->NextThink == ELYSIUM_NEVER_THINK ? TEXT("never") : *FString::Printf(TEXT("%.2fs"), E->NextThink),
-		*E->Def->Origin.ToString());
+		*E->Origin.ToString(),
+		bMoved ? *FString::Printf(TEXT(" (spawned at %s)"), *E->Def->Origin.ToString()) : TEXT(""));
 
 	if (E->Class)
 	{

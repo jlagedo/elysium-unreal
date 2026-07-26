@@ -310,8 +310,11 @@ to matter — not before.
 - **AI later**: runtime-generated NavMesh (dynamic navmesh generation over the loaded
   world collision) + Behavior Trees/StateTree — Unreal's stock AI stack replaces the
   `info_node` graph (×154 + patrol points) rather than reimplementing Source AI
-  navigation. `scripted_sequence` (×51) gets a minimal play-anim-at-marker handler
-  long before real AI.
+  navigation. `scripted_sequence` (×104, plus 4 `aiscripted_sequence`) gets a minimal
+  handler long before real AI: it reproduces the beat's animation and its
+  `OnBeginSequence`/`OnEndSequence` gate, and **places** the NPC on the marker instead of
+  walking it there. Real travel is the AI task's — it needs the navmesh above and the
+  root motion `animation_and_movers.md` A.3 leaves undecoded.
 
 ## B6. The Python connection (scripting host)
 

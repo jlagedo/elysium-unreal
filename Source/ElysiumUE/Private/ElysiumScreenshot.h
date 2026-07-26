@@ -20,7 +20,12 @@ namespace ElysiumScreenshot
 	// Ask the game viewport for its next frame. `OnCaptured` runs on the game thread, exactly once.
 	// Returns false (without ever calling back) when there is no game viewport to capture.
 	// `TimeoutFrames` bounds the wait; the default covers a slow first frame after a map load.
-	bool Request(const FOnCaptured& OnCaptured, int32 TimeoutFrames = 300);
+	// bShowUI selects whether Slate/UMG is composited into the capture. It defaults to **false**
+	// because that is what the screenshot-regression harness needs: a shot must not change when a
+	// Cog window happens to be open. The agent-facing MCP tool passes **true** — its job is to show
+	// what the player sees, and since 8.6 that includes the menu and every other UMG screen. The
+	// Canvas HUD draws with the world and appears either way.
+	bool Request(const FOnCaptured& OnCaptured, int32 TimeoutFrames = 300, bool bShowUI = false);
 
 	// Encode a captured bitmap as PNG. Returns false on an empty bitmap or an encoder failure.
 	bool EncodePng(int32 Width, int32 Height, const TArray<FColor>& Bitmap, TArray64<uint8>& OutPng);

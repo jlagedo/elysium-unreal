@@ -43,6 +43,10 @@ private:
 	// conversation ends. While it is up the player controller is in UI-only input (the VN freezes the
 	// world); a pick routes back through the world's PlayerDialogChoose chokepoint.
 	void UpdateDialogue();
+
+	// True while a UI screen (the menu) owns the display. The player-facing HUD — reticle, sign
+	// panels, dialogue box — stands down; the env_fade quad does not, being a screen effect.
+	bool IsMenuUp() const;
 	void TeardownDialogue();
 	void OnDialogueChoice(int32 VisibleIndex);   // -1 = advance a terminal line
 

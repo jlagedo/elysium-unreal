@@ -31,8 +31,9 @@ the maintenance contract.
 - **Design intent for an Unreal system** → `engine-core.md` (entity object model),
   `debug-tooling.md` (debug layers), `map-architecture.md` (map lifecycle),
   `rendering-perf.md` (render path + tuning), `asset-enhancement.md` (offline surface track),
-  `input-architecture.md` (input path). Each has a VtMB-facts counterpart it must not
-  duplicate — `input-architecture.md` ↔ `controls.md`, for instance.
+  `input-architecture.md` (input path), `ui-architecture.md` (the CommonUI/Slate UI stack). Each
+  has a VtMB-facts counterpart it must not duplicate — `input-architecture.md` ↔ `controls.md` and
+  `ui-architecture.md` ↔ `vtmb-ui.md`, for instance.
 - **What exists in code right now** → the directory `CLAUDE.md` next to that code
   (`Source/ElysiumUE/CLAUDE.md`, `tools/CLAUDE.md`, `Content/CLAUDE.md`), not a doc here.
 

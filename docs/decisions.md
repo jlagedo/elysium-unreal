@@ -6,6 +6,34 @@ trigger. A behavioural divergence from retail lands here carrying both the faith
 chosen behaviour (`remaster-direction.md`'s governing rule). Entries are never rewritten —
 append a correction as a new entry.
 
+- **2026-07-26 (cont. 3)** — **Correction to the same day's UI entry, point (4): the menu backdrop
+  builds the map in full, entity substrate included.** Owner call, on seeing the first working
+  menu.
+
+  The earlier decision had the backdrop adopt the baked level and skip the gameplay half, on the
+  reasoning that building the substrate would fire the map's `logic_auto` behind the menu. That
+  reasoning was sound and the conclusion was still wrong, because it costs the thing that makes a
+  live backdrop worth having: **the NPCs standing and idling in frame are entities**, so a
+  look-only build is an empty street. The owner picked `sm_hub_1` (the Asylum frontage) as the
+  menu scene precisely for its crowd.
+
+  So a backdrop is now an ordinary map build minus the player: `GetDefaultPawnClassForController`
+  returns null and an `ACameraActor` at `elysium.MenuVantage` is the view target. The side effects
+  the old design avoided are handled where they actually surface, in the HUD: while a menu is up,
+  `AElysiumHUD` draws no reticle and no sign panel and ticks no dialogue box. That last one is not
+  hypothetical — `sm_hub_1`'s `havenbum` opens a conversation on his own the moment the world
+  runs, and the B4 box drew straight over the menu until it was gated. **The conversation still
+  happens in the entity world; only its UI is withheld**, so nothing about the map's state is
+  faked to make the menu look right.
+
+  What the map's own logic contributes turns out to be an argument for the change rather than
+  against it: `sm_hub_1`'s streetlight relays cycle the crossing signals behind the menu, which is
+  ambience no particle field would have produced.
+
+  Two knobs follow from a *real* backdrop being less predictable than a designed one:
+  `elysium.MenuScrim` (how far the scene is knocked back so type holds — a night street needs
+  almost none, the sunlit alley this was first built against needed a lot) and `elysium.MenuMap`.
+
 - **2026-07-26** — **The UI foundation decision set (roadmap 8.6): the type system, the stack, the
   backdrop, and four RE corrections that reset what the original UI actually is.** Owner call,
   taken against reference captures of the running game plus a fresh `client.dll` decompile.
@@ -1448,6 +1476,47 @@ append a correction as a new entry.
   `17 20 25` is 0.067 undecoded — brighter than the world it hangs in — and 0.0021 decoded. The
   residual under-display of a saturated fog is B4/D7's measured tonemapper toe, one named
   calibration for the whole render; nothing here compensates for it locally.
+- **2026-07-26 (cont.)** — **NPC animation, 8.5: four calls where the faithful behaviour is
+  unreachable and one where it is not yet RE'd.** Grouped because they share a cause — VtMB drives
+  these through AI this runtime does not have.
+
+  1. **A `scripted_sequence` places its NPC on the mark instead of walking it there.** 66 of the 108
+     exported sequences carry `m_fMoveTo != 0`, and there is no navmesh, no locomotion driver, and no
+     decoded root motion (`animation_and_movers.md` A.3 — 66 of `move_and_ranged`'s 722 animdescs
+     carry movement records this pipeline does not read). The alternative is not "the NPC walks
+     there", it is "the NPC never arrives": on `sp_tutorial_1` Jack's whole follow-flow is
+     `scripted_sequence` — `script_1b`/`2c`/`4d`/`5b`/`6b`/`7b` are all "walk to this marker", no
+     animation at all — so without placement he stands on the porch for the entire tutorial while
+     every beat fires around him. The authored **end state** is reproduced and the transit is not.
+     `m_fMoveTo` 0 ("No") and the `NOSCRIPTMOVEMENT` spawnflag are honoured exactly; 5 ("No - Turn to
+     Face") takes the marker's angles and not its origin. `elysium.SeqTeleport 0` reverts to
+     animation + outputs only. Replaced by real locomotion when 10.7 lands the AI it needs.
+  2. **A beat with no `m_iszPostIdle` returns the NPC to its disposition idle rather than holding the
+     action's last frame.** Only 22 of the 108 name a post-idle; VtMB hands the NPC back to AI at
+     `SequenceDone`, which idles it, and the stance idle is the closest thing here. Without this the
+     other 30-odd action beats freeze mid-gesture — Jack finishes `waveover01` bent forward and stays
+     there. `CancelSequence` does the same for the same reason.
+  3. **An ambient NPC takes one of the three authored `Stance_<D>_Idle_N` per disposition, seeded
+     from its entity index, and does not cycle.** All three timing rules in
+     `vdata/system/dispositiontable.txt` (`TalkingStanceChangeThreshold/Chance`,
+     `StandingFidgetChance`, `StandingStanceChangeThreshold/Chance`) are **conversation-scoped** per
+     the file's own shipped comments, so ambient cycling would be invented. A per-entity variant is a
+     choice among clips VtMB authored for that disposition; seeding it from the index keeps it stable
+     across a reload and a save/restore. Measured spread on `sm_hub_1`: 22/25/28.
+  4. **`SetAnimation` and `SetGesture` loop.** VtMB's `SetAnimation` sets the model's *current*
+     sequence rather than firing a one-shot, and what the corpus passes are resting poses
+     (`cower_idle`, `dance0N`). A one-shot freezes on its last frame — `walk` is 1.53 s.
+  5. **Not a decision but an assumption, recorded so it is not mistaken for RE:** the `StartPlayerDialog`
+     input is registered as a second name for `StartPlayerDialogRemote`. 4 `scripted_sequence.OnEndSequence`
+     wires use the un-suffixed spelling (Chunk after the gallery lockpick, Jack after each tutorial
+     walk) and landed on nothing. Whether VtMB distinguishes them is **not RE'd**; this runtime does
+     the same thing for either — open the NPC's `dialogname` conversation.
+
+  The spawnflag lineage the first call turns on *is* RE'd: the class is `CCineNPC`, an HL1
+  `CCineMonster` derivative (`entity_io.md` → "Scripted sequences"), which fixes bits 1–128 and
+  means **no exported sequence carries START_ON_SPAWN**. Reading them in HL2 FGD order instead would
+  have auto-started 27 of `sp_tutorial_1`'s 51 at map load and played the Sabbat cutscene on the
+  loading screen.
 - **Pending** — **0.9, the uasset-bake architecture** (`docs/uasset-bake-spike.md`'s own
   terms: "earns a `decisions.md` entry or gets discarded"; de facto everything since
   2026-07-25 builds on it — trigger: before `spike/uasset-bake` merges to `main`).

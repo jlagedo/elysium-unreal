@@ -11,6 +11,8 @@
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumSignData.h"
 #include "ElysiumSignFonts.h"
+#include "ElysiumUISubsystem.h"
+#include "ElysiumUITexture.h"
 
 #include "Engine/GameViewportClient.h"
 #include "GameFramework/PlayerController.h"
@@ -43,43 +45,9 @@ static TAutoConsoleVariable<int32> CVarDrawSigns(
 	TEXT("Draw game_sign/popup panels (1) or suppress them (0)."),
 	ECVF_Default);
 
-namespace
-{
-	// Decode a PNG off disk into a transient BGRA texture. Shared by the PL3 use-icon atlas and the
-	// PL5c sign backgrounds — both are offline-decoded RGBA sheets read 1:1, not game-content
-	// textures (those go through FElysiumTextureCache). Returns null on any failure.
-	UTexture2D* LoadPngTexture(const FString& PngPath)
-	{
-		TArray<uint8> FileData;
-		if (!FFileHelper::LoadFileToArray(FileData, *PngPath))
-		{
-			return nullptr;
-		}
-		IImageWrapperModule& Module = FModuleManager::LoadModuleChecked<IImageWrapperModule>(TEXT("ImageWrapper"));
-		const TSharedPtr<IImageWrapper> Wrapper = Module.CreateImageWrapper(EImageFormat::PNG);
-		TArray64<uint8> Raw;
-		if (!Wrapper.IsValid() || !Wrapper->SetCompressed(FileData.GetData(), FileData.Num()) ||
-			!Wrapper->GetRaw(ERGBFormat::BGRA, 8, Raw))
-		{
-			return nullptr;
-		}
-		const int32 W = Wrapper->GetWidth();
-		const int32 H = Wrapper->GetHeight();
-		UTexture2D* Tex = UTexture2D::CreateTransient(W, H, PF_B8G8R8A8);
-		if (!Tex)
-		{
-			return nullptr;
-		}
-		Tex->SRGB = true;
-		Tex->NeverStream = true;
-		FTexturePlatformData* PlatformData = Tex->GetPlatformData();
-		void* Dest = PlatformData->Mips[0].BulkData.Lock(LOCK_READ_WRITE);
-		FMemory::Memcpy(Dest, Raw.GetData(), int64(W) * H * 4);
-		PlatformData->Mips[0].BulkData.Unlock();
-		Tex->UpdateResource();
-		return Tex;
-	}
-}
+// The PNG->transient-texture decode moved to ElysiumUITexture.{h,cpp} when the 8.6 title lockup
+// became its third consumer (after the PL3 use-icon atlas and the PL5c sign backgrounds).
+using ElysiumUI::LoadPngTexture;
 
 AElysiumHUD::AElysiumHUD()
 {
@@ -165,7 +133,23 @@ void AElysiumHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void AElysiumHUD::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+
+	// 8.6 — no dialogue box over a menu. A menu backdrop builds the whole map, and `sm_hub_1`'s
+	// pedestrians open conversations on their own (havenbum panhandles the moment the world runs),
+	// so this is a real collision and not a hypothetical one. The conversation itself is left alone
+	// in the entity world — only its UI is withheld — so nothing about the map's state is faked.
+	if (IsMenuUp())
+	{
+		return;
+	}
 	UpdateDialogue();
+}
+
+bool AElysiumHUD::IsMenuUp() const
+{
+	const UGameInstance* GI = GetGameInstance();
+	const UElysiumUISubsystem* UI = GI ? GI->GetSubsystem<UElysiumUISubsystem>() : nullptr;
+	return UI && UI->IsMenuOpen();
 }
 
 AElysiumMapActor* AElysiumHUD::ResolveMapActor() const
@@ -191,6 +175,15 @@ void AElysiumHUD::DrawHUD()
 	// locked_icon); otherwise it is the plain aim cross.
 	const float CX = Canvas->ClipX * 0.5f;
 	const float CY = Canvas->ClipY * 0.5f;
+
+	// 8.6 — while a menu screen is up the player-facing HUD is not: no aim reticle over a menu, and
+	// no sign/popup panel drawing behind it (a menu backdrop builds the whole map, so its scripts
+	// can legitimately open one). The env_fade quad below still draws — it is a screen effect, not
+	// a HUD element.
+	if (IsMenuUp())
+	{
+		return;
+	}
 
 	int32 AimedIcon = 0;
 	// A sign panel with HideHUD set covers the game: no reticle under it (P4.10).
