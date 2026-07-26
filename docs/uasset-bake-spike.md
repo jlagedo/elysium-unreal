@@ -1,6 +1,9 @@
-# Spike: `sp_tutorial_1` as native Unreal content
+# The `.uasset` bake: the map's look as native Unreal content
 
-Branch `spike/uasset-bake`, stacked on `spike/lumen-cards`. **Exploratory — not a decision.**
+**Adopted** — `decisions.md` 2026-07-26 (cont. 6), roadmap 0.9; the work is on `main`. This
+document is the spike record that earned that call, kept as the pipeline's reference: the split,
+the six stages, and the engine facts it pinned down. It reads as of `sp_tutorial_1`, the map it
+was measured on; the architecture now carries every exported map.
 
 The Lumen surface-cache spike (`lumen-coverage-spike.md`) ended on a negative result: runtime-built
 meshes can be given card representations, but hand-fitting them offline into a `.cards` sidecar
@@ -10,10 +13,9 @@ surfel cards, Nanite, distance fields, real LODs, BC7/BC5 compression.
 
 This spike stops fighting that wall. `sp_tutorial_1` is decoded once, offline, into real `.uasset`
 content and a real `.umap`, and **the game runs on it**: `play.bat` opens the baked level and every
-system the project has runs against it. It deliberately contradicts two of `CLAUDE.md`'s
-load-bearing rules — *"no `.uasset` baking, no editor content loop"* and *"build all engine objects
-in code at map-load time"* — to measure what those rules cost. There are no A/B flags: the branch
-either earns a `decisions.md` entry or gets discarded.
+system the project has runs against it. There are no A/B flags. Measuring what the old
+build-everything-at-map-load rule cost is what retired it; the charter docs now describe the
+architecture below.
 
 ## The split
 
@@ -109,16 +111,18 @@ sky."*
 
 **The look changes substantially, and it over-lights.** Real card coverage means far more indirect
 bounce than the runtime path ever had, and the light rig's constants (`PointSpotScale 0.003`,
-`MaxBrightness 8.0`) were calibrated against a scene with almost no bounce. Adoption owes a
-recalibration pass, which is why the Lights Cog window now also owns the sky and fog: how much the
-sky contributes and how much the per-source rig must carry is one decision, not two.
+`MaxBrightness 8.0`) were calibrated against a scene with almost no bounce. That is why the Lights
+Cog window also owns the sky and fog: how much the sky contributes and how much the per-source rig
+must carry is one decision, not two. The recalibration adoption owed was paid by the sky + ambience
+rework (`roadmap-archive.md` → SKY, Phases B–C).
 
 **Nanite costs nothing and buys nothing here.** Expected at ~30k world triangles. Its value is not
 throughput; it is that the ISM/Lumen question the previous spike could not settle stops mattering.
 
-**Perf is unmeasured on this branch.** The earlier 96-vs-123 FPS reading predates every change here
-(sky-transform fix, ray-tracing exclusion, collision profiles, cubemap IBL) and should not be
-quoted. `profile.bat` has not been run against the baked level.
+**Perf holds.** The earlier 96-vs-123 FPS reading predates every change here (sky-transform fix,
+ray-tracing exclusion, collision profiles, cubemap IBL) and should not be quoted. `profile.bat`
+against the baked level reports Lumen reflections 0.15–0.22 ms and Total GPU 5.08–5.54 ms — inside
+the committed baseline either way (`roadmap-archive.md` → SKY C5).
 
 ## Engine facts this pinned down
 
@@ -245,9 +249,11 @@ receives them normally.
 - **Volumetric fog** is enabled on the baked height fog, but only maps whose `.env` turns fog on get
   a fog actor at all — and `sp_tutorial_1` has fog off, so it shows nothing there.
 - **NPCs** stay on glTFRuntime. Skeletal meshes get no offline cards anyway.
-- **Perf** is unmeasured (above).
-- **One map.** Nothing has been said about the other 107, their bake cost, or the DDC/asset-registry
-  scale of ~1,700 assets per map.
+- **Not all 108 maps.** The 10 exported maps bake and run; the remaining ~98 have not been through
+  it, so their bake cost and the DDC/asset-registry scale at ~1,700 assets per map are still
+  unmeasured in aggregate.
+- **Packaging.** The mount is gitignored, so a package must either bake on first run or ship the
+  user-side bake tooling (roadmap 10.5).
 
 ## Repro
 

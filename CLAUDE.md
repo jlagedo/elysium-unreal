@@ -1,10 +1,11 @@
 # Elysium-Unreal
 
 *Vampire: The Masquerade – Bloodlines* (VtMB, 2004, early Source engine) rebuilt as a
-playable game — **remastered** — on **Unreal Engine 5.8 + C++**. The runtime loads
-engine-neutral intermediates produced by this repo's own offline decode/export pipeline and
-builds all engine objects in code at map-load time — no `.uasset` baking, no editor content
-loop.
+playable game — **remastered** — on **Unreal Engine 5.8 + C++**. Everything the runtime consumes
+is produced by this repo's own offline decode/export pipeline from the user's own install: the
+world's *look* is baked into a gitignored `.uasset` plugin mount and adopted at load, while
+collision, entities, scripting, audio and NPCs are built in code at map-load time from
+engine-neutral intermediates.
 
 ## Read first
 
@@ -54,10 +55,11 @@ Full charter: `docs/remaster-direction.md`.
 
 ### Bring-your-own-game
 
-**Nothing game-sourced is committed.** The decoders read *the user's own VtMB install*;
-their output (`tools/out/`) is gitignored and regenerable. This is the legal posture, not
-a convenience — prior community rebuilds died to a C&D, not to technical failure. The only
-assets in `Content/` are hand-authored and game-agnostic.
+**Nothing game-sourced is committed.** The decoders read *the user's own VtMB install*; their
+output (`tools/out/`) is gitignored and regenerable, and so is everything derived from it —
+including the baked `.uasset` mount `Plugins/ElysiumBaked/Content/` (only the `.uplugin` is
+committed). This is the legal posture, not a convenience — prior community rebuilds died to a
+C&D, not to technical failure. The only assets in `Content/` are hand-authored and game-agnostic.
 
 ### The two clean halves
 
@@ -65,11 +67,16 @@ assets in `Content/` are hand-authored and game-agnostic.
   TTH/TTZ, VPK, VMT, `.fnt`, `.res`) into intermediates under `tools/out/<map>/`
   (OBJ+MTL+PNG/DDS, glTF `.glb`, plain-text/JSON sidecars). `UE_bsp_to_scene.py` is the map
   exporter; `export_all.py` batches. Runs against the user's install; needs Python +
-  `tools/requirements.txt`.
-- **Runtime — `Source/ElysiumUE/`** (C++): loads those intermediates from disk at map-load
-  and builds geometry, materials, textures, and collision in code. Python is **never** run at
-  runtime to produce content — the seam is file-based. (The embedded CPython 2.7 VM runs
-  VtMB's *own* level scripts; it is game logic, not pipeline.)
+  `tools/requirements.txt`. A second offline stage, `bake.bat` → `tools/bake_map.py`, turns each
+  exported map's *look* into real assets and a `.umap` on the `/ElysiumBaked` mount — an editor
+  commandlet, so an editor build is a prerequisite for content, never for running.
+- **Runtime — `Source/ElysiumUE/`** (C++): opens the baked level and **adopts** its actors
+  (bucketed by the tags the bake stamped), then builds everything else in code from the
+  intermediates on disk — collision, ropes, the sky cubemap, the entity substrate, NPCs, audio,
+  scripting. Light values are re-derived from `.lights` at load rather than adopted, so live
+  calibration always wins. Python is **never** run at runtime to produce content — the seam is
+  file-based. (The embedded CPython 2.7 VM runs VtMB's *own* level scripts; it is game logic, not
+  pipeline.) The architecture and what it costs: `docs/decisions.md` 2026-07-26 (cont. 6).
 
 ### The `UE_` exporter convention
 
@@ -120,6 +127,11 @@ your VtMB install.
 - `content.bat` — rebuild all committed `Content/` assets in one headless editor session
   (`tools/build_content.py`). `python tools/export_all.py` invokes it at the end of a run
   (skip with `--no-content`), so a generator can't be forgotten and go stale.
+- `bake.bat [map] [stages]` — bake one exported map's look into `/ElysiumBaked` (an editor
+  commandlet running `tools/bake_map.py`; six stages — `textures`, `materials`, `world`, `sky`,
+  `props`, `level` — all by default, ~4 min cold). `tools/bake_verify.py` reads the result back
+  off the assets. A map with no bake is refused at travel. The running game holds the `.umap`
+  open, so quit before re-baking the `level` stage. Details: `docs/uasset-bake-spike.md`.
 - `editor.bat` — open the project in the Unreal editor (PIE via Play).
 - `play.bat [map]` — launch standalone (`-game`, 1600×900); optional map name under
   `tools/out` (default `sp_tutorial_1`).
@@ -182,6 +194,7 @@ facts, valid regardless of target engine. Organisation and maintenance rules: `d
 | `savegame_format.md` | the `.sav` container, `.HL1/2/3` sections, and the game state they hold |
 | `save-architecture.md` | the Unreal persistence design — the four blocks, the field walk, per-map snapshots |
 | `map-architecture.md` | the Unreal map load/unload/travel design |
+| `uasset-bake-spike.md` | the offline `.uasset` bake — the split, the six stages, the engine facts it pinned down (`lumen-coverage-spike.md` is the negative result that led to it) |
 | `rendering-perf.md` | the dynamic render path, perf cvars, MegaLights checklist |
 | `reflections.md` | `$envmap` — VtMB's own composite read out of its shipped DX8 shaders, the whole-game authoring survey, and the Unreal reflection channel |
 | `light-attribution.md` | telling VtMB's real fixtures from its GI-substitute fill lights — the probe, the surveys, what discriminates and what does not |

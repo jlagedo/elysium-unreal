@@ -4,9 +4,19 @@ Whether the runtime-built world and props can be made visible to Lumen's **surfa
 `$envmap` reflections (roadmap 7.5) and off-screen GI bounce come from the Lumen scene rather
 than from screen traces alone.
 
+**Superseded.** This spike's answer was negative — runtime-built meshes can be given card
+representations, but hand-fitting them offline bought no measurable quality — and that result is
+what led to the `.uasset` bake (`decisions.md` 2026-07-26, cont. 6; `uasset-bake-spike.md`). The
+runtime machinery §3 describes — `elysium.LumenCards`, `AttachLumenCards`, the `.cards` sidecar
+reader — **no longer exists**: the DDC fits real cards at bake time. Two pieces outlived it and
+are dead: `cards.bat` is deleted while `tools/export_all.py` still calls it (`bake_cards`, on by
+default, silently no-ops with a "skipped" line every run), and `ElysiumCardGen.cpp` still compiles
+into editor builds behind `ELYSIUM_WITH_CARDGEN` for the `elysium.cards.probe` verb. Both are
+removals nothing depends on. What stays valid here is the engine research — why a runtime mesh
+cannot have proper cards, and the measurements that prove it.
+
 Per-task status belongs in `roadmap.md`; this file is the spike's working record — the engine
-facts, the measurements, what is implemented, and what is known not to work. Companion:
-`rendering-perf.md` (the render path this changes).
+facts, the measurements, and what is known not to work. Companion: `rendering-perf.md`.
 
 All measurements are `sp_tutorial_1`, dev GPU **RTX 5070 Ti**, D3D12/SM6. The coverage vantage
 is the alley at `(-35.56, -19032.22, -340.69)` yaw `85.91` — reachable with

@@ -208,6 +208,57 @@ Records are verbatim moves out of `roadmap.md`: where one says "the decision log
   `tools/CLAUDE.md`. **Decision:** `ent_survey.py` keeps the retail default (stable baseline) and
   gains a `--patch` flag for the engine-loaded set; not defaulted patch-first. *Deps:* none.
 
+- [x] **0.9 The uasset-bake architecture — decide, document, land** — housekeeping, not graphics:
+  a decision entry, a charter-doc correction and a branch merge, with zero rendering work. The two
+  stacked spikes (`lumen-coverage-spike.md`, `uasset-bake-spike.md`) had answered a question that
+  blocked P3 — a runtime-built mesh can never hold what the editor build produces (DDC-fitted Lumen
+  surface-cache cards, Nanite, distance fields, BC7) — and the architecture that followed had been
+  running in practice, de facto, since 2026-07-25: the perf retune (4060 floor, stock Epic
+  scalability), `.phy` physics collision, prop skins, the decal bake and the whole SKY rework are
+  all built on it. This task closed the gap between the running code and the record.
+
+  **The decision** (`decisions.md` 2026-07-26, cont. 6): the world's *look* is baked offline into
+  `.uasset`s and everything else stays runtime-built. `bake.bat` → `tools/bake_map.py` bakes each
+  exported map into a **gitignored** plugin mount (`Plugins/ElysiumBaked/Content` → `/ElysiumBaked`;
+  only the `.uplugin` is committed — bring-your-own-game applied to a new artefact class, not
+  excepted for it), and `AElysiumMapActor` **adopts** the baked level at load, bucketing its actors
+  by the tag the bake stamped, while collision, ropes, the sky cube, the entity substrate, NPCs,
+  audio and scripting stay runtime-built. The entry records what forced it, the split, the
+  file-based seam, the fact that light *values* are re-derived at load rather than adopted (so live
+  calibration always wins), and the accepted costs: unbaked maps refused at travel, `shots.bat`
+  baselines invalidated per re-bake, an overwriting-but-not-pruning bake, and packaging's
+  bake-on-first-run question (10.5).
+
+  **The charter docs** were the stale half. `CLAUDE.md` lost "builds all engine objects in code at
+  map-load time — no `.uasset` baking, no editor content loop" for the real two-stage description;
+  its bring-your-own-game section now names the gitignored mount, the two-clean-halves section
+  carries the bake as the second offline stage and adoption-by-tag as the runtime's first act,
+  `bake.bat` joined the script table, and `uasset-bake-spike.md` joined the doc index.
+  `rebuild-strategy.md` lost "No original game content is ever converted into `.uasset`s"
+  (re-stated as the thing that actually holds: none of it is ever *committed*), principle 1's "No
+  import step, no bake, no editor involvement", principle 2's "The Unreal editor is never in the
+  content loop" (now: offline only, never at runtime), "Nanite is not applicable" (it is on for 311
+  of 339 tutorial meshes; the 28 exceptions are the translucent/additive surfaces) and "never
+  reintroduce `.uasset` baking"; the Godot→Unreal mapping rows that still described world and prop
+  geometry as runtime PMC/ISM were corrected to the baked `SM_*` reality. `uasset-bake-spike.md`
+  dropped its "exploratory — not a decision" banner for an adopted-and-on-`main` one, and its
+  now-closed gaps (perf unmeasured, one map) were replaced by what is actually still open (~98
+  unbaked maps, packaging).
+
+  **The merge** had already landed: `spike/uasset-bake` and `main` are the same commit (0/0
+  divergence) with every bake file — `bake.bat`, `tools/bake_{map,lib,verify}.py`,
+  `Plugins/ElysiumBaked/ElysiumBaked.uplugin`, `Source/ElysiumUE/Public/ElysiumBakedTags.h`,
+  `docs/uasset-bake-spike.md` — tracked on `main`. The "27 commits ahead" the task carried was
+  stale; verification, not a merge, is what this half needed.
+
+  **Residue found, handed on rather than fixed** (the task is docs + git, and this is code):
+  the superseded Lumen-card path has two dead ends — `tools/export_all.py` still calls a deleted
+  `cards.bat` through `bake_cards`/`--no-cards`, printing a "skipped" line on every export run, and
+  `ElysiumCardGen.cpp` still compiles into editor targets behind `ELYSIUM_WITH_CARDGEN` for the
+  `elysium.cards.probe` verb. The runtime consumer (`elysium.LumenCards`, `AttachLumenCards`, the
+  `.cards` sidecar reader) is already gone. Tracked as **PL11**. *Deps:* none — and everything
+  since 2026-07-25 informally depended on it.
+
 ## P1 — Entity substrate *(design: `engine-core.md` — read it; steps here are the tracker)*
 
 - [x] **1.1 Currency types + persistent state** — `FElysiumVariant` (Void/Bool/Int/Float/

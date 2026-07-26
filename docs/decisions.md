@@ -6,6 +6,57 @@ trigger. A behavioural divergence from retail lands here carrying both the faith
 chosen behaviour (`remaster-direction.md`'s governing rule). Entries are never rewritten —
 append a correction as a new entry.
 
+- **2026-07-26 (cont. 6)** — **The world's *look* is baked offline into `.uasset`s; everything
+  else stays runtime-built.** Owner call, adopting the architecture the two stacked spikes
+  (`lumen-coverage-spike.md`, `uasset-bake-spike.md`) built and ran on. The spike's own terms were
+  "the branch either earns a `decisions.md` entry or gets discarded" — this is the entry.
+
+  **What forced it.** A runtime `UStaticMesh` built with `BuildFromMeshDescriptions(bFastBuild)`
+  can never carry what the editor build produces: DDC-fitted Lumen surface-cache cards, Nanite,
+  distance fields, real LODs, BC7/BC5. The Lumen-cards spike tried to close that gap from the
+  runtime side — hand-fitting cards offline into a `.cards` sidecar — and came back negative: no
+  measurable quality for the machinery. VtMB's look is indirect-bounce-dominated, so partial
+  surface-cache coverage is not a detail, and no amount of runtime cleverness gets past the wall.
+  Baking removes the whole `.cards` apparatus (offline surfel fit, content hashing, the
+  `-ElysiumCards` harness — all deleted) in favour of the DDC doing its normal job.
+
+  **The split.** *Baked* — `bake.bat` → `tools/bake_map.py`, per map, ~4 min cold: world +
+  3D-skybox geometry, materials, textures, static props, projected decals, lights, sky light,
+  height fog, and the `.umap` itself. *Runtime-built* — `AElysiumMapActor` **adopts** the opened
+  baked level, bucketing its actors by the tag the bake stamped (`ElysiumBakedTags.h` ↔ `TAG_*`):
+  `.hulls`/`.dispcol` collision, ropes, the sky cubemap + backdrop, the `.ents` entity substrate
+  and every entity-driven body, NPC glTF skeletals, audio, dialogue, scripting. Tags rather than
+  Outliner folders, because folder paths are editor-only metadata and vanish in a `-game` build.
+
+  **Bring-your-own-game is unchanged, and it is what makes this admissible.** The baked assets are
+  derived from the user's own install, so `Plugins/ElysiumBaked/Content/` is gitignored and
+  regenerable exactly like `tools/out/`; only `ElysiumBaked.uplugin` is committed. This is the
+  existing posture applied to a new artefact class, not an exception to it — and it stays
+  categorically distinct from `Content/`, which remains hand-authored and game-agnostic.
+
+  **The seam stays file-based, and the runtime still owns behaviour.** The editor is in the
+  *offline* content loop only; nothing invokes Python or the editor at runtime. Light *values* are
+  deliberately not adopted from the bake: `UElysiumLightRig::Adopt` re-derives every intensity,
+  reach, falloff and specular from the raw `.lights` row at load, so the live calibration — not
+  whatever the bake happened to write — is what a map renders, and a Cog slider drag and a fresh
+  load agree exactly.
+
+  **Charter lines this overrides**, corrected in the same pass: `CLAUDE.md`'s "builds all engine
+  objects in code at map-load time — no `.uasset` baking, no editor content loop";
+  `rebuild-strategy.md`'s "No original game content is ever converted into `.uasset`s", principle
+  1's "No import step, no bake, no editor involvement", principle 2's "The Unreal editor is never
+  in the content loop", "Nanite is not applicable", and "never reintroduce `.uasset` baking".
+
+  **Costs, accepted.** A map with no bake is refused by `Travel` (with the command to run); a
+  re-bake invalidates the `shots.bat` baseline by B6's measured rule; the bake overwrites but does
+  not prune, so a shrunken export leaves orphan `SM_*`; a fog change needs a re-bake rather than a
+  reload (3.13); and packaging must either ship a bake-on-first-run path or the user-side bake
+  tooling (10.5). The recalibration the spike said adoption owed was paid by the sky + ambience
+  rework. What the spike left unmeasured no longer is: 10 maps export, bake and run, with
+  `profile.bat` showing no regression. Remaining gaps are tracked, not open questions — sprites
+  unplaced, no colour-grade LUT (3.7), NPCs staying on glTFRuntime. Reference for the pipeline,
+  the stage table and the engine facts it pinned down: `uasset-bake-spike.md`.
+
 - **2026-07-26 (cont. 5)** — **The playable path (PP0–PP6) is the master sequence.** Owner call.
   One path to a real, played game now drives all roadmap sequencing: **menu boot → New Game
   (genesis chargen: clan, name, spends) → the theatre cinematic → land on `sp_tutorial_1` with
@@ -15,8 +66,11 @@ append a correction as a new entry.
   all owner calls:
 
   1. **Logic and interactions outrank everything.** Gameplay systems land first.
-  2. **Graphics are frozen** — no look-polish work (P3/P7 open tasks, 10.1–10.3, asset
-     enhancement) until the path lands. A simple-but-working screen beats a polished absence;
+  2. **Graphics and performance are frozen** — no look polish, no perf tuning, no
+     pretty-graphics work of any kind (P3/P7 open tasks, 10.1–10.3, asset enhancement) until the
+     path lands. Rationale, stated at decision time: weeks of calibration/polish preceded this
+     call while the game itself did not yet run — the loop must be playable and *felt* before
+     more goes into the look. A simple-but-working screen beats a polished absence;
      only gameplay-blocking rendering bugs are exceptions. The render path itself is unchanged.
   3. **Acceptance is played, not injected.** A path phase completes only when its beats run from
      real input in the built game (beat-scripted in the 11.10 Play tier so the claim is a CI

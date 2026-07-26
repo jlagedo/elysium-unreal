@@ -33,11 +33,10 @@ one stays readable in a single pass:
 
 Rebuild VtMB as a playable game **— remastered —** on UE 5.8 + C++ from this repo's own
 exported intermediates; **bring-your-own-game holds** — nothing game-sourced is committed
-(strategy and principles: `rebuild-strategy.md`). Since 2026-07-25 the world's *look* is
-**baked offline into a gitignored `.uasset` plugin mount** (`/ElysiumBaked`, regenerable like
-`tools/out/`) and adopted at load, while collision, entities, scripting, audio and NPCs stay
-runtime-built — formalising that architecture is **0.9**, this tracker's top open decision.
-Everything is proven on `sp_tutorial_1` first (1,226 entities, 75 classnames — VtMB's own
+(strategy and principles: `rebuild-strategy.md`). The world's *look* is **baked offline into a
+gitignored `.uasset` plugin mount** (`/ElysiumBaked`, regenerable like `tools/out/`) and adopted at
+load, while collision, entities, scripting, audio and NPCs stay runtime-built — adopted 2026-07-26
+(`decisions.md`, cont. 6; roadmap 0.9). Everything is proven on `sp_tutorial_1` first (1,226 entities, 75 classnames — VtMB's own
 vertical slice), then scaled across ~100 maps.
 
 **Direction (`remaster-direction.md` — read it):** keep VtMB's tone, ambience, feel and logic;
@@ -76,16 +75,18 @@ tutorial with Jack → complete the tutorial.** Everything on the path lands fir
 it waits. Three standing rules:
 
 1. **Logic and interactions first.** Gameplay systems outrank everything else.
-2. **Graphics are frozen.** No look-polish work (P3/P7 open tasks, 10.1–10.3, asset enhancement)
-   until the path lands — a simple-but-working screen beats a polished absence. The render path
-   stays as configured; only gameplay-blocking rendering bugs are exceptions.
+2. **Graphics and performance are frozen.** No look polish, no perf tuning, no pretty-graphics
+   work of any kind (P3/P7 open tasks, 10.1–10.3, asset enhancement) until the path lands — the
+   game must *run and be felt* before another hour goes into how it looks. A simple-but-working
+   screen beats a polished absence. The render path stays exactly as configured today; the only
+   exceptions are rendering bugs that block gameplay.
 3. **Acceptance is played, not injected.** A rung completes when its beats run from real input in
    the built game, beat-scripted in the Play tier (11.10) so the claim is a CI run — console
    state-injection and dev shortcuts are implementation aids, never acceptance evidence.
 
 | Rung | Delivers | Tasks (in order) |
 |---|---|---|
-| **PP0 — the core refactor** | the spine: one clock/frame, world services, app states + pause, the player entity, input scopes, commands + user command, the view seam, the play harness | 0.9 → 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.8, 11.10 *(11.0 [x])* |
+| **PP0 — the core refactor** | the spine: one clock/frame, world services, app states + pause, the player entity, input scopes, commands + user command, the view seam, the play harness | 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.8, 11.10 *(11.0 [x])* |
 | **PP1 — New Game & genesis** | chargen for real: clan, **name**, sex, spends — onto the player entity, Python-readable; `sp_genesisdevice_1` played, not skipped | 9.4 (+ `sp_genesisdevice_1` export/bake), 9.7d, 8.6's New Game click path |
 | **PP2 — the theatre cinematic** | the intro plays start to finish: choreography, scripted camera, line audio, subtitles, **eyes and lipsync — all block** (cont. 5) | 11.7, 12.1–12.5 (+ `sp_theatre` export/bake) |
 | **PP3 — land the tutorial** | the chain hands the player to Jack; the first conversation runs with sound and reactions | 9.2, 9.9 |
@@ -96,21 +97,23 @@ it waits. Three standing rules:
 **After PP6 (the thaw):** 9.10 economy/barter, 8.8, 8.10, the P3/P7 look lanes, 10.1–10.5 and
 asset enhancement — re-sequenced then.
 
+*(Pre-path housekeeping, now done: **0.9** put the bake architecture on the record and confirmed
+`spike/uasset-bake` — the branch all of this sits on — is `main`. Docs + git only, zero rendering
+work.)*
+
 ## Now — the unblocked front
 
 The open tasks whose dependencies are met, in the order they pay off. Regenerable from the
 deps below — refresh it whenever a task flips:
 
-1. **0.9** — record the uasset-bake architecture call, fix the charter docs, land
-   `spike/uasset-bake` on `main`. Everything below is stacked on that branch.
-2. **11.1 / 11.2 / 11.3** — the three independent structural steps, parallel-capable; then
+1. **11.1 / 11.2 / 11.3** — the three independent structural steps, parallel-capable; then
    **11.4 (the player entity), the hinge**: 9.4, 9.5, 9.8, 9.9 and 9.10 all sit on it, and each
    one built against today's `FElysiumPlayerSheet` shim is a migration later.
-3. **11.5 → 11.6 → 11.8 → 11.10** — close PP0: scopes, commands + user command, the view seam,
+2. **11.5 → 11.6 → 11.8 → 11.10** — close PP0: scopes, commands + user command, the view seam,
    the play harness.
-4. **RE19/RE20 + PL9/PL10** — front-load the P12 unknowns (scene format, flex/eyes/`.lip`): the
+3. **RE19/RE20 + PL9/PL10** — front-load the P12 unknowns (scene format, flex/eyes/`.lip`): the
    highest-variance items on the path, spiked in parallel while PP0 lands.
-5. **9.7d** — land `OneOfSet` and the shadowed-name split: 589 dialogue gates currently fail
+4. **9.7d** — land `OneOfSet` and the shadowed-name split: 589 dialogue gates currently fail
    closed, the fix needs no backing system, and PP3's dialogue depends on those gates.
 
 The lighting/look lane (3.1–3.13, 7.x remainder) is **frozen** under playable-path rule 2.
@@ -244,22 +247,19 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
   24,081 outputs / 6,956 Python**), retail kept as a labelled comparison; the patch `maps/` is a
   strict superset of retail. `ent_survey.py` keeps the retail default and gains `--patch`.
   *Deps:* none.
-- [~] **0.9 The uasset-bake architecture — decide, document, land** — the two stacked spikes
-  (`docs/lumen-coverage-spike.md`, `docs/uasset-bake-spike.md`) answered a question that
-  blocked P3: a runtime-built mesh can never hold what the editor build produces (DDC-fitted
-  Lumen surface-cache cards, Nanite, distance fields, BC7), so `bake.bat` →
-  `tools/bake_map.py` bakes each exported map offline into a **gitignored** plugin mount
-  (`Plugins/ElysiumBaked/Content` → `/ElysiumBaked`; only the `.uplugin` is committed —
-  bring-your-own-game holds for the new artefact class) and `AElysiumMapActor` **adopts** the
-  baked level at load (tag-bucketed actors; collision, ropes, the sky cube, the entity
-  substrate, NPCs, audio and scripting stay runtime-built). **De facto adopted:** the perf
-  retune (4060 floor, stock Epic scalability), `.phy` physics collision, prop skins, the
-  decal bake and the whole SKY rework are built on it. **Remaining:** the dated
-  `decisions.md` adoption entry the spike doc promises ("earns a decision or gets
-  discarded"); update `CLAUDE.md` + `rebuild-strategy.md` (the "no `.uasset` baking / build
-  everything at map-load" charter lines are stale) and add `bake.bat` to the script table;
-  merge `spike/uasset-bake` → `main` (27 commits ahead). *Deps:* none — and everything since
-  2026-07-25 informally depends on it.
+- [x] **0.9 The uasset-bake architecture — decide, document, land** — the architecture running in
+  practice since 2026-07-25 is now on the record: **the world's *look* is baked offline into
+  `.uasset`s; everything else stays runtime-built** (`decisions.md` 2026-07-26, cont. 6).
+  `bake.bat` → `tools/bake_map.py` bakes each exported map into the **gitignored** `/ElysiumBaked`
+  mount (only the `.uplugin` committed) and `AElysiumMapActor` adopts the baked level by tag, while
+  collision, ropes, the sky cube, the entity substrate, NPCs, audio and scripting stay
+  runtime-built. `CLAUDE.md` and `rebuild-strategy.md` lost their "no `.uasset` baking / no editor
+  in the content loop / build everything at map-load / Nanite is not applicable" lines, `bake.bat`
+  joined the script table, and `uasset-bake-spike.md` became the adopted pipeline reference. The
+  merge was already landed — `spike/uasset-bake` and `main` are the same commit. Residue found and
+  handed on, not fixed here: the superseded Lumen-card path still has two dead ends (**PL11**).
+  Full record: `roadmap-archive.md` → 0.9. *Deps:* none — and everything since 2026-07-25 informally depended
+  on it.
 
 ## P1 — Entity substrate *(design: `engine-core.md` — read it; steps here are the tracker)*
 
@@ -1202,6 +1202,7 @@ retail end to end, and `test.bat Play` proves it headlessly.
 | PL5b | Mirror the whole `vdata/` rulebook (`system` 97 + `items` 244 + `camerashots` 66 + `hackterminals` 57 + `precache` 1 = 465) verbatim → `out/vdata/` — `UE_extract_vdata.py`, patch-first, `signs`/`.xls` excluded. Consumer map: `docs/vdata-catalog.md` | 9.4, 9.6, 10.7 [x] |
 | PL5d | Copy `cfg/*.cfg` (the alias/cvar tables — `user.cfg` carries the Basic/Plus `patchtype` alias) verbatim → `out/cfg/` — `UE_extract_cfg.py`, patch-first, wired into `export_all.py` (`--no-cfg`) [x] | 9.3b [x] |
 | PL6 | Texlight merge in exporter | 3.4 |
+| PL11 | Remove the dead Lumen-card path the bake superseded (found by 0.9): `export_all.py`'s `bake_cards`/`--no-cards` calls a `cards.bat` that no longer exists and prints a "skipped" line every run; `ElysiumCardGen.cpp` (`ELYSIUM_WITH_CARDGEN`, `elysium.cards.probe`) still builds into editor targets. Nothing depends on either | 0.9 |
 | PL7 | Sidecar space fixes surfaced by the audit — **none (0.4: all sidecars already Unreal cm)** | 0.4 [x] |
 | PL9 | Mirror the choreographed-scene files + `.lip` phoneme files → `out/scenes/`, `out/lip/` — patch-first, verbatim (format per RE19/RE20) | 12.1, 12.5 |
 | PL10 | Facial data in the NPC export — flex/eyeball chunks (RE20) decoded by `mdl_skel` into glb **morph targets** + a flex-name manifest per bank | 12.3, 12.4 |
@@ -1285,7 +1286,6 @@ extraction"; durable format/behaviour facts fold into the owning topic docs
 | Modern UI loses VtMB's voice (reads generic/AAA) | the remaster stops feeling like VtMB | 8.6 keeps the original's structure, palette and iconography and re-skins only the craft; presentation test applied per screen; `m0_menu_build.md` + extracted `.res`/scheme (PL8) are the intent reference every screen is checked against |
 | "Polish" leaks into the logic layer | silent divergence from retail behaviour, unfindable later | `remaster-direction.md`'s governing rule: RE first, owner's call, dated decision-log entry recording faithful *and* chosen behaviour; default is reproduce, and layer assignment happens before the work, not after |
 | No classic-UI mode to A/B against | a UI regression has no reference | the original's structure is captured as data (PL8) and in `m0_menu_build.md`, so screens are checked against intent rather than pixels; the *world* keeps its faithful A/B path unchanged |
-| The uasset-bake architecture is de-facto adopted but unrecorded (spike branch, stale charter docs) | tracker/docs diverge from the running code; the unmerged-branch debt compounds | 0.9 is the standing top task: decision entry + `CLAUDE.md`/`rebuild-strategy.md` update + merge to `main` |
 | The player stays a pawn + a sheet struct while 9.4/9.8/9.9/9.10/9.5 land on it | five systems built against a shim, then a five-way migration with saves already in the wild | 11.4 is sequenced ahead of all five and named the hinge in "Now"; the target shape is VtMB's own (`savegame_format.md`, `script_api.md`), so it is a port, not an invention |
 | Modal screens fight over input mode (three independent owners today) | the mouse is unusable in some screen order; Cog can make the game unclickable | 11.5's single arbiter + a Substrate test asserting the scope stack balances across every transition |
 | P12's choreography/facial RE (RE19/RE20) is unknown-duration work that **blocks PP2 in full** (owner call: eyes + lipsync gate the cinematic) | the playable path stalls behind RE | RE19/RE20 + PL9/PL10 are front-loaded in "Now", parallel to the PP0 refactor, so the unknowns surface earliest; each 12.x step is observable alone |

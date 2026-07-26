@@ -2,9 +2,10 @@
 
 North star: rebuild VtMB as a **playable game — remastered** — in Unreal Engine 5.8 + C++,
 consuming engine-neutral intermediates produced by this repo's own decode/export pipeline
-(`tools/`). **No original game content is ever converted into `.uasset`s.** The only assets
-committed to `Content/` are hand-authored, game-agnostic scaffolding (master materials, input
-configs, empty maps).
+(`tools/`). Game content converted into `.uasset`s — the offline look bake — lands on a
+**gitignored, regenerable mount** (`/ElysiumBaked`), never in the repo: **no original game
+content is ever committed in any form.** The only assets committed to `Content/` are
+hand-authored, game-agnostic scaffolding (master materials, input configs, empty maps).
 
 **Remaster, not pixel-perfect recreation.** Tone, ambience, feel and game logic are kept; craft
 is raised with tools 2004 did not have — modern UI and typography first, then assets, feel, and
@@ -37,12 +38,19 @@ The plan has two tracks that run in parallel:
      under `tools/out/<map>/` (gitignored — regenerable from the user's install) — OBJ+MTL+
      PNG/DDS, glTF `.glb`, and plain-text sidecars. `tools/UE_bsp_to_scene.py` is the exporter;
      `tools/export_all.py` batches it.
-   - **Runtime**: the C++ module `ElysiumUE` loads those intermediates from disk at
-     map-load time and builds engine objects in code. No import step, no bake, no
-     editor involvement. Python is **never run at runtime** — the seam between the
-     halves is purely file-based.
-2. **The Unreal editor is never in the content loop.** Editor Python exists only for
-   offline scaffolding (`make_boot_map.py`).
+   - **Offline, second stage**: `bake.bat` → `tools/bake_map.py` bakes each exported map's
+     *look* — geometry, materials, textures, props, decals, lights, fog, the `.umap` — into
+     real assets on the gitignored `/ElysiumBaked` mount. It is an editor commandlet, so it
+     runs beside the decoders, not beside the game.
+   - **Runtime**: the C++ module `ElysiumUE` opens the baked level and adopts its actors by
+     tag, then builds everything else in code from the intermediates on disk — collision,
+     ropes, the sky cubemap, the entity substrate, NPCs, audio, scripting. Python is **never
+     run at runtime** — the seam between the halves is purely file-based.
+2. **The Unreal editor is in the offline content loop only, never at runtime.** Editor Python
+   authors what only the editor build can produce — the map bake (`bake_map.py`, `bake_lib.py`,
+   `bake_verify.py`), the committed `Content/` assets (`build_content.py`), offline scaffolding
+   (`make_boot_map.py`) — and no shipped code path invokes it. The architecture call, its split
+   and its costs: `decisions.md` 2026-07-26 (cont. 6); the pipeline: `uasset-bake-spike.md`.
 3. **The pipeline lives in this repo.** `tools/` is the single home for the decoders; fixes
    and new sidecar formats land here. It is not forked from Godot — it is moved here, the
    Godot copy retired. The intermediates stay engine-neutral so the format work is not
@@ -164,7 +172,7 @@ Unreal-native substitutions:
 | `ObjModel.cs` | `FElysiumObjModel` | OBJ+MTL parser (albedo `map_Kd`, alpha-masked emissive `map_Ke`, alpha/blend flags). Extend `FElysiumMaterialDef` to the rest of the Godot `MaterialDef` field set: envmask, bump, WVT blend, water/decal params. |
 | `TextureCache.cs` | `FElysiumTextureCache` | DDS (native DXT + mips) preferred, PNG fallback. Add: worker-thread prewarm batch (Godot `Prewarm` shape — load is texture-bound), cubemap load (`UTextureCube` from six faces). |
 | `MaterialFactory.cs` | `FElysiumMaterialFactory` | MIDs off the master-material set below, parameters bound from `MaterialDef`. |
-| `WorldLoader.cs` | `AElysiumMapActor` | PMC sections per material bucket (built). Grows into the per-map owner of all Track B subsystems. |
+| `WorldLoader.cs` | `AElysiumMapActor` | adopts the baked level's `SM_World_*` chunk actors (one per 2048 cm cell, split into Nanite and non-Nanite buckets) by tag. The per-map owner of all Track B subsystems. |
 | `BrushCollision.cs` | brush collision in map actor | `UBodySetup` + `FKConvexElem` per `.hulls` brush; runtime trimesh from `.dispcol`. Replaces render-trimesh collision as the primary walkable surface (keep trimesh for displacement-heavy maps). |
 | `LightRig.cs` + `Lightstyles.cs` | `UElysiumLightRig` (component on map actor) | Point/spot/directional from `.lights`; lightstyle patterns ticked as intensity curves; texlight clustering per the Godot implementation. |
 | `CoronaField.cs` | billboard `UMaterialBillboardComponent`s or one Niagara system fed `.sprites` | additive glow sprites. |
@@ -173,7 +181,7 @@ Unreal-native substitutions:
 | `.cube` LUT | post-process Color Grading LUT (transient `UTexture` into per-map `FPostProcessSettings`) | native. |
 | `.env` | sky material from six sky PNGs + a **per-primitive distance-fog term** in the surface masters (`ElysiumFog.h`); `UExponentialHeightFogComponent` keeps the volumetric layer | native. The distance fog cannot be an engine fog: the world and the 3D-skybox miniature carry two authored sets and share screen depth. |
 | `SourceMovement.cs` / `PlayerController.cs` | custom `UCharacterMovementComponent` override | port the Source `CGameMovement` math line-by-line — `SourceMovement.cs` + `docs/source_movement.md` are the reference. Friction/accel/airaccel/StepMove constants verified against the decompile. |
-| props (`MultiMesh`) | `UInstancedStaticMeshComponent` per unique model | static mesh built at runtime from `props/*.obj` (`FStaticMeshRenderData` path or PMC per model); `solid != 0` instances get convex collision from the render mesh. |
+| props (`MultiMesh`) | one baked `SM_*` per unique model, placed as `AStaticMeshActor`s | baked offline from `props/*.obj` with skins, collision and authored mass on the asset (`props/*.skins`, `props/*.phys`); the map actor adopts the placements by tag. |
 | VGUI2 menu (`Ui/Vgui/*`) | **modern Slate/UMG UI** (not a VGUI port) | Screen inventory, panel anatomy, hierarchy and iconography carry over from `.res`/`trackerscheme.res`; the runtime is a resolution-independent Slate/UMG stack with vector type. No 640×480 scale box, no bitmap `.fnt` atlas, no classic mode. `remaster-direction.md` → axis 1; the Godot VGUI implementation and `m0_menu_build.md` are structural reference. |
 | `DevConsole.cs` | engine console commands now; Slate console only if it earns its keep | `elysium.*` commands cover current needs. |
 
@@ -295,7 +303,7 @@ to matter — not before.
 
 ## B5. Game models: props, physics, NPCs
 
-- **Static props** (Track A): ISM per unique model from `.props`.
+- **Static props** (Track A): one baked `SM_*` per unique model, placed from `.props`.
 - **Dynamic props** (`prop_dynamic` ×78): spawned from `.ents` `model` keyvalues.
   *Pipeline addition required*: export models referenced by entities (only
   GAME_LUMP static props are exported today). Skeletal ones ride the `.glb` path.
@@ -392,9 +400,10 @@ plays end-to-end — `rebuild-strategy.md` in the Godot repo holds the long-tail
 
 ## Where Unreal beats the Godot implementation
 
-- **Runtime geometry + lighting**: PMC sections + fully dynamic lights. Hardware
-  ray-traced Lumen for GI/reflections (runtime meshes have no offline distance fields,
-  so software Lumen is out; HWRT builds BLAS at runtime). **MegaLights** for the many
+- **Baked geometry + fully dynamic lighting**: the offline bake gives every surface real
+  DDC-fitted Lumen surface-cache cards and distance fields — the thing a runtime-built mesh
+  can never have, and the reason the bake exists. Hardware ray-traced Lumen for
+  GI/reflections. **MegaLights** for the many
   shadowed point lights (394 lights in the tutorial alone). Virtual Shadow Maps.
   Replaces Godot's SDFGI+SSAO+planar-reflection stack, and can eventually replace
   per-surface `$envmap` cubemaps with real reflections.
@@ -407,9 +416,12 @@ plays end-to-end — `rebuild-strategy.md` in the Godot repo holds the long-tail
 - **Audio engine**: submixes/attenuation/concurrency native; MS-ADPCM is the only
   custom code.
 - **Ropes**: `keyframe_rope`/`move_rope` (×107 in the tutorial) → Cable Components.
-- **Nanite is not applicable** (requires offline build; world meshes are ~20k tris).
+- **Nanite is on** for every baked mesh that can take it (311 of 339 on the tutorial; the
+  28 exceptions are the translucent/additive surfaces Nanite does not support). It buys no
+  throughput at ~20k world tris — its value is that the offline build is what carries the
+  Lumen surface-cache cards and distance fields a runtime mesh cannot have.
 - **C++ hot path**: parsing is already fast enough with the `.emc` cook-cache; if
-  load time ever matters again, extend the cache — never reintroduce `.uasset` baking.
+  load time ever matters again, extend the cache.
 
 ## Pipeline & tooling
 
@@ -417,6 +429,7 @@ plays end-to-end — `rebuild-strategy.md` in the Godot repo holds the long-tail
 (`bsp.py`, `UE_bsp_to_scene.py`, `export_all.py`, `mdl.py`/`mdl_gltf.py`/`mdl_skel.py`, `vmt.py`,
 `vpk.py`, `kv.py`, `fnt.py`, `install.py`, `tex_to_png.py`, `retex_dds.py`, `lightmap.py`,
 `build_grade_lut.py`, `menu_extract.py`, `make_boot_map.py`, `make_sky_material.py`,
+the bake (`bake_map.py`, `bake_lib.py`, `bake_verify.py`),
 `add_world_emissive.py`, `set_world_material_usage.py`,
 `make_testmap.py`, `sky_upscale.py`,
 the `probe_*.py`/`*_probe.py` investigators, and `tools/CLAUDE.md`), with `tools/requirements.txt`
