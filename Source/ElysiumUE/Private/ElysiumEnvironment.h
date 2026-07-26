@@ -32,10 +32,21 @@ namespace ElysiumEnvironment
 	// convention would silently draw wrong.
 	inline constexpr int32 SkyConventionVersion = 1;
 
-	// The six Source sky faces (tex/sky_{ft,bk,rt,lf,up,dn}.png) -> a transient UTextureCube
-	// in Unreal face order (+X,-X,+Y,-Y,+Z,-Z). It feeds the SkyLight IBL *and* the visible
-	// M_Sky backdrop, so both the face binding and the per-face rotation matter; the binding
-	// is currently wrong (see the .cpp). Null if any face is missing or the faces are not
-	// square and equal-sized.
+	// The six Source sky faces (tex/sky_{rt,lf,ft,bk,up,dn}.png) -> a transient UTextureCube in
+	// Unreal slice order (+X,-X,+Y,-Y,+Z,-Z), each face bound to its slice and rotated into
+	// Unreal's D3D-derived cube layout (the table is in the .cpp). It feeds the SkyLight IBL
+	// *and* the visible M_Sky backdrop, so both the binding and the per-face rotation matter.
+	// Null if any face is missing or the faces are not square and equal-sized.
 	UTextureCube* BuildSkyCube(const FString& TexDir);
+
+	// The two halves of the K1 x K2 face->slice transform, exposed so the automation suite can
+	// check them against the conventions they were derived from rather than against themselves.
+	// `Slice` is 0..5 = +X, -X, +Y, -Y, +Z, -Z.
+
+	// The Source face suffix feeding a slice ("rt", "lf", "ft", "bk", "up", "dn").
+	const TCHAR* SkySliceFace(int32 Slice);
+
+	// Where slice texel (X, Y) of an N x N face reads from in that face's decoded image — the
+	// rotation half. Both images are row-major top-down.
+	void SkySliceSource(int32 Slice, int32 X, int32 Y, int32 N, int32& OutSrcX, int32& OutSrcY);
 }

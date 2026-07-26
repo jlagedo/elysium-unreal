@@ -1866,18 +1866,25 @@ The rework is calibrated against data we already hold plus the original game:
   seam error it used to minimise survives as a one-line **read** on the input faces
   (`ring_seam_err`), printed before the upscale so faces that are not what the contract says
   are caught up front rather than silently stitched.
-- **B3 — correct cube assembly.** `BuildSkyCube` packs the canonical faces into UE slices with
-  the exact per-slice transform K1 × K2 fixes, documented face by face in the code. Two errors
-  to fix, not one. The code binds Source `ft/bk/rt/lf` to Unreal `+X/−X/+Y/−Y`, but under
-  `source_to_unreal` the correct Unreal `+X,−X,+Y,−Y,+Z,−Z` order is **`rt, lf, ft, bk, up, dn`**
-  — every horizon face is on the wrong axis. In Unreal space a face pixel `(u, v)` looks at
+- **B3 — correct cube assembly. Done** (2026-07-26). `BuildSkyCube` packs the canonical faces
+  into UE slices under one table carrying both halves of the transform — the binding
+  **`rt, lf, ft, bk, up, dn`** for `+X,−X,+Y,−Y,+Z,−Z` *and* each slice's rotation, applied by
+  an index remap at blit time (`RotSource`/`BlitRotated`). Both errors are gone together; the
+  table is documented face by face in the code with its derivation.
+  The transform is **re-derived, not copied**: solving K1's six face directions against K2's
+  six slice directions yields exactly one `(face, rotation)` pair per slice, matching the table
+  below with no residual. That derivation is now a standing test —
+  **`Elysium.Substrate.SkyCube`** re-solves it in C++ over a 7×7 texel grid per slice
+  (`SkySliceFace`/`SkySliceSource` expose the two halves), so a wrong binding, a wrong rotation
+  or a mirror each fail the suite rather than the eye. In Unreal space a face pixel `(u, v)`
+  looks at
 
   ```
   rt: ( 1,  s,  t)    lf: (-1, -s,  t)    bk: ( s, -1,  t)
   ft: (-s,  1,  t)    up: (-t,  s,  1)    dn: ( t,  s, -1)
   ```
 
-  (`s = 2u − 1`, `t = 1 − 2v`). And every slice needs the rotation UE's D3D-derived layout
+  (`s = 2u − 1`, `t = 1 − 2v`). And every slice takes the rotation UE's D3D-derived layout
   requires (K2): **`rt` 90° CCW, `lf` 90° CW, `ft` 180°, `bk` none, `up` 90° CCW, `dn` 90° CCW**
   — a renamed array alone still draws wrong. B1 is the acceptance check.
 - **B4 — backdrop verification + brightness calibration.** `M_Sky` sampling verified against

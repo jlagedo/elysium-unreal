@@ -17,6 +17,7 @@
 #include "ElysiumDlg.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
+#include "ElysiumEnvironment.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumEventQueue.h"
 #include "ElysiumExpr.h"
@@ -1084,5 +1085,94 @@ bool FElysiumCPythonWritersTest::RunTest(const FString&)
 	return true;
 }
 #endif // ELYSIUM_WITH_CPYTHON
+
+// =====================================================================================
+// The sky cube face->slice transform (sky-ambience B3). Checks BuildSkyCube's table against
+// the two conventions it was derived from, not against itself: for every Unreal cube slice
+// and a grid of its texels, the direction UE's own GetCubemapVector assigns that texel must
+// be the direction VtMB's draw tables assign the source pixel the transform reads from.
+// A wrong face binding, a wrong rotation or a mirror each break it.
+// =====================================================================================
+
+namespace
+{
+	// K1, carried into Unreal space by source_to_unreal (x, -y, z): the direction a Source sky
+	// face's image pixel (u, v) looks along, v = 0 the top row.
+	// docs/sky-ambience.md -> "K1 ... (settled)" / B3.
+	FVector ElysiumK1FaceDir(const FString& Face, double U, double V)
+	{
+		const double S = 2.0 * U - 1.0;
+		const double T = 1.0 - 2.0 * V;
+		if (Face == TEXT("rt")) { return FVector( 1,  S,  T); }
+		if (Face == TEXT("lf")) { return FVector(-1, -S,  T); }
+		if (Face == TEXT("bk")) { return FVector( S, -1,  T); }
+		if (Face == TEXT("ft")) { return FVector(-S,  1,  T); }
+		if (Face == TEXT("up")) { return FVector(-T,  S,  1); }
+		return FVector(T, S, -1);   // dn
+	}
+
+	// K2, GetCubemapVector (ReflectionEnvironmentShaders.usf): the raw Unreal world direction of
+	// slice texel (U, V), U growing right and V growing down over the slice's own texels.
+	FVector ElysiumK2SliceDir(int32 Slice, double U, double V)
+	{
+		const double SX = 2.0 * U - 1.0;
+		const double SY = 2.0 * V - 1.0;
+		switch (Slice)
+		{
+		case 0:  return FVector( 1, -SY, -SX);
+		case 1:  return FVector(-1, -SY,  SX);
+		case 2:  return FVector(SX,   1,  SY);
+		case 3:  return FVector(SX,  -1, -SY);
+		case 4:  return FVector(SX, -SY,   1);
+		default: return FVector(-SX, -SY, -1);
+		}
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSkyCubeTest, "Elysium.Substrate.SkyCube", GElysiumTestFlags)
+bool FElysiumSkyCubeTest::RunTest(const FString&)
+{
+	// Every slice takes a distinct face, and together they are the whole set.
+	TSet<FString> Faces;
+	for (int32 Slice = 0; Slice < 6; ++Slice)
+	{
+		Faces.Add(ElysiumEnvironment::SkySliceFace(Slice));
+	}
+	TestEqual(TEXT("the six slices take six distinct faces"), Faces.Num(), 6);
+	for (const TCHAR* Face : { TEXT("rt"), TEXT("lf"), TEXT("ft"), TEXT("bk"), TEXT("up"), TEXT("dn") })
+	{
+		TestTrue(FString::Printf(TEXT("face %s is bound to a slice"), Face), Faces.Contains(Face));
+	}
+
+	// N is odd and > 1 so the sample grid includes the centre and both parities of edge texel;
+	// a rotation that happened to be its own inverse on an even grid still has to survive.
+	const int32 N = 7;
+	for (int32 Slice = 0; Slice < 6; ++Slice)
+	{
+		const FString Face = ElysiumEnvironment::SkySliceFace(Slice);
+		double Worst = 0.0;
+		for (int32 Y = 0; Y < N; ++Y)
+		{
+			for (int32 X = 0; X < N; ++X)
+			{
+				int32 SX = 0, SY = 0;
+				ElysiumEnvironment::SkySliceSource(Slice, X, Y, N, SX, SY);
+				TestTrue(TEXT("the source texel is inside the face"),
+					SX >= 0 && SX < N && SY >= 0 && SY < N);
+
+				// Texel centres on both sides: the cube samples a slice texel, the transform
+				// hands it the pixel of the decoded face that must carry that direction.
+				const FVector Want = ElysiumK2SliceDir(Slice, (X + 0.5) / N, (Y + 0.5) / N).GetSafeNormal();
+				const FVector Got = ElysiumK1FaceDir(Face, (SX + 0.5) / N, (SY + 0.5) / N).GetSafeNormal();
+				Worst = FMath::Max(Worst, 1.0 - FVector::DotProduct(Want, Got));
+			}
+		}
+		TestTrue(FString::Printf(
+			TEXT("slice %d (%s): every texel looks where VtMB's tables say (worst 1-dot %g)"),
+			Slice, *Face, Worst), Worst < 1e-12);
+	}
+
+	return true;
+}
 
 #endif // WITH_DEV_AUTOMATION_TESTS
