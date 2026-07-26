@@ -71,7 +71,15 @@ namespace ElysiumEnvironment
 	// The same assembly over six faces named `<Prefix><face>.png` in Dir, which is how the
 	// labelled RE-A2 probe set is named (`<skyname>rt.png`, …). BuildSkyCube is this with
 	// Prefix = "sky_".
-	UTextureCube* BuildSkyCubeFrom(const FString& Dir, const FString& Prefix);
+	//
+	// `OutUpperMean`, when given, receives the cube's **solid-angle-weighted mean linear
+	// radiance over the upper hemisphere** — the part that actually lights, since the SkyLight
+	// runs with `bLowerHemisphereIsBlack`. It is what turns VtMB's `emit_skyambient` magnitude
+	// into a SkyLight intensity: VtMB states the sky's radiance as one number, so scaling the
+	// cube so its own average matches that number gives the sky VtMB's *level* while keeping
+	// the cube's *direction* (C1). 0 when the cube could not be built.
+	UTextureCube* BuildSkyCubeFrom(const FString& Dir, const FString& Prefix,
+		float* OutUpperMean = nullptr);
 
 	// True when all six `<Prefix><face>.png` exist in Dir — the test for "is there an enhanced
 	// face set for this map", asked before BuildSkyCubeFrom so a partial set falls back to the

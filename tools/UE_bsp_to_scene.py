@@ -207,7 +207,9 @@ def write_lights(data, out_dir, base, sky=None):
       type      0 emit_surface, 1 point, 2 spot, 3 skylight, 5 skyambient
       o*        origin, Unreal centimetres  (sx,-sy,sz)*INCH_TO_CM
       d*        beam direction, Unreal unit vector (nx,-ny,nz); 0 0 0 if none
-      i*        intensity, raw linear RGB (colour*brightness)
+      i*        intensity, raw linear RGB (colour*brightness). Six decimals, not three: the
+                type-5 skyambient row IS a lump-8 luxel value / 255 and runs as low as 0.005
+                (C1), so three would quantise the sky's whole ambient level to one figure.
       radius_cm cutoff radius in centimetres (0 = no cutoff)
       stopdot/stopdot2/exponent  spot cone (cos inner / cos outer / falloff exp)
       style     lightstyle index (0 = constant)
@@ -237,7 +239,7 @@ def write_lights(data, out_dir, base, sky=None):
             n_sky += in_sky
             f.write(f"{w['type']} {ox:.4f} {oy:.4f} {oz:.4f} "
                     f"{ux:.4f} {uy:.4f} {uz:.4f} "
-                    f"{ir:.3f} {ig:.3f} {ib:.3f} {w['radius'] * INCH_TO_CM:.4f} "
+                    f"{ir:.6f} {ig:.6f} {ib:.6f} {w['radius'] * INCH_TO_CM:.4f} "
                     f"{w['stopdot']:.4f} {w['stopdot2']:.4f} {w['exponent']:.3f} "
                     f"{w['style']} {in_sky}\n")
     from collections import Counter

@@ -16,7 +16,8 @@ class ULightComponent;
 //   type 1 point      -> UPointLightComponent
 //   type 2 spot       -> USpotLightComponent   (cone from stopdot2)
 //   type 3 skylight   -> UDirectionalLightComponent (the sun; its own lux scale)
-//   type 5 skyambient -> SkyAmbient colour (no light; the map actor tints its SkyLight)
+//   type 5 skyambient -> SkyAmbient colour + SkyAmbientMag (no light; the map actor drives
+//                        its SkyLight's tint AND level from them)
 //   type 0 emit_surface (texlight) -> shadowless point light (clustering deferred)
 //
 // VtMB point/spot intensities are pure inverse-square radiosity magnitudes with a
@@ -140,6 +141,13 @@ public:
 	bool bHasSun = false;
 	bool bHasSkyAmbient = false;
 	FLinearColor SkyAmbient = FLinearColor(0.12f, 0.13f, 0.18f);   // fallback cool-night tint
+	// The type-5 row's own magnitude, kept rather than normalised away (C1). VRAD divides no
+	// falloff out of a `light_environment`, so this IS a lump-8 luxel value / 255 — the radiance
+	// VtMB's light cache returns for a sky-hitting bounce ray (RE-A3/RE-A5). It spans 0.0050 to
+	// 0.0980 over the game's 25 pair maps (1.28 to 25.00 in stored-luxel units) and is
+	// **authored to exactly zero** on two of them, so zero is a value to honour, not a missing
+	// reading to default. 0 when the map has no pair at all.
+	float SkyAmbientMag = 0.f;
 
 	// Calibration — tunable per-instance in the editor, or via elysium.LightScale (which
 	// overrides PointSpotScale). Point/spot use Unreal's *non*-inverse-square falloff with a

@@ -63,7 +63,8 @@ FALLBACK_RADIUS_CM = 2500.0
 # authored radius is in miniature units and scales with the geometry it lights, but a source
 # authored with a degenerate radius would otherwise scale to a reach that lights nothing at all.
 MIN_SKY_REACH_CM = 5000.0
-SKYLIGHT_INTENSITY = 1.0
+# The sky light's hue where a map authors no type-5 row. Its INTENSITY in that case is 0 (D2),
+# so this only shows through if something later gives such a map a level.
 SKYLIGHT_FALLBACK_COLOR = unreal.LinearColor(0.12, 0.13, 0.18, 1.0)
 
 # The actor tags AElysiumMapActor::AdoptBakedLevel buckets the level by. Keep in sync with
@@ -617,7 +618,7 @@ class Bake(object):
                 # -- last-wins -- read the wrong row on the 5 maps with several.
                 if kind == 5:
                     if sky_ambient is None:
-                        sky_ambient = color
+                        sky_ambient = (color, mag)
                     continue
 
                 reach = (radius_cm if radius_cm > 1.0 else FALLBACK_RADIUS_CM) * RADIUS_SCALE
@@ -690,17 +691,24 @@ class Bake(object):
         cubemap sky light at all: that is what gives Lumen sky occlusion, so an interior goes
         dark because it cannot see the sky instead of being washed by a constant fill through
         solid walls. Lower hemisphere black, or the sky would light the world's undersides and
-        defeat the occlusion."""
+        defeat the occlusion.
+
+        Its INTENSITY is likewise the runtime's to set (C1/C2): the level comes from the map's
+        type-5 `emit_skyambient` magnitude divided by the cube's own mean radiance, and the cube
+        does not exist until load. What is written here is that magnitude alone, so the actor
+        carries the map's real data in the editor rather than a placeholder constant -- 0 on the
+        83 maps with no sky pair, which is the policy, not an absence."""
         actor = actors.spawn_actor_from_class(unreal.SkyLight, unreal.Vector(0.0, 0.0, 0.0))
         if actor:
+            color, mag = sky_ambient if sky_ambient else (None, 0.0)
             component = actor.light_component
             component.set_mobility(unreal.ComponentMobility.MOVABLE)
             component.set_editor_property("source_type",
                                           unreal.SkyLightSourceType.SLS_SPECIFIED_CUBEMAP)
             component.set_editor_property("cubemap", None)
             component.set_editor_property("lower_hemisphere_is_black", True)
-            component.set_editor_property("intensity", SKYLIGHT_INTENSITY)
-            component.set_light_color(sky_ambient or SKYLIGHT_FALLBACK_COLOR)
+            component.set_editor_property("intensity", mag)
+            component.set_light_color(color or SKYLIGHT_FALLBACK_COLOR)
             actor.set_actor_label("SkyLight")
             actor.tags = [TAG_SKYLIGHT]
             actor.set_folder_path("Environment")

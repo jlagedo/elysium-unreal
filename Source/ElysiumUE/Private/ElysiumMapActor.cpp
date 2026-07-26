@@ -868,9 +868,20 @@ bool AElysiumMapActor::AreLightsVisible() const
 void AElysiumMapActor::ApplyEnvironment()
 {
 	FElysiumEnvDef Env;
-	if (!FElysiumEnvDef::Parse(FElysiumContentPaths::MapEnv(MapName), Env) || !Env.bSky)
+	const bool bHaveEnv = FElysiumEnvDef::Parse(FElysiumContentPaths::MapEnv(MapName), Env);
+	if (!bHaveEnv || !Env.bSky)
 	{
-		return;   // no .env, or a map with no sky: the baked sky light keeps its authored fill
+		// No sky faces to build a cube from — but the SkyLight's *level* is still data (D2), and
+		// leaving it on the bake's placeholder is exactly the cubemap-less constant fill this
+		// policy exists to remove. A map with no sky pair gets zero; one that somehow has a pair
+		// but no faces has no cube to scale, which SkyAmbientIntensity reports as zero too.
+		if (SkyLight)
+		{
+			SkyLight->SetIntensity(SkyAmbientIntensity(0.f));
+			SkyLight->SetMobility(EComponentMobility::Movable);
+			SkyLight->RecaptureSky();
+		}
+		return;
 	}
 
 	// The faces are read verbatim under the export-side orientation contract; a sidecar written
@@ -890,10 +901,12 @@ void AElysiumMapActor::ApplyEnvironment()
 	const bool bEnhanced = !bProbe && CVarEnhancedTextures.GetValueOnGameThread() != 0
 		&& ElysiumEnvironment::HasSkyFaces(TexHi, TEXT("sky_"));
 
-	UTextureCube* Cube =
-		bProbe    ? ElysiumEnvironment::BuildSkyCubeFrom(FElysiumContentPaths::SkyProbeDir(), Env.SkyName) :
-		bEnhanced ? ElysiumEnvironment::BuildSkyCube(TexHi)
-		          : ElysiumEnvironment::BuildSkyCube(FElysiumContentPaths::MapTexDir(MapName));
+	float CubeUpperMean = 0.f;
+	UTextureCube* Cube = ElysiumEnvironment::BuildSkyCubeFrom(
+		bProbe    ? FElysiumContentPaths::SkyProbeDir() :
+		bEnhanced ? TexHi
+		          : FElysiumContentPaths::MapTexDir(MapName),
+		bProbe ? Env.SkyName : FString(TEXT("sky_")), &CubeUpperMean);
 	if (Cube == nullptr)
 	{
 		if (bProbe)
@@ -917,6 +930,7 @@ void AElysiumMapActor::ApplyEnvironment()
 		// A sky that lit the undersides of the world would defeat the occlusion above.
 		SkyLight->bLowerHemisphereIsBlack = true;
 		SkyLight->SetMobility(EComponentMobility::Movable);
+		SkyLight->SetIntensity(SkyAmbientIntensity(CubeUpperMean));
 		SkyLight->RecaptureSky();
 	}
 
@@ -939,9 +953,52 @@ void AElysiumMapActor::ApplyEnvironment()
 		SkyDomeMesh->SetMaterial(0, Mid);
 		SkyDomeMesh->SetVisibleInRayTracing(false);
 		SkyDomeMesh->SetVisibility(bSkyVisible);
-		UE_LOG(LogElysium, Log, TEXT("sky '%s': cubemap IBL + backdrop (%s faces)"), *Env.SkyName,
-			bProbe ? TEXT("labelled probe") : bEnhanced ? TEXT("enhanced") : TEXT("faithful"));
+		UE_LOG(LogElysium, Log,
+			TEXT("sky '%s': %s faces, cube upper-hemisphere mean %.5f, skyambient %.5f -> "
+			     "SkyLight intensity %.3f"),
+			*Env.SkyName,
+			bProbe ? TEXT("labelled probe") : bEnhanced ? TEXT("enhanced") : TEXT("faithful"),
+			CubeUpperMean, LightRig ? LightRig->SkyAmbientMag : 0.f,
+			SkyAmbientIntensity(CubeUpperMean));
 	}
+}
+
+float AElysiumMapActor::SkyAmbientIntensity(float CubeUpperMean) const
+{
+	// C1/C2 (D2, decisions.md 2026-07-26): the SkyLight actor stays on every map, and its level
+	// is DATA, not a constant. VtMB states the sky's own radiance once per map, as the type-5
+	// `emit_skyambient` row — the colour its light cache returns for a sky-hitting bounce ray
+	// (RE-A3) — and VRAD divides no falloff out of a `light_environment`, so that number is a
+	// lump-8 luxel value / 255 (RE-A5). It is authored on only **25 of 108 maps**; the other 83
+	// carry no `light_environment` at all, and 41 of those still draw sky through `toolsskybox`,
+	// so "shows sky" and "is lit by sky" are genuinely independent. Two of the 25 author a
+	// **zero**. So the policy has exactly three cases and no fallback:
+	//
+	//   no pair (83 maps)  -> 0. The rig and Lumen's bounce carry the room; a sky that shows but
+	//                         was never authored to light must not light.
+	//   pair, magnitude 0  -> 0. An authored zero is a reading, not a missing one.
+	//   pair, magnitude m  -> scale the cube so its own average radiance IS m.
+	//
+	// That last line is the whole of C1. VtMB's sky is one number and ours is an image; dividing
+	// the cube's solid-angle-weighted upper-hemisphere mean out and multiplying VtMB's number in
+	// gives the sky VtMB's **level** while keeping the cube's **direction** — the modernization
+	// (a real IBL with real occlusion) sits entirely in the distribution, and the magnitude stays
+	// the game's own. No free gain, which is what makes C4's residual a measurement.
+	const float Mag = LightRig ? LightRig->SkyAmbientMag : 0.f;
+	if (!LightRig || !LightRig->bHasSkyAmbient || Mag <= 0.f)
+	{
+		return 0.f;
+	}
+	if (CubeUpperMean <= KINDA_SMALL_NUMBER)
+	{
+		// A cube that integrates to nothing (an all-black `dn`-like set) cannot be scaled to a
+		// target radiance — the ratio diverges. Say so rather than ship an infinity.
+		UE_LOG(LogElysium, Warning,
+			TEXT("sky: type-5 magnitude %.5f but the cube's upper hemisphere is black — no IBL level"),
+			Mag);
+		return 0.f;
+	}
+	return Mag / CubeUpperMean;
 }
 
 void AElysiumMapActor::ApplySkyBrightness()

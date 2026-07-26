@@ -193,6 +193,62 @@ namespace
 		}
 	}
 
+	// The cube's solid-angle-weighted mean linear radiance over the UPPER hemisphere.
+	//
+	// Three things have to be right for this number to mean anything. The texels are sRGB, so
+	// they are decoded to linear before averaging — averaging gamma-encoded values would
+	// overstate a dark sky badly. A cube texel's solid angle is not uniform: it falls off as
+	// (1 + u^2 + v^2)^-3/2 toward the face corners, so each sample is weighted by that. And
+	// only the upper hemisphere counts, because the SkyLight runs with
+	// bLowerHemisphereIsBlack — VtMB's ground faces are uniform near-black plates and a sky
+	// that lit the world's undersides would defeat the occlusion the cubemap is there for.
+	//
+	// Reads the assembled slices, so it needs no knowledge of which face went where — the
+	// direction comes from GetCubemapVector, the same table the GPU samples with.
+	float UpperHemisphereMean(const uint8* Slices, int32 N)
+	{
+		const float Inv = 1.f / float(N);
+		double Sum = 0.0, Weight = 0.0;
+		for (int32 Slice = 0; Slice < 6; ++Slice)
+		{
+			const uint8* Face = Slices + int64(Slice) * N * N * 4;
+			for (int32 Y = 0; Y < N; ++Y)
+			{
+				const float V = 2.f * ((Y + 0.5f) * Inv) - 1.f;
+				for (int32 X = 0; X < N; ++X)
+				{
+					const float U = 2.f * ((X + 0.5f) * Inv) - 1.f;
+					// GetCubemapVector's third component is world up (its own
+					// "no sky lighting from below the horizon" test reads it).
+					float Up;
+					switch (Slice)
+					{
+					case 0: Up = -U;  break;   // +X: ( 1, -V, -U)
+					case 1: Up =  U;  break;   // -X: (-1, -V,  U)
+					case 2: Up =  V;  break;   // +Y: ( U,  1,  V)
+					case 3: Up = -V;  break;   // -Y: ( U, -1, -V)
+					case 4: Up =  1;  break;   // +Z
+					default: Up = -1; break;   // -Z
+					}
+					if (Up <= 0.f)
+					{
+						continue;
+					}
+					const float W = FMath::Pow(1.f + U * U + V * V, -1.5f);
+					const uint8* Px = Face + (int64(Y) * N + X) * 4;   // BGRA
+					// Rec.709 luminance of the sRGB-decoded texel.
+					const float Lum =
+						0.2126f * FMath::Pow(Px[2] / 255.f, 2.2f) +
+						0.7152f * FMath::Pow(Px[1] / 255.f, 2.2f) +
+						0.0722f * FMath::Pow(Px[0] / 255.f, 2.2f);
+					Sum += double(Lum) * W;
+					Weight += W;
+				}
+			}
+		}
+		return Weight > 0.0 ? float(Sum / Weight) : 0.f;
+	}
+
 	// Copy one N x N BGRA8 face into a slice, rotating the content.
 	void BlitRotated(const uint8* Src, uint8* Dst, int32 N, ESkyRot Rot)
 	{
@@ -244,8 +300,13 @@ bool ElysiumEnvironment::HasSkyFaces(const FString& Dir, const FString& Prefix)
 	return true;
 }
 
-UTextureCube* ElysiumEnvironment::BuildSkyCubeFrom(const FString& Dir, const FString& Prefix)
+UTextureCube* ElysiumEnvironment::BuildSkyCubeFrom(const FString& Dir, const FString& Prefix,
+	float* OutUpperMean)
 {
+	if (OutUpperMean)
+	{
+		*OutUpperMean = 0.f;
+	}
 	// One decoded face per Unreal slice, in slice order, each already assigned its rotation.
 	TArray64<uint8> Faces[6];
 	int32 Size = 0;
@@ -289,6 +350,11 @@ UTextureCube* ElysiumEnvironment::BuildSkyCubeFrom(const FString& Dir, const FSt
 	for (int32 F = 0; F < 6; ++F)
 	{
 		BlitRotated(Faces[F].GetData(), Dest + FaceBytes * F, Size, SkySlices[F].Rot);
+	}
+	// Measured while the bulk data is still mapped — after Unlock the pointer is not ours.
+	if (OutUpperMean)
+	{
+		*OutUpperMean = UpperHemisphereMean(Dest, Size);
 	}
 	Mip->BulkData.Unlock();
 

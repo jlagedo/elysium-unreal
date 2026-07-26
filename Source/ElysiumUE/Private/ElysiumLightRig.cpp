@@ -180,6 +180,7 @@ int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FStrin
 			if (!bHasSkyAmbient)
 			{
 				SkyAmbient = Color;
+				SkyAmbientMag = Mag;
 				bHasSkyAmbient = true;
 			}
 			continue;

@@ -2119,32 +2119,52 @@ The rework is calibrated against data we already hold plus the original game:
   than 0; that keeps `intensity × falloff` correct everywhere without each consumer having to
   remember which types are which. (b) and (d) land together because (b) rewrites the very
   attenuations (d) is built from.
-- **C1 — skyambient with magnitude.** Both bake and rig currently keep only the type-5
-  normalized colour and drop its magnitude; `SKYLIGHT_INTENSITY` is a flat 1.0. RE-A5 makes the
-  derivation trivial and the expectation honest: the type-5 intensity **is** a lump-8 luxel
-  value already, so there is no calibration to do — carry the magnitude through. RE-A3 supplies
-  the semantics it has to respect (an IBL/bounce term, never a lamp: it is the colour a
-  sky-hitting bounce ray returns, and contributes nothing through the direct path). RE-A7
-  supplies the range: the 25 pair maps span ~35× in type-5 magnitude, and three author a
-  **zero** on one half of the pair (`hw_chinese_1`, `sp_observatory_1` type-5; `hw_cemetery_1`
-  type-3), so zero is a value to honour, not a missing reading to default. What RE-A5 adds is
-  the **scale**: ×255 puts the per-map ambient ceiling at 1–25 stored-luxel units (median ~9)
-  against median lit faces of 1–19, so this is a substantial IBL term where sky is visible — not
-  the near-zero a flat `SKYLIGHT_INTENSITY = 1.0` implies. The open residue is the hemisphere
-  weighting (a factor of ~2), which C4 can absorb into its fit rather than C1 guessing at.
-- **C2 — interior SkyLight policy.** Maps whose `.env` has sky but whose worldlights carry no
-  sky pair (e.g. `sm_hub_1`), and pure interiors, currently keep a cubemap-less constant-fill
-  SkyLight from the bake. **Policy decided 2026-07-26 (D2, `decisions.md`): data-driven** —
-  the SkyLight actor stays everywhere, its intensity is the type-5 magnitude at the RE-A5
-  scale where a pair exists, and **zero (black capture)** on the 83 no-pair maps, ambience
-  carried by rig + Lumen alone.
-  RE-A7 makes this the **majority policy, not an edge case**: 83 of 108 maps have no sky pair,
-  and 41 of them still draw sky through `toolsskybox`, so "shows sky" and "is lit by sky" have
-  to be two independent flags in the `.env` contract. RE-A5 narrows what the policy may claim:
-  where a pair exists and sky is actually visible it contributes **more** than a typical lit
-  face, so "sky contributes no meaningful light" is *not* a blanket truth. The faithful policy
-  is driven by the pair's presence (83 maps have none) and by measured sky visibility (VtMB's
-  maps are mostly enclosed, so the reach is small), never by treating the term as negligible.
+- **C1 — skyambient with magnitude. Done** (2026-07-26). Bake and rig both kept only the
+  type-5 *normalized colour* and threw the magnitude away, against a flat
+  `SKYLIGHT_INTENSITY = 1.0`. The magnitude now travels: `UElysiumLightRig::SkyAmbientMag`
+  beside `SkyAmbient`, and the bake writes it onto the SkyLight actor so the editor carries the
+  map's real data rather than a placeholder.
+
+  RE-A5 makes the derivation need no calibration — a type-5 intensity is a lump-8 luxel value
+  ÷ 255 already, because VRAD divides no falloff out of a `light_environment`. What it needs is
+  a *bridge*, because VtMB's sky is one number and ours is an image. The bridge is one line:
+  **scale the cube so its own average radiance is that number.** `BuildSkyCubeFrom` returns the
+  cube's solid-angle-weighted mean linear radiance over the **upper** hemisphere (the part that
+  lights, since the SkyLight runs `bLowerHemisphereIsBlack`), and the intensity is
+  `magnitude / that`. The modernization — a real IBL with real occlusion — sits entirely in the
+  *distribution*; the *level* stays VtMB's own. No free gain, which is what leaves C4 a
+  measurement rather than a fit.
+
+  Measured on `sp_tutorial_1`: the `la` cube integrates to 0.00335 and the map authors 0.00656,
+  giving intensity **1.955** — the sky delivers about twice what the decoded faces alone would.
+  That the two are the same order of magnitude is the first evidence the units line up at all.
+
+  The magnitude also forced a sidecar fix: `.lights` wrote intensity at **three** decimals, so
+  `sp_tutorial_1`'s 0.006558 came back as 0.007 — a 6.7% error on the map's entire ambient
+  level, and worse on the maps authored near 0.005. It writes six now.
+
+  Range and zeros are as RE-A7 states, re-measured: 25 pair maps, type-5 magnitude 0.00500 to
+  0.09804 (1.28 to 25.00 stored-luxel units), authored to exactly **zero** on `hw_chinese_1` and
+  `sp_observatory_1`, with `hw_cemetery_1` zeroing the sun instead. Zero is honoured as a
+  reading, not defaulted away.
+- **C2 — interior SkyLight policy. Done** (2026-07-26; D2). One function,
+  `AElysiumMapActor::SkyAmbientIntensity`, is the whole policy, and it has three cases and no
+  fallback: **no pair → 0**, **pair authoring zero → 0**, **pair → C1's cube-scaled magnitude**.
+  It runs on every map including the ones with no `.env` and no sky faces at all, because the
+  case it exists to remove — the bake's placeholder constant-fill SkyLight — was precisely what
+  a map with no sky kept.
+
+  "Shows sky" and "is lit by sky" are now genuinely independent, as RE-A7 requires: the flag
+  that draws a backdrop is `.env`'s `skybox`, and the level comes from the rig's type-5 row.
+  41 maps draw sky and are lit by none of it.
+
+  Verified on `sm_hub_1` — the doc's own example, an outdoor night street with **no**
+  `light_environment`: `skyambient 0.00000 -> SkyLight intensity 0.000`. The B6 harness measures
+  what that changed: 3 of its 4 vantages moved (h2 most, 3.20% of pixels, p99 12 levels) and the
+  enclosed `spawn` vantage barely at all (0.05%). The change is real but small — the old flat
+  1.0 against a near-black `pier` cube was contributing little to begin with, which is itself
+  the point: this replaces a term that was arbitrary, not one that was load-bearing.
+
 - **C3 — Lumen art-direction knobs via a per-map PostProcessVolume.** The bake places a
   tagged, unbound PPV (pattern-matching SkyLight/Fog); `AdoptBakedLevel` adopts it. First
   payloads: **Skylight Leaking** (+ Full Skylight Leaking Distance) as the sanctioned

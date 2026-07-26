@@ -268,6 +268,11 @@ private:
 	// cubemap on the sky light is what gives Lumen sky occlusion — interiors then darken because
 	// they cannot see the sky, instead of receiving a constant fill through solid walls.
 	void ApplyEnvironment();
+	// The SkyLight's intensity for this map, from the type-5 `emit_skyambient` magnitude and the
+	// cube's own upper-hemisphere mean radiance (C1/C2, D2). Zero on the 83 maps with no sky
+	// pair, zero where the pair authors a zero, and otherwise the factor that makes the cube
+	// deliver VtMB's stated sky radiance. `CubeUpperMean` 0 means "no cube".
+	float SkyAmbientIntensity(float CubeUpperMean) const;
 	// Push elysium.SkyBrightness onto the live backdrop MID. The faithful value is 1 (D7): VtMB's
 	// sky transfer is the identity, so this is an A/B knob, not a calibration. No-op with no sky.
 	void ApplySkyBrightness();
