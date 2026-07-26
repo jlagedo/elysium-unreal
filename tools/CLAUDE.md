@@ -161,11 +161,18 @@ Struct layouts (v17 — probe real bytes, several differ from the modern wiki sp
   `avgLightColor[8]` int32 @0, `planenum` uint16 @32, `side` @34, `onnode` @35,
   `firstedge` int32 @36, `numedges` int16 @40, `texinfo` int16 @42, `dispinfo`
   int16 @44 (`-1` = not a displacement), `surfaceFogVolumeID` uint16 @46,
-  `styles[8]` @48, `day[8]` @56, `night[8]` @64 (VtMB's day/night lightmapping
-  system — 8 lightstyles each, not the modern `styles[4]@68`), `lightofs` int32
+  `styles[8]` @48, `day[8]` @56, `night[8]` @64 (three 8-entry lightstyle arrays
+  where modern Source has one `styles[4]@68`; only `styles` is live — see below),
+  `lightofs` int32
   @72 (`-1` = unlit), `area` float @76, `LightmapMins[2]` int32 @80,
   `LightmapSize[2]` int32 @88 (luxels; actual dims are size+1), `origFace` @96,
   `smoothingGroups` @100. Face count = FACES_len / 104.
+  `day`/`night` are **dead**: `0x00` on every face of all 108 maps (where `styles`
+  uses `0xFF` for an unused slot), and no `engine.dll` code reads offsets 56–71 —
+  the FACES lump's three consumers are `Mod_LoadFaces`, the face-centroid builder
+  and `CMod_LoadDispInfo`. Lump 8 therefore holds one bake, keyed by `styles[8]`
+  alone. The names are bspsrc's guess at the reserved space; the "two full bakes"
+  reading is retired. Evidence: `../docs/sky-ambience.md` → "K4 … (settled)".
 - VERTEXES: `float[3]` (12B). EDGES: `uint16[2]` (4B). SURFEDGES: signed int32.
 - TEXINFO: 72B. `sAxis float[4]` @0, `tAxis float[4]` @16, `texdata` int32 @68.
 - TEXDATA: 32B. `nameStringTableID` int32 @12, `width` @16, `height` @20.
@@ -218,7 +225,7 @@ recompiled maps store uncompressed **BGR888 inline in the `.tth`, no `.ttz`**.
 
 ## Lighting analysis (offline, not part of the export)
 
-Two non-`UE_` helpers read the baked lighting to *understand* how VtMB lit the world — they
+Non-`UE_` helpers that read the baked lighting to *understand* how VtMB lit the world — they
 produce no runtime intermediate:
 
 - **`lightmap.py`** — decodes LIGHTING (lump 8): per-face RGBE8888 luxel grids
@@ -229,13 +236,72 @@ produce no runtime intermediate:
   calibrate the dynamic-light parameters *by data* instead of by eye. Its headline finding
   (VtMB's look is indirect-bounce-dominated, so real-time GI is load-bearing) is written up
   in `../docs/rendering-perf.md` → "Why Lumen is load-bearing".
+- **`probe_daynight.py`** — scans **every** map in the install for a second lightmap bake and
+  anything that could select one: the byte histogram of `dface_t`'s `styles`/`day`/`night`
+  arrays, the per-face closure of lump 8 against a single bake (grids stored per lightstyle),
+  the complete `worldspawn` key inventory, and a day/night regex sweep over every entity key
+  and value. All three come back negative — the finding behind "K4 … (settled)" in
+  `../docs/sky-ambience.md`. Re-run after an install change to confirm it still holds.
+- **`probe_skyambient.py`** — the RE-A5 / K6 instrument: what VRAD did with `light_environment`
+  at bake time, read out of its output because **VtMB ships no map compiler**. It recovers the
+  keyvalue → `dworldlight_t.intensity` transfer —
+  `(colour/255)^2.2 · (brightness/255) · (const + 100·linear + 10000·quadratic)`, exact on all
+  16,378 origin-matched lights of all 108 maps — whose third factor is the light's own falloff
+  denominator at d = 100 units, so a compiled intensity is that light's radiance at 2.54 m. Lump
+  8 stores radiance ×255, so `stored luxel = 255 · intensity / falloff` and a light of brightness
+  `B` lands `(colour/255)^2.2 · B` at 100 units; the ×255 is measured off the sun, whose
+  sky-gated luxels sit on that ceiling at ×1.01 while carrying the sun's own chromaticity.
+  `--inventory` quotes the sky pair against each map's own lump-8 percentiles (the sun's ceiling
+  is a median 332% of the median lit face, the skyambient's 121% — a first-class term wherever
+  sky is visible); the per-map run adds a tracing half — luxel world positions rebuilt from
+  `lightmapVecs` + plane, sky visibility by a vectorised convex-brush trace classified on
+  `SURF_SKY` (0x4), with the sun as the control on the method. **`--provenance` is the one to
+  run first for any lump-8 work:** the Unofficial Patch recompiles 20 maps and adds 7 with a
+  later Source VRAD, so 27 of 108 bakes are not Troika's, and the probe refuses a non-retail
+  bake unless asked. Write-up: `../docs/sky-ambience.md` → "K6 …".
+
+## Sky-face orientation (offline check)
+
+**`probe_sky_orientation.py`** verifies the RE'd Source sky convention against the decoded
+`out/<map>/tex/sky_*.png`: it scores the horizon ring over every cyclic order × per-face
+mirror and `up`/`dn` over all eight dihedral transforms, by seam error against the cube the
+`engine.dll` tables predict, and reports the winner's margin so a low-contrast face reads as a
+tie rather than a match. The convention itself — face→axis binding (`rt`=+X, `lf`=−X, `bk`=+Y,
+`ft`=−Y, `up`=+Z, `dn`=−Z), the per-face basis, the `1 − t` texcoord flip, and the fact that
+**no face needs a rotation or mirror** — is written up in `../docs/sky-ambience.md` → "K1 …
+(settled)". The decoded faces are therefore already the canonical orientation.
+
+**`probe_sky_inventory.py`** is the whole-game sky/ambience inventory (RE-A7, K8): per map, the
+`skyname` and whether its six faces resolve, the `light_environment` rows, the WORLDLIGHTS type
+histogram (the type-3/type-5 sky pair), the `toolsskybox` face count, both fog sets
+(`worldspawn`'s and the `sky_camera`'s), and the 3D-skybox split — sky BSP `area`, its faces,
+and the static props / point entities / brush entities / worldlights inside it. Membership is
+the engine's own rule, `area(point_leaf(x)) == area(point_leaf(sky_camera.origin))` with `area`
+the low 9 bits of the `uint16` at leaf+6; a brush entity's point is its `models[N]` bbox centre
+plus its `origin` key, because vbsp re-centres the brushes of an entity that carries one. Prints
+a rollup, `--markdown` prints the doc tables, and it writes `out/_sky/inventory.json`. Findings:
+`../docs/sky-ambience.md` → "The full-game inventory".
+
+**`sky_probe.py`** is the in-game half (RE-A2): it authors six self-describing sky faces —
+suffix in large type, the predicted Source axis, a `TOP` banner and an up arrow, four
+distinctly-shaped corner markers, and the neighbour each edge meets in the unfolded cross —
+encodes them with `tex_from_png.encode_like` against the set they shadow, and installs them
+as loose `materials/skybox/` files the engine resolves before the VPKs. `--install` /
+`--uninstall` / `--status`; a manifest under `out/_skyprobe/` records every written path and
+sha256, and the `pier` set (the only sky the Unofficial Patch ships loose) is moved aside on
+install and restored on uninstall. Reference PNGs land in `out/_skyprobe/` and feed the
+runtime-side cube probe (B1) too. The prediction table and capture protocol:
+`../docs/sky-ambience.md` → "The in-game check (RE-A2)".
 
 ## Textures (.tth / .ttz — no .vtf on disk)
 
 Each texture is a pair under `materials/`: `<name>.tth` (header) + `<name>.ttz` (data).
 - `.tth`: `"TTH\0"` sig, a mip offset/size table, then an **embedded standard VTF
   header** starting at the `"VTF\0"` marker. Relative to that marker: `width` uint16 @16,
-  `height` uint16 @18, `highResFormat` uint32 @52, `mipCount` uint8 @56.
+  `height` uint16 @18, `reflectivity` float[3] @32, `highResFormat` uint32 @52,
+  `mipCount` uint8 @56. `reflectivity` is the average albedo `vtex` computed from the texture;
+  VtMB's engine multiplies every bounce ray by it when building a model's ambient cube
+  (`../docs/sky-ambience.md` → "K3 / K5"), so it is a decodable input, not dead header space.
 - `.ttz`: zlib-compressed (`78 da`) raw image data = DXT mip pyramid, ordered
   **smallest→largest** (full-res mip is LAST).
 - Formats seen: DXT5 (enum 15, most common), DXT1 (13), DXT3 (14), BGR888 (3),
@@ -243,6 +309,25 @@ Each texture is a pair under `materials/`: `<name>.tth` (header) + `<name>.ttz` 
 
 Decode (`tools/tex_to_png.py`): decompress `.ttz`, slice the last mip (size from the
 block formula), wrap DXT blocks in a minimal DDS header, let PIL decode → RGBA.
+
+Full `.tth` layout, as needed to **write** one (`tools/tex_from_png.py`, the inverse):
+`"TTH\0"`, `uint16 version` (1), `uint8 mip_count`, `uint8 inline_mips`, `uint32
+vtf_blob_len` (bytes from the `"VTF\0"` marker to EOF), then `mip_count + 1` pairs of
+`uint32 raw_offset, uint32 ttz_prefix`, then the embedded VTF 7.1 header (64 B), a
+low-res DXT1 16×16 thumbnail (128 B), and the `inline_mips` **smallest** mips. A mip's
+`raw_offset` is its position in the reconstructed `[header][thumbnail][mips]` image
+counted from the `"VTF\0"` marker, so the first mip sits at 192; `ttz_prefix` is how many
+compressed bytes precede it, which works because the `.ttz` is one zlib stream with a
+`Z_SYNC_FLUSH` between mips (`decompressobj().decompress(ttz[:prefix])` yields exactly the
+mips before it). Entry `mip_count` holds the two totals — end offset and `.ttz` length.
+Inline mips carry prefix 0. Retail textures keep their three smallest mips inline; the
+patch's uncompressed re-exports keep none and leave the per-mip columns unfilled, so only
+the totals row is load-bearing. `encode_like(template_tth, img)` clones a shipped
+texture's format, flags and mip policy, which is how a probe texture ships in the
+container the engine expects; BGR888 round-trips bit-exact, DXT5 within a re-encode.
+
+The writer exists for RE probes that need the *original game* to draw an authored image —
+VtMB has no loose `.vtf` path. It produces nothing the runtime consumes.
 
 Material resolution: material name → `materials/<name>.vmt` → `$basetexture` →
 `materials/<basetexture>.tth`/`.ttz`.
@@ -253,6 +338,16 @@ KeyValues text. `parse(text, resolve_include)` returns `basetexture` (normalized
 `\`→`/`, lowercased), `selfillum`, `translucent`, `alphatest`. Shader `"patch"`
 follows one `include`. `$selfillum "1"` means the base texture's **alpha channel is
 the emission mask** — emission = `RGB × (alpha/255)`, only masked pixels glow.
+
+**What a VMT's shader actually does is shipped as data, not compiled into a binary.**
+`materials/dxshaders/*.psh` are readable **ps.1.1 assembly source** with Valve's own comments
+intact, and `shaders/vsh/*.vcs` / `shaders/psh/*.vcs` are the compiled combos (a small offset
+header, then one DX8 bytecode program per static combo, each ending `ff ff 00 00`). Both
+resolve through `install.build_index` like any other asset. So "what does this material do to
+colour" is a file read, not a decompile — `unlitgeneric.psh` is `tex t0; mul r0, t0, v0`, and
+`lightmappedgeneric.psh` ends `mul_x2 r0.rgb, c0, r0   ; * 2 * (overbrightFactor/2)`, which is
+where `../docs/sky-ambience.md` → "K7" and `../docs/color_gamma.md` get the sky-vs-world
+brightness relationship from. Nothing here decodes them; there is no runtime consumer.
 
 ## Collision models (`.phy`, `tools/phy.py`)
 

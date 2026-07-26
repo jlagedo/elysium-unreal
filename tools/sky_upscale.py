@@ -9,9 +9,10 @@ horizontally (closes the loop seam) and reflect-pad vertically, upscale the whol
 strip once, then re-slice. up/dn are upscaled on their own (up = smooth sky,
 dn = near-black ground -> low seam risk).
 
-The cyclic order + per-face horizontal flip of the ring is auto-detected by
-minimising the pixel difference across each seam, so we don't have to hard-code the
-decode's face-orientation convention.
+The cyclic order + per-face horizontal flip of the ring is auto-detected by minimising
+the pixel difference across each seam. The convention it recovers is `bk, rt, ft, lf`
+unflipped — the decoded faces are already canonically oriented (`docs/sky-ambience.md`
+-> "K1 ... (settled)"); sky-ambience B2 replaces this solver with that constant.
 
 Usage:
     python sky_upscale.py --map la_hub_1 --model models/RealESRGAN_x4plus.pth

@@ -47,8 +47,11 @@ L_TEXDATA_STR_TABLE = 44
 #   surfaceFogVolumeID H @46 | styles[8] b @48 | day[8] b @56 | night[8] b @64 |
 #   lightofs i @72 | area f @76 | LightmapMins[2] i @80 | LightmapSize[2] i @88 |
 #   origFace i @96 | smoothingGroups i @100
-# `styles`/`day`/`night` are the VtMB day/night lightmapping system (MAXLIGHTMAPS=8),
-# NOT the modern styles[4]@68. We only read the offsets below, all confirmed correct.
+# The three 8-byte lightstyle arrays (MAXLIGHTMAPS=8) sit where modern Source has one
+# `styles[4]`@68. Only `styles`@48 is live: `day`@56 and `night`@64 are 0x00 on every
+# face of all 108 maps and no engine code reads those offsets, so lump 8 holds exactly
+# one bake (`../docs/sky-ambience.md` -> "K4"; probe: `probe_daynight.py`). The names
+# are bspsrc's. We only read the offsets below, all confirmed correct.
 FACE_SIZE       = 104
 FE_OFS          = 36   # firstedge  int32
 NE_OFS          = 40   # numedges   int16

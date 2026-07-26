@@ -92,8 +92,16 @@ namespace
 
 UTextureCube* ElysiumEnvironment::BuildSkyCube(const FString& TexDir)
 {
-	// Unreal cube face order +X,-X,+Y,-Y,+Z,-Z. Under our Source->Unreal transform
-	// (sx,-sy,sz), the Source sky faces map: +X=ft, -X=bk, +Y=rt, -Y=lf, +Z=up, -Z=dn.
+	// Unreal cube face order +X,-X,+Y,-Y,+Z,-Z.
+	//
+	// This binding is WRONG on every horizon face and the backdrop draws incorrectly because
+	// of it, in two separate ways. VtMB's own tables (engine.dll R_DrawSkyBox/MakeSkyVec, RE'd
+	// in docs/sky-ambience.md -> "K1 ... (settled)") put the Source faces on +X=rt, -X=lf,
+	// +Y=bk, -Y=ft, so under our Source->Unreal transform (sx,-sy,sz) the correct order here
+	// is rt, lf, ft, bk, up, dn. And a slice is the D3D face table applied to the raw Unreal
+	// world vector ("K2 ... (settled)"), which assumes Y-up where Unreal is Z-up, so each face
+	// also needs a rotation on the way in: rt 90 CCW, lf 90 CW, ft 180, bk none, up 90 CCW,
+	// dn 90 CCW. Both land together as sky-ambience B3.
 	static const TCHAR* FaceOrder[6] = { TEXT("ft"), TEXT("bk"), TEXT("rt"), TEXT("lf"), TEXT("up"), TEXT("dn") };
 
 	TArray64<uint8> Faces[6];

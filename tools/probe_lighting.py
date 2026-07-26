@@ -11,8 +11,9 @@ Dumps, per map:
     but the engine only USES the basis sets where the material has a normal map).
 
 Findings (ch_hub_1 / sm_hub_1 / sp_tutorial_1 / hw_hub_1 / la_hub_1):
-  HDR lumps 51-56,58 empty everywhere; day[]==night[]==0 everywhere (the night-
-  time lightmapping system was never baked). Lightstyles: hubs ~0-44 multi-style
+  HDR lumps 51-56,58 empty everywhere; day[]==night[]==0 everywhere -- since
+  confirmed over all 108 maps, and settled as dead fields rather than an unbaked
+  feature, by `probe_daynight.py` (docs/sky-ambience.md -> "K4"). Lightstyles: hubs ~0-44 multi-style
   faces, sp_tutorial 1473 (styles 0,1,6,32-34). Bumped lightmaps: hubs 31-1820
   faces on genuine $bumpmap materials; sp_tutorial all 10702 lit faces (VRAD
   -bumpall on the Hammer recompile). Byte-closure exact (residual 0-4 B).

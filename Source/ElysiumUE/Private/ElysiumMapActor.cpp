@@ -804,6 +804,10 @@ void AElysiumMapActor::ApplyEnvironment()
 	{
 		UMaterialInstanceDynamic* Mid = UMaterialInstanceDynamic::Create(Master, this);
 		Mid->SetTextureParameterValue(TEXT("SkyCube"), Cube);
+		// A divergence, not a calibration: VtMB writes the sky texel to the framebuffer
+		// unscaled and unfogged (sky-ambience.md → K7), so the faithful value is parity.
+		// The 4x lifts near-black night skies out of the tonemapper; D7 decides whether it
+		// stays.
 		Mid->SetScalarParameterValue(TEXT("Brightness"), 4.f);
 
 		TArray<FVector> Verts, Normals;

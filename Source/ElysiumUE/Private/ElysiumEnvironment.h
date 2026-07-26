@@ -22,8 +22,9 @@ struct FElysiumEnvDef
 namespace ElysiumEnvironment
 {
 	// The six Source sky faces (tex/sky_{ft,bk,rt,lf,up,dn}.png) -> a transient UTextureCube
-	// in Unreal face order (+X,-X,+Y,-Y,+Z,-Z). Used only as SkyLight IBL, so per-face
-	// rotation is irrelevant (the capture integrates the whole cube). Null if any face is
-	// missing or the faces are not square and equal-sized.
+	// in Unreal face order (+X,-X,+Y,-Y,+Z,-Z). It feeds the SkyLight IBL *and* the visible
+	// M_Sky backdrop, so both the face binding and the per-face rotation matter; the binding
+	// is currently wrong (see the .cpp). Null if any face is missing or the faces are not
+	// square and equal-sized.
 	UTextureCube* BuildSkyCube(const FString& TexDir);
 }

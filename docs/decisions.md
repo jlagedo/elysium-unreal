@@ -1140,5 +1140,54 @@ append a correction as a new entry.
      inverted an earlier decision to give those props generated collision. The runtime reproduces it
      off the asset's empty `AggGeom`; with the patch installed nothing reaches the path (27/27
      covered), so it is correctness insurance rather than live behaviour.
+- **2026-07-26 (cont.)** — **The sky & ambience decision set: D2/D3/D4/D5/D7 and B7's light
+  sub-decision, all resolved.** Owner calls, taken together once the sky-ambience RE closed
+  every unknown (K1–K8; `docs/sky-ambience.md`). The through-line: faithful defaults driven by
+  the data, divergence only through sanctioned, recorded, A/B-able channels.
+  1. **D2 — the SkyLight is data-driven, which means zero on 83 of 108 maps.** The SkyLight
+     actor stays on every map (Lumen keeps its sky-occlusion semantics), but its intensity comes
+     from the map's type-5 `emit_skyambient` magnitude at the RE-A5 scale on the 25 sky-pair
+     maps, and is **zero (black capture)** on the 83 maps that carry no `light_environment` —
+     including the 41 that draw sky through `toolsskybox` but take no light from it
+     (`sm_hub_1` is the plurality case, not an oddity). "Shows sky" and "is lit by sky" are two
+     independent flags in the `.env` contract. The no-pair maps may read darker until C3/C5
+     compensate; that exposes the load-bearing-fill question rather than masking it, which is
+     the point.
+  2. **B7 — the 1,442 sky-area worldlights are re-placed inside the sky transform** (position
+     scaled, reach × `scale` 16), completing the standing "full reproduce" scope call on B7.
+     VtMB's light cache lit the miniature's props from exactly these lump-15 rows (RE-A3/A8),
+     so deleting them would un-light authored content. They come out of the world rig and out
+     of the fill-vs-fixture survey sample unconditionally. Scaled-down radii may need a floor
+     clamp against degenerate lights — an implementation note, not a scope change.
+  3. **D7 — the sky backdrop ships at parity; the multiplier becomes a debug cvar.** VtMB's
+     transfer is the identity (RE-A9), so the faithful default is the value B4 calibrates to
+     land an Unreal sky texel at *displayed* parity with VtMB's gamma-space path — not
+     literally 1.0 under our tonemapper. The hand `Brightness 4` (tuned against the
+     wrongly-assembled cube) is retired; an `elysium.*` cvar keeps the multiplier for A/B. If
+     night skies then read crushed against the world, the fix is the world side via the D3
+     knobs — the backdrop is never lifted.
+  4. **D3 — the sanctioned Lumen knobs land as mechanism now, values only on evidence.** C3's
+     tagged per-map PPV ships with neutral defaults (no Skylight Leaking, Indirect Lighting
+     Intensity 1.0). A non-neutral value is set only where C4's calibration or C5's survey
+     shows a measured deficit, one dated entry per map when it happens. Ambient Cubemap stays
+     banned.
+  5. **D4 — fog is modernized, with the RE-hardened scoping folded in.** Unreal
+     exponential-height/volumetric fog replaces Source's planar distance fog (presentation
+     layer, existing accepted divergence formalised). World fog is sourced from **`worldspawn`**
+     (fixing the 12 maps whose authored fog is dropped and the 5 fogged against a `worldspawn`
+     that never asked); the `sky_camera` set is scoped to the **miniature only**; the 2D
+     backdrop is **never** fogged (`$nofog 1` on every shipped sky face → `FogMode(0)`,
+     RE-A9).
+  6. **D5 — upscaled sky faces are a default-off A/B layer** behind the
+     `elysium.EnhancedTextures`-family toggle; the faithful default remains the decoded
+     originals. Because the original transfer is the identity, an accepted upscale must
+     preserve absolute texel values — the pass gains a mean/histogram acceptance check against
+     the source face.
+  With these, **D1 is confirmed as the charter default it always resolved to**: the
+  faithful-ambience target is lump 8 at the shared vantages, *measured* — now in absolute
+  units (`stored luxel = 255 · intensity / falloff`, RE-A5) and restricted to Troika's 81
+  retail bakes (provenance split). **D6 dissolved** — first-wins matches both the runtime and
+  the bake, so it is a correction (C0a), not a decision. The full decision table with
+  outcomes: `docs/sky-ambience.md` → "Decisions".
 - **Pending** — 5.5 level-script execution strategy (interpreter vs transpile vs CPython);
   10.6 EnhancedInput migrate-or-remove.

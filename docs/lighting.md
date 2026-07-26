@@ -26,8 +26,14 @@ Design rationale and the phase-by-phase migration record (baked → real-time) l
 
 Lump 15 is VtMB's compiled light-*source* set: every point, spot, sun, sky-ambient, and
 emit-surface (texlight) the artists placed, including texlights and skyambient that no
-entity carries. It is the complete set the engine actually rendered from, and it is the
-primary lighting input.
+entity carries. It is the complete authored source set, and it is this project's primary
+lighting input.
+
+**It is not what the original engine rendered the world from.** VtMB's world surfaces are lit
+by the baked lightmaps (lump 8) alone; at runtime lump 15 is read only by the model light
+cache, which lights dynamic models and static props. Decompiled in RE-A3 —
+`docs/sky-ambience.md` → "K3 / K5". Driving real-time lights from lump 15 is therefore a
+reconstruction of the authored look, not a reproduction of a path the game had.
 
 `bsp.read_worldlights` decodes the standard 88-byte `dworldlight_t`: `origin`@0,
 `intensity`@12 (**linear RGB**, can exceed 1 — seen up to ~143 000), `normal`@24 (beam
@@ -37,10 +43,13 @@ direction), `type`@40, `style`@44, `stopdot`/`stopdot2`/`exponent`@48/52/56 (spo
 unused on the test maps.)
 
 Counts across the test set: point (1) 10–300, spot (2) 12–464, texlight (0) 0–32.
-**Sky-pair presence varies by export set:** on the Godot-era test set only `sp_ninesintro` and
-`sp_tutorial_1` carried a skylight (3) + skyambient (5); on Elysium-Unreal's 10-map export set
-it is 6 of 10, `ch_temple_1` carries **three** of each (multiple `light_environment`s), and the
-outdoor `sm_hub_1` carries none (its sky glow is sprayed fill). Inventory + the RE plan:
+**Sky-pair presence, measured over all 108 maps:** 25 carry a skylight (3) + skyambient (5),
+and the two types are never separated — the game's 33 of each sit in those same 25 maps, whose
+19,197 worldlights are otherwise 8,523 point, 8,179 spot and 2,429 texlight. Five maps carry
+several `light_environment`s (`sm_warehouse_1` 4, `ch_temple_1` and `sp_taxiride` 3,
+`sp_observatory_2` and `sp_soc_2` 2); the outdoor `sm_hub_1` carries none, so its sky glow is
+sprayed fill. (The Godot-era test set saw the pair on only `sp_ninesintro` and `sp_tutorial_1`
+— a sample effect: those were the pair maps it happened to hold.) Full inventory + the RE plan:
 `docs/sky-ambience.md`.
 
 ## Export — the `.lights` sidecar (`write_lights`)
