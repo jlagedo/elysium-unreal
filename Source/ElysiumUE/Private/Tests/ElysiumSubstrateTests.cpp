@@ -19,6 +19,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEnvironment.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumFog.h"
 #include "ElysiumEventQueue.h"
 #include "ElysiumExpr.h"
 #include "ElysiumKeyValues.h"
@@ -1170,6 +1171,60 @@ bool FElysiumSkyCubeTest::RunTest(const FString&)
 		TestTrue(FString::Printf(
 			TEXT("slice %d (%s): every texel looks where VtMB's tables say (worst 1-dot %g)"),
 			Slice, *Face, Worst), Worst < 1e-12);
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// The per-primitive fog packing (sky-ambience B8b). The whole term rests on one property:
+// an unwritten custom-primitive-data slot reads as zero, and zero must mean "not fogged" —
+// so the material stays neutral on anything nobody stamped, with no branch to get wrong.
+// This checks the packing keeps that property, and reproduces Source's own factor.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFogPackTest, "Elysium.Substrate.FogPack", GElysiumTestFlags)
+bool FElysiumFogPackTest::RunTest(const FString&)
+{
+	// The slots the material graph reads (tools/mat_fog.py) and the bake writes
+	// (tools/bake_map.py FOG_CPD_*). A colour is a float4, so it owns 0..3.
+	TestEqual(TEXT("colour is the first slot"), ElysiumFog::SlotColor, 0);
+	TestEqual(TEXT("start follows the colour's float4"), ElysiumFog::SlotStart, 4);
+	TestEqual(TEXT("inverse range follows start"), ElysiumFog::SlotInvRange, 5);
+	TestEqual(TEXT("six floats in all"), ElysiumFog::NumFloats, 6);
+
+	const FLinearColor Color(0.25f, 0.5f, 0.75f, 1.f);
+	TArray<float> Data;
+
+	// A map that authored fog: the factor is Source's own saturate((d - start) / (end - start)).
+	ElysiumFog::Pack(true, Color, 1270.f, 12700.f, Data);
+	TestEqual(TEXT("packed float count"), Data.Num(), ElysiumFog::NumFloats);
+	// The authored colour is gamma-encoded, like every VtMB colour, and lands linear.
+	for (int32 C = 0; C < 3; ++C)
+	{
+		TestTrue(FString::Printf(TEXT("colour channel %d decodes to linear"), C),
+			FMath::IsNearlyEqual(Data[ElysiumFog::SlotColor + C],
+				FMath::Pow(Color.Component(C), 2.2f), 1e-6f));
+	}
+	TestEqual(TEXT("start passes through"), Data[ElysiumFog::SlotStart], 1270.f);
+	TestTrue(TEXT("the inverse range spans start->end"),
+		FMath::IsNearlyEqual(Data[ElysiumFog::SlotInvRange], 1.f / (12700.f - 1270.f), 1e-9f));
+	// At `end` the surface is gone and only the fog's own colour is left; at `start`, nothing yet.
+	TestTrue(TEXT("f is 1 at the authored end"), FMath::IsNearlyEqual(
+		(12700.f - Data[ElysiumFog::SlotStart]) * Data[ElysiumFog::SlotInvRange], 1.f, 1e-5f));
+	TestEqual(TEXT("f is 0 at the authored start"),
+		(1270.f - Data[ElysiumFog::SlotStart]) * Data[ElysiumFog::SlotInvRange], 0.f);
+
+	// The three ways a map says "no fog" must all land on the zero an unwritten slot reads as:
+	// the flag is off (23 of the 43 sky_camera maps), or the range is degenerate.
+	for (const TTuple<bool, float, float>& Off : {
+			MakeTuple(false, 1270.f, 12700.f),   // authored, but fogenable 0
+			MakeTuple(true, 12700.f, 12700.f),   // start == end
+			MakeTuple(true, 12700.f, 1270.f) })  // end before start
+	{
+		ElysiumFog::Pack(Off.Get<0>(), Color, Off.Get<1>(), Off.Get<2>(), Data);
+		TestEqual(TEXT("an unfogged set packs the same zero an unwritten slot reads"),
+			Data[ElysiumFog::SlotInvRange], 0.f);
 	}
 
 	return true;

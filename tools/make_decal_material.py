@@ -6,14 +6,22 @@
 # included, which the fully-dynamic render path relies on.
 #
 # BaseColor = Albedo.rgb, Opacity = Albedo.a (alpha-blended overlay), plus the same alpha-masked
-# $selfillum emissive path as M_VtMB_World (Emissive x EmissiveScale, off by default). A UMaterial
-# graph only compiles offline, so this is authored here once and committed; the runtime only
-# instances it (FElysiumMaterialFactory::BuildDecal binds Albedo / Emissive / EmissiveScale).
+# $selfillum emissive path as M_VtMB_World (Emissive x EmissiveScale, off by default), plus the
+# world's own distance fog (FogColor / FogStart / FogInvRange), which a decal must reproduce
+# because it blends into the GBuffer the wall already fogged. A UMaterial graph only compiles
+# offline, so this is authored here once and committed; the runtime only instances it
+# (FElysiumMaterialFactory::BuildDecal binds Albedo / Emissive / EmissiveScale).
 #
 # Normally rebuilt by the umbrella (content.bat -> tools/build_content.py, which the export runs);
 # also runnable standalone:
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript -script="tools/make_decal_material.py" -unattended -nosplash -nopause
+import os
+import sys
+
 import unreal
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import mat_fog
 
 PKG = "/Game/VtMB/Materials"
 NAME = "M_Decal"
@@ -66,8 +74,19 @@ albedo.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYP
 if default_tex:
     albedo.set_editor_property("texture", default_tex)
 mel.connect_material_expressions(decal_uv, "", albedo, "UVs")
-mel.connect_material_property(albedo, "RGB", unreal.MaterialProperty.MP_BASE_COLOR)
 mel.connect_material_property(albedo, "A", unreal.MaterialProperty.MP_OPACITY)
+
+# Source's distance fog (mat_fog / sky-ambience B8b). A deferred decal blends BaseColor,
+# Specular and Emissive INTO the GBuffer the wall already wrote, so a decal that skipped the term
+# would erase the wall's fog over its own patch and read unfogged against it. Bound from named
+# parameters rather than Custom Primitive Data: a UDecalComponent is a USceneComponent and
+# carries none. It needs none -- a decal is only ever a world surface, never miniature, so the
+# per-map `worldspawn` value the bake binds is the whole requirement.
+fog_f, fog_inv, fog_color = mat_fog.fog_from_params(mat, x=-1400, y=1000)
+mel.connect_material_property(mat_fog.fade(mat, albedo, "RGB", fog_inv, -250, -40),
+                              "", unreal.MaterialProperty.MP_BASE_COLOR)
+mel.connect_material_property(mat_fog.specular(mat, fog_inv, -450, 1400),
+                              "", unreal.MaterialProperty.MP_SPECULAR)
 
 # Emissive: the per-decal alpha-masked self-illum map (rare -- glowing signs/graffiti), mirroring
 # M_VtMB_World. EmissiveScale defaults to 0, so a decal without a bound `map_Ke` never glows; the
@@ -86,7 +105,10 @@ scale.set_editor_property("default_value", 0.0)
 mul = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -250, 340)
 mel.connect_material_expressions(emis, "RGB", mul, "A")
 mel.connect_material_expressions(scale, "", mul, "B")
-mel.connect_material_property(mul, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+mel.connect_material_property(
+    mat_fog.inscatter(mat, mat_fog.fade(mat, mul, "", fog_inv, -60, 340),
+                      fog_f, fog_color, 160, 340),
+    "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
 
 mel.recompile_material(mat)
 if unreal.EditorAssetLibrary.save_asset(ASSET, only_if_is_dirty=False):

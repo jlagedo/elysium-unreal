@@ -7,6 +7,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumFog.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumEnvironment.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -124,6 +125,18 @@ static TAutoConsoleVariable<float> CVarDiffuseColorBoost(
 	     "the bounce and 1 is neutral. Negative = neutral (no override)."),
 	ECVF_Default);
 
+// Source's distance fog, on (1) or off (0), for A/B. It is a per-primitive material term rather
+// than the height fog actor because the world and the 3D-skybox miniature carry two different
+// fogs and share screen depth — the reasoning and its measurement are in ElysiumFog.h. Live:
+// ApplySceneFog re-stamps every primitive as it changes, so an A/B needs no reload. It does not
+// reach the map's decals, whose fog is bound into their baked material instances (a
+// UDecalComponent is a USceneComponent and carries no custom primitive data).
+static TAutoConsoleVariable<int32> CVarFog(
+	TEXT("elysium.Fog"), 1,
+	TEXT("Apply the map's authored distance fog (1) or none (0). World and 3D-skybox miniature "
+	     "take their own sets, from worldspawn and sky_camera."),
+	ECVF_Default);
+
 // Assemble the sky cube from the labelled RE-A2 probe faces instead of the map's own (0/1).
 // Each face states its suffix, the axis it belongs on, which way is up and which face each of
 // its edges meets, so a wrong slice binding, a rotation, a mirror and a broken seam are four
@@ -233,6 +246,11 @@ void AElysiumMapActor::BeginPlay()
 	CVarSkylightLeaking.AsVariable()->SetOnChangedCallback(Knobs);
 	CVarSkylightLeakingDistance.AsVariable()->SetOnChangedCallback(Knobs);
 	CVarDiffuseColorBoost.AsVariable()->SetOnChangedCallback(Knobs);
+
+	// Same for the fog A/B: it re-stamps the primitives already placed.
+	CVarFog.AsVariable()->SetOnChangedCallback(
+		FConsoleVariableDelegate::CreateWeakLambda(this,
+			[this](IConsoleVariable*) { ApplySceneFog(); }));
 
 	LoadMap();
 }
@@ -933,6 +951,12 @@ void AElysiumMapActor::ApplyEnvironment()
 {
 	FElysiumEnvDef Env;
 	const bool bHaveEnv = FElysiumEnvDef::Parse(FElysiumContentPaths::MapEnv(MapName), Env);
+	EnvDef = Env;
+
+	// Before anything sky-shaped: the fog belongs to every primitive in the level, including on
+	// the 65 maps with no sky_camera and the ones whose faces did not decode.
+	ApplySceneFog();
+
 	if (!bHaveEnv || !Env.bSky)
 	{
 		// No sky faces to build a cube from — but the SkyLight's *level* is still data (D2), and
@@ -1101,6 +1125,49 @@ void AElysiumMapActor::ApplySkyBrightness()
 	{
 		SkyMid->SetScalarParameterValue(TEXT("Brightness"), CVarSkyBrightness.GetValueOnGameThread());
 	}
+}
+
+void AElysiumMapActor::ApplySceneFog()
+{
+	// The bake already stamped these, so the level looks right the moment it is opened. The
+	// runtime re-derives them anyway, the same way it re-derives every light's intensity: the
+	// numbers belong to `<map>.env`, and a sidecar re-export must not need a re-bake to take.
+	const bool bOn = CVarFog.GetValueOnGameThread() != 0;
+
+	TArray<float> WorldData, SkyData;
+	ElysiumFog::Pack(bOn && EnvDef.bFog, EnvDef.FogColor, EnvDef.FogStartCm, EnvDef.FogEndCm,
+		WorldData);
+	// The miniature's distances arrive already multiplied by the 3D-skybox scale, because the
+	// pass renders at 1/scale — a skybox-space distance is `scale` times as far in the world.
+	ElysiumFog::Pack(bOn && EnvDef.bSkyFog, EnvDef.SkyFogColor, EnvDef.SkyFogStartCm,
+		EnvDef.SkyFogEndCm, SkyData);
+
+	auto Stamp = [](const TArray<TObjectPtr<AStaticMeshActor>>& Actors, const TArray<float>& Data)
+	{
+		int32 Count = 0;
+		for (const TObjectPtr<AStaticMeshActor>& Actor : Actors)
+		{
+			if (UStaticMeshComponent* Comp = Actor ? Actor->GetStaticMeshComponent() : nullptr)
+			{
+				Comp->SetCustomPrimitiveDataFloatArray(ElysiumFog::SlotColor, Data);
+				++Count;
+			}
+		}
+		return Count;
+	};
+
+	const int32 WorldStamped = Stamp(WorldActors, WorldData) + Stamp(PropActors, WorldData);
+	const int32 SkyStamped = Stamp(SkyActors, SkyData);
+
+	auto Describe = [](const TArray<float>& Data)
+	{
+		return Data[ElysiumFog::SlotInvRange] > 0.f
+			? FString::Printf(TEXT("%.0f->%.0fcm"), Data[ElysiumFog::SlotStart],
+				Data[ElysiumFog::SlotStart] + 1.f / Data[ElysiumFog::SlotInvRange])
+			: FString(TEXT("off"));
+	};
+	UE_LOG(LogElysium, Log, TEXT("fog: world %s on %d primitives, 3D skybox %s on %d"),
+		*Describe(WorldData), WorldStamped, *Describe(SkyData), SkyStamped);
 }
 
 bool AElysiumMapActor::ReadSpawn(FVector& OutLocation, float& OutYaw) const

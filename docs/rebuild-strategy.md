@@ -144,7 +144,7 @@ All under `tools/out/<map>/`. Formats are fixed by the pipeline and shared with 
 | `.lights` | one line per WORLDLIGHTS source: `type origin dir rgb radius stopdot stopdot2 exponent style sky` (rgb at six decimals — the type-5 row is the map's whole ambient level) | text |
 | `.sprites` | env_sprite coronas: `texpath pos w h rgb amt orient sky` | text, Unreal cm (sizes = `scale × texpx × INCH_TO_CM`) |
 | `.spawn` | `info_player_start` origin + yaw | text, Unreal cm (yaw pre-negated) |
-| `.env` | skybox flag/name, sky-face orientation convention (`skyconv`), and **two** fog sets — `fog*` from `worldspawn` (the world's) and `skyfog*` from `sky_camera` (the 3D-skybox pass's own, distances ×`scale` into world units) | text, Unreal cm |
+| `.env` | skybox flag/name, sky-face orientation convention (`skyconv`), and **two** fog sets — `fog*` from `worldspawn` (the world's) and `skyfog*` from `sky_camera` (the 3D-skybox pass's own, distances ×`scale` into world units). Colours are the authored value **/255, still gamma-encoded** — the consumer decodes with a plain 2.2 | text, Unreal cm |
 | `.water` | per-material plane, normalmap, fogcolor/dist, reflecttint | text, Unreal cm (plane Z + fogdist) |
 | `.cube` | color-grade LUT | Adobe .cube |
 | `.decals` | infodecal projectors: `material centre normal s_dir t_dir hw hh` (one deferred UDecalComponent per line) | text, Unreal cm (dirs unit; extents cm) |
@@ -171,7 +171,7 @@ Unreal-native substitutions:
 | `WaterReflector.cs` (SubViewport mirror) | **Single Layer Water** material + Lumen/SSR reflections | no manual mirror camera — strict upgrade. |
 | decals (corner-wrapped quads) | **`UDecalComponent`** deferred projection from the `.decals` sidecar (`M_Decal`, `DBM_TRANSLUCENT`) | went straight to deferred (the PMC-parity stage was skipped): a GBuffer decal is lit like its host wall, Lumen indirect included. |
 | `.cube` LUT | post-process Color Grading LUT (transient `UTexture` into per-map `FPostProcessSettings`) | native. |
-| `.env` | sky material from six sky PNGs + `UExponentialHeightFogComponent` | native. |
+| `.env` | sky material from six sky PNGs + a **per-primitive distance-fog term** in the surface masters (`ElysiumFog.h`); `UExponentialHeightFogComponent` keeps the volumetric layer | native. The distance fog cannot be an engine fog: the world and the 3D-skybox miniature carry two authored sets and share screen depth. |
 | `SourceMovement.cs` / `PlayerController.cs` | custom `UCharacterMovementComponent` override | port the Source `CGameMovement` math line-by-line — `SourceMovement.cs` + `docs/source_movement.md` are the reference. Friction/accel/airaccel/StepMove constants verified against the decompile. |
 | props (`MultiMesh`) | `UInstancedStaticMeshComponent` per unique model | static mesh built at runtime from `props/*.obj` (`FStaticMeshRenderData` path or PMC per model); `solid != 0` instances get convex collision from the render mesh. |
 | VGUI2 menu (`Ui/Vgui/*`) | **modern Slate/UMG UI** (not a VGUI port) | Screen inventory, panel anatomy, hierarchy and iconography carry over from `.res`/`trackerscheme.res`; the runtime is a resolution-independent Slate/UMG stack with vector type. No 640×480 scale box, no bitmap `.fnt` atlas, no classic mode. `remaster-direction.md` → axis 1; the Godot VGUI implementation and `m0_menu_build.md` are structural reference. |

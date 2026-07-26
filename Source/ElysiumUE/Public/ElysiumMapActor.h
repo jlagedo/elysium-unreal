@@ -189,6 +189,10 @@ private:
 	// with no `sky_camera`. Read at map load and used twice: the def parser carries sky-scope
 	// entities through it, and a miniature body takes its uniform mesh scale from it.
 	FElysiumSkyDef SkyDef;
+	// B8/B8b — `<map>.env`: the sky name and orientation convention, and the map's TWO fog sets
+	// (`worldspawn`'s for the world, `sky_camera`'s for the miniature). Kept past load so
+	// `elysium.Fog` can re-stamp the primitives live.
+	FElysiumEnvDef EnvDef;
 	UPROPERTY() TObjectPtr<UElysiumLightRig> LightRig;
 
 	// Adopted from the baked level (not owned): the map's ambience. Their tuning fields are driven
@@ -285,6 +289,11 @@ private:
 	// Push elysium.SkyBrightness onto the live backdrop MID. The faithful value is 1 (D7): VtMB's
 	// sky transfer is the identity, so this is an A/B knob, not a calibration. No-op with no sky.
 	void ApplySkyBrightness();
+	// B8b — stamp each adopted primitive with the fog set that owns it: `worldspawn`'s on the
+	// world and its props, the `sky_camera`'s on the 3D-skybox miniature. Custom primitive data,
+	// because the two share screen depth and a deferred fog pass cannot scope by anything else
+	// (ElysiumFog.h). Re-run by elysium.Fog, which stamps zeros instead.
+	void ApplySceneFog();
 	bool ReadSpawn(FVector& OutLocation, float& OutYaw) const;
 	// P4.6 — if this load is a landmark transition (the map subsystem has a queued landmark spawn),
 	// override the info_player_start placement: resolve the destination `info_landmark` in the just-

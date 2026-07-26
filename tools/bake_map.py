@@ -83,6 +83,16 @@ TAG_PPV = "elysium.ppv"
 # axis. Kept shallow so a decal catches its host wall and not the geometry behind it.
 DECAL_HALF_DEPTH = 16.0
 
+# Source's distance fog is a PER-PRIMITIVE material term, not the height fog actor: the world and
+# the 3D-skybox miniature carry two different fogs and share screen depth, so no engine-side fog
+# mechanism can separate them (the reasoning and the measurement are in tools/mat_fog.py). These
+# are the Custom Primitive Data slots that term reads. Keep in sync with mat_fog.CPD_* and
+# Source/ElysiumUE/Public/ElysiumFog.h.
+FOG_CPD_COLOR = 0        # float4: linear RGB, then an unused A
+FOG_CPD_START = 4
+FOG_CPD_INV_RANGE = 5
+FOG_CPD_FLOATS = 6
+
 ALL_STAGES = ("textures", "materials", "world", "sky", "props", "level")
 
 
@@ -106,6 +116,36 @@ def _dir_rotator(direction):
 
 def fail(msg):
     unreal.log_error("[bake] %s" % msg)
+
+
+def fog_color(env, prefix=""):
+    """One `.env` fog colour, decoded to linear. `.env` transports the authored value verbatim
+    (/255); VtMB's colours are gamma-encoded and its own math decodes them with a plain 2.2
+    (RE-A5), which is also what an albedo texture gets on import. The magnitudes agree: the maps'
+    own sky radiance is 0.0034-0.0066, so an undecoded 17/255 = 0.067 would put the fog well
+    above the world it hangs in. Full reasoning: Source/ElysiumUE/Public/ElysiumFog.h."""
+    rgb = env.get(prefix + "fogcolor", ["0", "0", "0"])
+    return [max(0.0, float(c)) ** 2.2 for c in rgb[:3]]
+
+
+def fog_data(env, prefix=""):
+    """The FOG_CPD_FLOATS custom-primitive floats for one `.env` fog set: "" is `worldspawn`'s
+    (the world's own) and "sky" is the `sky_camera`'s (the miniature's, its distances already
+    x scale into world units by the exporter).
+
+    A set that is off -- or degenerate -- yields an inverse range of 0, which is precisely what an
+    unwritten slot reads as, so "no fog" and "never written" are the same thing everywhere."""
+    on = env.get(prefix + "fog", ["0"])[0] == "1"
+    start = float(env.get(prefix + "fogstart", ["0"])[0])
+    end = float(env.get(prefix + "fogend", ["0"])[0])
+    return fog_color(env, prefix) + [1.0,
+            start, 1.0 / (end - start) if on and end > start else 0.0]
+
+
+def set_fog(component, data):
+    """Stamp a fog set onto one primitive. The default (serialized) slot, not the transient one:
+    the level has to look right when it is opened in the editor, before any game runs."""
+    component.set_default_custom_primitive_data_float_array(FOG_CPD_COLOR, data)
 
 
 def cmdline_arg(key, default=""):
@@ -141,6 +181,7 @@ class Bake(object):
         self.prop_skins = {}             # stem -> {family: {authored material: family material}}
         self.prop_phys = {}              # stem -> {"mass": kg, "hulls": [(verts, tris)]}
         self.masters = {}
+        self.env = {}                    # <map>.env, key -> [tokens]
         self.saved = []                  # asset paths pending save
 
     # ------------------------------------------------------------------ inputs
@@ -159,6 +200,7 @@ class Bake(object):
         if not os.path.isfile(obj_path):
             fail("no export at %s" % obj_path)
             return False
+        self.env = self._read_env()
         start = time.time()
         self.world_obj = bl.read_obj(obj_path)
         self.world_mats = bl.read_mtl(os.path.join(self.dir, "%s.mtl" % self.map))
@@ -295,9 +337,18 @@ class Bake(object):
         if emissive:
             bl.set_tex_param(mic, "Emissive", emissive)
             bl.set_scalar_param(mic, "EmissiveScale", EMISSIVE_SCALE)
-        # M_Decal carries only the albedo (RGB -> BaseColor, A -> Opacity) and that same
-        # alpha-masked self-illum path; the surface it projects onto owns the rest.
+        # M_Decal carries only the albedo (RGB -> BaseColor, A -> Opacity), that same
+        # alpha-masked self-illum path, and the world's fog; the surface it projects onto owns
+        # the rest. The fog is bound here rather than as custom primitive data because a
+        # UDecalComponent is a USceneComponent and carries none -- and needs none, since a decal
+        # is only ever a world surface. Without it the decal would blend an unfogged patch into
+        # the GBuffer its wall already fogged.
         if mat.decal:
+            fog = fog_data(self.env)
+            bl.set_vector_param(mic, "FogColor",
+                                unreal.LinearColor(fog[0], fog[1], fog[2], fog[3]))
+            bl.set_scalar_param(mic, "FogStart", fog[4])
+            bl.set_scalar_param(mic, "FogInvRange", fog[5])
             return
         bump = tex(mat.bump)
         if bump:
@@ -714,14 +765,16 @@ class Bake(object):
             actor.tags = [TAG_SKYLIGHT]
             actor.set_folder_path("Environment")
 
-        env = {}
-        env_path = os.path.join(self.dir, "%s.env" % self.map)
-        if os.path.isfile(env_path):
-            with open(env_path, "r", encoding="utf-8", errors="replace") as handle:
-                for line in handle:
-                    tok = line.split()
-                    if len(tok) >= 2:
-                        env[tok[0]] = tok[1:]
+        # The height fog is NOT the map's distance fog -- that is a per-primitive material term
+        # now (B8b), because the world and the miniature carry two different fogs and share
+        # screen depth. What is left here is the VOLUMETRIC layer: participating media the map's
+        # hundreds of dynamic lights shaft through, which is the Presentation-layer modernization
+        # D4 sanctioned and which no per-surface term can produce. Its analytic contribution is
+        # a residue rather than a design: the engine divides both FogDensity and FogHeightFalloff
+        # by 1000, so at 3/end this integrates to under 0.2% across a whole map, and the backdrop
+        # is cut off before it anyway (AElysiumMapActor::FogCutoffCm). Calibrating the volumetric
+        # layer for its own sake is open -- at this density it, too, is near-invisible.
+        env = self.env
         if env.get("fog", ["0"])[0] == "1":
             fog = actors.spawn_actor_from_class(unreal.ExponentialHeightFog,
                                                 unreal.Vector(0.0, 0.0, 0.0))
@@ -729,9 +782,11 @@ class Bake(object):
                 component = fog.component
                 start_cm = float(env.get("fogstart", [0.0])[0])
                 end_cm = max(float(env.get("fogend", [1.0])[0]), start_cm + 1.0)
-                color = env.get("fogcolor", ["1", "1", "1"])
+                # Same decode as the per-primitive term, so the two layers agree on what a
+                # colour means rather than sitting 30x apart.
+                color = fog_color(env)
                 component.set_editor_property("fog_inscattering_luminance", unreal.LinearColor(
-                    float(color[0]), float(color[1]), float(color[2]), 1.0))
+                    color[0], color[1], color[2], 1.0))
                 component.set_editor_property("start_distance", start_cm)
                 component.set_editor_property("fog_height_falloff", 0.02)
                 component.set_editor_property(
@@ -779,6 +834,12 @@ class Bake(object):
         # and sits at scale * (pivot - origin).
         sky_scale, sky_origin = self._read_sky()
 
+        # The world's fog and the miniature's, from their two owners (`worldspawn` and
+        # `sky_camera`, RE-A8). Each primitive carries its own set as custom primitive data,
+        # which is the only way to fog two things differently when they share screen depth.
+        world_fog = fog_data(self.env)
+        sky_fog = fog_data(self.env, "sky")
+
         placed = 0
         for asset_path in sorted(unreal.EditorAssetLibrary.list_assets(
                 self.mesh_pkg, recursive=False, include_folder=False)):
@@ -803,6 +864,7 @@ class Bake(object):
             component = actor.static_mesh_component
             component.set_static_mesh(static_mesh)
             component.set_collision_profile_name(PROFILE_PICK_ONLY)
+            set_fog(component, sky_fog if is_sky else world_fog)
             actor.tags = [TAG_SKY if is_sky else TAG_WORLD]
             if is_sky:
                 actor.set_actor_scale3d(unreal.Vector(sky_scale, sky_scale, sky_scale))
@@ -815,9 +877,13 @@ class Bake(object):
             placed += 1
         log("level: %d world/sky actors" % placed)
 
-        props, sky_props = self._place_props(actors, sky_scale, sky_origin)
+        props, sky_props = self._place_props(actors, sky_scale, sky_origin, world_fog, sky_fog)
         log("level: %d prop actors (%d in the 3D skybox)" % (props, sky_props))
         log("level: %d decal actors" % self._place_decals(actors))
+        log("fog: world %s, 3D skybox %s" % (
+            "%.0f->%.0fcm" % (world_fog[4], world_fog[4] + 1.0 / world_fog[5])
+            if world_fog[5] else "off",
+            "%.0f->%.0fcm" % (sky_fog[4], sky_fog[4] + 1.0 / sky_fog[5]) if sky_fog[5] else "off"))
         lights, sky_lights, sky_ambient = self._place_lights(actors, sky_scale, sky_origin)
         log("level: %d light actors (%d in the 3D skybox)" % (lights, sky_lights))
         self._place_sky(actors, sky_ambient)
@@ -828,6 +894,18 @@ class Bake(object):
             log("level: saved %s (%.1fs)" % (map_path, time.time() - start))
         else:
             fail("level save failed: %s" % map_path)
+
+    def _read_env(self):
+        """<map>.env as key -> [tokens]. Absent on a map with no environment sidecar at all."""
+        env = {}
+        path = os.path.join(self.dir, "%s.env" % self.map)
+        if os.path.isfile(path):
+            with open(path, "r", encoding="utf-8", errors="replace") as handle:
+                for line in handle:
+                    tok = line.split()
+                    if len(tok) >= 2:
+                        env[tok[0]] = tok[1:]
+        return env
 
     def _read_sky(self):
         """(scale, origin) from the .sky sidecar. 16 / world origin is the Source default."""
@@ -845,7 +923,8 @@ class Bake(object):
                     scale = float(tok[1])
         return scale, origin
 
-    def _place_props(self, actors, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
+    def _place_props(self, actors, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0),
+                     world_fog=None, sky_fog=None):
         """One StaticMeshActor per .props line: `stem x y z qx qy qz qw solid [skin [sky]]`."""
         path = os.path.join(self.dir, "%s.props" % self.map)
         if not os.path.isfile(path):
@@ -891,6 +970,9 @@ class Bake(object):
                 # simply have no skin.
                 if len(tok) >= 10 and int(tok[9]) != 0:
                     skinned += self._apply_prop_skin(component, mesh, stem, int(tok[9]))
+                fog = sky_fog if is_sky else world_fog
+                if fog:
+                    set_fog(component, fog)
                 if is_sky:
                     actor.set_actor_scale3d(unreal.Vector(sky_scale, sky_scale, sky_scale))
                     # Same reasoning as the sky world meshes: blown up 16x the miniature encloses

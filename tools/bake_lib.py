@@ -438,6 +438,10 @@ def set_scalar_param(mic, param, value):
     _mel.set_material_instance_scalar_parameter_value(mic, param, value)
 
 
+def set_vector_param(mic, param, value):
+    _mel.set_material_instance_vector_parameter_value(mic, param, value)
+
+
 def build_dynamic_mesh(sections):
     """Build one UDynamicMesh from `sections` = [(positions, normals, uvs, colors, tris)],
     each appended under its own material id (its index in the list)."""

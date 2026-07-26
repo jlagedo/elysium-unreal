@@ -13,6 +13,16 @@ game-agnostic; converted VtMB content lives only in the gitignored `tools/out/` 
 | `VtMB/Materials/M_Additive.uasset` | the `$additive` glow-overlay master — unlit, `BLEND_Additive`, `Albedo`→Emissive (light-fixture "on" panes, neon) |
 | `VtMB/Materials/M_Sky.uasset` | the 2D-skybox cube master material (samples a runtime `UTextureCube` by view direction) |
 | `VtMB/Materials/M_Decal.uasset` | the 7.2 deferred-decal master — `MD_DeferredDecal` + `BLEND_Translucent`, `Albedo` RGB→BaseColor + A→Opacity, alpha-masked `$selfillum` emissive, samples at `(U, 1-V)` (VtMB V is top-down); the bake instances it once per decal material and hangs those on the level's `ADecalActor`s |
+
+The four surface masters (`M_World_*`, `M_Additive`) additionally carry **Source's distance fog as
+a per-primitive term** (`tools/mat_fog.py`): `f = saturate((PixelDepth − FogStart) · FogInvRange)`
+read from **Custom Primitive Data** slots 0–5, fading BaseColor/Specular/Emissive and adding the
+fog's own colour. It exists because the world and the 3D-skybox miniature carry two different fogs
+and share screen depth, which no engine-side fog mechanism can separate — see
+`Source/ElysiumUE/Public/ElysiumFog.h`. Unwritten custom data reads as zero, which is "not fogged",
+so the term is neutral on any primitive nobody stamped. `M_Decal` carries the same term from named
+parameters instead (a `UDecalComponent` is a `USceneComponent` and has no custom primitive data);
+`M_Sky` carries none at all, because the backdrop is never fogged (RE-A9).
 | `VtMB/Materials/M_Gizmo.uasset` + `M_Gizmo_XRay.uasset` | the entity-gizmo ISM masters — unlit, two-sided, translucent, colour + opacity from per-instance custom data; `_XRay` disables the depth test |
 | `Fonts/*.ttf` (+ `Fonts/OFL-*.txt`) | the sign/popup typeface set — loose SIL OFL 1.1 TTFs read verbatim off disk at draw time, not `.uasset`s |
 

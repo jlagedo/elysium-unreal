@@ -20,6 +20,11 @@
 #   BaseTex2    (tex)     WorldVertexTransition second albedo; lerp(Albedo, BaseTex2, VertexColor.r x BlendAmount)
 #   BlendAmount (float)   0 by default (non-WVT surface ignores BaseTex2 and its vertex colour)
 #
+# All four also carry Source's distance fog as a PER-PRIMITIVE term read from Custom Primitive
+# Data (`mat_fog`), because the world and the 3D-skybox miniature are fogged differently and
+# share screen depth, which no engine-side fog mechanism can separate. Unwritten data is zero,
+# which is "not fogged", so the term is neutral on any primitive nobody wrote to.
+#
 # $envmap is handled the modern way (roadmap decision 2026-07-24): NOT a baked-cube sample but a
 # reflectivity mask that lowers Roughness, so the fully-dynamic Lumen path produces the reflection
 # (roadmap 7.5 tunes it). The exported tex/cube/ faces stay unused by the world path (the 2D sky
@@ -31,16 +36,39 @@
 # parameters above). Rebuilt by the umbrella (content.bat -> tools/build_content.py, which the
 # export runs); also runnable standalone:
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript -script="tools/make_world_materials.py" -unattended -nosplash -nopause
+import os
+import sys
+
 import unreal
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import mat_fog
+
+# A refused pin compiles anyway against the input's constant default, so a wrong output name
+# becomes a wrongly-rendering material instead of a failed build. These raise instead.
+connect = mat_fog.connect
+
+
+def connect_property(src, src_out, prop):
+    if not unreal.MaterialEditingLibrary.connect_material_property(src, src_out, prop):
+        raise SystemExit("[make_world_materials] no connection %s.%s -> %s" % (
+            src.get_class().get_name(), src_out or "<out>", prop))
 
 PKG = "/Game/VtMB/Materials"
 DEFAULT_TEX = "/Engine/EngineResources/DefaultTexture.DefaultTexture"
 DEFAULT_NORMAL = "/Engine/EngineMaterials/DefaultNormal.DefaultNormal"
 
-# Base/reflective roughness for the $envmap-mask -> Lumen path. 0.5 is what the old material's
-# unconnected Roughness pin defaulted to, so unmasked surfaces are unchanged.
-ROUGH_BASE = 0.5
+# The $envmap-mask -> Lumen reflection channel (roadmap 7.5). These are the master's parameter
+# DEFAULTS; the bake binds a per-material value over them.
+#
+# The non-reflective end is Lambert -- ROUGH_BASE 1.0 / SPEC_BASE 0.0 -- because that is what
+# VtMB's world is (docs/lighting.md: METALLIC 0, SPECULAR 0, ROUGHNESS 1), and what the light
+# rig already assumes when it sets specular_scale = 0 on every source. A surface reflects
+# because its VMT carries $envmap, not by default.
+ROUGH_BASE = 1.0
 ROUGH_REFLECT = 0.15
+SPEC_BASE = 0.0
+SPEC_REFLECT = 0.5
 
 mel = unreal.MaterialEditingLibrary
 tools = unreal.AssetToolsHelpers.get_asset_tools()
@@ -91,22 +119,74 @@ def _scalar(mat, name, default, x, y):
     return n
 
 
+def _vec_param(mat, name, x, y, default=(1.0, 1.0, 1.0)):
+    """A float3 parameter. A VectorParameter is a float4 with no RGB output of its own, so it
+    is masked here once -- an unmasked float4 will not coerce into a float3 multiply."""
+    n = mel.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, x, y)
+    n.set_editor_property("parameter_name", name)
+    n.set_editor_property("default_value", unreal.LinearColor(default[0], default[1], default[2], 1.0))
+    rgb = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, x + 180, y)
+    for channel, on in (("r", True), ("g", True), ("b", True), ("a", False)):
+        rgb.set_editor_property(channel, on)
+    connect(n, "", rgb, "")
+    return rgb
+
+
 def build_world_graph(mat):
-    """Author the shared lit world-surface graph; wire BaseColor/Emissive/Normal/Roughness.
-    Returns the Albedo sampler so a caller can also drive Opacity/OpacityMask from its alpha."""
+    """Author the shared lit world-surface graph; wire BaseColor/Emissive/Normal/Roughness/
+    Specular/Metallic. Returns the Albedo sampler so a caller can also drive Opacity/
+    OpacityMask from its alpha."""
+    # --- $envmap reach: env = saturate(EnvMask.r x EnvStrength) ---
+    # Computed first because three outputs read it: Roughness, Specular, and -- through the
+    # metal branch -- BaseColor. EnvStrength defaults to 0, so a surface with no $envmap is
+    # untouched by every one of them.
+    env_mask = _tex_param(mat, "EnvMask", -900, 1060)
+    env_str = _scalar(mat, "EnvStrength", 0.0, -900, 1240)
+    env_amt = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -640, 1100)
+    connect(env_mask, "R", env_amt, "A")
+    connect(env_str, "", env_amt, "B")
+    env = mel.create_material_expression(mat, unreal.MaterialExpressionSaturate, -520, 1100)
+    connect(env_amt, "", env, "")
+
+    # --- Metallic: env x MetalMask ---
+    # VtMB names its own metals. $envmaptint multiplies the reflection, and on 102 of the
+    # game's 2,610 reflective materials it is CHROMATIC -- brass 0.65/0.5/0, copper
+    # 0.74/0.57/0.31 -- which is a hand-authored statement that the surface is metal and what
+    # colour it reflects (docs/reflections.md). MetalMask defaults to 0, so metalness is never
+    # inferred: the bake sets it only where the game's own tint says so, and the $envmapmask
+    # then localises it to the metal texels rather than the whole surface.
+    metal_mask = _scalar(mat, "MetalMask", 0.0, -900, 1420)
+    metal = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -420, 1420)
+    connect(env, "", metal, "A")
+    connect(metal_mask, "", metal, "B")
+    connect_property(metal, "", unreal.MaterialProperty.MP_METALLIC)
+
     # --- WorldVertexTransition base colour: lerp(Albedo, BaseTex2, VertexColor.r x BlendAmount) ---
     albedo = _tex_param(mat, "Albedo", -900, -260)
     basetex2 = _tex_param(mat, "BaseTex2", -900, -80)
     blend_amt = _scalar(mat, "BlendAmount", 0.0, -900, 100)
     vcol = mel.create_material_expression(mat, unreal.MaterialExpressionVertexColor, -900, 220)
     wvt_alpha = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -640, 160)
-    mel.connect_material_expressions(vcol, "R", wvt_alpha, "A")
-    mel.connect_material_expressions(blend_amt, "", wvt_alpha, "B")
-    base_color = mel.create_material_expression(mat, unreal.MaterialExpressionLinearInterpolate, -420, -160)
-    mel.connect_material_expressions(albedo, "RGB", base_color, "A")
-    mel.connect_material_expressions(basetex2, "RGB", base_color, "B")
-    mel.connect_material_expressions(wvt_alpha, "", base_color, "Alpha")
-    mel.connect_material_property(base_color, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    connect(vcol, "R", wvt_alpha, "A")
+    connect(blend_amt, "", wvt_alpha, "B")
+    wvt = mel.create_material_expression(mat, unreal.MaterialExpressionLinearInterpolate, -420, -160)
+    connect(albedo, "RGB", wvt, "A")
+    connect(basetex2, "RGB", wvt, "B")
+    connect(wvt_alpha, "", wvt, "Alpha")
+
+    # A metal's BaseColor IS its reflection colour, so the tint lands here rather than on a
+    # specular level UE ignores once Metallic is up. Away from the metal branch the lerp
+    # resolves to white and this is a multiply by 1.
+    env_tint = _vec_param(mat, "EnvTint", -900, 1600)
+    white = mel.create_material_expression(mat, unreal.MaterialExpressionConstant3Vector, -900, 1740)
+    white.set_editor_property("constant", unreal.LinearColor(1.0, 1.0, 1.0, 1.0))
+    tint_mix = mel.create_material_expression(mat, unreal.MaterialExpressionLinearInterpolate, -560, 1660)
+    connect(white, "", tint_mix, "A")
+    connect(env_tint, "", tint_mix, "B")
+    connect(metal, "", tint_mix, "Alpha")
+    base_color = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -300, -100)
+    connect(wvt, "", base_color, "A")
+    connect(tint_mix, "", base_color, "B")
 
     # --- $selfillum emissive: Emissive.rgb x EmissiveScale (0 by default -> black) ---
     emis = _tex_param(mat, "Emissive", -900, 380)
@@ -114,7 +194,31 @@ def build_world_graph(mat):
     emis_mul = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -420, 420)
     mel.connect_material_expressions(emis, "RGB", emis_mul, "A")
     mel.connect_material_expressions(emis_scale, "", emis_mul, "B")
-    mel.connect_material_property(emis_mul, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+
+    # --- Source's distance fog, per primitive (mat_fog / sky-ambience B8b) ---
+    # The world and the 3D-skybox miniature carry two different fogs and share screen depth, so
+    # the term is driven by each primitive's own Custom Primitive Data. Unwritten data reads as
+    # zero, which is f = 0, so this passes BaseColor/Specular/Emissive through unchanged.
+    f, inv_f, fog_color = mat_fog.fog_from_primitive(mat)
+    connect_property(mat_fog.fade(mat, base_color, "", inv_f, -180, -160),
+                     "", unreal.MaterialProperty.MP_BASE_COLOR)
+    connect_property(
+        mat_fog.inscatter(mat, mat_fog.fade(mat, emis_mul, "", inv_f, -180, 420),
+                          f, fog_color, 40, 420),
+        "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+
+    # --- Specular: lerp(SpecBase, SpecReflect, env), faded by the fog ---
+    # SpecBase 0 is the Lambert floor; the reflection channel raises it only where the mask
+    # does. The grey half of $envmaptint (362 materials) is a reflection-strength dim-down and
+    # the bake folds its luminance into SpecReflect, so it needs no node of its own.
+    spec_base = _scalar(mat, "SpecBase", SPEC_BASE, -900, 1900)
+    spec_reflect = _scalar(mat, "SpecReflect", SPEC_REFLECT, -900, 1980)
+    spec = mel.create_material_expression(mat, unreal.MaterialExpressionLinearInterpolate, -640, 1940)
+    connect(spec_base, "", spec, "A")
+    connect(spec_reflect, "", spec, "B")
+    connect(env, "", spec, "Alpha")
+    connect_property(mat_fog.specular(mat, inv_f, -400, 1900, source=spec),
+                     "", unreal.MaterialProperty.MP_SPECULAR)
 
     # --- $bumpmap normal: lerp(flat (0,0,1), BumpMap, BumpAmount) ---
     bump = _tex_param(mat, "BumpMap", -900, 720, normal=True)
@@ -127,23 +231,16 @@ def build_world_graph(mat):
     mel.connect_material_expressions(bump_amt, "", normal, "Alpha")
     mel.connect_material_property(normal, "", unreal.MaterialProperty.MP_NORMAL)
 
-    # --- $envmap -> Lumen: EnvMask.r x EnvStrength lowers Roughness toward ROUGH_REFLECT ---
-    env_mask = _tex_param(mat, "EnvMask", -900, 1060)
-    env_str = _scalar(mat, "EnvStrength", 0.0, -900, 1240)
-    env_amt = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -640, 1100)
-    mel.connect_material_expressions(env_mask, "R", env_amt, "A")
-    mel.connect_material_expressions(env_str, "", env_amt, "B")
-    env_sat = mel.create_material_expression(mat, unreal.MaterialExpressionSaturate, -520, 1100)
-    mel.connect_material_expressions(env_amt, "", env_sat, "")
+    # --- Roughness: lerp(RoughBase, RoughReflect, env) ---
+    # Both ends are parameters, not constants, so the calibration is a bake binding (and a
+    # live cvar over the baked instance) rather than a re-authored graph.
+    r_base = _scalar(mat, "RoughBase", ROUGH_BASE, -900, 1240 + 60)
+    r_reflect = _scalar(mat, "RoughReflect", ROUGH_REFLECT, -900, 1320 + 60)
     rough = mel.create_material_expression(mat, unreal.MaterialExpressionLinearInterpolate, -420, 1160)
-    r_base = mel.create_material_expression(mat, unreal.MaterialExpressionConstant, -640, 1240)
-    r_base.set_editor_property("r", ROUGH_BASE)
-    r_reflect = mel.create_material_expression(mat, unreal.MaterialExpressionConstant, -640, 1320)
-    r_reflect.set_editor_property("r", ROUGH_REFLECT)
-    mel.connect_material_expressions(r_base, "", rough, "A")
-    mel.connect_material_expressions(r_reflect, "", rough, "B")
-    mel.connect_material_expressions(env_sat, "", rough, "Alpha")
-    mel.connect_material_property(rough, "", unreal.MaterialProperty.MP_ROUGHNESS)
+    connect(r_base, "", rough, "A")
+    connect(r_reflect, "", rough, "B")
+    connect(env, "", rough, "Alpha")
+    connect_property(rough, "", unreal.MaterialProperty.MP_ROUGHNESS)
 
     return albedo
 
@@ -191,7 +288,12 @@ def make_additive():
     mul = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -250, 40)
     mel.connect_material_expressions(albedo, "RGB", mul, "A")
     mel.connect_material_expressions(emis_scale, "", mul, "B")
-    mel.connect_material_property(mul, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    # Fog fades an additive glow OUT and adds no inscatter of its own: additive blending can only
+    # brighten what is already in the framebuffer, and the surface behind the glow has already
+    # contributed the fog's light once. A distant neon sign dims into the haze; it does not tint it.
+    _, inv_f, _ = mat_fog.fog_from_primitive(mat, x=-1200, y=900)
+    mel.connect_material_property(mat_fog.fade(mat, mul, "", inv_f, -60, 40),
+                                  "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
     # Additive blend weights the added colour by Opacity; the glow panes carry a coverage alpha.
     mel.connect_material_property(albedo, "A", unreal.MaterialProperty.MP_OPACITY)
     _save(mat, asset)

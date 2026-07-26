@@ -2,7 +2,7 @@
 
 **Status: every unknown (K1–K8) is settled and the rework has landed** — Phase A's RE is
 complete bar the owner-run reference captures (RE-A6), and Phases **B and C are done**
-(B1–B8, C0–C5). The backdrop drew wrong when this plan was written; it draws correctly now,
+(B1–B8b, C0–C5). The backdrop drew wrong when this plan was written; it draws correctly now,
 confirmed in-engine against the labelled faces. Both halves of the orientation chain are
 recovered: K1, the Source side, out of `engine.dll`'s own tables, and K2, the Unreal side, out
 of UE 5.8's source. K3/K5 — how the original engine lights models and what it does with lump 15
@@ -11,10 +11,13 @@ between); K6 is closed by RE-A5 — VRAD's photometric transfer is recovered exa
 and with it **the absolute scale of lump 8**, which this plan never had; and K7 is closed by
 RE-A9 — the sky's brightness chain is the **identity**, an unfogged texel written straight to
 the framebuffer. The owner decision set is resolved (`decisions.md` 2026-07-26: D2–D5, D7, B7's
-lights; D6 dissolved), with one correction the work itself forced: **D3's second knob, Indirect
-Lighting Intensity, is a no-op on this render path** (C3). Two pieces are carved out and named
-rather than dropped — the miniature's own fog term (B8b) and the skyambient's hemisphere
-aperture, which C4 shows is not identifiable from this data. This doc is the working record: the
+lights; D6 dissolved), with two corrections the work itself forced: **D3's second knob, Indirect
+Lighting Intensity, is a no-op on this render path** (C3), and **D4's exponential height fog
+cannot be the distance fog at all** (B8b) — the world and the 3D-skybox miniature share screen
+depth, measured, so the distance fog is a per-primitive material term and the height fog keeps
+only the volumetric layer. What stays open is named in "Sequencing": the volumetric layer's own
+calibration, and the skyambient's hemisphere aperture, which C4 shows is not identifiable from
+this data. This doc is the working record: the
 verified facts, the RE that established them, the rework that followed, and the owner decisions
 each divergence needed.
 
@@ -2001,10 +2004,34 @@ The rework is calibrated against data we already hold plus the original game:
   left un-rebaked is stable to **≤ 0.23 mean / ~1% of pixels** across a runtime change
   (`sm_hub_1`), which is the floor of Lumen's own temporal accumulation.
 
-  So the tool answers "did this runtime or asset change alter the look" — which is what it did
-  cleanly for C2 — and it does **not** answer "did anything change across a re-bake": at that
-  scale its own noise swamps the signal. Re-baseline after any re-bake, and attribute across one
-  only with a margin well above the numbers above.
+  **The same limit applies to regenerating the master materials, and B8b pinned the numbers
+  down.** Three runs over one fixed bake of `sp_tutorial_1`, a map that authors no fog at all, so
+  B8b's term is inert on it by data:
+
+  | comparison | `spawn` | `t1` | `t3` | `pw` | `t2` / `t1sky` / `t4` |
+  |---|---|---|---|---|---|
+  | same assets, run twice | — | — | — | 0.00 | — |
+  | with the fog term vs without | 14.75 | 6.60 | 1.68 | **0.00** | 0.40 / 0.37 / 0.03 |
+  | rebuilt **byte-identical** materials | 10.15 | 1.82 | 3.74 | **0.00** | 0.14 / 0.20 / 0.04 |
+
+  Read the last two rows together: authoring a *different* graph and authoring the *same* graph
+  again move the render by the same order, so the movement is the toolchain's, not the change's.
+  Every generator deletes and recreates its asset, which forces a full shader recompile and a
+  Lumen surface-cache recapture, and that recapture is as order-dependent as the bake's card
+  packing. `pw` is the control that makes this legible: it is bit-exact across all three
+  comparisons, so the render itself is deterministic for a fixed set of assets — it is *producing
+  the assets* that re-rolls, and it re-rolls hardest on the vantages whose frame is
+  bounce-dominated.
+
+  This also closes an item left open on 2026-07-26: the unexplained `sp_tutorial_1` `spawn`
+  residual of 32.46 recorded against a re-bake was not a defect in anything. That vantage's Lumen
+  solution is simply the least stable in the set, across bakes and asset rebuilds alike.
+
+  So the tool answers "did this runtime change alter the look" — which is what it did cleanly for
+  C2 — and it does **not** answer "did anything change across a re-bake or a content rebuild": at
+  that scale its own noise swamps the signal. Re-baseline after either, attribute across one only
+  with a margin well above the numbers above, and for a small effect compare **two runs over one
+  fixed set of assets** (a cvar A/B, as B8b used for the fog) rather than against a baseline.
 - **B7 — split the whole 3D skybox, not just its world faces. Done** (2026-07-26; RE-A8).
   The exporter's `SkyScope` computes the miniature's BSP area once — the engine's own
   membership rule, `area(point_leaf(x)) == area(point_leaf(sky_camera.origin))` — and applies
@@ -2075,21 +2102,69 @@ The rework is calibrated against data we already hold plus the original game:
   sky's displayed mean was 16.6 unfogged against 29.1 fogged; it is now **16.5 either way**,
   while the world keeps its fog.
 
-  **What is not done, and why.** The `sky_camera` set is carried but is not yet a second render
-  term on the miniature. VtMB can scope it trivially because the miniature is a separate pass
-  with its own fog push/pop; ours is one scene and one exponential height fog, and the world and
-  the miniature **overlap in screen depth** (the placed miniature spans the same few hundred
-  metres the world does), so no distance-based mechanism — `FogCutoffDistance`, a
-  `LocalFogVolume`, a second fog actor — can separate them. It needs a *per-primitive* term:
-  a distance-fog node in a sky-only material set, which would also reproduce Source's planar
-  fog exactly. That is a material-stack task, not a sidecar one, and it is the remaining piece
-  of D4's scoping.
+  Both sets reach the render in **B8b**, below, which is where the scoping is actually done.
+- **B8b — the miniature's own fog, as a per-primitive term. Done** (2026-07-26; D4 amended,
+  `decisions.md`). Source fogs the world and the miniature with two different linear fogs and can
+  scope them trivially, because the miniature is a separate pass with its own fog push/pop. Ours
+  is one scene, and the two **share screen depth** — measured over the exported set, the placed
+  miniature's bounds sit **0–4,868 cm** from the world's own against world diagonals of
+  **11,124–40,334 cm**, and on **6 of the 8** maps with a miniature the miniature's geometry lies
+  *inside* the world's bounding box (`sm_hub_1`, `sm_pawnshop_1` and `sp_tutorial_1` at distance
+  0). Only `sp_observatory_1` and `sp_soc_1` separate at all. So `FogCutoffDistance`, a
+  `LocalFogVolume` and a second fog actor are all ruled out by data, not by argument, and a
+  deferred fog pass offers nothing else.
 
-  Noted while measuring, for the same D4 follow-up: the Source-linear-`start`/`end` →
-  exponential-density mapping is uncalibrated. `fog_density = 3/end` with
-  `fog_height_falloff = 0.02` puts almost all the fog below z ≈ 2 m, so a map's near fog is far
-  thinner than authored while its far distances saturate — which is why the backdrop was the
-  first place the defect showed.
+  **So the distance fog moved into the material, per primitive.** Custom Primitive Data carries
+  one fog set per primitive — colour, start, `1/(end − start)` — and the term is Source's own
+  `f = saturate((PixelDepth − start) · invRange)`, so it reproduces the original fog rather than
+  approximating it. The bake stamps every world / prop / miniature component (so the level is
+  right when opened in the editor) and `AElysiumMapActor::ApplySceneFog` re-derives it from
+  `<map>.env` at load, the same way the rig re-derives every light. `elysium.Fog` A/Bs it live.
+
+  It is applied as `BaseColor ×= (1−f)`, `Specular = 0.5 · (1−f)`, `Emissive = Emissive·(1−f) +
+  colour·f`, which is exactly `lerp(shaded, fog, f)` for a deferred surface — the specular term
+  is there because scaling BaseColor alone leaves a Lumen reflection shining through the fog at
+  full strength. **Neutral by construction:** an unwritten custom-data slot reads as zero, zero
+  is `invRange`, and `f = 0` passes every output through unchanged — so "not fogged" and "never
+  written" are the same state, with no branch to get wrong. `Elysium.Substrate.FogPack` guards
+  that property.
+
+  Two things it does not cover, both bounded: a `UDecalComponent` is a `USceneComponent` and
+  carries no custom primitive data, so a decal takes the world's set from named parameters the
+  bake binds into its instance instead (a decal is only ever a world surface, so it needs no
+  per-primitive scoping — but `elysium.Fog` does not reach it, and a map with world fog needs a
+  re-bake, not just a reload, for its decals to follow); and the 2D backdrop is exempt game-wide,
+  as RE-A9 requires.
+
+  **The height fog is no longer the map's distance fog.** What is left to it is the volumetric
+  layer — participating media the map's hundreds of dynamic lights shaft through, which is the
+  modernization D4 sanctioned and which no per-surface term can produce. Its analytic
+  contribution is now a residue rather than a design, and a small one: **the engine divides both
+  `FogDensity` and `FogHeightFalloff` by 1000** (`FExponentialHeightFogSceneInfo`, `SceneCore.cpp`),
+  so `3/end` integrates to **under 0.2% across a whole map**, and the backdrop is cut off before
+  it regardless. *(That /1000 also corrects this plan: `fog_height_falloff = 0.02` does not put
+  the fog "below z ≈ 2 m" — it is 2 × 10⁻⁵ per cm, which halves the density every ~500 m and is
+  therefore effectively uniform over a VtMB map. The real defect was never the height profile; it
+  was that the density was ~1000× too thin for the world, which is why the only place it ever
+  showed was the 5 km backdrop.)* Calibrating the volumetric layer for its own sake is open — at
+  this density it, too, is near-invisible.
+
+  **The fog colour is decoded, not used raw.** `.env` transports the authored value verbatim
+  (`/255`); the consumers raise it to 2.2, because VtMB's colours are gamma-encoded and its own
+  math decodes them that way (RE-A5's `(colour/255)^2.2 · …`), and because that is what every
+  other authored colour in this pipeline becomes. The magnitudes settle it: C1 measures a map's
+  own sky radiance at 0.0034–0.0066 and C4 puts a typical lit surface near there, so `sm_hub_1`'s
+  authored `17 20 25` would be **0.067 undecoded — three to thirteen times brighter than the
+  world it hangs in** — against **0.0021 decoded**, a dark haze just under the walls. What this
+  does not close is the display transfer: a linear value still meets the filmic toe B4 measured
+  at up to ×9, so a saturated fog displays under its authored level. That is one named
+  calibration for the whole render (D7, roadmap 3.6/3.7), not a per-term fudge, and nothing here
+  compensates for it.
+
+  Measured on `sm_hub_1` (`worldspawn` 500→5000, `sky_camera` 500→5000 ×16 = 20,320→203,200 cm),
+  fog on against fog off over the same assets: mean **0.23–0.76**, p99 5–12, 5–19% of pixels. The
+  `spawn` vantage barely moves (0.33) because it stands inside `fogstart`, which is the authored
+  behaviour. On `sp_tutorial_1`, which authors no fog, the term is inert.
 
 ## Phase C — ambience rework (K3/K4/K5/K6 settled — no RE blocks it)
 
@@ -2294,7 +2369,7 @@ The rework is calibrated against data we already hold plus the original game:
 | D1 | The faithful-ambience target: lump 8 at the shared vantages, measured — not "looks right". **RE-A4 removed the fork:** there is one bake, keyed by `styles[8]`. **RE-A5 gave the target absolute units** (`stored luxel = 255 · intensity / falloff`), so "measured" now means in known units with no free gain — and the measurement must respect the retail-vs-patch provenance split | **Decided 2026-07-26** (`decisions.md`): reproduce — the measured target, in absolute units, retail bakes only |
 | D2 | SkyLight-as-IBL is a modernization. **RE-A3 makes the divergence exact:** the sky lights the *world* only through lump 8, and lights *models* only as the colour of a sky-hitting bounce ray | **Decided 2026-07-26** (`decisions.md`): data-driven — the actor stays everywhere, intensity from the type-5 magnitude at the RE-A5 scale on the 25 pair maps, **zero** on the 83 without |
 | D3 | Skylight Leaking / a bounce-strength knob — non-physical knobs replacing author fill; adjudicated like the light survey (does it serve the direction?). **C3 corrects the second one:** Indirect Lighting Intensity scales *precomputed* indirect only and no Lumen shader reads it, so it is a no-op on this render path; Lumen's own control is `LumenDiffuseColorBoost` | **Decided 2026-07-26** (`decisions.md`): mechanism lands now with neutral defaults; a non-neutral value only on a measured C4/C5 deficit, one dated entry per map |
-| D4 | Fog model: exponential height + volumetric vs Source's planar distance fog (existing accepted divergence — formalise it) | **Decided 2026-07-26** (`decisions.md`): modernize, with the RE scoping — world fog from `worldspawn`, `sky_camera` fog on the miniature only, the backdrop never fogged |
+| D4 | Fog model: exponential height + volumetric vs Source's planar distance fog (existing accepted divergence — formalise it). **B8b amends it:** the two fogs share screen depth (measured), so no engine-side mechanism can scope them and the exponential height fog cannot be the distance fog | **Decided 2026-07-26**, **amended 2026-07-26** (`decisions.md`): the RE scoping stands — world fog from `worldspawn`, `sky_camera` fog on the miniature only, the backdrop never fogged — but the distance fog is now Source's own linear model as a per-primitive material term, and the height fog keeps the volumetric layer alone |
 | D5 | Enhanced (upscaled) sky faces as default-off A/B layer | **Decided 2026-07-26** (`decisions.md`): modernize behind the toggle, with B5's absolute-texel-preservation acceptance check |
 | D6 | Multi-`light_environment` maps: sum vs first-wins (we currently do silent **last**-wins). **RE-A3 settled the runtime: first-wins, never summed**, for both halves of the pair. **RE-A5 settles the bake and shrinks the decision to nothing:** VRAD resolves the skyambient once, globally, first-entity-wins and writes that same value into every type-5 row, so the ambient half is moot by construction; the sun half is observable on `sp_observatory_2` alone (RE-A7), where summing vs first-wins moves the sun from 3.1% to 5.7% of the median lit face | **No decision needed** — adopt first-wins (C0a), which matches runtime and bake and changes no number |
 | D7 | **Sky backdrop brightness.** RE-A9 makes the faithful transfer exact — a sky pixel is the decoded texel, unscaled and unfogged — so `M_Sky`'s `Brightness 4` is a divergence, not a pending calibration | **Decided 2026-07-26** (`decisions.md`): parity is the shipped default — B4 calibrates the displayed-parity value under our tonemapper — and the multiplier survives only as an `elysium.*` debug cvar; any night-sky lift goes through the D3 knobs, never the backdrop |
@@ -2302,15 +2377,18 @@ The rework is calibrated against data we already hold plus the original game:
 ## Sequencing
 
 **Phase A is finished except for the owner-run captures** (RE-A6), and **Phases B and C have
-landed** — every task B1–B8 and C0–C5 is done, with two pieces carved out and named rather than
-quietly dropped:
+landed** — every task B1–B8b and C0–C5 is done. What is still open, named rather than quietly
+dropped:
 
-- **B8b** — the miniature's own fog as a per-primitive term. The `sky_camera` set is carried in
-  `.env` with its distances already scaled into world units, but one scene and one exponential
-  height fog cannot scope a term the world and the miniature share screen depth with. It needs a
-  distance-fog node in a sky-only material set, which would reproduce Source's planar fog
-  exactly. The same task should calibrate the linear-`start`/`end` → exponential-density mapping,
-  which currently puts nearly all the fog below z ≈ 2 m.
+- **The volumetric fog layer is uncalibrated.** B8b took the distance fog off the
+  `ExponentialHeightFog` actor and into a per-primitive material term, which leaves the actor
+  owning only the volumetric haze and light shafts. At the density it still carries (`3/end`,
+  which the engine divides by 1000 again) that layer is near-invisible, so the modernization D4
+  sanctioned is present as a mechanism and not yet as a look. Calibrating it is its own task, and
+  it can now be done freely: the distance fog no longer rides on the same number.
+- **A decal does not follow `elysium.Fog`, and needs a re-bake rather than a reload.** Its fog is
+  bound into its baked material instance because a `UDecalComponent` carries no custom primitive
+  data. Correct per map, but not live-tunable with the rest.
 - **The skyambient's hemisphere aperture** stays open, and C4 explains why it is not merely
   unmeasured but *unidentifiable* from this data: on an enclosed map the faces that see sky are
   the faces furthest from the author's fill, so sky visibility carries the fill's sign. RE-A5
@@ -2318,8 +2396,9 @@ quietly dropped:
 
 What the two phases changed, in one line each: the backdrop draws correctly and at parity (B3,
 B1, B4); the whole 3D skybox is real geometry rather than debris in the playable world (B7);
-world fog comes from `worldspawn` and never touches the backdrop (B8); a sky regression is a
-number (B6); the lump-15 corrections and the material reflectivity the bounce needs are in the
+world fog comes from `worldspawn` and never touches the backdrop (B8); the world and the
+miniature each take their own authored fog, per primitive, in Source's own linear model (B8b); a
+sky regression is a number, with its noise floor measured (B6); the lump-15 corrections and the material reflectivity the bounce needs are in the
 pipeline (C0); the sky light's level is the map's own authored radiance, zero on the 83 maps
 that authored none (C1, C2); the art-direction knob that can replace load-bearing fill is landed
 and measured (C3); and the bake is now measured in absolute units, which says direct light

@@ -1203,5 +1203,33 @@ append a correction as a new entry.
   retail bakes (provenance split). **D6 dissolved** — first-wins matches both the runtime and
   the bake, so it is a correction (C0a), not a decision. The full decision table with
   outcomes: `docs/sky-ambience.md` → "Decisions".
+- **2026-07-26 (cont.)** — **D4 amended: Source's distance fog is a per-primitive material term;
+  the exponential height fog keeps the volumetric layer alone.** (`docs/sky-ambience.md` → B8b.)
+
+  D4's scoping is unchanged and correct — world fog from `worldspawn`, the `sky_camera` set on
+  the miniature only, the backdrop never fogged. What the implementation showed is that **no
+  engine-side fog mechanism can deliver that scoping**. VtMB fogs the miniature in a separate
+  pass with its own fog push/pop; ported as one scene, the world and the placed miniature share
+  screen depth. Measured over the exported set: the miniature's bounds sit 0–4,868 cm from the
+  world's own against world diagonals of 11,124–40,334 cm, and on 6 of the 8 maps with a
+  miniature its geometry lies *inside* the world's bounding box. `FogCutoffDistance`, a
+  `LocalFogVolume` and a second fog actor are ruled out by that measurement, and a deferred fog
+  pass offers nothing else.
+
+  So the distance fog moves into the material, driven per primitive by Custom Primitive Data,
+  using **Source's own linear formula** — which makes this half of D4 *less* of a divergence than
+  the original decision, not more. The modernization D4 bought stays: the height fog actor
+  remains and keeps the volumetric haze and light shafts, which no per-surface term can produce.
+  Its analytic contribution is now a residue (under 0.2% across a map, since the engine divides
+  `FogDensity` by 1000), and calibrating the volumetric layer for its own sake is open.
+
+  Alongside it, one convention call: **an authored fog colour is gamma-encoded and is decoded
+  with a plain 2.2 before use**, in both the material term and the height fog's inscattering.
+  That is what VtMB's own math does to authored colours (RE-A5) and what every other authored
+  colour in this pipeline becomes. The magnitudes decide it independently: against a map's own
+  sky radiance of 0.0034–0.0066 (C1) and a typical lit surface near there (C4), `sm_hub_1`'s
+  `17 20 25` is 0.067 undecoded — brighter than the world it hangs in — and 0.0021 decoded. The
+  residual under-display of a saturated fog is B4/D7's measured tonemapper toe, one named
+  calibration for the whole render; nothing here compensates for it locally.
 - **Pending** — 5.5 level-script execution strategy (interpreter vs transpile vs CPython);
   10.6 EnhancedInput migrate-or-remove.

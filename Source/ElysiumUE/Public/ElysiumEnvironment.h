@@ -23,8 +23,8 @@ struct FElysiumEnvDef
 	// The 3D-SKYBOX PASS's own fog, off `sky_camera` — a second, separately-scoped set, with its
 	// distances already carried into world units (the pass renders at 1/scale, so the exporter
 	// multiplies by `scale`). VtMB pushes this for the miniature's draw and pops it again; the
-	// 2D backdrop is fogged by neither. Carried here; see docs/sky-ambience.md -> B8 for what
-	// the render can and cannot yet scope.
+	// 2D backdrop is fogged by neither. Scoped onto the miniature alone as a per-primitive
+	// material term — ElysiumFog.h says why nothing else can.
 	bool bSkyFog = false;
 	FLinearColor SkyFogColor = FLinearColor::Black;
 	float SkyFogStartCm = 0.f;
