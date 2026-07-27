@@ -340,12 +340,18 @@ Accessors (`CVStatList_t`, named by their own scope-trace markers):
 |---|---|---|
 | `GetBase(i)` | `10200CA0` | the raw base array value, unmodified |
 | `GetCurrent(i)` | `102012D0` | `base` → trait effects → clamp to effective max → clamp up to min |
-| `IncBase(i)` | `10200D60` | `+1`, gated by the stat's `IncPredependency` and its effective max |
-| `AddBase(i, d)` | `10200FC0` | `+d`, same gate — but a **negative `d` bypasses it** |
+| `IncBase(i)` | `10200D60` | `+1`, refused unless the stat's `IncPredependency` holds **and** `base < effective max` |
+| `AddBase(i, d)` | `10200FC0` | `+d` **written raw** — gated only by `IncPredependency`, which a **negative `d` bypasses** |
 
-Every write fires the stat's change callback with the old and new **current** values, which is
-how `Health`'s `Max "Max_Health"` and the `IncPredependency` expressions (`"Health < Max_Health"`)
-stay live.
+**`AddBase` does not clamp and never reads the max** (decompiled): the gate is the predependency
+alone, and the base is written as `base + d` whatever that comes to. So a `HumanityAdd 99` at 7
+leaves the **base at 106** while every reader sees the clamped current 10, and the next `-1` walks
+back to 105, not 9 — the overflow is banked in the base. Only `IncBase` tests the ceiling, because
+its `+1` is a dot being bought rather than a counter being moved.
+
+The change callback each fires differs with it: `IncBase` passes the old and new **base**,
+`AddBase` passes `GetCurrent` sampled before and after the write. That is how `Health`'s
+`Max "Max_Health"` and the `IncPredependency` expressions (`"Health < Max_Health"`) stay live.
 
 **`CVStatRef` is the one trait-name resolver** (16 bytes; `10204570`) shared by `BumpStat`,
 `traiteffects000.txt`, the `feats.txt` `Base%d`/`Automatic%d` keys and the stat `Min`/`Max`
@@ -400,6 +406,17 @@ block sets `Max_Health` literally, in the same flat container as `Strength`…`W
 | `Haggle` | Finance + Manipulation | Ranged (`Ranged_Combat`) | Firearms + Perception |
 
 So a `.dlg` gate "Persuasion 7" means `CalcFeat("Persuasion") >= 7`.
+
+**A dialogue check carries a sex gate** **[VtMB]**. `CDialogDependency::TestSimple` (`100E9760`)
+opens by rejecting the line when a per-dependency field at `+0x224` disagrees with
+`CBaseCombatCharacter::IsMale` (`10336920`): the field holds **1 = male-only**, **0 = female-only**,
+and anything else leaves the check ungated. In the data that field comes from an `M_`/`F_` prefix on
+the check name — `M_Persuasion 3`, `F_Seduction 8` — which is a *gate*, not part of the trait name:
+`F_Seduction` is not a feat, a stat or an item, and `cal.dlg` authors the same beat twice, once per
+sex, with different lines. 36 conditions across the corpus use it (`F_Seduction` 22, `M_Seduction`
+5, `M_Persuasion`/`F_Persuasion` 4 each). The evaluator also proves the check space is wider than
+the feat table: the same function reads trait values through `GetCurrent` for the discipline and
+stat checks (`Dominate` 102 sites, `Humanity` 272) that never enter `Feats::FeatValue` at all.
 
 The two-name table above is the **common** shape, not the schema. The shipped file holds **23
 feats** and the base list is counted by probing `Base0`, `Base1`, … until a key is absent, so it
@@ -675,9 +692,41 @@ beside a `Humanity` `Costs.Raise` of `Current_Rating * 1`, and every clan's fren
 is `Frenzy_Check_Mod` `"-1"`/`"-2"` — a real `Stat`. `"Modify"` in the file's header comment
 is stale: the key the code reads is **`Modifier`**.
 
-**Open.** How the operators *compose* — the order `+`/`*`/`%` are applied in, and whether a
-second group's `Max` overrides or intersects the first's — is not decompiled; only the
-loader and the vocabulary are.
+#### How the operators compose — `CVTraitEffectQuery` **[VtMB]**
+
+A read is one pass over the character's `m_tEffectList` filling a 68-byte accumulator, then one
+finalize. `ApplyEffects` (`101F9BF0`) builds the query (`101F6910`), lets every group in the list
+fold its matching effects in (`CVTraitEffectGroup_t::Apply` `101F75A0` → the per-effect switch
+`101F6C50`), then finalizes (`101F69A0`).
+
+The query's fields and their **initial values**: the input `value`; `add` **0**; `mul` **1**,
+`div` **1**, `max` **32000**, `min` **−32000**, each with a claim priority starting at **−1**;
+`percent` **100**.
+
+| Operator | What it does to the query |
+|---|---|
+| `0 +` / `-` | `add += amount` — every additive effect sums |
+| `1 *` / `2 /` / `3 Max` / `4 Min` | claims a **single** slot: a higher group priority takes it outright; at equal priority the **smaller amount wins** — for `Min` too |
+| `5 %` | `percent += (100 - amount)`, so `"50%"` reads as 150% and `"200%"` as 0 |
+| `6 Value` | **replaces** the value outright (a named payload resolves through its own enum first) |
+| `7 Cost` … `10 Duration` | the switch breaks — they carry payloads the buy path and the discipline/heal systems read, and no sheet read consumes them |
+
+Finalize is `(value + add) * mul / div` (signed, truncating), then `× percent / 100` when
+`percent != 100`, then clamp to `[min, max]`. The group priority is `CVTraitEffectGroup_t+0xC`, and
+**no shipped group authors one**, so every group ties and the smaller-amount rule is what actually
+decides. The shipped effects use only `+`/`-` (254), `Value` (63), `Max` (48), `Duration` (44),
+`Damage` (13) and `BloodCost` (2) — no `*`, `/`, `%` or `Min` anywhere.
+
+Two apparent copy-paste slips sit in the same switch: the `/` case stores its priority into the
+`Max` slot's priority field, and the `Min` case tie-breaks against the `Max` slot's amount. Neither
+is reachable with shipped data (no `/`, no `Min`), so the runtime implements the clean per-operator
+reading rather than reproducing them.
+
+**The bounds are the same walk.** `GetCurrent`'s "effective max" (`101FF060`) resolves the stat's
+authored `Max` `CVStatRef` and hands the number to this identical pass keyed by the stat's own
+`(category, index)`; the min accessor (`101FF010`) mirrors it. So a `+1` on a stat raises its
+ceiling with it, and a `Max 4` both caps the value and lowers the ceiling to 4 — one rule, applied
+twice.
 
 **Addresses.** Client-side (`client.dll`): group/category loaders `FUN_10157560` /
 `FUN_101576f0`, the per-effect loader `FUN_101568f0`, the modifier-string parser

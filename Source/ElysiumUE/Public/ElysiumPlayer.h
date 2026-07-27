@@ -8,6 +8,7 @@ class USkeletalMeshComponent;
 
 struct FElysiumStatTable;      // Private/Substrate/ElysiumRulebook.h — the data half of the sheet
 struct FElysiumClanTemplate;
+struct FElysiumSheetEffects;   // Private/Substrate/ElysiumSheetMath.h — the trait-effect layer
 
 // 11.4 (S3) — the player is an entity; the pawn is its body.
 //
@@ -67,17 +68,33 @@ struct FElysiumSheet
 	int32 GetCurrent(EElysiumTraitContainer Container, int32 Slot) const;
 	// Writes the base and re-derives the current. An out-of-range slot is ignored.
 	void SetBase(EElysiumTraitContainer Container, int32 Slot, int32 Value);
-	void AddBase(EElysiumTraitContainer Container, int32 Slot, int32 Delta);
 
-	// base -> [trait effects] -> clamp to the authored Min/Max. The trait-effect pass is 9.4c/f;
-	// until then this is base and the clamp. A null table leaves current equal to base.
-	void RecomputeCurrent(const FElysiumStatTable* Stats);
+	// `CVStatList_t::AddBase` — `+Delta` under the stat's effective max, which a **negative Delta
+	// bypasses**. With no rule table the write is ungated, which is what a bare test world wants.
+	void AddBase(EElysiumTraitContainer Container, int32 Slot, int32 Delta,
+		const FElysiumStatTable* Stats = nullptr, const FElysiumSheetEffects* Effects = nullptr);
+
+	// `CVStatList_t::IncBase` — `+1`, refused when the base is already at the effective max or the
+	// stat's `IncPredependency` reads false. Returns whether the dot landed.
+	bool IncBase(EElysiumTraitContainer Container, int32 Slot,
+		const FElysiumStatTable* Stats, const FElysiumSheetEffects* Effects = nullptr);
+
+	// base -> trait effects -> clamp to the effective Min/Max. A null table leaves current equal to
+	// base; a null effect layer is the ordinary case (a character with no clan or history).
+	void RecomputeCurrent(const FElysiumStatTable* Stats, const FElysiumSheetEffects* Effects = nullptr);
+
+	// A slot's bounds as they apply to THIS sheet: the authored `Min`/`Max` (resolving the ones
+	// authored as another stat's NAME against the base array), tightened by any `Max`/`Min` trait
+	// effect. `Max < Min` means "unbounded" and no caller clamps.
+	void BoundsFor(EElysiumTraitContainer Container, int32 Slot, const FElysiumStatTable* Stats,
+		const FElysiumSheetEffects* Effects, int32& OutMin, int32& OutMax) const;
 
 	// Every slot takes its `stats.txt` `Default`, base and current alike.
 	void SeedFrom(const FElysiumStatTable& Stats);
 	// Overlay a resolved clan / NPC template's authored ratings. An absent trait means inherit, so
 	// only what the template holds is written (`FElysiumClanTable::Resolve` folds the parent chain).
-	void ApplyTemplate(const FElysiumClanTemplate& Template, const FElysiumStatTable* Stats);
+	void ApplyTemplate(const FElysiumClanTemplate& Template, const FElysiumStatTable* Stats,
+		const FElysiumSheetEffects* Effects = nullptr);
 
 	// --- The named slots the runtime speaks ---------------------------------------------------
 	int32 Clan() const  { return GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Clan); }
@@ -137,6 +154,12 @@ struct FElysiumPlayerRecord
 	TArray<FString>         Effects;         // m_tEffectList
 	TArray<FString>         EmailFlags;      // the Player block, save-architecture.md section 3
 	FElysiumLawState        Law;
+
+	// `AddExperience`'s two accumulators. The award is in hundredths — every real
+	// `experience_table` row is `N01` — and the division **keeps its remainder**, so the residue is
+	// state, not a rounding artefact: one bonus point falls out per 100 awards.
+	float ExperienceRemainder = 0.f;   // m_flExpRemainder
+	float LifetimeExperience = 0.f;    // m_flLifetimeExp — raw, never divided
 
 	// MakePlayerUnkillable / MakePlayerKillable (events_player). Latched here as well as on the
 	// entity because the tutorial sets it at map load and it must survive the warp into the next map.
@@ -218,6 +241,11 @@ public:
 
 	bool bWillTalk = false;       // WillTalk (79 calls) — this character will start a conversation
 
+	// `m_tEffectList` — the `TraitEffectGroup` names in force on this character: its clan's
+	// `ClanEffect`, its History's `Effect`, and (later) its items' and its frenzy state's. Held as
+	// names because that is what the save stores and what a re-read rulebook re-resolves.
+	TArray<FString> Effects;
+
 	// --- The 25 CBaseCombatCharacter inputs -------------------------------------------------
 	// Backed: the four counters. VtMB's own InputMoneyAdd is
 	//     if (value.fieldType == FIELD_INTEGER && value.int != 0) MoneyAdd(value.int);
@@ -251,12 +279,49 @@ public:
 	// Fires the character's OnDeath output once. The player leaf overrides to end the run as well.
 	virtual void OnKilled();
 
+	// The masquerade counter hit its ceiling. Only the player's ends the run — the counter is on
+	// this class because the sheet is — so the base only reports and the player leaf overrides.
+	virtual void OnMasqueradeBreached();
+
 	virtual FElysiumCombatCharacter* AsCombatCharacter() override { return this; }
 
 	// `stats.txt`'s four containers, or null in a bare world — the sheet's clamps come from here.
 	const FElysiumStatTable* SheetRules() const;
-	// Move a trait's base by Delta and re-derive the current value under the authored bounds.
+	// The resolved trait-effect layer, or null when this character carries none / no rulebook is up.
+	const FElysiumSheetEffects* SheetEffects() const { return EffectLayer.Get(); }
+	// Re-resolve `Effects` against the rulebook and re-derive every current value from it. Called
+	// after anything writes the list — the clan lands, a History is chosen, a save is restored.
+	void RebuildEffects();
+	// base -> effects -> bounds, over the rules and the effect layer this character holds.
+	void RecomputeSheet();
+
+	// Move a trait's base by Delta and re-derive the current value under the effective bounds.
 	void AddTrait(EElysiumTraitContainer Container, int32 Slot, int32 Delta);
+
+	// --- The sheet reads the script surface calls (9.4c) --------------------------------------
+	// `CalcFeat(feat)` — the feat RATING, not a roll. A name the feat table does not own falls back
+	// to the trait of that name (`script_api.md`, a marked divergence); neither resolving reads 0.
+	int32 CalcFeat(const FString& Name) const;
+	// `BumpStat(stat, times)` — `times` dots onto the BASE, each under VtMB's own hardcoded
+	// `GetBase < 5` ceiling and the stat's own gate. Cannot decrement. Returns the dots that landed.
+	int32 BumpStat(const FString& Stat, int32 Times);
+	// `GetMasqueradeLevel()` — the 0..5 violation counter.
+	int32 GetMasqueradeLevel() const;
+	// `DialogDiscipline` is deliberately NOT here. Its whole spec is one doc string ("uses a
+	// discipline in dialog, doesn't deduct blood points"), the corpus never calls it, and its
+	// handler is undecompiled — so any number it returned would be invented. It stays a logged
+	// stub until the discipline layer (P13) defines what using a power in dialogue does.
+
+	// --- The counters, with their rules ------------------------------------------------------
+	// Humanity moves by `Delta`, DOUBLED when the character's effect layer carries
+	// `Fx_Humanity_Mods_Doubled` — Toreador's gift and its bane are the same flag.
+	void AddHumanity(int32 Delta);
+	// The masquerade counter. Reaching its authored ceiling (5) is the second game-over condition.
+	void ChangeMasqueradeLevel(int32 Delta);
+	void AddBlood(int32 Delta);
+	// Spend `Blood` blood points to heal `BloodToHealthRatio` (10) damage each — `VampHeal_Info`'s
+	// `VampFeedingHeal_Info`. Returns the damage actually healed.
+	int32 BloodHeal(int32 Blood);
 
 	// Log-and-no-op body for the inputs whose system has not landed. Public because the registration
 	// thunks are free lambdas, not members. Named so the log line reads as a recorded gap.
@@ -273,6 +338,10 @@ public:
 protected:
 	bool bUnkillable = false;
 	bool bDeathReported = false;   // OnKilled fires once, however much damage arrives after
+
+	// Rebuilt from `Effects`, never copied between characters: it is a resolution of the names, and
+	// the names are the truth. Null until something puts a group on this character.
+	TSharedPtr<FElysiumSheetEffects> EffectLayer;
 };
 
 // ============================================================================================
@@ -291,10 +360,25 @@ class FElysiumPlayer final : public FElysiumCombatCharacter
 public:
 	FElysiumLawState Law;
 	TArray<FElysiumXpEntry> ExperienceLog;
-	TArray<FString> Effects;
 	TArray<FString> EmailFlags;
 
+	// `AddExperience`'s accumulators — the record's, mirrored here for the map's lifetime.
+	float ExperienceRemainder = 0.f;
+	float LifetimeExperience = 0.f;
+
 	virtual void Spawn() override;
+
+	// `AwardExperience("<key>")` — the whole walk: refuse a key already in the give-once ledger,
+	// look it up (a miss awards and appends nothing, so it retries on every fire), add
+	// `Experience_Modifier` above 2 XP, then bank `floor(value/100)` into the `Experience` slot
+	// KEEPING the sub-100 residue. Returns the whole XP points banked by this award.
+	int32 AwardExperience(const FString& Key);
+	// Whether the give-once ledger already holds the key.
+	bool HasAwarded(const FString& Key) const;
+
+	// Resolve this character's clan into its `ClanEffect` group and rebuild the effect layer. The
+	// clan is a sheet slot, so this is called whenever that slot could have moved.
+	void RefreshClanEffects();
 
 	// Copy the session record in / out. The entity is the live view for the map's lifetime; the
 	// record is what crosses the boundary.
@@ -313,6 +397,8 @@ public:
 
 	// The run ends: fire OnDeath, then tell the session (which raises the game-over screen).
 	virtual void OnKilled() override;
+	// The other way a run ends — the masquerade counter at 5.
+	virtual void OnMasqueradeBreached() override;
 
 	// --- The 10 recovered player inputs ------------------------------------------------------
 	void InputGiveItem(const FElysiumInputArgs& Args);            // STRING, 126 calls — 9.8

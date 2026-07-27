@@ -381,6 +381,10 @@ Field 4 may join an **engine skill-check** to a Python expression with `&`. The 
 an implicit `>=` in 1,348 of 1,353 cases; the halves can swap order; skill-checks compose
 with `and`/`or` and parens; 830 conditions are skill-only with no Python at all.
 
+A check's `ident` is not always a feat: the corpus checks stats (`Humanity` 272) and disciplines
+(`Dominate` 102, `Thaumaturgy` 55) through the same syntax, and an `M_`/`F_` prefix on it is the
+engine dependency's **sex gate** rather than a name (`game_runtime.md` §3 → "Feats").
+
 Across 49,359 rows: zero imports, lambdas, comprehensions, exceptions, control flow,
 subscripts, slices, or container literals. Literals are `int` (12,278) and `str` (4,682)
 plus **one float game-wide**. Actions are only assignment (2,762) and call (1,156),
@@ -388,7 +392,8 @@ separated by `;` (and `&` in 7 places).
 
 ```ebnf
 condition  = skillcheck , [ ("&"|"|") , expr ] | expr , [ ("&"|"|") , skillcheck ] | expr ;
-skillcheck = [ "(" ] , ident , [ relop ] , int , [ ")" ] | skillcheck , ("and"|"or") , skillcheck ;
+skillcheck = [ "(" ] , [ sexgate ] , ident , [ relop ] , int , [ ")" ] | skillcheck , ("and"|"or") , skillcheck ;
+sexgate    = "M_" | "F_" ;   (* the dependency's required-gender field, not part of the name *)
 action     = stmt , { (";"|"&") , stmt } ;
 stmt       = target , "=" , expr | expr ;
 target     = ident , "." , ident | ident ;

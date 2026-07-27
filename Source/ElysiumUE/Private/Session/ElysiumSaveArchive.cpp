@@ -143,6 +143,9 @@ FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R)
 	Ar << R.Money;
 	Ar << R.Health << R.MaxHealth;
 	Ar << R.ExperienceLog << R.Effects << R.EmailFlags;
+	// The award accumulators travel with the ledger they belong to: the residue is real state (one
+	// bonus XP per 100 awards falls out of it), so dropping it would quietly cost a point.
+	Ar << R.ExperienceRemainder << R.LifetimeExperience;
 	Ar << R.Law;
 	Ar << R.bUnkillable;
 	return Ar;
@@ -441,6 +444,8 @@ void Describe(const FElysiumSavePayload& Payload, TArray<FString>& OutLines)
 	{
 		OutLines.Add(FString::Printf(TEXT("player.xp += %s (%d)"), *X.Entry, X.Amount));
 	}
+	OutLines.Add(FString::Printf(TEXT("player.xp.lifetime = %.0f (%.0f pending)"),
+		P.LifetimeExperience, P.ExperienceRemainder));
 	for (const FString& E : P.Effects)    { OutLines.Add(FString::Printf(TEXT("player.effect %s"), *E)); }
 	for (const FString& E : P.EmailFlags) { OutLines.Add(FString::Printf(TEXT("player.email %s"), *E)); }
 

@@ -65,6 +65,18 @@ void UElysiumGameStateSubsystem::NotifyPlayerKilled()
 	}
 }
 
+void UElysiumGameStateSubsystem::NotifyMasqueradeBreach()
+{
+	UE_LOG(LogElysiumState, Display, TEXT("the masquerade broke — ending the run"));
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UElysiumGameFlowSubsystem* Flow = GI->GetSubsystem<UElysiumGameFlowSubsystem>())
+		{
+			Flow->TriggerGameOver(EElysiumGameOverReason::MasqueradeBreach);
+		}
+	}
+}
+
 void UElysiumGameStateSubsystem::BeginNewGame(int32 Clan, bool bMale)
 {
 	// A fresh run starts from a clean bag: travel keeps `G` alive (R8), so without this a second

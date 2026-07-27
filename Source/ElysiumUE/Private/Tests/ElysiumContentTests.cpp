@@ -26,6 +26,7 @@
 #include "ElysiumReflections.h"
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumSheetMath.h"
 #include "Visual/ElysiumRopes.h"
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSaveTypes.h"
@@ -1417,6 +1418,10 @@ bool FElysiumRulebookContentTest::RunTest(const FString&)
 		// One value from each file, so a silently-empty half is caught.
 		TestEqual(TEXT("the frenzy damage threshold is the patch's 20"),
 			Rules.Int(TEXT("VampFrenzy_Info"), TEXT("Dmg_Amount")), 20);
+		// Blocks nest, and a nested one is keyed by its dotted path — without that the blood/health
+		// ratio reads as absent and `BloodHeal` silently falls back to its compiled default.
+		TestEqual(TEXT("a nested block's key reads through its path"),
+			Rules.Int(TEXT("VampHeal_Info.VampFeedingHeal_Info"), TEXT("BloodToHealthRatio")), 10);
 		// The CLAN-keyed half of the chargen pools (the tier half is nested in stats.txt, above).
 		// Indexed by the clandoc000 template index — their own per-row comments name Brujah(2)
 		// through Mercenary(11) — and the clan term is **0 on every shipped clan** bar disciplines,
@@ -1816,6 +1821,158 @@ bool FElysiumSheetContentTest::RunTest(const FString&)
 	else
 	{
 		AddError(Error);
+	}
+
+	return true;
+}
+
+// =================================================================================================
+// The sheet's arithmetic against the real rulebook (9.4c) — the halves the content-free tier
+// cannot reach: the trait-effect layer resolved out of `traiteffects000.txt`, the feat evaluator
+// over the shipped 23 feats, and the award values in `experience_table.txt`.
+// =================================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSheetMathContentTest,
+	"Elysium.Content.SheetMath", GElysiumContentTestFlags)
+bool FElysiumSheetMathContentTest::RunTest(const FString&)
+{
+	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/feats.txt"))))
+	{
+		AddInfo(TEXT("skipping: no exported out/vdata (run tools/export_all.py to enable)"));
+		return true;
+	}
+
+	using EC = EElysiumTraitContainer;
+	FString Error;
+
+	FElysiumStatTable Stats;
+	FElysiumFeatTable Feats;
+	FElysiumClanTable Clans;
+	FElysiumTraitEffects Effects;
+	FElysiumExperienceTable Experience;
+	const bool bLoaded = TestTrue(TEXT("stats.txt loads"), Stats.Load(Error))
+		&& TestTrue(TEXT("feats.txt loads"), Feats.Load(Error))
+		&& TestTrue(TEXT("clandoc000.txt loads"), Clans.Load(Error))
+		&& TestTrue(TEXT("traiteffects000.txt loads"), Effects.Load(Error))
+		&& TestTrue(TEXT("experience_table.txt loads"), Experience.Load(Error));
+	if (!bLoaded)
+	{
+		AddError(Error);
+		return true;
+	}
+
+	// A real playable character: `stats.txt`'s defaults, the clan's authored ratings on top.
+	auto MakePc = [&](const TCHAR* Template, FElysiumSheet& OutSheet, FElysiumSheetEffects& OutLayer)
+	{
+		FElysiumClanTemplate Resolved;
+		if (!Clans.Resolve(Template, Resolved))
+		{
+			AddError(FString::Printf(TEXT("%s does not resolve"), Template));
+			return;
+		}
+		const FString Group = Resolved.GeneralStr(TEXT("ClanEffect"));
+		TArray<FString> Groups;
+		if (!Group.IsEmpty()) { Groups.Add(Group); }
+		OutLayer.Build(Effects, Groups, &Feats);
+		OutSheet.SeedFrom(Stats);
+		OutSheet.ApplyTemplate(Resolved, &Stats, &OutLayer);
+	};
+
+	// --- Every shipped feat evaluates ------------------------------------------------------------
+	{
+		FElysiumSheet Pc;
+		FElysiumSheetEffects Layer;
+		MakePc(TEXT("Player_Brujah"), Pc, Layer);
+
+		int32 Evaluated = 0;
+		for (int32 i = 0; i < Feats.Num(); ++i)
+		{
+			const FElysiumFeat* Feat = Feats.At(i);
+			if (!Feat) { continue; }
+			const int32 Value = ElysiumFeats::FeatValue(*Feat, Pc, &Layer);
+			TestTrue(*FString::Printf(TEXT("%s evaluates within [0, %d]"), *Feat->InternalName, Feat->MaxValue),
+				Value >= 0 && Value <= Feat->MaxValue);
+			++Evaluated;
+		}
+		TestEqual(TEXT("all 23 shipped feats evaluate"), Evaluated, 23);
+
+		// The two-name shape, read off the real file: `Persuasion` = Charisma + Academics, each at
+		// its seeded rating (1 and 0), the attribute floored at 1.
+		bool bResolved = false, bIsFeat = false;
+		TestEqual(TEXT("CalcFeat(\"Persuasion\") sums the authored bases"),
+			ElysiumFeats::Calc(Feats, Pc, &Layer, TEXT("Persuasion"), bResolved, bIsFeat),
+			Pc.GetCurrent(EC::Attributes, /*Charisma*/ 4) + Pc.GetCurrent(EC::Abilities, /*Academics*/ 12));
+		TestTrue(TEXT("...as a feat"), bResolved && bIsFeat);
+		// The dlgexpr normalizer routes stat checks through the same name (272 `Humanity` checks in
+		// the corpus), so the fallback has to answer — a marked divergence from VtMB, which raises.
+		TestEqual(TEXT("CalcFeat(\"Humanity\") falls back to the trait"),
+			ElysiumFeats::Calc(Feats, Pc, &Layer, TEXT("Humanity"), bResolved, bIsFeat),
+			Pc.GetCurrent(EC::Attributes, ElysiumSlot::Humanity));
+		TestTrue(TEXT("...resolved, but not as a feat"), bResolved && !bIsFeat);
+		ElysiumFeats::Calc(Feats, Pc, &Layer, TEXT("D_HT"), bResolved, bIsFeat);
+		TestFalse(TEXT("a name that is neither reads 0 and says so"), bResolved);
+	}
+
+	// --- The clan banes, enforced by the generic effect layer -------------------------------------
+	{
+		// Tremere: no Physical attribute above 4, authored as `Max 4` trait effects.
+		FElysiumSheet Tremere;
+		FElysiumSheetEffects Layer;
+		MakePc(TEXT("Player_Tremere"), Tremere, Layer);
+		TestTrue(TEXT("the Tremere clan group resolves"), Layer.ResolvedGroups().Num() > 0);
+
+		Tremere.SetBase(EC::Attributes, ElysiumSlot::Strength, 5);
+		Tremere.RecomputeCurrent(&Stats, &Layer);
+		TestEqual(TEXT("Tremere physicals cap at the bane's Max 4"),
+			Tremere.GetCurrent(EC::Attributes, ElysiumSlot::Strength), 4);
+		TestEqual(TEXT("...on the current only — the base is what was bought"),
+			Tremere.GetBase(EC::Attributes, ElysiumSlot::Strength), 5);
+		TestFalse(TEXT("...and a dot cannot be raised past it"),
+			Tremere.IncBase(EC::Attributes, ElysiumSlot::Strength, &Stats, &Layer));
+		// The bound itself goes through the effect walk (RE26), so the bane lowers the CEILING —
+		// which is what `IncBase` and the chargen buy path both read, not just the clamp.
+		int32 BaneMin = 0, BaneMax = 0;
+		Tremere.BoundsFor(EC::Attributes, ElysiumSlot::Strength, &Stats, &Layer, BaneMin, BaneMax);
+		TestEqual(TEXT("the effective Strength ceiling is the bane's 4, not stats.txt's 10"), BaneMax, 4);
+		int32 FreeMin = 0, FreeMax = 0;
+		Tremere.BoundsFor(EC::Attributes, /*Charisma*/ 4, &Stats, &Layer, FreeMin, FreeMax);
+		TestEqual(TEXT("...and an unaffected attribute keeps its authored ceiling"), FreeMax, 10);
+
+		// Toreador: humanity moves are doubled — the gift and the bane are one flag.
+		FElysiumSheet Toreador;
+		FElysiumSheetEffects ToreadorLayer;
+		MakePc(TEXT("Player_Toreador"), Toreador, ToreadorLayer);
+		TestTrue(TEXT("Toreador carries Fx_Humanity_Mods_Doubled"),
+			ToreadorLayer.Flag(TEXT("Fx_Humanity_Mods_Doubled")) > 0);
+		TestEqual(TEXT("no other clan does — Brujah"), Layer.Flag(TEXT("Fx_Humanity_Mods_Doubled")), 0);
+
+		// A frenzy penalty is a real stat, not code: `Frenzy_Check_Mod`.
+		FElysiumSheet Gangrel;
+		FElysiumSheetEffects GangrelLayer;
+		MakePc(TEXT("Player_Gangrel"), Gangrel, GangrelLayer);
+		TestTrue(TEXT("Gangrel's frenzy bane lands on Frenzy_Check_Mod"),
+			Gangrel.GetCurrent(EC::Attributes, /*Frenzy_Check_Mod*/ 21) < 0);
+	}
+
+	// --- The award values --------------------------------------------------------------------------
+	{
+		// A real row, banked the way `AddExperience` banks it.
+		const FElysiumExperienceEntry* Row = Experience.Rows.IsEmpty() ? nullptr : &Experience.Rows[0];
+		if (TestNotNull(TEXT("the experience table has rows"), Row))
+		{
+			float Remainder = 0.f, Lifetime = 0.f;
+			const int32 Banked = ElysiumXp::Bank(ElysiumXp::WithModifier(Row->Value, 0), Remainder, Lifetime);
+			TestEqual(*FString::Printf(TEXT("'%s' (%d raw) banks floor(v/100)"), *Row->Key, Row->Value),
+				Banked, Row->Value / 100);
+		}
+		// Every shipped value is in hundredths — `N01` — bar the file's own "Junk for testing"
+		// block. That is what makes the kept remainder worth one bonus point per 100 awards.
+		int32 Hundredths = 0;
+		for (const FElysiumExperienceEntry& Entry : Experience.Rows)
+		{
+			if (Entry.Value % 100 == 1) { ++Hundredths; }
+		}
+		TestTrue(TEXT("nearly every award is authored as N01"), Hundredths >= Experience.Num() - 8);
 	}
 
 	return true;

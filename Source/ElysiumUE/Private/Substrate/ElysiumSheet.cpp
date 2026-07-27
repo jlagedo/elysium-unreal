@@ -10,6 +10,7 @@
 #include "ElysiumSheetSlots.h"
 
 #include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumSheetMath.h"
 
 // ================================================================================================
 // The slot tables — `stats.txt` file order, transcribed
@@ -225,54 +226,136 @@ void FElysiumSheet::SetBase(EElysiumTraitContainer Container, int32 Slot, int32 
 	Current[(uint8)Container][Slot] = Value;
 }
 
-void FElysiumSheet::AddBase(EElysiumTraitContainer Container, int32 Slot, int32 Delta)
+void FElysiumSheet::AddBase(EElysiumTraitContainer Container, int32 Slot, int32 Delta,
+	const FElysiumStatTable* Stats, const FElysiumSheetEffects* Effects)
 {
+	// `CVStatList_t::AddBase` writes the base RAW — it never consults the max, and it never clamps.
+	// Its only gate is the stat's `IncPredependency`, which **a negative Delta bypasses**. So a
+	// counter can bank base above its ceiling (the current value is what the clamp answers), and a
+	// loss can push it below the floor.
+	if (Delta > 0 && Stats)
+	{
+		if (const FElysiumStat* Stat = Stats->Container(Container).At(Slot))
+		{
+			for (const FString& Expr : Stat->IncPredependency)
+			{
+				if (!ElysiumSheetRules::EvalPredependency(Expr, *this))
+				{
+					return;
+				}
+			}
+		}
+	}
 	SetBase(Container, Slot, GetBase(Container, Slot) + Delta);
+	RecomputeCurrent(Stats, Effects);
 }
 
-void FElysiumSheet::RecomputeCurrent(const FElysiumStatTable* Stats)
+bool FElysiumSheet::IncBase(EElysiumTraitContainer Container, int32 Slot,
+	const FElysiumStatTable* Stats, const FElysiumSheetEffects* Effects)
 {
-	// Pass 1 — current is the base.
-	//
-	// 9.4c/f: the trait-effect pass belongs here, between the base and the clamp. VtMB's own
-	// `GetCurrent` is base -> trait effects -> clamp to the effective max -> clamp up to the min;
-	// until the effect layer lands, current is the base and its bounds.
+	if (!IsValidContainer(Container) || !Base[(uint8)Container].IsValidIndex(Slot))
+	{
+		return false;
+	}
+	const int32 Value = GetBase(Container, Slot);
+
+	if (Stats)
+	{
+		int32 Min = 0, Max = 0;
+		BoundsFor(Container, Slot, Stats, Effects, Min, Max);
+		if (Max >= Min && Value >= Max)
+		{
+			return false;
+		}
+		// The stat's own gate on being raised — `"BloodPool > 0"`, `"Health < Max_Health"`. All of
+		// them must hold; 17 of the Active_Disciplines author more than one.
+		if (const FElysiumStat* Stat = Stats->Container(Container).At(Slot))
+		{
+			for (const FString& Expr : Stat->IncPredependency)
+			{
+				if (!ElysiumSheetRules::EvalPredependency(Expr, *this))
+				{
+					return false;
+				}
+			}
+		}
+	}
+
+	SetBase(Container, Slot, Value + 1);
+	RecomputeCurrent(Stats, Effects);
+	return true;
+}
+
+void FElysiumSheet::BoundsFor(EElysiumTraitContainer Container, int32 Slot,
+	const FElysiumStatTable* Stats, const FElysiumSheetEffects* Effects,
+	int32& OutMin, int32& OutMax) const
+{
+	OutMin = 0;
+	OutMax = -1;   // Max < Min — "unbounded", which is what no rulebook means
+	const FElysiumStat* Stat = Stats ? Stats->Container(Container).At(Slot) : nullptr;
+	if (!Stat)
+	{
+		return;
+	}
+	OutMin = Stat->Min;
+	OutMax = Stat->Max;
+
+	// A bound may NAME another stat (`"Max" "Max_Health"`) rather than hold a number. It resolves
+	// against the BASE array, so the answer does not depend on which slot was recomputed first.
+	EElysiumTraitContainer RefContainer;
+	int32 RefSlot = INDEX_NONE;
+	if (!Stat->MinExpr.IsNumeric() && ElysiumFindSheetSlot(*Stat->MinExpr, RefContainer, RefSlot))
+	{
+		OutMin = Base[(uint8)RefContainer][RefSlot];
+	}
+	if (!Stat->MaxExpr.IsNumeric() && ElysiumFindSheetSlot(*Stat->MaxExpr, RefContainer, RefSlot))
+	{
+		OutMax = Base[(uint8)RefContainer][RefSlot];
+	}
+	// The bound itself goes through the character's effect walk, exactly as the engine's two bound
+	// accessors do: a `+1` on the stat raises its ceiling with it, a `Max 4` lowers it to 4.
+	if (Effects)
+	{
+		OutMin = Effects->ApplyToBound(Container, Slot, OutMin);
+		OutMax = Effects->ApplyToBound(Container, Slot, OutMax);
+	}
+}
+
+void FElysiumSheet::RecomputeCurrent(const FElysiumStatTable* Stats, const FElysiumSheetEffects* Effects)
+{
+	// VtMB's `GetCurrent` is base -> trait effects -> clamp to the effective max -> clamp up to the
+	// min, and the three steps are three passes here for one reason: a bound may name another stat,
+	// and that stat can sit at a higher slot than the one being clamped.
 	for (uint8 i = 0; i < (uint8)EElysiumTraitContainer::Count; ++i)
 	{
 		Current[i] = Base[i];
+	}
+
+	// Pass 2 — the modifier stack every group in force puts on the slot.
+	if (Effects)
+	{
+		for (uint8 i = 0; i < (uint8)EElysiumTraitContainer::Count; ++i)
+		{
+			const EElysiumTraitContainer Container = (EElysiumTraitContainer)i;
+			for (const FElysiumSheetSlot& Slot : ElysiumSheetSlots(Container))
+			{
+				Current[i][Slot.Index] = Effects->ApplyToTrait(Container, Slot.Index, Current[i][Slot.Index]);
+			}
+		}
 	}
 	if (!Stats)
 	{
 		return;
 	}
 
-	// Pass 2 — the authored bounds, which is a separate pass because a bound may NAME another stat
-	// (`"Max" "Max_Health"`) rather than hold a number, and the named stat can sit at a higher slot
-	// than the one being clamped. Reading it out of pass 1's output makes the result independent of
-	// slot order.
+	// Pass 3 — the effective bounds.
 	for (uint8 i = 0; i < (uint8)EElysiumTraitContainer::Count; ++i)
 	{
-		const FElysiumStatContainer& Table = Stats->Container((EElysiumTraitContainer)i);
-
-		for (const FElysiumSheetSlot& Slot : ElysiumSheetSlots((EElysiumTraitContainer)i))
+		const EElysiumTraitContainer Container = (EElysiumTraitContainer)i;
+		for (const FElysiumSheetSlot& Slot : ElysiumSheetSlots(Container))
 		{
-			const FElysiumStat* Stat = Table.At(Slot.Index);
-			if (!Stat)
-			{
-				continue;
-			}
-			int32 Min = Stat->Min;
-			int32 Max = Stat->Max;
-			EElysiumTraitContainer RefContainer;
-			int32 RefSlot;
-			if (!Stat->MinExpr.IsNumeric() && ElysiumFindSheetSlot(*Stat->MinExpr, RefContainer, RefSlot))
-			{
-				Min = Base[(uint8)RefContainer][RefSlot];
-			}
-			if (!Stat->MaxExpr.IsNumeric() && ElysiumFindSheetSlot(*Stat->MaxExpr, RefContainer, RefSlot))
-			{
-				Max = Base[(uint8)RefContainer][RefSlot];
-			}
+			int32 Min = 0, Max = 0;
+			BoundsFor(Container, Slot.Index, Stats, Effects, Min, Max);
 			if (Max >= Min)
 			{
 				Current[i][Slot.Index] = FMath::Clamp(Current[i][Slot.Index], Min, Max);
@@ -300,7 +383,8 @@ void FElysiumSheet::SeedFrom(const FElysiumStatTable& Stats)
 	RecomputeCurrent(&Stats);
 }
 
-void FElysiumSheet::ApplyTemplate(const FElysiumClanTemplate& Template, const FElysiumStatTable* Stats)
+void FElysiumSheet::ApplyTemplate(const FElysiumClanTemplate& Template, const FElysiumStatTable* Stats,
+	const FElysiumSheetEffects* Effects)
 {
 	// A template authors only the traits it sets, and `Resolve` has already folded the parent chain,
 	// so an absent key means inherit — write nothing for it.
@@ -315,5 +399,5 @@ void FElysiumSheet::ApplyTemplate(const FElysiumClanTemplate& Template, const FE
 			}
 		}
 	}
-	RecomputeCurrent(Stats);
+	RecomputeCurrent(Stats, Effects);
 }

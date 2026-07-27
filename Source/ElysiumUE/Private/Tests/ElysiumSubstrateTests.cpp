@@ -38,6 +38,7 @@
 #include "ElysiumPresentationSubsystem.h"
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumSheetMath.h"
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSaveTypes.h"
 #include "Scripting/ElysiumPythonVM.h"
@@ -1064,6 +1065,250 @@ bool FElysiumSheetTest::RunTest(const FString&)
 		const TArray<FName> SaveNames = Reg.SaveFields(*Player);
 		TestTrue(TEXT("the save walk enumerates a sheet slot"), SaveNames.Contains(FName(TEXT("base_strength"))));
 		TestTrue(TEXT("...both halves of it"), SaveNames.Contains(FName(TEXT("strength"))));
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// The sheet's arithmetic (9.4c), content-free: the write gates, the feat evaluator, the
+// predependency reader and the XP banking. The rulebook halves that need real `vdata` —
+// the trait-effect layer and the experience table — are `Elysium.Content.SheetMath`'s.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSheetMathTest, "Elysium.Substrate.SheetMath", GElysiumTestFlags)
+bool FElysiumSheetMathTest::RunTest(const FString&)
+{
+	using EC = EElysiumTraitContainer;
+
+	// A stand-in rulebook: every slot present (the recompute walks all four containers by index),
+	// with the three rows this test actually reads authored the way `stats.txt` authors them.
+	FElysiumStatTable Rules;
+	for (uint8 i = 0; i < (uint8)EC::Count; ++i)
+	{
+		FElysiumStatContainer& Container = Rules.Containers[i];
+		for (const FElysiumSheetSlot& Slot : ElysiumSheetSlots((EC)i))
+		{
+			FElysiumStat Stat;
+			Stat.InternalName = Slot.Internal;
+			Stat.Index = Slot.Index;
+			Stat.Min = 0;
+			Stat.Max = 10;
+			Container.Stats.Add(MoveTemp(Stat));
+		}
+	}
+	FElysiumStat& Humanity = Rules.Containers[(uint8)EC::Attributes].Stats[ElysiumSlot::Humanity];
+	Humanity.Max = 10;
+	FElysiumStat& Blood = Rules.Containers[(uint8)EC::Attributes].Stats[ElysiumSlot::BloodPool];
+	Blood.Max = 15;
+	// `Health`'s authored Max is the NAME of another stat, and its raise is gated on the same pair.
+	FElysiumStat& Damage = Rules.Containers[(uint8)EC::Attributes].Stats[ElysiumSlot::Health];
+	Damage.MaxExpr = TEXT("Max_Health");
+	Damage.Max = 0;
+	Damage.IncPredependency.Add(TEXT("Health < Max_Health"));
+	FElysiumStat& MaxHealth = Rules.Containers[(uint8)EC::Attributes].Stats[ElysiumSlot::MaxHealth];
+	MaxHealth.Max = 99999;
+
+	FElysiumSheet Sheet;
+	Sheet.SetBase(EC::Attributes, ElysiumSlot::MaxHealth, 100);
+	Sheet.SetBase(EC::Attributes, ElysiumSlot::Humanity, 7);
+	Sheet.SetBase(EC::Attributes, ElysiumSlot::BloodPool, 10);
+
+	// --- AddBase: the base is written RAW, and only the current is clamped --------------------
+	// The engine never reads the max here (RE26). The overflow banks in the base, which is why a
+	// big gain followed by a small loss does not walk back down from the ceiling.
+	Sheet.AddBase(EC::Attributes, ElysiumSlot::Humanity, 99, &Rules);
+	TestEqual(TEXT("a gain is written raw, past the ceiling"),
+		Sheet.GetBase(EC::Attributes, ElysiumSlot::Humanity), 106);
+	TestEqual(TEXT("...while the current reads the authored max"),
+		Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Humanity), 10);
+	Sheet.AddBase(EC::Attributes, ElysiumSlot::Humanity, -99, &Rules);
+	TestEqual(TEXT("a loss moves the same raw base"),
+		Sheet.GetBase(EC::Attributes, ElysiumSlot::Humanity), 7);
+	Sheet.AddBase(EC::Attributes, ElysiumSlot::Humanity, -99, &Rules);
+	TestEqual(TEXT("...below the floor as well — a negative delta bypasses the gate"),
+		Sheet.GetBase(EC::Attributes, ElysiumSlot::Humanity), -92);
+	TestEqual(TEXT("...and only the CURRENT value is clamped up to the authored min"),
+		Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Humanity), 0);
+	Sheet.SetBase(EC::Attributes, ElysiumSlot::Humanity, 7);
+
+	// The one gate a gain does face: the stat's own `IncPredependency`.
+	Sheet.SetBase(EC::Attributes, ElysiumSlot::Health, 100);   // Health == Max_Health
+	Sheet.RecomputeCurrent(&Rules);
+	Sheet.AddBase(EC::Attributes, ElysiumSlot::Health, 5, &Rules);
+	TestEqual(TEXT("a gain is refused outright when `Health < Max_Health` reads false"),
+		Sheet.GetBase(EC::Attributes, ElysiumSlot::Health), 100);
+	Sheet.AddBase(EC::Attributes, ElysiumSlot::Health, -5, &Rules);
+	TestEqual(TEXT("...and the loss through the same slot is not"),
+		Sheet.GetBase(EC::Attributes, ElysiumSlot::Health), 95);
+	Sheet.SetBase(EC::Attributes, ElysiumSlot::Health, 0);
+
+	// --- IncBase: the bound and the predependency ----------------------------------------------
+	Sheet.SetBase(EC::Attributes, ElysiumSlot::Health, 99);
+	TestTrue(TEXT("a dot lands while the gate holds"),
+		Sheet.IncBase(EC::Attributes, ElysiumSlot::Health, &Rules));
+	TestEqual(TEXT("...and it is one dot"), Sheet.GetBase(EC::Attributes, ElysiumSlot::Health), 100);
+	TestFalse(TEXT("at the named bound (Max_Health) the next one is refused"),
+		Sheet.IncBase(EC::Attributes, ElysiumSlot::Health, &Rules));
+	TestEqual(TEXT("...and nothing moved"), Sheet.GetBase(EC::Attributes, ElysiumSlot::Health), 100);
+	Sheet.SetBase(EC::Attributes, ElysiumSlot::Health, 0);
+
+	// --- The predependency reader ---------------------------------------------------------------
+	TestTrue(TEXT("`Health < Max_Health` reads true at zero damage"),
+		ElysiumSheetRules::EvalPredependency(TEXT("Health < Max_Health"), Sheet));
+	TestTrue(TEXT("a literal side reads"),
+		ElysiumSheetRules::EvalPredependency(TEXT("BloodPool > 0"), Sheet));
+	Sheet.SetBase(EC::Attributes, ElysiumSlot::BloodPool, 0);
+	Sheet.RecomputeCurrent(&Rules);
+	TestFalse(TEXT("...and answers the other way when the sheet does"),
+		ElysiumSheetRules::EvalPredependency(TEXT("BloodPool > 0"), Sheet));
+	TestTrue(TEXT("`>=` is not read as `>`"),
+		ElysiumSheetRules::EvalPredependency(TEXT("BloodPool >= 0"), Sheet));
+	TestTrue(TEXT("an expression naming nothing opens the gate rather than closing it"),
+		ElysiumSheetRules::EvalPredependency(TEXT("Squid_Rating > 4"), Sheet));
+	Sheet.SetBase(EC::Attributes, ElysiumSlot::BloodPool, 10);
+	Sheet.RecomputeCurrent(&Rules);
+
+	// --- FeatValue -------------------------------------------------------------------------------
+	// `Persuasion` = Charisma + Academics, the common two-name shape.
+	Sheet.SetBase(EC::Attributes, ElysiumSlot::Strength, 3);
+	Sheet.SetBase(EC::Abilities, /*Academics*/ 12, 2);
+	Sheet.SetBase(EC::Attributes, /*Charisma*/ 4, 4);
+	Sheet.RecomputeCurrent(&Rules);
+
+	FElysiumFeat Persuasion;
+	Persuasion.InternalName = TEXT("Persuasion");
+	Persuasion.Index = 7;
+	Persuasion.MaxValue = 10;
+	Persuasion.Bases.Add(FElysiumTraitRef::Parse(TEXT("Charisma")));
+	Persuasion.Bases.Add(FElysiumTraitRef::Parse(TEXT("Academics")));
+	TestEqual(TEXT("a feat is the sum of its bases"),
+		ElysiumFeats::FeatValue(Persuasion, Sheet, nullptr), 6);
+
+	// The per-base modifier, and the floor: the nine attributes read at least 1 however low they
+	// sit, and the derived stats do not.
+	FElysiumFeat Soak;
+	Soak.InternalName = TEXT("Soak_vs_Lethal_Falling");
+	Soak.Index = 15;
+	Soak.MaxValue = 20;
+	Soak.Bases.Add(FElysiumTraitRef::Parse(TEXT("Armor_Rating / 2")));
+	Soak.Bases.Add(FElysiumTraitRef::Parse(TEXT("Stamina")));
+	Sheet.SetBase(EC::Attributes, /*Armor_Rating*/ 19, 5);
+	Sheet.SetBase(EC::Attributes, ElysiumSlot::Stamina, 0);
+	Sheet.RecomputeCurrent(&Rules);
+	TestEqual(TEXT("`Armor_Rating / 2` divides, and Stamina floors at 1"),
+		ElysiumFeats::FeatValue(Soak, Sheet, nullptr), 3);
+
+	// The clamp, and the containers a base may NOT come from: a discipline base contributes zero,
+	// which is what `FeatValue`'s category test does.
+	Persuasion.MaxValue = 4;
+	TestEqual(TEXT("the rating clamps to the feat's MaxValue"),
+		ElysiumFeats::FeatValue(Persuasion, Sheet, nullptr), 4);
+	FElysiumFeat Odd;
+	Odd.InternalName = TEXT("Odd");
+	Odd.Index = 22;
+	Odd.Bases.Add(FElysiumTraitRef::Parse(TEXT("Celerity")));
+	Sheet.SetBase(EC::Disciplines, /*Celerity*/ 3, 5);
+	Sheet.RecomputeCurrent(&Rules);
+	TestEqual(TEXT("a discipline base contributes nothing"),
+		ElysiumFeats::FeatValue(Odd, Sheet, nullptr), 0);
+
+	// --- The effect accumulator (RE26) -------------------------------------------------------------
+	// The engine's own query: its defaults, its per-operator rules and its finalize order.
+	{
+		using FQuery = FElysiumSheetEffects::FQuery;
+		using FRow = FElysiumSheetEffects::FRow;
+		auto Row = [](EElysiumTraitOp Op, int32 Amount, int32 Priority = 0)
+		{
+			FRow R; R.Op = Op; R.Amount = Amount; R.Priority = Priority; return R;
+		};
+
+		FQuery Empty;
+		Empty.Value = 5;
+		TestEqual(TEXT("an empty query is the identity"), Empty.Finalize(), 5);
+
+		FQuery Adds;
+		Adds.Value = 5;
+		Adds.Accumulate(Row(EElysiumTraitOp::Add, 2));
+		Adds.Accumulate(Row(EElysiumTraitOp::Add, -1));
+		TestEqual(TEXT("every additive effect sums"), Adds.Finalize(), 6);
+
+		// `(value + add) * mul / div` — the order is the engine's, so the add lands INSIDE the
+		// multiply rather than after it.
+		FQuery Scale;
+		Scale.Value = 4;
+		Scale.Accumulate(Row(EElysiumTraitOp::Add, 2));
+		Scale.Accumulate(Row(EElysiumTraitOp::Mul, 3));
+		Scale.Accumulate(Row(EElysiumTraitOp::Div, 2));
+		TestEqual(TEXT("(4+2)*3/2"), Scale.Finalize(), 9);
+
+		// A single winner per slot: equal priority -> the SMALLER amount, higher priority -> outright.
+		FQuery Caps;
+		Caps.Value = 10;
+		Caps.Accumulate(Row(EElysiumTraitOp::Max, 4));
+		Caps.Accumulate(Row(EElysiumTraitOp::Max, 6));
+		TestEqual(TEXT("two equal-priority caps: the smaller wins"), Caps.Finalize(), 4);
+		FQuery Priority;
+		Priority.Value = 10;
+		Priority.Accumulate(Row(EElysiumTraitOp::Max, 4));
+		Priority.Accumulate(Row(EElysiumTraitOp::Max, 8, /*Priority*/ 1));
+		TestEqual(TEXT("a higher-priority cap takes the slot outright"), Priority.Finalize(), 8);
+
+		// `Value` replaces; `%` accumulates `100 - amount`, so 50% reads as 150%.
+		FQuery Replaced;
+		Replaced.Value = 9;
+		Replaced.Accumulate(Row(EElysiumTraitOp::Value, 2));
+		Replaced.Accumulate(Row(EElysiumTraitOp::Add, 1));
+		TestEqual(TEXT("`Value` replaces the value, the adds still apply"), Replaced.Finalize(), 3);
+		FQuery Percent;
+		Percent.Value = 10;
+		Percent.Accumulate(Row(EElysiumTraitOp::Percent, 50));
+		TestEqual(TEXT("`50%` reads as 150% — the engine's own inversion"), Percent.Finalize(), 15);
+
+		// The payload operators never touch the value.
+		FQuery Ignored;
+		Ignored.Value = 7;
+		Ignored.Accumulate(Row(EElysiumTraitOp::Duration, 200));
+		Ignored.Accumulate(Row(EElysiumTraitOp::Damage, 3));
+		TestEqual(TEXT("Duration/Damage are read elsewhere, not here"), Ignored.Finalize(), 7);
+	}
+
+	// --- The XP arithmetic ------------------------------------------------------------------------
+	// The bonus applies above 2 XP only — the threshold is on the raw hundredths.
+	TestEqual(TEXT("a 2 XP award takes no modifier"), ElysiumXp::WithModifier(201, 5), 201);
+	TestEqual(TEXT("a 3 XP award takes it"), ElysiumXp::WithModifier(301, 5), 306);
+	TestEqual(TEXT("a negative modifier cannot take an award below 1 XP"),
+		ElysiumXp::WithModifier(301, -900), 100);
+
+	{
+		float Remainder = 0.f, Lifetime = 0.f;
+		TestEqual(TEXT("a 301 award banks 3 points"), ElysiumXp::Bank(301, Remainder, Lifetime), 3);
+		TestEqual(TEXT("...and keeps the sub-100 residue"), (int32)Remainder, 1);
+		TestEqual(TEXT("...while the lifetime total stays raw"), (int32)Lifetime, 301);
+		// The residue is what it is FOR: 100 awards of `N01` fall out as one extra point.
+		float R = 0.f, L = 0.f;
+		int32 Banked = 0;
+		for (int32 i = 0; i < 100; ++i) { Banked += ElysiumXp::Bank(101, R, L); }
+		TestEqual(TEXT("100 awards of 1.01 XP bank 101, not 100"), Banked, 101);
+		TestEqual(TEXT("...and land back on zero residue"), (int32)R, 0);
+	}
+
+	// --- The give-once ledger ---------------------------------------------------------------------
+	// Give-once is the ledger, not the trailing `01`: every key is refused a second time.
+	{
+		FElysiumPlayer Pc;
+		TestFalse(TEXT("a fresh ledger holds nothing"), Pc.HasAwarded(TEXT("Tut_Jack")));
+		FElysiumXpEntry Entry;
+		Entry.Entry = TEXT("Tut_Jack");
+		Entry.Amount = 101;
+		Pc.ExperienceLog.Add(Entry);
+		TestTrue(TEXT("the awarded key is refused"), Pc.HasAwarded(TEXT("Tut_Jack")));
+		TestTrue(TEXT("...case-insensitively, as Q_strnicmp compares"), Pc.HasAwarded(TEXT("tut_jack")));
+		TestFalse(TEXT("an unrelated key still awards"), Pc.HasAwarded(TEXT("Tut_Mercurio")));
+		// The prefix compare is VtMB's own, reproduced rather than fixed — no shipped key pair
+		// triggers it, and `Elysium.Content.Rulebook` asserts that premise still holds.
+		TestTrue(TEXT("a key EXTENDING an awarded one reads as already given (VtMB's prefix compare)"),
+			Pc.HasAwarded(TEXT("Tut_Jack_Extra")));
 	}
 
 	return true;
@@ -2537,18 +2782,29 @@ bool FElysiumDlgExprTest::RunTest(const FString&)
 {
 	using namespace ElysiumDlgExpr;
 
-	// A skill-only condition: implicit `>=`, wrapped in CalcFeat.
+	// A skill-only condition: implicit `>=`, wrapped in CalcFeat. The receiver is explicit, because
+	// `CalcFeat` is a Character method — a bare call resolves to nothing in either host.
 	TestEqual(TEXT("bare skillcheck"), ConditionToPython(TEXT("Seduction 7")),
-		FString(TEXT("CalcFeat(\"Seduction\") >= 7")));
+		FString(TEXT("pc.CalcFeat(\"Seduction\") >= 7")));
 	// Explicit relop preserved.
 	TestEqual(TEXT("skillcheck relop"), ConditionToPython(TEXT("Humanity >= 5")),
-		FString(TEXT("CalcFeat(\"Humanity\") >= 5")));
+		FString(TEXT("pc.CalcFeat(\"Humanity\") >= 5")));
 	// Skillcheck joined to a python expr by `&` -> `and`.
 	TestEqual(TEXT("skillcheck & expr"), ConditionToPython(TEXT("Seduction 7 & G.Johnny_Dead == 0")),
-		FString(TEXT("CalcFeat(\"Seduction\") >= 7 and G.Johnny_Dead == 0")));
+		FString(TEXT("pc.CalcFeat(\"Seduction\") >= 7 and G.Johnny_Dead == 0")));
 	// `|` -> `or`.
 	TestEqual(TEXT("pipe -> or"), ConditionToPython(TEXT("Persuasion 7 | G.x == 1")),
-		FString(TEXT("CalcFeat(\"Persuasion\") >= 7 or G.x == 1")));
+		FString(TEXT("pc.CalcFeat(\"Persuasion\") >= 7 or G.x == 1")));
+	// The `M_`/`F_` prefix is the engine dependency's SEX GATE, not part of the trait name — the
+	// corpus authors the same beat twice, once per sex, with different lines (`cal.dlg`).
+	TestEqual(TEXT("male-gated skillcheck"), ConditionToPython(TEXT("M_Persuasion 3")),
+		FString(TEXT("(pc.IsMale() and pc.CalcFeat(\"Persuasion\") >= 3)")));
+	TestEqual(TEXT("female-gated skillcheck"), ConditionToPython(TEXT("F_Seduction 8 & G.x == 0")),
+		FString(TEXT("(not pc.IsMale() and pc.CalcFeat(\"Seduction\") >= 8) and G.x == 0")));
+	// A trait that merely STARTS with a letter and an underscore is not gated.
+	TestEqual(TEXT("an ordinary underscored trait is untouched"),
+		ConditionToPython(TEXT("Max_Health 5")),
+		FString(TEXT("pc.CalcFeat(\"Max_Health\") >= 5")));
 	// A pure python condition (no skillcheck) round-trips (normalised spacing).
 	TestEqual(TEXT("pure python"), ConditionToPython(TEXT("G.Patch_Plus == 0")),
 		FString(TEXT("G.Patch_Plus == 0")));

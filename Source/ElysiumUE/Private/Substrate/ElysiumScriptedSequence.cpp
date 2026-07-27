@@ -112,6 +112,14 @@ public:
 	bool bRunning = false;                 // between OnBeginSequence and OnEndSequence
 	FElysiumEntityHandle Activator;        // whoever fired BeginSequence, carried to OnEndSequence
 
+	// The RE'd CCineNPC::Use throttle (vampire.dll FUN_101a7390): a BeginSequence arriving
+	// before this gate is dropped instead of acted on, and the gate is pushed further out. A
+	// successful call sets it to Now + 0.05s (the same constant recovered from the binary). This
+	// is what keeps a self-chaining m_iszNextScript (e.g. sm_asylum_1's Jeanette_in_elevator,
+	// which names itself) from retriggering inside the same zero-delay drain pass — VtMB never
+	// runs the chain more than once per tick, so it never becomes a same-frame loop.
+	double NextAllowedBeginTime = -1.0;
+
 	// The NPC this beat drives, or null when it names the player (`!…`), has not spawned yet (an
 	// npc_maker child), or is gone. A null target still runs the beat as a timing shell so the
 	// outputs fire and the map's flow continues.
@@ -153,6 +161,18 @@ public:
 		{
 			return;
 		}
+
+		const double Now = World ? World->NowSeconds() : 0.0;
+		if (Now < NextAllowedBeginTime)
+		{
+			NextAllowedBeginTime += 0.05;
+			UE_LOG(LogElysiumSeq, Verbose,
+				TEXT("%s BeginSequence throttled (retriggered within 0.05s of the last call)"),
+				*DebugString());
+			return;
+		}
+		NextAllowedBeginTime = Now + 0.05;
+
 		Activator = Args.Activator;
 		bRunning = true;
 

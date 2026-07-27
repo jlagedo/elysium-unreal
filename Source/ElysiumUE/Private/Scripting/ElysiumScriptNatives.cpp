@@ -56,10 +56,10 @@ namespace
 		{ TEXT("IsMale"),              true,  TEXT("player sheet") },
 		{ TEXT("SeductiveFeed"),       true,  TEXT("stub") },
 		{ TEXT("SetCamera"),           true,  TEXT("the scripted-shot channel") },
-		{ TEXT("CalcFeat"),            true,  TEXT("stub (no character sheet)") },
-		{ TEXT("DialogDiscipline"),    true,  TEXT("stub") },
-		{ TEXT("BumpStat"),            true,  TEXT("stub (no character sheet)") },
-		{ TEXT("GetMasqueradeLevel"),  true,  TEXT("stub (no masquerade meter)") },
+		{ TEXT("CalcFeat"),            true,  TEXT("the feat rating over the sheet") },
+		{ TEXT("DialogDiscipline"),    true,  TEXT("stub (P13 owns using a power in dialogue)") },
+		{ TEXT("BumpStat"),            true,  TEXT("dots onto the sheet's base") },
+		{ TEXT("GetMasqueradeLevel"),  true,  TEXT("the masquerade counter") },
 		{ TEXT("GetQuestState"),       true,  TEXT("quest map") },
 		{ TEXT("IsFollowerOf"),        true,  TEXT("stub") },
 	};
@@ -114,10 +114,23 @@ namespace
 		}
 		if (Method == FName(TEXT("HasItem")) || Method == FName(TEXT("HasWeaponEquipped"))
 			|| Method == FName(TEXT("IsFollowerOf"))) { return FElysiumVariant::Bool(false); }
-		if (Method == FName(TEXT("AmmoCount"))
-			|| Method == FName(TEXT("CalcFeat")) || Method == FName(TEXT("GetMasqueradeLevel"))
-			|| Method == FName(TEXT("DialogDiscipline"))) { return FElysiumVariant::Int(0); }
+		if (Method == FName(TEXT("AmmoCount")) || Method == FName(TEXT("DialogDiscipline")))
+		{
+			return FElysiumVariant::Int(0);
+		}
 		return FElysiumVariant::Void();
+	}
+
+	// The receiver a Character method runs on. An UNSET handle is `FindPlayer()` — the script wrote
+	// no receiver, which is the PC — so it resolves to the player rather than to nothing.
+	FElysiumCombatCharacter* ResolveCharacter(FElysiumEntityWorld* World, const FElysiumEntityHandle& Self)
+	{
+		if (!World)
+		{
+			return nullptr;
+		}
+		FElysiumEntity* E = Self.IsSet() ? World->Resolve(Self) : nullptr;
+		return E ? E->AsCombatCharacter() : static_cast<FElysiumCombatCharacter*>(World->FindPlayer());
 	}
 }
 
@@ -221,9 +234,39 @@ namespace ElysiumScriptNatives
 		// — prices, barter, the HUD readout — is still 9.10's.
 		if (Method == FName(TEXT("CurrentMoney")))
 		{
-			const FElysiumEntity* E = World ? World->Resolve(Self) : nullptr;
-			const FElysiumCombatCharacter* Char = E ? E->AsCombatCharacter() : nullptr;
+			const FElysiumCombatCharacter* Char = ResolveCharacter(World, Self);
 			const FElysiumVariant R = FElysiumVariant::Int(Char ? Char->Money : 0);
+			Record(State, Method, Display, R, /*bStub*/ Char == nullptr);
+			return R;
+		}
+
+		// The sheet-counter surface (9.4c). All four read or write the RECEIVER's own sheet — the
+		// class is `CBaseCombatCharacter`, so an NPC answers for itself exactly as the PC does.
+		if (Method == FName(TEXT("CalcFeat")))
+		{
+			const FElysiumCombatCharacter* Char = ResolveCharacter(World, Self);
+			// The argument is the feat name; `LogArgs[0]` above has already normalised its casing
+			// for the log, and the lookup itself is case-insensitive either way.
+			const FString Name = Args.Num() >= 1 ? Args[0].ToString() : FString();
+			const FElysiumVariant R = FElysiumVariant::Int(Char ? Char->CalcFeat(Name) : 0);
+			Record(State, Method, Display, R, /*bStub*/ Char == nullptr);
+			return R;
+		}
+		if (Method == FName(TEXT("BumpStat")))
+		{
+			FElysiumCombatCharacter* Char = ResolveCharacter(World, Self);
+			// (char, stat, times) — the third argument is a REPEAT COUNT, not an amount, and an
+			// absent one is the single dot the two-argument call sites mean.
+			const FString Stat = Args.Num() >= 1 ? Args[0].ToString() : FString();
+			const int32 Times = Args.Num() >= 2 ? Args[1].ToInt() : 1;
+			const int32 Landed = Char ? Char->BumpStat(Stat, Times) : 0;
+			Record(State, Method, Display, FElysiumVariant::Int(Landed), /*bStub*/ Char == nullptr);
+			return FElysiumVariant::Void();   // VtMB returns None
+		}
+		if (Method == FName(TEXT("GetMasqueradeLevel")))
+		{
+			const FElysiumCombatCharacter* Char = ResolveCharacter(World, Self);
+			const FElysiumVariant R = FElysiumVariant::Int(Char ? Char->GetMasqueradeLevel() : 0);
 			Record(State, Method, Display, R, /*bStub*/ Char == nullptr);
 			return R;
 		}

@@ -253,8 +253,10 @@ private:
 // must not need a code change to be readable.
 struct FElysiumRules
 {
-	TArray<FString> BlockOrder;                             // lowercased, file order
-	TMap<FString, TMap<FString, FString>> Blocks;           // block -> key -> raw value
+	TArray<FString> BlockOrder;                             // top-level blocks, lowercased, file order
+	// block -> key -> raw value. A NESTED block is keyed by its dotted path
+	// (`vampheal_info.vampfeedingheal_info`), so `BlockOrder` and the key set differ.
+	TMap<FString, TMap<FString, FString>> Blocks;
 
 	TArray<FElysiumRuleTable> Tables;                       // rules_tables.txt
 

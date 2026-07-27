@@ -105,9 +105,10 @@ deps below — refresh it whenever a task flips:
 2. **9.4 — the PP1 rung, in seven sub-steps.** Build order: **RE24 [x]** → **a [x]** the rulebook
    readers (the gate — 12 table families now parse and are asserted against the exported files)
    → **b [x]** the sheet as 148 registered fields over VtMB's four containers, `Max_Health` read
-   as the authored stat it is → **c** the 290-call counter surface → **d** quests for real → **e** the
-   journal screen → **RE25 [x]** → **f** chargen including the quiz → **g** genesis played, not
-   skipped. **c is next**, and every slot it clamps now exists.
+   as the authored stat it is → **c [x]** the 290-call counter surface, the trait-effect layer under
+   it → **d** quests for real → **e** the journal screen → **RE25 [x]** → **f** chargen including the
+   quiz → **g** genesis played, not skipped. **d is next**, and the `AwardXP` key a quest state
+   fires now has an awarder to hand it to.
 3. **9.8 / 9.9 / 9.10 / 9.5** — the rest of what the hinge unblocked. They land *on*
    `FElysiumCombatCharacter` and `FElysiumPlayerRecord`: 9.10 finishes the economy over the
    `money` field that already exists, 9.8 fills the record's inventory half, and 9.5 (= 11.9, **[x]**)
@@ -798,17 +799,16 @@ draw on the same stack; NPCs stand in the world at their entity origins.
 - [ ] **9.10 Economy** — **250 calls**: `MoneyAdd`/`MoneyRemove` (INTEGER inputs on the combat
   character) + `CurrentMoney`/`SetMoney`. The smallest self-contained system on the ledger; one
   integer on the sheet plus vendor `worth` when 9.8 lands. *Deps:* 9.7c.
-- [ ] **9.4 Quests/XP + RPG sheet data** *(the PP1 rung)* — the sheet is real (**b [x]**) and the
-  rulebook parses (**a [x]**); what is still a shell is everything the sheet feeds. Quests are a bare
-  `name -> int` map with no catalogue and no awards, `CalcFeat`/`BumpStat`/`GetMasqueradeLevel`/
-  `DialogDiscipline` are logged stubs, `AwardExperience` drops, and there is no journal and no
-  chargen. 9.7 sized and constrained the lane: the sheet-counter demand is
+- [ ] **9.4 Quests/XP + RPG sheet data** *(the PP1 rung)* — the sheet is real (**b [x]**), the
+  rulebook parses (**a [x]**) and the arithmetic over it runs (**c [x]**); what is still a shell is
+  the content layer above. Quests are a bare `name -> int` map with no catalogue and no awards, and
+  there is no journal and no chargen. 9.7 sized and constrained the lane: the sheet-counter demand is
   **290 calls** (`AwardExperience` 77 / `HumanityAdd` 69 / `CalcFeat` 53 / `ChangeMasqueradeLevel` 44
   / `Bloodloss` / `BumpStat` / `GetMasqueradeLevel`), the counters are INTEGER datamap inputs on the
   combat character, and **`AwardExperience` takes a STRING** — it names an experience-table entry, so
   it cannot be modelled as an integer add (`script_api.md`). The sheet's home is `FElysiumSheet` on
   `FElysiumCombatCharacter` (live) + `FElysiumPlayerRecord` (durable, 11.4); what 9.4 has left to add
-  is the arithmetic over those slots and the two screens the data feeds.
+  is the quest catalogue and the two screens the data feeds.
   Table→system map: `docs/vdata-catalog.md`; the sheet's recovered shape: `savegame_format.md`
   (`m_iVAttributes*`, `m_QuestList`, `m_ExpList`). **Owner call:** chargen is a *full* reproduction
   including the `charcreatewizard.txt` quiz, the journal screen is in scope, and the open RE is
@@ -844,18 +844,38 @@ draw on the same stack; NPCs stand in the world at their entity origins.
     `stats.txt` and finds the same trait at the same index. **One inference, marked as one**
     (`game_runtime.md`): `Health`'s datamap name `vhealth` is taken from the sampled
     `vmax_health` pattern, not read off the image.
-  - **c. The 290-call counter surface** *(**RE24** closed it)* — the four Character-method stubs go
-    real: **`CalcFeat`** returns the clamped rating `Feats::FeatValue` computes over a
-    *variable-length* `Base%d` list (each entry the *current* trait value through its own `/`-or-`*`
-    modifier, the nine attributes floored at 1, then a feat-level trait-effect pass, then
-    `[0, MaxValue]`), **`BumpStat(stat, times)`** loops its recovered third argument and increments
-    the **base** under a hardcoded `< 5` ceiling and cannot decrement, plus `GetMasqueradeLevel` and
-    `DialogDiscipline`. `AwardExperience` looks its key up, refuses a repeat against the `m_ExpList`
-    ledger (give-once is the ledger, *not* the trailing `01`), adds `Experience_Modifier` above 2 XP,
-    and accumulates `floor(value/100)` **keeping the sub-100 remainder** into an
-    `FElysiumXpEntry`. The counters that already have fields gain their `rules.txt` clamps and the
-    clan trait-effect doubling. `ChangeMasqueradeLevel` reaching 5 is **the second game-over
-    condition** — the branch 11.3 shipped with no driver.
+  - [x] **c. The 290-call counter surface** *(**RE24** closed it)* — the arithmetic over the slots,
+    in `Private/Substrate/ElysiumSheetMath.{h,cpp}`: the **trait-effect layer** (`m_tEffectList`
+    resolved into per-trait / per-feat modifier rows and the `Fx_*` flags — the hole b left in
+    `RecomputeCurrent`, now the pass between the base and the bounds), the **feat evaluator**, and
+    the XP arithmetic. The four Character-method stubs are real: **`CalcFeat`** is
+    `Feats::FeatValue` over the *variable-length* `Base%d` list (each entry the *current* value
+    through its own `/`-or-`*` modifier, the nine attributes floored at 1, only the Attributes and
+    Abilities containers summed, then the feat-level effect pass, then `[0, MaxValue]`);
+    **`BumpStat(stat, times)`** loops its third argument through `IncBase` under the hardcoded
+    `GetBase < 5` ceiling and cannot decrement; plus `GetMasqueradeLevel` and `DialogDiscipline`
+    (the rating, no blood spent — the power is P13's). `AwardExperience` runs the whole walk:
+    give-once against the `m_ExpList` ledger (*not* the trailing `01`), a miss awarding **and
+    appending** nothing, `Experience_Modifier` above 2 XP, then `floor(value/100)` **keeping the
+    sub-100 remainder**, which is worth one bonus point per 100 awards. The counters write through
+    `AddBase`'s gate (the effective max on a gain, **bypassed on a loss**), Humanity doubling on
+    `Fx_Humanity_Mods_Doubled` (Toreador's gift and bane are one flag), and `BloodHeal` converting
+    at `rules.txt`'s `BloodToHealthRatio`. `ChangeMasqueradeLevel` reaching the authored ceiling
+    drives 11.3's `MasqueradeBreach` game-over — **the second loss condition**, which shipped with
+    no driver. Clan banes are enforced by the generic layer and nothing else: a Tremere's `Max 4`
+    caps the current value and refuses the dot. **RE26 closed the two readings this would otherwise
+    have guessed** — the effect accumulator is `CVTraitEffectQuery`'s, ported field for field, and
+    `AddBase` writes the base raw (no clamp, no max test) as the image does. **`DialogDiscipline`
+    stays a logged stub**: zero call sites, an undecompiled handler, and one doc string — any
+    number would be invented. Save payload version **3** (`Xp`), `MinSupported` raised with it, for
+    the two award accumulators. **One divergence, marked in `script_api.md`**: `CalcFeat` falls back
+    from the feat table to the **trait** of that name instead of raising, because our dlgexpr
+    normalizer routes every skill-check through it and VtMB's own dependency reads those off
+    `GetCurrent`. The normalizer also emits the receiver (`pc.CalcFeat`, which is what makes a
+    skill-gated line evaluate at all) and RE26's **sex gate** for an `M_`/`F_`-prefixed check.
+    Acceptance: `Elysium.Substrate.SheetMath` (the gates, the feat sum, the predependency reader,
+    the banking, the ledger) and `Elysium.Content.SheetMath` (all 23 shipped feats evaluate in
+    range, the Tremere and Toreador banes land, the award values bank as authored).
   - **d. Quests for real** — the `name -> int` map stays authoritative (732 call sites; default-0 on
     miss is VtMB's own contract). What lands is what happens *around* a state change: resolve the
     `CompletionState`, fire `AwardXP` (an experience-table key, not a number — the shipped file's own
@@ -890,7 +910,7 @@ draw on the same stack; NPCs stand in the world at their entity origins.
   *Acceptance (PP1):* New Game walks genesis from real input, the quiz-and-spend character lands on
   the player entity, `pc.clan`/`pc.strength` read back from Python, a skill-gated `.dlg` choice that
   was hidden becomes visible, and the journal shows `pc.SetQuest("Tutorial", 1)`. *Deps:* 1.1 [x],
-  9.7c [x], 11.4 [x], 11.6 [x]; **RE24 [x]** (b [x], c unblocked), **RE25 [x]** (f is unblocked).
+  9.7c [x], 11.4 [x], 11.6 [x]; **RE24 [x]** (b [x], c [x]), **RE25 [x]** (f is unblocked).
 - [x] **9.5 Save/load** — **built as 11.9**; see that entry. The four blocks (Session / Player /
   Maps / World) over the R2 field walk, the per-map snapshot lifecycle with the absent-entity set,
   the event queue incl. deferred script strings, think times, `G`, and owned RNG streams, inside a
@@ -1184,6 +1204,7 @@ retail end to end, and `test.bat Play` proves it headlessly.
 | RE23 | **The particle format + the wetness channel** — VtMB's weather is Troika-custom, not Source: no `func_precipitation` anywhere in the install, and the parser lives in a forked `Bin/engine.dll` (gate cvar `particles_enable_precipitation`). The `particles/*.txt` grammar is partly reconstructed (envelope, emitter-vs-particle roles, the `a~b` / `a,b,…` / `v(n)` value forms, the `collide { spawn / decal }` block) — `weather.md` marks what is inferred. Eight open questions, the load-bearing ones being **what `FadeGlobalWetness` actually scales** (`GlobalWetness` crosses into `client.dll`, so it reaches the render side), **who calls it** (survey `out/scripts/`), and whether `func_particle`/`env_particle` take the standard I/O + `start_hidden` surface. No public RE exists — the community FGD defines neither classname and annotates all three wetness keys "Not tested yet...". Full: `docs/weather.md` | 7.9, PL12 | [ ] |
 | RE24 | **The sheet math** — all four closed, and two premises were wrong. The substrate first: a trait is `(container, index)` over `CVStatList_t`, **index counting the container's leading `*_Order` block as 0**, so `m_iVAttributes*` is **35** slots (not 21) and `m_iVAbilities*` **13** (not 12) — proven three ways off the datamap and three hardcoded indices. **`AwardExperience`**: `floor(value/100)` confirmed, but `AddExperience` **keeps the sub-100 remainder**, and **give-once is the `m_ExpList` ledger, not the trailing `01`** — every key is give-once; a `> 299` award additionally adds `Experience_Modifier`. **`CalcFeat`** returns a plain int — the *rating*, not a roll — from `Feats::FeatValue`: the sum of a **variable-length** `Base%d` list (`Soak_vs_Bashing` has three, `Damage` none, `"Armor_Rating / 2"` is a per-base `÷`), each entry the *current* value, the nine attributes floored at 1, plus per-feat code terms, a feat-level trait-effect pass, and a clamp to `MaxValue`; `PCWeighting` resolves at load to a `dicerolls.txt` index (all 23 feats → `Normal`). **`BumpStat`**'s third argument is a **repeat count**; it writes the **base** via `IncBase`, under a hardcoded `GetBase < 5` ceiling, and cannot decrement. **There is no Stamina→Health derivation** — `Max_Health` is an authored stat (`Default 100`, no formula in any `vdata` file, no trait effect targeting it) and **`Health` counts damage taken**; NPC tracks are `npctemplate*`'s literal `Max_Health`. Residue: five per-feat override object pointers, null in the image with no writer found. Full: `game_runtime.md` §3; as-built: archive | 9.4b, 9.4c | [x] |
 | RE25 | **Chargen math** — all four closed, and the whole chargen surface turned out to live in **`client.dll`**, not `vampire.dll`. **Pools:** seven per-category counters = clan-keyed `rules_tables.txt` `Subpool_*` (zero on every shipped clan bar `Subpool_Disciplines` = 1) **+** the tier table routed through `Attribute_Order_Lookups`/`Ability_Order_Lookups` — so a playable PC spends **2/1/0** attribute dots, **3/2/1** ability dots, **1** discipline dot, over a baseline the wizard *buys* with `giftxp 9000` + `vautolvl <clan>_CharGen`. **Cost:** `Current_Rating` is **pre-purchase** and is the stat's **base**; `Sell(r) ≡ Buy(r−1)`; `New` only for the 0→1 step and never for attributes; `30000` = cannot buy. **The `-1` sentinel** gates the sheet's **row filter** (`0 ≤ v < 6`), not the price — and the `Raise_Clan_Discipline`/`Raise_Other_Discipline` dual formula was **never implemented** (neither string exists in either DLL). **Banes/histories** are the generic trait-effect layer, with its operator enum shipped as data (`traiteffect.txt` `ModifierNames`). Residue: trait-effect stacking order. Full: `game_runtime.md` → "Chargen" / "Buying a dot" / "Trait effects"; as-built: archive | 9.4f | [x] |
+| RE26 | **The trait-effect accumulator + the dialogue sex gate** — closed the two open readings 9.4c would otherwise have guessed. **`CVTraitEffectQuery`** (`101F9BF0` → `101F6910` build / `101F75A0`+`101F6C50` fold / `101F69A0` finalize): one pass over `m_tEffectList` into a 68-byte accumulator, `add` summing, `*`/`/`/`Max`/`Min` each a **single winner** (higher group priority wins, equal priority → the smaller amount, `Min` included), `%` accumulating `100 - amount`, `Value` replacing the value outright, `Cost`/`BloodCost`/`Damage`/`Duration` ignored; finalize is `(value + add) * mul / div`, then `× percent / 100`, then clamp to `[min, max]` (defaults 1/1/32000/−32000/100). No shipped group authors a priority, and the shipped ops are only `+`/`-`/`Value`/`Max`/`Duration`/`Damage`/`BloodCost`. **The stat's own bounds run through the same walk** (`101FF060`/`101FF010`), so a `+1` raises a ceiling and a `Max 4` lowers it. **`AddBase` (`10200FC0`) writes the base RAW** — no max test, no clamp, gated only by `IncPredependency` which a negative delta bypasses; **`IncBase` (`10200D60`)** is the one that tests `base < effective max`. **`CDialogDependency::TestSimple` (`100E9760`)** carries a required-sex field at `+0x224` tested against `CBaseCombatCharacter::IsMale` (`10336920`) — which is what a check's `M_`/`F_` prefix is, and it also reads stat/discipline checks off `GetCurrent`, never through `Feats::FeatValue`. Full: `game_runtime.md` §3, `python_bridge.md` | 9.4c, 9.4d, 9.4f, B4 | [x] |
 | SKY | **Sky + ambience rework, Phases B + C (B1–B8b, C0–C5)** — landed 2026-07-26: backdrop correct + at parity with standing tests (`Elysium.Substrate.SkyCube`/`FogPack`); the whole 3D skybox split by BSP area and placed under its transform; fog from its real owners + Source's own linear distance fog as a per-primitive material term (B8b, D4 amended); the sky light at the map's own authored level (**zero on the 83 no-pair maps**); the bake measured in absolute units — direct light explains ~0% of a median lit face, the bounce floor *is* the ambient level. Open residue promoted to **3.10–3.13 + RE17**. Facts: `sky-ambience.md` | 3.6/3.7 | [x] |
 
 The Ghidra extraction findings behind the closed rows (the RE1/RE2/RE3/RE4 detail: addresses,

@@ -100,7 +100,9 @@ struct FElysiumDlgFile
 // transforms — no evaluation — so they unit-test directly.
 namespace ElysiumDlgExpr
 {
-	// A field-4 condition. Skillchecks (`Seduction 7`, `Humanity >= 5`) -> `CalcFeat("Seduction") >= 7`;
+	// A field-4 condition. Skillchecks (`Seduction 7`, `Humanity >= 5`) -> `pc.CalcFeat("Seduction") >= 7`;
+	// an `M_`/`F_`-prefixed one carries the engine dependency's sex gate (`M_Persuasion 3` ->
+	// `(pc.IsMale() and pc.CalcFeat("Persuasion") >= 3)`);
 	// the top-level dlgexpr joins `&` -> `and`, `|` -> `or`. Empty -> empty (the caller treats empty as
 	// an open gate). A shape it cannot classify is returned unchanged (host error-to-false).
 	FString ConditionToPython(const FString& Raw);

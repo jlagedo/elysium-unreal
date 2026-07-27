@@ -525,18 +525,32 @@ bool FElysiumRules::Load(FString& OutError)
 	}
 
 	// Each block's key set differs and the Unofficial Patch tunes them, so the whole block is kept
-	// as authored rather than mapped onto fields a patch could outgrow.
+	// as authored rather than mapped onto fields a patch could outgrow. Blocks nest — the blood/
+	// health ratio is `VampHeal_Info { VampFeedingHeal_Info { … } }` — so a nested one is stored
+	// under its dotted PATH and only the top-level names go into `BlockOrder`.
+	TFunction<void(const FKvNode&, const FString&)> ReadBlock =
+		[this, &ReadBlock](const FKvNode& Node, const FString& Path)
+	{
+		TMap<FString, FString>& Block = Blocks.FindOrAdd(Path);
+		for (const TPair<FString, FString>& Pair : Node.Pairs)
+		{
+			Block.Add(Pair.Key, Pair.Value);
+		}
+		for (const TPair<FString, TSharedPtr<FKvNode>>& Sub : Node.Kids)
+		{
+			if (Sub.Value.IsValid())
+			{
+				ReadBlock(*Sub.Value, FString::Printf(TEXT("%s.%s"), *Path, *Sub.Key));
+			}
+		}
+	};
 	for (const TPair<FString, TSharedPtr<FKvNode>>& Kid : Data->Kids)
 	{
 		if (!Kid.Value.IsValid())
 		{
 			continue;
 		}
-		TMap<FString, FString>& Block = Blocks.FindOrAdd(Kid.Key);
-		for (const TPair<FString, FString>& Pair : Kid.Value->Pairs)
-		{
-			Block.Add(Pair.Key, Pair.Value);
-		}
+		ReadBlock(*Kid.Value, Kid.Key);
 		BlockOrder.AddUnique(Kid.Key);
 	}
 	if (Blocks.IsEmpty())

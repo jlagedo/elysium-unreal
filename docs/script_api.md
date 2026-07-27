@@ -183,17 +183,17 @@ in CurrentMoney"`), rather than returning a falsy value.
 | `StartBarter` | `101993c0` | `(char)` | 108 | stub |
 | `CurrentMoney` | `101998c0` | `(char)` | 86 | real (the `money` field) |
 | `SeductiveFeed` | `10198150` | `(char)` | 54 | stub |
-| `CalcFeat` | `10198cc0` | `(char, feat:str)` | 53 | stub |
+| `CalcFeat` | `10198cc0` | `(char, feat:str)` | 53 | real (the feat rating over the sheet) |
 | `HasWeaponEquipped` | `101984c0` | `(char, …)` | 27 | stub |
 | `AmmoCount` | `101989b0` | `(char, weapon:str)` | 19 | stub |
 | `GiveAmmo` | `10198b30` | `(char, weapon:str, count:int)` | 19 | stub |
-| `BumpStat` | `10199a70` | `(char, stat:str, times:int)` | 19 | stub |
+| `BumpStat` | `10199a70` | `(char, stat:str, times:int)` | 19 | real (dots onto the base) |
 | `WorldMap` | `10199520` | `(char)` | 12 | stub |
 | `IsFollowerOf` | `101988c0` | `(char, …)` | 8 | stub |
 | `SewerMap` | `10199690` | `(char)` | 4 | stub |
 | `SetGesture` | `10197f60` | `(char, sequence:str)` | 2 | real (plays the named clip) |
-| `GetMasqueradeLevel` | `10199ce0` | `(char)` | 2 | stub |
-| `DialogDiscipline` | `10198310` | `(char, …)` | — | stub |
+| `GetMasqueradeLevel` | `10199ce0` | `(char)` | 2 | real (the masquerade counter) |
+| `DialogDiscipline` | `10198310` | `(char, …)` | — | the rating, no blood spent (the power is P13) |
 | `SetExpression` | `10197ce0` | `(char, modifier:int, expr:str)` | — | stub |
 | `React` | `10197b00` | `(char, modifier:int, expr:str)` | 0 | stub |
 
@@ -210,6 +210,17 @@ what a *caller* needs is:
   `dlgexpr` skill-check applies compares a rating. A bad feat name raises
   `AttributeError("invalid feat name -- %s")`; a non-character raises
   `"invalid combat character"`.
+
+  **A divergence, marked.** The runtime resolves a name the feat table does not own **as a trait**
+  and returns its current value, where VtMB raises. The reason is our own dlgexpr normalizer: it
+  rewrites every `"<Name> <int>"` check into `pc.CalcFeat("<Name>") >= <int>`, and the `.dlg` corpus
+  checks `Humanity` 272 times, `Dominate` 102 and `Thaumaturgy` 55 — all traits, which VtMB resolves
+  in `CDialogDependency::TestSimple` off `GetCurrent` without going through `CalcFeat` at all
+  (`game_runtime.md` §3). Reading the trait *is* the faithful answer for those checks; routing them
+  through this one name is the divergence. A name that is neither feat nor trait still reads 0
+  rather than raising, because a raise would abort the whole conversation line; error-to-false is
+  the posture the rest of the scripting surface takes. The same dependency's **sex gate** (an
+  `M_`/`F_` prefix) is handled by the normalizer, not here — it emits `pc.IsMale()` beside the call.
 - **`BumpStat(char, stat, times)` takes three arguments** — the third is a **repeat count**, and
   the body loops it, adding one dot per pass. It writes the **base** (`CVStatList_t::IncBase`), and
   carries a ceiling of its own: each pass is skipped unless `GetBase(stat) < 5`, hardcoded and

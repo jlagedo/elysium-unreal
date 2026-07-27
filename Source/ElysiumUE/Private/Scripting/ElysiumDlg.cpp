@@ -250,8 +250,9 @@ namespace ElysiumDlgExprImpl
 
 	// Rebuild the source, copying the original text between tokens verbatim so pass-through spacing is
 	// preserved, and substituting only two things: a skill-check run `IDENT [relop] INT` (IDENT not
-	// followed by `.`/`(`, not a keyword, not preceded by `.`) -> `CalcFeat("IDENT") relop INT` (implicit
-	// `>=`), and the join operators `&` -> AndRepl / `|` -> OrRepl (which differ between condition and
+	// followed by `.`/`(`, not a keyword, not preceded by `.`) -> `pc.CalcFeat("IDENT") relop INT`
+	// (implicit `>=`, with an `M_`/`F_` prefix becoming the sex gate the engine's dependency carries),
+	// and the join operators `&` -> AndRepl / `|` -> OrRepl (which differ between condition and
 	// action). `Src` is the trimmed source the token spans index into.
 	FString Rebuild(const FString& Src, const TArray<FTok>& Toks, const TCHAR* AndRepl, const TCHAR* OrRepl)
 	{
@@ -292,7 +293,37 @@ namespace ElysiumDlgExprImpl
 				if (IntAt != INDEX_NONE)
 				{
 					const FString Relop = (RelAt != INDEX_NONE) ? Toks[RelAt].Text : TEXT(">=");
-					Out.Append(FString::Printf(TEXT("CalcFeat(\"%s\") %s %s"), *T.Text, *Relop, *Toks[IntAt].Text));
+					// `M_`/`F_` is the check's SEX GATE, not part of the trait name:
+					// `CDialogDependency::TestSimple` carries a required-gender field beside the check
+					// and rejects the line outright when it does not match the character's
+					// `CBaseCombatCharacter::IsMale` (`game_runtime.md` section 3). 36 corpus
+					// conditions use it — `M_Persuasion 3` and `F_Persuasion 3` on the same beat, with
+					// different lines.
+					FString Feat = T.Text;
+					const TCHAR* SexGate = nullptr;
+					if (Feat.StartsWith(TEXT("M_"), ESearchCase::CaseSensitive))
+					{
+						SexGate = TEXT("pc.IsMale()");
+						Feat = Feat.RightChop(2);
+					}
+					else if (Feat.StartsWith(TEXT("F_"), ESearchCase::CaseSensitive))
+					{
+						SexGate = TEXT("not pc.IsMale()");
+						Feat = Feat.RightChop(2);
+					}
+					// The receiver is explicit: `CalcFeat` is a Character method, not a module global,
+					// so a bare call resolves to nothing in either host. The check is the PC's, which
+					// is who the engine's dependency evaluates it against.
+					if (SexGate)
+					{
+						Out.Append(FString::Printf(TEXT("(%s and pc.CalcFeat(\"%s\") %s %s)"),
+							SexGate, *Feat, *Relop, *Toks[IntAt].Text));
+					}
+					else
+					{
+						Out.Append(FString::Printf(TEXT("pc.CalcFeat(\"%s\") %s %s"),
+							*Feat, *Relop, *Toks[IntAt].Text));
+					}
 					Cursor = Toks[IntAt].End;   // consumed the whole run (the interior spaces are dropped)
 					i = IntAt;
 					continue;

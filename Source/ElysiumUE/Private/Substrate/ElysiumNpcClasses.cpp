@@ -215,6 +215,14 @@ public:
 			if (Rules && Rules->Clans().Resolve(StatTemplate, Resolved))
 			{
 				Sheet.ApplyTemplate(Resolved, Table);
+				// A template names its clan's `TraitEffectGroup`; that group is where the clan's
+				// gifts and banes live, for an NPC exactly as for the player.
+				const FString ClanEffect = Resolved.GeneralStr(TEXT("ClanEffect"));
+				if (!ClanEffect.IsEmpty())
+				{
+					Effects.AddUnique(ClanEffect);
+				}
+				RebuildEffects();
 			}
 			else
 			{

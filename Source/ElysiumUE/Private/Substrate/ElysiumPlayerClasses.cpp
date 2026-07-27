@@ -18,6 +18,8 @@
 #include "ElysiumSheetSlots.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumRulebookSubsystem.h"
+#include "Substrate/ElysiumSheetMath.h"
 
 #include "Components/SkeletalMeshComponent.h"
 #include "Misc/Paths.h"
@@ -301,50 +303,216 @@ const FElysiumStatTable* FElysiumCombatCharacter::SheetRules() const
 	return GameState ? GameState->Stats() : nullptr;
 }
 
+// The rulebook this character reads its rules out of, or null in a bare world.
+static UElysiumRulebookSubsystem* CharRulebook(const FElysiumCombatCharacter& Char)
+{
+	UElysiumGameStateSubsystem* GameState = Char.World ? Char.World->GetGameState() : nullptr;
+	return GameState ? GameState->Rulebook() : nullptr;
+}
+
+void FElysiumCombatCharacter::RebuildEffects()
+{
+	UElysiumRulebookSubsystem* Rules = CharRulebook(*this);
+	if (Effects.IsEmpty() || !Rules)
+	{
+		EffectLayer.Reset();
+		RecomputeSheet();
+		return;
+	}
+	if (!EffectLayer.IsValid())
+	{
+		EffectLayer = MakeShared<FElysiumSheetEffects>();
+	}
+	EffectLayer->Build(Rules->TraitEffects(), Effects, &Rules->Feats());
+	RecomputeSheet();
+}
+
+void FElysiumCombatCharacter::RecomputeSheet()
+{
+	Sheet.RecomputeCurrent(SheetRules(), SheetEffects());
+	SyncHealthFromSheet();
+}
+
 void FElysiumCombatCharacter::AddTrait(EElysiumTraitContainer Container, int32 Slot, int32 Delta)
 {
-	Sheet.AddBase(Container, Slot, Delta);
-	// The bounds are `stats.txt`'s own — Humanity 0..10, Masquerade 0..5, BloodPool 0..15 — applied
-	// to the *current* value, which is what every reader goes through. The write-time gate VtMB's
-	// `IncBase` carries (and `BumpStat`'s hardcoded `< 5` ceiling) is 9.4c's.
-	Sheet.RecomputeCurrent(SheetRules());
+	// AddBase carries the gate — the effective max on a gain, bypassed on a loss — and re-derives
+	// every current value from the new base. The bounds are `stats.txt`'s own (Humanity 0..10,
+	// Masquerade 0..5, BloodPool 0..15), tightened by whatever the clan's trait effects cap.
+	Sheet.AddBase(Container, Slot, Delta, SheetRules(), SheetEffects());
+}
+
+int32 FElysiumCombatCharacter::CalcFeat(const FString& Name) const
+{
+	UElysiumRulebookSubsystem* Rules = CharRulebook(*this);
+	if (!Rules)
+	{
+		return 0;   // no rulebook: every check fails closed, as an unresolved gate does
+	}
+	bool bResolved = false;
+	bool bIsFeat = false;
+	const int32 Value = ElysiumFeats::Calc(Rules->Feats(), Sheet, SheetEffects(), Name,
+		bResolved, bIsFeat);
+	if (!bResolved)
+	{
+		// VtMB raises `AttributeError("invalid feat name -- %s")`. A raise here would abort the
+		// whole conversation line, so the name is reported and the gate fails closed — the
+		// error-to-false posture the rest of the scripting surface takes.
+		UE_LOG(LogElysiumPlayer, Verbose, TEXT("%s CalcFeat(\"%s\") — no feat and no trait of that name"),
+			*DebugString(), *Name);
+	}
+	return Value;
+}
+
+int32 FElysiumCombatCharacter::BumpStat(const FString& Stat, int32 Times)
+{
+	// A count below 1 does nothing — VtMB raises `"invalid args in BumpStat"`, and the loop it
+	// guards cannot run backwards, so **BumpStat cannot decrement**.
+	if (Stat.IsEmpty() || Times < 1)
+	{
+		UE_LOG(LogElysiumPlayer, Log, TEXT("%s BumpStat(\"%s\", %d) — invalid args"),
+			*DebugString(), *Stat, Times);
+		return 0;
+	}
+	EElysiumTraitContainer Container;
+	int32 Slot = INDEX_NONE;
+	if (!ElysiumFindSheetSlot(*Stat, Container, Slot))
+	{
+		UE_LOG(LogElysiumPlayer, Log, TEXT("%s BumpStat(\"%s\") — no such trait"), *DebugString(), *Stat);
+		return 0;
+	}
+
+	const FElysiumStatTable* Rules = SheetRules();
+	int32 Landed = 0;
+	for (int32 i = 0; i < Times; ++i)
+	{
+		// The ceiling is BumpStat's own, hardcoded and independent of the stat's authored `Max`:
+		// each pass is skipped unless the BASE is under 5. A stat whose Max is higher still stops
+		// here, which is why this cannot be folded into IncBase.
+		if (Sheet.GetBase(Container, Slot) >= 5)
+		{
+			break;
+		}
+		if (!Sheet.IncBase(Container, Slot, Rules, SheetEffects()))
+		{
+			break;
+		}
+		++Landed;
+	}
+	SyncHealthFromSheet();
+	// One client notification fires after the loop, not per dot (8.9 owns the readout).
+	return Landed;
+}
+
+int32 FElysiumCombatCharacter::GetMasqueradeLevel() const
+{
+	return Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Masquerade);
+}
+
+void FElysiumCombatCharacter::AddHumanity(int32 Delta)
+{
+	if (Delta == 0)
+	{
+		return;
+	}
+	// One flag doubles both directions: Toreador's gift (gains) and its bane (losses) are the same
+	// `Fx_Humanity_Mods_Doubled +1`, and no other shipped group sets it.
+	const FElysiumSheetEffects* Layer = SheetEffects();
+	const int32 Scaled = (Layer && Layer->Flag(TEXT("Fx_Humanity_Mods_Doubled")) > 0) ? Delta * 2 : Delta;
+	AddTrait(EElysiumTraitContainer::Attributes, ElysiumSlot::Humanity, Scaled);
+}
+
+void FElysiumCombatCharacter::ChangeMasqueradeLevel(int32 Delta)
+{
+	if (Delta == 0)
+	{
+		return;
+	}
+	AddTrait(EElysiumTraitContainer::Attributes, ElysiumSlot::Masquerade, Delta);
+
+	// The counter reaching its authored ceiling is the second loss condition. The check is on the
+	// clamped current value, so a `+9` and a `+1` at 4 both land on exactly 5.
+	int32 Min = 0, Max = 0;
+	Sheet.BoundsFor(EElysiumTraitContainer::Attributes, ElysiumSlot::Masquerade,
+		SheetRules(), SheetEffects(), Min, Max);
+	if (Max >= Min && GetMasqueradeLevel() >= Max && Delta > 0)
+	{
+		OnMasqueradeBreached();
+	}
+}
+
+void FElysiumCombatCharacter::OnMasqueradeBreached()
+{
+	// Only the player's masquerade ends a run; an NPC has the counter because the sheet is shared.
+	UE_LOG(LogElysiumPlayer, Log, TEXT("%s masquerade at %d"), *DebugString(), GetMasqueradeLevel());
+}
+
+void FElysiumCombatCharacter::AddBlood(int32 Delta)
+{
+	if (Delta != 0)
+	{
+		// The ceiling is `BloodPool`'s authored Max (15). The per-generation ceiling the file
+		// carries as `Generation_Blood_Pool_Max` is **commented out in the shipped data**, so it is
+		// not in force and nothing here consults it.
+		AddTrait(EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPool, Delta);
+	}
+}
+
+int32 FElysiumCombatCharacter::BloodHeal(int32 Blood)
+{
+	if (Blood <= 0)
+	{
+		return 0;
+	}
+	// `VampHeal_Info.VampFeedingHeal_Info` — `UsesRatio 1`, `BloodToHealthRatio 10`, i.e. one blood
+	// point buys ten points of damage healed. The ratio is data; only the default is code.
+	int32 Ratio = 10;
+	if (UElysiumRulebookSubsystem* Rules = CharRulebook(*this))
+	{
+		Ratio = Rules->Rules().Int(TEXT("VampHeal_Info.VampFeedingHeal_Info"),
+			TEXT("BloodToHealthRatio"), Ratio);
+	}
+
+	const int32 Spent = FMath::Min(Blood, Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPool));
+	if (Spent <= 0)
+	{
+		return 0;
+	}
+	AddBlood(-Spent);
+	// `Health` counts damage TAKEN, so healing is a subtraction from it — and a subtraction
+	// bypasses the gain gate, which is exactly what makes the floor the authored `Min` of 0.
+	const int32 Damage = Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Health);
+	const int32 Healed = FMath::Min(Damage, Spent * FMath::Max(1, Ratio));
+	AddTrait(EElysiumTraitContainer::Attributes, ElysiumSlot::Health, -Healed);
+	SyncHealthFromSheet();
+	return Healed;
 }
 
 void FElysiumCombatCharacter::InputHumanityAdd(const FElysiumInputArgs& Args)
 {
 	const int32 N = Args.Param.ToInt();
-	if (N != 0) { AddTrait(EElysiumTraitContainer::Attributes, ElysiumSlot::Humanity, N); }
+	if (N != 0) { AddHumanity(N); }
 }
 
 void FElysiumCombatCharacter::InputChangeMasqueradeLevel(const FElysiumInputArgs& Args)
 {
-	const int32 N = Args.Param.ToInt();
-	if (N != 0) { AddTrait(EElysiumTraitContainer::Attributes, ElysiumSlot::Masquerade, N); }
-	// The meter reaching 5 is the second loss condition (`game_runtime.md` section 3); 9.4c owns
-	// the check and the HUD readout, so nothing watches this number yet.
+	ChangeMasqueradeLevel(Args.Param.ToInt());
 }
 
 void FElysiumCombatCharacter::InputBloodloss(const FElysiumInputArgs& Args)
 {
-	const int32 N = Args.Param.ToInt();
-	if (N != 0) { AddTrait(EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPool, -N); }
+	AddBlood(-Args.Param.ToInt());
 }
 
 void FElysiumCombatCharacter::InputBloodgain(const FElysiumInputArgs& Args)
 {
-	// The ceiling is `BloodPool`'s authored Max, applied by the recompute; the per-generation
-	// variant is a `Generation` lookup 9.4c owns.
-	const int32 N = Args.Param.ToInt();
-	if (N != 0) { AddTrait(EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPool, N); }
+	AddBlood(Args.Param.ToInt());
 }
 
 void FElysiumCombatCharacter::InputBloodHeal(const FElysiumInputArgs& Args)
 {
-	// VtMB's internal name is BloodHealIn. Spending blood to heal is a `VampHeal_Info` conversion
-	// (9.4c), so this only spends the blood it is told to; the health half does not land here.
-	const int32 N = Args.Param.ToInt();
-	if (N != 0) { AddTrait(EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPool, -N); }
-	PendingInput(TEXT("BloodHeal"), TEXT("9.4c — the health/blood conversion"), Args);
+	// VtMB's internal name is BloodHealIn: the argument is the blood to spend, and the conversion
+	// is the rulebook's ratio.
+	BloodHeal(Args.Param.ToInt());
 }
 
 void FElysiumCombatCharacter::InputWillTalk(const FElysiumInputArgs& Args)
@@ -385,8 +553,7 @@ void FElysiumCombatCharacter::TakeDamage(float Amount)
 	const int32 Damage = FMath::Clamp(
 		Sheet.GetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Health) + Points, 0, MaxDamage);
 	Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Health, Damage);
-	Sheet.RecomputeCurrent(SheetRules());
-	SyncHealthFromSheet();
+	RecomputeSheet();
 
 	if (Health <= 0 && !bUnkillable)
 	{
@@ -450,6 +617,10 @@ void FElysiumCombatCharacter::GetDebugState(TArray<TPair<FString, FString>>& Out
 		Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Strength),
 		Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Dexterity),
 		Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Stamina)));
+	Out.Emplace(TEXT("Effects"), Effects.IsEmpty()
+		? FString(TEXT("(none)"))
+		: FString::Printf(TEXT("%s  (%d rows)"), *FString::Join(Effects, TEXT(", ")),
+			EffectLayer.IsValid() ? EffectLayer->NumRows() : 0));
 	Out.Emplace(TEXT("WillTalk"), bWillTalk ? TEXT("yes") : TEXT("no"));
 	Out.Emplace(TEXT("Disposition"), Disposition.IsEmpty() ? TEXT("(none)") : Disposition);
 	Out.Emplace(TEXT("Unnamed stats"), FString::FromInt(Sheet.Extra.Num()));
@@ -475,8 +646,116 @@ void FElysiumPlayer::Spawn()
 			Sheet.SeedFrom(*Table);
 		}
 	}
+	// The clan is a sheet slot, so the effect layer it names can only be resolved once the sheet is
+	// in place — which is here, whether it arrived from the record or was just seeded.
+	RefreshClanEffects();
 	SyncHealthFromSheet();
 	SyncFromBody();
+}
+
+void FElysiumPlayer::RefreshClanEffects()
+{
+	UElysiumGameStateSubsystem* GameState = World ? World->GetGameState() : nullptr;
+	UElysiumRulebookSubsystem* Rules = GameState ? GameState->Rulebook() : nullptr;
+	if (!Rules)
+	{
+		RebuildEffects();   // no rulebook: the layer still has to match the names, which is nothing
+		return;
+	}
+	// `clandoc000.txt` names the player templates `Player_<Clan>`, and each one names the
+	// `TraitEffectGroup` carrying that clan's gift and bane — which is where every bane lives:
+	// nothing about a clan is special-cased in code (`game_runtime.md` section 3).
+	FString Group;
+	FElysiumClanTemplate Resolved;
+	if (Rules->Clans().Resolve(FString::Printf(TEXT("Player_%s"), FElysiumSheet::ClanName(Sheet.Clan())), Resolved))
+	{
+		Group = Resolved.GeneralStr(TEXT("ClanEffect"));
+	}
+
+	// One clan group at a time: re-running this after a clan change must replace, not accumulate.
+	Effects.RemoveAll([](const FString& Name) { return Name.StartsWith(TEXT("Clan (")); });
+	if (!Group.IsEmpty())
+	{
+		Effects.Add(Group);
+	}
+	RebuildEffects();
+}
+
+bool FElysiumPlayer::HasAwarded(const FString& Key) const
+{
+	// `Q_strnicmp` over the STORED key's length — a prefix compare, which is latent breakage VtMB
+	// gets away with because no shipped key prefixes another (`Elysium.Content.Rulebook` asserts
+	// the premise still holds). Reproduced as authored, not "fixed".
+	for (const FElysiumXpEntry& Entry : ExperienceLog)
+	{
+		if (!Entry.Entry.IsEmpty() && Key.StartsWith(Entry.Entry, ESearchCase::IgnoreCase))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+int32 FElysiumPlayer::AwardExperience(const FString& Key)
+{
+	if (Key.IsEmpty())
+	{
+		return 0;
+	}
+	// 1. Give-once is the LEDGER, not an encoding: every key is give-once, unconditionally — the
+	//    trailing `01` every real row carries has nothing to do with it.
+	if (HasAwarded(Key))
+	{
+		UE_LOG(LogElysiumPlayer, Verbose, TEXT("%s AwardExperience(\"%s\") — already given"),
+			*DebugString(), *Key);
+		return 0;
+	}
+
+	UElysiumGameStateSubsystem* GameState = World ? World->GetGameState() : nullptr;
+	UElysiumRulebookSubsystem* Rules = GameState ? GameState->Rulebook() : nullptr;
+	const FElysiumExperienceEntry* Row = Rules ? Rules->Experience().Find(Key) : nullptr;
+	if (!Row)
+	{
+		// 2. A key the table does not hold awards nothing AND APPENDS nothing, so it retries on
+		//    every fire. That is the engine's own behaviour, not a leniency.
+		UE_LOG(LogElysiumPlayer, Log, TEXT("%s AwardExperience(\"%s\") — no such experience_table row"),
+			*DebugString(), *Key);
+		return 0;
+	}
+
+	// 3. The `Experience_Modifier` bonus, above 2 XP — the file's own "the value without extra
+	//    experience points". The threshold is on the RAW value, which is in hundredths.
+	const int32 Value = ElysiumXp::WithModifier(Row->Value,
+		Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::ExpModifier));
+
+	// 4. The key joins the ledger with the amount it was worth.
+	FElysiumXpEntry Entry;
+	Entry.Entry = Key;
+	Entry.Amount = Value;
+	ExperienceLog.Add(MoveTemp(Entry));
+
+	// `AddExperience`: the raw value accumulates untouched, the /100 keeps its remainder, and only
+	// whole points reach the sheet. Every real row being `N01`, each award banks 0.01 XP of residue
+	// and one bonus point falls out per 100 awards.
+	const int32 Whole = ElysiumXp::Bank(Value, ExperienceRemainder, LifetimeExperience);
+	if (Whole > 0)
+	{
+		AddTrait(EElysiumTraitContainer::Attributes, ElysiumSlot::Experience, Whole);
+	}
+	UE_LOG(LogElysiumPlayer, Log, TEXT("%s AwardExperience(\"%s\") — %d raw, +%d XP (%.0f left over)"),
+		*DebugString(), *Key, Value, Whole, ExperienceRemainder);
+	return Whole;
+}
+
+void FElysiumPlayer::OnMasqueradeBreached()
+{
+	FElysiumCombatCharacter::OnMasqueradeBreached();
+	// The second loss condition. Same shape as death: the substrate reports, and the session owns
+	// what it means to the application (11.3's GameOver state, with its own reason).
+	if (UElysiumGameStateSubsystem* State = World ? World->GetGameState() : nullptr)
+	{
+		State->NotifyMasqueradeBreach();
+	}
 }
 
 void FElysiumPlayer::Hydrate(const FElysiumPlayerRecord& Record)
@@ -489,8 +768,15 @@ void FElysiumPlayer::Hydrate(const FElysiumPlayerRecord& Record)
 	ExperienceLog = Record.ExperienceLog;
 	Effects    = Record.Effects;
 	EmailFlags = Record.EmailFlags;
+	ExperienceRemainder = Record.ExperienceRemainder;
+	LifetimeExperience  = Record.LifetimeExperience;
 	bUnkillable = Record.bUnkillable;
 	bDeathReported = false;
+	// The names crossed the boundary; their resolution did not — the rulebook is re-read at load,
+	// which is what lets a patched rulebook re-apply to a run that started before it. Going through
+	// RefreshClanEffects rather than RebuildEffects reconciles the clan group with the clan slot
+	// that just arrived, so a New Game into a different clan cannot keep the old one's bane.
+	RefreshClanEffects();
 }
 
 void FElysiumPlayer::Dehydrate(FElysiumPlayerRecord& Record) const
@@ -503,6 +789,8 @@ void FElysiumPlayer::Dehydrate(FElysiumPlayerRecord& Record) const
 	Record.ExperienceLog = ExperienceLog;
 	Record.Effects    = Effects;
 	Record.EmailFlags = EmailFlags;
+	Record.ExperienceRemainder = ExperienceRemainder;
+	Record.LifetimeExperience  = LifetimeExperience;
 	Record.bUnkillable = bUnkillable;
 }
 
@@ -554,16 +842,10 @@ void FElysiumPlayer::InputGiveItem(const FElysiumInputArgs& Args)
 
 void FElysiumPlayer::InputAwardExperience(const FElysiumInputArgs& Args)
 {
-	// STRING, not an amount: it names an entry the engine looks up in the experience table
-	// (`script_api.md`), so the ledger keeps the key and 9.4 resolves its value.
-	FElysiumXpEntry Entry;
-	Entry.Entry = Args.Param.ToString();
-	if (!Entry.Entry.IsEmpty())
-	{
-		ExperienceLog.Add(MoveTemp(Entry));
-	}
-	UE_LOG(LogElysiumPlayer, Log, TEXT("%s AwardExperience(\"%s\") — logged; the table lookup is 9.4"),
-		*DebugString(), *Args.Param.ToString());
+	// STRING, not an amount: it names an entry the engine looks up in the experience table. The
+	// handler takes the variant's string when the field type is STRING and otherwise stringifies
+	// it, which a Hammer wire's string parameter satisfies either way.
+	AwardExperience(Args.Param.ToString());
 }
 
 void FElysiumPlayer::InputSetCriminalLevel(const FElysiumInputArgs& Args)
@@ -588,7 +870,9 @@ void FElysiumPlayer::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 	Out.Emplace(TEXT("Facing"), FString::Printf(TEXT("yaw %.0f"), -Angles.Y));
 	Out.Emplace(TEXT("Law"), FString::Printf(TEXT("criminal %d / supernatural %d / investigate %d"),
 		Law.Criminal, Law.Supernatural, Law.Investigate));
-	Out.Emplace(TEXT("XP log"), FString::FromInt(ExperienceLog.Num()));
+	Out.Emplace(TEXT("XP"), FString::Printf(TEXT("%d spent-able, %d awards, %.0f raw (%.0f pending)"),
+		Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Experience),
+		ExperienceLog.Num(), LifetimeExperience, ExperienceRemainder));
 	Out.Emplace(TEXT("Body"), (World && World->Embodiment()) ? TEXT("pawn") : TEXT("(none)"));
 }
 

@@ -121,6 +121,10 @@ public:
 	// holds this subsystem, and "the run ended" is session state, not a map capability.
 	void NotifyPlayerKilled();
 
+	// The other lost run: the masquerade counter reached its ceiling (5). Same shape and the same
+	// owner as death, with its own game-over reason.
+	void NotifyMasqueradeBreach();
+
 	// Seed the state a fresh story run starts from. New Game in retail is four maps
 	// (`level_transitions.md`): chargen on `sp_genesisdevice_1` writes the sheet, then the theatre
 	// embrace + trial, then a landmark transition into `sp_tutorial_1`. Chargen (8.6) and the

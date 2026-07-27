@@ -78,7 +78,10 @@ entity, classname `player`, targetname `!player` (the name the maps themselves w
 
 The character sheet on that chain is `FElysiumSheet` (`Public/ElysiumPlayer.h`) over the compiled
 slot tables in `Public/ElysiumSheetSlots.h` + `Substrate/ElysiumSheet.cpp`; the values it seeds from
-are the rulebook's, reached as `World->GetGameState()->Stats()`. **Gotcha:** the sheet's own
+are the rulebook's, reached as `World->GetGameState()->Stats()`. The arithmetic over those slots is
+`Substrate/ElysiumSheetMath.{h,cpp}` — `FElysiumSheetEffects` (a character's resolved
+`m_tEffectList`), `ElysiumFeats::FeatValue`/`Calc` (what `CalcFeat` answers), `ElysiumXp` (the award
+banking) and `ElysiumSheetRules::EvalPredependency`. **Gotcha:** the sheet's own
 health slots register as `vhealth`/`vmax_health`, not `health`/`max_health` — those two are
 `CBaseEntity` keyfields on the same chain, and the registry resolves derived-shadows-base, so a
 sheet slot taking the bare name would silently repoint `trigger_hurt`. `Elysium.Substrate.Sheet`
@@ -166,6 +169,10 @@ Hard-won, non-obvious, and easy to undo:
 - **`+use` and the debug pick use dedicated channels** (`ELYSIUM_USE_CHANNEL` /
   `ELYSIUM_PICK_CHANNEL`), because the walkable surface is a material-less `.hulls` collider that
   would otherwise be reported instead of the wall.
+- **A sheet recompute needs BOTH the rules and the effect layer** — `RecomputeCurrent(Stats)` still
+  compiles (the effect argument defaults to null) and silently drops every clan bane and gift. On a
+  character, go through `FElysiumCombatCharacter::RecomputeSheet()`, which passes both and re-derives
+  the `health` keyfields after.
 - **Save omission diffs against a post-Load baseline, not zero** — a fresh-constructed reference
   omits the wrong things and a restored map re-runs every `logic_auto` ignition.
 - **Resolved `UAnimSequence`s cache on the map actor, not the subsystem** — glTFRuntime binds each to
