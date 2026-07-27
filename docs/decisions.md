@@ -6,6 +6,67 @@ trigger. A behavioural divergence from retail lands here carrying both the faith
 chosen behaviour (`remaster-direction.md`'s governing rule). Entries are never rewritten —
 append a correction as a new entry.
 
+- **2026-07-27** — **The development layer moves off the three bare keys it was squatting on
+  (roadmap 11.6).** Owner call, and the one 11.6 change a player would notice. `input-architecture.md`
+  states the guarantee — "the development layer occupies no bare key a player can bind", enforced by
+  a test rather than a convention — and the runtime was breaking it in three places, harmlessly only
+  because no player bind existed yet. `v` was the noclip toggle and is `+movedown` in VtMB's own
+  default set; `t` was the 3D-skybox A/B and is `toggleuiside`; `ConsoleKeys` was `F10`, which is
+  `snapshot`. Chosen: **dev toggles become chords** — `Ctrl+V` (noclip) and `Ctrl+T`
+  (`elysium.togglesky`), alongside Cog's existing `Ctrl+F1`–`Ctrl+F4` — and `ConsoleKeys` returns to
+  `` ` ``, which is VtMB's own `toggleconsole` bind, so the reserved set is one key and the reason it
+  is reserved is the original's. The skybox toggle also stops being a key handler at all: it is now
+  the `elysium.togglesky` console command, because a dev verb belongs on plane 1 and must never enter
+  the VtMB command bus — the two planes never share a name. `ElysiumBinds::ReservedKeys()` is the set,
+  the router refuses to install a default bind that lands on one, and `Elysium.Substrate.Commands`
+  asserts the whole default table clears it. The cost is muscle memory for bare `v`/`t`; the
+  alternative was a shipped game where six of VtMB's own default binds are dead keys.
+
+- **2026-07-27** — **Two calls taken while building the input scope stack (roadmap 11.5).** Owner
+  call. Both depart from the shape §8.1 sketched, and both are recorded because a later reader could
+  reasonably have built the sketch instead.
+
+  **(1) `pauses-game` is not a property of an input scope.** The sketch gave `FElysiumInputScope` a
+  `bPausesGame` flag and said the top scope decides "whether the game pauses". Chosen: it does not.
+  Pause has exactly one owner — `UElysiumGameFlowSubsystem`, which 11.3 made the sole writer of the
+  app state, and holding the world is a property of the *state* (`ElysiumAppState::HoldsWorld`), not
+  of what happens to be on screen. A scope that also drove pause would be a second writer and a
+  re-entrant one: pausing raises the pause menu, which pushes a scope, which would pause. The
+  dependency runs one way — the flow pauses, and the menu it raises pushes a scope. Nothing is lost:
+  no screen wants to pause *without* going through the flow, and a cutscene or a conversation
+  deliberately does not pause at all.
+
+  **(2) Cog's `Debug` scope is at the top of the priority table, and a screen revokes its capture at
+  push time rather than outranking it.** The sketch said Cog pushes at max priority, and the task's
+  acceptance said "Cog can never eat a menu click" — which as literally stated wants the opposite
+  ordering. Chosen: keep Debug at the top, and make the guard a *revocation*. The reason the two are
+  not equivalent is that ImGui's capture is a Slate catcher widget, not an input mode: an inherited
+  capture swallows the click before Slate reaches the screen underneath, so no priority ordering can
+  arbitrate it — only taking it away can. So `ElysiumInput::RevokesDebugCapture` fires on a UI-only
+  push (a menu, a conversation, chargen) and calls `SetEnableInput(false)`, which is the existing
+  8.6 behaviour generalised into a mechanism. It fires **at push time only**, because the front end
+  has a menu up permanently and a rule that fired continuously would make Cog unusable exactly where
+  the Maps window is used from — F1 pressed afterwards is a developer deliberately asking for the
+  debug UI over that screen, and it wins.
+
+- **2026-07-27** — **`OneOfSet`'s roll is drawn once per engine frame** (roadmap 9.7d). Owner call,
+  under an open RE unknown. Faithful: the decompiled body is
+  `PyInt_FromLong((roll % count) == (which - 1))` where `roll` comes from a vtable call at `+0x1e0`
+  on the global at `DAT_1070b22c` — an engine counter whose *identity* is not recovered, so how long
+  one value holds is unknown (`script_api.md` keeps it listed as pending). Chosen: draw one roll per
+  engine frame. The reasoning is the content, not the binary — the 589 call sites are authored
+  exclusively as **sets** (N sibling `.dlg` rows sharing one choice text, row *i* gated on
+  `OneOfSet(i, N)`), so "exactly one row of the set passes" is a property the shipped dialogue
+  depends on, and it holds only if every gate in a set reads the same roll. A per-call draw is
+  therefore ruled out by the content itself: over a seven-row set it would show no row 34% of the
+  time and two or more 40% of the time. The frame is the smallest unit that safely contains a set,
+  since `FElysiumDlgConversation::EnterNpcLine` evaluates a turn's whole choice list in one
+  synchronous burst. What this cannot settle is the coarser end — whether VtMB re-picks when the
+  player returns to the same set later; a frame-scoped roll re-picks, which is the behaviour the
+  gate reads as (a randomized line), and if the counter turns out to be conversation- or
+  session-scoped the change is one function (`ElysiumScriptNatives::OneOfSetRoll`).
+  `elysium.script.oneofset <roll>` pins the value for testing and for A/B against a recovered model.
+
 - **2026-07-26 (cont. 7)** — **Three implementation calls taken while building the player entity
   (roadmap 11.4).** Owner call. Call (A) of cont. 4 said *what* to build; these are the three
   choices inside it that a later reader could reasonably have made differently.

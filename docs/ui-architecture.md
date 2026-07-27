@@ -37,11 +37,14 @@ in the UI is a `.uasset` except the typefaces.
 `bAutoActivate` only fires for widgets pushed onto a `UCommonActivatableWidgetContainer`, so
 `ShowMenu` calls `ActivateWidget()` by hand. Without it the tree builds correctly and draws nothing.
 
-**The debug UI outranks nothing.** While Cog holds ImGui input capture it consumes the click before
-Slate sees it, so every menu item is dead — a restored Cog layout is not cosmetic, it makes the game
-unplayable by mouse. Cog therefore boots dormant and discards its layout between runs
-(`elysium.CogPersist`, see `Source/ElysiumUE/CLAUDE.md`), and `ApplyInputMode` revokes any capture
-when a screen comes up. F1 still re-enables Cog deliberately.
+**A screen takes the mouse back from the debug UI.** While Cog holds ImGui input capture it consumes
+the click before Slate sees it, so every menu item is dead — a restored Cog layout is not cosmetic,
+it makes the game unplayable by mouse. No input mode can arbitrate that, because the capture is a
+Slate catcher widget rather than a mode; only revoking it can. Cog therefore boots dormant and
+discards its layout between runs (`elysium.CogPersist`, see `Source/ElysiumUE/CLAUDE.md`), and the
+input scope stack revokes any capture the moment a UI-only scope is pushed
+(`runtime-architecture.md` §8.1). F1 still re-enables Cog deliberately — the revocation fires at
+push time, not continuously, because the front end has a menu up permanently.
 
 ## 2. The virtual canvas
 

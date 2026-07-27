@@ -60,6 +60,13 @@ protected:
 	// 8.6 still owes; when that lands this becomes the back handler instead.
 	virtual FReply NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& KeyEvent) override;
 
+	// S6 — the input scope stack is the sole authority over mode and cursor (11.5). CommonUI brings
+	// its own writer (`UCommonUIActionRouterBase` applies an FUIInputConfig per activated widget), so
+	// this screen declares no desired config and the action router never writes one; the UI subsystem
+	// pushes a scope instead. Stated rather than inherited: the engine's default happens to be unset,
+	// and a fourth mode owner appearing by default is exactly the failure this task removed.
+	virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override { return TOptional<FUIInputConfig>(); }
+
 private:
 	struct FMenuEntry
 	{

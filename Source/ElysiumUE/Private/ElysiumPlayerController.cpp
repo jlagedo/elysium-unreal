@@ -2,13 +2,19 @@
 
 #include "ElysiumCheatManager.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameFlowSubsystem.h"
+#include "ElysiumInputRouter.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
+#include "ElysiumPlayer.h"
+#include "ElysiumPlayerBody.h"
+#include "ElysiumScreenshot.h"
 
 #include "Components/InputComponent.h"
 #include "Engine/GameInstance.h"
-#include "InputCoreTypes.h"
+#include "GameFramework/Pawn.h"
+#include "Misc/Paths.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumPC, Log, All);
 
 AElysiumPlayerController::AElysiumPlayerController()
 {
@@ -25,64 +31,120 @@ void AElysiumPlayerController::SetupInputComponent()
 	{
 		return;
 	}
-
-	// Bound to the key rather than to a named action: `DefaultInput.ini` is the legacy mapping set
-	// 10.6 replaces wholesale, and Esc is a reserved key in every VtMB control scheme, so there is
-	// nothing to rebind it to yet.
-	FInputKeyBinding& Binding =
-		InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &AElysiumPlayerController::OnPauseKey);
-	// Without this the key is dead exactly when it is needed most: the pause menu holds the world
-	// through engine pause, and a paused world stops delivering input bindings.
-	Binding.bExecuteWhenPaused = true;
-
-	// The three world verbs that used to sit on the pawn (11.4). `Use` and `ToggleSky` are named
-	// actions in the legacy mapping set; the primary click is bound to its key directly, because
-	// `DefaultInput.ini` has no primary-fire mapping and every VtMB popup instructs "left-click to
-	// continue" — the binding is the panel's, not a weapon's.
-	InputComponent->BindAction(TEXT("Use"), IE_Pressed, this, &AElysiumPlayerController::OnUsePressed);
-	InputComponent->BindAction(TEXT("ToggleSky"), IE_Pressed, this, &AElysiumPlayerController::OnToggleSky);
-	InputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &AElysiumPlayerController::OnPrimaryClick);
+	if (!Router)
+	{
+		Router = NewObject<UElysiumInputRouter>(this, TEXT("InputRouter"));
+	}
+	Router->Setup(this, InputComponent);
 }
 
-void AElysiumPlayerController::OnPauseKey()
+void AElysiumPlayerController::BeginPlay()
 {
-	if (UGameInstance* GI = GetGameInstance())
+	Super::BeginPlay();
+	RegisterCommands();
+}
+
+void AElysiumPlayerController::EndPlay(const EEndPlayReason::Type Reason)
+{
+	UnregisterCommands();
+	if (Router)
 	{
-		if (UElysiumGameFlowSubsystem* Flow = GI->GetSubsystem<UElysiumGameFlowSubsystem>())
+		Router->Shutdown();
+	}
+	Super::EndPlay(Reason);
+}
+
+void AElysiumPlayerController::PlayerTick(float DeltaTime)
+{
+	Super::PlayerTick(DeltaTime);
+
+	if (Router)
+	{
+		Router->SampleFrame(DeltaTime);
+	}
+}
+
+void AElysiumPlayerController::RegisterCommands()
+{
+	FElysiumCommands& Registry = FElysiumCommands::Get();
+
+	// `+use` — press whatever the entity world's look cursor is aimed at (P4.2/P4.4). The release
+	// half latches IN_USE and does nothing else, which is what VtMB's own `+use` does.
+	Bindings.Add(Registry.Bind(TEXT("use"), [this](const FElysiumCommandCall& Call)
+	{
+		if (!Call.bPressed)
 		{
-			// A no-op outside Playing/Paused: the front end deliberately does not pause, because the
-			// live backdrop behind the menu is the feature.
-			Flow->TogglePause();
+			return;
 		}
-	}
+		if (FElysiumEntityWorld* World = CurrentEntityWorld())
+		{
+			World->PlayerUse();
+		}
+	}));
+
+	// `+attack` — until weapons exist (4.9) the primary click's only job is dismissing an open sign
+	// panel, which is what every VtMB popup instructs ("left-click to continue"). The world no-ops
+	// when none is up, and MinShowTime holds the panel so a click already in flight cannot skip it.
+	Bindings.Add(Registry.Bind(TEXT("attack"), [this](const FElysiumCommandCall& Call)
+	{
+		if (!Call.bPressed)
+		{
+			return;
+		}
+		if (FElysiumEntityWorld* World = CurrentEntityWorld())
+		{
+			World->PlayerDismissSign();
+		}
+	}));
+
+	Bindings.Add(Registry.Bind(TEXT("noclip"), [this](const FElysiumCommandCall&)
+	{
+		if (IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(GetPawn()))
+		{
+			Body->SetNoclip(!Body->IsNoclip());
+			UE_LOG(LogElysiumPC, Display, TEXT("noclip %s"), Body->IsNoclip() ? TEXT("on") : TEXT("off"));
+		}
+	}));
+
+	// `god` writes the same latch `events_player`'s MakePlayerUnkillable does — one gate, whether the
+	// map asks for it or the player does.
+	Bindings.Add(Registry.Bind(TEXT("god"), [this](const FElysiumCommandCall&)
+	{
+		FElysiumEntityWorld* World = CurrentEntityWorld();
+		FElysiumPlayer* Player = World ? World->FindPlayer() : nullptr;
+		if (!Player)
+		{
+			UE_LOG(LogElysiumPC, Warning, TEXT("god: no player entity in this world"));
+			return;
+		}
+		Player->SetUnkillable(!Player->IsUnkillable());
+		UE_LOG(LogElysiumPC, Display, TEXT("god %s"), Player->IsUnkillable() ? TEXT("on") : TEXT("off"));
+	}));
+
+	Bindings.Add(Registry.Bind(TEXT("snapshot"), [](const FElysiumCommandCall&)
+	{
+		const FString Path = FPaths::ProjectSavedDir() / TEXT("Screenshots") /
+			FString::Printf(TEXT("elysium_%s.png"), *FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S")));
+		ElysiumScreenshot::Request([Path](int32 W, int32 H, const TArray<FColor>& Bitmap)
+		{
+			if (W > 0 && ElysiumScreenshot::SavePng(W, H, Bitmap, Path))
+			{
+				UE_LOG(LogElysiumPC, Display, TEXT("snapshot -> %s"), *Path);
+			}
+		}, /*TimeoutFrames*/ 300, /*bShowUI*/ true);
+	}));
+
+	Bindings.RemoveAll([](const FElysiumCommandBinding& B) { return !B.IsValid(); });
 }
 
-void AElysiumPlayerController::OnUsePressed()
+void AElysiumPlayerController::UnregisterCommands()
 {
-	// E doubles as noclip-ascend, but the pawn's vertical strafe only acts while noclipping, so in
-	// normal play E is the use key. PlayerUse no-ops when the look-cursor is on nothing.
-	if (FElysiumEntityWorld* World = CurrentEntityWorld())
+	FElysiumCommands& Registry = FElysiumCommands::Get();
+	for (FElysiumCommandBinding& Binding : Bindings)
 	{
-		World->PlayerUse();
+		Registry.Unbind(Binding);
 	}
-}
-
-void AElysiumPlayerController::OnPrimaryClick()
-{
-	// Only meaningful while a sign is up; the world no-ops otherwise. MinShowTime holds the panel
-	// briefly so a click already in flight when it opened cannot skip it (CSignUI's Rules block).
-	if (FElysiumEntityWorld* World = CurrentEntityWorld())
-	{
-		World->PlayerDismissSign();
-	}
-}
-
-void AElysiumPlayerController::OnToggleSky()
-{
-	if (AElysiumMapActor* Map = CurrentMap())
-	{
-		Map->ToggleSkybox();
-	}
+	Bindings.Reset();
 }
 
 AElysiumMapActor* AElysiumPlayerController::CurrentMap() const

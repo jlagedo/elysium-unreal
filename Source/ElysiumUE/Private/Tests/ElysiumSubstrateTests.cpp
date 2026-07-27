@@ -12,7 +12,9 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumAppState.h"
+#include "ElysiumBinds.h"
 #include "ElysiumClassRegistry.h"
+#include "ElysiumCommands.h"
 #include "ElysiumConsole.h"
 #include "ElysiumDecals.h"
 #include "ElysiumDlg.h"
@@ -25,6 +27,7 @@
 #include "ElysiumExpr.h"
 #include "ElysiumGameClock.h"
 #include "ElysiumHUD.h"
+#include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumObjModel.h"
@@ -33,8 +36,10 @@
 #include "ElysiumRopes.h"
 #include "ElysiumScriptFS.h"
 #include "ElysiumScriptHost.h"
+#include "ElysiumScriptNatives.h"
 #include "ElysiumTestServices.h"
 #include "ElysiumTimeControl.h"
+#include "ElysiumUserCmd.h"
 #include "ElysiumVariant.h"
 
 #include "Math/RotationMatrix.h"
@@ -129,6 +134,123 @@ bool FElysiumExprTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// 9.7d — `OneOfSet(which, count)` and the shadowed-name split.
+//
+// The selector is `(roll % count) == which - 1` (script_api.md). What the shipped corpus
+// asserts is the SET property: N sibling `.dlg` rows carrying the same choice text, row i
+// gated on OneOfSet(i, N), must present exactly one row — which holds only if every gate in
+// the set reads one roll. Both halves test here, then again through the real expression
+// host, which is where a dialogue gate reaches it.
+//
+// The second half guards the collapse `script_api.md` warns about: `Whisper` and
+// `FrenzyTrigger` are both `vamputil.py` helpers AND datamap input names, so they must never
+// join the shared native table — the bare spelling belongs to the script, the qualified one
+// to the datamap.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOneOfSetTest, "Elysium.Substrate.OneOfSet", GElysiumTestFlags)
+bool FElysiumOneOfSetTest::RunTest(const FString&)
+{
+	// --- The selector, over a pinned roll -------------------------------------------------
+	// Exactly one of 1..N passes, for every roll residue and every set size the corpus uses
+	// (2, 4, 6, 7, 8) — this is the whole contract.
+	for (const int32 Count : { 2, 4, 6, 7, 8 })
+	{
+		for (int32 Roll = 0; Roll < Count * 3; ++Roll)
+		{
+			ElysiumScriptNatives::SetOneOfSetRoll(Roll);
+			int32 Passing = 0;
+			for (int32 Which = 1; Which <= Count; ++Which)
+			{
+				if (ElysiumScriptNatives::OneOfSet(Which, Count)) { ++Passing; }
+			}
+			if (Passing != 1)
+			{
+				AddError(FString::Printf(TEXT("OneOfSet(1..%d, %d) passed %d rows at roll %d, expected 1"),
+					Count, Count, Passing, Roll));
+			}
+		}
+	}
+
+	// It is 1-based: roll 0 selects `which` 1, not 0.
+	ElysiumScriptNatives::SetOneOfSetRoll(0);
+	TestTrue(TEXT("roll 0 selects which=1"), ElysiumScriptNatives::OneOfSet(1, 7));
+	TestFalse(TEXT("which=0 never passes"), ElysiumScriptNatives::OneOfSet(0, 7));
+	TestFalse(TEXT("which past count never passes"), ElysiumScriptNatives::OneOfSet(8, 7));
+	ElysiumScriptNatives::SetOneOfSetRoll(3);
+	TestTrue(TEXT("roll 3 selects which=4"), ElysiumScriptNatives::OneOfSet(4, 7));
+
+	// A degenerate count is false, not a divide-by-zero.
+	TestFalse(TEXT("count 0 is false"), ElysiumScriptNatives::OneOfSet(1, 0));
+	TestFalse(TEXT("negative count is false"), ElysiumScriptNatives::OneOfSet(1, -3));
+
+	// --- The roll is stable while nothing advances the frame ------------------------------
+	ElysiumScriptNatives::SetOneOfSetRoll(-1);
+	const int32 First = ElysiumScriptNatives::OneOfSetRoll();
+	TestEqual(TEXT("the roll does not change between calls in one frame"),
+		ElysiumScriptNatives::OneOfSetRoll(), First);
+
+	// --- Through the expression host, as a dialogue gate reaches it -----------------------
+	// The 7-way set from the shipped `.dlg` corpus, evaluated the way a turn's choice list is:
+	// each row's gate in one burst. Exactly one row is visible.
+	{
+		ElysiumExpr::FEnv Env;
+		auto Gate = [&Env](const TCHAR* Src)
+		{
+			Env.bError = false;
+			Env.Error.Reset();
+			return ElysiumExpr::Eval(FString(Src), Env).ToBool();
+		};
+
+		ElysiumScriptNatives::SetOneOfSetRoll(4);
+		int32 Visible = 0;
+		const TCHAR* const Set7[] = {
+			TEXT("OneOfSet(1,7)"), TEXT("OneOfSet(2,7)"), TEXT("OneOfSet(3,7)"), TEXT("OneOfSet(4,7)"),
+			TEXT("OneOfSet(5,7)"), TEXT("OneOfSet(6,7)"), TEXT("OneOfSet(7,7)"),
+		};
+		for (const TCHAR* Row : Set7)
+		{
+			if (Gate(Row)) { ++Visible; }
+		}
+		TestEqual(TEXT("a 7-row OneOfSet set shows exactly one row"), Visible, 1);
+		TestTrue(TEXT("...and it is the row the roll names"), Gate(TEXT("OneOfSet(5,7)")));
+
+		// The real corpus shape: the selector is ANDed with a second condition, so a failing
+		// second half still closes the row (`OneOfSet(1,6) and pc.CurrentMoney() >= 5`).
+		ElysiumScriptNatives::SetOneOfSetRoll(0);
+		TestTrue(TEXT("selected row with a passing conjunct"), Gate(TEXT("OneOfSet(1,6) and 5 >= 5")));
+		TestFalse(TEXT("selected row with a failing conjunct"), Gate(TEXT("OneOfSet(1,6) and 1 >= 5")));
+		TestFalse(TEXT("unselected row with a passing conjunct"), Gate(TEXT("OneOfSet(2,6) and 5 >= 5")));
+	}
+
+	ElysiumScriptNatives::SetOneOfSetRoll(-1);   // leave the live roll armed
+
+	// --- The shadowed names must not collapse into the native surface ---------------------
+	TestFalse(TEXT("Whisper is not a module global"), ElysiumScriptNatives::IsNativeGlobal(TEXT("Whisper")));
+	TestFalse(TEXT("Whisper is not a Character method"), ElysiumScriptNatives::IsCharacterMethod(TEXT("Whisper")));
+	TestFalse(TEXT("FrenzyTrigger is not a module global"),
+		ElysiumScriptNatives::IsNativeGlobal(TEXT("FrenzyTrigger")));
+	TestFalse(TEXT("FrenzyTrigger is not a Character method"),
+		ElysiumScriptNatives::IsCharacterMethod(TEXT("FrenzyTrigger")));
+
+	// The receiver-qualified spelling resolves the other way: a registered datamap input on the
+	// class chain, which is what `pc.Whisper(...)` / `pc.FrenzyTrigger()` fire.
+	{
+		const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+		const FElysiumClassDesc* PlayerDesc = Reg.Find(ElysiumPlayerClassName());
+		if (TestNotNull(TEXT("the player class is registered"), PlayerDesc))
+		{
+			TestTrue(TEXT("Whisper is a player datamap input"),
+				Reg.FindInput(*PlayerDesc, FName(TEXT("Whisper"))) != nullptr);
+			TestTrue(TEXT("FrenzyTrigger is inherited from the combat character"),
+				Reg.FindInput(*PlayerDesc, FName(TEXT("FrenzyTrigger"))) != nullptr);
+		}
+	}
+
+	return true;
+}
+
+// =====================================================================================
 // FElysiumConsole — VtMB's console surface (9.3b): cfg alias/cvar parse + the ccmd execute
 // path (alias expansion -> cvar set -> Python fallthrough). Content-free: no Python, no world.
 // =====================================================================================
@@ -170,16 +292,245 @@ bool FElysiumConsoleTest::RunTest(const FString&)
 	TestEqual(TEXT("cvar set does not fall through"), Fell.Num(), 0);
 	TestEqual(TEXT("cvar updated"), C.GetCvar(TEXT("fps_max")), FString(TEXT("30")));
 
-	// An alias body that is an engine command (`-speed;`) expands to one non-empty statement and
-	// falls through; the sink reporting "not Python" is how such commands are dropped.
+	// The precedence, stated once in the header and asserted here (11.6): **registered command ->
+	// alias -> cvar -> Python**. The patch's `run` alias expands to `-speed;`, which is a declared
+	// ButtonPair verb, so the registry consumes it and it never reaches the sink.
 	Fell.Reset();
 	C.SetPythonSink([&Fell](const FString& Line) { Fell.Add(Line); return false; });
+	FElysiumUserCmdBuilder Buttons;
+	Buttons.SetButton(EElysiumButton::Speed, true);
+	FElysiumCommands::Get().SetUserCmdSink(&Buttons);
 	C.Execute(TEXT("run"));
-	TestEqual(TEXT("run expands to one non-empty statement"), Fell.Num(), 1);
-	if (Fell.Num() == 1)
+	TestEqual(TEXT("a registered verb does not reach Python"), Fell.Num(), 0);
+	TestFalse(TEXT("`run` -> `-speed` lifted the gait latch"), Buttons.IsDown(EElysiumButton::Speed));
+
+	// A command outranks an alias of the same name: nothing a player writes into user.cfg can
+	// shadow `+forward`, which is Source's own Cmd_ExecuteString order.
+	C.ParseText(TEXT("alias +forward \"setPlus()\"\n"));
+	Fell.Reset();
+	C.Execute(TEXT("+forward"));
+	TestEqual(TEXT("the shadowing alias never ran"), Fell.Num(), 0);
+	TestTrue(TEXT("+forward latched the button"), Buttons.IsDown(EElysiumButton::Forward));
+
+	// A word that is neither a verb nor an alias nor a cvar still falls through to Python.
+	Fell.Reset();
+	C.Execute(TEXT("checkFeed()"));
+	TestEqual(TEXT("an unknown word reaches Python"), Fell.Num(), 1);
+
+	FElysiumCommands::Get().SetUserCmdSink(nullptr);
+	return true;
+}
+
+// =====================================================================================
+// S7 — the command registry (11.6, runtime-architecture.md §8.2). The inventory, the +/- pair
+// semantics, implementation stacking and the button latch are plain C++, so all of it is
+// asserted with no world, no controller and no input device.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCommandsTest, "Elysium.Substrate.Commands", GElysiumTestFlags)
+bool FElysiumCommandsTest::RunTest(const FString&)
+{
+	FElysiumCommands& Registry = FElysiumCommands::Get();
+
+	// --- The inventory ------------------------------------------------------------------
+	const FElysiumCommandDef* Forward = Registry.Find(TEXT("forward"));
+	TestNotNull(TEXT("`forward` is declared"), Forward);
+	if (Forward)
 	{
-		TestEqual(TEXT("engine command reached the sink"), Fell[0], FString(TEXT("-speed")));
+		TestTrue(TEXT("`forward` is a +/- pair"), Forward->Kind == EElysiumCmdKind::ButtonPair);
+		TestEqual(TEXT("`forward` carries the Forward bit"),
+			Forward->Button, static_cast<uint64>(EElysiumButton::Forward));
 	}
+	const FElysiumCommandDef* Camera = Registry.Find(TEXT("togglecamera"));
+	TestNotNull(TEXT("`togglecamera` is declared"), Camera);
+	if (Camera)
+	{
+		TestTrue(TEXT("`togglecamera` happens once"), Camera->Kind == EElysiumCmdKind::Once);
+	}
+	// Bound by both shipped default.cfg files, present in no binary and no script; deliberately
+	// dropped (`decisions.md` 2026-07-25). If it ever reappears, that is a decision, not a typo.
+	TestFalse(TEXT("`vphysicshand` is not declared"), Registry.IsDeclared(TEXT("vphysicshand")));
+	// Case folding is the registry's, so `+USE` and `+use` are the same verb.
+	TestTrue(TEXT("names are case-folded"), Registry.IsDeclared(TEXT("USE")));
+
+	// --- Resolution ---------------------------------------------------------------------
+	FElysiumUserCmdBuilder Builder;
+	Registry.SetUserCmdSink(&Builder);
+
+	TestTrue(TEXT("`+speed` resolves"), Registry.Execute(TEXT("+speed")));
+	TestTrue(TEXT("`+speed` latched the gait"), Builder.IsDown(EElysiumButton::Speed));
+	TestTrue(TEXT("`-speed` resolves"), Registry.Execute(TEXT("-speed")));
+	TestFalse(TEXT("`-speed` lifted the gait"), Builder.IsDown(EElysiumButton::Speed));
+
+	// A sign only means an edge on a pair. `+togglecamera` is not a verb — VtMB's console reports
+	// the same, and the console needs the false to know to try an alias.
+	TestFalse(TEXT("a signed Once verb is not a verb"), Registry.Execute(TEXT("+togglecamera")));
+	TestFalse(TEXT("an unknown word is not a verb"), Registry.Execute(TEXT("checkFeed()")));
+
+	// A pair invoked bare is a press — how a `.dlg` action or a script spells a momentary verb.
+	TestTrue(TEXT("a bare pair resolves"), Registry.Execute(TEXT("use")));
+
+	// --- Implementations ----------------------------------------------------------------
+	TArray<FString> Seen;
+	TestFalse(TEXT("`vhotkey` starts unimplemented"), Registry.IsBound(TEXT("vhotkey")));
+	FElysiumCommandBinding First = Registry.Bind(TEXT("vhotkey"),
+		[&Seen](const FElysiumCommandCall& Call) { Seen.Add(TEXT("first:") + Call.Args); });
+	TestTrue(TEXT("binding a declared verb succeeds"), First.IsValid());
+	Registry.Execute(TEXT("vhotkey #3"));
+	TestEqual(TEXT("the argument string survives"), Seen.Num() == 1 ? Seen[0] : FString(),
+		FString(TEXT("first:#3")));
+
+	// Implementations stack: a system can take a verb for a while and give it back.
+	FElysiumCommandBinding Second = Registry.Bind(TEXT("vhotkey"),
+		[&Seen](const FElysiumCommandCall&) { Seen.Add(TEXT("second")); });
+	Registry.Execute(TEXT("vhotkey #1"));
+	TestEqual(TEXT("the newest implementation runs"), Seen.Last(), FString(TEXT("second")));
+	Registry.Unbind(Second);
+	TestFalse(TEXT("Unbind clears the handle"), Second.IsValid());
+	Registry.Execute(TEXT("vhotkey #2"));
+	TestEqual(TEXT("the one underneath is restored"), Seen.Last(), FString(TEXT("first:#2")));
+
+	// Binding a name the inventory does not carry fails rather than inventing a verb.
+	AddExpectedError(TEXT("refused: not a declared verb"), EAutomationExpectedErrorFlags::Contains, 1);
+	FElysiumCommandBinding Bogus = Registry.Bind(TEXT("nosuchverb"), [](const FElysiumCommandCall&) {});
+	TestFalse(TEXT("an undeclared verb cannot be bound"), Bogus.IsValid());
+
+	Registry.Unbind(First);
+	Registry.SetUserCmdSink(nullptr);
+
+	// --- The default bind table ----------------------------------------------------------
+	// Every key VtMB's patch default.cfg binds names either a declared verb or one of the patch's
+	// own aliases, and none of them lands on a key the dev layer owns. A typo in the table is a
+	// dead key in the shipped game, so it fails here instead.
+	static const TCHAR* const PatchAliases[] = {
+		TEXT("vm_discipline"), TEXT("vm_feed"), TEXT("vm_passives"), TEXT("skip"),
+		TEXT("cam_restore"), TEXT("cam_rotateleft"), TEXT("cam_rotateright"),
+	};
+	for (const FElysiumDefaultBind& Bind : ElysiumBinds::Defaults())
+	{
+		TestFalse(FString::Printf(TEXT("'%s' is not a reserved key"), *Bind.Key.ToString()),
+			ElysiumBinds::IsReserved(Bind.Key));
+
+		FString Word = FString(Bind.Command);
+		int32 Space = INDEX_NONE;
+		Word.FindChar(TEXT(' '), Space);
+		if (Space != INDEX_NONE)
+		{
+			Word = Word.Left(Space);
+		}
+		const bool bSigned = Word.StartsWith(TEXT("+")) || Word.StartsWith(TEXT("-"));
+		const FName Verb(*(bSigned ? Word.Mid(1) : Word));
+
+		bool bKnown = Registry.IsDeclared(Verb);
+		for (const TCHAR* Alias : PatchAliases)
+		{
+			bKnown = bKnown || Word.Equals(Alias, ESearchCase::IgnoreCase);
+		}
+		TestTrue(FString::Printf(TEXT("bind '%s' -> '%s' names something"), Bind.VtmbKey, Bind.Command), bKnown);
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// S5 — intent is data (11.6, runtime-architecture.md §8.3). The user command is built from
+// button latches and analog accumulators with no engine input in sight, which is what makes
+// headless play and replay the same mechanism as playing.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUserCmdTest, "Elysium.Substrate.UserCmd", GElysiumTestFlags)
+bool FElysiumUserCmdTest::RunTest(const FString&)
+{
+	FElysiumUserCmdBuilder Builder;
+
+	// Opposed keys cancel; a diagonal is two axes, and clamping happens per axis.
+	Builder.SetButton(EElysiumButton::Forward, true);
+	Builder.SetButton(EElysiumButton::Back, true);
+	FElysiumUserCmd Cmd = Builder.Build(1.0f / 60.0f);
+	TestEqual(TEXT("forward and back cancel"), Cmd.Move.X, 0.0);
+	TestEqual(TEXT("the first command is #1"), (int32)Cmd.Seq, 1);
+
+	Builder.SetButton(EElysiumButton::Back, false);
+	Builder.SetButton(EElysiumButton::MoveRight, true);
+	Cmd = Builder.Build(1.0f / 60.0f);
+	TestEqual(TEXT("forward alone is +1"), Cmd.Move.X, 1.0);
+	TestEqual(TEXT("moveright alone is +1"), Cmd.Move.Y, 1.0);
+	TestEqual(TEXT("sequence advances"), (int32)Cmd.Seq, 2);
+
+	// `+left`/`+right` are turn keys, at cl_yawspeed — until `+strafe` is held, when the same two
+	// keys strafe instead. That is why they are buttons and not a look axis.
+	Builder.SetButton(EElysiumButton::Forward, false);
+	Builder.SetButton(EElysiumButton::MoveRight, false);
+	Builder.SetButton(EElysiumButton::Right, true);
+	Cmd = Builder.Build(1.0f);
+	TestEqual(TEXT("a turn key yaws at cl_yawspeed"), (float)Cmd.LookDelta.X,
+		ElysiumInput::KeyboardYawSpeed, 0.001f);
+	TestEqual(TEXT("a turn key does not strafe"), Cmd.Move.Y, 0.0);
+
+	Builder.SetButton(EElysiumButton::Strafe, true);
+	Cmd = Builder.Build(1.0f);
+	TestEqual(TEXT("+strafe turns the turn key into strafe"), Cmd.Move.Y, 1.0);
+	TestEqual(TEXT("+strafe stops it yawing"), (float)Cmd.LookDelta.X, 0.0f, 0.001f);
+	Builder.SetButton(EElysiumButton::Strafe, false);
+	Builder.SetButton(EElysiumButton::Right, false);
+
+	// Mouse counts accumulate within a frame and are consumed by the build, never carried over.
+	Builder.AddLook(1.5f, -0.5f);
+	Builder.AddLook(0.5f, 0.25f);
+	Cmd = Builder.Build(1.0f / 60.0f);
+	TestEqual(TEXT("look accumulates"), (float)Cmd.LookDelta.X, 2.0f, 0.001f);
+	TestEqual(TEXT("look accumulates on pitch too"), (float)Cmd.LookDelta.Y, -0.25f, 0.001f);
+	Cmd = Builder.Build(1.0f / 60.0f);
+	TestEqual(TEXT("the accumulator is consumed"), (float)Cmd.LookDelta.X, 0.0f, 0.001f);
+
+	// A held button survives a build; ClearButtons is what a scope change does to it, and it must
+	// not produce a command of its own.
+	Builder.SetButton(EElysiumButton::Speed, true);
+	TestTrue(TEXT("a latch survives a build"), Builder.Build(0.016f).IsDown(EElysiumButton::Speed));
+	Builder.ClearButtons();
+	TestFalse(TEXT("ClearButtons drops the latch"), Builder.Build(0.016f).IsDown(EElysiumButton::Speed));
+
+	// Press edges are what a Once-shaped consumer (jump, the noclip toggle) reads.
+	FElysiumUserCmd Prev;
+	FElysiumUserCmd Now;
+	Now.Buttons = static_cast<uint64>(EElysiumButton::Jump);
+	TestTrue(TEXT("a new press is an edge"), Now.JustPressed(EElysiumButton::Jump, Prev));
+	TestFalse(TEXT("a held press is not"), Now.JustPressed(EElysiumButton::Jump, Now));
+	TestTrue(TEXT("a release is an edge"), Prev.JustReleased(EElysiumButton::Jump, Now));
+
+	// --- Record / replay -----------------------------------------------------------------
+	// The acceptance: a recorded stream replays identically. The whole of it is here because the
+	// stream is a value — 11.10 drives the same stream through a real world.
+	FElysiumUserCmdStream Recorded;
+	FElysiumUserCmdBuilder Source;
+	static const EElysiumButton Script[] = {
+		EElysiumButton::Forward, EElysiumButton::Speed, EElysiumButton::MoveLeft, EElysiumButton::Jump,
+	};
+	for (int32 Frame = 0; Frame < 16; ++Frame)
+	{
+		Source.SetButton(Script[Frame % UE_ARRAY_COUNT(Script)], (Frame % 3) != 2);
+		Source.AddLook(Frame * 0.1f, Frame * -0.05f);
+		Recorded.Record(Source.Build(1.0f / 60.0f));
+	}
+	TestEqual(TEXT("16 frames recorded"), Recorded.Num(), 16);
+
+	// Replay is the router's loop: pull each command and use it verbatim.
+	FElysiumUserCmdStream Played;
+	Recorded.Rewind();
+	while (const FElysiumUserCmd* Next = Recorded.Next())
+	{
+		FElysiumUserCmd Frame = *Next;
+		// A replay at a different frame rate is still the same input, so the delta is re-stamped.
+		Frame.DeltaSeconds = 1.0f / 30.0f;
+		Played.Record(Frame);
+	}
+	TestTrue(TEXT("the replay is the recording"), Recorded.SameIntent(Played));
+
+	// And it survives the text form, which is what makes a stream a beat-script input.
+	FElysiumUserCmdStream RoundTrip;
+	TestTrue(TEXT("the text form parses"),
+		FElysiumUserCmdStream::FromText(Recorded.ToText(), RoundTrip));
+	TestTrue(TEXT("the text form round-trips"), Recorded.SameIntent(RoundTrip));
 
 	return true;
 }
@@ -613,6 +964,168 @@ bool FElysiumAppStateTest::RunTest(const FString&)
 	TestTrue(TEXT("GameOver holds the world"), ElysiumAppState::HoldsWorld(EState::GameOver));
 	TestFalse(TEXT("Playing runs the world"), ElysiumAppState::HoldsWorld(EState::Playing));
 	TestFalse(TEXT("FrontEnd runs the world"), ElysiumAppState::HoldsWorld(EState::FrontEnd));
+
+	return true;
+}
+
+// =====================================================================================
+// S6 — the input scope stack (11.5, runtime-architecture.md §8.1). The arbitration is plain
+// C++, so the whole rule set is asserted with no local player, no controller and no viewport:
+// what the top scope resolves to, what an out-of-order pop restores, and that the stack is
+// balanced across every screen transition the game can make.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInputScopesTest, "Elysium.Substrate.InputScopes", GElysiumTestFlags)
+bool FElysiumInputScopesTest::RunTest(const FString&)
+{
+	using EMode = EElysiumInputMode;
+	namespace Prio = ElysiumInput::Priority;
+
+	// The scopes the game actually pushes, as data — so a transition is a pair of these rather
+	// than a hand-written sequence, and the table below can walk every ordered pair.
+	auto MakeScope = [](const TCHAR* Name, int32 Priority, EMode Mode, bool bCursor)
+	{
+		FElysiumInputScope Scope;
+		Scope.Name = Name;
+		Scope.Priority = Priority;
+		Scope.Mode = Mode;
+		Scope.bShowCursor = bCursor;
+		return Scope;
+	};
+	const FElysiumInputScope Sign      = MakeScope(TEXT("Sign"),      Prio::Sign,      EMode::GameOnly,  false);
+	const FElysiumInputScope Cinematic = MakeScope(TEXT("Cinematic"), Prio::Cinematic, EMode::GameOnly,  false);
+	const FElysiumInputScope Chargen   = MakeScope(TEXT("Chargen"),   Prio::Chargen,   EMode::UIOnly,    true);
+	const FElysiumInputScope Dialogue  = MakeScope(TEXT("Dialogue"),  Prio::Dialogue,  EMode::UIOnly,    true);
+	const FElysiumInputScope Menu      = MakeScope(TEXT("Menu"),      Prio::Menu,      EMode::UIOnly,    true);
+	const FElysiumInputScope Debug     = MakeScope(TEXT("Debug"),     Prio::Debug,     EMode::GameOnly,  true);
+
+	// --- the empty stack is the game holding the mouse ---
+	{
+		FElysiumInputScopeStack Stack;
+		const FElysiumInputState Base = Stack.Resolve();
+		TestTrue(TEXT("an empty stack has no top"), Stack.Top() == nullptr);
+		TestTrue(TEXT("empty resolves to the gameplay default"), Base.Mode == EMode::GameOnly);
+		TestFalse(TEXT("no cursor over the world"), Base.bShowCursor);
+		TestTrue(TEXT("no deciding scope"), Base.Name.IsNone());
+	}
+
+	// --- the top decides everything, and it is the priority top, not the last push ---
+	{
+		FElysiumInputScopeStack Stack;
+		FElysiumInputScopeHandle MenuH = Stack.Push(Menu);
+		Stack.Push(Sign);   // a sign opening under a menu changes nothing
+		TestEqual(TEXT("the menu still decides"), Stack.Resolve().Name, FName(TEXT("Menu")));
+		TestTrue(TEXT("still UI-only"), Stack.Resolve().Mode == EMode::UIOnly);
+
+		// F1 over a menu: the debug UI is the top of the table on purpose.
+		Stack.Push(Debug);
+		TestEqual(TEXT("debug outranks a menu"), Stack.Resolve().Name, FName(TEXT("Debug")));
+		TestTrue(TEXT("and stands the menu's UI-only mode down"), Stack.Resolve().Mode == EMode::GameOnly);
+		Stack.PopByName(TEXT("Debug"));
+		TestEqual(TEXT("closing it restores the menu"), Stack.Resolve().Name, FName(TEXT("Menu")));
+
+		TestTrue(TEXT("the menu handle is still the menu's"), Stack.Pop(MenuH));
+		TestEqual(TEXT("the sign underneath is restored"), Stack.Resolve().Name, FName(TEXT("Sign")));
+		TestTrue(TEXT("and with it game input"), Stack.Resolve().Mode == EMode::GameOnly);
+	}
+
+	// --- same priority stacks like modals: the later push wins, and popping it restores the earlier ---
+	{
+		FElysiumInputScopeStack Stack;
+		FElysiumInputScope First = Menu;
+		First.Contexts.Add(TEXT("MenuContext"));
+		FElysiumInputScope Second = Menu;
+		Second.Name = TEXT("Menu2");
+		Second.Contexts.Add(TEXT("OptionsContext"));
+
+		Stack.Push(First);
+		FElysiumInputScopeHandle SecondH = Stack.Push(Second);
+		TestEqual(TEXT("the later same-priority push wins"), Stack.Resolve().Name, FName(TEXT("Menu2")));
+		TestEqual(TEXT("contexts follow the top"), Stack.Resolve().Contexts.Num(), 1);
+		TestEqual(TEXT("and they are the top's"), Stack.Resolve().Contexts[0], FName(TEXT("OptionsContext")));
+
+		Stack.Pop(SecondH);
+		TestEqual(TEXT("the first menu is back"), Stack.Resolve().Name, FName(TEXT("Menu")));
+		TestEqual(TEXT("with its own contexts"), Stack.Resolve().Contexts[0], FName(TEXT("MenuContext")));
+	}
+
+	// --- a stale or double pop takes nothing else down (ids are never reused) ---
+	{
+		FElysiumInputScopeStack Stack;
+		FElysiumInputScopeHandle DialogueH = Stack.Push(Dialogue);
+		TestTrue(TEXT("popped once"), Stack.Pop(DialogueH));
+		TestFalse(TEXT("popping the same handle again does nothing"), Stack.Pop(DialogueH));
+
+		FElysiumInputScopeHandle MenuH = Stack.Push(Menu);
+		TestFalse(TEXT("the stale handle is not the new scope's"), Stack.Pop(DialogueH));
+		TestEqual(TEXT("so the menu survives it"), Stack.Num(), 1);
+		TestTrue(TEXT("and its own handle still works"), Stack.Pop(MenuH));
+		TestTrue(TEXT("balanced"), Stack.IsEmpty());
+
+		FElysiumInputScopeHandle Never;
+		TestFalse(TEXT("an unpushed handle pops nothing"), Stack.Pop(Never));
+	}
+
+	// --- the acceptance: opening any screen over any other restores exactly the mode it found,
+	//     and the stack is balanced afterwards. Every ordered pair, both close orders — including
+	//     the out-of-order one (the thing under closes first, e.g. a conversation ending behind an
+	//     open pause menu).
+	{
+		const TArray<FElysiumInputScope> Screens = { Sign, Cinematic, Chargen, Dialogue, Menu, Debug };
+		for (const FElysiumInputScope& Under : Screens)
+		{
+			for (const FElysiumInputScope& Over : Screens)
+			{
+				FElysiumInputScopeStack Stack;
+				const FElysiumInputScopeHandle UnderH = Stack.Push(Under);
+				const FElysiumInputState Found = Stack.Resolve();
+
+				const FElysiumInputScopeHandle OverH = Stack.Push(Over);
+
+				// Last-in-first-out: the top goes away and what was underneath is exactly restored.
+				FElysiumInputScopeStack Lifo = Stack;
+				Lifo.Pop(OverH);
+				TestTrue(*FString::Printf(TEXT("%s over %s restores what it found"),
+					*Over.Name.ToString(), *Under.Name.ToString()), Lifo.Resolve() == Found);
+				Lifo.Pop(UnderH);
+				TestTrue(*FString::Printf(TEXT("%s/%s balances"),
+					*Under.Name.ToString(), *Over.Name.ToString()), Lifo.IsEmpty());
+
+				// Out of order: the first-pushed screen closes first. When it is not the one deciding,
+				// nothing may move — that is the conversation ending behind an open pause menu.
+				FElysiumInputScopeStack Fifo = Stack;
+				const FElysiumInputState Top = Fifo.Resolve();
+				const bool bUnderDecides = Fifo.Top() && Fifo.Top()->Handle == UnderH;
+				Fifo.Pop(UnderH);
+				if (!bUnderDecides)
+				{
+					TestTrue(*FString::Printf(TEXT("%s closing under %s leaves the top alone"),
+						*Under.Name.ToString(), *Over.Name.ToString()), Fifo.Resolve() == Top);
+				}
+				Fifo.Pop(OverH);
+				TestTrue(*FString::Printf(TEXT("%s/%s balances out of order"),
+					*Under.Name.ToString(), *Over.Name.ToString()), Fifo.IsEmpty());
+			}
+		}
+	}
+
+	// --- Cog can never eat a menu click: a scope that takes the mouse off the world revokes an
+	//     inherited ImGui capture. The subsystem does the revoking; this is the rule it asks.
+	TestTrue(TEXT("a menu revokes debug capture"), ElysiumInput::RevokesDebugCapture(Menu));
+	TestTrue(TEXT("so does a conversation"), ElysiumInput::RevokesDebugCapture(Dialogue));
+	TestTrue(TEXT("so does chargen"), ElysiumInput::RevokesDebugCapture(Chargen));
+	TestFalse(TEXT("a sign does not — it is dismissed by a world click"),
+		ElysiumInput::RevokesDebugCapture(Sign));
+	TestFalse(TEXT("nor does a cutscene"), ElysiumInput::RevokesDebugCapture(Cinematic));
+	TestFalse(TEXT("and the debug scope never revokes itself"), ElysiumInput::RevokesDebugCapture(Debug));
+
+	// The priority table is the ordering the whole system rests on; state it once, here.
+	TestTrue(TEXT("gameplay is the floor"), Prio::Game < Prio::Sign);
+	TestTrue(TEXT("a cutscene outranks a sign"), Prio::Sign < Prio::Cinematic);
+	TestTrue(TEXT("chargen outranks a cutscene"), Prio::Cinematic < Prio::Chargen);
+	TestTrue(TEXT("a conversation outranks chargen"), Prio::Chargen < Prio::Dialogue);
+	TestTrue(TEXT("a menu outranks a conversation"), Prio::Dialogue < Prio::Menu);
+	TestTrue(TEXT("F1 outranks everything"), Prio::Menu < Prio::Debug);
 
 	return true;
 }
@@ -1541,6 +2054,39 @@ bool FElysiumCPythonWritersTest::RunTest(const FString&)
 		Eval(TEXT("CallEntitySpawn(__pytest_e)"));
 		TestTrue(TEXT("spawned after CallEntitySpawn"), Spawned->bSpawnCalled);
 	}
+
+	// --- 9.7d: the shadowed-name split, through the real getattro -------------------------
+	// `Whisper` and `FrenzyTrigger` are `vamputil.py` helpers AND datamap input names, so the
+	// receiver — not the name — decides which one runs (script_api.md). Stand up the helper the
+	// way vamputil defines it (a plain `__main__` function) and check the two spellings stay
+	// distinct: the bare call reaches the script, the qualified one the datamap input.
+	World.SpawnPlayer();
+	Eval(TEXT("__pytest_whispers = []"));
+	Eval(TEXT("def Whisper(s):\n    __pytest_whispers.append(s)\n"));
+	Eval(TEXT("def FrenzyTrigger(char):\n    char.FrenzyTrigger(1)\n"));
+
+	TestTrue(TEXT("pc resolves to the player entity"), Eval(TEXT("pc is not None")).ToBool());
+	TestTrue(TEXT("pc.Whisper is not the __main__ helper"),
+		Eval(TEXT("pc.Whisper is not Whisper")).ToBool());
+	TestTrue(TEXT("pc.FrenzyTrigger is not the __main__ helper"),
+		Eval(TEXT("pc.FrenzyTrigger is not FrenzyTrigger")).ToBool());
+
+	Eval(TEXT("Whisper(\"Crying\")"));      // bare -> the script helper (24 `.dlg` sites)
+	Eval(TEXT("pc.Whisper(\"Crying\")"));   // receiver-qualified -> the player datamap input (9 sites)
+	World.Tick(0.0);
+	TestEqual(TEXT("only the bare spelling ran the helper"),
+		Eval(TEXT("len(__pytest_whispers)")).ToInt(), 1);
+	// `__main__` is process-global, so take the two real script names back out again.
+	Eval(TEXT("del Whisper, FrenzyTrigger, __pytest_whispers"));
+
+	// OneOfSet through the real module global: the same exactly-one-of-N set property, with the
+	// roll pinned so the assertion is deterministic.
+	ElysiumScriptNatives::SetOneOfSetRoll(2);
+	TestTrue(TEXT("the roll's row passes under CPython"), Eval(TEXT("OneOfSet(3,7)")).ToBool());
+	TestFalse(TEXT("a sibling row does not"), Eval(TEXT("OneOfSet(4,7)")).ToBool());
+	TestEqual(TEXT("a 7-row set shows exactly one row"),
+		Eval(TEXT("len([w for w in range(1,8) if OneOfSet(w,7)])")).ToInt(), 1);
+	ElysiumScriptNatives::SetOneOfSetRoll(-1);
 
 	return true;
 }

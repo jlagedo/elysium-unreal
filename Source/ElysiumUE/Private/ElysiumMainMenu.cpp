@@ -1,6 +1,7 @@
 #include "ElysiumMainMenu.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumCommandBus.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumUIStrings.h"
 #include "ElysiumUIStyle.h"
@@ -60,7 +61,7 @@ UElysiumMainMenu::UElysiumMainMenu()
 	bIsBackHandler = false;
 	bAutoActivate = true;
 	// Required for NativeOnKeyDown to ever run: SObjectWidget::SupportsKeyboardFocus() reports this
-	// flag, and the UI subsystem's FInputModeUIOnly hands focus to this widget.
+	// flag, and the menu's input scope names this widget as its focus target (11.5).
 	SetIsFocusable(true);
 }
 
@@ -171,19 +172,12 @@ FReply UElysiumMainMenu::NativeOnKeyDown(const FGeometry& Geometry, const FKeyEv
 {
 	if (KeyEvent.GetKey() == EKeys::Escape)
 	{
-		// Pause is the only mode Escape leaves: the front end has nothing behind it to go back to,
-		// and a lost run is not dismissible. In those two it is still consumed, so the key cannot
-		// reach the game underneath.
-		if (Mode == EElysiumMenuMode::Pause)
-		{
-			if (UGameInstance* GI = GetGameInstance())
-			{
-				if (UElysiumGameFlowSubsystem* Flow = GI->GetSubsystem<UElysiumGameFlowSubsystem>())
-				{
-					Flow->SetPaused(false);
-				}
-			}
-		}
+		// The screen is the *other* key source for one named verb (11.6). While a menu is up the
+		// input mode is UI-only and the player controller sees nothing, so the router's binding
+		// cannot fire — but `cancelselect` is the same verb either way, and the flow subsystem's
+		// implementation is what decides that Pause is the only mode Escape leaves. Consumed in
+		// every mode regardless, so the key cannot reach the game underneath.
+		ElysiumCommandBus::Exec(TEXT("cancelselect"));
 		return FReply::Handled();
 	}
 	return Super::NativeOnKeyDown(Geometry, KeyEvent);

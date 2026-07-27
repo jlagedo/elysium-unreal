@@ -5,8 +5,12 @@
 // VtMB's console surface -- the fifth scripting surface (docs/python_bridge.md). It is a table of
 // **aliases** and **cvars** parsed from `out/cfg/*.cfg` (Valve console syntax), plus the execute
 // path a `ccmd` attribute-set drives: a script runs `c.patchtype = ""` and the console executes
-// the command `patchtype`. Resolution, per command word:
+// the command `patchtype`. Resolution, per command word -- the precedence is stated here once and
+// asserted by `Elysium.Substrate.Console` (roadmap 11.6):
 //
+//   * a **registered command** (FElysiumCommands, the VtMB bindable-verb inventory) -> run it,
+//     `+`/`-` edges included. Commands outrank aliases, matching Source's own Cmd_ExecuteString,
+//     which is why a user alias cannot shadow `+forward`;
 //   * an **alias** -> recursively execute its expansion (`;`-separated commands, aliases nest);
 //   * a known **cvar** with args -> set it; with no args -> a no-op (retail prints the value);
 //   * otherwise -> **fall through to Python** (the sink evals the line in `__main__`).
@@ -35,6 +39,11 @@ public:
 	// LoadFromCfgDir; exposed for unit tests.
 	void ParseText(const FString& CfgText);
 
+	// Load CfgDir the first time this is called and never again. The command bus reaches the console
+	// from outside the Python VM (`elysium.cmd`, a bound key), and that path must resolve the
+	// patch's aliases whether or not the VM ever came up.
+	void EnsureSeeded(const FString& CfgDir);
+
 	// Execute one console command line (a `ccmd` attribute-set forms `name` + optional " " + value).
 	// Splits on top-level `;`, resolves each part (alias / cvar / Python fallthrough).
 	void Execute(const FString& CommandLine);
@@ -62,4 +71,5 @@ private:
 	TMap<FString, FString> Aliases; // name (lowercased) -> command expansion
 	TMap<FString, FString> Cvars;   // name (lowercased) -> value
 	FPythonSink PythonSink;
+	bool bSeeded = false;
 };

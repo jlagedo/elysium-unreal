@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "ElysiumAppState.h"
+#include "ElysiumCommands.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 
 #include "ElysiumGameFlowSubsystem.generated.h"
@@ -168,6 +169,13 @@ private:
 	void OnPreLoadMap(const FString& MapName);
 	void OnPostLoadMap(UWorld* LoadedWorld);
 
+	// --- The named verbs (11.6) ----------------------------------------------------------------
+	// `cancelselect`, `togglemainmenu`, `pause`, `save`, `load`. Registered here, not on the player
+	// controller, because Escape has to resolve while a screen holds input UI-only and no controller
+	// is seeing keys — this subsystem outlives every world and every screen.
+	void RegisterCommands();
+	void UnregisterCommands();
+
 	EElysiumAppState State = EElysiumAppState::Boot;
 	FOnElysiumAppStateChanged AppStateChanged;
 	EElysiumGameOverReason GameOverReason = EElysiumGameOverReason::Killed;
@@ -188,4 +196,5 @@ private:
 	FDelegateHandle PostLoadMapHandle;
 
 	TArray<IConsoleObject*> ConsoleObjects;
+	TArray<FElysiumCommandBinding> Bindings;
 };

@@ -159,6 +159,8 @@ void UElysiumGameFlowSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	PostLoadMapHandle = FCoreUObjectDelegates::PostLoadMapWithWorld.AddUObject(
 		this, &UElysiumGameFlowSubsystem::OnPostLoadMap);
 
+	RegisterCommands();
+
 	IConsoleManager& Console = IConsoleManager::Get();
 
 	ConsoleObjects.Add(Console.RegisterConsoleCommand(
@@ -251,6 +253,8 @@ void UElysiumGameFlowSubsystem::Deinitialize()
 	FCoreUObjectDelegates::PreLoadMap.Remove(PreLoadMapHandle);
 	FCoreUObjectDelegates::PostLoadMapWithWorld.Remove(PostLoadMapHandle);
 
+	UnregisterCommands();
+
 	for (IConsoleObject* Object : ConsoleObjects)
 	{
 		IConsoleManager::Get().UnregisterConsoleObject(Object);
@@ -258,6 +262,68 @@ void UElysiumGameFlowSubsystem::Deinitialize()
 	ConsoleObjects.Reset();
 
 	Super::Deinitialize();
+}
+
+// ================================================================================================
+// The named verbs (11.6)
+// ================================================================================================
+
+void UElysiumGameFlowSubsystem::RegisterCommands()
+{
+	FElysiumCommands& Registry = FElysiumCommands::Get();
+
+	// `cancelselect` is VtMB's Escape verb, and it is one verb with two key sources: the router's
+	// binding while the game has input, and `UElysiumMainMenu::NativeOnKeyDown` while a screen holds
+	// it UI-only and the controller sees nothing. Both arrive here, which is what 11.5 left open.
+	Bindings.Add(Registry.Bind(TEXT("cancelselect"), [this](const FElysiumCommandCall&)
+	{
+		// Pause is the only mode Escape leaves: the front end has nothing behind it to go back to,
+		// and a lost run is not dismissible. In those two it is consumed and nothing happens.
+		if (State == EElysiumAppState::Paused)
+		{
+			SetPaused(false);
+		}
+		else if (State == EElysiumAppState::Playing)
+		{
+			SetPaused(true);
+		}
+	}));
+
+	Bindings.Add(Registry.Bind(TEXT("togglemainmenu"), [this](const FElysiumCommandCall&)
+	{
+		TogglePause();
+	}));
+
+	Bindings.Add(Registry.Bind(TEXT("pause"), [this](const FElysiumCommandCall&)
+	{
+		TogglePause();
+	}));
+
+	// `save quick` / `load quick` are the two the default binds carry (F9 / F12); a bare slot name
+	// is a manual save. Both land on the 11.9 seam, which logs until persistence exists.
+	Bindings.Add(Registry.Bind(TEXT("save"), [this](const FElysiumCommandCall& Call)
+	{
+		const bool bQuick = Call.Args.Equals(TEXT("quick"), ESearchCase::IgnoreCase);
+		SaveGame(bQuick ? TEXT("quick") : (Call.Args.IsEmpty() ? TEXT("slot0") : Call.Args),
+			bQuick ? EElysiumSaveKind::Quick : EElysiumSaveKind::Manual);
+	}));
+
+	Bindings.Add(Registry.Bind(TEXT("load"), [this](const FElysiumCommandCall& Call)
+	{
+		LoadGame(Call.Args.IsEmpty() ? TEXT("quick") : Call.Args);
+	}));
+
+	Bindings.RemoveAll([](const FElysiumCommandBinding& B) { return !B.IsValid(); });
+}
+
+void UElysiumGameFlowSubsystem::UnregisterCommands()
+{
+	FElysiumCommands& Registry = FElysiumCommands::Get();
+	for (FElysiumCommandBinding& Binding : Bindings)
+	{
+		Registry.Unbind(Binding);
+	}
+	Bindings.Reset();
 }
 
 // ================================================================================================

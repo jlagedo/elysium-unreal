@@ -18,7 +18,7 @@ Input arrives on four separate channels that never share a key.
 | **0 — System** | engine | `ConsoleKeys` (viewport client), `bF11TogglesFullscreen`, Alt+Enter | yes |
 | **1 — Dev/debug** | Cog + `elysium.*` | Slate `SCogImguiInputCatcherWidget`, `UPlayerInput::DebugExecBindings`, `UEnhancedInputComponent::BindDebugKey` | no (`!UE_BUILD_SHIPPING`) |
 | **2 — Player** | Enhanced Input | `UInputAction` + `UInputMappingContext` + `UEnhancedInputUserSettings` | yes |
-| **3 — Command bus** | `FElysiumConsole` | alias expand → cvar set → Python fallthrough | yes |
+| **3 — Command bus** | `FElysiumCommands` + `FElysiumConsole` | registered command → alias expand → cvar set → Python fallthrough | yes |
 
 Plane 1 matters as much as plane 2: `BindDebugKey` takes an `FInputChord` directly and never
 enters a mapping context, so a debug key is not an action, cannot appear in the remapping screen,
@@ -30,6 +30,14 @@ VtMB has no action abstraction — an action *is* a console command string, and 
 whitelist of which strings the options UI may bind (`controls.md` § "What is bindable"). That maps
 onto Enhanced Input directly, and the mapping is what keeps ~64 actions tractable.
 
+**The strings already exist.** `FElysiumCommands` (roadmap 11.6, `runtime-architecture.md` §8.2)
+declares the whole inventory by name with its `+`/`-` pairs, and `ElysiumBinds::Defaults()` carries
+VtMB's own default bind set as `FKey` -> console line. Enhanced Input replaces the **front** of that
+path — where a key comes from — and nothing behind it: an action still resolves to a command string,
+the string still goes through the bus, and `FElysiumUserCmd` is still what movement and the camera
+read. The CSV below is therefore a *projection* of the same inventory, not a second source of truth
+for what a verb is.
+
 **One `UInputAction` per bindable command.** Each carries a `UPlayerMappableKeySettings` whose
 `Name` is a **stable id** (`Move_Forward`, `Hotkey_1`, `Discipline_Last`). That FName is the save
 key in the player's key profile and never changes once shipped. The VtMB command string
@@ -39,7 +47,8 @@ spaces make a poor persistence key.
 Two tiers:
 
 - **Analog / first-class** — `IA_Move` (Axis2D), `IA_Look` (Axis2D), `IA_MoveVertical`,
-  `IA_CameraDolly`. Bound natively in C++ to `AElysiumPawn`. They carry real axis values and
+  `IA_CameraDolly`. Bound natively in C++ to `UElysiumInputRouter`, which folds them into the
+  frame's `FElysiumUserCmd`. They carry real axis values and
   per-device modifier stacks; routing them through a string bus would discard both.
 - **Command actions** — everything else, bound generically off the action table:
 
@@ -183,10 +192,16 @@ profile beside it is imported as the initial profile.
 
 The development layer occupies no bare key a player can bind.
 
-- The console is `` ` ``, matching VtMB's own `toggleconsole` bind, and it is one console: UE cvars,
-  `elysium.*`, VtMB aliases and Python fallthrough all arrive through the 9.3b bridge.
+- The console is `` ` `` (`ConsoleKeys`), matching VtMB's own `toggleconsole` bind, and it is one
+  console: UE cvars, `elysium.*`, VtMB aliases and Python fallthrough all arrive through the 9.3b
+  bridge. It is the only **bare** key the dev layer holds, and `ElysiumBinds::ReservedKeys()` is that
+  set.
 - Cog's shell shortcuts are chords — `Ctrl+F1` toggle input, `Ctrl+F2`–`Ctrl+F4` layouts.
   `FCogInputChord` derives from `FInputChord`, so this is configuration.
+- Elysium's own dev toggles are chords for the same reason: `Ctrl+V` runs `noclip` and `Ctrl+T` runs
+  `elysium.togglesky`, because `v` is `+movedown` and `t` is `toggleuiside` in VtMB's default set
+  (`decisions.md` 2026-07-27). A dev verb is an `elysium.*` engine command and never enters the VtMB
+  command bus — the two planes do not share a name.
 - Every other dev key uses `UEnhancedInputComponent::BindDebugKey(FInputChord, IE_Pressed, …,
   bExecuteWhenPaused)` under `#if !UE_BUILD_SHIPPING`.
 
@@ -198,17 +213,22 @@ and matches the original's contract.
 three things consume it:
 
 1. the rebinding widget's key filter rejects them;
-2. an automation test (Substrate tier, `-nullrhi`) walks every generated IMC and asserts no default
-   mapping — bare or chorded — lands on a reserved key;
+2. an automation test (Substrate tier, `-nullrhi`) walks every default mapping and asserts none —
+   bare or chorded — lands on a reserved key. `Elysium.Substrate.Commands` does this today over
+   `ElysiumBinds::Defaults()`; at 10.6 it walks the generated IMCs instead;
 3. a dev-build startup check logs any collision between `DebugExecBindings` / Cog shortcuts and the
-   live key profile.
+   live key profile. `UElysiumInputRouter::Setup` already refuses to install a default bind that
+   lands on a reserved key, and says so.
 
 An action added to the CSV with `DefaultPrimary=F1` therefore fails `test.bat` rather than silently
 shadowing the debug menu. `elysium.input.ReserveDebugKeys 0` (dev builds only) unlocks the set for
 an A/B against retail muscle memory.
 
 Cog's input mode also removes the player mapping contexts on enter and re-adds them on exit under
-the default `bIgnoreAllPressedKeysUntilRelease`, so a held key cannot survive the transition.
+the default `bIgnoreAllPressedKeysUntilRelease`, so a held key cannot survive the transition. That is
+the `Debug` scope's `Contexts` set doing nothing: contexts are declared on `FElysiumInputScope`
+(11.5) and applied here, so the arbiter that already pushes and pops the scope is what adds and
+removes the mapping.
 
 ## Verification
 

@@ -1,5 +1,6 @@
 #include "ElysiumConsole.h"
 
+#include "ElysiumCommands.h"
 #include "HAL/FileManager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -163,8 +164,17 @@ void FElysiumConsole::LoadFromCfgDir(const FString& CfgDir)
 		ParseText(Text);
 		++FilesRead;
 	}
+	bSeeded = true;
 	UE_LOG(LogElysiumConsole, Display, TEXT("console cfg: %d file(s) from %s -> %d aliases, %d cvars"),
 		FilesRead, *CfgDir, Aliases.Num(), Cvars.Num());
+}
+
+void FElysiumConsole::EnsureSeeded(const FString& CfgDir)
+{
+	if (!bSeeded)
+	{
+		LoadFromCfgDir(CfgDir);
+	}
 }
 
 FString FElysiumConsole::GetCvar(const FString& Name) const
@@ -211,7 +221,15 @@ void FElysiumConsole::ExecuteStatement(const FString& Statement, int32 Depth)
 	}
 	const FString Name = Tokens[0].ToLower();
 
-	// 1) alias -> expand and run (each expansion may itself be `;`-separated / nest aliases).
+	// 1) a registered command (the VtMB bindable-verb inventory, S7). Commands outrank aliases the
+	// way Source's own Cmd_ExecuteString does, so nothing a player writes into user.cfg can shadow
+	// `+forward`. Execute() reports false for a word that names no verb, which is the cue to go on.
+	if (FElysiumCommands::Get().Execute(S))
+	{
+		return;
+	}
+
+	// 2) alias -> expand and run (each expansion may itself be `;`-separated / nest aliases).
 	if (const FString* Expansion = Aliases.Find(Name))
 	{
 		TArray<FString> Parts;
@@ -234,7 +252,7 @@ void FElysiumConsole::ExecuteStatement(const FString& Statement, int32 Depth)
 		Args = Args.TrimQuotes();
 	}
 
-	// 2) known cvar -> a value sets it; no value is a read (retail prints it; we no-op).
+	// 3) known cvar -> a value sets it; no value is a read (retail prints it; we no-op).
 	if (Cvars.Contains(Name))
 	{
 		if (!Args.IsEmpty())
@@ -244,7 +262,7 @@ void FElysiumConsole::ExecuteStatement(const FString& Statement, int32 Depth)
 		return;
 	}
 
-	// 3) fall through to Python. If the sink reports it was NOT Python (NameError/SyntaxError), the
+	// 4) fall through to Python. If the sink reports it was NOT Python (NameError/SyntaxError), the
 	// word is an engine cvar/command we do not model -- drop it with a Verbose note, matching the
 	// retail effect (nothing happens) without a scary traceback.
 	if (PythonSink && PythonSink(S))

@@ -8,7 +8,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
-#include "ElysiumPawn.h"
+#include "ElysiumPlayerBody.h"
 
 #include "CogLocalizationConfig.h"   // COG_TCHAR_TO_CHAR
 #include "CogWidgets.h"
@@ -184,8 +184,8 @@ void FElysiumCogWindow_Maps::RenderPlayer()
 		SmoothedFPS = FMath::FInterpTo(SmoothedFPS, 1.f / Dt, Dt, 4.f);
 	}
 
-	const AElysiumPawn* Pawn = Cast<AElysiumPawn>(PC->GetPawn());
-	const bool bNoclip = Pawn && Pawn->IsNoclip();
+	const IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(PC->GetPawn());
+	const bool bNoclip = Body && Body->IsNoclip();
 	const AElysiumMapActor* Map = GetMapActor();
 	const bool bSky = Map && Map->IsSkyboxVisible();
 	const bool bLights = Map && Map->AreLightsVisible();

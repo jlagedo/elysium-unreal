@@ -12,7 +12,7 @@
 #include "ElysiumLogTap.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
-#include "ElysiumPawn.h"
+#include "ElysiumPlayerBody.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumScreenshot.h"
 #include "ElysiumSoundScheme.h"
@@ -655,9 +655,9 @@ namespace ElysiumMcpImpl
 					Body->SetObjectField(TEXT("rotation"), Rot);
 
 					Body->SetObjectField(TEXT("velocity"), Vec(Pawn->GetVelocity()));
-					if (const AElysiumPawn* ElysiumPawn = Cast<AElysiumPawn>(Pawn))
+					if (const IElysiumPlayerBody* PlayerBody = Cast<IElysiumPlayerBody>(Pawn))
 					{
-						Body->SetBoolField(TEXT("noclip"), ElysiumPawn->IsNoclip());
+						Body->SetBoolField(TEXT("noclip"), PlayerBody->IsNoclip());
 					}
 					if (UElysiumMapSubsystem* Maps = Sub<UElysiumMapSubsystem>())
 					{
@@ -794,18 +794,18 @@ namespace ElysiumMcpImpl
 				Schema,
 				[](const TSharedPtr<FJsonObject>& Params) -> FModelContextProtocolToolResult
 				{
-					AElysiumPawn* Pawn = Cast<AElysiumPawn>(LivePawn());
-					if (!Pawn)
+					IElysiumPlayerBody* PlayerBody = Cast<IElysiumPlayerBody>(LivePawn());
+					if (!PlayerBody)
 					{
-						return MakeErrorResult(TEXT("no Elysium player pawn"));
+						return MakeErrorResult(TEXT("no Elysium player body"));
 					}
 					const bool bEnable = HasParam(Params, TEXT("enabled"))
 						? ParamBool(Params, TEXT("enabled"), true)
-						: !Pawn->IsNoclip();
-					Pawn->SetNoclip(bEnable);
+						: !PlayerBody->IsNoclip();
+					PlayerBody->SetNoclip(bEnable);
 
 					TSharedRef<FJsonObject> Body = Obj();
-					Body->SetBoolField(TEXT("noclip"), Pawn->IsNoclip());
+					Body->SetBoolField(TEXT("noclip"), PlayerBody->IsNoclip());
 					return Structured(Body);
 				}));
 		}

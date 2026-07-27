@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumInputScope.h"
 #include "GameFramework/HUD.h"
 #include "Templates/PimplPtr.h"
 #include "UObject/StrongObjectPtr.h"
@@ -40,7 +41,7 @@ private:
 	// The visual-novel `.dlg` panel, a native Slate widget added to the viewport while a conversation
 	// is open on the entity world. Ticked (not drawn on the Canvas): each frame the HUD polls the
 	// world's open conversation and rebuilds the box when the turn changes, tearing it down when the
-	// conversation ends. While it is up the player controller is in UI-only input (the VN freezes the
+	// conversation ends. While it is up the box holds a UI-only input scope (the VN freezes the
 	// world); a pick routes back through the world's PlayerDialogChoose chokepoint.
 	void UpdateDialogue();
 
@@ -53,7 +54,7 @@ private:
 	TSharedPtr<SElysiumDialogueBox> DialogueWidget;
 	FElysiumDlgConversation* DialogueConv = nullptr;   // identity/revision compare only; owned by the world
 	uint32 DialogueRev = 0;
-	bool bDialogueInput = false;                       // the UI-only input mode is currently installed
+	FElysiumInputScopeHandle DialogueScope;            // the box's claim on input while it is open
 
 	// --- +use context-icon reticle (P4.4) ----------------------------------------------------
 	// The reticle swaps to VtMB's context cursor while the +use look-cursor is on a usable entity:
@@ -77,6 +78,13 @@ private:
 	// mirror on first use. A miss caches null so a missing PNG is not retried every frame.
 	UTexture2D* GetSignBackground(const FString& ImageName);
 
+	// Hold an input scope for as long as the world has a sign open (11.5). The panel deliberately
+	// keeps game input — VtMB's popups say "left-click to continue" and that click is the player
+	// controller's, not a widget's — so the scope changes no mode; what it does is put the panel in
+	// the arbitration order, so a menu opening over it restores exactly the sign's state on close.
+	void UpdateSignScope();
+
+	FElysiumInputScopeHandle SignScope;
 	bool bSignManifestLoaded = false;
 	TMap<FString, FString> SignBackgroundFiles;                  // material name -> png filename
 	TMap<FString, TStrongObjectPtr<UTexture2D>> SignBackgrounds;  // material name -> texture (null = failed)

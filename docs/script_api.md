@@ -92,8 +92,17 @@ and the receiver decides which one runs: a bare `Whisper("Crying")` calls the sc
 (25 sites), while `pc.Whisper("Crying")` goes through `__getattr__` to the datamap input
 (9 sites); `FrenzyTrigger` splits 1 bare / 6 receiver-qualified. So a name's binding is not a
 property of the name — it is a property of the call site, and a port that resolves either
-spelling to a single implementation changes behaviour. Counts in the tables below are the
+spelling to a single implementation changes behaviour. The helpers are not pass-throughs either:
+`Whisper(s)` forwards to `pc.Whisper(s)` (so the bare spelling always addresses the *player*,
+whatever the surrounding receiver), and `FrenzyTrigger(char)` hands the input a `1` where the 5
+`.dlg` sites spell `pc.FrenzyTrigger()` and hand it nothing. Counts in the tables below are the
 **receiver-qualified** half for these two.
+
+In this rebuild the split is structural: neither name may enter the shared native table
+(`ElysiumScriptNatives.cpp`, which carries the rule as a comment and
+`Elysium.Substrate.OneOfSet` as its regression), so the bare spelling resolves in `__main__`
+against the real `vamputil.py` the CPython host imports, while the qualified spelling reaches the
+datamap input through the ordinary class-chain walk.
 
 ## Module globals — table `0x1058f7a8`, 11 entries
 
@@ -128,10 +137,25 @@ return PyInt_FromLong( (roll % count) == (which - 1) );
 ```
 
 So it is a **1-based one-of-N selector**: `OneOfSet(2, 4)` is true on exactly one of four
-outcomes. The corpus only ever calls `OneOfSet(1,2)`, `(1,4)` and `(1,6)` — dialogue uses it to
-show one line out of N. *Pending:* the identity of the global at `DAT_1070b22c` whose vtable slot
-`+0x1e0` supplies `roll` — whether it is a per-call RNG or a frame//conversation counter changes
-whether repeated evaluation is stable, which matters for a gate re-evaluated as a menu redraws.
+outcomes. It is called from `.dlg` only — never from a level script — and always in **sets**: N
+sibling rows carrying the same choice text, row *i* gated on `OneOfSet(i, N)`, so the set presents
+as one line and the roll picks which destination it goes to. The whole corpus is 589 calls in
+sets of 2, 4, 6, 7 (75 sets, the bulk) and 8, and the gate is routinely ANDed with a second
+condition (`OneOfSet(1,6) and pc.CurrentMoney() >= 5`), which closes the selected row without
+opening another.
+
+**The set shape is what constrains the roll.** Exactly one row passes only if every gate in a set
+reads *the same* roll, so a per-call draw is ruled out by the content: over a 7-row set it would
+show no row 34% of the time and two or more 40% of the time. `DAT_1070b22c`'s vtable slot `+0x1e0`
+must therefore hand back a value that is stable for at least the burst in which a turn's gates are
+evaluated. *Still pending:* the identity of that global — which fixes how *long* the value holds,
+and so how often a repeated visit to the same set re-picks.
+
+The runtime implements the selector verbatim and draws **one roll per engine frame**
+(`ElysiumScriptNatives::OneOfSetRoll`), the frame being the unit a turn's whole choice list is
+gathered in (`FElysiumDlgConversation::EnterNpcLine` runs the gates in one synchronous burst).
+`elysium.script.oneofset <roll>` pins it; `-1` restores the live draw.
+Tested by `Elysium.Substrate.OneOfSet` (roadmap 9.7d).
 
 ## Character methods — table `0x1058f868`, 24 entries
 
@@ -295,8 +319,8 @@ It is the file object `cPickle.load` reads `G` back through, the mirror of the `
 
 Demand-ranked, with the dependency that actually gates each one:
 
-1. **`OneOfSet`** — solved above, no backing system needed. 589 dialogue gates currently fail
-   closed. Land it with 9.7.
+1. **`OneOfSet`** — **landed** (9.7d). Solved above, no backing system needed; the 589 dialogue
+   gates that failed closed against the stub now select one row of N.
 2. **Disposition / reactions** (2,862) — 9.9. Needs `vdata/dispositiontable` + `reaction*` and an
    NPC emotional-state model; `SetDisposition(name, level)` and `SetRelationship(str)` are the
    entry points.

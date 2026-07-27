@@ -34,9 +34,11 @@ UE 5.8. Module `ElysiumUE` (Runtime, Default loading phase).
 - `Config/DefaultEngine.ini` — boot map `/Game/Elysium`, `AElysiumGameMode` default,
   `UElysiumGameInstance`, the fully-dynamic render path, and the `ElysiumUse` trace channel
   (`ECC_GameTraceChannel1`).
-- `Config/DefaultInput.ini` — legacy axis/action mappings (WASD + arrows, mouse-look, Space
-  jump, Q/E/Ctrl vertical, V noclip, T skybox, E use; F1 is Cog's). EnhancedInput is
-  configured as the player-input class but unused.
+- `Config/DefaultInput.ini` — engine-side input settings only: `ConsoleKeys=Tilde`, raw
+  MouseX/MouseY (`Sensitivity=1`, FOV scaling and mouse smoothing **off**, because VtMB's `m_filter`
+  is 0 and the router applies `sensitivity × m_yaw` itself). It carries **no** action or axis
+  mappings — every key is installed by `UElysiumInputRouter` from `ElysiumBinds::Defaults()` (11.6).
+  EnhancedInput is configured as the player-input class; its mapping contexts are 10.6's.
 - Boot is decided once, at game-instance init, by `UElysiumGameFlowSubsystem::BootFromCommandLine`
   (below): the menu over a backdrop by default, **New Game** under `elysium.BootMenu 0`, or a bare
   **dev map** under `-ElysiumMap=<name>` (`play.bat <map>`) / `-ElysiumNewGame=0`, which also seeds a
@@ -91,7 +93,7 @@ live backdrop behind the menu is the feature) and **Boot is reachable from nowhe
 | `NewGame(FElysiumNewGameRequest)` | clan/sex/history/spends + an `EntryPoint` (`story` \| `tutorial` \| `<map>[@<landmark>]`). The destination is checked against `ExportedMaps()` **before** `BeginNewGame` runs, because seeding is destructive. `elysium.SkipIntro` (default 1) rewrites `story` to the tutorial landmark until P12 lands the theatre act |
 | `LoadGame` / `SaveGame` | the seam every caller (menu, `trigger_autosave`, quicksave, MCP) goes through. Logged stubs until **11.9** |
 | `QuitToMenu()` | travel the backdrop map, then `UElysiumGameStateSubsystem::EndSession` (clear `G`, quests, the player record; rewind the clock). `G` and the quest map join the record as save blocks at 11.9 |
-| `ReloadMap()` / `SetPaused` / `TogglePause` / `TriggerGameOver` | the rest of the surface; `OnAppStateChanged` is the delegate the UI and (at 11.5) the input scope stack listen on |
+| `ReloadMap()` / `SetPaused` / `TogglePause` / `TriggerGameOver` | the rest of the surface; `OnAppStateChanged` is the delegate the UI listens on |
 
 **The screen is a pure function of the state** (`ApplyMenuForState`, called from the one state
 writer): FrontEnd/Paused/GameOver map to the matching `EElysiumMenuMode`, everything else hides. No
@@ -114,12 +116,14 @@ on another thread while the game thread is blocked in `LoadMap`, which is also w
 get `FNullGameMoviePlayer` and the hook no-ops. It covers the level-load flush only — the map
 actor's build pass runs after `PostLoadMapWithWorld` (10.4).
 
-**Esc has two halves.** `AElysiumPlayerController` binds the key (`bExecuteWhenPaused`; on the
-controller, not the pawn — a backdrop world seats no pawn and the key must still be swallowed) and
-calls `TogglePause`. While a menu is up the input mode is UI-only and the controller sees nothing, so
-the closing half is `UElysiumMainMenu::NativeOnKeyDown` — reachable only because
-`FInputModeUIOnly::SetWidgetToFocus` targets the menu and the widget is `SetIsFocusable(true)`.
-Escape is consumed in every menu mode. 11.5 replaces both with the input scope stack.
+**Esc is one verb with two key sources.** Both fire **`cancelselect`** (11.6), whose single
+implementation is registered here, on the GI-scoped flow subsystem — which is what lets it resolve
+when no controller is in the picture. The router binds the key (`bExecuteWhenPaused`; on the
+controller, not the pawn — a backdrop world seats no pawn and the key must still be swallowed).
+While a menu is up the input mode is UI-only and the controller sees nothing, so the other source is
+`UElysiumMainMenu::NativeOnKeyDown` — reachable only because the menu's input scope names the widget
+as its focus target and the widget is `SetIsFocusable(true)`. Escape is consumed in every menu mode,
+and only Paused is a mode it leaves.
 
 `GameOver` holds the world and raises the third menu mode. Its driver is the combat character's
 death path (11.4): the player entity's health running out reaches
@@ -131,14 +135,93 @@ Verbs: `elysium.appstate`, `.pausemenu [0|1]`, `.newgame [clan] [m|f] [entry]`, 
 `.gameover [killed|masquerade]`, `.SkipIntro`, `.BootMenu`, `.MenuMap`, `.MenuVantage`,
 `.LoadingScreen`, `.LoadingScreenMinTime`.
 
-Player-facing actors: `AElysiumGameMode` (pawn/HUD/controller classes, the no-pawn-on-a-backdrop
-rule, and one `NotifyWorldReady`), `AElysiumPlayerController` (+ `UElysiumCheatManager`
-— `Noclip`, `ElysiumTeleport`, plus stock `UCheatManager` execs; and every non-movement key: Esc,
-+use, the sign dismissal, the skybox toggle), `AElysiumPawn`
-(the player's **body** — Character movement, camera, noclip, and the handle of the entity it
-embodies), `AElysiumHUD` (Canvas: the use-icon reticle,
+Player-facing actors: `AElysiumGameMode` (pawn/HUD/controller classes — including the
+`elysium.SourceMovement` A/B between the two bodies — the no-pawn-on-a-backdrop rule, and one
+`NotifyWorldReady`), `AElysiumPlayerController` (hosts `UElysiumCheatManager` — `Noclip`,
+`ElysiumTeleport`, plus stock `UCheatManager` execs — and `UElysiumInputRouter`; it **binds no key**
+of its own and instead implements the world verbs `+use` / `+attack` / `noclip` / `god` /
+`snapshot`), `AElysiumPawn`
+(the player's **body** — box hull, `UElysiumMovementComponent`, camera, noclip, and the handle of
+the entity it embodies), `AElysiumHUD` (Canvas: the use-icon reticle,
 `env_fade` screen fade, sign panels — player pose/mode/FPS live in the Cog Maps window; it also
 ticks the native-Slate dialogue box off the world's open-conversation state, B4).
+
+## Commands, intent and the body (11.6)
+
+**S7 — one command registry; S5 — intent is data.** Design: `docs/runtime-architecture.md` §8.2–8.4;
+the VtMB facts: `docs/controls.md`. VtMB has no action abstraction — **an action is a console command
+string** — so the compiled verbs carry names and everything reaches them through one door.
+
+| Type | Role |
+|---|---|
+| `FElysiumCommands` (`Public/ElysiumCommands.h`) | the registry, plain C++. **92 declared verbs** — the whole `controls.md` bindable inventory with its `+`/`-` pairs, `vphysicshand` deliberately absent. A declaration carries kind (`Once`/`ButtonPair`), group, the `FElysiumUserCmd` bit a pair latches, and help that names the owning task when nothing implements it. `Bind`/`Unbind` install implementations and **stack**, so a system owns a verb exactly while it is alive; binding an undeclared name is refused. **The latch is the verb's, not its implementation's** — `+forward` fills the user command with no handler in sight, and a world with no sink drops it |
+| `ElysiumCommandBus` (`Private/ElysiumCommandBus.{h,cpp}`) | the one door: a bound key, a `ccmd` attribute-set, a `.dlg` action, `elysium.cmd <line>`, `elysium_console_exec` and `-ExecCmds` all arrive here. It reaches the `FElysiumConsole` on `FElysiumPythonVM` (which exists with or without CPython) and `EnsureSeeded`s it from `out/cfg`, so the patch's aliases resolve even when the interpreter never started |
+| `FElysiumConsole::Execute` | the precedence, stated once and tested: **registered command → alias → cvar → Python**. Source's own `Cmd_ExecuteString` order, so no user alias can shadow `+forward`; the registry reporting *false* for an unknown word is the cue to try an alias |
+| `FElysiumUserCmd` / `FElysiumUserCmdBuilder` / `FElysiumUserCmdStream` (`Public/ElysiumUserCmd.h`) | one frame of intent as a value: `Move`, `Up` (Source's `upmove`), `LookDelta` in degrees, `Buttons` (**uint64** — VtMB's ± inventory is 34 pairs), `DeltaSeconds`, `Seq`. The builder holds the latches and analog accumulators and composes the frame, including `+strafe` turning the turn keys into strafe and the `cl_yawspeed`/`cl_pitchspeed` keyboard-look rates. `ClearButtons` is what a scope change means for intent (`UElysiumInputSubsystem::ApplyToController` calls it, so a held key cannot bleed across a screen). The stream records, replays and round-trips through plain text |
+| `ElysiumBinds` (`Public/ElysiumBinds.h`) | VtMB's default bind set — 75 rows of the Patch's `cfg/default.cfg` as `FKey` → console line, the commands held as **strings** because several defaults bind an alias (`vm_feed`, `skip`, `cam_restore`) and a key bound to either must behave identically. Also `ReservedKeys()`: the bare keys the dev layer owns, which is `` ` `` alone |
+| `UElysiumInputRouter` (`Public/ElysiumInputRouter.h`) | on the player controller. Installs the binds (built by hand — `BindKey` carries no payload overload — with `bExecuteWhenPaused` on both edges, so a release cannot be swallowed by a pause and strand a latch), then `SampleFrame` runs from `PlayerTick` after `Super`, builds the command, writes the look delta **straight onto the control rotation** (not through `AddYawInput`, which applies the engine's legacy input scales) and hands the command to the body. Mouse look reads raw counts scaled only by `sensitivity × m_yaw` off the console store — VtMB's 0.066°/count, with no frame-rate term |
+| `IElysiumPlayerBody` (`Public/ElysiumPlayerBody.h`) | what everything outside the body talks to: noclip, the embodied entity handle, the body half-height the teleport seam lifts a Source feet-origin by, the spawn-hold freeze, `ApplyUserCmd`. An interface because the two bodies cannot share a base |
+| `AElysiumPawn` + `UElysiumMovementComponent` | the faithful body: `APawn` + a `UBoxComponent` (32×32×72 u) + a mover carrying Source's own `Friction`/`Accelerate`/`AirAccelerate`/`WalkMove`+`StepMove`/`CategorizePosition` over the `source_movement.md` constants. The hull is a **box** because `StepMove` depends on a flat bottom — a capsule reports ~0.65 against the 0.7 standable test and rejects every climb — and `ACharacter` will not take a box root. 4.7 owns the line-by-line port (real `surfaceFriction`, the gravity half-step split, ducking/**RE22**, ladders, water) |
+| `AElysiumCapsulePawn` | the A/B baseline behind `elysium.SourceMovement 0`: the `ACharacter` capsule over `UCharacterMovementComponent`, consuming the same user command so the comparison is over the mover alone |
+
+**The dev layer holds no bare key a player can bind.** `v` is `+movedown` and `t` is `toggleuiside`,
+so the noclip and skybox toggles are the chords `Ctrl+V` and `Ctrl+T`, and a dev verb is an
+`elysium.*` engine command (`elysium.togglesky`) that never enters the VtMB bus — the two planes do
+not share a name (`decisions.md` 2026-07-27).
+
+**Escape is one verb with two key sources.** The router binds it while the game has input; while a
+screen holds input UI-only the controller sees nothing, so `UElysiumMainMenu::NativeOnKeyDown` fires
+the same `cancelselect`. Its single implementation is on the GI-scoped flow subsystem, which is what
+lets it resolve with no controller in the picture.
+
+Verbs: `elysium.cmd <line>`, `elysium.commands [filter]`, `elysium.binds`, `elysium.togglesky`,
+`elysium.SourceMovement`, and the command-stream set `elysium.cmd.record` / `.stop` / `.save <name>` /
+`.replay [name]`.
+
+## Input scopes (11.5)
+
+**S6 — one input-mode arbiter.** Design: `docs/runtime-architecture.md` §8.1.
+**`UElysiumInputSubsystem`** (LocalPlayer-scoped) owns a priority stack of `FElysiumInputScope` and is
+the module's **only** `SetInputMode` caller. A screen, a conversation, a sign panel or the debug UI
+pushes a scope while it is up and pops it when it goes away; the top decides mode, cursor, keyboard
+focus and (at 10.6) mapping contexts. LocalPlayer-scoped because the stack has to survive travel and
+the controller it writes to does not — `PlayerControllerChanged` re-applies onto the fresh one.
+
+The stack itself is plain C++ (`Public/ElysiumInputScope.h`), like `ElysiumAppState.h`: no UObject and
+no engine type, so the whole rule set is asserted with no local player, no controller and no viewport
+(`Elysium.Substrate.InputScopes` walks every ordered pair of scopes in both close orders).
+`FElysiumInputState` is what the top resolves to, as one comparable value, so a write that would
+change nothing is skipped — re-applying UI-only re-steals keyboard focus.
+
+**Push/pop is handle-based, not LIFO.** Screens close out of order (a conversation ends behind an open
+pause menu), so `Pop` removes a scope from wherever it sits and the top re-resolves. Ids are never
+reused, so a stale or doubled pop is a no-op. Priority decides; push order is the tie-break, so
+same-priority screens behave like an ordinary modal stack.
+
+One table (`ElysiumInput::Priority`) answers "what happens when X opens over Y":
+`Game 0 < Sign 10 < Cinematic 20 < Chargen 30 < Dialogue 40 < Menu 50 < Debug 100`.
+
+| Scope | Pushed by | Claim |
+|---|---|---|
+| `Menu` | `UElysiumUISubsystem::ShowMenu`/`HideMenu` | UI-only + cursor, focus on the menu widget (that is what lets Escape reach `NativeOnKeyDown`) |
+| `Dialogue` | `AElysiumHUD` while a conversation is open | UI-only + cursor; the focus widget is re-pointed each turn, because the box rebuilds its whole tree |
+| `Sign` | `AElysiumHUD`, reconciled off `GetOpenSign()` | **GameOnly, no cursor** — VtMB's popups are dismissed by a left-click, which is the `+attack` verb, so taking the mouse off the world would make them undismissable; the scope is there for the ordering |
+| `Debug` | the subsystem's own per-frame reconcile off `FCogImguiContext::GetEnableInput()` | GameOnly + cursor, matching what Cog does to the controller anyway |
+| `Cinematic` / `Chargen` | nothing yet — P12 and 9.4 | priorities reserved |
+
+**Cog is arbitrated, not patched.** It is vendored and has no event to bind, so the subsystem observes
+it. Debug sits at the top of the table on purpose: F1 over a screen is a deliberate ask, and the front
+end has a menu up permanently. What keeps it from eating a screen's clicks is
+`ElysiumInput::RevokesDebugCapture` — **a UI-only push revokes an inherited ImGui capture**
+(`SetEnableInput(false)`, guarded on it already being enabled: that call dereferences the lazily
+created ImGui context and crashes at boot otherwise). At push time only.
+
+**CommonUI's fourth owner is declined explicitly**: `UElysiumMainMenu::GetDesiredInputConfig()` returns
+unset, so `UCommonUIActionRouterBase` never writes mode or cursor.
+
+**Pause is not a scope property** — `UElysiumGameFlowSubsystem` owns it, and the pause menu's scope is
+pushed *because* the flow paused (`docs/decisions.md` 2026-07-27). Verb: `elysium.inputscopes` dumps
+the stack bottom-to-top with the deciding scope marked.
 
 ## The entity substrate (Track B)
 
@@ -214,10 +297,10 @@ Eight combat-character inputs are backed by real fields (`MoneyAdd`/`MoneyRemove
 "a zero-valued input is a silent no-op"; the rest log the name and the task that owns them.
 
 **`AElysiumPawn` is a body**: collision, movement, camera, noclip, and `GetPlayerEntity()`. The
-verbs that are not movement (+use, sign dismissal, the skybox toggle) are
-`AElysiumPlayerController`'s, reaching the world through one cached map-actor pointer; 11.5/11.6
-re-home them onto the input scope stack and the command registry. The shift gait is a
-`+speed`/`-speed` latch, not a per-frame key poll, so the pawn does not tick.
+verbs that are not movement are named commands the player controller implements (`+use`, `+attack`
+for the sign dismissal, `noclip`, `god`, `snapshot`), reaching the world through one cached
+map-actor pointer; the dev skybox toggle became `elysium.togglesky` on the map actor. The gait is
+`+speed` in the frame's `FElysiumUserCmd`, not a key poll, so the pawn does not tick (11.6).
 
 ## The outbound seam (11.2)
 
@@ -247,8 +330,9 @@ Since 11.4 the substrate reaches them **through the player entity**, not directl
 writes `SetRuntimeOrigin` and the entity places the body; `trigger_hurt` reduces the entity's health
 and the body gets the engine damage event; `trigger_changelevel` reads the entity's own origin,
 which the world sampled off the body at the top of the frame. Two behaviours live in the body
-because they are its geometry: `TeleportPlayer`'s capsule half-height lift (Source places feet, an
-Unreal capsule is centred) and the `+use` line trace on `ELYSIUM_USE_CHANNEL` — the substrate hands
+because they are its geometry: `TeleportPlayer`'s half-height lift (Source places feet, both Unreal
+bodies are centred, so the number comes from `IElysiumPlayerBody::GetBodyHalfHeight`) and the `+use`
+line trace on `ELYSIUM_USE_CHANNEL` — the substrate hands
 over a segment and gets a handle back, keeping the usability arbitration on its own side.
 `GetPlayerViewPoint` is the eye, and stays here until **11.7** owns the camera.
 
@@ -398,8 +482,8 @@ writes hit the same `G` the level script reads), and hands it to the world's ope
 (`OpenDialog`/`GetOpenDialog`/`PlayerDialogChoose`/`PlayerDialogAdvance`/`CloseDialog`, one at a time like
 the sign slot). Closing routes `EndDialog` to the owner via `!self`, firing `OnDialogEnd` (→
 `DialogPostProcess`). NPC col-4 = action, PC col-4 = gate. The interim UI is a native-Slate visual-novel
-box (`SElysiumDialogueBox`, `ElysiumDialogueWidget.{h,cpp}`) the HUD adds to the viewport under
-`FInputModeUIOnly`; `elysium.dlg`/`.choose`/`.advance` are its scriptable echo (`ElysiumDlgConsole.cpp`).
+box (`SElysiumDialogueBox`, `ElysiumDialogueWidget.{h,cpp}`) the HUD adds to the viewport under a
+UI-only input scope (11.5); `elysium.dlg`/`.choose`/`.advance` are its scriptable echo (`ElysiumDlgConsole.cpp`).
 9.2 replaces the box on the 8.6 UI stack.
 
 Dynamic props (8.3, no physics) stand a static-mesh body the same way: `FElysiumProp`
@@ -475,7 +559,7 @@ no editor content loop (`docs/decisions.md` 2026-07-26). Design + the constraint
 
 | Type | Role |
 |---|---|
-| `UElysiumUISubsystem` | GI-scoped owner of the screens: create/show/hide plus the input-mode switch (which focuses the menu widget, so it can see Escape). GI-scoped because the menu outlives any one world. *When* a screen is up is not its call — `UElysiumGameFlowSubsystem` drives it from the app state. `elysium.menu [pause\|gameover]` / `elysium.menu.close` |
+| `UElysiumUISubsystem` | GI-scoped owner of the screens: create/show/hide, plus the `Menu` input scope it pushes while one is up (11.5 — the scope names the menu widget as its focus target, so the screen can see Escape). GI-scoped because the menu outlives any one world. *When* a screen is up is not its call — `UElysiumGameFlowSubsystem` drives it from the app state. `elysium.menu [pause\|gameover]` / `elysium.menu.close` |
 | `UElysiumMainMenu` | the main / pause / game-over menu (`UCommonActivatableWidget`), one `EElysiumMenuMode` per item set; a mode change rebuilds the screen. Layout is `CVMainMenu::PerformLayout` verbatim in a 1024×768 virtual canvas — every item sized to the widest label + `20×4`, `pitch = height + 2`, centred — under one `SDPIScaler` at `ScreenH/768`. Every item calls the flow subsystem. **A `UCommonActivatableWidget` added straight to the viewport stays collapsed until `ActivateWidget()`** (`bAutoActivate` only fires inside a `UCommonActivatableWidgetContainer`) |
 | `ElysiumUIStyle.{h,cpp}` | design tokens — the `VampireScheme.res` palette (gold chrome, blood accent, cyan active tab), the type ramp and spacing in virtual px, `ElysiumUI::ScaleFor` — plus `FElysiumUIFontLibrary`, which composes the committed `UFontFace` assets under `/Game/VtMB/UI/Fonts` into one runtime `UFont` per role (`FSlateFontInfo` resolves a composite font, not a bare face) |
 | `ElysiumUIStrings.{h,cpp}` | the authored string table (`out/ui/strings.json`). Menu labels are **`VMainMenu_BTN_*`** tokens with retail English as the fallback — what `CVMainMenu` itself does |
@@ -558,9 +642,15 @@ payloads, `logic_pythoncheck`, `EvalScript`, `ScheduleTask`, level-script import
   table the Cog Scripting window renders, the stub defaults, the Character-method dispatch, and
   the native-call log. It lives outside either host so `elysium.script.cpython 0/1` swaps the
   interpreter without changing what a name does. `IsClan`/`IsPCMalk` and `IsMale` are real (they
-  read the player sheet clan/gender) and `CurrentMoney` reads the receiver's own `money` field
-  (11.4); the rest of the character surface (inventory, blood, humanity/XP, `CalcFeat`) is a logged
-  stub until 9.4.
+  read the player sheet clan/gender), `CurrentMoney` reads the receiver's own `money` field (11.4),
+  and **`OneOfSet(which, count)`** is VtMB's 1-based one-of-N dialogue selector,
+  `(roll % count) == which - 1`, over **one roll per engine frame** — the granularity a conversation
+  turn gathers its whole choice list at, which is what makes a set of N sibling `.dlg` rows show
+  exactly one (`elysium.script.oneofset` pins the roll; `decisions.md` 2026-07-27). The rest of the
+  character surface (inventory, blood, humanity/XP, `CalcFeat`) is a logged stub until 9.4.
+  **`Whisper` and `FrenzyTrigger` are deliberately absent from the table**: each is a `vamputil.py`
+  helper *and* a datamap input name, so the receiver decides which one runs — a bare call is the
+  script's function, `pc.Whisper(...)` the player's input — and a row here would collapse the two.
 - Both hosts bind the two names the dialogue gates and level scripts read: **`pc`** (the player
   entity — **re-bound per eval** in both hosts, because a generation-checked handle minted by one
   map is stale in the next; `None`/the Invalid-handle Character when a map has no player) and

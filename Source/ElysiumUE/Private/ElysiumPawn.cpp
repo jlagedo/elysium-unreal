@@ -1,23 +1,26 @@
 #include "ElysiumPawn.h"
 
 #include "Camera/CameraComponent.h"
-#include "Components/CapsuleComponent.h"
-#include "GameFramework/CharacterMovementComponent.h"
+#include "Components/BoxComponent.h"
+#include "ElysiumMovementComponent.h"
+#include "ElysiumUserCmd.h"
 #include "GameFramework/PlayerController.h"
-#include "InputCoreTypes.h"
 
 AElysiumPawn::AElysiumPawn()
 {
-	// Nothing to tick: the gait is a latch the bindings set, and the entity that holds the player's
-	// state is sampled by the entity world's own tick (11.4).
+	// Nothing to tick: intent arrives as a value and the movement component is what runs on it.
 	PrimaryActorTick.bCanEverTick = false;
 
-	// Source player hull ~ 32u wide x 72u tall -> radius 40.6cm, half-height 91.4cm.
-	GetCapsuleComponent()->InitCapsuleSize(40.6f, 91.4f);
-	// The capsule must raise overlaps so trigger brush bodies (P1.5) see the player begin/end
-	// touch. Its Block-of-WorldDynamic is not a mutual block against a trigger's overlap response,
-	// so the player passes through and the overlap fires rather than being stopped.
-	GetCapsuleComponent()->SetGenerateOverlapEvents(true);
+	// Source's player hull, 32 x 32 x 72 units -> 81.28 x 81.28 x 182.88 cm. The box extent is half
+	// of each, and the component's origin is the box centre, so the feet sit at -91.44.
+	Hull = CreateDefaultSubobject<UBoxComponent>(TEXT("Hull"));
+	Hull->InitBoxExtent(FVector(16.0f * ElysiumMove::U, 16.0f * ElysiumMove::U, 36.0f * ElysiumMove::U));
+	Hull->SetCollisionProfileName(UCollisionProfile::Pawn_ProfileName);
+	// The hull must raise overlaps so trigger brush bodies see the player begin/end touch. Its
+	// Block-of-WorldDynamic is not a mutual block against a trigger's overlap response, so the
+	// player passes through and the overlap fires rather than being stopped.
+	Hull->SetGenerateOverlapEvents(true);
+	RootComponent = Hull;
 
 	// Body yaws with the controller; pitch is applied to the camera only.
 	bUseControllerRotationYaw = true;
@@ -25,23 +28,18 @@ AElysiumPawn::AElysiumPawn()
 	bUseControllerRotationRoll = false;
 
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
-	Camera->SetupAttachment(GetCapsuleComponent());
-	// Eye at 64u above the feet; capsule centre is 91.4cm up, so offset +71.2cm.
-	Camera->SetRelativeLocation(FVector(0.f, 0.f, 71.2f));
+	Camera->SetupAttachment(Hull);
+	// Eye at 64u above the feet; the box centre is 36u up, so the offset is +28u.
+	Camera->SetRelativeLocation(FVector(0.0f, 0.0f, 28.0f * ElysiumMove::U));
 	Camera->bUsePawnControlRotation = true;
 
-	UCharacterMovementComponent* Move = GetCharacterMovement();
-	Move->MaxWalkSpeed = RunSpeed;
-	Move->MaxAcceleration = 8192.f;
-	Move->BrakingDecelerationWalking = 8192.f;
-	Move->GroundFriction = 8.f;
-	Move->MaxStepHeight = 46.f;                 // Source sv_stepsize 18u
-	Move->SetWalkableFloorAngle(50.f);
-	Move->JumpZVelocity = 340.f;
-	Move->AirControl = 0.6f;
-	Move->GravityScale = 1.f;
-	Move->MaxFlySpeed = NoclipSpeed;
-	Move->BrakingDecelerationFlying = 8192.f;
+	Movement = CreateDefaultSubobject<UElysiumMovementComponent>(TEXT("Movement"));
+	Movement->UpdatedComponent = Hull;
+}
+
+UPawnMovementComponent* AElysiumPawn::GetMovementComponent() const
+{
+	return Movement;
 }
 
 void AElysiumPawn::BeginPlay()
@@ -52,122 +50,44 @@ void AElysiumPawn::BeginPlay()
 	{
 		if (PC->PlayerCameraManager)
 		{
-			PC->PlayerCameraManager->ViewPitchMin = -89.f;
-			PC->PlayerCameraManager->ViewPitchMax = 89.f;
+			// cl_pitchup / cl_pitchdown.
+			PC->PlayerCameraManager->ViewPitchMin = -89.0f;
+			PC->PlayerCameraManager->ViewPitchMax = 89.0f;
 		}
 	}
 }
 
-void AElysiumPawn::SetupPlayerInputComponent(UInputComponent* Input)
+bool AElysiumPawn::IsNoclip() const
 {
-	Super::SetupPlayerInputComponent(Input);
-
-	// Movement only. +use, the sign dismissal and the skybox toggle are the player controller's
-	// (11.4) — a body does not decide what a key means.
-	Input->BindAxis(TEXT("MoveForward"), this, &AElysiumPawn::MoveForward);
-	Input->BindAxis(TEXT("MoveRight"), this, &AElysiumPawn::MoveRight);
-	Input->BindAxis(TEXT("MoveUp"), this, &AElysiumPawn::MoveUp);
-	Input->BindAxis(TEXT("Turn"), this, &AElysiumPawn::Turn);
-	Input->BindAxis(TEXT("LookUp"), this, &AElysiumPawn::LookUp);
-
-	Input->BindAction(TEXT("Jump"), IE_Pressed, this, &AElysiumPawn::OnJumpPressed);
-	Input->BindAction(TEXT("Jump"), IE_Released, this, &AElysiumPawn::OnJumpReleased);
-	Input->BindAction(TEXT("ToggleNoclip"), IE_Pressed, this, &AElysiumPawn::ToggleNoclip);
-
-	// VtMB's `+speed` / `-speed` pair. Bound to the keys directly (the legacy mapping set has no
-	// such action) so the gait is a latch rather than a per-frame IsInputKeyDown poll.
-	for (const FKey& Shift : { EKeys::LeftShift, EKeys::RightShift })
-	{
-		Input->BindKey(Shift, IE_Pressed, this, &AElysiumPawn::OnWalkPressed);
-		Input->BindKey(Shift, IE_Released, this, &AElysiumPawn::OnWalkReleased);
-	}
-}
-
-void AElysiumPawn::OnWalkPressed()  { bWalkGait = true;  ApplyGait(); }
-void AElysiumPawn::OnWalkReleased() { bWalkGait = false; ApplyGait(); }
-
-void AElysiumPawn::ApplyGait()
-{
-	UCharacterMovementComponent* Move = GetCharacterMovement();
-	if (bNoclip)
-	{
-		Move->MaxFlySpeed = NoclipSpeed * (bWalkGait ? NoclipBoost : 1.f);
-	}
-	else
-	{
-		Move->MaxWalkSpeed = bWalkGait ? WalkSpeed : RunSpeed;
-	}
-}
-
-void AElysiumPawn::MoveForward(float Value)
-{
-	if (Value == 0.f)
-	{
-		return;
-	}
-	// Noclip flies along the aim (includes pitch); walking moves on the ground plane.
-	const FVector Dir = bNoclip
-		? Camera->GetForwardVector()
-		: FRotationMatrix(FRotator(0.f, GetControlRotation().Yaw, 0.f)).GetUnitAxis(EAxis::X);
-	AddMovementInput(Dir, Value);
-}
-
-void AElysiumPawn::MoveRight(float Value)
-{
-	if (Value == 0.f)
-	{
-		return;
-	}
-	const FVector Dir = bNoclip
-		? Camera->GetRightVector()
-		: FRotationMatrix(FRotator(0.f, GetControlRotation().Yaw, 0.f)).GetUnitAxis(EAxis::Y);
-	AddMovementInput(Dir, Value);
-}
-
-void AElysiumPawn::MoveUp(float Value)
-{
-	// Vertical strafe only exists in noclip (Space/E up, Ctrl/Q down).
-	if (bNoclip && Value != 0.f)
-	{
-		AddMovementInput(FVector::UpVector, Value);
-	}
-}
-
-void AElysiumPawn::Turn(float Value)
-{
-	AddControllerYawInput(Value);
-}
-
-void AElysiumPawn::LookUp(float Value)
-{
-	AddControllerPitchInput(Value);
-}
-
-void AElysiumPawn::OnJumpPressed()
-{
-	if (!bNoclip)
-	{
-		Jump();
-	}
-}
-
-void AElysiumPawn::OnJumpReleased()
-{
-	StopJumping();
-}
-
-void AElysiumPawn::ToggleNoclip()
-{
-	SetNoclip(!bNoclip);
+	return Movement && Movement->IsNoclip();
 }
 
 void AElysiumPawn::SetNoclip(bool bEnable)
 {
-	bNoclip = bEnable;
+	SetActorEnableCollision(!bEnable);
+	if (Movement)
+	{
+		Movement->SetNoclip(bEnable);
+	}
+}
 
-	UCharacterMovementComponent* Move = GetCharacterMovement();
-	SetActorEnableCollision(!bNoclip);
-	Move->SetMovementMode(bNoclip ? MOVE_Flying : MOVE_Walking);
-	Move->Velocity = FVector::ZeroVector;
-	ApplyGait();   // the same latch means "walk" on the ground and "boost" in the air
+float AElysiumPawn::GetBodyHalfHeight() const
+{
+	return Hull ? Hull->GetUnscaledBoxExtent().Z : 36.0f * ElysiumMove::U;
+}
+
+void AElysiumPawn::SetMovementFrozen(bool bFrozen)
+{
+	if (Movement)
+	{
+		Movement->SetFrozen(bFrozen);
+	}
+}
+
+void AElysiumPawn::ApplyUserCmd(const FElysiumUserCmd& Cmd)
+{
+	if (Movement)
+	{
+		Movement->SetUserCmd(Cmd);
+	}
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumInputScope.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 
 #include "ElysiumUISubsystem.generated.h"
@@ -41,19 +42,22 @@ public:
 	EElysiumMenuMode MenuMode() const { return CurrentMode; }
 
 private:
-	// Puts the local player into UI-only input (mouse visible) while a screen is up, and restores
-	// game input when it goes away. The menu is modal by construction — the world behind it is a
-	// backdrop, not something the player can reach past it.
+	// Claim input for the screen while it is up, and release it when it goes away (11.5). The menu
+	// is modal by construction — the world behind it is a backdrop, not something the player can
+	// reach past it — so the scope is UI-only with the cursor shown.
 	//
 	// Focus is handed to the menu widget itself, not left on the game viewport: that is what lets
-	// the screen see Escape (`UElysiumMainMenu::NativeOnKeyDown`) and close itself. 11.5 replaces
-	// this with the input scope stack; until then this is the one place the mode is set for a menu.
-	void ApplyInputMode(bool bUIOnly);
+	// the screen see Escape (`UElysiumMainMenu::NativeOnKeyDown`) and close itself. The subsystem
+	// no longer calls SetInputMode, and a UI-only push is also what takes an inherited Cog capture
+	// back, so a menu can never open under a debug UI that eats its clicks.
+	void PushMenuScope();
+	void PopMenuScope();
 
 	UPROPERTY(Transient)
 	TObjectPtr<UElysiumMainMenu> Menu;
 
 	EElysiumMenuMode CurrentMode = EElysiumMenuMode::Main;
+	FElysiumInputScopeHandle MenuScope;
 
 	TArray<IConsoleObject*> ConsoleObjects;
 };

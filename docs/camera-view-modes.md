@@ -319,9 +319,10 @@ player keeps authority over the view angles the whole time; the camera derives f
   (root `CLAUDE.md`). That rules out any asset-authored camera solution.
 - **A console/cvar bridge already exists** (`ccmd`/`cvar`, roadmap 9.3b), so VtMB's cvar names can
   be reproduced 1:1 and the shipped `cfg/` + the patch's `user.cfg` aliases keep working verbatim.
-- **The pawn is first-person today**: `AElysiumPawn` is an `ACharacter` with one
-  `UCameraComponent` at `Z = 71.2` cm and `bUsePawnControlRotation = true`
-  (`Source/ElysiumUE/Private/ElysiumPawn.cpp`). There is no player mesh yet.
+- **The pawn is first-person today**: `AElysiumPawn` is an `APawn` with a box hull, a
+  `UElysiumMovementComponent` and one `UCameraComponent` at `Z = 28 u` above the hull centre with
+  `bUsePawnControlRotation = true` (`Source/ElysiumUE/Private/ElysiumPawn.cpp`, roadmap 11.6).
+  There is no player mesh yet.
 - **Fully dynamic renderer**, HWRT Lumen + VSM, static lighting disabled
   (`docs/rendering-perf.md`).
 - **Feel is reproduce-first, then polish by explicit owner call** (`docs/remaster-direction.md`).

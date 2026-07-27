@@ -37,6 +37,22 @@ namespace ElysiumScriptNatives
 	bool IsNativeGlobal(const FString& Name);
 	bool IsCharacterMethod(const FString& Name);
 
+	// --- OneOfSet (9.7d) -------------------------------------------------------------------------
+	// VtMB's 1-based one-of-N selector, the gate behind 589 `.dlg` rows (`docs/script_api.md`):
+	// `(roll % count) == which - 1`. The corpus authors it in sets — N sibling rows carrying the same
+	// choice text, row i gated on `OneOfSet(i, N)` — so exactly one row passes only when every gate in
+	// the set sees ONE roll. `OneOfSetRoll` is that value: one draw per engine frame, which is the
+	// granularity a turn's gates are gathered at (`FElysiumDlgConversation::EnterNpcLine` evaluates a
+	// whole choice list in one burst). VtMB reads its roll off an engine counter whose identity is
+	// still open; what the corpus pins down is the stability, not the source.
+	int32 OneOfSetRoll();
+	// Pin the roll (>= 0) or restore the per-frame draw (< 0). `elysium.script.oneofset` is the console
+	// face of the same switch; tests use it to make the selector deterministic.
+	void SetOneOfSetRoll(int32 PinnedRoll);
+	// The selector over the current roll. `count <= 0` reads false rather than dividing by zero, and a
+	// `which` outside 1..count reads false on its own, since the modulo lands in [0, count-1].
+	bool OneOfSet(int32 Which, int32 Count);
+
 	// Case-insensitive stat/skill name normalisation (python_bridge.md: retail casing is
 	// inconsistent — `Humanity`/`humanity`, `F_Seduction`, ...). An unknown name passes through.
 	FString CanonicalStatName(const FString& Raw);
@@ -57,9 +73,10 @@ namespace ElysiumScriptNatives
 	FElysiumVariant CallCharacterMethod(UElysiumGameStateSubsystem* State, FElysiumEntityWorld* World,
 		const FElysiumEntityHandle& Self, FName Method, TArrayView<const FElysiumVariant> Args);
 
-	// The module globals whose result is a plain value: ScheduleTask and ChangeMap (both real —
-	// they go through the event queue) plus the three with no backing here (SquadSeesPlayer, OneOfSet,
-	// IsPCMalk). CreateEntityNoSpawn/CallEntitySpawn return/take an Entity object, so — like the Find*
+	// The module globals whose result is a plain value: ScheduleTask and ChangeMap (both real — they go
+	// through the event queue), OneOfSet and IsClan/IsPCMalk (real — the selector and the player sheet's
+	// clan), and SquadSeesPlayer, the one with no backing here — no shipped script calls it.
+	// CreateEntityNoSpawn/CallEntitySpawn return/take an Entity object, so — like the Find*
 	// globals — the CPython host implements them directly (ElysiumPythonEntity) and only the expr
 	// fallback lands here as a stub. `Ctx` supplies the provenance the deferred work is attributed to.
 	// Records the call. A name this does not know logs as a stub.

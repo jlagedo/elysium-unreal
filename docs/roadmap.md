@@ -86,8 +86,8 @@ it waits. Three standing rules:
 
 | Rung | Delivers | Tasks (in order) |
 |---|---|---|
-| **PP0 — the core refactor** | the spine: one clock/frame, world services, app states + pause, the player entity, input scopes, commands + user command, the view seam, the play harness | 11.5, 11.6, 11.8, 11.10 *(11.0, 11.1, 11.2, 11.3, 11.4 [x])* |
-| **PP1 — New Game & genesis** | chargen for real: clan, **name**, sex, spends — onto the player entity, Python-readable; `sp_genesisdevice_1` played, not skipped | 9.4 (+ `sp_genesisdevice_1` export/bake), 9.7d, 8.6's New Game click path |
+| **PP0 — the core refactor** | the spine: one clock/frame, world services, app states + pause, the player entity, input scopes, commands + user command, the view seam, the play harness | 11.8, 11.10 *(11.0, 11.1, 11.2, 11.3, 11.4, 11.5, 11.6 [x])* |
+| **PP1 — New Game & genesis** | chargen for real: clan, **name**, sex, spends — onto the player entity, Python-readable; `sp_genesisdevice_1` played, not skipped | 9.4 (+ `sp_genesisdevice_1` export/bake), 8.6's New Game click path |
 | **PP2 — the theatre cinematic** | the intro plays start to finish: choreography, scripted camera, line audio, subtitles, **eyes and lipsync — all block** (cont. 5) | 11.7, 12.1–12.5 (+ `sp_theatre` export/bake) |
 | **PP3 — land the tutorial** | the chain hands the player to Jack; the first conversation runs with sound and reactions | 9.2, 9.9 |
 | **PP4 — core mechanics** | faithful movement (owner call: **in** the path), camera modes, feeding, items + object interaction, dice, the vitals HUD | 4.7, 10.6, B6, 9.8, 9.6, 8.9 |
@@ -106,16 +106,14 @@ work.)*
 The open tasks whose dependencies are met, in the order they pay off. Regenerable from the
 deps below — refresh it whenever a task flips:
 
-1. **11.5 → 11.6 → 11.8 → 11.10** — close PP0: scopes, commands + user command, the view seam,
-   the play harness. Every dep is met. 11.6 also inherits the three verbs 11.4 parked on
-   `AElysiumPlayerController` (+use, sign dismissal, the skybox toggle) and the gait latch.
+1. **11.8 → 11.10** — close PP0: the view seam, then the play harness. Every dep is met, and
+   11.10 now has the two things it was waiting on — a named verb for every player action and a
+   recordable command stream (11.6).
 2. **9.4 / 9.8 / 9.9 / 9.10 / 9.5** — the five systems the hinge unblocked. They now land *on*
    `FElysiumCombatCharacter` and `FElysiumPlayerRecord`: 9.4 turns the sheet's dynamic bag into
    registered fields and gives health a real derivation, 9.10 finishes the economy over the
    `money` field that already exists, 9.8 fills the record's inventory half, and 9.5 (= 11.9)
    walks the chain.
-3. **9.7d** — land `OneOfSet` and the shadowed-name split: 589 dialogue gates currently fail
-   closed, the fix needs no backing system, and PP3's dialogue depends on those gates.
 
 **P12 is fully sourced** — everything left on it is runtime work. RE19 [x] and RE20 [x] closed
 the format half; **PL9 [x]** mirrored the 5,444 `.vcd` + 7,136 `.lip`, and **PL10 [x]** the
@@ -473,8 +471,10 @@ M1 leftovers that live in this lane.
   is a separate, owner-approved decision after this runs. **The body must be a box, so this is not a
   `UCharacterMovementComponent` override**: `ACharacter` creates a capsule root that cannot be
   substituted, and a capsule's rounded bottom reports ~0.65 against `StepMove`'s `0.7` standable test,
-  rejecting every climb (`source_movement.md`). **11.6** re-bases the pawn to `APawn` + box +
-  `UElysiumMovementComponent` and supplies the `FElysiumUserCmd` this consumes. Sequenced **in
+  rejecting every climb (`source_movement.md`). **11.6 [x]** re-based the pawn to `APawn` + box +
+  `UElysiumMovementComponent` and supplies the `FElysiumUserCmd` this consumes; what is left here is
+  the line-by-line port — `surfaceFriction` off real surface data, the gravity half-step split,
+  ducking, ladders and water, against 11.6's Source-shaped shell. Sequenced **in
   the playable path (PP4)** by owner call (`decisions.md` 2026-07-26 cont. 5) — the tutorial is
   played with VtMB feel, not UE feel. Open RE it needs: **RE22** (the ducked hull's dimensions —
   `IN_DUCK` is in the user command with nothing sizing it) and **RE21** (where usercmd
@@ -844,8 +844,8 @@ draw on the same stack; NPCs stand in the world at their entity origins.
     `BumpStat`/`GetMasqueradeLevel`) are **9.4**; **disposition/camera/barter** are B-track / later.
     `SquadSeesPlayer` stays a stub (called by no shipped script). **`OneOfSet` is not a `vamputil`
     helper** — it is a real module-table global, defined nowhere in the corpus and called 589 times
-    exclusively from dialogue, so its hardcoded-false stub silently fails 589 gates closed; **9.7**
-    RE'd it and owns the fix.
+    exclusively from dialogue; **9.7** RE'd it and **9.7d** replaced its hardcoded-false stub with
+    the real selector.
   - [x] **`vamputil` for real** *(9.3b)* — with `ccmd`/`cvar` bound (its top-level `c = __main__.ccmd`
     no longer throws), the real `vamputil.py` imports: its `zvtool` DAG, `fileutil`, and the 46 helpers
     (`IsClan`/`IsIdling`/`RandomLine`/`unhidePlus`/`setPlus`/…) load, and `tutorial`'s `from vamputil
@@ -882,35 +882,16 @@ draw on the same stack; NPCs stand in the world at their entity origins.
   log as a named divergence. Unit tier: `Elysium.Substrate.ScriptFS`. Full record + limits:
   `decisions.md` 2026-07-26; VtMB facts: `docs/python_bridge.md` → "The script file layer".
   *Deps:* 9.3b.
-- [~] **9.7 The script→engine action surface — survey, RE, spec** *(reference: `docs/script_api.md`)* —
-  the demand-side ledger `python_bridge.md` never had: which names the shipped content actually
-  calls, what each does in `vampire.dll`, and which system owes it. Orders every task below it.
-  - [x] **a. The survey** — `tools/script_api_survey.py` over `out/scripts` (36 `.py`),
-    `out/dlg` (147 files / 50,393 rows / cols 4+5) and the exported field-6 payloads, folding
-    module-level aliases (1,911 calls hide behind `Find = __main__.FindEntityByName`) and
-    cross-checking `ElysiumScriptNatives.cpp`, the CPython host's `PyMethodDef` tables and every
-    `D.Input(TEXT("…"))`. **16,438 call sites / 1,287 names; 47 natives bound (24 real / 23 stub);
-    124 names / 1,212 calls resolved to nothing.**
-  - [x] **b. Ghidra recovery** — new `DumpPyMethods.java` (walks a `PyMethodDef` table: names,
-    `ml_doc`, thunk→body, decompiled bodies) + `parse_datamap_builder.py` (replays a builder's
-    assignments, because an image read misses every builder-written record). All **six** method
-    tables dumped, and the three datamaps behind the unresolved names recovered —
-    `CBaseCombatCharacter` (25 inputs), `CAI_BaseNPC` (`SetRelationship` + 16 outputs incl.
-    **`OnFedUponBegin`/`OnFedUponEnd`**, which **B6** needs), the player class (11 inputs).
-  - [x] **c. The spec** — `docs/script_api.md`: per-name signature, arg types off `fieldType`,
-    owning table/datamap, handler address, call count, owning task, and the demand-ranked build
-    order. `python_bridge.md` keeps the mechanism and links to it.
-  - [ ] **d. Land the zero-dependency wins** — **`OneOfSet`** is
-    `(<engine roll> % count) == which - 1`, a 1-based one-of-N selector; its hardcoded-`false`
-    stub fails **589 dialogue gates** closed today. Also the `Whisper`/`FrenzyTrigger`
-    receiver split (a `vamputil` helper shadows an engine input name; bare vs `pc.`-qualified
-    must not collapse to one implementation). *Acceptance:* a `OneOfSet` gate selects one of N in
-    the built game; the shadowed names resolve per call site. *Deps:* none.
-  **Findings that correct existing docs:** `OneOfSet` is a real module global, not a `vamputil`
-  helper (9.3's note fixed); six `ml_doc` strings are copy-paste errors; `GiveItem` exists both as
-  a Character method and as a player datamap input; **`AwardExperience` takes a STRING**, not an
-  amount (constrains 9.4); `HungerCheck` and `FrenzyCheck` share one handler; the file-like table
-  is the `IRestore` adapter, closing `python_bridge.md`'s only open item. *Deps:* 9.3, B2.
+- [x] **9.7 The script→engine action surface — survey, RE, spec** *(reference: `docs/script_api.md`)* —
+  landed. The demand-side ledger `python_bridge.md` never had: **16,438 call sites / 1,287 names**
+  surveyed off the shipped content (a), all six `PyMethodDef` tables plus the three datamaps behind
+  the unresolved names recovered from `vampire.dll` (b), and `docs/script_api.md` written as the
+  per-name inventory + demand-ranked build order that orders every task below it (c). **d** landed
+  the two zero-dependency wins: **`OneOfSet`** is real (`(roll % count) == which - 1`, one roll per
+  frame), so the **589 dialogue gates** that failed closed against its stub now select one row of N,
+  and the `Whisper`/`FrenzyTrigger` receiver split is guarded — the bare spelling stays `vamputil`'s
+  helper, the `pc.`-qualified one the datamap input. As-built: `roadmap-archive.md`; roll model:
+  `decisions.md` 2026-07-27. *Deps:* 9.3, B2.
 - [ ] **9.8 Inventory & items** — **853 corpus calls**, the largest gap with no owning task:
   `HasItem` 327 / `RemoveItem` 182 / `GiveItem` 126 / `StartBarter` 108 / `AmmoCount` /
   `GiveAmmo` / `HasWeaponEquipped`, plus the `Inventory_Remove` input and
@@ -1135,22 +1116,54 @@ Steps are ordered so each compiles, ships and is observable alone. **11.4 was th
   the entity's `health` to 0 and the run ends in `GameOver`; money survives a travel and
   quit-to-menu clears the record. `Elysium.Substrate.PlayerEntity` asserts the whole shape headless.
   As-built: `roadmap-archive.md`. *Deps:* 11.0 (call A), 11.2.
-- [ ] **11.5 Input scope stack** *(S6)* — `UElysiumInputSubsystem` (LocalPlayer) owning a priority
-  stack of `FElysiumInputScope` (mode, cursor, mapping contexts, pauses-game); menus, dialogue, signs,
-  cinematics, chargen and Cog all push/pop instead of setting `FInputMode*` — retiring the three
-  independent owners that exist today (`UElysiumUISubsystem`, `AElysiumHUD`, Cog's ImGui capture).
-  *Acceptance:* opening any screen over any other restores exactly the mode it found; a Substrate test
-  asserts the stack is balanced across every screen transition; Cog can never eat a menu click.
-  *Deps:* 11.3.
-- [ ] **11.6 Command registry + user command** *(S5, S7)* — `FElysiumCommands` (every VtMB
-  bindable verb registered by name, `+`/`-` pairs included) with `FElysiumConsole::Execute`'s
-  precedence stated and tested (**command → alias → cvar → Python**); `FElysiumUserCmd` filled by the
-  router and consumed by movement, camera and the bus, so nothing polls a key; `AElysiumPawn` re-based
-  to `APawn` with a **box** collision component and a `UElysiumMovementComponent` shell
-  (`source_movement.md`: `ACharacter` cannot take a box root, and the box is a recovered requirement,
-  not a preference), the capsule pawn kept behind `elysium.SourceMovement 0`. *Acceptance:* every
-  bindable verb fires by name from console, level script, `.dlg` action and MCP; a recorded command
-  stream replays identically. *Deps:* 11.1. *Feeds:* 10.6, 4.7.
+- [x] **11.5 Input scope stack** *(S6)* — `UElysiumInputSubsystem` (LocalPlayer) owning a priority
+  stack of `FElysiumInputScope` (mode, cursor, mapping contexts, focus widget); the menu, the dialogue
+  box, sign panels and Cog all push/pop, and **nothing else in the module calls `SetInputMode`** —
+  the three independent owners (`UElysiumUISubsystem::ApplyInputMode`, `AElysiumHUD`'s dialogue
+  mode, Cog's ImGui capture) are retired, and CommonUI's fourth (`UCommonUIActionRouterBase`) is
+  declined explicitly by `GetDesiredInputConfig() → unset`. The stack and its arbitration are plain
+  C++ (`ElysiumInputScope.h`), so the whole rule set runs headless. Push/pop is **handle-based, not
+  LIFO** — screens genuinely close out of order (a conversation ending behind an open pause menu) and
+  whatever is left has to find exactly the mode it pushed over. One priority table
+  (`ElysiumInput::Priority`) answers "what happens when X opens over Y" once: Sign < Cinematic <
+  Chargen < Dialogue < Menu < **Debug**. Cog sits at the top on purpose (F1 over a screen is a
+  deliberate ask, and the front end has a menu up permanently), and what keeps it from eating a
+  screen's clicks is the other half of the rule: **a UI-only push revokes an inherited ImGui
+  capture**. `pauses-game` is deliberately *not* a scope property — pause has exactly one owner
+  (`UElysiumGameFlowSubsystem`, 11.3), and the pause menu's scope is pushed *because* the flow
+  paused (`decisions.md` 2026-07-27). The scope's `Contexts` are declared and reported but resolve
+  to nothing until 10.6 owns Enhanced Input. *Acceptance met:* `Elysium.Substrate.InputScopes` walks
+  **every ordered pair** of the six scopes in both close orders and asserts each restores exactly the
+  state it found and that the stack balances; in the built game the menu, a conversation and a sign
+  panel each take and return the mode, a menu opening under Cog takes the mouse back, and
+  `elysium.inputscopes` dumps the live stack. As-built: `roadmap-archive.md`. **Remaining:**
+  cinematics and chargen have priorities reserved but no pusher until P12 / 9.4. (Escape became the
+  named `cancelselect` verb at 11.6; the menu widget still catches the key, because a UI-only scope
+  is exactly when the controller cannot, but both sources now fire one verb.) *Deps:* 11.3.
+- [x] **11.6 Command registry + user command** *(S5, S7)* — `FElysiumCommands`: **92 declared verbs**,
+  the whole `controls.md` bindable inventory with its `+`/`-` pairs, `vphysicshand` dropped. Handlers
+  are installed separately and stack, so a verb has an implementation exactly while something owns
+  it; the 82 with none log their owning task and `elysium.commands` reads the coverage back as a work
+  list. `FElysiumConsole::Execute`'s precedence is stated once and asserted — **command → alias →
+  cvar → Python** (Source's own `Cmd_ExecuteString` order, so no user alias can shadow `+forward`),
+  and `ElysiumCommandBus::Exec` is the one door a key, a `ccmd` set, a `.dlg` action, `elysium.cmd`
+  and MCP all arrive through. `FElysiumUserCmd` (S5) is built by `UElysiumInputRouter` from button
+  latches — **nothing polls a key**; `AElysiumPawn` is re-based to `APawn` + a **box** hull +
+  `UElysiumMovementComponent` (Source's `Friction`/`Accelerate`/`AirAccelerate`/`WalkMove`+`StepMove`/
+  `CategorizePosition` over the RE'd constants), with `AElysiumCapsulePawn` kept behind
+  `elysium.SourceMovement 0`; `IElysiumPlayerBody` is the seam both answer. The three verbs 11.4
+  parked on the controller and the Esc key 11.5 left there are now `+use` / `+attack` /
+  `cancelselect`, and the menu's `NativeOnKeyDown` fires the *same* verb — one Escape, two key
+  sources. The dev layer moved off the two bare keys it was squatting on (`v`, `t` → `Ctrl+V`,
+  `Ctrl+T`; `ConsoleKeys` back to `` ` `` so `F10` is `snapshot`), which is
+  `input-architecture.md`'s reserved-key guarantee made true (`decisions.md` 2026-07-27).
+  *Acceptance met:* in the built game `elysium.cmd` fires every verb by name — `+forward` runs at
+  exactly 571 cm/s and `+speed` at 254, `+jump` reaches the 25-unit apex, `noclip` flies at 1200,
+  `cancelselect` raises and drops the pause menu, `snapshot` writes a PNG; `Elysium.Substrate.Commands`
+  asserts the inventory, the `+`/`-` resolution, implementation stacking and the whole default bind
+  table, `Elysium.Substrate.UserCmd` the latch/analog composition and the record→replay identity, and
+  `Elysium.Substrate.Console` the four-step precedence. As-built: `roadmap-archive.md`.
+  *Deps:* 11.1. *Feeds:* 10.6, 4.7.
 - [ ] **11.7 Camera component** — `UElysiumCameraComponent` holding VtMB's four weights with
   `AElysiumPawn::CalcCamera` as the single apply point (delegating to `GetCameraView` first), the
   cvar surface reproduced verbatim, and the scripted-shot channel (`SetCamera`, `camera_keyframe`,
@@ -1162,7 +1175,9 @@ Steps are ordered so each compiles, ships and is observable alone. **11.4 was th
 - [ ] **11.8 Presentation seam** *(S8)* — `UElysiumPresentationSubsystem` publishing
   `FElysiumViewState` once per frame plus discrete delegates; `AElysiumHUD`, the dialogue box and the
   8.6 screens re-based onto it. The front-end gating (`IsMenuUp()` checks scattered through the HUD)
-  becomes one rule in the publisher. *Acceptance:* no widget references `FElysiumEntityWorld`; the
+  becomes one rule in the publisher — including the case it currently gets wrong: the tick gate skips
+  the dialogue *reconcile* rather than taking an open box down, so a conversation already on screen
+  when the pause menu opens draws through it. *Acceptance:* no widget references `FElysiumEntityWorld`; the
   HUD renders from a hand-built view state in a test. *Deps:* 11.3. *Feeds:* 8.9, 9.2.
 - [ ] **11.9 Save/load** *(= 9.5, on this spine)* — `save-architecture.md` in full: the
   `UElysiumSaveGame` shell over a versioned compressed payload, the four blocks, `EElysiumField::Save`
@@ -1360,7 +1375,7 @@ extraction"; durable format/behaviour facts fold into the owning topic docs
 | "Polish" leaks into the logic layer | silent divergence from retail behaviour, unfindable later | `remaster-direction.md`'s governing rule: RE first, owner's call, dated decision-log entry recording faithful *and* chosen behaviour; default is reproduce, and layer assignment happens before the work, not after |
 | No classic-UI mode to A/B against | a UI regression has no reference | the original's structure is captured as data (PL8) and in `m0_menu_build.md`, so screens are checked against intent rather than pixels; the *world* keeps its faithful A/B path unchanged |
 | ~~The player stays a pawn + a sheet struct while 9.4/9.8/9.9/9.10/9.5 land on it~~ **(resolved)** | five systems built against a shim, then a five-way migration with saves already in the wild | **11.4 landed ahead of all five**: the sheet is on `FElysiumCombatCharacter`, the durable half is `FElysiumPlayerRecord`, and the shape is VtMB's own (`savegame_format.md`, `script_api.md`) — a port, not an invention |
-| Modal screens fight over input mode (three independent owners today) | the mouse is unusable in some screen order; Cog can make the game unclickable | 11.5's single arbiter + a Substrate test asserting the scope stack balances across every transition |
+| ~~Modal screens fight over input mode (three independent owners)~~ **(resolved)** | the mouse is unusable in some screen order; Cog can make the game unclickable | closed by **11.5**: one arbiter (`UElysiumInputSubsystem`) is the module's only `SetInputMode` caller, CommonUI's router is declined explicitly, and `Elysium.Substrate.InputScopes` asserts every ordered screen pair restores and balances |
 | P12's facial RE was unknown-duration work that **blocks PP2 in full** (owner call: eyes + lipsync gate the cinematic) | the playable path stalls behind RE | **Retired as a risk — front-loading worked on both halves.** RE19 closed the scene format, event semantics and completion contract; PL9 mirrored the 5,444 scenes + 7,136 `.lip`; **RE20 closed the face** — the flex chunks, both vertex-animation encodings, the `.lip` grammar and the phoneme tables, validated across 3.3 M records with zero failures (`docs/facial_animation.md`). Only PL10 (a mechanical bake) is left in "Now". The residual is a *scope* question, not an RE one: no eyeball data was ever authored, so 12.4's look-at half is an owner call, tracked on the task |
 | A shots baseline silently invalidates across a re-bake or content rebuild (measured: up to ~10 mean on bounce-dominated vantages from **byte-identical** inputs) | a look regression hides in toolchain noise — or toolchain noise reads as a regression | B6's measured rule: re-baseline after any bake/content change; A/B a small effect as two runs over one fixed asset set (a cvar A/B), never across a rebuild |
 

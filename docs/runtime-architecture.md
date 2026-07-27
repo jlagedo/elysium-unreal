@@ -65,7 +65,7 @@ UElysiumGameInstance                                   ── application
  └─ UElysiumCogSubsystem / UElysiumMcpSubsystem                        (dev-only)   (exists)
 
 ULocalPlayer
- └─ UElysiumInputSubsystem         the input scope stack; owns mode + contexts + cursor   (new)
+ └─ UElysiumInputSubsystem         the input scope stack; owns mode + cursor + focus  (exists)
 
 UWorld  (one per map epoch)                            ── map epoch
  ├─ AElysiumGameMode               class provider + one BeginPlay handshake         (exists, thinned)
@@ -95,7 +95,7 @@ rather than left to actor registration order (**S2**).
 
 | # | Stage | Where | Notes |
 |---|---|---|---|
-| 1 | sample input | `APlayerController::TickPlayerInput` (`TG_PrePhysics`) | Enhanced Input → `UElysiumInputRouter` → `FElysiumUserCmd` (§8) |
+| 1 | sample input | `APlayerController::PlayerTick` (`TG_PrePhysics`) | key bindings → command bus → latches; then `UElysiumInputRouter::SampleFrame` builds the frame's `FElysiumUserCmd` (§8) |
 | 2 | advance the clock | `AElysiumMapActor` gameplay tick, first statement | **the only place `Now` moves** (§4) |
 | 3 | run due thinks | `FElysiumEntityWorld::RunThinks(Now)` | movers issue their swept kinematic moves here |
 | 4 | service the queue | `FElysiumEntityWorld::ServiceEvents(Now)` | delayed I/O, field-6 Python, `ScheduleTask` |
@@ -230,12 +230,12 @@ never land on the copy that is about to be overwritten.
 
 `AElysiumPawn` is the body and nothing else: collision, movement, camera, noclip, and the handle of
 the entity it embodies. No `+use` routing, no sign dismissal, no `IsInputKeyDown` polling, no
-`GI → MapSubsystem → MapActor → EntityWorld` walk — the non-movement verbs are the player
-controller's until 11.5/11.6 take them, and the shift gait is a `+speed`/`-speed` latch.
+`GI → MapSubsystem → MapActor → EntityWorld` walk — the non-movement verbs are named commands
+(§8.2) and the gait is the `+speed` bit of the frame's user command.
 `FElysiumPlayer::SetRuntimeOrigin` moves the body, exactly as `FElysiumNpc` moves a skeletal one, so
 `point_teleport`, landmark placement and a scripted `pc.SetOrigin(...)` are one path. The reverse
 direction is a sample: the world reads the pawn into the entity once a frame, before thinks and the
-queue. `UElysiumMovementComponent` and `UElysiumCameraComponent` join it at 11.6 and 11.7.
+queue. `UElysiumMovementComponent` arrived with 11.6; `UElysiumCameraComponent` joins at 11.7.
 
 ### What it collapsed
 
@@ -310,37 +310,54 @@ each is a live rough edge today.
 
 ### 8.1 One input-mode arbiter (S6)
 
-Three owners currently move the mouse independently. Two call `SetInputMode` directly —
-`UElysiumUISubsystem::ApplyInputMode` (`FInputModeUIOnly` for menus) and `AElysiumHUD`
-(`FInputModeUIOnly` for the dialogue box, `FInputModeGameOnly` on close) — and a third, Cog, takes
-ImGui capture through Slate and restores it with a hand-rolled equivalent of `FInputModeGameOnly`
-(`debug-tooling.md`'s local patch). Nothing arbitrates: the last writer wins, a dialogue closing
-behind an open menu hands the mouse back to the world, and Cog's capture eats clicks before Slate
-sees them — which has already made the menu unusable once (`ui-architecture.md` §1). Every new modal
-screen adds another pair of collisions.
+`UElysiumInputSubsystem` (LocalPlayer-scoped) owns a priority stack of input scopes and is the only
+thing in the module that calls `SetInputMode`. A screen, a conversation, a cutscene or the debug UI
+pushes a scope while it is up and pops it when it goes away; the top of the stack decides what the
+engine is told. Roadmap 11.5.
 
 ```cpp
-// ULocalPlayerSubsystem
-struct FElysiumInputScope
+struct FElysiumInputScope            // plain C++ — ElysiumInputScope.h
 {
-    FName    Name;                    // "Menu", "Dialogue", "Sign", "Cinematic", "Chargen", "Debug"
-    int32    Priority = 0;
-    EElysiumInputMode Mode;           // GameOnly | GameAndUI | UIOnly
-    TArray<TObjectPtr<UInputMappingContext>> Contexts;   // added while this scope is top
-    bool     bShowCursor = false;
-    bool     bPausesGame = false;
+    FName    Name;                   // "Menu", "Dialogue", "Sign", "Cinematic", "Chargen", "Debug"
+    int32    Priority;               // ElysiumInput::Priority::*
+    EElysiumInputMode Mode;          // GameOnly | GameAndUI | UIOnly
+    bool     bShowCursor;
+    TArray<FName> Contexts;          // mapping contexts applied while this scope is top (10.6)
+    TSharedPtr<SWidget> FocusWidget; // where keyboard focus goes under UIOnly
 };
 
 FElysiumInputScopeHandle UElysiumInputSubsystem::Push(FElysiumInputScope Scope);
-void                     UElysiumInputSubsystem::Pop(FElysiumInputScopeHandle);
+bool                     UElysiumInputSubsystem::Pop(FElysiumInputScopeHandle&);
 ```
 
-The **top scope decides everything** — mode, cursor, which mapping contexts are applied, whether the
-game pauses. Push/pop is RAII-shaped, so a screen cannot leak a mode. Cog pushes a `Debug` scope at
-max priority when it takes capture and pops it when it releases, which is what makes
-"debug input never fights game input" a mechanism instead of a convention.
-`FModifyContextOptions::bIgnoreAllPressedKeysUntilRelease` (default true) settles held keys across a
-push, which is `controls.md`'s open "what does conversation do to held input" question on our side.
+The **top scope decides everything** — mode, cursor, focus, which mapping contexts are applied.
+Push/pop is **handle-based, not last-in-first-out**, because screens genuinely close out of order: a
+conversation ends behind an open pause menu, and the menu has to find exactly the mode it pushed
+over. Ids are never reused, so a stale or doubled pop is a no-op rather than a mismatched pop.
+Priority decides, and push order is the tie-break, so two screens at the same priority behave like an
+ordinary modal stack.
+
+One table answers "what happens when X opens over Y":
+`Game 0 < Sign 10 < Cinematic 20 < Chargen 30 < Dialogue 40 < Menu 50 < Debug 100`. Two rows carry
+weight. **The sign scope claims game input, not UI-only** — VtMB's popups are dismissed by a
+left-click, which is the `+attack` verb, so taking the mouse off the world would make them
+undismissable; the scope is there for the ordering. **Debug is the top of the table**, because F1
+over a screen is a developer asking for the debug UI and the front end has a menu up permanently.
+What keeps it from eating that screen's clicks is the other half of the rule: **a UI-only push
+revokes an inherited ImGui capture** (`ElysiumInput::RevokesDebugCapture`), at push time only, so the
+deliberate F1 afterwards still works. Cog itself is a vendored plugin with no event to bind, so the
+arbiter observes it — a per-frame reconcile pushes and pops the `Debug` scope off
+`FCogImguiContext::GetEnableInput()`.
+
+**Pause is not a scope property.** It has exactly one owner (`UElysiumGameFlowSubsystem`, §10), and
+the pause menu's scope is pushed *because* the flow paused — a scope that also drove pause would be
+a second writer, and a re-entrant one (`decisions.md` 2026-07-27).
+
+The stack and its arbitration are plain C++, so the whole rule set is asserted with no local player,
+no controller and no viewport — `Elysium.Substrate.InputScopes` walks every ordered pair of scopes in
+both close orders. `FModifyContextOptions::bIgnoreAllPressedKeysUntilRelease` (default true) settles
+held keys across a push, which is `controls.md`'s open "what does conversation do to held input"
+question on our side; it lands with the contexts at 10.6.
 
 CommonUI brings its own input writer — `UCommonUIActionRouterBase` applies an `FUIInputConfig` per
 activated widget, a *fourth* mode owner living inside the engine. **The scope stack is the sole
@@ -358,32 +375,52 @@ knows aliases, cvars and Python, but has **no registry of gameplay verbs** — `
 key on the pawn, and `togglecamera`, `holster`, `slotN`, `+feed`, `vdiscipline_*` have nowhere to
 land.
 
+**Declaration and implementation are separate.** The inventory is static data — one table of every
+bindable verb with its kind, its group, and the user-command bit a `+`/`-` pair latches — while the
+*implementation* is installed by whatever owns the verb and released when that goes away:
+
 ```cpp
-FElysiumCommands::Register(TEXT("+use"),  EElysiumCmd::ButtonPair, &Handler);
-FElysiumCommands::Register(TEXT("togglecamera"), EElysiumCmd::Once, &Handler);
+// Declared once, at startup, from the controls.md inventory.
+Registry.Declare({ TEXT("use"), EElysiumCmdKind::ButtonPair, EElysiumCmdGroup::Combat,
+                   uint64(EElysiumButton::Use), TEXT("world interaction") });
+
+// Implemented by whoever can answer it, for as long as it can.
+Binding = Registry.Bind(TEXT("use"), [this](const FElysiumCommandCall&) { World->PlayerUse(); });
 ```
 
+That split is what makes the registry usable before the systems exist: a declared verb with no
+implementation logs the task that owns it, and `elysium.commands` is the coverage report. It also
+puts the **button latch on the verb rather than on its implementation** — `+forward` fills the user
+command with no handler in sight, and a headless world with no sink drops it.
+
 Precedence in `FElysiumConsole::Execute`, stated once and tested: **registered command → alias
-expansion → cvar set → Python fallthrough**. One registry means a level script, a `.dlg` action, a
-key, a gamepad button, `-ExecCmds`, and an MCP tool all fire the same verb by name — which is exactly
-how the original behaves, and it is also the whole automation story (§12).
+expansion → cvar set → Python fallthrough** — Source's own `Cmd_ExecuteString` order, so no user
+alias can shadow a compiled verb. One registry means a level script, a `.dlg` action, a key, a
+gamepad button, `-ExecCmds`, and an MCP tool all fire the same verb by name — which is exactly how
+the original behaves, and it is also the whole automation story (§12).
 
 ### 8.3 Intent is data (S5)
 
 A faithful `CGameMovement` port (4.7) needs Source's `CUserCmd`: a per-frame record of intent, not
-live key state. Nothing should read a key directly — `AElysiumPawn::Tick` currently calls
-`IsInputKeyDown(EKeys::LeftShift)` to pick the gait, which is unbindable, untestable and unrecordable.
+live key state. Nothing reads a key directly — the gait was an `IsInputKeyDown(EKeys::LeftShift)`
+poll on the pawn's tick, which is unbindable, untestable and unrecordable; it is now the `+speed`
+bit of the command.
 
 ```cpp
 struct FElysiumUserCmd
 {
     FVector2D Move;          // -1..1, already deadzoned/modified per device
+    float     Up;            // Source's upmove: +moveup / +movedown, and the noclip fly
     FVector2D LookDelta;     // degrees this frame
-    uint32    Buttons;       // IN_ATTACK | IN_JUMP | IN_DUCK | IN_SPEED | IN_USE | ...
+    uint64    Buttons;       // Attack | Jump | Duck | Speed | Use | ...
     float     DeltaSeconds;
     uint32    Seq;
 };
 ```
+
+`Buttons` is 64 bits because VtMB's ± inventory is 34 pairs, past Source's own set — its camera and
+look-mode pairs are client-side state there rather than user-command bits, and here they are neither
+special-cased nor dropped.
 
 Filled by `UElysiumInputRouter` on the controller, consumed by `UElysiumMovementComponent`, the camera
 and the command bus. Three things become free:
@@ -410,7 +447,12 @@ own `StepUp` — is precisely the code being replaced. NPCs are unaffected: they
 not Source step semantics, and can keep capsules. Open RE: the **ducked** hull's dimensions are
 unrecorded (**RE22**) — `IN_DUCK` is in the user command with nothing sizing it.
 
-The current capsule pawn stays behind `elysium.SourceMovement 0` as the A/B baseline while 4.7 lands.
+The capsule pawn survives as `AElysiumCapsulePawn` behind `elysium.SourceMovement 0`, the A/B
+baseline while 4.7 lands. Because the two cannot share a base — one is an `APawn`, the other an
+`ACharacter` — what everything outside them talks to is **`IElysiumPlayerBody`**: noclip, the
+embodied entity handle, the body half-height the teleport seam lifts a Source feet-origin by, the
+spawn-hold freeze, and `ApplyUserCmd`. Nothing outside the two bodies names a concrete pawn class,
+which is also what keeps the A/B honest: it compares the movers, not two input paths.
 
 ## 9. The camera
 
@@ -625,9 +667,9 @@ roadmap task or a new P11 one.
 | 4 | no chargen | New Game mocks Tremere male; clan-gated content untestable | 9.4 |
 | 5 | no save/load | a session cannot be resumed; `trigger_autosave` is inert | 9.5 on **11.9** |
 | 6 | no vitals HUD (the Canvas HUD covers reticle/signs only) | blood/health/frenzy/masquerade invisible; the sheet has no readout | 8.9 on **11.8** |
-| 7 | ~~pause has no input path~~ | closed by **11.3** — Esc on the player controller drives `UElysiumGameFlowSubsystem::TogglePause`, which holds the world and raises the pause menu; the pause *input scope* is still 11.5's | **11.3** |
+| 7 | ~~pause has no input path~~ | closed by **11.3** — Esc on the player controller drives `UElysiumGameFlowSubsystem::TogglePause`, which holds the world and raises the pause menu, and the menu's scope comes from **11.5**'s stack (pause stays the flow's, never a scope property) | **11.3** |
 | 8 | no camera modes | `togglecamera` unbound and unimplemented; scripted cameras have no channel | **11.7** |
-| 9 | three input-mode owners | modal screens fight over the mouse; Cog can make the game unclickable | **11.5** |
+| 9 | ~~three input-mode owners~~ | closed by **11.5**: one arbiter owns mode, cursor and focus; CommonUI's router is declined explicitly, and a UI-only push revokes an inherited ImGui capture. Mapping contexts are declared on the scope and applied at 10.6 | **11.5** |
 | 10 | ~~no loading screen~~ | closed by **11.3** for the level-load flush; the map actor's build pass after it is 10.4's | **11.3** |
 | 11 | ~~no death / game-over path~~ | closed: **11.3** made `GameOver` a state, **11.4** gave it its driver — the player entity's health running out reaches `NotifyPlayerKilled` → `TriggerGameOver(Killed)`. The masquerade meter is the second loss condition, still 9.4's | **11.3** + **11.4** + 9.4 |
 | 12 | dialogue line audio unwired | `PlayDialogFile` (41 calls) silent though decode is done | 9.2 |
@@ -667,13 +709,17 @@ calls as one dated `decisions.md` entry — was recorded 2026-07-26 (cont. 4) an
    *Observable:* `Elysium.Substrate.PlayerEntity`, and in the built game `pc.MoneyAdd(50)` and
    `ent_fire !player MoneyAdd 50` land on the same field, `point_teleport` moves the player through
    `SetRuntimeOrigin`, and a `trigger_hurt` that empties the player's health ends the run.
-5. **11.5 Input scope stack** — `UElysiumInputSubsystem`; menus, dialogue, signs, cinematics, chargen
-   and Cog all push scopes. *Observable:* opening any screen over any other restores exactly the mode
-   it found, and Cog can never eat a menu click.
-6. **11.6 Command registry + user command** — `FElysiumCommands`, the stated console precedence,
-   `FElysiumUserCmd` filled by the router; the box pawn + `UElysiumMovementComponent` shell behind
-   `elysium.SourceMovement`. *Observable:* every VtMB bindable verb is fireable by name from console,
-   script and MCP; a recorded command stream replays identically. Feeds 10.6 and 4.7.
+5. **11.5 Input scope stack** *(landed)* — `UElysiumInputSubsystem` over a plain-C++ priority stack;
+   the menu, the dialogue box, sign panels and Cog push scopes, and nothing else calls
+   `SetInputMode`. *Observable:* `Elysium.Substrate.InputScopes` walks every ordered pair of screens
+   in both close orders; in the game `elysium.inputscopes` dumps the live stack, and a menu coming up
+   takes the mouse back from an inherited ImGui capture.
+6. **11.6 Command registry + user command** *(landed)* — `FElysiumCommands` (92 declared verbs),
+   the stated console precedence, `FElysiumUserCmd` filled by `UElysiumInputRouter` off VtMB's own
+   default bind table; the box pawn + `UElysiumMovementComponent`, with the capsule body behind
+   `elysium.SourceMovement 0`. *Observable:* `elysium.cmd <verb>` fires every bindable verb from the
+   console, a script, a `.dlg` action or MCP; `elysium.commands` reports the coverage; a recorded
+   command stream replays identically. Feeds 10.6 and 4.7.
 7. **11.7 Camera component** — the weight stack, `CalcCamera` as the apply point, `togglecamera` and
    the cvar surface, the scripted-shot channel. *Observable:* `camera-view-modes.md`'s weight-driver
    automation test passes; `SetCamera` has somewhere to land.

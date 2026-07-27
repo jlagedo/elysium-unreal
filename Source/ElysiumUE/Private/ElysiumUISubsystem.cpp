@@ -1,17 +1,12 @@
 #include "ElysiumUISubsystem.h"
 
+#include "ElysiumInputSubsystem.h"
 #include "ElysiumMainMenu.h"
 
 #include "Blueprint/UserWidget.h"
 #include "Engine/GameInstance.h"
-#include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
-
-#include "CogCommon.h"
-#if ENABLE_COG
-#include "CogSubsystem.h"
-#endif
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumUI, Log, All);
 
@@ -73,53 +68,33 @@ void UElysiumUISubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-void UElysiumUISubsystem::ApplyInputMode(bool bUIOnly)
+void UElysiumUISubsystem::PushMenuScope()
 {
-	UGameInstance* GI = GetGameInstance();
-	APlayerController* PC = GI ? GI->GetFirstLocalPlayerController() : nullptr;
-	if (!PC)
+	UElysiumInputSubsystem* Input = UElysiumInputSubsystem::Get(GetGameInstance());
+	if (!Input || !Menu)
 	{
 		return;
 	}
-	if (bUIOnly)
+
+	FElysiumInputScope Scope;
+	Scope.Name = TEXT("Menu");
+	Scope.Priority = ElysiumInput::Priority::Menu;
+	Scope.Mode = EElysiumInputMode::UIOnly;
+	Scope.bShowCursor = true;
+	// Focus the screen itself so Escape reaches it. Without this, focus stays on the game viewport
+	// widget and the menu's key handler never runs — the pause menu would open on Esc and then
+	// refuse to close on the same key.
+	Scope.FocusWidget = Menu->TakeWidget();
+	MenuScope = Input->Push(MoveTemp(Scope));
+}
+
+void UElysiumUISubsystem::PopMenuScope()
+{
+	if (UElysiumInputSubsystem* Input = UElysiumInputSubsystem::Get(GetGameInstance()))
 	{
-		FInputModeUIOnly Mode;
-		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-		// Focus the screen itself so Escape reaches it. Without this, focus stays on the game
-		// viewport widget and the menu's key handler never runs — the pause menu would open on Esc
-		// and then refuse to close on the same key.
-		if (Menu)
-		{
-			Mode.SetWidgetToFocus(Menu->TakeWidget());
-		}
-		PC->SetInputMode(Mode);
-		PC->SetShowMouseCursor(true);
-#if ENABLE_COG
-		// A game screen outranks the debug UI for the mouse. While Cog holds input, ImGui consumes
-		// the click before Slate sees it and every menu item is dead — so a menu coming up takes it
-		// back. F1 still re-enables Cog deliberately; this only revokes an inherited capture.
-		//
-		// **Only when it is already enabled.** SetEnableInput dereferences the ImGui context
-		// (ClearInputMouse), and Cog creates that lazily on its first tick — calling it from here at
-		// boot crashed outright. `bEnableInput` defaults false and only becomes true via a call that
-		// already required a live context, so "true" is a safe proxy for "initialised".
-		if (UWorld* World = PC->GetWorld())
-		{
-			if (UCogSubsystem* Cog = World->GetSubsystem<UCogSubsystem>())
-			{
-				if (Cog->GetContext().GetEnableInput())
-				{
-					Cog->GetContext().SetEnableInput(false);
-				}
-			}
-		}
-#endif
+		Input->Pop(MenuScope);
 	}
-	else
-	{
-		PC->SetInputMode(FInputModeGameOnly());
-		PC->SetShowMouseCursor(false);
-	}
+	MenuScope.Reset();
 }
 
 void UElysiumUISubsystem::ShowMenu(EElysiumMenuMode Mode)
@@ -157,7 +132,7 @@ void UElysiumUISubsystem::ShowMenu(EElysiumMenuMode Mode)
 	// viewport — so activate it by hand, or the tree builds and draws nothing.
 	Menu->ActivateWidget();
 	Menu->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-	ApplyInputMode(/*bUIOnly*/ true);
+	PushMenuScope();
 
 	UE_LOG(LogElysiumUI, Log, TEXT("menu shown (%s)"), MenuModeName(Mode));
 }
@@ -170,6 +145,6 @@ void UElysiumUISubsystem::HideMenu()
 	}
 	Menu->RemoveFromParent();
 	Menu = nullptr;
-	ApplyInputMode(/*bUIOnly*/ false);
+	PopMenuScope();
 	UE_LOG(LogElysiumUI, Log, TEXT("menu hidden"));
 }

@@ -1,6 +1,6 @@
 #include "ElysiumCheatManager.h"
 
-#include "ElysiumPawn.h"
+#include "ElysiumPlayerBody.h"
 
 #include "GameFramework/PlayerController.h"
 
@@ -9,10 +9,10 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumCheat, Log, All);
 void UElysiumCheatManager::Noclip()
 {
 	APlayerController* PC = GetPlayerController();
-	if (AElysiumPawn* Pawn = PC ? Cast<AElysiumPawn>(PC->GetPawn()) : nullptr)
+	if (IElysiumPlayerBody* Body = PC ? Cast<IElysiumPlayerBody>(PC->GetPawn()) : nullptr)
 	{
-		Pawn->SetNoclip(!Pawn->IsNoclip());
-		UE_LOG(LogElysiumCheat, Display, TEXT("noclip %s"), Pawn->IsNoclip() ? TEXT("ON") : TEXT("OFF"));
+		Body->SetNoclip(!Body->IsNoclip());
+		UE_LOG(LogElysiumCheat, Display, TEXT("noclip %s"), Body->IsNoclip() ? TEXT("ON") : TEXT("OFF"));
 	}
 }
 

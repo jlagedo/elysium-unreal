@@ -19,7 +19,7 @@
 #include "ElysiumNpcAnimSubsystem.h"
 #include "ElysiumNpcVisual.h"
 #include "ElysiumObjModel.h"
-#include "ElysiumPawn.h"
+#include "ElysiumPlayerBody.h"
 #include "ElysiumPropSkins.h"
 #include "ElysiumReflections.h"
 #include "ElysiumRopes.h"
@@ -44,8 +44,6 @@
 #include "Engine/Texture2D.h"
 #include "Engine/TextureCube.h"
 #include "EngineUtils.h"
-#include "GameFramework/Character.h"
-#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/DamageType.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PawnMovementComponent.h"
@@ -379,7 +377,7 @@ void AElysiumMapActor::EnsureTickPrerequisites()
 		// 11.4 — tell the body which entity it embodies. Done here rather than at SpawnPlayer
 		// because a fresh world has no pawn yet when the map builds, and this already runs each
 		// gameplay tick until the pawn appears (and again if it is replaced).
-		if (AElysiumPawn* Body = Cast<AElysiumPawn>(PC->GetPawn()))
+		if (IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(PC->GetPawn()))
 		{
 			Body->SetPlayerEntity(EntityWorld ? EntityWorld->PlayerHandle() : FElysiumEntityHandle::Invalid());
 		}
@@ -1189,13 +1187,14 @@ void AElysiumMapActor::TeleportPlayer(const FVector& FeetOrigin, float Yaw)
 	{
 		return;
 	}
-	// Source places the entity's absorigin (feet); an Unreal capsule is centred, so lift by the
-	// capsule half-height to seat the player on the destination rather than in the floor. This is
-	// the body's own geometry, which is why the compensation lives here and not in point_teleport.
+	// Source places the entity's absorigin (feet); both Unreal bodies are centred, so lift by the
+	// body's half-height to seat the player on the destination rather than in the floor. This is
+	// the body's own geometry, which is why the compensation lives here and not in point_teleport,
+	// and why the number comes from the body rather than from an assumed shape.
 	FVector Dest = FeetOrigin;
-	if (const ACharacter* Char = Cast<ACharacter>(Pawn))
+	if (const IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(Pawn))
 	{
-		Dest.Z += Char->GetDefaultHalfHeight();
+		Dest.Z += Body->GetBodyHalfHeight();
 	}
 	Pawn->SetActorLocation(Dest, false, nullptr, ETeleportType::TeleportPhysics);
 	if (APlayerController* PC = Cast<APlayerController>(Pawn->GetController()))
@@ -1539,6 +1538,22 @@ void AElysiumMapActor::ToggleSkybox()
 		SkyDomeMesh->SetVisibility(bSkyVisible && SkyDomeMesh->GetNumSections() > 0);
 	}
 }
+
+// The 3D-skybox A/B is a **dev** verb, not a player one, so it lives on plane 1: an `elysium.*`
+// console command, reached by a chord (Ctrl+T) rather than by a bare key — `t` is `toggleuiside` in
+// VtMB's default set (`docs/input-architecture.md` § "Reserved keys").
+static FAutoConsoleCommandWithWorld GElysiumToggleSky(
+	TEXT("elysium.togglesky"),
+	TEXT("Show/hide the 3D skybox miniature and the backdrop dome together."),
+	FConsoleCommandWithWorldDelegate::CreateStatic([](UWorld* World)
+	{
+		const UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
+		const UElysiumMapSubsystem* Maps = GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
+		if (AElysiumMapActor* Map = Maps ? Maps->GetCurrentMap() : nullptr)
+		{
+			Map->ToggleSkybox();
+		}
+	}));
 
 bool AElysiumMapActor::IsSkyboxVisible() const
 {
@@ -1951,15 +1966,14 @@ void AElysiumMapActor::Tick(float DeltaSeconds)
 	// Place the pawn immediately, but hold it frozen (no gravity) until the async
 	// collision cook produces ground under the spawn point — otherwise it falls
 	// through the not-yet-cooked floor. A timeout releases it regardless.
-	ACharacter* Char = Cast<ACharacter>(Pawn);
+	IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(Pawn);
 	if (!bSpawnPlaced)
 	{
 		Pawn->SetActorLocation(PendingSpawnLoc, false, nullptr, ETeleportType::TeleportPhysics);
 		PC->SetControlRotation(FRotator(0.f, PendingSpawnYaw, 0.f));
-		if (Char)
+		if (Body)
 		{
-			Char->GetCharacterMovement()->Velocity = FVector::ZeroVector;
-			Char->GetCharacterMovement()->SetMovementMode(MOVE_None);
+			Body->SetMovementFrozen(true);
 		}
 		bSpawnPlaced = true;
 	}
@@ -1970,9 +1984,9 @@ void AElysiumMapActor::Tick(float DeltaSeconds)
 		PendingSpawnLoc, PendingSpawnLoc - FVector(0.f, 0.f, 100000.f), ECC_Pawn);
 	if (bGround || SpawnHoldSeconds > 8.f)
 	{
-		if (Char && Char->GetCharacterMovement()->MovementMode == MOVE_None)
+		if (Body)
 		{
-			Char->GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+			Body->SetMovementFrozen(false);
 		}
 		UE_LOG(LogElysium, Log, TEXT("spawn released after %.2fs (%s)"),
 			SpawnHoldSeconds, bGround ? TEXT("ground ready") : TEXT("timeout"));

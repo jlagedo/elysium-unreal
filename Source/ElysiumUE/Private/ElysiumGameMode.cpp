@@ -1,5 +1,6 @@
 #include "ElysiumGameMode.h"
 
+#include "ElysiumCapsulePawn.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumHUD.h"
 #include "ElysiumMapSubsystem.h"
@@ -7,6 +8,15 @@
 #include "ElysiumPlayerController.h"
 
 #include "Engine/GameInstance.h"
+#include "HAL/IConsoleManager.h"
+
+// The A/B over the player's mover (11.6). 1 = the faithful body — an `APawn` with Source's box hull
+// and `UElysiumMovementComponent`; 0 = the `ACharacter` capsule over `UCharacterMovementComponent`
+// that preceded it. Read at pawn spawn, so it takes effect on the next map load or `elysium.reload`.
+static TAutoConsoleVariable<int32> CVarSourceMovement(
+	TEXT("elysium.SourceMovement"), 1,
+	TEXT("1 = box hull + UElysiumMovementComponent (default); 0 = the capsule ACharacter baseline."),
+	ECVF_Default);
 
 AElysiumGameMode::AElysiumGameMode()
 {
@@ -23,7 +33,11 @@ UClass* AElysiumGameMode::GetDefaultPawnClassForController_Implementation(AContr
 	{
 		return nullptr;
 	}
-	return Super::GetDefaultPawnClassForController_Implementation(InController);
+	// The box hull is a recovered requirement, not a preference (`source_movement.md` § StepMove);
+	// the capsule stays reachable so a feel change has something known-good to be compared against.
+	return CVarSourceMovement.GetValueOnGameThread() != 0
+		? AElysiumPawn::StaticClass()
+		: AElysiumCapsulePawn::StaticClass();
 }
 
 void AElysiumGameMode::BeginPlay()

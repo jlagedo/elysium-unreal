@@ -25,7 +25,7 @@ public:
 
 	void Construct(const FArguments& InArgs);
 
-	// The box owns keyboard focus while open so number-key selection works under FInputModeUIOnly.
+	// The box owns keyboard focus while open so number-key selection works under its UI-only scope.
 	virtual bool SupportsKeyboardFocus() const override { return true; }
 	virtual FReply OnKeyDown(const FGeometry& Geometry, const FKeyEvent& KeyEvent) override;
 

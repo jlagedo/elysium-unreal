@@ -1459,6 +1459,56 @@ Records are verbatim moves out of `roadmap.md`: where one says "the decision log
   10,949 rows, all parsed + branch-walked, 0 dangling links**), and `Elysium.Content.DlgJackTutorial` (the
   1116-row beat, walked to the `G.Tut_Jack=1` action and END). Consumed in-game by **B4**. *Deps:* 5.2.
 
+- [x] **9.7 The script→engine action surface — survey, RE, spec** *(reference: `docs/script_api.md`)* —
+  the demand-side ledger `python_bridge.md` never had: which names the shipped content actually
+  calls, what each does in `vampire.dll`, and which system owes it. Orders every task below it.
+  - [x] **a. The survey** — `tools/script_api_survey.py` over `out/scripts` (36 `.py`),
+    `out/dlg` (147 files / 50,393 rows / cols 4+5) and the exported field-6 payloads, folding
+    module-level aliases (1,911 calls hide behind `Find = __main__.FindEntityByName`) and
+    cross-checking `ElysiumScriptNatives.cpp`, the CPython host's `PyMethodDef` tables and every
+    `D.Input(TEXT("…"))`. **16,438 call sites / 1,287 names; 47 natives bound (24 real / 23 stub);
+    124 names / 1,212 calls resolved to nothing.**
+  - [x] **b. Ghidra recovery** — new `DumpPyMethods.java` (walks a `PyMethodDef` table: names,
+    `ml_doc`, thunk→body, decompiled bodies) + `parse_datamap_builder.py` (replays a builder's
+    assignments, because an image read misses every builder-written record). All **six** method
+    tables dumped, and the three datamaps behind the unresolved names recovered —
+    `CBaseCombatCharacter` (25 inputs), `CAI_BaseNPC` (`SetRelationship` + 16 outputs incl.
+    **`OnFedUponBegin`/`OnFedUponEnd`**, which **B6** needs), the player class (11 inputs).
+  - [x] **c. The spec** — `docs/script_api.md`: per-name signature, arg types off `fieldType`,
+    owning table/datamap, handler address, call count, owning task, and the demand-ranked build
+    order. `python_bridge.md` keeps the mechanism and links to it.
+  - [x] **d. The zero-dependency wins** — **`OneOfSet(which, count)`** is real:
+    `ElysiumScriptNatives::OneOfSet` is `(roll % count) == which - 1` verbatim, a 1-based one-of-N
+    selector, replacing the hardcoded `false` that failed **589 dialogue gates** closed. The roll
+    model is the part the decompile left open, and the *content* settles it rather than the binary:
+    the corpus authors the gate exclusively in **sets** — N sibling `.dlg` rows sharing one choice
+    text, row *i* gated on `OneOfSet(i, N)`, sizes 2/4/6/7/8 with 75 seven-row sets — so exactly
+    one row can pass only if every gate in a set reads the *same* roll (a per-call draw shows no
+    row 34% of the time over a 7-set, two or more 40%). So the runtime draws **one roll per engine
+    frame**, the frame being the unit `FElysiumDlgConversation::EnterNpcLine` gathers a turn's whole
+    choice list in; `elysium.script.oneofset <roll>` pins it (`-1` = live), and the identity of
+    VtMB's own counter stays a listed unknown in `script_api.md`. Result is `PyInt` 0/1, matching
+    `PyInt_FromLong` in the original body. The **`Whisper`/`FrenzyTrigger` split** needed no new
+    code but a guarantee: both are `vamputil.py` helpers *and* datamap input names, so neither may
+    enter the shared native table — a row there would resolve both spellings through one surface.
+    The rule is now stated in `ElysiumScriptNatives.cpp` beside the table and asserted by the test.
+    **Verified in the built game** (`sp_tutorial_1`, MCP): `[w for w in range(1,8) if OneOfSet(w,7)]`
+    returns a **single** row, four repeats inside one frame return the same one (`[[4],[4],[4],[4]]`)
+    and a later frame returns a different one; `Whisper.__module__` is `'vamputil'` while
+    `pc.Whisper` is an `entity_input`, and the I/O ring shows the three spellings landing distinctly
+    — bare `Whisper("Crying")` → `!player.Whisper(Crying)` (the helper's own forward),
+    `pc.FrenzyTrigger()` → `FrenzyTrigger()`, bare `FrenzyTrigger(pc)` → `FrenzyTrigger(1)` (the
+    helper's supplied argument). Unit tier: `Elysium.Substrate.OneOfSet` (exactly-one-of-N over every
+    roll residue for each corpus set size, 1-basedness, the degenerate-count guard, roll stability,
+    and the set driven through the real expression host) plus the split half of
+    `Elysium.Substrate.CPythonWriters` (the two spellings are not the same object; only the bare one
+    runs the helper). *Deps:* none.
+  **Findings that correct existing docs:** `OneOfSet` is a real module global, not a `vamputil`
+  helper (9.3's note fixed); six `ml_doc` strings are copy-paste errors; `GiveItem` exists both as
+  a Character method and as a player datamap input; **`AwardExperience` takes a STRING**, not an
+  amount (constrains 9.4); `HungerCheck` and `FrenzyCheck` share one handler; the file-like table
+  is the `IRestore` adapter, closing `python_bridge.md`'s only open item. *Deps:* 9.3, B2.
+
 ## Ghidra extraction — findings + plan *(pass dated 2026-07-22; scripts + dumps in `tools/ghidra/`, `out/re*.txt`)*
 
 All addresses are `vampire.dll` (image base `0x10000000`) unless noted. Structure facts feed
@@ -2618,3 +2668,223 @@ explains ~0% of a median lit face and the bounce floor *is* the ambient level (C
   *Unrelated pre-existing failure, not introduced here:* `Elysium.Content.DlgCorpus` fails because
   `sm_junkyard_1` references `Santa Monica/Nightwatchman.dlg`, which is absent from the exported
   mirror — an export gap, not a runtime one.
+
+- [x] **11.5 Input scope stack** *(S6; landed 2026-07-27)* — three pieces of code moved the mouse
+  independently and nothing arbitrated: `UElysiumUISubsystem::ApplyInputMode` set `FInputModeUIOnly`
+  for a menu, `AElysiumHUD` set it again for the dialogue box and `FInputModeGameOnly` on close, and
+  Cog took ImGui capture through Slate and hand-rolled the restore. Last writer won — a conversation
+  ending behind an open pause menu handed the mouse back to the world, and an inherited Cog capture
+  made the menu unclickable outright. There is now **one arbiter**, and it is the module's only
+  `SetInputMode` caller.
+
+  **The stack is plain C++** (`Public/ElysiumInputScope.h` + its `.cpp`), following `ElysiumAppState.h`:
+  `EElysiumInputMode` (GameOnly / GameAndUI / UIOnly), `FElysiumInputScope`
+  (name, priority, mode, cursor, mapping-context ids, focus widget), `FElysiumInputScopeHandle`, and
+  `FElysiumInputScopeStack` with `Push`/`Pop`/`PopByName`/`Top`/`Resolve`/`Describe`. No UObject, no
+  engine type — `TSharedPtr<SWidget>` is the only engine-adjacent member and SWidget is not a UObject —
+  so the entire rule set is asserted with no local player, no controller, no viewport and no RHI.
+  `FElysiumInputState` is what the top resolves to, as one comparable value, which is what lets the
+  subsystem skip a redundant write (re-applying UI-only re-steals keyboard focus).
+
+  **Push/pop is handle-based, not last-in-first-out.** That is the whole point: screens close out of
+  order, so `Pop` removes a scope from wherever it sits and `Top()` re-resolves. Ids are monotonic and
+  never reused, so a stale or doubled pop is a no-op rather than a mismatched pop that takes somebody
+  else's scope down. `RemoveAt` (not `RemoveAtSwap`) keeps push order intact, because push order is
+  the tie-break: highest priority wins, and on a tie the later push — so two screens at the same
+  priority behave like an ordinary modal stack.
+
+  **One priority table** (`ElysiumInput::Priority`) answers "what happens when X opens over Y" in one
+  place: `Game 0 < Sign 10 < Cinematic 20 < Chargen 30 < Dialogue 40 < Menu 50 < Debug 100`. Every push
+  names a constant, never an integer.
+
+  **Cog is arbitrated, not patched.** It is a vendored plugin with no event to bind, so
+  `UElysiumInputSubsystem` observes it: a per-frame reconcile (`FTSTicker`, `ENABLE_COG` only) pushes a
+  `Debug` scope when `FCogImguiContext::GetEnableInput()` goes true and pops it when it goes false.
+  Debug is the *top* of the table deliberately — F1 over a screen is a developer asking for the debug UI,
+  and the front end has a menu up permanently, so a Debug scope that lost to a menu would make Cog
+  unusable exactly where the Maps window is used from. What keeps it from eating a screen's clicks is
+  the other half of the rule, `ElysiumInput::RevokesDebugCapture`: **a UI-only push revokes an inherited
+  ImGui capture** (`SetEnableInput(false)`, guarded on it already being enabled — that call dereferences
+  the lazily-created ImGui context and crashes at boot otherwise) and drops the Debug scope. At push
+  time only, so the deliberate F1 afterwards still works. The Debug scope claims GameOnly + cursor,
+  matching what Cog does to the controller anyway; the value it adds is *ordering* — F1 over a
+  conversation stands the conversation's UI-only mode down while ImGui has input, and closing it
+  restores exactly what was underneath.
+
+  **CommonUI's fourth owner is declined explicitly.** `UCommonUIActionRouterBase` applies an
+  `FUIInputConfig` per activated widget, so `UElysiumMainMenu::GetDesiredInputConfig()` returns unset —
+  stated rather than inherited, since the engine default merely happens to be unset and a fourth mode
+  owner appearing by default is the exact failure this task removed (call F, `decisions.md` 2026-07-26
+  cont. 4).
+
+  **The pushers.** The menu (`UElysiumUISubsystem::PushMenuScope`/`PopMenuScope`, UI-only + cursor +
+  the menu widget as focus target, so Escape still reaches `NativeOnKeyDown`); the dialogue box
+  (`AElysiumHUD`, UI-only + cursor, its focus widget re-pointed every turn because the box rebuilds its
+  whole tree — otherwise a menu closing over a conversation would hand focus to a dead widget); and
+  sign panels, reconciled off the world's open-sign state at the top of the HUD's tick. The sign scope
+  deliberately claims **GameOnly with no cursor**: VtMB's popups say "left-click to continue" and that
+  click is the player controller's binding, so taking the mouse away from the game would make the panel
+  undismissable. It is on the stack for the arbitration, not to change the mode. Cinematics and chargen
+  have priorities reserved and no pusher — P12 and 9.4 own those screens.
+
+  **Lifetimes.** The subsystem is LocalPlayer-scoped, which is the application lifetime for input: the
+  stack survives travel (a menu is up across the level load New Game triggers) while the controller it
+  writes to does not. `PlayerControllerChanged` re-applies onto the fresh controller, and the HUD returns
+  its scopes in `EndPlay` so a map epoch ending cannot leave a claim on a stack that outlives it.
+
+  *Acceptance.* `Elysium.Substrate.InputScopes` walks **every ordered pair** of the six scopes in both
+  close orders — 36 pairs × 2 — asserting that popping the top restores exactly the state that was
+  found, that popping a non-deciding scope underneath moves nothing, and that the stack is empty
+  afterwards; plus the empty-stack identity, the same-priority modal tie-break, contexts following the
+  top, stale/double-pop safety, the revocation rule and the priority table itself. Whole Substrate tier
+  green (27 tests). Live on `sp_tutorial_1`, driven through `elysium.inputscopes` (which dumps the
+  stack bottom-to-top with the deciding scope marked): `elysium.pausemenu 1` pushes
+  `* Menu prio=50 mode=UIOnly cursor=1` and the viewport log shows the engine take it
+  (`MouseLockMode LockOnCapture → DoNotLock`, `MouseCaptureMode CapturePermanently → NoCapture`,
+  `bShowMouseCursor False → True`), and closing it empties the stack and reverses all three. Firing
+  `StartPlayerDialogRemote` on Jack pushes `Dialogue prio=40`; a menu opened over it decides while the
+  conversation's scope stays on the stack; closing the menu restores `Dialogue` exactly; walking the
+  conversation to its end empties the stack. `popup_1.OpenWindow` pushes `Sign prio=10 mode=GameOnly
+  cursor=0`, survives a menu opening and closing over it, and `CloseWindow` returns it.
+  **The Cog acceptance both ways:** `Cog.ToggleInput` pushes `Debug prio=100` and it decides; raising a
+  menu underneath it revokes the capture outright (the Debug scope is gone from the dump, the menu
+  decides); and a *deliberate* `Cog.ToggleInput` with the menu already up pushes `Debug` back on top,
+  with `Cog.DisableInput` restoring the menu. `elysium.quittomenu` travels to the backdrop and the
+  `Menu` scope is re-applied onto the fresh controller, which is `PlayerControllerChanged` doing its
+  job.
+
+  *Not in scope, named:* **`pauses-game` is deliberately not a scope property.** Pause has exactly one
+  owner (`UElysiumGameFlowSubsystem`, 11.3) and the pause menu's scope is pushed *because* the flow
+  paused — a scope that also drove pause would be a second writer and a re-entrant one
+  (`decisions.md` 2026-07-27). The scope's `Contexts` are declared, carried and reported by `Resolve`,
+  but resolve to no `UInputMappingContext` until **10.6** owns Enhanced Input; that is also where
+  `FModifyContextOptions::bIgnoreAllPressedKeysUntilRelease` settles held keys across a push. **Escape
+  is unchanged**: the controller binds the key and the menu's own `NativeOnKeyDown` closes it, because a
+  key becoming a named verb is **11.6**'s registry and **10.6**'s binding set, not this task's. The
+  dialogue box still draws under an open menu (the HUD's tick gate is unchanged) — taking it down is
+  **11.8**'s presenter, and only its input ownership moved here.
+
+- [x] **11.6 Command registry + user command** *(S5, S7; landed 2026-07-27)* — VtMB has no action
+  abstraction: **an action is a console command string**, and the Unofficial Patch's whole vocabulary
+  is *aliases* over those strings (`f` → `vm_feed` → `checkFeed()`), so a key bound to a compiled verb
+  and a key bound to a user alias have to be indistinguishable. Before this the compiled verbs had no
+  names at all — `+use` was hard-bound to a key on the pawn, `togglecamera`/`holster`/`slotN`/`+feed`/
+  `vdiscipline_*` had nowhere to land, and the gait was an `IsInputKeyDown(LeftShift)` poll.
+
+  **`FElysiumCommands` (`Public/ElysiumCommands.h`) is the registry**, plain C++ like
+  `ElysiumInputScope.h`. It ships **92 declared verbs** — the whole `controls.md` § "What is bindable"
+  inventory in one static table with kind (`Once` / `ButtonPair`), group, the `FElysiumUserCmd` bit a
+  pair latches, and help text that for an unimplemented verb *names the task that owns it*, so
+  `elysium.commands [filter]` reads the coverage back as a work list rather than a wall of "stub".
+  `vphysicshand` is deliberately absent — bound by both shipped `default.cfg` files, present in no
+  binary and no level script (`decisions.md` 2026-07-25) — and the test asserts its absence, so a
+  reappearance is a decision rather than a typo.
+
+  **Declaration and implementation are separate, and implementations stack.** `Bind(name, handler)`
+  returns a handle, `Unbind` clears it, and the most recently installed handler runs — so a system
+  owns a verb exactly while it is alive (the player controller's `+use`/`+attack`/`noclip`/`god`/
+  `snapshot` come and go with the world; the GI-scoped flow subsystem's `cancelselect`/
+  `togglemainmenu`/`pause`/`save`/`load` outlive every world, which is what lets Escape resolve while
+  a screen holds input UI-only and no controller is seeing keys). Binding an *undeclared* name is
+  refused with a log line: the inventory is the whitelist, and a verb is added to the table (and to
+  `controls.md`) rather than behind it. **The button latch is the verb's own property, not its
+  implementation's** — `+forward` fills the user command with no handler in sight, and a world with
+  no sink simply drops it, which is what a headless logic world and the front end both want.
+
+  **The precedence is stated once and tested.** `FElysiumConsole::ExecuteStatement` is now
+  **registered command → alias → cvar → Python**, matching Source's own `Cmd_ExecuteString` order —
+  so nothing a player writes into `user.cfg` can shadow `+forward`, and the registry returning *false*
+  for a word it does not know is precisely the cue to try an alias. `ElysiumCommandBus::Exec`
+  (`Private/ElysiumCommandBus.{h,cpp}`) is the one door: a bound key, a level script's `ccmd`
+  attribute-set, a `.dlg` action, `elysium.cmd <line>` from the UE console, an MCP
+  `elysium_console_exec` and `-ExecCmds` all arrive there. It reaches the console store on
+  `FElysiumPythonVM` (which exists whether or not CPython does) and `EnsureSeeded`s it from
+  `out/cfg`, so the patch's aliases resolve even when the interpreter never came up.
+
+  **`FElysiumUserCmd` (S5, `Public/ElysiumUserCmd.h`)** is one frame of intent as a value:
+  `Move` (2D, −1..1), `Up` (Source's `upmove` — the design sketch omitted it and `+moveup`/`+movedown`
+  need it), `LookDelta` in degrees, `Buttons`, `DeltaSeconds`, `Seq`. Buttons are **`uint64`**, not the
+  sketch's `uint32`: VtMB's ± inventory is 34 pairs, past Source's own bit set, because its camera and
+  look-mode pairs are client-side state rather than user-command bits. `FElysiumUserCmdBuilder` holds
+  the latches and the analog accumulators and composes the frame — including `+strafe`, which turns
+  the `+left`/`+right` turn keys into strafe, and the `cl_yawspeed` 210 / `cl_pitchspeed` 225
+  keyboard-look rates. `ClearButtons` is what an input-scope change means for intent, and
+  `UElysiumInputSubsystem::ApplyToController` calls it, so walking into a conversation with W held
+  stops walking — the same rule `bIgnoreAllPressedKeysUntilRelease` will enforce one layer up at 10.6.
+  `FElysiumUserCmdStream` records, replays and round-trips through a plain-text form
+  (`elysium.cmd.record` / `.stop` / `.save <name>` / `.replay [name]`), which is the recording 11.10
+  drives a headless world with.
+
+  **`UElysiumInputRouter`** sits on the player controller and does three things per frame: installs
+  the default binds, latches, and publishes. Binds come from **`ElysiumBinds::Defaults()`** — 75 rows
+  of the Patch's `cfg/default.cfg` as `FKey` → console line, with the arrow/comma-period swap, the ten
+  `vhotkey` slots and the numpad camera verbs. The commands are **strings**, because several patch
+  defaults bind an alias (`vm_feed`, `vm_discipline`, `skip`, `cam_restore`) and a key bound to either
+  must behave identically; `UInputComponent::BindKey` carries no payload overload (only `BindAction`
+  does), so each binding is built by hand with the line in a weak lambda's capture, `bExecuteWhenPaused`
+  on both edges so a release cannot be swallowed by a pause and leave a latch stuck. `SampleFrame`
+  runs from `PlayerTick` after `Super` — the frame's bindings have fired by then — builds the command,
+  writes the look delta straight onto the control rotation (**not** through `AddYawInput` /
+  `AddPitchInput`, which apply the engine's legacy input scales; the degrees in the command are the
+  degrees applied), and hands the whole command to the body. Mouse look reads **raw counts**:
+  `AxisConfig` sensitivity for MouseX/MouseY is 1.0, FOV scaling and mouse smoothing are off in
+  `DefaultInput.ini` (`m_filter` is 0), and `sensitivity × m_yaw` off the VtMB console store is the
+  only multiplier — VtMB's 0.066°/count, with no frame-rate term anywhere in the path.
+
+  **The body is a box.** `AElysiumPawn` is re-based to `APawn` with a `UBoxComponent`
+  (32×32×72 u → 81.28×81.28×182.88 cm) and `UElysiumMovementComponent : UPawnMovementComponent`.
+  That is a recovered requirement, not a preference: Source's `StepMove` depends on a flat-bottomed
+  AABB, and a capsule reports ~0.65 against the 0.7 standable test, rejecting *every* climb
+  (`source_movement.md`). `ACharacter` creates its capsule as its root and does not allow
+  substitution, so the old body survives as **`AElysiumCapsulePawn`** behind `elysium.SourceMovement 0`
+  and `AElysiumGameMode::GetDefaultPawnClassForController` picks between them at spawn. The two share
+  **`IElysiumPlayerBody`** — noclip, the embodied entity handle, the body half-height the teleport
+  seam lifts by, the spawn-hold freeze, and `ApplyUserCmd` — so the map actor, the cheat manager, the
+  Cog Maps window and the MCP tools all stopped naming a concrete pawn class. The mover carries
+  Source's own function names over the RE'd constants (`Friction`, `Accelerate`, `AirAccelerate`
+  with its uncapped-`wishspeed` asymmetry, `CategorizePosition`'s 2u down-trace with no `StayOnGround`,
+  `WalkMove`'s two-attempt `StepMove` where nothing detects a stair); **4.7 still owns the
+  line-by-line port** — real `surfaceFriction`, the gravity half-step split, ducking (**RE22**),
+  ladders and water.
+
+  **The reserved-key guarantee is now true.** `input-architecture.md` says the development layer
+  occupies no bare key a player can bind; it was occupying three. `v` is `+movedown` and `t` is
+  `toggleuiside` in VtMB's own default set, so the noclip and 3D-skybox dev toggles became the chords
+  `Ctrl+V` and `Ctrl+T`; `ConsoleKeys` went back to `` ` `` (VtMB's own `toggleconsole` key) so `F10`
+  is `snapshot`; and the skybox toggle became a proper `elysium.togglesky` console command, since a
+  dev verb belongs on plane 1 and never on the VtMB command bus (`decisions.md` 2026-07-27).
+  `ElysiumBinds::ReservedKeys()` is the set, the router refuses to install a default that lands on
+  one, and `Elysium.Substrate.Commands` asserts no row does.
+
+  **The parked verbs came home.** 11.4's three (`+use`, the sign dismissal, the skybox toggle) and
+  11.5's Escape are `+use`, `+attack` (a sign panel is dismissed by the primary click, which is what
+  every VtMB popup instructs), `elysium.togglesky` and `cancelselect`. Escape is **one verb with two
+  key sources**: the router's binding while the game has input, and `UElysiumMainMenu::NativeOnKeyDown`
+  while a screen holds it UI-only and the controller sees nothing — both call `cancelselect`, and the
+  flow subsystem's single implementation decides that Pause is the only mode Escape leaves. The shift
+  gait stopped being a latch on the pawn and became `+speed` in the user command.
+
+  *Acceptance.* `Elysium.Substrate.Commands` asserts the inventory (kinds, button bits, the
+  `vphysicshand` absence, case folding), `+`/`-` resolution (`+togglecamera` is *not* a verb — a sign
+  only means an edge on a pair), argument passing (`vhotkey #3` → `#3`), implementation stacking and
+  refusal, and walks the whole default bind table asserting every row names a declared verb or a known
+  patch alias and lands on no reserved key. `Elysium.Substrate.UserCmd` asserts the latch composition,
+  the `+strafe` reinterpretation, the keyboard-look rates, accumulator consumption, press/release
+  edges, and the record → replay → text round-trip identity. `Elysium.Substrate.Console` asserts the
+  four-step precedence, including that the patch's `run` alias (`-speed;`) is consumed by the registry
+  and never reaches Python and that an alias cannot shadow a command. Whole Substrate tier green
+  (30 tests). Live on `sp_tutorial_1` through `elysium.cmd`: `+forward` runs at **570.13 cm/s** against
+  the RE'd 571.5, `+speed` walks at **254.0** against 254, `+jump` reaches the 25-unit apex,
+  `noclip` + `+moveup` flies at 1200, `cancelselect` raises and drops the pause menu, `noclip`/`god`
+  toggle (`god` writes the same latch `events_player`'s `MakePlayerUnkillable` does — one gate,
+  whether the map asks or the player does), `snapshot` writes a PNG, `elysium.commands` reports
+  92 declared / 10 implemented and `elysium.binds` the 75 rows.
+
+  *Not in scope, named:* Enhanced Input is untouched — mapping contexts, the remapping screen, the
+  gamepad device layer and the one-way `config.cfg` projection are **10.6**'s, and they replace the
+  *front* of this path (the bind installation) while the command bus and the user command stay as
+  they are. The camera verbs (`togglecamera`, `+camin`, the orbit pairs) are declared and latched with
+  nothing consuming them until **11.7**; the inventory, discipline and hotkey verbs likewise wait on
+  9.7/9.8. `IN_DUCK` is in the user command with nothing sizing the ducked hull — **RE22**, unchanged.
+  The mover is a Source-shaped shell, not the port: 4.7 owns that, and the capsule body behind
+  `elysium.SourceMovement 0` is what it is A/B'd against.

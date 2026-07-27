@@ -6,6 +6,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumInputSubsystem.h"
 #include "ElysiumLightProbe.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
@@ -131,12 +132,23 @@ void AElysiumHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		PropsCmd = nullptr;
 	}
 	TeardownDialogue();
+	// The scope stack outlives this world (it is the local player's), so a map epoch ending has to
+	// return what it borrowed or the next map boots with a sign's claim still on the stack.
+	if (UElysiumInputSubsystem* Input = UElysiumInputSubsystem::Get(GetGameInstance()))
+	{
+		Input->Pop(SignScope);
+	}
+	SignScope.Reset();
 	Super::EndPlay(EndPlayReason);
 }
 
 void AElysiumHUD::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+
+	// Tracks the world's sign state, not the panel's visibility, so it is reconciled ahead of the
+	// menu gate below: a sign that opens behind a menu is still open in the world.
+	UpdateSignScope();
 
 	// 8.6 — no dialogue box over a menu. A menu backdrop builds the whole map, and `sm_hub_1`'s
 	// pedestrians open conversations on their own (havenbum panhandles the moment the world runs),
@@ -573,23 +585,29 @@ void AElysiumHUD::UpdateDialogue()
 		Viewport->AddViewportWidgetContent(DialogueWidget.ToSharedRef(), /*ZOrder*/ 100);
 	}
 
-	// Freeze the world into UI-only input and give the box keyboard focus (number-key selection), once,
-	// for the life of the conversation.
-	if (!bDialogueInput && PlayerOwner)
+	// Claim UI-only input for the life of the conversation, with the box focused so number-key
+	// selection works. The box is rebuilt every turn, so the scope's focus widget is re-pointed at
+	// the new one — otherwise a menu closing over a conversation would hand focus to a dead widget.
+	if (UElysiumInputSubsystem* Input = UElysiumInputSubsystem::Get(GetGameInstance()))
 	{
-		FInputModeUIOnly Mode;
-		if (DialogueWidget.IsValid())
+		if (!DialogueScope.IsValid())
 		{
-			Mode.SetWidgetToFocus(DialogueWidget);
+			FElysiumInputScope Scope;
+			Scope.Name = TEXT("Dialogue");
+			Scope.Priority = ElysiumInput::Priority::Dialogue;
+			Scope.Mode = EElysiumInputMode::UIOnly;
+			Scope.bShowCursor = true;
+			Scope.FocusWidget = DialogueWidget;
+			DialogueScope = Input->Push(MoveTemp(Scope));
 		}
-		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-		PlayerOwner->SetInputMode(Mode);
-		PlayerOwner->bShowMouseCursor = true;
-		bDialogueInput = true;
-	}
-	else if (DialogueWidget.IsValid())
-	{
-		FSlateApplication::Get().SetKeyboardFocus(DialogueWidget);
+		else
+		{
+			Input->SetFocusWidget(DialogueScope, DialogueWidget);
+			if (DialogueWidget.IsValid())
+			{
+				FSlateApplication::Get().SetKeyboardFocus(DialogueWidget);
+			}
+		}
 	}
 
 	DialogueConv = Conv;
@@ -606,14 +624,41 @@ void AElysiumHUD::TeardownDialogue()
 		}
 		DialogueWidget.Reset();
 	}
-	if (bDialogueInput && PlayerOwner)
+	if (UElysiumInputSubsystem* Input = UElysiumInputSubsystem::Get(GetGameInstance()))
 	{
-		PlayerOwner->SetInputMode(FInputModeGameOnly());
-		PlayerOwner->bShowMouseCursor = false;
-		bDialogueInput = false;
+		Input->Pop(DialogueScope);
 	}
+	DialogueScope.Reset();
 	DialogueConv = nullptr;
 	DialogueRev = 0;
+}
+
+void AElysiumHUD::UpdateSignScope()
+{
+	UElysiumInputSubsystem* Input = UElysiumInputSubsystem::Get(GetGameInstance());
+	if (!Input)
+	{
+		return;
+	}
+
+	const AElysiumMapActor* Map = ResolveMapActor();
+	const FElysiumEntityWorld* World = Map ? Map->GetEntityWorld() : nullptr;
+	const bool bSignOpen = World && World->GetOpenSign().IsSet();
+
+	if (bSignOpen && !SignScope.IsValid())
+	{
+		FElysiumInputScope Scope;
+		Scope.Name = TEXT("Sign");
+		Scope.Priority = ElysiumInput::Priority::Sign;
+		// Game input, no cursor: the panel is dismissed by a world click the player controller
+		// binds, so taking the mouse away from the game would make it undismissable.
+		Scope.Mode = EElysiumInputMode::GameOnly;
+		SignScope = Input->Push(MoveTemp(Scope));
+	}
+	else if (!bSignOpen && SignScope.IsValid())
+	{
+		Input->Pop(SignScope);
+	}
 }
 
 void AElysiumHUD::OnDialogueChoice(int32 VisibleIndex)

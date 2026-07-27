@@ -3,6 +3,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumPlayer.h"
+#include "HAL/IConsoleManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumNative, Log, All);
 
@@ -11,6 +12,16 @@ namespace
 	// The engine `vampire` module: 11 global functions + 24 Character methods (python_bridge.md).
 	// This one static table is the single source of truth — both hosts test membership against it
 	// and the Scripting Cog window renders it.
+	//
+	// **`Whisper` and `FrenzyTrigger` are deliberately absent, and must stay absent.** `vamputil.py`
+	// defines both as script helpers, and both are also datamap **input** names, so the binding is a
+	// property of the call site rather than of the name (`docs/script_api.md`): a bare
+	// `Whisper("Crying")` (24 `.dlg` sites) runs the helper, which forwards to `pc.Whisper(...)`, while
+	// the receiver-qualified `pc.Whisper("Crying")` (9 sites) fires the player datamap input directly;
+	// `FrenzyTrigger(char)` hands the input a `1` where `pc.FrenzyTrigger()` hands it nothing. A row
+	// here would resolve both spellings through this one surface and collapse that split — the bare
+	// spelling would stop being the script's own function. The qualified spelling reaches its input
+	// through the ordinary class-chain walk (`ElysiumPlayerClasses.cpp`), which is where it belongs.
 	const ElysiumScriptNatives::FNativeBinding GNativeBindings[] = {
 		// 11 module globals
 		{ TEXT("FindPlayer"),          false, TEXT("player object") },
@@ -22,7 +33,7 @@ namespace
 		{ TEXT("CreateEntityNoSpawn"), false, TEXT("runtime create, no spawn (cpython host)") },
 		{ TEXT("CallEntitySpawn"),     false, TEXT("runtime spawn (cpython host)") },
 		{ TEXT("ChangeMap"),           false, TEXT("fires a trigger_changelevel after delay") },
-		{ TEXT("OneOfSet"),            false, TEXT("stub") },
+		{ TEXT("OneOfSet"),            false, TEXT("1-of-N dialogue selector") },
 		{ TEXT("IsClan"),              false, TEXT("player sheet clan") },
 		{ TEXT("IsPCMalk"),            false, TEXT("player sheet clan") },
 		// 24 Character methods
@@ -51,6 +62,34 @@ namespace
 		{ TEXT("GetQuestState"),       true,  TEXT("quest map") },
 		{ TEXT("IsFollowerOf"),        true,  TEXT("stub") },
 	};
+
+	// OneOfSet's roll (9.7d). -1 = draw one per engine frame; >= 0 pins it.
+	int32 GOneOfSetPinnedRoll = -1;
+	FAutoConsoleVariableRef CVarOneOfSetRoll(
+		TEXT("elysium.script.oneofset"),
+		GOneOfSetPinnedRoll,
+		TEXT("Pin OneOfSet's roll to a fixed value (>= 0) so a one-of-N dialogue set always selects the ")
+		TEXT("same row, or -1 (default) to draw one roll per frame."),
+		ECVF_Cheat);
+
+	// One draw per frame, so every gate in a set sees the same roll (header). The frame is the unit
+	// because a conversation turn gathers its whole choice list in one synchronous burst; a per-call
+	// draw would let a 7-row set pass zero rows or two.
+	int32 CurrentOneOfSetRoll()
+	{
+		if (GOneOfSetPinnedRoll >= 0)
+		{
+			return GOneOfSetPinnedRoll;
+		}
+		static uint64 RolledOnFrame = MAX_uint64;
+		static int32 Roll = 0;
+		if (RolledOnFrame != GFrameCounter)
+		{
+			RolledOnFrame = GFrameCounter;
+			Roll = FMath::Rand();
+		}
+		return Roll;
+	}
 
 	const ElysiumScriptNatives::FNativeBinding* FindBinding(const FString& Name, bool bWantMethod)
 	{
@@ -87,6 +126,14 @@ namespace ElysiumScriptNatives
 
 	bool IsNativeGlobal(const FString& Name) { return FindBinding(Name, /*bWantMethod*/ false) != nullptr; }
 	bool IsCharacterMethod(const FString& Name) { return FindBinding(Name, /*bWantMethod*/ true) != nullptr; }
+
+	int32 OneOfSetRoll() { return CurrentOneOfSetRoll(); }
+	void SetOneOfSetRoll(int32 PinnedRoll) { GOneOfSetPinnedRoll = PinnedRoll; }
+
+	bool OneOfSet(int32 Which, int32 Count)
+	{
+		return Count > 0 && (CurrentOneOfSetRoll() % Count) == (Which - 1);
+	}
 
 	FString CanonicalStatName(const FString& Raw)
 	{
@@ -242,6 +289,19 @@ namespace ElysiumScriptNatives
 			return FElysiumVariant::Void();
 		}
 
+		// OneOfSet(which, count) — the 1-based one-of-N dialogue selector, `(roll % count) == which - 1`
+		// over an engine counter (script_api.md; the roll model is in this module's header). Real since
+		// 9.7d — until then it was hardcoded false, which failed all 589 gates riding on it closed.
+		if (Name == FName(TEXT("OneOfSet")))
+		{
+			const int32 Which = Args.Num() >= 1 ? Args[0].ToInt() : 0;
+			const int32 Count = Args.Num() >= 2 ? Args[1].ToInt() : 0;
+			// VtMB returns PyInt_FromLong, so the result is the integer 0/1, not a bool.
+			const FElysiumVariant R = FElysiumVariant::Int(OneOfSet(Which, Count) ? 1 : 0);
+			Record(State, Name, Display, R, /*bStub*/ false);
+			return R;
+		}
+
 		// IsClan(character, "ClanName") / IsPCMalk() read the player sheet clan (the 2..8 encoding).
 		// Only the PC carries a sheet in this slice — NPCs have no clan model yet — so both answer for
 		// the player; the character argument is accepted (and logged) but not otherwise consulted.
@@ -259,7 +319,7 @@ namespace ElysiumScriptNatives
 		// The rest have no backing yet — log a stub and return a plausible default. Predicate-shaped
 		// globals read false so a gate over them fails closed (error-to-false's spirit).
 		FElysiumVariant R = FElysiumVariant::Void();
-		if (Name == FName(TEXT("SquadSeesPlayer")) || Name == FName(TEXT("OneOfSet")))
+		if (Name == FName(TEXT("SquadSeesPlayer")))
 		{
 			R = FElysiumVariant::Bool(false);
 		}
