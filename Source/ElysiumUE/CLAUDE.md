@@ -162,7 +162,43 @@ string** — so the compiled verbs carry names and everything reaches them throu
 | `UElysiumInputRouter` (`Public/ElysiumInputRouter.h`) | on the player controller. Installs the binds (built by hand — `BindKey` carries no payload overload — with `bExecuteWhenPaused` on both edges, so a release cannot be swallowed by a pause and strand a latch), then `SampleFrame` runs from `PlayerTick` after `Super`, builds the command, writes the look delta **straight onto the control rotation** (not through `AddYawInput`, which applies the engine's legacy input scales) and hands the command to the body. Mouse look reads raw counts scaled only by `sensitivity × m_yaw` off the console store — VtMB's 0.066°/count, with no frame-rate term |
 | `IElysiumPlayerBody` (`Public/ElysiumPlayerBody.h`) | what everything outside the body talks to: noclip, the embodied entity handle, the body half-height the teleport seam lifts a Source feet-origin by, the spawn-hold freeze, `ApplyUserCmd`. An interface because the two bodies cannot share a base |
 | `AElysiumPawn` + `UElysiumMovementComponent` | the faithful body: `APawn` + a `UBoxComponent` (32×32×72 u) + a mover carrying Source's own `Friction`/`Accelerate`/`AirAccelerate`/`WalkMove`+`StepMove`/`CategorizePosition` over the `source_movement.md` constants. The hull is a **box** because `StepMove` depends on a flat bottom — a capsule reports ~0.65 against the 0.7 standable test and rejects every climb — and `ACharacter` will not take a box root. 4.7 owns the line-by-line port (real `surfaceFriction`, the gravity half-step split, ducking/**RE22**, ladders, water) |
-| `AElysiumCapsulePawn` | the A/B baseline behind `elysium.SourceMovement 0`: the `ACharacter` capsule over `UCharacterMovementComponent`, consuming the same user command so the comparison is over the mover alone |
+| `AElysiumCapsulePawn` | the A/B baseline behind `elysium.SourceMovement 0`: the `ACharacter` capsule over `UCharacterMovementComponent`, consuming the same user command **and the same camera** so the comparison is over the mover alone |
+
+## The camera (11.7)
+
+**One camera, one weight stack, one apply point.** Design + the recovered solve:
+`docs/camera-view-modes.md`; where it sits in the spine: `docs/runtime-architecture.md` §9. VtMB has
+**one** player camera with a blend weight, not two cameras — `togglecamera` flips a bool, a driver
+ramps a 0..1 weight at 2.0/s, and the boom offset, the view angles, the player model and the
+crosshair are all functions of it.
+
+| Type | Role |
+|---|---|
+| `FElysiumCameraWeights` (`Public/ElysiumCameraSolve.h`) | the driver, plain C++ like `ElysiumInputScope.h`: four weights (third / scripted / secondary / feed) + four latches, `Advance(dt, scale)` = `client.dll` `0x100fc900` — feed and secondary advance first (the third branch reads feed), **2.0/s** both ways, clamped, priority forced-third+feed → forced-first → user toggle. `IsThirdPerson()` is the **disjunction** VtMB wrote, so a blend reads as third person from its first frame and a scripted camera counts too. The ramp is linear; `SimpleSpline(t) = t²(3−2t)` eases at the point of use |
+| `FElysiumCameraShotStack` | the scripted channel: **handle-based** push/pop (shots end out of order, like the 11.5 input scopes), a **timed** ramp off each shot's own duration, and `Update` to refresh a live shot without restarting its blend — which is what a `Follow` attach type is. What is pushed is **values** (origin, look-at, roll, FOV, `MoveSpeed`/`MaxTurnRate`), so the camera never learns what an entity is |
+| `FElysiumCameraCvars` + `ElysiumCam::CvarDefs()` | VtMB's 24 camera cvars, 1:1 by name and default. They live in the **VtMB console store**, not as `elysium.*` cvars, so `config.cfg` and the patch's `cam_restore`/`cam_rotateleft` aliases keep governing; `FElysiumConsole::DeclareCvar` is what makes a compiled-code cvar a *known* one, so `cam_idealdist 50` resolves at step 3 of the precedence instead of falling through to Python. Values are held in Source units and converted once by `LoadFrom` |
+| `UElysiumCameraComponent` | a **`UCameraComponent` subclass** (one camera, so FOV/post-process/first-person-rendering stay where the engine expects them). Solves the boom in Source's order — rate-limited approach → sphere sweep on `ECC_Camera` with the 7-unit pull-in and a re-seed on contact → the **two-constant** Hooke damper (4.0 free, 15.0 wall-clipped, the reason `USpringArmComponent` is not enough) → `Offset *= SimpleSpline(w)` + the angle lerp. It **does not tick** (`UpdateCamera` runs from `CalcCamera`, frame-guarded — a component tick would solve before the pawn moved) and **polls no key** (the orbit/dolly pairs are latches in the frame's `FElysiumUserCmd`). Implements `togglecamera` / `thirdperson` / `firstperson` / `cam_command` / `snapto` / `centerview` / `force_centerview`; `camortho` stays unimplemented because no orthographic path exists in the recovered client |
+| `ElysiumCameraShots.{h,cpp}` (Private) | the `vdata/camerashots/` reader — the grammar Troika ships a how-to for — plus `FElysiumCameraDirector`, which resolves a shot's anchors against this map's entities and bodies (`Player`/`DialogTarget`/`World`/`Named` × `Origin`/`Center`/`Top`/`Bottom`/`EyePosition`/`Bone:`/`Attachment:`) and re-resolves every `Follow*` shot in the **post-move** pass. Owned by `AElysiumMapActor` |
+
+**`AElysiumPawn::CalcCamera` is the single apply point** — the analogue of `CAM_ApplyToView` — and
+`UElysiumCameraComponent::CalcCameraFor` delegates to `UCameraComponent::GetCameraView` **first**,
+because overriding `CalcCamera` without that is the documented cause of first-person rendering
+silently not applying. Both bodies use it, through `IElysiumPlayerBody::GetCameraComponent()`.
+
+**The substrate reaches the channel through `IElysiumEmbodiment::PushCameraShot`/`PopCameraShot`**,
+beside the other player-body calls — the camera *is* part of the body (S3), and `IElysiumPresenter`
+has no production implementation until 11.8. `FElysiumEntityWorld` holds **one** scripted camera at a
+time (`SetScriptedCamera`/`ClearScriptedCamera`), the same single-slot discipline the sign panel and
+the open conversation use, and drops it at teardown. `SetCamera` (115 script calls) sets it;
+`RemoveCamera` (the player datamap input) clears it. `FElysiumEntity::GetSkeletalBody()` is the
+no-RTTI seam a `Bone:` attach point resolves through.
+
+There is **no player mesh yet** (4.8): the fade band is solved and exposed as `ModelAlpha()` and
+nothing reads it. Weapon-class arbitration is 4.9's (the cvars are declared so a config round-trips);
+the feed camera raises its weight and nothing else, because its solver is unrecovered.
+
+Verbs: `elysium.camera` dumps the weights, the deciding latch, the solved boom and the shot stack;
+`elysium_player_get` (MCP) reports the same as structured fields.
 
 **The dev layer holds no bare key a player can bind.** `v` is `+movedown` and `t` is `toggleuiside`,
 so the noclip and skybox toggles are the chords `Ctrl+V` and `Ctrl+T`, and a dev verb is an
@@ -334,7 +370,9 @@ because they are its geometry: `TeleportPlayer`'s half-height lift (Source place
 bodies are centred, so the number comes from `IElysiumPlayerBody::GetBodyHalfHeight`) and the `+use`
 line trace on `ELYSIUM_USE_CHANNEL` — the substrate hands
 over a segment and gets a handle back, keeping the usability arbitration on its own side.
-`GetPlayerViewPoint` is the eye, and stays here until **11.7** owns the camera.
+`GetPlayerViewPoint` is the eye. **`PushCameraShot`/`PopCameraShot`** (11.7) are here for the same
+reason — the camera is the body's, not the presenter's — and the map actor's `FElysiumCameraDirector`
+is what turns a `vdata/camerashots/` name into the values the camera blends.
 
 `Private/Tests/ElysiumTestServices.h` is the recording stub that implements all four (handing back
 real transient components, so the leaf classes take their body-carrying path);
@@ -616,7 +654,10 @@ payloads, `logic_pythoncheck`, `EvalScript`, `ScheduleTask`, level-script import
   `ccmd` executes a console command on attribute-*set* (`c.patchtype=""` → alias → Python fallthrough),
   reads back `""` on get; `cvar` get/set reads/writes a value string. `FElysiumPythonVM` owns the
   interpreter and the **`FElysiumConsole`** store (`ElysiumConsole.{h,cpp}`, plain C++): the alias/cvar
-  tables parsed from `out/cfg` and the `Execute` path (alias-expand → cvar-set → Python fallthrough). The
+  tables parsed from `out/cfg`, the engine-declared cvar defaults compiled code owns (`DeclareCvar` —
+  a separate table that survives a re-seed and is shadowed by any cfg carrying the name, so 11.7's
+  camera surface is a *known* cvar with no `out/cfg` on disk at all), and the `Execute` path
+  (alias-expand → cvar-set → Python fallthrough). The
   VM binds a mutable `Character` compatibility stub so the real `vamputil.py` imports (the patch
   monkeypatches `Character`; our 24 Character methods dispatch off the getattro, not a shared class —
   `decisions.md` 2026-07-24).

@@ -8,7 +8,7 @@
 #include "ElysiumPawn.generated.h"
 
 class UBoxComponent;
-class UCameraComponent;
+class UElysiumCameraComponent;
 class UElysiumMovementComponent;
 
 // The player's **body** (S3, roadmap 11.4/11.6): collision, movement, the camera, and the handle of
@@ -36,6 +36,12 @@ public:
 	virtual void BeginPlay() override;
 	virtual UPawnMovementComponent* GetMovementComponent() const override;
 
+	// The one place the view is modified (11.7) — the structural analogue of VtMB's `CAM_ApplyToView`.
+	// It delegates to the camera component's `GetCameraView` first, then lets it apply the weight
+	// stack; skipping that delegation is the documented cause of first-person rendering silently not
+	// applying.
+	virtual void CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult) override;
+
 	// --- IElysiumPlayerBody ---------------------------------------------------------------
 	virtual bool IsNoclip() const override;
 	virtual void SetNoclip(bool bEnable) override;
@@ -44,10 +50,11 @@ public:
 	virtual float GetBodyHalfHeight() const override;
 	virtual void SetMovementFrozen(bool bFrozen) override;
 	virtual void ApplyUserCmd(const FElysiumUserCmd& Cmd) override;
+	virtual UElysiumCameraComponent* GetCameraComponent() const override { return Camera; }
 
 private:
 	UPROPERTY() TObjectPtr<UBoxComponent> Hull;
-	UPROPERTY() TObjectPtr<UCameraComponent> Camera;
+	UPROPERTY() TObjectPtr<UElysiumCameraComponent> Camera;
 	UPROPERTY() TObjectPtr<UElysiumMovementComponent> Movement;
 
 	FElysiumEntityHandle PlayerEntity;

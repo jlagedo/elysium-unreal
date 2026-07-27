@@ -1,7 +1,7 @@
 #include "ElysiumPawn.h"
 
-#include "Camera/CameraComponent.h"
 #include "Components/BoxComponent.h"
+#include "ElysiumCameraComponent.h"
 #include "ElysiumMovementComponent.h"
 #include "ElysiumUserCmd.h"
 #include "GameFramework/PlayerController.h"
@@ -27,9 +27,10 @@ AElysiumPawn::AElysiumPawn()
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationRoll = false;
 
-	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
+	Camera = CreateDefaultSubobject<UElysiumCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(Hull);
-	// Eye at 64u above the feet; the box centre is 36u up, so the offset is +28u.
+	// Eye at 64u above the feet; the box centre is 36u up, so the offset is +28u. In third person the
+	// boom hangs off this same point — there is one camera and one weight, never a second actor.
 	Camera->SetRelativeLocation(FVector(0.0f, 0.0f, 28.0f * ElysiumMove::U));
 	Camera->bUsePawnControlRotation = true;
 
@@ -90,4 +91,18 @@ void AElysiumPawn::ApplyUserCmd(const FElysiumUserCmd& Cmd)
 	{
 		Movement->SetUserCmd(Cmd);
 	}
+	if (Camera)
+	{
+		// The orbit and dolly pairs are latches in the same frame's command; nothing polls a key.
+		Camera->SetUserCmd(Cmd);
+	}
+}
+
+void AElysiumPawn::CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult)
+{
+	if (UElysiumCameraComponent::CalcCameraFor(Camera, DeltaTime, OutResult))
+	{
+		return;
+	}
+	Super::CalcCamera(DeltaTime, OutResult);
 }

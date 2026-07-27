@@ -54,7 +54,7 @@ namespace
 		{ TEXT("CurrentMoney"),        true,  TEXT("the combat character's money field") },
 		{ TEXT("IsMale"),              true,  TEXT("player sheet") },
 		{ TEXT("SeductiveFeed"),       true,  TEXT("stub") },
-		{ TEXT("SetCamera"),           true,  TEXT("stub") },
+		{ TEXT("SetCamera"),           true,  TEXT("the scripted-shot channel") },
 		{ TEXT("CalcFeat"),            true,  TEXT("stub (no character sheet)") },
 		{ TEXT("DialogDiscipline"),    true,  TEXT("stub") },
 		{ TEXT("BumpStat"),            true,  TEXT("stub (no character sheet)") },
@@ -234,6 +234,17 @@ namespace ElysiumScriptNatives
 			FElysiumEntity* E = World->Resolve(Self);
 			const bool bPlayed = E && E->PlayAnimClip(Args[0].ToString(), /*bLoop=*/true);
 			Record(State, Method, Display, FElysiumVariant::Void(), /*bStub*/ !bPlayed);
+			return FElysiumVariant::Void();
+		}
+		// SetCamera(char, shotfile) — "Sets the entity to use the named shot file as their cinematic
+		// camera mode" (ml_doc), so the argument keys `vdata/camerashots/` (115 calls). The receiver is
+		// the shot's subject: its `DialogTarget` anchors resolve to whoever the script called it on,
+		// which for a `.dlg` action is the NPC on screen. 11.7's channel is what it lands on.
+		if (Method == FName(TEXT("SetCamera")) && World && Args.Num() >= 1)
+		{
+			World->SetScriptedCamera(Args[0].ToString(), Self);
+			const bool bUp = World->HasScriptedCamera();
+			Record(State, Method, Display, FElysiumVariant::Void(), /*bStub*/ !bUp);
 			return FElysiumVariant::Void();
 		}
 		// SetDisposition(char, name, level) — 2,510 calls, 2,467 of them a `.dlg` line's action.

@@ -7,7 +7,7 @@
 
 #include "ElysiumCapsulePawn.generated.h"
 
-class UCameraComponent;
+class UElysiumCameraComponent;
 
 // The A/B baseline body, behind `elysium.SourceMovement 0`: `ACharacter` on a capsule over
 // `UCharacterMovementComponent`, which is what the player had before 11.6 put the faithful box hull
@@ -26,6 +26,7 @@ public:
 	AElysiumCapsulePawn();
 
 	virtual void BeginPlay() override;
+	virtual void CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult) override;
 
 	// --- IElysiumPlayerBody ---------------------------------------------------------------
 	virtual bool IsNoclip() const override { return bNoclip; }
@@ -35,9 +36,10 @@ public:
 	virtual float GetBodyHalfHeight() const override { return GetDefaultHalfHeight(); }
 	virtual void SetMovementFrozen(bool bFrozen) override;
 	virtual void ApplyUserCmd(const FElysiumUserCmd& Cmd) override;
+	virtual UElysiumCameraComponent* GetCameraComponent() const override { return Camera; }
 
 private:
-	UPROPERTY() TObjectPtr<UCameraComponent> Camera;
+	UPROPERTY() TObjectPtr<UElysiumCameraComponent> Camera;
 
 	bool bNoclip = false;
 	bool bWasJumpDown = false;

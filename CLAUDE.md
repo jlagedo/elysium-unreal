@@ -201,6 +201,7 @@ facts, valid regardless of target engine. Organisation and maintenance rules: `d
 | `reflections.md` | `$envmap` — VtMB's own composite read out of its shipped DX8 shaders, the whole-game authoring survey, and the Unreal reflection channel |
 | `light-attribution.md` | telling VtMB's real fixtures from its GI-substitute fill lights — the probe, the surveys, what discriminates and what does not |
 | `sky-ambience.md` | the sky + ambient-light RE plan and Unreal rework — the unknowns, the labelled-cube probes, the calibration path |
+| `weather.md` | the rain system — Troika's own particle format, the precipitation volumes, the `worldspawn` wetness channel, the lightning rig, and the Unreal plan |
 | `debug-tooling.md` | the layered (0–3) debug/dev-tooling architecture |
 | `asset-enhancement.md` | the offline surface track (delight → upscale → PBR synthesis) |
 | `vdata-catalog.md` | the `vdata/` rulebook inventory — each table → system → roadmap task |

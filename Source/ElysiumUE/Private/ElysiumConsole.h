@@ -48,7 +48,14 @@ public:
 	// Splits on top-level `;`, resolves each part (alias / cvar / Python fallthrough).
 	void Execute(const FString& CommandLine);
 
-	// The `cvar` object surface. Get returns the stored value, or empty on a miss (never raises).
+	// Declare a cvar the *engine* registers rather than a cfg file: the camera surface (11.7) and
+	// anything else compiled code owns. A declared name is a **known** cvar, so `cam_idealdist 50`
+	// resolves as a cvar set rather than falling through to Python, and it reads back its default when
+	// no cfg on disk carries it. Declarations survive a re-seed; a cfg value shadows one.
+	void DeclareCvar(const FString& Name, const FString& Default);
+
+	// The `cvar` object surface. Get returns the stored value, the declared default, or empty on a
+	// miss (never raises).
 	FString GetCvar(const FString& Name) const;
 	void SetCvar(const FString& Name, const FString& Value);
 
@@ -68,8 +75,12 @@ private:
 	// Split a command string on `;` that are NOT inside double quotes.
 	static void SplitStatements(const FString& Line, TArray<FString>& OutParts);
 
-	TMap<FString, FString> Aliases; // name (lowercased) -> command expansion
-	TMap<FString, FString> Cvars;   // name (lowercased) -> value
+	// True for a name the store knows: a cfg-parsed value or an engine-declared one.
+	bool IsKnownCvar(const FString& LowerName) const;
+
+	TMap<FString, FString> Aliases;      // name (lowercased) -> command expansion
+	TMap<FString, FString> Cvars;        // name (lowercased) -> value
+	TMap<FString, FString> CvarDefaults; // name (lowercased) -> engine-registered default
 	FPythonSink PythonSink;
 	bool bSeeded = false;
 };

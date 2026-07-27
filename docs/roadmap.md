@@ -88,7 +88,7 @@ it waits. Three standing rules:
 |---|---|---|
 | **PP0 — the core refactor** | the spine: one clock/frame, world services, app states + pause, the player entity, input scopes, commands + user command, the view seam, the play harness | 11.8, 11.10 *(11.0, 11.1, 11.2, 11.3, 11.4, 11.5, 11.6 [x])* |
 | **PP1 — New Game & genesis** | chargen for real: clan, **name**, sex, spends — onto the player entity, Python-readable; `sp_genesisdevice_1` played, not skipped | 9.4 (+ `sp_genesisdevice_1` export/bake), 8.6's New Game click path |
-| **PP2 — the theatre cinematic** | the intro plays start to finish: choreography, scripted camera, line audio, subtitles, **eyes and lipsync — all block** (cont. 5) | 11.7, 12.1–12.5 (+ `sp_theatre` export/bake) |
+| **PP2 — the theatre cinematic** | the intro plays start to finish: choreography, scripted camera, line audio, subtitles, **eyes and lipsync — all block** (cont. 5) | 12.1–12.5 (+ `sp_theatre` export/bake) *(11.7 [x])* |
 | **PP3 — land the tutorial** | the chain hands the player to Jack; the first conversation runs with sound and reactions | 9.2, 9.9 |
 | **PP4 — core mechanics** | faithful movement (owner call: **in** the path), camera modes, feeding, items + object interaction, dice, the vitals HUD | 4.7, 10.6, B6, 9.8, 9.6, 8.9 |
 | **PP5 — persistence** | save / quick / autosave + load mid-run; `trigger_autosave` live | 11.9 (= 9.5) |
@@ -605,6 +605,18 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
   as the reference — the original outranks a port of a port). The local half exists (2.9 +
   `shots_diff.py`); respect its measured noise floor — re-baseline after any bake or content
   rebuild. *Deps:* 0.3, 3.9, RE17.
+- [ ] **7.9 Weather & wetness** *(facts + design: `weather.md`)* — the rain system, never
+  surveyed until now: `func_particle`/`env_particle` precipitation volumes on 6 maps, the
+  `worldspawn` wetness channel the level scripts drive through `FadeGlobalWetness`, the
+  `lightningrotator` rig on 5 maps, and the `Environmental/Weather` ambients. Landing order is
+  independent-first: **(a)** wetness as a Material Parameter Collection scalar off the existing
+  `FElysiumWorldEvents::GlobalWetness` (no particle RE needed, largest look delta); **(b)** the
+  baked top-down occlusion height map in the exporter + a debug view; **(c)** Niagara rain in
+  the authored volumes, occlusion-masked; **(d)** impacts + the hand-placed drip emitters;
+  **(e)** volumetric mist, and lightning as real Lumen-bounced light on its authored timer
+  rhythm. Appearance is Presentation (built native); the volumes, shelters, timers and script
+  calls are Logic (reproduced). Re-enabling the two shipped-disabled rain layers is a
+  divergence — owner call + `decisions.md`. *Deps:* PL12, RE23 (c–e only; a–b are unblocked).
 
 **Slice acceptance** *(Track A criterion, re-based)*: side-by-side A/B match with the
 original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
@@ -1164,14 +1176,31 @@ Steps are ordered so each compiles, ships and is observable alone. **11.4 was th
   table, `Elysium.Substrate.UserCmd` the latch/analog composition and the record→replay identity, and
   `Elysium.Substrate.Console` the four-step precedence. As-built: `roadmap-archive.md`.
   *Deps:* 11.1. *Feeds:* 10.6, 4.7.
-- [ ] **11.7 Camera component** — `UElysiumCameraComponent` holding VtMB's four weights with
-  `AElysiumPawn::CalcCamera` as the single apply point (delegating to `GetCameraView` first), the
-  cvar surface reproduced verbatim, and the scripted-shot channel (`SetCamera`, `camera_keyframe`,
-  conversation and feed cameras) as one push/pop seam. Design + the recovered solve:
-  `camera-view-modes.md`. Sequenced in **PP2** — the scripted-shot channel is the theatre's
-  camera. *Acceptance:* its weight-driver automation test passes (0→1 in 0.5 s, time-scaled,
-  symmetric resume mid-blend); `togglecamera` works from a binding; `SetCamera` has a landing
-  site. *Deps:* 11.6.
+- [x] **11.7 Camera component** — `UElysiumCameraComponent` (a `UCameraComponent` subclass — VtMB has
+  **one** camera and a **weight**, not two cameras) holding the four VtMB weights, with
+  `AElysiumPawn::CalcCamera` as the single apply point, delegating to `GetCameraView` first. The
+  driver is plain C++ (`FElysiumCameraWeights`, `ElysiumCameraSolve.h`): 2.0/s in both directions,
+  linear and eased at the point of use through `SimpleSpline`, time-scaled, and
+  `CAM_IsThirdPerson` as the **disjunction** it is — so a blend reads as third person from its first
+  frame and a scripted camera counts too. The boom is Source's order — rate-limited approach → sphere
+  sweep with the 7-unit pull-in → the **two-constant** Hooke damper (4.0 free, 15.0 wall-clipped, the
+  reason the stock spring arm is not enough). The **cvar surface is reproduced 1:1 in the VtMB console
+  store**, not as `elysium.*` cvars, on a new `FElysiumConsole::DeclareCvar` — so `cam_idealdist 50`
+  resolves as a cvar set rather than falling through to Python and a user's `config.cfg` and the
+  patch's aliases keep governing. `camortho` stays unimplemented: no orthographic path exists in the
+  recovered client. The scripted-shot channel is one handle-based push/pop stack over **values** with
+  a timed ramp, and `SetCamera` lands on it: `ElysiumCameraShots` reads `vdata/camerashots/` (the
+  grammar Troika ships a how-to for) and `FElysiumCameraDirector` on the map actor resolves its
+  anchors against live entities and bodies — `Bone:`/`Attachment:` through a new
+  `FElysiumEntity::GetSkeletalBody()` — refreshed in the post-move pass. The substrate reaches it
+  through `IElysiumEmbodiment`, **not** `IElysiumPresenter`: the camera is part of the player's body
+  and the presenter has no implementation until 11.8 (`runtime-architecture.md` §9 corrected).
+  *Acceptance met:* `Elysium.Substrate.Camera` (0→1 in 0.5 s, frame-rate-independent, time-scaled,
+  symmetric resume mid-blend, the priority order, the shot stack) and `Elysium.Substrate.CameraShots`
+  (the shot-file read against the how-to) pass with no RHI; in the built game `togglecamera` reaches
+  the full 215.9 cm boom in the open and clips to 24 cm against a wall, `cam_idealdist`/`cam_yaw`
+  retune it live, and `SetCamera("dialogdefault")` frames Jack's head bone at the file's FOV 40 while
+  `RemoveCamera` ramps it back out. As-built: `roadmap-archive.md`. *Deps:* 11.6. *Feeds:* 12.x.
 - [ ] **11.8 Presentation seam** *(S8)* — `UElysiumPresentationSubsystem` publishing
   `FElysiumViewState` once per frame plus discrete delegates; `AElysiumHUD`, the dialogue box and the
   8.6 screens re-based onto it. The front-end gating (`IsMenuUp()` checks scattered through the HUD)
@@ -1291,6 +1320,7 @@ retail end to end, and `test.bat Play` proves it headlessly.
 | PL5d | Copy `cfg/*.cfg` (the alias/cvar tables — `user.cfg` carries the Basic/Plus `patchtype` alias) verbatim → `out/cfg/` — `UE_extract_cfg.py`, patch-first, wired into `export_all.py` (`--no-cfg`) [x] | 9.3b [x] |
 | PL6 | Texlight merge in exporter | 3.4 |
 | PL11 | Remove the dead Lumen-card path the bake superseded (found by 0.9): `export_all.py`'s `bake_cards`/`--no-cards` calls a `cards.bat` that no longer exists and prints a "skipped" line every run; `ElysiumCardGen.cpp` (`ELYSIUM_WITH_CARDGEN`, `elysium.cards.probe`) still builds into editor targets. Nothing depends on either | 0.9 |
+| PL12 | Mirror `particles/*.txt` (**1,594**) + the `particles/*.tga` sprite set (**309**) verbatim → `out/particles/` — patch-first, wired into `export_all.py`. Weather is the immediate consumer (33 rain definitions) but the set is engine-wide: fire, muzzle flashes, disciplines, the menu background. Also bake the top-down occlusion height map per map from `<map>.obj` + `worldspawn`'s `world_mins`/`world_maxs` (1024², ~11 cm/texel on `sm_hub_1`). Format: `weather.md` | 7.9 |
 | PL7 | Sidecar space fixes surfaced by the audit — **none (0.4: all sidecars already Unreal cm)** | 0.4 [x] |
 | PL9 ✅ | Mirror the choreographed-scene files + `.lip` phoneme files → `out/scenes/`, `out/lip/` — `UE_extract_scenes.py`, patch-first, verbatim, `sound/` prefix stripped so `SceneFile` reads back 1:1; **5,444 `.vcd`** (4.5 MB) + **7,136 `.lip`** (16.8 MB), wired into `export_all.py` (`--no-scenes`) with a `SceneFile` cross-check over the exported `.ents`. The `.lip` *format* stays RE20 [x] | 12.1, 12.5 |
 | PL10 ✅ | Facial data in the NPC export — the flex chunks (RE20 [x]) decoded by **`mdl_skel`** (one decoder, now shared with `probe_facial.py`) into glb **morph targets** in each rigged NPC's own glb, plus `out/npc/facial/<stem>.json` carrying what a morph target cannot hold: the 44 controllers, the 60 RPN rules, each morph's four-value ramp and `mstudiomouth_t`. **78 of 101 NPCs rigged, 4,015 morph targets**, +0.33–0.53 MB per rigged glb (manifest v3; the manifest names the sidecar). The unit-vector table comes out of the user's own `StudioRender.dll` at export time (`mdl_skel.read_anorms`; `probe_facial.py --anorms` still dumps it for RE) — game-derived, so regenerated, never committed; without it the export ships meshes and skips faces rather than baking wrong deltas. Two corrections to the plan: the unit is the flex **record**, not the flexdesc (a flexdesc splits into two ramps — 53 targets from 45 flexdescs), and a morph **spans materials**, so it lands as one same-named piece per primitive and the consumer must load with `MorphTargetsDuplicateStrategy::Merge` (12.3; 8.5's loader still takes the default `Ignore`). No eyeball chunk exists to export. `UE_extract_scenes.py` also mirrors the 249 `expressions/*.txt` → `out/expressions/`. Full shape: `docs/facial_animation.md` → "The offline export" | 12.3, 12.4, 12.5 |
@@ -1322,6 +1352,7 @@ retail end to end, and `test.bat Play` proves it headlessly.
 | RE20 | **MDL v2531 facial data** — the studiohdr facial block (at **344**, eight bytes past the VAMPTools field walk), `mstudioflexdesc_t` 4B / `mstudioflexcontroller_t` 20B / `mstudioflexrule_t` 12B + 8B RPN ops / `mstudiomouth_t` 20B; `StudioFlex` 32B with its target ramp, and **both** `StudioVertAnim` encodings — the 8B compressed record stores *directions*, two byte offsets into a 5,314-entry unit-vector table in `StudioRender.dll` plus `n/255` magnitudes scaled 8.0/2.0, and a 20B raw form (`mingxiao_transformation` only). **`NumEyeballs` is 0 on all 4,444 models** — no eye pose, look-at or procedural lid was ever authored; eyes are eyelid flexes. `.lip` is plain text (7,136 files, `VERSION`/`PLAINTEXT`/`WORDS`/`EMPHASIS`(always empty)/`CLOSECAPTION`/`OPTIONS`), joined to `expressions/<model stem>_phonemes.vfe` (249 tables) for phoneme→controller weights. Corrects `mdl_v2531.md`: `StudioModel` is **224B** and carries its own de-quantization offset/scale at +0xA0. Full: `docs/facial_animation.md`; probe: `tools/probe_facial.py` | 12.3–12.5, PL10 | [x] |
 | RE21 | **`GameFrame` usercmd order** — is player movement processed before or after the think pass? Settles `runtime-architecture.md` §3's inferred ordering (`DumpFuncs funcs=10571fc0`, the RE2 workflow) | 11.1, 4.7 | [ ] |
 | RE22 | **The ducked hull** — Source's crouch AABB dimensions + `CategorizePosition`/`StepMove` interaction (standing `32×32×72` is recorded in `source_movement.md`; ducked is not, and `IN_DUCK` needs it) | 4.7, 11.6 | [ ] |
+| RE23 | **The particle format + the wetness channel** — VtMB's weather is Troika-custom, not Source: no `func_precipitation` anywhere in the install, and the parser lives in a forked `Bin/engine.dll` (gate cvar `particles_enable_precipitation`). The `particles/*.txt` grammar is partly reconstructed (envelope, emitter-vs-particle roles, the `a~b` / `a,b,…` / `v(n)` value forms, the `collide { spawn / decal }` block) — `weather.md` marks what is inferred. Eight open questions, the load-bearing ones being **what `FadeGlobalWetness` actually scales** (`GlobalWetness` crosses into `client.dll`, so it reaches the render side), **who calls it** (survey `out/scripts/`), and whether `func_particle`/`env_particle` take the standard I/O + `start_hidden` surface. No public RE exists — the community FGD defines neither classname and annotates all three wetness keys "Not tested yet...". Full: `docs/weather.md` | 7.9, PL12 | [ ] |
 | SKY | **Sky + ambience rework, Phases B + C (B1–B8b, C0–C5)** — landed 2026-07-26: backdrop correct + at parity with standing tests (`Elysium.Substrate.SkyCube`/`FogPack`); the whole 3D skybox split by BSP area and placed under its transform; fog from its real owners + Source's own linear distance fog as a per-primitive material term (B8b, D4 amended); the sky light at the map's own authored level (**zero on the 83 no-pair maps**); the bake measured in absolute units — direct light explains ~0% of a median lit face, the bounce floor *is* the ambient level. Open residue promoted to **3.10–3.13 + RE17**. Facts: `sky-ambience.md`; full as-built: `roadmap-archive.md` → SKY | 3.6/3.7 | [x] |
 
 The Ghidra extraction findings behind the closed rows (the RE1/RE2/RE3/RE4 detail:

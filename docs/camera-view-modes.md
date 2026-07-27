@@ -313,16 +313,24 @@ player keeps authority over the view angles the whole time; the camera derives f
 
 ## 6. Reproducing it on Unreal 5.8
 
+Built at roadmap **11.7**; the as-built record is `roadmap-archive.md`. What runs:
+`FElysiumCameraWeights` + `FElysiumCameraShotStack` (`Public/ElysiumCameraSolve.h`, plain C++, no
+UObject) carry the driver and the scripted channel; `UElysiumCameraComponent` — a `UCameraComponent`
+subclass — solves the boom and applies it; `AElysiumPawn::CalcCamera` is the apply point;
+`ElysiumCameraShots.{h,cpp}` reads `vdata/camerashots/` and `FElysiumCameraDirector` on the map actor
+resolves a shot's anchors against live entities. The sections below are the design that produced it
+and stay the reference for the parts still open (§ *Not yet recovered*, the feed camera, the
+`Start`→`End` shot animation 12.x owns).
+
 ### Constraints this project imposes
 
 - **No `.uasset` authoring.** Every engine object is built in C++ at map-load
   (root `CLAUDE.md`). That rules out any asset-authored camera solution.
 - **A console/cvar bridge already exists** (`ccmd`/`cvar`, roadmap 9.3b), so VtMB's cvar names can
   be reproduced 1:1 and the shipped `cfg/` + the patch's `user.cfg` aliases keep working verbatim.
-- **The pawn is first-person today**: `AElysiumPawn` is an `APawn` with a box hull, a
-  `UElysiumMovementComponent` and one `UCameraComponent` at `Z = 28 u` above the hull centre with
-  `bUsePawnControlRotation = true` (`Source/ElysiumUE/Private/ElysiumPawn.cpp`, roadmap 11.6).
-  There is no player mesh yet.
+- **The pawn's camera sits at `Z = 28 u` above the hull centre** with `bUsePawnControlRotation = true`
+  (`Source/ElysiumUE/Private/ElysiumPawn.cpp`); the boom hangs off that same point. There is no
+  player mesh yet (roadmap 4.8), so the fade band and `ShouldDrawLocalPlayer` have nothing to drive.
 - **Fully dynamic renderer**, HWRT Lumen + VSM, static lighting disabled
   (`docs/rendering-perf.md`).
 - **Feel is reproduce-first, then polish by explicit owner call** (`docs/remaster-direction.md`).
@@ -412,9 +420,9 @@ Source's `(pitch, yaw, roll)` maps to `FRotator(Pitch, Yaw, Roll)` with **pitch 
 the same rule the rest of the pipeline already applies (`docs/rebuild-strategy.md` →
 *Coordinate conventions*).
 
-### Console surface to expose
+### Console surface
 
-Reproduce verbatim through the existing bridge: `togglecamera`, `thirdperson`, `firstperson`,
+Reproduced verbatim through the existing bridge: `togglecamera`, `thirdperson`, `firstperson`,
 `cam_idealdist`, `cam_yaw`, `cam_targetangle`, `cam_collide`, `cam_trace_radius`, `cam_fadestart`,
 `cam_fadeend`, `cdamp_on`, `cdamp_hookesconstant`, `cdamp_hookesconstantwall`,
 `cdamp_springlength`, `cdamp_maxdist`, `c_minpitch`, `c_maxpitch`, `c_minyaw`, `c_maxyaw`,
@@ -422,16 +430,92 @@ Reproduce verbatim through the existing bridge: `togglecamera`, `thirdperson`, `
 The input layer binds `z` → the *command*, never a hardcoded key, so `kb_def.lst` and a user's
 rebinds keep governing (`docs/controls.md`).
 
-`camera_prefs` / `camera_weaponswitch` only become meaningful once weapons exist; register them
-early anyway so the archived value survives round-tripping a user's `config.cfg`.
+`camera_prefs` / `camera_weaponswitch` only become meaningful once weapons exist; they are registered
+anyway so the archived value survives round-tripping a user's `config.cfg`.
+
+The whole set lives in the **VtMB console store** (`FElysiumConsole`), not as `elysium.*` engine
+cvars, so `config.cfg` and the patch's aliases keep governing. Compiled code owns the defaults through
+`FElysiumConsole::DeclareCvar(name, default)`: a declared name is a *known* cvar, so a bare
+`cam_idealdist 50` resolves at step 3 of the precedence (command → alias → cvar → Python) instead of
+falling through to the interpreter, the declaration survives a re-seed, and any cfg carrying the name
+shadows it. The table itself is `ElysiumCam::CvarDefs()`, defaults typed exactly as a `config.cfg`
+writes them; `FElysiumCameraCvars::LoadFrom` is the read and converts Source units to cm once.
+
+**`camortho` is not implemented**: no orthographic path exists in the recovered client (§1). The verb
+stays declared so a bind resolves and does nothing, which is what retail does.
+
+An axis the player has not orbited or dollied follows its cvar **live**, so retuning `cam_idealdist`
+or `cam_targetangle` moves the camera at once; `snapto` returns a hand-orbited axis to its cvar and
+re-seeds the smoothing. The orbit/dolly step rates and the approach speeds are **ours** — no ConVar
+holds them, and `CAM_Think`'s `kbutton_t` step (`0x100fc170`) is not recovered.
+
+### The scripted-shot channel
+
+The channel is a **handle-based** stack of shots-as-values (`FElysiumCameraShotStack`), not LIFO: a
+conversation ends behind a running cutscene, so a pop removes a shot from wherever it sits and the top
+re-resolves. Ids are never reused, so a stale or doubled pop is a no-op — the same discipline the input
+scopes use (`input-architecture.md`). Each shot carries its own **timed** ramp duration, matching
+VtMB's scripted weight (`(now − startTime) / duration` off fields on the player entity) rather than
+the toggle's fixed rate. A shot is pushed as origin / look-at / roll / FOV / rate limits; whoever
+pushed it keeps those values current, which is what a `Follow` attach type is. The camera therefore
+never learns what an entity is.
+
+The substrate reaches the channel through **`IElysiumEmbodiment::PushCameraShot` / `PopCameraShot`**,
+not `IElysiumPresenter`: the camera is part of the player's *body* (`runtime-architecture.md` §5–6),
+which is where `GetPlayerViewPoint` already lives. `FElysiumEntityWorld` holds **one** scripted camera
+at a time — `SetCamera` replaces, `RemoveCamera` clears, a map teardown clears — the same single-slot
+discipline the sign panel and the open conversation use.
+
+### `vdata/camerashots/` — the shot files
+
+`SetCamera(char, shotfile)` names one of the 66 files under `vdata/camerashots/`
+(`docs/script_api.md`: 115 call sites). The grammar is **documented by Troika themselves** in the
+shipped `camera shots how-to.txt`, so it is read rather than reconstructed. One file carries one shot,
+named after the file:
+
+```
+CameraShotTable { <ShotName> { Start {…} End {…} Target { Point1 {…} Point2 {…} }
+                               CameraConstraints {…} } }
+```
+
+- **`Start`** is where the shot begins. Absent, it starts from wherever the camera is — and for a
+  camera with no position yet, from the player's standard view.
+- **`End`** is where it transitions to. Absent, the camera does not move. *Both absent* makes the shot
+  a pure target definition other systems (worldcraft keyframed cameras) borrow.
+- **`Target`** is what it looks at. One point is tracked directly; **two are tracked at their
+  midpoint**.
+- Each anchor is `Position` × `AttachPos` × `AttachType` × `OffsetOrigin`:
+  `Position` ∈ `Player` | `DialogTarget` | `GrappleTarget` | `World` | a named entity;
+  `AttachPos` ∈ `Origin` | `Center` | `EyePosition` | `Top` | `Bottom` | `Bone: <name>` |
+  `Attachment: <name>`; `AttachType` ∈ `Follow` (position + the offset rotated by the attachment's
+  facing) | `FollowNoAngles` (position only) | `FollowEntAngles` (offset rotated by the entity's
+  facing) | `None` (set once, stay put). `OffsetOrigin "[F, R, U]"` is Source units.
+- **`CameraConstraints`** carries `MoveSpeed`/`MoveAccel` (inches/sec), `MaxTurnRate`/`TurnAccel`
+  (deg/s), `DistanceTolerance`/`AngularTolerance` (how far the subject may drift before the camera
+  follows), `FieldOfView`, `DialogPOV` (NPCs look at the camera rather than the player's eye),
+  `AutoPositionFromTarget`, `SyncRotateOnMove`, `SnapOnShotChange`, `ShowHud`, `DrawViewmodel`.
+
+**`OffsetOrigin`'s Y is positive-right, not Source's positive-left.** The how-to spells the axes as
+`[Forward/Backward, Right/Left, Up/Down]` and reads its own `[40, -10, 25]` example as "10 to our
+left", so this designer-facing offset is already Unreal's local frame and is the one Source-authored
+vector in this repo that takes **no Y negation**. World positions still do. The corpus writes `Y = 0`
+on nearly every dialogue shot, so the theatre (12.x) is what will confirm it against a shot that does
+not.
+
+`MoveSpeed` and `MaxTurnRate` limit the shot **tracking a moving subject** — not its arrival. A shot
+arriving is the *weight ramp*; the shot itself starts where it was authored.
 
 ### Verification hooks
 
-- An automation test (`test.bat Substrate`, `-nullrhi`) over the weight driver alone: 0→1 in
-  0.5 s at time scale 1, correct scaling by time scale, clamping, the priority order, and
-  symmetric resume on a mid-blend reversal.
-- `elysium_player_get` (MCP) reports the view mode, the weight and the solved boom length, so an
-  agent can drive the toggle and assert the transition.
+- `Elysium.Substrate.Camera` (`test.bat Substrate`, `-nullrhi`) over the weight driver and the shot
+  stack alone: 0→1 in 0.5 s at time scale 1, frame-rate independence, correct scaling by time scale,
+  clamping, the priority order, symmetric resume on a mid-blend reversal, and the stack's
+  out-of-order pop / no-op double pop / ramp-preserving refresh.
+- `Elysium.Substrate.CameraShots` reads a `dialogdefault`-shaped file and asserts it against the
+  how-to.
+- `elysium_player_get` (MCP) reports the view mode, the deciding latch, the weight, the scripted
+  weight, the solved boom length, the model alpha and the live shot name, so an agent can drive the
+  toggle and assert the transition. `elysium.camera` is the same state as a console dump.
 - `shots.bat` vantages captured at weight 0, 0.5 and 1 give a look-regression baseline for the
   blend.
 

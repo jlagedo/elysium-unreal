@@ -3,6 +3,8 @@
 #include "ElysiumAudioSubsystem.h"
 #include "ElysiumBakedTags.h"
 #include "ElysiumBrushComponent.h"
+#include "ElysiumCameraComponent.h"
+#include "ElysiumCameraShots.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumEditorLabels.h"
 #include "ElysiumEntity.h"
@@ -1240,6 +1242,27 @@ FElysiumEntityHandle AElysiumMapActor::TraceUseCursor(const FVector& Start, cons
 	return FElysiumEntityHandle::Invalid();
 }
 
+UElysiumCameraComponent* AElysiumMapActor::PlayerCamera() const
+{
+	const APawn* Pawn = ResolvePlayerPawn();
+	const IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(Pawn);
+	return Body ? Body->GetCameraComponent() : nullptr;
+}
+
+int32 AElysiumMapActor::PushCameraShot(const FString& ShotFile, const FElysiumEntityHandle& Subject)
+{
+	if (!CameraDirector)
+	{
+		CameraDirector = MakePimpl<FElysiumCameraDirector>();
+	}
+	return CameraDirector->Push(EntityWorld.Get(), PlayerCamera(), ShotFile, Subject);
+}
+
+bool AElysiumMapActor::PopCameraShot(int32 ShotId)
+{
+	return CameraDirector ? CameraDirector->Pop(PlayerCamera(), ShotId) : false;
+}
+
 FElysiumAudioVoiceHandle AElysiumMapActor::PlayVoice(const FString& Rel, const FElysiumPlayParams& Params)
 {
 	UElysiumAudioSubsystem* Audio = GetAudioSubsystem();
@@ -2006,6 +2029,14 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 	if (EntityWorld)
 	{
 		EntityWorld->UpdateUseCursor();
+	}
+
+	// 11.7 — re-resolve every `Follow` camera shot against this frame's final entity positions. Same
+	// reason as the use cursor: a shot framed on where an NPC *was* reads as a camera that lags the
+	// subject it is supposed to be locked onto.
+	if (CameraDirector)
+	{
+		CameraDirector->Tick(EntityWorld.Get(), PlayerCamera());
 	}
 
 	// The tail of a released frame: a dev step spends one here, and the last one re-holds the world.

@@ -177,10 +177,26 @@ void FElysiumConsole::EnsureSeeded(const FString& CfgDir)
 	}
 }
 
+void FElysiumConsole::DeclareCvar(const FString& Name, const FString& Default)
+{
+	CvarDefaults.Add(Name.ToLower(), Default);
+}
+
+bool FElysiumConsole::IsKnownCvar(const FString& LowerName) const
+{
+	return Cvars.Contains(LowerName) || CvarDefaults.Contains(LowerName);
+}
+
 FString FElysiumConsole::GetCvar(const FString& Name) const
 {
-	const FString* V = Cvars.Find(Name.ToLower());
-	return V ? *V : FString();
+	const FString Lower = Name.ToLower();
+	// A cfg-parsed value shadows the engine default, which is the order the game itself loads them in.
+	if (const FString* V = Cvars.Find(Lower))
+	{
+		return *V;
+	}
+	const FString* D = CvarDefaults.Find(Lower);
+	return D ? *D : FString();
 }
 
 void FElysiumConsole::SetCvar(const FString& Name, const FString& Value)
@@ -252,8 +268,10 @@ void FElysiumConsole::ExecuteStatement(const FString& Statement, int32 Depth)
 		Args = Args.TrimQuotes();
 	}
 
-	// 3) known cvar -> a value sets it; no value is a read (retail prints it; we no-op).
-	if (Cvars.Contains(Name))
+	// 3) known cvar -> a value sets it; no value is a read (retail prints it; we no-op). "Known" is
+	// either a cfg-parsed name or one compiled code declared, so the camera surface resolves as a
+	// cvar with no `out/cfg` on disk at all.
+	if (IsKnownCvar(Name))
 	{
 		if (!Args.IsEmpty())
 		{

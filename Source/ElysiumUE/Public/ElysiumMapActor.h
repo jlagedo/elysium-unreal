@@ -203,6 +203,11 @@ public:
 	virtual void TeleportPlayer(const FVector& FeetOrigin, float Yaw) override;
 	virtual void DamagePlayer(float Amount) override;
 	virtual FElysiumEntityHandle TraceUseCursor(const FVector& Start, const FVector& End) const override;
+	// 11.7 — the scripted-shot channel. The director resolves a `vdata/camerashots/` file against this
+	// map's entities and bodies and hands the values to the pawn's camera; the camera itself never
+	// learns what an entity is.
+	virtual int32 PushCameraShot(const FString& ShotFile, const FElysiumEntityHandle& Subject) override;
+	virtual bool PopCameraShot(int32 ShotId) override;
 
 	// --- IElysiumAudio ----------------------------------------------------------------------
 	// Voices forward to the GI-scoped UElysiumAudioSubsystem; the scheme calls drive this map's own
@@ -376,6 +381,13 @@ private:
 	// ambient_soundscheme entities can reach it during their spawn pass; ticked from Tick with the
 	// player location; its voices are stopped on unload (EndPlay).
 	TPimplPtr<FElysiumSoundSchemeManager> SchemeManager;
+
+	// 11.7 — the live scripted camera shots and their entity bindings. Owned here because resolving a
+	// shot's anchors needs the entity world and the bodies standing in it; refreshed in the post-move
+	// pass so a shot following an NPC sees where that NPC ended the frame.
+	TPimplPtr<class FElysiumCameraDirector> CameraDirector;
+	// The pawn's camera, or null (a backdrop map seats no pawn).
+	class UElysiumCameraComponent* PlayerCamera() const;
 
 	void LoadMap();
 	// Walk the baked level once and bucket its actors by the tag tools/bake_map.py stamped on them

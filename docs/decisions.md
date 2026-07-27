@@ -6,6 +6,38 @@ trigger. A behavioural divergence from retail lands here carrying both the faith
 chosen behaviour (`remaster-direction.md`'s governing rule). Entries are never rewritten —
 append a correction as a new entry.
 
+- **2026-07-27** — **The scripted-camera channel lives on `IElysiumEmbodiment`, not
+  `IElysiumPresenter` (roadmap 11.7).** Owner call. `runtime-architecture.md` §9 had sketched
+  `IElysiumPresenter::PushCameraShot` as the seam `SetCamera`, `camera_keyframe`, the conversation
+  camera and the feed camera all push through. Chosen: **`IElysiumEmbodiment::PushCameraShot` /
+  `PopCameraShot`**, beside the other player-body calls. Two reasons, and the second is decisive.
+  First, the camera *is* part of the player's body under S3 — it is a component of the pawn, and
+  `GetPlayerViewPoint` already lives on this interface for the same reason. Second, `Presenter` has
+  **no production implementation** and is null in play until 11.8 by design (11.2's null-service
+  discipline is what lets a whole map's logic run headlessly), so a channel placed there would have
+  been unreachable from the running game — `SetCamera` would have had a seam and no landing site,
+  which is precisely what 11.7's acceptance asks for. The presenter keeps what it was always for:
+  what the substrate puts *on screen* (the fade, the sign panel, the conversation), which 11.8
+  publishes as a view state. §9 is corrected in place. The cost is that the theatre's camera and the
+  theatre's subtitles arrive through two different interfaces; the alternative was deferring the
+  whole channel to 11.8 for a filing reason.
+
+- **2026-07-27** — **VtMB cvars that compiled code owns are declared into the VtMB console store,
+  not registered as `elysium.*` engine cvars (roadmap 11.7).** Owner call, and the pattern every
+  later system inherits. The camera's 24 cvars (`cam_idealdist`, `cdamp_hookesconstantwall`,
+  `c_maxyaw`, …) are read by a user's `config.cfg` and written by the Unofficial Patch's own aliases
+  (`cam_restore`, `cam_rotateleft`), so they have to resolve *as VtMB cvars* on the command bus —
+  a parallel `elysium.CamIdealDist` would leave a shipped cfg silently inert. But `FElysiumConsole`
+  only knew cvars it had *parsed from a cfg file*, so on an install with no `out/cfg` a bare
+  `cam_idealdist 50` fell through to Python and vanished. Chosen: **`FElysiumConsole::DeclareCvar(name,
+  default)`** — a second table, holding the values the engine itself registers, that survives a
+  re-seed and is shadowed by any cfg carrying the same name (the order the game loads them in). A
+  declared name is a *known* cvar for the precedence test, so it resolves at step 3, and a read with
+  no cfg behind it returns the retail default rather than empty. The alternative — pre-writing the
+  defaults into the `Cvars` table at seed time — loses the distinction between "the engine registers
+  this" and "the user set this", which is exactly what a settings screen and a `config.cfg` writer
+  will need to know at 10.6.
+
 - **2026-07-27** — **The development layer moves off the three bare keys it was squatting on
   (roadmap 11.6).** Owner call, and the one 11.6 change a player would notice. `input-architecture.md`
   states the guarantee — "the development layer occupies no bare key a player can bind", enforced by

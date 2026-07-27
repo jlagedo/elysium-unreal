@@ -211,6 +211,16 @@ public:
 	// resurrect the beat machine); a normal close fires it.
 	void CloseDialog(bool bSilent = false);
 
+	// The one scripted camera the map has up (11.7), held here for exactly the reason the sign and the
+	// conversation are: it is world state with a lifetime, and the thing that draws it is replaceable.
+	// `SetCamera(shotfile)` (115 script calls) sets it and `RemoveCamera` clears it; setting a second
+	// one replaces the first, which is what "*the* cinematic camera mode" means. Both no-op with no
+	// embodiment, so a headless conversation runs the same beats without a camera to point.
+	void SetScriptedCamera(const FString& ShotFile, const FElysiumEntityHandle& Subject);
+	void ClearScriptedCamera();
+	bool HasScriptedCamera() const { return ScriptedCameraShot != 0; }
+	const FString& ScriptedCameraName() const { return ScriptedCameraFile; }
+
 	// The game-state subsystem (the `G`/quest store, player sheet, script host). Outlives the world.
 	UElysiumGameStateSubsystem* GetGameState() const { return GameState; }
 
@@ -341,6 +351,10 @@ private:
 
 	// P4.10 open-sign state (one at a time). The panel content itself is parsed and cached on the
 	// game_sign entity; the world only tracks which entity owns the screen and since when.
+	// The scripted camera's handle on IElysiumEmbodiment's channel; 0 = none up.
+	int32 ScriptedCameraShot = 0;
+	FString ScriptedCameraFile;
+
 	FElysiumEntityHandle OpenSignOwner;
 	double OpenSignTime = 0.0;
 	TSharedPtr<const FElysiumSignData> OpenSignData;   // incomplete here; freed in the .cpp

@@ -163,7 +163,10 @@ bool FElysiumDlgFile::LoadFile(const FString& Path, FElysiumDlgFile& Out, FStrin
 // `&`/`|` is a logical join and every bare `IDENT [relop] INT` run is a skill-check.
 // ================================================================================================
 
-namespace
+// The module builds with unity on, so a bare `namespace {}` here would still collide with another
+// translation unit's helpers of the same name — `ElysiumExpr.cpp` has its own `ETok`/`Tokenize`. The
+// named namespace is the project's convention for that (see `ElysiumMcpTools.cpp`).
+namespace ElysiumDlgExprImpl
 {
 	bool IsIdentStart(TCHAR C) { return FChar::IsAlpha(C) || C == TEXT('_'); }
 	bool IsIdentChar(TCHAR C) { return FChar::IsAlnum(C) || C == TEXT('_'); }
@@ -314,6 +317,8 @@ namespace
 		return Rebuild(Trimmed, Tokenize(Trimmed), AndRepl, OrRepl);
 	}
 }
+
+using namespace ElysiumDlgExprImpl;
 
 FString ElysiumDlgExpr::ConditionToPython(const FString& Raw)
 {

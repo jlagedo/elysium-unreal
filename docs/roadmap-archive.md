@@ -2888,3 +2888,130 @@ explains ~0% of a median lit face and the bounce floor *is* the ambient level (C
   9.7/9.8. `IN_DUCK` is in the user command with nothing sizing the ducked hull — **RE22**, unchanged.
   The mover is a Source-shaped shell, not the port: 4.7 owns that, and the capsule body behind
   `elysium.SourceMovement 0` is what it is A/B'd against.
+
+- [x] **11.7 Camera component** *(landed 2026-07-27)* — VtMB ships **one** player camera with a
+  **blend weight**, not two cameras: `togglecamera` flips a bool, a per-frame driver ramps a 0→1
+  weight, and every third-person effect — the boom offset, the view angles, the player-model draw,
+  the crosshair — is a function of that weight (`camera-view-modes.md`, decompiled from retail
+  `cl_dlls/client.dll`). Before this the pawn carried a bare `UCameraComponent` and the twelve camera
+  verbs 11.6 declared had nothing to reach.
+
+  **`FElysiumCameraWeights` (`Public/ElysiumCameraSolve.h`) is the driver**, plain C++ like
+  `ElysiumInputScope.h` / `ElysiumAppState.h`: four weights (third-person toggle, scripted, secondary,
+  feed) and four latches, `Advance(dt, timescale)` reproducing `0x100fc900` line for line — the feed
+  and secondary weights advance *first* because the third-person branch reads the feed weight,
+  **rate 2.0/s** in both directions (a full traversal is 0.5 s), clamped, and the priority order
+  forced-third / feed → forced-first → the user toggle. `CAM_IsThirdPerson` is reproduced as the
+  **disjunction** it is, so it is true throughout the blend in *both* directions and a scripted
+  camera counts as third person — the property that gets the player model drawn under a dialogue
+  shot for free. The weight ramps **linearly** and is eased at the point of use through
+  `SimpleSpline(t) = t²(3−2t)`, written literally so it matches the decompiled constant rather than
+  routed through `FMath::SmoothStep`. Time scale is a parameter of the driver and 1.0 in the live
+  game, because the engine has already scaled the tick delta by the world's dilation by the time
+  `CalcCamera` sees it — 11.1's rule for the clock, applied to the same problem.
+
+  **`UElysiumCameraComponent` is a `UCameraComponent` subclass, not a state object beside one.**
+  There is one camera, so the FOV, the post-process settings and the first-person-rendering flags stay
+  where the engine expects them. **`AElysiumPawn::CalcCamera` is the single apply point** — the
+  structural analogue of `CAM_ApplyToView` — and `CalcCameraFor` delegates to
+  `UCameraComponent::GetCameraView` *first*, because overriding `CalcCamera` without that is the
+  documented cause of first-person rendering silently not applying. `AElysiumCapsulePawn` carries the
+  same component and the same override, so `elysium.SourceMovement` still A/Bs the **movers** and not
+  two camera paths; `IElysiumPlayerBody::GetCameraComponent()` is what everything outside the body
+  reaches it through. **It does not tick**: `UpdateCamera` runs from `CalcCamera` guarded on
+  `GFrameCounter`, which is where VtMB runs `CAM_Think` too — a component tick would solve the boom
+  before the pawn has moved and leave the camera a frame behind the body it hangs off. **It does not
+  poll a key**: the orbit and dolly pairs arrive as latches in the frame's `FElysiumUserCmd` (S5).
+
+  **The boom solve is Source's order**: rate-limited approach on distance/yaw/pitch (`0x100fc000`,
+  clamp the delta to `speed·dt`, angle-space for wrap) → a sphere sweep on `ECC_Camera` at
+  `cam_trace_radius` with the 7-unit pull-in and a forced re-seed on contact → the **two-constant
+  Hooke damper** (4.0 free, 15.0 wall-clipped, so the camera snaps in against a wall and eases out —
+  the single most characteristic part of the VtMB camera, and the reason `USpringArmComponent` is not
+  enough) → `Offset *= SimpleSpline(w)` and `Rotation = Lerp(ViewRotation, CameraRotation, w)`. VtMB
+  traces a *box* hull; a sphere is the substitution `camera-view-modes.md` already recorded as a feel
+  delta. The player-model fade band (`cam_fadeend` 18 → `cam_fadestart` 32) is solved and exposed as
+  `ModelAlpha()` even though nothing consumes it until a player mesh exists (4.8) — the band is a
+  number now rather than a later guess.
+
+  **The cvar surface is reproduced 1:1 through the VtMB console store, not as `elysium.*` engine
+  cvars**, so a user's `config.cfg` and the Patch's `cam_restore`/`cam_rotateleft` aliases keep
+  governing. That needed one new console primitive: `FElysiumConsole::DeclareCvar(name, default)`
+  records a cvar **compiled code** owns, in a table that survives a re-seed and is shadowed by any cfg
+  carrying the name. A declared name is a *known* cvar, so `cam_idealdist 50` resolves at step 3 of
+  the precedence instead of falling through to Python, and a fresh install with no `out/cfg` still
+  reads VtMB's own defaults. All 24 names `camera-view-modes.md` §1 lists are declared, including the
+  two `FCVAR_ARCHIVE` weapon-preference cvars that only become meaningful at 4.9, so an archived value
+  round-trips today. Values stay in **Source units** and `FElysiumCameraCvars::LoadFrom` converts once;
+  an axis the player has not orbited follows its cvar live, and `snapto` puts a hand-orbited one back.
+  Implemented verbs: `togglecamera`, `thirdperson`, `firstperson`, `cam_command` (the one-shot mode
+  request, consumed at the top of the solve, so the verb and the cvar are the same write), `snapto`,
+  `centerview`, `force_centerview`. `camortho` stays unimplemented on purpose — **no orthographic path
+  exists in the recovered client**.
+
+  **The scripted-shot channel is one push/pop seam.** `FElysiumCameraShotStack` is handle-based, not
+  LIFO — a conversation ends behind a running cutscene, exactly like the 11.5 input-scope stack — with
+  a **timed** ramp off each shot's own duration (VtMB's cutscene cameras get a start and a duration,
+  unlike the toggle's fixed rate) and an `Update` that refreshes a live shot's values without
+  restarting its blend, which is what a `Follow` attach type is. What is pushed is **values**:
+  origin, look-at, roll, FOV, and the shot file's own `MoveSpeed`/`MaxTurnRate` rate limits. The camera
+  never learns what an entity is.
+
+  **`SetCamera` (115 script calls) lands.** `ElysiumCameraShots.{h,cpp}` reads
+  `vdata/camerashots/<file>.txt` — a grammar **Troika documents themselves** in the shipped
+  `camera shots how-to.txt`, so this is a read of an authored format rather than a reconstruction:
+  `Start`/`End` anchors (`Position` × `AttachPos` × `AttachType` × `OffsetOrigin`), one or two `Target`
+  points (two are tracked at their midpoint), and a `CameraConstraints` block. `FElysiumCameraDirector`
+  on the map actor resolves an anchor against this map's entities and bodies — `Player` /
+  `DialogTarget` (the receiver `SetCamera` was called on) / `World` / `Named`; `Origin` / `Center` /
+  `Top` / `Bottom` / `EyePosition` from the body's bounds; and **`Bone:` / `Attachment:` through the
+  skeletal body's own socket table**, which needed one new no-RTTI virtual,
+  `FElysiumEntity::GetSkeletalBody()`, for the same reason `GetAttachBody` exists. It re-resolves every
+  `Follow*` shot in the **post-move** pass, so a shot locked onto an NPC sees where that NPC ended the
+  frame. `IElysiumEmbodiment::PushCameraShot` / `PopCameraShot` is the substrate's route in —
+  **not** `IElysiumPresenter` as `runtime-architecture.md` §9 had sketched it: the camera is part of
+  the player's *body* (S3, where `GetPlayerViewPoint` already lives) and the presenter has no
+  production implementation until 11.8, so putting the channel there would have made it unreachable.
+  The doc is corrected in place. `FElysiumEntityWorld` holds **one** scripted camera at a time, the
+  same slot discipline the sign and the conversation use, and tears it down with the map;
+  `RemoveCamera` (the player datamap input, previously a logged stub) clears it.
+
+  *Acceptance.* `Elysium.Substrate.Camera` asserts the weight driver with no pawn, world or RHI:
+  0→1 in 0.5 s and 0.5 s back, identical at 30 Hz and 240 Hz, halved at time scale 0.5 and frozen at
+  0, the disjunction being true mid-blend, symmetric resume on a mid-blend reversal (with no restart),
+  the full priority order, the 0.5/s secondary decay, `SimpleSpline`'s shape and clamp, the approach's
+  clamp/snap/wrap, the cvar defaults + override + unit conversion, and the shot stack's out-of-order
+  pop, no-op double pop, ramp-preserving refresh and zero-duration cut. `Elysium.Substrate.CameraShots`
+  asserts the shot-file read against the how-to: `End` wins over `Start`, both target points parse,
+  `OffsetOrigin`/`MoveSpeed`/`DistanceTolerance` convert to cm exactly once while `FieldOfView` and
+  `MaxTurnRate` stay degrees, an unrecognised `Position` is taken as the entity's own name, and an
+  empty table is a miss rather than a half-built shot. Whole Substrate tier green (32 tests). Live on
+  `sp_tutorial_1`: `elysium.cmd togglecamera` reaches third person at weight 1 with the boom at its
+  full **215.9 cm** (85 u) in the open and **24 cm, wall-clipped**, in the spawn alcove;
+  `cam_idealdist 40` moves it to 101.6 cm and `cam_yaw 30` rotates the offset to the predicted
+  (49.1, −85.5); `FindEntityByName("Jack").SetCamera("dialogdefault")` resolves the shipped dialogue
+  shot to 40 u in front of Jack and 65 u up, rotated by his own yaw, framing his `Bip01 Head` bone at
+  the file's FOV 40, and `ent_fire !player RemoveCamera` ramps it back out. `elysium.camera` dumps the
+  weights, the deciding latch, the solved boom and the shot stack; `elysium_player_get` reports mode /
+  driver / weight / scripted weight / boom length / model alpha / shot name, which is what lets an
+  agent drive the toggle and assert the transition instead of eyeballing a screenshot.
+
+  *Found, not fixed:* framing Jack through `dialogdefault` shows him in **profile**, not head-on. The
+  camera placement is verified numerically against his own `angles` (190 → Unreal yaw 170) and the
+  head-bone target tracks exactly, so the ~90° discrepancy is between the entity's authored yaw and
+  the **rendered facing of the glTF NPC body**, not the shot. That is an 8.2/8.5 question — it touches
+  every NPC placement and every `scripted_sequence` marker — and needs its own verification pass.
+
+  *Not in scope, named:* there is **no player mesh yet** (4.8), so the fade band,
+  `ShouldDrawLocalPlayer` and the world-weapon visibility rule have nothing to drive — the alpha is
+  solved and exposed and nothing reads it. Weapon-class arbitration (`camera_prefs`, the
+  `inven_holster` and `force_sniper_third_person` branches of `CAM_ToggleCamera`) is **4.9**'s: the
+  cvars are declared so a config round-trips, and `SetThirdPerson` deliberately implements only the
+  minimal pair. The feed / seduction / death camera raises its weight and nothing else — its solvers
+  `0x100fdfa0` / `0x100fe7f0` and the `camfeed_*`/`camseduct_*`/`camdead_*` cvar families are still
+  unrecovered (`camera-view-modes.md` → Not yet recovered), so its blend rate is *assumed* to be the
+  toggle's and says so in the code. A shot is framed on its `End` anchor; **animating between `Start`
+  and `End`** is the theatre's (12.x), as are the conversation and keyframed-camera pushers — this
+  task delivers the channel and the one caller VtMB's scripts already make. The exact angle
+  composition inside `0x100fd350` remains partially recovered, and the approach speeds and orbit steps
+  are ours (no ConVar holds them), both flagged at the point of use.

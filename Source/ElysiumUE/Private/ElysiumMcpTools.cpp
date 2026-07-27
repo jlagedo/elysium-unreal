@@ -3,6 +3,7 @@
 #if ELYSIUM_WITH_MCP
 
 #include "ElysiumAudioSubsystem.h"
+#include "ElysiumCameraComponent.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
@@ -631,7 +632,7 @@ namespace ElysiumMcpImpl
 		{
 			FSchema Schema;
 			Out.Add(MakeTool(TEXT("elysium_player_get"),
-				TEXT("Read the player's pose and state: world position (Unreal cm) and view rotation, noclip on/off, the current map, average FPS, and what the +use look-cursor is currently aimed at."),
+				TEXT("Read the player's pose and state: world position (Unreal cm) and view rotation, noclip on/off, the camera (first/third person, its blend weight, the solved boom length and any scripted shot), the current map, average FPS, and what the +use look-cursor is currently aimed at."),
 				Schema,
 				[](const TSharedPtr<FJsonObject>&) -> FModelContextProtocolToolResult
 				{
@@ -658,6 +659,23 @@ namespace ElysiumMcpImpl
 					if (const IElysiumPlayerBody* PlayerBody = Cast<IElysiumPlayerBody>(Pawn))
 					{
 						Body->SetBoolField(TEXT("noclip"), PlayerBody->IsNoclip());
+
+						// 11.7 — the camera as one weight, so an agent can drive `togglecamera` and
+						// assert the transition rather than eyeball a screenshot.
+						if (const UElysiumCameraComponent* Cam = PlayerBody->GetCameraComponent())
+						{
+							TSharedRef<FJsonObject> Camera = Obj();
+							Camera->SetStringField(TEXT("mode"),
+								Cam->IsThirdPerson() ? TEXT("third") : TEXT("first"));
+							Camera->SetStringField(TEXT("driver"), Cam->GetWeights().Driver());
+							Camera->SetNumberField(TEXT("weight"), Cam->ThirdPersonWeight());
+							Camera->SetNumberField(TEXT("scripted_weight"), Cam->GetShots().GetWeight());
+							Camera->SetNumberField(TEXT("boom_length"), Cam->BoomLength());
+							Camera->SetNumberField(TEXT("model_alpha"), Cam->ModelAlpha());
+							const FElysiumCameraShot* Shot = Cam->GetShots().Top();
+							Camera->SetStringField(TEXT("shot"), Shot ? Shot->DebugName : FString());
+							Body->SetObjectField(TEXT("camera"), Camera);
+						}
 					}
 					if (UElysiumMapSubsystem* Maps = Sub<UElysiumMapSubsystem>())
 					{

@@ -1,7 +1,7 @@
 #include "ElysiumCapsulePawn.h"
 
-#include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "ElysiumCameraComponent.h"
 #include "ElysiumUserCmd.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
@@ -18,7 +18,8 @@ AElysiumCapsulePawn::AElysiumCapsulePawn()
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationRoll = false;
 
-	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
+	// The same camera the box body carries, so the A/B is over the mover alone.
+	Camera = CreateDefaultSubobject<UElysiumCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(GetCapsuleComponent());
 	// Eye at 64u above the feet; capsule centre is 91.4cm up, so offset +71.2cm.
 	Camera->SetRelativeLocation(FVector(0.0f, 0.0f, 71.2f));
@@ -83,8 +84,22 @@ void AElysiumCapsulePawn::SetMovementFrozen(bool bFrozen)
 	Move->SetMovementMode(bFrozen ? MOVE_None : (bNoclip ? MOVE_Flying : MOVE_Walking));
 }
 
+void AElysiumCapsulePawn::CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult)
+{
+	if (UElysiumCameraComponent::CalcCameraFor(Camera, DeltaTime, OutResult))
+	{
+		return;
+	}
+	Super::CalcCamera(DeltaTime, OutResult);
+}
+
 void AElysiumCapsulePawn::ApplyUserCmd(const FElysiumUserCmd& Cmd)
 {
+	if (Camera)
+	{
+		Camera->SetUserCmd(Cmd);
+	}
+
 	// `+speed` selects the slow gait; the run is the default.
 	ApplyGait(Cmd.IsDown(EElysiumButton::Speed));
 

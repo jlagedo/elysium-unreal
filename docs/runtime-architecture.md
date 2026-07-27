@@ -235,7 +235,8 @@ the entity it embodies. No `+use` routing, no sign dismissal, no `IsInputKeyDown
 `FElysiumPlayer::SetRuntimeOrigin` moves the body, exactly as `FElysiumNpc` moves a skeletal one, so
 `point_teleport`, landmark placement and a scripted `pc.SetOrigin(...)` are one path. The reverse
 direction is a sample: the world reads the pawn into the entity once a frame, before thinks and the
-queue. `UElysiumMovementComponent` arrived with 11.6; `UElysiumCameraComponent` joins at 11.7.
+queue. `UElysiumMovementComponent` arrived with 11.6 and `UElysiumCameraComponent` with 11.7; both bodies
+carry the same camera, so the `elysium.SourceMovement` A/B compares the movers alone.
 
 ### What it collapsed
 
@@ -291,7 +292,8 @@ The player's body lives on `IElysiumEmbodiment` because the pawn *is* the player
 view point, origin, teleport, damage, and the `+use` trace. Since 11.4 the substrate reaches them
 *through the player entity* rather than directly — `point_teleport` writes `SetRuntimeOrigin` and
 the entity places the body, `trigger_hurt` reduces the entity's health — so what is left on the
-interface is the body's own geometry and the eye, which is 11.7's.
+interface is the body's own geometry, the eye, and the camera — 11.7 added the scripted-shot channel
+here rather than to `IElysiumPresenter`, because the camera is part of the body.
 
 Any member may be null, and every call site has to handle "no body" (`elysium.NpcBodies 0`,
 `elysium.BrushBodies 0`), so null-service is the existing A/B path formalised.
@@ -464,9 +466,12 @@ which is also what keeps the A/B honest: it compares the movers, not two input p
   post-process and first-person-rendering fields are filled, then applying offset and rotation.
 - **The scripted channel is a service, not a special case.** `SetCamera(shotfile)` (115 script calls,
   keyed to `vdata/camerashots/`), `camera_keyframe`/`camera_track`, the conversation camera and the
-  feed camera all push onto the same weight stack through one seam
-  (`IElysiumPresenter::PushCameraShot`). That keeps `RestoreCameraToPlayerControl` a pop, and keeps
-  cutscene cameras out of the pawn.
+  feed camera all push onto the same weight stack through one seam —
+  **`IElysiumEmbodiment::PushCameraShot` / `PopCameraShot`**, beside the other player-body calls,
+  because the camera *is* part of the body (§5–6) and `IElysiumPresenter` has no production
+  implementation until 11.8. What is pushed is **values**; whoever pushed the shot keeps them current,
+  so the camera never learns what an entity is. That keeps `RemoveCamera` a pop, and keeps cutscene
+  cameras out of the pawn.
 
 ## 10. Session, boot and the app state machine
 
@@ -668,7 +673,7 @@ roadmap task or a new P11 one.
 | 5 | no save/load | a session cannot be resumed; `trigger_autosave` is inert | 9.5 on **11.9** |
 | 6 | no vitals HUD (the Canvas HUD covers reticle/signs only) | blood/health/frenzy/masquerade invisible; the sheet has no readout | 8.9 on **11.8** |
 | 7 | ~~pause has no input path~~ | closed by **11.3** — Esc on the player controller drives `UElysiumGameFlowSubsystem::TogglePause`, which holds the world and raises the pause menu, and the menu's scope comes from **11.5**'s stack (pause stays the flow's, never a scope property) | **11.3** |
-| 8 | no camera modes | `togglecamera` unbound and unimplemented; scripted cameras have no channel | **11.7** |
+| 8 | ~~no camera modes~~ | closed by **11.7**: one camera, one weight stack, `CalcCamera` as the apply point; `togglecamera` and the cvar surface reproduced, and `SetCamera` lands on a real push/pop channel. The player-mesh half (fade band, `ShouldDrawLocalPlayer`) waits on 4.8 | **11.7** |
 | 9 | ~~three input-mode owners~~ | closed by **11.5**: one arbiter owns mode, cursor and focus; CommonUI's router is declined explicitly, and a UI-only push revokes an inherited ImGui capture. Mapping contexts are declared on the scope and applied at 10.6 | **11.5** |
 | 10 | ~~no loading screen~~ | closed by **11.3** for the level-load flush; the map actor's build pass after it is 10.4's | **11.3** |
 | 11 | ~~no death / game-over path~~ | closed: **11.3** made `GameOver` a state, **11.4** gave it its driver — the player entity's health running out reaches `NotifyPlayerKilled` → `TriggerGameOver(Killed)`. The masquerade meter is the second loss condition, still 9.4's | **11.3** + **11.4** + 9.4 |
@@ -690,7 +695,7 @@ calls as one dated `decisions.md` entry — was recorded 2026-07-26 (cont. 4) an
    (`TG_PostPhysics`) tick functions; `FElysiumTimeControl` as the one pause/scale facade.
    *Observable:* `Elysium.Substrate.FrameOrder` + `Elysium.Substrate.TimeControl`, and a
    `elysium.timescale 0.25` that slows movers, the queue and animation together (the camera blend
-   joins them at 11.7, which is where a blend first exists).
+   joined them at 11.7, on the same already-dilated delta).
 2. **11.2 World services** *(landed)* — `FElysiumWorldServices` injected into `FElysiumEntityWorld`;
    the map actor implements three of the four interfaces (`IElysiumPresenter` waits for 11.8); a
    recording stub in the module's test folder. *Observable:* `Elysium.Substrate.WorldServices` runs a
@@ -720,9 +725,11 @@ calls as one dated `decisions.md` entry — was recorded 2026-07-26 (cont. 4) an
    `elysium.SourceMovement 0`. *Observable:* `elysium.cmd <verb>` fires every bindable verb from the
    console, a script, a `.dlg` action or MCP; `elysium.commands` reports the coverage; a recorded
    command stream replays identically. Feeds 10.6 and 4.7.
-7. **11.7 Camera component** — the weight stack, `CalcCamera` as the apply point, `togglecamera` and
-   the cvar surface, the scripted-shot channel. *Observable:* `camera-view-modes.md`'s weight-driver
-   automation test passes; `SetCamera` has somewhere to land.
+7. **11.7 Camera component** *(landed)* — the weight stack, `CalcCamera` as the apply point,
+   `togglecamera` and the cvar surface (in the VtMB console store, on a new `DeclareCvar`), the
+   scripted-shot channel on `IElysiumEmbodiment` with the `vdata/camerashots/` reader behind it.
+   *Observable:* `Elysium.Substrate.Camera` + `.CameraShots` pass headlessly; in the game
+   `togglecamera` blends out to the full boom and `SetCamera("dialogdefault")` frames its subject.
 8. **11.8 Presentation seam** — `UElysiumPresentationSubsystem` + `FElysiumViewState`; the HUD and the
    dialogue box re-based onto it. *Observable:* no widget references `FElysiumEntityWorld`; the
    front-end gating is one rule.

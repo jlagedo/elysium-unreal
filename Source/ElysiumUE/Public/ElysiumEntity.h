@@ -176,6 +176,11 @@ public:
 	// simulating static-mesh body. Null = nothing to constrain (attach to world / skip).
 	virtual class UPrimitiveComponent* GetAttachBody() const;
 
+	// The skeletal body a camera shot's `Bone:` / `Attachment:` attach point resolves against (11.7),
+	// and the bone lookup a look-at rig will want (P12). Base returns null; `FElysiumAnimating`
+	// returns its standing `Visual`. Declared here for the same no-RTTI reason `GetAttachBody` is.
+	virtual class USkeletalMeshComponent* GetSkeletalBody() const { return nullptr; }
+
 	// The animation seam (8.5). Play a named sequence on this entity's body, resolved through the
 	// NPC clip manifest. Base answers false — only an entity that owns a skeletal body can play
 	// one. Every script-facing animation call lands here: the `SetAnimation` input (21 sites), the

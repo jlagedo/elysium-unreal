@@ -150,6 +150,8 @@ public:
 	virtual void OnRuntimeModelChanged() override;
 	// R6 — a ScriptHidden/dead character is undrawn and stops ticking its clip.
 	virtual void OnDormancyChanged() override;
+	// The body a camera shot's `Bone: Bip01 Head` attach point resolves against (11.7).
+	virtual USkeletalMeshComponent* GetSkeletalBody() const override { return Visual; }
 
 	// The model stem the clip manifest is keyed by: the model file's lowercased basename.
 	FString ModelStem() const;

@@ -153,6 +153,16 @@ struct FElysiumRecordingServices final
 	{
 		return UseCursorHit;
 	}
+	virtual int32 PushCameraShot(const FString& ShotFile, const FElysiumEntityHandle& Subject) override
+	{
+		Record(FString::Printf(TEXT("PushCameraShot %s"), *ShotFile));
+		return ++NextCameraShotId;
+	}
+	virtual bool PopCameraShot(int32 ShotId) override
+	{
+		Record(FString::Printf(TEXT("PopCameraShot %d"), ShotId));
+		return ShotId > 0;
+	}
 
 	// --- IElysiumAudio ---------------------------------------------------------------------
 	virtual FElysiumAudioVoiceHandle PlayVoice(const FString& Rel, const FElysiumPlayParams& Params) override
@@ -251,6 +261,7 @@ private:
 	TArray<TStrongObjectPtr<UActorComponent>> Spawned;
 
 	int32 NextVoiceId = 0;
+	int32 NextCameraShotId = 0;
 	TSet<int32> LiveVoices;
 };
 

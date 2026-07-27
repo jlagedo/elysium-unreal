@@ -13,6 +13,8 @@
 
 #include "ElysiumAppState.h"
 #include "ElysiumBinds.h"
+#include "ElysiumCameraShots.h"
+#include "ElysiumCameraSolve.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumCommands.h"
 #include "ElysiumConsole.h"
@@ -2813,6 +2815,350 @@ bool FElysiumWorldServicesTest::RunTest(const FString&)
 		TestFalse(TEXT("no embodiment means no use cursor"), Bare.GetAimedUsable().IsSet());
 		Bare.PlayerUse();
 	}
+
+	return true;
+}
+
+// =====================================================================================
+// The camera (11.7) — the weight driver and the scripted-shot channel.
+//
+// VtMB ships one camera with a blend weight, not two cameras, and the whole first<->third
+// transition is that weight ramping at a fixed rate with a priority order over three latches
+// (`camera-view-modes.md` §3). That is a pure function of time and flags, so it is asserted here
+// with no pawn, no world and no RHI — which is also what makes "0 -> 1 in 0.5 s" a number rather
+// than a stopwatch.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraTest, "Elysium.Substrate.Camera", GElysiumTestFlags)
+bool FElysiumCameraTest::RunTest(const FString&)
+{
+	// Advance a weight block in fixed steps, the way a frame would.
+	auto Run = [](FElysiumCameraWeights& W, float Seconds, float Step, float TimeScale = 1.0f)
+	{
+		for (float T = 0.0f; T < Seconds - KINDA_SMALL_NUMBER; T += Step)
+		{
+			W.Advance(Step, TimeScale);
+		}
+	};
+
+	// --- the transition is 0.5 s in both directions, at 2.0/s ---
+	{
+		FElysiumCameraWeights W;
+		TestEqual(TEXT("a fresh camera is first person"), W.Third, 0.0f);
+		TestFalse(TEXT("and reports first person"), W.IsThirdPerson());
+
+		W.bUserThird = true;
+		Run(W, 0.25f, 1.0f / 60.0f);
+		TestTrue(TEXT("halfway through the blend the weight is mid-ramp"),
+			W.Third > 0.4f && W.Third < 0.6f);
+		TestTrue(TEXT("but it already reports third person -- the predicate is a disjunction"),
+			W.IsThirdPerson());
+
+		Run(W, 0.30f, 1.0f / 60.0f);
+		TestEqual(TEXT("a full traversal takes 0.5 s and clamps at 1"), W.Third, 1.0f);
+
+		W.bUserThird = false;
+		Run(W, 0.50f, 1.0f / 60.0f);
+		TestEqual(TEXT("and 0.5 s back down, clamped at 0"), W.Third, 0.0f);
+		TestFalse(TEXT("only at exactly 0 does it stop being third person"), W.IsThirdPerson());
+	}
+
+	// --- the frame rate does not change the duration ---
+	{
+		FElysiumCameraWeights Fast, Slow;
+		Fast.bUserThird = Slow.bUserThird = true;
+		Run(Fast, 0.5f, 1.0f / 240.0f);
+		Run(Slow, 0.5f, 1.0f / 30.0f);
+		TestEqual(TEXT("240 Hz and 30 Hz reach the same place"), Fast.Third, Slow.Third);
+	}
+
+	// --- it is scaled by the player's time scale, not wall-clock ---
+	{
+		FElysiumCameraWeights W;
+		W.bUserThird = true;
+		Run(W, 0.5f, 1.0f / 60.0f, /*TimeScale*/ 0.5f);
+		TestTrue(TEXT("at half time scale half a second gets halfway"),
+			FMath::IsNearlyEqual(W.Third, 0.5f, 0.02f));
+		Run(W, 0.5f, 1.0f / 60.0f, 0.5f);
+		TestEqual(TEXT("and the full second finishes it"), W.Third, 1.0f);
+
+		FElysiumCameraWeights Held;
+		Held.bUserThird = true;
+		Run(Held, 1.0f, 1.0f / 60.0f, /*TimeScale*/ 0.0f);
+		TestEqual(TEXT("a held world does not blend at all"), Held.Third, 0.0f);
+	}
+
+	// --- symmetric and interruptible: reversing mid-blend resumes, it does not restart ---
+	{
+		FElysiumCameraWeights W;
+		W.bUserThird = true;
+		Run(W, 0.25f, 1.0f / 60.0f);
+		const float Mid = W.Third;
+
+		W.bUserThird = false;
+		Run(W, 0.10f, 1.0f / 60.0f);
+		TestTrue(TEXT("reversing continues from the current weight"), W.Third < Mid && W.Third > 0.0f);
+
+		// Turning it straight back on and running the *remaining* time finishes the blend: there is no
+		// transition object holding a start snapshot, so nothing restarts.
+		W.bUserThird = true;
+		Run(W, 0.5f, 1.0f / 60.0f);
+		TestEqual(TEXT("and re-reversing finishes without restarting"), W.Third, 1.0f);
+	}
+
+	// --- the priority order: forced-third and feed win, then forced-first, then the user toggle ---
+	{
+		FElysiumCameraWeights W;
+		W.bUserThird = false;
+		W.bForcedThird = true;
+		Run(W, 0.5f, 1.0f / 60.0f);
+		TestEqual(TEXT("forced-third outranks the user's first-person toggle"), W.Third, 1.0f);
+		TestEqual(TEXT("and says so"), FString(W.Driver()), FString(TEXT("forced-third")));
+
+		W.bForcedThird = false;
+		W.bForcedFirst = true;
+		W.bUserThird = true;
+		Run(W, 0.5f, 1.0f / 60.0f);
+		TestEqual(TEXT("forced-first outranks the user's third-person toggle"), W.Third, 0.0f);
+
+		// The feed camera raises its own weight, and that alone holds third person.
+		W.bForcedFirst = false;
+		W.bUserThird = false;
+		W.bFeed = true;
+		Run(W, 0.5f, 1.0f / 60.0f);
+		TestEqual(TEXT("the feed camera drives the third weight up"), W.Third, 1.0f);
+		TestEqual(TEXT("and is the deciding driver"), FString(W.Driver()), FString(TEXT("feed")));
+	}
+
+	// --- a scripted camera counts as third person, which is what draws the player model under it ---
+	{
+		FElysiumCameraWeights W;
+		W.Scripted = 0.3f;
+		TestTrue(TEXT("a scripted shot reads as third person"), W.IsThirdPerson());
+		W.Scripted = 0.0f;
+		W.Secondary = 0.2f;
+		TestTrue(TEXT("so does the secondary weight"), W.IsThirdPerson());
+		Run(W, 0.5f, 1.0f / 60.0f);
+		TestTrue(TEXT("which decays at 0.5/s"), FMath::IsNearlyEqual(W.Secondary, 0.2f - 0.25f * 1.0f, 0.02f)
+			|| W.Secondary == 0.0f);
+	}
+
+	// --- the easing is at the point of use, not in the ramp ---
+	{
+		TestEqual(TEXT("SimpleSpline(0)"), ElysiumCam::SimpleSpline(0.0f), 0.0f);
+		TestEqual(TEXT("SimpleSpline(1)"), ElysiumCam::SimpleSpline(1.0f), 1.0f);
+		TestEqual(TEXT("SimpleSpline(0.5) is its own midpoint"), ElysiumCam::SimpleSpline(0.5f), 0.5f);
+		TestTrue(TEXT("and it eases in below the midpoint"), ElysiumCam::SimpleSpline(0.25f) < 0.25f);
+		TestTrue(TEXT("and out above it"), ElysiumCam::SimpleSpline(0.75f) > 0.75f);
+		TestEqual(TEXT("it clamps rather than extrapolating"), ElysiumCam::SimpleSpline(2.0f), 1.0f);
+	}
+
+	// --- the rate-limited approach: clamp the step, snap when inside it, wrap in angle space ---
+	{
+		TestEqual(TEXT("a step larger than the gap arrives"),
+			ElysiumCam::Approach(0.0f, 10.0f, 1000.0f, 1.0f), 10.0f);
+		TestEqual(TEXT("a step smaller than the gap is clamped"),
+			ElysiumCam::Approach(0.0f, 10.0f, 4.0f, 1.0f), 4.0f);
+		TestEqual(TEXT("and it works downward too"),
+			ElysiumCam::Approach(10.0f, 0.0f, 4.0f, 1.0f), 6.0f);
+		TestEqual(TEXT("a zero speed snaps"), ElysiumCam::Approach(0.0f, 10.0f, 0.0f, 1.0f), 10.0f);
+		// 359 -> 1 is two degrees, not 358.
+		TestTrue(TEXT("angle space takes the short way round"),
+			FMath::IsNearlyEqual(ElysiumCam::ApproachAngle(179.0f, -179.0f, 1.0f, 1.0f), 180.0f, 0.01f));
+	}
+
+	// --- the cvar surface: defaults are VtMB's, a console value overrides, units convert once ---
+	{
+		TMap<FString, FString> Store;
+		auto Lookup = [&Store](const TCHAR* Name) -> FString
+		{
+			const FString* V = Store.Find(FString(Name).ToLower());
+			return V ? *V : FString();
+		};
+
+		FElysiumCameraCvars Cvars;
+		Cvars.LoadFrom(Lookup);
+		TestTrue(TEXT("cam_idealdist defaults to 85 Source units, held in cm"),
+			FMath::IsNearlyEqual(Cvars.IdealDist, 85.0f * 2.54f, 0.01f));
+		TestEqual(TEXT("cam_targetangle is degrees and needs no conversion"), Cvars.TargetAngle, 15.0f);
+		TestTrue(TEXT("the damper is on with two constants"),
+			Cvars.bDampOn && Cvars.HookesConstant == 4.0f && Cvars.HookesConstantWall == 15.0f);
+
+		Store.Add(TEXT("cam_idealdist"), TEXT("50"));
+		Store.Add(TEXT("cdamp_on"), TEXT("0"));
+		Cvars.LoadFrom(Lookup);
+		TestTrue(TEXT("a console value wins over the default"),
+			FMath::IsNearlyEqual(Cvars.IdealDist, 50.0f * 2.54f, 0.01f));
+		TestFalse(TEXT("and cdamp_on 0 bypasses the damper"), Cvars.bDampOn);
+
+		// Every name `camera-view-modes.md` §1 lists is declared, so none of them can fall through to
+		// Python when a user's config.cfg or the patch's aliases write it.
+		TestTrue(TEXT("the whole cvar surface is declared"), ElysiumCam::CvarDefs().Num() >= 24);
+		bool bFoundPrefs = false;
+		for (const ElysiumCam::FCvarDef& Def : ElysiumCam::CvarDefs())
+		{
+			bFoundPrefs |= FString(Def.Name) == TEXT("camera_prefs");
+		}
+		TestTrue(TEXT("including the archived weapon prefs, so a cfg round-trips"), bFoundPrefs);
+	}
+
+	// --- the scripted-shot channel: handle-based push/pop and a timed ramp ---
+	{
+		FElysiumCameraShotStack Stack;
+		TestFalse(TEXT("an idle channel has no shot"), Stack.IsActive());
+		TestEqual(TEXT("and no weight"), Stack.GetWeight(), 0.0f);
+
+		FElysiumCameraShot Dialogue;
+		Dialogue.DebugName = TEXT("DialogDefault");
+		Dialogue.BlendSeconds = 0.5f;
+		Dialogue.FieldOfView = 40.0f;
+		const int32 DlgId = Stack.Push(Dialogue);
+		TestTrue(TEXT("a push mints an id"), DlgId > 0);
+		TestEqual(TEXT("and the shot decides"), Stack.Top()->DebugName, FString(TEXT("DialogDefault")));
+
+		for (int32 i = 0; i < 30; ++i) { Stack.Advance(1.0f / 60.0f); }
+		TestEqual(TEXT("the ramp takes the shot's own duration, not a fixed rate"), Stack.GetWeight(), 1.0f);
+
+		// A cutscene opening over a conversation: the later push decides, and the ramp holds at 1.
+		FElysiumCameraShot Cutscene;
+		Cutscene.DebugName = TEXT("Theatre");
+		const int32 CutId = Stack.Push(Cutscene);
+		TestEqual(TEXT("the later push decides"), Stack.Top()->DebugName, FString(TEXT("Theatre")));
+		Stack.Advance(1.0f / 60.0f);
+		TestEqual(TEXT("and the channel stays at full weight across the swap"), Stack.GetWeight(), 1.0f);
+
+		// Shots end out of order — a conversation closing behind a running cutscene.
+		TestTrue(TEXT("a shot pops from wherever it sits"), Stack.Pop(DlgId));
+		TestEqual(TEXT("the cutscene is untouched"), Stack.Top()->DebugName, FString(TEXT("Theatre")));
+		TestFalse(TEXT("a doubled pop is a no-op"), Stack.Pop(DlgId));
+
+		// Refreshing a live shot is what a `Follow` attach type is; it must not restart the ramp.
+		FElysiumCameraShot Moved = Cutscene;
+		Moved.Origin = FVector(100.0f, 0.0f, 0.0f);
+		Moved.BlendSeconds = 99.0f;
+		TestTrue(TEXT("a live shot refreshes"), Stack.Update(CutId, Moved));
+		TestEqual(TEXT("with its new values"), (float)Stack.Top()->Origin.X, 100.0f);
+		TestEqual(TEXT("but keeps the blend it was pushed with"), Stack.Top()->BlendSeconds, 0.5f);
+		TestFalse(TEXT("and a stale id refreshes nothing"), Stack.Update(DlgId, Moved));
+
+		TestTrue(TEXT("the last shot pops"), Stack.Pop(CutId));
+		TestTrue(TEXT("leaving nothing on top"), Stack.Top() == nullptr);
+		for (int32 i = 0; i < 30; ++i) { Stack.Advance(1.0f / 60.0f); }
+		TestEqual(TEXT("and the weight ramps back out over the same duration"), Stack.GetWeight(), 0.0f);
+		TestFalse(TEXT("the channel is idle again"), Stack.IsActive());
+
+		// A shot with no blend cuts.
+		FElysiumCameraShot Cut;
+		Cut.BlendSeconds = 0.0f;
+		Stack.Push(Cut);
+		Stack.Advance(1.0f / 60.0f);
+		TestEqual(TEXT("a zero-duration shot is a cut"), Stack.GetWeight(), 1.0f);
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// vdata/camerashots — the shot files SetCamera names (11.7).
+//
+// The grammar is documented by Troika in the shipped `camera shots how-to.txt`, so this asserts the
+// read against that document rather than against itself: which block wins, how the two target points
+// combine, and that Source units become cm exactly once.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraShotsTest, "Elysium.Substrate.CameraShots", GElysiumTestFlags)
+bool FElysiumCameraShotsTest::RunTest(const FString&)
+{
+	// `dialogdefault.txt`, verbatim in shape — the conversation camera every `.dlg` line starts from.
+	const FString Text = TEXT(R"(
+CameraShotTable
+{
+	// This is the default camera that is used when dialog begins.
+	DialogDefault
+	{
+		End
+		{
+			"Position"		"DialogTarget"
+			"AttachPos"		"Origin"
+			"AttachType"		"Follow"
+			"OffsetOrigin"		"[40, 0, 65]"
+		}
+
+		Target
+		{
+			Point1
+			{
+				"Position"	"DialogTarget"
+				"AttachPos"	"Bone: Bip01 Head"
+				"AttachType"	"None"
+			}
+			Point2
+			{
+				"Position"	"Player"
+				"AttachPos"	"EyePosition"
+				"AttachType"	"None"
+			}
+		}
+
+		CameraConstraints
+		{
+			"MoveSpeed"		"500"
+			"MoveAccel"		"250"
+			"MaxTurnRate"		"[60, 60, 60]"
+			"DistanceTolerance"	"5"
+			"FieldOfView"		"40"
+			"DialogPOV"		"1"
+		}
+	}
+}
+)");
+
+	FElysiumCameraShotDef Def;
+	TestTrue(TEXT("the shot file parses"), ElysiumCameraShots::ParseText(Text, Def));
+	TestEqual(TEXT("one file, one shot, named after it"), Def.Name, FString(TEXT("dialogdefault")));
+
+	TestTrue(TEXT("End is where the shot lives"), Def.End.bPresent);
+	TestFalse(TEXT("this one authors no Start, so it enters from wherever the camera is"),
+		Def.Start.bPresent);
+	TestTrue(TEXT("it hangs off the conversation partner"),
+		Def.End.Position == EElysiumShotPosition::DialogTarget);
+	TestTrue(TEXT("and follows them"), Def.End.Attach == EElysiumShotAttach::Follow);
+	TestTrue(TEXT("OffsetOrigin converts Source units to cm exactly once"),
+		Def.End.OffsetOrigin.Equals(FVector(40.0f, 0.0f, 65.0f) * 2.54f, 0.01f));
+
+	TestTrue(TEXT("the first target point is a bone on the partner"),
+		Def.Target1.bPresent && Def.Target1.AttachPos == TEXT("Bone: Bip01 Head"));
+	TestTrue(TEXT("and it does not follow -- AttachType None is set-and-stay"),
+		Def.Target1.Attach == EElysiumShotAttach::None);
+	TestTrue(TEXT("the second point is the player's eye"),
+		Def.Target2.bPresent && Def.Target2.Position == EElysiumShotPosition::Player);
+
+	TestEqual(TEXT("FieldOfView is degrees, unconverted"), Def.Constraints.FieldOfView, 40.0f);
+	TestTrue(TEXT("MoveSpeed is inches/sec, held in cm/s"),
+		FMath::IsNearlyEqual(Def.Constraints.MoveSpeed, 500.0f * 2.54f, 0.01f));
+	TestTrue(TEXT("MaxTurnRate parses out of its bracket form"),
+		Def.Constraints.MaxTurnRate.Equals(FVector(60.0f, 60.0f, 60.0f), 0.01f));
+	TestTrue(TEXT("DialogPOV rides through"), Def.Constraints.bDialogPOV);
+	TestTrue(TEXT("DistanceTolerance converts too"),
+		FMath::IsNearlyEqual(Def.Constraints.DistanceTolerance, 5.0f * 2.54f, 0.01f));
+	// Nothing in the file says otherwise, so the defaults the how-to implies hold.
+	TestFalse(TEXT("AutoPositionFromTarget defaults off"), Def.Constraints.bAutoPositionFromTarget);
+	TestTrue(TEXT("ShowHud defaults on"), Def.Constraints.bShowHud);
+
+	// A file with no shot block is a miss, not a half-built shot.
+	FElysiumCameraShotDef Empty;
+	TestFalse(TEXT("an empty table parses to nothing"),
+		ElysiumCameraShots::ParseText(TEXT("CameraShotTable\n{\n}\n"), Empty));
+	TestFalse(TEXT("and so does empty text"), ElysiumCameraShots::ParseText(FString(), Empty));
+
+	// A `Named` anchor carries the entity name, and a bare name is taken as one (the how-to writes
+	// `Named` both as the keyword and as "the name of an entity in the map").
+	FElysiumCameraShotDef Named;
+	TestTrue(TEXT("a named-entity shot parses"), ElysiumCameraShots::ParseText(TEXT(R"(
+CameraShotTable { Vantage { End { "Position" "cam_marker_1" "AttachPos" "Origin" "AttachType" "None" } } }
+)"), Named));
+	TestTrue(TEXT("an unrecognised Position is the entity's own name"),
+		Named.End.Position == EElysiumShotPosition::Named && Named.End.NamedEntity == TEXT("cam_marker_1"));
 
 	return true;
 }

@@ -82,6 +82,17 @@ public:
 	// (Invalid for a miss, or a hit on anything that is not an entity body). The trace runs on the
 	// dedicated ELYSIUM_USE_CHANNEL so world geometry occludes it; the pawn is ignored.
 	virtual FElysiumEntityHandle TraceUseCursor(const FVector& Start, const FVector& End) const = 0;
+
+	// 11.7 — the scripted-shot channel. `SetCamera(shotfile)`, `camera_keyframe`, the conversation
+	// camera and the feed camera all push onto the player camera's one weight stack through here, and
+	// `RemoveCamera` pops. `ShotFile` keys `vdata/camerashots/`; `Subject` is the entity the shot is
+	// about, which is what its `DialogTarget` anchors resolve to. Returns 0 when the shot does not
+	// parse, nothing it anchors to is there, or there is no camera (a headless world runs the
+	// conversation without one). The channel is here, on the player's *body*, rather than on
+	// IElysiumPresenter: the camera is part of the body (S3), and the presenter has no production
+	// implementation until 11.8.
+	virtual int32 PushCameraShot(const FString& ShotFile, const FElysiumEntityHandle& Subject) = 0;
+	virtual bool PopCameraShot(int32 ShotId) = 0;
 };
 
 // --------------------------------------------------------------------------------------------

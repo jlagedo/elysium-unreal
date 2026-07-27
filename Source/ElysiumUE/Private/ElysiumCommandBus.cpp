@@ -1,6 +1,7 @@
 #include "ElysiumCommandBus.h"
 
 #include "ElysiumBinds.h"
+#include "ElysiumCameraSolve.h"
 #include "ElysiumCommands.h"
 #include "ElysiumConsole.h"
 #include "ElysiumContentPaths.h"
@@ -24,6 +25,21 @@ FElysiumConsole& ElysiumCommandBus::Console()
 	// level script) would otherwise reach the bus with empty alias/cvar tables, and half the patch's
 	// default binds are aliases.
 	Store.EnsureSeeded(FElysiumContentPaths::CfgDir());
+
+	// The cvars the *engine* registers rather than a cfg file. Declaring them makes each a known cvar
+	// with its retail default, so `cam_idealdist 50` resolves as a cvar set instead of falling through
+	// to Python and a fresh install with no `out/cfg` still reads VtMB's own values. Declarations
+	// survive a re-seed and are shadowed by any cfg that carries the name, which is the order the game
+	// itself loads them in.
+	static bool bDeclaredEngineCvars = false;
+	if (!bDeclaredEngineCvars)
+	{
+		bDeclaredEngineCvars = true;
+		for (const ElysiumCam::FCvarDef& Def : ElysiumCam::CvarDefs())
+		{
+			Store.DeclareCvar(Def.Name, Def.Default);
+		}
+	}
 	return Store;
 }
 

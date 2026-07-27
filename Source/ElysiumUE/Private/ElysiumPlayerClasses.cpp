@@ -619,8 +619,10 @@ static FElysiumClassRegistrar GRegPlayer(
 		// `script_api.md`.)
 		D.Input(TEXT("Whisper"),         [](FElysiumEntity& E, const FElysiumInputArgs& A)
 			{ static_cast<FP&>(E).PendingInput(TEXT("Whisper"), TEXT("9.2 — dialogue line audio"), A); });
-		D.Input(TEXT("RemoveCamera"),    [](FElysiumEntity& E, const FElysiumInputArgs& A)
-			{ static_cast<FP&>(E).PendingInput(TEXT("RemoveCamera"), TEXT("11.7 — the camera channel"), A); });
+		// RemoveCamera — the other half of `SetCamera`: hand the view back to the player. It clears the
+		// map's one scripted camera whether a script, a wire or the theatre put it up (11.7).
+		D.Input(TEXT("RemoveCamera"),    [](FElysiumEntity& E, const FElysiumInputArgs&)
+			{ if (E.World) { E.World->ClearScriptedCamera(); } });
 		D.Input(TEXT("PlayHUDParticle"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
 			{ static_cast<FP&>(E).PendingInput(TEXT("PlayHUDParticle"), TEXT("8.9 — the HUD"), A); });
 		D.Input(TEXT("StopHUDParticle"), [](FElysiumEntity& E, const FElysiumInputArgs& A)

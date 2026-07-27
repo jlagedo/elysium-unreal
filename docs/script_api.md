@@ -73,7 +73,7 @@ in one run.
 | Random dialogue gates | **589** | `OneOfSet` 589 | 9.7 (solved, below) |
 | Sheet: XP / humanity / masquerade | **290** | `AwardExperience` 77, `HumanityAdd` 69, `CalcFeat` 53 | 9.4 |
 | Economy | **250** | `CurrentMoney` 86, `MoneyAdd` 83, `MoneyRemove` 80 | 9.10 |
-| Sequences & conversation camera | **224** | `SetCamera` 115, `BeginSequence` 72 | 8.5 |
+| Sequences & conversation camera | **224** | `SetCamera` 115, `BeginSequence` 72 | 8.5, 11.7 |
 | AI schedules | 76 | `FleeAndDie`, `SetupPatrolType`, `FollowPatrolPath` | 10.7 |
 | Dialogue audio | 50 | `PlayDialogFile` 41 | 9.2 |
 
@@ -172,16 +172,16 @@ in CurrentMoney"`), rather than returning a falsy value.
 
 | Name | Body | Args | Calls | Backing today |
 |---|---|---|---|---|
-| `SetDisposition` | `10197e50` | `(char, name:str, level:int)` | **2,510** | stub |
+| `SetDisposition` | `10197e50` | `(char, name:str, level:int)` | **2,510** | stance only (9.9 owns reactions) |
 | `SetQuest` | `10199800` | `(char, quest:str, state:int)` | 732 | real (quest map) |
 | `GetQuestState` | `101987b0` | `(char, quest:str)` | 377 | real (quest map) |
 | `HasItem` | `10198640` | `(char, item:str)` | 327 | stub |
 | `IsMale` | `10199990` | `(char)` | 207 | real (sheet) |
 | `RemoveItem` | `10199240` | `(char, item:str)` | 182 | stub |
 | `GiveItem` | `10199100` | `(char, item:str)` | 126 | stub |
-| `SetCamera` | `10198070` | `(char, shotfile:str)` | 115 | stub |
+| `SetCamera` | `10198070` | `(char, shotfile:str)` | 115 | real (the 11.7 shot channel) |
 | `StartBarter` | `101993c0` | `(char)` | 108 | stub |
-| `CurrentMoney` | `101998c0` | `(char)` | 86 | stub |
+| `CurrentMoney` | `101998c0` | `(char)` | 86 | real (the `money` field) |
 | `SeductiveFeed` | `10198150` | `(char)` | 54 | stub |
 | `CalcFeat` | `10198cc0` | `(char, feat:str)` | 53 | stub |
 | `HasWeaponEquipped` | `101984c0` | `(char, …)` | 27 | stub |
@@ -191,7 +191,7 @@ in CurrentMoney"`), rather than returning a falsy value.
 | `WorldMap` | `10199520` | `(char)` | 12 | stub |
 | `IsFollowerOf` | `101988c0` | `(char, …)` | 8 | stub |
 | `SewerMap` | `10199690` | `(char)` | 4 | stub |
-| `SetGesture` | `10197f60` | `(char, sequence:str)` | 2 | stub |
+| `SetGesture` | `10197f60` | `(char, sequence:str)` | 2 | real (plays the named clip) |
 | `GetMasqueradeLevel` | `10199ce0` | `(char)` | 2 | stub |
 | `DialogDiscipline` | `10198310` | `(char, …)` | — | stub |
 | `SetExpression` | `10197ce0` | `(char, modifier:int, expr:str)` | — | stub |
@@ -282,7 +282,7 @@ what roadmap B6's feed interaction fires. Keyfields include `squadname` and `hin
 | `AwardExperience` | **STRING** | 77 | `LAB_10006807` |
 | `Whisper` | STRING | 9 | `LAB_100118a6` |
 | `SetCriminalLevel` | INTEGER | 3 | `LAB_100063bb` |
-| `RemoveCamera` | VOID | 3 | `LAB_10001c12` |
+| `RemoveCamera` | VOID | 3 | `LAB_10001c12` — real since 11.7: clears the map's one scripted camera |
 | `PlayHUDParticle` | STRING | 1 | `LAB_1000ff6a` |
 | `StopHUDParticle` | FLOAT | 1 | `FUN_1015f330` |
 | `SetInvestigateLevel` | INTEGER | 0 | `LAB_10007748` |
@@ -332,8 +332,9 @@ Demand-ranked, with the dependency that actually gates each one:
    `AwardExperience` need `vdata/system/feats.txt` and the experience table.
 5. **Economy** (250) — 9.10. `MoneyAdd`/`MoneyRemove`/`CurrentMoney` over one integer on the
    combat character. The smallest genuinely self-contained system on the list.
-6. **Sequences & camera** (224) — 8.5 / the conversation camera; `SetCamera` keys
-   `vdata/camerashots/`.
+6. **Sequences & camera** (224) — 8.5 [x] / **11.7 [x]**: `SetCamera` keys `vdata/camerashots/` and
+   lands on the scripted-shot channel (`camera-view-modes.md`); `RemoveCamera` pops it. Animating a
+   shot between its `Start` and `End` anchors is the theatre's, 12.x.
 7. **AI schedules** (76) — 10.7, behind real NPC AI.
 
 Everything below that is single-digit demand on classes that do not exist yet

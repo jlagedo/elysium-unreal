@@ -6,6 +6,7 @@
 
 #include "ElysiumPlayerBody.generated.h"
 
+class UElysiumCameraComponent;
 struct FElysiumUserCmd;
 
 UINTERFACE()
@@ -50,4 +51,9 @@ public:
 	// One frame of intent (S5). The router calls this after it has built the command and applied the
 	// look delta to the controller; everything else the body does with it is the body's business.
 	virtual void ApplyUserCmd(const FElysiumUserCmd& Cmd) = 0;
+
+	// The body's camera (11.7): the weight stack, the boom solve and the scripted-shot channel. Both
+	// bodies carry the same one, so the `elysium.SourceMovement` A/B compares the movers and not two
+	// camera paths. Never null on a spawned body.
+	virtual UElysiumCameraComponent* GetCameraComponent() const = 0;
 };

@@ -634,6 +634,34 @@ void FElysiumEntityWorld::CloseDialog(bool bSilent)
 	EndDialogSession(bSilent);
 }
 
+void FElysiumEntityWorld::SetScriptedCamera(const FString& ShotFile, const FElysiumEntityHandle& Subject)
+{
+	IElysiumEmbodiment* E = Embodiment();
+	if (!E)
+	{
+		return;
+	}
+	// "*The* cinematic camera mode": a second SetCamera replaces the first rather than stacking, so
+	// the channel underneath never accumulates shots a conversation forgot to remove.
+	ClearScriptedCamera();
+	ScriptedCameraShot = E->PushCameraShot(ShotFile, Subject);
+	ScriptedCameraFile = ScriptedCameraShot != 0 ? ShotFile : FString();
+}
+
+void FElysiumEntityWorld::ClearScriptedCamera()
+{
+	if (ScriptedCameraShot == 0)
+	{
+		return;
+	}
+	if (IElysiumEmbodiment* E = Embodiment())
+	{
+		E->PopCameraShot(ScriptedCameraShot);
+	}
+	ScriptedCameraShot = 0;
+	ScriptedCameraFile.Reset();
+}
+
 void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 {
 	const FElysiumEntityHandle Closing = OpenDialogOwner;
@@ -1068,6 +1096,9 @@ void FElysiumEntityWorld::Teardown()
 		}
 	}
 	Player = FElysiumEntityHandle::Invalid();
+
+	// A scripted camera does not outlive the map that pushed it.
+	ClearScriptedCamera();
 
 	// Epoch 0 matches no minted handle, so every outstanding handle goes stale at once (R3).
 	Epoch = 0;
