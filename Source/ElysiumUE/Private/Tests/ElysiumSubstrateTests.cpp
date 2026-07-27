@@ -32,10 +32,12 @@
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumMapActor.h"
+#include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumPresentationSubsystem.h"
 #include "ElysiumRng.h"
+#include "Substrate/ElysiumRulebook.h"
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSaveTypes.h"
 #include "Scripting/ElysiumPythonVM.h"
@@ -693,10 +695,9 @@ bool FElysiumKeyValuesTest::RunTest(const FString&)
 		"    \"name\" \"value\"\n"
 		"    \"XPos\" \"\"\n"                        // authored-but-empty: the CSignUI centring branch
 		"    \"Text\" \"line one\nline two\"\n"      // spans a newline inside the quotes
-		"    \"Block\"\n"
-		"    {\n"
-		"        \"inner\" \"1\"\n"
-		"    }\n"
+		"    \"gate\" \"BloodPool > 0\"\n"           // a repeated leaf key: the stats.txt case
+		"    \"gate\" \"Health < Max_Health\"\n"
+		"    \"Block\" { \"inner\" \"1\" }\n"        // a whole block inline on one line
 		"}\n");
 
 	TSharedPtr<ElysiumKeyValues::FKvNode> Root = ElysiumKeyValues::ParseText(Text);
@@ -722,11 +723,179 @@ bool FElysiumKeyValuesTest::RunTest(const FString&)
 	TestTrue(TEXT("empty XPos is empty"), RootBlock->Str(TEXT("XPos"), TEXT("DEFAULT")).IsEmpty());
 	TestFalse(TEXT("absent key not present"), RootBlock->Has(TEXT("nope")));
 
+	// A repeated leaf key is data, not an authoring slip: `Values` keeps the last, `Pairs` keeps
+	// both. 17 of stats.txt's Active_Disciplines gate on two IncPredependency expressions this way.
+	TestEqual(TEXT("repeated leaf: Values keeps the last"),
+		RootBlock->Str(TEXT("gate"), FString()), FString(TEXT("Health < Max_Health")));
+	TArray<FString> Gates;
+	RootBlock->ValuesFor(TEXT("gate"), Gates);
+	if (TestEqual(TEXT("repeated leaf: ValuesFor keeps both"), Gates.Num(), 2))
+	{
+		TestEqual(TEXT("in file order"), Gates[0], FString(TEXT("BloodPool > 0")));
+	}
+	TArray<FString> None;
+	RootBlock->ValuesFor(TEXT("nope"), None);
+	TestEqual(TEXT("ValuesFor on an absent key yields nothing"), None.Num(), 0);
+
 	// Nested block and its typed read.
 	const ElysiumKeyValues::FKvNode* Inner = RootBlock->Child(TEXT("Block"));
 	if (TestNotNull(TEXT("nested Block present"), Inner))
 	{
 		TestEqual(TEXT("nested int"), Inner->Int(TEXT("inner"), 0), 1);
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// The rulebook's pure parsers (9.4a) — the four grammars VtMB authors inside its `vdata/`
+// values, driven off literals so they are asserted with no exported content at all. Each is
+// a place where reading the string wrong produces a plausible-but-wrong number rather than
+// a failure, which is exactly why they are pinned here rather than only against the files.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRulebookTest, "Elysium.Substrate.Rulebook", GElysiumTestFlags)
+bool FElysiumRulebookTest::RunTest(const FString&)
+{
+	// --- The cost grammar: three authored forms ------------------------------------------------
+	FElysiumStatCost Cost;
+
+	TestTrue(TEXT("`Current_Rating * 4` parses"), Cost.Parse(TEXT("Current_Rating * 4")));
+	TestEqual(TEXT("  as per-rating"), (int32)Cost.Kind, (int32)FElysiumStatCost::EKind::PerRating);
+	// Current_Rating is the PRE-purchase base, so the 3 -> 4 dot costs 12 and selling it refunds 12.
+	TestEqual(TEXT("  the 3->4 attribute dot costs 12"), Cost.At(3), 12);
+	TestEqual(TEXT("  and the 0->1 dot is free of the raise price"), Cost.At(0), 0);
+
+	TestTrue(TEXT("`Table: 6, 8, 12, 18, 24` parses"), Cost.Parse(TEXT("Table: 6, 8, 12, 18, 24")));
+	TestEqual(TEXT("  as a table"), (int32)Cost.Kind, (int32)FElysiumStatCost::EKind::Table);
+	TestEqual(TEXT("  with five steps"), Cost.Steps.Num(), 5);
+	TestEqual(TEXT("  rating 2 costs 12"), Cost.At(2), 12);
+	TestEqual(TEXT("  past the end clamps to the last step"), Cost.At(99), 24);
+
+	TestTrue(TEXT("a bare integer parses"), Cost.Parse(TEXT("3")));
+	TestEqual(TEXT("  as flat"), (int32)Cost.Kind, (int32)FElysiumStatCost::EKind::Flat);
+	TestEqual(TEXT("  at any rating"), Cost.At(4), 3);
+
+	TestFalse(TEXT("an absent cost does not parse"), Cost.Parse(FString()));
+	TestTrue(TEXT("30000 is the engine's cannot-buy"), Cost.Parse(TEXT("30000")) &&
+		!Cost.CanBuy(0));
+
+	// One of New/Raise authored copies into the other — CVStatCost_t::Load's own rule, and the
+	// reason a stat with only a `Raise` still prices its first dot.
+	{
+		TSharedPtr<ElysiumKeyValues::FKvNode> Node =
+			ElysiumKeyValues::ParseText(TEXT("Costs { \"Raise\" \"Current_Rating * 5\" }"));
+		const ElysiumKeyValues::FKvNode* Block = Node.IsValid() ? Node->Child(TEXT("Costs")) : nullptr;
+		if (TestNotNull(TEXT("Costs block parsed"), Block))
+		{
+			FElysiumStatCosts Costs;
+			Costs.Load(*Block);
+			TestTrue(TEXT("Costs present"), Costs.bPresent);
+			TestEqual(TEXT("Raise copied into New"), Costs.New.At(2), Costs.Raise.At(2));
+		}
+	}
+
+	// --- CVStatRef: a trait name with an optional / N or * N -----------------------------------
+	FElysiumTraitRef Ref = FElysiumTraitRef::Parse(TEXT("Armor_Rating / 2"));
+	TestEqual(TEXT("`Armor_Rating / 2` names the trait"), Ref.Trait, FString(TEXT("Armor_Rating")));
+	TestEqual(TEXT("  and divides"), Ref.Apply(7), 3);
+	Ref = FElysiumTraitRef::Parse(TEXT("Strength"));
+	TestEqual(TEXT("a bare name is identity"), Ref.Apply(7), 7);
+	Ref = FElysiumTraitRef::Parse(TEXT("Soak_Pool * 3"));
+	TestEqual(TEXT("`* 3` multiplies"), Ref.Apply(7), 21);
+
+	// --- The Base%d probe stops at the first ABSENT index --------------------------------------
+	// `feats.txt` comments out a `Base2` while leaving `Base0`/`Base1` live, so a fixed-range scan
+	// would read a base the authors parked.
+	{
+		TSharedPtr<ElysiumKeyValues::FKvNode> Node = ElysiumKeyValues::ParseText(
+			TEXT("Feat { \"Base0\" \"Dexterity\" \"Base1\" \"Security\" \"Base3\" \"Parked\" }"));
+		const ElysiumKeyValues::FKvNode* Feat = Node.IsValid() ? Node->Child(TEXT("Feat")) : nullptr;
+		if (TestNotNull(TEXT("Feat block parsed"), Feat))
+		{
+			TArray<FElysiumTraitRef> Bases;
+			FElysiumFeatTable::ProbeTraitRefs(*Feat, TEXT("Base"), Bases);
+			TestEqual(TEXT("the probe stops at the gap"), Bases.Num(), 2);
+
+			TArray<FElysiumTraitRef> None;
+			FElysiumFeatTable::ProbeTraitRefs(*Feat, TEXT("Automatic"), None);
+			TestEqual(TEXT("a feat with no Automatic0 has none"), None.Num(), 0);
+		}
+	}
+
+	// --- The Modifier mini-DSL against the shipped operator vocabulary -------------------------
+	// The vocabulary is DATA (`traiteffect.txt`); here it is supplied by hand so the parse rule is
+	// asserted with no files. The content tier checks the shipped file still says this.
+	FElysiumTraitEffects Effects;
+	Effects.Operators.Names = { TEXT("+"), TEXT("*"), TEXT("/"), TEXT("Max"), TEXT("Min"),
+		TEXT("%"), TEXT("Value"), TEXT("Cost"), TEXT("BloodCost"), TEXT("Damage"), TEXT("Duration") };
+
+	FElysiumTraitEffect Fx;
+	Effects.ParseModifier(TEXT("+1"), Fx);
+	TestEqual(TEXT("`+1` is op Add"), (int32)Fx.Op, (int32)EElysiumTraitOp::Add);
+	TestEqual(TEXT("  amount 1"), Fx.Amount, 1);
+
+	Effects.ParseModifier(TEXT("-2"), Fx);
+	TestEqual(TEXT("`-2` is op Add"), (int32)Fx.Op, (int32)EElysiumTraitOp::Add);
+	TestEqual(TEXT("  amount -2"), Fx.Amount, -2);
+
+	Effects.ParseModifier(TEXT("Max 3"), Fx);
+	TestEqual(TEXT("`Max 3` is op Max"), (int32)Fx.Op, (int32)EElysiumTraitOp::Max);
+	TestEqual(TEXT("  amount 3"), Fx.Amount, 3);
+
+	Effects.ParseModifier(TEXT("Duration 200%"), Fx);
+	TestEqual(TEXT("`Duration 200%` is op Duration"), (int32)Fx.Op, (int32)EElysiumTraitOp::Duration);
+	TestEqual(TEXT("  amount 200"), Fx.Amount, 200);
+	TestTrue(TEXT("  flagged percent"), Fx.bPercent);
+
+	// `Value` takes a NAMED payload as readily as a number, which is the one operator that cannot
+	// be modelled as an int.
+	Effects.ParseModifier(TEXT("Value Clawed_Form"), Fx);
+	TestEqual(TEXT("`Value Clawed_Form` is op Value"), (int32)Fx.Op, (int32)EElysiumTraitOp::Value);
+	TestEqual(TEXT("  carries the name"), Fx.ValueName, FString(TEXT("Clawed_Form")));
+	Effects.ParseModifier(TEXT("Value 1"), Fx);
+	TestEqual(TEXT("`Value 1` is still op Value"), (int32)Fx.Op, (int32)EElysiumTraitOp::Value);
+	TestEqual(TEXT("  with a number"), Fx.Amount, 1);
+	TestTrue(TEXT("  and no name"), Fx.ValueName.IsEmpty());
+
+	// An unmatched operator name falls to op 0 with a signed integer — the engine's own fallback.
+	Effects.ParseModifier(TEXT("Nonsense 5"), Fx);
+	TestEqual(TEXT("an unknown operator falls to Add"), (int32)Fx.Op, (int32)EElysiumTraitOp::Add);
+
+	// --- The experience table's pipe rows ------------------------------------------------------
+	FElysiumExperienceEntry Entry;
+	TestTrue(TEXT("a row parses"),
+		FElysiumExperienceTable::ParseRow(TEXT("Carson01  | Found the case\t | 101"), Entry));
+	TestEqual(TEXT("  key trimmed of spaces"), Entry.Key, FString(TEXT("Carson01")));
+	TestEqual(TEXT("  description trimmed of tabs"), Entry.Description, FString(TEXT("Found the case")));
+	// Stored raw: the trailing `01` is not an encoding this layer strips.
+	TestEqual(TEXT("  value stored raw"), Entry.Value, 101);
+
+	TestFalse(TEXT("a `>` comment is not a row"),
+		FElysiumExperienceTable::ParseRow(TEXT("> Elizabeth Dane"), Entry));
+	TestFalse(TEXT("a blank line is not a row"), FElysiumExperienceTable::ParseRow(TEXT(""), Entry));
+	// The loader's own rule, not general whitespace handling: under three characters is skipped.
+	TestFalse(TEXT("a sub-3-character line is skipped"),
+		FElysiumExperienceTable::ParseRow(TEXT("ab"), Entry));
+	TestFalse(TEXT("a two-field line is not a row"),
+		FElysiumExperienceTable::ParseRow(TEXT("Key | 101"), Entry));
+	TestTrue(TEXT("a NONE description is still a row"),
+		FElysiumExperienceTable::ParseRow(TEXT("Title01  | NONE\t | 51"), Entry));
+
+	// --- The shared integer-keyed lookup table -------------------------------------------------
+	{
+		TSharedPtr<ElysiumKeyValues::FKvNode> Node = ElysiumKeyValues::ParseText(
+			TEXT("Table { \"InternalName\" \"T\" \"Clamping\" \"1\" \"0\" \"0\" \"1\" \"3.0\" \"2\" \"4.0\" }"));
+		const ElysiumKeyValues::FKvNode* Block = Node.IsValid() ? Node->Child(TEXT("Table")) : nullptr;
+		if (TestNotNull(TEXT("Table block parsed"), Block))
+		{
+			FElysiumRuleTable Table;
+			Table.Load(*Block);
+			// The named keys are not rows; only the numeric ones are.
+			TestEqual(TEXT("three rows, not five"), Table.Rows.Num(), 3);
+			TestEqual(TEXT("row 1 reads as a float"), Table.Lookup(1), 3.0f);
+			TestEqual(TEXT("clamping takes the nearest end"), Table.Lookup(99), 4.0f);
+		}
 	}
 
 	return true;
@@ -1139,10 +1308,15 @@ bool FElysiumInputScopesTest::RunTest(const FString&)
 }
 
 // =====================================================================================
-// S2 — the frame order (11.1, runtime-architecture.md §3), asserted at both levels it is
-// declared at: the engine tick table (tick groups + the pause split, read off the class
-// defaults — the prerequisites themselves are wired at registration and belong to the Play
-// tier), and the substrate's own think-before-queue order inside one world tick.
+// S2 — the frame order (runtime-architecture.md §3), asserted at both levels it is declared
+// at: the engine tick table (tick groups + the pause split, read off the class defaults —
+// the late-bound prerequisites are wired at registration and belong to the Play tier), and
+// the substrate's own two-pass drive inside one frame.
+//
+// The order is RETAIL's, and it is move-FIRST (RE21): the engine runs the whole
+// ProcessUsercmds -> CPlayerMove::RunCommand chain while draining the client's `clc_move`
+// message, strictly before SV_Frame calls GameFrame — so the pawn has already moved by the
+// time the first think or queued event runs.
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFrameOrderTest, "Elysium.Substrate.FrameOrder", GElysiumTestFlags)
@@ -1155,21 +1329,44 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 		return false;
 	}
 
-	// Steps 2-4 run before physics: the clock advances, then thinks issue their swept moves,
-	// then the queue services — all before anything is moved against them.
+	// Steps 2-3 run before physics AND before the move: the clock advances, a freshly seated pawn is
+	// placed and frozen, and the player entity's own think runs — the RunCommand shell retail wraps
+	// the move in.
+	TestTrue(TEXT("the pre-move pass ticks"), Map->PreMoveTickFunction.bCanEverTick);
+	TestTrue(TEXT("the pre-move pass starts enabled"), Map->PreMoveTickFunction.bStartWithTickEnabled);
+	TestEqual(TEXT("the pre-move pass is TG_PrePhysics"),
+		static_cast<int32>(Map->PreMoveTickFunction.TickGroup), static_cast<int32>(TG_PrePhysics));
+
+	// Steps 5-6 also run before physics, but AFTER the pawn's move — this is retail's GameFrame,
+	// and the move is not in it. Both passes share TG_PrePhysics, so what separates them is the
+	// prerequisite the map actor wires at registration, not the group; the Play tier reads that
+	// chain back off the running graph.
 	TestTrue(TEXT("the gameplay pass ticks"), Map->PrimaryActorTick.bCanEverTick);
 	TestEqual(TEXT("the gameplay pass is TG_PrePhysics"),
 		static_cast<int32>(Map->PrimaryActorTick.TickGroup), static_cast<int32>(TG_PrePhysics));
 
-	// Step 7 runs after physics, on the same actor: the +use cursor traces against the frame's
-	// final positions. Two tick functions, not two actors — one actor keeps the order declarable.
+	// Step 4 — the pawn's mover is in the same group as both, for the same reason: it is ordered by
+	// prerequisite, between them.
+	const UElysiumMovementComponent* Mover = GetDefault<UElysiumMovementComponent>();
+	if (TestNotNull(TEXT("movement component class defaults"), Mover))
+	{
+		TestTrue(TEXT("the mover ticks"), Mover->PrimaryComponentTick.bCanEverTick);
+		TestEqual(TEXT("the mover is TG_PrePhysics, between the two gameplay passes"),
+			static_cast<int32>(Mover->PrimaryComponentTick.TickGroup), static_cast<int32>(TG_PrePhysics));
+	}
+
+	// Step 8 runs after physics, on the same actor: the +use cursor traces against the frame's
+	// final positions. Three tick functions, not three actors — one actor keeps the order declarable.
 	TestTrue(TEXT("the post-move pass ticks"), Map->PostMoveTickFunction.bCanEverTick);
 	TestTrue(TEXT("the post-move pass starts enabled"), Map->PostMoveTickFunction.bStartWithTickEnabled);
 	TestEqual(TEXT("the post-move pass is TG_PostPhysics"),
 		static_cast<int32>(Map->PostMoveTickFunction.TickGroup), static_cast<int32>(TG_PostPhysics));
+	TestTrue(TEXT("the post-move pass is later than both pre-physics passes"),
+		static_cast<int32>(Map->PostMoveTickFunction.TickGroup)
+			> static_cast<int32>(Map->PreMoveTickFunction.TickGroup));
 
-	// Step 9 rebuilds the view state after everything that could change it has run, so it is later
-	// than both gameplay passes (11.8).
+	// Step 10 rebuilds the view state after everything that could change it has run, so it is later
+	// than all three gameplay passes (11.8).
 	const UElysiumPresentationSubsystem* Present = GetDefault<UElysiumPresentationSubsystem>();
 	if (TestNotNull(TEXT("presentation subsystem class defaults"), Present))
 	{
@@ -1177,14 +1374,15 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 		TestTrue(TEXT("the publish pass starts enabled"), Present->PublishTickFunction.bStartWithTickEnabled);
 		TestEqual(TEXT("the publish pass is TG_PostUpdateWork"),
 			static_cast<int32>(Present->PublishTickFunction.TickGroup), static_cast<int32>(TG_PostUpdateWork));
-		TestTrue(TEXT("the publish pass is last of the three"),
+		TestTrue(TEXT("the publish pass is last of the four"),
 			static_cast<int32>(Present->PublishTickFunction.TickGroup)
 				> static_cast<int32>(Map->PostMoveTickFunction.TickGroup));
 	}
 
-	// §4 — a hold stops the world and keeps the screen alive. Gameplay ticks are false on both
+	// §4 — a hold stops the world and keeps the screen alive. Gameplay ticks are false on all three
 	// passes; the publish pass, which is presentation, is true — pause is exactly when a dialogue
 	// box has to be taken down, and that comes off a publish.
+	TestFalse(TEXT("the pre-move pass stops when held"), Map->PreMoveTickFunction.bTickEvenWhenPaused);
 	TestFalse(TEXT("the gameplay pass stops when held"), Map->PrimaryActorTick.bTickEvenWhenPaused);
 	TestFalse(TEXT("the post-move pass stops when held"), Map->PostMoveTickFunction.bTickEvenWhenPaused);
 	if (Present)
@@ -1201,7 +1399,7 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 		TestFalse(TEXT("the HUD does not tick"), Hud->PrimaryActorTick.bCanEverTick);
 	}
 
-	// --- steps 3-4: think first, then service the queue (RE2's retail order) ---------------
+	// --- steps 5-6: think first, then service the queue (RE2's retail order) ---------------
 	// A logic_timer due this frame fires OnTimer from its Think; the wire it fires lands in the
 	// queue at zero delay. Think-first means the same tick's queue pass delivers it, so the
 	// counter has moved after ONE tick. Queue-first would leave it for the next frame.
@@ -1259,6 +1457,34 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 	World.Tick(1.0);
 	TestEqual(TEXT("the think's wire lands in the same frame's queue pass"),
 		CounterValue(CounterEntity), 5.f);
+
+	// --- steps 3 vs 5: the player thinks on the OTHER side of the move ----------------------
+	// Retail runs the player's own think inside CPlayerMove::RunCommand, around the move, and not
+	// in Physics_RunThinkFunctions. So the world is driven twice a frame and the player is the one
+	// entity the general think pass must skip — otherwise it thinks twice, and the second one lands
+	// after the move instead of before it.
+	FElysiumEntityDefs PlayerDefs;
+	PlayerDefs.MapName = TEXT("__test_player_think__");
+	FElysiumEntityWorld PlayerWorld(/*Owner*/ nullptr, /*GameState*/ nullptr);
+	PlayerWorld.Load(MoveTemp(PlayerDefs));
+	PlayerWorld.SpawnPlayer();
+
+	FElysiumPlayer* PlayerEnt = PlayerWorld.FindPlayer();
+	if (TestNotNull(TEXT("the player entity spawned"), PlayerEnt))
+	{
+		// Arm it due, then run the pre-move pass: the think fires and disarms itself.
+		PlayerEnt->NextThink = 1.0f;
+		PlayerWorld.RunPlayerThink(2.0);
+		TestEqual(TEXT("the pre-move pass runs the player's think"),
+			PlayerEnt->NextThink, ELYSIUM_NEVER_THINK);
+
+		// Arm it again and run the POST-move pass instead. The general think pass skips the player,
+		// so it stays armed — the pre-move pass is the only thing that may fire it.
+		PlayerEnt->NextThink = 1.0f;
+		PlayerWorld.Tick(2.0);
+		TestEqual(TEXT("the post-move think pass leaves the player alone"),
+			PlayerEnt->NextThink, 1.0f);
+	}
 
 	return true;
 }

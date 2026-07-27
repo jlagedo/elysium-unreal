@@ -17,11 +17,36 @@ class USkeletalMeshComponent;
 class UStaticMeshComponent;
 class AElysiumMapActor;
 
-// S2 — the map's post-move tick (runtime-architecture.md §3, step 7). A second tick function on
+// S2 — the map's pre-move tick (runtime-architecture.md §3, steps 2-3). The first of the actor's
+// three tick functions, in TG_PrePhysics, carrying everything that must be settled BEFORE the pawn
+// moves: the frame order's own wiring, the one clock advance, and the player entity's own think.
+// Retail runs the whole player move out of the `clc_move` drain, ahead of `GameFrame`, with the
+// player's think inside it — so the clock has to be at this frame's `now` and the body has to be
+// placed and held before the mover component gets its turn.
+USTRUCT()
+struct FElysiumPreMoveTickFunction : public FTickFunction
+{
+	GENERATED_USTRUCT_BODY()
+
+	AElysiumMapActor* Target = nullptr;
+
+	virtual void ExecuteTick(float DeltaTime, ELevelTick TickType, ENamedThreads::Type CurrentThread,
+		const FGraphEventRef& MyCompletionGraphEvent) override;
+	virtual FString DiagnosticMessage() override;
+	virtual FName DiagnosticContext(bool bDetailed) override;
+};
+
+template <>
+struct TStructOpsTypeTraits<FElysiumPreMoveTickFunction> : public TStructOpsTypeTraitsBase2<FElysiumPreMoveTickFunction>
+{
+	enum { WithCopy = false };
+};
+
+// S2 — the map's post-move tick (runtime-architecture.md §3, step 8). A third tick function on
 // the same actor, in TG_PostPhysics, carrying the work that must see the frame's FINAL positions:
 // the `+use` look cursor traces against where a door actually ended up this frame, not where it
-// was before its swept move and the pawn's. Two tick functions on one actor is the engine's own
-// answer to work that straddles physics — splitting into two actors would reintroduce the
+// was before its swept move and the pawn's. Three tick functions on one actor is the engine's own
+// answer to work that straddles physics — splitting into three actors would reintroduce the
 // ordering question tick groups solve.
 USTRUCT()
 struct FElysiumPostMoveTickFunction : public FTickFunction
@@ -82,15 +107,25 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void RegisterActorTickFunctions(bool bRegister) override;
 
-	// S2 — the frame's gameplay pass (TG_PrePhysics, steps 2-4): advance the one clock, run the
-	// substrate think-first, then the audio/scheme pass. Runs before physics and before the pawn's
-	// move, so a mover's swept move for this frame is issued before anything is moved against it.
+	// S2 — the frame's pre-move pass (TG_PrePhysics, steps 2-3), driven by PreMoveTickFunction:
+	// wire the frame order, advance the one clock, place and hold a freshly spawned pawn, then run
+	// the player entity's own think. Everything here happens before the pawn's move, which is where
+	// retail puts it.
+	void PreMoveTick(float DeltaSeconds);
+
+	// S2 — the frame's gameplay pass (TG_PrePhysics, steps 5-6): the substrate think-first, then the
+	// audio/scheme pass. Runs after the pawn's move — retail moves the player out of the `clc_move`
+	// drain, strictly before `GameFrame` runs a single think or queued event (RE21).
 	virtual void Tick(float DeltaSeconds) override;
 
-	// S2 — the frame's post-move pass (TG_PostPhysics, step 7), driven by PostMoveTickFunction.
+	// S2 — the frame's post-move pass (TG_PostPhysics, step 8), driven by PostMoveTickFunction.
 	void PostMoveTick(float DeltaSeconds);
 
-	// Step 7's tick function. Public so a test can read the declared frame order off the class.
+	// Steps 2-3's tick function. Public so a test can read the declared frame order off the class.
+	UPROPERTY()
+	FElysiumPreMoveTickFunction PreMoveTickFunction;
+
+	// Step 8's tick function. Public so a test can read the declared frame order off the class.
 	UPROPERTY()
 	FElysiumPostMoveTickFunction PostMoveTickFunction;
 
@@ -242,15 +277,22 @@ private:
 	// info_player_start and a landmark offset. Run right after ResolveLandmarkSpawn.
 	void ResolveRestorePlacement();
 
-	// S2 — declare the frame order rather than observe it: the gameplay tick runs after the player
-	// controller's input sample (step 1), and the pawn's movement component runs after the gameplay
-	// tick (step 5), so the pawn is moved against the positions this frame's thinks produced. Both
-	// ends appear later than BeginPlay (no controller yet on a fresh world, no pawn at all on the
-	// menu backdrop), so this re-checks each gameplay tick until each end is bound, and rebinds if
-	// the pawn is replaced.
+	// S2 — declare the frame order rather than observe it. Two edges are wired here, both of them
+	// late-binding: the pre-move pass runs after the player controller's input sample (step 1), and
+	// the gameplay pass runs after the pawn's movement component (step 4), so this frame's thinks
+	// and queued events see where the pawn actually ended up. Each end appears later than BeginPlay
+	// (no controller yet on a fresh world, no pawn at all on the menu backdrop), so this re-checks
+	// each pre-move tick until both are bound, and rebinds if the pawn is replaced. The third edge —
+	// pre-move before gameplay before post-move — is wired once at registration, because those three
+	// always exist and must hold on a map that never seats a pawn.
 	void EnsureTickPrerequisites();
 	TWeakObjectPtr<class APlayerController> PrereqController;
 	TWeakObjectPtr<class UPawnMovementComponent> PrereqMovement;
+
+	// Place a freshly seated pawn and hold it frozen until its ground has finished cooking. Runs in
+	// the pre-move pass, because a pawn that has not been placed and frozen yet must not be handed
+	// to the mover.
+	void TickSpawnHold(float DeltaSeconds);
 
 	// The player pawn may not exist yet in BeginPlay, so the teleport is deferred to Tick;
 	// the pawn is then held frozen until the async collision cook yields ground beneath it.

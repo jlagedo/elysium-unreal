@@ -23,8 +23,9 @@ class UStaticMeshComponent;
 // R1/R5 — the Track-B substrate: one plain-C++ object per map, owned by AElysiumMapActor, that
 // dies with it. It parses `.ents` into live entities, indexes them by name and class, and routes
 // every input delivery and every deferred output through the two chokepoints (AcceptInput and the
-// event queue) with the debug sinks always installed. It is ticked once per frame with the game
-// clock's `now`, think-first (retail order): run due thinks, then service the queue.
+// event queue) with the debug sinks always installed. It is driven twice per frame with the game
+// clock's `now`, straddling the pawn's move the way retail does: RunPlayerThink before it, then
+// Tick after it — think-first (retail order) — run due thinks, then service the queue.
 //
 // Identity (R3) is generation-checked: each world instance takes a unique epoch, every handle it
 // mints carries that epoch, and Resolve returns null for a stale-epoch, out-of-range, or dead
@@ -50,7 +51,13 @@ public:
 	// unregistered), index names/classes, run the spawn pass (Spawn() on each).
 	void Load(FElysiumEntityDefs&& InDefs);
 
-	// Per-frame drive (map actor Tick). Think-first: RunThinks(Now) then ServiceEvents(Now).
+	// The frame's PRE-move drive (map actor PreMoveTick): the player entity's own think, and only
+	// that. Retail runs it inside CPlayerMove::RunCommand rather than in the think pass, so it is
+	// the one entity whose think lands before the pawn moves.
+	void RunPlayerThink(double Now);
+
+	// The frame's POST-move drive (map actor Tick), which is retail's `GameFrame`: sample the moved
+	// body into the player entity, then think-first — RunThinks(Now) then ServiceEvents(Now).
 	void Tick(double Now);
 
 	// --- Chokepoints (R5) --------------------------------------------------------------

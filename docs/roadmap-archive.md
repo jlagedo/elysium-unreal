@@ -1404,6 +1404,80 @@ Records are verbatim moves out of `roadmap.md`: where one says "the decision log
 
 ## P9 — Dialogue & persistence *(design: `game_runtime.md`, `rebuild-strategy.md` B7/B9)*
 
+- [x] **9.4a The rulebook readers** *(the gate of the PP1 rung)* — `vdata/` went from one parsed
+  file to twelve families. `Private/Substrate/ElysiumRulebook.{h,cpp}` carries a row struct + a
+  table struct with `Load(FString&)` each, following `FElysiumDispositionTable`'s shape;
+  `UElysiumRulebookSubsystem` (GI-scoped, `Private/Substrate/`) owns them lazily, one `bLoaded`
+  flag set *before* the load so a failure is logged once instead of retried per read. Session-
+  lifetime, because no `vdata` value is saved: the sheet stores indices and the rulebook is re-read
+  at load, which is what lets a patched rulebook re-apply to a save made before the patch.
+
+  **Scope, by owner call:** the roadmap's ten families plus two the others cannot work without —
+  `traiteffect.txt`, the 11-entry `ModifierNames` vocabulary the `traiteffects000` parser indexes
+  (a `Modifier` string is unreadable without it), and `levelingtemplate_000.txt`, which `decisions.md`
+  (RE25) records 9.4f needing before the spend screen. `dispositiontable.txt` deliberately stayed on
+  `UElysiumNpcAnimSubsystem` — it is the animation path's live data and 9.9's next consumer, and
+  moving it would churn a working system for tidiness.
+
+  **Three rules hold across every loader.** A loader keys off the **filename, not the root key** —
+  `rules.txt`/`rules_tables.txt` are both `RuleData`, `clandoc000`/all 36 `npctemplate*` are both
+  `ClanDataTables`. **File order is the engine's index**, so nothing sorts: a trait is
+  `(container, position)`, a clan is its position in `clandoc000`, a history is the index
+  `m_iVHistoryID` holds, and the five quest files have a fixed alphabetical order because the save
+  stores the table index. **An empty container is legal** — `quests_main.txt`, `npctemplate019/021`
+  and `rules.txt`'s `Tables` stub all ship empty and must load clean rather than error.
+
+  **Four authored grammars are parsed once and shared**, each a place where reading the string
+  wrong yields a plausible-but-wrong number: the `Costs` strings (`Current_Rating * N` /
+  `Table: a, b, …` / a bare int, with one key copying into the other); `CVStatRef`'s trailing
+  `/ N` or `* N` held as a single signed multiplier; the `Modifier` mini-DSL, prefix-matched
+  against the loaded vocabulary with `Value` taking a *named* payload and an unmatched name falling
+  to operator 0 with a signed `Atoi`; and the experience table's three-field pipe rows. Two blocks
+  are kept as parsed key/value rather than mapped onto fields — `rules.txt`'s named constant blocks
+  and a `ClanData` `General` — because their key sets differ per block and the Unofficial Patch
+  tunes them, so a patch that adds a key must not need a code change to be readable.
+
+  **`ElysiumKeyValues` gained an ordered `Pairs` list** in the same pass. `Values` is a `TMap` and
+  the shipped data really does repeat a **leaf** key inside one block: 17 of `stats.txt`'s
+  Active_Disciplines gate on two `IncPredependency` expressions (`BloodPool > 0` *and*
+  `Health < Max_Health`) and one `clandoc000` `General` names `M_Hands` twice. One of each pair was
+  being silently dropped. `Values` and every existing accessor keep their behaviour, so sound
+  schemes, signs, camera shots and the disposition table are untouched; only the new readers read
+  `Pairs`, through `ValuesFor()`.
+
+  **This step wires no consumer.** Retiring `ElysiumInterimPlayerMaxHealth`, registering sheet
+  fields, `CalcFeat`/`BumpStat`/`AwardExperience`, the journal and chargen are b/c/d/e/f. What
+  landed is the data, the verb over it, and the tests that keep it honest.
+
+  *Verified:* `Elysium.Substrate.Rulebook` pins the four grammars off literals with no exported
+  content (35/35 Substrate green, including a repeated-leaf-key case added to
+  `Elysium.Substrate.KeyValues`). `Elysium.Content.Rulebook` runs against the real export: the row
+  counts (35/13/17/17 stat slots, 23 feats, 17 rule blocks + 20 tables, 5/169/457 trait effects,
+  25 clans, 36 files / 150 NPC templates, 93 histories, 190 experience rows, 75 quests / 435 states,
+  16 leveling templates / 8 `*_CharGen`), the tier tables reading 2/1/0 and 3/2/1, and four
+  cross-table resolutions — **161/161 `AwardXP` keys resolve in `experience_table`** (the roadmap's
+  named acceptance), every feat `Base%d` resolves to a stat or feat, every
+  `ClanEffect`/`FrenzyEffect`/history `Effect` resolves to a group, and all 64
+  `ParentTemplateName` chains resolve with no cycles. The skip path was checked by moving
+  `tools/out/vdata` aside: the test reports "skipping" and passes. The `elysium.rules` verb is
+  **not** covered by either tier — it needs a live `UGameInstance`, and `-ExecCmds` does not survive
+  the boot travel — so its dispatch and formatting are unexercised by tests; the loaders behind it
+  are what the content tier proves.
+
+  *Corrections made in the same pass* (`docs/CLAUDE.md` → "Correct in place"): `stats.txt`'s
+  **Disciplines and Active_Disciplines hold 17 slots, not 13** — `Shield_of_Faith`,
+  `Divine_Vision`, `Holy_Light` and `Mind_Shield` are the Numina powers and they ship in
+  `stats.txt` proper (byte-identical to `stats - vampire.txt`), so the file's slot space is wider
+  than the save's 13-slot array; the chargen **priority-tier** tables
+  (`Subpool_*_Primary_Secondary_Tertiary`, and their `_Kine` variants) live in `stats.txt` as
+  nested `Table` blocks on the `*_Order` stats, while `rules_tables.txt` holds only the clan-keyed
+  half — the two halves of a chargen pool come from two different files; `npctemplate*` is **36
+  files / 150 templates**, not "~40"; `Raise 10000` is a price out of reach rather than the engine's
+  `30000` cannot-buy verdict, which **no shipped stat carries**; `AwardMoney` and `Event` are
+  authored in **zero** shipped quest rows, so 9.4d's money and event award paths have no data to
+  test against; and `savegame_format.md` still described the attribute arrays as "21 named slots",
+  the pre-RE24 figure. *Deps:* PL5b [x], RE24 [x].
+
 - [x] **9.3a Level-script wiring — CPython is the default host + auto-load at map load.**
   `UElysiumGameStateSubsystem::MakePreferredScriptHost` installs `FElysiumCPythonScriptHost` when the
   module carries the vendored SDK **and the interpreter actually starts**, falling back to the expr
@@ -1625,6 +1699,67 @@ source via `FUN_100ce8a0`, field-6 Python via `FUN_100ce990`, type 2 discipline.
 fired *during* a think is serviced after all thinks that frame. **Implication:** flip task 1.4 to
 think-first to match retail (recorded in `engine-core.md` Tick note) — unless save-determinism
 argues for keeping queue-first; that is the 1.4 tick-order call.
+
+**RE21 — DONE: movement runs before the think pass, and not inside `GameFrame`.** *(pass dated
+2026-07-27.)* RE2 read the frame body only from its think call onward; RE21 opened it at the top and
+followed the other half of the server stage into `engine.dll`.
+
+*The frame entry, corrected.* `CServerGameDLL::GameFrame` is **`FUN_1011abc0`** — `0x10571fc0`,
+which the docs carried as the function, is its profile-scope *string* and has exactly one referencing
+site (`0x1011abd6`, inside the function). The engine reaches it through `serverGameDLL`
+(`0x21300c88`, cached by the interface loader `0x200faef0` alongside `serverGameEnts` `0x21300c8c`
+and `serverGameClients` `0x21300c90`) at vtable **`+0x14`**, slot 5 — the `ServerGameDLL002` layout.
+
+*The body.* Thirteen calls: IGameSystem pre-entity-think `0x1042c6c0` · `0x10352f00` ·
+**`Physics_RunThinkFunctions(simulating)` `0x1003bdd0`** · IGameSystem post-entity-think `0x1042c6e0`
+· singleton `0x101bdb50` → vtable `+4` · **`CEventQueue::ServiceEvents` `0x100cfac0`** · `0x10119980`
+· `0x1027ee90` · the player `dynamic_cast` → vtable `+0x420` · delete-list drain `0x100f6ce0` ·
+`UpdateAllClientData` `0x1018be60`. RE2's think-first finding is steps 3 and 6 of that list.
+`simulating` reaches only step 3 — false simulates players `1..maxClients`, true walks the whole
+entity list, both via `CBaseEntity::PhysicsSimulate` `0x1003bad0`. **No usercmd or movement call
+anywhere in the body.**
+
+*Where movement actually is.* `_Host_RunFrame` `0x2008e450` opens its Server scope, runs `CL_Move`
+`0x20027aa0` (gated on the server being active, `0x212b0754` — so in singleplayer the command is
+built and consumed in the same stage of the same frame), then `SV_Frame` `0x200f62b0`, which is
+`SV_ReadPackets` `0x200f2b10` → `SV_ExecuteClientMessage` `0x200f9cf0` → the **`clc_move`** handler
+`0x200f9990` → `serverGameClients->ProcessUsercmds` at vtable **`+0x20`** (call site `0x200f9b2d`)
+→ *only then* the game-frame driver `0x200f7e40` → `GameFrame` → `SV_SendClientMessages`
+`0x200f3c30`. The `clc_*` dispatch table is at **`0x201ac834`**, records
+`{const char *name; void (*func)(); int type;}` stride 12 — read out of the PE, because the
+decompiler shows only `&DAT_201ac838 + i*0xc` (the `func` field, one dword into the record) and
+Ghidra leaves the handlers undisassembled, unreferenced by anything but the table. The `+0x20` slot
+is pinned by its signature (seven pushed args, `float` return — Source's
+`ProcessUsercmds(edict_t*, bf_read*, numcmds, totalcmds, dropped, ignore, paused)`) and by the two
+`ProcessUsercmds: …` error strings in the same handler.
+
+*The game-DLL half.* `CServerGameClients::ProcessUsercmds` `0x1011c8c0` → player vtable `+0x734`
+`CBasePlayer::ProcessUsercmds` `0x1016aaf0`, which replays dropped commands and runs each new one
+**synchronously** through player vtable `+0x738` — no pending-command queue, nothing deferred —
+then drains the delete list. `+0x738` is `CHL2_Player::PlayerRunCommand` `0x10351090` (button
+latching + VtMB's own stamina/visibility accumulators) → `CBasePlayer::PlayerRunCommand`
+`0x1016af80` → `0x10356430` → **`CPlayerMove::RunCommand` `0x101874a0`** on `g_PlayerMove`
+`0x10939f00`: `StartCommand` `0x10185b10` → `frametime`/`curtime` set from the command →
+`UpdateButtonState` `0x1016b090` → `CheckMovingGround` `0x10185f90` → `RunPreThink` `0x10186f00`
+(→ `CHL2_Player::PreThink` `0x10350830`) → `RunThink` `0x101871f0` → `SetupMove` `0x10186120` →
+`CGameMovement` (`g_pGameMovement` `0x10627580`, vtable `+4`) → `FinishMove` `0x10186c10` →
+`ProcessImpacts` → `RunPostThink` `0x10187280` → `FinishCommand` `0x10185d70`.
+
+*Consequences.* (1) The pawn is moved against **last** frame's mover positions; retail absorbs the
+tunnelling case from the mover's side (`MOVETYPE_PUSH` pushes what it touches). (2) The player's own
+think runs inside `RunCommand`, not in the think pass. (3) `frametime`/`curtime` are rebound to the
+command's timing for the duration of the move. **`runtime-architecture.md` §3's tick table moves the
+pawn after thinks and the queue; the owner called reproduce (`decisions.md` 2026-07-27) and the
+rework is roadmap 11.11.** Docs corrected in the same pass: `game_runtime.md` §1 (the entry address, the server-stage
+order, the `GameFrame` body) and §7 (the open question retired), `runtime-architecture.md` §3.
+
+*Workspace notes.* Two headless runs launched back-to-back race on the project lock — the prior JVM
+has not released, the second aborts with `LockException: Unable to lock project`, and a run killed
+mid-save leaves a zero-filled `db.<n>.gbf` that then fails every open with
+`IOException: Unrecognized file format`. Leave a gap between runs. The engine-side work was done in a
+scratch project (`tools/ghidra/project_re21`) because the shared DB's `engine.dll` was left in that
+state; `MakeFuncs` does not help handlers reached only from a data table — they are undisassembled,
+not merely unowned, so `DumpAsm` (which disassembles on demand) is the tool.
 
 **`OnEnterMapHere` — CONFIRMED `info_landmark`-only.** The string pair `OnEnterMapHere`
 (`0x10559aa0`) / `m_OnEnterMapHere` (`0x10559ab4`) has exactly **one** referencing function in
@@ -2378,6 +2513,12 @@ explains ~0% of a median lit face and the bounce floor *is* the ambient level (C
 - [x] **11.1 Frame + clock ownership** *(landed 2026-07-26)* — `runtime-architecture.md` §3's tick
   table pinned in the engine's own tick graph (**S2**), and §4's one pause/time-scale facade over
   the clock **and** engine time (**S1**).
+
+  > **The step order below is superseded by 11.11** (see this file's 11.11 record). It moves the
+  > pawn *after* thinks and the queue on an inference RE21 later disproved — retail moves the pawn
+  > **first**. Owner call: reproduce (`decisions.md` 2026-07-27), landed. Everything else here — the
+  > tick functions, declared-not-observed ordering, the single clock advance site, the pause facade
+  > — stands, and survived the rework unchanged.
 
   **The frame.** `AElysiumMapActor` now registers **two** tick functions. The gameplay pass is
   `PrimaryActorTick` in `TG_PrePhysics` (steps 2–4: advance the clock, run the substrate think-first,
@@ -3237,3 +3378,375 @@ explains ~0% of a median lit face and the bounce floor *is* the ambient level (C
   rather than the wrong frame). **Decals** reserve a slot in the `Maps` block and 10.7 fills it.
   **`G.morgue`** has no runtime surface to save; when one lands it is a `G` key and needs no block
   change. The **Play tier** save round-trip (save at beat *N*, load, replay to the end) is **11.10**'s.
+
+- [x] **11.11 Rework the frame to retail order — move first, then think** *(landed 2026-07-27;
+  reverses 11.1's step order, supersedes it)* — RE21 pinned retail as move-first and the owner call
+  resolved to reproduce (`decisions.md` 2026-07-27). The frame now runs it.
+
+  **The order.** `AElysiumMapActor` registers a **third** tick function,
+  `FElysiumPreMoveTickFunction` (`TG_PrePhysics`), and the frame reads: sample input → **pre-move
+  pass** → **move the pawn** → gameplay pass → physics → post-move pass → camera → publish. What the
+  pre-move pass carries is more than the roadmap's "a tick function that owns only `AdvanceFrame`":
+  `EnsureTickPrerequisites` (so an edge wired this frame is in force this frame),
+  `TimeControl().AdvanceFrame` (**S1** *relocated*, not multiplied — the move runs on this frame's
+  `now`, which is what retail's `frametime`/`curtime` rebinding means), the player entity's own
+  think, and the **spawn hold**. The hold is the one that would have bitten: left in the gameplay
+  pass, a freshly seated pawn is placed at `PendingSpawnLoc` and frozen only *after* the mover's
+  first tick, so it takes one unfrozen step from wherever the game mode dropped it — the exact
+  "falls through the not-yet-cooked floor" case the hold exists to prevent. The rejected alternative
+  was folding the advance into `PlayerTick`: a world with no player controller (a headless logic
+  world) would never advance the clock at all, and the map actor is the object whose lifetime is the
+  map epoch.
+
+  **Ordering the two pre-physics passes.** Both are `TG_PrePhysics`, so the group cannot separate
+  them — prerequisites do. The pre-move tick takes one on the player controller; the movement
+  component takes one on the pre-move tick; the gameplay tick takes one on the movement component,
+  inverting 11.1's `Move->PrimaryComponentTick.AddPrerequisite(this, PrimaryActorTick)` edge. The
+  gameplay tick **also** takes one on the pre-move tick, unconditionally, wired in
+  `RegisterActorTickFunctions` rather than in the late-binding path — the menu backdrop and a
+  headless logic world seat no pawn, the movement edge never forms there, and without it the clock
+  would advance in registration order relative to the thinks reading it. Rebinding drops the
+  outgoing component's edge (`RemovePrerequisite`), so the `elysium.SourceMovement` body swap cannot
+  leave the gameplay pass waiting on a tick function that will never run again.
+
+  **The player's own think.** Retail runs it inside `CPlayerMove::RunCommand` (PreThink → think →
+  move → PostThink), not in `Physics_RunThinkFunctions`. `FElysiumEntityWorld` is therefore driven
+  **twice** a frame: `RunPlayerThink(Now)` from the pre-move pass, `Tick(Now)` from the gameplay
+  pass, and `RunThinks` skips the player by index so it cannot think twice or think on the wrong
+  side of the move. `SyncFromBody` needed no change and got better: it was reading the *previous*
+  frame's move and now reads this frame's, which is exactly retail's relationship between the packet
+  drain's move and `GameFrame`'s thinks.
+
+  **The `frametime` rebinding stopped being only a contract.**
+  `UElysiumMovementComponent::TickComponent` takes its delta from `PendingCmd.DeltaSeconds` in
+  preference to the tick's. The router builds one command per frame, so today it is the identity —
+  and it stops being the identity the moment a frame carries more or fewer than one command (11.10's
+  replayed command stream, a hitch clamp, 4.7's fixed step), at which point the mover follows the
+  command rather than the server frame, as retail does.
+
+  **What the inversion gave up, measured rather than assumed.** 11.1's comment — *"a door's think
+  issues its swept move here; moving the pawn first tunnels it on fast movers"* — names a real
+  hazard, and retail does not solve it by ordering: movers are `MOVETYPE_PUSH`. Ours are not.
+  Driven live on `sp_tutorial_1`: the pawn parked on `tutwarefrontdoora`'s hinge with the door open,
+  then `Close` — the pawn was **displaced ~61 cm out of the leaf's arc** and the door completed to
+  `AtBottom`. So nothing tunnels, but the displacement is Chaos resolving the swept kinematic body,
+  not `PhysicsPushEntity`: no `dmg` is dealt and `OnBlockedClosing` fires only when the sweep is
+  *fully* blocked. Recorded as **4.8's remainder**, on the task that owns the mover family. The
+  acceptance line "a door closing on the player pushes rather than tunnels" was restated to what the
+  code can answer, because the push path does not exist to be tested.
+
+  *Verified:* `dumpticks` on the running game reads the whole chain back — PC →
+  `ElysiumMapActor[AElysiumMapActor::PreMoveTick]` → `ElysiumMovementComponent[TickComponent]` →
+  `ElysiumMapActor[TickActor]` (whose two prerequisites are exactly the pre-move tick and the
+  movement component) → physics → `ElysiumMapActor[AElysiumMapActor::PostMoveTick]` →
+  `UElysiumPresentationSubsystem::Publish`. `Elysium.Substrate.FrameOrder` was rewritten, not
+  deleted: it asserts all four passes' groups and pause flags, that the post-move pass is later than
+  both pre-physics passes and the publish pass later than all, the unchanged think-before-queue
+  order, and — new — that `RunPlayerThink` fires an armed player think while `Tick` leaves it armed.
+  Whole Substrate tier green. `sp_tutorial_1` builds in 5.7 s and its opening beats play unchanged:
+  level script imported, the `logic_auto` → `monk_upstairs_podium` patrol chain fires at t=0.001 and
+  t=0.401, spawn released on ground-ready, the `GiveItem` run lands, 120 fps.
+
+  *Not in scope, named:* the mover **push path** (4.8, above). The **player think itself** is still a
+  no-op — `FElysiumPlayer` overrides no `Think()` and arms no `NextThink`, so the split is a
+  contract with a test behind it rather than observable behaviour, and it is in place for whatever
+  first needs it. **`PreThink`/`PostThink` as distinct hooks** are not modelled: retail's shell has
+  three slots around the move and we have one, which is enough while nothing fills the other two.
+
+## RE24 — the sheet math: the full as-built record
+
+Closed 2026-07-27 against `Vampire/dlls/vampire.dll` with the RE5 workflow — targeted
+`DumpFuncs`/`DumpAsm`/`DumpConst`/`DumpXrefs` runs plus `parse_datamap_builder.py`, no
+running game. The roadmap keeps a one-line summary; the durable VtMB facts fold into
+`game_runtime.md` §3 and `script_api.md`. Two of the four questions carried a wrong
+premise and are recorded here with the premise named.
+
+### The substrate the four answers share
+
+Every `CBaseCombatCharacter` holds the stat-container array at `+0x13BC` (count) /
+`+0x13C0` (`CVStatList_t*`), each container tagged at `+0x10` with its category: **0**
+Attributes, **1** Abilities, **2** Disciplines, **3** Active_Disciplines. **4** is a
+fifth category with no container — Feats — used only by `CVStatRef` and the trait-effect
+pass.
+
+A trait is `(category, index)`, and **index counts the container's leading `*_Order`
+block as slot 0**. That settles the sizes, and it corrects 9.4b's estimate:
+`m_iVAttributes*` is **35** slots (not 21) and `m_iVAbilities*` **13** (not 12);
+Disciplines and Active_Disciplines are 13 each with no order slot. Base and current are
+separate arrays, both datamap-exposed and saved — current under the bare name, base under
+a `base_` prefix:
+
+| Array | Offset | Slots |
+|---|---|---|
+| `m_iVAttributesBase` / `Current` | `+0x10F0` / `+0x117C` | 35 (`attrib_order` 0, `strength` 1 … `wits` 9, `vhealth` 15, `vmax_health` 17, `humanity` 27, `masquerade` 28, `experience_modifier` 29, `experience` 34) |
+| `m_iVAbilitiesBase` / `Current` | `+0x1210` / `+0x1244` | 13 (`ability_order` 0, `brawl` 1 … `academics` 12) |
+| `m_iVDisciplinesBase` / `Current` | `+0x1280` / `+0x12B4` | 13 (`animalism` 0) |
+| `m_iVActiveDisciplinesBase` / `Current` | `+0x1310` / `+0x1344` | 13 |
+
+Proven three independent ways, so the index base is not an inference: the datamap
+offsets read off `FUN_1031a600` (`base_experience_modifier` at `0x1164` = `0x10F0 + 29·4`,
+`base_experience` at `0x1178` = `+34·4`); the three hardcoded indices in the code —
+`AwardExperience` uses **29** (`Experience_Modifier`), `AddExperience` **34**
+(`Experience`), `HealthToPercent` **17** and **15** (`Max_Health`, `Health`); and
+`Feats::FeatValue`'s `index < 10` attribute floor, which under this base covers exactly
+slots 1–9, the nine attributes.
+
+Three datamap external names diverge from the `stats.txt` `InternalName` — `intimidate` ↔
+`Intimidation`, `computers` ↔ `Computer`, and `base_gender_` with a trailing underscore —
+so the two resolution paths (datamap walk vs `stats.txt` name) need both spellings.
+
+`CVStatList_t` accessors, named by their own scope-trace markers: `GetBase` `10200CA0`
+(raw), `GetCurrent` `102012D0` (base → trait effects → clamp to effective max → clamp up
+to min), `IncBase` `10200D60` (`+1`, gated by `IncPredependency` and the effective max),
+`AddBase` `10200FC0` (`+d`, same gate, but **a negative `d` bypasses it**). Every write
+fires the stat's change callback with old/new *current* values, which is what keeps
+`Health`'s `Max "Max_Health"` and expressions like `"Health < Max_Health"` live.
+
+`CVStatRef` (16 bytes, `10204570`) is the single trait-name resolver behind `BumpStat`,
+`traiteffects000.txt`, `feats.txt`'s `Base%d`/`Automatic%d` and the stat `Min`/`Max`
+cross-references. It strips a trailing ` / N` or ` * N`, then tries the four stat
+containers, the feat table (category 4), an item table, the `TraitFxStrs` `Fx_*` enum, and
+the hardcoded `"ObfuscateCanInc"` (category 9, function-backed). `CVStatRef::Apply(v)`
+(`10204C20`) is the arithmetic — multiplier at `+0xC`, `1` identity, **positive `N` = `×N`,
+negative `N` = `÷|N|`** — which is how `"Base0" "Armor_Rating / 2"` works.
+
+### Q1 — `AwardExperience`: `floor` confirmed, the give-once premise wrong
+
+`ExperienceTable::PreCache` (`10222300`) → `LoadFile` (`10222740`) → `ParseLine`
+(`102228F0`): `>` comments, lines under 3 characters skipped, split on `|` into exactly
+three fields, `Q_trimspace` on key and description, `atoi` on the value; a row is 12 bytes
+`{char* key, char* desc, int value}` and **the value is stored raw** — no division at load.
+190 rows ship, all keys distinct, longest 12 characters.
+
+`LAB_10006807` resolves to `JMP 0x1015F100` = `CVPlayer::InputAwardExperience`, which takes
+the variant's string at `fieldType == 2` and otherwise stringifies it, then calls
+`CVPlayer::AwardExperience` (`1015F630`):
+
+1. **Give-once is the `m_ExpList` ledger, not the trailing `01`.** It walks the list
+   (`+0x1D7C` memory / `+0x1D88` count, stride `0x34`) and `Q_strnicmp`s each stored key
+   against the incoming one for `strlen(key)` characters; a hit returns immediately. So
+   *every* key is give-once unconditionally, and the `01` suffix has no role — the roadmap
+   row's "trailing-`01` give-once rule" was wrong. (The prefix compare is latent breakage: a
+   key that is a strict prefix of an already-awarded key would read as already given. The
+   shipped table has **zero** such pairs, checked.)
+2. `ExperienceTable::Find` (`10222500`) returns `-1` on a miss, and a miss awards **and
+   appends** nothing — so a bad key retries on every fire.
+3. `value = row.value`; **if `value > 299`** (≥ 3 XP) then
+   `value += GetCurrent(Attributes, 29 /* Experience_Modifier */)`, floored at 100. This is
+   the file's own "*the value without extra experience points*", and `Experience_Modifier`
+   carries 5 trait effects.
+4. `AddExperience((float)value, notify = true)`.
+5. The key is appended (`Q_strncpy` 48 bytes into the 52-byte slot; the trailing dword is
+   not written by this path).
+
+`CVPlayer::AddExperience` (`1015F8B0`) holds the division, **and carries the remainder** —
+read off the raw listing because the decompiler drops the FPU expression:
+
+```
+m_flLifetimeExp (+0x19F8) += v            // raw, never divided
+acc = (m_flExpRemainder (+0x19FC) += v)
+if (acc < 100.0f) return                  // FCOM vs 0x10450564 = 100.0f
+whole = (int)(acc * 0.01f)                // 0x10450AA4 = 0.01f; __ftol truncates
+m_flExpRemainder = acc - whole * 100.0f   // the sub-100 residue is KEPT
+AddBase(Attributes, 34 /* Experience */, whole)
+if (notify && whole > 0) NotifyExperience(this)
+```
+
+So `XP = floor(value/100)` is confirmed, but the leftover hundredths persist across awards
+instead of being discarded. Every real row is `N01`, so each award banks +0.01 XP and one
+bonus point falls out per 100 awards; the four non-`N01` values (`0`, `7`, `50`, `51`) are
+the file's own "Junk for testing" block. `NotifyExperience` (`101CEBC0`) is the client-side
+notification, gated on `player->+0x1E00 == 0`, fired once before the award and again after
+when `whole > 0`.
+
+Also checked and **not** an invariant: the section headers' `> Total Experience Value:`
+comments agree with `sum(floor(v/100))` on only 36 of 68 sections. They document the base
+path — excluding mutually-exclusive outcomes and bonus rows — and three are stale.
+
+### Q2 — `CalcFeat` returns a rating, over a variable-length base list
+
+`CalcFeat` (`10198CC0`) parses `(O, s)`, resolves the combat character, matches the feat
+name case-insensitively (`__strcmpi`) against the global feat table (`DAT_10739D24` array of
+records, `DAT_10739D20` count; record `+0` = id, `+4` = `InternalName`) and returns
+`PyInt_FromLong(Feats::FeatValue(feat, character))` — **a plain int, the feat rating. It
+rolls nothing**, so the `dlgexpr` gate's implicit `>=` compares a rating. An unknown name
+dumps `Feat %d = %s` for ids 0–12 and raises `AttributeError("invalid feat name -- %s")`; a
+non-character raises `"invalid combat character"`.
+
+`Feats::FeatValue` (`101E56E0`, named by its own `"Invalid Character pointer for:
+Feats::FeatValue"` DevMsg):
+
+```
+cap = feat.MaxValue                      // KeyValues "MaxValue", default 10 (feat +0x18)
+r   = 0
+for each base ref in feat.bases:         // +0x1C count / +0x20 array, stride 0x10
+    if ref.category == 0:
+        v = ref.Apply(GetCurrent(attributes, ref.index))
+        if v < 1 and ref.index < 10: v = 1        // floor of 1 — the nine attributes
+        r += v
+    elif ref.category == 1:
+        r += ref.Apply(GetCurrent(abilities, ref.index))
+    // any other category (a "None" base) contributes nothing
+if feat.id == 1:            r += CBaseCombatCharacter::GetStealth…()   // 1032FAB0
+if feat.id in (9, 10, 11):  r += GetPresence…() (10323210) - GetShakyHa…() (103232B0)
+r = ApplyTraitEffects(m_tEffectList, category 4, feat.id, r)           // 101F9BF0
+return clamp(r, 0, cap)                                                 // negative → 0
+```
+
+So the premise "`Base0 + Base1`" was wrong: the loader (`101E50B0`) counts the base list by
+probing `Base0`, `Base1`, … until a key is absent, and the shipped file exercises the
+variability — `Soak_vs_Bashing` has three bases, `Soak_vs_Aggravated` one, `Damage` and
+`Frenzy_Feat` none (pure-code feats), and `Soak_vs_Lethal_Falling` uses
+`"Armor_Rating / 2"`. Each entry is the *current* (effect-modified, clamped) trait value
+through its own modifier, the sum takes per-feat code terms, and the whole is run through a
+second, feat-level trait-effect pass before the clamp. 23 feats ship; ids are file order,
+`Intrusion` 0 … `Frenzy_Feat` 22.
+
+`PCWeighting` / `NPCWeighting` resolve **at load** to an index into the global DiceRolls
+table array (`101D9780`, stride `0x19C`, name at `+4`, **0 on a miss**), stored at feat
+`+0x34` / `+0x38`. `dicerolls.txt` ships `Normal`(0), `Heavy`(1), `Light`(2) and all 23
+feats name `Normal` for both, so the miss-fallback is `Normal` too. **The rating is the pool
+size handed to that table** — the resolver stays `recovered/dice-system.md`'s. Two further
+loader keys are *not* summed into the rating: `Automatic%d` (automatic successes; used once,
+`Close_Combat_Brawl`'s `"Automatic0" "Automatic_Str_Successes"`) and `Display2nd%d`, which no
+shipped feat sets — a dead key.
+
+**Residue, named.** For feat ids 9–20 (the four combat feats and the eight `Soak_vs_*`)
+`Feats::FeatValue` consults five global object pointers — `0x1073A104` Brawl, `0x10739BDC`
+Melee, `0x10739CB4` Ranged, `0x10739C6C` Defensive_Maneuvers, `0x10739C24` all eight soaks —
+as `if (!obj->vtable[1]() && obj->+0x2C >= 1) rating = obj->+0x2C` (the guard virtual is
+called twice with contradictory handling, so the second test is unreachable — a refactor
+scar). The shape is Source's `ConVar` (`m_nValue` at `+0x2C`, `IsCommand()` at vtable slot 1),
+i.e. a dev override, but each pointer reads **null in the shipped image and has exactly three
+references, all reads, all inside this one function** — so the owner is unidentified.
+Since a null deref would crash on the first Brawl roll, something assigns them at runtime
+through code the analyzer does not attribute. Next step: `MakeFuncs` over `vampire.dll`, then
+re-xref `0x1073A104`. No `vdata` key configures an override, so the port reproduces the
+pre-override value.
+
+### Q3 — `BumpStat`: a repeat count, writing the base, capped at 5
+
+`BumpStat` (`10199A70`) parses **three** slots, `(O, s, i)` — the third argument is a
+**repeat count**, which is what the row recorded as unrecovered. `PyArg_ParseTuple` failing,
+a null name, or a count of `0` raises `"invalid args in BumpStat"`; an unresolvable name
+raises `"invalid stat in BumpStat -- %s"`. The name goes through the shared `CVStatRef`
+resolver, so the whole trait namespace is addressable, case-insensitively.
+
+The body loops `count` times and each pass does
+`if (GetBase(container, index) < 5) VStatBump(character, ref)`, where
+`CBaseCombatCharacter::VStatBump` (`10338440`) calls `CVStatList_t::IncBase` (`10200D60`).
+So: **it writes the base, not the current value**, one dot per pass; the `< 5` ceiling is
+**hardcoded in `BumpStat` itself**, independent of the stat's own `Max`; `IncBase` then
+applies its own can-raise predicate and effective max on top; and a count below 1 exits the
+loop immediately, so **`BumpStat` cannot decrement**. One client notification fires after the
+loop, not per dot. None of this is readable from the `ml_doc`, which is `DialogDiscipline`'s
+— one of the six copy-paste errors.
+
+### Q4 — there is no Stamina→Health derivation
+
+**The premise was wrong.** `Max_Health` is an ordinary stat — Attributes index **17**
+(`vmax_health` / `base_vmax_health`), `Min 1 / Max 99999 / Default 100`, `Raise 10000`
+(unbuyable) — and `stats.txt` has no formula key at all; `Min`/`Max` may only *name* another
+stat (`Health`'s `Max` is the string `"Max_Health"`). Nothing derives or modifies it:
+
+- `clandoc000.txt`'s four `Max_Health` lines are **all commented out**;
+- `levelingtemplate_000.txt` and `histories000.txt` never mention it;
+- **no** trait effect in `traiteffects000.txt` targets `Max_Health` or `Health` — 85 distinct
+  traits are targeted and neither is among them.
+
+So the player's ceiling is a flat **100** for the whole game, and
+`ElysiumInterimPlayerMaxHealth = 100` is numerically correct: it retires by being *read out
+of* `stats.txt`'s `Default`, not by being replaced with a formula. Stamina's real job is
+soak — `Base1` of `Soak_vs_Bashing` and `Soak_vs_Bashing_Kindred`, `Base2` of
+`Soak_vs_Lethal_Falling_Kindred`, and the target of 20 trait effects.
+
+The second half of the finding matters more for the port: **`Health` (index 15) counts
+damage taken, not health remaining** — `Default 0`, `Min 0`, `Max "Max_Health"`, with
+`Health_Aggravated_Dmg` (16) the second damage pool and `HealthBuffer` (25, Max 32000) the
+over-cap pool. `CBaseCombatCharacter::HealthToPercent` (`1032FE60`) projects the pair onto
+Source's engine-space health:
+
+```c
+(( GetCurrent(Attributes, 17) - GetCurrent(Attributes, 15) ) * m_iMaxHealth)
+    / GetCurrent(Attributes, 17)
+```
+
+with `CBaseEntity::m_iMaxHealth` at `+0x208` and `m_iHealth` at `+0x210` (read off the
+entity datamap builder `FUN_100A22F0`). So VtMB's own model is "record damage against a
+ceiling", which is what the runtime already does for characters with no track.
+
+**An NPC's track is authored, not derived**: each `npctemplate*.txt` `ClanData.Attributes`
+block sets `Max_Health` literally, in the same flat container as `Strength`…`Wits` (`"20"`
+for `TutorialThug`, `"819"` for a boss); a template omitting the key inherits the `stats.txt`
+`Default` 100.
+
+### Picked up in passing (RE25's territory, not closed here)
+
+`CVStatRef` resolves a trait name across more than stats: a `traiteffects000.txt` `"Trait"`
+can name a **ConVar** (`default_fov`, `vchar_skip_intro`, `vamplight_enabled`,
+`vdebug_wpn_anims_cycle`) or an **item** (`item_w_claws`, `item_w_fists`,
+`item_g_wireless_camera_1`), as well as a stat or an `Fx_*` flag. That is the addressing half
+of RE25's clan-bane enforcement question; what stacks, and in what order, stays open.
+
+## RE25 — chargen math: the as-built record *(pass dated 2026-07-27)*
+
+Gated 9.4f. All four questions closed; the durable facts are folded into `game_runtime.md` §3
+("Chargen", "Buying a dot", "Trait effects") and `vdata-catalog.md`. Addresses below are
+**`client.dll`** (image base `0x10000000`) unless marked; dumps under `tools/ghidra/out/re25_*.txt`.
+
+**The premise that had to be corrected first.** The row assumed the math was in `vampire.dll`.
+It is not: `vampire.dll` carries the `CVStat*` family (so the server can price and apply), but the
+**wizard, the point pools and the sheet UI exist only in `client.dll`** — `Subpool_*` does not
+appear as a string in `vampire.dll` at all. That is why one `DumpGrep` over the wrong binary
+returned two unrelated functions and the second, over `client.dll`, returned the whole cluster.
+
+**Method.** VtMB's client/server DLLs open almost every method with a profiler scope-trace push of
+its own `"CClass::Method"` string, so `DumpGrep -ScriptArgs "str=CVStat~CVChar~CharGen~CharCreate"`
+recovers a **name → address map for the entire subsystem in one run** — 66 functions, from
+`CVStatSubCost_t::Parse` to `CharGenWizard: ProcessPopUp`. Every later run was `DumpFuncs` on a
+name from that list. Two workflow notes: the project takes **one lock at a time** and does not
+release it the instant the JVM writes its output, so a driver must wait for the previous process to
+exit and then pause before the next; and `DumpFuncs`' `__thiscall` argument recovery is unreliable
+for these three-argument helpers — `DumpAsm` on `FUN_10159e00`/`FUN_10160e80` is what settled which
+sub-cost (`this+0` vs `this+0x14`) each branch uses.
+
+| Finding | Where |
+|---|---|
+| pool builder — 7 counters at panel `+0x7c`(kind)/`+0x80`(value), stride 8 | `FUN_1017d930` |
+| `Kindred` flag selects the `_Kine` subpool tables | `FUN_1008eb70` (template `+0x8c`) |
+| pool label `"<category>: <n>"` | `FUN_1017f470` |
+| `Clan_Tables` + the 3×3 `ConnectionScores` load | `FUN_10144840` |
+| `giftxp 9000` → `vautolvl <CharGen template> 1` | `FUN_10144be0` |
+| `CVStatSubCost_t::Parse` — `9999` = `Current_Rating * N`, `9998` = `Table:`, else a constant | `FUN_10159650` · vampire.dll `FUN_101fb980` |
+| `GetCostToBuy(r)` = `N·r` / `GetCostToSell(r)` = `N·(r−1)` | `FUN_101597d0` / `FUN_10159880` |
+| `CVStatCost_t` = New at `+0`, Raise at `+0x14`; an absent one is copied from the other | `FUN_10159d10` |
+| New-vs-Raise + the `30000` refusal | `FUN_10160e80`, from `FUN_10161170` |
+| `MinSell` = `max(Min, MinSell)`, `MaxBuy` = `min(Max, MaxBuy)`; `PostLoad` defaults both from `Min`/`Max` | `FUN_1015c120` / `FUN_1015c1d0` / `FUN_1015bb30` |
+| the `0 ≤ value < 6` row filter — what the discipline `-1` sentinel actually gates | `FUN_1017f870` |
+| `TraitEffect` loader (`Trait`, `Modifier`, `Costs`, `DisplayOverride`) | `FUN_101568f0` |
+| modifier-string parser — names 1–10 by prefix, else operator `0` + signed `atoi` | `FUN_101567e0` |
+| `TraitEffectGroup` / `TraitEffectCategory` readers | `FUN_10157560` / `FUN_101576f0`; vampire.dll `FUN_101f7bb0` / `FUN_101f7cc0` |
+
+**Negative results, each load-bearing.**
+
+- **`Raise_Clan_Discipline` / `Raise_Other_Discipline` were never implemented.** Neither string
+  exists in `client.dll` *or* `vampire.dll`, and `CVStatCost_t::Load` reads exactly two keys,
+  `New` and `Raise`. The per-clan discipline price is expressed instead as a `TraitEffect` carrying
+  its own `Costs` block (operator `7 Cost`) — the mechanism the Unofficial Patch uses to reinstate
+  the distinction in data (`"Raise" "Table: 6, 8, 12, 18, 24"` + `"Max 3"` on each non-clan
+  discipline, per clan).
+- **The clan-keyed `Subpool_*` tables are live code with dead data.** `rules_tables.txt` says so in
+  a comment ("These aren't really used anymore (but *ARE* referenced in code)") and the values are
+  `0` on every clan in **both** retail (VPK) and the patch — only `Subpool_Disciplines` is `1`.
+  So the shipped per-priority totals *are* the tier tables alone.
+- **`HiddenInCharEditor` is a dead key** — the `CVStatInfo_t` accessor exists and the row filter
+  honours it, but no `Stat` in the shipped `stats.txt` sets it.
+- Retail and patch agree on every number RE25 used: the tier tables (`2/1/0`, `3/2/1`, `_Kine`
+  `1/1/1`), the `Costs` formulas, and the clan subpools. Retail's copies carry a malformed
+  `"Clamping		"1"` key the patch fixed; nothing downstream depends on it.
+
+**Residue.** How trait-effect operators **compose** — the order `+`/`*`/`%` apply in, and whether a
+second group's `Max` overrides or intersects the first's — is not decompiled; only the loader and
+the vocabulary are. The chargen panel's own click path (which decrements a pool and calls the cost
+layer) is disassembled but defeats the decompiler; the pool *construction*, the cost layer and the
+row filter — everything 9.4f needs to reproduce the math — are recovered.

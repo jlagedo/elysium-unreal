@@ -8,7 +8,12 @@
 //
 // Grammar: quoted or bare tokens, `{ }` nesting, `//` line comments outside quotes. Keys fold
 // to lower (Source KV is case-insensitive); values keep their case. Repeated block keys are
-// preserved in order (a scheme's `RandomSound`, a sign's `TextBlock`).
+// preserved in order (a scheme's `RandomSound`, a sign's `TextBlock`), and so are repeated *leaf*
+// keys — `Values` keeps the last, `Pairs` keeps them all.
+//
+// Brace depth is the only structural signal. Several `vdata/` tables indent a child block at
+// column 0 (`levelingtemplate_000.txt`'s templates, one `rules.txt` key) and write whole blocks
+// inline on one line (`Level { "Strength" "2" }`), so indentation and line breaks mean nothing.
 //
 // A quoted value MAY SPAN LINES: 127 of the game's 187 loose sign definitions put a wrapped
 // paragraph in a single `"Text"` value. The tokenizer is therefore a character stream over the
@@ -26,6 +31,7 @@ namespace ElysiumKeyValues
 	struct FKvNode
 	{
 		TMap<FString, FString> Values;                     // leaf key -> value (last wins)
+		TArray<TPair<FString, FString>> Pairs;             // the same leaves in file order, repeats kept
 		TArray<TPair<FString, TSharedPtr<FKvNode>>> Kids;  // ordered child blocks (repeatable keys)
 
 		const FString* Value(const TCHAR* Key) const { return Values.Find(FString(Key).ToLower()); }
@@ -37,6 +43,16 @@ namespace ElysiumKeyValues
 		// True when the key is present at all (an authored-but-empty value is meaningful: a sign's
 		// `"XPos" ""` selects CSignUI's centring branch, which differs from XPos being absent).
 		bool Has(const TCHAR* Key) const { return Value(Key) != nullptr; }
+
+		// Every value authored under Key, in file order. A block MAY repeat a leaf key and mean it:
+		// 17 of `stats.txt`'s Active_Disciplines carry two `IncPredependency` gates ("BloodPool > 0"
+		// and "Health < Max_Health"), and one `clandoc000.txt` General block names `M_Hands` twice.
+		// `Values` keeps only the last of those, so a reader that needs the whole set reads here.
+		void ValuesFor(const TCHAR* Key, TArray<FString>& Out) const
+		{
+			const FString L = FString(Key).ToLower();
+			for (const TPair<FString, FString>& P : Pairs) { if (P.Key == L) { Out.Add(P.Value); } }
+		}
 
 		const FKvNode* Child(const TCHAR* Key) const
 		{
@@ -103,6 +119,7 @@ namespace ElysiumKeyValues
 			else if (Pos < Toks.Num())
 			{
 				Node->Values.Add(Key, Toks[Pos]);
+				Node->Pairs.Emplace(Key, Toks[Pos]);
 				++Pos;
 			}
 		}

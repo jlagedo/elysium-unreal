@@ -187,7 +187,7 @@ in CurrentMoney"`), rather than returning a falsy value.
 | `HasWeaponEquipped` | `101984c0` | `(char, …)` | 27 | stub |
 | `AmmoCount` | `101989b0` | `(char, weapon:str)` | 19 | stub |
 | `GiveAmmo` | `10198b30` | `(char, weapon:str, count:int)` | 19 | stub |
-| `BumpStat` | `10199a70` | `(char, stat:str, …)` | 19 | stub |
+| `BumpStat` | `10199a70` | `(char, stat:str, times:int)` | 19 | stub |
 | `WorldMap` | `10199520` | `(char)` | 12 | stub |
 | `IsFollowerOf` | `101988c0` | `(char, …)` | 8 | stub |
 | `SewerMap` | `10199690` | `(char)` | 4 | stub |
@@ -201,6 +201,22 @@ Useful doc strings: `SetCamera` — *"Sets the entity to use the named shot file
 camera mode"* (so its argument keys `vdata/camerashots/`); `DialogDiscipline` — *"Uses a
 discipline in dialog, doesn't deduct blood points"*; `GetQuestState` — *"Returns the state of the
 player's quest, or 0 if this is an NPC.."*.
+
+Two of the sheet methods are decompiled in full; the semantics live in `game_runtime.md` §3, and
+what a *caller* needs is:
+
+- **`CalcFeat(char, feat)` returns an int — the feat rating, not a roll.** It is
+  `Feats::FeatValue` (`101e56e0`) clamped to the feat's `MaxValue`, so the implicit `>=` a
+  `dlgexpr` skill-check applies compares a rating. A bad feat name raises
+  `AttributeError("invalid feat name -- %s")`; a non-character raises
+  `"invalid combat character"`.
+- **`BumpStat(char, stat, times)` takes three arguments** — the third is a **repeat count**, and
+  the body loops it, adding one dot per pass. It writes the **base** (`CVStatList_t::IncBase`), and
+  carries a ceiling of its own: each pass is skipped unless `GetBase(stat) < 5`, hardcoded and
+  independent of the stat's `Max`. A count below 1 does nothing, so it **cannot decrement**; a
+  count of 0 or a null name raises `"invalid args in BumpStat"`. One client notification fires
+  after the loop, not per dot. (Its `ml_doc` is `DialogDiscipline`'s — one of the six copy-paste
+  errors below — so none of this could be read off the doc string.)
 
 **Six doc strings are copy-paste errors** — a build fingerprint, and a trap for anyone reading
 them as spec: `CurrentMoney` carries `HasItem`'s text, `HasWeaponEquipped` carries `RemoveItem`'s,
@@ -279,7 +295,7 @@ what roadmap B6's feed interaction fires. Keyfields include `squadname` and `hin
 | Input | Type | Calls | Handler |
 |---|---|---|---|
 | `GiveItem` | **STRING** | 126 | `LAB_10008760` |
-| `AwardExperience` | **STRING** | 77 | `LAB_10006807` |
+| `AwardExperience` | **STRING** | 77 | `LAB_10006807` → `CVPlayer::InputAwardExperience` `FUN_1015f100` |
 | `Whisper` | STRING | 9 | `LAB_100118a6` |
 | `SetCriminalLevel` | INTEGER | 3 | `LAB_100063bb` |
 | `RemoveCamera` | VOID | 3 | `LAB_10001c12` — real since 11.7: clears the map's one scripted camera |
@@ -301,7 +317,12 @@ Two consequences for the port:
   wire's path and the method is the script's. Both must exist and they need not share an
   implementation.
 - **`AwardExperience` takes a STRING, not an amount.** It names an entry the engine looks up
-  (`vdata` experience data), so 9.4 cannot model it as an integer add.
+  (`vdata/system/Experience_Table.txt`), so 9.4 cannot model it as an integer add. The handler
+  (`FUN_1015f100`) takes the variant's string when `fieldType == 2` and otherwise stringifies it,
+  then calls `CVPlayer::AwardExperience` (`1015f630`): the key is refused if already in the
+  `m_ExpList` give-once ledger, looked up (a miss awards *and appends* nothing), given the
+  `Experience_Modifier` bonus above 2 XP, and handed to `AddExperience` (`1015f8b0`) — which
+  divides by 100 and **keeps the remainder**. Full walk: `game_runtime.md` §3 → "XP & leveling".
 
 ## `G` and the save adapter
 

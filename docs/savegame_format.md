@@ -347,17 +347,21 @@ combat-character base, not on the player class, which is why NPCs share it.
 
 **The sheet** (`vdata/` supplies the rulebook these index into — `vdata-catalog.md`):
 
-- `m_iVAttributesBase[ v_attribute_* ]` / `m_iVAttributesCurrent[ … ]` — 21 named slots each:
-  the nine WoD attributes (strength … wits) plus `clan`, `gender`, `bloodpool`, `bloodpool_max`,
-  `max_health`, `generation`, `level`, `humanity`, `experience`, `experience_modifier`,
-  `starting_equipment`, `autolevel_template`, `attrib_order`.
+- `m_iVAttributesBase[ v_attribute_* ]` / `m_iVAttributesCurrent[ … ]` — **35** slots each
+  (`stats.txt`'s whole Attributes container; the writer omits the all-zero ones, which is why a
+  save shows fewer): `attrib_order` at 0, the nine WoD attributes (strength … wits), then every
+  derived and bookkeeping stat through `experience` at 34 — `clan`, `gender`, `bloodpool`,
+  `bloodpool_max`, `faithpoints`, `health`, `health_aggravated_dmg`, `max_health`, `generation`,
+  `armor_rating`, `level`, `frenzy_check_mod`, `soak_pool`, `humanity`, `masquerade`,
+  `experience_modifier`, `starting_equipment`, `autolevel_template`, and the rest.
 - `m_iVAbilitiesBase[ v_ability_* ]` / `…Current[ … ]` — talents/skills/knowledges;
   only the non-zero ones are written (`intimidate`, `subterfuge`, `stealth`, `investigation`,
   `academics`).
 - `m_iVDisciplinesBase[ v_discipline_* ]` / `…Current[ … ]` — all 13 slots, `-1` for a discipline
   the clan cannot take, `0`+ for one it can: `animalism`, `auspex`, `blood_healing`, `celerity`,
   `corpus_vampirus`, `dementation`, `dominate`, `fortitude`, `obfuscate`, `potence`, `presence`,
-  `protean`, `thaumaturgy`.
+  `protean`, `thaumaturgy`. `stats.txt`'s Disciplines container is **17** — the four Numina powers
+  follow — so the file's slot space is wider than what the save writes.
 
 The **Base/Current split is the whole buff system**: base is the character sheet, current is the
 sheet plus every active modifier, and both are persisted.

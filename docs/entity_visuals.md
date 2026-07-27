@@ -244,7 +244,7 @@ exporting the definitions — nothing about signs is a quad/decal rendering prob
 ## 8. Related docs
 
 `docs/entity_io.md` (the 7-field I/O, `use_icon`, `StartHidden`/`ScriptHide` — the runtime
-behavior surface this data feeds), `docs/python_bridge.md` (name→delegate namespace, the four
+behavior surface this data feeds), `docs/python_bridge.md` (name→delegate namespace, the five
 Python call paths), `docs/engine-core.md` (`FElysiumEntityWorld`, the classname registry, the
 spawn pass — the Unreal substrate that consumes `.ents`), `docs/runtime-architecture.md` (the
 substrate's place in the map epoch and frame), `docs/lighting.md` (real-time lighting),

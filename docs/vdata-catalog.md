@@ -23,11 +23,18 @@ Counts: **465** files mirrored (`system/` 97, `items/` 244, `camerashots/` 66,
 
 The authoritative consumer is the engine loader in `vampire.dll` — e.g. `DiceRolls.txt` is
 read by `FUN_101d92b0` (see `recovered/dice-system.md` / RE5), found by grepping the
-decompile for the filename/root-key string. No existing runtime parser covers these tables, so
-there is no prior implementation to check field usage against — only a reusable Source-KeyValues
-parser pattern and prose schemas for the core sheet tables in `docs/game_runtime.md`. The exact
-engine loader/schema for each is RE'd when its consumer is built, the way RE5 did for the dice
-tables.
+decompile for the filename/root-key string. The exact engine loader/schema for each is RE'd when
+its consumer is built, the way RE5 did for the dice tables.
+
+**Twelve of these families now have a runtime reader** — `stats`, `feats`, `rules` +
+`rules_tables`, `traiteffect` + `traiteffects000`, `clandoc000` + `npctemplate*`, `histories000`,
+the five `quests_*`, `experience_table` and `levelingtemplate_000`, in
+`Source/ElysiumUE/Private/Substrate/ElysiumRulebook.{h,cpp}` behind `UElysiumRulebookSubsystem`
+(plus `dispositiontable.txt`, read separately by `FElysiumDispositionTable`). The row counts quoted
+below are asserted against the exported files by `Elysium.Content.Rulebook`, so a re-export that
+drifts is a test failure rather than a quietly smaller table. The remaining families have no
+parser, and for those there is no prior implementation to check field usage against — only this
+catalogue and the prose schemas in `docs/game_runtime.md`.
 
 ## `vdata/system/` (97) — the rulebook
 
@@ -35,23 +42,24 @@ tables.
 
 | Root key | File(s) | What | Notes |
 |---|---|---|---|
-| `StatData` | `stats.txt` | attribute/ability/discipline/background trait tree: `Min`/`Max`/`Default`, `Costs {New, Raise}`, `NameMapping` | `stats.txt` ≡ `stats - vampire.txt`; `- hunter` variant vestigial |
-| `FeatData` | `feats.txt` | derived feats: `Base0`+`Base1` (attribute+ability) → feat; `PCWeighting`/`NPCWeighting` name a `DiceRolls` table | ties feats → the RE5 weighting tables |
-| `TraitEffectsData` | `traiteffects000.txt` | per-trait effects (clan banes, frenzy effects) | vampire/hunter variants |
-| `RuleData` | `rules.txt`, `rules_tables.txt` | frenzy / humanity / masquerade / blood constants + shared tables | Unofficial-Patch-tuned (`changed by wesp`) |
+| `StatData` | `stats.txt` | four flat trait containers: `Min`/`Max`/`Default`, `Costs {New, Raise}`, `NameMapping`, `IncPredependency`. **The engine indexes each container by block position with the leading `*_Order` block at 0** — Attributes is 35 slots (every derived stat through `Experience`), Abilities 13, Disciplines and Active_Disciplines **17** each. Also carries 29 nested `Table` lookups, among them the chargen **priority-tier** pools on the `*_Order` stats (`Subpool_Attribute_Primary_Secondary_Tertiary` 2/1/0, `Subpool_Ability_…` 3/2/1, plus `_Kine` variants) — the clan-keyed half lives in `rules_tables.txt` | `stats.txt` ≡ `stats - vampire.txt`; `- hunter` variant vestigial. **RE24 done** — `game_runtime.md` → "How a trait is addressed". The last four discipline slots (`Shield_of_Faith`, `Divine_Vision`, `Holy_Light`, `Mind_Shield`) are the Numina powers, which ship in `stats.txt` proper; the **save array is 13** (`savegame_format.md`) |
+| `FeatData` | `feats.txt` | derived feats: a **variable-length** `Base%d` list (0–3 entries; a base may carry a `/ N` or `* N` modifier) summed into the feat rating, plus `Automatic%d` and the dead `Display2nd%d`; `PCWeighting`/`NPCWeighting` name a `DiceRolls` table | 23 feats; **RE24 done** — ties feats → the RE5 weighting tables (all 23 name `Normal`) |
+| `TraitEffectsData` | `traiteffects000.txt` | per-trait effects (clan banes, frenzy effects, History backgrounds): `TraitEffectCategory` → `TraitEffectGroup` → `TraitEffect { Trait, Modifier \| Costs }` — **5 categories / 169 groups / 457 effects** (+5 `UNUSED_TraitEffect`, 75 `Costs`) | vampire/hunter variants (`traiteffects000.txt` ≡ `- vampire`); **RE25 done** — the loader + operator set, `game_runtime.md` → "Trait effects". A group may name one trait twice (Brujah's `Animalism` takes a `Costs` effect *and* a `Max 3`), so a group is an ordered list, not a per-trait map |
+| `TraitEffectsData` | `traiteffect.txt` | the **`ModifierNames` operator enum** the trait-effect parser indexes (`0 +`, `1 *`, `2 /`, `3 Max`, `4 Min`, `5 %`, `6 Value`, `7 Cost`, `8 BloodCost`, `9 Damage`, `10 Duration`) | 27 lines; the only thing in it |
+| `RuleData` | `rules.txt`, `rules_tables.txt` | frenzy / humanity / masquerade / blood constants + shared tables; `rules_tables.txt` also holds the clan-keyed chargen `Subpool_*` pools (all zero bar `Subpool_Disciplines` = 1) | Unofficial-Patch-tuned (`changed by wesp`) |
 | `DiceRollData` | `dicerolls.txt` | d10 resolver `TableWeightings` + `HealthModifiers` + tier strings | **RE5 done** — `recovered/dice-system.md`; loader `FUN_101d92b0` |
-| (pipe-delimited) | `experience_table.txt` | quest-reward → XP (`XP = floor(value/100)`) | not KeyValues; `>`-comments |
-| `LevelingTemplateList` | `levelingtemplate_000.txt` | ordered auto-level templates | NPC / quick-level |
+| (pipe-delimited) | `experience_table.txt` | quest-reward → XP: `key \| description \| value`, 190 rows, `XP = floor(value/100)` with the **sub-100 remainder carried** across awards; give-once is the player's `m_ExpList` ledger, not the trailing `01` | not KeyValues; `>`-comments, lines under 3 chars skipped, the `Total Experience Value` headers are advisory (36/68 agree). **RE24 done** |
+| `LevelingTemplateList` | `levelingtemplate_000.txt` | ordered auto-level templates — **16 templates / 86 `LevelGroup` / 1,260 `Level` steps**; eight are `*_CharGen`. A `Level { "<Trait>" "<N>" }` block carries one pair whose *key* is the trait name, and the list order is the buy order | NPC / quick-level. Blocks sit at column 0 inside their parent and `Level` is written inline on one line, so brace depth is the only structural signal |
 
 ### Clans & character creation
 
 | Root key | File(s) | What |
 |---|---|---|
 | `ClanDataTables` | `clandoc000.txt` | clan definitions — disciplines, bonuses, banes, and the per-clan body models (`M_Body0..5`/`F_Body0..5`, the source the PC-body export draws from; `M_Hands`/`F_Hands` are separate hand models) |
-| `ClanDataTables` | `npctemplate000.txt`…`025` + named (`_tutorial`, `_malkmansion`, …) — ~40 | per-clan / per-map NPC stat templates |
+| `ClanDataTables` | `npctemplate000.txt`…`025` + 10 named (`_tutorial`, `_malkmansion`, …) — **36 files, 150 templates** | per-clan / per-map NPC stat templates. The `Attributes` block is the flat Attributes container, so **`Max_Health` is authored here as a literal** (`"20"` … `"819"`); a template omitting it inherits `stats.txt`'s `Default` 100 — this is the whole of an NPC's health track. **`ParentTemplateName` is single-parent inheritance** resolving across files (64 non-empty), so an absent trait key means *inherit*, not zero — `npctemplate_cdc.txt` is the minimal case, one `General` key over an empty `Attributes`. `npctemplate019/021.txt` are empty `ClanDataTables` |
 | `HistoryDataTables` / `HistoryData` | `histories000.txt`, `history.txt` | the History background-trait system |
-| `CharCreateWizard` | `charcreatewizard.txt` (78 KB) | chargen personality-quiz → clan scoring |
-| `CharEditor` | `chareditor.txt` | char-editor config (stub) |
+| `CharCreateWizard` | `charcreatewizard.txt` (78 KB) | chargen personality-quiz → clan scoring (`Traits`/`TraitCombinations`/`TraitOrderings`, 78 `Popup`s, `Clan_Tables.ClanNode` + the 3×3 `ConnectionScores` matrix) — **RE25 done**, read by `client.dll` |
+| `CharEditor` | `chareditor.txt` | char-editor config — two keys, `Music "music/Vampire_Theme.mp3"` + `Music_Volume "1.0"`; nothing else |
 
 ### Disciplines (vampire powers)
 
@@ -63,7 +71,26 @@ tables.
 
 | Root key | File(s) | What |
 |---|---|---|
-| `QuestTable` | `quests_santamonica/downtown/hollywood/chinatown/main.txt` | per-hub quest + objective definitions |
+| `QuestTable` | `quests_santamonica/downtown/hollywood/chinatown/main.txt` | per-hub quest + objective definitions — **75 quests / 435 completion states / 161 `AwardXP`**. `quests_main.txt` holds only its header comment and no quests |
+
+Schema, from the files' own header comment:
+
+```
+QuestTable { Quest { "Title" "DisplayName"
+    CompletionState { "ID" "Description" "Type" "AwardXP" "AwardMoney" "Event" } } }
+```
+
+- **`Title`** is the key dialogue and scripts use — `pc.SetQuest("Arthur Knox", 2)`. `DisplayName`
+  is the journal heading; `Description` is the journal body; both are localized.
+- **`ID`** is a unique numeric completion state. State **0 = unassigned**, and a quest is absent
+  from the journal until the player holds a valid ID for it.
+- **`Type`** is `success` / `failure` / `incomplete` and drives the entry's font and colour.
+- **`AwardXP` names an `experience_table.txt` key, not a number** (`"AwardXP" "Carson01"`) — the
+  shipped header comment calls it "how many experience points", and the data contradicts it.
+  `AwardMoney` *is* a number — but **`AwardMoney` and `Event` are authored in zero shipped rows**
+  across all five files, so the only award path with data behind it is `AwardXP`.
+- **`Event`** is script data — a flag assignment or a call — handed to the script interpreter when
+  the state is reached. It is a script-dispatch path beside the four in `python_bridge.md`.
 
 ### NPC social / AI
 

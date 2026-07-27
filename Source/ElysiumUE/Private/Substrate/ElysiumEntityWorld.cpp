@@ -1059,13 +1059,34 @@ void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 	}
 }
 
-// --- Tick (think-first, retail order) ---------------------------------------------------
+// --- Tick (move-first, then think — retail order) ----------------------------------------
+
+void FElysiumEntityWorld::RunPlayerThink(double Now)
+{
+	// The pre-move pass. Retail runs the player's own think inside CPlayerMove::RunCommand — the
+	// PreThink -> think -> move -> PostThink shell the engine drives while draining `clc_move` —
+	// and NOT in Physics_RunThinkFunctions, which is why it is a separate call rather than an
+	// ordering inside RunThinks. It reads the body where the previous frame's move left it, which
+	// is where the body still is: nothing has moved it since.
+	FElysiumPlayer* PlayerEnt = FindPlayer();
+	if (!PlayerEnt)
+	{
+		return;
+	}
+	if (PlayerEnt->IsInert() || PlayerEnt->NextThink == ELYSIUM_NEVER_THINK || PlayerEnt->NextThink > Now)
+	{
+		return;
+	}
+	PlayerEnt->NextThink = ELYSIUM_NEVER_THINK;
+	PlayerEnt->Think();
+}
 
 void FElysiumEntityWorld::Tick(double Now)
 {
 	// 11.4 — sample the pawn into the player entity first, so everything this frame reads (a think
 	// measuring distance, a landmark offset, `pc.GetOrigin()`) sees where the player actually is.
-	// The body moved during the previous frame's step 5, which is why this is a read, not a solve.
+	// The body moved earlier in THIS frame (step 4), which is the relationship retail has: the move
+	// writes the player's origin out of the packet drain, and every think in `GameFrame` reads it.
 	if (FElysiumPlayer* PlayerEnt = FindPlayer())
 	{
 		PlayerEnt->SyncFromBody();
@@ -1078,10 +1099,15 @@ void FElysiumEntityWorld::RunThinks(double Now)
 {
 	// Retail: Physics_RunThinkFunctions runs before the event queue. A due, non-inert entity
 	// thinks; its next-think is cleared first (Source semantics) so a Think() that doesn't
-	// reschedule stops firing. No class overrides Think() in P1.4, so this is inert here.
-	for (const TUniquePtr<FElysiumEntity>& EntPtr : EntityList)
+	// reschedule stops firing.
+	//
+	// The player is skipped: its think already ran in the pre-move pass, where retail runs it.
+	// Leaving it in would think it twice a frame, and on the wrong side of the move.
+	const int32 PlayerIndex = Player.IsSet() ? Player.Index : INDEX_NONE;
+	for (int32 Index = 0; Index < EntityList.Num(); ++Index)
 	{
-		if (!EntPtr)
+		const TUniquePtr<FElysiumEntity>& EntPtr = EntityList[Index];
+		if (!EntPtr || Index == PlayerIndex)
 		{
 			continue;
 		}

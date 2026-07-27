@@ -188,7 +188,7 @@ facts, valid regardless of target engine. Organisation and maintenance rules: `d
 | `runtime-architecture.md` | **the game spine** — lifetimes, the object graph, the frame, the player object, the session/boot state machine, the control surface, the seams |
 | `engine-core.md` | the entity object model and its two-phase build plan |
 | `entity_io.md` | the Source I/O bus — 7-field outputs, ScriptHide/Unhide, `use_icon` |
-| `python_bridge.md` | the CPython embedding, datamap reflection, the four call paths, `G` |
+| `python_bridge.md` | the CPython embedding, datamap reflection, the five call paths, `G` |
 | `script_api.md` | the script→engine **action inventory** — every name the content calls, its signature and owning datamap, demand-ranked |
 | `game_runtime.md` | main loop, three-layer split, RPG data model, the opening flow |
 | `animation_and_movers.md` | skeletal `.mdl` v2531 (Part A) + brush movers (Part B) |

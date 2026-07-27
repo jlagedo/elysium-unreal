@@ -28,7 +28,35 @@
 DEFINE_LOG_CATEGORY_STATIC(LogElysium, Log, All);
 
 // ------------------------------------------------------------------------------------------
-// S2 — the post-move tick function (runtime-architecture.md §3, step 7).
+// S2 — the pre-move tick function (runtime-architecture.md §3, steps 2-3).
+// ------------------------------------------------------------------------------------------
+
+void FElysiumPreMoveTickFunction::ExecuteTick(float DeltaTime, ELevelTick TickType,
+	ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent)
+{
+	if (Target && IsValidChecked(Target) && !Target->IsUnreachable())
+	{
+		FScopeCycleCounterUObject ActorScope(Target);
+		Target->PreMoveTick(DeltaTime);
+	}
+}
+
+FString FElysiumPreMoveTickFunction::DiagnosticMessage()
+{
+	return GetFullNameSafe(Target) + TEXT("[AElysiumMapActor::PreMoveTick]");
+}
+
+FName FElysiumPreMoveTickFunction::DiagnosticContext(bool bDetailed)
+{
+	if (bDetailed)
+	{
+		return FName(*FString::Printf(TEXT("ElysiumMapActorPreMove/%s"), *GetFullNameSafe(Target)));
+	}
+	return FName(TEXT("ElysiumMapActorPreMove"));
+}
+
+// ------------------------------------------------------------------------------------------
+// S2 — the post-move tick function (runtime-architecture.md §3, step 8).
 // ------------------------------------------------------------------------------------------
 
 void FElysiumPostMoveTickFunction::ExecuteTick(float DeltaTime, ELevelTick TickType,
@@ -57,10 +85,16 @@ FName FElysiumPostMoveTickFunction::DiagnosticContext(bool bDetailed)
 
 AElysiumMapActor::AElysiumMapActor()
 {
-	// S2 — the frame order is declared with tick groups, not left to registration order. The
-	// gameplay pass (clock, thinks, queue) runs before physics; the post-move pass runs after it
-	// and after the pawn's move. Neither ticks while the game is held: pause is meant to stop the
-	// world, and the presentation side is what keeps drawing (§4).
+	// S2 — the frame order is declared with tick groups and prerequisites, not left to registration
+	// order. The pre-move pass (clock, spawn hold, the player's own think) and the gameplay pass
+	// (thinks, queue, audio) both run before physics, with the pawn's move between them; the
+	// post-move pass runs after physics. None of the three ticks while the game is held: pause is
+	// meant to stop the world, and the presentation side is what keeps drawing (§4).
+	PreMoveTickFunction.bCanEverTick = true;
+	PreMoveTickFunction.bStartWithTickEnabled = true;
+	PreMoveTickFunction.TickGroup = TG_PrePhysics;
+	PreMoveTickFunction.bTickEvenWhenPaused = false;
+
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.TickGroup = TG_PrePhysics;
 	PrimaryActorTick.bTickEvenWhenPaused = false;
@@ -90,19 +124,38 @@ void AElysiumMapActor::RegisterActorTickFunctions(bool bRegister)
 
 	if (bRegister)
 	{
+		if (PreMoveTickFunction.bCanEverTick)
+		{
+			PreMoveTickFunction.Target = this;
+			PreMoveTickFunction.SetTickFunctionEnable(PreMoveTickFunction.bStartWithTickEnabled);
+			PreMoveTickFunction.RegisterTickFunction(GetLevel());
+			// Pre-move before gameplay, unconditionally. The pawn's movement component is wired
+			// between them when one exists (EnsureTickPrerequisites), but a map that never seats a
+			// pawn — the menu backdrop, a headless logic world — has no such edge, and its thinks
+			// must still run on a clock this frame's pre-move pass has already advanced. Both
+			// functions are TG_PrePhysics, so without this the order would be registration order.
+			PrimaryActorTick.AddPrerequisite(this, PreMoveTickFunction);
+		}
 		if (PostMoveTickFunction.bCanEverTick)
 		{
 			PostMoveTickFunction.Target = this;
 			PostMoveTickFunction.SetTickFunctionEnable(PostMoveTickFunction.bStartWithTickEnabled);
 			PostMoveTickFunction.RegisterTickFunction(GetLevel());
-			// The tick groups already separate the two passes; the prerequisite says so in the
+			// The tick groups already separate these two passes; the prerequisite says so in the
 			// graph as well, so the dependency survives anyone re-grouping either end.
 			PostMoveTickFunction.AddPrerequisite(this, PrimaryActorTick);
 		}
 	}
-	else if (PostMoveTickFunction.IsTickFunctionRegistered())
+	else
 	{
-		PostMoveTickFunction.UnRegisterTickFunction();
+		if (PreMoveTickFunction.IsTickFunctionRegistered())
+		{
+			PreMoveTickFunction.UnRegisterTickFunction();
+		}
+		if (PostMoveTickFunction.IsTickFunctionRegistered())
+		{
+			PostMoveTickFunction.UnRegisterTickFunction();
+		}
 	}
 }
 
@@ -115,19 +168,31 @@ void AElysiumMapActor::EnsureTickPrerequisites()
 		return;
 	}
 
-	// Step 1 -> steps 2-4: the frame's input sample lands before the substrate runs.
+	// Step 1 -> steps 2-3: the frame's input sample lands before the clock advances, because the
+	// command that sample builds is what the move about to follow is timed against.
 	if (PrereqController.Get() != PC)
 	{
-		AddTickPrerequisiteActor(PC);
+		PreMoveTickFunction.AddPrerequisite(PC, PC->PrimaryActorTick);
 		PrereqController = PC;
 	}
 
-	// Steps 2-4 -> step 5: the pawn moves against the positions this frame's thinks produced.
-	// A door's think issues its swept move here; moving the pawn first tunnels it on fast movers.
+	// Steps 2-3 -> step 4 -> steps 5-6 (RE21). Retail never runs the player move inside `GameFrame`:
+	// the engine drains the client's `clc_move` message and runs the whole ProcessUsercmds ->
+	// CPlayerMove::RunCommand chain there, so the pawn has already moved by the time the first think
+	// or queued event runs. The tunnelling hazard the old order guarded against is absorbed on the
+	// mover's side instead — a mover sweeps its own body and resolves what it hits.
 	UPawnMovementComponent* Move = PC->GetPawn() ? PC->GetPawn()->GetMovementComponent() : nullptr;
 	if (Move && PrereqMovement.Get() != Move)
 	{
-		Move->PrimaryComponentTick.AddPrerequisite(this, PrimaryActorTick);
+		// A replaced pawn (the elysium.SourceMovement A/B swaps the whole body) leaves the outgoing
+		// component's edge behind, and the gameplay pass would then wait on a tick function that is
+		// never going to run again. Drop it before wiring the new one.
+		if (UPawnMovementComponent* Previous = PrereqMovement.Get())
+		{
+			PrimaryActorTick.RemovePrerequisite(Previous, Previous->PrimaryComponentTick);
+		}
+		Move->PrimaryComponentTick.AddPrerequisite(this, PreMoveTickFunction);
+		PrimaryActorTick.AddPrerequisite(Move, Move->PrimaryComponentTick);
 		PrereqMovement = Move;
 
 		// 11.4 — tell the body which entity it embodies. Done here rather than at SpawnPlayer
@@ -694,12 +759,13 @@ void AElysiumMapActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
-void AElysiumMapActor::Tick(float DeltaSeconds)
+void AElysiumMapActor::PreMoveTick(float DeltaSeconds)
 {
-	Super::Tick(DeltaSeconds);
+	// Steps 2-3 — everything that must be settled before the pawn moves.
 
 	// The controller and the pawn appear after this actor does, so keep looking until the frame
-	// order is fully declared (a menu backdrop map never seats a pawn, and that is fine).
+	// order is fully declared (a menu backdrop map never seats a pawn, and that is fine). This is
+	// the frame's first pass, so an edge wired here is in force from the same frame it is bound.
 	EnsureTickPrerequisites();
 
 	if (UGameInstance* GI = GetGameInstance())
@@ -708,11 +774,40 @@ void AElysiumMapActor::Tick(float DeltaSeconds)
 		{
 			// Step 2 — the only place `Now` moves (S1). DeltaSeconds is already dilated by the
 			// engine, and the clock applies no factor of its own, so a time scale is applied once.
+			// It sits ahead of the move because retail rebinds `frametime`/`curtime` to the user
+			// command's own timing for the move's duration: the move runs at this frame's `now`,
+			// never the previous frame's.
 			GameState->TimeControl().AdvanceFrame(DeltaSeconds);
 
-			// Steps 3-4 — the substrate, think-first (retail order: Physics_RunThinkFunctions,
-			// then CEventQueue::ServiceEvents). Runs every frame, independent of the spawn-hold
-			// below, so the map-load I/O chains service immediately.
+			// Step 3 — the player's OWN think, which retail runs inside CPlayerMove::RunCommand
+			// (PreThink -> think -> move -> PostThink) rather than in Physics_RunThinkFunctions.
+			// Every other entity thinks in the gameplay pass, after the move.
+			if (EntityWorld)
+			{
+				EntityWorld->RunPlayerThink(GameState->GameClock().GetNow());
+			}
+		}
+	}
+
+	// The spawn hold is pre-move work: it places the pawn and freezes it until the async collision
+	// cook produces ground. Left in the gameplay pass it would run *after* the mover's first tick,
+	// so a freshly seated pawn would take one unfrozen step from wherever the game mode dropped it.
+	TickSpawnHold(DeltaSeconds);
+}
+
+void AElysiumMapActor::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	// Steps 5-6 — `GameFrame` itself: the pawn has already moved (step 4), which is the order
+	// RE21 pins. Nothing here is conditional on the spawn hold, so the map-load I/O chains
+	// service immediately.
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+		{
+			// Steps 5-6 — the substrate, think-first (retail order: Physics_RunThinkFunctions,
+			// then CEventQueue::ServiceEvents).
 			if (EntityWorld)
 			{
 				EntityWorld->Tick(GameState->GameClock().GetNow());
@@ -720,6 +815,7 @@ void AElysiumMapActor::Tick(float DeltaSeconds)
 
 			// P6.3 — reap finished voices, then advance the SoundScheme manager (random-one-shot
 			// scheduler + music crossfade) with the listener position for polar placement/attenuation.
+			// After the move, so the listener is this frame's ear rather than the last frame's.
 			if (UElysiumAudioSubsystem* Audio = GI->GetSubsystem<UElysiumAudioSubsystem>())
 			{
 				Audio->TickAudio(DeltaSeconds);
@@ -737,7 +833,10 @@ void AElysiumMapActor::Tick(float DeltaSeconds)
 			}
 		}
 	}
+}
 
+void AElysiumMapActor::TickSpawnHold(float DeltaSeconds)
+{
 	if (!bSpawnPending || bSpawnDone)
 	{
 		return;
@@ -782,12 +881,12 @@ void AElysiumMapActor::Tick(float DeltaSeconds)
 
 void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 {
-	// Step 7 — everything here reads the frame's final positions.
+	// Step 8 — everything here reads the frame's final positions.
 	//
 	// P4.2 — the minimal +use look-cursor: re-pick the aimed usable and fire OnIn/OnOut on the
 	// transitions. It traces, so it belongs after physics: before the pawn's move it would pick
 	// against last frame's geometry, which reads as a door you cannot use until you stop walking.
-	// Its outputs enqueue against the same `now` the gameplay pass advanced to, so they service on
+	// Its outputs enqueue against the same `now` the pre-move pass advanced to, so they service on
 	// the next frame's queue pass exactly like any other zero-delay wire.
 	if (EntityWorld)
 	{

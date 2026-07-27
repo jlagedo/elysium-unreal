@@ -261,7 +261,7 @@ own module name (so it is imported as a module, then merged — not exec'd into 
 `__main__` can answer that name. A host that evaluates payloads in the level module's namespace
 instead resolves the script's own functions but not the engine globals the script did not alias.
 
-## The four call paths
+## The five call paths
 
 | Trigger | Mechanism |
 |---|---|
@@ -269,6 +269,7 @@ instead resolves the script's own functions but not the engine globals the scrip
 | Entity output field 6 | Source's output format is extended from 5 comma fields to **7**; field 6 is a Python call string. 6,956 of 24,081 engine-loaded outputs (29%) carry one — 6,851 fire *only* Python with no I/O target, 105 do both (retail: 1,591 of 16,125, 10%; 1,500 / 91). |
 | `logic_pythoncheck` | `python_script` keyvalue is an expression → `PyRun_String` → `PyObject_IsTrue` → standard `OnTrue`/`OnFalse` I/O. |
 | Dialogue | `.dlg` field 4 (condition, eval) and field 5 (action, exec). |
+| Quest completion state | a `CompletionState`'s **`"Event"`** key in `vdata/system/quests_*.txt` — *"script data, such as a flag assignment or a function call, that will be passed to the script interpreter"*, run when the player reaches that state (`vdata-catalog.md` → Quests). |
 
 `worldspawn` carries a `levelscript` keyvalue (92 of 101 maps) naming the hub module —
 `"levelscript" "chinatown"` loads `python/chinatown/chinatown.py`. Several maps share one

@@ -24,6 +24,7 @@
 #include "Visual/ElysiumObjModel.h"
 #include "ElysiumReflections.h"
 #include "ElysiumRng.h"
+#include "Substrate/ElysiumRulebook.h"
 #include "Visual/ElysiumRopes.h"
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSaveTypes.h"
@@ -1253,6 +1254,419 @@ bool FElysiumMapSnapshotTest::RunTest(const FString&)
 	{
 		AddInfo(TEXT("no exported maps — snapshot round trip skipped"));
 	}
+	return true;
+}
+
+// =====================================================================================
+// The rulebook (9.4a) — every `vdata/system/` table the RPG layer reads, against the real
+// exported files. Two kinds of assertion, and the second is the point of the test:
+//
+//   * **shape** — the row counts, so a re-export that drops or duplicates rows is a failure
+//     rather than a quietly smaller table;
+//   * **coherence** — the cross-table references actually resolve. A quest's `AwardXP` names an
+//     `experience_table` key, a feat's `Base%d` names a stat, a clan's `ClanEffect` names a
+//     trait-effect group, an NPC template's parent names another template. Each of those is a
+//     string that resolves at runtime and fails silently when it does not.
+//
+// Counts are exact where the number is a documented invariant of the shipped data and a floor
+// where a data revision is plausible.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRulebookContentTest,
+	"Elysium.Content.Rulebook", GElysiumContentTestFlags)
+bool FElysiumRulebookContentTest::RunTest(const FString&)
+{
+	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/stats.txt"))))
+	{
+		AddInfo(TEXT("skipping: no exported out/vdata (run tools/export_all.py to enable)"));
+		return true;
+	}
+
+	FString Error;
+
+	// --- stats.txt ------------------------------------------------------------------------------
+	FElysiumStatTable Stats;
+	if (!TestTrue(TEXT("stats.txt loads"), Stats.Load(Error)))
+	{
+		AddError(Error);
+		return true;
+	}
+	// The container sizes ARE the engine's trait-id space: a trait is (container, position).
+	// Attributes is not the nine attributes — it is a flat list carrying every derived and
+	// bookkeeping stat through Experience.
+	TestEqual(TEXT("Attributes container is 35 slots"),
+		Stats.Container(EElysiumTraitContainer::Attributes).Num(), 35);
+	TestEqual(TEXT("Abilities container is 13 slots"),
+		Stats.Container(EElysiumTraitContainer::Abilities).Num(), 13);
+	// 17, not 13: the last four are the Numina/hunter powers, which ship in stats.txt proper.
+	TestEqual(TEXT("Disciplines container is 17 slots"),
+		Stats.Container(EElysiumTraitContainer::Disciplines).Num(), 17);
+	TestEqual(TEXT("Active_Disciplines container is 17 slots"),
+		Stats.Container(EElysiumTraitContainer::ActiveDisciplines).Num(), 17);
+	// The block name and the engine key diverge on exactly one container.
+	TestEqual(TEXT("the fourth container's engine key is Active_Disciplines"),
+		Stats.Container(EElysiumTraitContainer::ActiveDisciplines).InternalName,
+		FString(TEXT("Active_Disciplines")));
+
+	// Index 0 is the ordering enum, not a trait — which is what shifts every following id by one.
+	if (const FElysiumStat* Order = Stats.Container(EElysiumTraitContainer::Attributes).At(0))
+	{
+		TestEqual(TEXT("Attributes[0] is Attrib_Order"), Order->InternalName, FString(TEXT("Attrib_Order")));
+	}
+	if (const FElysiumStat* Order = Stats.Container(EElysiumTraitContainer::Abilities).At(0))
+	{
+		TestEqual(TEXT("Abilities[0] is Ability_Order"), Order->InternalName, FString(TEXT("Ability_Order")));
+	}
+	TestEqual(TEXT("Disciplines carry no order slot, so Animalism is 0"),
+		Stats.Container(EElysiumTraitContainer::Disciplines).IndexOf(TEXT("Animalism")), 0);
+
+	// The chargen priority-tier tables are nested Table blocks on the `*_Order` stats — NOT rows of
+	// rules_tables.txt, which holds only the clan-keyed half. 9.4f spends the sum of the two, so
+	// the nested-table load is what keeps that a lookup rather than a hardcoded 2/1/0.
+	if (const FElysiumStat* AttribOrder = Stats.Container(EElysiumTraitContainer::Attributes).At(0))
+	{
+		const FElysiumRuleTable* Tier =
+			AttribOrder->Tables.Find(TEXT("subpool_attribute_primary_secondary_tertiary"));
+		if (TestNotNull(TEXT("Attrib_Order carries the attribute tier table"), Tier))
+		{
+			TestEqual(TEXT("  primary tier is 2"), Tier->Lookup(0), 2.f);
+			TestEqual(TEXT("  secondary 1"), Tier->Lookup(1), 1.f);
+			TestEqual(TEXT("  tertiary 0"), Tier->Lookup(2), 0.f);
+		}
+		// The non-vampire variant, used when a template's `Kindred` key is 0.
+		TestNotNull(TEXT("and its _Kine variant"),
+			AttribOrder->Tables.Find(TEXT("subpool_attribute_primary_secondary_tertiary_kine")));
+	}
+	if (const FElysiumStat* AbilityOrder = Stats.Container(EElysiumTraitContainer::Abilities).At(0))
+	{
+		const FElysiumRuleTable* Tier =
+			AbilityOrder->Tables.Find(TEXT("subpool_ability_primary_secondary_tertiary"));
+		if (TestNotNull(TEXT("Ability_Order carries the ability tier table"), Tier))
+		{
+			TestEqual(TEXT("  ability tiers are 3/2/1"), Tier->Lookup(0), 3.f);
+			TestEqual(TEXT("  secondary 2"), Tier->Lookup(1), 2.f);
+			TestEqual(TEXT("  tertiary 1"), Tier->Lookup(2), 1.f);
+		}
+	}
+
+	// Health is the finding RE24 corrected: Max_Health is an authored stat with no formula, and
+	// Health counts damage TAKEN against it.
+	if (const FElysiumStat* MaxHealth = Stats.Find(TEXT("Max_Health")))
+	{
+		TestEqual(TEXT("Max_Health defaults to 100"), MaxHealth->Default, 100);
+		// Priced out of reach rather than flagged: a derived stat carries a flat 10000, which no
+		// screen offers and no XP total reaches. The 30000 cannot-buy sentinel is used by no
+		// shipped stat at all — it is a runtime verdict, not authored data.
+		const FElysiumStatCost& Raise =
+			Stats.Container(EElysiumTraitContainer::Attributes).CostsFor(*MaxHealth).Raise;
+		TestEqual(TEXT("Max_Health's raise price is a flat 10000"), Raise.At(0), 10000);
+		TestEqual(TEXT("  and it is a flat price, not a per-rating one"),
+			(int32)Raise.Kind, (int32)FElysiumStatCost::EKind::Flat);
+	}
+	else
+	{
+		AddError(TEXT("Max_Health missing from stats.txt"));
+	}
+	if (const FElysiumStat* Health = Stats.Find(TEXT("Health")))
+	{
+		TestEqual(TEXT("Health starts at 0 — it counts damage taken"), Health->Default, 0);
+		TestEqual(TEXT("and its ceiling is a stat NAME, not a number"),
+			Health->MaxExpr, FString(TEXT("Max_Health")));
+	}
+
+	// A repeated leaf key survived the parse — the FKvNode::Pairs half.
+	{
+		int32 MultiGate = 0;
+		for (const FElysiumStat& S : Stats.Container(EElysiumTraitContainer::ActiveDisciplines).Stats)
+		{
+			MultiGate += (S.IncPredependency.Num() > 1) ? 1 : 0;
+		}
+		TestEqual(TEXT("17 active disciplines carry two IncPredependency gates each"), MultiGate, 17);
+	}
+
+	// --- feats.txt ------------------------------------------------------------------------------
+	FElysiumFeatTable Feats;
+	if (TestTrue(TEXT("feats.txt loads"), Feats.Load(Error)))
+	{
+		TestEqual(TEXT("23 feats"), Feats.Num(), 23);
+		if (const FElysiumFeat* Soak = Feats.Find(TEXT("Soak_vs_Lethal_Falling")))
+		{
+			// The one feat whose base carries a divisor — the reason a base is parsed, not read.
+			TestTrue(TEXT("Soak_vs_Lethal_Falling has bases"), Soak->Bases.Num() >= 2);
+			TestEqual(TEXT("  its first base halves Armor_Rating"), Soak->Bases[0].Apply(8), 4);
+		}
+		if (const FElysiumFeat* Damage = Feats.Find(TEXT("Damage")))
+		{
+			TestEqual(TEXT("`Damage` is a pure-code feat with no bases"), Damage->Bases.Num(), 0);
+		}
+		int32 Normal = 0;
+		for (const FElysiumFeat& F : Feats.Feats)
+		{
+			Normal += (F.PcWeighting == TEXT("Normal") && F.NpcWeighting == TEXT("Normal")) ? 1 : 0;
+		}
+		TestEqual(TEXT("all 23 roll on the Normal dice table"), Normal, 23);
+	}
+
+	// --- rules.txt + rules_tables.txt -----------------------------------------------------------
+	FElysiumRules Rules;
+	if (TestTrue(TEXT("rules.txt + rules_tables.txt load"), Rules.Load(Error)))
+	{
+		TestEqual(TEXT("17 rule blocks"), Rules.BlockOrder.Num(), 17);
+		TestEqual(TEXT("20 shared tables"), Rules.Tables.Num(), 20);
+		// One value from each file, so a silently-empty half is caught.
+		TestEqual(TEXT("the frenzy damage threshold is the patch's 20"),
+			Rules.Int(TEXT("VampFrenzy_Info"), TEXT("Dmg_Amount")), 20);
+		// The CLAN-keyed half of the chargen pools (the tier half is nested in stats.txt, above).
+		// Indexed by the clandoc000 template index — their own per-row comments name Brujah(2)
+		// through Mercenary(11) — and the clan term is **0 on every shipped clan** bar disciplines,
+		// which is what leaves the priority tiers carrying the whole spend.
+		const FElysiumRuleTable* Physical = Rules.Table(TEXT("Subpool_Physical"));
+		const FElysiumRuleTable* Disciplines = Rules.Table(TEXT("Subpool_Disciplines"));
+		if (TestNotNull(TEXT("Subpool_Physical is present"), Physical) &&
+			TestNotNull(TEXT("Subpool_Disciplines is present"), Disciplines))
+		{
+			int32 Lo = 0, Hi = 0;
+			Physical->KeyRange(Lo, Hi);
+			TestEqual(TEXT("the pools are keyed over the clan index space, 0..11"), Hi, 11);
+			TestEqual(TEXT("Brujah's attribute subpool is the dead 0"), Physical->Lookup(2), 0.f);
+			TestEqual(TEXT("but its discipline subpool is 1"), Disciplines->Lookup(2), 1.f);
+			TestEqual(TEXT("and the two non-clan rows are 0"), Disciplines->Lookup(0), 0.f);
+		}
+	}
+
+	// --- traiteffect.txt + traiteffects000.txt ---------------------------------------------------
+	FElysiumTraitEffects Effects;
+	if (TestTrue(TEXT("traiteffects load"), Effects.Load(Error)))
+	{
+		TestEqual(TEXT("11 operators"), Effects.Operators.Names.Num(), (int32)EElysiumTraitOp::Count);
+		// The compiled enum mirrors a vocabulary that ships as data — assert they still agree,
+		// because a shifted index silently re-reads every modifier in the file as another operator.
+		for (int32 i = 0; i < Effects.Operators.Names.Num(); ++i)
+		{
+			TestEqual(FString::Printf(TEXT("operator %d is %s"), i,
+				ElysiumTraitOpName((EElysiumTraitOp)i)),
+				Effects.Operators.Names[i], FString(ElysiumTraitOpName((EElysiumTraitOp)i)));
+		}
+		TestEqual(TEXT("5 effect categories"), Effects.Categories.Num(), 5);
+		TestEqual(TEXT("169 effect groups"), Effects.Num(), 169);
+		TestEqual(TEXT("457 effects"), Effects.NumEffects(), 457);
+
+		// A group legitimately names one trait twice — which is why a group holds an array.
+		if (const FElysiumTraitEffectGroup* Brujah = Effects.Find(TEXT("Clan (Brujah)")))
+		{
+			int32 Animalism = 0;
+			for (const FElysiumTraitEffect& Fx : Brujah->Effects)
+			{
+				Animalism += Fx.Trait.Equals(TEXT("Animalism"), ESearchCase::IgnoreCase) ? 1 : 0;
+			}
+			TestTrue(TEXT("Clan (Brujah) names Animalism more than once"), Animalism > 1);
+		}
+		else
+		{
+			AddError(TEXT("no `Clan (Brujah)` trait-effect group"));
+		}
+	}
+
+	// --- clandoc000.txt + npctemplate*.txt --------------------------------------------------------
+	FElysiumClanTable Clans;
+	if (TestTrue(TEXT("clan + npc templates load"), Clans.Load(Error)))
+	{
+		TestEqual(TEXT("25 clan templates"), Clans.Clans.Num(), 25);
+		TestEqual(TEXT("36 npctemplate files"), Clans.NpcFiles.Num(), 36);
+		TestEqual(TEXT("150 npc templates"), Clans.NpcTemplates.Num(), 150);
+
+		// The engine's clan index is the file's own order, and `pc.clan` reports it. The seven
+		// playable clans sit at 2..8; re-ordering the file would re-point every save.
+		int32 Playable = 0;
+		for (const FElysiumClanTemplate& C : Clans.Clans) { Playable += C.IsPlayable() ? 1 : 0; }
+		TestEqual(TEXT("seven Player_* clans"), Playable, 7);
+		if (const FElysiumClanTemplate* Brujah = Clans.Clan(2))
+		{
+			TestEqual(TEXT("clan index 2 is Player_Brujah"), Brujah->TemplateName,
+				FString(TEXT("Player_Brujah")));
+		}
+		if (const FElysiumClanTemplate* Ventrue = Clans.Clan(8))
+		{
+			TestEqual(TEXT("clan index 8 is Player_Ventrue"), Ventrue->TemplateName,
+				FString(TEXT("Player_Ventrue")));
+		}
+
+		// The parent chain resolves across files, and a partial override inherits the rest. This
+		// is the whole reason an absent trait key means "inherit" rather than zero.
+		int32 Parented = 0, Broken = 0, Inherited = 0;
+		for (const FElysiumClanTemplate& C : Clans.NpcTemplates)
+		{
+			if (C.ParentTemplateName.IsEmpty())
+			{
+				continue;
+			}
+			++Parented;
+			if (Clans.Find(C.ParentTemplateName) == nullptr)
+			{
+				++Broken;
+				AddWarning(FString::Printf(TEXT("%s: parent '%s' resolves to nothing (%s)"),
+					*C.TemplateName, *C.ParentTemplateName, *C.SourceFile));
+				continue;
+			}
+			FElysiumClanTemplate Resolved;
+			if (Clans.Resolve(C.TemplateName, Resolved) &&
+				Resolved.Attributes.Num() > C.Attributes.Num())
+			{
+				++Inherited;
+			}
+		}
+		AddInfo(FString::Printf(TEXT("npc templates: %d parented, %d inheriting attributes"),
+			Parented, Inherited));
+		TestEqual(TEXT("every ParentTemplateName resolves"), Broken, 0);
+		TestTrue(TEXT("at least one template inherits its parent's attributes"), Inherited > 0);
+	}
+
+	// --- histories000.txt --------------------------------------------------------------------------
+	FElysiumHistoryTable Histories;
+	if (TestTrue(TEXT("histories000.txt loads"), Histories.Load(Error)))
+	{
+		TestEqual(TEXT("93 histories"), Histories.Num(), 93);
+	}
+
+	// --- experience_table.txt ----------------------------------------------------------------------
+	FElysiumExperienceTable Experience;
+	if (TestTrue(TEXT("experience_table.txt loads"), Experience.Load(Error)))
+	{
+		TestEqual(TEXT("190 experience rows"), Experience.Num(), 190);
+		// The engine's lookup is a prefix compare over the STORED key's length. An exact match
+		// reproduces it only while no key prefixes another — assert the premise, not the outcome.
+		TArray<TPair<FString, FString>> Collisions;
+		Experience.FindPrefixCollisions(Collisions);
+		for (const TPair<FString, FString>& C : Collisions)
+		{
+			AddWarning(FString::Printf(TEXT("'%s' prefixes '%s' — the engine's Q_strnicmp lookup ")
+				TEXT("would swallow it, so an exact match no longer reproduces it"), *C.Key, *C.Value));
+		}
+		TestEqual(TEXT("no experience key prefixes another"), Collisions.Num(), 0);
+	}
+
+	// --- the five quests_*.txt ---------------------------------------------------------------------
+	FElysiumQuestTables Quests;
+	if (TestTrue(TEXT("quests_*.txt load"), Quests.Load(Error)))
+	{
+		TestTrue(TEXT("at least 70 quests"), Quests.NumQuests() >= 70);
+		TestTrue(TEXT("at least 400 completion states"), Quests.NumStates() >= 400);
+		// quests_main.txt is comment-only and must load clean rather than as a failure.
+		TestEqual(TEXT("quests_main.txt is empty and clean"), Quests.Quests[3].Num(), 0);
+
+		int32 Awards = 0, Unresolved = 0, Money = 0, Events = 0;
+		TSet<FString> Types;
+		for (int32 t = 0; t < FElysiumQuestTables::NumTables; ++t)
+		{
+			for (const FElysiumQuest& Q : Quests.Quests[t])
+			{
+				for (const FElysiumQuestState& S : Q.States)
+				{
+					Types.Add(S.Type.ToLower());
+					Money += (S.AwardMoney != 0) ? 1 : 0;
+					Events += S.Event.IsEmpty() ? 0 : 1;
+					if (S.AwardXp.IsEmpty())
+					{
+						continue;
+					}
+					++Awards;
+					// THE named acceptance: an AwardXP value is a key into experience_table, not a
+					// number, and one that stops resolving is a silently unpaid quest reward.
+					if (Experience.Find(S.AwardXp) == nullptr)
+					{
+						++Unresolved;
+						AddError(FString::Printf(TEXT("quest \"%s\" state %d awards '%s', ")
+							TEXT("which is not an experience_table key"), *Q.Title, S.Id, *S.AwardXp));
+					}
+				}
+			}
+		}
+		AddInfo(FString::Printf(TEXT("quests: %d, states: %d, AwardXP: %d, AwardMoney: %d, Event: %d"),
+			Quests.NumQuests(), Quests.NumStates(), Awards, Money, Events));
+		TestTrue(TEXT("at least 150 AwardXP references"), Awards >= 150);
+		TestEqual(TEXT("every AwardXP key resolves in experience_table"), Unresolved, 0);
+		// The schema documents both, and the shipped data authors neither — recorded so 9.4d knows
+		// its money/event award path has no shipped case to test against.
+		TestEqual(TEXT("AwardMoney is authored nowhere"), Money, 0);
+		TestEqual(TEXT("Event is authored nowhere"), Events, 0);
+		TestEqual(TEXT("Type is exactly three values"), Types.Num(), 3);
+
+		if (const FElysiumQuest* Knox = Quests.Find(TEXT("Arthur Knox")))
+		{
+			if (const FElysiumQuestState* State2 = Knox->StateById(2))
+			{
+				TestEqual(TEXT("Arthur Knox state 2 awards Carson01"), State2->AwardXp,
+					FString(TEXT("Carson01")));
+			}
+		}
+		else
+		{
+			AddError(TEXT("no quest titled 'Arthur Knox'"));
+		}
+	}
+
+	// --- levelingtemplate_000.txt -------------------------------------------------------------------
+	FElysiumLevelingTemplates Leveling;
+	if (TestTrue(TEXT("levelingtemplate_000.txt loads"), Leveling.Load(Error)))
+	{
+		TestEqual(TEXT("16 leveling templates"), Leveling.Num(), 16);
+		TestTrue(TEXT("at least 1200 buy steps"), Leveling.NumSteps() >= 1200);
+		int32 CharGen = 0;
+		for (const FElysiumLevelingTemplate& T : Leveling.Templates) { CharGen += T.IsCharGen() ? 1 : 0; }
+		// The eight chargen templates are what 9.4f runs after `giftxp 9000`.
+		TestEqual(TEXT("eight *_CharGen templates"), CharGen, 8);
+		if (const FElysiumLevelingTemplate* Tremere = Leveling.Find(TEXT("Tremere_CharGen")))
+		{
+			TestTrue(TEXT("Tremere_CharGen buys something"), Tremere->NumSteps() > 0);
+		}
+		else
+		{
+			AddError(TEXT("no Tremere_CharGen leveling template"));
+		}
+	}
+
+	// --- cross-table coherence -----------------------------------------------------------------------
+	// Every trait name a feat sums, and every effect group a clan or history names, has to resolve
+	// or the system that reads it fails silently at runtime rather than here.
+	{
+		int32 BadBase = 0;
+		for (const FElysiumFeat& F : Feats.Feats)
+		{
+			for (const FElysiumTraitRef& Base : F.Bases)
+			{
+				if (Stats.Find(Base.Trait) == nullptr && Feats.Find(Base.Trait) == nullptr)
+				{
+					++BadBase;
+					AddError(FString::Printf(TEXT("feat %s: base '%s' names no stat or feat"),
+						*F.InternalName, *Base.Trait));
+				}
+			}
+		}
+		TestEqual(TEXT("every feat Base%d resolves to a stat or feat"), BadBase, 0);
+
+		int32 BadEffect = 0;
+		auto CheckGroup = [&](const FString& Owner, const FString& Group)
+		{
+			if (Group.IsEmpty() || Effects.Find(Group) != nullptr)
+			{
+				return;
+			}
+			++BadEffect;
+			AddError(FString::Printf(TEXT("%s names trait-effect group '%s', which does not exist"),
+				*Owner, *Group));
+		};
+		for (const FElysiumClanTemplate& C : Clans.Clans)
+		{
+			CheckGroup(C.TemplateName, C.GeneralStr(TEXT("ClanEffect")));
+			CheckGroup(C.TemplateName, C.GeneralStr(TEXT("FrenzyEffect")));
+		}
+		for (const FElysiumHistory& H : Histories.Rows)
+		{
+			CheckGroup(H.InternalName, H.Effect);
+		}
+		TestEqual(TEXT("every ClanEffect/FrenzyEffect/history Effect resolves"), BadEffect, 0);
+	}
+
 	return true;
 }
 

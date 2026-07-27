@@ -31,9 +31,10 @@ inline FName ElysiumCombatCharacterClassName(){ return FName(TEXT("CBaseCombatCh
 inline FName ElysiumPlayerClassName()         { return FName(TEXT("player")); }
 inline const TCHAR* ElysiumPlayerTargetName() { return TEXT("!player"); }
 
-// The player's interim health ceiling. VtMB derives the player's health track from Stamina through
-// `vdata/system`, which 9.4 loads; until then this is a stated constant, not a recovered one, and it
-// exists so the damage path has a real number to reduce and the death path is reachable.
+// The player's interim health ceiling, held here until the rulebook reader loads `stats.txt`.
+// It is VtMB's own number: `Max_Health` is an ordinary stat with `Default 100` and no formula
+// anywhere in `vdata`, so the player's ceiling is a flat 100 for the whole game. What this constant
+// stands in for is the *read*, not a derivation. (`docs/game_runtime.md` §3.)
 inline constexpr int32 ElysiumInterimPlayerMaxHealth = 100;
 
 // The numeric character sheet, as far as the runtime reads it today.

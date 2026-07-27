@@ -6,6 +6,143 @@ trigger. A behavioural divergence from retail lands here carrying both the faith
 chosen behaviour (`remaster-direction.md`'s governing rule). Entries are never rewritten —
 append a correction as a new entry.
 
+- **2026-07-27** — **The frame reverts to retail order: the pawn moves *before* the think pass.**
+  Owner call, on RE21. Recorded because it reverses a landed design, not because it adds a
+  divergence — it removes one. Faithful behaviour: player movement is not in `GameFrame` at all;
+  the engine runs the whole `ProcessUsercmds` → `CPlayerMove::RunCommand` chain while draining the
+  client's `clc_move` message, and only then does `SV_Frame` call `GameFrame`, whose body runs
+  `Physics_RunThinkFunctions` third and `CEventQueue::ServiceEvents` sixth. Facts:
+  `game_runtime.md` §1; as-built: `roadmap-archive.md` → RE21.
+
+  `runtime-architecture.md` §3's tick table (landed as 11.1) put the move *after* thinks and the
+  queue, on the stated inference that a pawn must be moved against the positions this frame's
+  thinks produced or it tunnels on fast movers. RE21 disproves the inference: retail moves first
+  and absorbs the tunnelling case from the mover's side, because movers are `MOVETYPE_PUSH` and
+  push what they touch. The default resolves to **reproduce**, and the engineering argument is not
+  strong enough to buy a divergence — it argues for a working mover push path, which is 4.1/4.8's
+  job regardless.
+
+  Two retail behaviours the table never carried come with it: the player's **own** think runs
+  inside `RunCommand` around the move rather than in the think pass, and `frametime`/`curtime` are
+  rebound to the command's timing for the move's duration (identity today, at one command per
+  frame — a contract, not yet code). The rework is **roadmap 11.11**, which also relocates the
+  clock's single advance site ahead of the move and rewrites `Elysium.Substrate.FrameOrder`. Until
+  it lands, the shipped order is the divergence and is flagged as such in both docs.
+
+- **2026-07-27** — **RE25 closed; 9.4f is unblocked, and the row's premise about *where* the math
+  lives was wrong.** Recorded here because each finding changes what 9.4f builds. Facts:
+  `game_runtime.md` §3 → "Chargen" / "Buying a dot" / "Trait effects"; as-built:
+  `roadmap-archive.md` → RE25.
+
+  **(1) Chargen is `client.dll`, not `vampire.dll`.** The wizard, the clan scoring, the point pools
+  and the sheet UI are all client-side; `Subpool_*` does not appear in `vampire.dll` at all. Both
+  DLLs carry the `CVStat*` cost/effect family. For 9.4f this only means the RE trail is in the
+  other binary — the runtime has one process — but it settles which decompiles are authoritative.
+
+  **(2) The per-priority totals are the tier tables, full stop.** A pool is the clan-keyed
+  `rules_tables.txt` `Subpool_<category>` value **plus** the tier value routed by
+  `Attrib_Order`/`Ability_Order`; the clan term is **0 on every shipped clan** (retail *and*
+  patch) except `Subpool_Disciplines` = 1. So a playable PC spends **2/1/0** attribute dots,
+  **3/2/1** ability dots and **1** discipline dot — and 9.4f builds the sum, not a constant, so the
+  dead clan table stays wired the way the engine leaves it wired.
+
+  **(3) The baseline is bought, not written.** The wizard runs `giftxp 9000` then
+  `vautolvl <clan>_CharGen`, so the starting spread comes out of `levelingtemplate_000.txt` through
+  the ordinary auto-level buyer. 9.4f therefore needs the leveling-template reader (9.4a) before the
+  spend screen, and the XP grant is part of the flow, not a debug shortcut.
+
+  **(4) `Current_Rating` is the pre-purchase *base* rating.** `Buy(r) = N·r`, `Sell(r) = N·(r−1)`,
+  so a dot always refunds what it cost; `New` prices only the 0→1 step and never applies to
+  attributes; `30000` is the engine's "cannot buy". The discipline **`-1` sentinel is a row filter**
+  (a by-value section admits only `0 ≤ v < 6`), not a price — the cost layer would quote a `-1`
+  discipline the `New` price. The commented `Raise_Clan_Discipline`/`Raise_Other_Discipline` pair
+  **was never implemented**: neither string exists in either DLL. A per-clan discipline price is a
+  trait effect carrying its own `Costs` block, which is how the Unofficial Patch reinstates it.
+
+  **(5) Clan banes and histories need no per-clan code.** They are `TraitEffectGroup`s whose
+  operator vocabulary ships as data (`traiteffect.txt`'s `ModifierNames`: `+ * / Max Min % Value
+  Cost BloodCost Damage Duration`), targeting a stat, a cost block, or a `TraitFxStrs` `Fx_*` flag
+  that engine code reads where the behaviour lives. 9.4f implements one loader and one applier
+  rather than seven clans of special cases. **Residue accepted:** how the operators compose (order,
+  and whether a later `Max` overrides or intersects) is not decompiled — 9.4f applies them in file
+  order and revisits if a bane misbehaves.
+
+- **2026-07-27** — **RE24 closed; 9.4b/9.4c are unblocked, and two of the four premises the row
+  carried were wrong.** Recorded here because both corrections change what 9.4 builds, not just
+  what a doc says. Facts: `game_runtime.md` §3; as-built: `roadmap-archive.md` → RE24.
+
+  **(1) There is no Stamina→Health derivation, so 9.4b's plan changes.** `Max_Health` is an
+  ordinary stat slot (`Default 100`, `Raise 10000`); `stats.txt` has no formula key at all, the
+  per-clan `Max_Health` lines in `clandoc000.txt` are all commented out, and **no** trait effect
+  targets `Max_Health` or `Health`. So the player's ceiling is a flat 100 for the whole game and
+  `ElysiumInterimPlayerMaxHealth` retires by being *read out of* the rulebook, not replaced by a
+  formula — the constant's value was already right; only its provenance was wrong. The load-bearing
+  half is the other finding: **`Health` counts damage taken, not health remaining**
+  (`Default 0`, `Max "Max_Health"`), and an NPC's track is its `npctemplate*` `Max_Health`
+  literal. So "record damage against a ceiling" is VtMB's own model, not our interim
+  simplification, and 9.4b keeps it rather than replacing it.
+
+  **(2) Give-once is a ledger, not an encoding, and the base list is variable-length.** The
+  trailing `01` on every `experience_table.txt` value does nothing: `AwardExperience` refuses any
+  key already in `m_ExpList`, so *every* award is give-once. `floor(value/100)` holds, but
+  `AddExperience` **keeps the sub-100 remainder** across awards, so 9.4c stores a residue, not just
+  an int. And `CalcFeat` is not `Base0 + Base1`: `Feats::FeatValue` sums a `Base%d` list counted by
+  probing until a key is absent — three entries on `Soak_vs_Bashing`, none on `Damage` — each
+  through its own `/`-or-`*` modifier, so the rulebook reader in 9.4a needs the general shape.
+
+  **(3) The sheet's slot counts are 35/13/13/13, not 21/12/13.** A trait is `(container, index)`
+  with the container's leading `*_Order` block occupying index 0, and the Attributes container is a
+  flat list carrying every derived stat through `Experience` at 34. 9.4b's field registration is
+  sized off the recovered arrays, and it registers **both** spellings where the datamap external
+  name diverges from the `stats.txt` `InternalName` (`intimidate`/`Intimidation`,
+  `computers`/`Computer`, `base_gender_`).
+
+  **(4) Residue accepted, not chased.** Five per-feat override object pointers in
+  `Feats::FeatValue` (the four combat feats and the eight soak feats) are null in the shipped image
+  with no writer anywhere in the disassembly. Shape says dev override; no `vdata` key configures
+  one, so the port reproduces the pre-override value and the identification is a named follow-up
+  (`MakeFuncs` over `vampire.dll`, then re-xref).
+
+- **2026-07-27** — **9.4 is scoped as seven sub-steps behind two RE gates; chargen reproduces the
+  quiz, and the journal screen is in.** Owner call, four parts, taken while planning the PP1 rung.
+
+  **(1) RE first, then build.** `game_runtime.md` §7's open RPG questions are closed with Ghidra
+  *before* the sub-step that consumes them, not inferred and corrected later — the governing rule's
+  default, and the same shape RE5 used on the dice cluster. They land as two backlog rows:
+  **RE24** (the sheet math — `AwardExperience`'s encoding, what `CalcFeat` returns and how
+  `Base0 + Base1` forms its pool, `BumpStat`'s unrecovered argument and its base/current target, and
+  the Stamina→Health derivation) gates 9.4b/9.4c; **RE25** (chargen math — the per-priority dot
+  totals, `Costs.Raise`'s operand, the discipline `-1` sentinel's gating, and how clan banes and
+  history effects are enforced) gates 9.4f. Each row carries its handler address, so recovering one
+  is a single `DumpFuncs` run with no running game.
+
+  **(2) Chargen is a full reproduction, quiz included.** Not a direct clan pick with an
+  `AutoLevel_Template` spend: the `charcreatewizard.txt` `Popup` flow, the eight abstract Traits it
+  tallies, `Trait_Prereq` gating and the `ConnectionScores` clan suggestion are all reproduced, with
+  the player free to override the suggestion. Logic and content are the reproduce layer
+  (`remaster-direction.md`), and the quiz *is* the content. Its `Bkg_Image`/`Region`/`TextRegion`
+  keys are 1024×768 art placement and are read as **intent** — the screen is re-laid on the
+  resolution-independent stack, because the UI has no classic mode.
+
+  **(3) The quest journal screen is in 9.4, not deferred to the UI lane.** The `CompletionState`
+  `Description`/`Type` rows exist only to be read on a screen; loading them with nothing to render
+  them would ship a data path no one can see fail.
+
+  **(4) `elysium.SkipIntro` is re-scoped rather than removed** *(pending — lands with 9.4g)*.
+  Faithful: New Game chains `sp_genesisdevice_1` → `sp_theatre` → `sp_tutorial_1`
+  (`game_runtime.md` §4). Today the cvar rewrites the `story` entry to the tutorial landmark, which
+  skips genesis as well as the theatre. `sp_genesisdevice_1` is exported **and** baked, so genesis
+  can be played now; `sp_theatre` is neither, and **P12** owns it. So the skip moves one map later —
+  genesis plays, and its `boogieout` exit lands on the tutorial landmark instead of the theatre.
+  Default stays 1. A recorded, reversible divergence, retired when P12 lands the theatre act.
+
+  Two findings that corrected standing docs in the same pass. **The `QuestTable` schema was
+  undocumented** — `vdata-catalog.md` named only the root key — and the shipped file's own header
+  comment is **wrong about `AwardXP`**: it calls it "how many experience points", but the data holds
+  an `experience_table.txt` key string (`"AwardXP" "Carson01"`). Both are now in `vdata-catalog.md`.
+  And a `CompletionState`'s **`"Event"`** key is a fifth script-dispatch path — script data handed to
+  the interpreter on reaching that state — so `python_bridge.md`'s "four call paths" is now five.
+
 - **2026-07-27** — **The menu leaves `CVMainMenu`'s centred column for a right-hand rail, and the
   recovered blood red becomes what *selection* means (roadmap 8.6).** Owner call, four presentation
   changes with one cause, all A/B'd live by **`elysium.MenuLayout`** (1 = rail, default; 0 = the

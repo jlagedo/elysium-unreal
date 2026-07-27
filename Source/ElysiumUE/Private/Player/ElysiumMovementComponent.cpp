@@ -7,8 +7,10 @@
 UElysiumMovementComponent::UElysiumMovementComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
-	// Step 5 of the frame: the map actor makes this a tick prerequisite of its gameplay pass, so the
-	// body moves against the positions this frame's thinks produced (11.1).
+	// Step 4 of the frame, and it is deliberately EARLY: the map actor makes this a prerequisite of
+	// its gameplay pass and a dependent of its pre-move pass, so the body moves on a freshly
+	// advanced clock and before a single think or queued event runs. That is where retail moves it —
+	// out of the `clc_move` drain, ahead of `GameFrame` entirely (RE21).
 	PrimaryComponentTick.TickGroup = TG_PrePhysics;
 }
 
@@ -235,6 +237,17 @@ void UElysiumMovementComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 	{
 		return;
 	}
+
+	// Retail rebinds `frametime` to the user command's OWN timing for the duration of the move
+	// (RE21): CPlayerMove::RunCommand runs on the command's interval, not on the server frame's.
+	// The router builds one command per frame, so today this is the identity — it stops being the
+	// identity the moment a frame carries more or fewer than one command (a replayed command
+	// stream, a hitch clamp, a fixed step), and the mover must follow the command either way.
+	if (PendingCmd.DeltaSeconds > 0.0f)
+	{
+		DeltaTime = PendingCmd.DeltaSeconds;
+	}
+
 	if (bFrozen)
 	{
 		Velocity = FVector::ZeroVector;

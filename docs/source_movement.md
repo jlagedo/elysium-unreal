@@ -29,6 +29,16 @@ the ConVar is dead (see below).
 boot the compiled-in ConVar defaults are what apply; `default.cfg` is what the
 engine seeds a fresh `config.cfg` from.
 
+## Where the move runs
+
+`CGameMovement` is driven from `CPlayerMove::RunCommand` (`0x101874a0`), one call per
+`CUserCmd`, and that whole chain runs while the engine drains the client's `clc_move`
+message — **before** the server frame runs a single think. `PreThink`, the player's own
+think and `PostThink` all sit inside `RunCommand` around the move, and
+`gpGlobals->frametime`/`curtime` are rebound to the command's timing for its duration, so
+the move integrates on the command's clock rather than the frame's. Full chain, addresses
+and the ordering evidence: `game_runtime.md` §1.
+
 ## View / camera
 
 | ConVar | Value | Meaning |

@@ -88,39 +88,57 @@ the substrate. Actors know about both.
 ## 3. The frame
 
 VtMB's frame is `Input → Server(GameFrame) → Client → Sound → Render` (`game_runtime.md` §1), and
-inside `GameFrame` it is **think-first**: `Physics_RunThinkFunctions` then
-`CEventQueue::ServiceEvents` — **RE2**'s finding (`roadmap-archive.md`, mirrored in
-`engine-core.md`). That is the order to reproduce; Unreal's tick groups are how it is *pinned*
-rather than left to actor registration order (**S2**).
+it is **move-first**: player movement is not in `GameFrame` at all. The engine runs the whole
+`SV_ReadPackets` → `ProcessUsercmds` → `CPlayerMove::RunCommand` chain while draining the client's
+`clc_move` message, strictly before `SV_Frame` calls `GameFrame` — so the pawn has already moved
+before a single think or queued event runs (**RE21**). Inside `GameFrame` it is then
+**think-first**: `Physics_RunThinkFunctions` then `CEventQueue::ServiceEvents` (**RE2**). That is
+the order reproduced below; Unreal's tick groups and prerequisites are how it is *pinned* rather
+than left to registration order (**S2**).
 
 | # | Stage | Where | Notes |
 |---|---|---|---|
 | 1 | sample input | `APlayerController::PlayerTick` (`TG_PrePhysics`) | key bindings → command bus → latches; then `UElysiumInputRouter::SampleFrame` builds the frame's `FElysiumUserCmd` (§8) |
-| 2 | advance the clock | `AElysiumMapActor` gameplay tick, first statement | **the only place `Now` moves** (§4) |
-| 3 | run due thinks | `FElysiumEntityWorld::RunThinks(Now)` | movers issue their swept kinematic moves here |
-| 4 | service the queue | `FElysiumEntityWorld::ServiceEvents(Now)` | delayed I/O, field-6 Python, `ScheduleTask` |
-| 5 | move the pawn | `UElysiumMovementComponent::TickComponent` (`TG_PrePhysics`, prereq on the controller) | consumes the frame's `FElysiumUserCmd` |
-| 6 | physics + overlaps | engine (`TG_DuringPhysics`) | Chaos overlap callbacks → `RouteBrushTouch` |
-| 7 | post-move gameplay | `AElysiumMapActor` **second tick function** (`TG_PostPhysics`) | `+use` look-cursor trace, attachment follow-up |
-| 8 | camera | `APawn::CalcCamera` via `APlayerCameraManager` | weight stack solved here (§9) |
-| 9 | publish | `UElysiumPresentationSubsystem` (`TG_PostUpdateWork`) | builds `FElysiumViewState`, fires discrete events |
-| 10 | audio | `UElysiumAudioSubsystem` | voice pool update, scheme scheduler |
+| 2 | advance the clock | `AElysiumMapActor::PreMoveTick`, **first** tick function | **the only place `Now` moves** (§4); ahead of the move, because the move runs on this frame's `now` |
+| 3 | the player's own think | `FElysiumEntityWorld::RunPlayerThink(Now)` | retail runs it inside `RunCommand`, not in the think pass; the spawn hold also places and freezes a fresh pawn here |
+| 4 | **move the pawn** | `UElysiumMovementComponent::TickComponent` (`TG_PrePhysics`, prereq on the pre-move tick) | consumes the frame's `FElysiumUserCmd`, on **the command's** delta |
+| 5 | run due thinks | `FElysiumEntityWorld::RunThinks(Now)` | `GameFrame` begins here; movers issue their swept kinematic moves |
+| 6 | service the queue | `FElysiumEntityWorld::ServiceEvents(Now)` | delayed I/O, field-6 Python, `ScheduleTask`; the audio/scheme pass follows |
+| 7 | physics + overlaps | engine (`TG_DuringPhysics`) | Chaos overlap callbacks → `RouteBrushTouch` |
+| 8 | post-move gameplay | `AElysiumMapActor::PostMoveTick`, **third** tick function (`TG_PostPhysics`) | `+use` look-cursor trace, `Follow` camera shots |
+| 9 | camera | `APawn::CalcCamera` via `APlayerCameraManager` | weight stack solved here (§9) |
+| 10 | publish | `UElysiumPresentationSubsystem` (`TG_PostUpdateWork`) | builds `FElysiumViewState`, fires discrete events |
 
 Three mechanisms hold the order, all stock UE 5.8:
 
-- `AElysiumMapActor` registers **two tick functions** — a `TG_PrePhysics` gameplay tick (2–4) and a
-  `TG_PostPhysics` post-move tick (7). Two functions on one actor is the engine's own answer to
-  "some of my work must straddle physics"; splitting into two actors would reintroduce the ordering
-  question it solves.
-- `AddTickPrerequisiteActor(PlayerController)` on the map actor, and on the movement component a
-  prerequisite on the map actor's gameplay tick. Order is then declared, not observed.
-- `bTickEvenWhenPaused = false` on both gameplay ticks; **true** on the presentation tick, so a paused
-  world still draws a live HUD and a Cog window still updates (`debug-tooling.md`).
+- `AElysiumMapActor` registers **three tick functions** — a `TG_PrePhysics` pre-move tick (2–3), the
+  `TG_PrePhysics` gameplay tick (5–6), and a `TG_PostPhysics` post-move tick (8). Three functions on
+  one actor is the engine's own answer to "some of my work must straddle the move and physics";
+  splitting into three actors would reintroduce the ordering question it solves.
+- Prerequisites, not groups, order the two `TG_PrePhysics` passes around the move: the pre-move tick
+  takes one on the player controller, the movement component takes one on the pre-move tick, and the
+  gameplay tick takes one on the movement component. **The gameplay tick also takes one on the
+  pre-move tick unconditionally**, wired at registration — the menu backdrop and a headless logic
+  world seat no pawn, so the movement edge never forms there and the clock would otherwise advance
+  in registration order relative to the thinks reading it.
+- `bTickEvenWhenPaused = false` on all three gameplay ticks; **true** on the presentation tick, so a
+  paused world still draws a live HUD and a Cog window still updates (`debug-tooling.md`).
 
-**Why step 5 sits after 3–4 rather than before.** A door's think computes its swept move for this
-frame; the pawn must be moved against the door's *new* position or it tunnels on fast movers. The
-argument stands on its own; whether VtMB itself runs movement after the think pass is *inferred,
-unverified* — **RE21** (the usercmd stage of `GameFrame`) settles it.
+**What the move-first order gives up, stated.** A door's think issues its swept move in step 5,
+after the pawn moved in step 4 — so the pawn is moved against last frame's mover positions, and the
+overlap is resolved from the *mover's* side when it sweeps. Retail resolves it by **pushing**:
+movers are `MOVETYPE_PUSH` and displace what they touch. `FElysiumMoverBase` does not push — it
+sweeps, and `FElysiumDoorBase::OnMoveBlocked` deals `dmg` and reverses. That absorbs the tunnelling
+case (the pawn does not pass through), but the resolution is a reverse where retail's is a shove.
+Reproducing the push is the mover family's remainder, tracked on **roadmap 4.8**, not the frame's.
+
+**One retail behaviour is a contract rather than code.** `frametime`/`curtime` are rebound to the
+user command's own timing for the move's duration. `UElysiumMovementComponent::TickComponent` takes
+its delta from `PendingCmd.DeltaSeconds` in preference to the tick's, which is the identity while
+the router builds exactly one command per frame — and stops being the identity the moment a frame
+carries more or fewer (a replayed command stream, a hitch clamp, a fixed step under 4.7).
+
+Full chain and addresses: `game_runtime.md` §1.
 
 ## 4. Time, pause and time scale
 
@@ -131,7 +149,7 @@ unverified* — **RE21** (the usercmd stage of `GameFrame`) settles it.
 struct FElysiumTimeControl                 // on UElysiumGameStateSubsystem, beside the clock
 {
     double AdvanceFrame(double Delta);     // the ONE advance site (§3 step 2); Delta is already dilated
-    void   EndFrame();                     // tail of a released frame (§3 step 7): spends one dev step
+    void   EndFrame();                     // tail of a released frame (§3 step 8): spends one dev step
 
     void  SetPaused(bool bPaused);         // clock hold + UGameplayStatics::SetGamePaused
     void  SetScale(double Scale);          // clock scale + SetGlobalTimeDilation (Celerity, host_timescale)

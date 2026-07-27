@@ -80,7 +80,7 @@ it waits. Three standing rules:
 | Rung | Delivers | Tasks (in order) |
 |---|---|---|
 | **PP0 — the core refactor** | the spine: one clock/frame, world services, app states + pause, the player entity, input scopes, commands + user command, the view seam, the play harness | 11.10 *(11.0, 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.8 [x])* |
-| **PP1 — New Game & genesis** | chargen for real: clan, **name**, sex, spends — onto the player entity, Python-readable; `sp_genesisdevice_1` played, not skipped | 9.4 (+ `sp_genesisdevice_1` export/bake), 8.6's New Game click path |
+| **PP1 — New Game & genesis** | chargen for real: clan, **name**, sex, spends — onto the player entity, Python-readable; `sp_genesisdevice_1` played, not skipped — the map is already exported **and** baked, so what is left is the `elysium.SkipIntro` re-scope | 9.4 a–g *(RE24 [x], RE25 [x])*, 8.6's New Game click path |
 | **PP2 — the theatre cinematic** | the intro plays start to finish: choreography, scripted camera, line audio, subtitles, **eyes and lipsync — all block** (cont. 5); the PC is on camera, so its body stands here | 12.1–12.5, 8.11a (+ `sp_theatre` export/bake) *(11.7 [x])* |
 | **PP3 — land the tutorial** | the chain hands the player to Jack; the first conversation runs with sound and reactions | 9.2, 9.9 |
 | **PP4 — core mechanics** | faithful movement (owner call: **in** the path), camera modes, the body's gait, feeding, items + object interaction, dice, the vitals HUD | 4.7, 8.11b, 10.6, B6, 9.8, 9.6, 8.9 |
@@ -102,12 +102,17 @@ deps below — refresh it whenever a task flips:
 1. **11.10** — the last of PP0: the play harness. It now has everything it was waiting on — a
    named verb for every player action and a recordable command stream (11.6), and a published view
    state (11.8) a beat can assert what is on screen against.
-2. **9.4 / 9.8 / 9.9 / 9.10 / 9.5** — the five systems the hinge unblocked. They now land *on*
-   `FElysiumCombatCharacter` and `FElysiumPlayerRecord`: 9.4 turns the sheet's dynamic bag into
-   registered fields and gives health a real derivation, 9.10 finishes the economy over the
+2. **9.4 — the PP1 rung, in seven sub-steps.** Build order: **RE24 [x]** → **a [x]** the rulebook
+   readers (the gate — 12 table families now parse and are asserted against the exported files)
+   → **b** the sheet as registered fields, `Max_Health` read as the authored
+   stat it is → **c** the 290-call counter surface → **d** quests for real → **e** the journal screen
+   → **RE25 [x]** → **f** chargen including the quiz → **g** genesis played, not skipped.
+   **b is next**, and it starts from data that already loads.
+3. **9.8 / 9.9 / 9.10 / 9.5** — the rest of what the hinge unblocked. They land *on*
+   `FElysiumCombatCharacter` and `FElysiumPlayerRecord`: 9.10 finishes the economy over the
    `money` field that already exists, 9.8 fills the record's inventory half, and 9.5 (= 11.9, **[x]**)
-   walks the chain — so each of the other four is saved the day it registers its state as fields.
-3. **8.11a** — the player body. **PL13 [x]** put all 56 clan bodies on disk beside the NPCs, so
+   walks the chain — so each of the others is saved the day it registers its state as fields.
+4. **8.11a** — the player body. **PL13 [x]** put all 56 clan bodies on disk beside the NPCs, so
    nothing is left to export; the task itself stays PP2-gated, because the theatre is where the
    body is first on camera.
 
@@ -510,11 +515,20 @@ M1 leftovers that live in this lane.
   dependence" or "pin the tick". Sequenced **in
   the playable path (PP4)** by owner call (`decisions.md` 2026-07-26 cont. 5) — the tutorial is
   played with VtMB feel, not UE feel. Open RE it needs: **RE22** (the ducked hull's dimensions —
-  `IN_DUCK` is in the user command with nothing sizing it) and **RE21** (where usercmd
-  processing sits in `GameFrame` relative to the think pass). *Deps:* 11.6.
+  `IN_DUCK` is in the user command with nothing sizing it). (c) **An owner call this task carried, now
+  discharged:** RE21 pinned retail as movement-*first*, called **reproduce** (`decisions.md`
+  2026-07-27) and landed by **11.11** — the mover already runs before the think pass, on the user
+  command's own delta, with the player's own think ahead of it. Port onto that order; the frame is
+  no longer moving under this task. *Deps:* 11.6, 11.11.
 - [ ] **4.8 Rotating/linear/elevator family** — `func_rotating` (spin-up/down, hurt-touch),
   `func_movelinear`, `func_elevator` (`GotoFloor`, floor Z table), keyframed movers if the
-  tutorial needs them. *Deps:* 4.1.
+  tutorial needs them. **Carries the mover-push remainder 11.11 left**: movers are `MOVETYPE_PUSH`
+  and displace what they touch from their own side, which is what makes the move-first frame safe.
+  `FElysiumMoverBase` sweeps instead, and Chaos resolving that sweep already shoves the pawn out of
+  a closing door's arc (measured) — so nothing tunnels, but VtMB's authored push is not reproduced:
+  `dmg` is not dealt and `OnBlockedClosing` does not fire unless the sweep is *fully* blocked, and
+  the displacement is a physics artifact rather than `PhysicsPushEntity`'s recursive push list.
+  *Deps:* 4.1.
 - [x] **4.9 Event-bus classes (`events_player` / `events_world`)** — both singletons land with
   their complete faithful input/field surfaces (datamaps recovered via `DumpDatamap.java`:
   `CPlayerEvents` 12 inputs / 23 outputs, `CWorldEvents` 10 / 21). The outputs await their driver
@@ -916,24 +930,107 @@ draw on the same stack; NPCs stand in the world at their entity origins.
 - [ ] **9.10 Economy** — **250 calls**: `MoneyAdd`/`MoneyRemove` (INTEGER inputs on the combat
   character) + `CurrentMoney`/`SetMoney`. The smallest self-contained system on the ledger; one
   integer on the sheet plus vendor `worth` when 9.8 lands. *Deps:* 9.7c.
-- [ ] **9.4 Quests/XP + RPG sheet data** — quest map is live since 1.1; the `vdata/` rulebook is
-  on disk (**PL5b [x]**, `out/vdata/`); load `system/stats/feats/traiteffects/rules` into the
-  sheet, `quests_*` + `experience_table` for XP. Table→system map: `docs/vdata-catalog.md`.
-  9.7 sized and constrained this lane: the sheet-counter demand is **290 calls**
-  (`AwardExperience` 77 / `HumanityAdd` 69 / `CalcFeat` 53 / `ChangeMasqueradeLevel` 44 /
-  `Bloodloss` / `BumpStat` / `GetMasqueradeLevel`), the counters are INTEGER datamap inputs on the
-  combat character, and **`AwardExperience` takes a STRING** — it names an experience-table entry,
-  so it cannot be modelled as an integer add (`script_api.md`). The sheet's home already exists
-  (11.4): `FElysiumSheet` on `FElysiumCombatCharacter` (live) + `FElysiumPlayerRecord` (durable).
-  What 9.4 adds is the loaded data — and it turns the names VtMB's own datamap carries into
-  registered fields, shrinking `GetDynamicField`'s bag as it goes. Health is part of that: its
-  ceiling is the stated interim `ElysiumInterimPlayerMaxHealth` until Stamina derives it.
-  Chargen lands here too — clan, **name**, sex, history, attribute/ability/discipline spends —
-  as the screen behind `ccmd.createplayer` (a registered 11.6 command) that VtMB's own
-  `sp_genesisdevice_1` already fires (`game_runtime.md` §4); `sp_genesisdevice_1` joins the
-  export/bake set so genesis is **played, not skipped** (PP1). *Acceptance (PP1):* New Game
-  walks genesis from real input, the created character lands on the player entity, and
-  `pc.clan`/`pc.strength` read back from Python. *Deps:* 1.1, 9.7c, 11.4, 11.6.
+- [ ] **9.4 Quests/XP + RPG sheet data** *(the PP1 rung)* — the RPG layer is a shell: `FElysiumSheet`
+  is a `TMap<FName,int32>` bag that answers every `base_*` read with 0, quests are a bare
+  `name -> int` map with no catalogue and no awards, `CalcFeat`/`BumpStat`/`GetMasqueradeLevel`/
+  `DialogDiscipline` are logged stubs and `AwardExperience` drops. The whole `vdata/` rulebook is on
+  disk (**PL5b [x]**, `out/vdata/`, 465 files) and **nothing parses any of it** but
+  `dispositiontable.txt`. 9.7 sized and constrained the lane: the sheet-counter demand is
+  **290 calls** (`AwardExperience` 77 / `HumanityAdd` 69 / `CalcFeat` 53 / `ChangeMasqueradeLevel` 44
+  / `Bloodloss` / `BumpStat` / `GetMasqueradeLevel`), the counters are INTEGER datamap inputs on the
+  combat character, and **`AwardExperience` takes a STRING** — it names an experience-table entry, so
+  it cannot be modelled as an integer add (`script_api.md`). The sheet's home already exists (11.4):
+  `FElysiumSheet` on `FElysiumCombatCharacter` (live) + `FElysiumPlayerRecord` (durable); what 9.4
+  adds is the loaded data, the fields VtMB's own datamap names, and the two screens that data feeds.
+  Table→system map: `docs/vdata-catalog.md`; the sheet's recovered shape: `savegame_format.md`
+  (`m_iVAttributes*`, `m_QuestList`, `m_ExpList`). **Owner call:** chargen is a *full* reproduction
+  including the `charcreatewizard.txt` quiz, the journal screen is in scope, and the open RE is
+  closed **before** the sub-step that needs it. Sub-steps, in build order:
+  - [x] **a. The rulebook readers** *(the gate)* — `ElysiumRulebook.{h,cpp}` +
+    `UElysiumRulebookSubsystem` in `Private/Substrate/`, **12** table families over
+    `ElysiumKeyValues.h` (the roadmap's ten plus `traiteffect.txt`, whose `ModifierNames` enum the
+    trait-effect parser indexes, and `levelingtemplate_000.txt`, which 9.4f runs after `giftxp
+    9000`). Lazy per table, session-lifetime, verb `elysium.rules`. Four authored grammars are
+    parsed once and shared — `Costs`, `CVStatRef`'s `/ N`·`* N`, the `Modifier` mini-DSL and the
+    experience rows — and `ElysiumKeyValues` gained an ordered `Pairs` list, because a repeated
+    **leaf** key is real data (17 Active_Disciplines gate on two `IncPredependency` expressions) and
+    the `TMap` was dropping one. **Reads only — no consumer is wired; b/c/d/f do that.**
+    `Elysium.Substrate.Rulebook` pins the grammars with no files; `Elysium.Content.Rulebook` asserts
+    the row counts and the four cross-table resolutions, including the named acceptance: **161/161
+    `AwardXP` keys resolve in `experience_table`**. As-built: `roadmap-archive.md`.
+    **Corrected in the same pass:** the Disciplines/Active_Disciplines containers are **17** slots,
+    not 13 (the last four are the Numina powers, in `stats.txt` proper — the *save array* is 13);
+    the chargen **priority-tier** tables live in `stats.txt` on the `*_Order` stats, not in
+    `rules_tables.txt`, which holds only the clan-keyed half; `npctemplate*` is 36 files / 150
+    templates, not "~40"; `10000` is a price out of reach, not the engine's `30000` cannot-buy
+    verdict, which no shipped stat carries; `AwardMoney` and `Event` are authored in **zero**
+    shipped quest rows, so 9.4d has no data behind either award path; and `savegame_format.md`'s
+    "21 named slots" was still the pre-RE24 figure.
+  - **b. The sheet becomes real fields** *(**RE24** closed it — the slot counts below are the
+    recovered ones, not the earlier estimate)* — the bag becomes VtMB's own shape:
+    `m_iVAttributesBase`/`Current` (**35** slots, the `Attrib_Order` block occupying index 0 and
+    every derived/bookkeeping stat through `Experience` at 34), `m_iVAbilitiesBase`/`Current`
+    (**13**, `Ability_Order` at 0), `m_iVDisciplinesBase`/`Current` and
+    `m_iVActiveDisciplinesBase`/`Current` (**13** each, no order slot; `-1` = a discipline the clan
+    cannot take). **The base/current split is the whole buff system** and both halves persist. Each
+    name registers through `AddSheetIntField`, so one R2 walk serves script reads (`pc.strength`),
+    keyvalues, the save enumeration and the inspector, and `GetDynamicField`'s bag shrinks to what
+    has no static name. Three datamap names diverge from the `stats.txt` `InternalName`
+    (`intimidate`/`Intimidation`, `computers`/`Computer`, `base_gender_`), so the field table needs
+    both spellings. **Health is not Stamina-derived** — `Max_Health` is an authored stat slot
+    (`Default 100`, no formula anywhere in `vdata`) and **`Health` counts damage taken**, so
+    `ElysiumInterimPlayerMaxHealth` retires by being read out of `stats.txt` rather than replaced
+    by a formula, and `npctemplate*`'s literal `Max_Health` gives every NPC a track (default 100
+    when the key is absent) so `TakeDamage` kills one instead of only recording damage.
+    `pc.generation` (9.3's field-table audit gap) lands here. Costs a `FElysiumSaveVersion` bump plus
+    matching `ElysiumSave::Describe` rows, or the sheet goes invisible to `elysium.save.diff`.
+  - **c. The 290-call counter surface** *(**RE24** closed it)* — the four Character-method stubs go
+    real: **`CalcFeat`** returns the clamped rating `Feats::FeatValue` computes over a
+    *variable-length* `Base%d` list (each entry the *current* trait value through its own `/`-or-`*`
+    modifier, the nine attributes floored at 1, then a feat-level trait-effect pass, then
+    `[0, MaxValue]`), **`BumpStat(stat, times)`** loops its recovered third argument and increments
+    the **base** under a hardcoded `< 5` ceiling and cannot decrement, plus `GetMasqueradeLevel` and
+    `DialogDiscipline`. `AwardExperience` looks its key up, refuses a repeat against the `m_ExpList`
+    ledger (give-once is the ledger, *not* the trailing `01`), adds `Experience_Modifier` above 2 XP,
+    and accumulates `floor(value/100)` **keeping the sub-100 remainder** into an
+    `FElysiumXpEntry`. The counters that already have fields gain their `rules.txt` clamps and the
+    clan trait-effect doubling. `ChangeMasqueradeLevel` reaching 5 is **the second game-over
+    condition** — the branch 11.3 shipped with no driver.
+  - **d. Quests for real** — the `name -> int` map stays authoritative (732 call sites; default-0 on
+    miss is VtMB's own contract). What lands is what happens *around* a state change: resolve the
+    `CompletionState`, fire `AwardXP` (an experience-table key, not a number — the shipped file's own
+    header comment is wrong), `AwardMoney`, and `Event` (script data handed to the installed host — a
+    dispatch surface `python_bridge.md` does not list), then keep the journal as
+    `ASSIGNED_QUEST { szTitle, idxQuestTable, idxState, iOrder }` rows on the player record.
+  - **e. The journal screen** — assigned quests on the 8.6 CommonUI/Slate stack, grouped by hub,
+    `DisplayName` as the heading and the current state's `Description` beneath it, coloured by `Type`
+    (`success`/`failure`/`incomplete`). Adds one `ElysiumInput::Priority` row, which the pairwise
+    `Elysium.Substrate.InputScopes` test picks up on its own.
+  - **f. Chargen** *(**RE25** closed it)* — **`createplayer`** declared in `FElysiumCommands` (it is not
+    in `controls.md`'s bindable inventory, so it is a new declaration) and implemented by the UI
+    subsystem, on the **`Chargen` scope 11.5 reserved and nothing has pushed since**. Full flow:
+    name + sex → the `charcreatewizard.txt` `Popup` quiz (the 8 abstract Traits, `Trait_Prereq`
+    gating, and the same-`InternalName` random pick drawn from an owned `ElysiumRng` stream so the
+    Play tier replays deterministically) → `ConnectionScores` clan suggestion with override →
+    history (`histories000`) → priority-tier point-buy → confirm onto the **player entity**, with
+    `m_tEffectList` in VtMB's own spelling. The quiz's `Bkg_Image`/`Region`/`TextRegion` keys are
+    read as intent, not as a runtime coordinate system (`remaster-direction.md` axis 1). The math
+    RE25 recovered is not a second design: build the pools as *clan `Subpool_*` + tier table*, the
+    baseline by running the clan's `*_CharGen` leveling template, and price a dot off the
+    **pre-purchase base** rating, `New` only at the 0→1 step. `game_runtime.md` §3 has the whole
+    model, incl. the `-1` row filter that hides a non-clan discipline and the trait-effect layer
+    the clan banes and histories ride on.
+  - **g. Genesis played, not skipped** — `sp_genesisdevice_1` is **already exported and baked**, and
+    its `newplayer` `trigger_once` already fires `ccmd.createplayer` + `G.Story_State = -5`, so with
+    **f** registered the map itself needs no change. What is left is routing New Game's `story` entry
+    to it and **re-scoping `elysium.SkipIntro`**: it skips from genesis's `boogieout` exit to the
+    tutorial landmark rather than skipping genesis, because `sp_theatre` is unexported and **P12**
+    owns it. A recorded, reversible divergence — `decisions.md`.
+
+  *Acceptance (PP1):* New Game walks genesis from real input, the quiz-and-spend character lands on
+  the player entity, `pc.clan`/`pc.strength` read back from Python, a skill-gated `.dlg` choice that
+  was hidden becomes visible, and the journal shows `pc.SetQuest("Tutorial", 1)`. *Deps:* 1.1 [x],
+  9.7c [x], 11.4 [x], 11.6 [x]; **RE24 [x]** (b/c are unblocked), **RE25 [x]** (f is unblocked).
 - [x] **9.5 Save/load** — **built as 11.9**; see that entry. The four blocks (Session / Player /
   Maps / World) over the R2 field walk, the per-map snapshot lifecycle with the absent-entity set,
   the event queue incl. deferred script strings, think times, `G`, and owned RNG streams, inside a
@@ -1066,12 +1163,13 @@ Steps are ordered so each compiles, ships and is observable alone. **11.4 was th
   RE opened (RE21 usercmd order, RE22 crouch hull). As-built: `roadmap-archive.md` 11.0.
   *Deps:* none.
 - [x] **11.1 Frame + clock ownership** *(S1, S2)* — the tick table pinned with tick groups and
-  prerequisites (`dumpticks` shows PC → map gameplay tick → movement → physics → map post-move tick);
+  prerequisites rather than left to registration order;
   `AElysiumMapActor` split into a `TG_PrePhysics` gameplay tick and a `TG_PostPhysics` post-move tick
   that owns the `+use` cursor; `FElysiumTimeControl` as the one pause/scale facade, with
   `FElysiumGameClock`'s writers made private to it so the single advance site is a compile-time
-  property. `elysium.timescale` / `.pause` / `.step`. As-built: `roadmap-archive.md` 11.1.
-  *Deps:* none.
+  property. `elysium.timescale` / `.pause` / `.step`. **Its step order was superseded by 11.11** —
+  RE21 pinned retail as move-first, and the frame now runs that way; the clock, the facade and the
+  two-level test survived the rework unchanged. As-built: `roadmap-archive.md` 11.1. *Deps:* none.
 - [x] **11.2 World services** *(the substrate's outbound seam)* — `FElysiumWorldServices`
   (`IElysiumEmbodiment`/`IElysiumAudio`/`IElysiumTravel`/`IElysiumPresenter`) injected into
   `FElysiumEntityWorld` at construction; `AElysiumMapActor` implements the first three, and every
@@ -1196,6 +1294,37 @@ Steps are ordered so each compiles, ships and is observable alone. **11.4 was th
   the matching MCP tools (`input_inject`, `beat_run`, `save`/`load`, `time`). *Acceptance:*
   `test.bat Play` walks the tutorial opening unassisted and fails loudly when a beat regresses — P9's
   slice acceptance becomes a CI run rather than a manual play-through. *Deps:* 11.6, 2.7, 2.9.
+
+- [x] **11.11 Rework the frame to retail order — move first, then think** *(reversed 11.1's tick
+  table)* — **RE21**'s move-first order is the shipped order. `AElysiumMapActor` carries a **third**
+  tick function, `FElysiumPreMoveTickFunction` (`TG_PrePhysics`), and the frame reads sample input →
+  **pre-move pass** → **move** → gameplay pass → physics → post-move pass → camera → publish. The
+  pre-move pass carries more than the clock: `EnsureTickPrerequisites`, `TimeControl().AdvanceFrame`
+  (S1 relocated, not multiplied), the player entity's own think, and the **spawn hold** — left in the
+  gameplay pass the hold would place and freeze a freshly seated pawn *after* the mover's first tick,
+  so it would take one unfrozen step from wherever the game mode dropped it. Folding the advance into
+  `PlayerTick` was rejected: a world with no controller would never advance the clock at all.
+  The two `TG_PrePhysics` passes are ordered by **prerequisite**, and the gameplay pass waits on the
+  pre-move pass **unconditionally** (wired at registration) as well as on the movement component —
+  the menu backdrop and a headless logic world seat no pawn, so the movement edge never forms there
+  and the clock would otherwise advance in registration order relative to the thinks reading it. A
+  replaced pawn's stale edge is dropped rather than left waiting on a dead tick function.
+  `FElysiumEntityWorld` is now driven **twice** a frame — `RunPlayerThink` before the move,
+  `Tick` after it — and `RunThinks` skips the player by index, which is where retail runs it
+  (`CPlayerMove::RunCommand`, not `Physics_RunThinkFunctions`). `SyncFromBody` became a same-frame
+  read of the move rather than the previous frame's. `frametime` rebinding stopped being only a
+  contract: `UElysiumMovementComponent::TickComponent` takes its delta from `PendingCmd.DeltaSeconds`
+  in preference to the tick's — the identity at one command per frame, and correct the moment a
+  replayed stream, a hitch clamp or 4.7's fixed step makes a frame carry more or fewer.
+  **What the inversion gave up, measured:** a closing door **displaces** the pawn out of its arc
+  (Chaos resolving the swept body) and completes its move — it does not tunnel, but it also does not
+  deal `dmg` or fire `OnBlockedClosing` unless the sweep is fully blocked, so VtMB's authored
+  `MOVETYPE_PUSH` is **4.8's remainder**, recorded there. *Verified:* `dumpticks` on the running game
+  reads PC → `PreMoveTick` → movement component → map gameplay tick → physics → `PostMoveTick` →
+  publish; `Elysium.Substrate.FrameOrder` asserts all four passes and that the player thinks in the
+  pre-move pass and *not* in the post-move one; `sp_tutorial_1` builds and its opening beats
+  (level script, `logic_auto` patrol chain, spawn release, `GiveItem` run) play unchanged at 120 fps.
+  As-built: `roadmap-archive.md` 11.11. *Deps:* 11.1, 11.4, 11.6; discharged 4.7's owner call (c).
 
 **Slice acceptance:** from a cold launch — the menu comes up over the backdrop, New Game runs chargen
 and enters the story, the tutorial's opening beats play on rebindable controls with a HUD, Esc pauses,
@@ -1328,9 +1457,11 @@ retail end to end, and `test.bat Play` proves it headlessly.
 | RE18 | **The script→engine action surface** — the demand ledger (16,438 call sites / 1,287 names) plus the supply side out of `vampire.dll`: all six `PyMethodDef` tables with their `ml_doc` contracts, and the `CBaseCombatCharacter` / `CAI_BaseNPC` / player datamaps behind the 124 unresolved names. Closes `python_bridge.md`'s file-like open item. Full: `docs/script_api.md` | 9.7, 9.8–9.10, 9.4, 8.5 | [x] |
 | RE19 | **Choreographed-scene format + event semantics** — the `.vcd` grammar (uniform word-list/brace, 14 live tokens of a much larger parser vocabulary), the 19-type `CChoreoEvent` enum with **nine** used by content and `CAMERASHOT` unhandled by the engine, the `CSceneEntity` datamap (4 inputs / 7 outputs; `force_lod` is a dead key), actor binding **by name** (`targetN` is inert — `!targetN` has zero uses), `position_start`/`position_end`, absolute-time playback offset by `snd_mixahead`, and `Start→OnStart` / end→`OnCompletion` / `Cancel`→`OnCanceled` / `firetrigger "N"`→`OnTriggerN`. 5,444 scenes on disk, 105 named by the 122 map entities; the rest are per-line dialogue scenes on `CInstancedSceneEntity`. Full: `docs/choreographed_scenes.md`; probe: `tools/probe_scenes.py` | 12.1, PL9 | [x] |
 | RE20 | **MDL v2531 facial data** — the studiohdr facial block (at **344**, eight bytes past the VAMPTools field walk), `mstudioflexdesc_t` 4B / `mstudioflexcontroller_t` 20B / `mstudioflexrule_t` 12B + 8B RPN ops / `mstudiomouth_t` 20B; `StudioFlex` 32B with its target ramp, and **both** `StudioVertAnim` encodings — the 8B compressed record stores *directions*, two byte offsets into a 5,314-entry unit-vector table in `StudioRender.dll` plus `n/255` magnitudes scaled 8.0/2.0, and a 20B raw form (`mingxiao_transformation` only). **`NumEyeballs` is 0 on all 4,444 models** — no eye pose, look-at or procedural lid was ever authored; eyes are eyelid flexes. `.lip` is plain text (7,136 files, `VERSION`/`PLAINTEXT`/`WORDS`/`EMPHASIS`(always empty)/`CLOSECAPTION`/`OPTIONS`), joined to `expressions/<model stem>_phonemes.vfe` (249 tables) for phoneme→controller weights. Corrects `mdl_v2531.md`: `StudioModel` is **224B** and carries its own de-quantization offset/scale at +0xA0. Full: `docs/facial_animation.md`; probe: `tools/probe_facial.py` | 12.3–12.5, PL10 | [x] |
-| RE21 | **`GameFrame` usercmd order** — is player movement processed before or after the think pass? Settles `runtime-architecture.md` §3's inferred ordering (`DumpFuncs funcs=10571fc0`, the RE2 workflow) | 11.1, 4.7 | [ ] |
+| RE21 | **`GameFrame` usercmd order** — **movement runs *before* the think pass**, and not in `GameFrame` at all: the engine runs it while draining the client's `clc_move` message (`_Host_RunFrame` → `SV_Frame` `0x200f62b0` → `SV_ReadPackets` → `SV_ExecuteClientMessage` → clc_move `0x200f9990` → `serverGameClients->ProcessUsercmds` → `CPlayerMove::RunCommand` `0x101874a0`), then `SV_Frame` calls `serverGameDLL->GameFrame` `0x1011abc0` (the old `0x10571fc0` is that function's profile *string*) whose body is thirteen calls with `Physics_RunThinkFunctions` third and `ServiceEvents` sixth. Also pins: the player's own think runs inside `RunCommand`, and `frametime`/`curtime` are rebound to the command's timing for the move. **`runtime-architecture.md` §3's tick table now reproduces this order — called as reproduce (`decisions.md` 2026-07-27), landed by 11.11.** Full: `game_runtime.md` §1; as-built: `roadmap-archive.md` | 11.1, **11.11**, 4.7 | [x] |
 | RE22 | **The ducked hull** — Source's crouch AABB dimensions + `CategorizePosition`/`StepMove` interaction (standing `32×32×72` is recorded in `source_movement.md`; ducked is not, and `IN_DUCK` needs it) | 4.7, 11.6 | [ ] |
 | RE23 | **The particle format + the wetness channel** — VtMB's weather is Troika-custom, not Source: no `func_precipitation` anywhere in the install, and the parser lives in a forked `Bin/engine.dll` (gate cvar `particles_enable_precipitation`). The `particles/*.txt` grammar is partly reconstructed (envelope, emitter-vs-particle roles, the `a~b` / `a,b,…` / `v(n)` value forms, the `collide { spawn / decal }` block) — `weather.md` marks what is inferred. Eight open questions, the load-bearing ones being **what `FadeGlobalWetness` actually scales** (`GlobalWetness` crosses into `client.dll`, so it reaches the render side), **who calls it** (survey `out/scripts/`), and whether `func_particle`/`env_particle` take the standard I/O + `start_hidden` surface. No public RE exists — the community FGD defines neither classname and annotates all three wetness keys "Not tested yet...". Full: `docs/weather.md` | 7.9, PL12 | [ ] |
+| RE24 | **The sheet math** — all four closed, and two premises were wrong. The substrate first: a trait is `(container, index)` over `CVStatList_t`, **index counting the container's leading `*_Order` block as 0**, so `m_iVAttributes*` is **35** slots (not 21) and `m_iVAbilities*` **13** (not 12) — proven three ways off the datamap and three hardcoded indices. **`AwardExperience`**: `floor(value/100)` confirmed, but `AddExperience` **keeps the sub-100 remainder**, and **give-once is the `m_ExpList` ledger, not the trailing `01`** — every key is give-once; a `> 299` award additionally adds `Experience_Modifier`. **`CalcFeat`** returns a plain int — the *rating*, not a roll — from `Feats::FeatValue`: the sum of a **variable-length** `Base%d` list (`Soak_vs_Bashing` has three, `Damage` none, `"Armor_Rating / 2"` is a per-base `÷`), each entry the *current* value, the nine attributes floored at 1, plus per-feat code terms, a feat-level trait-effect pass, and a clamp to `MaxValue`; `PCWeighting` resolves at load to a `dicerolls.txt` index (all 23 feats → `Normal`). **`BumpStat`**'s third argument is a **repeat count**; it writes the **base** via `IncBase`, under a hardcoded `GetBase < 5` ceiling, and cannot decrement. **There is no Stamina→Health derivation** — `Max_Health` is an authored stat (`Default 100`, no formula in any `vdata` file, no trait effect targeting it) and **`Health` counts damage taken**; NPC tracks are `npctemplate*`'s literal `Max_Health`. Residue: five per-feat override object pointers, null in the image with no writer found. Full: `game_runtime.md` §3; as-built: archive | 9.4b, 9.4c | [x] |
+| RE25 | **Chargen math** — all four closed, and the whole chargen surface turned out to live in **`client.dll`**, not `vampire.dll`. **Pools:** seven per-category counters = clan-keyed `rules_tables.txt` `Subpool_*` (zero on every shipped clan bar `Subpool_Disciplines` = 1) **+** the tier table routed through `Attribute_Order_Lookups`/`Ability_Order_Lookups` — so a playable PC spends **2/1/0** attribute dots, **3/2/1** ability dots, **1** discipline dot, over a baseline the wizard *buys* with `giftxp 9000` + `vautolvl <clan>_CharGen`. **Cost:** `Current_Rating` is **pre-purchase** and is the stat's **base**; `Sell(r) ≡ Buy(r−1)`; `New` only for the 0→1 step and never for attributes; `30000` = cannot buy. **The `-1` sentinel** gates the sheet's **row filter** (`0 ≤ v < 6`), not the price — and the `Raise_Clan_Discipline`/`Raise_Other_Discipline` dual formula was **never implemented** (neither string exists in either DLL). **Banes/histories** are the generic trait-effect layer, with its operator enum shipped as data (`traiteffect.txt` `ModifierNames`). Residue: trait-effect stacking order. Full: `game_runtime.md` → "Chargen" / "Buying a dot" / "Trait effects"; as-built: archive | 9.4f | [x] |
 | SKY | **Sky + ambience rework, Phases B + C (B1–B8b, C0–C5)** — landed 2026-07-26: backdrop correct + at parity with standing tests (`Elysium.Substrate.SkyCube`/`FogPack`); the whole 3D skybox split by BSP area and placed under its transform; fog from its real owners + Source's own linear distance fog as a per-primitive material term (B8b, D4 amended); the sky light at the map's own authored level (**zero on the 83 no-pair maps**); the bake measured in absolute units — direct light explains ~0% of a median lit face, the bounce floor *is* the ambient level. Open residue promoted to **3.10–3.13 + RE17**. Facts: `sky-ambience.md`; full as-built: `roadmap-archive.md` → SKY | 3.6/3.7 | [x] |
 
 The Ghidra extraction findings behind the closed rows (the RE1/RE2/RE3/RE4 detail:

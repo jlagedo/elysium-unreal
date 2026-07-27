@@ -75,7 +75,7 @@ tears the world down on travel and GC frees it, no manual flush, no force-GC. `/
 only the boot world now. `map-architecture.md` has the model.
 
 **The actor orchestrates the load; it does not render it.** `AElysiumMapActor` owns the load order,
-the two frame passes, the player's placement, the entity world / scheme manager / camera director,
+the three frame passes, the player's placement, the entity world / scheme manager / camera director,
 and three of the four `FElysiumWorldServices` interfaces. Three components carry everything else,
 and the actor holds no piece of their state — this is the module's engine/rendering seam made
 physical, so nothing that decides what the map *looks like* sits next to what it *does*:
@@ -436,9 +436,14 @@ the copy that is about to be overwritten. Health is a `Save`-flagged *entity* fi
 placement); the record's copy exists only to carry it across a map boundary.
 
 **The origin is sampled, the write is a move.** `FElysiumEntityWorld::Tick` reads the pawn into the
-entity as its first statement (before thinks and the queue), so everything that frame reads one
-place; a write (`point_teleport`, `pc.SetOrigin`) goes out through `OnRuntimeTransformChanged` →
-`IElysiumEmbodiment::TeleportPlayer`, the same shape an NPC uses for its skeletal body.
+entity as its first statement — after the move, before thinks and the queue, which is retail's own
+relationship — so everything that frame reads one place; a write (`point_teleport`, `pc.SetOrigin`)
+goes out through `OnRuntimeTransformChanged` → `IElysiumEmbodiment::TeleportPlayer`, the same shape
+an NPC uses for its skeletal body.
+
+**The player's own think is the one that does not run in the think pass.** Retail drives it inside
+`CPlayerMove::RunCommand`, around the move, so `FElysiumEntityWorld::RunPlayerThink` fires it from
+the pre-move pass and `RunThinks` skips the player by index.
 
 **Damage and death.** `trigger_hurt` and a blocked door call `FElysiumCombatCharacter::TakeDamage`
 (the body still gets the engine damage event, for later reaction handling); at zero health the character fires
@@ -446,8 +451,10 @@ place; a write (`point_teleport`, `pc.SetOrigin`) goes out through `OnRuntimeTra
 which raises `TriggerGameOver(Killed)` — the driver that state was waiting for.
 `events_player`'s `MakePlayerUnkillable` writes the latch onto the player entity, where the damage
 system is; an unkillable character floors at 1. A character with **no** health track (every NPC)
-records damage rather than dying. `ElysiumInterimPlayerMaxHealth` (100) is a **stated
-interim** ceiling — VtMB derives the track from Stamina through `vdata/system`, which is not yet implemented.
+records damage rather than dying — which is VtMB's own model: its `Health` stat counts damage taken
+against a `Max_Health` ceiling. `ElysiumInterimPlayerMaxHealth` (100) is VtMB's own number, held as
+a constant only until the rulebook reader loads `stats.txt`'s `Max_Health` default
+(`docs/game_runtime.md` §3); nothing derives it from Stamina.
 
 Eight combat-character inputs are backed by real fields (`MoneyAdd`/`MoneyRemove`/`HumanityAdd`/
 `ChangeMasqueradeLevel`/`Bloodloss`/`Bloodgain`/`BloodHeal`/`WillTalk`), reproducing VtMB's
@@ -507,23 +514,37 @@ logical state.
 Design: `docs/runtime-architecture.md` §3–4. The canonical order is declared in the engine's tick
 graph (`dumpticks` reads it back), never inferred from registration order:
 
+The order is retail's, and retail is **move-first**: the pawn moves out of the `clc_move` drain,
+before `GameFrame` runs a single think or queued event.
+
 | # | Stage | Where |
 |---|---|---|
 | 1 | sample input | `APlayerController` (`TG_PrePhysics`) |
-| 2 | advance the clock | `AElysiumMapActor::Tick`, first statement — **the only place `Now` moves** |
-| 3–4 | run due thinks, then service the queue | `FElysiumEntityWorld::Tick` (think-first, RE2's retail order) |
-| 5 | move the pawn | the movement component, prerequisite on the map actor's gameplay tick |
-| 6 | physics + overlaps | engine (`TG_DuringPhysics`) → `RouteBrushTouch` |
-| 7 | post-move gameplay | `AElysiumMapActor::PostMoveTick` (`TG_PostPhysics`) — the `+use` look cursor |
-| 8 | camera | `AElysiumPawn::CalcCamera` — the weight stack is solved here |
-| 9 | publish the view | `UElysiumPresentationSubsystem::Publish` (`TG_PostUpdateWork`) — the frame's `FElysiumViewState` |
+| 2 | advance the clock | `AElysiumMapActor::PreMoveTick`, first statement — **the only place `Now` moves** |
+| 3 | the player's own think + the spawn hold | `FElysiumEntityWorld::RunPlayerThink` (retail runs it inside `RunCommand`) |
+| 4 | **move the pawn** | the movement component, prerequisite on the pre-move tick, on the command's own delta |
+| 5–6 | run due thinks, then service the queue | `FElysiumEntityWorld::Tick` (think-first, RE2's retail order) |
+| 7 | physics + overlaps | engine (`TG_DuringPhysics`) → `RouteBrushTouch` |
+| 8 | post-move gameplay | `AElysiumMapActor::PostMoveTick` (`TG_PostPhysics`) — the `+use` look cursor |
+| 9 | camera | `AElysiumPawn::CalcCamera` — the weight stack is solved here |
+| 10 | publish the view | `UElysiumPresentationSubsystem::Publish` (`TG_PostUpdateWork`) — the frame's `FElysiumViewState` |
 
-`AElysiumMapActor` carries **two** tick functions: `PrimaryActorTick` (`TG_PrePhysics`) for the
-gameplay pass and `FElysiumPostMoveTickFunction` (`TG_PostPhysics`) for work that must see the
-frame's final positions. The `+use` cursor traces, so it lives in the second — before the pawn's
-move it would pick against last frame's geometry. `EnsureTickPrerequisites` binds the controller and
-the movement component as they appear (a menu backdrop map never seats a pawn) and rebinds if the
-pawn is replaced.
+`AElysiumMapActor` carries **three** tick functions: `FElysiumPreMoveTickFunction` (`TG_PrePhysics`)
+for everything that must be settled before the pawn moves, `PrimaryActorTick` (`TG_PrePhysics`) for
+the gameplay pass, and `FElysiumPostMoveTickFunction` (`TG_PostPhysics`) for work that must see the
+frame's final positions. The `+use` cursor traces, so it lives in the third — before the pawn's move
+it would pick against last frame's geometry. The two `TG_PrePhysics` passes are separated by
+**prerequisites, not groups**: the gameplay tick waits on the pre-move tick *unconditionally* (wired
+at registration, because a map that seats no pawn still needs its thinks to run on an advanced
+clock) and additionally on the movement component once one exists. `EnsureTickPrerequisites` binds
+the controller and the movement component as they appear and rebinds if the pawn is replaced,
+dropping the outgoing component's edge so the gameplay pass cannot wait on a dead tick function.
+
+**Movers absorb the tunnelling case from their own side**, which is what makes move-first safe: a
+mover sweeps its body and Chaos resolves the overlap, so a closing door displaces the pawn rather
+than passing through it. That is not VtMB's authored `MOVETYPE_PUSH` — no `dmg` is dealt and no
+`OnBlockedClosing` fires unless the sweep is fully blocked — and reproducing the push is
+`FElysiumMoverBase`'s remainder, not the frame's.
 
 **`FElysiumTimeControl`** (`ElysiumTimeControl.{h,cpp}`, on `UElysiumGameStateSubsystem` beside the
 clock) is the one pause/scale facade over the clock **and** engine time. `FElysiumGameClock` keeps
@@ -848,7 +869,33 @@ volume, so a flip re-applies in one pass (voices already fading out toward a rea
   a quoted value may span lines and may carry `\"`). Used by sound schemes, sign definitions and
   the `vdata/` tables. Both quoting rules are load-bearing rather than cosmetic: a quote the
   tokenizer mis-reads shifts every following key/value pair by one, so the next `{` is taken as a
-  value and the whole block nesting collapses.
+  value and the whole block nesting collapses. **Brace depth is the only structural signal** —
+  several `vdata/` tables indent a child block at column 0 and write whole blocks inline on one
+  line. A repeated **leaf** key is data, not a slip (`stats.txt` gates 17 Active_Disciplines on two
+  `IncPredependency` expressions each), so `Values` keeps the last and the ordered `Pairs` array
+  keeps them all — `ValuesFor()` reads the set.
+- `ElysiumRulebook.{h,cpp}` (`Substrate/`) — VtMB's RPG rulebook: 12 `vdata/system/` table
+  families, each a row struct plus a table struct with `Load(FString&)`. `stats.txt`'s four trait
+  containers (**35 / 13 / 17 / 17**, the `*_Order` block at index 0 where present), `feats.txt`'s
+  23 feats, `rules.txt` + `rules_tables.txt`, `traiteffect.txt`'s operator vocabulary +
+  `traiteffects000.txt`'s 169 groups, `clandoc000.txt`'s 25 clans and the 36 `npctemplate*` files'
+  150 templates, `histories000.txt`, the five `quests_*`, `experience_table.txt` (pipe-delimited,
+  not KeyValues) and `levelingtemplate_000.txt`. **A loader keys off the filename, not the root
+  key** — `rules.txt`/`rules_tables.txt` share `RuleData` and `clandoc000`/`npctemplate*` share
+  `ClanDataTables` — and **file order is the engine's index**, which is what the save stores. Four
+  authored grammars are parsed once and shared: the `Costs` strings (`Current_Rating * N` /
+  `Table: a, b, …` / a bare int, one key copying into the other), `CVStatRef`'s trailing `/ N` or
+  `* N`, the `Modifier` mini-DSL (prefix-matched against the vocabulary, `Value` taking a *named*
+  payload), and the experience table's three-field rows. A `rules.txt` block and a `ClanData`
+  `General` block are kept as parsed key/value rather than mapped onto fields, because their key
+  sets differ per block and the Unofficial Patch tunes them.
+- `UElysiumRulebookSubsystem` (`Substrate/`) — GameInstance-scoped owner of those tables, lazy per
+  table and session-lifetime: **no `vdata` value is ever saved**, so the sheet stores indices and
+  the rulebook is re-read at load, which is what lets a patched rulebook re-apply to an existing
+  save. A load failure is logged once and remembered rather than retried per read. Verb:
+  `elysium.rules [<table> | stat|feat|quest|xp|clan|history|effect|leveling <name>]`.
+  `dispositiontable.txt` is not here — `FElysiumDispositionTable` owns it, cached on
+  `UElysiumNpcAnimSubsystem` beside the animation data its `Animation Name` column keys.
 - `FElysiumSignData` — the `SignData` panel plus client.dll's `CSignUI` coordinate model (a
   1024×768 virtual canvas scaled uniformly by `ScreenH/768`, blocks positioned relative to the
   panel rect, centring branch when `XPos + YPos == 0`). That canvas model is the **intent
@@ -982,6 +1029,37 @@ volume, so a flip re-applies in one pass (voices already fading out toward a rea
   `#<idx> <name>(<class>)` debug string as a `ComponentTag`), lights `Light_<idx>_<kind>`, prop
   ISMs `Props_<model>_<solidity>`. The same canonical string
   (`FElysiumEntity::DebugString`) threads every I/O log line.
+
+## Build and test loop
+
+After a C++ change: `build.bat`, then `test.bat <tier>` — `Substrate` for anything under the
+substrate, scripting, session, player or UI layers, `Content` when the change reads `tools/out`.
+Both are cheap: the build is adaptive non-unity, so a handful of touched `.cpp` files compile and
+link in ~10 s, and the Substrate tier runs in about the same under `-nullrhi`.
+
+**The result surface is the report, not stdout.** Every run writes JSON + HTML under
+`tools/out/_tests/` and `test.bat` echoes the path and propagates the failure exit code. Filtering
+the console output discards whatever the filter did not match, and re-running to recover it buys
+nothing — the run is deterministic over unchanged sources.
+
+**One run per change, not one per claim.** A green tier stays green until code moves. A roadmap
+task's `*Acceptance:*` list is a set of things that must be **true**, not a set of runs to perform:
+one tier run answers every clause the tier covers, the rest are answered live (`build.bat` →
+`play.bat` → the `elysium` MCP surface, or `shots.bat` for a look regression), and a clause the
+code cannot answer yet is restated or handed to the task that owns it rather than demonstrated.
+
+**A live run is proposed, never assumed — ask the owner first, with a recommendation.** Launching
+the game and driving it through the `elysium` MCP surface is hands-on and slow next to a tier run,
+so it is the owner's call. The ask names what the live run would answer *that the tiers cannot*, so
+the answer is a decision rather than a formality. **Worth it** when the claim only exists in a built
+world: the tick graph and its prerequisites, map build and actor adoption, the spawn hold, pawn ↔
+mover collision, the camera solve, anything tracing real geometry, or a script/dialogue path that
+needs the level script running. **Not worth it** for plain-C++ work the Substrate tier already
+covers — the substrate, parsers, rulebook tables, expression and I/O logic, the app-state and
+input-scope rule sets — for doc-only changes, or for anything a green tier already answered. When
+in doubt the recommendation is *no*: the headless one-shot harnesses (`-ElysiumProfile`,
+`-ElysiumShots`, `-ElysiumProbe`) are the pattern for turning a repeated live check into a
+per-change one, and the Play tier is where a live check belongs once it is worth keeping.
 
 ## Console commands
 
