@@ -202,7 +202,7 @@ void UElysiumGameFlowSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 			FElysiumNewGameRequest Request;
 			if (Args.Num() > 0)
 			{
-				const int32 Parsed = FElysiumPlayerSheet::ClanFromName(Args[0]);
+				const int32 Parsed = FElysiumSheet::ClanFromName(Args[0]);
 				if (Parsed == 0)
 				{
 					UE_LOG(LogElysiumFlow, Warning,
@@ -413,7 +413,7 @@ void UElysiumGameFlowSubsystem::NotifyWorldReady(AGameModeBase* Mode)
 		// seeds state — it does not travel — so the bare load below still runs.
 		if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
 		{
-			GameState->BeginNewGame(FElysiumPlayerSheet::ClanFromName(TEXT("Tremere")), /*bMale*/ true);
+			GameState->BeginNewGame(FElysiumSheet::ClanFromName(TEXT("Tremere")), /*bMale*/ true);
 		}
 		if (Maps->Travel(BootMap))
 		{

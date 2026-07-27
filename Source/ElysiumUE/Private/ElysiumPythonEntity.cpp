@@ -45,17 +45,11 @@ namespace
 		PyObject* Dict;
 	};
 
-	// The player/Character object. There is no player entity yet (P8/P9), so it carries no handle:
-	// its data attributes read the game state's FElysiumPlayerSheet and its methods go through
-	// ElysiumScriptNatives with an unset Self, which that module labels `FindPlayer()`.
-	struct FPyPlayer
-	{
-		PyObject_HEAD
-		PyObject* Dict;
-	};
+	// There is no second player type (11.4): `FindPlayer()` returns an ordinary `vampire.Entity`
+	// over the player entity's handle, so `pc.clan` is a datamap field, `pc.MoneyAdd(50)` is a
+	// datamap input, and both take the R2 walk every other entity's attributes take.
 
 	PyTypeObject GEntityType = { PyVarObject_HEAD_INIT(nullptr, 0) "vampire.Entity", sizeof(FPyEntity) };
-	PyTypeObject GPlayerType = { PyVarObject_HEAD_INIT(nullptr, 0) "vampire.Player", sizeof(FPyPlayer) };
 
 	bool IsEntity(PyObject* O) { return O && O->ob_type == &GEntityType; }
 
@@ -389,6 +383,16 @@ namespace
 				return VariantToPy(F->Get(*E));
 			}
 		}
+		// The vdata-driven half of the character sheet (11.4): `pc.base_Celerity` has to read a
+		// number, not bind as a method, and the registry's static field table cannot name it until
+		// 9.4 loads the sheet. Consulted after the chain walk, before the method fallback.
+		{
+			FElysiumVariant Dynamic;
+			if (E->GetDynamicField(AttrName, Dynamic))
+			{
+				return VariantToPy(Dynamic);
+			}
+		}
 		// A Character method invoked on an NPC entity (Find("bob").SetExpression(...)): bind it so
 		// it dispatches through the same surface the PC uses.
 		if (ElysiumScriptNatives::IsCharacterMethod(Attr))
@@ -437,6 +441,12 @@ namespace
 				return -1;
 			}
 		}
+		// The sheet bag, mirroring the read path (11.4): `pc.base_Celerity = 3` writes the sheet
+		// rather than shadowing it in the property bag.
+		if (E->SetDynamicField(AttrName, PyToVariant(Value)))
+		{
+			return 0;
+		}
 		return PyObject_GenericSetAttr(Self, NameObj, Value);
 	}
 
@@ -454,96 +464,22 @@ namespace
 		PyObject_Del(Self);
 	}
 
-	// --- vampire.Player ------------------------------------------------------------------------
-	// Data attributes read the player sheet. `clan` and the `base_<discipline>` ratings are what
-	// the shipped scripts actually read off `pc`; anything already in the sheet's stat map answers
-	// too, and 9.4 grows that map from vdata/system. Every other name binds as a Character method,
-	// matching retail's forgiving surface (MakePlayerKillable, Bloodgain, ClearActiveDisciplines
-	// are all called by tutorial.py and none of them is in the bound 24).
-
-	bool IsSheetAttr(const FString& Name, const UElysiumGameStateSubsystem* S)
-	{
-		if (Name == TEXT("clan") || Name == TEXT("humanity") || Name == TEXT("bloodpool"))
-		{
-			return true;
-		}
-		if (Name.StartsWith(TEXT("base_"), ESearchCase::CaseSensitive))
-		{
-			return true;
-		}
-		return S && S->PlayerSheet().Stats.Contains(FName(*Name));
-	}
-
-	PyObject* Player_getattro(PyObject* Self, PyObject* NameObj)
-	{
-		if (PyObject* Generic = PyObject_GenericGetAttr(Self, NameObj))
-		{
-			return Generic;
-		}
-		if (!PyErr_ExceptionMatches(PyExc_AttributeError))
-		{
-			return nullptr;
-		}
-		PyErr_Clear();
-
-		const FString Attr = PyStr(NameObj);
-		UElysiumGameStateSubsystem* S = State();
-		if (IsSheetAttr(Attr, S))
-		{
-			if (Attr == TEXT("clan"))
-			{
-				return PyInt_FromLong(S ? S->PlayerSheet().Clan : 0);
-			}
-			const int32* V = S ? S->PlayerSheet().Stats.Find(FName(*Attr)) : nullptr;
-			return PyInt_FromLong(V ? *V : 0);   // unloaded sheet reads 0, like an unset G flag
-		}
-		return MakeBoundCharMethod(Self, NameObj);
-	}
-
-	int Player_setattro(PyObject* Self, PyObject* NameObj, PyObject* Value)
-	{
-		const FString Attr = PyStr(NameObj);
-		UElysiumGameStateSubsystem* S = State();
-		if (Value != nullptr && S && IsSheetAttr(Attr, S))
-		{
-			const int32 V = PyToVariant(Value).ToInt();
-			if (Attr == TEXT("clan")) { S->PlayerSheet().Clan = V; }
-			else                      { S->PlayerSheet().Stats.Add(FName(*Attr), V); }
-			return 0;
-		}
-		return PyObject_GenericSetAttr(Self, NameObj, Value);
-	}
-
-	PyObject* Player_repr(PyObject*)
-	{
-		UElysiumGameStateSubsystem* S = State();
-		const int32 Clan = S ? S->PlayerSheet().Clan : 0;
-		return PyString_FromString(TCHAR_TO_UTF8(
-			*FString::Printf(TEXT("<player clan=%d %s>"), Clan, FElysiumPlayerSheet::ClanName(Clan))));
-	}
-
-	void Player_dealloc(PyObject* Self)
-	{
-		Py_XDECREF(reinterpret_cast<FPyPlayer*>(Self)->Dict);
-		PyObject_Del(Self);
-	}
-
 	// --- the 11 module globals -----------------------------------------------------------------
 
+	// "Find the first player entity, or NULL if there is not one spawned" — the binding's own
+	// docstring, and since 11.4 exactly what it does: the player IS an entity, so this is the same
+	// lookup FindEntityByName does, and `None` on a map built without a player (a menu backdrop) is
+	// the documented answer rather than an invented one.
 	PyObject* Mod_FindPlayer(PyObject*, PyObject* Args)
 	{
 		const TArray<FElysiumVariant> Vals = ArgsToVariants(Args);
+		FElysiumEntityWorld* W = CurrentWorld();
+		FElysiumEntity* P = W ? static_cast<FElysiumEntity*>(W->FindPlayer()) : nullptr;
+		const FElysiumVariant R = P ? FElysiumVariant::Handle(P->Handle) : FElysiumVariant::Void();
 		ElysiumScriptNatives::Record(State(), FName(TEXT("FindPlayer")),
 			FString::Printf(TEXT("FindPlayer(%s)"), *ElysiumScriptNatives::DescribeArgs(Vals)),
-			FElysiumVariant::String(TEXT("<player>")), /*bStub*/ false);
-
-		FPyPlayer* P = PyObject_New(FPyPlayer, &GPlayerType);
-		if (!P)
-		{
-			return nullptr;
-		}
-		P->Dict = nullptr;
-		return reinterpret_cast<PyObject*>(P);
+			R, /*bStub*/ false);
+		return NewEntity(P ? P->Handle : FElysiumEntityHandle::Invalid());
 	}
 
 	PyObject* Mod_FindEntityByName(PyObject*, PyObject* Args)
@@ -902,24 +838,9 @@ bool InstallEntityBindings(PyObject* Module, FString& OutError)
 		return false;
 	}
 
-	GPlayerType.tp_flags      = Py_TPFLAGS_DEFAULT;
-	GPlayerType.tp_dealloc    = Player_dealloc;
-	GPlayerType.tp_repr       = Player_repr;
-	GPlayerType.tp_getattro   = Player_getattro;
-	GPlayerType.tp_setattro   = Player_setattro;
-	GPlayerType.tp_dictoffset = offsetof(FPyPlayer, Dict);
-	GPlayerType.tp_doc        = "The player character. Data attributes read the player sheet; every "
-	                            "other name binds as a Character method.";
-	if (PyType_Ready(&GPlayerType) < 0)
-	{
-		OutError = FString::Printf(TEXT("PyType_Ready(vampire.Player) failed: %s"), *FetchPyError());
-		return false;
-	}
-
 	Py_INCREF(&GEntityType);
 	PyModule_AddObject(Module, "Entity", reinterpret_cast<PyObject*>(&GEntityType));
-	Py_INCREF(&GPlayerType);
-	PyModule_AddObject(Module, "Player", reinterpret_cast<PyObject*>(&GPlayerType));
+	// There is no `vampire.Player`: 11.4 retired it. The player is an Entity like everything else.
 
 	// The console objects (9.3b): vampire.ccmd (attribute-set executes) + vampire.cvar. Both are
 	// data-less singletons forwarding to FElysiumPythonVM's FElysiumConsole.

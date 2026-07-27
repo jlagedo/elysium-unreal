@@ -28,6 +28,7 @@
 #include "ElysiumKeyValues.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumObjModel.h"
+#include "ElysiumPlayer.h"
 #include "ElysiumPythonVM.h"
 #include "ElysiumRopes.h"
 #include "ElysiumScriptFS.h"
@@ -1847,6 +1848,207 @@ bool FElysiumScriptedSequenceTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// The player entity (11.4, S3). The claim under test is that the player stopped being a
+// special case: it is a registry class on VtMB's own chain, it answers to a targetname the
+// maps already write (`!player`), its inputs arrive through the same R2 walk from either
+// direction, it is a real `!activator`, and `point_teleport` moves it exactly as it moves
+// anything else. No RHI, no actors, no `tools/out` — the recording stub is the body.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerEntityTest, "Elysium.Substrate.PlayerEntity", GElysiumTestFlags)
+bool FElysiumPlayerEntityTest::RunTest(const FString&)
+{
+	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+
+	// --- The chain is VtMB's ------------------------------------------------------------
+	const FElysiumClassDesc* PlayerDesc = Reg.Find(ElysiumPlayerClassName());
+	if (!TestNotNull(TEXT("`player` is registered"), PlayerDesc))
+	{
+		return false;
+	}
+	TestEqual(TEXT("player's base is CBaseCombatCharacter"),
+		PlayerDesc->BaseName.ToString(), ElysiumCombatCharacterClassName().ToString());
+	const FElysiumClassDesc* CharDesc = Reg.Find(ElysiumCombatCharacterClassName());
+	const FElysiumClassDesc* AnimDesc = Reg.Find(ElysiumAnimatingClassName());
+	if (!TestNotNull(TEXT("CBaseCombatCharacter is registered"), CharDesc) ||
+		!TestNotNull(TEXT("CBaseAnimating is registered"), AnimDesc))
+	{
+		return false;
+	}
+	TestEqual(TEXT("combat character's base is CBaseAnimating"),
+		CharDesc->BaseName.ToString(), ElysiumAnimatingClassName().ToString());
+	TestEqual(TEXT("animating's base is CBaseEntity"),
+		AnimDesc->BaseName.ToString(), ElysiumBaseClassName().ToString());
+
+	// One walk from the leaf reaches all four levels of the chain.
+	auto Resolves = [&Reg, PlayerDesc](const TCHAR* Input)
+	{
+		return reinterpret_cast<const void*>(Reg.FindInput(*PlayerDesc, FName(Input)));
+	};
+	TestNotNull(TEXT("player input GiveItem resolves"), Resolves(TEXT("GiveItem")));
+	TestNotNull(TEXT("combat-character input MoneyAdd resolves"), Resolves(TEXT("MoneyAdd")));
+	TestNotNull(TEXT("animating input SetAnimation resolves"), Resolves(TEXT("SetAnimation")));
+	TestNotNull(TEXT("base input Kill resolves"), Resolves(TEXT("Kill")));
+	TestNotNull(TEXT("input names fold case"), Resolves(TEXT("moneyadd")));
+	// The NPC inherits the same middle nodes — one MoneyAdd for every character in the game.
+	if (const FElysiumClassDesc* NpcDesc = Reg.Find(FName(TEXT("npc_VVampire"))))
+	{
+		TestEqual(TEXT("npc_* sits under CBaseCombatCharacter"),
+			NpcDesc->BaseName, ElysiumCombatCharacterClassName());
+		TestNotNull(TEXT("an NPC resolves MoneyAdd through the same node"),
+			reinterpret_cast<const void*>(Reg.FindInput(*NpcDesc, FName(TEXT("MoneyAdd")))));
+	}
+
+	// --- A world with a player ----------------------------------------------------------
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+	Services.PlayerLocation = FVector(100, 200, 30);
+	Services.PlayerRotation = FRotator(0.f, 90.f, 0.f);
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__player_test__");
+
+	// A trigger whose OnStartTouch fires at `!activator` — the activator must be the player.
+	FElysiumEntityDef Trig;
+	Trig.Classname = TEXT("trigger_multiple");
+	Trig.TargetName = TEXT("trig1");
+	Trig.Keys.Add(TEXT("spawnflags"), TEXT("1"));   // ALLOW_CLIENTS
+	{
+		FElysiumOutputDef W;
+		W.Name = TEXT("OnStartTouch");
+		W.Target = TEXT("!activator");
+		W.Input = TEXT("MoneyAdd");
+		W.Param = TEXT("7");
+		Trig.Outputs.Add(W);
+	}
+	Defs.Defs.Add(MoveTemp(Trig));
+
+	// A point_teleport aimed at `!player` by name, exactly as 48 of the 49 in the shipped maps are.
+	FElysiumEntityDef Tele;
+	Tele.Classname = TEXT("point_teleport");
+	Tele.TargetName = TEXT("tp1");
+	Tele.Origin = FVector(500, 600, 70);
+	Tele.Keys.Add(TEXT("target"), TEXT("!player"));
+	Tele.Keys.Add(TEXT("angles"), TEXT("0 45 0"));
+	Defs.Defs.Add(MoveTemp(Tele));
+
+	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+
+	const FElysiumEntityHandle PlayerHandle = World.SpawnPlayer();
+	FElysiumPlayer* Player = World.FindPlayer();
+	if (!TestNotNull(TEXT("SpawnPlayer created a player entity"), Player))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the world reports the same handle"), World.PlayerHandle().Index, PlayerHandle.Index);
+	TestEqual(TEXT("it answers to `!player` by name"),
+		World.FindByName(ElysiumPlayerTargetName()), static_cast<FElysiumEntity*>(Player));
+	TestFalse(TEXT("it is a registered class, not an inert record"), Player->IsRecordOnly());
+	TestEqual(TEXT("a second SpawnPlayer is a no-op"), World.SpawnPlayer().Index, PlayerHandle.Index);
+	TestEqual(TEXT("Spawn seeded the interim health ceiling"),
+		Player->MaxHealth, ElysiumInterimPlayerMaxHealth);
+	TestTrue(TEXT("Spawn sampled the body's origin"), Player->Origin.Equals(FVector(100, 200, 30)));
+
+	// --- Both directions land on the same field ------------------------------------------
+	// (a) the console / Hammer-wire direction: address it by targetname.
+	World.EnqueueInput(ElysiumPlayerTargetName(), FName(TEXT("MoneyAdd")), FElysiumVariant::Int(50),
+		0.0, FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+	World.Tick(0.0);
+	TestEqual(TEXT("ent_fire !player MoneyAdd 50"), Player->Money, 50);
+
+	// (b) the script direction: a bound input fires at `!self` with the entity as caller, which is
+	//     exactly what `pc.MoneyAdd(50)` manufactures in the CPython host.
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("MoneyAdd")), FElysiumVariant::Int(50),
+		0.0, FElysiumEntityHandle::Invalid(), PlayerHandle);
+	World.Tick(0.0);
+	TestEqual(TEXT("pc.MoneyAdd(50) lands on the same field"), Player->Money, 100);
+
+	// VtMB's own no-op rule: a zero-valued MoneyAdd changes nothing.
+	World.EnqueueInput(ElysiumPlayerTargetName(), FName(TEXT("MoneyAdd")), FElysiumVariant::Int(0),
+		0.0, FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+	World.Tick(0.0);
+	TestEqual(TEXT("a zero-valued MoneyAdd is a silent no-op"), Player->Money, 100);
+
+	// --- `!activator` is real -------------------------------------------------------------
+	FElysiumEntity* Trigger = World.FindByName(TEXT("trig1"));
+	if (!TestNotNull(TEXT("trigger resolved"), Trigger))
+	{
+		return false;
+	}
+	World.RouteBrushTouch(Trigger->Handle, PlayerHandle, /*bBegin*/ true);
+	World.Tick(0.0);
+	TestEqual(TEXT("a trigger the player walked into resolves !activator to it"), Player->Money, 107);
+
+	// --- point_teleport moves it like any other entity ------------------------------------
+	FElysiumEntity* Teleport = World.FindByName(TEXT("tp1"));
+	if (!TestNotNull(TEXT("point_teleport resolved"), Teleport))
+	{
+		return false;
+	}
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("Teleport")), FElysiumVariant::Void(), 0.0,
+		FElysiumEntityHandle::Invalid(), Teleport->Handle);
+	World.Tick(0.0);
+	TestTrue(TEXT("the entity's own origin moved"), Player->Origin.Equals(FVector(500, 600, 70)));
+	// The body followed through the embodiment — the Source yaw is negated on the way out.
+	TestTrue(TEXT("the body was placed at the destination"),
+		Services.Saw(TEXT("TeleportPlayer")) && Services.PlayerLocation.Equals(FVector(500, 600, 70)));
+	TestTrue(TEXT("the body took the destination's facing"),
+		FMath::IsNearlyEqual((float)Services.PlayerRotation.Yaw, -45.f));
+
+	// --- Damage, the unkillable latch, and the death path ---------------------------------
+	Player->TakeDamage(40.f);
+	TestEqual(TEXT("damage reduces the entity's health field"), Player->Health, 60);
+	Player->SetUnkillable(true);
+	Player->TakeDamage(1000.f);
+	TestEqual(TEXT("an unkillable player floors at 1"), Player->Health, 1);
+	Player->SetUnkillable(false);
+	Player->TakeDamage(1.f);
+	TestEqual(TEXT("health runs out"), Player->Health, 0);
+
+	// --- Hydrate / dehydrate is the map boundary ------------------------------------------
+	Player->Money = 250;
+	Player->Sheet.Clan = FElysiumSheet::ClanFromName(TEXT("Malkavian"));
+	Player->Sheet.Stats.Add(FName(TEXT("base_Celerity")), 3);
+	FElysiumPlayerRecord Record;
+	Player->Dehydrate(Record);
+	TestEqual(TEXT("dehydrate carries money"), Record.Money, 250);
+	TestEqual(TEXT("dehydrate carries the clan"), Record.Sheet.Clan, 4);
+
+	FElysiumPlayer Fresh;
+	Fresh.Hydrate(Record);
+	TestEqual(TEXT("hydrate restores money"), Fresh.Money, 250);
+	TestEqual(TEXT("hydrate restores the sheet"), Fresh.Sheet.Stats.FindRef(FName(TEXT("base_Celerity"))), 3);
+
+	// --- The vdata half of the sheet reads as a number, not a bound method -----------------
+	FElysiumVariant Dynamic;
+	TestTrue(TEXT("a loaded stat resolves dynamically"),
+		Player->GetDynamicField(FName(TEXT("base_Celerity")), Dynamic));
+	TestEqual(TEXT("...with its value"), Dynamic.ToInt(), 3);
+	TestTrue(TEXT("an unloaded base_ stat resolves to 0 rather than raising"),
+		Player->GetDynamicField(FName(TEXT("base_Obfuscate")), Dynamic));
+	TestEqual(TEXT("...as zero"), Dynamic.ToInt(), 0);
+	TestFalse(TEXT("an unrelated name does not resolve dynamically"),
+		Player->GetDynamicField(FName(TEXT("SetExpression")), Dynamic));
+
+	// --- A world with no player is a legal world ------------------------------------------
+	{
+		FElysiumEntityDefs Bare;
+		Bare.MapName = TEXT("__backdrop__");
+		FElysiumEntityWorld Backdrop(nullptr, nullptr);
+		Backdrop.Load(MoveTemp(Bare));
+		TestNull(TEXT("a map built without a player has none"), Backdrop.FindPlayer());
+		// And an input addressed at one is an unknown target, not a crash.
+		Backdrop.EnqueueInput(ElysiumPlayerTargetName(), FName(TEXT("MoneyAdd")), FElysiumVariant::Int(1),
+			0.0, FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+		Backdrop.Tick(0.0);
+		TestTrue(TEXT("it is reported as an unknown target"), Backdrop.UnknownTargets() > 0);
+	}
+
+	return true;
+}
+
+// =====================================================================================
 // FElysiumWorldServices (11.2) — the substrate's outbound seam. Runs the shape of the
 // tutorial's own logic_auto chain end to end against the recording stub: no RHI, no actors,
 // no `tools/out`. sp_tutorial_1's five logic_autos fire OnMapLoad at an NPC (WillTalk), a
@@ -1973,6 +2175,9 @@ bool FElysiumWorldServicesTest::RunTest(const FString&)
 	{
 		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Rec.Bundle());
 		World.Load(BuildDefs());
+		// A played map has a player entity (11.4) — the map actor creates one after Load, and the
+		// travel seam below reads its placement, so the test builds the same shape.
+		World.SpawnPlayer();
 
 		// Spawn-time reaches: the NPC stood a body, the start_enabled scheme faded in.
 		TestTrue(TEXT("the NPC stood a body through the embodiment"),
@@ -2005,9 +2210,10 @@ bool FElysiumWorldServicesTest::RunTest(const FString&)
 		TestTrue(TEXT("env_fade announced the fade to the presenter"),
 			Rec.Saw(TEXT("StartFade dur=2.50 hold=1.50")));
 
-		// The travel seam: a forced ChangeLevel captures the player's placement from the
-		// embodiment and asks the travel service for the transition. This map has no source
-		// landmark, so the offset stays zero — the warning path — and the yaw is the body's.
+		// The travel seam: a forced ChangeLevel captures the placement of the
+		// player entity — sampled off the body at the top of the frame (11.4) — and asks the travel
+		// service for the transition. This map has no source landmark, so the offset stays zero —
+		// the warning path — and the yaw is the one the body reported.
 		FElysiumEntity* Change = World.FindByName(TEXT("toalley"));
 		if (TestNotNull(TEXT("toalley resolved"), Change))
 		{

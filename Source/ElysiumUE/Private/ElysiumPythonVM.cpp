@@ -3,6 +3,7 @@
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
+#include "ElysiumPlayer.h"
 #include "ElysiumPythonEntity.h"
 #include "ElysiumScriptFS.h"
 #include "ElysiumScriptHost.h"
@@ -277,7 +278,7 @@ namespace
 		}
 
 		PyObject* Module = Py_InitModule3("vampire", VampireMethods,
-			"Elysium VtMB bridge: the G store, the Entity/Player objects, and the 11 module globals");
+			"Elysium VtMB bridge: the G store, the Entity object, and the 11 module globals");
 		if (!Module)
 		{
 			OutError = FString::Printf(TEXT("Py_InitModule3(vampire) failed: %s"), *FetchPyError());
@@ -295,7 +296,7 @@ namespace
 		Py_INCREF(Py_None);
 		PyModule_AddObject(Module, "null", Py_None); // VtMB scripts use bare `null`
 
-		// The entity/native surface (9.3 B2): vampire.Entity, vampire.Player, and the 11 globals.
+		// The entity/native surface (9.3 B2): vampire.Entity, ccmd/cvar, and the 11 globals.
 		return ElysiumPy::InstallEntityBindings(Module, OutError);
 	}
 
@@ -387,7 +388,7 @@ namespace
 		"__main__.ccmd = vampire.ccmd\n"
 		"__main__.cvar = vampire.cvar\n"
 		// `Character` is VtMB's player/NPC method class (python_bridge.md). Our 24 Character methods
-		// dispatch off the Entity/Player getattro (ElysiumScriptNatives::CallCharacterMethod), not a
+		// dispatch off the Entity getattro (ElysiumScriptNatives::CallCharacterMethod), not a
 		// shared class, so this is a compatibility shim: a mutable old-style class that lets vamputil's
 		// `from __main__ import Character` resolve and its `Character.Near = _Near` monkeypatch land
 		// (a C extension type would reject attribute assignment). The monkeypatched methods do not
@@ -404,10 +405,10 @@ namespace
 		"    f.__name__ = nm; return f\n"
 		"for _nm in ('IsIdling',):\n"
 		"    setattr(__main__, _nm, _mk(_nm))\n"
-		// `pc` = the player Character, the name every dialogue gate and level script reads (pc.clan,
-		// pc.base_*, IsClan(pc,...)). The object proxies the live player sheet, so binding it once here
-		// is enough — it reflects whatever BeginNewGame later seeds. (`npc` is bound per-eval, from the
-		// firing entity, in Eval().)
+		// `pc` = the player, the name every dialogue gate and level script reads (pc.clan, pc.base_*,
+		// IsClan(pc,...)). Bound here so the name always exists (None before any map builds) and
+		// **re-bound per eval** in Eval() alongside `npc`: since 11.4 it is an Entity over a
+		// generation-checked handle, and a handle minted by one map is stale in the next.
 		"__main__.pc = FindPlayer()\n";
 
 	// Run a code block in __main__; capture any exception text. Returns true on success.
@@ -601,8 +602,7 @@ FElysiumVariant FElysiumPythonVM::Eval(const FString& Source, const FElysiumScri
 	// `npc` = the firing entity (Self) for this eval — what a dialogue action (`npc.SetDisposition`,
 	// `npc.times_talked`) and many level-script payloads read. Bound per-eval from the delivery
 	// context (None when there is no firing entity, e.g. a hand-run eval), and left in `__main__`
-	// after — harmless, and it matches VtMB keeping `npc` as the last conversation partner. `pc` is
-	// bound once at startup (bootstrap) since it always proxies the live sheet.
+	// after — harmless, and it matches VtMB keeping `npc` as the last conversation partner.
 	if (Ctx.Self.IsSet())
 	{
 		if (PyObject* NpcObj = ElysiumPy::NewEntity(Ctx.Self))
@@ -614,6 +614,21 @@ FElysiumVariant FElysiumPythonVM::Eval(const FString& Source, const FElysiumScri
 	else
 	{
 		PyDict_SetItemString(Ns, "npc", Py_None);
+	}
+
+	// `pc` = the player entity (11.4). Re-bound per eval for the same reason `npc` is: it is a
+	// generation-checked handle now, not a sheet proxy, so the object a previous map minted would
+	// raise "game entity has been deleted" on every attribute read after a travel.
+	{
+		// ScopedCtx is already installed, so CurrentWorld() is this delivery's world (or the current
+		// map's for a hand-run eval).
+		FElysiumEntityWorld* PlayerWorld = ElysiumPy::CurrentWorld();
+		const FElysiumPlayer* PlayerEnt = PlayerWorld ? PlayerWorld->FindPlayer() : nullptr;
+		if (PyObject* PcObj = ElysiumPy::NewEntity(PlayerEnt ? PlayerEnt->Handle : FElysiumEntityHandle::Invalid()))
+		{
+			PyDict_SetItemString(Ns, "pc", PcObj);   // NewEntity answers None for an unset handle
+			Py_DECREF(PcObj);
+		}
 	}
 
 	// Try as an expression (pythoncheck gates); fall back to a statement block (field-6 assigns).

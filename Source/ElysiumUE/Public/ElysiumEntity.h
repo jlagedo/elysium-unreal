@@ -200,6 +200,24 @@ public:
 	// be recognised as a door without reflection.
 	virtual FElysiumDoorBase* AsDoorBase() { return nullptr; }
 
+	// No-RTTI downcast to the combat character (11.4), for the callers that need the sheet or the
+	// damage receiver off a base pointer — the same reason AsDoorBase exists.
+	virtual class FElysiumCombatCharacter* AsCombatCharacter() { return nullptr; }
+	const class FElysiumCombatCharacter* AsCombatCharacter() const
+	{
+		return const_cast<FElysiumEntity*>(this)->AsCombatCharacter();
+	}
+
+	// --- Open-ended attribute names (11.4) ----------------------------------------------
+	// The registry's field table is a static list of names, which is exactly right for a datamap
+	// and wrong for the part of the character sheet that is `vdata`-driven (`base_<discipline>`,
+	// the attribute/ability ratings). Both script hosts consult these AFTER the class-chain walk
+	// and before their Character-method fallback, so a sheet name reads a number instead of
+	// binding as a method. Base answers false — no dynamic names. 9.4 shrinks the bag as it turns
+	// the names VtMB's own datamap carries into registered fields.
+	virtual bool GetDynamicField(FName Name, FElysiumVariant& Out) const { return false; }
+	virtual bool SetDynamicField(FName Name, const FElysiumVariant& Value) { return false; }
+
 	// --- Lifecycle --------------------------------------------------------------------
 	// Bind identity and copy the base keyfields out of the def's raw keys through the class
 	// chain field table (R2), honouring start_hidden. The world's spawn pass (P1.4) calls

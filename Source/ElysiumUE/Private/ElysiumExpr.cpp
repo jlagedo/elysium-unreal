@@ -5,6 +5,7 @@
 #include "ElysiumEntityHandle.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
+#include "ElysiumPlayer.h"
 #include "ElysiumScriptNatives.h"
 
 #include <initializer_list>
@@ -599,10 +600,18 @@ namespace
 			if (Name == TEXT("self") && Env.Ctx.Self.IsSet()) { return FVal::FromVar(FElysiumVariant::Handle(Env.Ctx.Self)); }
 			if (Name == TEXT("activator") && Env.Ctx.Activator.IsSet()) { return FVal::FromVar(FElysiumVariant::Handle(Env.Ctx.Activator)); }
 
-			// `pc` = the player Character (sheet-backed; the Invalid handle is the PC, per FindPlayer);
+			// `pc` = the player entity (11.4 — an ordinary handle, like every other entity);
 			// `npc` = the firing entity (Self) in a dialogue/entity context. The two names the dialogue
-			// gates and level scripts actually read, mirroring the CPython host.
-			if (Name == TEXT("pc")) { return FVal::MakeCharacter(FElysiumEntityHandle::Invalid()); }
+			// gates and level scripts actually read, mirroring the CPython host. With no player (a
+			// menu backdrop, a bare probe world) `pc` falls through to a Character receiver on the
+			// Invalid handle, which is the sheet-less stub surface — error-to-false's spirit.
+			if (Name == TEXT("pc"))
+			{
+				FElysiumEntityWorld* W = World();
+				const FElysiumPlayer* P = W ? W->FindPlayer() : nullptr;
+				return P ? FVal::FromVar(FElysiumVariant::Handle(P->Handle))
+				         : FVal::MakeCharacter(FElysiumEntityHandle::Invalid());
+			}
 			if (Name == TEXT("npc") && Env.Ctx.Self.IsSet()) { return FVal::FromVar(FElysiumVariant::Handle(Env.Ctx.Self)); }
 
 			// Otherwise a bare name resolves to an entity by targetname (the one namespace, 5.2). Level-
@@ -670,6 +679,15 @@ namespace
 				if (const FElysiumFieldAccessor* F = Reg.FindField(*E.Class, AttrName))
 				{
 					return FVal::FromVar(F->Get(E));
+				}
+			}
+			// The vdata-driven half of the character sheet (11.4): `pc.base_Celerity` reads a number
+			// rather than binding as a method. Same position in the order as the CPython host's.
+			{
+				FElysiumVariant Dynamic;
+				if (E.GetDynamicField(AttrName, Dynamic))
+				{
+					return FVal::FromVar(Dynamic);
 				}
 			}
 			// A Character method invoked on an NPC entity handle (FindEntityByName("bob").SetExpression(...)):
@@ -985,7 +1003,13 @@ namespace
 					const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
 					const FName AttrName(*Attr);
 					const FElysiumFieldAccessor* F = E->Class ? Reg.FindField(*E->Class, AttrName) : nullptr;
-					if (!F) { Fail(FString::Printf(TEXT("entity has no writable attribute '%s'"), *Attr)); return Void(); }
+					if (!F)
+					{
+						// The sheet bag (11.4), mirroring the read path.
+						if (E->SetDynamicField(AttrName, V)) { return FVal::FromVar(V); }
+						Fail(FString::Printf(TEXT("entity has no writable attribute '%s'"), *Attr));
+						return Void();
+					}
 					if (!F->bKeyable) { Fail(FString::Printf(TEXT("'%s' is read only"), *Attr)); return Void(); }
 					F->Set(*E, V);
 					return FVal::FromVar(V);

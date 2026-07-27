@@ -165,8 +165,7 @@ is for — the map actor calls it from `BeginPlay`. Verbs: `elysium.timescale`, 
 
 ## 5. The player object
 
-**The player is an entity; the pawn is its body (S3).** This is the single largest structural gap
-today, and closing it removes more special cases than any other change in this document.
+**The player is an entity; the pawn is its body (S3)** — built by 11.4.
 
 VtMB's own architecture says so three times over:
 
@@ -184,14 +183,18 @@ VtMB's own architecture says so three times over:
 ### The shape
 
 ```
-FElysiumEntity                    CBaseEntity      — keyfields, dormancy, I/O, think        (exists)
- └ FElysiumAnimating              CBaseAnimating   — body follow, PlayAnimClip, skin        (new node)
+FElysiumEntity                    CBaseEntity      — keyfields, dormancy, I/O, think
+ └ FElysiumAnimating              CBaseAnimating   — body follow, PlayAnimClip, skin, disposition
     └ FElysiumCombatCharacter     CBaseCombatCharacter — the SHEET: 25 inputs, money,
       │                                                  blood, humanity, masquerade,
-      │                                                  disposition, inventory ownership   (new node)
-      ├ FElysiumNpc               CAI_BaseNPC      — SetRelationship, the 16 NPC outputs    (exists, re-based)
-      └ FElysiumPlayer            CBasePlayer/CHL2_Player — 11 inputs, view/camera links    (new)
+      │                                                  damage/death, inventory ownership
+      ├ FElysiumNpc               CAI_BaseNPC      — SetRelationship, the 16 NPC outputs
+      └ FElysiumPlayer            CBasePlayer/CHL2_Player — the player inputs, the body link
 ```
+
+The player leaf's classname is `player` and its targetname is **`!player`** — the name the maps
+themselves write (48 of the 49 `point_teleport.target` keys), so it resolves through the ordinary
+name index rather than a magic-target branch.
 
 `FElysiumPlayerRecord` (session lifetime) is the durable half:
 
@@ -203,43 +206,47 @@ struct FElysiumPlayerRecord
     int32             Humanity = 7, BloodPool = 10, Masquerade = 0;
     // health is NOT here — m_iHealth is a Save-flagged entity field on FElysiumCombatCharacter,
     // saved by the chain walk (save-architecture.md §4), which is VtMB's own placement
-    TArray<FElysiumItemRecord> Inventory;      // 9.8 — items are entities; this is their frozen form
-    TArray<FElysiumItemHandle> EquippedHandles;// m_hMyWeapons[] / m_hActiveWeapon, savegame_format.md
-    TArray<FElysiumQuestEntry> Quests;         // ASSIGNED_QUEST, savegame_format.md
+    int32             Health = 0, MaxHealth = 0;  // NOT a second home: m_iHealth is a Save-flagged
+                                   // entity field on the chain (save-architecture.md §4, VtMB's own
+                                   // placement). This copy exists only to carry the value across a
+                                   // map boundary, because our entity dies with its map.
     TArray<FElysiumXpEntry>    ExperienceLog;  // EXPERIENCE_ENTRY — itemised, not a total
     TArray<FString>            Effects;        // m_tEffectList
     TArray<FString>            EmailFlags;     // the Player block, save-architecture.md §3
-    FElysiumLawState  Law;         // criminal / supernatural counters + timers
+    FElysiumLawState  Law;         // criminal / supernatural / investigate counters
+    bool              bUnkillable; // events_player's MakePlayerUnkillable, which must cross a warp
+    // 9.8 adds the inventory and the equipped handles (items are entities; these are their frozen
+    // form). `G` and the quest map are still the game-state subsystem's own stores until 11.9
+    // gathers the save blocks.
 };
 ```
 
-`Hydrate(FElysiumPlayer&)` at map build, `Dehydrate()` at travel-out and at save. The entity is the
-*live* view; the record is the truth that crosses a map boundary.
+`Hydrate(const FElysiumPlayerRecord&)` at map build, `Dehydrate()` when the world is torn down (and,
+at 11.9, into the save). The entity is the *live* view; the record is the truth that crosses a map
+boundary, and `UElysiumGameStateSubsystem::PlayerSheet()` resolves live-entity-first so a write can
+never land on the copy that is about to be overwritten.
 
-### What the pawn becomes
+### What the pawn is
 
-`AElysiumPawn` keeps the body and loses everything else: no `+use` routing, no sign dismissal, no
-`IsInputKeyDown` polling, no reaching `GI → MapSubsystem → MapActor → EntityWorld` (four such chains
-exist today). It carries collision, `UElysiumMovementComponent`, `UElysiumCameraComponent`, and the
-handle of the entity it embodies. `FElysiumPlayer::SetRuntimeOrigin` moves it, exactly as
-`FElysiumNpc` moves a skeletal body — so `point_teleport`, landmark placement and a scripted
-`pc.SetOrigin(...)` all become one path.
+`AElysiumPawn` is the body and nothing else: collision, movement, camera, noclip, and the handle of
+the entity it embodies. No `+use` routing, no sign dismissal, no `IsInputKeyDown` polling, no
+`GI → MapSubsystem → MapActor → EntityWorld` walk — the non-movement verbs are the player
+controller's until 11.5/11.6 take them, and the shift gait is a `+speed`/`-speed` latch.
+`FElysiumPlayer::SetRuntimeOrigin` moves the body, exactly as `FElysiumNpc` moves a skeletal one, so
+`point_teleport`, landmark placement and a scripted `pc.SetOrigin(...)` are one path. The reverse
+direction is a sample: the world reads the pawn into the entity once a frame, before thinks and the
+queue. `UElysiumMovementComponent` and `UElysiumCameraComponent` join it at 11.6 and 11.7.
 
-### What it collapses
+### What it collapsed
 
-| Today | After |
+| Before | Now |
 |---|---|
 | `vampire.Player`, a second Python type over a struct on the game state | `FindPlayer()` returns an ordinary `Entity`; `pc.clan` / `pc.humanity` are datamap fields; `pc.MoneyAdd(50)` is a datamap input — the R2 walk, no new dispatch |
-| 25 `CBaseCombatCharacter` + 11 player inputs unreachable | registered inputs on the chain, shared by the I/O bus and the script bus (**one** `MoneyAdd`) |
-| `FElysiumPlayerSheet` (3 fields + a loose `TMap`) | `FElysiumSheet` on the combat character, `vdata`-loaded (9.4), saved by the field walk |
-| triggers filter on "is the toucher a pawn"; activator is always `Invalid` | the toucher resolves to its owning entity; `!activator` is real for the player and for NPCs |
-| inventory has nowhere to live | `item_*` entities owned by the player entity, persisted as entities (`savegame_format.md`) |
-| damage/death/frenzy have no receiver | `FElysiumCombatCharacter` is the receiver, shared by player and NPC — which is where VtMB put it |
-
-**Cost, stated honestly:** the sheet must move off the GI struct, the CPython `Player` type is
-retired, and every current reader of `State->PlayerSheet()` re-points. That is ~15 call sites and one
-Python type. It is the last cheap moment to do it — 9.4 (sheet), 9.8 (inventory), 9.10 (economy) and
-9.5 (save) all land *on* this shape, and each one built against the current shim is a migration later.
+| 25 `CBaseCombatCharacter` + the player inputs unreachable | registered inputs on the chain, shared by the I/O bus and the script bus (**one** `MoneyAdd`) |
+| a 3-field sheet struct + a loose `TMap` on the game instance | `FElysiumSheet` on the combat character, its `vdata` half reached by `GetDynamicField` until 9.4 names those fields |
+| triggers filter on "is the toucher a pawn"; activator is always `Invalid` | the toucher resolves to its owning entity; `!activator` is real |
+| the NPC leaf carried its own body, clips, idle policy and dormancy gate | all of it on `FElysiumAnimating`, shared with the player |
+| damage/death/frenzy have no receiver | `FElysiumCombatCharacter` is the receiver, shared by player and NPC — which is where VtMB put it — and the player's death is what drives `GameOver` |
 
 ## 6. The entity class chain, and why the middle nodes matter
 
@@ -281,8 +288,10 @@ still polls. The actor is still the world's component outer and VLOG context —
 service, and nothing under the world casts it to a map actor or walks it to a subsystem.
 
 The player's body lives on `IElysiumEmbodiment` because the pawn *is* the player's body (**S3**):
-view point, origin, teleport, damage, and the `+use` trace. 11.4 moves the player's *state* onto an
-entity, at which point these become ordinary entity operations.
+view point, origin, teleport, damage, and the `+use` trace. Since 11.4 the substrate reaches them
+*through the player entity* rather than directly — `point_teleport` writes `SetRuntimeOrigin` and
+the entity places the body, `trigger_hurt` reduces the entity's health — so what is left on the
+interface is the body's own geometry and the eye, which is 11.7's.
 
 Any member may be null, and every call site has to handle "no body" (`elysium.NpcBodies 0`,
 `elysium.BrushBodies 0`), so null-service is the existing A/B path formalised.
@@ -610,7 +619,7 @@ roadmap task or a new P11 one.
 
 | # | Gap | Consequence today | Owner |
 |---|---|---|---|
-| 1 | player is not an entity | no sheet mutation, no damage, no inventory, no real activator, no player save | **11.4** |
+| 1 | ~~player is not an entity~~ | closed by **11.4**: the chain, the record, the pawn demoted to a body. Sheet mutation, damage/death and `!activator` are real; inventory is 9.8's and the save 11.9's | **11.4** |
 | 2 | legacy `DefaultInput.ini` bindings | nothing is rebindable, no gamepad, Esc does not pause, dev keys collide with player keys | 10.6 |
 | 3 | movement is stock CMC on a capsule | not VtMB's feel; step semantics differ; no baseline to A/B against | 4.7 (+ **11.6** box pawn) |
 | 4 | no chargen | New Game mocks Tremere male; clan-gated content untestable | 9.4 |
@@ -620,7 +629,7 @@ roadmap task or a new P11 one.
 | 8 | no camera modes | `togglecamera` unbound and unimplemented; scripted cameras have no channel | **11.7** |
 | 9 | three input-mode owners | modal screens fight over the mouse; Cog can make the game unclickable | **11.5** |
 | 10 | ~~no loading screen~~ | closed by **11.3** for the level-load flush; the map actor's build pass after it is 10.4's | **11.3** |
-| 11 | no death / game-over path | closed by **11.3** as a *state*: `GameOver` holds the world and raises its screen, reachable by `elysium.gameover`. Nothing drives it yet — the combat character's death path and the masquerade meter are 11.4 / 9.4 | **11.3** + 9.4 |
+| 11 | ~~no death / game-over path~~ | closed: **11.3** made `GameOver` a state, **11.4** gave it its driver — the player entity's health running out reaches `NotifyPlayerKilled` → `TriggerGameOver(Killed)`. The masquerade meter is the second loss condition, still 9.4's | **11.3** + **11.4** + 9.4 |
 | 12 | dialogue line audio unwired | `PlayDialogFile` (41 calls) silent though decode is done | 9.2 |
 | 13 | no `logic_choreographed_scene` | the theatre act cannot run, so the story chain is short-circuited | **12.1** (P12 = PP2) |
 | 14 | no items/containers/barter | 853 script calls fail closed | 9.8 |
@@ -651,11 +660,13 @@ calls as one dated `decisions.md` entry — was recorded 2026-07-26 (cont. 4) an
    menu. *Observable:* `Elysium.Substrate.AppState`, and in the built game Esc pauses, the menu holds
    the world, quit-to-menu returns to the backdrop with the session cleared, and travel shows a
    loading screen.
-4. **11.4 The player entity** — `FElysiumAnimating` + `FElysiumCombatCharacter` chain nodes,
-   `FElysiumPlayer`, `FElysiumPlayerRecord` with hydrate/dehydrate, the pawn demoted to a body,
-   `FindPlayer()`/`pc` returning an `Entity`, `vampire.Player` retired. *Observable:*
-   `pc.MoneyAdd(50)` and `ent_fire !player HumanityAdd -1` both land on the same field; `!activator`
-   resolves on a trigger the player walks into.
+4. **11.4 The player entity** *(landed)* — `FElysiumAnimating` + `FElysiumCombatCharacter` chain
+   nodes, `FElysiumPlayer` under the targetname `!player`, `FElysiumPlayerRecord` with
+   hydrate-at-map-build / dehydrate-at-teardown, the pawn demoted to a body, `FindPlayer()`/`pc`
+   returning an `Entity`, `vampire.Player` retired, `FElysiumNpc` re-based onto the same nodes.
+   *Observable:* `Elysium.Substrate.PlayerEntity`, and in the built game `pc.MoneyAdd(50)` and
+   `ent_fire !player MoneyAdd 50` land on the same field, `point_teleport` moves the player through
+   `SetRuntimeOrigin`, and a `trigger_hurt` that empties the player's health ends the run.
 5. **11.5 Input scope stack** — `UElysiumInputSubsystem`; menus, dialogue, signs, cinematics, chargen
    and Cog all push scopes. *Observable:* opening any screen over any other restores exactly the mode
    it found, and Cog can never eat a menu click.
@@ -675,9 +686,8 @@ calls as one dated `decisions.md` entry — was recorded 2026-07-26 (cont. 4) an
     and time tools. *Observable:* `test.bat Play` walks the tutorial opening unassisted and fails
     loudly when a beat regresses.
 
-Steps 1–3 are independent of the rest and of each other, and all three have landed. Step 4 is the
-hinge: 9.4, 9.8, 9.9, 9.10 and 9.5 all sit on it, and every one of them built first would have to be
-re-based.
+Steps 1–4 have landed. Step 4 was the hinge: 9.4, 9.8, 9.9, 9.10 and 9.5 all sit on it, and every
+one of them built first would have had to be re-based.
 
 ## 16. Owner calls — decided
 

@@ -1,7 +1,10 @@
 #include "ElysiumPlayerController.h"
 
 #include "ElysiumCheatManager.h"
+#include "ElysiumEntityWorld.h"
 #include "ElysiumGameFlowSubsystem.h"
+#include "ElysiumMapActor.h"
+#include "ElysiumMapSubsystem.h"
 
 #include "Components/InputComponent.h"
 #include "Engine/GameInstance.h"
@@ -31,6 +34,14 @@ void AElysiumPlayerController::SetupInputComponent()
 	// Without this the key is dead exactly when it is needed most: the pause menu holds the world
 	// through engine pause, and a paused world stops delivering input bindings.
 	Binding.bExecuteWhenPaused = true;
+
+	// The three world verbs that used to sit on the pawn (11.4). `Use` and `ToggleSky` are named
+	// actions in the legacy mapping set; the primary click is bound to its key directly, because
+	// `DefaultInput.ini` has no primary-fire mapping and every VtMB popup instructs "left-click to
+	// continue" — the binding is the panel's, not a weapon's.
+	InputComponent->BindAction(TEXT("Use"), IE_Pressed, this, &AElysiumPlayerController::OnUsePressed);
+	InputComponent->BindAction(TEXT("ToggleSky"), IE_Pressed, this, &AElysiumPlayerController::OnToggleSky);
+	InputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &AElysiumPlayerController::OnPrimaryClick);
 }
 
 void AElysiumPlayerController::OnPauseKey()
@@ -44,4 +55,51 @@ void AElysiumPlayerController::OnPauseKey()
 			Flow->TogglePause();
 		}
 	}
+}
+
+void AElysiumPlayerController::OnUsePressed()
+{
+	// E doubles as noclip-ascend, but the pawn's vertical strafe only acts while noclipping, so in
+	// normal play E is the use key. PlayerUse no-ops when the look-cursor is on nothing.
+	if (FElysiumEntityWorld* World = CurrentEntityWorld())
+	{
+		World->PlayerUse();
+	}
+}
+
+void AElysiumPlayerController::OnPrimaryClick()
+{
+	// Only meaningful while a sign is up; the world no-ops otherwise. MinShowTime holds the panel
+	// briefly so a click already in flight when it opened cannot skip it (CSignUI's Rules block).
+	if (FElysiumEntityWorld* World = CurrentEntityWorld())
+	{
+		World->PlayerDismissSign();
+	}
+}
+
+void AElysiumPlayerController::OnToggleSky()
+{
+	if (AElysiumMapActor* Map = CurrentMap())
+	{
+		Map->ToggleSkybox();
+	}
+}
+
+AElysiumMapActor* AElysiumPlayerController::CurrentMap() const
+{
+	if (AElysiumMapActor* Cached = CachedMap.Get())
+	{
+		return Cached;
+	}
+	const UGameInstance* GI = GetGameInstance();
+	const UElysiumMapSubsystem* Maps = GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
+	AElysiumMapActor* Map = Maps ? Maps->GetCurrentMap() : nullptr;
+	CachedMap = Map;
+	return Map;
+}
+
+FElysiumEntityWorld* AElysiumPlayerController::CurrentEntityWorld() const
+{
+	AElysiumMapActor* Map = CurrentMap();
+	return Map ? Map->GetEntityWorld() : nullptr;
 }

@@ -19,6 +19,7 @@
 #include "ElysiumNpcAnimSubsystem.h"
 #include "ElysiumNpcVisual.h"
 #include "ElysiumObjModel.h"
+#include "ElysiumPawn.h"
 #include "ElysiumPropSkins.h"
 #include "ElysiumReflections.h"
 #include "ElysiumRopes.h"
@@ -374,6 +375,14 @@ void AElysiumMapActor::EnsureTickPrerequisites()
 	{
 		Move->PrimaryComponentTick.AddPrerequisite(this, PrimaryActorTick);
 		PrereqMovement = Move;
+
+		// 11.4 — tell the body which entity it embodies. Done here rather than at SpawnPlayer
+		// because a fresh world has no pawn yet when the map builds, and this already runs each
+		// gameplay tick until the pawn appears (and again if it is replaced).
+		if (AElysiumPawn* Body = Cast<AElysiumPawn>(PC->GetPawn()))
+		{
+			Body->SetPlayerEntity(EntityWorld ? EntityWorld->PlayerHandle() : FElysiumEntityHandle::Invalid());
+		}
 	}
 }
 
@@ -552,6 +561,16 @@ void AElysiumMapActor::LoadMap()
 				EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState, Services);
 				EntityWorld->Load(MoveTemp(EntDefs));
 				BrushBodyCount = EntityWorld->NumBrushBodies();
+
+				// 11.4 (S3) — the player is an entity, created here because the map is where a
+				// player exists at all: a backdrop seats no pawn, so it gets no player entity and
+				// everything that looks for one handles its absence. Created after the spawn pass
+				// and before the first tick, so `!player` resolves for the map's own logic_auto
+				// ignition; it hydrates from the session record the previous map dehydrated into.
+				if (!bMenuBackdrop)
+				{
+					EntityWorld->SpawnPlayer();
+				}
 			}
 			else
 			{

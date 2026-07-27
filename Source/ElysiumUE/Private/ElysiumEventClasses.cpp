@@ -26,6 +26,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumPlayer.h"
 
 #include <type_traits>
 
@@ -98,8 +99,20 @@ public:
 	void InputEnableOutputs()  { bEnabled = true; }
 	void InputDisableOutputs() { bEnabled = false; }
 
-	void InputMakePlayerUnkillable() { bUnkillable = true;  Note(TEXT("MakePlayerUnkillable")); }
-	void InputMakePlayerKillable()   { bUnkillable = false; Note(TEXT("MakePlayerKillable")); }
+	// The latch is the damage system's gate, and since 11.4 the damage system is the player entity's
+	// — so the write lands there. The copy kept here is what the inspector shows and what a second
+	// events_player on the same map would report; the player's own copy is the one that decides.
+	void InputMakePlayerUnkillable() { SetPlayerUnkillable(true);  Note(TEXT("MakePlayerUnkillable")); }
+	void InputMakePlayerKillable()   { SetPlayerUnkillable(false); Note(TEXT("MakePlayerKillable")); }
+
+	void SetPlayerUnkillable(bool bValue)
+	{
+		bUnkillable = bValue;
+		if (FElysiumPlayer* Player = World ? World->FindPlayer() : nullptr)
+		{
+			Player->SetUnkillable(bValue);
+		}
+	}
 
 	void InputImmobilizePlayer() { bImmobilized = true;  Note(TEXT("ImmobilizePlayer")); }
 	void InputMobilizePlayer()   { bImmobilized = false; Note(TEXT("MobilizePlayer")); }

@@ -86,7 +86,7 @@ it waits. Three standing rules:
 
 | Rung | Delivers | Tasks (in order) |
 |---|---|---|
-| **PP0 — the core refactor** | the spine: one clock/frame, world services, app states + pause, the player entity, input scopes, commands + user command, the view seam, the play harness | 11.4, 11.5, 11.6, 11.8, 11.10 *(11.0, 11.1, 11.2, 11.3 [x])* |
+| **PP0 — the core refactor** | the spine: one clock/frame, world services, app states + pause, the player entity, input scopes, commands + user command, the view seam, the play harness | 11.5, 11.6, 11.8, 11.10 *(11.0, 11.1, 11.2, 11.3, 11.4 [x])* |
 | **PP1 — New Game & genesis** | chargen for real: clan, **name**, sex, spends — onto the player entity, Python-readable; `sp_genesisdevice_1` played, not skipped | 9.4 (+ `sp_genesisdevice_1` export/bake), 9.7d, 8.6's New Game click path |
 | **PP2 — the theatre cinematic** | the intro plays start to finish: choreography, scripted camera, line audio, subtitles, **eyes and lipsync — all block** (cont. 5) | 11.7, 12.1–12.5 (+ `sp_theatre` export/bake) |
 | **PP3 — land the tutorial** | the chain hands the player to Jack; the first conversation runs with sound and reactions | 9.2, 9.9 |
@@ -106,11 +106,14 @@ work.)*
 The open tasks whose dependencies are met, in the order they pay off. Regenerable from the
 deps below — refresh it whenever a task flips:
 
-1. **11.4 (the player entity), the hinge** *(11.0, 11.2 [x]; the three independent structural
-   steps 11.1–11.3 are all landed)*: 9.4, 9.5, 9.8, 9.9 and 9.10 all sit on it, and each one
-   built against today's `FElysiumPlayerSheet` shim is a migration later.
-2. **11.5 → 11.6 → 11.8 → 11.10** — close PP0: scopes, commands + user command, the view seam,
-   the play harness. 11.5's dep (11.3) is met, so it can start in parallel with 11.4.
+1. **11.5 → 11.6 → 11.8 → 11.10** — close PP0: scopes, commands + user command, the view seam,
+   the play harness. Every dep is met. 11.6 also inherits the three verbs 11.4 parked on
+   `AElysiumPlayerController` (+use, sign dismissal, the skybox toggle) and the gait latch.
+2. **9.4 / 9.8 / 9.9 / 9.10 / 9.5** — the five systems the hinge unblocked. They now land *on*
+   `FElysiumCombatCharacter` and `FElysiumPlayerRecord`: 9.4 turns the sheet's dynamic bag into
+   registered fields and gives health a real derivation, 9.10 finishes the economy over the
+   `money` field that already exists, 9.8 fills the record's inventory half, and 9.5 (= 11.9)
+   walks the chain.
 3. **9.7d** — land `OneOfSet` and the shadowed-name split: 589 dialogue gates currently fail
    closed, the fix needs no backing system, and PP3's dialogue depends on those gates.
 
@@ -685,7 +688,7 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   + `Elysium.Content.ScriptedSequenceClips` (106 sequences, 88/88 animation refs resolve); in-game,
   `script_7b.BeginSequence` places Jack on his mark 187 m away and its `OnEndSequence` opens his
   dialogue. As-built: `roadmap-archive.md` 8.5. *Deps:* 8.2, PL4 [x].
-- [x] **8.6a New Game context + story entry** *(carve-out of 8.6)* — `FElysiumPlayerSheet` +
+- [x] **8.6a New Game context + story entry** *(carve-out of 8.6)* — the player sheet +
   `UElysiumGameStateSubsystem::BeginNewGame` seed the fresh-story state (`Story_State=-4`,
   `Tut_Jack=0`, `Tut_Patch=0`, `Linux_Wine=1`) and travel to **`sp_tutorial_1` @ the `tutorial`
   landmark** through the 4.6 path. `-ElysiumMap` keeps the bare dev path; `-ElysiumNewGame=0` A/Bs.
@@ -929,9 +932,11 @@ draw on the same stack; NPCs stand in the world at their entity origins.
   (`AwardExperience` 77 / `HumanityAdd` 69 / `CalcFeat` 53 / `ChangeMasqueradeLevel` 44 /
   `Bloodloss` / `BumpStat` / `GetMasqueradeLevel`), the counters are INTEGER datamap inputs on the
   combat character, and **`AwardExperience` takes a STRING** — it names an experience-table entry,
-  so it cannot be modelled as an integer add (`script_api.md`). The sheet's home is
-  `FElysiumCombatCharacter` (live) + `FElysiumPlayerRecord` (durable), **not** today's
-  `FElysiumPlayerSheet` shim — target the new one directly (`runtime-architecture.md` §5).
+  so it cannot be modelled as an integer add (`script_api.md`). The sheet's home already exists
+  (11.4): `FElysiumSheet` on `FElysiumCombatCharacter` (live) + `FElysiumPlayerRecord` (durable).
+  What 9.4 adds is the loaded data — and it turns the names VtMB's own datamap carries into
+  registered fields, shrinking `GetDynamicField`'s bag as it goes. Health is part of that: its
+  ceiling is the stated interim `ElysiumInterimPlayerMaxHealth` until Stamina derives it.
   Chargen lands here too — clan, **name**, sex, history, attribute/ability/discipline spends —
   as the screen behind `ccmd.createplayer` (a registered 11.6 command) that VtMB's own
   `sp_genesisdevice_1` already fires (`game_runtime.md` §4); `sp_genesisdevice_1` joins the
@@ -1059,8 +1064,8 @@ session, and the seams. It exists because the slice ladder now reaches "boot a N
 and that is the one thing no current doc owns. Its rules are **S1–S10** (`runtime-architecture.md`
 §13), orthogonal to `engine-core.md`'s R1–R8.
 
-Steps are ordered so each compiles, ships and is observable alone. **11.4 is the hinge** — 9.4, 9.5,
-9.8, 9.9 and 9.10 all sit on it.
+Steps are ordered so each compiles, ships and is observable alone. **11.4 was the hinge** — 9.4, 9.5,
+9.8, 9.9 and 9.10 all sit on it, and it landed before any of them.
 
 - [x] **11.0 Adopt the spine** — all seven `runtime-architecture.md` §16 owner calls recorded as
   one dated entry (`decisions.md` 2026-07-26 cont. 4), with the amendments from a four-way
@@ -1109,16 +1114,27 @@ Steps are ordered so each compiles, ships and is observable alone. **11.4 is the
   screen (`LogMoviePlayer` PlayMovie→PostLoadMap), boot is decided once at GI init.
   `Elysium.Substrate.AppState` asserts the whole transition table. As-built:
   `roadmap-archive.md`. *Deps:* 11.1, 8.6.
-- [ ] **11.4 The player entity** *(S3 — the hinge)* — `FElysiumAnimating` + `FElysiumCombatCharacter`
-  as real registry chain nodes matching VtMB's datamap chain, `FElysiumPlayer` under them, and
-  `FElysiumPlayerRecord` (session lifetime) with hydrate-at-map-build / dehydrate-at-travel. The pawn
-  demotes to a body (no `+use` routing, no sign dismissal, no key polling, no
-  GI→Map→Actor→World chains). `FindPlayer()` and `pc` return an ordinary `Entity`; `vampire.Player`
-  retires; the 25 `CBaseCombatCharacter` + 11 player datamap inputs register on the chain
-  (`script_api.md`), fail-closed until their systems land. *Acceptance:* `pc.MoneyAdd(50)` and
-  `elysium.ent_fire !player MoneyAdd 50` land on the same field through the same R2 walk; a trigger
-  the player walks into resolves `!activator` to a real handle; `point_teleport` moves the player
-  through `SetRuntimeOrigin` like any other entity. *Deps:* 11.0 (call A), 11.2.
+- [x] **11.4 The player entity** *(S3 — the hinge)* — `FElysiumAnimating` + `FElysiumCombatCharacter`
+  as real registry chain nodes matching VtMB's datamap chain, `FElysiumPlayer` under them (classname
+  `player`, targetname **`!player`** — which is what the maps themselves write, so 48 of the 49
+  `point_teleport.target` keys became ordinary name resolves), and `FElysiumPlayerRecord` (session
+  lifetime, on `UElysiumGameStateSubsystem`) hydrating at map build and dehydrating at world
+  teardown. `FElysiumNpc` re-based onto the same two nodes, losing its duplicated body/animation
+  half. The pawn demoted to a body: `+use`, sign dismissal and the skybox toggle moved to
+  `AElysiumPlayerController`, the shift-gait poll became a `+speed`/`-speed` latch, and it now
+  carries the handle of the entity it embodies. `FindPlayer()` and `pc` return an ordinary `Entity`
+  (re-bound per eval, since a handle is generation-checked); **`vampire.Player` is retired**; the 25
+  `CBaseCombatCharacter` + the 10 recovered player inputs register on the chain, eight of them
+  backed by real fields and the rest logging their owning task. A `GetDynamicField` hook carries the
+  `vdata` half of the sheet (`pc.base_*`) in both hosts until 9.4 names those fields. **The death
+  path is now 11.3's missing game-over driver.** *Acceptance met:* on `sp_tutorial_1`,
+  `pc.MoneyAdd(50)` and `elysium.ent_fire !player MoneyAdd 50` both land on `money` (0→50→100)
+  through the same R2 walk; a trigger the player walks into resolves `!activator` to a real handle;
+  `elysium.ent_fire teleport_player Teleport` moves the player through `SetRuntimeOrigin`; the map's
+  own `logic_auto` `GiveItem` wires at the player resolve instead of dropping; `trigger_hurt` drains
+  the entity's `health` to 0 and the run ends in `GameOver`; money survives a travel and
+  quit-to-menu clears the record. `Elysium.Substrate.PlayerEntity` asserts the whole shape headless.
+  As-built: `roadmap-archive.md`. *Deps:* 11.0 (call A), 11.2.
 - [ ] **11.5 Input scope stack** *(S6)* — `UElysiumInputSubsystem` (LocalPlayer) owning a priority
   stack of `FElysiumInputScope` (mode, cursor, mapping contexts, pauses-game); menus, dialogue, signs,
   cinematics, chargen and Cog all push/pop instead of setting `FInputMode*` — retiring the three
@@ -1343,7 +1359,7 @@ extraction"; durable format/behaviour facts fold into the owning topic docs
 | Modern UI loses VtMB's voice (reads generic/AAA) | the remaster stops feeling like VtMB | 8.6 keeps the original's structure, palette and iconography and re-skins only the craft; presentation test applied per screen; `m0_menu_build.md` + extracted `.res`/scheme (PL8) are the intent reference every screen is checked against |
 | "Polish" leaks into the logic layer | silent divergence from retail behaviour, unfindable later | `remaster-direction.md`'s governing rule: RE first, owner's call, dated decision-log entry recording faithful *and* chosen behaviour; default is reproduce, and layer assignment happens before the work, not after |
 | No classic-UI mode to A/B against | a UI regression has no reference | the original's structure is captured as data (PL8) and in `m0_menu_build.md`, so screens are checked against intent rather than pixels; the *world* keeps its faithful A/B path unchanged |
-| The player stays a pawn + a sheet struct while 9.4/9.8/9.9/9.10/9.5 land on it | five systems built against a shim, then a five-way migration with saves already in the wild | 11.4 is sequenced ahead of all five and named the hinge in "Now"; the target shape is VtMB's own (`savegame_format.md`, `script_api.md`), so it is a port, not an invention |
+| ~~The player stays a pawn + a sheet struct while 9.4/9.8/9.9/9.10/9.5 land on it~~ **(resolved)** | five systems built against a shim, then a five-way migration with saves already in the wild | **11.4 landed ahead of all five**: the sheet is on `FElysiumCombatCharacter`, the durable half is `FElysiumPlayerRecord`, and the shape is VtMB's own (`savegame_format.md`, `script_api.md`) — a port, not an invention |
 | Modal screens fight over input mode (three independent owners today) | the mouse is unusable in some screen order; Cog can make the game unclickable | 11.5's single arbiter + a Substrate test asserting the scope stack balances across every transition |
 | P12's facial RE was unknown-duration work that **blocks PP2 in full** (owner call: eyes + lipsync gate the cinematic) | the playable path stalls behind RE | **Retired as a risk — front-loading worked on both halves.** RE19 closed the scene format, event semantics and completion contract; PL9 mirrored the 5,444 scenes + 7,136 `.lip`; **RE20 closed the face** — the flex chunks, both vertex-animation encodings, the `.lip` grammar and the phoneme tables, validated across 3.3 M records with zero failures (`docs/facial_animation.md`). Only PL10 (a mechanical bake) is left in "Now". The residual is a *scope* question, not an RE one: no eyeball data was ever authored, so 12.4's look-at half is an owner call, tracked on the task |
 | A shots baseline silently invalidates across a re-bake or content rebuild (measured: up to ~10 mean on bounce-dominated vantages from **byte-identical** inputs) | a look regression hides in toolchain noise — or toolchain noise reads as a regression | B6's measured rule: re-baseline after any bake/content change; A/B a small effect as two runs over one fixed asset set (a cvar A/B), never across a rebuild |

@@ -13,6 +13,7 @@
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPawn.h"
+#include "ElysiumPlayer.h"
 #include "ElysiumScreenshot.h"
 #include "ElysiumSoundScheme.h"
 #include "ElysiumVariant.h"
@@ -619,7 +620,7 @@ namespace ElysiumMcpImpl
 					Body->SetBoolField(TEXT("ok"), Flow->NewGame(Request));
 					Body->SetStringField(TEXT("app_state"), ElysiumAppState::Name(Flow->AppState()));
 					Body->SetNumberField(TEXT("clan"), Clan);
-					Body->SetStringField(TEXT("clan_name"), FElysiumPlayerSheet::ClanName(Clan));
+					Body->SetStringField(TEXT("clan_name"), FElysiumSheet::ClanName(Clan));
 					AddTravelOutcome(Body, Maps);
 					return Structured(Body);
 				}));
@@ -671,6 +672,21 @@ namespace ElysiumMcpImpl
 						Body->SetStringField(TEXT("aimed_usable"),
 							Aimed.IsSet() ? World->DescribeHandle(Aimed) : FString());
 						Body->SetNumberField(TEXT("game_time"), World->NowSeconds());
+
+						// 11.4 — the pawn above is the body; the state is the entity's.
+						if (const FElysiumPlayer* Player = World->FindPlayer())
+						{
+							TSharedRef<FJsonObject> Ent = Obj();
+							Ent->SetStringField(TEXT("handle"), World->DescribeHandle(Player->Handle));
+							Ent->SetNumberField(TEXT("health"), Player->Health);
+							Ent->SetNumberField(TEXT("max_health"), Player->MaxHealth);
+							Ent->SetBoolField(TEXT("unkillable"), Player->IsUnkillable());
+							Ent->SetNumberField(TEXT("money"), Player->Money);
+							Ent->SetNumberField(TEXT("blood"), Player->BloodPool);
+							Ent->SetNumberField(TEXT("humanity"), Player->Humanity);
+							Ent->SetNumberField(TEXT("masquerade"), Player->Masquerade);
+							Body->SetObjectField(TEXT("entity"), Ent);
+						}
 					}
 					return Structured(Body);
 				}));
@@ -1210,10 +1226,10 @@ namespace ElysiumMcpImpl
 						Quests->SetNumberField(Pair.Key, Pair.Value);
 					}
 
-					const FElysiumPlayerSheet& Sheet = State->PlayerSheet();
+					const FElysiumSheet& Sheet = State->PlayerSheet();
 					TSharedRef<FJsonObject> Player = Obj();
 					Player->SetNumberField(TEXT("clan"), Sheet.Clan);
-					Player->SetStringField(TEXT("clan_name"), FElysiumPlayerSheet::ClanName(Sheet.Clan));
+					Player->SetStringField(TEXT("clan_name"), FElysiumSheet::ClanName(Sheet.Clan));
 					Player->SetBoolField(TEXT("male"), Sheet.bMale);
 					TSharedRef<FJsonObject> Stats = Obj();
 					for (const TPair<FName, int32>& Pair : Sheet.Stats)

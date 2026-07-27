@@ -6,6 +6,34 @@ trigger. A behavioural divergence from retail lands here carrying both the faith
 chosen behaviour (`remaster-direction.md`'s governing rule). Entries are never rewritten —
 append a correction as a new entry.
 
+- **2026-07-26 (cont. 7)** — **Three implementation calls taken while building the player entity
+  (roadmap 11.4).** Owner call. Call (A) of cont. 4 said *what* to build; these are the three
+  choices inside it that a later reader could reasonably have made differently.
+
+  **(1) The player's health ceiling is a stated interim constant, not a recovered value.**
+  Faithful: VtMB derives the player's health track from Stamina through `vdata/system`, which 9.4
+  loads. Chosen: `ElysiumInterimPlayerMaxHealth = 100` until then. The alternative — leave health
+  unmodelled — would have left the death path unreachable and 11.3's `GameOver` state without the
+  driver it was explicitly waiting for, so the divergence buys a working loss condition and is one
+  constant to delete. A character with **no** health track (every NPC until 9.4 loads
+  `stattemplate`) records damage rather than dying, so the constant does not leak into NPCs.
+
+  **(2) The substrate reports the player's death through `UElysiumGameStateSubsystem`, not through
+  a fifth world service.** 11.2's rule is that the substrate reaches the engine only through
+  `FElysiumWorldServices`; the game-state subsystem is not part of that bundle but is an injected
+  collaborator the world already holds and already calls (the quest map, `G`, the script host).
+  "The run ended" is session state, not a map capability, so `NotifyPlayerKilled` lives there and
+  forwards to `UElysiumGameFlowSubsystem::TriggerGameOver`. A headless world with no game state
+  no-ops, which is the same null-service discipline.
+
+  **(3) The `vdata` half of the character sheet is reached by a dynamic-field hook, not by faking
+  datamap entries.** `pc.base_Celerity` has to read a number rather than bind a Character method,
+  and the registry's field table is a static list of names that cannot yet include ratings 9.4 has
+  not loaded. `FElysiumEntity::GetDynamicField`/`SetDynamicField` sit between the class-chain walk
+  and the Character-method fallback in **both** script hosts. It is explicitly a placeholder for
+  the part of VtMB's 277-field player datamap we have not enumerated: 9.4 shrinks the bag as it
+  turns those names into registered fields.
+
 - **2026-07-26 (cont. 6)** — **The world's *look* is baked offline into `.uasset`s; everything
   else stays runtime-built.** Owner call, adopting the architecture the two stacked spikes
   (`lumen-coverage-spike.md`, `uasset-bake-spike.md`) built and ran on. The spike's own terms were

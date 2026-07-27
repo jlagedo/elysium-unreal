@@ -15,6 +15,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoverSounds.h"
+#include "ElysiumPlayer.h"
 #include "ElysiumWorldServices.h"
 
 #include "Dom/JsonObject.h"
@@ -621,9 +622,15 @@ void FElysiumDoorBase::OnMoveBlocked(const FHitResult& Hit)
 	{
 		if (Dmg > 0)
 		{
-			if (IElysiumEmbodiment* Player = World ? World->Embodiment() : nullptr)
+			// 11.4 — the same two halves trigger_hurt uses: the entity owns the health, the body
+			// gets the engine damage event.
+			if (FElysiumPlayer* Player = World ? World->FindPlayer() : nullptr)
 			{
-				Player->DamagePlayer((float)Dmg);
+				Player->TakeDamage((float)Dmg);
+			}
+			if (IElysiumEmbodiment* PlayerBody = World ? World->Embodiment() : nullptr)
+			{
+				PlayerBody->DamagePlayer((float)Dmg);
 			}
 		}
 		static const FName OnBlockedClosing(TEXT("OnBlockedClosing"));

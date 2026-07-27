@@ -152,8 +152,10 @@ void UElysiumBrushComponent::RouteTouch(const AActor* Toucher, bool bBegin) cons
 	}
 	if (FElysiumEntityWorld* World = Map->GetEntityWorld())
 	{
-		// The player pawn is not yet an entity, so the activator is unresolved (Invalid). P1.6
-		// triggers filter by class/spawnflags and translate the touch into OnStartTouch/OnEndTouch.
-		World->RouteBrushTouch(OwningEntity, FElysiumEntityHandle::Invalid(), bBegin);
+		// 11.4 — the toucher resolves to the entity it embodies, so `!activator` on the wires a
+		// trigger fires is a real handle. The player pawn is the only toucher today; when NPC
+		// bodies move (8.5 locomotion) this becomes a lookup from the body to its owning entity.
+		const FElysiumEntityHandle Activator = World->PlayerHandle();
+		World->RouteBrushTouch(OwningEntity, Activator, bBegin);
 	}
 }

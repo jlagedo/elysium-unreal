@@ -25,10 +25,11 @@ typedef struct _object PyObject;
 // namespace, no second dispatch: `ent.ScriptHide()` in a script and the I/O wire
 // `OnTrigger -> ScriptHide` are the same lookup.
 //
-// The Character/player object is separate because there is no player entity yet (P8/P9): it is
-// backed by UElysiumGameStateSubsystem's FElysiumPlayerSheet, and its methods go through the
-// shared ElysiumScriptNatives surface — the same stubs, defaults, and call counters the expr
-// host reports, so an A/B host swap changes nothing but the interpreter.
+// There is no separate player object (11.4): `FindPlayer()` returns an `Entity` over the player
+// entity, so `pc.clan` is a field on its class chain and `pc.MoneyAdd(50)` is an input on it. A
+// name that is neither — the Character methods — still goes through the shared ElysiumScriptNatives
+// surface, with the same stubs, defaults and call counters the expr host reports, so an A/B host
+// swap changes nothing but the interpreter.
 namespace ElysiumPy
 {
 #if defined(ELYSIUM_WITH_CPYTHON) && ELYSIUM_WITH_CPYTHON
@@ -40,7 +41,7 @@ namespace ElysiumPy
 	FString FetchPyError();
 
 	// --- Types + module globals ---------------------------------------------------------------
-	// Ready the Entity / Player / bound-method types and add the 11 `vampire` module globals
+	// Ready the Entity / console / bound-method types and add the 11 `vampire` module globals
 	// (python_bridge.md's module table) to an already-created module. Idempotent per process.
 	bool InstallEntityBindings(PyObject* Module, FString& OutError);
 

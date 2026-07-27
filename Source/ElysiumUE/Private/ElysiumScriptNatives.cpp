@@ -2,6 +2,7 @@
 
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
+#include "ElysiumPlayer.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumNative, Log, All);
 
@@ -39,7 +40,7 @@ namespace
 		{ TEXT("WorldMap"),            true,  TEXT("stub") },
 		{ TEXT("SewerMap"),            true,  TEXT("stub") },
 		{ TEXT("SetQuest"),            true,  TEXT("quest map") },
-		{ TEXT("CurrentMoney"),        true,  TEXT("stub (no character sheet)") },
+		{ TEXT("CurrentMoney"),        true,  TEXT("the combat character's money field") },
 		{ TEXT("IsMale"),              true,  TEXT("player sheet") },
 		{ TEXT("SeductiveFeed"),       true,  TEXT("stub") },
 		{ TEXT("SetCamera"),           true,  TEXT("stub") },
@@ -70,7 +71,7 @@ namespace
 		}
 		if (Method == FName(TEXT("HasItem")) || Method == FName(TEXT("HasWeaponEquipped"))
 			|| Method == FName(TEXT("IsFollowerOf"))) { return FElysiumVariant::Bool(false); }
-		if (Method == FName(TEXT("AmmoCount")) || Method == FName(TEXT("CurrentMoney"))
+		if (Method == FName(TEXT("AmmoCount"))
 			|| Method == FName(TEXT("CalcFeat")) || Method == FName(TEXT("GetMasqueradeLevel"))
 			|| Method == FName(TEXT("DialogDiscipline"))) { return FElysiumVariant::Int(0); }
 		return FElysiumVariant::Void();
@@ -164,6 +165,17 @@ namespace ElysiumScriptNatives
 			Record(State, Method, Display, R, /*bStub*/ false);
 			return R;
 		}
+		// CurrentMoney reads the receiver's own money field (11.4 put it on the combat character,
+		// which is where VtMB has it and where MoneyAdd/MoneyRemove write). The rest of the economy
+		// — prices, barter, the HUD readout — is still 9.10's.
+		if (Method == FName(TEXT("CurrentMoney")))
+		{
+			const FElysiumEntity* E = World ? World->Resolve(Self) : nullptr;
+			const FElysiumCombatCharacter* Char = E ? E->AsCombatCharacter() : nullptr;
+			const FElysiumVariant R = FElysiumVariant::Int(Char ? Char->Money : 0);
+			Record(State, Method, Display, R, /*bStub*/ Char == nullptr);
+			return R;
+		}
 
 		// The animation half of the character surface (8.5). Both reach the receiver's body through
 		// FElysiumEntity's virtual seam, so the host needs no knowledge of the NPC leaf.
@@ -237,8 +249,8 @@ namespace ElysiumScriptNatives
 		{
 			const int32 Have = State ? State->PlayerSheet().Clan : 0;
 			const int32 Want = (Name == FName(TEXT("IsPCMalk")))
-				? FElysiumPlayerSheet::ClanFromName(TEXT("Malkavian"))
-				: (Args.Num() >= 2 ? FElysiumPlayerSheet::ClanFromName(Args.Last().ToString()) : 0);
+				? FElysiumSheet::ClanFromName(TEXT("Malkavian"))
+				: (Args.Num() >= 2 ? FElysiumSheet::ClanFromName(Args.Last().ToString()) : 0);
 			const FElysiumVariant Clan = FElysiumVariant::Bool(Want != 0 && Have == Want);
 			Record(State, Name, Display, Clan, /*bStub*/ false);
 			return Clan;

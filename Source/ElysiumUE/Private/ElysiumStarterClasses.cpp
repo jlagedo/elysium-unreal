@@ -13,6 +13,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumPlayer.h"
 #include "ElysiumWorldServices.h"
 
 #include <type_traits>
@@ -119,11 +120,10 @@ public:
 	virtual bool IsOnce() const { return false; }
 
 	// CBaseTrigger::PassesTriggerFilters (RE1, entity_io.md) reads the ALLOW_* spawnflag bits
-	// against the toucher's flags. In P1.6 the only toucher is the player (a client) and its
-	// activator is unresolved (the pawn is not an entity yet), so the test reduces to the
-	// ALLOW_CLIENTS bit: a client-allowing trigger fires, a physics-only (0x8, no 0x1) trigger
-	// correctly ignores the player. Grows the full flag/filter test when the pawn becomes an
-	// entity (P4) and NPC touchers exist.
+	// against the toucher's flags. The only toucher is still the player (a client), so the test
+	// reduces to the ALLOW_CLIENTS bit: a client-allowing trigger fires, a physics-only (0x8, no
+	// 0x1) trigger correctly ignores the player. The activator IS resolved now (11.4), so the
+	// remaining bits (NPCs, physics objects) grow the test when those touchers exist.
 	bool PlayerPasses() const { return (SpawnFlags & 0x1) != 0; }   // 0x1 = ALLOW_CLIENTS
 
 	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) override
@@ -229,9 +229,17 @@ private:
 
 	void HurtNow()
 	{
-		if (IElysiumEmbodiment* Player = World ? World->Embodiment() : nullptr)
+		// 11.4 — the damage receiver is the player *entity*: `health` is a CBaseEntity keyfield and
+		// the combat character owns what running out of it means. The body still gets the hit (the
+		// engine damage event a flinch/hit reaction will hang off, 4.9), but it is no longer where
+		// the number lives.
+		if (FElysiumPlayer* Player = World ? World->FindPlayer() : nullptr)
 		{
-			Player->DamagePlayer(Damage);
+			Player->TakeDamage(Damage);
+		}
+		if (IElysiumEmbodiment* PlayerBody = World ? World->Embodiment() : nullptr)
+		{
+			PlayerBody->DamagePlayer(Damage);
 		}
 	}
 
@@ -454,10 +462,13 @@ private:
 		// re-adds the offset to its same-named landmark (translation only; the player keeps their yaw).
 		FVector Offset = FVector::ZeroVector;
 		float   Yaw = 0.0f;
-		FVector PlayerLoc = FVector::ZeroVector;
-		if (const IElysiumEmbodiment* Player = World ? World->Embodiment() : nullptr;
-			Player && Player->GetPlayerOrigin(PlayerLoc, Yaw))
+		// 11.4 — the player's position is the player entity's, sampled from its body at the top of
+		// this frame like every other entity's origin. `angles` is Source-space, so the Unreal yaw
+		// the destination re-applies is the negated one.
+		if (const FElysiumPlayer* Player = World ? World->FindPlayer() : nullptr)
 		{
+			const FVector PlayerLoc = Player->Origin;
+			Yaw = -Player->Angles.Y;
 			if (const FElysiumEntity* Src = World->FindLandmark(LandmarkName))
 			{
 				if (Src->Def)

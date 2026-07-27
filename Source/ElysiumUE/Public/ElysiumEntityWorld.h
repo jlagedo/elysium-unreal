@@ -86,6 +86,23 @@ public:
 	FElysiumEntityHandle CreateRuntimeEntityNoSpawn(FElysiumEntityDef Def);
 	void CallEntitySpawn(FElysiumEntity& Ent);
 
+	// 11.4 — create this map's player entity (S3): an ordinary runtime entity of classname `player`,
+	// named `!player` so the 48 `point_teleport.target` keys the maps author resolve through the
+	// name index like any other targetname. Hydrated from the session record when a game state is
+	// attached. Call it once, after Load and before the first Tick; a second call is a no-op.
+	// A map built without a player (the menu backdrop, a headless logic test) simply never calls it,
+	// and every reader handles FindPlayer() being null — that is the same null-service discipline
+	// 11.2 established.
+	FElysiumEntityHandle SpawnPlayer();
+	// This world's player entity, or null when the map was built without one.
+	class FElysiumPlayer* FindPlayer() const;
+	FElysiumEntityHandle PlayerHandle() const { return Player; }
+	// Drop the player without touching the entity, so Teardown has nothing to dehydrate. What
+	// ending a session means: the run is over, and the dying world's numbers must not be written
+	// back into the record that was just cleared (travel is deferred, so the teardown lands after
+	// `EndSession` returns).
+	void ForgetPlayer() { Player = FElysiumEntityHandle::Invalid(); }
+
 	// 9.3 — VtMB's Entity.SetName: re-key the name index so the renamed entity is immediately findable
 	// under its new targetname (and no longer under the old). Empty names are handled (add/remove skip).
 	void RenameEntity(FElysiumEntity& Ent, const FString& NewName);
@@ -127,8 +144,8 @@ public:
 	// nearest usable, non-inert brush entity within arm's reach and arbitrates OnIn/OnOut as the aim
 	// enters/leaves it (fired through the entities, so a StartHidden→ScriptUnhide arm gates it for
 	// free); PlayerUse presses whatever the cursor is on. Driven from AElysiumMapActor::Tick and the
-	// pawn's E key. The full use-only channel + use-icon HUD are P4.4; this lands activation + OnIn/
-	// OnOut. Player is not an entity yet (P4-later), so the activator is Invalid, matching triggers.
+	// player controller's use key. `PlayerUse` presses with the player entity as the activator
+	// (11.4), the same handle a trigger touch carries.
 	void UpdateUseCursor();
 	void PlayerUse();
 	FElysiumEntityHandle GetAimedUsable() const { return AimedUsable; }
@@ -298,6 +315,9 @@ private:
 	TArray<TWeakObjectPtr<UPhysicsConstraintComponent>> Constraints;
 	int32 TouchBeginCount = 0;
 	int32 TouchEndCount = 0;
+
+	// 11.4 — this map's player entity (S3), or Invalid when the map was built without one.
+	FElysiumEntityHandle Player;
 
 	// The usable brush entity currently under the +use look-cursor (P4.2), or Invalid when the aim
 	// is off every usable body / out of reach. OnIn/OnOut fire on the transitions of this handle.

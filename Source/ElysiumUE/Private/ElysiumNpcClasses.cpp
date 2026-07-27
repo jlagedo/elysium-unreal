@@ -9,6 +9,13 @@
 // and begins/ends a dialog "session" that fires OnDialogBegin/OnDialogEnd. `npc_maker.Spawn`
 // synthesizes one child NPC at runtime.
 //
+// The leaf here is the **dialogue half only**. Its place in VtMB's chain is CAI_BaseNPC under
+// CBaseCombatCharacter under CBaseAnimating (11.4, `ElysiumPlayer.h`), and everything those two own
+// — the sheet and its 25 inputs, the WillTalk latch, `default_disposition`, the skeletal body,
+// playing a clip on it, following SetOrigin/SetModel, gating it on dormancy — arrives through the
+// chain, shared with the player. `elysium.NpcBodies` is the one thing that stays here: it is this
+// class's A/B, not the animating node's.
+//
 // Deliberately out of scope (8.5 / B4 / B6): all AI, scripted_sequence anim-at-marker, the +use talk
 // path (an NPC has no use-body yet — the porch trigger drives dialog directly), the real .dlg runner
 // (B4 replaces the manual EndDialog seam), and feeding (OnFedUpon*, B6). SpawnFrequency /
@@ -21,11 +28,10 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
+#include "ElysiumPlayer.h"
 #include "ElysiumWorldServices.h"
 
-#include "Components/SkeletalMeshComponent.h"
 #include "HAL/IConsoleManager.h"
-#include "Misc/Paths.h"
 
 #include <type_traits>
 
@@ -82,85 +88,19 @@ namespace
 // skeletal model at its origin and latches the dialog-gating inputs; dialogue itself is B4.
 // ============================================================================================
 
-class FElysiumNpc final : public FElysiumEntity
+class FElysiumNpc final : public FElysiumCombatCharacter
 {
 public:
-	bool  bWillTalk = false;          // WillTalk latch — the NPC will start dialog when engaged
 	bool  bUseInteresting = false;    // use_interesting — the NPC is a look/use target (seeded from the key)
 	bool  bInDialog = false;          // a dialog session is open (OnDialogBegin fired, OnDialogEnd pending)
 	int32 DialogFlags = 0;            // the StartPlayerDialogRemote param, kept for B4's runner
 	int32 TimesTalked = 0;            // times_talked — dialogue interaction count (engine-written; script-read)
 	FString StatTemplate;             // stattemplate — the RPG stat block name (data only in B3)
-	// default_disposition — the NPC's emotional stance toward the player (authored on 242 of the
-	// 243 `npc_*` entities across the exported maps; 239 of them `Neutral`). It selects the
-	// animation set the NPC idles in through `vdata/system/dispositiontable.txt` (8.5). Held as
-	// runtime state rather than a spawn-time constant because 9.9's `SetDisposition` — 2,510 calls,
-	// 2,467 of them a `.dlg` line's action — writes it mid-conversation.
-	FString Disposition;
 
-	// The standing skeletal body, or null (bodiless npc_* like npc_VCamera, elysium.NpcBodies 0, or a
-	// missing glb). Owned by the map actor; the world tears it down. This leaf only gates its visibility.
-	USkeletalMeshComponent* Visual = nullptr;
+	// The sheet, the WillTalk latch, `default_disposition`, the skeletal body and everything that
+	// plays a clip on it now come from the chain (11.4): FElysiumCombatCharacter over
+	// FElysiumAnimating, which is where VtMB puts them. This leaf is the dialogue half.
 
-	// SetAnimation(<clip>) — 21 script call sites, on props (`shelf.SetAnimation("showguns")`) and
-	// on NPCs (`E.SetAnimation("cower_idle")`). On an NPC it is a plain "play this named sequence",
-	// resolved through the manifest so a shared bank's clip plays as readily as one of its own.
-	// Loops: VtMB's SetAnimation sets the model's *current* sequence rather than firing a one-shot
-	// — the arguments the corpus passes are resting poses (`cower_idle`, `cower2_idle`, `dance0N`)
-	// that have to persist. A one-shot would freeze on its last frame instead.
-	void InputSetAnimation(const FElysiumInputArgs& Args) { PlayClip(Args.Param.ToString(), /*bLoop=*/true); }
-
-
-	// Play a named clip on this NPC's body. False when the name resolves nothing (logged by the
-	// resolver), so a caller can fall back. The seam SetAnimation, the SetGesture Character method
-	// and scripted_sequence's m_iszPlay all reach animation through.
-	virtual bool PlayAnimClip(const FString& ClipName, bool bLoop, float* OutSeconds) override
-	{
-		return PlayClip(ClipName, bLoop, OutSeconds);
-	}
-	virtual bool ResetAnimToIdle() override { return RefreshIdle(); }
-	virtual bool SetDispositionName(const FString& NewDisposition) override
-	{
-		SetDispositionFromScript(NewDisposition);
-		return true;
-	}
-
-	bool PlayClip(const FString& ClipName, bool bLoop, float* OutSeconds = nullptr)
-	{
-		IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
-		if (!Embodiment || !Visual || ClipName.IsEmpty())
-		{
-			return false;
-		}
-		return Embodiment->PlayNpcClip(Visual, FPaths::GetBaseFilename(Model).ToLower(), ClipName, bLoop, OutSeconds);
-	}
-
-	// Re-run the default-idle policy — what a disposition change means for the body. 9.9 owns the
-	// emotional-state half of SetDisposition; this is its animation half, and it is what makes the
-	// 2,467 `.dlg` column-4 SetDisposition actions visible.
-	bool RefreshIdle()
-	{
-		IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
-		if (!Embodiment || !Visual)
-		{
-			return false;
-		}
-		return Embodiment->RefreshNpcIdle(Visual, FPaths::GetBaseFilename(Model).ToLower(), Disposition,
-			FMath::Max(0, Handle.Index));
-	}
-
-	// The script-facing disposition write. Records the new stance and follows it on the body.
-	void SetDispositionFromScript(const FString& NewDisposition)
-	{
-		if (NewDisposition.IsEmpty() || Disposition.Equals(NewDisposition, ESearchCase::IgnoreCase))
-		{
-			return;
-		}
-		Disposition = NewDisposition;
-		RefreshIdle();
-	}
-
-	void InputWillTalk(const FElysiumInputArgs& Args)        { bWillTalk = Args.Param.ToInt() != 0; }
 	void InputUseInteresting(const FElysiumInputArgs& Args)  { bUseInteresting = Args.Param.ToInt() != 0; }
 
 	// StartPlayerDialogRemote opens a dialog session: fire OnDialogBegin, then run the NPC's `.dlg`
@@ -227,7 +167,7 @@ public:
 		const UElysiumGameStateSubsystem* GameState = World->GetGameState();
 		const bool bMale = GameState ? GameState->PlayerSheet().bMale : true;
 		const bool bMalk = GameState
-			&& GameState->PlayerSheet().Clan == FElysiumPlayerSheet::ClanFromName(TEXT("Malkavian"));
+			&& GameState->PlayerSheet().Clan == FElysiumSheet::ClanFromName(TEXT("Malkavian"));
 		const FElysiumEntityHandle Self = Handle;
 		FElysiumEntityWorld* W = World;
 
@@ -254,98 +194,32 @@ public:
 
 	virtual void Spawn() override
 	{
-		// Keyfields (model/angles/use_interesting/stattemplate) are already applied. Stand the body.
-		if (CVarNpcBodies.GetValueOnGameThread() == 0 || !World || Model.IsEmpty())
+		// Keyfields (model/angles/use_interesting/stattemplate) are already applied. Stand the body:
+		// out/npc/<stem>.glb, playing the standing idle `default_disposition` selects, spread across
+		// the three VtMB authors per disposition and seeded from this entity's own index — a cop that
+		// stood with its arms crossed must still be doing so after a reload. All of that is
+		// FElysiumAnimating's; the cvar is this leaf's A/B.
+		if (CVarNpcBodies.GetValueOnGameThread() == 0)
 		{
-			return;   // gated off, no world, or bodiless npc_* (e.g. npc_VCamera has no model)
+			return;   // gated off: a bodiless record whose I/O still resolves
 		}
-		IElysiumEmbodiment* Embodiment = World->Embodiment();
-		if (!Embodiment || !Def)
-		{
-			return;   // bare test world / no embodiment to build components on
-		}
-
-		// out/npc/<stem>.glb, stem = the model file's lowercased basename (verified 1:1 for every
-		// tutorial NPC — no manifest lookup needed).
-		const FString Stem = FPaths::GetBaseFilename(Model).ToLower();
-		// Source `angles` is [pitch yaw roll]; a standing NPC needs yaw only. The Source->Unreal Y
-		// reflection negates yaw (docs/rebuild-strategy.md); exact facing is cosmetic for B3.
-		const FRotator Rot(0.0f, -Angles.Y, 0.0f);
-
-		// Spread the cast across the three standing idles VtMB authors per disposition. Seeded from
-		// the entity's own index so it is stable across a reload and a save/restore — a cop that
-		// stood with its arms crossed must still be doing so after a load.
-		Visual = Embodiment->BuildNpcVisual(Stem, Def->Origin, Rot, Embodiment->BodyScaleFor(*Def), Disposition,
-			/*IdleVariant=*/FMath::Max(0, Handle.Index));
-		if (Visual)
-		{
-			World->RegisterNpcBody(Visual);
-			if (IsInert())
-			{
-				GateVisual();   // born hidden (start_hidden / a Spawn()-time Kill)
-			}
-		}
+		BuildBody();
 	}
 
-	// Mirror the whole-entity dormancy switch onto the body (R6): a ScriptHidden/dead NPC is undrawn.
-	virtual void OnDormancyChanged() override
-	{
-		FElysiumEntity::OnDormancyChanged();
-		GateVisual();
-	}
-
-	// SetOrigin/SetAngles: the skeletal body is Movable, so follow it (bradbury/cemetery/downtown warp
-	// and re-face NPCs). Source `angles` is [pitch yaw roll]; a standing NPC needs yaw, negated by the
-	// Source->Unreal Y reflection (matches the Spawn()-time facing).
-	virtual void OnRuntimeTransformChanged() override
-	{
-		FElysiumEntity::OnRuntimeTransformChanged();
-		if (Visual)
-		{
-			Visual->SetRelativeLocation(Origin);
-			Visual->SetRelativeRotation(FRotator(0.0f, -Angles.Y, 0.0f));
-		}
-	}
-
-	// SetModel: swap the NPC's appearance (bradbury Heather goth/normal, cemetery prostitute, downtown
-	// Nines). Tear the old body down and stand the new model at the same origin/facing — BuildNpcVisual
-	// caches meshes per stem, so a repeated swap is cheap.
+	// SetModel: swap the NPC's appearance (bradbury Heather goth/normal, cemetery prostitute,
+	// downtown Nines). The rebuild is FElysiumAnimating's; the A/B gate is this leaf's.
 	virtual void OnRuntimeModelChanged() override
 	{
-		if (!World)
+		if (CVarNpcBodies.GetValueOnGameThread() == 0)
 		{
 			return;
 		}
-		IElysiumEmbodiment* Embodiment = World->Embodiment();
-		if (!Embodiment)
-		{
-			return;   // bare test world — the logical Model field is still updated
-		}
-		if (Visual)
-		{
-			Visual->DestroyComponent();
-			Visual = nullptr;
-		}
-		if (CVarNpcBodies.GetValueOnGameThread() == 0 || Model.IsEmpty())
-		{
-			return;   // gated off or now modelless
-		}
-		const FString Stem = FPaths::GetBaseFilename(Model).ToLower();
-		Visual = Embodiment->BuildNpcVisual(Stem, Origin, FRotator(0.0f, -Angles.Y, 0.0f),
-			/*UniformScale=*/1.f, /*Disposition=*/FString(), /*IdleVariant=*/0);
-		if (Visual)
-		{
-			World->RegisterNpcBody(Visual);
-			if (IsInert())
-			{
-				GateVisual();
-			}
-		}
+		FElysiumAnimating::OnRuntimeModelChanged();
 	}
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
 	{
-		Out.Emplace(TEXT("WillTalk"), bWillTalk ? TEXT("yes") : TEXT("no"));
+		FElysiumCombatCharacter::GetDebugState(Out);
 		Out.Emplace(TEXT("UseInteresting"), bUseInteresting ? TEXT("yes") : TEXT("no"));
 		Out.Emplace(TEXT("In dialog"), bInDialog ? FString::Printf(TEXT("YES (flags %d)"), DialogFlags) : TEXT("no"));
 		Out.Emplace(TEXT("Times talked"), FString::FromInt(TimesTalked));
@@ -355,17 +229,6 @@ public:
 		}
 		Out.Emplace(TEXT("Model"), Model.IsEmpty() ? TEXT("(none)") : Model);
 		Out.Emplace(TEXT("Body"), Visual ? TEXT("skeletal (standing)") : TEXT("(none)"));
-	}
-
-private:
-	void GateVisual()
-	{
-		if (Visual)
-		{
-			const bool bShown = !IsInert();
-			Visual->SetVisibility(bShown);
-			Visual->SetComponentTickEnabled(bShown);   // pause the idle clip while hidden
-		}
 	}
 };
 
@@ -445,8 +308,9 @@ static TUniquePtr<FElysiumEntity> MakeNpcMaker() { return MakeUnique<FElysiumNpc
 
 static void BuildNpcClass(FElysiumClassDesc& D)
 {
-	D.Input(TEXT("WillTalk"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
-		{ static_cast<FElysiumNpc&>(E).InputWillTalk(Args); });
+	// `WillTalk` and `SetAnimation` are not here: they belong to CBaseCombatCharacter and
+	// CBaseAnimating, and the chain walk (R2) reaches them — which is the point of 11.4 giving the
+	// NPC the same two ancestors VtMB gives it.
 	D.Input(TEXT("UseInteresting"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumNpc&>(E).InputUseInteresting(Args); });
 	D.Input(TEXT("StartPlayerDialogRemote"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
@@ -459,12 +323,9 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 		{ static_cast<FElysiumNpc&>(E).InputStartDialog(Args); });
 	D.Input(TEXT("EndDialog"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumNpc&>(E).InputEndDialog(Args); });
-	D.Input(TEXT("SetAnimation"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
-		{ static_cast<FElysiumNpc&>(E).InputSetAnimation(Args); });
 
 	AddNpcField(D, TEXT("use_interesting"), &FElysiumNpc::bUseInteresting);
 	AddNpcField(D, TEXT("stattemplate"),    &FElysiumNpc::StatTemplate);
-	AddNpcField(D, TEXT("default_disposition"), &FElysiumNpc::Disposition);
 	// times_talked: santamonica/chinatown/e3/demo read `npc.times_talked` to branch first-vs-repeat
 	// dialogue. Register it read-only (engine-written, script-read) so the read resolves to a defined
 	// value instead of raising AttributeError. B4's dialogue runner drives the count; it stays 0 until then.
@@ -501,7 +362,9 @@ struct FElysiumNpcRegistrar
 		};
 		for (const TCHAR* Name : NpcClasses)
 		{
-			BuildNpcClass(Reg.Register(FName(Name), ElysiumBaseClassName(), &MakeNpc));
+			// CAI_BaseNPC's place in VtMB's chain: under CBaseCombatCharacter, which is under
+			// CBaseAnimating (11.4). The sheet, the counters and the body all arrive through it.
+			BuildNpcClass(Reg.Register(FName(Name), ElysiumCombatCharacterClassName(), &MakeNpc));
 		}
 
 		static const TCHAR* const MakerClasses[] = { TEXT("npc_maker"), TEXT("npc_maker_fleshpile") };

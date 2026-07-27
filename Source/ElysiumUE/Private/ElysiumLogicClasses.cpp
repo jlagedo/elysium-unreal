@@ -17,6 +17,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumPlayer.h"
 #include "ElysiumWorldServices.h"
 
 #include <type_traits>
@@ -535,35 +536,50 @@ private:
 
 // ============================================================================================
 // point_teleport — CPointTeleport (22 on the tutorial). Its Teleport input moves the entity named
-// by `target` (almost always !player) to this point's origin + `angles` facing. Reaches the pawn
-// through the world seam (the player is not an entity yet, P4-later).
+// by `target` — 48 of the 49 across the exported maps name `!player` — to this point's origin and
+// `angles` facing.
+//
+// 11.4 made that one path: `!player` is the player entity's real targetname, so it resolves through
+// the ordinary name index and the move is `SetRuntimeOrigin`/`SetRuntimeAngles`, exactly as it is
+// for an NPC or a brush. Whether the moved entity carries a pawn, a skeletal body or a brush body
+// is the entity's own business — the teleporter no longer knows.
 // ============================================================================================
 
 class FElysiumPointTeleport final : public FElysiumEntity
 {
 public:
-	void InputTeleport(const FElysiumInputArgs&)
+	void InputTeleport(const FElysiumInputArgs& Args)
 	{
 		const FVector DestOrigin = Def ? Def->Origin : FVector::ZeroVector;
-		// Source SetMovedir-style angles are (pitch, yaw, roll); the load transform reflects Y, so the
-		// Unreal facing yaw is the negated Source yaw (matches source_dir_to_unreal for a yaw-only turn).
-		const float Yaw = -Angles.Y;
-
 		const FString TgtName = Def ? Def->Keys.FindRef(TEXT("target")) : FString();
-		if (TgtName.IsEmpty() || TgtName.Equals(TEXT("!player"), ESearchCase::IgnoreCase) ||
-			TgtName.Equals(TEXT("!activator"), ESearchCase::IgnoreCase))
+
+		FElysiumEntity* Ent = nullptr;
+		if (!World)
 		{
-			TeleportPawn(DestOrigin, Yaw);
 			return;
 		}
-		// A named entity target: move its brush body, if it has one (logic/point ents can't be placed).
-		if (FElysiumEntity* Ent = World ? World->FindByName(TgtName) : nullptr)
+		if (TgtName.IsEmpty())
 		{
-			if (Ent->Body)
-			{
-				Ent->Body->SetWorldLocationAndRotation(DestOrigin, FRotator(0.0f, Yaw, 0.0f));
-			}
+			Ent = World->FindPlayer();   // an unset target is the player, as Source has it
 		}
+		else if (TgtName.Equals(TEXT("!activator"), ESearchCase::IgnoreCase))
+		{
+			Ent = World->Resolve(Args.Activator);
+		}
+		else
+		{
+			Ent = World->FindByName(TgtName);
+		}
+		if (!Ent)
+		{
+			return;
+		}
+
+		// The stored `angles` is Source-space [pitch yaw roll] like the destination's own; each
+		// body-follow hook negates the yaw on its way out (the Source->Unreal Y reflection), so the
+		// value written here is in the same space every entity's angles are.
+		Ent->SetRuntimeOrigin(DestOrigin);
+		Ent->SetRuntimeAngles(FVector(0.0f, Angles.Y, 0.0f));
 	}
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
@@ -571,17 +587,6 @@ public:
 		Out.Emplace(TEXT("Target"), Def ? Def->Keys.FindRef(TEXT("target")) : FString(TEXT("(none)")));
 		Out.Emplace(TEXT("Dest"), FString::Printf(TEXT("%s  yaw %.0f"),
 			*(Def ? Def->Origin : FVector::ZeroVector).ToString(), -Angles.Y));
-	}
-
-private:
-	void TeleportPawn(const FVector& DestOrigin, float Yaw)
-	{
-		// Source places the entity's absorigin (feet); the capsule compensation is the body's own
-		// geometry, so it lives in the embodiment, not here.
-		if (IElysiumEmbodiment* Player = World ? World->Embodiment() : nullptr)
-		{
-			Player->TeleportPlayer(DestOrigin, Yaw);
-		}
 	}
 };
 

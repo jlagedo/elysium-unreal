@@ -1,18 +1,16 @@
 #include "ElysiumPawn.h"
 
-#include "ElysiumEntityWorld.h"
-#include "ElysiumMapActor.h"
-#include "ElysiumMapSubsystem.h"
-
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
-#include "Engine/GameInstance.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "InputCoreTypes.h"
 
 AElysiumPawn::AElysiumPawn()
 {
-	PrimaryActorTick.bCanEverTick = true;
+	// Nothing to tick: the gait is a latch the bindings set, and the entity that holds the player's
+	// state is sampled by the entity world's own tick (11.4).
+	PrimaryActorTick.bCanEverTick = false;
 
 	// Source player hull ~ 32u wide x 72u tall -> radius 40.6cm, half-height 91.4cm.
 	GetCapsuleComponent()->InitCapsuleSize(40.6f, 91.4f);
@@ -60,32 +58,12 @@ void AElysiumPawn::BeginPlay()
 	}
 }
 
-void AElysiumPawn::Tick(float DeltaSeconds)
-{
-	Super::Tick(DeltaSeconds);
-
-	// Shift is the slow gait (run is default), matching VtMB's +speed binding.
-	bool bShift = false;
-	if (const APlayerController* PC = Cast<APlayerController>(GetController()))
-	{
-		bShift = PC->IsInputKeyDown(EKeys::LeftShift) || PC->IsInputKeyDown(EKeys::RightShift);
-	}
-
-	UCharacterMovementComponent* Move = GetCharacterMovement();
-	if (bNoclip)
-	{
-		Move->MaxFlySpeed = NoclipSpeed * (bShift ? NoclipBoost : 1.f);
-	}
-	else
-	{
-		Move->MaxWalkSpeed = bShift ? WalkSpeed : RunSpeed;
-	}
-}
-
 void AElysiumPawn::SetupPlayerInputComponent(UInputComponent* Input)
 {
 	Super::SetupPlayerInputComponent(Input);
 
+	// Movement only. +use, the sign dismissal and the skybox toggle are the player controller's
+	// (11.4) — a body does not decide what a key means.
 	Input->BindAxis(TEXT("MoveForward"), this, &AElysiumPawn::MoveForward);
 	Input->BindAxis(TEXT("MoveRight"), this, &AElysiumPawn::MoveRight);
 	Input->BindAxis(TEXT("MoveUp"), this, &AElysiumPawn::MoveUp);
@@ -95,50 +73,29 @@ void AElysiumPawn::SetupPlayerInputComponent(UInputComponent* Input)
 	Input->BindAction(TEXT("Jump"), IE_Pressed, this, &AElysiumPawn::OnJumpPressed);
 	Input->BindAction(TEXT("Jump"), IE_Released, this, &AElysiumPawn::OnJumpReleased);
 	Input->BindAction(TEXT("ToggleNoclip"), IE_Pressed, this, &AElysiumPawn::ToggleNoclip);
-	Input->BindAction(TEXT("ToggleSky"), IE_Pressed, this, &AElysiumPawn::ToggleSky);
-	Input->BindAction(TEXT("Use"), IE_Pressed, this, &AElysiumPawn::OnUsePressed);
-	// P4.10 — dismissing a sign/popup window. Bound to the key directly rather than through a named
-	// action: DefaultInput.ini has no primary-fire mapping, and every VtMB popup instructs
-	// "left-click to continue", so the binding is the panel's, not a weapon's.
-	Input->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &AElysiumPawn::OnPrimaryClick);
-}
 
-void AElysiumPawn::OnPrimaryClick()
-{
-	// Only meaningful while a sign is up; the world no-ops otherwise. MinShowTime holds the panel
-	// briefly so a click already in flight when it opened cannot skip it (CSignUI's Rules block).
-	if (UGameInstance* GI = GetGameInstance())
+	// VtMB's `+speed` / `-speed` pair. Bound to the keys directly (the legacy mapping set has no
+	// such action) so the gait is a latch rather than a per-frame IsInputKeyDown poll.
+	for (const FKey& Shift : { EKeys::LeftShift, EKeys::RightShift })
 	{
-		if (UElysiumMapSubsystem* Maps = GI->GetSubsystem<UElysiumMapSubsystem>())
-		{
-			if (AElysiumMapActor* Map = Maps->GetCurrentMap())
-			{
-				if (FElysiumEntityWorld* World = Map->GetEntityWorld())
-				{
-					World->PlayerDismissSign();
-				}
-			}
-		}
+		Input->BindKey(Shift, IE_Pressed, this, &AElysiumPawn::OnWalkPressed);
+		Input->BindKey(Shift, IE_Released, this, &AElysiumPawn::OnWalkReleased);
 	}
 }
 
-void AElysiumPawn::OnUsePressed()
+void AElysiumPawn::OnWalkPressed()  { bWalkGait = true;  ApplyGait(); }
+void AElysiumPawn::OnWalkReleased() { bWalkGait = false; ApplyGait(); }
+
+void AElysiumPawn::ApplyGait()
 {
-	// Route +use to the current map's entity world (P4.2). E doubles as noclip-ascend, but MoveUp
-	// only acts while noclipping, so in normal play E is the use key. PlayerUse no-ops when the
-	// look-cursor is on nothing.
-	if (UGameInstance* GI = GetGameInstance())
+	UCharacterMovementComponent* Move = GetCharacterMovement();
+	if (bNoclip)
 	{
-		if (UElysiumMapSubsystem* Maps = GI->GetSubsystem<UElysiumMapSubsystem>())
-		{
-			if (AElysiumMapActor* Map = Maps->GetCurrentMap())
-			{
-				if (FElysiumEntityWorld* World = Map->GetEntityWorld())
-				{
-					World->PlayerUse();
-				}
-			}
-		}
+		Move->MaxFlySpeed = NoclipSpeed * (bWalkGait ? NoclipBoost : 1.f);
+	}
+	else
+	{
+		Move->MaxWalkSpeed = bWalkGait ? WalkSpeed : RunSpeed;
 	}
 }
 
@@ -212,15 +169,5 @@ void AElysiumPawn::SetNoclip(bool bEnable)
 	SetActorEnableCollision(!bNoclip);
 	Move->SetMovementMode(bNoclip ? MOVE_Flying : MOVE_Walking);
 	Move->Velocity = FVector::ZeroVector;
-}
-
-void AElysiumPawn::ToggleSky()
-{
-	if (const UElysiumMapSubsystem* Maps = GetGameInstance()->GetSubsystem<UElysiumMapSubsystem>())
-	{
-		if (AElysiumMapActor* Map = Maps->GetCurrentMap())
-		{
-			Map->ToggleSkybox();
-		}
-	}
+	ApplyGait();   // the same latch means "walk" on the ground and "boost" in the air
 }

@@ -1,8 +1,11 @@
 #include "ElysiumGameStateSubsystem.h"
 
+#include "ElysiumEntityWorld.h"
 #include "ElysiumExpr.h"
+#include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
+#include "ElysiumPlayer.h"
 #include "ElysiumPythonVM.h"
 
 #include "Engine/GameInstance.h"
@@ -10,36 +13,36 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumState, Log, All);
 
-namespace
+// --- The player: live entity first, record second (11.4) -------------------------------------
+
+FElysiumPlayer* UElysiumGameStateSubsystem::PlayerEntity() const
 {
-	// Indexed by the level-script encoding pc.clan uses: 2 = Brujah … 8 = Ventrue.
-	const TCHAR* GClanNames[] = { TEXT("?"), TEXT("?"), TEXT("Brujah"), TEXT("Gangrel"),
-		TEXT("Malkavian"), TEXT("Nosferatu"), TEXT("Toreador"), TEXT("Tremere"), TEXT("Ventrue") };
-	constexpr int32 GClanMin = 2;
-	constexpr int32 GClanMax = 8;
+	FElysiumEntityWorld* World = CurrentEntityWorld();
+	return World ? World->FindPlayer() : nullptr;
 }
 
-const TCHAR* FElysiumPlayerSheet::ClanName(int32 Clan)
+const FElysiumSheet& UElysiumGameStateSubsystem::PlayerSheet() const
 {
-	return (Clan >= GClanMin && Clan <= GClanMax) ? GClanNames[Clan] : TEXT("(unset)");
+	const FElysiumPlayer* Player = PlayerEntity();
+	return Player ? Player->Sheet : Record.Sheet;
 }
 
-int32 FElysiumPlayerSheet::ClanFromName(const FString& Name)
+FElysiumSheet& UElysiumGameStateSubsystem::PlayerSheet()
 {
-	// A bare number is taken as the 2..8 encoding directly, so both forms work.
-	if (Name.IsNumeric())
+	FElysiumPlayer* Player = PlayerEntity();
+	return Player ? Player->Sheet : Record.Sheet;
+}
+
+void UElysiumGameStateSubsystem::NotifyPlayerKilled()
+{
+	UE_LOG(LogElysiumState, Display, TEXT("the player died — ending the run"));
+	if (UGameInstance* GI = GetGameInstance())
 	{
-		const int32 N = FCString::Atoi(*Name);
-		return (N >= GClanMin && N <= GClanMax) ? N : 0;
-	}
-	for (int32 i = GClanMin; i <= GClanMax; ++i)
-	{
-		if (Name.Equals(GClanNames[i], ESearchCase::IgnoreCase))
+		if (UElysiumGameFlowSubsystem* Flow = GI->GetSubsystem<UElysiumGameFlowSubsystem>())
 		{
-			return i;
+			Flow->TriggerGameOver(EElysiumGameOverReason::Killed);
 		}
 	}
-	return 0;
 }
 
 void UElysiumGameStateSubsystem::BeginNewGame(int32 Clan, bool bMale)
@@ -49,9 +52,15 @@ void UElysiumGameStateSubsystem::BeginNewGame(int32 Clan, bool bMale)
 	ClearAllGlobals();
 	Quests.Reset();
 
-	Sheet = FElysiumPlayerSheet{};
-	Sheet.Clan  = (Clan >= GClanMin && Clan <= GClanMax) ? Clan : 2;
-	Sheet.bMale = bMale;
+	Record.Reset();
+	Record.Sheet.Clan  = FElysiumSheet::IsValidClan(Clan) ? Clan : 2;
+	Record.Sheet.bMale = bMale;
+	// A live player entity would otherwise keep the previous run's numbers until the next map
+	// build; New Game is destructive by design, so re-seed it from the fresh record now.
+	if (FElysiumPlayer* Player = PlayerEntity())
+	{
+		Player->Hydrate(Record);
+	}
 
 	SetGlobalInt(TEXT("Story_State"), -4);
 	SetGlobalInt(TEXT("Tut_Jack"), 0);
@@ -60,18 +69,26 @@ void UElysiumGameStateSubsystem::BeginNewGame(int32 Clan, bool bMale)
 
 	UE_LOG(LogElysiumState, Display,
 		TEXT("new game: clan %d (%s), %s — Story_State=-4, Tut_Jack=0, Tut_Patch=0, Linux_Wine=1"),
-		Sheet.Clan, FElysiumPlayerSheet::ClanName(Sheet.Clan), Sheet.bMale ? TEXT("male") : TEXT("female"));
+		Record.Sheet.Clan, FElysiumSheet::ClanName(Record.Sheet.Clan),
+		Record.Sheet.bMale ? TEXT("male") : TEXT("female"));
 }
 
 void UElysiumGameStateSubsystem::EndSession()
 {
 	ClearAllGlobals();
 	Quests.Reset();
-	Sheet = FElysiumPlayerSheet{};
+	// Order matters: quit-to-menu asks for the travel first and the engine tears the old world down
+	// at the end of the frame, so without this the dying map's player would dehydrate back into the
+	// record cleared below.
+	if (FElysiumEntityWorld* World = CurrentEntityWorld())
+	{
+		World->ForgetPlayer();
+	}
+	Record.Reset();
 	// The clock is session time (`curtime`), so it rewinds with the run. ResetClock also clears any
 	// hold, scale and armed dev step, and re-stamps the engine side.
 	TimeCtl.ResetClock();
-	UE_LOG(LogElysiumState, Display, TEXT("session ended — G, quests, sheet and clock cleared"));
+	UE_LOG(LogElysiumState, Display, TEXT("session ended — G, quests, the player record and the clock cleared"));
 }
 
 void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection)

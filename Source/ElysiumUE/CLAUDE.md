@@ -90,7 +90,7 @@ live backdrop behind the menu is the feature) and **Boot is reachable from nowhe
 | `NotifyWorldReady(Mode)` | the game mode's one `BeginPlay` call. A pending load → `SpawnPendingMap` then `FrontEnd` (backdrop: seat the `elysium.MenuVantage` camera) or `Playing`; no pending load → this is the boot world, run the plan |
 | `NewGame(FElysiumNewGameRequest)` | clan/sex/history/spends + an `EntryPoint` (`story` \| `tutorial` \| `<map>[@<landmark>]`). The destination is checked against `ExportedMaps()` **before** `BeginNewGame` runs, because seeding is destructive. `elysium.SkipIntro` (default 1) rewrites `story` to the tutorial landmark until P12 lands the theatre act |
 | `LoadGame` / `SaveGame` | the seam every caller (menu, `trigger_autosave`, quicksave, MCP) goes through. Logged stubs until **11.9** |
-| `QuitToMenu()` | travel the backdrop map, then `UElysiumGameStateSubsystem::EndSession` (clear `G`, quests, sheet; rewind the clock) — the session record until 11.4/11.9 name it |
+| `QuitToMenu()` | travel the backdrop map, then `UElysiumGameStateSubsystem::EndSession` (clear `G`, quests, the player record; rewind the clock). `G` and the quest map join the record as save blocks at 11.9 |
 | `ReloadMap()` / `SetPaused` / `TogglePause` / `TriggerGameOver` | the rest of the surface; `OnAppStateChanged` is the delegate the UI and (at 11.5) the input scope stack listen on |
 
 **The screen is a pure function of the state** (`ApplyMenuForState`, called from the one state
@@ -121,10 +121,11 @@ the closing half is `UElysiumMainMenu::NativeOnKeyDown` — reachable only becau
 `FInputModeUIOnly::SetWidgetToFocus` targets the menu and the widget is `SetIsFocusable(true)`.
 Escape is consumed in every menu mode. 11.5 replaces both with the input scope stack.
 
-`GameOver` is a real state with no driver yet: `TriggerGameOver(Killed|MasqueradeBreach)` holds the
-world and raises the third menu mode, and `elysium.gameover` is the named command that reaches it.
-The combat character's death path and the masquerade meter (11.4 / 9.4) are what will call it; the
-`MakePlayerUnkillable` latch on `events_player` is the damage system's gate, not the flow's.
+`GameOver` holds the world and raises the third menu mode. Its driver is the combat character's
+death path (11.4): the player entity's health running out reaches
+`UElysiumGameStateSubsystem::NotifyPlayerKilled` → `TriggerGameOver(Killed)`. The masquerade meter is
+the second loss condition and is still 9.4's. `elysium.gameover` is the named command that reaches
+the state by hand; the `MakePlayerUnkillable` latch is the damage system's gate, not the flow's.
 
 Verbs: `elysium.appstate`, `.pausemenu [0|1]`, `.newgame [clan] [m|f] [entry]`, `.quittomenu`,
 `.gameover [killed|masquerade]`, `.SkipIntro`, `.BootMenu`, `.MenuMap`, `.MenuVantage`,
@@ -132,8 +133,10 @@ Verbs: `elysium.appstate`, `.pausemenu [0|1]`, `.newgame [clan] [m|f] [entry]`, 
 
 Player-facing actors: `AElysiumGameMode` (pawn/HUD/controller classes, the no-pawn-on-a-backdrop
 rule, and one `NotifyWorldReady`), `AElysiumPlayerController` (+ `UElysiumCheatManager`
-— `Noclip`, `ElysiumTeleport`, plus stock `UCheatManager` execs; and the Esc binding), `AElysiumPawn`
-(Character-movement FPS pawn with noclip), `AElysiumHUD` (Canvas: the use-icon reticle,
+— `Noclip`, `ElysiumTeleport`, plus stock `UCheatManager` execs; and every non-movement key: Esc,
++use, the sign dismissal, the skybox toggle), `AElysiumPawn`
+(the player's **body** — Character movement, camera, noclip, and the handle of the entity it
+embodies), `AElysiumHUD` (Canvas: the use-icon reticle,
 `env_fade` screen fade, sign panels — player pose/mode/FPS live in the Cog Maps window; it also
 ticks the native-Slate dialogue box off the world's open-conversation state, B4).
 
@@ -152,11 +155,69 @@ Plain C++, no UObject reflection — Unreal supplies bodies only. Design: `docs/
 | `UElysiumBrushComponent` | the per-brush-entity body: collision-only `UPrimitiveComponent`, convex `UBodySetup` cooked from def hulls, handle-carrying, dormancy-gated, solidity by classname (trigger/solid/none); `elysium.BrushBodies` A/Bs it |
 | `FElysiumEventQueue`/`FElysiumIOEvent` | the one time-sorted queue (R4 — no engine timers) |
 | `IElysiumIOSink` | always-on `FElysiumRingBufferSink` (1,000-entry history) + `FElysiumLogSink` (`LogElysiumIO` + VLOG) |
-| `FElysiumGameClock`, `FElysiumTimeControl`, `UElysiumGameStateSubsystem` | the substrate clock + the one pause/time-scale facade over it (below); the GI-scoped `G` store, quest map, player sheet (`FElysiumPlayerSheet`), `BeginNewGame`/`EndSession` |
+| `FElysiumAnimating` / `FElysiumCombatCharacter` / `FElysiumPlayer` (`ElysiumPlayer.h`) | the character chain, VtMB's own (below) |
+| `FElysiumGameClock`, `FElysiumTimeControl`, `UElysiumGameStateSubsystem` | the substrate clock + the one pause/time-scale facade over it (below); the GI-scoped `G` store, quest map, **player record** (`FElysiumPlayerRecord`), `BeginNewGame`/`EndSession`/`NotifyPlayerKilled` |
 
 **Two rules that hold everywhere:** every input goes through `AcceptInput`/the event queue (so
 it is loggable, pausable, single-steppable, serializable), and time comes from the substrate
 clock, never `FTimerManager`.
+
+## The player entity (11.4)
+
+**The player is an entity; the pawn is its body (S3).** Design: `docs/runtime-architecture.md`
+§5–6; the input inventory: `docs/script_api.md`. The chain in `Public/ElysiumPlayer.h` is VtMB's:
+
+```
+FElysiumEntity                     CBaseEntity           keyfields, dormancy, I/O, think
+ └ FElysiumAnimating               CBaseAnimating        the body: BuildBody / PlayAnimClip /
+    │                                                    ResetAnimToIdle / SetDispositionName,
+    │                                                    transform + model follow, dormancy gate,
+    │                                                    `skin` + `default_disposition`, SetAnimation
+    └ FElysiumCombatCharacter      CBaseCombatCharacter  the SHEET (FElysiumSheet) + money / blood /
+       │                                                 humanity / masquerade + TakeDamage/OnKilled;
+       │                                                 the 25 datamap inputs
+       ├ FElysiumNpc               CAI_BaseNPC           dialogue only — the body half is inherited
+       └ FElysiumPlayer            CBasePlayer           the 10 recovered player inputs, the law
+                                                         counters, the XP ledger, hydrate/dehydrate
+```
+
+`FElysiumEntityWorld::SpawnPlayer()` creates it after `Load` (the map actor calls it for every
+non-backdrop map): classname `player`, targetname **`!player`** — the name the maps themselves
+write, so `point_teleport target=!player` and `elysium.ent_fire !player …` are ordinary name
+resolutions, not a magic keyword. `FindPlayer()`/`PlayerHandle()` are the world's accessors, and
+**every reader handles null** — a menu backdrop and a headless logic world have no player, which is
+the same null-service discipline 11.2 established.
+
+**Live vs durable.** `FElysiumPlayerRecord` (on `UElysiumGameStateSubsystem`) is the session-lifetime
+half; the entity is the live view. `SpawnPlayer` hydrates, `FElysiumEntityWorld::Teardown`
+dehydrates — one point, covering travel, reload, quit-to-menu and a world rebuilt on a surviving
+actor. `PlayerSheet()` resolves **live entity first, record otherwise**, so a write never lands on
+the copy that is about to be overwritten. Health is a `Save`-flagged *entity* field (VtMB's own
+placement); the record's copy exists only to carry it across a map boundary.
+
+**The origin is sampled, the write is a move.** `FElysiumEntityWorld::Tick` reads the pawn into the
+entity as its first statement (before thinks and the queue), so everything that frame reads one
+place; a write (`point_teleport`, `pc.SetOrigin`) goes out through `OnRuntimeTransformChanged` →
+`IElysiumEmbodiment::TeleportPlayer`, the same shape an NPC uses for its skeletal body.
+
+**Damage and death.** `trigger_hurt` and a blocked door call `FElysiumCombatCharacter::TakeDamage`
+(the body still gets the engine damage event for 4.9's reaction); at zero health the character fires
+`OnDeath` and `FElysiumPlayer::OnKilled` calls `UElysiumGameStateSubsystem::NotifyPlayerKilled`,
+which raises 11.3's `TriggerGameOver(Killed)` — the driver that state was waiting for.
+`events_player`'s `MakePlayerUnkillable` writes the latch onto the player entity, where the damage
+system is; an unkillable character floors at 1. A character with **no** health track (every NPC
+until 9.4) records damage rather than dying. `ElysiumInterimPlayerMaxHealth` (100) is a **stated
+interim** ceiling — VtMB derives the track from Stamina through `vdata/system`, which is 9.4's.
+
+Eight combat-character inputs are backed by real fields (`MoneyAdd`/`MoneyRemove`/`HumanityAdd`/
+`ChangeMasqueradeLevel`/`Bloodloss`/`Bloodgain`/`BloodHeal`/`WillTalk`), reproducing VtMB's
+"a zero-valued input is a silent no-op"; the rest log the name and the task that owns them.
+
+**`AElysiumPawn` is a body**: collision, movement, camera, noclip, and `GetPlayerEntity()`. The
+verbs that are not movement (+use, sign dismissal, the skybox toggle) are
+`AElysiumPlayerController`'s, reaching the world through one cached map-actor pointer; 11.5/11.6
+re-home them onto the input scope stack and the command registry. The shift gait is a
+`+speed`/`-speed` latch, not a per-frame key poll, so the pawn does not tick.
 
 ## The outbound seam (11.2)
 
@@ -181,11 +242,15 @@ removes the polling path rather than migrating it.
 `AActor* Owner` survives on the world, but only as the component outer (brush bodies, `phys_hinge`
 constraints) and the VLOG context. It is not a fifth service.
 
-The player-body calls live on `IElysiumEmbodiment` because the pawn *is* the player's body (S3);
-11.4 makes the player an entity and they become ordinary entity operations. Two behaviours moved
-into the body with them: `point_teleport`'s capsule half-height lift (Source places feet, an Unreal
-capsule is centred) and the `+use` line trace on `ELYSIUM_USE_CHANNEL` — the substrate hands over a
-segment and gets a handle back, keeping the usability arbitration on its own side.
+The player-body calls live on `IElysiumEmbodiment` because the pawn *is* the player's body (S3).
+Since 11.4 the substrate reaches them **through the player entity**, not directly: `point_teleport`
+writes `SetRuntimeOrigin` and the entity places the body; `trigger_hurt` reduces the entity's health
+and the body gets the engine damage event; `trigger_changelevel` reads the entity's own origin,
+which the world sampled off the body at the top of the frame. Two behaviours live in the body
+because they are its geometry: `TeleportPlayer`'s capsule half-height lift (Source places feet, an
+Unreal capsule is centred) and the `+use` line trace on `ELYSIUM_USE_CHANNEL` — the substrate hands
+over a segment and gets a handle back, keeping the usability arbitration on its own side.
+`GetPlayerViewPoint` is the eye, and stays here until **11.7** owns the camera.
 
 `Private/Tests/ElysiumTestServices.h` is the recording stub that implements all four (handing back
 real transient components, so the leaf classes take their body-carrying path);
@@ -236,8 +301,10 @@ Class implementations live in `ElysiumStarterClasses.cpp` (logic_auto/relay, tri
 `ElysiumMover.{h,cpp}` (`FElysiumMoverBase` = CBaseToggle, `FElysiumDoorBase` = the CBaseDoor
 4-state machine, `FElysiumFuncDoor`, `FElysiumButton`), `ElysiumSignClasses.cpp` (`game_sign`),
 `ElysiumAmbientGeneric.cpp`, `ElysiumEventClasses.cpp` (`events_player`/`events_world`),
-`ElysiumNpcClasses.cpp` (B3 — the AI-free `FElysiumNpc` character leaf for the living `npc_*`
-classnames and `FElysiumNpcMaker` for `npc_maker`/`npc_maker_fleshpile`),
+`ElysiumNpcClasses.cpp` (B3 — the AI-free `FElysiumNpc` dialogue leaf for the living `npc_*`
+classnames, over the 11.4 character chain, and `FElysiumNpcMaker` for
+`npc_maker`/`npc_maker_fleshpile`), `ElysiumPlayerClasses.cpp` (11.4 — `CBaseAnimating`,
+`CBaseCombatCharacter` and the `player` leaf),
 `ElysiumScriptedSequence.cpp` (8.5 — `FElysiumScriptedSequence` for
 `scripted_sequence`/`aiscripted_sequence`), and
 `ElysiumPropClasses.cpp` (8.3 `FElysiumProp` for `prop_dynamic`/`prop_dynamic_ornament`; 8.4
@@ -300,15 +367,16 @@ the subsystem, because glTFRuntime binds each one to a specific `USkeletalMesh`'
 meshes are per-map-epoch. `IElysiumEmbodiment::PlayNpcClip`/`RefreshNpcIdle` (the map actor's, over its
 private `ResolveNpcClip`) are the
 seams the script surface reaches animation through, via two virtuals on `FElysiumEntity`
-(`PlayAnimClip`, `SetDispositionName` — kept on the base for the same no-RTTI reason as
-`GetAttachBody`), plus `ResetAnimToIdle` for handing a body back to its resting stance. Bound to
-them: the **`SetAnimation`** input on `FElysiumNpc` (21 call sites), the
+(`PlayAnimClip`, `SetDispositionName` — *declared* on the base for the same no-RTTI reason as
+`GetAttachBody`, *implemented* once on `FElysiumAnimating`), plus `ResetAnimToIdle` for handing a
+body back to its resting stance. Bound to
+them: the **`SetAnimation`** input on `CBaseAnimating` (21 call sites), the
 **`SetGesture`** Character method, and the animation half of **`SetDisposition`** — 2,510 calls, all
 of them receiver-qualified (`npc.SetDisposition(...)`; zero bare), 2,467 a `.dlg` line's action, so
 an NPC's stance follows the conversation. 9.9 still owns its emotional-state half, and the natives
 table records it as `stance only` so the coverage report does not overclaim.
 `elysium.npc.play <clip> [index]` plays any resolved clip on a spawned test NPC and
-`elysium.npc.clips <stem> [filter]` lists a model's vocabulary with owner, activity and weight. `FElysiumNpc` latches `WillTalk`/`UseInteresting`; `StartPlayerDialogRemote` fires `OnDialogBegin` then
+`elysium.npc.clips <stem> [filter]` lists a model's vocabulary with owner, activity and weight. `WillTalk` is the combat character's latch and `UseInteresting` the NPC leaf's; `StartPlayerDialogRemote` fires `OnDialogBegin` then
 opens the NPC's `.dlg` conversation (B4 — its `dialogname` keyfield names the file). `npc_maker.Spawn`
 creates its `NPCTargetname` child through
 **`FElysiumEntityWorld::SpawnRuntimeEntity`** — a runtime-synthesized def stored past the map's
@@ -389,8 +457,10 @@ a target's physics body through (base returns the brush body; `FElysiumPhysProp`
 default-Block so world + solid bodies occlude the ray, isolated from `ECC_Visibility`). The
 72-entry icon-name table and the channel constant live in `ElysiumUseIcons.h`.
 
-**Brush touch requires a pawn toucher (`UElysiumBrushComponent::RouteTouch`).** Only a pawn
-overlapping a trigger volume raises `OnStartTouch`/`OnEndTouch`; a volume that merely intersects
+**Brush touch requires a pawn toucher (`UElysiumBrushComponent::RouteTouch`), and the toucher
+resolves to its entity.** Only a pawn overlapping a trigger volume raises
+`OnStartTouch`/`OnEndTouch`, and the activator it carries is the player entity's handle (11.4), so
+`!activator` on the wires a trigger fires is real. A volume that merely intersects
 another brush body — every body on a map is a component of the *same* map actor, so trigger∩trigger
 and trigger∩solid overlaps fire begin/end at map-build time — is filtered out, matching VtMB (geometry
 overlapping geometry is never a touch). Under OpenLevel hard travel each map builds in a fresh world
@@ -445,12 +515,16 @@ payloads, `logic_pythoncheck`, `EvalScript`, `ScheduleTask`, level-script import
   payload as `__main__.%s`, so the leading name is an attribute of the bus).
 - `ElysiumPythonEntity.{h,cpp}` is the `vampire` module's object surface: the **`Entity`** type
   (a generation-checked handle, not a pointer — a reference kept across a `Kill` or a travel
-  raises "game entity has been deleted"), the sheet-backed **`Player`**, the 11 module
-  globals, and the console objects **`ccmd`/`cvar`** (9.3b). `Entity.__getattr__` resolves the type
+  raises "game entity has been deleted"), the 11 module
+  globals, and the console objects **`ccmd`/`cvar`** (9.3b). **There is no `Player` type** — 11.4
+  retired it; `FindPlayer()` returns an `Entity` over the player entity, so `pc.clan` is a field and
+  `pc.MoneyAdd(50)` an input on the same chain walk. `Entity.__getattr__` resolves the type
   methods and instance `__dict__` first, then
   walks the class-chain tables — an **input** name manufactures a bound callable that fires
-  through `EnqueueInput`, a **field** name marshals the live value; `__setattr__` is the mirror
-  (datamap first, `__dict__` on a miss; an input or a non-keyable field is read-only). The base
+  through `EnqueueInput`, a **field** name marshals the live value — then the entity's
+  `GetDynamicField` hook (the `vdata` half of the sheet, `pc.base_*`, until 9.4 names those fields),
+  and only then the Character-method fallback; `__setattr__` is the mirror
+  (datamap, then the dynamic bag, then `__dict__`; an input or a non-keyable field is read-only). The base
   method table is real, not stubbed: `SetOrigin`/`SetAngles`/`SetModel`/`SetName` mutate live state
   (and follow the NPC body / re-key the name index), and `CreateEntityNoSpawn`/`CallEntitySpawn` are
   the host's real two-phase spawn (they return/take an `Entity`, like `Find*`). `G` is proxied onto
@@ -484,12 +558,14 @@ payloads, `logic_pythoncheck`, `EvalScript`, `ScheduleTask`, level-script import
   table the Cog Scripting window renders, the stub defaults, the Character-method dispatch, and
   the native-call log. It lives outside either host so `elysium.script.cpython 0/1` swaps the
   interpreter without changing what a name does. `IsClan`/`IsPCMalk` and `IsMale` are real (they
-  read the player sheet clan/gender); the rest of the character surface (inventory, money, blood,
-  humanity/XP, `CalcFeat`) is a logged stub until 9.4.
-- Both hosts bind the two names the dialogue gates and level scripts read off the sheet: **`pc`**
-  (the sheet-backed `Player` — CPython binds it once at VM start, the expr host resolves it as the
-  Invalid-handle Character) and **`npc`** (the firing entity, per-eval from `Ctx.Self` — the
-  conversation partner a `.dlg` action mutates).
+  read the player sheet clan/gender) and `CurrentMoney` reads the receiver's own `money` field
+  (11.4); the rest of the character surface (inventory, blood, humanity/XP, `CalcFeat`) is a logged
+  stub until 9.4.
+- Both hosts bind the two names the dialogue gates and level scripts read: **`pc`** (the player
+  entity — **re-bound per eval** in both hosts, because a generation-checked handle minted by one
+  map is stale in the next; `None`/the Invalid-handle Character when a map has no player) and
+  **`npc`** (the firing entity, per-eval from `Ctx.Self` — the conversation partner a `.dlg` action
+  mutates).
 - `FElysiumExprScriptHost` over `ElysiumExpr` — the self-contained lexer + recursive-descent
   parser + tree-walk for VtMB's restricted expression subset; every error collapses to Void
   (error-to-false).

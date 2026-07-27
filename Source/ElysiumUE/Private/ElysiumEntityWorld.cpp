@@ -7,6 +7,7 @@
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
+#include "ElysiumPlayer.h"
 #include "ElysiumScriptHost.h"
 #include "ElysiumSignData.h"
 #include "ElysiumUseIcons.h"
@@ -240,6 +241,47 @@ FElysiumEntityHandle FElysiumEntityWorld::SpawnRuntimeEntity(FElysiumEntityDef D
 	return H;
 }
 
+// --- The player entity (11.4, S3) --------------------------------------------------------
+
+FElysiumEntityHandle FElysiumEntityWorld::SpawnPlayer()
+{
+	if (Player.IsSet())
+	{
+		return Player;   // one player per world
+	}
+
+	FElysiumEntityDef Def;
+	Def.Classname  = ElysiumPlayerClassName().ToString();
+	Def.TargetName = ElysiumPlayerTargetName();
+	// The origin is the pawn's; SpawnPlayer runs before the first tick and FElysiumPlayer::Spawn
+	// samples the body, so the def's zero is never read as a position.
+	Player = CreateRuntimeEntityNoSpawn(MoveTemp(Def));
+
+	FElysiumPlayer* Ent = FindPlayer();
+	if (!Ent)
+	{
+		Player = FElysiumEntityHandle::Invalid();
+		UE_LOG(LogElysiumWorld, Error, TEXT("player entity could not be created"));
+		return Player;
+	}
+	// Hydrate BEFORE Spawn(): Spawn seeds a health ceiling only when the record carried none.
+	if (GameState)
+	{
+		Ent->Hydrate(GameState->PlayerRecord());
+	}
+	CallEntitySpawn(*Ent);
+	UE_LOG(LogElysiumWorld, Log, TEXT("player entity live: %s"), *Ent->DebugString());
+	return Player;
+}
+
+FElysiumPlayer* FElysiumEntityWorld::FindPlayer() const
+{
+	FElysiumEntity* E = const_cast<FElysiumEntityWorld*>(this)->Resolve(Player);
+	// The handle is only ever set by SpawnPlayer, so the static_cast is exact; going through
+	// AsCombatCharacter would answer for NPCs too.
+	return E ? static_cast<FElysiumPlayer*>(E) : nullptr;
+}
+
 void FElysiumEntityWorld::RenameEntity(FElysiumEntity& Ent, const FString& NewName)
 {
 	const int32 Idx = Ent.Handle.Index;
@@ -363,11 +405,11 @@ void FElysiumEntityWorld::UpdateUseCursor()
 
 void FElysiumEntityWorld::PlayerUse()
 {
-	// Press whatever the cursor settled on this frame. The player is not an entity yet, so the
-	// activator is Invalid (matching the trigger touch path); P4-later makes the pawn an entity.
+	// Press whatever the cursor settled on this frame, with the player as the activator (11.4) —
+	// the same handle the trigger touch path carries, so a `+use` wire's `!activator` resolves.
 	if (FElysiumEntity* E = Resolve(AimedUsable))
 	{
-		E->Use(FElysiumEntityHandle::Invalid());
+		E->Use(Player);
 	}
 }
 
@@ -618,6 +660,13 @@ void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 
 void FElysiumEntityWorld::Tick(double Now)
 {
+	// 11.4 — sample the pawn into the player entity first, so everything this frame reads (a think
+	// measuring distance, a landmark offset, `pc.GetOrigin()`) sees where the player actually is.
+	// The body moved during the previous frame's step 5, which is why this is a read, not a solve.
+	if (FElysiumPlayer* PlayerEnt = FindPlayer())
+	{
+		PlayerEnt->SyncFromBody();
+	}
 	RunThinks(Now);
 	ServiceEvents(Now);
 }
@@ -1008,6 +1057,18 @@ FString FElysiumEntityWorld::FormatEventLine(double Now, const FElysiumIOEvent& 
 
 void FElysiumEntityWorld::Teardown()
 {
+	// 11.4 — the player's live state goes back into the session record before the entity holding it
+	// dies. This is the only dehydrate point, and it covers every way a map epoch ends: a travel, a
+	// reload, quit-to-menu, and the world being rebuilt on a surviving actor.
+	if (GameState)
+	{
+		if (const FElysiumPlayer* PlayerEnt = FindPlayer())
+		{
+			PlayerEnt->Dehydrate(GameState->PlayerRecord());
+		}
+	}
+	Player = FElysiumEntityHandle::Invalid();
+
 	// Epoch 0 matches no minted handle, so every outstanding handle goes stale at once (R3).
 	Epoch = 0;
 	EventQueue.Reset();

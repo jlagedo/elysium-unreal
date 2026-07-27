@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "ElysiumGameClock.h"
+#include "ElysiumPlayer.h"
 #include "ElysiumScriptHost.h"
 #include "ElysiumTimeControl.h"
 #include "ElysiumVariant.h"
@@ -45,31 +46,6 @@ struct FElysiumNativeCallRecord
 	FString Call;          // reconstructed call, e.g. "FindPlayer().RemoveItem(Int(5))"
 	FString Result;        // FElysiumVariant::Describe() of the return value
 	bool bStub = false;    // true when the call only logged (no backing system yet)
-};
-
-// The player's character sheet, as far as the opening needs it. VtMB keeps the numeric sheet as
-// datamap fields on the player entity (`game_runtime.md` §2: numbers on the entity, story in `G`,
-// progress in quests) and `ccmd.createplayer` writes it during chargen on `sp_genesisdevice_1`.
-// There is no player entity and no chargen yet (P8/P9), so this stands in for both: the minimum
-// the tutorial's own scripts read off `pc`.
-//
-// `Clan` uses the LEVEL-SCRIPT indexing 2..8 (Brujah 2 … Ventrue 8) that `pc.clan` carries — not
-// the 1..7 `ClanNameFunc` display enum, and not `clandoc`'s ordering. `game_runtime.md` §3 records
-// that two indexings exist; the scripts (`IsClan`, `unhidePlus`'s 9/10/11 patch-type sentinels)
-// speak this one.
-//
-// `Stats` is the open-ended remainder (`base_<discipline>`, attributes, abilities). 9.4 loads
-// `vdata/system/*.txt` into it; until then it stays empty and readers fall back to their defaults.
-struct FElysiumPlayerSheet
-{
-	int32 Clan = 2;                  // pc.clan (2..8)
-	bool bMale = true;               // pc.IsMale()
-	TMap<FName, int32> Stats;        // base_<name> -> rating (9.4)
-
-	// Clan display names indexed by the 2..8 encoding; index 0/1 unused.
-	static const TCHAR* ClanName(int32 Clan);
-	// Case-insensitive name -> 2..8, or 0 when unrecognised (drives `elysium.newgame brujah`).
-	static int32 ClanFromName(const FString& Name);
 };
 
 // Persistent-across-travel game state (R8). Owns the three things that outlive any single
@@ -115,9 +91,27 @@ public:
 	bool HasQuest(const FString& Quest) const;
 	const FElysiumQuestMap& GetQuests() const { return Quests; }
 
-	// --- Player sheet + New Game ---------------------------------------------------
-	const FElysiumPlayerSheet& PlayerSheet() const { return Sheet; }
-	FElysiumPlayerSheet& PlayerSheet() { return Sheet; }
+	// --- The player record + New Game (11.4) ---------------------------------------
+	// S3: the player *is* an entity, so the live sheet lives on that entity for as long as a map
+	// does; this record is the durable half that crosses a map boundary and, at 11.9, a save. The
+	// entity hydrates from it at map build and dehydrates back into it when the world is torn down.
+	const FElysiumPlayerRecord& PlayerRecord() const { return Record; }
+	FElysiumPlayerRecord& PlayerRecord() { return Record; }
+
+	// The sheet every reader should go through: **the live player entity's when a map is up, the
+	// record's otherwise** (the front end, a New Game seeding before any map exists, a headless
+	// probe eval). One rule, so a write can never land on the copy that is about to be overwritten.
+	const FElysiumSheet& PlayerSheet() const;
+	FElysiumSheet& PlayerSheet();
+
+	// The live player entity in the current map, or null (no map, a menu backdrop, or the world
+	// built without one). The one place that resolution happens.
+	class FElysiumPlayer* PlayerEntity() const;
+
+	// The run is lost: the combat character's death path calls this and the session raises 11.3's
+	// GameOver state. It lives here rather than on a world service because the substrate already
+	// holds this subsystem, and "the run ended" is session state, not a map capability.
+	void NotifyPlayerKilled();
 
 	// Seed the state a fresh story run starts from. New Game in retail is four maps
 	// (`level_transitions.md`): chargen on `sp_genesisdevice_1` writes the sheet, then the theatre
@@ -137,11 +131,10 @@ public:
 	// (RE3), so the zeros need no explicit seeding; only the non-zero flags are written.
 	void BeginNewGame(int32 Clan, bool bMale);
 
-	// Drop the run: `G`, the quest map, the sheet and the clock all go back to their fresh-process
-	// values. Called by UElysiumGameFlowSubsystem::QuitToMenu (11.3) so the menu's backdrop world
-	// cannot be running behind a half-live session, and so the next New Game starts from nothing.
-	// This IS the session record until 11.4/11.9 give it a name — everything a run owns today lives
-	// on this subsystem.
+	// Drop the run: `G`, the quest map, the player record and the clock all go back to their
+	// fresh-process values. Called by UElysiumGameFlowSubsystem::QuitToMenu (11.3) so the menu's
+	// backdrop world cannot be running behind a half-live session, and so the next New Game starts
+	// from nothing. `G` and the quest map join the record as save blocks at 11.9.
 	void EndSession();
 
 	// --- Clock + time control (S1) -------------------------------------------------
@@ -219,7 +212,8 @@ public:
 private:
 	FElysiumGlobalMap Globals;
 	FElysiumQuestMap Quests;
-	FElysiumPlayerSheet Sheet;
+	// The durable player (11.4). The live one is the entity in the current map.
+	FElysiumPlayerRecord Record;
 	FElysiumGameClock Clock;
 	// Declared after the clock it holds a reference to.
 	FElysiumTimeControl TimeCtl{ Clock };

@@ -2513,3 +2513,108 @@ explains ~0% of a median lit face and the bounce floor *is* the ambient level (C
   Esc's *keystroke* is unverified headlessly — the binding and the widget handler are in place and
   the `TogglePause` path they call is verified through the console verb; the key itself lands in the
   Play tier (**11.10**).
+
+- [x] **11.4 The player entity** *(S3 — the hinge; landed 2026-07-26)* — the player stopped being a
+  special case. `runtime-architecture.md` sections 5–6 built: two new chain nodes, a player leaf
+  under them, a session record beside them, and the pawn demoted to a body.
+
+  **The chain is VtMB's, and it is one chain.** `FElysiumAnimating` (`CBaseAnimating`) owns the
+  skeletal body and everything done to it — `BuildBody`, `PlayAnimClip`, `ResetAnimToIdle`,
+  `SetDispositionName`, the transform/model follow hooks, the dormancy gate, the `skin` and
+  `default_disposition` fields and the `SetAnimation` input. `FElysiumCombatCharacter`
+  (`CBaseCombatCharacter`) owns the sheet and its **25 datamap inputs** (`script_api.md`, datamap
+  `0x1061664c`). `FElysiumPlayer` (`CBasePlayer`) owns the **10 recovered player inputs** (of the 11
+  the datamap header states; the eleventh is still unrecovered) and the link to the pawn. `FElysiumNpc`
+  re-based onto the same two nodes and **lost its duplicated half outright** — ~120 lines of body
+  building, clip playing, idle refreshing, transform following and dormancy gating that were the
+  animating node's all along. `elysium.ent_get` on any NPC now reports the chain
+  `npc_VPedestrian → CBaseCombatCharacter → CBaseAnimating → CBaseEntity` and 33 resolved inputs.
+
+  **`!player` is a targetname, not a keyword.** The player entity registers under the name the maps
+  themselves write — 48 of the 49 `point_teleport.target` keys across the exported maps are
+  `!player` — so it resolves through the ordinary name index and `ResolveTargets` gained no special
+  case. `point_teleport` collapsed to one path for every target: resolve the name, then
+  `SetRuntimeOrigin`/`SetRuntimeAngles`. That is also a **fix**: its named-entity branch used to move
+  `Ent->Body` (the *brush* body), which is null on an NPC, so the 13 map teleports aimed at Heather,
+  Jack, Beckett and the rest were silently doing nothing.
+
+  **Live is the entity, durable is the record.** `FElysiumPlayerRecord` sits on
+  `UElysiumGameStateSubsystem` (the thing 11.3 could only call "the session record until 11.4/11.9
+  name it"). `FElysiumEntityWorld::SpawnPlayer` hydrates it into the entity after `Load`;
+  `Teardown` dehydrates it back — **one** dehydrate point covering travel, reload, quit-to-menu and a
+  world rebuilt on a surviving actor. `PlayerSheet()` resolves live-entity-first so a write can never
+  land on the copy about to be overwritten. Health is the deliberate subtlety: `m_iHealth` stays a
+  `Save`-flagged **entity** field (`save-architecture.md` section 4, VtMB's own placement) and the
+  record's copy exists only to carry the value across a map boundary, because our entity dies with
+  its map where VtMB's is carried through the transition.
+
+  **The player's origin is sampled, not solved.** `FElysiumEntityWorld::Tick` reads the body into the
+  entity as its first statement, before thinks and the queue, so everything that frame — a landmark
+  offset, a `trigger_look`, `pc.GetOrigin()` — reads the same place. Writing it goes the other way,
+  through `OnRuntimeTransformChanged` → `TeleportPlayer`, which is exactly the shape an NPC uses to
+  move its skeletal body. The sync writes the fields directly; going through `SetRuntimeOrigin` would
+  teleport the pawn to where it already is, every frame.
+
+  **`vampire.Player` is gone.** `FindPlayer()` returns a `vampire.Entity` over the player's handle, so
+  `pc.clan` is a datamap field, `pc.MoneyAdd(50)` is a datamap input, and both take the R2 walk. `pc`
+  is **re-bound per eval** beside `npc` — a generation-checked handle minted by one map raises "game
+  entity has been deleted" in the next, which the old sheet proxy never had to care about. The expr
+  host resolves `pc` the same way, falling back to the sheet-less Character receiver when a map has
+  no player. One thing the datamap could not express: the `vdata` half of the sheet (`pc.base_*`,
+  the ratings 9.4 loads) is not a static field table, so `FElysiumEntity::GetDynamicField` /
+  `SetDynamicField` sit between the chain walk and the Character-method fallback in **both** hosts —
+  a number, not a bound method, and 9.4 shrinks the bag as it names those fields for real.
+
+  **Fail-closed, and honest about it.** Eight combat-character inputs have a real field behind them
+  (`MoneyAdd`/`MoneyRemove`/`HumanityAdd`/`ChangeMasqueradeLevel`/`Bloodloss`/`Bloodgain`/`BloodHeal`/
+  `WillTalk`), reproducing VtMB's own "a zero-valued input is a silent no-op" rule; the other
+  seventeen and five of the player's ten log the name and the task that owns them. `CurrentMoney()`
+  reads the same field `MoneyAdd` writes, which is 9.10's first row done early because it is one
+  integer.
+
+  **The pawn is a body.** `+use`, the sign dismissal and the skybox toggle moved to
+  `AElysiumPlayerController` (which already owned Esc, and is where 11.5/11.6 will find them), each
+  reaching the world through **one** cached map-actor pointer instead of a per-press
+  GI→MapSubsystem→MapActor→World walk. The shift-gait `IsInputKeyDown` poll became a `+speed`/
+  `-speed` press/release latch — VtMB's own binding shape — so the pawn stopped ticking entirely.
+  It gained `PlayerEntity`, the handle of what it embodies, bound as the tick prerequisites resolve.
+
+  **The death path closed 11.3's named gap.** `trigger_hurt` and a door closing on the player now
+  reduce the entity's `health` (the body still gets the engine damage event, for 4.9's flinch to hang
+  off); at zero the character fires `OnDeath` and the player leaf calls
+  `UElysiumGameStateSubsystem::NotifyPlayerKilled`, which raises `TriggerGameOver(Killed)`. The
+  substrate reaches the session through the subsystem it was already handed, not through a fifth
+  world service. `events_player`'s `MakePlayerUnkillable` writes the latch onto the player entity,
+  where the damage system now is; an unkillable player floors at 1 rather than refusing the hit.
+  A character with **no** health track (every NPC, until 9.4 loads `stattemplate`) records damage
+  instead of dying — arithmetic must not kill something with no health model.
+
+  *Acceptance.* Live on `sp_tutorial_1`: `elysium_player_get` reports `#1868 !player(player)` with
+  `health 100/100` and `unkillable true` — the map's own `pc_0.MakePlayerUnkillable` reached it.
+  `pc.MoneyAdd(50)` then `elysium.ent_fire !player MoneyAdd 50` take `money` 0→50→100 and the I/O
+  history shows both deliveries on the same entity; `pc.CurrentMoney()` reads 100 and
+  `pc.base_Celerity` reads 0 rather than binding a method. The map's own `logic_auto`
+  `GiveItem(item_w_unarmed)` / `GiveItem(weapon_physcannon)` wires at the player now *resolve*
+  instead of dropping as `[no target]`. `elysium.ent_fire teleport_player Teleport` moves both the
+  entity's origin and the pawn. Walking `trig_off_porch` fires its whole `OnEndTouch` chain,
+  `Jack.WillTalk(1)` included — through the re-based chain. `MakePlayerKillable` + standing in
+  `barrel_fire_burn` drains health to 0 and the app state goes to `GameOver`. `money 77` survives an
+  `elysium.map sm_pawnshop_1` travel onto a fresh `#468 !player`; `elysium.quittomenu` logs the
+  record cleared and the `sm_hub_1` backdrop builds 2,597 entities with **no** player among them.
+  `Elysium.Substrate.PlayerEntity` asserts the chain, both input directions, the zero-value no-op,
+  `!activator`, the teleport, damage/unkillable/death, hydrate/dehydrate, the dynamic sheet bag and
+  the no-player world — headless, no RHI, no `tools/out`. Whole Substrate tier green.
+
+  *Not in scope, named:* the player's health ceiling is a **stated interim constant**
+  (`ElysiumInterimPlayerMaxHealth` = 100), not a recovered one — VtMB derives the track from Stamina
+  through `vdata/system`, which is 9.4's. `GetPlayerViewPoint` stays on `IElysiumEmbodiment` because
+  the eye is the camera's and the camera is **11.7**'s. The three verbs parked on the player
+  controller are 11.5/11.6's to re-home onto the input scope stack and the command registry, and the
+  gait latch becomes a `FElysiumUserCmd` field there. The record carries no inventory or equipped
+  handles — those are entities, and **9.8** creates them; `G` and the quest map are still the
+  subsystem's own stores until **11.9** gathers the save blocks. `AsCombatCharacter` is a
+  no-RTTI downcast for the same reason `AsDoorBase` is one.
+
+  *Unrelated pre-existing failure, not introduced here:* `Elysium.Content.DlgCorpus` fails because
+  `sm_junkyard_1` references `Santa Monica/Nightwatchman.dlg`, which is absent from the exported
+  mirror — an export gap, not a runtime one.

@@ -6,7 +6,7 @@
 #include "Styling/CoreStyle.h"
 #include "UObject/Package.h"
 
-DEFINE_LOG_CATEGORY_STATIC(LogElysiumUI, Log, All);
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumUIStyle, Log, All);
 
 namespace
 {
@@ -64,7 +64,7 @@ namespace
 		UFontFace* Face = LoadObject<UFontFace>(nullptr, AssetPath);
 		if (!Face)
 		{
-			UE_LOG(LogElysiumUI, Warning,
+			UE_LOG(LogElysiumUIStyle, Warning,
 				TEXT("UI font face missing: %s — run tools/make_ui_fonts.py in the editor"), AssetPath);
 			return false;
 		}
