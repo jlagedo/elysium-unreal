@@ -1,6 +1,6 @@
 # Runtime architecture — the game spine
 
-**Status: adopted** (`decisions.md` 2026-07-26 cont. 4 — the seven §16 calls, with amendments).
+**Status: adopted** (`decisions.md` 2026-07-26 cont. 4 — the seven owner calls, with amendments).
 Roadmap **P11** tracks the build; the playable path (`roadmap.md` → "The playable path")
 sequences it as **PP0**.
 
@@ -682,110 +682,14 @@ Numbered like `engine-core.md`'s R1–R8, and orthogonal to them.
   needs a Cog control; this extends it — a feature also needs a named command, so a script, a test and
   an agent can reach it. A capability reachable only by hand is incomplete.
 
-## 14. What is missing today
+## 14. Status and open decisions
 
-The honest register, for "launch it and actually play a new game". Every row is either an existing
-roadmap task or a new P11 one.
+What is built versus outstanding, and the refactor sequence that got the spine here, are tracked
+in `docs/roadmap.md` (phase P11 onward) — not maintained here. The owner-call rationale behind
+this spine's design (is the player an entity, does the pawn become a box, does pause hold the
+engine as well as the clock, and the rest) is logged in `docs/decisions.md` (2026-07-26, cont. 4).
 
-| # | Gap | Consequence today | Owner |
-|---|---|---|---|
-| 1 | ~~player is not an entity~~ | closed by **11.4**: the chain, the record, the pawn demoted to a body. Sheet mutation, damage/death and `!activator` are real; the record is a save block since **11.9**, and inventory is 9.8's | **11.4** |
-| 2 | legacy `DefaultInput.ini` bindings | nothing is rebindable, no gamepad, Esc does not pause, dev keys collide with player keys | 10.6 |
-| 3 | movement is stock CMC on a capsule | not VtMB's feel; step semantics differ; no baseline to A/B against | 4.7 (+ **11.6** box pawn) |
-| 4 | no chargen | New Game mocks Tremere male; clan-gated content untestable | 9.4 |
-| 5 | ~~no save/load~~ | closed by **11.9**: the four blocks over the R2 field walk, the per-map snapshot lifecycle travel already produced, the queue and think times, owned RNG streams, and the slot/quick/auto ring. `trigger_autosave` writes the ring. The load *menu* is still 8.6's — the slot list has no screen | **11.9** |
-| 6 | no vitals HUD (the Canvas HUD covers reticle/signs only) | blood/health/frenzy/masquerade are *published* on the view state since **11.8** and nothing draws them; the sheet has no readout | 8.9 |
-| 7 | ~~pause has no input path~~ | closed by **11.3** — Esc on the player controller drives `UElysiumGameFlowSubsystem::TogglePause`, which holds the world and raises the pause menu, and the menu's scope comes from **11.5**'s stack (pause stays the flow's, never a scope property) | **11.3** |
-| 8 | ~~no camera modes~~ | closed by **11.7**: one camera, one weight stack, `CalcCamera` as the apply point; `togglecamera` and the cvar surface reproduced, and `SetCamera` lands on a real push/pop channel. The player-mesh half (fade band, `ShouldDrawLocalPlayer`) waits on 8.11 | **11.7** |
-| 9 | ~~three input-mode owners~~ | closed by **11.5**: one arbiter owns mode, cursor and focus; CommonUI's router is declined explicitly, and a UI-only push revokes an inherited ImGui capture. Mapping contexts are declared on the scope and applied at 10.6 | **11.5** |
-| 10 | ~~no loading screen~~ | closed by **11.3** for the level-load flush; the map actor's build pass after it is 10.4's | **11.3** |
-| 11 | ~~no death / game-over path~~ | closed: **11.3** made `GameOver` a state, **11.4** gave it its driver — the player entity's health running out reaches `NotifyPlayerKilled` → `TriggerGameOver(Killed)`. The masquerade meter is the second loss condition, still 9.4's | **11.3** + **11.4** + 9.4 |
-| 12 | dialogue line audio unwired | `PlayDialogFile` (41 calls) silent though decode is done | 9.2 |
-| 13 | no `logic_choreographed_scene` | the theatre act cannot run, so the story chain is short-circuited | **12.1** (P12 = PP2) |
-| 14 | no items/containers/barter | 853 script calls fail closed | 9.8 |
-| 15 | ~~substrate reaches the engine by back-pointer~~ | closed by **11.2** — the seam is `FElysiumWorldServices`, and `Elysium.Substrate.WorldServices` drives a map's logic headlessly | **11.2** |
-| 16 | ~~UI polls the substrate~~ | closed by **11.8**: `UElysiumPresentationSubsystem` publishes `FElysiumViewState` in step 9 and is the production `IElysiumPresenter`; the HUD reads it and no longer ticks, and the gating is one rule in the publisher | **11.8** |
-| 17 | no playthrough harness | "the tutorial is completable" is a manual claim | **11.10** |
-
-## 15. The refactor ladder
-
-Ordered so each step compiles, ships, and is observable on its own — and so nothing later has to
-re-do an earlier step. Roadmap IDs in **P11**. Step zero — **11.0 Adopt the spine**, the seven §16
-calls as one dated `decisions.md` entry — was recorded 2026-07-26 (cont. 4) and gates the rest.
-
-1. **11.1 Frame + clock ownership** *(landed)* — the §3 tick table pinned with tick groups and
-   prerequisites; the map actor split into gameplay (`TG_PrePhysics`) and post-move
-   (`TG_PostPhysics`) tick functions; `FElysiumTimeControl` as the one pause/scale facade.
-   *Observable:* `Elysium.Substrate.FrameOrder` + `Elysium.Substrate.TimeControl`, and a
-   `elysium.timescale 0.25` that slows movers, the queue and animation together (the camera blend
-   joined them at 11.7, on the same already-dilated delta).
-2. **11.2 World services** *(landed)* — `FElysiumWorldServices` injected into `FElysiumEntityWorld`;
-   the map actor implements three of the four interfaces (`IElysiumPresenter` waited for 11.8); a
-   recording stub in the module's test folder. *Observable:* `Elysium.Substrate.WorldServices` runs a
-   tutorial-shaped `logic_auto` chain end to end with no RHI, no actors and no `tools/out`, and the
-   same defs with a null bundle reach the same state.
-3. **11.3 App state machine** *(landed)* — `UElysiumGameFlowSubsystem`, `EElysiumAppState` with its
-   transition table as plain C++, boot out of the game mode, the movie-player loading screen, pause,
-   quit-to-menu, `GameOver`; the screen is a pure function of the state, so no call site closes a
-   menu. *Observable:* `Elysium.Substrate.AppState`, and in the built game Esc pauses, the menu holds
-   the world, quit-to-menu returns to the backdrop with the session cleared, and travel shows a
-   loading screen.
-4. **11.4 The player entity** *(landed)* — `FElysiumAnimating` + `FElysiumCombatCharacter` chain
-   nodes, `FElysiumPlayer` under the targetname `!player`, `FElysiumPlayerRecord` with
-   hydrate-at-map-build / dehydrate-at-teardown, the pawn demoted to a body, `FindPlayer()`/`pc`
-   returning an `Entity`, `vampire.Player` retired, `FElysiumNpc` re-based onto the same nodes.
-   *Observable:* `Elysium.Substrate.PlayerEntity`, and in the built game `pc.MoneyAdd(50)` and
-   `ent_fire !player MoneyAdd 50` land on the same field, `point_teleport` moves the player through
-   `SetRuntimeOrigin`, and a `trigger_hurt` that empties the player's health ends the run.
-5. **11.5 Input scope stack** *(landed)* — `UElysiumInputSubsystem` over a plain-C++ priority stack;
-   the menu, the dialogue box, sign panels and Cog push scopes, and nothing else calls
-   `SetInputMode`. *Observable:* `Elysium.Substrate.InputScopes` walks every ordered pair of screens
-   in both close orders; in the game `elysium.inputscopes` dumps the live stack, and a menu coming up
-   takes the mouse back from an inherited ImGui capture.
-6. **11.6 Command registry + user command** *(landed)* — `FElysiumCommands` (92 declared verbs),
-   the stated console precedence, `FElysiumUserCmd` filled by `UElysiumInputRouter` off VtMB's own
-   default bind table; the box pawn + `UElysiumMovementComponent`, with the capsule body behind
-   `elysium.SourceMovement 0`. *Observable:* `elysium.cmd <verb>` fires every bindable verb from the
-   console, a script, a `.dlg` action or MCP; `elysium.commands` reports the coverage; a recorded
-   command stream replays identically. Feeds 10.6 and 4.7.
-7. **11.7 Camera component** *(landed)* — the weight stack, `CalcCamera` as the apply point,
-   `togglecamera` and the cvar surface (in the VtMB console store, on a new `DeclareCvar`), the
-   scripted-shot channel on `IElysiumEmbodiment` with the `vdata/camerashots/` reader behind it.
-   *Observable:* `Elysium.Substrate.Camera` + `.CameraShots` pass headlessly; in the game
-   `togglecamera` blends out to the full boom and `SetCamera("dialogdefault")` frames its subject.
-8. **11.8 Presentation seam** *(landed)* — `UElysiumPresentationSubsystem` + `FElysiumViewState`,
-   published in step 9 of the frame and doubling as the production `IElysiumPresenter`; the HUD
-   re-based onto it and no longer ticking. *Observable:* `Elysium.Substrate.ViewState` drives every
-   rule off a hand-built state with no RHI; no widget or HUD draw path references
-   `FElysiumEntityWorld`; the front-end gating is one rule, and opening the pause menu over a
-   conversation now takes the box down instead of drawing through it.
-9. **11.9 Save/load [x]** — `save-architecture.md` in full. *Observable:* save mid-tutorial, quit to
-   menu, load, and the beat machine continues — the clock, both pending queue entries with their
-   saved fire times and serials, hidden entities, an unlocked door, `G` and the player's spot all
-   come back, and the restored delayed input fires at its saved time.
-10. **11.10 Play test tier** — the beat-script driver, replay, the save round-trip test, the MCP input
-    and time tools. *Observable:* `test.bat Play` walks the tutorial opening unassisted and fails
-    loudly when a beat regresses.
-
-Steps 1–4 have landed. Step 4 was the hinge: 9.4, 9.8, 9.9, 9.10 and 9.5 all sit on it, and every
-one of them built first would have had to be re-based.
-
-## 16. Owner calls — decided
-
-**All seven were adopted 2026-07-26** (`decisions.md` cont. 4 = roadmap 11.0), with the
-amendments noted per row. The table keeps the rationale.
-
-| # | Call | Recommendation |
-|---|---|---|
-| A | **Is the player an entity?** | **Yes.** It is VtMB's own architecture, the save format requires it, and ~36 of the script surface's unbacked names are datamap inputs on a class chain we would otherwise have to fake (35 enumerated — `script_api.md` lists 10 of the player's stated 11 inputs). Cost measured at 11 call sites plus retiring one Python type, and it only grows. |
-| B | **Does the player pawn become a box on `APawn`?** | **Yes**, together with 4.7. `ACharacter` cannot take a box root, and the box is a *recovered requirement*, not a preference (`source_movement.md`). Keep the capsule pawn behind `elysium.SourceMovement 0` until the port is at parity. |
-| C | **Does the sheet move off `UElysiumGameStateSubsystem`?** | **Yes**, to `FElysiumCombatCharacter` (live) + `FElysiumPlayerRecord` (durable). It is the same move as (A) and 9.4 should target the new home directly. |
-| D | **Does New Game reproduce the four-map chain?** | **Author it now; the theatre is P12.** `EntryPoint = story` walks the real chain through `sp_genesisdevice_1`; the theatre act lands as **P12** (the playable path's PP2, which it blocks in full — cont. 5). Until then `elysium.SkipIntro` skips it: a recorded, reversible divergence, and the flow never has to be re-plumbed. |
-| E | **Does pause use engine pause as well as the clock?** | **Both.** Either alone leaves half the world moving. `FrontEnd` deliberately does not pause (the backdrop is the feature); `Paused` does. |
-| F | **Does UI get a view-state seam, or keep polling?** | **Seam.** Three screens land on it in the next phase (HUD, dialogue, chargen), and the front-end gating is already scattered. |
-| G | **Does the game mode keep the boot decision?** | **No** — it moves to `UElysiumGameFlowSubsystem`. A per-world object cannot own an application-lifetime decision that must survive travel. |
-
-## 17. Not covered here
+## 15. Not covered here
 
 Full combat AI, navigation, and the vendor/barter loop remain `roadmap.md` 10.7; stealth,
 disciplines and firearms basics are **P13**, choreography is **P12**. Each is

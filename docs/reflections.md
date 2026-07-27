@@ -3,10 +3,10 @@
 What VtMB's cubemap reflection actually is, measured out of the shipped shader assembly and
 the whole-game material set, and how the remaster reproduces it on a fully-dynamic Lumen path.
 
-Per-task status belongs in `roadmap.md` (7.5). Related: `rendering-perf.md` (the render path),
-`sky-ambience.md` → "K7" (the same `.psh`-as-data route), `lumen-coverage-spike.md` (why the
-surface cache is what a reflection ray hits), `asset-enhancement.md` (the PBR-synthesis track
-that later feeds these same slots).
+Per-task status belongs in `roadmap.md` (7.5). Related: `rendering-perf.md` (the render path,
+and → "Lumen surface-cache engine facts" for why the surface cache is what a reflection ray
+hits), `sky-ambience.md` → "K7" (the same `.psh`-as-data route), `asset-enhancement.md` (the
+PBR-synthesis track that later feeds these same slots).
 
 ## The shipped shader is readable data
 

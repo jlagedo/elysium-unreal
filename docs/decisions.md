@@ -232,9 +232,10 @@ append a correction as a new entry.
   turns those names into registered fields.
 
 - **2026-07-26 (cont. 6)** — **The world's *look* is baked offline into `.uasset`s; everything
-  else stays runtime-built.** Owner call, adopting the architecture the two stacked spikes
-  (`lumen-coverage-spike.md`, `uasset-bake-spike.md`) built and ran on. The spike's own terms were
-  "the branch either earns a `decisions.md` entry or gets discarded" — this is the entry.
+  else stays runtime-built.** Owner call, adopting the architecture the two stacked spikes (the
+  Lumen surface-cache spike, since folded into `rendering-perf.md`, and `uasset-bake-spike.md`)
+  built and ran on. The spike's own terms were "the branch either earns a `decisions.md` entry or
+  gets discarded" — this is the entry.
 
   **What forced it.** A runtime `UStaticMesh` built with `BuildFromMeshDescriptions(bFastBuild)`
   can never carry what the editor build produces: DDC-fitted Lumen surface-cache cards, Nanite,
@@ -1892,6 +1893,46 @@ append a correction as a new entry.
   build (after Construct, Spawn and PostSpawn) and diffs against that. It costs one field walk per
   map load and one record per entity in memory, and it is what makes the payloads small for the
   right reason: `sp_tutorial_1` records 58 of 1,869 entities on a fresh load, 63 after play.
+- **2026-07-27** — **The runtime's layers are stated by the source tree, and the map actor is no
+  longer the thing that renders the map.** Two changes, one point.
+
+  `Private/` is subfoldered by layer — `Map/`, `Substrate/`, `Scripting/`, `Visual/`, `Audio/`,
+  `Player/`, `UI/`, `Debug/`, `Session/` — and private headers are included by their layer path
+  (`#include "Visual/ElysiumLightRig.h"`). Before this the module was 165 files in one flat folder,
+  so `ElysiumMaterialFactory` sat alphabetically between `ElysiumMapSubsystem` and `ElysiumMcpTools`
+  and nothing but the filename said which layer a file belonged to. The seam the runtime actually
+  enforces — `FElysiumWorldServices`, plain-C++ substrate on one side, engine on the other — was
+  invisible in the tree that held it. Only two headers stay at the `Private/` root, deliberately:
+  `ElysiumContentPaths.h` and `ElysiumKeyValues.h` are module-wide readers every layer includes, and
+  a layer prefix on them would be a lie about who owns them. `Public/` stays flat — it is the
+  module's API surface, not a layering.
+
+  `AElysiumMapActor` was 2,088 lines and did both halves of that seam at once: it adopted the baked
+  level, stood the material overrides, assembled the sky cube, drove the SkyLight's level and both
+  fog sets, pushed the Lumen knobs, built the ropes and the collision hulls, constructed every NPC
+  and prop body **and** implemented the substrate's three service interfaces. Three components now
+  carry the work that has nothing to do with entity logic — `UElysiumMapVisuals` (the look),
+  `UElysiumMapCollision` (the walkable surface), `UElysiumEntityBodies` (the body factory) — and the
+  actor keeps the load order, the two frame passes, the player's placement and the services. It
+  holds no piece of their state and carries **no forwarders** for the look or the collider: a façade
+  over `GetVisuals()`/`GetCollision()` would rebuild the god object the split removed, so the four
+  external readers (the Lights and Maps and Status Cog windows, the light probe, the profiler, the
+  MCP status tool) reach through. The six `IElysiumEmbodiment` mesh calls *are* forwarded, because
+  the substrate's one engine seam is the actor and the substrate must not learn that a body factory
+  exists.
+
+  One behavioural consequence, intended: the child components each build at load rather than in a
+  constructor — a map with no sky faces builds no backdrop mesh, a map with no `.hulls` builds no
+  collider — where before every map carried all of them, empty. The look-tuning cvar callbacks moved
+  with them into `UElysiumMapVisuals::BeginPlay`, which the actor's `Super::BeginPlay()` runs, so
+  they are still bound before `LoadMap` exactly as they were.
+
+  What is **not** addressed: `IElysiumEmbodiment` still returns raw `USkeletalMeshComponent*` /
+  `UStaticMeshComponent*`, so `Substrate/ElysiumPropClasses.cpp` still drives `SetVisibility`,
+  `SetSimulatePhysics` and `SetMassOverrideInKg` on render components directly. The seam abstracts
+  *which engine instance*, not *rendering vs simulation*. Replacing those with opaque body handles is
+  the remaining move and it is a larger one; it is recorded here so the current state is not mistaken
+  for the finished separation.
 - **Pending** — **0.9, the uasset-bake architecture** (`docs/uasset-bake-spike.md`'s own
   terms: "earns a `decisions.md` entry or gets discarded"; de facto everything since
   2026-07-25 builds on it — trigger: before `spike/uasset-bake` merges to `main`).

@@ -2,7 +2,6 @@
 
 **This document is the one work tracker.** It consolidates and supersedes the plan/tracking
 sections of `rebuild-strategy.md` (milestones M0–M6, pipeline backlog),
-`roadmap-lighting-unreal.md` (lighting tasks L*, absorbed — that file is now a stub),
 `debug-tooling.md` (build order), and `engine-core.md` (Phases 1–2). Those docs remain the
 **design/reference detail** behind the tasks here; this doc owns **sequencing, status, and
 decisions**. If a task exists anywhere, it exists here.
@@ -39,14 +38,8 @@ load, while collision, entities, scripting, audio and NPCs stay runtime-built �
 (`decisions.md`, cont. 6; roadmap 0.9). Everything is proven on `sp_tutorial_1` first (1,226 entities, 75 classnames — VtMB's own
 vertical slice), then scaled across ~100 maps.
 
-**Direction (`remaster-direction.md` — read it):** keep VtMB's tone, ambience, feel and logic;
-raise the craft. **Presentation** (UI, type, HUD, textures, post) modernizes freely under the
-art-direction test. **Feel** (movement, camera, combat) is built faithful first and polished
-only by explicit call. **Logic and content** is reproduced — a behavioural divergence requires
-the faithful behaviour to be RE'd and understood *first*, plus a dated owner decision in
-`decisions.md`. Default is always reproduce. The UI has no classic mode (VtMB's screen structure,
-re-skinned with vector type on a resolution-independent stack); the **world** keeps its
-faithful baseline with enhancement as an A/B toggle.
+**Direction:** the presentation/feel/logic three-layer rule and its adjudication tests are owned
+by `remaster-direction.md` — read it there, not restated here.
 
 The phases below are **vertical slices** — each ends with something observable/playable:
 
@@ -413,12 +406,24 @@ M1 leftovers that live in this lane.
   re-cache) is a hypothesis, not a finding. Test at bake/boot time (config var before first
   capture); wire it or retire it. D3's sanctioned bounce knob depends on the answer.
   *Deps:* none.
-- [ ] **3.12 `sm_hub_1` fill adjudication** — judge the 15 shortlist disagreements
-  (`light-attribution.md` → "Where to pick up") by in-engine A/B, now that C2 zeroed the
-  map's SkyLight (no pair — its "sky glow" is all sprayed fill, *more* load-bearing than
-  before) and C3's Skylight Leaking is the landed, measured replacement to gate against.
-  Kill a fill only where GI demonstrably replaces it; one dated `decisions.md` entry per
-  map. *Deps:* none (C3 [x]).
+- [ ] **3.12 `sm_hub_1` fill adjudication** — of `sm_hub_1`'s 249 lights that touch nothing
+  emissive, ~90% were kept by hand against the classifier's fill call (`light-attribution.md`)
+  — the only map where the two genuinely disagree, holding 104 of 409 fill candidates
+  project-wide. A 15-light shortlist of the highest-confidence disagreements sits in the map's
+  eastern strip (X > 7000), numerically indistinguishable from lights killed in the west; the
+  framing under test is that the classifier asks "authored as fill?" while the hand survey (live
+  rig, Lumen on) answers "does the scene survive without it?" — the two diverge where fill is
+  *load-bearing* (faking sky/city-glow ambient with nothing emissive nearby to bounce off).
+  Judge the shortlist by in-engine A/B (MCP teleport + screenshot per light), now that C2 zeroed
+  the map's SkyLight (no pair — its "sky glow" is all sprayed fill, *more* load-bearing than
+  before) and C3's Skylight Leaking is the landed, measured replacement to gate against. Kill a
+  fill only where GI demonstrably replaces it; one dated `decisions.md` entry per map. Follow-on
+  threads once this closes: survey `hw_609_1` to break a 3-of-4 tie (lowest protected share, 45%
+  abstention); re-score with the `type`/`style` clauses (type-0 auto-protect, styled protect, spot
+  prior) against all surveys; an in-engine counterfactual per authored batch
+  (`probe_light_attribution.py` already reconstructs per-luxel baked luminance to check against);
+  batch-level voting (83/85 unanimity on `sp_tutorial_1`, untested elsewhere). *Deps:* none (C3
+  [x]).
 - [ ] **3.13 Decal fog: accept or extend** — a `UDecalComponent` carries no custom primitive
   data, so its fog set is bound into the baked material instance: correct per map, but
   `elysium.Fog` does not reach it and a fog change needs a re-bake, not a reload. Either
@@ -663,69 +668,26 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   mesh + skeleton + clip from `out/npc/*.glb`. **Decision confirmed:** glTFRuntime is adopted
   for the NPC track; remaining risk lives in 8.5/PL4 (banks, multi-sequence merge), not the
   plugin. *Deps:* none.
-- [x] **8.3 Dynamic props** — `prop_dynamic`(+`_ornament`) now stand their decoded static `.mdl`
-  through `AElysiumMapActor::BuildPropVisual` (per-stem `UStaticMesh` cache, one build per model like
-  `LoadProps`; per-entity `UStaticMeshComponent`, not shared ISMs — the follow-hooks want per-entity
-  addressability), closing the 9.3 "bodiless prop" gap. Per-instance addressable: base
-  ScriptHide/ScriptUnhide + the 9.3 SetOrigin/SetAngles/SetModel body-follow + `Break` (hide +
-  `OnBreak`); `SetAnimation` logs a stub (LOD0 static geometry, no skeleton). **Skin families landed
-  2026-07-26** — `mdl.py` decodes the `.mdl` skin table (`StudioMesh.Material` is a *skinref*, not a
-  texture index; `docs/mdl_v2531.md` corrected) and emits `props/<stem>.skins`; the bake resolves it
-  into `DA_<map>_PropSkins` (`UElysiumPropSkinSet`); `ApplyPropSkin` repaints the body's material
-  slots for the `skin` keyfield, the `Skin`/`SetSkin` inputs and a script `.skin =` write. Skins
-  **snap** — VtMB's `skin` is a keyfield-input with a null `inputFunc`, and the crossfading
-  `FadeToSkin` is wired zero times in the 16 exported maps (RE + decision: `decisions.md` 2026-07-26,
-  `entity_io.md` → "Skin families"). GAME_LUMP static props take `DStaticPropV4.skin` (a 10th `.props`
-  field) applied offline by the bake. The `+use` static-mesh family (`prop_button`/`prop_switch`/
-  `prop_sign`/`prop_hacking`/`prop_doorknob(_electronic)`/`item_container(_animated/_lock)`) now stands
-  bodies + skins too, with no invented I/O (their interaction surface stays 4.10/8.8).
-  `elysium.PropSkins` A/Bs. Non-solid (prop_physics collision is 8.4). Placement
-  rotation reads the exporter's new `model_quat` verbatim (no runtime angle math). `elysium.PropBodies`
-  A/Bs. *Verified:* tutorial loads all 78 `prop_dynamic` without crash, `test.bat` Content+Substrate
-  green (a new prop content-assertion included), headless shots show them standing. *Deps:* 8.1, 1.3.
-- [x] **8.4 Physics props** — `prop_physics` ×54 / `phys_hinge` ×12 as Chaos rigid bodies +
-  hinge constraints. Physics props stand a simulating per-entity `UStaticMeshComponent`
-  (`FElysiumPhysProp` → `BuildPhysPropVisual`, `PhysicsActor` profile) on the **baked** `SM_<stem>`,
-  the same asset every other prop stands. **Collision is VtMB's own** (2026-07-26): `tools/phy.py`
-  decodes the model's sibling `.phy` — the VPhysics convex hulls the original game simulates against —
-  into `props/<stem>.phys`, and the bake reproduces each ledge exactly through Geometry Script's hull
-  builder under `CTF_UseSimpleAndComplex`. Nothing is decomposed or approximated; CoACD and
-  `prop_collision.py` are retired. **Mass** is the `.phy`'s authored value (boulder 2000 kg, crate
-  100 kg, wine glass 1.46 kg) unless the entity's `override_mass` > 0 — which is −1 on every
-  `prop_physics` in the exported maps, so the authored mass is what they all weigh. A model with no
-  collision model stands visible but inert, reproducing `CPhysicsProp::CreateVPhysics`
-  (`docs/phy_vphysics.md`); with the Unofficial Patch installed no prop reaches it (27/27 covered).
-  `FElysiumStaticMeshBuilder` is deleted — nothing builds a `UStaticMesh` at runtime any more.
-  `phys_hinge` (`FElysiumPhysHinge`) builds a `UPhysicsConstraintComponent` (twist on the exporter's
-  pre-converted `hinge_axis`, one rotational DOF) in a new `PostSpawn()`/Activate pass, wiring
-  `attach1`↔`attach2`/world. The RE'd VtMB I/O surface (Ghidra: `Wake`, **not**
-  EnableMotion/DisableMotion/Sleep; `TurnOn`/`TurnOff`/`Break`; `OnBreak`) is in `decisions.md`
-  (2026-07-24). **Skins landed 2026-07-26** with 8.3: `Skin`/`SetSkin` repaint the body for real, and
-  `FadeToSkin`/`SetSkinFadeTime` are registered against the RE'd behaviour — they snap, because no
-  exported map fires them (`decisions.md` 2026-07-26).
-  `elysium.PhysicsProps` A/Bs simulation. *Verified:* `build.bat` + `test.bat` Content/Substrate green
-  (54 prop_physics / 12 phys_hinge assertions, plus baked-collision/mass assertions on the asset);
-  `phy.py` decodes all 2,854 retail `.phy` files → 7,889 hulls, every one convex (`F = 2V − 4`, zero
-  exceptions); the bake reports 18 physics meshes / 19 convex shapes / 18 with authored mass, read back
-  off the assets. In-game: bodies simulate with the authored masses exact (trashgarage 3.00, barrela
-  7.00, break_crate 100.00 kg) and `showflag.Collision` shows the hulls hugging each barrel.
-  **Chaos settle/push feel + hinge swing await an owner in-game play test** (like 4.1). *Deps:* 8.1.
-- [x] **8.5 NPC presence + `scripted_sequence` minimal** — presence landed in **B3**, the animation
-  vocabulary in **PL4**, and this closes the rest: NPCs idle on the stance their disposition selects
-  instead of T-posing, and `scripted_sequence` (×104 + 4 `aiscripted_sequence`) runs as a real class.
-  Selection is on the engine's own keys — `mdl_skel.local_sequences` now reads `szactivitynameindex`
-  and `actweight`, so an idle is picked by **activity** (`default_disposition` →
-  `dispositiontable.txt` → `Stance_<Name>_Idle_*`, then `ACT_IDLE` by weight), never by label
-  substring. A native `UElysiumNpcAnimInstance` (two sequence players + a 0.25 s crossfade) plays it,
-  banks are retargeted by bone name and cached per session, and the script seam
-  (`SetAnimation`/`SetGesture`/`SetDisposition`) reaches it through two `FElysiumEntity` virtuals.
-  `scripted_sequence` reproduces the beat's outputs — `OnBeginSequence`/`OnEndSequence`, the
-  `m_iszNextScript` chain, `m_iszIdle` at spawn — which is the half the maps depend on: 67 of its 88
-  wires land on inputs that already exist. RE'd on the way: the class is **`CCineNPC`**, HL1
-  lineage, so **no exported sequence starts on spawn** (`entity_io.md`). **Not reproduced:**
-  locomotion — the NPC is placed on the mark rather than walked to it, and `OnScriptEvent01..08`
-  needs decoded animation events (`decisions.md` 2026-07-26). *Verified:* `Elysium.Substrate.ScriptedSequence`
-  + `Elysium.Content.ScriptedSequenceClips` (106 sequences, 88/88 animation refs resolve); in-game,
+- [x] **8.3 Dynamic props** — `prop_dynamic`(+`_ornament`) stand their decoded static `.mdl` as
+  per-entity static meshes (`AElysiumMapActor::BuildPropVisual`), closing the 9.3 "bodiless prop" gap;
+  non-solid (prop_physics collision is 8.4). Per-instance addressable via ScriptHide/Unhide, body-follow
+  and `Break`; skin families (2026-07-26) repaint them for real via a baked `PropSkinSet`.
+  `elysium.PropBodies`/`.PropSkins` A/B. *Verified:* tutorial loads all 78 `prop_dynamic` without crash,
+  `test.bat` Content+Substrate green, headless shots show them standing. As-built:
+  `roadmap-archive.md` 8.3. *Deps:* 8.1, 1.3.
+- [x] **8.4 Physics props** — `prop_physics` ×54 / `phys_hinge` ×12 as Chaos rigid bodies + hinge
+  constraints on the **baked** `SM_<stem>`; collision and mass reproduce VtMB's own `.phy` exactly
+  (CoACD and runtime hull-cooking retired). Skins (2026-07-26) repaint bodies for real, matching 8.3.
+  `elysium.PhysicsProps` A/Bs simulation. *Verified:* `build.bat`/`test.bat` Content+Substrate green
+  (54/12 assertions plus baked-collision/mass checks); in-game bodies simulate at their authored masses
+  exact and `showflag.Collision` hugs the geometry. **Chaos settle/push feel + hinge swing await an
+  owner in-game play test** (like 4.1). As-built: `roadmap-archive.md` 8.4. *Deps:* 8.1.
+- [x] **8.5 NPC presence + `scripted_sequence` minimal** — NPCs idle on the stance their disposition
+  selects (activity-based selection off `mdl_skel.local_sequences`, never label substring) instead of
+  T-posing, and `scripted_sequence`(+`aiscripted_sequence`) runs as a real class reproducing its beat
+  outputs. **Not reproduced:** locomotion (placed on the mark, not walked to it) and
+  `OnScriptEvent01..08`. *Verified:* `Elysium.Substrate.ScriptedSequence` +
+  `Elysium.Content.ScriptedSequenceClips` (106 sequences, 88/88 animation refs resolve); in-game,
   `script_7b.BeginSequence` places Jack on his mark 187 m away and its `OnEndSequence` opens his
   dialogue. As-built: `roadmap-archive.md` 8.5. *Deps:* 8.2, PL4 [x].
 - [x] **8.6a New Game context + story entry** *(carve-out of 8.6)* — the player sheet +
@@ -776,34 +738,14 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   **Acceptance:** main menu and pause menu are legible and correctly proportioned at 1080p,
   1440p, 4K and 21:9 with no letterboxing or bitmap-font blur; New Game enters `sp_tutorial_1`
   through the 8.6a seam. *Deps:* PL8 [x]; 8.6a [x] for the seam.
-- [x] **8.7 Ropes** — VtMB's overhead cables. The exporter's `write_ropes` resolves each
-  `move_rope`/`keyframe_rope` chain (topologically — `move_rope` is the start, not `keyframe_rope`
-  as `entity_visuals.md` had it; `NextKey` binds **first-match by entity order** — the engine's
-  `FindEntityByName`, RE-confirmed against the stock `CRopeKeyframe` in `vampire.dll` — which keeps
-  each of `sp_tutorial_1`'s two reused `tele4..tele9` installations local) into per-segment
-  `<map>.ropes` lines + decodes the `RopeMaterial`
-  texture; the runtime's `AElysiumMapActor::BuildRopes` stands one Verlet `UCableComponent` per
-  segment (`CableLength` = the sidecar's RE'd rest length, MID off `M_World_Opaque`), start pinned
-  and end pinned unless `Dangling`. Rest length is *not* `span + Slack`: half the computation lives
-  in `client.dll`, where `RecomputeSprings` applies `Slack` a second time, subtracts a flat 100
-  units and integer-divides — so most ropes sit at or below their straight span and hang taut
-  (`decisions.md` 2026-07-25 cont. 2). Node count is VtMB's `m_nSegments`, which `CRopeKeyframe::KeyValue`
-  derives from **`Type`** (0 → 10, 1 → 4, else → 2, clamped `[2, 10]`) — **not** `Subdiv`, which is
-  client-side render tessellation; a `Type 2` rope is one span and cannot sag, which is 25% of the
-  game's rope nodes (`decisions.md` 2026-07-25).
-  Stock `CableComponent` plugin enabled (`decisions.md` 2026-07-24). `elysium.Ropes` A/Bs.
-  *Verified:* build + `test.bat` green (full suite); export audited against the entity lump on all
-  seven exported maps — endpoints match the BSP 1:1, first-wins `NextKey` binding agrees with a
-  nearest-position heuristic on every segment, and a 108-map sweep finds no rope node inside any
-  `sky_camera` room. The tutorial loads **70 cables** (72 chain links − 2 coincident-node artifacts
-  dropped), placement verified in-game by MCP screenshot after fixing `UCableComponent`'s
-  unset-`AttachEndTo` root-component fallback (`decisions.md` 2026-07-25 cont.); sag depth verified
-  in-game after RE'ing the client half of the rest-length computation — chophouse chains hang
-  vertical with a short loop at the hook, street wires droop gently pole-to-pole. *Open:* the shape
-  reproduces VtMB's own arithmetic exactly but has **not** been put side by side with the running
-  original; `Subdiv` (client-side render tessellation) has nowhere to go on `UCableComponent`, so a
-  short high-slack link is drawn as a `nodes − 1` polyline where VtMB draws a Catmull-Rom spline.
-  As-built: `roadmap-archive.md` 8.7. *Deps:* none.
+- [x] **8.7 Ropes** — VtMB's overhead cable chains (`move_rope`/`keyframe_rope`, linked by `NextKey`)
+  stood as Verlet `UCableComponent`s, one per resolved segment; rest length and node count reproduce
+  VtMB's own arithmetic (`RecomputeSprings`, `m_nSegments` from `Type`, not `Subdiv`). `elysium.Ropes`
+  A/Bs. *Verified:* build + full `test.bat` green; export audited against the entity lump on all seven
+  exported maps (endpoints match 1:1); the tutorial's 70 cables load and sag in-game, verified by MCP
+  screenshot. **Open:** the shape has **not** been put side by side with the running original, and
+  `Subdiv` render tessellation has no analogue on `UCableComponent`. As-built: `roadmap-archive.md`
+  8.7. *Deps:* none.
 - [ ] **8.8 Sign / popup panels on the UI foundation** — 4.10's Canvas panel re-drawn on 8.6's
   stack. The **authored layout is honoured as proportion and grouping** (block rects, ordering,
   emphasis) and re-set with vector type on the resolution-independent layout — the `CSignUI`
@@ -872,14 +814,11 @@ draw on the same stack; NPCs stand in the world at their entity origins.
 
 ## P9 — Dialogue & persistence *(design: `game_runtime.md`, `rebuild-strategy.md` B7/B9)*
 
-- [x] **9.1 `.dlg` parser + dlgexpr** — `ElysiumDlg.{h,cpp}`: the 13-field CRLF/Latin-1 parser
-  (`FElysiumDlgFile`, 14-field `kiki.dlg` tolerance), the `dlgexpr` front-normalizer
-  (`ElysiumDlgExpr` — skill-checks → `CalcFeat(...) >=`, condition `&`/`|` → `and`/`or`, action `&` →
-  `;`) over the 5.2 evaluator/installed host, and the host-agnostic branch machine
-  (`FElysiumDlgConversation`). **error-to-false** rides the host (RE3). NPC col-4 = action, PC col-4 =
-  gate (resolved by data — `decisions.md` 2026-07-24). *Verified:* unit tests (parse / normalize /
-  branch) + a Content sweep over **all 25 NPC dialogues of the test-bench maps** (10,949 rows, every
-  one parsed + walked, 0 dangling links) + the jack_tutorial beat to `G.Tut_Jack=1`/END. As-built:
+- [x] **9.1 `.dlg` parser + dlgexpr** — `ElysiumDlg.{h,cpp}`: the 13-field CRLF/Latin-1 parser, the
+  `dlgexpr` front-normalizer over the 5.2 evaluator/installed host, and the host-agnostic branch
+  machine. NPC col-4 = action, PC col-4 = gate (resolved by data). *Verified:* unit tests
+  (parse/normalize/branch) + a Content sweep over all 25 NPC dialogues of the test-bench maps (10,949
+  rows, 0 dangling links) + the jack_tutorial beat to `G.Tut_Jack=1`/END. As-built:
   `roadmap-archive.md` 9.1. *Deps:* 5.2.
 - [ ] **9.2 Conversation UI + audio-by-path** — dialogue screen on the 8.6 UI foundation, line
   audio via 6.2. Content is **reproduced verbatim** (lines, conditions, branch structure,
@@ -1166,27 +1105,15 @@ Steps are ordered so each compiles, ships and is observable alone. **11.4 was th
   screen (`LogMoviePlayer` PlayMovie→PostLoadMap), boot is decided once at GI init.
   `Elysium.Substrate.AppState` asserts the whole transition table. As-built:
   `roadmap-archive.md`. *Deps:* 11.1, 8.6.
-- [x] **11.4 The player entity** *(S3 — the hinge)* — `FElysiumAnimating` + `FElysiumCombatCharacter`
-  as real registry chain nodes matching VtMB's datamap chain, `FElysiumPlayer` under them (classname
-  `player`, targetname **`!player`** — which is what the maps themselves write, so 48 of the 49
-  `point_teleport.target` keys became ordinary name resolves), and `FElysiumPlayerRecord` (session
-  lifetime, on `UElysiumGameStateSubsystem`) hydrating at map build and dehydrating at world
-  teardown. `FElysiumNpc` re-based onto the same two nodes, losing its duplicated body/animation
-  half. The pawn demoted to a body: `+use`, sign dismissal and the skybox toggle moved to
-  `AElysiumPlayerController`, the shift-gait poll became a `+speed`/`-speed` latch, and it now
-  carries the handle of the entity it embodies. `FindPlayer()` and `pc` return an ordinary `Entity`
-  (re-bound per eval, since a handle is generation-checked); **`vampire.Player` is retired**; the 25
-  `CBaseCombatCharacter` + the 10 recovered player inputs register on the chain, eight of them
-  backed by real fields and the rest logging their owning task. A `GetDynamicField` hook carries the
-  `vdata` half of the sheet (`pc.base_*`) in both hosts until 9.4 names those fields. **The death
-  path is now 11.3's missing game-over driver.** *Acceptance met:* on `sp_tutorial_1`,
-  `pc.MoneyAdd(50)` and `elysium.ent_fire !player MoneyAdd 50` both land on `money` (0→50→100)
-  through the same R2 walk; a trigger the player walks into resolves `!activator` to a real handle;
-  `elysium.ent_fire teleport_player Teleport` moves the player through `SetRuntimeOrigin`; the map's
-  own `logic_auto` `GiveItem` wires at the player resolve instead of dropping; `trigger_hurt` drains
-  the entity's `health` to 0 and the run ends in `GameOver`; money survives a travel and
-  quit-to-menu clears the record. `Elysium.Substrate.PlayerEntity` asserts the whole shape headless.
-  As-built: `roadmap-archive.md`. *Deps:* 11.0 (call A), 11.2.
+- [x] **11.4 The player entity** *(S3 — the hinge)* — the player stopped being a special case:
+  `FElysiumAnimating`/`FElysiumCombatCharacter`/`FElysiumPlayer` join VtMB's own datamap chain
+  (classname `player`, targetname `!player`), `FElysiumPlayerRecord` carries the durable half across
+  map boundaries, and `FElysiumNpc` re-bases onto the same chain. `vampire.Player` is retired — `pc`
+  is now an ordinary re-bound `Entity` handle, and the death path is 11.3's missing game-over driver.
+  *Acceptance met:* on `sp_tutorial_1`, money/teleport/damage/`GameOver` all round-trip through the
+  real chain, and money survives a travel while quit-to-menu clears the record.
+  `Elysium.Substrate.PlayerEntity` asserts the whole shape headless. As-built: `roadmap-archive.md`
+  11.4. *Deps:* 11.0 (call A), 11.2.
 - [x] **11.5 Input scope stack** *(S6)* — `UElysiumInputSubsystem` (LocalPlayer) owning a priority
   stack of `FElysiumInputScope` (mode, cursor, mapping contexts, focus widget); the menu, the dialogue
   box, sign panels and Cog all push/pop, and **nothing else in the module calls `SetInputMode`** —
@@ -1236,79 +1163,33 @@ Steps are ordered so each compiles, ships and is observable alone. **11.4 was th
   `Elysium.Substrate.Console` the four-step precedence. As-built: `roadmap-archive.md`.
   *Deps:* 11.1. *Feeds:* 10.6, 4.7.
 - [x] **11.7 Camera component** — `UElysiumCameraComponent` (a `UCameraComponent` subclass — VtMB has
-  **one** camera and a **weight**, not two cameras) holding the four VtMB weights, with
-  `AElysiumPawn::CalcCamera` as the single apply point, delegating to `GetCameraView` first. The
-  driver is plain C++ (`FElysiumCameraWeights`, `ElysiumCameraSolve.h`): 2.0/s in both directions,
-  linear and eased at the point of use through `SimpleSpline`, time-scaled, and
-  `CAM_IsThirdPerson` as the **disjunction** it is — so a blend reads as third person from its first
-  frame and a scripted camera counts too. The boom is Source's order — rate-limited approach → sphere
-  sweep with the 7-unit pull-in → the **two-constant** Hooke damper (4.0 free, 15.0 wall-clipped, the
-  reason the stock spring arm is not enough). The **cvar surface is reproduced 1:1 in the VtMB console
-  store**, not as `elysium.*` cvars, on a new `FElysiumConsole::DeclareCvar` — so `cam_idealdist 50`
-  resolves as a cvar set rather than falling through to Python and a user's `config.cfg` and the
-  patch's aliases keep governing. `camortho` stays unimplemented: no orthographic path exists in the
-  recovered client. The scripted-shot channel is one handle-based push/pop stack over **values** with
-  a timed ramp, and `SetCamera` lands on it: `ElysiumCameraShots` reads `vdata/camerashots/` (the
-  grammar Troika ships a how-to for) and `FElysiumCameraDirector` on the map actor resolves its
-  anchors against live entities and bodies — `Bone:`/`Attachment:` through a new
-  `FElysiumEntity::GetSkeletalBody()` — refreshed in the post-move pass. The substrate reaches it
-  through `IElysiumEmbodiment`, **not** `IElysiumPresenter`: the camera is part of the player's body
-  and the presenter carries what is put on *screen*, not what the player's body does
-  (`runtime-architecture.md` §9 corrected).
-  *Acceptance met:* `Elysium.Substrate.Camera` (0→1 in 0.5 s, frame-rate-independent, time-scaled,
-  symmetric resume mid-blend, the priority order, the shot stack) and `Elysium.Substrate.CameraShots`
-  (the shot-file read against the how-to) pass with no RHI; in the built game `togglecamera` reaches
-  the full 215.9 cm boom in the open and clips to 24 cm against a wall, `cam_idealdist`/`cam_yaw`
-  retune it live, and `SetCamera("dialogdefault")` frames Jack's head bone at the file's FOV 40 while
-  `RemoveCamera` ramps it back out. As-built: `roadmap-archive.md`. *Deps:* 11.6. *Feeds:* 12.x.
-- [x] **11.8 Presentation seam** *(S8)* — `UElysiumPresentationSubsystem` (world-scoped) rebuilds
-  `FElysiumViewState` in **step 9** of the frame (a declared `TG_PostUpdateWork` tick function, after
-  both gameplay passes, `bTickEvenWhenPaused` — a held world still has to publish the *suppression*)
-  and broadcasts the discrete delegates plus `OnViewPublished`. The state and its rules are plain C++
-  in `Public/ElysiumViewState.h`, like `ElysiumAppState.h`: `ShowsPlayerSurface`, `ResolveReticle`
-  and `ReconcileDialogue` are total functions over the struct, so the whole set is asserted with no
-  world, no HUD and no viewport. It is also the production **`IElysiumPresenter`** (11.2's fourth
-  service, null until now) — and the split that fell out is the load-bearing one: **continuous state
-  is sampled, discrete moments are announced.** The fade's alpha, the panel's fade-in ramp, the aimed
-  use icon and the meters are derived from the game clock and sampled off the world each pass; a fade
-  *starting* or a conversation opening has no clock to read, so the substrate announces it and the
-  publisher drains the announcement after the state is in place — a diff cannot tell a conversation
-  that closed and reopened in one frame from one that never moved. The fade/sign/dialogue state stays
-  on `FElysiumEntityWorld`, because each is world state with the map epoch's lifetime and 11.9 saves
-  it. `AElysiumHUD` **no longer ticks at all**: it reconciles the retained surfaces (the Slate box,
-  the sign's input scope) from `OnViewPublished` and draws the rest from `View()`, and its dialogue
-  pick routes back out through the presenter rather than into the world. The scattered `IsMenuUp()`
-  gates became **one rule** — `App == Playing && !bMenuOpen`, asking both writers because
-  `elysium.menu` raises a screen without moving the app state — and that rule is a rule about
-  *publishing*, which is what fixes the case the polled HUD got wrong: a conversation on screen when
-  the pause menu opens is republished as closed, so the box comes down instead of drawing through.
-  *Acceptance met:* no widget (and no HUD path) references `FElysiumEntityWorld`;
-  `Elysium.Substrate.ViewState` renders every rule off a hand-built state with no RHI, and
-  `Elysium.Substrate.FrameOrder` reads step 9 off the class defaults; in the built game
-  `elysium.viewstate` reports the live surface, the sign panel / dialogue box / `env_fade` quad /
-  crosshair / `+use` context cursor all draw off the published state, and opening the pause menu over
-  Jack's conversation takes the box *and* the panel down and closing it restores both. As-built:
-  `roadmap-archive.md`. *Deps:* 11.3. *Feeds:* 8.9, 9.2.
-- [x] **11.9 Save/load** *(= 9.5, on this spine)* — `save-architecture.md` in full: the
-  `UElysiumSaveGame` shell over a versioned compressed payload (`'ELYS'` prologue + Oodle, four
-  refusals), the four blocks, `EElysiumField::Save` on the class-chain field tables (enumeration is
-  the R2 walk via `SaveFields`, matched by name), the per-map snapshot lifecycle with the
-  absent-entity set, the event queue + think times, `G`, owned RNG streams (`ElysiumRng`, five named
-  streams off one session seed), and the slot/quick/autosave ring. **Omission diffs against a
-  post-Load baseline, not zero** — the design's literal reading would have omitted every entity whose
-  `Spawn()` arms a think its first think disarms, so a restored map would re-run every `logic_auto`
-  ignition (`decisions.md` 2026-07-27, with the mid-swing-door call). `G.morgue` has no runtime
-  surface to save yet; when one lands it is a `G` key and needs no block change.
-  *Acceptance met:* in the built game a mid-tutorial save → `elysium.quittomenu` → load restores the
-  clock to the saved second, both pending queue entries with their exact fire times *and* serials,
-  the `ScriptHide`n relay still hidden, the unlocked door still unlocked, `G` as saved (and the
-  backdrop map's own writes gone), the player back on the spot — and the beat machine keeps running
-  (`idle_timer`'s Python think fires on cadence, the restored delayed input fires at its saved time).
+  **one** camera and a **weight**, not two) with `AElysiumPawn::CalcCamera` as the single apply point.
+  The boom solve, the two-constant Hooke damper and the cvar surface reproduce VtMB's own console
+  store rather than `elysium.*` cvars. The scripted-shot channel (`SetCamera`, `vdata/camerashots/`)
+  resolves anchors against live entities and bodies through `IElysiumEmbodiment` (camera is part of
+  the player's body, not the presenter — `runtime-architecture.md` §9 corrected). *Acceptance met:*
+  `Elysium.Substrate.Camera`/`CameraShots` pass with no RHI; in the built game `togglecamera` reaches
+  the full 215.9 cm boom and clips against walls, and `SetCamera("dialogdefault")` frames Jack's head
+  bone correctly. As-built: `roadmap-archive.md` 11.7. *Deps:* 11.6. *Feeds:* 12.x.
+- [x] **11.8 Presentation seam** *(S8)* — `UElysiumPresentationSubsystem` rebuilds `FElysiumViewState`
+  once per frame (step 9, `TG_PostUpdateWork`, `bTickEvenWhenPaused`) and is the production
+  `IElysiumPresenter`: continuous state is sampled off the world, discrete moments (a fade starting, a
+  conversation opening/closing) are announced and drained after the state is in place. `AElysiumHUD`
+  no longer ticks or polls `FElysiumEntityWorld` — it reconciles from `OnViewPublished`. *Acceptance
+  met:* no widget/HUD path references `FElysiumEntityWorld`; `Elysium.Substrate.ViewState`/`FrameOrder`
+  pass with no RHI; in the built game opening the pause menu over Jack's conversation takes the
+  dialogue box *and* the sign panel down together and closing it restores both. As-built:
+  `roadmap-archive.md` 11.8. *Deps:* 11.3. *Feeds:* 8.9, 9.2.
+- [x] **11.9 Save/load** *(= 9.5, on this spine)* — `save-architecture.md` in full:
+  `UElysiumSaveGame` over a versioned compressed payload, the four blocks, `EElysiumField::Save` on
+  the class-chain field tables, per-map snapshots against a post-Load baseline (not zero, so a
+  restored map doesn't re-run its `logic_auto` ignitions), the event queue + think times, `G`, owned
+  RNG streams, and the slot/quick/autosave ring. *Acceptance met:* in the built game a mid-tutorial
+  save/load round-trips the clock, pending queue entries, hidden/unlocked entity state, `G` and the
+  player position exactly, and the beat machine keeps running afterward.
   `Elysium.Substrate.SaveRoundTrip`/`SavePayload`/`SaveSchema` and `Elysium.Content.MapSnapshot` are
-  green, the last one on a byte digest over the real container for every exported map. Snapshot
-  sizes: `sp_tutorial_1` 58/1869 records (1712 B), `sm_pawnshop_1` 13/469 (607 B), `sm_hub_1`
-  67/2598 (2041 B). New verbs: `elysium.save.slots`, `.cansave`, `.delete`, `.diff` (either side may
-  be `live`). As-built: `roadmap-archive.md`. *Deps:* 11.4, 5.4.
+  green. New verbs: `elysium.save.slots`, `.cansave`, `.delete`, `.diff`. As-built:
+  `roadmap-archive.md` 11.9. *Deps:* 11.4, 5.4.
 - [ ] **11.10 Play test tier** *(S10)* — a fourth automation tier that drives a real headless world:
   the beat-script driver (`do`/`wait`/`assert`/`shot` over the command registry, injected input, `G`/
   quest/entity predicates and the 2.9 shot baseline), command-stream replay, the save round-trip, and

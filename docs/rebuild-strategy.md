@@ -180,16 +180,14 @@ movement, Unreal-native throughout:
 | **modern Slate/UMG UI** (not a VGUI port) | Screen inventory, panel anatomy, hierarchy and iconography carry over from `.res`/`trackerscheme.res`; the runtime is a resolution-independent Slate/UMG stack with vector type. No 640×480 scale box, no bitmap `.fnt` atlas, no classic mode. `remaster-direction.md` → axis 1; `m0_menu_build.md` is structural reference. |
 | engine console commands now; Slate console only if it earns its keep | `elysium.*` commands cover current needs. |
 
-**Success criterion for Track A**: `sp_tutorial_1` and the hub maps (`sm_hub_1`, `ch_hub_1`,
-`hw_hub_1`, `la_hub_1`) reproduce VtMB's own look and movement feel, checked against the
-`shots.bat` screenshot-regression baseline (`tools/shots_diff.py`) rather than eyeballed.
+**Success criterion for Track A**: slice acceptance for P7, `docs/roadmap.md`.
 
 ## Master materials (the one hand-authored asset set)
 
 `UMaterial` cannot be created at runtime; everything else can. The repo commits a small,
 game-agnostic set with parameter slots:
 
-- `M_VtMB_World` *(exists — albedo + alpha-masked selfillum emissive)* — grows into
+- `M_VtMB_World` (albedo + alpha-masked selfillum emissive) — grows into
   `M_World_Opaque` (bump, envmap mask + cube, WVT second layer + vertex-color blend). The
   `$selfillum` path: the exporter bakes the base texture's alpha-masked RGB into `*_ke.png`
   and writes `map_Ke`; the runtime binds it onto the `Emissive` texture parameter and turns
@@ -199,8 +197,8 @@ game-agnostic set with parameter slots:
 - `M_Water` (Single Layer Water)
 - `M_Additive` (coronas / glow props)
 - `M_Decal` (deferred decal domain)
-- `M_Sky` (six-face skybox) *(exists — unlit, two-sided, samples the `SkyCube` param by
-  view direction; authored by `tools/make_sky_material.py`)*
+- `M_Sky` (six-face skybox, unlit, two-sided, samples the `SkyCube` param by view
+  direction; authored by `tools/make_sky_material.py`)
 - UI brushes / materials for the modern UI stack (vector-type rendering is Slate's own; these
   cover panel treatments — grain, ink bleed, vignette — that carry the paper/blood language)
 
@@ -451,14 +449,11 @@ P5+P6, etc.). The M-numbers below remain the shared vocabulary for what each mil
 Vertical slice: **play `sp_tutorial_1` start to finish, then walk into
 `sm_pawnshop_1`.**
 
-- **M0 — first pixels** *(done, verified)*: world + skybox rendering, DDS/PNG textures,
+- **M0 — first pixels**: world + skybox rendering, DDS/PNG textures,
   trimesh collision, `.emc` cache, free-fly pawn, map switching, debug HUD.
 - **M1 — world parity**: `.hulls`/`.dispcol` collision, Source movement component,
   light rig + lightstyles, `.env` sky/fog, `.cube` LUT, master-material set
-  (alpha modes, WVT, bump/envmap), texture prewarm off the game thread. (The `UE_`
-  coordinate conversion, `.env` sky/fog, `.cube` LUT, `M_Sky`, the light rig +
-  lightstyles, and `.hulls`/`.dispcol` brush collision are done — see "M1 — remaining
-  tasks" for what's left.)
+  (alpha modes, WVT, bump/envmap), texture prewarm off the game thread.
 - **M2 — dressing parity**: props via ISM (+ convex collision), decals, Single Layer
   Water, coronas, checked against the `shots.bat` baseline on tutorial + hub maps.
 - **M3 — entity backbone**: entity world + registry, event queue + input dispatch,

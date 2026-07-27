@@ -329,7 +329,7 @@ and stay the reference for the parts still open (§ *Not yet recovered*, the fee
 - **A console/cvar bridge already exists** (`ccmd`/`cvar`, roadmap 9.3b), so VtMB's cvar names can
   be reproduced 1:1 and the shipped `cfg/` + the patch's `user.cfg` aliases keep working verbatim.
 - **The pawn's camera sits at `Z = 28 u` above the hull centre** with `bUsePawnControlRotation = true`
-  (`Source/ElysiumUE/Private/ElysiumPawn.cpp`); the boom hangs off that same point. There is no
+  (`Source/ElysiumUE/Private/Player/ElysiumPawn.cpp`); the boom hangs off that same point. There is no
   player mesh yet (roadmap 8.11), so the fade band and `ShouldDrawLocalPlayer` have nothing to drive.
 - **Fully dynamic renderer**, HWRT Lumen + VSM, static lighting disabled
   (`docs/rendering-perf.md`).

@@ -287,22 +287,7 @@ every HL2 `game_sounds*.txt` line is commented out [data]. `scripts/soundscapes.
 dialogue layer, not here) are all dormant. `CSoundscapeSystem` still exists in the
 binaries but no map spawns `env_soundscape`, so it never runs.
 
-## 10. What Elysium needs (scope)
-
-The map viewer's job is *atmosphere first*, story audio later. Priority order:
-
-1. **`ambient_soundscheme` + scheme reader** — the biggest perceptual win: per-area
-   ambient bed + music + random one-shots. Small, self-contained (174 files, one
-   KeyValues grammar). Requires the music/ambient MP3+WAV assets.
-2. **`ambient_generic`** — point-source atmosphere (flickering lights, fire, drips).
-   Direct wav paths, trivial mapping.
-3. **DSP rooms** — optional polish; map `RoomDSP` presets to reverb buses.
-4. **Footstep/impact sounds** — needs the player/physics-material layer first.
-5. **Dialogue + sentences + `.vcd`/`.lip`** — deferred with the story/NPC port;
-   large (5k+ lines). The `.vcd` half is decoded — grammar, event semantics and the
-   scene entity are in `choreographed_scenes.md`, surveyed by `tools/probe_scenes.py`; the
-   `.lip` half is decoded in `facial_animation.md` (7,136 plain-text phoneme documents, one
-   per line, surveyed by `tools/probe_facial.py`) but has no runtime consumer yet.
+Implementation priority and status for this audio surface: `docs/roadmap.md`.
 
 ## 11. Provenance — key addresses (`engine.dll`, base `0x20000000`) [VtMB]
 

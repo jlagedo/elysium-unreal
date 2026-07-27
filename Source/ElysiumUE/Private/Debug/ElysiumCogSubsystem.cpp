@@ -1,0 +1,183 @@
+#include "ElysiumCogSubsystem.h"
+
+#include "CogCommon.h"
+#include "Containers/Ticker.h"
+
+#if ENABLE_COG
+#include "CogImguiHelper.h"
+#include "CogSubsystem.h"
+#include "HAL/FileManager.h"
+#include "HAL/IConsoleManager.h"
+#include "Debug/ElysiumCogWindow_Audio.h"
+#include "Debug/ElysiumCogWindow_Entities.h"
+#include "Debug/ElysiumCogWindow_EventQueue.h"
+#include "Debug/ElysiumCogWindow_Inspector.h"
+#include "Debug/ElysiumCogWindow_Lights.h"
+#include "Debug/ElysiumCogWindow_Logic.h"
+#include "Debug/ElysiumCogWindow_Maps.h"
+#include "Debug/ElysiumCogWindow_Npc.h"
+#include "Debug/ElysiumCogWindow_Scripting.h"
+#include "Debug/ElysiumCogWindow_SoundScheme.h"
+#include "Debug/ElysiumCogWindow_Status.h"
+#include "Debug/ElysiumCogWindow_WorldViz.h"
+#include "CogEngineWindow_CollisionViewer.h"
+#include "CogEngineWindow_Console.h"
+#include "CogEngineWindow_DebugSettings.h"
+#include "CogEngineWindow_Inspector.h"
+#include "CogEngineWindow_Levels.h"
+#include "CogEngineWindow_LogCategories.h"
+#include "CogEngineWindow_Metrics.h"
+#include "CogEngineWindow_OutputLog.h"
+#include "CogEngineWindow_Plots.h"
+#include "CogEngineWindow_Scalability.h"
+#include "CogEngineWindow_Selection.h"
+#include "CogEngineWindow_Stats.h"
+#include "CogEngineWindow_TimeScale.h"
+#include "CogEngineWindow_Transform.h"
+#endif
+
+bool UElysiumCogSubsystem::ShouldCreateSubsystem(UObject* Outer) const
+{
+	if (!Super::ShouldCreateSubsystem(Outer))
+	{
+		return false;
+	}
+
+#if ENABLE_COG
+	return true;
+#else
+	return false;
+#endif
+}
+
+#if ENABLE_COG
+// Whether Cog's ImGui window layout survives between runs. Off by default: a debug UI that
+// restores itself decides what is on screen at boot, and a restored window that holds the mouse
+// makes the game's own menu unclickable. With this off every launch starts dormant and F1 is the
+// only way in. Set to 1 to keep a hand-arranged layout across runs.
+static TAutoConsoleVariable<int32> CVarCogPersist(
+	TEXT("elysium.CogPersist"),
+	0,
+	TEXT("1 = keep Cog's ImGui window layout between runs; 0 = boot dormant every time."),
+	ECVF_Default);
+#endif
+
+void UElysiumCogSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+{
+	Super::Initialize(Collection);
+
+#if ENABLE_COG
+	// Clear the layout before the dependency below brings Cog up: its ImGui context reads this file
+	// when it first initialises, so removing it afterwards would be a race.
+	if (CVarCogPersist.GetValueOnGameThread() == 0)
+	{
+		const FString LayoutIni = FCogImguiHelper::GetIniFilePath(TEXT("imgui"));
+		if (IFileManager::Get().FileExists(*LayoutIni))
+		{
+			IFileManager::Get().Delete(*LayoutIni, /*RequireExists*/ false, /*EvenReadOnly*/ true);
+		}
+	}
+
+	CogSubsystem = Collection.InitializeDependency<UCogSubsystem>();
+#endif
+}
+
+void UElysiumCogSubsystem::PostInitialize()
+{
+	Super::PostInitialize();
+
+#if ENABLE_COG
+	UCogSubsystem* Cog = Cast<UCogSubsystem>(CogSubsystem.Get());
+	if (!IsValid(Cog))
+	{
+		return;
+	}
+
+	// Stock CogEngine windows. No GAS/AI/Input windows (this project uses none of
+	// those systems), so Cog::AddAllWindows (which pulls in CogAbility/CogAI) is
+	// intentionally not used. Nor is CogEngineWindow_ImGui: its whole content is the
+	// Dear ImGui / ImPlot demo, metrics, debug-log and style-editor toggles, which are
+	// ImGui's own showcase, not this project's debug surface. Press F1 in PIE/standalone
+	// to open the main menu.
+	Cog->AddWindow<FCogEngineWindow_Inspector>("Engine.Inspector");
+	Cog->AddWindow<FCogEngineWindow_Selection>("Engine.Selection");
+	Cog->AddWindow<FCogEngineWindow_CollisionViewer>("Engine.Collision Viewer");
+	Cog->AddWindow<FCogEngineWindow_Levels>("Engine.Levels");
+	Cog->AddWindow<FCogEngineWindow_Transform>("Engine.Transform");
+	Cog->AddWindow<FCogEngineWindow_Console>("Engine.Console");
+	Cog->AddWindow<FCogEngineWindow_OutputLog>("Engine.Output Log");
+	Cog->AddWindow<FCogEngineWindow_LogCategories>("Engine.Log Categories");
+	Cog->AddWindow<FCogEngineWindow_Stats>("Engine.Stats");
+	Cog->AddWindow<FCogEngineWindow_Metrics>("Engine.Metrics");
+	Cog->AddWindow<FCogEngineWindow_Plots>("Engine.Plots");
+	Cog->AddWindow<FCogEngineWindow_TimeScale>("Engine.Time Scale");
+	Cog->AddWindow<FCogEngineWindow_Scalability>("Engine.Scalability");
+	Cog->AddWindow<FCogEngineWindow_DebugSettings>("Engine.Debug Settings");
+
+	// Custom Elysium windows, grouped under an "Elysium" main-menu category (the "Elysium."
+	// name prefix). They read Elysium's own runtime data structures directly — the Track-B
+	// entities are plain C++, invisible to Cog's UObject reflection — via FElysiumCogWindow.
+	Cog->AddWindow<FElysiumCogWindow_Status>("Elysium.Status");
+	Cog->AddWindow<FElysiumCogWindow_Maps>("Elysium.Maps");
+	Cog->AddWindow<FElysiumCogWindow_Lights>("Elysium.Lights");
+	Cog->AddWindow<FElysiumCogWindow_Entities>("Elysium.Entities");
+	Cog->AddWindow<FElysiumCogWindow_Inspector>("Elysium.Entity Inspector");
+	Cog->AddWindow<FElysiumCogWindow_Logic>("Elysium.Logic");
+	Cog->AddWindow<FElysiumCogWindow_EventQueue>("Elysium.Event Queue");
+	Cog->AddWindow<FElysiumCogWindow_WorldViz>("Elysium.World Viz");
+	Cog->AddWindow<FElysiumCogWindow_Audio>("Elysium.Audio");
+	Cog->AddWindow<FElysiumCogWindow_SoundScheme>("Elysium.Sound Schemes");
+	Cog->AddWindow<FElysiumCogWindow_Npc>("Elysium.NPC");
+	Cog->AddWindow<FElysiumCogWindow_Scripting>("Elysium.Scripting");
+
+	// Boot dormant: Cog is compiled in (non-Shipping) and F1 opens it, but nothing should be on
+	// screen until then, and it must not be holding the mouse — a captured cursor makes the game's
+	// own UI unclickable, which is exactly how it presents.
+	//
+	// Closing windows is not enough on its own. Cog restores window visibility from its ImGui ini,
+	// and that restore can land *after* a fixed grace period expires, so a timed hide is a race the
+	// layout sometimes wins. `elysium.CogPersist 0` (the default) removes the layout ini before Cog
+	// reads it, which is what actually makes the boot state deterministic; the ticker below then
+	// only has to cover the frames before the first render.
+	StartupHideElapsed = 0.f;
+	StartupHideTicker = FTSTicker::GetCoreTicker().AddTicker(
+		FTickerDelegate::CreateWeakLambda(this, [this](float DeltaTime)
+		{
+			UCogSubsystem* CogToHide = Cast<UCogSubsystem>(CogSubsystem.Get());
+			if (IsValid(CogToHide))
+			{
+				CogToHide->CloseAllWindows();
+				// The input mode is the half that made the menu unclickable: with it enabled, ImGui
+				// swallows the click before Slate sees it, and no amount of closing windows helps
+				// because the main menu bar alone keeps input captured. Guarded on it already being
+				// enabled — SetEnableInput touches the ImGui context, which Cog creates lazily on
+				// its first tick, and this ticker can run before that.
+				if (CogToHide->GetContext().GetEnableInput())
+				{
+					CogToHide->GetContext().SetEnableInput(false);
+				}
+			}
+
+			StartupHideElapsed += DeltaTime;
+			const bool bKeepTicking = StartupHideElapsed < 1.f;
+			if (!bKeepTicking)
+			{
+				StartupHideTicker.Reset();
+			}
+			return bKeepTicking;
+		}));
+#endif
+}
+
+void UElysiumCogSubsystem::Deinitialize()
+{
+#if ENABLE_COG
+	if (StartupHideTicker.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(StartupHideTicker);
+		StartupHideTicker.Reset();
+	}
+#endif
+
+	Super::Deinitialize();
+}

@@ -13,7 +13,7 @@ water/decal/skybox/rope) write the intermediates the runtime reads back. `write_
 each `move_rope`/`keyframe_rope` chain (`NextKey` linkage) into per-segment `<map>.ropes` cable lines
 (12 tokens: `tex ax ay az bx by bz width_cm rest_cm nodes texscale flags`) and decodes the rope
 material texture, dropping coincident-node (zero-length) links; the runtime builds one
-`UCableComponent` per line (roadmap 8.7). Both classnames construct the same stock Source
+`UCableComponent` per line. Both classnames construct the same stock Source
 `CRopeKeyframe` (RE'd in `vampire.dll`), so chain roles are topological, not classname-derived.
 `NextKey` binds **first-match by entity-lump order** — the engine's `FindEntityByName(NULL, …)` rule.
 A map can reuse rope targetnames across separate installations (`sp_tutorial_1` reuses `tele4..tele9`
@@ -49,7 +49,7 @@ glTFRuntime loader applies the glTF→Unreal basis/scale change itself (default 
 `SceneScale 100`, `TransformBaseType::Default`). The `UE_` pre-conversion is only for dumb
 containers (OBJ, plain sidecars) the runtime reads verbatim; a self-describing container the
 loader reorients does not need it, so `mdl_gltf.py` keeps its non-`UE_` name while feeding the
-P8 NPC path directly.
+NPC path directly.
 
 The deep reverse-engineering reference docs (`entity_io.md`, `python_bridge.md`, etc.)
 live in this repo's `../docs/`. (The read-only Godot project at `E:\dev\elysium` holds
@@ -99,9 +99,9 @@ That composition and those VGUI scaling rules describe the **Godot prototype's**
 and `menu_extract.py` is that prototype's extractor — it writes the Godot repo's
 `game/content/ui/` and is not part of this pipeline.
 
-**This repo's UI extractor is `UE_extract_ui.py` (roadmap PL8).** Elysium-Unreal does not port
+**This repo's UI extractor is `UE_extract_ui.py`.** Elysium-Unreal does not port
 VGUI: the UI is re-skinned on a modern resolution-independent stack
-(`docs/remaster-direction.md` axis 1, roadmap 8.6), so what it produces is consumed as **design
+(`docs/remaster-direction.md` axis 1), so what it produces is consumed as **design
 intent + source art** — screen inventory, panel anatomy, palette, iconography, strings, and the
 title/background art — never as a runtime layout description. It mirrors, patch-first and
 whole-game, into `out/ui/`: 25 `.res` layouts plus **both** schemes byte-for-byte, the localized
@@ -440,10 +440,10 @@ and is annotated in `<map>.ents` with **`model_mesh`** = the decoded OBJ stem an
 the runtime reads orientation verbatim like it does `origin`; identity when `angles` is absent). Both
 present only when the decode succeeded; the origin stays the entity's own converted `origin`, not a
 `.props` line. Skeletal `npc_*` models are **excluded** — they belong to the glTFRuntime
-NPC track (roadmap 8.2/8.5), not this static-geometry path. Tutorial: 160 entity props / 64
-unique models. The runtime consumer is roadmap 8.3 (`prop_dynamic` → `FElysiumProp`) / 8.4 (physics).
+NPC track, not this static-geometry path. Tutorial: 160 entity props / 64
+unique models. The runtime consumer is `prop_dynamic` → `FElysiumProp`, with physics handled separately.
 
-**Physics collision (8.4).** Each `prop_physics`-referenced model additionally gets a
+**Physics collision.** Each `prop_physics`-referenced model additionally gets a
 `props/<stem>.phys` sidecar (`phy.py`), decoded from the model's sibling **`.phy`** — VtMB's own
 VPhysics collision model, the convex hulls the original game simulates against, resolved through the
 install index so a patched `.phy` shadows the VPK's. Format: `mass <kg>` then two lines per hull,
@@ -457,7 +457,7 @@ the axis-mapping evidence, and the missing-collision behaviour: **`docs/phy_vphy
 **`hinge_axis`** in `<map>.ents` = the normalized Unreal-space hinge direction
 (`source_dir_to_unreal` of the raw-Source `origin`→`hingeaxis` line), read verbatim; the pivot is the
 entity's already-converted `origin`. (CoACD decomposes per map, not cross-map — a scaling cost for the
-full export, tracked for P10.)
+full export.)
 
 `WorldLoader.LoadProps` groups instances by model, builds each unique model's mesh + a
 convex hull once, and renders each model as one **`MultiMeshInstance3D`** — per-instance
@@ -487,7 +487,7 @@ so clips retarget by bone name with no proportion rig.
 **two seeds into one product**: `npc_models_from_ents` scans `out/*/*.ents` for `npc_*` `model`
 keys (102 models, 1 of which the install does not ship), and `pc_models_from_clandoc` reads the
 **player bodies** out of `out/vdata/system/clandoc000.txt` — no entity on any map references a
-player model, so the rulebook is the only seed that reaches them (roadmap PL13). Both halves are
+player model, so the rulebook is the only seed that reaches them. Both halves are
 the same v2531 skeletal format and go through the same decode, writing under `out/npc/`:
 
 - **`<npc>.glb`** (`mdl_gltf.export_npc`) — skinned mesh + skeleton + the NPC's **own** clips +
@@ -500,7 +500,7 @@ the same v2531 skeletal format and go through the same decode, writing under `ou
   **no mesh**; decoded once and shared by every NPC. Bank stems keep the sub-path
   (`character_shared_male_misc`) so the male/female (and clan) banks that share a basename stay
   distinct.
-- **`facial/<npc>.json`** (`mdl_gltf.facial_rig`, roadmap PL10) — the three layers above the
+- **`facial/<npc>.json`** (`mdl_gltf.facial_rig`) — the three layers above the
   morph targets, which are vertex displacements and cannot hold them: the 44 flex controllers,
   the 60 RPN flex rules that combine them into flexdesc weights, and each morph's four-value
   target ramp. `morphs[i]` describes glTF morph target *i* of the sibling glb, in order. Split
@@ -512,21 +512,21 @@ the same v2531 skeletal format and go through the same decode, writing under `ou
   `banks[owner].clips` for a shared clip, `npcs[stem].own_clips` for the NPC's own — because a
   clip resolved by 39 NPCs is one clip, and inlining it per NPC would multiply ~3.5k rows into
   ~69k. A final reconcile pass drops any label whose owner did not actually bake it, so a hit
-  in `clips` is a promise the owning glb can answer. The runtime (roadmap 8.5) reads this, loads
+  in `clips` is a promise the owning glb can answer. The runtime reads this, loads
   a clip's owning glb once, and applies it to the NPC skeletal mesh by bone name via
   glTFRuntime — VtMB's virtualmodel bank-sharing, not a per-NPC monolith (the shared set is
   251 MB of banks + 341 MB of meshes across 67 banks / 157 characters; inlining each character's
   resolved vocabulary instead would be an order of magnitude more). `mdl_gltf` writes **standard
   glTF 2.0** (self-describing space), so it keeps its non-`UE_` name and needs no pre-conversion.
-  `mdl_gltf.export` (single clip) is the 8.2 spike/CLI probe.
+  `mdl_gltf.export` (single clip) is the spike/CLI probe.
 
-**The player bodies (PL13).** `vdata/system/clandoc000.txt`'s `ClanData.General` blocks carry
+**The player bodies.** `vdata/system/clandoc000.txt`'s `ClanData.General` blocks carry
 `M_Body0..5`/`F_Body0..5` — 7 playable `Player_*` clans × 2 sexes × 6 armour slots = **84 slots
 resolving to 56 distinct `.mdl`**, because each clan's top two slots repeat its tier-3 suit. Only
 the *indexed* keys are read: the un-indexed `M_Body`/`F_Body` of the human and Society-of-Leopold
 templates name NPC models, and the `mp-*`/`unused*` templates repeat the playable paths. Seeding
 from the table rather than from a glob is what keeps the exported set from drifting from the one
-8.11a selects through — the install ships 59 `models/character/pc/**.mdl`, three of which the
+the runtime selects through — the install ships 59 `models/character/pc/**.mdl`, three of which the
 table names nowhere (`average_vampire_hunter_pc`, `gangrel_male_beastial`, `riot_gear_male_2`).
 They land as ordinary index entries beside the NPCs, matched back to a clan slot through each
 entry's own `model` path. The PC animation banks were already exported as NPC includes; the trees
@@ -535,9 +535,9 @@ add only **3** new ones, the per-clan run-cycle aggregators
 carries a flex rig** — 0 of all 59, and 0 of the 21 `models/hands/` viewmodels — so none gets
 morph targets or a `facial/` sidecar (`../docs/facial_animation.md`). Each body is 63–106 bones,
 3–5 own clips, ~1,412–1,462 resolved, ~786 KB. The first-person hand viewmodels the same table
-names (`M_Hands`/`F_Hands`) are **not** exported — PL14.
+names (`M_Hands`/`F_Hands`) are **not** exported.
 
-**Morph targets (PL10).** A rigged NPC's glb carries one morph target per `StudioFlex`
+**Morph targets.** A rigged NPC's glb carries one morph target per `StudioFlex`
 *record* — 53 on the shipped rig, 78 of the 101 NPCs (and none of the 56 PC bodies, which carry
 no flex rig), 4,015 in total, +0.33–0.53 MB each. They
 are **sparse** accessors (base implicitly zero, only the moved vertices stored), unified across
@@ -581,22 +581,22 @@ values resolve). `--markdown` emits the doc table, `--dump <path>` pretty-prints
 scene, `--referenced` restricts the survey to map-named scenes, `--json` writes the ledger.
 Read-only over the install; produces no runtime intermediate. Findings — the 19-type event
 enum, the nine types content uses, actor binding, the timing model and the output contract —
-are in `../docs/choreographed_scenes.md` (roadmap RE19).
+are in `../docs/choreographed_scenes.md`.
 
-**Offline delivery (`UE_extract_scenes.py`, roadmap PL9 + PL10).** Three plain-text trees are
+**Offline delivery (`UE_extract_scenes.py`).** Three plain-text trees are
 copied **verbatim**, patch-first, no parse/transcode: the **5,444 `.vcd`** scenes →
 `out/scenes/` (5,137 from the VPKs, 307 loose patch files shadowing VPK copies), the **7,136
 `.lip`** phoneme sidecars → `out/lip/` (15 VPK, 7,121 loose patch), both out of `sound/`, and
-the **249 `expressions/*.txt`** phoneme→controller tables → `out/expressions/` (PL10; the
+the **249 `expressions/*.txt`** phoneme→controller tables → `out/expressions/` (the
 sibling `.vfe` is Faceposer's compiled form of the same data, so only the readable `.txt` is
 mirrored). Each tree's own root prefix is stripped, so a mirror keeps the subtree the engine
 addresses and a `SceneFile "sound/CINEMATIC/tutorial/jack_VS_sabbat.vcd"` reads back as
 `out/scenes/CINEMATIC/tutorial/jack_VS_sabbat.vcd` — the same layout rule as `out/sound/`. The
-two `sound/` extensions get separate mirrors because the consumers are separate (12.1 reads the
-scenes, 12.5 the phonemes) and the sub-paths otherwise interleave file-for-file, `.vcd` beside
+two `sound/` extensions get separate mirrors because the consumers are separate (one reads the
+scenes, the other the phonemes) and the sub-paths otherwise interleave file-for-file, `.vcd` beside
 `.lip` beside `.wav`. The run also cross-checks every `SceneFile` in the already-exported
 `.ents` against the mirror and names the ones the install does not ship — map data outliving
-its assets (RE19 counts eight, on three maps), not a format question. Whole-game, so
+its assets (eight, on three maps), not a format question. Whole-game, so
 `export_all.py` runs it once at end of a run (`--no-scenes` to skip). This only puts the bytes
 on disk; the `.lip` and `expressions/` *formats* are `probe_facial.py` /
 `../docs/facial_animation.md` (below).
@@ -629,11 +629,11 @@ intermediate. Findings — the header offsets (the flex block starts at **344**,
 past a naive VAMPTools field walk), both vertex-animation encodings, the flex-rule opcode
 set, the **absence of eyeball data in every shipped model**, the `.lip` grammar, and the
 `expressions/<model stem>_phonemes.vfe` naming rule — are in
-`../docs/facial_animation.md` (roadmap RE20). Two `mdl_v2531.md` corrections fell out of it:
+`../docs/facial_animation.md`. Two `mdl_v2531.md` corrections fell out of it:
 `StudioModel` is **224 bytes** (the stride `mdl_skel` walks bodyparts with), and it carries
 its own de-quantization offset/scale at +0xA0…+0xB4.
 
-**Offline delivery (roadmap PL10).** The flexes bake into glTF **morph targets** in each NPC's
+**Offline delivery.** The flexes bake into glTF **morph targets** in each NPC's
 own glb, and the rig above them into `out/npc/facial/<stem>.json` — see the *Skeletal NPCs*
 section above for the product, and `../docs/facial_animation.md` → "The offline export" for
 the shape and the two load contracts it fixes.
@@ -663,31 +663,31 @@ Python lives in **five surfaces, two languages**:
   Unofficial Patch's Basic/Plus switch is exactly this: two `user.cfg` variants differing only
   in `alias patchtype "setBasic()"` vs `"setPlus()"`, so `setPlus`/`setBasic` are named nowhere
   in the `.py`/`.ents`/`.dlg`/`.bsp` trees. Ignition is `logic_auto.OnMapLoad -> unhidePlus()`
-  on 107 of 108 maps. Mirrored offline by `UE_extract_cfg.py` (PL5d); the runtime console bridge is
-  roadmap 9.3b.
+  on 107 of 108 maps. Mirrored offline by `UE_extract_cfg.py`; the runtime console bridge is
+  `FElysiumConsole`.
 
-**Offline delivery (`UE_extract_scripts.py`, roadmap 5.1 / PL2).** The two plain-text script
+**Offline delivery (`UE_extract_scripts.py`).** The two plain-text script
 surfaces are copied **verbatim** into the runtime's mirror — `python/**/*.py` → `out/scripts/`
 (41 files: 35 patch + 6 retail-only; the 24 VPK `.pyc` are stale/unreachable and ignored),
 `dlg/**/*.dlg` → `out/dlg/` (147; the patch's loose `dlg/` fully overlays the 138 VPK) —
 resolved patch-first (patch loose > retail loose > VPK), no parse/transcode. Whole-game, not
 map-scoped, so `export_all.py` runs it once at the end of a run (`--no-scripts` to skip). The
-runtime scripting host (roadmap 5.2+) reads `out/scripts` + `out/dlg` from disk.
+runtime scripting host reads `out/scripts` + `out/dlg` from disk.
 
-**Offline delivery (`UE_extract_vdata.py`, roadmap PL5b).** VtMB's whole RPG/rules layer is
+**Offline delivery (`UE_extract_vdata.py`).** VtMB's whole RPG/rules layer is
 Valve-KeyValues **text** under `vdata/` (stats/feats/rules/dice/clans/quests/items/weapons/
 vendors/stealth/disposition/sound-schemes/strings/camera/hacking). This copies it **verbatim**
 → `out/vdata/` (465 files: `system` 97 + `items` 244 + `camerashots` 66 + `hackterminals` 57 +
 `precache` 1), patch-first, no parse/transcode; `vdata/signs/` (owned by `UE_extract_signs.py`)
 and `stealth.xls` excluded. Whole-game, so `export_all.py` runs it once at end of a run
 (`--no-vdata` to skip). The engine (`vampire.dll`) loads each table by name; the per-table
-consumer + roadmap-task map is `docs/vdata-catalog.md`. Runtime consumers are built task by
-task (9.4 sheet/quests/XP, 9.6 dice, 10.7 the rest).
+consumer map is `docs/vdata-catalog.md`. Runtime consumers are built incrementally, split across
+follow-on work (sheet/quests/XP, dice, and the rest).
 
-**Offline delivery (`UE_extract_cfg.py`, roadmap PL5d).** The `cfg/*.cfg` alias + cvar tables (Valve
+**Offline delivery (`UE_extract_cfg.py`).** The `cfg/*.cfg` alias + cvar tables (Valve
 console syntax) copied **verbatim** → `out/cfg/`, patch-first, no parse/transcode — `user.cfg` carries
 the Basic/Plus `patchtype` alias. Whole-game, so `export_all.py` runs it once at end of a run
-(`--no-cfg` to skip). The runtime console bridge (`FElysiumConsole`, roadmap 9.3b) seeds its alias/cvar
+(`--no-cfg` to skip). The runtime console bridge (`FElysiumConsole`) seeds its alias/cvar
 store from this mirror, and VtMB's file-touching scripts (`FixKeyBindings` reads `cfg/config.cfg`)
 reach the same tree through the CPython VM's own filesystem namespace, which mounts `cfg/`, `vdata/`,
 `python/`, `dlg/` and `sound/` here read-only and sends every script *write* to a `Saved/` overlay
@@ -713,7 +713,7 @@ against what the runtime binds (`ElysiumScriptNatives.cpp`, the CPython host's `
 tables, every `D.Input(TEXT("…"))`), so a row says both what the engine offers and what the
 runtime answers. Read-only over `out/`; `--json` writes the full ranked ledger. Sibling of
 `ent_survey.py` and `dlg_sheet_survey.py`. The recovered per-name reference it feeds is
-`../docs/script_api.md` (roadmap 9.7).
+`../docs/script_api.md`.
 
 **Entity methods are not bound anywhere.** `Entity.__getattr__` (`0x10195510`) resolves a
 name against the entity's **Source datamap**, walking `baseMap` up the class chain: a field

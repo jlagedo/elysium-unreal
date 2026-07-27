@@ -96,39 +96,14 @@ dated 2004-10-08). Their only remaining value is provenance and as a cross-check
 NULL-terminated. Every `ml_meth` points into an **MSVC incremental-link thunk table** at
 `0x1000xxxx` — each entry is a `JMP` to the real body. Follow the jump.
 
-| Table VA | Entries | What |
-|---|---|---|
-| `0x1058f7a8` | 11 | module `vampire` — global functions |
-| `0x1058f778` | 2 | `Entity.__getattr__`, `Entity.__setattr__` |
-| `0x1058f698` | 13 | `Entity` base methods — in table order: `__init__`, `GetOrigin`, `GetAngles`, `GetCenter`, `GetModelName`, `GetAngleVectors`, **`GetCenter` again**, `SetOrigin`, `SetAngles`, `SetModel`, `SetName`, `GetName`, `IsAlive`. 13 records but **12 distinct names** (`GetCenter` is duplicated), and there is **no `SetModelName`** — `SetModel` is the only model writer. |
-| `0x1058f868` | 24 | Character (player + NPC) |
-| `0x1058f5d0` | 2 | `G` — `ClearAll`, `keys`. **No `has_key`**: `G.has_key` falls past `Py_FindMethod` to the flag dict and reads integer 0. (`morgue` is a real dict, so `G.morgue.has_key(...)` — the only form any script uses — works.) |
-| `0x1058f620` | 2 | file-like — `read`, `readline` |
-
-**Total: 54 table entries. Scripts call 109 methods.** The other ~55 are not bound
-anywhere — see the next section.
-
-**Module `vampire` globals (11):** `FindPlayer`, `FindEntityByName`, `FindEntitiesByName`,
-`FindEntitiesByClass`, `ScheduleTask`, `SquadSeesPlayer`, `CreateEntityNoSpawn`,
-`CallEntitySpawn`, `ChangeMap`, `OneOfSet`, `IsPCMalk`. (`SquadSeesPlayer` is called by no
-shipped script — the tables include API the content never used.)
-
-Their `ml_doc` strings pin the contracts the scripts rely on:
-**`FindEntityByName`** — *"Find a single entity by its targetname field. **Returns None if not
-found.** It is an error if multiple entities have the same name."* That `None` is what every
-`if ent:` guard in the shipped scripts actually tests — an Entity instance itself is **always
-truthy** (no `__nonzero__` in the base table), and a reference to a *deleted* entity raises
-`AttributeError` on access rather than turning falsy. **`FindPlayer`** — *"Find the first player
-entity, or NULL if there is not one spawned"*. **`FindEntitiesByName`/`ByClass`** return lists.
-
-**Character (24):** `React`, `SetExpression`, `SetDisposition`, `SetGesture`, `HasItem`,
-`GiveItem`, `RemoveItem`, `AmmoCount`, `GiveAmmo`, `HasWeaponEquipped`, `StartBarter`,
-`WorldMap`, `SewerMap`, `SetQuest`, `CurrentMoney`, `IsMale`, `SeductiveFeed`, `SetCamera`,
-`CalcFeat`, `DialogDiscipline`, `BumpStat`, `GetMasqueradeLevel`, `GetQuestState`,
-`IsFollowerOf`.
-
-Several `ml_doc` strings are copy-paste errors (`CurrentMoney` carries `HasItem`'s text;
-`IsFollowerOf` carries `GetQuestState`'s) — useful as a build fingerprint.
+Six such tables carry the whole bound surface: the module `vampire`'s global functions, the
+`Entity.__getattr__`/`__setattr__` pair, the `Entity` base methods, the Character methods,
+`G` (`ClearAll`, `keys` — no `has_key`, so `G.has_key` falls past `Py_FindMethod` into the
+flag dict and reads integer `0`), and a two-entry file-like table (`read`, `readline`) that
+is the `IRestore` buffer adapter (see below). **54 table entries total; the shipped scripts
+call 109 methods** — the other ~55 are unbound, see the next section. The full per-name
+inventory — every name, arity, doc string, call count, the `GetCenter` duplicate, and the
+copy-paste `ml_doc` errors — lives in `docs/script_api.md`, not repeated here.
 
 ## Dispatch — `Entity.__getattr__` is a datamap lookup
 
@@ -480,7 +455,7 @@ a branch, not an error, so a rebuild that cannot answer the probe silently chang
 The Unreal answer is a filesystem namespace scoped to the interpreter rather than a redirected
 `getcwd` — reads served from the content mirror, writes into a `Saved/` overlay. Why the process
 cwd is not available, and what the overlay buys: `decisions.md` 2026-07-26, and the design comment
-on `Source/ElysiumUE/Private/ElysiumScriptFS.h`.
+on `Source/ElysiumUE/Private/Scripting/ElysiumScriptFS.h`.
 
 ## Implications for the rebuild
 

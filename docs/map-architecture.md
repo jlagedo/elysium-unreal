@@ -47,10 +47,12 @@ until ground exists under the spawn, ~0.4s); the time-sliced build is roadmap 10
 ```
 UElysiumGameInstance            process lifetime — session state
  └─ UElysiumMapSubsystem        game-instance subsystem — the map machine
-     └─ AElysiumMapActor        one per loaded map — owns everything map-scoped
-         ├─ WorldMesh / SkyMesh (PMC sections per material)
-         ├─ collision, lights, props, coronas…        (M1+)
-         └─ entity actors (changelevel triggers, …)   (M1+)
+     └─ AElysiumMapActor        one per loaded map — orchestrates it, owns its lifetime
+         ├─ UElysiumMapVisuals    the LOOK: adopted baked actors, material MIDs, sky, fog,
+         │                        the PPV knobs, the light rig, the cables, the texture cache
+         ├─ UElysiumMapCollision  the WALKABLE SURFACE: .hulls convex + .dispcol trimesh
+         ├─ UElysiumEntityBodies  the BODY FACTORY: NPC/prop bodies + the per-map asset caches
+         └─ FElysiumEntityWorld   Track B — the entity substrate (a plain-C++ member)
 ```
 
 - **`UElysiumGameInstance`** — anchors the GI-scoped subsystems, the state that must survive a
@@ -65,6 +67,10 @@ UElysiumGameInstance            process lifetime — session state
   `SpawnPendingMap`) into the fresh world. Everything map-scoped is a component of it or a
   UPROPERTY / plain member it owns, so **the actor dying with its world unloads the map** —
   meshes, MIDs, and the map's texture cache die with it. No manual teardown lists.
+  The actor itself **orchestrates** the map — the load order, the two frame passes, the player's
+  placement, and the substrate's engine seam (`FElysiumWorldServices`) — and holds none of the
+  state behind the three components above. Nothing that decides what the map *looks like* sits on
+  the same object as what it *does* (`decisions.md` 2026-07-27).
 
 The game mode stays thin: pawn + HUD classes, and one `NotifyWorldReady` on BeginPlay. The app state
 machine behind that call is what builds the pending map (post-travel) or runs the boot decision
@@ -74,9 +80,9 @@ machine behind that call is what builds the pending map (post-travel) or runs th
 
 `OpenLevel` (`UEngine::LoadMap`) tears down the current `UWorld` and runs GC; everything the map
 actor owns — meshes, materials, collision, entity actors, and the per-map texture cache — is
-released with it, no bespoke flush. The **texture cache is a plain member of the map actor**
+released with it, no bespoke flush. The **texture cache is a plain member of `UElysiumMapVisuals`**
 (`FElysiumTextureCache`), a per-map decoded-texture dedup index holding strong refs; those refs
-drop when the actor is destroyed, so GC reclaims the textures. It is not a process-wide cache —
+drop when the map actor and its components are destroyed, so GC reclaims the textures. It is not a process-wide cache —
 under hard travel only one map is resident at a time, so nothing is shared across maps (assets
 that genuinely need to persist, like UI, live in an explicit global scope instead).
 
@@ -95,15 +101,10 @@ the heavy build runs in the fresh shell world's `BeginPlay` behind a loading scr
 A travel that happens to hit an already-loaded map (later: cached parse results) just
 runs stage 2.
 
-## Evolution to the final game
+## Exported maps
 
-| Stage | What lands on this skeleton |
-|---|---|
-| M1 | `.hulls` brush collision, `.lights` rig, props — all built inside `AElysiumMapActor` |
-| M1.5 | Entity spawn from `.ents`: changelevel/teleport volumes live → real in-game map traversal |
-| M2 | Water, decals, coronas, 3D-sky polish — map-actor components |
-| M3 | Menu as the boot travel target; New Game = `Travel("sp_tutorial_1", …)` |
-| M4+ | Entity I/O dispatch, story scripting, saves = GameInstance serialization |
+Current build status of collision, entity spawn, water/decals/coronas, the menu boot target, and
+story scripting is tracked in `docs/roadmap.md`, not here.
 
 Exported maps available today: `ch_hub_1, hw_hub_1, hw_redspot_1, la_hub_1, sm_hub_1,
 sp_ninesintro, sp_tutorial_1, testbox` (the pipeline exports more on demand).

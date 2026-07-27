@@ -1,3 +1,4 @@
+/.claude
 /.git
 /.vs
 /.vscode
@@ -9,5 +10,6 @@
 /sdk
 /tools
 /Plugins/Cog/Intermediate
+/Plugins/ElysiumBaked/Content
 /Plugins/glTFRuntime/Content
 /Plugins/glTFRuntime/Intermediate

@@ -1,14 +1,10 @@
 # Light attribution — separating VtMB's real fixtures from its fill lights
 
-**Status: hand authoring decided; the classifier investigation is parked.** The measurement
-tools, the data format, and four hand surveys exist and are reusable. The classifier works on
-three of four surveyed maps and fails on the fourth. The standing decision
-(`docs/decisions.md` 2026-07-26) is that the per-map light set is curated **by hand** in the
-Lights Cog window — VtMB's lights are authored like a painting, for the baked result rather than
-as physical fixtures, so no automatic rule ships — and the saved survey auto-applies at map load
-(`elysium.LightSurvey 0` restores the full faithful rig). The classifier remains a
-candidate-ranker/advisor for that hand pass; any *classifier-driven* removal would still need the
-open question at the bottom closed first.
+The per-map light set is curated **by hand** in the Lights Cog window (`docs/decisions.md`
+2026-07-26) — VtMB's lights are authored like a painting, for the baked result rather than as
+physical fixtures, so no automatic rule ships — and the saved survey auto-applies at map load
+(`elysium.LightSurvey 0` restores the full faithful rig). The classifier below is a
+candidate-ranker/advisor for that hand pass. Per-task status: `docs/roadmap.md`.
 
 ## The question
 
@@ -244,60 +240,15 @@ Across ten maps: 1,220 protected (60%), 409 fill (20%), 372 review (18%).
 `hw_609_1` is the least trustworthy unlabelled result — 45% of its lights land in review, meaning
 the rule largely abstains there.
 
-## Where to pick up
-
-**The one open question is `sm_hub_1`.** 249 of its lights touch nothing emissive and ~90% of them
-were kept by hand. Every feature built — geometric, redundancy, ray-traced — says they look like
-fill. It is the only map where the classifier and the hand verdict genuinely disagree, and it holds
-104 of the 409 fill candidates.
-
-A 15-light shortlist of the highest-confidence disagreements exists, all in the map's eastern strip
-(X > 7000), several of them `mag 17476 / reach 984u / share 0.05` — numerically indistinguishable
-from lights killed in the west. Resolving those 15 decides whether the rule over-flags on dense
-maps or the survey was uneven.
-
-**What the ambience rework settled (sky-ambience C1–C5, 2026-07-26).** The standing hope was
-that this disagreement would dissolve once sky-glow ambience was modelled properly. It cannot:
-`sm_hub_1` carries **no `light_environment` at all**, so its correct sky contribution is
-**zero** — the SkyLight now sits there by policy rather than at the arbitrary flat 1.0 it used
-to. The sky term got *smaller*, so the fill is more load-bearing, not less. Separately, the
-3D-skybox split took `sm_hub_1`'s 60 sky-area worldlights out of the world rig — they had been
-in the fill-vs-fixture sample while sitting at miniature coordinates, lighting nothing — but all
-60 are at X −3868 to −2497 and the shortlist is the eastern strip at X > 7000, so **the 15
-disagreements are untouched**. Finally, the bake measured in absolute units says direct light
-explains ~0% of the median lit face and the bounce floor *is* the ambient level, which is the
-quantitative form of the framing below. The one thing that did change: there is now a landed,
-measured replacement to gate against — `elysium.SkylightLeaking` on the per-map post-process
-volume.
-
-**The framing under test:** the classifier asks *"was this light authored as fill?"*, but the hand
-survey — made under the live rig, Lumen on — answers *"does the scene survive without it?"*. The
-two diverge where fill is **load-bearing**: a light faking night-sky/city-glow ambient is genuinely
-fill, yet Lumen cannot replace it where there is nothing emissive to bounce. A dense outdoor street
-with a sparse-emissive strip — `sm_hub_1` east — is the candidate case. If this holds, the fix is
-not a better fill detector but a second gate: fill is only killable where GI demonstrably replaces
-it.
-
-Threads, in rough value order:
-
-1. **Adjudicate the `sm_hub_1` 15-light shortlist** — the MCP server's teleport + screenshot makes
-   the on/off A/B automatable per light; the survey save shows disabled lights across the full X
-   range, so an eastern coverage *gap* is not the default explanation, but that save predates the
-   reviewed mark, so kept ≠ judged there.
-2. **Survey `hw_609_1`** to break the 3-of-4 tie — most informative (lowest protected share, 45%
-   abstention). Survey per authored batch with the reviewed mark on.
-3. **Re-score with the `type`/`style` clauses** (type-0 auto-protect, styled protect, per-map spot
-   prior) against all surveys once 1–2 add labels.
-4. **In-engine counterfactual per batch** — the direct measurement every feature above only
-   proxies: toggle an authored batch off headless, let Lumen settle, sample luminance at fixed
-   points against the bake-referenced target (`probe_light_attribution.py` already reconstructs
-   per-luxel baked luminance). ~85 batches per map keeps it tractable; the analytic NNLS failure
-   does not apply because the engine supplies the bounce. Confirms or vetoes each fill batch
-   individually and demotes the classifier to a candidate-ranker.
-5. **Batch-level voting** (classify the authored batch, not the light) — 83/85 unanimity on
-   `sp_tutorial_1` suggests it would raise precision, untested elsewhere.
+**The one open disagreement is `sm_hub_1`.** 249 of its lights touch nothing emissive and ~90% of
+them were kept by hand — the only map where the classifier and the hand verdict genuinely
+disagree, holding 104 of the 409 fill candidates. `sm_hub_1`'s zero-`light_environment` status and
+its consequence for the SkyLight are `sky-ambience.md`'s finding in full (C1–C5, 2026-07-26); for
+this classifier, what matters is that the sky term got *smaller*, not larger, so the fill class is
+more load-bearing here, not less. Open-thread detail (the shortlist, the untested load-bearing-fill
+hypothesis, next surveys): `docs/roadmap.md`.
 
 **No classifier-driven change to the light rig is justified yet.** Hand-authored curation is
 decided and running (`docs/decisions.md` 2026-07-26, `elysium.LightSurvey`); an *automatic*
-removal or attenuation of a light class would be a further divergence needing this question closed
-and its own dated decision, per the remaster charter.
+removal or attenuation of a light class would be a further divergence needing the `sm_hub_1`
+question closed and its own dated decision, per the remaster charter.

@@ -1,0 +1,904 @@
+#include "Visual/ElysiumMapVisuals.h"
+
+#include "ElysiumBakedTags.h"
+#include "ElysiumContentPaths.h"
+#include "ElysiumFog.h"
+#include "ElysiumMapActor.h"
+#include "ElysiumMapSubsystem.h"
+#include "ElysiumReflections.h"
+#include "Visual/ElysiumLightRig.h"
+#include "Visual/ElysiumMaterialFactory.h"
+#include "Visual/ElysiumObjModel.h"
+#include "Visual/ElysiumRopes.h"
+#include "Visual/ElysiumTextureCache.h"
+
+#include "CableComponent.h"
+#include "Components/ExponentialHeightFogComponent.h"
+#include "Components/SkyLightComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/ExponentialHeightFog.h"
+#include "Engine/GameInstance.h"
+#include "Engine/Light.h"
+#include "Engine/PostProcessVolume.h"
+#include "Engine/SkyLight.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
+#include "Engine/TextureCube.h"
+#include "EngineUtils.h"
+#include "HAL/IConsoleManager.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "ProceduralMeshComponent.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumVisuals, Log, All);
+
+// Build the map's overhead cables (1) or skip them (0), for A/B. Read at map load, so re-travel
+// (elysium.reload) to toggle.
+static TAutoConsoleVariable<int32> CVarRopes(
+	TEXT("elysium.Ropes"), 1,
+	TEXT("Build the map's cables from <map>.ropes (1) or skip (0). Applied at map load."),
+	ECVF_Default);
+
+// A debug multiplier on the 2D backdrop's texel, default 1 = parity (decisions.md 2026-07-26,
+// D7). VtMB writes a sky texel to the framebuffer unscaled and unfogged — the whole material is
+// `mul r0, t0, v0` against a modulation the engine forces to white (sky-ambience.md -> "K7 ...
+// (settled)") — so any value but 1 is a stated divergence, not a calibration. A night-sky lift
+// goes through the D3 post-process knobs, never through here. Live: re-applies to the backdrop
+// as it changes, so an A/B needs no reload.
+static TAutoConsoleVariable<float> CVarSkyBrightness(
+	TEXT("elysium.SkyBrightness"), 1.f,
+	TEXT("Debug multiplier on the sky backdrop texel. 1 = parity with VtMB's identity transfer."),
+	ECVF_Default);
+
+// The offline enhancement track's A/B (docs/asset-enhancement.md), off by default: prefer the
+// super-resolved `tex_hi/` set over the faithful `tex/` decode wherever a map has one. The sky
+// is its first consumer; the world/prop texture path joins it as that track lands. Faithful is
+// the default everywhere, per the direction charter — this is an opt-in layer, not a
+// replacement. Read at map load; elysium.reload to apply.
+static TAutoConsoleVariable<int32> CVarEnhancedTextures(
+	TEXT("elysium.EnhancedTextures"), 0,
+	TEXT("Prefer the offline-enhanced tex_hi/ texture set (1) over the faithful decode (0). "
+	     "Applied at map load."),
+	ECVF_Default);
+
+// The two Lumen art-direction knobs D3 sanctions, as live cvars over the map's baked
+// PostProcessVolume. **Negative = neutral**, which is the shipped state: the override is
+// cleared rather than set to a nominal default, so "we are not touching this" and "we set it to
+// what it would have been" stay distinguishable. A non-neutral value is a divergence and wants
+// a dated per-map decision (decisions.md); these exist so C4/C5 can measure whether one is
+// justified without a rebuild.
+//
+// Skylight Leaking is the sanctioned replacement for VtMB's load-bearing author fill — the
+// soft lights it sprays where a real bounce would have come from, which Lumen cannot reproduce
+// where there is nothing in the room to bounce off.
+//
+// The bounce-strength knob is **Lumen Diffuse Color Boost**, not Indirect Lighting Intensity.
+// D3 named the latter, but on this render path it does nothing: it reaches the shaders as
+// `View.PrecomputedIndirectLightingColorScale`, which scales *precomputed* indirect lighting
+// only, and no shader under Lumen/ reads it — measured, an IndirectLightingIntensity of 3
+// changes not one pixel here. `LumenDiffuseColorBoost` is Lumen's own control
+// (`LumenDiffuseColorBoost.ush`: `pow(DiffuseLum, Boost)`, so **below 1 brightens** and 1 is
+// neutral) and it raises the albedo the bounce sees, which is the term VtMB's look actually
+// lives on.
+//
+// Ambient Cubemap is deliberately absent: a flat occlusion-ignoring term is the contrast-killer
+// both Epic and the direction charter warn against.
+static TAutoConsoleVariable<float> CVarSkylightLeaking(
+	TEXT("elysium.SkylightLeaking"), -1.f,
+	TEXT("Lumen skylight leaking on the map's PPV (0..1). Negative = neutral (no override)."),
+	ECVF_Default);
+
+static TAutoConsoleVariable<float> CVarSkylightLeakingDistance(
+	TEXT("elysium.SkylightLeakingDistance"), -1.f,
+	TEXT("Distance (cm) over which skylight leaking reaches full strength. Negative = neutral."),
+	ECVF_Default);
+
+static TAutoConsoleVariable<float> CVarDiffuseColorBoost(
+	TEXT("elysium.LumenDiffuseBoost"), -1.f,
+	TEXT("Lumen diffuse colour boost on the map's PPV: pow(albedo, boost), so below 1 brightens "
+	     "the bounce and 1 is neutral. Negative = neutral (no override)."),
+	ECVF_Default);
+
+// The $envmap reflection channel (roadmap 7.5), live over the baked materials.
+//
+// The bake authors MaterialInstanceConstants, and a constant has no runtime setter — so without
+// ApplyMaterialOverrides standing a MID in front of each, every one of these is dead on the path
+// that actually renders. The pass reads each knob's BAKED value off the parent instance and
+// writes the adjusted one onto the MID, so applying twice is idempotent and a per-material value
+// the bake computed (the grey-$envmaptint dim-down on SpecReflect, say) is never flattened by a
+// global knob.
+//
+// EnvReflect SCALES the baked EnvStrength, so it cannot make a matte surface reflective: a
+// surface with no $envmap has a baked strength of 0 and stays at 0 whatever the multiplier.
+// The three level knobs pin a parameter across every reflective material and follow the
+// "negative = neutral" convention the PPV knobs above use — the override is *not applied* rather
+// than set to a nominal default, so "not touching this" and "set to what it would have been"
+// stay distinguishable.
+static TAutoConsoleVariable<int32> CVarMaterialOverrides(
+	TEXT("elysium.MaterialOverrides"), 1,
+	TEXT("Stand a dynamic instance in front of each baked material (1) so the elysium.* material "
+	     "knobs reach it, or render the baked instances exactly as authored (0). Applied at map load."),
+	ECVF_Default);
+
+static TAutoConsoleVariable<float> CVarRoughBase(
+	TEXT("elysium.RoughBase"), -1.f,
+	TEXT("Roughness of a NON-reflective surface (VtMB's world is Lambert, so 1). "
+	     "Negative = neutral (keep the baked value)."),
+	ECVF_Default);
+
+static TAutoConsoleVariable<float> CVarRoughReflect(
+	TEXT("elysium.RoughReflect"), -1.f,
+	TEXT("Roughness a fully $envmapmask-ed texel reaches. Negative = neutral (keep the baked value)."),
+	ECVF_Default);
+
+static TAutoConsoleVariable<float> CVarSpecBase(
+	TEXT("elysium.SpecBase"), -1.f,
+	TEXT("Specular level of a NON-reflective surface. 0 is the Lambert floor VtMB's material data "
+	     "states; UE's own default is 0.5. Negative = neutral (keep the baked value)."),
+	ECVF_Default);
+
+static TAutoConsoleVariable<float> CVarSpecReflect(
+	TEXT("elysium.SpecReflect"), -1.f,
+	TEXT("Specular level a fully $envmapmask-ed texel reaches. Pinning this overrides the "
+	     "per-material grey-$envmaptint dim-down. Negative = neutral (keep the baked value)."),
+	ECVF_Default);
+
+// Source's distance fog, on (1) or off (0), for A/B. It is a per-primitive material term rather
+// than the height fog actor because the world and the 3D-skybox miniature carry two different
+// fogs and share screen depth — the reasoning and its measurement are in ElysiumFog.h. Live:
+// ApplySceneFog re-stamps every primitive as it changes, so an A/B needs no reload. It does not
+// reach the map's decals, whose fog is bound into their baked material instances (a
+// UDecalComponent is a USceneComponent and carries no custom primitive data).
+static TAutoConsoleVariable<int32> CVarFog(
+	TEXT("elysium.Fog"), 1,
+	TEXT("Apply the map's authored distance fog (1) or none (0). World and 3D-skybox miniature "
+	     "take their own sets, from worldspawn and sky_camera."),
+	ECVF_Default);
+
+// Assemble the sky cube from the labelled RE-A2 probe faces instead of the map's own (0/1).
+// Each face states its suffix, the axis it belongs on, which way is up and which face each of
+// its edges meets, so a wrong slice binding, a rotation, a mirror and a broken seam are four
+// visibly different failures. It is the acceptance check on the B3 assembly, run against the
+// same six images the shipped VtMB engine drew for RE-A2 — so both ends of the orientation
+// chain are checked with one set of faces. Read at map load; elysium.reload to apply.
+static TAutoConsoleVariable<int32> CVarSkyProbe(
+	TEXT("elysium.SkyProbe"), 0,
+	TEXT("Build the sky cube from the labelled tools/out/_skyprobe faces (1) or the map's own (0). "
+	     "Applied at map load."),
+	ECVF_Default);
+
+namespace
+{
+	// Half-extent of the backdrop box, centred on the map actor. It only has to enclose every
+	// map (the largest is a few hundred metres) plus the 3D-skybox miniature blown up 16x.
+	constexpr float SkyDomeHalfExtentCm = 500000.f;
+
+	// Where the world's height fog stops. RE-A9 is categorical that VtMB's 2D backdrop is never
+	// fogged — every sky face in the game carries `$nofog 1`, which the shader turns into
+	// FogMode(0) — but our backdrop is ordinary opaque geometry, and Unreal's deferred fog pass
+	// fogs by depth alone, so without this the fog inscatters straight into the sky (measured on
+	// sm_hub_1: the sky's displayed mean goes 16.6 -> 29.1). Epic's own documented use for the
+	// cutoff is exactly this. It sits far outside anything real — the world and the miniature
+	// both live within a few hundred metres — and far inside the dome, so no camera position
+	// inside the map can put the two on the wrong sides of it.
+	constexpr float FogCutoffCm = SkyDomeHalfExtentCm * 0.5f;
+
+	// A cube of half-extent H centred on the origin, as PMC section arrays. The sky material
+	// is two-sided and samples by view direction, so winding, normals, and UVs are unused —
+	// the box just has to surround the camera. ~5 km keeps the tutorial map well inside it.
+	void BuildSkyBox(float H, TArray<FVector>& Verts, TArray<int32>& Tris,
+		TArray<FVector>& Normals, TArray<FVector2D>& UVs)
+	{
+		Verts = {
+			{-H, -H, -H}, {H, -H, -H}, {H, H, -H}, {-H, H, -H},
+			{-H, -H,  H}, {H, -H,  H}, {H, H,  H}, {-H, H,  H} };
+		const int32 Quads[6][4] = {
+			{0, 1, 2, 3}, {7, 6, 5, 4}, {4, 5, 1, 0}, {3, 2, 6, 7}, {1, 5, 6, 2}, {4, 0, 3, 7} };
+		for (const int32(&Q)[4] : Quads)
+		{
+			Tris.Append({ Q[0], Q[1], Q[2], Q[0], Q[2], Q[3] });
+		}
+		Normals.Init(FVector::UpVector, Verts.Num());
+		UVs.Init(FVector2D::ZeroVector, Verts.Num());
+	}
+}
+
+UElysiumMapVisuals::UElysiumMapVisuals()
+{
+	PrimaryComponentTick.bCanEverTick = false;
+	// Must exist before the first material is built, and lives for the component's lifetime so a
+	// runtime prop/NPC spawn reuses it.
+	TexCache = MakePimpl<FElysiumTextureCache>();
+}
+
+void UElysiumMapVisuals::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// The real-time light rig, standing before the map builds so the Lights Cog window has
+	// something to bind to from frame one.
+	if (AActor* Owner = GetOwner())
+	{
+		LightRig = NewObject<UElysiumLightRig>(Owner, TEXT("LightRig"));
+		LightRig->SetupAttachment(this);
+		LightRig->RegisterComponent();
+	}
+
+	// The backdrop multiplier is an A/B knob, so a console flip has to reach the sky already
+	// built. Weak-bound: the callback drops out with the component at map teardown.
+	CVarSkyBrightness.AsVariable()->SetOnChangedCallback(
+		FConsoleVariableDelegate::CreateWeakLambda(this,
+			[this](IConsoleVariable*) { ApplySkyBrightness(); }));
+
+	// The D3 knobs are for finding a value by eye against a live scene, so they apply as they
+	// change rather than at load.
+	const FConsoleVariableDelegate Knobs = FConsoleVariableDelegate::CreateWeakLambda(this,
+		[this](IConsoleVariable*) { ApplyPostProcessKnobs(); });
+	CVarSkylightLeaking.AsVariable()->SetOnChangedCallback(Knobs);
+	CVarSkylightLeakingDistance.AsVariable()->SetOnChangedCallback(Knobs);
+	CVarDiffuseColorBoost.AsVariable()->SetOnChangedCallback(Knobs);
+
+	// The reflection channel is found by eye against a live scene too, so its knobs re-apply as
+	// they change. ApplyMaterialOverrides re-reads each baked value before adjusting it, so
+	// re-running it is idempotent rather than cumulative.
+	const FConsoleVariableDelegate Reflect = FConsoleVariableDelegate::CreateWeakLambda(this,
+		[this](IConsoleVariable*) { ApplyMaterialOverrides(); });
+	CVarRoughBase.AsVariable()->SetOnChangedCallback(Reflect);
+	CVarRoughReflect.AsVariable()->SetOnChangedCallback(Reflect);
+	CVarSpecBase.AsVariable()->SetOnChangedCallback(Reflect);
+	CVarSpecReflect.AsVariable()->SetOnChangedCallback(Reflect);
+	if (IConsoleVariable* EnvReflectVar =
+		IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.EnvReflect")))
+	{
+		EnvReflectVar->SetOnChangedCallback(Reflect);
+	}
+
+	// Same for the fog A/B: it re-stamps the primitives already placed.
+	CVarFog.AsVariable()->SetOnChangedCallback(
+		FConsoleVariableDelegate::CreateWeakLambda(this,
+			[this](IConsoleVariable*) { ApplySceneFog(); }));
+}
+
+int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysiumSkyDef& SkyDef)
+{
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return 0;
+	}
+
+	WorldActors.Reset();
+	SkyActors.Reset();
+	PropActors.Reset();
+	SkyLight = nullptr;
+	HeightFog = nullptr;
+	PostProcess = nullptr;
+	DecalCount = 0;
+
+	// One pass over the level. A light's `.lights` line index rides a second tag, so the rig can
+	// bind each actor back to the source row it re-derives intensity and reach from.
+	TArray<UElysiumLightRig::FAdoptedLight> Adopted;
+	int32 Tagged = 0;
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		AActor* Actor = *It;
+		if (Actor == nullptr || Actor->Tags.Num() == 0)
+		{
+			continue;
+		}
+		if (Actor->ActorHasTag(ElysiumBakedTags::World))
+		{
+			WorldActors.Add(Cast<AStaticMeshActor>(Actor));
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::Sky))
+		{
+			SkyActors.Add(Cast<AStaticMeshActor>(Actor));
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::Prop))
+		{
+			PropActors.Add(Cast<AStaticMeshActor>(Actor));
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::Light))
+		{
+			if (ALight* Light = Cast<ALight>(Actor))
+			{
+				Adopted.Add({ Light->GetLightComponent(),
+					ElysiumBakedTags::ParseSourceIndex(Actor->Tags) });
+			}
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::SkyLight))
+		{
+			if (ASkyLight* Sky = Cast<ASkyLight>(Actor))
+			{
+				SkyLight = Sky->GetLightComponent();
+			}
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::Fog))
+		{
+			if (AExponentialHeightFog* Fog = Cast<AExponentialHeightFog>(Actor))
+			{
+				HeightFog = Fog->GetComponent();
+				// The world's fog, and only the world's: the 2D backdrop is exempt game-wide
+				// (sky-ambience B8 / RE-A9), and a deferred fog pass has no other way to say so.
+				HeightFog->SetFogCutoffDistance(FogCutoffCm);
+			}
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::PostProcess))
+		{
+			PostProcess = Cast<APostProcessVolume>(Actor);
+			if (PostProcess)
+			{
+				// The runtime owns how the volume applies, the same way it owns every light's
+				// values: the bake only places the actor. Unbound and full weight, so the knobs
+				// reach the camera wherever it is — a bounded volume would silently do nothing
+				// outside its brush, which is indistinguishable from a knob that does not work.
+				PostProcess->bEnabled = true;
+				PostProcess->bUnbound = true;
+				PostProcess->BlendWeight = 1.f;
+			}
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::Decal))
+		{
+			++DecalCount;
+		}
+		else
+		{
+			continue;
+		}
+		++Tagged;
+	}
+
+	// A Cast that failed leaves a null slot; drop those rather than null-check at every use.
+	WorldActors.RemoveAll([](const TObjectPtr<AStaticMeshActor>& A) { return A == nullptr; });
+	SkyActors.RemoveAll([](const TObjectPtr<AStaticMeshActor>& A) { return A == nullptr; });
+	PropActors.RemoveAll([](const TObjectPtr<AStaticMeshActor>& A) { return A == nullptr; });
+
+	WorldSurfaceCount = WorldActors.Num();
+	SkySurfaceCount = SkyActors.Num();
+	PropInstanceCount = PropActors.Num();
+	// Unique models behind those instances, so the stat still reads as it did on the runtime path.
+	TSet<const UStaticMesh*> Models;
+	for (const TObjectPtr<AStaticMeshActor>& Prop : PropActors)
+	{
+		if (const UStaticMeshComponent* Comp = Prop->GetStaticMeshComponent())
+		{
+			Models.Add(Comp->GetStaticMesh());
+		}
+	}
+	PropModelCount = Models.Num();
+
+	if (LightRig)
+	{
+		WorldLightCount = LightRig->Adopt(Adopted, FElysiumContentPaths::MapLights(MapName), SkyDef.Scale);
+	}
+
+	// Stand dynamic instances in front of the baked materials so the look-tuning cvars reach them;
+	// without this a baked MaterialInstanceConstant has no runtime setter and every elysium.*
+	// material knob is dead on the path that renders.
+	MaterialOverrides.Reset();
+	ApplyMaterialOverrides();
+
+	if (Tagged == 0)
+	{
+		UE_LOG(LogElysiumVisuals, Warning,
+			TEXT("'%s' has no baked actors — this world is not a baked level (run: bake.bat %s)"),
+			*MapName, *MapName);
+	}
+	// The PPV is the one adopted actor whose absence is silent — the D3 knobs simply stop
+	// working — so its presence is stated rather than inferred.
+	UE_LOG(LogElysiumVisuals, Log, TEXT("adopted '%s': %d tagged actors, ppv %s"),
+		*MapName, Tagged, PostProcess ? TEXT("yes") : TEXT("MISSING"));
+	return Tagged;
+}
+
+void UElysiumMapVisuals::ApplyMaterialOverrides()
+{
+	if (CVarMaterialOverrides.GetValueOnGameThread() == 0)
+	{
+		return;
+	}
+
+	// elysium.EnvReflect is registered by ElysiumMaterialFactory.cpp (it also binds it onto the
+	// rope MIDs, which are built at runtime and not baked), so it is reached by name rather than
+	// duplicated here — one cvar, both consumers.
+	static IConsoleVariable* EnvReflectVar =
+		IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.EnvReflect"));
+	const float EnvReflect = EnvReflectVar ? FMath::Max(0.f, EnvReflectVar->GetFloat()) : 1.f;
+	const float RoughBase = CVarRoughBase.GetValueOnGameThread();
+	const float RoughReflect = CVarRoughReflect.GetValueOnGameThread();
+	const float SpecBase = CVarSpecBase.GetValueOnGameThread();
+	const float SpecReflect = CVarSpecReflect.GetValueOnGameThread();
+
+	// Nothing to override until a knob is actually turned, and standing a dynamic instance in
+	// front of a baked one is not free: a runtime SetMaterial drops the primitive's built texture
+	// streaming data, and the textures fall back to a low mip until the streamer catches up (a
+	// visibly blurry world). So the shipped path creates no MIDs at all and renders the baked
+	// instances exactly as authored; they appear only for an A/B session, where a transient mip
+	// settle is an acceptable price for a live knob.
+	const bool bWanted = !FMath::IsNearlyEqual(EnvReflect, 1.f)
+		|| RoughBase >= 0.f || RoughReflect >= 0.f || SpecBase >= 0.f || SpecReflect >= 0.f;
+	if (!bWanted && MaterialOverrides.Num() == 0)
+	{
+		return;
+	}
+
+	// Build the MID set once per map. Keyed by the baked material, so a material shared by many
+	// components yields one MID — the same one-MID-per-material shape the runtime-built path had,
+	// and the reason this is ~700 objects on the tutorial rather than ~1,400 slot-wise.
+	if (MaterialOverrides.Num() == 0)
+	{
+		auto Cover = [this](const TArray<TObjectPtr<AStaticMeshActor>>& Actors)
+		{
+			for (const TObjectPtr<AStaticMeshActor>& Actor : Actors)
+			{
+				UStaticMeshComponent* Comp = Actor ? Actor->GetStaticMeshComponent() : nullptr;
+				if (Comp == nullptr)
+				{
+					continue;
+				}
+				const int32 Num = Comp->GetNumMaterials();
+				for (int32 Slot = 0; Slot < Num; ++Slot)
+				{
+					UMaterialInterface* Baked = Comp->GetMaterial(Slot);
+					// Already covered (a material shared across two of the buckets), or nothing
+					// bound at all.
+					if (Baked == nullptr || Baked->IsA<UMaterialInstanceDynamic>())
+					{
+						continue;
+					}
+					TObjectPtr<UMaterialInstanceDynamic>& Mid = MaterialOverrides.FindOrAdd(Baked);
+					if (Mid == nullptr)
+					{
+						Mid = UMaterialInstanceDynamic::Create(Baked, this);
+					}
+					if (Mid != nullptr)
+					{
+						Comp->SetMaterial(Slot, Mid);
+					}
+				}
+			}
+		};
+		Cover(WorldActors);
+		Cover(SkyActors);
+		Cover(PropActors);
+	}
+
+	for (const TPair<TObjectPtr<UMaterialInterface>, TObjectPtr<UMaterialInstanceDynamic>>& Pair
+		: MaterialOverrides)
+	{
+		UMaterialInterface* Baked = Pair.Key;
+		UMaterialInstanceDynamic* Mid = Pair.Value;
+		if (Baked == nullptr || Mid == nullptr)
+		{
+			continue;
+		}
+
+		// Every parameter is read off the BAKED instance and written whole, so the pass is
+		// idempotent and a knob returned to neutral restores the authored value exactly —
+		// rather than leaving the last pinned one behind, which would make an A/B one-way.
+		auto Pin = [Baked, Mid](const FName& Param, float Knob)
+		{
+			float Value = 0.f;
+			if (!Baked->GetScalarParameterValue(Param, Value))
+			{
+				return;   // this master has no such parameter (M_Additive is unlit)
+			}
+			Mid->SetScalarParameterValue(Param, Knob >= 0.f ? Knob : Value);
+		};
+
+		// The Lambert base is the whole world's, not just the reflective set's — it is what
+		// decides whether a non-$envmap surface takes any Lumen specular at all.
+		Pin(ElysiumReflections::Params::RoughBase, RoughBase);
+		Pin(ElysiumReflections::Params::SpecBase, SpecBase);
+		// The reflective end. Inert on a matte surface, whose lerp alpha is 0 there.
+		Pin(ElysiumReflections::Params::RoughReflect, RoughReflect);
+		Pin(ElysiumReflections::Params::SpecReflect, SpecReflect);
+
+		// EnvStrength is SCALED rather than pinned, because it carries no single right value:
+		// it is the per-material reflection reach. Reading the baked value each time is what
+		// keeps repeated calls from compounding the multiplier. Scaling is also what keeps a
+		// matte surface matte — its baked strength is 0, so no multiplier gives it a reflection.
+		float BakedEnvStrength = 0.f;
+		if (Baked->GetScalarParameterValue(ElysiumReflections::Params::EnvStrength, BakedEnvStrength)
+			&& BakedEnvStrength > 0.f)
+		{
+			Mid->SetScalarParameterValue(ElysiumReflections::Params::EnvStrength,
+				BakedEnvStrength * EnvReflect);
+		}
+	}
+}
+
+void UElysiumMapVisuals::BuildRopes(const FString& MapName)
+{
+	RopeCount = 0;
+	AActor* Owner = GetOwner();
+	if (Owner == nullptr || CVarRopes.GetValueOnGameThread() == 0)
+	{
+		return;
+	}
+
+	TArray<FElysiumRopeDef> Defs;
+	if (!FElysiumRopes::Parse(FElysiumContentPaths::MapRopes(MapName), Defs) || Defs.Num() == 0)
+	{
+		return;
+	}
+
+	const FString Dir = FElysiumContentPaths::MapDir(MapName);
+
+	// One MID per unique rope texture (every cable/cable rope shares one; the exporter names the PNG
+	// after the material, so the albedo path identifies the material). Built through the same factory
+	// the world/prop surfaces use, so the sidecar's matflags pick the master: `cable/chain`/`chainb`
+	// are $alphatest over a texture that is ~47% cut out, and instancing them opaque fills the gaps
+	// between the links in — a chain then reads as a solid tube with a chain painted on it. A "-" tex
+	// (decode failed) yields a solid dark-cable fallback from the def's Kd colour.
+	TMap<FString, UMaterialInstanceDynamic*> MidByTex;
+	auto MidFor = [&](const FElysiumRopeDef& D) -> UMaterialInstanceDynamic*
+	{
+		if (UMaterialInstanceDynamic** Found = MidByTex.Find(D.Tex))
+		{
+			return *Found;
+		}
+		FElysiumMaterialDef MatDef;
+		MatDef.Name = TEXT("rope");
+		if (D.Tex != TEXT("-"))
+		{
+			MatDef.Albedo = D.Tex;
+		}
+		else
+		{
+			MatDef.Color = FLinearColor(0.05f, 0.05f, 0.05f);
+		}
+		if (D.Bump != TEXT("-"))
+		{
+			MatDef.Bump = D.Bump;
+		}
+		MatDef.bScissor = (D.MatFlags & FElysiumRopeDef::Masked) != 0;
+		MatDef.bBlend = (D.MatFlags & FElysiumRopeDef::Translucent) != 0;
+		// $envmap with no separate mask ($normalmapalphaenvmapmask) — the uniform-reflectivity path.
+		MatDef.bEnvmap = (D.MatFlags & FElysiumRopeDef::Envmap) != 0;
+		UMaterialInstanceDynamic* Mid = FElysiumMaterialFactory::Build(&MatDef, Dir, this, *TexCache);
+		MidByTex.Add(D.Tex, Mid);
+		return Mid;
+	};
+
+	Ropes.Reserve(Defs.Num());
+	for (const FElysiumRopeDef& D : Defs)
+	{
+		UCableComponent* Cable = NewObject<UCableComponent>(Owner);
+		Cable->SetupAttachment(this);
+		// The map actor sits at the origin, so a component-relative location is the world point.
+		// Start is fixed at A (the component's own location). The end needs care: EndLocation is
+		// resolved against `AttachEndTo.GetComponent(GetOwner())`, and with AttachEndTo unset
+		// FComponentReference does NOT return null — `ExtractComponent` falls back to the owner's
+		// ROOT component (EngineTypes.cpp), i.e. the map actor's SceneRoot, not the cable. (The stock
+		// CableActor never notices because its cable IS the root.) SceneRoot sits at identity, so
+		// EndLocation is in world space: it must be B itself. A `B - A` offset here reads as an
+		// absolute point near the world origin and drags every cable's far end into one spot.
+		Cable->SetRelativeLocation(D.A);
+		Cable->EndLocation = D.B;
+		Cable->bAttachStart = true;
+		// `Dangling` clears ROPE_LOCK_END_POINT, so the far end swings free instead of being
+		// pinned to B.
+		Cable->bAttachEnd = (D.Flags & FElysiumRopeDef::Dangling) == 0;
+		// The sidecar already carries the RE'd rest length, so it goes in unmodified: the surplus
+		// over the straight A→B distance is the whole sag. VtMB's `RecomputeSprings` subtracts a
+		// flat 100 units from it, which at VtMB's authored slack (0..100 game-wide) usually puts
+		// the rest length at or *below* the span — those cables hang taut, and the solver simply
+		// stretches them along the chord.
+		Cable->CableLength = D.RestCm;
+		Cable->CableWidth = FMath::Max(0.1f, D.WidthCm);
+		Cable->NumSides = 4;                                           // thin round tube
+		// VtMB simulates `Nodes` points, so `Nodes - 1` spans. The Type-2 case (Nodes == 2) is
+		// load-bearing: one span between two locked points is a straight line and cannot sag,
+		// which is how the taut steel cables and hanging-lamp chains are meant to read.
+		Cable->NumSegments = FMath::Max(1, D.Nodes - 1);
+		// Enough relaxation passes that the shape settles on its catenary instead of hanging
+		// somewhere short of it — the sag then follows from the authored slack alone.
+		Cable->SolverIterations = 8;
+		// Tile the strand texture along the cable so it does not stretch: repeats scale with length
+		// (metres) times the authored TextureScale. Measure the drawn strand, not the rest length —
+		// a taut cable is drawn along the chord, which is longer.
+		const float Dist = static_cast<float>(FVector::Dist(D.A, D.B));
+		Cable->TileMaterial = FMath::Max(0.1f, (FMath::Max(Dist, D.RestCm) / 100.f) * D.TexScale);
+		if (UMaterialInstanceDynamic* Mid = MidFor(D))
+		{
+			Cable->SetMaterial(0, Mid);
+		}
+		Cable->RegisterComponent();
+		Ropes.Add(Cable);
+	}
+	RopeCount = Ropes.Num();
+	UE_LOG(LogElysiumVisuals, Log, TEXT("ropes: %d cables"), RopeCount);
+}
+
+void UElysiumMapVisuals::ApplyEnvironment(const FString& MapName)
+{
+	FElysiumEnvDef Env;
+	const bool bHaveEnv = FElysiumEnvDef::Parse(FElysiumContentPaths::MapEnv(MapName), Env);
+	EnvDef = Env;
+
+	// Before anything sky-shaped: the fog belongs to every primitive in the level, including on
+	// the 65 maps with no sky_camera and the ones whose faces did not decode.
+	ApplySceneFog();
+
+	if (!bHaveEnv || !Env.bSky)
+	{
+		// No sky faces to build a cube from — but the SkyLight's *level* is still data (D2), and
+		// leaving it on the bake's placeholder is exactly the cubemap-less constant fill this
+		// policy exists to remove. A map with no sky pair gets zero; one that somehow has a pair
+		// but no faces has no cube to scale, which SkyAmbientIntensity reports as zero too.
+		if (SkyLight)
+		{
+			SkyLight->SetIntensity(SkyAmbientIntensity(0.f));
+			SkyLight->SetMobility(EComponentMobility::Movable);
+			SkyLight->RecaptureSky();
+		}
+		return;
+	}
+
+	// The faces are read verbatim under the export-side orientation contract; a sidecar written
+	// under a different one would assemble into a silently wrong cube.
+	if (Env.SkyConvention != ElysiumEnvironment::SkyConventionVersion)
+	{
+		UE_LOG(LogElysiumVisuals, Warning,
+			TEXT("sky '%s': .env states orientation convention %d, this build assembles %d"),
+			*Env.SkyName, Env.SkyConvention, ElysiumEnvironment::SkyConventionVersion);
+	}
+
+	// Faces come from one of three sets: the labelled probe (B1), the enhanced set (B5), or the
+	// faithful decode. The enhanced set is opt-in and per-map, so a map without one silently
+	// keeps the faithful faces rather than losing its sky.
+	const bool bProbe = CVarSkyProbe.GetValueOnGameThread() != 0 && !Env.SkyName.IsEmpty();
+	const FString TexHi = FElysiumContentPaths::MapTexHiDir(MapName);
+	const bool bEnhanced = !bProbe && CVarEnhancedTextures.GetValueOnGameThread() != 0
+		&& ElysiumEnvironment::HasSkyFaces(TexHi, TEXT("sky_"));
+
+	float CubeUpperMean = 0.f;
+	UTextureCube* Cube = ElysiumEnvironment::BuildSkyCubeFrom(
+		bProbe    ? FElysiumContentPaths::SkyProbeDir() :
+		bEnhanced ? TexHi
+		          : FElysiumContentPaths::MapTexDir(MapName),
+		bProbe ? Env.SkyName : FString(TEXT("sky_")), &CubeUpperMean);
+	if (Cube == nullptr)
+	{
+		if (bProbe)
+		{
+			UE_LOG(LogElysiumVisuals, Warning,
+				TEXT("elysium.SkyProbe: no labelled '%s' face set under %s — run tools/sky_probe.py"),
+				*Env.SkyName, *FElysiumContentPaths::SkyProbeDir());
+		}
+		return;
+	}
+
+	// The cube does two jobs. As the SkyLight's IBL source it is what gives Lumen real sky
+	// occlusion: an interior stops receiving ambient because it cannot see the sky, instead of
+	// being washed by a constant fill through solid walls (the cubemap-less SLS_SpecifiedCubemap
+	// this replaced). VtMB night skies integrate to nearly nothing, which is the point — the
+	// .lights rig and Lumen's bounce off the baked surface cache carry the room now.
+	if (SkyLight)
+	{
+		SkyLight->SourceType = SLS_SpecifiedCubemap;
+		SkyLight->Cubemap = Cube;
+		// A sky that lit the undersides of the world would defeat the occlusion above.
+		SkyLight->bLowerHemisphereIsBlack = true;
+		SkyLight->SetMobility(EComponentMobility::Movable);
+		SkyLight->SetIntensity(SkyAmbientIntensity(CubeUpperMean));
+		SkyLight->RecaptureSky();
+	}
+
+	// And as the visible backdrop: a huge two-sided box around the camera sampling the cube by
+	// view direction, so it reads as infinitely far. Excluded from ray tracing — a mesh that
+	// encloses the whole scene is the canonical Lumen hardware-ray-tracing overlap cost.
+	AActor* Owner = GetOwner();
+	if (Owner == nullptr)
+	{
+		return;
+	}
+	if (UMaterialInterface* Master = LoadObject<UMaterialInterface>(nullptr,
+		TEXT("/Game/VtMB/Materials/M_Sky.M_Sky")))
+	{
+		SkyMid = UMaterialInstanceDynamic::Create(Master, this);
+		UMaterialInstanceDynamic* Mid = SkyMid;
+		Mid->SetTextureParameterValue(TEXT("SkyCube"), Cube);
+		ApplySkyBrightness();
+
+		// The backdrop mesh is built here rather than with the component: a map with no sky
+		// (65 of them) has no cube to sample and gets no dome at all.
+		if (SkyDomeMesh == nullptr)
+		{
+			SkyDomeMesh = NewObject<UProceduralMeshComponent>(Owner, TEXT("SkyDomeMesh"));
+			SkyDomeMesh->SetupAttachment(this);
+			SkyDomeMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			SkyDomeMesh->SetCastShadow(false);
+			SkyDomeMesh->RegisterComponent();
+		}
+
+		TArray<FVector> Verts, Normals;
+		TArray<int32> Tris;
+		TArray<FVector2D> UVs;
+		BuildSkyBox(SkyDomeHalfExtentCm, Verts, Tris, Normals, UVs);
+		SkyDomeMesh->CreateMeshSection_LinearColor(0, Verts, Tris, Normals, UVs, {}, {}, false);
+		SkyDomeMesh->SetMaterial(0, Mid);
+		SkyDomeMesh->SetVisibleInRayTracing(false);
+		SkyDomeMesh->SetVisibility(bSkyVisible);
+		UE_LOG(LogElysiumVisuals, Log,
+			TEXT("sky '%s': %s faces, cube upper-hemisphere mean %.5f, skyambient %.5f -> "
+			     "SkyLight intensity %.3f"),
+			*Env.SkyName,
+			bProbe ? TEXT("labelled probe") : bEnhanced ? TEXT("enhanced") : TEXT("faithful"),
+			CubeUpperMean, LightRig ? LightRig->SkyAmbientMag : 0.f,
+			SkyAmbientIntensity(CubeUpperMean));
+	}
+}
+
+float UElysiumMapVisuals::SkyAmbientIntensity(float CubeUpperMean) const
+{
+	// C1/C2 (D2, decisions.md 2026-07-26): the SkyLight actor stays on every map, and its level
+	// is DATA, not a constant. VtMB states the sky's own radiance once per map, as the type-5
+	// `emit_skyambient` row — the colour its light cache returns for a sky-hitting bounce ray
+	// (RE-A3) — and VRAD divides no falloff out of a `light_environment`, so that number is a
+	// lump-8 luxel value / 255 (RE-A5). It is authored on only **25 of 108 maps**; the other 83
+	// carry no `light_environment` at all, and 41 of those still draw sky through `toolsskybox`,
+	// so "shows sky" and "is lit by sky" are genuinely independent. Two of the 25 author a
+	// **zero**. So the policy has exactly three cases and no fallback:
+	//
+	//   no pair (83 maps)  -> 0. The rig and Lumen's bounce carry the room; a sky that shows but
+	//                         was never authored to light must not light.
+	//   pair, magnitude 0  -> 0. An authored zero is a reading, not a missing one.
+	//   pair, magnitude m  -> scale the cube so its own average radiance IS m.
+	//
+	// That last line is the whole of C1. VtMB's sky is one number and ours is an image; dividing
+	// the cube's solid-angle-weighted upper-hemisphere mean out and multiplying VtMB's number in
+	// gives the sky VtMB's **level** while keeping the cube's **direction** — the modernization
+	// (a real IBL with real occlusion) sits entirely in the distribution, and the magnitude stays
+	// the game's own. No free gain, which is what makes C4's residual a measurement.
+	const float Mag = LightRig ? LightRig->SkyAmbientMag : 0.f;
+	if (!LightRig || !LightRig->bHasSkyAmbient || Mag <= 0.f)
+	{
+		return 0.f;
+	}
+	if (CubeUpperMean <= KINDA_SMALL_NUMBER)
+	{
+		// A cube that integrates to nothing (an all-black `dn`-like set) cannot be scaled to a
+		// target radiance — the ratio diverges. Say so rather than ship an infinity.
+		UE_LOG(LogElysiumVisuals, Warning,
+			TEXT("sky: type-5 magnitude %.5f but the cube's upper hemisphere is black — no IBL level"),
+			Mag);
+		return 0.f;
+	}
+	return Mag / CubeUpperMean;
+}
+
+void UElysiumMapVisuals::ApplyPostProcessKnobs()
+{
+	if (!PostProcess)
+	{
+		return;
+	}
+	FPostProcessSettings& S = PostProcess->Settings;
+
+	const float Leak = CVarSkylightLeaking.GetValueOnGameThread();
+	S.bOverride_LumenSkylightLeaking = Leak >= 0.f;
+	if (Leak >= 0.f)
+	{
+		S.LumenSkylightLeaking = Leak;
+	}
+
+	const float LeakDist = CVarSkylightLeakingDistance.GetValueOnGameThread();
+	S.bOverride_LumenFullSkylightLeakingDistance = LeakDist >= 0.f;
+	if (LeakDist >= 0.f)
+	{
+		S.LumenFullSkylightLeakingDistance = LeakDist;
+	}
+
+	const float Boost = CVarDiffuseColorBoost.GetValueOnGameThread();
+	S.bOverride_LumenDiffuseColorBoost = Boost >= 0.f;
+	if (Boost >= 0.f)
+	{
+		S.LumenDiffuseColorBoost = Boost;
+	}
+}
+
+void UElysiumMapVisuals::ApplySkyBrightness()
+{
+	if (SkyMid)
+	{
+		SkyMid->SetScalarParameterValue(TEXT("Brightness"), CVarSkyBrightness.GetValueOnGameThread());
+	}
+}
+
+void UElysiumMapVisuals::ApplySceneFog()
+{
+	// The bake already stamped these, so the level looks right the moment it is opened. The
+	// runtime re-derives them anyway, the same way it re-derives every light's intensity: the
+	// numbers belong to `<map>.env`, and a sidecar re-export must not need a re-bake to take.
+	const bool bOn = CVarFog.GetValueOnGameThread() != 0;
+
+	TArray<float> WorldData, SkyData;
+	ElysiumFog::Pack(bOn && EnvDef.bFog, EnvDef.FogColor, EnvDef.FogStartCm, EnvDef.FogEndCm,
+		WorldData);
+	// The miniature's distances arrive already multiplied by the 3D-skybox scale, because the
+	// pass renders at 1/scale — a skybox-space distance is `scale` times as far in the world.
+	ElysiumFog::Pack(bOn && EnvDef.bSkyFog, EnvDef.SkyFogColor, EnvDef.SkyFogStartCm,
+		EnvDef.SkyFogEndCm, SkyData);
+
+	auto Stamp = [](const TArray<TObjectPtr<AStaticMeshActor>>& Actors, const TArray<float>& Data)
+	{
+		int32 Count = 0;
+		for (const TObjectPtr<AStaticMeshActor>& Actor : Actors)
+		{
+			if (UStaticMeshComponent* Comp = Actor ? Actor->GetStaticMeshComponent() : nullptr)
+			{
+				Comp->SetCustomPrimitiveDataFloatArray(ElysiumFog::SlotColor, Data);
+				++Count;
+			}
+		}
+		return Count;
+	};
+
+	const int32 WorldStamped = Stamp(WorldActors, WorldData) + Stamp(PropActors, WorldData);
+	const int32 SkyStamped = Stamp(SkyActors, SkyData);
+
+	auto Describe = [](const TArray<float>& Data)
+	{
+		return Data[ElysiumFog::SlotInvRange] > 0.f
+			? FString::Printf(TEXT("%.0f->%.0fcm"), Data[ElysiumFog::SlotStart],
+				Data[ElysiumFog::SlotStart] + 1.f / Data[ElysiumFog::SlotInvRange])
+			: FString(TEXT("off"));
+	};
+	UE_LOG(LogElysiumVisuals, Log, TEXT("fog: world %s on %d primitives, 3D skybox %s on %d"),
+		*Describe(WorldData), WorldStamped, *Describe(SkyData), SkyStamped);
+}
+
+void UElysiumMapVisuals::ToggleProps()
+{
+	bPropsVisible = !bPropsVisible;
+	for (const TObjectPtr<AStaticMeshActor>& Prop : PropActors)
+	{
+		Prop->SetActorHiddenInGame(!bPropsVisible);
+	}
+}
+
+void UElysiumMapVisuals::ToggleSkybox()
+{
+	// Both halves of the sky read as one thing to the eye, so they toggle together: the baked
+	// 3D-skybox miniature and the backdrop dome that stands in for the 2D sky behind it.
+	bSkyVisible = !bSkyVisible;
+	for (const TObjectPtr<AStaticMeshActor>& Sky : SkyActors)
+	{
+		Sky->SetActorHiddenInGame(!bSkyVisible);
+	}
+	if (SkyDomeMesh)
+	{
+		SkyDomeMesh->SetVisibility(bSkyVisible && SkyDomeMesh->GetNumSections() > 0);
+	}
+}
+
+void UElysiumMapVisuals::ToggleLights()
+{
+	if (LightRig)
+	{
+		LightRig->SetLightsVisible(!LightRig->AreLightsVisible());
+	}
+}
+
+bool UElysiumMapVisuals::AreLightsVisible() const
+{
+	return LightRig && LightRig->AreLightsVisible();
+}
+
+// The 3D-skybox A/B is a **dev** verb, not a player one, so it lives on plane 1: an `elysium.*`
+// console command, reached by a chord (Ctrl+T) rather than by a bare key — `t` is `toggleuiside` in
+// VtMB's default set (`docs/input-architecture.md` § "Reserved keys").
+static FAutoConsoleCommandWithWorld GElysiumToggleSky(
+	TEXT("elysium.togglesky"),
+	TEXT("Show/hide the 3D skybox miniature and the backdrop dome together."),
+	FConsoleCommandWithWorldDelegate::CreateStatic([](UWorld* World)
+	{
+		const UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
+		const UElysiumMapSubsystem* Maps = GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
+		AElysiumMapActor* Map = Maps ? Maps->GetCurrentMap() : nullptr;
+		if (UElysiumMapVisuals* Visuals = Map ? Map->GetVisuals() : nullptr)
+		{
+			Visuals->ToggleSkybox();
+		}
+	}));

@@ -131,13 +131,14 @@ just bind the extra maps and toggle the features on.
 
 ## Floor reality (the hard constraint)
 
-The perf floor is **RTX 3060 12 GB @ 1080p, and HWRT Lumen already eats ~10–14 ms of the
-16.6 ms frame** (`rendering-perf.md` → Floor reality) — there is essentially no headroom, and
-VRAM is a real ceiling. So enhancement is **budget-gated**, not free:
+The perf floor and its VRAM budget are `CLAUDE.md` → "Target hardware" and
+`rendering-perf.md` → "Floor reality" — read those for the current numbers rather than
+duplicating them here, since they are re-measured independently of this doc. So enhancement is
+**budget-gated**, not free:
 
 - **Upscale factor is chosen against VRAM, not maxed.** 2× as the default; 4× reserved for
   hero surfaces the player gets close to. A blanket 4× over every texture × the added PBR maps
-  can blow the 12 GB floor on its own.
+  can blow the VRAM floor on its own.
 - **BCn + mips are mandatory** on every generated map (the point of `retex_dds` for copies;
   the generated maps need genuine BC5/BC4/BC7 encoding). Uncompressed PNG at runtime is not an
   option at this budget.

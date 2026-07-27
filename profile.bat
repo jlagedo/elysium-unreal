@@ -1,6 +1,6 @@
 @echo off
 REM Headless render profiling for roadmap 0.1/0.2. Launches Elysium standalone, loads a
-REM map, and drives the -ElysiumProfile harness (Source/ElysiumUE/Private/ElysiumProfiler):
+REM map, and drives the -ElysiumProfile harness (Source/ElysiumUE/Private/Debug/ElysiumProfiler):
 REM it pins the camera to each configured vantage near spawn, warms up, captures N frames
 REM through the CSV profiler (per-pass GPU stats via -csvGpuStats), writes a summary, and
 REM exits. No human interaction. Then it runs the parser to emit the roadmap baseline table.

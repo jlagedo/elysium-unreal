@@ -48,6 +48,53 @@ is *not* a bake; it reads the baked result to learn how VtMB actually lit the sc
 bounce is the look. So **Lumen GI is load-bearing, not overkill**, and the dynamic lights are
 a modest contributor feeding it. Re-run the tool on any map; interior-only maps may differ.
 
+## Lumen surface-cache engine facts
+
+Generic UE 5.8 engine behavior, independent of this project's own bake/runtime split — background
+for anything that touches Lumen coverage.
+
+**Three requirements for a primitive to enter the surface cache** (all three, or it is culled):
+
+1. **Card representation.** `FLumenSceneData::AddMeshCards` reads
+   `Proxy->GetMeshCardRepresentation()`; a null pointer takes the fallback branch and the
+   primitive gets no cards. Only `FStaticMeshSceneProxy`, `FSkeletalMeshSceneProxy`, the Nanite
+   proxies, and `FBaseDynamicMeshSceneProxy` override it — a `UProceduralMeshComponent` proxy
+   never does.
+2. **Static mesh batches.** The card-capture pass (`EMeshPass::LumenCardCapture`) draws from
+   `PrimitiveSceneInfo->StaticMeshRelevances`. A proxy that only implements
+   `GetDynamicMeshElements` (again, `UProceduralMeshComponent`) contributes no draws to that
+   pass, so even a hand-attached card representation would capture nothing.
+3. **Large enough.** The primitive's largest bounding-box face area must exceed
+   `r.LumenScene.SurfaceCache.MeshCardsMinSize` (`LumenMeshCards::GetCardMinSurfaceArea`). Below
+   it, the primitive is culled outright — Epic's own docs describe this as small meshes reading
+   black in reflections, tunable via the post-process "Lumen Scene Detail" setting.
+
+`FStaticMeshLODResources::CardRepresentationData` is a public raw pointer the LOD owns and
+deletes; it can be assigned a custom `FCardRepresentationData` at runtime as long as this happens
+before the scene proxy is constructed (the proxy copies the pointer at construction time).
+`MeshCardRepresentation::SetCardsFromBounds` is `ENGINE_API` and reachable from game code with no
+engine edit — it is what `UDynamicMeshComponent` itself uses.
+
+**`SetCardsFromBounds` behavior.** It always emits exactly **six cards, one per face of the
+bounding box**, each looking inward and extended outward by a small fixed offset
+(`CardZOffset = 5`) to avoid degeneracy on thin bounds. A card captures only the *nearest*
+surface along its facing direction, so six box faces cannot represent a volume that holds several
+surfaces at different depths (e.g. a room with furniture) — Epic's own guidance is that only
+meshes with simple interiors work this way, and that walls/floors/ceilings should be separate
+meshes. Real static meshes built through the editor's offline surfel-fitting builder get up to 12
+cards (raisable) placed against the actual surface; bounds-only cards are a strictly coarser
+approximation.
+
+**Hit lighting is a fallback, not a mode switch.** A reflection ray re-traces with hit lighting
+only when hit lighting is force-enabled, *or* the surface-cache lookup at the hit point came back
+incomplete (`LumenReflectionHardwareRayTracing.usf`). Enabling
+`r.Lumen.Reflections.HardwareRayTracing.HitLighting` does not change the ray's lighting mode by
+itself — it only permits a *miss* to fall through to a second, more expensive trace. Its cost
+therefore scales with the fraction of the scene the surface cache fails to cover, and falls
+automatically as coverage improves; it never regresses correctness, only cost. Nanite has no
+runtime build path (`NaniteBuilder` is an editor-only module), so a runtime-constructed mesh
+cannot itself be Nanite regardless of card coverage.
+
 ## Shipped defaults
 
 Target hardware is in `CLAUDE.md` → "Target hardware": **RTX 4060-class / 16 GB floor at 1440p
@@ -137,16 +184,16 @@ Nuclear brackets to attribute cost: `r.Lumen.HardwareRayTracing 0` (HWRT's share
 
 **Headless, repeatable, no human in the loop:** `profile.bat <map> [cam]` launches standalone
 at 2560×1440 / SM6 and drives the `-ElysiumProfile` harness
-(`Source/ElysiumUE/Private/ElysiumProfiler.cpp`) — it pins the camera to each fixed vantage
+(`Source/ElysiumUE/Private/Debug/ElysiumProfiler.cpp`) — it pins the camera to each fixed vantage
 near spawn (the `GProfileCams[]` table), warms up 120 frames, captures 300 through the CSV
 profiler (`-csvGpuStats` → per-pass GPU ms), dumps one `ProfileGPU` tree to the log, writes a
 JSON summary, and exits. `tools/profile_report.py` turns the CSVs into the per-pass table
 (`tools/out/_profile/<map>_report.md`) and the committed baseline below ("Profiling
 baseline").
-The harness also logs the SM6/adapter confirmation and MegaLights-vs-ShadowDepths split, so it
-answers roadmap 0.1 **and** 0.2 in one pass. Capture a new vantage by flying there in-game and
-running `elysium.campos` (logs a paste-ready `GProfileCams[]` row with the exact pitch the HUD
-omits).
+The harness also logs the SM6/adapter confirmation and the MegaLights-vs-ShadowDepths split, so
+one run covers both the render-path check and the engagement check together. Capture a new
+vantage by flying there in-game and running `elysium.campos` (logs a paste-ready
+`GProfileCams[]` row with the exact pitch the HUD omits).
 
 The fixed vantages double as **rendering-regression test points**: re-run `profile.bat` after
 any render-path change and diff the per-vantage GPU ms against the committed baseline below.
@@ -156,10 +203,10 @@ GPU time), `ProfileGPU` (one-frame pass breakdown), Unreal Insights for a timeli
 profile a **standalone** build (`play.bat` / `profile.bat`), not a PIE editor session — editor
 overhead skews the numbers.
 
-## Profiling baseline (roadmap 0.1)
+## Profiling baseline
 
 Captured **headless** by `profile.bat` → the `-ElysiumProfile` harness
-(`Source/ElysiumUE/Private/ElysiumProfiler.cpp`) → `tools/profile_report.py`. The harness
+(`Source/ElysiumUE/Private/Debug/ElysiumProfiler.cpp`) → `tools/profile_report.py`. The harness
 pins the camera to each fixed vantage near spawn, warms up, captures per-pass GPU stats
 through the CSV profiler, and exits — no manual console typing. Full per-vantage reports
 (incl. the heaviest-pass breakdown) regenerate at `tools/out/_profile/<map>_report.md`.
@@ -192,8 +239,7 @@ Epic-tier Lumen at 1440p native, on the baked level.
 
 The two tables below are **not comparable** to the one above: they were captured at 66% screen
 percentage with Medium-tier Lumen on the runtime `UProceduralMeshComponent` path, and neither map
-is baked. Kept only for the many-light cost reading in the 0.2 verdict; re-capture once those maps
-are baked.
+is baked. Kept only for the many-light cost reading below; re-capture once those maps are baked.
 
 ### sm_hub_1 — 687 world lights — GPU ms per vantage
 
@@ -215,11 +261,11 @@ are baked.
 | ShadowDepths / VSM | 0.00 | 0.00 | 0.00 | 0.00 |
 | **Total GPU** (whole frame) | **3.96** | **4.31** | **4.30** | **4.27** |
 
-**0.2 verdict — MegaLights is engaging, no VSM blow-up.** MegaLights (~1.0–1.3 ms) meets or
+**MegaLights is engaging, with no VSM blow-up.** MegaLights (~1.0–1.3 ms) meets or
 beats ShadowDepths on every vantage, and the many-light cost is ~**flat**: 687 lights
 (sm_hub_1) and 161 (sm_pawnshop_1) both cost the same ~1 ms as 395 (sp_tutorial_1).
 ShadowDepths never dominates and is ~0 on both `sm_` maps. MegaLights is carrying the local lights
-as designed — 3.1 is **not** the immediate next task.
+as designed.
 
 **The `[VSM] Non-Nanite Marking Job Queue overflow` warning is gone.** It was driven by huge
 single-section PMC world surfaces each covering a large shadow page area; with the world baked as

@@ -210,8 +210,8 @@ Records are verbatim moves out of `roadmap.md`: where one says "the decision log
 
 - [x] **0.9 The uasset-bake architecture — decide, document, land** — housekeeping, not graphics:
   a decision entry, a charter-doc correction and a branch merge, with zero rendering work. The two
-  stacked spikes (`lumen-coverage-spike.md`, `uasset-bake-spike.md`) had answered a question that
-  blocked P3 — a runtime-built mesh can never hold what the editor build produces (DDC-fitted Lumen
+  stacked spikes (the Lumen surface-cache spike, since folded into `rendering-perf.md`, and
+  `uasset-bake-spike.md`) had answered a question that blocked P3 — a runtime-built mesh can never hold what the editor build produces (DDC-fitted Lumen
   surface-cache cards, Nanite, distance fields, BC7) — and the architecture that followed had been
   running in practice, de facto, since 2026-07-25: the perf retune (4060 floor, stock Epic
   scalability), `.phy` physics collision, prop skins, the decal bake and the whole SKY rework are
@@ -334,7 +334,7 @@ Records are verbatim moves out of `roadmap.md`: where one says "the decision log
   `sp_tutorial_1`: 1868 entities → 185 brush bodies, no cook stall. *Deps:* 1.4.
 
 - [x] **1.6 Starter classes** — the four leaf classes that make the substrate fire visibly
-  (`Source/ElysiumUE/Private/ElysiumStarterClasses.cpp`, plain-C++ `FElysiumEntity` subclasses via
+  (`Source/ElysiumUE/Private/Substrate/ElysiumStarterClasses.cpp`, plain-C++ `FElysiumEntity` subclasses via
   module-static registrars). **`logic_auto`** owns map-load ignition: `Spawn()` schedules a one-shot
   think at t=0, `Think()` fires `OnMapLoad` once on the first world tick (superseding the generic
   `FireMapLoadOutputs`, now removed). **`logic_relay`** (the indirection layer) takes
@@ -371,7 +371,7 @@ Records are verbatim moves out of `roadmap.md`: where one says "the decision log
 - [x] **2.1 Cog integration** — the custom-window foundation on top of the 0.5 spike (which
   already vendored Cog, stood up `UElysiumCogSubsystem` with the 15 stock CogEngine windows, the
   `#if ENABLE_COG` out-of-Shipping posture, and proved the F1 menu renders in PIE + standalone).
-  **`FElysiumCogWindow`** (`Private/ElysiumCogWindow.{h,cpp}`) is the base for every Elysium window:
+  **`FElysiumCogWindow`** (`Private/Debug/ElysiumCogWindow.{h,cpp}`) is the base for every Elysium window:
   it hands derived windows the live handles Cog's UObject-reflection inspector can't reach —
   `GetMapActor()`/`GetEntityWorld()`/`GetGameState()`, resolved off the window's world — because the
   Track-B entities are plain C++, not UObjects. **`FElysiumCogWindow_Status`** (registered
@@ -406,7 +406,7 @@ Records are verbatim moves out of `roadmap.md`: where one says "the decision log
   editor target compiles + links clean. *Deps:* 2.1, 1.4.
 
 - [x] **2.3 `ent_*` verbs** — the Source-style verb set lands as `UElysiumEntityDebugSubsystem`
-  (a `UTickableWorldSubsystem`, `Private/ElysiumEntityDebugSubsystem.{h,cpp}`): it registers the
+  (a `UTickableWorldSubsystem`, `Private/Debug/ElysiumEntityDebugSubsystem.{h,cpp}`): it registers the
   `elysium.ent_*` console commands (`ECVF_Cheat`), reaches the live world through the map subsystem's
   current map actor, and ticks to draw the overlays. **`ent_fire`** injects through the real queue via
   `EnqueueInput` (`!self` + Caller = each resolved handle, so shared targetnames still hit the exact
@@ -490,11 +490,11 @@ Records are verbatim moves out of `roadmap.md`: where one says "the decision log
 - [x] **2.7 Agent-facing MCP surface** *(design: `debug-tooling.md` Layer 3)* — the debug
   layer's console verbs get a third consumer beside the human (Cog) and `-ExecCmds`: an
   MCP server an AI agent (Claude Code, Cursor, the MCP Inspector) drives over loopback HTTP.
-  **`UElysiumMcpSubsystem`** (`Private/ElysiumMcpSubsystem.{h,cpp}`, a `UEngineSubsystem`)
+  **`UElysiumMcpSubsystem`** (`Private/Debug/ElysiumMcpSubsystem.{h,cpp}`, a `UEngineSubsystem`)
   registers **20 `elysium_*` tools** through the engine's experimental `ModelContextProtocol`
   plugin via `IModelContextProtocolModule::AddTool()` — the direct-registration path, so the
   tools work in `-game`/PIE/cooked, not only the editor-only Toolset-Registry adapter. Tools
-  (`Private/ElysiumMcpTools.cpp`) are thin structured wrappers over the same runtime state the
+  (`Private/Debug/ElysiumMcpTools.cpp`) are thin structured wrappers over the same runtime state the
   Cog windows render, resolving the live world at **call** time (one stable tool list across
   travel/PIE/idle): map lifecycle (`maps_list`/`map_load`/`map_reload`/`new_game`), player
   (`player_get`/`teleport`/`noclip`), entities (`entity_list` w/ histogram + paging /
@@ -526,7 +526,7 @@ Records are verbatim moves out of `roadmap.md`: where one says "the decision log
   `Automation RunTest Elysium.<...>` headless with a JSON+HTML report. All 8 tests pass. *Deps:* 1.4, 5.2.
 
 - [x] **2.9 Screenshot-regression harness** — `FElysiumShotRun`
-  (`Private/ElysiumShotRun.{h,cpp}`), sibling to `FElysiumProfileRun`: `-ElysiumShots` self-drives
+  (`Private/Debug/ElysiumShotRun.{h,cpp}`), sibling to `FElysiumProfileRun`: `-ElysiumShots` self-drives
   once the boot map settles, visits the **same fixed vantages as the profiler** (extracted into the
   shared `ElysiumVantages.h`, so a look regression and a cost regression line up frame-for-frame),
   pins the camera, settles (Lumen accumulation + shader compile), captures the viewport (overlay
@@ -1109,9 +1109,9 @@ Records are verbatim moves out of `roadmap.md`: where one says "the decision log
     re-face, like the NPC leaf, since a script `SetAngles` carries no pre-converted quat),
     `OnRuntimeModelChanged` (tear down + rebuild from the new model's basename), and `OnDormancyChanged`
     (ScriptHide/Kill → undrawn). Inputs: `Break` (hide the body + fire `OnBreak`, idempotent);
-    `Skin`/`SetAnimation` are **logged stubs** — the prop decode is LOD0 static geometry, skin 0 only, so
-    faithfully they can only record the request until a skin-family / skeletal-prop export exists (a
-    tracked follow-up). The `skin` keyfield is registered read/write (closes the 9.3 `.skin`-on-prop note).
+    `SetAnimation` is a **logged stub** — the prop decode is LOD0 static geometry with no skeleton, so it
+    can only record the request. `Skin`/`SetSkin` repaint the body for real (see "Skin families,
+    2026-07-26" below); the `skin` keyfield is registered read/write (closes the 9.3 `.skin`-on-prop note).
   - **Teardown** — `FElysiumEntityWorld::RegisterPropBody` + a `PropBodies` weak-ref list destroyed in
     `Teardown`, exactly like `NpcBodies`, so a world rebuild on a surviving actor (reload) does not leak.
   - **Orientation at export, read verbatim** — `.ents` left `angles` as a raw Source string (only
@@ -1120,6 +1120,18 @@ Records are verbatim moves out of `roadmap.md`: where one says "the decision log
     uses) for every `model_mesh` entity; `FElysiumEntityDefs::Parse` reads it into `Def.ModelQuat`
     (identity when absent, so an older export still loads — props just unrotated). Honours the load-bearing
     "convert at export, never at runtime" rule.
+  - **Skin families (2026-07-26).** `mdl.py` decodes the `.mdl` skin table — `StudioMesh.Material` is a
+    *skinref*, not a texture index (`docs/mdl_v2531.md` corrected) — and emits `props/<stem>.skins`; the
+    bake resolves it into `DA_<map>_PropSkins` (`UElysiumPropSkinSet`). `ApplyPropSkin` repaints the
+    body's material slots for the `skin` keyfield, the `Skin`/`SetSkin` inputs and a script `.skin =`
+    write. Skins **snap** — VtMB's `skin` is a keyfield-input with a null `inputFunc`, and the
+    crossfading `FadeToSkin` is wired zero times in the 16 exported maps, so `FadeToSkin`/
+    `SetSkinFadeTime` are registered against the RE'd behaviour and snap too (RE + decision:
+    `decisions.md` 2026-07-26, `entity_io.md` → "Skin families"). GAME_LUMP static props take
+    `DStaticPropV4.skin` (a 10th `.props` field) applied offline by the bake. The `+use` static-mesh
+    family (`prop_button`/`prop_switch`/`prop_sign`/`prop_hacking`/`prop_doorknob(_electronic)`/
+    `item_container(_animated/_lock)`) now stands bodies + skins too, with no invented I/O (their
+    interaction surface stays 4.10/8.8). `elysium.PropSkins` A/Bs the pass.
   - **Verified** — `build.bat` green; the tutorial re-exported (78 `prop_dynamic`, all with
     `model_mesh` + `model_quat`); `test.bat Content` + `Substrate` green, including a new
     `Elysium.Content.TutorialEnts` assertion (prop_dynamic registers, records carry `model_mesh`, a
@@ -1139,21 +1151,32 @@ Records are verbatim moves out of `roadmap.md`: where one says "the decision log
     `attach1`/`attach2`/`forcelimit`/`torquelimit`/`hingefriction`/`hingeaxis`; inputs `TurnOn`/`TurnOff`/
     `Break`; output `OnBreak`. Full record: `decisions.md` 2026-07-24.
   - **Exporter** — `UE_bsp_to_scene` emits `hinge_axis` (normalized `source_dir_to_unreal` of the raw-Source
-    `origin`→`hingeaxis` line; pivot = the converted top-level origin) for `phys_hinge`. `prop_collision.py`
-    convex-decomposes each `prop_physics` model (**CoACD**, optional dep) into `props/<stem>.hulls` in the
-    world-collider format (one hull per line, flat Unreal-cm verts). Params tuned for pipeline speed
-    (`threshold=0.2` + lowered MCTS/voxel resolutions — CoACD's default 0.05 cost ~150 s on one 2.5k-vert
-    chair; the tuned set is ~10 s for an 8-hull proxy), plus a **skip-if-fresh cache** (`.hulls` newer than
-    its `.obj` is reused) so a re-export is instant and `export_all` pays per model once. CoACD absent/failing
-    → single whole-model hull line (the baseline spec) — the pipeline never hard-fails.
-  - **Runtime** — `FElysiumPhysProp` (`ElysiumPropClasses.cpp`) stands a per-entity `UStaticMeshComponent` via
-    `AElysiumMapActor::BuildPhysPropVisual` (mesh cooked with convex collision from the `.hulls`, one
-    `FKConvexElem` per line, else a single whole-model hull; cached under a `#phys` key so a model shared with
-    a non-solid `prop_dynamic` doesn't clash), `PhysicsActor` profile, `SetSimulatePhysics` + `override_mass`
-    (>0 overrides, −1 keeps computed). `FElysiumStaticMeshBuilder::Build` gained a hull-list param +
-    `LoadConvexHulls`. `Wake`→`WakeAllRigidBodies`, `Break`→hide+`OnBreak`, skin inputs are stubs (skin 0 only
-    exported). `FElysiumPhysHinge` builds a `UPhysicsConstraintComponent` (twist on `Def->HingeAxis`,
-    swings/linear locked → one DOF; `forcelimit`/`torquelimit`=0 → unbreakable) in a new **`PostSpawn()` pass**
+    `origin`→`hingeaxis` line; pivot = the converted top-level origin) for `phys_hinge`. Collision export
+    is `tools/phy.py`, not the retired `prop_collision.py`/CoACD path — see "Collision reworked" below.
+  - **Collision reworked to VtMB's own `.phy` (2026-07-26).** `tools/phy.py` decodes each `prop_physics`
+    model's sibling `.phy` — the VPhysics convex hulls the original game simulates against — into
+    `props/<stem>.phys`, and the bake reproduces each ledge exactly through Geometry Script's hull
+    builder under `CTF_UseSimpleAndComplex`. Nothing is decomposed or approximated; **CoACD and
+    `prop_collision.py` are retired**, and the mesh + collision are now baked offline onto `SM_<stem>` —
+    the same asset every other prop stands — rather than cooked by `FElysiumStaticMeshBuilder` at
+    runtime, which is **deleted**. Mass is the `.phy`'s authored value (boulder 2000 kg, crate 100 kg,
+    wine glass 1.46 kg) unless the entity's `override_mass` > 0, which is −1 on every `prop_physics` in
+    the exported maps, so the authored mass is what they all weigh. A model with no collision model
+    stands visible but inert, reproducing `CPhysicsProp::CreateVPhysics` (`docs/phy_vphysics.md`); with
+    the Unofficial Patch installed no prop reaches it (27/27 covered). `phy.py` decodes all 2,854 retail
+    `.phy` files → 7,889 hulls, every one convex (`F = 2V − 4`, zero exceptions); the bake reports 18
+    physics meshes / 19 convex shapes / 18 with authored mass, read back off the assets. In-game: bodies
+    simulate with the authored masses exact (trashgarage 3.00, barrela 7.00, break_crate 100.00 kg) and
+    `showflag.Collision` shows the hulls hugging each barrel.
+  - **Runtime** — `FElysiumPhysProp` (`ElysiumPropClasses.cpp`) stands a per-entity `UStaticMeshComponent`
+    via `AElysiumMapActor::BuildPhysPropVisual` on the **baked** `SM_<stem>` (collision baked offline from
+    the `.phy` hulls, above), `PhysicsActor` profile, `SetSimulatePhysics` + `override_mass` (>0
+    overrides, −1 keeps the `.phy`'s authored mass). `Wake`→`WakeAllRigidBodies`, `Break`→hide+`OnBreak`;
+    **skins landed 2026-07-26** with 8.3 — `Skin`/`SetSkin` repaint the body for real, and
+    `FadeToSkin`/`SetSkinFadeTime` are registered against the RE'd behaviour and snap, because no
+    exported map fires them (`decisions.md` 2026-07-26). `FElysiumPhysHinge` builds a
+    `UPhysicsConstraintComponent` (twist on `Def->HingeAxis`, swings/linear locked → one DOF;
+    `forcelimit`/`torquelimit`=0 → unbreakable) in a new **`PostSpawn()` pass**
     (`FElysiumEntityWorld::Load` second loop = Source's `Activate()`, run after every entity spawns so both
     attach bodies exist), wiring `attach1`↔`attach2`/world via `SetConstrainedComponents`; `TurnOn`/`TurnOff`/
     `Break`, `OnBreak`. `FElysiumEntity::GetAttachBody` is the seam (base = brush body; phys prop = simulating
@@ -1162,12 +1185,10 @@ Records are verbatim moves out of `roadmap.md`: where one says "the decision log
     non-solid, visual parity).
   - **Deferred (recorded)** — physics-driven constraint break firing `OnBreak` (the `OnConstraintBroken`
     delegate needs a UObject; the plain-C++ leaf fires `OnBreak` only on the explicit input); the gib
-    `OnBreakLevel*` chain (no decomposition-into-pieces system); runtime multi-convex for later maps if
-    concave furniture becomes gameplay-relevant (the offline path already covers it).
-  - **Verified** — `build.bat` green; re-export writes `hinge_axis` (12/12) + 18 decomposed `.hulls`
-    (66 hulls: `bottle`→1, `chairoffice`/`retro_chair`/`trashgarage` multi-hull); `test.bat` Content +
+    `OnBreakLevel*` chain (no decomposition-into-pieces system).
+  - **Verified** — `build.bat` green; re-export writes `hinge_axis` (12/12); `test.bat` Content +
     Substrate green with a new `Elysium.Content.TutorialEnts` assertion (prop_physics/phys_hinge register,
-    prop_physics carry `model_mesh` + a `.hulls` sidecar on disk, phys_hinge carry `hinge_axis`); a
+    prop_physics carry `model_mesh` + a `.phys` sidecar on disk, phys_hinge carry `hinge_axis`); a
     timeboxed `play.bat sp_tutorial_1` load built all bodies + all 12 hinges (`attach1 <-> world`) with no
     crash (`world 'sp_tutorial_1' live: 1868 entities`). The Chaos settle/push feel + hinge swing await an
     owner in-game play test (like 4.1 — physics feel is the one thing headless coverage can't judge).
@@ -2795,7 +2816,7 @@ explains ~0% of a median lit face and the bounce floor *is* the ambient level (C
   **registered command → alias → cvar → Python**, matching Source's own `Cmd_ExecuteString` order —
   so nothing a player writes into `user.cfg` can shadow `+forward`, and the registry returning *false*
   for a word it does not know is precisely the cue to try an alias. `ElysiumCommandBus::Exec`
-  (`Private/ElysiumCommandBus.{h,cpp}`) is the one door: a bound key, a level script's `ccmd`
+  (`Private/Player/ElysiumCommandBus.{h,cpp}`) is the one door: a bound key, a level script's `ccmd`
   attribute-set, a `.dlg` action, `elysium.cmd <line>` from the UE console, an MCP
   `elysium_console_exec` and `-ExecCmds` all arrive there. It reaches the console store on
   `FElysiumPythonVM` (which exists whether or not CPython does) and `EnsureSeeded`s it from

@@ -489,19 +489,20 @@ set by its dialogue clips (`heather` +2.4 %) and the whole of a glb that has non
 
 ## What this settles for the rebuild
 
-- **12.3** needs the controller → rule → flexdesc evaluation at runtime, not a flat morph
+- The controller → rule → flexdesc evaluation has to run at load time, not as a flat morph
   list: 44 controllers drive 65 morphs through 60 RPN rules, and the rules are where the
-  eyelid interaction lives. The morphs themselves are baked (PL10).
-- **12.4** has no eyeball data to consume. Eyes are the eight `eyelid` controllers plus the
+  eyelid interaction lives.
+- There is no eyeball data to consume. Eyes are the eight `eyelid` controllers plus the
   16 eyelid flexdescs; gaze must come from bones or from a deliberate remaster addition
   under `remaster-direction.md`'s rule.
-- **12.5** is a three-file join per line — `.lip` for timing, `expressions/<stem>_phonemes`
+- Lip sync is a three-file join per line — `.lip` for timing, `expressions/<stem>_phonemes`
   for the weights, `mstudiomouth_t` for the amplitude jaw — with the phoneme *string* as the
   key. All three are on disk: `out/lip/`, `out/expressions/`, and `mouths` in the facial
   manifest.
-- **12.3 and 12.5 cover NPCs only.** No player body carries a flex rig (inventory above), so
-  the PC has no morph targets to drive and no `facial/` sidecar; 8.11a's body stands and
-  animates with a still face.
+- No player body carries a flex rig (inventory above), so the PC has no morph targets to
+  drive and no `facial/` sidecar — it animates with a still face.
+
+Task status for this system: `docs/roadmap.md`.
 
 ## Provenance
 

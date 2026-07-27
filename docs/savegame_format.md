@@ -281,38 +281,20 @@ and thrown props keep their pose and velocity.
 
 ### `Python` — the script layer
 
-A chain of records, outside the field-stream convention:
+A chain of records, outside the field-stream convention: `byte tag; int len; byte pickle[len]`,
+each a **CPython 2.1 protocol-0 pickle** of a flat `str -> int` dict —
+`(dp1\nS'Tut_Elev'\np2\nI1\ns…`. The two dicts are `G` and `G.morgue`; the block handler, its
+vftable, and the full `G`/morgue mechanism belong to `python_bridge.md` ("`G` is the save unit").
+What follows is specific to the decoded saves themselves, written flag-dict first:
 
-```
-byte tag; int len; byte pickle[len]
-```
-
-Each payload is a **CPython 2.1 protocol-0 pickle** of a flat `str -> int` dict —
-`(dp1\nS'Tut_Elev'\np2\nI1\ns…`. The handler's vftable is `0x10476ac8` (slot 0 `GetBlockName`
-returns `"Python"`, slot 2 `Save` = `0x1019adc0`, slot 7 `Restore` = `0x1019b130`, the rest empty
-stubs). `Save` imports **`cPickle`**, takes its `dump`, and calls `cPickle.dump(dict, file)` twice
-against a file-like adapter over the `ISave` buffer — which is exactly the `byte tag; int len;
-pickle[len]` framing seen on disk. The two dicts are `PyDataManager`'s two engine globals
-(`0x1072b370`, `0x1072b374` — `python_bridge.md`), written flag-dict first:
-
-1. **`G`** — the global story namespace. `Jack_Faction: 2`, `In_Downtown: 0`, `Tut_Elev: 1`,
-   `Story_State: -5`. 56 keys mid-tutorial, growing as the playthrough advances. This is *the*
-   quest/story state: 208 of the 345 flags the level scripts read are written only by `.dlg`
-   files, so nothing else records that progress.
-2. **`G.morgue`** — the **dead-character registry**, keyed by NPC targetname → `1`: `Sire2`,
-   `thug_1`, `stealth_victim`, `sabbat_redshirt_3`, `bum`, `rat_2`. `PyDataManager_Log`
-   (`0x1019b800`) prints the pair under the headings `Global Variables:` and `Morgue Entries:`,
-   which is what names it. Scripts reach it only through `vamputil.py`'s two helpers —
-   `IsDead(charname)` is `G.morgue.has_key(charname)`, `MarkAsDead(charname)` is
-   `G.morgue[charname] = 1` — and story content gates on it throughout (`IsDead("Milligan")`,
-   `IsDead("Pisha")`, `IsDead("Heather")`). The engine makes `morgue` read-only as an attribute
-   (`"morgue cannot directly modified"`); you mutate the dict in place.
-
-Because entries are written by script and dialogue rather than by an engine death hook, **a
-morgue entry does not imply the entity is mechanically dead** in that map's saved state: of the
-15 names in a mid-game save, `thug_2`/`thug_3` are `m_lifeState 1`, while `bum` is alive at
-46/100 health. The morgue is the *story's* record of who is gone, and it is the one the writers
-wrote against.
+1. **`G`** — the global story namespace. A mid-tutorial save carries `Jack_Faction: 2`,
+   `In_Downtown: 0`, `Tut_Elev: 1`, `Story_State: -5` among 56 keys, growing as the playthrough
+   advances.
+2. **`G.morgue`** — the dead-character registry, keyed by NPC targetname → `1`: `Sire2`,
+   `thug_1`, `stealth_victim`, `sabbat_redshirt_3`, `bum`, `rat_2` in that same save. Because
+   entries are written by script and dialogue rather than by an engine death hook, a morgue entry
+   does not imply the entity is mechanically dead in that map's saved state: of the 15 names in a
+   mid-game save, `thug_2`/`thug_3` are `m_lifeState 1`, while `bum` is alive at 46/100 health.
 
 **Each map section carries its own frozen copy of both dicts** — the snapshot as of the last time
 the player was in that map. The live values are whichever the current map's section holds.
@@ -441,37 +423,7 @@ character that can punch.
   existing save.
 - **No dialogue text or `.dlg` state** beyond what the scripts wrote into `G`.
 
-## Mapping to Elysium-Unreal
-
-The format tells us the shape a faithful save must have, independent of container choice. Four
-tiers, in dependency order:
-
-1. **Slot metadata** — current map, visited-map list, display label, elapsed time. The `.sav`
-   global stream, one to one.
-2. **Per-map frozen state**, one snapshot per visited map, restored on re-entry:
-   - the entity set with per-entity field state, addressed by a stable save id;
-   - which entities are *absent* because they travelled with the player (`.HL3`);
-   - the pending delayed-I/O queue (`EventQueue`) — Elysium's substrate already funnels every
-     firing through one event queue, so this maps directly onto that queue's contents;
-   - physics poses; NPC AI memory; lightstyle animation state;
-   - the level-connection/landmark table (`ADJACENCY`), which `map-architecture.md`'s OpenLevel
-     travel model needs to place the player on arrival;
-   - decals (client section) — bullet holes and blood, currently not modelled at all.
-3. **Player state** — the sheet, quests, XP ledger, effects, email flags, masquerade/criminal
-   counters, discipline cooldowns, plus the inventory *as owned entities*.
-4. **Script state** — `G` and `G.morgue`, per map snapshot. Elysium runs the real
-   CPython 2.7 VM with a live `__main__`, so the natural analogue is to serialise the same
-   namespaces; the values are flat ints and strings, so the container need not be a pickle.
-
-Two structural decisions the original made that are worth keeping, and one worth dropping:
-
-- **Keep entity-as-inventory.** It is what makes item state, script hooks, and `+use` semantics
-  work uniformly, and Elysium's substrate already builds every item through the class registry.
-- **Keep the per-map snapshot model.** It is what `trigger_changelevel` round-trips depend on, and
-  it matches the adopted OpenLevel hard-travel lifecycle.
-- **Drop the sparse 16383-slot symbol table.** It exists because Source interned datamap field
-  names at runtime; a rebuild can name fields directly. The zero-value-omission rule is worth
-  keeping — it is most of why these files are small.
+Unreal mapping: see `docs/save-architecture.md`.
 
 ## Tooling
 

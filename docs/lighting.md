@@ -41,12 +41,9 @@ entity I/O — see `docs/entity_io.md` for the light-toggling inputs).
 
 ## The `$envmap` reflection term
 
-World and prop materials carry a `$envmap` reflection term composited into the albedo, not
-added after lighting: `(base + cube·mask·tint) · lightmap · 2` — the reflection is added to
-the base colour and the lightmap then multiplies it, so a reflective surface in an unlit room
-stays dark. Read out of the shipped DX8 assembly
-(`materials/dxshaders/lightmappedgeneric*envmap*.psh`). Full term, the `vertexlitgeneric`
-counterpart, and the whole-game authoring survey: `docs/reflections.md`.
+World and prop materials carry a `$envmap` reflection term composited pre-lightmap. Full
+derivation, the `vertexlitgeneric` counterpart, and the whole-game authoring survey:
+`docs/reflections.md`.
 
 ## Baked lighting (lump 8)
 

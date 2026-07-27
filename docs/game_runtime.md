@@ -549,29 +549,7 @@ cinematic model; the cast binds **by actor name**, not through `target1..4`) wit
 Captions = the `.vcd` `speak` token → `.dlg` line-id join. Deferred beats use
 `ScheduleTask(delay, "<pysource>")`. Format + event semantics: `choreographed_scenes.md`.
 
-## 6. Where Elysium is today vs. this (the gap)
-
-The runtime currently **shortcuts** the whole opening: `GameManager.NewGame()` sets
-`Launch.Map = sp_tutorial_1` and loads it as a bare `map` — spawning at
-`info_player_start` (`GameScene`, `docs/level_transitions.md`), with a dev
-`SpawnOverride` pinning the warehouse alley. There is **no chargen, no theatre trial, no
-Jack dialogue, no beat machine, no landmark chain** yet. Mapping the real flow onto the
-`docs/rebuild-strategy.md` milestones:
-
-- **Chargen** — a native character-creation screen replacing `ccmd.createplayer`, writing
-  the sheet fields (clan 2–8, gender, `base_*`) onto the player entity. New; not in the
-  current milestones as a UI, but the RPG data (§3) is the backing.
-- **The event queue + think loop (M2 backbone)** — the one time-ordered queue draining
-  each server step, serving delayed I/O *and* deferred script entries, plus a
-  `SetNextThink` analog. This is the single most load-bearing runtime primitive.
-- **Landmark transitions** — `trigger_changelevel` + `info_landmark` relative placement
-  (the opening is four maps chained this way), replacing the bare-`map` spawn.
-- **`logic_choreographed_scene` + camera tracks (M6)** — for the embrace/trial cinematics
-  and the tutorial's scripted beats.
-- **`.dlg` runtime + `dlgexpr` evaluator (M4)** — the 13-column loader (§5), the branch
-  machine, and the shared expression core over `G`/Character/`vamputil`.
-- **`G` + quests + the block save** — a dynamic `{name:int}` `G` store, a `{name:int}`
-  quest map, and the four-block save (entity fields / event queue / think contexts / `G`).
+Implementation status against these milestones: `docs/roadmap.md`.
 
 ## 7. Open questions
 

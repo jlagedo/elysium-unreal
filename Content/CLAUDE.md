@@ -12,7 +12,7 @@ game-agnostic; converted VtMB content lives only in the gitignored `tools/out/` 
 | `VtMB/Materials/M_World_Translucent.uasset` | the `$translucent` variant — same graph, `BLEND_Translucent`, per-pixel lit (glass) |
 | `VtMB/Materials/M_Additive.uasset` | the `$additive` glow-overlay master — unlit, `BLEND_Additive`, `Albedo`→Emissive (light-fixture "on" panes, neon) |
 | `VtMB/Materials/M_Sky.uasset` | the 2D-skybox cube master material (samples a runtime `UTextureCube` by view direction) |
-| `VtMB/Materials/M_Decal.uasset` | the 7.2 deferred-decal master — `MD_DeferredDecal` + `BLEND_Translucent`, `Albedo` RGB→BaseColor + A→Opacity, alpha-masked `$selfillum` emissive, samples at `(U, 1-V)` (VtMB V is top-down); the bake instances it once per decal material and hangs those on the level's `ADecalActor`s |
+| `VtMB/Materials/M_Decal.uasset` | the deferred-decal master — `MD_DeferredDecal` + `BLEND_Translucent`, `Albedo` RGB→BaseColor + A→Opacity, alpha-masked `$selfillum` emissive, samples at `(U, 1-V)` (VtMB V is top-down); the bake instances it once per decal material and hangs those on the level's `ADecalActor`s |
 
 The four surface masters (`M_World_*`, `M_Additive`) additionally carry **Source's distance fog as
 a per-primitive term** (`tools/mat_fog.py`): `f = saturate((PixelDepth − FogStart) · FogInvRange)`
@@ -30,11 +30,11 @@ parameters instead (a `UDecalComponent` is a `USceneComponent` and has no custom
 
 Two sets live here, both SIL OFL 1.1 with their licence text alongside as `OFL-<family>.txt`.
 
-### The UI type system — "Nocturne" (roadmap 8.6)
+### The UI type system — "Nocturne"
 
 The project-wide ramp, chosen against reference captures of the running game: VtMB's type
 signature is **small-caps serif labels with wide tracking** over plain-sans body copy, and that
-signature is kept even though the bitmap `.fnt` atlases are not (`docs/decisions.md` 2026-07-26,
+signature is kept even though the bitmap `.fnt` atlases are not (`docs/decisions.md`,
 `docs/vtmb-ui.md` §4).
 
 | Role | Files | Use |
@@ -48,11 +48,11 @@ upstream and are copied verbatim; Inter ships variable-only, so the two weights 
 of it with `fontTools` (permitted without renaming — none of the three carries a Reserved Font
 Name). Re-run only when a face is added or replaced.
 
-### The sign/popup set (pre-Nocturne, migrates with 8.8)
+### The sign/popup set (pre-Nocturne, slated to migrate)
 
 VtMB's authored sign face names map onto five faces. This set is what `ElysiumSignFonts.cpp`
-resolves today; 8.8 re-skins the sign panel onto the Nocturne ramp above and retires the overlap
-(`Caveat` stays either way — it is the handwriting slot).
+resolves today; the sign panel is expected to migrate onto the Nocturne ramp above, retiring the
+overlap (`Caveat` stays either way — it is the handwriting slot).
 
 | VtMB face | File | Role |
 |---|---|---|
@@ -97,6 +97,6 @@ The `Fonts/` TTFs are the exception: they are static freely-licensed files, not 
 set from upstream (network, idempotent); the older sign faces were placed by hand. Either way they
 change only when a face is added or replaced.
 
-`M_Water` (Single Layer Water) is the one world-surface master still unbuilt — see `docs/roadmap.md`
-7.3. The `$envmap` reflection channel authored into `M_World_Opaque` is a Lumen roughness path, not a
-baked-cube sample; 7.5 tunes it.
+`M_Water` (Single Layer Water) is the one world-surface master still unbuilt — see `docs/roadmap.md`.
+The `$envmap` reflection channel authored into `M_World_Opaque` is a Lumen roughness path, not a
+baked-cube sample; tuning detail: `docs/reflections.md`.

@@ -315,28 +315,4 @@ remaining span and raises `IOError` carrying the message `"py_obj->irestore->Rea
 It is the file object `cPickle.load` reads `G` back through, the mirror of the `ISave` adapter
 `CPython_SaveRestoreBlockHandler::Save` pickles into. 9.5 rebuilds both ends.
 
-## Build order
-
-Demand-ranked, with the dependency that actually gates each one:
-
-1. **`OneOfSet`** — **landed** (9.7d). Solved above, no backing system needed; the 589 dialogue
-   gates that failed closed against the stub now select one row of N.
-2. **Disposition / reactions** (2,862) — 9.9. Needs `vdata/dispositiontable` + `reaction*` and an
-   NPC emotional-state model; `SetDisposition(name, level)` and `SetRelationship(str)` are the
-   entry points.
-3. **Inventory & items** (853) — 9.8. Needs the item model behind `vdata/items/` (244 files).
-   `HasItem`/`GiveItem`/`RemoveItem` are string-keyed; `StartBarter` additionally needs the
-   barter UI, so it lags the rest.
-4. **Sheet counters** (290) — 9.4. `HumanityAdd`/`ChangeMasqueradeLevel`/`Bloodloss`/`Bloodgain`
-   are integer inputs over sheet meters and are cheap once the sheet holds them; `CalcFeat` and
-   `AwardExperience` need `vdata/system/feats.txt` and the experience table.
-5. **Economy** (250) — 9.10. `MoneyAdd`/`MoneyRemove`/`CurrentMoney` over one integer on the
-   combat character. The smallest genuinely self-contained system on the list.
-6. **Sequences & camera** (224) — 8.5 [x] / **11.7 [x]**: `SetCamera` keys `vdata/camerashots/` and
-   lands on the scripted-shot channel (`camera-view-modes.md`); `RemoveCamera` pops it. Animating a
-   shot between its `Start` and `End` anchors is the theatre's, 12.x.
-7. **AI schedules** (76) — 10.7, behind real NPC AI.
-
-Everything below that is single-digit demand on classes that do not exist yet
-(`GotoFloor` on an elevator, `StartTimer`/`Show`/`Hide` on a timer, `SetSpeed`, `FadeToPattern`)
-and belongs to its own entity-class task (4.8, 4.10), not to this surface.
+Implementation priority and status for this action inventory: `docs/roadmap.md`.

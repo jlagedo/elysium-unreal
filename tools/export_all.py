@@ -79,7 +79,7 @@ def bake_cards(maps):
     (IMeshUtilities::GenerateCardRepresentationData) ray-traces through Embree and exists only
     in the editor -- baking here is what keeps Embree out of the shipping build. It stays an
     offline step: the runtime only ever reads out/<map>/<map>.cards. See
-    docs/lumen-coverage-spike.md.
+    docs/uasset-bake-spike.md.
 
     Roughly 35 s per map, so this is the long tail of a full export -- --no-cards skips it,
     at the cost of every re-exported map falling back to bounds cards until it is re-run."""

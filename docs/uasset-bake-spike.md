@@ -5,7 +5,7 @@ document is the spike record that earned that call, kept as the pipeline's refer
 the six stages, and the engine facts it pinned down. It reads as of `sp_tutorial_1`, the map it
 was measured on; the architecture now carries every exported map.
 
-The Lumen surface-cache spike (`lumen-coverage-spike.md`) ended on a negative result: runtime-built
+The Lumen surface-cache spike (its engine facts now in `rendering-perf.md`) ended on a negative result: runtime-built
 meshes can be given card representations, but hand-fitting them offline into a `.cards` sidecar
 bought no measurable quality. The wall behind that result is that a runtime `UStaticMesh` built with
 `BuildFromMeshDescriptions(bFastBuild)` can never have what the editor build produces — DDC-fitted

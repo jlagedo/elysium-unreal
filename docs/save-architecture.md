@@ -1,8 +1,5 @@
 # Save architecture — the persistence design
 
-**Status: built** (`decisions.md` 2026-07-26 cont. 4; roadmap **9.5** = **11.9**, the playable path's
-PP5 rung). This doc describes the system as it stands.
-
 How Elysium saves and restores a run. The VtMB-facts counterpart is **`savegame_format.md`** — the
 `.sav` container, the five block handlers, and the exact inventory of state the original persists;
 this doc owns the Unreal side: the container we write, the block model, how state is enumerated, and
@@ -92,7 +89,9 @@ World     the visited-map graph: landmark adjacency, the current map + player pl
 ```
 
 `Session` and `Player` are the session record (`runtime-architecture.md` §1) written straight out.
-`Maps` is the interesting one.
+`World` is the level-connection/landmark table (VtMB's `ADJACENCY`), which is what
+`map-architecture.md`'s OpenLevel travel model needs to place the player on arrival. `Maps` is the
+interesting one.
 
 ## 4. Enumeration is a walk, not a list (S9)
 

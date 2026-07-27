@@ -76,7 +76,7 @@ C&D, not to technical failure. The only assets in `Content/` are hand-authored a
   scripting. Light values are re-derived from `.lights` at load rather than adopted, so live
   calibration always wins. Python is **never** run at runtime to produce content — the seam is
   file-based. (The embedded CPython 2.7 VM runs VtMB's *own* level scripts; it is game logic, not
-  pipeline.) The architecture and what it costs: `docs/decisions.md` 2026-07-26 (cont. 6).
+  pipeline.) The architecture and what it costs: `docs/decisions.md`.
 
 ### The `UE_` exporter convention
 
@@ -95,6 +95,17 @@ The Source→Unreal math lives once in `tools/bsp.py` (`source_to_unreal` for po
 `source_dir_to_unreal` for directions; the Y negation is a reflection, so the exporter
 reverses winding at OBJ-write time). Never inline it, and never convert at runtime. Full
 rules: `docs/rebuild-strategy.md` → "Coordinate conventions".
+
+### CLAUDE.md carries no history
+
+Every `CLAUDE.md` in this repo — this file and its four sub-files (`Source/ElysiumUE/CLAUDE.md`,
+`tools/CLAUDE.md`, `docs/CLAUDE.md`, `Content/CLAUDE.md`) — states present-tense facts only, same
+as every other doc (`docs/CLAUDE.md` → "House rules"). **Never** write a roadmap task-ID
+parenthetical (`(11.9)`, `roadmap 8.6`, `(PL13)`), a dated decision citation
+(`` `docs/decisions.md 2026-07-27` ``), or a change/migration narrative ("was X, now Y") into any
+of them — that tracking lives only in `docs/roadmap.md` / `docs/roadmap-archive.md` /
+`docs/decisions.md`. Cite a doc by name, with no date or task number attached. This has already
+needed one clean-up pass; don't let it recur.
 
 ## What runs today
 
@@ -200,7 +211,7 @@ facts, valid regardless of target engine. Organisation and maintenance rules: `d
 | `savegame_format.md` | the `.sav` container, `.HL1/2/3` sections, and the game state they hold |
 | `save-architecture.md` | the Unreal persistence design — the four blocks, the field walk, per-map snapshots |
 | `map-architecture.md` | the Unreal map load/unload/travel design |
-| `uasset-bake-spike.md` | the offline `.uasset` bake — the split, the six stages, the engine facts it pinned down (`lumen-coverage-spike.md` is the negative result that led to it) |
+| `uasset-bake-spike.md` | the offline `.uasset` bake — the split, the six stages, the engine facts it pinned down |
 | `rendering-perf.md` | the dynamic render path, perf cvars, MegaLights checklist |
 | `reflections.md` | `$envmap` — VtMB's own composite read out of its shipped DX8 shaders, the whole-game authoring survey, and the Unreal reflection channel |
 | `light-attribution.md` | telling VtMB's real fixtures from its GI-substitute fill lights — the probe, the surveys, what discriminates and what does not |

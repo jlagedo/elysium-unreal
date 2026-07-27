@@ -15,7 +15,7 @@
 
 #include "ElysiumDlg.h"
 #include "ElysiumEntityDefs.h"
-#include "ElysiumSignData.h"
+#include "Substrate/ElysiumSignData.h"
 #include "ElysiumWorldServices.h"
 
 #include "Components/SkeletalMeshComponent.h"

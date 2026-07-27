@@ -162,7 +162,8 @@ either it grows UI-inclusive vantages or HUD regressions go unwatched.
 
 ## 7. Screen inventory
 
-Built:
+Current build status for every screen (chargen, load/save, options + accessibility, the
+sign/popup re-skin, the HUD, the dialogue UI): `docs/roadmap.md`.
 
 - **Main menu** — **two layouts, one widget**, A/B'd live by `elysium.MenuLayout`. Labels resolve
   `VMainMenu_BTN_*` against the authored table with retail English as the fallback in both, which is
@@ -207,6 +208,5 @@ Built:
   display size. All three heads sit on the same block, so the item column starts at one Y in every
   mode.
 
-Not built: chargen (9.4), load/save (9.5), options + accessibility (8.10), the sign/popup re-skin
-(8.8), the HUD (8.9), the dialogue UI (9.2). Load Game / Save Game / Options draw disabled rather
-than absent, so the screen's shape matches the original's even where the backing system is missing.
+Load Game / Save Game / Options draw disabled rather than absent, so the screen's shape matches
+the original's even where the backing system is missing.
