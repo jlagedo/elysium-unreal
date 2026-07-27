@@ -10,10 +10,9 @@ PBR-synthesis track that later feeds these same slots).
 
 ## The shipped shader is readable data
 
-VtMB ships its DX8 pixel shaders as **ps.1.1 assembly source** with Valve's comments intact,
-under `materials/dxshaders/*.psh`, resolved through `install.build_index` like any other asset
-(`sky-ambience.md` → RE-A9 establishes the route). So the reflection composite is a file read,
-not a decompile. `lightmappedgeneric_maskedenvmap.psh` is the world's masked path in full:
+The `.psh` shaders are readable ps.1.1 assembly, not compiled binary (`texture_format.md`; route
+confirmed at `sky-ambience.md` → RE-A9), so the reflection composite is a file read, not a
+decompile. `lightmappedgeneric_maskedenvmap.psh` is the world's masked path in full:
 
 ```
 tex t0                      ; base texture
@@ -150,13 +149,12 @@ plus `Metallic` from the mask on the 102 chromatic-tint materials.
   re-baselined maps (`soccurtainrod`, `lantern`, one on `ch_temple_1`). The maps where it
   concentrates — Hollywood and Chinatown brass — have no shot baseline, so `Metallic` from the
   tint is verified as *bound and classified*, not as *looking right*.
-- **Reflections can never show the sky or the miniature**, both being ray-tracing-excluded, and on
-  the 83 maps whose SkyLight is zero an outdoor reflective surface has no sky term at all.
-  Consequence of C1/C2 + the HWRT overlap rule, not of this task; unmeasured.
+- **What a reflection can and cannot see** (above) is a consequence of C1/C2 + the HWRT overlap
+  rule, not of this task; unmeasured.
 - **A live knob costs texture streaming.** `ApplyMaterialOverrides` is lazy precisely because a
   runtime `SetMaterial` drops the primitive's built streaming data; during an A/B session the
   world will be briefly blurry while mips settle. Acceptable for a tuning tool, wrong for the
-  shipped path — hence the laziness.
+  shipped path.
 
 ## How to re-measure
 

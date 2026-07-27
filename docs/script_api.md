@@ -4,7 +4,7 @@ What VtMB's scripts *call*, what each name *does*, and which system has to back 
 
 `python_bridge.md` owns the **mechanism** — how `vampire.dll` binds Python to the engine, and
 why `Entity.__getattr__` being a datamap walk means there is no fixed method API to port. This
-doc is the **inventory**: one row per name the shipped content actually reaches for, with its
+doc is the **inventory**: one row per name the shipped content reaches for, with its
 signature, its owning binding table or datamap, its call count across the whole corpus, and the
 runtime system that must answer it.
 
@@ -79,10 +79,10 @@ in one run.
 
 By binding kind: 21 Character methods (4,989 calls), 9 module globals (3,713), 47 registered
 entity inputs (1,798), 11 `Entity` base methods (658), and 124 names (1,212 calls) that resolve
-to nothing the runtime knows — the residue this doc exists to name.
+to nothing the runtime knows.
 
-Two names in the tables are called by **no** shipped script: `React` and `SquadSeesPlayer`. The
-tables carry API the content never used.
+Two names in the tables are called by **no** shipped script: `React` and `SquadSeesPlayer` — API
+the content never used.
 
 ### A `vamputil` helper can shadow an engine input name
 

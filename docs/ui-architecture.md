@@ -101,7 +101,7 @@ Faces reach the runtime as committed **`UFontFace` assets** under `/Game/VtMB/UI
 `FElysiumUIFontLibrary` composes them into one runtime `UFont` per role with the weights as named
 typeface entries, because `FSlateFontInfo` resolves a composite font, not a bare face.
 
-Two constraints worth knowing before touching this:
+Two constraints:
 
 - **`make_ui_fonts.py` cannot run in the content.bat umbrella.** Importing a `UFontFace` flushes
   Slate's font cache and `FSlateApplication::Get()` asserts in a commandlet (`-run=pythonscript`
@@ -133,8 +133,8 @@ a HUD element.
 
 Leaving the backdrop is an ordinary Travel: New Game opens the story entry with a player in it.
 
-Because a real 3D scene is far less predictable than a designed backdrop, two things are knobs
-rather than constants: `elysium.MenuScrim` (§3) and `elysium.MenuMap`.
+Two things are knobs rather than constants for that reason (§3): `elysium.MenuScrim` and
+`elysium.MenuMap`.
 
 The menu camera is deliberately **not** an entry in `ElysiumVantages::Table`: that table is the
 profiling and screenshot baseline and `Resolve("")` returns every vantage for a map, so adding one
@@ -170,9 +170,9 @@ sign/popup re-skin, the HUD, the dialogue UI): `docs/roadmap.md`.
   **Rail (1, the default).** The menu stands in a right-hand rail: title lockup (from
   `out/ui/menu/title.png`, the user's own art) on the bottom edge of a fixed head block, then the
   item column right-aligned against a gold hairline, then a reserved caption line. Every horizontal
-  constant is measured **from the right edge**, never as a fraction of 1024 — the virtual canvas is
-  `ScreenW·768/ScreenH` wide, so a fraction would drift the rail inward on ultrawide. Three pieces
-  carry it:
+  constant is measured **from the right edge**, never as a fraction of 1024 — the virtual canvas
+  scales with the aspect ratio (§2), so a fraction would drift the rail inward on ultrawide. Three
+  pieces carry it:
 
   - **The veil** (§3) and **the hairline** are code-authored alpha ramps
     (`ElysiumUI::MakeAlphaRamp`), coloured by brush tint — the ramp the layout constants were tuned

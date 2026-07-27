@@ -135,7 +135,7 @@ in `Config/DefaultGameInput.ini`:
 - `bOverrideHardwareDeviceIdString` + `OverriddenHardwareDeviceId = "DualSense"` — the string
   `FInputDeviceScope` publishes, which is what button-glyph swapping keys off
 
-Two constraints that belong in the plan, not in a later surprise:
+Two constraints:
 
 - **`GameInputRedist.msi` ships with the game** (Windows 10 19H1 minimum) — part of 10.5's
   packaging story.

@@ -19,8 +19,7 @@ engine-neutral intermediates.
 - **`docs/remaster-direction.md`** — the direction charter: what may be modernized, what must
   be reproduced, who decides.
 
-This file is the quick-orientation fact sheet. Directory-scoped facts live in sub-files that
-load with the code they describe:
+Directory-scoped facts live in sub-files that load with the code they describe:
 
 | File | Covers |
 |---|---|
@@ -117,8 +116,7 @@ Every `CLAUDE.md` in this repo — this file and its four sub-files (`Source/Ely
 as every other doc (`docs/CLAUDE.md` → "House rules"). **Never** write a roadmap task-ID
 parenthetical (`(11.9)`, `roadmap 8.6`, `(PL13)`), a date, or a change/migration narrative
 ("was X, now Y") into any of them — task tracking lives only in `docs/roadmap.md`. Cite a doc by
-name, with no date or task number attached. This has already needed one clean-up pass; don't let
-it recur.
+name, with no date or task number attached.
 
 ## What runs today
 
@@ -175,6 +173,13 @@ your VtMB install.
   bare run diffs against it per vantage (mean/p99 difference, percent of pixels moved, a heat map
   and a non-zero exit for any vantage over threshold) — so a look regression is a number, not an
   eyeball. `t1sky`/`h1sky` are the sky-framing vantages.
+- `move.bat [course] [hz]` — headless **movement** regression (`-ElysiumMove`): replays a fixed
+  command stream over eight courses on `sp_tutorial_1` against real geometry at a forced frame rate,
+  writing per-frame CSV + a summary JSON under `tools/out/_move/` (gitignored — game-derived). A
+  bare number is a rate (`move.bat 120`). `tools/move_diff.py --save` promotes a baseline and a bare
+  run diffs against it; `--hz 60 120 240` is the **cross-rate** check that measures what is and is
+  not frame-rate dependent (`docs/source_movement.md` → "Frame timing"). This is what makes "the
+  step still climbs" a number rather than a play-through.
 - `test.bat [filter]` — run the automation suite headless (`Substrate`/`Content` shorthands, or a
   full dotted test name; default = all). The `Substrate` tier runs under `-nullrhi`; the `Content`
   tier reads `tools/out` and self-skips unexported maps. JSON+HTML report under `tools/out/_tests/`.

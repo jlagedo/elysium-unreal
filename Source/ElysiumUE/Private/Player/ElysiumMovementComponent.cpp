@@ -61,6 +61,23 @@ void UElysiumMovementComponent::SetNoclip(bool bEnable)
 	}
 }
 
+void UElysiumMovementComponent::ResetState()
+{
+	Velocity = FVector::ZeroVector;
+	OldButtons = 0;
+	PrevCmd = FElysiumUserCmd();
+	Stepper.Reset();
+	bOnGround = false;
+	WaterLevel = EElysiumWaterLevel::None;
+
+	// Stand up if we were crouched, so the hull the body arrives with is the standing one.
+	if (bDucked || bDucking)
+	{
+		FinishUnDuck();
+	}
+	DuckTime = 0.0f;
+}
+
 void UElysiumMovementComponent::SetFrozen(bool bInFrozen)
 {
 	bFrozen = bInFrozen;
@@ -518,7 +535,14 @@ void UElysiumMovementComponent::CheckJumpButton()
 		return;
 	}
 
-	Velocity.Z = Tuning.JumpSpeed();
+	// **Additive, not an overwrite** (`vampire.dll` 0x101226b0: `v.z = impulse * groundFactor + v.z`).
+	// This is load-bearing rather than cosmetic: `StartGravity` has already taken half the step's
+	// gravity off `v.z` by the time this runs, and adding on top of that is what leaves the launch
+	// at the half-step the leapfrog wants. Overwriting instead discards it and the apex lands at
+	// `boost + v0*dt/2` — 26.67 units at 60 fps instead of 25, and frame-rate dependent with it.
+	// The ground factor is the surface's own jump scale, 1.0 for the `default` prop that every
+	// world surface resolves to (`source_movement.md` § surfaceFriction).
+	Velocity.Z += Tuning.JumpSpeed();
 	bOnGround = false;
 	OldButtons |= static_cast<uint64>(EElysiumButton::Jump);
 }

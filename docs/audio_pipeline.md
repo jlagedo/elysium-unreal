@@ -49,8 +49,7 @@ Two codecs, split by role [data]:
 
 **WAV encodings** (RIFF/`fmt ` parsed over a random sample) [data]: **~92% Microsoft
 ADPCM (`WAVE_FORMAT_ADPCM` = tag 2), 4-bit, mono, 22050 Hz**, the rest 44100 Hz and a
-few stereo; only ~2–3% is 16-bit PCM. **Microsoft ADPCM ≠ IMA ADPCM.** This is the
-single most important asset fact for the port (see §11).
+few stereo; only ~2–3% is 16-bit PCM. **Microsoft ADPCM ≠ IMA ADPCM** (§11).
 
 **Driver** [VtMB]: `engine.dll` sound init `FUN_20118cf0` @ `0x20118cf0`
 `LoadLibrary`s **`mss32.dll`** (RAD Miles Sound System) + **`vaudio_miles.dll`** and

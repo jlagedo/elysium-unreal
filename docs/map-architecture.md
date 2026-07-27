@@ -13,8 +13,8 @@ fresh world's `AElysiumMapActor` reads the target VtMB map + landmark from GI-sc
 builds all content in code on `BeginPlay`. Cross-map state lives at GameInstance scope and
 survives the travel; per-map state dies with the world. This is the UE5 standard for a
 discrete-map single-player game, and it *is* VtMB's own model (`trigger_changelevel` + loading
-screen). Owner call, with the options weighed and the migration scope:
-(roadmap 10.8). *Level streaming and World Partition are rejected outright:* both stream
+screen). Owner call — options and migration scope tracked at roadmap 10.8.
+*Level streaming and World Partition are rejected outright:* both stream
 *authored `.umap` assets*, and Elysium maps are built at runtime from the pipeline
 intermediates, so there is no asset to stream.
 
@@ -34,7 +34,6 @@ The `.ents` sidecar for every map already contains the original game's transitio
 - `point_teleport` / `info_teleport_destination` — same-map teleports, same pattern.
 
 So "advancing in the game" is: player enters a changelevel volume → `Travel(map, landmark)`.
-No invented mechanism; the data drives it.
 
 ## Components
 
@@ -42,7 +41,7 @@ Implemented today: `UElysiumGameInstance`, `UElysiumMapSubsystem` (Travel/OpenLe
 plus `elysium.map` / `elysium.maps` engine-console mirrors), `AElysiumMapActor`, and the
 dev console. `trigger_changelevel` volumes + scripted `ChangeMap` drive landmark travel through
 the same seam. Loading is synchronous except collision (async Chaos cook; the pawn is held frozen
-until ground exists under the spawn, ~0.4s); the time-sliced build is roadmap 10.4.
+until ground exists under the spawn, ~0.4s).
 
 ```
 UElysiumGameInstance            process lifetime — session state
@@ -65,10 +64,10 @@ UElysiumGameInstance            process lifetime — session state
   Registers the `elysium.map <name> [landmark]` console command.
 - **`AElysiumMapActor`** — "one loaded VtMB map", spawned by the subsystem (via
   `SpawnPendingMap`) into the fresh world. Everything map-scoped is a component of it or a
-  UPROPERTY / plain member it owns, so **the actor dying with its world unloads the map** —
-  meshes, MIDs, and the map's texture cache die with it. No manual teardown lists.
-  The actor itself **orchestrates** the map — the load order, the two frame passes, the player's
-  placement, and the substrate's engine seam (`FElysiumWorldServices`) — and holds none of the
+  UPROPERTY / plain member it owns, so **the actor dying with its world unloads the map**
+  (below, "Ownership and memory across transitions"). The actor itself **orchestrates** the
+  map — the load order, the two frame passes, the player's placement, and the substrate's
+  engine seam (`FElysiumWorldServices`) — and holds none of the
   state behind the three components above. Nothing that decides what the map *looks like* sits on
   the same object as what it *does*.
 
@@ -78,13 +77,13 @@ machine behind that call is what builds the pending map (post-travel) or runs th
 
 ## Ownership and memory across transitions
 
-`OpenLevel` (`UEngine::LoadMap`) tears down the current `UWorld` and runs GC; everything the map
-actor owns — meshes, materials, collision, entity actors, and the per-map texture cache — is
-released with it, no bespoke flush. The **texture cache is a plain member of `UElysiumMapVisuals`**
-(`FElysiumTextureCache`), a per-map decoded-texture dedup index holding strong refs; those refs
-drop when the map actor and its components are destroyed, so GC reclaims the textures. It is not a process-wide cache —
-under hard travel only one map is resident at a time, so nothing is shared across maps (assets
-that genuinely need to persist, like UI, live in an explicit global scope instead).
+Tearing down the `UWorld` on travel releases everything the map actor owns — meshes, materials,
+collision, entity actors, and the per-map texture cache — with no bespoke flush. The **texture
+cache is a plain member of `UElysiumMapVisuals`** (`FElysiumTextureCache`), a per-map
+decoded-texture dedup index holding strong refs; those refs drop when the map actor and its
+components are destroyed, so GC reclaims the textures. It is not a process-wide cache — under
+hard travel only one map is resident at a time, so nothing is shared across maps (assets that
+need to persist, like UI, live in an explicit global scope instead).
 
 ## Async loading (removing the load hitch)
 

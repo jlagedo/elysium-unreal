@@ -196,11 +196,10 @@ The rotation is **not** `bind + delta`: an animated component *replaces* the bin
 component with `sample × rotscale`; an un-animated component *keeps* the bind
 component. The difference only shows under animation (at the bind pose every bone
 matrix is identity, so any decode reproduces the rest mesh) and bites hardest on
-bones with **partial** rotation animation — e.g. a clavicle with only the `w`
-channel animated must keep its bind `x/y/z`; adding a delta, or zeroing the
-un-animated axes, snaps the shoulder and tears the mesh. Adding the bind quaternion
-to *every* channel (as a naive "delta" reading suggests) double-counts the bind
-orientation and throws the whole skeleton off.
+bones with **partial** rotation animation — adding a delta, or zeroing the
+un-animated axes, tears the mesh at the joint (the clavicles, below). Adding the
+bind quaternion to *every* channel, as a naive "delta" reading suggests,
+double-counts the bind orientation and throws the whole skeleton off.
 
 This mirrors Source's `CalcBonePosition` (delta on bind) and `CalcBoneQuaternion`,
 adapted to v2531's 4-channel quaternion, where the modern euler+`AngleQuaternion`
@@ -250,10 +249,10 @@ export; the quaternion post-multiply above is the direct glTF-space equivalent.
 ## A.5 Skinning [data-verified]
 
 All character models are `VertexListType==0` (SKINNED, 44B `StudioVertex`); the
-per-vertex `BoneWeight` (`mdl_v2531.md`) *is* the skin: `byte Weight[3]`@0,
-`short Bone[3]`@4, `byte NumBones`@10. **`NumBones` reads 0 on VtMB data — derive
-the influence count from nonzero weights** (probe: jeanette 6389/6393 verts have
-`NumBones==0`). Max **3 influences**, well within a standard 4-weight skin:
+per-vertex `BoneWeight` (layout: `mdl_v2531.md`) *is* the skin. **`NumBones` reads 0
+on VtMB data — derive the influence count from nonzero weights** (probe: jeanette
+6389/6393 verts have `NumBones==0`). Max **3 influences**, well within a standard
+4-weight skin:
 
 ```
 for i in 0..2:
@@ -287,9 +286,8 @@ is *own anims ∪ (recursively) all included banks*, keyed by bone name against 
 skeleton.
 
 **On-disk** [data-verified]: `NumIncludeModels`@404 / `IncludeModelIndex`@408 →
-`StudioModelGroup[]` (**stride 116**: `int FilenameIndex`@0 relative to the group-entry base,
-`int LabelIndex`@4, `int Filler[27]`). The tree is a DAG — `frenzy`/`pc_idles` reappear via
-several parents — so resolution dedups by path. Every bank bone name is present in the NPC's
+`StudioModelGroup[]` (layout: `mdl_v2531.md`). The tree is a DAG — `frenzy`/`pc_idles` reappear
+via several parents — so resolution dedups by path. Every bank bone name is present in the NPC's
 skeleton (verified: `move_and_ranged` 60 / `stances` 53 bones, **0 missing** in a 69-bone
 gangmember), so no proportion retarget is needed — tracks bind to the skeleton by bone name.
 `m_iszPlay` and friends name a **sequence label** (`StudioSeqDesc.szlabel`@0 → `anim[0][0]`@56 →

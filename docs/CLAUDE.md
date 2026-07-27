@@ -6,15 +6,14 @@ the maintenance contract.
 
 ## Where a given fact belongs
 
-- **Status, plans, task breakdowns, "what landed"** → **`roadmap.md`**, the single source of truth
-  work tracker (the playable-path ladder PP0–PP6, phases P0–P13, per-task status, the pipeline
-  (PL*) and RE backlogs, the risk register). It is the *only* status file — there is no as-built
-  archive and no decision log. Never mirror status into another doc; link to the task instead.
+- **Status, plans, task breakdowns, "what landed"** → **`roadmap.md`** (the playable-path ladder
+  PP0–PP6, phases P0–P13, per-task status, the pipeline (PL*) and RE backlogs, the risk
+  register). It is the *only* status file — there is no as-built archive and no decision log.
+  Never mirror status into another doc; link to the task instead.
 - **Strategy** (tracks, milestone vocabulary, sidecar contracts, per-system design targets) →
   `rebuild-strategy.md`.
-- **What may be modernized vs must be reproduced** → `remaster-direction.md`. A behavioural
-  divergence needs the faithful behaviour RE'd and recorded **in the doc that owns the system**,
-  stated beside the divergence and marked as one.
+- **What may be modernized vs must be reproduced** → `remaster-direction.md`. A divergence's
+  record lives in the doc that owns the system (see House rules below).
 - **A new VtMB format/behaviour finding** → the topic doc that owns it (`entity_io.md`,
   `python_bridge.md`, `audio_pipeline.md`, `mdl_v2531.md`, `phy_vphysics.md`, `bsp_format.md`,
   `vpk_format.md`, `texture_format.md`, `facial_animation.md`,
@@ -46,12 +45,10 @@ the maintenance contract.
 ## House rules
 
 - **Facts, present tense.** These docs describe how VtMB works and what the design is — not how a
-  doc changed, not what a decision replaced, not what a past choice superseded. Delete migration
-  narrative rather than relocating it; git history holds it.
+  doc changed or what a past decision replaced. Delete migration narrative rather than relocating
+  it; git history holds it.
 - **One fact, one home.** A fact is written out in exactly **one** doc — the one that owns the
-  system. Everywhere else cites that doc by name. If you find yourself writing a sentence that is
-  already true in another doc, cite instead of restating. This is the rule that keeps a task from
-  costing four near-identical write-ups.
+  system. Everywhere else cites that doc by name instead of restating it.
 - **A divergence is a fact, recorded where the system lives.** When we deliberately differ from
   VtMB, the owning doc states the faithful behaviour, states what we do instead, and marks it a
   divergence with the owner call. It does not go anywhere else.

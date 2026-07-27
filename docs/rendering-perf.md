@@ -50,8 +50,7 @@ a modest contributor feeding it. Re-run the tool on any map; interior-only maps 
 
 ## Lumen surface-cache engine facts
 
-Generic UE 5.8 engine behavior, independent of this project's own bake/runtime split — background
-for anything that touches Lumen coverage.
+Generic UE 5.8 engine behavior, independent of this project's bake/runtime split.
 
 **Three requirements for a primitive to enter the surface cache** (all three, or it is culled):
 
@@ -97,8 +96,8 @@ cannot itself be Nanite regardless of card coverage.
 
 ## Shipped defaults
 
-Target hardware is in `CLAUDE.md` → "Target hardware": **RTX 4060-class / 16 GB floor at 1440p
-native, RTX 4070/5070 recommended.** One forced tier ships; there is no quality ladder yet.
+Target hardware: `CLAUDE.md` → "Target hardware". One forced tier ships; there is no quality
+ladder yet.
 
 - Feature enables: `Config/DefaultEngine.ini` → `[/Script/Engine.RendererSettings]`
   (`r.DynamicGlobalIlluminationMethod=1`, `r.ReflectionMethod=1`, `r.RayTracing=True`,
@@ -106,9 +105,9 @@ native, RTX 4070/5070 recommended.** One forced tier ships; there is no quality 
   `r.MegaLights.EnableForProject=True`, `r.Shadow.Virtual.Enable=1`).
 - Quality tier: `Config/DefaultEngine.ini` → `[SystemSettings]`, all eleven `sg.` scalability
   groups pinned to **Epic (3)** with `sg.ResolutionQuality=100`. Each `sg.` line pulls in the
-  matching block of `Engine/Config/BaseScalability.ini` — ~45 cvars for GI alone — which is Epic's
-  own recommendation over a hand-rolled cvar set, because the buckets are tuned to hold indirect
-  lighting consistent as they scale.
+  matching block of `Engine/Config/BaseScalability.ini` — ~45 cvars for GI alone — Epic's own
+  recommendation over hand-rolled cvars, since the buckets keep indirect lighting consistent as
+  they scale.
 - Three deliberate deviations sit under the `sg.` block: HWRT scene culling
   (`r.RayTracing.Culling` 3 / Radius 15000 / Angle 0.5), 16x anisotropy (the Epic bucket stops at
   8), and a 3 GB texture streaming pool (Epic bucket 1000 MB).
@@ -126,8 +125,8 @@ native, RTX 4070/5070 recommended.** One forced tier ships; there is no quality 
 - **There is real headroom:** 5.1–6.2 ms total GPU at 1440p **native** with Epic-tier Lumen
   (baseline below). The bake is what affords it — Nanite world geometry plus full DDC-fitted Lumen
   card coverage, so no reflection ray needs a hit-lighting second trace to find a lit surface.
-- **VRAM:** the floor assumes **16 GB**, which is what lets the streaming pool run at 3 GB and
-  leaves the Lumen surface-cache atlas at the Epic bucket's 4096.
+- **VRAM:** the floor assumes **16 GB** — leaves the streaming pool at 3 GB and the Lumen
+  surface-cache atlas at the Epic bucket's 4096.
 - **The 4060 number is extrapolated, not measured.** Every capture here is on a 5070 Ti, which
   clears the budget comfortably; validating the floor needs actual 4060-class hardware. Until then
   the floor is judged by *look* plus the pass proportions below.
@@ -182,7 +181,7 @@ Nuclear brackets to attribute cost: `r.Lumen.HardwareRayTracing 0` (HWRT's share
 
 ## Profiling
 
-**Headless, repeatable, no human in the loop:** `profile.bat <map> [cam]` launches standalone
+**Headless and repeatable:** `profile.bat <map> [cam]` launches standalone
 at 2560×1440 / SM6 and drives the `-ElysiumProfile` harness
 (`Source/ElysiumUE/Private/Debug/ElysiumProfiler.cpp`) — it pins the camera to each fixed vantage
 near spawn (the `GProfileCams[]` table), warms up 120 frames, captures 300 through the CSV
@@ -191,7 +190,7 @@ JSON summary, and exits. `tools/profile_report.py` turns the CSVs into the per-p
 (`tools/out/_profile/<map>_report.md`) and the committed baseline below ("Profiling
 baseline").
 The harness also logs the SM6/adapter confirmation and the MegaLights-vs-ShadowDepths split, so
-one run covers both the render-path check and the engagement check together. Capture a new
+one run covers both the render-path check and the engagement check. Capture a new
 vantage by flying there in-game and running `elysium.campos` (logs a paste-ready
 `GProfileCams[]` row with the exact pitch the HUD omits).
 
@@ -205,12 +204,8 @@ overhead skews the numbers.
 
 ## Profiling baseline
 
-Captured **headless** by `profile.bat` → the `-ElysiumProfile` harness
-(`Source/ElysiumUE/Private/Debug/ElysiumProfiler.cpp`) → `tools/profile_report.py`. The harness
-pins the camera to each fixed vantage near spawn, warms up, captures per-pass GPU stats
-through the CSV profiler, and exits — no manual console typing. Full per-vantage reports
+Captured by `profile.bat` (see "Profiling" above for the harness). Full per-vantage reports
 (incl. the heaviest-pass breakdown) regenerate at `tools/out/_profile/<map>_report.md`.
-Re-run any time with `profile.bat <map> [cam]`; add a vantage with `elysium.campos` in-game.
 
 **Dev GPU: RTX 5070 Ti · D3D12 / `PCD3D_SM6` · 2560×1440 **native** · warmup 120 / capture 300
 frames.** This card is far above the RTX 4060 floor, so read these for **pass proportions and
@@ -267,17 +262,16 @@ beats ShadowDepths on every vantage, and the many-light cost is ~**flat**: 687 l
 ShadowDepths never dominates and is ~0 on both `sm_` maps. MegaLights is carrying the local lights
 as designed.
 
-**The `[VSM] Non-Nanite Marking Job Queue overflow` warning is gone.** It was driven by huge
-single-section PMC world surfaces each covering a large shadow page area; with the world baked as
-Nanite static meshes, a full five-vantage capture logs **zero** overflows even with the
-`ResolutionLodBiasDirectional` workaround removed.
+**No `[VSM] Non-Nanite Marking Job Queue overflow`.** Large single-section PMC world surfaces
+drive that warning by covering a large shadow page area; the Nanite-baked world sidesteps it — a
+full five-vantage capture logs **zero** overflows.
 
-**Other reads.** MegaLights (~1.0–1.3 ms) is now the single heaviest pass at every vantage;
-TemporalSuperResolution drops to ~0.48 ms, since at `sg.ResolutionQuality=100` it is doing
-anti-aliasing rather than a 66%→100% upscale. Nanite adds its own passes (NaniteBasePass ~0.38,
-NaniteVisBuffer ~0.28) which the PMC path did not have. Lumen GI reads ~free (0.02 ms) *on this
-card* — a fast-GPU artifact, not proof Lumen is cheap. Render-thread time collapses to ~0
-(idle-waiting on the GPU): the title is GPU-bound, as expected.
+**Other reads.** MegaLights (~1.0–1.3 ms) is the single heaviest pass at every vantage;
+TemporalSuperResolution is ~0.48 ms, since at `sg.ResolutionQuality=100` it does anti-aliasing
+rather than a 66%→100% upscale. Nanite adds its own passes (NaniteBasePass ~0.38, NaniteVisBuffer
+~0.28), which the PMC path does not have. Lumen GI reads ~free (0.02 ms) *on this card* — a
+fast-GPU artifact, not proof Lumen is cheap. Render-thread time collapses to ~0 (idle-waiting on
+the GPU): the title is GPU-bound, as expected.
 
 
 ## Sources

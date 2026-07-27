@@ -39,11 +39,22 @@ public:
 	void SetNoclip(bool bEnable);
 	bool IsNoclip() const { return bNoclip; }
 
+	// Drop all carried motion and latches: velocity, the button latch, the duck, the step
+	// accumulator. What a teleport wants — a body arriving somewhere new must not still be running.
+	void ResetState();
+
 	// Freeze the body where it stands (the spawn hold, while collision cooks).
 	void SetFrozen(bool bFrozen);
 	bool IsFrozen() const { return bFrozen; }
 
 	bool IsOnGround() const { return bOnGround; }
+	bool IsDucked() const { return bDucked; }
+	bool IsDucking() const { return bDucking; }
+	EElysiumWaterLevel GetWaterLevel() const { return WaterLevel; }
+	// What the substrate calls when a water brush reports the body's depth. Nothing calls it yet —
+	// no exported map places one (`docs/source_movement.md` → "Water").
+	void SetWaterLevel(EElysiumWaterLevel InLevel) { WaterLevel = InLevel; }
+	float GetSurfaceFriction() const { return SurfaceFriction; }
 
 private:
 	// One integration step of the pending command. `TickComponent` is a thin driver over this: it

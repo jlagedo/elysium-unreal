@@ -1,12 +1,11 @@
 # Engine core — the entity object model and its two-phase build plan
 
-**Status: adopted design; Phase 1 (core substrate) and Phase 2 (debug layer) are the next
-work items, in that order, ahead of the full M3 class coverage.** This doc defines the
-runtime object language for Track B: the core types, how they interact, and the hard plan
-to stand them up. It is the synthesis of `entity_io.md`, `python_bridge.md`,
-`game_runtime.md`, `animation_and_movers.md` Part B, `entity_visuals.md`,
-`level_transitions.md`, and `debug-tooling.md` — the requirements below cite those docs;
-do not re-derive them.
+This doc defines the runtime object language for Track B: the core types, how they
+interact, and the plan to stand them up. It synthesizes `entity_io.md`,
+`python_bridge.md`, `game_runtime.md`, `animation_and_movers.md` Part B,
+`entity_visuals.md`, `level_transitions.md`, and `debug-tooling.md` — the requirements
+below cite those docs rather than re-deriving them. Status tracking lives in
+`docs/roadmap.md`.
 
 ## Design rules (the object language)
 
@@ -17,7 +16,7 @@ These rules are load-bearing; every Track B system and every debug tool assumes 
   actors/components are optional *embodiments* attached to an entity for
   rendering/physics/overlap only. **All game state lives on the entity object** — bodies
   are disposable presentation. This keeps save/load, travel teardown, the inspector, and
-  determinism entirely in our hands, and matches the three-tier spawn policy
+  determinism in our own code, and matches the three-tier spawn policy
   (`rebuild-strategy.md` B1): logic entities never get a body at all.
 - **R2 — One name table per class serves everything.** Each classname registers a
   **class descriptor**: input table (name → member-function thunk) + field table
@@ -83,7 +82,7 @@ These rules are load-bearing; every Track B system and every debug tool assumes 
 | Bodies: `UElysiumBrushComponent` | `UPrimitiveComponent` (convex `UBodySetup` from the def's hulls) | map actor | Brush-entity embodiment: collision/overlap (+ optional debug draw); carries its owning handle; overlap events route back to the entity world. One per brush entity, positioned at the def origin (brush geometry is entity-local, origin = hinge for rotating doors). |
 | Bodies: `AElysiumEntityActor` | thin `AActor` | map (spawned) | Model-entity embodiment (`prop_dynamic`, NPCs, items): mesh + transform; carries its handle; no game state. |
 
-Persistent vs map-scoped split stays as today: `UElysiumMapSubsystem` (lifecycle/travel)
+Persistent vs map-scoped state splits as follows: `UElysiumMapSubsystem` (lifecycle/travel)
 and `UElysiumGameStateSubsystem` + script host live on the game instance;
 `FElysiumEntityWorld` and everything it owns die with `AElysiumMapActor`.
 
@@ -110,8 +109,7 @@ and `UElysiumGameStateSubsystem` + script host live on the game instance;
   (`FUN_100cebb0`, fires each event with `fireTime ≤ curtime`: Entity I/O via `AcceptInput`
   vtable `+0x1d8`, field-6 Python via `FUN_100ce990`, `ScheduleTask` source via `FUN_100ce8a0`).
   So an output fired *during* a think is serviced after all thinks that frame, not interleaved.
-  (Earlier we recorded queue-before-thinks as a provisional choice; retail says think-first —
-  match it unless a determinism reason argues otherwise. RE2 in `roadmap.md`.)
+  Match retail unless a determinism reason argues otherwise (RE2, `roadmap.md`).
 - **Touch/use:** brush bodies raise begin/end overlap → entity world translates to
   `OnStartTouch`/`OnEndTouch` outputs (trigger classes), respecting dormancy. `+use` is
   a camera trace against a use-only collision channel on usable bodies (13 classnames

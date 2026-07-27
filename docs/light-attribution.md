@@ -1,9 +1,9 @@
 # Light attribution — separating VtMB's real fixtures from its fill lights
 
 The per-map light set is curated **by hand** in the Lights Cog window — VtMB's lights are authored like a painting, for the baked result rather than as
-physical fixtures, so no automatic rule ships — and the saved survey auto-applies at map load
-(`elysium.LightSurvey 0` restores the full faithful rig). The classifier below is a
-candidate-ranker/advisor for that hand pass. Per-task status: `docs/roadmap.md`.
+physical fixtures, so no automatic rule ships — and the saved survey auto-applies at map load.
+The classifier below is a candidate-ranker/advisor for that hand pass. Per-task status:
+`docs/roadmap.md`.
 
 ## The question
 
@@ -102,7 +102,6 @@ prior rather than a guarantee — it held 11 lights on `sp_tutorial_1` and 12 on
 killed by hand, so it must not be wired as an un-overridable lock.
 
 Distances are the tell: fixtures and windows are hit at **3–21 cm**, plain brush at ~93 cm.
-A real light is *touching* its source object.
 
 **Prop classification must read the prop's own materials, not its name.** A keyword list
 (`lamp`/`bulb`/`sconce`/…) misses real emitters — `italian_itwndwb`, `la_wndweblit`,
@@ -114,8 +113,6 @@ material-emission moved `sp_giovanni_1` from 25% → 91% precision.
 A real light **owns** its patch; a fill light is one of many contributors. On `sm_hub_1`, median
 `share` is **0.05** for hand-disabled lights against **0.65** for kept ones. Consistent in direction
 on all four maps (AUC 0.18 / 0.19 / 0.04 / 0.24, low = fill).
-
-This is the most direct statement of "standing in for bounce" available from geometry alone.
 
 ### Detachment
 

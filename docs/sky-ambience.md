@@ -6,9 +6,11 @@ Phases B and C, tasks B1–B8b and C0–C5 — **landed 2026-07-26**. This doc k
 engine-neutral facts and the instruments that measured them; status, history and decisions
 live in the tracker set:
 
-- **Status and next work:** `roadmap.md` — the SKY row, and the open residue promoted to
-  tasks **3.6/3.7** (tone curve), **3.10–3.13** (volumetric layer, `LumenDiffuseBoost`,
-  `sm_hub_1` fill adjudication, decal fog) and **RE17** (owner-run reference captures).
+- **Status and next work:** `roadmap.md` — the SKY row (done), and the open residue promoted
+  to **3.6/3.7** (the measured tonemapper toe — the one remaining visible gap to displayed
+  parity), **3.10** (volumetric fog layer calibration), **3.11** (`elysium.LumenDiffuseBoost`
+  verification), **3.12** (`sm_hub_1` fill adjudication), **3.13** (decal fog liveness), and
+  **RE17** (owner-run reference captures, gated on the `snapshot` pre/post-gamma-ramp check).
 - **The decisions** (D1–D7; D6 dissolved, D4 amended, D3 corrected) are stated as facts in the
   sections below.
 
@@ -37,8 +39,7 @@ engine works. Two things force the revisit:
    plan had been holding open (K4): there is only one bake. RE-A5 then closed the bake-time
    half (K6) with an answer that reframes the whole of Phase C — VRAD's photometric transfer
    is exactly recoverable from the shipped data, and it converts any worldlight into the luxel
-   value it actually contributes. Phase C had been fitting a model whose absolute scale was
-   unknown; it is known now.
+   value it actually contributes, giving Phase C's model the absolute scale it needs.
 
 ## What we know (verified)
 
@@ -61,7 +62,7 @@ engine works. Two things force the revisit:
 | **K2 is settled** — an Unreal cube slice is the plain **D3D** face table applied to the **raw** world vector, with no swizzle anywhere in the chain. Unreal being Z-up where that table assumes Y-up, four of the six slices are stored rotated against an upright view along their own axis (+X 90° CCW, −X 90° CW, +Y 180°, −Y none, ±Z with world +Y at the top) | UE 5.8 source ×4 + Epic's authoring doc (see below) |
 | **K3/K5 are settled** — world surfaces render from lump 8 alone; lump 15 is read at runtime *only* by the light cache, which lights dynamic models and static props. A model's ambient term is a 6-face ambient cube built by a 162-ray radiosity sweep that samples `dface_t.avgLightColor` and multiplies by the hit material's reflectivity | RE-A3 (below) |
 | VtMB **does** have a runtime one-bounce GI — for models only. `emit_skyambient`'s intensity is the colour a sky-hitting bounce ray returns; it contributes nothing through the direct-light path | RE-A3 |
-| **25 of the 108 maps** carry the sun+skyambient pair, never one without the other; the other 83 have no `light_environment` at all. 5 maps carry several (`sm_warehouse_1` 4, `ch_temple_1` and `sp_taxiride` 3, `sp_observatory_2` and `sp_soc_2` 2), and `sm_hub_1` — the outdoor hub street — carries **none** | RE-A7, `tools/probe_sky_inventory.py` (supersedes an earlier undercount) |
+| **25 of the 108 maps** carry the sun+skyambient pair, never one without the other; the other 83 have no `light_environment` at all. 5 maps carry several (`sm_warehouse_1` 4, `ch_temple_1` and `sp_taxiride` 3, `sp_observatory_2` and `sp_soc_2` 2), and `sm_hub_1` — the outdoor hub street — carries **none** | RE-A7, `tools/probe_sky_inventory.py` |
 | **K7 is settled** — every sky VMT in the game is `UnlitGeneric` with `$basetexture` + `$nofog` and nothing else, and the whole draw is `mul r0, t0, v0` against a modulation the engine forces to white. **A sky pixel is the decoded texel**: no scaling, no overbright, no gamma op, no fog | RE-A9, `stdshader_dx8.dll` + the shipped `unlitgeneric.psh`/`.vcs` |
 | The world's pixel is `albedo × lightmap × 2` — `lightmappedgeneric.psh`'s `mul_x2 … (overbrightFactor/2)` with the factor **pinned** to 2 (only 1.0 and 2.0 are accepted; anything else, and any hardware without overbright support, is rewritten to 2.0). That ×2 is the *only* sky-vs-world asymmetry in the framebuffer | RE-A9, `0x200718d0` |
 | Gamma is frame-wide, never per-material: `gamma` 2.2, `texgamma` 2.2, `brightness` 0, `linearFrameBuffer` 0, and a display value of `1.6 − clamp(cl_v_gamma − 1, 0, 3)·0.5` (= 1.35 at the default `cl_v_gamma` 1.5), applied as a device gamma ramp at present | RE-A9, `docs/color_gamma.md` |
@@ -271,7 +272,7 @@ once, from the authoring end, in Epic's documentation. All five agree: **a cube 
 plain D3D face table applied to the raw Unreal world vector, with no swizzle anywhere in the
 chain.**
 
-That last clause is the entire surprise. The D3D table was specified for a **Y-up** world;
+That "no swizzle" clause is what matters: the D3D table was specified for a **Y-up** world;
 Unreal is **Z-up** and hands the hardware its world vector unmodified. So D3D's *pole* faces
 (slices 2/3) land on Unreal's horizontal ±Y, and its *side* faces (slices 4/5) land on Unreal's
 up and down. Four of the six slices are therefore stored **rotated** relative to an upright view
@@ -356,10 +357,9 @@ so no camera angle could make it line up — and every slice was missing its rot
 
 ### What B1 confirmed
 
-A confirmation, not a discovery — and it confirmed. Fed the RE-A2 labelled faces through the
-corrected binding, our runtime draws every face upright on its predicted axis, the same picture
-the shipped VtMB engine drew (RE-A2), with no residual in the memory layout or `M_Sky`'s
-sampling vector.
+Fed the RE-A2 labelled faces through the corrected binding, the runtime draws every face upright
+on its predicted axis — the same picture the shipped VtMB engine drew (RE-A2), with no residual
+in the memory layout or `M_Sky`'s sampling vector.
 
 ## The 3D skybox — what the pass actually draws (RE-A8, settled)
 
@@ -465,7 +465,7 @@ Read from the `0x1019d600` decompile; step numbers are its instruction order.
    `DrawTranslucentRenderables(&list, areabits, 1, 1, 0)`.
 10. `DisableFog()`, restore the area bits, clear `m_bDrawingSkybox`, return `true`.
 
-`DrawOpaqueRenderables` is worth one line because it settles "what counts as a renderable": it
+`DrawOpaqueRenderables` settles "what counts as a renderable": it
 walks a flat array (count at `list+0x48004`, 12-byte entries from `list+0xc000`) of
 `{flags, IClientRenderable*, …}`, masks flags against `8|0x10`, calls the renderable's
 `+0x2c` (its fade/LOD test) and then `+0x24`/`+0x28` (`DrawModel`). It is type-blind — a static
@@ -648,8 +648,7 @@ level-init zero-light check (`0x2007cdb0`), one debug visualiser (`0x2006e3d0`),
 (`worldbrush + 0x138`, set from lump 8) is consumed by a disjoint set in the
 `0x20071xxx`–`0x20073xxx` band, the surface/lightmap builder. **No function reads both.**
 
-So the working hypothesis in K5 was right, with one correction: lump 15 is not *only*
-compiler input — it is live runtime data, but only for models.
+Lump 15 is not *only* compiler input — it is live runtime data, but only for models.
 
 ### What the loader changes on the way in
 
@@ -774,11 +773,11 @@ Object addresses in `engine.dll`; int value at object `+0x30`, float at `+0x2c`.
 
 ### What this changes for us
 
-- **The faithfulness claim, restated.** Our rig turns lump 15 into real Unreal lights for the
+- **The faithfulness claim.** Our rig turns lump 15 into real Unreal lights for the
   *world*. The engine never did that: the authored world look is lump 8, and lump 15 lit only
   models. The rig + Lumen is therefore a reconstruction of lump 8, not a reproduction of a
-  runtime the game had — which is exactly what D1's "measured target against lump 8" says, and
-  it is now a fact rather than a hypothesis. (D2 is unblocked on the same evidence.)
+  runtime the game had, confirming D1's "measured target against lump 8" as fact rather than
+  hypothesis. D2 is unblocked on the same evidence.
 - **`avgLightColor` is decodable ground truth we are not using.** It is at `dface_t + 0`,
   already in our byte map, 8 RGBE entries per face. It is the engine's own per-face summary of
   the bake — a cheap, exact second calibration target alongside the luxel grid, and the input
@@ -890,10 +889,9 @@ or the light cache, and `engine.dll` — which owns all three — has no dayligh
 ### Where the "two full bakes" reading came from
 
 `day`/`night` are **bspsrc's** names for the two arrays (`DFaceVTMB.java`, both fields carrying
-the comment *"Nightime lightmapping system"*) — a guess at what the reserved space was for,
-which this doc and `tools/CLAUDE.md` inherited and hardened into "v17 carries two full bakes".
-The bytes never supported it. The names are kept in our struct map because they are the only
-published ones, now with the fact attached.
+the comment *"Nightime lightmapping system"*) — a guess at what the reserved space was for; the
+bytes never supported it. The names are kept in the struct map because they are the only
+published ones.
 
 **Scope of the claim.** This settles the shipped game: no map carries a second bake and no
 shipped binary reads one. It says nothing about whether Troika's in-house compiler ever had the
@@ -1060,8 +1058,7 @@ The area rule is the engine's; the other eight rows are unaffected.
 ### Fog
 
 Fog is two authored key sets — `worldspawn` the world's, `sky_camera` the skybox pass's —
-and the full scan sizes how far they differ. *(Counts corrected by B8's re-measurement; this
-section originally read 31 disagreeing sets and 5 wrongly-fogged maps.)*
+and the full scan sizes how far they differ.
 
 - **65 maps have no `sky_camera`.** On **12** of them `worldspawn` carries `fogenable 1` —
   `ch_temple_4`, `hw_ash_sewer_1`, `hw_sinbin_1`, `la_chantry_1`, `la_crackhouse_1`,
@@ -1276,9 +1273,8 @@ reads those 17 only. `probe_skyambient.py` refuses a non-retail bake unless aske
 
 Two corrections this forces:
 
-- **`sp_tutorial_1` is the wrong map for this question**, and it is the one this plan
-  originally named. It is patch-recompiled, and in **retail it carries no sky pair at all** —
-  its `light_environment` is the patch's addition.
+- **`sp_tutorial_1` is the wrong map for this question.** It is patch-recompiled, and in
+  **retail it carries no sky pair at all** — its `light_environment` is the patch's addition.
 - RE-A7's inventory is patch-first, which is correct for "what does the engine load", but a
   sky-pair observation drawn from it can be the patch compiler's behaviour rather than
   Troika's. Its `sp_soc_2` note — two `light_environment`s but only one lump-15 pair — is one:
@@ -1731,15 +1727,9 @@ The rework is calibrated against data we already hold plus the original game:
 
 ## Status, history, and what remains
 
-This doc is the **facts** reference; the tracker set owns everything else:
-
-- **`roadmap.md`** — the SKY row (done) and the promoted open work: **3.6/3.7** (the
-  measured tonemapper toe — the one remaining visible gap to displayed parity), **3.10**
-  (volumetric fog layer calibration), **3.11** (`elysium.LumenDiffuseBoost` verification),
-  **3.12** (`sm_hub_1` fill adjudication), **3.13** (decal fog liveness), **RE17**
-  (owner-run reference captures, gated on the `snapshot` pre/post-gamma-ramp check).
-- The decision set D1–D7 (D6 dissolved, D4 amended, D3 corrected) is stated as facts in the
-  sections above.
+This doc is the **facts** reference; status and next work, and the D1–D7 decision set (D6
+dissolved, D4 amended, D3 corrected), are cited at the top of this doc — the tracker set owns
+everything else.
 
 The one deliberately *bounded* fact: the skyambient's hemisphere aperture (cosine vs
 uniform, a factor of ~2) is **not identifiable from the shipped data** — on an enclosed

@@ -21,9 +21,8 @@ engine places you **relative to the landmark**, *not* at `info_player_start`:
 new_origin = dest.info_landmark[name].origin + (player_origin − src.info_landmark[name].origin)
 ```
 
-i.e. your offset from the source landmark is preserved against the destination
-landmark. `info_player_start` is bypassed entirely on this path. Both the source
-and destination maps must carry an `info_landmark` with the same `targetname`.
+`info_player_start` is bypassed entirely on this path. Both the source and
+destination maps must carry an `info_landmark` with the same `targetname`.
 
 **3. Scripted `ChangeMap` (the story path).** Level scripts call
 `__main__.ChangeMap(delay, "<landmark>", "<trigger>")` (embedded Python), which

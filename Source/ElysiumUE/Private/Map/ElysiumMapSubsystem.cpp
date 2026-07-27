@@ -2,6 +2,7 @@
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumMapActor.h"
+#include "Debug/ElysiumMoveRun.h"
 #include "Debug/ElysiumProbeRun.h"
 #include "Debug/ElysiumProfiler.h"
 #include "Debug/ElysiumShotRun.h"
@@ -102,6 +103,12 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	{
 		ProbeRun = MakePimpl<FElysiumProbeRun>(this);
 	}
+	// Under -ElysiumMove, arm the headless movement-regression run (4.7): a fixed command stream
+	// per course, sampled against real geometry.
+	if (FElysiumMoveRun::IsRequested())
+	{
+		MoveRun = MakePimpl<FElysiumMoveRun>(this);
+	}
 }
 
 void UElysiumMapSubsystem::Deinitialize()
@@ -109,6 +116,7 @@ void UElysiumMapSubsystem::Deinitialize()
 	ProfileRun.Reset();
 	ShotRun.Reset();
 	ProbeRun.Reset();
+	MoveRun.Reset();
 	for (IConsoleObject* Obj : ConsoleObjects)
 	{
 		IConsoleManager::Get().UnregisterConsoleObject(Obj);

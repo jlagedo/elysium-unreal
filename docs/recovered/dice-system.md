@@ -90,9 +90,8 @@ face (`GetInt(key, default 1)` per entry — `FUN_101d90c0`). The file comments 
 **In the shipped install all weighting tables are a plain uniform d10.** The file defines
 three (`Normal`, `Heavy`, `Light`) and every one maps `face = r99 / 10` (`0–9→0, 10–19→1, …,
 90–99→9`) — each face 0..9 appears exactly 10×. So `rng.Next(0, 10)` reproduces the shipped
-behaviour exactly. The weighting *mechanism* is real (a mod could bias a die), so the runtime
-resolver (roadmap 9.6) should **load `DiceRolls.txt`** and index the table by context rather
-than hard-code uniformity — but with today's data the two are identical.
+behaviour exactly. The weighting *mechanism* is real (a mod could bias a die); see "Runtime
+consumer" below for what the resolver should load instead of hard-coding uniformity.
 
 `DiceRolls.txt` also carries, in its `Text` block, the display strings that confirm the tier
 enum names 1:1 — `RollResult`: `0 Botched · 1 Failure · 2 Partial Success · 3 Success ·
@@ -140,30 +139,26 @@ public static RollResult ResolveRoll(int pool, int difficulty, System.Random rng
 
 ## Verification (RE5 — resolved without the running game)
 
-The planned golden test was to drive retail's `vroll` and match its printed
-`"Dice Results:"` report. That became unnecessary: decompiling the full roll cluster showed
-the only RNG-dependent behaviour — the die-face distribution — is **data-driven** by
-`vdata/system/DiceRolls.txt`, which we read directly. Every other step (loop, tiering,
-difficulty comparison, caps, field layout) is fixed in code and confirmed against both the
-decompilation and the raw listing. So the ground truth is a shipped data file plus the
-disassembly, both available offline under the bring-your-own-game posture.
+The planned golden test — driving retail's `vroll` and matching its printed `"Dice Results:"`
+report — proved unnecessary once the RNG-dependent step turned out to be data-driven (see
+status above). Every other step — loop, tiering, difficulty comparison, caps, field layout —
+is fixed in code and confirmed against both the decompilation and the raw listing.
 
 What each open question resolved to:
 
-- **Difficulty scale** — human (1..10); `vroll` passes `atoi(arg2)` raw and the ctor stores
-  `[0xb] = that − 1` (`0x100d7040` → `FUN_101d88b0`). Port's `difficulty − 1` is correct.
-- **RNG distribution** — engine `RandomInt(0,99)` indexed into a per-context 100-entry
-  weighting table; the shipped `Normal`/`Heavy`/`Light` tables are all uniform d10
-  (`face = r99/10`), so `rng.Next(0,10)` is faithful. Verified by parsing the file.
-- **Provisional fields** — `[4]` (context→table select), `[6]` (botch table; null for
-  `vroll`), `[0xe]` (health mod; data-driven, all 0 today), and the pool source
-  (`f(character sheet, ability)`, not a CLI arg) all confirmed from the ctor + handler.
+- **Difficulty scale** — human (1..10), confirmed by `vroll`'s raw `atoi(arg2)` → ctor
+  `[0xb] = arg − 1` path (`0x100d7040` → `FUN_101d88b0`; see "Difficulty scale" above).
+- **RNG distribution** — a per-context 100-entry weighting table indexed by
+  `RandomInt(0,99)`; the shipped tables are all uniform d10, so `rng.Next(0,10)` is faithful
+  (see "data-driven table lookup" above).
+- **Provisional fields** — `[4]`, `[6]`, `[0xe]`, and the pool source (`f(character sheet,
+  ability)`, not a CLI arg) are confirmed from the ctor + handler (see field map above).
 
-**For reference**, the `vroll` console command (`FUN_100d71a0`, real handler `0x100d7040`,
-help *"Processes a Vampire Dice Roll."*) still exists and, in its debug branch, prints the
-face list (physical 1..10), a summary (net, 10s, human difficulty `[0xb]+1`, tier), and a
-running `"Breakdown: ave = …"` histogram — useful if a future observed divergence needs a
-live cross-check, but not required to treat this doc as canonical.
+The `vroll` console command (`FUN_100d71a0`, real handler `0x100d7040`, help *"Processes a
+Vampire Dice Roll."*) still exists and, in its debug branch, prints the face list (physical
+1..10), a summary (net, 10s, human difficulty `[0xb]+1`, tier), and a running
+`"Breakdown: ave = …"` histogram — useful for a live cross-check if a future divergence
+surfaces.
 
 **Runtime consumer (roadmap 9.6).** Copy `vdata/system/DiceRolls.txt` into the offline
 mirror (a small `UE_`-style extract, patch-first like the other `vdata` copies) and have the

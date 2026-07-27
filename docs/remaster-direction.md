@@ -1,9 +1,8 @@
 # Remaster direction — what "Elysium" is and is not
 
 **Target: VtMB *remastered*.** Keep the game — its tone, its ambience, its feel, its logic —
-and raise the craft with tools 2004 did not have. This is not a pixel-perfect recreation, and
-being un-pixel-perfect is not a failure mode. Where the original made a choice, we keep it;
-where the original was *constrained*, we are not.
+and raise the craft with tools 2004 did not have. Not a pixel-perfect recreation: where the
+original made a choice, we keep it; where the original was *constrained*, we are not.
 
 This doc is the **direction charter**: what may be modernized, what must be reproduced, and
 who decides. It sits beside `rebuild-strategy.md` (how the thing is built) and
@@ -67,8 +66,7 @@ art direction, it was the hardware.
 > Is this a 2004 **technical constraint or defect**, or an **authored design decision**?
 
 Constraint or defect → may be fixed, with an owner's call. Design decision → reproduce, even
-where it is unfashionable. When it is genuinely unclear which one it is, that is exactly the
-case that goes to the owner rather than being resolved by taste.
+where it is unfashionable. An unclear case goes to the owner, not to taste.
 
 ## The four axes in scope
 
@@ -91,24 +89,23 @@ Carried over — the design intent:
 
 Replaced — the craft:
 
-- **Bitmap `.fnt` glyph atlases → vector/SDF type.** The original fonts are unreadable on
-  modern displays at modern resolutions; that is the single loudest defect in the game today.
-  Typeface choices target VtMB's voice, not its bitmaps.
+- **Bitmap `.fnt` glyph atlases → vector/SDF type.** The original fonts are unreadable at
+  modern resolutions — the loudest defect in the game today. Typeface choices target VtMB's
+  voice, not its bitmaps.
 - **The 640×480 proportional VGUI space → resolution-independent layout.** Real widescreen and
   ultrawide, DPI-aware scaling, no letterbox canvas, no `//ws-fix` coordinate pairs. `.res`
   coordinates inform proportion and grouping; they are not the runtime layout engine.
 - **Low-resolution UI bitmaps → upscaled or re-authored** at modern resolution, under the
   presentation test.
-- **Static, motionless panels → restrained motion**: state transitions, focus, and feedback
-  that a 2004 VGUI could not express. Restrained is the operative word — this is a slow,
-  moody game, not a kinetic one.
+- **Static panels → restrained motion**: state transitions, focus, and feedback that a 2004
+  VGUI could not express — this is a slow, moody game, not a kinetic one.
 - **A modern component set**: focus/hover/disabled states, gamepad-navigable, text that
   reflows, tooltips where the original relied on the manual.
 
-**There is no "classic UI" mode.** The pixel-faithful VGUI port is not built — modern is the
-only UI. The VGUI/scheme/`.fnt`/`.res` decoders stay in `tools/` as extraction and
-reference machinery, not as a runtime layout stack. (`m0_menu_build.md` documents the
-original's structure and the `GameUI.dll` findings; it is reference, not a port target.)
+**There is no "classic UI" mode** — the pixel-faithful VGUI port is not built. The
+VGUI/scheme/`.fnt`/`.res` decoders stay in `tools/` as extraction and reference machinery, not
+a runtime layout stack. (`m0_menu_build.md` documents the original's structure and the
+`GameUI.dll` findings; it is reference, not a port target.)
 
 The **world**, by contrast, keeps its faithful path: geometry, placement, and lighting stay
 anchored to VtMB's own data and the lightmap calibration, with enhancement as a toggle on top
@@ -116,16 +113,15 @@ anchored to VtMB's own data and the lightmap calibration, with enhancement as a 
 
 ### 2. Assets — textures, materials, models
 
-The `asset-enhancement.md` track is **in scope**, not a someday-maybe: delight → super-resolve
-→ style-anchored PBR synthesis, tiered, curated per material family, budget-gated by the
-RTX 3060 / 12 GB floor. Its tier discipline and its `elysium.EnhancedTextures` A/B toggle are
-unchanged — the toggle is the regression guard that keeps the enhanced set honest against the
-faithful reference, and the faithful set stays the reference forever.
+The `asset-enhancement.md` track is **in scope**: delight → super-resolve → style-anchored PBR
+synthesis, tiered, curated per material family, budget-gated by the RTX 3060 / 12 GB floor. The
+`elysium.EnhancedTextures` A/B toggle is the regression guard that keeps the enhanced set honest
+against the faithful reference; the faithful set stays the reference forever.
 
 Tier 0 (delight, super-resolve) is a technical-deficit fix for a dynamically-relit engine and
 needs no special pleading. Tier 1 (normal/roughness/AO/envmask synthesis) is style-anchored
 enhancement and is reviewed per family. Tier 2 (glossy/chrome, de-griming, "pop",
-remodelling, invented hero detail) stays out of bounds — that is where remasters go to die.
+remodelling, invented hero detail) stays out of bounds.
 
 ### 3. Feel — movement, combat, camera
 
@@ -152,24 +148,20 @@ does. In scope:
 - Legible save/load and autosave affordances (the save *format* and its four blocks stay
   ours and deterministic — see `roadmap.md` 9.5).
 
-Difficulty and balance are **not** QoL — they are the logic layer, and they are governed by
-the one rule.
+Difficulty and balance are **not** QoL — they are the logic layer, governed by the one rule.
 
 ## What this direction does not change
 
-- **Bring-your-own-game.** Nothing game-sourced is committed. Every asset the remaster
-  touches is a regenerable derivative of the user's own install under gitignored `tools/out/`.
-  Modernizing the UI does not mean shipping art; it means better craft applied to their bytes,
-  plus hand-authored game-agnostic scaffolding in `Content/`.
-- **The two clean halves.** Offline Python decodes; the C++ runtime loads intermediates at
-  map-load. Python is never run at runtime as a *pipeline* step (the embedded CPython 2.7 is
-  the game's own scripting VM, a different thing).
+- **Bring-your-own-game** (root `CLAUDE.md`) — modernizing the UI applies better craft to the
+  user's own bytes, not shipped art.
+- **The two clean halves** (root `CLAUDE.md`) — offline decode, runtime load; this direction
+  does not change the split.
 - **No `.uasset` baking of game content.**
 - **The world calibration.** VtMB's look is indirect-bounce-dominated and the dynamic rig is
   anchored to its baked lightmaps (`rendering-perf.md`). That calibration defines the target
   look; richer surfaces respond to it, they do not redefine it.
-- **`sp_tutorial_1` is the vertical slice**, and the slice ladder in `roadmap.md` is unchanged
-  in ordering — the entity/IO/scripting spine still lands before the UI work.
+- **`sp_tutorial_1` is the vertical slice** — the slice ladder in `roadmap.md` keeps the
+  entity/IO/scripting spine landing before the UI work.
 
 ## Where the work lives
 

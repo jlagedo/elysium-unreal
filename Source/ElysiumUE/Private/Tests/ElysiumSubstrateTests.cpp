@@ -989,18 +989,31 @@ bool FElysiumTimeControlTest::RunTest(const FString&)
 	TestEqual(TEXT("scale starts at 1"), Time.GetScale(), 1.0);
 	TestFalse(TEXT("starts running"), Time.IsPaused());
 
-	// A frame advances by exactly the delta it is handed.
-	TestEqual(TEXT("a frame applies its whole delta"), Time.AdvanceFrame(0.5), 0.5);
-	TestEqual(TEXT("now advanced"), Clock.GetNow(), 0.5);
+	// A frame advances by exactly the delta it is handed, within the frame bound.
+	TestEqual(TEXT("a frame applies its whole delta"), Time.AdvanceFrame(0.05), 0.05);
+	TestEqual(TEXT("now advanced"), Clock.GetNow(), 0.05);
 
 	// Scale is applied EXACTLY ONCE (runtime-architecture.md §4). Engine dilation has already
 	// scaled the tick's delta by the time it reaches AdvanceFrame, so the clock must multiply by
-	// nothing: at 0.25x a 0.4 s delta is still 0.4 s of game time, not 0.1.
+	// nothing: at 0.25x a 0.04 s delta is still 0.04 s of game time, not 0.01.
 	Time.SetScale(0.25);
 	TestEqual(TEXT("scale recorded on the clock"), Time.GetScale(), 0.25);
-	TestEqual(TEXT("the clock adds no factor of its own"), Time.AdvanceFrame(0.4), 0.4);
-	TestEqual(TEXT("now advanced by the dilated delta"), Clock.GetNow(), 0.9);
+	TestEqual(TEXT("the clock adds no factor of its own"), Time.AdvanceFrame(0.04), 0.04);
+	TestEqual(TEXT("now advanced by the dilated delta"), Clock.GetNow(), 0.09);
 	Time.SetScale(1.0);
+
+	// The frame bound (`source_movement.md` → "Frame timing"): VtMB's `Host_FilterTime` clamps
+	// host_frametime to [0.001, 0.1] before the game DLL sees it, so a hitch cannot fire a whole
+	// interval's thinks and queued I/O in one frame. **The mover clamps with this same constant** —
+	// game time and player motion must not disagree about how long the frame was.
+	TestEqual(TEXT("a hitch is bounded to MaxFrameSeconds"), Time.AdvanceFrame(5.0),
+		ElysiumFrame::MaxFrameSeconds);
+	TestEqual(TEXT("and a sub-millisecond frame is raised to the floor"), Time.AdvanceFrame(0.0001),
+		ElysiumFrame::MinFrameSeconds);
+	// A zero delta is passed through rather than raised: the engine's own filter never calls the
+	// game with one, so inventing a millisecond here would fabricate time retail never advances.
+	TestEqual(TEXT("but a zero delta stays zero"), Time.AdvanceFrame(0.0), 0.0);
+	Time.ResetClock(0.09);
 
 	// A negative scale is meaningless; time never runs backwards.
 	Time.SetScale(-2.0);
@@ -1011,7 +1024,7 @@ bool FElysiumTimeControlTest::RunTest(const FString&)
 	Time.SetPaused(true);
 	TestTrue(TEXT("held"), Time.IsPaused());
 	TestEqual(TEXT("a held frame applies nothing"), Time.AdvanceFrame(1.0), 0.0);
-	TestEqual(TEXT("now unmoved while held"), Clock.GetNow(), 0.9);
+	TestEqual(TEXT("now unmoved while held"), Clock.GetNow(), 0.09);
 
 	// Stepping releases exactly N frames and holds again. EndFrame is the tail of a released
 	// frame (the map actor's post-move tick), so one step = one Advance + one EndFrame.
@@ -1028,7 +1041,7 @@ bool FElysiumTimeControlTest::RunTest(const FString&)
 	Time.EndFrame();
 	TestTrue(TEXT("the last step re-holds the world"), Time.IsPaused());
 	TestEqual(TEXT("no steps left"), Time.StepsPending(), 0);
-	TestEqual(TEXT("exactly two frames of time bought"), Clock.GetNow(), 1.1);
+	TestEqual(TEXT("exactly two frames of time bought"), Clock.GetNow(), 0.29);
 	TestEqual(TEXT("held again, so nothing more"), Time.AdvanceFrame(1.0), 0.0);
 
 	// Stepping a running world is meaningless — there is nothing to release.
@@ -1050,6 +1063,226 @@ bool FElysiumTimeControlTest::RunTest(const FString&)
 	TestEqual(TEXT("rewound to the given curtime"), Clock.GetNow(), 42.0);
 	TestEqual(TEXT("rewind restores real time"), Time.GetScale(), 1.0);
 	TestFalse(TEXT("rewind releases the hold"), Time.IsPaused());
+
+	return true;
+}
+
+// =====================================================================================
+// The mover's arithmetic (4.7) — every number here is one `docs/source_movement.md` records
+// off the decompile, asserted without a pawn, a world or an RHI.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMovementTest, "Elysium.Substrate.Movement", GElysiumTestFlags)
+bool FElysiumMovementTest::RunTest(const FString&)
+{
+	using namespace ElysiumMove;
+	const FElysiumMoveTuning T;
+
+	// FVector is double-precision; the tuning and the recorded constants are float. Narrow at the
+	// comparison rather than widening every constant, so the numbers below read as the doc writes
+	// them.
+	auto F = [](double D) { return static_cast<float>(D); };
+
+	// --- Friction: 3D speed, a stopspeed floor, and all three components scaled ---------------
+	{
+		// Below the 0.1 cut-off nothing happens at all.
+		FVector V(0.05f, 0.0f, 0.0f);
+		ApplyFriction(V, T.Friction, T.StopSpeed, 1.0f, 1.0f / 60.0f);
+		TestEqual(TEXT("friction ignores a near-stopped body"), F(V.X), 0.05f);
+
+		// Above stopspeed the drop is proportional to the speed itself.
+		V = FVector(500.0f, 0.0f, 0.0f);
+		const float Dt = 1.0f / 60.0f;
+		ApplyFriction(V, T.Friction, T.StopSpeed, 1.0f, Dt);
+		const float Expected = 500.0f - 500.0f * T.Friction * Dt;
+		TestTrue(TEXT("friction drops control * friction * dt"), FMath::IsNearlyEqual(F(V.X), Expected, 0.01f));
+
+		// Under stopspeed the *control* speed floors at sv_stopspeed, so a slow body loses a
+		// constant amount rather than a proportional one — that is what makes the stop crisp.
+		V = FVector(10.0f, 0.0f, 0.0f);
+		ApplyFriction(V, T.Friction, T.StopSpeed, 1.0f, Dt);
+		const float FlooredDrop = T.StopSpeed * T.Friction * Dt;
+		TestTrue(TEXT("below stopspeed the control speed floors"),
+			FMath::IsNearlyEqual(F(V.X), 10.0f - FlooredDrop, 0.01f));
+
+		// It scales the vertical component too — the decompile does not special-case Z.
+		V = FVector(300.0f, 0.0f, 300.0f);
+		ApplyFriction(V, T.Friction, T.StopSpeed, 1.0f, Dt);
+		TestTrue(TEXT("friction scales Z as well as XY"), F(V.Z) < 300.0f);
+	}
+
+	// --- Accelerate, and the air-accel asymmetry ----------------------------------------------
+	{
+		const float Dt = 1.0f / 60.0f;
+		const FVector Dir(1.0f, 0.0f, 0.0f);
+
+		FVector V = FVector::ZeroVector;
+		ApplyAccelerate(V, Dir, RunSpeed, T.Accelerate, 1.0f, Dt);
+		TestTrue(TEXT("ground accel adds accel * dt * wishspeed"),
+			FMath::IsNearlyEqual(F(V.X), T.Accelerate * Dt * RunSpeed, 0.01f));
+
+		// Already at the target: nothing is added.
+		V = FVector(RunSpeed, 0.0f, 0.0f);
+		ApplyAccelerate(V, Dir, RunSpeed, T.Accelerate, 1.0f, Dt);
+		TestTrue(TEXT("ground accel adds nothing at the target"),
+			FMath::IsNearlyEqual(F(V.X), RunSpeed, 0.01f));
+
+		// The whole of air-strafing: the CAP binds the target, but the UNCAPPED wishspeed drives
+		// accelspeed. Past the 30 u/s cap the air gives no more forward speed...
+		V = FVector(AirSpeedCap + 10.0f, 0.0f, 0.0f);
+		FVector Before = V;
+		ApplyAirAccelerate(V, Dir, RunSpeed, T.AirAccel, T.AirSpeedCap, 1.0f, Dt);
+		TestTrue(TEXT("air accel is capped along the wish direction"),
+			FMath::IsNearlyEqual(F(V.X), F(Before.X), 0.01f));
+
+		// ...but sideways, where the projected speed is still 0, it gives a full uncapped kick.
+		// That asymmetry is why a Source player can gain speed by strafing in the air.
+		V = FVector(1000.0f, 0.0f, 0.0f);
+		const FVector Side(0.0f, 1.0f, 0.0f);
+		ApplyAirAccelerate(V, Side, RunSpeed, T.AirAccel, T.AirSpeedCap, 1.0f, Dt);
+		TestTrue(TEXT("but sideways it accelerates on the UNCAPPED wishspeed"),
+			FMath::IsNearlyEqual(F(V.Y), FMath::Min(T.AirAccel * RunSpeed * Dt, AirSpeedCap), 0.01f));
+		TestTrue(TEXT("and the sideways kick beats the capped target"), F(V.Y) > 0.0f);
+	}
+
+	// --- CheckVelocity clamps per COMPONENT, not per magnitude --------------------------------
+	{
+		FVector V(T.MaxVelocity * 2.0f, T.MaxVelocity * 2.0f, 0.0f);
+		CheckVelocity(V, T.MaxVelocity);
+		TestTrue(TEXT("each component clamps to sv_maxvelocity"),
+			FMath::IsNearlyEqual(F(V.X), T.MaxVelocity, 0.01f) &&
+			FMath::IsNearlyEqual(F(V.Y), T.MaxVelocity, 0.01f));
+		// The distinction from GetClampedToMaxSize: the magnitude is allowed past the limit.
+		TestTrue(TEXT("so the magnitude may exceed it — this is not a size clamp"),
+			F(V.Size()) > T.MaxVelocity);
+
+		V = FVector(FMath::Sqrt(-1.0f), 0.0f, 0.0f);
+		CheckVelocity(V, T.MaxVelocity);
+		TestTrue(TEXT("and a non-finite component is scrubbed"), F(V.X) == 0.0f);
+	}
+
+	// --- ClipVelocity's blocked bits ----------------------------------------------------------
+	{
+		FVector Out;
+		const int32 Floor = ClipVelocity(FVector(100.0f, 0.0f, -100.0f), FVector::UpVector, Out);
+		TestEqual(TEXT("a floor plane reports bit 1"), Floor, 1);
+		TestTrue(TEXT("and the downward component is removed"), FMath::IsNearlyEqual(F(Out.Z), 0.0f, 0.01f));
+
+		const int32 Wall = ClipVelocity(FVector(100.0f, 0.0f, 0.0f), FVector(-1.0f, 0.0f, 0.0f), Out);
+		TestEqual(TEXT("a vertical wall reports bit 2"), Wall, 2);
+		TestTrue(TEXT("and the into-wall component is removed"), FMath::IsNearlyEqual(F(Out.X), 0.0f, 0.01f));
+	}
+
+	// --- The jump apex: flat, and the gravity split is what makes it dt-invariant -------------
+	{
+		// sv_jump_boost is literally the apex height in units, since v^2/2g = boost.
+		TestTrue(TEXT("jump speed is sqrt(2 * boost * g)"),
+			FMath::IsNearlyEqual(T.JumpSpeed(), 200.0f * U, 0.5f));
+		TestTrue(TEXT("and its apex reads back as sv_jump_boost"),
+			FMath::IsNearlyEqual(ApexHeight(T.JumpSpeed(), T.Gravity), T.JumpBoost, 0.01f));
+
+		// Integrate a real jump the way FullWalkMove does — StartGravity, move, FinishGravity —
+		// at three frame rates. The half-step split is exact for constant acceleration, so the
+		// apex must be a flat 25 units at every one of them. A single full step instead lands at
+		// `25 - 100*dt`, which is the frame-rate dependence the timestep question was about.
+		auto SimulateApex = [&T](float Dt)
+		{
+			FVector V(0.0f, 0.0f, T.JumpSpeed());
+			float Z = 0.0f;
+			float Peak = 0.0f;
+			for (int32 i = 0; i < 4096 && (V.Z > 0.0f || Z > 0.0f); ++i)
+			{
+				StartGravity(V, T.Gravity, Dt);
+				Z += V.Z * Dt;
+				FinishGravity(V, T.Gravity, Dt);
+				Peak = FMath::Max(Peak, Z);
+			}
+			return Peak / U;   // in Source units, to read against sv_jump_boost
+		};
+
+		const float Apex60 = SimulateApex(1.0f / 60.0f);
+		const float Apex120 = SimulateApex(1.0f / 120.0f);
+		const float Apex240 = SimulateApex(1.0f / 240.0f);
+
+		TestTrue(TEXT("the split puts the apex at sv_jump_boost at 60 fps"),
+			FMath::IsNearlyEqual(Apex60, T.JumpBoost, 0.01f));
+		TestTrue(TEXT("and at 120 fps"), FMath::IsNearlyEqual(Apex120, T.JumpBoost, 0.01f));
+		TestTrue(TEXT("and at 240 fps"), FMath::IsNearlyEqual(Apex240, T.JumpBoost, 0.01f));
+	}
+
+	// --- The timestep: 0 is the faithful path, a fixed step carries its remainder --------------
+	{
+		FElysiumMoveStepper Stepper;
+		float Step = 0.0f;
+
+		// Faithful: one step, at exactly the delta handed in.
+		TestFalse(TEXT("the default stepper is the raw variable delta"), Stepper.IsFixed());
+		TestEqual(TEXT("raw mode runs one step"), Stepper.BeginFrame(0.0321f, Step), 1);
+		TestTrue(TEXT("at the frame's own delta"), FMath::IsNearlyEqual(Step, 0.0321f, 1e-6f));
+
+		// Fixed: whole steps now, remainder carried rather than dropped.
+		Stepper.Reset();
+		Stepper.FixedStep = 0.01f;
+		TestEqual(TEXT("a 25 ms frame at a 10 ms step runs two"), Stepper.BeginFrame(0.025f, Step), 2);
+		TestTrue(TEXT("each at the fixed interval"), FMath::IsNearlyEqual(Step, 0.01f, 1e-6f));
+		// The carried 5 ms plus another 25 ms is 30 ms — three steps, not two.
+		TestEqual(TEXT("and the carried remainder lands the third step next frame"),
+			Stepper.BeginFrame(0.025f, Step), 3);
+
+		// The sub-step backstop: with the frame delta already bounded this is unreachable in
+		// practice, so it exists to stop an absurd FixedStep from hanging the frame.
+		Stepper.Reset();
+		Stepper.FixedStep = 0.0001f;
+		Stepper.MaxSubSteps = 4;
+		TestEqual(TEXT("the sub-step count is capped"), Stepper.BeginFrame(0.1f, Step), 4);
+		TestTrue(TEXT("and the backlog is dropped, not carried into the next frame"),
+			Stepper.Alpha() == 0.0f);
+	}
+
+	// --- The hulls (RE22) and the frame bound --------------------------------------------------
+	{
+		// Read off the CGameMovement constructor: the ducked hull keeps the standing footprint and
+		// halves the height, and its eye is at 30 — not stock Source's VEC_DUCK_VIEW of 28.
+		TestTrue(TEXT("the standing hull is 72u tall"), FMath::IsNearlyEqual(StandHeight / U, 72.0f, 0.01f));
+		TestTrue(TEXT("the ducked hull is 36u"), FMath::IsNearlyEqual(DuckHeight / U, 36.0f, 0.01f));
+		TestTrue(TEXT("the standing eye is at 64u"), FMath::IsNearlyEqual(StandViewZ / U, 64.0f, 0.01f));
+		TestTrue(TEXT("and the ducked eye at 30u, not Source's 28"),
+			FMath::IsNearlyEqual(DuckViewZ / U, 30.0f, 0.01f));
+
+		// The frame bound is ONE number, and the mover and the clock must clamp with it together.
+		TestTrue(TEXT("a hitch bounds to 0.1 s"),
+			FMath::IsNearlyEqual(ElysiumFrame::ClampFrameDelta(5.0), 0.1, 1e-9));
+		TestTrue(TEXT("a sub-millisecond frame floors at 0.001 s"),
+			FMath::IsNearlyEqual(ElysiumFrame::ClampFrameDelta(0.00001), 0.001, 1e-9));
+		TestTrue(TEXT("and zero passes through rather than fabricating time"),
+			ElysiumFrame::ClampFrameDelta(0.0) == 0.0);
+	}
+
+	// --- The cvar surface is declared, so a config.cfg governs and nothing falls to Python -----
+	{
+		TestTrue(TEXT("the sv_* movement surface is declared"), CvarDefs().Num() >= 9);
+
+		TMap<FString, FString> Store;
+		auto Lookup = [&Store](const TCHAR* Name)
+		{
+			const FString* Found = Store.Find(Name);
+			return Found ? *Found : FString();
+		};
+
+		FElysiumMoveTuning Tuned;
+		Tuned.LoadFrom(Lookup);
+		TestTrue(TEXT("an empty store keeps VtMB's own defaults"),
+			FMath::IsNearlyEqual(Tuned.Gravity, Gravity, 0.01f));
+
+		Store.Add(TEXT("sv_gravity"), TEXT("400"));
+		Store.Add(TEXT("sv_jump_boost"), TEXT("100"));
+		Tuned.LoadFrom(Lookup);
+		TestTrue(TEXT("a console value wins, converted from Source units once"),
+			FMath::IsNearlyEqual(Tuned.Gravity, 400.0f * U, 0.01f));
+		// The apex stays in Source units because it *is* a height — so it reads back literally.
+		TestTrue(TEXT("and the apex still reads back as the boost it was given"),
+			FMath::IsNearlyEqual(ApexHeight(Tuned.JumpSpeed(), Tuned.Gravity), 100.0f, 0.01f));
+	}
 
 	return true;
 }

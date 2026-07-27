@@ -3,9 +3,9 @@
 North star: rebuild VtMB as a **playable game — remastered** — in Unreal Engine 5.8 + C++,
 consuming engine-neutral intermediates produced by this repo's own decode/export pipeline
 (`tools/`). Game content converted into `.uasset`s — the offline look bake — lands on a
-**gitignored, regenerable mount** (`/ElysiumBaked`), never in the repo: **no original game
-content is ever committed in any form.** The only assets committed to `Content/` are
-hand-authored, game-agnostic scaffolding (master materials, input configs, empty maps).
+**gitignored, regenerable mount** (`/ElysiumBaked`): **no original game content is ever
+committed in any form.** The only assets committed to `Content/` are hand-authored,
+game-agnostic scaffolding (master materials, input configs, empty maps).
 
 **Remaster, not pixel-perfect recreation.** Tone, ambience, feel and game logic are kept; craft
 is raised with tools 2004 did not have — modern UI and typography first, then assets, feel, and
@@ -13,9 +13,7 @@ quality-of-life. The stance, the three change layers (presentation / feel / logi
 tests, and the rule that **every behavioural divergence needs the RE done first and an explicit
 owner's call** live in **`docs/remaster-direction.md`** — read it with this doc.
 
-Unreal is the committed implementation.
-
-The plan has two tracks that run in parallel:
+Two tracks run in parallel:
 
 - **Track A — parity**: reach VtMB's own rendering/walking state (world, props, lights,
   water, decals, movement) — every system here has an exact data format, exported by this
@@ -46,14 +44,13 @@ The plan has two tracks that run in parallel:
 2. **The Unreal editor is in the offline content loop only, never at runtime.** Editor Python
    authors what only the editor build can produce — the map bake (`bake_map.py`, `bake_lib.py`,
    `bake_verify.py`), the committed `Content/` assets (`build_content.py`), offline scaffolding
-   (`make_boot_map.py`) — and no shipped code path invokes it. The architecture call, its split
-   and its costs: (cont. 6); the pipeline: `uasset-bake-spike.md`.
+   (`make_boot_map.py`) — and no shipped code path invokes it. The architecture call, its
+   split, and its costs: `uasset-bake-spike.md`.
 3. **The pipeline lives in this repo.** `tools/` is the single home for the decoders; fixes
    and new sidecar formats land here. The intermediates stay engine-neutral so the format work
    is not Unreal-specific, but there is only one consumer.
-4. **Bring-your-own-game holds.** Nothing game-sourced is committed to this repo. This is
-   the load-bearing legal posture — prior community rebuilds died to a C&D, not to
-   technical failure.
+4. **Bring-your-own-game holds** — nothing game-sourced is committed to this repo. Legal
+   posture and rationale: root `CLAUDE.md`.
 5. **Prove everything on `sp_tutorial_1`** (1,226 entities, 75 classnames — VtMB's own
    vertical slice exercising every system), then scale horizontally across the ~100 maps.
 6. **Reference documentation lives in this repo's `docs/`.** The deep RE work this plan
@@ -64,22 +61,16 @@ The plan has two tracks that run in parallel:
    `m0_menu_build.md` (the original UI's structure + `GameUI.dll` findings — reference for the
    re-skin, not a port target), and `recovered/dice-system.md`. Do not re-derive what those already
    state.
-7. **Remaster: modernize presentation, reproduce behaviour.** Three change layers, three rules
-   (`remaster-direction.md`): **presentation** (UI, type, HUD, textures, post) modernizes freely
-   under the art-direction test; **feel** (movement, camera, combat) is built faithful first and
-   polished only by explicit call; **logic and content** (entity semantics, I/O, scripts,
-   dialogue, stats, saves) is reproduced, and any divergence requires the faithful behaviour to
-   be RE'd and understood *first* plus a dated owner decision in `roadmap.md`'s log. Default is
-   always reproduce.
+7. **Remaster stance governs every target below.** `remaster-direction.md`'s three change
+   layers, two adjudication tests, and default-to-reproduce rule apply throughout; a
+   divergence is recorded, once, in the doc that owns the diverging system.
 8. **The world keeps its faithful baseline; the UI does not.** Geometry 1:1 and dynamic GI
    anchored to the baked-lightmap calibration stay the reference, with the **offline,
    code-driven asset-enhancement track** as an A/B toggle on top, never a fork — adjudicated by
    *does it serve VtMB's grimy gothic-punk direction (or fix a technical deficit that fights the
    dynamic relight — e.g. delighting albedo), or is it inventing/overriding an artist decision?*
    Serve/fix → in; invent/override → out. Full plan, tiers, and pipeline hooks:
-   `asset-enhancement.md` (in scope; scheduled P10-ish, scaffolding exists in `tools/`). The UI
-   has **no classic mode** — the pixel-faithful VGUI port is not built; VtMB's screen structure
-   is re-skinned with vector type on a resolution-independent stack.
+   `asset-enhancement.md` (in scope; scheduled P10-ish, scaffolding exists in `tools/`).
 
 ## Implementation state
 
@@ -108,7 +99,6 @@ A/B toggles → 3.7.
 
 Design targets in this doc that are **not** code are marked where they appear — chiefly
 `map-architecture.md`'s async-travel state machine and its Slate console.
-
 
 ## Coordinate conventions
 
@@ -320,7 +310,7 @@ to matter — not before.
 ## B6. The Python connection (scripting host)
 
 VtMB embeds CPython 2.1; `vampire.dll` owns the whole API. `python_bridge.md` has the
-full RE. Key insight: **there is no big API to port** — entity method calls are datamap
+full RE. **There is no big API to port** — entity method calls are datamap
 reflection (B2's input table already provides this); the genuinely bespoke surface is
 11 globals + 24 Character methods + the `G` persistent-flag dict + field marshalling.
 
@@ -409,14 +399,14 @@ plays end-to-end.
 - **Ropes**: `keyframe_rope`/`move_rope` (×107 in the tutorial) → Cable Components.
 - **Nanite is on** for every baked mesh that can take it (311 of 339 on the tutorial; the
   28 exceptions are the translucent/additive surfaces Nanite does not support). It buys no
-  throughput at ~20k world tris — its value is that the offline build is what carries the
-  Lumen surface-cache cards and distance fields a runtime mesh cannot have.
+  throughput at ~20k world tris — the value is the bake's surface-cache/distance-field win,
+  above, not raw triangle count.
 - **C++ hot path**: parsing is already fast enough with the `.emc` cook-cache; if
   load time ever matters again, extend the cache.
 
 ## Pipeline & tooling
 
-**Tooling migration — done.** The decode/export pipeline lives in this repo's `tools/`
+The decode/export pipeline lives in this repo's `tools/`
 (`bsp.py`, `UE_bsp_to_scene.py`, `export_all.py`, `mdl.py`/`mdl_gltf.py`/`mdl_skel.py`, `vmt.py`,
 `vpk.py`, `kv.py`, `fnt.py`, `install.py`, `tex_to_png.py`, `retex_dds.py`, `lightmap.py`,
 `build_grade_lut.py`, `menu_extract.py`, `make_boot_map.py`, `make_sky_material.py`,
@@ -426,14 +416,14 @@ the bake (`bake_map.py`, `bake_lib.py`, `bake_verify.py`),
 the `probe_*.py`/`*_probe.py` investigators, and `tools/CLAUDE.md`), with `tools/requirements.txt`
 for deps (`Pillow`, `numpy`, `matplotlib` core; `torch`, `torchvision`, `spandrel`, `einops`,
 `safetensors` optional, ESRGAN upscalers only). It is engine-neutral Python; the only "Godot" in
-it is the `source_to_godot` coordinate convention baked into the intermediates, which the runtime
-converts. `tools/out/` (generated), `tools/.venv/`, `tools/__pycache__/`, `tools/models/`, and the
+it is the `source_to_godot` convention still used by legacy non-`UE_` exporters (Coordinate
+conventions, above). `tools/out/` (generated), `tools/.venv/`, `tools/__pycache__/`, `tools/models/`, and the
 entire `tools/ghidra*/` + `tools/re/` RE trees are gitignored. `FElysiumContentPaths::Root()` resolves to
 `FPaths::ProjectDir()/"tools/out"` (in-repo), and `sp_tutorial_1` is exported there. The `re/` RE
 toolchain (Crowbar/TemplePlus/VAMPTools/source-engine) and the `tools/ghidra/` workspace are
 local-only, read-only RE references (never committed).
 
-New sidecar formats and decoder fixes land in `tools/` from now on. The pipeline backlog
+New sidecar formats and decoder fixes land in `tools/`. The pipeline backlog
 (entity-model export, script/`.dlg` copies, use-icon atlas, NPC batch export +
 include-model resolution, sound-scheme/`vdata` copies, texlight merge, space fixes) is
 tracked as **PL1–PL7 in `docs/roadmap.md`**. Everything else the runtime needs is already
@@ -486,5 +476,4 @@ list are documented next to the code they describe:
 - `../tools/CLAUDE.md` — the VtMB input formats and their decoders.
 - The repo-root `CLAUDE.md` — orientation, the load-bearing rules, build & run.
 
-Map lifecycle design: `map-architecture.md` (its async-travel state machine and Slate console
-are design targets, not current code).
+Map lifecycle design: `map-architecture.md`.

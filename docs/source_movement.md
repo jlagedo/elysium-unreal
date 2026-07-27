@@ -32,12 +32,9 @@ engine seeds a fresh `config.cfg` from.
 ## Where the move runs
 
 `CGameMovement` is driven from `CPlayerMove::RunCommand` (`0x101874a0`), one call per
-`CUserCmd`, and that whole chain runs while the engine drains the client's `clc_move`
-message — **before** the server frame runs a single think. `PreThink`, the player's own
-think and `PostThink` all sit inside `RunCommand` around the move, and
-`gpGlobals->frametime`/`curtime` are rebound to the command's timing for its duration, so
-the move integrates on the command's clock rather than the frame's. Full chain, addresses
-and the ordering evidence: `game_runtime.md` §1.
+`CUserCmd`, while the engine drains the client's `clc_move` message — **before** the server
+frame runs a single think. The move integrates on the command's rebound `frametime`/`curtime`,
+not the frame's. Full chain, addresses and the ordering evidence: `game_runtime.md` §1.
 
 ## Frame timing — the host bound, and why there is no tick
 
@@ -69,16 +66,26 @@ the clamp is skipped.
 
 **There is no fixed tick, and no accumulator.** `Host_FilterTime` bounds a *variable*
 `host_frametime` and returns; nothing accumulates a residual or runs the game N times at a fixed
-interval. This closes the question from the other direction than the cvar sweep did, and it agrees
-with it: `game_runtime.md` § "Time model" pins VtMB to the pre-tick Source branch on the absence of
-`interval_per_tick` / `sv_tickrate` / `TICK_INTERVAL`, and the frame pacing confirms it. 66.7 Hz is
+interval. This agrees with `game_runtime.md` § "Time model", which pins VtMB to the pre-tick
+Source branch on the absence of `interval_per_tick` / `sv_tickrate` / `TICK_INTERVAL`. 66.7 Hz is
 *modern* Source's default tickrate and has no presence in this build.
 
-**The consequence for movement is real, not theoretical.** Because every `CGameMovement` formula
-integrates on that variable delta, retail's movement genuinely is frame-rate dependent:
-`AirAccelerate`'s `addspeed` clamp stops binding above ~117 fps, and the full-step gravity puts the
-jump apex at `25 − 100·dt` units rather than a flat 25. Reproducing VtMB faithfully means
-reproducing that dependence.
+**The consequence for movement, measured.** Because every `CGameMovement` formula integrates on
+that variable delta, some of retail's movement is frame-rate dependent — but **less of it than the
+shape of the code suggests**, and the jump is not among it:
+
+- **The jump apex is exact and rate-invariant.** The half-step gravity split plus the *additive*
+  jump impulse (below) form a velocity-Verlet integrator, which is exact for constant acceleration.
+  Driving the same command stream at 60 / 120 / 240 Hz gives an apex of **25.00 units at all
+  three** — `sv_jump_boost` on the nose. (An earlier reading of this doc predicted `25 − 100·dt`;
+  that is what a *full*-step gravity would give, and it is not what the engine does.)
+- **Air acceleration is the part that really does vary.** `AirAccelerate`'s `addspeed` clamp stops
+  binding above ~117 fps, so a strafe-jump's exit speed drifts with the frame rate — measured at
+  259.5 / 259.8 / 261.0 u/s across 60 / 120 / 240 Hz, about **0.6%** over a doubling-and-doubling
+  of the rate.
+
+So reproducing VtMB faithfully means reproducing a small residual air-control drift, not a
+wandering jump height. Measurements are `move.bat` + `tools/move_diff.py --hz 60 120 240`.
 
 *Provenance: `DumpFuncs funcs=2008ba30 depth=1` on `engine.dll`; the four constants read from
 `.rdata` directly.*
@@ -132,6 +139,19 @@ vfov = 2 * atan(tan(hfov/2) / (4/3))       // 75 -> 59.84
 **Jump velocity** = `sqrt(2 * sv_jump_boost * sv_gravity)` = `sqrt(2*25*800)` =
 **200 u/s**, scaled by a ground factor. `sv_jump_boost` is literally the apex
 height in units, since `v²/2g = 25`.
+
+**`CheckJumpButton` (`0x101226b0`) is additive, and that is load-bearing.** The decompile reads
+`v.z = impulse * groundFactor + v.z` — it *adds* to the existing vertical velocity rather than
+overwriting it. `FullWalkMove` has already run `StartGravity` by the time the jump is checked, so
+the launch velocity is `jumpSpeed − g·dt/2`: exactly the half-step offset the leapfrog integration
+wants, which is why the apex comes out at a flat 25 units at any frame rate. Overwriting instead
+discards that half-step and the apex becomes `25 + v₀·dt/2` — 26.67 units at 60 fps, and
+frame-rate dependent with it. The ground factor is the surface's own jump scale (`surfacedata`
++0x6c), 1.0 for the `default` prop every world surface resolves to; a moving ground entity's own
+velocity is added on top.
+
+`m_nOldButtons` is what stops a held jump from pogoing: the bit is set when the jump fires and
+cleared only when the button is released.
 
 ### Formulas (verified against the decompile)
 
@@ -249,8 +269,8 @@ mover itself and selected by the three accessors `GetPlayerMins` (`0x1011e310`),
 | observer | `+0x44` / `+0x50` | `-10 -10 -10` | `10 10 10` | — |
 
 So the ducked hull is the standing footprint at **half the height**, and the ducked eye sits at
-**30**, not the 28 that stock Source's `VEC_DUCK_VIEW` uses — a Troika value, and the reason it had
-to be read rather than assumed. The mins/maxs selector keys off `m_bDucking` (`player+0x1edd`),
+**30**, not the 28 that stock Source's `VEC_DUCK_VIEW` uses — a Troika value. The mins/maxs
+selector keys off `m_bDucking` (`player+0x1edd`),
 while the view-offset selector takes the ducked flag as an argument.
 
 The same constructor seeds `surfaceFriction` (`+0xa0`) to `1.0`, which is the value the game then
@@ -294,6 +314,7 @@ the rest are identified by their bodies):
 | `PlayerMove` | `0x101274a0` | the dispatcher; profile string `CGameMovement::PlayerMove` |
 | `CategorizePosition` | `0x1011e560` | ground + `surfaceFriction` |
 | `Duck` | `0x10126fd0` | → `FinishDuck` `0x10126cb0` / `FinishUnDuck` `0x101269e0`, `CanUnduck` `0x101265d0` |
+| `CheckJumpButton` | `0x101226b0` | **additive**, and latches `m_nOldButtons` |
 | `FullWalkMove` | `0x10121ce0` | the gravity split lives here |
 | `FullNoClipMove` | `0x10122190` | reads `sv_noclipspeed` / `sv_noclipaccelerate` |
 | `StartGravity` / `FinishGravity` | `0x1011fa80` / `0x10120f30` | the half-step pair |

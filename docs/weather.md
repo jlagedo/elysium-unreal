@@ -110,7 +110,7 @@ per map in the timers' own keys.
 `particles/` holds **1,594 `.txt`** definitions and **309 `.tga`** sprites. The format is
 engine-wide — the same files drive fire, muzzle flashes, discipline effects and the main-menu
 background — so this section describes a general VtMB system that weather happens to be the
-largest coherent consumer of. If the format is ever fully closed it earns its own doc.
+largest coherent consumer of.
 
 ### Envelope
 

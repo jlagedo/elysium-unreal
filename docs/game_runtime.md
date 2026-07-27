@@ -5,9 +5,9 @@ three-layer split (engine / game DLL / Python), what state the game keeps and wh
 it lives, the character sheet and RPG rules, the New Game → chargen → trial → tutorial
 sequence, and the dialogue/subtitle system.
 
-This is the **integrating overview**. The mechanics it references are documented in
-depth in the sibling docs — this one ties them together and adds the loop, the state
-model, the RPG data, and the opening sequence:
+This is the **integrating overview** — the mechanics it references live in the sibling
+docs; this one ties them together and adds the loop, the state model, the RPG data, and
+the opening sequence:
 
 - `docs/python_bridge.md` — the CPython 2.1 embedding, the datamap reflection API, the
   five call paths, `G`.
@@ -1008,10 +1008,10 @@ Consolidated from the four investigations; each gates a real decision.
 - Clan banes — enforcement path/stacking of the attribute caps, Humanity doubling, frenzy
   mods, feeding restrictions (named as trait-effects, enforced in code) — see "Trait effects"
   above for the group/operator layer, whose loader and operator enum RE25 settled. **What
-  stacks, and in what order, is still open.** RE24 adds one
-  piece of the addressing: the resolver a `"Trait"` name goes through is `CVStatRef`, so an effect
-  can also target a **ConVar** (`default_fov`, `vchar_skip_intro`, `vamplight_enabled`) or an
-  **item name** (`item_w_claws`, `item_w_fists`), not only a stat or an `Fx_*` flag.
+  stacks, and in what order, is still open.** RE24 adds one piece of the addressing:
+  `CVStatRef` (see "How a trait is addressed" above) can also target a **ConVar**
+  (`default_fov`, `vchar_skip_intro`, `vamplight_enabled`) or an **item name**
+  (`item_w_claws`, `item_w_fists`), not only a stat or an `Fx_*` flag.
 
 **Dialogue**
 - ~~Whether the NPC-line col-4 "action" slot is ever evaluated as a *condition*.~~ **Resolved (9.1,

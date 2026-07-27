@@ -177,11 +177,10 @@ is rebound to `skip` anyway (last bind wins).
 
 Conversation runs under its own client mode, `CClientModeDialog` (`client.dll`). Whether it
 cancels held movement buttons or merely ignores them is **not established** — the command
-strings near its RTTI descriptor turn out to be the ordinary ConCommand name pool
+strings near its RTTI descriptor are the ordinary ConCommand name pool
 (`centerview` at `0x10282b24` is referenced only by its own registration, `FUN_1018f5e0`), so
 string adjacency proves nothing here. Decompiling `CClientModeDialog`'s mode-enter/mode-exit
-vtable slots would settle it. It matters: walking into a dialogue trigger with a movement key
-held is a common case.
+vtable slots would settle it.
 
 ## Where bindings live — files and load order
 
@@ -411,8 +410,8 @@ disables the subsystem, `-nomouse` the mouse (`cl_mouseenable`).
 
 There is **no controller UI** — no options page, no `.res`, and `JOY1`–`JOY4` / `AUX1`–`AUX32`
 are absent from `kb_def.lst` and `kb_act.lst` in both retail and the patch. `valve.rc` execs a
-`joystick.cfg` that the game does not ship. Gamepad support in VtMB is, in practice, the raw
-cvar layer and nothing else.
+`joystick.cfg` that the game does not ship. Gamepad support in VtMB is the raw cvar layer and
+nothing else.
 
 ## Notes for Elysium-Unreal
 
@@ -420,9 +419,9 @@ Facts that constrain the rebuild, not decisions. The Unreal design they feed is
 **`input-architecture.md`** (build task: roadmap **10.6**; the remapping screen is **8.10** on
 **8.6**'s stack):
 
-- **The action set is the whitelist in `kb_act.lst`**, and the patch's version is the richer,
-  better-labelled one. It is the natural source for a remapping screen's action list — it is
-  already grouped, already labelled, and already the players' mental model.
+- **`kb_act.lst`'s whitelist**, in the patch's richer, better-labelled form, is the natural
+  source for a remapping screen's action list — already grouped, labelled, and the players'
+  mental model.
 - **Two bindings per action** (primary + Alternate) is the original's contract, and both the
   keyboard defaults and the mouse-wheel binds rely on it.
 - `+`/`-` button pairs map cleanly onto Unreal's pressed/released events; the one-key-owns-the-
@@ -436,7 +435,7 @@ Facts that constrain the rebuild, not decisions. The Unreal design they feed is
   that file as a **one-way projection** of the Enhanced Input key profile, not as the settings
   model.
 - Auto-aim (`sv_aim`) defaults to **off**.
-- Gamepad support has no original to reproduce — VtMB ships raw joystick cvars, no UI, no
-  default binds, and a `joystick.cfg` that does not exist. Anything here is new work under the
-  Presentation/Feel axes rather than a port; the device layer is the engine's `GameInputWindows`
-  plugin with authored PlayStation device configs (`input-architecture.md` § Gamepad).
+- Gamepad support has no original to reproduce (see "Joystick" above). Anything here is new
+  work under the Presentation/Feel axes rather than a port; the device layer is the engine's
+  `GameInputWindows` plugin with authored PlayStation device configs (`input-architecture.md` §
+  Gamepad).

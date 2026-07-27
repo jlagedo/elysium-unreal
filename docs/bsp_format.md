@@ -52,8 +52,9 @@ displacement), `surfaceFogVolumeID` uint16 @46, `styles[8]` @48, `day[8]` @56, `
 `day`/`night` are **dead**: `0x00` on every face of all 108 maps (where `styles` uses `0xFF` for
 an unused slot), and no `engine.dll` code reads offsets 56–71 — the FACES lump's three consumers
 are `Mod_LoadFaces`, the face-centroid builder, and `CMod_LoadDispInfo`. Lump 8 therefore holds
-one bake, keyed by `styles[8]` alone; the "two full bakes" reading bspsrc's field names suggest
-is retired. Evidence and the lighting analysis this feeds: `sky-ambience.md` → "K4 … (settled)".
+one bake, keyed by `styles[8]` alone; the "two full bakes" reading that bspsrc's field names
+suggest is retired. Evidence and the lighting analysis this feeds: `sky-ambience.md` → "K4 …
+(settled)".
 
 **Other lump-7-adjacent structs**, all fixed layouts: VERTEXES = `float[3]` (12 B). EDGES =
 `uint16[2]` (4 B). SURFEDGES = signed int32. TEXINFO = 72 B (`sAxis float[4]` @0, `tAxis float[4]`
@@ -93,7 +94,7 @@ float fadeMin, fadeMax; Vector lightingOrigin`. (`ch_hub_1` = 500 props / 124 mo
 ## `TOOLS/*` materials
 
 `toolsnodraw`, `toolsclip`, `toolstrigger`, `toolsskybox`, `toolshint`, `toolsareaportal`, … are
-invisible engine surfaces — their faces carry no visible geometry and are skipped.
+invisible engine surfaces — their faces are skipped.
 
 ## Cubemaps
 

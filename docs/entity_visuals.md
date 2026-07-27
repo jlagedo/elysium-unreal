@@ -17,8 +17,8 @@ output firing) is `docs/entity_io.md`; Python evaluation is `docs/python_bridge.
 
 ## 1. What VtMB places, entity-side
 
-Beyond the baked BSP geometry, a VtMB map carries a layer of entity-placed visuals the pipeline
-must resolve separately: `env_sprite` glow coronas and volumetric-light billboards at lamps/bulbs,
+Beyond the baked BSP geometry, a VtMB map carries entity-placed visuals the pipeline must resolve
+separately: `env_sprite` glow coronas and volumetric-light billboards at lamps/bulbs,
 `prop_dynamic`/`prop_physics` placed models (street lights, cop cars, …), `keyframe_rope`/
 `move_rope` catenary cables strung between poles/buildings, `env_particle`/`func_particle`/
 `params_particle`/`env_steam` emitters (steam, smoke, fire), and `game_sign`/`prop_sign` signage.
@@ -120,10 +120,8 @@ Two `env_sprite`-specific facts a renderer needs:
 - **StartOn filtering.** 135 of 1,251 sprites are StartOff (`spawnflags` bit0 clear) and must
   not draw on load; only entity I/O turns them on later. This is separate from `start_hidden`
   (0 sprites carry it).
-- **`rendermode` drives the blend, not just the tint.** `kRenderGlow` (3) sprites should fade
-  their alpha by the unoccluded fraction and hold roughly constant apparent size regardless of
-  distance; `kRenderTransAdd` (5) is plain world-scaled additive with no occlusion fade. Both
-  blend additive.
+- **`rendermode` drives the blend, not just the tint** — `kRenderGlow` (3) vs. `kRenderTransAdd`
+  (5), per §2.
 - Orientation: `parallel_upright` in the sprite's VMT constrains the billboard to the world
   Y-axis only; its absence means a full camera-facing (`vp_parallel`) billboard.
 - World size is `scale × textureSize` (Source inches → Unreal cm).
@@ -135,8 +133,8 @@ Two `env_sprite`-specific facts a renderer needs:
 562 catenary cables, strung between poles/buildings. Elysium-Unreal already builds these
 (roadmap 8.7): `write_ropes` emits a `<map>.ropes` per-segment sidecar
 carrying the RE'd rest length, and the runtime stands one Verlet `UCableComponent` per segment
-(no offline catenary sampling needed). The facts below are the RE reference that implementation
-was built from, and they generalize to any renderer.
+(no offline catenary sampling needed). The facts below are the RE reference, and they generalize
+to any renderer.
 
 Chain resolution: each node's `NextKey` → the `targetname` of the next node. `keyframe_rope` and
 `move_rope` construct the **same** class — stock Source **`CRopeKeyframe`** (`vampire.dll`
@@ -229,8 +227,8 @@ drawn at all.
 
 ## 7. `game_sign` / `prop_sign` — signage
 
-Not a world-geometry visual — both classes render a **full-screen VGUI window**, not world
-geometry: each carries a `definition_file` naming a `vdata/Signs/*.txt` KeyValues panel
+Both classes render a **full-screen VGUI window**, not world geometry: each carries a
+`definition_file` naming a `vdata/Signs/*.txt` KeyValues panel
 (`SignData` → `BackgroundImage` + `TextBlock`/`Label`, fonts from `resource/TrackerScheme.res`),
 opened by the `OpenWindow` input or a `+use` on the prop. `game_sign` (73 across the patch map
 set) is bodiless — the tutorial's `popup_*` help windows; `prop_sign` (100) is a world `.mdl`

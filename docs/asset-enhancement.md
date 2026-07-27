@@ -2,8 +2,7 @@
 
 **Remaster axis 2** (`remaster-direction.md`) — in scope, **scheduled at P10**, after the
 vertical slice plays: it is polish on a shipped look, not a blocker. Scaffolding already exists
-in `tools/` (see "What exists today"). This doc is the plan of record so the choice is made
-deliberately, not by drift.
+in `tools/` (see "What exists today").
 
 ## North star
 
@@ -14,9 +13,9 @@ code-driven passes while **preserving its art direction**. This is a *remaster* 
 enrich the shipped art), not a *remake* (re-author it) — the same stance the whole project
 takes (`remaster-direction.md`), applied to surfaces.
 
-(The **UI** is the one place with no faithful path to sit on: its 2004 craft is a hardware
-constraint rather than an art decision, so it is re-skinned outright rather than toggled —
-`remaster-direction.md` axis 1. Surfaces are not that case; the faithful set stays.)
+(The **UI** has no faithful path to sit on: its 2004 craft is a hardware constraint rather than
+an art decision, so it is re-skinned outright rather than toggled — `remaster-direction.md` axis
+1. Surfaces are not that case; the faithful set stays.)
 
 The layer is always a **toggle**, never a fork — the same A/B discipline as
 `elysium.BrushCollision` / `elysium.props` / `elysium.lights`. The faithful set stays the
@@ -67,21 +66,20 @@ most technically-correct enhancement**, and it dictates the order of every other
 5. **Metallic by hand-gated mask**, not inference. (Tier 1 — see the vocabulary below.)
 
 The whole PBR set is a **heuristic guess** — the source carries no roughness/metallic/normal
-ground truth. Every reputable workflow says the same thing: AI material generation is a great
-*starting point, never final*. So this is authored-by-recipe-plus-review, not a blind batch.
+ground truth. AI material generation is a starting point, never final (see Sources). This is
+authored-by-recipe-plus-review, not a blind batch.
 
 ## The VtMB material vocabulary (the anchor for Tier 1)
 
-Good news for a faithful remaster: VtMB is almost entirely **high-roughness dielectric** —
-concrete, grime, worn fabric, painted/rusted metal, wet asphalt, brick, skin. That narrow
-vocabulary *is* the synthesis recipe and the guard against the generic-upscaler failure mode
+VtMB is almost entirely **high-roughness dielectric** — concrete, grime, worn fabric,
+painted/rusted metal, wet asphalt, brick, skin. That narrow vocabulary *is* the synthesis
+recipe and the guard against the generic-upscaler failure mode
 ("everything becomes glossy plastic and chrome"):
 
 - **Bias roughness high.** Most surfaces are matte-to-satin. Wetness (VtMB loves wet streets)
   is the one lower-roughness cue, and it should read as *wet grime*, not showroom polish.
 - **Metallic ≈ 0 by default; gate the exceptions by hand-authored mask.** Genuinely metal
-  surfaces are a small, enumerable set. Never let an inference model decide metalness
-  globally — that is exactly what turns Santa Monica into a car showroom.
+  surfaces are a small, enumerable set. Never let an inference model decide metalness globally.
 - **Gentle normals.** Surface micro-relief, not embossed geometry. Height/parallax stays
   subtle; VtMB's forms live in the mesh, not the texture.
 - **Keep the grime.** Any pass that cleans, brightens, or evens-out a surface has failed the
@@ -89,8 +87,7 @@ vocabulary *is* the synthesis recipe and the guard against the generic-upscaler 
 
 ## What exists today (the seam is already half-built)
 
-The offline half already has the scaffolding — this track *formalizes and extends* it, it does
-not start from zero:
+The offline half already has the scaffolding this track *formalizes and extends*:
 
 - **`tools/upscale_bench.py`** — spandrel runner (ESRGAN / RealPLKSR / DAT / Compact / HAT /
   SPAN from one `.pth`/`.safetensors`). Already **alpha-aware** (splits RGB/alpha, upscales
@@ -132,8 +129,7 @@ just bind the extra maps and toggle the features on.
 ## Floor reality (the hard constraint)
 
 The perf floor and its VRAM budget are `CLAUDE.md` → "Target hardware" and
-`rendering-perf.md` → "Floor reality" — read those for the current numbers rather than
-duplicating them here, since they are re-measured independently of this doc. So enhancement is
+`rendering-perf.md` → "Floor reality" — read those for the current numbers. Enhancement is
 **budget-gated**, not free:
 
 - **Upscale factor is chosen against VRAM, not maxed.** 2× as the default; 4× reserved for
@@ -165,10 +161,10 @@ duplicating them here, since they are re-measured independently of this doc. So 
 
 ## Legal posture
 
-Unchanged and load-bearing: enhanced textures are **derivative works of the user's own game
-assets**, so they live under gitignored, regenerable `tools/out/` exactly like every other
-decoded intermediate. Nothing enhanced is ever committed or distributed. Bring-your-own-game
-holds (`CLAUDE.md` → "Bring-your-own-game").
+Load-bearing: enhanced textures are **derivative works of the user's own game assets**, so
+they live under gitignored, regenerable `tools/out/` exactly like every other decoded
+intermediate. Nothing enhanced is ever committed or distributed. Bring-your-own-game holds
+(`CLAUDE.md` → "Bring-your-own-game").
 
 ## Non-texture modernizations (pointer, not scope)
 

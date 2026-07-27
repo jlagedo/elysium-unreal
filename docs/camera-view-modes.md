@@ -306,8 +306,7 @@ ApplyScriptedBlend(&view->origin, &view->angles, &view->fov);
 | **Persistence** | `camera_prefs` | the choice is written back per weapon class and archived to `config.cfg` |
 
 **What it does not affect**: movement (the character still steers by view yaw — the camera is a
-view-space offset, nothing is reparented), the aim/attack origin, FOV, or input sensitivity. The
-player keeps authority over the view angles the whole time; the camera derives from them.
+view-space offset, nothing is reparented), the aim/attack origin, FOV, or input sensitivity.
 
 ---
 
@@ -359,7 +358,7 @@ Mirror VtMB's structure rather than Unreal's idioms:
   `Rotation = Lerp(ViewRotation, CameraRotation, SimpleSpline(w))`.
 
 `SimpleSpline` exists in Unreal as `FMath::SmoothStep`/`FMath::InterpEaseInOut`; `t²(3−2t)` is
-two lines and worth writing literally so it matches the decompiled constant.
+two lines, so write it literally to match the decompiled constant.
 
 ### Collision and damping
 
@@ -368,9 +367,9 @@ pawn, is the direct equivalent of `UTIL_TraceHull` (VtMB uses a *box* hull with 
 a sphere is the closer match to how it actually reads in motion, and is what `USpringArmComponent`
 uses too — record the substitution here, it is a feel delta).
 
-The damper is a Hooke spring with **two constants** — 4.0 free, 15.0 wall-clipped — which is the
-single most characteristic part of the VtMB camera and the reason the stock spring arm is not
-enough (below). Implement it explicitly; keep `cdamp_on 0` working as a bypass for A/B.
+The damper is a Hooke spring with **two constants** — 4.0 free, 15.0 wall-clipped — the reason the
+stock spring arm is not enough (below). Implement it explicitly; keep `cdamp_on 0` working as a
+bypass for A/B.
 
 ### Options considered and rejected
 
@@ -385,21 +384,20 @@ enough (below). Implement it explicitly; keep `cdamp_on 0` working as a bypass f
 There is no player mesh yet, so this is design intent for when one lands — **roadmap 8.11a** owns
 it, and the P8 skeletal path (8.2/8.5) supplies the machinery:
 
-- **Visibility**: `CAM_IsThirdPerson`'s "true throughout the blend" semantics matter — the mesh
-  must be registered and drawn from the first frame of the blend, not switched at the end. Drive
-  a MID scalar from the alpha rather than toggling `SetOwnerNoSee`; use `SetOwnerNoSee(true)`
-  only as a cull when the weight is exactly 0.
-- **The fade band** (`cam_fadeend` 18 → `cam_fadestart` 32 Source units) is a near-camera
-  dissolve, so it needs dithered or masked opacity on the character material, not translucency —
-  translucency would take the player mesh off the opaque path and out of Lumen's GI, which is
-  load-bearing here. The one state that quantises the alpha to 0/1 maps to a simple
-  `bDitherEnabled = false` branch.
-- **First Person Rendering** (UE 5.5+) is available to this project for free: its advanced
-  features require *Allow Static Lighting* to be **disabled**, which is already the case, and its
-  world-space-representation path needs VSM or ray-traced shadows, which is already the render
-  path. If a first-person weapon/hands mesh is ever added, `FirstPersonPrimitiveType = FirstPerson`
-  plus a `WorldSpaceRepresentation` twin gives correct HWRT reflections and VSM shadows without
-  a second render pass. It is not needed for the camera itself.
+- **Visibility**: draw the mesh from the first frame of the blend, not switched at the end
+  (`CAM_IsThirdPerson`'s "true throughout" behaviour, §2). Drive a MID scalar from the alpha
+  rather than toggling `SetOwnerNoSee`; use `SetOwnerNoSee(true)` only as a cull when the weight
+  is exactly 0.
+- **The fade band** (`cam_fadeend` → `cam_fadestart`) is a near-camera dissolve, so it needs
+  dithered or masked opacity on the character material, not translucency — translucency would
+  take the player mesh off the opaque path and out of Lumen's GI, which is load-bearing here. The
+  one state that quantises the alpha to 0/1 maps to a simple `bDitherEnabled = false` branch.
+- **First Person Rendering** (UE 5.5+) already qualifies: its advanced features require *Allow
+  Static Lighting* to be **disabled**, already the case, and its world-space-representation path
+  needs VSM or ray-traced shadows, already the render path. If a first-person weapon/hands mesh
+  is ever added, `FirstPersonPrimitiveType = FirstPerson` plus a `WorldSpaceRepresentation` twin
+  gives correct HWRT reflections and VSM shadows without a second render pass. It is not needed
+  for the camera itself.
 
 ### Units
 

@@ -19,12 +19,12 @@ the sign art → `out/signs/`) and `stealth.xls` (a design-source spreadsheet, n
 Counts: **465** files mirrored (`system/` 97, `items/` 244, `camerashots/` 66,
 `hackterminals/` 57, `precache/` 1); `signs/` 278 land in `out/signs/`.
 
-## How consumers were established
+## How consumers are established
 
 The authoritative consumer is the engine loader in `vampire.dll` — e.g. `DiceRolls.txt` is
 read by `FUN_101d92b0` (see `recovered/dice-system.md` / RE5), found by grepping the
-decompile for the filename/root-key string. The exact engine loader/schema for each is RE'd when
-its consumer is built, the way RE5 did for the dice tables.
+decompile for the filename/root-key string. The exact engine loader/schema for each is RE'd
+when its consumer is built.
 
 **Twelve of these families now have a runtime reader** — `stats`, `feats`, `rules` +
 `rules_tables`, `traiteffect` + `traiteffects000`, `clandoc000` + `npctemplate*`, `histories000`,

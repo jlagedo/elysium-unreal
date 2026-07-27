@@ -34,12 +34,12 @@ Related: `choreographed_scenes.md` (the `.vcd` scenes that schedule the lines an
 
 **The player is not in that cast.** All **59** `models/character/pc/**.mdl` carry
 `NumFlexDescs` 0, as do all **21** `models/hands/**.mdl` first-person viewmodels — so the 56
-clan bodies `clandoc000.txt` names (roadmap PL13, exported since) have no flexdescs, no
+clan bodies `clandoc000.txt` names (roadmap PL13) have no flexdescs, no
 controllers, no rules and no `StudioFlex` records at all. The PC's face is authored only in the
-NPC-model portraits VtMB shows elsewhere; on the body itself there is nothing to drive. This is
-the same shape as the eyeball finding below and has the same consequence for the rebuild: the
-lipsync and expression layers (12.3, 12.5) apply to NPCs, and any PC facial performance would be
-a remaster addition under `remaster-direction.md`'s rule, not a reproduction.
+NPC-model portraits VtMB shows elsewhere; on the body itself there is nothing to drive. The
+eyeball finding below is the same shape and carries the same consequence: the lipsync and
+expression layers (12.3, 12.5) apply to NPCs, and any PC facial performance would be a remaster
+addition under `remaster-direction.md`'s rule, not a reproduction.
 
 ## The studiohdr facial block
 
@@ -154,7 +154,7 @@ phoneme track.
 
 ## `StudioModel` — two corrections the flex walk forced
 
-Both are properties of the *containing* struct, and both matter to `mdl_v2531.md`:
+Both are properties of the *containing* struct and belong in `mdl_v2531.md`:
 
 - **`StudioModel` is 224 bytes, not ~160.** Measured off every multi-model bodypart in the
   install (`mingxiao`, `cashbox`, `flashlight`, `jewelery_box`, `doorknob_round_brass`,
@@ -426,9 +426,8 @@ code, so a layout fixed for one is fixed for both.
 ### The morph target is a flex *record*, not a flexdesc
 
 One target per distinct `(flexdesc, target ramp)` over the whole model. A flexdesc can carry
-two flexes on one mesh under different ramps — that is exactly how the eyelid pairs hinge one
-flexdesc into a lower and an upper half around a sentinel value — and the ramp decides which
-half a given weight drives, so they are two morphs. The shipped 65-flexdesc rig yields **53**
+two flexes on one mesh under different ramps — the eyelid hinge above — and the ramp decides
+which half a given weight drives, so they are two morphs. The shipped 65-flexdesc rig yields **53**
 of them: 45 flexdescs that a mesh actually deforms, plus eight second ramps.
 
 Names are the flexdesc's FACS name, with a `#k` suffix on the second and later ramp of the
@@ -492,9 +491,8 @@ set by its dialogue clips (`heather` +2.4 %) and the whole of a glb that has non
 - The controller → rule → flexdesc evaluation has to run at load time, not as a flat morph
   list: 44 controllers drive 65 morphs through 60 RPN rules, and the rules are where the
   eyelid interaction lives.
-- There is no eyeball data to consume. Eyes are the eight `eyelid` controllers plus the
-  16 eyelid flexdescs; gaze must come from bones or from a deliberate remaster addition
-  under `remaster-direction.md`'s rule.
+- There is no eyeball data to consume (eyeballs section above); gaze must come from bones
+  or from a deliberate remaster addition under `remaster-direction.md`'s rule.
 - Lip sync is a three-file join per line — `.lip` for timing, `expressions/<stem>_phonemes`
   for the weights, `mstudiomouth_t` for the amplitude jaw — with the phoneme *string* as the
   key. All three are on disk: `out/lip/`, `out/expressions/`, and `mouths` in the facial

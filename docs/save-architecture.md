@@ -125,8 +125,7 @@ ignition. Per-entity state outside the field walk (origin, `bDead`/`bHidden`, `N
 `ScriptUnhide` think, the remaining output fire counts) is captured beside the fields and diffed the
 same way.
 
-The cost is one `FElysiumEntityState` per entity in memory. The payoff is the measured one: on
-`sp_tutorial_1` the freeze records 58 of 1,869 entities.
+The cost is one `FElysiumEntityState` per entity in memory. The payoff is measured in §11.
 
 Three things do *not* fit the field walk and get explicit hooks:
 
@@ -296,8 +295,7 @@ the project:
 - **Decals as save state.** VtMB persists bullet holes and blood — 212 in a well-played Santa Monica
   hub — and nothing models them yet. The `Maps` block reserves the slot; the system that fills it is
   the combat-impact task (10.7).
-- **`G.morgue`.** Nothing writes or reads it yet (§7); when a system does, it is a `G` key and needs
-  no block change.
+- **`G.morgue`.** Nothing writes or reads it yet (§7).
 - **Snapshot size — measured, and not a problem.** A freeze of a just-loaded map records 58 of 1,869
   entities on `sp_tutorial_1` (1.7 KB compressed), 13 of 469 on `sm_pawnshop_1` (0.6 KB) and 67 of
   2,598 on `sm_hub_1` (2.0 KB). A played map records more, but the baseline diff keeps the growth

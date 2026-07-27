@@ -29,8 +29,8 @@ per solid:  int size;                                       // bytes of surface 
 after every solid:  a plain-text keyvalues block
 ```
 
-`byte_size` re-encoding the solid size is the integrity check worth asserting — it caught every
-mis-split during development, and it holds on all 2,854 files. The `magic` is decorative: it
+`byte_size` re-encoding the solid size is the integrity check worth asserting: it holds on all
+2,854 files with zero exceptions. The `magic` is decorative: it
 reads `IVPS` on scenery and is **zeroed on the 42 ragdoll files**, which are otherwise the same
 layout (all 42 decode, 100 hulls, every one convex).
 

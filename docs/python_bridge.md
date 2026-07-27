@@ -47,7 +47,7 @@ no interface is passed anywhere. All binding happens in `vampire.dll`.
 | **Console / cfg** | `cfg/*.cfg` aliases ↔ `__main__.ccmd` | the Basic/Plus switch + the movement aliases | console commands ↔ Python |
 | *(compiled duplicates)* | `python/*.pyc` inside the VPKs | 24 | **dead — never loaded** |
 
-**The console surface is bidirectional**, which is easy to miss. Scripts run console commands by
+**The console surface is bidirectional.** Scripts run console commands by
 *assigning an attribute* on the console object — `c = __main__.ccmd; c.patchtype = ""` executes the
 alias `patchtype` — and a command the console cannot resolve **falls through to Python**. So a
 `.cfg` alias can name a Python function and a Python function can trigger a `.cfg` alias.
@@ -179,8 +179,8 @@ unifies attribute reads with input dispatch.
 VtMB has **no static `DEFINE_FIELD` arrays**; each class's `datamap_t` is populated at init by a
 per-class **builder** that writes 44-byte `typedescription_t` records into `.data`. The
 `CBaseEntity` builder is **`FUN_100a22f0`**; every record carries the internal name (`m_spawnflags`),
-the external/Hammer name (`spawnflags`), `fieldType`, `fieldOffset`, the `flags` byte (bit `0x8` =
-keyable/writable), and — for inputs — the `inputFunc`. Reading a datamap out of the binary therefore
+the external/Hammer name (`spawnflags`), `fieldType`, `fieldOffset`, the `flags` byte (keyable
+bit, see the write path above), and — for inputs — the `inputFunc`. Reading a datamap out of the binary therefore
 means decompiling these builders, not walking a static table.
 
 The base `CBaseEntity` contract every entity inherits (from `FUN_100a22f0`):
@@ -455,7 +455,7 @@ a branch, not an error, so a rebuild that cannot answer the probe silently chang
 
 The Unreal answer is a filesystem namespace scoped to the interpreter rather than a redirected
 `getcwd` — reads served from the content mirror, writes into a `Saved/` overlay. Why the process
-cwd is not available, and what the overlay buys:, and the design comment
+cwd is not available, and what the overlay buys, is in the design comment
 on `Source/ElysiumUE/Private/Scripting/ElysiumScriptFS.h`.
 
 ## Implications for the rebuild
@@ -479,7 +479,7 @@ hand-fixed fork of Troika's source only ever matches one install, and 21 of 26 s
 scripts already differ between the retail and patch trees. Any adaptation must be a
 deterministic transform re-run over the user's own files.
 
-**IronPython facts** (should the question return): IronPython **2.7 is Python 2.7** and
+**IronPython facts:** IronPython **2.7 is Python 2.7** and
 would accept VtMB's 2.1 syntax nearly as-is, but is dormant and .NET-Framework-era.
 IronPython **3** is maintained and targets **.NET 8/10** but is Python 3.4
 and needs a 2to3 pass; it maps `int` to `BigInteger`, and the DLR's runtime codegen rules

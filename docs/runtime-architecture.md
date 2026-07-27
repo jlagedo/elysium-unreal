@@ -38,7 +38,7 @@ Every piece of state has exactly one home, and the home is a lifetime, not a cla
 | **Map epoch** | `OpenLevel` tears the world down | `AElysiumMapActor` → `FElysiumEntityWorld` | entities, bodies, the event queue, the light rig, sound schemes, the texture cache |
 | **Frame** | next tick | nobody — recomputed | the user command, the view state, the look cursor, camera weights |
 
-Two rules fall out and are worth stating as prohibitions:
+Two rules fall out, stated as prohibitions:
 
 - **A map-epoch object never holds session state.** The player's blood pool does not live on
   `FElysiumPlayer` alone; the entity is *hydrated from* the session record at map build and
@@ -48,8 +48,8 @@ Two rules fall out and are worth stating as prohibitions:
   `UElysiumNpcAnimSubsystem` and the CPython VM survive New Game; nothing about a run may accumulate
   in them. Quit to menu clears the session record and nothing else.
 
-The session record is also the **entire** save payload's mutable half (`save-architecture.md`), which
-is what makes save/load mechanical rather than an archaeology exercise.
+The session record is also the **entire** save payload's mutable half (`save-architecture.md`) —
+save/load is mechanical, not an archaeology exercise.
 
 ## 2. The object graph
 
@@ -167,10 +167,10 @@ Engine pause and dilation are per-world state and the clock is not, which is wha
 is for — the map actor calls it from `BeginPlay`. Verbs: `elysium.timescale`, `elysium.pause`,
 `elysium.step`.
 
-- **Pause is one call.** Today the menu does not pause anything; the substrate keeps running behind
-  it (which the menu backdrop *wants* — implied by, decided as
-  call E in cont. 4 — and the pause menu does not). The difference is a property of the app state (§10), not of the menu widget: `FrontEnd` runs
-  the world unpaused as a backdrop, `Paused` holds it. Engine pause freezes actor ticks, physics and
+- **Pause is one call.** The menu does not pause anything; the substrate keeps running behind it,
+  which the menu backdrop wants and the pause menu does not (owner call). The difference is a
+  property of the app state (§10), not of the menu widget: `FrontEnd` runs the world unpaused as a
+  backdrop, `Paused` holds it. Engine pause freezes actor ticks, physics and
   animation; the clock hold freezes thinks, the queue, movers and `ScheduleTask`. Both are needed —
   either alone leaves half the world moving.
 - **Time scale is one call.** VtMB's third-person blend is explicitly scaled by the player's time
@@ -222,8 +222,6 @@ struct FElysiumPlayerRecord
     FElysiumSheet     Sheet;        // attributes / abilities / disciplines, base + current
     int32             Money = 0;
     int32             Humanity = 7, BloodPool = 10, Masquerade = 0;
-    // health is NOT here — m_iHealth is a Save-flagged entity field on FElysiumCombatCharacter,
-    // saved by the chain walk (save-architecture.md §4), which is VtMB's own placement
     int32             Health = 0, MaxHealth = 0;  // NOT a second home: m_iHealth is a Save-flagged
                                    // entity field on the chain (save-architecture.md §4, VtMB's own
                                    // placement). This copy exists only to carry the value across a
@@ -388,7 +386,7 @@ question on our side; it lands with the contexts at 10.6.
 
 CommonUI brings its own input writer — `UCommonUIActionRouterBase` applies an `FUIInputConfig` per
 activated widget, a *fourth* mode owner living inside the engine. **The scope stack is the sole
-authority** (call F): Elysium's activatable widgets return no
+authority** (owner call): Elysium's activatable widgets return no
 desired input config (`GetDesiredInputConfig()` → unset) so the action router never writes mode or
 cursor, and `UElysiumUISubsystem` pushes/pops scopes instead.
 
@@ -578,10 +576,6 @@ rather than a prerequisite.
 
 ## 11. The presentation seam *(built — 11.8)*
 
-`AElysiumHUD` used to poll the entity world every frame for the reticle icon, the screen fade, the
-open sign and the open dialogue, and gate all of it on `IsMenuUp()`. Each new screen added another
-poll and another gate, and none of it was testable without a world.
-
 One publisher, one struct, one set of events (**S8**):
 
 ```cpp
@@ -610,13 +604,11 @@ data longer keeps a copy; the map epoch they point into ends at travel. Player *
 other way through the command bus and the publisher's two routing calls, never by a widget calling
 into the substrate.
 
-**The gating is one rule**, `App == Playing && !bMenuOpen`, and it is a rule about *publishing*
-rather than about drawing. Both writers are asked, because `elysium.menu` raises a screen without
-moving the app state. That is what fixes the case the polled HUD got wrong: its tick gate skipped
-the dialogue *reconcile* rather than taking an open box down, so a conversation already on screen
-when the pause menu opened drew through it — now it is republished as closed, the box comes down,
-and closing the screen rebuilds it from the next publish. The conversation itself is untouched in
-the entity world; only its UI is withheld.
+**The gating is one rule**, `App == Playing && !bMenuOpen`, over *publishing* rather than drawing.
+Both writers are asked, because `elysium.menu` raises a screen without moving the app state: a
+conversation already on screen when the pause menu opens is republished as closed, the box comes
+down, and closing the screen rebuilds it from the next publish. The conversation itself is
+untouched in the entity world; only its UI is withheld.
 
 The struct and the three rules over it (`ShowsPlayerSurface`, `ResolveReticle`,
 `ReconcileDialogue`) are plain C++ in `Public/ElysiumViewState.h`, like `ElysiumAppState.h` and
@@ -654,7 +646,7 @@ predicates over `G`, quests, entity fields and player pose — the exact surface
 `shot` is `ElysiumScreenshot::Request` against the 2.9 baseline. Nothing new is invented; the tier is
 a driver over seams that exist.
 
-What it gates, and why it is worth it:
+What it gates:
 
 - **P9's slice acceptance** ("`sp_tutorial_1` is completable as in retail") stops being a manual
   play-through and becomes a CI run.

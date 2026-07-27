@@ -2,11 +2,11 @@
 
 Lump 15 is VtMB's compiled light-*source* set: every point, spot, sun, sky-ambient, and
 emit-surface (texlight) the artists placed, including texlights and skyambient that no entity
-carries. It is the complete authored source set.
+carries.
 
-**It is not what the original engine rendered the world from.** VtMB's world surfaces are lit
-by the baked lightmaps (lump 8) alone; at runtime lump 15 is read only by the model light
-cache, which lights dynamic models and static props. Decompiled in RE-A3 —
+**It is not what the original engine rendered the world from.** At runtime lump 15 is read only
+by the model light cache, which lights dynamic models and static props; world surfaces are lit
+by the baked lightmaps in lump 8 alone (below). Decompiled in RE-A3 —
 `docs/sky-ambience.md` → "K3 / K5". Driving a real-time light set from lump 15 is therefore a
 reconstruction of the authored look, not a reproduction of a path the game had.
 
@@ -47,8 +47,7 @@ derivation, the `vertexlitgeneric` counterpart, and the whole-game authoring sur
 
 ## Baked lighting (lump 8)
 
-VtMB itself is DX8/LDR with no post-processing; its world surfaces are lit entirely by the
-baked lightmaps in lump 8 (the LIGHTING lump), never by lump 15 at runtime. Lump 8 is present
-in every BSP but is not decoded for runtime rendering. It **is** decoded offline for lighting
+VtMB itself is DX8/LDR with no post-processing. Lump 8 (the LIGHTING lump) is present in every
+BSP but is not decoded for runtime rendering; it **is** decoded offline for lighting
 analysis/calibration — `tools/lightmap.py`, `tools/probe_light_calibration.py`; see
 `docs/rendering-perf.md`.

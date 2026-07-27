@@ -1,9 +1,8 @@
 # The `.uasset` bake: the map's look as native Unreal content
 
-**Adopted** — (cont. 6), roadmap 0.9; the work is on `main`. This
-document is the spike record that earned that call, kept as the pipeline's reference: the split,
-the six stages, and the engine facts it pinned down. It reads as of `sp_tutorial_1`, the map it
-was measured on; the architecture now carries every exported map.
+**Adopted** — (cont. 6), roadmap 0.9. This document is the pipeline's reference: the split, the
+six stages, and the engine facts pinned down, measured on `sp_tutorial_1`; the architecture now
+carries every exported map.
 
 The Lumen surface-cache spike (its engine facts now in `rendering-perf.md`) ended on a negative result: runtime-built
 meshes can be given card representations, but hand-fitting them offline into a `.cards` sidecar
@@ -13,9 +12,7 @@ surfel cards, Nanite, distance fields, real LODs, BC7/BC5 compression.
 
 This spike stops fighting that wall. `sp_tutorial_1` is decoded once, offline, into real `.uasset`
 content and a real `.umap`, and **the game runs on it**: `play.bat` opens the baked level and every
-system the project has runs against it. There are no A/B flags. Measuring what the old
-build-everything-at-map-load rule cost is what retired it; the charter docs now describe the
-architecture below.
+system the project has runs against it. There are no A/B flags.
 
 ## The split
 
@@ -99,7 +96,7 @@ loaded sp_tutorial_1 in 2.50s
 **Lumen surface-cache coverage is total and free.** `r.Lumen.Visualize.CardPlacement 1` shows fitted
 cards on every wall, floor, prop and ornament. This is the entire `.cards` sidecar from the previous
 spike — the offline surfel fit, the content hashing, the `-ElysiumCards` harness — replaced by the
-DDC doing its normal job. That harness is deleted on this branch.
+DDC doing its normal job. That harness is deleted.
 
 **The sky finally lights the world.** The sky light was `SLS_SpecifiedCubemap` with *no cubemap*,
 which resolves to a flat constant ambient — unshadowed fill reaching every interior through solid
@@ -113,8 +110,8 @@ sky."*
 bounce than the runtime path ever had, and the light rig's constants (`PointSpotScale 0.003`,
 `MaxBrightness 8.0`) were calibrated against a scene with almost no bounce. That is why the Lights
 Cog window also owns the sky and fog: how much the sky contributes and how much the per-source rig
-must carry is one decision, not two. The recalibration adoption owed was paid by the sky + ambience
-rework (`sky-ambience.md`).
+must carry is one decision, not two. The sky + ambience rework (`sky-ambience.md`) carries the
+recalibration this required.
 
 **Nanite costs nothing and buys nothing here.** Expected at ~30k world triangles. Its value is not
 throughput; it is that the ISM/Lumen question the previous spike could not settle stops mattering.
@@ -243,7 +240,7 @@ receives them normally.
 ## Gaps
 
 - **Sprites** (96) are not placed. Decals and ropes are.
-- **Post-process**: no `.cube` colour-grade LUT. Note the runtime path does not grade either — its
+- **Post-process**: no `.cube` colour-grade LUT. The runtime path does not grade either — its
   LUT block was commented out with `// TEMP: disabled for a test` and never restored. Deliberately
   left off (owner call) until the sky/ambient recalibration settles.
 - **Volumetric fog** is enabled on the baked height fog, but only maps whose `.env` turns fog on get
@@ -267,4 +264,4 @@ play.bat sp_tutorial_1                       # the game, on the baked level
 
 Requires the `GeometryScripting` and `ElysiumBaked` plugins (both enabled in the `.uproject`) and an
 export of the map under `tools/out/`. A map with no bake is refused by `Travel` with the command to
-run. Note the running game holds the `.umap` open — quit before re-baking the `level` stage.
+run. The running game holds the `.umap` open — quit before re-baking the `level` stage.

@@ -36,11 +36,11 @@ VtMB draws world surfaces with the DX8 `LightmappedGeneric` techniques, enumerat
 (technique dispatch).
 
 The combine is a **modulate-2×** (overbright): `finalColor = baseTexture × lightmap
-× 2`. The `× 2` is the `mat_overbright` factor, and VtMB states it in its own words:
-the game ships its DX8 shader assembly as **data**, so
+× 2`. The `× 2` is the `mat_overbright` factor: the game ships its DX8 shader
+assembly as **data**, so
 `materials/dxshaders/lightmappedgeneric.psh` reads
 `mul r0, t0, v0` / `mul r0.rgb, t1, r0` / `mul_x2 r0.rgb, c0, r0   ; * 2 *
-(overbrightFactor/2)` — base × modulation, fold in the lightmap, ×2. The factor is
+(overbrightFactor/2)`. The factor is
 **pinned**, not merely defaulted: `UpdateMaterialSystemConfig` (`engine.dll`
 `0x200718d0`) accepts only `1.0` or `2.0` from `mat_overbright` and rewrites anything
 else — and any hardware reporting no overbright support — back to `2.0`. The
@@ -50,9 +50,7 @@ the framebuffer at exactly its texel value (`docs/sky-ambience.md` → "K7"). On
 sampler** (that is a DX9 sampler state), so the base texture is sampled **raw /
 gamma-encoded**, multiplied by the gamma-encoded lightmap texel, ×2, **clamped at
 255**, and written to a **gamma-space framebuffer**. The entire diffuse combine
-happens in gamma space; the gamma ramp is applied only at present. That
-gamma-space-multiply-then-hard-clip is what gives the game its grounded, "real" look —
-there is no tonemapper reshaping the midtones and no bloom smearing the highlights.
+happens in gamma space; the gamma ramp is applied only at present.
 
 ### The ConVar defaults (read from `engine.dll`)
 
@@ -74,4 +72,4 @@ ramp per user and are **not** part of the scene render.
 
 SDK cross-reference (`gameui/OptionsSubVideo.cpp`): the `mat_monitorgamma` slider
 ranges 1.6–2.6; HDR/color-correction combos are gated on `mat_dxlevel.GetInt() >= 80`
-/ `>= 90`. Consistent with the DX8/LDR-only reading above.
+/ `>= 90`.

@@ -9,6 +9,7 @@ class AElysiumMapActor;
 class FElysiumProfileRun;
 class FElysiumProbeRun;
 class FElysiumShotRun;
+class FElysiumMoveRun;
 
 // The only owner of VtMB-map lifecycle. Map change is UE5 hard travel (roadmap 10.8): Travel
 // stows the target map + landmark in this GI-scoped state and OpenLevels the map's own baked
@@ -151,4 +152,7 @@ private:
 	// Headless screenshot-regression harness (P2.9), created only under -ElysiumShots.
 	TPimplPtr<FElysiumShotRun> ShotRun;
 	TPimplPtr<FElysiumProbeRun> ProbeRun;
+
+	// Headless movement-regression harness (4.7), created only under -ElysiumMove.
+	TPimplPtr<FElysiumMoveRun> MoveRun;
 };

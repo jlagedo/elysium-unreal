@@ -44,8 +44,7 @@ totals row is load-bearing. `encode_like(template_tth, img)` clones a shipped te
 flags and mip policy — BGR888 round-trips bit-exact, DXT5 within a re-encode.
 
 This writer exists only for RE probes that need the *original game* to draw an authored image
-(e.g. the sky-orientation probes in `sky-ambience.md`) — VtMB has no loose `.vtf` path, and the
-writer produces nothing the runtime consumes.
+(e.g. the sky-orientation probes in `sky-ambience.md`); it produces nothing the runtime consumes.
 
 ## Cubemaps
 
@@ -65,7 +64,7 @@ lowercased), `selfillum`, `translucent`, `alphatest`. Shader `"patch"` follows o
 Material resolution: material name → `materials/<name>.vmt` → `$basetexture` →
 `materials/<basetexture>.tth`/`.ttz`.
 
-**What a VMT's shader actually does is shipped as data, not compiled into a binary.**
+**What a VMT's shader does is shipped as data, not compiled into a binary.**
 `materials/dxshaders/*.psh` are readable **ps.1.1 assembly source** with Valve's own comments
 intact, and `shaders/vsh/*.vcs` / `shaders/psh/*.vcs` are the compiled combos (a small offset
 header, then one DX8 bytecode program per static combo, each ending `ff ff 00 00`). Both resolve

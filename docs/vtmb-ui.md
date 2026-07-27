@@ -1,4 +1,4 @@
-# VtMB's UI — what the original actually is
+# VtMB's UI — what the original is
 
 Engine-neutral facts about VtMB's user interface: which code owns which screen, what data
 drives it, where the art lives, and the coordinate model it is authored in. This is the
@@ -26,8 +26,8 @@ headless workspace: `tools/ghidra/README.md`.
 | **`client.dll`** — VtMB's own C++ UI (`CVMainMenu`, `CHud*`, `CharEditPanel`, `CSignUI`, …) | the main + pause menu, the whole in-game HUD, the character sheet, quest log, barter, maps, sign panels | `Resource/VampireScheme.res` |
 
 The menu the player sees is **client.dll's**. `GameUI.dll`'s `CGameMenu` is Source boilerplate
-that VtMB links but does not present — which matters because its geometry (west alignment, a
-`(6,0)` text inset, `Vamp_MainFont@44`) has been mistaken for the shipped menu's.
+that VtMB links but does not present — its geometry (west alignment, a `(6,0)` text inset,
+`Vamp_MainFont@44`) has been mistaken for the shipped menu's.
 
 **Both schemes are loaded.** They are not alternatives:
 
@@ -185,11 +185,10 @@ VtMB ships **28 bitmap `.fnt` families** (`materials/fonts/<face>_<size>_<weight
 plus `-pageN` atlases; glyphs live in the atlas alpha). Decoder: `tools/fnt.py`. Face inventory
 and metrics: `m0_menu_build.md` §3.
 
-The load-bearing fact for the re-skin is not the atlases but what they are drawn as: **every
-label in the game is small-caps with wide tracking**, and body copy drops to a plain sans. That
-is an authored art decision, not a hardware constraint, so it survives into the remaster even
-though the atlases do not. The 640×480-tier font aliasing does not
-survive — vector type scales continuously.
+What matters for the re-skin is not the atlases but what they are drawn as: **every label in the
+game is small-caps with wide tracking**, and body copy drops to a plain sans — an authored art
+decision, not a hardware constraint, so it survives into the remaster even though the atlases do
+not. The 640×480-tier font aliasing does not survive — vector type scales continuously.
 
 ---
 
@@ -215,8 +214,7 @@ out/ui/
 
 ## 6. Corrections to `m0_menu_build.md`
 
-That doc is the `GameUI.dll` decompile reference. Four of its claims describe
-the menu that does not ship; they are superseded here:
+Four of its claims describe the menu that does not ship; they are superseded here:
 
 | `m0_menu_build.md` | Corrected |
 |---|---|

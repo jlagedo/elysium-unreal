@@ -6,13 +6,12 @@ level, adopts its actors, and builds everything the bake cannot hold — brush c
 entity substrate, entity-driven bodies, the sky cubemap — from the pipeline's on-disk intermediates,
 with no coordinate conversion.
 
-**This file is an orientation map: what exists and where, not how it behaves.** The design —
-lifetimes, the frame, the object graph, ownership rationale — belongs to `docs/runtime-architecture.md`
-(the spine), `docs/engine-core.md` (entity object model), `docs/save-architecture.md` (persistence),
+**This file maps what exists and where, not how it behaves.** Design — lifetimes, the frame, the
+object graph, ownership rationale — belongs to `docs/runtime-architecture.md` (the spine),
+`docs/engine-core.md` (entity object model), `docs/save-architecture.md` (persistence),
 `docs/camera-view-modes.md`, `docs/ui-architecture.md`, `docs/input-architecture.md`,
-`docs/python_bridge.md`, `docs/debug-tooling.md`, `docs/map-architecture.md`. Per-task status is
-`docs/roadmap.md`. **Read the source for current behaviour; don't restate it here** — the
-exception is a hard-won gotcha (below), which a source read would not reliably surface.
+`docs/python_bridge.md`, `docs/debug-tooling.md`, `docs/map-architecture.md`. Per-task status:
+`docs/roadmap.md`. Gotchas below are the one exception.
 
 ## Module
 
@@ -28,10 +27,9 @@ UE 5.8. Module `ElysiumUE` (Runtime, Default loading phase).
 
 ## Source layout
 
-`Private/` is subfoldered **by layer**, and the folder a file sits in states which layer it belongs
-to. A private header is included by its layer path (`#include "Visual/ElysiumLightRig.h"`), so a
-cross-layer dependency is visible at the top of the file. `Public/` stays flat — it is the module's
-API surface, not a layering.
+`Private/` is subfoldered **by layer**. A private header is included by its layer path
+(`#include "Visual/ElysiumLightRig.h"`), so a cross-layer dependency is visible at the top of the
+file. `Public/` stays flat — the module's API surface, not a layering.
 
 | Folder | Layer |
 |---|---|
@@ -127,6 +125,12 @@ ones (`_Status`, `_Maps`, `_Lights`, `_Entities`, `_Inspector`, `_EventQueue`, `
 `ElysiumPick.{h,cpp}` is click-selection; `FElysiumGizmoLayer` the retained gizmo ISM.
 `UElysiumMcpSubsystem` is Layer 3, reached through `tools/mcp_proxy.py`. Design:
 `docs/debug-tooling.md`.
+
+Headless self-driving harnesses, all armed from `UElysiumMapSubsystem::Initialize` on a
+command-line flag and all exiting when done: `FElysiumProfileRun` (`-ElysiumProfile`),
+`FElysiumShotRun` (`-ElysiumShots`), `FElysiumProbeRun` (`-ElysiumProbe`), `FElysiumMoveRun`
+(`-ElysiumMove`, courses in `ElysiumMoveCourses.h`, driven by `move.bat`, compared by
+`tools/move_diff.py`).
 
 Automation tests live in `Private/Tests/`: `ElysiumSubstrateTests.cpp` (content-free, `-nullrhi`)
 and `ElysiumContentTests.cpp` (parses real exports, self-skips when `tools/out` is empty).

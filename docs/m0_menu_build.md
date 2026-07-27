@@ -10,14 +10,13 @@
 > **Reference, not a port target. Elysium-Unreal does not port VGUI.** The direction is
 > *remaster* (`docs/remaster-direction.md` axis 1): VtMB's screen **structure** — inventory,
 > panel anatomy, reading order, palette, iconography, strings — is kept and re-skinned on a
-> modern resolution-independent Slate/UMG stack with vector type (roadmap **8.6**). There is
-> no classic UI mode, no 640×480 scale box, and no runtime `.fnt` bitmap atlas.
+> modern resolution-independent Slate/UMG stack with vector type (roadmap **8.6**). No classic
+> UI mode, no 640×480 scale box, no runtime `.fnt` bitmap atlas.
 >
-> What this doc is **for**, then: the authoritative record of *what the original UI contains and
-> why* — the `GameUI.dll` decompile findings (§7), the source-data inventory (§2), the scheme
-> and `.res` semantics, the font roles and their metrics, the particle background. That is the
-> design intent every re-skinned screen is checked against, and the spec `menu_extract.py`
-> (PL8) extracts to.
+> What this doc is for: the record of what the original UI contains and why — the `GameUI.dll`
+> decompile findings (§7), the source-data inventory (§2), the scheme and `.res` semantics, the
+> font roles and metrics, the particle background. The design intent every re-skinned screen is
+> checked against, and what `menu_extract.py` (PL8) extracts to.
 
 **Goal:** rebuild the VtMB main menu + in-game pause menu as a faithful port of the
 original Valve **VGUI2** UI — real fonts, real scheme, real `.res` layouts, real 3D
@@ -25,16 +24,14 @@ particle scene — not a hand-composited look-alike. Actions may be stubbed
 (settings/load/save unimplemented); the target is that **look, structure, and
 behavior** are exact. Current state against that target is the ledger in §0.
 
-This document is self-contained: it captures the full source exploration + the
-`GameUI.dll` decompile results, and specifies what to build. Companion: the overall
-plan is `docs/rebuild-strategy.md` (this is the drill-down for its M0 milestone).
+Companion: `docs/rebuild-strategy.md` (this is the drill-down for its M0 milestone).
 Decompile tooling + dumps live under `tools/ghidra/` (`README.md`).
 
 **Bring-your-own:** every byte below comes from the user's own install. The pipeline
 (`tools/menu_extract.py`) extracts to `game/content/ui/` at build time; nothing
 game-sourced is committed. The repo keeps Elysium branding.
 
-**Locked decisions (2026-07-16):** runtime `.fnt` fonts · a general `.res`→`Control`
+**Locked:** runtime `.fnt` fonts · a general `.res`→`Control`
 loader rendering every dialog (inert where unbacked) · geometry informed by a
 `GameUI.dll` decompile · VtMB's VGUI logical coordinate space (proportional).
 
@@ -115,14 +112,13 @@ Resolution-tiered (base + `_640` families, 640×480 logical). Parse `Colors`,
 | Options | `OpenOptionsDialog` |
 | Quit | `Quit` |
 
-Multiplayer is present in the `.res` but suppressed by the shipped game (§8).
+Multiplayer is suppressed by the shipped game (§8).
 
 Labels from `gameui_english.txt` (UCS-2): "New Game", "Load Game", "Save Game",
 "Multiplayer", "Options", "Quit" (leading `&` = keyboard mnemonic, stripped at render).
 
 **Pause menu** = the same menu; the decompile shows the only difference is `SaveGame`
-being enabled in-game (§8). The pause item set observed in-game is Continue / Reload /
-Load Game / Save Game / Options / Main Menu.
+being enabled in-game — observed pause item set in §8.
 
 ---
 
@@ -190,10 +186,10 @@ reference.
 
 ## 8. In-game vs. main menu
 
-Same `CGameMenu`; `CBasePanel::OnThink` gates `SaveGame` by in-game state. Multiplayer
-is present in `gamemenu.res` but suppressed by the shipped game. The game's own menus
-show: main menu = New Game / Load Game / Save Game(disabled) / Options / Quit;
-pause = Continue / Reload / Load Game / Save Game / Options / Main Menu.
+Same `CGameMenu` (§7). Multiplayer is present in `gamemenu.res` but suppressed by the
+shipped game. The game's own menus show: main menu = New Game / Load Game / Save
+Game(disabled) / Options / Quit; pause = Continue / Reload / Load Game / Save Game /
+Options / Main Menu.
 
 ---
 
@@ -215,9 +211,8 @@ size/rotation/velocity/θ-speed, per-channel RGB + brightness/alpha keyframes, `
 The original composites particles by summing sRGB-encoded color values directly into
 an 8-bit framebuffer — an additive, premultiplied, gamma-space blend (`mask 0`), not a
 linear-HDR blend. The camera sits at the emitter origin, looks down Source +X, and
-yaws continuously at `camera_rotation` deg/s; each emitter group spawns on a radius-75
-ring at `[0,0,-30]`, so only ~14% of any ring is inside the camera's view frustum at a
-given moment.
+yaws continuously at `camera_rotation` deg/s, so only ~14% of any emitter ring is
+inside the camera's view frustum at a given moment.
 
 **Confidence.** Only the fire emitter's on-screen brightness/color has been
 quantitatively matched against a reference capture of the running game (`G/R`/`B/R`/`R`

@@ -1,8 +1,8 @@
 # VtMB savegames — container format, on-disk structures, and the game state they hold
 
 What a *Vampire: The Masquerade – Bloodlines* `.sav` file contains, how every byte maps back
-to the engine's `CSaveRestore` machinery and the Source datamap, and — the point of the
-exercise — the inventory of **game state a rebuild must persist**.
+to the engine's `CSaveRestore` machinery and the Source datamap, and the inventory of
+**game state a rebuild must persist**.
 
 **Status: verified by decoding.** Every structure below was read out of real save files with
 `tools/sav.py`; the field names are the game's own datamap strings, carried inside the save's
@@ -108,8 +108,8 @@ Field names are literal Source datamap `externalName` strings — `m_iHealth`, `
 `m_hActiveWeapon` — including per-element array names, which VtMB spells out one slot at a time:
 `m_iVAttributesBase[ v_attribute_strength ]`, `m_AnimOverlay[0].m_flCycle`. A save is therefore a
 **self-describing dump of the datamap**, and reading one requires no header at all. That property
-is what makes the format tractable: 1522 distinct field names appear across a single mid-game
-save, all spelled out.
+makes the format tractable: 1522 distinct field names appear across a single mid-game save, all
+spelled out.
 
 ## Sections: `.HL1`, `.HL2`, `.HL3`
 
@@ -181,7 +181,7 @@ The client section registers exactly **one** block, `Entities`, whose table mirr
 by `saveentityindex` and whose element datamap is `C_BaseEntity`. `baseFilePos` is 0 here — the
 client writes no preamble.
 
-The decal list is the interesting half. Each `DECALLIST` group holds four fields in datamap order:
+Each `DECALLIST` group holds four fields in datamap order:
 
 | Field | Size | Meaning |
 |---|---|---|
@@ -195,10 +195,9 @@ reproduces every map's decal region to the byte: `210×161 + 2×167 = 34144` for
 hub, and likewise for all five maps that have decals.
 
 `entityIndex` is absent on world decals purely because of the **zero-omission rule** — the world
-is entity index 0, so the field is all-zero and the writer skips it. It is not a special case.
-(Data alone cannot separate "omitted because zero" from "written only when attached" — the bytes
-are identical either way — but zero-omission needs no extra rule and holds everywhere else in the
-format.)
+is entity index 0, so the field is all-zero and the writer skips it. (Data alone cannot separate
+"omitted because zero" from "written only when attached" — the bytes are identical either way —
+but zero-omission needs no extra rule and holds everywhere else in the format.)
 
 Every attached decal found resolves to a **brush entity**: `func_door_rotating` with a `*N` model,
 carrying signage — `decals/signs/number7` on a pawnshop door, `signs/exit` in the theatre,
@@ -341,9 +340,9 @@ distinct classnames — dominated by `env_sprite` (574), `ai_hint` (346), `prop_
 
 ## What the player entity holds
 
-This is the answer to *what is the RPG layer, mechanically*. All of it is on the `player` entity,
-almost all of it on `CBaseCombatCharacter` — Troika hung the World-of-Darkness sheet on the
-combat-character base, not on the player class, which is why NPCs share it.
+All of it is on the `player` entity, almost all of it on `CBaseCombatCharacter` — Troika hung the
+World-of-Darkness sheet on the combat-character base, not on the player class, which is why NPCs
+share it.
 
 **The sheet** (`vdata/` supplies the rulebook these index into — `vdata-catalog.md`):
 

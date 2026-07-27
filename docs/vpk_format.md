@@ -29,8 +29,8 @@ bytes.
 VtMB's own installed **Unofficial Patch** overlays loose files on top of the VPKs, and every
 asset class — maps, models, materials, particles, the script layer — resolves through the same
 patch-first order: `Unofficial_Patch\` before `Vampire\` and the VPKs. This is the game's own
-file-resolution rule, not a pipeline convention; the pipeline (`tools/install.py`) reproduces it
-so exported content matches what the installed game actually loads.
+file-resolution rule, not a pipeline convention; `tools/install.py` reproduces it so exported
+content matches what the installed game loads.
 
 `install.build_index(dirs)` merges the install into one table keyed by lowercase,
 forward-slashed, install-relative paths, with loose entries shadowing VPK ones. `install.read(idx,

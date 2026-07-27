@@ -225,9 +225,7 @@ is **not** tested anywhere in the button class — it is inert for `func_button`
 engine bit). **On buttons VtMB keeps the stock layout: `0x100`=touch, `0x400`=use** — verified by
 decompile, not assumed: the `0x400`-armed handler (`0x100c9250`) gates on `PassesUseFilter` (the use
 path), and all six `sp_tutorial_1` `func_button`s are `spawnflags 1057` (`0x400` + `use_icon 12`),
-i.e. +use switches. This corrects an earlier reading here that had `0x100`/`0x400` swapped; the
-offsets/addresses above were right, only the use/touch labels were reversed. Matches
-`animation_and_movers.md` B.5.
+i.e. +use switches. Matches `animation_and_movers.md` B.5.
 
 ## Trigger activation filter (`trigger_multiple` / `trigger_once`)
 

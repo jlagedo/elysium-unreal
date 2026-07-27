@@ -1,8 +1,7 @@
 # Committed content (`Content/`)
 
 **Nothing game-sourced is committed.** Every asset here is hand-authored or freely-licensed and
-game-agnostic; converted VtMB content lives only in the gitignored `tools/out/` (see the repo-root
-`CLAUDE.md` → "Bring-your-own-game"). The whole list:
+game-agnostic (root `CLAUDE.md` → "Bring-your-own-game"). The full list:
 
 | Asset | Role |
 |---|---|
@@ -49,9 +48,9 @@ Name). Re-run only when a face is added or replaced.
 
 ### The sign/popup set (pre-Nocturne, slated to migrate)
 
-VtMB's authored sign face names map onto five faces. This set is what `ElysiumSignFonts.cpp`
-resolves today; the sign panel is expected to migrate onto the Nocturne ramp above, retiring the
-overlap (`Caveat` stays either way — it is the handwriting slot).
+VtMB's authored sign face names map onto five faces, which `ElysiumSignFonts.cpp` resolves. The
+sign panel is expected to migrate onto the Nocturne ramp above, retiring the overlap (`Caveat`
+stays either way — it is the handwriting slot).
 
 | VtMB face | File | Role |
 |---|---|---|
@@ -75,8 +74,7 @@ code": authored offline by generators under `tools/`, then committed.
 ## Regenerating
 
 Never hand-edit these in the editor and commit the result — edit the generator instead.
-`content.bat` → `tools/build_content.py` rebuilds all of them in one headless editor session,
-in dependency order:
+`content.bat` runs `tools/build_content.py`, rebuilding all of them in dependency order:
 
 1. `make_world_materials.py` — `M_World_Opaque` + `_Masked` + `_Translucent` + `M_Additive` (one shared graph; deletes the old `M_VtMB_World`)
 2. `make_sky_material.py` — `M_Sky`
@@ -85,8 +83,6 @@ in dependency order:
 5. `make_boot_map.py` — `Elysium.umap`
 
 Every generator is idempotent and also runnable standalone as a `-script`.
-`python tools/export_all.py` invokes the umbrella at the end of a run (skip with
-`--no-content`), so a generator cannot be forgotten and silently go stale.
 
 **Registering a new committed asset** = add its generator filename to `GENERATORS` in
 `tools/build_content.py`, and add a row to the table above.

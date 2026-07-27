@@ -1,11 +1,11 @@
 # Debug & development tooling architecture
 
-**Status: adopted design; the foundation layer is a pre-M3 work item.** This doc defines how
-Elysium-Unreal gets live inspection, visualization, and iteration tooling given its central
-constraint: **every engine object is built at runtime from `tools/out` intermediates**. There
+**Status: adopted design; the foundation layer is a pre-M3 work item.** Elysium-Unreal's live
+inspection, visualization, and iteration tooling follows from one constraint: **every engine
+object is built at runtime from `tools/out` intermediates**. There
 are no per-entity `.uasset`s, so the Unreal editor's asset-centric tooling (Content Browser,
 level editing, Details-panel authoring) has nothing to author — and any value tweaked in the
-editor would be overwritten by the next pipeline export anyway. Debug tooling therefore lives
+editor would be overwritten by the next pipeline export. Debug tooling therefore lives
 **in-process, in the running game**, reading the same runtime data structures the game plays
 from. The editor is a *viewer* we get for free during PIE, never an authoring surface.
 
@@ -196,16 +196,15 @@ What lands with M3 (names mirror Source so the muscle memory transfers):
 | `elysium.ent_dump <name>` / `ent_info <classname>` | Live keyvalue/state dump of an entity; schema dump (supported inputs/outputs) of a class. Driven by the entity records + input tables — no per-class code. |
 | `elysium.showtriggers` | Render trigger volumes as wireframes, colored by classname (or enabled/disabled state); I/O beam lines (`DrawDebugDirectionalArrow` with duration) from caller to target on fire — exceeding Source, which only drew textual arrows. |
 | `elysium.developer 2` equivalent | Every dispatch logs `(sim-time) input caller: target.Input(param) [python]` to a dedicated log category (the field-6 Python string is VtMB-specific and must be in the line). |
-| I/O history ring buffer | Every dispatch is *always* recorded into a bounded ring (Source's `env_debughistory`: 1000 lines), dumpable on demand and cheap enough to serialize into saves later — postmortem forensics without having had logging on. |
+| I/O history ring buffer | Every dispatch is recorded into a bounded ring (Source's `env_debughistory`: 1000 lines), dumpable on demand and cheap enough to serialize into saves later — postmortem forensics without having had logging on. |
 | `elysium.ent_break <target> [input]` | Auto-`ent_pause` when a matching input is delivered — breakpoint-on-entity-event; trivial given the chokepoint, and better than any surveyed prior art. |
 
 Each dispatch also emits `UE_VLOG` events (Layer 0) for offline scrubbing.
 
 ## Layer 3 — the agent-facing surface (P2.7, MCP)
 
-The `elysium.*` console verbs were always described here as *a thin scriptable layer over the same
-runtime state* — for `-ExecCmds` automation and headless runs. Layer 3 makes the third consumer
-(after the human at Cog and the script) first-class: an **AI agent** driving the game for QA and
+Layer 3 makes the third consumer of the `elysium.*` runtime state — after the human at Cog and
+the script — first-class: an **AI agent** driving the game for QA and
 tests. It reads and writes exactly the state Layers 1–2 expose, through structured **MCP tools**
 instead of parsed console text — no new dispatch, no I/O side channel (the fire path is still
 `FElysiumEntityWorld::EnqueueInput`, the same chokepoint the Inspector and `ent_fire` use).

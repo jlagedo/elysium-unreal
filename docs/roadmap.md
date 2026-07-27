@@ -21,13 +21,11 @@ owns the system.
      This is the only place implementation detail is written in prose.
   2. Flip the checkbox here and replace the open task's body with **one line, ≤2 lines**:
      what landed, and the doc that owns it. Not what was verified in detail, not the deps,
-     not the reasoning — those are the design doc's and git's.
-
-  **Do not** restate the same fact in more than one doc. If a sentence would be true in
-  both the design doc and here, it belongs only in the design doc.
-- **Decisions are not logged anywhere.** A decision's outcome is written once, as a present-tense
-  fact, in the doc that owns the system. A deliberate divergence from VtMB is written the same
-  way — faithful behaviour, what we do instead, marked as a divergence with the owner call.
+     not the reasoning — those are the design doc's and git's. If a sentence would be true in
+     both docs, it belongs only in the design doc.
+- **Decisions are not logged anywhere** — a deliberate divergence from VtMB follows the same
+  rule: faithful behaviour, what we do instead, marked as a divergence with the owner call,
+  written once in the doc that owns the system.
 - Old plan IDs (M1–M6, L0–L5, X1/X2, engine-core Phase 1/2) map to new IDs in the
   **traceability table** at the bottom; other docs may still say "M3" — that table resolves it.
 
@@ -118,11 +116,9 @@ deps below — refresh it whenever a task flips:
    nothing is left to export; the task itself stays PP2-gated, because the theatre is where the
    body is first on camera.
 
-**P12 is fully sourced** — everything left on it is runtime work. RE19 [x] and RE20 [x] closed
-the format half; **PL9 [x]** mirrored the 5,444 `.vcd` + 7,136 `.lip`, and **PL10 [x]** the
-morph targets, the flex rigs and the 249 `expressions/` tables. One finding reshapes the
-ladder: **no shipped model carries eyeball data**, so 12.4 has no eye pose to decode and its
-look-at half needs an owner call.
+**P12 is fully sourced** — everything left on it is runtime work; RE19/RE20/PL9/PL10 [x], detail
+in the P12 section below. **No shipped model carries eyeball data**, so 12.4 has no eye pose to
+decode and its look-at half needs an owner call.
 
 The lighting/look lane (3.1–3.13, 7.x remainder) is **frozen** under playable-path rule 2.
 
@@ -380,7 +376,7 @@ M1 leftovers that live in this lane.
   seating the player at `dest_landmark + offset`. The scripted `ChangeMap()` is real;
   `elysium.map <map> [landmark]`; a Transitions section in the Maps window. *Verified headless:*
   tutorial → `sm_pawnshop_1` at `dest_newgame + offset`. *Deps:* 1.6, 0.3.
-- [ ] **4.7 Source movement component** *(was M1.1; parallel-capable)* — port `CGameMovement`
+- [x] **4.7 Source movement component** *(was M1.1; parallel-capable)* — port `CGameMovement`
   friction/accel/airaccel/StepMove into a `UCharacterMovementComponent` override
   (`source_movement.md`). **Faithful first** — this is the feel
   layer's known-good baseline and the thing every later tuning delta is measured against, so it
@@ -404,12 +400,17 @@ M1 leftovers that live in this lane.
   take Unreal's raw delta today. (b) **There is no tick.** `Host_FilterTime` bounds a *variable*
   frametime and returns — no accumulator, no fixed-interval loop — which confirms
   `game_runtime.md`'s pre-tick finding from the pacing side and retires the "fixed 66.7 Hz tick"
-  (that is *modern* Source's default). So retail's frame-rate dependence is real and faithful:
-  `AirAccelerate`'s `addspeed` clamp stops binding above ~117 fps, and full-step gravity puts the
-  jump apex at `25 − 100·dt` units instead of a flat 25. **A fixed-step accumulator is therefore a
+  (that is *modern* Source's default). **A fixed-step accumulator is therefore a
   divergence, not the baseline** — it ships behind `elysium.move.FixedStep` (default 0 = faithful
-  variable delta), recorded in `source_movement.md`. **RE22 is closed** and the ducked hull is
-  `(-16,-16,0)..(16,16,36)` with the eye at 30. **Ladders are out of scope, not deferred**: VtMB's
+  variable delta), recorded in `source_movement.md`. **And the residual frame-rate dependence is
+  smaller than the shape of the code suggested**, measured over `move.bat` at 60/120/240 Hz: the
+  jump apex is a flat **25.00 units at every rate** — the half-step split plus VtMB's *additive*
+  `CheckJumpButton` (`0x101226b0`, `v.z += impulse`, not an overwrite) is exact velocity-Verlet, and
+  the old `25 − 100·dt` prediction was what a *full*-step gravity would give. What does drift is
+  air control alone: a strafe-jump exits at 259.5 / 259.8 / 261.0 u/s across the three rates, ~0.6%.
+  **RE22 is closed** and the ducked hull is
+  `(-16,-16,0)..(16,16,36)` with the eye at 30 (not stock Source's 28), over `TIME_TO_DUCK` 0.4 /
+  `TIME_TO_UNDUCK` 0.2. **Ladders are out of scope, not deferred**: VtMB's
   `PlayerMove` switch has no ladder arm and no map places a ladder entity, so there is nothing to
   reproduce. Water movement exists (`WaterMove` `0x101200c0`) and its wish-velocity build, `0.8`
   speed clamp, `40` idle sink and friction step are transcribed, but no exported map places a water
@@ -419,7 +420,20 @@ M1 leftovers that live in this lane.
   played with VtMB feel, not UE feel. (c) **An owner call this task carried, now
   discharged:** RE21 pinned retail as movement-*first*, called **reproduce** and landed by **11.11** — the mover already runs before the think pass, on the user
   command's own delta, with the player's own think ahead of it. Port onto that order; the frame is
-  no longer moving under this task. *Deps:* 11.6, 11.11.
+  no longer moving under this task.
+  **As built:** the math is `Public/ElysiumMoveSolve.h` (constants + the `CGameMovement` formulas as
+  free functions + `FElysiumMoveTuning`'s `sv_*` console surface + `FElysiumMoveStepper`), the state
+  machine is `UElysiumMovementComponent` in `PlayerMove`/`FullWalkMove` order; the frame bound is
+  `ElysiumFrame::ClampFrameDelta` in `ElysiumGameClock.h`, read by the clock, the router and the
+  mover. *Verified:* `Elysium.Substrate.Movement` (content-free, the formulas and the hulls) plus
+  **`move.bat`** — a new `-ElysiumMove` harness replaying fixed command streams over eight courses
+  against real geometry, with `tools/move_diff.py` as the comparator (`--save` promotes a baseline,
+  `--hz` does the cross-rate check). It caught two real defects the unit tests could not: the jump
+  overwriting `v.z` instead of adding to it, and courses inheriting the previous course's velocity.
+  *Remaining:* the `stairs`/`slope`/`doorway` courses are sited on placeholder coordinates and need
+  surveyed vantages (`elysium.campos`) before their baselines mean anything; ducked speed uses
+  Source's `/3` rather than a read-out VtMB value, since retail's is animation-driven.
+  *Deps:* 11.6, 11.11.
 - [ ] **4.8 Rotating/linear/elevator family** — `func_rotating` (spin-up/down, hurt-touch),
   `func_movelinear`, `func_elevator` (`GotoFloor`, floor Z table), keyframed movers if the
   tutorial needs them. **Carries the mover-push remainder 11.11 left**: movers are `MOVETYPE_PUSH`
@@ -817,13 +831,12 @@ draw on the same stack; NPCs stand in the world at their entity origins.
     keyvalues, the save enumeration and the inspector, and `GetDynamicField`'s bag shrinks to what
     has no static name. Three datamap names diverge from the `stats.txt` `InternalName`
     (`intimidate`/`Intimidation`, `computers`/`Computer`, `base_gender_`), so the field table needs
-    both spellings. **Health is not Stamina-derived** — `Max_Health` is an authored stat slot
-    (`Default 100`, no formula anywhere in `vdata`) and **`Health` counts damage taken**, so
-    `ElysiumInterimPlayerMaxHealth` retires by being read out of `stats.txt` rather than replaced
-    by a formula, and `npctemplate*`'s literal `Max_Health` gives every NPC a track (default 100
-    when the key is absent) so `TakeDamage` kills one instead of only recording damage.
-    `pc.generation` (9.3's field-table audit gap) lands here. Costs a `FElysiumSaveVersion` bump plus
-    matching `ElysiumSave::Describe` rows, or the sheet goes invisible to `elysium.save.diff`.
+    both spellings. **Health is not Stamina-derived** (RE24) — so `ElysiumInterimPlayerMaxHealth`
+    retires by being read out of `stats.txt` rather than replaced by a formula, and
+    `npctemplate*`'s literal `Max_Health` gives every NPC a track (default 100 when the key is
+    absent) so `TakeDamage` kills one instead of only recording damage. `pc.generation` (9.3's
+    field-table audit gap) lands here. Costs a `FElysiumSaveVersion` bump plus matching
+    `ElysiumSave::Describe` rows, or the sheet goes invisible to `elysium.save.diff`.
   - **c. The 290-call counter surface** *(**RE24** closed it)* — the four Character-method stubs go
     real: **`CalcFeat`** returns the clamped rating `Feats::FeatValue` computes over a
     *variable-length* `Base%d` list (each entry the *current* trait value through its own `/`-or-`*`
@@ -1217,7 +1230,7 @@ datamap shapes, method notes) live in the owning topic docs — `python_bridge.m
 | No classic-UI mode to A/B against | a UI regression has no reference | the original's structure is captured as data (PL8) and in `m0_menu_build.md`, so screens are checked against intent rather than pixels; the *world* keeps its faithful A/B path unchanged |
 | ~~The player stays a pawn + a sheet struct while 9.4/9.8/9.9/9.10/9.5 land on it~~ **(resolved)** | five systems built against a shim, then a five-way migration with saves already in the wild | **11.4 landed ahead of all five**: the sheet is on `FElysiumCombatCharacter`, the durable half is `FElysiumPlayerRecord`, and the shape is VtMB's own (`savegame_format.md`, `script_api.md`) — a port, not an invention |
 | ~~Modal screens fight over input mode (three independent owners)~~ **(resolved)** | the mouse is unusable in some screen order; Cog can make the game unclickable | closed by **11.5**: one arbiter (`UElysiumInputSubsystem`) is the module's only `SetInputMode` caller, CommonUI's router is declined explicitly, and `Elysium.Substrate.InputScopes` asserts every ordered screen pair restores and balances |
-| P12's facial RE was unknown-duration work that **blocks PP2 in full** (owner call: eyes + lipsync gate the cinematic) | the playable path stalls behind RE | **Retired as a risk — front-loading worked on both halves.** RE19 closed the scene format, event semantics and completion contract; PL9 mirrored the 5,444 scenes + 7,136 `.lip`; **RE20 closed the face** — the flex chunks, both vertex-animation encodings, the `.lip` grammar and the phoneme tables, validated across 3.3 M records with zero failures (`docs/facial_animation.md`). Only PL10 (a mechanical bake) is left in "Now". The residual is a *scope* question, not an RE one: no eyeball data was ever authored, so 12.4's look-at half is an owner call, tracked on the task |
+| P12's facial RE was unknown-duration work that **blocks PP2 in full** (owner call: eyes + lipsync gate the cinematic) | the playable path stalls behind RE | **Retired as a risk — front-loading worked on both halves.** RE19/RE20/PL9/PL10 all closed (detail: P12, `docs/facial_animation.md`). The residual is a *scope* question, not an RE one: no eyeball data was ever authored, so 12.4's look-at half is an owner call, tracked on the task |
 | A shots baseline silently invalidates across a re-bake or content rebuild (measured: up to ~10 mean on bounce-dominated vantages from **byte-identical** inputs) | a look regression hides in toolchain noise — or toolchain noise reads as a regression | B6's measured rule: re-baseline after any bake/content change; A/B a small effect as two runs over one fixed asset set (a cvar A/B), never across a rebuild |
 
 ## Traceability (old plan IDs → this doc)

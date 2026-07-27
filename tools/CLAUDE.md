@@ -6,21 +6,18 @@ engine) proprietary formats offline into OBJ+MTL+PNG/DDS (+ glTF and JSON/text s
 script reads/writes what, in what order, whole-game or per-map, committed or gitignored.** VtMB's
 own file formats live in the RE topic docs (`bsp_format.md`, `vpk_format.md`, `texture_format.md`,
 `mdl_v2531.md`, `phy_vphysics.md`, `facial_animation.md`, `savegame_format.md`,
-`choreographed_scenes.md`, `python_bridge.md`, `script_api.md`, `vdata-catalog.md`, …); this
-pipeline's own sidecar output contracts live in `rebuild-strategy.md`. Never restated here.
+`choreographed_scenes.md`, `python_bridge.md`, `script_api.md`, `vdata-catalog.md`, …); the export
+pipeline, the sidecar contracts each writer emits, and the consuming runtime are described in
+`../docs/rebuild-strategy.md`.
 
-The export pipeline, the sidecar contracts each writer emits, and the runtime that consumes them
-are described in `../docs/rebuild-strategy.md`.
-
-**The `UE_` convention** (repo-root `CLAUDE.md` → "The `UE_` exporter convention"). An exporter
-prefixed `UE_` emits Unreal-native output (cm, Z-up, left-handed, winding pre-reversed) via
-`source_to_unreal`/`source_dir_to_unreal` in `bsp.py`. Without the prefix (`mdl.py`,
+**The `UE_` convention** (repo-root `CLAUDE.md` → "The `UE_` exporter convention") is implemented
+by `source_to_unreal`/`source_dir_to_unreal` in `bsp.py`. Without the prefix (`mdl.py`,
 `mdl_skel.py`, `bsp_to_obj.py`, the `probe_*`/`lightmap` helpers) an exporter still emits the
 legacy Godot Y-up/metres space and is flagged for review before its output is treated as Unreal
 space. `mdl.py`'s `write_obj_scene` takes `ue_space=True` for its Unreal-native callers (the prop
 path); it keeps its non-`UE_` name because its other callers still default to Godot space.
 `mdl_gltf.py` is the one standing exemption — its `.glb` is standard glTF 2.0 (self-describing),
-so glTFRuntime reorients it at load and it needs no pre-conversion.
+so glTFRuntime reorients it at load and needs no pre-conversion.
 
 The deep RE reference docs live in `../docs/`. (The read-only Godot project at `E:\dev\elysium`
 holds an earlier prototype — consulted only as a porting reference, not a source of truth here.)
@@ -42,7 +39,7 @@ order: `vpk_format.md`.
 flagship map exporter) and its per-feature sidecar writers (world/material/lighting/water/decal/
 skybox/rope). Container + lump struct formats: `bsp_format.md`. The Source→Unreal/Godot
 coordinate transforms live once in `bsp.py` (repo-root `CLAUDE.md` → "Coordinates are read
-verbatim"; `rebuild-strategy.md` → "Coordinate conventions") — not repeated here or there.
+verbatim"; `rebuild-strategy.md` → "Coordinate conventions").
 
 `write_ropes` resolves each `move_rope`/`keyframe_rope` chain into the `.ropes` sidecar (format:
 `rebuild-strategy.md`'s sidecar table); the rope math RE (why `rest_cm` is a simulated length, the
@@ -95,9 +92,8 @@ mapping: `phy_vphysics.md`.
 ## Static props / models (`.mdl` v2531, `tools/mdl.py`)
 
 Struct format: `mdl_v2531.md`; byte-probe: `tools/probe_mdl.py`; reference parsers cloned
-read-only at `tools/re/VAMPTools` + `tools/re/Crowbar`. Ghidra (`tools/ghidra/`) is set up for
-decompiling the VtMB engine/game binaries when a format or runtime behaviour can't be settled from
-data alone.
+read-only at `tools/re/VAMPTools` + `tools/re/Crowbar`. The Ghidra workspace (`tools/ghidra/`,
+below) is available when a format or runtime behaviour can't be settled from data alone.
 
 `tools/mdl.py` decodes an `.mdl`+`.dx80.vtx` (LOD0) into per-material meshes; `write_obj_scene`
 emits an OBJ+MTL+`tex/`, reusing the world VMT+TTH/TTZ pipeline for materials. Model texture
@@ -144,8 +140,7 @@ Both write under `out/npc/`:
   metadata, deduped so a clip resolved by many NPCs is stored once. The runtime loads a clip's
   owning glb once and applies it to the NPC skeletal mesh by bone name via glTFRuntime.
 
-`mdl_gltf.export` (single clip) is the spike/CLI probe. `mdl_gltf.py` writes standard glTF 2.0
-(self-describing space), so it needs no `UE_` pre-conversion.
+`mdl_gltf.export` (single clip) is the spike/CLI probe.
 
 ## Texture upscaling (`upscale_bench.py`, `sky_upscale.py`, `retex_dds.py`)
 
