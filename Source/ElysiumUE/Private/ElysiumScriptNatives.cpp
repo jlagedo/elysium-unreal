@@ -3,6 +3,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumRng.h"
 #include "HAL/IConsoleManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumNative, Log, All);

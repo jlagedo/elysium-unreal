@@ -319,6 +319,11 @@ private:
 	// 11.9 — re-stamp a handle read out of a payload with this world's epoch (Invalid when its index
 	// no longer exists). The only place a saved handle becomes a live one.
 	FElysiumEntityHandle RebaseHandle(const FElysiumEntityHandle& Saved) const;
+	// One entity's full state, undiffed — the shared half of the freeze and the baseline.
+	FElysiumEntityState CaptureState(const FElysiumEntity& Ent) const;
+	// Record one entity's post-Load state as the omission baseline. Called for every entity at the
+	// end of Load and for each runtime entity as it spawns.
+	void CaptureBaseline(int32 Index);
 
 	AActor* Owner = nullptr;                          // component outer + VLOG context; not owned
 	UElysiumGameStateSubsystem* GameState = nullptr;  // clock + script host; outlives the world
@@ -359,6 +364,12 @@ private:
 	// 11.9 — set by Detach(): this world no longer owns any part of the session, so Teardown neither
 	// dehydrates the player nor freezes a snapshot over the one a load just restored.
 	bool bDetached = false;
+
+	// 11.9 — the omission baseline: each entity's state as the spawn pass left it, index-aligned
+	// with EntityList. A freeze records only what has moved since, which is what makes a 2,600-entity
+	// map a few kilobytes. Captured once at Load and never updated by a restore, because a rebuild
+	// always starts from the spawn pass.
+	TArray<FElysiumEntityState> Baseline;
 
 	// The usable brush entity currently under the +use look-cursor (P4.2), or Invalid when the aim
 	// is off every usable body / out of reach. OnIn/OnOut fire on the transitions of this handle.

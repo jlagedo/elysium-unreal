@@ -54,6 +54,11 @@ struct FElysiumEntityState
 	FName ClassName;                  // guards a def-array shift: a mismatch skips the record
 	FString TargetName;               // Entity.SetName re-keys the name index, so it is restored explicitly
 
+	// The live origin. Not a registered field and cannot be one — the def's `origin` key is still
+	// the raw Source-space string and Construct applies every key that has a field — so it rides
+	// here, beside the flags.
+	FVector Origin = FVector::ZeroVector;
+
 	bool  bDead = false;
 	bool  bHidden = false;
 	bool  bSpawnCalled = true;
@@ -71,6 +76,10 @@ struct FElysiumEntityState
 	// they serialize their synthesized def alongside their state and restore as themselves.
 	bool bRuntime = false;
 	FElysiumEntityDef Def;
+
+	// In-memory only, never serialized: marks a slot of the world's post-Load omission baseline as
+	// filled. A default-constructed row is "no baseline", which makes the freeze record everything.
+	bool bCaptured = false;
 };
 
 // The `env_fade` screen fade — world state with the map epoch's lifetime (11.8), so it is the map's.

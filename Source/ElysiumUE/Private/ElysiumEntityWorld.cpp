@@ -128,6 +128,15 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 		}
 	}
 
+	// 11.9 — the spawn pass is finished, so this is what a rebuild of this map produces: record it
+	// as the omission baseline a freeze diffs against (`save-architecture.md` §4).
+	Baseline.Reset();
+	Baseline.SetNum(EntityList.Num());
+	for (int32 i = 0; i < EntityList.Num(); ++i)
+	{
+		CaptureBaseline(i);
+	}
+
 	UE_LOG(LogElysiumWorld, Log, TEXT("world '%s' live: %d entities (%d brush bodies), epoch %u"),
 		*Defs.MapName, EntityList.Num(), Bodies.Num(), Epoch);
 }
@@ -231,6 +240,9 @@ void FElysiumEntityWorld::CallEntitySpawn(FElysiumEntity& Ent)
 	// A runtime-spawned entity has no "all entities" barrier to wait on; its attach targets (if any)
 	// already exist, so run its second-phase init immediately after Spawn().
 	Ent.PostSpawn();
+	// 11.9 — a runtime entity's rebuild is this same create+spawn replayed from its saved def, so
+	// its baseline is taken at the same point in its life as a def entity's.
+	CaptureBaseline(Ent.Handle.Index);
 	UE_LOG(LogElysiumWorld, Log, TEXT("(%8.3f) runtime spawn %s"), NowSeconds(), *Ent.DebugString());
 }
 
@@ -291,20 +303,70 @@ FElysiumPlayer* FElysiumEntityWorld::FindPlayer() const
 // `save-architecture.md` §5 means by "a snapshot is produced by exactly the same code path a save
 // uses": a travel boundary and a Save Game call reach Freeze identically.
 
-namespace
+FElysiumEntityState FElysiumEntityWorld::CaptureState(const FElysiumEntity& E) const
 {
-	// The state a fresh build of this def would produce — the baseline the freeze diffs against.
-	// It is a plain registry Create (factory + Construct: keyvalues applied, no Spawn, no world, no
-	// body), so it costs one allocation per entity and answers exactly the question the omission
-	// rule asks: "would rebuilding this map produce this value anyway?"
-	TUniquePtr<FElysiumEntity> MakeReference(const FElysiumEntity& Live)
+	FElysiumEntityState S;
+	S.Index = E.Handle.Index;
+	S.ClassName = E.Def ? FName(*E.Def->Classname) : NAME_None;
+	S.TargetName = E.TargetName;
+	S.bRuntime = E.Handle.Index >= Defs.Defs.Num();
+	S.bDead = E.bDead;
+	S.bHidden = E.bHidden;
+	S.bSpawnCalled = E.bSpawnCalled;
+	S.NextThink = E.NextThink;
+	S.SavedNextThink = E.GetSavedNextThink();
+	S.OutputTimesRemaining = E.OutputTimesRemaining;
+	// The live origin is not a registered field and cannot become one: the def's `origin` key is
+	// still the raw Source-space string, and Construct applies every key that has a field, so a
+	// registered `origin` would overwrite the converted placement at every spawn. It rides here
+	// instead — `point_teleport` and `Entity.SetOrigin` move entities for real (11.4).
+	S.Origin = E.Origin;
+
+	// The R2 field walk, in the registry's sorted order so two captures of one state agree byte
+	// for byte (§8).
+	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+	if (E.Class)
 	{
-		if (!Live.Def)
+		for (const FName& FieldName : Reg.SaveFields(*E.Class))
 		{
-			return nullptr;
+			if (const FElysiumFieldAccessor* Acc = Reg.FindField(*E.Class, FieldName))
+			{
+				if (Acc->Get)
+				{
+					S.Fields.Emplace(FieldName, Acc->Get(E));
+				}
+			}
 		}
-		return FElysiumClassRegistry::Get().Create(*Live.Def, FElysiumEntityHandle(Live.Handle.Index, 0));
 	}
+
+	// The leaf's derived state (§4). A leaf that does not override Serialize writes nothing.
+	{
+		FMemoryWriter Writer(S.LeafState, /*bIsPersistent*/ true);
+		FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::Latest);
+		const_cast<FElysiumEntity&>(E).Serialize(Ar);
+	}
+	return S;
+}
+
+void FElysiumEntityWorld::CaptureBaseline(int32 Index)
+{
+	// **The omission baseline is the post-Load state, not the post-Construct state.** The question
+	// the rule asks is "would rebuilding this map produce this value anyway?", and a rebuild is
+	// Construct *plus* Spawn plus PostSpawn — so the answer has to be taken after all three. Taking
+	// it after Construct alone silently drops anything Spawn writes and gameplay later returns to
+	// its constructed value: `logic_auto`'s first think is exactly that (Spawn arms it at 0, the
+	// think disarms it to never, and never is also the constructed value), and omitting it would
+	// re-run every map's ignition on load.
+	if (!EntityList.IsValidIndex(Index) || !EntityList[Index])
+	{
+		return;
+	}
+	if (Baseline.Num() < EntityList.Num())
+	{
+		Baseline.SetNum(EntityList.Num());
+	}
+	Baseline[Index] = CaptureState(*EntityList[Index]);
+	Baseline[Index].bCaptured = true;
 }
 
 void FElysiumEntityWorld::Freeze(FElysiumMapSnapshot& Out) const
@@ -313,8 +375,6 @@ void FElysiumEntityWorld::Freeze(FElysiumMapSnapshot& Out) const
 	Out.MapName = Defs.MapName;
 	Out.DefCount = Defs.Defs.Num();
 	Out.FrozenAt = NowSeconds();
-
-	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
 
 	for (const TUniquePtr<FElysiumEntity>& EntPtr : EntityList)
 	{
@@ -338,77 +398,59 @@ void FElysiumEntityWorld::Freeze(FElysiumMapSnapshot& Out) const
 			continue;
 		}
 
-		const TUniquePtr<FElysiumEntity> Ref = MakeReference(E);
-		if (!Ref)
+		FElysiumEntityState S = CaptureState(E);
+		const int32 Index = E.Handle.Index;
+		const FElysiumEntityState* Base =
+			(Baseline.IsValidIndex(Index) && Baseline[Index].bCaptured) ? &Baseline[Index] : nullptr;
+
+		// A runtime entity has no def on disk, so it is always written and its synthesized def rides
+		// along — that is the whole of how it restores as itself.
+		if (S.bRuntime && E.Def)
 		{
-			continue;   // no def: nothing to rebuild it from, so nothing to diff against
+			S.Def = *E.Def;
 		}
 
-		FElysiumEntityState S;
-		S.Index = E.Handle.Index;
-		S.ClassName = E.Def ? FName(*E.Def->Classname) : NAME_None;
-		S.bRuntime = E.Handle.Index >= Defs.Defs.Num();
-
-		bool bDiffers = S.bRuntime;   // a runtime entity has no def on disk, so it is always written
-
-		if (E.TargetName != Ref->TargetName)
+		bool bDiffers = S.bRuntime || Base == nullptr;
+		if (Base)
 		{
-			bDiffers = true;
-		}
-		S.TargetName = E.TargetName;
+			bDiffers = bDiffers
+				|| S.TargetName != Base->TargetName
+				|| S.bDead != Base->bDead
+				|| S.bHidden != Base->bHidden
+				|| S.bSpawnCalled != Base->bSpawnCalled
+				|| S.NextThink != Base->NextThink
+				|| S.SavedNextThink != Base->SavedNextThink
+				|| S.OutputTimesRemaining != Base->OutputTimesRemaining
+				|| !S.Origin.Equals(Base->Origin, 0.0f)
+				|| S.LeafState != Base->LeafState;
 
-		if (E.bDead != Ref->bDead || E.bHidden != Ref->bHidden || E.bSpawnCalled != Ref->bSpawnCalled
-			|| E.NextThink != Ref->NextThink || E.GetSavedNextThink() != Ref->GetSavedNextThink()
-			|| E.OutputTimesRemaining != Ref->OutputTimesRemaining)
-		{
-			bDiffers = true;
-		}
-		S.bDead = E.bDead;
-		S.bHidden = E.bHidden;
-		S.bSpawnCalled = E.bSpawnCalled;
-		S.NextThink = E.NextThink;
-		S.SavedNextThink = E.GetSavedNextThink();
-		S.OutputTimesRemaining = E.OutputTimesRemaining;
-
-		// The R2 field walk — sorted by name, so two freezes of the same state are byte-identical.
-		if (E.Class)
-		{
-			for (const FName& FieldName : Reg.SaveFields(*E.Class))
+			// Prune the field list to what actually moved. The baseline is sorted the same way, so
+			// this is a merge, not a search.
+			TArray<TPair<FName, FElysiumVariant>> Changed;
+			int32 b = 0;
+			for (const TPair<FName, FElysiumVariant>& F : S.Fields)
 			{
-				const FElysiumFieldAccessor* Acc = Reg.FindField(*E.Class, FieldName);
-				if (!Acc || !Acc->Get)
+				while (b < Base->Fields.Num() && Base->Fields[b].Key != F.Key
+					&& Base->Fields[b].Key.LexicalLess(F.Key))
 				{
-					continue;
+					++b;
 				}
-				const FElysiumVariant Value = Acc->Get(E);
-				if (Value == Acc->Get(*Ref))
+				const bool bSame = (b < Base->Fields.Num() && Base->Fields[b].Key == F.Key
+					&& Base->Fields[b].Value == F.Value);
+				if (!bSame)
 				{
-					continue;   // the rebuild produces this already
+					Changed.Add(F);
 				}
-				S.Fields.Emplace(FieldName, Value);
+			}
+			if (Changed.Num() > 0)
+			{
 				bDiffers = true;
 			}
-		}
+			S.Fields = MoveTemp(Changed);
 
-		// The leaf's derived state, if it has any. Written into the record unconditionally and then
-		// compared against the reference's, so a leaf that never overrides Serialize costs 0 bytes.
-		{
-			FMemoryWriter LiveWriter(S.LeafState, /*bIsPersistent*/ true);
-			FElysiumSaveArchive LiveAr(LiveWriter, FElysiumSaveVersion::Latest);
-			const_cast<FElysiumEntity&>(E).Serialize(LiveAr);
-
-			TArray<uint8> RefBytes;
-			FMemoryWriter RefWriter(RefBytes, /*bIsPersistent*/ true);
-			FElysiumSaveArchive RefAr(RefWriter, FElysiumSaveVersion::Latest);
-			Ref->Serialize(RefAr);
-
-			if (S.LeafState == RefBytes)
+			if (S.LeafState == Base->LeafState)
 			{
-				S.LeafState.Reset();
-			}
-			else
-			{
-				bDiffers = true;
+				S.LeafState.Reset();   // a leaf whose derived state has not moved costs 0 bytes
 			}
 		}
 
@@ -453,16 +495,6 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 	}
 
 	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
-
-	// Entities carried out with the player are not here any more (§5): kill them, which is exactly
-	// what a resolve against them already reports and what gates their body.
-	for (int32 Absent : Snapshot.AbsentEntities)
-	{
-		if (FElysiumEntity* E = Resolve(FElysiumEntityHandle(Absent, Epoch)))
-		{
-			E->Kill();
-		}
-	}
 
 	// Pass 1 — re-create the runtime-spawned entities (npc_maker.Spawn, CreateEntityNoSpawn) from the
 	// defs that ride along, in index order, so every one lands back on its saved index. They do land
@@ -534,6 +566,13 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 			RenameEntity(*E, S.TargetName);
 		}
 
+		// Through the runtime writer, so a leaf's body follows the restored position exactly as it
+		// does for a live `point_teleport` — the body was built at the def origin by Spawn().
+		if (!E->Origin.Equals(S.Origin, 0.0f))
+		{
+			E->SetRuntimeOrigin(S.Origin);
+		}
+
 		E->bSpawnCalled = S.bSpawnCalled;
 		E->NextThink = S.NextThink;
 		E->SetSavedNextThink(S.SavedNextThink);
@@ -560,6 +599,17 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 		}
 		NotifyVisualChanged(*E);
 		++Applied;
+	}
+
+	// Entities carried out with the player are not here any more (§5): kill them, which is exactly
+	// what a resolve against them already reports and what gates their body. Last, so a stale record
+	// for the same index cannot resurrect one — the absent set is the later statement about it.
+	for (int32 Absent : Snapshot.AbsentEntities)
+	{
+		if (FElysiumEntity* E = Resolve(FElysiumEntityHandle(Absent, Epoch)))
+		{
+			E->Kill();
+		}
 	}
 
 	// The queue is REPLACED: this load's Spawn pass has already queued its own openers, and the
@@ -1486,6 +1536,7 @@ void FElysiumEntityWorld::Teardown()
 	Constraints.Empty();
 
 	EntityList.Empty();
+	Baseline.Empty();
 	RuntimeDefs.Empty();
 	Ring = nullptr;
 	Sinks.Empty();

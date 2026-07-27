@@ -18,17 +18,22 @@
 #include "ElysiumDecals.h"
 #include "ElysiumDlg.h"
 #include "ElysiumEntityDefs.h"
+#include "ElysiumEntityWorld.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumNpcClips.h"
 #include "ElysiumObjModel.h"
 #include "ElysiumReflections.h"
+#include "ElysiumRng.h"
 #include "ElysiumRopes.h"
+#include "ElysiumSaveArchive.h"
+#include "ElysiumSaveTypes.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture.h"
 #include "HAL/FileManager.h"
 #include "Materials/MaterialInterface.h"
 #include "Misc/Paths.h"
 #include "PhysicsEngine/BodySetup.h"
+#include "Serialization/MemoryWriter.h"
 
 static constexpr EAutomationTestFlags GElysiumContentTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -1071,6 +1076,183 @@ bool FElysiumPlayerBodiesTest::RunTest(const FString&)
 	TestEqual(TEXT("the whole table names 56 distinct body models"), Models.Num(), 56);
 	TestEqual(TEXT("every player body is exported"), Exported, Models.Num());
 
+	return true;
+}
+
+// =====================================================================================
+// 11.9 — freeze/thaw a real map's `.ents` world (`save-architecture.md` §10, the content
+// tier). The substrate tier proves the mechanism on three synthetic entities; this proves
+// it against the shapes the shipped data actually holds — 1,000+ records, every registered
+// classname, real output tables, the runtime-spawned player. Self-skips with no export.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapSnapshotTest,
+	"Elysium.Content.MapSnapshot", GElysiumContentTestFlags)
+bool FElysiumMapSnapshotTest::RunTest(const FString&)
+{
+	// Every map that has been exported, so the tier gets wider as the export set does. The maps
+	// are read straight off disk; nothing here needs a bake, an RHI or a world.
+	static const TCHAR* const Maps[] =
+	{
+		TEXT("sp_tutorial_1"), TEXT("sm_pawnshop_1"), TEXT("sm_hub_1")
+	};
+
+	int32 Checked = 0;
+	for (const TCHAR* Map : Maps)
+	{
+		const FString Path = FElysiumContentPaths::MapEnts(Map);
+		if (!IFileManager::Get().FileExists(*Path))
+		{
+			AddInfo(FString::Printf(TEXT("%s not exported — skipping"), Map));
+			continue;
+		}
+
+		auto ParseDefs = [&Path, Map](FElysiumEntityDefs& Out) -> bool
+		{
+			Out = FElysiumEntityDefs();
+			const bool bOk = FElysiumEntityDefs::Parse(Path, Out);
+			Out.MapName = Map;
+			return bOk;
+		};
+
+		FElysiumEntityDefs DefsA;
+		if (!ParseDefs(DefsA))
+		{
+			AddError(FString::Printf(TEXT("%s: .ents did not parse"), Map));
+			continue;
+		}
+		const int32 DefCount = DefsA.Num();
+
+		FElysiumEntityWorld A(/*Owner*/ nullptr, /*GameState*/ nullptr);
+		A.Load(MoveTemp(DefsA));
+		// The player is a runtime entity appended past the def array — the case the snapshot's
+		// index alignment turns on, so it has to be in the fixture.
+		A.SpawnPlayer();
+
+		// Let the map's own openers run: logic_auto ignition, first thinks, the queue draining at
+		// t=0. That is what makes the frozen state a *played* state rather than a spawned one.
+		for (int32 i = 0; i < 8; ++i)
+		{
+			A.Tick(0.0);
+		}
+
+		FElysiumMapSnapshot Snapshot;
+		A.Freeze(Snapshot);
+		TestEqual(*FString::Printf(TEXT("%s: the snapshot records the def count"), Map),
+			Snapshot.DefCount, DefCount);
+		// The omission rule has to actually omit: a whole map's worth of untouched records would
+		// mean the diff-against-a-fresh-build baseline is not doing its job.
+		TestTrue(*FString::Printf(TEXT("%s: fewer records than entities (%d of %d)"),
+			Map, Snapshot.Entities.Num(), A.NumEntities()),
+			Snapshot.Entities.Num() < A.NumEntities());
+
+		// Round-trip the snapshot through the real payload container, so what is applied below is
+		// what came off disk, not what stayed in memory.
+		FElysiumSavePayload Payload;
+		Payload.World.CurrentMap = Map;
+		Payload.Maps.Add(Snapshot.MapName, Snapshot);
+		TArray<uint8> Bytes;
+		FString Error;
+		if (!TestTrue(*FString::Printf(TEXT("%s: the payload writes"), Map),
+			ElysiumSave::Write(Payload, Bytes, Error)))
+		{
+			AddError(Error);
+			continue;
+		}
+		FElysiumSavePayload Read;
+		if (!TestTrue(*FString::Printf(TEXT("%s: and reads back"), Map),
+			ElysiumSave::Read(Bytes, Read, Error)))
+		{
+			AddError(Error);
+			continue;
+		}
+		const FElysiumMapSnapshot* Thawed = Read.Maps.Find(Snapshot.MapName);
+		if (!TestNotNull(*FString::Printf(TEXT("%s: the map came back"), Map), Thawed))
+		{
+			continue;
+		}
+
+		// Rebuild and apply. Entity counts, the name index and the queue all have to survive.
+		FElysiumEntityDefs DefsB;
+		ParseDefs(DefsB);
+		FElysiumEntityWorld B(/*Owner*/ nullptr, /*GameState*/ nullptr);
+		B.Load(MoveTemp(DefsB));
+		B.SpawnPlayer();
+		B.ApplySnapshot(*Thawed);
+
+		TestEqual(*FString::Printf(TEXT("%s: the same entity count"), Map),
+			B.NumEntities(), A.NumEntities());
+		TestEqual(*FString::Printf(TEXT("%s: the same pending queue"), Map),
+			B.Queue().Num(), A.Queue().Num());
+		TestNotNull(*FString::Printf(TEXT("%s: `!player` still resolves"), Map),
+			(const void*)B.FindPlayer());
+
+		// The name index: every targetname the frozen world answered to, the restored one answers
+		// to as well. This is what `Entity.SetName` and the runtime-spawn append would break.
+		int32 NameMisses = 0;
+		for (const TUniquePtr<FElysiumEntity>& Ent : A.Entities())
+		{
+			if (Ent && !Ent->TargetName.IsEmpty() && !Ent->IsDead()
+				&& B.FindByName(Ent->TargetName) == nullptr)
+			{
+				++NameMisses;
+			}
+		}
+		TestEqual(*FString::Printf(TEXT("%s: no targetname lost across the round trip"), Map),
+			NameMisses, 0);
+
+		// And the digest: freeze -> write -> read -> apply -> freeze is the same bytes (§8/§10).
+		FElysiumMapSnapshot Second;
+		B.Freeze(Second);
+		TArray<uint8> DigestA;
+		TArray<uint8> DigestB;
+		{
+			FMemoryWriter W(DigestA, /*bIsPersistent*/ true);
+			FElysiumSaveArchive Ar(W, FElysiumSaveVersion::Latest);
+			Ar << Snapshot;
+		}
+		{
+			FMemoryWriter W(DigestB, /*bIsPersistent*/ true);
+			FElysiumSaveArchive Ar(W, FElysiumSaveVersion::Latest);
+			Ar << Second;
+		}
+		if (DigestB != DigestA)
+		{
+			// The failure has to name the field, not just the mismatch — §10's whole point is that a
+			// persistence bug is a text diff. Same set diff `elysium.save.diff` runs.
+			AddError(FString::Printf(TEXT("%s: the round trip is NOT byte-identical"), Map));
+			FElysiumSavePayload Before;
+			FElysiumSavePayload After;
+			Before.Maps.Add(Snapshot.MapName, Snapshot);
+			After.Maps.Add(Second.MapName, Second);
+			TArray<FString> LinesA;
+			TArray<FString> LinesB;
+			ElysiumSave::Describe(Before, LinesA);
+			ElysiumSave::Describe(After, LinesB);
+			const TSet<FString> SetA(LinesA);
+			const TSet<FString> SetB(LinesB);
+			int32 Shown = 0;
+			for (const FString& Line : LinesA)
+			{
+				if (!SetB.Contains(Line) && Shown++ < 8) { AddError(TEXT("  - ") + Line); }
+			}
+			Shown = 0;
+			for (const FString& Line : LinesB)
+			{
+				if (!SetA.Contains(Line) && Shown++ < 8) { AddError(TEXT("  + ") + Line); }
+			}
+		}
+
+		AddInfo(FString::Printf(
+			TEXT("%s: %d entities, %d records (%d bytes compressed), %d queued"),
+			Map, A.NumEntities(), Snapshot.Entities.Num(), Bytes.Num(), Snapshot.Queue.Num()));
+		++Checked;
+	}
+
+	if (Checked == 0)
+	{
+		AddInfo(TEXT("no exported maps — snapshot round trip skipped"));
+	}
 	return true;
 }
 

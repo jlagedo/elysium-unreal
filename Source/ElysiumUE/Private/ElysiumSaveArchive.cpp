@@ -142,7 +142,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R)
 
 FArchive& operator<<(FArchive& Ar, FElysiumEntityState& S)
 {
-	Ar << S.Index << S.ClassName << S.TargetName;
+	Ar << S.Index << S.ClassName << S.TargetName << S.Origin;
 	Ar << S.bDead << S.bHidden << S.bSpawnCalled;
 	Ar << S.NextThink << S.SavedNextThink;
 	Ar << S.OutputTimesRemaining;

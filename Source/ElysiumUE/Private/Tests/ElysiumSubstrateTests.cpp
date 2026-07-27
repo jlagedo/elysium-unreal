@@ -35,6 +35,9 @@
 #include "ElysiumObjModel.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumPresentationSubsystem.h"
+#include "ElysiumRng.h"
+#include "ElysiumSaveArchive.h"
+#include "ElysiumSaveTypes.h"
 #include "ElysiumPythonVM.h"
 #include "ElysiumViewState.h"
 #include "ElysiumRopes.h"
@@ -47,6 +50,7 @@
 #include "ElysiumVariant.h"
 
 #include "Math/RotationMatrix.h"
+#include "Serialization/MemoryWriter.h"
 
 // One context flag (runs anywhere) + the product filter (this project's own suite bucket).
 // EAutomationTestFlags is a strong enum in 5.8, so the constant carries that type (ENUM_CLASS_FLAGS
@@ -3293,6 +3297,417 @@ bool FElysiumViewStateTest::RunTest(const FString&)
 	FElysiumVitals Bled = Same;
 	Bled.BloodPool = Same.BloodPool - 1;
 	TestTrue(TEXT("and neither does one point of blood"), Bled != Same);
+
+	return true;
+}
+
+// =====================================================================================
+// 11.9 — persistence. `save-architecture.md` §10 asks for the strongest harness in the
+// project, because a silent save bug surfaces hours later. Three tests, all content-free:
+// a freeze/rebuild/apply/re-freeze **digest** round trip on a bare world, the payload
+// container's version and integrity gates, and the schema rules that let a payload survive
+// a build that has moved on.
+// =====================================================================================
+
+namespace
+{
+	// The map the round trip runs on: a relay wired into a counter, plus a timer — between them
+	// they cover a registered leaf field, a think time, an output counter and the dormancy switch.
+	FElysiumEntityDefs MakeSaveTestDefs()
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__save_test__");
+
+		FElysiumEntityDef Relay;
+		Relay.Classname = TEXT("logic_relay");
+		Relay.TargetName = TEXT("relay1");
+		{
+			FElysiumOutputDef Wire;
+			Wire.Name = TEXT("OnTrigger");
+			Wire.Target = TEXT("counter1");
+			Wire.Input = TEXT("Add");
+			Wire.Param = TEXT("5");
+			Wire.Times = 2;            // a countdown the snapshot has to carry
+			Relay.Outputs.Add(Wire);
+		}
+		Defs.Defs.Add(MoveTemp(Relay));
+
+		FElysiumEntityDef Counter;
+		Counter.Classname = TEXT("math_counter");
+		Counter.TargetName = TEXT("counter1");
+		Counter.Keys.Add(TEXT("max"), TEXT("100"));
+		Defs.Defs.Add(MoveTemp(Counter));
+
+		FElysiumEntityDef Timer;
+		Timer.Classname = TEXT("logic_timer");
+		Timer.TargetName = TEXT("timer1");
+		Timer.Keys.Add(TEXT("RefireTime"), TEXT("5"));
+		Defs.Defs.Add(MoveTemp(Timer));
+
+		return Defs;
+	}
+
+	// A snapshot's bytes — the digest §8's byte-identical rule is stated in terms of.
+	TArray<uint8> ElysiumSaveDigest(const FElysiumMapSnapshot& Snapshot)
+	{
+		TArray<uint8> Bytes;
+		FMemoryWriter Writer(Bytes, /*bIsPersistent*/ true);
+		FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::Latest);
+		Ar << const_cast<FElysiumMapSnapshot&>(Snapshot);
+		return Bytes;
+	}
+
+	// math_counter's Value, off the debug-state rows (the leaf class is file-local).
+	float SaveTestCounterValue(const FElysiumEntity* Entity)
+	{
+		if (!Entity)
+		{
+			return -1.0f;
+		}
+		TArray<TPair<FString, FString>> State;
+		Entity->GetDebugState(State);
+		for (const TPair<FString, FString>& Row : State)
+		{
+			if (Row.Key == TEXT("Value")) { return FCString::Atof(*Row.Value); }
+		}
+		return -1.0f;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSaveRoundTripTest, "Elysium.Substrate.SaveRoundTrip",
+	GElysiumTestFlags)
+bool FElysiumSaveRoundTripTest::RunTest(const FString&)
+{
+	// --- Build, mutate through the real chokepoints, freeze ------------------------------------
+	FElysiumEntityWorld A(/*Owner*/ nullptr, /*GameState*/ nullptr);
+	A.Load(MakeSaveTestDefs());
+
+	FElysiumEntity* Relay = A.FindByName(TEXT("relay1"));
+	FElysiumEntity* Counter = A.FindByName(TEXT("counter1"));
+	FElysiumEntity* Timer = A.FindByName(TEXT("timer1"));
+	if (!TestNotNull(TEXT("relay1"), Relay) || !TestNotNull(TEXT("counter1"), Counter)
+		|| !TestNotNull(TEXT("timer1"), Timer))
+	{
+		return false;
+	}
+
+	// One wire delivery: the counter advances and the relay's `times` counts down.
+	A.EnqueueInput(TEXT("!self"), FName(TEXT("Trigger")), FElysiumVariant::Void(), 0.0,
+		FElysiumEntityHandle::Invalid(), Relay->Handle);
+	for (int32 i = 0; i < 4; ++i) { A.Tick(0.0); }
+	TestEqual(TEXT("counter advanced before the freeze"), SaveTestCounterValue(Counter), 5.0f);
+
+	// The dormancy switch, a runtime-created entity, and a delayed event still pending.
+	Timer->ScriptHide();
+	FElysiumEntityDef Spawned;
+	Spawned.Classname = TEXT("math_counter");
+	Spawned.TargetName = TEXT("runtime1");
+	const FElysiumEntityHandle SpawnedHandle = A.SpawnRuntimeEntity(MoveTemp(Spawned));
+	TestTrue(TEXT("runtime entity created"), A.Resolve(SpawnedHandle) != nullptr);
+
+	A.EnqueueInput(TEXT("counter1"), FName(TEXT("Add")), FElysiumVariant::Int(3), /*Delay*/ 30.0,
+		FElysiumEntityHandle::Invalid(), Relay->Handle);
+	TestEqual(TEXT("one event still pending at freeze time"), A.Queue().Num(), 1);
+
+	FElysiumMapSnapshot First;
+	A.Freeze(First);
+	TestEqual(TEXT("the frozen map names itself"), First.MapName, FString(TEXT("__save_test__")));
+	TestEqual(TEXT("the pending delivery is in the snapshot"), First.Queue.Num(), 1);
+	// The omission rule: only entities that differ from a fresh build of their own def are written.
+	TestTrue(TEXT("something was recorded"), First.Entities.Num() >= 3);
+	TestTrue(TEXT("but not more than the world holds"), First.Entities.Num() <= A.NumEntities());
+
+	// --- Rebuild from the same defs, apply, re-freeze, compare digests -------------------------
+	FElysiumEntityWorld B(/*Owner*/ nullptr, /*GameState*/ nullptr);
+	B.Load(MakeSaveTestDefs());
+	const int32 AppliedCount = B.ApplySnapshot(First);
+	TestEqual(TEXT("every record applied"), AppliedCount, First.Entities.Num());
+
+	FElysiumEntity* CounterB = B.FindByName(TEXT("counter1"));
+	FElysiumEntity* TimerB = B.FindByName(TEXT("timer1"));
+	if (!TestNotNull(TEXT("counter1 after restore"), CounterB)
+		|| !TestNotNull(TEXT("timer1 after restore"), TimerB))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the counter's value survived"), SaveTestCounterValue(CounterB), 5.0f);
+	TestTrue(TEXT("the hidden timer is still hidden"), TimerB->IsHidden());
+	TestNotNull(TEXT("the runtime entity restored under its own name"), B.FindByName(TEXT("runtime1")));
+	TestEqual(TEXT("the queue was replaced, not appended to"), B.Queue().Num(), 1);
+	if (const FElysiumIOEvent* Head = B.Queue().PeekEarliest())
+	{
+		TestEqual(TEXT("its fire time is absolute and unchanged"), Head->FireTime, 30.0);
+		// §6 — a saved handle is re-stamped against the live epoch, so it resolves again.
+		if (const FElysiumEntity* Caller = B.Resolve(Head->Caller))
+		{
+			TestEqual(TEXT("the caller handle re-resolved to the entity that queued it"),
+				Caller->Handle.Index, Relay->Handle.Index);
+		}
+		else
+		{
+			AddError(TEXT("the restored caller handle did not resolve"));
+		}
+	}
+
+	FElysiumMapSnapshot Second;
+	B.Freeze(Second);
+	// §10's round trip is a digest comparison rather than a semantic diff, and it can be because
+	// §8 makes the walk order stable: entities by index, fields sorted by name.
+	TestEqual(TEXT("freeze -> rebuild -> apply -> freeze is byte-identical"),
+		ElysiumSaveDigest(Second), ElysiumSaveDigest(First));
+
+	// --- Absent entities: what left with the player does not come back -------------------------
+	FElysiumMapSnapshot WithAbsent = First;
+	WithAbsent.AbsentEntities.Add(Counter->Handle.Index);
+	FElysiumEntityWorld C(/*Owner*/ nullptr, /*GameState*/ nullptr);
+	C.Load(MakeSaveTestDefs());
+	C.ApplySnapshot(WithAbsent);
+	TestNull(TEXT("an absent entity is not re-materialised"), C.FindByName(TEXT("counter1")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSavePayloadTest, "Elysium.Substrate.SavePayload",
+	GElysiumTestFlags)
+bool FElysiumSavePayloadTest::RunTest(const FString&)
+{
+	// A payload with something in every block.
+	FElysiumSavePayload Payload;
+	Payload.Session.ClockNow = 123.5;
+	Payload.Session.Globals.Emplace(TEXT("Story_State"), FElysiumVariant::Int(-4));
+	Payload.Session.Globals.Emplace(TEXT("Tut_Jack"), FElysiumVariant::Int(2));
+	Payload.Session.Quests.Emplace(TEXT("tutorial"), 3);
+	Payload.Session.RngSessionSeed = 4242;
+	ElysiumRng::SeedAll(4242);
+	ElysiumRng::Stream(EElysiumRngStream::OneOfSet).GetUnsignedInt();
+	ElysiumRng::Snapshot(Payload.Session.Rng);
+
+	Payload.Player.Sheet.Clan = 7;
+	Payload.Player.Sheet.bMale = false;
+	Payload.Player.Sheet.Stats.Add(FName(TEXT("base_strength")), 3);
+	Payload.Player.Money = 250;
+	Payload.Player.Health = 61;
+	Payload.Player.MaxHealth = 100;
+	Payload.Player.Law.Criminal = 2;
+	Payload.Player.ExperienceLog.Add({ TEXT("xp_tutorial"), 0 });
+
+	FElysiumMapSnapshot Snap;
+	Snap.MapName = TEXT("sp_tutorial_1");
+	Snap.DefCount = 12;
+	Snap.QueueNextSerial = 9;
+	{
+		FElysiumEntityState S;
+		S.Index = 4;
+		S.ClassName = FName(TEXT("math_counter"));
+		S.TargetName = TEXT("counter1");
+		S.NextThink = ELYSIUM_NEVER_THINK;
+		S.Fields.Emplace(FName(TEXT("startvalue")), FElysiumVariant::Int(5));
+		Snap.Entities.Add(MoveTemp(S));
+	}
+	{
+		FElysiumIOEvent E;
+		E.FireTime = 30.0;
+		E.Target = TEXT("counter1");
+		E.Input = FName(TEXT("Add"));
+		E.Param = FElysiumVariant::Int(3);
+		E.PythonSrc = TEXT("Tut_Advance()");
+		E.Caller = FElysiumEntityHandle(4, 77);
+		E.Serial = 8;
+		Snap.Queue.Add(MoveTemp(E));
+	}
+	Payload.Maps.Add(Snap.MapName, MoveTemp(Snap));
+	Payload.World.CurrentMap = TEXT("sp_tutorial_1");
+	Payload.World.PlayerOrigin = FVector(10, 20, 30);
+	Payload.World.PlayerYaw = 45.0f;
+	Payload.World.bHasPlacement = true;
+	Payload.World.VisitedMaps.Add(TEXT("sp_tutorial_1"));
+
+	// --- Write / read ---------------------------------------------------------------------------
+	TArray<uint8> Bytes;
+	FString Error;
+	if (!TestTrue(TEXT("the payload writes"), ElysiumSave::Write(Payload, Bytes, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestEqual(TEXT("the prologue declares this build's schema"),
+		ElysiumSave::PeekVersion(Bytes), (int32)FElysiumSaveVersion::Latest);
+
+	FElysiumSavePayload Back;
+	if (!TestTrue(TEXT("and reads back"), ElysiumSave::Read(Bytes, Back, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestEqual(TEXT("the clock survived"), Back.Session.ClockNow, 123.5);
+	TestEqual(TEXT("G survived"), Back.Session.Globals.Num(), 2);
+	TestEqual(TEXT("in order, case-sensitively by key"), Back.Session.Globals[0].Key,
+		FString(TEXT("Story_State")));
+	TestEqual(TEXT("the quest map survived"), Back.Session.Quests.Num(), 1);
+	TestEqual(TEXT("the RNG stream states survived"), Back.Session.Rng.Num(), Payload.Session.Rng.Num());
+	TestEqual(TEXT("the clan survived"), Back.Player.Sheet.Clan, 7);
+	TestEqual(TEXT("the sheet bag survived"), Back.Player.Sheet.Stats.Num(), 1);
+	TestEqual(TEXT("money survived"), Back.Player.Money, 250);
+	TestEqual(TEXT("the law counters survived"), Back.Player.Law.Criminal, 2);
+	TestEqual(TEXT("one map snapshot"), Back.Maps.Num(), 1);
+	if (const FElysiumMapSnapshot* Read = Back.Maps.Find(TEXT("sp_tutorial_1")))
+	{
+		TestEqual(TEXT("its entity record survived"), Read->Entities.Num(), 1);
+		if (Read->Entities.Num() == 1 && Read->Entities[0].Fields.Num() == 1)
+		{
+			TestEqual(TEXT("with its field"), Read->Entities[0].Fields[0].Value.ToInt(), 5);
+		}
+		TestEqual(TEXT("its queue survived"), Read->Queue.Num(), 1);
+		if (Read->Queue.Num() == 1)
+		{
+			// §6 — a deferred script survives as its SOURCE STRING, which is how ScheduleTask does
+			// in the original too.
+			TestEqual(TEXT("including the deferred script source"), Read->Queue[0].PythonSrc,
+				FString(TEXT("Tut_Advance()")));
+			TestEqual(TEXT("the serial is preserved, not re-minted"), (int32)Read->Queue[0].Serial, 8);
+			// The epoch is dropped on the way out; re-stamping is the applier's job.
+			TestEqual(TEXT("a saved handle keeps its index"), Read->Queue[0].Caller.Index, 4);
+			TestEqual(TEXT("and loses its epoch"), (int32)Read->Queue[0].Caller.Epoch, 0);
+		}
+	}
+	TestEqual(TEXT("the world placement survived"), Back.World.PlayerYaw, 45.0f);
+
+	// Determinism: the same state writes the same bytes (§8).
+	TArray<uint8> Again;
+	TestTrue(TEXT("a second write succeeds"), ElysiumSave::Write(Payload, Again, Error));
+	TestEqual(TEXT("two writes of one state are byte-identical"), Again, Bytes);
+
+	// --- The integrity gates -------------------------------------------------------------------
+	FElysiumSavePayload Rejected;
+	TArray<uint8> Garbage;
+	Garbage.AddZeroed(64);
+	TestFalse(TEXT("a foreign blob is refused"), ElysiumSave::Read(Garbage, Rejected, Error));
+	TestTrue(TEXT("with a readable reason"), Error.Contains(TEXT("Elysium payload")));
+
+	TArray<uint8> Truncated(Bytes.GetData(), 8);
+	TestFalse(TEXT("a truncated payload is refused"), ElysiumSave::Read(Truncated, Rejected, Error));
+
+	// A payload stamped below the floor: rejected with a reason, never half-read.
+	{
+		TArray<uint8> TooOld = Bytes;
+		FMemoryWriter Patch(TooOld, /*bIsPersistent*/ true);
+		uint32 Magic = ElysiumSaveMagic;
+		int32 Version = FElysiumSaveVersion::MinSupported - 1;
+		Patch << Magic << Version;
+		TestFalse(TEXT("a below-floor schema is refused"), ElysiumSave::Read(TooOld, Rejected, Error));
+		TestTrue(TEXT("naming the floor"), Error.Contains(TEXT("floor")));
+	}
+	{
+		TArray<uint8> TooNew = Bytes;
+		FMemoryWriter Patch(TooNew, /*bIsPersistent*/ true);
+		uint32 Magic = ElysiumSaveMagic;
+		int32 Version = FElysiumSaveVersion::Latest + 1;
+		Patch << Magic << Version;
+		TestFalse(TEXT("a future schema is refused"), ElysiumSave::Read(TooNew, Rejected, Error));
+		TestTrue(TEXT("saying so"), Error.Contains(TEXT("newer build")));
+	}
+
+	// --- The readable dump ------------------------------------------------------------------
+	TArray<FString> Lines;
+	ElysiumSave::Describe(Payload, Lines);
+	TestTrue(TEXT("the dump names a G flag"),
+		Lines.ContainsByPredicate([](const FString& L) { return L.Contains(TEXT("session.G.Story_State")); }));
+	TestTrue(TEXT("and the map's queued delivery"),
+		Lines.ContainsByPredicate([](const FString& L) { return L.Contains(TEXT("queue @30.000")); }));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSaveSchemaTest, "Elysium.Substrate.SaveSchema",
+	GElysiumTestFlags)
+bool FElysiumSaveSchemaTest::RunTest(const FString&)
+{
+	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+
+	// --- The field flags ARE the enumeration (§4) ----------------------------------------------
+	const FElysiumClassDesc* CounterDesc = Reg.Find(FName(TEXT("math_counter")));
+	if (!TestNotNull(TEXT("math_counter is registered"), CounterDesc))
+	{
+		return false;
+	}
+	const TArray<FName> SaveNames = Reg.SaveFields(*CounterDesc);
+	TestTrue(TEXT("the chain walk reaches a leaf field"), SaveNames.Contains(FName(TEXT("startvalue"))));
+	TestTrue(TEXT("and a base one"), SaveNames.Contains(FName(TEXT("health"))));
+	// Sorted, because §8's digest comparison needs an order that is not a hash map's.
+	TArray<FName> Sorted = SaveNames;
+	Sorted.Sort(FNameLexicalLess());
+	TestEqual(TEXT("the walk is sorted"), SaveNames, Sorted);
+	// Derived shadows base, so a name appears once however many tables in the chain carry it.
+	const TSet<FName> Unique(SaveNames);
+	TestEqual(TEXT("and carries no duplicates"), Unique.Num(), SaveNames.Num());
+
+	// A field registered with neither flag is in neither consumer's list. The player's law counters
+	// are the case: their setter is a deliberate no-op and their durable home is the Player block.
+	if (const FElysiumClassDesc* PlayerDesc = Reg.Find(ElysiumPlayerClassName()))
+	{
+		if (const FElysiumFieldAccessor* Law = Reg.FindField(*PlayerDesc, FName(TEXT("criminal_level"))))
+		{
+			TestFalse(TEXT("a read-only law counter is not save-walked"), Law->bSave);
+			TestFalse(TEXT("nor keyable"), Law->bKeyable);
+		}
+	}
+
+	// --- A field name this build no longer knows is skipped, not fatal (§4) --------------------
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__schema_test__");
+	FElysiumEntityDef Counter;
+	Counter.Classname = TEXT("math_counter");
+	Counter.TargetName = TEXT("counter1");
+	Defs.Defs.Add(MoveTemp(Counter));
+
+	FElysiumMapSnapshot Snapshot;
+	Snapshot.MapName = TEXT("__schema_test__");
+	Snapshot.DefCount = 1;
+	{
+		FElysiumEntityState S;
+		S.Index = 0;
+		S.ClassName = FName(TEXT("math_counter"));
+		S.TargetName = TEXT("counter1");
+		S.NextThink = ELYSIUM_NEVER_THINK;
+		S.Fields.Emplace(FName(TEXT("startvalue")), FElysiumVariant::Int(11));
+		S.Fields.Emplace(FName(TEXT("a_field_from_the_future")), FElysiumVariant::Int(1));
+		Snapshot.Entities.Add(MoveTemp(S));
+	}
+
+	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
+	World.Load(MoveTemp(Defs));
+	TestEqual(TEXT("the record still applied"), World.ApplySnapshot(Snapshot), 1);
+	TestEqual(TEXT("the known field landed"),
+		SaveTestCounterValue(World.FindByName(TEXT("counter1"))), 11.0f);
+
+	// --- A record whose class changed under the save is skipped, not misapplied ----------------
+	FElysiumMapSnapshot Wrong = Snapshot;
+	Wrong.Entities[0].ClassName = FName(TEXT("logic_relay"));
+	Wrong.Entities[0].Fields.Reset();
+	Wrong.Entities[0].Fields.Emplace(FName(TEXT("startvalue")), FElysiumVariant::Int(99));
+
+	FElysiumEntityDefs Defs2;
+	Defs2.MapName = TEXT("__schema_test__");
+	FElysiumEntityDef Counter2;
+	Counter2.Classname = TEXT("math_counter");
+	Counter2.TargetName = TEXT("counter1");
+	Defs2.Defs.Add(MoveTemp(Counter2));
+	FElysiumEntityWorld Other(/*Owner*/ nullptr, /*GameState*/ nullptr);
+	Other.Load(MoveTemp(Defs2));
+	TestEqual(TEXT("the mismatched record is skipped"), Other.ApplySnapshot(Wrong), 0);
+	TestEqual(TEXT("and nothing was written"),
+		SaveTestCounterValue(Other.FindByName(TEXT("counter1"))), 0.0f);
+
+	// --- The owned RNG streams restore their position (§8) -------------------------------------
+	ElysiumRng::SeedAll(1234);
+	ElysiumRng::Stream(EElysiumRngStream::Dice).RandRange(0, 9);
+	TArray<ElysiumRng::FState> State;
+	ElysiumRng::Snapshot(State);
+	const int32 Next = ElysiumRng::Stream(EElysiumRngStream::Dice).RandRange(0, 9);
+	ElysiumRng::Stream(EElysiumRngStream::Dice).RandRange(0, 9);
+	ElysiumRng::Restore(State);
+	TestEqual(TEXT("a restored stream continues the saved sequence"),
+		ElysiumRng::Stream(EElysiumRngStream::Dice).RandRange(0, 9), Next);
 
 	return true;
 }
