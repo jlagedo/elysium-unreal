@@ -1,0 +1,169 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "ElysiumEntityDefs.h"
+#include "ElysiumEntityHandle.h"
+#include "ElysiumEventQueue.h"
+#include "ElysiumPlayer.h"
+#include "ElysiumRng.h"
+#include "ElysiumVariant.h"
+
+// 11.9 — the four blocks a save holds (`save-architecture.md` §3), as plain C++ structs we own.
+// None of this is UPROPERTY-reflected and none of it should become so: the substrate is plain C++
+// precisely so serialization, determinism and travel teardown stay in our hands (engine-core.md R1).
+// `UElysiumSaveGame` is the only reflected part, and it carries these as an opaque byte payload.
+
+// The payload's schema id. It is also registered as an engine custom version
+// (`FCustomVersionRegistration`), so a nested engine serializer sees it on the archive; the number
+// is written into the payload prologue as well, because a raw memory archive carries no custom-
+// version container of its own.
+struct FElysiumSaveVersion
+{
+	enum Type : int32
+	{
+		BeforeFirst   = 0,
+		Initial       = 1,   // the four blocks, the field walk, the snapshot lifecycle
+
+		LatestPlusOne,
+		Latest = LatestPlusOne - 1
+	};
+
+	// The oldest payload this build can read. A payload below it is rejected with a readable
+	// reason rather than half-read (`save-architecture.md` §2).
+	static constexpr int32 MinSupported = Initial;
+
+	static const FGuid GUID;
+};
+
+// 'ELYS' — the payload's first four bytes, so a truncated or foreign file fails loudly.
+inline constexpr uint32 ElysiumSaveMagic = 0x53594C45u;
+
+// ------------------------------------------------------------------------------------------------
+// The `Maps` block — one frozen map (`save-architecture.md` §5)
+// ------------------------------------------------------------------------------------------------
+
+// One entity's saved state. Identity is the **def index** (R3: stable across runs, never reused
+// within a map load), so it is also the save id with no extra id space.
+//
+// `Fields` holds only what differs from what a fresh build of the same def would produce — the
+// generalisation of VtMB's zero-value-omission rule, and most of why these payloads are small.
+// Restoring matches **by name**, so a field added to a base class does not invalidate a payload.
+struct FElysiumEntityState
+{
+	int32 Index = INDEX_NONE;
+	FName ClassName;                  // guards a def-array shift: a mismatch skips the record
+	FString TargetName;               // Entity.SetName re-keys the name index, so it is restored explicitly
+
+	bool  bDead = false;
+	bool  bHidden = false;
+	bool  bSpawnCalled = true;
+	float NextThink = 0.0f;           // absolute game seconds, rebased onto the restored clock
+	float SavedNextThink = 0.0f;      // what ScriptUnhide restores
+
+	TArray<int32> OutputTimesRemaining;
+	TArray<TPair<FName, FElysiumVariant>> Fields;   // sorted by name; only the differing ones
+
+	// A leaf's derived runtime state (a mover's phase, a sequence cursor) — the one thing that does
+	// not fit the field walk, written by FElysiumEntity::SaveState (`save-architecture.md` §4).
+	TArray<uint8> LeafState;
+
+	// Runtime-spawned entities (npc_maker.Spawn, CreateEntityNoSpawn) live past the def array, so
+	// they serialize their synthesized def alongside their state and restore as themselves.
+	bool bRuntime = false;
+	FElysiumEntityDef Def;
+};
+
+// The `env_fade` screen fade — world state with the map epoch's lifetime (11.8), so it is the map's.
+struct FElysiumSavedFade
+{
+	bool         bActive = false;
+	FLinearColor Color = FLinearColor::Black;
+	float        MaxAlpha = 1.0f;
+	float        Duration = 0.0f;
+	float        HoldTime = 0.0f;
+	bool         bFadeIn = false;
+	bool         bAutoReverse = false;
+	double       StartTime = 0.0;
+};
+
+// A save holds the current map plus a frozen snapshot of every other map visited this run, so
+// walking back into Santa Monica finds it as you left it. It is also exactly what the OpenLevel
+// hard-travel lifecycle produces at every travel boundary — the same code path, which is what keeps
+// travel and save from drifting apart.
+struct FElysiumMapSnapshot
+{
+	FString MapName;
+	int32   DefCount = 0;             // the def array's size when frozen; a mismatch is logged
+	double  FrozenAt = 0.0;           // game seconds at freeze, for the readable dump
+
+	TArray<FElysiumEntityState> Entities;
+
+	// The `.HL3` equivalent: def indices that left the map with the player (the player plus
+	// everything carried). On restore the build skips them, because they now live wherever the
+	// player is — without it, walking back re-materialises the whole inventory.
+	TArray<int32> AbsentEntities;
+
+	// The one time-sorted queue, absolute times kept as-is (the restored clock is the saved clock).
+	TArray<FElysiumIOEvent> Queue;
+	uint64 QueueNextSerial = 1;
+
+	FElysiumSavedFade Fade;
+
+	bool IsValid() const { return !MapName.IsEmpty(); }
+};
+
+// ------------------------------------------------------------------------------------------------
+// The `Session`, `Player` and `World` blocks
+// ------------------------------------------------------------------------------------------------
+
+// `G`, the quest map, the clock and the RNG streams — everything that outlives any one map and is
+// not the player. `G` serializes as a variant map with no pickling and no interpreter involvement,
+// because it already lives in C++ (`save-architecture.md` §7). The CPython VM's own namespace is
+// **not** saved and does not need to be: level-script names are re-imported per map at load, and
+// every durable value a script writes goes to `G`, the quest map or an entity field.
+struct FElysiumSessionBlock
+{
+	double ClockNow = 0.0;
+
+	// Sorted by key on the way out, so two saves of the same state are byte-identical (§8).
+	TArray<TPair<FString, FElysiumVariant>> Globals;
+	TArray<TPair<FString, int32>>           Quests;
+
+	int32 RngSessionSeed = 0;
+	TArray<ElysiumRng::FState> Rng;
+};
+
+// The visited-map graph and where the player is standing in it.
+struct FElysiumWorldBlock
+{
+	FString CurrentMap;
+	FVector PlayerOrigin = FVector::ZeroVector;
+	float   PlayerYaw = 0.0f;          // Unreal yaw (the pawn's), not the entity's Source-space angle
+	bool    bHasPlacement = false;     // false = place at info_player_start (a save with no live pawn)
+
+	TArray<FString> VisitedMaps;       // first-visit order
+};
+
+// Slot metadata, written **outside** the compressed payload so the load menu can list slots without
+// inflating or loading anything — the reason `userName`, `comment` and `mapName` sit in VtMB's own
+// global stream too.
+struct FElysiumSaveHeaderData
+{
+	int32   PayloadVersion = FElysiumSaveVersion::Latest;
+	FString Map;
+	FString Label;
+	FString ClanName;
+	int32   Clan = 0;
+	double  PlaytimeSeconds = 0.0;
+	FDateTime Timestamp;
+	FString Kind;                      // "manual" | "quick" | "auto"
+};
+
+// The whole payload: the four blocks, in the order `save-architecture.md` §3 lists them.
+struct FElysiumSavePayload
+{
+	FElysiumSessionBlock Session;
+	FElysiumPlayerRecord Player;
+	TMap<FString, FElysiumMapSnapshot> Maps;
+	FElysiumWorldBlock   World;
+};

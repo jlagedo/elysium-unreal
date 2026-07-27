@@ -52,11 +52,11 @@ namespace
 	// FElysiumEntity members). Mirrors AddSignField / AddLogicField — file-unique name so all of them
 	// can land in one unity blob.
 	template <typename TClass, typename TMember>
-	void AddNpcField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member, bool bKeyable = true)
+	void AddNpcField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member, EElysiumField Flags = ElysiumFieldDefault)
 	{
 		static_assert(std::is_base_of_v<FElysiumEntity, TClass>, "TClass must derive from FElysiumEntity");
 		FElysiumFieldAccessor Acc;
-		Acc.bKeyable = bKeyable;
+		Acc.ApplyFlags(Flags);
 		if constexpr (std::is_same_v<TMember, bool>)
 		{
 			Acc.Type = EElysiumVariantType::Bool;
@@ -329,7 +329,7 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	// times_talked: santamonica/chinatown/e3/demo read `npc.times_talked` to branch first-vs-repeat
 	// dialogue. Register it read-only (engine-written, script-read) so the read resolves to a defined
 	// value instead of raising AttributeError. B4's dialogue runner drives the count; it stays 0 until then.
-	AddNpcField(D, TEXT("times_talked"), &FElysiumNpc::TimesTalked, /*bKeyable*/ false);
+	AddNpcField(D, TEXT("times_talked"), &FElysiumNpc::TimesTalked, EElysiumField::Save);
 }
 
 static void BuildNpcMakerClass(FElysiumClassDesc& D)

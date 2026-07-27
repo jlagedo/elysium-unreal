@@ -38,11 +38,11 @@ namespace
 	// FElysiumEntity members). Mirrors AddLogicField / AddSubclassField / AddDoorSubclassField —
 	// file-unique name so all of them can land in one unity blob.
 	template <typename TClass, typename TMember>
-	void AddEventField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member, bool bKeyable = true)
+	void AddEventField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member, EElysiumField Flags = ElysiumFieldDefault)
 	{
 		static_assert(std::is_base_of_v<FElysiumEntity, TClass>, "TClass must derive from FElysiumEntity");
 		FElysiumFieldAccessor Acc;
-		Acc.bKeyable = bKeyable;
+		Acc.ApplyFlags(Flags);
 		if constexpr (std::is_same_v<TMember, bool>)
 		{
 			Acc.Type = EElysiumVariantType::Bool;

@@ -17,6 +17,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumRng.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumWorldServices.h"
 
@@ -32,11 +33,11 @@ namespace
 	// three can land in one unity blob. Always valid: a class's field table is only walked for
 	// entities of that class or a subclass.
 	template <typename TClass, typename TMember>
-	void AddLogicField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member, bool bKeyable = true)
+	void AddLogicField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member, EElysiumField Flags = ElysiumFieldDefault)
 	{
 		static_assert(std::is_base_of_v<FElysiumEntity, TClass>, "TClass must derive from FElysiumEntity");
 		FElysiumFieldAccessor Acc;
-		Acc.bKeyable = bKeyable;
+		Acc.ApplyFlags(Flags);
 		if constexpr (std::is_same_v<TMember, bool>)
 		{
 			Acc.Type = EElysiumVariantType::Bool;
@@ -212,7 +213,11 @@ public:
 private:
 	float Interval() const
 	{
-		return bUseRandomTime ? FMath::FRandRange(LowerRandomBound, UpperRandomBound) : RefireTime;
+		// S8 — an owned, seeded stream, not FMath: the interval is game-visible time, so a load has to
+		// reproduce the sequence the save was in the middle of (`save-architecture.md` §8).
+		return bUseRandomTime
+			? ElysiumRng::Stream(EElysiumRngStream::LogicTimer).FRandRange(LowerRandomBound, UpperRandomBound)
+			: RefireTime;
 	}
 	void Reschedule()
 	{
@@ -304,7 +309,8 @@ public:
 		for (int32 i = 0; i < NumCases; ++i) { if (bCaseSet[i]) { Live.Add(i); } }
 		if (Live.Num() > 0)
 		{
-			FireCase(Live[FMath::RandRange(0, Live.Num() - 1)], A.Activator, A.Param);
+			FireCase(Live[ElysiumRng::Stream(EElysiumRngStream::LogicCase).RandRange(0, Live.Num() - 1)],
+				A.Activator, A.Param);
 		}
 	}
 
@@ -341,7 +347,7 @@ public:
 		for (int32 i = 0; i < NumCases; ++i) { if (bCaseSet[i]) { Live.Add(i); } }
 		if (Live.Num() > 0)
 		{
-			CurrentCase = Live[FMath::RandRange(0, Live.Num() - 1)];
+			CurrentCase = Live[ElysiumRng::Stream(EElysiumRngStream::LogicCase).RandRange(0, Live.Num() - 1)];
 			FireCase(CurrentCase, A.Activator, A.Param);
 		}
 	}

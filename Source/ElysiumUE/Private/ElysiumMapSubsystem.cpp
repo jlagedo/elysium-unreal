@@ -260,6 +260,25 @@ bool UElysiumMapSubsystem::ConsumeLandmarkSpawn(FString& OutLandmark, FVector& O
 	return true;
 }
 
+void UElysiumMapSubsystem::RequestRestorePlacement(const FVector& Origin, float Yaw)
+{
+	NextRestorePlacement.bValid = true;
+	NextRestorePlacement.Origin = Origin;
+	NextRestorePlacement.Yaw = Yaw;
+}
+
+bool UElysiumMapSubsystem::ConsumeRestorePlacement(FVector& OutOrigin, float& OutYaw)
+{
+	if (!NextRestorePlacement.bValid)
+	{
+		return false;
+	}
+	OutOrigin = NextRestorePlacement.Origin;
+	OutYaw    = NextRestorePlacement.Yaw;
+	NextRestorePlacement = FRestorePlacement{};
+	return true;
+}
+
 FString UElysiumMapSubsystem::PendingTravelDesc() const
 {
 	if (!PendingMapLoad.bValid)

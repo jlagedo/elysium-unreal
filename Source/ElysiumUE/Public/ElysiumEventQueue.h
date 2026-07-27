@@ -45,6 +45,31 @@ public:
 		Events.Insert(MoveTemp(Event), Insert);
 	}
 
+	// 11.9 — the restore path (`save-architecture.md` §6). A saved event already carries the serial
+	// it was queued under, so re-adding it must keep that serial rather than mint a new one: the
+	// serial is the FIFO tiebreaker, and re-numbering would reorder equal-time events. Insertion is
+	// the same (FireTime, Serial) ordering Add uses, so a payload written out of order still lands
+	// sorted. Not a second chokepoint: it takes only events this queue itself wrote out.
+	void AddRestored(FElysiumIOEvent&& Event)
+	{
+		int32 Insert = Events.Num();
+		for (int32 i = 0; i < Events.Num(); ++i)
+		{
+			if (Events[i].FireTime > Event.FireTime
+				|| (Events[i].FireTime == Event.FireTime && Events[i].Serial > Event.Serial))
+			{
+				Insert = i;
+				break;
+			}
+		}
+		Events.Insert(MoveTemp(Event), Insert);
+	}
+
+	// The serial the next Add will take. Saved and restored so a load cannot hand out a serial that
+	// is already sitting in the restored queue.
+	uint64 NextSerialValue() const { return NextSerial; }
+	void SetNextSerial(uint64 In) { NextSerial = FMath::Max(In, (uint64)1); }
+
 	// The head is the earliest event; due when its FireTime has been reached.
 	bool HasDue(double Now) const { return Events.Num() > 0 && Events[0].FireTime <= Now; }
 	const FElysiumIOEvent* PeekEarliest() const { return Events.Num() > 0 ? &Events[0] : nullptr; }

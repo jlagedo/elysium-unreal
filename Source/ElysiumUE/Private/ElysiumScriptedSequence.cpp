@@ -61,7 +61,7 @@ namespace
 	{
 		static_assert(std::is_base_of_v<FElysiumEntity, TClass>, "TClass must derive from FElysiumEntity");
 		FElysiumFieldAccessor Acc;
-		Acc.bKeyable = true;
+		Acc.ApplyFlags(ElysiumFieldDefault);
 		if constexpr (std::is_same_v<TMember, int32>)
 		{
 			Acc.Type = EElysiumVariantType::Int;

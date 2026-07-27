@@ -30,16 +30,43 @@ inline FVector ElysiumParseVec3(const FString& S)
 // (P1.6+) register their own.
 using FElysiumInputThunk = void(*)(FElysiumEntity& Self, const FElysiumInputArgs& Args);
 
+// R2 — what a registered field is *for*. VtMB's datamap flags carry the same two bits we need:
+// 0x8 (FTYPEDESC_KEY — writable from a keyvalue/Python) and 0x2 (FTYPEDESC_SAVE — walked by the
+// save/restore pass). Persistence is the field table's fifth consumer, beside I/O, the Python
+// datamap walk, keyvalue application and the inspector (`save-architecture.md` §4), so it is a
+// flag on the registration rather than a second list somebody has to remember to edit.
+enum class EElysiumField : uint8
+{
+	None = 0,
+	Key  = 1 << 0,   // writable at runtime from a keyvalue / Python / an input
+	Save = 1 << 1,   // enumerated by the save walk
+};
+ENUM_CLASS_FLAGS(EElysiumField)
+
+// The default a registration takes when it says nothing: a keyable field the save walk carries.
+// Saving a field that never changes costs nothing — the freeze diffs against a fresh build of the
+// same def and omits everything that matches (`save-architecture.md` §4's zero-omission rule,
+// generalised from "zero" to "what the rebuild would produce").
+inline constexpr EElysiumField ElysiumFieldDefault = EElysiumField::Key | EElysiumField::Save;
+
 // R2 — one typed accessor over a live entity field. Get/Set marshal through the variant;
 // `bKeyable` mirrors the VtMB datamap flags bit 0x8 (writable from a keyvalue/Python). The
 // spawn pass applies map keyvalues regardless; runtime writes (Python/I/O, P1.4+) honour
-// bKeyable. `Type` is the marshalling category, surfaced by the P2 inspector.
+// bKeyable. `bSave` is bit 0x2 — the save walk's enumeration. `Type` is the marshalling
+// category, surfaced by the P2 inspector.
 struct FElysiumFieldAccessor
 {
 	EElysiumVariantType Type = EElysiumVariantType::Void;
 	bool bKeyable = false;
+	bool bSave = false;
 	TFunction<FElysiumVariant(const FElysiumEntity&)> Get;
 	TFunction<void(FElysiumEntity&, const FElysiumVariant&)> Set;
+
+	void ApplyFlags(EElysiumField Flags)
+	{
+		bKeyable = EnumHasAnyFlags(Flags, EElysiumField::Key);
+		bSave    = EnumHasAnyFlags(Flags, EElysiumField::Save);
+	}
 };
 
 // Builds one live entity of a class. The base/inert case returns a plain FElysiumEntity;
@@ -69,10 +96,10 @@ struct FElysiumClassDesc
 	// Register a data member as a typed field. The member type deduces the variant category
 	// and the get/set marshalling. String keyvalues coerce at spawn (Atoi/Atof/vec-parse).
 	template <typename T>
-	FElysiumClassDesc& Field(FName Name, T FElysiumEntity::* Member, bool bKeyable = true)
+	FElysiumClassDesc& Field(FName Name, T FElysiumEntity::* Member, EElysiumField Flags = ElysiumFieldDefault)
 	{
 		FElysiumFieldAccessor Acc;
-		Acc.bKeyable = bKeyable;
+		Acc.ApplyFlags(Flags);
 		if constexpr (std::is_same_v<T, int32>)
 		{
 			Acc.Type = EElysiumVariantType::Int;
@@ -138,6 +165,12 @@ public:
 	// Chain walk (derived shadows base): resolve an input/field by name up the base chain.
 	FElysiumInputThunk FindInput(const FElysiumClassDesc& Desc, FName Input) const;
 	const FElysiumFieldAccessor* FindField(const FElysiumClassDesc& Desc, FName Field) const;
+
+	// The chain-resolved `Save`-flagged field names for a class, **sorted**. Sorted rather than in
+	// registration order because a class's own table is a TMap: two walks in one process agree, but
+	// a save has to be reproducible across builds, and §8's byte-identical round-trip test is a
+	// digest comparison. Derived shadows base, so a name appears once.
+	TArray<FName> SaveFields(const FElysiumClassDesc& Desc) const;
 
 	// Build a live entity for a def: its leaf class if registered, else an inert base record.
 	TUniquePtr<FElysiumEntity> Create(const FElysiumEntityDef& Def, FElysiumEntityHandle Handle) const;

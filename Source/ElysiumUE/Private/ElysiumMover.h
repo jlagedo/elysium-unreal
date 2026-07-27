@@ -161,6 +161,11 @@ public:
 	virtual void Spawn() override;
 	virtual void Think() override;
 
+	// 11.9 — the door's derived state is exactly the case `save-architecture.md` §4 carves out for a
+	// leaf hook: `m_toggle_state` and the lock are neither keyvalues nor registered fields, and a
+	// rebuild from the def cannot re-derive them (it would put every door back at its spawn pose).
+	virtual void Serialize(FElysiumSaveArchive& Ar) override;
+
 protected:
 	// Leaf hook: compute the OPEN body-relative transform from the door's keyvalues + spawnflags.
 	// Closed is always the spawn pose (identity/origin). Rotating doors rotate about the hinge;
@@ -190,6 +195,12 @@ protected:
 	// *after* Spawn() (BuildBrushBody follows Spawn in the world's load pass), so the pose can't be
 	// applied in Spawn() itself.
 	bool bStartOpenSeatPending = false;
+
+	// 11.9 — a restored door has to be re-seated at the pose its saved state implies, and the body
+	// does not exist while the snapshot is being applied. Serialize arms this and forces an
+	// immediate think; the seat pass snaps the pose and hands the saved think back.
+	bool  bRestoreSeatPending = false;
+	float RestoreResumeThink = ELYSIUM_NEVER_THINK;
 };
 
 // Register the shared CBaseDoor input + field tables onto a descriptor (used by the CBaseDoor

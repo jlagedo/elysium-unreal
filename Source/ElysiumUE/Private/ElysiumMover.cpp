@@ -16,6 +16,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoverSounds.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumSaveArchive.h"
 #include "ElysiumWorldServices.h"
 
 #include "Dom/JsonObject.h"
@@ -126,11 +127,11 @@ namespace
 	// File-unique name: ElysiumStarterClasses.cpp has an identical template, and both can land in
 	// one unity blob.
 	template <typename TClass, typename TMember>
-	void AddDoorSubclassField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member, bool bKeyable = true)
+	void AddDoorSubclassField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member, EElysiumField Flags = ElysiumFieldDefault)
 	{
 		static_assert(std::is_base_of_v<FElysiumEntity, TClass>, "TClass must derive from FElysiumEntity");
 		FElysiumFieldAccessor Acc;
-		Acc.bKeyable = bKeyable;
+		Acc.ApplyFlags(Flags);
 		if constexpr (std::is_same_v<TMember, bool>)
 		{
 			Acc.Type = EElysiumVariantType::Bool;
@@ -476,6 +477,31 @@ void FElysiumDoorBase::Spawn()
 	}
 }
 
+void FElysiumDoorBase::Serialize(FElysiumSaveArchive& Ar)
+{
+	uint8 State = static_cast<uint8>(ToggleState);
+	Ar << State;
+	Ar << bLocked;
+
+	if (Ar.IsLoading())
+	{
+		// A door caught mid-swing resolves to the end it was travelling toward. VtMB saves the move
+		// itself and resumes it; one frame of tween is animation, not game state, and resolving it
+		// keeps the restored world's collision honest from the first frame (`decisions.md` 2026-07-27).
+		const EToggleState Saved = static_cast<EToggleState>(State);
+		ToggleState =
+			(Saved == EToggleState::GoingUp)   ? EToggleState::AtTop :
+			(Saved == EToggleState::GoingDown) ? EToggleState::AtBottom : Saved;
+
+		// Force one think now and hand the saved one back from the seat pass; a `wait -1` door's
+		// think is NEVER, and it still has to be re-seated.
+		RestoreResumeThink = NextThink;
+		bRestoreSeatPending = true;
+		bStartOpenSeatPending = false;
+		NextThink = 0.0f;
+	}
+}
+
 void FElysiumDoorBase::Think()
 {
 	const double Now = World ? World->NowSeconds() : 0.0;
@@ -483,6 +509,17 @@ void FElysiumDoorBase::Think()
 	if (IsMoving())
 	{
 		TickMove(Now);
+		return;
+	}
+
+	if (bRestoreSeatPending)
+	{
+		// 11.9 — the pose a restored door rests in. Same reason START_OPEN seats on the first think:
+		// the brush body is built after Spawn, and the snapshot is applied after that.
+		bRestoreSeatPending = false;
+		const bool bOpen = (ToggleState == EToggleState::AtTop);
+		SnapBody(bOpen ? OpenLoc : ClosedLoc, bOpen ? OpenRot : ClosedRot);
+		NextThink = RestoreResumeThink;   // the saved think, e.g. a pending autoclose
 		return;
 	}
 

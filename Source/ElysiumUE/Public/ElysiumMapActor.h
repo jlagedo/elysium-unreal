@@ -443,6 +443,9 @@ private:
 	// landmark's OnEnterMapHere. No-op (keeps the .spawn placement) for a plain load or a missing
 	// landmark. Called by LoadMap after the entity world is built.
 	void ResolveLandmarkSpawn();
+	// 11.9 — if this load is a save restore, the World block's absolute player pose outranks both
+	// info_player_start and a landmark offset. Run right after ResolveLandmarkSpawn.
+	void ResolveRestorePlacement();
 
 	// S2 — declare the frame order rather than observe it: the gameplay tick runs after the player
 	// controller's input sample (step 1), and the pawn's movement component runs after the gameplay

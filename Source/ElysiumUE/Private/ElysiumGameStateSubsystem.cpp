@@ -51,6 +51,12 @@ void UElysiumGameStateSubsystem::BeginNewGame(int32 Clan, bool bMale)
 	// New Game would inherit the previous run's beat counter and latches.
 	ClearAllGlobals();
 	Quests.Reset();
+	Snapshots.Reset();
+	Visited.Reset();
+
+	// S8 — every game-visible draw comes from an owned, seeded stream whose state is in the save
+	// (`save-architecture.md` §8). A run takes one session seed; the five streams derive from it.
+	ElysiumRng::SeedAll(static_cast<int32>(FPlatformTime::Cycles()));
 
 	Record.Reset();
 	Record.Sheet.Clan  = FElysiumSheet::IsValidClan(Clan) ? Clan : 2;
@@ -77,6 +83,8 @@ void UElysiumGameStateSubsystem::EndSession()
 {
 	ClearAllGlobals();
 	Quests.Reset();
+	Snapshots.Reset();
+	Visited.Reset();
 	// Order matters: quit-to-menu asks for the travel first and the engine tears the old world down
 	// at the end of the frame, so without this the dying map's player would dehydrate back into the
 	// record cleared below.
@@ -88,7 +96,31 @@ void UElysiumGameStateSubsystem::EndSession()
 	// The clock is session time (`curtime`), so it rewinds with the run. ResetClock also clears any
 	// hold, scale and armed dev step, and re-stamps the engine side.
 	TimeCtl.ResetClock();
-	UE_LOG(LogElysiumState, Display, TEXT("session ended — G, quests, the player record and the clock cleared"));
+	UE_LOG(LogElysiumState, Display,
+		TEXT("session ended — G, quests, the map snapshots, the player record and the clock cleared"));
+}
+
+// --- The per-map snapshots (11.9) -------------------------------------------------------------
+
+const FElysiumMapSnapshot* UElysiumGameStateSubsystem::FindMapSnapshot(const FString& Map) const
+{
+	return Snapshots.Find(Map);
+}
+
+void UElysiumGameStateSubsystem::StoreMapSnapshot(FElysiumMapSnapshot&& Snapshot)
+{
+	if (!Snapshot.IsValid())
+	{
+		return;
+	}
+	const FString Key = Snapshot.MapName;
+	Visited.AddUnique(Key);   // first-visit order; re-freezing a map does not move it
+	Snapshots.Add(Key, MoveTemp(Snapshot));
+}
+
+void UElysiumGameStateSubsystem::SetMapSnapshots(TMap<FString, FElysiumMapSnapshot>&& In)
+{
+	Snapshots = MoveTemp(In);
 }
 
 void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection)

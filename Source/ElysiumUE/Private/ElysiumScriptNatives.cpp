@@ -86,7 +86,10 @@ namespace
 		if (RolledOnFrame != GFrameCounter)
 		{
 			RolledOnFrame = GFrameCounter;
-			Roll = FMath::Rand();
+			// S8 — the roll comes from the session's own OneOfSet stream, whose position is in the
+			// save (`save-architecture.md` §8). A conversation reopened after a load then selects the
+			// same row it would have without one, which is the whole point of the per-frame draw.
+			Roll = ElysiumRng::Stream(EElysiumRngStream::OneOfSet).RandHelper(MAX_int32);
 		}
 		return Roll;
 	}

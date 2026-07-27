@@ -8,9 +8,13 @@
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumSaveArchive.h"
 #include "ElysiumScriptHost.h"
 #include "ElysiumSignData.h"
 #include "ElysiumUseIcons.h"
+
+#include "Serialization/MemoryReader.h"
+#include "Serialization/MemoryWriter.h"
 
 #include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -280,6 +284,327 @@ FElysiumPlayer* FElysiumEntityWorld::FindPlayer() const
 	// The handle is only ever set by SpawnPlayer, so the static_cast is exact; going through
 	// AsCombatCharacter would answer for NPCs too.
 	return E ? static_cast<FElysiumPlayer*>(E) : nullptr;
+}
+
+// --- Persistence (11.9) ------------------------------------------------------------------
+// The map snapshot. Both halves run against the *same* world the game runs against, which is what
+// `save-architecture.md` §5 means by "a snapshot is produced by exactly the same code path a save
+// uses": a travel boundary and a Save Game call reach Freeze identically.
+
+namespace
+{
+	// The state a fresh build of this def would produce — the baseline the freeze diffs against.
+	// It is a plain registry Create (factory + Construct: keyvalues applied, no Spawn, no world, no
+	// body), so it costs one allocation per entity and answers exactly the question the omission
+	// rule asks: "would rebuilding this map produce this value anyway?"
+	TUniquePtr<FElysiumEntity> MakeReference(const FElysiumEntity& Live)
+	{
+		if (!Live.Def)
+		{
+			return nullptr;
+		}
+		return FElysiumClassRegistry::Get().Create(*Live.Def, FElysiumEntityHandle(Live.Handle.Index, 0));
+	}
+}
+
+void FElysiumEntityWorld::Freeze(FElysiumMapSnapshot& Out) const
+{
+	Out = FElysiumMapSnapshot();
+	Out.MapName = Defs.MapName;
+	Out.DefCount = Defs.Defs.Num();
+	Out.FrozenAt = NowSeconds();
+
+	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+
+	for (const TUniquePtr<FElysiumEntity>& EntPtr : EntityList)
+	{
+		if (!EntPtr)
+		{
+			continue;
+		}
+		const FElysiumEntity& E = *EntPtr;
+
+		// The player is the Player block's, not this map's — it travels, and its record already
+		// carries everything the entity holds (11.4's hydrate/dehydrate pair).
+		if (Player.IsSet() && E.Handle.Index == Player.Index)
+		{
+			continue;
+		}
+		// Anything carried out of the map is recorded absent rather than saved here (§5). Nothing
+		// answers true until 9.8 makes items owned entities; the rule is the mechanism, not a stub.
+		if (E.TravelsWithPlayer())
+		{
+			Out.AbsentEntities.Add(E.Handle.Index);
+			continue;
+		}
+
+		const TUniquePtr<FElysiumEntity> Ref = MakeReference(E);
+		if (!Ref)
+		{
+			continue;   // no def: nothing to rebuild it from, so nothing to diff against
+		}
+
+		FElysiumEntityState S;
+		S.Index = E.Handle.Index;
+		S.ClassName = E.Def ? FName(*E.Def->Classname) : NAME_None;
+		S.bRuntime = E.Handle.Index >= Defs.Defs.Num();
+
+		bool bDiffers = S.bRuntime;   // a runtime entity has no def on disk, so it is always written
+
+		if (E.TargetName != Ref->TargetName)
+		{
+			bDiffers = true;
+		}
+		S.TargetName = E.TargetName;
+
+		if (E.bDead != Ref->bDead || E.bHidden != Ref->bHidden || E.bSpawnCalled != Ref->bSpawnCalled
+			|| E.NextThink != Ref->NextThink || E.GetSavedNextThink() != Ref->GetSavedNextThink()
+			|| E.OutputTimesRemaining != Ref->OutputTimesRemaining)
+		{
+			bDiffers = true;
+		}
+		S.bDead = E.bDead;
+		S.bHidden = E.bHidden;
+		S.bSpawnCalled = E.bSpawnCalled;
+		S.NextThink = E.NextThink;
+		S.SavedNextThink = E.GetSavedNextThink();
+		S.OutputTimesRemaining = E.OutputTimesRemaining;
+
+		// The R2 field walk — sorted by name, so two freezes of the same state are byte-identical.
+		if (E.Class)
+		{
+			for (const FName& FieldName : Reg.SaveFields(*E.Class))
+			{
+				const FElysiumFieldAccessor* Acc = Reg.FindField(*E.Class, FieldName);
+				if (!Acc || !Acc->Get)
+				{
+					continue;
+				}
+				const FElysiumVariant Value = Acc->Get(E);
+				if (Value == Acc->Get(*Ref))
+				{
+					continue;   // the rebuild produces this already
+				}
+				S.Fields.Emplace(FieldName, Value);
+				bDiffers = true;
+			}
+		}
+
+		// The leaf's derived state, if it has any. Written into the record unconditionally and then
+		// compared against the reference's, so a leaf that never overrides Serialize costs 0 bytes.
+		{
+			FMemoryWriter LiveWriter(S.LeafState, /*bIsPersistent*/ true);
+			FElysiumSaveArchive LiveAr(LiveWriter, FElysiumSaveVersion::Latest);
+			const_cast<FElysiumEntity&>(E).Serialize(LiveAr);
+
+			TArray<uint8> RefBytes;
+			FMemoryWriter RefWriter(RefBytes, /*bIsPersistent*/ true);
+			FElysiumSaveArchive RefAr(RefWriter, FElysiumSaveVersion::Latest);
+			Ref->Serialize(RefAr);
+
+			if (S.LeafState == RefBytes)
+			{
+				S.LeafState.Reset();
+			}
+			else
+			{
+				bDiffers = true;
+			}
+		}
+
+		if (bDiffers)
+		{
+			Out.Entities.Add(MoveTemp(S));
+		}
+	}
+
+	Out.Queue = EventQueue.Pending();
+	Out.QueueNextSerial = EventQueue.NextSerialValue();
+
+	Out.Fade.bActive      = ScreenFade.bActive;
+	Out.Fade.Color        = ScreenFade.Color;
+	Out.Fade.MaxAlpha     = ScreenFade.MaxAlpha;
+	Out.Fade.Duration     = ScreenFade.Duration;
+	Out.Fade.HoldTime     = ScreenFade.HoldTime;
+	Out.Fade.bFadeIn      = ScreenFade.bFadeIn;
+	Out.Fade.bAutoReverse = ScreenFade.bAutoReverse;
+	Out.Fade.StartTime    = ScreenFade.StartTime;
+
+	UE_LOG(LogElysiumWorld, Log,
+		TEXT("froze '%s' at %.3f: %d/%d entity records, %d absent, %d queued"),
+		*Out.MapName, Out.FrozenAt, Out.Entities.Num(), EntityList.Num(),
+		Out.AbsentEntities.Num(), Out.Queue.Num());
+}
+
+int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
+{
+	if (!Snapshot.IsValid())
+	{
+		return 0;
+	}
+	if (Snapshot.DefCount != Defs.Defs.Num())
+	{
+		// The map's `.ents` changed under the save. Every record is matched by index and guarded by
+		// classname below, so this is a loud warning rather than a refusal — a re-export that only
+		// appended still restores the entities it did not move.
+		UE_LOG(LogElysiumWorld, Warning,
+			TEXT("snapshot '%s' was frozen against %d defs, this build parsed %d — applying by index"),
+			*Snapshot.MapName, Snapshot.DefCount, Defs.Defs.Num());
+	}
+
+	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+
+	// Entities carried out with the player are not here any more (§5): kill them, which is exactly
+	// what a resolve against them already reports and what gates their body.
+	for (int32 Absent : Snapshot.AbsentEntities)
+	{
+		if (FElysiumEntity* E = Resolve(FElysiumEntityHandle(Absent, Epoch)))
+		{
+			E->Kill();
+		}
+	}
+
+	// Pass 1 — re-create the runtime-spawned entities (npc_maker.Spawn, CreateEntityNoSpawn) from the
+	// defs that ride along, in index order, so every one lands back on its saved index. They do land
+	// there: the def array fills 0..DefCount-1, the player takes DefCount (SpawnPlayer runs
+	// immediately after Load, on every load), and the rest were appended in exactly this order.
+	// Creating and spawning them here, before anything is restored, gives them the same
+	// "built, then edited by the snapshot" shape the def-array entities already have.
+	for (const FElysiumEntityState& S : Snapshot.Entities)
+	{
+		if (!S.bRuntime || EntityList.IsValidIndex(S.Index))
+		{
+			continue;
+		}
+		if (S.Index != EntityList.Num())
+		{
+			UE_LOG(LogElysiumWorld, Warning,
+				TEXT("snapshot '%s': runtime entity #%d cannot be placed (world holds %d) — skipped"),
+				*Snapshot.MapName, S.Index, EntityList.Num());
+			continue;
+		}
+		const FElysiumEntityHandle H = CreateRuntimeEntityNoSpawn(S.Def);
+		if (FElysiumEntity* Fresh = Resolve(H))
+		{
+			CallEntitySpawn(*Fresh);
+		}
+	}
+
+	int32 Applied = 0;
+	for (const FElysiumEntityState& S : Snapshot.Entities)
+	{
+		FElysiumEntity* E = EntityList.IsValidIndex(S.Index) ? EntityList[S.Index].Get() : nullptr;
+		if (!E)
+		{
+			continue;
+		}
+		if (!S.ClassName.IsNone() && E->Def && FName(*E->Def->Classname) != S.ClassName)
+		{
+			UE_LOG(LogElysiumWorld, Warning,
+				TEXT("snapshot '%s': #%d is %s here but was %s when saved — skipped"),
+				*Snapshot.MapName, S.Index, *E->Def->Classname, *S.ClassName.ToString());
+			continue;
+		}
+
+		// Fields first, so a leaf's Serialize sees the restored keyfields. Matched by name, never by
+		// position: a field added to a base class does not invalidate an existing payload, and a name
+		// this build no longer registers is skipped with a warning rather than failing the load.
+		if (E->Class)
+		{
+			for (const TPair<FName, FElysiumVariant>& F : S.Fields)
+			{
+				const FElysiumFieldAccessor* Acc = Reg.FindField(*E->Class, F.Key);
+				if (!Acc || !Acc->bSave || !Acc->Set)
+				{
+					UE_LOG(LogElysiumWorld, Warning,
+						TEXT("snapshot '%s': #%d has no saved field '%s' in this build — skipped"),
+						*Snapshot.MapName, S.Index, *F.Key.ToString());
+					continue;
+				}
+				if (F.Key == FName(TEXT("targetname")))
+				{
+					continue;   // the name index has to be re-keyed; handled below, once
+				}
+				Acc->Set(*E, F.Value);
+			}
+		}
+
+		if (E->TargetName != S.TargetName)
+		{
+			RenameEntity(*E, S.TargetName);
+		}
+
+		E->bSpawnCalled = S.bSpawnCalled;
+		E->NextThink = S.NextThink;
+		E->SetSavedNextThink(S.SavedNextThink);
+		if (S.OutputTimesRemaining.Num() == E->OutputTimesRemaining.Num())
+		{
+			E->OutputTimesRemaining = S.OutputTimesRemaining;
+		}
+
+		if (S.LeafState.Num() > 0)
+		{
+			FMemoryReader Reader(S.LeafState, /*bIsPersistent*/ true);
+			FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::Latest);
+			E->Serialize(Ar);
+		}
+
+		// Dormancy last, and written directly rather than through ScriptHide/ScriptUnhide: those are
+		// inputs with side effects (they stash and restore the think we have just restored ourselves).
+		const bool bWasInert = E->IsInert();
+		E->bHidden = S.bHidden;
+		E->bDead = S.bDead;
+		if (E->IsInert() != bWasInert)
+		{
+			E->OnDormancyChanged();
+		}
+		NotifyVisualChanged(*E);
+		++Applied;
+	}
+
+	// The queue is REPLACED: this load's Spawn pass has already queued its own openers, and the
+	// saved queue is the one that was actually pending.
+	EventQueue.Reset();
+	for (const FElysiumIOEvent& Saved : Snapshot.Queue)
+	{
+		FElysiumIOEvent E = Saved;
+		// §6 — the handles inside an event carry a dead epoch. Re-stamp them against this world; an
+		// index that no longer resolves reads Invalid, the same falsy value a killed entity produces.
+		E.Activator = RebaseHandle(Saved.Activator);
+		E.Caller    = RebaseHandle(Saved.Caller);
+		EventQueue.AddRestored(MoveTemp(E));
+	}
+	EventQueue.SetNextSerial(Snapshot.QueueNextSerial);
+
+	ScreenFade.bActive      = Snapshot.Fade.bActive;
+	ScreenFade.Color        = Snapshot.Fade.Color;
+	ScreenFade.MaxAlpha     = Snapshot.Fade.MaxAlpha;
+	ScreenFade.Duration     = Snapshot.Fade.Duration;
+	ScreenFade.HoldTime     = Snapshot.Fade.HoldTime;
+	ScreenFade.bFadeIn      = Snapshot.Fade.bFadeIn;
+	ScreenFade.bAutoReverse = Snapshot.Fade.bAutoReverse;
+	ScreenFade.StartTime    = Snapshot.Fade.StartTime;
+
+	UE_LOG(LogElysiumWorld, Log,
+		TEXT("applied snapshot '%s': %d/%d entity records, %d absent, %d queued"),
+		*Snapshot.MapName, Applied, Snapshot.Entities.Num(), Snapshot.AbsentEntities.Num(),
+		Snapshot.Queue.Num());
+	return Applied;
+}
+
+FElysiumEntityHandle FElysiumEntityWorld::RebaseHandle(const FElysiumEntityHandle& Saved) const
+{
+	if (!Saved.IsSet() || !EntityList.IsValidIndex(Saved.Index))
+	{
+		return FElysiumEntityHandle::Invalid();
+	}
+	return FElysiumEntityHandle(Saved.Index, Epoch);
+}
+
+void FElysiumEntityWorld::Detach()
+{
+	Player = FElysiumEntityHandle::Invalid();
+	bDetached = true;
 }
 
 void FElysiumEntityWorld::RenameEntity(FElysiumEntity& Ent, const FString& NewName)
@@ -1093,6 +1418,17 @@ void FElysiumEntityWorld::Teardown()
 		if (const FElysiumPlayer* PlayerEnt = FindPlayer())
 		{
 			PlayerEnt->Dehydrate(GameState->PlayerRecord());
+
+			// 11.9 — and the map itself is frozen into the session, beside the record, by the same
+			// call a save uses (`save-architecture.md` §5). Gated on there having been a player: a
+			// menu backdrop and a headless logic world run the substrate in full but are not part of
+			// anyone's run, so they must not join the visited-map set.
+			if (!bDetached && !Defs.MapName.IsEmpty())
+			{
+				FElysiumMapSnapshot Snapshot;
+				Freeze(Snapshot);
+				GameState->StoreMapSnapshot(MoveTemp(Snapshot));
+			}
 		}
 	}
 	Player = FElysiumEntityHandle::Invalid();

@@ -36,11 +36,11 @@ namespace
 	// FElysiumEntity members). Mirrors AddSubclassField / AddNpcField / AddLogicField — file-unique
 	// name so all of them can land in one unity blob.
 	template <typename TClass, typename TMember>
-	void AddCharField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member, bool bKeyable = true)
+	void AddCharField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member, EElysiumField Flags = ElysiumFieldDefault)
 	{
 		static_assert(std::is_base_of_v<FElysiumEntity, TClass>, "TClass must derive from FElysiumEntity");
 		FElysiumFieldAccessor Acc;
-		Acc.bKeyable = bKeyable;
+		Acc.ApplyFlags(Flags);
 		if constexpr (std::is_same_v<TMember, bool>)
 		{
 			Acc.Type = EElysiumVariantType::Bool;
@@ -71,7 +71,7 @@ namespace
 	void AddSheetIntField(FElysiumClassDesc& D, const TCHAR* Name, int32 FElysiumSheet::* Member)
 	{
 		FElysiumFieldAccessor Acc;
-		Acc.bKeyable = true;
+		Acc.ApplyFlags(ElysiumFieldDefault);
 		Acc.Type = EElysiumVariantType::Int;
 		Acc.Get = [Member](const FElysiumEntity& E)
 		{
@@ -88,7 +88,9 @@ namespace
 	void AddLawField(FElysiumClassDesc& D, const TCHAR* Name, int32 FElysiumLawState::* Member)
 	{
 		FElysiumFieldAccessor Acc;
-		Acc.bKeyable = false;
+		// Neither keyable nor saved: the setter is a deliberate no-op, and the counters' durable home
+		// is FElysiumPlayerRecord::Law in the Player block, not the entity field walk.
+		Acc.ApplyFlags(EElysiumField::None);
 		Acc.Type = EElysiumVariantType::Int;
 		Acc.Get = [Member](const FElysiumEntity& E)
 		{

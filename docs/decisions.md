@@ -6,6 +6,45 @@ trigger. A behavioural divergence from retail lands here carrying both the faith
 chosen behaviour (`remaster-direction.md`'s governing rule). Entries are never rewritten —
 append a correction as a new entry.
 
+- **2026-07-27** — **The menu leaves `CVMainMenu`'s centred column for a right-hand rail, and the
+  recovered blood red becomes what *selection* means (roadmap 8.6).** Owner call, four presentation
+  changes with one cause, all A/B'd live by **`elysium.MenuLayout`** (1 = rail, default; 0 = the
+  classic reproduction, unchanged and still scrimmed).
+
+  The faithful behaviour, and what it assumed: `PerformLayout` (`FUN_100660e0`) centres the item
+  column and sizes every button to the widest label; every item draws in the hardcoded
+  `0xc00000a8` = RGBA(168,0,0,192) at rest and swaps instantly to full alpha on hover, with no fade
+  anywhere in the menu path; every background colour in `VampireScheme.res` is fully transparent.
+  All three hold together **because VtMB's menu floats on a designed 2D particle field** — the
+  darkest, quietest region of that field is dead centre, by construction.
+
+  This rebuild replaced that field with a real 3D camera on a real map (`elysium.MenuMap`), and the
+  premise went with it. On the `sm_hub_1` h1 vantage the centred column lands on the sidewalk lamp
+  pool — the single brightest surface in frame — with the lamp post running through the wordmark,
+  which is what `elysium.MenuScrim` had been dimming *the whole city* to rescue. So:
+
+  1. **Layout — the column moves to a right-hand rail**, right-aligned against a gold hairline, with
+     the head block and a reserved caption line above and below it. Horizontal constants are measured
+     from the **right edge**, never as a fraction of 1024, because the virtual canvas is
+     `ScreenW·768/ScreenH` wide and a fraction would drift the rail inward on ultrawide.
+  2. **Colour — items rest in `Bone` and arm in `BloodLit`.** The recovered red stops being the
+     ground and becomes the accent `ElysiumUIStyle.h` always said it was ("reserved for the menu
+     column, the pips and critical states — not the ground"). A dead row drops to `BoneDim` rather
+     than to a darker blood, so *off* reads as off instead of as a second red.
+  3. **The scrim goes local.** The rail's veil is a horizontal ramp that reaches zero by mid-frame,
+     so the lit half of the backdrop is never paid for. `elysium.MenuScrim` still governs, and only
+     governs, the classic layout.
+  4. **Arming gains a 130 ms ease.** One tick rides the hairline onto the armed row; VtMB's own swap
+     is instant, and this is the one place the menu animates at all.
+
+  Two consequences worth stating. A drawn-but-dead row (`Load Game`, `Options`) is left **enabled**
+  in the rail, because a disabled `SButton` takes neither hover nor focus and so could never arm —
+  and arming is what makes the caption ("No saved games yet.") reachable; the click is gated instead.
+  And the rail's seal is a `mm_<clan>` sigil off the menu particle sheet — the sect ankh in the front
+  end, the PC's own clan in a session — so the emitter graph stays unreproduced while its art does
+  not. What is **not** touched: the item sets, their order, the `VMainMenu_BTN_*` tokens, and the
+  main-menu-vs-pause `SaveGame` gate, all of which stay retail's.
+
 - **2026-07-27** — **The presentation seam samples continuous state and is announced discrete
   moments (roadmap 11.8).** `IElysiumPresenter` was specified in 11.2 as the substrate's outbound
   screen seam and left unimplemented, with `FElysiumEntityWorld` holding the fade / open sign / open

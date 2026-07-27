@@ -74,12 +74,21 @@ states, and cyan marks the active tab.
 | `Blood` / `BloodLit` | `0xc00000a8` in `CVMainMenu` (hardcoded, in neither scheme) | menu items, pips |
 | `Scrim` | **ours** | see below |
 
-**The scrim is ours and it is a knob, not a constant.** Every background colour in `VampireScheme`
-is fully transparent, because VtMB's menu floats over a dark particle field. A real 3D backdrop is
-not that reliable: how much dimming the type needs is a property of where the camera points. Blood
-red on a sunlit alley wall needed a lot; the night street outside the Asylum needs almost none.
-`elysium.MenuScrim` (default `0.22`) is the dial — the presentation layer paying for a modernised
-backdrop, not a divergence from the look.
+**Grounds are ours, because VtMB has none.** Every background colour in `VampireScheme` is fully
+transparent — its menu floats over a dark particle field, where the type never needs help. A real 3D
+backdrop is not that reliable: how much dimming the type needs is a property of where the camera
+points. Two answers, one per menu layout (§7):
+
+- `elysium.MenuScrim` (default `0.22`) — the **classic** layout's global dimmer, applied to the
+  whole frame because a centred column can land on anything the camera framed.
+- The **rail** layout's veil — a horizontal ramp reaching zero by mid-frame, so only the strip the
+  type sits on is paid for and the lit half of the backdrop is untouched. `MenuScrim` does not
+  reach it.
+
+**Blood red marks selection; it is not the ground.** Menu items rest in `Bone` and arm in
+`BloodLit`, and a drawn-but-dead row drops to `BoneDim` — so *off* reads as off rather than as a
+second red. The recovered `0xc00000a8` is what *armed* means (`decisions.md` 2026-07-27); the
+classic layout keeps it as the resting colour, which is what makes the A/B worth having.
 
 ## 4. Type
 
@@ -155,12 +164,48 @@ either it grows UI-inclusive vantages or HUD regressions go unwatched.
 
 Built:
 
-- **Main menu** — title lockup (from `out/ui/menu/title.png`, the user's own art), item column laid
-  out by the RE'd law: every item sized to the widest label + `20×4` virtual px, `pitch = height + 2`,
-  centred. Labels resolve `VMainMenu_BTN_*` against the authored table with retail English as the
-  fallback, which is what `CVMainMenu` itself does.
+- **Main menu** — **two layouts, one widget**, A/B'd live by `elysium.MenuLayout`. Labels resolve
+  `VMainMenu_BTN_*` against the authored table with retail English as the fallback in both, which is
+  what `CVMainMenu` itself does.
+
+  **Rail (1, the default).** The menu stands in a right-hand rail: title lockup (from
+  `out/ui/menu/title.png`, the user's own art) on the bottom edge of a fixed head block, then the
+  item column right-aligned against a gold hairline, then a reserved caption line. Every horizontal
+  constant is measured **from the right edge**, never as a fraction of 1024 — the virtual canvas is
+  `ScreenW·768/ScreenH` wide, so a fraction would drift the rail inward on ultrawide. Three pieces
+  carry it:
+
+  - **The veil** (§3) and **the hairline** are code-authored alpha ramps
+    (`ElysiumUI::MakeAlphaRamp`), coloured by brush tint — the ramp the layout constants were tuned
+    against, rather than a gradient asset that could drift from them.
+  - **The tick** — one blood bar riding the hairline, eased onto the armed row over ~130 ms by
+    `NativeTick`. Row geometry is analytic (the row table is built as the column is), so the marker
+    is placed by padding rather than by querying geometry. Slate ticks off the application, not the
+    world, so it keeps running while a pause holds the world — which is the pause menu's only state.
+  - **The seal** — a `mm_<clan>` sigil off the menu particle sprite sheet at 10% gold, bleeding off
+    the right edge behind the column: the Camarilla ankh in the front end (no character exists yet),
+    the PC's own clan in a session, resolved through `PlayerSheet()`. The emitter graph is not
+    reproduced; its art is.
+
+  **Armed ≠ enabled.** A row whose destination is missing is left *enabled* so it can take hover and
+  focus — a disabled `SButton` takes neither, and arming is what makes its caption ("No saved games
+  yet.") reachable. The click is gated instead, and the label colour reports the state. The armed row
+  also *persists* when the pointer leaves the rail, so the marker reads as a cursor rather than a
+  hover highlight.
+
+  **Classic (0).** `CVMainMenu::PerformLayout` verbatim: every item sized to the widest label +
+  `20×4` virtual px, `pitch = height + 2`, the column centred, blood red at rest, the whole frame
+  behind it knocked back by `elysium.MenuScrim`. Kept so the divergence stays measurable rather than
+  asserted.
+
+  Both knobs are read at tree-build time, so `UElysiumUISubsystem::RebuildMenu` (a console-variable
+  sink on each) takes an open screen down and puts it back up.
 - **Pause menu** — the same widget with the pause item set. `SaveGame` is enabled only in game,
-  reproducing the *entire* main-menu-vs-pause difference in retail (`CBasePanel::OnThink`).
+  reproducing the *entire* main-menu-vs-pause difference in retail (`CBasePanel::OnThink`). The rail
+  replaces the wordmark with a `Paused` eyebrow — repeating the lockup over a held game is not what
+  it is for — and the game-over mode replaces it with the reason the run ended, set in blood at
+  display size. All three heads sit on the same block, so the item column starts at one Y in every
+  mode.
 
 Not built: chargen (9.4), load/save (9.5), options + accessibility (8.10), the sign/popup re-skin
 (8.8), the HUD (8.9), the dialogue UI (9.2). Load Game / Save Game / Options draw disabled rather

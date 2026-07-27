@@ -13,8 +13,12 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumGameFlowSubsystem.h"
+#include "ElysiumGameStateSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumWorldServices.h"
+
+#include "Engine/GameInstance.h"
 
 #include <type_traits>
 
@@ -28,11 +32,11 @@ namespace
 	// walked for entities of that class or a subclass (Construct applies keyvalues through the
 	// entity's own chain, the P2 inspector reads an entity through its own chain).
 	template <typename TClass, typename TMember>
-	void AddSubclassField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member, bool bKeyable = true)
+	void AddSubclassField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member, EElysiumField Flags = ElysiumFieldDefault)
 	{
 		static_assert(std::is_base_of_v<FElysiumEntity, TClass>, "TClass must derive from FElysiumEntity");
 		FElysiumFieldAccessor Acc;
-		Acc.bKeyable = bKeyable;
+		Acc.ApplyFlags(Flags);
 		if constexpr (std::is_same_v<TMember, bool>)
 		{
 			Acc.Type = EElysiumVariantType::Bool;
@@ -340,8 +344,9 @@ private:
 
 // ============================================================================================
 // trigger_autosave (P4.5) — CTriggerAutosave (1 on the tutorial). A checkpoint volume: the player
-// entering it triggers a save. Saves land in P10, so this logs the checkpoint and fires once
-// (then disables) so it doesn't spam every frame the player lingers.
+// entering it triggers a save. 11.9 makes that real — it fires the `Auto` ring through the one save
+// seam every other caller uses. Still one-shot per arming, so it does not spam every frame the
+// player lingers in the volume; a ScriptUnhide/Enable re-arms it.
 // ============================================================================================
 
 class FElysiumTriggerAutosave final : public FElysiumTriggerBase
@@ -354,20 +359,34 @@ public:
 			return;
 		}
 		++TriggerCount;
-		UE_LOG(LogElysiumTrigger, Log, TEXT("%s: autosave checkpoint reached (save deferred to P10)"),
-			*DebugString());
-		bDisabled = true;   // one-shot per arming; a ScriptUnhide/Enable re-arms it
+		bDisabled = true;
+
+		UGameInstance* GI = World && World->GetGameState() ? World->GetGameState()->GetGameInstance() : nullptr;
+		UElysiumGameFlowSubsystem* Flow = GI ? GI->GetSubsystem<UElysiumGameFlowSubsystem>() : nullptr;
+		if (!Flow)
+		{
+			UE_LOG(LogElysiumTrigger, Log, TEXT("%s: autosave checkpoint reached (no flow subsystem)"),
+				*DebugString());
+			return;
+		}
+		// The flow refuses and logs its own reason when the moment is not saveable (a panel up, a
+		// travel in flight); the checkpoint stays spent either way, exactly as it would in retail.
+		bLastSaveAccepted = Flow->SaveGame(FString(), EElysiumSaveKind::Auto);
+		UE_LOG(LogElysiumTrigger, Log, TEXT("%s: autosave checkpoint reached — %s"),
+			*DebugString(), bLastSaveAccepted ? TEXT("saving") : TEXT("refused"));
 	}
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
 	{
 		Out.Emplace(TEXT("Triggered"), FString::Printf(TEXT("%d time(s)"), TriggerCount));
 		Out.Emplace(TEXT("Armed"), bDisabled ? TEXT("no") : TEXT("yes"));
-		Out.Emplace(TEXT("Save"), TEXT("deferred to P10"));
+		Out.Emplace(TEXT("Last save"), TriggerCount == 0 ? TEXT("—")
+			: (bLastSaveAccepted ? TEXT("accepted") : TEXT("refused")));
 	}
 
 private:
 	int32 TriggerCount = 0;
+	bool  bLastSaveAccepted = false;
 };
 
 // ============================================================================================

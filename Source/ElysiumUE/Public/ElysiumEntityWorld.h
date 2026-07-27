@@ -6,6 +6,7 @@
 #include "ElysiumEntityHandle.h"
 #include "ElysiumEventQueue.h"
 #include "ElysiumIOSink.h"
+#include "ElysiumSaveTypes.h"
 #include "ElysiumVariant.h"
 #include "ElysiumWorldServices.h"
 
@@ -102,6 +103,25 @@ public:
 	// back into the record that was just cleared (travel is deferred, so the teardown lands after
 	// `EndSession` returns).
 	void ForgetPlayer() { Player = FElysiumEntityHandle::Invalid(); }
+
+	// --- Persistence (11.9, `save-architecture.md` §5) ----------------------------------
+	// Freeze this map to a snapshot. Pure read: the same call serves a travel boundary and a save,
+	// which is what keeps the two from drifting apart. Every entity is diffed against a **fresh
+	// build of its own def** and contributes nothing when it matches — the generalisation of VtMB's
+	// zero-value-omission rule, and most of why these payloads are small.
+	void Freeze(FElysiumMapSnapshot& Out) const;
+
+	// Apply a snapshot onto this freshly-built world. Runs after Load + SpawnPlayer and before the
+	// first Tick, so the map's own spawn pass has already produced the baseline the snapshot edits.
+	// It **replaces** the event queue rather than appending to it, because Spawn() will have queued
+	// this load's own openers. Reports how many entity records were applied.
+	int32 ApplySnapshot(const FElysiumMapSnapshot& Snapshot);
+
+	// Give up this world's claim on the session: forget the player (so Teardown dehydrates nothing)
+	// and suppress the teardown freeze. What a load means for the world being replaced — the record
+	// and the snapshots have already been overwritten from the payload, and travel is deferred, so
+	// the dying world's teardown lands afterwards and must not write over them.
+	void Detach();
 
 	// 9.3 — VtMB's Entity.SetName: re-key the name index so the renamed entity is immediately findable
 	// under its new targetname (and no longer under the old). Empty names are handled (add/remove skip).
@@ -257,6 +277,9 @@ public:
 	FElysiumEntity* FindLandmark(const FString& Name);
 	void ForEachNamed(FName Name, TFunctionRef<void(FElysiumEntity&)> Fn);
 
+	// The map this world was built from (the snapshot key), or empty on a bare test world.
+	const FString& MapName() const { return Defs.MapName; }
+
 	int32 NumEntities() const { return EntityList.Num(); }
 	const TArray<TUniquePtr<FElysiumEntity>>& Entities() const { return EntityList; }
 	const FElysiumEventQueue& Queue() const { return EventQueue; }
@@ -293,6 +316,9 @@ private:
 	void DeliverEvent(const FElysiumIOEvent& Event, double Now);
 	// Resolve a due event's target string to live entities (skips dead), honouring !self/!activator.
 	void ResolveTargets(const FElysiumIOEvent& Event, TArray<FElysiumEntity*>& Out);
+	// 11.9 — re-stamp a handle read out of a payload with this world's epoch (Invalid when its index
+	// no longer exists). The only place a saved handle becomes a live one.
+	FElysiumEntityHandle RebaseHandle(const FElysiumEntityHandle& Saved) const;
 
 	AActor* Owner = nullptr;                          // component outer + VLOG context; not owned
 	UElysiumGameStateSubsystem* GameState = nullptr;  // clock + script host; outlives the world
@@ -329,6 +355,10 @@ private:
 
 	// 11.4 — this map's player entity (S3), or Invalid when the map was built without one.
 	FElysiumEntityHandle Player;
+
+	// 11.9 — set by Detach(): this world no longer owns any part of the session, so Teardown neither
+	// dehydrates the player nor freezes a snapshot over the one a load just restored.
+	bool bDetached = false;
 
 	// The usable brush entity currently under the +use look-cursor (P4.2), or Invalid when the aim
 	// is off every usable body / out of reach. OnIn/OnOut fire on the transitions of this handle.

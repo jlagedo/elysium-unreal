@@ -38,6 +38,11 @@ public:
 	// screen, so a run that ends while the pause menu is up swaps to the game-over item set.
 	void ShowMenu(EElysiumMenuMode Mode);
 	void HideMenu();
+
+	// Rebuild the open screen in place, keeping its mode. The look knobs (`elysium.MenuLayout`,
+	// `elysium.MenuScrim`) are read when the tree is built, so an A/B typed at the console has to
+	// take the screen down and put it back up; no-op when no screen is up.
+	void RebuildMenu();
 	bool IsMenuOpen() const { return Menu != nullptr; }
 	EElysiumMenuMode MenuMode() const { return CurrentMode; }
 

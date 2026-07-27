@@ -574,6 +574,15 @@ void AElysiumMapActor::LoadMap()
 				if (!bMenuBackdrop)
 				{
 					EntityWorld->SpawnPlayer();
+
+					// 11.9 — if the run has been here before (this session, or a loaded save), the
+					// map is not new: apply the frozen snapshot over the freshly-built world
+					// (`save-architecture.md` §5). After SpawnPlayer, so the player exists for the
+					// records that reference it, and before the first Tick, so nothing has run yet.
+					if (const FElysiumMapSnapshot* Snapshot = GameState->FindMapSnapshot(MapName))
+					{
+						EntityWorld->ApplySnapshot(*Snapshot);
+					}
 				}
 			}
 			else
@@ -589,6 +598,7 @@ void AElysiumMapActor::LoadMap()
 	if (!bMenuBackdrop)
 	{
 		ResolveLandmarkSpawn();
+		ResolveRestorePlacement();
 	}
 
 	Phase(TEXT("Entities"));
@@ -1913,6 +1923,30 @@ void AElysiumMapActor::ResolveLandmarkSpawn()
 
 	UE_LOG(LogElysium, Log, TEXT("landmark spawn: %s @ %s -> %s (yaw %.0f)"),
 		*MapName, *Landmark, *PendingSpawnLoc.ToString(), PendingSpawnYaw);
+}
+
+void AElysiumMapActor::ResolveRestorePlacement()
+{
+	UGameInstance* GI = GetGameInstance();
+	UElysiumMapSubsystem* Maps = GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
+	if (!Maps)
+	{
+		return;
+	}
+
+	// 11.9 — a loaded save carries the pose the player was actually standing in, so it outranks both
+	// info_player_start and a landmark offset. It is already a pawn-space (capsule-centre) location:
+	// the save read it off the body, so it goes back verbatim with no lift.
+	FVector Origin; float Yaw;
+	if (!Maps->ConsumeRestorePlacement(Origin, Yaw))
+	{
+		return;
+	}
+	PendingSpawnLoc = Origin;
+	PendingSpawnYaw = Yaw;
+	bSpawnPending = true;
+	UE_LOG(LogElysium, Log, TEXT("restore placement: %s @ %s (yaw %.0f)"),
+		*MapName, *PendingSpawnLoc.ToString(), PendingSpawnYaw);
 }
 
 void AElysiumMapActor::EndPlay(const EEndPlayReason::Type EndPlayReason)

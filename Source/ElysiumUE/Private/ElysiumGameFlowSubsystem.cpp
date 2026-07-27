@@ -3,6 +3,7 @@
 #include "ElysiumContentPaths.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMapSubsystem.h"
+#include "ElysiumSaveSubsystem.h"
 #include "ElysiumUIStyle.h"
 #include "ElysiumUISubsystem.h"
 
@@ -300,17 +301,19 @@ void UElysiumGameFlowSubsystem::RegisterCommands()
 	}));
 
 	// `save quick` / `load quick` are the two the default binds carry (F9 / F12); a bare slot name
-	// is a manual save. Both land on the 11.9 seam, which logs until persistence exists.
+	// is a manual save. Both land on the 11.9 seam, which is UElysiumSaveSubsystem.
 	Bindings.Add(Registry.Bind(TEXT("save"), [this](const FElysiumCommandCall& Call)
 	{
 		const bool bQuick = Call.Args.Equals(TEXT("quick"), ESearchCase::IgnoreCase);
-		SaveGame(bQuick ? TEXT("quick") : (Call.Args.IsEmpty() ? TEXT("slot0") : Call.Args),
+		// An empty manual `save` takes the next free Elysium-NNN slot; the slot name is the
+		// subsystem's ring rule, not this call site's.
+		SaveGame(bQuick ? FString() : Call.Args,
 			bQuick ? EElysiumSaveKind::Quick : EElysiumSaveKind::Manual);
 	}));
 
 	Bindings.Add(Registry.Bind(TEXT("load"), [this](const FElysiumCommandCall& Call)
 	{
-		LoadGame(Call.Args.IsEmpty() ? TEXT("quick") : Call.Args);
+		LoadGame(Call.Args.IsEmpty() ? FString(TEXT("Quick")) : Call.Args);
 	}));
 
 	Bindings.RemoveAll([](const FElysiumCommandBinding& B) { return !B.IsValid(); });
@@ -626,21 +629,59 @@ bool UElysiumGameFlowSubsystem::NewGame(const FElysiumNewGameRequest& Request)
 
 bool UElysiumGameFlowSubsystem::LoadGame(const FString& SlotName)
 {
-	// 11.9. The shape is settled (`save-architecture.md`): restore the session record, then travel
-	// the saved map with a restore payload — which is why it goes through this one seam and not
-	// through the map subsystem.
-	UE_LOG(LogElysiumFlow, Warning, TEXT("LoadGame('%s'): save/load is unbuilt (roadmap 11.9)"), *SlotName);
-	return false;
+	// 11.9 — one restore path, and it is the one travel already uses: the save subsystem writes the
+	// payload back over the session and asks for the travel, and this subsystem owns the state move.
+	UGameInstance* GI = GetGameInstance();
+	UElysiumSaveSubsystem* Saves = GI ? GI->GetSubsystem<UElysiumSaveSubsystem>() : nullptr;
+	if (!Saves)
+	{
+		return false;
+	}
+
+	// An empty slot name is the menu's "Load Game" with no picker yet (9.5's UI half): take the most
+	// recent slot on disk, which is what a player pressing it with one save expects.
+	FString Slot = SlotName;
+	if (Slot.IsEmpty())
+	{
+		TArray<FElysiumSaveSlotInfo> Slots;
+		Saves->ListSlots(Slots);
+		if (Slots.Num() == 0)
+		{
+			UE_LOG(LogElysiumFlow, Warning, TEXT("LoadGame: there are no saves"));
+			return false;
+		}
+		Slot = Slots[0].Slot;
+	}
+
+	FString Error;
+	if (!Saves->Load(Slot, Error))
+	{
+		UE_LOG(LogElysiumFlow, Warning, TEXT("LoadGame('%s') refused: %s"), *Slot, *Error);
+		return false;
+	}
+
+	ReleasePauseHold();
+	SetAppState(EElysiumAppState::Loading);
+	return true;
 }
 
 bool UElysiumGameFlowSubsystem::SaveGame(const FString& SlotName, EElysiumSaveKind Kind)
 {
-	const TCHAR* KindName =
-		Kind == EElysiumSaveKind::Quick ? TEXT("quick") :
-		Kind == EElysiumSaveKind::Auto  ? TEXT("auto")  : TEXT("manual");
-	UE_LOG(LogElysiumFlow, Warning, TEXT("SaveGame('%s', %s): save/load is unbuilt (roadmap 11.9)"),
-		*SlotName, KindName);
-	return false;
+	UGameInstance* GI = GetGameInstance();
+	UElysiumSaveSubsystem* Saves = GI ? GI->GetSubsystem<UElysiumSaveSubsystem>() : nullptr;
+	if (!Saves)
+	{
+		return false;
+	}
+	FString Slot;
+	FString Error;
+	if (!Saves->Save(Kind, SlotName, Slot, Error))
+	{
+		UE_LOG(LogElysiumFlow, Warning, TEXT("SaveGame(%s) refused: %s"),
+			UElysiumSaveSubsystem::KindName(Kind), *Error);
+		return false;
+	}
+	return true;
 }
 
 bool UElysiumGameFlowSubsystem::QuitToMenu()

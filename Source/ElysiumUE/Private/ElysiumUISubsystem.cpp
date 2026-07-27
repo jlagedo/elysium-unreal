@@ -55,6 +55,20 @@ void UElysiumUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		TEXT("Hide the menu and return input to the game."),
 		FConsoleCommandDelegate::CreateWeakLambda(this, [this]() { HideMenu(); }),
 		ECVF_Default));
+
+	// The two look knobs are read at tree-build time, so an open screen has to be rebuilt for a
+	// console A/B to show. They are declared by the menu's own translation unit (they are its
+	// knobs); this subsystem is what owns a live screen, so the sink lives here. Found rather than
+	// referenced because a static TAutoConsoleVariable in another TU has no header.
+	static const TCHAR* const LookCvars[] = { TEXT("elysium.MenuLayout"), TEXT("elysium.MenuScrim") };
+	for (const TCHAR* Name : LookCvars)
+	{
+		if (IConsoleVariable* Var = Console.FindConsoleVariable(Name))
+		{
+			Var->SetOnChangedCallback(FConsoleVariableDelegate::CreateWeakLambda(
+				this, [this](IConsoleVariable*) { RebuildMenu(); }));
+		}
+	}
 }
 
 void UElysiumUISubsystem::Deinitialize()
@@ -135,6 +149,17 @@ void UElysiumUISubsystem::ShowMenu(EElysiumMenuMode Mode)
 	PushMenuScope();
 
 	UE_LOG(LogElysiumUI, Log, TEXT("menu shown (%s)"), MenuModeName(Mode));
+}
+
+void UElysiumUISubsystem::RebuildMenu()
+{
+	if (!Menu)
+	{
+		return;
+	}
+	const EElysiumMenuMode Mode = CurrentMode;
+	HideMenu();
+	ShowMenu(Mode);
 }
 
 void UElysiumUISubsystem::HideMenu()

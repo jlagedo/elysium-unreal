@@ -4,6 +4,7 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "ElysiumGameClock.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumSaveTypes.h"
 #include "ElysiumScriptHost.h"
 #include "ElysiumTimeControl.h"
 #include "ElysiumVariant.h"
@@ -137,6 +138,20 @@ public:
 	// from nothing. `G` and the quest map join the record as save blocks at 11.9.
 	void EndSession();
 
+	// --- The per-map snapshots (11.9) ------------------------------------------------
+	// A run holds the current map plus a frozen snapshot of every other map visited, so walking back
+	// into Santa Monica finds it as you left it (`save-architecture.md` §5). They live here for the
+	// same reason `G` does: session lifetime, not map lifetime. The entity world writes one at every
+	// teardown and reads one back at every build, which is why travel and save cannot drift apart.
+	const FElysiumMapSnapshot* FindMapSnapshot(const FString& Map) const;
+	void StoreMapSnapshot(FElysiumMapSnapshot&& Snapshot);
+	const TMap<FString, FElysiumMapSnapshot>& MapSnapshots() const { return Snapshots; }
+	void SetMapSnapshots(TMap<FString, FElysiumMapSnapshot>&& In);
+
+	// First-visit order, for the World block. A map is "visited" the first time it is frozen.
+	const TArray<FString>& VisitedMaps() const { return Visited; }
+	void SetVisitedMaps(TArray<FString>&& In) { Visited = MoveTemp(In); }
+
 	// --- Clock + time control (S1) -------------------------------------------------
 	// The clock is read-only to everyone but the facade beside it (FElysiumGameClock friends
 	// FElysiumTimeControl and nothing else), so `Now` moves in exactly one place: the map
@@ -214,6 +229,9 @@ private:
 	FElysiumQuestMap Quests;
 	// The durable player (11.4). The live one is the entity in the current map.
 	FElysiumPlayerRecord Record;
+	// The frozen maps of this run (11.9), keyed by map name, plus first-visit order.
+	TMap<FString, FElysiumMapSnapshot> Snapshots;
+	TArray<FString> Visited;
 	FElysiumGameClock Clock;
 	// Declared after the clock it holds a reference to.
 	FElysiumTimeControl TimeCtl{ Clock };

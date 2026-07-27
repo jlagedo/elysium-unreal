@@ -75,6 +75,26 @@ const FElysiumFieldAccessor* FElysiumClassRegistry::FindField(const FElysiumClas
 	return nullptr;
 }
 
+TArray<FName> FElysiumClassRegistry::SaveFields(const FElysiumClassDesc& Desc) const
+{
+	TArray<FName> Names;
+	TSet<FName> Seen;
+	// Derived first, so a shadowed base row is skipped by the Seen set rather than by ordering luck.
+	for (const FElysiumClassDesc* D = &Desc; D != nullptr; D = D->BaseName.IsNone() ? nullptr : Find(D->BaseName))
+	{
+		for (const TPair<FName, FElysiumFieldAccessor>& F : D->Fields)
+		{
+			if (F.Value.bSave && F.Value.Get && F.Value.Set && !Seen.Contains(F.Key))
+			{
+				Seen.Add(F.Key);
+				Names.Add(F.Key);
+			}
+		}
+	}
+	Names.Sort(FNameLexicalLess());
+	return Names;
+}
+
 TUniquePtr<FElysiumEntity> FElysiumClassRegistry::Create(const FElysiumEntityDef& Def, FElysiumEntityHandle Handle) const
 {
 	const FElysiumClassDesc* Desc = Find(FName(*Def.Classname));

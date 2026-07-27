@@ -117,6 +117,11 @@ struct FElysiumContentPaths
 	static FString UiStrings() { return UiDir() / TEXT("strings.json"); }
 	static FString UiMenuDir() { return UiDir() / TEXT("menu"); }
 	static FString UiTitle() { return UiMenuDir() / TEXT("title.png"); }
+	// The menu particle scene's sprite sheet, decoded to PNG: the blood cels, the glow, and the 15
+	// `mm_<clan>` sect/clan sigils VtMB drifts across its own menu backdrop. The menu draws one of
+	// them as its seal (`mm_cam` in the front end, the PC's clan in a session), so the emitter graph
+	// is not reproduced but its art is. Stem is the sprite name without extension.
+	static FString UiMenuSprite(const FString& Stem) { return UiMenuDir() / TEXT("sprites") / (Stem + TEXT(".png")); }
 	static FString UiArt(const FString& Rel) { return UiDir() / TEXT("art") / Rel; }
 
 	// Fonts. The sign/popup panel's typeface set — hand-authored/game-agnostic OFL faces committed

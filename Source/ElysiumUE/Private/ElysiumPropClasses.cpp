@@ -84,12 +84,12 @@ namespace
 	// FElysiumEntity members). Mirrors AddNpcField — file-unique name so all of them can land in one
 	// unity blob. Only the int case this leaf needs.
 	template <typename TClass, typename TMember>
-	void AddPropField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member, bool bKeyable = true)
+	void AddPropField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member, EElysiumField Flags = ElysiumFieldDefault)
 	{
 		static_assert(std::is_base_of_v<FElysiumEntity, TClass>, "TClass must derive from FElysiumEntity");
 		static_assert(std::is_same_v<TMember, int32>, "AddPropField: only int32 members are used here");
 		FElysiumFieldAccessor Acc;
-		Acc.bKeyable = bKeyable;
+		Acc.ApplyFlags(Flags);
 		Acc.Type = EElysiumVariantType::Int;
 		Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Int(static_cast<const TClass&>(E).*Member); };
 		Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt(); };
@@ -104,7 +104,7 @@ namespace
 	void AddPropSkinField(FElysiumClassDesc& D)
 	{
 		FElysiumFieldAccessor Acc;
-		Acc.bKeyable = true;
+		Acc.ApplyFlags(ElysiumFieldDefault);
 		Acc.Type = EElysiumVariantType::Int;
 		Acc.Get = [](const FElysiumEntity& E) { return FElysiumVariant::Int(static_cast<const TClass&>(E).Skin); };
 		Acc.Set = [](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).SetSkin(V.ToInt()); };

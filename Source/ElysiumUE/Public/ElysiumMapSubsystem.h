@@ -79,6 +79,13 @@ public:
 	// landmark, lift onto it). Returns false for a plain info_player_start load.
 	bool ConsumeLandmarkSpawn(FString& OutLandmark, FVector& OutOffset, float& OutYaw, bool& bOutHasYaw);
 
+	// 11.9 — a loaded save places the player where they were standing, which is neither
+	// info_player_start nor a landmark offset but an absolute pose the World block carried. Set by
+	// UElysiumSaveSubsystem before it travels; consumed once by the freshly-loaded map actor, after
+	// the landmark pass, so it wins over both.
+	void RequestRestorePlacement(const FVector& Origin, float Yaw);
+	bool ConsumeRestorePlacement(FVector& OutOrigin, float& OutYaw);
+
 	// Re-Travel the current map (the export->reload hot loop). Returns false with no map loaded.
 	bool Reload();
 
@@ -127,6 +134,15 @@ private:
 		bool    bHasYaw = false;   // true: transition (keep view yaw); false: direct entry (face landmark)
 	};
 	FLandmarkSpawn NextLandmarkSpawn;
+
+	// The absolute pose a loaded save places the player at (11.9); cleared on consume.
+	struct FRestorePlacement
+	{
+		bool    bValid = false;
+		FVector Origin = FVector::ZeroVector;
+		float   Yaw = 0.0f;
+	};
+	FRestorePlacement NextRestorePlacement;
 
 	// Headless profiling harness (task 0.1/0.2), created only under -ElysiumProfile.
 	// TPimplPtr keeps the deleter type-erased, so the forward declaration suffices.
