@@ -20,6 +20,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumKeyValues.h"
+#include "ElysiumPlayer.h"
 #include "Visual/ElysiumNpcClips.h"
 #include "Visual/ElysiumObjModel.h"
 #include "ElysiumReflections.h"
@@ -1665,6 +1666,156 @@ bool FElysiumRulebookContentTest::RunTest(const FString&)
 			CheckGroup(H.InternalName, H.Effect);
 		}
 		TestEqual(TEXT("every ClanEffect/FrenzyEffect/history Effect resolves"), BadEffect, 0);
+	}
+
+	return true;
+}
+
+// =================================================================================================
+// The character sheet against the real rulebook — the audit that keeps the compiled slot table
+// honest.
+//
+// `ElysiumSheetSlots.h` freezes the layout in C++ because VtMB freezes it in `vampire.dll`; the
+// values come from `stats.txt`. That split only holds while the two agree, so this walks every
+// compiled slot and asserts the file names the same trait at the same index.
+// =================================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSheetContentTest,
+	"Elysium.Content.Sheet", GElysiumContentTestFlags)
+bool FElysiumSheetContentTest::RunTest(const FString&)
+{
+	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/stats.txt"))))
+	{
+		AddInfo(TEXT("skipping: no exported out/vdata (run tools/export_all.py to enable)"));
+		return true;
+	}
+
+	using EC = EElysiumTraitContainer;
+	FString Error;
+
+	FElysiumStatTable Stats;
+	if (!TestTrue(TEXT("stats.txt loads"), Stats.Load(Error)))
+	{
+		AddError(Error);
+		return true;
+	}
+
+	// --- Slot for slot ------------------------------------------------------------------------
+	int32 Mismatched = 0;
+	for (uint8 i = 0; i < (uint8)EC::Count; ++i)
+	{
+		const EC Container = (EC)i;
+		const FElysiumStatContainer& File = Stats.Container(Container);
+		for (const FElysiumSheetSlot& Slot : ElysiumSheetSlots(Container))
+		{
+			const FElysiumStat* Stat = File.At(Slot.Index);
+			if (!Stat)
+			{
+				++Mismatched;
+				AddError(FString::Printf(TEXT("%s slot %d (%s) has no row in stats.txt"),
+					ElysiumTraitContainerName(Container), Slot.Index, Slot.Internal));
+			}
+			else if (!Stat->InternalName.Equals(Slot.Internal, ESearchCase::IgnoreCase))
+			{
+				++Mismatched;
+				AddError(FString::Printf(TEXT("%s slot %d: the table says '%s', stats.txt says '%s'"),
+					ElysiumTraitContainerName(Container), Slot.Index, Slot.Internal, *Stat->InternalName));
+			}
+		}
+	}
+	TestEqual(TEXT("every compiled slot names the trait stats.txt puts at that index"), Mismatched, 0);
+
+	// The file's Disciplines container is WIDER than the compiled array: 17 rows, the last four
+	// being the Numina powers. If that ever stops being true the 13 above needs re-deriving.
+	TestEqual(TEXT("stats.txt authors 17 disciplines to the compiled 13"),
+		Stats.Container(EC::Disciplines).Num(), 17);
+	if (const FElysiumStat* Numina = Stats.Container(EC::Disciplines).At(13))
+	{
+		TestEqual(TEXT("the first file-only slot is Shield_of_Faith"),
+			Numina->InternalName, FString(TEXT("Shield_of_Faith")));
+	}
+
+	// --- The seed -----------------------------------------------------------------------------
+	FElysiumSheet Sheet;
+	Sheet.SeedFrom(Stats);
+
+	// `Max_Health` is an ordinary stat with `Default 100` and no formula anywhere in `vdata` —
+	// nothing derives health from Stamina (RE24). This read is what retired the interim constant.
+	TestEqual(TEXT("Max_Health seeds to its authored 100"),
+		Sheet.GetCurrent(EC::Attributes, ElysiumSlot::MaxHealth), 100);
+	TestEqual(TEXT("Health starts at zero damage taken"),
+		Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Health), 0);
+	TestEqual(TEXT("Humanity seeds to 7"), Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Humanity), 7);
+	TestEqual(TEXT("BloodPool seeds to 10"), Sheet.GetCurrent(EC::Attributes, ElysiumSlot::BloodPool), 10);
+	TestEqual(TEXT("Masquerade starts clean"), Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Masquerade), 0);
+	TestEqual(TEXT("an attribute seeds to 1"), Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Strength), 1);
+	TestEqual(TEXT("an ability seeds to 0"), Sheet.GetCurrent(EC::Abilities, /*Brawl*/ 1), 0);
+	// -1 is the sentinel for a discipline the clan cannot take; it is the authored Default, so a
+	// freshly seeded sheet reads it on all 13 until a clan template overlays.
+	TestEqual(TEXT("a discipline seeds to the -1 sentinel"),
+		Sheet.GetCurrent(EC::Disciplines, /*Animalism*/ 0), -1);
+
+	// `Health`'s authored Max is the NAME `Max_Health`, not a number — so the clamp resolves it
+	// against the sheet, which is why the recompute is two passes rather than one.
+	Sheet.SetBase(EC::Attributes, ElysiumSlot::Health, 999);
+	Sheet.RecomputeCurrent(&Stats);
+	TestEqual(TEXT("damage clamps to the Max_Health the sheet holds"),
+		Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Health), 100);
+	// And the numeric bounds, which is where the counter inputs get their range.
+	Sheet.SetBase(EC::Attributes, ElysiumSlot::Humanity, 99);
+	Sheet.SetBase(EC::Attributes, ElysiumSlot::Masquerade, 99);
+	Sheet.RecomputeCurrent(&Stats);
+	TestEqual(TEXT("Humanity clamps to its authored 0..10"),
+		Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Humanity), 10);
+	TestEqual(TEXT("Masquerade clamps to 0..5 — the game-over ceiling"),
+		Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Masquerade), 5);
+
+	// --- A template overlays it ----------------------------------------------------------------
+	FElysiumClanTable Clans;
+	if (TestTrue(TEXT("the clan/NPC templates load"), Clans.Load(Error)))
+	{
+		// A playable clan: the overlay is what makes a discipline the clan CAN take read 0 or more
+		// instead of the -1 sentinel.
+		FElysiumClanTemplate Brujah;
+		if (TestTrue(TEXT("Player_Brujah resolves"), Clans.Resolve(TEXT("Player_Brujah"), Brujah)))
+		{
+			FElysiumSheet Pc;
+			Pc.SeedFrom(Stats);
+			Pc.ApplyTemplate(Brujah, &Stats);
+			TestNotEqual(TEXT("its clan disciplines are no longer the -1 sentinel"),
+				Pc.GetCurrent(EC::Disciplines, /*Celerity*/ 3), -1);
+		}
+
+		// An NPC template: `Max_Health` is authored as a literal there, and that overlay IS the
+		// whole of an NPC's health track (`vdata-catalog.md`).
+		int32 Checked = 0;
+		for (const FElysiumClanTemplate& Row : Clans.NpcTemplates)
+		{
+			const int32* Authored = Row.Trait(TEXT("Max_Health"));
+			if (!Authored || *Authored <= 0)
+			{
+				continue;
+			}
+			FElysiumClanTemplate Resolved;
+			if (!Clans.Resolve(Row.TemplateName, Resolved))
+			{
+				continue;
+			}
+			FElysiumSheet Npc;
+			Npc.SeedFrom(Stats);
+			Npc.ApplyTemplate(Resolved, &Stats);
+			TestEqual(*FString::Printf(TEXT("%s takes its authored Max_Health"), *Row.TemplateName),
+				Npc.GetCurrent(EC::Attributes, ElysiumSlot::MaxHealth), *Authored);
+			if (++Checked >= 5)
+			{
+				break;   // five is enough to prove the path; the slot audit above covers the rest
+			}
+		}
+		TestTrue(TEXT("at least one NPC template authors a health ceiling"), Checked > 0);
+	}
+	else
+	{
+		AddError(Error);
 	}
 
 	return true;

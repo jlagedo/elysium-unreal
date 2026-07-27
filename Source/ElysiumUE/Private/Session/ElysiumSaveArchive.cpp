@@ -113,7 +113,15 @@ FArchive& operator<<(FArchive& Ar, ElysiumRng::FState& S)
 
 FArchive& operator<<(FArchive& Ar, FElysiumSheet& S)
 {
-	Ar << S.Clan << S.bMale << S.Stats;
+	// Fixed-length arrays, written in container order. The slot count is compiled (`ElysiumSheetSlots.h`)
+	// and so is stable across installs, but the arrays serialise with their own length anyway, which
+	// is what makes a future slot-count change a version bump rather than a corrupt read.
+	for (uint8 i = 0; i < (uint8)EElysiumTraitContainer::Count; ++i)
+	{
+		Ar << S.Base[i];
+		Ar << S.Current[i];
+	}
+	Ar << S.Extra;
 	return Ar;
 }
 
@@ -132,7 +140,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumLawState& L)
 FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R)
 {
 	Ar << R.Sheet;
-	Ar << R.Money << R.Humanity << R.BloodPool << R.Masquerade;
+	Ar << R.Money;
 	Ar << R.Health << R.MaxHealth;
 	Ar << R.ExperienceLog << R.Effects << R.EmailFlags;
 	Ar << R.Law;
@@ -401,20 +409,33 @@ void Describe(const FElysiumSavePayload& Payload, TArray<FString>& OutLines)
 	}
 
 	const FElysiumPlayerRecord& P = Payload.Player;
-	OutLines.Add(FString::Printf(TEXT("player.clan = %d (%s)"), P.Sheet.Clan,
-		FElysiumSheet::ClanName(P.Sheet.Clan)));
-	OutLines.Add(FString::Printf(TEXT("player.male = %d"), P.Sheet.bMale ? 1 : 0));
+	OutLines.Add(FString::Printf(TEXT("player.clan = %d (%s)"), P.Sheet.Clan(),
+		FElysiumSheet::ClanName(P.Sheet.Clan())));
+	OutLines.Add(FString::Printf(TEXT("player.male = %d"), P.Sheet.IsMale() ? 1 : 0));
 	OutLines.Add(FString::Printf(TEXT("player.health = %d/%d"), P.Health, P.MaxHealth));
 	OutLines.Add(FString::Printf(TEXT("player.money = %d"), P.Money));
-	OutLines.Add(FString::Printf(TEXT("player.humanity = %d"), P.Humanity));
-	OutLines.Add(FString::Printf(TEXT("player.blood = %d"), P.BloodPool));
-	OutLines.Add(FString::Printf(TEXT("player.masquerade = %d"), P.Masquerade));
 	OutLines.Add(FString::Printf(TEXT("player.law = %d/%d/%d"),
 		P.Law.Criminal, P.Law.Supernatural, P.Law.Investigate));
 	OutLines.Add(FString::Printf(TEXT("player.unkillable = %d"), P.bUnkillable ? 1 : 0));
-	for (const TPair<FName, int32>& S : P.Sheet.Stats)
+	// The sheet, by slot. Only what is non-zero: VtMB's own writer omits the all-zero slots, and 148
+	// rows a dump would drown the diff this exists to be read as.
+	for (uint8 i = 0; i < (uint8)EElysiumTraitContainer::Count; ++i)
 	{
-		OutLines.Add(FString::Printf(TEXT("player.stat.%s = %d"), *S.Key.ToString(), S.Value));
+		const EElysiumTraitContainer Container = (EElysiumTraitContainer)i;
+		for (const FElysiumSheetSlot& Slot : ElysiumSheetSlots(Container))
+		{
+			const int32 Base = P.Sheet.GetBase(Container, Slot.Index);
+			const int32 Cur  = P.Sheet.GetCurrent(Container, Slot.Index);
+			if (Base != 0 || Cur != 0)
+			{
+				OutLines.Add(FString::Printf(TEXT("player.sheet.%s.%s = %d/%d"),
+					ElysiumTraitContainerName(Container), Slot.Datamap, Base, Cur));
+			}
+		}
+	}
+	for (const TPair<FName, int32>& S : P.Sheet.Extra)
+	{
+		OutLines.Add(FString::Printf(TEXT("player.sheet.extra.%s = %d"), *S.Key.ToString(), S.Value));
 	}
 	for (const FElysiumXpEntry& X : P.ExperienceLog)
 	{

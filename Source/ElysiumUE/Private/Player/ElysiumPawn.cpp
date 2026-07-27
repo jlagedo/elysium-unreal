@@ -94,20 +94,32 @@ void AElysiumPawn::SetHullHeight(float HeightCm, float EyeAboveFeetCm, bool bAnc
 	}
 
 	// Source's player origin sits at the **feet** (its hull mins are 0); ours is the box centre, so
-	// resizing has to move the actor or the body would grow/shrink about its middle. On the ground
-	// the feet are what must stay planted; in the air it is the head, or an unduck would drive the
-	// body down through whatever is beneath it.
-	const float Shift = bAnchorFeet ? (NewHalf - OldHalf) : (OldHalf - NewHalf);
+	// resizing has to move the actor or the body would grow/shrink about its middle.
+	//
+	// On the ground the feet stay planted, so the centre travels the half-height change. Airborne,
+	// `FinishDuck` moves the origin by **half** the height difference (`+18u` ducking, `-18u`
+	// standing up) rather than the whole of it — the feet rise 18 and the head drops 18, which is
+	// exactly a **fixed centre**. So the airborne case is a pure resize with no shift, and that half
+	// — not the full 36 — is the crouch-jump's reach (`docs/source_movement.md` → "Ducking").
+	const float Shift = bAnchorFeet ? (NewHalf - OldHalf) : 0.0f;
 
 	Hull->SetBoxExtent(FVector(ElysiumMove::HullHalfWidth, ElysiumMove::HullHalfWidth, NewHalf),
 		/*bUpdateOverlaps*/ true);
 	AddActorWorldOffset(FVector(0.0f, 0.0f, Shift), /*bSweep*/ false, nullptr,
 		ETeleportType::TeleportPhysics);
 
-	if (Camera)
+	SetEyeHeight(EyeAboveFeetCm);
+}
+
+void AElysiumPawn::SetEyeHeight(float EyeAboveFeetCm)
+{
+	if (Camera && Hull)
 	{
-		// The view offset is measured from the feet, so it re-bases onto the new centre.
-		Camera->SetRelativeLocation(FVector(0.0f, 0.0f, EyeAboveFeetCm - NewHalf));
+		// The view offset is measured from the feet, so it re-bases onto the current centre. The
+		// mover drives this on its own during a duck transition, where the eye slides between the
+		// two offsets while the hull is still the standing one.
+		Camera->SetRelativeLocation(FVector(0.0f, 0.0f,
+			EyeAboveFeetCm - Hull->GetUnscaledBoxExtent().Z));
 	}
 }
 

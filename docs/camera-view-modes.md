@@ -308,6 +308,35 @@ ApplyScriptedBlend(&view->origin, &view->angles, &view->fov);
 **What it does not affect**: movement (the character still steers by view yaw — the camera is a
 view-space offset, nothing is reparented), the aim/attack origin, FOV, or input sensitivity.
 
+### The strafe bank is first-person only
+
+Strafing banks the camera around the view axis, and it is a **view** effect — no character
+animation is involved. `client.dll` `0x101907a0` is Quake's `V_CalcRoll`, unchanged:
+
+```
+side = DotProduct(velocity, right);   sign = side >= 0 ? 1 : -1;   side = |side|
+side < rollspeed ? (side / rollspeed) * rollangle * sign
+                 : rollangle * sign
+```
+
+Its caller (`0x10190850`) fetches the two cvars, adds the result to `view.roll`, and — when a
+vtable predicate fires — adds a literal `0.0` (`0x101e34f0`) instead. That gate is what makes the
+bank exist in first person and vanish in third.
+
+**The live pair is `cl_rollangle` (default `2`, degrees) and `cl_rollspeed` (default `200`).**
+`sv_rollangle` / `sv_rollspeed` carry the same defaults and are **dead**: both game DLLs register
+them, neither reads them, and the string does not occur in `engine.dll` at all. (The community
+knows this empirically as "`sv_rollangle` doesn't work"; the RE says why.) ConVar objects:
+`cl_rollangle` `0x105fc550`, `cl_rollspeed` `0x105fc5b0`, recovered from the `mov ecx, imm32` in
+each registration stub — the decompiler drops the `this` argument on these thiscall ctors, so the
+raw bytes are the only place the object address survives.
+
+At the 225 u/s run speed a pure sideways strafe exceeds `cl_rollspeed`, so it banks the full 2°;
+a walk lands proportionally short of it.
+
+*Provenance: `client.dll` decompiled in `tools/ghidra/project_client`; defaults and ConVar object
+addresses read out of the PE.*
+
 ---
 
 ## 6. Reproducing it on Unreal 5.8

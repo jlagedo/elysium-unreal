@@ -7,6 +7,7 @@
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "Scripting/ElysiumPythonVM.h"
+#include "Substrate/ElysiumRulebookSubsystem.h"
 
 #include "Engine/GameInstance.h"
 #include "HAL/IConsoleManager.h"
@@ -31,6 +32,25 @@ FElysiumSheet& UElysiumGameStateSubsystem::PlayerSheet()
 {
 	FElysiumPlayer* Player = PlayerEntity();
 	return Player ? Player->Sheet : Record.Sheet;
+}
+
+UElysiumRulebookSubsystem* UElysiumGameStateSubsystem::Rulebook() const
+{
+	UGameInstance* GI = GetGameInstance();
+	return GI ? GI->GetSubsystem<UElysiumRulebookSubsystem>() : nullptr;
+}
+
+const FElysiumStatTable* UElysiumGameStateSubsystem::Stats() const
+{
+	UElysiumRulebookSubsystem* Rules = Rulebook();
+	if (!Rules)
+	{
+		return nullptr;
+	}
+	// The accessor loads on first touch and remembers a failure, so a broken export costs one
+	// warning rather than one per read. An empty table is returned, never null — hence IsValid.
+	const FElysiumStatTable& Table = Rules->Stats();
+	return Table.IsValid() ? &Table : nullptr;
 }
 
 void UElysiumGameStateSubsystem::NotifyPlayerKilled()
@@ -59,8 +79,14 @@ void UElysiumGameStateSubsystem::BeginNewGame(int32 Clan, bool bMale)
 	ElysiumRng::SeedAll(static_cast<int32>(FPlatformTime::Cycles()));
 
 	Record.Reset();
-	Record.Sheet.Clan  = FElysiumSheet::IsValidClan(Clan) ? Clan : 2;
-	Record.Sheet.bMale = bMale;
+	// The sheet starts from `stats.txt`'s authored defaults, then takes the two identity slots the
+	// front end chose. Chargen (9.4f) replaces this with the full spend.
+	if (const FElysiumStatTable* Table = Stats())
+	{
+		Record.Sheet.SeedFrom(*Table);
+	}
+	Record.Sheet.SetClan(FElysiumSheet::IsValidClan(Clan) ? Clan : 2);
+	Record.Sheet.SetMale(bMale);
 	// A live player entity would otherwise keep the previous run's numbers until the next map
 	// build; New Game is destructive by design, so re-seed it from the fresh record now.
 	if (FElysiumPlayer* Player = PlayerEntity())
@@ -75,8 +101,8 @@ void UElysiumGameStateSubsystem::BeginNewGame(int32 Clan, bool bMale)
 
 	UE_LOG(LogElysiumState, Display,
 		TEXT("new game: clan %d (%s), %s — Story_State=-4, Tut_Jack=0, Tut_Patch=0, Linux_Wine=1"),
-		Record.Sheet.Clan, FElysiumSheet::ClanName(Record.Sheet.Clan),
-		Record.Sheet.bMale ? TEXT("male") : TEXT("female"));
+		Record.Sheet.Clan(), FElysiumSheet::ClanName(Record.Sheet.Clan()),
+		Record.Sheet.IsMale() ? TEXT("male") : TEXT("female"));
 }
 
 void UElysiumGameStateSubsystem::EndSession()

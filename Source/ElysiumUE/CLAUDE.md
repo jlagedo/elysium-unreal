@@ -76,6 +76,14 @@ The character chain in `Public/ElysiumPlayer.h` is VtMB's own: `FElysiumEntity` 
 entity, classname `player`, targetname `!player` (the name the maps themselves write).
 `FindPlayer()`/`PlayerHandle()` are the accessors; every reader handles null.
 
+The character sheet on that chain is `FElysiumSheet` (`Public/ElysiumPlayer.h`) over the compiled
+slot tables in `Public/ElysiumSheetSlots.h` + `Substrate/ElysiumSheet.cpp`; the values it seeds from
+are the rulebook's, reached as `World->GetGameState()->Stats()`. **Gotcha:** the sheet's own
+health slots register as `vhealth`/`vmax_health`, not `health`/`max_health` — those two are
+`CBaseEntity` keyfields on the same chain, and the registry resolves derived-shadows-base, so a
+sheet slot taking the bare name would silently repoint `trigger_hurt`. `Elysium.Substrate.Sheet`
+guards it.
+
 Entity class implementations: `ElysiumStarterClasses.cpp` (logic_auto/relay, triggers,
 `logic_pythoncheck`), `ElysiumLogicClasses.cpp` (math_counter, logic_timer, logic_case, env_fade,
 func_brush, point_teleport), `ElysiumMover.{h,cpp}` (`FElysiumMoverBase`, `FElysiumDoorBase`,

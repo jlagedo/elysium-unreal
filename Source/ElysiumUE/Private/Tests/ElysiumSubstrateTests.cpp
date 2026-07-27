@@ -902,6 +902,174 @@ bool FElysiumRulebookTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// The character sheet's compiled half — the slot tables and the fields they register.
+//
+// This is the content-free side: the table's own shape, and that every slot reaches the R2 walk
+// under both spellings. `Elysium.Content.Sheet` is the other half, checking the table against the
+// real `stats.txt`.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSheetTest, "Elysium.Substrate.Sheet", GElysiumTestFlags)
+bool FElysiumSheetTest::RunTest(const FString&)
+{
+	using EC = EElysiumTraitContainer;
+
+	// --- The tables ---------------------------------------------------------------------------
+	// The widths are `CBaseCombatCharacter`'s compiled arrays, read off the datamap offsets: the
+	// base -> current delta is 0x8C on Attributes (35 ints) and 0x34 on the other three (13).
+	// Disciplines is 13 even though `stats.txt` authors 17 — the four Numina rows are file-only.
+	TestEqual(TEXT("Attributes is 35 slots"), ElysiumSheetSlotCount(EC::Attributes), 35);
+	TestEqual(TEXT("Abilities is 13"), ElysiumSheetSlotCount(EC::Abilities), 13);
+	TestEqual(TEXT("Disciplines is 13, not stats.txt's 17"), ElysiumSheetSlotCount(EC::Disciplines), 13);
+	TestEqual(TEXT("Active_Disciplines matches it"), ElysiumSheetSlotCount(EC::ActiveDisciplines), 13);
+
+	TSet<FString> AllDatamapNames;
+	for (uint8 i = 0; i < (uint8)EC::Count; ++i)
+	{
+		const EC Container = (EC)i;
+		int32 Expected = 0;
+		for (const FElysiumSheetSlot& Slot : ElysiumSheetSlots(Container))
+		{
+			TestEqual(FString::Printf(TEXT("%s slot %d states its own index"),
+				ElysiumTraitContainerName(Container), Expected), Slot.Index, Expected);
+			TestTrue(FString::Printf(TEXT("%s slot %d names a trait"),
+				ElysiumTraitContainerName(Container), Expected),
+				Slot.Datamap && *Slot.Datamap && Slot.Internal && *Slot.Internal);
+			// One name, one slot, across the whole sheet — a collision would make the second
+			// registration silently overwrite the first in the class's field map.
+			bool bAlready = false;
+			AllDatamapNames.Add(FString(Slot.Datamap).ToLower(), &bAlready);
+			TestFalse(FString::Printf(TEXT("`%s` is not a duplicate datamap name"), Slot.Datamap), bAlready);
+			++Expected;
+		}
+	}
+
+	// The five rows where the datamap and `stats.txt` disagree. Three are RE24's off the image; the
+	// two `v`-prefixed health rows are the collision-avoidance pattern RE24 sampled at slot 17.
+	auto SlotName = [](EC Container, int32 Index) -> FString
+	{
+		TArrayView<const FElysiumSheetSlot> Slots = ElysiumSheetSlots(Container);
+		return Slots.IsValidIndex(Index) ? FString(Slots[Index].Datamap) : FString();
+	};
+	TestEqual(TEXT("Intimidation is `intimidate` on the datamap"), SlotName(EC::Abilities, 3), FString(TEXT("intimidate")));
+	TestEqual(TEXT("Computer is `computers`"), SlotName(EC::Abilities, 9), FString(TEXT("computers")));
+	TestEqual(TEXT("Gender carries its trailing underscore"), SlotName(EC::Attributes, 11), FString(TEXT("gender_")));
+	TestEqual(TEXT("Health is `vhealth`"), SlotName(EC::Attributes, ElysiumSlot::Health), FString(TEXT("vhealth")));
+	TestEqual(TEXT("Max_Health is `vmax_health`"), SlotName(EC::Attributes, ElysiumSlot::MaxHealth), FString(TEXT("vmax_health")));
+
+	// `CVStatRef`'s resolver: by the `stats.txt` name, case-insensitive, across all four containers.
+	EC FoundContainer = EC::Count;
+	int32 FoundSlot = INDEX_NONE;
+	TestTrue(TEXT("`Max_Health` resolves by its stats.txt name"),
+		ElysiumFindSheetSlot(TEXT("max_health"), FoundContainer, FoundSlot));
+	TestEqual(TEXT("...to the Attributes container"), (int32)FoundContainer, (int32)EC::Attributes);
+	TestEqual(TEXT("...at slot 17"), FoundSlot, ElysiumSlot::MaxHealth);
+	TestTrue(TEXT("a discipline resolves too"),
+		ElysiumFindSheetSlot(TEXT("Thaumaturgy"), FoundContainer, FoundSlot));
+	TestEqual(TEXT("...in its own container"), (int32)FoundContainer, (int32)EC::Disciplines);
+	TestFalse(TEXT("a Numina power does not — the compiled array does not reach it"),
+		ElysiumFindSheetSlot(TEXT("Shield_of_Faith"), FoundContainer, FoundSlot));
+
+	// --- Storage ------------------------------------------------------------------------------
+	FElysiumSheet Sheet;
+	TestEqual(TEXT("a fresh sheet is sized to the tables"),
+		Sheet.Base[(uint8)EC::Attributes].Num(), 35);
+	TestEqual(TEXT("an unset slot reads 0"), Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Strength), 0);
+	TestEqual(TEXT("an out-of-range slot reads 0 rather than crashing"),
+		Sheet.GetCurrent(EC::Abilities, 999), 0);
+
+	Sheet.SetBase(EC::Attributes, ElysiumSlot::Strength, 4);
+	TestEqual(TEXT("a base write is readable"), Sheet.GetBase(EC::Attributes, ElysiumSlot::Strength), 4);
+	TestEqual(TEXT("and the current follows it"), Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Strength), 4);
+	Sheet.AddBase(EC::Attributes, ElysiumSlot::Strength, -1);
+	TestEqual(TEXT("AddBase moves it"), Sheet.GetBase(EC::Attributes, ElysiumSlot::Strength), 3);
+	TestEqual(TEXT("a different container is untouched"), Sheet.GetBase(EC::Abilities, 1), 0);
+
+	Sheet.SetClan(FElysiumSheet::ClanFromName(TEXT("Tremere")));
+	TestEqual(TEXT("clan is a slot, not a member"), Sheet.Clan(), 7);
+	TestEqual(TEXT("...reachable through the container too"),
+		Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Clan), 7);
+	Sheet.SetMale(false);
+	TestFalse(TEXT("sex is the Gender slot"), Sheet.IsMale());
+
+	// With no rulebook nothing is clamped — the same fail-closed posture the seed takes.
+	Sheet.SetBase(EC::Attributes, ElysiumSlot::Humanity, 99);
+	Sheet.RecomputeCurrent(nullptr);
+	TestEqual(TEXT("with no stat table the current is the base"),
+		Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Humanity), 99);
+
+	// --- The R2 walk --------------------------------------------------------------------------
+	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+	const FElysiumClassDesc* Player = Reg.Find(ElysiumPlayerClassName());
+	const FElysiumClassDesc* Npc = Reg.Find(FName(TEXT("npc_VVampire")));
+	if (!TestNotNull(TEXT("the player class is registered"), reinterpret_cast<const void*>(Player))
+		|| !TestNotNull(TEXT("and npc_VVampire"), reinterpret_cast<const void*>(Npc)))
+	{
+		return false;
+	}
+
+	auto FieldOn = [&Reg](const FElysiumClassDesc* Class, const TCHAR* Name) -> const FElysiumFieldAccessor*
+	{
+		return Reg.FindField(*Class, FName(Name));
+	};
+
+	// Both spellings of a slot, on the player and — because the sheet is on CBaseCombatCharacter,
+	// where VtMB puts it — on every NPC through the same walk.
+	for (const TCHAR* Name : { TEXT("strength"), TEXT("base_strength"), TEXT("humanity"),
+		TEXT("base_humanity"), TEXT("masquerade"), TEXT("bloodpool"), TEXT("clan"),
+		TEXT("generation"), TEXT("experience"), TEXT("vmax_health"), TEXT("intimidate"),
+		TEXT("computers"), TEXT("celerity"), TEXT("base_celerity"), TEXT("active_obfuscate"),
+		TEXT("gender_"), TEXT("gender") })
+	{
+		TestNotNull(*FString::Printf(TEXT("player.%s resolves as a field"), Name),
+			reinterpret_cast<const void*>(FieldOn(Player, Name)));
+		TestNotNull(*FString::Printf(TEXT("npc_VVampire.%s resolves too"), Name),
+			reinterpret_cast<const void*>(FieldOn(Npc, Name)));
+	}
+
+	// The shadowing guard. `health` and `max_health` are CBaseEntity keyfields — `m_iHealth` and
+	// `m_iMaxHealth` — and the sheet's own damage/ceiling slots are `vhealth`/`vmax_health`
+	// precisely so they do not shadow them on the character chain. If a sheet slot ever took the
+	// bare name, `trigger_hurt` would silently start writing the wrong number.
+	{
+		FElysiumPlayer Probe;
+		Probe.Health = 42;
+		Probe.Sheet.SetBase(EC::Attributes, ElysiumSlot::Health, 7);
+		const FElysiumFieldAccessor* Health = FieldOn(Player, TEXT("health"));
+		if (TestNotNull(TEXT("`health` still resolves"), reinterpret_cast<const void*>(Health)))
+		{
+			TestEqual(TEXT("...to the entity keyfield, not the sheet's damage slot"),
+				Health->Get(Probe).ToInt(), 42);
+		}
+		const FElysiumFieldAccessor* VHealth = FieldOn(Player, TEXT("vhealth"));
+		if (TestNotNull(TEXT("`vhealth` resolves"), reinterpret_cast<const void*>(VHealth)))
+		{
+			TestEqual(TEXT("...to the sheet's damage slot"), VHealth->Get(Probe).ToInt(), 7);
+		}
+
+		// A write through the field lands on the base and carries to the current.
+		const FElysiumFieldAccessor* Str = FieldOn(Player, TEXT("base_strength"));
+		if (TestNotNull(TEXT("`base_strength` resolves"), reinterpret_cast<const void*>(Str)))
+		{
+			Str->Set(Probe, FElysiumVariant::Int(5));
+			TestEqual(TEXT("a field write reaches the slot's base"),
+				Probe.Sheet.GetBase(EC::Attributes, ElysiumSlot::Strength), 5);
+			TestEqual(TEXT("...and the current with it"),
+				FieldOn(Player, TEXT("strength"))->Get(Probe).ToInt(), 5);
+		}
+	}
+
+	// Every sheet field is Save-flagged, so the whole sheet is in the save walk's enumeration.
+	{
+		const TArray<FName> SaveNames = Reg.SaveFields(*Player);
+		TestTrue(TEXT("the save walk enumerates a sheet slot"), SaveNames.Contains(FName(TEXT("base_strength"))));
+		TestTrue(TEXT("...both halves of it"), SaveNames.Contains(FName(TEXT("strength"))));
+	}
+
+	return true;
+}
+
+// =====================================================================================
 // FElysiumEventQueue — the one time-sorted queue: ordering, FIFO ties, cancel-by-caller.
 // =====================================================================================
 
@@ -1173,41 +1341,62 @@ bool FElysiumMovementTest::RunTest(const FString&)
 		TestTrue(TEXT("and the into-wall component is removed"), FMath::IsNearlyEqual(F(Out.X), 0.0f, 0.01f));
 	}
 
-	// --- The jump apex: flat, and the gravity split is what makes it dt-invariant -------------
+	// --- The jump: a held push under reduced gravity, not a single impulse --------------------
 	{
-		// sv_jump_boost is literally the apex height in units, since v^2/2g = boost.
-		TestTrue(TEXT("jump speed is sqrt(2 * boost * g)"),
-			FMath::IsNearlyEqual(T.JumpSpeed(), 200.0f * U, 0.5f));
-		TestTrue(TEXT("and its apex reads back as sv_jump_boost"),
-			FMath::IsNearlyEqual(ApexHeight(T.JumpSpeed(), T.Gravity), T.JumpBoost, 0.01f));
+		// The four numbers are `rules.txt`'s, not `CGameMovement` constants. sv_jump_boost is an
+		// origin pop measured in inches, NOT an apex height — asserting that here is what stops
+		// the old `sqrt(2 * boost * g)` reading coming back.
+		TestTrue(TEXT("BaseJumpVelocity is 185 Source units/s"),
+			FMath::IsNearlyEqual(T.BaseJumpVelocity, 185.0f * U, 0.5f));
+		TestTrue(TEXT("gravity runs at 0.75 during a jump"),
+			FMath::IsNearlyEqual(T.JumpGravityMultiplier, 0.75f, 1e-4f));
+		TestTrue(TEXT("and the push window is JumpHoldTime"),
+			FMath::IsNearlyEqual(T.JumpHoldSeconds, 0.2f, 1e-4f));
+		TestTrue(TEXT("sv_jump_boost is an origin pop in inches, not an apex"),
+			FMath::IsNearlyEqual(T.JumpBoost, 25.0f, 1e-4f));
 
-		// Integrate a real jump the way FullWalkMove does — StartGravity, move, FinishGravity —
-		// at three frame rates. The half-step split is exact for constant acceleration, so the
-		// apex must be a flat 25 units at every one of them. A single full step instead lands at
-		// `25 - 100*dt`, which is the frame-rate dependence the timestep question was about.
+		// The ballistic tail, once the push window has closed. The half-step split is exact for
+		// constant acceleration, so this piece is dt-invariant even though the height it reaches
+		// is no longer `sv_jump_boost`.
+		// ApexHeight already returns Source units.
+		const float TailApex = ApexHeight(T.BaseJumpVelocity,
+			T.Gravity * T.JumpGravityMultiplier);
+		TestTrue(TEXT("the ballistic tail alone clears 28 units"), TailApex > 28.0f);
+
+		// Integrate the whole thing the way FullWalkMove does, holding the button for the window.
 		auto SimulateApex = [&T](float Dt)
 		{
-			FVector V(0.0f, 0.0f, T.JumpSpeed());
-			float Z = 0.0f;
-			float Peak = 0.0f;
+			const float G = T.Gravity * T.JumpGravityMultiplier;
+			FVector V(0.0f, 0.0f, T.BaseJumpVelocity);
+			float Z = T.JumpBoost * U * ElysiumMove::JumpBoostScale;   // the press-frame pop
+			float Peak = Z;
+			float Hold = T.JumpHoldSeconds;
 			for (int32 i = 0; i < 4096 && (V.Z > 0.0f || Z > 0.0f); ++i)
 			{
-				StartGravity(V, T.Gravity, Dt);
+				StartGravity(V, G, Dt);
+				// The held push re-asserts the launch speed while the window is open.
+				if (Hold > 0.0f) { V.Z = FMath::Max(V.Z, T.BaseJumpVelocity); Hold -= Dt; }
 				Z += V.Z * Dt;
-				FinishGravity(V, T.Gravity, Dt);
+				FinishGravity(V, G, Dt);
 				Peak = FMath::Max(Peak, Z);
 			}
-			return Peak / U;   // in Source units, to read against sv_jump_boost
+			return Peak / U;
 		};
 
 		const float Apex60 = SimulateApex(1.0f / 60.0f);
 		const float Apex120 = SimulateApex(1.0f / 120.0f);
 		const float Apex240 = SimulateApex(1.0f / 240.0f);
 
-		TestTrue(TEXT("the split puts the apex at sv_jump_boost at 60 fps"),
-			FMath::IsNearlyEqual(Apex60, T.JumpBoost, 0.01f));
-		TestTrue(TEXT("and at 120 fps"), FMath::IsNearlyEqual(Apex120, T.JumpBoost, 0.01f));
-		TestTrue(TEXT("and at 240 fps"), FMath::IsNearlyEqual(Apex240, T.JumpBoost, 0.01f));
+		// The headline: the reachable height is far above the 25 units the old model produced,
+		// which is what made the tutorial's crate stack unclimbable.
+		TestTrue(TEXT("a held jump clears well past 25 units"), Apex60 > 60.0f);
+		// The push window is wall-clock, so the three rates agree to within a frame's worth of it.
+		TestTrue(TEXT("and 120 fps agrees with 60"), FMath::Abs(Apex120 - Apex60) < 4.0f);
+		TestTrue(TEXT("and 240 fps agrees with 60"), FMath::Abs(Apex240 - Apex60) < 4.0f);
+
+		// A tap is shorter than a hold — the mousewheel-vs-spacebar difference players report.
+		TestTrue(TEXT("the ballistic tail alone is shorter than a full held jump"),
+			TailApex < Apex60);
 	}
 
 	// --- The timestep: 0 is the faithful path, a fixed step carries its remainder --------------
@@ -1279,9 +1468,9 @@ bool FElysiumMovementTest::RunTest(const FString&)
 		Tuned.LoadFrom(Lookup);
 		TestTrue(TEXT("a console value wins, converted from Source units once"),
 			FMath::IsNearlyEqual(Tuned.Gravity, 400.0f * U, 0.01f));
-		// The apex stays in Source units because it *is* a height — so it reads back literally.
-		TestTrue(TEXT("and the apex still reads back as the boost it was given"),
-			FMath::IsNearlyEqual(ApexHeight(Tuned.JumpSpeed(), Tuned.Gravity), 100.0f, 0.01f));
+		// The pop stays in Source units because it *is* a distance in inches — read back literally.
+		TestTrue(TEXT("and sv_jump_boost reads back in Source units, unconverted"),
+			FMath::IsNearlyEqual(Tuned.JumpBoost, 100.0f, 0.01f));
 	}
 
 	return true;
@@ -2981,9 +3170,17 @@ bool FElysiumPlayerEntityTest::RunTest(const FString&)
 		World.FindByName(ElysiumPlayerTargetName()), static_cast<FElysiumEntity*>(Player));
 	TestFalse(TEXT("it is a registered class, not an inert record"), Player->IsRecordOnly());
 	TestEqual(TEXT("a second SpawnPlayer is a no-op"), World.SpawnPlayer().Index, PlayerHandle.Index);
-	TestEqual(TEXT("Spawn seeded the interim health ceiling"),
-		Player->MaxHealth, ElysiumInterimPlayerMaxHealth);
 	TestTrue(TEXT("Spawn sampled the body's origin"), Player->Origin.Equals(FVector(100, 200, 30)));
+
+	// This world has no game state, so no rulebook reached Spawn and the sheet stayed at zero —
+	// which is the fail-closed posture, not a bug: a character with no health model does not die of
+	// arithmetic. Seed the ceiling by hand for the damage assertions below. `Elysium.Content.Sheet`
+	// is where the real `stats.txt` seed (a flat 100) is checked.
+	TestEqual(TEXT("with no rulebook the sheet has no health track"), Player->MaxHealth, 0);
+	Player->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::MaxHealth, 100);
+	Player->SyncHealthFromSheet();
+	TestEqual(TEXT("the health keyfield is derived from the sheet's ceiling"), Player->MaxHealth, 100);
+	TestEqual(TEXT("...with no damage taken yet"), Player->Health, 100);
 
 	// --- Both directions land on the same field ------------------------------------------
 	// (a) the console / Hammer-wire direction: address it by targetname.
@@ -3032,8 +3229,12 @@ bool FElysiumPlayerEntityTest::RunTest(const FString&)
 		FMath::IsNearlyEqual((float)Services.PlayerRotation.Yaw, -45.f));
 
 	// --- Damage, the unkillable latch, and the death path ---------------------------------
+	// The number lands on the sheet's `Health` slot, which counts damage TAKEN (RE24); the entity's
+	// `health` keyfield is the engine-space projection of that against `Max_Health`.
 	Player->TakeDamage(40.f);
-	TestEqual(TEXT("damage reduces the entity's health field"), Player->Health, 60);
+	TestEqual(TEXT("damage accumulates on the sheet's damage slot"),
+		Player->Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Health), 40);
+	TestEqual(TEXT("...and the health keyfield follows it down"), Player->Health, 60);
 	Player->SetUnkillable(true);
 	Player->TakeDamage(1000.f);
 	TestEqual(TEXT("an unkillable player floors at 1"), Player->Health, 1);
@@ -3043,25 +3244,34 @@ bool FElysiumPlayerEntityTest::RunTest(const FString&)
 
 	// --- Hydrate / dehydrate is the map boundary ------------------------------------------
 	Player->Money = 250;
-	Player->Sheet.Clan = FElysiumSheet::ClanFromName(TEXT("Malkavian"));
-	Player->Sheet.Stats.Add(FName(TEXT("base_Celerity")), 3);
+	Player->Sheet.SetClan(FElysiumSheet::ClanFromName(TEXT("Malkavian")));
+	Player->Sheet.SetBase(EElysiumTraitContainer::Disciplines, /*Celerity*/ 3, 3);
 	FElysiumPlayerRecord Record;
 	Player->Dehydrate(Record);
 	TestEqual(TEXT("dehydrate carries money"), Record.Money, 250);
-	TestEqual(TEXT("dehydrate carries the clan"), Record.Sheet.Clan, 4);
+	TestEqual(TEXT("dehydrate carries the clan"), Record.Sheet.Clan(), 4);
 
 	FElysiumPlayer Fresh;
 	Fresh.Hydrate(Record);
 	TestEqual(TEXT("hydrate restores money"), Fresh.Money, 250);
-	TestEqual(TEXT("hydrate restores the sheet"), Fresh.Sheet.Stats.FindRef(FName(TEXT("base_Celerity"))), 3);
+	TestEqual(TEXT("hydrate restores the sheet"),
+		Fresh.Sheet.GetCurrent(EElysiumTraitContainer::Disciplines, 3), 3);
 
-	// --- The vdata half of the sheet reads as a number, not a bound method -----------------
+	// --- The sheet reads as a registered field, and the bag holds what is left -------------
+	// A script read resolves the field table BEFORE the dynamic hook (`Entity_getattro`), so a
+	// compiled slot never reaches the bag — that ordering is what turns `pc.base_Celerity` from a
+	// default-0 rescue into the real rating.
+	{
+		const FElysiumFieldAccessor* Celerity = Reg.FindField(*Player->Class, FName(TEXT("base_celerity")));
+		if (TestNotNull(TEXT("base_celerity resolves as a datamap field"),
+			reinterpret_cast<const void*>(Celerity)))
+		{
+			TestEqual(TEXT("...reading the slot the sheet holds"), Celerity->Get(*Player).ToInt(), 3);
+		}
+	}
 	FElysiumVariant Dynamic;
-	TestTrue(TEXT("a loaded stat resolves dynamically"),
-		Player->GetDynamicField(FName(TEXT("base_Celerity")), Dynamic));
-	TestEqual(TEXT("...with its value"), Dynamic.ToInt(), 3);
-	TestTrue(TEXT("an unloaded base_ stat resolves to 0 rather than raising"),
-		Player->GetDynamicField(FName(TEXT("base_Obfuscate")), Dynamic));
+	TestTrue(TEXT("a base_ name no slot owns resolves to 0 rather than raising"),
+		Player->GetDynamicField(FName(TEXT("base_NotAStat")), Dynamic));
 	TestEqual(TEXT("...as zero"), Dynamic.ToInt(), 0);
 	TestFalse(TEXT("an unrelated name does not resolve dynamically"),
 		Player->GetDynamicField(FName(TEXT("SetExpression")), Dynamic));
@@ -3941,9 +4151,10 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	ElysiumRng::Stream(EElysiumRngStream::OneOfSet).GetUnsignedInt();
 	ElysiumRng::Snapshot(Payload.Session.Rng);
 
-	Payload.Player.Sheet.Clan = 7;
-	Payload.Player.Sheet.bMale = false;
-	Payload.Player.Sheet.Stats.Add(FName(TEXT("base_strength")), 3);
+	Payload.Player.Sheet.SetClan(7);
+	Payload.Player.Sheet.SetMale(false);
+	Payload.Player.Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Strength, 3);
+	Payload.Player.Sheet.SetBase(EElysiumTraitContainer::Disciplines, /*Celerity*/ 3, 2);
 	Payload.Player.Money = 250;
 	Payload.Player.Health = 61;
 	Payload.Player.MaxHealth = 100;
@@ -4004,8 +4215,15 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 		FString(TEXT("Story_State")));
 	TestEqual(TEXT("the quest map survived"), Back.Session.Quests.Num(), 1);
 	TestEqual(TEXT("the RNG stream states survived"), Back.Session.Rng.Num(), Payload.Session.Rng.Num());
-	TestEqual(TEXT("the clan survived"), Back.Player.Sheet.Clan, 7);
-	TestEqual(TEXT("the sheet bag survived"), Back.Player.Sheet.Stats.Num(), 1);
+	TestEqual(TEXT("the clan survived"), Back.Player.Sheet.Clan(), 7);
+	TestFalse(TEXT("and the sex"), Back.Player.Sheet.IsMale());
+	TestEqual(TEXT("an attribute slot survived"),
+		Back.Player.Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Strength), 3);
+	TestEqual(TEXT("and so did a slot in another container"),
+		Back.Player.Sheet.GetCurrent(EElysiumTraitContainer::Disciplines, 3), 2);
+	TestEqual(TEXT("every container came back at its compiled width"),
+		Back.Player.Sheet.Base[(uint8)EElysiumTraitContainer::Attributes].Num(),
+		ElysiumSheetSlotCount(EElysiumTraitContainer::Attributes));
 	TestEqual(TEXT("money survived"), Back.Player.Money, 250);
 	TestEqual(TEXT("the law counters survived"), Back.Player.Law.Criminal, 2);
 	TestEqual(TEXT("one map snapshot"), Back.Maps.Num(), 1);

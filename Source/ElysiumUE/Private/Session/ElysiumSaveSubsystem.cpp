@@ -334,8 +334,8 @@ FElysiumSaveHeaderData UElysiumSaveSubsystem::MakeHeader(const FElysiumSavePaylo
 	FElysiumSaveHeaderData H;
 	H.PayloadVersion  = FElysiumSaveVersion::Latest;
 	H.Map             = Payload.World.CurrentMap;
-	H.Clan            = Payload.Player.Sheet.Clan;
-	H.ClanName        = FElysiumSheet::ClanName(Payload.Player.Sheet.Clan);
+	H.Clan            = Payload.Player.Sheet.Clan();
+	H.ClanName        = FElysiumSheet::ClanName(Payload.Player.Sheet.Clan());
 	H.PlaytimeSeconds = Payload.Session.ClockNow;
 	H.Timestamp       = FDateTime::UtcNow();
 	H.Kind            = KindName(Kind);

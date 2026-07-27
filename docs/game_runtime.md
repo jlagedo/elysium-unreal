@@ -323,8 +323,14 @@ current value under the bare name, the base under a `base_` prefix:
 | `m_iVDisciplinesBase` / `Current` | `+0x1280` / `+0x12B4` | 13 | `base_animalism`(0) |
 | `m_iVActiveDisciplinesBase` / `Current` | `+0x1310` / `+0x1344` | 13 | `base_active_animalism`(0) |
 
-Three datamap external names diverge from the `stats.txt` `InternalName`: `intimidate` ↔
-`Intimidation`, `computers` ↔ `Computer`, and `base_gender_` carries a trailing underscore.
+Four datamap external names are known to diverge from the `stats.txt` `InternalName`: `intimidate`
+↔ `Intimidation`, `computers` ↔ `Computer`, `base_gender_` carries a trailing underscore, and
+`Max_Health`(17) reads `vmax_health` — a `v` prefix that keeps the trait clear of
+`CBaseEntity::m_iMaxHealth`, which is a separate keyfield on the same entity. **Inferred, not
+read:** `Health`(15) has the identical collision with `m_iHealth` and its datamap name was not
+sampled; the runtime takes `vhealth` from the slot-17 pattern, and a later decompile pass should
+confirm or correct it.
+
 A Hammer keyvalue / `__getattr__` walk resolves the *datamap* name; `BumpStat` and the
 `feats.txt` `Base%d` keys resolve the *`stats.txt`* name — two spellings, one slot.
 

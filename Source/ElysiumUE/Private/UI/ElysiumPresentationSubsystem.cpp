@@ -275,9 +275,10 @@ void UElysiumPresentationSubsystem::Publish()
 			Vit.bValid = true;
 			Vit.Health = PlayerEnt->Health;
 			Vit.MaxHealth = PlayerEnt->MaxHealth;
-			Vit.BloodPool = PlayerEnt->BloodPool;
-			Vit.Humanity = PlayerEnt->Humanity;
-			Vit.Masquerade = PlayerEnt->Masquerade;
+			const FElysiumSheet& Sheet = PlayerEnt->Sheet;
+			Vit.BloodPool  = Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPool);
+			Vit.Humanity   = Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Humanity);
+			Vit.Masquerade = Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Masquerade);
 		}
 	}
 

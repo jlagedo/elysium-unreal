@@ -704,9 +704,11 @@ namespace ElysiumMcpImpl
 							Ent->SetNumberField(TEXT("max_health"), Player->MaxHealth);
 							Ent->SetBoolField(TEXT("unkillable"), Player->IsUnkillable());
 							Ent->SetNumberField(TEXT("money"), Player->Money);
-							Ent->SetNumberField(TEXT("blood"), Player->BloodPool);
-							Ent->SetNumberField(TEXT("humanity"), Player->Humanity);
-							Ent->SetNumberField(TEXT("masquerade"), Player->Masquerade);
+							const FElysiumSheet& S = Player->Sheet;
+							using EC = EElysiumTraitContainer;
+							Ent->SetNumberField(TEXT("blood"), S.GetCurrent(EC::Attributes, ElysiumSlot::BloodPool));
+							Ent->SetNumberField(TEXT("humanity"), S.GetCurrent(EC::Attributes, ElysiumSlot::Humanity));
+							Ent->SetNumberField(TEXT("masquerade"), S.GetCurrent(EC::Attributes, ElysiumSlot::Masquerade));
 							Body->SetObjectField(TEXT("entity"), Ent);
 						}
 					}
@@ -1250,11 +1252,25 @@ namespace ElysiumMcpImpl
 
 					const FElysiumSheet& Sheet = State->PlayerSheet();
 					TSharedRef<FJsonObject> Player = Obj();
-					Player->SetNumberField(TEXT("clan"), Sheet.Clan);
-					Player->SetStringField(TEXT("clan_name"), FElysiumSheet::ClanName(Sheet.Clan));
-					Player->SetBoolField(TEXT("male"), Sheet.bMale);
+					Player->SetNumberField(TEXT("clan"), Sheet.Clan());
+					Player->SetStringField(TEXT("clan_name"), FElysiumSheet::ClanName(Sheet.Clan()));
+					Player->SetBoolField(TEXT("male"), Sheet.IsMale());
+					// The whole sheet by datamap name, current values — what a script would read.
+					// Zero slots are dropped so the dump reads as a character, not as a table.
 					TSharedRef<FJsonObject> Stats = Obj();
-					for (const TPair<FName, int32>& Pair : Sheet.Stats)
+					for (uint8 i = 0; i < (uint8)EElysiumTraitContainer::Count; ++i)
+					{
+						const EElysiumTraitContainer Container = (EElysiumTraitContainer)i;
+						for (const FElysiumSheetSlot& Slot : ElysiumSheetSlots(Container))
+						{
+							const int32 Value = Sheet.GetCurrent(Container, Slot.Index);
+							if (Value != 0)
+							{
+								Stats->SetNumberField(Slot.Datamap, Value);
+							}
+						}
+					}
+					for (const TPair<FName, int32>& Pair : Sheet.Extra)
 					{
 						Stats->SetNumberField(Pair.Key.ToString(), Pair.Value);
 					}

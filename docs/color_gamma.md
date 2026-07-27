@@ -73,3 +73,28 @@ ramp per user and are **not** part of the scene render.
 SDK cross-reference (`gameui/OptionsSubVideo.cpp`): the `mat_monitorgamma` slider
 ranges 1.6–2.6; HDR/color-correction combos are gated on `mat_dxlevel.GetInt() >= 80`
 / `>= 90`.
+
+### Screenshot capture happens before the gamma ramp
+
+`snapshot` (`TakeSnapshotTGA`/`TakeSnapshotJPEG`) does **not** see the gamma ramp described
+above — this doc's "the gamma ramp is applied only at present" line (above) means a
+`snapshot` file grab bypasses it entirely, because capture and the ramp are two separate
+subsystems reading/writing two different surfaces:
+
+- Capture reads rendered-surface memory: `GetBackBufferImage`/`GetFrontBufferImage` call
+  `IDirect3DDevice::GetRenderTargetData`/`GetFrontBufferData` — a raw memory copy, no gamma
+  math.
+- The ramp (`SetHardwareGammaRamp`, driven by `mat_monitorgamma`) calls
+  `IDirect3DDevice::SetGammaRamp` — a DAC/output-stage lookup table applied at scanout, never
+  written back into the surface the capture path reads.
+
+**Confidence: SDK cross-reference only, not yet confirmed against VtMB's own binaries** — this
+section is read from the leaked/public Source engine source (`materialsystem/shaderapidx9/
+shaderapidx8.cpp` + `shaderdevicedx8.cpp`, mirrored at `nillerusr/source-engine` on GitHub),
+the same 2004-era DX8 architecture this doc's rest is drawn from via Ghidra, but not this
+specific finding. What would raise it to verified: decompiling `engine.dll`'s own
+`TakeSnapshotTGA`/`ReadPixels` and confirming it never calls `SetGammaRamp`/reads a
+ramp-corrected surface. Practical consequence for **RE17**: an original-game reference
+screenshot used for quantitative calibration needs the `mat_monitorgamma`/`cl_v_gamma` curve
+re-applied as a post-process step before comparison, or the capture session's ramp cvars
+pinned to engine default so the raw file and the on-screen image already match.

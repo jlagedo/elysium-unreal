@@ -65,6 +65,29 @@ forms appear on the same classname in the same map set.
 `WaterDrops_Timer` is the drip layer under overhangs, placed by hand and dense: 36 in
 `sm_hub_1`, 5 in `sp_tutorial_1`, 3 in `la_hub_1`.
 
+**The two classes' keyvalue/I/O surface is public** — the community `vampire.fgd`
+(Antitribu's mirror of Troika's own Bloodlines SDK) declares both, `func_particle` inheriting
+`env_particle` with no additions beyond the solid-brush volume itself:
+
+| Key/input | Type | Default | Role |
+|---|---|---|---|
+| `active` | choice | `1` (Yes) | spawns active — the `start_hidden`-equivalent; there is no separate hidden flag |
+| `attach_type` | integer | `0` | undocumented even by the FGD's own author ("Unknown yet") |
+| `bone` | choice | `<none>` | attach point on a parent skeletal model (`Bip01 Head`/`L Hand`/`R Hand`/`Neck`/`Pelvis`/`Spine`…), untested |
+| `particle_definition` | choice | `fire1_emitter` | the `particles/<name>.txt` file, matching the entity survey above |
+| `bounds` | integer | `512` | "Bounds (Intensity)", untested |
+| `ramp_scale` / `ramp_time` | float | `1` / `0` | undocumented |
+| `spawnflags` bit 1 | flag | off | undocumented even by the FGD's own author |
+| `TurnOn` / `TurnOff` | input | — | the standard on/off pair |
+| `SetAttachType` / `SetRateScale` / `SetRampTime` | input | — | live retune |
+
+This answers "what we do not know" item 7 below: scripts **can** turn a volume on and off
+per-instance (`TurnOn`/`TurnOff`), and the spawn state is the `active` keyvalue, not a
+spawnflag. Source: `vampire.fgd` (`@PointClass env_particle`, `@SolidClass func_particle`),
+fetched from the Antitribu Bloodlines-SDK mirror on GitHub — a public, community-authored
+file, not our own decompile, so treat the *values* as corroboration rather than as
+Ghidra-grade fact.
+
 The `_follow_` / `_box_` split is the system's shape. A follow emitter tracks the viewer and
 supplies rain wherever they are; the boxes are fixed volumes. Both appear in `sm_hub_1`
 simultaneously.
@@ -314,15 +337,23 @@ Tracked as **RE23**.
    data supports, unconfirmed.
 5. **The `v(n)` keyframe position unit** — frame index or percentage.
 6. **Emitter volume sampling** — how `func_particle` distributes spawns through a brush volume,
-   and what `radius` means when the emitter is a volume rather than a point.
-7. **Whether `func_particle`/`env_particle` respect the standard I/O and `start_hidden`
-   surface**, i.e. whether scripts can turn weather on and off per volume.
+   and what `radius` means when the emitter is a volume rather than a point. The public FGD's
+   `func_particle` block adds nothing over `env_particle` (no per-axis density key), so this
+   stays a decompile-only question.
+7. ~~Whether `func_particle`/`env_particle` respect the standard I/O and `start_hidden`
+   surface~~ — **resolved above**, off the public FGD: yes (`TurnOn`/`TurnOff`), and the
+   spawn-state key is `active`, not `start_hidden`.
 8. **Sprite render mode** — additive vs translucent, and whether `mask` is alpha or a separate
    mask channel.
 
-The community record does not help here: the FGD the VtMB modding scene uses defines neither
-`env_particle` nor `func_particle`, and annotates all three wetness keys `"Not tested yet..."`.
-No public decoder for `particles/*.txt` exists.
+The community record helps only partway: `vampire.fgd` (Antitribu mirror) *does* define both
+`env_particle` and `func_particle` (keyvalue/I/O table above) — corrects the earlier read of
+this doc, which had them absent — but still annotates all three wetness keys and every
+particle-specific key `"Not tested yet..."`/`"Unknown yet..."`, and `lightningrotator` (an
+instance name, not a class — see "Lightning" above) appears nowhere in any of the three public
+FGD files (`vampire.fgd`, `vampire-base.fgd`, `vampire-adds.fgd`), consistent with it being a
+plain `func_rotating` given that targetname rather than a distinct entity. No public decoder
+for `particles/*.txt` exists.
 
 ## The Unreal plan
 

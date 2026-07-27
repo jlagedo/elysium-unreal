@@ -81,8 +81,11 @@ private:
 	// Would the standing hull fit where we are? What stops a stand-up under a low ceiling.
 	bool CanUnduck() const;
 
-	// Sweep the current hull between two points. The mover's one world dependency.
-	bool TraceHull(const FVector& Start, const FVector& End, FHitResult& OutHit) const;
+	// `sv_jump_boost` — the instant origin pop on the jump's first frame, swept so a ceiling caps it.
+	void ApplyJumpBoost();
+	// Close the hold window and restore full gravity. Called on release, on expiry and on landing.
+	void EndJumpHold();
+
 	// The two-attempt move: flat, then raised, keeping whichever covered more ground. Nothing
 	// detects a stair — that is the whole trick.
 	void WalkMove(float DeltaTime);
@@ -121,6 +124,17 @@ private:
 	// How deep the body is in water. Nothing sets this yet — no exported map places a water brush —
 	// so the water branch is live in the state machine and unreachable from content.
 	EElysiumWaterLevel WaterLevel = EElysiumWaterLevel::None;
+
+	// How much of the jump's push window is left, seconds. Non-zero means the button is still
+	// doing work — VtMB's jump is a held push, not a single impulse.
+	float JumpHoldRemaining = 0.0f;
+
+	// The player's own gravity scale (`m_flGravity`, `player+0x3ec`), which `Start`/`FinishGravity`
+	// multiply by. `JumpGravityMultiplier` for the duration of a jump, 1.0 otherwise.
+	float GravityScale = 1.0f;
+
+	// The rulebook is read once; `rules.txt` is not hot-reloaded.
+	bool bJumpTuningLoaded = false;
 
 	// 1.0 on every world surface, which is what retail computes: VtMB scales the material's friction
 	// by 1.25 and clamps to 1.0, and 1 of the install's 11,624 VMTs carries a `$surfaceprop`, so

@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 
+#include "ElysiumSheetSlots.h"
+
 // VtMB's rulebook — the RPG rules layer under `vdata/system/`, mirrored verbatim by PL5b.
 //
 // Twelve table families, one struct pair each: a row struct and a table struct carrying
@@ -115,16 +117,8 @@ struct FElysiumRuleTable
 // 1. stats.txt — the four trait containers
 // ================================================================================================
 
-enum class EElysiumTraitContainer : uint8
-{
-	Attributes = 0,
-	Abilities,
-	Disciplines,
-	ActiveDisciplines,
-	Count,
-};
-
-const TCHAR* ElysiumTraitContainerName(EElysiumTraitContainer Container);
+// `EElysiumTraitContainer` and `ElysiumTraitContainerName` are the compiled side's
+// (`Public/ElysiumSheetSlots.h`) — one enum serves the file and the sheet it fills.
 
 // One `Stat` block. Its position in the container is the engine's trait id, so `Index` is data.
 struct FElysiumStat

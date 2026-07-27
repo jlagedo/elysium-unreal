@@ -44,6 +44,22 @@ namespace ElysiumCam
 
 	// The same, in angle space, so a 359 -> 1 step is 2 degrees rather than 358.
 	float ApproachAngle(float Current, float Target, float Speed, float Dt);
+
+	// The strafe bank — `V_CalcRoll` (`client.dll` `0x101907a0`), unchanged from Quake:
+	//
+	//     side = DotProduct(velocity, right);  sign = side >= 0 ? 1 : -1;  side = |side|
+	//     side < rollspeed ? (side / rollspeed) * rollangle * sign : rollangle * sign
+	//
+	// A **view** effect only: the caller (`0x10190850`) adds the result to `view.roll` and adds a
+	// literal 0.0 instead when its third-person gate fires, which is why the bank exists in first
+	// person and vanishes in third.
+	//
+	// The pair that drives it is `cl_rollangle` / `cl_rollspeed`, **not** `sv_rollangle` /
+	// `sv_rollspeed` — those two are registered by both game DLLs and read by neither (and the
+	// string does not appear in `engine.dll` at all), so they are dead Source leftovers.
+	// `VelocityCm` and `RollSpeedCm` are both in cm/s; the return is degrees.
+	float SolveViewRoll(const FVector& VelocityCm, const FRotator& ViewRot,
+		float RollAngleDeg, float RollSpeedCm);
 }
 
 // --------------------------------------------------------------------------------------------
@@ -223,6 +239,10 @@ struct FElysiumCameraCvars
 	// The player-model fade band (used once a player mesh exists — 8.11).
 	float FadeStart = 32.0f * ElysiumCam::U;      // cam_fadestart 32
 	float FadeEnd = 18.0f * ElysiumCam::U;        // cam_fadeend 18
+
+	// The strafe bank. Degrees, and a speed in cm/s above which the bank is at full angle.
+	float RollAngle = 2.0f;                       // cl_rollangle 2
+	float RollSpeed = 200.0f * ElysiumCam::U;     // cl_rollspeed 200
 
 	// The spring damper. **Two constants** — stiffer against a wall than in open space — which is the
 	// single most characteristic part of the VtMB camera and the reason the stock spring arm is not

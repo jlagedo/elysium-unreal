@@ -30,6 +30,8 @@
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumRulebookSubsystem.h"
 
 #include "HAL/IConsoleManager.h"
 
@@ -95,7 +97,7 @@ public:
 	bool  bInDialog = false;          // a dialog session is open (OnDialogBegin fired, OnDialogEnd pending)
 	int32 DialogFlags = 0;            // the StartPlayerDialogRemote param, kept for B4's runner
 	int32 TimesTalked = 0;            // times_talked — dialogue interaction count (engine-written; script-read)
-	FString StatTemplate;             // stattemplate — the RPG stat block name (data only in B3)
+	FString StatTemplate;             // stattemplate — the `npctemplate*.txt` stat block this NPC wears
 
 	// The sheet, the WillTalk latch, `default_disposition`, the skeletal body and everything that
 	// plays a clip on it now come from the chain (11.4): FElysiumCombatCharacter over
@@ -165,9 +167,9 @@ public:
 		// Player gender + clan drive text selection: VtMB shows col-2 for a female PC, and the col-12
 		// Malkavian variant for a Malkavian PC. Clan is the 2..8 sheet encoding (Malkavian = 4).
 		const UElysiumGameStateSubsystem* GameState = World->GetGameState();
-		const bool bMale = GameState ? GameState->PlayerSheet().bMale : true;
+		const bool bMale = GameState ? GameState->PlayerSheet().IsMale() : true;
 		const bool bMalk = GameState
-			&& GameState->PlayerSheet().Clan == FElysiumSheet::ClanFromName(TEXT("Malkavian"));
+			&& GameState->PlayerSheet().Clan() == FElysiumSheet::ClanFromName(TEXT("Malkavian"));
 		const FElysiumEntityHandle Self = Handle;
 		FElysiumEntityWorld* W = World;
 
@@ -192,8 +194,40 @@ public:
 		return true;
 	}
 
+	// The sheet, from `stats.txt`'s defaults overlaid with this NPC's `stattemplate`. That overlay
+	// is the whole of an NPC's health track: `npctemplate*` authors `Max_Health` as a literal, and a
+	// template that omits it inherits `stats.txt`'s `Default 100` (`vdata-catalog.md`). Without it
+	// every NPC had a zero ceiling and TakeDamage only logged.
+	void SeedSheet()
+	{
+		UElysiumGameStateSubsystem* GameState = World ? World->GetGameState() : nullptr;
+		const FElysiumStatTable* Table = GameState ? GameState->Stats() : nullptr;
+		if (!Table)
+		{
+			return;   // no rulebook: the sheet stays zeroed and the damage path stays fail-closed
+		}
+		Sheet.SeedFrom(*Table);
+
+		if (!StatTemplate.IsEmpty())
+		{
+			UElysiumRulebookSubsystem* Rules = GameState->Rulebook();
+			FElysiumClanTemplate Resolved;
+			if (Rules && Rules->Clans().Resolve(StatTemplate, Resolved))
+			{
+				Sheet.ApplyTemplate(Resolved, Table);
+			}
+			else
+			{
+				UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s stattemplate '%s' resolves to nothing"),
+					*DebugString(), *StatTemplate);
+			}
+		}
+		SyncHealthFromSheet();
+	}
+
 	virtual void Spawn() override
 	{
+		SeedSheet();
 		// Keyfields (model/angles/use_interesting/stattemplate) are already applied. Stand the body:
 		// out/npc/<stem>.glb, playing the standing idle `default_disposition` selects, spread across
 		// the three VtMB authors per disposition and seeded from this entity's own index — a cop that

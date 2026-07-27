@@ -115,20 +115,13 @@ void CheckVelocity(FVector& Velocity, float MaxVel)
 	}
 }
 
-float JumpVelocity(float JumpBoostUnits, float GravityAccel)
-{
-	// v = sqrt(2 * boost * g). The boost is in Source units and the gravity in cm/s^2, so the
-	// boost converts here — which is what makes `sv_jump_boost 25` mean "25 units of apex".
-	return FMath::Sqrt(2.0f * (JumpBoostUnits * U) * GravityAccel);
-}
-
 float ApexHeight(float LaunchZ, float GravityAccel)
 {
 	if (GravityAccel <= 0.0f)
 	{
 		return 0.0f;
 	}
-	// In Source units, so it reads against `sv_jump_boost` directly.
+	// Returned in **Source units** so it reads as a height on the map's own scale.
 	return (LaunchZ * LaunchZ) / (2.0f * GravityAccel) / U;
 }
 
@@ -234,6 +227,14 @@ void FElysiumMoveTuning::LoadFrom(TFunctionRef<FString(const TCHAR*)> Lookup)
 	Read(TEXT("sv_maxvelocity"),   MaxVelocity,  ElysiumMove::U);
 	Read(TEXT("sv_jump_maxspeed"), JumpMaxSpeed, ElysiumMove::U);
 
-	// The apex stays in Source units — it is a height, and `JumpSpeed()` converts it.
+	// The pop stays in Source units — it is a distance in inches, converted where it is applied.
 	Read(TEXT("sv_jump_boost"),    JumpBoost,    1.0f);
+}
+
+void FElysiumMoveTuning::LoadJumpFrom(TFunctionRef<bool(const TCHAR*, float&)> Lookup)
+{
+	float V = 0.0f;
+	if (Lookup(TEXT("BaseJumpVelocity"), V))      { BaseJumpVelocity = V * ElysiumMove::U; }
+	if (Lookup(TEXT("JumpGravityMultiplier"), V)) { JumpGravityMultiplier = V; }
+	if (Lookup(TEXT("JumpHoldTime"), V))          { JumpHoldSeconds = V; }
 }

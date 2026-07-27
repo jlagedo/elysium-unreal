@@ -23,6 +23,7 @@ struct FElysiumSaveVersion
 	{
 		BeforeFirst   = 0,
 		Initial       = 1,   // the four blocks, the field walk, the snapshot lifecycle
+		Sheet         = 2,   // the character sheet as VtMB's four trait containers, base + current
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
@@ -30,7 +31,11 @@ struct FElysiumSaveVersion
 
 	// The oldest payload this build can read. A payload below it is rejected with a readable
 	// reason rather than half-read (`save-architecture.md` §2).
-	static constexpr int32 MinSupported = Initial;
+	//
+	// `Sheet` restructured the player's trait storage from a name -> value bag into VtMB's four
+	// fixed containers. Nothing populated that bag but a test, so there is no data to carry across
+	// and no upgrade branch: a v1 payload is refused.
+	static constexpr int32 MinSupported = Sheet;
 
 	static const FGuid GUID;
 };

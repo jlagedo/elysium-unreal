@@ -293,7 +293,7 @@ UTexture2D* UElysiumMainMenu::ResolveSeal()
 		{
 			if (const UElysiumGameStateSubsystem* State = GI->GetSubsystem<UElysiumGameStateSubsystem>())
 			{
-				Clan = State->PlayerSheet().Clan;
+				Clan = State->PlayerSheet().Clan();
 			}
 		}
 	}

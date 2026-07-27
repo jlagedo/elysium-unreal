@@ -2,8 +2,12 @@
 
 #include "CoreMinimal.h"
 #include "ElysiumEntity.h"
+#include "ElysiumSheetSlots.h"
 
 class USkeletalMeshComponent;
+
+struct FElysiumStatTable;      // Private/Substrate/ElysiumRulebook.h — the data half of the sheet
+struct FElysiumClanTemplate;
 
 // 11.4 (S3) — the player is an entity; the pawn is its body.
 //
@@ -31,27 +35,55 @@ inline FName ElysiumCombatCharacterClassName(){ return FName(TEXT("CBaseCombatCh
 inline FName ElysiumPlayerClassName()         { return FName(TEXT("player")); }
 inline const TCHAR* ElysiumPlayerTargetName() { return TEXT("!player"); }
 
-// The player's interim health ceiling, held here until the rulebook reader loads `stats.txt`.
-// It is VtMB's own number: `Max_Health` is an ordinary stat with `Default 100` and no formula
-// anywhere in `vdata`, so the player's ceiling is a flat 100 for the whole game. What this constant
-// stands in for is the *read*, not a derivation. (`docs/game_runtime.md` §3.)
-inline constexpr int32 ElysiumInterimPlayerMaxHealth = 100;
-
-// The numeric character sheet, as far as the runtime reads it today.
+// The numeric character sheet — VtMB's own four containers, base and current.
+//
+// Storage is the compiled shape (`ElysiumSheetSlots.h`): four fixed-length int arrays of 35/13/13/13
+// slots, doubled into a base and a current copy. **The base/current split is the whole buff system**
+// — base is the character sheet, current is the sheet plus every active modifier — and both halves
+// persist, which is what VtMB's save does. Every slot registers as a datamap field, so one R2 walk
+// serves a script read (`pc.strength`), a Hammer keyvalue, the save enumeration and the inspector.
+//
+// The *values* come from `vdata/system/stats.txt` through the rulebook: `SeedFrom` writes each
+// slot's authored `Default`, and `RecomputeCurrent` clamps to its authored `Min`/`Max`.
 //
 // `Clan` uses the LEVEL-SCRIPT indexing 2..8 (Brujah 2 ... Ventrue 8) that `pc.clan` carries — not
 // the 1..7 `ClanNameFunc` display enum, and not `clandoc`'s ordering. `game_runtime.md` section 3
 // records that two indexings exist; the scripts (`IsClan`, `unhidePlus`'s 9/10/11 patch-type
 // sentinels) speak this one.
-//
-// `Stats` is the open-ended remainder (`base_<discipline>`, attributes, abilities), reached through
-// the entity attribute protocol by FElysiumCombatCharacter's dynamic-field hook. 9.4 loads
-// `vdata/system/*.txt` into it and turns the ones VtMB's datamap names into registered fields.
 struct FElysiumSheet
 {
-	int32 Clan = 2;                  // pc.clan (2..8)
-	bool bMale = true;               // pc.IsMale()
-	TMap<FName, int32> Stats;        // base_<name> -> rating (9.4)
+	FElysiumSheet();
+
+	// One entry per compiled slot, sized at construction so a sheet is always addressable.
+	TArray<int32> Base[(uint8)EElysiumTraitContainer::Count];
+	TArray<int32> Current[(uint8)EElysiumTraitContainer::Count];
+
+	// What has no compiled slot. VtMB has no equivalent — its datamap is the whole namespace — so
+	// this only catches a `base_*` name the shipped `stats.txt` does not own.
+	TMap<FName, int32> Extra;
+
+	// --- The CVStatList_t accessors -----------------------------------------------------------
+	int32 GetBase(EElysiumTraitContainer Container, int32 Slot) const;
+	int32 GetCurrent(EElysiumTraitContainer Container, int32 Slot) const;
+	// Writes the base and re-derives the current. An out-of-range slot is ignored.
+	void SetBase(EElysiumTraitContainer Container, int32 Slot, int32 Value);
+	void AddBase(EElysiumTraitContainer Container, int32 Slot, int32 Delta);
+
+	// base -> [trait effects] -> clamp to the authored Min/Max. The trait-effect pass is 9.4c/f;
+	// until then this is base and the clamp. A null table leaves current equal to base.
+	void RecomputeCurrent(const FElysiumStatTable* Stats);
+
+	// Every slot takes its `stats.txt` `Default`, base and current alike.
+	void SeedFrom(const FElysiumStatTable& Stats);
+	// Overlay a resolved clan / NPC template's authored ratings. An absent trait means inherit, so
+	// only what the template holds is written (`FElysiumClanTable::Resolve` folds the parent chain).
+	void ApplyTemplate(const FElysiumClanTemplate& Template, const FElysiumStatTable* Stats);
+
+	// --- The named slots the runtime speaks ---------------------------------------------------
+	int32 Clan() const  { return GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Clan); }
+	void  SetClan(int32 Value) { SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Clan, Value); }
+	bool  IsMale() const { return GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Gender) != 0; }
+	void  SetMale(bool bValue) { SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Gender, bValue ? 1 : 0); }
 
 	// Clan display names indexed by the 2..8 encoding; index 0/1 unused.
 	static const TCHAR* ClanName(int32 Clan);
@@ -92,12 +124,11 @@ struct FElysiumLawState
 // the save blocks. Neither is stubbed here — an empty field nothing fills would read as support.
 struct FElysiumPlayerRecord
 {
+	// Humanity, blood, masquerade, clan and sex are all slots on this — VtMB holds them in the
+	// Attributes container, not as members beside it, so there is nothing to mirror.
 	FElysiumSheet Sheet;
 
-	int32 Money = 0;
-	int32 Humanity = 7;
-	int32 BloodPool = 10;
-	int32 Masquerade = 0;
+	int32 Money = 0;         // m_iMoney — not a Stat in `stats.txt`
 
 	int32 Health = 0;        // carried across a travel; 0 = "not seeded yet" (the entity seeds it)
 	int32 MaxHealth = 0;
@@ -183,10 +214,7 @@ class FElysiumCombatCharacter : public FElysiumAnimating
 public:
 	FElysiumSheet Sheet;
 
-	int32 Money = 0;
-	int32 Humanity = 7;
-	int32 BloodPool = 10;
-	int32 Masquerade = 0;
+	int32 Money = 0;              // m_iMoney — the one counter `stats.txt` does not carry as a Stat
 
 	bool bWillTalk = false;       // WillTalk (79 calls) — this character will start a conversation
 
@@ -206,10 +234,17 @@ public:
 	void InputWillTalk(const FElysiumInputArgs& Args);
 
 	// --- Damage and death -------------------------------------------------------------------
-	// The receiver `trigger_hurt`, a door closing, and (at 9.4) combat all reach. Reduces the
-	// entity's own `health` field — VtMB's `m_iHealth`, a base keyfield — and calls OnKilled once
-	// it runs out. Unkillable characters take the damage down to 1.
+	// The receiver `trigger_hurt`, a door closing, and (later) combat all reach.
+	//
+	// The number lands on the sheet: VtMB's `Health` stat (Attributes 15) counts damage TAKEN, with
+	// `Max_Health` (17) the ceiling, and `CBaseEntity::m_iHealth` — our `health` keyfield — is the
+	// engine-space projection of the pair. So this adds to the damage slot and re-derives the
+	// keyfield, which is what the save walk and the body read. Unkillable characters stop at 1 hp.
 	void TakeDamage(float Amount);
+
+	// Re-derive the entity's `health`/`max_health` keyfields from the sheet's damage and ceiling
+	// slots. Called after anything writes either one.
+	void SyncHealthFromSheet();
 	bool IsUnkillable() const { return bUnkillable; }
 	void SetUnkillable(bool bValue) { bUnkillable = bValue; }
 
@@ -218,13 +253,18 @@ public:
 
 	virtual FElysiumCombatCharacter* AsCombatCharacter() override { return this; }
 
+	// `stats.txt`'s four containers, or null in a bare world — the sheet's clamps come from here.
+	const FElysiumStatTable* SheetRules() const;
+	// Move a trait's base by Delta and re-derive the current value under the authored bounds.
+	void AddTrait(EElysiumTraitContainer Container, int32 Slot, int32 Delta);
+
 	// Log-and-no-op body for the inputs whose system has not landed. Public because the registration
 	// thunks are free lambdas, not members. Named so the log line reads as a recorded gap.
 	void PendingInput(const TCHAR* Input, const TCHAR* Owner, const FElysiumInputArgs& Args) const;
 
-	// The open-ended sheet bag (`base_<discipline>` and anything `vdata` has loaded), reached
-	// through the entity attribute protocol. 9.4 turns the names VtMB's datamap actually carries
-	// into registered fields and this shrinks to whatever is left.
+	// What is left after the datamap: a `base_*` name no compiled slot owns. It still has to read a
+	// number rather than raise, because the gates that ask (`pc.base_Celerity > 0`) are written
+	// against a sheet where every name resolves.
 	virtual bool GetDynamicField(FName Name, FElysiumVariant& Out) const override;
 	virtual bool SetDynamicField(FName Name, const FElysiumVariant& Value) override;
 

@@ -4,6 +4,9 @@
 #include "ElysiumPawn.h"
 #include "Debug/ElysiumConsole.h"
 #include "Player/ElysiumCommandBus.h"
+#include "Substrate/ElysiumRulebookSubsystem.h"
+
+#include "Engine/GameInstance.h"
 
 #include "Components/PrimitiveComponent.h"
 #include "GameFramework/Controller.h"
@@ -18,6 +21,16 @@ static TAutoConsoleVariable<float> CVarMoveFixedStep(
 	TEXT("Seconds per movement integration step. 0 = the frame's own delta (faithful: VtMB has no ")
 	TEXT("tick and its air-accel/jump apex are frame-rate dependent). A non-zero value (e.g. 0.015) ")
 	TEXT("makes movement frame-rate independent — a divergence, kept A/B-able."),
+	ECVF_Default);
+
+// How long the jump's push keeps being applied. 0 = use `rules.txt`'s `JumpHoldTime` (0.2). This
+// is **ours, not a VtMB cvar** — it exists because `rules.txt` carries two candidate windows
+// (`JumpHoldTime` 0.2 and the Feat-indexed `JumpDuration`, 0.11 at rank 1) and which one the
+// engine uses is not transcribed. `docs/source_movement.md` records that as unverified.
+static TAutoConsoleVariable<float> CVarJumpHoldSeconds(
+	TEXT("elysium.jump.HoldSeconds"),
+	0.0f,
+	TEXT("Seconds the jump's upward push is sustained while held. 0 = rules.txt JumpHoldTime."),
 	ECVF_Default);
 
 UElysiumMovementComponent::UElysiumMovementComponent()
@@ -69,6 +82,7 @@ void UElysiumMovementComponent::ResetState()
 	Stepper.Reset();
 	bOnGround = false;
 	WaterLevel = EElysiumWaterLevel::None;
+	EndJumpHold();
 
 	// Stand up if we were crouched, so the hull the body arrives with is the standing one.
 	if (bDucked || bDucking)
@@ -104,8 +118,9 @@ void UElysiumMovementComponent::CategorizePosition()
 		return;
 	}
 	// Rising: never on the ground. Source's own gate, and what keeps a jump from re-grounding on
-	// the frame it leaves.
-	if (Velocity.Z > Tuning.JumpSpeed() * 0.5f)
+	// the frame it leaves — including every frame of the held push, which holds `v.z` at the full
+	// launch speed and would otherwise re-ground the moment the body brushed a surface.
+	if (Velocity.Z > Tuning.BaseJumpVelocity * 0.5f)
 	{
 		bOnGround = false;
 		return;
@@ -124,6 +139,12 @@ void UElysiumMovementComponent::CategorizePosition()
 		UpdatedPrimitive->GetCollisionShape(), Params);
 
 	bOnGround = bHit && Hit.ImpactNormal.Z >= ElysiumMove::StandableZ;
+	if (bOnGround)
+	{
+		// Landing ends the jump: the reduced gravity and the push window belong to the jump, and
+		// leaving either armed would carry it into the next one.
+		EndJumpHold();
+	}
 	// 1.0 is the retail value, not a placeholder: VtMB scales the surface's friction by 1.25 and
 	// clamps to 1.0, and every world surface resolves to the `default` prop at 0.8
 	// (`source_movement.md` § surfaceFriction is 1.0 on every world surface).
@@ -219,19 +240,6 @@ void UElysiumMovementComponent::WalkMove(float DeltaTime)
 	Velocity.Z = FlatVel.Z;
 }
 
-bool UElysiumMovementComponent::TraceHull(const FVector& Start, const FVector& End,
-	FHitResult& OutHit) const
-{
-	if (!UpdatedPrimitive || !GetWorld())
-	{
-		return false;
-	}
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(ElysiumTraceHull), /*bTraceComplex*/ false, PawnOwner);
-	Params.AddIgnoredActor(PawnOwner);
-	return GetWorld()->SweepSingleByChannel(OutHit, Start, End, UpdatedComponent->GetComponentQuat(),
-		UpdatedPrimitive->GetCollisionObjectType(), UpdatedPrimitive->GetCollisionShape(), Params);
-}
-
 void UElysiumMovementComponent::ReduceTimers(float DeltaTime)
 {
 	// `m_flDucktime` counts down in **milliseconds**, which is why the step is scaled by 1000.
@@ -239,29 +247,42 @@ void UElysiumMovementComponent::ReduceTimers(float DeltaTime)
 	{
 		DuckTime = FMath::Max(0.0f, DuckTime - DeltaTime * 1000.0f);
 	}
+
+	// The jump-hold window is in seconds. When it closes, full gravity comes back — the reduced
+	// gravity belongs to the jump, not to being airborne.
+	if (JumpHoldRemaining > 0.0f)
+	{
+		JumpHoldRemaining -= DeltaTime;
+		if (JumpHoldRemaining <= 0.0f)
+		{
+			EndJumpHold();
+		}
+	}
 }
 
 bool UElysiumMovementComponent::CanUnduck() const
 {
-	if (!UpdatedComponent)
+	if (!UpdatedComponent || !UpdatedPrimitive || !GetWorld())
 	{
 		return true;
 	}
 
-	// Would the standing hull fit? Sweep the *current* (ducked) hull up through the height it would
-	// gain: if something blocks that, the head has nowhere to go.
+	// VtMB tests the **standing** hull at the origin the stand-up would land on, and refuses if it
+	// hits anything. On the ground the feet stay planted, so the centre rises by the half-height
+	// gained; airborne the centre does not move at all (`SetHullHeight`). Testing at the
+	// destination rather than sweeping from here is what stops a stand-up pushing the body through
+	// a ceiling — and, in the air, through the floor.
 	const float Grow = (ElysiumMove::StandHeight - ElysiumMove::DuckHeight) * 0.5f;
-	const FVector Start = UpdatedComponent->GetComponentLocation();
-	const FVector End = Start + FVector(0.0f, 0.0f, Grow * 2.0f);
+	const FVector Centre = UpdatedComponent->GetComponentLocation()
+		+ FVector(0.0f, 0.0f, bOnGround ? Grow : 0.0f);
 
-	FHitResult Hit;
-	// On the ground the body grows upward from planted feet; airborne it grows downward from a
-	// planted head, so the ceiling is only in the way in the first case.
-	if (!bOnGround)
-	{
-		return true;
-	}
-	return !TraceHull(Start, End, Hit);
+	const FCollisionShape Standing = FCollisionShape::MakeBox(FVector(
+		ElysiumMove::HullHalfWidth, ElysiumMove::HullHalfWidth, ElysiumMove::StandHeight * 0.5f));
+
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(ElysiumCanUnduck), /*bTraceComplex*/ false, PawnOwner);
+	Params.AddIgnoredActor(PawnOwner);
+	return !GetWorld()->OverlapBlockingTestByChannel(Centre, UpdatedComponent->GetComponentQuat(),
+		UpdatedPrimitive->GetCollisionObjectType(), Standing, Params);
 }
 
 void UElysiumMovementComponent::Duck()
@@ -274,6 +295,14 @@ void UElysiumMovementComponent::Duck()
 
 	const bool bWantsDuck = PendingCmd.IsDown(EElysiumButton::Duck);
 	const uint64 DuckBit = static_cast<uint64>(EElysiumButton::Duck);
+
+	// **Airborne, the transition does not ramp — it completes on the spot.** `Duck` only takes the
+	// `SetDuckedEyeOffset` lerp branch when `GetGroundEntity()` is non-null; every other path falls
+	// straight through to `Finish(Un)Duck`. That is what makes the crouch-jump exist: the hull
+	// shrinks on the frame the button goes down, mid-flight, lifting the feet 18 units. Ramping
+	// instead would put the shrink 0.4s after the press — longer than the whole 0.5s jump — so a
+	// step between 25 and 43 units becomes unclimbable (`docs/source_movement.md` → "Ducking").
+	const bool bInAir = !bOnGround;
 
 	if (bWantsDuck)
 	{
@@ -292,9 +321,15 @@ void UElysiumMovementComponent::Duck()
 		if (bDucking && !bDucked)
 		{
 			const float Elapsed = (ElysiumMove::GameMovementDuckTime - DuckTime) * 0.001f;
-			if (Elapsed >= ElysiumMove::TimeToDuck)
+			if (Elapsed >= ElysiumMove::TimeToDuck || bInAir)
 			{
 				FinishDuck();
+			}
+			else if (AElysiumPawn* P = Cast<AElysiumPawn>(PawnOwner))
+			{
+				// Only the eye moves during the ramp; the hull stays standing until the finish.
+				P->SetEyeHeight(FMath::Lerp(ElysiumMove::StandViewZ, ElysiumMove::DuckViewZ,
+					Elapsed / ElysiumMove::TimeToDuck));
 			}
 		}
 	}
@@ -314,9 +349,17 @@ void UElysiumMovementComponent::Duck()
 			const float Elapsed = (ElysiumMove::GameMovementDuckTime - DuckTime) * 0.001f;
 			// The unduck is gated on headroom as well as on time — a stand-up under a low ceiling
 			// simply keeps waiting rather than pushing the body through it.
-			if (Elapsed >= ElysiumMove::TimeToUnduck && CanUnduck())
+			if (Elapsed >= ElysiumMove::TimeToUnduck || bInAir)
 			{
-				FinishUnDuck();
+				if (CanUnduck())
+				{
+					FinishUnDuck();
+				}
+			}
+			else if (AElysiumPawn* P = Cast<AElysiumPawn>(PawnOwner))
+			{
+				P->SetEyeHeight(FMath::Lerp(ElysiumMove::DuckViewZ, ElysiumMove::StandViewZ,
+					Elapsed / ElysiumMove::TimeToUnduck));
 			}
 		}
 	}
@@ -386,6 +429,29 @@ void UElysiumMovementComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 	// the way the original's would. An unset name keeps VtMB's own compiled-in default.
 	Tuning.LoadFrom([](const TCHAR* Name) { return ElysiumCommandBus::Console().GetCvar(Name); });
 
+	// The jump's own numbers come from `vdata/system/rules.txt`, not from a cvar — read once, since
+	// the rulebook is not hot-reloaded. Absent keys keep the shipped defaults.
+	if (!bJumpTuningLoaded)
+	{
+		bJumpTuningLoaded = true;
+		if (const UWorld* W = GetWorld())
+		{
+			if (UElysiumRulebookSubsystem* Rulebook = UGameInstance::GetSubsystem<UElysiumRulebookSubsystem>(W->GetGameInstance()))
+			{
+				const FElysiumRules& Rules = Rulebook->Rules();
+				Tuning.LoadJumpFrom([&Rules](const TCHAR* Key, float& Out) -> bool
+				{
+					if (!Rules.Has(TEXT("Jumping"), Key))
+					{
+						return false;
+					}
+					Out = Rules.Flt(TEXT("Jumping"), Key);
+					return true;
+				});
+			}
+		}
+	}
+
 	// The command stays authoritative for HOW MUCH time to integrate (RE21); the stepper decides
 	// only how that time is chopped up. Total integrated time is the same in both modes, up to the
 	// carried remainder.
@@ -427,7 +493,7 @@ void UElysiumMovementComponent::FullWalkMove(float DeltaTime)
 	// The FIRST half of the interval's gravity.
 	if (!bInWater)
 	{
-		ElysiumMove::StartGravity(Velocity, Tuning.Gravity, DeltaTime);
+		ElysiumMove::StartGravity(Velocity, Tuning.Gravity * GravityScale, DeltaTime);
 	}
 
 	if (bInWater)
@@ -464,7 +530,7 @@ void UElysiumMovementComponent::FullWalkMove(float DeltaTime)
 	// than `sv_jump_boost - 100*dt`.
 	if (!bInWater)
 	{
-		ElysiumMove::FinishGravity(Velocity, Tuning.Gravity, DeltaTime);
+		ElysiumMove::FinishGravity(Velocity, Tuning.Gravity * GravityScale, DeltaTime);
 	}
 
 	if (bOnGround)
@@ -524,10 +590,20 @@ void UElysiumMovementComponent::CheckJumpButton()
 	if (!PendingCmd.IsDown(EElysiumButton::Jump))
 	{
 		OldButtons &= ~static_cast<uint64>(EElysiumButton::Jump);
+		// Releasing ends the push early. This is the whole reason a tap and a hold give different
+		// heights, and why the mousewheel — which cannot be held — only ever hops.
+		EndJumpHold();
 		return;
 	}
 	if (OldButtons & static_cast<uint64>(EElysiumButton::Jump))
 	{
+		// Held. VtMB's jump is a **constant upward push for a window**, not a single impulse, so
+		// the velocity is re-asserted every frame the window is still open rather than being left
+		// to gravity. `ReduceTimers` closes the window and restores full gravity.
+		if (JumpHoldRemaining > 0.0f)
+		{
+			Velocity.Z = FMath::Max(Velocity.Z, Tuning.BaseJumpVelocity);
+		}
 		return;
 	}
 	if (!bOnGround)
@@ -535,14 +611,45 @@ void UElysiumMovementComponent::CheckJumpButton()
 		return;
 	}
 
+	// --- The press edge -------------------------------------------------------------------------
+	// `sv_jump_boost` first: an instant **origin** pop of 25 inches, scaled by 0.99 and by how far
+	// the hull actually gets, so it can never seat the body inside a ceiling.
+	ApplyJumpBoost();
+
 	// **Additive, not an overwrite** (`vampire.dll` 0x101226b0: `v.z = impulse * groundFactor + v.z`).
-	// This is load-bearing rather than cosmetic: `StartGravity` has already taken half the step's
-	// gravity off `v.z` by the time this runs, and adding on top of that is what leaves the launch
-	// at the half-step the leapfrog wants. Overwriting instead discards it and the apex lands at
-	// `boost + v0*dt/2` — 26.67 units at 60 fps instead of 25, and frame-rate dependent with it.
-	// The ground factor is the surface's own jump scale, 1.0 for the `default` prop that every
-	// world surface resolves to (`source_movement.md` § surfaceFriction).
-	Velocity.Z += Tuning.JumpSpeed();
+	// `StartGravity` has already taken half the step's gravity off `v.z`, and adding on top of that
+	// is what leaves the launch at the half-step the leapfrog integration wants. The ground factor
+	// is the surface's own jump scale, 1.0 for the `default` prop every world surface resolves to.
+	Velocity.Z += Tuning.BaseJumpVelocity;
+
+	// The jump runs under reduced gravity for its whole duration — VtMB sets the player's own
+	// gravity scale (`m_flGravity`, `player+0x3ec`), which `Start`/`FinishGravity` multiply by.
+	GravityScale = Tuning.JumpGravityMultiplier;
+	// ...and the push keeps being applied while the button is held, which is why tapping the
+	// mousewheel hops and holding space clears a crate.
+	const float HoldOverride = CVarJumpHoldSeconds.GetValueOnGameThread();
+	JumpHoldRemaining = HoldOverride > 0.0f ? HoldOverride : Tuning.JumpHoldSeconds;
+
 	bOnGround = false;
 	OldButtons |= static_cast<uint64>(EElysiumButton::Jump);
+}
+
+void UElysiumMovementComponent::ApplyJumpBoost()
+{
+	const float Pop = Tuning.JumpBoost * ElysiumMove::U * ElysiumMove::JumpBoostScale;
+	if (Pop <= 0.0f || !UpdatedComponent)
+	{
+		return;
+	}
+	// Sweep rather than teleport: the original scales the pop by its own `TracePlayerBBox`
+	// fraction, and a swept move is the same thing expressed with the engine's tracer.
+	FHitResult Hit;
+	SafeMoveUpdatedComponent(FVector(0.0f, 0.0f, Pop), UpdatedComponent->GetComponentQuat(),
+		/*bSweep*/ true, Hit);
+}
+
+void UElysiumMovementComponent::EndJumpHold()
+{
+	JumpHoldRemaining = 0.0f;
+	GravityScale = 1.0f;
 }

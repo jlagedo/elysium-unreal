@@ -110,7 +110,7 @@ namespace
 	{
 		if (Method == FName(TEXT("IsMale")))
 		{
-			return FElysiumVariant::Bool(State ? State->PlayerSheet().bMale : true);
+			return FElysiumVariant::Bool(State ? State->PlayerSheet().IsMale() : true);
 		}
 		if (Method == FName(TEXT("HasItem")) || Method == FName(TEXT("HasWeaponEquipped"))
 			|| Method == FName(TEXT("IsFollowerOf"))) { return FElysiumVariant::Bool(false); }
@@ -322,7 +322,7 @@ namespace ElysiumScriptNatives
 		// the player; the character argument is accepted (and logged) but not otherwise consulted.
 		if (Name == FName(TEXT("IsClan")) || Name == FName(TEXT("IsPCMalk")))
 		{
-			const int32 Have = State ? State->PlayerSheet().Clan : 0;
+			const int32 Have = State ? State->PlayerSheet().Clan() : 0;
 			const int32 Want = (Name == FName(TEXT("IsPCMalk")))
 				? FElysiumSheet::ClanFromName(TEXT("Malkavian"))
 				: (Args.Num() >= 2 ? FElysiumSheet::ClanFromName(Args.Last().ToString()) : 0);

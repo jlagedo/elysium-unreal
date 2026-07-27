@@ -32,6 +32,25 @@ float ElysiumCam::ApproachAngle(float Current, float Target, float Speed, float 
 	return FRotator::NormalizeAxis(Current + FMath::Sign(Delta) * Step);
 }
 
+float ElysiumCam::SolveViewRoll(const FVector& VelocityCm, const FRotator& ViewRot,
+	float RollAngleDeg, float RollSpeedCm)
+{
+	if (RollSpeedCm <= 0.0f || RollAngleDeg == 0.0f)
+	{
+		return 0.0f;
+	}
+	// `AngleVectors`' right vector, dotted with the whole velocity — the vertical term is part of
+	// the dot in the original and is kept rather than flattened.
+	const FVector Right = FRotationMatrix(ViewRot).GetScaledAxis(EAxis::Y);
+	const float Side = static_cast<float>(FVector::DotProduct(VelocityCm, Right));
+	const float Sign = Side >= 0.0f ? 1.0f : -1.0f;
+	const float Mag = FMath::Abs(Side);
+
+	return Mag < RollSpeedCm
+		? (Mag / RollSpeedCm) * RollAngleDeg * Sign
+		: RollAngleDeg * Sign;
+}
+
 // =====================================================================================
 // The weight driver (0x100fc900)
 // =====================================================================================
@@ -191,6 +210,8 @@ TArrayView<const ElysiumCam::FCvarDef> ElysiumCam::CvarDefs()
 		{ TEXT("cam_trace_radius"),       TEXT("9"),   TEXT("half-extent of the boom hull trace") },
 		{ TEXT("cam_fadestart"),          TEXT("32"),  TEXT("player model fully visible at/above this distance") },
 		{ TEXT("cam_fadeend"),            TEXT("18"),  TEXT("player model fully hidden at/below this distance") },
+		{ TEXT("cl_rollangle"),           TEXT("2"),   TEXT("strafe view bank, degrees at full speed") },
+		{ TEXT("cl_rollspeed"),           TEXT("200"), TEXT("sideways speed at which the bank reaches cl_rollangle") },
 		{ TEXT("c_mindistance"),          TEXT("30"),  TEXT("boom length clamp, minimum") },
 		{ TEXT("c_maxdistance"),          TEXT("200"), TEXT("boom length clamp, maximum") },
 		{ TEXT("c_minpitch"),             TEXT("0"),   TEXT("orbit pitch clamp, minimum") },
@@ -238,6 +259,9 @@ void FElysiumCameraCvars::LoadFrom(TFunctionRef<FString(const TCHAR*)> Lookup)
 
 	FadeStart = Num(TEXT("cam_fadestart"), 32.0f) * ElysiumCam::U;
 	FadeEnd   = Num(TEXT("cam_fadeend"), 18.0f) * ElysiumCam::U;
+
+	RollAngle = Num(TEXT("cl_rollangle"), 2.0f);
+	RollSpeed = Num(TEXT("cl_rollspeed"), 200.0f) * ElysiumCam::U;
 
 	bDampOn            = Flag(TEXT("cdamp_on"), true);
 	HookesConstant     = Num(TEXT("cdamp_hookesconstant"), 4.0f);

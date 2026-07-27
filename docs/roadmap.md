@@ -104,10 +104,10 @@ deps below — refresh it whenever a task flips:
    state (11.8) a beat can assert what is on screen against.
 2. **9.4 — the PP1 rung, in seven sub-steps.** Build order: **RE24 [x]** → **a [x]** the rulebook
    readers (the gate — 12 table families now parse and are asserted against the exported files)
-   → **b** the sheet as registered fields, `Max_Health` read as the authored
-   stat it is → **c** the 290-call counter surface → **d** quests for real → **e** the journal screen
-   → **RE25 [x]** → **f** chargen including the quiz → **g** genesis played, not skipped.
-   **b is next**, and it starts from data that already loads.
+   → **b [x]** the sheet as 148 registered fields over VtMB's four containers, `Max_Health` read
+   as the authored stat it is → **c** the 290-call counter surface → **d** quests for real → **e** the
+   journal screen → **RE25 [x]** → **f** chargen including the quiz → **g** genesis played, not
+   skipped. **c is next**, and every slot it clamps now exists.
 3. **9.8 / 9.9 / 9.10 / 9.5** — the rest of what the hinge unblocked. They land *on*
    `FElysiumCombatCharacter` and `FElysiumPlayerRecord`: 9.10 finishes the economy over the
    `money` field that already exists, 9.8 fills the record's inventory half, and 9.5 (= 11.9, **[x]**)
@@ -798,18 +798,17 @@ draw on the same stack; NPCs stand in the world at their entity origins.
 - [ ] **9.10 Economy** — **250 calls**: `MoneyAdd`/`MoneyRemove` (INTEGER inputs on the combat
   character) + `CurrentMoney`/`SetMoney`. The smallest self-contained system on the ledger; one
   integer on the sheet plus vendor `worth` when 9.8 lands. *Deps:* 9.7c.
-- [ ] **9.4 Quests/XP + RPG sheet data** *(the PP1 rung)* — the RPG layer is a shell: `FElysiumSheet`
-  is a `TMap<FName,int32>` bag that answers every `base_*` read with 0, quests are a bare
+- [ ] **9.4 Quests/XP + RPG sheet data** *(the PP1 rung)* — the sheet is real (**b [x]**) and the
+  rulebook parses (**a [x]**); what is still a shell is everything the sheet feeds. Quests are a bare
   `name -> int` map with no catalogue and no awards, `CalcFeat`/`BumpStat`/`GetMasqueradeLevel`/
-  `DialogDiscipline` are logged stubs and `AwardExperience` drops. The whole `vdata/` rulebook is on
-  disk (**PL5b [x]**, `out/vdata/`, 465 files) and **nothing parses any of it** but
-  `dispositiontable.txt`. 9.7 sized and constrained the lane: the sheet-counter demand is
+  `DialogDiscipline` are logged stubs, `AwardExperience` drops, and there is no journal and no
+  chargen. 9.7 sized and constrained the lane: the sheet-counter demand is
   **290 calls** (`AwardExperience` 77 / `HumanityAdd` 69 / `CalcFeat` 53 / `ChangeMasqueradeLevel` 44
   / `Bloodloss` / `BumpStat` / `GetMasqueradeLevel`), the counters are INTEGER datamap inputs on the
   combat character, and **`AwardExperience` takes a STRING** — it names an experience-table entry, so
-  it cannot be modelled as an integer add (`script_api.md`). The sheet's home already exists (11.4):
-  `FElysiumSheet` on `FElysiumCombatCharacter` (live) + `FElysiumPlayerRecord` (durable); what 9.4
-  adds is the loaded data, the fields VtMB's own datamap names, and the two screens that data feeds.
+  it cannot be modelled as an integer add (`script_api.md`). The sheet's home is `FElysiumSheet` on
+  `FElysiumCombatCharacter` (live) + `FElysiumPlayerRecord` (durable, 11.4); what 9.4 has left to add
+  is the arithmetic over those slots and the two screens the data feeds.
   Table→system map: `docs/vdata-catalog.md`; the sheet's recovered shape: `savegame_format.md`
   (`m_iVAttributes*`, `m_QuestList`, `m_ExpList`). **Owner call:** chargen is a *full* reproduction
   including the `charcreatewizard.txt` quiz, the journal screen is in scope, and the open RE is
@@ -820,23 +819,31 @@ draw on the same stack; NPCs stand in the world at their entity origins.
     **161/161 `AwardXP` keys resolve in `experience_table`**. Corrections it forced (container slot
     counts, where the priority-tier tables live, the template count) landed in `vdata-catalog.md`,
     `game_runtime.md` and `savegame_format.md` in the same pass.
-  - **b. The sheet becomes real fields** *(**RE24** closed it — the slot counts below are the
-    recovered ones, not the earlier estimate)* — the bag becomes VtMB's own shape:
-    `m_iVAttributesBase`/`Current` (**35** slots, the `Attrib_Order` block occupying index 0 and
-    every derived/bookkeeping stat through `Experience` at 34), `m_iVAbilitiesBase`/`Current`
-    (**13**, `Ability_Order` at 0), `m_iVDisciplinesBase`/`Current` and
-    `m_iVActiveDisciplinesBase`/`Current` (**13** each, no order slot; `-1` = a discipline the clan
-    cannot take). **The base/current split is the whole buff system** and both halves persist. Each
-    name registers through `AddSheetIntField`, so one R2 walk serves script reads (`pc.strength`),
-    keyvalues, the save enumeration and the inspector, and `GetDynamicField`'s bag shrinks to what
-    has no static name. Three datamap names diverge from the `stats.txt` `InternalName`
-    (`intimidate`/`Intimidation`, `computers`/`Computer`, `base_gender_`), so the field table needs
-    both spellings. **Health is not Stamina-derived** (RE24) — so `ElysiumInterimPlayerMaxHealth`
-    retires by being read out of `stats.txt` rather than replaced by a formula, and
-    `npctemplate*`'s literal `Max_Health` gives every NPC a track (default 100 when the key is
-    absent) so `TakeDamage` kills one instead of only recording damage. `pc.generation` (9.3's
-    field-table audit gap) lands here. Costs a `FElysiumSaveVersion` bump plus matching
-    `ElysiumSave::Describe` rows, or the sheet goes invisible to `elysium.save.diff`.
+  - [x] **b. The sheet becomes real fields** *(**RE24** closed it)* — the bag is VtMB's own shape.
+    **The split the design turns on: the storage and the names are code, the values are data**,
+    because that is how `vampire.dll` holds them — `Public/ElysiumSheetSlots.h` freezes the four
+    containers (`Attributes` **35** with `Attrib_Order` at 0 and every derived stat through
+    `Experience` at 34, `Abilities` **13**, `Disciplines` and `Active_Disciplines` **13** each),
+    each row carrying its datamap name *and* its `stats.txt` `InternalName`; the rulebook supplies
+    `Default`/`Min`/`Max`. **Disciplines are 13, not `stats.txt`'s 17** — the last four rows are the
+    Numina powers, which the compiled array and the save array do not reach, so they stay
+    rulebook-side, nameable by `CVStatRef` with nowhere to store a value. **The base/current split
+    is the whole buff system** and both halves persist; `RecomputeCurrent` is base → clamp today,
+    with the trait-effect pass a named hole for c/f, and it runs in **two passes** because a bound
+    may name another stat (`"Max" "Max_Health"`) at a higher slot. Every slot registers twice
+    (`<datamap>`, `base_<datamap>`) — 148 fields on `CBaseCombatCharacter` — so one R2 walk serves
+    script reads, keyvalues, the save enumeration and the inspector, and the dynamic bag shrinks to
+    a `base_*` name no slot owns. **`Humanity`/`BloodPool`/`Masquerade`/`Clan`/sex stopped being
+    members** and became the Attributes slots VtMB holds them in, so an input and a script read hit
+    one place. **Health is not Stamina-derived** — `ElysiumInterimPlayerMaxHealth` retired by being
+    read out of `stats.txt`, `Health`(15) counts damage taken with the `health` keyfield derived
+    from it, and `npctemplate*`'s literal `Max_Health` (through `stattemplate` →
+    `FElysiumClanTable::Resolve`) gives every NPC a track, so `TakeDamage` kills one. `pc.generation`
+    lands with the rest. Save version **2**, `MinSupported` raised with it — a v1 payload is refused,
+    not upgraded. Acceptance: `Elysium.Content.Sheet` walks every compiled slot against the real
+    `stats.txt` and finds the same trait at the same index. **One inference, marked as one**
+    (`game_runtime.md`): `Health`'s datamap name `vhealth` is taken from the sampled
+    `vmax_health` pattern, not read off the image.
   - **c. The 290-call counter surface** *(**RE24** closed it)* — the four Character-method stubs go
     real: **`CalcFeat`** returns the clamped rating `Feats::FeatValue` computes over a
     *variable-length* `Base%d` list (each entry the *current* trait value through its own `/`-or-`*`
@@ -883,7 +890,7 @@ draw on the same stack; NPCs stand in the world at their entity origins.
   *Acceptance (PP1):* New Game walks genesis from real input, the quiz-and-spend character lands on
   the player entity, `pc.clan`/`pc.strength` read back from Python, a skill-gated `.dlg` choice that
   was hidden becomes visible, and the journal shows `pc.SetQuest("Tutorial", 1)`. *Deps:* 1.1 [x],
-  9.7c [x], 11.4 [x], 11.6 [x]; **RE24 [x]** (b/c are unblocked), **RE25 [x]** (f is unblocked).
+  9.7c [x], 11.4 [x], 11.6 [x]; **RE24 [x]** (b [x], c unblocked), **RE25 [x]** (f is unblocked).
 - [x] **9.5 Save/load** — **built as 11.9**; see that entry. The four blocks (Session / Player /
   Maps / World) over the R2 field walk, the per-map snapshot lifecycle with the absent-entity set,
   the event queue incl. deferred script strings, think times, `G`, and owned RNG streams, inside a
@@ -1168,7 +1175,7 @@ retail end to end, and `test.bat Play` proves it headlessly.
 | RE14 | **Full-game sky inventory (K8, RE-A7)** — 11 sky sets; 66 maps draw sky, **25 are lit by it, 83 have no `light_environment` at all**; 43 run the miniature at `scale` 16; 1,442 worldlights sit in sky areas. Full: `sky-ambience.md` → "The full-game inventory" | SKY B7/B8, C1/C2 | [x] |
 | RE15 | **VRAD's transfer + lump 8's absolute scale (K6, RE-A5)** — `intensity = (colour/255)^2.2·(B/255)·falloff(100u)`, zero exceptions on 16,378 lights; `stored luxel = 255·intensity/falloff`; the sun confirmed at ×1.01; sky ambient resolved globally first-entity-wins; 27/108 bakes are the patch compiler's (provenance-gate everything). Open residue: the skyambient's hemisphere aperture, bounded ~2× and **unidentifiable from this data** (C4). Full: `sky-ambience.md` → K6 | SKY C0–C4, D1/D6, 10.1 | [x] |
 | RE16 | **The sky's brightness chain (K7, RE-A9)** — the identity: a sky pixel is the decoded texel, unscaled, `$nofog` game-wide; the one asymmetry is the world's `albedo × lightmap × 2` (overbright pinned to 2). Full: `sky-ambience.md` → K7 | SKY B4/B5/B8, D7 | [x] |
-| RE17 | **Owner-run reference captures** *(was sky-ambience RE-A6)* — original-game screenshots at the shared vantages (3–4 sky maps + one sky-only view per skyname), for the **world** half of the display ratio (`albedo × lightmap × 2` beside a sky texel — the sky's own transfer is the identity, RE16) and as 7.8's reference. **Gate:** first settle whether `snapshot` grabs pre- or post-gamma-ramp (the display gamma is a device LUT a back-buffer grab omits) — quantitative use waits on that check | 3.6/3.7, 7.8 | [ ] |
+| RE17 | **Owner-run reference captures** *(was sky-ambience RE-A6)* — original-game screenshots at the shared vantages (3–4 sky maps + one sky-only view per skyname), for the **world** half of the display ratio (`albedo × lightmap × 2` beside a sky texel — the sky's own transfer is the identity, RE16) and as 7.8's reference. **Gate cleared (SDK cross-reference, pending VtMB binary confirmation):** `snapshot` grabs pre-gamma-ramp — capture and the hardware gamma ramp are separate D3D surfaces that never touch. → `color_gamma.md` → "Screenshot capture happens before the gamma ramp". What is left is the owner actually running the captures | 3.6/3.7, 7.8 | [ ] |
 | RE18 | **The script→engine action surface** — the demand ledger (16,438 call sites / 1,287 names) plus the supply side out of `vampire.dll`: all six `PyMethodDef` tables with their `ml_doc` contracts, and the `CBaseCombatCharacter` / `CAI_BaseNPC` / player datamaps behind the 124 unresolved names. Closes `python_bridge.md`'s file-like open item. Full: `docs/script_api.md` | 9.7, 9.8–9.10, 9.4, 8.5 | [x] |
 | RE19 | **Choreographed-scene format + event semantics** — the `.vcd` grammar (uniform word-list/brace, 14 live tokens of a much larger parser vocabulary), the 19-type `CChoreoEvent` enum with **nine** used by content and `CAMERASHOT` unhandled by the engine, the `CSceneEntity` datamap (4 inputs / 7 outputs; `force_lod` is a dead key), actor binding **by name** (`targetN` is inert — `!targetN` has zero uses), `position_start`/`position_end`, absolute-time playback offset by `snd_mixahead`, and `Start→OnStart` / end→`OnCompletion` / `Cancel`→`OnCanceled` / `firetrigger "N"`→`OnTriggerN`. 5,444 scenes on disk, 105 named by the 122 map entities; the rest are per-line dialogue scenes on `CInstancedSceneEntity`. Full: `docs/choreographed_scenes.md`; probe: `tools/probe_scenes.py` | 12.1, PL9 | [x] |
 | RE20 | **MDL v2531 facial data** — the studiohdr facial block (at **344**, eight bytes past the VAMPTools field walk), `mstudioflexdesc_t` 4B / `mstudioflexcontroller_t` 20B / `mstudioflexrule_t` 12B + 8B RPN ops / `mstudiomouth_t` 20B; `StudioFlex` 32B with its target ramp, and **both** `StudioVertAnim` encodings — the 8B compressed record stores *directions*, two byte offsets into a 5,314-entry unit-vector table in `StudioRender.dll` plus `n/255` magnitudes scaled 8.0/2.0, and a 20B raw form (`mingxiao_transformation` only). **`NumEyeballs` is 0 on all 4,444 models** — no eye pose, look-at or procedural lid was ever authored; eyes are eyelid flexes. `.lip` is plain text (7,136 files, `VERSION`/`PLAINTEXT`/`WORDS`/`EMPHASIS`(always empty)/`CLOSECAPTION`/`OPTIONS`), joined to `expressions/<model stem>_phonemes.vfe` (249 tables) for phoneme→controller weights. Corrects `mdl_v2531.md`: `StudioModel` is **224B** and carries its own de-quantization offset/scale at +0xA0. Full: `docs/facial_animation.md`; probe: `tools/probe_facial.py` | 12.3–12.5, PL10 | [x] |

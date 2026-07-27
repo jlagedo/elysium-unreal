@@ -74,11 +74,11 @@ Source branch on the absence of `interval_per_tick` / `sv_tickrate` / `TICK_INTE
 that variable delta, some of retail's movement is frame-rate dependent — but **less of it than the
 shape of the code suggests**, and the jump is not among it:
 
-- **The jump apex is exact and rate-invariant.** The half-step gravity split plus the *additive*
-  jump impulse (below) form a velocity-Verlet integrator, which is exact for constant acceleration.
-  Driving the same command stream at 60 / 120 / 240 Hz gives an apex of **25.00 units at all
-  three** — `sv_jump_boost` on the nose. (An earlier reading of this doc predicted `25 − 100·dt`;
-  that is what a *full*-step gravity would give, and it is not what the engine does.)
+- **The gravity integration is exact and rate-invariant.** The half-step split plus the *additive*
+  jump impulse (below) form a velocity-Verlet integrator, which is exact for constant
+  acceleration, so a given launch velocity produces the same apex at any frame rate. (This says
+  nothing about the *height* — VtMB's launch is not a single impulse; see "The jump is not stock
+  Source's".)
 - **Air acceleration is the part that really does vary.** `AirAccelerate`'s `addspeed` clamp stops
   binding above ~117 fps, so a strafe-jump's exit speed drifts with the frame rate — measured at
   259.5 / 259.8 / 261.0 u/s across 60 / 120 / 240 Hz, about **0.6%** over a doubling-and-doubling
@@ -131,27 +131,85 @@ vfov = 2 * atan(tan(hfov/2) / (4/3))       // 75 -> 59.84
 | `sv_stepsize` | 18 | |
 | `sv_maxvelocity` | 3500 | terminal clamp |
 | `sv_maxspeed` | 2048 | a ceiling, **not** the player's speed |
-| `sv_jump_boost` | 25.0 | jump apex, in units |
+| `sv_jump_boost` | 25.0 | **inches of instant origin pop** on the jump's first frame — not the apex |
 | `sv_jump_maxspeed` | 350.0 | `m_flMaxSpeed` while airborne |
-| `sv_jump_boost_immediate` | 0 | when 1, the jump teleports up instead of adding velocity |
+| `sv_jump_boost_immediate` | 0 | gates the origin pop |
 | `sv_walkscale` / `sv_runscale` / `sv_sneakscale` | 1.0 / 1.0 / 2.3 | function-local statics in `CHL2_Player::PreThink` |
 
-**Jump velocity** = `sqrt(2 * sv_jump_boost * sv_gravity)` = `sqrt(2*25*800)` =
-**200 u/s**, scaled by a ground factor. `sv_jump_boost` is literally the apex
-height in units, since `v²/2g = 25`.
+## The jump is not stock Source's
+
+**Troika replaced it with a held, gravity-modified, Feat-scaled "unified jump", and none of it is
+a `CGameMovement` constant.** The tuning lives in `vdata/system/rules.txt` → `RuleData/Jumping`,
+and the engine reads it into a settings singleton (`0x10739d08`) that `CheckJumpButton` queries
+through per-field getters — `FUN_101e7d90` returns `*(float*)(obj + 0x3c8)`, the jump impulse.
+Nothing in `.rdata` holds the value; the field is uninitialised in the PE and populated at load.
+
+| `rules.txt` key | Value | Meaning (Troika's own comments) |
+|---|---|---|
+| `BaseJumpVelocity` | **185** | "the base velocity that is added to the player when you hit **or hold** the jump button". The file notes HL2's is 268, and that 270 was the pre-`SKS_JUMP` value |
+| `JumpGravityMultiplier` | **0.75** | gravity runs at 75% for the duration of the jump |
+| `JumpHoldTime` | **0.2** | s |
+| `Vertical[Feat]` | 0.30 … 0.48 | Jumping-Feat → vertical velocity modifier, ranks 1–10 |
+| `Horizontal[Feat]` | 1.05 … 1.50 | ditto, horizontal |
+| `JumpDuration[Feat]` | 0.11 … 1.10 | "how long you can hold the jump button down for increased effect", s |
+| `SafeFallDist` / `FallDistPerDmg` / `SupernaturalFallDist` | 240 / 8.4 / 500 | the fall-damage curve |
+
+So the jump height is **not** a single constant and **not** frame-symmetric: the button is held,
+velocity keeps being added while it is, gravity is reduced throughout, a Feat scales both the
+magnitude and the hold window, and `sv_jump_boost` teleports the origin up 25 inches on the first
+frame on top of all of it. A rank-1 (tutorial) character therefore clears far more than the ~25
+units a single 185 u/s impulse against full gravity would give.
+
+### Where each field lands
+
+`FUN_101e6310` parses the `Jumping` block into the settings singleton, and `CheckJumpButton`
+reads one of those fields back through `FUN_101e7d90`:
+
+| Field | Key | Read by |
+|---|---|---|
+| `obj+0x3c8` | `BaseJumpVelocity` | **`CheckJumpButton` — this is the impulse it adds** (getter `0x101e7d90`, called from `0x1012287a`) |
+| `obj+0x3cc` | `JumpGravityMultiplier` | applied to the player's own gravity scale |
+| `obj+0x3d0` | `JumpHoldTime` | the push window |
+| `obj+0x3e0` / `+0x3e4` / `+0x3e8` | `SafeFallDist` / `FallDistPerDmg` / `SupernaturalFallDist` | fall damage |
+| `obj+0x3ec` / `+0x3f0` | — | `sqrt(2 · sv_gravity · SafeFallDist)` and the supernatural equivalent, precomputed at load |
+| `obj+0x20` / `+0x48` | `Vertical[1..10]` / `Horizontal[1..10]` | the Feat tables |
+
+The gravity scale is the player's stock Source `m_flGravity` (`player+0x3ec`), which
+`StartGravity` / `FinishGravity` / `AddGravity` each multiply by, defaulting to `1.0` when zero.
+`player+0x2314` next to it is `m_flWaterJumpTime`, not a jump timer — `FinishGravity`'s early-out
+on it is Source's stock water-jump guard.
+
+### The model
+
+**The jump is a constant upward push sustained while the button is held, under reduced gravity,
+after an instant origin pop.** On the press frame: `origin.z` pops up `sv_jump_boost × 0.99 ×`
+the hull-trace fraction, `velocity.z += BaseJumpVelocity × groundFactor`, and the player's gravity
+scale becomes `JumpGravityMultiplier`. For as long as the button stays down inside the window, the
+push keeps being applied — which is what `rules.txt` means by *"added to the player when you hit
+**or hold** the jump button"*. Releasing early ends it, so a tap and a hold give different
+heights; players know this as the spacebar jumping higher than the mousewheel, which cannot be
+held.
+
+**Unverified: which window the engine uses.** `rules.txt` carries two candidates —
+`JumpHoldTime` (a flat `0.2`) and the Feat-indexed `JumpDuration` (`0.11` at rank 1) — and the
+code that selects between them has not been read. The Feat itself is moot in the shipped game:
+**Athletics and the Jumping feat are both unused content**, so every character is effectively
+rank 1. Verifying this needs the RPG-layer jump driver, not `CGameMovement`.
+
+*Provenance: `FUN_101e6310` (the `Jumping` parser), `FUN_101e7d90` (the `BaseJumpVelocity`
+getter) and its call site in `CheckJumpButton`; `sv_jump_boost`'s registered help string; the
+`0.99` and `0.5` scalars read from `.rdata` as doubles.*
 
 **`CheckJumpButton` (`0x101226b0`) is additive, and that is load-bearing.** The decompile reads
 `v.z = impulse * groundFactor + v.z` — it *adds* to the existing vertical velocity rather than
 overwriting it. `FullWalkMove` has already run `StartGravity` by the time the jump is checked, so
-the launch velocity is `jumpSpeed − g·dt/2`: exactly the half-step offset the leapfrog integration
-wants, which is why the apex comes out at a flat 25 units at any frame rate. Overwriting instead
-discards that half-step and the apex becomes `25 + v₀·dt/2` — 26.67 units at 60 fps, and
-frame-rate dependent with it. The ground factor is the surface's own jump scale (`surfacedata`
-+0x6c), 1.0 for the `default` prop every world surface resolves to; a moving ground entity's own
-velocity is added on top.
+the launch velocity carries the half-step offset the leapfrog integration wants; overwriting
+instead discards it and makes the apex frame-rate dependent. The ground factor is the surface's
+own jump scale (`surfacedata` +0x6c), 1.0 for the `default` prop every world surface resolves to;
+a moving ground entity's own velocity is added on top.
 
-`m_nOldButtons` is what stops a held jump from pogoing: the bit is set when the jump fires and
-cleared only when the button is released.
+`m_nOldButtons` stops a held jump from *re-firing*; it does not stop the hold from extending the
+same jump, which is a separate timer on the player.
 
 ### Formulas (verified against the decompile)
 
@@ -270,7 +328,7 @@ mover itself and selected by the three accessors `GetPlayerMins` (`0x1011e310`),
 
 So the ducked hull is the standing footprint at **half the height**, and the ducked eye sits at
 **30**, not the 28 that stock Source's `VEC_DUCK_VIEW` uses — a Troika value. The mins/maxs
-selector keys off `m_bDucking` (`player+0x1edd`),
+selector keys off `m_bDucked` (`player+0x1edd`),
 while the view-offset selector takes the ducked flag as an argument.
 
 The same constructor seeds `surfaceFriction` (`+0xa0`) to `1.0`, which is the value the game then
@@ -281,8 +339,10 @@ computes every frame anyway (above).
 `Duck` (`0x10126fd0`) is called from `PlayerMove` between the step-sound update and
 `CategorizePosition`, so the ground trace runs against the hull the rest of the frame will use. It
 latches `IN_DUCK` (button bit `4`) into `m_nOldButtons` itself, and drives four pieces of player
-state: `m_bDucking` (`+0x1edd`), `m_bDucked` (`+0x1ede`), `m_flDucktime` (`+0x1ee0`) and
-`m_flDuckJumpTime` (`player[0x7b8]`).
+state: `m_bDucked` (`+0x1edd`), `m_bDucking` (`+0x1ede`), `m_flDucktime` (`+0x1ee0`) and
+`m_flDuckJumpTime` (`player[0x7b8]`). `m_bDucked` is the one the hull selector reads, which is why
+`CanUnduck` (`0x101265d0`) clears it around its own trace to make `TracePlayerBBox` pick the
+standing size.
 
 `GAMEMOVEMENT_DUCK_TIME` is **1000.0** (milliseconds — `0x447a0000`, assigned to `m_flDucktime`
 on both the duck and the unduck edge), and the elapsed fraction is formed as
@@ -295,10 +355,36 @@ transition thresholds, which are stock Source's:
 | `TIME_TO_DUCK` | `0x1044a2bc` | `0.4` | float |
 | `TIME_TO_UNDUCK` | `0x10449198` | `0.2` | **double** |
 
-`FinishDuck`
-(`0x10126cb0`) and `FinishUnDuck` (`0x101269e0`) swap the hull and fix the origin up by half the
-height difference; `FinishUnDuck` first runs a `TracePlayerBBox` at the standing size and refuses
-the unduck if it would not fit, which is what stops a stand-up through a low ceiling.
+**Both thresholds are skipped entirely while airborne.** The elapsed-time comparison guards only
+the `SetDuckedEyeOffset` lerp (`0x10126e20`), and that branch is additionally gated on
+`GetGroundEntity()` being non-null:
+
+```
+if (elapsed*0.001 <= TIME_TO_DUCK && GetGroundEntity() && !(flags & FL_DUCKING))
+    { SetDuckedEyeOffset(elapsed/TIME_TO_DUCK); return }     // ground: slide the eye
+FinishDuck()                                                 // air, or ramp over: snap
+```
+
+so off the ground the duck — and symmetrically the unduck — **completes on the frame the button
+changes**, with no 0.4 s ramp. `SetDuckedEyeOffset` is a plain linear lerp between the two view
+offsets, not stock Source's `SimpleSpline`.
+
+`FinishDuck` (`0x10126cb0`) and `FinishUnDuck` (`0x101269e0`) swap the hull and then fix the
+origin, and the fixup differs by ground state:
+
+| | origin fixup | net effect |
+|---|---|---|
+| on ground | `origin += duckMins − standMins` — **zero**, both mins are `0` | feet planted, head drops 36 |
+| **airborne** | `origin ± (standHeight − duckHeight) × 0.5` = **±18** (`0x104454d0` = `0.5`, `0x1044f030` = `−0.5`) | feet rise 18, head drops 18 — the **centre** is what stays fixed |
+
+**This is the crouch-jump, and it is the only way past a step taller than the 25-unit apex.**
+Ducking in flight lifts the feet 18 units, so the reachable ledge goes from `sv_jump_boost` = **25**
+to **43** units. `AirMove` never runs the step attempt, so `sv_stepsize` adds nothing here — 43 is
+the hard ceiling on what can be climbed in one jump.
+
+`FinishUnDuck` and `CanUnduck` (`0x101265d0`) both apply the airborne `−18` *before* running
+`TracePlayerBBox` at the standing size, and refuse the unduck if it would not fit — which is what
+stops a stand-up through a low ceiling on the ground, and through the floor in the air.
 
 *Provenance: `DumpFuncs range=1011e000-10128000` on `vampire.dll`; the hull literals decoded from
 the constructor's immediate dwords.*

@@ -304,6 +304,17 @@ void UElysiumCameraComponent::SolveModelAlpha()
 
 void UElysiumCameraComponent::ApplyToView(FMinimalViewInfo& View) const
 {
+	// The strafe bank goes on FIRST, so the third-person blend below lerps it away along with
+	// everything else. VtMB's own gate is binary — it adds a literal 0.0 in third person — but the
+	// mode here is a weight rather than a flag, so the bank is scaled by the first-person share.
+	// At E = 0 and E = 1 that is exactly the original; in between it fades instead of popping.
+	if (const AActor* Owner = GetOwner())
+	{
+		const float Roll = ElysiumCam::SolveViewRoll(Owner->GetVelocity(), View.Rotation,
+			Cvars.RollAngle, Cvars.RollSpeed);
+		View.Rotation.Roll += Roll * (1.0f - Weights.ThirdBlend());
+	}
+
 	const float E = Weights.ThirdBlend();
 	if (E > 0.0f)
 	{

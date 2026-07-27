@@ -267,17 +267,7 @@ float FElysiumRuleTable::Lookup(int32 Key, float Def) const
 // 1. stats.txt
 // ================================================================================================
 
-const TCHAR* ElysiumTraitContainerName(EElysiumTraitContainer Container)
-{
-	switch (Container)
-	{
-	case EElysiumTraitContainer::Attributes:        return TEXT("Attributes");
-	case EElysiumTraitContainer::Abilities:         return TEXT("Abilities");
-	case EElysiumTraitContainer::Disciplines:       return TEXT("Disciplines");
-	case EElysiumTraitContainer::ActiveDisciplines: return TEXT("Active_Disciplines");
-	default:                                        return TEXT("?");
-	}
-}
+// `ElysiumTraitContainerName` lives with the slot tables in `ElysiumSheet.cpp`.
 
 const FElysiumStat* FElysiumStatContainer::Find(const FString& InName) const
 {

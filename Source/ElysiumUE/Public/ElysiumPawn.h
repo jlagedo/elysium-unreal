@@ -59,6 +59,10 @@ public:
 	// no-op to satisfy an interface.
 	void SetHullHeight(float HeightCm, float EyeAboveFeetCm, bool bAnchorFeet);
 
+	// Move the eye alone, leaving the hull as it is. The duck transition slides the view offset
+	// between the standing and ducked heights while the body is still the standing size.
+	void SetEyeHeight(float EyeAboveFeetCm);
+
 private:
 	UPROPERTY() TObjectPtr<UBoxComponent> Hull;
 	UPROPERTY() TObjectPtr<UElysiumCameraComponent> Camera;

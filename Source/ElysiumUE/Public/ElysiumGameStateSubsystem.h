@@ -105,6 +105,13 @@ public:
 	const FElysiumSheet& PlayerSheet() const;
 	FElysiumSheet& PlayerSheet();
 
+	// VtMB's rulebook — the data half of the sheet. The substrate already holds this subsystem, so
+	// this is the one path from an entity to `stats.txt` (`World->GetGameState()->Rulebook()`).
+	// Null in a bare test world; every caller handles that by leaving the sheet unclamped.
+	class UElysiumRulebookSubsystem* Rulebook() const;
+	// `stats.txt`'s four containers, or null when the rulebook is absent or failed to load.
+	const struct FElysiumStatTable* Stats() const;
+
 	// The live player entity in the current map, or null (no map, a menu backdrop, or the world
 	// built without one). The one place that resolution happens.
 	class FElysiumPlayer* PlayerEntity() const;

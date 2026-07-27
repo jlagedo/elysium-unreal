@@ -27,8 +27,20 @@ namespace ElysiumMove
 	inline constexpr float AirSpeedCap  = 30.0f * U;  // hardcoded in vampire.dll (0x104492a8)
 	inline constexpr float StepSize     = 18.0f * U;  // sv_stepsize, via m_flStepSize
 	inline constexpr float MaxVelocity  = 3500.0f * U;// sv_maxvelocity
-	inline constexpr float JumpBoost    = 25.0f;      // sv_jump_boost — literally the apex, in units
 	inline constexpr float JumpMaxSpeed = 350.0f * U; // sv_jump_maxspeed, while airborne
+
+	// --- The jump, which is Troika's and not Source's ------------------------------------------
+	// `sv_jump_boost` is an instant **origin** displacement on the press frame, in inches — its own
+	// help string says so — not an apex height. The rest of the jump is authored in
+	// `vdata/system/rules.txt` → `RuleData/Jumping`.
+	inline constexpr float JumpBoost    = 25.0f;      // sv_jump_boost, Source units (inches)
+	// The pop is scaled by 0.99 and by the hull trace's fraction, so it can never seat the body in
+	// a ceiling (`0x10462968`, read as a double).
+	inline constexpr float JumpBoostScale = 0.99f;
+
+	inline constexpr float BaseJumpVelocity      = 185.0f * U;   // rules.txt BaseJumpVelocity
+	inline constexpr float JumpGravityMultiplier = 0.75f;        // rules.txt JumpGravityMultiplier
+	inline constexpr float JumpHoldSeconds       = 0.2f;         // rules.txt JumpHoldTime
 
 	// The retail player speed is animation-driven and no ConVar holds it; `speed_walk` /
 	// `speed_runbase` are Troika's stated intent and are registered-but-never-read, which makes them
@@ -123,9 +135,8 @@ namespace ElysiumMove
 	// terminal velocity, which is where a long fall lives.
 	void CheckVelocity(FVector& Velocity, float MaxVel);
 
-	// The jump, and its inverse. `sv_jump_boost` is literally the apex height in units, since
-	// `v^2 / 2g = boost`.
-	float JumpVelocity(float JumpBoostUnits, float GravityAccel);
+	// Apex of a ballistic launch — still the right tool for reading a fall or the tail of a jump,
+	// but NOT for predicting VtMB's jump height, which is a held push and not one impulse.
 	float ApexHeight(float LaunchZ, float GravityAccel);
 
 	// Wish direction in a given frame, with Source's normalize-and-clamp: a keyboard diagonal is
@@ -202,11 +213,29 @@ struct FElysiumMoveTuning
 	float MaxVelocity  = ElysiumMove::MaxVelocity;
 	float JumpMaxSpeed = ElysiumMove::JumpMaxSpeed;
 
-	// Held in **Source units**, because it is the apex height and reads as one.
+	// --- The jump -----------------------------------------------------------------------------
+	// VtMB does **not** use Source's jump. Its own model is a *constant upward push held for a
+	// window*, under reduced gravity, preceded by an instant origin pop — all four numbers below
+	// come from `vdata/system/rules.txt` → `RuleData/Jumping`, not from a `CGameMovement` constant
+	// (`docs/source_movement.md` → "The jump is not stock Source's").
+
+	// `BaseJumpVelocity`, cm/s. The velocity ADDED on the press frame and re-asserted every frame
+	// the button stays down inside the hold window.
+	float BaseJumpVelocity = ElysiumMove::BaseJumpVelocity;
+
+	// `JumpGravityMultiplier` — gravity runs at this scale for the whole jump.
+	float JumpGravityMultiplier = ElysiumMove::JumpGravityMultiplier;
+
+	// `JumpHoldTime`, seconds — how long the push keeps being applied while held.
+	float JumpHoldSeconds = ElysiumMove::JumpHoldSeconds;
+
+	// `sv_jump_boost`, held in **Source units** because the cvar's own help calls them inches:
+	// "How many extra inches to add to the player's origin on the first frame of the jump".
 	float JumpBoost    = ElysiumMove::JumpBoost;
 
-	// The launch speed the tuning implies.
-	float JumpSpeed() const { return ElysiumMove::JumpVelocity(JumpBoost, Gravity); }
+	// Seed the four jump values from the rulebook. Keys absent from `rules.txt` keep their
+	// defaults, so a run without the vdata mirror behaves like the shipped tuning.
+	void LoadJumpFrom(TFunctionRef<bool(const TCHAR*, float&)> Lookup);
 
 	// Re-read the whole surface. `Lookup` returns a cvar's value string or empty for one the store
 	// does not carry, which is how the console itself answers; an empty read keeps the default, so a

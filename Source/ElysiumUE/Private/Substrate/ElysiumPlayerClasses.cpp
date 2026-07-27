@@ -15,7 +15,9 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSheetSlots.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumRulebook.h"
 
 #include "Components/SkeletalMeshComponent.h"
 #include "Misc/Paths.h"
@@ -66,22 +68,49 @@ namespace
 		D.Fields.Add(FName(Name), MoveTemp(Acc));
 	}
 
-	// A field on FElysiumCombatCharacter::Sheet — the sheet is a struct member, so it needs its own
-	// accessor rather than a member pointer.
-	void AddSheetIntField(FElysiumClassDesc& D, const TCHAR* Name, int32 FElysiumSheet::* Member)
+	// One trait slot on FElysiumCombatCharacter::Sheet, as VtMB's datamap exposes it: the current
+	// value under the bare name, the base under a `base_` prefix. Both halves are keyable and both
+	// are saved, which is what the recovered datamap flags say.
+	void AddSlotField(FElysiumClassDesc& D, const TCHAR* Name,
+		EElysiumTraitContainer Container, int32 Slot, bool bBase)
 	{
 		FElysiumFieldAccessor Acc;
 		Acc.ApplyFlags(ElysiumFieldDefault);
 		Acc.Type = EElysiumVariantType::Int;
-		Acc.Get = [Member](const FElysiumEntity& E)
+		Acc.Get = [Container, Slot, bBase](const FElysiumEntity& E)
 		{
-			return FElysiumVariant::Int(static_cast<const FElysiumCombatCharacter&>(E).Sheet.*Member);
+			const FElysiumSheet& S = static_cast<const FElysiumCombatCharacter&>(E).Sheet;
+			return FElysiumVariant::Int(bBase ? S.GetBase(Container, Slot) : S.GetCurrent(Container, Slot));
 		};
-		Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V)
+		Acc.Set = [Container, Slot](FElysiumEntity& E, const FElysiumVariant& V)
 		{
-			static_cast<FElysiumCombatCharacter&>(E).Sheet.*Member = V.ToInt();
+			// A write lands on the base either way: a keyvalue and a script assignment both set the
+			// character sheet, and the current value is derived from it.
+			static_cast<FElysiumCombatCharacter&>(E).Sheet.SetBase(Container, Slot, V.ToInt());
 		};
 		D.Fields.Add(FName(Name), MoveTemp(Acc));
+	}
+
+	// Every compiled slot in every container, twice over. 74 slots -> 148 fields on
+	// CBaseCombatCharacter, which is the whole sheet reachable through one R2 walk.
+	void AddSheetFields(FElysiumClassDesc& D)
+	{
+		for (uint8 i = 0; i < (uint8)EElysiumTraitContainer::Count; ++i)
+		{
+			const EElysiumTraitContainer Container = (EElysiumTraitContainer)i;
+			for (const FElysiumSheetSlot& Slot : ElysiumSheetSlots(Container))
+			{
+				AddSlotField(D, Slot.Datamap, Container, Slot.Index, /*bBase=*/false);
+				AddSlotField(D, *FString::Printf(TEXT("base_%s"), Slot.Datamap),
+					Container, Slot.Index, /*bBase=*/true);
+				if (Slot.Alias)
+				{
+					AddSlotField(D, Slot.Alias, Container, Slot.Index, /*bBase=*/false);
+					AddSlotField(D, *FString::Printf(TEXT("base_%s"), Slot.Alias),
+						Container, Slot.Index, /*bBase=*/true);
+				}
+			}
+		}
 	}
 
 	// The same shape for FElysiumPlayer::Law, read-only (the SetCriminalLevel family writes it).
@@ -266,44 +295,72 @@ void FElysiumCombatCharacter::InputMoneyRemove(const FElysiumInputArgs& Args)
 	if (N != 0) { Money = FMath::Max(0, Money - N); }
 }
 
+const FElysiumStatTable* FElysiumCombatCharacter::SheetRules() const
+{
+	UElysiumGameStateSubsystem* GameState = World ? World->GetGameState() : nullptr;
+	return GameState ? GameState->Stats() : nullptr;
+}
+
+void FElysiumCombatCharacter::AddTrait(EElysiumTraitContainer Container, int32 Slot, int32 Delta)
+{
+	Sheet.AddBase(Container, Slot, Delta);
+	// The bounds are `stats.txt`'s own — Humanity 0..10, Masquerade 0..5, BloodPool 0..15 — applied
+	// to the *current* value, which is what every reader goes through. The write-time gate VtMB's
+	// `IncBase` carries (and `BumpStat`'s hardcoded `< 5` ceiling) is 9.4c's.
+	Sheet.RecomputeCurrent(SheetRules());
+}
+
 void FElysiumCombatCharacter::InputHumanityAdd(const FElysiumInputArgs& Args)
 {
 	const int32 N = Args.Param.ToInt();
-	if (N != 0) { Humanity = FMath::Clamp(Humanity + N, 0, 10); }   // the WoD 0..10 track
+	if (N != 0) { AddTrait(EElysiumTraitContainer::Attributes, ElysiumSlot::Humanity, N); }
 }
 
 void FElysiumCombatCharacter::InputChangeMasqueradeLevel(const FElysiumInputArgs& Args)
 {
 	const int32 N = Args.Param.ToInt();
-	if (N != 0) { Masquerade = FMath::Clamp(Masquerade + N, 0, 5); }
-	// The meter reaching 5 is a loss condition (`game_runtime.md` section 3); 9.4 owns the check and
-	// the HUD readout, so nothing watches this number yet.
+	if (N != 0) { AddTrait(EElysiumTraitContainer::Attributes, ElysiumSlot::Masquerade, N); }
+	// The meter reaching 5 is the second loss condition (`game_runtime.md` section 3); 9.4c owns
+	// the check and the HUD readout, so nothing watches this number yet.
 }
 
 void FElysiumCombatCharacter::InputBloodloss(const FElysiumInputArgs& Args)
 {
 	const int32 N = Args.Param.ToInt();
-	if (N != 0) { BloodPool = FMath::Max(0, BloodPool - N); }
+	if (N != 0) { AddTrait(EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPool, -N); }
 }
 
 void FElysiumCombatCharacter::InputBloodgain(const FElysiumInputArgs& Args)
 {
+	// The ceiling is `BloodPool`'s authored Max, applied by the recompute; the per-generation
+	// variant is a `Generation` lookup 9.4c owns.
 	const int32 N = Args.Param.ToInt();
-	if (N != 0) { BloodPool += N; }   // the per-generation ceiling is the sheet's (9.4)
+	if (N != 0) { AddTrait(EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPool, N); }
 }
 
 void FElysiumCombatCharacter::InputBloodHeal(const FElysiumInputArgs& Args)
 {
-	// VtMB's internal name is BloodHealIn. Spending blood to heal needs both meters modelled, so
-	// this only spends the blood it is told to; the health half is 9.4's.
+	// VtMB's internal name is BloodHealIn. Spending blood to heal is a `VampHeal_Info` conversion
+	// (9.4c), so this only spends the blood it is told to; the health half does not land here.
 	const int32 N = Args.Param.ToInt();
-	if (N != 0) { BloodPool = FMath::Max(0, BloodPool - N); }
-	PendingInput(TEXT("BloodHeal"), TEXT("9.4 — the health/blood conversion"), Args);
+	if (N != 0) { AddTrait(EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPool, -N); }
+	PendingInput(TEXT("BloodHeal"), TEXT("9.4c — the health/blood conversion"), Args);
 }
 
 void FElysiumCombatCharacter::InputWillTalk(const FElysiumInputArgs& Args)
 {
 	bWillTalk = Args.Param.ToInt() != 0;
+}
+
+void FElysiumCombatCharacter::SyncHealthFromSheet()
+{
+	// `CBaseCombatCharacter::HealthToPercent` projects the sheet pair onto Source's engine-space
+	// health (`game_runtime.md` section 3). Our `health` / `max_health` keyfields ARE that engine
+	// space — what the save walk enumerates, what a `.ents` `health` key writes, and what the body
+	// reads — so they are derived, never the truth.
+	MaxHealth = Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::MaxHealth);
+	const int32 Damage = Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Health);
+	Health = FMath::Max(0, MaxHealth - Damage);
 }
 
 void FElysiumCombatCharacter::TakeDamage(float Amount)
@@ -314,17 +371,23 @@ void FElysiumCombatCharacter::TakeDamage(float Amount)
 	}
 	if (MaxHealth <= 0)
 	{
-		// No health track seeded — an NPC, until 9.4 loads `stattemplate` into a sheet. Damage is
-		// recorded rather than applied: a character with no health model must not die of arithmetic.
+		// No health track: the rulebook did not load, or the character was built without a sheet.
+		// Damage is recorded rather than applied — a character with no health model must not die of
+		// arithmetic.
 		UE_LOG(LogElysiumPlayer, Verbose, TEXT("%s took %.1f damage with no health track"),
 			*DebugString(), Amount);
 		return;
 	}
 	const int32 Points = FMath::Max(1, FMath::RoundToInt(Amount));
 	// Unkillable is the damage system's gate (`events_player`'s MakePlayerUnkillable), so it takes
-	// the hit down to 1 rather than refusing it — retail keeps the flinch, only not the death.
-	const int32 Floor = bUnkillable ? 1 : 0;
-	Health = FMath::Max(Floor, Health - Points);
+	// the hit down to 1 hp rather than refusing it — retail keeps the flinch, only not the death.
+	const int32 MaxDamage = bUnkillable ? MaxHealth - 1 : MaxHealth;
+	const int32 Damage = FMath::Clamp(
+		Sheet.GetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Health) + Points, 0, MaxDamage);
+	Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Health, Damage);
+	Sheet.RecomputeCurrent(SheetRules());
+	SyncHealthFromSheet();
+
 	if (Health <= 0 && !bUnkillable)
 	{
 		OnKilled();
@@ -345,13 +408,15 @@ void FElysiumCombatCharacter::OnKilled()
 
 bool FElysiumCombatCharacter::GetDynamicField(FName Name, FElysiumVariant& Out) const
 {
-	if (const int32* V = Sheet.Stats.Find(Name))
+	// Every compiled slot is a registered field, so the R2 walk has already answered by the time
+	// this runs. What is left is a `base_*` name the shipped `stats.txt` does not own — which still
+	// reads 0 rather than raising, the same default-on-miss `G` has, because the gates that ask
+	// (`pc.base_Celerity > 0`) are written against a sheet where every name resolves.
+	if (const int32* V = Sheet.Extra.Find(Name))
 	{
 		Out = FElysiumVariant::Int(*V);
 		return true;
 	}
-	// An unloaded `base_<discipline>` reads 0, the same default-on-miss `G` has: the gates that ask
-	// (`pc.base_Celerity > 0`) must read a number, not raise, before 9.4 fills the sheet.
 	if (Name.ToString().StartsWith(TEXT("base_"), ESearchCase::CaseSensitive))
 	{
 		Out = FElysiumVariant::Int(0);
@@ -362,9 +427,9 @@ bool FElysiumCombatCharacter::GetDynamicField(FName Name, FElysiumVariant& Out) 
 
 bool FElysiumCombatCharacter::SetDynamicField(FName Name, const FElysiumVariant& Value)
 {
-	if (Sheet.Stats.Contains(Name) || Name.ToString().StartsWith(TEXT("base_"), ESearchCase::CaseSensitive))
+	if (Sheet.Extra.Contains(Name) || Name.ToString().StartsWith(TEXT("base_"), ESearchCase::CaseSensitive))
 	{
-		Sheet.Stats.Add(Name, Value.ToInt());
+		Sheet.Extra.Add(Name, Value.ToInt());
 		return true;
 	}
 	return false;
@@ -372,17 +437,22 @@ bool FElysiumCombatCharacter::SetDynamicField(FName Name, const FElysiumVariant&
 
 void FElysiumCombatCharacter::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 {
-	Out.Emplace(TEXT("Clan"), FString::Printf(TEXT("%d (%s), %s"), Sheet.Clan,
-		FElysiumSheet::ClanName(Sheet.Clan), Sheet.bMale ? TEXT("male") : TEXT("female")));
+	using EC = EElysiumTraitContainer;
+	Out.Emplace(TEXT("Clan"), FString::Printf(TEXT("%d (%s), %s"), Sheet.Clan(),
+		FElysiumSheet::ClanName(Sheet.Clan()), Sheet.IsMale() ? TEXT("male") : TEXT("female")));
 	Out.Emplace(TEXT("Health"), FString::Printf(TEXT("%d / %d%s"), Health, MaxHealth,
 		bUnkillable ? TEXT("  (unkillable)") : TEXT("")));
 	Out.Emplace(TEXT("Money"), FString::FromInt(Money));
-	Out.Emplace(TEXT("Blood"), FString::FromInt(BloodPool));
-	Out.Emplace(TEXT("Humanity"), FString::FromInt(Humanity));
-	Out.Emplace(TEXT("Masquerade"), FString::FromInt(Masquerade));
+	Out.Emplace(TEXT("Blood"), FString::FromInt(Sheet.GetCurrent(EC::Attributes, ElysiumSlot::BloodPool)));
+	Out.Emplace(TEXT("Humanity"), FString::FromInt(Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Humanity)));
+	Out.Emplace(TEXT("Masquerade"), FString::FromInt(Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Masquerade)));
+	Out.Emplace(TEXT("Physical"), FString::Printf(TEXT("str %d  dex %d  sta %d"),
+		Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Strength),
+		Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Dexterity),
+		Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Stamina)));
 	Out.Emplace(TEXT("WillTalk"), bWillTalk ? TEXT("yes") : TEXT("no"));
 	Out.Emplace(TEXT("Disposition"), Disposition.IsEmpty() ? TEXT("(none)") : Disposition);
-	Out.Emplace(TEXT("Sheet stats"), FString::FromInt(Sheet.Stats.Num()));
+	Out.Emplace(TEXT("Unnamed stats"), FString::FromInt(Sheet.Extra.Num()));
 }
 
 // ============================================================================================
@@ -392,16 +462,20 @@ void FElysiumCombatCharacter::GetDebugState(TArray<TPair<FString, FString>>& Out
 void FElysiumPlayer::Spawn()
 {
 	// The body is the pawn, already standing: nothing to build, and the first SyncFromBody puts the
-	// entity where the pawn is. A health ceiling the damage path can reduce is seeded here when the
-	// record carries none (a fresh run) — see ElysiumInterimPlayerMaxHealth.
-	if (MaxHealth <= 0)
+	// entity where the pawn is.
+	//
+	// The health ceiling is read, not derived: `Max_Health` is an ordinary stat with `Default 100`
+	// and no formula anywhere in `vdata` — nothing derives health from Stamina (RE24). A run that
+	// has been through New Game arrives with the record's seeded sheet; one that has not (a map
+	// loaded straight from the console) seeds here so the damage path has a track.
+	if (Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::MaxHealth) <= 0)
 	{
-		MaxHealth = ElysiumInterimPlayerMaxHealth;
+		if (const FElysiumStatTable* Table = SheetRules())
+		{
+			Sheet.SeedFrom(*Table);
+		}
 	}
-	if (Health <= 0)
-	{
-		Health = MaxHealth;
-	}
+	SyncHealthFromSheet();
 	SyncFromBody();
 }
 
@@ -409,9 +483,6 @@ void FElysiumPlayer::Hydrate(const FElysiumPlayerRecord& Record)
 {
 	Sheet      = Record.Sheet;
 	Money      = Record.Money;
-	Humanity   = Record.Humanity;
-	BloodPool  = Record.BloodPool;
-	Masquerade = Record.Masquerade;
 	Health     = Record.Health;
 	MaxHealth  = Record.MaxHealth;
 	Law        = Record.Law;
@@ -426,9 +497,6 @@ void FElysiumPlayer::Dehydrate(FElysiumPlayerRecord& Record) const
 {
 	Record.Sheet      = Sheet;
 	Record.Money      = Money;
-	Record.Humanity   = Humanity;
-	Record.BloodPool  = BloodPool;
-	Record.Masquerade = Masquerade;
 	Record.Health     = Health;
 	Record.MaxHealth  = MaxHealth;
 	Record.Law        = Law;
@@ -595,11 +663,10 @@ static FElysiumClassRegistrar GRegCombatCharacter(
 		ELYSIUM_PENDING_INPUT(FC, LookAtEntityOrigin,     "12.4 — the look-at rig");
 		ELYSIUM_PENDING_INPUT(FC, LookAtEntityDefault,    "12.4 — the look-at rig");
 
-		AddCharField(D, TEXT("money"),      &FC::Money);
-		AddCharField(D, TEXT("humanity"),   &FC::Humanity);
-		AddCharField(D, TEXT("bloodpool"),  &FC::BloodPool);
-		AddCharField(D, TEXT("masquerade"), &FC::Masquerade);
-		AddSheetIntField(D, TEXT("clan"),   &FElysiumSheet::Clan);
+		// `money` is `m_iMoney`, the one counter `stats.txt` does not carry as a Stat. Humanity,
+		// blood, masquerade, clan and sex are all trait slots, and arrive with the rest of the sheet.
+		AddCharField(D, TEXT("money"), &FC::Money);
+		AddSheetFields(D);
 	});
 
 // The player. Its classname is VtMB's own (`player`); nothing in a `.ents` file carries it, because
