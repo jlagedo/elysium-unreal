@@ -22,8 +22,8 @@ class ULightComponent;
 //
 // VtMB point/spot intensities are pure inverse-square radiosity magnitudes with a
 // `radius` cutoff — which is exactly Unreal's physical light model, so radius maps
-// straight onto AttenuationRadius and intensity onto candelas (no Godot-style falloff
-// exponent hack). The sun's near-unit intensity gets its own lux scale.
+// straight onto AttenuationRadius and intensity onto candelas (no falloff-exponent hack
+// needed). The sun's near-unit intensity gets its own lux scale.
 UCLASS()
 class UElysiumLightRig : public USceneComponent
 {
@@ -151,8 +151,8 @@ public:
 
 	// Calibration — tunable per-instance in the editor, or via elysium.LightScale (which
 	// overrides PointSpotScale). Point/spot use Unreal's *non*-inverse-square falloff with a
-	// gentle exponent, matching VtMB's soft baked look (the Godot rig's proven constants):
-	// inverse-square + candela read too hard — hot speculars, over-bright at the source, then
+	// gentle exponent, matching VtMB's soft baked look: inverse-square + candela read too
+	// hard — hot speculars, over-bright at the source, then
 	// a cliff to black. Specular is killed (VtMB world is pure Lambert). Intensity (unitless)
 	// = clamp(max(rgb) * PointSpotScale, 0, MaxBrightness); reach = radius * RadiusScale.
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float PointSpotScale = 0.003f;

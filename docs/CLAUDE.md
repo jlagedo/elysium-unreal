@@ -54,19 +54,13 @@ the maintenance contract.
 - **Correct in place.** When RE contradicts a doc, fix the doc in the same pass and note the
   correction in the roadmap task that found it.
 
-## Godot-prototype reference docs
+## `m0_menu_build.md`
 
-`lighting.md`, `entity_visuals.md`, `color_gamma.md`, `m0_menu_build.md`, and the "Mapping to
-Godot" sections of `audio_pipeline.md` / `source_movement.md` / `animation_and_movers.md`
-carry a banner: they describe the **read-only Godot prototype's** implementation, not
-Elysium-Unreal. The VtMB facts inside remain valid; the C#/Godot detail is porting reference
-only. Keep the banner when editing.
-
-`m0_menu_build.md` carries a second caveat: the UI is **not** ported from VGUI. That doc is
-the record of what the original UI contains and why (the `GameUI.dll` findings, scheme/`.res`
-semantics, font roles) — the design intent the modern re-skin is checked against, not a port
-target. It is also **partly superseded**: it decompiles the menu VtMB links but does not present,
-so four of its claims are corrected in `vtmb-ui.md` §6. Keep both banners when editing.
+Records what the original UI contains and why (the `GameUI.dll` decompile findings, scheme/
+`.res` semantics, font roles) — the design intent the modern re-skin is checked against, not
+a port target (Elysium-Unreal does not port VGUI; see `remaster-direction.md` axis 1). It is
+**partly superseded**: it decompiles the menu VtMB links but does not present, so four of its
+claims are corrected in `vtmb-ui.md` §6. Keep that banner when editing.
 
 ## Not in this repo
 

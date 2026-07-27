@@ -1,7 +1,7 @@
 # Save architecture — the persistence design
 
-**Status: adopted** (`decisions.md` 2026-07-26 cont. 4). Roadmap **9.5** builds it as **11.9** —
-the playable path's PP5 rung.
+**Status: built** (`decisions.md` 2026-07-26 cont. 4; roadmap **9.5** = **11.9**, the playable path's
+PP5 rung). This doc describes the system as it stands.
 
 How Elysium saves and restores a run. The VtMB-facts counterpart is **`savegame_format.md`** — the
 `.sav` container, the five block handlers, and the exact inventory of state the original persists;
@@ -20,7 +20,7 @@ Read off `savegame_format.md`, mapped onto the objects in `runtime-architecture.
 | Tier | VtMB | Elysium home | Block |
 |---|---|---|---|
 | slot metadata | the `.sav` global stream | `UElysiumSaveSubsystem` | header (uncompressed, readable without loading) |
-| session state | `G` + `G.morgue` (pickled per map), quests, elapsed time | `FElysiumSessionRecord` | `Session` |
+| session state | `G` + `G.morgue` (pickled per map), quests, elapsed time | `FElysiumSessionBlock` | `Session` |
 | the player | 277 datamap fields on the player entity + inventory as owned entities | `FElysiumPlayerRecord` | `Player` |
 | per-map frozen world | `.HL1`/`.HL2`/`.HL3` per visited map | `FElysiumMapSnapshot` per visited map | `Maps` |
 | in-flight time | `EventQueue` + think times | the substrate's own queue + per-entity next-think | inside each `Maps` entry |
@@ -35,18 +35,26 @@ Two structural choices of VtMB's are kept because they are load-bearing, and one
   other map visited this run, so walking back into Santa Monica finds it as you left it. It is also
   exactly what the adopted OpenLevel hard-travel lifecycle produces at every travel boundary.
 - **Drop the 16383-slot symbol table.** It exists because Source interned datamap field names at
-  runtime; we name fields directly. The **zero-value-omission rule is kept** — it is most of why
-  those files are small, and it costs one comparison per field.
+  runtime; we name fields directly. **Omission is kept and generalised**: instead of comparing each
+  field against zero, a snapshot diffs each entity against a **post-Load baseline** — what a fresh
+  build of the same `.ents` produces after Construct, Spawn and PostSpawn (§4). It is most of why
+  these files are small, and it costs one field walk per map load plus one comparison per field.
 
 ## 2. The container
 
 ```
 UElysiumSaveGame : USaveGame          // the only UPROPERTY-reflected part
 {
-    FElysiumSaveHeader Header;        // map, label, clan, level, playtime, timestamp, thumbnail
-    TArray<uint8>      Payload;       // our own versioned, compressed block stream
+    // the header, as loose UPROPERTYs ahead of the payload so a slot lists without inflating
+    int32 PayloadVersion;  FString Map, Label, ClanName;  int32 Clan;
+    double PlaytimeSeconds;  FDateTime Timestamp;  FString Kind;   // "manual" | "quick" | "auto"
+
+    TArray<uint8> Payload;            // our own versioned, compressed block stream
 };
 ```
+
+`FElysiumSaveHeaderData` is the same set as a plain struct, which is what `ReadSlotHeader` hands the
+load menu. There is no thumbnail (§11).
 
 `USaveGame` buys slot management, platform-safe paths and `UGameplayStatics::AsyncSaveGameToSlot`
 without owning the content. The payload is written by `FElysiumSaveArchive` (an `FArchive` wrapper),
@@ -57,7 +65,10 @@ hands (`engine-core.md` R1).
 - **Versioning** is an engine custom version (`FCustomVersionRegistration` + `Ar.UsingCustomVersion`),
   so a payload carries its own schema id and a reader can branch. A save from an older version either
   loads through declared upgrade paths or is rejected with a readable reason — never silently
-  half-read.
+  half-read. A raw memory archive carries no custom-version container of its own, so the payload
+  opens with a short **uncompressed prologue** — `{'ELYS', version, MinSupported, uncompressed size}`
+  — read before anything is inflated. The four refusals are: not an Elysium payload (magic),
+  below the floor, from a newer build, and failed decompression.
 - **Compression** is `FArchiveSaveCompressedProxy`/`Oodle` over the whole payload. VtMB's own
   per-section zlib exists to bound memory on a 2004 machine; one stream is simpler and smaller.
 - **The header is outside the compressed payload**, so the load menu lists slots without inflating or
@@ -90,22 +101,39 @@ gives every registered class a **field table** used by I/O, the Python datamap w
 application and the inspector; persistence is the fifth consumer.
 
 ```cpp
-// FElysiumClassDesc field registration gains one flag
+// FElysiumClassDesc field registration carries one flag word; the default is Key | Save
 D.Field(TEXT("m_iHealth"), &FElysiumCombatCharacter::Health, EElysiumField::Save);
-D.Field(TEXT("skin"),      &FElysiumProp::Skin,              EElysiumField::Key | EElysiumField::Save);
+D.Field(TEXT("skin"),      &FElysiumProp::Skin);   // ElysiumFieldDefault
 ```
 
-Saving an entity is: walk its class chain base-first, emit every `Save`-flagged field whose value is
-non-default, tagged by name. Restoring is the mirror, matched **by name, never by position**, so a
-field added to a base class does not invalidate existing saves. That is VtMB's own property — its
-saves are self-describing datamap dumps — and it is what makes 9.4/9.8/9.9/9.10 free: a system that
-registers its state as fields is saved the day it lands.
+`FElysiumClassRegistry::SaveFields` is the walk: derived→base over the class chain, first
+registration of a name wins, `Save`-flagged and round-trippable (both a getter and a setter) only,
+sorted lexically so the order is stable (§8). Saving an entity emits every one of those whose value
+differs from the baseline, tagged by name. Restoring is the mirror, matched **by name, never by
+position**, so a field added to a base class does not invalidate existing saves; an unrecognised or
+no-longer-`Save` name is skipped with a warning and the rest of the record still applies. That is
+VtMB's own property — its saves are self-describing datamap dumps — and it is what makes
+9.4/9.8/9.9/9.10 free: a system that registers its state as fields is saved the day it lands.
+
+**The baseline is post-Load, not zero.** A per-world `TArray<FElysiumEntityState>` captures every
+entity once, at the end of the map build (after Construct, Spawn and PostSpawn) and for a runtime
+entity at the end of its spawn; a restore never updates it. Comparing against a *fresh-constructed*
+default would be wrong in both directions: `Origin` is not a registered field at all (Construct
+applies every key that has one, and the def's `origin` key is still the raw Source-space string), and
+an entity whose `Spawn()` arms `NextThink` and whose first think disarms it back to `NEVER` would
+compare equal to a default and be omitted — so a restored map would re-run every `logic_auto`
+ignition. Per-entity state outside the field walk (origin, `bDead`/`bHidden`, `NextThink` and the
+`ScriptUnhide` think, the remaining output fire counts) is captured beside the fields and diffed the
+same way.
+
+The cost is one `FElysiumEntityState` per entity in memory. The payoff is the measured one: on
+`sp_tutorial_1` the freeze records 58 of 1,869 entities.
 
 Three things do *not* fit the field walk and get explicit hooks:
 
 | State | Hook |
 |---|---|
-| a leaf's derived runtime state (a mover's phase, a conversation cursor) | `virtual void FElysiumEntity::Serialize(FElysiumSaveArchive&)`, called after the field walk |
+| a leaf's derived runtime state (a mover's phase, a conversation cursor) | `virtual void FElysiumEntity::Serialize(FElysiumSaveArchive&)`, called after the field walk; the blob is dropped from the record when it matches the baseline's |
 | bodies (meshes, MIDs, cables, constraints) | **not saved**. Bodies are disposable presentation (R1); they rebuild from the def + the restored entity state |
 | anything an engine object owns (timers, tick handles, actor transforms) | **not saved**, and nothing game-visible is allowed to live there (R4/S1) |
 
@@ -127,14 +155,23 @@ load           →  restore the session; travel to Header.Map; the enter-map pat
 **Entities that travelled out with the player are absent, not duplicated.** VtMB's `.HL3` is a list
 of save ids that left the map (the player plus everything carried); on restore the engine skips them,
 because they now live wherever the player is. Our equivalent is one set per snapshot,
-`AbsentEntities`, produced at dehydrate time from the item records moved onto the player record.
-Without it, walking back into a map re-materialises the entire inventory — the failure mode the
+`AbsentEntities`, produced at freeze time from `virtual bool FElysiumEntity::TravelsWithPlayer()` —
+the entity's own answer, so the inventory task fills the set by overriding one predicate. The player
+itself is neither recorded nor listed: it is the `Player` block's, and the map build spawns it.
+Without the set, walking back into a map re-materialises the entire inventory — the failure mode the
 original explicitly solves.
 
 **Identity is the def index.** `FElysiumEntityHandle`'s index is the entity's position in the `.ents`
 array — stable across runs, never reused within a map load (R3) — so it is also the save id, with no
 extra id space. Runtime-spawned entities (`npc_maker.Spawn`, `CreateEntityNoSpawn`) live past the def
-array and serialize their synthesized def alongside their state, so they restore as themselves.
+array and serialize their synthesized def alongside their state, so they restore as themselves: the
+apply is two passes, one that re-creates them in index order before anything is written, one that
+writes every record. Index alignment holds because the def array always fills `0..DefCount-1`, the
+player always takes `DefCount`, and runtime entities replay in append order; a `DefCount` mismatch or
+a per-record classname mismatch is logged and the record skipped rather than mis-applied.
+
+The absent set is applied **after** the records, so a stale record for the same index cannot
+resurrect an entity the set says is gone.
 
 ## 6. The event queue and think times
 
@@ -145,13 +182,17 @@ tutorial's beat machine.
 
 This is why R4 bans `FTimerManager`: our queue is `TArray<FElysiumIOEvent>` of plain data —
 `{FireTime, Target, Input, Param, PythonSrc, Activator, Caller, Serial}` — and serializing it is
-writing the array with absolute times rebased to the restored clock. Per-entity `NextThink` rides
-along in the entity field walk.
+writing the array out and back. **Times need no rebasing**: the clock is part of the `Session` block,
+so a load resets it to the saved value and every absolute time still means what it meant. The
+restored entries keep their saved serials and the queue's next-serial counter is restored with them,
+so a same-time ordering survives too. Per-entity `NextThink` rides along in the entity record.
 
 The one subtlety: **handles inside events**. `Activator`/`Caller` carry an epoch that will not match
 the restored world's. They serialize as `{index, bWasValid}` and re-resolve against the new epoch at
 load; an entity that no longer exists resolves to Invalid, which is the same falsy value a killed
-entity already produces and which every call site already handles.
+entity already produces and which every call site already handles. The re-stamping is the *world's*,
+not the archive's — the archive is a byte layer with no world to ask, so `ApplySnapshot` walks the
+restored queue and rebases each handle itself.
 
 ## 7. `G`, the morgue, and the script VM
 
@@ -171,8 +212,10 @@ miss), so they serialize as a variant map with no pickling and no interpreter in
   `ScheduleTask` survives a save in the original too.
 
 `G.morgue` is a plain string set; it is *the story's* record of who is gone and does not imply the
-entity is mechanically dead in a snapshot (`savegame_format.md`), so it is saved as written and never
-reconciled against entity state.
+entity is mechanically dead in a snapshot (`savegame_format.md`), so it is to be saved as written and
+never reconciled against entity state. **Nothing models it yet** — no runtime surface writes or reads
+a morgue — so the `Session` block carries `G` and the quest map only. When the morgue lands it is a
+key in `G` like any other and needs no block change.
 
 ## 8. Determinism
 
@@ -180,24 +223,28 @@ A save is only worth as much as the run that follows it, so three rules hold on 
 
 - **All game-visible time comes from `FElysiumGameClock`** (S1). A system that reads
   `FPlatformTime::Seconds` or `World->GetTimeSeconds` for gameplay is a save bug waiting to surface.
-- **RNG is an owned, seeded stream.** `OneOfSet` (589 dialogue gates), the d10 resolver
-  (`recovered/dice-system.md`), the ambient idle picks and the RandomSound scheduler draw from named
-  `FRandomStream`s whose state is in the `Session` block. `FMath::Rand()` is banned in gameplay code
-  for the same reason `FTimerManager` is.
+- **RNG is an owned, seeded stream.** `ElysiumRng` owns one `FRandomStream` per named stream —
+  `OneOfSet` (589 dialogue gates), `LogicTimer`, `LogicCase`, `Dice` (`recovered/dice-system.md`),
+  `Ambient` — each seeded off one session seed by a fixed hash, so a new game seeds once and every
+  stream follows. Their state is in the `Session` block: each stream saves `{initial, current}` and
+  restores by re-initialising to the saved *current* value, which is the only writer `FRandomStream`
+  exposes and which continues the sequence exactly. `FMath::Rand()` is banned in gameplay code for
+  the same reason `FTimerManager` is.
   *(`script_api.md` leaves open whether VtMB's `OneOfSet` counter is a per-call RNG or a frame
   counter; whichever it resolves to, ours is a named stream so the answer is a seeding decision, not
   an architecture change.)*
-- **Iteration order is stable.** Saving walks entities by index and fields by registration order, so
-  two saves of the same state are byte-identical — which is what makes the round-trip test in §10 a
-  digest comparison rather than a semantic diff.
+- **Iteration order is stable.** Saving walks entities by index and fields in sorted name order; the
+  `Maps` map, `G` and the quest map serialize as key-sorted arrays rather than straight out of their
+  hash containers. Two saves of the same state are byte-identical — which is what makes the
+  round-trip test in §10 a digest comparison rather than a semantic diff.
 
 ## 9. Slots, autosave, and the surfaces that trigger them
 
 | Kind | Trigger | Slot |
 |---|---|---|
-| Manual | pause menu → Save Game (8.6's item exists, disabled) | `Elysium-NNN` |
-| Quick | `save quick` — a registered command, so the key binding is the player's (`controls.md`) | `Quick` |
-| Auto | `trigger_autosave` (a live class since 4.5, currently inert), map travel, and a chargen/act boundary | `Auto0..4`, a rotating ring like VtMB's |
+| Manual | pause menu → Save Game (8.6's item exists, disabled) | the requested name, or the next free `Elysium-NNN` |
+| Quick | `save` — a registered command, so the key binding is the player's (`controls.md`) | `Quick` |
+| Auto | `trigger_autosave`, and a chargen/act boundary | `Auto0..4`, a rotating ring like VtMB's |
 
 `UElysiumSaveSubsystem` owns the slot list, the ring, and the async write. **Writing is off the game
 thread**: freeze to a payload synchronously (it is a memory walk, and it must be atomic with respect
@@ -205,29 +252,42 @@ to the frame), then compress and write asynchronously via `AsyncSaveGameToSlot`.
 through `UElysiumGameFlowSubsystem::LoadGame` → `Loading` state → travel, so there is exactly one
 restore path and it is the one travel already uses.
 
-**A save is refused, loudly, rather than written wrong** — mid-travel, during a choreographed scene
-with no safe resume point, or when the payload version cannot be produced. VtMB refuses saves in
-similar states; a broken slot is worse than a missing one.
+**A save is refused, loudly, rather than written wrong.** `CanSave` returns the reason as text, and
+`elysium.save.cansave` prints it. The refusals: no session running, a map load in flight, the menu
+backdrop is the world, no entity world or no player, an open sign panel, and an open conversation —
+the last two because neither carries a resume point the payload models. VtMB refuses saves in similar
+states; a broken slot is worse than a missing one.
+
+Loading checks the target map is exported **before** it touches the session, so a payload naming a
+map this install cannot build fails with the session intact rather than half-torn-down.
 
 ## 10. Verification
 
 Persistence is the system where a silent bug surfaces hours later, so it gets the strongest harness in
 the project:
 
-- **Substrate tier** — round-trip a bare `FElysiumEntityWorld`: build, mutate through the real
-  chokepoints, freeze, rebuild, apply, and assert the two digests match. No RHI, no content; possible
-  because of `runtime-architecture.md` §7's injected services.
-- **Substrate tier** — schema tests: a field added to a base class still loads an older payload; an
-  unknown field name in a payload is skipped with a warning, not a failure; a version bump below the
-  supported floor is rejected with a readable message.
-- **Content tier** — freeze/thaw every exported map's real `.ents` world and assert entity counts,
-  name indices and queue contents survive.
+- **`Elysium.Substrate.SaveRoundTrip`** — round-trip a bare `FElysiumEntityWorld`: build, mutate
+  through the real chokepoints, hide an entity, spawn a runtime one, leave a delayed event pending,
+  freeze, rebuild, apply, assert each of those came back, and assert the two digests match. Then the
+  absent-entity case. No RHI, no content; possible because of `runtime-architecture.md` §7's
+  injected services.
+- **`Elysium.Substrate.SavePayload`** — the container: every block populated, write → peek version →
+  read, two writes byte-identical, the four integrity refusals, and `Describe`'s readable lines.
+- **`Elysium.Substrate.SaveSchema`** — the field walk reaches leaf and base names, sorted and
+  duplicate-free; a non-save field is in neither the key nor the save set; an unknown field name is
+  skipped and the rest of the record still applies; a classname mismatch skips the record; a restored
+  RNG stream continues the saved sequence.
+- **`Elysium.Content.MapSnapshot`** — freeze/thaw every exported map's real `.ents` world through the
+  real container and assert entity counts, name indices and queue contents survive, with a byte
+  digest and a `Describe` diff printed on mismatch. It also reports the snapshot sizes.
 - **Play tier** (`runtime-architecture.md` §12) — the one that matters: run a beat script to step *N*,
   save, load, run the *same* script from *N* to the end, and assert the same beats fire. This is what
   turns "save/load works" from a claim into a gate, and it reuses the harness the tutorial acceptance
   already needs.
 - **A `elysium.save.diff` verb** — dump a payload as readable name/value lines and diff two of them,
-  so a "why did this not persist" investigation is a text diff rather than a debugger session.
+  so a "why did this not persist" investigation is a text diff rather than a debugger session. Either
+  side may be `live`, which builds the payload the current session would write. Its neighbours:
+  `elysium.save.slots`, `elysium.save.cansave`, `elysium.save.delete`.
 
 ## 11. Open
 
@@ -237,6 +297,9 @@ the project:
 - **Decals as save state.** VtMB persists bullet holes and blood — 212 in a well-played Santa Monica
   hub — and nothing models them yet. The `Maps` block reserves the slot; the system that fills it is
   the combat-impact task (10.7).
-- **Snapshot size.** A full session holds one snapshot per visited map; VtMB's equivalent runs to a
-  few MB across six maps. Measure at the first ten-map run, and only then consider per-map
-  compression or dropping unmodified entities (the zero-omission rule already drops most of them).
+- **`G.morgue`.** Nothing writes or reads it yet (§7); when a system does, it is a `G` key and needs
+  no block change.
+- **Snapshot size — measured, and not a problem.** A freeze of a just-loaded map records 58 of 1,869
+  entities on `sp_tutorial_1` (1.7 KB compressed), 13 of 469 on `sm_pawnshop_1` (0.6 KB) and 67 of
+  2,598 on `sm_hub_1` (2.0 KB). A played map records more, but the baseline diff keeps the growth
+  proportional to what the player actually changed. Re-measure at the first ten-map run.

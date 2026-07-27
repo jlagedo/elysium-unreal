@@ -50,14 +50,12 @@ Third-person (`z` = `togglecamera`): `c_mindistance` 30, `c_maxdistance` 200,
 `c_minpitch` 0, `c_maxpitch` 90, `c_minyaw`/`c_maxyaw` ±135.
 
 **FOV is horizontal at 4:3.** Source is Hor+: the vertical angle is what holds at
-every aspect, and a wider window shows more horizontally. Godot's `Camera3D.Fov`
-is *vertical* under the default `KeepAspectEnum.Height`, so it needs converting:
+every aspect, and a wider window shows more horizontally. Converting to a vertical
+FOV (the convention most engines default to):
 
 ```
 vfov = 2 * atan(tan(hfov/2) / (4/3))       // 75 -> 59.84
 ```
-
-(`MenuBackground3D` applies the same conversion to the menu's `camera_fov`.)
 
 ## Movement
 
@@ -216,41 +214,3 @@ The edge-friction *trace* still runs (its result feeds `surfaceFriction`), but t
 2× multiplier `sv_edgefriction` is gone. `speed_walk`/`speed_runbase` are still the
 best statement of Troika's intended tuning and are what a port with no player
 animation should use — they are simply wired to nothing in the retail build.
-
-## Godot mapping
-
-> **Godot-target mapping (reference).** This section maps the constants above onto the read-only
-> Godot prototype (`E:\dev\elysium`: `CharacterBody3D`, `PlayerController.StepMove`). It is porting
-> reference, not the Unreal target — see `docs/rebuild-strategy.md` (Track A: custom
-> `UCharacterMovementComponent`, port `CGameMovement` line-by-line). The unit factor and the
-> box-hull / step-move requirements carry over unchanged.
-
-1 unit = 0.0254 m (`Assets`/`World` use the same factor).
-
-| Quantity | Source | Godot |
-|---|---|---|
-| gravity | 800 u/s² | 20.32 m/s² |
-| run (`speed_runbase`) | 225 u/s | 5.715 m/s |
-| walk (`speed_walk`) | 100 u/s | 2.54 m/s |
-| jump velocity | 200 u/s | 5.08 m/s (apex 0.635 m) |
-| `sv_stopspeed` | 16 u/s | 0.406 m/s |
-| air speed cap | 30 u/s | 0.762 m/s |
-| `sv_stepsize` | 18 u | 0.457 m |
-| `sv_maxvelocity` | 3500 u/s | 88.9 m/s |
-| eye height | 64 u | 1.626 m |
-| hull (box) | 72 × 32 u | 1.83 × 0.81 m |
-| ground tolerance | 2 u | 0.051 m (`FloorSnapLength`) |
-| FOV | 75 horizontal @ 4:3 | 59.84 vertical |
-| mouse | 0.022 °/count × sens 3 | 0.0011519 rad/count |
-
-`sv_friction` and `sv_accelerate` are per-second rates and carry over unitless.
-
-Eye height is the value `PlayerController` already used and is **not** confirmed
-against the binary. The hull is a `BoxShape3D` because StepMove requires it (above).
-
-Godot's `CharacterBody3D` has **no step-height property** — `floor_snap_length`
-only keeps a body attached going *down*. `PlayerController.StepMove` ports the
-algorithm above, with `Trace` standing in for `TracePlayerBBox`: `MoveAndCollide`
-is not a substitute, as its depenetration pass nudges the hull sideways out of a
-flush contact. `ApplyFloorSnap` afterwards re-derives `IsOnFloor`, which both
-attempts otherwise leave reflecting the raised (airborne) move.

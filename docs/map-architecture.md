@@ -87,7 +87,7 @@ the heavy build runs in the fresh shell world's `BeginPlay` behind a loading scr
 `LoadMap`. Map load splits into two stages:
 
 1. **Task threads** — file IO, OBJ/MTL/sidecar parsing, PNG decode. Pure data, fans out
-   across cores (the Godot viewer's `Prewarm` equivalent).
+   across cores.
 2. **Game thread, time-sliced** — `CreateTransient` texture uploads, mesh-section
    creation, actor spawns, budgeted per frame behind the loading screen so the world
    never hard-freezes.

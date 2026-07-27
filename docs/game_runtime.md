@@ -16,9 +16,9 @@ model, the RPG data, and the opening sequence:
 - `docs/level_transitions.md` — the map chain and the three spawn mechanisms.
 - `docs/recovered/dice-system.md` — the World-of-Darkness d10 resolution.
 - `docs/audio_pipeline.md` — the sound engine (Miles mixer, MS-ADPCM/MP3 codecs),
-  the bespoke SoundScheme ambience/music system, DSP rooms, and the Godot mapping.
+  the bespoke SoundScheme ambience/music system, DSP rooms.
 - `docs/animation_and_movers.md` — skeletal `.mdl` v2531 animation (bones, the RLE
-  keyframe tracks, skinning) and brush movers (doors/buttons/spinners), + Godot mapping.
+  keyframe tracks, skinning) and brush movers (doors/buttons/spinners).
 - `docs/rebuild-strategy.md` — the milestone roadmap this feeds.
 
 Evidence is tagged where it matters: **[VtMB]** = read from the user's own DLLs
@@ -585,8 +585,8 @@ Consolidated from the four investigations; each gates a real decision.
   (`DumpFuncs funcs=10571fc0`).
 - Confirm `ScheduleTask` truly enqueues into `CEventQueue` (vs. a separate list) — decompile
   the thunk behind PyMethodDef `ScheduleTask` `0x10590530`.
-- Fixed vs. variable step is settled as **variable** from cvar absence; a port may still
-  *choose* Godot's fixed physics tick — a deliberate divergence, not a fidelity break.
+- Fixed vs. variable step is settled as **variable** from cvar absence; Elysium-Unreal may
+  still *choose* a fixed physics tick instead — a deliberate divergence, not a fidelity break.
 
 **Scripting (from `docs/python_bridge.md`, still open)**
 - `G` default-on-miss value (assumed `0`) — confirm in Ghidra; silently changes branching.

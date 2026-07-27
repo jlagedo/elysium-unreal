@@ -22,12 +22,11 @@ Counts: **465** files mirrored (`system/` 97, `items/` 244, `camerashots/` 66,
 
 The authoritative consumer is the engine loader in `vampire.dll` — e.g. `DiceRolls.txt` is
 read by `FUN_101d92b0` (see `recovered/dice-system.md` / RE5), found by grepping the
-decompile for the filename/root-key string. The Godot prototype (`E:\dev\elysium`) parses
-**none** of these tables (it is a render/menu shell), so it offers no runtime consumer to
-inherit — only a reusable Source-KeyValues parser pattern and prose schemas for the core sheet
-tables in its `docs/game_runtime.md`. The "roadmap" column below is this project's design
-intent; the exact engine loader/schema for each is RE'd when its consumer is built, the way
-RE5 did for the dice tables.
+decompile for the filename/root-key string. No existing runtime parser covers these tables, so
+there is no prior implementation to check field usage against — only a reusable Source-KeyValues
+parser pattern and prose schemas for the core sheet tables in `docs/game_runtime.md`. The
+"roadmap" column below is this project's design intent; the exact engine loader/schema for each
+is RE'd when its consumer is built, the way RE5 did for the dice tables.
 
 ## `vdata/system/` (97) — the rulebook
 

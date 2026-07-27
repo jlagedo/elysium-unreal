@@ -3106,3 +3106,113 @@ explains ~0% of a median lit face and the bounce floor *is* the ambient level (C
   substrate to begin with — `UElysiumMainMenu` and `SElysiumDialogueBox` were already clean, so the
   work was all on the HUD. The meters are *published*, not drawn: **8.9** is what puts them on the
   8.6 stack, and **9.2** is what replaces the interim Slate box. `Subtitle` waits on **12.3**.
+
+- [x] **11.9 Save/load** *(= 9.5; landed 2026-07-27)* — `save-architecture.md` built in full.
+
+  **The container.** `UElysiumSaveGame` is the only UPROPERTY-reflected part: eight header fields
+  (`PayloadVersion`, `Map`, `Label`, `ClanName`, `Clan`, `PlaytimeSeconds`, `Timestamp`, `Kind`)
+  ahead of one `TArray<uint8> Payload`, so `ListSlots` reads a slot's line without inflating
+  anything. The payload is ours — `FElysiumSaveArchive`, an `FArchiveProxy` carrying the schema
+  version, plus one free `operator<<` per type. `FElysiumSaveVersion` is registered as an engine
+  custom version *and* written into an uncompressed prologue (`'ELYS'`, version, the `MinSupported`
+  floor, the uncompressed size), because a raw memory archive carries no custom-version container
+  of its own. `Write` stages the blocks, writes the prologue, then one `FArchiveSaveCompressedProxy`
+  Oodle stream. `Read` refuses four ways with a readable reason: not an Elysium payload, below the
+  floor, from a newer build, failed decompress. `PeekVersion` and `Describe` (readable name/value
+  lines, maps in sorted name order) round it out.
+
+  **Enumeration is the R2 walk.** `EElysiumField` became a flag word — `Key | Save`, defaulting to
+  both — and `FElysiumClassRegistry::SaveFields` is the walk: derived→base over the class chain,
+  first registration of a name wins, `Save`-flagged and round-trippable (getter *and* setter) only,
+  sorted lexically so the order is stable. Two flags were set by hand against the default:
+  `times_talked` is `Save`-only, and the law counter is `EElysiumField::None` because its setter is
+  a deliberate no-op and its durable home is the `Player` block.
+
+  **The correctness pivot: the omission baseline is post-Load, not zero.** The design read VtMB's
+  zero-value-omission rule literally, and built literally it is wrong in both directions. Recording
+  everything costs 1,868 of 1,869 records and 11.7 KB on `sp_tutorial_1`. Diffing against a
+  freshly-*constructed* reference is worse than useless: the live `Origin` is not a registered field
+  and cannot become one (Construct applies every key that has a field, and the def's `origin` key is
+  still the raw Source-space string), and an entity whose `Spawn()` arms `NextThink = 0` and whose
+  first think disarms it back to `NEVER` compares equal to a default — so it is omitted, and a
+  restored map re-runs every `logic_auto` ignition. Running `Spawn()` on a throwaway reference
+  entity to fix that is not available either: `Spawn` builds bodies, plays audio and fires outputs.
+  So the world keeps `TArray<FElysiumEntityState> Baseline`, captured once per entity at the end of
+  `Load()` (after Construct, Spawn *and* PostSpawn) and at the end of `CallEntitySpawn` for a
+  runtime entity, never updated by a restore. Cost: one record per entity in memory, one field walk
+  per map load. Result: 58/1869 records and 1712 B on `sp_tutorial_1`, 13/469 and 607 B on
+  `sm_pawnshop_1`, 67/2598 and 2041 B on `sm_hub_1`.
+
+  **`Freeze` / `ApplySnapshot`.** `Freeze` skips the player (the `Player` block's) and anything
+  answering `TravelsWithPlayer()` (those go in `AbsentEntities` — the `.HL3` equivalent, an entity's
+  own answer, so 9.8's inventory joins it by overriding one predicate). For the rest it captures the
+  full record — index, classname, targetname, origin, `bDead`/`bHidden`/`bSpawnCalled`, `NextThink`
+  and the `ScriptUnhide` think, the remaining output fire counts, every `Save` field in sorted
+  order, the leaf `Serialize` blob — diffs it against the baseline by a sorted merge, prunes the
+  fields to the changed ones, drops an unchanged leaf blob, and emits only if something differs.
+  Then the queue (entries, `NextSerialValue`) and the `env_fade`. `ApplySnapshot` is two passes:
+  re-create runtime entities in index order (`CreateRuntimeEntityNoSpawn` + `CallEntitySpawn`), then
+  apply every record. Index alignment holds because the def array fills `0..DefCount-1`, the player
+  always takes `DefCount`, and runtime entities replay in append order. The absent-entity `Kill()`
+  loop runs **last**, after the records — the ordering bug that showed up first as a resurrected
+  entity, because `bDead = false` from a stale record beat the set. Then the queue is replaced with
+  the saved entries (serials and the next-serial counter kept, `Activator`/`Caller` rebased onto the
+  new epoch by `RebaseHandle`), then the fade. Handles serialize as `{Index, bWasValid}` with the
+  epoch dropped: the archive is a byte layer with no world to ask, so re-stamping is the world's.
+
+  **The lifecycle is travel's own.** `AElysiumMapActor` applies a stored snapshot immediately after
+  `SpawnPlayer`, and resolves a restore placement right after the landmark spawn (the saved origin
+  is already the pawn's actor location, so it is used verbatim). `FElysiumEntityWorld::Teardown`
+  freezes and stores, gated on there having been a player, which excludes the menu backdrop and
+  headless logic worlds; `Detach()` is how a load suppresses the outgoing freeze.
+  `UElysiumGameStateSubsystem` holds the snapshot map and the visited-map list, and clears both on
+  `BeginNewGame`/`EndSession`.
+
+  **Determinism.** `ElysiumRng` owns five named `FRandomStream`s (`OneOfSet`, `LogicTimer`,
+  `LogicCase`, `Dice`, `Ambient`), each derived from one session seed by a fixed hash; `BeginNewGame`
+  seeds. The three live draws moved onto them (`OneOfSet` in the script natives, the `logic_timer`
+  interval and `logic_case`'s pick). Restore re-initialises each stream to its saved *current* value
+  — `FRandomStream` exposes no current-seed setter, and `Initialize(current)` continues the sequence
+  exactly. Byte-identity comes from sorting everything that lives in a hash container on the way out:
+  the `Maps` map, `G` and the quest map as key-sorted arrays, fields by name.
+
+  **The surfaces.** `UElysiumSaveSubsystem` (GI-scoped) owns slot naming (`Quick`, the `Auto0..4`
+  ring with its cursor, the requested name or the next free `Elysium-NNN`), `ListSlots` /
+  `ReadSlotHeader` / `DeleteSlot`, `CanSave`, `BuildPayload` (const, synchronous — atomic with
+  respect to the frame), `ApplyPayload`, and the async write via `AsyncSaveGameToSlot`. `CanSave`
+  refuses with a reason for: no session, a map load in flight, the menu backdrop, no entity world, no
+  player, an open sign panel, an open conversation — the last two because neither carries a resume
+  point the payload models. `Load` checks the target map is in `ExportedMaps()` **before** it touches
+  the session, so a bad payload fails with the session intact. `UElysiumGameFlowSubsystem::SaveGame`/
+  `LoadGame` stopped being stubs and delegate here, so the menu, the `save`/`load` commands,
+  `trigger_autosave` and MCP share one path; `FElysiumTriggerAutosave::OnTouchStart` now writes the
+  ring and reports the result in `GetDebugState`. Verbs: `elysium.save.slots`, `.cansave`,
+  `.delete <slot>`, `.diff <slot|live> [slot|live]`.
+
+  **The one leaf hook so far** is `FElysiumDoorBase::Serialize` — toggle state and the locked flag,
+  with a mid-swing save resolving to its destination pose and seating there on the first think
+  (`decisions.md` 2026-07-27).
+
+  *Acceptance met:* `Elysium.Substrate.SaveRoundTrip` (build, mutate through the real chokepoints,
+  hide, spawn a runtime entity, leave a delayed event, freeze, rebuild, apply, assert each came back,
+  then digest-equal; then the absent case), `Elysium.Substrate.SavePayload` (every block, write →
+  peek → read, two writes byte-identical, the four refusals, `Describe`),
+  `Elysium.Substrate.SaveSchema` (the walk reaches leaf and base names sorted and duplicate-free; the
+  law counter is in neither set; an unknown field name is skipped and the record still applies; a
+  classname mismatch skips the record; a restored stream continues its sequence) and
+  `Elysium.Content.MapSnapshot` (every exported map's real `.ents` world through the real container,
+  byte digest, an 8-line `Describe` diff printed on mismatch) are all green; whole suite green. Live
+  on `sp_tutorial_1`: with a door unlocked, a relay `ScriptHide`n, `G["Save_Probe"]` set and two
+  delayed inputs pending, `save` froze 63/1869 records into 1,947 payload bytes;
+  `elysium.quittomenu` travelled the `sm_hub_1` backdrop and ended the session (so the backdrop's own
+  script wrote `Haven_Bum` into a cleared `G`); `load` brought back the clock at the saved second,
+  both queue entries with their exact fire times *and* serials, the hidden relay, the unlocked door
+  with its `use_icon` back off `locked_icon`, `G` as saved with `Haven_Bum` gone, and the player on
+  the spot — and the beat machine kept running (`idle_timer`'s Python think firing on cadence) until
+  the restored delayed `ScriptUnhide` fired at its saved time and unhid the relay.
+
+  *Not in scope, named:* the **load menu** — the slot list has no screen; 8.6's Load item stays
+  disabled until 9.5's UI half. No **thumbnail** (capturing at save time costs a frame; store nothing
+  rather than the wrong frame). **Decals** reserve a slot in the `Maps` block and 10.7 fills it.
+  **`G.morgue`** has no runtime surface to save; when one lands it is a `G` key and needs no block
+  change. The **Play tier** save round-trip (save at beat *N*, load, replay to the end) is **11.10**'s.

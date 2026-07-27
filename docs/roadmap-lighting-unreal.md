@@ -7,4 +7,4 @@ L5.* → 7.8/10.1/10.3, X1 → 0.3, X2 → 0.4).
 
 Reference detail remains where it always was: `rendering-perf.md` (render-path facts, the
 SM6 requirement, the MegaLights-engagement checklist, tuning ladder) and `lighting.md`
-(engine-neutral VtMB lighting facts + Godot porting reference).
+(engine-neutral VtMB lighting facts).

@@ -1871,6 +1871,27 @@ append a correction as a new entry.
   means **no exported sequence carries START_ON_SPAWN**. Reading them in HL2 FGD order instead would
   have auto-started 27 of `sp_tutorial_1`'s 51 at map load and played the Sabbat cutscene on the
   loading screen.
+- **2026-07-27** — **Save/load, 11.9: a door saved mid-swing restores at its destination, not
+  mid-swing.** `FElysiumDoorBase::Serialize` writes the toggle state; on load, `GoingUp` resolves to
+  `AtTop` and `GoingDown` to `AtBottom`, and the door is seated in that pose on its first think.
+  What is *not* reproduced is the partial pose: VtMB's `.HL1` carries the mover's live origin and
+  `m_flMoveDistance`, so a retail save caught mid-swing resumes the swing from where it was.
+  Reproducing that needs the interpolation cursor as saved state on every mover class, and the
+  observable difference is one door's ≤1 s of travel at the moment of a load. The faithful behaviour
+  is recorded here; the divergence is the cheaper end state, and it is reversible by adding the
+  cursor to the leaf blob without touching the payload's schema (the blob is opaque and versioned
+  with the payload). Doors that were already `AtTop`/`AtBottom`, and the locked flag, are exact.
+
+  Alongside it, one structural call that is *not* a divergence from VtMB but is a divergence from
+  `save-architecture.md` as written: **omission diffs against a post-Load baseline, not against
+  zero.** The design read VtMB's zero-value-omission rule literally. Built literally it is wrong in
+  both directions — an entity's live origin is not a registered field and cannot become one, and an
+  entity whose `Spawn()` arms `NextThink` and whose first think disarms it compares equal to a
+  fresh default, so it would be omitted and a restored map would re-run every `logic_auto`
+  ignition. The world therefore captures one `FElysiumEntityState` per entity at the end of the map
+  build (after Construct, Spawn and PostSpawn) and diffs against that. It costs one field walk per
+  map load and one record per entity in memory, and it is what makes the payloads small for the
+  right reason: `sp_tutorial_1` records 58 of 1,869 entities on a fresh load, 63 after play.
 - **Pending** — **0.9, the uasset-bake architecture** (`docs/uasset-bake-spike.md`'s own
   terms: "earns a `decisions.md` entry or gets discarded"; de facto everything since
   2026-07-25 builds on it — trigger: before `spike/uasset-bake` merges to `main`).

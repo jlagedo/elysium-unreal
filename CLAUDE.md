@@ -187,7 +187,11 @@ facts, valid regardless of target engine. Organisation and maintenance rules: `d
 | `phy_vphysics.md` | the `.phy` collision-model format — convex ledges, authored mass, axis mapping |
 | `audio_pipeline.md` | codecs, mixer, DSP, the SoundScheme system |
 | `source_movement.md` | `CGameMovement` constants + formulas |
+| `lighting.md` | the WORLDLIGHTS (lump 15) format — `dworldlight_t`, lightstyles, texlights |
+| `color_gamma.md` | VtMB's DX8 fixed-function, LDR, gamma-space render pipeline |
+| `entity_visuals.md` | the entity-placed visuals plan — glow sprites, dynamic-model props, ropes, particles, signs |
 | `vtmb-ui.md` | **the UI as VtMB builds it** — the two UI stacks, the two schemes, `CVMainMenu`'s 1024×768 layout law, the HUD class inventory, the art trees |
+| `m0_menu_build.md` | the `GameUI.dll` decompile — `.fnt` format, TrackerScheme colours, dialog `.res` inventory |
 | `ui-architecture.md` | the Unreal re-skin — the CommonUI/Slate stack, design tokens, the virtual canvas, the menu backdrop |
 | `controls.md` | the input surface — keynames, bindable commands, default binds, cfg load order, control options UI |
 | `input-architecture.md` | the Unreal input design — the four planes, Enhanced Input over the command bus, remapping, gamepad, reserved keys |
@@ -207,13 +211,5 @@ facts, valid regardless of target engine. Organisation and maintenance rules: `d
 | `vdata-catalog.md` | the `vdata/` rulebook inventory — each table → system → roadmap task |
 | `recovered/dice-system.md` | the World-of-Darkness d10 resolver (verified: decompile + `DiceRolls.txt`) |
 
-Godot-prototype reference docs carry a banner — see `docs/CLAUDE.md`.
 `tools/ghidra/README.md` documents the headless-Ghidra RE workspace (the whole
 `tools/ghidra*/` + `tools/re/` trees are gitignored, local-only).
-
-## The Godot project (`E:\dev\elysium`)
-
-A **read-only reference**: the first-attempt prototype. Consulted for proven designs and
-exact data formats (Track A is a class-for-class port of its runtime) and for un-ported
-system source at `E:\dev\elysium\game\src`. No further work lands there. When a doc here
-mentions a bare `CLAUDE.md`, `docs/archive/…`, or `game/src/…` path, it means that repo.

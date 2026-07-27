@@ -91,7 +91,7 @@ it waits. Three standing rules:
 | **PP2 — the theatre cinematic** | the intro plays start to finish: choreography, scripted camera, line audio, subtitles, **eyes and lipsync — all block** (cont. 5); the PC is on camera, so its body stands here | 12.1–12.5, 8.11a (+ `sp_theatre` export/bake) *(11.7 [x])* |
 | **PP3 — land the tutorial** | the chain hands the player to Jack; the first conversation runs with sound and reactions | 9.2, 9.9 |
 | **PP4 — core mechanics** | faithful movement (owner call: **in** the path), camera modes, the body's gait, feeding, items + object interaction, dice, the vitals HUD | 4.7, 8.11b, 10.6, B6, 9.8, 9.6, 8.9 |
-| **PP5 — persistence** | save / quick / autosave + load mid-run; `trigger_autosave` live | 11.9 (= 9.5) |
+| **PP5 — persistence** | save / quick / autosave + load mid-run; `trigger_autosave` live | **[x]** *(11.9 = 9.5)* |
 | **PP6 — complete the tutorial** | stealth, disciplines, firearms — every retail beat to the exit, proven headlessly | 13.1, 13.2, 13.3 → P9's slice acceptance as `test.bat Play` |
 
 **After PP6 (the thaw):** 9.10 economy/barter, 8.8, 8.10, the P3/P7 look lanes, 10.1–10.5 and
@@ -112,8 +112,8 @@ deps below — refresh it whenever a task flips:
 2. **9.4 / 9.8 / 9.9 / 9.10 / 9.5** — the five systems the hinge unblocked. They now land *on*
    `FElysiumCombatCharacter` and `FElysiumPlayerRecord`: 9.4 turns the sheet's dynamic bag into
    registered fields and gives health a real derivation, 9.10 finishes the economy over the
-   `money` field that already exists, 9.8 fills the record's inventory half, and 9.5 (= 11.9)
-   walks the chain.
+   `money` field that already exists, 9.8 fills the record's inventory half, and 9.5 (= 11.9, **[x]**)
+   walks the chain — so each of the other four is saved the day it registers its state as fields.
 3. **8.11a** — the player body. **PL13 [x]** put all 56 clan bodies on disk beside the NPCs, so
    nothing is left to export; the task itself stays PP2-gated, because the theatre is where the
    body is first on camera.
@@ -398,7 +398,7 @@ M1 leftovers that live in this lane.
   source ≈ 55, so with VtMB's skies sitting almost entirely below that, **the backdrop's
   remaining gap to parity is this task's**, not the sky's. *Deps:* 3.6.
 - [ ] **3.8 Texture prewarm off the game thread** *(was M1.3)* — worker-thread batch in
-  `FElysiumTextureCache` (load is texture-bound; Godot `Prewarm` shape). *Deps:* none.
+  `FElysiumTextureCache` (load is texture-bound). *Deps:* none.
 - [ ] **3.9 Lightstyle clock pin + freeze** *(was L4.4)* — cvar-pinned phase + freeze toggle
   for reproducible A/B captures. *Deps:* none.
 - [ ] **3.10 Volumetric fog layer calibration** — B8b moved Source's distance fog into the
@@ -466,7 +466,7 @@ M1 leftovers that live in this lane.
   tutorial → `sm_pawnshop_1` at `dest_newgame + offset`. *Deps:* 1.6, 0.3.
 - [ ] **4.7 Source movement component** *(was M1.1; parallel-capable)* — port `CGameMovement`
   friction/accel/airaccel/StepMove into a `UCharacterMovementComponent` override
-  (`source_movement.md`, Godot `SourceMovement.cs`). **Faithful first** — this is the feel
+  (`source_movement.md`). **Faithful first** — this is the feel
   layer's known-good baseline and the thing every later tuning delta is measured against, so it
   lands line-by-line from the decompile and stays A/B-able (`remaster-direction.md` axis 3).
   Frame-rate independence, high-polling-rate mouse input and FOV control ride along (identical
@@ -592,7 +592,7 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
 ## P7 — Dressing & parity *(Track A completion; parallel lane)* — **open tasks FROZEN** *(playable-path rule 2)*
 
 - [ ] **7.1 Coronas** *(was L3.3 / M2)* — `.sprites` consumer: additive depth-tested
-  billboards (Godot `CoronaField.cs`), StartOff spawnflag filtering. *Deps:* 0.4.
+  billboards, StartOff spawnflag filtering. *Deps:* 0.4.
 - [x] **7.2 Decals** *(M2)* — `infodecal`s as **deferred `UDecalComponent`s** (owner call — the
   PMC-parity stage skipped; a deferred decal is lit exactly like its host wall, Lumen bounce
   included): the exporter writes a `<map>.decals` projector sidecar (Unreal cm), and the new
@@ -629,8 +629,8 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
 - [ ] **7.7 Shadow quality** *(was L3.4)* — contact shadows on hero lights, penumbra softness,
   within 0.1 budget. *Deps:* 0.1, 3.1, 3.2.
 - [ ] **7.8 A/B capture harness** *(was L5.1, re-based)* — scripted fixed-camera captures vs
-  **the original game** at the shared vantages (RE17's protocol; the Godot viewer is retired
-  as the reference — the original outranks a port of a port). The local half exists (2.9 +
+  **the original game** at the shared vantages (RE17's protocol — the original is the only
+  reference). The local half exists (2.9 +
   `shots_diff.py`); respect its measured noise floor — re-baseline after any bake or content
   rebuild. *Deps:* 0.3, 3.9, RE17.
 - [ ] **7.9 Weather & wetness** *(facts + design: `weather.md`)* — the rain system, never
@@ -995,12 +995,11 @@ draw on the same stack; NPCs stand in the world at their entity origins.
   export/bake set so genesis is **played, not skipped** (PP1). *Acceptance (PP1):* New Game
   walks genesis from real input, the created character lands on the player entity, and
   `pc.clan`/`pc.strength` read back from Python. *Deps:* 1.1, 9.7c, 11.4, 11.6.
-- [ ] **9.5 Save/load** *(design: `save-architecture.md`; built as **11.9**)* — the four blocks
-  (Session / Player / Maps / World) over the R2 field walk, the per-map snapshot lifecycle with the
-  absent-entity set, the event queue incl. deferred script strings, think times, `G` + morgue, and
-  owned RNG streams, inside a `UElysiumSaveGame` shell over a versioned compressed payload.
-  *Deps:* 1.4, 5.4, **11.4** (the player and its inventory are entities — persistence is entity
-  persistence, `savegame_format.md`).
+- [x] **9.5 Save/load** — **built as 11.9**; see that entry. The four blocks (Session / Player /
+  Maps / World) over the R2 field walk, the per-map snapshot lifecycle with the absent-entity set,
+  the event queue incl. deferred script strings, think times, `G`, and owned RNG streams, inside a
+  `UElysiumSaveGame` shell over a versioned compressed payload. The inventory half arrives with 9.8:
+  an item that overrides `TravelsWithPlayer()` joins the absent set with no change here.
 - [ ] **9.6 Dice resolver** *(RE5 [x])* — **mechanic verified** by decompiling the full roll
   cluster (ctor `FUN_101d88b0`, roller `FUN_101d8b40`, `vroll` handler `0x100d7040`, RNG/table
   path, loader `FUN_101d92b0`) **plus reading `vdata/system/DiceRolls.txt`** — no running game
@@ -1159,7 +1158,7 @@ Steps are ordered so each compiles, ships and is observable alone. **11.4 was th
   `NativeOnKeyDown` closes it. `FElysiumNewGameRequest` carries the retail chain as data with
   `elysium.SkipIntro` as the entry-point switch. New verbs: `elysium.appstate`, `.pausemenu`,
   `.quittomenu`, `.gameover`, `.newgame` (moved), `.SkipIntro`, `.LoadingScreen[MinTime]`; MCP
-  reports `app_state`. **Remaining:** `LoadGame`/`SaveGame` are logged seams until 11.9; the
+  reports `app_state`. **Remaining:** the
   game-over screen's copy is invented (VtMB's own death screen is un-RE'd); the loading screen
   covers the level-load flush only — the map actor's build pass after it is 10.4's. *Acceptance met:*
   Esc pauses and holds the world (clock frozen; `FrontEnd` deliberately does not — verified a no-op),
@@ -1290,12 +1289,26 @@ Steps are ordered so each compiles, ships and is observable alone. **11.4 was th
   crosshair / `+use` context cursor all draw off the published state, and opening the pause menu over
   Jack's conversation takes the box *and* the panel down and closing it restores both. As-built:
   `roadmap-archive.md`. *Deps:* 11.3. *Feeds:* 8.9, 9.2.
-- [ ] **11.9 Save/load** *(= 9.5, on this spine)* — `save-architecture.md` in full: the
-  `UElysiumSaveGame` shell over a versioned compressed payload, the four blocks, `EElysiumField::Save`
-  on the class-chain field tables (enumeration is the R2 walk, matched by name, zero-omitted), the
-  per-map snapshot lifecycle with the absent-entity set, the event queue + think times, `G`/morgue,
-  owned RNG streams, and the slot/quick/autosave ring. *Acceptance:* save mid-tutorial, quit to menu,
-  load, and the beat machine continues; the round-trip digest test is green. *Deps:* 11.4, 5.4.
+- [x] **11.9 Save/load** *(= 9.5, on this spine)* — `save-architecture.md` in full: the
+  `UElysiumSaveGame` shell over a versioned compressed payload (`'ELYS'` prologue + Oodle, four
+  refusals), the four blocks, `EElysiumField::Save` on the class-chain field tables (enumeration is
+  the R2 walk via `SaveFields`, matched by name), the per-map snapshot lifecycle with the
+  absent-entity set, the event queue + think times, `G`, owned RNG streams (`ElysiumRng`, five named
+  streams off one session seed), and the slot/quick/autosave ring. **Omission diffs against a
+  post-Load baseline, not zero** — the design's literal reading would have omitted every entity whose
+  `Spawn()` arms a think its first think disarms, so a restored map would re-run every `logic_auto`
+  ignition (`decisions.md` 2026-07-27, with the mid-swing-door call). `G.morgue` has no runtime
+  surface to save yet; when one lands it is a `G` key and needs no block change.
+  *Acceptance met:* in the built game a mid-tutorial save → `elysium.quittomenu` → load restores the
+  clock to the saved second, both pending queue entries with their exact fire times *and* serials,
+  the `ScriptHide`n relay still hidden, the unlocked door still unlocked, `G` as saved (and the
+  backdrop map's own writes gone), the player back on the spot — and the beat machine keeps running
+  (`idle_timer`'s Python think fires on cadence, the restored delayed input fires at its saved time).
+  `Elysium.Substrate.SaveRoundTrip`/`SavePayload`/`SaveSchema` and `Elysium.Content.MapSnapshot` are
+  green, the last one on a byte digest over the real container for every exported map. Snapshot
+  sizes: `sp_tutorial_1` 58/1869 records (1712 B), `sm_pawnshop_1` 13/469 (607 B), `sm_hub_1`
+  67/2598 (2041 B). New verbs: `elysium.save.slots`, `.cansave`, `.delete`, `.diff` (either side may
+  be `live`). As-built: `roadmap-archive.md`. *Deps:* 11.4, 5.4.
 - [ ] **11.10 Play test tier** *(S10)* — a fourth automation tier that drives a real headless world:
   the beat-script driver (`do`/`wait`/`assert`/`shot` over the command registry, injected input, `G`/
   quest/entity predicates and the 2.9 shot baseline), command-stream replay, the save round-trip, and
@@ -1481,7 +1494,7 @@ extraction"; durable format/behaviour facts fold into the owning topic docs
 | Chaos kinematic movers push/block poorly | doors feel wrong | 4.1 prototypes one door first |
 | Floor perf unproven (no 3060 on hand) | late surprise | look-gates until 10.3; lump-8 bake parked as contingency; Lumen Lite noted as a cheaper option (see Options) |
 | Tutorial-only calibration bias | rework on other maps | 0.3 second map early; all calibration provisional until 10.1 |
-| Sidecar space drift (Godot-era leftovers) | subtle geometry/logic bugs | 0.4 audit before any new consumer |
+| Sidecar space drift (legacy non-`UE_` exporter leftovers) | subtle geometry/logic bugs | 0.4 audit before any new consumer |
 | Save determinism erodes | broken saves late | standing rule since P1: no engine timers, own serializable structs |
 | Legal posture | project-ending | bring-your-own-game holds; nothing game-sourced committed — standing constraint on every task |
 | `GameInputWindows` is a beta plugin with a redist prerequisite | PlayStation pads regress or fail to enumerate on a player's machine | 10.6e authors device configs against the documented VID/PID set and keeps the mapping in `Config/DefaultGameInput.ini` (data, not code); Xbox/XInput remains the fallback path, so a GameInput failure degrades to "PS pads need Steam Input" rather than to no gamepad; `GameInputRedist.msi` is tracked as a 10.5 packaging prerequisite |

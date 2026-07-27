@@ -216,14 +216,14 @@ struct FElysiumPlayerRecord
     FElysiumLawState  Law;         // criminal / supernatural / investigate counters
     bool              bUnkillable; // events_player's MakePlayerUnkillable, which must cross a warp
     // 9.8 adds the inventory and the equipped handles (items are entities; these are their frozen
-    // form). `G` and the quest map are still the game-state subsystem's own stores until 11.9
-    // gathers the save blocks.
+    // form). `G` and the quest map stay the game-state subsystem's own stores; the save gathers
+    // them into the Session block beside this record (11.9).
 };
 ```
 
-`Hydrate(const FElysiumPlayerRecord&)` at map build, `Dehydrate()` when the world is torn down (and,
-at 11.9, into the save). The entity is the *live* view; the record is the truth that crosses a map
-boundary, and `UElysiumGameStateSubsystem::PlayerSheet()` resolves live-entity-first so a write can
+`Hydrate(const FElysiumPlayerRecord&)` at map build, `Dehydrate()` when the world is torn down and
+again into the save's `Player` block (11.9). The entity is the *live* view; the record is the truth
+that crosses a map boundary, and `UElysiumGameStateSubsystem::PlayerSheet()` resolves live-entity-first so a write can
 never land on the copy that is about to be overwritten.
 
 ### What the pawn is
@@ -689,11 +689,11 @@ roadmap task or a new P11 one.
 
 | # | Gap | Consequence today | Owner |
 |---|---|---|---|
-| 1 | ~~player is not an entity~~ | closed by **11.4**: the chain, the record, the pawn demoted to a body. Sheet mutation, damage/death and `!activator` are real; inventory is 9.8's and the save 11.9's | **11.4** |
+| 1 | ~~player is not an entity~~ | closed by **11.4**: the chain, the record, the pawn demoted to a body. Sheet mutation, damage/death and `!activator` are real; the record is a save block since **11.9**, and inventory is 9.8's | **11.4** |
 | 2 | legacy `DefaultInput.ini` bindings | nothing is rebindable, no gamepad, Esc does not pause, dev keys collide with player keys | 10.6 |
 | 3 | movement is stock CMC on a capsule | not VtMB's feel; step semantics differ; no baseline to A/B against | 4.7 (+ **11.6** box pawn) |
 | 4 | no chargen | New Game mocks Tremere male; clan-gated content untestable | 9.4 |
-| 5 | no save/load | a session cannot be resumed; `trigger_autosave` is inert | 9.5 on **11.9** |
+| 5 | ~~no save/load~~ | closed by **11.9**: the four blocks over the R2 field walk, the per-map snapshot lifecycle travel already produced, the queue and think times, owned RNG streams, and the slot/quick/auto ring. `trigger_autosave` writes the ring. The load *menu* is still 8.6's — the slot list has no screen | **11.9** |
 | 6 | no vitals HUD (the Canvas HUD covers reticle/signs only) | blood/health/frenzy/masquerade are *published* on the view state since **11.8** and nothing draws them; the sheet has no readout | 8.9 |
 | 7 | ~~pause has no input path~~ | closed by **11.3** — Esc on the player controller drives `UElysiumGameFlowSubsystem::TogglePause`, which holds the world and raises the pause menu, and the menu's scope comes from **11.5**'s stack (pause stays the flow's, never a scope property) | **11.3** |
 | 8 | ~~no camera modes~~ | closed by **11.7**: one camera, one weight stack, `CalcCamera` as the apply point; `togglecamera` and the cvar surface reproduced, and `SetCamera` lands on a real push/pop channel. The player-mesh half (fade band, `ShouldDrawLocalPlayer`) waits on 8.11 | **11.7** |
@@ -759,8 +759,10 @@ calls as one dated `decisions.md` entry — was recorded 2026-07-26 (cont. 4) an
    rule off a hand-built state with no RHI; no widget or HUD draw path references
    `FElysiumEntityWorld`; the front-end gating is one rule, and opening the pause menu over a
    conversation now takes the box down instead of drawing through it.
-9. **11.9 Save/load** — `save-architecture.md` in full. *Observable:* save mid-tutorial, quit to menu,
-   load, and the beat machine continues.
+9. **11.9 Save/load [x]** — `save-architecture.md` in full. *Observable:* save mid-tutorial, quit to
+   menu, load, and the beat machine continues — the clock, both pending queue entries with their
+   saved fire times and serials, hidden entities, an unlocked door, `G` and the player's spot all
+   come back, and the restored delayed input fires at its saved time.
 10. **11.10 Play test tier** — the beat-script driver, replay, the save round-trip test, the MCP input
     and time tools. *Observable:* `test.bat Play` walks the tutorial opening unassisted and fails
     loudly when a beat regresses.

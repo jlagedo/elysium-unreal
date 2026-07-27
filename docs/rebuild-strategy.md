@@ -13,22 +13,19 @@ quality-of-life. The stance, the three change layers (presentation / feel / logi
 tests, and the rule that **every behavioural divergence needs the RE done first and an explicit
 owner's call** live in **`docs/remaster-direction.md`** — read it with this doc.
 
-Unreal is the committed implementation. The Godot project (`E:\dev\elysium`) was the first
-attempt and is now a **read-only reference**: no further work lands there. It is consulted for
-proven designs and exact data formats until each system it covers is superseded here, then it
-falls away entirely.
+Unreal is the committed implementation.
 
 The plan has two tracks that run in parallel:
 
-- **Track A — parity**: reach the Godot prototype's rendering/walking state
-  (world, props, lights, water, decals, movement). The Godot viewer is the
-  reference implementation; every system here has a proven design and exact data
-  formats to copy. **The UI is not a parity target** — its Godot VGUI port is structural
-  reference for the modern re-skin, not a thing to reproduce (principle 8).
+- **Track A — parity**: reach VtMB's own rendering/walking state (world, props, lights,
+  water, decals, movement) — every system here has an exact data format, exported by this
+  repo's own pipeline, to build from. **The UI is not a parity target** — VtMB's own VGUI
+  screens are structural reference for the modern re-skin, not a thing to reproduce
+  (principle 8).
 - **Track B — the game layer**: entities, Source I/O, triggers, movers, +use,
-  travel, NPCs, scripting, dialogue, the main game loop. The Godot prototype
-  **never built this** — it exists only as reverse-engineering docs and exported
-  data. Unreal is the lead implementation here, designed Unreal-native from day one.
+  travel, NPCs, scripting, dialogue, the main game loop. This layer exists only as
+  reverse-engineering docs and exported data — Unreal is the lead implementation here,
+  designed Unreal-native from day one.
 
 ## Core principles
 
@@ -52,9 +49,8 @@ The plan has two tracks that run in parallel:
    (`make_boot_map.py`) — and no shipped code path invokes it. The architecture call, its split
    and its costs: `decisions.md` 2026-07-26 (cont. 6); the pipeline: `uasset-bake-spike.md`.
 3. **The pipeline lives in this repo.** `tools/` is the single home for the decoders; fixes
-   and new sidecar formats land here. It is not forked from Godot — it is moved here, the
-   Godot copy retired. The intermediates stay engine-neutral so the format work is not
-   Unreal-specific, but there is only one consumer now.
+   and new sidecar formats land here. The intermediates stay engine-neutral so the format work
+   is not Unreal-specific, but there is only one consumer.
 4. **Bring-your-own-game holds.** Nothing game-sourced is committed to this repo. This is
    the load-bearing legal posture — prior community rebuilds died to a C&D, not to
    technical failure.
@@ -67,8 +63,7 @@ The plan has two tracks that run in parallel:
    `mdl_v2531.md`, `entity_visuals.md`, `color_gamma.md`, `level_transitions.md`,
    `m0_menu_build.md` (the original UI's structure + `GameUI.dll` findings — reference for the
    re-skin, not a port target), and `recovered/dice-system.md`. Do not re-derive what those already
-   state. Un-ported system *source* (for class-for-class porting) remains in the read-only
-   Godot repo at `E:\dev\elysium\game\src`.
+   state.
 7. **Remaster: modernize presentation, reproduce behaviour.** Three change layers, three rules
    (`remaster-direction.md`): **presentation** (UI, type, HUD, textures, post) modernizes freely
    under the art-direction test; **feel** (movement, camera, combat) is built faithful first and
@@ -140,7 +135,7 @@ no swap, scale, or winding flip:
 
 ## Sidecar contracts (what the runtime consumes)
 
-All under `tools/out/<map>/`. Formats are fixed by the pipeline and shared with Godot:
+All under `tools/out/<map>/`. Formats are fixed by the pipeline:
 
 | File | Content | Format |
 |---|---|---|
@@ -161,37 +156,38 @@ All under `tools/out/<map>/`. Formats are fixed by the pipeline and shared with 
 
 ---
 
-# Track A — parity with the Godot prototype
+# Track A — world/rendering parity with VtMB
 
-Class-for-class mapping of the Godot runtime (`E:\dev\elysium\game\src`), with the
-Unreal-native substitutions:
+The system-by-system implementation targets for reproducing VtMB's own rendering and
+movement, Unreal-native throughout:
 
-| Godot (C#) | Unreal (C++) | Mechanism |
-|---|---|---|
-| `ContentPaths.cs` | `FElysiumContentPaths` | Content root at `tools/out` (dev), one-line switch to packaged location later. |
-| `ObjModel.cs` | `FElysiumObjModel` | OBJ+MTL parser (albedo `map_Kd`, alpha-masked emissive `map_Ke`, alpha/blend flags). Extend `FElysiumMaterialDef` to the rest of the Godot `MaterialDef` field set: envmask, bump, WVT blend, water/decal params. |
-| `TextureCache.cs` | `FElysiumTextureCache` | DDS (native DXT + mips) preferred, PNG fallback. Add: worker-thread prewarm batch (Godot `Prewarm` shape — load is texture-bound), cubemap load (`UTextureCube` from six faces). |
-| `MaterialFactory.cs` | `FElysiumMaterialFactory` | MIDs off the master-material set below, parameters bound from `MaterialDef`. |
-| `WorldLoader.cs` | `AElysiumMapActor` | adopts the baked level's `SM_World_*` chunk actors (one per 2048 cm cell, split into Nanite and non-Nanite buckets) by tag. The per-map owner of all Track B subsystems. |
-| `BrushCollision.cs` | brush collision in map actor | `UBodySetup` + `FKConvexElem` per `.hulls` brush; runtime trimesh from `.dispcol`. Replaces render-trimesh collision as the primary walkable surface (keep trimesh for displacement-heavy maps). |
-| `LightRig.cs` + `Lightstyles.cs` | `UElysiumLightRig` (component on map actor) | Point/spot/directional from `.lights`; lightstyle patterns ticked as intensity curves; texlight clustering per the Godot implementation. |
-| `CoronaField.cs` | billboard `UMaterialBillboardComponent`s or one Niagara system fed `.sprites` | additive glow sprites. |
-| `WaterReflector.cs` (SubViewport mirror) | **Single Layer Water** material + Lumen/SSR reflections | no manual mirror camera — strict upgrade. |
-| decals (corner-wrapped quads) | **`UDecalComponent`** deferred projection from the `.decals` sidecar (`M_Decal`, `DBM_TRANSLUCENT`) | went straight to deferred (the PMC-parity stage was skipped): a GBuffer decal is lit like its host wall, Lumen indirect included. |
-| `.cube` LUT | post-process Color Grading LUT (transient `UTexture` into per-map `FPostProcessSettings`) | native. |
-| `.env` | sky material from six sky PNGs + a **per-primitive distance-fog term** in the surface masters (`ElysiumFog.h`); `UExponentialHeightFogComponent` keeps the volumetric layer | native. The distance fog cannot be an engine fog: the world and the 3D-skybox miniature carry two authored sets and share screen depth. |
-| `SourceMovement.cs` / `PlayerController.cs` | custom `UCharacterMovementComponent` override | port the Source `CGameMovement` math line-by-line — `SourceMovement.cs` + `docs/source_movement.md` are the reference. Friction/accel/airaccel/StepMove constants verified against the decompile. |
-| props (`MultiMesh`) | one baked `SM_*` per unique model, placed as `AStaticMeshActor`s | baked offline from `props/*.obj` with skins, collision and authored mass on the asset (`props/*.skins`, `props/*.phys`); the map actor adopts the placements by tag. |
-| VGUI2 menu (`Ui/Vgui/*`) | **modern Slate/UMG UI** (not a VGUI port) | Screen inventory, panel anatomy, hierarchy and iconography carry over from `.res`/`trackerscheme.res`; the runtime is a resolution-independent Slate/UMG stack with vector type. No 640×480 scale box, no bitmap `.fnt` atlas, no classic mode. `remaster-direction.md` → axis 1; the Godot VGUI implementation and `m0_menu_build.md` are structural reference. |
-| `DevConsole.cs` | engine console commands now; Slate console only if it earns its keep | `elysium.*` commands cover current needs. |
+| Unreal (C++) | Mechanism |
+|---|---|
+| `FElysiumContentPaths` | Content root at `tools/out` (dev), one-line switch to packaged location later. |
+| `FElysiumObjModel` | OBJ+MTL parser (albedo `map_Kd`, alpha-masked emissive `map_Ke`, alpha/blend flags). Extend `FElysiumMaterialDef` to the full VtMB material field set: envmask, bump, WVT blend, water/decal params. |
+| `FElysiumTextureCache` | DDS (native DXT + mips) preferred, PNG fallback. Add: worker-thread prewarm batch (load is texture-bound), cubemap load (`UTextureCube` from six faces). |
+| `FElysiumMaterialFactory` | MIDs off the master-material set below, parameters bound from `MaterialDef`. |
+| `AElysiumMapActor` | adopts the baked level's `SM_World_*` chunk actors (one per 2048 cm cell, split into Nanite and non-Nanite buckets) by tag. The per-map owner of all Track B subsystems. |
+| brush collision in map actor | `UBodySetup` + `FKConvexElem` per `.hulls` brush; runtime trimesh from `.dispcol`. Replaces render-trimesh collision as the primary walkable surface (keep trimesh for displacement-heavy maps). |
+| `UElysiumLightRig` (component on map actor) | Point/spot/directional from `.lights`; lightstyle patterns ticked as intensity curves; texlight clustering. |
+| billboard `UMaterialBillboardComponent`s or one Niagara system fed `.sprites` | additive glow sprites. |
+| **Single Layer Water** material + Lumen/SSR reflections | no manual mirror camera. |
+| **`UDecalComponent`** deferred projection from the `.decals` sidecar (`M_Decal`, `DBM_TRANSLUCENT`) | went straight to deferred: a GBuffer decal is lit like its host wall, Lumen indirect included. |
+| `.cube` LUT | post-process Color Grading LUT (transient `UTexture` into per-map `FPostProcessSettings`) — native. |
+| `.env` | sky material from six sky PNGs + a **per-primitive distance-fog term** in the surface masters (`ElysiumFog.h`); `UExponentialHeightFogComponent` keeps the volumetric layer — native. The distance fog cannot be an engine fog: the world and the 3D-skybox miniature carry two authored sets and share screen depth. |
+| custom `UCharacterMovementComponent` override | port the Source `CGameMovement` math line-by-line — `docs/source_movement.md` is the reference. Friction/accel/airaccel/StepMove constants verified against the decompile. |
+| one baked `SM_*` per unique model, placed as `AStaticMeshActor`s | baked offline from `props/*.obj` with skins, collision and authored mass on the asset (`props/*.skins`, `props/*.phys`); the map actor adopts the placements by tag. |
+| **modern Slate/UMG UI** (not a VGUI port) | Screen inventory, panel anatomy, hierarchy and iconography carry over from `.res`/`trackerscheme.res`; the runtime is a resolution-independent Slate/UMG stack with vector type. No 640×480 scale box, no bitmap `.fnt` atlas, no classic mode. `remaster-direction.md` → axis 1; `m0_menu_build.md` is structural reference. |
+| engine console commands now; Slate console only if it earns its keep | `elysium.*` commands cover current needs. |
 
-**Success criterion for Track A**: side-by-side A/B match with the Godot viewer on
-`sp_tutorial_1` and the hub maps (`sm_hub_1`, `ch_hub_1`, `hw_hub_1`, `la_hub_1`).
+**Success criterion for Track A**: `sp_tutorial_1` and the hub maps (`sm_hub_1`, `ch_hub_1`,
+`hw_hub_1`, `la_hub_1`) reproduce VtMB's own look and movement feel, checked against the
+`shots.bat` screenshot-regression baseline (`tools/shots_diff.py`) rather than eyeballed.
 
 ## Master materials (the one hand-authored asset set)
 
 `UMaterial` cannot be created at runtime; everything else can. The repo commits a small,
-game-agnostic set with parameter slots — the analogue of Godot's `.gdshader` files:
+game-agnostic set with parameter slots:
 
 - `M_VtMB_World` *(exists — albedo + alpha-masked selfillum emissive)* — grows into
   `M_World_Opaque` (bump, envmap mask + cube, WVT second layer + vertex-color blend). The
@@ -215,10 +211,10 @@ These encode shading logic, not game content — they belong in `Content/` perma
 # Track B — the game layer (Unreal leads)
 
 Everything in this track consumes data that is **already exported** (`.ents` carries the
-complete entity/I/O surface) but has no runtime consumer in either engine. Design targets
-come from the decompile-backed docs in `docs/`, not from Godot code. The concrete object
-model for B1/B2 (core types, interaction flows, and the two-phase substrate→debug-layer
-build plan) is `docs/engine-core.md`; the debug layer itself is `docs/debug-tooling.md`.
+complete entity/I/O surface) but has no runtime consumer yet. Design targets come from the
+decompile-backed docs in `docs/`. The concrete object model for B1/B2 (core types,
+interaction flows, and the two-phase substrate→debug-layer build plan) is
+`docs/engine-core.md`; the debug layer itself is `docs/debug-tooling.md`.
 
 ## B1. Entity substrate
 
@@ -267,9 +263,8 @@ maps, 1,591 retail).
   queue; it is ~100 lines.
 - Implement `logic_relay` early — it is the biggest output source in the game (5,418
   outputs game-wide) and the tutorial's spine.
-- Debug: port the Godot entity gizmo/inspector idea onto the HUD — F1 pick shows an
-  entity's record and lets you fire inputs by hand. This is the primary test harness
-  for the whole track.
+- Debug: an entity gizmo/inspector on the HUD — F1 pick shows an entity's record and
+  lets you fire inputs by hand. This is the primary test harness for the whole track.
 
 ## B3. Triggers, +use, and movers
 
@@ -308,8 +303,8 @@ to matter — not before.
   *Pipeline addition required*: export models referenced by entities (only
   GAME_LUMP static props are exported today). Skeletal ones ride the `.glb` path.
 - **Physics props** (`prop_physics` ×54, `phys_hinge` ×12): **Chaos rigid bodies** with
-  convex hulls from the render mesh, constraints for hinges. This is a straight
-  Unreal win — the Godot plan had nothing here.
+  convex hulls from the render mesh, constraints for hinges — this system is built from
+  scratch, with no prior implementation to de-risk it against.
 - **NPCs**: spawn from `npc_*` / `npc_maker` entity data at their origins;
   **glTFRuntime** plugin loads `npc/*.glb` (skeletal mesh + skeleton + animation)
   at runtime. *Pipeline additions*: batch NPC model export beyond the one test
@@ -376,10 +371,10 @@ on the map actor:
 
 ## B8. Audio
 
-Fully RE'd in `audio_pipeline.md`, zero runtime exists in either engine:
+Fully RE'd in `audio_pipeline.md`, no runtime exists yet:
 
 - MS-ADPCM WAV (~92% of SFX): decode in C++ (the codec is simple) into
-  `USoundWaveProcedural`/PCM — no offline transcode step needed, unlike Godot.
+  `USoundWaveProcedural`/PCM — no offline transcode step needed.
 - MP3 dialogue/music: runtime decode likewise.
 - `ambient_generic` (×76 in tutorial) from entity data; **SoundScheme** system
   (`sound/schemes/*.txt`) for ambience.
@@ -394,23 +389,21 @@ foundation + dlgexpr (B6.2) + audio-by-path. The **dialogue content is reproduce
 (lines, conditions, branch structure, the 89 malformed snippets' error-to-false behaviour);
 only its presentation modernizes — legible type, reflowing line lists, subtitles, and a layout
 that is not bound to 640×480. Chargen, combat, and the full RPG sheet come after the tutorial
-plays end-to-end — `rebuild-strategy.md` in the Godot repo holds the long-tail toolkit table.
+plays end-to-end.
 
 ---
 
-## Where Unreal beats the Godot implementation
+## What Unreal's own tech gives this build
 
 - **Baked geometry + fully dynamic lighting**: the offline bake gives every surface real
   DDC-fitted Lumen surface-cache cards and distance fields — the thing a runtime-built mesh
   can never have, and the reason the bake exists. Hardware ray-traced Lumen for
   GI/reflections. **MegaLights** for the many
-  shadowed point lights (394 lights in the tutorial alone). Virtual Shadow Maps.
-  Replaces Godot's SDFGI+SSAO+planar-reflection stack, and can eventually replace
-  per-surface `$envmap` cubemaps with real reflections.
-- **Native subsystems replace hand-rolled ones**: deferred decals, Single Layer Water
-  (vs. SubViewport mirror cameras), post-process LUT, exponential height fog, Niagara.
-- **Chaos physics**: `prop_physics`, `phys_hinge`, breakables, later ragdoll — the
-  Godot prototype has no physics-prop story at all.
+  shadowed point lights (394 lights in the tutorial alone). Virtual Shadow Maps. Can
+  eventually replace per-surface `$envmap` cubemaps with real reflections.
+- **Native subsystems replace hand-rolled ones**: deferred decals, Single Layer Water,
+  post-process LUT, exponential height fog, Niagara.
+- **Chaos physics**: `prop_physics`, `phys_hinge`, breakables, later ragdoll.
 - **AI stack**: runtime NavMesh + Behavior Trees/StateTree instead of porting Source
   node-graph navigation.
 - **Audio engine**: submixes/attenuation/concurrency native; MS-ADPCM is the only
@@ -467,7 +460,7 @@ Vertical slice: **play `sp_tutorial_1` start to finish, then walk into
   lightstyles, and `.hulls`/`.dispcol` brush collision are done — see "M1 — remaining
   tasks" for what's left.)
 - **M2 — dressing parity**: props via ISM (+ convex collision), decals, Single Layer
-  Water, coronas, A/B match vs. the Godot viewer on tutorial + hub maps.
+  Water, coronas, checked against the `shots.bat` baseline on tutorial + hub maps.
 - **M3 — entity backbone**: entity world + registry, event queue + input dispatch,
   visibility subsystem, triggers, movers (doors/buttons/elevator), +use,
   `logic_relay`/`math_counter`/`logic_timer`, changelevel + landmark travel, entity
@@ -485,7 +478,7 @@ Vertical slice: **play `sp_tutorial_1` start to finish, then walk into
 
 Ordering rationale: M3 lands before menu/NPC work because every downstream system
 (dialogue, AI, quests, saves) sits on the entity/I-O/scripting spine, and it is the
-one part with no Godot reference to fall back on — de-risk it earliest.
+one part built from scratch with no prior implementation to lean on — de-risk it earliest.
 
 ## Repository facts
 

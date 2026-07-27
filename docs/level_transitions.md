@@ -9,8 +9,9 @@ and the Unofficial Patch.
 **1. `info_player_start` (bare map load).** `Vampire/dlls/vampire.dll` registers
 the `info_player_start` classname; on a plain `map <name>` console load the game
 DLL spawns the player at that entity's `origin`/`angles`. This is the path the
-Elysium viewer emulates — `bsp_to_scene.py` writes the map's `info_player_start`
-to the `<name>.spawn` sidecar and `WorldLoader.ReadSpawn` uses it.
+pipeline and runtime reproduce — `UE_bsp_to_scene.py` writes the map's
+`info_player_start` to the `<name>.spawn` sidecar and `AElysiumMapActor::ReadSpawn`
+uses it.
 
 **2. Landmark transition (`trigger_changelevel` → `info_landmark`).** When one map
 sends you to another through a `trigger_changelevel` (`map` + `landmark` keys), the
@@ -77,8 +78,8 @@ Retail's start is inside the warehouse (surrounding faces `METAL/GALVANIZEDA`,
 `trigger_multiple "trig_off_porch"`, the bus-stop sign prop and the `newgame`
 landmark all moved with it.
 
-So the viewer spawning "in a different place" than the old retail export is the
-patched game's actual opening — not an export bug.
+So spawning "in a different place" than the old retail export is the patched
+game's actual opening — not an export bug.
 
 ## Exporter behaviour
 
@@ -87,15 +88,7 @@ unordered ENTITIES scan, then `break`). Safe on every hub shipped so far (each h
 exactly one), but on a hypothetical multi-`info_player_start` map whichever the
 compiler emitted first wins, not a deliberate choice.
 
-The viewer never reproduces the landmark path (paths 2/3): the runtime has no
-`trigger_changelevel`/`info_landmark` layer yet, so every map loads as a bare
-`map` command and spawns at `info_player_start`.
-
-## Dev spawn override
-
-`GameScene.SpawnOverrides` is a small per-map table of Godot-space
-(feet + yaw) spawn pins, consulted **before** the `.spawn` sidecar. It exists so a
-map can be pinned to a working spot during rendering work without touching (and
-being clobbered by a re-export of) the sidecar. Currently `sp_tutorial_1` is pinned
-to the warehouse-alley spot near `brick/trnwllbase`; remove the entry to fall back
-to the map's real `info_player_start` (the theatre porch).
+The runtime reproduces the landmark path (paths 2/3): `UElysiumMapSubsystem::RequestLandmarkTravel`
+captures the player's source-landmark offset and view yaw, defers the travel to the next tick, and
+`AElysiumMapActor::ResolveLandmarkSpawn` seats the player at `dest_landmark + offset` on the far
+side (roadmap 4.6). A bare `map` command still bypasses this and spawns at `info_player_start`.

@@ -91,8 +91,8 @@ live backdrop behind the menu is the feature) and **Boot is reachable from nowhe
 | `BootFromCommandLine()` | at GI `Initialize`: *decides* the boot plan (dev map / new game / menu). No world exists yet, so the first `NotifyWorldReady` executes it, once |
 | `NotifyWorldReady(Mode)` | the game mode's one `BeginPlay` call. A pending load → `SpawnPendingMap` then `FrontEnd` (backdrop: seat the `elysium.MenuVantage` camera) or `Playing`; no pending load → this is the boot world, run the plan |
 | `NewGame(FElysiumNewGameRequest)` | clan/sex/history/spends + an `EntryPoint` (`story` \| `tutorial` \| `<map>[@<landmark>]`). The destination is checked against `ExportedMaps()` **before** `BeginNewGame` runs, because seeding is destructive. `elysium.SkipIntro` (default 1) rewrites `story` to the tutorial landmark until P12 lands the theatre act |
-| `LoadGame` / `SaveGame` | the seam every caller (menu, `trigger_autosave`, quicksave, MCP) goes through. Logged stubs until **11.9** |
-| `QuitToMenu()` | travel the backdrop map, then `UElysiumGameStateSubsystem::EndSession` (clear `G`, quests, the player record; rewind the clock). `G` and the quest map join the record as save blocks at 11.9 |
+| `LoadGame` / `SaveGame` | the seam every caller (menu, `trigger_autosave`, quicksave, MCP) goes through; both delegate to `UElysiumSaveSubsystem` (11.9). `SaveGame` with no slot resolves by kind; `LoadGame` with no slot takes the newest on disk |
+| `QuitToMenu()` | travel the backdrop map, then `UElysiumGameStateSubsystem::EndSession` (clear `G`, quests, the map snapshots, the player record; rewind the clock) |
 | `ReloadMap()` / `SetPaused` / `TogglePause` / `TriggerGameOver` | the rest of the surface; `OnAppStateChanged` is the delegate the UI listens on |
 
 **The screen is a pure function of the state** (`ApplyMenuForState`, called from the one state
@@ -253,6 +253,50 @@ previous frame's publish. A dialogue pick routes back out through
 `elysium.dlg.choose` uses, so player input goes the other way through one door. The map-actor handle
 still on the HUD serves the dev console verbs (`elysium.lights`/`.props`/`.lightprobe`), which are
 not presentation.
+
+## Persistence (11.9)
+
+**S9 — enumeration is the R2 walk, not a save function.** Design: `docs/save-architecture.md`.
+VtMB facts: `docs/savegame_format.md`.
+
+| Type | Role |
+|---|---|
+| `UElysiumSaveGame` (`Public/ElysiumSaveGame.h`) | the only UPROPERTY-reflected part: the header fields (`PayloadVersion`, `Map`, `Label`, `ClanName`, `Clan`, `PlaytimeSeconds`, `Timestamp`, `Kind`) ahead of one `TArray<uint8> Payload`. `USaveGame` buys slot paths and `AsyncSaveGameToSlot`; it owns none of the content |
+| `ElysiumSaveTypes.h` | the four blocks as plain structs — `FElysiumSessionBlock` (clock, `G`, quests, the RNG snapshot), `FElysiumPlayerRecord` (11.4's, reused whole), `TMap<FString, FElysiumMapSnapshot>`, `FElysiumWorldBlock` — plus `FElysiumEntityState`, `FElysiumSavedFade`, `FElysiumSaveHeaderData` and `FElysiumSaveVersion` (schema id, `MinSupported` floor, a registered engine custom version) |
+| `FElysiumSaveArchive` (`Public/ElysiumSaveArchive.h`) | an `FArchiveProxy` carrying the payload version, plus a free `operator<<` per type. A handle serializes as `{Index, bWasValid}` with the **epoch dropped** — the archive has no world to re-stamp against, so `ApplySnapshot` does it. `ElysiumSave::Write`/`Read`/`PeekVersion`/`Describe`: blocks → staging buffer → an uncompressed `{'ELYS', version, floor, size}` prologue → one Oodle stream. Four refusals, each with a readable reason: bad magic, below the floor, from a newer build, failed decompress |
+| `UElysiumSaveSubsystem` (`Public/ElysiumSaveSubsystem.h`) | GI-scoped. Slot naming (`Quick`, the `Auto0..4` ring, `Elysium-NNN`), `ListSlots`/`ReadSlotHeader`/`DeleteSlot`, `CanSave(FString& OutReason)`, `BuildPayload` (const), `ApplyPayload`, `Save`, `Load`. Verbs: `elysium.save.slots`, `.cansave`, `.delete <slot>`, `.diff <slot\|live> [slot\|live]` |
+| `ElysiumRng` (`Public/ElysiumRng.h`) | S8's owned streams: one `FRandomStream` per `EElysiumRngStream` (`OneOfSet`, `LogicTimer`, `LogicCase`, `Dice`, `Ambient`), all derived from one session seed, snapshot/restore as `{initial, current}`. `FMath::Rand()` is banned in gameplay code |
+| `FElysiumClassRegistry::SaveFields` | the walk: derived→base over the class chain, first registration of a name wins, `Save`-flagged and round-trippable only, sorted lexically. `EElysiumField` is the flag word on `Field()`; `ElysiumFieldDefault` is `Key \| Save` |
+
+**Omission diffs against a post-Load baseline.** `FElysiumEntityWorld` holds one
+`FElysiumEntityState` per entity captured at the end of the map build (after Construct, Spawn and
+PostSpawn) and at the end of `CallEntitySpawn` for a runtime entity; a restore never updates it.
+`Freeze` captures each entity the same way and emits only the rows that differ. Comparing against a
+fresh-constructed default instead would omit the wrong things: the live `Origin` is not a registered
+field and cannot be one, and an entity whose `Spawn()` arms `NextThink` and whose first think disarms
+it back to `NEVER` would compare equal to a default, so a restored map would re-run every
+`logic_auto` ignition. Measured: `sp_tutorial_1` records 58 of 1,869 entities, 1.7 KB compressed.
+
+**`Freeze` / `ApplySnapshot` are the whole lifecycle, and travel uses the same pair.**
+`AElysiumMapActor` applies a stored snapshot right after `SpawnPlayer`; `FElysiumEntityWorld::Teardown`
+freezes the map and hands it to `UElysiumGameStateSubsystem::StoreMapSnapshot`, gated on there having
+been a player so the menu backdrop and headless logic worlds store nothing. `Detach()` is how a load
+suppresses the outgoing freeze. Order inside `ApplySnapshot`: re-create runtime entities in index
+order, apply every record, *then* kill the absent set — so a stale record cannot resurrect an entity
+the `AbsentEntities` set says is gone — then replace the queue with the saved entries (serials and
+next-serial kept, `Activator`/`Caller` rebased onto the new epoch), then the fade. A `DefCount` or
+per-record classname mismatch is logged and skipped, never mis-applied.
+
+`FElysiumEntity::Serialize(FElysiumSaveArchive&)` is the leaf hook for state the field walk cannot
+reach; `TravelsWithPlayer()` is the entity's own answer to whether it belongs in the absent set.
+`FElysiumDoorBase` is the one implementer of the former: it saves the toggle state and the locked
+flag, and resolves a mid-swing save to its destination pose (`docs/decisions.md` 2026-07-27).
+
+**A save is refused rather than written wrong.** `CanSave` says no with a reason when there is no
+session, a map load is in flight, the world is the menu backdrop, there is no entity world or player,
+a sign panel is open, or a conversation is open. `Load` checks the target map is exported *before* it
+touches the session. Both directions run through `UElysiumGameFlowSubsystem::SaveGame`/`LoadGame`, so
+the menu, `trigger_autosave`, the `save`/`load` commands and MCP share one path.
 
 ## Input scopes (11.5)
 

@@ -25,8 +25,8 @@ inline FVector ElysiumGizmoAnchor(const FElysiumEntity& Ent)
 inline constexpr float ElysiumGizmoScale = 0.28f;
 inline constexpr float ElysiumGizmoHalfExtent = 100.0f * ElysiumGizmoScale * 0.5f;
 
-// Coarse classname -> debug category, ported from the Godot viewer (WorldLoader.EntColor).
-// Read-at-a-glance keying over 100+ classnames without a per-class table. One enum drives the
+// Coarse classname -> debug category. Read-at-a-glance keying over 100+ classnames without a
+// per-class table. One enum drives the
 // three things that have to agree: the gizmo colour, the World Viz class filter, and its labels.
 enum class EElysiumGizmoClass : uint8
 {

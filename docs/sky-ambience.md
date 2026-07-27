@@ -14,7 +14,7 @@ live in the tracker set:
 - **The decisions** (D1–D7; D6 dissolved, D4 amended, D3 corrected): `decisions.md`,
   2026-07-26.
 
-Related: `docs/lighting.md` (WORLDLIGHTS facts, Godot-banner), `docs/light-attribution.md`
+Related: `docs/lighting.md` (WORLDLIGHTS facts), `docs/light-attribution.md`
 (fixture-vs-fill), `docs/rendering-perf.md` (why Lumen is load-bearing), `docs/color_gamma.md`
 (the LDR look), `docs/asset-enhancement.md` (upscaled sky faces as an A/B layer).
 
@@ -22,7 +22,7 @@ Related: `docs/lighting.md` (WORLDLIGHTS facts, Godot-banner), `docs/light-attri
 
 VtMB's ambience was never explored as its own subject — the sky path was built bottom-up
 (decode faces → cube → SkyLight + backdrop) on **assumed** conventions, and the ambience model
-was inherited from the Godot prototype's calibration rather than derived from how the original
+was inherited from an earlier calibration pass rather than derived from how the original
 engine works. Two things force the revisit:
 
 1. **The sky cube rendered wrong.** The decoded faces are correct as images (upright, level
@@ -63,7 +63,7 @@ engine works. Two things force the revisit:
 | **K2 is settled** — an Unreal cube slice is the plain **D3D** face table applied to the **raw** world vector, with no swizzle anywhere in the chain. Unreal being Z-up where that table assumes Y-up, four of the six slices are stored rotated against an upright view along their own axis (+X 90° CCW, −X 90° CW, +Y 180°, −Y none, ±Z with world +Y at the top) | UE 5.8 source ×4 + Epic's authoring doc (see below) |
 | **K3/K5 are settled** — world surfaces render from lump 8 alone; lump 15 is read at runtime *only* by the light cache, which lights dynamic models and static props. A model's ambient term is a 6-face ambient cube built by a 162-ray radiosity sweep that samples `dface_t.avgLightColor` and multiplies by the hit material's reflectivity | RE-A3 (below) |
 | VtMB **does** have a runtime one-bounce GI — for models only. `emit_skyambient`'s intensity is the colour a sky-hitting bounce ray returns; it contributes nothing through the direct-light path | RE-A3 |
-| **25 of the 108 maps** carry the sun+skyambient pair, never one without the other; the other 83 have no `light_environment` at all. 5 maps carry several (`sm_warehouse_1` 4, `ch_temple_1` and `sp_taxiride` 3, `sp_observatory_2` and `sp_soc_2` 2), and `sm_hub_1` — the outdoor hub street — carries **none** | RE-A7, `tools/probe_sky_inventory.py` (supersedes `lighting.md`'s Godot-era "only 2 maps" count) |
+| **25 of the 108 maps** carry the sun+skyambient pair, never one without the other; the other 83 have no `light_environment` at all. 5 maps carry several (`sm_warehouse_1` 4, `ch_temple_1` and `sp_taxiride` 3, `sp_observatory_2` and `sp_soc_2` 2), and `sm_hub_1` — the outdoor hub street — carries **none** | RE-A7, `tools/probe_sky_inventory.py` (supersedes an earlier undercount) |
 | **K7 is settled** — every sky VMT in the game is `UnlitGeneric` with `$basetexture` + `$nofog` and nothing else, and the whole draw is `mul r0, t0, v0` against a modulation the engine forces to white. **A sky pixel is the decoded texel**: no scaling, no overbright, no gamma op, no fog | RE-A9, `stdshader_dx8.dll` + the shipped `unlitgeneric.psh`/`.vcs` |
 | The world's pixel is `albedo × lightmap × 2` — `lightmappedgeneric.psh`'s `mul_x2 … (overbrightFactor/2)` with the factor **pinned** to 2 (only 1.0 and 2.0 are accepted; anything else, and any hardware without overbright support, is rewritten to 2.0). That ×2 is the *only* sky-vs-world asymmetry in the framebuffer | RE-A9, `0x200718d0` |
 | Gamma is frame-wide, never per-material: `gamma` 2.2, `texgamma` 2.2, `brightness` 0, `linearFrameBuffer` 0, and a display value of `1.6 − clamp(cl_v_gamma − 1, 0, 3)·0.5` (= 1.35 at the default `cl_v_gamma` 1.5), applied as a device gamma ramp at present | RE-A9, `docs/color_gamma.md` |

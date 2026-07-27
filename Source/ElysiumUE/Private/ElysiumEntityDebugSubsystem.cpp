@@ -812,7 +812,7 @@ void UElysiumEntityDebugSubsystem::HandleGizmos(const TArray<FString>& Args)
 	}
 	else
 	{
-		// Cycle off -> visible -> all -> off (F4 in the Godot viewer).
+		// Cycle off -> visible -> all -> off.
 		switch (VizSettings.GizmoMode)
 		{
 		case EGizmoMode::Off:     VizSettings.GizmoMode = EGizmoMode::Visible; break;

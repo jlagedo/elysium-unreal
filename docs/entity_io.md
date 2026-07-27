@@ -137,8 +137,8 @@ that would lose most of the 185 brush entities, including all 97 trigger volumes
 ]}
 ```
 
-- `origin` — Unreal centimetres (`source_to_unreal`; the JSON above shows Godot-era
-  metre values for illustration). For `func_door_rotating` it is also the hinge.
+- `origin` — Unreal centimetres (`source_to_unreal`; the JSON above uses illustrative
+  placeholder values, not real exported figures). For `func_door_rotating` it is also the hinge.
 - `hulls` — convex hulls in **entity-local** Unreal centimetres, one flat `x y z ...` list
   each, built by walking the brush entity's own headnode (`dmodel_t` @36) through
   `_model_brushes`. World = `origin + hull`; `source_to_unreal` is linear, so

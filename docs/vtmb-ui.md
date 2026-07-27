@@ -10,8 +10,8 @@ the screen inventory as rebuilt). The pairing works like `controls.md` ↔ `inpu
 a new fact about how *VtMB* draws a screen goes here; a decision about how *Elysium* draws it
 goes there. Per-task status lives in `roadmap.md` (**PL8**, **8.6**, 8.8, 8.9, 8.10).
 
-`m0_menu_build.md` covers the same ground for the read-only Godot prototype and is **partly
-superseded by this doc** — see "Corrections" at the end.
+`m0_menu_build.md` is the `GameUI.dll` decompile reference and is **partly superseded by this
+doc** — see "Corrections" at the end.
 
 Addresses are `client.dll` unless stated, imagebase `0x10000000`. Recovery method and the
 headless workspace: `tools/ghidra/README.md`.
@@ -205,7 +205,7 @@ out/ui/
 
 ## 6. Corrections to `m0_menu_build.md`
 
-That doc records the Godot prototype and a `GameUI.dll` decompile. Four of its claims describe
+That doc is the `GameUI.dll` decompile reference. Four of its claims describe
 the menu that does not ship; they are superseded here and the reasoning is dated in
 `decisions.md` (2026-07-26):
 

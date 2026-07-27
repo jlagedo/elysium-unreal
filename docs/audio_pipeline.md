@@ -1,10 +1,9 @@
-# VtMB audio pipeline — how it works, and how it maps to Godot
+# VtMB audio pipeline — how it works
 
 How *Vampire: The Masquerade – Bloodlines* produces sound: the codecs and driver,
 the mixer, the DSP/reverb bank, the bespoke **SoundScheme** ambience/music system
 that replaces Source's `env_soundscape`, point sounds (`ambient_generic`), dialogue,
-sentences, and footsteps — then what a Godot 4 port needs from each layer and how it
-maps onto Godot's audio nodes.
+sentences, and footsteps.
 
 Evidence tags: **[VtMB]** = read from the user's own DLLs (Ghidra strings/symbols/
 addresses); **[SDK]** = Source SDK / leaked-engine reference at `tools/re/source-engine`;
@@ -305,63 +304,7 @@ The map viewer's job is *atmosphere first*, story audio later. Priority order:
    `.lip` half is decoded in `facial_animation.md` (7,136 plain-text phoneme documents, one
    per line, surveyed by `tools/probe_facial.py`) but has no runtime consumer yet.
 
-## 11. Mapping to Godot 4
-
-> **Godot-target mapping (reference).** This section maps the facts above onto the read-only Godot
-> prototype's nodes/APIs (`E:\dev\elysium`). It is porting reference, not the Unreal target — see
-> `docs/rebuild-strategy.md` (§B8 Audio) for the Unreal-native plan (MS-ADPCM/MP3 decode in C++,
-> `USoundWaveProcedural`, submixes, MetaSounds).
-
-Verified against Godot 4 docs (this project runs 4.7.1).
-
-**Codec / import.** Godot decodes **MP3** (`AudioStreamMP3`) and **Ogg Vorbis**
-natively; `AudioStreamWAV.Format` is `FORMAT_8_BITS`, `FORMAT_16_BITS`,
-**`FORMAT_IMA_ADPCM`**, `FORMAT_QOA` — **there is no Microsoft-ADPCM path.** So the
-converter must **transcode VtMB's MS-ADPCM WAVs offline** (decode to PCM16, emit
-`.wav` PCM or `.ogg`); MP3s (music/dialogue) pass through as bytes into
-`AudioStreamMP3`. A `tools/` audio decoder alongside `tex_to_png.py` is the natural
-home — Python's `audioop`/`wave` won't decode MS-ADPCM directly, but the codec is
-simple (a documented 4-bit predictor with per-block coefficients) or `ffmpeg` can be
-shelled if available.
-
-**Point sounds → `AudioStreamPlayer3D`.** `message` → stream; `health/10` →
-`volume_db` (20·log10); `radius` → `max_distance` (× 0.0254 m); loop from
-`spawnflags`; `SourceEntityName` → parent the player node under that entity's node;
-`StartHidden`/`ScriptHide` → `playing=false`. `attenuation_model` =
-`ATTENUATION_INVERSE_DISTANCE` approximates the SNDLVL curve closely enough; tune
-`unit_size`. `flag_no_voice_duck` → assign to a non-ducked bus.
-
-**SoundScheme → a scheme node + buses.** Export each `sound/schemes/*.txt` to a
-per-map sidecar (JSON, like `.ents`/`.water`), and build a runtime `SoundScheme`
-node driven by the exported `ambient_soundscheme` entities:
-- `Ambient` → one looping `AudioStreamPlayer` (2D/non-positional bed) at `Volume/100`.
-- `RandomSound` → an `AudioStreamRandomizer` (random pitch via `PitchMin/Max`,
-  random volume) feeding an `AudioStreamPlayer3D` that a small scheduler repositions
-  each shot on the polar ring (`DistMin/Max`, `HeightMin/Max`, `AngleMin/Max`) around
-  the entity `origin`, at up to `RandomSoundCount` concurrent voices (`max_polyphony`
-  / `AudioStreamPlaybackPolyphonic`), gated by `Frequency`, ranged by `AudibleRadius`.
-- Scheme swap (`FadeIn`/`FadeOut` I/O) → tween the bed/music `volume_db` between the
-  outgoing and incoming scheme nodes.
-
-**Dynamic music → `AudioStreamInteractive`.** Godot 4's `AudioStreamInteractive`
-(clips + a transition table, exposed as a stream parameter on an `AudioStreamPlayer`)
-is the direct fit: register the scheme's `Music`/`Combat`/`Alert` MP3s as clips, wire
-transitions, and drive the active clip from combat state (the port's equivalent of
-`SetSafeArea`). `Dry`/`NoPause` map to bus routing (dry bus) and
-`AudioStreamPlayer.process_mode = ALWAYS` (play through pause). A hand-rolled
-two-player cross-fade is the fallback if `AudioStreamInteractive` is over-heavy.
-
-**DSP rooms → reverb buses + `Area3D`.** Build a bus per distinct `RoomDSP` preset
-with an `AudioEffectReverb` (approximate the preset's reverb size/damping/wet from
-its `RVA` processor row — no need to reproduce the full DSP graph). Godot's
-`Area3D` **reverb bus** (dry/wet send + `uniformity`) is the built-in room-reverb
-mechanism; a scheme's active `RoomDSP` selects which reverb bus its 3D sources send
-to. `Dry` music routes to a bus with no reverb send.
-
-**Bus layout** (proposed): `Master → {Music, Ambient, SFX(→ per-room reverb buses),
-Voice(ducks SFX/Ambient)}`, matching VtMB's ducking and dry/wet split.
-
-## 12. Provenance — key addresses (`engine.dll`, base `0x20000000`) [VtMB]
+## 11. Provenance — key addresses (`engine.dll`, base `0x20000000`) [VtMB]
 
 | Address | Symbol / role |
 |---|---|

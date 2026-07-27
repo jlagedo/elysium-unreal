@@ -113,9 +113,9 @@ Two constraints worth knowing before touching this:
 
 ## 5. The menu backdrop
 
-The menu stands in front of **real game geometry**, not a port of VtMB's particle scene (which the
-Godot prototype never verified against ground truth, so "faithful" was not testable —
-`decisions.md`). `UElysiumMapSubsystem::TravelForMenu` loads `elysium.MenuMap` (default `sm_hub_1`,
+The menu stands in front of **real game geometry**, not a port of VtMB's particle scene — that
+scene was never verified against a ground-truth capture, so "faithful" was not testable
+(`decisions.md`). `UElysiumMapSubsystem::TravelForMenu` loads `elysium.MenuMap` (default `sm_hub_1`,
 the Asylum frontage) as a **backdrop**.
 
 A backdrop is an ordinary map build **minus the player**. The substrate builds in full, because the

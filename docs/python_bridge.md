@@ -505,7 +505,7 @@ deterministic transform re-run over the user's own files.
 
 **IronPython facts** (should the question return): IronPython **2.7 is Python 2.7** and
 would accept VtMB's 2.1 syntax nearly as-is, but is dormant and .NET-Framework-era.
-IronPython **3** is maintained and targets **.NET 8/10** (Godot's TFM) but is Python 3.4
+IronPython **3** is maintained and targets **.NET 8/10** but is Python 3.4
 and needs a 2to3 pass; it maps `int` to `BigInteger`, and the DLR's runtime codegen rules
 out AOT/trimming. Neither touches the ~11,300 `dlgexpr` snippets, which need their own
 parser regardless.

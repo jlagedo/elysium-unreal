@@ -65,8 +65,8 @@ public:
 	// elysium.showtriggers / ent_gizmos / ent_beams verbs. State lives here (the always-running tick
 	// renders it whether or not any Cog window is open), so it stays on screen while you play.
 
-	// Entity-gizmo display, ported from the Godot viewer: Off, Visible (depth-tested — walls occlude),
-	// All (foreground x-ray — drawn on top of everything).
+	// Entity-gizmo display: Off, Visible (depth-tested — walls occlude), All (foreground
+	// x-ray — drawn on top of everything).
 	enum class EGizmoMode : uint8 { Off, Visible, All };
 
 	// The whole world-viz control surface, edited in place by the Cog window's ImGui widgets and the

@@ -195,8 +195,7 @@ Builds `debug-tooling.md`'s Layers 1–2 on the Phase 1 substrate (core first, t
    crosshair, via body handles; nearest-origin for bodiless logic entities).
 4. **World visualization:** `elysium.showtriggers` (wireframe hulls colored by
    class/state), I/O beam arrows on fire (fading, duration-drawn), entity gizmos
-   ported from the Godot viewer's proven UX (color-keyed boxes + labels, 3-state
-   cycle off/visible/all, cone pick).
+   (color-keyed boxes + labels, 3-state cycle off/visible/all, cone pick).
 5. **Maps/Lights Cog windows + `elysium.reload`** (absorbing the Canvas HUD panels).
 
 **Acceptance:** in standalone `play.bat` — open the entity browser, pick the elevator

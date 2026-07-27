@@ -1,12 +1,12 @@
-# VtMB animation & movement — skeletal models, brush movers, and the Godot mapping
+# VtMB animation & movement — skeletal models and brush movers
 
 Everything in VtMB that *moves* falls in two subsystems: **skeletal model
 animation** (NPCs, animals, animated props — a rigged `.mdl` skeleton driven by
 compressed keyframe clips) and **brush-entity movers** (doors, buttons, spinners,
 elevators, trams — a brush model translated/rotated at runtime by parametric logic).
-This documents the on-disk format and runtime behaviour of both, and how each maps
-onto Godot 4. It is the companion to `mdl_v2531.md` (static-geometry half of the
-`.mdl`) and `entity_io.md` (the I/O bus the movers ride).
+This documents the on-disk format and runtime behaviour of both. It is the
+companion to `mdl_v2531.md` (static-geometry half of the `.mdl`) and
+`entity_io.md` (the I/O bus the movers ride).
 
 Evidence tags: **[VtMB]** = decompiled `vampire.dll` (image base `0x10000000`);
 **[data]** = shipped map/model bytes, probe-verified; **[ref]** = a VtMB-native
@@ -214,7 +214,7 @@ a limb bone's bind `x/y/z` are ~0, so 0 and bind coincide — but collapses any 
 whose bind carries a **large rotation**. The clavicles are the canonical victims:
 an idle clip animates only their `w` channel (`......1`), so a 0-fill gives
 `(0,0,0,w)` = identity, snapping the shoulder ~150° off; keeping bind `x/y/z` gives
-the correct rest shoulder. The Godot exporter (`tools/mdl_gltf.py`) consumes this
+the correct rest shoulder. The exporter (`tools/mdl_gltf.py`) consumes this
 decode verbatim.
 
 ## A.4a `BONEFLAG_ORIENTATION` (bone flag `0x2`) — the axis-permuted bone [VtMB — decompiled + data-verified]
@@ -253,7 +253,7 @@ All character models are `VertexListType==0` (SKINNED, 44B `StudioVertex`); the
 per-vertex `BoneWeight` (`mdl_v2531.md`) *is* the skin: `byte Weight[3]`@0,
 `short Bone[3]`@4, `byte NumBones`@10. **`NumBones` reads 0 on VtMB data — derive
 the influence count from nonzero weights** (probe: jeanette 6389/6393 verts have
-`NumBones==0`). Max **3 influences**, fits Godot's 4-weight skin directly:
+`NumBones==0`). Max **3 influences**, well within a standard 4-weight skin:
 
 ```
 for i in 0..2:
@@ -472,87 +472,7 @@ only `0x8` = NOT_SOLID is tested.
 
 ---
 
-# Part C — Mapping to Godot 4
-
-> **Godot-target mapping (reference).** Part C maps Parts A/B onto the read-only Godot prototype
-> (`E:\dev\elysium`: `mdl_skel.py`/`mdl_gltf.py` glTF bake, `Skeleton3D`, `AnimatableBody3D`, the
-> `GameScene` playback — the "shipped" statuses are the prototype's). It is porting reference, not
-> the Unreal target — see `docs/rebuild-strategy.md` (§B3 movers, §B5 NPCs via glTFRuntime). The
-> glTF-bake decision and the coordinate/skin/attachment facts carry over; only the runtime host
-> changes. Parts A and B above are engine-neutral.
-
-## C.1 Skeletal models → `Skeleton3D` + `Skin` + `AnimationPlayer`
-
-Skeletal models need a **richer container than the world's runtime-OBJ path** — OBJ
-carries no skeleton, skin, or animation. Two routes were considered; **route 1
-shipped**:
-
-1. **Offline-bake to glTF 2.0 (shipped).** `tools/mdl_skel.py` decodes the skeletal
-   half (bones, skin, RLE animation tracks; §A) and `tools/mdl_gltf.py` writes one
-   `.glb` per model: mesh + skin + `Skeleton3D` node hierarchy + inverse-bind matrices
-   + **one named animation** (the clip named on the CLI — no sequence merge or
-   shared-library resolution yet). Godot's glTF importer builds `Skeleton3D` + `Skin` +
-   `AnimationPlayer` natively and handles the coordinate conversion — the least custom
-   runtime code. The viewer loads it in `GameScene.SpawnGltfCharacter`
-   (`GltfDocument.AppendFromFile` → `GenerateScene`), plays the clip, and lets the
-   `LightRig` light the mesh (exported to `tools/out/npc/`, launched via `--gltf` or an
-   animated-prop swap). `mdl_gltf.py` imports `mdl` for the shared material pipeline —
-   it is a sibling module, not an extension of `mdl.py`.
-2. **Runtime builder (not taken).** Python writes a skeletal sidecar (bones + skin +
-   decoded animation tracks); C# builds `Skeleton3D.AddBone`/`SetBoneParent`/
-   `SetBoneRest`, an `ArrayMesh` with `SurfaceTool.SetBones`/`SetWeights`, a `Skin`, and
-   `Animation` resources under an `AnimationPlayer`. More code; the glTF route made it
-   unnecessary.
-
-**Coordinate care**: bone `pos`/`quat` are parent-relative in **Source** space —
-apply the same `M: (x,y,z)→(x,z,−y)` basis change and `×0.0254` the props use
-(`basis' = M·basis·M⁻¹`, `origin' = M·origin·0.0254`), which transforms the bind
-quaternions consistently. Route 1 offloads this to the glTF importer.
-
-**Skin**: `Weight[i]/255` (§A.5), 3 influences into Godot's 4-slot skin; inverse-bind
-from `poseToBone`. **Attachments** (§A.6) → `BoneAttachment3D` for weapons/props.
-
-## C.2 Movers → `AnimatableBody3D` + a parametric mover component
-
-Brush geometry already exports (world/brush-entity meshes offset by `origin`;
-`.ents`/`.hulls` carry the per-entity convex hulls). Per mover, spawn an
-**`AnimatableBody3D`** (moves by transform and pushes the `CharacterBody3D` player
-correctly) at `origin`, driven by a small mover component that reads the exported
-keyvalues:
-
-- **`func_door_rotating`** → rotate `distance°` about the `angles` axis around the
-  hinge (`origin`) at `speed` °/s. **`func_door`** → translate `(bbox_extent − lip)`
-  inches along `angles` at `speed` in/s. **`func_button`** → press-in + spring/latch.
-  **`func_rotating`** → continuous spin (`AnimationPlayer` loop or `_Process`).
-  **keyframe mover** → interpolate the `NextKey` path.
-- The primitive is a **constant-velocity `LinearMove`/`AngularMove` toward a target
-  that fires a `MoveDone` callback** (§B.4) — no easing. A door is one arc +
-  `wait`-timer autoclose + blocked/crush; a button is press + `TriggerAndWait` +
-  return/latch.
-
-**Movers depend on the not-yet-built I/O runtime** (`entity_io.md`): `Open`/`Close`/
-`Lock`/`Unlock` arrive as inputs, `OnFullyOpen`/`OnPressed`/`OnIn`/`OnOut` fire as
-outputs (some with field-6 Python), and `+use` targets doors/buttons. So movers land
-naturally **with the interaction/`+use` milestone**, not before it. VtMB plumbing the
-component must honour: `soundgroup` → the open/close/move/stop sounds
-(`audio_pipeline.md`); `linked_door` → drive the paired leaf; `use_override` → route
-`+use` to a button; `StartHidden` → spawn `SOLID_NONE` + inert until `ScriptUnhide`;
-`use_icon`/`locked_icon` → the reticle armed by `OnIn`/`OnOut`.
-
-## C.3 Scope for Elysium
-
-1. **Skeletal decode + glTF export** (§A) — **shipped** (`mdl_skel.py` + `mdl_gltf.py`,
-   played back in `GameScene`); unblocks NPCs, animated props, and animals. The
-   remaining engineering is include-model resolution (§A.7 — an NPC that idles from a
-   shared library) and merging multiple sequences into one `.glb`; the self-contained
-   clips work today.
-2. **Movers** (§B) — geometry + parametric spec export now; runtime lands with the
-   I/O/`+use` milestone (doors/buttons are the first thing `+use` acts on).
-3. **Deferred**: procedural bones (jiggle/IK — `ProcType`≠0), root-motion
-   `mstudiomovement_t`, blend spaces (`numblends`>1), anim events, `.phy` ragdoll
-   (vphysics lump undecoded), and NPC AI/spawning (a separate subsystem).
-
-## C.4 Provenance
+# Provenance
 
 Skeletal format [ref, data-verified]: VAMPTools `MDLConverter/inc/external/studio.h`
 + `src/{Animation,Skeleton}.cpp`; Crowbar `Core/GameModel/SourceModel2531/*2531.vb`
