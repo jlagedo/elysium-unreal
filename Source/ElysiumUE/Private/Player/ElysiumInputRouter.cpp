@@ -4,6 +4,7 @@
 #include "Player/ElysiumCommandBus.h"
 #include "ElysiumCommands.h"
 #include "Debug/ElysiumConsole.h"
+#include "ElysiumGameClock.h"
 #include "ElysiumPlayerBody.h"
 
 #include "Components/InputComponent.h"
@@ -183,6 +184,11 @@ void UElysiumInputRouter::ClearHeldButtons()
 
 void UElysiumInputRouter::SampleFrame(float DeltaSeconds)
 {
+	// Bound the delta here, at the point the command is built, so a hitch never *enters* the
+	// command stream: a recording made across a level-load stutter replays as the game would have
+	// simulated it, not as the stall happened to be measured.
+	DeltaSeconds = static_cast<float>(ElysiumFrame::ClampFrameDelta(DeltaSeconds));
+
 	if (bReplaying)
 	{
 		if (const FElysiumUserCmd* Recorded = Replay.Next())

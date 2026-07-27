@@ -5,6 +5,7 @@
 #include "ElysiumCommands.h"
 #include "Debug/ElysiumConsole.h"
 #include "ElysiumContentPaths.h"
+#include "ElysiumMoveSolve.h"
 #include "Scripting/ElysiumPythonVM.h"
 
 #include "ElysiumInputRouter.h"
@@ -36,6 +37,10 @@ FElysiumConsole& ElysiumCommandBus::Console()
 	{
 		bDeclaredEngineCvars = true;
 		for (const ElysiumCam::FCvarDef& Def : ElysiumCam::CvarDefs())
+		{
+			Store.DeclareCvar(Def.Name, Def.Default);
+		}
+		for (const ElysiumMove::FCvarDef& Def : ElysiumMove::CvarDefs())
 		{
 			Store.DeclareCvar(Def.Name, Def.Default);
 		}

@@ -6,12 +6,13 @@ level, adopts its actors, and builds everything the bake cannot hold — brush c
 entity substrate, entity-driven bodies, the sky cubemap — from the pipeline's on-disk intermediates,
 with no coordinate conversion.
 
-**This file is an orientation map: what exists and where.** How it works is the design docs' —
-`docs/runtime-architecture.md` (the spine: frame, clock, seams, app state, presentation, input
-scopes), `docs/engine-core.md` (entity object model), `docs/save-architecture.md` (persistence),
-`docs/camera-view-modes.md`, `docs/ui-architecture.md`, `docs/python_bridge.md`,
-`docs/debug-tooling.md`, `docs/map-architecture.md`. Per-task status is `docs/roadmap.md`.
-Don't restate any of them here.
+**This file is an orientation map: what exists and where, not how it behaves.** The design —
+lifetimes, the frame, the object graph, ownership rationale — belongs to `docs/runtime-architecture.md`
+(the spine), `docs/engine-core.md` (entity object model), `docs/save-architecture.md` (persistence),
+`docs/camera-view-modes.md`, `docs/ui-architecture.md`, `docs/input-architecture.md`,
+`docs/python_bridge.md`, `docs/debug-tooling.md`, `docs/map-architecture.md`. Per-task status is
+`docs/roadmap.md`. **Read the source for current behaviour; don't restate it here** — the
+exception is a hard-won gotcha (below), which a source read would not reliably surface.
 
 ## Module
 
@@ -45,78 +46,37 @@ API surface, not a layering.
 | `Session/` | the game/flow state subsystems, the clock, persistence, the RNG streams |
 | (root) | `ElysiumUE.cpp` plus the two module-wide readers, `ElysiumContentPaths.h` and `ElysiumKeyValues.h`, which every layer includes bare |
 
-## Content root and config
+## Config
 
-- `FElysiumContentPaths::Root()` = `FPaths::ProjectDir()/"tools/out"` (in-repo, gitignored).
-- `Config/DefaultEngine.ini` — boot map `/Game/Elysium`, `AElysiumGameMode`, `UElysiumGameInstance`,
-  the fully-dynamic render path, the `ElysiumUse` trace channel (`ECC_GameTraceChannel1`).
-- `Config/DefaultInput.ini` — engine-side settings only: `ConsoleKeys` = `Tilde` + `F7`, raw
-  MouseX/MouseY, FOV scaling and mouse smoothing **off**. It carries **no** action or axis mappings;
-  every key is installed by `UElysiumInputRouter` from `ElysiumBinds::Defaults()`.
-- Boot is decided once, at GI init, by `UElysiumGameFlowSubsystem::BootFromCommandLine`: menu over a
-  backdrop by default, New Game under `elysium.BootMenu 0`, a bare dev map under `-ElysiumMap=<name>`
-  / `-ElysiumNewGame=0` (which also seeds a mock character so dialogue gates have a sheet).
-  `-ElysiumProfile` / `-ElysiumShots` / `-ElysiumProbe` run the headless harnesses.
+`Config/DefaultEngine.ini` (boot map, game mode/instance, render path, trace channels) and
+`Config/DefaultInput.ini` (engine-side settings only — no action/axis mappings; those are
+installed by `UElysiumInputRouter`). Boot decision + flow: `docs/runtime-architecture.md`.
+`FElysiumContentPaths::Root()` is the pipeline's `tools/out` mount point.
 
-## Map and world
+## Key type index
 
-`UElysiumMapSubsystem` (UE5 hard travel) → `AElysiumMapActor`, which owns the map for one epoch. The
-actor **orchestrates the load; it does not render it** — it owns the load order, the three frame
-passes, the player's placement, the entity world / scheme manager / camera director, and three of the
-four `FElysiumWorldServices`. Three components carry the rest, and the actor holds none of their
-state:
+Grep entry points, one line each — semantics live in the design doc named per group.
 
-| Component | Owns |
-|---|---|
-| `UElysiumMapVisuals` (`Visual/`) | the LOOK — `AdoptBakedLevel`, material-override MIDs, sky cube + backdrop, SkyLight level, both fog sets, the Lumen knobs, the light rig, cables, the texture cache, every `elysium.*` look cvar |
-| `UElysiumMapCollision` (`Map/`) | the WALKABLE SURFACE — `.hulls` convex + `.dispcol` trimesh onto collision-only PMCs |
-| `UElysiumEntityBodies` (`Visual/`) | the BODY FACTORY behind `IElysiumEmbodiment`'s mesh half — NPC skeletal and prop static bodies, prop skins, per-map mesh/anim caches |
+**Map** (`docs/map-architecture.md`, `docs/engine-core.md`): `AElysiumMapActor` (owns one map's
+epoch) with three components — `UElysiumMapVisuals` (`Visual/`, the look), `UElysiumMapCollision`
+(`Map/`, the walkable surface), `UElysiumEntityBodies` (`Visual/`, NPC/prop body factory) — exposed
+as `GetVisuals()`/`GetCollision()`/`GetBodies()`, no forwarders. Visual readers:
+`FElysiumObjModel`, `FElysiumTextureCache`, `FElysiumMaterialFactory`, `ElysiumReflections.h`,
+`FElysiumDecals`, `FElysiumRopes`, `UElysiumLightRig`, `FElysiumSkyDef`,
+`ElysiumEnvironment.{h,cpp}`, `ElysiumFog.h`.
 
-Exposed as `GetVisuals()` / `GetCollision()` / `GetBodies()`, with **no forwarders** for the look or
-the collider — a façade would rebuild the god object the split removed. The actor does forward the
-six `IElysiumEmbodiment` mesh calls, because the substrate's one engine seam is the actor.
+**Entity substrate / Track B** (`docs/engine-core.md`), plain C++, no UObject reflection:
+`FElysiumVariant`, `FElysiumEntityHandle`, `FElysiumEntityDef`/`FElysiumEntityDefs`,
+`FElysiumEntity`, `FElysiumClassDesc`/`FElysiumClassRegistry`, `FElysiumEntityWorld` (owned by
+`AElysiumMapActor`), `UElysiumBrushComponent`, `FElysiumEventQueue`/`FElysiumIOEvent`,
+`IElysiumIOSink`. Every input goes through `FElysiumEntityWorld::AcceptInput`/the event queue, and
+time comes from the substrate clock, never `FTimerManager` — this holds everywhere in the layer.
 
-Visual/readers worth knowing by name: `FElysiumObjModel` (OBJ/MTL + `.emc` cache),
-`FElysiumTextureCache`, `FElysiumMaterialFactory`, `ElysiumReflections.h` (the `$envmap` channel),
-`FElysiumDecals`, `FElysiumRopes`, `UElysiumLightRig`, `FElysiumSkyDef`, `ElysiumEnvironment.{h,cpp}`
-(sky cube), `ElysiumFog.h` (Source distance fog as per-primitive Custom Primitive Data).
-
-## The entity substrate (Track B)
-
-Plain C++, no UObject reflection — Unreal supplies bodies only.
-
-| Type | Role |
-|---|---|
-| `FElysiumVariant` | tagged Void/Bool/Int/Float/String/Vector/Handle |
-| `FElysiumEntityHandle` | `{Index, Epoch}`, generation-checked through `Resolve` |
-| `FElysiumEntityDef`/`FElysiumEntityDefs` | immutable parsed `.ents` records |
-| `FElysiumEntity` | the live base entity: CBaseEntity keyfields, runtime origin/angles/model with body-follow hooks, `Kill`/`ScriptHide`/`ScriptUnhide`, dormancy, per-output `times`, `FireOutput`, touch routing |
-| `FElysiumClassDesc`/`FElysiumClassRegistry` | per-classname factory, base-chain link, input + typed field tables; inert-record fallback for unregistered classnames |
-| `FElysiumEntityWorld` | the substrate: the spawn pass, `SpawnRuntimeEntity`, `RenameEntity`, the `AcceptInput` + event-queue **chokepoints**, output firing, `RouteBrushTouch`, `UpdateUseCursor`/`PlayerUse`, tick, epoch teardown, `AddSink`, and the injected `FElysiumWorldServices`. Owned by `AElysiumMapActor` via `TPimplPtr` |
-| `UElysiumBrushComponent` | the per-brush-entity body: collision-only, convex `UBodySetup` from def hulls, dormancy-gated, solidity by classname |
-| `FElysiumEventQueue`/`FElysiumIOEvent` | the one time-sorted queue |
-| `IElysiumIOSink` | always-on `FElysiumRingBufferSink` (1,000 entries) + `FElysiumLogSink` |
-
-**Two rules that hold everywhere:** every input goes through `AcceptInput`/the event queue (so it is
-loggable, pausable, single-steppable, serializable), and time comes from the substrate clock, **never
-`FTimerManager`**.
-
-The character chain in `Public/ElysiumPlayer.h` is VtMB's own:
-
-```
-FElysiumEntity                     CBaseEntity           keyfields, dormancy, I/O, think
- └ FElysiumAnimating               CBaseAnimating        the body: BuildBody / PlayAnimClip /
-    │                                                    ResetAnimToIdle / SetDispositionName
-    └ FElysiumCombatCharacter      CBaseCombatCharacter  the SHEET + money/blood/humanity/
-       │                                                 masquerade + TakeDamage/OnKilled
-       ├ FElysiumNpc               CAI_BaseNPC           dialogue only; body half inherited
-       └ FElysiumPlayer            CBasePlayer           player inputs, law counters, XP ledger
-```
-
-The player entity is created by `SpawnPlayer()` with classname `player`, targetname **`!player`** —
-the name the maps themselves write, so `point_teleport target=!player` is an ordinary name
-resolution. `FindPlayer()`/`PlayerHandle()` are the accessors and **every reader handles null** (a
-menu backdrop and a headless logic world have no player).
+The character chain in `Public/ElysiumPlayer.h` is VtMB's own: `FElysiumEntity` (CBaseEntity) →
+`FElysiumAnimating` (CBaseAnimating) → `FElysiumCombatCharacter` (CBaseCombatCharacter) →
+`FElysiumNpc` (CAI_BaseNPC) / `FElysiumPlayer` (CBasePlayer). `SpawnPlayer()` creates the player
+entity, classname `player`, targetname `!player` (the name the maps themselves write).
+`FindPlayer()`/`PlayerHandle()` are the accessors; every reader handles null.
 
 Entity class implementations: `ElysiumStarterClasses.cpp` (logic_auto/relay, triggers,
 `logic_pythoncheck`), `ElysiumLogicClasses.cpp` (math_counter, logic_timer, logic_case, env_fade,
@@ -125,110 +85,51 @@ func_brush, point_teleport), `ElysiumMover.{h,cpp}` (`FElysiumMoverBase`, `FElys
 `ElysiumEventClasses.cpp`, `ElysiumNpcClasses.cpp`, `ElysiumPlayerClasses.cpp`,
 `ElysiumScriptedSequence.cpp`, `ElysiumPropClasses.cpp`.
 
-## The outbound seam
+**The outbound seam** (`docs/runtime-architecture.md`): everything the substrate needs from the
+engine arrives as `FElysiumWorldServices`. `IElysiumEmbodiment` (bodies + the player's own view/
+teleport/damage/`+use`/camera, implemented by `AElysiumMapActor`), `IElysiumAudio` (voice,
+`AElysiumMapActor`), `IElysiumTravel` (`AElysiumMapActor`), `IElysiumPresenter` (fades/signs/
+dialog moments, `UElysiumPresentationSubsystem`). Any member may be null; every call site handles
+it. `Private/Tests/ElysiumTestServices.h` is the recording stub implementing all four.
 
-Everything the substrate needs *from* the engine arrives as **`FElysiumWorldServices`**, taken by
-`FElysiumEntityWorld` at construction. Nothing under the world casts its owner to a map actor or
-touches `GetWorld()->GetFirstPlayerController()`.
+**Subsystems by scope** (`docs/runtime-architecture.md`): GameInstance —
+`UElysiumGameFlowSubsystem` (app state), `UElysiumGameStateSubsystem` (`G`, quest map, player
+record, clock, snapshots, script host), `UElysiumMapSubsystem` (travel), `UElysiumSaveSubsystem`,
+`UElysiumUISubsystem`, `UElysiumAudioSubsystem`, `UElysiumNpcAnimSubsystem`,
+`UElysiumRulebookSubsystem`. World — `UElysiumPresentationSubsystem`. LocalPlayer —
+`UElysiumInputSubsystem` (the only `SetInputMode` caller). Engine — `UElysiumMcpSubsystem`.
 
-| Interface | Covers | Implemented by |
-|---|---|---|
-| `IElysiumEmbodiment` | NPC/prop/phys-prop bodies, clips, idles, skins — **and the player's body**: view point, origin+yaw, teleport, damage, the `+use` trace, camera shots | `AElysiumMapActor` |
-| `IElysiumAudio` | `PlayVoice`/`StopVoice`/`SetVoiceVolume`/`IsVoicePlaying` + the scheme fades | `AElysiumMapActor` |
-| `IElysiumTravel` | `RequestLandmarkTravel`, `ChangeMap` | `AElysiumMapActor` |
-| `IElysiumPresenter` | `StartFade`, `OpenSign`/`CloseSign`, `OpenDialog`/`CloseDialog` — the discrete *moments*, not the state | `UElysiumPresentationSubsystem` |
+**Player, commands, camera** (`docs/controls.md`, `docs/input-architecture.md`,
+`docs/camera-view-modes.md`): `FElysiumCommands` (`Public/ElysiumCommands.h`, the verb registry),
+`ElysiumCommandBus`, `FElysiumConsole`, `FElysiumUserCmd`/`Builder`/`Stream`, `ElysiumBinds`,
+`UElysiumInputRouter`, `IElysiumPlayerBody`, `AElysiumPawn` + `UElysiumMovementComponent` (the
+faithful body) over `ElysiumMoveSolve.h` (`docs/source_movement.md`: `namespace ElysiumMove`'s
+constants + the `CGameMovement` math as free functions, plus `FElysiumMoveTuning`'s `sv_*` cvar
+surface — the same pure-rules/engine-half split as `ElysiumCameraSolve.h`),
+`AElysiumCapsulePawn` (the `elysium.SourceMovement 0` A/B baseline),
+`FElysiumCameraWeights`/`FElysiumCameraShotStack`/`UElysiumCameraComponent`,
+`FElysiumViewState`. Actors: `AElysiumGameMode`, `AElysiumPlayerController` (hosts
+`UElysiumCheatManager` and the router), `AElysiumPawn`, `AElysiumHUD` (Canvas, does not tick).
 
-**Any member may be null**, and every call site handles it — that is what lets a whole map's logic
-run headlessly. `Private/Tests/ElysiumTestServices.h` is the recording stub implementing all four.
+**Scripting, audio, shared readers**: `IElysiumScriptHost` (`FElysiumCPythonScriptHost` over
+`FElysiumPythonVM` the map-load default; `FElysiumExprScriptHost`/`FElysiumNullScriptHost`
+fallbacks), `ElysiumPythonEntity.{h,cpp}`, `ElysiumScriptNatives.{h,cpp}`, `FElysiumScriptFS`,
+`ElysiumDlg.{h,cpp}`. Audio: `UElysiumAudioSubsystem` + `FElysiumSoundCache` +
+`FElysiumSoundSchemeManager` (every voice passes `elysium.Mute`, default 1, a gain multiplier).
+Shared readers: `ElysiumKeyValues.h`, `ElysiumRulebook.{h,cpp}`, `FElysiumSignData`.
 
-## The frame
+## Debug layer (non-Shipping)
 
-Declared in the engine's tick graph (`dumpticks` reads it back), never inferred from registration
-order. Retail is **move-first**: the pawn moves out of the `clc_move` drain, before `GameFrame` runs
-a single think or queued event.
+`UElysiumCogSubsystem` (`#if ENABLE_COG`) registers the stock CogEngine windows plus the Elysium
+ones (`_Status`, `_Maps`, `_Lights`, `_Entities`, `_Inspector`, `_EventQueue`, `_WorldViz`,
+`_Audio`, `_SoundScheme`, `_Logic`, `_Scripting`, `_Npc`) over `FElysiumCogWindow`.
+`UElysiumEntityDebugSubsystem` hosts the `elysium.ent_*` verbs and world-viz layers.
+`ElysiumPick.{h,cpp}` is click-selection; `FElysiumGizmoLayer` the retained gizmo ISM.
+`UElysiumMcpSubsystem` is Layer 3, reached through `tools/mcp_proxy.py`. Design:
+`docs/debug-tooling.md`.
 
-| # | Stage | Where |
-|---|---|---|
-| 1 | sample input | `APlayerController` (`TG_PrePhysics`) |
-| 2 | advance the clock | `AElysiumMapActor::PreMoveTick`, first statement — **the only place `Now` moves** |
-| 3 | the player's own think + the spawn hold | `FElysiumEntityWorld::RunPlayerThink` |
-| 4 | **move the pawn** | the movement component, prerequisite on the pre-move tick |
-| 5–6 | run due thinks, then service the queue | `FElysiumEntityWorld::Tick` (think-first) |
-| 7 | physics + overlaps | engine (`TG_DuringPhysics`) → `RouteBrushTouch` |
-| 8 | post-move gameplay | `AElysiumMapActor::PostMoveTick` (`TG_PostPhysics`) — the `+use` cursor |
-| 9 | camera | `AElysiumPawn::CalcCamera` — the weight stack is solved here |
-| 10 | publish the view | `UElysiumPresentationSubsystem::Publish` (`TG_PostUpdateWork`) |
-
-`AElysiumMapActor` carries **three** tick functions. The two `TG_PrePhysics` passes are separated by
-**prerequisites, not groups**: the gameplay tick waits on the pre-move tick unconditionally (a map
-that seats no pawn still needs thinks on an advanced clock) and additionally on the movement
-component. `EnsureTickPrerequisites` rebinds if the pawn is replaced.
-
-`FElysiumTimeControl` (on `UElysiumGameStateSubsystem`) is the one pause/scale facade over the clock
-**and** engine time; `FElysiumGameClock` keeps its writers private and friends only that struct, so
-the single advance site is a compile-time property. **Scale is applied exactly once.**
-`bTickEvenWhenPaused` is false on both gameplay passes and true on the presentation side.
-
-## Subsystems by scope
-
-| Scope | Subsystem | Owns |
-|---|---|---|
-| GameInstance | `UElysiumGameFlowSubsystem` | `EElysiumAppState` (Boot/FrontEnd/Loading/Playing/Paused/GameOver), its transition table (`Public/ElysiumAppState.h`), New Game / Load / Save / QuitToMenu / pause / game-over. **The screen is a pure function of the state.** |
-| GameInstance | `UElysiumGameStateSubsystem` | `G`, the quest map, `FElysiumPlayerRecord`, the clock + `FElysiumTimeControl`, map snapshots, the installed script host |
-| GameInstance | `UElysiumMapSubsystem` | travel, `PendingMapLoad`, the menu backdrop |
-| GameInstance | `UElysiumSaveSubsystem` | slots, `CanSave`, `BuildPayload`/`ApplyPayload` |
-| GameInstance | `UElysiumUISubsystem` | the screens + the `Menu` input scope |
-| GameInstance | `UElysiumAudioSubsystem` | the decode registry, the voice pool, the global mute |
-| GameInstance | `UElysiumNpcAnimSubsystem` | parsed bank assets, clip vocabularies, the disposition table |
-| GameInstance | `UElysiumRulebookSubsystem` | the 12 `vdata/system/` table families, lazy per table |
-| World | `UElysiumPresentationSubsystem` | the only writer of `FElysiumViewState` |
-| LocalPlayer | `UElysiumInputSubsystem` | the priority stack of `FElysiumInputScope` — the module's **only** `SetInputMode` caller |
-| Engine | `UElysiumMcpSubsystem` | ~20 `elysium_*` MCP tools (editor-gated) |
-
-Priority table for input scopes (`ElysiumInput::Priority`):
-`Game 0 < Sign 10 < Cinematic 20 < Chargen 30 < Dialogue 40 < Menu 50 < Debug 100`. Push/pop is
-**handle-based, not LIFO** — screens close out of order.
-
-## Player, commands, camera
-
-**An action is a console command string** — VtMB has no action abstraction, so everything reaches one
-registry through one door.
-
-| Type | Role |
-|---|---|
-| `FElysiumCommands` (`Public/ElysiumCommands.h`) | the registry, plain C++. **92 declared verbs** with `+`/`-` pairs. Implementations `Bind`/`Unbind` and **stack**. **The latch is the verb's, not its implementation's** |
-| `ElysiumCommandBus` | the one door: a bound key, a `ccmd` set, a `.dlg` action, `elysium.cmd`, MCP, `-ExecCmds` |
-| `FElysiumConsole::Execute` | the precedence, stated once and tested: **command → alias → cvar → Python** |
-| `FElysiumUserCmd` / `Builder` / `Stream` | one frame of intent as a value (`Buttons` is **uint64**); records, replays, round-trips through text |
-| `ElysiumBinds` | VtMB's 75-row default bind set + `ReservedKeys()` (`` ` `` and `F7`) |
-| `UElysiumInputRouter` | installs the binds, `SampleFrame` from `PlayerTick`, writes look **straight onto the control rotation** |
-| `IElysiumPlayerBody` | what everything outside the body talks to; an interface because the two bodies share no base |
-| `AElysiumPawn` + `UElysiumMovementComponent` | the faithful body: `APawn` + a `UBoxComponent` (32×32×72 u) + Source's movement functions |
-| `AElysiumCapsulePawn` | the A/B baseline behind `elysium.SourceMovement 0` |
-| `FElysiumCameraWeights` / `FElysiumCameraShotStack` / `UElysiumCameraComponent` | one camera and a weight, not two; `AElysiumPawn::CalcCamera` is the single apply point |
-| `FElysiumViewState` (`Public/ElysiumViewState.h`) | everything on screen, assembled once per frame; three total functions over it |
-
-Actors: `AElysiumGameMode`, `AElysiumPlayerController` (hosts `UElysiumCheatManager` and the router;
-**binds no key of its own**), `AElysiumPawn`, `AElysiumHUD` (Canvas; **does not tick** — it
-reconciles from `OnViewPublished`).
-
-## Scripting, audio, shared readers
-
-`IElysiumScriptHost` is the one seam. `FElysiumCPythonScriptHost` over `FElysiumPythonVM` is the
-map-load default (embedded CPython 2.7.18 running VtMB's own level scripts 1:1);
-`FElysiumExprScriptHost` and `FElysiumNullScriptHost` are the fallbacks.
-`ElysiumPythonEntity.{h,cpp}` is the `vampire` module's object surface (the `Entity` type — **there
-is no `Player` type**), `ElysiumScriptNatives.{h,cpp}` the engine surface both hosts share,
-`FElysiumScriptFS` the VM's own filesystem namespace, `ElysiumDlg.{h,cpp}` the engine-neutral `.dlg`
-core.
-
-Audio: `UElysiumAudioSubsystem` + `FElysiumSoundCache` (WAV/MP3 → `USoundWaveProcedural`) +
-`FElysiumSoundSchemeManager`. Every voice passes the global mute (`elysium.Mute`, **default 1**),
-which is a gain multiplier, not a stop.
-
-Shared readers: `ElysiumKeyValues.h` (whole-file character-stream tokenizer; **brace depth is the
-only structural signal**, and a repeated *leaf* key is data — `Values` keeps the last, the ordered
-`Pairs` array keeps them all), `ElysiumRulebook.{h,cpp}`, `FElysiumSignData`.
+Automation tests live in `Private/Tests/`: `ElysiumSubstrateTests.cpp` (content-free, `-nullrhi`)
+and `ElysiumContentTests.cpp` (parses real exports, self-skips when `tools/out` is empty).
 
 ## Engine gotchas
 
@@ -257,23 +158,8 @@ Hard-won, non-obvious, and easy to undo:
   omits the wrong things and a restored map re-runs every `logic_auto` ignition.
 - **Resolved `UAnimSequence`s cache on the map actor, not the subsystem** — glTFRuntime binds each to
   a specific `USkeleton`, and meshes are per-map-epoch.
-
-## Debug layer (non-Shipping)
-
-`UElysiumCogSubsystem` (`#if ENABLE_COG`) registers the stock CogEngine windows plus the Elysium ones
-(`_Status`, `_Maps`, `_Lights`, `_Entities`, `_Inspector`, `_EventQueue`, `_WorldViz`, `_Audio`,
-`_SoundScheme`, `_Logic`, `_Scripting`, `_Npc`) over the `FElysiumCogWindow` base.
-`UElysiumEntityDebugSubsystem` hosts the Source-style `elysium.ent_*` verbs and the world-viz layers.
-`ElysiumPick.{h,cpp}` is click-selection; `FElysiumGizmoLayer` is the retained gizmo ISM.
-`UElysiumMcpSubsystem` is Layer 3, reached through the reconnecting stdio proxy `tools/mcp_proxy.py`.
-**Cog boots dormant** (`elysium.CogPersist 0` deletes its layout ini before the dependency brings Cog
-up) — restored input capture makes the game's own UI unclickable.
-
-**Debug injection always uses the real chokepoint** (`FElysiumEntityWorld::EnqueueInput`).
-
-Automation tests live in `Private/Tests/` (inside the module — the plain-C++ substrate carries no
-`ELYSIUMUE_API` exports): `ElysiumSubstrateTests.cpp` (content-free, runs under `-nullrhi`) and
-`ElysiumContentTests.cpp` (parses real exports, self-skips when `tools/out` is empty).
+- **Cog boots dormant** (`elysium.CogPersist 0` deletes its layout ini before the dependency brings
+  Cog up) — restored input capture makes the game's own UI unclickable otherwise.
 
 ## Build and test loop
 

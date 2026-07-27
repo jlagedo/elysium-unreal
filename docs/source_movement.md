@@ -39,6 +39,50 @@ think and `PostThink` all sit inside `RunCommand` around the move, and
 the move integrates on the command's clock rather than the frame's. Full chain, addresses
 and the ordering evidence: `game_runtime.md` §1.
 
+## Frame timing — the host bound, and why there is no tick
+
+`_Host_RunFrame` (`engine.dll` `0x2008e450`) gates its entire body on
+**`Host_FilterTime` (`0x2008ba30`)**, which decides whether a frame runs at all and, if it does,
+sets `host_frametime`. Read out in full:
+
+```
+realtime += dt
+if (fps_max is set and != 0) {
+    fps = clamp(fps_max, 0.1, 1000.0)          // MIN_FPS / MAX_FPS
+    if (!recording && realtime - oldrealtime < 1.0 / fps)
+        return false                            // too early — no frame this pass
+}
+host_frametime = realtime - oldrealtime
+oldrealtime    = realtime
+host_frametime *= timescale                     // host_timescale
+host_frametime  = min(host_frametime, timescale * 0.1)     // MAX_FRAMETIME
+host_frametime  = max(host_frametime, timescale * 0.001)    // MIN_FRAMETIME
+```
+
+**The bound is `[0.001, 0.1]` seconds** — a hard 10 fps floor on a single frame's delta. Both
+constants are `double` in `.rdata`: `0x201736e0` = `0.1`, `0x20173650` = `0.001`
+(`0x20174070` = `1000.0` is `MAX_FPS`). So a hitch — a level-load flush, an alt-tab, a
+debugger break — can never hand the game more than 100 ms of simulation in one frame.
+
+`host_framerate` replaces the measurement outright rather than bounding it: when set, it wins and
+the clamp is skipped.
+
+**There is no fixed tick, and no accumulator.** `Host_FilterTime` bounds a *variable*
+`host_frametime` and returns; nothing accumulates a residual or runs the game N times at a fixed
+interval. This closes the question from the other direction than the cvar sweep did, and it agrees
+with it: `game_runtime.md` § "Time model" pins VtMB to the pre-tick Source branch on the absence of
+`interval_per_tick` / `sv_tickrate` / `TICK_INTERVAL`, and the frame pacing confirms it. 66.7 Hz is
+*modern* Source's default tickrate and has no presence in this build.
+
+**The consequence for movement is real, not theoretical.** Because every `CGameMovement` formula
+integrates on that variable delta, retail's movement genuinely is frame-rate dependent:
+`AirAccelerate`'s `addspeed` clamp stops binding above ~117 fps, and the full-step gravity puts the
+jump apex at `25 − 100·dt` units rather than a flat 25. Reproducing VtMB faithfully means
+reproducing that dependence.
+
+*Provenance: `DumpFuncs funcs=2008ba30 depth=1` on `engine.dll`; the four constants read from
+`.rdata` directly.*
+
 ## View / camera
 
 | ConVar | Value | Meaning |
@@ -191,6 +235,147 @@ step is never taken.
 
 VtMB has no `StayOnGround`: descending a step briefly leaves the ground rather than
 gluing to it, and `CategorizePosition`'s 2u down-trace is what re-detects the floor.
+
+## The hulls and the view offsets
+
+All six vectors are literals in the `CGameMovement` constructor (`0x1011e0d0`), stored on the
+mover itself and selected by the three accessors `GetPlayerMins` (`0x1011e310`), `GetPlayerMaxs`
+(`0x1011e350`) and `GetPlayerViewOffset(bool ducked)` (`0x1011e390`):
+
+| State | Field | mins | maxs | view offset |
+|---|---|---|---|---|
+| standing | `+0x14` / `+0x20` / `+0x5c` | `-16 -16 0` | `16 16 72` | `0 0 64` |
+| **ducked** | `+0x2c` / `+0x38` / `+0x68` | `-16 -16 0` | **`16 16 36`** | **`0 0 30`** |
+| observer | `+0x44` / `+0x50` | `-10 -10 -10` | `10 10 10` | — |
+
+So the ducked hull is the standing footprint at **half the height**, and the ducked eye sits at
+**30**, not the 28 that stock Source's `VEC_DUCK_VIEW` uses — a Troika value, and the reason it had
+to be read rather than assumed. The mins/maxs selector keys off `m_bDucking` (`player+0x1edd`),
+while the view-offset selector takes the ducked flag as an argument.
+
+The same constructor seeds `surfaceFriction` (`+0xa0`) to `1.0`, which is the value the game then
+computes every frame anyway (above).
+
+### Ducking
+
+`Duck` (`0x10126fd0`) is called from `PlayerMove` between the step-sound update and
+`CategorizePosition`, so the ground trace runs against the hull the rest of the frame will use. It
+latches `IN_DUCK` (button bit `4`) into `m_nOldButtons` itself, and drives four pieces of player
+state: `m_bDucking` (`+0x1edd`), `m_bDucked` (`+0x1ede`), `m_flDucktime` (`+0x1ee0`) and
+`m_flDuckJumpTime` (`player[0x7b8]`).
+
+`GAMEMOVEMENT_DUCK_TIME` is **1000.0** (milliseconds — `0x447a0000`, assigned to `m_flDucktime`
+on both the duck and the unduck edge), and the elapsed fraction is formed as
+`(1000 − ducktime) × 0.001` (`0x10454b8c` = `0.001f`) before being compared against the two
+transition thresholds, which are stock Source's:
+
+| Constant | Address | Value | Type |
+|---|---|---|---|
+| `GAMEMOVEMENT_DUCK_TIME` | `0x10447ee0` | `1000.0` | float (ms) |
+| `TIME_TO_DUCK` | `0x1044a2bc` | `0.4` | float |
+| `TIME_TO_UNDUCK` | `0x10449198` | `0.2` | **double** |
+
+`FinishDuck`
+(`0x10126cb0`) and `FinishUnDuck` (`0x101269e0`) swap the hull and fix the origin up by half the
+height difference; `FinishUnDuck` first runs a `TracePlayerBBox` at the standing size and refuses
+the unduck if it would not fit, which is what stops a stand-up through a low ceiling.
+
+*Provenance: `DumpFuncs range=1011e000-10128000` on `vampire.dll`; the hull literals decoded from
+the constructor's immediate dwords.*
+
+## Where each move function lives
+
+The whole mover, named by behaviour off the decompile (`CGameMovement::PlayerMove` and
+`CGameMovement::TracePlayerBBox` are the only two functions carrying their own profile string, so
+the rest are identified by their bodies):
+
+| Function | Address | Note |
+|---|---|---|
+| `PlayerMove` | `0x101274a0` | the dispatcher; profile string `CGameMovement::PlayerMove` |
+| `CategorizePosition` | `0x1011e560` | ground + `surfaceFriction` |
+| `Duck` | `0x10126fd0` | → `FinishDuck` `0x10126cb0` / `FinishUnDuck` `0x101269e0`, `CanUnduck` `0x101265d0` |
+| `FullWalkMove` | `0x10121ce0` | the gravity split lives here |
+| `FullNoClipMove` | `0x10122190` | reads `sv_noclipspeed` / `sv_noclipaccelerate` |
+| `StartGravity` / `FinishGravity` | `0x1011fa80` / `0x10120f30` | the half-step pair |
+| `Friction` | `0x10120ba0` | |
+| `Accelerate` / `AirAccelerate` | `0x101212e0` / `0x10121000` | |
+| `WalkMove` (`StepMove` inlined) | `0x101213b0` | |
+| `WaterMove` | `0x101200c0` | |
+| `CheckWater` / `CheckWaterJump` / `WaterJump` | `0x101252e0` / `0x1011fb50` / `0x1011ffe0` | |
+| `CheckFalling` | `0x10125db0` | |
+| `TracePlayerBBox` | — | profile string `CGameMovement::TracePlayerBBox` |
+| `UpdateStepSound` | `0x1011e940` | step intervals 60/80 walking, 120/220 running |
+
+### The gravity half-step split
+
+`FullWalkMove`'s body, in order — this is where the split actually is, not in the caller:
+
+```
+if (!CheckWater())  StartGravity()                  // the FIRST half
+if (m_flWaterJumpTime != 0) { WaterJump(); TryPlayerMove(); CheckWater(); return }
+if (waterlevel >= 2) { if (waterlevel == 2) CheckWaterJump(); ... WaterMove(); ... }
+else {
+    IN_JUMP ? CheckJumpButton() : (oldbuttons &= ~IN_JUMP)
+    if (onground) { velocity.z = 0; Friction() }
+    CheckVelocity()
+    onground ? WalkMove() : AirMove()
+    CategorizePosition()
+}
+velocity -= basevelocity
+CheckVelocity()
+if (!CheckWater())  FinishGravity()                 // the SECOND half
+if (onground) velocity.z = 0
+CheckFalling()
+```
+
+### Ladders: VtMB has none
+
+**`PlayerMove`'s movetype switch has no ladder arm.** Its cases are `0` (none), `2`/`3` (both →
+`FullWalkMove`), `5`/`6` (→ the toss move), `9` (→ `FullNoClipMove`) and `10` (→ the observer
+move), with everything else falling through to the `Bogus pmove player movetype %i` DevMsg. The
+`"ladder"` string in `vampire.dll` at `0x10572554` is a **footstep material name** read by
+`UpdateStepSound`, not a move type.
+
+This agrees with the content: no `func_ladder`, `func_useableladder` or any other ladder classname
+appears in the exported entity lumps. Ladder movement is not part of this game, so a port has
+nothing to reproduce.
+
+### Water
+
+Water movement *does* exist — `WaterMove` (`0x101200c0`), reached from `FullWalkMove` whenever
+`m_nWaterLevel` (`player+0x3e0`) is 2 or more — but **no exported map places a water brush**, so
+it is unexercised by current content. The shape, read off the decompile:
+
+```
+wishvel  = forward*forwardmove + right*sidemove          // the full 3D view basis, pitch included
+wishvel.z += upmove                                       // or += m_flUpMove's jump-button variant
+if (no buttons and no move input)
+    wishvel.z -= 40                                       // idle sink  (0x10462950; +40 when flagged)
+wishspeed = min(|wishvel|, maxspeed) * 0.8                // 0x104491a8 = 0.8 (double)
+
+// friction: no stopspeed floor, and it scales all three components
+if (speed != 0) {
+    newspeed = speed - dt * surfaceFriction * sv_friction * speed
+    if (newspeed < 0.1) newspeed = 0                      // 0x104491b4 = 0.1f
+    v *= newspeed / speed
+}
+// then a capped acceleration toward wishdir, on its own ConVar rather than sv_accelerate
+```
+
+Two constants differ from HL2's `CGameMovement`: the idle **sink rate is 40**, not 60, and the
+water speed scale is the stock `0.8`. Vertical placement uses the hull's **midpoint** (`0.5`,
+`0x10449270`, a double) rather than the eye.
+
+**Confidence:** the wish-velocity build, the sink branch, the `0.8` clamp and the friction step are
+transcribed from the decompile. The acceleration tail and the `WaterJump` /
+`CheckWaterJump` pair (`0x1011ffe0` / `0x1011fb50`) are located and their ConVars identified
+(`0x109ef28c` drives the water accel) but **not yet transcribed line-by-line** — there is no
+content to validate them against, so they are the one part of this survey left at
+"located, not read".
+
+*Provenance: `DumpFuncs range=1011e000-10128000` on `vampire.dll`; every constant above read
+directly from `.rdata` — note that several are `double` where the decompiler prints a bare `_DAT_`,
+including the `0.7` standable normal (`0x104492d0`) and `TIME_TO_UNDUCK`.*
 
 ## Player speed is animation-driven
 

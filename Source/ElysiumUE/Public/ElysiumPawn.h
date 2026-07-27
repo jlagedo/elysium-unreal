@@ -52,6 +52,13 @@ public:
 	virtual void ApplyUserCmd(const FElysiumUserCmd& Cmd) override;
 	virtual UElysiumCameraComponent* GetCameraComponent() const override { return Camera; }
 
+	// Swap the hull between the standing and ducked sizes (`docs/source_movement.md` → "The hulls
+	// and the view offsets"). The mover owns *when*; the pawn owns *how*, because the box extent
+	// and the camera's relative Z have to move together or the view detaches from the body for a
+	// frame. Not on `IElysiumPlayerBody` — `AElysiumCapsulePawn` has no mover and must not grow a
+	// no-op to satisfy an interface.
+	void SetHullHeight(float HeightCm, float EyeAboveFeetCm, bool bAnchorFeet);
+
 private:
 	UPROPERTY() TObjectPtr<UBoxComponent> Hull;
 	UPROPERTY() TObjectPtr<UElysiumCameraComponent> Camera;

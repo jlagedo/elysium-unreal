@@ -392,36 +392,31 @@ M1 leftovers that live in this lane.
   substituted, and a capsule's rounded bottom reports ~0.65 against `StepMove`'s `0.7` standable test,
   rejecting every climb (`source_movement.md`). **11.6 [x]** re-based the pawn to `APawn` + box +
   `UElysiumMovementComponent` and supplies the `FElysiumUserCmd` this consumes; what is left here is
-  the line-by-line port — the gravity half-step split, a fixed movement tick, ducking, ladders and
+  the line-by-line port — the gravity half-step split, the timestep, ducking and
   water, against 11.6's Source-shaped shell. **`surfaceFriction` is closed**: it is 1.0 on every
   world surface in retail (VtMB scales the material's friction by 1.25 and clamps to 1.0; 1 of
   11,624 VMTs carries a `$surfaceprop`, so everything is the `default` prop at 0.8), so the shell's
   hardcoded 1.0 is already faithful and there is nothing per-surface to export
-  (`source_movement.md`). **Frame-rate independence is the live one**: the mover runs on the render
-  delta, and while ground friction is dt-stable to <2% over 60–240 fps, `AirAccelerate`'s `addspeed`
-  clamp stops binding above ~117 fps — a 120 fps player gets 3500 u/s² of air control where VtMB's
-  fixed 66.7 Hz tick gives 2000 — and the full-step gravity puts the jump apex at `25 − 100·dt`
-  units instead of a flat 25. A fixed-timestep accumulator at Source's tick closes both.
-  **Two divergences the port must settle first** (found reviewing the clock, 2026-07-27):
-  (a) **Nothing clamps the frame delta.** `FElysiumTimeControl::AdvanceFrame` and the mover's
-  `TickComponent` both take Unreal's raw delta. Stock Source bounds host frametime in
-  `Host_FilterTime` before `GameFrame` ever sees it, so a hitch — level-load flush, alt-tab, a
-  debugger break — cannot hand the mover one enormous integration step or fire a whole interval's
-  thinks and queued I/O in a single frame; ours can. A clamp must cover the clock and the mover with
-  the same number, or game time and player motion disagree about how long the frame was. VtMB's own
-  bound is unconfirmed — `Host_FilterTime` is `engine.dll`, outside the `vampire.dll` dumps — so RE
-  it before pinning a constant. (b) **The "fixed 66.7 Hz tick" above is unverified and contradicts
-  `game_runtime.md`**, which pins VtMB to the *pre-tick* Source branch on cvar absence (no
-  `interval_per_tick` / `sv_tickrate` / `TICK_INTERVAL` in `engine.dll`; `GameFrame` runs once per
-  rendered frame on a variable `gpGlobals->frametime`, with `curtime` the only clock). 66.7 Hz is
-  *modern* Source's default tickrate — the exact trap `game_runtime.md` flags. If the pre-tick
-  finding holds, retail's air-accel really is frame-rate dependent, and a fixed-step accumulator is a
-  **divergence** — defensible, but one needing an owner call recorded in `source_movement.md`, not the
-  faithful baseline. Settle which before porting: it decides whether the target is "reproduce the fps
-  dependence" or "pin the tick". Sequenced **in
+  (`source_movement.md`). **The two divergences this task carried are both settled by RE**
+  (`Host_FilterTime` `0x2008ba30`, decompiled): (a) **the frame-delta bound is `[0.001, 0.1]`
+  seconds** — VtMB clamps `host_frametime` to a hard 10 fps floor before the game sees it, so the
+  port pins that one number across `FElysiumTimeControl::AdvanceFrame` and the mover, which both
+  take Unreal's raw delta today. (b) **There is no tick.** `Host_FilterTime` bounds a *variable*
+  frametime and returns — no accumulator, no fixed-interval loop — which confirms
+  `game_runtime.md`'s pre-tick finding from the pacing side and retires the "fixed 66.7 Hz tick"
+  (that is *modern* Source's default). So retail's frame-rate dependence is real and faithful:
+  `AirAccelerate`'s `addspeed` clamp stops binding above ~117 fps, and full-step gravity puts the
+  jump apex at `25 − 100·dt` units instead of a flat 25. **A fixed-step accumulator is therefore a
+  divergence, not the baseline** — it ships behind `elysium.move.FixedStep` (default 0 = faithful
+  variable delta), recorded in `source_movement.md`. **RE22 is closed** and the ducked hull is
+  `(-16,-16,0)..(16,16,36)` with the eye at 30. **Ladders are out of scope, not deferred**: VtMB's
+  `PlayerMove` switch has no ladder arm and no map places a ladder entity, so there is nothing to
+  reproduce. Water movement exists (`WaterMove` `0x101200c0`) and its wish-velocity build, `0.8`
+  speed clamp, `40` idle sink and friction step are transcribed, but no exported map places a water
+  brush, so it lands formula-faithful and unexercised; the accel tail and the `WaterJump` pair are
+  located, not read. Sequenced **in
   the playable path (PP4)** by owner call — the tutorial is
-  played with VtMB feel, not UE feel. Open RE it needs: **RE22** (the ducked hull's dimensions —
-  `IN_DUCK` is in the user command with nothing sizing it). (c) **An owner call this task carried, now
+  played with VtMB feel, not UE feel. (c) **An owner call this task carried, now
   discharged:** RE21 pinned retail as movement-*first*, called **reproduce** and landed by **11.11** — the mover already runs before the think pass, on the user
   command's own delta, with the player's own think ahead of it. Port onto that order; the frame is
   no longer moving under this task. *Deps:* 11.6, 11.11.
@@ -1165,7 +1160,7 @@ retail end to end, and `test.bat Play` proves it headlessly.
 | RE19 | **Choreographed-scene format + event semantics** — the `.vcd` grammar (uniform word-list/brace, 14 live tokens of a much larger parser vocabulary), the 19-type `CChoreoEvent` enum with **nine** used by content and `CAMERASHOT` unhandled by the engine, the `CSceneEntity` datamap (4 inputs / 7 outputs; `force_lod` is a dead key), actor binding **by name** (`targetN` is inert — `!targetN` has zero uses), `position_start`/`position_end`, absolute-time playback offset by `snd_mixahead`, and `Start→OnStart` / end→`OnCompletion` / `Cancel`→`OnCanceled` / `firetrigger "N"`→`OnTriggerN`. 5,444 scenes on disk, 105 named by the 122 map entities; the rest are per-line dialogue scenes on `CInstancedSceneEntity`. Full: `docs/choreographed_scenes.md`; probe: `tools/probe_scenes.py` | 12.1, PL9 | [x] |
 | RE20 | **MDL v2531 facial data** — the studiohdr facial block (at **344**, eight bytes past the VAMPTools field walk), `mstudioflexdesc_t` 4B / `mstudioflexcontroller_t` 20B / `mstudioflexrule_t` 12B + 8B RPN ops / `mstudiomouth_t` 20B; `StudioFlex` 32B with its target ramp, and **both** `StudioVertAnim` encodings — the 8B compressed record stores *directions*, two byte offsets into a 5,314-entry unit-vector table in `StudioRender.dll` plus `n/255` magnitudes scaled 8.0/2.0, and a 20B raw form (`mingxiao_transformation` only). **`NumEyeballs` is 0 on all 4,444 models** — no eye pose, look-at or procedural lid was ever authored; eyes are eyelid flexes. `.lip` is plain text (7,136 files, `VERSION`/`PLAINTEXT`/`WORDS`/`EMPHASIS`(always empty)/`CLOSECAPTION`/`OPTIONS`), joined to `expressions/<model stem>_phonemes.vfe` (249 tables) for phoneme→controller weights. Corrects `mdl_v2531.md`: `StudioModel` is **224B** and carries its own de-quantization offset/scale at +0xA0. Full: `docs/facial_animation.md`; probe: `tools/probe_facial.py` | 12.3–12.5, PL10 | [x] |
 | RE21 | **`GameFrame` usercmd order** — **movement runs *before* the think pass**, and not in `GameFrame` at all: the engine runs it while draining the client's `clc_move` message (`_Host_RunFrame` → `SV_Frame` `0x200f62b0` → `SV_ReadPackets` → `SV_ExecuteClientMessage` → clc_move `0x200f9990` → `serverGameClients->ProcessUsercmds` → `CPlayerMove::RunCommand` `0x101874a0`), then `SV_Frame` calls `serverGameDLL->GameFrame` `0x1011abc0` (the old `0x10571fc0` is that function's profile *string*) whose body is thirteen calls with `Physics_RunThinkFunctions` third and `ServiceEvents` sixth. Also pins: the player's own think runs inside `RunCommand`, and `frametime`/`curtime` are rebound to the command's timing for the move. **`runtime-architecture.md` §3's tick table now reproduces this order — called as reproduce, landed by 11.11.** Full: `game_runtime.md` §1 | 11.1, **11.11**, 4.7 | [x] |
-| RE22 | **The ducked hull** — Source's crouch AABB dimensions + `CategorizePosition`/`StepMove` interaction (standing `32×32×72` is recorded in `source_movement.md`; ducked is not, and `IN_DUCK` needs it) | 4.7, 11.6 | [ ] |
+| RE22 | **The ducked hull** — all six hull/view vectors are literals in the `CGameMovement` ctor (`0x1011e0d0`): ducked is `(-16,-16,0)..(16,16,36)` with the eye at **30** (not stock Source's `VEC_DUCK_VIEW` 28 — a Troika value), standing `(-16,-16,0)..(16,16,72)` eye 64, observer `±10`. `GAMEMOVEMENT_DUCK_TIME` is 1000 ms; `FinishUnDuck` refuses a stand-up that fails a standing-size `TracePlayerBBox`. The same ctor seeds `surfaceFriction` to 1.0. **Also closed alongside it:** VtMB's `PlayerMove` switch has **no ladder arm** — ladder movement is not in this game, and the `"ladder"` string is a footstep material. Full: `source_movement.md` → "The hulls and the view offsets" / "Ladders: VtMB has none" | 4.7, 11.6 | [x] |
 | RE23 | **The particle format + the wetness channel** — VtMB's weather is Troika-custom, not Source: no `func_precipitation` anywhere in the install, and the parser lives in a forked `Bin/engine.dll` (gate cvar `particles_enable_precipitation`). The `particles/*.txt` grammar is partly reconstructed (envelope, emitter-vs-particle roles, the `a~b` / `a,b,…` / `v(n)` value forms, the `collide { spawn / decal }` block) — `weather.md` marks what is inferred. Eight open questions, the load-bearing ones being **what `FadeGlobalWetness` actually scales** (`GlobalWetness` crosses into `client.dll`, so it reaches the render side), **who calls it** (survey `out/scripts/`), and whether `func_particle`/`env_particle` take the standard I/O + `start_hidden` surface. No public RE exists — the community FGD defines neither classname and annotates all three wetness keys "Not tested yet...". Full: `docs/weather.md` | 7.9, PL12 | [ ] |
 | RE24 | **The sheet math** — all four closed, and two premises were wrong. The substrate first: a trait is `(container, index)` over `CVStatList_t`, **index counting the container's leading `*_Order` block as 0**, so `m_iVAttributes*` is **35** slots (not 21) and `m_iVAbilities*` **13** (not 12) — proven three ways off the datamap and three hardcoded indices. **`AwardExperience`**: `floor(value/100)` confirmed, but `AddExperience` **keeps the sub-100 remainder**, and **give-once is the `m_ExpList` ledger, not the trailing `01`** — every key is give-once; a `> 299` award additionally adds `Experience_Modifier`. **`CalcFeat`** returns a plain int — the *rating*, not a roll — from `Feats::FeatValue`: the sum of a **variable-length** `Base%d` list (`Soak_vs_Bashing` has three, `Damage` none, `"Armor_Rating / 2"` is a per-base `÷`), each entry the *current* value, the nine attributes floored at 1, plus per-feat code terms, a feat-level trait-effect pass, and a clamp to `MaxValue`; `PCWeighting` resolves at load to a `dicerolls.txt` index (all 23 feats → `Normal`). **`BumpStat`**'s third argument is a **repeat count**; it writes the **base** via `IncBase`, under a hardcoded `GetBase < 5` ceiling, and cannot decrement. **There is no Stamina→Health derivation** — `Max_Health` is an authored stat (`Default 100`, no formula in any `vdata` file, no trait effect targeting it) and **`Health` counts damage taken**; NPC tracks are `npctemplate*`'s literal `Max_Health`. Residue: five per-feat override object pointers, null in the image with no writer found. Full: `game_runtime.md` §3; as-built: archive | 9.4b, 9.4c | [x] |
 | RE25 | **Chargen math** — all four closed, and the whole chargen surface turned out to live in **`client.dll`**, not `vampire.dll`. **Pools:** seven per-category counters = clan-keyed `rules_tables.txt` `Subpool_*` (zero on every shipped clan bar `Subpool_Disciplines` = 1) **+** the tier table routed through `Attribute_Order_Lookups`/`Ability_Order_Lookups` — so a playable PC spends **2/1/0** attribute dots, **3/2/1** ability dots, **1** discipline dot, over a baseline the wizard *buys* with `giftxp 9000` + `vautolvl <clan>_CharGen`. **Cost:** `Current_Rating` is **pre-purchase** and is the stat's **base**; `Sell(r) ≡ Buy(r−1)`; `New` only for the 0→1 step and never for attributes; `30000` = cannot buy. **The `-1` sentinel** gates the sheet's **row filter** (`0 ≤ v < 6`), not the price — and the `Raise_Clan_Discipline`/`Raise_Other_Discipline` dual formula was **never implemented** (neither string exists in either DLL). **Banes/histories** are the generic trait-effect layer, with its operator enum shipped as data (`traiteffect.txt` `ModifierNames`). Residue: trait-effect stacking order. Full: `game_runtime.md` → "Chargen" / "Buying a dot" / "Trait effects"; as-built: archive | 9.4f | [x] |

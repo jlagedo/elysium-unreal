@@ -66,7 +66,7 @@ namespace
 		{ TEXT("lookdown"),     EK::ButtonPair, EG::Movement, EB::LookDown,     TEXT("keyboard pitch down (cl_pitchspeed)") },
 		{ TEXT("speed"),        EK::ButtonPair, EG::Movement, EB::Speed,        TEXT("walk modifier -- held selects the slow gait") },
 		{ TEXT("strafe"),       EK::ButtonPair, EG::Movement, EB::Strafe,       TEXT("strafe modifier -- the turn keys strafe while held") },
-		{ TEXT("duck"),         EK::ButtonPair, EG::Movement, EB::Duck,         TEXT("crouch -- hull dimensions unrecovered (RE22), consumed at 4.7") },
+		{ TEXT("duck"),         EK::ButtonPair, EG::Movement, EB::Duck,         TEXT("crouch -- 36u hull, eye at 30u") },
 		{ TEXT("jump"),         EK::ButtonPair, EG::Movement, EB::Jump,         TEXT("jump") },
 		{ TEXT("klook"),        EK::ButtonPair, EG::Movement, EB::KLook,        TEXT("keyboard look mode") },
 		{ TEXT("mlook"),        EK::ButtonPair, EG::Movement, EB::MLook,        TEXT("mouse look mode -- on from a cold start (default.cfg ends with +mlook)") },

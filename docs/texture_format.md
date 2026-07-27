@@ -1,0 +1,74 @@
+# Textures (`.tth`/`.ttz`) and VMT materials
+
+VtMB ships no loose `.vtf` — every texture is a pair under `materials/`: `<name>.tth` (header) +
+`<name>.ttz` (compressed data). The reader is `tools/tex_to_png.py`; the inverse writer (RE probes
+only, below) is `tools/tex_from_png.py`.
+
+## `.tth` header
+
+`"TTH\0"` sig, a mip offset/size table, then an **embedded standard VTF header** starting at the
+`"VTF\0"` marker. Relative to that marker: `width` uint16 @16, `height` uint16 @18,
+`reflectivity` float[3] @32, `highResFormat` uint32 @52, `mipCount` uint8 @56.
+
+`reflectivity` is the **linear** average albedo `vtex` computed from the texture; VtMB's engine
+multiplies every bounce ray by it when building a model's ambient cube (the consumer:
+`sky-ambience.md` → "K3/K5"), so it is a decodable input, not dead header space.
+`tex_to_png.reflectivity(tth)` reads it and the exporter writes it into the `.mtl` as
+`reflectivity r g b`. Over `sp_tutorial_1`'s 412 materials it correlates with the decoded
+texture's own mean **linear** albedo at 1.0000 (0.9597 against the gamma-encoded mean) — both the
+decode's proof and the proof that the average is linear.
+
+## `.ttz` payload
+
+Zlib-compressed (`78 da`) raw image data = a DXT mip pyramid, ordered **smallest→largest** (the
+full-res mip is LAST). Formats seen: DXT5 (enum 15, most common), DXT1 (13), DXT3 (14), BGR888
+(3), BGRA8888 (12), RGBA8888 (0).
+
+Decode: decompress `.ttz`, slice the last mip (size from the block formula), wrap DXT blocks in a
+minimal DDS header, let PIL decode → RGBA.
+
+## Writing a `.tth` (RE probes only)
+
+Full layout, as needed to **write** one (`tools/tex_from_png.py`): `"TTH\0"`, `uint16 version`
+(1), `uint8 mip_count`, `uint8 inline_mips`, `uint32 vtf_blob_len` (bytes from the `"VTF\0"`
+marker to EOF), then `mip_count + 1` pairs of `uint32 raw_offset, uint32 ttz_prefix`, then the
+embedded VTF 7.1 header (64 B), a low-res DXT1 16×16 thumbnail (128 B), and the `inline_mips`
+**smallest** mips. A mip's `raw_offset` is its position in the reconstructed
+`[header][thumbnail][mips]` image counted from the `"VTF\0"` marker, so the first mip sits at
+192; `ttz_prefix` is how many compressed bytes precede it, which works because the `.ttz` is one
+zlib stream with a `Z_SYNC_FLUSH` between mips (`decompressobj().decompress(ttz[:prefix])` yields
+exactly the mips before it). Entry `mip_count` holds the two totals — end offset and `.ttz`
+length. Inline mips carry prefix 0. Retail textures keep their three smallest mips inline; the
+patch's uncompressed re-exports keep none and leave the per-mip columns unfilled, so only the
+totals row is load-bearing. `encode_like(template_tth, img)` clones a shipped texture's format,
+flags and mip policy — BGR888 round-trips bit-exact, DXT5 within a re-encode.
+
+This writer exists only for RE probes that need the *original game* to draw an authored image
+(e.g. the sky-orientation probes in `sky-ambience.md`) — VtMB has no loose `.vtf` path, and the
+writer produces nothing the runtime consumes.
+
+## Cubemaps
+
+VtMB cubemaps are **VTF 7.1 = 7 faces** (six axes + a legacy spheremap, dropped): DXT cubes ship
+the large mips zlib'd in `.ttz` (small mips in `.tth`); recompiled maps store uncompressed
+**BGR888 inline in the `.tth`, no `.ttz`**. `tex_to_png.decode_cubemap` handles both, slicing the
+full-res mip's first six faces. The naming convention that ties a cubemap to a BSP face is
+`bsp_format.md` → "Cubemaps".
+
+## VMT materials (`tools/vmt.py`)
+
+KeyValues text. `parse(text, resolve_include)` returns `basetexture` (normalized, `\`→`/`,
+lowercased), `selfillum`, `translucent`, `alphatest`. Shader `"patch"` follows one `include`.
+`$selfillum "1"` means the base texture's **alpha channel is the emission mask** — emission =
+`RGB × (alpha/255)`, only masked pixels glow.
+
+Material resolution: material name → `materials/<name>.vmt` → `$basetexture` →
+`materials/<basetexture>.tth`/`.ttz`.
+
+**What a VMT's shader actually does is shipped as data, not compiled into a binary.**
+`materials/dxshaders/*.psh` are readable **ps.1.1 assembly source** with Valve's own comments
+intact, and `shaders/vsh/*.vcs` / `shaders/psh/*.vcs` are the compiled combos (a small offset
+header, then one DX8 bytecode program per static combo, each ending `ff ff 00 00`). Both resolve
+through `install.build_index` like any other asset, so "what does this material do to colour" is
+a file read, not a decompile. The shader-level findings (`unlitgeneric.psh`,
+`lightmappedgeneric.psh`, the sky-vs-world brightness relationship) are `color_gamma.md`.

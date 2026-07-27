@@ -17,7 +17,10 @@ UWorld* FElysiumTimeControl::ResolveWorld() const
 
 double FElysiumTimeControl::AdvanceFrame(double DeltaSeconds)
 {
-	return Clock.Advance(DeltaSeconds);
+	// Bounded exactly as `Host_FilterTime` bounds it, with the same constant the mover uses: a
+	// hitch must not fire a whole interval's thinks and queued I/O in one frame, and game time must
+	// not disagree with player motion about how long the frame was.
+	return Clock.Advance(ElysiumFrame::ClampFrameDelta(DeltaSeconds));
 }
 
 void FElysiumTimeControl::EndFrame()

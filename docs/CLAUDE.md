@@ -16,9 +16,12 @@ the maintenance contract.
   divergence needs the faithful behaviour RE'd and recorded **in the doc that owns the system**,
   stated beside the divergence and marked as one.
 - **A new VtMB format/behaviour finding** → the topic doc that owns it (`entity_io.md`,
-  `python_bridge.md`, `audio_pipeline.md`, `mdl_v2531.md`, `facial_animation.md`,
+  `python_bridge.md`, `audio_pipeline.md`, `mdl_v2531.md`, `phy_vphysics.md`, `bsp_format.md`,
+  `vpk_format.md`, `texture_format.md`, `facial_animation.md`,
   `source_movement.md`, `controls.md`,
-  `level_transitions.md`, `animation_and_movers.md`, `game_runtime.md`). Cite where it came
+  `level_transitions.md`, `animation_and_movers.md`, `game_runtime.md`). This is **never**
+  `tools/CLAUDE.md` — that file is pipeline orientation only, no matter how format-specific the
+  finding reads. Cite where it came
   from — decompiled address, `tools/ghidra/run.ps1 -Script DumpGrep` output, or the data file.
   `python_bridge.md` ↔ `script_api.md` split the scripting layer the same way the other pairs
   split theirs: the first owns the binding **mechanism**, the second the per-name **inventory**

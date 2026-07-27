@@ -107,6 +107,16 @@ Every button is sized to the *widest* label, so the column is one uniform block.
 **same virtual canvas `CSignUI` uses** — signs, menu and HUD share one
 authored coordinate model, and it is 1024×768, not VGUI's 640×480.
 
+### The title art
+
+`MainMenu` composes `MenuBackground3D` + the title art + `GameMenuPanel`(main) + theme music,
+and opens dialogs on menu commands. The title is `title.png` (`interface/mainmenu/vtm_title`)
+drawn as **one** image at `TitleRect` — VGUI scales art by width/640 and height/480
+independently, so it stretches with the window rather than holding its authored aspect
+(`StretchMode.Scale`). A `TextureRect` needs `ExpandMode = IgnoreSize`, or the texture's own
+pixel size becomes the control's *minimum* and a smaller rect silently clamps up to it. The
+pause overlay (`GameManager`) reuses `GameMenuPanel`(pause) over a dimmed world.
+
 ### The animated backdrop
 
 `FUN_10067030` reads `resource/MainMenuParticles.txt`: `camera_rotation`, `camera_fov` (default

@@ -1,0 +1,113 @@
+# BSP format (VtMB = version 17)
+
+VtMB's compiled maps (`maps/*.bsp`) are a Source-engine BSP, version **17** — an early Source
+2003 dialect with several VtMB-specific struct divergences from the modern (v19+) format. The
+reader is `tools/bsp.py`; struct layouts are cross-checked against ata4/bspsrc (public domain,
+cloned read-only at `E:\dev\bspsrc` — its `bspsrc-lib` has VtMB-specific `DFaceVTMB`/
+`DDispInfo`/`DStaticPropV4` classes).
+
+## Container
+
+Header: `int ident "VBSP" (0x50534256)`, `int version (17)`, `lump_t[64]`, `int mapRevision`.
+`lump_t` (16 B): `int fileofs, filelen, version; char[4] fourCC`. The lump directory starts at
+byte 8; a BSP is a container of 64 lumps addressed by that directory, not by any fixed layout
+after it.
+
+Lumps used by this pipeline: 0 ENTITIES (text KeyValues — format and semantics: `entity_io.md`),
+1 PLANES, 2 TEXDATA, 3 VERTEXES, 4 VISIBILITY (PVS — the 3D-skybox split), 5 NODES, 6 TEXINFO,
+7 FACES, 8 LIGHTING (baked lightmaps — decoded for *analysis* only, not baked for runtime; the
+WORLDLIGHTS sources that produced it are `lighting.md`), 10 LEAFS, 12 EDGES, 13 SURFEDGES,
+14 MODELS, 15 WORLDLIGHTS (real-time light sources — full format: `lighting.md`), 16 LEAFFACES,
+17 LEAFBRUSHES, 18 BRUSHES, 19 BRUSHSIDES (collision), 26 DISPINFO / 33 DISP_VERTS / 48 DISP_TRIS
+(displacement terrain), 35 GAME_LUMP (static/detail props), 40 PAKFILE (embedded zip; holds
+cubemap-patched material VMTs), 42 CUBEMAPS, 43 TEXDATA_STRING_DATA, 44 TEXDATA_STRING_TABLE.
+
+## VISIBILITY (lump 4)
+
+`int numclusters; int byteofs[numclusters][2]` (`[0]` = PVS, `[1]` = PAS), then run-length-coded
+cluster bit rows — a `0x00` byte is followed by a count of zero bytes.
+
+## Leaf/node tree
+
+`dleaf_t` (LEAFS, lump 10) is the modern **32-byte** form: `contents` i @0, `cluster` h @4,
+`firstleafface` H @20, `numleaffaces` H @22, `firstleafbrush` H @24. `dnode_t` (NODES, lump 5,
+32 B): `planenum` i @0, `children[2]` i @4. `bsp.point_leaf(data, pt)` walks the node tree to a
+leaf; `bsp.pvs_faces(data, origin)` returns the model-0 faces visible from a point.
+
+`tools/bsp.py` is the shared reader: `read_lump`/`lump_ptr`, the struct-offset constants,
+`strings_from_blob`, plus `read_game_lump(data) -> {fourcc: (version, bytes)}`,
+`read_pakfile(data) -> {name: bytes}`, and `read_dispinfos`/`read_dispverts` (displacements).
+
+## Faces (`dface_t`, lump 7)
+
+**VtMB's `dface_t` is 104 bytes** (`DFaceVTMB`; modern Source is 56). Full layout:
+`avgLightColor[8]` int32 @0, `planenum` uint16 @32, `side` @34, `onnode` @35, `firstedge` int32
+@36, `numedges` int16 @40, `texinfo` int16 @42, `dispinfo` int16 @44 (`-1` = not a
+displacement), `surfaceFogVolumeID` uint16 @46, `styles[8]` @48, `day[8]` @56, `night[8]` @64
+(three 8-entry lightstyle arrays where modern Source has one `styles[4]@68`), `lightofs` int32
+@72 (`-1` = unlit), `area` float @76, `LightmapMins[2]` int32 @80, `LightmapSize[2]` int32 @88
+(luxels; actual dims are size+1), `origFace` @96, `smoothingGroups` @100. Face count =
+`FACES_len / 104`.
+
+`day`/`night` are **dead**: `0x00` on every face of all 108 maps (where `styles` uses `0xFF` for
+an unused slot), and no `engine.dll` code reads offsets 56–71 — the FACES lump's three consumers
+are `Mod_LoadFaces`, the face-centroid builder, and `CMod_LoadDispInfo`. Lump 8 therefore holds
+one bake, keyed by `styles[8]` alone; the "two full bakes" reading bspsrc's field names suggest
+is retired. Evidence and the lighting analysis this feeds: `sky-ambience.md` → "K4 … (settled)".
+
+**Other lump-7-adjacent structs**, all fixed layouts: VERTEXES = `float[3]` (12 B). EDGES =
+`uint16[2]` (4 B). SURFEDGES = signed int32. TEXINFO = 72 B (`sAxis float[4]` @0, `tAxis float[4]`
+@16, `texdata` int32 @68). TEXDATA = 32 B (`nameStringTableID` int32 @12, `width` @16, `height`
+@20). TEXDATA_STRING_TABLE = int32 byte-offsets into TEXDATA_STRING_DATA (null-terminated
+strings).
+
+### Face polygon reconstruction
+
+A face stores no vertex list, only edges: walk `surfedges[firstedge .. +numedges]`; each surfedge
+`se` → edge index: `se>=0` uses `edges[se][0]`, `se<0` uses `edges[-se][1]` (sign = winding).
+Collect corners, then fan-triangulate.
+
+### Face → material
+
+`face.texinfo → texinfo.texdata → texdata.nameStringTableID → stringtable[id] → stringdata →
+name` (e.g. `"BUILDING/CHINABLDG04"`).
+
+### UVs
+
+Planar projection, computed in **source** coordinates before the axis swap: `u = (pos·sAxis.xyz
++ sAxis.w) / texWidth`, `v = (pos·tAxis.xyz + tAxis.w) / texHeight`, texWidth/Height from TEXDATA.
+
+## Static/detail props (GAME_LUMP, lump 35)
+
+Dir header `int count`, then per entry `char[4] fourCC, uint16 flags, uint16 version, int
+fileofs, int filelen`. `fourCC` is stored byte-reversed (`sprp`→`prps` on disk); `fileofs` is
+absolute from the BSP start. Entries seen: `sprp` (static props, v4), `dprp` (detail props, v2),
+`dplt`.
+
+The `sprp` payload: `int nameCount; char[128] modelDict[]; int leafCount; uint16 leaf[]; int
+propCount; DStaticProp prop[]`. VtMB uses **`DStaticPropV4` (56 B)**: `Vector origin; Vector
+angles; uint16 propType (→modelDict); uint16 firstLeaf, leafCount; byte solid, flags; int skin;
+float fadeMin, fadeMax; Vector lightingOrigin`. (`ch_hub_1` = 500 props / 124 models; `la_hub_1`
+= 864.)
+
+## `TOOLS/*` materials
+
+`toolsnodraw`, `toolsclip`, `toolstrigger`, `toolsskybox`, `toolshint`, `toolsareaportal`, … are
+invisible engine surfaces — their faces carry no visible geometry and are skipped.
+
+## Cubemaps
+
+Cubemap-patched material names appear as `maps/<mapname>/<mat>` and
+`maps/<mapname>/<mat>_<x>_<y>_<z>`. Strip the `maps/<mapname>/` prefix and any trailing `_x_y_z`
+to get the base material; base VMTs live in the VPKs, patched VMTs live in lump 40 (PAKFILE). The
+`_x_y_z` suffix (or its absence) also names the face's baked env cubemap
+(`materials/maps/<map>/c<x>_<y>_<z>` or the map-wide `cubemapdefault`), embedded in PAKFILE.
+CUBEMAPS (lump 42) holds the sample origins: `dcubemapsample_t` (16 B): `origin[3]` int32,
+`size` int32 (`0` = engine default). VtMB cubemaps are **VTF 7.1 = 7 faces** (six axes plus a
+legacy spheremap, dropped); the container they ship in is `texture_format.md`.
+
+## Coordinates
+
+The Source→Unreal (and legacy Source→Godot) transforms live once in `tools/bsp.py` and are
+described in the repo-root `CLAUDE.md` → "Coordinates are read verbatim" and
+`rebuild-strategy.md` → "Coordinate conventions" — not repeated here.

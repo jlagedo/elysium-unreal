@@ -24,7 +24,7 @@ load with the code they describe:
 
 | File | Covers |
 |---|---|
-| `Source/ElysiumUE/CLAUDE.md` | the C++ runtime — module, key types, entity substrate, scripting hosts, debug layer, config |
+| `Source/ElysiumUE/CLAUDE.md` | the C++ runtime — module/plugin list, folder → layer map, build/test loop, gotchas |
 | `tools/CLAUDE.md` | the offline Python pipeline — VtMB input formats and their decoders |
 | `docs/CLAUDE.md` | how the documentation set is organised and maintained |
 | `Content/CLAUDE.md` | the committed `.uasset`s and how they are regenerated |
@@ -95,6 +95,20 @@ The Source→Unreal math lives once in `tools/bsp.py` (`source_to_unreal` for po
 `source_dir_to_unreal` for directions; the Y negation is a reflection, so the exporter
 reverses winding at OBJ-write time). Never inline it, and never convert at runtime. Full
 rules: `docs/rebuild-strategy.md` → "Coordinate conventions".
+
+### Docs describe design, RE, and status — not the current build
+
+Documentation exists for what the code cannot say for itself: design intent, VtMB
+reverse-engineering facts, and `docs/roadmap.md` status. The source is the as-built record — read
+it rather than paraphrasing it. The four orientation `CLAUDE.md` files (`Source/ElysiumUE/
+CLAUDE.md`, `tools/CLAUDE.md`, `docs/CLAUDE.md`, `Content/CLAUDE.md`) point at *where* something
+lives — module/plugin list, folder → layer map, build/test commands — never *how* the current
+implementation behaves. The one exception is a hard-won gotcha: a non-obvious trap (lazy-init
+order, a silent side effect, an easy-to-undo fix) that a source read would not reliably surface on
+its own. A VtMB **format or behaviour fact** (byte layouts, discovered engine rules) belongs in
+the `docs/` topic file that owns it (`docs/CLAUDE.md` → "Where a given fact belongs") — **never**
+in a `CLAUDE.md`, including `tools/CLAUDE.md`, no matter how much it reads like "how something
+works," because it describes VtMB, not our own implementation.
 
 ### CLAUDE.md carries no history
 
@@ -193,6 +207,9 @@ facts, valid regardless of target engine. Organisation and maintenance rules: `d
 | `facial_animation.md` | the face — `.mdl` flex/eyeball chunks, the flex-rule RPN, the `.lip` phoneme files, `expressions/` |
 | `mdl_v2531.md` | the static-geometry `.mdl` struct map |
 | `phy_vphysics.md` | the `.phy` collision-model format — convex ledges, authored mass, axis mapping |
+| `bsp_format.md` | the VBSP v17 container — lump directory, face/leaf/node structs, static props, cubemaps |
+| `vpk_format.md` | the VPK archive container + the patch-first asset resolution order |
+| `texture_format.md` | the `.tth`/`.ttz` texture container + VMT material parsing |
 | `audio_pipeline.md` | codecs, mixer, DSP, the SoundScheme system |
 | `source_movement.md` | `CGameMovement` constants + formulas |
 | `lighting.md` | the WORLDLIGHTS (lump 15) format — `dworldlight_t`, lightstyles, texlights |

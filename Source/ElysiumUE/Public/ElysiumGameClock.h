@@ -2,6 +2,31 @@
 
 #include "CoreMinimal.h"
 
+// The frame's own bound, and the one number both the clock and the mover clamp with.
+//
+// VtMB's `Host_FilterTime` (`engine.dll` 0x2008ba30) clamps `host_frametime` to [0.001, 0.1]
+// before the game DLL ever sees it, so a hitch — a level-load flush, an alt-tab, a debugger
+// break — cannot hand the game one enormous integration step or fire a whole interval's thinks
+// and queued I/O in a single frame. It lives here rather than beside the movement math because it
+// is a property of **the frame**, and game time and player motion must agree about how long the
+// frame was — a clamp that covered only one of them would put them into disagreement.
+// (`docs/source_movement.md` → "Frame timing".)
+namespace ElysiumFrame
+{
+	inline constexpr double MinFrameSeconds = 0.001;
+	inline constexpr double MaxFrameSeconds = 0.1;
+
+	// A non-positive delta is passed through untouched rather than raised to the minimum: the
+	// engine's own filter never calls the game with one (it returns early instead), so inventing
+	// a millisecond here would fabricate time the original never advances.
+	inline double ClampFrameDelta(double DeltaSeconds)
+	{
+		return DeltaSeconds <= 0.0
+			? DeltaSeconds
+			: FMath::Clamp(DeltaSeconds, MinFrameSeconds, MaxFrameSeconds);
+	}
+}
+
 // R4 — one clock, no engine timers. Game-visible time is a single absolute-seconds value
 // (VtMB's `curtime`): pausable and scalable, variable step (no fixed tick). Everything
 // time-based in Track B keys off this — delayed I/O, ScheduleTask strings, per-entity

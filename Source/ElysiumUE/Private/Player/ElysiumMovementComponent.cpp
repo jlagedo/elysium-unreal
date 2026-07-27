@@ -1,8 +1,24 @@
 #include "ElysiumMovementComponent.h"
 
+#include "ElysiumGameClock.h"
+#include "ElysiumPawn.h"
+#include "Debug/ElysiumConsole.h"
+#include "Player/ElysiumCommandBus.h"
+
 #include "Components/PrimitiveComponent.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/Pawn.h"
+
+// The timestep A/B. **0 is the faithful baseline** — VtMB has no tick, so its movement really is
+// frame-rate dependent (`docs/source_movement.md` → "Frame timing"). A non-zero value opts into
+// frame-rate independence and is a recorded divergence, not the reference behaviour.
+static TAutoConsoleVariable<float> CVarMoveFixedStep(
+	TEXT("elysium.move.FixedStep"),
+	0.0f,
+	TEXT("Seconds per movement integration step. 0 = the frame's own delta (faithful: VtMB has no ")
+	TEXT("tick and its air-accel/jump apex are frame-rate dependent). A non-zero value (e.g. 0.015) ")
+	TEXT("makes movement frame-rate independent — a divergence, kept A/B-able."),
+	ECVF_Default);
 
 UElysiumMovementComponent::UElysiumMovementComponent()
 {
@@ -22,10 +38,16 @@ float UElysiumMovementComponent::GetMaxSpeed() const
 	}
 	if (!bOnGround)
 	{
-		return ElysiumMove::JumpMaxSpeed;
+		return Tuning.JumpMaxSpeed;
 	}
 	// `+speed` selects the *slow* gait: the run is the default, holding the key walks.
-	return PendingCmd.IsDown(EElysiumButton::Speed) ? ElysiumMove::WalkSpeed : ElysiumMove::RunSpeed;
+	const float Base = PendingCmd.IsDown(EElysiumButton::Speed)
+		? ElysiumMove::WalkSpeed : ElysiumMove::RunSpeed;
+	// Source's duck speed is a third of the gait — `sv_sneakscale` 2.3 divides it in the retail
+	// PreThink, but that path is animation-driven (`source_movement.md` § "Player speed is
+	// animation-driven"), so this is the one movement number still standing on Source's own default
+	// rather than a read-out VtMB value. Marked so it is not mistaken for RE'd.
+	return (bDucked || bDucking) ? Base / 3.0f : Base;
 }
 
 void UElysiumMovementComponent::SetNoclip(bool bEnable)
@@ -54,19 +76,7 @@ FVector UElysiumMovementComponent::WishDirection(const FElysiumUserCmd& Cmd, flo
 	const FRotator ViewRot = C ? C->GetControlRotation() : (PawnOwner ? PawnOwner->GetActorRotation() : FRotator::ZeroRotator);
 
 	// Walking is on the ground plane; noclip flies along the aim, pitch included.
-	const FRotator Frame = bNoclip ? ViewRot : FRotator(0.0f, ViewRot.Yaw, 0.0f);
-	const FRotationMatrix Basis(Frame);
-
-	FVector Wish = Basis.GetUnitAxis(EAxis::X) * Cmd.Move.X + Basis.GetUnitAxis(EAxis::Y) * Cmd.Move.Y;
-	if (bNoclip)
-	{
-		Wish += FVector::UpVector * Cmd.Up;
-	}
-
-	// Source scales wishspeed by the length of the analog input and clamps it to maxspeed; a
-	// diagonal on the keyboard is length sqrt(2), which is why it normalizes rather than summing.
-	OutScale = FMath::Min(Wish.Size(), 1.0f);
-	return Wish.GetSafeNormal();
+	return ElysiumMove::WishDirection(Cmd.Move, Cmd.Up, ViewRot, /*bIncludePitch*/ bNoclip, OutScale);
 }
 
 void UElysiumMovementComponent::CategorizePosition()
@@ -78,7 +88,7 @@ void UElysiumMovementComponent::CategorizePosition()
 	}
 	// Rising: never on the ground. Source's own gate, and what keeps a jump from re-grounding on
 	// the frame it leaves.
-	if (Velocity.Z > ElysiumMove::JumpSpeed * 0.5f)
+	if (Velocity.Z > Tuning.JumpSpeed() * 0.5f)
 	{
 		bOnGround = false;
 		return;
@@ -107,46 +117,6 @@ void UElysiumMovementComponent::CategorizePosition()
 	}
 }
 
-void UElysiumMovementComponent::ApplyFriction(float DeltaTime)
-{
-	// Scales all three components, not just the horizontal ones — that is what the decompile does.
-	const float Speed = Velocity.Size();
-	if (Speed < 0.1f)
-	{
-		return;
-	}
-	const float Control = FMath::Max(Speed, ElysiumMove::StopSpeed);
-	const float Drop = Control * ElysiumMove::Friction * SurfaceFriction * DeltaTime;
-	Velocity *= FMath::Max(0.0f, Speed - Drop) / Speed;
-}
-
-void UElysiumMovementComponent::ApplyAccelerate(const FVector& WishDir, float WishSpeed, float DeltaTime)
-{
-	const float AddSpeed = WishSpeed - FVector::DotProduct(Velocity, WishDir);
-	if (AddSpeed <= 0.0f)
-	{
-		return;
-	}
-	const float AccelSpeed =
-		FMath::Min(ElysiumMove::Accelerate * DeltaTime * WishSpeed * SurfaceFriction, AddSpeed);
-	Velocity += AccelSpeed * WishDir;
-}
-
-void UElysiumMovementComponent::ApplyAirAccelerate(const FVector& WishDir, float WishSpeed, float DeltaTime)
-{
-	// The cap applies to the *target* while the uncapped wishspeed still drives accelspeed. That
-	// asymmetry is the whole of Source's air-strafing behaviour, so it is reproduced exactly.
-	const float Capped = FMath::Min(WishSpeed, ElysiumMove::AirSpeedCap);
-	const float AddSpeed = Capped - FVector::DotProduct(Velocity, WishDir);
-	if (AddSpeed <= 0.0f)
-	{
-		return;
-	}
-	const float AccelSpeed =
-		FMath::Min(ElysiumMove::AirAccel * WishSpeed * DeltaTime * SurfaceFriction, AddSpeed);
-	Velocity += AccelSpeed * WishDir;
-}
-
 void UElysiumMovementComponent::TryPlayerMove(const FVector& Delta)
 {
 	FVector Remaining = Delta;
@@ -160,9 +130,14 @@ void UElysiumMovementComponent::TryPlayerMove(const FVector& Delta)
 		{
 			return;
 		}
-		// ClipVelocity: project both the velocity and what is left of the move onto the plane.
-		Velocity = FVector::VectorPlaneProject(Velocity, Hit.Normal);
-		Remaining = FVector::VectorPlaneProject(Remaining * (1.0f - Hit.Time), Hit.Normal);
+		// Source's own ClipVelocity, overbounce 1.0, applied to both the velocity and what is left
+		// of the move. The returned blocked bits are what a two-plane crease case would need.
+		FVector Clipped;
+		ElysiumMove::ClipVelocity(Velocity, Hit.Normal, Clipped);
+		Velocity = Clipped;
+
+		ElysiumMove::ClipVelocity(Remaining * (1.0f - Hit.Time), Hit.Normal, Clipped);
+		Remaining = Clipped;
 	}
 }
 
@@ -172,6 +147,15 @@ void UElysiumMovementComponent::WalkMove(float DeltaTime)
 	{
 		return;
 	}
+
+	// Ground acceleration belongs to WalkMove, not to its caller — `FullWalkMove` runs friction and
+	// then hands over. The vertical component is dropped first, so a walk is planar.
+	float Scale = 0.0f;
+	const FVector WishDir = WishDirection(PendingCmd, Scale);
+	ElysiumMove::ApplyAccelerate(Velocity, WishDir, GetMaxSpeed() * Scale, Tuning.Accelerate,
+		SurfaceFriction, DeltaTime);
+	Velocity.Z = 0.0f;
+
 	const FVector Start = UpdatedComponent->GetComponentLocation();
 	const FVector StartVelocity = Velocity;
 	const FVector Delta = Velocity * DeltaTime;
@@ -218,6 +202,131 @@ void UElysiumMovementComponent::WalkMove(float DeltaTime)
 	Velocity.Z = FlatVel.Z;
 }
 
+bool UElysiumMovementComponent::TraceHull(const FVector& Start, const FVector& End,
+	FHitResult& OutHit) const
+{
+	if (!UpdatedPrimitive || !GetWorld())
+	{
+		return false;
+	}
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(ElysiumTraceHull), /*bTraceComplex*/ false, PawnOwner);
+	Params.AddIgnoredActor(PawnOwner);
+	return GetWorld()->SweepSingleByChannel(OutHit, Start, End, UpdatedComponent->GetComponentQuat(),
+		UpdatedPrimitive->GetCollisionObjectType(), UpdatedPrimitive->GetCollisionShape(), Params);
+}
+
+void UElysiumMovementComponent::ReduceTimers(float DeltaTime)
+{
+	// `m_flDucktime` counts down in **milliseconds**, which is why the step is scaled by 1000.
+	if (DuckTime > 0.0f)
+	{
+		DuckTime = FMath::Max(0.0f, DuckTime - DeltaTime * 1000.0f);
+	}
+}
+
+bool UElysiumMovementComponent::CanUnduck() const
+{
+	if (!UpdatedComponent)
+	{
+		return true;
+	}
+
+	// Would the standing hull fit? Sweep the *current* (ducked) hull up through the height it would
+	// gain: if something blocks that, the head has nowhere to go.
+	const float Grow = (ElysiumMove::StandHeight - ElysiumMove::DuckHeight) * 0.5f;
+	const FVector Start = UpdatedComponent->GetComponentLocation();
+	const FVector End = Start + FVector(0.0f, 0.0f, Grow * 2.0f);
+
+	FHitResult Hit;
+	// On the ground the body grows upward from planted feet; airborne it grows downward from a
+	// planted head, so the ceiling is only in the way in the first case.
+	if (!bOnGround)
+	{
+		return true;
+	}
+	return !TraceHull(Start, End, Hit);
+}
+
+void UElysiumMovementComponent::Duck()
+{
+	AElysiumPawn* Pawn = Cast<AElysiumPawn>(PawnOwner);
+	if (!Pawn)
+	{
+		return;
+	}
+
+	const bool bWantsDuck = PendingCmd.IsDown(EElysiumButton::Duck);
+	const uint64 DuckBit = static_cast<uint64>(EElysiumButton::Duck);
+
+	if (bWantsDuck)
+	{
+		// The press edge, latched into OldButtons the same way the jump is — so a held duck does
+		// not restart the transition every step.
+		if (!(OldButtons & DuckBit))
+		{
+			OldButtons |= DuckBit;
+			if (!bDucked)
+			{
+				bDucking = true;
+				DuckTime = ElysiumMove::GameMovementDuckTime;
+			}
+		}
+
+		if (bDucking && !bDucked)
+		{
+			const float Elapsed = (ElysiumMove::GameMovementDuckTime - DuckTime) * 0.001f;
+			if (Elapsed >= ElysiumMove::TimeToDuck)
+			{
+				FinishDuck();
+			}
+		}
+	}
+	else
+	{
+		OldButtons &= ~DuckBit;
+
+		if (bDucked || bDucking)
+		{
+			if (!bDucking)
+			{
+				// The release edge: start the unduck ramp.
+				bDucking = true;
+				DuckTime = ElysiumMove::GameMovementDuckTime;
+			}
+
+			const float Elapsed = (ElysiumMove::GameMovementDuckTime - DuckTime) * 0.001f;
+			// The unduck is gated on headroom as well as on time — a stand-up under a low ceiling
+			// simply keeps waiting rather than pushing the body through it.
+			if (Elapsed >= ElysiumMove::TimeToUnduck && CanUnduck())
+			{
+				FinishUnDuck();
+			}
+		}
+	}
+}
+
+void UElysiumMovementComponent::FinishDuck()
+{
+	if (AElysiumPawn* Pawn = Cast<AElysiumPawn>(PawnOwner))
+	{
+		Pawn->SetHullHeight(ElysiumMove::DuckHeight, ElysiumMove::DuckViewZ, /*bAnchorFeet*/ bOnGround);
+	}
+	bDucked = true;
+	bDucking = false;
+	DuckTime = 0.0f;
+}
+
+void UElysiumMovementComponent::FinishUnDuck()
+{
+	if (AElysiumPawn* Pawn = Cast<AElysiumPawn>(PawnOwner))
+	{
+		Pawn->SetHullHeight(ElysiumMove::StandHeight, ElysiumMove::StandViewZ, /*bAnchorFeet*/ bOnGround);
+	}
+	bDucked = false;
+	bDucking = false;
+	DuckTime = 0.0f;
+}
+
 void UElysiumMovementComponent::NoclipMove(float DeltaTime)
 {
 	float Scale = 0.0f;
@@ -247,6 +356,7 @@ void UElysiumMovementComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 	{
 		DeltaTime = PendingCmd.DeltaSeconds;
 	}
+	DeltaTime = static_cast<float>(ElysiumFrame::ClampFrameDelta(DeltaTime));
 
 	if (bFrozen)
 	{
@@ -255,46 +365,160 @@ void UElysiumMovementComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 		return;
 	}
 
+	// Re-read the `sv_*` surface once per frame, so a live `elysium.cmd sv_gravity 400` takes effect
+	// the way the original's would. An unset name keeps VtMB's own compiled-in default.
+	Tuning.LoadFrom([](const TCHAR* Name) { return ElysiumCommandBus::Console().GetCvar(Name); });
+
+	// The command stays authoritative for HOW MUCH time to integrate (RE21); the stepper decides
+	// only how that time is chopped up. Total integrated time is the same in both modes, up to the
+	// carried remainder.
+	Stepper.FixedStep = FMath::Max(0.0f, CVarMoveFixedStep.GetValueOnGameThread());
+
+	float StepSeconds = 0.0f;
+	const int32 Steps = Stepper.BeginFrame(DeltaTime, StepSeconds);
+
+	for (int32 Step = 0; Step < Steps; ++Step)
+	{
+		PlayerMove(StepSeconds);
+	}
+
+	PrevCmd = PendingCmd;
+	UpdateComponentVelocity();
+}
+
+void UElysiumMovementComponent::PlayerMove(float DeltaTime)
+{
 	if (bNoclip)
 	{
 		NoclipMove(DeltaTime);
-		PrevCmd = PendingCmd;
-		UpdateComponentVelocity();
 		return;
 	}
 
+	// PlayerMove's own order (`source_movement.md` → "Where each move function lives"): the timers
+	// and the duck run first, so the ground trace below sees the hull this step will move with.
+	ReduceTimers(DeltaTime);
+	Duck();
 	CategorizePosition();
 
+	FullWalkMove(DeltaTime);
+}
+
+void UElysiumMovementComponent::FullWalkMove(float DeltaTime)
+{
+	const bool bInWater = WaterLevel >= EElysiumWaterLevel::Waist;
+
+	// The FIRST half of the interval's gravity.
+	if (!bInWater)
+	{
+		ElysiumMove::StartGravity(Velocity, Tuning.Gravity, DeltaTime);
+	}
+
+	if (bInWater)
+	{
+		WaterMove(DeltaTime);
+		CategorizePosition();
+	}
+	else
+	{
+		CheckJumpButton();
+
+		if (bOnGround)
+		{
+			Velocity.Z = 0.0f;
+			ElysiumMove::ApplyFriction(Velocity, Tuning.Friction, Tuning.StopSpeed,
+				SurfaceFriction, DeltaTime);
+		}
+		ElysiumMove::CheckVelocity(Velocity, Tuning.MaxVelocity);
+
+		if (bOnGround)
+		{
+			WalkMove(DeltaTime);
+		}
+		else
+		{
+			AirMove(DeltaTime);
+		}
+		CategorizePosition();
+	}
+
+	ElysiumMove::CheckVelocity(Velocity, Tuning.MaxVelocity);
+
+	// The SECOND half. Splitting it is what puts the jump apex at a flat `sv_jump_boost` rather
+	// than `sv_jump_boost - 100*dt`.
+	if (!bInWater)
+	{
+		ElysiumMove::FinishGravity(Velocity, Tuning.Gravity, DeltaTime);
+	}
+
+	if (bOnGround)
+	{
+		Velocity.Z = 0.0f;
+	}
+}
+
+void UElysiumMovementComponent::AirMove(float DeltaTime)
+{
 	float Scale = 0.0f;
 	const FVector WishDir = WishDirection(PendingCmd, Scale);
 	const float WishSpeed = GetMaxSpeed() * Scale;
 
-	if (bOnGround)
+	ElysiumMove::ApplyAirAccelerate(Velocity, WishDir, WishSpeed, Tuning.AirAccel,
+		Tuning.AirSpeedCap, SurfaceFriction, DeltaTime);
+
+	// The air move slides against geometry too — it just never runs the step attempt.
+	TryPlayerMove(Velocity * DeltaTime);
+}
+
+void UElysiumMovementComponent::WaterMove(float DeltaTime)
+{
+	// Formula-faithful and unexercised: nothing sets WaterLevel, because no exported map places a
+	// water brush (`source_movement.md` → "Water"). It is here so the state machine is Source's
+	// shape rather than a subset, and so the day a water map exports this is wiring, not a port.
+	const AController* C = PawnOwner ? PawnOwner->GetController() : nullptr;
+	const FRotator ViewRot = C ? C->GetControlRotation()
+		: (PawnOwner ? PawnOwner->GetActorRotation() : FRotator::ZeroRotator);
+
+	float Scale = 0.0f;
+	// Swimming aims where you look, pitch included.
+	FVector WishDir = ElysiumMove::WishDirection(PendingCmd.Move, PendingCmd.Up, ViewRot,
+		/*bIncludePitch*/ true, Scale);
+	float WishSpeed = GetMaxSpeed() * Scale;
+
+	if (Scale <= 0.0f && PendingCmd.Buttons == 0)
 	{
-		// The jump edge, not the key's level: a held jump does not re-fire.
-		if (PendingCmd.JustPressed(EElysiumButton::Jump, PrevCmd))
-		{
-			Velocity.Z = ElysiumMove::JumpSpeed;
-			bOnGround = false;
-		}
+		// Idle in water sinks. VtMB's rate is 40, not HL2's 60.
+		WishDir = -FVector::UpVector;
+		WishSpeed = ElysiumMove::WaterSinkSpeed;
+	}
+	WishSpeed *= ElysiumMove::WaterSpeedScale;
+
+	ElysiumMove::ApplyWaterFriction(Velocity, Tuning.Friction, SurfaceFriction, DeltaTime);
+	ElysiumMove::ApplyAccelerate(Velocity, WishDir, WishSpeed, Tuning.Accelerate,
+		SurfaceFriction, DeltaTime);
+
+	TryPlayerMove(Velocity * DeltaTime);
+}
+
+void UElysiumMovementComponent::CheckJumpButton()
+{
+	// Source's `m_nOldButtons` rule, not a press edge against the previous *command*. It is the
+	// faithful one (a held jump does not pogo), and it is also what makes sub-stepping correct: the
+	// latch is consumed on the first step, so one press cannot fire a jump per sub-step.
+	if (!PendingCmd.IsDown(EElysiumButton::Jump))
+	{
+		OldButtons &= ~static_cast<uint64>(EElysiumButton::Jump);
+		return;
+	}
+	if (OldButtons & static_cast<uint64>(EElysiumButton::Jump))
+	{
+		return;
+	}
+	if (!bOnGround)
+	{
+		return;
 	}
 
-	if (bOnGround)
-	{
-		ApplyFriction(DeltaTime);
-		ApplyAccelerate(WishDir, WishSpeed, DeltaTime);
-		Velocity.Z = 0.0f;
-	}
-	else
-	{
-		// 4.7 owns Source's half-before/half-after gravity split; one full step is the shell.
-		Velocity.Z -= ElysiumMove::Gravity * DeltaTime;
-		ApplyAirAccelerate(WishDir, WishSpeed, DeltaTime);
-	}
-
-	Velocity = Velocity.GetClampedToMaxSize(ElysiumMove::MaxVelocity);
-	WalkMove(DeltaTime);
-
-	PrevCmd = PendingCmd;
-	UpdateComponentVelocity();
+	Velocity.Z = Tuning.JumpSpeed();
+	bOnGround = false;
+	OldButtons |= static_cast<uint64>(EElysiumButton::Jump);
 }

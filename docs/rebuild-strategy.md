@@ -141,8 +141,8 @@ All under `tools/out/<map>/`. Formats are fixed by the pipeline:
 |---|---|---|
 | `<map>.obj/.mtl` + `tex/` | world geometry + materials | OBJ, MTL with VtMB extensions (illum 4 = alphatest, blend, Kd) |
 | `<map>_sky.obj`, `.sky` | 3D skybox + `origin`/`scale` transform | OBJ + text |
-| `.ents` | **all 1,226 entities**: classname, targetname, origin, `start_hidden`, `sky` (3D-skybox scope), raw keyvalues, brush-entity convex `hulls` + `contents`/`blocks_player`, and 7-field I/O `outputs` (`target, input, param, delay, times, python, name`) | JSON, Unreal cm (origins + entity-local hulls) |
-| `.props` | static props: `safename ox oy oz qx qy qz qw solid skin sky`, models in `props/<safename>.obj` | text, Unreal cm + quaternion |
+| `.ents` | **all 1,226 entities**: classname, targetname, origin, `start_hidden`, `sky` (3D-skybox scope), raw keyvalues, brush-entity convex `hulls` + `contents`/`blocks_player`, 7-field I/O `outputs` (`target, input, param, delay, times, python, name`), and — only when the entity's `model` key decoded a static `.mdl` — `model_mesh` (the decoded OBJ stem) + `model_quat` (Unreal-space placement rotation); `phys_hinge` additionally carries `hinge_axis` (normalized Unreal-space hinge direction) | JSON, Unreal cm (origins + entity-local hulls) |
+| `.props` | static props: `safename ox oy oz qx qy qz qw solid skin sky`, models in `props/<safename>.obj`, with sibling `props/<stem>.phys` (VPhysics hulls + authored mass, `prop_physics` only — format: `phy_vphysics.md`) and `props/<stem>.skins` (alternate skin-family remaps — format: `mdl_v2531.md`) | text, Unreal cm + quaternion |
 | `.hulls` / `.dispcol` | world brush convex hulls (3D-skybox brushes excluded) / displacement collision tris | text, Unreal cm |
 | `.lights` | one line per WORLDLIGHTS source: `type origin dir rgb radius stopdot stopdot2 exponent style sky` (rgb at six decimals — the type-5 row is the map's whole ambient level) | text |
 | `.sprites` | env_sprite coronas: `texpath pos w h rgb amt orient sky` | text, Unreal cm (sizes = `scale × texpx × INCH_TO_CM`) |
