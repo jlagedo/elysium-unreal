@@ -80,7 +80,7 @@ it waits. Three standing rules:
 | Rung | Delivers | Tasks (in order) |
 |---|---|---|
 | **PP0 — the core refactor** | the spine: one clock/frame, world services, app states + pause, the player entity, input scopes, commands + user command, the view seam, the play harness | 11.10 *(11.0, 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.8 [x])* |
-| **PP1 — New Game & genesis** | chargen for real: clan, **name**, sex, spends — onto the player entity, Python-readable; `sp_genesisdevice_1` played, not skipped — the map is already exported **and** baked, so what is left is the `elysium.SkipIntro` re-scope | 9.4 a–g *(RE24 [x], RE25 [x])*, 8.6's New Game click path |
+| **PP1 — New Game & genesis** | chargen for real: clan, **name**, sex, spends — onto the player entity, Python-readable; `sp_genesisdevice_1` played, not skipped — the map is already exported **and** baked, so what is left is the `elysium.SkipIntro` re-scope | 9.4 a–g *(RE24 [x], RE25 [x], RE27 [x])*, 8.6's New Game click path |
 | **PP2 — the theatre cinematic** | the intro plays start to finish: choreography, scripted camera, line audio, subtitles, **eyes and lipsync — all block** (cont. 5); the PC is on camera, so its body stands here | 12.1–12.5, 8.11a (+ `sp_theatre` export/bake) *(11.7 [x])* |
 | **PP3 — land the tutorial** | the chain hands the player to Jack; the first conversation runs with sound and reactions | 9.2, 9.9 |
 | **PP4 — core mechanics** | faithful movement (owner call: **in** the path), camera modes, the body's gait, feeding, items + object interaction, dice, the vitals HUD | 4.7, 8.11b, 10.6, B6, 9.8, 9.6, 8.9 |
@@ -106,9 +106,10 @@ deps below — refresh it whenever a task flips:
    readers (the gate — 12 table families now parse and are asserted against the exported files)
    → **b [x]** the sheet as 148 registered fields over VtMB's four containers, `Max_Health` read
    as the authored stat it is → **c [x]** the 290-call counter surface, the trait-effect layer under
-   it → **d** quests for real → **e** the journal screen → **RE25 [x]** → **f** chargen including the
-   quiz → **g** genesis played, not skipped. **d is next**, and the `AwardXP` key a quest state
-   fires now has an awarder to hand it to.
+   it → **RE27 [x]** → **d [x]** quests for real, all 161 shipped `AwardXP` keys now reachable
+   through a real state change → **e** the journal screen → **RE25 [x]** → **f** chargen including
+   the quiz → **g** genesis played, not skipped. **e is next**, and it has data to render: the
+   `ASSIGNED_QUEST` rows d writes, grouped by the hub each row's table index names.
 3. **9.8 / 9.9 / 9.10 / 9.5** — the rest of what the hinge unblocked. They land *on*
    `FElysiumCombatCharacter` and `FElysiumPlayerRecord`: 9.10 finishes the economy over the
    `money` field that already exists, 9.8 fills the record's inventory half, and 9.5 (= 11.9, **[x]**)
@@ -800,15 +801,15 @@ draw on the same stack; NPCs stand in the world at their entity origins.
   character) + `CurrentMoney`/`SetMoney`. The smallest self-contained system on the ledger; one
   integer on the sheet plus vendor `worth` when 9.8 lands. *Deps:* 9.7c.
 - [ ] **9.4 Quests/XP + RPG sheet data** *(the PP1 rung)* — the sheet is real (**b [x]**), the
-  rulebook parses (**a [x]**) and the arithmetic over it runs (**c [x]**); what is still a shell is
-  the content layer above. Quests are a bare `name -> int` map with no catalogue and no awards, and
-  there is no journal and no chargen. 9.7 sized and constrained the lane: the sheet-counter demand is
+  rulebook parses (**a [x]**), the arithmetic over it runs (**c [x]**) and a quest state change now
+  resolves, awards and journals (**d [x]**); what is left of the content layer is the two screens —
+  no journal and no chargen. 9.7 sized and constrained the lane: the sheet-counter demand is
   **290 calls** (`AwardExperience` 77 / `HumanityAdd` 69 / `CalcFeat` 53 / `ChangeMasqueradeLevel` 44
   / `Bloodloss` / `BumpStat` / `GetMasqueradeLevel`), the counters are INTEGER datamap inputs on the
   combat character, and **`AwardExperience` takes a STRING** — it names an experience-table entry, so
   it cannot be modelled as an integer add (`script_api.md`). The sheet's home is `FElysiumSheet` on
   `FElysiumCombatCharacter` (live) + `FElysiumPlayerRecord` (durable, 11.4); what 9.4 has left to add
-  is the quest catalogue and the two screens the data feeds.
+  is the two screens the data feeds.
   Table→system map: `docs/vdata-catalog.md`; the sheet's recovered shape: `savegame_format.md`
   (`m_iVAttributes*`, `m_QuestList`, `m_ExpList`). **Owner call:** chargen is a *full* reproduction
   including the `charcreatewizard.txt` quiz, the journal screen is in scope, and the open RE is
@@ -876,12 +877,31 @@ draw on the same stack; NPCs stand in the world at their entity origins.
     Acceptance: `Elysium.Substrate.SheetMath` (the gates, the feat sum, the predependency reader,
     the banking, the ledger) and `Elysium.Content.SheetMath` (all 23 shipped feats evaluate in
     range, the Tremere and Toreador banes land, the award values bank as authored).
-  - **d. Quests for real** — the `name -> int` map stays authoritative (732 call sites; default-0 on
-    miss is VtMB's own contract). What lands is what happens *around* a state change: resolve the
-    `CompletionState`, fire `AwardXP` (an experience-table key, not a number — the shipped file's own
-    header comment is wrong), `AwardMoney`, and `Event` (script data handed to the installed host — a
-    dispatch surface `python_bridge.md` does not list), then keep the journal as
-    `ASSIGNED_QUEST { szTitle, idxQuestTable, idxState, iOrder }` rows on the player record.
+  - [x] **d. Quests for real** *(**RE27** closed it)* — the `name -> int` map stays authoritative
+    (732 call sites; default-0 on miss is VtMB's own contract) and `SetQuestState` becomes the one
+    funnel that does what happens *around* a change. The decision is `Private/Substrate/
+    ElysiumQuestLog.{h,cpp}` — a pure function over the catalogue and the journal, factored as 9.4c
+    factored `ElysiumSheetMath`, so every rule RE27 recovered is testable with no world and no disk.
+    **RE27 corrected two premises the plan was built on**: the authored `"ID"` is decorative (the
+    state argument is the completion state's **ordinal in file order**, which is what
+    `StateByOrdinal` now addresses and what the content tier asserts still coincides with the ID on
+    all 435 rows), and the re-fire rule is not a judgement call — a repeat set awards **nothing**
+    while any other change awards, **backwards included**, gated only by the `botch` type no shipped
+    row authors. Awards run in the engine's order: `AwardMoney` through a new
+    `FElysiumCombatCharacter::AddMoney` (the raw `+=` `MoneyAdd` is, extracted so the input and the
+    quest share one write), `AwardXP` through 9.4c's `AwardExperience` — whose `m_ExpList` ledger is
+    a second give-once guard — then `Event` through the same eval seam a field-6 payload uses,
+    which is what makes it a real dispatch path rather than a listed one (`python_bridge.md`).
+    The journal is `FElysiumAssignedQuest` rows on the player record, replaced in place and matched
+    case-insensitively, with `Order` assigned once as `max+1`. **The hazard the funnel created and
+    closes:** a save load re-set every key through `SetQuestState`, which would have replayed the
+    run's whole XP — `RestoreQuests` is the silent bulk door, and the Substrate tier asserts it
+    awards nothing. Save payload version **4** (`Journal`), `MinSupported` raised with it. Debug
+    surface is one verb, `elysium.quest` (the journal / one quest's states / `set` driving the real
+    path); the journal *screen* is **e**. Acceptance: `Elysium.Substrate.QuestLog` (the gate, the
+    ordinal, the order counter, the botch refusal, the case/whitespace reconciliation) and
+    `Elysium.Content.Quests` — **all 161 shipped `AwardXP` keys are reachable through a real state
+    change**, not merely present in the file, and no repeat set owes anything.
   - **e. The journal screen** — assigned quests on the 8.6 CommonUI/Slate stack, grouped by hub,
     `DisplayName` as the heading and the current state's `Description` beneath it, coloured by `Type`
     (`success`/`failure`/`incomplete`). Adds one `ElysiumInput::Priority` row, which the pairwise
@@ -910,7 +930,8 @@ draw on the same stack; NPCs stand in the world at their entity origins.
   *Acceptance (PP1):* New Game walks genesis from real input, the quiz-and-spend character lands on
   the player entity, `pc.clan`/`pc.strength` read back from Python, a skill-gated `.dlg` choice that
   was hidden becomes visible, and the journal shows `pc.SetQuest("Tutorial", 1)`. *Deps:* 1.1 [x],
-  9.7c [x], 11.4 [x], 11.6 [x]; **RE24 [x]** (b [x], c [x]), **RE25 [x]** (f is unblocked).
+  9.7c [x], 11.4 [x], 11.6 [x]; **RE24 [x]** (b [x], c [x]), **RE27 [x]** (d [x]),
+  **RE25 [x]** (f is unblocked).
 - [x] **9.5 Save/load** — **built as 11.9**; see that entry. The four blocks (Session / Player /
   Maps / World) over the R2 field walk, the per-map snapshot lifecycle with the absent-entity set,
   the event queue incl. deferred script strings, think times, `G`, and owned RNG streams, inside a
@@ -1205,6 +1226,7 @@ retail end to end, and `test.bat Play` proves it headlessly.
 | RE24 | **The sheet math** — all four closed, and two premises were wrong. The substrate first: a trait is `(container, index)` over `CVStatList_t`, **index counting the container's leading `*_Order` block as 0**, so `m_iVAttributes*` is **35** slots (not 21) and `m_iVAbilities*` **13** (not 12) — proven three ways off the datamap and three hardcoded indices. **`AwardExperience`**: `floor(value/100)` confirmed, but `AddExperience` **keeps the sub-100 remainder**, and **give-once is the `m_ExpList` ledger, not the trailing `01`** — every key is give-once; a `> 299` award additionally adds `Experience_Modifier`. **`CalcFeat`** returns a plain int — the *rating*, not a roll — from `Feats::FeatValue`: the sum of a **variable-length** `Base%d` list (`Soak_vs_Bashing` has three, `Damage` none, `"Armor_Rating / 2"` is a per-base `÷`), each entry the *current* value, the nine attributes floored at 1, plus per-feat code terms, a feat-level trait-effect pass, and a clamp to `MaxValue`; `PCWeighting` resolves at load to a `dicerolls.txt` index (all 23 feats → `Normal`). **`BumpStat`**'s third argument is a **repeat count**; it writes the **base** via `IncBase`, under a hardcoded `GetBase < 5` ceiling, and cannot decrement. **There is no Stamina→Health derivation** — `Max_Health` is an authored stat (`Default 100`, no formula in any `vdata` file, no trait effect targeting it) and **`Health` counts damage taken**; NPC tracks are `npctemplate*`'s literal `Max_Health`. Residue: five per-feat override object pointers, null in the image with no writer found. Full: `game_runtime.md` §3; as-built: archive | 9.4b, 9.4c | [x] |
 | RE25 | **Chargen math** — all four closed, and the whole chargen surface turned out to live in **`client.dll`**, not `vampire.dll`. **Pools:** seven per-category counters = clan-keyed `rules_tables.txt` `Subpool_*` (zero on every shipped clan bar `Subpool_Disciplines` = 1) **+** the tier table routed through `Attribute_Order_Lookups`/`Ability_Order_Lookups` — so a playable PC spends **2/1/0** attribute dots, **3/2/1** ability dots, **1** discipline dot, over a baseline the wizard *buys* with `giftxp 9000` + `vautolvl <clan>_CharGen`. **Cost:** `Current_Rating` is **pre-purchase** and is the stat's **base**; `Sell(r) ≡ Buy(r−1)`; `New` only for the 0→1 step and never for attributes; `30000` = cannot buy. **The `-1` sentinel** gates the sheet's **row filter** (`0 ≤ v < 6`), not the price — and the `Raise_Clan_Discipline`/`Raise_Other_Discipline` dual formula was **never implemented** (neither string exists in either DLL). **Banes/histories** are the generic trait-effect layer, with its operator enum shipped as data (`traiteffect.txt` `ModifierNames`). Residue: trait-effect stacking order. Full: `game_runtime.md` → "Chargen" / "Buying a dot" / "Trait effects"; as-built: archive | 9.4f | [x] |
 | RE26 | **The trait-effect accumulator + the dialogue sex gate** — closed the two open readings 9.4c would otherwise have guessed. **`CVTraitEffectQuery`** (`101F9BF0` → `101F6910` build / `101F75A0`+`101F6C50` fold / `101F69A0` finalize): one pass over `m_tEffectList` into a 68-byte accumulator, `add` summing, `*`/`/`/`Max`/`Min` each a **single winner** (higher group priority wins, equal priority → the smaller amount, `Min` included), `%` accumulating `100 - amount`, `Value` replacing the value outright, `Cost`/`BloodCost`/`Damage`/`Duration` ignored; finalize is `(value + add) * mul / div`, then `× percent / 100`, then clamp to `[min, max]` (defaults 1/1/32000/−32000/100). No shipped group authors a priority, and the shipped ops are only `+`/`-`/`Value`/`Max`/`Duration`/`Damage`/`BloodCost`. **The stat's own bounds run through the same walk** (`101FF060`/`101FF010`), so a `+1` raises a ceiling and a `Max 4` lowers it. **`AddBase` (`10200FC0`) writes the base RAW** — no max test, no clamp, gated only by `IncPredependency` which a negative delta bypasses; **`IncBase` (`10200D60`)** is the one that tests `base < effective max`. **`CDialogDependency::TestSimple` (`100E9760`)** carries a required-sex field at `+0x224` tested against `CBaseCombatCharacter::IsMale` (`10336920`) — which is what a check's `M_`/`F_` prefix is, and it also reads stat/discipline checks off `GetCurrent`, never through `Feats::FeatValue`. Full: `game_runtime.md` §3, `python_bridge.md` | 9.4c, 9.4d, 9.4f, B4 | [x] |
+| RE27 | **`SetQuest` and the quest journal** — closed the six readings 9.4d would otherwise have guessed, and corrected two premises. The Python thunk (`10199800`) **ignores its receiver**: it fetches entity index 1, so a quest always lands on the player. **The authored `"ID"` is never read** — `QuestJournal::AddCompletionState` (`10221660`) parses only `AwardMoney`/`AwardXP`/`Description`/`Event`/`Type`, and `SetQuest(title, N)` addresses the N-th state in **file order**, 1-based, over an array capped at **20**; all 435 shipped rows author `ID` equal to their position, so the two coincide on retail data. **`Type` is matched by substring** (`Q_stristr`, `incomplete` 1 / `success` 2 / `failure` 3 / `botch` 4, default `incomplete`) — `botch` is a fourth type no row authors. `CVPlayer::SetQuest` (`1017CC20`): an unknown title or a missing state **does nothing at all**; `iOrder` is assigned once on first assignment as `max(order)+1` (so the first quest of a run is 1); the re-fire gate (`10182420`) reads the **journal row**, so a repeat set awards nothing while **any other change awards, backwards included**, unless the state being left is `botch`; then **`AwardMoney` → `AwardXP` → `Event`** in that order, `Event` being `PyRun_ConsoleString` into `__main__`. The row (`10182260`) is matched **case-insensitively** by title and **replaced in place**, never appended twice. `ASSIGNED_QUEST` is stride **0x40** and carries an **unread byte at `+0x3c`** the save doc did not list, and its `idxQuestTable` is the **flat quest index**, not the file's. Full: `game_runtime.md` → "Quests"; corrections in `savegame_format.md`, `vdata-catalog.md`, `script_api.md`, `python_bridge.md` | 9.4d | [x] |
 | SKY | **Sky + ambience rework, Phases B + C (B1–B8b, C0–C5)** — landed 2026-07-26: backdrop correct + at parity with standing tests (`Elysium.Substrate.SkyCube`/`FogPack`); the whole 3D skybox split by BSP area and placed under its transform; fog from its real owners + Source's own linear distance fog as a per-primitive material term (B8b, D4 amended); the sky light at the map's own authored level (**zero on the 83 no-pair maps**); the bake measured in absolute units — direct light explains ~0% of a median lit face, the bounce floor *is* the ambient level. Open residue promoted to **3.10–3.13 + RE17**. Facts: `sky-ambience.md` | 3.6/3.7 | [x] |
 
 The Ghidra extraction findings behind the closed rows (the RE1/RE2/RE3/RE4 detail: addresses,

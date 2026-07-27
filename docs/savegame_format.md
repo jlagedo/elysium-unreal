@@ -368,8 +368,15 @@ sheet plus every active modifier, and both are persisted.
 **Progression and identity:** `m_iVHistoryID` (the chosen history), `m_iGender`, `m_iMoney`,
 `m_iBloodStolen`, and:
 
-- `m_QuestList` — `CUtlVector<ASSIGNED_QUEST { szTitle[48], idxQuestTable, idxState, iOrder }>`.
-  The quest journal: name, which `vdata` quest table, which state within it, display order.
+- `m_QuestList` — `CUtlVector<ASSIGNED_QUEST { szTitle[48], idxQuestTable, idxState, iOrder }>`,
+  stride **0x40** (`player+0x1D68`, count `+0x1D74`). The quest journal: name, quest, which state
+  within it, display order. Two readings the field names invite and the code refuses
+  (`game_runtime.md` → "Quests"): **`idxQuestTable` is the flat quest index across all five loaded
+  `quests_*.txt`**, not the index of the file; and `idxState` is a **0-based ordinal into the
+  quest's completion-state array in file order**, not the authored `"ID"`, which the loader never
+  reads. The record also carries a **byte at `+0x3c`, set to 1 on every write** — the journal's
+  unread marker — leaving `+0x3d..0x3f` as padding. Rows are matched by case-insensitive title
+  and replaced in place, so one quest never holds two.
 - `m_ExpList` — `CUtlVector<EXPERIENCE_ENTRY { szTitle[48], nAmt }>`. The XP ledger, itemised by
   award, not a running total.
 - `m_tEffectList` — a plain length-prefixed string list, outside the field-stream convention:

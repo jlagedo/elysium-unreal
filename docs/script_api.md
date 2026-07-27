@@ -173,7 +173,7 @@ in CurrentMoney"`), rather than returning a falsy value.
 | Name | Body | Args | Calls | Backing today |
 |---|---|---|---|---|
 | `SetDisposition` | `10197e50` | `(char, name:str, level:int)` | **2,510** | stance only (9.9 owns reactions) |
-| `SetQuest` | `10199800` | `(char, quest:str, state:int)` | 732 | real (quest map) |
+| `SetQuest` | `10199800` | `(char, quest:str, state:int)` | 732 | real (map + catalogue + awards + journal) |
 | `GetQuestState` | `101987b0` | `(char, quest:str)` | 377 | real (quest map) |
 | `HasItem` | `10198640` | `(char, item:str)` | 327 | stub |
 | `IsMale` | `10199990` | `(char)` | 207 | real (sheet) |
@@ -201,6 +201,14 @@ Useful doc strings: `SetCamera` — *"Sets the entity to use the named shot file
 camera mode"* (so its argument keys `vdata/camerashots/`); `DialogDiscipline` — *"Uses a
 discipline in dialog, doesn't deduct blood points"*; `GetQuestState` — *"Returns the state of the
 player's quest, or 0 if this is an NPC.."*.
+
+**`SetQuest` ignores its receiver.** The thunk fetches entity index **1** and hands the call to
+`CVPlayer::SetQuest`, so a quest lands on the player however the call was written; a bad argument
+list raises `AttributeError("bad args to SetQuest.")`. Its second argument is the completion
+state's **1-based ordinal in file order**, not the authored `"ID"`, and the call does far more than
+store a number — it resolves the state, pays `AwardMoney` then `AwardXP` then `Event`, and writes
+the journal row, all of it skipped when the state did not actually change. The whole walk:
+`game_runtime.md` → "Quests".
 
 Two of the sheet methods are decompiled in full; the semantics live in `game_runtime.md` §3, and
 what a *caller* needs is:

@@ -37,6 +37,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumPresentationSubsystem.h"
 #include "ElysiumRng.h"
+#include "Substrate/ElysiumQuestLog.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSheetMath.h"
 #include "ElysiumSaveArchive.h"
@@ -4416,6 +4417,10 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	Payload.Player.MaxHealth = 100;
 	Payload.Player.Law.Criminal = 2;
 	Payload.Player.ExperienceLog.Add({ TEXT("xp_tutorial"), 0 });
+	// The journal rides with the record (9.4d) — the quest map is the Session block's, so a payload
+	// that loses these rows keeps the states and forgets the order they were taken in.
+	Payload.Player.Journal.Add({ TEXT("Arthur Knox"), /*Table*/ 4, /*Quest*/ 0, /*State*/ 2,
+		/*Order*/ 1, /*bUnread*/ true });
 
 	FElysiumMapSnapshot Snap;
 	Snap.MapName = TEXT("sp_tutorial_1");
@@ -4482,6 +4487,16 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 		ElysiumSheetSlotCount(EElysiumTraitContainer::Attributes));
 	TestEqual(TEXT("money survived"), Back.Player.Money, 250);
 	TestEqual(TEXT("the law counters survived"), Back.Player.Law.Criminal, 2);
+	TestEqual(TEXT("the journal survived"), Back.Player.Journal.Num(), 1);
+	if (Back.Player.Journal.Num() == 1)
+	{
+		const FElysiumAssignedQuest& Row = Back.Player.Journal[0];
+		TestEqual(TEXT("with its title"), Row.Title, FString(TEXT("Arthur Knox")));
+		TestEqual(TEXT("its quest address"), Row.Table, 4);
+		TestEqual(TEXT("its state"), Row.State, 2);
+		TestEqual(TEXT("and its display order"), Row.Order, 1);
+		TestTrue(TEXT("and the unread marker"), Row.bUnread);
+	}
 	TestEqual(TEXT("one map snapshot"), Back.Maps.Num(), 1);
 	if (const FElysiumMapSnapshot* Read = Back.Maps.Find(TEXT("sp_tutorial_1")))
 	{
@@ -4641,6 +4656,165 @@ bool FElysiumSaveSchemaTest::RunTest(const FString&)
 	ElysiumRng::Restore(State);
 	TestEqual(TEXT("a restored stream continues the saved sequence"),
 		ElysiumRng::Stream(EElysiumRngStream::Dice).RandRange(0, 9), Next);
+
+	return true;
+}
+
+// ==================================================================================================
+// 9.4d — the quest log: the decision and the journal bookkeeping, with no world and no disk.
+// `FElysiumQuestTables` is plain C++ with public arrays, so the catalogue below is hand-built and
+// every rule `game_runtime.md` -> "Quests" records is driven directly.
+// ==================================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumQuestLogTest, "Elysium.Substrate.QuestLog", GElysiumTestFlags)
+
+namespace
+{
+	// Two quests on one table, plus a third carrying a `botch` state — the type no shipped row
+	// authors and the only thing that refuses a change.
+	FElysiumQuestTables MakeQuestFixture()
+	{
+		FElysiumQuestTables T;
+
+		FElysiumQuest& Knox = T.Quests[4].AddDefaulted_GetRef();   // santamonica
+		Knox.Title = TEXT("Arthur Knox");
+		Knox.DisplayName = TEXT("A Bounty For The Hunter");
+		Knox.TableIndex = 4;
+		Knox.Index = 0;
+		for (int32 i = 1; i <= 3; ++i)
+		{
+			FElysiumQuestState& S = Knox.States.AddDefaulted_GetRef();
+			S.Id = i;
+			S.Type = (i == 3) ? TEXT("success") : TEXT("incomplete");
+			S.Description = FString::Printf(TEXT("state %d"), i);
+			if (i == 2) { S.AwardXp = TEXT("Carson01"); S.AwardMoney = 25; }
+			if (i == 3) { S.Event = TEXT("G.Knox_Done = 1"); }
+		}
+
+		FElysiumQuest& Tut = T.Quests[4].AddDefaulted_GetRef();
+		Tut.Title = TEXT("Tutorial");
+		Tut.DisplayName = TEXT("Learning The Ropes");
+		Tut.TableIndex = 4;
+		Tut.Index = 1;
+		FElysiumQuestState& TS = Tut.States.AddDefaulted_GetRef();
+		TS.Id = 1;
+		TS.Type = TEXT("incomplete");
+
+		FElysiumQuest& Bad = T.Quests[0].AddDefaulted_GetRef();    // chinatown
+		Bad.Title = TEXT("Botched");
+		Bad.DisplayName = TEXT("Botched");
+		Bad.TableIndex = 0;
+		Bad.Index = 0;
+		FElysiumQuestState& B1 = Bad.States.AddDefaulted_GetRef();
+		B1.Id = 1; B1.Type = TEXT("botch");
+		FElysiumQuestState& B2 = Bad.States.AddDefaulted_GetRef();
+		B2.Id = 2; B2.Type = TEXT("incomplete");
+
+		T.Reindex();
+		return T;
+	}
+}
+
+bool FElysiumQuestLogTest::RunTest(const FString&)
+{
+	using namespace ElysiumQuestLog;
+	const FElysiumQuestTables Tables = MakeQuestFixture();
+	TArray<FElysiumAssignedQuest> Journal;
+
+	// --- The Type vocabulary: substring, in the engine's order, unknown reads as incomplete -----
+	TestTrue(TEXT("incomplete"), ParseType(TEXT("incomplete")) == EType::Incomplete);
+	TestTrue(TEXT("success"),    ParseType(TEXT("success"))    == EType::Success);
+	TestTrue(TEXT("failure"),    ParseType(TEXT("failure"))    == EType::Failure);
+	TestTrue(TEXT("botch"),      ParseType(TEXT("botch"))      == EType::Botch);
+	TestTrue(TEXT("a substring match, not equality"),
+		ParseType(TEXT("  Success!  ")) == EType::Success);
+	TestTrue(TEXT("an unrecognised type reads as incomplete"),
+		ParseType(TEXT("qqq")) == EType::Incomplete);
+
+	// --- An unknown title, and a state the quest does not have, do nothing at all ---------------
+	FOutcome Out = Apply(Tables, Journal, TEXT("No Such Quest"), 1);
+	TestFalse(TEXT("an unknown title does not resolve"), Out.bResolved);
+	TestFalse(TEXT("and awards nothing"), Out.bChanged);
+	TestEqual(TEXT("and writes no row"), Journal.Num(), 0);
+
+	Out = Apply(Tables, Journal, TEXT("Arthur Knox"), 9);
+	TestFalse(TEXT("a state the quest does not have does not resolve"), Out.bResolved);
+	TestEqual(TEXT("and writes no row"), Journal.Num(), 0);
+
+	Out = Apply(Tables, Journal, TEXT("Arthur Knox"), 0);
+	TestFalse(TEXT("state 0 is unassigned, never a real state"), Out.bResolved);
+
+	// --- First assignment: a row, order 1, and the state's awards -------------------------------
+	Out = Apply(Tables, Journal, TEXT("Arthur Knox"), 1);
+	TestTrue(TEXT("a first assignment resolves"), Out.bResolved);
+	TestTrue(TEXT("and changes"), Out.bChanged);
+	TestEqual(TEXT("the first quest of a run gets order 1"), Out.Order, 1);
+	TestEqual(TEXT("one row"), Journal.Num(), 1);
+	TestEqual(TEXT("on the right table"), Journal[0].Table, 4);
+	TestEqual(TEXT("at the right quest"), Journal[0].Quest, 0);
+	TestEqual(TEXT("at the right state"), Journal[0].State, 1);
+	TestTrue(TEXT("marked unread"), Journal[0].bUnread);
+	TestEqual(TEXT("state 1 awards no xp"), Out.AwardXpKey, FString());
+
+	// --- A repeat set is a no-op: no award, no re-run -------------------------------------------
+	Out = Apply(Tables, Journal, TEXT("Arthur Knox"), 1);
+	TestTrue(TEXT("a repeat set still resolves"), Out.bResolved);
+	TestFalse(TEXT("but does not change"), Out.bChanged);
+	TestEqual(TEXT("and owes no xp"), Out.AwardXpKey, FString());
+	TestEqual(TEXT("and owes no money"), Out.AwardMoney, 0);
+	TestEqual(TEXT("still one row"), Journal.Num(), 1);
+
+	// --- A forward change replaces the row in place and pays out --------------------------------
+	Out = Apply(Tables, Journal, TEXT("Arthur Knox"), 2);
+	TestTrue(TEXT("a forward change changes"), Out.bChanged);
+	TestEqual(TEXT("the row is replaced, not appended"), Journal.Num(), 1);
+	TestEqual(TEXT("at the new state"), Journal[0].State, 2);
+	TestEqual(TEXT("keeping its order"), Journal[0].Order, 1);
+	TestEqual(TEXT("and owes the authored key"), Out.AwardXpKey, FString(TEXT("Carson01")));
+	TestEqual(TEXT("and the authored money"), Out.AwardMoney, 25);
+
+	// --- Backwards fires too: the gate tests inequality, not direction --------------------------
+	Out = Apply(Tables, Journal, TEXT("Arthur Knox"), 1);
+	TestTrue(TEXT("a backwards move changes"), Out.bChanged);
+	TestEqual(TEXT("and lands on the earlier state"), Journal[0].State, 1);
+
+	// --- The title match is case- and whitespace-insensitive, and the row keeps the catalogue's --
+	Out = Apply(Tables, Journal, TEXT("  arthur KNOX  "), 3);
+	TestTrue(TEXT("a differently-cased, padded title resolves"), Out.bResolved);
+	TestEqual(TEXT("and does not become a second row"), Journal.Num(), 1);
+	TestEqual(TEXT("the row keeps the catalogue's spelling"),
+		Journal[0].Title, FString(TEXT("Arthur Knox")));
+	TestEqual(TEXT("state 3 carries the Event"), Out.Event, FString(TEXT("G.Knox_Done = 1")));
+
+	// --- The second quest assigned gets order 2 -------------------------------------------------
+	Out = Apply(Tables, Journal, TEXT("Tutorial"), 1);
+	TestEqual(TEXT("the second quest assigned gets order 2"), Out.Order, 2);
+	TestEqual(TEXT("two rows"), Journal.Num(), 2);
+
+	// --- Leaving a `botch` state is refused outright --------------------------------------------
+	TArray<FElysiumAssignedQuest> Botch;
+	Out = Apply(Tables, Botch, TEXT("Botched"), 1);
+	TestTrue(TEXT("entering a botched state is allowed"), Out.bChanged);
+	Out = Apply(Tables, Botch, TEXT("Botched"), 2);
+	TestTrue(TEXT("leaving it is refused"), Out.bBotched);
+	TestFalse(TEXT("with nothing awarded"), Out.bChanged);
+	TestEqual(TEXT("and the row untouched"), Botch[0].State, 1);
+
+	// --- FindRow is the same case-insensitive match ---------------------------------------------
+	TestNotNull(TEXT("FindRow matches case-insensitively"),
+		FindRow(Journal, TEXT("ARTHUR knox")));
+	TestNull(TEXT("and misses an unassigned quest"), FindRow(Journal, TEXT("Botched")));
+
+	// --- Ordinal addressing is what SetQuest uses, not the authored ID --------------------------
+	const FElysiumQuest* Knox = Tables.Find(TEXT("Arthur Knox"));
+	TestNotNull(TEXT("the fixture quest resolves"), Knox);
+	if (Knox)
+	{
+		TestNotNull(TEXT("ordinal 1 is the first state in file order"), Knox->StateByOrdinal(1));
+		TestNull(TEXT("ordinal 0 is not a state"), Knox->StateByOrdinal(0));
+		TestNull(TEXT("nor is one past the end"), Knox->StateByOrdinal(4));
+		TestNull(TEXT("nor one past VtMB's 20-state cap"), Knox->StateByOrdinal(21));
+	}
 
 	return true;
 }

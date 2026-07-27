@@ -303,16 +303,10 @@ void UElysiumSaveSubsystem::ApplyPayload(const FElysiumSavePayload& In)
 	{
 		State->SetGlobal(G.Key, G.Value);
 	}
-	// The quest map has no bulk clear, and a load is a wholesale replace: zero every live key first
-	// (0 is also the default-on-miss, so a key the payload does not carry reads exactly as unset).
-	for (const TPair<FString, int32>& Q : State->GetQuests())
-	{
-		State->SetQuestState(Q.Key, 0);
-	}
-	for (const TPair<FString, int32>& Q : In.Session.Quests)
-	{
-		State->SetQuestState(Q.Key, Q.Value);
-	}
+	// A load is a wholesale replace and must be SILENT — SetQuestState pays out the completion
+	// state's awards, so routing a load through it would replay the whole run's XP. RestoreQuests
+	// is the door that only moves the map; the journal arrives with the player record below.
+	State->RestoreQuests(TArray<TPair<FString, int32>>(In.Session.Quests));
 
 	ElysiumRng::SeedAll(In.Session.RngSessionSeed);
 	ElysiumRng::Restore(In.Session.Rng);

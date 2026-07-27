@@ -117,6 +117,27 @@ struct FElysiumXpEntry
 	int32   Amount = 0;
 };
 
+// One ASSIGNED_QUEST row — the journal as VtMB holds it (`savegame_format.md`). A quest is absent
+// from the journal until it holds a state, and holds exactly one row for as long as it does.
+struct FElysiumAssignedQuest
+{
+	// szTitle. The CATALOGUE's spelling, not the caller's: the engine matches a row by
+	// `Q_strnicmp(title, 48)`, so two casings of one title cannot become two rows.
+	FString Title;
+	// idxQuestTable. VtMB stores the flat quest index across all five loaded files; we store the
+	// (table, quest) pair the rulebook indexes by, because our catalogue keeps them separate.
+	int32 Table = INDEX_NONE;
+	int32 Quest = INDEX_NONE;
+	// idxState — the completion state's 1-based ORDINAL in file order, which is what SetQuest's
+	// second argument is. The authored `"ID"` is decorative; VtMB's loader never reads it.
+	int32 State = 0;
+	// iOrder — display order, assigned once when the quest is first assigned as max(order)+1, so
+	// the first quest of a run gets 1.
+	int32 Order = 0;
+	// The unread marker VtMB sets on every write (the record's byte at +0x3c).
+	bool bUnread = false;
+};
+
 // The criminal / supernatural / investigate counters `SetCriminalLevel`, `SetSupernaturalLevel` and
 // `SetInvestigateLevel` write. Their decay timers are the police-response system's (10.7).
 struct FElysiumLawState
@@ -154,6 +175,12 @@ struct FElysiumPlayerRecord
 	TArray<FString>         Effects;         // m_tEffectList
 	TArray<FString>         EmailFlags;      // the Player block, save-architecture.md section 3
 	FElysiumLawState        Law;
+
+	// m_QuestList — the journal. It lives on the record ONLY and is not mirrored onto the live
+	// player entity the way Money and ExperienceLog are: the quest map it reflects is session-scoped
+	// (it outlives having no map at all), and no script name, datamap input or keyfield reads the
+	// journal, so a hydrate/dehydrate round-trip would buy nothing.
+	TArray<FElysiumAssignedQuest> Journal;
 
 	// `AddExperience`'s two accumulators. The award is in hundredths — every real
 	// `experience_table` row is `N01` — and the division **keeps its remainder**, so the residue is
@@ -245,6 +272,10 @@ public:
 	// `ClanEffect`, its History's `Effect`, and (later) its items' and its frenzy state's. Held as
 	// names because that is what the save stores and what a re-read rulebook re-resolves.
 	TArray<FString> Effects;
+
+	// `CBaseCombatCharacter::MoneyAdd` — the one write both the datamap input and a quest's
+	// `AwardMoney` go through. Raw `+=`, no floor, as the engine's is.
+	void AddMoney(int32 Delta);
 
 	// --- The 25 CBaseCombatCharacter inputs -------------------------------------------------
 	// Backed: the four counters. VtMB's own InputMoneyAdd is

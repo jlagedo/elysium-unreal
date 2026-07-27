@@ -86,11 +86,25 @@ public:
 	const FElysiumGlobalMap& GetGlobals() const { return Globals; }
 
 	// --- Quests --------------------------------------------------------------------
-	// String->int quest state; miss -> 0. (XP/RPG sheet load onto this subsystem later — 9.4.)
+	// String->int quest state; miss -> 0. The map stays authoritative (732 `SetQuest` call sites,
+	// default-0 on miss is VtMB's own contract); what hangs off it is everything that happens
+	// AROUND a change — the completion state's awards and the journal row (`game_runtime.md` ->
+	// "Quests"). The state value is the completion state's 1-based ORDINAL in file order, which is
+	// what `SetQuest`'s second argument is.
 	int32 GetQuestState(const FString& Quest) const;
-	void SetQuestState(const FString& Quest, int32 State);
 	bool HasQuest(const FString& Quest) const;
 	const FElysiumQuestMap& GetQuests() const { return Quests; }
+
+	// The script/dialogue funnel. Writes the state, then resolves the catalogue and pays out:
+	// `AwardMoney`, then `AwardXP`, then `Event` — the engine's own order.
+	void SetQuestState(const FString& Quest, int32 State);
+
+	// The wholesale replace a save load performs. Awards NOTHING and leaves the journal alone (it
+	// arrives with the player record): a load must not replay a run's worth of awards.
+	void RestoreQuests(TArray<TPair<FString, int32>>&& In);
+
+	// The journal — ASSIGNED_QUEST rows on the player record, in assignment order.
+	const TArray<FElysiumAssignedQuest>& Journal() const { return Record.Journal; }
 
 	// --- The player record + New Game (11.4) ---------------------------------------
 	// S3: the player *is* an entity, so the live sheet lives on that entity for as long as a map
@@ -236,6 +250,9 @@ public:
 	FElysiumEntityWorld* CurrentEntityWorld() const;
 
 private:
+	// `elysium.quest` — the journal, one quest, or a real state change.
+	void ExecQuest(const TArray<FString>& Args);
+
 	FElysiumGlobalMap Globals;
 	FElysiumQuestMap Quests;
 	// The durable player (11.4). The live one is the entity in the current map.

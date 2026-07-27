@@ -7,6 +7,7 @@
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "Scripting/ElysiumPythonVM.h"
+#include "Substrate/ElysiumQuestLog.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 
 #include "Engine/GameInstance.h"
@@ -174,6 +175,20 @@ void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection
 	// is available (so level-script names resolve) and the expression evaluator otherwise.
 	// `elysium.script.live 0` swaps in the null host — the whole surface goes dark together.
 	ScriptHostPtr = MakePreferredScriptHost();
+
+	// `elysium.quest` — the journal, one quest, or drive a real state change. Quest titles carry
+	// spaces (`Kill Venus`, `Kings Way`), so the name is everything after the selector rejoined,
+	// the same handling `elysium.rules` uses.
+	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
+		TEXT("elysium.quest"),
+		TEXT("elysium.quest [<title> | set <title> <state>] — no args: the journal. One arg: that ")
+		TEXT("quest's live state and every completion state it has. `set` drives the real path, ")
+		TEXT("awards and all."),
+		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
+		{
+			ExecQuest(Args);
+		}),
+		ECVF_Default));
 
 	// `elysium.g <name> [value]` — inspect/poke the G store by hand. No args dumps every
 	// set flag; one arg reads (miss -> 0); a second arg writes (integer if it parses, else
@@ -492,7 +507,165 @@ int32 UElysiumGameStateSubsystem::GetQuestState(const FString& Quest) const
 
 void UElysiumGameStateSubsystem::SetQuestState(const FString& Quest, int32 State)
 {
+	// The map write is unconditional and comes first: default-0-on-miss is the contract every one
+	// of the 732 call sites reads through, so an unknown title still stores its value here even
+	// though the engine's own catalogue has nowhere to put it.
 	Quests.Add(Quest, State);
+
+	UElysiumRulebookSubsystem* Rules = Rulebook();
+	if (!Rules)
+	{
+		return;   // a bare test world: the map is the whole system, exactly as before 9.4d
+	}
+
+	const ElysiumQuestLog::FOutcome Outcome =
+		ElysiumQuestLog::Apply(Rules->Quests(), Record.Journal, Quest, State);
+
+	if (!Outcome.bResolved)
+	{
+		UE_LOG(LogElysiumState, Log, TEXT("SetQuest(\"%s\", %d) — no such quest or state; "
+			"stored, nothing awarded"), *Quest, State);
+		return;
+	}
+	if (Outcome.bBotched)
+	{
+		UE_LOG(LogElysiumState, Warning, TEXT("SetQuest(\"%s\", %d) — refused: leaving a botched state"),
+			*Outcome.Title, State);
+		return;
+	}
+	if (!Outcome.bChanged)
+	{
+		return;   // a repeat set: the engine awards nothing and re-runs nothing
+	}
+
+	UE_LOG(LogElysiumState, Log, TEXT("quest \"%s\" (%s) -> state %d [%s], order %d"),
+		*Outcome.Title, *Outcome.DisplayName, State, *Outcome.Type, Outcome.Order);
+
+	// The awards, in the engine's order: money, then XP, then the script event. Each is skipped
+	// when zero/empty, and `AwardMoney`/`Event` are authored in no shipped row.
+	FElysiumPlayer* Player = PlayerEntity();
+	if (Outcome.AwardMoney != 0)
+	{
+		if (Player) { Player->AddMoney(Outcome.AwardMoney); }
+		else        { Record.Money += Outcome.AwardMoney; }
+	}
+	if (!Outcome.AwardXpKey.IsEmpty())
+	{
+		if (Player)
+		{
+			Player->AwardExperience(Outcome.AwardXpKey);
+		}
+		else
+		{
+			// No live player entity (a New Game seeding before any map exists). The award walk is
+			// the entity's — banking it into the record here would bypass the give-once ledger.
+			UE_LOG(LogElysiumState, Log, TEXT("quest \"%s\" AwardXP \"%s\" — no player entity, skipped"),
+				*Outcome.Title, *Outcome.AwardXpKey);
+		}
+	}
+	if (!Outcome.Event.IsEmpty())
+	{
+		// The `Event` key is script data handed to the interpreter — a dispatch path beside the
+		// field-6/pythoncheck/dialogue/ScheduleTask four (`python_bridge.md`). It goes through the
+		// same seam, so it resolves the level script's names and lands in the recent-eval log.
+		FString Error;
+		EvalScript(Outcome.Event, Error);
+		if (!Error.IsEmpty())
+		{
+			UE_LOG(LogElysiumState, Warning, TEXT("quest \"%s\" Event failed: %s"),
+				*Outcome.Title, *Error);
+		}
+	}
+}
+
+void UElysiumGameStateSubsystem::ExecQuest(const TArray<FString>& Args)
+{
+	UElysiumRulebookSubsystem* Rules = Rulebook();
+	if (!Rules)
+	{
+		UE_LOG(LogElysiumState, Display, TEXT("no rulebook — quests are the bare map"));
+		return;
+	}
+
+	// No args: the journal, in display order.
+	if (Args.Num() == 0)
+	{
+		TArray<FElysiumAssignedQuest> Rows = Record.Journal;
+		Rows.Sort([](const FElysiumAssignedQuest& A, const FElysiumAssignedQuest& B)
+			{ return A.Order < B.Order; });
+		UE_LOG(LogElysiumState, Display, TEXT("journal: %d assigned"), Rows.Num());
+		for (const FElysiumAssignedQuest& Row : Rows)
+		{
+			const FElysiumQuest* Q = Rules->Quests().At({ Row.Table, Row.Quest });
+			const FElysiumQuestState* S = Q ? Q->StateByOrdinal(Row.State) : nullptr;
+			UE_LOG(LogElysiumState, Display, TEXT("  %2d. %-22s %-10s state %-3d %-11s %s%s"),
+				Row.Order, *Row.Title,
+				Row.Table >= 0 ? FElysiumQuestTables::HubNames[Row.Table] : TEXT("?"),
+				Row.State, S ? *S->Type : TEXT("?"),
+				Row.bUnread ? TEXT("* ") : TEXT("  "),
+				S ? *S->Description.Left(80) : TEXT(""));
+		}
+		return;
+	}
+
+	// `set <title> <state>` — the state is the last arg, the title everything between.
+	const bool bSet = Args[0].Equals(TEXT("set"), ESearchCase::IgnoreCase);
+	const int32 First = bSet ? 1 : 0;
+	const int32 Last  = bSet ? Args.Num() - 1 : Args.Num();
+	if (bSet && Args.Num() < 3)
+	{
+		UE_LOG(LogElysiumState, Display, TEXT("usage: elysium.quest set <title> <state>"));
+		return;
+	}
+
+	FString Title;
+	for (int32 i = First; i < Last; ++i)
+	{
+		Title += (i > First ? TEXT(" ") : TEXT("")) + Args[i];
+	}
+	Title = Title.TrimQuotes();
+
+	if (bSet)
+	{
+		SetQuestState(Title, FCString::Atoi(*Args.Last()));
+		return;
+	}
+
+	FElysiumQuestRef Ref;
+	const FElysiumQuest* Q = Rules->Quests().Find(Title, &Ref);
+	if (!Q)
+	{
+		UE_LOG(LogElysiumState, Display, TEXT("no quest '%s' (live state %d)"),
+			*Title, GetQuestState(Title));
+		return;
+	}
+	const FElysiumAssignedQuest* Row = ElysiumQuestLog::FindRow(Record.Journal, Q->Title);
+	UE_LOG(LogElysiumState, Display, TEXT("\"%s\" — %s  [%s]  live %d, journal %s"),
+		*Q->Title, *Q->DisplayName, FElysiumQuestTables::HubNames[Ref.Table],
+		GetQuestState(Q->Title),
+		Row ? *FString::Printf(TEXT("state %d, order %d"), Row->State, Row->Order)
+			: TEXT("unassigned"));
+	for (int32 i = 0; i < Q->States.Num(); ++i)
+	{
+		// The ordinal is what SetQuest addresses; the authored ID rides along because a mismatch
+		// between the two is exactly the divergence worth seeing.
+		const FElysiumQuestState& S = Q->States[i];
+		UE_LOG(LogElysiumState, Display, TEXT("  %s#%-3d id %-4d %-11s %-14s %s"),
+			(Row && Row->State == i + 1) ? TEXT(">") : TEXT(" "),
+			i + 1, S.Id, *S.Type, *S.AwardXp, *S.Description.Left(80));
+	}
+}
+
+void UElysiumGameStateSubsystem::RestoreQuests(TArray<TPair<FString, int32>>&& In)
+{
+	// A load is a wholesale replace, and it must be SILENT: routing it through SetQuestState would
+	// replay every award the run ever made. The journal is not rebuilt here either — it arrives
+	// with the player record, which is where the rows live.
+	Quests.Reset();
+	for (TPair<FString, int32>& Q : In)
+	{
+		Quests.Add(MoveTemp(Q.Key), Q.Value);
+	}
 }
 
 bool UElysiumGameStateSubsystem::HasQuest(const FString& Quest) const

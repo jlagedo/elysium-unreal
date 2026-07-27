@@ -655,6 +655,62 @@ Unofficial Patch reinstates the distinction in data.
   console command; a template's `LevelGroup` is selected by a `Dependency` expression over
   the sheet (`"Attrib_Order == Physical_Mental_Social"`) **[data]**.
 
+### Quests — the catalogue, `SetQuest`, and the awards **[VtMB]**
+
+The class is **`QuestJournal`** (its own scope-trace strings name it). The catalogue is a process
+global loaded from the five `quests_*.txt` files; the *player* carries only the journal rows.
+
+**The catalogue records.** A quest is 0x68 bytes: `+0` `Title`, `+4` `DisplayName`, `+8` the id of
+the file it came from, `+0xc` `iOrder`, `+0x10` the current state (**-1 = unassigned**), and
+`+0x14` an `int stateIdx[20]` prefilled with -1 — so **a quest is capped at 20 completion states**.
+A `CompletionState` is 0x18 bytes: `+0` ID, `+4` `Description`, `+8` `Type`, `+0xc` `AwardMoney`,
+`+0x10` `AwardXP`, `+0x14` `Event`. `QuestJournal::AddQuest` (`102213C0`) and
+`AddCompletionState` (`10221660`) `Q_trimspace` every string they read, `Title` included.
+
+- **`Type` is resolved by substring**, not by equality — `Q_stristr` in order: `incomplete` → 1,
+  `success` → 2, `failure` → 3, `botch` → 4, anything else → 1. The key's default when absent is
+  the literal `"incomplete"`. **`botch` is a fourth type no shipped row authors.**
+- **The authored `"ID"` is never read.** `AddCompletionState` zeroes the record's ID slot and
+  parses only `AwardMoney` / `AwardXP` / `Description` / `Event` / `Type`. The states are appended
+  in file order, and `SetQuest`'s second argument indexes that array **1-based**: state `N`
+  addresses `stateIdx[N-1]`. All 435 shipped rows happen to author `ID` equal to their file
+  position, so the two readings coincide on retail data — but the mechanism is the ordinal.
+
+**`pc.SetQuest(title, state)`** — Python thunk `10199800`, setter `CVPlayer::SetQuest` `1017CC20`.
+The thunk parses `(self, title:str, state:int)` and raises `AttributeError("bad args to
+SetQuest.")` on a mismatch, but **ignores the receiver**: it fetches entity index **1**, so the
+quest always lands on the player no matter what the call was written against.
+
+1. Look the title up in the catalogue. **An unknown title does nothing at all** — no state stored,
+   no journal row, no award. Likewise a `state` whose `stateIdx[N-1]` is -1.
+2. **`iOrder` is assigned once, on first assignment** (the quest's current state is still -1): a
+   walk over every loaded quest takes `max(iOrder) + 1`, so the first quest assigned in a run
+   gets **1**.
+3. The catalogue record's current state is overwritten unconditionally.
+4. **The re-fire gate** (`10182420`) reads the *journal row*, not the catalogue:
+   - no row yet → proceed (a first assignment always awards);
+   - a row at the **same** state → **stop**; a repeat `SetQuest` awards nothing and re-runs nothing;
+   - a row at a **different** state → proceed, **including a move backwards** — unless the row's
+     current state is `Type` **botch**, which raises `Error("Attempting to set botched quest %s to
+     state: %d")` and stops. With no shipped row authoring `botch`, that branch is unreachable on
+     retail data.
+5. The awards then run **in this order**, all on the player: **`AwardMoney`**
+   (`CBaseCombatCharacter::MoneyAdd` `10340E50` — a raw `+=` on `+0x13D8`, no floor at zero), then
+   **`AwardXP`** (`AwardExperience` above, so the `m_ExpList` ledger is the second give-once
+   guard), then **`Event`** — `PyRun_ConsoleString` against `__main__`'s dict with
+   `Py_file_input`, traced as `RUNNING PYTHON AT TIME %f: %s` and `PyErr_Print`ed on failure. Each
+   is skipped when zero/empty.
+6. The journal row is written last (`10182260`), and on a `success` state the client notification
+   fires a second time.
+
+**The journal row** is `ASSIGNED_QUEST`, stride **0x40** at `player+0x1D68` with the count at
+`+0x1D74`: `szTitle[0x30]`, `+0x30` `idxQuestTable`, `+0x34` `idxState`, `+0x38` `iOrder`, and
+**`+0x3c` a byte flag set to 1 on every write** — the unread marker, a field
+`savegame_format.md`'s record does not list. Two things the name `idxQuestTable` hides: the value
+stored is the **flat quest index across all five loaded files**, not the index of the file; and the
+row is matched by **`Q_strnicmp(title, 48)` — case-insensitively** — then **replaced in place**, so
+a quest never holds two rows.
+
 ### Trait effects — how clan banes and histories are enforced **[VtMB]**
 
 Clan gifts/banes and History backgrounds are **not** special-cased in code. A clan names

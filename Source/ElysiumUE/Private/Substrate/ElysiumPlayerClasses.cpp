@@ -283,10 +283,17 @@ void FElysiumCombatCharacter::PendingInput(const TCHAR* Input, const TCHAR* Owne
 		*DebugString(), Input, *Args.Param.Describe(), Owner);
 }
 
+void FElysiumCombatCharacter::AddMoney(int32 Delta)
+{
+	// `CBaseCombatCharacter::MoneyAdd` (`10340E50`) is a raw `+=` with no floor, which is what the
+	// quest `AwardMoney` path reaches. `InputMoneyRemove` adds its own floor for the subtracting
+	// direction; this one deliberately does not.
+	if (Delta != 0) { Money += Delta; }
+}
+
 void FElysiumCombatCharacter::InputMoneyAdd(const FElysiumInputArgs& Args)
 {
-	const int32 N = Args.Param.ToInt();
-	if (N != 0) { Money += N; }
+	AddMoney(Args.Param.ToInt());
 }
 
 void FElysiumCombatCharacter::InputMoneyRemove(const FElysiumInputArgs& Args)

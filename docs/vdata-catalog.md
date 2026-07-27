@@ -82,9 +82,14 @@ QuestTable { Quest { "Title" "DisplayName"
 
 - **`Title`** is the key dialogue and scripts use — `pc.SetQuest("Arthur Knox", 2)`. `DisplayName`
   is the journal heading; `Description` is the journal body; both are localized.
-- **`ID`** is a unique numeric completion state. State **0 = unassigned**, and a quest is absent
-  from the journal until the player holds a valid ID for it.
-- **`Type`** is `success` / `failure` / `incomplete` and drives the entry's font and colour.
+- **`ID`** is documented as the unique numeric completion state, and state **0 = unassigned** — but
+  the loader **never reads the key**: `SetQuest(title, N)` addresses the N-th `CompletionState` in
+  **file order** (`game_runtime.md` → "Quests"). All 435 shipped rows author `ID` equal to their own
+  position, so the two readings coincide; the ordinal is the mechanism. A quest is capped at **20**
+  states, and is absent from the journal until it holds one.
+- **`Type`** is `success` / `failure` / `incomplete` and drives the entry's font and colour. The
+  engine matches it by **substring**, and knows a fourth value — `botch` — that no shipped row
+  authors and that refuses any further state change on that quest.
 - **`AwardXP` names an `experience_table.txt` key, not a number** (`"AwardXP" "Carson01"`) — the
   shipped header comment calls it "how many experience points", and the data contradicts it.
   `AwardMoney` *is* a number — but **`AwardMoney` and `Event` are authored in zero shipped rows**

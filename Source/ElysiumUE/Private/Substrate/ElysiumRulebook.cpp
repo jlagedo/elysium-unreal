@@ -1189,6 +1189,15 @@ const FElysiumQuestState* FElysiumQuest::StateById(int32 Id) const
 	return nullptr;
 }
 
+const FElysiumQuestState* FElysiumQuest::StateByOrdinal(int32 OneBased) const
+{
+	if (OneBased < 1 || OneBased > MaxStates || OneBased > States.Num())
+	{
+		return nullptr;
+	}
+	return &States[OneBased - 1];
+}
+
 bool FElysiumQuestTables::Load(FString& OutError)
 {
 	for (int32 i = 0; i < NumTables; ++i)
@@ -1227,8 +1236,10 @@ bool FElysiumQuestTables::Load(FString& OutError)
 			FElysiumQuest Quest;
 			Quest.TableIndex = t;
 			Quest.Index = Quests[t].Num();
-			Quest.Title = Kid.Value->Str(TEXT("Title"), FString());
-			Quest.DisplayName = Kid.Value->Str(TEXT("DisplayName"), Quest.Title);
+			// `QuestJournal::AddQuest` Q_trimspace's both, and the shipped files do author padding
+			// around a Title — so the stored spelling is the trimmed one everywhere.
+			Quest.Title = Kid.Value->Str(TEXT("Title"), FString()).TrimStartAndEnd();
+			Quest.DisplayName = Kid.Value->Str(TEXT("DisplayName"), Quest.Title).TrimStartAndEnd();
 
 			for (const TPair<FString, TSharedPtr<FKvNode>>& StateKid : Kid.Value->Kids)
 			{
@@ -1249,10 +1260,11 @@ bool FElysiumQuestTables::Load(FString& OutError)
 				Quest.States.Add(MoveTemp(State));
 			}
 
-			ByTitle.Add(Fold(Quest.Title), FElysiumQuestRef{ t, Quest.Index });
 			Quests[t].Add(MoveTemp(Quest));
 		}
 	}
+
+	Reindex();
 
 	if (Loaded == 0)
 	{
@@ -1262,9 +1274,21 @@ bool FElysiumQuestTables::Load(FString& OutError)
 	return true;
 }
 
+void FElysiumQuestTables::Reindex()
+{
+	ByTitle.Reset();
+	for (int32 t = 0; t < NumTables; ++t)
+	{
+		for (int32 q = 0; q < Quests[t].Num(); ++q)
+		{
+			ByTitle.Add(Fold(Quests[t][q].Title.TrimStartAndEnd()), FElysiumQuestRef{ t, q });
+		}
+	}
+}
+
 const FElysiumQuest* FElysiumQuestTables::Find(const FString& Title, FElysiumQuestRef* OutRef) const
 {
-	const FElysiumQuestRef* Ref = ByTitle.Find(Fold(Title));
+	const FElysiumQuestRef* Ref = ByTitle.Find(Fold(Title.TrimStartAndEnd()));
 	if (Ref == nullptr)
 	{
 		return nullptr;

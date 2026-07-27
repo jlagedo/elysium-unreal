@@ -81,7 +81,11 @@ slot tables in `Public/ElysiumSheetSlots.h` + `Substrate/ElysiumSheet.cpp`; the 
 are the rulebook's, reached as `World->GetGameState()->Stats()`. The arithmetic over those slots is
 `Substrate/ElysiumSheetMath.{h,cpp}` — `FElysiumSheetEffects` (a character's resolved
 `m_tEffectList`), `ElysiumFeats::FeatValue`/`Calc` (what `CalcFeat` answers), `ElysiumXp` (the award
-banking) and `ElysiumSheetRules::EvalPredependency`. **Gotcha:** the sheet's own
+banking) and `ElysiumSheetRules::EvalPredependency`. Quests sit beside it in the same shape:
+`Substrate/ElysiumQuestLog.{h,cpp}` is the pure decision (`ElysiumQuestLog::Apply` — resolve,
+gate, reconcile the `FElysiumAssignedQuest` rows on the player record), and
+`UElysiumGameStateSubsystem::SetQuestState` is the funnel that performs what it reports.
+**Gotcha:** the sheet's own
 health slots register as `vhealth`/`vmax_health`, not `health`/`max_health` — those two are
 `CBaseEntity` keyfields on the same chain, and the registry resolves derived-shadows-base, so a
 sheet slot taking the bare name would silently repoint `trigger_hurt`. `Elysium.Substrate.Sheet`
@@ -173,6 +177,9 @@ Hard-won, non-obvious, and easy to undo:
   compiles (the effect argument defaults to null) and silently drops every clan bane and gift. On a
   character, go through `FElysiumCombatCharacter::RecomputeSheet()`, which passes both and re-derives
   the `health` keyfields after.
+- **`SetQuestState` pays out; a save load must not go through it** — it resolves the completion
+  state and fires `AwardMoney`/`AwardXP`/`Event`, so restoring a payload key-by-key through it would
+  replay the whole run's awards. `RestoreQuests` is the silent bulk door, and it is the only one.
 - **Save omission diffs against a post-Load baseline, not zero** — a fresh-constructed reference
   omits the wrong things and a restored map re-runs every `logic_auto` ignition.
 - **Resolved `UAnimSequence`s cache on the map actor, not the subsystem** — glTFRuntime binds each to

@@ -131,6 +131,12 @@ FArchive& operator<<(FArchive& Ar, FElysiumXpEntry& E)
 	return Ar;
 }
 
+FArchive& operator<<(FArchive& Ar, FElysiumAssignedQuest& Q)
+{
+	Ar << Q.Title << Q.Table << Q.Quest << Q.State << Q.Order << Q.bUnread;
+	return Ar;
+}
+
 FArchive& operator<<(FArchive& Ar, FElysiumLawState& L)
 {
 	Ar << L.Criminal << L.Supernatural << L.Investigate;
@@ -148,6 +154,9 @@ FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R)
 	Ar << R.ExperienceRemainder << R.LifetimeExperience;
 	Ar << R.Law;
 	Ar << R.bUnkillable;
+	// The journal rides with the record because that is where m_QuestList lives; the quest map it
+	// reflects is in the Session block, and only a state change writes both.
+	Ar << R.Journal;
 	return Ar;
 }
 
@@ -448,6 +457,12 @@ void Describe(const FElysiumSavePayload& Payload, TArray<FString>& OutLines)
 		P.LifetimeExperience, P.ExperienceRemainder));
 	for (const FString& E : P.Effects)    { OutLines.Add(FString::Printf(TEXT("player.effect %s"), *E)); }
 	for (const FString& E : P.EmailFlags) { OutLines.Add(FString::Printf(TEXT("player.email %s"), *E)); }
+	// The journal, as stored — assignment order, which is also `Order` order.
+	for (const FElysiumAssignedQuest& Q : P.Journal)
+	{
+		OutLines.Add(FString::Printf(TEXT("player.quest.%s = state %d (table %d, quest %d, order %d%s)"),
+			*Q.Title, Q.State, Q.Table, Q.Quest, Q.Order, Q.bUnread ? TEXT(", unread") : TEXT("")));
+	}
 
 	OutLines.Add(FString::Printf(TEXT("world.map = %s"), *Payload.World.CurrentMap));
 	OutLines.Add(FString::Printf(TEXT("world.placement = %s yaw %.1f%s"),

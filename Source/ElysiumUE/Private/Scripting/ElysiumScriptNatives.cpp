@@ -51,7 +51,7 @@ namespace
 		{ TEXT("StartBarter"),         true,  TEXT("stub") },
 		{ TEXT("WorldMap"),            true,  TEXT("stub") },
 		{ TEXT("SewerMap"),            true,  TEXT("stub") },
-		{ TEXT("SetQuest"),            true,  TEXT("quest map") },
+		{ TEXT("SetQuest"),            true,  TEXT("quest map + the catalogue's awards and journal") },
 		{ TEXT("CurrentMoney"),        true,  TEXT("the combat character's money field") },
 		{ TEXT("IsMale"),              true,  TEXT("player sheet") },
 		{ TEXT("SeductiveFeed"),       true,  TEXT("stub") },
@@ -209,7 +209,9 @@ namespace ElysiumScriptNatives
 		}
 		const FString Display = FString::Printf(TEXT("%s.%s(%s)"), *Recv, *Method.ToString(), *DescribeArgs(LogArgs));
 
-		// Real backing: the quest map on the game-state subsystem.
+		// Real backing: the game-state subsystem's quest funnel — the map write plus the completion
+		// state's awards and journal row (9.4d). The receiver is deliberately ignored, as VtMB's own
+		// thunk ignores it: `SetQuest` always lands on the player (`script_api.md`).
 		if (Method == FName(TEXT("SetQuest")))
 		{
 			if (State && Args.Num() >= 2) { State->SetQuestState(Args[0].ToString(), Args[1].ToInt()); }

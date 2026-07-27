@@ -25,6 +25,7 @@
 #include "Visual/ElysiumObjModel.h"
 #include "ElysiumReflections.h"
 #include "ElysiumRng.h"
+#include "Substrate/ElysiumQuestLog.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSheetMath.h"
 #include "Visual/ElysiumRopes.h"
@@ -1561,13 +1562,23 @@ bool FElysiumRulebookContentTest::RunTest(const FString&)
 		TestEqual(TEXT("quests_main.txt is empty and clean"), Quests.Quests[3].Num(), 0);
 
 		int32 Awards = 0, Unresolved = 0, Money = 0, Events = 0;
+		int32 IdMismatches = 0, OverCap = 0;
 		TSet<FString> Types;
 		for (int32 t = 0; t < FElysiumQuestTables::NumTables; ++t)
 		{
 			for (const FElysiumQuest& Q : Quests.Quests[t])
 			{
-				for (const FElysiumQuestState& S : Q.States)
+				// VtMB's loader stops at 20 states per quest — a 21st would silently not exist.
+				if (Q.States.Num() > FElysiumQuest::MaxStates) { ++OverCap; }
+				for (int32 i = 0; i < Q.States.Num(); ++i)
 				{
+					const FElysiumQuestState& S = Q.States[i];
+					// `SetQuest(title, N)` addresses the N-th state in FILE ORDER; the authored
+					// `"ID"` is never read (`game_runtime.md` -> "Quests"). Every shipped row
+					// happens to author the two equal, which is what makes `elysium.rules quest`'s
+					// by-ID listing readable — assert it so a patched rulebook that breaks the
+					// coincidence surfaces here rather than as a mis-addressed award.
+					if (S.Id != i + 1) { ++IdMismatches; }
 					Types.Add(S.Type.ToLower());
 					Money += (S.AwardMoney != 0) ? 1 : 0;
 					Events += S.Event.IsEmpty() ? 0 : 1;
@@ -1595,7 +1606,11 @@ bool FElysiumRulebookContentTest::RunTest(const FString&)
 		// its money/event award path has no shipped case to test against.
 		TestEqual(TEXT("AwardMoney is authored nowhere"), Money, 0);
 		TestEqual(TEXT("Event is authored nowhere"), Events, 0);
+		// Three, not four: `botch` is a real Type in the engine's parser and no row authors it, so
+		// the refuse-to-leave-a-botched-quest branch is unreachable on retail data.
 		TestEqual(TEXT("Type is exactly three values"), Types.Num(), 3);
+		TestEqual(TEXT("every authored ID equals its 1-based file position"), IdMismatches, 0);
+		TestEqual(TEXT("no quest exceeds VtMB's 20-state cap"), OverCap, 0);
 
 		if (const FElysiumQuest* Knox = Quests.Find(TEXT("Arthur Knox")))
 		{
@@ -1974,6 +1989,105 @@ bool FElysiumSheetMathContentTest::RunTest(const FString&)
 		}
 		TestTrue(TEXT("nearly every award is authored as N01"), Hundredths >= Experience.Num() - 8);
 	}
+
+	return true;
+}
+
+// =================================================================================================
+// Quests against the real catalogue (9.4d) — what the content-free tier's hand-built fixture
+// cannot answer: that the shipped 161 `AwardXP` keys are actually REACHABLE through the state
+// change that owes them, not merely present in the file. The entity-side award walk itself
+// (give-once, Experience_Modifier, the remainder-keeping /100) is `Elysium.Content.SheetMath`'s.
+// =================================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumQuestContentTest,
+	"Elysium.Content.Quests", GElysiumContentTestFlags)
+
+bool FElysiumQuestContentTest::RunTest(const FString&)
+{
+	if (!IFileManager::Get().FileExists(
+			*FElysiumContentPaths::VdataFile(TEXT("system/quests_santamonica.txt"))))
+	{
+		AddInfo(TEXT("skipping: no exported out/vdata (run tools/export_all.py to enable)"));
+		return true;
+	}
+
+	FString Error;
+	FElysiumQuestTables Quests;
+	FElysiumExperienceTable Experience;
+	if (!TestTrue(TEXT("quests_*.txt load"), Quests.Load(Error)) ||
+		!TestTrue(TEXT("experience_table.txt loads"), Experience.Load(Error)))
+	{
+		AddError(Error);
+		return true;
+	}
+
+	// --- Every authored award is reachable, and every reached award resolves --------------------
+	// Walk every quest to every one of its states through the real decision function, exactly as
+	// `SetQuestState` does, and check the key it hands back against `experience_table`.
+	int32 Reached = 0, Unresolved = 0, Repeats = 0;
+	for (int32 t = 0; t < FElysiumQuestTables::NumTables; ++t)
+	{
+		for (const FElysiumQuest& Q : Quests.Quests[t])
+		{
+			TArray<FElysiumAssignedQuest> Journal;
+			for (int32 i = 1; i <= Q.States.Num(); ++i)
+			{
+				const ElysiumQuestLog::FOutcome Out =
+					ElysiumQuestLog::Apply(Quests, Journal, Q.Title, i);
+				if (!Out.bChanged)
+				{
+					AddError(FString::Printf(TEXT("quest \"%s\" state %d did not change"), *Q.Title, i));
+					continue;
+				}
+				if (Out.AwardXpKey.IsEmpty())
+				{
+					continue;
+				}
+				++Reached;
+				if (Experience.Find(Out.AwardXpKey) == nullptr) { ++Unresolved; }
+
+				// Immediately re-setting the same state owes nothing — the property that keeps a
+				// re-fired dialogue line from paying twice.
+				const ElysiumQuestLog::FOutcome Again =
+					ElysiumQuestLog::Apply(Quests, Journal, Q.Title, i);
+				if (Again.bChanged || !Again.AwardXpKey.IsEmpty()) { ++Repeats; }
+			}
+			// One quest, one row, however many states it walked through.
+			TestEqual(TEXT("a walked quest holds exactly one journal row"), Journal.Num(), 1);
+		}
+	}
+	AddInfo(FString::Printf(TEXT("AwardXP reached through a state change: %d"), Reached));
+	TestTrue(TEXT("at least 150 awards are reachable"), Reached >= 150);
+	TestEqual(TEXT("every reached award resolves in experience_table"), Unresolved, 0);
+	TestEqual(TEXT("no repeat set owes anything"), Repeats, 0);
+
+	// --- The worked case, end to end -----------------------------------------------------------
+	TArray<FElysiumAssignedQuest> Journal;
+	ElysiumQuestLog::FOutcome Out = ElysiumQuestLog::Apply(Quests, Journal, TEXT("Arthur Knox"), 1);
+	TestTrue(TEXT("Arthur Knox assigns"), Out.bChanged);
+	TestEqual(TEXT("as the first quest of the run, order 1"), Out.Order, 1);
+	TestEqual(TEXT("with the shipped display name"), Out.DisplayName,
+		FString(TEXT("A Bounty For The Hunter")));
+
+	Out = ElysiumQuestLog::Apply(Quests, Journal, TEXT("Arthur Knox"), 2);
+	TestEqual(TEXT("state 2 owes Carson01"), Out.AwardXpKey, FString(TEXT("Carson01")));
+	if (const FElysiumExperienceEntry* Row = Experience.Find(Out.AwardXpKey))
+	{
+		// Raw 101 -> one whole XP point, with 0.01 banked as residue (`ElysiumXp::Bank`).
+		TestEqual(TEXT("Carson01 is worth 101 raw"), Row->Value, 101);
+		float Remainder = 0.f, Lifetime = 0.f;
+		TestEqual(TEXT("which banks one whole XP point"),
+			ElysiumXp::Bank(Row->Value, Remainder, Lifetime), 1);
+		TestEqual(TEXT("keeping the sub-100 residue"), Remainder, 1.0f);
+	}
+	TestEqual(TEXT("and the journal still holds one row"), Journal.Num(), 1);
+	TestEqual(TEXT("on the santamonica table"), Journal[0].Table, 4);
+
+	// A quest assigned second gets order 2, whichever hub it came from.
+	Out = ElysiumQuestLog::Apply(Quests, Journal, TEXT("Tutorial"), 1);
+	TestTrue(TEXT("Tutorial assigns"), Out.bChanged);
+	TestEqual(TEXT("as the second quest, order 2"), Out.Order, 2);
 
 	return true;
 }

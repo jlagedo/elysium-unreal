@@ -459,7 +459,10 @@ private:
 
 struct FElysiumQuestState
 {
-	int32 Id = 0;               // unique within the quest, NOT sequential and NOT an array index
+	// The authored `"ID"`. DECORATIVE: `QuestJournal::AddCompletionState` never reads the key —
+	// `SetQuest(title, N)` addresses the N-th state in FILE ORDER (`game_runtime.md` → "Quests").
+	// Kept because every shipped row authors it equal to its own position, which is worth asserting.
+	int32 Id = 0;
 	FString Description;        // the journal body
 	FString Type;               // success | failure | incomplete — drives the entry's colour
 	FString AwardXp;            // an experience_table.txt KEY, not a number
@@ -479,6 +482,13 @@ struct FElysiumQuest
 
 	// State 0 is "unassigned" and is never authored, so a miss is the ordinary case.
 	const FElysiumQuestState* StateById(int32 Id) const;
+
+	// What `SetQuest(title, N)` actually addresses: the N-th state in file order, 1-based. This is
+	// the engine's own lookup; `StateById` is the readable one the verb prints. VtMB caps a quest at
+	// 20 states, so anything past that could not have been loaded either.
+	static constexpr int32 MaxStates = 20;
+	const FElysiumQuestState* StateByOrdinal(int32 OneBased) const;
+
 	bool IsValid() const { return !Title.IsEmpty(); }
 };
 
@@ -502,6 +512,12 @@ struct FElysiumQuestTables
 	bool Load(FString& OutError);
 	bool IsValid() const { return NumQuests() > 0; }
 
+	// Rebuild the title index from `Quests`. `Load` calls it; a hand-built catalogue (the tests')
+	// needs it because the lookup is the index, not a scan.
+	void Reindex();
+
+	// Case-insensitive, and trimmed on both sides — the engine `Q_trimspace`s a Title at load and
+	// matches a journal row with `Q_strnicmp`.
 	const FElysiumQuest* Find(const FString& Title, FElysiumQuestRef* OutRef = nullptr) const;
 	const FElysiumQuest* At(const FElysiumQuestRef& Ref) const;
 	int32 NumQuests() const;
