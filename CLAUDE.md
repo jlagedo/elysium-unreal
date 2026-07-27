@@ -11,10 +11,9 @@ engine-neutral intermediates.
 
 - **`docs/roadmap.md`** — the single source of truth work tracker: the playable-path ladder
   (PP0–PP6, the master sequence), phases P0–P13, per-task status, pipeline + RE backlogs, risk
-  register. Its two companions carry the history:
-  `docs/roadmap-archive.md` (the full as-built record of every completed task) and
-  `docs/decisions.md` (the dated, append-only decision log). **Status and history live in
-  that three-file set and nowhere else** — including this file.
+  register. **Status lives there and nowhere else** — including this file. There is no as-built
+  archive and no decision log; git history is the as-built record, and a decision's outcome is a
+  present-tense fact in the doc that owns the system.
 - **`docs/rebuild-strategy.md`** — the strategy reference: north star, principles, the two
   tracks, sidecar contracts, per-system design targets.
 - **`docs/remaster-direction.md`** — the direction charter: what may be modernized, what must
@@ -47,8 +46,9 @@ recreation. Three change layers, three rules:
 - **Logic & content** (entity semantics, I/O, scripts, dialogue, stats, saves) — reproduce.
 
 **The governing rule: only change what we understand, and only on an explicit owner call.** RE
-comes first; a behavioural divergence needs the faithful behaviour known and recorded, plus a
-dated decision in `docs/decisions.md`. Default resolves to reproduce. The **world** keeps its
+comes first; a behavioural divergence needs the faithful behaviour known and recorded **in the doc
+that owns the system**, stated beside the divergence and marked as one. Default resolves to
+reproduce. The **world** keeps its
 faithful baseline (lightmap calibration, plus the planned `elysium.EnhancedTextures` A/B
 toggle); only the UI drops its.
 Full charter: `docs/remaster-direction.md`.
@@ -76,7 +76,7 @@ C&D, not to technical failure. The only assets in `Content/` are hand-authored a
   scripting. Light values are re-derived from `.lights` at load rather than adopted, so live
   calibration always wins. Python is **never** run at runtime to produce content — the seam is
   file-based. (The embedded CPython 2.7 VM runs VtMB's *own* level scripts; it is game logic, not
-  pipeline.) The architecture and what it costs: `docs/decisions.md`.
+  pipeline.) The architecture and what it costs: `docs/uasset-bake-spike.md`.
 
 ### The `UE_` exporter convention
 
@@ -101,11 +101,10 @@ rules: `docs/rebuild-strategy.md` → "Coordinate conventions".
 Every `CLAUDE.md` in this repo — this file and its four sub-files (`Source/ElysiumUE/CLAUDE.md`,
 `tools/CLAUDE.md`, `docs/CLAUDE.md`, `Content/CLAUDE.md`) — states present-tense facts only, same
 as every other doc (`docs/CLAUDE.md` → "House rules"). **Never** write a roadmap task-ID
-parenthetical (`(11.9)`, `roadmap 8.6`, `(PL13)`), a dated decision citation
-(`` `docs/decisions.md 2026-07-27` ``), or a change/migration narrative ("was X, now Y") into any
-of them — that tracking lives only in `docs/roadmap.md` / `docs/roadmap-archive.md` /
-`docs/decisions.md`. Cite a doc by name, with no date or task number attached. This has already
-needed one clean-up pass; don't let it recur.
+parenthetical (`(11.9)`, `roadmap 8.6`, `(PL13)`), a date, or a change/migration narrative
+("was X, now Y") into any of them — task tracking lives only in `docs/roadmap.md`. Cite a doc by
+name, with no date or task number attached. This has already needed one clean-up pass; don't let
+it recur.
 
 ## What runs today
 
@@ -181,8 +180,6 @@ facts, valid regardless of target engine. Organisation and maintenance rules: `d
 | Doc | Topic |
 |---|---|
 | `roadmap.md` | **the work tracker** — phases, status, backlogs, risks |
-| `roadmap-archive.md` | as-built records of completed roadmap tasks (same IDs) |
-| `decisions.md` | the dated, append-only decision log |
 | `rebuild-strategy.md` | tracks, milestone vocabulary, sidecar contracts, per-system design targets |
 | `remaster-direction.md` | the direction charter — the three layers, the two adjudication tests |
 | `runtime-architecture.md` | **the game spine** — lifetimes, the object graph, the frame, the player object, the session/boot state machine, the control surface, the seams |

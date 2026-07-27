@@ -4,8 +4,7 @@ How Elysium builds its user interface. The VtMB-facts counterpart is **`vtmb-ui.
 owns which screen, the two schemes, the 1024×768 canvas law, the HUD class inventory); this doc
 owns the Unreal stack, the design tokens and the screen inventory as rebuilt. The pairing works
 like `controls.md` ↔ `input-architecture.md`: a new fact about *VtMB's* UI goes there, a decision
-about *ours* goes here. Per-task status: `roadmap.md` (8.6, 8.8, 8.9, 8.10). The owner calls behind
-the choices below are dated in `decisions.md` (2026-07-26).
+about *ours* goes here. Per-task status: `roadmap.md` (8.6, 8.8, 8.9, 8.10).
 
 **The direction**: VtMB's screen structure, palette, iconography and strings are kept; its craft is
 replaced (`remaster-direction.md` axis 1). There is no classic UI mode.
@@ -54,7 +53,7 @@ Everything is authored in **VtMB's own 1024×768 space** and scaled once by `Scr
 - The layout constants recovered from `CVMainMenu::PerformLayout` are the literal layout code.
 - Width is *not* divided — the virtual width is `ScreenW·768/ScreenH`, so content reflows into real
   widescreen and ultrawide with no letterbox and no `//ws-fix` coordinate pairs.
-- Signs (`CSignUI`, `decisions.md` 2026-07-23), the menu and the HUD share one law.
+- Signs (`CSignUI`), the menu and the HUD share one law.
 
 This is deliberately **not** the engine's `UIScaleCurve`. The curve would restate the same ratio in
 an ini and could then drift from the canvas the panels are authored against; `ScaleFor` is the one
@@ -87,12 +86,12 @@ points. Two answers, one per menu layout (§7):
 
 **Blood red marks selection; it is not the ground.** Menu items rest in `Bone` and arm in
 `BloodLit`, and a drawn-but-dead row drops to `BoneDim` — so *off* reads as off rather than as a
-second red. The recovered `0xc00000a8` is what *armed* means (`decisions.md` 2026-07-27); the
+second red. The recovered `0xc00000a8` is what *armed* means; the
 classic layout keeps it as the resting colour, which is what makes the A/B worth having.
 
 ## 4. Type
 
-The **Nocturne** system (`decisions.md` 2026-07-26): **Spectral SC** for small-caps labels,
+The **Nocturne** system: **Spectral SC** for small-caps labels,
 **Spectral** for body copy, **Inter** for data and numerals. VtMB's small-caps-with-wide-tracking
 signature is kept — it is an authored art decision, not a hardware constraint — while the 28 bitmap
 `.fnt` atlases are not.
@@ -114,8 +113,7 @@ Two constraints worth knowing before touching this:
 ## 5. The menu backdrop
 
 The menu stands in front of **real game geometry**, not a port of VtMB's particle scene — that
-scene was never verified against a ground-truth capture, so "faithful" was not testable
-(`decisions.md`). `UElysiumMapSubsystem::TravelForMenu` loads `elysium.MenuMap` (default `sm_hub_1`,
+scene was never verified against a ground-truth capture, so "faithful" was not testable. `UElysiumMapSubsystem::TravelForMenu` loads `elysium.MenuMap` (default `sm_hub_1`,
 the Asylum frontage) as a **backdrop**.
 
 A backdrop is an ordinary map build **minus the player**. The substrate builds in full, because the

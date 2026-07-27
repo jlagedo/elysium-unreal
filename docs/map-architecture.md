@@ -13,7 +13,7 @@ fresh world's `AElysiumMapActor` reads the target VtMB map + landmark from GI-sc
 builds all content in code on `BeginPlay`. Cross-map state lives at GameInstance scope and
 survives the travel; per-map state dies with the world. This is the UE5 standard for a
 discrete-map single-player game, and it *is* VtMB's own model (`trigger_changelevel` + loading
-screen). Owner call, with the options weighed and the migration scope: `decisions.md` 2026-07-24
+screen). Owner call, with the options weighed and the migration scope:
 (roadmap 10.8). *Level streaming and World Partition are rejected outright:* both stream
 *authored `.umap` assets*, and Elysium maps are built at runtime from the pipeline
 intermediates, so there is no asset to stream.
@@ -70,7 +70,7 @@ UElysiumGameInstance            process lifetime — session state
   The actor itself **orchestrates** the map — the load order, the two frame passes, the player's
   placement, and the substrate's engine seam (`FElysiumWorldServices`) — and holds none of the
   state behind the three components above. Nothing that decides what the map *looks like* sits on
-  the same object as what it *does* (`decisions.md` 2026-07-27).
+  the same object as what it *does*.
 
 The game mode stays thin: pawn + HUD classes, and one `NotifyWorldReady` on BeginPlay. The app state
 machine behind that call is what builds the pending map (post-travel) or runs the boot decision

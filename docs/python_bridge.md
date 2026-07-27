@@ -455,7 +455,7 @@ a branch, not an error, so a rebuild that cannot answer the probe silently chang
 
 The Unreal answer is a filesystem namespace scoped to the interpreter rather than a redirected
 `getcwd` — reads served from the content mirror, writes into a `Saved/` overlay. Why the process
-cwd is not available, and what the overlay buys: `decisions.md` 2026-07-26, and the design comment
+cwd is not available, and what the overlay buys:, and the design comment
 on `Source/ElysiumUE/Private/Scripting/ElysiumScriptFS.h`.
 
 ## Implications for the rebuild

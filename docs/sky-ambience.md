@@ -9,10 +9,8 @@ live in the tracker set:
 - **Status and next work:** `roadmap.md` — the SKY row, and the open residue promoted to
   tasks **3.6/3.7** (tone curve), **3.10–3.13** (volumetric layer, `LumenDiffuseBoost`,
   `sm_hub_1` fill adjudication, decal fog) and **RE17** (owner-run reference captures).
-- **The full as-built record** (Phases A–C task by task, with every measurement):
-  `roadmap-archive.md` → "SKY".
-- **The decisions** (D1–D7; D6 dissolved, D4 amended, D3 corrected): `decisions.md`,
-  2026-07-26.
+- **The decisions** (D1–D7; D6 dissolved, D4 amended, D3 corrected) are stated as facts in the
+  sections below.
 
 Related: `docs/lighting.md` (WORLDLIGHTS facts), `docs/light-attribution.md`
 (fixture-vs-fill), `docs/rendering-perf.md` (why Lumen is load-bearing), `docs/color_gamma.md`
@@ -361,7 +359,7 @@ so no camera angle could make it line up — and every slice was missing its rot
 A confirmation, not a discovery — and it confirmed. Fed the RE-A2 labelled faces through the
 corrected binding, our runtime draws every face upright on its predicted axis, the same picture
 the shipped VtMB engine drew (RE-A2), with no residual in the memory layout or `M_Sky`'s
-sampling vector. Captures and the per-axis table: `roadmap-archive.md` → SKY, B1.
+sampling vector.
 
 ## The 3D skybox — what the pass actually draws (RE-A8, settled)
 
@@ -576,7 +574,7 @@ the miniature's *world faces* into lump 8 like any other geometry, and lit the m
 real runtime job — lighting the skybox props — they just never touched the playable world. In a
 port where the miniature is real scaled geometry lit by real lights, the faithful reading is to
 carry those lights **into the sky transform** (position scaled, reach scaled by `scale`), not to
-delete them — which is what B7 does (owner call, `decisions.md` 2026-07-26): re-placed inside
+delete them — which is what B7 does (owner call): re-placed inside
 the transform, reach × `scale`, floored at `MinSkyReachCm`.
 
 ### Fog is two different things
@@ -1740,10 +1738,8 @@ This doc is the **facts** reference; the tracker set owns everything else:
   (volumetric fog layer calibration), **3.11** (`elysium.LumenDiffuseBoost` verification),
   **3.12** (`sm_hub_1` fill adjudication), **3.13** (decal fog liveness), **RE17**
   (owner-run reference captures, gated on the `snapshot` pre/post-gamma-ramp check).
-- **`roadmap-archive.md` → "SKY"** — the full as-built record of Phases A–C (task IDs
-  RE-A1–A9, B1–B8b, C0–C5) with every measurement, moved verbatim from this doc.
-- **`decisions.md`** (2026-07-26) — the decision set D1–D7 (D6 dissolved, D4 amended,
-  D3 corrected).
+- The decision set D1–D7 (D6 dissolved, D4 amended, D3 corrected) is stated as facts in the
+  sections above.
 
 The one deliberately *bounded* fact: the skyambient's hemisphere aperture (cosine vs
 uniform, a factor of ~2) is **not identifiable from the shipped data** — on an enclosed

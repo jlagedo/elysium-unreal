@@ -390,7 +390,7 @@ void FElysiumDlgConversation::EnterNpcLine(int32 LineIndex)
 
 	const FElysiumDlgLine& Npc = DlgFile->Lines[LineIndex];
 	// NPC col-4 and col-5 are both actions run when the line is spoken (col-4 is exec, not a gate —
-	// see the header note / decisions.md).
+	// see the header note).
 	if (ActFn)
 	{
 		if (!Npc.Condition.IsEmpty()) { ActFn(Npc.Condition); }

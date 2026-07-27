@@ -354,8 +354,8 @@ timers, which script calls — is Logic and is reproduced from the exported enti
    fog density rather than more sprites; the maps already carry `fogenable`/`fogstart`/`fogend`.
    Lightning keeps its authored timer rhythm and replaces the sprite flash with a real light
    pulse, so Lumen bounces it down the street — an effect the original renderer could not
-   produce. Re-enabling the disabled layers' *intent* is a divergence and needs an owner call
-   plus a dated entry in `decisions.md`.
+   produce. Re-enabling the disabled layers' *intent* is a divergence and needs an owner call,
+   recorded here beside the faithful behaviour.
 
 **Budget.** The risk is translucent overdraw, not particle count — rain is thin, numerous and
 screen-filling. Two engine facts to verify before committing rain to a lit translucent

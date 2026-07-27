@@ -24,7 +24,7 @@ struct FElysiumTextureCache;
 // backdrop, the sky light's level, the two fog sets, the Lumen art-direction knobs on the map's
 // PostProcessVolume, the light rig, and the overhead cables.
 //
-// The split is the module's engine/rendering seam made physical (`docs/decisions.md` 2026-07-27):
+// The split is the module's engine/rendering seam made physical:
 // the map actor orchestrates the load and IS the substrate's engine side (`ElysiumWorldServices.h`),
 // while every `elysium.*` look knob, every adopted primitive and every material lives here. Nothing
 // in this class knows what an entity is.

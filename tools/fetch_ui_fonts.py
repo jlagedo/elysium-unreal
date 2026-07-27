@@ -1,6 +1,6 @@
 """Fetch the UI typeface set into `Content/Fonts/`.
 
-The UI type system is **Nocturne** (`docs/decisions.md` 2026-07-26): Spectral SC for
+The UI type system is **Nocturne** (`docs/ui-architecture.md`): Spectral SC for
 small-caps labels, Spectral for body copy, Inter for data and numerals. All three are
 SIL OFL 1.1 with **no Reserved Font Name**, so they are redistributable as-is and a
 static instance cut from a variable source needs no rename.

@@ -47,7 +47,7 @@ The plan has two tracks that run in parallel:
    authors what only the editor build can produce — the map bake (`bake_map.py`, `bake_lib.py`,
    `bake_verify.py`), the committed `Content/` assets (`build_content.py`), offline scaffolding
    (`make_boot_map.py`) — and no shipped code path invokes it. The architecture call, its split
-   and its costs: `decisions.md` 2026-07-26 (cont. 6); the pipeline: `uasset-bake-spike.md`.
+   and its costs: (cont. 6); the pipeline: `uasset-bake-spike.md`.
 3. **The pipeline lives in this repo.** `tools/` is the single home for the decoders; fixes
    and new sidecar formats land here. The intermediates stay engine-neutral so the format work
    is not Unreal-specific, but there is only one consumer.

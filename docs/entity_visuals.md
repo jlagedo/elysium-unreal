@@ -8,7 +8,7 @@ draw them. It does not own the Unreal-side entity substrate or spawn/behavior de
 `FElysiumEntityWorld`, documented in `docs/engine-core.md` (the entity object model, the two-phase
 build plan, the classname registry) and `docs/runtime-architecture.md` (the substrate's place in
 the map epoch, the spawn pass, `AcceptInput`, the event queue). Per-task build status lives in
-`docs/roadmap.md` / `docs/roadmap-archive.md`, never here.
+`docs/roadmap.md`, never here.
 
 The behavior surface these visuals eventually wire into (I/O dispatch, `ScriptHide`/`ScriptUnhide`,
 output firing) is `docs/entity_io.md`; Python evaluation is `docs/python_bridge.md`.
@@ -133,7 +133,7 @@ Two `env_sprite`-specific facts a renderer needs:
 ## 5. `keyframe_rope` / `move_rope` — cables
 
 562 catenary cables, strung between poles/buildings. Elysium-Unreal already builds these
-(`docs/roadmap-archive.md` 8.7): `write_ropes` emits a `<map>.ropes` per-segment sidecar
+(roadmap 8.7): `write_ropes` emits a `<map>.ropes` per-segment sidecar
 carrying the RE'd rest length, and the runtime stands one Verlet `UCableComponent` per segment
 (no offline catenary sampling needed). The facts below are the RE reference that implementation
 was built from, and they generalize to any renderer.

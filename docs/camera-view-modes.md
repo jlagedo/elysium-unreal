@@ -313,7 +313,7 @@ player keeps authority over the view angles the whole time; the camera derives f
 
 ## 6. Reproducing it on Unreal 5.8
 
-Built at roadmap **11.7**; the as-built record is `roadmap-archive.md`. What runs:
+Built at roadmap **11.7**. What runs:
 `FElysiumCameraWeights` + `FElysiumCameraShotStack` (`Public/ElysiumCameraSolve.h`, plain C++, no
 UObject) carry the driver and the scripted channel; `UElysiumCameraComponent` — a `UCameraComponent`
 subclass — solves the boom and applies it; `AElysiumPawn::CalcCamera` is the apply point;

@@ -25,9 +25,9 @@ is. Concretely:
    proposed once the faithful behaviour is *known* (RE'd or verified in-game) and recorded.
    Ignorance is not licence.
 3. **Divergence needs an owner's call.** The project owner approves each behavioural
-   divergence explicitly, and it lands in `decisions.md`, dated, with the
-   faithful behaviour recorded next to the chosen one. No silent drift, no "while I was in
-   there".
+   divergence explicitly, and it is recorded **in the doc that owns the system** — the faithful
+   behaviour stated next to the chosen one and marked as a divergence. No silent drift, no
+   "while I was in there".
 4. **The RE backlog does not shrink because of this direction.** Decompiling stays as
    valuable as ever — you cannot judge what to keep until you know what is there.
 
@@ -179,4 +179,4 @@ the one rule.
 | Assets | `asset-enhancement.md`; scheduled from `roadmap.md` P10 |
 | Feel | `roadmap.md` 4.7 (movement), 10.7 long tail (combat, camera) |
 | QoL / accessibility | `roadmap.md` 8.10 |
-| Every behavioural divergence | `decisions.md`, dated, owner-approved |
+| Every behavioural divergence | the doc that owns the system, marked as a divergence, owner-approved |

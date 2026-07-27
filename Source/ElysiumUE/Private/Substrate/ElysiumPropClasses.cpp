@@ -6,7 +6,7 @@
 // ScriptHide/ScriptUnhide dormancy, the 9.3 SetOrigin/SetAngles/SetModel writers (body-follow), and the
 // prop_dynamic inputs. `Break` hides the body and fires OnBreak. `Skin`/`SetAnimation` are logged stubs:
 // the prop decode is LOD0 static geometry, skin 0 only — no alternate skin families or skeleton are
-// exported — so faithfully they can only record the request (roadmap 8.3 / decisions.md).
+// exported — so faithfully they can only record the request.
 //
 // Deliberately out of scope: prop_physics Chaos bodies + constraints (8.4), the interactive
 // prop_button/prop_sign/prop_switch/… `+use` family (4.10/8.8), and collision — a prop stands non-solid
@@ -293,7 +293,7 @@ private:
 // ============================================================================================
 // FElysiumPhysProp — the `prop_physics` leaf: a Chaos rigid body. Stands the same decoded mesh as
 // a dynamic prop but cooked with convex collision (the 8.4 `.hulls` decomposition) and simulating.
-// Faithful I/O surface (RE'd from CPhysicsProp/CBreakableProp datamaps, decisions.md 2026-07-24):
+// Faithful I/O surface (RE'd from CPhysicsProp/CBreakableProp datamaps):
 // `Wake` wakes the body; `Break` hides it + fires OnBreak (no gib system — the OnBreakLevel1..8 chain
 // stays undriven); `Skin`/`SetSkin`/`FadeToSkin`/`SetSkinFadeTime` are skin stubs (skin 0 only
 // exported, as 8.3). VtMB's prop has **no** EnableMotion/DisableMotion/Sleep — those don't exist here.
@@ -396,7 +396,7 @@ public:
 	// old skin, m_nSkin to the new one, and leaves the blend to the client -- all three fields are
 	// networked SendProps and the server writes no start time. We snap instead: no exported map
 	// fires this input (18 skin wires across the 16 exported maps are all `Skin`, which snaps in
-	// VtMB too), so the crossfade is engine code no map data reaches. Recorded in decisions.md.
+	// VtMB too), so the crossfade is engine code no map data reaches.
 	void InputFadeToSkin(const FElysiumInputArgs& Args)
 	{
 		SetSkin(Args.Param.ToInt());
@@ -517,7 +517,7 @@ private:
 // ============================================================================================
 // FElysiumPhysHinge — the `phys_hinge` leaf: a Chaos hinge constraint (one free rotational DOF)
 // between attach1's body and attach2's (or the world). Bodiless. RE'd from CPhysHinge/CPhysConstraint
-// (decisions.md 2026-07-24): fields attach1/attach2/forcelimit/torquelimit/hingefriction/hingeaxis;
+// Fields attach1/attach2/forcelimit/torquelimit/hingefriction/hingeaxis;
 // inputs TurnOn/TurnOff/Break; output OnBreak. The axis is the exporter's pre-converted Def->HingeAxis.
 // ============================================================================================
 

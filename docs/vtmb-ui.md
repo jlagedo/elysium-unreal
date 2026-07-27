@@ -104,7 +104,7 @@ y_i = menuY + 2 + i · pitch
 ```
 
 Every button is sized to the *widest* label, so the column is one uniform block. This is the
-**same virtual canvas `CSignUI` uses** (`decisions.md` 2026-07-23) — signs, menu and HUD share one
+**same virtual canvas `CSignUI` uses** — signs, menu and HUD share one
 authored coordinate model, and it is 1024×768, not VGUI's 640×480.
 
 ### The animated backdrop
@@ -178,7 +178,7 @@ and metrics: `m0_menu_build.md` §3.
 The load-bearing fact for the re-skin is not the atlases but what they are drawn as: **every
 label in the game is small-caps with wide tracking**, and body copy drops to a plain sans. That
 is an authored art decision, not a hardware constraint, so it survives into the remaster even
-though the atlases do not (`decisions.md` 2026-07-26). The 640×480-tier font aliasing does not
+though the atlases do not. The 640×480-tier font aliasing does not
 survive — vector type scales continuously.
 
 ---
@@ -206,8 +206,7 @@ out/ui/
 ## 6. Corrections to `m0_menu_build.md`
 
 That doc is the `GameUI.dll` decompile reference. Four of its claims describe
-the menu that does not ship; they are superseded here and the reasoning is dated in
-`decisions.md` (2026-07-26):
+the menu that does not ship; they are superseded here:
 
 | `m0_menu_build.md` | Corrected |
 |---|---|

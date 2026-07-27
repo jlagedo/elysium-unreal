@@ -80,7 +80,7 @@ struct TStructOpsTypeTraits<FElysiumPostMoveTickFunction> : public TStructOpsTyp
 // world-scoped UElysiumPresentationSubsystem (11.8), which this actor looks up and threads in.
 //
 // **What it is not** is the map's renderer. Three components carry the work that has nothing to do
-// with entity logic, and the actor holds no piece of their state (`docs/decisions.md` 2026-07-27):
+// with entity logic, and the actor holds no piece of their state:
 //
 //   UElysiumMapVisuals    the LOOK — adopting the baked level, the material-override MIDs, the sky
 //                         cube and backdrop, the sky light's level, the two fog sets, the Lumen

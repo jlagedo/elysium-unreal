@@ -1,6 +1,6 @@
 # The `.uasset` bake: the map's look as native Unreal content
 
-**Adopted** — `decisions.md` 2026-07-26 (cont. 6), roadmap 0.9; the work is on `main`. This
+**Adopted** — (cont. 6), roadmap 0.9; the work is on `main`. This
 document is the spike record that earned that call, kept as the pipeline's reference: the split,
 the six stages, and the engine facts it pinned down. It reads as of `sp_tutorial_1`, the map it
 was measured on; the architecture now carries every exported map.
@@ -114,7 +114,7 @@ bounce than the runtime path ever had, and the light rig's constants (`PointSpot
 `MaxBrightness 8.0`) were calibrated against a scene with almost no bounce. That is why the Lights
 Cog window also owns the sky and fog: how much the sky contributes and how much the per-source rig
 must carry is one decision, not two. The recalibration adoption owed was paid by the sky + ambience
-rework (`roadmap-archive.md` → SKY, Phases B–C).
+rework (`sky-ambience.md`).
 
 **Nanite costs nothing and buys nothing here.** Expected at ~30k world triangles. Its value is not
 throughput; it is that the ISM/Lumen question the previous spike could not settle stops mattering.
@@ -122,7 +122,7 @@ throughput; it is that the ISM/Lumen question the previous spike could not settl
 **Perf holds.** The earlier 96-vs-123 FPS reading predates every change here (sky-transform fix,
 ray-tracing exclusion, collision profiles, cubemap IBL) and should not be quoted. `profile.bat`
 against the baked level reports Lumen reflections 0.15–0.22 ms and Total GPU 5.08–5.54 ms — inside
-the committed baseline either way (`roadmap-archive.md` → SKY C5).
+the committed baseline either way (`rendering-perf.md`).
 
 ## Engine facts this pinned down
 

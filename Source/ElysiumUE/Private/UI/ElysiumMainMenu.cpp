@@ -40,7 +40,7 @@ static TAutoConsoleVariable<float> CVarMenuScrim(
 	ECVF_Default);
 
 // Which layout the screen builds. 1 = the rail (default); 0 = `CVMainMenu::PerformLayout`'s centred
-// column, kept as the A/B against the recovered original. `docs/decisions.md` 2026-07-27.
+// column, kept as the A/B against the recovered original.
 static TAutoConsoleVariable<int32> CVarMenuLayout(
 	TEXT("elysium.MenuLayout"),
 	1,

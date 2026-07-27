@@ -42,7 +42,7 @@ public class ElysiumUE : ModuleRules
 			"Slate", "SlateCore",
 			// 8.6 the UI foundation. CommonUI is the engine-native game-UI stack: the
 			// activatable-widget stack, input routing, focus and gamepad navigation that
-			// roadmap 8.10 would otherwise hand-roll (decisions.md 2026-07-26). The widget
+			// roadmap 8.10 would otherwise hand-roll. The widget
 			// *visual trees* are still built in C++ Slate inside UCommonActivatableWidget
 			// subclasses, so adopting it costs no Widget Blueprint assets -- only the one
 			// CommonUIInputData asset CommonInput requires as config.

@@ -1,5 +1,5 @@
 # Imports the UI typeface set (Content/Fonts/*.ttf) into committed `UFontFace` assets under
-# /Game/VtMB/UI/Fonts. Roadmap 8.6; the type system is "Nocturne" (docs/decisions.md 2026-07-26):
+# /Game/VtMB/UI/Fonts. Roadmap 8.6; the type system is "Nocturne" (docs/ui-architecture.md):
 # Spectral SC for small-caps labels, Spectral for body copy, Inter for data and numerals.
 #
 # Why font *faces* and not one composite UFont: UE 5.8's editor Python exposes `UFontFace`

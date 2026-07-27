@@ -30,7 +30,7 @@ namespace ElysiumUI
 	// --- Palette -------------------------------------------------------------------------------
 	// Read from the install's own `VampireScheme.res` (the scheme client.dll loads) and confirmed
 	// against reference captures. The chrome is gold; blood red is an accent reserved for the menu
-	// column, the pips and critical states — not the ground. See docs/decisions.md 2026-07-26.
+	// column, the pips and critical states — not the ground.
 	namespace Palette
 	{
 		// Chrome / labels — `VUnselectedText` rising to `VDesHeaderText`.
@@ -85,7 +85,7 @@ namespace ElysiumUI
 	}
 }
 
-// Which of the three Nocturne families a piece of text belongs to (docs/decisions.md 2026-07-26).
+// Which of the three Nocturne families a piece of text belongs to (docs/ui-architecture.md).
 enum class EElysiumFontRole : uint8
 {
 	Label,   // Spectral SC — small caps: menu items, sheet rows, HUD labels, headers

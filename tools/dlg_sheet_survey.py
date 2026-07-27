@@ -11,7 +11,7 @@ what the tutorial (`sp_tutorial_1`) consumes first — the 9.4 sheet/Character-A
 
 Read-only analysis over `out/` (the gitignored, regenerable mirror); writes nothing. Sibling
 of `ent_survey.py`. Usage: `python tools/dlg_sheet_survey.py` (findings recorded 2026-07-24 in
-`docs/decisions.md`).
+`docs/game_runtime.md`).
 """
 import collections
 import glob

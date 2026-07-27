@@ -4,8 +4,7 @@
 > `CBasePanel`/`CGameMenu`, which VtMB links but **does not present**. The menu the player sees
 > is `client.dll`'s own `CVMainMenu`. Four claims below are therefore wrong about the shipped
 > menu — the loaded scheme (§2), the label namespace (§5), item alignment and the layout
-> constants (§7). `vtmb-ui.md` §6 tabulates each correction; `decisions.md` (2026-07-26) dates
-> them. Still valid here: the `.fnt` format and face inventory (§3), the TrackerScheme colour
+> constants (§7). `vtmb-ui.md` §6 tabulates each correction. Still valid here: the `.fnt` format and face inventory (§3), the TrackerScheme colour
 > and alias tables (§4), the dialog `.res` inventory (§6), and the particle-scene structure (§9).
 
 > **Reference, not a port target. Elysium-Unreal does not port VGUI.** The direction is

@@ -814,7 +814,7 @@ class Bake(object):
                 component.set_editor_property(
                     "fog_density", max(0.0001, min(0.05, 3.0 / end_cm)))
                 # Volumetric fog turns the map's hundreds of dynamic lights into real shafts and
-                # haze rather than a flat depth tint (decisions.md -- a Presentation-layer call).
+                # haze rather than a flat depth tint (a Presentation-layer call).
                 component.set_editor_property("enable_volumetric_fog", True)
                 component.set_editor_property("volumetric_fog_scattering_distribution", 0.2)
                 component.set_editor_property("volumetric_fog_extinction_scale", 1.0)
@@ -822,7 +822,7 @@ class Bake(object):
                 fog.tags = [TAG_FOG]
                 fog.set_folder_path("Environment")
 
-        # The map's Lumen art-direction volume (D3, decisions.md 2026-07-26). It ships
+        # The map's Lumen art-direction volume (D3, sky-ambience.md). It ships
         # NEUTRAL -- unbound, and with not a single bOverride_ set -- so it changes no pixel.
         # What it provides is the place a per-map value goes when C4/C5 measure a deficit that
         # justifies one: Skylight Leaking (+ its full-leaking distance) as the sanctioned

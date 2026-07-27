@@ -358,7 +358,7 @@ bool FElysiumCommandsTest::RunTest(const FString&)
 		TestTrue(TEXT("`togglecamera` happens once"), Camera->Kind == EElysiumCmdKind::Once);
 	}
 	// Bound by both shipped default.cfg files, present in no binary and no script; deliberately
-	// dropped (`decisions.md` 2026-07-25). If it ever reappears, that is a decision, not a typo.
+	// dropped. If it ever reappears, that is a decision, not a typo.
 	TestFalse(TEXT("`vphysicshand` is not declared"), Registry.IsDeclared(TEXT("vphysicshand")));
 	// Case folding is the registry's, so `+USE` and `+use` are the same verb.
 	TestTrue(TEXT("names are case-folded"), Registry.IsDeclared(TEXT("USE")));

@@ -173,7 +173,7 @@ def load_dlg(s):
                 continue
             rows += 1
             # col-4 is a *gate* on a PC line and an *action* on an NPC line (resolved by data,
-            # decisions.md 2026-07-24), so it is labelled by column, not by role.
+            # script_api.md), so it is labelled by column, not by role.
             for idx, surface in ((4, "dlg4"), (5, "dlg5")):
                 snippet = seg[idx].strip()
                 if snippet and snippet != "#":

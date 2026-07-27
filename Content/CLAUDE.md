@@ -34,8 +34,7 @@ Two sets live here, both SIL OFL 1.1 with their licence text alongside as `OFL-<
 
 The project-wide ramp, chosen against reference captures of the running game: VtMB's type
 signature is **small-caps serif labels with wide tracking** over plain-sans body copy, and that
-signature is kept even though the bitmap `.fnt` atlases are not (`docs/decisions.md`,
-`docs/vtmb-ui.md` §4).
+signature is kept even though the bitmap `.fnt` atlases are not.
 
 | Role | Files | Use |
 |---|---|---|

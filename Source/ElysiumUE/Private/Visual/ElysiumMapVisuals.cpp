@@ -38,8 +38,8 @@ static TAutoConsoleVariable<int32> CVarRopes(
 	TEXT("Build the map's cables from <map>.ropes (1) or skip (0). Applied at map load."),
 	ECVF_Default);
 
-// A debug multiplier on the 2D backdrop's texel, default 1 = parity (decisions.md 2026-07-26,
-// D7). VtMB writes a sky texel to the framebuffer unscaled and unfogged — the whole material is
+// A debug multiplier on the 2D backdrop's texel, default 1 = parity (D7).
+// VtMB writes a sky texel to the framebuffer unscaled and unfogged — the whole material is
 // `mul r0, t0, v0` against a modulation the engine forces to white (sky-ambience.md -> "K7 ...
 // (settled)") — so any value but 1 is a stated divergence, not a calibration. A night-sky lift
 // goes through the D3 post-process knobs, never through here. Live: re-applies to the backdrop
@@ -64,7 +64,7 @@ static TAutoConsoleVariable<int32> CVarEnhancedTextures(
 // PostProcessVolume. **Negative = neutral**, which is the shipped state: the override is
 // cleared rather than set to a nominal default, so "we are not touching this" and "we set it to
 // what it would have been" stay distinguishable. A non-neutral value is a divergence and wants
-// a dated per-map decision (decisions.md); these exist so C4/C5 can measure whether one is
+// a per-map decision; these exist so C4/C5 can measure whether one is
 // justified without a rebuild.
 //
 // Skylight Leaking is the sanctioned replacement for VtMB's load-bearing author fill — the
@@ -732,7 +732,7 @@ void UElysiumMapVisuals::ApplyEnvironment(const FString& MapName)
 
 float UElysiumMapVisuals::SkyAmbientIntensity(float CubeUpperMean) const
 {
-	// C1/C2 (D2, decisions.md 2026-07-26): the SkyLight actor stays on every map, and its level
+	// C1/C2 (D2, docs/sky-ambience.md): the SkyLight actor stays on every map, and its level
 	// is DATA, not a constant. VtMB states the sky's own radiance once per map, as the type-5
 	// `emit_skyambient` row — the colour its light cache returns for a sky-hitting bounce ray
 	// (RE-A3) — and VRAD divides no falloff out of a `light_environment`, so that number is a

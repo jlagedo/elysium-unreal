@@ -487,7 +487,7 @@ void FElysiumDoorBase::Serialize(FElysiumSaveArchive& Ar)
 	{
 		// A door caught mid-swing resolves to the end it was travelling toward. VtMB saves the move
 		// itself and resumes it; one frame of tween is animation, not game state, and resolving it
-		// keeps the restored world's collision honest from the first frame (`decisions.md` 2026-07-27).
+		// keeps the restored world's collision honest from the first frame.
 		const EToggleState Saved = static_cast<EToggleState>(State);
 		ToggleState =
 			(Saved == EToggleState::GoingUp)   ? EToggleState::AtTop :

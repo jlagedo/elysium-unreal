@@ -202,8 +202,7 @@ The development layer occupies no bare key a player can bind.
 - Cog's shell shortcuts are chords — `Ctrl+F1` toggle input, `Ctrl+F2`–`Ctrl+F4` layouts.
   `FCogInputChord` derives from `FInputChord`, so this is configuration.
 - Elysium's own dev toggles are chords for the same reason: `Ctrl+V` runs `noclip` and `Ctrl+T` runs
-  `elysium.togglesky`, because `v` is `+movedown` and `t` is `toggleuiside` in VtMB's default set
-  (`decisions.md` 2026-07-27). A dev verb is an `elysium.*` engine command and never enters the VtMB
+  `elysium.togglesky`, because `v` is `+movedown` and `t` is `toggleuiside` in VtMB's default set. A dev verb is an `elysium.*` engine command and never enters the VtMB
   command bus — the two planes do not share a name.
 - Every other dev key uses `UEnhancedInputComponent::BindDebugKey(FInputChord, IE_Pressed, …,
   bExecuteWhenPaused)` under `#if !UE_BUILD_SHIPPING`.

@@ -1,6 +1,6 @@
 # Runtime architecture — the game spine
 
-**Status: adopted** (`decisions.md` 2026-07-26 cont. 4 — the seven owner calls, with amendments).
+**Status: adopted**.
 Roadmap **P11** tracks the build; the playable path (`roadmap.md` → "The playable path")
 sequences it as **PP0**.
 
@@ -168,7 +168,7 @@ is for — the map actor calls it from `BeginPlay`. Verbs: `elysium.timescale`, 
 `elysium.step`.
 
 - **Pause is one call.** Today the menu does not pause anything; the substrate keeps running behind
-  it (which the menu backdrop *wants* — implied by `decisions.md` 2026-07-26 cont. 3, decided as
+  it (which the menu backdrop *wants* — implied by, decided as
   call E in cont. 4 — and the pause menu does not). The difference is a property of the app state (§10), not of the menu widget: `FrontEnd` runs
   the world unpaused as a backdrop, `Paused` holds it. Engine pause freezes actor ticks, physics and
   animation; the clock hold freezes thinks, the queue, movers and `ScheduleTask`. Both are needed —
@@ -378,7 +378,7 @@ arbiter observes it — a per-frame reconcile pushes and pops the `Debug` scope 
 
 **Pause is not a scope property.** It has exactly one owner (`UElysiumGameFlowSubsystem`, §10), and
 the pause menu's scope is pushed *because* the flow paused — a scope that also drove pause would be
-a second writer, and a re-entrant one (`decisions.md` 2026-07-27).
+a second writer, and a re-entrant one.
 
 The stack and its arbitration are plain C++, so the whole rule set is asserted with no local player,
 no controller and no viewport — `Elysium.Substrate.InputScopes` walks every ordered pair of scopes in
@@ -388,7 +388,7 @@ question on our side; it lands with the contexts at 10.6.
 
 CommonUI brings its own input writer — `UCommonUIActionRouterBase` applies an `FUIInputConfig` per
 activated widget, a *fourth* mode owner living inside the engine. **The scope stack is the sole
-authority** (call F, `decisions.md` 2026-07-26 cont. 4): Elysium's activatable widgets return no
+authority** (call F): Elysium's activatable widgets return no
 desired input config (`GetDesiredInputConfig()` → unset) so the action router never writes mode or
 cursor, and `UElysiumUISubsystem` pushes/pops scopes instead.
 
@@ -558,8 +558,7 @@ struct FElysiumNewGameRequest
   unchanged; only the screen behind the verb is new.
 - `EntryPoint = tutorial` is the dev shortcut that exists today, kept as `elysium.SkipIntro`.
 - The theatre act needs `logic_choreographed_scene` + scene playback, owned by roadmap **P12** —
-  the playable path's PP2, which it blocks **in full** (eyes and lipsync included; owner call,
-  `decisions.md` 2026-07-26 cont. 5). The chain is authored now; `elysium.SkipIntro` stays the
+  the playable path's PP2, which it blocks **in full** (eyes and lipsync included; owner call). The chain is authored now; `elysium.SkipIntro` stays the
   dev shortcut until P12 lands, so the flow never has to be re-plumbed.
 
 ### Death and game over
@@ -703,9 +702,9 @@ Numbered like `engine-core.md`'s R1–R8, and orthogonal to them.
 ## 14. Status and open decisions
 
 What is built versus outstanding, and the refactor sequence that got the spine here, are tracked
-in `docs/roadmap.md` (phase P11 onward) — not maintained here. The owner-call rationale behind
-this spine's design (is the player an entity, does the pawn become a box, does pause hold the
-engine as well as the clock, and the rest) is logged in `docs/decisions.md` (2026-07-26, cont. 4).
+in `docs/roadmap.md` (phase P11 onward) — not maintained here. The owner calls behind
+this spine's design (the player is an entity, the pawn is a box, pause holds the engine as well as
+the clock, and the rest) are stated as facts in the sections above.
 
 ## 15. Not covered here
 

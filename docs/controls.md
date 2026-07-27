@@ -429,13 +429,12 @@ Facts that constrain the rebuild, not decisions. The Unreal design they feed is
   press rule matters for overlapping keys.
 - The `,`/`.` ↔ arrow-key swap, the ten `vhotkey` slots, and the numpad camera verbs are
   **patch** behaviour, not retail. The **patch set is the one that ships** — with `vphysicshand`
-  dropped and the `kb_def.lst`/`default.cfg` disagreements resolved to `default.cfg`
-  (`decisions.md` 2026-07-25).
+  dropped and the `kb_def.lst`/`default.cfg` disagreements resolved to `default.cfg`.
 - `config.cfg` round-tripping (`unbindall` + `bind` lines + archived cvars) is what the embedded
   CPython VM's `FixKeyBindings` reads — the VM's `nt.getcwd`/`sys.moddir` redirect to
   `tools/out/` exists so that read resolves (roadmap 9.3b, `python_bridge.md`). The rebuild keeps
   that file as a **one-way projection** of the Enhanced Input key profile, not as the settings
-  model (`decisions.md` 2026-07-25).
+  model.
 - Auto-aim (`sv_aim`) defaults to **off**.
 - Gamepad support has no original to reproduce — VtMB ships raw joystick cvars, no UI, no
   default binds, and a `joystick.cfg` that does not exist. Anything here is new work under the

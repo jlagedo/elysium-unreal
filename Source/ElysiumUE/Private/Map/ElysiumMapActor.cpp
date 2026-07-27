@@ -263,7 +263,7 @@ void AElysiumMapActor::LoadMap()
 
 	// 8.6 — a menu backdrop builds the map in full, entity substrate included: the NPCs standing and
 	// idling in frame *are* entities, so a look-only build has no one in it (owner call, see
-	// `docs/decisions.md`). What a backdrop skips is only the player's placement — it seats no pawn.
+	// What a backdrop skips is only the player's placement — it seats no pawn.
 	UElysiumMapSubsystem* MapSubsystem =
 		GetGameInstance() ? GetGameInstance()->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
 	const bool bMenuBackdrop = MapSubsystem && MapSubsystem->IsMenuBackdrop();

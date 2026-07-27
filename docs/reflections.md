@@ -134,8 +134,7 @@ reflective surface has no sky term in its reflection at all.
 
 Faithful: `base + cube·mask·tint`, all of it multiplied by baked light, no Fresnel, one baked
 cube per surface. Chosen: a roughness/specular channel Lumen resolves against the live scene,
-plus `Metallic` from the mask on the 102 chromatic-tint materials. The dated owner call and the
-reasoning: `decisions.md`.
+plus `Metallic` from the mask on the 102 chromatic-tint materials.
 
 ## Known gaps
 

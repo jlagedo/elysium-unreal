@@ -966,9 +966,9 @@ Implementation status against these milestones: `docs/roadmap.md`.
 Consolidated from the four investigations; each gates a real decision.
 
 **Loop / runtime**
-- ~~`GameFrame` body ordering (queue vs thinks)~~ — **resolved: think-first** (RE2,
-  `roadmap-archive.md`: `Physics_RunThinkFunctions` at `0x1011ac1b`, then the sole
-  `CEventQueue::ServiceEvents` at `0x1011ac34`).
+- ~~`GameFrame` body ordering (queue vs thinks)~~ — **resolved: think-first** (RE2:
+  `Physics_RunThinkFunctions` at `0x1011ac1b`, then the sole `CEventQueue::ServiceEvents` at
+  `0x1011ac34`).
 - ~~Where usercmd processing (player movement) sits relative to the think pass~~ —
   **resolved: movement runs first**, and not inside `GameFrame` at all (RE21, §1 above).
 - Confirm `ScheduleTask` truly enqueues into `CEventQueue` (vs. a separate list) — decompile
@@ -1017,8 +1017,7 @@ Consolidated from the four investigations; each gates a real decision.
 - ~~Whether the NPC-line col-4 "action" slot is ever evaluated as a *condition*.~~ **Resolved (9.1,
   by data):** it is an **action (exec)**, not a gate. `jack_tutorial.dlg`'s entry line carries col-4
   `G.Story_State = -3` — an assignment, which would syntax-error if evaluated as a condition. So an NPC
-  line runs col-4 + col-5 when spoken; only a PC choice's col-4 is the eval gate. (`decisions.md`
-  2026-07-24.)
+  line runs col-4 + col-5 when spoken; only a PC choice's col-4 is the eval gate.
 
 **Save**
 - The exact `.sav` block order/format if import of original saves is ever wanted (the four

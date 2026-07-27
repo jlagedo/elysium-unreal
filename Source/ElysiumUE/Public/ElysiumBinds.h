@@ -5,7 +5,7 @@
 
 // VtMB's default bind set, as `FKey` -> console command string (roadmap 11.6; the Enhanced Input
 // mapping contexts this becomes are **10.6**'s). It is `cfg/default.cfg` from the Unofficial Patch,
-// which is the set that ships (`docs/controls.md` § "Default bindings", `decisions.md` 2026-07-25):
+// which is the set that ships (`docs/controls.md` § "Default bindings"):
 // the patch's arrow/comma-period swap, its ten `vhotkey` slots and its numpad camera verbs, with
 // `vphysicshand` dropped and the `kb_def.lst` disagreements resolved to `default.cfg`.
 //

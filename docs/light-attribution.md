@@ -1,7 +1,6 @@
 # Light attribution — separating VtMB's real fixtures from its fill lights
 
-The per-map light set is curated **by hand** in the Lights Cog window (`docs/decisions.md`
-2026-07-26) — VtMB's lights are authored like a painting, for the baked result rather than as
+The per-map light set is curated **by hand** in the Lights Cog window — VtMB's lights are authored like a painting, for the baked result rather than as
 physical fixtures, so no automatic rule ships — and the saved survey auto-applies at map load
 (`elysium.LightSurvey 0` restores the full faithful rig). The classifier below is a
 candidate-ranker/advisor for that hand pass. Per-task status: `docs/roadmap.md`.
@@ -249,6 +248,6 @@ more load-bearing here, not less. Open-thread detail (the shortlist, the unteste
 hypothesis, next surveys): `docs/roadmap.md`.
 
 **No classifier-driven change to the light rig is justified yet.** Hand-authored curation is
-decided and running (`docs/decisions.md` 2026-07-26, `elysium.LightSurvey`); an *automatic*
+decided and running; an *automatic*
 removal or attenuation of a light class would be a further divergence needing the `sm_hub_1`
 question closed and its own dated decision, per the remaster charter.

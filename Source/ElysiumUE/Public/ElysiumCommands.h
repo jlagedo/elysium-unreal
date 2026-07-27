@@ -167,7 +167,7 @@ namespace ElysiumCommands
 	// The VtMB bindable-verb inventory (`controls.md` § "What is bindable"), declared into the
 	// registry. Called once by FElysiumCommands::Get(); exposed so a test can assert the table
 	// itself. `vphysicshand` is deliberately absent — it is bound by both shipped `default.cfg`s and
-	// exists in no binary and no script (`decisions.md` 2026-07-25).
+	// exists in no binary and no script.
 	void DeclareVtmbInventory(FElysiumCommands& Registry);
 
 	// Case-folded canonical form of a verb name.

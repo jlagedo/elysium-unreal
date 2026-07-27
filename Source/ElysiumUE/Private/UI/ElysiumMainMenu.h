@@ -29,7 +29,7 @@ enum class EElysiumMenuCommand : uint8
 // The main / pause / game-over menu (roadmap 8.6, driven by the app state machine at 11.3). A
 // `UCommonActivatableWidget` whose visual tree is built in C++ Slate — CommonUI supplies the
 // activation stack, input routing and focus; no Widget Blueprint asset is involved
-// (`docs/decisions.md` 2026-07-26).
+// (`docs/ui-architecture.md`).
 //
 // The screen has **two layouts**, A/B'd live by `elysium.MenuLayout`, both authored in VtMB's own
 // 1024x768 virtual canvas under one `SDPIScaler` at `ScreenH/768`:
@@ -38,7 +38,7 @@ enum class EElysiumMenuCommand : uint8
 //    by mid-frame, so the backdrop's own darkness carries the type and the lit half of the scene is
 //    never dimmed to rescue it. Items rest in bone and arm in blood, marked by one tick sliding
 //    along the rail's hairline; the seal behind them is a `mm_<clan>` sigil off the menu particle
-//    sheet. Why this diverges from the recovered law: `docs/decisions.md` 2026-07-27.
+//    sheet. Why this diverges from the recovered law: `docs/ui-architecture.md`.
 //  - **Classic** (0) — `CVMainMenu::PerformLayout` verbatim: every item sized to the **widest**
 //    label plus 20x4 virtual px, stacked at `pitch = height + 2`, the column centred, the whole
 //    screen behind it knocked back by `elysium.MenuScrim`. Kept so the divergence stays measurable.

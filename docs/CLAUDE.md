@@ -6,17 +6,15 @@ the maintenance contract.
 
 ## Where a given fact belongs
 
-- **Status, plans, task breakdowns, dates, "what landed"** → the roadmap set. `roadmap.md`
-  is the single source of truth work tracker (the playable-path ladder PP0–PP6, phases P0–P13,
-  per-task status, the pipeline (PL*) and RE backlogs, the risk register); `roadmap-archive.md` holds the full as-built
-  record of every completed task (moved there, verbatim, when a task lands — the roadmap
-  keeps a short summary); `decisions.md` is the append-only **decision log**. Never mirror
-  status into another doc — link to the task instead. Other docs' plan sections point here.
+- **Status, plans, task breakdowns, "what landed"** → **`roadmap.md`**, the single source of truth
+  work tracker (the playable-path ladder PP0–PP6, phases P0–P13, per-task status, the pipeline
+  (PL*) and RE backlogs, the risk register). It is the *only* status file — there is no as-built
+  archive and no decision log. Never mirror status into another doc; link to the task instead.
 - **Strategy** (tracks, milestone vocabulary, sidecar contracts, per-system design targets) →
   `rebuild-strategy.md`.
 - **What may be modernized vs must be reproduced** → `remaster-direction.md`. A behavioural
-  divergence needs the faithful behaviour RE'd and recorded *plus* a dated entry in
-  `decisions.md`.
+  divergence needs the faithful behaviour RE'd and recorded **in the doc that owns the system**,
+  stated beside the divergence and marked as one.
 - **A new VtMB format/behaviour finding** → the topic doc that owns it (`entity_io.md`,
   `python_bridge.md`, `audio_pipeline.md`, `mdl_v2531.md`, `facial_animation.md`,
   `source_movement.md`, `controls.md`,
@@ -44,15 +42,22 @@ the maintenance contract.
 
 ## House rules
 
-- **Facts, present tense.** These docs describe how VtMB works and what the design is — not
-  how a doc changed, not what a decision replaced. Migration narrative and rationale-for-a-
-  past-decision belong in `decisions.md`, if anywhere.
+- **Facts, present tense.** These docs describe how VtMB works and what the design is — not how a
+  doc changed, not what a decision replaced, not what a past choice superseded. Delete migration
+  narrative rather than relocating it; git history holds it.
+- **One fact, one home.** A fact is written out in exactly **one** doc — the one that owns the
+  system. Everywhere else cites that doc by name. If you find yourself writing a sentence that is
+  already true in another doc, cite instead of restating. This is the rule that keeps a task from
+  costing four near-identical write-ups.
+- **A divergence is a fact, recorded where the system lives.** When we deliberately differ from
+  VtMB, the owning doc states the faithful behaviour, states what we do instead, and marks it a
+  divergence with the owner call. It does not go anywhere else.
 - **Mark confidence.** An unverified reconstruction says so in the doc, and states what would
   verify it (the `recovered/` folder holds these; each carries a status line — e.g.
   `recovered/dice-system.md` records that it was verified by decompilation + the shipped
   `DiceRolls.txt`, so no running-game golden test was needed).
-- **Correct in place.** When RE contradicts a doc, fix the doc in the same pass and note the
-  correction in the roadmap task that found it.
+- **Correct in place.** When RE contradicts a doc, fix the doc in the same pass. Don't leave the
+  old claim behind with a note explaining that it was wrong.
 
 ## `m0_menu_build.md`
 
