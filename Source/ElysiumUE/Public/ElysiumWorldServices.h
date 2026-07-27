@@ -89,8 +89,8 @@ public:
 	// about, which is what its `DialogTarget` anchors resolve to. Returns 0 when the shot does not
 	// parse, nothing it anchors to is there, or there is no camera (a headless world runs the
 	// conversation without one). The channel is here, on the player's *body*, rather than on
-	// IElysiumPresenter: the camera is part of the body (S3), and the presenter has no production
-	// implementation until 11.8.
+	// IElysiumPresenter: the camera is part of the body (S3), and the presenter carries what is put
+	// on *screen*, not what the player's body does.
 	virtual int32 PushCameraShot(const FString& ShotFile, const FElysiumEntityHandle& Subject) = 0;
 	virtual bool PopCameraShot(int32 ShotId) = 0;
 };
@@ -143,13 +143,17 @@ public:
 // --------------------------------------------------------------------------------------------
 // Presenter — what the substrate puts on screen.
 //
-// **There is no production implementation yet.** The screen fade, the open sign panel and the open
-// conversation are still held on FElysiumEntityWorld and polled by AElysiumHUD; 11.8 replaces that
-// with UElysiumPresentationSubsystem publishing FElysiumViewState, and this is where it lands. Until
-// then the bundle's Presenter is null in play (the null-service path) and non-null only in a test,
-// where it is what lets a headless run assert "the chain faded the screen and opened this panel"
-// with no HUD to look at. The world calls these *in addition to* setting its own state, so the
-// polling path is unchanged and 11.8 removes it rather than migrating it.
+// Implemented by UElysiumPresentationSubsystem (11.8), the world-scoped publisher of
+// FElysiumViewState. These are **announcements of discrete moments**, not the state itself: the
+// fade, the open panel and the open conversation stay on FElysiumEntityWorld, because each is world
+// state with a lifetime (the map epoch owns it, and 11.9 saves it). The publisher samples that state
+// once per frame and uses these calls to know *when* something happened, which is what its discrete
+// delegates carry — a diff cannot tell a conversation that closed and reopened in one frame from one
+// that never moved.
+//
+// Null where there is no publisher at all: a Substrate-tier world with no engine behind it, or an
+// editor preview world. A test stub implements it to assert "the chain faded the screen and opened
+// this panel" with no HUD to look at.
 // --------------------------------------------------------------------------------------------
 class IElysiumPresenter
 {

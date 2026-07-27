@@ -61,9 +61,8 @@ struct TStructOpsTypeTraits<FElysiumPostMoveTickFunction> : public TStructOpsTyp
 //
 // It is also the substrate's engine side (11.2): it implements three of the four
 // FElysiumWorldServices interfaces and hands the bundle to FElysiumEntityWorld at construction, so
-// the plain-C++ half below it never casts back up here. IElysiumPresenter is the fourth and has no
-// production implementation until 11.8 — the world's fade/sign/dialogue state is still polled by
-// AElysiumHUD.
+// the plain-C++ half below it never casts back up here. The fourth, IElysiumPresenter, is the
+// world-scoped UElysiumPresentationSubsystem (11.8), which this actor looks up and threads in.
 UCLASS()
 class AElysiumMapActor : public AActor,
 	public IElysiumEmbodiment,

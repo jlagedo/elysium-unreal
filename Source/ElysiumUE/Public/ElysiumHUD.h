@@ -2,21 +2,29 @@
 
 #include "CoreMinimal.h"
 #include "ElysiumInputScope.h"
+#include "ElysiumViewState.h"
 #include "GameFramework/HUD.h"
 #include "Templates/PimplPtr.h"
 #include "UObject/StrongObjectPtr.h"
 #include "ElysiumHUD.generated.h"
 
 class AElysiumMapActor;
-class FElysiumDlgConversation;
 class FElysiumSignFontLibrary;
 class IConsoleObject;
 class SElysiumDialogueBox;
+class UElysiumPresentationSubsystem;
 class UTexture2D;
 
 // The game HUD. Always-on: the centre crosshair (or the +use context cursor), the sign/popup
 // panel, and the env_fade screen fade. Player pose, FPS, and movement/skybox/light state live
 // in the Cog Maps window's Player section (`docs/debug-tooling.md`), not here.
+//
+// **It reads FElysiumViewState and nothing else** (11.8): no map-actor walk, no FElysiumEntityWorld,
+// no per-draw-path IsMenuUp() check. `UElysiumPresentationSubsystem` publishes the state in step 9
+// of the frame and calls OnViewPublished right after, which is where the retained surfaces — the
+// dialogue box and the sign's input scope — reconcile; DrawHUD then draws this frame's state on the
+// Canvas. The map-actor handle that survives is the dev console verbs' (`elysium.lights` and
+// friends), which are not presentation.
 UCLASS()
 class AElysiumHUD : public AHUD
 {
@@ -28,32 +36,40 @@ public:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void DrawHUD() override;
-	virtual void Tick(float DeltaSeconds) override;
 
 private:
 	IConsoleObject* LightsCmd = nullptr;
 	IConsoleObject* PropsCmd = nullptr;
 	IConsoleObject* LightProbeCmd = nullptr;
 
+	// For the dev console verbs above only — never for anything drawn.
 	AElysiumMapActor* ResolveMapActor() const;
 
-	// --- Dialogue box (P9 9.1 / B4) ----------------------------------------------------------
-	// The visual-novel `.dlg` panel, a native Slate widget added to the viewport while a conversation
-	// is open on the entity world. Ticked (not drawn on the Canvas): each frame the HUD polls the
-	// world's open conversation and rebuilds the box when the turn changes, tearing it down when the
-	// conversation ends. While it is up the box holds a UI-only input scope (the VN freezes the
-	// world); a pick routes back through the world's PlayerDialogChoose chokepoint.
-	void UpdateDialogue();
+	UElysiumPresentationSubsystem* Presentation() const;
+	// This frame's published state, or a default (nothing on screen) when there is no publisher.
+	const FElysiumViewState& View() const;
 
-	// True while a UI screen (the menu) owns the display. The player-facing HUD — reticle, sign
-	// panels, dialogue box — stands down; the env_fade quad does not, being a screen effect.
-	bool IsMenuUp() const;
+	// Called from the publisher, once per frame, right after the state is rebuilt. The retained
+	// surfaces reconcile here rather than in an actor tick: the publish runs in TG_PostUpdateWork
+	// and a HUD tick would be a frame behind it, which is one frame of a dialogue box drawing over
+	// a pause menu that just opened.
+	void OnViewPublished(const FElysiumViewState& NewView);
+	FDelegateHandle ViewPublishedHandle;
+
+	// --- Dialogue box (P9 9.1 / B4) ----------------------------------------------------------
+	// The visual-novel `.dlg` panel, a native Slate widget added to the viewport while the published
+	// state carries an open conversation. `ElysiumView::ReconcileDialogue` decides build / rebuild /
+	// teardown against what is already up; while the box is up it holds a UI-only input scope (the
+	// VN freezes the world), and a pick routes back through the presenter's DialogueChoose.
+	void RebuildDialogue(const FElysiumDialogueView& Dialogue);
 	void TeardownDialogue();
 	void OnDialogueChoice(int32 VisibleIndex);   // -1 = advance a terminal line
 
 	TSharedPtr<SElysiumDialogueBox> DialogueWidget;
-	FElysiumDlgConversation* DialogueConv = nullptr;   // identity/revision compare only; owned by the world
-	uint32 DialogueRev = 0;
+	// Identity + turn of the conversation the box currently shows. The pointer is compared and never
+	// dereferenced — the conversation is the world's, and the map epoch it lives in can end.
+	const FElysiumDlgConversation* ShownConv = nullptr;
+	uint32 ShownRev = 0;
 	FElysiumInputScopeHandle DialogueScope;            // the box's claim on input while it is open
 
 	// --- +use context-icon reticle (P4.4) ----------------------------------------------------
@@ -70,19 +86,20 @@ private:
 	TMap<int32, FBox2D> UseIconUV;          // use_icon index (1-based) -> atlas UV rect
 
 	// --- Sign / popup window (P4.10) ---------------------------------------------------------
-	// The one open game_sign panel, polled off the entity world each frame (same seam as the
-	// env_fade screen state). Layout is CSignUI's 1024x768 virtual canvas stretched to the
-	// viewport — see ElysiumSignData.h for the decompile this reproduces.
-	void DrawSignPanel();
+	// The one open game_sign panel, taken off the published state each frame with its fade-in ramp
+	// already resolved. Layout is CSignUI's 1024x768 virtual canvas stretched to the viewport — see
+	// ElysiumSignData.h for the decompile this reproduces.
+	void DrawSignPanel(const FElysiumViewState& V);
 	// Background art by material name (e.g. "interface/pop_ups/general"), decoded from the PL5c
 	// mirror on first use. A miss caches null so a missing PNG is not retried every frame.
 	UTexture2D* GetSignBackground(const FString& ImageName);
 
-	// Hold an input scope for as long as the world has a sign open (11.5). The panel deliberately
-	// keeps game input — VtMB's popups say "left-click to continue" and that click is the player
-	// controller's, not a widget's — so the scope changes no mode; what it does is put the panel in
-	// the arbitration order, so a menu opening over it restores exactly the sign's state on close.
-	void UpdateSignScope();
+	// Hold an input scope for as long as the published state carries an open sign (11.5). The panel
+	// deliberately keeps game input — VtMB's popups say "left-click to continue" and that click is
+	// the player controller's, not a widget's — so the scope changes no mode; what it does is put the
+	// panel in the arbitration order, so a menu opening over it restores exactly the sign's state on
+	// close.
+	void UpdateSignScope(bool bSignOpen);
 
 	FElysiumInputScopeHandle SignScope;
 	bool bSignManifestLoaded = false;

@@ -14,6 +14,12 @@
 // paragraph in a single `"Text"` value. The tokenizer is therefore a character stream over the
 // whole file, not a per-line scan — a line-based scan truncates such a value at the first
 // newline and turns its remainder into stray tokens.
+//
+// A quoted value may also carry `\"` — `clandoc000.txt`'s Malkavian description quotes the word
+// "insight". Only that one escape is honoured; a lone backslash stays literal, so the Windows
+// paths the same files carry (`models\props\x.mdl`) read verbatim. Both defects have the same
+// consequence and it is not a truncated string: a stray quote shifts every following key/value
+// pair by one, so the next `{` is consumed as a value and the block nesting collapses.
 
 namespace ElysiumKeyValues
 {
@@ -60,7 +66,12 @@ namespace ElysiumKeyValues
 			{
 				++i;
 				FString Tok;
-				while (i < N && Text[i] != TEXT('"')) { Tok.AppendChar(Text[i]); ++i; }
+				while (i < N && Text[i] != TEXT('"'))
+				{
+					if (Text[i] == TEXT('\\') && i + 1 < N && Text[i + 1] == TEXT('"')) { ++i; }
+					Tok.AppendChar(Text[i]);
+					++i;
+				}
 				++i;   // closing quote (tolerates an unterminated final string)
 				Out.Add(MoveTemp(Tok));
 				continue;

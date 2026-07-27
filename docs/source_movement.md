@@ -115,8 +115,39 @@ accelspeed = min(sv_airaccelerate * wishspeed * dt * surfaceFriction, addspeed)
 v += accelspeed * wishdir
 ```
 
-`surfaceFriction` is a per-player field the ground trace fills in; absent surface
-data it is 1.0.
+### `surfaceFriction` is 1.0 on every world surface
+
+`surfaceFriction` is a field on **`CGameMovement` itself** at `+0xa0` (not on the
+player), read by `Accelerate` (`0x101212e0`) and `AirAccelerate` (`0x10121000`) as
+`dt * m_surfaceFriction * wishspeed * accel`, and by `Friction` (`0x10120ba0`) as
+`sv_friction * m_surfaceFriction`.
+
+`CategorizePosition` (`0x1011e560`) is its only writer. Its tail reaches the
+`IPhysicsSurfaceProps` interface (through `0x1071a278`, **not** the
+`VPhysicsSurfaceProps001` pointer `CPhysicsHook::Init` caches at `0x10723944`), stores
+the trace's surface index at `+0x98` and its `surfacedata_t*` at `+0x9c`, then:
+
+```
+GetPhysicsProperties(m_nSurfaceProps, NULL, NULL, &m_surfaceFriction, NULL)   // vtbl +0x10
+m_surfaceFriction *= 1.25                  // 0x10462914 = 1.25f
+if (m_surfaceFriction > 1.0) m_surfaceFriction = 1.0
+```
+
+The `1.25` scale-and-clamp is present in VtMB's 2003 build, and it is what makes the
+value **1.0 in practice**: a material's friction comes from its VMT's `$surfaceprop`
+looked up in `scripts/surfaceproperties.txt`, and **Troika authored almost none**
+— exactly **1 of the install's 11,624 VMTs** carries a `$surfaceprop`, and **0 of
+`sp_tutorial_1`'s 597 world materials** do. Every world surface therefore resolves to
+the `default` prop, whose `friction` is `0.8`, and `0.8 × 1.25 = 1.0` exactly.
+
+So a port hardcoding `surfaceFriction = 1.0` for world geometry is not an
+approximation — it is the value the retail game computes. The 35 friction-carrying
+props in `surfaceproperties.txt` that differ (`ice` 0.1, `bottle` 0.2, `mud` 1.5,
+`rubber` 100) are reachable only by VPhysics props, never by the player's ground trace.
+There is nothing per-surface to export from the BSP.
+
+*Provenance: `DumpFuncs range=1011e000-10128000` + `DumpConst addrs=10462914` on
+`vampire.dll`; the VMT survey is over `install.build_index()`.*
 
 ### StepMove — walking up curbs and stairs
 

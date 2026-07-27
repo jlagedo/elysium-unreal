@@ -34,7 +34,9 @@
 #include "ElysiumMapActor.h"
 #include "ElysiumObjModel.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumPresentationSubsystem.h"
 #include "ElysiumPythonVM.h"
+#include "ElysiumViewState.h"
 #include "ElysiumRopes.h"
 #include "ElysiumScriptFS.h"
 #include "ElysiumScriptHost.h"
@@ -1162,15 +1164,37 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 	TestEqual(TEXT("the post-move pass is TG_PostPhysics"),
 		static_cast<int32>(Map->PostMoveTickFunction.TickGroup), static_cast<int32>(TG_PostPhysics));
 
+	// Step 9 rebuilds the view state after everything that could change it has run, so it is later
+	// than both gameplay passes (11.8).
+	const UElysiumPresentationSubsystem* Present = GetDefault<UElysiumPresentationSubsystem>();
+	if (TestNotNull(TEXT("presentation subsystem class defaults"), Present))
+	{
+		TestTrue(TEXT("the publish pass ticks"), Present->PublishTickFunction.bCanEverTick);
+		TestTrue(TEXT("the publish pass starts enabled"), Present->PublishTickFunction.bStartWithTickEnabled);
+		TestEqual(TEXT("the publish pass is TG_PostUpdateWork"),
+			static_cast<int32>(Present->PublishTickFunction.TickGroup), static_cast<int32>(TG_PostUpdateWork));
+		TestTrue(TEXT("the publish pass is last of the three"),
+			static_cast<int32>(Present->PublishTickFunction.TickGroup)
+				> static_cast<int32>(Map->PostMoveTickFunction.TickGroup));
+	}
+
 	// §4 — a hold stops the world and keeps the screen alive. Gameplay ticks are false on both
-	// passes; the HUD, which is presentation, is true.
+	// passes; the publish pass, which is presentation, is true — pause is exactly when a dialogue
+	// box has to be taken down, and that comes off a publish.
 	TestFalse(TEXT("the gameplay pass stops when held"), Map->PrimaryActorTick.bTickEvenWhenPaused);
 	TestFalse(TEXT("the post-move pass stops when held"), Map->PostMoveTickFunction.bTickEvenWhenPaused);
+	if (Present)
+	{
+		TestTrue(TEXT("presentation keeps publishing when held"),
+			Present->PublishTickFunction.bTickEvenWhenPaused);
+	}
 
+	// The HUD itself does not tick at all: it reconciles from the publisher's OnViewPublished, which
+	// is a frame later if it comes off an actor tick in TG_PrePhysics.
 	const AElysiumHUD* Hud = GetDefault<AElysiumHUD>();
 	if (TestNotNull(TEXT("HUD class defaults"), Hud))
 	{
-		TestTrue(TEXT("presentation keeps ticking when held"), Hud->PrimaryActorTick.bTickEvenWhenPaused);
+		TestFalse(TEXT("the HUD does not tick"), Hud->PrimaryActorTick.bCanEverTick);
 	}
 
 	// --- steps 3-4: think first, then service the queue (RE2's retail order) ---------------
@@ -3159,6 +3183,116 @@ CameraShotTable { Vantage { End { "Position" "cam_marker_1" "AttachPos" "Origin"
 )"), Named));
 	TestTrue(TEXT("an unrecognised Position is the entity's own name"),
 		Named.End.Position == EElysiumShotPosition::Named && Named.End.NamedEntity == TEXT("cam_marker_1"));
+
+	return true;
+}
+
+// =====================================================================================
+// The presentation seam (11.8, runtime-architecture.md §11). FElysiumViewState is a value and its
+// rules are total functions over it, so the whole set is asserted with no world, no HUD and no
+// viewport — the hand-built state a widget renders from is exactly what is built here.
+//
+// The load-bearing case is the one the polled HUD got wrong: a conversation already on screen when
+// the pause menu opens is republished as *closed*, so the box reconciles to Teardown instead of
+// drawing through the menu.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumViewStateTest, "Elysium.Substrate.ViewState", GElysiumTestFlags)
+bool FElysiumViewStateTest::RunTest(const FString&)
+{
+	using EState = EElysiumAppState;
+	static const EState All[] = { EState::Boot, EState::FrontEnd, EState::Loading,
+		EState::Playing, EState::Paused, EState::GameOver };
+
+	// --- the one gating rule ---------------------------------------------------------------
+	// Playing with no screen up is the only combination that shows a player-facing surface. Both
+	// writers are asked, because `elysium.menu` raises a screen without moving the app state and
+	// TriggerGameOver moves the state without the menu having opened yet.
+	for (const EState S : All)
+	{
+		const bool bExpected = (S == EState::Playing);
+		TestEqual(*FString::Printf(TEXT("%s with no menu"), ElysiumAppState::Name(S)),
+			ElysiumView::ShowsPlayerSurface(S, /*bMenuOpen*/ false), bExpected);
+		TestFalse(*FString::Printf(TEXT("%s with a menu up"), ElysiumAppState::Name(S)),
+			ElysiumView::ShowsPlayerSurface(S, /*bMenuOpen*/ true));
+	}
+
+	// --- the reticle ------------------------------------------------------------------------
+	FElysiumViewState V;
+	TestEqual(TEXT("no surface, no reticle"), ElysiumView::ResolveReticle(V), ElysiumView::EReticle::None);
+
+	V.bPlayerSurface = true;
+	TestEqual(TEXT("the plain aim cross by default"),
+		ElysiumView::ResolveReticle(V), ElysiumView::EReticle::Cross);
+
+	V.ReticleIcon = 7;
+	TestEqual(TEXT("a usable under the cursor swaps in the context icon"),
+		ElysiumView::ResolveReticle(V), ElysiumView::EReticle::UseIcon);
+
+	// A panel with HideHUD owns the screen (P4.10) — no crosshair under it, icon or not.
+	V.bSignHidesHUD = true;
+	TestEqual(TEXT("a HideHUD panel takes the reticle with it"),
+		ElysiumView::ResolveReticle(V), ElysiumView::EReticle::None);
+	V.bSignHidesHUD = false;
+
+	// The rule is total: a suppressed surface reports nothing even with an icon left in the field.
+	V.bPlayerSurface = false;
+	TestEqual(TEXT("suppression outranks a stale icon"),
+		ElysiumView::ResolveReticle(V), ElysiumView::EReticle::None);
+
+	// --- the dialogue reconcile ---------------------------------------------------------------
+	// The pointers are identity only and never dereferenced, so two distinct addresses stand in for
+	// two conversations.
+	const FElysiumDlgConversation* const ConvA = reinterpret_cast<const FElysiumDlgConversation*>(0x1);
+	const FElysiumDlgConversation* const ConvB = reinterpret_cast<const FElysiumDlgConversation*>(0x2);
+
+	FElysiumDialogueView Closed;
+	FElysiumDialogueView TurnOne;
+	TurnOne.Conversation = ConvA;
+	TurnOne.Revision = 3;
+	FElysiumDialogueView TurnTwo = TurnOne;
+	TurnTwo.Revision = 4;
+	FElysiumDialogueView Other;
+	Other.Conversation = ConvB;
+	Other.Revision = 3;
+
+	using EAction = ElysiumView::EDialogueAction;
+	TestEqual(TEXT("nothing open, nothing up"),
+		ElysiumView::ReconcileDialogue(nullptr, 0, Closed), EAction::None);
+	TestEqual(TEXT("a conversation opens"),
+		ElysiumView::ReconcileDialogue(nullptr, 0, TurnOne), EAction::Rebuild);
+	TestEqual(TEXT("the same turn again leaves the retained box alone"),
+		ElysiumView::ReconcileDialogue(ConvA, 3, TurnOne), EAction::None);
+	TestEqual(TEXT("the turn advances"),
+		ElysiumView::ReconcileDialogue(ConvA, 3, TurnTwo), EAction::Rebuild);
+	TestEqual(TEXT("a different conversation at the same revision still rebuilds"),
+		ElysiumView::ReconcileDialogue(ConvA, 3, Other), EAction::Rebuild);
+	TestEqual(TEXT("the conversation ends"),
+		ElysiumView::ReconcileDialogue(ConvA, 3, Closed), EAction::Teardown);
+
+	// The bug the seam closes: the publisher withholds the whole player-facing surface while a
+	// screen is up, so a box that is on screen when the pause menu opens is told to come down.
+	FElysiumViewState Paused;
+	Paused.App = EState::Paused;
+	Paused.bPlayerSurface = ElysiumView::ShowsPlayerSurface(Paused.App, /*bMenuOpen*/ true);
+	TestFalse(TEXT("a paused frame publishes no surface"), Paused.bPlayerSurface);
+	TestFalse(TEXT("and therefore no conversation"), Paused.Dialogue.IsOpen());
+	TestEqual(TEXT("so an open box comes down instead of drawing through the menu"),
+		ElysiumView::ReconcileDialogue(ConvA, 3, Paused.Dialogue), EAction::Teardown);
+
+	// --- the meters -------------------------------------------------------------------------
+	// Compared by value, because the change delegate fires on a difference and nothing else.
+	FElysiumVitals Vit;
+	TestFalse(TEXT("no player entity means no meters"), Vit.bValid);
+	FElysiumVitals Same = Vit;
+	TestTrue(TEXT("an unchanged sheet compares equal"), Same == Vit);
+	Same.bValid = true;
+	Same.Health = 80;
+	Same.MaxHealth = 100;
+	TestTrue(TEXT("a seeded sheet does not"), Same != Vit);
+	FElysiumVitals Bled = Same;
+	Bled.BloodPool = Same.BloodPool - 1;
+	TestTrue(TEXT("and neither does one point of blood"), Bled != Same);
 
 	return true;
 }

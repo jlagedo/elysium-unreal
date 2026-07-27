@@ -1,29 +1,52 @@
 """Minimal Source KeyValues parser (the grammar shared by .res / .vmt / the
-particle .txt files). Returns nested dicts; duplicate keys keep the last value,
-except that repeated block keys are collected into a list.
+particle .txt files and the `vdata/` rulebook). Returns nested dicts; duplicate
+keys keep the last value, except that repeated block keys are collected into a
+list.
 
-Tokens are either "quoted" or bare (whitespace-delimited); `//` starts a line
-comment; `{ }` nest. Keys are lowercased for stable lookup; values keep case.
+Tokens are either "quoted" or bare (whitespace-delimited); `//` outside a quoted
+string starts a comment that runs to end of line; `{ }` nest. Keys are lowercased
+for stable lookup; values keep case.
+
+A quoted string may span lines and may carry `\\"` — `clandoc000.txt` uses both
+(a `ShortDescription` that opens with a newline, a description quoting the word
+"insight"). Scanning is therefore character-wise with quote state carried across
+lines, not line-by-line: a stray quote shifts every following key/value pair by
+one, which turns the next `{` into a value and collapses the block nesting.
 """
-import re
 
-_TOKEN = re.compile(r'"([^"]*)"|([^\s{}]+)|([{}])')
+_BARE_END = set(' \t\r\n{}"')
 
 
 def _tokenize(text: str):
-    for line in text.splitlines():
-        # strip // comments (not inside quotes — VtMB data has no quoted //)
-        q = line.find("//")
-        if q >= 0 and line.count('"', 0, q) % 2 == 0:
-            line = line[:q]
-        for m in _TOKEN.finditer(line):
-            quoted, bare, brace = m.groups()
-            if brace:
-                yield brace
-            elif quoted is not None:
-                yield quoted
-            else:
-                yield bare
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        if c in " \t\r\n":
+            i += 1
+        elif c == "/" and text[i + 1:i + 2] == "/":
+            j = text.find("\n", i)
+            i = n if j < 0 else j + 1
+        elif c == '"':
+            i += 1
+            out = []
+            while i < n and text[i] != '"':
+                if text[i] == "\\" and text[i + 1:i + 2] == '"':
+                    out.append('"')
+                    i += 2
+                else:
+                    out.append(text[i])
+                    i += 1
+            i += 1                            # past the closing quote (or EOF)
+            yield "".join(out)
+        elif c in "{}":
+            yield c
+            i += 1
+        else:
+            j = i
+            while j < n and text[j] not in _BARE_END and text[j:j + 2] != "//":
+                j += 1
+            yield text[i:j]
+            i = j
 
 
 def parse(text: str) -> dict:

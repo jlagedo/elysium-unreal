@@ -6,6 +6,71 @@ trigger. A behavioural divergence from retail lands here carrying both the faith
 chosen behaviour (`remaster-direction.md`'s governing rule). Entries are never rewritten —
 append a correction as a new entry.
 
+- **2026-07-27** — **The presentation seam samples continuous state and is announced discrete
+  moments (roadmap 11.8).** `IElysiumPresenter` was specified in 11.2 as the substrate's outbound
+  screen seam and left unimplemented, with `FElysiumEntityWorld` holding the fade / open sign / open
+  conversation and `AElysiumHUD` polling all three. Building the publisher forced the question of
+  which of those two paths survives, and the answer is **both, for different things**. The fade's
+  current alpha, the panel's `fade_in` ramp, the aimed use icon and the player's meters are all
+  functions of the game clock, so `UElysiumPresentationSubsystem` *samples* them off the world in its
+  publish pass — there is no moment to announce and no reason to duplicate the state. A fade
+  *starting*, a panel opening, a conversation opening or closing has no clock behind it, and a diff
+  over the published state cannot distinguish a conversation that closed and reopened inside one
+  frame from one that never moved, so those stay announcements through `IElysiumPresenter`, recorded
+  when they arrive and broadcast after the new state is in place. The state itself stays on the
+  world: each piece has the map epoch's lifetime and 11.9 serialises it, so what 11.8 removed is the
+  *polling path*, not the state. Considered and rejected: moving the state onto the subsystem (it
+  would then have to be saved from two places), and deriving every event from a state diff (loses
+  same-frame close/reopen, and makes the substrate's announcement dead code).
+
+- **2026-07-27** — **The player-facing surface is shown while `App == Playing` and no menu is open,
+  and the rule is about publishing (roadmap 11.8).** Owner call, replacing the `IsMenuUp()` checks
+  scattered through `AElysiumHUD`'s draw paths. Two writers can put a screen over the world —
+  `UElysiumGameFlowSubsystem`'s app state (FrontEnd / Loading / Paused / GameOver) and
+  `UElysiumUISubsystem`'s own open flag, which `elysium.menu` sets without moving the state — so both
+  are asked, in one place. Making it a rule about *publishing* rather than about drawing is what
+  fixes the divergence 8.6 shipped: the HUD's tick gate returned before the dialogue reconcile, so it
+  skipped taking an open box down and a conversation already on screen when the pause menu opened
+  drew through it. A suppressed frame now publishes no conversation, the box reconciles to teardown,
+  and closing the screen rebuilds it from the next publish — the conversation itself is never touched
+  in the entity world, so nothing about the map's state is faked. The `env_fade` quad is suppressed
+  with the rest, which is 8.6's shipped behaviour (a backdrop map's own scripts can legitimately fade
+  to black behind the main menu); the `ElysiumHUD.h` comment claiming the fade stood apart as "a
+  screen effect" described an intent the code never had and is retired.
+
+- **2026-07-27** — **The player body becomes roadmap 8.11 and lands inside the playable path.**
+  Owner call. The PC has no model, and nothing owned that: five sites in the runtime and two docs
+  pointed at "4.8" for it, which is the rotating/linear/elevator family — a wrong pointer copied out
+  of 11.7's as-built text, not a task. Two decisions on top of filing it. **First, it is split.**
+  8.11a is the body — mesh, choreography-driven animation, the fade band — and 8.11b is locomotion,
+  because the states a gait blends between are the Source movement port's (4.7) and building them
+  ahead of it would be inventing feel the port then has to contradict. **Second, 8.11a is PP2, not
+  the post-PP6 thaw.** The theatre animates the PC on camera: `logic_choreographed_scene` carries
+  `MaleAnim`/`FemaleAnim` (`m_iszAnimSetForMalePlayer`/`ForFemalePlayer`, 25 uses each) and binds
+  `Player` as an actor, and 11.7 already made a scripted camera count as third person, so the intro
+  plays over an invisible protagonist without it. Rule 2 (graphics frozen) does not cover this — an
+  absent character is missing content, not look polish. Identity comes from
+  `vdata/system/clandoc000.txt`, already on disk since PL5b, so the model is selected by VtMB's own
+  table rather than chosen by us; ahead of chargen (9.4, PP1) a cvar default stands in. The export
+  half is **PL13**: the 59 `models/character/pc/**.mdl` are the same v2531 skeletal format the NPC
+  path already decodes, and their animation banks are exported already — `npc_export.py` simply
+  seeds from `npc_*` entity keys, and no entity names a player model.
+
+- **2026-07-27** — **`F7` joins `` ` `` as a second console key (roadmap 10.6c).** Owner call, on
+  hardware evidence. `` ` `` is VtMB's own `toggleconsole` bind and stays, but it is not a key every
+  physical layout has: a Brazilian **ABNT2** keyboard puts `'`/`"` where a US layout puts `` ` ``/`~`
+  (and puts the `´`/`` ` `` dead key over on the US `[`), so UE resolves that position to
+  `EKeys::Apostrophe` — which `ElysiumBinds::Defaults()` binds to `+moveup`. The console was
+  unreachable on that hardware and the key swam instead. Chosen: **`ConsoleKeys` takes both `Tilde`
+  and `F7`**, and `ReservedKeys()` holds both. `F7` because it is the only function key claimed by
+  neither `ElysiumBinds::Defaults()` nor VtMB's `cfg/default.cfg` (F1–F6/F8/F9/F10/F12 are all bound,
+  F11 is UE's fullscreen toggle, `Ctrl+F1`–`Ctrl+F4` are Cog's), so reserving it costs the player
+  nothing — the same test `` ` `` and `ESCAPE` pass. Function keys are also the only keys whose
+  physical position is layout-invariant, which is the property the failure was about. Additive rather
+  than a swap: a US layout keeps the key VtMB itself used. The alternative — detecting the layout and
+  picking a key per keyboard — makes the reserved set a runtime value, which the Substrate-tier
+  reserved-key test cannot assert against.
+
 - **2026-07-27** — **The scripted-camera channel lives on `IElysiumEmbodiment`, not
   `IElysiumPresenter` (roadmap 11.7).** Owner call. `runtime-architecture.md` §9 had sketched
   `IElysiumPresenter::PushCameraShot` as the seam `SetCamera`, `camera_keyframe`, the conversation

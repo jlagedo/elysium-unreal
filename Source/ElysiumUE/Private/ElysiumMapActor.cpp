@@ -22,6 +22,7 @@
 #include "ElysiumNpcVisual.h"
 #include "ElysiumObjModel.h"
 #include "ElysiumPlayerBody.h"
+#include "ElysiumPresentationSubsystem.h"
 #include "ElysiumPropSkins.h"
 #include "ElysiumReflections.h"
 #include "ElysiumRopes.h"
@@ -553,11 +554,14 @@ void AElysiumMapActor::LoadMap()
 				SchemeManager = MakePimpl<FElysiumSoundSchemeManager>();
 
 				// 11.2 — hand the substrate its outbound seam. This actor is three of the four
-				// services; IElysiumPresenter stays null until 11.8 gives it a real implementation.
+				// services; the fourth is the world-scoped presentation subsystem (11.8), which is
+				// null only where there is no publisher at all (an editor preview world, a
+				// Substrate-tier world with no engine behind it).
 				FElysiumWorldServices Services;
 				Services.Embodiment = this;
 				Services.Audio      = this;
 				Services.Travel     = this;
+				Services.Presenter  = UElysiumPresentationSubsystem::Get(GetWorld());
 				EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState, Services);
 				EntityWorld->Load(MoveTemp(EntDefs));
 				BrushBodyCount = EntityWorld->NumBrushBodies();

@@ -99,7 +99,8 @@ private:
 	bool bNoclip = false;
 	bool bFrozen = false;
 
-	// Filled by the ground trace; 1.0 with no surface data, which is every surface until 4.7 reads
-	// the material's own friction.
+	// 1.0 on every world surface, which is what retail computes: VtMB scales the material's friction
+	// by 1.25 and clamps to 1.0, and 1 of the install's 11,624 VMTs carries a `$surfaceprop`, so
+	// everything resolves to the `default` prop at 0.8 (`docs/source_movement.md`).
 	float SurfaceFriction = 1.0f;
 };

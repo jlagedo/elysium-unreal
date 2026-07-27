@@ -436,8 +436,8 @@ void FElysiumEntityWorld::StartScreenFade(const FLinearColor& Color, float Durat
 	ScreenFade.bAutoReverse = bAutoReverse;
 	ScreenFade.StartTime    = NowSeconds();
 
-	// 11.2 — announce it as well as hold it. AElysiumHUD still polls GetScreenFade; 11.8 moves the
-	// state itself onto the published view state and this becomes the only path.
+	// 11.2 — announce it as well as hold it. The state stays here because it has the map's lifetime;
+	// the announcement is what tells the publisher a fade *started* this frame (11.8).
 	if (IElysiumPresenter* P = Presenter())
 	{
 		P->StartFade(ScreenFade.Color, ScreenFade.Duration, ScreenFade.HoldTime, ScreenFade.MaxAlpha,

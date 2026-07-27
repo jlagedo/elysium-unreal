@@ -283,10 +283,17 @@ struct FElysiumWorldServices
 ```
 
 `AElysiumMapActor` implements the first three and hands the bundle to `FElysiumEntityWorld` at
-construction; **`IElysiumPresenter` has no production implementation until 11.8**, so it is null in
-play and the world announces to it *in addition to* holding the fade/sign/dialogue state `AElysiumHUD`
-still polls. The actor is still the world's component outer and VLOG context — that is not a fifth
-service, and nothing under the world casts it to a map actor or walks it to a subsystem.
+construction; the fourth is the world-scoped `UElysiumPresentationSubsystem` (11.8), which the actor
+looks up and threads in. The actor is still the world's component outer and VLOG context — that is
+not a fifth service, and nothing under the world casts it to a map actor or walks it to a subsystem.
+
+**What `IElysiumPresenter` carries is a moment, not the state.** The fade, the open sign and the
+open conversation stay on `FElysiumEntityWorld` — each is world state with the map epoch's lifetime,
+and 11.9 serialises it — and the publisher *samples* the clock-derived half (the fade's current
+alpha, the panel's `fade_in` ramp, the aimed use icon, the meters) once per frame. What has no clock
+behind it is announced: a fade starting, a panel opening, a conversation opening or closing. A diff
+over the published state cannot tell a conversation that closed and reopened inside one frame from
+one that never moved, which is why the announcement is kept rather than inferred (§11).
 
 The player's body lives on `IElysiumEmbodiment` because the pawn *is* the player's body (**S3**):
 view point, origin, teleport, damage, and the `+use` trace. Since 11.4 the substrate reaches them
@@ -468,8 +475,8 @@ which is also what keeps the A/B honest: it compares the movers, not two input p
   keyed to `vdata/camerashots/`), `camera_keyframe`/`camera_track`, the conversation camera and the
   feed camera all push onto the same weight stack through one seam —
   **`IElysiumEmbodiment::PushCameraShot` / `PopCameraShot`**, beside the other player-body calls,
-  because the camera *is* part of the body (§5–6) and `IElysiumPresenter` has no production
-  implementation until 11.8. What is pushed is **values**; whoever pushed the shot keeps them current,
+  because the camera *is* part of the body (§5–6) and `IElysiumPresenter` carries what is put on
+  *screen*, not what the player's body does. What is pushed is **values**; whoever pushed the shot keeps them current,
   so the camera never learns what an entity is. That keeps `RemoveCamera` a pop, and keeps cutscene
   cameras out of the pawn.
 
@@ -552,11 +559,11 @@ the HUD later.
 mechanism and it works with hard travel, which is what makes 10.4's time-sliced build an optimisation
 rather than a prerequisite.
 
-## 11. The presentation seam
+## 11. The presentation seam *(built — 11.8)*
 
-Today `AElysiumHUD` polls the entity world every frame for the reticle icon, the screen fade, the open
-sign and the open dialogue, and gates all of it on `IsMenuUp()`. Each new screen adds another poll and
-another gate, and none of it is testable without a world.
+`AElysiumHUD` used to poll the entity world every frame for the reticle icon, the screen fade, the
+open sign and the open dialogue, and gate all of it on `IsMenuUp()`. Each new screen added another
+poll and another gate, and none of it was testable without a world.
 
 One publisher, one struct, one set of events (**S8**):
 
@@ -576,12 +583,28 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnElysiumDialogueOpened, const FElysiumDlgC
 // ... Closed / SignOpened / FadeStarted / VitalsChanged / AppStateChanged
 ```
 
-`UElysiumPresentationSubsystem` (world-scoped) builds it; `AElysiumHUD`, the CommonUI screens and the
-dialogue box read it and nothing else. Pointer fields (`Sign`, `Dialogue`) are **valid until the
-next publish and never stored** — a widget that needs the data longer keeps a copy; the map epoch
-they point into ends at travel. The menu-up gating becomes one rule in the publisher ("in
-`FrontEnd`, publish no player-facing surface") instead of a check in every draw path. Player *input*
-still goes the other way through the command bus, never by a widget calling into the substrate.
+`UElysiumPresentationSubsystem` (world-scoped) builds it in **step 9** of the frame — a declared
+`TG_PostUpdateWork` tick function with `bTickEvenWhenPaused` true, because a held world still has to
+publish the *suppression*. `AElysiumHUD`, the CommonUI screens and the dialogue box read it and
+nothing else; the HUD does not tick at all, reconciling its retained surfaces from `OnViewPublished`
+(an actor tick is `TG_PrePhysics` and would always be a frame behind the publish). Pointer fields
+(`Sign`, `Dialogue`) are **valid until the next publish and never stored** — a widget that needs the
+data longer keeps a copy; the map epoch they point into ends at travel. Player *input* still goes the
+other way through the command bus and the publisher's two routing calls, never by a widget calling
+into the substrate.
+
+**The gating is one rule**, `App == Playing && !bMenuOpen`, and it is a rule about *publishing*
+rather than about drawing. Both writers are asked, because `elysium.menu` raises a screen without
+moving the app state. That is what fixes the case the polled HUD got wrong: its tick gate skipped
+the dialogue *reconcile* rather than taking an open box down, so a conversation already on screen
+when the pause menu opened drew through it — now it is republished as closed, the box comes down,
+and closing the screen rebuilds it from the next publish. The conversation itself is untouched in
+the entity world; only its UI is withheld.
+
+The struct and the three rules over it (`ShowsPlayerSurface`, `ResolveReticle`,
+`ReconcileDialogue`) are plain C++ in `Public/ElysiumViewState.h`, like `ElysiumAppState.h` and
+`ElysiumInputScope.h`, so the whole set is asserted with no world, no HUD and no viewport —
+`Elysium.Substrate.ViewState`. `Subtitle` is deliberately **not** declared until 12.3 produces one.
 
 ## 12. The automation seam
 
@@ -671,9 +694,9 @@ roadmap task or a new P11 one.
 | 3 | movement is stock CMC on a capsule | not VtMB's feel; step semantics differ; no baseline to A/B against | 4.7 (+ **11.6** box pawn) |
 | 4 | no chargen | New Game mocks Tremere male; clan-gated content untestable | 9.4 |
 | 5 | no save/load | a session cannot be resumed; `trigger_autosave` is inert | 9.5 on **11.9** |
-| 6 | no vitals HUD (the Canvas HUD covers reticle/signs only) | blood/health/frenzy/masquerade invisible; the sheet has no readout | 8.9 on **11.8** |
+| 6 | no vitals HUD (the Canvas HUD covers reticle/signs only) | blood/health/frenzy/masquerade are *published* on the view state since **11.8** and nothing draws them; the sheet has no readout | 8.9 |
 | 7 | ~~pause has no input path~~ | closed by **11.3** — Esc on the player controller drives `UElysiumGameFlowSubsystem::TogglePause`, which holds the world and raises the pause menu, and the menu's scope comes from **11.5**'s stack (pause stays the flow's, never a scope property) | **11.3** |
-| 8 | ~~no camera modes~~ | closed by **11.7**: one camera, one weight stack, `CalcCamera` as the apply point; `togglecamera` and the cvar surface reproduced, and `SetCamera` lands on a real push/pop channel. The player-mesh half (fade band, `ShouldDrawLocalPlayer`) waits on 4.8 | **11.7** |
+| 8 | ~~no camera modes~~ | closed by **11.7**: one camera, one weight stack, `CalcCamera` as the apply point; `togglecamera` and the cvar surface reproduced, and `SetCamera` lands on a real push/pop channel. The player-mesh half (fade band, `ShouldDrawLocalPlayer`) waits on 8.11 | **11.7** |
 | 9 | ~~three input-mode owners~~ | closed by **11.5**: one arbiter owns mode, cursor and focus; CommonUI's router is declined explicitly, and a UI-only push revokes an inherited ImGui capture. Mapping contexts are declared on the scope and applied at 10.6 | **11.5** |
 | 10 | ~~no loading screen~~ | closed by **11.3** for the level-load flush; the map actor's build pass after it is 10.4's | **11.3** |
 | 11 | ~~no death / game-over path~~ | closed: **11.3** made `GameOver` a state, **11.4** gave it its driver — the player entity's health running out reaches `NotifyPlayerKilled` → `TriggerGameOver(Killed)`. The masquerade meter is the second loss condition, still 9.4's | **11.3** + **11.4** + 9.4 |
@@ -681,7 +704,7 @@ roadmap task or a new P11 one.
 | 13 | no `logic_choreographed_scene` | the theatre act cannot run, so the story chain is short-circuited | **12.1** (P12 = PP2) |
 | 14 | no items/containers/barter | 853 script calls fail closed | 9.8 |
 | 15 | ~~substrate reaches the engine by back-pointer~~ | closed by **11.2** — the seam is `FElysiumWorldServices`, and `Elysium.Substrate.WorldServices` drives a map's logic headlessly | **11.2** |
-| 16 | UI polls the substrate | no view contract; every screen re-invents its gating | **11.8** |
+| 16 | ~~UI polls the substrate~~ | closed by **11.8**: `UElysiumPresentationSubsystem` publishes `FElysiumViewState` in step 9 and is the production `IElysiumPresenter`; the HUD reads it and no longer ticks, and the gating is one rule in the publisher | **11.8** |
 | 17 | no playthrough harness | "the tutorial is completable" is a manual claim | **11.10** |
 
 ## 15. The refactor ladder
@@ -697,7 +720,7 @@ calls as one dated `decisions.md` entry — was recorded 2026-07-26 (cont. 4) an
    `elysium.timescale 0.25` that slows movers, the queue and animation together (the camera blend
    joined them at 11.7, on the same already-dilated delta).
 2. **11.2 World services** *(landed)* — `FElysiumWorldServices` injected into `FElysiumEntityWorld`;
-   the map actor implements three of the four interfaces (`IElysiumPresenter` waits for 11.8); a
+   the map actor implements three of the four interfaces (`IElysiumPresenter` waited for 11.8); a
    recording stub in the module's test folder. *Observable:* `Elysium.Substrate.WorldServices` runs a
    tutorial-shaped `logic_auto` chain end to end with no RHI, no actors and no `tools/out`, and the
    same defs with a null bundle reach the same state.
@@ -730,9 +753,12 @@ calls as one dated `decisions.md` entry — was recorded 2026-07-26 (cont. 4) an
    scripted-shot channel on `IElysiumEmbodiment` with the `vdata/camerashots/` reader behind it.
    *Observable:* `Elysium.Substrate.Camera` + `.CameraShots` pass headlessly; in the game
    `togglecamera` blends out to the full boom and `SetCamera("dialogdefault")` frames its subject.
-8. **11.8 Presentation seam** — `UElysiumPresentationSubsystem` + `FElysiumViewState`; the HUD and the
-   dialogue box re-based onto it. *Observable:* no widget references `FElysiumEntityWorld`; the
-   front-end gating is one rule.
+8. **11.8 Presentation seam** *(landed)* — `UElysiumPresentationSubsystem` + `FElysiumViewState`,
+   published in step 9 of the frame and doubling as the production `IElysiumPresenter`; the HUD
+   re-based onto it and no longer ticking. *Observable:* `Elysium.Substrate.ViewState` drives every
+   rule off a hand-built state with no RHI; no widget or HUD draw path references
+   `FElysiumEntityWorld`; the front-end gating is one rule, and opening the pause menu over a
+   conversation now takes the box down instead of drawing through it.
 9. **11.9 Save/load** — `save-architecture.md` in full. *Observable:* save mid-tutorial, quit to menu,
    load, and the beat machine continues.
 10. **11.10 Play test tier** — the beat-script driver, replay, the save round-trip test, the MCP input

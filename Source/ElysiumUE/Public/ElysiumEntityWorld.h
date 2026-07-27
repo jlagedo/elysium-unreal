@@ -155,7 +155,7 @@ public:
 
 	// --- Screen fade (P4.5 env_fade) ---------------------------------------------------
 	// A full-screen colour fade driven by env_fade's `Fade` input, advanced off the game clock and
-	// drawn by AElysiumHUD (which polls GetScreenFade each frame). Held on the world so it dies with
+	// published each frame by UElysiumPresentationSubsystem (11.8). Held on the world so it dies with
 	// the map. One active fade at a time — a new Fade replaces the running one; VtMB keeps a fade
 	// *list*, but its colours sum and its alphas max, which is indistinguishable from one slot while
 	// every fade on a map is the same colour (all of them are black on the tutorial).
@@ -168,7 +168,7 @@ public:
 
 	// --- Open sign window (P4.10 game_sign) --------------------------------------------
 	// The one sign panel currently on screen, driven by game_sign's OpenWindow/CloseWindow and
-	// drawn by AElysiumHUD (which polls GetOpenSign each frame). Same shape as the screen fade:
+	// published each frame by UElysiumPresentationSubsystem (11.8). Same shape as the screen fade:
 	// held on the world so it dies with the map, one at a time (a second OpenWindow replaces the
 	// first, matching CSignUI's single panel). The handle identifies the owning entity so dismissal
 	// can fire its OnUseEnd back through the real output path.
@@ -194,8 +194,8 @@ public:
 
 	// --- Open dialogue (P9 9.1 / B4 `.dlg` conversation) --------------------------------
 	// The one conversation currently on screen, driven by an NPC's StartPlayerDialogRemote and drawn
-	// by the visual-novel Slate box (AElysiumHUD polls GetOpenDialog each frame — same held-on-the-
-	// world lifetime as the sign/fade). The owning NPC's OnDialogEnd fires when it closes (the beat
+	// by the visual-novel Slate box off the published view state (11.8 — same held-on-the-world
+	// lifetime as the sign/fade). The owning NPC's OnDialogEnd fires when it closes (the beat
 	// machine's hinge — DialogPostProcess reads the `G` flags the dialogue's field-5 actions wrote).
 	void OpenDialog(const FElysiumEntityHandle& Owner, TSharedRef<FElysiumDlgConversation> Conversation);
 	// The live conversation, or null when none is open. What the dialogue box renders.
@@ -227,7 +227,8 @@ public:
 	// --- The outbound seam (11.2) ------------------------------------------------------
 	// The four services, injected at construction. **Every one may be null** — a headless world has
 	// none, `elysium.NpcBodies 0` runs without an embodiment, and Presenter has no production
-	// implementation until 11.8. Call sites check; the world never manufactures a substitute.
+	// implementation where nothing publishes a view. Call sites check; the world never manufactures
+	// a substitute.
 	const FElysiumWorldServices& Services() const { return WorldServices; }
 	IElysiumEmbodiment* Embodiment() const { return WorldServices.Embodiment; }
 	IElysiumAudio*      Audio() const      { return WorldServices.Audio; }

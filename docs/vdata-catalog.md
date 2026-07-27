@@ -47,7 +47,7 @@ RE5 did for the dice tables.
 
 | Root key | File(s) | What |
 |---|---|---|
-| `ClanDataTables` | `clandoc000.txt` | clan definitions — disciplines, bonuses, banes |
+| `ClanDataTables` | `clandoc000.txt` | clan definitions — disciplines, bonuses, banes, and the per-clan body models (`M_Body0..5`/`F_Body0..5`, the seed **PL13 [x]** exports the PC bodies from; `M_Hands`/`F_Hands` is PL14) |
 | `ClanDataTables` | `npctemplate000.txt`…`025` + named (`_tutorial`, `_malkmansion`, …) — ~40 | per-clan / per-map NPC stat templates |
 | `HistoryDataTables` / `HistoryData` | `histories000.txt`, `history.txt` | the History background-trait system |
 | `CharCreateWizard` | `charcreatewizard.txt` (78 KB) | chargen personality-quiz → clan scoring |

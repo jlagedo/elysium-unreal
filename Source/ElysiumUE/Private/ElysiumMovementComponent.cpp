@@ -95,7 +95,10 @@ void UElysiumMovementComponent::CategorizePosition()
 		UpdatedPrimitive->GetCollisionShape(), Params);
 
 	bOnGround = bHit && Hit.ImpactNormal.Z >= ElysiumMove::StandableZ;
-	SurfaceFriction = 1.0f;   // 4.7 reads the surface's own value
+	// 1.0 is the retail value, not a placeholder: VtMB scales the surface's friction by 1.25 and
+	// clamps to 1.0, and every world surface resolves to the `default` prop at 0.8
+	// (`source_movement.md` § surfaceFriction is 1.0 on every world surface).
+	SurfaceFriction = 1.0f;
 	if (bOnGround && Velocity.Z < 0.0f)
 	{
 		Velocity.Z = 0.0f;

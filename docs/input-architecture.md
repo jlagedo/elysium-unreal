@@ -192,10 +192,13 @@ profile beside it is imported as the initial profile.
 
 The development layer occupies no bare key a player can bind.
 
-- The console is `` ` `` (`ConsoleKeys`), matching VtMB's own `toggleconsole` bind, and it is one
-  console: UE cvars, `elysium.*`, VtMB aliases and Python fallthrough all arrive through the 9.3b
-  bridge. It is the only **bare** key the dev layer holds, and `ElysiumBinds::ReservedKeys()` is that
-  set.
+- The console is `` ` `` **and `F7`** (`ConsoleKeys` takes a list), and it is one console: UE cvars,
+  `elysium.*`, VtMB aliases and Python fallthrough all arrive through the 9.3b bridge. `` ` ``
+  matches VtMB's own `toggleconsole` bind; `F7` is the layout-independent second key, because
+  `` ` `` is not on every physical keyboard — an ABNT2 puts `'`/`"` left of `1`, which UE resolves
+  to `EKeys::Apostrophe`, a bind rather than the console. F7 is the one function key neither
+  `ElysiumBinds::Defaults()` nor VtMB's `default.cfg` claims (F11 is UE's fullscreen toggle). These
+  two are the only **bare** keys the dev layer holds, and `ElysiumBinds::ReservedKeys()` is that set.
 - Cog's shell shortcuts are chords — `Ctrl+F1` toggle input, `Ctrl+F2`–`Ctrl+F4` layouts.
   `FCogInputChord` derives from `FInputChord`, so this is configuration.
 - Elysium's own dev toggles are chords for the same reason: `Ctrl+V` runs `noclip` and `Ctrl+T` runs
@@ -207,7 +210,7 @@ The development layer occupies no bare key a player can bind.
 
 **`toggleconsole` and `cancelselect` are non-rebindable, which is what VtMB does** — neither appears
 in `kb_act.lst` in retail or the patch, so reserving `` ` `` and `ESCAPE` costs the player nothing
-and matches the original's contract.
+and matches the original's contract. `F7` costs nothing either — `default.cfg` leaves it unbound.
 
 **The guarantee is a test, not a convention.** `FElysiumReservedKeys` defines the set once, and
 three things consume it:

@@ -94,6 +94,10 @@ const TArray<FKey>& ElysiumBinds::ReservedKeys()
 		// The console. VtMB's own `toggleconsole` bind and the engine's `ConsoleKeys`, which is why
 		// there is nothing bound to it in the table above either.
 		EKeys::Tilde,
+		// The console's second key, for layouts that put no `` ` `` left of `1` (ABNT2 puts `'` there,
+		// which UE resolves to `EKeys::Apostrophe` — a bind, not the console). F7 is the one function
+		// key neither this table nor VtMB's own `default.cfg` claims.
+		EKeys::F7,
 	};
 	return Keys;
 }

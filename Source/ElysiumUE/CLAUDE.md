@@ -34,7 +34,7 @@ UE 5.8. Module `ElysiumUE` (Runtime, Default loading phase).
 - `Config/DefaultEngine.ini` — boot map `/Game/Elysium`, `AElysiumGameMode` default,
   `UElysiumGameInstance`, the fully-dynamic render path, and the `ElysiumUse` trace channel
   (`ECC_GameTraceChannel1`).
-- `Config/DefaultInput.ini` — engine-side input settings only: `ConsoleKeys=Tilde`, raw
+- `Config/DefaultInput.ini` — engine-side input settings only: `ConsoleKeys` = `Tilde` + `F7`, raw
   MouseX/MouseY (`Sensitivity=1`, FOV scaling and mouse smoothing **off**, because VtMB's `m_filter`
   is 0 and the router applies `sensitivity × m_yaw` itself). It carries **no** action or axis
   mappings — every key is installed by `UElysiumInputRouter` from `ElysiumBinds::Defaults()` (11.6).
@@ -144,7 +144,7 @@ of its own and instead implements the world verbs `+use` / `+attack` / `noclip` 
 (the player's **body** — box hull, `UElysiumMovementComponent`, camera, noclip, and the handle of
 the entity it embodies), `AElysiumHUD` (Canvas: the use-icon reticle,
 `env_fade` screen fade, sign panels — player pose/mode/FPS live in the Cog Maps window; it also
-ticks the native-Slate dialogue box off the world's open-conversation state, B4).
+stands the native-Slate dialogue box up and down, all of it off the published `FElysiumViewState`).
 
 ## Commands, intent and the body (11.6)
 
@@ -158,7 +158,7 @@ string** — so the compiled verbs carry names and everything reaches them throu
 | `ElysiumCommandBus` (`Private/ElysiumCommandBus.{h,cpp}`) | the one door: a bound key, a `ccmd` attribute-set, a `.dlg` action, `elysium.cmd <line>`, `elysium_console_exec` and `-ExecCmds` all arrive here. It reaches the `FElysiumConsole` on `FElysiumPythonVM` (which exists with or without CPython) and `EnsureSeeded`s it from `out/cfg`, so the patch's aliases resolve even when the interpreter never started |
 | `FElysiumConsole::Execute` | the precedence, stated once and tested: **registered command → alias → cvar → Python**. Source's own `Cmd_ExecuteString` order, so no user alias can shadow `+forward`; the registry reporting *false* for an unknown word is the cue to try an alias |
 | `FElysiumUserCmd` / `FElysiumUserCmdBuilder` / `FElysiumUserCmdStream` (`Public/ElysiumUserCmd.h`) | one frame of intent as a value: `Move`, `Up` (Source's `upmove`), `LookDelta` in degrees, `Buttons` (**uint64** — VtMB's ± inventory is 34 pairs), `DeltaSeconds`, `Seq`. The builder holds the latches and analog accumulators and composes the frame, including `+strafe` turning the turn keys into strafe and the `cl_yawspeed`/`cl_pitchspeed` keyboard-look rates. `ClearButtons` is what a scope change means for intent (`UElysiumInputSubsystem::ApplyToController` calls it, so a held key cannot bleed across a screen). The stream records, replays and round-trips through plain text |
-| `ElysiumBinds` (`Public/ElysiumBinds.h`) | VtMB's default bind set — 75 rows of the Patch's `cfg/default.cfg` as `FKey` → console line, the commands held as **strings** because several defaults bind an alias (`vm_feed`, `skip`, `cam_restore`) and a key bound to either must behave identically. Also `ReservedKeys()`: the bare keys the dev layer owns, which is `` ` `` alone |
+| `ElysiumBinds` (`Public/ElysiumBinds.h`) | VtMB's default bind set — 75 rows of the Patch's `cfg/default.cfg` as `FKey` → console line, the commands held as **strings** because several defaults bind an alias (`vm_feed`, `skip`, `cam_restore`) and a key bound to either must behave identically. Also `ReservedKeys()`: the bare keys the dev layer owns — `` ` `` and `F7`, both console |
 | `UElysiumInputRouter` (`Public/ElysiumInputRouter.h`) | on the player controller. Installs the binds (built by hand — `BindKey` carries no payload overload — with `bExecuteWhenPaused` on both edges, so a release cannot be swallowed by a pause and strand a latch), then `SampleFrame` runs from `PlayerTick` after `Super`, builds the command, writes the look delta **straight onto the control rotation** (not through `AddYawInput`, which applies the engine's legacy input scales) and hands the command to the body. Mouse look reads raw counts scaled only by `sensitivity × m_yaw` off the console store — VtMB's 0.066°/count, with no frame-rate term |
 | `IElysiumPlayerBody` (`Public/ElysiumPlayerBody.h`) | what everything outside the body talks to: noclip, the embodied entity handle, the body half-height the teleport seam lifts a Source feet-origin by, the spawn-hold freeze, `ApplyUserCmd`. An interface because the two bodies cannot share a base |
 | `AElysiumPawn` + `UElysiumMovementComponent` | the faithful body: `APawn` + a `UBoxComponent` (32×32×72 u) + a mover carrying Source's own `Friction`/`Accelerate`/`AirAccelerate`/`WalkMove`+`StepMove`/`CategorizePosition` over the `source_movement.md` constants. The hull is a **box** because `StepMove` depends on a flat bottom — a capsule reports ~0.65 against the 0.7 standable test and rejects every climb — and `ACharacter` will not take a box root. 4.7 owns the line-by-line port (real `surfaceFriction`, the gravity half-step split, ducking/**RE22**, ladders, water) |
@@ -187,13 +187,13 @@ silently not applying. Both bodies use it, through `IElysiumPlayerBody::GetCamer
 
 **The substrate reaches the channel through `IElysiumEmbodiment::PushCameraShot`/`PopCameraShot`**,
 beside the other player-body calls — the camera *is* part of the body (S3), and `IElysiumPresenter`
-has no production implementation until 11.8. `FElysiumEntityWorld` holds **one** scripted camera at a
+carries what is put on *screen*, not what the player's body does. `FElysiumEntityWorld` holds **one** scripted camera at a
 time (`SetScriptedCamera`/`ClearScriptedCamera`), the same single-slot discipline the sign panel and
 the open conversation use, and drops it at teardown. `SetCamera` (115 script calls) sets it;
 `RemoveCamera` (the player datamap input) clears it. `FElysiumEntity::GetSkeletalBody()` is the
 no-RTTI seam a `Bone:` attach point resolves through.
 
-There is **no player mesh yet** (4.8): the fade band is solved and exposed as `ModelAlpha()` and
+There is **no player mesh yet** (8.11): the fade band is solved and exposed as `ModelAlpha()` and
 nothing reads it. Weapon-class arbitration is 4.9's (the cvars are declared so a config round-trips);
 the feed camera raises its weight and nothing else, because its solver is unrecovered.
 
@@ -213,6 +213,46 @@ lets it resolve with no controller in the picture.
 Verbs: `elysium.cmd <line>`, `elysium.commands [filter]`, `elysium.binds`, `elysium.togglesky`,
 `elysium.SourceMovement`, and the command-stream set `elysium.cmd.record` / `.stop` / `.save <name>` /
 `.replay [name]`.
+
+## The presentation seam (11.8)
+
+**One publisher, one struct, one set of events (S8).** Design: `docs/runtime-architecture.md` §11.
+Everything the running game puts on screen is assembled once per frame into one value, and the
+surfaces read that value and nothing else — no widget and no HUD draw path resolves the map actor or
+touches `FElysiumEntityWorld`.
+
+| Type | Role |
+|---|---|
+| `FElysiumViewState` (`Public/ElysiumViewState.h`) | the value and its rules, plain C++ like `ElysiumAppState.h`: app state, the surface flag, the reticle icon, the fade colour+alpha, the sign with its `fade_in` ramp already resolved, `FElysiumDialogueView` (one turn snapshotted — speaker, subtitle and choice labels already picked for the player's clan and gender), `FElysiumVitals`. Three **total functions** over it — `ShowsPlayerSurface`, `ResolveReticle`, `ReconcileDialogue` — so the whole rule set is asserted with no world, no HUD and no viewport (`Elysium.Substrate.ViewState`). `bSignHidesHUD` is lifted out of the private `FElysiumSignData` so the rules stay readable from the public header; `Subtitle` is deliberately absent until 12.3 produces one |
+| `UElysiumPresentationSubsystem` | the only writer. World-scoped, because the `Sign`/`Dialogue` pointers point into a map epoch that ends at travel. Publishes in **step 9** of the frame — a declared `FElysiumPublishTickFunction` at `TG_PostUpdateWork`, set up in the constructor so the position reads off the class defaults, registered on the persistent level at `OnWorldBeginPlay`. `bTickEvenWhenPaused` is **true**: pause is exactly when a conversation box has to come down, and a held world publishes no new state of its own but still has to publish the *suppression*. Verb: `elysium.viewstate` |
+
+**Continuous state is sampled; discrete moments are announced.** The fade's current alpha, the
+panel's ramp, the aimed use icon and the meters are all functions of the game clock, so the publish
+pass reads them off the world. A fade *starting*, a panel opening, a conversation opening or closing
+has no clock behind it, so the substrate announces it through **`IElysiumPresenter`** — the
+subsystem is its production implementation — and the publisher drains the announcement *after* the
+new state is in place, so a listener always sees a `View()` that agrees with the event. A state diff
+cannot tell a conversation that closed and reopened inside one frame from one that never moved,
+which is why the announcement is kept rather than inferred. The one derived event is the dialogue
+turn, because the branch machine moves inside the conversation.
+
+Events fire in a fixed order — app state, fade, sign, dialogue, vitals, then `OnViewPublished` last,
+so the general per-frame reconcile runs after every specific reaction.
+
+**The gating is one rule**: `App == Playing && !bMenuOpen`. Both writers are asked, because
+`elysium.menu` raises a screen without moving the app state. It is a rule about *publishing*, not
+about drawing — the publisher fills no player-facing field when it is false, the `env_fade` quad
+included — and that is what takes a dialogue box down when the pause menu opens over it instead of
+letting it draw through. The conversation itself is untouched in the entity world; only its UI is
+withheld, and the next publish after the screen closes rebuilds the box.
+
+**`AElysiumHUD` does not tick.** The retained surfaces (the Slate box, the sign's input scope)
+reconcile from `OnViewPublished`; an actor tick is `TG_PrePhysics` and would always act on the
+previous frame's publish. A dialogue pick routes back out through
+`UElysiumPresentationSubsystem::DialogueChoose`/`DialogueAdvance` to the same world chokepoint
+`elysium.dlg.choose` uses, so player input goes the other way through one door. The map-actor handle
+still on the HUD serves the dev console verbs (`elysium.lights`/`.props`/`.lightprobe`), which are
+not presentation.
 
 ## Input scopes (11.5)
 
@@ -350,13 +390,14 @@ casts its owner to a map actor, walks it to a GI subsystem, or touches
 | `IElysiumEmbodiment` | NPC/prop/phys-prop bodies, clips, idles, skins, `BodyScaleFor` — **and the player's body**: view point, origin+yaw, teleport, damage, the `+use` trace | `AElysiumMapActor` |
 | `IElysiumAudio` | `PlayVoice`/`StopVoice`/`SetVoiceVolume`/`IsVoicePlaying` (forwarded to the GI `UElysiumAudioSubsystem`) + `FadeInScheme`/`FadeOutScheme`/`ActiveSchemeRel` (this map's `FElysiumSoundSchemeManager`) | `AElysiumMapActor` |
 | `IElysiumTravel` | `RequestLandmarkTravel`, `ChangeMap` (forwarded to `UElysiumMapSubsystem`) | `AElysiumMapActor` |
-| `IElysiumPresenter` | `StartFade`, `OpenSign`/`CloseSign`, `OpenDialog`/`CloseDialog` | **nothing yet — 11.8** |
+| `IElysiumPresenter` | `StartFade`, `OpenSign`/`CloseSign`, `OpenDialog`/`CloseDialog` — the discrete *moments*, not the state | `UElysiumPresentationSubsystem` |
 
 **Any member may be null**, and every call site handles it: that is the existing `elysium.NpcBodies 0`
 / `elysium.BrushBodies 0` A/B formalised, and it is what lets a whole map's logic run headlessly.
-`Presenter` is null in play — the fade / open sign / open conversation are still world state that
-`AElysiumHUD` polls, and the world *announces* to the presenter in addition to holding them, so 11.8
-removes the polling path rather than migrating it.
+`Presenter` is null only where nothing publishes a view (an editor preview world, a Substrate-tier
+world with no engine behind it). The fade / open sign / open conversation stay world state — each has
+the map epoch's lifetime and 11.9 saves it — and the world *announces* to the presenter in addition to
+holding them, because a discrete moment has no clock the publisher could sample it from.
 
 `AActor* Owner` survives on the world, but only as the component outer (brush bodies, `phys_hinge`
 constraints) and the VLOG context. It is not a fifth service.
@@ -393,6 +434,8 @@ graph (`dumpticks` reads it back), never inferred from registration order:
 | 5 | move the pawn | the movement component, prerequisite on the map actor's gameplay tick |
 | 6 | physics + overlaps | engine (`TG_DuringPhysics`) → `RouteBrushTouch` |
 | 7 | post-move gameplay | `AElysiumMapActor::PostMoveTick` (`TG_PostPhysics`) — the `+use` look cursor |
+| 8 | camera | `AElysiumPawn::CalcCamera` — the weight stack is solved here (11.7) |
+| 9 | publish the view | `UElysiumPresentationSubsystem::Publish` (`TG_PostUpdateWork`) — the frame's `FElysiumViewState` (11.8) |
 
 `AElysiumMapActor` carries **two** tick functions: `PrimaryActorTick` (`TG_PrePhysics`) for the
 gameplay pass and `FElysiumPostMoveTickFunction` (`TG_PostPhysics`) for work that must see the
@@ -414,8 +457,8 @@ clock is not. `StepFrames(N)` releases the world and `EndFrame` (the tail of the
 counts the frames back down. Verbs: `elysium.timescale`, `elysium.pause`, `elysium.step`.
 
 `bTickEvenWhenPaused` is **false** on both gameplay passes and **true** on the presentation side —
-`AElysiumHUD` and `UElysiumEntityDebugSubsystem` — so a held world still draws a live HUD and keeps
-its debug overlays, which is exactly when they are read.
+the publish pass and `UElysiumEntityDebugSubsystem` — so a held world still draws a live HUD and keeps
+its debug overlays, which is exactly when they are read. `AElysiumHUD` itself does not tick (11.8).
 
 Class implementations live in `ElysiumStarterClasses.cpp` (logic_auto/relay, trigger family,
 `logic_pythoncheck`), `ElysiumLogicClasses.cpp` (math_counter, logic_timer, logic_case
@@ -445,7 +488,7 @@ resolves that DAG offline; the runtime looks a label up and is told which glb ow
 
 | Type | Role |
 |---|---|
-| `ElysiumNpcClips.{h,cpp}` | plain-C++ readers for the two runtime sidecars: `FElysiumNpcIndex` (`out/npc/npc_index.json`, ~34 KB — every NPC and bank with its glb, counts and facial sidecar) and `FElysiumNpcClipSet` (`out/npc/clips/<stem>.json`, ~92 KB — one NPC's whole resolved vocabulary, ~1,360 clips). A slice interns its owner stems and activity literals, storing each clip as `[owner_i, activity_i, weight, flags, frames, fps]`. The 10.1 MB `npc_manifest.json` is **not** read at runtime — it is the offline probes' file, and a map places only 17–22 distinct models |
+| `ElysiumNpcClips.{h,cpp}` | plain-C++ readers for the two runtime sidecars: `FElysiumNpcIndex` (`out/npc/npc_index.json`, ~47 KB — every character and bank with its glb, counts and facial sidecar; 101 NPCs + the 56 PC bodies PL13 seeds off `clandoc000.txt`) and `FElysiumNpcClipSet` (`out/npc/clips/<stem>.json`, ~95 KB — one character's whole resolved vocabulary, ~1,400 clips). A slice interns its owner stems and activity literals, storing each clip as `[owner_i, activity_i, weight, flags, frames, fps]`. The 15.8 MB `npc_manifest.json` is **not** read at runtime — it is the offline probes' file, and a map places only 17–22 distinct models |
 | `UElysiumNpcAnimSubsystem` | GI-scoped owner of everything skeleton-**in**dependent and expensive: the parsed bank `UglTFRuntimeAsset`s (2–35 MB each, session-lifetime because the same two stances banks serve essentially every map), the clip vocabularies, and the disposition table. `ResolveClip` finds a label's owning glb and retargets it onto a mesh; `PickIdleClip`/`IdleCandidates` run the default-idle policy and report which rule fired (`EElysiumIdleTier`) |
 | `FElysiumDispositionTable` (`ElysiumDisposition.{h,cpp}`) | `vdata/system/dispositiontable.txt` — per disposition, the `Animation Name` that keys its stance clips plus the fidget/stance-change chances and thresholds. Shared: **8.5** reads `AnimName`, **9.9** (2,862 calls, `SetDisposition` alone 2,510) needs the same rows for the emotional-state model |
 | `UElysiumNpcAnimInstance` (`ElysiumNpcAnimInstance.{h,cpp}`) | the animation host: a native anim instance (no Blueprint, no anim-graph asset) whose proxy runs two `FAnimNode_SequencePlayer_Standalone`s and lerps between them, so a clip change crossfades (0.25 s) instead of popping. It exists because VtMB's stance banks ship almost no authored transitions — one `Stance_<D>_Trans_<a>_<b>` across 21 dispositions × 2 gendered banks — so a stance change cannot route through an authored blend. The proxy must implement **`UpdateAnimationNode`**: a sequence player that is never `Update_AnyThread`'d holds its start frame forever, and the base `Update(float)` does not drive it. `elysium.NpcAnim 0` drops back to the single-node instance |
@@ -723,7 +766,10 @@ volume, so a flip re-applies in one pass (voices already fading out toward a rea
 ## Shared readers
 
 - `ElysiumKeyValues.h` — the Source KeyValues reader (whole-file character-stream tokenizer, so
-  a quoted value may span lines). Used by sound schemes and sign definitions.
+  a quoted value may span lines and may carry `\"`). Used by sound schemes, sign definitions and
+  the `vdata/` tables. Both quoting rules are load-bearing rather than cosmetic: a quote the
+  tokenizer mis-reads shifts every following key/value pair by one, so the next `{` is taken as a
+  value and the whole block nesting collapses.
 - `FElysiumSignData` — the `SignData` panel plus client.dll's `CSignUI` coordinate model (a
   1024×768 virtual canvas scaled uniformly by `ScreenH/768`, blocks positioned relative to the
   panel rect, centring branch when `XPos + YPos == 0`). That canvas model is the **intent

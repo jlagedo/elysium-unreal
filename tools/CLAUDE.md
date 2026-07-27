@@ -469,7 +469,7 @@ full-bright self-lit. Props Source marks solid get a shared `ConvexPolygonShape3
 the render mesh) on a per-instance `StaticBody3D`. ch_hub_1 = 500 props / 124 models
 (331 solid).
 
-## Skeletal NPCs (`.mdl` v2531 — `mdl_skel.py` / `mdl_gltf.py` / `npc_export.py`)
+## Skeletal characters — NPCs + the player bodies (`.mdl` v2531 — `mdl_skel.py` / `mdl_gltf.py` / `npc_export.py`)
 
 The animated half of the `.mdl` (bones, skin, RLE animation tracks, and the facial flex block)
 decodes in `mdl_skel.py`; the full struct map is `docs/animation_and_movers.md` Part A and
@@ -483,8 +483,12 @@ the `ACT_*` `activity` literal@4, `actweight`@16 and `flags`@8 — `activity`@12
 disk, so the *name* is the durable key). Every bank bone name is present in the NPC skeleton,
 so clips retarget by bone name with no proportion rig.
 
-`npc_export.py` is the batch driver (`export_all.py --npc`, the heaviest offline pass). It scans
-`out/*/*.ents` for `npc_*` `model` keys and writes under `out/npc/`:
+`npc_export.py` is the batch driver (`export_all.py --npc`, the heaviest offline pass). It runs
+**two seeds into one product**: `npc_models_from_ents` scans `out/*/*.ents` for `npc_*` `model`
+keys (102 models, 1 of which the install does not ship), and `pc_models_from_clandoc` reads the
+**player bodies** out of `out/vdata/system/clandoc000.txt` — no entity on any map references a
+player model, so the rulebook is the only seed that reaches them (roadmap PL13). Both halves are
+the same v2531 skeletal format and go through the same decode, writing under `out/npc/`:
 
 - **`<npc>.glb`** (`mdl_gltf.export_npc`) — skinned mesh + skeleton + the NPC's **own** clips +
   its **facial morph targets** (below). A
@@ -511,13 +515,31 @@ so clips retarget by bone name with no proportion rig.
   in `clips` is a promise the owning glb can answer. The runtime (roadmap 8.5) reads this, loads
   a clip's owning glb once, and applies it to the NPC skeletal mesh by bone name via
   glTFRuntime — VtMB's virtualmodel bank-sharing, not a per-NPC monolith (the shared set is
-  251 MB of banks + 296 MB of meshes across 64 banks / 101 NPCs; inlining each NPC's resolved
-  vocabulary instead would be an order of magnitude more). `mdl_gltf` writes **standard glTF
-  2.0** (self-describing space), so it keeps its non-`UE_` name and needs no pre-conversion.
+  251 MB of banks + 341 MB of meshes across 67 banks / 157 characters; inlining each character's
+  resolved vocabulary instead would be an order of magnitude more). `mdl_gltf` writes **standard
+  glTF 2.0** (self-describing space), so it keeps its non-`UE_` name and needs no pre-conversion.
   `mdl_gltf.export` (single clip) is the 8.2 spike/CLI probe.
 
+**The player bodies (PL13).** `vdata/system/clandoc000.txt`'s `ClanData.General` blocks carry
+`M_Body0..5`/`F_Body0..5` — 7 playable `Player_*` clans × 2 sexes × 6 armour slots = **84 slots
+resolving to 56 distinct `.mdl`**, because each clan's top two slots repeat its tier-3 suit. Only
+the *indexed* keys are read: the un-indexed `M_Body`/`F_Body` of the human and Society-of-Leopold
+templates name NPC models, and the `mp-*`/`unused*` templates repeat the playable paths. Seeding
+from the table rather than from a glob is what keeps the exported set from drifting from the one
+8.11a selects through — the install ships 59 `models/character/pc/**.mdl`, three of which the
+table names nowhere (`average_vampire_hunter_pc`, `gangrel_male_beastial`, `riot_gear_male_2`).
+They land as ordinary index entries beside the NPCs, matched back to a clan slot through each
+entry's own `model` path. The PC animation banks were already exported as NPC includes; the trees
+add only **3** new ones, the per-clan run-cycle aggregators
+(`character/shared/male/run{brujah,malknos,otherspc}_pcidles_allsequences.mdl`). **No PC body
+carries a flex rig** — 0 of all 59, and 0 of the 21 `models/hands/` viewmodels — so none gets
+morph targets or a `facial/` sidecar (`../docs/facial_animation.md`). Each body is 63–106 bones,
+3–5 own clips, ~1,412–1,462 resolved, ~786 KB. The first-person hand viewmodels the same table
+names (`M_Hands`/`F_Hands`) are **not** exported — PL14.
+
 **Morph targets (PL10).** A rigged NPC's glb carries one morph target per `StudioFlex`
-*record* — 53 on the shipped rig, 78 of the 101 NPCs, 4,015 in total, +0.33–0.53 MB each. They
+*record* — 53 on the shipped rig, 78 of the 101 NPCs (and none of the 56 PC bodies, which carry
+no flex rig), 4,015 in total, +0.33–0.53 MB each. They
 are **sparse** accessors (base implicitly zero, only the moved vertices stored), unified across
 every primitive so `mesh.extras.targetNames` names them positionally, with untouched primitives
 carrying a one-entry zero. Two consequences for the loader: a morph that spans materials arrives

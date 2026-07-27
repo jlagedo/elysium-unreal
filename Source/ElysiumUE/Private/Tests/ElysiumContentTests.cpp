@@ -18,6 +18,7 @@
 #include "ElysiumDecals.h"
 #include "ElysiumDlg.h"
 #include "ElysiumEntityDefs.h"
+#include "ElysiumKeyValues.h"
 #include "ElysiumNpcClips.h"
 #include "ElysiumObjModel.h"
 #include "ElysiumReflections.h"
@@ -940,6 +941,120 @@ bool FElysiumScriptedSequenceClipsTest::RunTest(const FString&)
 	// Every animation an NPC-targeted beat names resolves. A single miss means the bank that owns it
 	// stopped being exported, or its label changed — both silent at runtime.
 	TestEqual(TEXT("every NPC-targeted sequence animation resolves in the manifest"), Resolved, Refs);
+
+	return true;
+}
+
+// =====================================================================================
+// The player bodies × the character export (PL13) — every `.mdl` the clan table names as a PC
+// body has a glb on disk. No entity on any map references a player model, so the export seeds
+// this half of the set from `vdata/system/clandoc000.txt` itself; this asserts the two have not
+// drifted, which is the whole reason the seed is the rulebook and not a hand-written list.
+//
+// Measured over the merged install: 7 playable clans × 2 sexes × 6 armour slots = 84 slots,
+// resolving to 56 distinct models (each clan's top two slots repeat its tier-3 suit).
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerBodiesTest,
+	"Elysium.Content.PlayerBodies", GElysiumContentTestFlags)
+bool FElysiumPlayerBodiesTest::RunTest(const FString&)
+{
+	const FString ClanDoc = FElysiumContentPaths::VdataFile(TEXT("system/clandoc000.txt"));
+	if (!IFileManager::Get().FileExists(*ClanDoc) ||
+		!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
+	{
+		AddInfo(TEXT("skipping: no exported out/vdata + out/npc (run tools/export_all.py --npc to enable)"));
+		return true;
+	}
+
+	FString Text;
+	if (!TestTrue(TEXT("clandoc000.txt loads"), FFileHelper::LoadFileToString(Text, *ClanDoc)))
+	{
+		return true;
+	}
+	const TSharedPtr<ElysiumKeyValues::FKvNode> Root = ElysiumKeyValues::ParseText(Text);
+	const ElysiumKeyValues::FKvNode* Tables = Root.IsValid() ? Root->Child(TEXT("ClanDataTables")) : nullptr;
+	if (!TestNotNull(TEXT("clandoc000.txt has a ClanDataTables block"), Tables))
+	{
+		return true;
+	}
+
+	// Only the *indexed* body keys are the player's. The un-indexed `M_Body`/`F_Body` of the human
+	// and Society-of-Leopold templates name NPC models, which the map-driven seed already covers.
+	// `Models` spans every template because the export's seed does; `PlayableSlots` counts only the
+	// seven `Player_*` ones, since the multiplayer and `unused*` templates repeat their paths.
+	int32 PlayableTemplates = 0, PlayableSlots = 0;
+	TSet<FString> Models;
+	for (const TPair<FString, TSharedPtr<ElysiumKeyValues::FKvNode>>& Clan : Tables->Kids)
+	{
+		if (Clan.Key != TEXT("clandata") || !Clan.Value.IsValid())
+		{
+			continue;
+		}
+		const ElysiumKeyValues::FKvNode* General = Clan.Value->Child(TEXT("General"));
+		if (!General)
+		{
+			continue;
+		}
+		const ElysiumKeyValues::FKvNode* Names = Clan.Value->Child(TEXT("Text"));
+		const bool bPlayable = Names && Names->Str(TEXT("TemplateName"), FString()).StartsWith(TEXT("Player_"));
+		PlayableTemplates += bPlayable ? 1 : 0;
+		for (const TPair<FString, FString>& Kv : General->Values)
+		{
+			const bool bBodySlot = (Kv.Key.StartsWith(TEXT("m_body")) || Kv.Key.StartsWith(TEXT("f_body"))) &&
+				Kv.Key.Len() > 6 && FChar::IsDigit(Kv.Key[6]);
+			if (bBodySlot && Kv.Value.EndsWith(TEXT(".mdl")))
+			{
+				PlayableSlots += bPlayable ? 1 : 0;
+				Models.Add(Kv.Value.ToLower().Replace(TEXT("\\"), TEXT("/")));
+			}
+		}
+	}
+
+	FElysiumNpcIndex Index;
+	FString Error;
+	if (!TestTrue(FString::Printf(TEXT("npc_index.json loads (%s)"), *Error), Index.Load(Error)))
+	{
+		return true;
+	}
+
+	// The index is keyed by stem; the clan table names a path, so match on the entry's own `Model`.
+	TMap<FString, FString> StemByModel;
+	for (const TPair<FString, FElysiumNpcIndexEntry>& Npc : Index.Npcs)
+	{
+		StemByModel.Add(Npc.Value.Model.ToLower().Replace(TEXT("\\"), TEXT("/")), Npc.Key);
+	}
+
+	int32 Exported = 0;
+	for (const FString& Model : Models)
+	{
+		const FString* Stem = StemByModel.Find(Model);
+		if (!Stem)
+		{
+			AddError(FString::Printf(TEXT("clan table names %s, which the character export did not "
+				"produce (tools/npc_export.py)"), *Model));
+			continue;
+		}
+		if (IFileManager::Get().FileExists(*FElysiumContentPaths::NpcGlb(*Stem)))
+		{
+			++Exported;
+		}
+		else
+		{
+			AddError(FString::Printf(TEXT("%s exports as stem '%s' but %s is missing"),
+				*Model, **Stem, *FElysiumContentPaths::NpcGlb(*Stem)));
+		}
+	}
+
+	AddInfo(FString::Printf(TEXT("player bodies: %d playable clans × %d slots -> %d distinct models, %d with a glb"),
+		PlayableTemplates, PlayableSlots, Models.Num(), Exported));
+
+	// The counts are the drift alarm on the table itself: a patch that adds an armour tier or a
+	// clan changes them, and the seed must be re-run rather than silently covering less.
+	TestEqual(TEXT("seven Player_* clan templates"), PlayableTemplates, 7);
+	TestEqual(TEXT("they fill 84 indexed body slots"), PlayableSlots, 84);
+	TestEqual(TEXT("the whole table names 56 distinct body models"), Models.Num(), 56);
+	TestEqual(TEXT("every player body is exported"), Exported, Models.Num());
 
 	return true;
 }

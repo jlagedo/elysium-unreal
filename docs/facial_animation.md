@@ -32,6 +32,15 @@ Related: `choreographed_scenes.md` (the `.vcd` scenes that schedule the lines an
 60-rule rig, 2 carry 66 (`mercuriodamaged`), and the rest are one-off morph rigs
 (`mingxiao_transformation` 21, `creation1_full` 4, four models with a single flex).
 
+**The player is not in that cast.** All **59** `models/character/pc/**.mdl` carry
+`NumFlexDescs` 0, as do all **21** `models/hands/**.mdl` first-person viewmodels — so the 56
+clan bodies `clandoc000.txt` names (roadmap PL13, exported since) have no flexdescs, no
+controllers, no rules and no `StudioFlex` records at all. The PC's face is authored only in the
+NPC-model portraits VtMB shows elsewhere; on the body itself there is nothing to drive. This is
+the same shape as the eyeball finding below and has the same consequence for the rebuild: the
+lipsync and expression layers (12.3, 12.5) apply to NPCs, and any PC facial performance would be
+a remaster addition under `remaster-direction.md`'s rule, not a reproduction.
+
 ## The studiohdr facial block
 
 **The VAMPTools field walk is 8 bytes short from `NumFlexDescs` onward** — it places the
@@ -490,6 +499,9 @@ set by its dialogue clips (`heather` +2.4 %) and the whole of a glb that has non
   for the weights, `mstudiomouth_t` for the amplitude jaw — with the phoneme *string* as the
   key. All three are on disk: `out/lip/`, `out/expressions/`, and `mouths` in the facial
   manifest.
+- **12.3 and 12.5 cover NPCs only.** No player body carries a flex rig (inventory above), so
+  the PC has no morph targets to drive and no `facial/` sidecar; 8.11a's body stands and
+  animates with a still face.
 
 ## Provenance
 

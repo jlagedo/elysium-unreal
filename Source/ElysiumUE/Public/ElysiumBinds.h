@@ -34,6 +34,9 @@ namespace ElysiumBinds
 	// is a chord — Cog's shell is `Ctrl+F1`–`Ctrl+F4`, and Elysium's own dev toggles are `Ctrl+V`
 	// (noclip) and `Ctrl+T` (the 3D-skybox A/B), precisely so `v` and `t` stay the player's.
 	//
+	// The console holds two of them — `` ` `` and `F7` — because `` ` `` is not on every physical
+	// layout, and F7 is the one function key neither this table nor `default.cfg` claims.
+	//
 	// Distinct from *non-rebindable*: `ESCAPE` and `` ` `` are bound by `default.cfg` but appear in
 	// no `kb_act.lst`, so the player keeps `cancelselect` and `toggleconsole` and cannot move them.
 	const TArray<FKey>& ReservedKeys();

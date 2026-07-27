@@ -23,7 +23,7 @@ Usage:
   python tools/export_all.py --no-vdata          # skip the vdata rulebook copy
   python tools/export_all.py --no-cfg            # skip the console cfg copy
   python tools/export_all.py --no-scenes         # skip the choreo scene/.lip/expressions copy
-  python tools/export_all.py --npc               # also batch-export NPC glbs + shared banks
+  python tools/export_all.py --npc               # also batch-export NPC + PC-body glbs + shared banks
 """
 import os, sys, time, subprocess, shutil, traceback
 import UE_bsp_to_scene as B
@@ -243,13 +243,14 @@ def main():
             print(f"[scenes] FAILED: {e}", flush=True)
             traceback.print_exc()
 
-    # Batch-export the NPCs the exported maps reference (PL4): per-NPC mesh glbs (mesh + skeleton +
-    # own clips), the shared animation banks each once, and out/npc/npc_manifest.json. Opt-in (--npc):
-    # the include-tree decode is the heaviest offline pass. Standard glTF (self-describing space),
-    # loaded via glTFRuntime, retargeted onto NPC skeletons by bone name at runtime (roadmap 8.5).
-    # Scans out/*/*.ents, so it runs after the map loop.
+    # Batch-export the skeletal characters: per-character mesh glbs (mesh + skeleton + own clips),
+    # the shared animation banks each once, and out/npc/npc_manifest.json. Two seeds — the NPCs the
+    # exported maps reference (PL4) and the player bodies out/vdata's clandoc000.txt names (PL13),
+    # which no map references. Opt-in (--npc): the include-tree decode is the heaviest offline pass.
+    # Standard glTF (self-describing space), loaded via glTFRuntime, retargeted onto the skeletons by
+    # bone name at runtime (roadmap 8.5). Reads out/*/*.ents and out/vdata, so it runs after both.
     if "--npc" in args:
-        print("\n[npc] batch NPC export (mesh glbs + shared banks + manifest) ...", flush=True)
+        print("\n[npc] batch character export (mesh glbs + shared banks + manifest) ...", flush=True)
         try:
             import npc_export
             npc_export.main()

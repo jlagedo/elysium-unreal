@@ -280,7 +280,7 @@ void UElysiumCameraComponent::SolveModelAlpha()
 {
 	// The near-camera dissolve band (`CAM_Think` tail, `CInput+0x104`): 0 below `cam_fadeend`, 1 at or
 	// above min(`cam_idealdist`, `cam_fadestart`), SimpleSpline between. Nothing consumes it until a
-	// player mesh exists (4.8) — it is solved now so the band is a number rather than a later guess.
+	// player mesh exists (8.11) — it is solved now so the band is a number rather than a later guess.
 	const float Distance = SolvedOffset.Size() * Weights.ThirdBlend();
 	const float Full = FMath::Min(Cvars.IdealDist, Cvars.FadeStart);
 	if (Distance <= Cvars.FadeEnd)

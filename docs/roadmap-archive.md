@@ -2931,7 +2931,7 @@ explains ~0% of a median lit face and the bounce floor *is* the ambient level (C
   enough) → `Offset *= SimpleSpline(w)` and `Rotation = Lerp(ViewRotation, CameraRotation, w)`. VtMB
   traces a *box* hull; a sphere is the substitution `camera-view-modes.md` already recorded as a feel
   delta. The player-model fade band (`cam_fadeend` 18 → `cam_fadestart` 32) is solved and exposed as
-  `ModelAlpha()` even though nothing consumes it until a player mesh exists (4.8) — the band is a
+  `ModelAlpha()` even though nothing consumes it until a player mesh exists (8.11) — the band is a
   number now rather than a later guess.
 
   **The cvar surface is reproduced 1:1 through the VtMB console store, not as `elysium.*` engine
@@ -3002,7 +3002,7 @@ explains ~0% of a median lit face and the bounce floor *is* the ambient level (C
   the **rendered facing of the glTF NPC body**, not the shot. That is an 8.2/8.5 question — it touches
   every NPC placement and every `scripted_sequence` marker — and needs its own verification pass.
 
-  *Not in scope, named:* there is **no player mesh yet** (4.8), so the fade band,
+  *Not in scope, named:* there is **no player mesh yet** (8.11), so the fade band,
   `ShouldDrawLocalPlayer` and the world-weapon visibility rule have nothing to drive — the alpha is
   solved and exposed and nothing reads it. Weapon-class arbitration (`camera_prefs`, the
   `inven_holster` and `force_sniper_third_person` branches of `CAM_ToggleCamera`) is **4.9**'s: the
@@ -3015,3 +3015,94 @@ explains ~0% of a median lit face and the bounce floor *is* the ambient level (C
   task delivers the channel and the one caller VtMB's scripts already make. The exact angle
   composition inside `0x100fd350` remains partially recovered, and the approach speeds and orbit steps
   are ours (no ConVar holds them), both flagged at the point of use.
+
+- [x] **11.8 Presentation seam** *(S8; landed 2026-07-27)* — everything the running game puts on
+  screen is assembled once per frame into one value, and the surfaces read that value and nothing
+  else. Before this, `AElysiumHUD` polled `FElysiumEntityWorld` from its own draw paths for the
+  reticle icon, the screen fade, the open sign and the open conversation, and gated each on
+  `IsMenuUp()`; every new screen would have added another poll, another gate, and another thing that
+  could not be tested without a world.
+
+  **`Public/ElysiumViewState.h` is the value and its rules**, plain C++ with no UObject and no engine
+  type, the same shape as `ElysiumAppState.h` and `ElysiumInputScope.h`: `FElysiumViewState`
+  (app state, the surface flag, reticle icon, fade colour+alpha, the sign with its ramp already
+  resolved, `FElysiumDialogueView`, `FElysiumVitals`) plus three total functions over it —
+  `ShowsPlayerSurface`, `ResolveReticle`, `ReconcileDialogue`. `bSignHidesHUD` is lifted out of
+  `FElysiumSignData` rather than read through it because that type is private and the rules have to
+  stay readable from the public header. `Subtitle` is **not** declared: 12.3 owns it and nothing
+  produces one, and an empty field nothing fills would read as support. `FElysiumVitals` is declared
+  because 11.4 already gives it real fields.
+
+  **`UElysiumPresentationSubsystem` is the only writer.** World-scoped, because what it publishes is
+  a world's state and the `Sign`/`Dialogue` pointers point into a map epoch that ends at travel. It
+  rebuilds the state in **step 9** of the frame — a real `FElysiumPublishTickFunction` at
+  `TG_PostUpdateWork`, declared in the constructor so the position is readable off the class defaults
+  the way the map actor's two passes are, registered on the persistent level at `OnWorldBeginPlay`.
+  `bTickEvenWhenPaused` is **true**: pause is exactly when a conversation box has to come down, and a
+  held world publishes no new state of its own but still has to publish the *suppression*.
+
+  **It is also the production `IElysiumPresenter`** — 11.2's fourth service, null until now — and the
+  split that fell out of wiring it is the load-bearing design point: **continuous state is sampled,
+  discrete moments are announced.** The fade's current alpha, the panel's `fade_in` ramp, the aimed
+  use icon and the meters are all derived from the game clock, so the publish pass reads them off the
+  world; a fade *starting*, a panel opening, a conversation opening or closing has no clock to read,
+  so the substrate announces it through the interface and the publisher drains the announcement
+  *after* the new state is in place. A diff over the state cannot tell a conversation that closed and
+  reopened inside one frame from one that never moved, which is why the announcement is kept rather
+  than inferred. The fade/sign/dialogue state itself stays on `FElysiumEntityWorld`: each is world
+  state with the map's lifetime, 11.9 serialises it, and the polling *path* is what was removed, not
+  the state. The only dialogue event that is derived is the turn change, because the branch machine
+  moves inside the conversation and there is nothing to announce.
+
+  **The gating became one rule.** `ShowsPlayerSurface(App, bMenuOpen)` = `App == Playing && !bMenuOpen`.
+  Both writers are asked on purpose: the app state covers FrontEnd / Loading / Paused / GameOver, and
+  the menu's own open flag covers `elysium.menu`, which raises a screen without moving the state. It
+  is a rule about *publishing*, not about drawing — the publisher fills no player-facing field when it
+  is false — and that is what fixes the case the polled HUD got wrong: its tick gate skipped the
+  dialogue reconcile rather than taking an open box down, so a conversation already on screen when the
+  pause menu opened drew through it. Now it is republished as closed, `ReconcileDialogue` answers
+  `Teardown`, and closing the menu rebuilds it from the next publish. The `env_fade` quad is
+  suppressed with the rest (8.6's shipped behaviour; the `ElysiumHUD.h` comment that said otherwise
+  was stale) — a backdrop map's own scripts can fade to black behind the main menu.
+
+  **`AElysiumHUD` no longer ticks at all.** The retained surfaces — the Slate dialogue box and the
+  sign's input scope — reconcile from `OnViewPublished`, which the publisher broadcasts immediately
+  after the state is in place; an actor tick runs in `TG_PrePhysics` and would therefore always act on
+  the previous frame's state, which is one frame of a box drawing over a menu that just opened. The
+  box is built from the publisher's strings (speaker, subtitle, choice labels, already resolved
+  against the player's clan and gender), so it never touches the `.dlg` data, and a pick routes back
+  out through `UElysiumPresentationSubsystem::DialogueChoose`/`DialogueAdvance` to the same
+  `PlayerDialogChoose`/`PlayerDialogAdvance` chokepoint `elysium.dlg.choose` uses. The one map-actor
+  handle left on the HUD serves the dev console verbs (`elysium.lights`/`.props`/`.lightprobe`), which
+  are not presentation. A missing atlas cell degrades to the plain cross in the HUD, not in the rule —
+  that is an asset gap, not a view-state one. Verb: `elysium.viewstate`.
+
+  *Acceptance met:* no widget and no HUD draw path references `FElysiumEntityWorld`.
+  `Elysium.Substrate.ViewState` drives every rule off a hand-built state with no world, no HUD and no
+  RHI — the gate over all six app states × both menu flags, the reticle including the HideHUD panel
+  and a suppressed surface outranking a stale icon, the reconcile across open / same turn / next turn
+  / a different conversation at the same revision / end, the pause-menu case end to end, and the
+  vitals value comparison the change delegate fires on. `Elysium.Substrate.FrameOrder` now reads step
+  9 off the class defaults (ticks, starts enabled, `TG_PostUpdateWork`, later than the post-move pass,
+  survives a hold) and asserts the HUD does not tick. Whole Substrate tier green (33 tests). Live on
+  `sp_tutorial_1`: `elysium.viewstate` reports `app=Playing surface=1` with real meters
+  (`health=100/100 blood=10 humanity=7 masq=0`); `popup_3.OpenWindow` publishes
+  `sign=tutorial_popup_feed1.txt` and the panel draws; `Jack.StartPlayerDialogRemote` publishes
+  `dialogue=open rev=1 speaker='Jack'` and the box draws under it; `elysium.pausemenu 1` takes **both**
+  down behind the menu and `elysium.pausemenu 0` restores both exactly; a choice advances the turn to
+  `rev=2 choices=4`; `fade_out.Fade` under `elysium.timescale 0.05` publishes `fade=(0,0,0,0.19)` and
+  the quad draws over the world and the panel; `elysium.quittomenu` publishes `app=FrontEnd surface=0`
+  with a clean backdrop (`sm_hub_1`'s `havenbum` conversation runs with no box), and travelling back
+  republishes from the fresh world's subsystem. The crosshair and the `+use` context cursor (the
+  locked padlock on `tutchopdoorc`) both draw off the published state.
+
+  *Verified pre-existing, not caused here:* `tools/shots_diff.py` fails 6 of `sp_tutorial_1`'s
+  vantages against the kept baseline. The baseline predates the committed 11.7 camera rework by ~13
+  hours, and rebuilding with this task's source changes stashed reproduces the same failure at the
+  same magnitude (`t2` mean 3.78 stashed vs 3.69 with the change), so the seam is pixel-neutral and
+  the baseline needs re-promoting against the camera work — not against this.
+
+  *Not in scope, named:* the **8.6 screens** are re-based only in the sense that they never read the
+  substrate to begin with — `UElysiumMainMenu` and `SElysiumDialogueBox` were already clean, so the
+  work was all on the HUD. The meters are *published*, not drawn: **8.9** is what puts them on the
+  8.6 stack, and **9.2** is what replaces the interim Slate box. `Subtitle` waits on **12.3**.

@@ -2,17 +2,13 @@
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumDialogueWidget.h"
-#include "ElysiumDlg.h"
-#include "ElysiumEntity.h"
-#include "ElysiumEntityDefs.h"
-#include "ElysiumEntityWorld.h"
 #include "ElysiumInputSubsystem.h"
 #include "ElysiumLightProbe.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
+#include "ElysiumPresentationSubsystem.h"
 #include "ElysiumSignData.h"
 #include "ElysiumSignFonts.h"
-#include "ElysiumUISubsystem.h"
 #include "ElysiumUITexture.h"
 
 #include "Engine/GameViewportClient.h"
@@ -52,18 +48,21 @@ using ElysiumUI::LoadPngTexture;
 
 AElysiumHUD::AElysiumHUD()
 {
-	// The HUD ticks so it can manage the Slate dialogue box (add/refresh/remove) off the entity world's
-	// open-conversation state, independent of the Canvas DrawHUD pass.
-	PrimaryActorTick.bCanEverTick = true;
-	// S2 — this is the presentation side of the frame, so it keeps ticking while the world is held:
-	// a paused game still draws a live HUD, and a menu opening over a conversation must still be able
-	// to take the dialogue box down. Gameplay ticks (the map actor's two) do the opposite.
-	PrimaryActorTick.bTickEvenWhenPaused = true;
+	// The HUD does not tick. The Slate dialogue box and the sign's input scope are reconciled from
+	// the publisher's OnViewPublished, which runs in step 9 of the frame (TG_PostUpdateWork); an
+	// actor tick would run in TG_PrePhysics and therefore always act on the previous frame's state.
+	PrimaryActorTick.bCanEverTick = false;
 }
 
 void AElysiumHUD::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// 11.8 — the one inbound seam. Everything drawn below comes from the state this hands over.
+	if (UElysiumPresentationSubsystem* P = Presentation())
+	{
+		ViewPublishedHandle = P->OnViewPublished().AddUObject(this, &AElysiumHUD::OnViewPublished);
+	}
 
 	// elysium.lights — show/hide the real-time light rig (A/B the world with and without it).
 	LightsCmd = IConsoleManager::Get().RegisterConsoleCommand(
@@ -114,6 +113,14 @@ void AElysiumHUD::BeginPlay()
 
 void AElysiumHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (ViewPublishedHandle.IsValid())
+	{
+		if (UElysiumPresentationSubsystem* P = Presentation())
+		{
+			P->OnViewPublished().Remove(ViewPublishedHandle);
+		}
+		ViewPublishedHandle.Reset();
+	}
 	if (LightsCmd)
 	{
 		IConsoleManager::Get().UnregisterConsoleObject(LightsCmd);
@@ -142,30 +149,43 @@ void AElysiumHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
-void AElysiumHUD::Tick(float DeltaSeconds)
+UElysiumPresentationSubsystem* AElysiumHUD::Presentation() const
 {
-	Super::Tick(DeltaSeconds);
-
-	// Tracks the world's sign state, not the panel's visibility, so it is reconciled ahead of the
-	// menu gate below: a sign that opens behind a menu is still open in the world.
-	UpdateSignScope();
-
-	// 8.6 — no dialogue box over a menu. A menu backdrop builds the whole map, and `sm_hub_1`'s
-	// pedestrians open conversations on their own (havenbum panhandles the moment the world runs),
-	// so this is a real collision and not a hypothetical one. The conversation itself is left alone
-	// in the entity world — only its UI is withheld — so nothing about the map's state is faked.
-	if (IsMenuUp())
-	{
-		return;
-	}
-	UpdateDialogue();
+	return UElysiumPresentationSubsystem::Get(GetWorld());
 }
 
-bool AElysiumHUD::IsMenuUp() const
+const FElysiumViewState& AElysiumHUD::View() const
 {
-	const UGameInstance* GI = GetGameInstance();
-	const UElysiumUISubsystem* UI = GI ? GI->GetSubsystem<UElysiumUISubsystem>() : nullptr;
-	return UI && UI->IsMenuOpen();
+	// A world with no publisher (there is none before OnWorldBeginPlay, and none at all in an editor
+	// preview world) reads as "nothing on screen" rather than as a special case at every draw site.
+	static const FElysiumViewState Empty;
+	const UElysiumPresentationSubsystem* P = Presentation();
+	return P ? P->View() : Empty;
+}
+
+void AElysiumHUD::OnViewPublished(const FElysiumViewState& NewView)
+{
+	// The sign's scope tracks the published panel, so a sign that opens behind a menu claims nothing
+	// until the menu closes and the panel is published again — the scope and the panel are raised and
+	// dropped by the same fact.
+	UpdateSignScope(NewView.Sign != nullptr);
+
+	switch (ElysiumView::ReconcileDialogue(ShownConv, ShownRev, NewView.Dialogue))
+	{
+	case ElysiumView::EDialogueAction::Rebuild:
+		RebuildDialogue(NewView.Dialogue);
+		break;
+	case ElysiumView::EDialogueAction::Teardown:
+		// Reached both when the conversation ends and when a screen comes up over it: the publisher
+		// withholds the whole player-facing surface, so the box comes down instead of drawing
+		// through the menu. The conversation itself is untouched in the entity world — `sm_hub_1`'s
+		// havenbum panhandles behind the main menu exactly as it does in play — and the box is
+		// rebuilt from the next publish once the screen closes.
+		TeardownDialogue();
+		break;
+	case ElysiumView::EDialogueAction::None:
+		break;
+	}
 }
 
 AElysiumMapActor* AElysiumHUD::ResolveMapActor() const
@@ -184,45 +204,27 @@ void AElysiumHUD::DrawHUD()
 		return;
 	}
 
+	const FElysiumViewState& V = View();
+
 	// Centre reticle — always on, independent of the debug overlay and any Cog window, so it never
 	// flickers in/out with what happens to be open. The HUD renders every frame in -game and PIE, so
 	// this is the one reliable always-visible surface. While the +use look-cursor is on a usable
 	// entity (P4.4), the reticle swaps to VtMB's context cursor (ring frame + the entity's use_icon /
-	// locked_icon); otherwise it is the plain aim cross.
+	// locked_icon); otherwise it is the plain aim cross. `None` covers both a screen owning the
+	// display and a sign panel with HideHUD covering the game.
 	const float CX = Canvas->ClipX * 0.5f;
 	const float CY = Canvas->ClipY * 0.5f;
 
-	// 8.6 — while a menu screen is up the player-facing HUD is not: no aim reticle over a menu, and
-	// no sign/popup panel drawing behind it (a menu backdrop builds the whole map, so its scripts
-	// can legitimately open one). This also suppresses the env_fade quad below.
-	if (IsMenuUp())
-	{
-		return;
-	}
-
-	int32 AimedIcon = 0;
-	// A sign panel with HideHUD set covers the game: no reticle under it (P4.10).
-	bool bSignHidesHUD = false;
-	if (const AElysiumMapActor* MapForUse = ResolveMapActor())
-	{
-		if (const FElysiumEntityWorld* World = MapForUse->GetEntityWorld())
-		{
-			AimedIcon = World->GetAimedUseIcon();
-			const FElysiumSignData* OpenSign = World->GetOpenSignData();
-			bSignHidesHUD = OpenSign && OpenSign->bHideHUD;
-		}
-	}
-
 	EnsureUseIconAtlas();
-	if (bSignHidesHUD)
+	const ElysiumView::EReticle Reticle = ElysiumView::ResolveReticle(V);
+	// A missing atlas cell is an asset gap, not a view-state one, so it degrades to the plain cross
+	// here rather than in the rule.
+	const bool bHaveCell = UseAtlas.IsValid() && UseIconUV.Contains(V.ReticleIcon);
+	if (Reticle == ElysiumView::EReticle::UseIcon && bHaveCell)
 	{
-		// nothing — the panel owns the screen
+		DrawUseReticle(CX, CY, V.ReticleIcon);
 	}
-	else if (AimedIcon > 0 && UseAtlas.IsValid() && UseIconUV.Contains(AimedIcon))
-	{
-		DrawUseReticle(CX, CY, AimedIcon);
-	}
-	else
+	else if (Reticle != ElysiumView::EReticle::None)
 	{
 		DrawLine(CX - 7.f, CY, CX + 7.f, CY, FLinearColor(1, 1, 1, 0.7f), 1.2f);
 		DrawLine(CX, CY - 7.f, CX, CY + 7.f, FLinearColor(1, 1, 1, 0.7f), 1.2f);
@@ -230,22 +232,16 @@ void AElysiumHUD::DrawHUD()
 
 	// P4.10 game_sign — the open sign/popup window, over the world and the reticle but under the
 	// env_fade quad (a fade-to-black covers everything, panel included).
-	DrawSignPanel();
+	DrawSignPanel(V);
 
 	// P4.5 env_fade — a full-screen colour quad over everything (reticle included), driven by the
 	// entity world's single screen-fade state (Fade input); the fade covers the whole viewport.
-	if (const AElysiumMapActor* MapForFade = ResolveMapActor())
+	// Alpha 0 is the idle state, and a suppressed surface publishes exactly that, so a fade running
+	// on a backdrop map does not black out the menu in front of it.
+	if (V.Fade.A > KINDA_SMALL_NUMBER)
 	{
-		FLinearColor FadeColor;
-		if (const FElysiumEntityWorld* World = MapForFade->GetEntityWorld())
-		{
-			if (World->GetScreenFade(FadeColor))
-			{
-				DrawRect(FadeColor, 0.f, 0.f, Canvas->ClipX, Canvas->ClipY);
-			}
-		}
+		DrawRect(V.Fade, 0.f, 0.f, Canvas->ClipX, Canvas->ClipY);
 	}
-
 }
 
 // --- +use context-icon reticle (P4.4) -------------------------------------------------------
@@ -374,19 +370,13 @@ UTexture2D* AElysiumHUD::GetSignBackground(const FString& ImageName)
 	return Tex;
 }
 
-void AElysiumHUD::DrawSignPanel()
+void AElysiumHUD::DrawSignPanel(const FElysiumViewState& V)
 {
 	if (CVarDrawSigns.GetValueOnGameThread() == 0)
 	{
 		return;
 	}
-	const AElysiumMapActor* Map = ResolveMapActor();
-	const FElysiumEntityWorld* World = Map ? Map->GetEntityWorld() : nullptr;
-	if (!World)
-	{
-		return;
-	}
-	const FElysiumSignData* Sign = World->GetOpenSignData();
+	const FElysiumSignData* Sign = V.Sign;
 	if (!Sign || !Sign->bParsed)
 	{
 		return;
@@ -395,17 +385,11 @@ void AElysiumHUD::DrawSignPanel()
 	const float ScreenW = Canvas->ClipX;
 	const float ScreenH = Canvas->ClipY;
 
-	// fade_in ramps the whole panel up; the game clock drives it, matching every other timed
-	// entity state. (fade_out is applied by the dismissal path, which tears the panel down
-	// immediately in this slice — a fading-out panel needs a lingering copy, deferred to 8.8.)
-	double OpenTime = 0.0;
-	World->GetOpenSign(&OpenTime);
-	const float FadeIn = World->GetOpenSignFadeIn();
-	float Alpha = 1.0f;
-	if (FadeIn > KINDA_SMALL_NUMBER)
-	{
-		Alpha = FMath::Clamp(float(World->NowSeconds() - OpenTime) / FadeIn, 0.0f, 1.0f);
-	}
+	// fade_in ramps the whole panel up; the publisher resolves the ramp against the game clock,
+	// matching every other timed entity state. (fade_out is applied by the dismissal path, which
+	// tears the panel down immediately in this slice — a fading-out panel needs a lingering copy,
+	// deferred to 8.8.)
+	const float Alpha = V.SignAlpha;
 
 	// --- panel rect + background -------------------------------------------------------------
 	// The BackgroundImage block sizes the sign panel itself, so its rect is also the origin every
@@ -527,49 +511,11 @@ void AElysiumHUD::DrawSignPanel()
 
 // --- Dialogue box (P9 9.1 / B4) -------------------------------------------------------------
 
-void AElysiumHUD::UpdateDialogue()
+void AElysiumHUD::RebuildDialogue(const FElysiumDialogueView& Dialogue)
 {
-	AElysiumMapActor* Map = ResolveMapActor();
-	FElysiumEntityWorld* World = Map ? Map->GetEntityWorld() : nullptr;
-	FElysiumDlgConversation* Conv = World ? World->GetOpenDialog() : nullptr;
-
-	if (!Conv)
-	{
-		if (DialogueWidget.IsValid())
-		{
-			TeardownDialogue();
-		}
-		return;
-	}
-
-	// Nothing changed since the last rebuild — leave the retained widget alone.
-	if (Conv == DialogueConv && Conv->Revision() == DialogueRev && DialogueWidget.IsValid())
-	{
-		return;
-	}
-
-	// Snapshot this turn: the speaker, the current NPC line, and its visible choice labels.
-	FString Speaker;
-	if (const FElysiumEntity* OwnerEnt = World->Resolve(World->GetOpenDialogOwner()))
-	{
-		Speaker = OwnerEnt->Def ? OwnerEnt->Def->TargetName : FString();
-	}
-	const bool bMale = Conv->PlayerMale();
-	const bool bMalk = Conv->PlayerMalkavian();
-	const FElysiumDlgLine* NpcLine = Conv->CurrentNpcLine();
-	const FString LineText = NpcLine ? NpcLine->DisplayText(bMale, bMalk) : FString();
-
-	TArray<FString> Choices;
-	for (int32 v = 0; v < Conv->VisibleChoices().Num(); ++v)
-	{
-		if (const FElysiumDlgLine* Choice = Conv->VisibleChoice(v))
-		{
-			Choices.Add(Choice->DisplayText(bMale, bMalk));
-		}
-	}
-	const bool bTerminal = Conv->IsTerminalLine();
-
-	// Rebuild the box for the new turn (turns are user-paced, so a full rebuild is cheap).
+	// Rebuild the box for the new turn (turns are user-paced, so a full rebuild is cheap). Every
+	// string is the publisher's — the speaker, the subtitle and the choice labels are already
+	// resolved against the player's clan and gender, so the box never touches the `.dlg` data.
 	if (UGameViewportClient* Viewport = GetWorld() ? GetWorld()->GetGameViewport() : nullptr)
 	{
 		if (DialogueWidget.IsValid())
@@ -577,10 +523,10 @@ void AElysiumHUD::UpdateDialogue()
 			Viewport->RemoveViewportWidgetContent(DialogueWidget.ToSharedRef());
 		}
 		DialogueWidget = SNew(SElysiumDialogueBox)
-			.Speaker(Speaker)
-			.Line(LineText)
-			.Choices(Choices)
-			.bTerminal(bTerminal)
+			.Speaker(Dialogue.Speaker)
+			.Line(Dialogue.Line)
+			.Choices(Dialogue.Choices)
+			.bTerminal(Dialogue.bTerminal)
 			.OnChoose(FElysiumOnDlgChoice::CreateUObject(this, &AElysiumHUD::OnDialogueChoice));
 		Viewport->AddViewportWidgetContent(DialogueWidget.ToSharedRef(), /*ZOrder*/ 100);
 	}
@@ -610,8 +556,8 @@ void AElysiumHUD::UpdateDialogue()
 		}
 	}
 
-	DialogueConv = Conv;
-	DialogueRev = Conv->Revision();
+	ShownConv = Dialogue.Conversation;
+	ShownRev = Dialogue.Revision;
 }
 
 void AElysiumHUD::TeardownDialogue()
@@ -629,21 +575,17 @@ void AElysiumHUD::TeardownDialogue()
 		Input->Pop(DialogueScope);
 	}
 	DialogueScope.Reset();
-	DialogueConv = nullptr;
-	DialogueRev = 0;
+	ShownConv = nullptr;
+	ShownRev = 0;
 }
 
-void AElysiumHUD::UpdateSignScope()
+void AElysiumHUD::UpdateSignScope(bool bSignOpen)
 {
 	UElysiumInputSubsystem* Input = UElysiumInputSubsystem::Get(GetGameInstance());
 	if (!Input)
 	{
 		return;
 	}
-
-	const AElysiumMapActor* Map = ResolveMapActor();
-	const FElysiumEntityWorld* World = Map ? Map->GetEntityWorld() : nullptr;
-	const bool bSignOpen = World && World->GetOpenSign().IsSet();
 
 	if (bSignOpen && !SignScope.IsValid())
 	{
@@ -663,20 +605,21 @@ void AElysiumHUD::UpdateSignScope()
 
 void AElysiumHUD::OnDialogueChoice(int32 VisibleIndex)
 {
-	AElysiumMapActor* Map = ResolveMapActor();
-	FElysiumEntityWorld* World = Map ? Map->GetEntityWorld() : nullptr;
-	if (!World)
+	UElysiumPresentationSubsystem* P = Presentation();
+	if (!P)
 	{
 		return;
 	}
-	// -1 is the terminal "continue"; otherwise the Nth visible PC choice. Both route through the world
-	// chokepoint; the next Tick reflects the new turn (or tears the box down when the conversation ends).
+	// -1 is the terminal "continue"; otherwise the Nth visible PC choice. Player input goes back the
+	// other way through the presenter, which resolves the world and hands it to the same
+	// PlayerDialogChoose/PlayerDialogAdvance chokepoint every other caller uses; the next publish
+	// reflects the new turn (or tears the box down when the conversation ends).
 	if (VisibleIndex < 0)
 	{
-		World->PlayerDialogAdvance();
+		P->DialogueAdvance();
 	}
 	else
 	{
-		World->PlayerDialogChoose(VisibleIndex);
+		P->DialogueChoose(VisibleIndex);
 	}
 }

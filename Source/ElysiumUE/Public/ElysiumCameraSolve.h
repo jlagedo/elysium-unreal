@@ -220,7 +220,7 @@ struct FElysiumCameraCvars
 	bool bCollide = true;                         // cam_collide 1
 	float TraceRadius = 9.0f * ElysiumCam::U;     // cam_trace_radius 9
 
-	// The player-model fade band (used once a player mesh exists — 4.8).
+	// The player-model fade band (used once a player mesh exists — 8.11).
 	float FadeStart = 32.0f * ElysiumCam::U;      // cam_fadestart 32
 	float FadeEnd = 18.0f * ElysiumCam::U;        // cam_fadeend 18
 

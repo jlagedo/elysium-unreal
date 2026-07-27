@@ -1,7 +1,11 @@
-"""Batch NPC export: mesh glbs + shared animation-bank glbs + a resolution manifest.
+"""Batch character export: mesh glbs + shared animation-bank glbs + a resolution manifest.
 
-Scans the exported maps for `npc_*` model references, resolves each NPC's include-model tree
-(`docs/animation_and_movers.md` A.7) into shared banks, and writes under `out/npc/`:
+Two seeds, one product. The maps' own `npc_*` model references cover every NPC; the **player
+bodies** are named by no entity at all, so they come from `vdata/system/clandoc000.txt`
+instead (56 distinct models over its 84 `M_Body0..5`/`F_Body0..5` slots, roadmap PL13). Both
+are the same v2531 skeletal format, so both go through the same decode: each model's
+include-model tree (`docs/animation_and_movers.md` A.7) resolves into shared banks, and the
+run writes under `out/npc/`:
 
   <npc>.glb          skinned mesh + skeleton + own clips (dialogue anims) + morph targets
   banks/<bank>.glb   a shared bank's skeleton + all its clips, no mesh
@@ -31,22 +35,26 @@ so it is read at export time and never committed. No model in the install carrie
 data, so there is none to export. Format: `docs/facial_animation.md`.
 
 CLI:
-  python tools/npc_export.py                 # every npc_* model the exported maps reference
+  python tools/npc_export.py                 # both seeds: the maps' npc_* models + the PC bodies
   python tools/npc_export.py <model.mdl ...> # only the named models (+ their banks)
 `export_all.py --npc` calls `main()` at the end of a run.
 """
 import glob
 import json
 import os
+import re
 import sys
 
 import install
+import kv
 import mdl
 import mdl_gltf
 import mdl_skel as S
 
 OUT = "out"
 NPC_DIR = os.path.join(OUT, "npc")
+CLANDOC = os.path.join("vdata", "system", "clandoc000.txt")
+_BODY_SLOT = re.compile(r"^([mf])_body(\d+)$")
 MANIFEST = os.path.join(NPC_DIR, "npc_manifest.json")
 INDEX = os.path.join(NPC_DIR, "npc_index.json")
 CLIPS_DIR = os.path.join(NPC_DIR, "clips")
@@ -68,6 +76,36 @@ def npc_models_from_ents(out_root=OUT):
                 continue
             m = ent.get("keys", {}).get("model", "").strip().lower().replace("\\", "/")
             if m.endswith(".mdl"):
+                models.add(m if m.startswith("models/") else "models/" + m)
+    return sorted(models)
+
+
+def pc_models_from_clandoc(out_root=OUT):
+    """Every distinct player-body `.mdl` `vdata/system/clandoc000.txt` names (roadmap PL13).
+
+    No entity in any map carries a player model, so the `.ents` seed above cannot reach the
+    PC bodies. The rulebook is the seed instead -- the same table 8.11a selects a body
+    through, so the exported set cannot drift from it: each `ClanData.General` carries
+    `M_Body0..5`/`F_Body0..5`, 7 playable clans x 2 sexes x 6 armour slots whose top two
+    repeat the tier-3 suit, so 84 slots resolve to **56 distinct models**. The multiplayer and
+    `unused*` templates repeat the same paths and the un-indexed `M_Body`/`F_Body` of the
+    human templates name NPC models, so only the indexed keys are read.
+
+    Requires PL5b's `out/vdata/` mirror; returns `[]` (with a note) when it is absent."""
+    path = os.path.join(out_root, CLANDOC)
+    if not os.path.exists(path):
+        print(f"[npc] {path} not found - PC bodies skipped (run the vdata export first)")
+        return []
+    with open(path, encoding="utf-8", errors="replace") as f:
+        doc = kv.parse(f.read())
+    blocks = doc.get("clandata", [])
+    if isinstance(blocks, dict):
+        blocks = [blocks]
+    models = set()
+    for block in blocks:
+        for key, val in block.get("general", {}).items():
+            if _BODY_SLOT.match(key) and isinstance(val, str) and val.lower().endswith(".mdl"):
+                m = val.strip().lower().replace("\\", "/")
                 models.add(m if m.startswith("models/") else "models/" + m)
     return sorted(models)
 
@@ -94,19 +132,19 @@ def _clip_meta(c):
     `activity` is the `ACT_*` literal the engine selects on (empty on a layer/plumbing
     sequence), `weight` its weighted-random share among the clips sharing that activity, and
     `flags` the studio sequence bits. Stored once per owning stem, not per NPC that resolves
-    it -- 45 NPCs x ~1,535 resolved clips would be two orders of magnitude more rows."""
+    it -- 157 characters x ~1,400 resolved clips would be two orders of magnitude more rows."""
     return {"activity": c.activity, "weight": c.actweight, "flags": c.flags,
             "frames": c.frames, "fps": round(c.fps, 4)}
 
 
 def write_facial(stem, model, rig):
-    """Write one NPC's flex rig to `facial/<stem>.json` -> the manifest fields naming it.
+    """Write one character's flex rig to `facial/<stem>.json` -> the manifest fields naming it.
 
     Kept out of `npc_manifest.json` for the same reason the clip vocabularies are: the rig is
     ~65 flexdescs + 44 controllers + 60 rules + a morph row each, and a map places 17-22 NPC
     models, so the runtime should parse only the ones it places. `{}` for a model with no
-    flex rig -- 14 of the 54 exported NPCs carry none, and `shovelhead` carries the header
-    without a single flex record."""
+    flex rig -- 78 of the 157 exported characters are rigged, `shovelhead` carries the header
+    without a single flex record, and **no player body carries one at all** (PL13)."""
     if not rig:
         return {}
     os.makedirs(FACIAL_DIR, exist_ok=True)
@@ -125,16 +163,16 @@ def write_facial(stem, model, rig):
 def write_sidecars(manifest):
     """The runtime-facing split of `npc_manifest.json` (roadmap 8.5).
 
-    The whole manifest is 5.5 MB / 71k clip rows because 54 NPCs each resolve ~1,535 clips
-    out of the same shared banks. A map places 17-22 distinct NPC models, so the runtime is
-    made to parse only those:
+    The whole manifest is 15.8 MB / 218k clip rows because 157 characters each resolve ~1,400
+    clips out of the same shared banks. A map places 17-22 distinct models (and one player
+    body), so the runtime is made to parse only those:
 
-      npc_index.json      every NPC + bank, glb path and counts, no clip maps (~17 KB)
-      clips/<stem>.json   one NPC's whole resolved vocabulary
+      npc_index.json      every character + bank, glb path and counts, no clip maps (~47 KB)
+      clips/<stem>.json   one character's whole resolved vocabulary
 
     A slice interns its owner stems and activity literals into two small arrays and stores
     each clip as `[owner_i, activity_i, weight, flags, frames, fps]`. The strings repeat
-    across ~1,535 rows (62 owners, a few hundred activities), so interning pays for the
+    across ~1,400 rows (67 owners, a few hundred activities), so interning pays for the
     activity column and still lands under the un-interned label->owner map it replaces.
     Index 0 of `owners` is always the NPC itself; index 0 of `activities` is always `""`
     (a layer/plumbing sequence the engine composes rather than selects)."""
@@ -188,12 +226,23 @@ def main(only=None):
     load_mdl = lambda k: (r if (r := install.read(idx, (k[:-4] if k.lower().endswith(".mdl")
                                                          else k) + ".mdl")) else None)
 
-    npcs = [m for m in (only or npc_models_from_ents()) if load_mdl(m) is not None]
-    missing = [m for m in (only or []) if load_mdl(m) is None]
+    # The default seed is two lists, because the two halves are referenced differently: NPCs by
+    # the maps' own entities, the player bodies only by the rulebook (PL13).
+    if only is None:
+        from_ents = npc_models_from_ents()
+        pc_models = set(pc_models_from_clandoc())
+        print(f"[npc] seed: {len(from_ents)} npc model(s) from the exported .ents + "
+              f"{len(pc_models)} player body model(s) from {CLANDOC}")
+        seed = sorted(set(from_ents) | pc_models)
+    else:
+        seed, pc_models = only, set()
+
+    npcs = [m for m in seed if load_mdl(m) is not None]
+    missing = [m for m in seed if load_mdl(m) is None]
     for m in missing:
         print(f"  ! {m}: no .mdl in install - skipped")
     if not npcs:
-        print("[npc] no NPC models to export")
+        print("[npc] no character models to export")
         return
 
     # NPC stems are basenames (the console/`elysium.npc.load` ergonomic); fall back to a
@@ -301,8 +350,9 @@ def main(only=None):
     metas = [m for r in bank_index.values() for m in r["clips"].values()]
     metas += [m for r in npc_index.values() for m in r["own_clips"].values()]
     acts = {m["activity"] for m in metas if m["activity"]}
-    print(f"[npc] done: {len(npc_index)} NPCs, {len(bank_index)} banks, "
-          f"{n_clips} resolved clip refs -> {MANIFEST}")
+    n_pc = sum(1 for r in npc_index.values() if r["model"] in pc_models)
+    print(f"[npc] done: {len(npc_index)} characters ({len(npc_index) - n_pc} NPCs + {n_pc} PC "
+          f"bodies), {len(bank_index)} banks, {n_clips} resolved clip refs -> {MANIFEST}")
     print(f"[npc] clips: {len(metas)} distinct baked, {sum(1 for m in metas if m['activity'])} "
           f"carry an activity ({len(acts)} distinct, e.g. ACT_IDLE/ACT_DISPOSITION)")
     rigged = [r for r in npc_index.values() if r.get("facial")]

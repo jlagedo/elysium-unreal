@@ -135,10 +135,12 @@ struct FElysiumContentPaths
 	// The shared animation banks and their resolution sidecars (8.5). A VtMB NPC's own .mdl
 	// carries only its own clips — mostly dialogue — and pulls idle/locomotion/combat from banks
 	// through the studiohdr include DAG, so a bank glb is a skeleton + clips with no mesh, applied
-	// to any NPC by bone name. `npc_index.json` names every NPC and bank with its glb and counts
-	// (~34 KB, read once); `clips/<stem>.json` is one NPC's whole resolved vocabulary (~92 KB),
-	// read only for the stems a map actually places — the full npc_manifest.json is 10.1 MB and
-	// exists for the offline probes. NpcBankGlb takes the index's own relative path ("banks/x.glb").
+	// to any NPC by bone name. `npc_index.json` names every character and bank with its glb and
+	// counts (~47 KB, read once); `clips/<stem>.json` is one character's whole resolved vocabulary
+	// (~95 KB), read only for the stems a map actually places — the full npc_manifest.json is
+	// 15.8 MB and exists for the offline probes. The index also carries the 56 player bodies
+	// (PL13), which no map references and 8.11a resolves by clan through `clandoc000.txt`.
+	// NpcBankGlb takes the index's own relative path ("banks/x.glb").
 	static FString NpcIndex() { return NpcDir() / TEXT("npc_index.json"); }
 	static FString NpcClips(const FString& Stem) { return NpcDir() / TEXT("clips") / (Stem + TEXT(".json")); }
 	static FString NpcBankGlb(const FString& RelGlb) { return NpcDir() / RelGlb; }

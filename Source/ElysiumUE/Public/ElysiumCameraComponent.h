@@ -92,7 +92,7 @@ public:
 	// The solved boom length in cm (0 in first person), for `elysium_player_get` and the Cog window.
 	float BoomLength() const { return SolvedOffset.Size() * Weights.ThirdBlend(); }
 	// The player-model alpha the fade band produces (`CInput+0x104`). Nothing reads it until a player
-	// mesh exists (4.8); it is solved now so the band is one number rather than a later guess.
+	// mesh exists (8.11); it is solved now so the band is one number rather than a later guess.
 	float ModelAlpha() const { return PlayerModelAlpha; }
 	const FElysiumCameraCvars& GetCvars() const { return Cvars; }
 	FString Describe() const;

@@ -86,11 +86,11 @@ it waits. Three standing rules:
 
 | Rung | Delivers | Tasks (in order) |
 |---|---|---|
-| **PP0 — the core refactor** | the spine: one clock/frame, world services, app states + pause, the player entity, input scopes, commands + user command, the view seam, the play harness | 11.8, 11.10 *(11.0, 11.1, 11.2, 11.3, 11.4, 11.5, 11.6 [x])* |
+| **PP0 — the core refactor** | the spine: one clock/frame, world services, app states + pause, the player entity, input scopes, commands + user command, the view seam, the play harness | 11.10 *(11.0, 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.8 [x])* |
 | **PP1 — New Game & genesis** | chargen for real: clan, **name**, sex, spends — onto the player entity, Python-readable; `sp_genesisdevice_1` played, not skipped | 9.4 (+ `sp_genesisdevice_1` export/bake), 8.6's New Game click path |
-| **PP2 — the theatre cinematic** | the intro plays start to finish: choreography, scripted camera, line audio, subtitles, **eyes and lipsync — all block** (cont. 5) | 12.1–12.5 (+ `sp_theatre` export/bake) *(11.7 [x])* |
+| **PP2 — the theatre cinematic** | the intro plays start to finish: choreography, scripted camera, line audio, subtitles, **eyes and lipsync — all block** (cont. 5); the PC is on camera, so its body stands here | 12.1–12.5, 8.11a (+ `sp_theatre` export/bake) *(11.7 [x])* |
 | **PP3 — land the tutorial** | the chain hands the player to Jack; the first conversation runs with sound and reactions | 9.2, 9.9 |
-| **PP4 — core mechanics** | faithful movement (owner call: **in** the path), camera modes, feeding, items + object interaction, dice, the vitals HUD | 4.7, 10.6, B6, 9.8, 9.6, 8.9 |
+| **PP4 — core mechanics** | faithful movement (owner call: **in** the path), camera modes, the body's gait, feeding, items + object interaction, dice, the vitals HUD | 4.7, 8.11b, 10.6, B6, 9.8, 9.6, 8.9 |
 | **PP5 — persistence** | save / quick / autosave + load mid-run; `trigger_autosave` live | 11.9 (= 9.5) |
 | **PP6 — complete the tutorial** | stealth, disciplines, firearms — every retail beat to the exit, proven headlessly | 13.1, 13.2, 13.3 → P9's slice acceptance as `test.bat Play` |
 
@@ -106,14 +106,17 @@ work.)*
 The open tasks whose dependencies are met, in the order they pay off. Regenerable from the
 deps below — refresh it whenever a task flips:
 
-1. **11.8 → 11.10** — close PP0: the view seam, then the play harness. Every dep is met, and
-   11.10 now has the two things it was waiting on — a named verb for every player action and a
-   recordable command stream (11.6).
+1. **11.10** — the last of PP0: the play harness. It now has everything it was waiting on — a
+   named verb for every player action and a recordable command stream (11.6), and a published view
+   state (11.8) a beat can assert what is on screen against.
 2. **9.4 / 9.8 / 9.9 / 9.10 / 9.5** — the five systems the hinge unblocked. They now land *on*
    `FElysiumCombatCharacter` and `FElysiumPlayerRecord`: 9.4 turns the sheet's dynamic bag into
    registered fields and gives health a real derivation, 9.10 finishes the economy over the
    `money` field that already exists, 9.8 fills the record's inventory half, and 9.5 (= 11.9)
    walks the chain.
+3. **8.11a** — the player body. **PL13 [x]** put all 56 clan bodies on disk beside the NPCs, so
+   nothing is left to export; the task itself stays PP2-gated, because the theatre is where the
+   body is first on camera.
 
 **P12 is fully sourced** — everything left on it is runtime work. RE19 [x] and RE20 [x] closed
 the format half; **PL9 [x]** mirrored the 5,444 `.vcd` + 7,136 `.lip`, and **PL10 [x]** the
@@ -473,8 +476,33 @@ M1 leftovers that live in this lane.
   substituted, and a capsule's rounded bottom reports ~0.65 against `StepMove`'s `0.7` standable test,
   rejecting every climb (`source_movement.md`). **11.6 [x]** re-based the pawn to `APawn` + box +
   `UElysiumMovementComponent` and supplies the `FElysiumUserCmd` this consumes; what is left here is
-  the line-by-line port — `surfaceFriction` off real surface data, the gravity half-step split,
-  ducking, ladders and water, against 11.6's Source-shaped shell. Sequenced **in
+  the line-by-line port — the gravity half-step split, a fixed movement tick, ducking, ladders and
+  water, against 11.6's Source-shaped shell. **`surfaceFriction` is closed**: it is 1.0 on every
+  world surface in retail (VtMB scales the material's friction by 1.25 and clamps to 1.0; 1 of
+  11,624 VMTs carries a `$surfaceprop`, so everything is the `default` prop at 0.8), so the shell's
+  hardcoded 1.0 is already faithful and there is nothing per-surface to export
+  (`source_movement.md`). **Frame-rate independence is the live one**: the mover runs on the render
+  delta, and while ground friction is dt-stable to <2% over 60–240 fps, `AirAccelerate`'s `addspeed`
+  clamp stops binding above ~117 fps — a 120 fps player gets 3500 u/s² of air control where VtMB's
+  fixed 66.7 Hz tick gives 2000 — and the full-step gravity puts the jump apex at `25 − 100·dt`
+  units instead of a flat 25. A fixed-timestep accumulator at Source's tick closes both.
+  **Two divergences the port must settle first** (found reviewing the clock, 2026-07-27):
+  (a) **Nothing clamps the frame delta.** `FElysiumTimeControl::AdvanceFrame` and the mover's
+  `TickComponent` both take Unreal's raw delta. Stock Source bounds host frametime in
+  `Host_FilterTime` before `GameFrame` ever sees it, so a hitch — level-load flush, alt-tab, a
+  debugger break — cannot hand the mover one enormous integration step or fire a whole interval's
+  thinks and queued I/O in a single frame; ours can. A clamp must cover the clock and the mover with
+  the same number, or game time and player motion disagree about how long the frame was. VtMB's own
+  bound is unconfirmed — `Host_FilterTime` is `engine.dll`, outside the `vampire.dll` dumps — so RE
+  it before pinning a constant. (b) **The "fixed 66.7 Hz tick" above is unverified and contradicts
+  `game_runtime.md`**, which pins VtMB to the *pre-tick* Source branch on cvar absence (no
+  `interval_per_tick` / `sv_tickrate` / `TICK_INTERVAL` in `engine.dll`; `GameFrame` runs once per
+  rendered frame on a variable `gpGlobals->frametime`, with `curtime` the only clock). 66.7 Hz is
+  *modern* Source's default tickrate — the exact trap `game_runtime.md` flags. If the pre-tick
+  finding holds, retail's air-accel really is frame-rate dependent, and a fixed-step accumulator is a
+  **divergence** — defensible, but one needing an owner call and a `decisions.md` entry, not the
+  faithful baseline. Settle which before porting: it decides whether the target is "reproduce the fps
+  dependence" or "pin the tick". Sequenced **in
   the playable path (PP4)** by owner call (`decisions.md` 2026-07-26 cont. 5) — the tutorial is
   played with VtMB feel, not UE feel. Open RE it needs: **RE22** (the ducked hull's dimensions —
   `IN_DUCK` is in the user command with nothing sizing it) and **RE21** (where usercmd
@@ -806,6 +834,37 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   for Use Defaults — over three columns (Key/Button, Alternate, Gamepad) and filters its key
   selector against `FElysiumReservedKeys` (`input-architecture.md`).
   *Deps:* 8.6, 10.6 (input path built).
+- [ ] **8.11 The player body** *(design: `camera-view-modes.md` → "Player mesh, fade and
+  first-person rendering")* — the PC's own skeletal body: the thing 11.7's camera already solves for
+  and nothing draws. `FElysiumPlayer::OnRuntimeModelChanged` is a deliberate no-op today ("the
+  player's model is the pawn"), so the entity chain's animating half is unused on the one character
+  that is always on screen. Two carve-outs, sequenced apart because they need different things:
+  - **a. The body** *(PP2)* — the mesh stands, animates under choreography, and fades on the band.
+    Built on 8.5's machinery — glTFRuntime, a skeletal visual, bank retarget by bone name — with the
+    pawn as the body the entity places. **Model identity is data, not a constant:**
+    `vdata/system/clandoc000.txt` (on disk since PL5b) carries `M_Body0..5`/`F_Body0..5` per clan —
+    7 clans × 2 sexes × 6 armour slots whose top two repeat the tier-3 suit, **56 distinct `.mdl`
+    over 84 slots** — plus the `M_Hands`/`F_Hands` first-person viewmodels the patch restored (PL14).
+    All 56 are exported (**PL13 [x]**) as ordinary `npc_index.json` entries, so the selection is
+    `clandoc` path → index `model` → stem → the 8.5 loader; **none carries a flex rig**, so the PC
+    body has no face to drive.
+    Chargen (9.4) supplies clan + sex; a cvar default covers the path ahead of it. Visibility is
+    `CAM_IsThirdPerson` as 11.7 defines it (true from the blend's first frame, true under a scripted
+    camera), and the fade band is already solved — `UElysiumCameraComponent::ModelAlpha()` — needing
+    **dithered or masked** opacity on the character material, never translucency, which would take
+    the body off the opaque path and out of Lumen. **Choreography is why this is PP2 and not later:**
+    `logic_choreographed_scene` carries `MaleAnim`/`FemaleAnim`
+    (`m_iszAnimSetForMalePlayer`/`ForFemalePlayer`, 25 uses each) and binds `Player`/`!player` as an
+    actor, so the theatre's embrace + trial animate the PC on camera (`choreographed_scenes.md`).
+    *Deps:* 8.2 [x], 8.5 [x], 11.7 [x], PL13 [x]; 9.4 for real identity.
+  - **b. Locomotion** *(PP4, beside 4.7)* — idle/walk/run/crouch driven by movement state.
+    `UElysiumNpcAnimInstance` is a two-sequence idle crossfade; a player locomotion blend is new
+    work, and the states it blends between are the Source movement port's, so it lands beside 4.7
+    rather than ahead of it. *Deps:* 8.11a, 4.7.
+  *Acceptance (a):* on `sp_tutorial_1`, `togglecamera` shows the PC's own clan model on the boom,
+  dissolving in across `cam_fadeend`→`cam_fadestart` and culled at weight 0; the theatre's scenes
+  animate it. *(b):* the gait matches the mover's reported state through a walk/run/crouch pass, and
+  a `test.bat Play` beat asserts it.
 
 **Slice acceptance** *(M5 criterion)*: New Game starts from a real, modern menu that is legible
 and correctly proportioned from 1080p to 4K and at 21:9; the HUD and the tutorial's popup signs
@@ -994,8 +1053,9 @@ dialogue, scripted flow, quests, save/load included.
     mappings and `bEnableLegacyInputScales`; contexts replace VtMB's `CClientMode*` split
     (`IMC_Dialogue`/`_Menu`/`_Cinematic`), with `bIgnoreAllPressedKeysUntilRelease` settling the
     held-input-into-conversation question on our side of the port.
-  - **c. Reserved keys** — console back to `` ` `` (VtMB's own `toggleconsole` key; frees F10 for
-    `snapshot`), Cog's shell shortcuts to `Ctrl+F1`–`Ctrl+F4`, all other dev keys on
+  - **c. Reserved keys** — console on `` ` `` (VtMB's own `toggleconsole` key; frees F10 for
+    `snapshot`) **plus `F7`** for layouts with no `` ` `` left of `1`, Cog's shell shortcuts to
+    `Ctrl+F1`–`Ctrl+F4`, all other dev keys on
     `BindDebugKey`. Enforced by a **Substrate-tier test** over every generated IMC, not by
     convention; `elysium.input.ReserveDebugKeys 0` A/Bs it in dev builds.
   - **d. `UElysiumMouseSensitivity` modifier** — reads `sensitivity`/`m_pitch`/`m_yaw`/`m_filter`
@@ -1078,8 +1138,8 @@ Steps are ordered so each compiles, ships and is observable alone. **11.4 was th
   (`IElysiumEmbodiment`/`IElysiumAudio`/`IElysiumTravel`/`IElysiumPresenter`) injected into
   `FElysiumEntityWorld` at construction; `AElysiumMapActor` implements the first three, and every
   `Cast<AElysiumMapActor>` and `GetWorld()->GetFirstPlayerController()` under the substrate is gone.
-  `IElysiumPresenter` has **no production implementation until 11.8** — the fade/sign/dialogue state
-  stays on the world for `AElysiumHUD` to poll and the seam is announce-only, non-null in a test.
+  `IElysiumPresenter` had no production implementation at the time and was announce-only, non-null
+  in a test; 11.8's `UElysiumPresentationSubsystem` is the fourth.
   A recording stub (`Private/Tests/ElysiumTestServices.h`) implements all four.
   *Acceptance met:* `Elysium.Substrate.WorldServices` runs a tutorial-shaped `logic_auto` chain end to
   end against the stub with no RHI, no actors and no `tools/out`, then re-runs the same defs with a
@@ -1194,20 +1254,42 @@ Steps are ordered so each compiles, ships and is observable alone. **11.4 was th
   anchors against live entities and bodies — `Bone:`/`Attachment:` through a new
   `FElysiumEntity::GetSkeletalBody()` — refreshed in the post-move pass. The substrate reaches it
   through `IElysiumEmbodiment`, **not** `IElysiumPresenter`: the camera is part of the player's body
-  and the presenter has no implementation until 11.8 (`runtime-architecture.md` §9 corrected).
+  and the presenter carries what is put on *screen*, not what the player's body does
+  (`runtime-architecture.md` §9 corrected).
   *Acceptance met:* `Elysium.Substrate.Camera` (0→1 in 0.5 s, frame-rate-independent, time-scaled,
   symmetric resume mid-blend, the priority order, the shot stack) and `Elysium.Substrate.CameraShots`
   (the shot-file read against the how-to) pass with no RHI; in the built game `togglecamera` reaches
   the full 215.9 cm boom in the open and clips to 24 cm against a wall, `cam_idealdist`/`cam_yaw`
   retune it live, and `SetCamera("dialogdefault")` frames Jack's head bone at the file's FOV 40 while
   `RemoveCamera` ramps it back out. As-built: `roadmap-archive.md`. *Deps:* 11.6. *Feeds:* 12.x.
-- [ ] **11.8 Presentation seam** *(S8)* — `UElysiumPresentationSubsystem` publishing
-  `FElysiumViewState` once per frame plus discrete delegates; `AElysiumHUD`, the dialogue box and the
-  8.6 screens re-based onto it. The front-end gating (`IsMenuUp()` checks scattered through the HUD)
-  becomes one rule in the publisher — including the case it currently gets wrong: the tick gate skips
-  the dialogue *reconcile* rather than taking an open box down, so a conversation already on screen
-  when the pause menu opens draws through it. *Acceptance:* no widget references `FElysiumEntityWorld`; the
-  HUD renders from a hand-built view state in a test. *Deps:* 11.3. *Feeds:* 8.9, 9.2.
+- [x] **11.8 Presentation seam** *(S8)* — `UElysiumPresentationSubsystem` (world-scoped) rebuilds
+  `FElysiumViewState` in **step 9** of the frame (a declared `TG_PostUpdateWork` tick function, after
+  both gameplay passes, `bTickEvenWhenPaused` — a held world still has to publish the *suppression*)
+  and broadcasts the discrete delegates plus `OnViewPublished`. The state and its rules are plain C++
+  in `Public/ElysiumViewState.h`, like `ElysiumAppState.h`: `ShowsPlayerSurface`, `ResolveReticle`
+  and `ReconcileDialogue` are total functions over the struct, so the whole set is asserted with no
+  world, no HUD and no viewport. It is also the production **`IElysiumPresenter`** (11.2's fourth
+  service, null until now) — and the split that fell out is the load-bearing one: **continuous state
+  is sampled, discrete moments are announced.** The fade's alpha, the panel's fade-in ramp, the aimed
+  use icon and the meters are derived from the game clock and sampled off the world each pass; a fade
+  *starting* or a conversation opening has no clock to read, so the substrate announces it and the
+  publisher drains the announcement after the state is in place — a diff cannot tell a conversation
+  that closed and reopened in one frame from one that never moved. The fade/sign/dialogue state stays
+  on `FElysiumEntityWorld`, because each is world state with the map epoch's lifetime and 11.9 saves
+  it. `AElysiumHUD` **no longer ticks at all**: it reconciles the retained surfaces (the Slate box,
+  the sign's input scope) from `OnViewPublished` and draws the rest from `View()`, and its dialogue
+  pick routes back out through the presenter rather than into the world. The scattered `IsMenuUp()`
+  gates became **one rule** — `App == Playing && !bMenuOpen`, asking both writers because
+  `elysium.menu` raises a screen without moving the app state — and that rule is a rule about
+  *publishing*, which is what fixes the case the polled HUD got wrong: a conversation on screen when
+  the pause menu opens is republished as closed, so the box comes down instead of drawing through.
+  *Acceptance met:* no widget (and no HUD path) references `FElysiumEntityWorld`;
+  `Elysium.Substrate.ViewState` renders every rule off a hand-built state with no RHI, and
+  `Elysium.Substrate.FrameOrder` reads step 9 off the class defaults; in the built game
+  `elysium.viewstate` reports the live surface, the sign panel / dialogue box / `env_fade` quad /
+  crosshair / `+use` context cursor all draw off the published state, and opening the pause menu over
+  Jack's conversation takes the box *and* the panel down and closing it restores both. As-built:
+  `roadmap-archive.md`. *Deps:* 11.3. *Feeds:* 8.9, 9.2.
 - [ ] **11.9 Save/load** *(= 9.5, on this spine)* — `save-architecture.md` in full: the
   `UElysiumSaveGame` shell over a versioned compressed payload, the four blocks, `EElysiumField::Save`
   on the class-chain field tables (enumeration is the R2 walk, matched by name, zero-omitted), the
@@ -1321,6 +1403,8 @@ retail end to end, and `test.bat Play` proves it headlessly.
 | PL6 | Texlight merge in exporter | 3.4 |
 | PL11 | Remove the dead Lumen-card path the bake superseded (found by 0.9): `export_all.py`'s `bake_cards`/`--no-cards` calls a `cards.bat` that no longer exists and prints a "skipped" line every run; `ElysiumCardGen.cpp` (`ELYSIUM_WITH_CARDGEN`, `elysium.cards.probe`) still builds into editor targets. Nothing depends on either | 0.9 |
 | PL12 | Mirror `particles/*.txt` (**1,594**) + the `particles/*.tga` sprite set (**309**) verbatim → `out/particles/` — patch-first, wired into `export_all.py`. Weather is the immediate consumer (33 rain definitions) but the set is engine-wide: fire, muzzle flashes, disciplines, the menu background. Also bake the top-down occlusion height map per map from `<map>.obj` + `worldspawn`'s `world_mins`/`world_maxs` (1024², ~11 cm/texel on `sm_hub_1`). Format: `weather.md` | 7.9 |
+| PL13 ✅ | **Export the PC models.** A second seed, not a second path: `pc_models_from_clandoc` reads `out/vdata/system/clandoc000.txt`'s indexed `M_Body0..5`/`F_Body0..5` — 7 `Player_*` clans × 2 sexes × 6 armour slots = **84 slots → 56 distinct `.mdl`** (each clan's top two repeat its tier-3 suit) — and `main()` unions it with `npc_models_from_ents`, so the exported set cannot drift from the table 8.11a selects through. Only the *indexed* keys count: the un-indexed `M_Body`/`F_Body` of the human/Society-of-Leopold templates name NPC models, and the `mp-*`/`unused*` templates repeat the playable paths. All 56 resolve; the install's other 3 `models/character/pc/**.mdl` are named nowhere. Result: **157 characters (101 NPCs + 56 PC bodies), 67 banks, 721 MB** — the bodies are ordinary index entries (63–106 bones, 3–5 own clips, ~1,440 resolved, ~786 KB each; 45 MB total), matched back to a clan slot through each entry's own `model` path, and the banks confirm the prediction: only **3** are new, the per-clan run-cycle aggregators `run{brujah,malknos,otherspc}_pcidles_allsequences`. **Finding: no PC body carries a flex rig** — 0 of all 59, and 0 of the 21 `models/hands/` viewmodels — so the player has no morph targets and no `facial/` sidecar, which is 12.3/12.5's problem to answer for the PC (`facial_animation.md`). Two parser defects fell out and are fixed: `kv.py` and `ElysiumKeyValues.h` both mis-read a quoted value carrying `\"` (`clandoc000.txt`'s Malkavian description), and `kv.py` also mis-read one spanning lines — either shifts every following key/value pair by one, so the next `{` is taken as a value and the block nesting collapses. Mechanised as **`Elysium.Content.PlayerBodies`** | 8.11 |
+| PL14 | **Export the first-person hand viewmodels.** `clandoc000.txt` also names `M_Hands`/`F_Hands` per clan — the patch-restored per-clan viewmodels under `models/hands/**` (21 in the merged install) — and PL13 deliberately left them out: they are the first-person half of the body and 8.11a's acceptance is the third-person boom. Same seed function, one more key pair; none carries a flex rig | 8.11a |
 | PL7 | Sidecar space fixes surfaced by the audit — **none (0.4: all sidecars already Unreal cm)** | 0.4 [x] |
 | PL9 ✅ | Mirror the choreographed-scene files + `.lip` phoneme files → `out/scenes/`, `out/lip/` — `UE_extract_scenes.py`, patch-first, verbatim, `sound/` prefix stripped so `SceneFile` reads back 1:1; **5,444 `.vcd`** (4.5 MB) + **7,136 `.lip`** (16.8 MB), wired into `export_all.py` (`--no-scenes`) with a `SceneFile` cross-check over the exported `.ents`. The `.lip` *format* stays RE20 [x] | 12.1, 12.5 |
 | PL10 ✅ | Facial data in the NPC export — the flex chunks (RE20 [x]) decoded by **`mdl_skel`** (one decoder, now shared with `probe_facial.py`) into glb **morph targets** in each rigged NPC's own glb, plus `out/npc/facial/<stem>.json` carrying what a morph target cannot hold: the 44 controllers, the 60 RPN rules, each morph's four-value ramp and `mstudiomouth_t`. **78 of 101 NPCs rigged, 4,015 morph targets**, +0.33–0.53 MB per rigged glb (manifest v3; the manifest names the sidecar). The unit-vector table comes out of the user's own `StudioRender.dll` at export time (`mdl_skel.read_anorms`; `probe_facial.py --anorms` still dumps it for RE) — game-derived, so regenerated, never committed; without it the export ships meshes and skips faces rather than baking wrong deltas. Two corrections to the plan: the unit is the flex **record**, not the flexdesc (a flexdesc splits into two ramps — 53 targets from 45 flexdescs), and a morph **spans materials**, so it lands as one same-named piece per primitive and the consumer must load with `MorphTargetsDuplicateStrategy::Merge` (12.3; 8.5's loader still takes the default `Ignore`). No eyeball chunk exists to export. `UE_extract_scenes.py` also mirrors the 249 `expressions/*.txt` → `out/expressions/`. Full shape: `docs/facial_animation.md` → "The offline export" | 12.3, 12.4, 12.5 |
