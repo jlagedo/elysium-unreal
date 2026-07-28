@@ -130,3 +130,9 @@ FSlateFontInfo FElysiumUIFontLibrary::Font(EElysiumFontRole Role, EElysiumFontWe
 	// size. Visibly wrong type is the intended signal — it says "run the font generator".
 	return FCoreStyle::GetDefaultFontStyle(TEXT("Regular"), Size);
 }
+
+FElysiumUIFontLibrary& ElysiumUIFonts()
+{
+	static FElysiumUIFontLibrary Library;
+	return Library;
+}

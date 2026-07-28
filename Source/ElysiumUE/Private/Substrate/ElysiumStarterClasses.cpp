@@ -650,11 +650,19 @@ static FElysiumClassRegistrar GRegInfoLandmark(
 	[](FElysiumClassDesc& /*D*/) { /* bodiless anchor — placement + OnEnterMapHere driven by the map actor */ });
 
 // trigger_changelevel — CBaseTrigger leaf (Enable/Disable/Toggle inherited via the chain). `map` +
-// `landmark` are its own keyfields; ChangeLevel is the scripted/forced transition input.
+// `landmark` are its own keyfields; the scripted/forced transition input is **ChangeNow**, which is
+// the name the content actually wires: 88 outputs across the exported maps name `ChangeNow` and not
+// one names `ChangeLevel`. Genesis's exit is one of them (`firetrans` -> `boogieout,ChangeNow`, the
+// wire the chargen wizard's `teleport_player firetrans` lands on). `ChangeLevel` stays bound to the
+// same handler because our own ChangeMap native emits it.
 static FElysiumClassRegistrar GRegChangeLevel(
 	TEXT("trigger_changelevel"), FName(TEXT("CBaseTrigger")), &MakeChangeLevel,
 	[](FElysiumClassDesc& D)
 	{
+		D.Input(TEXT("ChangeNow"), [](FElysiumEntity& E, const FElysiumInputArgs&)
+		{
+			static_cast<FElysiumChangeLevel&>(E).ForceChangeLevel();
+		});
 		D.Input(TEXT("ChangeLevel"), [](FElysiumEntity& E, const FElysiumInputArgs&)
 		{
 			static_cast<FElysiumChangeLevel&>(E).ForceChangeLevel();

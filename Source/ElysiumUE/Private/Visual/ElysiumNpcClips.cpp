@@ -193,6 +193,42 @@ bool FElysiumNpcIndex::Load(FString& OutError)
 	}
 	ReadIndexGroup(Root, TEXT("npcs"), Npcs);
 	ReadIndexGroup(Root, TEXT("banks"), Banks);
+
+	Cinematics.Reset();
+	const TSharedPtr<FJsonObject>* CinObj = nullptr;
+	if (Root->TryGetObjectField(TEXT("cinematics"), CinObj) && CinObj != nullptr)
+	{
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*CinObj)->Values)
+		{
+			const TSharedPtr<FJsonObject>* Entry = nullptr;
+			if (!Pair.Value->TryGetObject(Entry) || Entry == nullptr)
+			{
+				continue;
+			}
+			FElysiumCinematicSet Set;
+			(*Entry)->TryGetStringField(TEXT("stem"), Set.Stem);
+			const TArray<TSharedPtr<FJsonValue>>* Roots = nullptr;
+			if ((*Entry)->TryGetArrayField(TEXT("roots"), Roots) && Roots != nullptr)
+			{
+				for (const TSharedPtr<FJsonValue>& RootVal : *Roots)
+				{
+					const TSharedPtr<FJsonObject>* R = nullptr;
+					if (!RootVal->TryGetObject(R) || R == nullptr)
+					{
+						continue;
+					}
+					FString RootName, Bank;
+					if ((*R)->TryGetStringField(TEXT("root"), RootName)
+						&& (*R)->TryGetStringField(TEXT("bank"), Bank))
+					{
+						Set.Roots.Add(RootName.ToLower(), Bank);
+					}
+				}
+			}
+			Cinematics.Add(Pair.Key.ToLower(), MoveTemp(Set));
+		}
+	}
+
 	if (Npcs.IsEmpty())
 	{
 		OutError = TEXT("index carries no NPCs (re-run: python tools/npc_export.py --reindex)");
@@ -205,4 +241,32 @@ FString FElysiumNpcIndex::BankGlbPath(const FString& BankStem) const
 {
 	const FElysiumNpcIndexEntry* E = Banks.Find(BankStem);
 	return E ? FElysiumContentPaths::NpcBankGlb(E->Glb) : FString();
+}
+
+FString FElysiumCinematicSet::BankForRoot(const FString& Root) const
+{
+	if (const FString* Exact = Roots.Find(Root.ToLower()))
+	{
+		return *Exact;
+	}
+	// A scene naming a root this model does not carry, or naming none: take the first. A
+	// single-root cinematic is exported unsuffixed and has exactly one entry.
+	for (const TPair<FString, FString>& Pair : Roots)
+	{
+		return Pair.Value;
+	}
+	return FString();
+}
+
+FString FElysiumNpcIndex::CinematicBank(const FString& ModelPath, const FString& BoneRoot) const
+{
+	FString Key = ModelPath;
+	Key.ReplaceInline(TEXT("\\"), TEXT("/"));
+	Key.ToLowerInline();
+	if (!Key.StartsWith(TEXT("models/")))
+	{
+		Key = TEXT("models/") + Key;
+	}
+	const FElysiumCinematicSet* Set = Cinematics.Find(Key);
+	return Set ? Set->BankForRoot(BoneRoot) : FString();
 }

@@ -67,6 +67,16 @@ struct FElysiumContentPaths
 	static FString SoundDir() { return Root() / TEXT("sound"); }
 	static FString SoundFile(const FString& Rel) { return SoundDir() / Rel; }
 
+	// Choreographed scenes and their phoneme sidecars (PL9), mirrored verbatim from the install by
+	// tools/UE_extract_scenes.py. Both trees mirror VtMB's `sound/` layout with that prefix already
+	// stripped, so a `logic_choreographed_scene`'s SceneFile ("sound/Character/dlg/.../x.vcd") reads
+	// back as scenes/Character/dlg/.../x.vcd. Rel is that stripped path — run a raw keyvalue through
+	// ElysiumScene::NormalizeSceneRel first, which also folds separators and case.
+	static FString ScenesDir() { return Root() / TEXT("scenes"); }
+	static FString SceneFile(const FString& Rel) { return ScenesDir() / Rel; }
+	static FString LipDir() { return Root() / TEXT("lip"); }
+	static FString LipFile(const FString& Rel) { return LipDir() / Rel; }
+
 	// Scripting (P5). VtMB's level scripts + dialogue are game-global loose plain-text,
 	// mirrored verbatim under out/scripts and out/dlg by tools/UE_extract_scripts.py. A
 	// worldspawn `levelscript` value (e.g. "tutorial") names the hub module, which lives at

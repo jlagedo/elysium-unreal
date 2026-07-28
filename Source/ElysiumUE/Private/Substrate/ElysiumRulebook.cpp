@@ -44,15 +44,11 @@ namespace
 		return Block;
 	}
 
-	FString Fold(const FString& S) { return S.ToLower(); }
-
-	// The KV reader lowercases keys, so a block key is already folded; a *value* used as a lookup
-	// key (a TemplateName, a quest Title) is not.
 	void Index(TMap<FString, int32>& Map, const FString& Key, int32 Value)
 	{
 		if (!Key.IsEmpty())
 		{
-			Map.Add(Fold(Key), Value);
+			Map.Add(ElysiumFold(Key), Value);
 		}
 	}
 
@@ -271,7 +267,7 @@ float FElysiumRuleTable::Lookup(int32 Key, float Def) const
 
 const FElysiumStat* FElysiumStatContainer::Find(const FString& InName) const
 {
-	const int32* Idx = ByName.Find(Fold(InName));
+	const int32* Idx = ByName.Find(ElysiumFold(InName));
 	return Idx ? &Stats[*Idx] : nullptr;
 }
 
@@ -282,7 +278,7 @@ const FElysiumStat* FElysiumStatContainer::At(int32 Index) const
 
 int32 FElysiumStatContainer::IndexOf(const FString& InName) const
 {
-	const int32* Idx = ByName.Find(Fold(InName));
+	const int32* Idx = ByName.Find(ElysiumFold(InName));
 	return Idx ? *Idx : INDEX_NONE;
 }
 
@@ -327,6 +323,17 @@ void FElysiumStatContainer::Load(const FKvNode& Node, const FString& BlockName)
 		Stat.MinSell = N.Int(TEXT("MinSell"), Stat.Min);
 		Stat.MaxBuy = N.Int(TEXT("MaxBuy"), Stat.Max);
 
+		// The sheet's detail panel: the trait blurb, then the per-rating pair. `HelpTextH%d` /
+		// `HelpTextL%d` are 1-based and only the disciplines author them, so both lists are probed
+		// rather than sized — an absent rating is an empty entry, never a shift.
+		Stat.HelpText = N.Str(TEXT("HelpText"), FString());
+		Stat.HelpText2 = N.Str(TEXT("HelpText2"), FString());
+		for (int32 Level = 1; Level <= 5; ++Level)
+		{
+			Stat.LevelHeadings.Add(N.Str(*FString::Printf(TEXT("HelpTextH%d"), Level), FString()));
+			Stat.LevelDetails.Add(N.Str(*FString::Printf(TEXT("HelpTextL%d"), Level), FString()));
+		}
+
 		Stat.NameMapping = N.Str(TEXT("NameMapping"), FString());
 		Stat.NameFunc = N.Str(TEXT("NameFunc"), FString());
 		Stat.bDisabled = N.Bool(TEXT("Disabled"), false);
@@ -342,7 +349,7 @@ void FElysiumStatContainer::Load(const FKvNode& Node, const FString& BlockName)
 			{
 				FElysiumRuleTable Table;
 				Table.Load(*Sub.Value);
-				Stat.Tables.Add(Fold(Table.InternalName), MoveTemp(Table));
+				Stat.Tables.Add(ElysiumFold(Table.InternalName), MoveTemp(Table));
 			}
 		}
 
@@ -474,7 +481,7 @@ bool FElysiumFeatTable::Load(FString& OutError)
 			{
 				FElysiumRuleTable Table;
 				Table.Load(*Sub.Value);
-				Feat.Tables.Add(Fold(Table.InternalName), MoveTemp(Table));
+				Feat.Tables.Add(ElysiumFold(Table.InternalName), MoveTemp(Table));
 			}
 		}
 
@@ -492,7 +499,7 @@ bool FElysiumFeatTable::Load(FString& OutError)
 
 const FElysiumFeat* FElysiumFeatTable::Find(const FString& InName) const
 {
-	const int32* Idx = ByName.Find(Fold(InName));
+	const int32* Idx = ByName.Find(ElysiumFold(InName));
 	return Idx ? &Feats[*Idx] : nullptr;
 }
 
@@ -597,8 +604,8 @@ bool FElysiumRules::Load(FString& OutError)
 
 const FString* FElysiumRules::Raw(const TCHAR* Block, const TCHAR* Key) const
 {
-	const TMap<FString, FString>* B = Blocks.Find(Fold(Block));
-	return B ? B->Find(Fold(Key)) : nullptr;
+	const TMap<FString, FString>* B = Blocks.Find(ElysiumFold(Block));
+	return B ? B->Find(ElysiumFold(Key)) : nullptr;
 }
 
 bool FElysiumRules::Has(const TCHAR* Block, const TCHAR* Key) const
@@ -626,7 +633,7 @@ FString FElysiumRules::Str(const TCHAR* Block, const TCHAR* Key, const FString& 
 
 const FElysiumRuleTable* FElysiumRules::Table(const FString& InName) const
 {
-	const int32* Idx = TableByName.Find(Fold(InName));
+	const int32* Idx = TableByName.Find(ElysiumFold(InName));
 	return Idx ? &Tables[*Idx] : nullptr;
 }
 
@@ -843,7 +850,7 @@ bool FElysiumTraitEffects::Load(FString& OutError)
 
 const FElysiumTraitEffectGroup* FElysiumTraitEffects::Find(const FString& InName) const
 {
-	const int32* Idx = ByName.Find(Fold(InName));
+	const int32* Idx = ByName.Find(ElysiumFold(InName));
 	return Idx ? &Groups[*Idx] : nullptr;
 }
 
@@ -860,7 +867,8 @@ int32 FElysiumTraitEffects::NumEffects() const
 
 namespace
 {
-	void LoadTraitBlock(const FKvNode* Node, TMap<FString, int32>& Out)
+	void LoadTraitBlock(const FKvNode* Node, TMap<FString, int32>& Out,
+		TMap<FString, FString>* OutText = nullptr)
 	{
 		if (Node == nullptr)
 		{
@@ -871,6 +879,12 @@ namespace
 		for (const TPair<FString, FString>& Pair : Node->Pairs)
 		{
 			Out.Add(Pair.Key, FCString::Atoi(*Pair.Value));
+			// A symbolic value would otherwise vanish into a 0 — the Attributes block carries six of
+			// them, including the two trait ORDERS that decide the chargen point pools.
+			if (OutText && !Pair.Value.IsNumeric())
+			{
+				OutText->Add(Pair.Key, Pair.Value);
+			}
 		}
 	}
 
@@ -894,11 +908,11 @@ namespace
 				Out.General.Add(Pair.Key, Pair.Value);
 			}
 		}
-		LoadTraitBlock(N.Child(TEXT("Attributes")), Out.Attributes);
-		LoadTraitBlock(N.Child(TEXT("Abilities")), Out.Abilities);
-		LoadTraitBlock(N.Child(TEXT("Disciplines")), Out.Disciplines);
-		LoadTraitBlock(N.Child(TEXT("Numina")), Out.Numina);
-		LoadTraitBlock(N.Child(TEXT("Resistances")), Out.Resistances);
+		LoadTraitBlock(N.Child(TEXT("Attributes")), Out.Attributes, &Out.TraitText);
+		LoadTraitBlock(N.Child(TEXT("Abilities")), Out.Abilities, &Out.TraitText);
+		LoadTraitBlock(N.Child(TEXT("Disciplines")), Out.Disciplines, &Out.TraitText);
+		LoadTraitBlock(N.Child(TEXT("Numina")), Out.Numina, &Out.TraitText);
+		LoadTraitBlock(N.Child(TEXT("Resistances")), Out.Resistances, &Out.TraitText);
 
 		if (const FKvNode* Reactions = N.Child(TEXT("Reactions")))
 		{
@@ -947,29 +961,35 @@ namespace
 
 bool FElysiumClanTemplate::HasGeneral(const TCHAR* Key) const
 {
-	return General.Contains(Fold(Key));
+	return General.Contains(ElysiumFold(Key));
 }
 
 FString FElysiumClanTemplate::GeneralStr(const TCHAR* Key, const FString& Def) const
 {
-	const FString* V = General.Find(Fold(Key));
+	const FString* V = General.Find(ElysiumFold(Key));
 	return V ? *V : Def;
 }
 
 int32 FElysiumClanTemplate::GeneralInt(const TCHAR* Key, int32 Def) const
 {
-	const FString* V = General.Find(Fold(Key));
+	const FString* V = General.Find(ElysiumFold(Key));
 	return V ? FCString::Atoi(**V) : Def;
 }
 
 const int32* FElysiumClanTemplate::Trait(const FString& InName) const
 {
-	const FString Key = Fold(InName);
+	const FString Key = ElysiumFold(InName);
 	if (const int32* V = Attributes.Find(Key)) { return V; }
 	if (const int32* V = Abilities.Find(Key)) { return V; }
 	if (const int32* V = Disciplines.Find(Key)) { return V; }
 	if (const int32* V = Numina.Find(Key)) { return V; }
 	return Resistances.Find(Key);
+}
+
+FString FElysiumClanTemplate::TraitStr(const FString& InName, const FString& Def) const
+{
+	const FString* V = TraitText.Find(ElysiumFold(InName));
+	return V ? *V : Def;
 }
 
 bool FElysiumClanTable::Load(FString& OutError)
@@ -1023,7 +1043,7 @@ bool FElysiumClanTable::Load(FString& OutError)
 
 const FElysiumClanTemplate* FElysiumClanTable::Find(const FString& TemplateName) const
 {
-	const FString Key = Fold(TemplateName);
+	const FString Key = ElysiumFold(TemplateName);
 	if (const int32* Idx = ClanByName.Find(Key)) { return &Clans[*Idx]; }
 	if (const int32* Idx = NpcByName.Find(Key)) { return &NpcTemplates[*Idx]; }
 	return nullptr;
@@ -1038,9 +1058,9 @@ void FElysiumClanTable::ParentChain(const FString& TemplateName, TArray<FString>
 {
 	TSet<FString> Seen;
 	const FElysiumClanTemplate* Node = Find(TemplateName);
-	while (Node != nullptr && !Seen.Contains(Fold(Node->TemplateName)))
+	while (Node != nullptr && !Seen.Contains(ElysiumFold(Node->TemplateName)))
 	{
-		Seen.Add(Fold(Node->TemplateName));
+		Seen.Add(ElysiumFold(Node->TemplateName));
 		Out.Add(Node->TemplateName);
 		if (Node->ParentTemplateName.IsEmpty())
 		{
@@ -1048,6 +1068,31 @@ void FElysiumClanTable::ParentChain(const FString& TemplateName, TArray<FString>
 		}
 		Node = Find(Node->ParentTemplateName);
 	}
+}
+
+FString FElysiumClanTable::PlayerBodyStem(int32 ClanIndex, bool bFemale, int32 ArmorSlot) const
+{
+	// Addressed by INDEX rather than by a `Player_<name>` string: the clandoc's own template order
+	// is the engine's clan index, so the table already holds the mapping and nothing here has to
+	// know how a clan is spelled.
+	const FElysiumClanTemplate* Row = Clan(ClanIndex);
+	if (Row == nullptr || !Row->IsPlayable())
+	{
+		return FString();
+	}
+	FElysiumClanTemplate Template;
+	if (!Resolve(Row->TemplateName, Template))
+	{
+		return FString();
+	}
+	const FString Key = FString::Printf(TEXT("%s_Body%d"), bFemale ? TEXT("F") : TEXT("M"), ArmorSlot);
+	const FString Model = Template.GeneralStr(*Key);
+	if (Model.IsEmpty())
+	{
+		return FString();
+	}
+	// The clan table writes Windows separators; the export keys by the base filename alone.
+	return FPaths::GetBaseFilename(Model.Replace(TEXT("\\"), TEXT("/"))).ToLower();
 }
 
 bool FElysiumClanTable::Resolve(const FString& TemplateName, FElysiumClanTemplate& Out) const
@@ -1084,6 +1129,10 @@ bool FElysiumClanTable::Resolve(const FString& TemplateName, FElysiumClanTemplat
 		for (const TPair<FString, float>& Pair : Node->LoiterActivities)
 		{
 			Out.LoiterActivities.Add(Pair.Key, Pair.Value);
+		}
+		for (const TPair<FString, FString>& Pair : Node->TraitText)
+		{
+			Out.TraitText.Add(Pair.Key, Pair.Value);
 		}
 		if (!Node->Name.IsEmpty()) { Out.Name = Node->Name; }
 		if (!Node->Description.IsEmpty()) { Out.Description = Node->Description; }
@@ -1157,7 +1206,7 @@ bool FElysiumHistoryTable::Load(FString& OutError)
 
 const FElysiumHistory* FElysiumHistoryTable::Find(const FString& InName) const
 {
-	const int32* Idx = ByName.Find(Fold(InName));
+	const int32* Idx = ByName.Find(ElysiumFold(InName));
 	return Idx ? &Rows[*Idx] : nullptr;
 }
 
@@ -1281,14 +1330,14 @@ void FElysiumQuestTables::Reindex()
 	{
 		for (int32 q = 0; q < Quests[t].Num(); ++q)
 		{
-			ByTitle.Add(Fold(Quests[t][q].Title.TrimStartAndEnd()), FElysiumQuestRef{ t, q });
+			ByTitle.Add(ElysiumFold(Quests[t][q].Title.TrimStartAndEnd()), FElysiumQuestRef{ t, q });
 		}
 	}
 }
 
 const FElysiumQuest* FElysiumQuestTables::Find(const FString& Title, FElysiumQuestRef* OutRef) const
 {
-	const FElysiumQuestRef* Ref = ByTitle.Find(Fold(Title.TrimStartAndEnd()));
+	const FElysiumQuestRef* Ref = ByTitle.Find(ElysiumFold(Title.TrimStartAndEnd()));
 	if (Ref == nullptr)
 	{
 		return nullptr;
@@ -1370,7 +1419,7 @@ bool FElysiumExperienceTable::Load(FString& OutError)
 		FElysiumExperienceEntry Entry;
 		if (ParseRow(Line, Entry))
 		{
-			ByKey.Add(Fold(Entry.Key), Rows.Num());
+			ByKey.Add(ElysiumFold(Entry.Key), Rows.Num());
 			Rows.Add(MoveTemp(Entry));
 		}
 	}
@@ -1385,7 +1434,7 @@ bool FElysiumExperienceTable::Load(FString& OutError)
 
 const FElysiumExperienceEntry* FElysiumExperienceTable::Find(const FString& Key) const
 {
-	const int32* Idx = ByKey.Find(Fold(Key));
+	const int32* Idx = ByKey.Find(ElysiumFold(Key));
 	return Idx ? &Rows[*Idx] : nullptr;
 }
 
@@ -1516,7 +1565,7 @@ bool FElysiumLevelingTemplates::Load(FString& OutError)
 
 const FElysiumLevelingTemplate* FElysiumLevelingTemplates::Find(const FString& InName) const
 {
-	const int32* Idx = ByName.Find(Fold(InName));
+	const int32* Idx = ByName.Find(ElysiumFold(InName));
 	return Idx ? &Templates[*Idx] : nullptr;
 }
 
@@ -1524,5 +1573,454 @@ int32 FElysiumLevelingTemplates::NumSteps() const
 {
 	int32 N = 0;
 	for (const FElysiumLevelingTemplate& T : Templates) { N += T.NumSteps(); }
+	return N;
+}
+
+// ================================================================================================
+// 13. charcreatewizard.txt
+// ================================================================================================
+
+namespace
+{
+	FElysiumWizRegion ReadRegion(const FKvNode* Block, const TCHAR* Key)
+	{
+		FElysiumWizRegion R;
+		const FKvNode* N = Block ? Block->Child(Key) : nullptr;
+		if (N == nullptr)
+		{
+			return R;
+		}
+		R.X = N->Int(TEXT("X"), 0);
+		R.Y = N->Int(TEXT("Y"), 0);
+		R.Width = N->Int(TEXT("Width"), 0);
+		R.Height = N->Int(TEXT("Height"), 0);
+		R.bAuthored = true;
+		return R;
+	}
+
+	// Every `Trait_Prereq` block directly under Block, in file order. An absent bound stays at the
+	// unbounded sentinel rather than collapsing to 0, which would silently exclude a zero tally.
+	void ReadPrereqs(const FKvNode* Block, TArray<FElysiumWizPrereq>& Out)
+	{
+		if (Block == nullptr)
+		{
+			return;
+		}
+		for (const TPair<FString, TSharedPtr<FKvNode>>& Kid : Block->Kids)
+		{
+			if (Kid.Key != TEXT("trait_prereq") || !Kid.Value.IsValid())
+			{
+				continue;
+			}
+			FElysiumWizPrereq P;
+			P.Trait = Kid.Value->Str(TEXT("Trait"), FString());
+			if (Kid.Value->Has(TEXT("MinVal"))) { P.MinVal = Kid.Value->Int(TEXT("MinVal"), 0); }
+			if (Kid.Value->Has(TEXT("MaxVal"))) { P.MaxVal = Kid.Value->Int(TEXT("MaxVal"), 0); }
+			Out.Add(MoveTemp(P));
+		}
+	}
+
+	FElysiumWizAction ReadAction(const FKvNode& N)
+	{
+		FElysiumWizAction A;
+		A.Text = N.Str(TEXT("Text"), FString());
+		A.Next = N.Str(TEXT("Next"), FString());
+		A.Trait = N.Str(TEXT("Trait"), FString());
+		A.CharTemplate = N.Str(TEXT("CharTemplate"), FString());
+		A.bSetGenderMale = N.Bool(TEXT("SetGenderMale"), false);
+		A.bSetGenderFemale = N.Bool(TEXT("SetGenderFemale"), false);
+		A.bIsCheckBox = N.Bool(TEXT("IsCheckBox"), false);
+		A.bEndCharGenWiz = N.Bool(TEXT("EndCharGenWiz"), false);
+		A.bProcessTraitChoices = N.Bool(TEXT("ProcessTraitChoices"), false);
+		if (N.Has(TEXT("KeyLookup"))) { A.KeyLookup = N.Int(TEXT("KeyLookup"), 0); }
+		ReadPrereqs(&N, A.Prereqs);
+		A.Region = ReadRegion(&N, TEXT("Region"));
+		return A;
+	}
+
+	FElysiumWizPopup ReadPopup(const FKvNode& N)
+	{
+		FElysiumWizPopup P;
+		P.Text = N.Str(TEXT("Text"), FString());
+		P.InternalName = N.Str(TEXT("InternalName"), FString());
+		P.CharTemplate = N.Str(TEXT("CharTemplate"), FString());
+		P.BkgImage = N.Str(TEXT("Bkg_Image"), FString());
+		P.bOrderPrereqs = N.Bool(TEXT("Order_Prereqs"), false);
+		P.bClanPrereqs = N.Bool(TEXT("Clan_Prereqs"), false);
+		ReadPrereqs(&N, P.Prereqs);
+		P.Region = ReadRegion(&N, TEXT("Region"));
+		P.TextRegion = ReadRegion(&N, TEXT("TextRegion"));
+		for (const TPair<FString, TSharedPtr<FKvNode>>& Kid : N.Kids)
+		{
+			if (Kid.Key == TEXT("action") && Kid.Value.IsValid())
+			{
+				P.Actions.Add(ReadAction(*Kid.Value));
+			}
+		}
+		return P;
+	}
+
+	// Fold a group's `Defaults` into one of its popups: the popup wins wherever it authored
+	// something, the defaults fill the rest. Actions inherit **by position**, because the defaults
+	// block carries the geometry and the shared flags for slot 0, 1, 2 and the alternates, and a
+	// concrete popup authors only the text and wiring for the slots it uses.
+	void ApplyDefaults(const FElysiumWizPopup& Def, FElysiumWizPopup& P)
+	{
+		if (P.Text.IsEmpty())         { P.Text = Def.Text; }
+		if (P.InternalName.IsEmpty()) { P.InternalName = Def.InternalName; }
+		if (P.CharTemplate.IsEmpty()) { P.CharTemplate = Def.CharTemplate; }
+		if (P.BkgImage.IsEmpty())     { P.BkgImage = Def.BkgImage; }
+		if (!P.Region.bAuthored)      { P.Region = Def.Region; }
+		if (!P.TextRegion.bAuthored)  { P.TextRegion = Def.TextRegion; }
+
+		for (int32 i = 0; i < P.Actions.Num(); ++i)
+		{
+			if (!Def.Actions.IsValidIndex(i))
+			{
+				continue;
+			}
+			const FElysiumWizAction& D = Def.Actions[i];
+			FElysiumWizAction& A = P.Actions[i];
+			if (A.Text.IsEmpty())         { A.Text = D.Text; }
+			if (A.Next.IsEmpty())         { A.Next = D.Next; }
+			if (A.Trait.IsEmpty())        { A.Trait = D.Trait; }
+			if (A.CharTemplate.IsEmpty()) { A.CharTemplate = D.CharTemplate; }
+			if (!A.Region.bAuthored)      { A.Region = D.Region; }
+			A.bSetGenderMale       = A.bSetGenderMale       || D.bSetGenderMale;
+			A.bSetGenderFemale     = A.bSetGenderFemale     || D.bSetGenderFemale;
+			A.bIsCheckBox          = A.bIsCheckBox          || D.bIsCheckBox;
+			A.bEndCharGenWiz       = A.bEndCharGenWiz       || D.bEndCharGenWiz;
+			A.bProcessTraitChoices = A.bProcessTraitChoices || D.bProcessTraitChoices;
+			if (A.KeyLookup == INDEX_NONE) { A.KeyLookup = D.KeyLookup; }
+		}
+	}
+}
+
+int32 FElysiumWizClanNode::RankOf(const FString& Trait) const
+{
+	const FString F = ElysiumFold(Trait);
+	for (const FString& T : Primary)   { if (ElysiumFold(T) == F) { return 0; } }
+	for (const FString& T : Secondary) { if (ElysiumFold(T) == F) { return 1; } }
+	for (const FString& T : Tertiary)  { if (ElysiumFold(T) == F) { return 2; } }
+	return INDEX_NONE;
+}
+
+bool FElysiumWizard::Load(FString& OutError)
+{
+	Traits.Reset();
+	Combinations.Reset();
+	Orderings.Reset();
+	ClanNodes.Reset();
+	Groups.Reset();
+	GroupNames.Reset();
+	GroupByName.Reset();
+	FMemory::Memzero(ConnectionScores);
+
+	static const TCHAR* Rel = TEXT("system/charcreatewizard.txt");
+	TSharedPtr<FKvNode> Root;
+	if (!ReadVdata(Rel, Root, OutError))
+	{
+		return false;
+	}
+	const FKvNode* Wiz = RootBlock(Root, TEXT("CharCreateWizard"), Rel, OutError);
+	if (Wiz == nullptr)
+	{
+		return false;
+	}
+
+	// The authored group order. It names the ten `*_Popups` blocks; those blocks are siblings at
+	// wizard scope, so this list is what tells them apart from `Strings`/`Traits`/`Clan_Tables`.
+	if (const FKvNode* Strings = Wiz->Child(TEXT("Strings")))
+	{
+		if (const FKvNode* Names = Strings->Child(TEXT("PopUpGroups")))
+		{
+			for (const TPair<FString, FString>& P : Names->Pairs) { GroupNames.Add(P.Value); }
+		}
+	}
+
+	if (const FKvNode* TraitsBlock = Wiz->Child(TEXT("Traits")))
+	{
+		for (const TPair<FString, TSharedPtr<FKvNode>>& Kid : TraitsBlock->Kids)
+		{
+			if (Kid.Key == TEXT("trait") && Kid.Value.IsValid())
+			{
+				Traits.Add(Kid.Value->Str(TEXT("InternalName"), FString()));
+			}
+		}
+		if (const FKvNode* Combos = TraitsBlock->Child(TEXT("TraitCombinations")))
+		{
+			for (const TPair<FString, TSharedPtr<FKvNode>>& Kid : Combos->Kids)
+			{
+				if (Kid.Key == TEXT("traitcombination") && Kid.Value.IsValid())
+				{
+					FElysiumWizCombination C;
+					C.InternalName = Kid.Value->Str(TEXT("InternalName"), FString());
+					Kid.Value->ValuesFor(TEXT("Trait"), C.Traits);   // repeats, and means them
+					Combinations.Add(MoveTemp(C));
+				}
+			}
+			if (const FKvNode* Ords = Combos->Child(TEXT("TraitOrderings")))
+			{
+				for (const TPair<FString, TSharedPtr<FKvNode>>& Kid : Ords->Kids)
+				{
+					if (Kid.Key != TEXT("traitordering") || !Kid.Value.IsValid())
+					{
+						continue;
+					}
+					FElysiumWizTraitOrdering O;
+					O.TraitCombination = Kid.Value->Str(TEXT("TraitCombination"), FString());
+					O.Index = Kid.Value->Str(TEXT("Index"), FString());
+					O.Trait = Kid.Value->Str(TEXT("Trait"), FString());
+					ReadPrereqs(Kid.Value.Get(), O.Prereqs);
+					for (const TPair<FString, TSharedPtr<FKvNode>>& Step : Kid.Value->Kids)
+					{
+						if (Step.Key == TEXT("ordering") && Step.Value.IsValid())
+						{
+							FElysiumWizOrderingStep S;
+							S.TraitCombination = Step.Value->Str(TEXT("TraitCombination"), FString());
+							S.Index = Step.Value->Str(TEXT("Index"), FString());
+							O.Orderings.Add(MoveTemp(S));
+						}
+					}
+					Orderings.Add(MoveTemp(O));
+				}
+			}
+		}
+	}
+
+	if (const FKvNode* Tables = Wiz->Child(TEXT("Clan_Tables")))
+	{
+		for (const TPair<FString, TSharedPtr<FKvNode>>& Kid : Tables->Kids)
+		{
+			if (Kid.Key != TEXT("clannode") || !Kid.Value.IsValid())
+			{
+				continue;
+			}
+			FElysiumWizClanNode C;
+			C.CharTemplate = Kid.Value->Str(TEXT("CharTemplate"), FString());
+			// A rank repeats -- Gangrel authors two Primaries -- so every value is kept, not the last.
+			Kid.Value->ValuesFor(TEXT("Primary"), C.Primary);
+			Kid.Value->ValuesFor(TEXT("Secondary"), C.Secondary);
+			Kid.Value->ValuesFor(TEXT("Tertiary"), C.Tertiary);
+			ClanNodes.Add(MoveTemp(C));
+		}
+		if (const FKvNode* Scores = Tables->Child(TEXT("ConnectionScores")))
+		{
+			int32 Sel = 0;
+			for (const TPair<FString, TSharedPtr<FKvNode>>& Kid : Scores->Kids)
+			{
+				if (Kid.Key != TEXT("selection") || !Kid.Value.IsValid() || Sel >= 3)
+				{
+					continue;
+				}
+				ConnectionScores[Sel][0] = Kid.Value->Int(TEXT("Primary"), 0);
+				ConnectionScores[Sel][1] = Kid.Value->Int(TEXT("Secondary"), 0);
+				ConnectionScores[Sel][2] = Kid.Value->Int(TEXT("Tertiary"), 0);
+				++Sel;
+			}
+		}
+	}
+
+	// The popup groups. Their block keys are the names `Strings.PopUpGroups` listed, so everything
+	// else at wizard scope is skipped without needing a special case per sibling.
+	TSet<FString> WantedGroups;
+	for (const FString& N : GroupNames) { WantedGroups.Add(ElysiumFold(N)); }
+
+	for (const TPair<FString, TSharedPtr<FKvNode>>& Kid : Wiz->Kids)
+	{
+		if (!Kid.Value.IsValid() || !WantedGroups.Contains(Kid.Key))
+		{
+			continue;
+		}
+		FElysiumWizGroup G;
+		G.InternalName = Kid.Value->Str(TEXT("InternalName"), FString());
+		if (const FKvNode* Next = Kid.Value->Child(TEXT("NextSection")))
+		{
+			G.NextSection.Next = Next->Str(TEXT("Next"), FString());
+			if (Next->Has(TEXT("MinCount"))) { G.NextSection.MinCount = Next->Int(TEXT("MinCount"), 0); }
+			if (Next->Has(TEXT("MaxCount"))) { G.NextSection.MaxCount = Next->Int(TEXT("MaxCount"), 0); }
+		}
+		if (const FKvNode* Def = Kid.Value->Child(TEXT("Defaults")))
+		{
+			G.Defaults = ReadPopup(*Def);
+		}
+		for (const TPair<FString, TSharedPtr<FKvNode>>& Sub : Kid.Value->Kids)
+		{
+			if (Sub.Key != TEXT("popup") || !Sub.Value.IsValid())
+			{
+				continue;
+			}
+			FElysiumWizPopup P = ReadPopup(*Sub.Value);
+			ApplyDefaults(G.Defaults, P);
+			G.Popups.Add(MoveTemp(P));
+		}
+		Index(GroupByName, G.InternalName.IsEmpty() ? Kid.Key : G.InternalName, Groups.Num());
+		Groups.Add(MoveTemp(G));
+	}
+
+	if (Groups.IsEmpty())
+	{
+		OutError = FString::Printf(TEXT("no popup groups in %s"), *FElysiumContentPaths::VdataFile(Rel));
+		return false;
+	}
+	return true;
+}
+
+const FElysiumWizGroup* FElysiumWizard::Group(const FString& InternalName) const
+{
+	const int32* Idx = GroupByName.Find(ElysiumFold(InternalName));
+	return Idx ? &Groups[*Idx] : nullptr;
+}
+
+void FElysiumWizard::PopupsNamed(const FString& InternalName, TArray<const FElysiumWizPopup*>& Out) const
+{
+	const FString F = ElysiumFold(InternalName);
+	for (const FElysiumWizGroup& G : Groups)
+	{
+		for (const FElysiumWizPopup& P : G.Popups)
+		{
+			if (ElysiumFold(P.InternalName) == F) { Out.Add(&P); }
+		}
+	}
+}
+
+const FElysiumWizClanNode* FElysiumWizard::ClanNode(const FString& CharTemplate) const
+{
+	const FString F = ElysiumFold(CharTemplate);
+	for (const FElysiumWizClanNode& C : ClanNodes)
+	{
+		if (ElysiumFold(C.CharTemplate) == F) { return &C; }
+	}
+	return nullptr;
+}
+
+int32 FElysiumWizard::NumPopups() const
+{
+	int32 N = 0;
+	for (const FElysiumWizGroup& G : Groups) { N += G.Popups.Num(); }
+	return N;
+}
+
+// ================================================================================================
+// 14. strings.txt + strings_internal.txt
+// ================================================================================================
+
+namespace
+{
+	// One `StringData.Strings` block: every child is a group of sparse `Name<N>` leaves. Merges into
+	// whatever the group already holds, because a group is authored more than once across (and
+	// within) the two files.
+	void LoadStringGroups(const FKvNode& Strings, TMap<FString, TArray<FString>>& Out)
+	{
+		for (const TPair<FString, TSharedPtr<FKvNode>>& Kid : Strings.Kids)
+		{
+			if (!Kid.Value.IsValid())
+			{
+				continue;
+			}
+			TArray<FString>& Names = Out.FindOrAdd(Kid.Key);
+			for (const TPair<FString, FString>& Pair : Kid.Value->Pairs)
+			{
+				if (!Pair.Key.StartsWith(TEXT("name")))
+				{
+					continue;
+				}
+				const FString Tail = Pair.Key.Mid(4);
+				if (Tail.IsEmpty() || !Tail.IsNumeric())
+				{
+					continue;   // a bare `Name`, which several groups carry as a title
+				}
+				const int32 Index = FCString::Atoi(*Tail);
+				if (Index < 0 || Index > 4096)
+				{
+					continue;
+				}
+				// Grow to the authored index rather than appending: the index IS the stat value, so
+				// a gap left by a commented-out entry must stay a gap.
+				while (Names.Num() <= Index)
+				{
+					Names.Emplace();
+				}
+				Names[Index] = Pair.Value;
+			}
+		}
+	}
+
+	bool LoadStringFile(const TCHAR* Rel, TMap<FString, TArray<FString>>& Out, FString& OutError)
+	{
+		TSharedPtr<FKvNode> Root;
+		if (!ReadVdata(Rel, Root, OutError))
+		{
+			return false;
+		}
+		const FKvNode* Data = RootBlock(Root, TEXT("StringData"), Rel, OutError);
+		if (Data == nullptr)
+		{
+			return false;
+		}
+		// One `Strings` child in both files, but iterate rather than `Child` so a patch that splits
+		// it does not silently drop half the groups.
+		for (const TPair<FString, TSharedPtr<FKvNode>>& Kid : Data->Kids)
+		{
+			if (Kid.Key == TEXT("strings") && Kid.Value.IsValid())
+			{
+				LoadStringGroups(*Kid.Value, Out);
+			}
+		}
+		return true;
+	}
+}
+
+bool FElysiumStrings::Load(FString& OutError)
+{
+	Groups.Reset();
+
+	if (!LoadStringFile(TEXT("system/strings.txt"), Groups, OutError))
+	{
+		return false;
+	}
+	// The internal file loads second so its groups extend the localized ones. An unreadable internal
+	// file costs the `AttributeOrder`/`AbilityOrder` lookups, not the whole table, so it is recorded
+	// and survived.
+	FString InternalError;
+	if (!LoadStringFile(TEXT("system/strings_internal.txt"), Groups, InternalError))
+	{
+		OutError = InternalError;
+	}
+	return !Groups.IsEmpty();
+}
+
+const TArray<FString>* FElysiumStrings::Group(const FString& Name) const
+{
+	return Groups.Find(ElysiumFold(Name));
+}
+
+FString FElysiumStrings::At(const FString& InGroup, int32 Index, const FString& Def) const
+{
+	const TArray<FString>* Names = Group(InGroup);
+	return (Names && Names->IsValidIndex(Index) && !(*Names)[Index].IsEmpty()) ? (*Names)[Index] : Def;
+}
+
+int32 FElysiumStrings::IndexOf(const FString& InGroup, const FString& Value) const
+{
+	const TArray<FString>* Names = Group(InGroup);
+	if (Names == nullptr || Value.IsEmpty())
+	{
+		return INDEX_NONE;
+	}
+	for (int32 i = 0; i < Names->Num(); ++i)
+	{
+		if ((*Names)[i].Equals(Value, ESearchCase::IgnoreCase))
+		{
+			return i;
+		}
+	}
+	return INDEX_NONE;
+}
+
+int32 FElysiumStrings::NumEntries() const
+{
+	int32 N = 0;
+	for (const TPair<FString, TArray<FString>>& Pair : Groups) { N += Pair.Value.Num(); }
 	return N;
 }

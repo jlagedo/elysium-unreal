@@ -3,6 +3,7 @@
 #include "CommonActivatableWidget.h"
 #include "CoreMinimal.h"
 
+#include "Substrate/ElysiumChargen.h"
 #include "UI/ElysiumUISubsystem.h"
 
 #include "ElysiumCharacterScreen.generated.h"
@@ -40,8 +41,11 @@ struct FElysiumCharacterScreenMode
 // art, each piece guarded: `out/ui/art/` is gitignored, so every image degrades to a token-drawn
 // equivalent rather than leaving a hole.
 //
-// **Sheet and Info are framed placeholders.** They draw their real panels and headings with a line
-// naming the task that fills them; the shell exists so those bodies — and chargen's — drop in.
+// **The Sheet body is one widget serving both hosts.** Chargen and the in-game level-up screen draw
+// the same rows, the same feats panel and the same detail panel over the same
+// `FElysiumChargenState`; only `Mode.Spend` differs, and it selects which currency the state spends
+// (`EElysiumChargenCurrency`). The spend state is a scratch — nothing reaches the character until
+// ACCEPT — so CANCEL is a discard rather than an undo log.
 UCLASS()
 class UElysiumCharacterScreen : public UCommonActivatableWidget
 {
@@ -52,6 +56,22 @@ public:
 
 	// Call before the widget is constructed, or call and then rebuild.
 	void SetMode(const FElysiumCharacterScreenMode& InMode) { Mode = InMode; }
+
+	// The scratch the Sheet body edits. The host builds it — chargen from `ApplyBaseline`, the
+	// in-game screen from `BeginLevelUp` — and owns what ACCEPT does with it. Null leaves the Sheet
+	// tab reading the live character with nothing buyable.
+	void SetSpendState(TSharedPtr<FElysiumChargenState> InState);
+	TSharedPtr<FElysiumChargenState> SpendState() const { return Spend; }
+
+	// Fired when the footer's ACCEPT / NEXT / CANCEL is pressed. The screen never commits and never
+	// closes itself: the host decides, because what a commit means differs between the two.
+	DECLARE_DELEGATE(FOnCharacterScreenAction);
+	FOnCharacterScreenAction OnAccept;
+	FOnCharacterScreenAction OnCancel;
+	// The character's clan or sex changed, so the body behind the panels is a different one. Fired
+	// by the Base tab and by `SetSpendState`; the host owns the stage, because the in-game screen
+	// raises the same one.
+	FOnCharacterScreenAction OnCharacterChanged;
 	void SetActiveTab(EElysiumCharacterTab Tab);
 	EElysiumCharacterTab ActiveTab() const { return Tab; }
 
@@ -109,9 +129,43 @@ private:
 	TSharedRef<SWidget> BuildHubRow(const int32* HubActive);
 	TSharedRef<SWidget> BuildEntry(const ElysiumQuestView::FEntry& Entry, bool bLedger);
 
+	// --- the sheet ------------------------------------------------------------------------------
+	// The rulebook gathered for the model layer, and the sheet the body reads — the scratch when
+	// there is one, the live character otherwise.
+	FElysiumChargenRules SpendRules() const;
+	const FElysiumSheet& ViewSheet() const;
+	const FElysiumSheetEffects* ViewEffects() const;
+
+	TSharedRef<SWidget> BuildSheet();
+	// One heading plus its rows. `Pool` is `None` for a block that spends nothing (nothing does
+	// today, but the parameter is what keeps the heading's counter optional rather than implied).
+	TSharedRef<SWidget> BuildTraitBlock(EElysiumChargenPool Pool, EElysiumTraitContainer Container,
+	                                    int32 First, int32 Last);
+	TSharedRef<SWidget> BuildTraitRow(EElysiumTraitContainer Container, int32 TraitSlot);
+	TSharedRef<SWidget> BuildBubbles(EElysiumTraitContainer Container, int32 TraitSlot);
+	TSharedRef<SWidget> BuildFeats();
+	TSharedRef<SWidget> BuildDetail();
+
+	// --- the Base tab ---------------------------------------------------------------------------
+	TSharedRef<SWidget> BuildBase();
+	TSharedRef<SWidget> BuildChoiceRow(const FText& Heading, const TArray<FText>& Options,
+	                                   int32 Selected, TFunction<void(int32)> OnPick);
+
+	void Select(EElysiumTraitContainer Container, int32 TraitSlot);
+	void TryBuy(EElysiumTraitContainer Container, int32 TraitSlot);
+	void TrySell(EElysiumTraitContainer Container, int32 TraitSlot);
+	// Re-derive the whole state after a clan / sex / history change, then redraw.
+	void RebuildBaseline();
+
 	FElysiumCharacterScreenMode Mode;
 	EElysiumCharacterTab Tab = EElysiumCharacterTab::QuestLog;
 	int32 Hub = INDEX_NONE;
+
+	TSharedPtr<FElysiumChargenState> Spend;
+	// The row the detail panel describes. Attributes/Strength is the retail default — the first row
+	// of the first block, so the panel is never empty.
+	EElysiumTraitContainer SelContainer = EElysiumTraitContainer::Attributes;
+	int32 SelSlot = 1;
 
 	UPROPERTY(Transient)
 	TMap<FString, TObjectPtr<UTexture2D>> ArtTextures;

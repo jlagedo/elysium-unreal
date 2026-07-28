@@ -90,6 +90,13 @@ public:
 	// Re-Travel the current map (the export->reload hot loop). Returns false with no map loaded.
 	bool Reload();
 
+	// Ask the next map build to forget the destination's stored snapshot instead of replaying it,
+	// so its openings fire again. Consumed once by the freshly-loaded map actor, at the point it
+	// would have applied the snapshot — NOT when the command runs, because travel defers teardown
+	// to end of frame and that teardown freezes the map we are leaving.
+	void RequestFreshMapState() { bFreshMapState = true; }
+	bool ConsumeFreshMapState();
+
 	// The map after Current in the sorted exported list (wrapping), for `map next`.
 	FString NextMapName() const;
 
@@ -123,6 +130,9 @@ private:
 	// actor and game mode can ask what kind of world this is after SpawnPendingMap has cleared
 	// the pending record.
 	bool bCurrentIsMenuBackdrop = false;
+
+	// One-shot: the next map build discards the destination's snapshot (RequestFreshMapState).
+	bool bFreshMapState = false;
 
 	// The landmark placement the next map load consumes (dest = landmark origin + Offset). Set by a
 	// transition (RequestLandmarkTravel) or by a direct Travel(map, landmark); cleared on consume.

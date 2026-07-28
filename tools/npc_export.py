@@ -80,6 +80,31 @@ def npc_models_from_ents(out_root=OUT):
     return sorted(models)
 
 
+def cinematic_models_from_ents(out_root=OUT):
+    """Every distinct anim-set `.mdl` the exported maps' `logic_choreographed_scene` entities
+    name (`BaseAnim` / `MaleAnim` / `FemaleAnim`).
+
+    Neither of the other two seeds reaches these: no `npc_*` entity carries a cinematic model and
+    the rulebook never names one, so the whole `models/cinematic/**` tree (106 models in the
+    merged install) stayed in the VPKs. They are the whole-cast performances a scene's
+    `sequence "entire_scene"` plays -- see `docs/choreographed_scenes.md`.
+    """
+    models = set()
+    for ents in glob.glob(os.path.join(out_root, "*", "*.ents")):
+        try:
+            data = json.load(open(ents, encoding="utf-8"))
+        except Exception:
+            continue
+        for ent in data.get("entities", []):
+            if ent.get("classname") != "logic_choreographed_scene":
+                continue
+            for key in ("BaseAnim", "MaleAnim", "FemaleAnim"):
+                m = ent.get("keys", {}).get(key, "").strip().lower().replace("\\", "/")
+                if m.endswith(".mdl"):
+                    models.add(m if m.startswith("models/") else "models/" + m)
+    return sorted(models)
+
+
 def pc_models_from_clandoc(out_root=OUT):
     """Every distinct player-body `.mdl` `vdata/system/clandoc000.txt` names (roadmap PL13).
 
@@ -189,6 +214,10 @@ def write_sidecars(manifest):
                  for s, r in manifest["npcs"].items()},
         "banks": {s: {"glb": r["glb"], "model": r["model"], "clips": len(r["clips"])}
                   for s, r in manifest["banks"].items()},
+        # 12.1 — a choreo scene's anim-set model key -> the per-bone-root banks it was split
+        # into. The runtime resolves (BaseAnim/MaleAnim/FemaleAnim, the actor's bonerename
+        # source) through this to a bank stem in `banks` above.
+        "cinematics": manifest.get("cinematics", {}),
     }
     with open(INDEX, "w", encoding="utf-8") as f:
         json.dump(index, f, indent=1)
@@ -231,11 +260,13 @@ def main(only=None):
     if only is None:
         from_ents = npc_models_from_ents()
         pc_models = set(pc_models_from_clandoc())
+        cinematics = cinematic_models_from_ents()
         print(f"[npc] seed: {len(from_ents)} npc model(s) from the exported .ents + "
-              f"{len(pc_models)} player body model(s) from {CLANDOC}")
+              f"{len(pc_models)} player body model(s) from {CLANDOC} + "
+              f"{len(cinematics)} cinematic anim-set(s)")
         seed = sorted(set(from_ents) | pc_models)
     else:
-        seed, pc_models = only, set()
+        seed, pc_models, cinematics = only, set(), []
 
     npcs = [m for m in seed if load_mdl(m) is not None]
     missing = [m for m in seed if load_mdl(m) is None]
@@ -290,6 +321,37 @@ def main(only=None):
                 "clips": {c.label: _clip_meta(c) for c in info["clips"]},
             }
 
+    # The cinematic anim sets (12.1). Each is a whole multi-actor performance in one file, so it
+    # is split into one bank per bone root with the prefix folded back to Bip01 -- which is what
+    # a scene's `bonerename "BipNN" "Bip01"` selects. They ride the bank index like any other
+    # bank; `cinematic_roots` records which roots a model offers so the runtime can resolve
+    # (anim set, bonerename-from) -> bank.
+    cinematic_index = {}
+    if cinematics:
+        print(f"[npc] exporting {len(cinematics)} cinematic anim-set(s) -> {NPC_DIR}/banks/ ...",
+              flush=True)
+    for key in cinematics:
+        if load_mdl(key) is None:
+            print(f"  ! {key}: no .mdl in install - skipped")
+            continue
+        stem = bank_stem(key)
+        try:
+            banks = mdl_gltf.export_cinematic(idx, key, NPC_DIR, stem)
+        except Exception as e:
+            print(f"  !! cinematic {stem} FAILED: {e}")
+            continue
+        if not banks:
+            continue
+        roots = []
+        for info in banks:
+            bank_index[info["stem"]] = {
+                "glb": info["glb"], "model": info["model"],
+                "clips": {c.label: _clip_meta(c) for c in info["clips"]},
+            }
+            if info.get("root"):
+                roots.append({"root": info["root"], "bank": info["stem"]})
+        cinematic_index[key] = {"stem": stem, "roots": roots}
+
     # Export the NPC mesh glbs (mesh + skeleton + own clips + facial morph targets). The
     # unit-vector table the compressed vertex-animation records index is read once, from the
     # user's own StudioRender.dll -- without it the morph magnitudes are unknowable, so the
@@ -337,6 +399,7 @@ def main(only=None):
                 "present, names the flex rig driving that glb's morph targets.",
         "npcs": npc_index,
         "banks": bank_index,
+        "cinematics": cinematic_index,
     }
     with open(MANIFEST, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=1)

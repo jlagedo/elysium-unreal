@@ -26,9 +26,10 @@ read by `FUN_101d92b0` (see `recovered/dice-system.md` / RE5), found by grepping
 decompile for the filename/root-key string. The exact engine loader/schema for each is RE'd
 when its consumer is built.
 
-**Twelve of these families now have a runtime reader** — `stats`, `feats`, `rules` +
+**Fourteen of these families now have a runtime reader** — `stats`, `feats`, `rules` +
 `rules_tables`, `traiteffect` + `traiteffects000`, `clandoc000` + `npctemplate*`, `histories000`,
-the five `quests_*`, `experience_table` and `levelingtemplate_000`, in
+the five `quests_*`, `experience_table`, `levelingtemplate_000`, `charcreatewizard` and
+`strings` + `strings_internal`, in
 `Source/ElysiumUE/Private/Substrate/ElysiumRulebook.{h,cpp}` behind `UElysiumRulebookSubsystem`
 (plus `dispositiontable.txt`, read separately by `FElysiumDispositionTable`). The row counts quoted
 below are asserted against the exported files by `Elysium.Content.Rulebook`, so a re-export that
@@ -58,7 +59,7 @@ catalogue and the prose schemas in `docs/game_runtime.md`.
 | `ClanDataTables` | `clandoc000.txt` | clan definitions — disciplines, bonuses, banes, and the per-clan body models (`M_Body0..5`/`F_Body0..5`, the source the PC-body export draws from; `M_Hands`/`F_Hands` are separate hand models) |
 | `ClanDataTables` | `npctemplate000.txt`…`025` + 10 named (`_tutorial`, `_malkmansion`, …) — **36 files, 150 templates** | per-clan / per-map NPC stat templates. The `Attributes` block is the flat Attributes container, so **`Max_Health` is authored here as a literal** (`"20"` … `"819"`); a template omitting it inherits `stats.txt`'s `Default` 100 — this is the whole of an NPC's health track. **`ParentTemplateName` is single-parent inheritance** resolving across files (64 non-empty), so an absent trait key means *inherit*, not zero — `npctemplate_cdc.txt` is the minimal case, one `General` key over an empty `Attributes`. `npctemplate019/021.txt` are empty `ClanDataTables` |
 | `HistoryDataTables` / `HistoryData` | `histories000.txt`, `history.txt` | the History background-trait system |
-| `CharCreateWizard` | `charcreatewizard.txt` (78 KB) | chargen personality-quiz → clan scoring (`Traits`/`TraitCombinations`/`TraitOrderings`, 78 `Popup`s, `Clan_Tables.ClanNode` + the 3×3 `ConnectionScores` matrix) — **RE25 done**, read by `client.dll` |
+| `CharCreateWizard` | `charcreatewizard.txt` (78 KB) | chargen personality-quiz → clan scoring (`Traits`/`TraitCombinations`/`TraitOrderings`, **85** `Popup`s in 10 groups, `Clan_Tables.ClanNode` + the 3×3 `ConnectionScores` matrix) — **RE25 done**, read by `client.dll`. 78 popups author a bare `Popup` line and 7 carry a trailing `// restored by wesp` / `// added by wesp`, so a count by line shape undercounts exactly the patch's restorations. A group's `Defaults` block is popup-shaped and every member inherits from it field by field, **including the positional `Action` list**. Parsed by `FElysiumWizard` |
 | `CharEditor` | `chareditor.txt` | char-editor config — two keys, `Music "music/Vampire_Theme.mp3"` + `Music_Volume "1.0"`; nothing else |
 
 ### Disciplines (vampire powers)
@@ -130,7 +131,7 @@ QuestTable { Quest { "Title" "DisplayName"
 
 | Root key | File(s) | What |
 |---|---|---|
-| `StringData` | `strings.txt`, `strings_internal.txt` | display strings (trait name-mappings, UI) |
+| `StringData` | `strings.txt`, `strings_internal.txt` | named `Name<N>` lists under one `Strings` block — the groups a stat's `NameMapping` points at. Both files share the root key and their group name spaces overlap by design, so a reader must MERGE by index rather than replace (`strings.txt` itself authors `UIOccultStrs` twice). `AttributeOrder`/`AbilityOrder` are what turn a clan template's symbolic `Attrib_Order` into an index; `AttributeGroup`/`AbilityGroup`/`StatCategoryTitles` are the sheet's own headings |
 | `MapNames` | `mapnames_localized.txt` | map display names |
 | `LoadingTips` | `loadingtips.txt` (114 KB) | loading-screen tips |
 | `InfoBarMessages` | `infobartypes.txt` | HUD info-bar messages |

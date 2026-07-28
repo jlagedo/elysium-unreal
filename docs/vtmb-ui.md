@@ -159,20 +159,26 @@ Related screens, same stack: `CharEditPanel` (+ `CharEditCharPanel` / `EquipPane
 
 ### The character screen — one screen, three classes
 
-The chargen wizard and the in-game character screen **look identical and are not one class.** RTTI
-gives `VCharWizardUI`, `CharEditPanel` (+ `CharEditCharPanel` / `CharEditStatsPanel` /
-`CharEditInfoPanel` / `CharEditEquipPanel`) and `QuestLogPanel` as siblings; what they share is the
-art, the header anatomy and the 1024×768 layout law, not code. **`CharEditEquipPanel` appears in no
-capture** — an equipment panel reached some other way, or cut.
+The chargen wizard and the in-game character screen **are the same panel in a different mode.**
+`createplayer`, `questlog` and `chooseteam` are three `client.dll` ConCommands that all open the HUD
+element **`CharEditPanel`** and differ only in the mode int they write to `+0x274` — `questlog` 0,
+`createplayer` 1, `chooseteam` 2 (`game_runtime.md` → "`createplayer` opens a panel"). The mode also
+selects the panel's backdrop.
+
+RTTI does carry `VCharWizardUI`, `CharEditPanel` (+ `CharEditCharPanel` / `CharEditStatsPanel` /
+`CharEditInfoPanel` / `CharEditEquipPanel`) and `QuestLogPanel` as separate classes, but the sheet
+the player sees in chargen is `CharEditPanel` in mode 1 — `VCharWizardUI` is the **quiz popup**, the
+separate full-screen question/answer screen that runs *before* the panel. **`CharEditEquipPanel`
+appears in no capture** — an equipment panel reached some other way, or cut.
 
 The **header is identical on every tab of both**: the clan sigil at top left, the PC's name beside
 it, `HUMANITY` centred over ten rating bubbles, `MASQUERADE` right over five mask faces, then the
 tab strip between two full-width rules with the active tab in `BrightControlText` cyan. The rules
 and the mask faces are one bitmap, `cm_topbar` (below).
 
-The two screens differ on exactly four axes:
+The two modes differ on exactly four axes:
 
-| | chargen (`VCharWizardUI`) | in game (`CharEditPanel`) |
+| | chargen (`+0x274` = 1) | in game (`+0x274` = 0) |
 |---|---|---|
 | Tabs | `Base` \| `Sheet` | `Sheet` \| `Info` \| `Quest Log` |
 | Name | `NAME:` label + `VCTextEntry` | static text |
@@ -186,7 +192,19 @@ raise traits. Chargen and level-up are the same editable body against different 
 The chargen Sheet's heading counters are RE25's pool model on screen: `ATTRIBUTES(3)` =
 `PHYSICAL(1) + SOCIAL(0) + MENTAL(2)`, `ABILITIES(6)` = `TALENTS(2) + SKILLS(1) + KNOWLEDGES(3)`,
 `DISCIPLINES(1)` — the 2/1/0 and 3/2/1 tier tables in the player's chosen priority order, plus
-`Subpool_Disciplines = 1`.
+`Subpool_Disciplines = 1`. **A zero pool renders with no parenthetical at all**, so the tertiary
+category reads as a bare heading rather than as `(0)`.
+
+Three more anatomy facts the captures settle:
+
+- The bottom framed panel is the selected trait's name, its description and its `LEVEL n:` line,
+  with **`REMAINING POINTS: n` right-aligned in the panel's header row** — not in the footer.
+- The right column is a framed `FEATS` panel (`Combat` / `Covert` / `Public` / `Soak`, each
+  `NAME ~ value`), and a value the trait-effect layer moved off its baseline is drawn **cyan** —
+  which is how a clan gift reads as a gift rather than as an ordinary number.
+- The **Base** tab is `CLAN` / `GENDER` / `HISTORY`, each a curled rule heading over a dropdown in
+  the left half, a framed description panel below them, and a single **`NEXT`** bottom-right —
+  Accept/Cancel belong to the Sheet tab, not to this one.
 
 ### The quest log
 

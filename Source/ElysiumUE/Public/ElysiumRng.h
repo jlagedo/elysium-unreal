@@ -19,6 +19,7 @@ enum class EElysiumRngStream : uint8
 	LogicCase,     // logic_case PickRandom / PickRandomShuffle
 	Dice,          // the World-of-Darkness d10 resolver (9.6, `recovered/dice-system.md`)
 	Ambient,       // ambient idle picks and the RandomSound scheduler
+	Chargen,       // which phrasing of a wizard question the quiz asks (9.4f)
 	Count
 };
 

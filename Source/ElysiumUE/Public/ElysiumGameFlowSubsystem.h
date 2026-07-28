@@ -44,12 +44,12 @@ struct FElysiumNewGameRequest
 	TMap<FName, int32> Spends;
 
 	// Where the chain is entered:
-	//   ""/"story"   the full retail chain from `sp_genesisdevice_1` (chargen)
+	//   ""/"story"   the retail chain from `sp_genesisdevice_1` (chargen), at its info_player_start
 	//   "tutorial"   straight to `sp_tutorial_1` at its `tutorial` landmark — the dev shortcut
 	//   "<map>"           a bare map load
 	//   "<map>@<landmark>" a map entered at a named info_landmark
-	// `elysium.SkipIntro 1` (the default) rewrites "story" to "tutorial" until P12 lands the
-	// theatre act, so the flow never has to be re-plumbed when it does.
+	// `elysium.SkipIntro` does not act here: "story" always resolves to genesis, and the cvar governs
+	// only where genesis's exit leads (ResolveIntroSkip).
 	FString EntryPoint;
 };
 
@@ -63,6 +63,19 @@ namespace ElysiumStory
 	inline const TCHAR* const TutorialMap = TEXT("sp_tutorial_1");
 	inline const TCHAR* const TutorialLandmark = TEXT("tutorial");
 	inline const TCHAR* const SantaMonicaMap = TEXT("sm_pawnshop_1");
+
+	// The intro skip, as a decision over a requested destination. Returns true when it rewrote one.
+	//
+	// The theatre act is P12's, so with the skip on, a transition into `sp_theatre` lands instead at
+	// the `tutorial` landmark on `sp_tutorial_1` — where the theatre's own `tutorial_change` would
+	// have delivered the player. The offset and yaw are dropped with it: the offset a
+	// trigger_changelevel captures is measured from the SOURCE map's landmark (genesis's `newgame`),
+	// and that anchor means nothing against the tutorial's `tutorial`, so the rewrite is a
+	// direct-entry placement (bHasYaw false = face the landmark's own angles).
+	//
+	// A divergence, and marked as one in `level_transitions.md` — reversible by `elysium.SkipIntro 0`,
+	// which takes the authored route. Pure so the rule is testable with no world and no cvar.
+	bool ResolveIntroSkip(bool bSkip, FString& Map, FString& Landmark, FVector& Offset, bool& bHasYaw);
 }
 
 // Old state, new state. Non-dynamic: the listeners are C++ (the UI subsystem, the HUD, the input
@@ -105,6 +118,11 @@ public:
 	// --- Session -------------------------------------------------------------------------------
 	// Clear the session and enter the story. Returns false when the entry map is not exported+baked.
 	bool NewGame(const FElysiumNewGameRequest& Request);
+
+	// `elysium.SkipIntro`. Static because the readers are the travel funnel and the chargen footer,
+	// neither of which is holding this subsystem — the cvar lives here because the story chain does.
+	static bool ShouldSkipIntro();
+	static void SetSkipIntro(bool bSkip);
 
 	// 11.9 owns the payload; these are the seam every caller (menu, `trigger_autosave`, the quicksave
 	// binding, MCP) goes through, so nothing has to be re-plumbed when it lands. They log and report

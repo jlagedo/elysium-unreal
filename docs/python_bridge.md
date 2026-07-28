@@ -47,10 +47,25 @@ no interface is passed anywhere. All binding happens in `vampire.dll`.
 | **Console / cfg** | `cfg/*.cfg` aliases ↔ `__main__.ccmd` | the Basic/Plus switch + the movement aliases | console commands ↔ Python |
 | *(compiled duplicates)* | `python/*.pyc` inside the VPKs | 24 | **dead — never loaded** |
 
-**The console surface is bidirectional.** Scripts run console commands by
-*assigning an attribute* on the console object — `c = __main__.ccmd; c.patchtype = ""` executes the
-alias `patchtype` — and a command the console cannot resolve **falls through to Python**. So a
-`.cfg` alias can name a Python function and a Python function can trigger a `.cfg` alias.
+**The console surface is bidirectional.** Scripts run console commands by *touching an attribute* on
+the console object — `c = __main__.ccmd; c.patchtype = ""` executes the alias `patchtype` — and a
+command the console cannot resolve **falls through to Python**. So a `.cfg` alias can name a Python
+function and a Python function can trigger a `.cfg` alias.
+
+**Reading an attribute executes it too, not only assigning one** *(inferred — see below)*. Field 6 is
+wrapped as `__main__.%s` and evaluated, so genesis's `ccmd.createplayer` is a bare attribute **get**
+with no assignment. `createplayer` is a real `client.dll` ConCommand (`game_runtime.md` →
+"`createplayer` opens a panel") and that field-6 expression is its **only** invocation anywhere in the
+shipped content — so a get must execute, or chargen could never open in the retail game. Across every
+exported map, field 6 names `ccmd` exactly twice: `ccmd.createplayer` (genesis, once) and
+`ccmd.wc_create` (9 maps, `logic_auto` `OnMapLoad`, delay 1.5, times 1); both read consistently under
+get-executes.
+
+*Confidence:* behavioural inference, not a decompile. `ccmd` is not a defined string in `vampire.dll`
+or `client.dll` and `engine.dll` does not import into the Ghidra project, so the type object's
+`tp_getattro` was not read directly. **What would verify it:** locating the `vampire` module's
+`ccmd` type object (the module is built before `PyRun_SimpleString("from vampire import *")` in
+`vampire.dll FUN_1019a490`) and decompiling its getattr slot.
 
 The Unofficial Patch's entire Basic/Plus switch rides on this: its installer writes one of two
 `cfg/user.cfg` files differing only in `alias patchtype "setBasic()"` vs `"setPlus()"`, and the one

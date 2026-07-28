@@ -6,7 +6,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumSheet, Log, All);
 
 namespace
 {
-	FString Fold(const FString& S) { return S.ToLower(); }
 
 	int32 TraitKey(EElysiumTraitContainer Container, int32 Slot)
 	{
@@ -64,7 +63,7 @@ void FElysiumSheetEffects::Build(const FElysiumTraitEffects& Table,
 			{
 				// `"+1"` is the shipped spelling; a flag authored with no amount still counts as set.
 				const int32 Amount = (Effect.Amount != 0) ? Effect.Amount : 1;
-				Flags.FindOrAdd(Fold(Effect.Trait)) += Amount;
+				Flags.FindOrAdd(ElysiumFold(Effect.Trait)) += Amount;
 				continue;
 			}
 
@@ -215,7 +214,7 @@ int32 FElysiumSheetEffects::ApplyToBound(EElysiumTraitContainer Container, int32
 
 int32 FElysiumSheetEffects::Flag(const TCHAR* FxName) const
 {
-	const int32* Value = FxName ? Flags.Find(Fold(FxName)) : nullptr;
+	const int32* Value = FxName ? Flags.Find(ElysiumFold(FxName)) : nullptr;
 	return Value ? *Value : 0;
 }
 

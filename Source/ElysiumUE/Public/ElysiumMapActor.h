@@ -170,6 +170,9 @@ public:
 		const FString& Disposition, int32 IdleVariant) override;
 	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		bool bLoop, float* OutSeconds) override;
+	virtual bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
+		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName,
+		bool bLoop, float* OutSeconds) override;
 	virtual UStaticMeshComponent* BuildPropVisual(const FString& Stem, const FVector& Location,
 		const FQuat& Rotation, float UniformScale) override;
 	virtual UStaticMeshComponent* BuildPhysPropVisual(const FString& Stem, const FVector& Location,

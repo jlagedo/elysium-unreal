@@ -49,15 +49,6 @@ static TAutoConsoleVariable<int32> CVarMenuLayout(
 
 namespace
 {
-	// One font library per module load. The composed UFonts are transient UObjects held by
-	// TStrongObjectPtr inside, so they survive GC for the session; the menu is not the only screen
-	// that will want them.
-	FElysiumUIFontLibrary& UIFonts()
-	{
-		static FElysiumUIFontLibrary Library;
-		return Library;
-	}
-
 	// Title art is 1024x512. VtMB stretches it with the window (VGUI scales width/640 and
 	// height/480 independently, so the lockup distorts); we hold its aspect instead — a technical
 	// deficit fixed, not an artist decision overridden.
@@ -311,7 +302,7 @@ UTexture2D* UElysiumMainMenu::ResolveSeal()
 TSharedRef<SWidget> UElysiumMainMenu::BuildRailRow(const FMenuEntry& Item, const FText& Label,
                                                    int32 Index, float& RowTop)
 {
-	FElysiumUIFontLibrary& Fonts = UIFonts();
+	FElysiumUIFontLibrary& Fonts = ElysiumUIFonts();
 	const float Height = Item.bPrimary ? Rail::RowPrimary : Rail::RowHeight;
 	const FSlateFontInfo Font = Tracked(
 		Fonts.Font(EElysiumFontRole::Label, EElysiumFontWeight::Regular,
@@ -373,7 +364,7 @@ TSharedRef<SWidget> UElysiumMainMenu::BuildRailRow(const FMenuEntry& Item, const
 TSharedRef<SWidget> UElysiumMainMenu::BuildRail(const TArray<FMenuEntry>& Items,
                                                 const TArray<FText>& Labels)
 {
-	FElysiumUIFontLibrary& Fonts = UIFonts();
+	FElysiumUIFontLibrary& Fonts = ElysiumUIFonts();
 
 	RailRows.Reset();
 	RailItems = Items;
@@ -635,7 +626,7 @@ TSharedRef<SWidget> UElysiumMainMenu::BuildRail(const TArray<FMenuEntry>& Items,
 TSharedRef<SWidget> UElysiumMainMenu::BuildClassic(const TArray<FMenuEntry>& Items,
                                                    const TArray<FText>& Labels)
 {
-	FElysiumUIFontLibrary& Fonts = UIFonts();
+	FElysiumUIFontLibrary& Fonts = ElysiumUIFonts();
 	const FSlateFontInfo ItemFont =
 		Fonts.Font(EElysiumFontRole::Label, EElysiumFontWeight::Regular,
 		           ElysiumUI::Type::MenuItem, /*Scale*/ 1.0f);

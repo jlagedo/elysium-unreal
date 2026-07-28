@@ -296,7 +296,20 @@ is dropped — the rest of the scene continues.
 
 `BaseAnim` (and `MaleAnim`/`FemaleAnim`) name a **cinematic `.mdl` that holds the whole
 multi-actor performance**, e.g. `models/cinematic/tutorial/jack_VS_sabbat.mdl` for
-`sp_tutorial_1`'s alley fight. At `Start`, `FUN_100843d0` picks the male or female model by
+`sp_tutorial_1`'s alley fight.
+
+**One model, N co-located skeletons, one clip.** `jack_vs_sabbat.mdl` is **271 bones** — four
+complete 67-bone skeletons rooted `Bip01`, `Bip02`, `Bip03`, `Bip04`, plus three `DummyNN` nodes —
+carrying a **single** sequence, `entire_scene`, 461 frames at 30 fps (15.37 s, against the `.vcd`'s
+authored `0 → 15.300`). Every actor plays that same clip; `bonerename "BipNN" "Bip01"` is what
+selects which skeleton inside it is *this* actor's. That is the whole purpose of the key.
+
+Some cinematics instead ship one file per actor (`Courtroom_bip1.mdl` … `Courtroom_bip7.mdl` for
+`sp_theatre`'s seven concurrent courtroom scenes, `snuff_bip1`/`snuff_bip2` in Hollywood), and
+those files still carry all four bip skeletons. 106 such models are in the merged install; the
+exported maps name **20** distinct ones, and `sp_theatre` alone accounts for 15.
+
+At `Start`, `FUN_100843d0` picks the male or female model by
 the local player's `IsMale()`, then for each scene actor resolves the entity, casts it to
 `CBaseAnimating`, and hands it the scene, the actor's **`bonerename` pair**, the chosen
 anim-set model and the `BaseAnim` model (virtual `+0x3d4` on the actor). That is what
@@ -329,6 +342,28 @@ normal simulation afterwards.
 Jack lines); when set it hides the surrounding entities for the scene's duration and
 unhides them at completion **or** at `Cancel`.
 
+### What `hide_ents` actually selects
+
+`FUN_100826b0` walks the global **NPC list** and hides everything its predicate `FUN_10082520`
+accepts; `FUN_100828d0` reverses it. The predicate, in order:
+
+1. the candidate must exist and not be dead or dying (`FUN_100a52a0`);
+2. its flags (`FUN_100b39c0`) must not carry bit **`0x20`**;
+3. it must not be one of **this scene's own actors** — the scene walks its actor array and compares;
+4. its character object (entity `+0x98`) must exist, and that object's EHANDLE at **`+0xfe8` must
+   not resolve**. That field is the **current dialogue partner**: `FindNamedEntity`'s
+   `!dialogpartner` branch reads exactly `UTIL_PlayerByIndex(1) + 0xfe8`. So an NPC already in a
+   conversation is never hidden;
+5. finally a class/relationship gate — **not decoded**: a virtual at `+0x740` on that character
+   object returning a small enum (value `4` is rejected outright; `2`, `3`, `0x0b` and `0x0e` pass
+   when `+0x29c` — which returns an entity — equals the player), plus `+0x650(player)` returning 1
+   as an alternative accept.
+
+Steps 1–4 are settled. Step 5's two virtuals are unidentified: they live on the object at entity
+`+0x98`, whose vftable is large enough to be entity-sized, and naming them needs that vftable
+located and walked. Until then the *set* of NPCs a shipped scene hides is not reproducible, only
+the mechanism.
+
 ## The timing model
 
 `CSceneEntity`'s playback think is virtual slot **`+0x218`** = `0x100819b0`, and it re-arms
@@ -343,16 +378,48 @@ Per call:
    it cannot drift and cannot be scaled;
 4. hand the scene the sound-system latency — the `snd_mixahead` convar, cached in the
    constructor at `0x4c8` — so `speak` events are scheduled against the mixer's lead;
-5. `CChoreoScene::Process(m_flCurrentTime)`, which calls back into
-   `CSceneEntity::DispatchStartEvent` (virtual `+0x3e0`) for every event whose start time
-   the clock has crossed since the last call;
+5. `CChoreoScene::Process(m_flCurrentTime)` (`FUN_1007d7f0`), which classifies **every** event
+   against the clock and calls back through `IChoreoEventCallback` — `vampire.dll` carries both
+   `.?AVIChoreoEventCallback@@` and `.?AVCChoreoEventCallback@@`, so the interface is Valve's
+   four-method one, not a single start dispatch. Per event, per frame, exactly one of:
+   **START** (its start has been crossed and it was not running) → `DispatchStartEvent`
+   (virtual `+0x3e0`); **CONTINUE** (still inside its range); **STOP** (the clock left its
+   range); **IGNORE**. An event with no end time (`time t -1`) is treated as
+   `end = start`, so it starts on the frame that crosses it and stops on the next one.
+   Pending events are dispatched in start-time order;
 6. if the scene reports its simulation finished, call `OnSceneFinished` (`+0x3dc`) — which
    restores the actors, fires **`OnCompletion`**, clears the events and unhides;
 7. otherwise, if `position_start == 1`, re-pin the actors.
 
-`Resume` re-stamps the clock base so paused time is not counted. `Cancel` stops the scene's
-events, unhides, fires `OnCanceled` with the stored activator, and clears both flags —
-without touching `position_end`.
+### The completion test
+
+`SimulationFinished` (`FUN_1007d1e0`) is **two** conditions, not one: the scene's current time
+(`+0x7c`) must be past its latest time (`+0x90`) **and** its active-event count (`+0x94`) must be
+zero. `latestTime` is the maximum over events of the end time — or the start time for an event
+that has none — with **SPEAK events extended by the sound-system latency** (`+0x98`, written by
+`FUN_1007e5a0` from the scene entity each think). The same latency pulls each speak event's start
+*earlier*, so a line is queued ahead of its cue by exactly the mixer's lead and the scene's own end
+is pushed out by the same amount.
+
+So an instantaneous event authored at the very end of a scene still gets dispatched before the
+scene may finish, and a scene whose last event never stops never completes.
+
+### `Start` and `OnSceneFinished` in order
+
+`FUN_100829e0` gates on an already-parsed scene (`+0x4bc`) and on not already playing, then runs:
+reset the simulation → bind the actors → apply the anim set (`FUN_100843d0`) → `position_start`
+save-and-teleport (`FUN_10081ed0`) → arm the think → `hide_ents` → and fires **`OnStart` last**.
+
+`FUN_10081b60` is the mirror: stop the live events → reset → clear the playing/paused flags and
+zero the clock → apply **`position_end`** → restore the actors → fire **`OnCompletion`** → unhide.
+
+**`Resume` does not re-base the clock.** `FUN_10082b00` re-applies the anim set and writes
+`m_flLastUpdateTime` (`+0x4a4`) and the next-think (`+0x17c`) — **not** `m_flStartTime` (`+0x4a8`),
+which is what `m_flCurrentTime = curtime − m_flStartTime` reads. Paused time is therefore *counted*:
+a resumed map scene snaps forward to wall-clock and dispatches everything that fell inside the pause
+in one burst. Unobservable in shipped content — no map wires `Pause` or `Resume` — but it is what
+the code does. `Cancel` stops the scene's events, unhides, fires `OnCanceled` with the stored
+activator, and clears both flags — without touching `position_end`.
 
 ## `CInstancedSceneEntity` — the dialogue path
 
@@ -388,6 +455,37 @@ its own flags in place. This is the path the ~5,300 per-line `.vcd`s run on.
 - `sp_theatre`'s trial runs **seven** concurrent scenes (`courtroom_scene_bip2`…`bip7`
   started directly, `bip1` through a `logic_pythoncheck` gender branch), plus the two
   embrace scenes and the two Prince-escort scenes.
+
+## Where the rebuild diverges
+
+The runtime class is `FElysiumChoreoScene`
+(`Source/ElysiumUE/Private/Substrate/ElysiumChoreoScene.cpp`), over the reader and timeline in
+`ElysiumSceneData.{h,cpp}` / `ElysiumScenePlayer.{h,cpp}`. It reproduces the four inputs, the seven
+outputs, actor binding by name, the timing model above, and `position_start`/`position_end`. It
+diverges as follows, each an explicit call:
+
+- **`gesture` and `sequence` collapse onto one clip player.** Source layers a gesture additively
+  over a base sequence; this runtime has a single clip slot per body, so both play through it. Same
+  class of simplification as `scripted_sequence`'s missing locomotion. `sequenceduration` is parsed
+  and surfaced, not acted on.
+- **`position_start` round-trips origin and angles only.** VtMB also saves and restores each actor's
+  solidity and solid flags; there is no per-entity solid state here to save.
+- **A scene's end is clamped** by `elysium.SceneMaxDuration` (600 s). The corpus contains authored
+  ranges that are plainly wrong — one event runs to ~1.5 million seconds — and unbounded, such a
+  scene never satisfies the completion test, so `OnCompletion` never fires. On `sp_tutorial_1` that
+  is a soft-lock, because the alley fight's completion gates `logic_alley_cleanup`.
+- **An event whose start was overrun by a long frame still fires**, rather than being dropped. The
+  classifier latches on "has this start passed" instead of "did it fall inside this frame's
+  window"; on a monotonic clock the two agree, and the latch additionally survives a hitch and a
+  save restored mid-scene.
+- **`python` events go through the field-6 event queue** (`EnqueuePython`) rather than the actor's
+  own AI object. Both corpus uses are module-level calls, so the receiver is observably the same,
+  and this way the call single-steps in the queue window and serializes into a save.
+- **`hide_ents` is off by default** (`elysium.SceneHideEnts`), because step 5 of its predicate is
+  undecoded (above). The mechanism is implemented; the selection is not trusted.
+- **Not reproduced at all:** `force_lod_2` (LOD is not reproduced), the `m_bAutomated` pause
+  automation block, and the intro-skip global at `0x106e7e91` — nothing in any map or script
+  reaches any of them.
 
 Open, and owned elsewhere: what `full_sound` and `force_lod_2` change (both read once each,
 in the speak path and the actor pass), and what sets the intro-skip flag. The facial layer

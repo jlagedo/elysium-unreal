@@ -15,6 +15,7 @@
 #include "Map/ElysiumMapCollision.h"
 #include "Player/ElysiumCameraShots.h"
 #include "Visual/ElysiumEntityBodies.h"
+#include "Visual/ElysiumNpcAnimSubsystem.h"
 #include "Visual/ElysiumMapVisuals.h"
 
 #include "Engine/GameInstance.h"
@@ -348,7 +349,18 @@ void AElysiumMapActor::LoadMap()
 					// map is not new: apply the frozen snapshot over the freshly-built world
 					// (`save-architecture.md` §5). After SpawnPlayer, so the player exists for the
 					// records that reference it, and before the first Tick, so nothing has run yet.
-					if (const FElysiumMapSnapshot* Snapshot = GameState->FindMapSnapshot(MapName))
+					//
+					// A dev fresh-state entry (`elysium.newgame_ttd`) drops the snapshot here rather
+					// than at the command, because the travel it issued tore this map down on the way
+					// out and froze it again.
+					UElysiumMapSubsystem* MapsForState =
+						GetGameInstance() ? GetGameInstance()->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
+					if (MapsForState && MapsForState->ConsumeFreshMapState())
+					{
+						GameState->ClearMapSnapshot(MapName);
+						UE_LOG(LogElysium, Log, TEXT("fresh map state: %s forgotten"), *MapName);
+					}
+					else if (const FElysiumMapSnapshot* Snapshot = GameState->FindMapSnapshot(MapName))
 					{
 						EntityWorld->ApplySnapshot(*Snapshot);
 					}
@@ -404,6 +416,25 @@ bool AElysiumMapActor::PlayNpcClip(USkeletalMeshComponent* Body, const FString& 
 	const FString& ClipName, bool bLoop, float* OutSeconds)
 {
 	return Bodies->PlayNpcClip(Body, Stem, ClipName, bLoop, OutSeconds);
+}
+
+bool AElysiumMapActor::PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
+	const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName,
+	bool bLoop, float* OutSeconds)
+{
+	// The anim-set model + the actor's bonerename root name a bank the offline split produced.
+	UGameInstance* GI = GetGameInstance();
+	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	if (Anims == nullptr)
+	{
+		return false;
+	}
+	const FString Bank = Anims->GetIndex().CinematicBank(AnimSetModel, BoneRoot);
+	if (Bank.IsEmpty())
+	{
+		return false;
+	}
+	return Bodies->PlayCinematicClip(Body, Stem, Bank, ClipName, bLoop, OutSeconds);
 }
 
 UStaticMeshComponent* AElysiumMapActor::BuildPropVisual(const FString& Stem, const FVector& Location,

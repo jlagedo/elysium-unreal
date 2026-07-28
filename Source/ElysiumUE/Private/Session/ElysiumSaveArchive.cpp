@@ -161,6 +161,9 @@ FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R)
 	// The selected hub tab is a datamap field on VtMB's player, so it persists with the character
 	// rather than with the panel that reads it.
 	Ar << R.QuestLogArea;
+	// The History is the choice; the trait-effect group it names rides in `Effects` above, so a
+	// patched `histories000.txt` re-applies on load exactly as a patched rulebook does.
+	Ar << R.HistoryId;
 	return Ar;
 }
 
@@ -470,6 +473,7 @@ void Describe(const FElysiumSavePayload& Payload, TArray<FString>& OutLines)
 			*Q.Title, Q.State, Q.Table, Q.Quest, Q.Order, Q.bUnread ? TEXT(", unread") : TEXT("")));
 	}
 	OutLines.Add(FString::Printf(TEXT("player.questlog.area = %d"), P.QuestLogArea));
+	OutLines.Add(FString::Printf(TEXT("player.history = %d"), P.HistoryId));
 
 	OutLines.Add(FString::Printf(TEXT("world.map = %s"), *Payload.World.CurrentMap));
 	OutLines.Add(FString::Printf(TEXT("world.placement = %s yaw %.1f%s"),

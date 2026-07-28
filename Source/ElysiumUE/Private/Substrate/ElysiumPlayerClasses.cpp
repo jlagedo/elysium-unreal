@@ -204,6 +204,18 @@ bool FElysiumAnimating::PlayAnimClip(const FString& ClipName, bool bLoop, float*
 	return Embodiment->PlayNpcClip(Visual, ModelStem(), ClipName, bLoop, OutSeconds);
 }
 
+bool FElysiumAnimating::PlayCinematicClip(const FString& AnimSetModel, const FString& BoneRoot,
+	const FString& ClipName, bool bLoop, float* OutSeconds)
+{
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (!Embodiment || !Visual || AnimSetModel.IsEmpty() || ClipName.IsEmpty())
+	{
+		return false;
+	}
+	return Embodiment->PlayCinematicClip(Visual, ModelStem(), AnimSetModel, BoneRoot, ClipName,
+		bLoop, OutSeconds);
+}
+
 bool FElysiumAnimating::ResetAnimToIdle()
 {
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;

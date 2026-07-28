@@ -108,10 +108,11 @@ deps below — refresh it whenever a task flips:
    as the authored stat it is → **c [x]** the 290-call counter surface, the trait-effect layer under
    it → **RE27 [x]** → **d [x]** quests for real, all 161 shipped `AwardXP` keys now reachable
    through a real state change → **e [x]** the character screen carrying the journal, built as the
-   one shell chargen also lands in → **RE25 [x]** → **f** chargen including the quiz → **g** genesis
-   played, not skipped. **f is next**, and e reduced it to two bodies and a mode: the shell, header,
-   frames and art already exist, so f supplies the `Base` and spend-mode-`Chargen` tabs and the
-   flow behind them.
+   one shell chargen also lands in → **RE25 [x]** → **f [x]** chargen including the quiz, which also
+   closed e's placeholder Sheet tab and its deferred PC render → **g** genesis played, not skipped.
+   **g is next**, and it is routing rather than building: the map already fires `ccmd.createplayer`
+   and f made that verb real, so what is left is New Game's `story` entry and re-scoping
+   `elysium.SkipIntro`.
 3. **9.8 / 9.9 / 9.10 / 9.5** — the rest of what the hinge unblocked. They land *on*
    `FElysiumCombatCharacter` and `FElysiumPlayerRecord`: 9.10 finishes the economy over the
    `money` field that already exists, 9.8 fills the record's inventory half, and 9.5 (= 11.9, **[x]**)
@@ -120,8 +121,10 @@ deps below — refresh it whenever a task flips:
    nothing is left to export; the task itself stays PP2-gated, because the theatre is where the
    body is first on camera.
 
-**P12 is fully sourced** — everything left on it is runtime work; RE19/RE20/PL9/PL10 [x], detail
-in the P12 section below. **No shipped model carries eyeball data**, so 12.4 has no eye pose to
+**P12 is sourced bar two content gaps** — RE19/RE20/PL9/PL10 [x], detail in the P12 section below.
+The gaps: the cinematic anim sets were never exported (**PL16**, seeded off the scenes' own
+`BaseAnim` keys), and no `Character/dlg/**` line audio is exported, so every `speak` event resolves
+nothing until 12.2 mirrors it. **No shipped model carries eyeball data**, so 12.4 has no eye pose to
 decode and its look-at half needs an owner call.
 
 The lighting/look lane (3.1–3.13, 7.x remainder) is **frozen** under playable-path rule 2.
@@ -803,10 +806,10 @@ draw on the same stack; NPCs stand in the world at their entity origins.
   character) + `CurrentMoney`/`SetMoney`. The smallest self-contained system on the ledger; one
   integer on the sheet plus vendor `worth` when 9.8 lands. *Deps:* 9.7c.
 - [ ] **9.4 Quests/XP + RPG sheet data** *(the PP1 rung)* — the sheet is real (**b [x]**), the
-  rulebook parses (**a [x]**), the arithmetic over it runs (**c [x]**) and a quest state change now
-  resolves, awards and journals (**d [x]**), and the character screen carries the journal on the 8.6
-  stack (**e [x]**). What is left of the content layer is **chargen (f)**, which lands as a body in
-  e's shell, **g**'s routing, and the Sheet/Info bodies e left as framed placeholders.
+  rulebook parses (**a [x]**), the arithmetic over it runs (**c [x]**), a quest state change now
+  resolves, awards and journals (**d [x]**), the character screen carries the journal on the 8.6
+  stack (**e [x]**) and chargen builds a character in it (**f [x]**). What is left of the content
+  layer is **g**'s routing and the Info body e left as a framed placeholder.
   9.7 sized and constrained the lane: the sheet-counter demand is
   **290 calls** (`AwardExperience` 77 / `HumanityAdd` 69 / `CalcFeat` 53 / `ChangeMasqueradeLevel` 44
   / `Bloodloss` / `BumpStat` / `GetMasqueradeLevel`), the counters are INTEGER datamap inputs on the
@@ -936,26 +939,49 @@ draw on the same stack; NPCs stand in the world at their entity origins.
     catalogue miss degrading rather than vanishing, the opening hub) and `Elysium.Content.Quests`
     extended — every shipped quest lands in exactly one tab and resolves. The **Masquerade masks are
     sub-rectangles of `cm_topbar`**, which bakes the meter into the header band beside its two rules
-    (`vtmb-ui.md`) — there is no separate mask asset and none is missing. **Open:** the live PC render
-    behind the panels is deferred.
-  - **f. Chargen** *(**RE25** closed it; **e** built its shell)* — **`createplayer`** declared in
-    `FElysiumCommands` (it is not in `controls.md`'s bindable inventory, so it is a new declaration)
-    and implemented by the UI subsystem, on the **`Chargen` scope 11.5 reserved and nothing has
-    pushed since**. **The screen already exists**: supply `UElysiumCharacterScreen` a
-    `FElysiumCharacterScreenMode` with the `Base | Sheet` tab set, `EElysiumSpendMode::Chargen`, the
-    name text entry and the wizard footer, and build the two bodies — the shell, header, frames and
-    art are e's. Full flow:
-    name + sex → the `charcreatewizard.txt` `Popup` quiz (the 8 abstract Traits, `Trait_Prereq`
-    gating, and the same-`InternalName` random pick drawn from an owned `ElysiumRng` stream so the
-    Play tier replays deterministically) → `ConnectionScores` clan suggestion with override →
-    history (`histories000`) → priority-tier point-buy → confirm onto the **player entity**, with
-    `m_tEffectList` in VtMB's own spelling. The quiz's `Bkg_Image`/`Region`/`TextRegion` keys are
-    read as intent, not as a runtime coordinate system (`remaster-direction.md` axis 1). The math
-    RE25 recovered is not a second design: build the pools as *clan `Subpool_*` + tier table*, the
-    baseline by running the clan's `*_CharGen` leveling template, and price a dot off the
-    **pre-purchase base** rating, `New` only at the 0→1 step. `game_runtime.md` §3 has the whole
-    model, incl. the `-1` row filter that hides a non-clan discipline and the trait-effect layer
-    the clan banes and histories ride on.
+    (`vtmb-ui.md`) — there is no separate mask asset and none is missing. The live PC render behind
+    the panels, and the Sheet tab's body, were deferred here and land with **f**.
+  - [x] **f. Chargen** *(**RE25** closed it; **e** built its shell)* — **`createplayer`** declared in
+    `FElysiumCommands` (not in `controls.md`'s bindable inventory, so it gets no default bind) and
+    implemented by the UI subsystem on the **`Chargen` scope 11.5 reserved**; `elysium.chargen` opens
+    the same door without the map. The genesis `newplayer` trigger reaches it through
+    `ccmd.createplayer`, which needed a bridge fix of its own: **a bare attribute GET on `ccmd`
+    executes**, and `Ccmd_getattro` returned `""` without running anything. Proven from the corpus —
+    field 6 names `ccmd` exactly twice across every exported map and `createplayer` is chargen's only
+    entry — and inert for the other use (`ccmd.wc_create` resolves as nothing and the console drops
+    it). Marked as behavioural inference in `python_bridge.md` with what would verify it.
+    **The correction that changed the model: chargen spends DOTS, not experience.** A pool point buys
+    a dot outright; the `Costs` blocks price the level-up path. The shipped numbers admit no other
+    reading — a 2-point Physical pool against `Current_Rating * 4` could not buy its first dot, and
+    the single discipline point against `Current_Rating * 5` could never buy anything.
+    **A data-loss bug it surfaced:** `clandoc000.txt`'s `Attributes` block carries six SYMBOLIC
+    values, and the loader stored the block as name→int — so `Attrib_Order "Physical_Mental_Social"`
+    read as ordering **0** for every clan, and `CharGen_AutoLevel_Template` (not a `stats.txt` slot
+    at all) vanished. A `TraitText` side map keeps them; Brujah is ordering **1**, which is the
+    `PHYSICAL(2) / SOCIAL / MENTAL(1)` the retail capture shows.
+    Two new rulebook families: **`charcreatewizard.txt`** (85 popups — 78 bare `Popup` lines plus 7
+    the Unofficial Patch restored, so any count by line shape undercounts) and **`strings.txt` +
+    `strings_internal.txt`**, which merge by index because their group name spaces overlap by design.
+    `PlayerBodyStem` on the clan table is the one body lookup the stage and
+    `Elysium.Content.PlayerBodies` share.
+    **One screen, two currencies**: `BuildSheet` serves chargen and the in-game level-up sheet over
+    the same `FElysiumChargenState`, so **e's placeholder Sheet tab closed with this task** — and so
+    did its deferred PC render, as `FElysiumCharacterStage` (a real animated body on a transient
+    camera rig over the fixed backdrop quad), raised for both hosts. Both edit a **scratch**: nothing
+    reaches the character until ACCEPT, which makes CANCEL a discard rather than an undo log.
+    Save payload **6** (`History`) for `m_iVHistoryID`, and a sixth owned RNG stream (`Chargen`) so a
+    seeded quiz replays identically. `FElysiumNewGameRequest::{HistoryId, Spends}` stopped being
+    carried-and-logged and now lands through the same `CommitChargen` funnel the wizard uses.
+    **Two marked omissions**, both in `game_runtime.md`: route 3 (the Society of Leopold hunter
+    campaign — its templates are the multiplayer clans 9–11, which the clan encoding, the sigils and
+    the body lookup all stop short of), and **`AUTO-SPEND POINTS`, drawn disabled** because there is
+    no recovered algorithm — the clan's `_CharGen` template *is* the baseline and has already run by
+    the time the pools exist, so there is no authored spend order left to follow. Inventing one would
+    be a silent divergence. Acceptance: `Elysium.Substrate.Chargen` (pool arithmetic per ordering,
+    buy/sell symmetry in both currencies, the `New`/`Raise` split on the XP path, the `[0,6)` row
+    filter) and `Elysium.Content.Chargen` (every clan's pools against the real tables, the Brujah
+    baseline, a clan change re-deriving rather than layering, the quiz terminating and replaying
+    identically from one seed).
   - **g. Genesis played, not skipped** — `sp_genesisdevice_1` is **already exported and baked**, and
     its `newplayer` `trigger_once` already fires `ccmd.createplayer` + `G.Story_State = -5`, so with
     **f** registered the map itself needs no change. Confirmed by reading it (`level_transitions.md`):
@@ -971,7 +997,7 @@ draw on the same stack; NPCs stand in the world at their entity origins.
   the player entity, `pc.clan`/`pc.strength` read back from Python, a skill-gated `.dlg` choice that
   was hidden becomes visible, and the journal shows `pc.SetQuest("Tutorial", 1)`. *Deps:* 1.1 [x],
   9.7c [x], 11.4 [x], 11.6 [x]; **RE24 [x]** (b [x], c [x]), **RE27 [x]** (d [x]),
-  **RE25 [x]** (f is unblocked, and **e [x]** built the shell it lands in).
+  **RE25 [x]** (f [x] built on the shell **e [x]** framed).
 - [x] **9.5 Save/load** — **built as 11.9**; see that entry. The four blocks (Session / Player /
   Maps / World) over the R2 field walk, the per-map snapshot lifecycle with the absent-entity set,
   the event queue incl. deferred script strings, think times, `G`, and owned RNG streams, inside a
@@ -1159,8 +1185,18 @@ it was never authored.
   `expression`, `gesture`, `sequence`, `firetrigger`, `python`, `bodysound`), absolute scene time
   offset by the audio mixahead, `position_start`/`position_end` actor placement, and
   `firetrigger "N"` → `OnTriggerN`. *Acceptance:* the theatre's first scene runs its actors and
-  fires its completion wires in the built game. *Deps:* 8.5, 11.1, RE19 [x], PL9 [x] — a
+  fires its completion wires in the built game. *Deps:* 8.5, 11.1, RE19 [x], PL9 [x], PL16 — a
   `SceneFile` resolves to `out/scenes/` + the path with its `sound/` prefix stripped.
+  - **Landed:** the reader (`ElysiumSceneData`), the timeline (`ElysiumScenePlayer`), the entity
+    (`ElysiumChoreoScene`) with all four inputs, all seven outputs, name binding,
+    `position_start`/`position_end`, `Serialize`, `GetDebugState` and `elysium.scene`;
+    `firetrigger`/`sequence`/`gesture`/`speak`/`bodysound`/`python` routed. Tests:
+    `Elysium.Substrate.SceneParse`, `.SceneTimeline`, `.ChoreoScene`, `Elysium.Content.SceneCorpus`
+    (all 5,444 `.vcd`, histograms matched against the doc) and `.SceneAnimSets` (every anim-set
+    reference and actor bone-root resolves to a PL16 bank). `sp_theatre` is exported and baked.
+  - **Remaining:** the live acceptance run. `speak` resolves nothing until 12.2 mirrors
+    `Character/dlg/**`. `hide_ents` ships behind `elysium.SceneHideEnts` (default 0) — steps 1–4
+    of its predicate are decoded, step 5's two virtuals are not.
 - [ ] **12.2 Scene audio + subtitles** — per-line audio through the 6.2 decode path (the
   `PlayDialogFile` file-resolution rules) synced to scene time; a subtitle surface on the view
   state (11.8). *Acceptance:* the scene's lines are audible and subtitled in sync. *Deps:* 12.1,
@@ -1232,6 +1268,7 @@ retail end to end, and `test.bat Play` proves it headlessly.
 | PL13 ✅ | **Export the PC models.** A second seed, not a second path: `pc_models_from_clandoc` reads `out/vdata/system/clandoc000.txt`'s indexed `M_Body0..5`/`F_Body0..5` — 7 `Player_*` clans × 2 sexes × 6 armour slots = **84 slots → 56 distinct `.mdl`** (each clan's top two repeat its tier-3 suit) — and `main()` unions it with `npc_models_from_ents`, so the exported set cannot drift from the table 8.11a selects through. Only the *indexed* keys count: the un-indexed `M_Body`/`F_Body` of the human/Society-of-Leopold templates name NPC models, and the `mp-*`/`unused*` templates repeat the playable paths. All 56 resolve; the install's other 3 `models/character/pc/**.mdl` are named nowhere. Result: **157 characters (101 NPCs + 56 PC bodies), 67 banks, 721 MB** — the bodies are ordinary index entries (63–106 bones, 3–5 own clips, ~1,440 resolved, ~786 KB each; 45 MB total), matched back to a clan slot through each entry's own `model` path, and the banks confirm the prediction: only **3** are new, the per-clan run-cycle aggregators `run{brujah,malknos,otherspc}_pcidles_allsequences`. **Finding: no PC body carries a flex rig** — 0 of all 59, and 0 of the 21 `models/hands/` viewmodels — so the player has no morph targets and no `facial/` sidecar, which is 12.3/12.5's problem to answer for the PC (`facial_animation.md`). Two parser defects fell out and are fixed: `kv.py` and `ElysiumKeyValues.h` both mis-read a quoted value carrying `\"` (`clandoc000.txt`'s Malkavian description), and `kv.py` also mis-read one spanning lines — either shifts every following key/value pair by one, so the next `{` is taken as a value and the block nesting collapses. Mechanised as **`Elysium.Content.PlayerBodies`** | 8.11 |
 | PL15 ✅ | **Find the Masquerade mask faces** — *there is no missing asset; the premise was wrong.* The masks are **baked into `cm_topbar`**, whose 1024×128 page carries the header's two full-width rules *and* the meter painted into its right end (x 797–997, rows 32–73, 43 px pitch, brightening left to right). Settled from `client.dll`'s own string table: it names all 29 `charactermaintenance` textures it can load and no mask is among them — `cm_Masquerade_Strike` is the only mask-related material, the slash drawn over violated slots. Verified against a 1366×768 capture — the page's masks scaled to that width match within 1.5 px, and both rules land on identical rows, so the bar draws stretched horizontally at native vertical scale. The meter and the two rules now read their own sub-rectangles of the page (9.4e); the extractor needed no change. The tree is complete at 44 stems bar two `.vmt`-less art-source `cm_topbar` variants. Format facts: `vtmb-ui.md` | 8.9 |
 | PL14 | **Export the first-person hand viewmodels.** `clandoc000.txt` also names `M_Hands`/`F_Hands` per clan — the patch-restored per-clan viewmodels under `models/hands/**` (21 in the merged install) — and PL13 deliberately left them out: they are the first-person half of the body and 8.11a's acceptance is the third-person boom. Same seed function, one more key pair; none carries a flex rig | 8.11a |
+| PL16 ✅ | **Export the cinematic anim sets.** A third seed beside PL13's, for the same reason: no `npc_*` entity carries a `models/cinematic/**` model and the rulebook never names one, so the whole tree (106 models) stayed in the VPKs and every `sequence "entire_scene"` resolved nothing. `cinematic_models_from_ents` reads the `BaseAnim`/`MaleAnim`/`FemaleAnim` keys off each exported map's `logic_choreographed_scene` entities — **20 distinct models** across the exported set, 15 of them `sp_theatre`'s. Each is one multi-actor performance: N co-located 67-bone skeletons (`Bip01`..`BipNN`) carrying a single clip, which is what a scene's `bonerename "BipNN" "Bip01"` picks an actor out of. `mdl_gltf.export_cinematic` splits each into **one bank per bone root** with the prefix folded back to `Bip01`, so the existing bone-name retarget applies it to an ordinary NPC skeleton with no new runtime path; `npc_index.json` grows a `cinematics` map (model key → its per-root banks) for the runtime to resolve (anim set, bonerename source) → bank. Format: `docs/choreographed_scenes.md` → "The animation set" | 12.1 |
 | PL7 | Sidecar space fixes surfaced by the audit — **none (0.4: all sidecars already Unreal cm)** | 0.4 [x] |
 | PL9 ✅ | Mirror the choreographed-scene files + `.lip` phoneme files → `out/scenes/`, `out/lip/` — `UE_extract_scenes.py`, patch-first, verbatim, `sound/` prefix stripped so `SceneFile` reads back 1:1; **5,444 `.vcd`** (4.5 MB) + **7,136 `.lip`** (16.8 MB), wired into `export_all.py` (`--no-scenes`) with a `SceneFile` cross-check over the exported `.ents`. The `.lip` *format* stays RE20 [x] | 12.1, 12.5 |
 | PL10 ✅ | Facial data in the NPC export — the flex chunks (RE20 [x]) decoded by **`mdl_skel`** (one decoder, now shared with `probe_facial.py`) into glb **morph targets** in each rigged NPC's own glb, plus `out/npc/facial/<stem>.json` carrying what a morph target cannot hold: the 44 controllers, the 60 RPN rules, each morph's four-value ramp and `mstudiomouth_t`. **78 of 101 NPCs rigged, 4,015 morph targets**, +0.33–0.53 MB per rigged glb (manifest v3; the manifest names the sidecar). The unit-vector table comes out of the user's own `StudioRender.dll` at export time (`mdl_skel.read_anorms`; `probe_facial.py --anorms` still dumps it for RE) — game-derived, so regenerated, never committed; without it the export ships meshes and skips faces rather than baking wrong deltas. Two corrections to the plan: the unit is the flex **record**, not the flexdesc (a flexdesc splits into two ramps — 53 targets from 45 flexdescs), and a morph **spans materials**, so it lands as one same-named piece per primitive and the consumer must load with `MorphTargetsDuplicateStrategy::Merge` (12.3; 8.5's loader still takes the default `Ignore`). No eyeball chunk exists to export. `UE_extract_scenes.py` also mirrors the 249 `expressions/*.txt` → `out/expressions/`. Full shape: `docs/facial_animation.md` → "The offline export" | 12.3, 12.4, 12.5 |

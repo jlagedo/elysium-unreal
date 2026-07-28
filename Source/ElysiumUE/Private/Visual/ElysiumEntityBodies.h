@@ -51,6 +51,11 @@ public:
 	// Crossfade a live NPC body to a named clip, resolved through the manifest. Returns false when
 	// the name resolves nothing. OutSeconds receives the clip's authored length — what a
 	// `scripted_sequence` schedules its `OnEndSequence` off.
+	// 12.1 — play a clip out of a named cinematic bank (a choreo scene's anim set), resolved and
+	// cached per (bank, clip) exactly like an ordinary one.
+	bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& BankStem,
+		const FString& ClipName, bool bLoop, float* OutSeconds);
+
 	bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		bool bLoop, float* OutSeconds);
 

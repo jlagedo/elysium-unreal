@@ -287,6 +287,13 @@ bool UElysiumMapSubsystem::ConsumeRestorePlacement(FVector& OutOrigin, float& Ou
 	return true;
 }
 
+bool UElysiumMapSubsystem::ConsumeFreshMapState()
+{
+	const bool bWas = bFreshMapState;
+	bFreshMapState = false;
+	return bWas;
+}
+
 FString UElysiumMapSubsystem::PendingTravelDesc() const
 {
 	if (!PendingMapLoad.bValid)

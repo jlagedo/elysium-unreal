@@ -2,6 +2,8 @@
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumGameStateSubsystem.h"
+#include "Substrate/ElysiumChargen.h"
+#include "Substrate/ElysiumRulebookSubsystem.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumSaveSubsystem.h"
 #include "UI/ElysiumUIStyle.h"
@@ -54,14 +56,17 @@ static TAutoConsoleVariable<int32> CVarBootMenu(
 	TEXT("1 = cold boot raises the main menu over a backdrop; 0 = boot straight into New Game."),
 	ECVF_Default);
 
-// Retail's New Game is a four-map chain and the first two maps need chargen (9.4) and the
-// choreographed theatre act (P12). Until those land, "story" resolves to the tutorial entry — the
-// same landmark the real `sp_theatre` transition arrives at, so the flow is not re-plumbed when
-// P12 lands, only this default flips.
+// New Game always enters the chain at genesis; this governs only the leg AFTER it. The theatre act
+// is P12's, so with the skip on, a transition into `sp_theatre` is rewritten to the tutorial landmark
+// that act would have delivered to — applied once, at the travel funnel (ElysiumStory::ResolveIntroSkip,
+// UElysiumMapSubsystem::RequestLandmarkTravel). Ours, not VtMB's: retail's own switch is the
+// `vchar_skip_intro` ConVar behind the wizard's `Skip Intro` checkbox, whose reader is not yet
+// recovered (`level_transitions.md`). Reversible — 0 takes the authored route.
 static TAutoConsoleVariable<int32> CVarSkipIntro(
 	TEXT("elysium.SkipIntro"),
 	1,
-	TEXT("1 = New Game enters at sp_tutorial_1; 0 = enter the full chain at sp_genesisdevice_1."),
+	TEXT("1 = leaving genesis skips the theatre act and lands at sp_tutorial_1's `tutorial` landmark; ")
+	TEXT("0 = take the authored route to sp_theatre."),
 	ECVF_Default);
 
 static TAutoConsoleVariable<int32> CVarLoadingScreen(
@@ -221,6 +226,49 @@ void UElysiumGameFlowSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 				Request.EntryPoint = Args[2];
 			}
 			NewGame(Request);
+		}),
+		ECVF_Cheat));
+
+	// The theatre-opening replay door. `sp_theatre`'s opening is a single trigger_once the player
+	// spawns straight onto at the `newgame` landmark, so once it has fired, re-entering the map
+	// correctly finds it spent — a fire-once trigger staying fired is faithful, and the map
+	// snapshot is right to replay it. This is the dev way back in: seed a run exactly as New Game
+	// does (the chain reads pc.clan/pc.IsMale in chooseSire/castUnderstudy and expects
+	// Story_State=-4), and forget the theatre's map state so the whole embrace chain runs again.
+	//
+	// The forget is a request consumed on arrival, not a clear here: NewGame's travel tears the
+	// current map down at end of frame, and that teardown re-freezes it.
+	ConsoleObjects.Add(Console.RegisterConsoleCommand(
+		TEXT("elysium.newgame_ttd"),
+		TEXT("elysium.newgame_ttd [clan] [m|f] — theatre debug: new run entered at sp_theatre's "
+			"`newgame` landmark with the map's state forgotten, so its opening chain fires again"),
+		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
+		{
+			FElysiumNewGameRequest Request;
+			Request.Clan = (Args.Num() > 0) ? FElysiumSheet::ClanFromName(Args[0]) : 0;
+			if (Args.Num() > 0 && Request.Clan == 0)
+			{
+				UE_LOG(LogElysiumFlow, Warning,
+					TEXT("elysium.newgame_ttd: unknown clan '%s' — using the default"), *Args[0]);
+			}
+			Request.bMale = !(Args.Num() > 1 && Args[1].StartsWith(TEXT("f"), ESearchCase::IgnoreCase));
+			Request.EntryPoint = TEXT("sp_theatre@newgame");
+
+			UGameInstance* GI = GetGameInstance();
+			UElysiumMapSubsystem* Maps = GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
+			if (Maps)
+			{
+				Maps->RequestFreshMapState();
+			}
+			if (!NewGame(Request))
+			{
+				if (Maps)
+				{
+					Maps->ConsumeFreshMapState();   // nothing travelled; do not leave it armed
+				}
+				UE_LOG(LogElysiumFlow, Warning,
+					TEXT("elysium.newgame_ttd: sp_theatre needs both an export and a bake"));
+			}
 		}),
 		ECVF_Cheat));
 
@@ -553,16 +601,14 @@ bool UElysiumGameFlowSubsystem::ResolveEntryPoint(const FString& EntryPoint,
 
 	if (Entry.Equals(TEXT("story"), ESearchCase::IgnoreCase))
 	{
-		// The full chain starts at chargen. Both chargen (9.4) and the theatre act (P12) are
-		// unbuilt, so the shipped default enters at the tutorial — the landmark the real
-		// `sp_theatre` transition arrives at, so nothing downstream changes when they land.
-		if (CVarSkipIntro.GetValueOnGameThread() == 0)
-		{
-			OutMap = ElysiumStory::ChargenMap;
-			OutLandmark.Reset();
-			return true;
-		}
-		Entry = TEXT("tutorial");
+		// The chain starts at genesis, and it enters through the map's own `info_player_start` — no
+		// landmark, because nothing transitioned into it. From there the map drives itself: the spawn
+		// lands inside the `newplayer` trigger, which fires `G.Story_State = -5` and
+		// `ccmd.createplayer`, and the wizard's close teleports the player onto the exit
+		// (`level_transitions.md`). Where that exit *goes* is the skip's business, not this function's.
+		OutMap = ElysiumStory::ChargenMap;
+		OutLandmark.Reset();
+		return true;
 	}
 
 	if (Entry.Equals(TEXT("tutorial"), ESearchCase::IgnoreCase))
@@ -579,6 +625,24 @@ bool UElysiumGameFlowSubsystem::ResolveEntryPoint(const FString& EntryPoint,
 		OutLandmark.Reset();
 	}
 	return !OutMap.IsEmpty();
+}
+
+bool UElysiumGameFlowSubsystem::ShouldSkipIntro()
+{
+	return CVarSkipIntro.GetValueOnGameThread() != 0;
+}
+
+void UElysiumGameFlowSubsystem::SetSkipIntro(bool bSkip)
+{
+	CVarSkipIntro->Set(bSkip ? 1 : 0, ECVF_SetByCode);
+}
+
+namespace ElysiumStory
+{
+	bool IsSkippedIntroLeg(bool bSkip, const FString& Map)
+	{
+		return bSkip && Map.Equals(TheatreMap, ESearchCase::IgnoreCase);
+	}
 }
 
 bool UElysiumGameFlowSubsystem::NewGame(const FElysiumNewGameRequest& Request)
@@ -617,13 +681,56 @@ bool UElysiumGameFlowSubsystem::NewGame(const FElysiumNewGameRequest& Request)
 	// BeginNewGame clears `G`, the quest map and the sheet, then writes the flags that survive
 	// retail's intro chain. It does not travel.
 	GameState->BeginNewGame(Clan, Request.bMale);
+
+	// A request that already carries a character — the MCP tool, a save-less dev entry, or a caller
+	// that ran the wizard headless — lands it through chargen's own funnel, so a seeded character
+	// and one the player built go down the same path.
 	if (Request.HistoryId >= 0 || Request.Spends.Num() > 0)
 	{
-		// 9.4 owns the history table and the chargen spends; recorded rather than dropped so the
-		// call sites that will fill them are traceable now.
+		FElysiumChargenState Chargen;
+		Chargen.Currency = EElysiumChargenCurrency::Pools;
+		Chargen.Name = GameState->PlayerName();
+		Chargen.Clan = Clan;
+		Chargen.bMale = Request.bMale;
+		Chargen.HistoryId = Request.HistoryId;
+
+		FElysiumChargenRules Rules;
+		if (UElysiumRulebookSubsystem* Book = GameState->Rulebook())
+		{
+			Rules.Stats        = &Book->Stats();
+			Rules.Rules        = &Book->Rules();
+			Rules.Clans        = &Book->Clans();
+			Rules.Histories    = &Book->Histories();
+			Rules.Leveling     = &Book->Leveling();
+			Rules.TraitEffects = &Book->TraitEffects();
+			Rules.Feats        = &Book->Feats();
+			Rules.Strings      = &Book->Strings();
+		}
+		ElysiumChargen::ApplyBaseline(Chargen, Rules);
+
+		// Each spend names a trait and how many dots to buy on top of the baseline. A name the
+		// rulebook does not own, or a dot the pool cannot pay for, is reported rather than silently
+		// dropped — a request that asks for more than chargen allows is a caller bug.
+		int32 Applied = 0, Refused = 0;
+		for (const TPair<FName, int32>& Spend : Request.Spends)
+		{
+			EElysiumTraitContainer Container = EElysiumTraitContainer::Attributes;
+			int32 Slot = INDEX_NONE;
+			if (!ElysiumFindSheetSlot(*Spend.Key.ToString(), Container, Slot))
+			{
+				++Refused;
+				continue;
+			}
+			for (int32 i = 0; i < Spend.Value; ++i)
+			{
+				if (ElysiumChargen::Buy(Chargen, Rules, Container, Slot)) { ++Applied; }
+				else { ++Refused; break; }
+			}
+		}
+		GameState->CommitChargen(Chargen);
 		UE_LOG(LogElysiumFlow, Log,
-			TEXT("New Game: history %d and %d chargen spends carried but unapplied (9.4)"),
-			Request.HistoryId, Request.Spends.Num());
+			TEXT("New Game: history %d applied, %d chargen dot(s) bought, %d refused"),
+			Request.HistoryId, Applied, Refused);
 	}
 
 	if (!Maps->Travel(Map, Landmark))

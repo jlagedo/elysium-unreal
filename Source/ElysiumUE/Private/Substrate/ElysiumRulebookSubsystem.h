@@ -37,6 +37,8 @@ public:
 	const FElysiumQuestTables&        Quests();
 	const FElysiumExperienceTable&    Experience();
 	const FElysiumLevelingTemplates&  Leveling();
+	const FElysiumWizard&             Wizard();
+	const FElysiumStrings&            Strings();
 
 	// Force every table. Returns the number that loaded clean.
 	int32 LoadAll();
@@ -71,6 +73,8 @@ private:
 	FElysiumQuestTables       QuestTables;
 	FElysiumExperienceTable   ExperienceTable;
 	FElysiumLevelingTemplates LevelingTemplates;
+	FElysiumWizard            WizardData;
+	FElysiumStrings           StringData;
 
 	bool bStatsLoaded = false;
 	bool bFeatsLoaded = false;
@@ -81,6 +85,8 @@ private:
 	bool bQuestsLoaded = false;
 	bool bExperienceLoaded = false;
 	bool bLevelingLoaded = false;
+	bool bWizardLoaded = false;
+	bool bStringsLoaded = false;
 
 	FString StatsError;
 	FString FeatsError;
@@ -91,6 +97,8 @@ private:
 	FString QuestsError;
 	FString ExperienceError;
 	FString LevelingError;
+	FString WizardError;
+	FString StringsError;
 
 	TArray<IConsoleObject*> ConsoleObjects;
 };

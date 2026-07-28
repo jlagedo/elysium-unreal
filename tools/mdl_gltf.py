@@ -540,6 +540,148 @@ def export_bank(idx, model_path, out_dir, stem):
     return dict(stem=stem, glb="banks/" + os.path.basename(glb), model=model_path, clips=labels)
 
 
+def _bone_root(name):
+    """A bone's root token if it names one of a cinematic model's actor skeletons.
+
+    `Bip01 Spine1` -> `Bip01`; `Dummy01` -> None. The match is on the leading word only, so
+    every bone of one actor's skeleton answers the same root.
+    """
+    head = name.split()[0] if name.split() else name
+    low = head.lower()
+    if low.startswith("bip") and low[3:].isdigit():
+        return head
+    return None
+
+
+def cinematic_roots(bones):
+    """The distinct `BipNN` roots a model carries, in first-seen order."""
+    roots, seen = [], set()
+    for b in bones:
+        r = _bone_root(b.name)
+        if r and r.lower() not in seen:
+            seen.add(r.lower())
+            roots.append(r)
+    return roots
+
+
+def export_cinematic(idx, model_path, out_dir, stem):
+    """Write one bank per bone root of a cinematic `.mdl` -> `<out_dir>/banks/<stem>__<root>.glb`.
+
+    A cinematic model is a whole multi-actor performance packed into one file: N co-located
+    skeletons (`Bip01`..`BipNN`, ~67 bones each) carrying a single clip, usually `entire_scene`.
+    A choreo scene's `bonerename "BipNN" "Bip01"` is how each actor picks its own root out of
+    that one clip (`docs/choreographed_scenes.md`).
+
+    Each root is emitted as its own bank with the prefix folded back to `Bip01`, so the existing
+    bone-name retarget applies it to an ordinary NPC skeleton with no new runtime path. A model
+    with a single root is written once, unsuffixed, exactly like any other bank.
+
+    Returns a list of bank dicts (as `export_bank`), each with an extra `root` key, or None.
+    """
+    key = model_path[:-4] if model_path.lower().endswith(".mdl") else model_path
+    d = install.read(idx, key + ".mdl")
+    if not d:
+        return None
+    clips = S.local_sequences(d)
+    if not clips:
+        return None
+    bones = S.read_bones(d)
+    roots = cinematic_roots(bones)
+    if len(roots) <= 1:
+        one = export_bank(idx, model_path, out_dir, stem)
+        if one:
+            one["root"] = roots[0] if roots else None
+        return [one] if one else None
+
+    # Decode each clip once against the FULL skeleton: the animation records are indexed by the
+    # model's own bone order, so a per-root subset has to read through the original indices.
+    decoded = {}
+    for c in clips:
+        decoded[c.label] = S.read_anim(d, bones, c.base, c.frames)
+
+    banks_dir = os.path.join(out_dir, "banks")
+    os.makedirs(banks_dir, exist_ok=True)
+    out = []
+
+    for root in roots:
+        low = root.lower()
+        sub = [b for b in bones if (_bone_root(b.name) or "").lower() == low]
+        if not sub:
+            continue
+        old2new = {b.index: i for i, b in enumerate(sub)}
+
+        g = Gltf()
+        nodes = []
+        for b in sub:
+            t = conv_pos(b.pos)
+            q = conv_quat(b.quat)
+            # Fold this actor's prefix back to Bip01 so the clip retargets onto a normal skeleton.
+            name = b.name
+            if name[:len(root)].lower() == low:
+                name = "Bip01" + name[len(root):]
+            nodes.append({
+                "name": name,
+                "translation": [float(t[0]), float(t[1]), float(t[2])],
+                "rotation": [float(q[0]), float(q[1]), float(q[2]), float(q[3])],
+            })
+        for i, b in enumerate(sub):
+            if b.parent in old2new:
+                nodes[old2new[b.parent]].setdefault("children", []).append(i)
+
+        animations, labels = [], []
+        for c in clips:
+            frames = decoded[c.label]
+            recs = c.base + struct.unpack_from("<i", d, c.base + 48)[0]
+            times = np.arange(c.frames, dtype=np.float32) / (c.fps or 30.0)
+            time_acc = g.accessor(times.reshape(-1, 1), FLOAT, "SCALAR", mm=True)
+            channels, samplers = [], []
+            for b in sub:
+                offs = struct.unpack_from("<7i", d, recs + b.index * 32 + 4)
+                node = old2new[b.index]
+                if any(offs[3:]):
+                    qout = np.array([conv_quat(frames[f][b.index][1]) for f in range(c.frames)],
+                                    dtype=np.float32)
+                    samplers.append({"input": time_acc, "output": g.accessor(qout, FLOAT, "VEC4"),
+                                     "interpolation": "LINEAR"})
+                    channels.append({"sampler": len(samplers) - 1,
+                                     "target": {"node": node, "path": "rotation"}})
+                if any(offs[:3]):
+                    tout = np.array([conv_pos(frames[f][b.index][0]) for f in range(c.frames)],
+                                    dtype=np.float32)
+                    samplers.append({"input": time_acc, "output": g.accessor(tout, FLOAT, "VEC3"),
+                                     "interpolation": "LINEAR"})
+                    channels.append({"sampler": len(samplers) - 1,
+                                     "target": {"node": node, "path": "translation"}})
+            if channels:
+                animations.append({"name": c.label.lstrip("@"), "channels": channels,
+                                   "samplers": samplers})
+                labels.append(c)
+        if not animations:
+            continue
+
+        # The subtree's own root: the one bone whose parent is outside the subtree.
+        sub_root = next((old2new[b.index] for b in sub if b.parent not in old2new), 0)
+        name = f"{stem}__{low}"
+        gltf = {
+            "asset": {"version": "2.0", "generator": "elysium mdl_gltf cinematic"},
+            "scene": 0,
+            "scenes": [{"nodes": [sub_root]}],
+            "nodes": nodes,
+            "animations": animations,
+            "accessors": g.accessors,
+            "bufferViews": g.bufferViews,
+            "buffers": [{"byteLength": len(g.bin)}],
+        }
+        glb = os.path.join(banks_dir, name + ".glb")
+        _write_glb(gltf, g.bin, glb)
+        print(f"  cinematic {name}: {len(sub)} bones, {len(labels)} clips "
+              f"-> {glb} ({os.path.getsize(glb) // 1024} KB)")
+        out.append(dict(stem=name, glb="banks/" + os.path.basename(glb), model=model_path,
+                        clips=labels, root=root))
+
+    return out or None
+
+
 def export(model_path, anim_name, out_dir):
     """Single-clip probe (the CLI / 8.2 spike): mesh + skeleton + one named clip, found by
     sequence label first, then by raw anim name."""

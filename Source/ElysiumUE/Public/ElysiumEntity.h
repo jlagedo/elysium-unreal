@@ -196,6 +196,12 @@ public:
 	// idles it, and the stance idle is the closest thing this runtime has to that. Base answers false.
 	virtual bool ResetAnimToIdle() { return false; }
 
+	// 12.1 — play a clip out of a choreographed scene's own anim set (the whole-cast cinematic
+	// model), selecting this actor's skeleton inside it by the scene's `bonerename` source. Kept
+	// beside PlayAnimClip for the same no-RTTI reason; base answers false.
+	virtual bool PlayCinematicClip(const FString& AnimSetModel, const FString& BoneRoot,
+		const FString& ClipName, bool bLoop, float* OutSeconds = nullptr) { return false; }
+
 	// A disposition write from script — the animation half of `SetDisposition` (2,510 calls, the
 	// largest single engine demand in the game). Re-picks the standing stance; the emotional-state
 	// and reaction half is 9.9's. Base answers false.

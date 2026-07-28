@@ -73,7 +73,11 @@ FElysiumEntityWorld::~FElysiumEntityWorld()
 
 double FElysiumEntityWorld::NowSeconds() const
 {
-	return GameState ? GameState->GameClock().GetNow() : 0.0;
+	// The clock is the game state's. Without one — a headless test world, or the worldless probe
+	// entity `elysium.classes` builds — fall back to the last time this world was ticked, so a think
+	// that measures elapsed time still reads the caller's clock. Only RunThinks/RunPlayerThink see
+	// the tick argument directly; everything else asks here.
+	return GameState ? GameState->GameClock().GetNow() : LastTickNow;
 }
 
 // --- Load / spawn -----------------------------------------------------------------------
@@ -1063,6 +1067,7 @@ void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 
 void FElysiumEntityWorld::RunPlayerThink(double Now)
 {
+	LastTickNow = Now;
 	// The pre-move pass. Retail runs the player's own think inside CPlayerMove::RunCommand — the
 	// PreThink -> think -> move -> PostThink shell the engine drives while draining `clc_move` —
 	// and NOT in Physics_RunThinkFunctions, which is why it is a separate call rather than an
@@ -1083,6 +1088,7 @@ void FElysiumEntityWorld::RunPlayerThink(double Now)
 
 void FElysiumEntityWorld::Tick(double Now)
 {
+	LastTickNow = Now;
 	// 11.4 — sample the pawn into the player entity first, so everything this frame reads (a think
 	// measuring distance, a landmark offset, `pc.GetOrigin()`) sees where the player actually is.
 	// The body moved earlier in THIS frame (step 4), which is the relationship retail has: the move
@@ -1369,20 +1375,9 @@ void FElysiumEntityWorld::ResolveTargets(const FElysiumIOEvent& Event, TArray<FE
 		return;
 	}
 
-	// Targetnames are non-unique — fan out over every live (non-dead) match.
-	const FName Name(*T);
-	for (auto It = NameIndex.CreateConstKeyIterator(Name); It; ++It)
-	{
-		const int32 Idx = It.Value();
-		if (EntityList.IsValidIndex(Idx))
-		{
-			FElysiumEntity* E = EntityList[Idx].Get();
-			if (E && !E->IsDead())
-			{
-				Out.Add(E);
-			}
-		}
-	}
+	// Targetnames are non-unique — fan out over every live (non-dead) match. A wire may name a
+	// trailing-`*` prefix (RE29); 68 shipped outputs do, `patrol_cop_*` alone 51 times.
+	ForEachMatch(T, [&Out](FElysiumEntity& E) { Out.Add(&E); return true; });
 }
 
 // --- Resolution -------------------------------------------------------------------------
@@ -1404,19 +1399,11 @@ const FElysiumEntity* FElysiumEntityWorld::Resolve(const FElysiumEntityHandle& H
 
 FElysiumEntity* FElysiumEntityWorld::FindByName(const FString& Name)
 {
-	const FName N(*Name);
-	for (auto It = NameIndex.CreateConstKeyIterator(N); It; ++It)
-	{
-		if (EntityList.IsValidIndex(It.Value()))
-		{
-			FElysiumEntity* E = EntityList[It.Value()].Get();
-			if (E && !E->IsDead())
-			{
-				return E;
-			}
-		}
-	}
-	return nullptr;
+	// FindEntityByName with a null start entity: the first live match, under the same matching rule
+	// everything else uses (RE29) — so a trailing-`*` name resolves here too.
+	FElysiumEntity* Found = nullptr;
+	ForEachMatch(Name, [&Found](FElysiumEntity& E) { Found = &E; return false; });
+	return Found;
 }
 
 FElysiumEntity* FElysiumEntityWorld::FindLandmark(const FString& Name)
@@ -1441,21 +1428,74 @@ FElysiumEntity* FElysiumEntityWorld::FindLandmark(const FString& Name)
 	return nullptr;
 }
 
-void FElysiumEntityWorld::ForEachNamed(FName Name, TFunctionRef<void(FElysiumEntity&)> Fn)
+bool FElysiumEntityWorld::NameMatches(const FString& TargetName, const FString& Pattern)
 {
-	for (auto It = NameIndex.CreateConstKeyIterator(Name); It; ++It)
+	// RE29 (vampire.dll FUN_100f7770). An empty pattern matches nothing — the image tests
+	// `*szName == '\0'` and returns null before it walks anything — and a nameless entity is never a
+	// candidate, because the walk skips a null targetname pointer.
+	const int32 Len = Pattern.Len();
+	if (Len == 0 || TargetName.IsEmpty())
 	{
-		if (EntityList.IsValidIndex(It.Value()))
+		return false;
+	}
+	// Only the FINAL character is special. The image indexes `szName[len-1]` and nothing else, so a
+	// `*` in any other position is a literal — there is no glob here, and no `?`.
+	if (Pattern[Len - 1] == TEXT('*'))
+	{
+		// _strnicmp(targetname, pattern, len-1): case-insensitive over everything before the star. A
+		// bare "*" is len-1 == 0, which _strnicmp answers 0 (equal) for — so it matches every named
+		// entity, exactly as the image does.
+		const int32 Prefix = Len - 1;
+		return TargetName.Len() >= Prefix
+			&& FCString::Strnicmp(*TargetName, *Pattern, Prefix) == 0;
+	}
+	// _stricmp — the ordinary case-insensitive exact match.
+	return TargetName.Equals(Pattern, ESearchCase::IgnoreCase);
+}
+
+void FElysiumEntityWorld::ForEachMatch(const FString& Pattern, TFunctionRef<bool(FElysiumEntity&)> Fn)
+{
+	if (Pattern.IsEmpty())
+	{
+		return;
+	}
+
+	// The common case is an exact name, and the name index already folds case (FName), so it answers
+	// the same question the image's _stricmp does — take the hash.
+	if (Pattern[Pattern.Len() - 1] != TEXT('*'))
+	{
+		const FName Name(*Pattern);
+		for (auto It = NameIndex.CreateConstKeyIterator(Name); It; ++It)
 		{
-			if (FElysiumEntity* E = EntityList[It.Value()].Get())
+			if (EntityList.IsValidIndex(It.Value()))
 			{
-				if (!E->IsDead())
+				if (FElysiumEntity* E = EntityList[It.Value()].Get())
 				{
-					Fn(*E);
+					if (!E->IsDead() && !Fn(*E))
+					{
+						return;
+					}
 				}
 			}
 		}
+		return;
 	}
+
+	// A prefix pattern cannot use the hash, so walk the list — which is also the image's own order
+	// (entity-list order), so "the first match" means the same thing on both sides.
+	for (const TUniquePtr<FElysiumEntity>& Owned : EntityList)
+	{
+		FElysiumEntity* E = Owned.Get();
+		if (E && !E->IsDead() && NameMatches(E->TargetName, Pattern) && !Fn(*E))
+		{
+			return;
+		}
+	}
+}
+
+void FElysiumEntityWorld::ForEachNamed(const FString& Pattern, TFunctionRef<void(FElysiumEntity&)> Fn)
+{
+	ForEachMatch(Pattern, [&Fn](FElysiumEntity& E) { Fn(E); return true; });
 }
 
 // --- Formatting -------------------------------------------------------------------------

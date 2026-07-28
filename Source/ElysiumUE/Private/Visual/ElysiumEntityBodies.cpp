@@ -94,6 +94,60 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	return true;
 }
 
+bool UElysiumEntityBodies::PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
+	const FString& BankStem, const FString& ClipName, bool bLoop, float* OutSeconds)
+{
+	if (Body == nullptr || BankStem.IsEmpty())
+	{
+		return false;
+	}
+	const AActor* Owner = GetOwner();
+	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
+	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	const TObjectPtr<USkeletalMesh>* Mesh = NpcMeshCache.Find(Stem);
+	if (Anims == nullptr || Mesh == nullptr || *Mesh == nullptr)
+	{
+		return false;
+	}
+
+	// Cached alongside the ordinary clips — the key is the bank, so two actors taking different
+	// bone roots out of one performance stay distinct.
+	const FString Key = BankStem + TEXT("|") + ClipName;
+	UAnimSequence* Anim = nullptr;
+	if (const TObjectPtr<UAnimSequence>* Found = NpcAnimCache.Find(Key))
+	{
+		Anim = Found->Get();
+	}
+	else
+	{
+		FString Error;
+		Anim = Anims->ResolveClipFromBank(BankStem, ClipName, Mesh->Get(), Error);
+		if (Anim == nullptr)
+		{
+			UE_LOG(LogElysiumBodies, Warning, TEXT("cinematic bank '%s' clip '%s': %s"),
+				*BankStem, *ClipName, *Error);
+		}
+		NpcAnimCache.Add(Key, Anim);
+	}
+	if (Anim == nullptr)
+	{
+		return false;
+	}
+	if (OutSeconds != nullptr)
+	{
+		*OutSeconds = Anim->GetPlayLength();
+	}
+	if (UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()))
+	{
+		Inst->PlayClip(Anim, bLoop);
+	}
+	else
+	{
+		Body->PlayAnimation(Anim, bLoop);
+	}
+	return true;
+}
+
 bool UElysiumEntityBodies::RefreshNpcIdle(USkeletalMeshComponent* Body, const FString& Stem,
 	const FString& Disposition, int32 IdleVariant)
 {

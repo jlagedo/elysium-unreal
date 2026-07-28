@@ -140,6 +140,13 @@ Both write under `out/npc/`:
   metadata, deduped so a clip resolved by many NPCs is stored once. The runtime loads a clip's
   owning glb once and applies it to the NPC skeletal mesh by bone name via glTFRuntime.
 
+A third seed, `cinematic_models_from_ents`, reads the `BaseAnim`/`MaleAnim`/`FemaleAnim` keys off
+each exported map's `logic_choreographed_scene` entities — the `models/cinematic/**` anim sets no
+`npc_*` entity and no rulebook table reaches. `mdl_gltf.export_cinematic` writes these as
+**one bank per bone root** (`<stem>__bipNN.glb`, each root's prefix folded back to `Bip01`), and
+`npc_index.json` grows a `cinematics` map from the model key to those banks. Why per root:
+`choreographed_scenes.md` → "The animation set".
+
 `mdl_gltf.export` (single clip) is the spike/CLI probe.
 
 ## Texture upscaling (`upscale_bench.py`, `sky_upscale.py`, `retex_dds.py`)

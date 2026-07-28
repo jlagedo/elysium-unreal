@@ -25,11 +25,13 @@
 #include "Visual/ElysiumObjModel.h"
 #include "ElysiumReflections.h"
 #include "ElysiumRng.h"
+#include "Substrate/ElysiumChargen.h"
 #include "Substrate/ElysiumQuestLog.h"
 #include "Substrate/ElysiumQuestView.h"
 
 #include "Algo/AnyOf.h"
 #include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumSceneData.h"
 #include "Substrate/ElysiumSheetMath.h"
 #include "Visual/ElysiumRopes.h"
 #include "ElysiumSaveArchive.h"
@@ -1083,6 +1085,40 @@ bool FElysiumPlayerBodiesTest::RunTest(const FString&)
 	TestEqual(TEXT("the whole table names 56 distinct body models"), Models.Num(), 56);
 	TestEqual(TEXT("every player body is exported"), Exported, Models.Num());
 
+	// The same lookup as the character screen's stage performs, through the shared helper — so the
+	// thing this test proves and the thing the UI calls are one path, not two that agree today.
+	{
+		FElysiumClanTable Clans;
+		FString ClanError;
+		if (TestTrue(TEXT("the clan table loads"), Clans.Load(ClanError)))
+		{
+			int32 Resolved = 0;
+			for (int32 Clan = 2; Clan <= 8; ++Clan)
+			{
+				for (bool bFemale : { false, true })
+				{
+					const FString Stem = Clans.PlayerBodyStem(Clan, bFemale, /*ArmorSlot*/ 0);
+					if (Stem.IsEmpty() ||
+						!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcGlb(Stem)))
+					{
+						AddError(FString::Printf(TEXT("no exported body for clan %d %s (stem '%s')"),
+							Clan, bFemale ? TEXT("female") : TEXT("male"), *Stem));
+						continue;
+					}
+					++Resolved;
+				}
+			}
+			TestEqual(TEXT("both bodies of all seven clans resolve through PlayerBodyStem"),
+				Resolved, 14);
+			// The un-indexed key is an NPC model, so the helper must not answer for a slot that has
+			// no indexed entry.
+			TestTrue(TEXT("an out-of-range armour slot resolves to nothing"),
+				Clans.PlayerBodyStem(2, false, /*ArmorSlot*/ 9).IsEmpty());
+			TestTrue(TEXT("and a non-playable clan index does too"),
+				Clans.PlayerBodyStem(1, false).IsEmpty());
+		}
+	}
+
 	return true;
 }
 
@@ -1649,6 +1685,150 @@ bool FElysiumRulebookContentTest::RunTest(const FString&)
 		}
 	}
 
+	// --- charcreatewizard.txt --------------------------------------------------------------------
+	FElysiumWizard Wizard;
+	if (TestTrue(TEXT("charcreatewizard.txt loads"), Wizard.Load(Error)))
+	{
+		TestEqual(TEXT("8 abstract traits"), Wizard.Traits.Num(), 8);
+		TestEqual(TEXT("3 trait combinations"), Wizard.Combinations.Num(), 3);
+		TestEqual(TEXT("10 popup groups"), Wizard.Groups.Num(), 10);
+		// 78 author a bare `Popup` line; 7 more carry a trailing `// restored by wesp` /
+		// `// added by wesp`, so counting by line shape undercounts exactly the patch's restorations.
+		TestEqual(TEXT("85 popups"), Wizard.NumPopups(), 85);
+		TestEqual(TEXT("7 clan nodes"), Wizard.ClanNodes.Num(), 7);
+
+		// The 3x3 payoff matrix, read out of the file rather than compiled in: the player's n-th
+		// choice meeting a clan that ranks it n-th is the diagonal, and it is the maximum.
+		TestEqual(TEXT("1st choice / clan Primary scores 3"), Wizard.ConnectionScores[0][0], 3);
+		TestEqual(TEXT("1st choice / clan Tertiary scores 0"), Wizard.ConnectionScores[0][2], 0);
+		TestEqual(TEXT("2nd choice / clan Secondary scores 3"), Wizard.ConnectionScores[1][1], 3);
+		TestEqual(TEXT("3rd choice / clan Tertiary scores 3"), Wizard.ConnectionScores[2][2], 3);
+
+		// A rank REPEATS: Gangrel authors two Primaries. A reader keeping only the last would score
+		// it against one trait and silently mis-suggest the clan.
+		if (const FElysiumWizClanNode* Gangrel = Wizard.ClanNode(TEXT("Player_Gangrel")))
+		{
+			TestEqual(TEXT("Gangrel has two Primary traits"), Gangrel->Primary.Num(), 2);
+			TestEqual(TEXT("Armed is Primary for Gangrel"), Gangrel->RankOf(TEXT("Armed")), 0);
+			TestEqual(TEXT("Unarmed is Primary for Gangrel too"), Gangrel->RankOf(TEXT("Unarmed")), 0);
+			TestEqual(TEXT("Stealth is Secondary"), Gangrel->RankOf(TEXT("Stealth")), 1);
+			TestEqual(TEXT("a trait it does not rank is INDEX_NONE"),
+				Gangrel->RankOf(TEXT("Social")), (int32)INDEX_NONE);
+		}
+		else
+		{
+			AddError(TEXT("no Player_Gangrel ClanNode"));
+		}
+
+		// Popups share an InternalName on purpose — the wizard picks among them at random, so the
+		// gender question being one-of-N would silently become one-of-1 if the reader deduped.
+		TArray<const FElysiumWizPopup*> Combat;
+		Wizard.PopupsNamed(TEXT("Trait_Combat_vs_Non-Combat"), Combat);
+		TestTrue(TEXT("the Combat/Non-Combat question has several phrasings"), Combat.Num() > 1);
+
+		// `Defaults` inheritance, the part a reader most easily drops: this popup authors no
+		// Bkg_Image and no TextRegion, and must take its group's.
+		TArray<const FElysiumWizPopup*> Gender;
+		Wizard.PopupsNamed(TEXT("Trait_Male_vs_Female"), Gender);
+		if (TestEqual(TEXT("one gender popup"), Gender.Num(), 1))
+		{
+			TestEqual(TEXT("it inherited the group's backdrop"),
+				Gender[0]->BkgImage, FString(TEXT("Interface/Pop_Ups/Pop_Up_1")));
+			TestTrue(TEXT("it inherited the group's TextRegion"), Gender[0]->TextRegion.bAuthored);
+			TestEqual(TEXT("the inherited TextRegion is the authored one"),
+				Gender[0]->TextRegion.X, 183);
+			TestEqual(TEXT("two answers"), Gender[0]->Actions.Num(), 2);
+			if (Gender[0]->Actions.Num() == 2)
+			{
+				TestTrue(TEXT("answer 1 sets male"), Gender[0]->Actions[0].bSetGenderMale);
+				TestTrue(TEXT("answer 2 sets female"), Gender[0]->Actions[1].bSetGenderFemale);
+			}
+		}
+
+		// The group hand-off that ends the quiz section, on the answered-count.
+		if (const FElysiumWizGroup* G = Wizard.Group(TEXT("Trait_Popups")))
+		{
+			TestEqual(TEXT("Trait_Popups hands off after 6..8 answers"), G->NextSection.MinCount, 6);
+			TestEqual(TEXT("and at most 8"), G->NextSection.MaxCount, 8);
+			TestFalse(TEXT("to a named popup"), G->NextSection.Next.IsEmpty());
+		}
+		else
+		{
+			AddError(TEXT("no Trait_Popups group"));
+		}
+
+		// An absent bound must stay unbounded. A popup authoring only MaxVal has to admit a trait
+		// the player has never picked, which is exactly the zero tally a 0-default would exclude.
+		bool bSawOpenMin = false;
+		for (const FElysiumWizGroup& G : Wizard.Groups)
+		{
+			for (const FElysiumWizPopup& P : G.Popups)
+			{
+				for (const FElysiumWizPrereq& Q : P.Prereqs)
+				{
+					if (Q.MinVal == MIN_int32) { bSawOpenMin = true; TestTrue(
+						TEXT("an unauthored MinVal admits a zero tally"), Q.Admits(0)); }
+				}
+			}
+		}
+		TestTrue(TEXT("some popup authors MaxVal alone"), bSawOpenMin);
+
+		// Every wire resolves, or the quiz dead-ends at runtime instead of here.
+		int32 BadNext = 0, BadTrait = 0, BadTemplate = 0;
+		TSet<FString> TraitNames;
+		for (const FString& T : Wizard.Traits) { TraitNames.Add(ElysiumFold(T)); }
+		auto CheckNext = [&](const FString& Owner, const FString& Next)
+		{
+			if (Next.IsEmpty()) { return; }
+			TArray<const FElysiumWizPopup*> Hits;
+			Wizard.PopupsNamed(Next, Hits);
+			if (Hits.IsEmpty())
+			{
+				++BadNext;
+				AddError(FString::Printf(TEXT("%s: Next '%s' names no popup"), *Owner, *Next));
+			}
+		};
+		for (const FElysiumWizGroup& G : Wizard.Groups)
+		{
+			CheckNext(G.InternalName, G.NextSection.Next);
+			for (const FElysiumWizPopup& P : G.Popups)
+			{
+				for (const FElysiumWizAction& A : P.Actions)
+				{
+					CheckNext(P.InternalName, A.Next);
+					if (!A.Trait.IsEmpty() && !TraitNames.Contains(ElysiumFold(A.Trait)))
+					{
+						++BadTrait;
+						AddError(FString::Printf(TEXT("popup %s: answer increments unknown trait '%s'"),
+							*P.InternalName, *A.Trait));
+					}
+					if (!A.CharTemplate.IsEmpty() && Clans.Find(A.CharTemplate) == nullptr)
+					{
+						++BadTemplate;
+						AddError(FString::Printf(TEXT("popup %s: answer names unknown template '%s'"),
+							*P.InternalName, *A.CharTemplate));
+					}
+				}
+			}
+		}
+		TestEqual(TEXT("every Next resolves to a popup"), BadNext, 0);
+		TestEqual(TEXT("every answer's Trait is one of the 8"), BadTrait, 0);
+		TestEqual(TEXT("every answer's CharTemplate resolves in clandoc"), BadTemplate, 0);
+
+		// The scoring table and the clan table have to agree on names, or a clan scores 0 forever.
+		int32 BadClan = 0;
+		for (const FElysiumWizClanNode& C : Wizard.ClanNodes)
+		{
+			if (Clans.Find(C.CharTemplate) == nullptr)
+			{
+				++BadClan;
+				AddError(FString::Printf(TEXT("ClanNode '%s' resolves to no clan template"),
+					*C.CharTemplate));
+			}
+		}
+		TestEqual(TEXT("every ClanNode names a real clan"), BadClan, 0);
+	}
+
 	// --- cross-table coherence -----------------------------------------------------------------------
 	// Every trait name a feat sums, and every effect group a clan or history names, has to resolve
 	// or the system that reads it fails silently at runtime rather than here.
@@ -2148,6 +2328,593 @@ bool FElysiumQuestContentTest::RunTest(const FString&)
 			Algo::AnyOf(FElysiumQuestTables::HubTabOrder,
 				[Opening](int32 H) { return H == Opening; }));
 	}
+
+	return true;
+}
+
+
+// ================================================================================================
+// Chargen over the real rulebook — the pools a clan produces and the baseline it stands on (9.4f)
+// ================================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumChargenContentTest,
+	"Elysium.Content.Chargen", GElysiumContentTestFlags)
+bool FElysiumChargenContentTest::RunTest(const FString&)
+{
+	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/stats.txt"))))
+	{
+		AddInfo(TEXT("skipping: no exported out/vdata (run tools/export_all.py to enable)"));
+		return true;
+	}
+
+	FString Error;
+	FElysiumStatTable Stats;
+	FElysiumRules RuleData;
+	FElysiumClanTable Clans;
+	FElysiumHistoryTable Histories;
+	FElysiumLevelingTemplates Leveling;
+	FElysiumTraitEffects Effects;
+	FElysiumFeatTable Feats;
+	FElysiumStrings Strings;
+
+	const bool bLoaded =
+		TestTrue(TEXT("stats.txt loads"), Stats.Load(Error))
+		& TestTrue(TEXT("rules load"), RuleData.Load(Error))
+		& TestTrue(TEXT("clandoc000.txt loads"), Clans.Load(Error))
+		& TestTrue(TEXT("histories000.txt loads"), Histories.Load(Error))
+		& TestTrue(TEXT("levelingtemplate_000.txt loads"), Leveling.Load(Error))
+		& TestTrue(TEXT("traiteffects load"), Effects.Load(Error))
+		& TestTrue(TEXT("feats.txt loads"), Feats.Load(Error))
+		& TestTrue(TEXT("strings load"), Strings.Load(Error));
+	if (!bLoaded)
+	{
+		AddError(Error);
+		return true;
+	}
+
+	FElysiumChargenRules Rules;
+	Rules.Stats = &Stats;
+	Rules.Rules = &RuleData;
+	Rules.Clans = &Clans;
+	Rules.Histories = &Histories;
+	Rules.Leveling = &Leveling;
+	Rules.TraitEffects = &Effects;
+	Rules.Feats = &Feats;
+	Rules.Strings = &Strings;
+
+	// --- the string groups a symbolic trait value resolves through -------------------------------
+	{
+		TestEqual(TEXT("AttributeOrder names all seven orderings"),
+			Strings.Group(TEXT("AttributeOrder")) ? Strings.Group(TEXT("AttributeOrder"))->Num() : 0, 7);
+		TestEqual(TEXT("  Physical_Mental_Social is ordering 1"),
+			Strings.IndexOf(TEXT("AttributeOrder"), TEXT("Physical_Mental_Social")), 1);
+		TestEqual(TEXT("AbilityOrder names all seven"),
+			Strings.Group(TEXT("AbilityOrder")) ? Strings.Group(TEXT("AbilityOrder"))->Num() : 0, 7);
+		TestEqual(TEXT("  Talents_Skills_Knowledges is ordering 0"),
+			Strings.IndexOf(TEXT("AbilityOrder"), TEXT("Talents_Skills_Knowledges")), 0);
+
+		// The two files merge: `AttributeOrder` is internal-only and `AttributeGroup` localized, and
+		// both have to be reachable through one table.
+		TestEqual(TEXT("the localized file's groups survive the merge"),
+			Strings.At(TEXT("AttributeGroup"), 0), FString(TEXT("Physical")));
+		TestEqual(TEXT("  including the ability headings"),
+			Strings.At(TEXT("AbilityGroup"), 2), FString(TEXT("Knowledges")));
+		TestEqual(TEXT("  and the sheet's category titles"),
+			Strings.At(TEXT("StatCategoryTitles"), 6), FString(TEXT("Disciplines")));
+
+		// A stat's `NameMapping` names a group that must exist, or its value has no display and no
+		// symbolic reading.
+		int32 Missing = 0;
+		for (int32 c = 0; c < (int32)EElysiumTraitContainer::Count; ++c)
+		{
+			for (const FElysiumStat& Stat : Stats.Container((EElysiumTraitContainer)c).Stats)
+			{
+				if (!Stat.NameMapping.IsEmpty() && Strings.Group(Stat.NameMapping) == nullptr)
+				{
+					++Missing;
+					AddError(FString::Printf(TEXT("stat '%s' maps to unknown string group '%s'"),
+						*Stat.InternalName, *Stat.NameMapping));
+				}
+			}
+		}
+		TestEqual(TEXT("every NameMapping resolves to a string group"), Missing, 0);
+	}
+
+	// --- a clan template's symbolic trait values survive the int maps ----------------------------
+	{
+		FElysiumClanTemplate Brujah;
+		if (TestTrue(TEXT("Player_Brujah resolves"),
+			ElysiumChargen::ResolveClanTemplate(Rules, 2, Brujah)))
+		{
+			// The trait maps hold ints, so an unrecorded symbolic value would read as ordering 0 —
+			// a different point split entirely.
+			TestEqual(TEXT("Brujah's Attrib_Order is authored as a name"),
+				Brujah.TraitStr(TEXT("Attrib_Order")), FString(TEXT("Physical_Mental_Social")));
+			TestEqual(TEXT("  which resolves to ordering 1"),
+				ElysiumChargen::ResolveOrder(Rules, Brujah, EElysiumTraitContainer::Attributes,
+					ElysiumSlot::AttribOrder), 1);
+			TestEqual(TEXT("  and its Ability_Order to 0"),
+				ElysiumChargen::ResolveOrder(Rules, Brujah, EElysiumTraitContainer::Abilities, 0), 0);
+			// The chargen leveling template is named in the Attributes block and is not a stat slot,
+			// so it exists only as authored text.
+			TestEqual(TEXT("the CharGen template is named on the clan"),
+				Brujah.TraitStr(TEXT("CharGen_AutoLevel_Template")), FString(TEXT("Brujah_CharGen")));
+			TestNotNull(TEXT("  and it is a real template"),
+				Leveling.Find(Brujah.TraitStr(TEXT("CharGen_AutoLevel_Template"))));
+		}
+	}
+
+	// --- every playable clan produces the same total, split by its own ordering -------------------
+	for (int32 Clan = 2; Clan <= 8; ++Clan)
+	{
+		const TCHAR* Name = FElysiumSheet::ClanName(Clan);
+		FElysiumClanTemplate Template;
+		if (!TestTrue(*FString::Printf(TEXT("Player_%s resolves"), Name),
+			ElysiumChargen::ResolveClanTemplate(Rules, Clan, Template)))
+		{
+			continue;
+		}
+		const int32 AttribOrder = ElysiumChargen::ResolveOrder(Rules, Template,
+			EElysiumTraitContainer::Attributes, ElysiumSlot::AttribOrder);
+		const int32 AbilityOrder = ElysiumChargen::ResolveOrder(Rules, Template,
+			EElysiumTraitContainer::Abilities, 0);
+		TestTrue(*FString::Printf(TEXT("%s names a real attribute ordering"), Name),
+			AttribOrder >= 0 && AttribOrder < 6);
+		TestTrue(*FString::Printf(TEXT("%s names a real ability ordering"), Name),
+			AbilityOrder >= 0 && AbilityOrder < 6);
+
+		const FElysiumChargenPools P = ElysiumChargen::BuildPools(Rules, Clan, AttribOrder,
+			AbilityOrder, true);
+		TestEqual(*FString::Printf(TEXT("%s gets 3 attribute points"), Name),
+			P[EElysiumChargenPool::Physical] + P[EElysiumChargenPool::Social]
+			+ P[EElysiumChargenPool::Mental], 3);
+		TestEqual(*FString::Printf(TEXT("%s gets 6 ability points"), Name),
+			P[EElysiumChargenPool::Talents] + P[EElysiumChargenPool::Skills]
+			+ P[EElysiumChargenPool::Knowledges], 6);
+		// `Subpool_Disciplines` is the one subpool table Troika left non-zero — the file's own note
+		// says so — and it ships 1 for every clan.
+		TestEqual(*FString::Printf(TEXT("%s gets 1 discipline point"), Name),
+			P[EElysiumChargenPool::Disciplines], 1);
+	}
+
+	// --- the baseline: seeded, templated, then bought through the CharGen template ----------------
+	{
+		FElysiumChargenState State;
+		State.Clan = 2;                  // Brujah
+		State.bMale = false;
+		State.HistoryId = 0;             // "None" — no effect group
+		ElysiumChargen::ApplyBaseline(State, Rules);
+
+		TestEqual(TEXT("the clan slot survives the baseline"), State.Sheet.Clan(), 2);
+		TestFalse(TEXT("and so does the sex"), State.Sheet.IsMale());
+		TestEqual(TEXT("the resolved order lands on the sheet"),
+			State.Sheet.GetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::AttribOrder), 1);
+
+		// Ordering 1 is `Physical_Mental_Social`, which is what the shipped screen draws as
+		// PHYSICAL(2) / SOCIAL / MENTAL(1) — the zero pool showing no parenthetical at all.
+		TestEqual(TEXT("Brujah's Physical pool is 2"), State.Pools[EElysiumChargenPool::Physical], 2);
+		TestEqual(TEXT("  Mental 1"), State.Pools[EElysiumChargenPool::Mental], 1);
+		TestEqual(TEXT("  Social 0"), State.Pools[EElysiumChargenPool::Social], 0);
+		TestEqual(TEXT("  Talents 3"), State.Pools[EElysiumChargenPool::Talents], 3);
+		TestEqual(TEXT("  Skills 2"), State.Pools[EElysiumChargenPool::Skills], 2);
+		TestEqual(TEXT("  Knowledges 1"), State.Pools[EElysiumChargenPool::Knowledges], 1);
+		TestFalse(TEXT("and nothing is spent yet"), State.IsSpentOut());
+
+		// `Brujah_CharGen`'s Physical_Mental_Social group buys Strength 2, Dexterity 1, Stamina 2 and
+		// Wits 2 — the dots VtMB grants through `giftxp 9000` + `vautolvl`, not a written block.
+		TestEqual(TEXT("the baseline bought Strength to 2"),
+			State.Sheet.GetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Strength), 2);
+		TestEqual(TEXT("  Stamina to 2"),
+			State.Sheet.GetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Stamina), 2);
+		TestEqual(TEXT("  and Wits to 2"),
+			State.Sheet.GetBase(EElysiumTraitContainer::Attributes, 9), 2);
+		TestEqual(TEXT("the baseline is snapshotted as the sell floor"),
+			State.Baseline.GetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Strength), 2);
+
+		// The clan effect layer is live while the player is still spending, so the Brujah gift is
+		// already on the sheet's feat reads.
+		TestTrue(TEXT("the clan effect group resolved"),
+			State.Effects.ResolvedGroups().Contains(TEXT("Clan (Brujah)")));
+
+		// Brujah has Celerity, Potence, Presence, Blood_Healing and Corpus_Vampirus; every other
+		// discipline stays at the -1 default and draws no row.
+		int32 Visible = 0;
+		for (const FElysiumSheetSlot& Slot : ElysiumSheetSlots(EElysiumTraitContainer::Disciplines))
+		{
+			Visible += ElysiumChargen::IsRowVisible(Rules, State.Sheet,
+				EElysiumTraitContainer::Disciplines, Slot.Index) ? 1 : 0;
+		}
+		TestEqual(TEXT("only the clan's own disciplines draw a row"), Visible, 5);
+
+		int32 Cost = 0;
+		TestFalse(TEXT("a non-clan discipline cannot be bought"),
+			ElysiumChargen::CanBuy(State, Rules, EElysiumTraitContainer::Disciplines, 0, Cost));
+		TestTrue(TEXT("a clan discipline can"), ElysiumChargen::CanBuy(State, Rules,
+			EElysiumTraitContainer::Disciplines, 3, Cost));   // Celerity
+
+		// Spending the discipline point out empties that pool and nothing else.
+		TestTrue(TEXT("the discipline point spends"), ElysiumChargen::Buy(State, Rules,
+			EElysiumTraitContainer::Disciplines, 3));
+		TestEqual(TEXT("  leaving the discipline pool empty"),
+			State.Remaining(EElysiumChargenPool::Disciplines), 0);
+		TestFalse(TEXT("  and refusing a second"), ElysiumChargen::CanBuy(State, Rules,
+			EElysiumTraitContainer::Disciplines, 4, Cost));
+		TestTrue(TEXT("  while it sells back for exactly what it cost"),
+			ElysiumChargen::Sell(State, Rules, EElysiumTraitContainer::Disciplines, 3));
+		TestEqual(TEXT("  restoring the pool"), State.Remaining(EElysiumChargenPool::Disciplines), 1);
+
+		// A clan change re-runs the baseline, which must replace the old clan rather than layer on
+		// it — a Nosferatu who kept Brujah's disciplines would be the failure.
+		State.Clan = 5;
+		ElysiumChargen::ApplyBaseline(State, Rules);
+		TestEqual(TEXT("a clan change re-derives the sheet"), State.Sheet.Clan(), 5);
+		TestFalse(TEXT("  dropping the old clan's Celerity"), ElysiumChargen::IsRowVisible(
+			Rules, State.Sheet, EElysiumTraitContainer::Disciplines, 3));
+		TestEqual(TEXT("  and nothing carries over as spent"), State.Spent.Total(), 0);
+	}
+
+
+	// --- the quiz runner over the real wizard -----------------------------------------------------
+	{
+		FElysiumWizard Wizard;
+		FString WizError;
+		if (TestTrue(TEXT("charcreatewizard.txt loads"), Wizard.Load(WizError)))
+		{
+			// The entry popup is the wizard's own, and route 3 is filtered out: the Society of
+			// Leopold campaign is a marked omission, so its action must not be offered.
+			FElysiumChargenState Quiz;
+			Quiz.Clan = 2;
+			FElysiumWizRun Run;
+			ElysiumChargen::WizBegin(Run, Wizard, Quiz, ElysiumChargen::WizEntryPopup);
+			if (TestTrue(TEXT("the entry popup opens"), Run.IsActive()))
+			{
+				TestEqual(TEXT("  offering two routes, not three"), Run.Choices.Num(), 2);
+				TestTrue(TEXT("  route 1 walks the quiz"),
+					Run.Choices[0]->Next.Equals(TEXT("Trait_Male_vs_Female")));
+				TestTrue(TEXT("  route 2 ends it"), Run.Choices[1]->Next.IsEmpty());
+
+				// Route 2: the chain ends immediately and nothing was tallied.
+				FElysiumChargenState Direct = Quiz;
+				FElysiumWizRun Straight;
+				ElysiumChargen::WizBegin(Straight, Wizard, Direct, ElysiumChargen::WizEntryPopup);
+				TestFalse(TEXT("route 2 finishes the run"),
+					ElysiumChargen::WizChoose(Straight, Direct, 1));
+				TestTrue(TEXT("  with nothing tallied"), Direct.Tally.IsEmpty());
+			}
+
+			// Route 1, walked to the end from a seeded stream. The run must terminate, and it must
+			// terminate the same way twice — the phrasing of each question is a random pick, so a
+			// replay that diverged would mean the stream is not the only source of it.
+			auto Walk = [&Wizard](int32 Seed, FElysiumChargenState& Out) -> int32
+			{
+				ElysiumRng::SeedAll(Seed);
+				Out = FElysiumChargenState();
+				Out.Clan = 2;
+				FElysiumWizRun Run;
+				ElysiumChargen::WizBegin(Run, Wizard, Out, ElysiumChargen::WizEntryPopup);
+				ElysiumChargen::WizChoose(Run, Out, 0);   // route 1
+
+				int32 Steps = 0;
+				while (Run.IsActive() && Steps < 64)
+				{
+					// Always the first surviving answer, so the only variation left is the stream's.
+					ElysiumChargen::WizChoose(Run, Out, 0);
+					++Steps;
+				}
+				return Steps;
+			};
+
+			FElysiumChargenState First, Second;
+			const int32 StepsA = Walk(1234, First);
+			const int32 StepsB = Walk(1234, Second);
+			TestTrue(TEXT("the quiz terminates"), StepsA > 0 && StepsA < 64);
+			TestEqual(TEXT("  and replays identically from the same seed"), StepsB, StepsA);
+			TestEqual(TEXT("  tallying the same traits"), Second.Tally.Num(), First.Tally.Num());
+			for (const TPair<FString, int32>& Pair : First.Tally)
+			{
+				const int32* Other = Second.Tally.Find(Pair.Key);
+				TestEqual(*FString::Printf(TEXT("  '%s' tallies the same"), *Pair.Key),
+					Other ? *Other : -1, Pair.Value);
+			}
+			TestTrue(TEXT("  and it tallied something"), First.Tally.Num() > 0);
+
+			// The ordering is the top three by tally, and it is what the clan suggestion scores.
+			TArray<FString> Ordering;
+			ElysiumChargen::WizOrdering(First, Wizard, Ordering);
+			TestTrue(TEXT("the ordering names at most three traits"), Ordering.Num() <= 3);
+			TestTrue(TEXT("  each of them a wizard trait"),
+				Ordering.Num() == 0 || Wizard.Traits.Contains(Ordering[0]));
+		}
+	}
+
+	// --- the quiz's clan suggestion ---------------------------------------------------------------
+	{
+		FElysiumWizard Wizard;
+		if (TestTrue(TEXT("charcreatewizard.txt loads"), Wizard.Load(Error)))
+		{
+			// A player whose three picks are all a clan's Primaries must be suggested that clan, and
+			// the answer must be a clan index the sheet can actually hold.
+			for (const FElysiumWizClanNode& Node : Wizard.ClanNodes)
+			{
+				if (Node.Primary.IsEmpty())
+				{
+					continue;
+				}
+				const TArray<FString> Ordering = { Node.Primary[0] };
+				const int32 Suggested = ElysiumChargen::SuggestClan(Wizard, Clans, Ordering);
+				TestTrue(*FString::Printf(TEXT("a pick of '%s' suggests a playable clan"),
+					*Node.Primary[0]), FElysiumSheet::IsValidClan(Suggested));
+			}
+			TestEqual(TEXT("no picks suggests nothing"),
+				ElysiumChargen::SuggestClan(Wizard, Clans, {}), 0);
+		}
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// 12.1 — the whole choreographed-scene corpus: every `.vcd` the pipeline mirrored (PL9).
+//
+// This is what turns `docs/choreographed_scenes.md`'s survey numbers into a regression test. The
+// doc's histograms were produced by tools/probe_scenes.py over the install; this reads the mirror
+// with the runtime's own parser and asserts the two agree. A drift here means either the exporter
+// changed what it mirrors or this reader diverged from the reference grammar — both worth failing.
+//
+// Self-skips when out/scenes has not been exported.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSceneCorpusTest, "Elysium.Content.SceneCorpus", GElysiumContentTestFlags)
+bool FElysiumSceneCorpusTest::RunTest(const FString&)
+{
+	const FString ScenesDir = FElysiumContentPaths::ScenesDir();
+
+	TArray<FString> Files;
+	IFileManager::Get().FindFilesRecursive(Files, *ScenesDir, TEXT("*.vcd"), /*Files*/ true, /*Dirs*/ false);
+	if (Files.Num() == 0)
+	{
+		AddInfo(TEXT("skipping: no scenes under tools/out/scenes (run the pipeline to enable)"));
+		return true;
+	}
+
+	int32 TypeTotals[static_cast<int32>(EElysiumChoreoEvent::Count)] = {};
+	int32 NumValid = 0;
+	int32 NumUnreadable = 0;
+	int32 NumVersion1 = 0;
+	int32 NumNoVersion = 0;
+	int32 NumFps60 = 0;
+	int32 NumSnapOn = 0;
+	int32 TotalDegenerate = 0;
+	int32 TotalEvents = 0;
+
+	for (const FString& Path : Files)
+	{
+		FString Text;
+		if (!FFileHelper::LoadFileToString(Text, *Path))
+		{
+			++NumUnreadable;
+			continue;
+		}
+
+		FElysiumSceneData S;
+		ElysiumScene::ParseText(Text, Path, S);
+
+		if (S.bValid) { ++NumValid; }
+		if (S.Version == 1) { ++NumVersion1; }
+		else if (S.Version == INDEX_NONE) { ++NumNoVersion; }
+		if (FMath::IsNearlyEqual(S.Fps, 60.f)) { ++NumFps60; }
+		if (S.bSnap) { ++NumSnapOn; }
+		TotalDegenerate += S.NumDegenerate;
+		TotalEvents += S.Events.Num();
+
+		for (int32 i = 0; i < static_cast<int32>(EElysiumChoreoEvent::Count); ++i)
+		{
+			TypeTotals[i] += S.TypeCounts[i];
+		}
+	}
+
+	AddInfo(FString::Printf(TEXT("%d scene files, %d events, %d valid, %d degenerate ranges"),
+		Files.Num(), TotalEvents, NumValid, TotalDegenerate));
+
+	// The mirror the exporter writes (PL9). A change here is an export change, not a parser one.
+	TestEqual(TEXT("the corpus is the 5,444 scenes PL9 mirrors"), Files.Num(), 5444);
+	TestEqual(TEXT("every scene file is readable"), NumUnreadable, 0);
+	TestEqual(TEXT("every scene names at least one actor"), NumValid, Files.Num());
+
+	// `// Choreo version 1` on 5,434; 10 files carry no version line at all.
+	TestEqual(TEXT("version 1 count"), NumVersion1, 5434);
+	TestEqual(TEXT("no-version count"), NumNoVersion, 10);
+	// `fps 60` on all 5,443 that have an fps line — the one without falls back to the same default,
+	// so this counts 5,444. `snap on` appears exactly once.
+	TestEqual(TEXT("fps is 60 everywhere"), NumFps60, Files.Num());
+	TestEqual(TEXT("snap on appears once"), NumSnapOn, 1);
+
+	// The nine live event types, straight out of `docs/choreographed_scenes.md`.
+	const TPair<EElysiumChoreoEvent, int32> Expected[] = {
+		{ EElysiumChoreoEvent::Silence,     12089 },
+		{ EElysiumChoreoEvent::Loud,         9809 },
+		{ EElysiumChoreoEvent::Speak,        5541 },
+		{ EElysiumChoreoEvent::Expression,   1431 },
+		{ EElysiumChoreoEvent::Gesture,       609 },
+		{ EElysiumChoreoEvent::Sequence,      242 },
+		{ EElysiumChoreoEvent::FireTrigger,    24 },
+		{ EElysiumChoreoEvent::Python,          2 },
+		{ EElysiumChoreoEvent::BodySound,       1 },
+	};
+	for (const TPair<EElysiumChoreoEvent, int32>& E : Expected)
+	{
+		TestEqual(*FString::Printf(TEXT("event count: %s"), ElysiumScene::EventTypeName(E.Key)),
+			TypeTotals[static_cast<int32>(E.Key)], E.Value);
+	}
+
+	// The ten types VtMB's parser recognises and no shipped scene authors. If one of these ever
+	// goes non-zero, the runtime is dropping an event it has no handler for — a real finding.
+	const EElysiumChoreoEvent Dead[] = {
+		EElysiumChoreoEvent::Section, EElysiumChoreoEvent::LookAt, EElysiumChoreoEvent::MoveTo,
+		EElysiumChoreoEvent::Face, EElysiumChoreoEvent::FlexAnimation, EElysiumChoreoEvent::Subscene,
+		EElysiumChoreoEvent::Loop, EElysiumChoreoEvent::CameraMove, EElysiumChoreoEvent::CameraShot,
+		EElysiumChoreoEvent::CameraRestore,
+	};
+	for (EElysiumChoreoEvent T : Dead)
+	{
+		TestEqual(*FString::Printf(TEXT("dead event type stays unauthored: %s"),
+			ElysiumScene::EventTypeName(T)), TypeTotals[static_cast<int32>(T)], 0);
+	}
+	TestEqual(TEXT("no event carries an unrecognised type token"),
+		TypeTotals[static_cast<int32>(EElysiumChoreoEvent::Unknown)], 0);
+
+	// --- every SceneFile an exported map names must resolve through the same path rule ---------
+	TArray<FString> EntsFiles;
+	IFileManager::Get().FindFilesRecursive(EntsFiles, *FElysiumContentPaths::Root(), TEXT("*.ents"),
+		/*Files*/ true, /*Dirs*/ false);
+
+	int32 NumReferenced = 0;
+	int32 NumResolved = 0;
+	TArray<FString> Missing;
+	for (const FString& EntsPath : EntsFiles)
+	{
+		FElysiumEntityDefs Defs;
+		if (!FElysiumEntityDefs::Parse(EntsPath, Defs))
+		{
+			continue;
+		}
+		for (const FElysiumEntityDef& Def : Defs.Defs)
+		{
+			const FString* SceneFile = Def.Keys.Find(TEXT("SceneFile"));
+			if (SceneFile == nullptr || SceneFile->IsEmpty())
+			{
+				continue;
+			}
+			++NumReferenced;
+			const FString Full = FElysiumContentPaths::SceneFile(ElysiumScene::NormalizeSceneRel(*SceneFile));
+			if (IFileManager::Get().FileExists(*Full))
+			{
+				++NumResolved;
+			}
+			else
+			{
+				Missing.AddUnique(*SceneFile);
+			}
+		}
+	}
+
+	AddInfo(FString::Printf(TEXT("%d SceneFile references across the exported maps, %d resolve"),
+		NumReferenced, NumResolved));
+	for (const FString& M : Missing)
+	{
+		AddWarning(FString::Printf(TEXT("SceneFile does not resolve: %s"), *M));
+	}
+	// Eight scenes referenced by three maps are absent from the install itself (map data outliving
+	// its assets) — none of them on an exported map today, so this is currently exact. It is a
+	// warning list plus a hard check, so a broken path rule fails while Troika's own gaps do not.
+	TestEqual(TEXT("every SceneFile an exported map names resolves"), NumResolved, NumReferenced);
+
+	return true;
+}
+
+// =====================================================================================
+// 12.1 / PL16 — the cinematic anim sets a scene's actors animate out of.
+//
+// A whole-cast performance lives in a `models/cinematic/**.mdl` that no NPC's include tree names,
+// so it reaches the runtime only through this seed. The join asserted here is the one the runtime
+// makes at `sequence "entire_scene"`: (the scene's anim-set model, the actor's `bonerename` source)
+// -> a bank stem that exists. A non-zero miss count means the export no longer covers the content.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSceneAnimSetsTest, "Elysium.Content.SceneAnimSets",
+	GElysiumContentTestFlags)
+bool FElysiumSceneAnimSetsTest::RunTest(const FString&)
+{
+	FElysiumNpcIndex Index;
+	FString Error;
+	if (!Index.Load(Error))
+	{
+		AddInfo(FString::Printf(TEXT("skipping: no NPC index (%s)"), *Error));
+		return true;
+	}
+	if (Index.Cinematics.IsEmpty())
+	{
+		AddInfo(TEXT("skipping: the NPC export carries no cinematic anim sets (re-run npc_export)"));
+		return true;
+	}
+
+	TArray<FString> EntsFiles;
+	IFileManager::Get().FindFilesRecursive(EntsFiles, *FElysiumContentPaths::Root(), TEXT("*.ents"),
+		/*Files*/ true, /*Dirs*/ false);
+
+	int32 NumSets = 0, NumSetsResolved = 0;
+	int32 NumActorBinds = 0, NumActorBindsResolved = 0;
+	TArray<FString> MissingSets;
+
+	for (const FString& EntsPath : EntsFiles)
+	{
+		FElysiumEntityDefs Defs;
+		if (!FElysiumEntityDefs::Parse(EntsPath, Defs))
+		{
+			continue;
+		}
+		for (const FElysiumEntityDef& Def : Defs.Defs)
+		{
+			if (Def.Classname != TEXT("logic_choreographed_scene"))
+			{
+				continue;
+			}
+			// Whichever anim set this scene would use — check every key it carries.
+			for (const TCHAR* Key : { TEXT("BaseAnim"), TEXT("MaleAnim"), TEXT("FemaleAnim") })
+			{
+				const FString* Model = Def.Keys.Find(Key);
+				if (Model == nullptr || Model->IsEmpty())
+				{
+					continue;
+				}
+				++NumSets;
+				// Any root resolving proves the model was exported and split.
+				const FString AnyBank = Index.CinematicBank(*Model, FString());
+				if (!AnyBank.IsEmpty() && Index.Banks.Contains(AnyBank))
+				{
+					++NumSetsResolved;
+				}
+				else
+				{
+					MissingSets.AddUnique(*Model);
+				}
+			}
+
+			// And the per-actor root each scene actually asks for.
+			const FString* SceneFile = Def.Keys.Find(TEXT("SceneFile"));
+			const FString* BaseAnim = Def.Keys.Find(TEXT("BaseAnim"));
+			if (SceneFile == nullptr || BaseAnim == nullptr || BaseAnim->IsEmpty())
+			{
+				continue;
+			}
+			TSharedPtr<const FElysiumSceneData> Scene = ElysiumScene::Load(*SceneFile);
+			if (!Scene.IsValid())
+			{
+				continue;
+			}
+			for (const FElysiumSceneActor& Actor : Scene->Actors)
+			{
+				++NumActorBinds;
+				const FString Bank = Index.CinematicBank(*BaseAnim, Actor.BoneFrom);
+				if (!Bank.IsEmpty() && Index.Banks.Contains(Bank))
+				{
+					++NumActorBindsResolved;
+				}
+			}
+		}
+	}
+
+	AddInfo(FString::Printf(TEXT("%d anim-set references (%d resolve), %d actor bone-roots (%d resolve)"),
+		NumSets, NumSetsResolved, NumActorBinds, NumActorBindsResolved));
+	for (const FString& M : MissingSets)
+	{
+		AddWarning(FString::Printf(TEXT("anim set not exported: %s"), *M));
+	}
+
+	TestEqual(TEXT("every anim set an exported scene names was exported and split"),
+		NumSetsResolved, NumSets);
+	TestEqual(TEXT("every scene actor's bonerename root resolves to a bank"),
+		NumActorBindsResolved, NumActorBinds);
 
 	return true;
 }

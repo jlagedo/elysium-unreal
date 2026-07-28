@@ -97,8 +97,23 @@ struct FElysiumRecordingServices final
 		}
 		return Body != nullptr;
 	}
+	virtual bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
+		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName,
+		bool bLoop, float* OutSeconds) override
+	{
+		Record(FString::Printf(TEXT("PlayCinematicClip %s %s %s %s"), *Stem, *AnimSetModel,
+			*BoneRoot, *ClipName));
+		if (OutSeconds)
+		{
+			*OutSeconds = ClipSeconds;
+		}
+		return bCinematicClipsResolve && Body != nullptr;
+	}
 	// The authored length every stub clip reports. A scripted_sequence's OnEndSequence lands here.
 	float ClipSeconds = 1.0f;
+	// Whether a cinematic anim set resolves. Default false, which is the state of the world until
+	// PL16's banks are exported — a scene must run its timeline and outputs either way.
+	bool bCinematicClipsResolve = false;
 
 	virtual UStaticMeshComponent* BuildPropVisual(const FString& Stem, const FVector& Location,
 		const FQuat& Rotation, float UniformScale) override

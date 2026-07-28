@@ -191,6 +191,11 @@ struct FElysiumPlayerRecord
 	// INDEX_NONE means "never opened"; the screen resolves that to a hub with work in it.
 	int32 QuestLogArea = INDEX_NONE;
 
+	// m_iVHistoryID — the History background the player picked at chargen, as an index into
+	// `histories000.txt`. The trait effect it names is applied through `Effects` like any other, so
+	// this is the choice, not its consequence. INDEX_NONE means unset.
+	int32 HistoryId = INDEX_NONE;
+
 	// `AddExperience`'s two accumulators. The award is in hundredths — every real
 	// `experience_table` row is `N01` — and the division **keeps its remainder**, so the residue is
 	// state, not a rounding artefact: one bonus point falls out per 100 awards.
@@ -233,6 +238,8 @@ public:
 
 	// --- The animation seam (8.5), implemented once for every character ---------------------
 	virtual bool PlayAnimClip(const FString& ClipName, bool bLoop, float* OutSeconds = nullptr) override;
+	virtual bool PlayCinematicClip(const FString& AnimSetModel, const FString& BoneRoot,
+		const FString& ClipName, bool bLoop, float* OutSeconds = nullptr) override;
 	virtual bool ResetAnimToIdle() override;
 	virtual bool SetDispositionName(const FString& NewDisposition) override;
 

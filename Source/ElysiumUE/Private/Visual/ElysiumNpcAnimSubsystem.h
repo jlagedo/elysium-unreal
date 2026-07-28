@@ -57,6 +57,13 @@ public:
 	UAnimSequence* ResolveClip(const FString& Stem, const FString& ClipName, USkeletalMesh* Mesh,
 		UglTFRuntimeAsset* OwnAsset, FString& OutError);
 
+	// 12.1 — retarget a clip out of a NAMED bank, bypassing the clip vocabulary. A choreo scene's
+	// `entire_scene` lives in a cinematic anim set that no NPC's include tree mentions, so there is
+	// no vocabulary entry to look it up by; the scene knows the bank because it knows its own
+	// `BaseAnim` and the actor's `bonerename` root (PL16).
+	UAnimSequence* ResolveClipFromBank(const FString& BankStem, const FString& ClipName,
+		USkeletalMesh* Mesh, FString& OutError);
+
 	// The standing idle for a stem at a disposition, by VtMB's own chain:
 	//   default_disposition -> dispositiontable "Animation Name" -> Stance_<Name>_Idle_* (by weight)
 	//   -> ACT_IDLE (by weight) -> a loose idle-named clip -> nothing.

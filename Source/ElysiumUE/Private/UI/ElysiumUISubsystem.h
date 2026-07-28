@@ -64,6 +64,24 @@ public:
 	// doors into it, and showing it while it is already up switches tab rather than rebuilding.
 	void ShowCharacterScreen(EElysiumCharacterTab Tab);
 	void HideCharacterScreen();
+
+	// Character creation — the same screen with the Base tab in front of the Sheet, the pools as its
+	// currency and the name editable. Raised by the `createplayer` verb, which the genesis map's
+	// `newplayer` trigger reaches through `ccmd.createplayer`, and by `elysium.chargen`.
+	void ShowChargen();
+	// The quiz's answer handler: apply the choice, then either redraw the popup or — when the chain
+	// ends — take it down and open the sheet with what it decided already on it.
+	void AnswerChargenPopup(int32 Index);
+	// Raise the sheet on the pending character - the second half of both routes.
+	void OpenChargenSheet();
+	// Chargen's ACCEPT — land the character through the game state's own funnel, then close.
+	void CommitChargen();
+	// The screen's ACCEPT on the in-game level-up sheet: write the scratch back onto the character,
+	// then close. Chargen's own commit is the chargen door's, because it also lands a clan, a sex, a
+	// History and a name (`Substrate/ElysiumChargen.h`).
+	void CommitCharacterSpend();
+	// Re-point the stage's body at whatever clan/sex the screen is now showing.
+	void UpdateCharacterStageBody();
 	bool IsCharacterScreenOpen() const { return CharacterScreen != nullptr; }
 
 	// Close the topmost screen the PLAYER opened, and report whether there was one. This is what
@@ -86,7 +104,10 @@ private:
 	void PushMenuScope();
 	void PopMenuScope();
 
-	void PushCharacterScope();
+	// The screen's input scope. Chargen pushes the same scope at `Priority::Chargen` instead of
+	// `Priority::Character` — it sits above the game rather than beside it, because there is no run
+	// to fall back into while it is up.
+	void PushCharacterScope(int32 Priority, const TCHAR* Name);
 	void PopCharacterScope();
 
 	// `questlog` / `chareditor` — declared and key-bound already (`ElysiumCommands.cpp`,
@@ -99,6 +120,16 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UElysiumCharacterScreen> CharacterScreen;
+	// The body + backdrop behind the screen's panels. Plain C++ rather than a UObject: it owns
+	// transient actors and its own GC roots (`UI/ElysiumCharacterStage.h`).
+	TSharedPtr<class FElysiumCharacterStage> CharacterStage;
+
+	// The wizard's entry popup and question chain. Alive only between `createplayer` and the moment
+	// the chain ends; the sheet is what follows it.
+	UPROPERTY(Transient)
+	TObjectPtr<class UElysiumChargenPopup> ChargenPopup;
+	TSharedPtr<struct FElysiumWizRun> ChargenRun;
+	TSharedPtr<struct FElysiumChargenState> PendingChargen;
 
 	EElysiumMenuMode CurrentMode = EElysiumMenuMode::Main;
 	FElysiumInputScopeHandle MenuScope;

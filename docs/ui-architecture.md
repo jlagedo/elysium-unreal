@@ -223,9 +223,29 @@ the original's even where the backing system is missing.
   that share art and layout but not code (`vtmb-ui.md`); one shell is the same thing to the player
   and is what makes chargen a body rather than a rebuild.
 
-  **Sheet and Info are framed placeholders.** They draw their real panels, rules and headings with a
-  line naming the task that fills them, and the Sheet footer draws `Auto-Level is Off` / `Accept` /
-  `Cancel` **disabled** — the tab is the level-up interface with no body yet, not a read-only display.
+  **The Sheet body is one widget serving both hosts.** `BuildSheet` draws the same three category
+  blocks, the same feats panel and the same detail panel for chargen and for the in-game level-up
+  screen, over the same `FElysiumChargenState`. `Mode.Spend` selects only the currency — the seven
+  category pools or the `Experience` slot — and the heading counters and the detail panel's corner
+  read that one field. **A zero pool draws no parenthetical at all**, which is what the retail
+  capture shows for a tertiary category.
+
+  Both hosts edit a **scratch**, never the character: nothing reaches the player entity until
+  ACCEPT, which is what makes CANCEL a discard rather than an undo log. That is also why the row's
+  bubbles have four states rather than two — a dot the character came in with, a dot bought this
+  session and not yet committed, a dot the trait-effect layer added on top of the base, and nothing.
+  VtMB ships art for all four (`cm_bubble_{filled,pending,bonus,empty}`).
+
+  A row is drawn only while its **current** value is in `[0, 6)`, which is what gives a non-clan
+  discipline no row at all rather than a greyed one. Left-click raises, right-click sells back, and
+  the whole row is the hit target rather than the bubbles.
+
+  **The Base tab is chargen's only extra body**: clan, gender and history as rows of selectable
+  words with a framed write-up beside them, and a single `NEXT` in the footer. Retail draws three
+  dropdowns; at chargen every list is short enough to show whole, and a list that is always open is
+  one fewer state than a combo box — the UI has no classic mode (`remaster-direction.md` axis 1).
+
+  **Info is still a framed placeholder.**
 
   A tab or hub change swaps the strip, footer and body **in place** (`Refresh`), never through a
   teardown: the screen changes tab from inside its own key handler, and destroying the widget there
@@ -252,3 +272,27 @@ the original's even where the backing system is missing.
   Quest rows are ordered **newest assignment first** — `Order` is `max+1` at assignment, so it is the
   real chronology — and the hub tabs carry live open-quest counts, so work in a hub you are not
   looking at is still visible as a number.
+
+- **The character stage** — `FElysiumCharacterStage`, the body behind the screen's panels. Raised
+  for **both** hosts: VtMB's own screen draws the character *through* its translucent panels in game
+  as well as at chargen, which is what proves the body is geometry and not a picture. Three transient
+  actors in a pocket of whatever world is loaded — an `ACameraActor` the controller looks through
+  (`UElysiumGameFlowSubsystem::EnterMenuBackdrop` is the precedent), an unlit quad carrying
+  `charactermaintenance/background` as a **fixed wallpaper**, and the body itself with collision off,
+  standing the idle `UElysiumNpcAnimSubsystem::PickIdleClip` would give an NPC. The mesh goes through
+  the same world-free `ElysiumNpcVisual::LoadMesh` the game's own NPC bodies use, resolved by
+  `FElysiumClanTable::PlayerBodyStem` — the one lookup `Elysium.Content.PlayerBodies` also asserts.
+
+  It **remembers the previous view target and restores it on teardown**, before the input scope pops:
+  the in-game screen has a camera to give back and chargen does not, and a null is what says so.
+  Every piece degrades independently — no `.glb`, no body; no backdrop texture, no quad; no world, no
+  stage — and the panels stand alone in each case.
+
+- **The chargen popup** — `UElysiumChargenPopup`, one `charcreatewizard.txt` popup full-screen: the
+  framed page art with the question at its top-left and the surviving answers as numbered lines
+  below. The entry popup and every quiz question are the same widget; they differ only in the
+  `FElysiumWizPopup` handed to it. The answers carry their own numbers in the data ("1. Male?"), so
+  nothing is prefixed. The authored `Region`/`TextRegion` are read as **intent**, not as a runtime
+  coordinate system: the page is centred in the virtual canvas and its text column takes the
+  proportion the data asks for. The widget draws and reports which line was clicked; everything that
+  decides what happens next is `ElysiumChargen::WizChoose`.

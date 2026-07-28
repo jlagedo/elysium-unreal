@@ -125,3 +125,9 @@ private:
 	TMap<uint8, TStrongObjectPtr<UFont>> Fonts;   // role -> composed runtime UFont (null = failed)
 	bool bComplete = true;
 };
+
+// The module's one font library, shared by every screen. Composing a role's `UFont` is not free and
+// the faces are identical wherever they are drawn, so this is a single instance rather than one per
+// screen. The composed `UFont`s are transient UObjects held by `TStrongObjectPtr` inside, so they
+// survive GC for the session.
+FElysiumUIFontLibrary& ElysiumUIFonts();

@@ -4,6 +4,12 @@
 
 #include "ElysiumSheetSlots.h"
 
+// How a *value* used as a lookup key is normalised. The KV reader lowercases block keys already, so
+// this is for the other half — a `TemplateName`, a quest `Title`, an effect's `Trait`. Every layer
+// that keys off one folds it the same way here, because a lookup that folded differently would
+// silently miss rather than fail.
+inline FString ElysiumFold(const FString& S) { return S.ToLower(); }
+
 // VtMB's rulebook — the RPG rules layer under `vdata/system/`, mirrored verbatim by PL5b.
 //
 // Twelve table families, one struct pair each: a row struct and a table struct carrying
@@ -142,6 +148,15 @@ struct FElysiumStat
 	FString NameMapping;       // a strings.txt display table
 	FString NameFunc;          // a code-side display function (`ClanNameFunc`)
 	bool bDisabled = false;
+
+	// What the sheet's detail panel reads. `HelpText` is the trait blurb and `HelpText2` the
+	// mechanical note under it; the two five-entry lists are the per-rating `LEVEL n:` pair, which
+	// only the disciplines author. An unauthored rating is an empty entry, so the index is the
+	// rating and never shifts.
+	FString HelpText;
+	FString HelpText2;
+	TArray<FString> LevelHeadings;   // HelpTextH1..5
+	TArray<FString> LevelDetails;    // HelpTextL1..5
 
 	// Gates on raising the stat, e.g. `"BloodPool > 0"` and `"Health < Max_Health"`. Authored more
 	// than once per block on 17 of the Active_Disciplines, which is why this is a list.
@@ -384,6 +399,14 @@ struct FElysiumClanTemplate
 	TMap<FString, int32> Reactions;     // `Reactions { To { "Brujah" "+20" } }`
 	TMap<FString, float> LoiterActivities;
 
+	// The authored TEXT of any trait whose value is a symbolic name rather than a number —
+	// `"Attrib_Order" "Physical_Mental_Social"`, `"Starting_Equipment" "Player_Kindred"`,
+	// `"CharGen_AutoLevel_Template" "Brujah_CharGen"`. The trait maps above hold ints, so those
+	// values would otherwise read as 0. The name resolves through the stat's `NameMapping` group in
+	// `FElysiumStrings`, or against another table entirely (`CharGen_AutoLevel_Template` names a
+	// leveling template and has no `stats.txt` slot at all).
+	TMap<FString, FString> TraitText;
+
 	bool IsValid() const { return !TemplateName.IsEmpty(); }
 	bool IsPlayable() const { return TemplateName.StartsWith(TEXT("Player_")); }
 
@@ -393,6 +416,8 @@ struct FElysiumClanTemplate
 
 	// A trait's rating in this template alone, ignoring the parent chain.
 	const int32* Trait(const FString& InternalName) const;
+	// The same trait's authored text, when it was authored as a name rather than a number.
+	FString TraitStr(const FString& InternalName, const FString& Def = FString()) const;
 };
 
 struct FElysiumClanTable
@@ -414,6 +439,15 @@ struct FElysiumClanTable
 
 	// The chain a name walks, nearest first. The diagnosis half of Resolve.
 	void ParentChain(const FString& TemplateName, TArray<FString>& Out) const;
+
+	// The `npc_index.json` stem for a playable clan's body: the template at `ClanIndex` resolved,
+	// then its `M_Body<slot>` / `F_Body<slot>`, then that `.mdl` path's base filename lowercased —
+	// which is the stem the character export writes. Empty when the clan is not playable or the
+	// slot is absent.
+	//
+	// Only the INDEXED body keys are a player's: the un-indexed `M_Body`/`F_Body` on the human and
+	// Society-of-Leopold templates name NPC models, which the map-driven seed already covers.
+	FString PlayerBodyStem(int32 ClanIndex, bool bFemale, int32 ArmorSlot = 0) const;
 
 private:
 	TMap<FString, int32> ClanByName;
@@ -617,4 +651,182 @@ struct FElysiumLevelingTemplates
 
 private:
 	TMap<FString, int32> ByName;
+};
+
+// ================================================================================================
+// 13. charcreatewizard.txt — the chargen personality quiz and its clan scoring
+// ================================================================================================
+//
+// The wizard is a `client.dll` panel, so nothing here is a layout: `Region`/`TextRegion` are read
+// as authored *intent* (which answer sits above which, how much room the question wanted), never as
+// a runtime coordinate system (`remaster-direction.md` axis 1). What is load-bearing is the graph —
+// which popup follows which, which answer increments which abstract trait, and how the tallies
+// score each clan. The model: `docs/game_runtime.md` → "Chargen — a personality quiz".
+
+// A rectangle exactly as authored, in the file's own 1024x768 terms.
+struct FElysiumWizRegion
+{
+	int32 X = 0, Y = 0, Width = 0, Height = 0;
+	bool bAuthored = false;
+};
+
+// One `Trait_Prereq`. Either bound may be absent, and absent means unbounded — a popup that only
+// authors `MaxVal` admits every tally at or below it, including a trait never yet incremented.
+struct FElysiumWizPrereq
+{
+	FString Trait;
+	int32 MinVal = MIN_int32;
+	int32 MaxVal = MAX_int32;
+
+	bool Admits(int32 Tally) const { return Tally >= MinVal && Tally <= MaxVal; }
+};
+
+// A button, and what clicking it does. At most three are shown; the rest of a block's Actions are
+// `KeyLookup` alternates, selected by the wizard rather than drawn alongside.
+struct FElysiumWizAction
+{
+	FString Text;
+	FString Next;              // the InternalName of the popup to go to
+	FString Trait;             // the abstract trait this answer increments, or empty
+	FString CharTemplate;      // sets the player's clan/template outright
+	bool bSetGenderMale = false;
+	bool bSetGenderFemale = false;
+	bool bIsCheckBox = false;         // only triggers if still checked when the popup closes
+	bool bEndCharGenWiz = false;
+	bool bProcessTraitChoices = false;
+	// **Absent is not zero.** `"KeyLookup" "0"` is a real alternate distinct from a plain action, so
+	// the unauthored state needs its own value.
+	int32 KeyLookup = INDEX_NONE;
+	TArray<FElysiumWizPrereq> Prereqs;
+	FElysiumWizRegion Region;
+};
+
+struct FElysiumWizPopup
+{
+	FString Text;
+	FString InternalName;      // NOT unique — popups share one and the wizard picks among them
+	FString CharTemplate;
+	FString BkgImage;
+	bool bOrderPrereqs = false;
+	bool bClanPrereqs = false;
+	TArray<FElysiumWizPrereq> Prereqs;
+	TArray<FElysiumWizAction> Actions;
+	FElysiumWizRegion Region;
+	FElysiumWizRegion TextRegion;
+
+	bool IsValid() const { return !InternalName.IsEmpty(); }
+};
+
+// When a group hands off to the next one, and on what answered-count.
+struct FElysiumWizNextSection
+{
+	FString Next;
+	int32 MinCount = INDEX_NONE;
+	int32 MaxCount = INDEX_NONE;
+};
+
+// One of the ten `*_Popups` blocks. Its `Defaults` is a popup-shaped block every member inherits
+// from field by field — including the positional `Action` list, which concrete popups override by
+// index rather than replace.
+struct FElysiumWizGroup
+{
+	FString InternalName;
+	FElysiumWizNextSection NextSection;
+	FElysiumWizPopup Defaults;
+	TArray<FElysiumWizPopup> Popups;
+};
+
+// How traits group for the ordering questions.
+struct FElysiumWizCombination
+{
+	FString InternalName;
+	TArray<FString> Traits;
+};
+
+struct FElysiumWizOrderingStep
+{
+	FString TraitCombination;
+	FString Index;             // "Primary" | "Secondary" | "Tertiary"
+};
+
+struct FElysiumWizTraitOrdering
+{
+	FString TraitCombination;
+	FString Index;
+	FString Trait;
+	TArray<FElysiumWizPrereq> Prereqs;
+	TArray<FElysiumWizOrderingStep> Orderings;
+};
+
+// A clan's ranked traits. **A rank repeats** — Gangrel authors two `Primary`s — so each is a list.
+struct FElysiumWizClanNode
+{
+	FString CharTemplate;
+	TArray<FString> Primary;
+	TArray<FString> Secondary;
+	TArray<FString> Tertiary;
+
+	// The rank this clan gives a trait: 0 Primary, 1 Secondary, 2 Tertiary, INDEX_NONE if unranked.
+	int32 RankOf(const FString& Trait) const;
+};
+
+struct FElysiumWizard
+{
+	TArray<FString> Traits;                     // the 8 abstract traits, in file order
+	TArray<FElysiumWizCombination> Combinations;
+	TArray<FElysiumWizTraitOrdering> Orderings;
+	TArray<FElysiumWizClanNode> ClanNodes;
+	// `ConnectionScores`: [selection 0..2][clan rank 0..2]. The payoff for the player's n-th chosen
+	// trait meeting a clan that ranks it n-th.
+	int32 ConnectionScores[3][3] = {};
+	TArray<FElysiumWizGroup> Groups;
+	TArray<FString> GroupNames;                 // Strings.PopUpGroups, the authored group order
+
+	bool Load(FString& OutError);
+	bool IsValid() const { return !Groups.IsEmpty(); }
+
+	const FElysiumWizGroup* Group(const FString& InternalName) const;
+	// Every popup with this InternalName, across all groups — the set the wizard picks from.
+	void PopupsNamed(const FString& InternalName, TArray<const FElysiumWizPopup*>& Out) const;
+	const FElysiumWizClanNode* ClanNode(const FString& CharTemplate) const;
+
+	int32 NumPopups() const;
+
+private:
+	TMap<FString, int32> GroupByName;
+};
+
+// ================================================================================================
+// 14. strings.txt + strings_internal.txt — the named string lists
+// ================================================================================================
+
+// `StringData.Strings` — a flat set of named groups, each a sparse `Name<N>` list. The file's own
+// note says they "are referenced by the `NameMapping` fields in stats", which is what makes this a
+// rulebook table and not UI text: a stat's value is DISPLAYED through its group, and a clan
+// template's symbolic trait value (`"Attrib_Order" "Physical_Mental_Social"`) is READ back through
+// the same group. `AttributeOrder`/`AbilityOrder` are what turn one into an index.
+//
+// Both files hang off the same root key and their group name spaces overlap by design — `ClanStrs`
+// is authored in one and `ClanStrs_NO_LOCALIZE` in the other, and `strings.txt` itself authors
+// `UIOccultStrs` twice. Groups therefore MERGE by index rather than replacing, so a second block
+// extends the first and only overwrites the entries it names.
+struct FElysiumStrings
+{
+	// Lowercased group name -> the dense `Name<N>` list. A gap in the authored indices (a commented
+	// out `Name4`) is an empty entry, not a shortened list: the index is the value, so it must not
+	// shift.
+	TMap<FString, TArray<FString>> Groups;
+
+	bool Load(FString& OutError);
+	bool IsValid() const { return !Groups.IsEmpty(); }
+
+	const TArray<FString>* Group(const FString& Name) const;
+	// `Name<Index>` in the group, or Def when the group or the index is absent.
+	FString At(const FString& Group, int32 Index, const FString& Def = FString()) const;
+	// The index whose entry equals Value, case-insensitively, or INDEX_NONE. This is the direction
+	// the clan templates and the leveling dependencies read.
+	int32 IndexOf(const FString& Group, const FString& Value) const;
+
+	int32 Num() const { return Groups.Num(); }
+	int32 NumEntries() const;
 };

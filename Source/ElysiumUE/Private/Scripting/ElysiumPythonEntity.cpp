@@ -528,7 +528,7 @@ namespace
 		TArray<FElysiumEntityHandle> Found;
 		if (FElysiumEntityWorld* W = CurrentWorld())
 		{
-			W->ForEachNamed(FName(UTF8_TO_TCHAR(Name)), [&Found](FElysiumEntity& E) { Found.Add(E.Handle); });
+			W->ForEachNamed(FString(UTF8_TO_TCHAR(Name)), [&Found](FElysiumEntity& E) { Found.Add(E.Handle); });
 		}
 		ElysiumScriptNatives::Record(State(), FName(TEXT("FindEntitiesByName")),
 			FString::Printf(TEXT("FindEntitiesByName(\"%s\")"), UTF8_TO_TCHAR(Name)),
@@ -652,12 +652,17 @@ namespace
 	};
 
 	// --- vampire.ccmd : the console command object (python_bridge.md, the fifth surface) --------
-	// Attribute-ASSIGN executes a console command through the shared FElysiumConsole: `c.patchtype
-	// = ""` runs the alias `patchtype`, which the Unofficial Patch's user.cfg defines as `setPlus()`
-	// -> the console falls through to Python -> the level-script function. The assigned value, if
-	// non-empty, is the command's argument string (the corpus only ever assigns ""). Attribute-GET
-	// does NOT execute (retail's documented SET-only semantics) -- it returns "" so a bare field-6
-	// `ccmd.wc_create` is a harmless no-op rather than a NameError.
+	// TOUCHING an attribute executes a console command through the shared FElysiumConsole -- both
+	// assigning one and merely reading one. `c.patchtype = ""` runs the alias `patchtype`, which the
+	// Unofficial Patch's user.cfg defines as `setPlus()` -> the console falls through to Python ->
+	// the level-script function. On assign, a non-empty value is the command's argument string (the
+	// corpus only ever assigns "").
+	//
+	// **Read executes too**, which is what makes chargen reachable: output field 6 is wrapped as
+	// `__main__.%s` and evaluated, so genesis's `ccmd.createplayer` is a bare GET with no assignment,
+	// and it is the only invocation of that command in the whole shipped corpus. A get returns "" so
+	// the field-6 expression still yields a value. The other field-6 use, `ccmd.wc_create`, resolves
+	// as no command / no alias / no cvar / no Python name and the console drops it with a Verbose log.
 	PyObject* Ccmd_getattro(PyObject* Self, PyObject* NameObj)
 	{
 		if (PyObject* Generic = PyObject_GenericGetAttr(Self, NameObj))
@@ -669,7 +674,13 @@ namespace
 			return nullptr;
 		}
 		PyErr_Clear();
-		return PyString_FromString(""); // reading a command name is a no-op, not an execute
+		const char* Name = PyString_AsString(NameObj);
+		if (!Name)
+		{
+			return nullptr;
+		}
+		FElysiumPythonVM::Get().Console().Execute(FString(UTF8_TO_TCHAR(Name)));
+		return PyString_FromString("");
 	}
 
 	int Ccmd_setattro(PyObject* /*Self*/, PyObject* NameObj, PyObject* Value)

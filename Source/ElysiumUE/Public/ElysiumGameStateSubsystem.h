@@ -172,6 +172,12 @@ public:
 	// (RE3), so the zeros need no explicit seeding; only the non-zero flags are written.
 	void BeginNewGame(int32 Clan, bool bMale);
 
+	// Chargen's ACCEPT: land a finished character on the record and on the live player entity — the
+	// name, the whole spent sheet (clan and sex are slots on it), the History and the trait-effect
+	// group it names. The only door chargen writes through, so what a New Game seeds and what the
+	// wizard produces cannot drift (`Substrate/ElysiumChargen.h`).
+	void CommitChargen(const struct FElysiumChargenState& State);
+
 	// Drop the run: `G`, the quest map, the player record and the clock all go back to their
 	// fresh-process values. Called by UElysiumGameFlowSubsystem::QuitToMenu (11.3) so the menu's
 	// backdrop world cannot be running behind a half-live session, and so the next New Game starts
@@ -187,6 +193,11 @@ public:
 	void StoreMapSnapshot(FElysiumMapSnapshot&& Snapshot);
 	const TMap<FString, FElysiumMapSnapshot>& MapSnapshots() const { return Snapshots; }
 	void SetMapSnapshots(TMap<FString, FElysiumMapSnapshot>&& In);
+
+	// Forget one map, so the next build treats it as never visited and runs its opening from
+	// scratch. A run never does this — a fire-once trigger staying fired is the faithful
+	// behaviour. It exists for the dev entries that replay a map's opening (`elysium.newgame_ttd`).
+	void ClearMapSnapshot(const FString& Map);
 
 	// First-visit order, for the World block. A map is "visited" the first time it is frozen.
 	const TArray<FString>& VisitedMaps() const { return Visited; }

@@ -1,0 +1,245 @@
+# Elysium-Unreal
+
+*Vampire: The Masquerade – Bloodlines* (VtMB, 2004, early Source engine) rebuilt as a
+playable game — **remastered** — on **Unreal Engine 5.8 + C++**. Everything the runtime consumes
+is produced by this repo's own offline decode/export pipeline from the user's own install: the
+world's *look* is baked into a gitignored `.uasset` plugin mount and adopted at load, while
+collision, entities, scripting, audio and NPCs are built in code at map-load time from
+engine-neutral intermediates.
+
+## Read first
+
+- **`docs/roadmap.md`** — the single source of truth work tracker: the playable-path ladder
+  (PP0–PP6, the master sequence), phases P0–P13, per-task status, pipeline + RE backlogs, risk
+  register. **Status lives there and nowhere else** — including this file. There is no as-built
+  archive and no decision log; git history is the as-built record, and a decision's outcome is a
+  present-tense fact in the doc that owns the system.
+- **`docs/rebuild-strategy.md`** — the strategy reference: north star, principles, the two
+  tracks, sidecar contracts, per-system design targets.
+- **`docs/remaster-direction.md`** — the direction charter: what may be modernized, what must
+  be reproduced, who decides.
+
+Directory-scoped facts live in sub-files that load with the code they describe:
+
+| File | Covers |
+|---|---|
+| `Source/ElysiumUE/CLAUDE.md` | the C++ runtime — module/plugin list, folder → layer map, build/test loop, gotchas |
+| `tools/CLAUDE.md` | the offline Python pipeline — VtMB input formats and their decoders |
+| `docs/CLAUDE.md` | how the documentation set is organised and maintained |
+| `Content/CLAUDE.md` | the committed `.uasset`s and how they are regenerated |
+
+## Load-bearing rules
+
+### Remaster direction
+
+Keep VtMB's tone, ambience, feel and logic; raise the craft. **Not** a pixel-perfect
+recreation. Three change layers, three rules:
+
+- **Presentation** (UI, type, HUD, textures, post) — modernize freely, adjudicated by *does it
+  serve VtMB's grimy gothic-punk direction (or fix a technical deficit), or invent/override an
+  artist decision?* The **UI has no classic mode**: VtMB's screen structure is kept and
+  re-skinned with vector type on a resolution-independent Slate/UMG stack — no VGUI port, no
+  640×480 canvas, no `.fnt` bitmap atlas at runtime.
+- **Feel** (movement, camera, combat) — build the RE'd original first, keep it A/B-able, polish
+  one delta at a time by explicit owner call.
+- **Logic & content** (entity semantics, I/O, scripts, dialogue, stats, saves) — reproduce.
+
+**The governing rule: only change what we understand, and only on an explicit owner call.** RE
+comes first; a behavioural divergence needs the faithful behaviour known and recorded **in the doc
+that owns the system**, stated beside the divergence and marked as one. Default resolves to
+reproduce. The **world** keeps its
+faithful baseline (lightmap calibration, plus the planned `elysium.EnhancedTextures` A/B
+toggle); only the UI drops its.
+Full charter: `docs/remaster-direction.md`.
+
+### Bring-your-own-game
+
+**Nothing game-sourced is committed.** The decoders read *the user's own VtMB install*; their
+output (`tools/out/`) is gitignored and regenerable, and so is everything derived from it —
+including the baked `.uasset` mount `Plugins/ElysiumBaked/Content/` (only the `.uplugin` is
+committed). This is the legal posture, not a convenience — prior community rebuilds died to a
+C&D, not to technical failure. The only assets in `Content/` are hand-authored and game-agnostic.
+
+### The two clean halves
+
+- **Offline — `tools/`** (Python): decodes VtMB's proprietary formats (BSP v17, MDL v2531,
+  TTH/TTZ, VPK, VMT, `.fnt`, `.res`) into intermediates under `tools/out/<map>/`
+  (OBJ+MTL+PNG/DDS, glTF `.glb`, plain-text/JSON sidecars). `UE_bsp_to_scene.py` is the map
+  exporter; `export_all.py` batches. Runs against the user's install; needs Python +
+  `tools/requirements.txt`. A second offline stage, `bake.bat` → `tools/bake_map.py`, turns each
+  exported map's *look* into real assets and a `.umap` on the `/ElysiumBaked` mount — an editor
+  commandlet, so an editor build is a prerequisite for content, never for running.
+- **Runtime — `Source/ElysiumUE/`** (C++): opens the baked level and **adopts** its actors
+  (bucketed by the tags the bake stamped), then builds everything else in code from the
+  intermediates on disk — collision, ropes, the sky cubemap, the entity substrate, NPCs, audio,
+  scripting. Light values are re-derived from `.lights` at load rather than adopted, so live
+  calibration always wins. Python is **never** run at runtime to produce content — the seam is
+  file-based. (The embedded CPython 2.7 VM runs VtMB's *own* level scripts; it is game logic, not
+  pipeline.) The architecture and what it costs: `docs/uasset-bake-spike.md`.
+
+### The `UE_` exporter convention
+
+An exporter prefixed **`UE_`** (e.g. `UE_bsp_to_scene.py`) is verified to emit
+**Unreal-native** output: centimetres, Z-up, left-handed, triangle winding pre-reversed —
+so the C++ runtime reads every file 1:1 with **no coordinate conversion**. An exporter
+**without** the prefix (`mdl.py`, `bsp_to_obj.py`, …) still emits the old Godot Y-up/metres
+space (`source_to_godot`) and is **flagged for review** — do not consume its output as Unreal
+space until it is converted and renamed (rename + update callers + docs in the same pass).
+`mdl_gltf.py` is the one standing exemption: standard glTF 2.0 is self-describing, so
+glTFRuntime reorients it at load. Details: `tools/CLAUDE.md`.
+
+### Coordinates are read verbatim
+
+The Source→Unreal math lives once in `tools/bsp.py` (`source_to_unreal` for positions,
+`source_dir_to_unreal` for directions; the Y negation is a reflection, so the exporter
+reverses winding at OBJ-write time). Never inline it, and never convert at runtime. Full
+rules: `docs/rebuild-strategy.md` → "Coordinate conventions".
+
+### Docs describe design, RE, and status — not the current build
+
+Documentation exists for what the code cannot say for itself: design intent, VtMB
+reverse-engineering facts, and `docs/roadmap.md` status. The source is the as-built record — read
+it rather than paraphrasing it. The four orientation `CLAUDE.md` files (`Source/ElysiumUE/
+CLAUDE.md`, `tools/CLAUDE.md`, `docs/CLAUDE.md`, `Content/CLAUDE.md`) point at *where* something
+lives — module/plugin list, folder → layer map, build/test commands — never *how* the current
+implementation behaves. The one exception is a hard-won gotcha: a non-obvious trap (lazy-init
+order, a silent side effect, an easy-to-undo fix) that a source read would not reliably surface on
+its own. A VtMB **format or behaviour fact** (byte layouts, discovered engine rules) belongs in
+the `docs/` topic file that owns it (`docs/CLAUDE.md` → "Where a given fact belongs") — **never**
+in a `CLAUDE.md`, including `tools/CLAUDE.md`, no matter how much it reads like "how something
+works," because it describes VtMB, not our own implementation.
+
+### CLAUDE.md carries no history
+
+Every `CLAUDE.md` in this repo — this file and its four sub-files (`Source/ElysiumUE/CLAUDE.md`,
+`tools/CLAUDE.md`, `docs/CLAUDE.md`, `Content/CLAUDE.md`) — states present-tense facts only, same
+as every other doc (`docs/CLAUDE.md` → "House rules"). **Never** write a roadmap task-ID
+parenthetical (`(11.9)`, `roadmap 8.6`, `(PL13)`), a date, or a change/migration narrative
+("was X, now Y") into any of them — task tracking lives only in `docs/roadmap.md`. Cite a doc by
+name, with no date or task number attached.
+
+## What runs today
+
+**Per-task status, as-built detail, and what is next: `docs/roadmap.md`.** Runtime types and
+where they live: `Source/ElysiumUE/CLAUDE.md`.
+
+## Target hardware
+
+- **Minimum floor:** NVIDIA **RTX 4060-class** desktop GPU with **16 GB**, **1440p native** — the
+  shipped config targets this floor. **Recommended:** RTX 4070/5070-class.
+- **DX12/SM6 is mandatory.** The render path is fully dynamic — HWRT Lumen, MegaLights, VSM
+  (`Config/DefaultEngine.ini`). Every one of those silently disables under DX11/SM5 (no error,
+  just a CPU-bound slideshow). The window title must read `PCD3D_SM6`. There is no non-RT
+  fallback, so a DXR-capable GPU is required.
+- **Lumen GI is load-bearing, not optional.** VtMB's look is indirect-bounce-dominated, so the
+  bounce carries it; geometry is trivial (~20k tris/map) and MegaLights keeps hundreds of
+  dynamic lights ~constant-cost.
+
+Tuning, the SM6 setup, the MegaLights-engagement checklist, the floor budget, and the
+calibration findings: **`docs/rendering-perf.md`**.
+
+## Build & run (Windows)
+
+Requires a UE 5.8 install; the `.bat` files pin `UE_ROOT=D:\Epic\UE_5.8` — edit if yours
+differs. Also requires the `tools/` pipeline to have exported at least `sp_tutorial_1` from
+your VtMB install.
+
+- `build.bat` — compile `ElysiumUEEditor` (Win64 Development) via UnrealBuildTool
+  (`rebuild` / `clean` / `analyze` subcommands; extra args pass through).
+- `content.bat` — rebuild all committed `Content/` assets in one headless editor session
+  (`tools/build_content.py`). `python tools/export_all.py` invokes it at the end of a run
+  (skip with `--no-content`), so a generator can't be forgotten and go stale.
+- `bake.bat [map] [stages]` — bake one exported map's look into `/ElysiumBaked` (an editor
+  commandlet running `tools/bake_map.py`; six stages — `textures`, `materials`, `world`, `sky`,
+  `props`, `level` — all by default, ~4 min cold). `tools/bake_verify.py` reads the result back
+  off the assets. A map with no bake is refused at travel. The running game holds the `.umap`
+  open, so quit before re-baking the `level` stage. Details: `docs/uasset-bake-spike.md`.
+- `editor.bat` — open the project in the Unreal editor (PIE via Play).
+- `play.bat [map]` — launch standalone (`-game`, 1600×900); optional map name under
+  `tools/out` (default `sp_tutorial_1`).
+- `profile.bat [map] [cam]` — headless render profiling at 2560×1440/SM6: fixed vantages,
+  warmup + 300-frame CSV capture (per-pass GPU ms), summary, exit — no interaction.
+  `tools/profile_report.py` builds the table; results in `tools/out/_profile/`, baseline in
+  `docs/rendering-perf.md` → "Profiling baseline". Add a vantage in-game with `elysium.campos`.
+- `probe.bat [map...]` — headless light-attribution probe (`-ElysiumProbe`, one process per map;
+  default = every exported map). Traces a ray fan from each WORLDLIGHTS source against the real
+  built scene and writes `tools/out/_lights/<map>.probe.json`: what each light is nearest, whether
+  that surface emits, how enclosed it is, and its share of the light reaching what it lights. The
+  data behind separating real fixtures from the soft fill VtMB sprays in place of global
+  illumination. `elysium.lightprobe` runs the same pass live.
+- `shots.bat [map] [cam]` — headless screenshot-regression capture at 2560×1440/SM6 over the
+  **same** vantages as `profile.bat` (`-ElysiumShots`); PNGs + manifest under `tools/out/_shots/`
+  (gitignored — game-derived). `tools/shots_diff.py --save` promotes a run to the baseline and a
+  bare run diffs against it per vantage (mean/p99 difference, percent of pixels moved, a heat map
+  and a non-zero exit for any vantage over threshold) — so a look regression is a number, not an
+  eyeball. `t1sky`/`h1sky` are the sky-framing vantages.
+- `move.bat [course] [hz]` — headless **movement** regression (`-ElysiumMove`): replays a fixed
+  command stream over eight courses on `sp_tutorial_1` against real geometry at a forced frame rate,
+  writing per-frame CSV + a summary JSON under `tools/out/_move/` (gitignored — game-derived). A
+  bare number is a rate (`move.bat 120`). `tools/move_diff.py --save` promotes a baseline and a bare
+  run diffs against it; `--hz 60 120 240` is the **cross-rate** check that measures what is and is
+  not frame-rate dependent (`docs/source_movement.md` → "Frame timing"). This is what makes "the
+  step still climbs" a number rather than a play-through.
+- `test.bat [filter]` — run the automation suite headless (`Substrate`/`Content` shorthands, or a
+  full dotted test name; default = all). The `Substrate` tier runs under `-nullrhi`; the `Content`
+  tier reads `tools/out` and self-skips unexported maps. JSON+HTML report under `tools/out/_tests/`.
+  Requires the editor target built first.
+
+## Git workflow
+
+Solo-dev project on GitHub (`jlagedo/elysium-unreal`, private). Work lands as commits
+directly on `main` — do not create feature branches, pull requests, or merge requests
+unless explicitly asked.
+
+## Documentation index
+
+`docs/` holds the reverse-engineering reference this project builds on — engine-neutral VtMB
+facts, valid regardless of target engine. Organisation and maintenance rules: `docs/CLAUDE.md`.
+
+| Doc | Topic |
+|---|---|
+| `roadmap.md` | **the work tracker** — phases, status, backlogs, risks |
+| `rebuild-strategy.md` | tracks, milestone vocabulary, sidecar contracts, per-system design targets |
+| `remaster-direction.md` | the direction charter — the three layers, the two adjudication tests |
+| `runtime-architecture.md` | **the game spine** — lifetimes, the object graph, the frame, the player object, the session/boot state machine, the control surface, the seams |
+| `engine-core.md` | the entity object model and its two-phase build plan |
+| `entity_io.md` | the Source I/O bus — 7-field outputs, ScriptHide/Unhide, `use_icon` |
+| `python_bridge.md` | the CPython embedding, datamap reflection, the five call paths, `G` |
+| `script_api.md` | the script→engine **action inventory** — every name the content calls, its signature and owning datamap, demand-ranked |
+| `game_runtime.md` | main loop, three-layer split, RPG data model, the opening flow |
+| `animation_and_movers.md` | skeletal `.mdl` v2531 (Part A) + brush movers (Part B) |
+| `choreographed_scenes.md` | the `.vcd` choreo format + `logic_choreographed_scene` — event types, actor binding, timing, the completion contract |
+| `facial_animation.md` | the face — `.mdl` flex/eyeball chunks, the flex-rule RPN, the `.lip` phoneme files, `expressions/` |
+| `mdl_v2531.md` | the static-geometry `.mdl` struct map |
+| `phy_vphysics.md` | the `.phy` collision-model format — convex ledges, authored mass, axis mapping |
+| `bsp_format.md` | the VBSP v17 container — lump directory, face/leaf/node structs, static props, cubemaps |
+| `vpk_format.md` | the VPK archive container + the patch-first asset resolution order |
+| `texture_format.md` | the `.tth`/`.ttz` texture container + VMT material parsing |
+| `audio_pipeline.md` | codecs, mixer, DSP, the SoundScheme system |
+| `source_movement.md` | `CGameMovement` constants + formulas |
+| `lighting.md` | the WORLDLIGHTS (lump 15) format — `dworldlight_t`, lightstyles, texlights |
+| `color_gamma.md` | VtMB's DX8 fixed-function, LDR, gamma-space render pipeline |
+| `entity_visuals.md` | the entity-placed visuals plan — glow sprites, dynamic-model props, ropes, particles, signs |
+| `vtmb-ui.md` | **the UI as VtMB builds it** — the two UI stacks, the two schemes, `CVMainMenu`'s 1024×768 layout law, the HUD class inventory, the art trees |
+| `m0_menu_build.md` | the `GameUI.dll` decompile — `.fnt` format, TrackerScheme colours, dialog `.res` inventory |
+| `ui-architecture.md` | the Unreal re-skin — the CommonUI/Slate stack, design tokens, the virtual canvas, the menu backdrop |
+| `controls.md` | the input surface — keynames, bindable commands, default binds, cfg load order, control options UI |
+| `input-architecture.md` | the Unreal input design — the four planes, Enhanced Input over the command bus, remapping, gamepad, reserved keys |
+| `camera-view-modes.md` | the first↔third-person camera — blend weight, solver, cvars, the Unreal design |
+| `level_transitions.md` | the three spawn mechanisms + the opening map chain |
+| `savegame_format.md` | the `.sav` container, `.HL1/2/3` sections, and the game state they hold |
+| `save-architecture.md` | the Unreal persistence design — the four blocks, the field walk, per-map snapshots |
+| `map-architecture.md` | the Unreal map load/unload/travel design |
+| `uasset-bake-spike.md` | the offline `.uasset` bake — the split, the six stages, the engine facts it pinned down |
+| `rendering-perf.md` | the dynamic render path, perf cvars, MegaLights checklist |
+| `reflections.md` | `$envmap` — VtMB's own composite read out of its shipped DX8 shaders, the whole-game authoring survey, and the Unreal reflection channel |
+| `light-attribution.md` | telling VtMB's real fixtures from its GI-substitute fill lights — the probe, the surveys, what discriminates and what does not |
+| `sky-ambience.md` | the sky + ambient-light RE plan and Unreal rework — the unknowns, the labelled-cube probes, the calibration path |
+| `weather.md` | the rain system — Troika's own particle format, the precipitation volumes, the `worldspawn` wetness channel, the lightning rig, and the Unreal plan |
+| `debug-tooling.md` | the layered (0–3) debug/dev-tooling architecture |
+| `asset-enhancement.md` | the offline surface track (delight → upscale → PBR synthesis) |
+| `vdata-catalog.md` | the `vdata/` rulebook inventory — each table → system → roadmap task |
+| `recovered/dice-system.md` | the World-of-Darkness d10 resolver (verified: decompile + `DiceRolls.txt`) |
+
+`tools/ghidra/README.md` documents the headless-Ghidra RE workspace (the whole
+`tools/ghidra*/` + `tools/re/` trees are gitignored, local-only).

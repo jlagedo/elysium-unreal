@@ -27,6 +27,7 @@ struct FElysiumSaveVersion
 		Xp            = 3,   // AddExperience's two accumulators — the residue and the lifetime total
 		Journal       = 4,   // m_QuestList — the ASSIGNED_QUEST rows a quest state change writes
 		Identity      = 5,   // the PC's name, and m_iCurrQuestLogArea — the quest log's hub tab
+		History       = 6,   // m_iVHistoryID — the background trait chargen writes
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
@@ -37,9 +38,10 @@ struct FElysiumSaveVersion
 	//
 	// `Sheet` restructured the player's trait storage from a name -> value bag into VtMB's four
 	// fixed containers. `Xp` added the award accumulators beside them, `Journal` the quest rows, and
-	// `Identity` the name and the quest log's hub tab. All four are additions to the player block
-	// with no upgrade branch: an older payload is refused, not half-read.
-	static constexpr int32 MinSupported = Identity;
+	// `Identity` the name and the quest log's hub tab, and `History` the background trait. All five
+	// are additions to the player block with no upgrade branch: an older payload is refused, not
+	// half-read.
+	static constexpr int32 MinSupported = History;
 
 	static const FGuid GUID;
 };

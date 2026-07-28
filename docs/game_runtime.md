@@ -537,6 +537,30 @@ the ordinary auto-level buyer against a deliberately huge XP grant, on top of th
 template's flat `Attributes`/`Abilities`/`Disciplines` block **[VtMB]**. Only then does the
 point-spend panel open.
 
+**A clan's `Attributes` block carries symbolic values, not only ratings** **[data]**. Six of its
+keys are names rather than numbers — `Attrib_Order` (`"Physical_Mental_Social"`) and
+`Ability_Order` (`"Talents_Skills_Knowledges"`), which resolve through the stat's `NameMapping`
+group in `strings_internal.txt` and are what select the tier split above; `Starting_Equipment` /
+`Excluded_Equipment`; and `CharGen_AutoLevel_Template` / `Default_AutoLevel_Template`, which name
+`levelingtemplate_000.txt` rows. The last two are **not** `stats.txt` slots at all — they live in
+the `Attributes` block but have no trait behind them, so a reader that stores the block as
+name → int loses them entirely and reads both orders as ordering 0.
+
+**Two marked divergences in our chargen** (`remaster-direction.md` — logic layer, so both are
+recorded beside the faithful behaviour rather than silently taken):
+
+- **Route 3 of the entry popup is omitted.** `Help_Popup0`'s third action — the Unofficial Patch's
+  "replay some Bloodlines missions as a human hunter from the Society of Leopold" — leads to
+  `Hunter_Selection`, whose `CharTemplate`s are the **multiplayer clans 9–11** (`mp-mercenary`,
+  `mp-condotierre`, `mp-inquisitor`). The sheet's 2..8 clan encoding, the clan sigil set and the
+  player-body lookup all stop short of them, so the route is filtered out of the popup rather than
+  left to open a path that dead-ends. Reversible: the data is parsed and the filter is one name.
+- **`AUTO-SPEND POINTS` is drawn disabled.** Its handler is not recovered, and the obvious
+  candidate is not one: the clan's `<Clan>_CharGen` leveling template **is** the baseline and has
+  already run by the time the pools exist, so no authored spend order remains to follow. A
+  priority-order fill would be an invented rule, which the governing direction refuses by default.
+  The button keeps its shape so the screen does not misreport what retail offers.
+
 **The point pools** (`FUN_1017d930`, one pass at panel construction) **[VtMB]**. Seven
 counters — Physical, Social, Mental, Talents, Skills, Knowledges, Disciplines — each built
 as *clan term + tier term*:
@@ -558,6 +582,14 @@ as *clan term + tier term*:
 So a shipped playable character gets **2/1/0 attribute dots** by category priority,
 **3/2/1 ability dots**, and **1 discipline dot** — on top of the auto-levelled baseline.
 The panel shows each as `"<category>: <n>"` (`FUN_1017f470`).
+
+**A pool point buys a dot outright — the `Costs` model below is the experience path, not this
+one.** The shipped numbers admit no other reading: an attribute raise is priced
+`Current_Rating * 4`, so the 1 → 2 step alone costs 4 and a 2-point Physical pool could not buy a
+single dot; a discipline raise is `Current_Rating * 5` against a pool of exactly 1. The pools are
+denominated in dots, and the panel's `REMAINING POINTS` counts dots. *Confidence: inferred from
+the shipped tables rather than decompiled; the spend handler in `client.dll`'s
+`0x1017c000–0x10182500` panel block would confirm it directly.*
 
 ### Buying a dot — the cost model **[VtMB]**
 
@@ -983,6 +1015,41 @@ real game start.
 Two engine console-commands appear with no data equivalent: **`ccmd.createplayer`**
 (chargen UI) and **`ccmd.wc_create`** (runtime cubemap bake — irrelevant to a port that
 bakes offline).
+
+### `createplayer` opens a panel; it does not build a player **[VtMB]**
+
+`createplayer` is a **`client.dll` ConCommand** (registered at `FUN_10173670` →
+`FUN_100df430("createplayer", FUN_10173640, 0, 0, 0)`). Its handler is three lines:
+
+```c
+void FUN_10173640(void) {            // "createplayer"
+  FUN_100f0ed0("CharEditPanel");     // FindHudElement -> DevWarning "Could not find Hud Element '%s'"
+  FUN_101734f0();                    // (thiscall on the panel)
+}
+void FUN_101734f0(CharEditPanel *this) {
+  engine->ExecuteClientCmd("giftxp 9000", 1);
+  this->mode /*+0x274*/ = 1;
+  FUN_10173350(this);                // show: two visible bytes + a vtable call
+}
+```
+
+So **the player entity already exists when the wizard opens** — `giftxp 9000` is granted to it and
+the panel edits it in place. Nothing in the handler pauses the world, so the map's `logic_auto`,
+`logic_timer` and script layer keep running underneath the wizard. Only `giftxp 9000` runs here;
+`vautolvl <clan>_CharGen` is issued later, when a clan is chosen (§"The sheet baseline is bought").
+
+**One panel, three modes.** Three sibling ConCommands open the *same* `CharEditPanel` and differ
+only in the mode int at **`+0x274`**:
+
+| ConCommand | handler | `+0x274` | also does |
+|---|---|---|---|
+| `questlog` | `FUN_10173620` | **0** | show, set the in-game backdrop, clear `+0xcf9` |
+| `createplayer` | `FUN_10173640` | **1** | `giftxp 9000`, show |
+| `chooseteam` | `FUN_10173600` | **2** | `giftxp 9000`, show — the multiplayer templates (clans 9–11), which is what `unhidePlus()` branches on |
+
+The per-mode call `FUN_101744c0(mode)` selects the panel's **backdrop**, mode 0 reaching
+`interface/charactermaintenance/background` — so the painted street is a panel backdrop with the
+character model composited over it, not a rendered scene.
 
 ## 5. Dialogue, NPC conversation & subtitles
 

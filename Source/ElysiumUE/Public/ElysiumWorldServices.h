@@ -58,6 +58,13 @@ public:
 	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		bool bLoop, float* OutSeconds) = 0;
 
+	// 12.1 — a choreo scene's whole-cast performance. The clip lives in a cinematic anim set that
+	// no NPC's include tree names, so it is addressed by the scene's own anim-set model plus the
+	// actor's `bonerename` root (PL16) rather than through the clip vocabulary.
+	virtual bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
+		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName,
+		bool bLoop, float* OutSeconds) = 0;
+
 	// 8.3 — stand a non-solid dynamic-prop body. 8.4 — stand the same mesh with its `.phy` collision
 	// and authored mass, ready for the leaf to drive SetSimulatePhysics. Null on an unbaked model.
 	virtual UStaticMeshComponent* BuildPropVisual(const FString& Stem, const FVector& Location,

@@ -81,14 +81,34 @@ struct FElysiumNpcIndexEntry
 	int32   ClipCount = 0;
 };
 
+// One cinematic anim set (12.1 / PL16): the whole-cast performance a choreo scene's
+// `BaseAnim`/`MaleAnim`/`FemaleAnim` names, split offline into one bank per bone root because a
+// single clip carries several co-located skeletons. A scene actor's `bonerename "BipNN" "Bip01"`
+// picks which root — and therefore which bank — is that actor's.
+struct FElysiumCinematicSet
+{
+	FString Stem;
+	// Root token (`Bip01`, `Bip02`, …) -> the bank stem holding that actor's copy of the clips.
+	TMap<FString, FString> Roots;
+
+	// The bank for a bonerename source, falling back to the first root when the scene names one
+	// this model does not carry (or names none at all — a single-actor cinematic).
+	FString BankForRoot(const FString& Root) const;
+};
+
 struct FElysiumNpcIndex
 {
 	TMap<FString, FElysiumNpcIndexEntry> Npcs;
 	TMap<FString, FElysiumNpcIndexEntry> Banks;
+	// Keyed by the model path exactly as a scene's keyvalue spells it, lowercased/forward-slashed.
+	TMap<FString, FElysiumCinematicSet> Cinematics;
 
 	bool IsValid() const { return !Npcs.IsEmpty(); }
 	bool Load(FString& OutError);
 
 	// Absolute path to a bank's glb, or empty when the stem is not a known bank.
 	FString BankGlbPath(const FString& BankStem) const;
+
+	// The bank stem a scene's anim-set model + actor bonerename resolves to, or empty.
+	FString CinematicBank(const FString& ModelPath, const FString& BoneRoot) const;
 };

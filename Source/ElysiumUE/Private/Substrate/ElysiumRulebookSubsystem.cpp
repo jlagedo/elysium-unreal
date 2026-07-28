@@ -83,6 +83,16 @@ const FElysiumLevelingTemplates& UElysiumRulebookSubsystem::Leveling()
 	return Get(LevelingTemplates, bLevelingLoaded, TEXT("leveling"), LevelingError);
 }
 
+const FElysiumWizard& UElysiumRulebookSubsystem::Wizard()
+{
+	return Get(WizardData, bWizardLoaded, TEXT("wizard"), WizardError);
+}
+
+const FElysiumStrings& UElysiumRulebookSubsystem::Strings()
+{
+	return Get(StringData, bStringsLoaded, TEXT("strings"), StringsError);
+}
+
 int32 UElysiumRulebookSubsystem::LoadAll()
 {
 	TArray<FStatus> Status;
@@ -131,6 +141,16 @@ void UElysiumRulebookSubsystem::GetStatus(TArray<FStatus>& Out)
 
 	Out.Add({ TEXT("leveling"),     TEXT("system/levelingtemplate_000.txt"),
 		Leveling().Num(), Leveling().IsValid(), LevelingError });
+
+	// Counted in popups rather than groups: the popups are the content, and the count is what a
+	// parse regression would move first.
+	Out.Add({ TEXT("wizard"),       TEXT("system/charcreatewizard.txt"),
+		Wizard().NumPopups(), Wizard().IsValid(), WizardError });
+
+	// Counted in entries rather than groups: a `NameMapping` resolves an INDEX, so a group that
+	// silently lost its tail is the regression that matters.
+	Out.Add({ TEXT("strings"),      TEXT("system/strings.txt + strings_internal.txt"),
+		Strings().NumEntries(), Strings().IsValid(), StringsError });
 }
 
 // ================================================================================================

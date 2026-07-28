@@ -121,6 +121,57 @@ void AElysiumPlayerController::RegisterCommands()
 		UE_LOG(LogElysiumPC, Display, TEXT("god %s"), Player->IsUnkillable() ? TEXT("on") : TEXT("off"));
 	}));
 
+	// `teleport_player <targetname>` / `teleport_player <x> <y> <z>` — the vampire.dll verb, whose own
+	// help string is "Teleports the player to a named entity, or to an X Y Z coordinate". Both forms
+	// are reproduced because the image accepts both; the named form is the one the content uses, and
+	// it is how the chargen wizard leaves genesis (`teleport_player firetrans`).
+	Bindings.Add(Registry.Bind(TEXT("teleport_player"), [this](const FElysiumCommandCall& Call)
+	{
+		FElysiumEntityWorld* World = CurrentEntityWorld();
+		IElysiumEmbodiment* Body = World ? World->Embodiment() : nullptr;
+		if (!Body)
+		{
+			UE_LOG(LogElysiumPC, Warning, TEXT("teleport_player: no world"));
+			return;
+		}
+
+		// `angles` is Source-space throughout the substrate, so an Unreal yaw is the negated one — the
+		// convention the landmark spawn and point_teleport already use.
+		const FElysiumPlayer* Player = World->FindPlayer();
+		const float KeepYaw = Player ? -Player->Angles.Y : 0.0f;
+
+		TArray<FString> Tok;
+		Call.Args.ParseIntoArrayWS(Tok);
+		if (Tok.Num() >= 3)
+		{
+			const FVector To(FCString::Atod(*Tok[0]), FCString::Atod(*Tok[1]), FCString::Atod(*Tok[2]));
+			// A coordinate teleport moves the origin only, so the player keeps their facing.
+			Body->TeleportPlayer(To, KeepYaw);
+			UE_LOG(LogElysiumPC, Display, TEXT("teleport_player -> %s"), *To.ToString());
+			return;
+		}
+		if (Tok.Num() != 1)
+		{
+			UE_LOG(LogElysiumPC, Warning, TEXT("teleport_player usage:"));
+			return;
+		}
+
+		const FElysiumEntity* Dest = World->FindByName(Tok[0]);
+		if (!Dest || !Dest->Def)
+		{
+			// The image's own message, verbatim.
+			UE_LOG(LogElysiumPC, Warning, TEXT("Could not find entity named %s"), *Tok[0]);
+			return;
+		}
+		// Position only — the help string says "teleported to that entity's position", and the entity
+		// named is typically a trigger whose `angles` are a meaningless 0 (genesis's `firetrans` is),
+		// so adopting them would snap the player's facing for no reason. point_teleport is the verb
+		// that does carry a facing, and it keeps its own.
+		Body->TeleportPlayer(Dest->Origin, KeepYaw);
+		UE_LOG(LogElysiumPC, Display, TEXT("teleport_player -> %s at %s"),
+			*Tok[0], *Dest->Origin.ToString());
+	}));
+
 	Bindings.Add(Registry.Bind(TEXT("snapshot"), [](const FElysiumCommandCall&)
 	{
 		const FString Path = FPaths::ProjectSavedDir() / TEXT("Screenshots") /

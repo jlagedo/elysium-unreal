@@ -9,6 +9,7 @@
 #include "Scripting/ElysiumPythonVM.h"
 #include "Substrate/ElysiumQuestLog.h"
 #include "Substrate/ElysiumQuestView.h"
+#include "Substrate/ElysiumChargen.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 
 #include "Engine/GameInstance.h"
@@ -119,6 +120,46 @@ void UElysiumGameStateSubsystem::BeginNewGame(int32 Clan, bool bMale)
 		Record.Sheet.IsMale() ? TEXT("male") : TEXT("female"));
 }
 
+void UElysiumGameStateSubsystem::CommitChargen(const FElysiumChargenState& State)
+{
+	Record.Name = State.Name;
+	// The sheet carries clan and sex as slots, so this one assignment lands the whole character —
+	// the auto-levelled baseline, the spent dots and the identity together.
+	Record.Sheet = State.Sheet;
+	Record.HistoryId = State.HistoryId;
+
+	// The History's trait-effect group, in VtMB's own spelling. One at a time: re-committing must
+	// replace rather than accumulate, exactly as `RefreshClanEffects` does for the clan.
+	Record.Effects.RemoveAll([](const FString& Name) { return Name.StartsWith(TEXT("History (")); });
+	FString HistoryName;
+	if (UElysiumRulebookSubsystem* Rules = Rulebook())
+	{
+		if (const FElysiumHistory* History = Rules->Histories().At(State.HistoryId))
+		{
+			HistoryName = History->Name;
+			if (!History->Effect.IsEmpty())
+			{
+				Record.Effects.Add(History->Effect);
+			}
+		}
+	}
+
+	if (FElysiumPlayer* Player = PlayerEntity())
+	{
+		// Hydrate reconciles the clan group with the clan slot that just arrived; the recompute after
+		// it is the character's own door, never `RecomputeCurrent(Stats)` — that overload still
+		// compiles and silently drops every clan bane.
+		Player->Hydrate(Record);
+		Player->RecomputeSheet();
+	}
+
+	UE_LOG(LogElysiumState, Display,
+		TEXT("chargen committed: '%s', clan %d (%s), %s, history %d (%s), %d effect group(s)"),
+		*Record.Name, Record.Sheet.Clan(), FElysiumSheet::ClanName(Record.Sheet.Clan()),
+		Record.Sheet.IsMale() ? TEXT("male") : TEXT("female"), Record.HistoryId,
+		HistoryName.IsEmpty() ? TEXT("none") : *HistoryName, Record.Effects.Num());
+}
+
 void UElysiumGameStateSubsystem::EndSession()
 {
 	ClearAllGlobals();
@@ -161,6 +202,14 @@ void UElysiumGameStateSubsystem::StoreMapSnapshot(FElysiumMapSnapshot&& Snapshot
 void UElysiumGameStateSubsystem::SetMapSnapshots(TMap<FString, FElysiumMapSnapshot>&& In)
 {
 	Snapshots = MoveTemp(In);
+}
+
+void UElysiumGameStateSubsystem::ClearMapSnapshot(const FString& Map)
+{
+	// Both halves: the snapshot is what ApplySnapshot would replay, and the visited entry is what
+	// the World block calls a first visit.
+	Snapshots.Remove(Map);
+	Visited.Remove(Map);
 }
 
 void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection)

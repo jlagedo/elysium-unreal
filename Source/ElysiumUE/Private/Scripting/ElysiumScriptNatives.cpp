@@ -324,13 +324,15 @@ namespace ElysiumScriptNatives
 		{
 			// ChangeMap(delay, landmark, trigger) (P4.6): the scripted map transition. After `delay`
 			// seconds, activate the named trigger_changelevel — it carries the destination map + the
-			// landmark, so this reduces to path 2 (level_transitions.md). Enqueue its ChangeLevel input
+			// landmark, so this reduces to path 2 (level_transitions.md). Enqueue its ChangeNow input
 			// through the real event queue (chokepoint 2), so it single-steps in the Event Queue window
-			// and the transition runs deferred (not inside this eval). Arg 1 (landmark) is the trigger's
-			// own landmark key — carried only for the log; the trigger reads its own map/landmark.
+			// and the transition runs deferred (not inside this eval). `ChangeNow` is the name the maps'
+			// own wires use, so the scripted and entity paths fire one input. Arg 1 (landmark) is the
+			// trigger's own landmark key — carried only for the log; the trigger reads its own
+			// map/landmark.
 			if (World && Args.Num() >= 3)
 			{
-				World->EnqueueInput(Args[2].ToString(), FName(TEXT("ChangeLevel")), FElysiumVariant::Void(),
+				World->EnqueueInput(Args[2].ToString(), FName(TEXT("ChangeNow")), FElysiumVariant::Void(),
 					Args[0].ToFloat(), Ctx.Activator, Ctx.Self);
 			}
 			Record(State, Name, Display, FElysiumVariant::Void(), /*bStub*/ false);

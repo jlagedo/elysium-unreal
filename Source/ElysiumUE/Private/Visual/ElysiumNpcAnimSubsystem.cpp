@@ -137,6 +137,23 @@ UAnimSequence* UElysiumNpcAnimSubsystem::ResolveClip(const FString& Stem, const 
 	return ElysiumNpcVisual::RetargetClip(Asset, Mesh, ClipName, OutError);
 }
 
+UAnimSequence* UElysiumNpcAnimSubsystem::ResolveClipFromBank(const FString& BankStem,
+	const FString& ClipName, USkeletalMesh* Mesh, FString& OutError)
+{
+	OutError.Reset();
+	if (BankStem.IsEmpty() || Mesh == nullptr)
+	{
+		OutError = TEXT("no bank or no mesh");
+		return nullptr;
+	}
+	UglTFRuntimeAsset* Asset = GetBankAsset(BankStem, OutError);
+	if (Asset == nullptr)
+	{
+		return nullptr;
+	}
+	return ElysiumNpcVisual::RetargetClip(Asset, Mesh, ClipName, OutError);
+}
+
 TArray<FString> UElysiumNpcAnimSubsystem::IdleCandidates(const FString& Stem,
 	const FString& Disposition, EElysiumIdleTier& OutTier)
 {
