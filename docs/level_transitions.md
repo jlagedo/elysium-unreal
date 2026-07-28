@@ -44,6 +44,22 @@ New Game
                                        → sp_tutorial_1     landmark tutorial
 ```
 
+**`sp_genesisdevice_1` is a launcher, not a place.** It is 13 entities in a 548×576×468 box with an
+empty `.props` and a single `light`; nothing in it is ever seen, because the wizard covers the screen
+and its backdrop is the painted street bitmap (`vtmb-ui.md`), not the map. Three entities carry the
+whole map:
+
+- `trigger_once "newplayer"` — fires `G.Story_State = -5` and `ccmd.createplayer`, then `Toggle`s
+  itself off. `ccmd.<name>` is the scripts' console escape hatch, so `createplayer` is a
+  **`client.dll` console command** that raises `VCharWizardUI`.
+- `trigger_multiple "firetrans"` — `boogieout,ChangeNow` once the wizard is done.
+- `trigger_changelevel "boogieout"` — `sp_theatre` via landmark `newgame`.
+
+The rest is the standard furniture every map carries: `events_player` (spawned disabled),
+`events_world`, `logic_auto` → `unhidePlus()`, a 5-second `logic_timer` → `IsIdling()`, an
+`ambient_soundscheme`, and the two dialogue-discipline particle params. So reproducing genesis is
+reproducing the wizard; the map itself needs nothing.
+
 The theatre→tutorial handoff is driven **entirely by entities**. `theatre.py`'s
 `tutorialLoad()` (`ChangeMap(2.5, "tutorial", "tutorial_change")`) is a parallel/legacy
 path with **no caller** — no theatre entity output and no `.dlg` row invokes it

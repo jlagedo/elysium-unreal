@@ -28,6 +28,7 @@ in the UI is a `.uasset` except the typefaces.
 |---|---|
 | `UElysiumUISubsystem` | GI-scoped owner of the screens. Creates/shows/tears down, owns the input-mode switch. GI-scoped because the menu outlives any one world — it is up before the first map and survives the travel New Game triggers. Verbs: `elysium.menu [pause]`, `elysium.menu.close` |
 | `UElysiumMainMenu` | the main / pause menu (`UCommonActivatableWidget`) |
+| `UElysiumCharacterScreen` | the character screen — sheet / info / quest log, one shell parameterised for chargen's tab set too. Verb: `elysium.charscreen`; keys `C` and `L` |
 | `ElysiumUIStyle.{h,cpp}` | the design tokens — palette, type ramp, spacing, the virtual canvas — plus `FElysiumUIFontLibrary` |
 | `ElysiumUIStrings.{h,cpp}` | the authored string table read from `out/ui/strings.json` |
 | `ElysiumUITexture.{h,cpp}` | PNG → transient texture, shared by the use-icon atlas, sign backgrounds and the title lockup |
@@ -208,3 +209,46 @@ sign/popup re-skin, the HUD, the dialogue UI): `docs/roadmap.md`.
 
 Load Game / Save Game / Options draw disabled rather than absent, so the screen's shape matches
 the original's even where the backing system is missing.
+
+- **Character screen** — `UElysiumCharacterScreen`, one screen entered on a tab. `L` opens it on the
+  quest log, `C` on the sheet, and pressing the other key while it is up **switches tab** rather than
+  closing; that is what makes them two doors into one screen. Verb: `elysium.charscreen
+  [sheet|info|quest]`. Scope `ElysiumInput::Priority::Character` (45) — above a conversation, below a
+  menu, so a pause can open over it. Opening is gated on the app state being `Playing`; closing is
+  not, so a state change can never strand it open.
+
+  **The shell is parameterised on the four axes the chargen wizard differs on**
+  (`FElysiumCharacterScreenMode`): the tab set, `EElysiumSpendMode`, whether the name is a text
+  entry, and the footer. Retail splits the same apparent screen across three `client.dll` classes
+  that share art and layout but not code (`vtmb-ui.md`); one shell is the same thing to the player
+  and is what makes chargen a body rather than a rebuild.
+
+  **Sheet and Info are framed placeholders.** They draw their real panels, rules and headings with a
+  line naming the task that fills them, and the Sheet footer draws `Auto-Level is Off` / `Accept` /
+  `Cancel` **disabled** — the tab is the level-up interface with no body yet, not a read-only display.
+
+  A tab or hub change swaps the strip, footer and body **in place** (`Refresh`), never through a
+  teardown: the screen changes tab from inside its own key handler, and destroying the widget there
+  would drop keyboard focus and churn the input scope for what is a content change.
+
+  **The chrome is VtMB's own decoded sheet art**, every piece guarded — `out/ui/art/` is gitignored,
+  so each image degrades to a token-drawn equivalent and logs Verbose once rather than leaving a
+  hole. The panel frames are 9-sliced from a **measured UV sub-rectangle**: each is a power-of-two
+  page with the frame drawn top-left and the rest transparent, so the region is the frame's own
+  extent and the margin is the corner scroll's share of it. `cm_divider` carries a curl at both ends,
+  so the two rule terminals are two sub-rectangles of one page rather than one image mirrored.
+
+  `Palette::Amber` is the art's gold, sampled off the divider and the frames — warmer than the
+  scheme's text gold, which is a *text* colour. Drawn rules take the amber so a hairline continuing a
+  bitmap rule reads as one line.
+
+  **Two divergences, both ours.** The unread marker is *cleared* when the player leaves a hub or
+  closes the screen (`MarkQuestsRead`): VtMB sets the byte on every write and never reads it, so its
+  own clear rule is unrecoverable, and without one the marker would say "updated" forever. Per hub
+  rather than globally, so markers survive on hubs that were not looked at. And **Failed collapses**
+  to a labelled rule and a count while it is empty instead of holding a third of the screen, which is
+  its usual state.
+
+  Quest rows are ordered **newest assignment first** — `Order` is `max+1` at assignment, so it is the
+  real chronology — and the hub tabs carry live open-quest counts, so work in a hub you are not
+  looking at is still visible as a number.

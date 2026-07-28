@@ -157,6 +157,51 @@ Related screens, same stack: `CharEditPanel` (+ `CharEditCharPanel` / `EquipPane
 / `StatsPanel`), `QuestLogPanel`, `VBarterUI`, `VItemInfoUI`, `VMapScreenUI`, `VHotkeysUI`,
 `VCharWizardUI`, `CSignUI`.
 
+### The character screen — one screen, three classes
+
+The chargen wizard and the in-game character screen **look identical and are not one class.** RTTI
+gives `VCharWizardUI`, `CharEditPanel` (+ `CharEditCharPanel` / `CharEditStatsPanel` /
+`CharEditInfoPanel` / `CharEditEquipPanel`) and `QuestLogPanel` as siblings; what they share is the
+art, the header anatomy and the 1024×768 layout law, not code. **`CharEditEquipPanel` appears in no
+capture** — an equipment panel reached some other way, or cut.
+
+The **header is identical on every tab of both**: the clan sigil at top left, the PC's name beside
+it, `HUMANITY` centred over ten rating bubbles, `MASQUERADE` right over five mask faces, then the
+tab strip between two full-width rules with the active tab in `BrightControlText` cyan. The rules
+and the mask faces are one bitmap, `cm_topbar` (below).
+
+The two screens differ on exactly four axes:
+
+| | chargen (`VCharWizardUI`) | in game (`CharEditPanel`) |
+|---|---|---|
+| Tabs | `Base` \| `Sheet` | `Sheet` \| `Info` \| `Quest Log` |
+| Name | `NAME:` label + `VCTextEntry` | static text |
+| Sheet spend | the **category pools** — counters in the headings | **experience** — the `Experience` box |
+| Footer | `Skip Intro` ☐, `Auto-Spend Points`, `Accept`, `Cancel` | `Auto-Level is Off`, `Accept`, `Cancel` |
+
+**The in-game Sheet is not read-only** — it is the level-up interface, where experience is spent to
+raise traits. Chargen and level-up are the same editable body against different currencies. Only
+`Info` and `Quest Log` are read-only.
+
+The chargen Sheet's heading counters are RE25's pool model on screen: `ATTRIBUTES(3)` =
+`PHYSICAL(1) + SOCIAL(0) + MENTAL(2)`, `ABILITIES(6)` = `TALENTS(2) + SKILLS(1) + KNOWLEDGES(3)`,
+`DISCIPLINES(1)` — the 2/1/0 and 3/2/1 tier tables in the player's chosen priority order, plus
+`Subpool_Disciplines = 1`.
+
+### The quest log
+
+Four hub tabs — Santa Monica, Downtown, Hollywood, Chinatown — over three framed, scrolling boxes:
+`ACTIVE QUESTS` in the wide left column, `COMPLETED` over `FAILED` in the right. An entry is the
+quest's `DisplayName` in gold small caps over the current completion state's `Description` in white.
+The `Failed` box is the same size empty as full, and it is empty for most of a run.
+
+The selected tab is **persisted player state**: `m_iCurrQuestLogArea` is an integer datamap field on
+the player at `+0x1dac`, not a member of the panel that reads it.
+
+`quests_main.txt` — the fifth table the loader reads — **ships with every quest commented out.** The
+file is the format's own documentation template and authors none, so all 79 shipped quests belong to
+the four hub tables and the four tabs cover the whole catalogue.
+
 ### HUD art trees
 
 | Tree | Count | Contents |
@@ -169,8 +214,32 @@ Related screens, same stack: `CharEditPanel` (+ `CharEditCharPanel` / `EquipPane
 | `materials/hud/crosshairs` | 19 | per-weapon reticles |
 | `materials/hud/signs` | 69 | in-world sign art |
 | `materials/hud/inventory_images` | ~350 | item / armour / weapon icons |
-| `materials/interface/charactermaintenance` | 130 | sheet chrome: clan symbols, bubbles, buttons, dividers |
+| `materials/interface/charactermaintenance` | 130 | sheet chrome — see below |
 | `materials/interface/{pop_ups,worldmap,sewermap,tipinfoscreen,widescreen,mainmenu}` | 90 / 77 / 66 / 15 / 39 / 3 | the remaining screens; `mainmenu` holds `vtm_title` (1024×512) |
+
+**The sheet chrome, by piece.** `background.png` is not a character render — it is a **painted LA
+street at dusk** (red-brick corner building, vertical neon, wet cobbles, a violet sky down the
+alley), and the PC's model is composited over it at runtime. `cm_topbar` is the whole header band —
+both rules *and* the Masquerade meter (below); `cm_divider` a hairline with a **curled terminal at
+each end**; `activequestwindow` /
+`completedquest` / `failedquest` / `infowindow2` / `featwindow` the panel frames — a thin double rule
+with a sage-green art-nouveau corner scroll at each corner. `cm_bubble_{filled,empty,pending,bonus}`
+are the rating dots (a gold ring around blood-red glass); `cm_masquerade_strike` a red claw slash;
+`cm_dropdownbutton_{up,dwn}` the scroll arrows; `cm_clan_symbol_*` the ten clan sigils at 64².
+
+Two golds, not one. The scheme's `VUnselectedText` `#ab8c5f` is a **text** colour; the rules,
+terminals and frames are painted in a warmer `#c08848`, and the corner scrolls in a desaturated
+sage. A drawn rule meeting a bitmap rule has to use the art's gold or the two read as two lines.
+
+**The five Masquerade mask faces are painted into `cm_topbar`, not shipped as their own texture.**
+The page is 1024×128: two full-width rules at rows 74 and 99 (the tab strip sits between them), and
+the meter baked into its right end — five pale tragedy masks at x 797–997, rows 32–73, on a 43 px
+pitch, each slightly brighter than the last. `cm_masquerade_strike` (64², a red claw slash) is the
+only mask-related material the game loads, drawn over the violated slots. `client.dll`'s string
+table names all 29 `charactermaintenance` textures it can reference and no mask is among them, which
+is the proof there is no separate asset to find. The bar draws stretched to screen width at native
+vertical scale — both rules land on the same rows in the page and in a 1366×768 capture, and the
+page's masks scaled to that width match the capture's within 1.5 px.
 
 **`new_ui` is retail, not the Unofficial Patch.** Most of the tree lives in the VPKs; the patch
 overrides only the blood- and faith-bar art loose (`blood_bar*`, `bloodbar*`, `faith*`,

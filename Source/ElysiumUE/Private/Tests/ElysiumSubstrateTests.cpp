@@ -38,6 +38,7 @@
 #include "ElysiumPresentationSubsystem.h"
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumQuestLog.h"
+#include "Substrate/ElysiumQuestView.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSheetMath.h"
 #include "ElysiumSaveArchive.h"
@@ -1841,6 +1842,7 @@ bool FElysiumInputScopesTest::RunTest(const FString&)
 	const FElysiumInputScope Cinematic = MakeScope(TEXT("Cinematic"), Prio::Cinematic, EMode::GameOnly,  false);
 	const FElysiumInputScope Chargen   = MakeScope(TEXT("Chargen"),   Prio::Chargen,   EMode::UIOnly,    true);
 	const FElysiumInputScope Dialogue  = MakeScope(TEXT("Dialogue"),  Prio::Dialogue,  EMode::UIOnly,    true);
+	const FElysiumInputScope Character = MakeScope(TEXT("Character"), Prio::Character, EMode::UIOnly,    true);
 	const FElysiumInputScope Menu      = MakeScope(TEXT("Menu"),      Prio::Menu,      EMode::UIOnly,    true);
 	const FElysiumInputScope Debug     = MakeScope(TEXT("Debug"),     Prio::Debug,     EMode::GameOnly,  true);
 
@@ -1916,7 +1918,7 @@ bool FElysiumInputScopesTest::RunTest(const FString&)
 	//     the out-of-order one (the thing under closes first, e.g. a conversation ending behind an
 	//     open pause menu).
 	{
-		const TArray<FElysiumInputScope> Screens = { Sign, Cinematic, Chargen, Dialogue, Menu, Debug };
+		const TArray<FElysiumInputScope> Screens = { Sign, Cinematic, Chargen, Dialogue, Character, Menu, Debug };
 		for (const FElysiumInputScope& Under : Screens)
 		{
 			for (const FElysiumInputScope& Over : Screens)
@@ -1959,6 +1961,7 @@ bool FElysiumInputScopesTest::RunTest(const FString&)
 	TestTrue(TEXT("a menu revokes debug capture"), ElysiumInput::RevokesDebugCapture(Menu));
 	TestTrue(TEXT("so does a conversation"), ElysiumInput::RevokesDebugCapture(Dialogue));
 	TestTrue(TEXT("so does chargen"), ElysiumInput::RevokesDebugCapture(Chargen));
+	TestTrue(TEXT("so does the character screen"), ElysiumInput::RevokesDebugCapture(Character));
 	TestFalse(TEXT("a sign does not — it is dismissed by a world click"),
 		ElysiumInput::RevokesDebugCapture(Sign));
 	TestFalse(TEXT("nor does a cutscene"), ElysiumInput::RevokesDebugCapture(Cinematic));
@@ -1969,7 +1972,8 @@ bool FElysiumInputScopesTest::RunTest(const FString&)
 	TestTrue(TEXT("a cutscene outranks a sign"), Prio::Sign < Prio::Cinematic);
 	TestTrue(TEXT("chargen outranks a cutscene"), Prio::Cinematic < Prio::Chargen);
 	TestTrue(TEXT("a conversation outranks chargen"), Prio::Chargen < Prio::Dialogue);
-	TestTrue(TEXT("a menu outranks a conversation"), Prio::Dialogue < Prio::Menu);
+	TestTrue(TEXT("the character screen outranks a conversation"), Prio::Dialogue < Prio::Character);
+	TestTrue(TEXT("a menu outranks the character screen"), Prio::Character < Prio::Menu);
 	TestTrue(TEXT("F1 outranks everything"), Prio::Menu < Prio::Debug);
 
 	return true;
@@ -4408,6 +4412,7 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	ElysiumRng::Stream(EElysiumRngStream::OneOfSet).GetUnsignedInt();
 	ElysiumRng::Snapshot(Payload.Session.Rng);
 
+	Payload.Player.Name = TEXT("Carmilla");
 	Payload.Player.Sheet.SetClan(7);
 	Payload.Player.Sheet.SetMale(false);
 	Payload.Player.Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Strength, 3);
@@ -4421,6 +4426,9 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// that loses these rows keeps the states and forgets the order they were taken in.
 	Payload.Player.Journal.Add({ TEXT("Arthur Knox"), /*Table*/ 4, /*Quest*/ 0, /*State*/ 2,
 		/*Order*/ 1, /*bUnread*/ true });
+	// `m_iCurrQuestLogArea` — the quest log's hub tab is player state in VtMB, not the panel's, so
+	// it has to survive a save the way the sheet does.
+	Payload.Player.QuestLogArea = 1;
 
 	FElysiumMapSnapshot Snap;
 	Snap.MapName = TEXT("sp_tutorial_1");
@@ -4485,6 +4493,8 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	TestEqual(TEXT("every container came back at its compiled width"),
 		Back.Player.Sheet.Base[(uint8)EElysiumTraitContainer::Attributes].Num(),
 		ElysiumSheetSlotCount(EElysiumTraitContainer::Attributes));
+	TestEqual(TEXT("the PC's name survived"), Back.Player.Name, FString(TEXT("Carmilla")));
+	TestEqual(TEXT("and the quest log's hub tab"), Back.Player.QuestLogArea, 1);
 	TestEqual(TEXT("money survived"), Back.Player.Money, 250);
 	TestEqual(TEXT("the law counters survived"), Back.Player.Law.Criminal, 2);
 	TestEqual(TEXT("the journal survived"), Back.Player.Journal.Num(), 1);
@@ -4534,6 +4544,14 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 
 	TArray<uint8> Truncated(Bytes.GetData(), 8);
 	TestFalse(TEXT("a truncated payload is refused"), ElysiumSave::Read(Truncated, Rejected, Error));
+
+	// The floor moves with every additive schema change, so state where it is: `Identity` added the
+	// PC's name and the quest log's hub tab to the player block with no upgrade branch, which means
+	// a `Journal` (v4) payload is refused rather than half-read.
+	TestEqual(TEXT("the floor is the current schema"),
+		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::Identity);
+	TestEqual(TEXT("and the current schema is the latest"),
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::Identity);
 
 	// A payload stamped below the floor: rejected with a reason, never half-read.
 	{
@@ -4814,6 +4832,134 @@ bool FElysiumQuestLogTest::RunTest(const FString&)
 		TestNull(TEXT("ordinal 0 is not a state"), Knox->StateByOrdinal(0));
 		TestNull(TEXT("nor is one past the end"), Knox->StateByOrdinal(4));
 		TestNull(TEXT("nor one past VtMB's 20-state cap"), Knox->StateByOrdinal(21));
+	}
+
+	return true;
+}
+
+// ==================================================================================================
+// The journal as a screen reads it (9.4e) — `ElysiumQuestView`. The read side of the same rows
+// `ElysiumQuestLog` writes: which column a row lands in, which hub tab shows it, and what order the
+// list is in. Pure over a catalogue and an array, so the whole screen's model is testable with no
+// world, no subsystem and no viewport.
+// ==================================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumQuestViewTest, "Elysium.Substrate.QuestView", GElysiumTestFlags)
+
+bool FElysiumQuestViewTest::RunTest(const FString&)
+{
+	using namespace ElysiumQuestView;
+	constexpr int32 SantaMonica = 4;
+	constexpr int32 Chinatown   = 0;
+	constexpr int32 Downtown    = 1;
+	constexpr int32 Main        = FElysiumQuestTables::MainTable;
+
+	FElysiumQuestTables Tables = MakeQuestFixture();
+
+	// A cross-hub quest, which is the case the hub tabs cannot express on their own.
+	FElysiumQuest& Plot = Tables.Quests[Main].AddDefaulted_GetRef();
+	Plot.Title = TEXT("The Sarcophagus");
+	Plot.DisplayName = TEXT("The Epic Of The Ankaran Sarcophagus");
+	Plot.TableIndex = Main;
+	Plot.Index = 0;
+	FElysiumQuestState& PS1 = Plot.States.AddDefaulted_GetRef();
+	PS1.Id = 1; PS1.Type = TEXT("incomplete"); PS1.Description = TEXT("The prince wants it NOW!");
+	FElysiumQuestState& PS2 = Plot.States.AddDefaulted_GetRef();
+	PS2.Id = 2; PS2.Type = TEXT("failure"); PS2.Description = TEXT("Gone.");
+	Tables.Reindex();
+
+	// --- the empty journal is a real state, not a degenerate one --------------------------------
+	{
+		const FView Empty = Build(Tables, {}, SantaMonica);
+		TestEqual(TEXT("nothing active"), Empty.Active.Num(), 0);
+		TestEqual(TEXT("nothing completed"), Empty.Completed.Num(), 0);
+		TestEqual(TEXT("nothing failed"), Empty.Failed.Num(), 0);
+		TestEqual(TEXT("and every tab reads zero"), Empty.HubActive[SantaMonica], 0);
+	}
+
+	// One row per column, plus the cross-hub plot quest and a row the catalogue cannot place.
+	TArray<FElysiumAssignedQuest> Journal;
+	Journal.Add({ TEXT("Tutorial"),        SantaMonica, 1, /*State*/ 1, /*Order*/ 1, /*bUnread*/ false });
+	Journal.Add({ TEXT("Arthur Knox"),     SantaMonica, 0, /*State*/ 3, /*Order*/ 2, true });   // success
+	Journal.Add({ TEXT("The Sarcophagus"), Main,        0, /*State*/ 1, /*Order*/ 3, false });
+	Journal.Add({ TEXT("Botched"),         Chinatown,   0, /*State*/ 1, /*Order*/ 4, false });  // botch
+	Journal.Add({ TEXT("Ghost Row"),       SantaMonica, 99, /*State*/ 1, /*Order*/ 5, false }); // no such quest
+
+	const FView SM = Build(Tables, Journal, SantaMonica);
+
+	// --- the type decides the column -------------------------------------------------------------
+	TestEqual(TEXT("success lands in Completed"), SM.Completed.Num(), 1);
+	if (SM.Completed.Num() == 1)
+	{
+		TestEqual(TEXT("and carries the catalogue's display name"),
+			SM.Completed[0].DisplayName, FString(TEXT("A Bounty For The Hunter")));
+		TestTrue(TEXT("and its unread marker"), SM.Completed[0].bUnread);
+	}
+	TestEqual(TEXT("nothing failed under this hub"), SM.Failed.Num(), 0);
+
+	// Tutorial (incomplete) + the plot quest (cross-hub) + the unplaceable row. `Botched` is
+	// Chinatown's, so it is not here even though `botch` counts as still-open.
+	TestEqual(TEXT("three rows are open under Santa Monica"), SM.Active.Num(), 3);
+
+	// --- newest assignment first -----------------------------------------------------------------
+	if (SM.Active.Num() == 3)
+	{
+		TestEqual(TEXT("the newest row sorts first"), SM.Active[0].Order, 5);
+		TestEqual(TEXT("then the next"), SM.Active[1].Order, 3);
+		TestEqual(TEXT("then the oldest"), SM.Active[2].Order, 1);
+	}
+
+	// --- a catalogue miss degrades, it does not vanish --------------------------------------------
+	const FEntry* Ghost = SM.Active.FindByPredicate(
+		[](const FEntry& E) { return E.Title == TEXT("Ghost Row"); });
+	TestNotNull(TEXT("a row the catalogue cannot place is still shown"), Ghost);
+	if (Ghost)
+	{
+		TestFalse(TEXT("marked unresolved"), Ghost->bResolved);
+		TestEqual(TEXT("headed by its own title"), Ghost->DisplayName, FString(TEXT("Ghost Row")));
+		TestTrue(TEXT("with no description to show"), Ghost->Description.IsEmpty());
+	}
+
+	// --- `main` rides along in every hub ----------------------------------------------------------
+	auto HasPlot = [](const FView& V)
+	{
+		return V.Active.ContainsByPredicate(
+			[](const FEntry& E) { return E.Table == FElysiumQuestTables::MainTable; });
+	};
+	TestTrue(TEXT("the cross-hub quest shows under Santa Monica"), HasPlot(SM));
+	TestTrue(TEXT("and under Downtown"), HasPlot(Build(Tables, Journal, Downtown)));
+	TestTrue(TEXT("and under Chinatown"), HasPlot(Build(Tables, Journal, Chinatown)));
+
+	// --- botch is still open, and belongs to its own hub -------------------------------------------
+	const FView CT = Build(Tables, Journal, Chinatown);
+	TestTrue(TEXT("a botch state reads as still open"),
+		CT.Active.ContainsByPredicate([](const FEntry& E) { return E.Title == TEXT("Botched"); }));
+
+	// --- the tab counts describe the TABS, not the journal ------------------------------------------
+	// Santa Monica: Tutorial + Ghost Row + the plot quest. Chinatown: Botched + the plot quest.
+	// Downtown and Hollywood have only the plot quest — which is exactly why the count is per-tab.
+	TestEqual(TEXT("Santa Monica counts three"), SM.HubActive[SantaMonica], 3);
+	TestEqual(TEXT("Chinatown counts two"), SM.HubActive[Chinatown], 2);
+	TestEqual(TEXT("Downtown counts the plot quest alone"), SM.HubActive[Downtown], 1);
+
+	// --- the completed row is not counted as open ----------------------------------------------------
+	{
+		TArray<FElysiumAssignedQuest> Done;
+		Done.Add({ TEXT("Arthur Knox"), SantaMonica, 0, 3, 1, false });
+		const FView V = Build(Tables, Done, SantaMonica);
+		TestEqual(TEXT("a finished quest leaves the tab count at zero"), V.HubActive[SantaMonica], 0);
+	}
+
+	// --- the opening hub, for a character that has never opened the screen ----------------------------
+	{
+		TestEqual(TEXT("an empty journal opens on Santa Monica"),
+			DefaultHub(Tables, {}), SantaMonica);
+
+		// Chinatown alone has open work, so that is where the screen opens.
+		TArray<FElysiumAssignedQuest> OnlyCT;
+		OnlyCT.Add({ TEXT("Botched"), Chinatown, 0, 1, 1, false });
+		TestEqual(TEXT("otherwise it opens where the work is"),
+			DefaultHub(Tables, OnlyCT), Chinatown);
 	}
 
 	return true;

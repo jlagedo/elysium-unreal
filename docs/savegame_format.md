@@ -375,8 +375,11 @@ sheet plus every active modifier, and both are persisted.
   `quests_*.txt`**, not the index of the file; and `idxState` is a **0-based ordinal into the
   quest's completion-state array in file order**, not the authored `"ID"`, which the loader never
   reads. The record also carries a **byte at `+0x3c`, set to 1 on every write** — the journal's
-  unread marker — leaving `+0x3d..0x3f` as padding. Rows are matched by case-insensitive title
-  and replaced in place, so one quest never holds two.
+  unread marker — leaving `+0x3d..0x3f` as padding. Nothing in the image ever *reads* that byte, so
+  what would clear it is unrecovered. Rows are matched by case-insensitive title and replaced in
+  place, so one quest never holds two.
+- `m_iCurrQuestLogArea` — `int` at `player+0x1dac`. The quest log's selected hub tab, saved with the
+  character: the panel reads it, but it is the player's field, not the panel's.
 - `m_ExpList` — `CUtlVector<EXPERIENCE_ENTRY { szTitle[48], nAmt }>`. The XP ledger, itemised by
   award, not a running total.
 - `m_tEffectList` — a plain length-prefixed string list, outside the field-stream convention:

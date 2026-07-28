@@ -711,6 +711,17 @@ stored is the **flat quest index across all five loaded files**, not the index o
 row is matched by **`Q_strnicmp(title, 48)` — case-insensitively** — then **replaced in place**, so
 a quest never holds two rows.
 
+**Nothing in the image ever reads `+0x3c`.** The engine sets it and the panel that would clear it is
+compiled in and undecompiled, so VtMB's own rule for when a quest stops being "new" is unrecovered.
+
+**The quest log's selected hub tab is player state, not panel state**: `m_iCurrQuestLogArea`, an
+integer datamap field on the player at **`+0x1dac`** (read out of the datamap builder in
+`vampire.dll`). It persists with the character, so a save restores the tab the player was last on.
+
+**`quests_main.txt` authors no quests.** The loader reads five tables, but the fifth ships with every
+quest commented out — the file is the format's own documentation template. All 79 shipped quests
+belong to the four hub tables, which is why the log needs only four tabs.
+
 ### Trait effects — how clan banes and histories are enforced **[VtMB]**
 
 Clan gifts/banes and History backgrounds are **not** special-cased in code. A clan names

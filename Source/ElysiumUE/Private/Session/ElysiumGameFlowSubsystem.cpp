@@ -278,6 +278,16 @@ void UElysiumGameFlowSubsystem::RegisterCommands()
 	// it UI-only and the controller sees nothing. Both arrive here, which is what 11.5 left open.
 	Bindings.Add(Registry.Bind(TEXT("cancelselect"), [this](const FElysiumCommandCall&)
 	{
+		// "Close panel, else open menu" — VtMB's own reading of Escape (`controls.md`). A panel the
+		// player opened is what Escape is for first; only with nothing to close does it reach pause.
+		if (UElysiumUISubsystem* UI = GetGameInstance()->GetSubsystem<UElysiumUISubsystem>())
+		{
+			if (UI->CloseTopScreen())
+			{
+				return;
+			}
+		}
+
 		// Pause is the only mode Escape leaves: the front end has nothing behind it to go back to,
 		// and a lost run is not dismissible. In those two it is consumed and nothing happens.
 		if (State == EElysiumAppState::Paused)

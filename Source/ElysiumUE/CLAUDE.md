@@ -85,6 +85,9 @@ banking) and `ElysiumSheetRules::EvalPredependency`. Quests sit beside it in the
 `Substrate/ElysiumQuestLog.{h,cpp}` is the pure decision (`ElysiumQuestLog::Apply` — resolve,
 gate, reconcile the `FElysiumAssignedQuest` rows on the player record), and
 `UElysiumGameStateSubsystem::SetQuestState` is the funnel that performs what it reports.
+`Substrate/ElysiumQuestView.{h,cpp}` is the read side of the same rows — `ResolveRow` joins one row
+to the catalogue, `Build` splits a hub's worth into the three columns the quest log draws — and both
+the screen and the `elysium.quest` verb go through it.
 **Gotcha:** the sheet's own
 health slots register as `vhealth`/`vmax_health`, not `health`/`max_health` — those two are
 `CBaseEntity` keyfields on the same chain, and the registry resolves derived-shadows-base, so a

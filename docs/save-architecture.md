@@ -80,9 +80,9 @@ Four blocks, all plain structs we own, each with its own version tag:
 
 ```
 Session   G (variant map) · G.morgue · quests · elapsed time · RNG stream state · app/story flags
-Player    FElysiumPlayerRecord — sheet (base+current) · money · humanity · blood · masquerade
-          · law counters + timers · quest journal · XP ledger · effects · email flags
-          · inventory as item records · equipped handles
+Player    FElysiumPlayerRecord — name · sheet (base+current) · money · humanity · blood · masquerade
+          · law counters + timers · quest journal + the log's hub tab · XP ledger · effects
+          · email flags · inventory as item records · equipped handles
 Maps      per visited map:  entity states · absent-entity set · event queue · think times
           · lightstyle phase · decals · physics poses · NPC memory (when AI exists)
 World     the visited-map graph: landmark adjacency, the current map + player placement

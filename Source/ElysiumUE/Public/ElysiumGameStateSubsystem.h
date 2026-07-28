@@ -106,12 +106,27 @@ public:
 	// The journal — ASSIGNED_QUEST rows on the player record, in assignment order.
 	const TArray<FElysiumAssignedQuest>& Journal() const { return Record.Journal; }
 
+	// The quest log's selected hub tab (`m_iCurrQuestLogArea`), INDEX_NONE until the screen is first
+	// opened. Player state in VtMB, so it lives on the record and persists with the character.
+	int32 QuestLogArea() const { return Record.QuestLogArea; }
+	void SetQuestLogArea(int32 Hub) { Record.QuestLogArea = Hub; }
+
+	// Clear the unread marker on every row belonging to `Hub` (and to the cross-hub `main` table,
+	// which the screen shows in every tab). **Ours, not VtMB's** — the engine sets the byte on every
+	// write and never reads it, so the panel's own clear rule is unrecovered (`ui-architecture.md`).
+	void MarkQuestsRead(int32 Hub);
+
 	// --- The player record + New Game (11.4) ---------------------------------------
 	// S3: the player *is* an entity, so the live sheet lives on that entity for as long as a map
 	// does; this record is the durable half that crosses a map boundary and, at 11.9, a save. The
 	// entity hydrates from it at map build and dehydrates back into it when the world is torn down.
 	const FElysiumPlayerRecord& PlayerRecord() const { return Record; }
 	FElysiumPlayerRecord& PlayerRecord() { return Record; }
+
+	// The name typed at chargen (9.4f). Empty until then, and every reader must render that state
+	// rather than substituting a placeholder.
+	const FString& PlayerName() const { return Record.Name; }
+	void SetPlayerName(const FString& In) { Record.Name = In; }
 
 	// The sheet every reader should go through: **the live player entity's when a map is up, the
 	// record's otherwise** (the front end, a New Game seeding before any map exists, a headless

@@ -507,6 +507,14 @@ struct FElysiumQuestTables
 	static const TCHAR* HubNames[5];
 	static constexpr int32 NumTables = 5;
 
+	// `quests_main.txt` — the cross-hub table. It is not a place, so it has no tab of its own in the
+	// quest log; its rows show under whichever hub is selected.
+	static constexpr int32 MainTable = 3;
+
+	// The four tables that ARE hubs, in tab order as the quest log lists them: Santa Monica,
+	// Downtown, Hollywood, Chinatown. Alphabetical `HubNames` order is not tab order.
+	static constexpr int32 HubTabOrder[4] = { 4, 1, 2, 0 };
+
 	TArray<FElysiumQuest> Quests[NumTables];
 
 	bool Load(FString& OutError);

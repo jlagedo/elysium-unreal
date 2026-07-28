@@ -8,6 +8,7 @@
 #include "ElysiumPlayer.h"
 #include "Scripting/ElysiumPythonVM.h"
 #include "Substrate/ElysiumQuestLog.h"
+#include "Substrate/ElysiumQuestView.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 
 #include "Engine/GameInstance.h"
@@ -596,14 +597,16 @@ void UElysiumGameStateSubsystem::ExecQuest(const TArray<FString>& Args)
 		UE_LOG(LogElysiumState, Display, TEXT("journal: %d assigned"), Rows.Num());
 		for (const FElysiumAssignedQuest& Row : Rows)
 		{
-			const FElysiumQuest* Q = Rules->Quests().At({ Row.Table, Row.Quest });
-			const FElysiumQuestState* S = Q ? Q->StateByOrdinal(Row.State) : nullptr;
+			// The same join the screen reads, so the verb and the panel can never describe a row
+			// differently. Only the presentation differs: one flat list in assignment order here,
+			// three columns per hub there.
+			const ElysiumQuestView::FEntry E = ElysiumQuestView::ResolveRow(Rules->Quests(), Row);
 			UE_LOG(LogElysiumState, Display, TEXT("  %2d. %-22s %-10s state %-3d %-11s %s%s"),
 				Row.Order, *Row.Title,
 				Row.Table >= 0 ? FElysiumQuestTables::HubNames[Row.Table] : TEXT("?"),
-				Row.State, S ? *S->Type : TEXT("?"),
+				Row.State, E.bResolved ? *E.RawType : TEXT("?"),
 				Row.bUnread ? TEXT("* ") : TEXT("  "),
-				S ? *S->Description.Left(80) : TEXT(""));
+				*E.Description.Left(80));
 		}
 		return;
 	}
@@ -665,6 +668,23 @@ void UElysiumGameStateSubsystem::RestoreQuests(TArray<TPair<FString, int32>>&& I
 	for (TPair<FString, int32>& Q : In)
 	{
 		Quests.Add(MoveTemp(Q.Key), Q.Value);
+	}
+}
+
+void UElysiumGameStateSubsystem::MarkQuestsRead(int32 Hub)
+{
+	// The rows the screen just showed: the selected hub, plus `main`, which rides along in every tab.
+	// A hub outside the table range clears nothing rather than clearing everything.
+	if (Hub < 0 || Hub >= FElysiumQuestTables::NumTables)
+	{
+		return;
+	}
+	for (FElysiumAssignedQuest& Row : Record.Journal)
+	{
+		if (Row.Table == Hub || Row.Table == FElysiumQuestTables::MainTable)
+		{
+			Row.bUnread = false;
+		}
 	}
 }
 

@@ -63,6 +63,10 @@ Saved/Cooked/
 # reference (proprietary, Copyright Valve — never ours to ship or commit).
 /sdk/
 
+# VtMB screenshots kept locally as a UI/HUD reference (game-sourced, never ours
+# to ship or commit).
+/reference/
+
 # Build / export logs
 *.log
 

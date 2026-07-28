@@ -162,6 +162,10 @@ struct FElysiumLawState
 // the save blocks. Neither is stubbed here — an empty field nothing fills would read as support.
 struct FElysiumPlayerRecord
 {
+	// The name the player types at chargen. Not a Stat and not a datamap field — VtMB carries it as
+	// its own string on the character — so it sits beside the sheet rather than in a container.
+	FString Name;
+
 	// Humanity, blood, masquerade, clan and sex are all slots on this — VtMB holds them in the
 	// Attributes container, not as members beside it, so there is nothing to mirror.
 	FElysiumSheet Sheet;
@@ -181,6 +185,11 @@ struct FElysiumPlayerRecord
 	// (it outlives having no map at all), and no script name, datamap input or keyfield reads the
 	// journal, so a hydrate/dehydrate round-trip would buy nothing.
 	TArray<FElysiumAssignedQuest> Journal;
+
+	// m_iCurrQuestLogArea — the quest log's selected hub tab, an integer datamap field on the player
+	// at +0x1dac. It is player state in VtMB, not the panel's, so it persists with the character.
+	// INDEX_NONE means "never opened"; the screen resolves that to a hub with work in it.
+	int32 QuestLogArea = INDEX_NONE;
 
 	// `AddExperience`'s two accumulators. The award is in hundredths — every real
 	// `experience_table` row is `N01` — and the division **keeps its remainder**, so the residue is

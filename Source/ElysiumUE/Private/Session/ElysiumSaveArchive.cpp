@@ -145,6 +145,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumLawState& L)
 
 FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R)
 {
+	Ar << R.Name;
 	Ar << R.Sheet;
 	Ar << R.Money;
 	Ar << R.Health << R.MaxHealth;
@@ -157,6 +158,9 @@ FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R)
 	// The journal rides with the record because that is where m_QuestList lives; the quest map it
 	// reflects is in the Session block, and only a state change writes both.
 	Ar << R.Journal;
+	// The selected hub tab is a datamap field on VtMB's player, so it persists with the character
+	// rather than with the panel that reads it.
+	Ar << R.QuestLogArea;
 	return Ar;
 }
 
@@ -421,6 +425,8 @@ void Describe(const FElysiumSavePayload& Payload, TArray<FString>& OutLines)
 	}
 
 	const FElysiumPlayerRecord& P = Payload.Player;
+	OutLines.Add(FString::Printf(TEXT("player.name = %s"),
+		P.Name.IsEmpty() ? TEXT("(unnamed)") : *P.Name));
 	OutLines.Add(FString::Printf(TEXT("player.clan = %d (%s)"), P.Sheet.Clan(),
 		FElysiumSheet::ClanName(P.Sheet.Clan())));
 	OutLines.Add(FString::Printf(TEXT("player.male = %d"), P.Sheet.IsMale() ? 1 : 0));
@@ -463,6 +469,7 @@ void Describe(const FElysiumSavePayload& Payload, TArray<FString>& OutLines)
 		OutLines.Add(FString::Printf(TEXT("player.quest.%s = state %d (table %d, quest %d, order %d%s)"),
 			*Q.Title, Q.State, Q.Table, Q.Quest, Q.Order, Q.bUnread ? TEXT(", unread") : TEXT("")));
 	}
+	OutLines.Add(FString::Printf(TEXT("player.questlog.area = %d"), P.QuestLogArea));
 
 	OutLines.Add(FString::Printf(TEXT("world.map = %s"), *Payload.World.CurrentMap));
 	OutLines.Add(FString::Printf(TEXT("world.placement = %s yaw %.1f%s"),

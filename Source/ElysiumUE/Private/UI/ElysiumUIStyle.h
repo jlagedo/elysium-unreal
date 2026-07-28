@@ -44,6 +44,10 @@ namespace ElysiumUI
 		inline const FLinearColor Disabled  = FLinearColor::FromSRGBColor(FColor(128, 128, 128));
 		// The active tab — `BrightControlText`.
 		inline const FLinearColor Cyan      = FLinearColor::FromSRGBColor(FColor(109, 207, 246));
+		// The ART's gold, sampled off `cm_divider` and the sheet panel frames — warmer than the
+		// scheme's text gold, which is a TEXT colour. A drawn rule continuing a bitmap rule has to
+		// use this or the two read as two different lines meeting.
+		inline const FLinearColor Amber     = FLinearColor::FromSRGBColor(FColor(192, 136,  72));
 		// The menu column. Hardcoded in CVMainMenu as 0xc00000a8 = RGBA(168,0,0,192); the armed
 		// colour is ours (retail swaps to the same value at full alpha, which reads as no change
 		// on a modern display).

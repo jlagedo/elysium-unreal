@@ -26,6 +26,9 @@
 #include "ElysiumReflections.h"
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumQuestLog.h"
+#include "Substrate/ElysiumQuestView.h"
+
+#include "Algo/AnyOf.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSheetMath.h"
 #include "Visual/ElysiumRopes.h"
@@ -2088,6 +2091,63 @@ bool FElysiumQuestContentTest::RunTest(const FString&)
 	Out = ElysiumQuestLog::Apply(Quests, Journal, TEXT("Tutorial"), 1);
 	TestTrue(TEXT("Tutorial assigns"), Out.bChanged);
 	TestEqual(TEXT("as the second quest, order 2"), Out.Order, 2);
+
+	// --- The screen's read of the same data (9.4e) ----------------------------------------------
+	// Assign every shipped quest at its first state, then check the view places each one exactly
+	// once across the four hub tabs. A row that lands in no tab is a quest the player can never
+	// read, which is the failure this catches.
+	{
+		TArray<FElysiumAssignedQuest> All;
+		int32 Assigned = 0;
+		for (int32 t = 0; t < FElysiumQuestTables::NumTables; ++t)
+		{
+			for (const FElysiumQuest& Q : Quests.Quests[t])
+			{
+				if (Q.States.Num() > 0 && ElysiumQuestLog::Apply(Quests, All, Q.Title, 1).bChanged)
+				{
+					++Assigned;
+				}
+			}
+		}
+		TestEqual(TEXT("every shipped quest assigns"), All.Num(), Assigned);
+
+		int32 Placements = 0, Unresolvable = 0;
+		for (int32 Hub : FElysiumQuestTables::HubTabOrder)
+		{
+			const ElysiumQuestView::FView View = ElysiumQuestView::Build(Quests, All, Hub);
+			Placements += View.Num();
+			for (const ElysiumQuestView::FEntry& E : View.Active)
+			{
+				if (!E.bResolved) { ++Unresolvable; }
+			}
+		}
+		TestEqual(TEXT("every row the view shows resolves against the catalogue"), Unresolvable, 0);
+
+		// A `main` row is shown under all four tabs by design, so the total placement count is the
+		// journal size plus three extra copies of each cross-hub quest.
+		const int32 MainRows = All.FilterByPredicate([](const FElysiumAssignedQuest& R)
+			{ return R.Table == FElysiumQuestTables::MainTable; }).Num();
+		TestEqual(TEXT("each quest is placed once per tab it belongs to"),
+			Placements, All.Num() + MainRows * 3);
+		AddInfo(FString::Printf(TEXT("journal %d rows, %d cross-hub, %d tab placements"),
+			All.Num(), MainRows, Placements));
+
+		// **`quests_main.txt` ships with every quest commented out** — the file is the format's own
+		// documentation template and authors none. So the cross-hub rule is schema with no data
+		// behind it on retail content, the same standing as `AwardMoney` and `Event`, and all four
+		// hub tabs together cover every shipped quest. Asserted rather than assumed, because the
+		// day a row appears there the fold-in stops being theoretical.
+		TestEqual(TEXT("no shipped quest lives on the main table"),
+			Quests.Quests[FElysiumQuestTables::MainTable].Num(), 0);
+		TestEqual(TEXT("so every placement is a single tab"), Placements, All.Num());
+
+		// The opening hub for a character who has never opened the screen is a real hub, not a
+		// sentinel the tab row cannot draw.
+		const int32 Opening = ElysiumQuestView::DefaultHub(Quests, All);
+		TestTrue(TEXT("the default hub is one of the four tabs"),
+			Algo::AnyOf(FElysiumQuestTables::HubTabOrder,
+				[Opening](int32 H) { return H == Opening; }));
+	}
 
 	return true;
 }

@@ -1,6 +1,8 @@
 #include "UI/ElysiumUISubsystem.h"
 
+#include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumInputSubsystem.h"
+#include "UI/ElysiumCharacterScreen.h"
 #include "UI/ElysiumMainMenu.h"
 
 #include "Blueprint/UserWidget.h"
@@ -69,11 +71,89 @@ void UElysiumUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 				this, [this](IConsoleVariable*) { RebuildMenu(); }));
 		}
 	}
+
+	ConsoleObjects.Add(Console.RegisterConsoleCommand(
+		TEXT("elysium.charscreen"),
+		TEXT("elysium.charscreen [sheet|info|quest] — open the character screen on a tab, or close ")
+		TEXT("it if it is already up. The same screen `C` and `L` open."),
+		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
+		{
+			EElysiumCharacterTab Tab = EElysiumCharacterTab::Sheet;
+			if (Args.Num() > 0)
+			{
+				if (Args[0].StartsWith(TEXT("q")))      { Tab = EElysiumCharacterTab::QuestLog; }
+				else if (Args[0].StartsWith(TEXT("i"))) { Tab = EElysiumCharacterTab::Info; }
+			}
+			if (IsCharacterScreenOpen() && CharacterScreen->ActiveTab() == Tab)
+			{
+				HideCharacterScreen();
+			}
+			else
+			{
+				ShowCharacterScreen(Tab);
+			}
+		}),
+		ECVF_Default));
+
+	RegisterCommands();
+}
+
+// ================================================================================================
+// `questlog` / `chareditor` — two doors into one screen
+// ================================================================================================
+
+void UElysiumUISubsystem::RegisterCommands()
+{
+	FElysiumCommands& Registry = FElysiumCommands::Get();
+
+	// Both are declared as ButtonPairs and key-bound already (`L` and `C`), so only the press edge
+	// acts here — the release is VtMB's user-command bit latching, which is not this screen's business.
+	auto Door = [this](EElysiumCharacterTab Tab)
+	{
+		return [this, Tab](const FElysiumCommandCall& Call)
+		{
+			if (!Call.bPressed)
+			{
+				return;
+			}
+			if (IsCharacterScreenOpen())
+			{
+				// The other key while it is up switches tab rather than closing: that is what makes
+				// these two doors into one screen instead of two screens.
+				if (CharacterScreen->ActiveTab() != Tab)
+				{
+					CharacterScreen->SetActiveTab(Tab);
+				}
+				else
+				{
+					HideCharacterScreen();
+				}
+				return;
+			}
+			ShowCharacterScreen(Tab);
+		};
+	};
+
+	Bindings.Add(Registry.Bind(TEXT("questlog"),   Door(EElysiumCharacterTab::QuestLog)));
+	Bindings.Add(Registry.Bind(TEXT("chareditor"), Door(EElysiumCharacterTab::Sheet)));
+	Bindings.RemoveAll([](const FElysiumCommandBinding& B) { return !B.IsValid(); });
+}
+
+void UElysiumUISubsystem::UnregisterCommands()
+{
+	FElysiumCommands& Registry = FElysiumCommands::Get();
+	for (FElysiumCommandBinding& Binding : Bindings)
+	{
+		Registry.Unbind(Binding);
+	}
+	Bindings.Reset();
 }
 
 void UElysiumUISubsystem::Deinitialize()
 {
+	HideCharacterScreen();
 	HideMenu();
+	UnregisterCommands();
 	for (IConsoleObject* Object : ConsoleObjects)
 	{
 		IConsoleManager::Get().UnregisterConsoleObject(Object);
@@ -172,4 +252,105 @@ void UElysiumUISubsystem::HideMenu()
 	Menu = nullptr;
 	PopMenuScope();
 	UE_LOG(LogElysiumUI, Log, TEXT("menu hidden"));
+}
+
+// ================================================================================================
+// The character screen
+// ================================================================================================
+
+void UElysiumUISubsystem::PushCharacterScope()
+{
+	UElysiumInputSubsystem* Input = UElysiumInputSubsystem::Get(GetGameInstance());
+	if (!Input || !CharacterScreen)
+	{
+		return;
+	}
+
+	FElysiumInputScope Scope;
+	Scope.Name = TEXT("Character");
+	Scope.Priority = ElysiumInput::Priority::Character;
+	Scope.Mode = EElysiumInputMode::UIOnly;
+	Scope.bShowCursor = true;
+	// As with the menu: the screen must hold focus or its own key handler never runs, and `L` would
+	// open a panel that neither Escape nor `L` could close.
+	Scope.FocusWidget = CharacterScreen->TakeWidget();
+	CharacterScope = Input->Push(MoveTemp(Scope));
+}
+
+void UElysiumUISubsystem::PopCharacterScope()
+{
+	if (UElysiumInputSubsystem* Input = UElysiumInputSubsystem::Get(GetGameInstance()))
+	{
+		Input->Pop(CharacterScope);
+	}
+	CharacterScope.Reset();
+}
+
+void UElysiumUISubsystem::ShowCharacterScreen(EElysiumCharacterTab Tab)
+{
+	if (CharacterScreen)
+	{
+		// Already up: this is a tab change, which the screen swaps in place — no teardown, so
+		// keyboard focus and the input scope survive it.
+		CharacterScreen->SetActiveTab(Tab);
+		return;
+	}
+
+	// The screen reads live session state and belongs to a run. Opening it over the front end or a
+	// lost run would show an empty sheet for a character that does not exist yet.
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		const UElysiumGameFlowSubsystem* Flow = GI->GetSubsystem<UElysiumGameFlowSubsystem>();
+		if (Flow && Flow->AppState() != EElysiumAppState::Playing)
+		{
+			return;
+		}
+	}
+
+	UGameInstance* GI = GetGameInstance();
+	APlayerController* PC = GI ? GI->GetFirstLocalPlayerController() : nullptr;
+	if (!PC)
+	{
+		UE_LOG(LogElysiumUI, Warning, TEXT("no local player controller — character screen not shown"));
+		return;
+	}
+
+	CharacterScreen = CreateWidget<UElysiumCharacterScreen>(PC, UElysiumCharacterScreen::StaticClass());
+	if (!CharacterScreen)
+	{
+		UE_LOG(LogElysiumUI, Error, TEXT("failed to create the character screen widget"));
+		return;
+	}
+	CharacterScreen->SetActiveTab(Tab);
+	CharacterScreen->AddToViewport(/*ZOrder*/ 90);   // under the menu, which can open over it
+	// Collapsed until activated by hand — `bAutoActivate` only fires inside an activatable container.
+	CharacterScreen->ActivateWidget();
+	CharacterScreen->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	PushCharacterScope();
+
+	UE_LOG(LogElysiumUI, Log, TEXT("character screen shown"));
+}
+
+void UElysiumUISubsystem::HideCharacterScreen()
+{
+	if (!CharacterScreen)
+	{
+		return;
+	}
+	// Closing is the last thing that marks the shown hub read; the screen owns that rule.
+	CharacterScreen->NotifyClosing();
+	CharacterScreen->RemoveFromParent();
+	CharacterScreen = nullptr;
+	PopCharacterScope();
+	UE_LOG(LogElysiumUI, Log, TEXT("character screen hidden"));
+}
+
+bool UElysiumUISubsystem::CloseTopScreen()
+{
+	if (CharacterScreen)
+	{
+		HideCharacterScreen();
+		return true;
+	}
+	return false;
 }
