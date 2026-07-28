@@ -156,6 +156,13 @@ void UElysiumBrushComponent::RouteTouch(const AActor* Toucher, bool bBegin) cons
 		// trigger fires is a real handle. The player pawn is the only toucher today; when NPC
 		// bodies move (8.5 locomotion) this becomes a lookup from the body to its owning entity.
 		const FElysiumEntityHandle Activator = World->PlayerHandle();
+		// Brush bodies are built before the runtime !player record. If UE reports an overlap while a
+		// body is registering, defer it to the map actor's post-placement reconciliation rather than
+		// firing an authored output with a null activator and then suppressing the real player edge.
+		if (!Activator.IsSet())
+		{
+			return;
+		}
 		World->RouteBrushTouch(OwningEntity, Activator, bBegin);
 	}
 }

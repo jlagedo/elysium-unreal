@@ -13,6 +13,7 @@
 
 #include "ElysiumAppState.h"
 #include "ElysiumBinds.h"
+#include "ElysiumBrushComponent.h"
 #include "Player/ElysiumCameraShots.h"
 #include "ElysiumCameraSolve.h"
 #include "ElysiumClassRegistry.h"
@@ -28,6 +29,7 @@
 #include "ElysiumEventQueue.h"
 #include "ElysiumExpr.h"
 #include "ElysiumGameClock.h"
+#include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumHUD.h"
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
@@ -35,6 +37,7 @@
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumPawn.h"
 #include "ElysiumPresentationSubsystem.h"
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumChargen.h"
@@ -52,6 +55,7 @@
 #include "Scripting/ElysiumScriptFS.h"
 #include "ElysiumScriptHost.h"
 #include "Scripting/ElysiumScriptNatives.h"
+#include "Tests/ElysiumOverlapTestProbe.h"
 #include "Tests/ElysiumTestServices.h"
 #include "ElysiumTimeControl.h"
 #include "ElysiumUserCmd.h"
@@ -59,6 +63,11 @@
 
 #include "Math/RotationMatrix.h"
 #include "Serialization/MemoryWriter.h"
+#include "Tests/AutomationCommon.h"
+
+#include "Components/SceneComponent.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
 
 // One context flag (runs anywhere) + the product filter (this project's own suite bucket).
 // EAutomationTestFlags is a strong enum in 5.8, so the constant carries that type (ENUM_CLASS_FLAGS
@@ -2226,6 +2235,30 @@ bool FElysiumRegistryTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// RE29 — CGlobalEntityList::FindEntityByName's exact matching rule. Only a final `*` is special;
+// matching is case-insensitive, and a bare star selects every named entity.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEntityNameMatchTest,
+	"Elysium.Substrate.EntityNameMatch", GElysiumTestFlags)
+bool FElysiumEntityNameMatchTest::RunTest(const FString&)
+{
+	TestTrue(TEXT("exact names fold case"),
+		FElysiumEntityWorld::NameMatches(TEXT("Plus_Closet"), TEXT("plus_closet")));
+	TestTrue(TEXT("a trailing star is a prefix match"),
+		FElysiumEntityWorld::NameMatches(TEXT("plus_Closet"), TEXT("PLUS_*")));
+	TestTrue(TEXT("a bare star matches every named entity"),
+		FElysiumEntityWorld::NameMatches(TEXT("anything"), TEXT("*")));
+	TestFalse(TEXT("a star away from the end is literal"),
+		FElysiumEntityWorld::NameMatches(TEXT("guard_alpha"), TEXT("guard*_alpha")));
+	TestFalse(TEXT("an empty pattern matches nothing"),
+		FElysiumEntityWorld::NameMatches(TEXT("anything"), FString()));
+	TestFalse(TEXT("a nameless entity never matches"),
+		FElysiumEntityWorld::NameMatches(FString(), TEXT("*")));
+	return true;
+}
+
+// =====================================================================================
 // End-to-end I/O through a bare world: logic_relay -> math_counter, no bodies, no PIE.
 // Exercises both chokepoints (AcceptInput + the event queue), FireOutput, and the
 // "falsy when dead" identity contract.
@@ -3570,6 +3603,289 @@ bool FElysiumPlayerEntityTest::RunTest(const FString&)
 			0.0, FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
 		Backdrop.Tick(0.0);
 		TestTrue(TEXT("it is reported as an unknown target"), Backdrop.UnknownTargets() > 0);
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// Genesis's recovered exit: the chargen panel teleports the player into `firetrans`, whose
+// OnStartTouch forces `boogieout,ChangeNow`. The recording services keep this content-free while
+// exercising the real command parser, entity I/O and travel seam end to end.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGenesisExitTest,
+	"Elysium.Substrate.GenesisExit", GElysiumTestFlags)
+bool FElysiumGenesisExitTest::RunTest(const FString&)
+{
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+	Services.PlayerLocation = FVector(20.f, 30.f, 40.f);
+	Services.PlayerRotation = FRotator(0.f, 75.f, 0.f);
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__genesis_exit__");
+
+	FElysiumEntityDef Landmark;
+	Landmark.Classname = TEXT("info_landmark");
+	Landmark.TargetName = TEXT("newgame");
+	Landmark.Origin = FVector::ZeroVector;
+	Defs.Defs.Add(MoveTemp(Landmark));
+
+	FElysiumEntityDef Change;
+	Change.Classname = TEXT("trigger_changelevel");
+	Change.TargetName = TEXT("boogieout_direct");
+	Change.Keys.Add(TEXT("map"), TEXT("sp_theatre"));
+	Change.Keys.Add(TEXT("landmark"), TEXT("newgame"));
+	Defs.Defs.Add(MoveTemp(Change));
+
+	FElysiumEntityDef BoogieoutDef;
+	BoogieoutDef.Classname = TEXT("trigger_changelevel");
+	BoogieoutDef.TargetName = TEXT("boogieout");
+	BoogieoutDef.Keys.Add(TEXT("map"), TEXT("sp_theatre"));
+	BoogieoutDef.Keys.Add(TEXT("landmark"), TEXT("newgame"));
+	Defs.Defs.Add(MoveTemp(BoogieoutDef));
+
+	FElysiumEntityDef Fire;
+	Fire.Classname = TEXT("trigger_multiple");
+	Fire.TargetName = TEXT("firetrans");
+	Fire.Origin = FVector(400.f, 500.f, 60.f);
+	Fire.Keys.Add(TEXT("spawnflags"), TEXT("1"));
+	{
+		FElysiumOutputDef Wire;
+		Wire.Name = TEXT("OnStartTouch");
+		Wire.Target = TEXT("boogieout");
+		Wire.Input = TEXT("ChangeNow");
+		Wire.Times = -1;
+		Fire.Outputs.Add(MoveTemp(Wire));
+	}
+	Defs.Defs.Add(MoveTemp(Fire));
+
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	const FElysiumEntityHandle PlayerHandle = World.SpawnPlayer();
+	FElysiumEntity* DirectChange = World.FindByName(TEXT("boogieout_direct"));
+	FElysiumEntity* Boogieout = World.FindByName(TEXT("boogieout"));
+	FElysiumEntity* Firetrans = World.FindByName(TEXT("firetrans"));
+	if (!TestNotNull(TEXT("direct changelevel resolved"), DirectChange)
+		|| !TestNotNull(TEXT("boogieout resolved"), Boogieout)
+		|| !TestNotNull(TEXT("firetrans resolved"), Firetrans))
+	{
+		return false;
+	}
+
+	// The forced input itself is live — this was the dead wire before ChangeNow registered.
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("ChangeNow")), FElysiumVariant::Void(), 0.0,
+		PlayerHandle, DirectChange->Handle);
+	World.Tick(0.0);
+	TestTrue(TEXT("ChangeNow reaches the travel seam"),
+		Services.Saw(TEXT("RequestLandmarkTravel sp_theatre@newgame")));
+	TestEqual(TEXT("ChangeNow is not counted as an unknown input"), World.UnknownInputs(), 0);
+
+	FElysiumCommands& Commands = FElysiumCommands::Get();
+	FElysiumCommandBinding TeleportBinding = Commands.Bind(TEXT("teleport_player"),
+		[&World](const FElysiumCommandCall& Call)
+		{
+			ElysiumCommands::TeleportPlayer(World, Call.Args);
+		});
+	if (!TestTrue(TEXT("teleport_player test implementation bound"), TeleportBinding.IsValid()))
+	{
+		return false;
+	}
+
+	Services.Calls.Reset();
+	TestTrue(TEXT("the named form is a declared command"),
+		Commands.Execute(TEXT("teleport_player firetrans")));
+	TestTrue(TEXT("the named form moves through the embodiment seam"),
+		Services.PlayerLocation.Equals(Firetrans->Origin));
+	TestTrue(TEXT("the named form preserves yaw"),
+		FMath::IsNearlyEqual((float)Services.PlayerRotation.Yaw, 75.f));
+
+	TestTrue(TEXT("the coordinate form is a declared command"),
+		Commands.Execute(TEXT("teleport_player 7 8 9")));
+	TestTrue(TEXT("the coordinate form lands at the requested feet origin"),
+		Services.PlayerLocation.Equals(FVector(7.f, 8.f, 9.f)));
+
+	const int32 CallsBeforeMissing = Services.Calls.Num();
+	AddExpectedError(TEXT("Could not find entity named missing_target"),
+		EAutomationExpectedErrorFlags::Contains, 1);
+	TestTrue(TEXT("an unresolved target is still a recognized command"),
+		Commands.Execute(TEXT("teleport_player missing_target")));
+	TestEqual(TEXT("an unresolved target does not move the player"),
+		Services.Calls.Num(), CallsBeforeMissing);
+
+	// Reproduce the complete close tail: move into firetrans, route the resulting touch, drain the
+	// output event, and observe the same travel request as direct ChangeNow.
+	Services.Calls.Reset();
+	Commands.Execute(TEXT("teleport_player firetrans"));
+	const int32 TouchBeginsBefore = World.TouchBegins();
+	World.RouteBrushTouch(Firetrans->Handle, PlayerHandle, /*bBegin*/ true);
+	World.RouteBrushTouch(Firetrans->Handle, PlayerHandle, /*bBegin*/ true);
+	TestEqual(TEXT("movement and teleport reconciliation collapse to one begin edge"),
+		World.TouchBegins(), TouchBeginsBefore + 1);
+	for (int32 i = 0; i < 3; ++i)
+	{
+		World.Tick(1.0 + i);
+	}
+	TestTrue(TEXT("teleport -> OnStartTouch -> ChangeNow reaches travel"),
+		Services.Saw(TEXT("RequestLandmarkTravel sp_theatre@newgame")));
+	TestEqual(TEXT("the recovered chain delivers no unknown input"), World.UnknownInputs(), 0);
+	const int32 TouchEndsBefore = World.TouchEnds();
+	World.RouteBrushTouch(Firetrans->Handle, PlayerHandle, /*bBegin*/ false);
+	World.RouteBrushTouch(Firetrans->Handle, PlayerHandle, /*bBegin*/ false);
+	TestEqual(TEXT("duplicate reconciliation also collapses to one end edge"),
+		World.TouchEnds(), TouchEndsBefore + 1);
+
+	Commands.Unbind(TeleportBinding);
+	return true;
+}
+
+// =====================================================================================
+// Engine integration for the one part GenesisExit cannot model on a bare entity world:
+// SetActorLocation(..., TeleportPhysics) must make UE recompute the real player hull's overlaps
+// and synchronously deliver BeginOverlap to the real runtime convex trigger component.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEngineTeleportOverlapTest,
+	"Elysium.Substrate.EngineTeleportOverlap", GElysiumTestFlags)
+bool FElysiumEngineTeleportOverlapTest::RunTest(const FString&)
+{
+	FTestWorldWrapper TestWorld;
+	if (!TestWorld.CreateTestWorld(EWorldType::Game)
+		|| !TestWorld.BeginPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	UWorld* World = TestWorld.GetTestWorld();
+	if (!TestNotNull(TEXT("transient game world exists"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>();
+	AElysiumPawn* Pawn = World->SpawnActor<AElysiumPawn>(
+		FVector(0.f, 0.f, ElysiumMove::StandHeight * 0.5f), FRotator::ZeroRotator);
+	if (!TestNotNull(TEXT("player controller spawned"), PC)
+		|| !TestNotNull(TEXT("faithful player hull spawned"), Pawn))
+	{
+		return false;
+	}
+	PC->Possess(Pawn);
+	TestTrue(TEXT("transient world exposes the possessed pawn"),
+		World->GetFirstPlayerController() == PC && PC->GetPawn() == Pawn);
+
+	AActor* TriggerOwner = World->SpawnActor<AActor>();
+	if (!TestNotNull(TEXT("trigger owner spawned"), TriggerOwner))
+	{
+		return false;
+	}
+	USceneComponent* Root = NewObject<USceneComponent>(TriggerOwner, TEXT("Root"));
+	TriggerOwner->SetRootComponent(Root);
+	Root->RegisterComponent();
+	TriggerOwner->AddInstanceComponent(Root);
+
+	// The destination is the entity's feet-origin, matching `teleport_player firetrans`. The convex
+	// encloses the lifted standing hull but is far enough from the start that registration itself
+	// cannot produce the notification under test.
+	const FVector FeetDestination(500.f, 0.f, 0.f);
+	FElysiumConvexHull Hull;
+	for (const float X : { -200.f, 200.f })
+	{
+		for (const float Y : { -200.f, 200.f })
+		{
+			for (const float Z : { -100.f, 220.f })
+			{
+				Hull.Vertices.Emplace(X, Y, Z);
+			}
+		}
+	}
+	UElysiumBrushComponent* Trigger =
+		NewObject<UElysiumBrushComponent>(TriggerOwner, TEXT("Firetrans"));
+	Trigger->InitBrush(FElysiumEntityHandle::Invalid(), { Hull }, EElysiumBrushSolidity::Trigger);
+	Trigger->SetupAttachment(Root);
+	Trigger->SetRelativeLocation(FeetDestination);
+	Trigger->RegisterComponent();
+	TriggerOwner->AddInstanceComponent(Trigger);
+
+	UElysiumOverlapTestProbe* Probe = NewObject<UElysiumOverlapTestProbe>(World);
+	Trigger->OnComponentBeginOverlap.AddDynamic(
+		Probe, &UElysiumOverlapTestProbe::HandleBeginOverlap);
+	TestEqual(TEXT("fixture starts outside firetrans"), Probe->BeginCount, 0);
+	TestFalse(TEXT("fixture starts with no player overlap"), Trigger->IsOverlappingActor(Pawn));
+
+	// Deferred construction avoids loading a map; TeleportPlayer itself needs only this actor's
+	// world and its first player controller, so this calls the exact production wrapper.
+	AElysiumMapActor* MapActor = World->SpawnActorDeferred<AElysiumMapActor>(
+		AElysiumMapActor::StaticClass(), FTransform::Identity);
+	if (!TestNotNull(TEXT("production map actor wrapper spawned deferred"), MapActor))
+	{
+		return false;
+	}
+	MapActor->TeleportPlayer(FeetDestination, 37.f);
+
+	TestEqual(TEXT("engine teleport synchronously emits one begin overlap"), Probe->BeginCount, 1);
+	TestTrue(TEXT("begin overlap identifies the player pawn"), Probe->LastOther == Pawn);
+	TestTrue(TEXT("player hull is registered inside firetrans after teleport"),
+		Trigger->IsOverlappingActor(Pawn));
+	TestTrue(TEXT("production wrapper lifts the feet-origin by the hull half-height"),
+		Pawn->GetActorLocation().Equals(
+			FeetDestination + FVector(0.f, 0.f, ElysiumMove::StandHeight * 0.5f)));
+	TestTrue(TEXT("production wrapper applies the requested yaw"),
+		FMath::IsNearlyEqual((float)PC->GetControlRotation().Yaw, 37.f));
+
+	MapActor->Destroy();
+	return true;
+}
+
+// =====================================================================================
+// The theatre detour is a pure decision at the travel funnel: only the authored genesis→theatre
+// destination is rewritten, and a rewrite is a direct tutorial-landmark entry.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStorySkipTest,
+	"Elysium.Substrate.StorySkip", GElysiumTestFlags)
+bool FElysiumStorySkipTest::RunTest(const FString&)
+{
+	{
+		FString Map = ElysiumStory::TheatreMap;
+		FString Landmark = TEXT("newgame");
+		FVector Offset(10.f, 20.f, 30.f);
+		bool bHasYaw = true;
+		TestTrue(TEXT("the enabled skip rewrites the theatre leg"),
+			ElysiumStory::ResolveIntroSkip(true, Map, Landmark, Offset, bHasYaw));
+		TestEqual(TEXT("the rewrite selects the tutorial map"), Map,
+			FString(ElysiumStory::TutorialMap));
+		TestEqual(TEXT("the rewrite selects the tutorial landmark"), Landmark,
+			FString(ElysiumStory::TutorialLandmark));
+		TestTrue(TEXT("the source-landmark offset is dropped"), Offset.IsNearlyZero());
+		TestFalse(TEXT("the source yaw is dropped"), bHasYaw);
+	}
+
+	{
+		FString Map = ElysiumStory::TheatreMap;
+		FString Landmark = TEXT("newgame");
+		FVector Offset(1.f, 2.f, 3.f);
+		bool bHasYaw = true;
+		TestFalse(TEXT("a disabled skip leaves theatre authored"),
+			ElysiumStory::ResolveIntroSkip(false, Map, Landmark, Offset, bHasYaw));
+		TestEqual(TEXT("theatre remains the destination"), Map,
+			FString(ElysiumStory::TheatreMap));
+		TestEqual(TEXT("the authored landmark remains"), Landmark, FString(TEXT("newgame")));
+		TestTrue(TEXT("the authored offset remains"), Offset.Equals(FVector(1.f, 2.f, 3.f)));
+		TestTrue(TEXT("the authored yaw remains"), bHasYaw);
+	}
+
+	{
+		FString Map = TEXT("sm_pawnshop_1");
+		FString Landmark = TEXT("newgame");
+		FVector Offset(4.f, 5.f, 6.f);
+		bool bHasYaw = true;
+		TestFalse(TEXT("the skip does not rewrite another destination"),
+			ElysiumStory::ResolveIntroSkip(true, Map, Landmark, Offset, bHasYaw));
+		TestEqual(TEXT("another map remains untouched"), Map, FString(TEXT("sm_pawnshop_1")));
+		TestTrue(TEXT("another destination keeps its placement"),
+			Offset.Equals(FVector(4.f, 5.f, 6.f)) && bHasYaw);
 	}
 
 	return true;

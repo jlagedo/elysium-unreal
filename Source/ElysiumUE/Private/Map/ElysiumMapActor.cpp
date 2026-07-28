@@ -516,6 +516,36 @@ void AElysiumMapActor::TeleportPlayer(const FVector& FeetOrigin, float Yaw)
 	{
 		PC->SetControlRotation(FRotator(0.0f, Yaw, 0.0f));
 	}
+	ReconcilePlayerBrushTouches(Pawn);
+}
+
+void AElysiumMapActor::ReconcilePlayerBrushTouches(APawn* Pawn)
+{
+	if (!Pawn || !EntityWorld)
+	{
+		return;
+	}
+
+	// AActor::SetActorLocation returns early for a zero transform delta. That is observable on map
+	// entry because the baked APlayerStart and the runtime .spawn placement name the same place:
+	// the pawn can already be inside a newly registered trigger, with no movement edge left to wake
+	// it. Dirty UE's overlap-skip cache and perform the query now that both player and entity world
+	// are live.
+	if (USceneComponent* Root = Pawn->GetRootComponent())
+	{
+		Root->ClearSkipUpdateOverlaps();
+	}
+	Pawn->UpdateOverlaps(/*bDoNotifies*/ true);
+
+	TInlineComponentArray<UElysiumBrushComponent*> BrushComponents(this);
+	for (UElysiumBrushComponent* Brush : BrushComponents)
+	{
+		if (Brush && Brush->IsOverlappingActor(Pawn))
+		{
+			EntityWorld->RouteBrushTouch(
+				Brush->GetOwningEntity(), EntityWorld->PlayerHandle(), /*bBegin*/ true);
+		}
+	}
 }
 
 void AElysiumMapActor::DamagePlayer(float Amount)
@@ -887,6 +917,7 @@ void AElysiumMapActor::TickSpawnHold(float DeltaSeconds)
 	{
 		Pawn->SetActorLocation(PendingSpawnLoc, false, nullptr, ETeleportType::TeleportPhysics);
 		PC->SetControlRotation(FRotator(0.f, PendingSpawnYaw, 0.f));
+		ReconcilePlayerBrushTouches(Pawn);
 		if (Body)
 		{
 			Body->SetMovementFrozen(true);

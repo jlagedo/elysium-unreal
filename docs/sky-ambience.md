@@ -1542,47 +1542,14 @@ no gamma operation, no clamp beyond the framebuffer's own.**
 
 ### The one asymmetry: the world gets ×2 and the sky does not
 
-The shader 612 of the 626 distinct world materials on `sp_tutorial_1` + `sm_hub_1` use is
-`LightmappedGeneric`, and `materials/dxshaders/lightmappedgeneric.psh` carries Valve's own
-comment:
-
-```
-tex t0
-tex t1
-mul r0, t0, v0			; base times vertex color (with alpha)
-mul r0.rgb, t1, r0		; fold in lightmap (color only)
-mul_x2 r0.rgb, c0, r0   ; * 2 * (overbrightFactor/2)
-```
-
-and the overbright factor is **pinned to 2**. `UpdateMaterialSystemConfig` (`0x200718d0`) reads
-`mat_overbright` into the config, and any value that is not exactly `1.0` or `2.0` — and any
-hardware reporting no overbright support — is rewritten by `mat_overbright.SetValue(2.0f)`.
-
-So the framebuffer relationship is exact and needs no capture to state:
-
-> **sky = texel.  world = albedo × lightmap × 2.**
-
-There is no separate sky exposure to discover. What B4 has to calibrate is not "how bright was
-VtMB's sky" — that is 1:1 — but how to land an Unreal sky texel at the same *displayed* value
-relative to a world that Lumen and the tonemapper reconstruct rather than multiply.
+The world-side shader derivation is canonical in `color_gamma.md`. The sky-specific comparison
+needed here is exact: **sky = texel; world = albedo × lightmap × 2**. There is no separate sky
+exposure to recover.
 
 ### Gamma is frame-wide, never sky-specific
 
-`UpdateMaterialSystemConfig` builds `MaterialSystem_Config_t` at `0x20a6bc80`: `+0x00` `gamma`
-(2.2), `+0x04` `texgamma` (2.2), `+0x08` overbright (2.0 per above), `+0x0d`
-`linearFrameBuffer` (0), then `mat_polyoffset`, `mat_picmip` and the rest. It ends by calling
-`IMaterialSystem` vtable `+0x4c` with `1.6 − clamp(cl_v_gamma − 1, 0, 3) × 0.5` — the video
-options' gamma slider, default `cl_v_gamma` 1.5, so **1.35**. The same four convars are copied
-into `StudioRenderConfig_t` at `0x20d63dc0` by `0x200a4500` (`+0x18` gamma, `+0x1c` texgamma,
-`+0x20` brightness, `+0x24` overbright, the last 1.0 unless the hardware reports support) for
-model rendering.
-
-None of it is per-material. Sky, world and models all land in the same 8-bit gamma-space
-framebuffer and the ramp is a display LUT applied at present (`shaderapidx9.dll` tracks
-`m_HasSetDeviceGammaRamp` as a hardware cap). This corroborates `docs/color_gamma.md` from a
-second direction and adds the pinning; the registration static-inits there are unchanged
-(`gamma`/`texgamma` `0x213064c0`/`0x21306618`, `brightness` `0x21306510`, `linearFrameBuffer`
-`0x21306558`, all built at `0x2010e290`).
+The frame-wide gamma path, ConVars, addresses, and screenshot behavior are canonical in
+`color_gamma.md`. Sky, world, and models share that path; there is no per-sky gamma stage.
 
 ### Fog: the 2D sky is exempt, game-wide
 
@@ -1627,30 +1594,17 @@ never of the backdrop** — which is a constraint on B8, not just a fidelity not
 | `0x1004d888`–`0x1004d9e0` | `MaterialSystem` | the reverse-ordered material-var flag name table |
 | `materials/dxshaders/*.psh`, `shaders/{vsh,psh}/*.vcs` | shipped data | the shader assembly and its compiled form — **not in a binary at all** |
 
-### What this changes for us
+### Rebuild implications
 
-- **B4's unknown is gone, and its character changes.** There is no VtMB-side sky exposure to
-  measure: the transfer is 1:1 and fog-free. `Brightness 4` is therefore a **divergence**
-  (D7), not an uncalibrated constant, and its faithful value is whatever makes the Unreal sky
-  texel display at parity with the same texel through VtMB's `texel → 8-bit gamma-space
-  framebuffer` path. RE-A6's captures (roadmap **RE17**) are still wanted, but for the *world* half of the ratio
-  (what Lumen + the tonemapper do to a lit surface), not for the sky.
-- **B8 gains a hard rule.** The backdrop is never fogged; the miniature always is, from
-  `sky_camera`. A single fog volume covering both reproduces neither.
-- **B5 / `docs/asset-enhancement.md` inherit a constraint.** Because the transfer is identity, an
-  upscaled sky face must preserve *absolute* texel values, not just structure — a super-resolver
-  that shifts the mean shifts the sky's brightness one-for-one.
-- **`docs/color_gamma.md` gets a stronger source.** Its `base × lightmap × 2` reading was
-  inferred from technique names and the ConVar default; the shipped `lightmappedgeneric.psh`
-  states it in Valve's own words, and `0x200718d0` shows the factor is pinned rather than
-  merely defaulted.
+- The faithful sky transfer is 1:1 and fog-free; Unreal calibration must preserve that displayed
+  relationship rather than add a separate sky exposure.
+- The backdrop remains unfogged while the 3D miniature uses `sky_camera` fog.
+- Upscaled sky faces must preserve absolute texel values, because mean shifts change brightness
+  one-for-one. Work status lives in `roadmap.md`; any deliberate divergence belongs beside the
+  faithful behavior in this document.
 
 ### Loose ends (seen, deliberately not chased)
 
-- **Whether `snapshot` captures pre- or post-ramp.** The gamma ramp is a device LUT, so a
-  back-buffer grab would not include it — which would make RE-A6 captures and our `shots.bat`
-  PNGs comparable to each other but not to what a player's monitor showed. The engine's
-  screenshot path was not read; confirm before any RE-A6 (RE17) capture is used *quantitatively*.
 - **`IMaterialSystem` vtable `+0x4c`** takes the `1.6 − …` gamma value; the slot was not named
   from `MaterialSystem.dll`'s own vtable. The formula and its inputs are read directly.
 - **The lightmap luxel → 8-bit page encoding** (where `texgamma` is actually spent, and how
@@ -1659,10 +1613,10 @@ never of the backdrop** — which is a constraint on B8, not just a fidelity not
 - **`dist`** in `R_DrawSkyBox` comes from `[0x201a11f0]`'s vtable `+0x48`; the value was not
   chased, because with fog disabled the backdrop's distance has no effect on its colour.
 
-## The unknowns (K1–K8) — all settled
+## Findings index (K1–K8)
 
-Each K was an unknown this doc tracked to closure; the sections above are the full
-write-ups. Nothing downstream of them rests on an assumption any more.
+The sections above are the canonical write-ups; this table is only a navigation summary.
+
 
 | K | Question | Settled by | One line |
 |---|---|---|---|
@@ -1725,15 +1679,9 @@ The rework is calibrated against data we already hold plus the original game:
   `StudioRender.dll` (model ambient). Findings cited into this doc per `docs/CLAUDE.md`.
   **Not available for VRAD:** the game ships no compiler (K6), so the bake is data-only.
 
-## Status, history, and what remains
+## Remaining bounded uncertainty
 
-This doc is the **facts** reference; status and next work, and the D1–D7 decision set (D6
-dissolved, D4 amended, D3 corrected), are cited at the top of this doc — the tracker set owns
-everything else.
-
-The one deliberately *bounded* fact: the skyambient's hemisphere aperture (cosine vs
-uniform, a factor of ~2) is **not identifiable from the shipped data** — on an enclosed
-map the faces that see sky are also the faces farthest from the author's fill, so sky
-visibility carries the fill's sign (C4's regression lands at a physically impossible
-negative on `ch_temple_1`). Closing it would need a fill-subtracted target or a compiler
-binary that does not exist; every consumer carries the exact authored ceiling instead.
+The skyambient hemisphere aperture (cosine versus uniform, a factor of roughly two) is not
+identifiable from the shipped data: on enclosed maps, the faces that see sky are also farthest
+from the authored fill. Closing it requires a fill-subtracted target or a compiler binary that
+does not ship; consumers therefore carry the exact authored ceiling.

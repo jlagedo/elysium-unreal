@@ -131,89 +131,18 @@ and `UElysiumGameStateSubsystem` + script host live on the game instance;
 
 ## Class coverage ladder
 
-Phase 1 registers just enough real classes to make the substrate observable end-to-end
-on `sp_tutorial_1` (1,226 entities, 75 classnames): `logic_auto` (map-load ignition),
-`logic_relay` (a quarter of all game wires), `trigger_multiple`/`trigger_once` (touch →
-outputs; 55 volumes in the tutorial), plus the inert-record fallback for the other ~70
-classnames. M3 then climbs the histogram with the debug layer watching: `func_button`,
-`func_door`/`func_door_rotating` (the shared `LinearMove`/`AngularMove` + 4-state
-toggle base from `animation_and_movers.md` B.4), `math_counter`, `logic_timer`,
-`trigger_changelevel` + landmark travel, `+use`, `prop_dynamic`, `func_brush`,
-`point_teleport`, `logic_pythoncheck` (via the script host), elevator family.
+The minimum observable substrate registers enough real classes to exercise `sp_tutorial_1`
+(1,226 entities, 75 classnames): `logic_auto` (map-load ignition), `logic_relay` (a quarter
+of all game wires), `trigger_multiple`/`trigger_once` (touch → outputs), plus the inert-record
+fallback. Coverage then climbs the histogram with the debug layer watching: `func_button`,
+`func_door`/`func_door_rotating`, `math_counter`, `logic_timer`, `trigger_changelevel` +
+landmark travel, `+use`, `prop_dynamic`, `func_brush`, `point_teleport`,
+`logic_pythoncheck`, and the elevator family. The mover state machine is
+`animation_and_movers.md` Part B; exact work items are in `roadmap.md` P1/P4.
 
-## Phase 1 — core substrate (engine changes, debug-ready)
+## Implementation and verification
 
-*Status tracking lives in `docs/roadmap.md` (**P1**; step 1 below is roadmap 0.4). This
-section is the design detail behind those tasks.*
-
-Ordered; each step compiles and runs on its own.
-
-1. **Pipeline verification first:** confirm `UE_bsp_to_scene.py` emits `.ents` fully in
-   Unreal space (origins *and* entity-local hulls, cm/Z-up/winding) per the `UE_`
-   convention; fix in `tools/bsp.py` terms if not. The runtime reads defs verbatim.
-2. **Currency types:** `FElysiumVariant`, `FElysiumEntityHandle`, `FElysiumGameClock`
-   (on the new `UElysiumGameStateSubsystem`, with the `G`/quest stores).
-3. **Defs:** `.ents` JSON parser → `FElysiumEntityDefs` (+ `.emc`-style cache only if
-   parse time demands it).
-4. **Registry + base entity:** class descriptors, registration statics, case-folded
-   chain lookup; `FElysiumEntity` with `Kill`/`ScriptHide`/`ScriptUnhide` and dormancy
-   per R6; inert-record fallback.
-5. **Entity world + queue + chokepoints:** storage, indices, spawn pass, `AcceptInput`,
-   output firing with `times`, think servicing, teardown; **sinks, ring buffer,
-   `LogElysiumIO`, and VLOG lines land in this same step** — the chokepoints are never
-   uninstrumented. `FElysiumNullScriptHost` behind `IElysiumScriptHost`.
-6. **Brush bodies:** `UElysiumBrushComponent` per brush entity from def hulls (handle
-   attached, overlap routing, dormancy-gated) — triggers become live.
-7. **Starter classes:** `logic_auto`, `logic_relay`, `trigger_multiple`/`trigger_once`.
-8. **Editor affordances:** labels/folders on all bodies and existing spawn paths
-   (`#if WITH_EDITOR`), canonical debug strings in every log line.
-
-**Acceptance:** loading `sp_tutorial_1` fires the `logic_auto` chains through real
-queue entries; walking through a trigger volume logs
-`(time) OnStartTouch #n name(trigger_multiple) → target.Input(param)` lines; Python
-payloads appear as script-host log lines; the ring buffer holds the session's I/O
-history; PIE Outliner shows labeled bodies. All observable with nothing but the log —
-no debug UI exists yet.
-
-## Phase 2 — the debug layer
-
-*Status tracking lives in `docs/roadmap.md` (**P2**). This section is the design detail.*
-
-Builds `debug-tooling.md`'s Layers 1–2 on the Phase 1 substrate (core first, then UI):
-
-1. **Cog vendored** into `Plugins/`, compiled on 5.8, world-subsystem shell, dev-only.
-2. **Entity windows** reading `FElysiumEntityWorld` directly: browser (filter by
-   class/name, histogram, dormancy state), inspector (def keyvalues, live fields via
-   the field tables, outputs with all 7 fields, fire-any-input buttons), event-queue
-   window (pending entries, ring-buffer history, pause/step).
-3. **`ent_*` console verbs** on the chokepoints: `elysium.ent_fire` (through the real
-   queue), `ent_dump`/`ent_info` (off the class tables), `ent_pause`/`ent_step`,
-   `ent_break <target> [input]`, `ent_text`/`ent_bbox`/`ent_messages` per-entity
-   overlay bitmask — all with the picker fallback (no argument = entity under the
-   crosshair, via body handles; nearest-origin for bodiless logic entities).
-4. **World visualization:** `elysium.showtriggers` (wireframe hulls colored by
-   class/state), I/O beam arrows on fire (fading, duration-drawn), entity gizmos
-   (color-keyed boxes + labels, 3-state cycle off/visible/all, cone pick).
-5. **Maps/Lights Cog windows + `elysium.reload`** (absorbing the Canvas HUD panels).
-
-**Acceptance:** in standalone `play.bat` — open the entity browser, pick the elevator
-call button through the crosshair, `ent_fire` its `OnPressed` target chain by hand,
-watch the beams and the queue window, pause and single-step the chain, and reload the
-map after a re-export without restarting. That is the M3 test harness, ready before
-M3 writes its first mover.
-
-## Open items (tracked, non-blocking)
-
-- **Trigger/button spawnflag semantics** — **decompiled** (RE1): `func_button`
-  (`CBaseButton::Spawn`) and `trigger_multiple`/`trigger_once`
-  (`CBaseTrigger::PassesTriggerFilters`) bit maps are in `entity_io.md`. Trigger filter
-  matches stock Source (`0x1`=clients … `0x8`=physics + `m_hFilter`); the button does not.
-- **Retail queue-vs-think order** — **confirmed think-first** (RE2, see the Tick note above):
-  thinks run, then `CEventQueue::ServiceEvents`.
-- **Ghidra datamap export** — method confirmed (RE4): VtMB datamaps are runtime-built by
-  per-class builders (`CBaseEntity` = `FUN_100a22f0`); the base keyfield/input/output contract
-  is extracted (`python_bridge.md`). A batch `DumpDatamap` over the builders → JSON per classname
-  is still to build — optional, valuable once class coverage widens.
-- **`G` default-0 and dialogue error-to-false** — **confirmed** (RE3, `python_bridge.md`):
-  `G.tp_getattr` returns `PyInt(0)` on a miss; `logic_pythoncheck`/exec paths clear errors and
-  evaluate false. Implement as documented.
+Build sequence, task status, and slice acceptance live only in `roadmap.md` P1, P2, and P4.
+This document owns the object model, flows, and class-coverage rationale above; VtMB input and
+spawnflag facts live in `entity_io.md`, queue/frame order in `game_runtime.md`, and binding
+mechanics in `python_bridge.md`.

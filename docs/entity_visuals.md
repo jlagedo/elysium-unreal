@@ -57,28 +57,10 @@ additive, world-scaled). Both blend additive; glow adds the occlusion fade.
 
 ### 3.1 `.ents` (the entity source of truth)
 
-`tools/UE_bsp_to_scene.py::write_entities` emits `{"map": <base>, "entities": [ … ]}`. Per entity:
-
-- Always: `classname`, `targetname`, `origin` (**Unreal centimetres**, `source_to_unreal`
-  applied), `start_hidden` (bool), `keys` (every remaining keyvalue verbatim, last-wins — so
-  `spawnflags`, `model`, `rendermode`, `rendercolor`, `renderamt`, `scale`, `angles`,
-  `particle_definition`, `NextKey`, `Slack`, `use_icon`, … all live here).
-- Brush entities only (`model "*N"`): `model` (int index), `hulls` (list of flat
-  `[x,y,z, …]` **entity-local Unreal-centimetre** convex hulls), `contents`, `blocks_player`.
-- If any `On*/Out*` key: `outputs[]`, each `{name, target, input, param, delay, times,
-  python}`. Retained regardless of whether the visual it targets is addressable yet.
-- Entities carrying a static `.mdl` `model` key (`prop_dynamic`/`prop_physics` and the
-  `prop_button`/`prop_doorknob(_electronic)`/`prop_sign`/`prop_switch`/`prop_hacking`/
-  `item_container(_animated/_lock)` family) additionally get `model_mesh` (the decoded OBJ
-  stem, shared with GAME_LUMP static props) and `model_quat` (the Unreal-space placement
-  rotation). Skeletal `npc_*` models are excluded — they belong to the glTFRuntime NPC track,
-  not this static-geometry path.
-- `phys_hinge` (and the `phys_*` constraint family) additionally get `hinge_axis` = the
-  normalized Unreal-space hinge direction; the pivot is the entity's own `origin`.
-- An entity inside the 3D-skybox miniature's BSP area is annotated `"sky": true`.
-
-`classname`/`targetname`/`origin` are popped from `keys`; `StartHidden` stays in `keys` **and**
-is surfaced as `start_hidden`. This schema is stable — entity I/O reads it as-is.
+The complete schema is `rebuild-strategy.md` → "Sidecar contracts." Visual consumers use the
+raw render keys plus `model_mesh`/`model_quat` for decoded static-model bodies, `hinge_axis`
+for constraints, and `sky` for 3D-skybox scope. Skeletal `npc_*` models remain on the character
+export path. These annotations extend the entity record; they never replace it.
 
 ### 3.2 Asset decodes (assets only, keyed by the entity's own references)
 
@@ -99,11 +81,9 @@ keyed back to the entity, never a replacement for it.
 
 ### 3.3 Coordinate conventions (reference)
 
-Source→Unreal: `(sx,sy,sz) → (sx, -sy, sz) × 2.54` — inches to centimetres, Z-up both spaces, Y
-negated to flip handedness (a reflection, so triangle winding is reversed once at export time).
-Directions use the same negation with no scale. `.ents` `origin` is **already** Unreal space;
-`keys.origin`/`keys.angles` are raw Source, for a consumer that needs the original values. Full
-rule (single source of truth): `tools/bsp.py::source_to_unreal` / `source_dir_to_unreal`.
+The single coordinate rule is `rebuild-strategy.md` → "Coordinate conventions." Visual
+consumers read normalized fields such as `origin` and `model_quat` in Unreal space; raw
+`keys.origin`/`keys.angles` remain Source values when the original authoring is needed.
 
 ---
 

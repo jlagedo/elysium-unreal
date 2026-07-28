@@ -1,13 +1,11 @@
 # Debug & development tooling architecture
 
-**Status: adopted design; the foundation layer is a pre-M3 work item.** Elysium-Unreal's live
-inspection, visualization, and iteration tooling follows from one constraint: **every engine
-object is built at runtime from `tools/out` intermediates**. There
-are no per-entity `.uasset`s, so the Unreal editor's asset-centric tooling (Content Browser,
-level editing, Details-panel authoring) has nothing to author — and any value tweaked in the
-editor would be overwritten by the next pipeline export. Debug tooling therefore lives
-**in-process, in the running game**, reading the same runtime data structures the game plays
-from. The editor is a *viewer* we get for free during PIE, never an authoring surface.
+Elysium-Unreal gameplay objects are built at runtime from `tools/out` intermediates; the map's
+baked look is adopted rather than authored as gameplay state. The editor's asset-centric tools
+therefore cannot inspect or persist entity fields, queued I/O, script state, or generated
+collision. Debug tooling lives in-process, in the running game, and reads the same structures
+the game plays from. PIE remains a useful viewer, not the authoring surface for those systems.
+Bake and runtime ownership are `uasset-bake-spike.md`; work status is `roadmap.md` P2.
 
 The architecture is four layers, numbered 0–3. Everything is development-only (compiled out of or
 disabled in Shipping); nothing here touches the bring-your-own-game posture.
@@ -258,13 +256,10 @@ captures the viewport to the gitignored `tools/out/_shots/` (baselines are game-
 its capture path (`ElysiumScreenshot.{h,cpp}`) with the `elysium_screenshot` MCP tool — the
 fire→screenshot→assert loop the agent runs live and the harness runs headless are one code path.
 
-## Build order
+## Tracking
 
-Work tracking lives in **`docs/roadmap.md`** (the single source of truth): the entity
-substrate is roadmap **P1**, this doc's Layers 1–2 are roadmap **P2** (Cog shell, entity/queue
-windows, `ent_*` verbs, trigger/gizmo visualization, Maps/Lights windows, `elysium.reload`,
-labels/folders, the `UCheatManager` subclass). The design detail behind P1 is
-`docs/engine-core.md`.
+Implementation sequence and status live only in `roadmap.md` P2; `engine-core.md` owns the
+entity substrate design it observes.
 
 ## Prior art / sources
 

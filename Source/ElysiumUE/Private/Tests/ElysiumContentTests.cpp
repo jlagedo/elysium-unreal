@@ -40,6 +40,7 @@
 #include "Engine/Texture.h"
 #include "HAL/FileManager.h"
 #include "Materials/MaterialInterface.h"
+#include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "PhysicsEngine/BodySetup.h"
 #include "Serialization/MemoryWriter.h"
@@ -294,6 +295,188 @@ bool FElysiumTutorialEntsTest::RunTest(const FString&)
 			Skinned, PropLines.Num()));
 	}
 
+	return true;
+}
+
+// =====================================================================================
+// Genesis's routing premises. These are deliberately content assertions rather than a hand-built
+// duplicate: if the exporter drops the trigger, rewrites its wire, or moves the spawn out of it,
+// New Game must fail here before the live route silently stops opening the wizard.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGenesisEntsTest,
+	"Elysium.Content.GenesisEnts", GElysiumContentTestFlags)
+bool FElysiumGenesisEntsTest::RunTest(const FString&)
+{
+	const TCHAR* Map = TEXT("sp_genesisdevice_1");
+	const FString EntsPath = FElysiumContentPaths::MapEnts(Map);
+	if (!IFileManager::Get().FileExists(*EntsPath))
+	{
+		AddInfo(FString::Printf(TEXT("skipping %s: no exported .ents at %s"), Map, *EntsPath));
+		return true;
+	}
+
+	FElysiumEntityDefs Defs;
+	if (!TestTrue(TEXT("genesis .ents parses"), FElysiumEntityDefs::Parse(EntsPath, Defs)))
+	{
+		return false;
+	}
+	TestEqual(TEXT("genesis carries its 14 records"), Defs.Num(), 14);
+
+	auto Find = [&Defs](const TCHAR* Classname, const TCHAR* Targetname) -> const FElysiumEntityDef*
+	{
+		for (const FElysiumEntityDef& Def : Defs.Defs)
+		{
+			if (Def.Classname.Equals(Classname, ESearchCase::IgnoreCase)
+				&& Def.TargetName.Equals(Targetname, ESearchCase::IgnoreCase))
+			{
+				return &Def;
+			}
+		}
+		return nullptr;
+	};
+
+	const FElysiumEntityDef* NewPlayer = Find(TEXT("trigger_once"), TEXT("newplayer"));
+	const FElysiumEntityDef* Firetrans = Find(TEXT("trigger_multiple"), TEXT("firetrans"));
+	const FElysiumEntityDef* Boogieout = Find(TEXT("trigger_changelevel"), TEXT("boogieout"));
+	if (!TestNotNull(TEXT("newplayer trigger_once exists"), NewPlayer)
+		|| !TestNotNull(TEXT("firetrans trigger_multiple exists"), Firetrans)
+		|| !TestNotNull(TEXT("boogieout trigger_changelevel exists"), Boogieout))
+	{
+		return false;
+	}
+
+	const bool bCreatesPlayer = NewPlayer->Outputs.ContainsByPredicate([](const FElysiumOutputDef& W)
+	{
+		return W.Name.Equals(TEXT("OnTrigger"), ESearchCase::IgnoreCase)
+			&& W.Target.Equals(TEXT("newplayer"), ESearchCase::IgnoreCase)
+			&& W.Input.Equals(TEXT("Toggle"), ESearchCase::IgnoreCase)
+			&& W.Python.Contains(TEXT("ccmd.createplayer"));
+	});
+	TestTrue(TEXT("newplayer fires ccmd.createplayer and disables itself"), bCreatesPlayer);
+
+	// Read the same two-line sidecar contract as AElysiumMapActor::ReadSpawn, including its +100 cm
+	// feet-origin lift, then prove that lifted point remains inside newplayer's exported volume.
+	TArray<FString> SpawnLines;
+	FVector Spawn = FVector::ZeroVector;
+	bool bFoundOrigin = false;
+	if (TestTrue(TEXT("genesis .spawn loads"), FFileHelper::LoadFileToStringArray(
+		SpawnLines, *FElysiumContentPaths::MapSpawn(Map))))
+	{
+		for (const FString& Line : SpawnLines)
+		{
+			TArray<FString> Tokens;
+			Line.ParseIntoArrayWS(Tokens);
+			if (Tokens.Num() == 4 && Tokens[0].Equals(TEXT("origin"), ESearchCase::IgnoreCase))
+			{
+				Spawn = FVector(FCString::Atod(*Tokens[1]), FCString::Atod(*Tokens[2]),
+					FCString::Atod(*Tokens[3])) + FVector(0.f, 0.f, 100.f);
+				bFoundOrigin = true;
+				break;
+			}
+		}
+	}
+	TestTrue(TEXT("genesis .spawn names an origin"), bFoundOrigin);
+	FBox NewPlayerBounds(ForceInit);
+	for (const FElysiumConvexHull& Hull : NewPlayer->Hulls)
+	{
+		for (const FVector& Vertex : Hull.Vertices)
+		{
+			NewPlayerBounds += NewPlayer->Origin + Vertex;
+		}
+	}
+	TestTrue(TEXT("the lifted spawn point is inside newplayer's volume bounds"),
+		bFoundOrigin && NewPlayerBounds.IsValid && NewPlayerBounds.IsInsideOrOn(Spawn));
+
+	const bool bFiresExit = Firetrans->Outputs.ContainsByPredicate([](const FElysiumOutputDef& W)
+	{
+		return W.Name.Equals(TEXT("OnStartTouch"), ESearchCase::IgnoreCase)
+			&& W.Target.Equals(TEXT("boogieout"), ESearchCase::IgnoreCase)
+			&& W.Input.Equals(TEXT("ChangeNow"), ESearchCase::IgnoreCase);
+	});
+	TestTrue(TEXT("firetrans forces boogieout.ChangeNow on touch"), bFiresExit);
+	TestEqual(TEXT("boogieout names the authored theatre map"),
+		Boogieout->Keys.FindRef(TEXT("map")), FString(TEXT("sp_theatre")));
+	TestEqual(TEXT("boogieout names the newgame landmark"),
+		Boogieout->Keys.FindRef(TEXT("landmark")), FString(TEXT("newgame")));
+
+	return true;
+}
+
+// =====================================================================================
+// Every exported ChangeNow output must resolve through the real trigger_changelevel registry.
+// This is the corpus guard for all 88 shipped wires, including the five authored wires whose
+// target names are not present in their own map and therefore cannot be classified by target.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumChangeLevelInputCoverageTest,
+	"Elysium.Content.ChangeLevelInputs", GElysiumContentTestFlags)
+bool FElysiumChangeLevelInputCoverageTest::RunTest(const FString&)
+{
+	TArray<FString> EntsFiles;
+	IFileManager::Get().FindFilesRecursive(EntsFiles, *FElysiumContentPaths::Root(), TEXT("*.ents"),
+		/*Files*/ true, /*Dirs*/ false);
+	if (EntsFiles.Num() == 0)
+	{
+		AddInfo(TEXT("skipping: no exported maps under tools/out"));
+		return true;
+	}
+
+	const FElysiumClassDesc* ChangeDesc =
+		FElysiumClassRegistry::Get().Find(FName(TEXT("trigger_changelevel")));
+	if (!TestNotNull(TEXT("trigger_changelevel is registered"), ChangeDesc))
+	{
+		return false;
+	}
+
+	int32 ChangeNowWires = 0;
+	int32 UnknownInputs = 0;
+	for (const FString& EntsPath : EntsFiles)
+	{
+		FElysiumEntityDefs Defs;
+		if (!FElysiumEntityDefs::Parse(EntsPath, Defs))
+		{
+			AddError(FString::Printf(TEXT("could not parse %s"), *EntsPath));
+			continue;
+		}
+
+		for (const FElysiumEntityDef& Source : Defs.Defs)
+		{
+			for (const FElysiumOutputDef& Wire : Source.Outputs)
+			{
+				const bool bIsChangeNow =
+					Wire.Input.Equals(TEXT("ChangeNow"), ESearchCase::IgnoreCase);
+				ChangeNowWires += bIsChangeNow ? 1 : 0;
+
+				bool bTargetsChangeLevel = false;
+				for (const FElysiumEntityDef& Target : Defs.Defs)
+				{
+					if (Target.Classname.Equals(TEXT("trigger_changelevel"), ESearchCase::IgnoreCase)
+						&& FElysiumEntityWorld::NameMatches(Target.TargetName, Wire.Target))
+					{
+						bTargetsChangeLevel = true;
+						break;
+					}
+				}
+				if (!bTargetsChangeLevel && !bIsChangeNow)
+				{
+					continue;
+				}
+
+				if (FElysiumClassRegistry::Get().FindInput(*ChangeDesc, FName(*Wire.Input)) == nullptr)
+				{
+					++UnknownInputs;
+					AddError(FString::Printf(TEXT("%s: %s.%s -> %s.%s is unimplemented"),
+						*Defs.MapName, *Source.Classname, *Wire.Name, *Wire.Target, *Wire.Input));
+				}
+			}
+		}
+	}
+
+	AddInfo(FString::Printf(TEXT("trigger_changelevel corpus: %d ChangeNow wires, %d unknown inputs"),
+		ChangeNowWires, UnknownInputs));
+	TestEqual(TEXT("the exported corpus carries all 88 ChangeNow wires"), ChangeNowWires, 88);
+	TestEqual(TEXT("every trigger_changelevel input resolves"), UnknownInputs, 0);
 	return true;
 }
 

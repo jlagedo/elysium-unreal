@@ -713,11 +713,38 @@ void FElysiumEntityWorld::AddSink(TUniquePtr<IElysiumIOSink> InSink)
 void FElysiumEntityWorld::RouteBrushTouch(const FElysiumEntityHandle& Brush,
 	const FElysiumEntityHandle& Activator, bool bBegin)
 {
+	const uint64 TouchKey = (static_cast<uint64>(static_cast<uint32>(Brush.Index)) << 32)
+		| static_cast<uint32>(Activator.Index);
+	if (!bBegin)
+	{
+		// Collision is switched off as part of Hide/Kill, after the entity has become inert. Release
+		// the physical pair before the liveness gate so a later Unhide while still intersecting can
+		// produce a fresh begin edge.
+		if (ActiveTouches.Remove(TouchKey) == 0)
+		{
+			return;
+		}
+	}
+
 	FElysiumEntity* E = Resolve(Brush);
 	if (!E || E->IsInert())
 	{
 		return;   // a dormant/dead brush cannot be touched (R6)
 	}
+
+	// Begin/end are edges, not level-triggered calls. Engine movement normally supplies exactly
+	// one of each, but a teleport reconciliation also asks which brushes contain the player after
+	// the transform. Collapse that second observation here so an authored trigger never double-
+	// fires; an end releases the pair so a later genuine re-entry remains an edge.
+	if (bBegin)
+	{
+		if (ActiveTouches.Contains(TouchKey))
+		{
+			return;
+		}
+		ActiveTouches.Add(TouchKey);
+	}
+
 	if (bBegin)
 	{
 		++TouchBeginCount;

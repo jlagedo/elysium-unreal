@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "ElysiumUserCmd.h"
 
+class FElysiumEntityWorld;
+
 // S7 — one command registry (roadmap 11.6, `runtime-architecture.md` §8.2). VtMB has no action
 // abstraction: **an action is a console command string**, and the Unofficial Patch's whole
 // vocabulary is aliases over those strings (`f` → `vm_feed` → `checkFeed()`), so a key bound to a
@@ -172,4 +174,9 @@ namespace ElysiumCommands
 
 	// Case-folded canonical form of a verb name.
 	FName Canonical(const FString& Word);
+
+	// The world-dependent half of vampire.dll's `teleport_player` command. Kept beside the verb
+	// inventory so the player controller and the content-free tests execute exactly the same parser.
+	// Returns true only when the player was moved.
+	bool TeleportPlayer(FElysiumEntityWorld& World, const FString& Args);
 }

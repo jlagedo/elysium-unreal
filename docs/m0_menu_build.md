@@ -186,10 +186,8 @@ reference.
 
 ## 8. In-game vs. main menu
 
-Same `CGameMenu` (§7). Multiplayer is present in `gamemenu.res` but suppressed by the
-shipped game. The game's own menus show: main menu = New Game / Load Game / Save
-Game(disabled) / Options / Quit; pause = Continue / Reload / Load Game / Save Game /
-Options / Main Menu.
+The shipped main/pause menu inventory is canonical in `vtmb-ui.md` §2. This section remains
+about the non-presenting `CGameMenu` stack and its dialog resources.
 
 ---
 

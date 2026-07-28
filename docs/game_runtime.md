@@ -38,7 +38,7 @@ logic only.**
 | Engine | `Bin/engine.dll` | host loop, render, sound, physics-lib load, save-file I/O, the CPython VM boot |
 | Game (server) DLL | `Vampire/dlls/vampire.dll` | entities, think, entity I/O, movement, AI, RPG rules, dialogue eval, camera, and the **Python dispatch** |
 | Client DLL | `Vampire/cl_dlls/client.dll` | HUD, `use_icon` table, view/input feel |
-| Menu/UI | `GameUI.dll`, `vgui2.dll` | main menu, pause (see `docs/m0_menu_build.md`) |
+| Menu/UI | `client.dll` main/pause/HUD; `GameUI.dll` dialogs | two shipped UI stacks; full ownership: `vtmb-ui.md` |
 | Script VM | `Bin/vampire_python21.dll` | stock CPython 2.1 — runs the story scripts |
 
 ### The host frame
@@ -852,30 +852,17 @@ The die itself (pool → tier, 10-again, botch table) is `docs/recovered/dice-sy
 
 ## 4. The opening flow — New Game → chargen → trial → tutorial
 
-New Game does **not** load the tutorial directly (`docs/level_transitions.md`). The real
-chain, all via landmark transitions:
-
-```
-New Game
-  → map sp_genesisdevice_1          levelscript "demo"      (character creation)
-       newplayer trigger_once → ccmd.createplayer + G.Story_State = -5
-       walk into boogieout (trigger_changelevel, landmark "newgame")
-  → map sp_theatre                  levelscript "theatre"   (embrace + LaCroix trial)
-       embrace cutscene → courtroom trial (5 choreo scenes) → walk-out → fade
-       walk_out_cam_k final keyframe: ScriptUnhide tutorial_change + controls off + fade
-  → trigger_changelevel tutorial_change (map sp_tutorial_1, landmark "tutorial")
-  → map sp_tutorial_1               levelscript "tutorial"  (Jack's guided tutorial)
-       LeaveTutorial() → trig_leave_tutorial → sm_pawnshop_1 (Santa Monica — real game start)
-```
+New Game reaches genesis, theatre, tutorial, and Santa Monica through the landmark chain in
+`level_transitions.md`. This section owns what each stage does and the state carried between them.
 
 > `sp_ninesintro` is **not** part of the opening — it is the later "arrive in Downtown
 > LA" cutscene. It only shows up because it was pre-exported under `tools/out/`.
 
 ### Character generation — `sp_genesisdevice_1`
 
-A tiny abstract limbo map (~4.6 KB entity lump, skyname `hav`, dark fog) — no gameplay
-geometry, just `info_player_start`, a light, and one trigger. Troika's codename (a *Star
-Trek* device that creates life) for the chargen staging space.
+A tiny abstract limbo map (~4.6 KB entity lump, skyname `hav`, dark fog): 14 entity records,
+seven world hulls, an empty `.props`, and one light. Troika's codename (a *Star Trek* device that
+creates life) for the chargen staging space.
 
 **Chargen is engine-side, fired by an entity — not by script** **[VtMB/data]**. The
 `newplayer` `trigger_once` at entry:
@@ -890,8 +877,11 @@ screens and writes the result **directly onto the player entity** (`pc.clan` int
 `pc.IsMale()`, `pc.base_<discipline>`). `demo.py` is **vestigial** — its functions
 reference `cube_*`/`cagedancer_*` entities that don't exist on this map (leftover
 E3/demo code); the only live outputs are `logic_auto → unhidePlus()` and a `logic_timer`.
-Walking forward crosses `boogieout` (`trigger_changelevel → sp_theatre`, landmark
-`newgame`); **clan is carried on the player entity across the landmark**, read later.
+The wizard's close tail teleports the player into `trigger_multiple "firetrans"`; its
+`OnStartTouch → boogieout,ChangeNow` forces the `trigger_changelevel` to `sp_theatre` at landmark
+`newgame`. The lifted spawn rests on a platform roughly 5.7 m above the exit volumes, so this
+teleport is the exit, not a shortcut to a trigger the player walks into. **Clan is carried on the
+player entity across the landmark**, read later.
 
 ### The intro cutscene — embrace + trial (`sp_theatre`)
 
@@ -991,7 +981,7 @@ real game start.
 |---|---|---|
 | New Game → chargen | engine `map sp_genesisdevice_1` | menu/client `map` command |
 | chargen UI opens | `newplayer` trigger_once | `OnTrigger → ccmd.createplayer` + `G.Story_State=-5` |
-| chargen → theatre | `boogieout` trigger_changelevel | `map sp_theatre`, landmark `newgame` (walk in) |
+| chargen → theatre | wizard close → `teleport_player firetrans` | `firetrans.OnStartTouch → boogieout,ChangeNow`; `boogieout` names `sp_theatre @ newgame` |
 | embrace | trigger StartTouch | `embrace_o_matic,Start` + camera + gender `Test` |
 | trial | `start_courtroom` trigger_once | `courtroom_scene_relay,Trigger` + `courtroomSire()` |
 | trial → walk-out | camera keyframe | `OnReachedKeyframe → scene_over_relay → walk_out_relay` |
@@ -1034,9 +1024,25 @@ void FUN_101734f0(CharEditPanel *this) {
 ```
 
 So **the player entity already exists when the wizard opens** — `giftxp 9000` is granted to it and
-the panel edits it in place. Nothing in the handler pauses the world, so the map's `logic_auto`,
-`logic_timer` and script layer keep running underneath the wizard. Only `giftxp 9000` runs here;
-`vautolvl <clan>_CharGen` is issued later, when a clan is chosen (§"The sheet baseline is bought").
+the panel edits it in place. The open handler shown above does not issue the pause itself; the
+panel's show path takes the hold, and the close tail below proves that hold by issuing `v_unpause`.
+The exact `v_setpause` issuing call site remains untraced; `FUN_10173350` is the candidate. Only
+`giftxp 9000` runs in this handler; `vautolvl <clan>_CharGen` is issued later, when a clan is chosen
+(§"The sheet baseline is bought").
+
+**Closing the chargen host drives the map exit** **[VtMB/decompile]**. `CharEditPanel` close/hide
+is `FUN_101740e0(this, bAccept)`. Its tail, when panel mode `+0x274` is non-zero, executes:
+
+```c
+engine->ExecuteClientCmd("v_unpause");
+engine->ExecuteClientCmd("teleport_player firetrans");
+```
+
+Both ACCEPT and CANCEL use this close function, so both release the hold and leave genesis. The
+meaning of the local byte that gates this tail is not yet recovered; it changes when the tail runs,
+not the two commands it performs. `teleport_player` is a `vampire.dll` ConCommand whose own contract
+is “Teleports the player to a named entity, or to an X Y Z coordinate”; an unresolved named target
+prints `Could not find entity named %s`.
 
 **One panel, three modes.** Three sibling ConCommands open the *same* `CharEditPanel` and differ
 only in the mode int at **`+0x274`**:

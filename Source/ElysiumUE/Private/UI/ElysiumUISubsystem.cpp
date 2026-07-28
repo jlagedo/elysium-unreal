@@ -171,6 +171,17 @@ void UElysiumUISubsystem::UnregisterCommands()
 
 void UElysiumUISubsystem::Deinitialize()
 {
+	// Shutdown is teardown, not a panel close: release a chargen-owned hold without running the
+	// wizard's gameplay exit tail into a dying world.
+	if (bChargenHold)
+	{
+		if (UElysiumGameStateSubsystem* State = GetGameInstance()
+			? GetGameInstance()->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr)
+		{
+			State->TimeControl().SetPaused(false);
+		}
+		bChargenHold = false;
+	}
 	HideCharacterScreen();
 	HideMenu();
 	UnregisterCommands();
@@ -409,7 +420,14 @@ void UElysiumUISubsystem::ShowChargen()
 		Chargen->bMale = Seeded.IsMale();
 		Chargen->HistoryId = 0;
 	}
+	Chargen->bSkipIntro = UElysiumGameFlowSubsystem::ShouldSkipIntro();
 	PendingChargen = Chargen;
+
+	// The retail panel releases `v_unpause` from its close tail. Take the matching modal hold here,
+	// through time control only: chargen leaves the application state Playing and never raises the
+	// pause menu.
+	State->TimeControl().SetPaused(true);
+	bChargenHold = true;
 
 	// The stage stands behind whichever of the two is up, so it is raised before either.
 	CharacterStage = MakeShared<FElysiumCharacterStage>();
@@ -565,6 +583,7 @@ void UElysiumUISubsystem::CommitChargen()
 
 	if (State && Chargen.IsValid() && Chargen->Currency == EElysiumChargenCurrency::Pools)
 	{
+		UElysiumGameFlowSubsystem::SetSkipIntro(Chargen->bSkipIntro);
 		State->CommitChargen(*Chargen);
 	}
 	PendingChargen.Reset();
@@ -635,7 +654,22 @@ void UElysiumUISubsystem::HideCharacterScreen()
 		ChargenPopup = nullptr;
 	}
 	ChargenRun.Reset();
+	PendingChargen.Reset();
 	PopCharacterScope();
+
+	// CharEditPanel's recovered mode!=0 close tail: unpause, then execute
+	// `teleport_player firetrans`. Both ACCEPT and CANCEL close through here. The latch keeps the
+	// in-game Sheet/Quest/Info and level-up hosts on their ordinary close path.
+	if (bChargenHold)
+	{
+		if (UElysiumGameStateSubsystem* State = GetGameInstance()
+			? GetGameInstance()->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr)
+		{
+			State->TimeControl().SetPaused(false);
+		}
+		bChargenHold = false;
+		FElysiumCommands::Get().Execute(TEXT("teleport_player firetrans"));
+	}
 	UE_LOG(LogElysiumUI, Log, TEXT("character screen hidden"));
 }
 

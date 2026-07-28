@@ -296,6 +296,10 @@ private:
 	// the pre-move pass, because a pawn that has not been placed and frozen yet must not be handed
 	// to the mover.
 	void TickSpawnHold(float DeltaSeconds);
+	// UE can retain an already-overlapping pair across a non-swept/zero-distance teleport without
+	// emitting a fresh begin edge. Refresh the pawn's overlap cache, then reconcile every runtime
+	// brush currently containing it into the deduplicating entity touch bus.
+	void ReconcilePlayerBrushTouches(APawn* Pawn);
 
 	// The player pawn may not exist yet in BeginPlay, so the teleport is deferred to Tick;
 	// the pawn is then held frozen until the async collision cook yields ground beneath it.

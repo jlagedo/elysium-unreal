@@ -33,7 +33,8 @@ enum class EElysiumGameOverReason : uint8
 struct FElysiumNewGameRequest
 {
 	// The level-script 2..8 clan encoding (2 Brujah .. 8 Ventrue). 0 = ask, i.e. run chargen —
-	// which does not exist yet (9.4), so 0 currently resolves to the mock default.
+	// NewGame seeds Brujah so the genesis wizard has a valid player to edit; the wizard overwrites
+	// clan and sex when the player commits.
 	int32 Clan = 0;
 	bool  bMale = true;
 

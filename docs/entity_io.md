@@ -48,6 +48,30 @@ reference, not a `targetname`.
 They live on the base entity and reach subclasses through the datamap `baseMap`
 chain (`docs/python_bridge.md`), so the port implements them once, not per class.
 
+## Entity-name matching
+
+`CGlobalEntityList::FindEntityByName` (`vampire.dll` `FUN_100f7770`) uses one small matching rule
+for I/O targets and the Python `FindEntityByName`/`FindEntitiesByName` helpers:
+
+- comparison is case-insensitive;
+- an empty search matches nothing, and a nameless entity is never a candidate;
+- a `*` is special only when it is the final character, where it makes the preceding text a prefix;
+- a bare `*` matches every named entity; `*` anywhere else is a literal, and `?` has no special
+  meaning.
+
+The body tests the final character and calls `_strnicmp(targetname, pattern, len-1)` for the prefix
+case, otherwise `_stricmp`. A leading `!` takes a separate single-result path for `!player`,
+`!playercontroller`, `!pvsplayer`, `!activator`, `!picker`, and `!caller`. This rule is what makes
+the patch's `FindEntitiesByName("plus_*")` / `FindEntitiesByName("basic_*")` switches operate over
+the hundreds of hidden variant entities rather than silently finding none.
+
+## `trigger_changelevel` forced input
+
+The forced-transition input is named **`ChangeNow`**. The exported corpus carries 88 such wires
+across 19 maps and zero wires named `ChangeLevel`; genesis's
+`firetrans.OnStartTouch → boogieout,ChangeNow` is one of them. `ChangeLevel` is not a shipped map
+input name and exists in the rebuild only as a compatibility alias for earlier internal callers.
+
 ## Hidden state: StartHidden / ScriptHide / ScriptUnhide
 
 **`ScriptHide` is not "invisible" — it is a whole-entity OFF switch.** It makes the
@@ -120,50 +144,12 @@ stay hidden until the game (once ported) reveals them:
 
 ## The `<map>.ents` sidecar
 
-`bsp_to_scene.write_entities` emits every entity to `<map>.ents` (JSON). It is
-deliberately **unfiltered**: the render pass drops `tools/*` and `StartHidden`
-faces, but those same entities carry the level's behaviour, so filtering the data
-the way the render is filtered would throw the game away. In `sp_tutorial_1` alone
-that would lose most of the 185 brush entities, including all 97 trigger volumes.
-
-```json
-{"map":"sp_tutorial_1","entities":[
-  {"classname":"func_button","targetname":"","origin":[-3.02,1.78,9.45],
-   "model":61,"hulls":[[x,y,z, ...]],"contents":1,"blocks_player":true,
-   "start_hidden":true,
-   "outputs":[{"name":"OnPressed","target":"pc_control_55","input":"Activate",
-               "param":"","delay":0.0,"times":-1,"python":""}],
-   "keys":{"spawnflags":"1057","use_icon":"12","soundgroup":"small_metal_switch"}}
-]}
-```
-
-- `origin` — Unreal centimetres (`source_to_unreal`; the JSON above uses illustrative
-  placeholder values, not real exported figures). For `func_door_rotating` it is also the hinge.
-- `hulls` — convex hulls in **entity-local** Unreal centimetres, one flat `x y z ...` list
-  each, built by walking the brush entity's own headnode (`dmodel_t` @36) through
-  `_model_brushes`. World = `origin + hull`; `source_to_unreal` is linear, so
-  converting each separately and adding is equivalent. Brush entities are authored
-  about their origin, so a button's hull centre is (0,0,0).
-- `contents` — the OR of the brushes' CONTENTS flags; `blocks_player` is
-  `contents & BLOCK_MASK`. Solidity is per entity, gated at runtime by
-  `start_hidden` (a hidden entity is `SOLID_NONE`).
-- `keys` — every remaining keyvalue, verbatim.
-
-`sp_tutorial_1`: 1868 entities, 185 brush, 466 hulls, 1028 outputs, 811 KB. All 185
-brush entities yield at least one hull.
-
-**Only the debug layer consumes it so far** — the F1 debug-mode entity gizmos +
-inspector read `.ents` read-only (`WorldLoader.BuildEntGizmos`/`PickEntity`/
-`EntityDump` → `EntInspector`): MultiMesh boxes + labels at each origin, colour-keyed
-by class, RMB-dumped. No *functional* runtime node is spawned yet. The runtime mapping
-this is built for:
-
-| Source | runtime node | fires on |
-| --- | --- | --- |
-| `trigger_multiple` / `trigger_once` | `Area3D` + `ConvexPolygonShape3D` | `body_entered`/`body_exited` = `OnStartTouch`/`OnEndTouch` |
-| `func_button` | shape on a use-only collision layer | camera ray on use-press — **not** proximity |
-| `StartHidden 1` | node built, monitoring + collision off | inert until `ScriptUnhide` |
-| `func_door*` | `AnimatableBody3D` + hulls | blocks movement; `Open`/`Close`/`Lock` |
+The complete JSON contract is `rebuild-strategy.md` → "Sidecar contracts." Entity I/O relies
+on three properties: entities are exported unfiltered; `outputs[]` preserves all seven fields;
+and brush `hulls` are entity-local Unreal-centimetre convexes whose world transform is the
+entity origin. `start_hidden` gates solidity and monitoring, while `keys` retains every raw
+keyvalue needed by a class handler. This doc owns the behavior of those fields, not a second
+copy of their wire schema.
 
 ## The usable set
 

@@ -61,44 +61,23 @@ Two tracks run in parallel:
    `m0_menu_build.md` (the original UI's structure + `GameUI.dll` findings — reference for the
    re-skin, not a port target), and `recovered/dice-system.md`. Do not re-derive what those already
    state.
-7. **Remaster stance governs every target below.** `remaster-direction.md`'s three change
-   layers, two adjudication tests, and default-to-reproduce rule apply throughout; a
-   divergence is recorded, once, in the doc that owns the diverging system.
-8. **The world keeps its faithful baseline; the UI does not.** Geometry 1:1 and dynamic GI
-   anchored to the baked-lightmap calibration stay the reference, with the **offline,
-   code-driven asset-enhancement track** as an A/B toggle on top, never a fork — adjudicated by
-   *does it serve VtMB's grimy gothic-punk direction (or fix a technical deficit that fights the
-   dynamic relight — e.g. delighting albedo), or is it inventing/overriding an artist decision?*
-   Serve/fix → in; invent/override → out. Full plan, tiers, and pipeline hooks:
-   `asset-enhancement.md` (in scope; scheduled P10-ish, scaffolding exists in `tools/`).
+7. **Remaster stance governs every target below.** The change layers, adjudication tests, and
+   default-to-reproduce rule live only in `remaster-direction.md`; divergences are recorded in
+   the topic doc that owns the system.
+8. **The world keeps its faithful baseline; the UI does not.** Asset enhancement is an A/B
+   layer over that world baseline, never a fork. Its surface-specific design is
+   `asset-enhancement.md`; its governing test remains `remaster-direction.md`.
 
-## Implementation state
+## Cross-system invariants
 
-**Authoritative status lives in `docs/roadmap.md`** — the single source of truth work tracker
-(per-task detail, what landed, what is next). Nothing is mirrored here. What exists in code
-right now, and where it lives, is documented next to the code: `../Source/ElysiumUE/CLAUDE.md`
-(runtime types, entity substrate, scripting hosts, debug layer), `../tools/CLAUDE.md`
-(decoders), `../Content/CLAUDE.md` (committed assets).
+Status lives only in `roadmap.md`; current code inventories live beside the code in
+`../Source/ElysiumUE/CLAUDE.md`, `../tools/CLAUDE.md`, and `../Content/CLAUDE.md`.
 
-Two implementation facts this doc owns, because they shape every downstream design:
+Two facts shape every downstream design:
 
-- **Intermediates are read verbatim.** `UE_bsp_to_scene.py` emits Unreal cm/Z-up/left-handed
-  with winding pre-reversed, so no runtime coordinate conversion happens anywhere (rules
-  below).
-- **VtMB's look is indirect-bounce-dominated.** Calibrating the runtime light rig against
-  VtMB's own baked lightmaps (`tools/probe_light_calibration.py`) established that a
-  direct-light model — even with correct occlusion — has zero correlation with the baked
-  result. So Lumen GI is load-bearing, not optional, and the dynamic lights are a modest
-  contributor feeding it. This also makes **baking VtMB's lump-8 lighting** the natural
-  low-end/floor path (free GI at runtime, from the data VtMB shipped). Render path, the SM6
-  requirement, tuning, and the floor budget: `rendering-perf.md`.
-
-The M1 remainder maps onto roadmap tasks: Source movement → 4.7, master-material set → 7.4,
-texture prewarm → 3.8, texlight clustering → 3.4, colour-grade fidelity + sky orientation +
-A/B toggles → 3.7.
-
-Design targets in this doc that are **not** code are marked where they appear — chiefly
-`map-architecture.md`'s async-travel state machine and its Slate console.
+- Exported intermediates are read verbatim in Unreal space; the complete rule is below.
+- VtMB's look is indirect-bounce-dominated, so Lumen GI is load-bearing. The calibration,
+  render path, hardware floor, and tuning live only in `rendering-perf.md`.
 
 ## Coordinate conventions
 
@@ -431,10 +410,8 @@ exported.
 
 ## Milestones
 
-**Sequencing and status live in `docs/roadmap.md`** (the single source of truth work
-tracker; its traceability table maps M-numbers to roadmap phases — M3 → P1+P2+P4, M4 →
-P5+P6, etc.). The M-numbers below remain the shared vocabulary for what each milestone
-*means*.
+The M-numbers below are vocabulary for what each milestone means. Sequencing, task mapping,
+and status live only in `roadmap.md`; its traceability table resolves these names to phases.
 
 Vertical slice: **play `sp_tutorial_1` start to finish, then walk into
 `sm_pawnshop_1`.**

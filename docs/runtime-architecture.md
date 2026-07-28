@@ -1,8 +1,6 @@
 # Runtime architecture — the game spine
 
-**Status: adopted**.
-Roadmap **P11** tracks the build; the playable path (`roadmap.md` → "The playable path")
-sequences it as **PP0**.
+Roadmap P11 tracks this design's implementation; the playable path sequences it as PP0.
 
 The load-bearing structure *between* the systems this project has already designed: what owns what,
 at which lifetime, in what order per frame, and through which seams the pieces talk. `engine-core.md`
@@ -691,17 +689,13 @@ Numbered like `engine-core.md`'s R1–R8, and orthogonal to them.
   needs a Cog control; this extends it — a feature also needs a named command, so a script, a test and
   an agent can reach it. A capability reachable only by hand is incomplete.
 
-## 14. Status and open decisions
+## 14. Tracking
 
-What is built versus outstanding, and the refactor sequence that got the spine here, are tracked
-in `docs/roadmap.md` (phase P11 onward) — not maintained here. The owner calls behind
-this spine's design (the player is an entity, the pawn is a box, pause holds the engine as well as
-the clock, and the rest) are stated as facts in the sections above.
+Task status and unresolved decision work live only in `roadmap.md` P11 onward. Once resolved,
+the durable architecture decision is stated in this document.
 
 ## 15. Not covered here
 
-Full combat AI, navigation, and the vendor/barter loop remain `roadmap.md` 10.7; stealth,
-disciplines and firearms basics are **P13**, choreography is **P12**. Each is
-a system with its own doc when it is reached; this doc's contract is that each one
-lands on the chain in §6, the frame in §3, the command registry in §8.2 and the save walk in §9's
-`save-architecture.md` — with no new dispatch mechanism, no new clock, and no new input owner.
+Combat AI, navigation, barter, stealth, disciplines, firearms, and choreography remain separate
+systems tracked in `roadmap.md`. Each must join the class chain, frame, command registry, and save
+walk defined here without creating another dispatcher, clock, or input owner.

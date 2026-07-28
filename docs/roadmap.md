@@ -35,7 +35,8 @@ Rebuild VtMB as a playable game **— remastered —** on UE 5.8 + C++ from this
 exported intermediates; **bring-your-own-game holds** — nothing game-sourced is committed
 (strategy and principles: `rebuild-strategy.md`). The world's *look* is **baked offline into a
 gitignored `.uasset` plugin mount** (`/ElysiumBaked`, regenerable like `tools/out/`) and adopted at
-load, while collision, entities, scripting, audio and NPCs stay runtime-built — adopted 2026-07-26. Everything is proven on `sp_tutorial_1` first (1,226 entities, 75 classnames — VtMB's own
+load, while collision, entities, scripting, audio and NPCs stay runtime-built. Everything is proven
+on `sp_tutorial_1` first (1,226 entities, 75 classnames — VtMB's own
 vertical slice), then scaled across ~100 maps.
 
 **Direction:** the presentation/feel/logic three-layer rule and its adjudication tests are owned
@@ -62,7 +63,7 @@ The phases below are **vertical slices** — each ends with something observable
 
 ## The playable path (PP0–PP6) — the master sequence
 
-**Owner call, 2026-07-26.** One path to a real, played game drives all
+**Owner call.** One path to a real, played game drives all
 sequencing: **menu boot → New Game (genesis chargen) → the theatre cinematic → land on the
 tutorial with Jack → complete the tutorial.** Everything on the path lands first; everything off
 it waits. Three standing rules:
@@ -80,7 +81,7 @@ it waits. Three standing rules:
 | Rung | Delivers | Tasks (in order) |
 |---|---|---|
 | **PP0 — the core refactor** | the spine: one clock/frame, world services, app states + pause, the player entity, input scopes, commands + user command, the view seam, the play harness | 11.10 *(11.0, 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.8 [x])* |
-| **PP1 — New Game & genesis** | chargen for real: clan, **name**, sex, spends — onto the player entity, Python-readable; `sp_genesisdevice_1` played, not skipped — the map is already exported **and** baked, so what is left is the `elysium.SkipIntro` re-scope | 9.4 a–g *(a–e [x]; RE24 [x], RE25 [x], RE27 [x])*, 8.6's New Game click path |
+| **PP1 — New Game & genesis [x]** | chargen for real: clan, **name**, sex, spends — onto the player entity, Python-readable; `sp_genesisdevice_1` played, not skipped | **9.4 a–g [x]** *(RE24 [x], RE25 [x], RE27 [x], RE28 [x], RE29 [x])*, 8.6's New Game click path |
 | **PP2 — the theatre cinematic** | the intro plays start to finish: choreography, scripted camera, line audio, subtitles, **eyes and lipsync — all block** (cont. 5); the PC is on camera, so its body stands here | 12.1–12.5, 8.11a (+ `sp_theatre` export/bake) *(11.7 [x])* |
 | **PP3 — land the tutorial** | the chain hands the player to Jack; the first conversation runs with sound and reactions | 9.2, 9.9 |
 | **PP4 — core mechanics** | faithful movement (owner call: **in** the path), camera modes, the body's gait, feeding, items + object interaction, dice, the vitals HUD | 4.7, 8.11b, 10.6, B6, 9.8, 9.6, 8.9 |
@@ -90,44 +91,16 @@ it waits. Three standing rules:
 **After PP6 (the thaw):** 9.10 economy/barter, 8.8, 8.10, the P3/P7 look lanes, 10.1–10.5 and
 asset enhancement — re-sequenced then.
 
-*(Pre-path housekeeping, now done: **0.9** put the bake architecture on the record and confirmed
-`spike/uasset-bake` — the branch all of this sits on — is `main`. Docs + git only, zero rendering
-work.)*
-
 ## Now — the unblocked front
 
-The open tasks whose dependencies are met, in the order they pay off. Regenerable from the
-deps below — refresh it whenever a task flips:
+Open tasks whose dependencies are met, ordered by playable-path payoff:
 
-1. **11.10** — the last of PP0: the play harness. It now has everything it was waiting on — a
-   named verb for every player action and a recordable command stream (11.6), and a published view
-   state (11.8) a beat can assert what is on screen against.
-2. **9.4 — the PP1 rung, in seven sub-steps.** Build order: **RE24 [x]** → **a [x]** the rulebook
-   readers (the gate — 12 table families now parse and are asserted against the exported files)
-   → **b [x]** the sheet as 148 registered fields over VtMB's four containers, `Max_Health` read
-   as the authored stat it is → **c [x]** the 290-call counter surface, the trait-effect layer under
-   it → **RE27 [x]** → **d [x]** quests for real, all 161 shipped `AwardXP` keys now reachable
-   through a real state change → **e [x]** the character screen carrying the journal, built as the
-   one shell chargen also lands in → **RE25 [x]** → **f [x]** chargen including the quiz, which also
-   closed e's placeholder Sheet tab and its deferred PC render → **g** genesis played, not skipped.
-   **g is next**, and it is routing rather than building: the map already fires `ccmd.createplayer`
-   and f made that verb real, so what is left is New Game's `story` entry and re-scoping
-   `elysium.SkipIntro`.
-3. **9.8 / 9.9 / 9.10 / 9.5** — the rest of what the hinge unblocked. They land *on*
-   `FElysiumCombatCharacter` and `FElysiumPlayerRecord`: 9.10 finishes the economy over the
-   `money` field that already exists, 9.8 fills the record's inventory half, and 9.5 (= 11.9, **[x]**)
-   walks the chain — so each of the others is saved the day it registers its state as fields.
-4. **8.11a** — the player body. **PL13 [x]** put all 56 clan bodies on disk beside the NPCs, so
-   nothing is left to export; the task itself stays PP2-gated, because the theatre is where the
-   body is first on camera.
+1. **11.10** — finish PP0 with the played-input harness.
+2. **9.8 / 9.9 / 9.10** — inventory, NPC reactions, and economy on the durable player/entity spine.
+3. **8.11a** — seat the exported player body for PP2.
 
-**P12 is sourced bar two content gaps** — RE19/RE20/PL9/PL10 [x], detail in the P12 section below.
-The gaps: the cinematic anim sets were never exported (**PL16**, seeded off the scenes' own
-`BaseAnim` keys), and no `Character/dlg/**` line audio is exported, so every `speak` event resolves
-nothing until 12.2 mirrors it. **No shipped model carries eyeball data**, so 12.4 has no eye pose to
-decode and its look-at half needs an owner call.
-
-The lighting/look lane (3.1–3.13, 7.x remainder) is **frozen** under playable-path rule 2.
+P12's remaining content and behavior gaps are tracked on its task rows. The lighting/look lane
+(3.1–3.13 and the P7 remainder) stays frozen under playable-path rule 2.
 
 ## The first-beat path (B*) — landing → the second warp point
 
@@ -138,22 +111,9 @@ at `teleport_very_beginning` (the `tutorial` `info_landmark` — 8.6a seats the 
 **Warp #2** is the patch's relocation to the downtown alley: `teleport_fade` (an `env_fade`) fires
 `OnBeginFade -> teleport_player.Teleport` + `teleport_jack.Teleport`.
 
-**The data flow** (traced from `sp_tutorial_1.ents` + `tutorial.py`, patch flow):
-
-1. **Map load** — `logic_auto.OnMapLoad -> unhidePlus()` → `ccmd.patchtype` → `setPlus()` arms
-   `trig_popup_move` (`StartDisabled 1`). Live end to end (B5): the console bridge runs the whole
-   chain unassisted on a fresh New Game.
-2. **Step forward** — `trig_popup_move -> popup_1.OpenWindow` (movement popup). Trigger +
-   `game_sign` already work.
-3. **Walk off the porch** — `trig_off_porch.OnEndTouch` → `Jack.WillTalk(1)` +
-   `Jack.StartPlayerDialogRemote(256)` + `blueblood_maker.Spawn` + `pc_0` bus inputs. The
-   trigger fires today; `Jack` (`npc_VVampire`) and `npc_maker` are inert records, so every NPC
-   input drops as `[no input]`.
-4. **Jack's dialogue** — `jack_tutorial.dlg` field-5 actions set `G.Tut_Jack = 1`; `OnDialogEnd`
-   fires the field-6 payload `DialogPostProcess()`. No dialogue system exists yet (9.1/9.2).
-5. **`DialogPostProcess()`** (tutorial.py, on the CPython host) — the
-   `Tut_Jack==1 and Tut_Patch==0` branch calls `Find("teleport_fade").Fade()` → **warp #2**;
-   the follow-up branch opens `popup_2` (blood pool) and sets `G.Tutorial_Feeding = 1`.
+**Data-flow facts:** cross-map placement is `level_transitions.md`; entity/output semantics are
+`entity_io.md`; the dialogue and tutorial beat machine are `game_runtime.md`. This ladder keeps
+only priority and acceptance status.
 
 Ordered so each step is independently observable with the existing debug layer — after B1 the
 warp is console-fireable, after B2 the script warps the player, after B3 Jack stands there and
@@ -182,21 +142,10 @@ Parallel, non-blocking: 4.7 Source movement (the current pawn walks the beat fin
 for Jack's real model. B-tasks that are slices of phase tasks (B2/B4/B5) flip here **and** feed
 their parent task's status in the same change.
 
-## Done foundation (verified, compressed — details in `rebuild-strategy.md`)
+## Foundation baseline
 
-- [x] M0: world+skybox PMC rendering, DDS/PNG textures, `.emc` cache, fly pawn, map
-  switching, Canvas HUD, `elysium.*` commands.
-- [x] `UE_` coordinate conversion (exporter emits Unreal cm/Z-up/LH, winding pre-reversed).
-- [x] `.env` sky/fog + `M_Sky` (the `.cube` colour-grade LUT was a test, never wired in —
-  stripped 2026-07-26; grading re-enters only through 3.7); light rig + lightstyles (fully
-  dynamic HWRT Lumen + MegaLights + VSM config); `.hulls`/`.dispcol` brush collision
-  (walkable); static props (originally runtime `UStaticMesh` + ISM — now baked `SM_*`
-  assets, see 0.9).
-- [x] Designs adopted: `engine-core.md` (entity object model), `debug-tooling.md`
-  (the layered debug architecture), `map-architecture.md` (map lifecycle; async travel is
-  design-only → R10.4).
-
----
+- [x] **M0 — first pixels.** Milestone meaning: `rebuild-strategy.md`; task-level completion is
+  represented by the phase rows below and the traceability table.
 
 ## P0 — Ground truth & de-risk
 
@@ -805,199 +754,9 @@ draw on the same stack; NPCs stand in the world at their entity origins.
 - [ ] **9.10 Economy** — **250 calls**: `MoneyAdd`/`MoneyRemove` (INTEGER inputs on the combat
   character) + `CurrentMoney`/`SetMoney`. The smallest self-contained system on the ledger; one
   integer on the sheet plus vendor `worth` when 9.8 lands. *Deps:* 9.7c.
-- [ ] **9.4 Quests/XP + RPG sheet data** *(the PP1 rung)* — the sheet is real (**b [x]**), the
-  rulebook parses (**a [x]**), the arithmetic over it runs (**c [x]**), a quest state change now
-  resolves, awards and journals (**d [x]**), the character screen carries the journal on the 8.6
-  stack (**e [x]**) and chargen builds a character in it (**f [x]**). What is left of the content
-  layer is **g**'s routing and the Info body e left as a framed placeholder.
-  9.7 sized and constrained the lane: the sheet-counter demand is
-  **290 calls** (`AwardExperience` 77 / `HumanityAdd` 69 / `CalcFeat` 53 / `ChangeMasqueradeLevel` 44
-  / `Bloodloss` / `BumpStat` / `GetMasqueradeLevel`), the counters are INTEGER datamap inputs on the
-  combat character, and **`AwardExperience` takes a STRING** — it names an experience-table entry, so
-  it cannot be modelled as an integer add (`script_api.md`). The sheet's home is `FElysiumSheet` on
-  `FElysiumCombatCharacter` (live) + `FElysiumPlayerRecord` (durable, 11.4).
-  Table→system map: `docs/vdata-catalog.md`; the sheet's recovered shape: `savegame_format.md`
-  (`m_iVAttributes*`, `m_QuestList`, `m_ExpList`). **Owner call:** chargen is a *full* reproduction
-  including the `charcreatewizard.txt` quiz, the journal screen is in scope, and the open RE is
-  closed **before** the sub-step that needs it. Sub-steps, in build order:
-  - [x] **a. The rulebook readers** *(the gate)* — `ElysiumRulebook.{h,cpp}` +
-    `UElysiumRulebookSubsystem`, **12** table families over `ElysiumKeyValues.h`, lazy per table,
-    verb `elysium.rules`. **Reads only — no consumer is wired; b/c/d/f do that.** Acceptance:
-    **161/161 `AwardXP` keys resolve in `experience_table`**. Corrections it forced (container slot
-    counts, where the priority-tier tables live, the template count) landed in `vdata-catalog.md`,
-    `game_runtime.md` and `savegame_format.md` in the same pass.
-  - [x] **b. The sheet becomes real fields** *(**RE24** closed it)* — the bag is VtMB's own shape.
-    **The split the design turns on: the storage and the names are code, the values are data**,
-    because that is how `vampire.dll` holds them — `Public/ElysiumSheetSlots.h` freezes the four
-    containers (`Attributes` **35** with `Attrib_Order` at 0 and every derived stat through
-    `Experience` at 34, `Abilities` **13**, `Disciplines` and `Active_Disciplines` **13** each),
-    each row carrying its datamap name *and* its `stats.txt` `InternalName`; the rulebook supplies
-    `Default`/`Min`/`Max`. **Disciplines are 13, not `stats.txt`'s 17** — the last four rows are the
-    Numina powers, which the compiled array and the save array do not reach, so they stay
-    rulebook-side, nameable by `CVStatRef` with nowhere to store a value. **The base/current split
-    is the whole buff system** and both halves persist; `RecomputeCurrent` is base → clamp today,
-    with the trait-effect pass a named hole for c/f, and it runs in **two passes** because a bound
-    may name another stat (`"Max" "Max_Health"`) at a higher slot. Every slot registers twice
-    (`<datamap>`, `base_<datamap>`) — 148 fields on `CBaseCombatCharacter` — so one R2 walk serves
-    script reads, keyvalues, the save enumeration and the inspector, and the dynamic bag shrinks to
-    a `base_*` name no slot owns. **`Humanity`/`BloodPool`/`Masquerade`/`Clan`/sex stopped being
-    members** and became the Attributes slots VtMB holds them in, so an input and a script read hit
-    one place. **Health is not Stamina-derived** — `ElysiumInterimPlayerMaxHealth` retired by being
-    read out of `stats.txt`, `Health`(15) counts damage taken with the `health` keyfield derived
-    from it, and `npctemplate*`'s literal `Max_Health` (through `stattemplate` →
-    `FElysiumClanTable::Resolve`) gives every NPC a track, so `TakeDamage` kills one. `pc.generation`
-    lands with the rest. Save version **2**, `MinSupported` raised with it — a v1 payload is refused,
-    not upgraded. Acceptance: `Elysium.Content.Sheet` walks every compiled slot against the real
-    `stats.txt` and finds the same trait at the same index. **One inference, marked as one**
-    (`game_runtime.md`): `Health`'s datamap name `vhealth` is taken from the sampled
-    `vmax_health` pattern, not read off the image.
-  - [x] **c. The 290-call counter surface** *(**RE24** closed it)* — the arithmetic over the slots,
-    in `Private/Substrate/ElysiumSheetMath.{h,cpp}`: the **trait-effect layer** (`m_tEffectList`
-    resolved into per-trait / per-feat modifier rows and the `Fx_*` flags — the hole b left in
-    `RecomputeCurrent`, now the pass between the base and the bounds), the **feat evaluator**, and
-    the XP arithmetic. The four Character-method stubs are real: **`CalcFeat`** is
-    `Feats::FeatValue` over the *variable-length* `Base%d` list (each entry the *current* value
-    through its own `/`-or-`*` modifier, the nine attributes floored at 1, only the Attributes and
-    Abilities containers summed, then the feat-level effect pass, then `[0, MaxValue]`);
-    **`BumpStat(stat, times)`** loops its third argument through `IncBase` under the hardcoded
-    `GetBase < 5` ceiling and cannot decrement; plus `GetMasqueradeLevel` and `DialogDiscipline`
-    (the rating, no blood spent — the power is P13's). `AwardExperience` runs the whole walk:
-    give-once against the `m_ExpList` ledger (*not* the trailing `01`), a miss awarding **and
-    appending** nothing, `Experience_Modifier` above 2 XP, then `floor(value/100)` **keeping the
-    sub-100 remainder**, which is worth one bonus point per 100 awards. The counters write through
-    `AddBase`'s gate (the effective max on a gain, **bypassed on a loss**), Humanity doubling on
-    `Fx_Humanity_Mods_Doubled` (Toreador's gift and bane are one flag), and `BloodHeal` converting
-    at `rules.txt`'s `BloodToHealthRatio`. `ChangeMasqueradeLevel` reaching the authored ceiling
-    drives 11.3's `MasqueradeBreach` game-over — **the second loss condition**, which shipped with
-    no driver. Clan banes are enforced by the generic layer and nothing else: a Tremere's `Max 4`
-    caps the current value and refuses the dot. **RE26 closed the two readings this would otherwise
-    have guessed** — the effect accumulator is `CVTraitEffectQuery`'s, ported field for field, and
-    `AddBase` writes the base raw (no clamp, no max test) as the image does. **`DialogDiscipline`
-    stays a logged stub**: zero call sites, an undecompiled handler, and one doc string — any
-    number would be invented. Save payload version **3** (`Xp`), `MinSupported` raised with it, for
-    the two award accumulators. **One divergence, marked in `script_api.md`**: `CalcFeat` falls back
-    from the feat table to the **trait** of that name instead of raising, because our dlgexpr
-    normalizer routes every skill-check through it and VtMB's own dependency reads those off
-    `GetCurrent`. The normalizer also emits the receiver (`pc.CalcFeat`, which is what makes a
-    skill-gated line evaluate at all) and RE26's **sex gate** for an `M_`/`F_`-prefixed check.
-    Acceptance: `Elysium.Substrate.SheetMath` (the gates, the feat sum, the predependency reader,
-    the banking, the ledger) and `Elysium.Content.SheetMath` (all 23 shipped feats evaluate in
-    range, the Tremere and Toreador banes land, the award values bank as authored).
-  - [x] **d. Quests for real** *(**RE27** closed it)* — the `name -> int` map stays authoritative
-    (732 call sites; default-0 on miss is VtMB's own contract) and `SetQuestState` becomes the one
-    funnel that does what happens *around* a change. The decision is `Private/Substrate/
-    ElysiumQuestLog.{h,cpp}` — a pure function over the catalogue and the journal, factored as 9.4c
-    factored `ElysiumSheetMath`, so every rule RE27 recovered is testable with no world and no disk.
-    **RE27 corrected two premises the plan was built on**: the authored `"ID"` is decorative (the
-    state argument is the completion state's **ordinal in file order**, which is what
-    `StateByOrdinal` now addresses and what the content tier asserts still coincides with the ID on
-    all 435 rows), and the re-fire rule is not a judgement call — a repeat set awards **nothing**
-    while any other change awards, **backwards included**, gated only by the `botch` type no shipped
-    row authors. Awards run in the engine's order: `AwardMoney` through a new
-    `FElysiumCombatCharacter::AddMoney` (the raw `+=` `MoneyAdd` is, extracted so the input and the
-    quest share one write), `AwardXP` through 9.4c's `AwardExperience` — whose `m_ExpList` ledger is
-    a second give-once guard — then `Event` through the same eval seam a field-6 payload uses,
-    which is what makes it a real dispatch path rather than a listed one (`python_bridge.md`).
-    The journal is `FElysiumAssignedQuest` rows on the player record, replaced in place and matched
-    case-insensitively, with `Order` assigned once as `max+1`. **The hazard the funnel created and
-    closes:** a save load re-set every key through `SetQuestState`, which would have replayed the
-    run's whole XP — `RestoreQuests` is the silent bulk door, and the Substrate tier asserts it
-    awards nothing. Save payload version **4** (`Journal`), `MinSupported` raised with it. Debug
-    surface is one verb, `elysium.quest` (the journal / one quest's states / `set` driving the real
-    path); the journal *screen* is **e**. Acceptance: `Elysium.Substrate.QuestLog` (the gate, the
-    ordinal, the order counter, the botch refusal, the case/whitespace reconciliation) and
-    `Elysium.Content.Quests` — **all 161 shipped `AwardXP` keys are reachable through a real state
-    change**, not merely present in the file, and no repeat set owes anything.
-  - [x] **e. The character screen** *(the journal screen, and the shell f lands in)* — five retail
-    captures reframed it: this is **not** a journal with a header, it is **one screen the whole game
-    reuses**, and `L` and `C` are two doors into it (both already declared and key-bound, so the task
-    added no command and no bind). `UElysiumCharacterScreen` is one shell parameterised on exactly
-    the four axes the chargen wizard differs on — tab set, `EElysiumSpendMode`, name-as-entry, footer
-    — so **f is a body, not a rebuild**. Retail splits the same apparent screen across three
-    `client.dll` classes (`VCharWizardUI` / `CharEditPanel`+4 / `QuestLogPanel`) that share art and
-    the 1024×768 law but not code; one shell is the same thing to the player. **Quest Log is real;
-    Sheet and Info are framed, navigable placeholders** whose footers draw their real controls
-    disabled — the Sheet tab is the *level-up* interface with no body yet, not a read-only display.
-    The read model is `Private/Substrate/ElysiumQuestView.{h,cpp}`, pure over a catalogue and an
-    array, and **`elysium.quest` was refactored onto its `ResolveRow`** so the verb and the panel
-    cannot describe a row differently. Chrome is VtMB's own decoded sheet art, every piece guarded
-    (`out/ui/art/` is gitignored, so each degrades to a token draw); frames are 9-sliced from
-    **measured** UV sub-rectangles, and `cm_divider`'s two curled ends are two sub-rectangles of one
-    page rather than a mirror. `Palette::Amber` joins the tokens — the art's gold is warmer than the
-    scheme's *text* gold. One `ElysiumInput::Priority` row (`Character` 45), which the pairwise
-    `Elysium.Substrate.InputScopes` test picks up once spliced into the ordering chain. **It also
-    closed a gap it did not open:** `cancelselect` now honours its own declared contract — "close the
-    top screen, else pause" — which `controls.md` documents as VtMB's and the handler did not do.
-    Save payload **5** (`Identity`), `MinSupported` raised with it, for the PC's name (blank until f)
-    and **`m_iCurrQuestLogArea`** — RE found the hub tab is a real player datamap field at `+0x1dac`,
-    so the tab row is a reproduction, not an invention. **Two divergences, both marked**: the unread
-    marker is cleared per hub on view (VtMB writes the byte and never reads it, so its rule is
-    unrecoverable), and Failed collapses to a rule and a count while empty. **A finding that made one
-    decision moot**: `quests_main.txt` ships with every quest commented out, so the cross-hub fold-in
-    is schema with no shipped data and the four tabs cover all 79 quests — asserted, not assumed.
-    Acceptance: `Elysium.Substrate.QuestView` (columns, ordering, the fold-in, tab counts, a
-    catalogue miss degrading rather than vanishing, the opening hub) and `Elysium.Content.Quests`
-    extended — every shipped quest lands in exactly one tab and resolves. The **Masquerade masks are
-    sub-rectangles of `cm_topbar`**, which bakes the meter into the header band beside its two rules
-    (`vtmb-ui.md`) — there is no separate mask asset and none is missing. The live PC render behind
-    the panels, and the Sheet tab's body, were deferred here and land with **f**.
-  - [x] **f. Chargen** *(**RE25** closed it; **e** built its shell)* — **`createplayer`** declared in
-    `FElysiumCommands` (not in `controls.md`'s bindable inventory, so it gets no default bind) and
-    implemented by the UI subsystem on the **`Chargen` scope 11.5 reserved**; `elysium.chargen` opens
-    the same door without the map. The genesis `newplayer` trigger reaches it through
-    `ccmd.createplayer`, which needed a bridge fix of its own: **a bare attribute GET on `ccmd`
-    executes**, and `Ccmd_getattro` returned `""` without running anything. Proven from the corpus —
-    field 6 names `ccmd` exactly twice across every exported map and `createplayer` is chargen's only
-    entry — and inert for the other use (`ccmd.wc_create` resolves as nothing and the console drops
-    it). Marked as behavioural inference in `python_bridge.md` with what would verify it.
-    **The correction that changed the model: chargen spends DOTS, not experience.** A pool point buys
-    a dot outright; the `Costs` blocks price the level-up path. The shipped numbers admit no other
-    reading — a 2-point Physical pool against `Current_Rating * 4` could not buy its first dot, and
-    the single discipline point against `Current_Rating * 5` could never buy anything.
-    **A data-loss bug it surfaced:** `clandoc000.txt`'s `Attributes` block carries six SYMBOLIC
-    values, and the loader stored the block as name→int — so `Attrib_Order "Physical_Mental_Social"`
-    read as ordering **0** for every clan, and `CharGen_AutoLevel_Template` (not a `stats.txt` slot
-    at all) vanished. A `TraitText` side map keeps them; Brujah is ordering **1**, which is the
-    `PHYSICAL(2) / SOCIAL / MENTAL(1)` the retail capture shows.
-    Two new rulebook families: **`charcreatewizard.txt`** (85 popups — 78 bare `Popup` lines plus 7
-    the Unofficial Patch restored, so any count by line shape undercounts) and **`strings.txt` +
-    `strings_internal.txt`**, which merge by index because their group name spaces overlap by design.
-    `PlayerBodyStem` on the clan table is the one body lookup the stage and
-    `Elysium.Content.PlayerBodies` share.
-    **One screen, two currencies**: `BuildSheet` serves chargen and the in-game level-up sheet over
-    the same `FElysiumChargenState`, so **e's placeholder Sheet tab closed with this task** — and so
-    did its deferred PC render, as `FElysiumCharacterStage` (a real animated body on a transient
-    camera rig over the fixed backdrop quad), raised for both hosts. Both edit a **scratch**: nothing
-    reaches the character until ACCEPT, which makes CANCEL a discard rather than an undo log.
-    Save payload **6** (`History`) for `m_iVHistoryID`, and a sixth owned RNG stream (`Chargen`) so a
-    seeded quiz replays identically. `FElysiumNewGameRequest::{HistoryId, Spends}` stopped being
-    carried-and-logged and now lands through the same `CommitChargen` funnel the wizard uses.
-    **Two marked omissions**, both in `game_runtime.md`: route 3 (the Society of Leopold hunter
-    campaign — its templates are the multiplayer clans 9–11, which the clan encoding, the sigils and
-    the body lookup all stop short of), and **`AUTO-SPEND POINTS`, drawn disabled** because there is
-    no recovered algorithm — the clan's `_CharGen` template *is* the baseline and has already run by
-    the time the pools exist, so there is no authored spend order left to follow. Inventing one would
-    be a silent divergence. Acceptance: `Elysium.Substrate.Chargen` (pool arithmetic per ordering,
-    buy/sell symmetry in both currencies, the `New`/`Raise` split on the XP path, the `[0,6)` row
-    filter) and `Elysium.Content.Chargen` (every clan's pools against the real tables, the Brujah
-    baseline, a clan change re-deriving rather than layering, the quiz terminating and replaying
-    identically from one seed).
-  - **g. Genesis played, not skipped** — `sp_genesisdevice_1` is **already exported and baked**, and
-    its `newplayer` `trigger_once` already fires `ccmd.createplayer` + `G.Story_State = -5`, so with
-    **f** registered the map itself needs no change. Confirmed by reading it (`level_transitions.md`):
-    13 entities in a 548-unit box, empty `.props`, one light — a launcher for the wizard, not a place,
-    and nothing in it is ever seen because the wizard's backdrop is the painted street bitmap.
-    `Skip Intro` is an **authored checkbox in the chargen footer**, so `elysium.SkipIntro` has a real
-    counterpart to surface there rather than staying cvar-only. What is left is routing New Game's `story` entry
-    to it and **re-scoping `elysium.SkipIntro`**: it skips from genesis's `boogieout` exit to the
-    tutorial landmark rather than skipping genesis, because `sp_theatre` is unexported and **P12**
-    owns it. A reversible divergence, recorded in `level_transitions.md`.
-
-  *Acceptance (PP1):* New Game walks genesis from real input, the quiz-and-spend character lands on
-  the player entity, `pc.clan`/`pc.strength` read back from Python, a skill-gated `.dlg` choice that
-  was hidden becomes visible, and the journal shows `pc.SetQuest("Tutorial", 1)`. *Deps:* 1.1 [x],
-  9.7c [x], 11.4 [x], 11.6 [x]; **RE24 [x]** (b [x], c [x]), **RE27 [x]** (d [x]),
-  **RE25 [x]** (f [x] built on the shell **e [x]** framed).
+- [x] **9.4 Quests/XP, RPG sheet, character screen, chargen, and genesis** — all seven PP1
+  substeps landed. VtMB facts: `game_runtime.md`, `vdata-catalog.md`; UI design:
+  `ui-architecture.md`; genesis travel and the intro-skip divergence: `level_transitions.md`.
 - [x] **9.5 Save/load** — **built as 11.9**; see that entry. The four blocks (Session / Player /
   Maps / World) over the R2 field walk, the per-map snapshot lifecycle with the absent-entity set,
   the event queue incl. deferred script strings, think times, `G`, and owned RNG streams, inside a
@@ -1026,8 +785,8 @@ dialogue, scripted flow, quests, save/load included.
   *Deps:* P4 done (travel), P3 done (calibration meaningful).
 - [ ] **10.2 Perf deepening** — Lumen tuning ladder (was L4.1), light culling/max-influence
   cap (was L4.2), scale-up scalability tier for 4070+ (was L4.3). *Deps:* 0.1, P3.
-- [ ] **10.3 Floor validation `[needs 3060]`** *(was L5.3)* — 1080p/60 on a real RTX
-  3060-class card; the one gate look can't judge. *Deps:* P3, 10.2.
+- [ ] **10.3 Floor validation `[needs 4060]`** *(was L5.3)* — 1440p/60 on a real RTX
+  4060-class 16 GB card; the one gate look cannot judge. *Deps:* P3, 10.2.
 - [ ] **10.4 Async travel state machine** — `map-architecture.md` design (fade → unload →
   task-thread parse → spawn → fade in), built on the 10.8 OpenLevel foundation (the heavy
   build runs in the shell world's `BeginPlay` behind a loading screen); **trigger: when
@@ -1096,9 +855,15 @@ dialogue, scripted flow, quests, save/load included.
   (`sndscheme_*`/`sound_volume_table`, distinct from PL5a's map SoundSchemes), and the **minor UI
   content tables** (`loadingtips`/`infobartypes`/`mapnames_localized`/`keynames`/
   `interestingplacetypelist`). Promote any to its own task when reached.
-- [x] **10.8 OpenLevel map-lifecycle migration** — map change is UE5 hard travel through the
-  GI-scoped `PendingMapLoad` and one reused shell `.umap`; the texture cache is a per-map instance
-  so GC frees it with the world. → `map-architecture.md`.
+- [x] **10.8 OpenLevel map lifecycle** — hard travel opens each generated
+  `/ElysiumBaked/<map>/<map>` level; GI-scoped state survives while the old world and its
+  per-map runtime state are reclaimed. → `map-architecture.md`, `uasset-bake-spike.md`.
+- [ ] **10.9 Asset enhancement** — run the offline delight → super-resolve → style-anchored
+  PBR pipeline as an `elysium.EnhancedTextures` A/B layer over the faithful world.
+  *Acceptance:* toggle-off remains byte-for-byte on the faithful inputs; curated Tier 0/1
+  outputs meet the `rendering-perf.md` floor budget; no game-derived output is committed.
+  *Deps:* PP6, 10.3, 7.4. *Design:* `asset-enhancement.md`; governing test:
+  `remaster-direction.md`.
 
 ## P11 — Runtime spine *(design: `runtime-architecture.md` + `save-architecture.md` — read them; steps here are the tracker)*
 
@@ -1255,57 +1020,59 @@ retail end to end, and `test.bat Play` proves it headlessly.
 
 | ID | Task | Needed by |
 |---|---|---|
-| PL1 | Export `.ents`-referenced models (`prop_dynamic`/`prop_physics`) — `model_mesh` in `.ents` | 8.1 [x] |
-| PL2 | Copy loose `.py` → `out/scripts/`, `.dlg` → `out/dlg/` — `UE_extract_scripts.py` | 5.1 [x] |
-| PL3 | Use-icon atlas export (72-entry enum) — `UE_use_icons.py` → `out/hud/use_icons.png`+`.json` | 4.4 [x] |
-| PL4 | Batch NPC export + include-model resolution — `mdl_skel.resolve_tree`/`local_sequences` (includes@404/408, `StudioModelGroup` stride 116) → shared-bank glbs + `npc_manifest.json` via `npc_export.py`; 45 NPCs / 62 banks / ~410 MB | 8.5 [x] |
-| PL5 | Copy sound schemes (a) [x] + the full `vdata/` rulebook (b) [x] + `vdata/Signs/*.txt` ×278 + the 57 referenced background materials (`hud/signs/*`, `interface/Pop_Ups/*`) → `out/signs/` — `UE_extract_signs.py` (c) [x] | 6.3, 9.4, 4.10 |
-| PL5b | Mirror the whole `vdata/` rulebook (`system` 97 + `items` 244 + `camerashots` 66 + `hackterminals` 57 + `precache` 1 = 465) verbatim → `out/vdata/` — `UE_extract_vdata.py`, patch-first, `signs`/`.xls` excluded. Consumer map: `docs/vdata-catalog.md` | 9.4, 9.6, 10.7 [x] |
-| PL5d | Copy `cfg/*.cfg` (the alias/cvar tables — `user.cfg` carries the Basic/Plus `patchtype` alias) verbatim → `out/cfg/` — `UE_extract_cfg.py`, patch-first, wired into `export_all.py` (`--no-cfg`) [x] | 9.3b [x] |
+| PL1 [x] | `.ents`-referenced model export landed; visual contract: `entity_visuals.md`. | 8.1 [x] |
+| PL2 [x] | Loose scripts and dialogue are mirrored under `out/`; formats: `python_bridge.md`, `game_runtime.md`. | 5.1 [x] |
+| PL3 [x] | The use-icon atlas and enum metadata are exported; semantics: `entity_io.md`. | 4.4 [x] |
+| PL4 [x] | NPC models and shared animation banks are batch-exported with include resolution. | 8.5 [x] |
+| PL5 [x] | Sound schemes, rulebook data, and sign assets are mirrored to their runtime sidecars. | 6.3, 9.4, 4.10 [x] |
+| PL5b [x] | The patch-first `vdata/` rulebook mirror landed; consumer map: `vdata-catalog.md`. | 9.4, 9.6, 10.7 [x] |
+| PL5d [x] | Patch-first `cfg/*.cfg` mirroring landed; contracts: `controls.md`, `python_bridge.md`. | 9.3b [x] |
 | PL6 | Texlight merge in exporter | 3.4 |
 | PL11 | Remove the dead Lumen-card path the bake superseded (found by 0.9): `export_all.py`'s `bake_cards`/`--no-cards` calls a `cards.bat` that no longer exists and prints a "skipped" line every run; `ElysiumCardGen.cpp` (`ELYSIUM_WITH_CARDGEN`, `elysium.cards.probe`) still builds into editor targets. Nothing depends on either | 0.9 |
 | PL12 | Mirror `particles/*.txt` (**1,594**) + the `particles/*.tga` sprite set (**309**) verbatim → `out/particles/` — patch-first, wired into `export_all.py`. Weather is the immediate consumer (33 rain definitions) but the set is engine-wide: fire, muzzle flashes, disciplines, the menu background. Also bake the top-down occlusion height map per map from `<map>.obj` + `worldspawn`'s `world_mins`/`world_maxs` (1024², ~11 cm/texel on `sm_hub_1`). Format: `weather.md` | 7.9 |
-| PL13 ✅ | **Export the PC models.** A second seed, not a second path: `pc_models_from_clandoc` reads `out/vdata/system/clandoc000.txt`'s indexed `M_Body0..5`/`F_Body0..5` — 7 `Player_*` clans × 2 sexes × 6 armour slots = **84 slots → 56 distinct `.mdl`** (each clan's top two repeat its tier-3 suit) — and `main()` unions it with `npc_models_from_ents`, so the exported set cannot drift from the table 8.11a selects through. Only the *indexed* keys count: the un-indexed `M_Body`/`F_Body` of the human/Society-of-Leopold templates name NPC models, and the `mp-*`/`unused*` templates repeat the playable paths. All 56 resolve; the install's other 3 `models/character/pc/**.mdl` are named nowhere. Result: **157 characters (101 NPCs + 56 PC bodies), 67 banks, 721 MB** — the bodies are ordinary index entries (63–106 bones, 3–5 own clips, ~1,440 resolved, ~786 KB each; 45 MB total), matched back to a clan slot through each entry's own `model` path, and the banks confirm the prediction: only **3** are new, the per-clan run-cycle aggregators `run{brujah,malknos,otherspc}_pcidles_allsequences`. **Finding: no PC body carries a flex rig** — 0 of all 59, and 0 of the 21 `models/hands/` viewmodels — so the player has no morph targets and no `facial/` sidecar, which is 12.3/12.5's problem to answer for the PC (`facial_animation.md`). Two parser defects fell out and are fixed: `kv.py` and `ElysiumKeyValues.h` both mis-read a quoted value carrying `\"` (`clandoc000.txt`'s Malkavian description), and `kv.py` also mis-read one spanning lines — either shifts every following key/value pair by one, so the next `{` is taken as a value and the block nesting collapses. Mechanised as **`Elysium.Content.PlayerBodies`** | 8.11 |
-| PL15 ✅ | **Find the Masquerade mask faces** — *there is no missing asset; the premise was wrong.* The masks are **baked into `cm_topbar`**, whose 1024×128 page carries the header's two full-width rules *and* the meter painted into its right end (x 797–997, rows 32–73, 43 px pitch, brightening left to right). Settled from `client.dll`'s own string table: it names all 29 `charactermaintenance` textures it can load and no mask is among them — `cm_Masquerade_Strike` is the only mask-related material, the slash drawn over violated slots. Verified against a 1366×768 capture — the page's masks scaled to that width match within 1.5 px, and both rules land on identical rows, so the bar draws stretched horizontally at native vertical scale. The meter and the two rules now read their own sub-rectangles of the page (9.4e); the extractor needed no change. The tree is complete at 44 stems bar two `.vmt`-less art-source `cm_topbar` variants. Format facts: `vtmb-ui.md` | 8.9 |
+| PL13 [x] | All 56 player bodies are exported from the clan table; animation/facial implications live in `animation_and_movers.md` and `facial_animation.md`. | 8.11 |
+| PL15 [x] | The Masquerade meter is a sub-rectangle of `cm_topbar`; no asset is missing. → `vtmb-ui.md`. | 8.9 |
 | PL14 | **Export the first-person hand viewmodels.** `clandoc000.txt` also names `M_Hands`/`F_Hands` per clan — the patch-restored per-clan viewmodels under `models/hands/**` (21 in the merged install) — and PL13 deliberately left them out: they are the first-person half of the body and 8.11a's acceptance is the third-person boom. Same seed function, one more key pair; none carries a flex rig | 8.11a |
-| PL16 ✅ | **Export the cinematic anim sets.** A third seed beside PL13's, for the same reason: no `npc_*` entity carries a `models/cinematic/**` model and the rulebook never names one, so the whole tree (106 models) stayed in the VPKs and every `sequence "entire_scene"` resolved nothing. `cinematic_models_from_ents` reads the `BaseAnim`/`MaleAnim`/`FemaleAnim` keys off each exported map's `logic_choreographed_scene` entities — **20 distinct models** across the exported set, 15 of them `sp_theatre`'s. Each is one multi-actor performance: N co-located 67-bone skeletons (`Bip01`..`BipNN`) carrying a single clip, which is what a scene's `bonerename "BipNN" "Bip01"` picks an actor out of. `mdl_gltf.export_cinematic` splits each into **one bank per bone root** with the prefix folded back to `Bip01`, so the existing bone-name retarget applies it to an ordinary NPC skeleton with no new runtime path; `npc_index.json` grows a `cinematics` map (model key → its per-root banks) for the runtime to resolve (anim set, bonerename source) → bank. Format: `docs/choreographed_scenes.md` → "The animation set" | 12.1 |
-| PL7 | Sidecar space fixes surfaced by the audit — **none (0.4: all sidecars already Unreal cm)** | 0.4 [x] |
-| PL9 ✅ | Mirror the choreographed-scene files + `.lip` phoneme files → `out/scenes/`, `out/lip/` — `UE_extract_scenes.py`, patch-first, verbatim, `sound/` prefix stripped so `SceneFile` reads back 1:1; **5,444 `.vcd`** (4.5 MB) + **7,136 `.lip`** (16.8 MB), wired into `export_all.py` (`--no-scenes`) with a `SceneFile` cross-check over the exported `.ents`. The `.lip` *format* stays RE20 [x] | 12.1, 12.5 |
-| PL10 ✅ | Facial data in the NPC export — the flex chunks (RE20 [x]) decoded by **`mdl_skel`** (one decoder, now shared with `probe_facial.py`) into glb **morph targets** in each rigged NPC's own glb, plus `out/npc/facial/<stem>.json` carrying what a morph target cannot hold: the 44 controllers, the 60 RPN rules, each morph's four-value ramp and `mstudiomouth_t`. **78 of 101 NPCs rigged, 4,015 morph targets**, +0.33–0.53 MB per rigged glb (manifest v3; the manifest names the sidecar). The unit-vector table comes out of the user's own `StudioRender.dll` at export time (`mdl_skel.read_anorms`; `probe_facial.py --anorms` still dumps it for RE) — game-derived, so regenerated, never committed; without it the export ships meshes and skips faces rather than baking wrong deltas. Two corrections to the plan: the unit is the flex **record**, not the flexdesc (a flexdesc splits into two ramps — 53 targets from 45 flexdescs), and a morph **spans materials**, so it lands as one same-named piece per primitive and the consumer must load with `MorphTargetsDuplicateStrategy::Merge` (12.3; 8.5's loader still takes the default `Ignore`). No eyeball chunk exists to export. `UE_extract_scenes.py` also mirrors the 249 `expressions/*.txt` → `out/expressions/`. Full shape: `docs/facial_animation.md` → "The offline export" | 12.3, 12.4, 12.5 |
-| PL8 ✅ | UI source inventory for the re-skin — **`tools/UE_extract_ui.py`** mirrors `out/ui/`: 25 `.res` layouts + **both** schemes byte-for-byte (`VampireScheme` skins client.dll, `TrackerScheme` skins GameUI.dll — `docs/vtmb-ui.md`), 194 localized strings, the 1024×512 title lockup, the menu particle scene (26 scripts → 22 `.tga` sprites) + the 6 `MM_Skybox` faces, and **503 decoded HUD/interface materials**; `--inventory` adds the ~350 item icons. Zero unresolved. Wired into `export_all.py` (`--no-ui`). The `.fnt` atlases are **not** extracted — vector type is `Content/Fonts` via `tools/fetch_ui_fonts.py`. | 8.6 |
+| PL16 [x] | Cinematic animation sets are exported and split into actor-addressable banks. → `choreographed_scenes.md`. | 12.1 |
+| PL7 [x] | The sidecar-space audit found no fixes: all consumed sidecars are already Unreal centimetres. | 0.4 [x] |
+| PL9 [x] | Choreographed scenes and `.lip` files are mirrored patch-first. → `choreographed_scenes.md`, `facial_animation.md`. | 12.1, 12.5 |
+| PL10 [x] | NPC flex data, morph targets, facial sidecars, and expression tables are exported. → `facial_animation.md`. | 12.3–12.5 |
+| PL8 [x] | The UI layouts, schemes, strings, menu scene, and art inventory are exported for the re-skin. → `vtmb-ui.md`. | 8.6 |
 
 ## RE backlog (reverse-engineering work; each cited where consumed)
 
 | ID | Question | Consumed by | Status |
 |---|---|---|---|
-| RE1 | Trigger/button spawnflag filter bits — decoded from the decompile; the maps live in `entity_io.md` (4.2 corrected a `0x100`↔`0x400` touch↔use label swap) | 4.2, 4.5 | [x] |
-| RE2 | Retail queue-vs-think service order — **confirmed think-first** (thinks then `ServiceEvents`); our provisional queue-first diverges (see `engine-core.md` Tick note) | 1.4 | [x] |
-| RE3 | `__setattr__` write path + error-to-false + `G` default-0 **all confirmed** | 5.2, 9.1 | [x] |
+| RE1 | Trigger/button spawnflag semantics are recovered. → `entity_io.md`. | 4.2, 4.5 | [x] |
+| RE2 | Retail services thinks before queued events. → `game_runtime.md`. | 1.4 | [x] |
+| RE3 | Attribute writes, error-to-false, and `G` default-zero are recovered. → `python_bridge.md`. | 5.2, 9.1 | [x] |
 | RE4 | Ghidra datamap export (validate our input/field tables vs retail) — method confirmed, CBaseEntity base map extracted. **4.5 proved the fast path: `run.ps1 -Script DumpGrep` (str=/cls= anchors) over the persisted `vtmb` project, no re-import — recovered every P4.5 class factory/datamap and settled `logic_case_toggle`'s delta-advance divergence.** | 4.5+ (optional, valuable) | [~] |
-| RE5 | Dice-system verified by decompilation + `vdata/system/DiceRolls.txt` (data-driven face weightings, shipped tables uniform d10; difficulty is human-scale; `[4]`/`[6]`/`[0xe]` + pool source all confirmed) — no running game needed; `recovered/dice-system.md` canonical | 9.6 | [x] |
-| RE6 | `ent_survey` count reconciliation — retail = 16,125 outputs / 1,591 Python (16,214/1,621 was stale) | 0.6 | [x] |
+| RE5 | The dice resolver is verified. → `recovered/dice-system.md`. | 9.6 | [x] |
+| RE6 | Retail entity-I/O survey counts are reconciled. → `entity_io.md`. | 0.6 | [x] |
 | RE7 | Retail `.sav` block wire format | 10.7 (only for importing retail saves) | [P] |
-| RE8 | Re-base `entity_io.md` survey on the patch (engine-loaded) map set — patch 24,081 outputs / 6,956 Python (retail 16,125 / 1,591) | 0.8 | [x] |
-| RE9 | Screen-fade flag semantics — the client owns the curve, not `env_fade`; `SF_FADE_STAYOUT` uncovers again, and no `OnEndFade`/`ReverseFade` exists (detail:) | B1 | [x] |
-| RE10 | **Sky-face orientation (K1)** — `R_DrawSkyBox`/`MakeSkyVec` + three `.rdata` tables: `rt`+X / `lf`−X / `bk`+Y / `ft`−Y, **no face rotated or mirrored**; the draw applies no colour scaling (brightness is material-side → RE16). Full: `sky-ambience.md` → K1; verbatim row: archive | 3.7, SKY B2/B3 | [x] |
-| RE11 | **Labelled-sky probe in the shipped engine (RE-A2)** — the original draws all six labelled faces exactly as K1 predicts (five three-face corner agreements, two on `dn`); K1 closed on three independent legs. Full: `sky-ambience.md` → "The in-game check" | SKY B1 | [x] |
-| RE12 | **Model lighting + lump 15's runtime role (K3/K5, RE-A3)** — world surfaces render from lump 8 alone; lump 15 feeds only the model light cache (162-ray ambient cube off `avgLightColor` × reflectivity + ≤ 2 direct worldlights); first-wins, never summed. Full: `sky-ambience.md` → K3/K5 | SKY C0–C2, D2/D6 | [x] |
-| RE13 | **Day/night bake selection (K4, RE-A4)** — the premise was wrong: `day[8]`/`night[8]` all-zero across 108 maps, no reader in `engine.dll`, one bake keyed by `styles[8]`. Full: `sky-ambience.md` → K4 | SKY C4, D1 | [x] |
-| RE14 | **Full-game sky inventory (K8, RE-A7)** — 11 sky sets; 66 maps draw sky, **25 are lit by it, 83 have no `light_environment` at all**; 43 run the miniature at `scale` 16; 1,442 worldlights sit in sky areas. Full: `sky-ambience.md` → "The full-game inventory" | SKY B7/B8, C1/C2 | [x] |
-| RE15 | **VRAD's transfer + lump 8's absolute scale (K6, RE-A5)** — `intensity = (colour/255)^2.2·(B/255)·falloff(100u)`, zero exceptions on 16,378 lights; `stored luxel = 255·intensity/falloff`; the sun confirmed at ×1.01; sky ambient resolved globally first-entity-wins; 27/108 bakes are the patch compiler's (provenance-gate everything). Open residue: the skyambient's hemisphere aperture, bounded ~2× and **unidentifiable from this data** (C4). Full: `sky-ambience.md` → K6 | SKY C0–C4, D1/D6, 10.1 | [x] |
-| RE16 | **The sky's brightness chain (K7, RE-A9)** — the identity: a sky pixel is the decoded texel, unscaled, `$nofog` game-wide; the one asymmetry is the world's `albedo × lightmap × 2` (overbright pinned to 2). Full: `sky-ambience.md` → K7 | SKY B4/B5/B8, D7 | [x] |
+| RE8 | The entity-I/O survey is rebased on the patch-loaded map set. → `entity_io.md`. | 0.8 | [x] |
+| RE9 | Screen-fade flags and outputs are recovered. → `entity_io.md`. | B1 | [x] |
+| RE10 | Source sky-face orientation is settled. → `sky-ambience.md` K1. | 3.7 | [x] |
+| RE11 | The labelled-sky in-game probe confirms the recovered orientation. → `sky-ambience.md`. | 3.7 | [x] |
+| RE12 | Model lighting and lump 15's runtime role are recovered. → `sky-ambience.md` K3/K5. | 3.7, 10.1 | [x] |
+| RE13 | VtMB carries one lightmap bake; the apparent day/night arrays are unused. → `sky-ambience.md` K4. | 3.7 | [x] |
+| RE14 | The full-game sky inventory is measured. → `sky-ambience.md`. | 3.7, 10.1 | [x] |
+| RE15 | VRAD's sky transfer and lump-8 absolute scale are recovered. → `sky-ambience.md` K6. | 3.7, 10.1 | [x] |
+| RE16 | The sky brightness chain is settled. → `sky-ambience.md` K7, `color_gamma.md`. | 3.7 | [x] |
 | RE17 | **Owner-run reference captures** *(was sky-ambience RE-A6)* — original-game screenshots at the shared vantages (3–4 sky maps + one sky-only view per skyname), for the **world** half of the display ratio (`albedo × lightmap × 2` beside a sky texel — the sky's own transfer is the identity, RE16) and as 7.8's reference. **Gate cleared (SDK cross-reference, pending VtMB binary confirmation):** `snapshot` grabs pre-gamma-ramp — capture and the hardware gamma ramp are separate D3D surfaces that never touch. → `color_gamma.md` → "Screenshot capture happens before the gamma ramp". What is left is the owner actually running the captures | 3.6/3.7, 7.8 | [ ] |
-| RE18 | **The script→engine action surface** — the demand ledger (16,438 call sites / 1,287 names) plus the supply side out of `vampire.dll`: all six `PyMethodDef` tables with their `ml_doc` contracts, and the `CBaseCombatCharacter` / `CAI_BaseNPC` / player datamaps behind the 124 unresolved names. Closes `python_bridge.md`'s file-like open item. Full: `docs/script_api.md` | 9.7, 9.8–9.10, 9.4, 8.5 | [x] |
-| RE19 | **Choreographed-scene format + event semantics** — the `.vcd` grammar (uniform word-list/brace, 14 live tokens of a much larger parser vocabulary), the 19-type `CChoreoEvent` enum with **nine** used by content and `CAMERASHOT` unhandled by the engine, the `CSceneEntity` datamap (4 inputs / 7 outputs; `force_lod` is a dead key), actor binding **by name** (`targetN` is inert — `!targetN` has zero uses), `position_start`/`position_end`, absolute-time playback offset by `snd_mixahead`, and `Start→OnStart` / end→`OnCompletion` / `Cancel`→`OnCanceled` / `firetrigger "N"`→`OnTriggerN`. 5,444 scenes on disk, 105 named by the 122 map entities; the rest are per-line dialogue scenes on `CInstancedSceneEntity`. Full: `docs/choreographed_scenes.md`; probe: `tools/probe_scenes.py` | 12.1, PL9 | [x] |
-| RE20 | **MDL v2531 facial data** — the studiohdr facial block (at **344**, eight bytes past the VAMPTools field walk), `mstudioflexdesc_t` 4B / `mstudioflexcontroller_t` 20B / `mstudioflexrule_t` 12B + 8B RPN ops / `mstudiomouth_t` 20B; `StudioFlex` 32B with its target ramp, and **both** `StudioVertAnim` encodings — the 8B compressed record stores *directions*, two byte offsets into a 5,314-entry unit-vector table in `StudioRender.dll` plus `n/255` magnitudes scaled 8.0/2.0, and a 20B raw form (`mingxiao_transformation` only). **`NumEyeballs` is 0 on all 4,444 models** — no eye pose, look-at or procedural lid was ever authored; eyes are eyelid flexes. `.lip` is plain text (7,136 files, `VERSION`/`PLAINTEXT`/`WORDS`/`EMPHASIS`(always empty)/`CLOSECAPTION`/`OPTIONS`), joined to `expressions/<model stem>_phonemes.vfe` (249 tables) for phoneme→controller weights. Corrects `mdl_v2531.md`: `StudioModel` is **224B** and carries its own de-quantization offset/scale at +0xA0. Full: `docs/facial_animation.md`; probe: `tools/probe_facial.py` | 12.3–12.5, PL10 | [x] |
-| RE21 | **`GameFrame` usercmd order** — **movement runs *before* the think pass**, and not in `GameFrame` at all: the engine runs it while draining the client's `clc_move` message (`_Host_RunFrame` → `SV_Frame` `0x200f62b0` → `SV_ReadPackets` → `SV_ExecuteClientMessage` → clc_move `0x200f9990` → `serverGameClients->ProcessUsercmds` → `CPlayerMove::RunCommand` `0x101874a0`), then `SV_Frame` calls `serverGameDLL->GameFrame` `0x1011abc0` (the old `0x10571fc0` is that function's profile *string*) whose body is thirteen calls with `Physics_RunThinkFunctions` third and `ServiceEvents` sixth. Also pins: the player's own think runs inside `RunCommand`, and `frametime`/`curtime` are rebound to the command's timing for the move. **`runtime-architecture.md` §3's tick table now reproduces this order — called as reproduce, landed by 11.11.** Full: `game_runtime.md` §1 | 11.1, **11.11**, 4.7 | [x] |
-| RE22 | **The ducked hull** — all six hull/view vectors are literals in the `CGameMovement` ctor (`0x1011e0d0`): ducked is `(-16,-16,0)..(16,16,36)` with the eye at **30** (not stock Source's `VEC_DUCK_VIEW` 28 — a Troika value), standing `(-16,-16,0)..(16,16,72)` eye 64, observer `±10`. `GAMEMOVEMENT_DUCK_TIME` is 1000 ms; `FinishUnDuck` refuses a stand-up that fails a standing-size `TracePlayerBBox`. The same ctor seeds `surfaceFriction` to 1.0. **Also closed alongside it:** VtMB's `PlayerMove` switch has **no ladder arm** — ladder movement is not in this game, and the `"ladder"` string is a footstep material. Full: `source_movement.md` → "The hulls and the view offsets" / "Ladders: VtMB has none" | 4.7, 11.6 | [x] |
+| RE18 | The script→engine action inventory and demand ranking are recovered. → `script_api.md`. | 9.7–9.10 | [x] |
+| RE19 | Choreographed-scene format, binding, timing, and completion semantics are recovered. → `choreographed_scenes.md`. | 12.1 | [x] |
+| RE20 | MDL facial data, flex rules, eyeball absence, and `.lip` format are recovered. → `facial_animation.md`. | 12.3–12.5 | [x] |
+| RE21 | Player commands run before the think/event pass; the full frame order is recovered. → `game_runtime.md`. | 11.1, 11.11, 4.7 | [x] |
+| RE22 | Player hull/view constants and the absence of ladder movement are recovered. → `source_movement.md`. | 4.7, 11.6 | [x] |
 | RE23 | **The particle format + the wetness channel** — VtMB's weather is Troika-custom, not Source: no `func_precipitation` anywhere in the install, and the parser lives in a forked `Bin/engine.dll` (gate cvar `particles_enable_precipitation`). The `particles/*.txt` grammar is partly reconstructed (envelope, emitter-vs-particle roles, the `a~b` / `a,b,…` / `v(n)` value forms, the `collide { spawn / decal }` block) — `weather.md` marks what is inferred. Eight open questions, the load-bearing ones being **what `FadeGlobalWetness` actually scales** (`GlobalWetness` crosses into `client.dll`, so it reaches the render side), **who calls it** (survey `out/scripts/`), and whether `func_particle`/`env_particle` take the standard I/O + `start_hidden` surface. No public RE exists — the community FGD defines neither classname and annotates all three wetness keys "Not tested yet...". Full: `docs/weather.md` | 7.9, PL12 | [ ] |
-| RE24 | **The sheet math** — all four closed, and two premises were wrong. The substrate first: a trait is `(container, index)` over `CVStatList_t`, **index counting the container's leading `*_Order` block as 0**, so `m_iVAttributes*` is **35** slots (not 21) and `m_iVAbilities*` **13** (not 12) — proven three ways off the datamap and three hardcoded indices. **`AwardExperience`**: `floor(value/100)` confirmed, but `AddExperience` **keeps the sub-100 remainder**, and **give-once is the `m_ExpList` ledger, not the trailing `01`** — every key is give-once; a `> 299` award additionally adds `Experience_Modifier`. **`CalcFeat`** returns a plain int — the *rating*, not a roll — from `Feats::FeatValue`: the sum of a **variable-length** `Base%d` list (`Soak_vs_Bashing` has three, `Damage` none, `"Armor_Rating / 2"` is a per-base `÷`), each entry the *current* value, the nine attributes floored at 1, plus per-feat code terms, a feat-level trait-effect pass, and a clamp to `MaxValue`; `PCWeighting` resolves at load to a `dicerolls.txt` index (all 23 feats → `Normal`). **`BumpStat`**'s third argument is a **repeat count**; it writes the **base** via `IncBase`, under a hardcoded `GetBase < 5` ceiling, and cannot decrement. **There is no Stamina→Health derivation** — `Max_Health` is an authored stat (`Default 100`, no formula in any `vdata` file, no trait effect targeting it) and **`Health` counts damage taken**; NPC tracks are `npctemplate*`'s literal `Max_Health`. Residue: five per-feat override object pointers, null in the image with no writer found. Full: `game_runtime.md` §3; as-built: archive | 9.4b, 9.4c | [x] |
-| RE25 | **Chargen math** — all four closed, and the whole chargen surface turned out to live in **`client.dll`**, not `vampire.dll`. **Pools:** seven per-category counters = clan-keyed `rules_tables.txt` `Subpool_*` (zero on every shipped clan bar `Subpool_Disciplines` = 1) **+** the tier table routed through `Attribute_Order_Lookups`/`Ability_Order_Lookups` — so a playable PC spends **2/1/0** attribute dots, **3/2/1** ability dots, **1** discipline dot, over a baseline the wizard *buys* with `giftxp 9000` + `vautolvl <clan>_CharGen`. **Cost:** `Current_Rating` is **pre-purchase** and is the stat's **base**; `Sell(r) ≡ Buy(r−1)`; `New` only for the 0→1 step and never for attributes; `30000` = cannot buy. **The `-1` sentinel** gates the sheet's **row filter** (`0 ≤ v < 6`), not the price — and the `Raise_Clan_Discipline`/`Raise_Other_Discipline` dual formula was **never implemented** (neither string exists in either DLL). **Banes/histories** are the generic trait-effect layer, with its operator enum shipped as data (`traiteffect.txt` `ModifierNames`). Residue: trait-effect stacking order. Full: `game_runtime.md` → "Chargen" / "Buying a dot" / "Trait effects"; as-built: archive | 9.4f | [x] |
-| RE26 | **The trait-effect accumulator + the dialogue sex gate** — closed the two open readings 9.4c would otherwise have guessed. **`CVTraitEffectQuery`** (`101F9BF0` → `101F6910` build / `101F75A0`+`101F6C50` fold / `101F69A0` finalize): one pass over `m_tEffectList` into a 68-byte accumulator, `add` summing, `*`/`/`/`Max`/`Min` each a **single winner** (higher group priority wins, equal priority → the smaller amount, `Min` included), `%` accumulating `100 - amount`, `Value` replacing the value outright, `Cost`/`BloodCost`/`Damage`/`Duration` ignored; finalize is `(value + add) * mul / div`, then `× percent / 100`, then clamp to `[min, max]` (defaults 1/1/32000/−32000/100). No shipped group authors a priority, and the shipped ops are only `+`/`-`/`Value`/`Max`/`Duration`/`Damage`/`BloodCost`. **The stat's own bounds run through the same walk** (`101FF060`/`101FF010`), so a `+1` raises a ceiling and a `Max 4` lowers it. **`AddBase` (`10200FC0`) writes the base RAW** — no max test, no clamp, gated only by `IncPredependency` which a negative delta bypasses; **`IncBase` (`10200D60`)** is the one that tests `base < effective max`. **`CDialogDependency::TestSimple` (`100E9760`)** carries a required-sex field at `+0x224` tested against `CBaseCombatCharacter::IsMale` (`10336920`) — which is what a check's `M_`/`F_` prefix is, and it also reads stat/discipline checks off `GetCurrent`, never through `Feats::FeatValue`. Full: `game_runtime.md` §3, `python_bridge.md` | 9.4c, 9.4d, 9.4f, B4 | [x] |
-| RE27 | **`SetQuest` and the quest journal** — closed the six readings 9.4d would otherwise have guessed, and corrected two premises. The Python thunk (`10199800`) **ignores its receiver**: it fetches entity index 1, so a quest always lands on the player. **The authored `"ID"` is never read** — `QuestJournal::AddCompletionState` (`10221660`) parses only `AwardMoney`/`AwardXP`/`Description`/`Event`/`Type`, and `SetQuest(title, N)` addresses the N-th state in **file order**, 1-based, over an array capped at **20**; all 435 shipped rows author `ID` equal to their position, so the two coincide on retail data. **`Type` is matched by substring** (`Q_stristr`, `incomplete` 1 / `success` 2 / `failure` 3 / `botch` 4, default `incomplete`) — `botch` is a fourth type no row authors. `CVPlayer::SetQuest` (`1017CC20`): an unknown title or a missing state **does nothing at all**; `iOrder` is assigned once on first assignment as `max(order)+1` (so the first quest of a run is 1); the re-fire gate (`10182420`) reads the **journal row**, so a repeat set awards nothing while **any other change awards, backwards included**, unless the state being left is `botch`; then **`AwardMoney` → `AwardXP` → `Event`** in that order, `Event` being `PyRun_ConsoleString` into `__main__`. The row (`10182260`) is matched **case-insensitively** by title and **replaced in place**, never appended twice. `ASSIGNED_QUEST` is stride **0x40** and carries an **unread byte at `+0x3c`** the save doc did not list, and its `idxQuestTable` is the **flat quest index**, not the file's. Full: `game_runtime.md` → "Quests"; corrections in `savegame_format.md`, `vdata-catalog.md`, `script_api.md`, `python_bridge.md` | 9.4d | [x] |
-| SKY | **Sky + ambience rework, Phases B + C (B1–B8b, C0–C5)** — landed 2026-07-26: backdrop correct + at parity with standing tests (`Elysium.Substrate.SkyCube`/`FogPack`); the whole 3D skybox split by BSP area and placed under its transform; fog from its real owners + Source's own linear distance fog as a per-primitive material term (B8b, D4 amended); the sky light at the map's own authored level (**zero on the 83 no-pair maps**); the bake measured in absolute units — direct light explains ~0% of a median lit face, the bounce floor *is* the ambient level. Open residue promoted to **3.10–3.13 + RE17**. Facts: `sky-ambience.md` | 3.6/3.7 | [x] |
+| RE24 | Sheet storage, feat/XP math, and health semantics are recovered. → `game_runtime.md` §3. | 9.4b–c | [x] |
+| RE25 | Chargen pools, costs, sentinel behavior, and trait-effect source are recovered. → `game_runtime.md`. | 9.4f | [x] |
+| RE26 | Trait-effect accumulation and dialogue sex gates are recovered. → `game_runtime.md`, `python_bridge.md`. | 9.4c–f, B4 | [x] |
+| RE27 | Quest addressing, journal replacement, and award ordering are recovered. → `game_runtime.md`. | 9.4d | [x] |
+| RE28 | Chargen close unpauses and teleports into the authored genesis exit. → `game_runtime.md`, `level_transitions.md`. | 9.4g | [x] |
+| RE29 | Entity-name matching is case-insensitive with final-`*` prefix semantics. → `entity_io.md`. | entity I/O | [x] |
+| SKY | The sky/ambience rework is complete; remaining work is tracked as 3.10–3.13 and RE17. Facts: `sky-ambience.md`. | 3.6, 3.7 | [x] |
 
 The Ghidra extraction findings behind the closed rows (the RE1/RE2/RE3/RE4 detail: addresses,
 datamap shapes, method notes) live in the owning topic docs — `python_bridge.md` and
@@ -1325,47 +1092,31 @@ datamap shapes, method notes) live in the owning topic docs — `python_bridge.m
   than the parked lump-8 bake — but VtMB's look is bounce-dominated and calibrated against
   full Lumen GI, so it risks the look. HWRT commitment unchanged; revisit if 10.3 floor
   validation fails or a sub-DXR audience becomes a goal.
-- ~~**Asset-enhancement track**~~ — **no longer an option; it is in scope** as remaster axis 2
-  (`remaster-direction.md`). Delight → super-resolve → PBR-synthesize
-  (normal/roughness/AO/envmask), as an `elysium.EnhancedTextures` A/B toggle on top of the
-  faithful world set (the toggle stays — it is the regression guard, and the faithful set stays
-  the reference forever). Tier 0 (delight + upscale) fixes real deficits for a dynamically-relit
-  engine; Tier 1 (PBR synthesis) is style-anchored enhancement; Tier 2 is out of bounds.
-  Scaffolding exists (`upscale_bench.py`, `sky_upscale.py`, `retex_dds.py`); `M_VtMB_World`'s
-  normal/envmask slots are the runtime hooks. **Budget-gated** by the 3060/12 GB floor (2×
-  default, 4× hero only; BCn+mips mandatory). Full plan + adjudication test:
-  `asset-enhancement.md`. **Sequencing is unchanged** — scheduled at P10, after the vertical
-  slice plays; it is polish on a shipped look, not a blocker.
 
 ## Risk register
 
 | Risk | Impact | Mitigation |
 |---|---|---|
 | MegaLights silently disengages (VSM fallback) | frame collapses | 0.2 check lives in the profiling routine forever; 3.1 pins it |
-| ~~Cog fails to build on 5.8~~ **(resolved)** | debug layer slips | **0.5 done: Cog builds + runs clean on 5.8** (VS 14.50, no ImPlot patch needed); fallback (VesCodes/ImGui + hand-rolled windows) unused |
-| ~~Level scripts exceed the mini-interpreter subset~~ **(resolved)** | scripting rework | **5.5 + 9.3a done: CPython 2.7.18 is embedded and is the map-load default host**, importing the map's own `worldspawn.levelscript` — retail's scripts run as written |
 | Embedded VM fails to start in a packaged build | whole scripting surface silently error-to-false | 9.3a: `MakePreferredScriptHost` checks the VM actually started and falls back to the expr host, logging a warning, rather than leaving every eval Void |
 | Chaos kinematic movers push/block poorly | doors feel wrong | 4.1 prototypes one door first |
-| Floor perf unproven (no 3060 on hand) | late surprise | look-gates until 10.3; lump-8 bake parked as contingency; Lumen Lite noted as a cheaper option (see Options) |
+| Floor perf unproven (no 4060/16 GB card on hand) | late surprise | validate 1440p/60 at 10.3; lump-8 bake remains a parked contingency; Lumen Lite is the cheaper option |
 | Tutorial-only calibration bias | rework on other maps | 0.3 second map early; all calibration provisional until 10.1 |
 | Sidecar space drift (legacy non-`UE_` exporter leftovers) | subtle geometry/logic bugs | 0.4 audit before any new consumer |
-| Save determinism erodes | broken saves late | standing rule since P1: no engine timers, own serializable structs |
+| Save determinism erodes | broken saves late | no engine timers; use owned serializable structs |
 | Legal posture | project-ending | bring-your-own-game holds; nothing game-sourced committed — standing constraint on every task |
 | `GameInputWindows` is a beta plugin with a redist prerequisite | PlayStation pads regress or fail to enumerate on a player's machine | 10.6e authors device configs against the documented VID/PID set and keeps the mapping in `Config/DefaultGameInput.ini` (data, not code); Xbox/XInput remains the fallback path, so a GameInput failure degrades to "PS pads need Steam Input" rather than to no gamepad; `GameInputRedist.msi` is tracked as a 10.5 packaging prerequisite |
 | Asset enhancement drifts off-style | silent look regression | `asset-enhancement.md` adjudication test + `elysium.EnhancedTextures` A/B toggle keeps the faithful set as reference; per-family review, not per-texture |
 | Modern UI loses VtMB's voice (reads generic/AAA) | the remaster stops feeling like VtMB | 8.6 keeps the original's structure, palette and iconography and re-skins only the craft; presentation test applied per screen; `m0_menu_build.md` + extracted `.res`/scheme (PL8) are the intent reference every screen is checked against |
-| "Polish" leaks into the logic layer | silent divergence from retail behaviour, unfindable later | `remaster-direction.md`'s governing rule: RE first, owner's call, dated decision-log entry recording faithful *and* chosen behaviour; default is reproduce, and layer assignment happens before the work, not after |
+| "Polish" leaks into the logic layer | silent divergence from retail behavior | `remaster-direction.md`: RE first, owner call, and faithful/chosen behavior recorded once in the owning topic doc; default is reproduce |
 | No classic-UI mode to A/B against | a UI regression has no reference | the original's structure is captured as data (PL8) and in `m0_menu_build.md`, so screens are checked against intent rather than pixels; the *world* keeps its faithful A/B path unchanged |
-| ~~The player stays a pawn + a sheet struct while 9.4/9.8/9.9/9.10/9.5 land on it~~ **(resolved)** | five systems built against a shim, then a five-way migration with saves already in the wild | **11.4 landed ahead of all five**: the sheet is on `FElysiumCombatCharacter`, the durable half is `FElysiumPlayerRecord`, and the shape is VtMB's own (`savegame_format.md`, `script_api.md`) — a port, not an invention |
-| ~~Modal screens fight over input mode (three independent owners)~~ **(resolved)** | the mouse is unusable in some screen order; Cog can make the game unclickable | closed by **11.5**: one arbiter (`UElysiumInputSubsystem`) is the module's only `SetInputMode` caller, CommonUI's router is declined explicitly, and `Elysium.Substrate.InputScopes` asserts every ordered screen pair restores and balances |
-| P12's facial RE was unknown-duration work that **blocks PP2 in full** (owner call: eyes + lipsync gate the cinematic) | the playable path stalls behind RE | **Retired as a risk — front-loading worked on both halves.** RE19/RE20/PL9/PL10 all closed (detail: P12, `docs/facial_animation.md`). The residual is a *scope* question, not an RE one: no eyeball data was ever authored, so 12.4's look-at half is an owner call, tracked on the task |
 | A shots baseline silently invalidates across a re-bake or content rebuild (measured: up to ~10 mean on bounce-dominated vantages from **byte-identical** inputs) | a look regression hides in toolchain noise — or toolchain noise reads as a regression | B6's measured rule: re-baseline after any bake/content change; A/B a small effect as two runs over one fixed asset set (a cvar A/B), never across a rebuild |
 
 ## Traceability (old plan IDs → this doc)
 
 | Old | Here |
 |---|---|
-| M0 | Done foundation |
+| M0 | Foundation baseline |
 | M1.1 Source movement / M1.2 materials / M1.3 prewarm / M1.4 texlights | 4.7 / 7.4 / 3.8 / 3.4 |
 | M1 polish (grade, sky orientation, A/B toggles, repo hygiene) | 3.7, 0.7 |
 | M2 (props + decals done; water, coronas, A/B) | done / done / 7.3 / 7.1 / 7.8 |

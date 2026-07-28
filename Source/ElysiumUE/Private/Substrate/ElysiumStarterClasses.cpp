@@ -654,7 +654,7 @@ static FElysiumClassRegistrar GRegInfoLandmark(
 // the name the content actually wires: 88 outputs across the exported maps name `ChangeNow` and not
 // one names `ChangeLevel`. Genesis's exit is one of them (`firetrans` -> `boogieout,ChangeNow`, the
 // wire the chargen wizard's `teleport_player firetrans` lands on). `ChangeLevel` stays bound to the
-// same handler because our own ChangeMap native emits it.
+// same handler as a legacy alias; scripted ChangeMap and shipped entity wires both emit ChangeNow.
 static FElysiumClassRegistrar GRegChangeLevel(
 	TEXT("trigger_changelevel"), FName(TEXT("CBaseTrigger")), &MakeChangeLevel,
 	[](FElysiumClassDesc& D)

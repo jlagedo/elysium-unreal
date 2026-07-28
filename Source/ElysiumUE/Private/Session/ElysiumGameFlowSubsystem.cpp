@@ -232,26 +232,20 @@ void UElysiumGameFlowSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	// The theatre-opening replay door. `sp_theatre`'s opening is a single trigger_once the player
 	// spawns straight onto at the `newgame` landmark, so once it has fired, re-entering the map
 	// correctly finds it spent — a fire-once trigger staying fired is faithful, and the map
-	// snapshot is right to replay it. This is the dev way back in: seed a run exactly as New Game
-	// does (the chain reads pc.clan/pc.IsMale in chooseSire/castUnderstudy and expects
-	// Story_State=-4), and forget the theatre's map state so the whole embrace chain runs again.
+	// snapshot is right to replay it. This is the dev way back in: seed the same mock pre-chargen
+	// player as a parameterless New Game (the chain reads pc.clan/pc.IsMale in
+	// chooseSire/castUnderstudy and expects Story_State=-4), and forget the theatre's map state so
+	// the whole embrace chain runs again.
 	//
 	// The forget is a request consumed on arrival, not a clear here: NewGame's travel tears the
 	// current map down at end of frame, and that teardown re-freezes it.
 	ConsoleObjects.Add(Console.RegisterConsoleCommand(
 		TEXT("elysium.newgame_ttd"),
-		TEXT("elysium.newgame_ttd [clan] [m|f] — theatre debug: new run entered at sp_theatre's "
+		TEXT("elysium.newgame_ttd — theatre debug: new run entered at sp_theatre's "
 			"`newgame` landmark with the map's state forgotten, so its opening chain fires again"),
-		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
+		FConsoleCommandDelegate::CreateWeakLambda(this, [this]()
 		{
 			FElysiumNewGameRequest Request;
-			Request.Clan = (Args.Num() > 0) ? FElysiumSheet::ClanFromName(Args[0]) : 0;
-			if (Args.Num() > 0 && Request.Clan == 0)
-			{
-				UE_LOG(LogElysiumFlow, Warning,
-					TEXT("elysium.newgame_ttd: unknown clan '%s' — using the default"), *Args[0]);
-			}
-			Request.bMale = !(Args.Num() > 1 && Args[1].StartsWith(TEXT("f"), ESearchCase::IgnoreCase));
 			Request.EntryPoint = TEXT("sp_theatre@newgame");
 
 			UGameInstance* GI = GetGameInstance();
@@ -639,9 +633,19 @@ void UElysiumGameFlowSubsystem::SetSkipIntro(bool bSkip)
 
 namespace ElysiumStory
 {
-	bool IsSkippedIntroLeg(bool bSkip, const FString& Map)
+	bool ResolveIntroSkip(bool bSkip, FString& Map, FString& Landmark,
+		FVector& Offset, bool& bHasYaw)
 	{
-		return bSkip && Map.Equals(TheatreMap, ESearchCase::IgnoreCase);
+		if (!bSkip || !Map.Equals(TheatreMap, ESearchCase::IgnoreCase))
+		{
+			return false;
+		}
+
+		Map = TutorialMap;
+		Landmark = TutorialLandmark;
+		Offset = FVector::ZeroVector;
+		bHasYaw = false;
+		return true;
 	}
 }
 
@@ -674,8 +678,8 @@ bool UElysiumGameFlowSubsystem::NewGame(const FElysiumNewGameRequest& Request)
 		return false;
 	}
 
-	// Clan 0 means "ask" — chargen (9.4). Until it exists, the mock default stands in, which is what
-	// the boot path and the MCP tool already do.
+	// Clan 0 means "ask". Seed a valid pre-chargen Brujah player; the genesis wizard edits that
+	// existing player and overwrites the clan/sex when it commits.
 	const int32 Clan = (Request.Clan == 0) ? 2 : Request.Clan;
 
 	// BeginNewGame clears `G`, the quest map and the sheet, then writes the flags that survive

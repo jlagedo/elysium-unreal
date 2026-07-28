@@ -379,6 +379,10 @@ private:
 	// 8.4 phys_hinge constraints (built on the map actor by the leaf's PostSpawn): weak refs held so
 	// a world rebuild on a surviving actor destroys them, like PropBodies.
 	TArray<TWeakObjectPtr<UPhysicsConstraintComponent>> Constraints;
+	// UE may report the same overlap once from its movement update and once from the explicit
+	// post-teleport reconciliation. Keep touch edges idempotent at the engine-neutral terminus;
+	// the packed key is (brush index, activator index), sufficient within this world's epoch.
+	TSet<uint64> ActiveTouches;
 	int32 TouchBeginCount = 0;
 	int32 TouchEndCount = 0;
 

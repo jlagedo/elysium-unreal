@@ -130,6 +130,10 @@ private:
 	TObjectPtr<class UElysiumChargenPopup> ChargenPopup;
 	TSharedPtr<struct FElysiumWizRun> ChargenRun;
 	TSharedPtr<struct FElysiumChargenState> PendingChargen;
+	// The chargen host alone holds the world. The in-game Sheet/Quest/Info host shares the same
+	// close function, so this latch is the boundary that keeps those screens from unpausing or
+	// teleporting the player when they close.
+	bool bChargenHold = false;
 
 	EElysiumMenuMode CurrentMode = EElysiumMenuMode::Main;
 	FElysiumInputScopeHandle MenuScope;

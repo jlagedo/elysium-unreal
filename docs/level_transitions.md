@@ -37,6 +37,8 @@ The chain, all via landmarks:
 ```
 New Game
   → map sp_genesisdevice_1            (chargen; levelscript "demo")
+  → wizard close: v_unpause + teleport_player firetrans
+  → firetrans.OnStartTouch → boogieout,ChangeNow
   → trigger_changelevel "boogieout"   → sp_theatre        landmark newgame
   → walk_out_cam_k final keyframe:
       tutorial_change,ScriptUnhide + controls,Deactivate + fade_to_tutorial,Fade
@@ -44,21 +46,25 @@ New Game
                                        → sp_tutorial_1     landmark tutorial
 ```
 
-**`sp_genesisdevice_1` is a launcher, not a place.** It is 13 entities in a 548×576×468 box with an
-empty `.props` and a single `light`; nothing in it is ever seen, because the wizard covers the screen
-and its backdrop is the painted street bitmap (`vtmb-ui.md`), not the map. Three entities carry the
-whole map:
+**Genesis exit.** `game_runtime.md` owns the wizard and character-state behavior. For travel,
+both close paths issue `v_unpause` then `teleport_player firetrans`; that volume fires
+`boogieout.ChangeNow`, entering `sp_theatre @ newgame`. The elevated spawn cannot reach the exit
+volume by walking, so the teleport is the only authored route into the transition.
 
-- `trigger_once "newplayer"` — fires `G.Story_State = -5` and `ccmd.createplayer`, then `Toggle`s
-  itself off. `ccmd.<name>` is the scripts' console escape hatch, so `createplayer` is a
-  **`client.dll` console command** that raises `VCharWizardUI`.
-- `trigger_multiple "firetrans"` — `boogieout,ChangeNow` once the wizard is done.
-- `trigger_changelevel "boogieout"` — `sp_theatre` via landmark `newgame`.
+## Intro-skip divergence
 
-The rest is the standard furniture every map carries: `events_player` (spawned disabled),
-`events_world`, `logic_auto` → `unhidePlus()`, a 5-second `logic_timer` → `IsIdling()`, an
-`ambient_soundscheme`, and the two dialogue-discipline particle params. So reproducing genesis is
-reproducing the wizard; the map itself needs nothing.
+VtMB exposes the wizard footer's `Skip Intro` state as the client-side `vchar_skip_intro` ConVar,
+but the binary reader that applies it is not yet recovered. The separate `vskip_intro`
+`vampire.dll` ConCommand (“Skips the Intro Scene”) is not that reader; the Unofficial Patch calls it
+only for its clans 9–11 from `unhidePlus()`.
+
+**Divergence — owner call.** New Game always plays genesis. With `elysium.SkipIntro 1`, the one
+travel funnel rewrites only the authored `sp_theatre @ newgame` request to
+`sp_tutorial_1 @ tutorial`. It drops the carried offset and yaw because genesis's `newgame`
+displacement has no meaning relative to the tutorial's different landmark, making the rewrite the
+same direct-entry placement used by an explicit landmark load. `elysium.SkipIntro 0` preserves the
+authored theatre request with no fallback. `sp_theatre` is exported but not baked; the theatre act
+remains a later playable-path step.
 
 The theatre→tutorial handoff is driven **entirely by entities**. `theatre.py`'s
 `tutorialLoad()` (`ChangeMap(2.5, "tutorial", "tutorial_change")`) is a parallel/legacy

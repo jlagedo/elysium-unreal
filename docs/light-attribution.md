@@ -216,7 +216,7 @@ Recorded so these are not re-derived:
   extent, 18 of 25 grid cells); the other three carry no such check. A survey made with the
   reviewed mark records coverage as data — score it against `reviewed[]` only.
 
-## Current classifier and its scores
+## Classifier and measured scores
 
 ```
 PROTECTED  the nearest surface emits                          -> keep
@@ -236,13 +236,9 @@ Across ten maps: 1,220 protected (60%), 409 fill (20%), 372 review (18%).
 `hw_609_1` is the least trustworthy unlabelled result — 45% of its lights land in review, meaning
 the rule largely abstains there.
 
-**The one open disagreement is `sm_hub_1`.** 249 of its lights touch nothing emissive and ~90% of
-them were kept by hand — the only map where the classifier and the hand verdict genuinely
-disagree, holding 104 of the 409 fill candidates. `sm_hub_1`'s zero-`light_environment` status and
-its consequence for the SkyLight are `sky-ambience.md`'s finding in full (C1–C5, 2026-07-26); for
-this classifier, what matters is that the sky term got *smaller*, not larger, so the fill class is
-more load-bearing here, not less. Open-thread detail (the shortlist, the untested load-bearing-fill
-hypothesis, next surveys): `docs/roadmap.md`.
+**The unresolved disagreement is `sm_hub_1`.** Its hand survey retains many non-emissive lights
+that the classifier ranks as fill. The map's authored sky term is documented in
+`sky-ambience.md`; the classifier question and next work remain in `roadmap.md`.
 
 **No classifier-driven change to the light rig is justified yet.** Hand-authored curation is
 decided and running; an *automatic*

@@ -1,6 +1,7 @@
 #include "ElysiumMapSubsystem.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "Debug/ElysiumMoveRun.h"
 #include "Debug/ElysiumProbeRun.h"
@@ -228,7 +229,19 @@ bool UElysiumMapSubsystem::TravelForMenu(const FString& Map)
 void UElysiumMapSubsystem::RequestLandmarkTravel(const FString& Map, const FString& Landmark,
 	const FVector& PlayerOffset, float PlayerYaw)
 {
-	if (Map.IsEmpty())
+	FString DestMap = Map;
+	FString DestLandmark = Landmark;
+	FVector DestOffset = PlayerOffset;
+	bool bHasYaw = true;
+	if (ElysiumStory::ResolveIntroSkip(UElysiumGameFlowSubsystem::ShouldSkipIntro(),
+		DestMap, DestLandmark, DestOffset, bHasYaw))
+	{
+		UE_LOG(LogElysiumMap, Log,
+			TEXT("intro skip: %s @ %s -> %s @ %s (dropping source offset/yaw)"),
+			*Map, *Landmark, *DestMap, *DestLandmark);
+	}
+
+	if (DestMap.IsEmpty())
 	{
 		UE_LOG(LogElysiumMap, Warning, TEXT("landmark travel requested with empty map name"));
 		return;
@@ -241,15 +254,18 @@ void UElysiumMapSubsystem::RequestLandmarkTravel(const FString& Map, const FStri
 	// Fill the placement the destination map will consume (dest = landmark origin + offset, keep the
 	// player's view yaw). Travel below won't overwrite it (its direct-entry fallback only fires when
 	// NextLandmarkSpawn is empty), then OpenLevels — safe from inside the tick (teardown is deferred).
-	NextLandmarkSpawn = FLandmarkSpawn{ true, Landmark, PlayerOffset, PlayerYaw, /*bHasYaw*/ true };
+	NextLandmarkSpawn = FLandmarkSpawn{
+		true, DestLandmark, DestOffset, PlayerYaw, bHasYaw
+	};
 	UE_LOG(LogElysiumMap, Log, TEXT("landmark travel -> %s @ %s (offset %s)"),
-		*Map, *Landmark, *PlayerOffset.ToString());
+		*DestMap, *DestLandmark, *DestOffset.ToString());
 
-	if (!Travel(Map, Landmark))
+	if (!Travel(DestMap, DestLandmark))
 	{
 		// Destination map isn't exported — drop the placement so it can't leak onto a later travel.
 		NextLandmarkSpawn = FLandmarkSpawn{};
-		UE_LOG(LogElysiumMap, Warning, TEXT("landmark travel to '%s' failed (map not exported)"), *Map);
+		UE_LOG(LogElysiumMap, Warning,
+			TEXT("landmark travel to '%s' failed (map not exported)"), *DestMap);
 	}
 }
 
@@ -353,4 +369,3 @@ TArray<FString> UElysiumMapSubsystem::ExportedMaps() const
 	Names.Sort();
 	return Names;
 }
-

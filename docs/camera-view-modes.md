@@ -341,14 +341,8 @@ addresses read out of the PE.*
 
 ## 6. Reproducing it on Unreal 5.8
 
-Built at roadmap **11.7**. What runs:
-`FElysiumCameraWeights` + `FElysiumCameraShotStack` (`Public/ElysiumCameraSolve.h`, plain C++, no
-UObject) carry the driver and the scripted channel; `UElysiumCameraComponent` — a `UCameraComponent`
-subclass — solves the boom and applies it; `AElysiumPawn::CalcCamera` is the apply point;
-`ElysiumCameraShots.{h,cpp}` reads `vdata/camerashots/` and `FElysiumCameraDirector` on the map actor
-resolves a shot's anchors against live entities. The sections below are the design that produced it
-and stay the reference for the parts still open (§ *Not yet recovered*, the feed camera, the
-`Start`→`End` shot animation 12.x owns).
+Implementation status is `roadmap.md` 11.7. The sections below own the Unreal design and the
+remaining RE questions; source owns the current type inventory.
 
 ### Constraints this project imposes
 
@@ -356,9 +350,9 @@ and stay the reference for the parts still open (§ *Not yet recovered*, the fee
   (root `CLAUDE.md`). That rules out any asset-authored camera solution.
 - **A console/cvar bridge already exists** (`ccmd`/`cvar`, roadmap 9.3b), so VtMB's cvar names can
   be reproduced 1:1 and the shipped `cfg/` + the patch's `user.cfg` aliases keep working verbatim.
-- **The pawn's camera sits at `Z = 28 u` above the hull centre** with `bUsePawnControlRotation = true`
-  (`Source/ElysiumUE/Private/Player/ElysiumPawn.cpp`); the boom hangs off that same point. There is no
-  player mesh yet (roadmap 8.11), so the fade band and `ShouldDrawLocalPlayer` have nothing to drive.
+- **One eye-point contract.** The boom hangs from the pawn's camera origin; player-model
+  visibility is driven through the body seam in `runtime-architecture.md`, not by a second
+  camera or a camera-owned mesh.
 - **Fully dynamic renderer**, HWRT Lumen + VSM, static lighting disabled
   (`docs/rendering-perf.md`).
 - **Feel is reproduce-first, then polish by explicit owner call** (`docs/remaster-direction.md`).

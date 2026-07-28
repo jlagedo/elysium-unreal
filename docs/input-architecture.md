@@ -26,9 +26,8 @@ and cannot be bound by a player. The separation is the engine's own, not a conve
 
 ## The action model
 
-VtMB has no action abstraction — an action *is* a console command string, and `kb_act.lst` is the
-whitelist of which strings the options UI may bind (`controls.md` § "What is bindable"). That maps
-onto Enhanced Input directly, and the mapping is what keeps ~64 actions tractable.
+VtMB's command-string binding model and bindable whitelist are `controls.md`. The Unreal path
+preserves that identity while mapping it onto Enhanced Input.
 
 **The strings already exist.** `FElysiumCommands` (roadmap 11.6, `runtime-architecture.md` §8.2)
 declares the whole inventory by name with its `+`/`-` pairs, and `ElysiumBinds::Defaults()` carries

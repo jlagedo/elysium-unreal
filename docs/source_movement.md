@@ -107,8 +107,8 @@ wandering jump height. Measurements are `move.bat` + `tools/move_diff.py --hz 60
 | `v_centerspeed` / `v_centermove` | 500 / 0.15 | auto-center |
 | `cl_pitchspeed` / `cl_yawspeed` | 225 / 210 | keyboard look, °/sec |
 
-Third-person (`z` = `togglecamera`): `c_mindistance` 30, `c_maxdistance` 200,
-`c_minpitch` 0, `c_maxpitch` 90, `c_minyaw`/`c_maxyaw` ±135.
+Third-person command, cvar, transition, and solver behavior is canonical in
+`camera-view-modes.md`; this section retains only first-person view and movement tuning.
 
 **FOV is horizontal at 4:3.** Source is Hor+: the vertical angle is what holds at
 every aspect, and a wider window shows more horizontally. Converting to a vertical

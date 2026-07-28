@@ -156,13 +156,13 @@ there would silently change what `profile.bat` and `shots.bat` measure. Retune w
 The Canvas HUD draws with the world and appears either way — which is why a UI-free capture can look
 convincing (the reticle is there) while every Slate widget is silently missing.
 
-**Open:** the shots harness therefore cannot see the UI layer. When 8.9 puts the HUD on this stack,
-either it grows UI-inclusive vantages or HUD regressions go unwatched.
+UI regression captures must request `bShowUI`; tracker work for HUD/UI coverage lives in
+`roadmap.md` 8.9.
 
 ## 7. Screen inventory
 
-Current build status for every screen (chargen, load/save, options + accessibility, the
-sign/popup re-skin, the HUD, the dialogue UI): `docs/roadmap.md`.
+Screen implementation status lives only in `roadmap.md`. The entries below record the shared
+design shape and constraints, not a second completion ledger.
 
 - **Main menu** — **two layouts, one widget**, A/B'd live by `elysium.MenuLayout`. Labels resolve
   `VMainMenu_BTN_*` against the authored table with retail English as the fallback in both, which is

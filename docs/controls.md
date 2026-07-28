@@ -148,9 +148,8 @@ Camera cvars: `cam_snapto`, `cam_idealyaw`, `cam_idealpitch`, `cam_idealdist` (8
 `c_mindistance`/`c_maxdistance`/`c_orthowidth`/`c_orthoheight`, the spring damper
 `cdamp_on`/`cdamp_hookesconstant`/`cdamp_hookesconstantwall`/`cdamp_springlength`/`cdamp_maxdist`,
 and the scripted-camera families `camfeed_*`, `camdead_*`, `camseduct_*` (feeding, death and
-seduction shots). `camera_prefs` (default `7`) and `camera_weaponswitch` (`1`) are archived
-player preferences; **the bit semantics of `camera_prefs` are not RE'd** — treat the value as
-opaque until decompiled.
+seduction shots). `camera_prefs` and `camera_weaponswitch` are archived player preferences;
+their recovered bit semantics and runtime behavior are canonical in `camera-view-modes.md`.
 
 ### UI, game and system
 
@@ -167,6 +166,15 @@ opaque until decompiled.
 | `toggleconsole` | engine | console |
 | `bind`, `unbind`, `unbindall`, `alias`, `exec`, `echo`, `incrementvar`, `writeconfig` | engine | the console/config verbs |
 | `vstats`, `vdmg`, `giftxp`, `faith`, `blood`, `god`, `noclip`, `skill`, `player_sequence`, `infobar_message` | vampire | gameplay/debug verbs the patch's aliases call |
+
+Several real commands are content/UI machinery rather than player binds:
+
+| Command | Owner | Effect |
+|---|---|---|
+| `teleport_player <targetname>` / `<x> <y> <z>` | vampire | move the player to a named entity or coordinate; missing names report `Could not find entity named %s` |
+| `v_setpause`, `v_unpause` | client | take/release the character-panel modal hold |
+| `vskip_intro` | vampire | skip the current intro scene; not the `vchar_skip_intro` chargen-footer ConVar |
+| `createplayer` | client | show `CharEditPanel` in character-creation mode |
 
 **`vphysicshand` is a dead bind.** Both `default.cfg` files and the patch's `kb_def.lst` bind
 `p` to it, but the literal appears in no shipped binary and in no level script — the physics-hand item

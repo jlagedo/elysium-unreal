@@ -1,5 +1,8 @@
 #include "ElysiumCommands.h"
 
+#include "ElysiumEntityWorld.h"
+#include "ElysiumWorldServices.h"
+
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumCmd, Log, All);
 
 const TCHAR* LexToString(EElysiumCmdKind Kind)
@@ -29,6 +32,50 @@ const TCHAR* LexToString(EElysiumCmdGroup Group)
 FName ElysiumCommands::Canonical(const FString& Word)
 {
 	return FName(*Word.ToLower());
+}
+
+bool ElysiumCommands::TeleportPlayer(FElysiumEntityWorld& World, const FString& Args)
+{
+	IElysiumEmbodiment* Body = World.Embodiment();
+	if (!Body)
+	{
+		UE_LOG(LogElysiumCmd, Warning, TEXT("teleport_player: no world"));
+		return false;
+	}
+
+	FVector CurrentOrigin = FVector::ZeroVector;
+	float KeepYaw = 0.0f;
+	Body->GetPlayerOrigin(CurrentOrigin, KeepYaw);
+
+	TArray<FString> Tokens;
+	Args.ParseIntoArrayWS(Tokens);
+	if (Tokens.Num() == 3)
+	{
+		const FVector Destination(
+			FCString::Atod(*Tokens[0]), FCString::Atod(*Tokens[1]), FCString::Atod(*Tokens[2]));
+		Body->TeleportPlayer(Destination, KeepYaw);
+		UE_LOG(LogElysiumCmd, Display, TEXT("teleport_player -> %s"), *Destination.ToString());
+		return true;
+	}
+	if (Tokens.Num() != 1)
+	{
+		UE_LOG(LogElysiumCmd, Warning,
+			TEXT("teleport_player <targetname> | teleport_player <x> <y> <z>"));
+		return false;
+	}
+
+	const FElysiumEntity* Destination = World.FindByName(Tokens[0]);
+	if (!Destination)
+	{
+		// The image's own message, verbatim.
+		UE_LOG(LogElysiumCmd, Warning, TEXT("Could not find entity named %s"), *Tokens[0]);
+		return false;
+	}
+
+	Body->TeleportPlayer(Destination->Origin, KeepYaw);
+	UE_LOG(LogElysiumCmd, Display, TEXT("teleport_player -> %s at %s"),
+		*Tokens[0], *Destination->Origin.ToString());
+	return true;
 }
 
 // =====================================================================================

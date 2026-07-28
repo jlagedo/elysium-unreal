@@ -1,8 +1,7 @@
 # Asset enhancement — code-driven remaster of VtMB's own art
 
-**Remaster axis 2** (`remaster-direction.md`) — in scope, **scheduled at P10**, after the
-vertical slice plays: it is polish on a shipped look, not a blocker. Scaffolding already exists
-in `tools/` (see "What exists today").
+**Remaster axis 2** (`remaster-direction.md`). Work and sequencing are tracked only in
+`roadmap.md` P10.
 
 ## North star
 
@@ -26,15 +25,8 @@ richer surfaces just respond to it — they don't redefine it).
 
 ### The adjudication test
 
-Every candidate enhancement answers one question:
-
-> **Does it serve VtMB's art direction (or fix a technical deficit that fights it), or is it
-> inventing/overriding an artist decision?**
-
-Serve or fix → in. Invent or override → out. VtMB's direction is specific and load-bearing:
-**gothic-punk, grimy, wet, moody, deliberately un-glamorous.** "Higher fidelity" that
-de-grimes, glamorizes, or chromes the world fails the test even when it is technically
-"better." Grime *is* the style.
+Every candidate uses `remaster-direction.md`'s presentation test. The tiers below apply that
+single project-wide rule to surfaces; they do not define a second version of it.
 
 ### Three tiers
 
@@ -84,29 +76,6 @@ recipe and the guard against the generic-upscaler failure mode
   subtle; VtMB's forms live in the mesh, not the texture.
 - **Keep the grime.** Any pass that cleans, brightens, or evens-out a surface has failed the
   adjudication test regardless of "fidelity."
-
-## What exists today (the seam is already half-built)
-
-The offline half already has the scaffolding this track *formalizes and extends*:
-
-- **`tools/upscale_bench.py`** — spandrel runner (ESRGAN / RealPLKSR / DAT / Compact / HAT /
-  SPAN from one `.pth`/`.safetensors`). Already **alpha-aware** (splits RGB/alpha, upscales
-  each — VtMB PNGs carry real RGB under transparent pixels + a smooth mask), **block-aware**
-  (prefers compression-aware models — Source shipped DXT, so clean-photo models ring on block
-  edges), and **`--seamless`** (wrap-pad → upscale → crop so tiling textures still butt
-  cleanly). Emits contact sheets for eyeball A/B before a bulk run.
-- **`tools/sky_upscale.py`** — skybox-aware upscale (ring-composite the four horizon faces →
-  one 360° strip → upscale once → re-slice, so no per-face seam invention). Writes
-  `out/<map>/tex_hi/`.
-- **`tools/retex_dds.py`** — emits `.dds` siblings preserving the original DXT blocks + mip
-  chain (smaller uploads, real mips, bit-identical texels). The runtime prefers DDS; PNG stays
-  the fallback and covers generated maps with no `.tth` source (`_ke` self-illum, `_envmask`,
-  normals).
-
-The runtime half is ready too: `M_VtMB_World` is a parameter-slot master material whose growth
-path (`rebuild-strategy.md` → Master materials) already plans **bump/normal, envmap mask +
-cube, WVT second layer**. PBR-synthesis outputs plug into those slots — no new master material,
-just bind the extra maps and toggle the features on.
 
 ## Integration plan
 
@@ -161,17 +130,14 @@ The perf floor and its VRAM budget are `CLAUDE.md` → "Target hardware" and
 
 ## Legal posture
 
-Load-bearing: enhanced textures are **derivative works of the user's own game assets**, so
-they live under gitignored, regenerable `tools/out/` exactly like every other decoded
-intermediate. Nothing enhanced is ever committed or distributed. Bring-your-own-game holds
-(`CLAUDE.md` → "Bring-your-own-game").
+Enhanced outputs are game-derived, so they remain under gitignored, regenerable `tools/out/`.
+The general bring-your-own-game rule and rationale are `rebuild-strategy.md`.
 
 ## Non-texture modernizations (pointer, not scope)
 
-Other "fix a technical deficit" upgrades are *code*, not asset passes, and are tracked
-elsewhere: dynamic GI (done — `rendering-perf.md`), TSR upscaling (shipped), Source-movement
-correctness (roadmap 4.7), native spatial audio (P6). This doc is scoped to the **offline
-asset-enhancement track** only.
+Other "fix a technical deficit" upgrades are code, not asset passes: dynamic GI is owned by
+`rendering-perf.md`, movement by `source_movement.md`, and audio by `audio_pipeline.md`.
+This doc is scoped to the offline asset-enhancement track only.
 
 ## Sources
 

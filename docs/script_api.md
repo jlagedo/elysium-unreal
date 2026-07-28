@@ -104,6 +104,22 @@ In this rebuild the split is structural: neither name may enter the shared nativ
 against the real `vamputil.py` the CPython host imports, while the qualified spelling reaches the
 datamap input through the ordinary class-chain walk.
 
+## The console escape hatch
+
+`ccmd.<name>` sends a script call out through the client console, so console commands that level
+scripts invoke are part of the action surface even though they are not Python methods. The opening
+path establishes these commands directly from the binaries:
+
+| Name | Registered by | Contract |
+|---|---|---|
+| `teleport_player <targetname>` / `<x> <y> <z>` | `vampire.dll` | moves the player to a named entity or coordinate; a missing name prints `Could not find entity named %s` |
+| `v_setpause` | `client.dll` | takes the client-side modal pause used by the character wizard |
+| `v_unpause` | `client.dll` | releases that pause; `CharEditPanel` close executes it before the genesis teleport |
+| `vskip_intro` | `vampire.dll` | skips the current intro scene; distinct from the wizard footer's `vchar_skip_intro` ConVar |
+
+`vskip_intro` is not the character wizard's ordinary skip switch. The Unofficial Patch reaches it
+only from `unhidePlus()` for clans 9–11; the reader of `vchar_skip_intro` remains unrecovered.
+
 ## Module globals — table `0x1058f7a8`, 11 entries
 
 Doc strings are verbatim from `ml_doc`; they are the contract the scripts rely on.
@@ -349,10 +365,7 @@ Two consequences for the port:
 no `has_key`, which is why `G.has_key` falls past `Py_FindMethod` into the flag dict and reads
 integer `0`. The corpus writes **1,226 distinct `G` flags across 3,782 assignments**.
 
-The two-entry file-like table (`0x1058f620`) — `read` (`1019bba0`), `readline` (`1019bc80`) — is
-the **`IRestore` buffer adapter**: `read` bounds its request against the restore buffer's
-remaining span and raises `IOError` carrying the message `"py_obj->irestore->ReadData read …"`.
-It is the file object `cPickle.load` reads `G` back through, the mirror of the `ISave` adapter
-`CPython_SaveRestoreBlockHandler::Save` pickles into. 9.5 rebuilds both ends.
+The restore adapter is binding/save mechanism, not an action name; its recovered contract is
+`python_bridge.md` → "Reproduction."
 
 Implementation priority and status for this action inventory: `docs/roadmap.md`.

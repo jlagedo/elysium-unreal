@@ -1,18 +1,13 @@
 # The `.uasset` bake: the map's look as native Unreal content
 
-**Adopted** — (cont. 6), roadmap 0.9. This document is the pipeline's reference: the split, the
-six stages, and the engine facts pinned down, measured on `sp_tutorial_1`; the architecture now
-carries every exported map.
+This document owns the bake/runtime split, the six offline stages, and the UE 5.8 engine facts
+that require the map's look to be native content. A fast runtime `UStaticMesh` lacks the editor
+build's fitted Lumen cards, Nanite data, distance fields, LODs, and BC texture compression; the
+offline bake supplies those representations.
 
-The Lumen surface-cache spike (its engine facts now in `rendering-perf.md`) ended on a negative result: runtime-built
-meshes can be given card representations, but hand-fitting them offline into a `.cards` sidecar
-bought no measurable quality. The wall behind that result is that a runtime `UStaticMesh` built with
-`BuildFromMeshDescriptions(bFastBuild)` can never have what the editor build produces — DDC-fitted
-surfel cards, Nanite, distance fields, real LODs, BC7/BC5 compression.
-
-This spike stops fighting that wall. `sp_tutorial_1` is decoded once, offline, into real `.uasset`
-content and a real `.umap`, and **the game runs on it**: `play.bat` opens the baked level and every
-system the project has runs against it. There are no A/B flags.
+Each exported map produces a real `.umap` and native assets under the gitignored
+`/ElysiumBaked` mount. Gameplay opens that level directly and adopts it; there is no second
+runtime-rendering path for the baked look.
 
 ## The split
 
@@ -91,35 +86,16 @@ world 'sp_tutorial_1' live: 1868 entities (185 brush bodies), epoch 1
 loaded sp_tutorial_1 in 2.50s
 ```
 
-## What it changes
+## Runtime consequences
 
-**Lumen surface-cache coverage is total and free.** `r.Lumen.Visualize.CardPlacement 1` shows fitted
-cards on every wall, floor, prop and ornament. This is the entire `.cards` sidecar from the previous
-spike — the offline surfel fit, the content hashing, the `-ElysiumCards` harness — replaced by the
-DDC doing its normal job. That harness is deleted.
-
-**The sky finally lights the world.** The sky light was `SLS_SpecifiedCubemap` with *no cubemap*,
-which resolves to a flat constant ambient — unshadowed fill reaching every interior through solid
-walls. It now takes the map's real sky cubemap with the lower hemisphere black, so Lumen does real
-sky occlusion and an interior is dark because it cannot see the sky. Epic's own wording is the
-argument: *"A Sky Light should be used instead of the Ambient Cubemap to represent the sky's light
-because Sky Lights support local shadowing, which prevents indoor areas from getting light from the
-sky."*
-
-**The look changes substantially, and it over-lights.** Real card coverage means far more indirect
-bounce than the runtime path ever had, and the light rig's constants (`PointSpotScale 0.003`,
-`MaxBrightness 8.0`) were calibrated against a scene with almost no bounce. That is why the Lights
-Cog window also owns the sky and fog: how much the sky contributes and how much the per-source rig
-must carry is one decision, not two. The sky + ambience rework (`sky-ambience.md`) carries the
-recalibration this required.
-
-**Nanite costs nothing and buys nothing here.** Expected at ~30k world triangles. Its value is not
-throughput; it is that the ISM/Lumen question the previous spike could not settle stops mattering.
-
-**Perf holds.** The earlier 96-vs-123 FPS reading predates every change here (sky-transform fix,
-ray-tracing exclusion, collision profiles, cubemap IBL) and should not be quoted. `profile.bat`
-against the baked level reports Lumen reflections 0.15–0.22 ms and Total GPU 5.08–5.54 ms — inside
-the committed baseline either way (`rendering-perf.md`).
+- Editor-built world and prop meshes have fitted Lumen surface-cache representations.
+- The Sky Light uses the map's real cubemap with a black lower hemisphere, so local shadowing
+  rather than flat ambient fill determines whether interiors see sky.
+- `UElysiumLightRig::Adopt` still derives live light values from `.lights`; the bake owns native
+  representation, not calibration.
+- Nanite is representation infrastructure rather than a triangle-throughput requirement for these
+  small maps.
+- Performance measurements and their baseline live only in `rendering-perf.md`.
 
 ## Engine facts this pinned down
 
@@ -237,20 +213,11 @@ stacked them rather than in undefined order. Deferred decals write into the GBuf
 lighting pass, so each is lit exactly like the wall it lands on, Lumen bounce included, and Nanite
 receives them normally.
 
-## Gaps
+## Scope boundaries
 
-- **Sprites** (96) are not placed. Decals and ropes are.
-- **Post-process**: no `.cube` colour-grade LUT. The runtime path does not grade either — its
-  LUT block was commented out with `// TEMP: disabled for a test` and never restored. Deliberately
-  left off (owner call) until the sky/ambient recalibration settles.
-- **Volumetric fog** is enabled on the baked height fog, but only maps whose `.env` turns fog on get
-  a fog actor at all — and `sp_tutorial_1` has fog off, so it shows nothing there.
-- **NPCs** stay on glTFRuntime. Skeletal meshes get no offline cards anyway.
-- **Not all 108 maps.** The 10 exported maps bake and run; the remaining ~98 have not been through
-  it, so their bake cost and the DDC/asset-registry scale at ~1,700 assets per map are still
-  unmeasured in aggregate.
-- **Packaging.** The mount is gitignored, so a package must either bake on first run or ship the
-  user-side bake tooling (roadmap 10.5).
+Entity-driven sprites, ropes, NPCs, collision, scripting, and audio remain on the runtime side of
+the split. Post-processing, fog calibration, horizontal map coverage, and packaged distribution
+are tracked in `roadmap.md`; this document does not mirror their status.
 
 ## Repro
 

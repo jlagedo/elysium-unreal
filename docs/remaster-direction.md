@@ -114,8 +114,9 @@ anchored to VtMB's own data and the lightmap calibration, with enhancement as a 
 ### 2. Assets — textures, materials, models
 
 The `asset-enhancement.md` track is **in scope**: delight → super-resolve → style-anchored PBR
-synthesis, tiered, curated per material family, budget-gated by the RTX 3060 / 12 GB floor. The
-`elysium.EnhancedTextures` A/B toggle is the regression guard that keeps the enhanced set honest
+synthesis, tiered, curated per material family, and budget-gated by the hardware floor in
+`rendering-perf.md`. The `elysium.EnhancedTextures` A/B toggle is the regression guard that keeps
+the enhanced set honest
 against the faithful reference; the faithful set stays the reference forever.
 
 Tier 0 (delight, super-resolve) is a technical-deficit fix for a dynamically-relit engine and
@@ -156,7 +157,9 @@ Difficulty and balance are **not** QoL — they are the logic layer, governed by
   user's own bytes, not shipped art.
 - **The two clean halves** (root `CLAUDE.md`) — offline decode, runtime load; this direction
   does not change the split.
-- **No `.uasset` baking of game content.**
+- **The bake/runtime split** (`uasset-bake-spike.md`) — the map's look is generated offline on
+  the gitignored `/ElysiumBaked` mount; collision, entities, scripting, audio, and NPCs remain
+  runtime-built.
 - **The world calibration.** VtMB's look is indirect-bounce-dominated and the dynamic rig is
   anchored to its baked lightmaps (`rendering-perf.md`). That calibration defines the target
   look; richer surfaces respond to it, they do not redefine it.
@@ -165,10 +168,6 @@ Difficulty and balance are **not** QoL — they are the logic layer, governed by
 
 ## Where the work lives
 
-| Axis | Tracked as |
-|---|---|
-| UI foundation, menus, HUD, sign panels | `roadmap.md` P8 (8.6, 8.8, 8.9, 8.10) + P9 9.2 (dialogue UI) |
-| Assets | `asset-enhancement.md`; scheduled from `roadmap.md` P10 |
-| Feel | `roadmap.md` 4.7 (movement), 10.7 long tail (combat, camera) |
-| QoL / accessibility | `roadmap.md` 8.10 |
-| Every behavioural divergence | the doc that owns the system, marked as a divergence, owner-approved |
+Implementation status and sequencing live only in `roadmap.md`. Topic design remains split by
+concern: `ui-architecture.md` for the Unreal UI, `asset-enhancement.md` for surfaces, and the
+owning behavior doc for every deliberate divergence.
