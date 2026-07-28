@@ -287,9 +287,12 @@ skeleton.
 
 **On-disk** [data-verified]: `NumIncludeModels`@404 / `IncludeModelIndex`@408 →
 `StudioModelGroup[]` (layout: `mdl_v2531.md`). The tree is a DAG — `frenzy`/`pc_idles` reappear
-via several parents — so resolution dedups by path. Every bank bone name is present in the NPC's
-skeleton (verified: `move_and_ranged` 60 / `stances` 53 bones, **0 missing** in a 69-bone
-gangmember), so no proportion retarget is needed — tracks bind to the skeleton by bone name.
+via several parents — so resolution dedups by path. The shared Biped deformation core binds by
+bone name without proportion retargeting. A bank can also animate optional bones absent from a
+particular target — weapon/attachment bones, anatomy helpers, and toes on a few reduced skeletons.
+Those tracks have no target bone or weighted vertices and are skipped, leaving the target at its
+own bind pose. This is distinct from a broken skin: every non-zero vertex influence must still
+name a valid joint in the target GLB, and every joint must be reachable from the skin root.
 `m_iszPlay` and friends name a **sequence label** (`StudioSeqDesc.szlabel`@0 → `anim[0][0]`@56 →
 local anim); the pipeline keys clips by that label.
 

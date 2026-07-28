@@ -98,7 +98,7 @@ than left to registration order (**S2**).
 |---|---|---|---|
 | 1 | sample input | `APlayerController::PlayerTick` (`TG_PrePhysics`) | key bindings → command bus → latches; then `UElysiumInputRouter::SampleFrame` builds the frame's `FElysiumUserCmd` (§8) |
 | 2 | advance the clock | `AElysiumMapActor::PreMoveTick`, **first** tick function | **the only place `Now` moves** (§4); ahead of the move, because the move runs on this frame's `now` |
-| 3 | the player's own think | `FElysiumEntityWorld::RunPlayerThink(Now)` | retail runs it inside `RunCommand`, not in the think pass; the spawn hold also places and freezes a fresh pawn here |
+| 3 | the player's own think | `FElysiumEntityWorld::RunPlayerThink(Now)` | retail runs it inside `RunCommand`, not in the think pass; admitted only after map activation |
 | 4 | **move the pawn** | `UElysiumMovementComponent::TickComponent` (`TG_PrePhysics`, prereq on the pre-move tick) | consumes the frame's `FElysiumUserCmd`, on **the command's** delta |
 | 5 | run due thinks | `FElysiumEntityWorld::RunThinks(Now)` | `GameFrame` begins here; movers issue their swept kinematic moves |
 | 6 | service the queue | `FElysiumEntityWorld::ServiceEvents(Now)` | delayed I/O, field-6 Python, `ScheduleTask`; the audio/scheme pass follows |
@@ -119,8 +119,11 @@ Three mechanisms hold the order, all stock UE 5.8:
   pre-move tick unconditionally**, wired at registration — the menu backdrop and a headless logic
   world seat no pawn, so the movement edge never forms there and the clock would otherwise advance
   in registration order relative to the thinks reading it.
-- `bTickEvenWhenPaused = false` on all three gameplay ticks; **true** on the presentation tick, so a
-  paused world still draws a live HUD and a Cog window still updates (`debug-tooling.md`).
+- Before map activation, the pre-move and gameplay tick functions have `bTickEvenWhenPaused = true`
+  so an inherited dev hold cannot deadlock readiness; their gameplay branches are phase-gated.
+  Activation restores both to false. The post-move gameplay tick is always false, while the
+  presentation tick is **true**, so a paused world still draws a live HUD and a Cog window still
+  updates (`debug-tooling.md`).
 
 **What the move-first order gives up, stated.** A door's think issues its swept move in step 5,
 after the pawn moved in step 4 — so the pawn is moved against last frame's mover positions, and the
@@ -567,10 +570,15 @@ the HUD later.
 
 ### Loading
 
-`Loading` exists so the OpenLevel hitch has somewhere to hide: `FCoreUObjectDelegates::PreLoadMap` →
-`GetMoviePlayer()->SetupLoadingScreen`, torn down on `PostLoadMapWithWorld`. That is the engine's own
-mechanism and it works with hard travel, which is what makes 10.4's time-sliced build an optimisation
-rather than a prerequisite.
+`Loading` covers both halves of map admission. `FCoreUObjectDelegates::PreLoadMap` prepares a pure-
+Slate MoviePlayer screen for the blocking `OpenLevel`/`LoadMap` portion; it auto-completes normally.
+`PostLoadMapWithWorld` then installs the same visual as a game-viewport overlay while the map actor's
+runtime activation barrier polls construction, final player placement/tick wiring, and required
+asynchronous collision cooks. `NotifyWorldReady` only spawns the runtime actor and leaves the app in
+`Loading`; the current actor's one-shot `MapReady` callback removes the overlay and transitions to
+`Playing`/`FrontEnd`. `MapFailed` remains gated and replaces the spinner with the structured missing
+prerequisite. `map-architecture.md` owns the full lifecycle; roadmap 10.4 remains the separate
+time-slicing optimisation inside this correctness boundary.
 
 ## 11. The presentation seam *(built — 11.8)*
 

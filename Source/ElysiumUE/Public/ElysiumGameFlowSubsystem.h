@@ -9,6 +9,9 @@
 
 class AGameModeBase;
 class UWorld;
+class UGameViewportClient;
+class SWidget;
+class AElysiumMapActor;
 
 // Which slot ring a save belongs to. `trigger_autosave` fires Auto; the pause menu fires Manual;
 // the quicksave binding fires Quick. The slots themselves are 11.9's.
@@ -112,8 +115,8 @@ public:
 	void BootFromCommandLine();
 
 	// The game mode's one call. Under hard travel this runs in every fresh world: if a map load is
-	// pending it is this world's, so build it and settle into FrontEnd or Playing; otherwise this
-	// is the boot world and the boot plan runs.
+	// pending it is this world's, so start its runtime build and remain Loading until MapReady;
+	// otherwise this is the boot world and the boot plan runs.
 	void NotifyWorldReady(AGameModeBase* Mode);
 
 	// --- Session -------------------------------------------------------------------------------
@@ -187,6 +190,10 @@ private:
 	void OnPrepareLoadingScreen();
 	void OnPreLoadMap(const FString& MapName);
 	void OnPostLoadMap(UWorld* LoadedWorld);
+	void OnMapRuntimeReady(AElysiumMapActor* Map);
+	void OnMapRuntimeFailed(AElysiumMapActor* Map, const FString& Reason);
+	void ShowRuntimeLoadingOverlay(UWorld* World, const FText& Message, bool bForce = false);
+	void HideRuntimeLoadingOverlay();
 
 	// --- The named verbs (11.6) ----------------------------------------------------------------
 	// `cancelselect`, `togglemainmenu`, `pause`, `save`, `load`. Registered here, not on the player
@@ -213,6 +220,11 @@ private:
 	FDelegateHandle PrepareLoadingScreenHandle;
 	FDelegateHandle PreLoadMapHandle;
 	FDelegateHandle PostLoadMapHandle;
+	FDelegateHandle MapReadyHandle;
+	FDelegateHandle MapFailedHandle;
+	TWeakObjectPtr<UGameViewportClient> RuntimeLoadingViewport;
+	TSharedPtr<SWidget> RuntimeLoadingWidget;
+	FString RuntimeLoadingFailure;
 
 	TArray<IConsoleObject*> ConsoleObjects;
 	TArray<FElysiumCommandBinding> Bindings;

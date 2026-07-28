@@ -4,6 +4,7 @@
 
 #include "HAL/IConsoleManager.h"
 #include "Misc/FileHelper.h"
+#include "PhysicsEngine/BodySetup.h"
 #include "ProceduralMeshComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumCollision, Log, All);
@@ -22,19 +23,87 @@ UElysiumMapCollision::UElysiumMapCollision()
 	PrimaryComponentTick.bCanEverTick = false;
 }
 
+const TCHAR* ElysiumCollisionBuildStateName(EElysiumCollisionBuildState State)
+{
+	switch (State)
+	{
+	case EElysiumCollisionBuildState::Disabled: return TEXT("Disabled");
+	case EElysiumCollisionBuildState::Cooking:  return TEXT("Cooking");
+	case EElysiumCollisionBuildState::Ready:    return TEXT("Ready");
+	case EElysiumCollisionBuildState::Failed:   return TEXT("Failed");
+	default:                                    return TEXT("Unknown");
+	}
+}
+
 bool UElysiumMapCollision::Build(const FString& MapName)
 {
-	bBrushCollision = CVarBrushCollision.GetValueOnGameThread() != 0 && LoadHulls(MapName);
-	if (bBrushCollision)
+	HullCount = 0;
+	DispTriCount = 0;
+	bBrushCollision = false;
+	FailureReason.Reset();
+	HullCollision = nullptr;
+	DispCollision = nullptr;
+
+	if (CVarBrushCollision.GetValueOnGameThread() == 0)
 	{
-		LoadDispCol(MapName);
+		BuildState = EElysiumCollisionBuildState::Disabled;
+		UE_LOG(LogElysiumCollision, Log, TEXT("brush collision disabled for '%s'"), *MapName);
+		return false;
 	}
-	else
+
+	if (!LoadHulls(MapName))
 	{
-		UE_LOG(LogElysiumCollision, Warning,
-			TEXT("no brush collision for '%s' — the map has no walkable surface"), *MapName);
+		BuildState = EElysiumCollisionBuildState::Failed;
+		FailureReason = FString::Printf(TEXT("required world collision is missing or empty: %s"),
+			*FElysiumContentPaths::MapHulls(MapName));
+		UE_LOG(LogElysiumCollision, Error, TEXT("%s"), *FailureReason);
+		return false;
 	}
-	return bBrushCollision;
+
+	bBrushCollision = true;
+	LoadDispCol(MapName);
+	BuildState = EElysiumCollisionBuildState::Cooking;
+	return true;
+}
+
+EElysiumCollisionBuildState UElysiumMapCollision::GetBuildState() const
+{
+	if (BuildState != EElysiumCollisionBuildState::Cooking)
+	{
+		return BuildState;
+	}
+
+	auto ComponentState = [](const UProceduralMeshComponent* Component)
+	{
+		if (!Component)
+		{
+			return EElysiumCollisionBuildState::Ready;
+		}
+		const UBodySetup* Setup = Component->ProcMeshBodySetup;
+		if (!Setup)
+		{
+			return EElysiumCollisionBuildState::Cooking;
+		}
+		if (Setup->bFailedToCreatePhysicsMeshes)
+		{
+			return EElysiumCollisionBuildState::Failed;
+		}
+		return Setup->bCreatedPhysicsMeshes
+			? EElysiumCollisionBuildState::Ready
+			: EElysiumCollisionBuildState::Cooking;
+	};
+
+	const EElysiumCollisionBuildState HullState = ComponentState(HullCollision);
+	const EElysiumCollisionBuildState DispState = ComponentState(DispCollision);
+	if (HullState == EElysiumCollisionBuildState::Failed
+		|| DispState == EElysiumCollisionBuildState::Failed)
+	{
+		return EElysiumCollisionBuildState::Failed;
+	}
+	return HullState == EElysiumCollisionBuildState::Ready
+		&& DispState == EElysiumCollisionBuildState::Ready
+		? EElysiumCollisionBuildState::Ready
+		: EElysiumCollisionBuildState::Cooking;
 }
 
 bool UElysiumMapCollision::LoadHulls(const FString& MapName)

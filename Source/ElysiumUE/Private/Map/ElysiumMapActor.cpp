@@ -28,6 +28,75 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysium, Log, All);
 
+const TCHAR* ElysiumMapRuntimePhaseName(EElysiumMapRuntimePhase Phase)
+{
+	switch (Phase)
+	{
+	case EElysiumMapRuntimePhase::Building:                return TEXT("Building");
+	case EElysiumMapRuntimePhase::WaitingForPrerequisites: return TEXT("WaitingForPrerequisites");
+	case EElysiumMapRuntimePhase::Activating:              return TEXT("Activating");
+	case EElysiumMapRuntimePhase::Active:                  return TEXT("Active");
+	case EElysiumMapRuntimePhase::Failed:                  return TEXT("Failed");
+	default:                                               return TEXT("Unknown");
+	}
+}
+
+FString FElysiumMapRuntimePrerequisites::Missing() const
+{
+	TArray<FString> MissingItems;
+	if (!bConstructionComplete) { MissingItems.Add(TEXT("runtime construction")); }
+	if (!bEntityWorldReady)     { MissingItems.Add(TEXT("entity substrate")); }
+	if (bCollisionFailed)       { MissingItems.Add(TEXT("world collision failed")); }
+	else if (!bCollisionReady)  { MissingItems.Add(TEXT("world collision cooking")); }
+
+	if (!bMenuBackdrop)
+	{
+		if (!bSpawnTransformReady)    { MissingItems.Add(TEXT("final spawn transform")); }
+		if (!bPlayerEntityReady)      { MissingItems.Add(TEXT("player entity")); }
+		if (!bPossessedPawnReady)     { MissingItems.Add(TEXT("possessed player pawn")); }
+		if (!bPlayerBodyReady)        { MissingItems.Add(TEXT("player body freeze contract")); }
+		if (!bFinalPlacementReady)    { MissingItems.Add(TEXT("final player placement")); }
+		if (!bTickPrerequisitesReady) { MissingItems.Add(TEXT("player tick prerequisites")); }
+	}
+	return FString::Join(MissingItems, TEXT(", "));
+}
+
+EElysiumMapReadinessResult FElysiumMapRuntimePrerequisites::Evaluate(
+	double WaitSeconds, FString& OutFailure) const
+{
+	OutFailure.Reset();
+	if (bCollisionFailed)
+	{
+		OutFailure = TEXT("required world collision failed");
+		return EElysiumMapReadinessResult::Failed;
+	}
+	// Once construction is declared complete, these inputs cannot arrive on a later engine tick.
+	if (bConstructionComplete && !bEntityWorldReady)
+	{
+		OutFailure = TEXT("runtime construction produced no entity substrate");
+		return EElysiumMapReadinessResult::Failed;
+	}
+	if (bConstructionComplete && !bMenuBackdrop
+		&& (!bSpawnTransformReady || !bPlayerEntityReady))
+	{
+		OutFailure = !bSpawnTransformReady
+			? TEXT("gameplay map has no final spawn transform")
+			: TEXT("gameplay map did not construct its player entity");
+		return EElysiumMapReadinessResult::Failed;
+	}
+
+	if (Missing().IsEmpty())
+	{
+		return EElysiumMapReadinessResult::Ready;
+	}
+	if (WaitSeconds >= WatchdogSeconds)
+	{
+		OutFailure = FString::Printf(TEXT("activation watchdog expired; missing: %s"), *Missing());
+		return EElysiumMapReadinessResult::Failed;
+	}
+	return EElysiumMapReadinessResult::Waiting;
+}
+
 // ------------------------------------------------------------------------------------------
 // S2 — the pre-move tick function (runtime-architecture.md §3, steps 2-3).
 // ------------------------------------------------------------------------------------------
@@ -87,18 +156,20 @@ FName FElysiumPostMoveTickFunction::DiagnosticContext(bool bDetailed)
 AElysiumMapActor::AElysiumMapActor()
 {
 	// S2 — the frame order is declared with tick groups and prerequisites, not left to registration
-	// order. The pre-move pass (clock, spawn hold, the player's own think) and the gameplay pass
+	// order. The pre-move pass (clock, activation poll, the player's own think) and the gameplay pass
 	// (thinks, queue, audio) both run before physics, with the pawn's move between them; the
-	// post-move pass runs after physics. None of the three ticks while the game is held: pause is
-	// meant to stop the world, and the presentation side is what keeps drawing (§4).
+	// post-move pass runs after physics. Before activation the first two may poll through a hold;
+	// activation restores the normal pause-stops-gameplay rule (§4).
 	PreMoveTickFunction.bCanEverTick = true;
 	PreMoveTickFunction.bStartWithTickEnabled = true;
 	PreMoveTickFunction.TickGroup = TG_PrePhysics;
-	PreMoveTickFunction.bTickEvenWhenPaused = false;
+	// The two pre-physics functions must continue polling the activation barrier if a persistent
+	// dev hold survived travel. ActivateRuntime restores their normal pause behaviour atomically.
+	PreMoveTickFunction.bTickEvenWhenPaused = true;
 
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.TickGroup = TG_PrePhysics;
-	PrimaryActorTick.bTickEvenWhenPaused = false;
+	PrimaryActorTick.bTickEvenWhenPaused = true;
 
 	PostMoveTickFunction.bCanEverTick = true;
 	PostMoveTickFunction.bStartWithTickEnabled = true;
@@ -209,6 +280,8 @@ void AElysiumMapActor::EnsureTickPrerequisites()
 void AElysiumMapActor::BeginPlay()
 {
 	Super::BeginPlay();
+	RuntimePhase = EElysiumMapRuntimePhase::Building;
+	RuntimeWaitStartSeconds = FPlatformTime::Seconds();
 
 	// Engine pause and time dilation are per-world; the clock is not. Re-stamp them onto this
 	// world so a hold or a time scale set before travel survives the map change (S1).
@@ -224,6 +297,11 @@ void AElysiumMapActor::BeginPlay()
 	// The look-tuning cvar callbacks are bound by UElysiumMapVisuals::BeginPlay, which Super has
 	// already run — so a knob turned during the load still reaches the surfaces it built.
 	LoadMap();
+	bRuntimeConstructionComplete = true;
+	RuntimePhase = EElysiumMapRuntimePhase::WaitingForPrerequisites;
+	UE_LOG(LogElysium, Log, TEXT("map runtime %s: %s (collision %s)"), *MapName,
+		ElysiumMapRuntimePhaseName(RuntimePhase),
+		ElysiumCollisionBuildStateName(Collision->GetBuildState()));
 }
 
 void AElysiumMapActor::LoadMap()
@@ -267,7 +345,7 @@ void AElysiumMapActor::LoadMap()
 	// What a backdrop skips is only the player's placement — it seats no pawn.
 	UElysiumMapSubsystem* MapSubsystem =
 		GetGameInstance() ? GetGameInstance()->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
-	const bool bMenuBackdrop = MapSubsystem && MapSubsystem->IsMenuBackdrop();
+	bMenuBackdrop = MapSubsystem && MapSubsystem->IsMenuBackdrop();
 
 	// The walkable surface. Baked world geometry carries no gameplay collision, so the brush
 	// sidecars are the only world collider: .hulls convex (which carries the invisible PLAYERCLIP
@@ -636,6 +714,14 @@ bool AElysiumMapActor::IsVoicePlaying(FElysiumAudioVoiceHandle Handle) const
 
 void AElysiumMapActor::FadeInScheme(const FString& SchemeRel, const FVector& Anchor, float FadeSeconds)
 {
+	if (RuntimePhase != EElysiumMapRuntimePhase::Active)
+	{
+		bHasDeferredSchemeFadeIn = true;
+		DeferredSchemeRel = SchemeRel;
+		DeferredSchemeAnchor = Anchor;
+		DeferredSchemeFadeSeconds = FadeSeconds;
+		return;
+	}
 	if (SchemeManager)
 	{
 		SchemeManager->FadeInScheme(GetAudioSubsystem(), SchemeRel, Anchor, FadeSeconds);
@@ -644,6 +730,11 @@ void AElysiumMapActor::FadeInScheme(const FString& SchemeRel, const FVector& Anc
 
 void AElysiumMapActor::FadeOutScheme(const FString& SchemeRel, float FadeSeconds)
 {
+	if (bHasDeferredSchemeFadeIn && DeferredSchemeRel == SchemeRel)
+	{
+		bHasDeferredSchemeFadeIn = false;
+		DeferredSchemeRel.Reset();
+	}
 	if (SchemeManager)
 	{
 		SchemeManager->FadeOutScheme(GetAudioSubsystem(), SchemeRel, FadeSeconds);
@@ -828,6 +919,14 @@ void AElysiumMapActor::PreMoveTick(float DeltaSeconds)
 	// order is fully declared (a menu backdrop map never seats a pawn, and that is fine). This is
 	// the frame's first pass, so an edge wired here is in force from the same frame it is bound.
 	EnsureTickPrerequisites();
+	if (RuntimePhase != EElysiumMapRuntimePhase::Active)
+	{
+		if (RuntimePhase == EElysiumMapRuntimePhase::WaitingForPrerequisites)
+		{
+			PollRuntimeActivation();
+		}
+		return;
+	}
 
 	if (UGameInstance* GI = GetGameInstance())
 	{
@@ -850,19 +949,23 @@ void AElysiumMapActor::PreMoveTick(float DeltaSeconds)
 		}
 	}
 
-	// The spawn hold is pre-move work: it places the pawn and freezes it until the async collision
-	// cook produces ground. Left in the gameplay pass it would run *after* the mover's first tick,
-	// so a freshly seated pawn would take one unfrozen step from wherever the game mode dropped it.
-	TickSpawnHold(DeltaSeconds);
 }
 
 void AElysiumMapActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (RuntimePhase == EElysiumMapRuntimePhase::Activating)
+	{
+		ActivateRuntime();
+		return;
+	}
+	if (RuntimePhase != EElysiumMapRuntimePhase::Active)
+	{
+		return;
+	}
 
 	// Steps 5-6 — `GameFrame` itself: the pawn has already moved (step 4), which is the order
-	// RE21 pins. Nothing here is conditional on the spawn hold, so the map-load I/O chains
-	// service immediately.
+	// RE21 pins. This whole branch is admitted only after the activation transaction.
 	if (UGameInstance* GI = GetGameInstance())
 	{
 		if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
@@ -874,75 +977,202 @@ void AElysiumMapActor::Tick(float DeltaSeconds)
 				EntityWorld->Tick(GameState->GameClock().GetNow());
 			}
 
-			// P6.3 — reap finished voices, then advance the SoundScheme manager (random-one-shot
-			// scheduler + music crossfade) with the listener position for polar placement/attenuation.
-			// After the move, so the listener is this frame's ear rather than the last frame's.
-			if (UElysiumAudioSubsystem* Audio = GI->GetSubsystem<UElysiumAudioSubsystem>())
-			{
-				Audio->TickAudio(DeltaSeconds);
-				if (SchemeManager)
-				{
-					FVector ListenerLoc = GetActorLocation();
-					if (const APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
-					{
-						FVector VLoc; FRotator VRot;
-						PC->GetPlayerViewPoint(VLoc, VRot);
-						ListenerLoc = VLoc;
-					}
-					SchemeManager->Tick(Audio, ListenerLoc, DeltaSeconds);
-				}
-			}
+			TickAudio(DeltaSeconds);
 		}
 	}
 }
 
-void AElysiumMapActor::TickSpawnHold(float DeltaSeconds)
+double AElysiumMapActor::GetRuntimeWaitSeconds() const
 {
-	if (!bSpawnPending || bSpawnDone)
+	if (RuntimePhase == EElysiumMapRuntimePhase::Active
+		|| RuntimePhase == EElysiumMapRuntimePhase::Failed)
 	{
-		return;
+		return RuntimeWaitDurationSeconds;
 	}
-	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
-	APawn* Pawn = PC ? PC->GetPawn() : nullptr;
-	if (!Pawn)
-	{
-		return;
-	}
+	return RuntimeWaitStartSeconds > 0.0
+		? FMath::Max(0.0, FPlatformTime::Seconds() - RuntimeWaitStartSeconds)
+		: 0.0;
+}
 
-	// Place the pawn immediately, but hold it frozen (no gravity) until the async
-	// collision cook produces ground under the spawn point — otherwise it falls
-	// through the not-yet-cooked floor. A timeout releases it regardless.
-	IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(Pawn);
-	if (!bSpawnPlaced)
+FString AElysiumMapActor::GetMissingRuntimePrerequisites() const
+{
+	return CollectRuntimePrerequisites().Missing();
+}
+
+FElysiumMapRuntimePrerequisites AElysiumMapActor::CollectRuntimePrerequisites() const
+{
+	FElysiumMapRuntimePrerequisites P;
+	P.bConstructionComplete = bRuntimeConstructionComplete;
+	P.bEntityWorldReady = EntityWorld.Get() != nullptr;
+	P.bMenuBackdrop = bMenuBackdrop;
+	const EElysiumCollisionBuildState CollisionState = Collision
+		? Collision->GetBuildState() : EElysiumCollisionBuildState::Failed;
+	P.bCollisionReady = CollisionState == EElysiumCollisionBuildState::Ready
+		|| CollisionState == EElysiumCollisionBuildState::Disabled;
+	P.bCollisionFailed = CollisionState == EElysiumCollisionBuildState::Failed;
+	P.bSpawnTransformReady = bSpawnPending;
+	P.bPlayerEntityReady = EntityWorld && EntityWorld->PlayerHandle().IsSet();
+
+	if (!bMenuBackdrop)
 	{
-		Pawn->SetActorLocation(PendingSpawnLoc, false, nullptr, ETeleportType::TeleportPhysics);
-		PC->SetControlRotation(FRotator(0.f, PendingSpawnYaw, 0.f));
-		ReconcilePlayerBrushTouches(Pawn);
-		if (Body)
+		const APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+		const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+		P.bPossessedPawnReady = Pawn && Pawn->GetController() == PC;
+		P.bPlayerBodyReady = Pawn && Cast<IElysiumPlayerBody>(Pawn) != nullptr;
+		P.bFinalPlacementReady = bSpawnPlaced;
+		UPawnMovementComponent* Move = Pawn ? Pawn->GetMovementComponent() : nullptr;
+		P.bTickPrerequisitesReady = Move && PrereqController.Get() == PC
+			&& PrereqMovement.Get() == Move;
+	}
+	return P;
+}
+
+void AElysiumMapActor::PollRuntimeActivation()
+{
+	if (!bMenuBackdrop && bRuntimeConstructionComplete)
+	{
+		APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+		APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+		IElysiumPlayerBody* Body = Pawn ? Cast<IElysiumPlayerBody>(Pawn) : nullptr;
+		if (Pawn && Pawn->GetController() == PC && Body && !bSpawnPlaced)
 		{
+			// Freeze before changing the transform: even if movement's prerequisite runs later in this
+			// frame, the newly placed pawn cannot take an unguarded step.
 			Body->SetMovementFrozen(true);
+			Pawn->SetActorLocation(PendingSpawnLoc, false, nullptr, ETeleportType::TeleportPhysics);
+			PC->SetControlRotation(FRotator(0.f, PendingSpawnYaw, 0.f));
+			bSpawnPlaced = true;
+			EnsureTickPrerequisites();
+			UE_LOG(LogElysium, Log, TEXT("map runtime %s: player placed and frozen at %s"),
+				*MapName, *PendingSpawnLoc.ToString());
 		}
-		bSpawnPlaced = true;
 	}
 
-	SpawnHoldSeconds += DeltaSeconds;
-	FHitResult Hit;
-	const bool bGround = GetWorld()->LineTraceSingleByChannel(Hit,
-		PendingSpawnLoc, PendingSpawnLoc - FVector(0.f, 0.f, 100000.f), ECC_Pawn);
-	if (bGround || SpawnHoldSeconds > 8.f)
+	const FElysiumMapRuntimePrerequisites P = CollectRuntimePrerequisites();
+	FString Failure;
+	switch (P.Evaluate(GetRuntimeWaitSeconds(), Failure))
 	{
-		if (Body)
+	case EElysiumMapReadinessResult::Ready:
+		RuntimePhase = EElysiumMapRuntimePhase::Activating;
+		UE_LOG(LogElysium, Log, TEXT("map runtime %s: %s after %.3fs"), *MapName,
+			ElysiumMapRuntimePhaseName(RuntimePhase), GetRuntimeWaitSeconds());
+		return;
+	case EElysiumMapReadinessResult::Failed:
+		if (P.bCollisionFailed && Collision && !Collision->GetFailureReason().IsEmpty())
+		{
+			Failure = Collision->GetFailureReason();
+		}
+		FailRuntime(Failure);
+		return;
+	case EElysiumMapReadinessResult::Waiting:
+	default:
+		return;
+	}
+}
+
+void AElysiumMapActor::ActivateRuntime()
+{
+	if (RuntimePhase != EElysiumMapRuntimePhase::Activating)
+	{
+		return;
+	}
+
+	double Now = 0.0;
+	if (const UGameInstance* GI = GetGameInstance())
+	{
+		if (const UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+		{
+			Now = GameState->GameClock().GetNow();
+		}
+	}
+
+	if (EntityWorld)
+	{
+		EntityWorld->Activate(Now);
+	}
+	if (APawn* Pawn = ResolvePlayerPawn())
+	{
+		ReconcilePlayerBrushTouches(Pawn);
+	}
+	if (EntityWorld)
+	{
+		// One frozen-time pass ignites logic_auto, map-entry outputs, initial containment touches,
+		// and every zero-delay event they produce before the partial world is ever shown.
+		EntityWorld->RunPlayerThink(Now);
+		EntityWorld->Tick(Now);
+	}
+	if (bHasDeferredSchemeFadeIn && SchemeManager)
+	{
+		SchemeManager->FadeInScheme(GetAudioSubsystem(), DeferredSchemeRel,
+			DeferredSchemeAnchor, DeferredSchemeFadeSeconds);
+		bHasDeferredSchemeFadeIn = false;
+		DeferredSchemeRel.Reset();
+	}
+	TickAudio(0.0f);
+
+	RuntimeWaitDurationSeconds = GetRuntimeWaitSeconds();
+	RuntimePhase = EElysiumMapRuntimePhase::Active;
+	bSpawnDone = true;
+	if (APawn* Pawn = ResolvePlayerPawn())
+	{
+		if (IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(Pawn))
 		{
 			Body->SetMovementFrozen(false);
 		}
-		UE_LOG(LogElysium, Log, TEXT("spawn released after %.2fs (%s)"),
-			SpawnHoldSeconds, bGround ? TEXT("ground ready") : TEXT("timeout"));
-		bSpawnDone = true;
+	}
+	PreMoveTickFunction.bTickEvenWhenPaused = false;
+	PrimaryActorTick.bTickEvenWhenPaused = false;
+
+	UE_LOG(LogElysium, Log, TEXT("map runtime %s: Active after %.3fs at game time %.3f"),
+		*MapName, GetRuntimeWaitSeconds(), Now);
+	RuntimeReady.Broadcast(this);
+}
+
+void AElysiumMapActor::FailRuntime(const FString& Reason)
+{
+	if (RuntimePhase == EElysiumMapRuntimePhase::Failed
+		|| RuntimePhase == EElysiumMapRuntimePhase::Active)
+	{
+		return;
+	}
+	RuntimeFailureReason = Reason;
+	RuntimeWaitDurationSeconds = GetRuntimeWaitSeconds();
+	RuntimePhase = EElysiumMapRuntimePhase::Failed;
+	UE_LOG(LogElysium, Error,
+		TEXT("map runtime %s: Failed after %.3fs: %s [missing: %s]"),
+		*MapName, GetRuntimeWaitSeconds(), *RuntimeFailureReason,
+		*GetMissingRuntimePrerequisites());
+	RuntimeFailed.Broadcast(this, RuntimeFailureReason);
+}
+
+void AElysiumMapActor::TickAudio(float DeltaSeconds)
+{
+	UElysiumAudioSubsystem* Audio = GetAudioSubsystem();
+	if (!Audio)
+	{
+		return;
+	}
+	Audio->TickAudio(DeltaSeconds);
+	if (SchemeManager)
+	{
+		FVector ListenerLoc = GetActorLocation();
+		if (const APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
+		{
+			FVector VLoc; FRotator VRot;
+			PC->GetPlayerViewPoint(VLoc, VRot);
+			ListenerLoc = VLoc;
+		}
+		SchemeManager->Tick(Audio, ListenerLoc, DeltaSeconds);
 	}
 }
 
 void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 {
+	if (RuntimePhase != EElysiumMapRuntimePhase::Active)
+	{
+		return;
+	}
+
 	// Step 8 — everything here reads the frame's final positions.
 	//
 	// P4.2 — the minimal +use look-cursor: re-pick the aimed usable and fire OnIn/OnOut on the

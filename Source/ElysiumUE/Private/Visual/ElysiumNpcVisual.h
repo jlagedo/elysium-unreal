@@ -30,8 +30,9 @@ namespace ElysiumNpcVisual
 	// NPC's own glb or any bank: glTFRuntime keys its tracks by bone name and resolves each against
 	// the target ref skeleton, skipping a name the skeleton lacks and leaving that bone at its bind
 	// pose (glTFRuntimeParserSkeletalMeshes.cpp, LoadSkeletalAnimationFromTracksAndMorphTargets).
-	// Every bank bone name is present in every VtMB NPC skeleton, so no proportion retarget is
-	// needed — this is VtMB's own virtualmodel bank-sharing (`docs/animation_and_movers.md` A.7).
+	// The shared Biped core binds directly; optional attachment/anatomy tracks may be absent on a
+	// target that has no such bone and therefore no vertices for it (`docs/animation_and_movers.md`
+	// A.7). This is VtMB's own virtualmodel bank-sharing, not proportion retargeting.
 	// Returns null and fills OutError when the asset has no clip by that name.
 	UAnimSequence* RetargetClip(UglTFRuntimeAsset* Asset, USkeletalMesh* Mesh, const FString& ClipName,
 		FString& OutError);

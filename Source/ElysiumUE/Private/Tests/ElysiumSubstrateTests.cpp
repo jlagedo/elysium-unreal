@@ -20,6 +20,8 @@
 #include "ElysiumCommands.h"
 #include "Debug/ElysiumConsole.h"
 #include "Visual/ElysiumDecals.h"
+#include "Visual/ElysiumEntityBodies.h"
+#include "Visual/ElysiumNpcAnimInstance.h"
 #include "ElysiumDlg.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
@@ -36,6 +38,7 @@
 #include "ElysiumMapActor.h"
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
+#include "Visual/ElysiumNpcClips.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumPawn.h"
 #include "ElysiumPresentationSubsystem.h"
@@ -62,6 +65,7 @@
 #include "ElysiumVariant.h"
 
 #include "Math/RotationMatrix.h"
+#include "Animation/AnimSequence.h"
 #include "Serialization/MemoryWriter.h"
 #include "Tests/AutomationCommon.h"
 
@@ -2021,6 +2025,177 @@ bool FElysiumInputScopesTest::RunTest(const FString&)
 // time the first think or queued event runs.
 // =====================================================================================
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapReadinessTest,
+	"Elysium.Substrate.MapReadiness", GElysiumTestFlags)
+bool FElysiumMapReadinessTest::RunTest(const FString&)
+{
+	FString Failure;
+	FElysiumMapRuntimePrerequisites Gameplay;
+
+	// Prerequisites are independent observations, not an assumed tick order. Complete the
+	// player-facing half first and prove the gate still waits for construction/collision.
+	Gameplay.bPossessedPawnReady = true;
+	Gameplay.bPlayerBodyReady = true;
+	Gameplay.bFinalPlacementReady = true;
+	Gameplay.bTickPrerequisitesReady = true;
+	TestEqual(TEXT("out-of-order partial completion waits"),
+		Gameplay.Evaluate(0.5, Failure), EElysiumMapReadinessResult::Waiting);
+
+	Gameplay.bCollisionReady = true;
+	Gameplay.bSpawnTransformReady = true;
+	Gameplay.bPlayerEntityReady = true;
+	Gameplay.bEntityWorldReady = true;
+	TestEqual(TEXT("construction has not completed yet"),
+		Gameplay.Evaluate(1.0, Failure), EElysiumMapReadinessResult::Waiting);
+	Gameplay.bConstructionComplete = true;
+	TestEqual(TEXT("all gameplay prerequisites open the gate in any completion order"),
+		Gameplay.Evaluate(1.0, Failure), EElysiumMapReadinessResult::Ready);
+
+	FElysiumMapRuntimePrerequisites Backdrop;
+	Backdrop.bMenuBackdrop = true;
+	Backdrop.bConstructionComplete = true;
+	Backdrop.bEntityWorldReady = true;
+	Backdrop.bCollisionReady = true;
+	TestEqual(TEXT("a backdrop omits every pawn prerequisite"),
+		Backdrop.Evaluate(0.0, Failure), EElysiumMapReadinessResult::Ready);
+
+	FElysiumMapRuntimePrerequisites CollisionFailure = Gameplay;
+	CollisionFailure.bCollisionReady = false;
+	CollisionFailure.bCollisionFailed = true;
+	TestEqual(TEXT("a collision failure never opens the gate"),
+		CollisionFailure.Evaluate(0.0, Failure), EElysiumMapReadinessResult::Failed);
+	TestTrue(TEXT("collision failure is structured"), Failure.Contains(TEXT("collision")));
+
+	FElysiumMapRuntimePrerequisites Timeout = Gameplay;
+	Timeout.bPossessedPawnReady = false;
+	Timeout.bFinalPlacementReady = false;
+	TestEqual(TEXT("an incomplete map waits before the watchdog"),
+		Timeout.Evaluate(FElysiumMapRuntimePrerequisites::WatchdogSeconds - 0.01, Failure),
+		EElysiumMapReadinessResult::Waiting);
+	TestEqual(TEXT("the watchdog fails closed"),
+		Timeout.Evaluate(FElysiumMapRuntimePrerequisites::WatchdogSeconds, Failure),
+		EElysiumMapReadinessResult::Failed);
+	TestTrue(TEXT("watchdog reason names missing prerequisites"),
+		Failure.Contains(TEXT("possessed player pawn"))
+		&& Failure.Contains(TEXT("final player placement")));
+
+	FElysiumMapRuntimePrerequisites MissingSubstrate = Backdrop;
+	MissingSubstrate.bEntityWorldReady = false;
+	TestEqual(TEXT("a completed build with no substrate fails immediately"),
+		MissingSubstrate.Evaluate(0.0, Failure), EElysiumMapReadinessResult::Failed);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumActivationLifecycleTest,
+	"Elysium.Substrate.ActivationLifecycle", GElysiumTestFlags)
+bool FElysiumActivationLifecycleTest::RunTest(const FString&)
+{
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__activation_lifecycle__");
+
+	auto AddWire = [](FElysiumEntityDef& Source, const TCHAR* Output,
+		const TCHAR* Target, const TCHAR* Input, const TCHAR* Param)
+	{
+		FElysiumOutputDef Wire;
+		Wire.Name = Output;
+		Wire.Target = Target;
+		Wire.Input = Input;
+		Wire.Param = Param;
+		Wire.Times = -1;
+		Source.Outputs.Add(MoveTemp(Wire));
+	};
+
+	FElysiumEntityDef Auto;
+	Auto.Classname = TEXT("logic_auto");
+	Auto.TargetName = TEXT("auto1");
+	AddWire(Auto, TEXT("OnMapLoad"), TEXT("counter1"), TEXT("Add"), TEXT("3"));
+	Defs.Defs.Add(MoveTemp(Auto));
+
+	FElysiumEntityDef Timer;
+	Timer.Classname = TEXT("logic_timer");
+	Timer.TargetName = TEXT("timer1");
+	Timer.Keys.Add(TEXT("RefireTime"), TEXT("1"));
+	AddWire(Timer, TEXT("OnTimer"), TEXT("counter1"), TEXT("Add"), TEXT("11"));
+	Defs.Defs.Add(MoveTemp(Timer));
+
+	FElysiumEntityDef Trigger;
+	Trigger.Classname = TEXT("trigger_multiple");
+	Trigger.TargetName = TEXT("trigger1");
+	Trigger.Keys.Add(TEXT("spawnflags"), TEXT("1")); // ALLOW_CLIENTS
+	AddWire(Trigger, TEXT("OnStartTouch"), TEXT("counter1"), TEXT("Add"), TEXT("7"));
+	Defs.Defs.Add(MoveTemp(Trigger));
+
+	FElysiumEntityDef Counter;
+	Counter.Classname = TEXT("math_counter");
+	Counter.TargetName = TEXT("counter1");
+	Defs.Defs.Add(MoveTemp(Counter));
+
+	FElysiumEntityWorld World(nullptr, nullptr);
+	World.Load(MoveTemp(Defs));
+	const FElysiumEntityHandle Player = World.SpawnPlayer();
+	FElysiumEntity* TriggerEntity = World.FindByName(TEXT("trigger1"));
+	FElysiumEntity* CounterEntity = World.FindByName(TEXT("counter1"));
+	if (!TestNotNull(TEXT("trigger resolved"), TriggerEntity)
+		|| !TestNotNull(TEXT("counter resolved"), CounterEntity))
+	{
+		return false;
+	}
+
+	auto CounterValue = [](const FElysiumEntity* Entity)
+	{
+		TArray<TPair<FString, FString>> State;
+		Entity->GetDebugState(State);
+		for (const TPair<FString, FString>& Row : State)
+		{
+			if (Row.Key == TEXT("Value"))
+			{
+				return FCString::Atof(*Row.Value);
+			}
+		}
+		return -1.0f;
+	};
+
+	// Construction may queue map-entry work, but every gameplay drive and physical ingress is
+	// inert until the map actor opens the gate.
+	World.EnqueueInput(TEXT("counter1"), FName(TEXT("Add")), FElysiumVariant::Int(5), 0.0,
+		Player, Player);
+	for (int32 i = 0; i < 3; ++i)
+	{
+		World.RunPlayerThink(10.0 + i);
+		World.Tick(10.0 + i);
+		World.RouteBrushTouch(TriggerEntity->Handle, Player, true);
+	}
+	TestFalse(TEXT("Load leaves the world dormant"), World.IsActive());
+	TestEqual(TEXT("dormant thinks, timers and events do not run"), CounterValue(CounterEntity), 0.0f);
+	TestEqual(TEXT("dormant overlap callbacks are forgotten"), World.TouchBegins(), 0);
+	TestEqual(TEXT("the queued input remains pending"), World.Queue().Num(), 1);
+
+	World.Activate(0.0);
+	World.Activate(99.0); // idempotent: must not move the frozen activation time or replay anything
+	TestTrue(TEXT("Activate opens the gate"), World.IsActive());
+	TestEqual(TEXT("a second Activate does not change now"), World.NowSeconds(), 0.0);
+
+	// This mirrors the map actor's activation transaction: reconcile final containment, then run
+	// player-think and the ordinary think-first/event-queue pass at the unchanged game time.
+	World.RouteBrushTouch(TriggerEntity->Handle, Player, true);
+	World.RouteBrushTouch(TriggerEntity->Handle, Player, true);
+	World.RunPlayerThink(0.0);
+	World.Tick(0.0);
+	TestEqual(TEXT("initial auto, queued input and touch complete in the activation pass"),
+		CounterValue(CounterEntity), 15.0f);
+	TestEqual(TEXT("activation containment emits exactly one begin"), World.TouchBegins(), 1);
+
+	World.Tick(1.0);
+	TestEqual(TEXT("timers start only after activation"), CounterValue(CounterEntity), 26.0f);
+	World.RouteBrushTouch(TriggerEntity->Handle, Player, false);
+	World.RouteBrushTouch(TriggerEntity->Handle, Player, true);
+	World.Tick(1.0);
+	TestEqual(TEXT("a genuine exit and re-entry emits a new edge"), CounterValue(CounterEntity), 33.0f);
+	TestEqual(TEXT("one exit was recorded"), World.TouchEnds(), 1);
+	TestEqual(TEXT("the re-entry is the second begin"), World.TouchBegins(), 2);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFrameOrderTest, "Elysium.Substrate.FrameOrder", GElysiumTestFlags)
 bool FElysiumFrameOrderTest::RunTest(const FString&)
 {
@@ -2081,11 +2256,11 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 				> static_cast<int32>(Map->PostMoveTickFunction.TickGroup));
 	}
 
-	// §4 — a hold stops the world and keeps the screen alive. Gameplay ticks are false on all three
-	// passes; the publish pass, which is presentation, is true — pause is exactly when a dialogue
-	// box has to be taken down, and that comes off a publish.
-	TestFalse(TEXT("the pre-move pass stops when held"), Map->PreMoveTickFunction.bTickEvenWhenPaused);
-	TestFalse(TEXT("the gameplay pass stops when held"), Map->PrimaryActorTick.bTickEvenWhenPaused);
+	// §4 — before activation, the two lifecycle-bearing passes are allowed to poll while held, but
+	// their gameplay branches are phase-gated. ActivateRuntime restores both flags to false; the
+	// post-move gameplay pass is never needed for readiness. Presentation remains live throughout.
+	TestTrue(TEXT("the pre-move pass can poll readiness while held"), Map->PreMoveTickFunction.bTickEvenWhenPaused);
+	TestTrue(TEXT("the activation pass can run while held"), Map->PrimaryActorTick.bTickEvenWhenPaused);
 	TestFalse(TEXT("the post-move pass stops when held"), Map->PostMoveTickFunction.bTickEvenWhenPaused);
 	if (Present)
 	{
@@ -2131,6 +2306,7 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 	// caller passes — which is what lets the test place the think's due time by hand.
 	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
 	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
 
 	FElysiumEntity* CounterEntity = World.FindByName(TEXT("counter1"));
 	if (!TestNotNull(TEXT("counter1 resolved"), CounterEntity))
@@ -2170,6 +2346,7 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 	FElysiumEntityWorld PlayerWorld(/*Owner*/ nullptr, /*GameState*/ nullptr);
 	PlayerWorld.Load(MoveTemp(PlayerDefs));
 	PlayerWorld.SpawnPlayer();
+	PlayerWorld.Activate(0.0);
 
 	FElysiumPlayer* PlayerEnt = PlayerWorld.FindPlayer();
 	if (TestNotNull(TEXT("the player entity spawned"), PlayerEnt))
@@ -2294,6 +2471,7 @@ bool FElysiumIOChainTest::RunTest(const FString&)
 
 	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
 	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
 
 	TestEqual(TEXT("two entities loaded"), World.NumEntities(), 2);
 
@@ -2652,6 +2830,7 @@ bool FElysiumNpcTest::RunTest(const FString&)
 
 	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
 	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
 
 	FElysiumEntity* JackEnt = World.FindByName(TEXT("Jack"));
 	FElysiumEntity* MakerEnt = World.FindByName(TEXT("blueblood_maker"));
@@ -2715,6 +2894,7 @@ bool FElysiumRuntimeSpawnTest::RunTest(const FString&)
 	Defs.MapName = TEXT("__spawn_test__");
 	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
 	World.Load(MoveTemp(Defs));   // empty map — everything here is runtime-created
+	World.Activate(0.0);
 
 	// --- Phase 1: CreateEntityNoSpawn appends a live, findable, NOT-yet-spawned entity ---
 	FElysiumEntityDef D;
@@ -3006,6 +3186,7 @@ bool FElysiumCPythonWritersTest::RunTest(const FString&)
 	Defs.Defs.Add(MoveTemp(Relay));
 	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
 	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
 
 	// Ctx.World is what CurrentWorld() resolves against for the duration of each eval.
 	FElysiumScriptContext Ctx;
@@ -3298,6 +3479,7 @@ bool FElysiumScriptedSequenceTest::RunTest(const FString&)
 
 	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
 	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
 
 	FElysiumEntity* Seq = World.FindByName(TEXT("seq1"));
 	FElysiumEntity* Target = World.FindByName(TEXT("mover1"));
@@ -3370,6 +3552,7 @@ bool FElysiumScriptedSequenceTest::RunTest(const FString&)
 
 	FElysiumEntityWorld World2(nullptr, nullptr);
 	World2.Load(MoveTemp(PlayerDefs));
+	World2.Activate(0.0);
 	FElysiumEntity* PSeq = World2.FindByName(TEXT("pseq"));
 	FElysiumEntity* Count2 = World2.FindByName(TEXT("counter1"));
 	if (TestNotNull(TEXT("pseq resolved"), PSeq) && TestNotNull(TEXT("counter1 resolved"), Count2))
@@ -3475,6 +3658,7 @@ bool FElysiumPlayerEntityTest::RunTest(const FString&)
 	World.Load(MoveTemp(Defs));
 
 	const FElysiumEntityHandle PlayerHandle = World.SpawnPlayer();
+	World.Activate(0.0);
 	FElysiumPlayer* Player = World.FindPlayer();
 	if (!TestNotNull(TEXT("SpawnPlayer created a player entity"), Player))
 	{
@@ -3597,6 +3781,7 @@ bool FElysiumPlayerEntityTest::RunTest(const FString&)
 		Bare.MapName = TEXT("__backdrop__");
 		FElysiumEntityWorld Backdrop(nullptr, nullptr);
 		Backdrop.Load(MoveTemp(Bare));
+		Backdrop.Activate(0.0);
 		TestNull(TEXT("a map built without a player has none"), Backdrop.FindPlayer());
 		// And an input addressed at one is an unknown target, not a crash.
 		Backdrop.EnqueueInput(ElysiumPlayerTargetName(), FName(TEXT("MoneyAdd")), FElysiumVariant::Int(1),
@@ -3664,6 +3849,7 @@ bool FElysiumGenesisExitTest::RunTest(const FString&)
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 	World.Load(MoveTemp(Defs));
 	const FElysiumEntityHandle PlayerHandle = World.SpawnPlayer();
+	World.Activate(0.0);
 	FElysiumEntity* DirectChange = World.FindByName(TEXT("boogieout_direct"));
 	FElysiumEntity* Boogieout = World.FindByName(TEXT("boogieout"));
 	FElysiumEntity* Firetrans = World.FindByName(TEXT("firetrans"));
@@ -4021,6 +4207,7 @@ bool FElysiumWorldServicesTest::RunTest(const FString&)
 		// A played map has a player entity (11.4) — the map actor creates one after Load, and the
 		// travel seam below reads its placement, so the test builds the same shape.
 		World.SpawnPlayer();
+		World.Activate(0.0);
 
 		// Spawn-time reaches: the NPC stood a body, the start_enabled scheme faded in.
 		TestTrue(TEXT("the NPC stood a body through the embodiment"),
@@ -4080,6 +4267,7 @@ bool FElysiumWorldServicesTest::RunTest(const FString&)
 	{
 		FElysiumEntityWorld Bare(/*Owner*/ nullptr, /*GameState*/ nullptr);
 		Bare.Load(BuildDefs());
+		Bare.Activate(0.0);
 
 		TestNull(TEXT("a bare world has no embodiment"), Bare.Embodiment());
 		TestNull(TEXT("a bare world has no audio"), Bare.Audio());
@@ -4648,6 +4836,7 @@ bool FElysiumSaveRoundTripTest::RunTest(const FString&)
 	// --- Build, mutate through the real chokepoints, freeze ------------------------------------
 	FElysiumEntityWorld A(/*Owner*/ nullptr, /*GameState*/ nullptr);
 	A.Load(MakeSaveTestDefs());
+	A.Activate(0.0);
 
 	FElysiumEntity* Relay = A.FindByName(TEXT("relay1"));
 	FElysiumEntity* Counter = A.FindByName(TEXT("counter1"));
@@ -4688,6 +4877,7 @@ bool FElysiumSaveRoundTripTest::RunTest(const FString&)
 	FElysiumEntityWorld B(/*Owner*/ nullptr, /*GameState*/ nullptr);
 	B.Load(MakeSaveTestDefs());
 	const int32 AppliedCount = B.ApplySnapshot(First);
+	B.Activate(0.0);
 	TestEqual(TEXT("every record applied"), AppliedCount, First.Entities.Num());
 
 	FElysiumEntity* CounterB = B.FindByName(TEXT("counter1"));
@@ -4980,6 +5170,7 @@ bool FElysiumSaveSchemaTest::RunTest(const FString&)
 	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
 	World.Load(MoveTemp(Defs));
 	TestEqual(TEXT("the record still applied"), World.ApplySnapshot(Snapshot), 1);
+	World.Activate(0.0);
 	TestEqual(TEXT("the known field landed"),
 		SaveTestCounterValue(World.FindByName(TEXT("counter1"))), 11.0f);
 
@@ -4998,6 +5189,7 @@ bool FElysiumSaveSchemaTest::RunTest(const FString&)
 	FElysiumEntityWorld Other(/*Owner*/ nullptr, /*GameState*/ nullptr);
 	Other.Load(MoveTemp(Defs2));
 	TestEqual(TEXT("the mismatched record is skipped"), Other.ApplySnapshot(Wrong), 0);
+	Other.Activate(0.0);
 	TestEqual(TEXT("and nothing was written"),
 		SaveTestCounterValue(Other.FindByName(TEXT("counter1"))), 0.0f);
 
@@ -6244,6 +6436,7 @@ bool FElysiumChoreoSceneTest::RunTest(const FString&)
 		Defs.Defs.Add(MoveTemp(Counter));
 
 		World.Load(MoveTemp(Defs));
+		World.Activate(0.0);
 	};
 
 	// --- bool keyfields read numerically, not as string truthiness -------------------------
@@ -6263,6 +6456,7 @@ bool FElysiumChoreoSceneTest::RunTest(const FString&)
 		S.Keys.Add(TEXT("full_sound"), TEXT("1"));
 		Defs.Defs.Add(MoveTemp(S));
 		World.Load(MoveTemp(Defs));
+		World.Activate(0.0);
 
 		const FElysiumEntity* Ent = World.FindByName(TEXT("flags1"));
 		if (TestNotNull(TEXT("flags1 resolved"), Ent))
@@ -6420,6 +6614,51 @@ bool FElysiumChoreoSceneTest::RunTest(const FString&)
 	}
 
 	ElysiumScene::ClearCache();
+	return true;
+}
+
+// =====================================================================================
+// Skeleton-bound animation resolution — cache identity and cinematic root selection.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationBindingIdentityTest,
+	"Elysium.Substrate.AnimationBindingIdentity", GElysiumTestFlags)
+bool FElysiumAnimationBindingIdentityTest::RunTest(const FString&)
+{
+	const FString Clip(TEXT("entire_scene"));
+	const FString Bank(TEXT("cinematic_santa_monica_courtroom_courtroom_bip1__bip02"));
+	const FString Sheriff = ElysiumEntityAnimation::CinematicClipCacheKey(
+		TEXT("sheriff"), Bank, Clip);
+	const FString Sire = ElysiumEntityAnimation::CinematicClipCacheKey(
+		TEXT("doppleganger_male"), Bank, Clip);
+	TestFalse(TEXT("one cinematic bank retargeted to two models has two cache identities"),
+		Sheriff == Sire);
+	TestFalse(TEXT("ordinary and cinematic cache namespaces cannot alias"),
+		Sheriff == ElysiumEntityAnimation::NpcClipCacheKey(TEXT("sheriff"), Clip));
+
+	FElysiumNpcAnimProxy Proxy;
+	UAnimSequence* Sequence = NewObject<UAnimSequence>();
+	Proxy.Request(Sequence, /*bLoop=*/true, 0.25f);
+	TestTrue(TEXT("the initial stance loops"), Proxy.IsPlayingLoop());
+	Proxy.Request(Sequence, /*bLoop=*/false, 0.25f);
+	TestFalse(TEXT("the same clip can change from a loop to a one-shot"), Proxy.IsPlayingLoop());
+	Proxy.Request(Sequence, /*bLoop=*/true, 0.25f);
+	TestTrue(TEXT("reset-to-idle restores looping on the same clip"), Proxy.IsPlayingLoop());
+
+	FElysiumCinematicSet Multi;
+	Multi.Roots.Add(TEXT("bip01"), TEXT("bank_one"));
+	Multi.Roots.Add(TEXT("bip02"), TEXT("bank_two"));
+	TestEqual(TEXT("cinematic roots match case-insensitively"),
+		Multi.BankForRoot(TEXT("Bip02")), FString(TEXT("bank_two")));
+	TestTrue(TEXT("an unknown root does not animate an arbitrary actor"),
+		Multi.BankForRoot(TEXT("Bip99")).IsEmpty());
+	TestTrue(TEXT("an empty root is ambiguous on a multi-actor set"),
+		Multi.BankForRoot(FString()).IsEmpty());
+
+	FElysiumCinematicSet Single;
+	Single.Roots.Add(TEXT("bip01"), TEXT("solo_bank"));
+	TestEqual(TEXT("a single-actor set may omit bonerename"),
+		Single.BankForRoot(FString()), FString(TEXT("solo_bank")));
 	return true;
 }
 

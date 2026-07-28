@@ -17,6 +17,51 @@ class USkeletalMeshComponent;
 class UStaticMeshComponent;
 class AElysiumMapActor;
 
+// Elysium's map lifecycle, distinct from Unreal's package/actor lifecycle. BeginPlay only starts
+// Building; authored gameplay is admitted exactly once at the Activating -> Active transaction.
+enum class EElysiumMapRuntimePhase : uint8
+{
+	Building,
+	WaitingForPrerequisites,
+	Activating,
+	Active,
+	Failed,
+};
+
+enum class EElysiumMapReadinessResult : uint8
+{
+	Waiting,
+	Ready,
+	Failed,
+};
+
+// Pure snapshot of the independently completing activation prerequisites. The map actor builds
+// one from current engine state each poll; keeping the decision engine-neutral makes completion
+// order, backdrop rules and fail-closed timeout behaviour directly testable.
+struct FElysiumMapRuntimePrerequisites
+{
+	static constexpr double WatchdogSeconds = 8.0;
+
+	bool bConstructionComplete = false;
+	bool bEntityWorldReady = false;
+	bool bMenuBackdrop = false;
+	bool bCollisionReady = false;   // Ready or intentionally Disabled
+	bool bCollisionFailed = false;
+	bool bSpawnTransformReady = false;
+	bool bPlayerEntityReady = false;
+	bool bPossessedPawnReady = false;
+	bool bPlayerBodyReady = false;
+	bool bFinalPlacementReady = false;
+	bool bTickPrerequisitesReady = false;
+
+	FString Missing() const;
+	EElysiumMapReadinessResult Evaluate(double WaitSeconds, FString& OutFailure) const;
+};
+
+const TCHAR* ElysiumMapRuntimePhaseName(EElysiumMapRuntimePhase Phase);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnElysiumMapRuntimeReady, AElysiumMapActor*);
+DECLARE_MULTICAST_DELEGATE_TwoParams(FOnElysiumMapRuntimeFailed, AElysiumMapActor*, const FString&);
+
 // S2 — the map's pre-move tick (runtime-architecture.md §3, steps 2-3). The first of the actor's
 // three tick functions, in TG_PrePhysics, carrying everything that must be settled BEFORE the pawn
 // moves: the frame order's own wiring, the one clock advance, and the player entity's own think.
@@ -147,9 +192,16 @@ public:
 	// def parser, but a mesh's own size is not a point), 1 for everything else.
 	virtual float BodyScaleFor(const struct FElysiumEntityDef& Def) const override;
 
-	// True once the pawn has been placed and its ground collision has finished cooking
-	// (or the spawn-hold timed out). The headless profiler waits on this before capturing.
+	// True only after the activation transaction has completed. The headless profiler waits on
+	// this before capturing, so it cannot observe a partially-built runtime world.
 	bool IsSpawnDone() const { return bSpawnDone; }
+	EElysiumMapRuntimePhase GetRuntimePhase() const { return RuntimePhase; }
+	bool IsRuntimeActive() const { return RuntimePhase == EElysiumMapRuntimePhase::Active; }
+	double GetRuntimeWaitSeconds() const;
+	FString GetMissingRuntimePrerequisites() const;
+	const FString& GetRuntimeFailureReason() const { return RuntimeFailureReason; }
+	FOnElysiumMapRuntimeReady& OnRuntimeReady() { return RuntimeReady; }
+	FOnElysiumMapRuntimeFailed& OnRuntimeFailed() { return RuntimeFailed; }
 
 	// The live Track-B entity world (P1.4), or null if the map has no `.ents`. Owned by this
 	// actor, so it dies on map unload. The `elysium.world*` verbs reach it through here.
@@ -260,6 +312,12 @@ private:
 	// ambient_soundscheme entities can reach it during their spawn pass; ticked from Tick with the
 	// player location; its voices are stopped on unload (EndPlay).
 	TPimplPtr<FElysiumSoundSchemeManager> SchemeManager;
+	// A start_enabled ambient_soundscheme asks for its bed during the construction Spawn pass. Keep
+	// that request as data until the activation transaction reaches its audio step.
+	bool bHasDeferredSchemeFadeIn = false;
+	FString DeferredSchemeRel;
+	FVector DeferredSchemeAnchor = FVector::ZeroVector;
+	float DeferredSchemeFadeSeconds = 0.0f;
 
 	// 11.7 — the live scripted camera shots and their entity bindings. Owned here because resolving a
 	// shot's anchors needs the entity world and the bodies standing in it; refreshed in the post-move
@@ -292,21 +350,33 @@ private:
 	TWeakObjectPtr<class APlayerController> PrereqController;
 	TWeakObjectPtr<class UPawnMovementComponent> PrereqMovement;
 
-	// Place a freshly seated pawn and hold it frozen until its ground has finished cooking. Runs in
-	// the pre-move pass, because a pawn that has not been placed and frozen yet must not be handed
-	// to the mover.
-	void TickSpawnHold(float DeltaSeconds);
+	// Lifecycle polling is the only work admitted before Active. It places/freezes the pawn at its
+	// final transform, observes asynchronous collision completion, and opens the atomic transaction
+	// only when every independent prerequisite is satisfied.
+	void PollRuntimeActivation();
+	FElysiumMapRuntimePrerequisites CollectRuntimePrerequisites() const;
+	void ActivateRuntime();
+	void FailRuntime(const FString& Reason);
+	void TickAudio(float DeltaSeconds);
 	// UE can retain an already-overlapping pair across a non-swept/zero-distance teleport without
 	// emitting a fresh begin edge. Refresh the pawn's overlap cache, then reconcile every runtime
 	// brush currently containing it into the deduplicating entity touch bus.
 	void ReconcilePlayerBrushTouches(APawn* Pawn);
 
-	// The player pawn may not exist yet in BeginPlay, so the teleport is deferred to Tick;
-	// the pawn is then held frozen until the async collision cook yields ground beneath it.
+	// The player pawn may not exist yet in BeginPlay, so final placement is performed by the
+	// readiness poll. It stays frozen through the activation transaction.
 	bool bSpawnPending = false;
 	bool bSpawnPlaced = false;
 	bool bSpawnDone = false;
-	float SpawnHoldSeconds = 0.f;
 	FVector PendingSpawnLoc = FVector::ZeroVector;
 	float PendingSpawnYaw = 0.f;
+
+	EElysiumMapRuntimePhase RuntimePhase = EElysiumMapRuntimePhase::Building;
+	bool bRuntimeConstructionComplete = false;
+	bool bMenuBackdrop = false;
+	double RuntimeWaitStartSeconds = 0.0;
+	double RuntimeWaitDurationSeconds = 0.0;
+	FString RuntimeFailureReason;
+	FOnElysiumMapRuntimeReady RuntimeReady;
+	FOnElysiumMapRuntimeFailed RuntimeFailed;
 };

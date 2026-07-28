@@ -38,6 +38,17 @@ UElysiumEntityBodies::UElysiumEntityBodies()
 	PrimaryComponentTick.bCanEverTick = false;
 }
 
+FString ElysiumEntityAnimation::NpcClipCacheKey(const FString& Stem, const FString& ClipName)
+{
+	return Stem + TEXT("|") + ClipName;
+}
+
+FString ElysiumEntityAnimation::CinematicClipCacheKey(
+	const FString& Stem, const FString& BankStem, const FString& ClipName)
+{
+	return Stem + TEXT("|") + BankStem + TEXT("|") + ClipName;
+}
+
 UAnimSequence* UElysiumEntityBodies::ResolveNpcClip(const FString& Stem, const FString& ClipName)
 {
 	if (Stem.IsEmpty() || ClipName.IsEmpty())
@@ -46,7 +57,7 @@ UAnimSequence* UElysiumEntityBodies::ResolveNpcClip(const FString& Stem, const F
 	}
 	// Keyed by stem AND clip: one UAnimSequence is bound to one skeleton, so the same bank clip
 	// resolves separately per NPC model. A null entry is a remembered miss.
-	const FString Key = Stem + TEXT("|") + ClipName;
+	const FString Key = ElysiumEntityAnimation::NpcClipCacheKey(Stem, ClipName);
 	if (const TObjectPtr<UAnimSequence>* Cached = NpcAnimCache.Find(Key))
 	{
 		return Cached->Get();
@@ -110,9 +121,10 @@ bool UElysiumEntityBodies::PlayCinematicClip(USkeletalMeshComponent* Body, const
 		return false;
 	}
 
-	// Cached alongside the ordinary clips — the key is the bank, so two actors taking different
-	// bone roots out of one performance stay distinct.
-	const FString Key = BankStem + TEXT("|") + ClipName;
+	// Cached alongside the ordinary clips. The target stem is part of the key because the
+	// UAnimSequence returned by glTFRuntime is bound to that target mesh's USkeleton. Theatre
+	// scenes send one bank clip to several different character models concurrently.
+	const FString Key = ElysiumEntityAnimation::CinematicClipCacheKey(Stem, BankStem, ClipName);
 	UAnimSequence* Anim = nullptr;
 	if (const TObjectPtr<UAnimSequence>* Found = NpcAnimCache.Find(Key))
 	{

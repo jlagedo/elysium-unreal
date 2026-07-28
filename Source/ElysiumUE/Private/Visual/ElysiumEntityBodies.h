@@ -52,7 +52,8 @@ public:
 	// the name resolves nothing. OutSeconds receives the clip's authored length — what a
 	// `scripted_sequence` schedules its `OnEndSequence` off.
 	// 12.1 — play a clip out of a named cinematic bank (a choreo scene's anim set), resolved and
-	// cached per (bank, clip) exactly like an ordinary one.
+	// cached per (target stem, bank, clip). The target stem is load-bearing: glTFRuntime binds the
+	// returned UAnimSequence to that model's USkeleton.
 	bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& BankStem,
 		const FString& ClipName, bool bLoop, float* OutSeconds);
 
@@ -124,3 +125,11 @@ private:
 	UPROPERTY() TObjectPtr<UElysiumPropSkinSet> PropSkins;
 	bool bPropSkinsLoaded = false;
 };
+
+// Skeleton-bound animation cache keys. Kept outside the UObject so the invariant is testable
+// without constructing a world: no key may alias sequences retargeted onto different models.
+namespace ElysiumEntityAnimation
+{
+	FString NpcClipCacheKey(const FString& Stem, const FString& ClipName);
+	FString CinematicClipCacheKey(const FString& Stem, const FString& BankStem, const FString& ClipName);
+}

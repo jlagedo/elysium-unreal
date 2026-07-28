@@ -84,6 +84,7 @@ double FElysiumEntityWorld::NowSeconds() const
 
 void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 {
+	bActive = false;
 	Defs = MoveTemp(InDefs);
 
 	EntityList.Reserve(Defs.Num());
@@ -141,8 +142,20 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 		CaptureBaseline(i);
 	}
 
-	UE_LOG(LogElysiumWorld, Log, TEXT("world '%s' live: %d entities (%d brush bodies), epoch %u"),
+	UE_LOG(LogElysiumWorld, Log, TEXT("world '%s' built dormant: %d entities (%d brush bodies), epoch %u"),
 		*Defs.MapName, EntityList.Num(), Bodies.Num(), Epoch);
+}
+
+void FElysiumEntityWorld::Activate(double Now)
+{
+	if (bActive)
+	{
+		return;
+	}
+	LastTickNow = Now;
+	bActive = true;
+	UE_LOG(LogElysiumWorld, Log, TEXT("(%8.3f) world '%s' activated, epoch %u"),
+		Now, *Defs.MapName, Epoch);
 }
 
 void FElysiumEntityWorld::BuildBrushBody(FElysiumEntity& Ent)
@@ -713,6 +726,14 @@ void FElysiumEntityWorld::AddSink(TUniquePtr<IElysiumIOSink> InSink)
 void FElysiumEntityWorld::RouteBrushTouch(const FElysiumEntityHandle& Brush,
 	const FElysiumEntityHandle& Activator, bool bBegin)
 {
+	// Engine overlap callbacks can arrive while procedural collision and the pawn placement are
+	// still settling. Dormant observations are deliberately forgotten: activation reconciles the
+	// final overlap state once, after the pawn is at its authoritative transform.
+	if (!bActive)
+	{
+		return;
+	}
+
 	const uint64 TouchKey = (static_cast<uint64>(static_cast<uint32>(Brush.Index)) << 32)
 		| static_cast<uint32>(Activator.Index);
 	if (!bBegin)
@@ -770,6 +791,11 @@ namespace
 
 void FElysiumEntityWorld::UpdateUseCursor()
 {
+	if (!bActive)
+	{
+		return;
+	}
+
 	// Camera-ray-pick the nearest usable, non-inert brush entity within reach. The trace itself is
 	// the embodiment's (it needs the pawn to ignore and the engine channel to trace on); what comes
 	// back is a handle, and the usability arbitration below is the substrate's.
@@ -811,6 +837,11 @@ void FElysiumEntityWorld::UpdateUseCursor()
 
 void FElysiumEntityWorld::PlayerUse()
 {
+	if (!bActive)
+	{
+		return;
+	}
+
 	// Press whatever the cursor settled on this frame, with the player as the activator (11.4) —
 	// the same handle the trigger touch path carries, so a `+use` wire's `!activator` resolves.
 	if (FElysiumEntity* E = Resolve(AimedUsable))
@@ -1094,6 +1125,10 @@ void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 
 void FElysiumEntityWorld::RunPlayerThink(double Now)
 {
+	if (!bActive)
+	{
+		return;
+	}
 	LastTickNow = Now;
 	// The pre-move pass. Retail runs the player's own think inside CPlayerMove::RunCommand — the
 	// PreThink -> think -> move -> PostThink shell the engine drives while draining `clc_move` —
@@ -1115,6 +1150,10 @@ void FElysiumEntityWorld::RunPlayerThink(double Now)
 
 void FElysiumEntityWorld::Tick(double Now)
 {
+	if (!bActive)
+	{
+		return;
+	}
 	LastTickNow = Now;
 	// 11.4 — sample the pawn into the player entity first, so everything this frame reads (a think
 	// measuring distance, a landmark offset, `pc.GetOrigin()`) sees where the player actually is.
@@ -1553,6 +1592,9 @@ FString FElysiumEntityWorld::FormatEventLine(double Now, const FElysiumIOEvent& 
 
 void FElysiumEntityWorld::Teardown()
 {
+	bActive = false;
+	ActiveTouches.Empty();
+
 	// 11.4 — the player's live state goes back into the session record before the entity holding it
 	// dies. This is the only dehydrate point, and it covers every way a map epoch ends: a travel, a
 	// reload, quit-to-menu, and the world being rebuilt on a surviving actor.

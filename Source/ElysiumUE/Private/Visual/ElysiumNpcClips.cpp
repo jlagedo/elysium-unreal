@@ -249,16 +249,16 @@ FString FElysiumCinematicSet::BankForRoot(const FString& Root) const
 	{
 		return *Exact;
 	}
-	// A scene naming a root this model does not carry, or naming none: take the first. A
-	// single-root cinematic is exported unsuffixed and has exactly one entry.
-	for (const TPair<FString, FString>& Pair : Roots)
+	// A single-actor cinematic can omit bonerename. Multiple roots are never interchangeable:
+	// iteration order is not semantic, and choosing another root animates the wrong cast member.
+	if (Root.IsEmpty() && Roots.Num() == 1)
 	{
-		return Pair.Value;
+		return Roots.CreateConstIterator().Value();
 	}
 	return FString();
 }
 
-FString FElysiumNpcIndex::CinematicBank(const FString& ModelPath, const FString& BoneRoot) const
+const FElysiumCinematicSet* FElysiumNpcIndex::FindCinematic(const FString& ModelPath) const
 {
 	FString Key = ModelPath;
 	Key.ReplaceInline(TEXT("\\"), TEXT("/"));
@@ -267,6 +267,11 @@ FString FElysiumNpcIndex::CinematicBank(const FString& ModelPath, const FString&
 	{
 		Key = TEXT("models/") + Key;
 	}
-	const FElysiumCinematicSet* Set = Cinematics.Find(Key);
+	return Cinematics.Find(Key);
+}
+
+FString FElysiumNpcIndex::CinematicBank(const FString& ModelPath, const FString& BoneRoot) const
+{
+	const FElysiumCinematicSet* Set = FindCinematic(ModelPath);
 	return Set ? Set->BankForRoot(BoneRoot) : FString();
 }

@@ -120,10 +120,21 @@ void FElysiumCogWindow_Maps::RenderContent()
 
 	ImGui::SeparatorText("Current map");
 	Row("Name", Map->LoadedMap.IsEmpty() ? TEXT("(loading)") : Map->LoadedMap);
+	Row("Runtime", FString::Printf(TEXT("%s · %.2fs"),
+		ElysiumMapRuntimePhaseName(Map->GetRuntimePhase()), Map->GetRuntimeWaitSeconds()));
+	const FString Missing = Map->GetMissingRuntimePrerequisites();
+	if (!Missing.IsEmpty())
+	{
+		Row("Waiting for", Missing);
+	}
+	if (!Map->GetRuntimeFailureReason().IsEmpty())
+	{
+		Row("Failure", Map->GetRuntimeFailureReason());
+	}
 	Row("Surfaces", FString::Printf(TEXT("%d world · %d sky"), Visuals->WorldSurfaceCount, Visuals->SkySurfaceCount));
-	Row("Collision", Collision->bBrushCollision
-		? FString::Printf(TEXT("brush · %d hulls · %d disp tris"), Collision->HullCount, Collision->DispTriCount)
-		: FString(TEXT("render trimesh")));
+	Row("Collision", FString::Printf(TEXT("%s · %d hulls · %d disp tris"),
+		ElysiumCollisionBuildStateName(Collision->GetBuildState()),
+		Collision->HullCount, Collision->DispTriCount));
 	Row("Lights", FString::Printf(TEXT("%d"), Visuals->WorldLightCount));
 	Row("Props", FString::Printf(TEXT("%d inst · %d models"), Visuals->PropInstanceCount, Visuals->PropModelCount));
 	Row("Decals", FString::Printf(TEXT("%d"), Visuals->DecalCount));

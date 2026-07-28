@@ -6,6 +6,18 @@
 
 class UProceduralMeshComponent;
 
+// Readiness of the only collision the player can stand on. Disabled is an intentional satisfied
+// state (`elysium.BrushCollision 0`); Failed is never safe to admit gameplay.
+enum class EElysiumCollisionBuildState : uint8
+{
+	Disabled,
+	Cooking,
+	Ready,
+	Failed,
+};
+
+const TCHAR* ElysiumCollisionBuildStateName(EElysiumCollisionBuildState State);
+
 // The map's WALKABLE SURFACE. Baked world geometry carries no gameplay collision, so the two
 // colliders built here are the only thing the player stands on: `<map>.hulls` is one convex
 // element per solid world brush (invisible PLAYERCLIP volumes included, geometry the designer
@@ -23,11 +35,12 @@ class UElysiumMapCollision : public USceneComponent
 public:
 	UElysiumMapCollision();
 
-	// Build both colliders for this map. Returns true when at least one convex hull loaded — a
-	// false leaves the map with no walkable surface at all, which is a warning, not an error
-	// (`elysium.BrushCollision 0` is a debugging flythrough). Reads the cvar itself, so the caller
-	// asks for the surface and gets whatever the map and the A/B allow.
+	// Build both colliders for this map. Returns true when a required asynchronous build started.
+	// When collision is intentionally disabled, BuildState is Disabled and the activation
+	// prerequisite is satisfied. Missing/invalid required hull data while enabled is Failed.
 	bool Build(const FString& MapName);
+	EElysiumCollisionBuildState GetBuildState() const;
+	const FString& GetFailureReason() const { return FailureReason; }
 
 	// Convex-hull count and displacement-triangle count, for the debug overlay.
 	int32 HullCount = 0;
@@ -45,4 +58,6 @@ private:
 
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> HullCollision;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> DispCollision;
+	EElysiumCollisionBuildState BuildState = EElysiumCollisionBuildState::Disabled;
+	FString FailureReason;
 };

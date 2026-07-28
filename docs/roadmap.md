@@ -884,8 +884,7 @@ Steps are ordered so each compiles, ships and is observable alone. **11.4 was th
   or `GetFirstPlayerController()` left under the substrate.
 - [x] **11.3 App state machine + pause + loading + game over** — `UElysiumGameFlowSubsystem` owning
   `EElysiumAppState` and its transition table; **the screen is a pure function of the state**.
-  **Remaining:** the game-over copy is invented (VtMB's death screen is un-RE'd); the loading screen
-  covers the level-load flush only — the build pass after it is 10.4's.
+  **Remaining:** the game-over copy is invented (VtMB's death screen is un-RE'd).
 - [x] **11.4 The player entity** *(S3 — the hinge)* — `FElysiumAnimating`/`FElysiumCombatCharacter`/
   `FElysiumPlayer` join VtMB's own datamap chain; `FElysiumPlayerRecord` carries the durable half
   across maps. `vampire.Player` retired — `pc` is an ordinary `Entity` handle.
@@ -919,6 +918,16 @@ Steps are ordered so each compiles, ships and is observable alone. **11.4 was th
   twice a frame. **What the inversion gave up, measured:** a closing door displaces the pawn rather
   than dealing `dmg` or firing `OnBlockedClosing`, so VtMB's authored `MOVETYPE_PUSH` is **4.8's
   remainder**. → `runtime-architecture.md` §3. Discharged 4.7's owner call (c).
+- [x] **11.12 Map activation barrier** — `AElysiumMapActor` owns an explicit
+  `Building → WaitingForPrerequisites → Activating → Active|Failed` lifecycle. Entity worlds load
+  dormant; a wall-clock watchdog fails closed unless runtime construction, final frozen player
+  placement (gameplay maps), tick wiring, and every required async collision cook are complete.
+  Activation reconciles final overlaps and runs the initial player/entity/event/audio pass at the
+  unchanged game time before `UElysiumMapSubsystem` publishes `MapReady`; app state stays `Loading`
+  and a viewport Slate overlay covers the post-`LoadMap` build until that callback. `MapFailed`
+  retains the overlay with the missing prerequisite. This is the correctness gate under **10.4**;
+  parsing/spawning are still synchronous and 10.4 remains open. → `map-architecture.md`,
+  `runtime-architecture.md` §3/§10.
 
 **Slice acceptance:** from a cold launch — the menu comes up over the backdrop, New Game runs chargen
 and enters the story, the tutorial's opening beats play on rebindable controls with a HUD, Esc pauses,

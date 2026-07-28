@@ -91,8 +91,8 @@ struct FElysiumCinematicSet
 	// Root token (`Bip01`, `Bip02`, …) -> the bank stem holding that actor's copy of the clips.
 	TMap<FString, FString> Roots;
 
-	// The bank for a bonerename source, falling back to the first root when the scene names one
-	// this model does not carry (or names none at all — a single-actor cinematic).
+	// The bank for an exact bonerename source. An empty source resolves only when this is an
+	// unambiguous single-root cinematic; a wrong non-empty root never selects another actor.
 	FString BankForRoot(const FString& Root) const;
 };
 
@@ -108,6 +108,9 @@ struct FElysiumNpcIndex
 
 	// Absolute path to a bank's glb, or empty when the stem is not a known bank.
 	FString BankGlbPath(const FString& BankStem) const;
+
+	// The normalized cinematic-set record for a scene model path, or null.
+	const FElysiumCinematicSet* FindCinematic(const FString& ModelPath) const;
 
 	// The bank stem a scene's anim-set model + actor bonerename resolves to, or empty.
 	FString CinematicBank(const FString& ModelPath, const FString& BoneRoot) const;

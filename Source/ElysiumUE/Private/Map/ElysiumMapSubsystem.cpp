@@ -176,11 +176,11 @@ bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
 	return true;
 }
 
-void UElysiumMapSubsystem::SpawnPendingMap()
+bool UElysiumMapSubsystem::SpawnPendingMap()
 {
 	if (!PendingMapLoad.bValid)
 	{
-		return;
+		return false;
 	}
 	const FPendingMapLoad P = PendingMapLoad;
 	PendingMapLoad = FPendingMapLoad{};
@@ -191,7 +191,10 @@ void UElysiumMapSubsystem::SpawnPendingMap()
 	UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
 	if (!World)
 	{
-		return;
+		const FString Reason = FString::Printf(TEXT("cannot spawn runtime map '%s': no current world"), *P.Map);
+		UE_LOG(LogElysiumMap, Error, TEXT("%s"), *Reason);
+		CurrentMapFailed.Broadcast(nullptr, Reason);
+		return false;
 	}
 
 	const double Start = FPlatformTime::Seconds();
@@ -201,16 +204,47 @@ void UElysiumMapSubsystem::SpawnPendingMap()
 	AElysiumMapActor* NewMap = World->SpawnActorDeferred<AElysiumMapActor>(AElysiumMapActor::StaticClass(), Xf);
 	if (!NewMap)
 	{
-		return;
+		const FString Reason = FString::Printf(TEXT("cannot spawn runtime map actor for '%s'"), *P.Map);
+		UE_LOG(LogElysiumMap, Error, TEXT("%s"), *Reason);
+		CurrentMapFailed.Broadcast(nullptr, Reason);
+		return false;
 	}
 	NewMap->MapName = P.Map;
-	NewMap->FinishSpawning(Xf);
+	// CurrentMap and the delegates are installed before FinishSpawning invokes BeginPlay. Readiness
+	// normally completes on a later tick, but this ordering also makes a synchronous construction
+	// failure unambiguously belong to the current actor.
 	CurrentMap = NewMap;
+	NewMap->OnRuntimeReady().AddUObject(this, &UElysiumMapSubsystem::HandleRuntimeReady);
+	NewMap->OnRuntimeFailed().AddUObject(this, &UElysiumMapSubsystem::HandleRuntimeFailed);
+	NewMap->FinishSpawning(Xf);
 
 	UE_LOG(LogElysiumMap, Log, TEXT("built %s%s%s (%.2fs)"), *P.Map,
 		P.Landmark.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" @ %s"), *P.Landmark),
 		P.bMenuBackdrop ? TEXT(" [menu backdrop]") : TEXT(""),
 		FPlatformTime::Seconds() - Start);
+	return true;
+}
+
+void UElysiumMapSubsystem::HandleRuntimeReady(AElysiumMapActor* Map)
+{
+	if (!Map || CurrentMap.Get() != Map)
+	{
+		UE_LOG(LogElysiumMap, Verbose, TEXT("ignored stale map-ready callback from %s"),
+			*GetNameSafe(Map));
+		return;
+	}
+	CurrentMapReady.Broadcast(Map);
+}
+
+void UElysiumMapSubsystem::HandleRuntimeFailed(AElysiumMapActor* Map, const FString& Reason)
+{
+	if (!Map || CurrentMap.Get() != Map)
+	{
+		UE_LOG(LogElysiumMap, Verbose, TEXT("ignored stale map-failed callback from %s: %s"),
+			*GetNameSafe(Map), *Reason);
+		return;
+	}
+	CurrentMapFailed.Broadcast(Map, Reason);
 }
 
 bool UElysiumMapSubsystem::TravelForMenu(const FString& Map)

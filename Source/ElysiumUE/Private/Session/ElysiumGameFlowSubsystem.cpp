@@ -2,6 +2,7 @@
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumGameStateSubsystem.h"
+#include "ElysiumMapActor.h"
 #include "Substrate/ElysiumChargen.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "ElysiumMapSubsystem.h"
@@ -11,6 +12,7 @@
 
 #include "Camera/CameraActor.h"
 #include "Engine/GameInstance.h"
+#include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/PlayerController.h"
@@ -93,7 +95,7 @@ namespace
 	// font, not a UFont asset) and its ground from a core brush, rather than from the
 	// FElysiumUIFontLibrary / decoded-texture path every other screen uses. The palette is still
 	// ours: ElysiumUI::Palette is plain FLinearColor constants with nothing to collect.
-	TSharedRef<SWidget> BuildLoadingScreen()
+	TSharedRef<SWidget> BuildLoadingScreen(const FText& Message, bool bShowThrobber)
 	{
 		const FSlateBrush* Solid = FCoreStyle::Get().GetBrush(TEXT("WhiteBrush"));
 
@@ -119,8 +121,9 @@ namespace
 					.Padding(FMargin(0.0f, 0.0f, 16.0f, 0.0f))
 					[
 						SNew(STextBlock)
-						.Text(NSLOCTEXT("Elysium", "Loading", "LOADING"))
+						.Text(Message)
 						.Font(Font)
+						.Justification(ETextJustify::Right)
 						.ColorAndOpacity(FSlateColor(ElysiumUI::Palette::Gold))
 					]
 					+ SHorizontalBox::Slot()
@@ -132,6 +135,7 @@ namespace
 						SNew(SCircularThrobber)
 						.NumPieces(8)
 						.Radius(14.0f)
+						.Visibility(bShowThrobber ? EVisibility::Visible : EVisibility::Collapsed)
 						.ColorAndOpacity(FSlateColor(ElysiumUI::Palette::Blood))
 					]
 				]
@@ -153,6 +157,13 @@ void UElysiumGameFlowSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	Collection.InitializeDependency<UElysiumMapSubsystem>();
 	Collection.InitializeDependency<UElysiumGameStateSubsystem>();
 	Collection.InitializeDependency<UElysiumUISubsystem>();
+	if (UElysiumMapSubsystem* Maps = GetGameInstance()->GetSubsystem<UElysiumMapSubsystem>())
+	{
+		MapReadyHandle = Maps->OnCurrentMapReady().AddUObject(
+			this, &UElysiumGameFlowSubsystem::OnMapRuntimeReady);
+		MapFailedHandle = Maps->OnCurrentMapFailed().AddUObject(
+			this, &UElysiumGameFlowSubsystem::OnMapRuntimeFailed);
+	}
 
 	BootFromCommandLine();
 
@@ -288,6 +299,13 @@ void UElysiumGameFlowSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UElysiumGameFlowSubsystem::Deinitialize()
 {
+	HideRuntimeLoadingOverlay();
+	if (UElysiumMapSubsystem* Maps = GetGameInstance()
+		? GetGameInstance()->GetSubsystem<UElysiumMapSubsystem>() : nullptr)
+	{
+		Maps->OnCurrentMapReady().Remove(MapReadyHandle);
+		Maps->OnCurrentMapFailed().Remove(MapFailedHandle);
+	}
 	if (PrepareLoadingScreenHandle.IsValid())
 	{
 		GetMoviePlayer()->OnPrepareLoadingScreen().Remove(PrepareLoadingScreenHandle);
@@ -492,17 +510,9 @@ void UElysiumGameFlowSubsystem::NotifyWorldReady(AGameModeBase* Mode)
 	// baked level the engine opened for it: build that map's runtime half and settle.
 	if (Maps->HasPendingMapLoad())
 	{
+		// Spawning starts Elysium's runtime construction but deliberately leaves the application in
+		// Loading. Only the current actor's post-activation callback can expose this world.
 		Maps->SpawnPendingMap();
-		if (Maps->IsMenuBackdrop())
-		{
-			// A backdrop world builds the look only; seat the fixed camera and raise the menu over it.
-			EnterMenuBackdrop();
-			SetAppState(EElysiumAppState::FrontEnd);
-		}
-		else
-		{
-			SetAppState(EElysiumAppState::Playing);
-		}
 		return;
 	}
 
@@ -914,7 +924,8 @@ void UElysiumGameFlowSubsystem::OnPrepareLoadingScreen()
 	}
 
 	FLoadingScreenAttributes Attributes;
-	Attributes.WidgetLoadingScreen = BuildLoadingScreen();
+	Attributes.WidgetLoadingScreen = BuildLoadingScreen(
+		NSLOCTEXT("Elysium", "Loading", "LOADING"), /*bShowThrobber*/ true);
 	Attributes.bAutoCompleteWhenLoadingCompletes = true;
 	Attributes.bMoviesAreSkippable = false;
 	Attributes.MinimumLoadingScreenDisplayTime = CVarLoadingScreenMinTime.GetValueOnGameThread();
@@ -923,6 +934,8 @@ void UElysiumGameFlowSubsystem::OnPrepareLoadingScreen()
 
 void UElysiumGameFlowSubsystem::OnPreLoadMap(const FString& MapName)
 {
+	HideRuntimeLoadingOverlay();
+	RuntimeLoadingFailure.Reset();
 	// Every travel passes through here, including the ones the substrate starts on its own
 	// (trigger_changelevel, a scripted ChangeMap), so the state is right even when no menu asked.
 	SetAppState(EElysiumAppState::Loading);
@@ -930,7 +943,87 @@ void UElysiumGameFlowSubsystem::OnPreLoadMap(const FString& MapName)
 
 void UElysiumGameFlowSubsystem::OnPostLoadMap(UWorld* LoadedWorld)
 {
-	// Deliberately does not leave Loading: the level is in memory, but AElysiumMapActor has not
-	// built the map's runtime half yet (collision, the substrate, bodies). NotifyWorldReady — which
-	// runs after that build — is what settles into FrontEnd or Playing.
+	// PostLoadMap ends the blocking engine load, not Elysium's runtime build. Hand the same pure-
+	// Slate visual from MoviePlayer to the game viewport before the movie auto-completes; normal
+	// ticks can now finish collision/player readiness without exposing a partial world.
+	if (State == EElysiumAppState::Loading)
+	{
+		if (RuntimeLoadingFailure.IsEmpty())
+		{
+			ShowRuntimeLoadingOverlay(LoadedWorld,
+				NSLOCTEXT("Elysium", "LoadingRuntime", "LOADING"));
+		}
+		else
+		{
+			ShowRuntimeLoadingOverlay(LoadedWorld, FText::FromString(RuntimeLoadingFailure), true);
+		}
+	}
+}
+
+void UElysiumGameFlowSubsystem::OnMapRuntimeReady(AElysiumMapActor* Map)
+{
+	if (!Map || State != EElysiumAppState::Loading)
+	{
+		UE_LOG(LogElysiumFlow, Warning, TEXT("ignored map-ready callback in %s from %s"),
+			ElysiumAppState::Name(State), *GetNameSafe(Map));
+		return;
+	}
+
+	HideRuntimeLoadingOverlay();
+	RuntimeLoadingFailure.Reset();
+	UElysiumMapSubsystem* Maps = GetGameInstance()->GetSubsystem<UElysiumMapSubsystem>();
+	if (Maps && Maps->IsMenuBackdrop())
+	{
+		EnterMenuBackdrop();
+		SetAppState(EElysiumAppState::FrontEnd);
+	}
+	else
+	{
+		SetAppState(EElysiumAppState::Playing);
+	}
+}
+
+void UElysiumGameFlowSubsystem::OnMapRuntimeFailed(AElysiumMapActor* Map, const FString& Reason)
+{
+	// Fail closed. The map subsystem already rejected stale actors; retain Loading and replace the
+	// spinner with the structured failed prerequisite so the partial world is never exposed.
+	const FString MapLabel = Map ? Map->MapName : FString(TEXT("<unknown>"));
+	const FText Message = FText::FromString(FString::Printf(
+		TEXT("MAP LOAD FAILED\n%s\n%s"), *MapLabel, *Reason));
+	RuntimeLoadingFailure = Message.ToString();
+	ShowRuntimeLoadingOverlay(GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr,
+		Message, /*bForce*/ true);
+	UE_LOG(LogElysiumFlow, Error, TEXT("runtime activation failed for %s: %s"),
+		*MapLabel, *Reason);
+}
+
+void UElysiumGameFlowSubsystem::ShowRuntimeLoadingOverlay(
+	UWorld* World, const FText& Message, bool bForce)
+{
+	if ((!bForce && CVarLoadingScreen.GetValueOnGameThread() == 0) || !World)
+	{
+		return;
+	}
+	UGameViewportClient* Viewport = World->GetGameViewport();
+	if (!Viewport)
+	{
+		return;
+	}
+
+	HideRuntimeLoadingOverlay();
+	const bool bFailed = Message.ToString().StartsWith(TEXT("MAP LOAD FAILED"));
+	RuntimeLoadingWidget = BuildLoadingScreen(Message, !bFailed);
+	RuntimeLoadingViewport = Viewport;
+	Viewport->AddViewportWidgetContent(RuntimeLoadingWidget.ToSharedRef(), 10000);
+}
+
+void UElysiumGameFlowSubsystem::HideRuntimeLoadingOverlay()
+{
+	if (UGameViewportClient* Viewport = RuntimeLoadingViewport.Get();
+		Viewport && RuntimeLoadingWidget.IsValid())
+	{
+		Viewport->RemoveViewportWidgetContent(RuntimeLoadingWidget.ToSharedRef());
+	}
+	RuntimeLoadingWidget.Reset();
+	RuntimeLoadingViewport.Reset();
 }

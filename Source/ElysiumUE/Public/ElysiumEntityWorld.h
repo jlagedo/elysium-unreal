@@ -48,8 +48,16 @@ public:
 
 	// --- Lifecycle ---------------------------------------------------------------------
 	// Build one entity per def via the registry (inert record when the classname is
-	// unregistered), index names/classes, run the spawn pass (Spawn() on each).
+	// unregistered), index names/classes, run the spawn pass (Spawn() on each). The resulting
+	// substrate is dormant: construction may queue work, but no think, event, cursor or physical
+	// touch ingress is admitted until Activate.
 	void Load(FElysiumEntityDefs&& InDefs);
+
+	// Open the gameplay gate at the map actor's frozen game time. Idempotent: a second call does
+	// not restart timers or replay construction. The map actor owns the initial think/event pass
+	// that follows this transition, so activation itself only changes the lifecycle state.
+	void Activate(double Now);
+	bool IsActive() const { return bActive; }
 
 	// The frame's PRE-move drive (map actor PreMoveTick): the player entity's own think, and only
 	// that. Retail runs it inside CPlayerMove::RunCommand rather than in the think pass, so it is
@@ -353,6 +361,7 @@ private:
 	UElysiumGameStateSubsystem* GameState = nullptr;  // clock + script host; outlives the world
 	FElysiumWorldServices WorldServices;              // the outbound seam (11.2); members may be null
 	uint32 Epoch = 0;
+	bool bActive = false;
 
 	FElysiumEntityDefs Defs;
 	// Defs synthesized at runtime (npc_maker.Spawn): held so an entity's Def* stays valid past the

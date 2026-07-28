@@ -15,6 +15,10 @@ landmark from GI-scoped state, adopts the actors stamped by the bake, and builds
 entities, scripting, audio, NPCs, and other runtime systems on `BeginPlay`. Cross-map state
 lives at GameInstance scope and survives the travel; per-map state dies with the world.
 
+`BeginPlay` is the start of Elysium's runtime construction, not its gameplay-ready signal. The map
+actor advances through `Building → WaitingForPrerequisites → Activating → Active|Failed`; the
+entity substrate remains dormant and the application remains `Loading` until `Active`.
+
 This is the UE5 standard model for a discrete-map single-player game and matches VtMB's
 `trigger_changelevel` + loading-screen lifecycle. Level streaming and World Partition are not
 part of the design: only one VtMB map is resident, and travel is also the save-snapshot boundary.
@@ -67,8 +71,9 @@ UElysiumGameInstance            process lifetime — session state
   the same object as what it *does*.
 
 The game mode stays thin: pawn + HUD classes, and one `NotifyWorldReady` on BeginPlay. The app state
-machine behind that call is what builds the pending map (post-travel) or runs the boot decision
-(menu / New Game / a bare dev load) — `runtime-architecture.md` §10.
+machine behind that call starts the pending map build (post-travel) or runs the boot decision
+(menu / New Game / a bare dev load). Only the current map actor's `MapReady` callback settles into
+`Playing` or `FrontEnd`; stale actor callbacks are rejected — `runtime-architecture.md` §10.
 
 ## Ownership and memory across transitions
 
@@ -80,10 +85,44 @@ components are destroyed, so GC reclaims the textures. It is not a process-wide 
 hard travel only one map is resident at a time, so nothing is shared across maps (assets that
 need to persist, like UI, live in an explicit global scope instead).
 
+## Runtime activation barrier
+
+Unreal's `PostLoadMapWithWorld` means the blocking `LoadMap` call ended, and an actor's `BeginPlay`
+means that actor entered play. Neither means Elysium's procedural collision, runtime entities,
+player body and final placement are mutually ready. Readiness is therefore an explicit conjunction:
+
+- runtime construction completed: baked adoption, sidecar parse, script import, entity spawn and
+  post-spawn, player entity, snapshot, and landmark/restore resolution;
+- gameplay maps have a possessed pawn implementing the player-body freeze contract, placed at the
+  final spawn transform with its tick prerequisites wired; menu backdrops omit this requirement;
+- `UElysiumMapCollision` reports `Ready` for every required procedural component. `Disabled` is an
+  intentional satisfied state for `elysium.BrushCollision 0`; `Cooking` waits; missing input or a
+  failed Chaos cook reports `Failed`.
+
+The readiness poll uses wall-clock time because the game clock does not advance before activation.
+After eight seconds it fails closed with the missing prerequisite; it never releases a pawn into an
+incomplete world. The two lifecycle-bearing pre-physics ticks may poll through an inherited engine
+pause, but every gameplay branch remains phase-gated.
+
+Activation is one game-thread transaction at the unchanged game time: activate the entity world,
+refresh the finally placed pawn's overlaps, reconcile current brush containment, run the initial
+player-think/entity-think/event-queue pass, start initial audio scheduling, mark `Active`, release
+movement, then publish `MapReady`. Early overlap callbacks are discarded while dormant, so the
+final containment query is the one authoritative initial state; active touch-pair deduplication
+collapses `UpdateOverlaps` and the manual containment scan into one edge.
+
+Loading presentation has two consecutive owners. MoviePlayer draws the pure-Slate loading tree for
+the blocking `OpenLevel` portion and auto-completes normally. `PostLoadMapWithWorld` installs the
+same tree as a game-viewport overlay for the tick-driven readiness phase. `MapReady` removes it only
+after the initial activation pass; `MapFailed` keeps it visible with the failed prerequisite. The
+game thread is never held in `WaitForMovieToFinish` while readiness ticks.
+
 ## Async loading (removing the load hitch)
 
-The time-sliced runtime build is tracked by **roadmap 10.4**. It runs in the generated level's
-`BeginPlay` behind a loading screen, after `LoadMap` has loaded the baked look. Runtime work
+The time-sliced runtime build is tracked by **roadmap 10.4**. The activation barrier above is its
+correctness boundary, not its implementation: parsing and spawning are still synchronous today.
+Future work runs in the generated level's `BeginPlay` behind the same loading overlay, after
+`LoadMap` has loaded the baked look. Runtime work
 splits into two stages:
 
 1. **Task threads** — file IO, OBJ/MTL/sidecar parsing, PNG decode. Pure data, fans out

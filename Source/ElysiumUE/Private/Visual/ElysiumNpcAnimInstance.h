@@ -20,8 +20,8 @@ class UAnimSequence;
 // original's feel rather than inventing polish.
 //
 // Two sequence players and a lerp: a request starts a crossfade from whatever is currently
-// playing to the new clip; requesting the clip already playing is a no-op, so a repeated write
-// (a `.dlg` line firing `SetDisposition` twice) does not restart the pose.
+// playing to the new clip. Repeating the same looping stance is a no-op; a one-shot request or a
+// loop-mode change restarts from frame zero, which scripted_sequence/choreo playback requires.
 
 USTRUCT()
 struct FElysiumNpcAnimProxy : public FAnimInstanceProxy
@@ -44,6 +44,7 @@ struct FElysiumNpcAnimProxy : public FAnimInstanceProxy
 	void Request(UAnimSequence* Sequence, bool bLoop, float BlendSeconds);
 
 	UAnimSequence* GetPlaying() const { return Playing; }
+	bool IsPlayingLoop() const { return bPlayingLoop; }
 	bool IsBlending() const { return BlendAlpha < 1.f; }
 
 private:
@@ -59,6 +60,7 @@ private:
 	float BlendRate = 0.f;
 
 	UPROPERTY(Transient) TObjectPtr<UAnimSequence> Playing = nullptr;
+	bool bPlayingLoop = true;
 	bool bInitialized = false;
 	// A player whose sequence changed needs Initialize_AnyThread to reset its time accumulator —
 	// SetSequence alone leaves it wherever the previous clip had run to. Flagged on the game
@@ -76,8 +78,8 @@ public:
 	// swaps on a standing body, and a long blend reads as a drift rather than a change of pose.
 	static constexpr float DefaultBlendSeconds = 0.25f;
 
-	// Play a clip, crossfading from whatever is current. Re-requesting the playing clip does
-	// nothing, so an input that fires repeatedly does not restart it.
+	// Play a clip, crossfading from whatever is current. Repeating an already-looping clip does
+	// nothing; a repeated one-shot or a loop-mode change restarts it from frame zero.
 	void PlayClip(UAnimSequence* Sequence, bool bLoop = true, float BlendSeconds = DefaultBlendSeconds);
 
 	UAnimSequence* GetPlayingClip() const { return Proxy.GetPlaying(); }

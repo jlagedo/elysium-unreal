@@ -1354,6 +1354,7 @@ bool FElysiumMapSnapshotTest::RunTest(const FString&)
 		// The player is a runtime entity appended past the def array — the case the snapshot's
 		// index alignment turns on, so it has to be in the fixture.
 		A.SpawnPlayer();
+		A.Activate(0.0);
 
 		// Let the map's own openers run: logic_auto ignition, first thinks, the queue draining at
 		// t=0. That is what makes the frozen state a *played* state rather than a spawned one.
@@ -1405,6 +1406,7 @@ bool FElysiumMapSnapshotTest::RunTest(const FString&)
 		B.Load(MoveTemp(DefsB));
 		B.SpawnPlayer();
 		B.ApplySnapshot(*Thawed);
+		B.Activate(0.0);
 
 		TestEqual(*FString::Printf(TEXT("%s: the same entity count"), Map),
 			B.NumEntities(), A.NumEntities());
@@ -3051,9 +3053,18 @@ bool FElysiumSceneAnimSetsTest::RunTest(const FString&)
 					continue;
 				}
 				++NumSets;
-				// Any root resolving proves the model was exported and split.
-				const FString AnyBank = Index.CinematicBank(*Model, FString());
-				if (!AnyBank.IsEmpty() && Index.Banks.Contains(AnyBank))
+				// The set itself proves the model was exported. Validate every bank it names rather
+				// than asking an empty actor root to choose arbitrarily from a multi-actor set.
+				const FElysiumCinematicSet* Set = Index.FindCinematic(*Model);
+				bool bAllBanksExist = Set != nullptr && !Set->Roots.IsEmpty();
+				if (Set != nullptr)
+				{
+					for (const TPair<FString, FString>& RootBank : Set->Roots)
+					{
+						bAllBanksExist &= Index.Banks.Contains(RootBank.Value);
+					}
+				}
+				if (bAllBanksExist)
 				{
 					++NumSetsResolved;
 				}

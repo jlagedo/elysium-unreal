@@ -18,6 +18,13 @@ void FElysiumNpcAnimProxy::Initialize(UAnimInstance* InAnimInstance)
 		Player.SetGroupMethod(EAnimSyncMethod::DoNotSync);
 		Player.Initialize_AnyThread(Context);
 	}
+	Incoming = 0;
+	BlendAlpha = 1.f;
+	BlendRate = 0.f;
+	Playing = nullptr;
+	bPlayingLoop = true;
+	bNeedsReinit[0] = false;
+	bNeedsReinit[1] = false;
 	bInitialized = false;
 }
 
@@ -32,9 +39,25 @@ void FElysiumNpcAnimProxy::CacheBones()
 
 void FElysiumNpcAnimProxy::Request(UAnimSequence* Sequence, bool bLoop, float BlendSeconds)
 {
-	if (Sequence == nullptr || Sequence == Playing)
+	if (Sequence == nullptr)
 	{
-		return;   // re-requesting what is already playing must not restart the pose
+		return;
+	}
+	if (Sequence == Playing)
+	{
+		// A repeated disposition/idle write must not visibly reset a looping stance. One-shots are
+		// commands, though: repeating one means replay it, and changing loop policy must take effect.
+		if (bLoop && bPlayingLoop)
+		{
+			return;
+		}
+		Players[Incoming].SetLoopAnimation(bLoop);
+		Players[Incoming].SetStartPosition(0.f);
+		bNeedsReinit[Incoming] = true;
+		bPlayingLoop = bLoop;
+		BlendAlpha = 1.f;
+		BlendRate = 0.f;
+		return;
 	}
 
 	// The first clip has nothing to blend from, so it snaps in regardless of BlendSeconds —
@@ -49,6 +72,7 @@ void FElysiumNpcAnimProxy::Request(UAnimSequence* Sequence, bool bLoop, float Bl
 
 	Incoming = Next;
 	Playing = Sequence;
+	bPlayingLoop = bLoop;
 	BlendAlpha = bSnap ? 1.f : 0.f;
 	BlendRate = bSnap ? 0.f : 1.f / BlendSeconds;
 	bInitialized = true;

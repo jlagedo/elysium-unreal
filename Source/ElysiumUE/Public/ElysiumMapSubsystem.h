@@ -11,6 +11,9 @@ class FElysiumProbeRun;
 class FElysiumShotRun;
 class FElysiumMoveRun;
 
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnElysiumCurrentMapReady, AElysiumMapActor*);
+DECLARE_MULTICAST_DELEGATE_TwoParams(FOnElysiumCurrentMapFailed, AElysiumMapActor*, const FString&);
+
 // The only owner of VtMB-map lifecycle. Map change is UE5 hard travel (roadmap 10.8): Travel
 // stows the target map + landmark in this GI-scoped state and OpenLevels the map's own baked
 // `.umap` under /ElysiumBaked (which carries the map's whole look as real assets); the engine tears
@@ -35,16 +38,11 @@ public:
 	// landmark's facing) instead of info_player_start — the console/direct entry to the P4.6 path.
 	bool Travel(const FString& Map, const FString& Landmark = FString());
 
-	// 8.6 — load a map as the **menu backdrop**: its baked look only. The map actor adopts the
-	// baked level (geometry, lights, sky, post, decals, props) and skips everything gameplay —
-	// the entity substrate, brush collision, the landmark placement. That is not an optimisation:
-	// building the substrate would fire `sp_tutorial_1`'s `logic_auto` behind the menu, arm the
-	// tutorial's popups and let a `game_sign` draw over the title screen. Nothing walks on a
-	// backdrop, so it needs no collider either.
+	// 8.6 — load a map as the **menu backdrop**. The map actor builds the ordinary runtime world so
+	// NPCs and authored ambience can live behind the menu, but the activation barrier omits the
+	// possessed-pawn/final-placement requirement. No player entity or pawn is seated.
 	//
-	// Leaving this mode is an ordinary Travel: New Game re-opens the same map with the substrate
-	// built. That costs one map load, which is the honest price of never running two half-states
-	// of a world in the same process.
+	// Leaving this mode is an ordinary Travel: New Game re-opens the destination as a play world.
 	bool TravelForMenu(const FString& Map);
 
 	// True while the current world is a menu backdrop (see TravelForMenu). Read by the map actor
@@ -69,9 +67,11 @@ public:
 	FString PendingTravelDesc() const;
 
 	// Spawn the AElysiumMapActor for the pending map into the current world and consume the pending
-	// state. Called by the game mode on BeginPlay after a Travel OpenLevel lands in the map's baked
-	// level. No-op with no pending load.
-	void SpawnPendingMap();
+	// state. Returns false and publishes MapFailed if the actor could not be created. Success means
+	// only that construction started; MapReady is published after the actor's activation barrier.
+	bool SpawnPendingMap();
+	FOnElysiumCurrentMapReady& OnCurrentMapReady() { return CurrentMapReady; }
+	FOnElysiumCurrentMapFailed& OnCurrentMapFailed() { return CurrentMapFailed; }
 
 	// Consumed once by the freshly-loaded map actor (P4.6): if this load is a landmark transition,
 	// returns true and fills the destination `info_landmark` name + the player offset/yaw to place
@@ -112,7 +112,12 @@ public:
 	static const TCHAR* StoryEntryLandmark() { return TEXT("tutorial"); }
 
 private:
+	void HandleRuntimeReady(AElysiumMapActor* Map);
+	void HandleRuntimeFailed(AElysiumMapActor* Map, const FString& Reason);
+
 	TWeakObjectPtr<AElysiumMapActor> CurrentMap;
+	FOnElysiumCurrentMapReady CurrentMapReady;
+	FOnElysiumCurrentMapFailed CurrentMapFailed;
 	TArray<IConsoleObject*> ConsoleObjects;
 
 	// The map Travel stowed for the fresh world to build. Set by Travel (survives OpenLevel — this
@@ -122,7 +127,7 @@ private:
 		bool    bValid = false;
 		FString Map;
 		FString Landmark;
-		bool    bMenuBackdrop = false;   // 8.6: build the look, skip the gameplay half
+		bool    bMenuBackdrop = false;   // 8.6: build the full runtime world, omit player seating
 	};
 	FPendingMapLoad PendingMapLoad;
 
