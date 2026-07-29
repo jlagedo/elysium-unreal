@@ -10,6 +10,7 @@
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPlayerBody.h"
 #include "ElysiumPresentationSubsystem.h"
+#include "ElysiumSkeletalBasis.h"
 #include "ElysiumUseIcons.h"
 #include "Audio/ElysiumSoundScheme.h"
 #include "Map/ElysiumMapCollision.h"
@@ -18,6 +19,7 @@
 #include "Visual/ElysiumNpcAnimSubsystem.h"
 #include "Visual/ElysiumMapVisuals.h"
 
+#include "Components/SkeletalMeshComponent.h"
 #include "Engine/GameInstance.h"
 #include "GameFramework/DamageType.h"
 #include "GameFramework/Pawn.h"
@@ -515,6 +517,45 @@ bool AElysiumMapActor::PlayCinematicClip(USkeletalMeshComponent* Body, const FSt
 	return Bodies->PlayCinematicClip(Body, Stem, Bank, ClipName, bLoop, OutSeconds);
 }
 
+bool AElysiumMapActor::SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds)
+{
+	return Bodies && Bodies->SeekCinematicClip(Body, PositionSeconds);
+}
+
+void AElysiumMapActor::StopCinematicClip(USkeletalMeshComponent* Body)
+{
+	if (Bodies)
+	{
+		Bodies->StopCinematicClip(Body);
+	}
+}
+
+FString AElysiumMapActor::AnimatedPropStemForModel(const FString& ModelPath) const
+{
+	return Bodies ? Bodies->AnimatedPropStemForModel(ModelPath) : FString();
+}
+
+USkeletalMeshComponent* AElysiumMapActor::BuildAnimatedPropVisual(const FString& Stem,
+	const FVector& Location, const FQuat& Rotation, float UniformScale)
+{
+	return Bodies ? Bodies->BuildAnimatedPropVisual(Stem, Location, Rotation, UniformScale) : nullptr;
+}
+
+bool AElysiumMapActor::PlayAnimatedPropClip(USkeletalMeshComponent* Body, const FString& Stem,
+	const FString& ClipName, bool bLoop, float* OutSeconds)
+{
+	return Bodies && Bodies->PlayAnimatedPropClip(Body, Stem, ClipName, bLoop, OutSeconds);
+}
+
+void AElysiumMapActor::ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
+	const FString& StaticStem, int32 Family)
+{
+	if (Bodies)
+	{
+		Bodies->ApplyAnimatedPropSkin(Comp, StaticStem, Family);
+	}
+}
+
 UStaticMeshComponent* AElysiumMapActor::BuildPropVisual(const FString& Stem, const FVector& Location,
 	const FQuat& Rotation, float UniformScale)
 {
@@ -530,6 +571,52 @@ UStaticMeshComponent* AElysiumMapActor::BuildPhysPropVisual(const FString& Stem,
 void AElysiumMapActor::ApplyPropSkin(UStaticMeshComponent* Comp, const FString& Stem, int32 Family)
 {
 	Bodies->ApplyPropSkin(Comp, Stem, Family);
+}
+
+USkeletalMeshComponent* AElysiumMapActor::BuildPlayerVisual(const FString& Stem,
+	const FString& Disposition, int32 IdleVariant)
+{
+	APawn* Pawn = ResolvePlayerPawn();
+	IElysiumPlayerBody* Body = Pawn ? Cast<IElysiumPlayerBody>(Pawn) : nullptr;
+	if (!Body || !Bodies || Stem.IsEmpty())
+	{
+		return nullptr;
+	}
+	ClearPlayerVisual();
+
+	FVector Feet = Pawn->GetActorLocation();
+	Feet.Z -= Body->GetBodyHalfHeight();
+	USkeletalMeshComponent* Visual = Bodies->BuildNpcVisual(Stem, Feet,
+		ElysiumSkeletalBasis::FromUnrealYaw(Pawn->GetActorRotation().Yaw),
+		/*UniformScale*/ 1.0f, Disposition, IdleVariant, /*bPlayerMaterial=*/true);
+	if (!Visual || !Pawn->GetRootComponent())
+	{
+		return Visual;
+	}
+
+	// The glTF model's root is authored at Source absorigin (the feet), while both movement pawns
+	// are centred. Attach after loading through the shared skeletal cache, then offset one body
+	// half-height so movement, crouching and controller yaw carry the surface automatically.
+	Visual->AttachToComponent(Pawn->GetRootComponent(), FAttachmentTransformRules::KeepWorldTransform);
+	Visual->SetRelativeLocation(FVector(0.0f, 0.0f, -Body->GetBodyHalfHeight()));
+	Visual->SetRelativeRotation(ElysiumSkeletalBasis::RelativeToPawn());
+	Body->SetPlayerVisual(Visual);
+	return Visual;
+}
+
+void AElysiumMapActor::ClearPlayerVisual()
+{
+	APawn* Pawn = ResolvePlayerPawn();
+	IElysiumPlayerBody* Body = Pawn ? Cast<IElysiumPlayerBody>(Pawn) : nullptr;
+	if (!Body)
+	{
+		return;
+	}
+	if (USkeletalMeshComponent* Visual = Body->GetPlayerVisual())
+	{
+		Body->SetPlayerVisual(nullptr);
+		Visual->DestroyComponent();
+	}
 }
 
 APawn* AElysiumMapActor::ResolvePlayerPawn() const
@@ -679,9 +766,25 @@ int32 AElysiumMapActor::PushCameraShot(const FString& ShotFile, const FElysiumEn
 	return CameraDirector->Push(EntityWorld.Get(), PlayerCamera(), ShotFile, Subject);
 }
 
-bool AElysiumMapActor::PopCameraShot(int32 ShotId)
+int32 AElysiumMapActor::PushCameraShotValue(const FElysiumCameraShot& Shot)
 {
-	return CameraDirector ? CameraDirector->Pop(PlayerCamera(), ShotId) : false;
+	if (!CameraDirector)
+	{
+		CameraDirector = MakePimpl<FElysiumCameraDirector>();
+	}
+	return CameraDirector->PushValue(PlayerCamera(), Shot);
+}
+
+bool AElysiumMapActor::UpdateCameraShotValue(int32 ShotId, const FElysiumCameraShot& Shot)
+{
+	return CameraDirector
+		? CameraDirector->UpdateValue(PlayerCamera(), ShotId, Shot)
+		: false;
+}
+
+bool AElysiumMapActor::PopCameraShot(int32 ShotId, float BlendOutSeconds)
+{
+	return CameraDirector ? CameraDirector->Pop(PlayerCamera(), ShotId, BlendOutSeconds) : false;
 }
 
 FElysiumAudioVoiceHandle AElysiumMapActor::PlayVoice(const FString& Rel, const FElysiumPlayParams& Params)

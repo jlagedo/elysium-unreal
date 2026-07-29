@@ -3,6 +3,7 @@
 #include "ElysiumContentPaths.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumMapActor.h"
+#include "Debug/ElysiumGreenRoomRun.h"
 #include "Debug/ElysiumMoveRun.h"
 #include "Debug/ElysiumProbeRun.h"
 #include "Debug/ElysiumProfiler.h"
@@ -99,6 +100,12 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	{
 		ShotRun = MakePimpl<FElysiumShotRun>(this);
 	}
+	// Under -ElysiumGreenRoom, audition one body/bank pair (or the opening ensemble) on an
+	// isolated rendered stage before an aggregate theatre run is allowed.
+	if (FElysiumGreenRoomRun::IsRequested())
+	{
+		GreenRoomRun = MakePimpl<FElysiumGreenRoomRun>(this);
+	}
 	// Under -ElysiumProbe, arm the headless light-attribution probe (one map per launch).
 	if (FElysiumProbeRun::IsRequested())
 	{
@@ -116,6 +123,7 @@ void UElysiumMapSubsystem::Deinitialize()
 {
 	ProfileRun.Reset();
 	ShotRun.Reset();
+	GreenRoomRun.Reset();
 	ProbeRun.Reset();
 	MoveRun.Reset();
 	for (IConsoleObject* Obj : ConsoleObjects)

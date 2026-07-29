@@ -225,11 +225,23 @@ public:
 	virtual bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName,
 		bool bLoop, float* OutSeconds) override;
+	virtual bool SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds) override;
+	virtual void StopCinematicClip(USkeletalMeshComponent* Body) override;
+	virtual FString AnimatedPropStemForModel(const FString& ModelPath) const override;
+	virtual USkeletalMeshComponent* BuildAnimatedPropVisual(const FString& Stem,
+		const FVector& Location, const FQuat& Rotation, float UniformScale) override;
+	virtual bool PlayAnimatedPropClip(USkeletalMeshComponent* Body, const FString& Stem,
+		const FString& ClipName, bool bLoop, float* OutSeconds) override;
+	virtual void ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
+		const FString& StaticStem, int32 Family) override;
 	virtual UStaticMeshComponent* BuildPropVisual(const FString& Stem, const FVector& Location,
 		const FQuat& Rotation, float UniformScale) override;
 	virtual UStaticMeshComponent* BuildPhysPropVisual(const FString& Stem, const FVector& Location,
 		const FQuat& Rotation, float UniformScale) override;
 	virtual void ApplyPropSkin(UStaticMeshComponent* Comp, const FString& Stem, int32 Family) override;
+	virtual USkeletalMeshComponent* BuildPlayerVisual(const FString& Stem,
+		const FString& Disposition, int32 IdleVariant) override;
+	virtual void ClearPlayerVisual() override;
 
 	// --- IElysiumEmbodiment: the player's body ----------------------------------------------
 	// All five resolve the pawn through this world's first player controller and report false /
@@ -245,7 +257,9 @@ public:
 	// map's entities and bodies and hands the values to the pawn's camera; the camera itself never
 	// learns what an entity is.
 	virtual int32 PushCameraShot(const FString& ShotFile, const FElysiumEntityHandle& Subject) override;
-	virtual bool PopCameraShot(int32 ShotId) override;
+	virtual int32 PushCameraShotValue(const FElysiumCameraShot& Shot) override;
+	virtual bool UpdateCameraShotValue(int32 ShotId, const FElysiumCameraShot& Shot) override;
+	virtual bool PopCameraShot(int32 ShotId, float BlendOutSeconds = -1.0f) override;
 
 	// --- IElysiumAudio ----------------------------------------------------------------------
 	// Voices forward to the GI-scoped UElysiumAudioSubsystem; the scheme calls drive this map's own

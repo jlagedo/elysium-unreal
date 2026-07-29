@@ -1,6 +1,7 @@
 #include "ElysiumPawn.h"
 
 #include "Components/BoxComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "ElysiumCameraComponent.h"
 #include "ElysiumMovementComponent.h"
 #include "ElysiumUserCmd.h"
@@ -144,11 +145,29 @@ void AElysiumPawn::ApplyUserCmd(const FElysiumUserCmd& Cmd)
 	}
 }
 
+void AElysiumPawn::SetPlayerVisual(USkeletalMeshComponent* InVisual)
+{
+	PlayerVisual = InVisual;
+	ApplyPlayerModelAlpha(PlayerVisualAlpha);
+}
+
+void AElysiumPawn::ApplyPlayerModelAlpha(float Alpha)
+{
+	PlayerVisualAlpha = FMath::Clamp(Alpha, 0.0f, 1.0f);
+	if (PlayerVisual)
+	{
+		PlayerVisual->SetScalarParameterValueOnMaterials(TEXT("ModelAlpha"), PlayerVisualAlpha);
+		PlayerVisual->SetHiddenInGame(PlayerVisualAlpha <= KINDA_SMALL_NUMBER);
+	}
+}
+
 void AElysiumPawn::CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult)
 {
 	if (UElysiumCameraComponent::CalcCameraFor(Camera, DeltaTime, OutResult))
 	{
+		ApplyPlayerModelAlpha(Camera->ModelAlpha());
 		return;
 	}
 	Super::CalcCamera(DeltaTime, OutResult);
+	ApplyPlayerModelAlpha(Camera ? Camera->ModelAlpha() : 0.0f);
 }

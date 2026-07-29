@@ -40,7 +40,8 @@ public:
 	// is retargeted onto this skeleton by bone name — UElysiumNpcAnimSubsystem owns that resolution
 	// and the session-lifetime bank cache. Null on a missing/failed glb or an empty stem.
 	USkeletalMeshComponent* BuildNpcVisual(const FString& Stem, const FVector& Location,
-		const FRotator& Rotation, float UniformScale, const FString& Disposition, int32 IdleVariant);
+		const FRotator& Rotation, float UniformScale, const FString& Disposition, int32 IdleVariant,
+		bool bPlayerMaterial = false);
 
 	// Re-run the default-idle policy on a live body and crossfade to the result. The seam a
 	// disposition change reaches animation through: 9.9's `SetDisposition` is 2,510 calls, 2,467
@@ -56,15 +57,27 @@ public:
 	// returned UAnimSequence to that model's USkeleton.
 	bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& BankStem,
 		const FString& ClipName, bool bLoop, float* OutSeconds);
+	bool SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds);
+	void StopCinematicClip(USkeletalMeshComponent* Body);
 
 	bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		bool bLoop, float* OutSeconds);
+
+	// v4 skeletal props. The model-path lookup chooses the animated representation; building and
+	// clip resolution stay separate so ordinary props never load glTF or animation data.
+	FString AnimatedPropStemForModel(const FString& ModelPath) const;
+	USkeletalMeshComponent* BuildAnimatedPropVisual(const FString& Stem, const FVector& Location,
+		const FQuat& Rotation, float UniformScale);
+	bool PlayAnimatedPropClip(USkeletalMeshComponent* Body, const FString& Stem,
+		const FString& ClipName, bool bLoop, float* OutSeconds);
+	void ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp, const FString& Stem, int32 Family);
 
 	// Retarget one named clip onto an already-built NPC model's skeleton, cached per (stem, clip).
 	// The clip may live in the NPC's own glb or in any shared bank — the manifest says which, and
 	// the bank is loaded once per session. Null when the stem has no body yet or the name resolves
 	// nothing.
-	UAnimSequence* ResolveNpcClip(const FString& Stem, const FString& ClipName);
+	UAnimSequence* ResolveNpcClip(const FString& Stem, const FString& ClipName,
+		USkeletalMesh* TargetMesh = nullptr);
 
 	// The baked SM_<Stem> asset for a prop model, cached per stem (one load per model however many
 	// entities place it). Null + a warning naming the bake command when the map has no such asset.
@@ -115,6 +128,13 @@ private:
 	// The NPC's own parsed glb, kept for the epoch so a clip it owns itself (its dialogue anims)
 	// can still be retargeted after the mesh is cached — the bank path does not go through it.
 	UPROPERTY() TMap<FString, TObjectPtr<UglTFRuntimeAsset>> NpcAssetCache;
+	FString NpcVisualKeyForMesh(const FString& Stem, const USkeletalMesh* Mesh) const;
+
+	// v4 animated props are their own model/asset/clip namespace. Keeping separate maps prevents a
+	// prop and NPC with the same basename from aliasing skeleton-bound UAnimSequences.
+	UPROPERTY() TMap<FString, TObjectPtr<USkeletalMesh>> AnimatedPropMeshCache;
+	UPROPERTY() TMap<FString, TObjectPtr<UglTFRuntimeAsset>> AnimatedPropAssetCache;
+	UPROPERTY() TMap<FString, TObjectPtr<UAnimSequence>> AnimatedPropAnimCache;
 
 	// 8.3 dynamic-prop static meshes: per-stem cache, GC-rooted here so a model placed by several
 	// prop entities builds once and survives until unload.
@@ -130,6 +150,7 @@ private:
 // without constructing a world: no key may alias sequences retargeted onto different models.
 namespace ElysiumEntityAnimation
 {
+	FString NpcVisualCacheKey(const FString& Stem, bool bPlayerMaterial);
 	FString NpcClipCacheKey(const FString& Stem, const FString& ClipName);
 	FString CinematicClipCacheKey(const FString& Stem, const FString& BankStem, const FString& ClipName);
 }

@@ -10,6 +10,7 @@
 class UBoxComponent;
 class UElysiumCameraComponent;
 class UElysiumMovementComponent;
+class USkeletalMeshComponent;
 
 // The player's **body** (S3, roadmap 11.4/11.6): collision, movement, the camera, and the handle of
 // the entity it embodies. All player game state — the sheet, health, money, blood, the law counters
@@ -51,6 +52,9 @@ public:
 	virtual void SetMovementFrozen(bool bFrozen) override;
 	virtual void ApplyUserCmd(const FElysiumUserCmd& Cmd) override;
 	virtual UElysiumCameraComponent* GetCameraComponent() const override { return Camera; }
+	virtual USkeletalMeshComponent* GetPlayerVisual() const override { return PlayerVisual; }
+	virtual void SetPlayerVisual(USkeletalMeshComponent* InVisual) override;
+	virtual void ApplyPlayerModelAlpha(float Alpha) override;
 
 	// Swap the hull between the standing and ducked sizes (`docs/source_movement.md` → "The hulls
 	// and the view offsets"). The mover owns *when*; the pawn owns *how*, because the box extent
@@ -67,6 +71,8 @@ private:
 	UPROPERTY() TObjectPtr<UBoxComponent> Hull;
 	UPROPERTY() TObjectPtr<UElysiumCameraComponent> Camera;
 	UPROPERTY() TObjectPtr<UElysiumMovementComponent> Movement;
+	UPROPERTY() TObjectPtr<USkeletalMeshComponent> PlayerVisual;
 
 	FElysiumEntityHandle PlayerEntity;
+	float PlayerVisualAlpha = 0.0f;
 };

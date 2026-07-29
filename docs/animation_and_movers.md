@@ -216,35 +216,33 @@ an idle clip animates only their `w` channel (`......1`), so a 0-fill gives
 the correct rest shoulder. The exporter (`tools/mdl_gltf.py`) consumes this
 decode verbatim.
 
-## A.4a `BONEFLAG_ORIENTATION` (bone flag `0x2`) — the axis-permuted bone [VtMB — decompiled + data-verified]
+## A.4a Bone flag `0x2` is not an animation-channel transform [VtMB — decompiled + data-verified]
 
-One bone per biped — always **`Bip01 Spine1`** — carries `Flags & 0x2`
-(`BONEFLAG_ORIENTATION`, @136). Its **animation** rotation is stored with a constant
-120° axis-permutation post-composed into every keyframe: the decoded quaternion is
-`q_real · Q_ORIENT`, where `Q_ORIENT = (-0.5,-0.5,-0.5,0.5)` (the X→Y→Z→X cycle). Its
-**bind** quaternion carries no such permutation. Recover the real local rotation by
-right-multiplying each animation-frame quaternion (after the §A.4 decode) by
-`Q_ORIENT⁻¹ = (0.5,0.5,0.5,0.5)`:
+One bone per ordinary biped — normally **`Bip01 Spine1`** — carries `Flags & 0x2`
+at bone offset 136. That bit does **not** change the v2531 quaternion decode. The
+retail client pose evaluator `FUN_10089b20` calls quaternion decoder
+`FUN_100889f0` once per selected bone. The decoder walks all four rotation offsets,
+uses the corresponding bind quaternion component when an offset is zero, otherwise
+decodes `RLE_short * rotscale`, and slerps adjacent frames. It receives the 160-byte
+bone record but never reads `flags@136`; the normalized result is consumed verbatim.
+
+The `Flags & 0x2` branch at `FUN_10091110` belongs to a separate ragdoll/physics
+matrix merge. It is not evidence for changing animation keys. VAMPTools
+`Animation.cpp` also special-cases this bit, but its inverse-quaternion, Euler
+re-decomposition, and fixed axis swap are an FBX-export accommodation. They are not
+portable to a direct glTF quaternion conversion.
+
+Accordingly the runtime-facing decode is simply:
 
 ```
 q = normalize(decode §A.4)
-if bone.flags & 0x2:  q = qmul(q, (0.5, 0.5, 0.5, 0.5))    # Hamilton product, strip the permutation
 ```
 
-Left un-stripped, Spine1 sits ~110° off, and because it **parents the whole upper
-body** (Spine1 → Spine2 → Neck → Head, and both clavicles), it throws the torso, head,
-and arms while the legs — which branch off the pelvis *below* Spine1 — stay correct.
-The constant is universal: verified on every character model that has an ORIENT bone
-(brujah/gangrel/gangmember male+female), the same `(0.5,0.5,0.5,0.5)` recovers Spine1
-from ~85–118° down to ~13–20° from bind.
-
-**Game confirmation** (`client.dll`, Ghidra): the bone-matrix pass at `FUN_10091110`
-iterates the bone array (stride `0xa0`=160, array at `studiohdr+0xf4`) and branches on
-`(bone.parent < 0) || (*(byte*)(bone + 0x88) & 2)` — i.e. root bones and
-`BONEFLAG_ORIENTATION` bones — into an angle re-decomposition (`AngleMatrix`
-`FUN_1010a540` → `MatrixAngles` `FUN_10107eb0`), the runtime form of the axis swap.
-VtMB's model tools (VAMPTools `Animation.cpp`) apply the equivalent fixed swap on FBX
-export; the quaternion post-multiply above is the direct glTF-space equivalent.
+No fixed quaternion is pre- or post-multiplied. The courtroom seated-Bip01 probe
+makes the distinction observable: the retail decode places the head 8.3 inches
+above and 12.7 inches forward of the pelvis. A fixed left multiplication produces
+an unnaturally straight 21.6-inch rise and reverses the upper-body presentation;
+the corresponding right multiplication turns the upper body below the pelvis.
 
 ## A.5 Skinning [data-verified]
 
@@ -304,6 +302,22 @@ the NPC's dialogue into `out/npc/<npc>.glb`, each shared bank into `out/npc/bank
 resolution. The runtime loads a bank glb once and applies its clips to any NPC skeletal mesh by
 bone name (glTFRuntime `LoadSkeletalAnimation(mesh, …)`), which is VtMB's own virtualmodel
 bank-sharing. Full cast: 45 NPCs / 62 banks / ~410 MB.
+
+The runtime binds a bank's already-local animation tracks to the target reference skeleton by **bone
+name** and deliberately leaves glTFRuntime's generic rest-pose retargeter disabled. The shared biped
+tracks already use the target's local frame, while a whole-cast cinematic bank encodes authored stage
+placement in its `bip01` root. A second rest-frame/proportion transform scales a normal 1–3 m body
+into a 4–8 m exploded pose or double-applies that root placement. Source-node tracks with no target
+bone are removed before animation construction; this covers unweighted hair, toe, attachment, and nub
+helpers without hiding a broken weighted skin. Weighted influences and skin-root reachability remain
+strict errors.
+
+`mdl_gltf.py` writes standard right-handed Y-up glTF. glTFRuntime's default Unreal import maps its
+ground plane into `(Source Y, Source X)`. Every skeletal component therefore applies **−90° yaw**
+before the reflected Source entity yaw. Ordinary NPCs, scene understudies, controller NPCs, and
+the pawn-attached player body use that same basis. NPC and player-material skeletal permutations keep
+separate mesh, asset, and clip cache identities; rebuilding the player body cannot replace an ordinary
+NPC's materials.
 
 ## A.8 Deviations from modern Source (v44–49) [ref/SDK]
 

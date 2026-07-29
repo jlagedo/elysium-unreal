@@ -275,6 +275,39 @@ public:
 };
 
 // ============================================================================================
+// npc_VPlayerController — the scene-owned duplicate of the player. It deliberately stops at the
+// animating/combat-character layer: no dialogue, AI, use body, collision, or autonomous think.
+// ============================================================================================
+
+class FElysiumPlayerControllerNpc final : public FElysiumCombatCharacter
+{
+public:
+	virtual void Spawn() override
+	{
+		if (CVarNpcBodies.GetValueOnGameThread() != 0)
+		{
+			BuildBody();
+		}
+	}
+
+	virtual void OnRuntimeModelChanged() override
+	{
+		if (CVarNpcBodies.GetValueOnGameThread() != 0)
+		{
+			FElysiumAnimating::OnRuntimeModelChanged();
+		}
+	}
+
+	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
+	{
+		FElysiumCombatCharacter::GetDebugState(Out);
+		Out.Emplace(TEXT("Role"), TEXT("player controller (non-AI, non-solid)"));
+		Out.Emplace(TEXT("Model"), Model.IsEmpty() ? TEXT("(none)") : Model);
+		Out.Emplace(TEXT("Body"), Visual ? TEXT("skeletal") : TEXT("(none)"));
+	}
+};
+
+// ============================================================================================
 // FElysiumNpcMaker — npc_maker: a template that spawns one child NPC per Spawn input. The child's
 // class is NPCType, its targetname NPCTargetname, standing the maker's model at the maker origin.
 // ============================================================================================
@@ -345,8 +378,9 @@ public:
 
 // --- Registration -----------------------------------------------------------------------------
 
-static TUniquePtr<FElysiumEntity> MakeNpc()      { return MakeUnique<FElysiumNpc>(); }
-static TUniquePtr<FElysiumEntity> MakeNpcMaker() { return MakeUnique<FElysiumNpcMaker>(); }
+static TUniquePtr<FElysiumEntity> MakeNpc()       { return MakeUnique<FElysiumNpc>(); }
+static TUniquePtr<FElysiumEntity> MakeController(){ return MakeUnique<FElysiumPlayerControllerNpc>(); }
+static TUniquePtr<FElysiumEntity> MakeNpcMaker()  { return MakeUnique<FElysiumNpcMaker>(); }
 
 static void BuildNpcClass(FElysiumClassDesc& D)
 {
@@ -408,6 +442,10 @@ struct FElysiumNpcRegistrar
 			// CBaseAnimating (11.4). The sheet, the counters and the body all arrive through it.
 			BuildNpcClass(Reg.Register(FName(Name), ElysiumCombatCharacterClassName(), &MakeNpc));
 		}
+
+		// Created only at runtime by events_player.CreateControllerNPC. It intentionally does not
+		// receive FElysiumNpc's dialogue surface or any AI behavior.
+		Reg.Register(TEXT("npc_VPlayerController"), ElysiumCombatCharacterClassName(), &MakeController);
 
 		static const TCHAR* const MakerClasses[] = { TEXT("npc_maker"), TEXT("npc_maker_fleshpile") };
 		for (const TCHAR* Name : MakerClasses)

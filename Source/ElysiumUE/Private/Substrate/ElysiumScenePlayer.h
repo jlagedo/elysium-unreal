@@ -31,6 +31,12 @@ public:
 	virtual void ProcessEvent(const FElysiumSceneData& Scene, const FElysiumSceneEvent& Event, float SceneTime) {}
 	// The clock left the event's range (or the scene stopped while it was running).
 	virtual void EndEvent(const FElysiumSceneData& Scene, const FElysiumSceneEvent& Event, float SceneTime) {}
+	// Reconstitute a continuous event from a save. Instantaneous outputs are never restored through
+	// this callback, so a load cannot duplicate a firetrigger or Python call.
+	virtual void RestoreEvent(const FElysiumSceneData& Scene, const FElysiumSceneEvent& Event, float SceneTime)
+	{
+		StartEvent(Scene, Event, SceneTime);
+	}
 };
 
 class FElysiumScenePlayer
@@ -59,6 +65,15 @@ public:
 	// Mark every event whose start has already passed as started-but-not-active, without calling
 	// back. This is how a save restored mid-scene resumes without re-firing what already fired.
 	void PreLatchTo(float SceneTime);
+
+	// Restore exact dispatch/active latches and reconstitute only continuous live events. Arrays are
+	// byte-valued so they serialize without tying the save contract to TBitArray's representation.
+	void CaptureLatches(TArray<uint8>& OutStarted, TArray<uint8>& OutActive) const;
+	void RestoreLatches(float SceneTime, const TArray<uint8>& Started, const TArray<uint8>& Active,
+		IElysiumChoreoCallback& Callback);
+	// Legacy-save fallback: derive the latches from elapsed time, restoring ranged events that are
+	// live at that instant while keeping past instantaneous outputs silent.
+	void RestoreTo(float SceneTime, IElysiumChoreoCallback& Callback);
 
 	bool  IsBound() const { return Scene.IsValid(); }
 	float GetTime() const { return CurrentTime; }

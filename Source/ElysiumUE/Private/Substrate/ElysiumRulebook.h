@@ -440,13 +440,14 @@ struct FElysiumClanTable
 	// The chain a name walks, nearest first. The diagnosis half of Resolve.
 	void ParentChain(const FString& TemplateName, TArray<FString>& Out) const;
 
-	// The `npc_index.json` stem for a playable clan's body: the template at `ClanIndex` resolved,
-	// then its `M_Body<slot>` / `F_Body<slot>`, then that `.mdl` path's base filename lowercased —
-	// which is the stem the character export writes. Empty when the clan is not playable or the
-	// slot is absent.
+	// The full authored `.mdl` path and its `npc_index.json` stem for a playable clan's body: the
+	// template at `ClanIndex` resolved, then its `M_Body<slot>` / `F_Body<slot>`. Empty when the clan
+	// is not playable or the slot is absent. PlayerBodyModel normalizes separators; PlayerBodyStem
+	// takes its lower-cased basename for the skeletal export index.
 	//
 	// Only the INDEXED body keys are a player's: the un-indexed `M_Body`/`F_Body` on the human and
 	// Society-of-Leopold templates name NPC models, which the map-driven seed already covers.
+	FString PlayerBodyModel(int32 ClanIndex, bool bFemale, int32 ArmorSlot = 0) const;
 	FString PlayerBodyStem(int32 ClanIndex, bool bFemale, int32 ArmorSlot = 0) const;
 
 private:

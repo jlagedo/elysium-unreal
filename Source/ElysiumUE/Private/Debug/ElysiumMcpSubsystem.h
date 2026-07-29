@@ -20,9 +20,10 @@ class IConsoleObject;
 //
 // The server is ON BY DEFAULT in any build that carries the plugin (editor/dev only — the dep is
 // gated by ELYSIUM_WITH_MCP, defined 1 only for the Editor target, so it never self-starts in
-// Shipping/Test). `-NoElysiumMcp` opts out; `-ElysiumMcp=<port>` pins a port; `elysium.mcp.start`/
-// `stop` toggle it live. It binds loopback-only with no authentication (the engine plugin's
-// posture), so it is a local dev tool and nothing else.
+// Shipping/Test). Commandlets and unattended automation do not auto-start the HTTP listener; `-NoElysiumMcp` opts out in an
+// interactive process; `-ElysiumMcp=<port>` pins a port; `elysium.mcp.start`/`stop` toggle it live.
+// It binds loopback-only with no authentication (the engine plugin's posture), so it is a local
+// dev tool and nothing else.
 UCLASS()
 class UElysiumMcpSubsystem : public UEngineSubsystem
 {

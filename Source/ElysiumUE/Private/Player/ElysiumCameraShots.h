@@ -134,7 +134,11 @@ public:
 	int32 Push(FElysiumEntityWorld* World, UElysiumCameraComponent* Camera, const FString& ShotFile,
 		const FElysiumEntityHandle& Subject);
 
-	bool Pop(UElysiumCameraComponent* Camera, int32 Id);
+	// A raw value uses the same director-handle namespace as named shots, so callers can always
+	// update/pop through one interface without colliding with the component's private ids.
+	int32 PushValue(UElysiumCameraComponent* Camera, const FElysiumCameraShot& Shot);
+	bool UpdateValue(UElysiumCameraComponent* Camera, int32 Id, const FElysiumCameraShot& Shot);
+	bool Pop(UElysiumCameraComponent* Camera, int32 Id, float BlendOutSeconds = -1.0f);
 
 	// Every shot the map has up, dropped — a teardown, or `RemoveCamera` in the large.
 	void Clear(UElysiumCameraComponent* Camera);
@@ -152,6 +156,7 @@ private:
 	{
 		int32 Id = 0;              // ours
 		int32 CameraShotId = 0;    // the camera component's
+		bool bValue = false;       // true for a camera_track value, false for a named shot file
 		FElysiumCameraShotDef Def;
 		FElysiumEntityHandle Subject;
 	};

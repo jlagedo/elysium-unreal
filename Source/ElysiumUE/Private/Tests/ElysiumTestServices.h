@@ -63,6 +63,7 @@ struct FElysiumRecordingServices final
 	bool     bHasPlayer = false;
 	FVector  PlayerLocation = FVector::ZeroVector;
 	FRotator PlayerRotation = FRotator::ZeroRotator;
+	FElysiumCameraShot LastCameraShot;
 	// What the next TraceUseCursor returns (Invalid = the ray hit nothing usable).
 	FElysiumEntityHandle UseCursorHit;
 	// Damage accumulated by DamagePlayer, so a trigger_hurt cadence is assertable as a number.
@@ -109,6 +110,43 @@ struct FElysiumRecordingServices final
 		}
 		return bCinematicClipsResolve && Body != nullptr;
 	}
+	virtual bool SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds) override
+	{
+		Record(FString::Printf(TEXT("SeekCinematicClip %.3f"), PositionSeconds));
+		return Body != nullptr;
+	}
+	virtual void StopCinematicClip(USkeletalMeshComponent*) override { Record(TEXT("StopCinematicClip")); }
+	// Test-controlled model path -> v4 animated-prop stem.
+	TMap<FString, FString> AnimatedPropModels;
+	virtual FString AnimatedPropStemForModel(const FString& ModelPath) const override
+	{
+		if (const FString* Stem = AnimatedPropModels.Find(ModelPath))
+		{
+			return *Stem;
+		}
+		return FString();
+	}
+	virtual USkeletalMeshComponent* BuildAnimatedPropVisual(const FString& Stem,
+		const FVector& Location, const FQuat& Rotation, float UniformScale) override
+	{
+		Record(FString::Printf(TEXT("BuildAnimatedPropVisual %s %s scale=%.2f"),
+			*Stem, *Location.ToString(), UniformScale));
+		return NewComponent<USkeletalMeshComponent>();
+	}
+	virtual bool PlayAnimatedPropClip(USkeletalMeshComponent* Body, const FString& Stem,
+		const FString& ClipName, bool bLoop, float* OutSeconds) override
+	{
+		Record(FString::Printf(TEXT("PlayAnimatedPropClip %s %s loop=%d"),
+			*Stem, *ClipName, bLoop ? 1 : 0));
+		if (OutSeconds) { *OutSeconds = ClipSeconds; }
+		return Body != nullptr;
+	}
+	virtual void ApplyAnimatedPropSkin(USkeletalMeshComponent*, const FString& StaticStem,
+		int32 Family) override
+	{
+		Record(FString::Printf(TEXT("ApplyAnimatedPropSkin %s family=%d"), *StaticStem, Family));
+	}
+
 	// The authored length every stub clip reports. A scripted_sequence's OnEndSequence lands here.
 	float ClipSeconds = 1.0f;
 	// Whether a cinematic anim set resolves. Default false, which is the state of the world until
@@ -130,6 +168,17 @@ struct FElysiumRecordingServices final
 	virtual void ApplyPropSkin(UStaticMeshComponent* Comp, const FString& Stem, int32 Family) override
 	{
 		Record(FString::Printf(TEXT("ApplyPropSkin %s family=%d"), *Stem, Family));
+	}
+	virtual USkeletalMeshComponent* BuildPlayerVisual(const FString& Stem,
+		const FString& Disposition, int32 IdleVariant) override
+	{
+		Record(FString::Printf(TEXT("BuildPlayerVisual %s disp=%s var=%d"),
+			*Stem, *Disposition, IdleVariant));
+		return Stem.IsEmpty() ? nullptr : NewComponent<USkeletalMeshComponent>();
+	}
+	virtual void ClearPlayerVisual() override
+	{
+		Record(TEXT("ClearPlayerVisual"));
 	}
 
 	virtual bool GetPlayerViewPoint(FVector& OutLocation, FRotator& OutRotation) const override
@@ -173,16 +222,29 @@ struct FElysiumRecordingServices final
 		Record(FString::Printf(TEXT("PushCameraShot %s"), *ShotFile));
 		return ++NextCameraShotId;
 	}
-	virtual bool PopCameraShot(int32 ShotId) override
+	virtual int32 PushCameraShotValue(const FElysiumCameraShot& Shot) override
 	{
-		Record(FString::Printf(TEXT("PopCameraShot %d"), ShotId));
+		Record(FString::Printf(TEXT("PushCameraShotValue %s"), *Shot.DebugName));
+		LastCameraShot = Shot;
+		return ++NextCameraShotId;
+	}
+	virtual bool UpdateCameraShotValue(int32 ShotId, const FElysiumCameraShot& Shot) override
+	{
+		Record(FString::Printf(TEXT("UpdateCameraShotValue %d %s"), ShotId, *Shot.DebugName));
+		LastCameraShot = Shot;
+		return ShotId > 0;
+	}
+	virtual bool PopCameraShot(int32 ShotId, float BlendOutSeconds = -1.0f) override
+	{
+		Record(FString::Printf(TEXT("PopCameraShot %d blend=%.2f"), ShotId, BlendOutSeconds));
 		return ShotId > 0;
 	}
 
 	// --- IElysiumAudio ---------------------------------------------------------------------
 	virtual FElysiumAudioVoiceHandle PlayVoice(const FString& Rel, const FElysiumPlayParams& Params) override
 	{
-		Record(FString::Printf(TEXT("PlayVoice %s vol=%.2f loop=%d"), *Rel, Params.Volume, Params.bLooping ? 1 : 0));
+		Record(FString::Printf(TEXT("PlayVoice %s vol=%.2f loop=%d offset=%.3f"), *Rel, Params.Volume,
+			Params.bLooping ? 1 : 0, Params.StartTimeSeconds));
 		FElysiumAudioVoiceHandle H;
 		H.Id = ++NextVoiceId;
 		LiveVoices.Add(H.Id);

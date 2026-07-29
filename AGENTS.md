@@ -216,6 +216,7 @@ facts, valid regardless of target engine. Organisation and maintenance rules: `d
 | `vpk_format.md` | the VPK archive container + the patch-first asset resolution order |
 | `texture_format.md` | the `.tth`/`.ttz` texture container + VMT material parsing |
 | `audio_pipeline.md` | codecs, mixer, DSP, the SoundScheme system |
+| `audio-architecture.md` | the Unreal Audio Mixer design — requests, streaming, routing, zones, concurrency, subsystem adapters |
 | `source_movement.md` | `CGameMovement` constants + formulas |
 | `lighting.md` | the WORLDLIGHTS (lump 15) format — `dworldlight_t`, lightstyles, texlights |
 | `color_gamma.md` | VtMB's DX8 fixed-function, LDR, gamma-space render pipeline |

@@ -231,7 +231,8 @@ game thread (the server serializes tool calls there), so they touch the substrat
 **Posture.** The server is **on by default in dev builds** — it auto-starts whenever the plugin is
 present, which is editor-target-only (the dependency is gated by `ELYSIUM_WITH_MCP`, defined `1`
 only for the Editor target, so nothing self-starts in a Game/Shipping/Test build — every call site
-compiles to an empty shell there). `-NoElysiumMcp` opts out; `-ElysiumMcp=<port>` pins a port;
+compiles to an empty shell there). Commandlets and unattended automation register the tools without starting the HTTP
+listener. `-NoElysiumMcp` opts out in an interactive process; `-ElysiumMcp=<port>` pins a port;
 `elysium.mcp.start`/`stop` toggle it live. It binds `127.0.0.1` with no authentication (the plugin's
 own posture): a local dev tool, nothing else. An agent connects via the repo-root `.mcp.json`
 (server name `elysium`, `http://127.0.0.1:8000/mcp`) — launch the game, then run `claude` from the
@@ -255,6 +256,28 @@ screenshot-regression sibling of the profiler — it visits the *same* fixed van
 captures the viewport to the gitignored `tools/out/_shots/` (baselines are game-derived), and shares
 its capture path (`ElysiumScreenshot.{h,cpp}`) with the `elysium_screenshot` MCP tool — the
 fire→screenshot→assert loop the agent runs live and the harness runs headless are one code path.
+
+### Rendered skeletal green room
+
+`greenroom.bat <case> [map]` is the real-RHI gate between structural animation tests and an aggregate
+story launch. It loads the production skeletal mesh/material/clip paths, seeks fixed absolute poses,
+renders off-screen at 1920×1080 DX12/SM6, and writes PNGs plus `manifest.json` under
+`tools/out/_greenroom/<case>/`. Individual `player`, `sire`, `vampire1`, `vampire2`, `sheriff`, and
+named prop cases isolate one model and clip; `opening` renders the five-body cast; `props` walks both
+wineglass clips and all seven stake clips one at a time.
+
+`embrace` runs on `sp_theatre`: it builds the player through the same NPC understudy/material path
+used by the scene, places all five bodies at the authored scene origin through the shared skeletal
+basis, parses both real camera chains, and composes the production position/target value shot. Capture
+times are derived from every exact-zero cut in either stream, every positive-movement midpoint, and
+every authored fade boundary. The six black fade windows are applied to the rendered viewport.
+
+Every capture records root, bounds-center, extent, clip time, eight key-bone positions, normalized
+camera coordinates and in-frame counts, plus camera segments/position/target/roll/FOV/fade alpha.
+Non-finite values, zero or exploded bounds, missing key bones/assets/clips, a failed screenshot,
+disagreeing camera clocks, or any cast member never entering frame outside an opaque fade makes `ok`
+false and exits the batch with status 1. This separates model/clip/material faults from placement,
+framing, cuts, and fades before `newgame_ttd` is allowed to be the aggregate integration test.
 
 ## Tracking
 

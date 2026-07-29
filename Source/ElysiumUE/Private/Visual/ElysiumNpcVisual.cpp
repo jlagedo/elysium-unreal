@@ -8,7 +8,40 @@
 
 #include "Animation/AnimSequence.h"
 #include "Engine/SkeletalMesh.h"
+#include "Materials/MaterialInterface.h"
+#include "UObject/UObjectGlobals.h"
 #include "Misc/Paths.h"
+
+namespace
+{
+	void ConfigureRetarget(UglTFRuntimeAsset* Asset, USkeletalMesh* Mesh,
+		FglTFRuntimeSkeletalAnimationConfig& Config)
+	{
+		const FReferenceSkeleton& TargetRef = Mesh->GetRefSkeleton();
+		if (TargetRef.GetNum() == 0)
+		{
+			return;
+		}
+
+		// VtMB's virtual-model contract binds compatible biped-local animation tracks by bone name.
+		// Do not enable glTFRuntime's generic rest-pose retargeter: cinematic roots carry absolute
+		// placement inside the scene and the other tracks already use the target biped's local frame.
+		// Rest-pose retargeting expands a normal 1-3 m body into a 4-8 m pose, while a post-transform
+		// on Bip01 also double-applies the authored stage placement.
+		//
+		// Banks may carry optional hair, toe and nub tracks absent from a particular body. Filter
+		// those tracks before animation construction; the target leaves those bones at bind pose.
+		const TArray<FglTFRuntimeNode> SourceNodes = Asset->GetNodes();
+		for (const FglTFRuntimeNode& Node : SourceNodes)
+		{
+			const FName NodeName(*Node.Name);
+			if (!Node.Name.IsEmpty() && TargetRef.FindBoneIndex(NodeName) == INDEX_NONE)
+			{
+				Config.RemoveTracks.AddUnique(Node.Name);
+			}
+		}
+	}
+}
 
 namespace ElysiumNpcVisual
 {
@@ -42,6 +75,7 @@ namespace ElysiumNpcVisual
 			return nullptr;
 		}
 		FglTFRuntimeSkeletalAnimationConfig AnimConfig;
+		ConfigureRetarget(Asset, Mesh, AnimConfig);
 		UAnimSequence* Anim = Asset->LoadSkeletalAnimationByName(Mesh, ClipName, AnimConfig,
 			/*bCaseSensitive=*/false);
 		if (Anim == nullptr)
@@ -51,12 +85,13 @@ namespace ElysiumNpcVisual
 		return Anim;
 	}
 
-	USkeletalMesh* LoadMesh(const FString& Stem, UglTFRuntimeAsset*& OutAsset, FString& OutError)
+	USkeletalMesh* LoadMeshFromPath(const FString& FullPath, UglTFRuntimeAsset*& OutAsset,
+		FString& OutError, bool bPlayerMaterial)
 	{
 		OutAsset = nullptr;
 		OutError.Reset();
 
-		UglTFRuntimeAsset* Asset = LoadAssetFromPath(FElysiumContentPaths::NpcGlb(Stem), OutError);
+		UglTFRuntimeAsset* Asset = LoadAssetFromPath(FullPath, OutError);
 		if (Asset == nullptr)
 		{
 			return nullptr;
@@ -68,6 +103,22 @@ namespace ElysiumNpcVisual
 		// Elysium.Content.SkeletalGlbContracts validates the same contract over the complete export.
 		FglTFRuntimeSkeletalMeshConfig SkeletalMeshConfig;
 		SkeletalMeshConfig.bIgnoreMissingBones = false;
+		if (bPlayerMaterial)
+		{
+			UMaterialInterface* BodyMaterial = LoadObject<UMaterialInterface>(nullptr,
+				TEXT("/Game/VtMB/Materials/M_PlayerBody.M_PlayerBody"));
+			if (BodyMaterial == nullptr)
+			{
+				OutError = TEXT("M_PlayerBody is missing; run content.bat");
+				return nullptr;
+			}
+			for (uint8 Raw = static_cast<uint8>(EglTFRuntimeMaterialType::Opaque);
+				Raw <= static_cast<uint8>(EglTFRuntimeMaterialType::TwoSidedMasked); ++Raw)
+			{
+				SkeletalMeshConfig.MaterialsConfig.UberMaterialsOverrideMap.Add(
+					static_cast<EglTFRuntimeMaterialType>(Raw), BodyMaterial);
+			}
+		}
 		USkeletalMesh* Mesh = Asset->LoadSkeletalMesh(0, 0, SkeletalMeshConfig);
 		if (Mesh == nullptr)
 		{
@@ -77,6 +128,12 @@ namespace ElysiumNpcVisual
 
 		OutAsset = Asset;
 		return Mesh;
+	}
+
+	USkeletalMesh* LoadMesh(const FString& Stem, UglTFRuntimeAsset*& OutAsset, FString& OutError,
+		bool bPlayerMaterial)
+	{
+		return LoadMeshFromPath(FElysiumContentPaths::NpcGlb(Stem), OutAsset, OutError, bPlayerMaterial);
 	}
 
 }

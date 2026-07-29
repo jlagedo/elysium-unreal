@@ -54,28 +54,6 @@ def _cstr_rel(b, base, field_off):
     return _cstr(b, base + rel) if rel else ""
 
 
-def _qmul(a, b):
-    """Hamilton product of quaternions (x,y,z,w)."""
-    ax, ay, az, aw = a
-    bx, by, bz, bw = b
-    return (aw*bx + ax*bw + ay*bz - az*by,
-            aw*by - ax*bz + ay*bw + az*bx,
-            aw*bz + ax*by - ay*bx + az*bw,
-            aw*bw - ax*bx - ay*by - az*bz)
-
-
-# BONEFLAG_ORIENTATION (bone flag 0x2, always `Bip01 Spine1` on a VtMB biped): the
-# bone's animation rotation is stored with a constant 120deg axis-permutation
-# post-composed into every keyframe (Q_ORIENT = (-0.5,-0.5,-0.5,0.5)); its bind
-# rotation is not. Right-multiplying the decoded animation quaternion by
-# Q_ORIENT^-1 = (0.5,0.5,0.5,0.5) recovers the real local rotation. Spine1 parents the
-# whole upper body, so leaving it permuted busts the torso + arms (legs branch below).
-# Game-confirmed: client.dll FUN_10091110 special-cases bone.flags & 2. See
-# docs/animation_and_movers.md A.4a.
-BONEFLAG_ORIENTATION = 0x2
-_Q_ORIENT_INV = (0.5, 0.5, 0.5, 0.5)
-
-
 class Bone:
     __slots__ = ("index", "name", "parent", "pos", "quat", "posscale", "rotscale",
                  "pose_to_bone", "flags")
@@ -90,9 +68,9 @@ def read_bones(d):
 
     pos/quat are parent-relative bind pose (Source inches / xyzw). posscale/rotscale
     multiply the animation short deltas. pose_to_bone is the 3x4 world->bone
-    inverse-bind (row-major, 12 floats). flags@136 carries the studio bone flags;
-    bit 0x2 (BONEFLAG_ORIENTATION) marks a bone whose animation rotation is stored in
-    a swapped axis frame (see mdl_gltf.orient_matrix)."""
+    inverse-bind (row-major, 12 floats). flags@136 carries the studio bone flags. It
+    does not alter v2531 animation-channel decoding; the retail quaternion evaluator
+    never reads it (see `docs/animation_and_movers.md` A.4a)."""
     n = _i32(d, 240)
     base = _i32(d, 244)
     bones = []
@@ -286,8 +264,6 @@ def read_anim(d, bones, animdesc_base, numframes):
             )
             n = (q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]) ** 0.5 or 1.0
             q = (q[0] / n, q[1] / n, q[2] / n, q[3] / n)
-            if bone.flags & BONEFLAG_ORIENTATION:
-                q = _qmul(q, _Q_ORIENT_INV)   # strip the stored axis-permutation
             frames[f][bi] = (pos, q)
     return frames
 

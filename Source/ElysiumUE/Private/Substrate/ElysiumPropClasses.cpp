@@ -16,8 +16,10 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumSaveArchive.h"
 #include "ElysiumWorldServices.h"
 
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/Actor.h"
 #include "Engine/StaticMesh.h"
@@ -120,51 +122,59 @@ namespace
 class FElysiumProp final : public FElysiumEntity
 {
 public:
-	// The standing static-mesh body, or null (elysium.PropBodies 0, a decode that failed, or a record
-	// with no model_mesh annotation). Owned by the map actor; the world tears it down. This leaf only
-	// gates its visibility / moves it.
+	// Exactly one representation is live. Ordinary props retain the baked static mesh; a model in
+	// npc_index v4's animated_props section stands a skeletal glTF component instead.
 	UStaticMeshComponent* Visual = nullptr;
-	bool  bBroken = false;   // Break fired — the body is hidden and stays down
-	int32 Skin = 0;          // `skin` keyfield / Skin input (recorded; no alternate skins exported)
+	USkeletalMeshComponent* AnimatedVisual = nullptr;
+	FString AnimatedStem;
+	FString VisualStem;          // baked/static skin-table stem for either representation
+	FString CurrentAnimation;
+	bool bAnimationLoop = false;
+	bool bBroken = false;
+	int32 Skin = 0;
 
 	virtual void Spawn() override
 	{
-		// Keyfields (model/angles/skin) are already applied. Stand the body from the export annotation.
 		BuildBody(/*bFromSetModel=*/false);
+		PlayAuthoredDefault();
 	}
 
-	// Mirror the whole-entity dormancy switch onto the body (R6): a ScriptHidden/dead prop is undrawn.
+	virtual void Serialize(FElysiumSaveArchive& Ar) override
+	{
+		Ar << CurrentAnimation << bAnimationLoop;
+		if (Ar.IsLoading() && AnimatedVisual && !CurrentAnimation.IsEmpty())
+		{
+			PlayAnimation(CurrentAnimation, bAnimationLoop);
+		}
+	}
+
 	virtual void OnDormancyChanged() override
 	{
 		FElysiumEntity::OnDormancyChanged();
 		GateVisual();
 	}
 
-	// SetOrigin/SetAngles: the body is Movable, so follow it. Authored placement is a full 3-axis quat
-	// (the exporter's model_quat); a runtime re-face carries no pre-converted form, so it collapses to
-	// yaw-only, negated by the Source->Unreal Y reflection — matching the NPC leaf (cosmetic in practice).
 	virtual void OnRuntimeTransformChanged() override
 	{
 		FElysiumEntity::OnRuntimeTransformChanged();
+		const FQuat Rot(FRotator(0.0f, -Angles.Y, 0.0f));
 		if (Visual)
 		{
-			Visual->SetRelativeLocationAndRotation(Origin, FQuat(FRotator(0.0f, -Angles.Y, 0.0f)));
+			Visual->SetRelativeLocationAndRotation(Origin, Rot);
+		}
+		if (AnimatedVisual)
+		{
+			AnimatedVisual->SetRelativeLocationAndRotation(Origin, Rot);
 		}
 	}
 
-	// SetModel: tear the old body down and rebuild from the new model at the same placement.
 	virtual void OnRuntimeModelChanged() override
 	{
-		if (Visual)
-		{
-			Visual->DestroyComponent();
-			Visual = nullptr;
-		}
+		DestroyBody();
 		BuildBody(/*bFromSetModel=*/true);
+		PlayAuthoredDefault();
 	}
 
-	// Break: hide the prop and fire OnBreak (Source spawns gibs here; 8.3 has no gib system, so the
-	// body simply goes down). Idempotent.
 	void InputBreak(const FElysiumInputArgs& Args)
 	{
 		if (bBroken)
@@ -178,17 +188,11 @@ public:
 		UE_LOG(LogElysiumProp, Verbose, TEXT("%s Break"), *DebugString());
 	}
 
-	// Skin: select an alternate skin family. VtMB's datamap exposes `skin` as a keyfield-input with a
-	// null inputFunc (flags 0xe: SAVE|KEY|INPUT), i.e. Source's DEFINE_INPUT -- firing it writes
-	// m_nSkin directly, so it snaps. Input matching is case-insensitive, which is why every map's
-	// `Skin` wire binds here. The crossfading variant is a separate input (FadeToSkin), see below.
 	void InputSkin(const FElysiumInputArgs& Args)
 	{
 		SetSkin(Args.Param.ToInt());
 	}
 
-	// The `skin` keyfield and a script's `.skin` write land here too (5 such writes across VtMB's
-	// own scripts), so the body follows a field write exactly as it follows an input.
 	void SetSkin(int32 Family)
 	{
 		Skin = Family;
@@ -197,42 +201,102 @@ public:
 
 	void ApplySkin()
 	{
-		if (!Visual || !World || !Def)
+		IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+		if (!Embodiment || VisualStem.IsEmpty())
 		{
 			return;
 		}
-		if (IElysiumEmbodiment* Embodiment = World->Embodiment())
+		if (AnimatedVisual)
 		{
-			Embodiment->ApplyPropSkin(Visual, Def->ModelMesh, Skin);
+			Embodiment->ApplyAnimatedPropSkin(AnimatedVisual, VisualStem, Skin);
+		}
+		else if (Visual)
+		{
+			Embodiment->ApplyPropSkin(Visual, VisualStem, Skin);
 		}
 	}
 
-	// SetAnimation: prop_dynamic can be skeletal in Source; the decode here is LOD0 static geometry (no
-	// skeleton), so animation is a no-op stub (roadmap 8.3 deferral — skeletal props are a follow-up).
 	void InputSetAnimation(const FElysiumInputArgs& Args)
 	{
-		UE_LOG(LogElysiumProp, Log, TEXT("%s SetAnimation '%s' — prop is static geometry (8.3 stub)"),
-			*DebugString(), *Args.Param.ToString());
+		const FString Clip = Args.Param.ToString();
+		if (!PlayAnimation(Clip, /*bLoop*/ false))
+		{
+			UE_LOG(LogElysiumProp, Warning, TEXT("%s SetAnimation '%s' did not resolve on %s"),
+				*DebugString(), *Clip, AnimatedStem.IsEmpty() ? TEXT("static representation") : *AnimatedStem);
+		}
 	}
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
 	{
 		Out.Emplace(TEXT("Model"), Model.IsEmpty() ? TEXT("(none)") : Model);
-		Out.Emplace(TEXT("Body"), Visual ? TEXT("static mesh") : TEXT("(none)"));
+		Out.Emplace(TEXT("Body"), AnimatedVisual ? TEXT("skeletal animated prop")
+			: (Visual ? TEXT("static mesh") : TEXT("(none)")));
+		Out.Emplace(TEXT("Animation"), CurrentAnimation.IsEmpty() ? TEXT("(none)") : CurrentAnimation);
+		Out.Emplace(TEXT("Animation loop"), bAnimationLoop ? TEXT("yes") : TEXT("no"));
 		Out.Emplace(TEXT("Broken"), bBroken ? TEXT("yes") : TEXT("no"));
 		Out.Emplace(TEXT("Skin"), FString::FromInt(Skin));
 	}
 
 private:
-	// Stand (or restand) the body. At spawn the exporter's model_mesh annotation names the decoded OBJ
-	// stem exactly (a plain basename may not reproduce the sanitised stem) and model_quat the placement
-	// rotation; a runtime SetModel has neither, so it derives the stem from the model path's basename
-	// (matching the NPC SetModel path) and keeps the current yaw.
+	static bool MeaningfulSequence(const FString& Sequence)
+	{
+		return !Sequence.IsEmpty()
+			&& !Sequence.Equals(TEXT("none"), ESearchCase::IgnoreCase)
+			&& !Sequence.Equals(TEXT("null"), ESearchCase::IgnoreCase)
+			&& Sequence != TEXT("0");
+	}
+
+	void DestroyBody()
+	{
+		if (Visual) { Visual->DestroyComponent(); Visual = nullptr; }
+		if (AnimatedVisual) { AnimatedVisual->DestroyComponent(); AnimatedVisual = nullptr; }
+		AnimatedStem.Reset();
+		VisualStem.Reset();
+		CurrentAnimation.Reset();
+		bAnimationLoop = false;
+	}
+
+	bool PlayAnimation(const FString& Clip, bool bLoop)
+	{
+		if (!MeaningfulSequence(Clip) || !AnimatedVisual || !World)
+		{
+			return false;
+		}
+		IElysiumEmbodiment* Embodiment = World->Embodiment();
+		if (!Embodiment || !Embodiment->PlayAnimatedPropClip(
+			AnimatedVisual, AnimatedStem, Clip, bLoop, nullptr))
+		{
+			return false;
+		}
+		CurrentAnimation = Clip;
+		bAnimationLoop = bLoop;
+		return true;
+	}
+
+	void PlayAuthoredDefault()
+	{
+		if (!AnimatedVisual || !Def)
+		{
+			return;
+		}
+		const FString Loop = Def->Keys.FindRef(TEXT("LoopSequence"));
+		if (MeaningfulSequence(Loop))
+		{
+			PlayAnimation(Loop, /*bLoop*/ true);
+			return;
+		}
+		const FString Demo = Def->Keys.FindRef(TEXT("demo_sequence"));
+		if (MeaningfulSequence(Demo))
+		{
+			PlayAnimation(Demo, /*bLoop*/ true);
+		}
+	}
+
 	void BuildBody(bool bFromSetModel)
 	{
-		if (CVarPropBodies.GetValueOnGameThread() == 0 || !World || !Def)
+		if (CVarPropBodies.GetValueOnGameThread() == 0 || !World || !Def || Model.IsEmpty())
 		{
-			return;   // gated off, no world, or bare test world (no map actor to build on)
+			return;
 		}
 		IElysiumEmbodiment* Embodiment = World->Embodiment();
 		if (!Embodiment)
@@ -240,56 +304,61 @@ private:
 			return;
 		}
 
-		FString Stem;
 		FVector Loc;
-		FQuat   Rot;
+		FQuat Rot;
 		if (bFromSetModel)
 		{
-			if (Model.IsEmpty())
-			{
-				return;   // now modelless
-			}
-			Stem = FPaths::GetBaseFilename(Model).ToLower();
-			Loc  = Origin;
-			Rot  = FQuat(FRotator(0.0f, -Angles.Y, 0.0f));
+			VisualStem = FPaths::GetBaseFilename(Model).ToLower();
+			Loc = Origin;
+			Rot = FQuat(FRotator(0.0f, -Angles.Y, 0.0f));
 		}
 		else
 		{
-			if (Def->ModelMesh.IsEmpty())
-			{
-				return;   // no decoded prop mesh (bodiless record / decode failed) — stay a data-only entity
-			}
-			Stem = Def->ModelMesh;
-			Loc  = Def->Origin;
-			Rot  = Def->ModelQuat;
+			VisualStem = Def->ModelMesh;
+			Loc = Def->Origin;
+			Rot = Def->ModelQuat;
 		}
 
-		Visual = Embodiment->BuildPropVisual(Stem, Loc, Rot, Embodiment->BodyScaleFor(*Def));
-		if (Visual)
+		AnimatedStem = Embodiment->AnimatedPropStemForModel(Model);
+		if (!AnimatedStem.IsEmpty())
 		{
-			World->RegisterPropBody(Visual);
-			// The `skin` keyfield is already applied, so a prop authored on an alternate family
-			// stands on it from the first frame rather than popping on the first Skin input.
-			if (Skin != 0)
+			AnimatedVisual = Embodiment->BuildAnimatedPropVisual(AnimatedStem, Loc, Rot,
+				Embodiment->BodyScaleFor(*Def));
+			if (AnimatedVisual)
 			{
-				Embodiment->ApplyPropSkin(Visual, Stem, Skin);
+				World->RegisterNpcBody(AnimatedVisual);
 			}
-			if (IsInert() || bBroken)
+		}
+		else if (!VisualStem.IsEmpty())
+		{
+			Visual = Embodiment->BuildPropVisual(VisualStem, Loc, Rot, Embodiment->BodyScaleFor(*Def));
+			if (Visual)
 			{
-				GateVisual();   // born hidden (start_hidden / a Spawn()-time Kill) or already broken
+				World->RegisterPropBody(Visual);
 			}
+		}
+
+		if (Visual || AnimatedVisual)
+		{
+			if (Skin != 0) { ApplySkin(); }
+			if (IsInert() || bBroken) { GateVisual(); }
 		}
 	}
 
 	void GateVisual()
 	{
+		const bool bShown = !IsInert() && !bBroken;
 		if (Visual)
 		{
-			Visual->SetVisibility(!IsInert() && !bBroken);
+			Visual->SetVisibility(bShown);
+		}
+		if (AnimatedVisual)
+		{
+			AnimatedVisual->SetVisibility(bShown);
+			AnimatedVisual->SetComponentTickEnabled(bShown);
 		}
 	}
 };
-
 // ============================================================================================
 // FElysiumPhysProp — the `prop_physics` leaf: a Chaos rigid body. Stands the same decoded mesh as
 // a dynamic prop but cooked with convex collision (the 8.4 `.hulls` decomposition) and simulating.

@@ -481,11 +481,54 @@ the toggle's fixed rate. A shot is pushed as origin / look-at / roll / FOV / rat
 pushed it keeps those values current, which is what a `Follow` attach type is. The camera therefore
 never learns what an entity is.
 
-The substrate reaches the channel through **`IElysiumEmbodiment::PushCameraShot` / `PopCameraShot`**,
-not `IElysiumPresenter`: the camera is part of the player's *body* (`runtime-architecture.md` §5–6),
-which is where `GetPlayerViewPoint` already lives. `FElysiumEntityWorld` holds **one** scripted camera
-at a time — `SetCamera` replaces, `RemoveCamera` clears, a map teardown clears — the same single-slot
-discipline the sign panel and the open conversation use.
+The substrate reaches the raw value channel through
+**`IElysiumEmbodiment::PushCameraShotValue` / `UpdateCameraShotValue` / `PopCameraShot`**, not
+`IElysiumPresenter`: the camera is part of the player's *body* (`runtime-architecture.md` §5–6),
+which is where `GetPlayerViewPoint` already lives. `SetCamera` owns one replaceable named-shot slot.
+Worldcraft tracks instead own independent **position** and **target** streams in the map epoch;
+`FElysiumEntityWorld` composes whichever streams are live into one raw shot. Restoring one owner does
+not cancel the other, and the raw shot is popped only when neither stream remains. The composed track
+shot sets `MaxTurnRate` to zero: the authored position/target samples already define the complete view,
+so the generic moving-subject tracker must not add a second yaw/pitch scroll between them. Map teardown
+clears all owners.
+
+### `camera_track` / `camera_keyframe`
+
+A `camera_track` is also its first keyframe. `NextKey` walks through `camera_keyframe` or another
+`camera_track`; cycles and missing/wrong-class links terminate with one warning, and content tests
+require the shipped opening chains to be complete and acyclic. `PlayAsCameraPosition` and
+`PlayAsCameraTarget` start independently owned streams. `RestoreCameraToPlayerControl` (with
+`Restore` as a compact compatibility alias) releases that entity's live roles; `HoldAtEnd` retains
+the final sample until restore. `FromPlayerTime` is the push blend, `ToPlayerTime` the default pop
+blend, and an explicit restore parameter overrides the latter. `OnReachedKeyframe`,
+`OnLeavingKeyframe`, and exactly-once `OnAnimationCompleted` fire from crossed authored times,
+including zero-duration chains.
+
+Timing belongs to the departing key. With `TimeControl`, its `MoveTime` is the segment duration.
+Otherwise duration is distance divided by endpoint `MoveSpeed`: the two endpoint speeds are averaged,
+except a `Corner` departure uses its own speed. Units convert once from Source units/s to cm/s. The
+destination key's `Pause` is then added as a dwell. `RateOut`/`RateIn` ease normalized segment time;
+position, roll, and focal length use the recovered four-key Catmull form (duplicating an endpoint at
+chain ends or corners), while pitch/yaw and roll normalize onto the shortest angular path.
+`PositionInterpolator` is parsed, retained, and shown in diagnostics but is a dead VtMB key with no
+runtime effect. A time-controlled segment is a **hard cut only when authored `MoveTime` is zero**
+(with normal floating-point tolerance): the destination becomes current at that same scene time.
+Every positive `MoveTime`, however short, remains authored movement and uses the spatial and angular
+interpolation above. The theatre chains use exact zeroes for their edits; the value-shot seam also
+sets `MaxTurnRate` to zero so the generic moving-subject tracker cannot turn those authored cuts into
+secondary camera pans. Crossing an exact-zero edit, replacing a zero-blend track owner, or popping a
+zero-blend top shot also marks Unreal's `bGameCameraCutThisFrame` and resets the previous view
+transform at the single camera apply point. That one-frame signal invalidates temporal history.
+While the scripted-shot stack has non-zero weight, the same apply point overrides motion-blur amount
+to zero: Unreal's ordinary camera blur otherwise makes the opening's rapid authored dollies and
+closely spaced edits read as continuous scrolling even when every sampled transform and cut boundary
+is correct. The override leaves gameplay motion blur unchanged after the scripted channel releases.
+
+The authored focal value is 35 mm focal length, not degrees. The unresolved client helper is isolated
+behind the standard 36 mm horizontal-gate conversion
+`FOV = 2 * atan(18 / focalMm)`; non-positive values preserve the player's FOV. Both streams and their
+elapsed/output latches serialize with the map snapshot, so restore republishes the current sample
+without replaying crossed outputs.
 
 ### `vdata/camerashots/` — the shot files
 
@@ -533,7 +576,9 @@ arriving is the *weight ramp*; the shot itself starts where it was authored.
   clamping, the priority order, symmetric resume on a mid-blend reversal, and the stack's
   out-of-order pop / no-op double pop / ramp-preserving refresh.
 - `Elysium.Substrate.CameraShots` reads a `dialogdefault`-shaped file and asserts it against the
-  how-to.
+  how-to. `Elysium.Substrate.CameraTrack` covers authored duration/pause/easing, four-key spatial and
+  focal sampling, shortest-path roll, zero/30 ms cuts, independent owners, exact track-shot rotation,
+  holds/restores, outputs, blend times, and snapshot restore.
 - `elysium_player_get` (MCP) reports the view mode, the deciding latch, the weight, the scripted
   weight, the solved boom length, the model alpha and the live shot name, so an agent can drive the
   toggle and assert the transition. `elysium.camera` is the same state as a console dump.

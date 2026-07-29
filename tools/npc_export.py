@@ -59,7 +59,8 @@ MANIFEST = os.path.join(NPC_DIR, "npc_manifest.json")
 INDEX = os.path.join(NPC_DIR, "npc_index.json")
 CLIPS_DIR = os.path.join(NPC_DIR, "clips")
 FACIAL_DIR = os.path.join(NPC_DIR, "facial")
-MANIFEST_VERSION = 3
+ANIMATED_PROP_DIR = os.path.join(NPC_DIR, "animated_props")
+MANIFEST_VERSION = 4
 
 
 def npc_models_from_ents(out_root=OUT):
@@ -77,6 +78,53 @@ def npc_models_from_ents(out_root=OUT):
             m = ent.get("keys", {}).get("model", "").strip().lower().replace("\\", "/")
             if m.endswith(".mdl"):
                 models.add(m if m.startswith("models/") else "models/" + m)
+    return sorted(models)
+
+
+def _meaningful_sequence(value):
+    return isinstance(value, str) and value.strip().lower() not in ("", "none", "null", "0")
+
+
+def animated_prop_models_from_ents(out_root=OUT):
+    """Skeletal prop models that gameplay can animate.
+
+    A prop qualifies when it authors a meaningful default/loop sequence or when any exported
+    output targets it with SetAnimation. Target matching reproduces the shipped trailing-* prefix
+    rule; engine aliases and other dynamic targets cannot identify a model offline and are skipped.
+    """
+    docs = []
+    for ents in glob.glob(os.path.join(out_root, "*", "*.ents")):
+        try:
+            docs.append(json.load(open(ents, encoding="utf-8")))
+        except Exception:
+            continue
+
+    animation_targets = set()
+    for data in docs:
+        for ent in data.get("entities", []):
+            for wire in ent.get("outputs", []):
+                if str(wire.get("input", "")).lower() == "setanimation":
+                    target = str(wire.get("target", "")).strip().lower()
+                    if target and not target.startswith("!"):
+                        animation_targets.add(target)
+
+    def targeted(name):
+        name = (name or "").lower()
+        return any(name.startswith(t[:-1]) if t.endswith("*") else name == t
+                   for t in animation_targets)
+
+    models = set()
+    for data in docs:
+        for ent in data.get("entities", []):
+            if not str(ent.get("classname", "")).startswith("prop_dynamic"):
+                continue
+            keys = ent.get("keys", {})
+            animated = (_meaningful_sequence(keys.get("demo_sequence"))
+                        or _meaningful_sequence(keys.get("LoopSequence"))
+                        or targeted(ent.get("targetname", "")))
+            model = str(keys.get("model", "")).strip().lower().replace("\\", "/")
+            if animated and model.endswith(".mdl"):
+                models.add(model if model.startswith("models/") else "models/" + model)
     return sorted(models)
 
 
@@ -218,6 +266,13 @@ def write_sidecars(manifest):
         # into. The runtime resolves (BaseAnim/MaleAnim/FemaleAnim, the actor's bonerename
         # source) through this to a bank stem in `banks` above.
         "cinematics": manifest.get("cinematics", {}),
+        # v4 — skeletal prop models selected by prop_dynamic. Version 3 readers see no field;
+        # version 4 readers get the GLB plus the exact baked clip inventory.
+        "animated_props": {
+            stem: {"glb": rec["glb"], "model": rec["model"],
+                   "bones": rec.get("bones", 0), "clips": sorted(rec.get("clips", {}))}
+            for stem, rec in manifest.get("animated_props", {}).items()
+        },
     }
     with open(INDEX, "w", encoding="utf-8") as f:
         json.dump(index, f, indent=1)
@@ -261,19 +316,21 @@ def main(only=None):
         from_ents = npc_models_from_ents()
         pc_models = set(pc_models_from_clandoc())
         cinematics = cinematic_models_from_ents()
+        animated_props = animated_prop_models_from_ents()
         print(f"[npc] seed: {len(from_ents)} npc model(s) from the exported .ents + "
               f"{len(pc_models)} player body model(s) from {CLANDOC} + "
-              f"{len(cinematics)} cinematic anim-set(s)")
+              f"{len(cinematics)} cinematic anim-set(s) + "
+              f"{len(animated_props)} animated prop model(s)")
         seed = sorted(set(from_ents) | pc_models)
     else:
-        seed, pc_models, cinematics = only, set(), []
+        seed, pc_models, cinematics, animated_props = only, set(), [], []
 
     npcs = [m for m in seed if load_mdl(m) is not None]
     missing = [m for m in seed if load_mdl(m) is None]
     for m in missing:
         print(f"  ! {m}: no .mdl in install - skipped")
-    if not npcs:
-        print("[npc] no character models to export")
+    if not npcs and not cinematics and not animated_props:
+        print("[npc] no character, cinematic, or animated-prop models to export")
         return
 
     # NPC stems are basenames (the console/`elysium.npc.load` ergonomic); fall back to a
@@ -372,6 +429,33 @@ def main(only=None):
             **write_facial(info["stem"], info["model"], info["facial"]),
         }
 
+    # Skeletal prop GLBs are intentionally separate from NPCs: prop_dynamic selects them only when
+    # this index promises an animated representation, while ordinary props retain their baked
+    # Nanite/static path. Props own their clips directly; no NPC include-bank vocabulary is needed.
+    animated_prop_index = {}
+    if animated_props:
+        os.makedirs(ANIMATED_PROP_DIR, exist_ok=True)
+        print(f"[npc] exporting {len(animated_props)} animated prop model(s) -> "
+              f"{ANIMATED_PROP_DIR}/ ...", flush=True)
+    prop_counts = Counter(_basename_stem(m) for m in animated_props)
+    for model in animated_props:
+        if load_mdl(model) is None:
+            print(f"  ! animated prop {model}: no .mdl in install - skipped")
+            continue
+        stem = (_basename_stem(model) if prop_counts[_basename_stem(model)] == 1
+                else bank_stem(model))
+        try:
+            info = mdl_gltf.export_npc(idx, model, ANIMATED_PROP_DIR, stem, anorms=None)
+        except Exception as e:
+            print(f"  !! animated prop {stem} FAILED: {e}")
+            continue
+        animated_prop_index[stem] = {
+            "glb": "animated_props/" + info["glb"],
+            "model": info["model"],
+            "bones": info["bones"],
+            "clips": {c.label: _clip_meta(c) for c in info["clips"]},
+        }
+
     # Reconcile: a sequence the include tree advertises but whose owner failed to bake (empty
     # tracks, or a bank export that raised) must not appear as resolvable. Filtering here is
     # what lets the runtime treat a hit in `clips` as a promise the glb can answer.
@@ -400,6 +484,7 @@ def main(only=None):
         "npcs": npc_index,
         "banks": bank_index,
         "cinematics": cinematic_index,
+        "animated_props": animated_prop_index,
     }
     with open(MANIFEST, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=1)
@@ -415,7 +500,8 @@ def main(only=None):
     acts = {m["activity"] for m in metas if m["activity"]}
     n_pc = sum(1 for r in npc_index.values() if r["model"] in pc_models)
     print(f"[npc] done: {len(npc_index)} characters ({len(npc_index) - n_pc} NPCs + {n_pc} PC "
-          f"bodies), {len(bank_index)} banks, {n_clips} resolved clip refs -> {MANIFEST}")
+          f"bodies), {len(bank_index)} banks, {len(animated_prop_index)} animated props, "
+          f"{n_clips} resolved clip refs -> {MANIFEST}")
     print(f"[npc] clips: {len(metas)} distinct baked, {sum(1 for m in metas if m['activity'])} "
           f"carry an activity ({len(acts)} distinct, e.g. ACT_IDLE/ACT_DISPOSITION)")
     rigged = [r for r in npc_index.values() if r.get("facial")]

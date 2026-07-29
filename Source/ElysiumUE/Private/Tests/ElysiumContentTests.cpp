@@ -39,7 +39,10 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture.h"
 #include "HAL/FileManager.h"
+#include "Materials/Material.h"
 #include "Materials/MaterialInterface.h"
+#include "MaterialShared.h"
+#include "RHIShaderPlatform.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "PhysicsEngine/BodySetup.h"
@@ -1306,7 +1309,267 @@ bool FElysiumPlayerBodiesTest::RunTest(const FString&)
 }
 
 // =====================================================================================
-// 11.9 — freeze/thaw a real map's `.ents` world (`save-architecture.md` §10, the content
+// 12.1 opening content: the authored camera graphs are closed acyclic chains, the six embrace
+// props resolve through npc_index v4 with every clip their wires request, and the player material
+// keeps the masked/dithered ModelAlpha contract the scripted-camera body path depends on.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOpeningCameraContentTest,
+	"Elysium.Content.OpeningCameraTracks", GElysiumContentTestFlags)
+bool FElysiumOpeningCameraContentTest::RunTest(const FString&)
+{
+	const FString Path = FElysiumContentPaths::MapEnts(TEXT("sp_theatre"));
+	if (!IFileManager::Get().FileExists(*Path))
+	{
+		AddInfo(TEXT("skipping: sp_theatre has not been exported"));
+		return true;
+	}
+	FElysiumEntityDefs Defs;
+	if (!TestTrue(TEXT("sp_theatre entities parse"), FElysiumEntityDefs::Parse(Path, Defs)))
+	{
+		return true;
+	}
+
+	TMap<FString, const FElysiumEntityDef*> NamedKeys;
+	TArray<const FElysiumEntityDef*> Tracks;
+	for (const FElysiumEntityDef& Def : Defs.Defs)
+	{
+		const bool bTrack = Def.Classname.Equals(TEXT("camera_track"), ESearchCase::IgnoreCase);
+		const bool bKey = Def.Classname.Equals(TEXT("camera_keyframe"), ESearchCase::IgnoreCase);
+		if (!bTrack && !bKey)
+		{
+			continue;
+		}
+		if (!Def.TargetName.IsEmpty())
+		{
+			const FString Name = Def.TargetName.ToLower();
+			if (NamedKeys.Contains(Name))
+			{
+				AddError(FString::Printf(TEXT("duplicate camera key targetname: %s"), *Def.TargetName));
+			}
+			NamedKeys.Add(Name, &Def);
+		}
+		if (bTrack)
+		{
+			Tracks.Add(&Def);
+		}
+	}
+
+	TestEqual(TEXT("theatre retains all eight camera track roots"), Tracks.Num(), 8);
+	TMap<FString, int32> ChainLengths;
+	for (const FElysiumEntityDef* Track : Tracks)
+	{
+		TSet<FString> Seen;
+		const FElysiumEntityDef* Cursor = Track;
+		int32 Length = 0;
+		while (Cursor)
+		{
+			const FString Current = Cursor->TargetName.ToLower();
+			if (Seen.Contains(Current))
+			{
+				AddError(FString::Printf(TEXT("camera chain %s cycles at %s"),
+					*Track->TargetName, *Cursor->TargetName));
+				break;
+			}
+			Seen.Add(Current);
+			++Length;
+			const FString Next = Cursor->Keys.FindRef(TEXT("NextKey"));
+			if (Next.IsEmpty())
+			{
+				break;
+			}
+			const FElysiumEntityDef* const* Found = NamedKeys.Find(Next.ToLower());
+			if (!Found)
+			{
+				AddError(FString::Printf(TEXT("camera chain %s has missing NextKey endpoint %s"),
+					*Track->TargetName, *Next));
+				break;
+			}
+			Cursor = *Found;
+		}
+		ChainLengths.Add(Track->TargetName.ToLower(), Length);
+	}
+	TestEqual(TEXT("embrace position chain remains complete"),
+		ChainLengths.FindRef(TEXT("embrace_camera")), 24);
+	TestEqual(TEXT("embrace target chain remains complete"),
+		ChainLengths.FindRef(TEXT("embrace_target")), 19);
+
+	// The two independent streams use different numbers of keys, but their cuts, dwells and moves
+	// converge on the same authored edit clock. A mismatched clock makes a correct position sample
+	// look at the wrong beat and reads on screen as a spurious pan.
+	auto ChainEndSeconds = [&NamedKeys](const TCHAR* RootName)
+	{
+		const FElysiumEntityDef* const* Root = NamedKeys.Find(FString(RootName).ToLower());
+		if (!Root)
+		{
+			return -1.0f;
+		}
+		const FElysiumEntityDef* Cursor = *Root;
+		TSet<FString> Seen;
+		float End = 0.0f;
+		while (Cursor)
+		{
+			const FString Current = Cursor->TargetName.ToLower();
+			if (Seen.Contains(Current))
+			{
+				return -1.0f;
+			}
+			Seen.Add(Current);
+			const FString Next = Cursor->Keys.FindRef(TEXT("NextKey"));
+			if (Next.IsEmpty())
+			{
+				break;
+			}
+			if (!Cursor->Keys.FindRef(TEXT("TimeControl")).Equals(TEXT("1")))
+			{
+				return -1.0f;
+			}
+			End += FMath::Max(0.0f, FCString::Atof(*Cursor->Keys.FindRef(TEXT("MoveTime"))));
+			const FElysiumEntityDef* const* Found = NamedKeys.Find(Next.ToLower());
+			if (!Found)
+			{
+				return -1.0f;
+			}
+			Cursor = *Found;
+			End += FMath::Max(0.0f, FCString::Atof(*Cursor->Keys.FindRef(TEXT("Pause"))));
+		}
+		return End;
+	};
+	const float PositionEnd = ChainEndSeconds(TEXT("embrace_camera"));
+	const float TargetEnd = ChainEndSeconds(TEXT("embrace_target"));
+	TestTrue(TEXT("embrace position and target streams end on the same edit"),
+		FMath::IsNearlyEqual(PositionEnd, TargetEnd, KINDA_SMALL_NUMBER));
+	TestTrue(TEXT("the recovered embrace edit clock remains 58.87 seconds"),
+		FMath::IsNearlyEqual(PositionEnd, 58.87f, 0.001f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOpeningAnimatedPropsContentTest,
+	"Elysium.Content.OpeningAnimatedProps", GElysiumContentTestFlags)
+bool FElysiumOpeningAnimatedPropsContentTest::RunTest(const FString&)
+{
+	const FString Path = FElysiumContentPaths::MapEnts(TEXT("sp_theatre"));
+	if (!IFileManager::Get().FileExists(*Path))
+	{
+		AddInfo(TEXT("skipping: sp_theatre has not been exported"));
+		return true;
+	}
+	FElysiumNpcIndex Index;
+	FString Error;
+	if (!TestTrue(FString::Printf(TEXT("npc_index v4 loads: %s"), *Error), Index.Load(Error)))
+	{
+		return true;
+	}
+	TestEqual(TEXT("animated-prop manifest schema is v4"), Index.ManifestVersion, 4);
+
+	FElysiumEntityDefs Defs;
+	if (!TestTrue(TEXT("sp_theatre entities parse"), FElysiumEntityDefs::Parse(Path, Defs)))
+	{
+		return true;
+	}
+	TMap<FString, const FElysiumEntityDef*> ByName;
+	for (const FElysiumEntityDef& Def : Defs.Defs)
+	{
+		if (!Def.TargetName.IsEmpty())
+		{
+			ByName.FindOrAdd(Def.TargetName.ToLower(), &Def);
+		}
+	}
+
+	struct FExpected
+	{
+		const TCHAR* Target;
+		const TCHAR* ClipA;
+		const TCHAR* ClipB;
+	};
+	const FExpected Expected[] =
+	{
+		{ TEXT("wineglass_1"), TEXT("wineglass_1"), nullptr },
+		{ TEXT("wineglass_2"), TEXT("wineglass_2"), nullptr },
+		{ TEXT("pc_pre"),      TEXT("idle01"),     TEXT("pc_pre") },
+		{ TEXT("pc_post"),     TEXT("pc_post"),    TEXT("pc_post_female") },
+		{ TEXT("sire_pre"),    TEXT("idle01"),     TEXT("sire_pre") },
+		{ TEXT("sire_post"),   TEXT("idle01"),     TEXT("sire_post") },
+		{ TEXT("sire_fly"),    TEXT("idle01"),     TEXT("sire_fly") },
+	};
+
+	int32 Resolved = 0;
+	for (const FExpected& Want : Expected)
+	{
+		const FElysiumEntityDef* const* DefPtr = ByName.Find(FString(Want.Target).ToLower());
+		if (!TestNotNull(FString::Printf(TEXT("opening prop %s exists"), Want.Target),
+			reinterpret_cast<const void*>(DefPtr)))
+		{
+			continue;
+		}
+		const FElysiumEntityDef& Def = **DefPtr;
+		TestTrue(FString::Printf(TEXT("%s is prop_dynamic"), Want.Target),
+			Def.Classname.Equals(TEXT("prop_dynamic"), ESearchCase::IgnoreCase));
+		const FString Model = Def.Keys.FindRef(TEXT("model"));
+		const FElysiumAnimatedPropEntry* Entry = Index.FindAnimatedProp(Model);
+		if (!TestNotNull(FString::Printf(TEXT("%s model is indexed as animated"), Want.Target), Entry))
+		{
+			continue;
+		}
+		TestTrue(FString::Printf(TEXT("%s generated GLB exists"), Want.Target),
+			IFileManager::Get().FileExists(*FElysiumContentPaths::AnimatedPropGlb(Entry->Glb)));
+		TestTrue(FString::Printf(TEXT("%s clip %s resolves"), Want.Target, Want.ClipA),
+			Entry->HasClip(Want.ClipA));
+		if (Want.ClipB)
+		{
+			TestTrue(FString::Printf(TEXT("%s clip %s resolves"), Want.Target, Want.ClipB),
+				Entry->HasClip(Want.ClipB));
+		}
+		++Resolved;
+	}
+	TestEqual(TEXT("all seven opening animated props resolve"), Resolved, static_cast<int32>(UE_ARRAY_COUNT(Expected)));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerBodyMaterialTest,
+	"Elysium.Content.PlayerBodyMaterial", GElysiumContentTestFlags)
+bool FElysiumPlayerBodyMaterialTest::RunTest(const FString&)
+{
+	UMaterial* Material = LoadObject<UMaterial>(nullptr,
+		TEXT("/Game/VtMB/Materials/M_PlayerBody.M_PlayerBody"));
+	if (!TestNotNull(TEXT("M_PlayerBody asset loads"), Material))
+	{
+		return true;
+	}
+	TestEqual(TEXT("player body material is masked"), Material->GetBlendMode(), BLEND_Masked);
+	TestTrue(TEXT("player body uses native dithered opacity masking"), Material->DitherOpacityMask != 0);
+	TestTrue(TEXT("player body material is compiled for skeletal meshes"),
+		Material->GetUsageByFlag(MATUSAGE_SkeletalMesh));
+	// test.bat runs under NullRHI, so the material owns no rendering-platform resource by default.
+	// Create and synchronously compile the exact platform the game launches instead of mistaking an
+	// absent NullRHI resource for a shader failure.
+	TArray<FMaterialResource*> Sm6Resources;
+	FMaterialResource* Sm6 = FindOrCreateMaterialResource(Sm6Resources, Material, nullptr,
+		SP_PCD3D_SM6, EMaterialQualityLevel::High);
+	if (TestNotNull(TEXT("player body creates a PCD3D_SM6 material resource"), Sm6))
+	{
+		TestTrue(TEXT("player body compiles synchronously for PCD3D_SM6"),
+			Sm6->CacheShaders(EMaterialShaderPrecompileMode::None));
+		for (const FString& Error : Sm6->GetCompileErrors())
+		{
+			AddError(FString::Printf(TEXT("PCD3D_SM6: %s"), *Error));
+		}
+		TestNotNull(TEXT("player body has a ready PCD3D_SM6 shader map"),
+			Sm6->GetGameThreadShaderMap());
+	}
+	FMaterial::DeferredDeleteArray(Sm6Resources);
+	TArray<FMaterialParameterInfo> Scalars;
+	TArray<FGuid> ScalarIds;
+	Material->GetAllScalarParameterInfo(Scalars, ScalarIds);
+	TestTrue(TEXT("player material exposes ModelAlpha"),
+		Scalars.ContainsByPredicate([](const FMaterialParameterInfo& Info)
+		{
+			return Info.Name == FName(TEXT("ModelAlpha"));
+		}));
+	return true;
+}
+
+// =====================================================================================// 11.9 — freeze/thaw a real map's `.ents` world (`save-architecture.md` §10, the content
 // tier). The substrate tier proves the mechanism on three synthetic entities; this proves
 // it against the shapes the shipped data actually holds — 1,000+ records, every registered
 // classname, real output tables, the runtime-spawned player. Self-skips with no export.

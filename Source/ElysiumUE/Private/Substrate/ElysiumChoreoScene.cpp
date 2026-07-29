@@ -192,6 +192,9 @@ public:
 		FVector SavedAngles = FVector::ZeroVector;
 		bool bSaved = false;
 		bool bPlayingClip = false;          // we started a clip on it and owe it a reset
+		bool bCachedBip01 = false;
+		FVector CachedBipOrigin = FVector::ZeroVector;
+		FVector CachedBipAngles = FVector::ZeroVector;
 	};
 	TArray<FBoundActor> Bound;
 
@@ -202,8 +205,14 @@ public:
 	int32 NumUnresolvedActors = 0;
 	int32 NumUnresolvedClips = 0;
 	int32 NumUnresolvedSpeak = 0;
+	mutable bool bLoggedMissingActor = false;
 	mutable bool bLoggedMissingClip = false;
 	mutable bool bLoggedMissingSpeak = false;
+	// Event indices, not pointers, make active animation and voice ownership save-stable.
+	TSet<int32> ActiveClipEvents;
+	TMap<int32, FElysiumAudioVoiceHandle> Voices;
+	TMap<int32, float> RestoredVoiceOffsets;
+	FElysiumEntityHandle SavedControllerRelationship;
 
 	// ---------------------------------------------------------------------------------------
 	// Spawn — parse the scene up front. VtMB's Start gates on an already-parsed scene pointer
@@ -237,16 +246,21 @@ public:
 			return nullptr;
 		}
 		if (Name.Equals(TEXT("Player"), ESearchCase::IgnoreCase)
-			|| Name.Equals(TEXT("!player"), ESearchCase::IgnoreCase)
-			// This runtime has no separate controller entity — 11.4 made the player one entity with
-			// a body — so !playercontroller (25 uses) binds to the same place.
-			|| Name.Equals(TEXT("!playercontroller"), ESearchCase::IgnoreCase))
+			|| Name.Equals(TEXT("!player"), ESearchCase::IgnoreCase))
 		{
 			return reinterpret_cast<FElysiumEntity*>(World->FindPlayer());
 		}
+		if (Name.Equals(TEXT("!playercontroller"), ESearchCase::IgnoreCase))
+		{
+			return World->FindPlayerController();
+		}
 		if (Name.Equals(TEXT("!dialogpartner"), ESearchCase::IgnoreCase))
 		{
-			return OverrideSpeechTarget.IsEmpty() ? nullptr : World->FindByName(OverrideSpeechTarget);
+			if (!OverrideSpeechTarget.IsEmpty())
+			{
+				return World->FindByName(OverrideSpeechTarget);
+			}
+			return World->Resolve(World->GetOpenDialogOwner());
 		}
 		if (Name.Equals(TEXT("!target1"), ESearchCase::IgnoreCase)) { return World->FindByName(Target1); }
 		if (Name.Equals(TEXT("!target2"), ESearchCase::IgnoreCase)) { return World->FindByName(Target2); }
@@ -274,10 +288,14 @@ public:
 			else
 			{
 				++NumUnresolvedActors;
-				// VtMB logs `CSceneEntity unable find actor "%s"` and drops that actor's events;
-				// the rest of the scene plays on.
-				UE_LOG(LogElysiumChoreo, Verbose, TEXT("%s: unable to find actor '%s'"),
-					*DebugString(), *Scene->Actors[i].Name);
+				// VtMB drops that actor's events and lets the rest of the scene play. One diagnostic
+				// per Start keeps a missing cast member visible without flooding every binding.
+				if (!bLoggedMissingActor)
+				{
+					bLoggedMissingActor = true;
+					UE_LOG(LogElysiumChoreo, Log, TEXT("%s: unable to find actor '%s' (further misses counted)"),
+						*DebugString(), *Scene->Actors[i].Name);
+				}
 			}
 		}
 	}
@@ -293,6 +311,27 @@ public:
 	}
 
 	FElysiumEntity* ActorOf(const FElysiumSceneEvent& Event) const { return ActorAt(Event.ActorIndex); }
+
+	int32 EventIndex(const FElysiumSceneEvent& Event) const
+	{
+		if (!Scene.IsValid() || Scene->Events.Num() == 0)
+		{
+			return INDEX_NONE;
+		}
+		const FElysiumSceneEvent* First = Scene->Events.GetData();
+		const ptrdiff_t Delta = &Event - First;
+		return Delta >= 0 && Delta < Scene->Events.Num() ? static_cast<int32>(Delta) : INDEX_NONE;
+	}
+
+	FElysiumEntityHandle RebaseSavedHandle(const FElysiumEntityHandle& Saved) const
+	{
+		if (World == nullptr || !Saved.IsSet())
+		{
+			return FElysiumEntityHandle::Invalid();
+		}
+		const FElysiumEntityHandle Live(Saved.Index, World->GetEpoch());
+		return World->Resolve(Live) != nullptr ? Live : FElysiumEntityHandle::Invalid();
+	}
 
 	bool ActorsEnabled() const { return CVarSceneActors.GetValueOnGameThread() != 0; }
 
@@ -373,16 +412,12 @@ public:
 				}
 				break;
 			case POSEND_BIP01:
-				// Settle the entity under the pose the animation finished in. With no cinematic
-				// clip resolved the body is still in its idle, so this is a no-move today and
-				// starts mattering the day the anim-set export lands.
-				if (USkeletalMeshComponent* Skel = A->GetSkeletalBody())
+				// EndEvent caches this before the last cinematic clip is stopped. Reading the socket
+				// here would otherwise observe the restored idle, not the authored final pose.
+				if (Bound[i].bCachedBip01)
 				{
-					const FName Bip01(TEXT("Bip01"));
-					if (Skel->DoesSocketExist(Bip01))
-					{
-						A->SetRuntimeOrigin(Skel->GetSocketLocation(Bip01));
-					}
+					A->SetRuntimeOrigin(Bound[i].CachedBipOrigin);
+					A->SetRuntimeAngles(Bound[i].CachedBipAngles);
 				}
 				break;
 			case POSEND_LEAVE:
@@ -460,8 +495,16 @@ public:
 		bPlaying = true;
 		bPaused = false;
 		StartTime = World ? World->NowSeconds() : 0.0;
+		NumUnresolvedActors = 0;
 		NumUnresolvedClips = 0;
 		NumUnresolvedSpeak = 0;
+		bLoggedMissingActor = false;
+		bLoggedMissingClip = false;
+		bLoggedMissingSpeak = false;
+		ActiveClipEvents.Reset();
+		Voices.Reset();
+		RestoredVoiceOffsets.Reset();
+		SavedControllerRelationship = World ? World->PlayerControllerHandle() : FElysiumEntityHandle::Invalid();
 
 		BindActors();
 		SaveAndPlaceActors();
@@ -528,16 +571,18 @@ public:
 		{
 			if (Bound[i].bPlayingClip)
 			{
+				CacheActorFinalPose(i);
 				Bound[i].bPlayingClip = false;
 				if (FElysiumEntity* A = ActorAt(i))
 				{
-					A->ResetAnimToIdle();
+					A->StopCinematicClip();
 				}
 			}
 		}
+		ActiveClipEvents.Reset();
 	}
 
-	// FUN_10081b60: end live events -> reset -> position_end -> OnCompletion -> unhide.
+	// FUN_10081b60: stop -> final placement -> restore cast -> OnCompletion -> unhide.
 	void OnSceneFinished()
 	{
 		Player.StopActiveEvents(*this);
@@ -545,16 +590,13 @@ public:
 		bPaused = false;
 		NextThink = ELYSIUM_NEVER_THINK;
 
-		// `position_end` BEFORE handing the bodies back to their idles: value 3 settles each actor
-		// onto its own `bip01` bone, i.e. under the pose the animation finished in. Resetting to
-		// idle first would read the idle's pelvis instead, which is a different place.
 		ApplyPositionEnd();
 		ReleaseActorClips();
-		UnhideSurroundings();
 		Player.Reset();
 
 		static const FName OnCompletion(TEXT("OnCompletion"));
 		FireOutput(OnCompletion, Activator);
+		UnhideSurroundings();
 		UE_LOG(LogElysiumChoreo, Verbose, TEXT("%s: completed"), *DebugString());
 	}
 
@@ -600,7 +642,7 @@ public:
 	// IElysiumChoreoCallback — what an event MEANS.
 	// ============================================================================================
 
-	virtual void StartEvent(const FElysiumSceneData&, const FElysiumSceneEvent& Event, float) override
+	virtual void StartEvent(const FElysiumSceneData&, const FElysiumSceneEvent& Event, float SceneTime) override
 	{
 		switch (Event.Type)
 		{
@@ -610,52 +652,67 @@ public:
 
 		case EElysiumChoreoEvent::Sequence:
 		case EElysiumChoreoEvent::Gesture:
-			PlayActorClip(Event);
+			PlayActorClip(Event, SceneTime);
 			break;
 
 		case EElysiumChoreoEvent::Speak:
-			SpeakLine(Event);
+			SpeakLine(Event, SceneTime);
 			break;
 
 		case EElysiumChoreoEvent::BodySound:
-			BodySound(Event);
+			BodySound(Event, SceneTime);
 			break;
 
 		case EElysiumChoreoEvent::Python:
-			// VtMB hands the call string to the actor's own AI object rather than evaluating it
-			// here. Both corpus uses are module-level calls (`OnPreRaidSounds()`), so the field-6
-			// event-queue path is observably equivalent and single-steps in the queue window.
 			if (World != nullptr && !Event.Param.IsEmpty())
 			{
 				World->EnqueuePython(Event.Param, 0.0, Activator, Handle);
 			}
 			break;
 
-		case EElysiumChoreoEvent::Expression:   // 12.3 — the flex evaluator
-		case EElysiumChoreoEvent::Silence:      // 12.5 — the amplitude jaw track
+		case EElysiumChoreoEvent::Expression:
+		case EElysiumChoreoEvent::Silence:
 		case EElysiumChoreoEvent::Loud:
 		default:
-			break;   // parsed and counted; deliberately not dispatched
+			break;
+		}
+	}
+
+	virtual void ProcessEvent(const FElysiumSceneData&, const FElysiumSceneEvent& Event, float SceneTime) override
+	{
+		if (Event.Type == EElysiumChoreoEvent::Sequence || Event.Type == EElysiumChoreoEvent::Gesture)
+		{
+			SeekActorClip(Event, SceneTime);
+		}
+	}
+
+	virtual void RestoreEvent(const FElysiumSceneData&, const FElysiumSceneEvent& Event, float SceneTime) override
+	{
+		// Only continuous state is rebuilt. Past firetriggers and Python calls remain latched and
+		// silent, which is the load-time exactly-once contract.
+		if (Event.Type == EElysiumChoreoEvent::Sequence || Event.Type == EElysiumChoreoEvent::Gesture)
+		{
+			PlayActorClip(Event, SceneTime);
+		}
+		else if (Event.Type == EElysiumChoreoEvent::Speak)
+		{
+			SpeakLine(Event, SceneTime);
+		}
+		else if (Event.Type == EElysiumChoreoEvent::BodySound)
+		{
+			BodySound(Event, SceneTime);
 		}
 	}
 
 	virtual void EndEvent(const FElysiumSceneData&, const FElysiumSceneEvent& Event, float) override
 	{
-		if (Event.Type == EElysiumChoreoEvent::Speak)
+		if (Event.Type == EElysiumChoreoEvent::Speak || Event.Type == EElysiumChoreoEvent::BodySound)
 		{
 			StopLine(Event);
 		}
 		else if (Event.Type == EElysiumChoreoEvent::Sequence || Event.Type == EElysiumChoreoEvent::Gesture)
 		{
-			const int32 Index = Event.ActorIndex;
-			if (Bound.IsValidIndex(Index) && Bound[Index].bPlayingClip && ActorsEnabled())
-			{
-				Bound[Index].bPlayingClip = false;
-				if (FElysiumEntity* A = ActorAt(Index))
-				{
-					A->ResetAnimToIdle();
-				}
-			}
+			EndActorClip(Event);
 		}
 	}
 
@@ -674,7 +731,7 @@ public:
 		FireOutput(FName(*FString::Printf(TEXT("OnTrigger%d"), N)), Activator);
 	}
 
-	void PlayActorClip(const FElysiumSceneEvent& Event)
+	void PlayActorClip(const FElysiumSceneEvent& Event, float SceneTime)
 	{
 		if (!ActorsEnabled() || Event.Param.IsEmpty())
 		{
@@ -686,38 +743,105 @@ public:
 			return;
 		}
 
-		// A cinematic clip first: the whole-cast performance lives in this scene's own anim set,
-		// which no NPC's clip vocabulary mentions, and the actor's `bonerename` source is what
-		// selects that actor's skeleton inside the one shared clip. Falls through to the ordinary
-		// per-NPC vocabulary for a dialogue gesture, which is what most scenes carry.
+		bool bResolved = false;
 		const FString& AnimSet = ResolveAnimSetModel();
 		if (!AnimSet.IsEmpty() && Bound.IsValidIndex(Event.ActorIndex))
 		{
 			const FString& Root = Scene->Actors[Event.ActorIndex].BoneFrom;
-			if (A->PlayCinematicClip(AnimSet, Root, Event.Param, /*bLoop=*/false))
-			{
-				Bound[Event.ActorIndex].bPlayingClip = true;
-				return;
-			}
+			bResolved = A->PlayCinematicClip(AnimSet, Root, Event.Param, /*bLoop=*/false);
 		}
-
-		if (!A->PlayAnimClip(Event.Param, /*bLoop=*/false))
+		if (!bResolved)
+		{
+			bResolved = A->PlayAnimClip(Event.Param, /*bLoop=*/false);
+		}
+		if (!bResolved)
 		{
 			++NumUnresolvedClips;
 			if (!bLoggedMissingClip)
 			{
 				bLoggedMissingClip = true;
-				// `entire_scene` is the whole-cast cinematic performance, which lives in a
-				// models/cinematic/**.mdl the NPC export does not yet seed from.
 				UE_LOG(LogElysiumChoreo, Log,
 					TEXT("%s: clip '%s' did not resolve on %s (further misses counted, not logged)"),
 					*DebugString(), *Event.Param, *A->DebugString());
 			}
 			return;
 		}
+
+		const int32 EvIndex = EventIndex(Event);
+		if (EvIndex != INDEX_NONE)
+		{
+			ActiveClipEvents.Add(EvIndex);
+		}
 		if (Bound.IsValidIndex(Event.ActorIndex))
 		{
 			Bound[Event.ActorIndex].bPlayingClip = true;
+			Bound[Event.ActorIndex].bCachedBip01 = false;
+		}
+		SeekActorClip(Event, SceneTime);
+	}
+
+	void SeekActorClip(const FElysiumSceneEvent& Event, float SceneTime)
+	{
+		const int32 EvIndex = EventIndex(Event);
+		if (!ActiveClipEvents.Contains(EvIndex))
+		{
+			return;
+		}
+		if (FElysiumEntity* A = ActorOf(Event))
+		{
+			A->SeekCinematicClip(FMath::Max(0.f, SceneTime - Event.StartTime));
+		}
+	}
+
+	void CacheActorFinalPose(int32 ActorIndex)
+	{
+		if (!Bound.IsValidIndex(ActorIndex))
+		{
+			return;
+		}
+		FElysiumEntity* A = ActorAt(ActorIndex);
+		USkeletalMeshComponent* Skel = A ? A->GetSkeletalBody() : nullptr;
+		const FName Bip01(TEXT("Bip01"));
+		if (Skel == nullptr || !Skel->DoesSocketExist(Bip01))
+		{
+			return;
+		}
+		Skel->TickAnimation(0.f, /*bNeedsValidRootMotion=*/false);
+		Skel->RefreshBoneTransforms();
+		const FTransform Root = Skel->GetSocketTransform(Bip01, RTS_World);
+		Bound[ActorIndex].CachedBipOrigin = Root.GetLocation();
+		Bound[ActorIndex].CachedBipAngles = FVector(0.f, -Root.Rotator().Yaw, 0.f);
+		Bound[ActorIndex].bCachedBip01 = true;
+	}
+
+	void EndActorClip(const FElysiumSceneEvent& Event)
+	{
+		const int32 EvIndex = EventIndex(Event);
+		if (!ActiveClipEvents.Remove(EvIndex))
+		{
+			return;
+		}
+		const int32 ActorIndex = Event.ActorIndex;
+		CacheActorFinalPose(ActorIndex);
+		bool bActorStillPlaying = false;
+		for (int32 Other : ActiveClipEvents)
+		{
+			if (Scene->Events.IsValidIndex(Other) && Scene->Events[Other].ActorIndex == ActorIndex)
+			{
+				bActorStillPlaying = true;
+				break;
+			}
+		}
+		if (Bound.IsValidIndex(ActorIndex))
+		{
+			Bound[ActorIndex].bPlayingClip = bActorStillPlaying;
+		}
+		if (!bActorStillPlaying)
+		{
+			if (FElysiumEntity* A = ActorAt(ActorIndex))
+			{
+				A->StopCinematicClip();
+			}
 		}
 	}
 
@@ -736,7 +860,19 @@ public:
 		return IFileManager::Get().FileExists(*FElysiumContentPaths::SoundFile(AsMp3)) ? AsMp3 : Rel;
 	}
 
-	void SpeakLine(const FElysiumSceneEvent& Event)
+	float VoiceOffset(const FElysiumSceneEvent& Event, float SceneTime)
+	{
+		const int32 Index = EventIndex(Event);
+		if (float* Restored = RestoredVoiceOffsets.Find(Index))
+		{
+			const float Offset = FMath::Max(0.f, *Restored);
+			RestoredVoiceOffsets.Remove(Index);
+			return Offset;
+	}
+		return FMath::Max(0.f, SceneTime - Event.StartTime);
+	}
+
+	void SpeakLine(const FElysiumSceneEvent& Event, float SceneTime)
 	{
 		if (World == nullptr || World->Audio() == nullptr || Event.Param.IsEmpty())
 		{
@@ -771,8 +907,12 @@ public:
 		}
 		// param2 is a dB level ("70dB"). Parsed and carried; the dB->gain curve and full_sound are
 		// 12.2's, so the line plays at the seam's own level for now.
+		P.StartTimeSeconds = VoiceOffset(Event, SceneTime);
 		const FElysiumAudioVoiceHandle Voice = World->Audio()->PlayVoice(Rel, P);
-		Voices.Add(&Event, Voice);
+		if (Voice.IsValid())
+		{
+			Voices.Add(EventIndex(Event), Voice);
+		}
 	}
 
 	void StopLine(const FElysiumSceneEvent& Event)
@@ -781,16 +921,17 @@ public:
 		{
 			return;
 		}
-		if (const FElysiumAudioVoiceHandle* Voice = Voices.Find(&Event))
+		const int32 Index = EventIndex(Event);
+		if (const FElysiumAudioVoiceHandle* Voice = Voices.Find(Index))
 		{
 			World->Audio()->StopVoice(*Voice, 0.f);
-			Voices.Remove(&Event);
+			Voices.Remove(Index);
 		}
 	}
 
 	// One authored use corpus-wide. Same resolution as speak; param2 is a dB level defaulting to
 	// 80 and floored at 75.
-	void BodySound(const FElysiumSceneEvent& Event)
+	void BodySound(const FElysiumSceneEvent& Event, float SceneTime)
 	{
 		if (World == nullptr || World->Audio() == nullptr || Event.Param.IsEmpty())
 		{
@@ -813,17 +954,18 @@ public:
 		{
 			P.Location = Origin;
 		}
-		World->Audio()->PlayVoice(Rel, P);
+		P.StartTimeSeconds = VoiceOffset(Event, SceneTime);
+		const FElysiumAudioVoiceHandle Voice = World->Audio()->PlayVoice(Rel, P);
+		if (Voice.IsValid())
+		{
+			Voices.Add(EventIndex(Event), Voice);
+		}
 	}
 
-	// Live voices, keyed by the event that started them. The scene data outlives the playback, so
-	// the pointer key is stable for as long as an entry can exist.
-	TMap<const FElysiumSceneEvent*, FElysiumAudioVoiceHandle> Voices;
 
 	// --- Persistence ------------------------------------------------------------------------
-	// The alley fight's OnCompletion gates map flow, so a quicksave mid-scene that came back
-	// not-playing would be a soft-lock. Elapsed time is saved (not the absolute base), and on
-	// restore every event already passed is latched silently so nothing re-fires.
+	// Elapsed is the wall-clock base (pause never rebases it); PlayerTime is the last processed
+	// event time. Saving both is what restores a paused pose and still catches up faithfully later.
 	virtual void Serialize(FElysiumSaveArchive& Ar) override
 	{
 		float Elapsed = bPlaying ? static_cast<float>((World ? World->NowSeconds() : 0.0) - StartTime) : 0.f;
@@ -831,16 +973,18 @@ public:
 		Ar << bPaused;
 		Ar << Elapsed;
 
-		if (Ar.IsLoading())
+		// Version-6 leaf state ended here. Its outer payload remains readable: derive active ranges
+		// from elapsed time, but never replay a past instantaneous output.
+		if (Ar.IsLoading() && Ar.AtEnd())
 		{
 			if (bPlaying && HasScene())
 			{
 				Player.Begin(Scene, CVarSceneMixahead.GetValueOnGameThread(),
 					CVarSceneMaxDuration.GetValueOnGameThread());
 				BindActors();
-				Player.PreLatchTo(Elapsed);
 				const double Now = World ? World->NowSeconds() : 0.0;
 				StartTime = Now - Elapsed;
+				Player.RestoreTo(Elapsed, *this);
 				NextThink = static_cast<float>(Now);
 			}
 			else
@@ -849,6 +993,111 @@ public:
 				bPaused = false;
 				NextThink = ELYSIUM_NEVER_THINK;
 			}
+			return;
+		}
+
+		float PlayerTime = Player.GetTime();
+		TArray<uint8> Started;
+		TArray<uint8> Active;
+		if (Ar.IsSaving())
+		{
+			Player.CaptureLatches(Started, Active);
+			SavedControllerRelationship = World
+				? World->PlayerControllerHandle() : FElysiumEntityHandle::Invalid();
+		}
+		Ar << PlayerTime;
+		Ar << Activator;
+		Ar << Started;
+		Ar << Active;
+
+		int32 BoundCount = Bound.Num();
+		Ar << BoundCount;
+		if (Ar.IsLoading())
+		{
+			Bound.SetNum(FMath::Max(0, BoundCount));
+		}
+		for (FBoundActor& B : Bound)
+		{
+			Ar << B.Handle;
+			Ar << B.SavedOrigin;
+			Ar << B.SavedAngles;
+			Ar << B.bSaved;
+			Ar << B.bPlayingClip;
+			Ar << B.bCachedBip01;
+			Ar << B.CachedBipOrigin;
+			Ar << B.CachedBipAngles;
+		}
+
+		int32 HiddenCount = Hidden.Num();
+		Ar << HiddenCount;
+		if (Ar.IsLoading())
+		{
+			Hidden.SetNum(FMath::Max(0, HiddenCount));
+		}
+		for (FElysiumEntityHandle& H : Hidden)
+		{
+			Ar << H;
+		}
+		Ar << SavedControllerRelationship;
+
+		TArray<int32> VoiceEvents;
+		TArray<float> VoiceOffsets;
+		if (Ar.IsSaving() && Scene.IsValid())
+		{
+			for (const TPair<int32, FElysiumAudioVoiceHandle>& Pair : Voices)
+			{
+				if (Pair.Value.IsValid() && Scene->Events.IsValidIndex(Pair.Key))
+				{
+					VoiceEvents.Add(Pair.Key);
+					VoiceOffsets.Add(FMath::Max(0.f, Elapsed - Scene->Events[Pair.Key].StartTime));
+				}
+			}
+		}
+		Ar << VoiceEvents;
+		Ar << VoiceOffsets;
+
+		if (!Ar.IsLoading())
+		{
+			return;
+		}
+
+		Activator = RebaseSavedHandle(Activator);
+		for (FBoundActor& B : Bound)
+		{
+			B.Handle = RebaseSavedHandle(B.Handle);
+		}
+		for (FElysiumEntityHandle& H : Hidden)
+		{
+			H = RebaseSavedHandle(H);
+		}
+		Hidden.RemoveAll([](const FElysiumEntityHandle& H) { return !H.IsSet(); });
+		SavedControllerRelationship = RebaseSavedHandle(SavedControllerRelationship);
+		Voices.Reset();
+		ActiveClipEvents.Reset();
+		RestoredVoiceOffsets.Reset();
+		for (int32 i = 0; i < FMath::Min(VoiceEvents.Num(), VoiceOffsets.Num()); ++i)
+		{
+			RestoredVoiceOffsets.Add(VoiceEvents[i], VoiceOffsets[i]);
+		}
+
+		if (bPlaying && HasScene())
+		{
+			Player.Begin(Scene, CVarSceneMixahead.GetValueOnGameThread(),
+				CVarSceneMaxDuration.GetValueOnGameThread());
+			if (Bound.Num() != Scene->Actors.Num())
+			{
+				BindActors();
+			}
+			const double Now = World ? World->NowSeconds() : 0.0;
+			StartTime = Now - Elapsed;
+			Player.RestoreLatches(PlayerTime, Started, Active, *this);
+			NextThink = static_cast<float>(Now);
+		}
+		else
+		{
+			bPlaying = false;
+			bPaused = false;
+			NextThink = ELYSIUM_NEVER_THINK;
 		}
 	}
 

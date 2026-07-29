@@ -20,6 +20,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # committed asset.
 GENERATORS = [
     "make_world_materials.py",      # M_World_{Opaque,Masked,Translucent}.uasset + M_Additive.uasset (7.4)
+    "make_player_body_material.py", # M_PlayerBody.uasset: masked/dithered glTF player body
     "make_sky_material.py",         # M_Sky.uasset: the 2D-skybox cube master material
     "make_gizmo_material.py",       # M_Gizmo{,_XRay}.uasset: the P2.4 entity-gizmo ISM materials
     "make_decal_material.py",       # M_Decal.uasset: the 7.2 deferred-decal master material

@@ -97,7 +97,6 @@ Open tasks whose dependencies are met, ordered by playable-path payoff:
 
 1. **11.10** — finish PP0 with the played-input harness.
 2. **9.8 / 9.9 / 9.10** — inventory, NPC reactions, and economy on the durable player/entity spine.
-3. **8.11a** — seat the exported player body for PP2.
 
 P12's remaining content and behavior gaps are tracked on its task rows. The lighting/look lane
 (3.1–3.13 and the P7 remainder) stays frozen under playable-path rule 2.
@@ -324,7 +323,7 @@ M1 leftovers that live in this lane.
   `trigger_hurt`/`trigger_look`/`trigger_autosave`; the Source `COutput<T>` value seam
   (`FireOutput` fills an empty map-param); the `Elysium.Logic` Cog window.
   `trigger_stealth_mod`/`trigger_inventory_check`/`trigger_environmental_audio` stay inert (their
-  backing systems don't exist yet). *Deps:* 1.6.
+  backing systems don't exist yet; environmental audio is owned by 6.7). *Deps:* 1.6.
 - [x] **4.6 `trigger_changelevel` + landmark travel** — cross-map travel through a shared
   `info_landmark`, translation-only, grounded in the decompiled `CChangeLevel`: a touch or a
   scripted `ChangeLevel` fires `OnChangeLevel`, captures the player's source-landmark offset +
@@ -404,7 +403,7 @@ M1 leftovers that live in this lane.
   `CPlayerEvents` 12 inputs / 23 outputs, `CWorldEvents` 10 / 21). The outputs await their driver
   systems (disciplines, cop/masquerade AI, music) — each input latches state + logs rather than
   silently no-opping. *Verified:* `pc_0.MakePlayerUnkillable()` + `world.SetNoFrenzyArea(1)`
-  deliver instead of `[no input]`. *Next:* P6.3's music state machine drives `events_world`'s six
+  deliver instead of `[no input]`. *Next:* 6.7's completed music state machine drives `events_world`'s six
   music outputs. *Deps:* 1.6.
 - [~] **4.10 `game_sign` / `prop_sign` — sign windows** — **`game_sign` + PL5c landed:**
   `UE_extract_signs.py` (278 definitions + 57 background materials → `out/signs/`), the shared
@@ -454,7 +453,7 @@ loads `sm_pawnshop_1` at the landmark.
 execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` fire);
 `G` flags flip visibly in the debug layer.
 
-## P6 — Audio foundation *(design: `audio_pipeline.md`; parallel with P5/P7)*
+## P6 — Audio foundation *(facts: `audio_pipeline.md`; design: `audio-architecture.md`; parallel with P5/P7)*
 
 - [x] **6.1 MS-ADPCM decode** — runtime WAV decode via the vendored single-header `dr_wav`
   (MS-ADPCM / IMA / PCM16 → int16); `FElysiumSoundCache` (decoded-PCM cache,
@@ -477,6 +476,39 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
   `on`/`off`, the SILENT gate `0x1000`); `UE_extract_sounds.py` mirrors the WAVs + writes
   `soundgroups.json`; the door/button state machines play through the voice pool at the body; a
   Mover-soundgroups browser in the Audio window. *Deps:* 4.1–4.3, 6.1.
+- [ ] **6.5 Final loose-audio core + catalog** — replace whole-file/game-thread-shaped playback
+  with `audio-architecture.md`'s request/handle service: one canonical case-insensitive resolver,
+  PL17's duration/codec/reference catalog, worker decode, byte-budgeted PCM LRU for short sounds,
+  bounded streaming buffers for dialogue/music/radio, generation-safe handles, owner + map-epoch
+  cancellation, completion carrying actual audio start/duration. **Acceptance:** a long MP3 never
+  exists as whole-file PCM; prefetch/decode does no game-thread file/codec work; map travel cancels
+  every old-map request; forced small buffers exercise underflow diagnostics without a stale-handle
+  crash. *Deps:* 6.1, 6.2, PL17.
+- [ ] **6.6 UE mixer graph + mix policy** — committed/regenerated game-agnostic Sound Classes,
+  Submixes, reverb return, attenuation profiles, concurrency/virtualization and Audio Modulation
+  buses; user master/music/dialogue/ambience/SFX/UI control, dialogue ducking +
+  `flag_no_voice_duck`, `Dry`, pause/`NoPause`, category priority, selective occlusion. Retire the
+  per-play attenuation allocation and make `elysium.Mute` a debug override rather than the
+  default-on gate. **Acceptance:** the Audio debugger names the request's class/submix/buses,
+  category sliders survive restart, dialogue ducking exempts an authored voice, loops resume from
+  virtualization without restarting, and a shipping-config launch is audible. *Deps:* 6.5.
+- [ ] **6.7 Map ambience, music + DSP closure** — finish every authored `ambient_generic` flag/
+  envelope/lifetime path; make SoundScheme transitions deterministic and honor `Dry`, `NoPause`,
+  `RandomSoundCount` and `RoomDSP`; drive `events_world`'s six music outputs from real explore/
+  alert/combat state; one listener-zone resolver combines scheme DSP with
+  `trigger_environmental_audio`. Settle RE30/RE31 and classify the 15 unresolved wires found by
+  `audio_surface_survey.py`; never silently swallow one. **Acceptance:** scheme trigger pairs in
+  tutorial + hubs crossfade without duplicate stems, the tutorial's authored `room_type` volumes
+  change and restore DSP, and every exported map's point/scheme controls either resolve or carry an
+  explicit optional-content disposition. *Deps:* 4.5, 4.9, 6.5, 6.6, RE30, RE31.
+- [ ] **6.8 Gameplay audio adapters** — typed `Character`/`Openable`/`Switches`/`Computer`/
+  `Weapons` event resolution (never a bare `soundgroup` lookup); NPC sentences, whispers,
+  `SetSoundOverrideEnt`/`SetFakeSilence`; surface footsteps/impacts/scrapes; item/weapon/discipline
+  `SoundData`/`SoundFX`; radio/news; and the separate AI-hearing event from
+  `sound_volume_table.txt`. Dialogue and scene line presentation remain 9.2/12.2, consuming the same
+  line service. **Acceptance:** one door, computer, NPC voice set, alternating surface footstep,
+  weapon shot + AI stimulus, whisper, radio loop and news story all resolve through the one request
+  ledger with the correct owner/category. *Deps:* 6.5, 6.6 and each owning gameplay caller.
 
 ## P7 — Dressing & parity *(Track A completion; parallel lane)* — **open tasks FROZEN** *(playable-path rule 2)*
 
@@ -643,11 +675,11 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   selector against `FElysiumReservedKeys` (`input-architecture.md`).
   *Deps:* 8.6, 10.6 (input path built).
 - [ ] **8.11 The player body** *(design: `camera-view-modes.md` → "Player mesh, fade and
-  first-person rendering")* — the PC's own skeletal body: the thing 11.7's camera already solves for
-  and nothing draws. `FElysiumPlayer::OnRuntimeModelChanged` is a deliberate no-op today ("the
-  player's model is the pawn"), so the entity chain's animating half is unused on the one character
-  that is always on screen. Two carve-outs, sequenced apart because they need different things:
-  - **a. The body** *(PP2)* — the mesh stands, animates under choreography, and fades on the band.
+  first-person rendering")* — the PC's own skeletal body. The durable record resolves clan, sex,
+  and armor slot to the full authored `.mdl` before the player entity spawns; both movement-body
+  implementations build and rebuild that model through the NPC/glTF skeletal path. Two carve-outs,
+  sequenced apart because they need different things:
+  - [x] **a. The body** *(PP2)* — the mesh stands, animates under choreography, and fades on the band.
     Built on 8.5's machinery — glTFRuntime, a skeletal visual, bank retarget by bone name — with the
     pawn as the body the entity places. **Model identity is data, not a constant:**
     `vdata/system/clandoc000.txt` (on disk since PL5b) carries `M_Body0..5`/`F_Body0..5` per clan —
@@ -664,6 +696,11 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
     `logic_choreographed_scene` carries `MaleAnim`/`FemaleAnim`
     (`m_iszAnimSetForMalePlayer`/`ForFemalePlayer`, 25 uses each) and binds `Player`/`!player` as an
     actor, so the theatre's embrace + trial animate the PC on camera (`choreographed_scenes.md`).
+    **Landed:** `BodyIdentity` save schema v7 with v6→slot-0 migration; clan/sex/slot model
+    resolution before spawn; the same skeletal visual on both movement bodies; runtime `SetModel`
+    rebuild/clear; a masked dithered `M_PlayerBody` driven by the camera's `ModelAlpha`; and
+    first-person/scripted-camera visibility tests. The aggregate theatre run shows the PC and
+    `player_understudy` present, correctly skinned, and animating through the embrace.
     *Deps:* 8.2 [x], 8.5 [x], 11.7 [x], PL13 [x]; 9.4 for real identity.
   - **b. Locomotion** *(PP4, beside 4.7)* — idle/walk/run/crouch driven by movement state.
     `UElysiumNpcAnimInstance` is a two-sequence idle crossfade; a player locomotion blend is new
@@ -684,9 +721,9 @@ draw on the same stack; NPCs stand in the world at their entity origins.
   front-normalizer, the host-agnostic branch machine. NPC col-4 = action, PC col-4 = gate. →
   `game_runtime.md`.
 - [ ] **9.2 Conversation UI + audio-by-path** — dialogue screen on the 8.6 UI foundation, line
-  audio via 6.2. Content is **reproduced verbatim** (lines, conditions, branch structure,
+  audio via 6.5/6.6's shared line service. Content is **reproduced verbatim** (lines, conditions, branch structure,
   ordering); presentation modernizes — vector type, reflowing line lists, speaker/emotion cues,
-  the 8.10 subtitle path. *Deps:* 9.1, 6.2, 8.6.
+  the 8.10 subtitle path. *Deps:* 9.1, 6.5, 6.6, 8.6.
 - [x] **9.3a Level-script wiring — CPython is the default host + auto-load at map load** —
   `MakePreferredScriptHost` installs the CPython host when the VM actually starts (else it falls
   back to expr with a warning — a dead VM is indistinguishable from error-to-false); the map's
@@ -735,8 +772,8 @@ draw on the same stack; NPCs stand in the world at their entity origins.
 - [x] **9.3c The script filesystem** — `FElysiumScriptFS` gives the VM its own filesystem namespace:
   reads union the `Saved/` overlay over the `out/` mirror, writes land in the overlay with copy-up,
   escaping the sandbox is the one denial. → `python_bridge.md` → "The script file layer".
-- [x] **9.7 The script→engine action surface — survey, RE, spec** — **16,438 call sites / 1,287
-  names** surveyed, the `PyMethodDef` tables and datamaps recovered, and `script_api.md` written as
+- [x] **9.7 The script→engine action surface — survey, RE, spec** — **16,860 executable call sites /
+  676 called names** surveyed, the `PyMethodDef` tables and datamaps recovered, and `script_api.md` written as
   the per-name inventory + demand-ranked build order. **d** landed `OneOfSet` for real (the 589
   dialogue gates now select) and guarded the `Whisper`/`FrenzyTrigger` receiver split. →
   `script_api.md`; roll model:.
@@ -839,7 +876,7 @@ dialogue, scripted flow, quests, save/load included.
 - [P] **10.7 Long tail** *(post-tutorial; promote to tasks when reached — **promoted 2026-07-26:**
   stealth → **13.1**, disciplines → **13.2**, weapons/combat basics → **13.3**, chargen → **9.4**,
   choreography → **P12**)* — full combat AI (beyond 13.3's basics); real NPC AI (runtime NavMesh + BT/StateTree
-  replacing `info_node`); ragdoll/IK/anim blends; MetaSounds; `.emc`-style cache for `.ents` if
+  replacing `info_node`); ragdoll/IK/anim blends; `.emc`-style cache for `.ents` if
   parse time bites; lump-8 lighting bake as a low-end contingency (parked with the dynamic-path
   commitment); retail `.sav` import (needs RE7 wire format — currently a non-goal). For the
   low-end contingency, **Lumen Lite** (5.8's medium-quality irradiance-field GI, ~2× faster,
@@ -850,9 +887,9 @@ dialogue, scripted flow, quests, save/load included.
   **stealth** (`stealth`/`stealthkillrules`; → **13.1**), the **hacking minigame** (`hackterminals/`),
   **economy/vendors** (`vendors`, item `worth`), **NPC disposition + reactions**
   (`dispositiontable`/`reaction*`), **data-driven conversation camera** (`camerashots/`),
-  **radio + TV-news ambient content** (`radio_data`/`newscaster_*` — only 6.2's audio decode
-  exists), **impact FX** (`particleimpacttable`), **per-category entity sound schemes + volume**
-  (`sndscheme_*`/`sound_volume_table`, distinct from PL5a's map SoundSchemes), and the **minor UI
+  **radio + TV-news ambient content** (`radio_data`/`newscaster_*` → **6.8**), **impact FX**
+  (`particleimpacttable`), **per-category entity sound schemes + AI-hearing volume**
+  (`sndscheme_*`/`sound_volume_table` → **6.8**, distinct from PL5a's map SoundSchemes), and the **minor UI
   content tables** (`loadingtips`/`infobartypes`/`mapnames_localized`/`keynames`/
   `interestingplacetypelist`). Promote any to its own task when reached.
 - [x] **10.8 OpenLevel map lifecycle** — hard travel opens each generated
@@ -952,7 +989,7 @@ lid. Eyes in VtMB are *eyelids*: eight `eyelid` flex controllers driving 16 eyel
 through four RPN rules. Blink and lid shaping are reproducible; gaze is not RE-able because
 it was never authored.
 
-- [ ] **12.1 Choreographed scenes** — `logic_choreographed_scene` as a real class + the scene-file
+- [x] **12.1 Choreographed scenes** — `logic_choreographed_scene` as a real class + the scene-file
   parser (PL9) + an event timeline on the game clock, `Start`/`Pause`/`Resume`/`Cancel` inputs and
   the seven outputs; actors resolve **by name** and play through the 8.5 anim seam. Spec:
   `docs/choreographed_scenes.md` (RE19) — nine live event types (`speak`, `silence`, `loud`,
@@ -961,20 +998,39 @@ it was never authored.
   `firetrigger "N"` → `OnTriggerN`. *Acceptance:* the theatre's first scene runs its actors and
   fires its completion wires in the built game. *Deps:* 8.5, 11.1, RE19 [x], PL9 [x], PL16 — a
   `SceneFile` resolves to `out/scenes/` + the path with its `sound/` prefix stripped.
-  - **Landed:** the reader (`ElysiumSceneData`), the timeline (`ElysiumScenePlayer`), the entity
-    (`ElysiumChoreoScene`) with all four inputs, all seven outputs, name binding,
-    `position_start`/`position_end`, `Serialize`, `GetDebugState` and `elysium.scene`;
-    `firetrigger`/`sequence`/`gesture`/`speak`/`bodysound`/`python` routed. Tests:
-    `Elysium.Substrate.SceneParse`, `.SceneTimeline`, `.ChoreoScene`, `Elysium.Content.SceneCorpus`
-    (all 5,444 `.vcd`, histograms matched against the doc) and `.SceneAnimSets` (every anim-set
-    reference and actor bone-root resolves to a PL16 bank). `sp_theatre` is exported and baked.
-  - **Remaining:** the live acceptance run. `speak` resolves nothing until 12.2 mirrors
-    `Character/dlg/**`. `hide_ents` ships behind `elysium.SceneHideEnts` (default 0) — steps 1–4
-    of its predicate are decoded, step 5's two virtuals are not.
-- [ ] **12.2 Scene audio + subtitles** — per-line audio through the 6.2 decode path (the
+  - **Landed:** the reader/timeline/entity cover all four inputs, seven outputs, nine live event
+    types, `active 0`, absolute seek/stop, pause catch-up, exact completion/cancel ordering,
+    `position_end == 3`, actor/dialogue/controller binding, diagnostic reset, voice ownership and
+    mid-scene snapshot restore without duplicate instantaneous outputs. `camera_track` and
+    `camera_keyframe` provide paired value streams, authored timing/easing/four-key interpolation,
+    focal conversion, holds/restores/outputs and save state. The PC body resolves before spawn and
+    rebuilds at runtime; `npc_VPlayerController` is a real transferable map-epoch entity; generated
+    skeletal manifest v4 and `prop_dynamic` cover all seven authored opening prop targets (two
+    wineglasses and five stake entities) while
+    v3 remains readable. Tests: `Elysium.Substrate.Camera*`, `.SceneParse`, `.SceneTimeline`,
+    `.ChoreoScene`, `.OpeningEmbodiment`, `.AnimatedPropManifest`, `.SavePayload`, plus
+    `Elysium.Content.SceneCorpus`, `.SceneAnimSets`, `.OpeningCameraTracks`,
+    `.OpeningAnimatedProps`, `.OpeningPoseEnvelope`, `.OpeningScenePlacement`,
+    `.PlayerBodyMaterial`, and `.TheatreSkeletonBinding` (48/48 runtime USkeleton binds, including
+    six player-body binds). Rendered isolation is green for all five bodies and all nine named prop
+    clips. The authored-camera `embrace` gate derives 63 current-map samples across every cut,
+    movement midpoint, and fade boundary; it applies the six fades, records eight key bones per actor,
+    and confirms all five cast members enter frame outside opaque fades. `sp_theatre` is exported and
+    baked.
+  - **Live acceptance:** `newgame_ttd` activates both camera owners, renders exact-zero edits as
+    clean cuts, and carries the authored positive-time moves without the generic look tracker or
+    Unreal motion blur turning them into scrolls. The PC and `player_understudy` are visible and
+    animate with intact geometry/materials; all seven opening prop targets receive their clips;
+    both embrace scenes start and complete exactly once; controller creation, `!playercontroller`,
+    removal/transfer, and the next courtroom handoff run. The active courtroom scene resolves all
+    four actors. No unexpected actor, clip, camera, NPC, or prop diagnostics remain. Deferred scene
+    audio/facial/lip work belongs to 12.2–12.5. `hide_ents` remains behind
+    `elysium.SceneHideEnts` (default 0), and the authored missing `controls` target remains a single
+    non-fatal diagnostic rather than a synthetic entity.
+- [ ] **12.2 Scene audio + subtitles** — per-line audio through 6.5/6.6's shared line service (the
   `PlayDialogFile` file-resolution rules) synced to scene time; a subtitle surface on the view
   state (11.8). *Acceptance:* the scene's lines are audible and subtitled in sync. *Deps:* 12.1,
-  6.2, 11.8.
+  6.5, 6.6, 11.8.
 - [ ] **12.3 Facial flex track** — the morph targets are baked (PL10 [x]); what is left is the
   three layers above them, which are runtime evaluation: 44 flex controllers → 60 RPN flex rules
   → 65 flexdesc weights → the per-flex target ramp → the morph weight. All four inputs are in
@@ -1043,6 +1099,7 @@ retail end to end, and `test.bat Play` proves it headlessly.
 | PL15 [x] | The Masquerade meter is a sub-rectangle of `cm_topbar`; no asset is missing. → `vtmb-ui.md`. | 8.9 |
 | PL14 | **Export the first-person hand viewmodels.** `clandoc000.txt` also names `M_Hands`/`F_Hands` per clan — the patch-restored per-clan viewmodels under `models/hands/**` (21 in the merged install) — and PL13 deliberately left them out: they are the first-person half of the body and 8.11a's acceptance is the third-person boom. Same seed function, one more key pair; none carries a flex rig | 8.11a |
 | PL16 [x] | Cinematic animation sets are exported and split into actor-addressable banks. → `choreographed_scenes.md`. | 12.1 |
+| PL17 | Build the patch-first audio catalog + typed sidecars: codec/channel/rate/frame/duration metadata, complete static reference closure, parsed map + entity sound schemes, sentences/surfaces, item/discipline events, radio/news, case collisions and missing refs. Raw game audio remains gitignored under `out/sound/`. → `audio_pipeline.md`, `audio-architecture.md`. | 6.5–6.8, 9.2, 12.2 |
 | PL7 [x] | The sidecar-space audit found no fixes: all consumed sidecars are already Unreal centimetres. | 0.4 [x] |
 | PL9 [x] | Choreographed scenes and `.lip` files are mirrored patch-first. → `choreographed_scenes.md`, `facial_animation.md`. | 12.1, 12.5 |
 | PL10 [x] | NPC flex data, morph targets, facial sidecars, and expression tables are exported. → `facial_animation.md`. | 12.3–12.5 |
@@ -1081,6 +1138,8 @@ retail end to end, and `test.bat Play` proves it headlessly.
 | RE27 | Quest addressing, journal replacement, and award ordering are recovered. → `game_runtime.md`. | 9.4d | [x] |
 | RE28 | Chargen close unpauses and teleports into the authored genesis exit. → `game_runtime.md`, `level_transitions.md`. | 9.4g | [x] |
 | RE29 | Entity-name matching is case-insensitive with final-`*` prefix semantics. → `entity_io.md`. | entity I/O | [x] |
+| RE30 | Recover `trigger_environmental_audio` touch behavior and the precedence/interpolation among its `room_type`, SoundScheme `RoomDSP`, and the player's networked `m_sndRoomDSP`/`m_sndPlayerDSP`. → `audio_pipeline.md`. | 6.7 | [ ] |
+| RE31 | Recover the SoundScheme RandomSound frequency scheduler/distribution and transition edge cases; the current approximate curve is not a faithful baseline. → `audio_pipeline.md`. | 6.7 | [ ] |
 | SKY | The sky/ambience rework is complete; remaining work is tracked as 3.10–3.13 and RE17. Facts: `sky-ambience.md`. | 3.6, 3.7 | [x] |
 
 The Ghidra extraction findings behind the closed rows (the RE1/RE2/RE3/RE4 detail: addresses,

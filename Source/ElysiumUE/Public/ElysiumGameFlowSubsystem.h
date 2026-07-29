@@ -68,6 +68,15 @@ namespace ElysiumStory
 	inline const TCHAR* const TutorialLandmark = TEXT("tutorial");
 	inline const TCHAR* const SantaMonicaMap = TEXT("sm_pawnshop_1");
 
+	// Both spellings invoke the same fresh-state theatre replay. The compact alias is the command
+	// used by the opening-scene QA loop; keeping the pair as data makes registration testable without
+	// constructing a game instance in the content-free automation tier.
+	inline const TCHAR* const TheatreReplayCommands[] =
+	{
+		TEXT("elysium.newgame_ttd"),
+		TEXT("newgame_ttd"),
+	};
+
 	// The intro skip, as a decision over a requested destination. Returns true when it rewrote one.
 	//
 	// The theatre act is P12's, so with the skip on, a transition into `sp_theatre` lands instead at

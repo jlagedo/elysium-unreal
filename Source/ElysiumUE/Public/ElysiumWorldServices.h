@@ -7,6 +7,7 @@
 class FElysiumDlgConversation;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
+struct FElysiumCameraShot;
 struct FElysiumEntityDef;
 struct FElysiumSignData;
 
@@ -64,6 +65,18 @@ public:
 	virtual bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName,
 		bool bLoop, float* OutSeconds) = 0;
+	virtual bool SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds) = 0;
+	virtual void StopCinematicClip(USkeletalMeshComponent* Body) = 0;
+
+	// v4 animated props. Model selection is explicit and manifest-backed; ordinary props stay on
+	// the existing static representation. The skeletal surface remains non-solid.
+	virtual FString AnimatedPropStemForModel(const FString& ModelPath) const = 0;
+	virtual USkeletalMeshComponent* BuildAnimatedPropVisual(const FString& Stem,
+		const FVector& Location, const FQuat& Rotation, float UniformScale) = 0;
+	virtual bool PlayAnimatedPropClip(USkeletalMeshComponent* Body, const FString& Stem,
+		const FString& ClipName, bool bLoop, float* OutSeconds) = 0;
+	virtual void ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
+		const FString& StaticStem, int32 Family) = 0;
 
 	// 8.3 — stand a non-solid dynamic-prop body. 8.4 — stand the same mesh with its `.phy` collision
 	// and authored mass, ready for the leaf to drive SetSimulatePhysics. Null on an unbaked model.
@@ -73,6 +86,13 @@ public:
 		const FQuat& Rotation, float UniformScale) = 0;
 	// Repaint a prop body to one of its model's alternate skin families (VtMB's `skin`).
 	virtual void ApplyPropSkin(UStaticMeshComponent* Comp, const FString& Stem, int32 Family) = 0;
+
+	// Stand/clear the player surface through the same glTF skeletal path as NPCs, then seat it on
+	// whichever movement pawn is active. The returned component is also the FElysiumPlayer visual,
+	// so scene clips and understudy model-copying use the ordinary animating contract.
+	virtual USkeletalMeshComponent* BuildPlayerVisual(const FString& Stem,
+		const FString& Disposition, int32 IdleVariant) = 0;
+	virtual void ClearPlayerVisual() = 0;
 
 	// --- The player's body ------------------------------------------------------------------
 	// The eye: where the player is looking from and along. False when there is no player (the menu
@@ -99,7 +119,11 @@ public:
 	// IElysiumPresenter: the camera is part of the body (S3), and the presenter carries what is put
 	// on *screen*, not what the player's body does.
 	virtual int32 PushCameraShot(const FString& ShotFile, const FElysiumEntityHandle& Subject) = 0;
-	virtual bool PopCameraShot(int32 ShotId) = 0;
+	// Value shots are the camera_track path: the entity world owns the sampler and publishes the
+	// resulting world-space value without teaching the camera component about entities.
+	virtual int32 PushCameraShotValue(const FElysiumCameraShot& Shot) = 0;
+	virtual bool UpdateCameraShotValue(int32 ShotId, const FElysiumCameraShot& Shot) = 0;
+	virtual bool PopCameraShot(int32 ShotId, float BlendOutSeconds = -1.0f) = 0;
 };
 
 // --------------------------------------------------------------------------------------------

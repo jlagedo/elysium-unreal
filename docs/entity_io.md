@@ -65,6 +65,24 @@ case, otherwise `_stricmp`. A leading `!` takes a separate single-result path fo
 the patch's `FindEntitiesByName("plus_*")` / `FindEntitiesByName("basic_*")` switches operate over
 the hundreds of hidden variant entities rather than silently finding none.
 
+### `!playercontroller` — the cinematic relationship entity
+
+`events_player.CreateControllerNPC` creates one map-epoch `npc_VPlayerController`, not a boolean
+latch. Repeated creation returns the same entity. It copies the player's model, origin, angles, skin,
+and available embodied character state, builds through the ordinary NPC skeletal path, and remains
+non-AI and non-solid. `!playercontroller` resolves that relationship directly, which is why the
+shipped choreographies and scripted sequences can bind it as an ordinary animating actor.
+
+`events_player.RemoveControllerNPC` first transfers the controller's final model, transform, skin,
+and applicable character state back to the player, then destroys it and clears the alias. The
+relationship handle is map-snapshot state: restoring a scene in progress rebinds
+`!playercontroller` to the restored runtime entity before event processing resumes.
+
+The opening map also has one deliberately dangling authored wire:
+`walk_out_cam_k.OnReachedKeyframe → controls.Deactivate`, paired with a `trigger_once` sending
+`controls.Activate`. `sp_theatre` contains no target named `controls` and no `game_ui` entity. The
+rebuild therefore leaves both as non-fatal missing-target diagnostics; it does not invent a receiver.
+
 ## `trigger_changelevel` forced input
 
 The forced-transition input is named **`ChangeNow`**. The exported corpus carries 88 such wires

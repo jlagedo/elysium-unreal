@@ -83,9 +83,12 @@ STDLIB = set("""
 ENTITY_RECEIVERS = re.compile(
     r"^(pc|npc|player|ent|e|char|character|self|Find\w*|.*\.?Find\w*\(.*\))$", re.I)
 
-COMMENT = re.compile(r"#.*$")
+COMMENT = re.compile(r"#.*$", re.M)
 STRING = re.compile(r"'''.*?'''|\"\"\".*?\"\"\"|'[^'\n]*'|\"[^\"\n]*\"", re.S)
 DEF = re.compile(r"^\s*(?:def|class)\s+(\w+)", re.M)
+DEF_LINE = re.compile(r"^\s*(?:def|class)\s+\w+.*$", re.M)
+SCHEDULED = re.compile(
+    r"\bScheduleTask\s*\(\s*[^,\n]+,\s*(['\"])(.*?)\1\s*\)", re.S)
 # Module-level aliasing of an engine name: `Find = __main__.FindEntityByName`. Every level script
 # opens with a block of these, so an alias is by far the commonest spelling of an engine call.
 ALIAS = re.compile(r"^(\w+)\s*=\s*(?:__main__\s*\.\s*)?(\w+)\s*$", re.M)
@@ -125,8 +128,15 @@ class Survey(object):
             name = self.aliases[name]
         return name
 
-    def scan(self, text, surface, where):
+    def scan(self, text, surface, where, include_scheduled=True):
+        # ScheduleTask's second argument is executable Python, not inert text. Count that future
+        # call once, then blank ordinary strings below so filenames and comments cannot look like
+        # API calls.
+        if include_scheduled:
+            for _quote, payload in SCHEDULED.findall(text):
+                self.scan(payload, surface, where + ":scheduled", include_scheduled=False)
         body = strip_source(text)
+        body = DEF_LINE.sub("", body)
         for dotted, name in CALL.findall(body):
             full, tail = receiver_of(dotted)
             if name in ("if", "while", "for", "print", "return", "not", "and", "or", "in",
@@ -187,14 +197,15 @@ def load_ents(s):
     payloads = 0
     for p in files:
         rel = os.path.basename(p)
-        for line in open(p, "r", errors="replace"):
-            if "," not in line:
-                continue
-            parts = line.rstrip("\n").split(",")
-            if len(parts) < 7:
-                continue
-            payload = parts[5].strip()
-            if payload:
+        try:
+            root = json.load(open(p, "r", errors="replace"))
+        except (OSError, ValueError):
+            continue
+        for ent in root.get("entities", []):
+            for output in ent.get("outputs", []):
+                payload = str(output.get("python", "")).strip()
+                if not payload:
+                    continue
                 payloads += 1
                 s.scan(payload, "ents", rel)
     return len(files), payloads
@@ -209,18 +220,17 @@ def runtime_natives():
     the module globals, which are implemented C functions rather than table entries).
     """
     out = {}
-    try:
-        text = open(os.path.join(SRC, "ElysiumScriptNatives.cpp"), "r", errors="replace").read()
-    except OSError:
-        text = ""
+    native_files = glob.glob(os.path.join(SRC, "**", "ElysiumScriptNatives.cpp"),
+                             recursive=True)
+    text = open(native_files[0], "r", errors="replace").read() if native_files else ""
     for name, _method, note in re.findall(
             r'\{\s*TEXT\("(\w+)"\),\s*(true|false),\s*TEXT\("([^"]*)"\)', text):
         out[name] = "stub" if note.startswith("stub") else "real"
 
-    try:
-        py = open(os.path.join(SRC, "ElysiumPythonEntity.cpp"), "r", errors="replace").read()
-    except OSError:
+    py_files = glob.glob(os.path.join(SRC, "**", "ElysiumPythonEntity.cpp"), recursive=True)
+    if not py_files:
         return out
+    py = open(py_files[0], "r", errors="replace").read()
     for table in ("GEntityMethods", "GModuleGlobals"):
         block = re.search(re.escape(table) + r"\[\]\s*=\s*\{(.*?)\n\t\};", py, re.S)
         if not block:
@@ -233,7 +243,7 @@ def runtime_natives():
 def runtime_inputs():
     """Every entity input the class registry registers: D.Input(TEXT("Name")."""
     names = set()
-    for p in glob.glob(os.path.join(SRC, "*.cpp")):
+    for p in glob.glob(os.path.join(SRC, "**", "*.cpp"), recursive=True):
         text = open(p, "r", errors="replace").read()
         names.update(re.findall(r'\bD\.Input\(\s*TEXT\("(\w+)"\)', text))
         names.update(re.findall(r'\bInput\(\s*TEXT\("(\w+)"\)', text))

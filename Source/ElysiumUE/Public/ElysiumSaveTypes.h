@@ -28,6 +28,7 @@ struct FElysiumSaveVersion
 		Journal       = 4,   // m_QuestList — the ASSIGNED_QUEST rows a quest state change writes
 		Identity      = 5,   // the PC's name, and m_iCurrQuestLogArea — the quest log's hub tab
 		History       = 6,   // m_iVHistoryID — the background trait chargen writes
+		BodyIdentity  = 7,   // the authored M_BodyN/F_BodyN armor-slot appearance
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1

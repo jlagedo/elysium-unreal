@@ -16,6 +16,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumSheetSlots.h"
+#include "ElysiumSkeletalBasis.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
@@ -179,9 +180,9 @@ void FElysiumAnimating::BuildBody()
 		return;   // bare test world, no embodiment, or a bodiless character (npc_VCamera has no model)
 	}
 
-	// Source `angles` is [pitch yaw roll]; a standing character needs yaw only. The Source->Unreal Y
-	// reflection negates yaw (`rebuild-strategy.md`).
-	const FRotator Rot(0.0f, -Angles.Y, 0.0f);
+	// Source `angles` is [pitch yaw roll]; a standing character needs yaw only. The skeletal glTF
+	// basis contributes a fixed -90 degrees before the reflected Source yaw.
+	const FRotator Rot = ElysiumSkeletalBasis::FromSourceAngles(Angles);
 	Visual = Embodiment->BuildNpcVisual(ModelStem(), Origin, Rot, Embodiment->BodyScaleFor(*Def),
 		Disposition, IdleVariant());
 	if (Visual)
@@ -216,6 +217,22 @@ bool FElysiumAnimating::PlayCinematicClip(const FString& AnimSetModel, const FSt
 		bLoop, OutSeconds);
 }
 
+bool FElysiumAnimating::SeekCinematicClip(float PositionSeconds)
+{
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	return Embodiment && Visual && Embodiment->SeekCinematicClip(Visual, PositionSeconds);
+}
+
+void FElysiumAnimating::StopCinematicClip()
+{
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (Embodiment && Visual)
+	{
+		Embodiment->StopCinematicClip(Visual);
+	}
+	ResetAnimToIdle();
+}
+
 bool FElysiumAnimating::ResetAnimToIdle()
 {
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
@@ -245,7 +262,7 @@ void FElysiumAnimating::OnRuntimeTransformChanged()
 	if (Visual)
 	{
 		Visual->SetRelativeLocation(Origin);
-		Visual->SetRelativeRotation(FRotator(0.0f, -Angles.Y, 0.0f));
+		Visual->SetRelativeRotation(ElysiumSkeletalBasis::FromSourceAngles(Angles));
 	}
 }
 
@@ -670,6 +687,19 @@ void FElysiumPlayer::Spawn()
 	RefreshClanEffects();
 	SyncHealthFromSheet();
 	SyncFromBody();
+
+	if (!Model.IsEmpty())
+	{
+		if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
+		{
+			Visual = Embodiment->BuildPlayerVisual(ModelStem(), Disposition, IdleVariant());
+			if (Visual)
+			{
+				World->RegisterNpcBody(Visual);
+				GateVisual();
+			}
+		}
+	}
 }
 
 void FElysiumPlayer::RefreshClanEffects()
@@ -831,12 +861,33 @@ void FElysiumPlayer::SyncFromBody()
 
 void FElysiumPlayer::OnRuntimeTransformChanged()
 {
-	// No FElysiumAnimating::OnRuntimeTransformChanged — the player has no spawned skeletal body; the
-	// pawn is the body, and the embodiment owns the capsule compensation (Source places feet).
+	// The skeletal surface is attached to the pawn, so moving the pawn carries it. Do not run
+	// FElysiumAnimating::OnRuntimeTransformChanged, which would treat its relative transform as a
+	// map-root world transform and double-apply the placement.
 	FElysiumEntity::OnRuntimeTransformChanged();
 	if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
 	{
 		Embodiment->TeleportPlayer(Origin, -Angles.Y);
+	}
+}
+
+void FElysiumPlayer::OnRuntimeModelChanged()
+{
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (!Embodiment)
+	{
+		return; // a headless world still keeps the logical model string
+	}
+	Embodiment->ClearPlayerVisual();
+	Visual = nullptr;
+	if (!Model.IsEmpty())
+	{
+		Visual = Embodiment->BuildPlayerVisual(ModelStem(), Disposition, IdleVariant());
+		if (Visual)
+		{
+			World->RegisterNpcBody(Visual);
+			GateVisual();
+		}
 	}
 }
 

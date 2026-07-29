@@ -205,6 +205,7 @@ namespace
 		}
 
 		bool Validate(bool bRequireSkin, FGltfStats& Stats);
+		bool ValidateNeutralStanceLean();
 
 	private:
 		bool Fail(const FString& Message)
@@ -546,6 +547,168 @@ namespace
 		++Stats.Files;
 		return true;
 	}
+
+	bool FGltfContract::ValidateNeutralStanceLean()
+	{
+		const TArray<TSharedPtr<FJsonValue>>* Nodes = JsonArray(Root, TEXT("nodes"));
+		const TArray<TSharedPtr<FJsonValue>>* Animations = JsonArray(Root, TEXT("animations"));
+		if (Nodes == nullptr || Animations == nullptr)
+		{
+			return Fail(TEXT("neutral-stance regression has no nodes or animations"));
+		}
+
+		TSharedPtr<FJsonObject> Neutral;
+		for (const TSharedPtr<FJsonValue>& Value : *Animations)
+		{
+			const TSharedPtr<FJsonObject> Animation = Value->AsObject();
+			if (JsonString(Animation, TEXT("name")).Equals(
+				TEXT("Stance_Neutral_Idle_1"), ESearchCase::IgnoreCase))
+			{
+				Neutral = Animation;
+				break;
+			}
+		}
+		if (!Neutral.IsValid())
+		{
+			return Fail(TEXT("shared male stances lost Stance_Neutral_Idle_1"));
+		}
+
+		auto VectorField = [](const TSharedPtr<FJsonObject>& Node, const TCHAR* Field,
+			const TArray<double>& Default)
+		{
+			const TArray<TSharedPtr<FJsonValue>>* Values = JsonArray(Node, Field);
+			if (Values == nullptr || Values->Num() != Default.Num()) return Default;
+			TArray<double> Out;
+			for (const TSharedPtr<FJsonValue>& Value : *Values) Out.Add(Value->AsNumber());
+			return Out;
+		};
+		auto Multiply = [](const TArray<double>& A, const TArray<double>& B)
+		{
+			TArray<double> C;
+			C.Init(0.0, 16);
+			for (int32 Column = 0; Column < 4; ++Column)
+			{
+				for (int32 Row = 0; Row < 4; ++Row)
+				{
+					for (int32 K = 0; K < 4; ++K)
+					{
+						C[Column * 4 + Row] += A[K * 4 + Row] * B[Column * 4 + K];
+					}
+				}
+			}
+			return C;
+		};
+
+		TArray<TArray<double>> Translations, Rotations;
+		TArray<int32> Parents;
+		Translations.SetNum(Nodes->Num());
+		Rotations.SetNum(Nodes->Num());
+		Parents.Init(INDEX_NONE, Nodes->Num());
+		int32 Pelvis = INDEX_NONE, Head = INDEX_NONE;
+		for (int32 NodeIndex = 0; NodeIndex < Nodes->Num(); ++NodeIndex)
+		{
+			const TSharedPtr<FJsonObject> Node = JsonObjectAt(Nodes, NodeIndex);
+			Translations[NodeIndex] = VectorField(Node, TEXT("translation"), { 0.0, 0.0, 0.0 });
+			Rotations[NodeIndex] = VectorField(Node, TEXT("rotation"), { 0.0, 0.0, 0.0, 1.0 });
+			const FString Name = JsonString(Node, TEXT("name"));
+			if (Name.Equals(TEXT("Bip01 Pelvis"), ESearchCase::IgnoreCase)) Pelvis = NodeIndex;
+			if (Name.Equals(TEXT("Bip01 Head"), ESearchCase::IgnoreCase)) Head = NodeIndex;
+			const TArray<TSharedPtr<FJsonValue>>* Children = JsonArray(Node, TEXT("children"));
+			if (Children == nullptr) continue;
+			for (const TSharedPtr<FJsonValue>& Child : *Children)
+			{
+				const int32 ChildIndex = static_cast<int32>(Child->AsNumber());
+				if (Parents.IsValidIndex(ChildIndex)) Parents[ChildIndex] = NodeIndex;
+			}
+		}
+		if (Pelvis == INDEX_NONE || Head == INDEX_NONE)
+		{
+			return Fail(TEXT("neutral-stance regression lost pelvis or head"));
+		}
+
+		const TArray<TSharedPtr<FJsonValue>>* Channels = JsonArray(Neutral, TEXT("channels"));
+		const TArray<TSharedPtr<FJsonValue>>* Samplers = JsonArray(Neutral, TEXT("samplers"));
+		if (Channels == nullptr || Samplers == nullptr)
+		{
+			return Fail(TEXT("neutral stance has no channels or samplers"));
+		}
+		for (const TSharedPtr<FJsonValue>& ChannelValue : *Channels)
+		{
+			const TSharedPtr<FJsonObject> Channel = ChannelValue->AsObject();
+			const TSharedPtr<FJsonObject>* TargetPtr = nullptr;
+			if (!Channel.IsValid() || !Channel->TryGetObjectField(TEXT("target"), TargetPtr)) continue;
+			const int32 NodeIndex = JsonInt(*TargetPtr, TEXT("node"));
+			const FString PathName = JsonString(*TargetPtr, TEXT("path"));
+			const TSharedPtr<FJsonObject> Sampler = JsonObjectAt(Samplers, JsonInt(Channel, TEXT("sampler")));
+			FGltfAccessor Values;
+			if (!Nodes->IsValidIndex(NodeIndex) || !Sampler.IsValid()
+				|| !Accessor(JsonInt(Sampler, TEXT("output")), Values))
+			{
+				return Fail(TEXT("neutral stance has an invalid channel"));
+			}
+			if (PathName == TEXT("translation") && Values.Components == 3)
+			{
+				Translations[NodeIndex] = { Values.Number(0, 0), Values.Number(0, 1), Values.Number(0, 2) };
+			}
+			else if (PathName == TEXT("rotation") && Values.Components == 4)
+			{
+				Rotations[NodeIndex] = { Values.Number(0, 0), Values.Number(0, 1),
+					Values.Number(0, 2), Values.Number(0, 3) };
+			}
+		}
+
+		TArray<TArray<double>> Globals;
+		Globals.SetNum(Nodes->Num());
+		TFunction<bool(int32)> BuildGlobal = [&](int32 NodeIndex)
+		{
+			if (Globals[NodeIndex].Num() == 16) return true;
+			const TArray<double>& T = Translations[NodeIndex];
+			const TArray<double>& Q = Rotations[NodeIndex];
+			const double X = Q[0], Y = Q[1], Z = Q[2], W = Q[3];
+			TArray<double> Local;
+			Local.Init(0.0, 16);
+			Local[0] = 1.0 - 2.0 * (Y * Y + Z * Z);
+			Local[1] = 2.0 * (X * Y + W * Z);
+			Local[2] = 2.0 * (X * Z - W * Y);
+			Local[4] = 2.0 * (X * Y - W * Z);
+			Local[5] = 1.0 - 2.0 * (X * X + Z * Z);
+			Local[6] = 2.0 * (Y * Z + W * X);
+			Local[8] = 2.0 * (X * Z + W * Y);
+			Local[9] = 2.0 * (Y * Z - W * X);
+			Local[10] = 1.0 - 2.0 * (X * X + Y * Y);
+			Local[12] = T[0]; Local[13] = T[1]; Local[14] = T[2]; Local[15] = 1.0;
+			const int32 Parent = Parents[NodeIndex];
+			if (Parent != INDEX_NONE)
+			{
+				if (!BuildGlobal(Parent)) return false;
+				Globals[NodeIndex] = Multiply(Globals[Parent], Local);
+			}
+			else
+			{
+				Globals[NodeIndex] = MoveTemp(Local);
+			}
+			return true;
+		};
+		if (!BuildGlobal(Pelvis) || !BuildGlobal(Head))
+		{
+			return Fail(TEXT("neutral-stance hierarchy does not resolve"));
+		}
+
+		// mdl_gltf maps Source (X forward, Y left, Z up) to glTF (X forward, Y up, Z right).
+		// A neutral pose may breathe and shift, but its first frame must not carry the former
+		// systematic Spine1 cant. The bad quaternion order measured 0.1244; the recovered order
+		// measures 0.0186, leaving generous room for source-data variation.
+		const double Rise = FMath::Abs(Globals[Head][13] - Globals[Pelvis][13]);
+		const double Lateral = FMath::Abs(Globals[Head][14] - Globals[Pelvis][14]);
+		if (Rise < 1.e-4 || Lateral / Rise > 0.05)
+		{
+			return Fail(FString::Printf(TEXT("neutral stance leans sideways: lateral %.5f / rise %.5f"),
+				Lateral, Rise));
+		}
+		Test.AddInfo(FString::Printf(TEXT("neutral stance lateral/rise %.5f / %.5f = %.4f"),
+			Lateral, Rise, Lateral / Rise));
+		return true;
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSkeletalGlbContractsTest,
@@ -570,7 +733,14 @@ bool FElysiumSkeletalGlbContractsTest::RunTest(const FString&)
 	for (const TPair<FString, FElysiumNpcIndexEntry>& Pair : Index.Banks)
 	{
 		FGltfContract Contract(*this, FElysiumContentPaths::NpcBankGlb(Pair.Value.Glb));
-		bValid &= Contract.Load() && Contract.Validate(/*bRequireSkin=*/false, Stats);
+		const bool bContractValid = Contract.Load()
+			&& Contract.Validate(/*bRequireSkin=*/false, Stats);
+		bValid &= bContractValid;
+		if (bContractValid && Pair.Key.Equals(
+			TEXT("character_shared_male_stances"), ESearchCase::IgnoreCase))
+		{
+			bValid &= Contract.ValidateNeutralStanceLean();
+		}
 	}
 
 	AddInfo(FString::Printf(TEXT("validated %lld GLBs: %lld joints, %lld weighted vertices, "
@@ -759,15 +929,19 @@ bool FElysiumTheatreSkeletonBindingTest::RunTest(const FString&)
 				}
 
 				const FString Target = ResolveSceneActorTarget(SceneDef, Actor.Name);
-				if (Target.Equals(TEXT("!playercontroller"), ESearchCase::IgnoreCase))
+				const bool bPlayerController =
+					Target.Equals(TEXT("!playercontroller"), ESearchCase::IgnoreCase);
+				if (bPlayerController)
 				{
-					++PlayerBinds; // 8.11a owns the runtime player mesh; root/bank still validated above.
-					continue;
+					++PlayerBinds;
 				}
-				const FElysiumEntityDef* TargetDef = FindEntityByTarget(Defs, Target);
+				const FElysiumEntityDef* TargetDef =
+					bPlayerController ? nullptr : FindEntityByTarget(Defs, Target);
 				const FString* TargetModel = TargetDef != nullptr
 					? FindKeyIgnoreCase(TargetDef->Keys, TEXT("model")) : nullptr;
-				const FString Stem = TargetModel != nullptr ? StemForModel(Index, *TargetModel) : FString();
+				const FString Stem = bPlayerController
+					? TEXT("brujah_male_armor_0")
+					: (TargetModel != nullptr ? StemForModel(Index, *TargetModel) : FString());
 				if (Stem.IsEmpty())
 				{
 					AddError(FString::Printf(TEXT("%s: actor %s target '%s' has no indexed skeletal model"),
@@ -868,9 +1042,9 @@ bool FElysiumTheatreSkeletonBindingTest::RunTest(const FString&)
 		if (Object != nullptr && Object->IsRooted()) Object->RemoveFromRoot();
 	}
 	AddInfo(FString::Printf(TEXT("sp_theatre: %d anim sets, %d exact actor roots, %d runtime "
-		"USkeleton binds; %d player binds await the 8.11a body"),
+		"USkeleton binds; %d bind the default player body"),
 		SceneSets, ActorRoots, RuntimeBinds, PlayerBinds));
-	TestTrue(TEXT("every non-player theatre cinematic clip binds to its target model's USkeleton"), bValid);
+	TestTrue(TEXT("every theatre cinematic clip binds to its target model's USkeleton"), bValid);
 	TestTrue(TEXT("the theatre test exercised runtime bindings"), RuntimeBinds > 0);
 	return true;
 }

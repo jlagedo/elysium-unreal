@@ -42,6 +42,10 @@ struct FElysiumNpcAnimProxy : public FAnimInstanceProxy
 	// Start playing Sequence, crossfading over BlendSeconds (0 snaps). Called from the game
 	// thread through UElysiumNpcAnimInstance, never from the worker.
 	void Request(UAnimSequence* Sequence, bool bLoop, float BlendSeconds);
+	// Pin the current clip to an absolute authored time. Cinematic scenes call this every scene
+	// frame, making the pose a function of scene time rather than accumulated animation delta.
+	void Seek(float PositionSeconds);
+	void Stop();
 
 	UAnimSequence* GetPlaying() const { return Playing; }
 	bool IsPlayingLoop() const { return bPlayingLoop; }
@@ -81,6 +85,8 @@ public:
 	// Play a clip, crossfading from whatever is current. Repeating an already-looping clip does
 	// nothing; a repeated one-shot or a loop-mode change restarts it from frame zero.
 	void PlayClip(UAnimSequence* Sequence, bool bLoop = true, float BlendSeconds = DefaultBlendSeconds);
+	void SeekClip(float PositionSeconds);
+	void StopClip();
 
 	UAnimSequence* GetPlayingClip() const { return Proxy.GetPlaying(); }
 

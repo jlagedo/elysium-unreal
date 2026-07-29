@@ -7,6 +7,7 @@
 #include "ElysiumPlayerBody.generated.h"
 
 class UElysiumCameraComponent;
+class USkeletalMeshComponent;
 struct FElysiumUserCmd;
 
 UINTERFACE()
@@ -56,4 +57,11 @@ public:
 	// bodies carry the same one, so the `elysium.SourceMovement` A/B compares the movers and not two
 	// camera paths. Never null on a spawned body.
 	virtual UElysiumCameraComponent* GetCameraComponent() const = 0;
+
+	// The skeletal surface shared by both movement implementations. It is animation-only and
+	// non-solid; the pawn's hull remains the authoritative body. Camera alpha is applied as a
+	// masked-dither scalar, with a hard hidden fast path only at true zero.
+	virtual USkeletalMeshComponent* GetPlayerVisual() const = 0;
+	virtual void SetPlayerVisual(USkeletalMeshComponent* InVisual) = 0;
+	virtual void ApplyPlayerModelAlpha(float Alpha) = 0;
 };

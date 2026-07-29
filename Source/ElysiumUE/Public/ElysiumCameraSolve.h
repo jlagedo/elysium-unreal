@@ -152,6 +152,11 @@ struct FElysiumCameraShot
 	float MoveSpeed = 0.0f;                                   // cm/s
 	FVector MaxTurnRate = FVector(90.0f, 90.0f, 90.0f);       // deg/s, (pitch, yaw, roll)
 
+	// One-shot render-history reset. The camera component consumes and clears it while publishing
+	// the value; it is never persistent shot state. Zero-time camera_track edits set this so Unreal
+	// does not smear the previous view across an authored hard cut.
+	bool bCameraCut = false;
+
 	// The name it was pushed under, for the debug read-out.
 	FString DebugName;
 };
@@ -171,7 +176,7 @@ public:
 
 	// Remove a shot. When it was the top one, the weight ramps back out over its BlendSeconds (or
 	// toward whatever is left underneath, which stays at full weight).
-	bool Pop(int32 Id);
+	bool Pop(int32 Id, float BlendOutSeconds = -1.0f);
 
 	// Drop everything, weight included — a map teardown, `RestoreCameraToPlayerControl` in the large.
 	void Clear();
@@ -277,6 +282,11 @@ struct FElysiumCameraCvars
 
 namespace ElysiumCam
 {
+	// The player-body visibility consumer shared by both movement pawns. True first person is zero;
+	// the near-camera third-person band and a scripted shot each provide a dithered visibility ramp.
+	float SolveModelAlpha(const FVector& SolvedOffset, const FElysiumCameraWeights& Weights,
+		const FElysiumCameraCvars& Cvars);
+
 	// One row of the cvar surface: the VtMB name, its default **as typed** (Source units / degrees /
 	// a flag), and what it does. The table is the declaration; `FElysiumCameraCvars::LoadFrom` is the
 	// read. Ordered as `camera-view-modes.md` §1 lists them.

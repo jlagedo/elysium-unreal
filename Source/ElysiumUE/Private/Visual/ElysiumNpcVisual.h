@@ -18,7 +18,11 @@ namespace ElysiumNpcVisual
 	// fills OutError on any failure (missing file, parse error, no mesh). On success OutAsset carries
 	// the parsed glTFRuntime asset so the caller can pull animations off it (LoadIdleAnim, or the
 	// harness's own per-clip auditioning). Needs no UWorld — glTFLoadAssetFromFilename is world-free.
-	USkeletalMesh* LoadMesh(const FString& Stem, UglTFRuntimeAsset*& OutAsset, FString& OutError);
+	USkeletalMesh* LoadMesh(const FString& Stem, UglTFRuntimeAsset*& OutAsset, FString& OutError,
+		bool bPlayerMaterial = false);
+	// The same strict skeletal loader for a manifest-provided absolute path (v4 animated props).
+	USkeletalMesh* LoadMeshFromPath(const FString& FullPath, UglTFRuntimeAsset*& OutAsset,
+		FString& OutError, bool bPlayerMaterial = false);
 
 	// Parse any .glb by absolute path — the shared animation banks (out/npc/banks/<stem>.glb), which
 	// carry a skeleton and clips but no mesh. Same config as LoadMesh, so a bank reorients into
@@ -26,14 +30,10 @@ namespace ElysiumNpcVisual
 	// is the expensive step (a bank is 2-35 MB).
 	UglTFRuntimeAsset* LoadAssetFromPath(const FString& FullPath, FString& OutError);
 
-	// Retarget one named clip from Asset onto Mesh's skeleton, **by bone name**. Asset may be the
-	// NPC's own glb or any bank: glTFRuntime keys its tracks by bone name and resolves each against
-	// the target ref skeleton, skipping a name the skeleton lacks and leaving that bone at its bind
-	// pose (glTFRuntimeParserSkeletalMeshes.cpp, LoadSkeletalAnimationFromTracksAndMorphTargets).
-	// The shared Biped core binds directly; optional attachment/anatomy tracks may be absent on a
-	// target that has no such bone and therefore no vertices for it (`docs/animation_and_movers.md`
-	// A.7). This is VtMB's own virtualmodel bank-sharing, not proportion retargeting.
-	// Returns null and fills OutError when the asset has no clip by that name.
+	// Bind one named clip from Asset onto Mesh's compatible skeleton by bone name. VtMB banks author
+	// biped-local tracks directly; generic rest-pose retargeting corrupts those locals and Bip01's
+	// absolute scene placement. Optional source tracks absent from the target are filtered before
+	// construction and remain at bind pose. Returns null and fills OutError when the clip is absent.
 	UAnimSequence* RetargetClip(UglTFRuntimeAsset* Asset, USkeletalMesh* Mesh, const FString& ClipName,
 		FString& OutError);
 }

@@ -183,18 +183,40 @@ void FElysiumNpcClipSet::SortByWeight(TArray<FString>& Labels) const
 
 bool FElysiumNpcIndex::Load(FString& OutError)
 {
+	FString JsonText;
+	if (!FFileHelper::LoadFileToString(JsonText, *FElysiumContentPaths::NpcIndex()))
+	{
+		OutError = FString::Printf(TEXT("not found: %s"), *FElysiumContentPaths::NpcIndex());
+		return false;
+	}
+	return LoadJsonText(JsonText, OutError);
+}
+
+bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
+{
+	ManifestVersion = 0;
 	Npcs.Reset();
 	Banks.Reset();
+	Cinematics.Reset();
+	AnimatedProps.Reset();
 
 	TSharedPtr<FJsonObject> Root;
-	if (!ReadJsonFile(FElysiumContentPaths::NpcIndex(), Root, OutError))
+	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonText);
+	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 	{
+		OutError = TEXT("malformed npc_index JSON");
+		return false;
+	}
+	Root->TryGetNumberField(TEXT("manifest_version"), ManifestVersion);
+	if (ManifestVersion != 3 && ManifestVersion != 4)
+	{
+		OutError = FString::Printf(TEXT("unsupported npc_index manifest version %d (expected 3 or 4)"),
+			ManifestVersion);
 		return false;
 	}
 	ReadIndexGroup(Root, TEXT("npcs"), Npcs);
 	ReadIndexGroup(Root, TEXT("banks"), Banks);
 
-	Cinematics.Reset();
 	const TSharedPtr<FJsonObject>* CinObj = nullptr;
 	if (Root->TryGetObjectField(TEXT("cinematics"), CinObj) && CinObj != nullptr)
 	{
@@ -226,6 +248,44 @@ bool FElysiumNpcIndex::Load(FString& OutError)
 				}
 			}
 			Cinematics.Add(Pair.Key.ToLower(), MoveTemp(Set));
+		}
+	}
+
+	if (ManifestVersion >= 4)
+	{
+		const TSharedPtr<FJsonObject>* PropObj = nullptr;
+		if (Root->TryGetObjectField(TEXT("animated_props"), PropObj) && PropObj != nullptr)
+		{
+			for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*PropObj)->Values)
+			{
+				const TSharedPtr<FJsonObject>* Obj = nullptr;
+				if (!Pair.Value.IsValid() || !Pair.Value->TryGetObject(Obj) || Obj == nullptr)
+				{
+					continue;
+				}
+				FElysiumAnimatedPropEntry Entry;
+				Entry.Stem = Pair.Key;
+				(*Obj)->TryGetStringField(TEXT("glb"), Entry.Glb);
+				(*Obj)->TryGetStringField(TEXT("model"), Entry.Model);
+				(*Obj)->TryGetNumberField(TEXT("bones"), Entry.Bones);
+				Entry.Model.ReplaceInline(TEXT("\\"), TEXT("/"));
+				Entry.Model.ToLowerInline();
+				const TArray<TSharedPtr<FJsonValue>>* Clips = nullptr;
+				if ((*Obj)->TryGetArrayField(TEXT("clips"), Clips) && Clips != nullptr)
+				{
+					for (const TSharedPtr<FJsonValue>& Clip : *Clips)
+					{
+						if (Clip.IsValid())
+						{
+							Entry.Clips.Add(Clip->AsString().ToLower());
+						}
+					}
+				}
+				if (!Entry.Glb.IsEmpty() && !Entry.Model.IsEmpty())
+				{
+					AnimatedProps.Add(Entry.Stem, MoveTemp(Entry));
+				}
+			}
 		}
 	}
 
@@ -274,4 +334,23 @@ FString FElysiumNpcIndex::CinematicBank(const FString& ModelPath, const FString&
 {
 	const FElysiumCinematicSet* Set = FindCinematic(ModelPath);
 	return Set ? Set->BankForRoot(BoneRoot) : FString();
+}
+
+const FElysiumAnimatedPropEntry* FElysiumNpcIndex::FindAnimatedProp(const FString& ModelPath) const
+{
+	FString Key = ModelPath;
+	Key.ReplaceInline(TEXT("\\"), TEXT("/"));
+	Key.ToLowerInline();
+	if (!Key.StartsWith(TEXT("models/")))
+	{
+		Key = TEXT("models/") + Key;
+	}
+	for (const TPair<FString, FElysiumAnimatedPropEntry>& Pair : AnimatedProps)
+	{
+		if (Pair.Value.Model == Key)
+		{
+			return &Pair.Value;
+		}
+	}
+	return nullptr;
 }

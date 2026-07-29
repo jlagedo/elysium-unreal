@@ -52,6 +52,7 @@ void FElysiumNpcAnimProxy::Request(UAnimSequence* Sequence, bool bLoop, float Bl
 			return;
 		}
 		Players[Incoming].SetLoopAnimation(bLoop);
+		Players[Incoming].SetPlayRate(1.f);
 		Players[Incoming].SetStartPosition(0.f);
 		bNeedsReinit[Incoming] = true;
 		bPlayingLoop = bLoop;
@@ -67,6 +68,7 @@ void FElysiumNpcAnimProxy::Request(UAnimSequence* Sequence, bool bLoop, float Bl
 
 	Players[Next].SetSequence(Sequence);
 	Players[Next].SetLoopAnimation(bLoop);
+	Players[Next].SetPlayRate(1.f);
 	Players[Next].SetStartPosition(0.f);
 	bNeedsReinit[Next] = true;   // reset that player's play time on the worker
 
@@ -76,6 +78,31 @@ void FElysiumNpcAnimProxy::Request(UAnimSequence* Sequence, bool bLoop, float Bl
 	BlendAlpha = bSnap ? 1.f : 0.f;
 	BlendRate = bSnap ? 0.f : 1.f / BlendSeconds;
 	bInitialized = true;
+}
+
+void FElysiumNpcAnimProxy::Seek(float PositionSeconds)
+{
+	if (!bInitialized || Playing == nullptr)
+	{
+		return;
+	}
+	const float Length = Playing->GetPlayLength();
+	const float Position = bPlayingLoop && Length > SMALL_NUMBER
+		? FMath::Fmod(FMath::Max(0.f, PositionSeconds), Length)
+		: FMath::Clamp(PositionSeconds, 0.f, Length);
+	Players[Incoming].SetStartPosition(Position);
+	Players[Incoming].SetPlayRate(0.f);
+	bNeedsReinit[Incoming] = true;
+	BlendAlpha = 1.f;
+	BlendRate = 0.f;
+}
+
+void FElysiumNpcAnimProxy::Stop()
+{
+	Playing = nullptr;
+	bInitialized = false;
+	BlendAlpha = 1.f;
+	BlendRate = 0.f;
 }
 
 void FElysiumNpcAnimProxy::UpdateAnimationNode(const FAnimationUpdateContext& InContext)
@@ -153,4 +180,14 @@ void UElysiumNpcAnimInstance::PlayClip(UAnimSequence* Sequence, bool bLoop, floa
 	// GetProxyOnGameThread blocks on any in-flight parallel evaluation, so the write cannot race
 	// the worker reading the same fields.
 	GetProxyOnGameThread<FElysiumNpcAnimProxy>().Request(Sequence, bLoop, BlendSeconds);
+}
+
+void UElysiumNpcAnimInstance::SeekClip(float PositionSeconds)
+{
+	GetProxyOnGameThread<FElysiumNpcAnimProxy>().Seek(PositionSeconds);
+}
+
+void UElysiumNpcAnimInstance::StopClip()
+{
+	GetProxyOnGameThread<FElysiumNpcAnimProxy>().Stop();
 }

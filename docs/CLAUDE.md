@@ -34,9 +34,11 @@ the maintenance contract.
   `debug-tooling.md` (debug layers), `map-architecture.md` (map lifecycle),
   `rendering-perf.md` (render path + tuning), `asset-enhancement.md` (offline surface track),
   `input-architecture.md` (input path), `ui-architecture.md` (the CommonUI/Slate UI stack),
-  `save-architecture.md` (persistence). Each has a VtMB-facts counterpart it must not duplicate —
+  `save-architecture.md` (persistence), `audio-architecture.md` (Audio Mixer integration). Each
+  has a VtMB-facts counterpart it must not duplicate —
   `input-architecture.md` ↔ `controls.md`, `ui-architecture.md` ↔ `vtmb-ui.md`,
-  `save-architecture.md` ↔ `savegame_format.md`, `runtime-architecture.md` ↔ `game_runtime.md`.
+  `save-architecture.md` ↔ `savegame_format.md`, `audio-architecture.md` ↔
+  `audio_pipeline.md`, `runtime-architecture.md` ↔ `game_runtime.md`.
   `runtime-architecture.md` is the one that *integrates* the others: it may state which system owns
   a seam, never how that system works internally.
 - **What exists in code right now** → the directory `CLAUDE.md` next to that code

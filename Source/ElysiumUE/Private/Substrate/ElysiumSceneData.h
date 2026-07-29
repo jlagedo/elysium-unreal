@@ -65,6 +65,9 @@ struct FElysiumSceneEvent
 	float StartTime = 0.f;
 	float EndTime = 0.f;
 	bool  bHasEnd = false;
+	// Actor/channel blocks with `active 0` remain parsed and inspectable, but their events never
+	// enter the runtime timeline.
+	bool  bActive = true;
 
 	// `fixedlength` — the event's length is the asset's, not the authored range (12.2 acts on it).
 	bool  bFixedLength = false;

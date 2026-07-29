@@ -490,12 +490,16 @@ which is also what keeps the A/B honest: it compares the movers, not two input p
   post-process and first-person-rendering fields are filled, then applying offset and rotation.
 - **The scripted channel is a service, not a special case.** `SetCamera(shotfile)` (115 script calls,
   keyed to `vdata/camerashots/`), `camera_keyframe`/`camera_track`, the conversation camera and the
-  feed camera all push onto the same weight stack through one seam —
-  **`IElysiumEmbodiment::PushCameraShot` / `PopCameraShot`**, beside the other player-body calls,
-  because the camera *is* part of the body (§5–6) and `IElysiumPresenter` carries what is put on
-  *screen*, not what the player's body does. What is pushed is **values**; whoever pushed the shot keeps them current,
-  so the camera never learns what an entity is. That keeps `RemoveCamera` a pop, and keeps cutscene
-  cameras out of the pawn.
+  feed camera all push onto the same weight stack through one value seam —
+  **`IElysiumEmbodiment::PushCameraShotValue(const FElysiumCameraShot&)`**,
+  **`UpdateCameraShotValue(int32, const FElysiumCameraShot&)`**, and
+  **`PopCameraShot(int32, float)`** — beside the other player-body calls. The camera *is* part of the
+  body (§5–6), while `IElysiumPresenter` carries what is put on *screen*. Whoever owns a shot keeps
+  its values current, so the camera never learns what an entity is. `SetCamera` owns a replaceable
+  named-shot slot; the map epoch separately owns camera-track position and target streams and composes
+  them into one raw shot. Either stream may restore independently, and the raw shot leaves the stack
+  only after both owners are gone. This keeps `RemoveCamera` a pop and cutscene cameras out of the
+  pawn.
 
 ## 10. Session, boot and the app state machine
 

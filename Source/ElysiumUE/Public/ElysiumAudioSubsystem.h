@@ -31,6 +31,7 @@ struct FElysiumPlayParams
 	bool  b3D = true;            // false == non-spatialized 2D (SF "everywhere" / music stems)
 	float AttenuationRadiusCm = 0.f;   // sphere falloff distance in cm; 0 == no attenuation
 	float FadeInSeconds = 0.f;   // >0 fades the voice up from silence over this long
+	float StartTimeSeconds = 0.f; // decoded-stream offset used when restoring an active scene voice
 	// Placement (b3D only): attach to AttachTo if set (SourceEntityName parenting — the sound follows
 	// a mover), else play world-static at Location. Ignored when b3D is false.
 	USceneComponent* AttachTo = nullptr;

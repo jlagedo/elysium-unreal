@@ -113,6 +113,15 @@ public:
 	// This world's player entity, or null when the map was built without one.
 	class FElysiumPlayer* FindPlayer() const;
 	FElysiumEntityHandle PlayerHandle() const { return Player; }
+
+	// The cutscene stand-in created by events_player. It is one real runtime entity per map epoch,
+	// not a latch: scenes, I/O and scripts resolve it through !playercontroller, and removal transfers
+	// its final embodied state back to the player before killing the stand-in.
+	FElysiumEntityHandle CreatePlayerControllerEntity();
+	bool RemovePlayerControllerEntity();
+	FElysiumEntity* FindPlayerController() const;
+	FElysiumEntityHandle PlayerControllerHandle() const { return PlayerControllerEntity; }
+
 	// Drop the player without touching the entity, so Teardown has nothing to dehydrate. What
 	// ending a session means: the run is over, and the dying world's numbers must not be written
 	// back into the record that was just cleared (travel is deferred, so the teardown lands after
@@ -256,6 +265,20 @@ public:
 	bool HasScriptedCamera() const { return ScriptedCameraShot != 0; }
 	const FString& ScriptedCameraName() const { return ScriptedCameraFile; }
 
+	// `camera_track` publishes position and target independently. The world composes both roles into
+	// one value shot so restoring one track never tears down the other.
+	void PublishTrackCamera(bool bTargetRole, const FElysiumEntityHandle& Owner,
+		const FVector& Point, const FRotator& Rotation, float Roll, float FieldOfView,
+		float BlendInSeconds, bool bCameraCut = false);
+	void RestoreTrackCamera(bool bTargetRole, const FElysiumEntityHandle& Owner,
+		float BlendOutSeconds);
+	void ClearTrackCamera(float BlendOutSeconds = 0.0f);
+	bool HasTrackCamera() const { return TrackCameraShot != 0; }
+	FElysiumEntityHandle TrackCameraOwner(bool bTargetRole) const
+	{
+		return bTargetRole ? TrackCameraTargetOwner : TrackCameraPositionOwner;
+	}
+
 	// The game-state subsystem (the `G`/quest store, player sheet, script host). Outlives the world.
 	UElysiumGameStateSubsystem* GetGameState() const { return GameState; }
 
@@ -395,8 +418,11 @@ private:
 	int32 TouchBeginCount = 0;
 	int32 TouchEndCount = 0;
 
-	// 11.4 — this map's player entity (S3), or Invalid when the map was built without one.
+	// 11.4 — this map's player entity (S3), or Invalid when the map was built without one).
 	FElysiumEntityHandle Player;
+	// The active npc_VPlayerController stand-in, restored by finding the saved runtime entity after
+	// snapshot application. It is never valid outside this map epoch.
+	FElysiumEntityHandle PlayerControllerEntity;
 
 	// 11.9 — set by Detach(): this world no longer owns any part of the session, so Teardown neither
 	// dehydrates the player nor freezes a snapshot over the one a load just restored.
@@ -433,6 +459,17 @@ private:
 	// The scripted camera's handle on IElysiumEmbodiment's channel; 0 = none up.
 	int32 ScriptedCameraShot = 0;
 	FString ScriptedCameraFile;
+
+	// The paired camera_track director. Values remain cached when one role restores so the surviving
+	// role does not snap to the player between independently authored chains.
+	int32 TrackCameraShot = 0;
+	FElysiumEntityHandle TrackCameraPositionOwner;
+	FElysiumEntityHandle TrackCameraTargetOwner;
+	FVector TrackCameraPosition = FVector::ZeroVector;
+	FVector TrackCameraTarget = FVector::ZeroVector;
+	FRotator TrackCameraRotation = FRotator::ZeroRotator;
+	float TrackCameraRoll = 0.0f;
+	float TrackCameraFov = 0.0f;
 
 	FElysiumEntityHandle OpenSignOwner;
 	double OpenSignTime = 0.0;

@@ -383,13 +383,35 @@ int32 FElysiumCameraDirector::Push(FElysiumEntityWorld* World, UElysiumCameraCom
 
 	FLiveShot& Entry = Live.AddDefaulted_GetRef();
 	Entry.Id = NextId++;
+	Entry.bValue = false;
 	Entry.Def = *Def;
 	Entry.Subject = Subject;
 	Entry.CameraShotId = Camera->PushShot(Shot);
 	return Entry.Id;
 }
 
-bool FElysiumCameraDirector::Pop(UElysiumCameraComponent* Camera, int32 Id)
+int32 FElysiumCameraDirector::PushValue(UElysiumCameraComponent* Camera, const FElysiumCameraShot& Shot)
+{
+	if (!Camera)
+	{
+		return 0;
+	}
+	FLiveShot& Entry = Live.AddDefaulted_GetRef();
+	Entry.Id = NextId++;
+	Entry.bValue = true;
+	Entry.CameraShotId = Camera->PushShot(Shot);
+	return Entry.Id;
+}
+
+bool FElysiumCameraDirector::UpdateValue(UElysiumCameraComponent* Camera, int32 Id,
+	const FElysiumCameraShot& Shot)
+{
+	const FLiveShot* Entry = Live.FindByPredicate(
+		[Id](const FLiveShot& S) { return S.Id == Id && S.bValue; });
+	return Entry && Camera && Camera->UpdateShot(Entry->CameraShotId, Shot);
+}
+
+bool FElysiumCameraDirector::Pop(UElysiumCameraComponent* Camera, int32 Id, float BlendOutSeconds)
 {
 	const int32 Index = Live.IndexOfByPredicate([Id](const FLiveShot& S) { return S.Id == Id; });
 	if (Index == INDEX_NONE)
@@ -398,7 +420,7 @@ bool FElysiumCameraDirector::Pop(UElysiumCameraComponent* Camera, int32 Id)
 	}
 	if (Camera)
 	{
-		Camera->PopShot(Live[Index].CameraShotId);
+		Camera->PopShot(Live[Index].CameraShotId, BlendOutSeconds);
 	}
 	Live.RemoveAt(Index);
 	return true;
@@ -424,6 +446,10 @@ void FElysiumCameraDirector::Tick(FElysiumEntityWorld* World, UElysiumCameraComp
 	}
 	for (const FLiveShot& Entry : Live)
 	{
+		if (Entry.bValue)
+		{
+			continue;
+		}
 		const bool bFollows = Entry.Def.End.IsFollowing() || Entry.Def.Start.IsFollowing()
 			|| Entry.Def.Target1.IsFollowing() || Entry.Def.Target2.IsFollowing();
 		if (!bFollows)
@@ -449,12 +475,19 @@ FString FElysiumCameraDirector::Describe() const
 	FString Out;
 	for (const FLiveShot& Entry : Live)
 	{
-		Out += FString::Printf(TEXT("\n  #%d '%s' (camera #%d)  end %s/%s/%s  fov %.1f"),
-			Entry.Id, *Entry.Def.Name, Entry.CameraShotId,
-			ElysiumCameraShots::LexToString(Entry.Def.End.Position),
-			*Entry.Def.End.AttachPos,
-			ElysiumCameraShots::LexToString(Entry.Def.End.Attach),
-			Entry.Def.Constraints.FieldOfView);
+		if (Entry.bValue)
+		{
+			Out += FString::Printf(TEXT("\n  #%d value (camera #%d)"), Entry.Id, Entry.CameraShotId);
+		}
+		else
+		{
+			Out += FString::Printf(TEXT("\n  #%d '%s' (camera #%d)  end %s/%s/%s  fov %.1f"),
+				Entry.Id, *Entry.Def.Name, Entry.CameraShotId,
+				ElysiumCameraShots::LexToString(Entry.Def.End.Position),
+				*Entry.Def.End.AttachPos,
+				ElysiumCameraShots::LexToString(Entry.Def.End.Attach),
+				Entry.Def.Constraints.FieldOfView);
+		}
 	}
 	return FString::Printf(TEXT("%d scripted shot(s):%s"), Live.Num(), *Out);
 }

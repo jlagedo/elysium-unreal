@@ -54,6 +54,11 @@ public:
 	// not two camera paths.
 	static bool CalcCameraFor(UElysiumCameraComponent* Camera, float DeltaSeconds, FMinimalViewInfo& Out);
 
+	// A cut request is latched when the entity world publishes it and consumed from CalcCamera, after
+	// the shot has been applied. Keeping it until that phase prevents an earlier engine camera update
+	// from clearing the one-frame temporal-history signal before the viewport builds its view.
+	bool ConsumeTemporalCameraCutRequest();
+
 	// --- Intent -----------------------------------------------------------------------------
 	// The frame's user command, handed on by the body. Only the camera pairs are read here.
 	void SetUserCmd(const FElysiumUserCmd& Cmd) { PendingCmd = Cmd; }
@@ -84,7 +89,7 @@ public:
 	// Returns the shot's id (never reused, 0 on failure); `PopShot` gives control back.
 	int32 PushShot(const FElysiumCameraShot& Shot);
 	bool UpdateShot(int32 Id, const FElysiumCameraShot& Shot);
-	bool PopShot(int32 Id);
+	bool PopShot(int32 Id, float BlendOutSeconds = -1.0f);
 	void ClearShots() { Shots.Clear(); }
 	const FElysiumCameraShotStack& GetShots() const { return Shots; }
 
@@ -170,6 +175,8 @@ private:
 	bool bShotSeeded = false;
 	// The shot the channel is currently framed on, so a push or a pop that changes the top re-seeds.
 	int32 LastTopShotId = 0;
+	// Set by the shot mutation phase; cleared only when CalcCamera publishes the cut to Unreal.
+	bool bTemporalCameraCutPending = false;
 
 	float PlayerModelAlpha = 0.0f;
 

@@ -1,0 +1,1277 @@
+#include "Debug/ElysiumGreenRoomRun.h"
+
+#include "ElysiumCameraSolve.h"
+#include "ElysiumContentPaths.h"
+#include "ElysiumEntity.h"
+#include "ElysiumEntityDefs.h"
+#include "ElysiumEntityWorld.h"
+#include "ElysiumMapActor.h"
+#include "ElysiumMapSubsystem.h"
+#include "ElysiumPlayerBody.h"
+#include "ElysiumSkeletalBasis.h"
+#include "Debug/ElysiumScreenshot.h"
+#include "Substrate/ElysiumCameraTrack.h"
+
+#include "Components/PointLightComponent.h"
+#include "Components/SceneComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/GameInstance.h"
+#include "Engine/SkeletalMesh.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/World.h"
+#include "GameFramework/Actor.h"
+#include "GameFramework/Pawn.h"
+#include "Camera/PlayerCameraManager.h"
+#include "GameFramework/PlayerController.h"
+#include "HAL/FileManager.h"
+#include "HAL/PlatformMisc.h"
+#include "Misc/CommandLine.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Parse.h"
+#include "Misc/Paths.h"
+#include "RHI.h"
+#include "UObject/UObjectGlobals.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumGreenRoom, Log, All);
+
+namespace
+{
+	constexpr int32 BootSettleFrames = 8;
+	constexpr int32 PoseWarmupFrames = 4;
+
+	FString VecJson(const FVector& V)
+	{
+		return FString::Printf(TEXT("[%.3f, %.3f, %.3f]"), V.X, V.Y, V.Z);
+	}
+
+	FString RotJson(const FRotator& R)
+	{
+		return FString::Printf(TEXT("[%.3f, %.3f, %.3f]"), R.Pitch, R.Yaw, R.Roll);
+	}
+
+	FString Vec2Json(const FVector2D& V)
+	{
+		return FString::Printf(TEXT("[%.3f, %.3f]"), V.X, V.Y);
+	}
+
+	bool IsFiniteVector(const FVector& V)
+	{
+		return FMath::IsFinite(V.X) && FMath::IsFinite(V.Y) && FMath::IsFinite(V.Z);
+	}
+}
+
+bool FElysiumGreenRoomRun::IsRequested()
+{
+	if (!FParse::Param(FCommandLine::Get(), TEXT("ElysiumGreenRoom")))
+	{
+		return false;
+	}
+	if (GUsingNullRHI)
+	{
+		UE_LOG(LogElysiumGreenRoom, Warning,
+			TEXT("-ElysiumGreenRoom ignored: rendered skeletal validation requires a real RHI."));
+		return false;
+	}
+	return true;
+}
+
+FElysiumGreenRoomRun::FElysiumGreenRoomRun(UElysiumMapSubsystem* InSubsystem)
+	: Subsystem(InSubsystem)
+{
+	FParse::Value(FCommandLine::Get(), TEXT("GreenRoomCase="), Selector);
+	FParse::Value(FCommandLine::Get(), TEXT("GreenRoomSettle="), SettleFrames);
+	Selector = Selector.ToLower();
+	SettleFrames = FMath::Max(2, SettleFrames);
+	Fractions = { 0.0f, 0.25f, 0.5f, 0.75f, 0.99f };
+
+	UE_LOG(LogElysiumGreenRoom, Log, TEXT("green room armed: case=%s settle=%d"),
+		*Selector, SettleFrames);
+	TickHandle = FTSTicker::GetCoreTicker().AddTicker(
+		FTickerDelegate::CreateRaw(this, &FElysiumGreenRoomRun::Tick));
+}
+
+FElysiumGreenRoomRun::~FElysiumGreenRoomRun()
+{
+	if (TickHandle.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(TickHandle);
+	}
+	DestroyBodies();
+}
+
+UWorld* FElysiumGreenRoomRun::GetWorld() const
+{
+	const UElysiumMapSubsystem* Sub = Subsystem.Get();
+	const UGameInstance* GI = Sub ? Sub->GetGameInstance() : nullptr;
+	return GI ? GI->GetWorld() : nullptr;
+}
+
+AElysiumMapActor* FElysiumGreenRoomRun::GetMap() const
+{
+	const UElysiumMapSubsystem* Sub = Subsystem.Get();
+	return Sub ? Sub->GetCurrentMap() : nullptr;
+}
+
+void FElysiumGreenRoomRun::ResolveCases()
+{
+	const TArray<FCase> Opening =
+	{
+		{ TEXT("player"), TEXT("brujah_male_armor_0"),
+			TEXT("models/cinematic/santa_monica/haven/embrace_bips1.mdl"), TEXT("Bip01"), true },
+		{ TEXT("sire"), TEXT("brujah_female_armor_3"),
+			TEXT("models/cinematic/santa_monica/haven/embrace_bips1.mdl"), TEXT("Bip02"), false },
+		{ TEXT("vampire1"), TEXT("malkavian_male_armor_0"),
+			TEXT("models/cinematic/santa_monica/haven/embrace_bips1.mdl"), TEXT("Bip03"), false },
+		{ TEXT("vampire2"), TEXT("toreador_male_armor_0"),
+			TEXT("models/cinematic/santa_monica/haven/embrace_bips1.mdl"), TEXT("Bip04"), false },
+		{ TEXT("sheriff"), TEXT("sheriff"),
+			TEXT("models/cinematic/santa_monica/haven/embrace_bips2.mdl"), TEXT("Bip05"), false },
+	};
+	const TArray<FCase> OpeningProps =
+	{
+		{ TEXT("wineglass_1"), TEXT("cin_wineglass"), TEXT("wineglass_1"),
+			TEXT("models/cinematic/santa_monica/haven/cin_wineglass.mdl"), false, true, false },
+		{ TEXT("wineglass_2"), TEXT("cin_wineglass"), TEXT("wineglass_2"),
+			TEXT("models/cinematic/santa_monica/haven/cin_wineglass.mdl"), false, true, false },
+		{ TEXT("stake_idle01"), TEXT("cinematic_santa_monica_haven_cin_stake"), TEXT("idle01"),
+			TEXT("models/cinematic/santa_monica/haven/cin_stake.mdl"), false, true, true },
+		{ TEXT("pc_pre"), TEXT("cinematic_santa_monica_haven_cin_stake"), TEXT("pc_pre"),
+			TEXT("models/cinematic/santa_monica/haven/cin_stake.mdl"), false, true, false },
+		{ TEXT("pc_post"), TEXT("cinematic_santa_monica_haven_cin_stake"), TEXT("pc_post"),
+			TEXT("models/cinematic/santa_monica/haven/cin_stake.mdl"), false, true, false },
+		{ TEXT("pc_post_female"), TEXT("cinematic_santa_monica_haven_cin_stake"), TEXT("pc_post_female"),
+			TEXT("models/cinematic/santa_monica/haven/cin_stake.mdl"), false, true, false },
+		{ TEXT("sire_fly"), TEXT("cinematic_santa_monica_haven_cin_stake"), TEXT("sire_fly"),
+			TEXT("models/cinematic/santa_monica/haven/cin_stake.mdl"), false, true, false },
+		{ TEXT("sire_pre"), TEXT("cinematic_santa_monica_haven_cin_stake"), TEXT("sire_pre"),
+			TEXT("models/cinematic/santa_monica/haven/cin_stake.mdl"), false, true, false },
+		{ TEXT("sire_post"), TEXT("cinematic_santa_monica_haven_cin_stake"), TEXT("sire_post"),
+			TEXT("models/cinematic/santa_monica/haven/cin_stake.mdl"), false, true, false },
+	};
+	const TArray<FCase> Courtroom =
+	{
+		// A deliberately small authored-space oracle. Vampire4 is one of the seated audience actors
+		// reported facing away from the stage; LaCroix supplies the intended focus side without
+		// requiring the opening scripts, cameras, or the rest of the cast.
+		{ TEXT("vampire4_seated"), TEXT("ventrue_female_armor_1"),
+			TEXT("models/cinematic/santa_monica/courtroom/courtroom_bip5.mdl"),
+			TEXT("Bip01"), false },
+		{ TEXT("prince"), TEXT("lacroix"),
+			TEXT("models/cinematic/santa_monica/courtroom/courtroom_bip2.mdl"),
+			TEXT("Bip01"), false },
+	};
+
+	ActiveCases.Reset();
+	bTheatreCamera = Selector == TEXT("embrace");
+	bCourtroom = Selector == TEXT("courtroom");
+	bEnsemble = Selector == TEXT("opening") || bTheatreCamera || bCourtroom;
+	if (bCourtroom)
+	{
+		ActiveCases = Courtroom;
+		return;
+	}
+	if (Selector == TEXT("props"))
+	{
+		ActiveCases = OpeningProps;
+		return;
+	}
+	if (bEnsemble || Selector == TEXT("all"))
+	{
+		ActiveCases = Opening;
+		return;
+	}
+	if (Selector == TEXT("placeholder"))
+	{
+		// Diagnostic only: this is the authored temporary body before chooseSire() replaces it. Its
+		// loud rainbow torso is source content and must never be confused with the final sire.
+		ActiveCases.Add({ TEXT("placeholder"), TEXT("doppleganger_male"),
+			TEXT("models/cinematic/santa_monica/haven/embrace_bips1.mdl"), TEXT("Bip02"), false });
+		return;
+	}
+	for (const FCase& Candidate : Opening)
+	{
+		if (Candidate.Label == Selector)
+		{
+			ActiveCases.Add(Candidate);
+			return;
+		}
+	}
+	for (const FCase& Candidate : OpeningProps)
+	{
+		if (Candidate.Label == Selector)
+		{
+			ActiveCases.Add(Candidate);
+			return;
+		}
+	}
+	UE_LOG(LogElysiumGreenRoom, Warning,
+		TEXT("unknown GreenRoomCase '%s' (player|sire|vampire1|vampire2|sheriff|opening|")
+		TEXT("embrace|courtroom|props|all|placeholder|prop clip)"),
+		*Selector);
+	bAnyFailure = true;
+}
+
+bool FElysiumGreenRoomRun::CreateStage()
+{
+	if (bTheatreCamera)
+	{
+		return PrepareTheatreCase();
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+	AActor* Actor = World->SpawnActor<AActor>();
+	if (!Actor)
+	{
+		return false;
+	}
+	USceneComponent* Root = NewObject<USceneComponent>(Actor, TEXT("GreenRoomRoot"));
+	Actor->AddInstanceComponent(Root);
+	Actor->SetRootComponent(Root);
+	Root->RegisterComponent();
+	StageActor = Actor;
+
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	if (!Cube)
+	{
+		UE_LOG(LogElysiumGreenRoom, Warning, TEXT("green room could not load Engine cube"));
+		return false;
+	}
+	auto MakePanel = [Actor, Root, Cube](const TCHAR* Name)
+	{
+		UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(Actor, Name);
+		Actor->AddInstanceComponent(Comp);
+		Comp->SetupAttachment(Root);
+		Comp->SetStaticMesh(Cube);
+		Comp->SetMobility(EComponentMobility::Movable);
+		Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Comp->SetCastShadow(false);
+		Comp->RegisterComponent();
+		return Comp;
+	};
+	Floor = MakePanel(TEXT("GreenRoomFloor"));
+	Wall = MakePanel(TEXT("GreenRoomWall"));
+
+	auto MakeLight = [Actor, Root](const TCHAR* Name, float Intensity)
+	{
+		UPointLightComponent* Light = NewObject<UPointLightComponent>(Actor, Name);
+		Actor->AddInstanceComponent(Light);
+		Light->SetupAttachment(Root);
+		Light->SetMobility(EComponentMobility::Movable);
+		Light->SetIntensity(Intensity);
+		Light->SetAttenuationRadius(1800.0f);
+		Light->SetCastShadows(true);
+		Light->RegisterComponent();
+		return Light;
+	};
+	KeyLight = MakeLight(TEXT("GreenRoomKey"), 80000.0f);
+	FillLight = MakeLight(TEXT("GreenRoomFill"), 30000.0f);
+	if (FillLight.IsValid())
+	{
+		FillLight->SetLightColor(FLinearColor(0.30f, 0.45f, 1.0f));
+	}
+	return true;
+}
+
+bool FElysiumGreenRoomRun::PrepareTheatreCase()
+{
+	AElysiumMapActor* Map = GetMap();
+	FElysiumEntityWorld* World = Map ? Map->GetEntityWorld() : nullptr;
+	FElysiumEntity* Scene = World ? World->FindByName(TEXT("embrace_o_matic")) : nullptr;
+	FElysiumEntity* PositionRoot = World ? World->FindByName(TEXT("embrace_camera")) : nullptr;
+	FElysiumEntity* TargetRoot = World ? World->FindByName(TEXT("embrace_target")) : nullptr;
+	if (!Scene || !PositionRoot || !TargetRoot)
+	{
+		UE_LOG(LogElysiumGreenRoom, Warning,
+			TEXT("embrace room requires embrace_o_matic, embrace_camera, and embrace_target"));
+		return false;
+	}
+
+	TheatreSceneOrigin = Scene->Origin;
+	TheatreSceneRotation = ElysiumSkeletalBasis::FromSourceAngles(Scene->Angles);
+	TheatrePositionOwner = PositionRoot->Handle;
+	TheatreTargetOwner = TargetRoot->Handle;
+
+	FElysiumEntityDefs Defs;
+	if (!FElysiumEntityDefs::Parse(FElysiumContentPaths::MapEnts(TEXT("sp_theatre")), Defs))
+	{
+		UE_LOG(LogElysiumGreenRoom, Warning, TEXT("embrace room could not parse sp_theatre.ents"));
+		return false;
+	}
+	TMap<FString, const FElysiumEntityDef*> Named;
+	for (const FElysiumEntityDef& Def : Defs.Defs)
+	{
+		if (!Def.TargetName.IsEmpty())
+		{
+			Named.FindOrAdd(Def.TargetName.ToLower(), &Def);
+		}
+	}
+
+	auto FloatKey = [](const FElysiumEntityDef& Def, const TCHAR* Name, float Default)
+	{
+		const FString* Value = Def.Keys.Find(Name);
+		return Value && !Value->IsEmpty() ? FCString::Atof(**Value) : Default;
+	};
+	auto BoolKey = [](const FElysiumEntityDef& Def, const TCHAR* Name, bool Default)
+	{
+		const FString* Value = Def.Keys.Find(Name);
+		return Value && !Value->IsEmpty() ? FCString::Atoi(**Value) != 0 : Default;
+	};
+	auto VectorKey = [](const FElysiumEntityDef& Def, const TCHAR* Name)
+	{
+		const FString* Value = Def.Keys.Find(Name);
+		if (!Value)
+		{
+			return FVector::ZeroVector;
+		}
+		TArray<FString> Parts;
+		Value->ParseIntoArrayWS(Parts);
+		return Parts.Num() >= 3
+			? FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]))
+			: FVector::ZeroVector;
+	};
+	auto BuildPath = [&Named, &FloatKey, &BoolKey, &VectorKey](
+		const TCHAR* RootName, ElysiumCameraTrack::FPath& Out,
+		TArray<const FElysiumEntityDef*>& OutDefs)
+	{
+		Out = ElysiumCameraTrack::FPath();
+		OutDefs.Reset();
+		const FElysiumEntityDef* const* Root = Named.Find(FString(RootName).ToLower());
+		const FElysiumEntityDef* Cursor = Root ? *Root : nullptr;
+		TSet<FString> Seen;
+		for (int32 Guard = 0; Cursor && Guard < 1024; ++Guard)
+		{
+			const FString Current = Cursor->TargetName.ToLower();
+			if (Seen.Contains(Current))
+			{
+				return false;
+			}
+			Seen.Add(Current);
+
+			ElysiumCameraTrack::FPoint Point;
+			Point.Position = Cursor->Origin;
+			Point.SourceAngles = VectorKey(*Cursor, TEXT("angles"));
+			Point.Roll = FloatKey(*Cursor, TEXT("Roll"), 0.0f);
+			Point.FocalLength = FloatKey(*Cursor, TEXT("FocalLength"), 0.0f);
+			Point.bTimeControl = BoolKey(*Cursor, TEXT("TimeControl"), false);
+			Point.MoveSpeed = FloatKey(*Cursor, TEXT("MoveSpeed"), 64.0f);
+			Point.MoveTime = FloatKey(*Cursor, TEXT("MoveTime"), 0.0f);
+			Point.Pause = FloatKey(*Cursor, TEXT("Pause"), 0.0f);
+			Point.RateIn = FloatKey(*Cursor, TEXT("RateIn"), 1.0f);
+			Point.RateOut = FloatKey(*Cursor, TEXT("RateOut"), 1.0f);
+			Point.bCorner = BoolKey(*Cursor, TEXT("Corner"), false);
+			Out.Points.Add(Point);
+			OutDefs.Add(Cursor);
+
+			const FString Next = Cursor->Keys.FindRef(TEXT("NextKey"));
+			if (Next.IsEmpty())
+			{
+				break;
+			}
+			const FElysiumEntityDef* const* Found = Named.Find(Next.ToLower());
+			if (!Found)
+			{
+				return false;
+			}
+			Cursor = *Found;
+		}
+		Out.RebuildTimes();
+		return Out.Points.Num() > 0;
+	};
+
+	TheatrePositionPath = MakeUnique<ElysiumCameraTrack::FPath>();
+	TheatreTargetPath = MakeUnique<ElysiumCameraTrack::FPath>();
+	TArray<const FElysiumEntityDef*> PositionDefs;
+	TArray<const FElysiumEntityDef*> TargetDefs;
+	if (!BuildPath(TEXT("embrace_camera"), *TheatrePositionPath, PositionDefs)
+		|| !BuildPath(TEXT("embrace_target"), *TheatreTargetPath, TargetDefs))
+	{
+		UE_LOG(LogElysiumGreenRoom, Warning, TEXT("embrace room could not build both camera paths"));
+		return false;
+	}
+	TheatreDuration = FMath::Max(TheatrePositionPath->EndTime, TheatreTargetPath->EndTime);
+	if (TheatreDuration <= 0.0f
+		|| !FMath::IsNearlyEqual(TheatrePositionPath->EndTime, TheatreTargetPath->EndTime, 0.001f))
+	{
+		UE_LOG(LogElysiumGreenRoom, Warning,
+			TEXT("embrace camera clocks disagree: position %.3f target %.3f"),
+			TheatrePositionPath->EndTime, TheatreTargetPath->EndTime);
+		return false;
+	}
+
+	TheatreFades.Reset();
+	for (int32 Index = 0; Index < PositionDefs.Num(); ++Index)
+	{
+		const FElysiumEntityDef& Point = *PositionDefs[Index];
+		for (const FElysiumOutputDef& Output : Point.Outputs)
+		{
+			const bool bReached = Output.Name.Equals(TEXT("OnReachedKeyframe"), ESearchCase::IgnoreCase);
+			const bool bLeaving = Output.Name.Equals(TEXT("OnLeavingKeyframe"), ESearchCase::IgnoreCase);
+			if ((!bReached && !bLeaving)
+				|| !Output.Input.Equals(TEXT("Fade"), ESearchCase::IgnoreCase))
+			{
+				continue;
+			}
+			const FElysiumEntityDef* const* Found = Named.Find(Output.Target.ToLower());
+			const FElysiumEntityDef* Fade = Found ? *Found : nullptr;
+			if (!Fade || !Fade->Classname.Equals(TEXT("env_fade"), ESearchCase::IgnoreCase))
+			{
+				continue;
+			}
+
+			FFadeWindow Window;
+			Window.StartTime = (bReached
+				? TheatrePositionPath->Arrivals[Index]
+				: TheatrePositionPath->Departures[Index]) + FMath::Max(0.0f, Output.Delay);
+			Window.Duration = FMath::Max(0.0f, FloatKey(*Fade, TEXT("duration"), 0.0f));
+			Window.HoldTime = FMath::Max(0.0f, FloatKey(*Fade, TEXT("holdtime"), 0.0f));
+			Window.Opacity = FMath::Clamp(FloatKey(*Fade, TEXT("renderamt"), 255.0f) / 255.0f, 0.0f, 1.0f);
+			Window.bAutoReverse = (FMath::RoundToInt(FloatKey(*Fade, TEXT("spawnflags"), 0.0f)) & 8) != 0;
+			TheatreFades.Add(Window);
+		}
+	}
+	TheatreFades.Sort([](const FFadeWindow& A, const FFadeWindow& B)
+	{
+		return A.StartTime < B.StartTime;
+	});
+
+	// Sample every authored edit from both independently timed streams. Positive moves get a
+	// midpoint; true zero-time cuts get frames immediately before and after the boundary.
+	TArray<float> Times;
+	auto AddTime = [&Times, this](float Time)
+	{
+		const float Clamped = FMath::Clamp(Time, 0.0f, TheatreDuration);
+		if (!Times.ContainsByPredicate([Clamped](float Existing)
+		{
+			return FMath::IsNearlyEqual(Existing, Clamped, 0.002f);
+		}))
+		{
+			Times.Add(Clamped);
+		}
+	};
+	auto AddPathEdits = [&AddTime](const ElysiumCameraTrack::FPath& Path)
+	{
+		for (int32 Index = 0; Index + 1 < Path.Points.Num(); ++Index)
+		{
+			const float Departure = Path.Departures[Index];
+			const float Arrival = Path.Arrivals[Index + 1];
+			if (ElysiumCameraTrack::IsHardCut(Path.Points[Index]))
+			{
+				AddTime(Arrival - 0.01f);
+				AddTime(Arrival + 0.01f);
+			}
+			else
+			{
+				AddTime(Departure + (Arrival - Departure) * 0.5f);
+			}
+		}
+	};
+	AddTime(0.0f);
+	AddPathEdits(*TheatrePositionPath);
+	AddPathEdits(*TheatreTargetPath);
+	for (const FFadeWindow& Window : TheatreFades)
+	{
+		AddTime(Window.StartTime - 0.01f);
+		AddTime(Window.StartTime + 0.01f);
+		AddTime(Window.StartTime + Window.Duration + Window.HoldTime - 0.01f);
+		AddTime(Window.StartTime + Window.Duration + Window.HoldTime + Window.Duration + 0.01f);
+	}
+	AddTime(TheatreDuration - 0.01f);
+	Times.Sort();
+	Fractions.Reset();
+	for (const float Time : Times)
+	{
+		Fractions.Add(Time / TheatreDuration);
+	}
+	UE_LOG(LogElysiumGreenRoom, Log,
+		TEXT("embrace room ready: origin=%s yaw=%.1f camera=%.3fs samples=%d fades=%d"),
+		*TheatreSceneOrigin.ToCompactString(), TheatreSceneRotation.Yaw, TheatreDuration,
+		Fractions.Num(), TheatreFades.Num());
+	return true;
+}
+
+void FElysiumGreenRoomRun::DestroyBodies()
+{
+	AElysiumMapActor* Map = GetMap();
+	for (FBodyEntry& Entry : Bodies)
+	{
+		if (Entry.Case.bPlayerSurface && bPlayerSurfaceActive)
+		{
+			continue;
+		}
+		if (USkeletalMeshComponent* Body = Entry.Body.Get())
+		{
+			Body->DestroyComponent();
+		}
+	}
+	if (bPlayerSurfaceActive && Map)
+	{
+		Map->ClearPlayerVisual();
+	}
+	bPlayerSurfaceActive = false;
+	Bodies.Reset();
+}
+
+bool FElysiumGreenRoomRun::BuildBodies()
+{
+	DestroyBodies();
+	AElysiumMapActor* Map = GetMap();
+	if (!Map || ActiveCases.IsEmpty())
+	{
+		return false;
+	}
+
+	const int32 Begin = bEnsemble ? 0 : CaseIndex;
+	const int32 End = bEnsemble ? ActiveCases.Num() : CaseIndex + 1;
+	for (int32 Index = Begin; Index < End; ++Index)
+	{
+		const FCase& Case = ActiveCases[Index];
+		USkeletalMeshComponent* Body = nullptr;
+		if (Case.bAnimatedProp)
+		{
+			const FString ResolvedStem = Map->AnimatedPropStemForModel(Case.BoneRoot);
+			if (!ResolvedStem.Equals(Case.MeshStem, ESearchCase::CaseSensitive))
+			{
+				UE_LOG(LogElysiumGreenRoom, Warning,
+					TEXT("%s: model %s resolved animated stem '%s', expected '%s'"),
+					*Case.Label, *Case.BoneRoot, *ResolvedStem, *Case.MeshStem);
+				bAnyFailure = true;
+				continue;
+			}
+			Body = Map->BuildAnimatedPropVisual(ResolvedStem, BodyOrigin(),
+				FQuat(BodyRotation()), 1.0f);
+			if (Body)
+			{
+				Map->ApplyAnimatedPropSkin(Body, FPaths::GetBaseFilename(Case.BoneRoot).ToLower(), 0);
+			}
+		}
+		else if (Case.bPlayerSurface && !bTheatreCamera)
+		{
+			Body = Map->BuildPlayerVisual(Case.MeshStem, TEXT("Neutral"), 0);
+			bPlayerSurfaceActive = Body != nullptr;
+			if (Body && Map->GetRootComponent())
+			{
+				Body->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+				Body->AttachToComponent(Map->GetRootComponent(), FAttachmentTransformRules::KeepWorldTransform);
+			}
+		}
+		else
+		{
+			Body = Map->BuildNpcVisual(Case.MeshStem, BodyOrigin(), BodyRotation(),
+				1.0f, TEXT("Neutral"), 0);
+		}
+		if (!Body)
+		{
+			UE_LOG(LogElysiumGreenRoom, Warning, TEXT("%s: failed to build %s"),
+				*Case.Label, *Case.MeshStem);
+			bAnyFailure = true;
+			continue;
+		}
+		Body->SetWorldLocationAndRotation(BodyOrigin(), BodyRotation());
+		Body->SetVisibility(true, true);
+		Body->SetComponentTickEnabled(true);
+
+		float Duration = 0.0f;
+		const bool bPlayed = Case.bAnimatedProp
+			? Map->PlayAnimatedPropClip(Body, Case.MeshStem, Case.AnimSetModel,
+				Case.bLoop, &Duration)
+			: Map->PlayCinematicClip(Body, Case.MeshStem, Case.AnimSetModel, Case.BoneRoot,
+				TEXT("entire_scene"), false, &Duration);
+		if (!bPlayed)
+		{
+			if (Case.bAnimatedProp)
+			{
+				UE_LOG(LogElysiumGreenRoom, Warning,
+					TEXT("%s: failed to play animated prop %s/%s"),
+					*Case.Label, *Case.MeshStem, *Case.AnimSetModel);
+			}
+			else
+			{
+				UE_LOG(LogElysiumGreenRoom, Warning,
+					TEXT("%s: failed to bind cinematic %s/%s"),
+					*Case.Label, *Case.MeshStem, *Case.AnimSetModel);
+			}
+			Body->DestroyComponent();
+			bAnyFailure = true;
+			continue;
+		}
+		Bodies.Add({ Case, Body, Duration });
+		if (Case.bAnimatedProp)
+		{
+			UE_LOG(LogElysiumGreenRoom, Log, TEXT("%s: %s clip %s loop=%d (%.3fs)"),
+				*Case.Label, *Case.MeshStem, *Case.AnimSetModel, Case.bLoop ? 1 : 0, Duration);
+		}
+		else
+		{
+			UE_LOG(LogElysiumGreenRoom, Log, TEXT("%s: %s <- %s/%s entire_scene (%.3fs)"),
+				*Case.Label, *Case.MeshStem, *Case.AnimSetModel, *Case.BoneRoot, Duration);
+		}
+	}
+	return Bodies.Num() == End - Begin;
+}
+
+void FElysiumGreenRoomRun::SeekPose()
+{
+	AElysiumMapActor* Map = GetMap();
+	if (!Map || !Fractions.IsValidIndex(FractionIndex))
+	{
+		return;
+	}
+	const float SceneTime = bTheatreCamera
+		? CurrentSceneTime()
+		: Fractions[FractionIndex];
+	for (FBodyEntry& Entry : Bodies)
+	{
+		if (USkeletalMeshComponent* Body = Entry.Body.Get())
+		{
+			Body->SetWorldLocationAndRotation(BodyOrigin(), BodyRotation());
+			const float ClipTime = bTheatreCamera
+				? FMath::Min(Entry.Duration, SceneTime)
+				: Entry.Duration * SceneTime;
+			Map->SeekCinematicClip(Body, ClipTime);
+		}
+	}
+	FrameInPhase = 0;
+}
+
+bool FElysiumGreenRoomRun::PrepareFrame()
+{
+	CurrentMetrics.Reset();
+	CurrentCamera = FCameraMetric();
+	if (bTheatreCamera)
+	{
+		PublishTheatreCamera();
+		if (!CurrentCamera.bValid)
+		{
+			return false;
+		}
+	}
+	FBox Combined(ForceInit);
+	const FVector BaseOrigin = BodyOrigin();
+	const FRotator BaseRotation = BodyRotation();
+	const FVector IndividualCenter = BaseOrigin + FVector(0.0f, 0.0f, 105.0f);
+
+	for (FBodyEntry& Entry : Bodies)
+	{
+		USkeletalMeshComponent* Body = Entry.Body.Get();
+		if (!Body || !Body->GetSkeletalMeshAsset())
+		{
+			bAnyFailure = true;
+			continue;
+		}
+		Body->RefreshBoneTransforms();
+		Body->UpdateBounds();
+
+		FBodyMetric Metric;
+		Metric.Label = Entry.Case.Label;
+		Metric.MeshStem = Entry.Case.MeshStem;
+		Metric.TimeSeconds = bTheatreCamera
+			? FMath::Min(Entry.Duration, CurrentSceneTime())
+			: Entry.Duration * Fractions[FractionIndex];
+		Metric.AuthoredBoundsCenter = Body->Bounds.Origin - BaseOrigin;
+		Metric.BoundsExtent = Body->Bounds.BoxExtent;
+		const FReferenceSkeleton& Ref = Body->GetSkeletalMeshAsset()->GetRefSkeleton();
+		if (Ref.GetNum() > 0)
+		{
+			const FTransform RootWorld = Body->GetSocketTransform(Ref.GetBoneName(0), RTS_World);
+			Metric.AuthoredRoot = RootWorld.GetLocation() - BaseOrigin;
+			Metric.AuthoredRootRotation = RootWorld.Rotator();
+			const FName HeadName(TEXT("Bip01 Head"));
+			if (Ref.FindBoneIndex(HeadName) != INDEX_NONE)
+			{
+				const FTransform HeadWorld = Body->GetSocketTransform(HeadName, RTS_World);
+				Metric.AuthoredHead = BaseRotation.UnrotateVector(
+					HeadWorld.GetLocation() - BaseOrigin);
+				// VtMB's eye attachments use the head bone's local +Z as their forward axis. Record
+				// the final runtime pose after glTF import and component placement, not a decoder
+				// estimate, so a basis error at either layer is observable.
+				Metric.AuthoredHeadForward = BaseRotation.UnrotateVector(
+					HeadWorld.GetUnitAxis(EAxis::Z)).GetSafeNormal();
+			}
+		}
+		if (bTheatreCamera)
+		{
+			static const FName KeyBoneNames[] =
+			{
+				TEXT("Bip01 Pelvis"), TEXT("Bip01 Spine2"), TEXT("Bip01 Neck"),
+				TEXT("Bip01 Head"), TEXT("Bip01 L Hand"), TEXT("Bip01 R Hand"),
+				TEXT("Bip01 L Foot"), TEXT("Bip01 R Foot")
+			};
+			const float TanHalfHorizontal = FMath::Tan(FMath::DegreesToRadians(
+				FMath::Clamp(CurrentCamera.FieldOfView, 1.0f, 179.0f) * 0.5f));
+			const float TanHalfVertical = TanHalfHorizontal / (16.0f / 9.0f);
+			for (const FName BoneName : KeyBoneNames)
+			{
+				const int32 BoneIndex = Ref.FindBoneIndex(BoneName);
+				if (BoneIndex == INDEX_NONE)
+				{
+					UE_LOG(LogElysiumGreenRoom, Warning, TEXT("%s/%s is missing key bone %s"),
+						*CurrentLabel(), *Entry.Case.Label, *BoneName.ToString());
+					bAnyFailure = true;
+					continue;
+				}
+				FBoneMetric Bone;
+				Bone.Name = BoneName.ToString();
+				const FVector WorldLocation = Body->GetBoneLocation(BoneName);
+				Bone.AuthoredLocation = BaseRotation.UnrotateVector(WorldLocation - BaseOrigin);
+				const FVector View = CurrentCamera.Rotation.UnrotateVector(
+					WorldLocation - CurrentCamera.Position);
+				Bone.ViewDepth = View.X;
+				if (View.X > KINDA_SMALL_NUMBER)
+				{
+					Bone.NormalizedView.X = View.Y / (View.X * TanHalfHorizontal);
+					Bone.NormalizedView.Y = View.Z / (View.X * TanHalfVertical);
+					Bone.bInFrame = FMath::Abs(Bone.NormalizedView.X) <= 1.0f
+						&& FMath::Abs(Bone.NormalizedView.Y) <= 1.0f;
+				}
+				Metric.VisibleKeyBones += Bone.bInFrame ? 1 : 0;
+				Metric.KeyBones.Add(MoveTemp(Bone));
+			}
+		}
+		if (!IsFiniteVector(Metric.AuthoredRoot)
+			|| !IsFiniteVector(Metric.AuthoredBoundsCenter)
+			|| !IsFiniteVector(Metric.BoundsExtent)
+			|| Metric.BoundsExtent.SizeSquared() <= KINDA_SMALL_NUMBER
+			|| Metric.BoundsExtent.GetAbsMax() > 2000.0f
+			|| Metric.AuthoredRoot.GetAbsMax() > 5000.0f)
+		{
+			UE_LOG(LogElysiumGreenRoom, Warning,
+				TEXT("%s/%s has invalid or exploded geometry at %.3fs: root=%s center=%s extent=%s"),
+				*CurrentLabel(), *Entry.Case.Label, Metric.TimeSeconds,
+				*Metric.AuthoredRoot.ToCompactString(), *Metric.AuthoredBoundsCenter.ToCompactString(),
+				*Metric.BoundsExtent.ToCompactString());
+			bAnyFailure = true;
+		}
+		if (bTheatreCamera)
+		{
+			Metric.AuthoredBoundsCenter = BaseRotation.UnrotateVector(Metric.AuthoredBoundsCenter);
+			Metric.AuthoredRoot = BaseRotation.UnrotateVector(Metric.AuthoredRoot);
+			Metric.AuthoredRootRotation = (
+				BaseRotation.Quaternion().Inverse() * Metric.AuthoredRootRotation.Quaternion()).Rotator();
+		}
+
+		if (!bEnsemble)
+		{
+			Metric.CenteringOffset = IndividualCenter - Body->Bounds.Origin;
+			Body->AddWorldOffset(Metric.CenteringOffset);
+			Body->UpdateBounds();
+		}
+		Combined += Body->Bounds.GetBox();
+		CurrentMetrics.Add(Metric);
+	}
+	if (bCourtroom)
+	{
+		FBodyMetric* Audience = CurrentMetrics.FindByPredicate([](const FBodyMetric& Metric)
+		{
+			return Metric.Label == TEXT("vampire4_seated");
+		});
+		const FBodyMetric* Prince = CurrentMetrics.FindByPredicate([](const FBodyMetric& Metric)
+		{
+			return Metric.Label == TEXT("prince");
+		});
+		if (Audience && Prince)
+		{
+			FVector ToFocus = Prince->AuthoredHead - Audience->AuthoredHead;
+			ToFocus.Z = 0.0f;
+			FVector Forward = Audience->AuthoredHeadForward;
+			Forward.Z = 0.0f;
+			if (ToFocus.Normalize() && Forward.Normalize())
+			{
+				Audience->FacingDotToFocus = FVector::DotProduct(Forward, ToFocus);
+				Audience->bHasFacingFocus = true;
+				UE_LOG(LogElysiumGreenRoom, Log,
+					TEXT("courtroom %.3fs: Vampire4 head-forward=%s to-Prince=%s dot=%.3f"),
+					Audience->TimeSeconds, *Forward.ToCompactString(),
+					*ToFocus.ToCompactString(), Audience->FacingDotToFocus);
+			}
+		}
+	}
+	if (!Combined.IsValid)
+	{
+		UE_LOG(LogElysiumGreenRoom, Warning, TEXT("%s: no valid rendered bounds"), *CurrentLabel());
+		bAnyFailure = true;
+		return false;
+	}
+	if (!bTheatreCamera)
+	{
+		UpdateStage(Combined);
+		PublishCamera(Combined);
+	}
+	return !bAnyFailure;
+}
+
+void FElysiumGreenRoomRun::UpdateStage(const FBox& Bounds)
+{
+	const FVector Center = Bounds.GetCenter();
+	const FVector Extent = Bounds.GetExtent();
+	if (UStaticMeshComponent* WallComp = Wall.Get())
+	{
+		const float WallSide = bCourtroom ? 1.0f : -1.0f;
+		WallComp->SetWorldLocation(Center + FVector(WallSide * (Extent.X + 180.0f), 0.0f, 0.0f));
+		WallComp->SetWorldScale3D(FVector(0.1f,
+			FMath::Max(4.0f, (Extent.Y + 220.0f) / 50.0f),
+			FMath::Max(4.0f, (Extent.Z + 180.0f) / 50.0f)));
+	}
+	if (UStaticMeshComponent* FloorComp = Floor.Get())
+	{
+		FloorComp->SetWorldLocation(FVector(Center.X, Center.Y, Bounds.Min.Z - 8.0f));
+		FloorComp->SetWorldScale3D(FVector(
+			FMath::Max(6.0f, (Extent.X + 450.0f) / 50.0f),
+			FMath::Max(6.0f, (Extent.Y + 250.0f) / 50.0f), 0.1f));
+	}
+	if (UPointLightComponent* Light = KeyLight.Get())
+	{
+		Light->SetWorldLocation(Center + FVector(260.0f, -220.0f, 320.0f));
+	}
+	if (UPointLightComponent* Light = FillLight.Get())
+	{
+		Light->SetWorldLocation(Center + FVector(80.0f, 300.0f, 120.0f));
+	}
+}
+
+void FElysiumGreenRoomRun::PublishCamera(const FBox& Bounds)
+{
+	AElysiumMapActor* Map = GetMap();
+	if (!Map)
+	{
+		return;
+	}
+	const FVector Center = Bounds.GetCenter();
+	const FVector Extent = Bounds.GetExtent();
+	const bool bSmallProp = ActiveCases.IsValidIndex(CaseIndex)
+		&& ActiveCases[CaseIndex].bAnimatedProp;
+	const float Distance = FMath::Max(bSmallProp ? 25.0f : 280.0f,
+		FMath::Max(Extent.Y / 0.50f, Extent.Z / 0.28f) + Extent.X
+			+ (bSmallProp ? 12.0f : 100.0f));
+	// Courtroom_bip5 places its seated audience on the positive-X side looking toward LaCroix.
+	// Put the oracle camera on LaCroix's side so the expected result is Vampire4's face, not the
+	// back view produced by the generic +X green-room camera.
+	CameraLocation = Center + FVector(bCourtroom ? -Distance : Distance, 0.0f, 0.0f);
+	CameraRotation = (Center - CameraLocation).Rotation();
+
+	FElysiumCameraShot Shot;
+	Shot.Origin = CameraLocation;
+	Shot.LookAt = Center;
+	Shot.bUseLookAt = true;
+	Shot.FieldOfView = 60.0f;
+	Shot.BlendSeconds = 0.0f;
+	Shot.MaxTurnRate = FVector::ZeroVector;
+	Shot.DebugName = TEXT("green_room");
+	if (CameraShotId == 0)
+	{
+		CameraShotId = Map->PushCameraShotValue(Shot);
+	}
+	else
+	{
+		Map->UpdateCameraShotValue(CameraShotId, Shot);
+	}
+}
+
+void FElysiumGreenRoomRun::PublishTheatreCamera()
+{
+	AElysiumMapActor* Map = GetMap();
+	FElysiumEntityWorld* World = Map ? Map->GetEntityWorld() : nullptr;
+	if (!World || !TheatrePositionPath || !TheatreTargetPath)
+	{
+		bAnyFailure = true;
+		return;
+	}
+	ElysiumCameraTrack::FSample Position;
+	ElysiumCameraTrack::FSample Target;
+	const float SceneTime = CurrentSceneTime();
+	if (!TheatrePositionPath->Sample(SceneTime, Position)
+		|| !TheatreTargetPath->Sample(SceneTime, Target))
+	{
+		UE_LOG(LogElysiumGreenRoom, Warning, TEXT("embrace camera sample failed at %.3fs"), SceneTime);
+		bAnyFailure = true;
+		return;
+	}
+
+	// Mirror the authored output order, then let the position publish compose the complete value
+	// shot. This is the production world seam, including independent stream ownership and cuts.
+	World->PublishTrackCamera(true, TheatreTargetOwner, Target.Position, Target.Rotation,
+		Target.Roll, Target.FieldOfView, 0.0f);
+	World->PublishTrackCamera(false, TheatrePositionOwner, Position.Position, Position.Rotation,
+		Position.Roll, Position.FieldOfView, 0.0f);
+
+	CurrentCamera.bValid = true;
+	CurrentCamera.SceneTime = SceneTime;
+	CurrentCamera.PositionSegment = Position.Segment;
+	CurrentCamera.TargetSegment = Target.Segment;
+	CurrentCamera.Position = Position.Position;
+	CurrentCamera.Target = Target.Position;
+	CurrentCamera.Rotation = (Target.Position - Position.Position).Rotation();
+	CurrentCamera.Rotation.Roll = Position.Roll;
+	CurrentCamera.Roll = Position.Roll;
+	CurrentCamera.FieldOfView = Position.FieldOfView;
+	CurrentCamera.FadeAlpha = TheatreFadeAlpha(SceneTime);
+	CameraLocation = Position.Position;
+	CameraRotation = CurrentCamera.Rotation;
+}
+
+float FElysiumGreenRoomRun::CurrentSceneTime() const
+{
+	return bTheatreCamera && Fractions.IsValidIndex(FractionIndex)
+		? Fractions[FractionIndex] * TheatreDuration
+		: 0.0f;
+}
+
+float FElysiumGreenRoomRun::TheatreFadeAlpha(float SceneTime) const
+{
+	float Alpha = 0.0f;
+	for (const FFadeWindow& Window : TheatreFades)
+	{
+		const float Local = SceneTime - Window.StartTime;
+		if (Local < 0.0f)
+		{
+			continue;
+		}
+		float WindowAlpha = Window.Opacity;
+		if (Window.Duration > KINDA_SMALL_NUMBER && Local < Window.Duration)
+		{
+			WindowAlpha *= Local / Window.Duration;
+		}
+		else if (Local <= Window.Duration + Window.HoldTime)
+		{
+			WindowAlpha = Window.Opacity;
+		}
+		else if (Window.bAutoReverse
+			&& Local < 2.0f * Window.Duration + Window.HoldTime)
+		{
+			WindowAlpha *= 1.0f - (Local - Window.Duration - Window.HoldTime)
+				/ FMath::Max(Window.Duration, KINDA_SMALL_NUMBER);
+		}
+		else
+		{
+			WindowAlpha = Window.bAutoReverse ? 0.0f : Window.Opacity;
+		}
+		Alpha = FMath::Max(Alpha, FMath::Clamp(WindowAlpha, 0.0f, 1.0f));
+	}
+	return Alpha;
+}
+
+FVector FElysiumGreenRoomRun::BodyOrigin() const
+{
+	return bTheatreCamera ? TheatreSceneOrigin : StageOrigin;
+}
+
+FRotator FElysiumGreenRoomRun::BodyRotation() const
+{
+	return bTheatreCamera ? TheatreSceneRotation : FRotator::ZeroRotator;
+}
+
+void FElysiumGreenRoomRun::PinCameraAndPlayerSurface()
+{
+	UWorld* World = GetWorld();
+	APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+	APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+	if (Pawn)
+	{
+		if (IElysiumPlayerBody* PlayerBody = Cast<IElysiumPlayerBody>(Pawn))
+		{
+			PlayerBody->ApplyPlayerModelAlpha(1.0f);
+		}
+	}
+	if (PC)
+	{
+		PC->SetControlRotation(CameraRotation);
+		if (bTheatreCamera && PC->PlayerCameraManager)
+		{
+			PC->PlayerCameraManager->SetManualCameraFade(
+				CurrentCamera.FadeAlpha, FLinearColor::Black, false);
+		}
+	}
+}
+
+FString FElysiumGreenRoomRun::CurrentLabel() const
+{
+	if (bTheatreCamera)
+	{
+		return TEXT("embrace");
+	}
+	if (bEnsemble)
+	{
+		return Selector;
+	}
+	return ActiveCases.IsValidIndex(CaseIndex) ? ActiveCases[CaseIndex].Label : Selector;
+}
+
+FString FElysiumGreenRoomRun::OutputDirectory() const
+{
+	return FElysiumContentPaths::Root() / TEXT("_greenroom") / Selector;
+}
+
+void FElysiumGreenRoomRun::BeginCapture()
+{
+	const float Fraction = Fractions[FractionIndex];
+	const FString Label = CurrentLabel();
+	const int32 TimeCode = bTheatreCamera
+		? FMath::RoundToInt(CurrentSceneTime() * 100.0f)
+		: FMath::RoundToInt(Fraction * 100.0f);
+	const FString Path = OutputDirectory() / (bTheatreCamera
+		? FString::Printf(TEXT("%s_s%05d.png"), *Label, TimeCode)
+		: FString::Printf(TEXT("%s_t%03d.png"), *Label, TimeCode));
+	const TArray<FBodyMetric> Metrics = CurrentMetrics;
+	const FCameraMetric Camera = CurrentCamera;
+	bAwaitingCapture = true;
+
+	const bool bRequested = ElysiumScreenshot::Request(
+		[this, Path, Label, Fraction, Metrics, Camera](int32 Width, int32 Height, const TArray<FColor>& Bitmap)
+		{
+			FShot Shot;
+			Shot.Label = Label;
+			Shot.File = Path;
+			Shot.Fraction = Fraction;
+			Shot.Width = Width;
+			Shot.Height = Height;
+			Shot.Bodies = Metrics;
+			Shot.Camera = Camera;
+			Shot.bOk = Width > 0 && Height > 0
+				&& ElysiumScreenshot::SavePng(Width, Height, Bitmap, Path);
+			Shots.Add(MoveTemp(Shot));
+			bAnyFailure |= !Shots.Last().bOk;
+			if (Shots.Last().bOk)
+			{
+				UE_LOG(LogElysiumGreenRoom, Log, TEXT("%s %3.0f%%: captured (%dx%d)"),
+					*Label, Fraction * 100.0f, Width, Height);
+			}
+			else
+			{
+				UE_LOG(LogElysiumGreenRoom, Warning, TEXT("%s %3.0f%%: capture FAILED (%dx%d)"),
+					*Label, Fraction * 100.0f, Width, Height);
+			}
+			bAwaitingCapture = false;
+		});
+	if (!bRequested)
+	{
+		UE_LOG(LogElysiumGreenRoom, Warning, TEXT("no viewport available for green-room capture"));
+		bAnyFailure = true;
+		bAwaitingCapture = false;
+	}
+}
+
+void FElysiumGreenRoomRun::Advance()
+{
+	if (++FractionIndex < Fractions.Num())
+	{
+		SeekPose();
+		Phase = EPhase::PoseWarmup;
+		return;
+	}
+	FractionIndex = 0;
+	if (!bEnsemble && ++CaseIndex < ActiveCases.Num())
+	{
+		if (!BuildBodies())
+		{
+			bAnyFailure = true;
+		}
+		SeekPose();
+		Phase = EPhase::PoseWarmup;
+		return;
+	}
+	Finish();
+	Phase = EPhase::Done;
+}
+
+void FElysiumGreenRoomRun::Finish()
+{
+	if (bTheatreCamera)
+	{
+		if (AElysiumMapActor* Map = GetMap())
+		{
+			if (FElysiumEntityWorld* World = Map->GetEntityWorld())
+			{
+				World->RestoreTrackCamera(false, TheatrePositionOwner, 0.0f);
+				World->RestoreTrackCamera(true, TheatreTargetOwner, 0.0f);
+			}
+		}
+	}
+	if (bTheatreCamera)
+	{
+		for (const FCase& Case : ActiveCases)
+		{
+			const bool bFramed = Shots.ContainsByPredicate([&Case](const FShot& Shot)
+			{
+				return Shot.bOk && Shot.Camera.bValid && Shot.Camera.FadeAlpha < 0.8f
+					&& Shot.Bodies.ContainsByPredicate([&Case](const FBodyMetric& Body)
+					{
+						return Body.Label == Case.Label && Body.VisibleKeyBones > 0;
+					});
+			});
+			if (!bFramed)
+			{
+				UE_LOG(LogElysiumGreenRoom, Warning,
+					TEXT("embrace framing never shows %s outside an opaque fade"), *Case.Label);
+				bAnyFailure = true;
+			}
+		}
+	}
+	if (UWorld* World = GetWorld())
+	{
+		if (APlayerController* PC = World->GetFirstPlayerController())
+		{
+			if (PC->PlayerCameraManager)
+			{
+				PC->PlayerCameraManager->SetManualCameraFade(0.0f, FLinearColor::Black, false);
+			}
+		}
+	}
+	IFileManager::Get().MakeDirectory(*OutputDirectory(), true);
+	FString Json;
+	Json += TEXT("{\n");
+	Json += FString::Printf(TEXT("  \"selector\": \"%s\",\n"), *Selector);
+	Json += FString::Printf(TEXT("  \"ensemble\": %s,\n"), bEnsemble ? TEXT("true") : TEXT("false"));
+	Json += FString::Printf(TEXT("  \"ok\": %s,\n"), bAnyFailure ? TEXT("false") : TEXT("true"));
+	Json += TEXT("  \"shots\": [\n");
+	for (int32 ShotIndex = 0; ShotIndex < Shots.Num(); ++ShotIndex)
+	{
+		const FShot& Shot = Shots[ShotIndex];
+		Json += TEXT("    {\n");
+		Json += FString::Printf(TEXT("      \"label\": \"%s\", \"fraction\": %.3f,\n"),
+			*Shot.Label, Shot.Fraction);
+		Json += FString::Printf(TEXT("      \"file\": \"%s\", \"width\": %d, \"height\": %d, \"ok\": %s,\n"),
+			*FPaths::GetCleanFilename(Shot.File), Shot.Width, Shot.Height, Shot.bOk ? TEXT("true") : TEXT("false"));
+		Json += TEXT("      \"bodies\": [\n");
+		for (int32 BodyIndex = 0; BodyIndex < Shot.Bodies.Num(); ++BodyIndex)
+		{
+			const FBodyMetric& Body = Shot.Bodies[BodyIndex];
+			Json += TEXT("        {");
+			Json += FString::Printf(TEXT("\"label\": \"%s\", \"stem\": \"%s\", \"time\": %.3f, "),
+				*Body.Label, *Body.MeshStem, Body.TimeSeconds);
+			Json += FString::Printf(TEXT("\"authored_root\": %s, \"authored_bounds_center\": %s, "),
+				*VecJson(Body.AuthoredRoot), *VecJson(Body.AuthoredBoundsCenter));
+			Json += FString::Printf(
+				TEXT("\"authored_root_rotation\": %s, \"authored_head\": %s, ")
+				TEXT("\"authored_head_forward\": %s, "),
+				*RotJson(Body.AuthoredRootRotation), *VecJson(Body.AuthoredHead),
+				*VecJson(Body.AuthoredHeadForward));
+			if (Body.bHasFacingFocus)
+			{
+				Json += FString::Printf(TEXT("\"facing_dot_to_focus\": %.3f, "),
+					Body.FacingDotToFocus);
+			}
+			Json += FString::Printf(TEXT("\"bounds_extent\": %s, \"centering_offset\": %s, "),
+				*VecJson(Body.BoundsExtent), *VecJson(Body.CenteringOffset));
+			Json += FString::Printf(TEXT("\"visible_key_bones\": %d, \"key_bones\": ["),
+				Body.VisibleKeyBones);
+			for (int32 BoneIndex = 0; BoneIndex < Body.KeyBones.Num(); ++BoneIndex)
+			{
+				const FBoneMetric& Bone = Body.KeyBones[BoneIndex];
+				Json += FString::Printf(
+					TEXT("{\"name\": \"%s\", \"authored_location\": %s, ")
+					TEXT("\"view_depth\": %.3f, \"normalized_view\": %s, \"in_frame\": %s}"),
+					*Bone.Name, *VecJson(Bone.AuthoredLocation), Bone.ViewDepth,
+					*Vec2Json(Bone.NormalizedView), Bone.bInFrame ? TEXT("true") : TEXT("false"));
+				Json += BoneIndex + 1 < Body.KeyBones.Num() ? TEXT(", ") : TEXT("");
+			}
+			Json += TEXT("]}");
+			Json += BodyIndex + 1 < Shot.Bodies.Num() ? TEXT(",\n") : TEXT("\n");
+		}
+		if (Shot.Camera.bValid)
+		{
+			Json += TEXT("      ],\n");
+			Json += FString::Printf(
+				TEXT("      \"camera\": {\"scene_time\": %.3f, ")
+				TEXT("\"position_segment\": %d, \"target_segment\": %d, ")
+				TEXT("\"position\": %s, \"target\": %s, ")
+				TEXT("\"rotation\": %s, \"roll\": %.3f, \"fov\": %.3f, ")
+				TEXT("\"fade_alpha\": %.3f}\n"),
+				Shot.Camera.SceneTime, Shot.Camera.PositionSegment, Shot.Camera.TargetSegment,
+				*VecJson(Shot.Camera.Position), *VecJson(Shot.Camera.Target),
+				*RotJson(Shot.Camera.Rotation), Shot.Camera.Roll, Shot.Camera.FieldOfView,
+				Shot.Camera.FadeAlpha);
+		}
+		else
+		{
+			Json += TEXT("      ]\n");
+		}
+		Json += ShotIndex + 1 < Shots.Num() ? TEXT("    },\n") : TEXT("    }\n");
+	}
+	Json += TEXT("  ]\n");
+	Json += TEXT("}\n");
+	const FString Manifest = OutputDirectory() / TEXT("manifest.json");
+	if (!FFileHelper::SaveStringToFile(Json, *Manifest))
+	{
+		bAnyFailure = true;
+		UE_LOG(LogElysiumGreenRoom, Warning, TEXT("failed to write %s"), *Manifest);
+	}
+	else
+	{
+		UE_LOG(LogElysiumGreenRoom, Log, TEXT("wrote %s (%d shots, ok=%s)"),
+			*Manifest, Shots.Num(), bAnyFailure ? TEXT("false") : TEXT("true"));
+	}
+	FPlatformMisc::RequestExitWithStatus(false, bAnyFailure ? 1 : 0);
+}
+
+bool FElysiumGreenRoomRun::Tick(float /*DeltaSeconds*/)
+{
+	AElysiumMapActor* Map = GetMap();
+	UWorld* World = GetWorld();
+	APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+	APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+
+	switch (Phase)
+	{
+	case EPhase::WaitReady:
+		if (Map && Map->IsSpawnDone() && PC && Pawn && ++FrameInPhase >= BootSettleFrames)
+		{
+			ResolveCases();
+			if (ActiveCases.IsEmpty() || !CreateStage() || !BuildBodies())
+			{
+				bAnyFailure = true;
+				Finish();
+				Phase = EPhase::Done;
+				return false;
+			}
+			SeekPose();
+			Phase = EPhase::PoseWarmup;
+		}
+		break;
+
+	case EPhase::PoseWarmup:
+		PinCameraAndPlayerSurface();
+		if (++FrameInPhase >= PoseWarmupFrames)
+		{
+			if (!PrepareFrame())
+			{
+				Finish();
+				Phase = EPhase::Done;
+				return false;
+			}
+			FrameInPhase = 0;
+			Phase = EPhase::Settle;
+		}
+		break;
+
+	case EPhase::Settle:
+		PinCameraAndPlayerSurface();
+		if (++FrameInPhase >= SettleFrames)
+		{
+			BeginCapture();
+			FrameInPhase = 0;
+			Phase = EPhase::Await;
+		}
+		break;
+
+	case EPhase::Await:
+		PinCameraAndPlayerSurface();
+		if (!bAwaitingCapture)
+		{
+			Advance();
+			if (Phase == EPhase::Done)
+			{
+				return false;
+			}
+		}
+		break;
+
+	case EPhase::Done:
+	default:
+		return false;
+	}
+	return true;
+}

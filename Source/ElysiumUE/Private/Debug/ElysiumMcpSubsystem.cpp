@@ -4,6 +4,7 @@
 #include "Debug/ElysiumMcpTools.h"
 
 #include "HAL/IConsoleManager.h"
+#include "Misc/App.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 
@@ -17,11 +18,13 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumMcp, Log, All);
 
 namespace
 {
-	// `-NoElysiumMcp` fully suppresses the auto-start (the one opt-out). The server is otherwise on
-	// by default in any build that carries the plugin (editor/dev only — see ELYSIUM_WITH_MCP).
-	bool ElysiumMcpDisabledOnCommandLine()
+	// `-NoElysiumMcp` fully suppresses the auto-start. Commandlets and unattended automation never
+	// need an HTTP listener; they still register the tools, but cannot receive MCP calls.
+	bool ElysiumMcpAutoStartDisabled()
 	{
-		return FParse::Param(FCommandLine::Get(), TEXT("NoElysiumMcp"));
+		return IsRunningCommandlet()
+			|| FApp::IsUnattended()
+			|| FParse::Param(FCommandLine::Get(), TEXT("NoElysiumMcp"));
 	}
 
 	// `-ElysiumMcp=8123` pins a port; a bare `-ElysiumMcp` or its absence leaves OutPort 0, meaning
@@ -55,12 +58,13 @@ void UElysiumMcpSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 	// On by default in any build that carries the plugin — which is editor/dev only (ELYSIUM_WITH_MCP
 	// is defined 1 only for the Editor target), so this never self-starts a server in Shipping/Test.
-	// `-NoElysiumMcp` is the opt-out; `-ElysiumMcp=<port>` pins a port.
+	// Commandlets and unattended automation never auto-start it; `-NoElysiumMcp` is the interactive opt-out and
+	// `-ElysiumMcp=<port>` pins a port.
 #if ELYSIUM_WITH_MCP
-	if (ElysiumMcpDisabledOnCommandLine())
+	if (ElysiumMcpAutoStartDisabled())
 	{
 		UE_LOG(LogElysiumMcp, Log,
-			TEXT("Elysium MCP auto-start suppressed (-NoElysiumMcp); %d tools registered, use `elysium.mcp.start` to run."),
+			TEXT("Elysium MCP auto-start suppressed (commandlet, unattended, or -NoElysiumMcp); %d tools registered, use `elysium.mcp.start` to run."),
 			Registered);
 	}
 	else

@@ -38,15 +38,15 @@ namespace
 
 	// One parsed line plus whatever block followed it. The grammar is uniform, so this single node
 	// shape covers actors, channels, events and every sub-block without special-casing any of them.
-	struct FNode
+	struct FSceneNode
 	{
 		TArray<FString> Words;
 		TArray<int32>   Children;   // indices into the arena
 	};
 
-	struct FNodeArena
+	struct FSceneNodeArena
 	{
-		TArray<FNode> Nodes;
+		TArray<FSceneNode> Nodes;
 		TArray<int32> Roots;
 
 		int32 Alloc() { return Nodes.Emplace(); }
@@ -138,7 +138,7 @@ namespace
 
 	// Build the node tree. This is probe_scenes.py's `parse` one-for-one, including the `pending`
 	// rule: a line becomes a block only when a `{` follows it (on the same line or the next one).
-	void BuildTree(const TArray<FString>& Lines, FNodeArena& Arena)
+	void BuildTree(const TArray<FString>& Lines, FSceneNodeArena& Arena)
 	{
 		TArray<int32> Stack;         // open blocks; INDEX_NONE sentinel = scene root
 		Stack.Add(INDEX_NONE);
@@ -215,7 +215,7 @@ namespace
 		}
 	}
 
-	bool WordIs(const FNode& N, int32 Index, const TCHAR* Lit)
+	bool WordIs(const FSceneNode& N, int32 Index, const TCHAR* Lit)
 	{
 		return N.Words.IsValidIndex(Index) && N.Words[Index].Equals(Lit, ESearchCase::IgnoreCase);
 	}
@@ -236,7 +236,7 @@ namespace
 		return Out.TrimStartAndEnd();
 	}
 
-	void LiftEvent(const FNodeArena& Arena, const FNode& N, int32 ActorIndex, int32 ChannelIndex,
+	void LiftEvent(const FSceneNodeArena& Arena, const FSceneNode& N, int32 ActorIndex, int32 ChannelIndex,
 		FElysiumSceneData& Out)
 	{
 		FElysiumSceneEvent Ev;
@@ -247,7 +247,7 @@ namespace
 
 		for (int32 ChildIdx : N.Children)
 		{
-			const FNode& C = Arena.Nodes[ChildIdx];
+			const FSceneNode& C = Arena.Nodes[ChildIdx];
 			if (C.Words.Num() == 0)
 			{
 				continue;
@@ -283,7 +283,7 @@ namespace
 			{
 				for (int32 SampleIdx : C.Children)
 				{
-					const FNode& S = Arena.Nodes[SampleIdx];
+					const FSceneNode& S = Arena.Nodes[SampleIdx];
 					if (S.Words.Num() >= 2)
 					{
 						Ev.Ramp.Emplace(FCString::Atof(*S.Words[0]), FCString::Atof(*S.Words[1]));
@@ -309,7 +309,7 @@ namespace
 		Out.Events.Add(MoveTemp(Ev));
 	}
 
-	void LiftChannel(const FNodeArena& Arena, const FNode& N, int32 ActorIndex, FElysiumSceneData& Out)
+	void LiftChannel(const FSceneNodeArena& Arena, const FSceneNode& N, int32 ActorIndex, FElysiumSceneData& Out)
 	{
 		FElysiumSceneChannel Ch;
 		Ch.Name = N.Words.IsValidIndex(1) ? N.Words[1] : FString();
@@ -317,7 +317,7 @@ namespace
 
 		for (int32 ChildIdx : N.Children)
 		{
-			const FNode& C = Arena.Nodes[ChildIdx];
+			const FSceneNode& C = Arena.Nodes[ChildIdx];
 			if (WordIs(C, 0, TEXT("event")))
 			{
 				LiftEvent(Arena, C, ActorIndex, ChannelIndex, Out);
@@ -329,7 +329,7 @@ namespace
 		}
 	}
 
-	void LiftActor(const FNodeArena& Arena, const FNode& N, FElysiumSceneData& Out)
+	void LiftActor(const FSceneNodeArena& Arena, const FSceneNode& N, FElysiumSceneData& Out)
 	{
 		FElysiumSceneActor A;
 		A.Name = CleanName(N.Words.IsValidIndex(1) ? N.Words[1] : FString());
@@ -337,7 +337,7 @@ namespace
 
 		for (int32 ChildIdx : N.Children)
 		{
-			const FNode& C = Arena.Nodes[ChildIdx];
+			const FSceneNode& C = Arena.Nodes[ChildIdx];
 			if (WordIs(C, 0, TEXT("channel")))
 			{
 				LiftChannel(Arena, C, ActorIndex, Out);
@@ -447,12 +447,12 @@ void ElysiumScene::ParseText(const FString& Text, const FString& SourceRel, FEly
 	Text.ParseIntoArrayLines(Lines, /*bCullEmpty=*/false);
 	Out.Version = ParseVersion(Lines);
 
-	FNodeArena Arena;
+	FSceneNodeArena Arena;
 	BuildTree(Lines, Arena);
 
 	for (int32 RootIdx : Arena.Roots)
 	{
-		const FNode& N = Arena.Nodes[RootIdx];
+		const FSceneNode& N = Arena.Nodes[RootIdx];
 		if (N.Words.Num() == 0)
 		{
 			continue;
@@ -475,6 +475,18 @@ void ElysiumScene::ParseText(const FString& Text, const FString& SourceRel, FEly
 		}
 	}
 
+	// Resolve actor/channel activity after the whole tree has been lifted: Faceposer may place the
+	// `active` token after the event blocks it governs. Disabled blocks remain in Events for corpus
+	// inspection, but the player excludes them from timing and dispatch.
+	for (FElysiumSceneEvent& Ev : Out.Events)
+	{
+		const bool bActorActive = Ev.ActorIndex == INDEX_NONE
+			|| (Out.Actors.IsValidIndex(Ev.ActorIndex) && Out.Actors[Ev.ActorIndex].bActive);
+		const bool bChannelActive = Ev.ChannelIndex == INDEX_NONE
+			|| (Out.Channels.IsValidIndex(Ev.ChannelIndex) && Out.Channels[Ev.ChannelIndex].bActive);
+		Ev.bActive = bActorActive && bChannelActive;
+	}
+
 	// Dispatch order is authored start time; a stable sort keeps same-time events in file order,
 	// which is what decides e.g. which of two triggers on one frame fires first.
 	Out.Events.StableSort([](const FElysiumSceneEvent& A, const FElysiumSceneEvent& B)
@@ -482,7 +494,10 @@ void ElysiumScene::ParseText(const FString& Text, const FString& SourceRel, FEly
 
 	for (const FElysiumSceneEvent& Ev : Out.Events)
 	{
-		Out.LatestTime = FMath::Max(Out.LatestTime, Ev.bHasEnd ? Ev.EndTime : Ev.StartTime);
+		if (Ev.bActive)
+		{
+			Out.LatestTime = FMath::Max(Out.LatestTime, Ev.bHasEnd ? Ev.EndTime : Ev.StartTime);
+		}
 	}
 
 	// A scene with no actor names nothing and can bind nothing. That is the one shape this reader

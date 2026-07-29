@@ -52,6 +52,33 @@ float ElysiumCam::SolveViewRoll(const FVector& VelocityCm, const FRotator& ViewR
 }
 
 // =====================================================================================
+// Player-model visibility (`CAM_Think` tail, `CInput+0x104`)
+// =====================================================================================
+
+float ElysiumCam::SolveModelAlpha(const FVector& SolvedOffset,
+	const FElysiumCameraWeights& Weights, const FElysiumCameraCvars& Cvars)
+{
+	// 0 below `cam_fadeend`, 1 at/above min(`cam_idealdist`, `cam_fadestart`), SimpleSpline
+	// between. The third-person weight scales the solved boom before the band is evaluated.
+	const float Distance = SolvedOffset.Size() * Weights.ThirdBlend();
+	const float Full = FMath::Min(Cvars.IdealDist, Cvars.FadeStart);
+	float DistanceAlpha = 0.0f;
+	if (Distance >= Full)
+	{
+		DistanceAlpha = 1.0f;
+	}
+	else if (Distance > Cvars.FadeEnd)
+	{
+		const float Span = FMath::Max(KINDA_SMALL_NUMBER, Full - Cvars.FadeEnd);
+		DistanceAlpha = SimpleSpline((Distance - Cvars.FadeEnd) / Span);
+	}
+
+	// A scripted shot has no boom distance. Its own eased weight is the visibility ramp, which
+	// reveals the body under a cutscene even when the user's ordinary view is true first person.
+	return FMath::Max(DistanceAlpha, SimpleSpline(Weights.Scripted));
+}
+
+// =====================================================================================
 // The weight driver (0x100fc900)
 // =====================================================================================
 
@@ -121,7 +148,7 @@ bool FElysiumCameraShotStack::Update(int32 Id, const FElysiumCameraShot& Shot)
 	return false;
 }
 
-bool FElysiumCameraShotStack::Pop(int32 Id)
+bool FElysiumCameraShotStack::Pop(int32 Id, float BlendOutSeconds)
 {
 	const int32 Index = Shots.IndexOfByPredicate([Id](const FEntry& E) { return E.Id == Id; });
 	if (Index == INDEX_NONE)
@@ -129,7 +156,9 @@ bool FElysiumCameraShotStack::Pop(int32 Id)
 		return false;
 	}
 	const bool bWasTop = Index == Shots.Num() - 1;
-	const float Blend = Shots[Index].Shot.BlendSeconds;
+	const float Blend = BlendOutSeconds >= 0.0f
+		? BlendOutSeconds
+		: Shots[Index].Shot.BlendSeconds;
 	Shots.RemoveAt(Index);
 	if (bWasTop)
 	{

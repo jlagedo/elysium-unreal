@@ -148,6 +148,20 @@ FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R)
 	Ar << R.Name;
 	Ar << R.Sheet;
 	Ar << R.Money;
+	const int32 Version = Ar.CustomVer(FElysiumSaveVersion::GUID);
+	if (Ar.IsSaving() || Version >= FElysiumSaveVersion::BodyIdentity)
+	{
+		Ar << R.ArmorSlot;
+	}
+	else if (Ar.IsLoading())
+	{
+		// Version 6 predates appearance identity; retail's first body slot is the migration default.
+		R.ArmorSlot = 0;
+	}
+	if (Ar.IsLoading())
+	{
+		R.ArmorSlot = FMath::Clamp(R.ArmorSlot, 0, 5);
+	}
 	Ar << R.Health << R.MaxHealth;
 	Ar << R.ExperienceLog << R.Effects << R.EmailFlags;
 	// The award accumulators travel with the ledger they belong to: the residue is real state (one

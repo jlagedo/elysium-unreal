@@ -180,7 +180,7 @@ FElysiumAudioVoiceHandle UElysiumAudioSubsystem::PlayVoice(const FString& Rel, c
 	if (!Params.b3D)
 	{
 		// Non-spatialized bed (music stem / "everywhere" ambient_generic): full volume everywhere.
-		Comp = UGameplayStatics::SpawnSound2D(World, Wave, StartVol, Params.Pitch, /*StartTime*/ 0.f,
+		Comp = UGameplayStatics::SpawnSound2D(World, Wave, StartVol, Params.Pitch, Params.StartTimeSeconds,
 			/*ConcurrencySettings*/ nullptr, /*bPersistAcrossLevelTransition*/ false, /*bAutoDestroy*/ false);
 	}
 	else if (Params.AttachTo != nullptr)
@@ -188,12 +188,12 @@ FElysiumAudioVoiceHandle UElysiumAudioSubsystem::PlayVoice(const FString& Rel, c
 		// Parent to a mover's component (SourceEntityName) so the sound tracks it.
 		Comp = UGameplayStatics::SpawnSoundAttached(Wave, Params.AttachTo, NAME_None, FVector::ZeroVector,
 			FRotator::ZeroRotator, EAttachLocation::SnapToTarget, /*bStopWhenAttachedToDestroyed*/ true,
-			StartVol, Params.Pitch, 0.f, nullptr, nullptr, /*bAutoDestroy*/ false);
+			StartVol, Params.Pitch, Params.StartTimeSeconds, nullptr, nullptr, /*bAutoDestroy*/ false);
 	}
 	else
 	{
 		Comp = UGameplayStatics::SpawnSoundAtLocation(World, Wave, Params.Location, FRotator::ZeroRotator,
-			StartVol, Params.Pitch, 0.f, nullptr, nullptr, /*bAutoDestroy*/ false);
+			StartVol, Params.Pitch, Params.StartTimeSeconds, nullptr, nullptr, /*bAutoDestroy*/ false);
 	}
 
 	if (Comp == nullptr)
@@ -223,7 +223,8 @@ FElysiumAudioVoiceHandle UElysiumAudioSubsystem::PlayVoice(const FString& Rel, c
 	Voice.Pitch = Params.Pitch;
 	// A one-shot self-reaps a hair past its natural length (the procedural voice underflows to
 	// silence but never ends itself); a loop never auto-expires.
-	Voice.ExpireWorldTime = Params.bLooping ? -1.0 : (Now + Decoded->Info.DurationSeconds + 0.25);
+	const double Remaining = FMath::Max(0.f, Decoded->Info.DurationSeconds - Params.StartTimeSeconds);
+	Voice.ExpireWorldTime = Params.bLooping ? -1.0 : (Now + Remaining + 0.25);
 	Voices.Add(MoveTemp(Voice));
 
 	return FElysiumAudioVoiceHandle{ NextVoiceId - 1 };

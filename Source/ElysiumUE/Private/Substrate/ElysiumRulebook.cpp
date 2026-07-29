@@ -1070,13 +1070,13 @@ void FElysiumClanTable::ParentChain(const FString& TemplateName, TArray<FString>
 	}
 }
 
-FString FElysiumClanTable::PlayerBodyStem(int32 ClanIndex, bool bFemale, int32 ArmorSlot) const
+FString FElysiumClanTable::PlayerBodyModel(int32 ClanIndex, bool bFemale, int32 ArmorSlot) const
 {
 	// Addressed by INDEX rather than by a `Player_<name>` string: the clandoc's own template order
 	// is the engine's clan index, so the table already holds the mapping and nothing here has to
 	// know how a clan is spelled.
 	const FElysiumClanTemplate* Row = Clan(ClanIndex);
-	if (Row == nullptr || !Row->IsPlayable())
+	if (Row == nullptr || !Row->IsPlayable() || ArmorSlot < 0 || ArmorSlot > 5)
 	{
 		return FString();
 	}
@@ -1086,13 +1086,15 @@ FString FElysiumClanTable::PlayerBodyStem(int32 ClanIndex, bool bFemale, int32 A
 		return FString();
 	}
 	const FString Key = FString::Printf(TEXT("%s_Body%d"), bFemale ? TEXT("F") : TEXT("M"), ArmorSlot);
-	const FString Model = Template.GeneralStr(*Key);
-	if (Model.IsEmpty())
-	{
-		return FString();
-	}
-	// The clan table writes Windows separators; the export keys by the base filename alone.
-	return FPaths::GetBaseFilename(Model.Replace(TEXT("\\"), TEXT("/"))).ToLower();
+	FString Model = Template.GeneralStr(*Key);
+	Model.ReplaceInline(TEXT("\\"), TEXT("/"));
+	return Model;
+}
+
+FString FElysiumClanTable::PlayerBodyStem(int32 ClanIndex, bool bFemale, int32 ArmorSlot) const
+{
+	const FString Model = PlayerBodyModel(ClanIndex, bFemale, ArmorSlot);
+	return Model.IsEmpty() ? FString() : FPaths::GetBaseFilename(Model).ToLower();
 }
 
 bool FElysiumClanTable::Resolve(const FString& TemplateName, FElysiumClanTemplate& Out) const

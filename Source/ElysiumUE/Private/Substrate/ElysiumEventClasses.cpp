@@ -91,7 +91,6 @@ public:
 	// (damage/RPG 9.4, NPC 8.5), so the bus records the intent and reports it in the inspector.
 	bool bUnkillable       = false;   // MakePlayerUnkillable / MakePlayerKillable
 	bool bImmobilized      = false;   // ImmobilizePlayer / MobilizePlayer
-	bool bControllerNPC    = false;   // CreateControllerNPC / RemoveControllerNPC
 	int32 DisciplineClears = 0;       // RemoveDisciplines(+Now) call count
 	int32 DialogTimerClears= 0;       // ClearDialogCombatTimers call count
 	FString LastAwardExp;             // AwardExp <experience_table key>
@@ -117,8 +116,22 @@ public:
 	void InputImmobilizePlayer() { bImmobilized = true;  Note(TEXT("ImmobilizePlayer")); }
 	void InputMobilizePlayer()   { bImmobilized = false; Note(TEXT("MobilizePlayer")); }
 
-	void InputCreateControllerNPC() { bControllerNPC = true;  Note(TEXT("CreateControllerNPC")); }
-	void InputRemoveControllerNPC() { bControllerNPC = false; Note(TEXT("RemoveControllerNPC")); }
+	void InputCreateControllerNPC()
+	{
+		if (World)
+		{
+			World->CreatePlayerControllerEntity();
+		}
+		Note(TEXT("CreateControllerNPC"));
+	}
+	void InputRemoveControllerNPC()
+	{
+		if (World)
+		{
+			World->RemovePlayerControllerEntity();
+		}
+		Note(TEXT("RemoveControllerNPC"));
+	}
 
 	void InputRemoveDisciplines()    { ++DisciplineClears; Note(TEXT("RemoveDisciplines")); }
 	void InputRemoveDisciplinesNow() { ++DisciplineClears; Note(TEXT("RemoveDisciplinesNow")); }
@@ -149,7 +162,7 @@ public:
 		Out.Emplace(TEXT("Outputs"),      OnOff(bEnabled));
 		Out.Emplace(TEXT("Player"),       bUnkillable ? TEXT("unkillable") : TEXT("killable"));
 		Out.Emplace(TEXT("Movement"),     bImmobilized ? TEXT("immobilized") : TEXT("free"));
-		Out.Emplace(TEXT("Controller NPC"), OnOff(bControllerNPC));
+		Out.Emplace(TEXT("Controller NPC"), OnOff(World && World->FindPlayerController() != nullptr));
 		Out.Emplace(TEXT("Discipline clears"), FString::FromInt(DisciplineClears));
 		Out.Emplace(TEXT("Dialog timer clears"), FString::FromInt(DialogTimerClears));
 		Out.Emplace(TEXT("Last AwardExp"), LastAwardExp.IsEmpty() ? TEXT("(none)") : LastAwardExp);

@@ -7,6 +7,7 @@
 
 class AElysiumMapActor;
 class FElysiumProfileRun;
+class FElysiumGreenRoomRun;
 class FElysiumProbeRun;
 class FElysiumShotRun;
 class FElysiumMoveRun;
@@ -166,6 +167,9 @@ private:
 
 	// Headless screenshot-regression harness (P2.9), created only under -ElysiumShots.
 	TPimplPtr<FElysiumShotRun> ShotRun;
+
+	// Rendered skeletal body/clip validation, created only under -ElysiumGreenRoom.
+	TPimplPtr<FElysiumGreenRoomRun> GreenRoomRun;
 	TPimplPtr<FElysiumProbeRun> ProbeRun;
 
 	// Headless movement-regression harness (4.7), created only under -ElysiumMove.

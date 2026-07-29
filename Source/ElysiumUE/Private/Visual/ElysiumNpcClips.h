@@ -96,15 +96,32 @@ struct FElysiumCinematicSet
 	FString BankForRoot(const FString& Root) const;
 };
 
+struct FElysiumAnimatedPropEntry
+{
+	FString Stem;
+	FString Glb;       // relative to out/npc, normally animated_props/<stem>.glb
+	FString Model;     // normalized source .mdl path
+	int32 Bones = 0;
+	TSet<FString> Clips;
+
+	bool HasClip(const FString& Label) const { return Clips.Contains(Label.ToLower()); }
+};
+
 struct FElysiumNpcIndex
 {
+	int32 ManifestVersion = 0;
 	TMap<FString, FElysiumNpcIndexEntry> Npcs;
 	TMap<FString, FElysiumNpcIndexEntry> Banks;
 	// Keyed by the model path exactly as a scene's keyvalue spells it, lowercased/forward-slashed.
 	TMap<FString, FElysiumCinematicSet> Cinematics;
+	// v4 only. Version 3 is accepted and leaves this empty.
+	TMap<FString, FElysiumAnimatedPropEntry> AnimatedProps;
 
 	bool IsValid() const { return !Npcs.IsEmpty(); }
 	bool Load(FString& OutError);
+	// Parse an already-loaded manifest. This is the same compatibility gate as Load(), exposed so
+	// generated-content validation can cover old/new schema migration without rewriting tools/out.
+	bool LoadJsonText(const FString& JsonText, FString& OutError);
 
 	// Absolute path to a bank's glb, or empty when the stem is not a known bank.
 	FString BankGlbPath(const FString& BankStem) const;
@@ -114,4 +131,8 @@ struct FElysiumNpcIndex
 
 	// The bank stem a scene's anim-set model + actor bonerename resolves to, or empty.
 	FString CinematicBank(const FString& ModelPath, const FString& BoneRoot) const;
+
+	// The v4 animated-prop record selected by a normalized source model path, or null. Version 3
+	// indexes answer null for every model.
+	const FElysiumAnimatedPropEntry* FindAnimatedProp(const FString& ModelPath) const;
 };

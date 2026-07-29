@@ -64,7 +64,8 @@ in one run.
 
 ## The demand, in one table
 
-16,438 call sites over 1,287 distinct names. Grouped by the system that has to answer them:
+16,860 executable call sites over 676 distinct called names. Grouped by the system that has to
+answer them (the rows below are selected demand slices, not a partition of the total):
 
 | System | Calls | Leading names | Owning task |
 |---|---|---|---|
@@ -75,11 +76,12 @@ in one run.
 | Economy | **250** | `CurrentMoney` 86, `MoneyAdd` 83, `MoneyRemove` 80 | 9.10 |
 | Sequences & conversation camera | **224** | `SetCamera` 115, `BeginSequence` 72 | 8.5, 11.7 |
 | AI schedules | 76 | `FleeAndDie`, `SetupPatrolType`, `FollowPatrolPath` | 10.7 |
-| Dialogue audio | 50 | `PlayDialogFile` 41 | 9.2 |
+| Scripted line / whisper audio | 48 | `PlayDialogFile` 39, receiver-qualified `Whisper` 9 | 6.8, 9.2 |
 
-By binding kind: 21 Character methods (4,989 calls), 9 module globals (3,713), 47 registered
-entity inputs (1,798), 11 `Entity` base methods (658), and 124 names (1,212 calls) that resolve
-to nothing the runtime knows.
+By binding kind: 21 Character methods (4,982 calls), 9 module globals (3,712), 62 registered
+entity inputs (2,278), 10 `Entity` base methods (650), 455 script-defined names (4,155), 40
+standard-library names (393), one `G`-method name (4), and 78 names (686 calls) that resolve to
+nothing the runtime knows.
 
 Two names in the tables are called by **no** shipped script: `React` and `SquadSeesPlayer` — API
 the content never used.

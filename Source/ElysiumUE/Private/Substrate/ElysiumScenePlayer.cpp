@@ -21,6 +21,10 @@ void FElysiumScenePlayer::Begin(TSharedPtr<const FElysiumSceneData> InScene, flo
 	{
 		for (const FElysiumSceneEvent& Ev : Scene->Events)
 		{
+			if (!Ev.bActive)
+			{
+				continue;
+			}
 			const float End = Ev.bHasEnd ? Ev.EndTime : Ev.StartTime;
 			const float Extended = End + (Ev.Type == EElysiumChoreoEvent::Speak ? Latency : 0.f);
 			EffectiveLatestTime = FMath::Max(EffectiveLatestTime, Extended);
@@ -44,6 +48,66 @@ void FElysiumScenePlayer::Reset()
 	ActiveCount = 0;
 }
 
+void FElysiumScenePlayer::CaptureLatches(TArray<uint8>& OutStarted, TArray<uint8>& OutActive) const
+{
+	OutStarted.SetNumUninitialized(bStarted.Num());
+	OutActive.SetNumUninitialized(bActive.Num());
+	for (int32 i = 0; i < bStarted.Num(); ++i)
+	{
+		OutStarted[i] = bStarted[i] ? 1 : 0;
+		OutActive[i] = bActive[i] ? 1 : 0;
+	}
+}
+
+void FElysiumScenePlayer::RestoreLatches(float SceneTime, const TArray<uint8>& Started,
+	const TArray<uint8>& Active, IElysiumChoreoCallback& Callback)
+{
+	if (!Scene.IsValid() || Started.Num() != Scene->Events.Num() || Active.Num() != Scene->Events.Num())
+	{
+		RestoreTo(SceneTime, Callback);
+		return;
+	}
+	CurrentTime = SceneTime;
+	ActiveCount = 0;
+	for (int32 i = 0; i < Scene->Events.Num(); ++i)
+	{
+		const FElysiumSceneEvent& Ev = Scene->Events[i];
+		bStarted[i] = Ev.bActive && Started[i] != 0;
+		bActive[i] = bStarted[i] && Active[i] != 0;
+		if (bActive[i])
+		{
+			++ActiveCount;
+			if (Ev.bHasEnd)
+			{
+				Callback.RestoreEvent(*Scene, Ev, SceneTime);
+			}
+		}
+	}
+}
+
+void FElysiumScenePlayer::RestoreTo(float SceneTime, IElysiumChoreoCallback& Callback)
+{
+	if (!Scene.IsValid())
+	{
+		return;
+	}
+	CurrentTime = SceneTime;
+	ActiveCount = 0;
+	for (int32 i = 0; i < Scene->Events.Num(); ++i)
+	{
+		const FElysiumSceneEvent& Ev = Scene->Events[i];
+		const float Start = EffectiveStart(Ev);
+		const float End = Ev.bHasEnd ? FMath::Max(Ev.EndTime, Start) : Start;
+		bStarted[i] = Ev.bActive && Start <= SceneTime;
+		bActive[i] = bStarted[i] && Ev.bHasEnd && SceneTime <= End;
+		if (bActive[i])
+		{
+			++ActiveCount;
+			Callback.RestoreEvent(*Scene, Ev, SceneTime);
+		}
+	}
+}
+
 void FElysiumScenePlayer::PreLatchTo(float SceneTime)
 {
 	if (!Scene.IsValid())
@@ -54,7 +118,8 @@ void FElysiumScenePlayer::PreLatchTo(float SceneTime)
 	ActiveCount = 0;
 	for (int32 i = 0; i < Scene->Events.Num(); ++i)
 	{
-		const bool bPassed = EffectiveStart(Scene->Events[i]) <= SceneTime;
+		const FElysiumSceneEvent& Ev = Scene->Events[i];
+		const bool bPassed = Ev.bActive && EffectiveStart(Ev) <= SceneTime;
 		bStarted[i] = bPassed;
 		bActive[i] = false;
 	}
@@ -73,6 +138,10 @@ void FElysiumScenePlayer::AdvanceTo(float SceneTime, IElysiumChoreoCallback& Cal
 	for (int32 i = 0; i < Scene->Events.Num(); ++i)
 	{
 		const FElysiumSceneEvent& Ev = Scene->Events[i];
+		if (!Ev.bActive)
+		{
+			continue;
+		}
 		const float Start = EffectiveStart(Ev);
 		// An event with no end time occupies a single instant. Holding End at Start makes it start
 		// and end within one AdvanceTo, which is exactly what the 24 firetriggers need.

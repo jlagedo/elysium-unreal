@@ -120,14 +120,22 @@ public:
 	// runs the chain more than once per tick, so it never becomes a same-frame loop.
 	double NextAllowedBeginTime = -1.0;
 
-	// The NPC this beat drives, or null when it names the player (`!…`), has not spawned yet (an
-	// npc_maker child), or is gone. A null target still runs the beat as a timing shell so the
+	// The NPC this beat drives, or null when it has not spawned yet (an npc_maker child), is gone,
+	// or names an unsupported engine alias. A null target still runs the beat as a timing shell so
 	// outputs fire and the map's flow continues.
 	FElysiumEntity* ResolveTarget() const
 	{
-		if (!World || TargetEntity.IsEmpty() || TargetEntity.StartsWith(TEXT("!")))
+		if (!World || TargetEntity.IsEmpty())
 		{
-			return nullptr;   // `!playercontroller` — the player has no NPC body to drive
+			return nullptr;
+		}
+		if (TargetEntity.Equals(TEXT("!playercontroller"), ESearchCase::IgnoreCase))
+		{
+			return World->FindPlayerController();
+		}
+		if (TargetEntity.StartsWith(TEXT("!")))
+		{
+			return nullptr;
 		}
 		return World->FindByName(TargetEntity);
 	}

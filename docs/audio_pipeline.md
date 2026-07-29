@@ -28,11 +28,15 @@ alert music*, a *looping ambient bed*, *polar-placed random one-shots*, and a *D
 room assignment* into one per-area unit. A client-side **music state machine**
 cross-fades the music stems on combat state.
 
-So the live audio surface is exactly three things: **`ambient_generic`** (point
-sounds), **`ambient_soundscheme`** → **`sound/schemes/*.txt`** (ambience + music +
-DSP), and **direct dialogue playback** (`PlayDialogFile`, from Python and the
-dialogue layer). Everything else in `scripts/` (`soundscapes.txt`, `sounds.txt`,
-`game_sounds*.txt`, `titles.txt`) is dormant HL2 leftover.
+The map-authored audio surface has three dedicated entity families:
+**`ambient_generic`** (point sounds), **`ambient_soundscheme`** →
+**`sound/schemes/*.txt`** (ambience + music + DSP), and brush
+**`trigger_environmental_audio`** volumes (`room_type`). Audio controls also live on
+movers, NPCs, `events_world`, choreography and generic entity lifetime inputs. Above
+the map layer, dialogue, sentences, surfaces, radio/news, weapons, disciplines and
+character sound schemes all feed the same mixer. The stock HL2 `soundscapes.txt`,
+`sounds.txt`, dormant `game_sounds*.txt` entries and `titles.txt` remain leftovers;
+§10 separates those from the live non-map systems.
 
 ## 2. Asset formats and storage
 
@@ -122,12 +126,22 @@ documented in the file's own header. The shipped file holds **~141 presets index
 `soundscapes.txt` (`0` "Normal (off)", `1` "Generic", `2` "Metal Small" … `28`
 "Weirdo 3"). Parse errors are literal (`"DSP PARSE ERROR!!! … too many processors"`).
 
-**Zone selection — the divergence** [VtMB strings + inferred]: stock Source picks
-DSP from `env_soundscape`/`dsp_room` entities; VtMB has none. Instead a scheme's
-`SchemeParams { "RoomDSP" "<n>" }` names the preset, and `client.dll` (which carries
-`RoomDSP`, `dsp_room`, `WET`, `DRY`, `Ducking`) drives the engine `dsp_room` cvar
-from the active scheme. Music blocks flagged `"Dry" "1"` bypass the reverb bus (the
-`#`/drymix path) so the score isn't smeared by room reverb.
+**Zone selection — the divergence** [VtMB strings + data + partial decompile]: stock
+Source picks DSP from `env_soundscape`/`dsp_room` entities; VtMB has no live
+`env_soundscape`. A scheme's `SchemeParams { "RoomDSP" "<n>" }` names one preset,
+while brush `trigger_environmental_audio` entities author a numeric `room_type`.
+The player networks both `m_sndRoomDSP` and `m_sndPlayerDSP` from `vampire.dll` to
+`client.dll`; the client carries `RoomDSP`, `dsp_room`, `WET`, `DRY` and `Ducking`
+and drives the engine DSP state. Music blocks flagged `"Dry" "1"` bypass the reverb
+bus (the `#`/drymix path) so the score is not smeared by room reverb.
+
+The exact touch handler and precedence between a trigger's `room_type`, the active
+scheme's `RoomDSP`, and the two player fields are **not yet recovered**. The current
+export snapshot has 16 environmental-audio brushes, all in `sp_tutorial_1`, with
+`room_type` values `5` (3), `11` (1), `12` (1), `104` (2), `108` (1), and `123`
+(8). All author `StartDisabled 1`, spawnflags `1`, no targetname and no outputs, so
+the meaning of those inherited trigger fields must be settled from the handler, not
+guessed from the map text.
 
 ## 5. The SoundScheme system (VtMB's `env_soundscape` replacement)
 
@@ -225,7 +239,33 @@ additions:
 
 Fired by presence (looping beds), by I/O, or from Python via the datamap-bound
 `Entity.PlaySound()` / `StopSound()` (phone rings, sirens, buzzers) [script]. The
-stock LFO/spin envelope block (`lfotype`/`lforate`/`spinup`…) is present but zeroed.
+stock LFO/spin envelope block (`lfotype`/`lforate`/`spinup`…) is present but zeroed. Fade keys
+are not: five authored `fadeinsecs` and four `fadeoutsecs` values are non-zero in this snapshot.
+
+### Current exported seam [data]
+
+`tools/audio_surface_survey.py` reads every current `.ents` plus the mirrored Python
+without writing game data. The present 23-map snapshot contains 14,663 entities and:
+
+| Entity | Instances |
+|---|---:|
+| `ambient_generic` | 416 |
+| `ambient_soundscheme` | 45 |
+| `trigger_environmental_audio` | 16 |
+
+Every exported map has at least one of those. The densest are `sp_tutorial_1` (98),
+`la_hub_1` (88), `sm_hub_1` (53), `sm_warehouse_1` (52), and `sm_medical_1` (50).
+The `ambient_generic` messages are 410 WAV and 6 MP3. Their authored I/O wires are
+173 `PlaySound`, 76 `Kill`, 44 `StopSound`, and 15 `Volume`; SoundSchemes receive 80
+`FadeIn` and 69 `FadeOut` wires. Scheme switching is dominated by
+`trigger_multiple` enter/exit pairs, with relays, switches and Python checks also
+driving it.
+
+Fifteen audio-control wires currently resolve no target in their exported map. They
+include patch-added names, `AmbientCrickets` in `sm_warehouse_1`, and `scheme_guns`
+in `sp_tutorial_1`. These are content-validation findings: a runtime must diagnose
+them rather than silently accept them, but absence in a partial export does not by
+itself prove the retail target never exists.
 
 ## 7b. Mover sounds — the `soundgroup` convention
 
@@ -276,7 +316,50 @@ independent of the soundgroup. `soundgroup` is a **base-`CBaseEntity`** field
   patch-overridden) holds those named impact sounds (`Metal.Impact` = `soundlevel` +
   volume/pitch range + `rndwave` list). This is the **only** live game-sound script.
 
-## 9. Dead stock leftovers (ignore)
+## 9. Gameplay definitions and script control
+
+The audio layer above map ambience is data-driven [data]:
+
+- `vdata/system/sndscheme_{char,computer,openable,switch,wpn}.txt` define typed event
+  vocabularies and optional animation activities. They are **not** map SoundSchemes.
+  They resolve character activity/voice events, usable-object `open`/`close`/`locked`/
+  `swing`, switch `on`/`off`, computer `accept`/`access`/`error`/`typing`, and weapon
+  events into domain- and entity-specific directory paths.
+- Item and weapon definitions carry nested `SoundData` variant lists per pickup,
+  attack, deploy, reload, impact and other gameplay events. Discipline definitions
+  carry `SoundFX` blocks for activation, loop, hit, interrupt and deactivation.
+- `sound_volume_table.txt` maps semantic events such as footsteps, gunshots, impacts,
+  feeding, physics and doors to **AI-hearing radii in game units**. Despite its name,
+  this is not the audible mixer gain. One action can therefore emit both a rendered
+  sound and a separate gameplay-noise event.
+- `radio_data.txt` selects the first dependency-true radio loop at map/save load.
+  `newscaster_main.txt` / `_side.txt` select dependency-gated `.vcd` stories; these
+  reuse the choreography/line-audio path.
+
+`soundgroup` is correspondingly overloaded. In the current map snapshot it appears
+on 218 rotating doors, 32 sliding doors, 69 button/switch props and also 124+ NPC/
+maker entities. A mover token resolves through the usable domain; an NPC token is a
+character voice set. Treating every token as a mover directory is incorrect.
+
+The 36 mirrored game Python files add this executable audio-facing surface (comments
+excluded; scheduled string payloads included):
+
+| Method | Calls | Role |
+|---|---:|---|
+| `PlayDialogFile` | 39 | speaker-attached direct playback; one call intentionally names licensed music |
+| `PlaySound` / `StopSound` / `Volume` | 13 / 4 / 2 | point/entity voice control |
+| `FadeIn` / `FadeOut` | 10 / 9 | map SoundScheme and music switching |
+| `SetSafeArea` | 15 | world combat/music gate, including one scheduled call |
+| `SetSoundOverrideEnt` / `SetFakeSilence` | 5 / 1 | NPC/newscaster voice ownership and suppression |
+| `Whisper` | 9 | player voice/mental cue |
+
+`PlayDialogFile` paths exercise forward slashes, backslashes, a leading slash,
+case differences, WAV and MP3, and dynamic string construction. Resolution is
+case-insensitive and slash-normalized; dialogue uses the MP3-first/WAV-fallback rule,
+but the verb itself is general direct playback and cannot be hard-wired to a dialogue
+directory.
+
+## 10. Dead stock leftovers (ignore)
 
 The `game_sounds` manifest precaches **only** `game_sounds_surfaceproperties.txt`;
 every HL2 `game_sounds*.txt` line is commented out [data]. `scripts/soundscapes.txt`
@@ -286,7 +369,8 @@ every HL2 `game_sounds*.txt` line is commented out [data]. `scripts/soundscapes.
 dialogue layer, not here) are all dormant. `CSoundscapeSystem` still exists in the
 binaries but no map spawns `env_soundscape`, so it never runs.
 
-Implementation priority and status for this audio surface: `docs/roadmap.md`.
+The Unreal system that consumes this surface is `audio-architecture.md`. Implementation
+priority and status live in `docs/roadmap.md`.
 
 ## 11. Provenance — key addresses (`engine.dll`, base `0x20000000`) [VtMB]
 
@@ -311,6 +395,11 @@ scheme parser and `ambient_soundscheme` entity are now pinned (`tools/ghidra/out
 | `0x1022b290` / `0x1022cf20` | `soundscheme_randomness` / `soundscheme_toggledebug` cvars |
 | `0x105b4494` / `0x105b4594` | `CSoundSchemeManager` / `CSoundScheme` RTTI; `CSoundSchemePlayingThink` (str `0x105b4400`) |
 | `0x1000e8a9` / `0x1000ef8e` / `0x10010ce9` | `ambient_generic` / `ambient_soundscheme` / `env_soundscape` class registration |
+| `0x101cbb10` | `trigger_environmental_audio` factory; object size `0x59c` (touch behavior remains open) |
+
+Player DSP transport [VtMB, decompiled]: `vampire.dll` send table builder
+`0x1018a730` publishes `m_sndRoomDSP` and `m_sndPlayerDSP`; `client.dll` receive table
+builder `0x100a3e00` receives them at client-player offsets `0x144` and `0x148`.
 
 **Retail RandomSound defaults** (from `0x1022a930`) [VtMB, decompiled]: `Volume` 20,
 `Frequency` 10, `PitchMin`/`PitchMax` 100/100, `AudibleRadius` 1600, `DistMin`/`DistMax`

@@ -4,6 +4,7 @@
 #include "Debug/ElysiumConsole.h"
 #include "ElysiumPlayerBody.h"
 
+#include "Camera/PlayerCameraManager.h"
 #include "CollisionQueryParams.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
@@ -11,6 +12,19 @@
 #include "HAL/IConsoleManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumCamera, Log, All);
+
+namespace
+{
+	void MarkTemporalCameraCut(const UActorComponent* Component)
+	{
+		const APawn* Pawn = Component ? Cast<APawn>(Component->GetOwner()) : nullptr;
+		const APlayerController* PC = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
+		if (PC && PC->PlayerCameraManager)
+		{
+			PC->PlayerCameraManager->SetGameCameraCutThisFrame();
+		}
+	}
+}
 
 UElysiumCameraComponent::UElysiumCameraComponent()
 {
@@ -278,26 +292,8 @@ void UElysiumCameraComponent::SolveShot(float Dt)
 
 void UElysiumCameraComponent::SolveModelAlpha()
 {
-	// The near-camera dissolve band (`CAM_Think` tail, `CInput+0x104`): 0 below `cam_fadeend`, 1 at or
-	// above min(`cam_idealdist`, `cam_fadestart`), SimpleSpline between. Nothing consumes it until a
-	// player mesh exists (8.11) — it is solved now so the band is a number rather than a later guess.
-	const float Distance = SolvedOffset.Size() * Weights.ThirdBlend();
-	const float Full = FMath::Min(Cvars.IdealDist, Cvars.FadeStart);
-	if (Distance <= Cvars.FadeEnd)
-	{
-		PlayerModelAlpha = 0.0f;
-	}
-	else if (Distance >= Full)
-	{
-		PlayerModelAlpha = 1.0f;
-	}
-	else
-	{
-		const float Span = FMath::Max(KINDA_SMALL_NUMBER, Full - Cvars.FadeEnd);
-		PlayerModelAlpha = ElysiumCam::SimpleSpline((Distance - Cvars.FadeEnd) / Span);
-	}
+	PlayerModelAlpha = ElysiumCam::SolveModelAlpha(SolvedOffset, Weights, Cvars);
 }
-
 // =====================================================================================
 // The apply point (`CAM_ApplyToView`, 0x100ffb00)
 // =====================================================================================
@@ -324,6 +320,15 @@ void UElysiumCameraComponent::ApplyToView(FMinimalViewInfo& View) const
 
 	const float S = Shots.GetWeight();
 	const FElysiumCameraShot* Top = Shots.Top();
+	if (S > 0.0f)
+	{
+		// VtMB camera tracks author exact edits and deliberate dollies, but no camera-motion blur.
+		// UE's default blur turns even the small post-cut dollies into a radial smear and makes a
+		// zero-time edit read as a scroll. Keep gameplay post-processing intact and suppress only the
+		// scripted camera channel while it has visible weight.
+		View.PostProcessSettings.bOverride_MotionBlurAmount = true;
+		View.PostProcessSettings.MotionBlurAmount = 0.0f;
+	}
 	if (S > 0.0f && bShotSeeded)
 	{
 		// The scripted camera is applied on top: origin, look-at, roll and FOV all lerp by its own
@@ -335,6 +340,13 @@ void UElysiumCameraComponent::ApplyToView(FMinimalViewInfo& View) const
 			View.FOV = FMath::Lerp(View.FOV, Top->FieldOfView, S);
 		}
 	}
+}
+
+bool UElysiumCameraComponent::ConsumeTemporalCameraCutRequest()
+{
+	const bool bPending = bTemporalCameraCutPending;
+	bTemporalCameraCutPending = false;
+	return bPending;
 }
 
 bool UElysiumCameraComponent::CalcCameraFor(UElysiumCameraComponent* Camera, float DeltaSeconds,
@@ -349,6 +361,16 @@ bool UElysiumCameraComponent::CalcCameraFor(UElysiumCameraComponent* Camera, flo
 	Camera->GetCameraView(DeltaSeconds, Out);
 	Camera->UpdateCamera(DeltaSeconds);
 	Camera->ApplyToView(Out);
+	if (Camera->ConsumeTemporalCameraCutRequest())
+	{
+		// A camera cut resets temporal histories and has zero camera velocity by definition. The base
+		// camera component can still supply its pre-cut transform through PreviousViewTransform, so
+		// override it with the newly applied authored view before the viewport builds this frame.
+		Out.PreviousViewTransform = FTransform(Out.Rotation, Out.Location);
+		MarkTemporalCameraCut(Camera);
+		UE_LOG(LogElysiumCamera, Log, TEXT("applied temporal camera cut at %s"),
+			*Out.Location.ToCompactString());
+	}
 	return true;
 }
 
@@ -377,21 +399,47 @@ void UElysiumCameraComponent::ToggleCamera()
 
 int32 UElysiumCameraComponent::PushShot(const FElysiumCameraShot& Shot)
 {
-	const int32 Id = Shots.Push(Shot);
+	FElysiumCameraShot StableShot = Shot;
+	StableShot.bCameraCut = false; // an instruction for this frame, never persistent shot state
+	const int32 Id = Shots.Push(StableShot);
+	if (Shot.bCameraCut || Shot.BlendSeconds <= KINDA_SMALL_NUMBER)
+	{
+		bTemporalCameraCutPending = true;
+	}
 	UE_LOG(LogElysiumCamera, Verbose, TEXT("camera shot #%d '%s' pushed"), Id, *Shot.DebugName);
 	return Id;
 }
 
 bool UElysiumCameraComponent::UpdateShot(int32 Id, const FElysiumCameraShot& Shot)
 {
-	return Shots.Update(Id, Shot);
-}
-
-bool UElysiumCameraComponent::PopShot(int32 Id)
-{
-	if (!Shots.Pop(Id))
+	FElysiumCameraShot StableShot = Shot;
+	StableShot.bCameraCut = false;
+	if (!Shots.Update(Id, StableShot))
 	{
 		return false;
+	}
+	if (Shot.bCameraCut)
+	{
+		bTemporalCameraCutPending = true;
+		UE_LOG(LogElysiumCamera, Log, TEXT("camera shot #%d queued temporal cut"), Id);
+	}
+	return true;
+}
+
+bool UElysiumCameraComponent::PopShot(int32 Id, float BlendOutSeconds)
+{
+	const bool bWasTop = Shots.TopId() == Id;
+	const FElysiumCameraShot* Existing = Shots.Find(Id);
+	const float EffectiveBlend = BlendOutSeconds >= 0.0f
+		? BlendOutSeconds
+		: (Existing ? Existing->BlendSeconds : 0.0f);
+	if (!Shots.Pop(Id, BlendOutSeconds))
+	{
+		return false;
+	}
+	if (bWasTop && EffectiveBlend <= KINDA_SMALL_NUMBER)
+	{
+		bTemporalCameraCutPending = true;
 	}
 	UE_LOG(LogElysiumCamera, Verbose, TEXT("camera shot #%d popped"), Id);
 	return true;

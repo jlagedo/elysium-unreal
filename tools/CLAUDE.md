@@ -178,6 +178,15 @@ Format + findings (the flex-rule opcode set, both vertex-animation encodings, th
 `facial_animation.md`. Read-only over the install; produces no runtime intermediate — the offline
 delivery is the NPC export above.
 
+## Audio mirror and survey
+
+`UE_extract_sounds.py` mirrors map- and scheme-referenced WAV/MP3 files patch-first into
+`out/sound/` and writes the mover sound-group manifest. `audio_surface_survey.py` is the read-only
+cross-surface check over exported `.ents` plus mirrored Python: audio entities, I/O wires,
+environmental room types, typed `soundgroup` use and script audio calls (`--json` writes the full
+ledger). VtMB behavior and formats live in `audio_pipeline.md`; the Unreal design is
+`audio-architecture.md`.
+
 ## Game logic (embedded Python 2.1)
 
 VtMB runs its story on a stock CPython 2.1 (`Bin/vampire_python21.dll`). The scripting surfaces,

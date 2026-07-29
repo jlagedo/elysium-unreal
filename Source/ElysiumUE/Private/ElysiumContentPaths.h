@@ -159,6 +159,7 @@ struct FElysiumContentPaths
 	static FString NpcIndex() { return NpcDir() / TEXT("npc_index.json"); }
 	static FString NpcClips(const FString& Stem) { return NpcDir() / TEXT("clips") / (Stem + TEXT(".json")); }
 	static FString NpcBankGlb(const FString& RelGlb) { return NpcDir() / RelGlb; }
+	static FString AnimatedPropGlb(const FString& RelGlb) { return NpcDir() / RelGlb; }
 
 	// The labelled sky set (debug, sky-ambience RE-A2/B1). Six self-describing face images —
 	// suffix, predicted axis, TOP banner, up arrow, tagged corners, edge neighbours — authored by

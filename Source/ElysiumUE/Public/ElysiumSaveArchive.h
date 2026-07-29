@@ -21,10 +21,7 @@ struct FElysiumSaveArchive : public FArchiveProxy
 		, PayloadVersion(InVersion)
 	{
 		InInner.UsingCustomVersion(FElysiumSaveVersion::GUID);
-		if (InInner.IsSaving())
-		{
-			InInner.SetCustomVersion(FElysiumSaveVersion::GUID, InVersion, TEXT("ElysiumSave"));
-		}
+		InInner.SetCustomVersion(FElysiumSaveVersion::GUID, InVersion, TEXT("ElysiumSave"));
 	}
 
 	int32 Version() const { return PayloadVersion; }

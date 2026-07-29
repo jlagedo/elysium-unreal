@@ -15,7 +15,9 @@
 #include "ElysiumBinds.h"
 #include "ElysiumBrushComponent.h"
 #include "Player/ElysiumCameraShots.h"
+#include "ElysiumCameraComponent.h"
 #include "ElysiumCameraSolve.h"
+#include "Substrate/ElysiumCameraTrack.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumCommands.h"
 #include "Debug/ElysiumConsole.h"
@@ -1763,6 +1765,19 @@ bool FElysiumMovementTest::RunTest(const FString&)
 // inferred from a play-through — including the two rules the acceptance turns on: the front end
 // deliberately does not pause, and Boot is reachable from nowhere.
 // =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGameFlowCommandsTest,
+	"Elysium.Substrate.GameFlowCommands", GElysiumTestFlags)
+bool FElysiumGameFlowCommandsTest::RunTest(const FString&)
+{
+	TestEqual(TEXT("the theatre replay registers exactly two spellings"),
+		static_cast<int32>(UE_ARRAY_COUNT(ElysiumStory::TheatreReplayCommands)), 2);
+	TestEqual(TEXT("the canonical theatre replay spelling"),
+		FString(ElysiumStory::TheatreReplayCommands[0]), FString(TEXT("elysium.newgame_ttd")));
+	TestEqual(TEXT("the compact theatre replay spelling used by QA"),
+		FString(ElysiumStory::TheatreReplayCommands[1]), FString(TEXT("newgame_ttd")));
+	return true;
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAppStateTest, "Elysium.Substrate.AppState", GElysiumTestFlags)
 bool FElysiumAppStateTest::RunTest(const FString&)
@@ -3794,7 +3809,184 @@ bool FElysiumPlayerEntityTest::RunTest(const FString&)
 }
 
 // =====================================================================================
-// Genesis's recovered exit: the chargen panel teleports the player into `firetrans`, whose
+// Opening-embrace embodiment: the controller is a real map-epoch entity, and prop_dynamic
+// selects the generated v4 skeletal representation only for indexed models.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimatedPropManifestTest,
+	"Elysium.Substrate.AnimatedPropManifest", GElysiumTestFlags)
+bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
+{
+	const FString MinimalNpc = TEXT("\"npcs\":{\"dummy\":{\"glb\":\"dummy.glb\",\"model\":\"models/dummy.mdl\",\"clips\":1}}");
+	FString Error;
+	FElysiumNpcIndex V3;
+	const FString Json3 = FString::Printf(TEXT("{\"manifest_version\":3,%s,\"banks\":{},\"cinematics\":{}}"), *MinimalNpc);
+	TestTrue(FString::Printf(TEXT("v3 manifest parses: %s"), *Error), V3.LoadJsonText(Json3, Error));
+	TestEqual(TEXT("v3 version retained"), V3.ManifestVersion, 3);
+	TestTrue(TEXT("v3 reads animated_props as empty"), V3.AnimatedProps.IsEmpty());
+	TestNull(TEXT("v3 resolves no animated prop"),
+		V3.FindAnimatedProp(TEXT("models/cinematic/cin_wineglass.mdl")));
+
+	FElysiumNpcIndex V4;
+	const FString Json4 = FString::Printf(TEXT("{\"manifest_version\":4,%s,\"banks\":{},\"cinematics\":{},"
+		"\"animated_props\":{\"cin_wineglass\":{\"glb\":\"animated_props/cin_wineglass.glb\","
+		"\"model\":\"models/cinematic/cin_wineglass.mdl\",\"bones\":4,\"clips\":[\"Idle\",\"Pour\"]}}}"),
+		*MinimalNpc);
+	Error.Reset();
+	TestTrue(FString::Printf(TEXT("v4 manifest parses: %s"), *Error), V4.LoadJsonText(Json4, Error));
+	TestEqual(TEXT("v4 version retained"), V4.ManifestVersion, 4);
+	const FElysiumAnimatedPropEntry* Glass =
+		V4.FindAnimatedProp(TEXT("cinematic\\cin_wineglass.mdl"));
+	if (TestNotNull(TEXT("v4 normalizes and resolves animated prop model"), Glass))
+	{
+		TestEqual(TEXT("v4 retains generated glb"), Glass->Glb,
+			FString(TEXT("animated_props/cin_wineglass.glb")));
+		TestTrue(TEXT("clip lookup folds case"), Glass->HasClip(TEXT("POUR")));
+		TestEqual(TEXT("clip inventory retained"), Glass->Clips.Num(), 2);
+	}
+
+	FElysiumNpcIndex Future;
+	Error.Reset();
+	const FString Json5 = FString::Printf(TEXT("{\"manifest_version\":5,%s}"), *MinimalNpc);
+	TestFalse(TEXT("future manifest is rejected"), Future.LoadJsonText(Json5, Error));
+	TestTrue(TEXT("future rejection explains supported versions"), Error.Contains(TEXT("expected 3 or 4")));
+	return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOpeningEmbodimentTest,
+	"Elysium.Substrate.OpeningEmbodiment", GElysiumTestFlags)
+bool FElysiumOpeningEmbodimentTest::RunTest(const FString&)
+{
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+	Services.PlayerLocation = FVector(10.f, 20.f, 30.f);
+	Services.PlayerRotation = FRotator(0.f, 35.f, 0.f);
+	Services.AnimatedPropModels.Add(TEXT("models/cinematic/cin_wineglass.mdl"), TEXT("cin_wineglass"));
+
+	auto BuildDefs = []()
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__opening_embodiment__");
+		FElysiumEntityDef Glass;
+		Glass.Classname = TEXT("prop_dynamic");
+		Glass.TargetName = TEXT("wineglass");
+		Glass.Origin = FVector(100.f, 200.f, 300.f);
+		Glass.ModelMesh = TEXT("cin_wineglass");
+		Glass.Keys.Add(TEXT("model"), TEXT("models/cinematic/cin_wineglass.mdl"));
+		Glass.Keys.Add(TEXT("LoopSequence"), TEXT("glass_idle"));
+		Defs.Defs.Add(MoveTemp(Glass));
+		return Defs;
+	};
+
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(BuildDefs());
+	World.SpawnPlayer();
+	World.Activate(0.0);
+	FElysiumPlayer* Player = World.FindPlayer();
+	if (!TestNotNull(TEXT("player spawned"), Player))
+	{
+		return false;
+	}
+	Player->SetRuntimeOrigin(FVector(40.f, 50.f, 60.f));
+	Player->SetRuntimeAngles(FVector(0.f, 70.f, 0.f));
+	Player->SetRuntimeModel(TEXT("models/character/pc/male/tremere_armor_0.mdl"));
+	Player->Skin = 2;
+	Player->Disposition = TEXT("Cinematic");
+
+	const FElysiumEntityHandle ControllerHandle = World.CreatePlayerControllerEntity();
+	FElysiumEntity* Controller = World.FindPlayerController();
+	if (!TestTrue(TEXT("controller handle is valid"), ControllerHandle.IsSet())
+		|| !TestNotNull(TEXT("controller entity exists"), Controller))
+	{
+		return false;
+	}
+	TestEqual(TEXT("!playercontroller resolves the relationship entity"),
+		World.FindByName(TEXT("!playercontroller")), Controller);
+	TestEqual(TEXT("controller creation is idempotent"),
+		World.CreatePlayerControllerEntity().Index, ControllerHandle.Index);
+	TestTrue(TEXT("controller copies player origin"), Controller->Origin.Equals(Player->Origin));
+	TestTrue(TEXT("controller copies player orientation"), Controller->Angles.Equals(Player->Angles));
+	TestEqual(TEXT("controller copies player model"), Controller->Model, Player->Model);
+	TestTrue(TEXT("controller stands through the NPC skeletal path"),
+		Services.Saw(TEXT("BuildNpcVisual tremere_armor_0")));
+
+	Controller->SetRuntimeOrigin(FVector(400.f, 500.f, 600.f));
+	Controller->SetRuntimeAngles(FVector(0.f, 135.f, 0.f));
+	Controller->SetRuntimeModel(TEXT("models/character/pc/female/toreador_armor_0.mdl"));
+	if (FElysiumCombatCharacter* ControllerCharacter = Controller->AsCombatCharacter())
+	{
+		ControllerCharacter->Skin = 4;
+		ControllerCharacter->Disposition = TEXT("Neutral");
+	}
+	TestTrue(TEXT("controller removal succeeds"), World.RemovePlayerControllerEntity());
+	TestNull(TEXT("controller relationship clears"), World.FindPlayerController());
+	TestTrue(TEXT("final controller origin transfers to player"),
+		Player->Origin.Equals(FVector(400.f, 500.f, 600.f)));
+	TestTrue(TEXT("final controller orientation transfers to player"),
+		Player->Angles.Equals(FVector(0.f, 135.f, 0.f)));
+	TestEqual(TEXT("final controller model transfers to player"), Player->Model,
+		FString(TEXT("models/character/pc/female/toreador_armor_0.mdl")));
+	TestEqual(TEXT("final controller skin transfers to player"), Player->Skin, 4);
+	TestEqual(TEXT("final controller disposition transfers to player"), Player->Disposition,
+		FString(TEXT("Neutral")));
+	TestFalse(TEXT("removing an absent controller is a no-op"), World.RemovePlayerControllerEntity());
+
+	World.CreatePlayerControllerEntity();
+	FElysiumMapSnapshot Snapshot;
+	World.Freeze(Snapshot);
+	FElysiumEntityWorld Restored(nullptr, nullptr, Services.Bundle());
+	Restored.Load(BuildDefs());
+	Restored.SpawnPlayer();
+	Restored.Activate(0.0);
+	Restored.ApplySnapshot(Snapshot);
+	TestNotNull(TEXT("snapshot rebinds the controller relationship"), Restored.FindPlayerController());
+	TestEqual(TEXT("snapshot preserves !playercontroller resolution"),
+		Restored.FindByName(TEXT("!playercontroller")), Restored.FindPlayerController());
+
+	TestTrue(TEXT("indexed prop selects the animated visual"),
+		Services.Saw(TEXT("BuildAnimatedPropVisual cin_wineglass")));
+	TestTrue(TEXT("authored loop starts looping"),
+		Services.Saw(TEXT("PlayAnimatedPropClip cin_wineglass glass_idle loop=1")));
+	World.EnqueueInput(TEXT("wineglass"), FName(TEXT("SetAnimation")),
+		FElysiumVariant::String(TEXT("glass_pour")), 0.0,
+		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+	World.EnqueueInput(TEXT("wineglass"), FName(TEXT("Skin")), FElysiumVariant::Int(3), 0.0,
+		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+	World.Tick(0.0);
+	TestTrue(TEXT("SetAnimation selects a non-looping cinematic clip"),
+		Services.Saw(TEXT("PlayAnimatedPropClip cin_wineglass glass_pour loop=0")));
+	TestTrue(TEXT("Skin reaches skeletal prop material families"),
+		Services.Saw(TEXT("ApplyAnimatedPropSkin cin_wineglass family=3")));
+
+	if (FElysiumEntity* Glass = World.FindByName(TEXT("wineglass")))
+	{
+		Glass->SetRuntimeModel(TEXT("models/props/furniture/chair.mdl"));
+	}
+	TestTrue(TEXT("SetModel to an unindexed model rebuilds static representation"),
+		Services.Saw(TEXT("BuildPropVisual chair")));
+	if (FElysiumEntity* Glass = World.FindByName(TEXT("wineglass")))
+	{
+		Glass->SetRuntimeModel(TEXT("models/cinematic/cin_wineglass.mdl"));
+	}
+	TestTrue(TEXT("SetModel back to an indexed model rebuilds skeletal representation"),
+		Services.Count(TEXT("BuildAnimatedPropVisual cin_wineglass")) >= 2);
+
+	World.EnqueueInput(TEXT("wineglass"), FName(TEXT("Break")), FElysiumVariant::Void(), 0.0,
+		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+	World.Tick(0.0);
+	TArray<TPair<FString, FString>> Debug;
+	if (FElysiumEntity* Glass = World.FindByName(TEXT("wineglass")))
+	{
+		Glass->GetDebugState(Debug);
+	}
+	TestTrue(TEXT("Break leaves the animated prop destroyed"),
+		Debug.ContainsByPredicate([](const TPair<FString, FString>& Row)
+		{
+			return Row.Key == TEXT("Broken") && Row.Value == TEXT("yes");
+		}));
+	return true;
+}
+
+// =====================================================================================// Genesis's recovered exit: the chargen panel teleports the player into `firetrans`, whose
 // OnStartTouch forces `boogieout,ChangeNow`. The recording services keep this content-free while
 // exercising the real command parser, entity I/O and travel seam end to end.
 // =====================================================================================
@@ -4426,6 +4618,27 @@ bool FElysiumCameraTest::RunTest(const FString&)
 			|| W.Secondary == 0.0f);
 	}
 
+	// --- the body is hidden only at true first-person zero, and a scripted shot reveals it ---
+	{
+		FElysiumCameraCvars Cvars;
+		Cvars.IdealDist = 100.0f;
+		Cvars.FadeStart = 80.0f;
+		Cvars.FadeEnd = 20.0f;
+		FElysiumCameraWeights W;
+		TestEqual(TEXT("true first person hides the player body"),
+			ElysiumCam::SolveModelAlpha(FVector(100.0f, 0.0f, 0.0f), W, Cvars), 0.0f);
+		W.Scripted = 0.5f;
+		TestEqual(TEXT("a half-weight scripted camera reveals the body through the same ramp"),
+			ElysiumCam::SolveModelAlpha(FVector::ZeroVector, W, Cvars), 0.5f);
+		W.Scripted = 1.0f;
+		TestEqual(TEXT("a full scripted camera makes the body fully visible"),
+			ElysiumCam::SolveModelAlpha(FVector::ZeroVector, W, Cvars), 1.0f);
+		W.Scripted = 0.0f;
+		W.Third = 1.0f;
+		TestEqual(TEXT("ordinary third person still uses the recovered distance band"),
+			ElysiumCam::SolveModelAlpha(FVector(80.0f, 0.0f, 0.0f), W, Cvars), 1.0f);
+	}
+
 	// --- the easing is at the point of use, not in the ramp ---
 	{
 		TestEqual(TEXT("SimpleSpline(0)"), ElysiumCam::SimpleSpline(0.0f), 0.0f);
@@ -4536,6 +4749,239 @@ bool FElysiumCameraTest::RunTest(const FString&)
 		Stack.Push(Cut);
 		Stack.Advance(1.0f / 60.0f);
 		TestEqual(TEXT("a zero-duration shot is a cut"), Stack.GetWeight(), 1.0f);
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// camera_track — paired value streams and the recovered keyframe timing surface (12.1).
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraTrackTest, "Elysium.Substrate.CameraTrack", GElysiumTestFlags)
+bool FElysiumCameraTrackTest::RunTest(const FString&)
+{
+	using namespace ElysiumCameraTrack;
+
+	FPoint A;
+	A.Position = FVector::ZeroVector;
+	A.bTimeControl = true;
+	A.MoveTime = 2.0f;
+	A.Pause = 1.0f;
+	A.Roll = 170.0f;
+	A.FocalLength = 50.0f;
+	FPoint B = A;
+	B.Position = FVector(100.0f, 0.0f, 0.0f);
+	B.Pause = 0.5f;
+	B.Roll = -170.0f;
+	B.FocalLength = 25.0f;
+
+	FPath Timed;
+	Timed.Points = { A, B };
+	Timed.RebuildTimes();
+	TestEqual(TEXT("the root pause is not a pre-roll dwell"), Timed.Departures[0], 0.0f);
+	TestEqual(TEXT("TimeControl uses authored MoveTime"), Timed.Arrivals[1], 2.0f);
+	TestEqual(TEXT("the destination pause extends completion"), Timed.EndTime, 2.5f);
+
+	FSample Sample;
+	TestTrue(TEXT("a path starts moving immediately"), Timed.Sample(0.5f, Sample));
+	TestFalse(TEXT("the root is not held for its authored pause"), Sample.Position.Equals(A.Position, 0.01f));
+	TestTrue(TEXT("the midpoint samples between endpoints"), Timed.Sample(1.0f, Sample));
+	TestTrue(TEXT("linear rate defaults put the two-point Catmull midpoint at 50"),
+		FMath::IsNearlyEqual(Sample.Position.X, 50.0f, 0.01f));
+	TestTrue(TEXT("roll takes the short 20-degree path across 180"),
+		FMath::Abs(FMath::Abs(Sample.Roll) - 180.0f) < 0.1f);
+	TestTrue(TEXT("a positive lens becomes a horizontal FOV"), Sample.FieldOfView > 0.0f);
+	TestTrue(TEXT("the path is complete after the destination pause"), Timed.Sample(2.5f, Sample) && Sample.bFinished);
+
+	FPoint SpeedA;
+	SpeedA.Position = FVector::ZeroVector;
+	SpeedA.MoveSpeed = 50.0f;
+	FPoint SpeedB = SpeedA;
+	SpeedB.Position = FVector(254.0f, 0.0f, 0.0f);
+	TestTrue(TEXT("speed timing converts Source units per second exactly once"),
+		FMath::IsNearlyEqual(SegmentSeconds(SpeedA, SpeedB), 2.0f, 0.001f));
+	TestTrue(TEXT("RateOut/RateIn use the recovered endpoint-slope cubic"),
+		FMath::IsNearlyEqual(EaseRate(0.25f, 2.0f, 1.0f), 0.390625f, KINDA_SMALL_NUMBER));
+	SpeedB.MoveSpeed = 150.0f;
+	TestTrue(TEXT("a smooth destination averages endpoint speeds"),
+		FMath::IsNearlyEqual(SegmentSeconds(SpeedA, SpeedB), 1.0f, 0.001f));
+	SpeedB.bCorner = true;
+	TestTrue(TEXT("a corner destination uses the source speed"),
+		FMath::IsNearlyEqual(SegmentSeconds(SpeedA, SpeedB), 2.0f, 0.001f));
+	TestTrue(TEXT("50mm on a 36mm horizontal gate is about 39.6 degrees"),
+		FMath::IsNearlyEqual(FocalLengthToHorizontalFov(50.0f), 39.5978f, 0.01f));
+
+	FPath Cut;
+	A.Pause = 0.0f;
+	A.MoveTime = 0.0f;
+	B.Pause = 0.0f;
+	Cut.Points = { A, B };
+	Cut.RebuildTimes();
+	TestTrue(TEXT("a zero-duration chain reaches its final key immediately"),
+		Cut.Sample(0.0f, Sample) && Sample.bFinished && Sample.Position.Equals(B.Position, 0.01f));
+
+	FPath TheatreCut;
+	A.MoveTime = 0.03f;
+	B.Position = FVector(900.0f, -400.0f, 200.0f);
+	TheatreCut.Points = { A, B };
+	TheatreCut.RebuildTimes();
+	TestFalse(TEXT("a positive authored MoveTime remains movement rather than an invented cut"),
+		IsHardCut(A));
+	TestTrue(TEXT("the short move keeps its authored duration in the path clock"),
+		FMath::IsNearlyEqual(TheatreCut.EndTime, 0.03f, KINDA_SMALL_NUMBER));
+	TestTrue(TEXT("the short move samples between the authored endpoints"),
+		TheatreCut.Sample(0.015f, Sample)
+			&& !Sample.Position.Equals(A.Position, 0.01f)
+			&& !Sample.Position.Equals(B.Position, 0.01f));
+	TestTrue(TEXT("the short move reaches its destination at the arrival boundary"),
+		TheatreCut.Sample(0.03f, Sample) && Sample.Position.Equals(B.Position, 0.01f));
+
+	FPath ZeroCut;
+	A.MoveTime = 0.0f;
+	ZeroCut.Points = { A, B };
+	ZeroCut.RebuildTimes();
+	TestTrue(TEXT("only an authored zero-time transition is classified as a hard cut"),
+		IsHardCut(A));
+	TestTrue(TEXT("a zero-time edit switches to the destination immediately"),
+		ZeroCut.Sample(0.0f, Sample) && Sample.Position.Equals(B.Position, 0.01f));
+	TestTrue(TEXT("forward playback reports the zero-time edit exactly once"),
+		CrossesHardCut(ZeroCut, -KINDA_SMALL_NUMBER, 0.0f));
+	TestFalse(TEXT("a sampled hard cut is not reported again on the next frame"),
+		CrossesHardCut(ZeroCut, 0.0f, 0.1f));
+	TestFalse(TEXT("positive-time movement never requests a temporal camera cut"),
+		CrossesHardCut(TheatreCut, 0.0f, 0.03f));
+
+	UElysiumCameraComponent* TemporalCamera = NewObject<UElysiumCameraComponent>();
+	TestNotNull(TEXT("the temporal-cut phase test has a camera component"), TemporalCamera);
+	if (TemporalCamera)
+	{
+		FElysiumCameraShot TemporalShot;
+		TemporalShot.BlendSeconds = 0.0f;
+		const int32 TemporalShotId = TemporalCamera->PushShot(TemporalShot);
+		TestTrue(TEXT("a zero-blend push latches a cut until the camera apply phase"),
+			TemporalCamera->ConsumeTemporalCameraCutRequest());
+		TestFalse(TEXT("the camera apply phase consumes the cut exactly once"),
+			TemporalCamera->ConsumeTemporalCameraCutRequest());
+		TemporalCamera->UpdateCamera(1.0f / 60.0f);
+		FMinimalViewInfo ScriptedView;
+		ScriptedView.PostProcessSettings.MotionBlurAmount = 0.5f;
+		TemporalCamera->ApplyToView(ScriptedView);
+		TestTrue(TEXT("a visible scripted shot overrides camera motion blur"),
+			ScriptedView.PostProcessSettings.bOverride_MotionBlurAmount);
+		TestEqual(TEXT("scripted camera edits and dollies render without radial smear"),
+			ScriptedView.PostProcessSettings.MotionBlurAmount, 0.0f);
+
+		TemporalShot.BlendSeconds = 1.0f;
+		TemporalShot.bCameraCut = true;
+		TestTrue(TEXT("an authored cut update reaches the pending-until-apply latch"),
+			TemporalCamera->UpdateShot(TemporalShotId, TemporalShot));
+		TestTrue(TEXT("the authored cut remains pending until camera application"),
+			TemporalCamera->ConsumeTemporalCameraCutRequest());
+		TemporalShot.bCameraCut = false;
+		TemporalCamera->UpdateShot(TemporalShotId, TemporalShot);
+		TestFalse(TEXT("an ordinary value update does not invent a temporal cut"),
+			TemporalCamera->ConsumeTemporalCameraCutRequest());
+		TestTrue(TEXT("the focused shot can be popped"),
+			TemporalCamera->PopShot(TemporalShotId, 0.0f));
+		TestTrue(TEXT("a zero-blend pop also latches a cut until camera application"),
+			TemporalCamera->ConsumeTemporalCameraCutRequest());
+	}
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__camera_track_test__");
+	FElysiumEntityDef Pos;
+	Pos.Classname = TEXT("camera_track");
+	Pos.TargetName = TEXT("pos");
+	Pos.Origin = FVector(10.0f, 20.0f, 30.0f);
+	Pos.Keys.Add(TEXT("HoldAtEnd"), TEXT("1"));
+	Pos.Keys.Add(TEXT("FocalLength"), TEXT("50"));
+	Pos.Keys.Add(TEXT("FromPlayerTime"), TEXT("0.25"));
+	Pos.Keys.Add(TEXT("ToPlayerTime"), TEXT("0.75"));
+	FElysiumOutputDef Completed;
+	Completed.Name = TEXT("OnAnimationCompleted");
+	Completed.Target = TEXT("completed");
+	Completed.Input = TEXT("Add");
+	Completed.Param = TEXT("1");
+	Pos.Outputs.Add(Completed);
+	FElysiumOutputDef Reached = Completed;
+	Reached.Name = TEXT("OnReachedKeyframe");
+	Reached.Target = TEXT("reached");
+	Pos.Outputs.Add(Reached);
+	Defs.Defs.Add(Pos);
+	FElysiumEntityDef Target = Pos;
+	Target.TargetName = TEXT("target");
+	Target.Origin = FVector(100.0f, 200.0f, 300.0f);
+	Target.Outputs.Reset();
+	Defs.Defs.Add(Target);
+	FElysiumEntityDef Counter;
+	Counter.Classname = TEXT("math_counter");
+	Counter.TargetName = TEXT("completed");
+	Defs.Defs.Add(Counter);
+	Counter.TargetName = TEXT("reached");
+	Defs.Defs.Add(Counter);
+
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+	World.AcceptInput(TEXT("pos"), FName(TEXT("PlayAsCameraPosition")), FElysiumVariant::Void(),
+		FElysiumEntityHandle(), FElysiumEntityHandle());
+	TestEqual(TEXT("the first role pushes one value shot"), Services.Count(TEXT("PushCameraShotValue")), 1);
+	World.Tick(0.0);
+	auto CounterValue = [&World]()
+	{
+		TArray<TPair<FString, FString>> Rows;
+		if (FElysiumEntity* CounterEnt = World.FindByName(TEXT("completed")))
+		{
+			CounterEnt->GetDebugState(Rows);
+		}
+		for (const TPair<FString, FString>& Row : Rows)
+		{
+			if (Row.Key == TEXT("Value")) { return FCString::Atof(*Row.Value); }
+		}
+		return -1.0f;
+	};
+	TestEqual(TEXT("zero-duration completion fires once"), CounterValue(), 1.0f);
+	TArray<TPair<FString, FString>> ReachedRows;
+	World.FindByName(TEXT("reached"))->GetDebugState(ReachedRows);
+	TestTrue(TEXT("arrival fires the authored OnReachedKeyframe output"),
+		ReachedRows.ContainsByPredicate([](const TPair<FString, FString>& Row)
+		{
+			return Row.Key == TEXT("Value") && FMath::IsNearlyEqual(FCString::Atof(*Row.Value), 1.0f);
+		}));
+	World.Tick(1.0);
+	TestEqual(TEXT("held completion does not fire again"), CounterValue(), 1.0f);
+	World.AcceptInput(TEXT("target"), FName(TEXT("PlayAsCameraTarget")), FElysiumVariant::Void(),
+		FElysiumEntityHandle(), FElysiumEntityHandle());
+	TestEqual(TEXT("the paired role updates rather than pushes another shot"),
+		Services.Count(TEXT("PushCameraShotValue")), 1);
+	TestTrue(TEXT("the composed value uses the authored target"),
+		Services.LastCameraShot.bUseLookAt && Services.LastCameraShot.LookAt.Equals(Target.Origin, 0.01f));
+	TestTrue(TEXT("the composed track shot bypasses the generic target-chase turn limiter"),
+		Services.LastCameraShot.MaxTurnRate.IsZero());
+	World.AcceptInput(TEXT("pos"), FName(TEXT("RestoreCameraToPlayerControl")), FElysiumVariant::Float(1.25f),
+		FElysiumEntityHandle(), FElysiumEntityHandle());
+	TestTrue(TEXT("restoring position leaves the target-owned shot live"), World.HasTrackCamera());
+	World.AcceptInput(TEXT("target"), FName(TEXT("Restore")), FElysiumVariant::Float(1.25f),
+		FElysiumEntityHandle(), FElysiumEntityHandle());
+	TestFalse(TEXT("restoring the final role pops the shared value shot"), World.HasTrackCamera());
+	TestTrue(TEXT("the explicit Restore parameter overrides ToPlayerTime"),
+		Services.Saw(TEXT("PopCameraShot 1 blend=1.25")));
+
+	const FElysiumEntity* PosEntity = World.FindByName(TEXT("pos"));
+	TestNotNull(TEXT("the camera owner remains addressable"), PosEntity);
+	if (PosEntity)
+	{
+		World.PublishTrackCamera(false, PosEntity->Handle, FVector(1.0f, 2.0f, 3.0f),
+			FRotator::ZeroRotator, 0.0f, 60.0f, 0.0f, true);
+		TestTrue(TEXT("the world carries a hard-cut instruction onto the value shot"),
+			Services.LastCameraShot.bCameraCut);
+		World.PublishTrackCamera(false, PosEntity->Handle, FVector(2.0f, 3.0f, 4.0f),
+			FRotator::ZeroRotator, 0.0f, 60.0f, 0.0f);
+		TestFalse(TEXT("the temporal cut instruction is one-shot"),
+			Services.LastCameraShot.bCameraCut);
 	}
 
 	return true;
@@ -4945,6 +5391,7 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	Payload.Player.Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Strength, 3);
 	Payload.Player.Sheet.SetBase(EElysiumTraitContainer::Disciplines, /*Celerity*/ 3, 2);
 	Payload.Player.Money = 250;
+	Payload.Player.ArmorSlot = 4;
 	Payload.Player.Health = 61;
 	Payload.Player.MaxHealth = 100;
 	Payload.Player.Law.Criminal = 2;
@@ -5021,6 +5468,7 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 		Back.Player.Sheet.Base[(uint8)EElysiumTraitContainer::Attributes].Num(),
 		ElysiumSheetSlotCount(EElysiumTraitContainer::Attributes));
 	TestEqual(TEXT("the PC's name survived"), Back.Player.Name, FString(TEXT("Carmilla")));
+	TestEqual(TEXT("the authored player body slot survived"), Back.Player.ArmorSlot, 4);
 	TestEqual(TEXT("and the quest log's hub tab"), Back.Player.QuestLogArea, 1);
 	TestEqual(TEXT("money survived"), Back.Player.Money, 250);
 	TestEqual(TEXT("the law counters survived"), Back.Player.Law.Criminal, 2);
@@ -5072,13 +5520,55 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	TArray<uint8> Truncated(Bytes.GetData(), 8);
 	TestFalse(TEXT("a truncated payload is refused"), ElysiumSave::Read(Truncated, Rejected, Error));
 
-	// The floor moves with every additive schema change, so state where it is: `History` added
-	// `m_iVHistoryID` to the player block with no upgrade branch, which means an `Identity` (v5)
-	// payload is refused rather than half-read.
-	TestEqual(TEXT("the floor is the current schema"),
+	// `BodyIdentity` is the first additive schema with an upgrade branch: v6 is still the floor,
+	// and its absent armor slot migrates to retail's first body.
+	TestEqual(TEXT("the floor remains the migratable history schema"),
 		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::History);
-	TestEqual(TEXT("and the current schema is the latest"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::History);
+	TestEqual(TEXT("body identity is the current schema"),
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::BodyIdentity);
+
+	// Build the exact v6 player byte stream (which has no ArmorSlot field) and read it through the
+	// current operator. This is deliberately manual: asking the current writer to emit v6 would
+	// test today's field list rather than the historical layout.
+	{
+		TArray<uint8> LegacyBytes;
+		{
+			FMemoryWriter Writer(LegacyBytes, /*bIsPersistent*/ true);
+			FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::History);
+			FElysiumPlayerRecord Legacy = Payload.Player;
+			Ar << Legacy.Name << Legacy.Sheet << Legacy.Money;
+			Ar << Legacy.Health << Legacy.MaxHealth;
+			Ar << Legacy.ExperienceLog << Legacy.Effects << Legacy.EmailFlags;
+			Ar << Legacy.ExperienceRemainder << Legacy.LifetimeExperience;
+			Ar << Legacy.Law << Legacy.bUnkillable << Legacy.Journal << Legacy.QuestLogArea
+				<< Legacy.HistoryId;
+		}
+		FElysiumPlayerRecord Migrated;
+		Migrated.ArmorSlot = 5;
+		FMemoryReader Reader(LegacyBytes, /*bIsPersistent*/ true);
+		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::History);
+		Ar << Migrated;
+		TestEqual(TEXT("a v6 player migrates to armor slot zero"), Migrated.ArmorSlot, 0);
+		TestEqual(TEXT("v6 fields after the inserted slot stay aligned"), Migrated.Health,
+			Payload.Player.Health);
+	}
+
+	// Corrupt/future body indices cannot escape the authored M_Body0..5 range.
+	{
+		FElysiumPlayerRecord Invalid = Payload.Player;
+		Invalid.ArmorSlot = 99;
+		TArray<uint8> RecordBytes;
+		{
+			FMemoryWriter Writer(RecordBytes, /*bIsPersistent*/ true);
+			FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::Latest);
+			Ar << Invalid;
+		}
+		FElysiumPlayerRecord Clamped;
+		FMemoryReader Reader(RecordBytes, /*bIsPersistent*/ true);
+		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::Latest);
+		Ar << Clamped;
+		TestEqual(TEXT("a loaded armor slot clamps to the authored maximum"), Clamped.ArmorSlot, 5);
+	}
 
 	// A payload stamped below the floor: rejected with a reason, never half-read.
 	{
@@ -6140,6 +6630,10 @@ namespace
 		{
 			Log.Add(FString::Printf(TEXT("end:%s"), *E.Name));
 		}
+		virtual void RestoreEvent(const FElysiumSceneData&, const FElysiumSceneEvent& E, float) override
+		{
+			Log.Add(FString::Printf(TEXT("restore:%s"), *E.Name));
+		}
 
 		bool Has(const TCHAR* Entry) const { return Log.Contains(Entry); }
 		int32 CountOf(const TCHAR* Entry) const
@@ -6347,6 +6841,47 @@ bool FElysiumSceneTimelineTest::RunTest(const FString&)
 		TestTrue(TEXT("a restored scene still reaches completion"), P.IsFinished());
 	}
 
+	// --- exact restore rebuilds continuous events without replaying instantaneous outputs -
+	{
+		FElysiumScenePlayer Original;
+		FElysiumSceneRecorder Before;
+		Original.Begin(Scene, 0.f, 600.f);
+		Original.AdvanceTo(3.5f, Before);
+		TArray<uint8> Started;
+		TArray<uint8> Active;
+		Original.CaptureLatches(Started, Active);
+
+		FElysiumScenePlayer Restored;
+		FElysiumSceneRecorder After;
+		Restored.Begin(Scene, 0.f, 600.f);
+		Restored.RestoreLatches(3.5f, Started, Active, After);
+		TestTrue(TEXT("restore reconstitutes the wide ranged event"), After.Has(TEXT("restore:wide")));
+		TestTrue(TEXT("restore reconstitutes the ranged event"), After.Has(TEXT("restore:ranged")));
+		TestFalse(TEXT("restore does not replay the instantaneous output"), After.Has(TEXT("restore:inst")));
+		TestEqual(TEXT("the exact active latch count survives"), Restored.ActiveEvents(), 3);
+		After.Clear();
+		Restored.AdvanceTo(4.5f, After);
+		TestFalse(TEXT("past starts remain exactly-once after restore"), After.Has(TEXT("start:inst")));
+		TestTrue(TEXT("the restored instantaneous event still closes"), After.Has(TEXT("end:inst")));
+	}
+
+	// --- active 0 actors/channels remain inspectable but never enter the timeline ----------
+	{
+		const FString DisabledText = TEXT("// Choreo version 1\nactor \"A\"\n{\n  channel \"off\"\n  {\n")
+			+ SceneEvent(TEXT("firetrigger"), TEXT("disabled"), 50.f, -1.f, TEXT("1"))
+			+ TEXT("    active 0\n  }\n}\nfps 60\n");
+		TSharedPtr<const FElysiumSceneData> Disabled = MakeTestScene(DisabledText);
+		TestEqual(TEXT("disabled events remain parsed"), Disabled->Events.Num(), 1);
+		TestFalse(TEXT("the event inherits its channel's disabled state"), Disabled->Events[0].bActive);
+		FElysiumScenePlayer P;
+		FElysiumSceneRecorder R;
+		P.Begin(Disabled, 0.f, 600.f);
+		TestEqual(TEXT("disabled content does not extend scene duration"), P.GetLatest(), 0.f);
+		P.AdvanceTo(100.f, R);
+		TestEqual(TEXT("disabled content dispatches nothing"), R.Log.Num(), 0);
+		TestTrue(TEXT("and cannot stall completion"), P.IsFinished());
+	}
+
 	// --- an unbound player is inert -------------------------------------------------------
 	{
 		FElysiumScenePlayer P;
@@ -6524,6 +7059,50 @@ bool FElysiumChoreoSceneTest::RunTest(const FString&)
 		TestEqual(TEXT("  and only once"), CounterValue(Count), 11011.f);
 	}
 
+	// --- Pause keeps the original start base; Resume catches up missed events ---------------
+	{
+		FElysiumEntityWorld World(nullptr, nullptr);
+		BuildWorld(World, 0, 0, TEXT("test/scene.vcd"), TEXT("A"));
+		const FElysiumEntity* Count = World.FindByName(TEXT("counter1"));
+		double T = 0.0;
+		World.EnqueueInput(TEXT("scene1"), FName(TEXT("Start")), FElysiumVariant::Void(), 0.0, {}, {});
+		World.Tick(T);
+		World.EnqueueInput(TEXT("scene1"), FName(TEXT("Pause")), FElysiumVariant::Void(), 0.0, {}, {});
+		T = 0.5; World.Tick(T);
+		T = 2.2; World.Tick(T);
+		TestEqual(TEXT("paused scene dispatches no missed triggers"), CounterValue(Count), 1.f);
+		World.EnqueueInput(TEXT("scene1"), FName(TEXT("Resume")), FElysiumVariant::Void(), 0.0, {}, {});
+		T = 2.3; World.Tick(T);
+		T = 2.31; World.Tick(T);
+		TestEqual(TEXT("resume catches up both wall-clock triggers exactly once"), CounterValue(Count), 11001.f);
+	}
+
+	// --- A mid-scene snapshot restores latches without duplicating past outputs ------------
+	{
+		FElysiumEntityWorld Before(nullptr, nullptr);
+		BuildWorld(Before, 0, 0, TEXT("test/scene.vcd"), TEXT("A"));
+		double T = 0.0;
+		Before.EnqueueInput(TEXT("scene1"), FName(TEXT("Start")), FElysiumVariant::Void(), 0.0, {}, {});
+		Before.Tick(T);
+		T = 1.2; Before.Tick(T);
+		FElysiumMapSnapshot Snapshot;
+		Before.Freeze(Snapshot);
+
+		FElysiumEntityWorld After(nullptr, nullptr);
+		BuildWorld(After, 0, 0, TEXT("test/scene.vcd"), TEXT("A"));
+		After.Tick(T); // match the saved wall clock before the leaf computes its restored base
+		After.ApplySnapshot(Snapshot);
+		const FElysiumEntity* Count = After.FindByName(TEXT("counter1"));
+		TestEqual(TEXT("snapshot carried the first trigger"), CounterValue(Count), 1001.f);
+		T = 1.3; After.Tick(T);
+		TestEqual(TEXT("the first trigger is not replayed after restore"), CounterValue(Count), 1001.f);
+		T = 2.2; After.Tick(T);
+		TestEqual(TEXT("the future trigger still dispatches"), CounterValue(Count), 11001.f);
+		T = 4.5; After.Tick(T);
+		T = 4.6; After.Tick(T);
+		TestEqual(TEXT("the restored scene completes exactly once"), CounterValue(Count), 11011.f);
+	}
+
 	// --- Cancel suppresses completion, permanently -----------------------------------------
 	{
 		FElysiumEntityWorld World(nullptr, nullptr);
@@ -6635,6 +7214,15 @@ bool FElysiumAnimationBindingIdentityTest::RunTest(const FString&)
 		Sheriff == Sire);
 	TestFalse(TEXT("ordinary and cinematic cache namespaces cannot alias"),
 		Sheriff == ElysiumEntityAnimation::NpcClipCacheKey(TEXT("sheriff"), Clip));
+	const FString NormalVisual = ElysiumEntityAnimation::NpcVisualCacheKey(
+		TEXT("malkavian_male_armor_2"), false);
+	const FString PlayerVisual = ElysiumEntityAnimation::NpcVisualCacheKey(
+		TEXT("malkavian_male_armor_2"), true);
+	TestFalse(TEXT("normal NPC and masked player meshes have distinct cache identities"),
+		NormalVisual == PlayerVisual);
+	TestFalse(TEXT("their skeleton-bound clips cannot alias either"),
+		ElysiumEntityAnimation::NpcClipCacheKey(NormalVisual, Clip)
+			== ElysiumEntityAnimation::NpcClipCacheKey(PlayerVisual, Clip));
 
 	FElysiumNpcAnimProxy Proxy;
 	UAnimSequence* Sequence = NewObject<UAnimSequence>();

@@ -230,7 +230,7 @@ wire, exactly like `OnEnterMapHere` on a `point_teleport` (`game_runtime.md`). `
 |---|---|---|
 | `Start` | `InputStartPlayback` → `0x10081e00` → virtual `+0x3c8` = `0x100829e0` | begin playback |
 | `Pause` | `InputPausePlayback` → `+0x3cc` = `0x10082ad0` | set `m_bPaused` (only while playing) |
-| `Resume` | `InputResumePlayback` → `+0x3d0` = `0x10082b00` | clear `m_bPaused`, re-apply the anim set, re-base the clock |
+| `Resume` | `InputResumePlayback` → `+0x3d0` = `0x10082b00` | clear `m_bPaused`, re-apply the anim set; the unchanged start clock catches up next frame |
 | `Cancel` | `InputCancelPlayback` → `+0x3d4` = `0x10082b80` | stop and fire `OnCanceled` |
 
 Map data only ever sends **`Start` (131 wires)** and **`Cancel` (18)** — `Pause`/`Resume`
@@ -452,9 +452,32 @@ its own flags in place. This is the path the ~5,300 per-line `.vcd`s run on.
   `firetrigger "N"` → `OnTriggerN`, N ∈ 1…4.
 - Scene time is absolute seconds since `Start`, ticked every frame, offset by the audio
   mixahead. That maps directly onto a timeline on the game clock.
+- Actor/channel/event blocks marked `active 0` remain parseable for inspection but do not enter the
+  live timeline or extend its completion time.
 - `sp_theatre`'s trial runs **seven** concurrent scenes (`courtroom_scene_bip2`…`bip7`
   started directly, `bip1` through a `logic_pythoncheck` gender branch), plus the two
   embrace scenes and the two Prince-escort scenes.
+
+### Runtime lifecycle and persistence contract
+
+Cinematic clips are driven from absolute scene/event time. Start, resume, and load explicitly seek
+the clip; event end, cancellation, restart, and teardown explicitly stop it. Before the last clip is
+stopped the actor's final `bip01` world transform is cached, so `position_end == 3` settles the entity
+under the actual final pose rather than its component origin. Pause suppresses processing without
+moving the scene's start time; resume seeks to wall-clock elapsed time and dispatches missed events.
+
+Every accepted `Start` clears the missing-actor, missing-clip, and missing-speech one-shot diagnostics.
+`!dialogpartner` uses `override_speech_target` first and the player's active conversation partner only
+when no override is present. Both `speak` and `bodysound` own voice handles. Cancel, restart, teardown,
+and load stop or resume them, and an active restored voice starts at its saved elapsed offset instead
+of replaying from zero.
+
+Ordering is explicit. Completion stops live events, caches/applies final positions, restores actors,
+fires `OnCompletion`, and only then unhides the scene-hidden set. Cancellation stops live events,
+unhides, then fires `OnCanceled`; it never applies completion positioning. A map snapshot carries the
+activator, actor bindings, original transforms, hidden actors, event dispatched/active latches,
+elapsed and pause state, the player-controller relationship, and live voice offsets. Restore seeks
+the current pose and recreates active ranged events without replaying past instantaneous outputs.
 
 ## Where the rebuild diverges
 

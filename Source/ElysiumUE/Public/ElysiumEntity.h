@@ -201,6 +201,8 @@ public:
 	// beside PlayAnimClip for the same no-RTTI reason; base answers false.
 	virtual bool PlayCinematicClip(const FString& AnimSetModel, const FString& BoneRoot,
 		const FString& ClipName, bool bLoop, float* OutSeconds = nullptr) { return false; }
+	virtual bool SeekCinematicClip(float PositionSeconds) { return false; }
+	virtual void StopCinematicClip() {}
 
 	// A disposition write from script — the animation half of `SetDisposition` (2,510 calls, the
 	// largest single engine demand in the game). Re-picks the standing stance; the emotional-state

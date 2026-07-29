@@ -250,11 +250,8 @@ void UElysiumGameFlowSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	//
 	// The forget is a request consumed on arrival, not a clear here: NewGame's travel tears the
 	// current map down at end of frame, and that teardown re-freezes it.
-	ConsoleObjects.Add(Console.RegisterConsoleCommand(
-		TEXT("elysium.newgame_ttd"),
-		TEXT("elysium.newgame_ttd — theatre debug: new run entered at sp_theatre's "
-			"`newgame` landmark with the map's state forgotten, so its opening chain fires again"),
-		FConsoleCommandDelegate::CreateWeakLambda(this, [this]()
+	const FConsoleCommandDelegate TheatreReplay = FConsoleCommandDelegate::CreateWeakLambda(this,
+		[this]()
 		{
 			FElysiumNewGameRequest Request;
 			Request.EntryPoint = TEXT("sp_theatre@newgame");
@@ -274,7 +271,17 @@ void UElysiumGameFlowSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 				UE_LOG(LogElysiumFlow, Warning,
 					TEXT("elysium.newgame_ttd: sp_theatre needs both an export and a bake"));
 			}
-		}),
+		});
+	ConsoleObjects.Add(Console.RegisterConsoleCommand(
+		ElysiumStory::TheatreReplayCommands[0],
+		TEXT("elysium.newgame_ttd — theatre debug: new run entered at sp_theatre's "
+			"`newgame` landmark with the map's state forgotten, so its opening chain fires again"),
+		TheatreReplay,
+		ECVF_Cheat));
+	ConsoleObjects.Add(Console.RegisterConsoleCommand(
+		ElysiumStory::TheatreReplayCommands[1],
+		TEXT("newgame_ttd — compact alias for elysium.newgame_ttd"),
+		TheatreReplay,
 		ECVF_Cheat));
 
 	ConsoleObjects.Add(Console.RegisterConsoleCommand(

@@ -1,6 +1,7 @@
 #include "ElysiumEntityWorld.h"
 
 #include "ElysiumBrushComponent.h"
+#include "ElysiumCameraSolve.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumDlg.h"
 #include "ElysiumEditorLabels.h"
@@ -10,6 +11,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumSaveArchive.h"
 #include "ElysiumScriptHost.h"
+#include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSignData.h"
 #include "ElysiumUseIcons.h"
 
@@ -286,6 +288,19 @@ FElysiumEntityHandle FElysiumEntityWorld::SpawnPlayer()
 	FElysiumEntityDef Def;
 	Def.Classname  = ElysiumPlayerClassName().ToString();
 	Def.TargetName = ElysiumPlayerTargetName();
+	if (GameState)
+	{
+		const FElysiumPlayerRecord& Record = GameState->PlayerRecord();
+		if (UElysiumRulebookSubsystem* Rules = GameState->Rulebook())
+		{
+			const FString PlayerModel = Rules->Clans().PlayerBodyModel(Record.Sheet.Clan(),
+				/*bFemale*/ !Record.Sheet.IsMale(), FMath::Clamp(Record.ArmorSlot, 0, 5));
+			if (!PlayerModel.IsEmpty())
+			{
+				Def.Keys.Add(TEXT("model"), PlayerModel);
+			}
+		}
+	}
 	// The origin is the pawn's; SpawnPlayer runs before the first tick and FElysiumPlayer::Spawn
 	// samples the body, so the def's zero is never read as a position.
 	Player = CreateRuntimeEntityNoSpawn(MoveTemp(Def));
@@ -313,6 +328,92 @@ FElysiumPlayer* FElysiumEntityWorld::FindPlayer() const
 	// The handle is only ever set by SpawnPlayer, so the static_cast is exact; going through
 	// AsCombatCharacter would answer for NPCs too.
 	return E ? static_cast<FElysiumPlayer*>(E) : nullptr;
+}
+
+FElysiumEntity* FElysiumEntityWorld::FindPlayerController() const
+{
+	return const_cast<FElysiumEntityWorld*>(this)->Resolve(PlayerControllerEntity);
+}
+
+FElysiumEntityHandle FElysiumEntityWorld::CreatePlayerControllerEntity()
+{
+	if (FindPlayerController())
+	{
+		return PlayerControllerEntity;
+	}
+	FElysiumPlayer* Source = FindPlayer();
+	if (!Source)
+	{
+		return FElysiumEntityHandle::Invalid();
+	}
+
+	FElysiumEntityDef Def;
+	Def.Classname = TEXT("npc_VPlayerController");
+	Def.TargetName = TEXT("!playercontroller");
+	Def.Origin = Source->Origin;
+	if (!Source->Model.IsEmpty())
+	{
+		Def.Keys.Add(TEXT("model"), Source->Model);
+	}
+	Def.Keys.Add(TEXT("angles"), FString::Printf(TEXT("%g %g %g"),
+		Source->Angles.X, Source->Angles.Y, Source->Angles.Z));
+
+	PlayerControllerEntity = CreateRuntimeEntityNoSpawn(MoveTemp(Def));
+	FElysiumCombatCharacter* Controller = static_cast<FElysiumCombatCharacter*>(Resolve(PlayerControllerEntity));
+	if (!Controller)
+	{
+		PlayerControllerEntity = FElysiumEntityHandle::Invalid();
+		return PlayerControllerEntity;
+	}
+
+	// This entity is an embodied duplicate, not a second character. Copy only state that can affect
+	// the performance; the controller leaf has no AI or collision of its own.
+	Controller->Origin = Source->Origin;
+	Controller->Angles = Source->Angles;
+	Controller->Model = Source->Model;
+	Controller->Skin = Source->Skin;
+	Controller->Disposition = Source->Disposition;
+	Controller->Sheet = Source->Sheet;
+	Controller->Effects = Source->Effects;
+	Controller->Health = Source->Health;
+	Controller->MaxHealth = Source->MaxHealth;
+	CallEntitySpawn(*Controller);
+	UE_LOG(LogElysiumWorld, Log, TEXT("player controller entity live: %s"), *Controller->DebugString());
+	return PlayerControllerEntity;
+}
+
+bool FElysiumEntityWorld::RemovePlayerControllerEntity()
+{
+	FElysiumCombatCharacter* Controller = static_cast<FElysiumCombatCharacter*>(FindPlayerController());
+	FElysiumPlayer* Dest = FindPlayer();
+	if (!Controller)
+	{
+		PlayerControllerEntity = FElysiumEntityHandle::Invalid();
+		return false;
+	}
+
+	if (Dest)
+	{
+		// Apply the final pose anchor before the stand-in disappears. SetModel goes through the
+		// player's rebuild path only when the controller actually changed it.
+		Dest->SetRuntimeOrigin(Controller->Origin);
+		Dest->SetRuntimeAngles(Controller->Angles);
+		if (Dest->Model != Controller->Model)
+		{
+			Dest->SetRuntimeModel(Controller->Model);
+		}
+		Dest->Skin = Controller->Skin;
+		Dest->Disposition = Controller->Disposition;
+	}
+
+	if (Controller->Visual)
+	{
+		Controller->Visual->DestroyComponent();
+		Controller->Visual = nullptr;
+	}
+	Controller->Kill();
+	PlayerControllerEntity = FElysiumEntityHandle::Invalid();
+	return true;
 }
 
 // --- Persistence (11.9) ------------------------------------------------------------------
@@ -626,6 +727,19 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 		if (FElysiumEntity* E = Resolve(FElysiumEntityHandle(Absent, Epoch)))
 		{
 			E->Kill();
+		}
+	}
+
+	// Rebind the map-epoch relationship after runtime entities and their dead flags are final. A
+	// live saved controller keeps its stable runtime index; a removed/dead one resolves to nothing.
+	PlayerControllerEntity = FElysiumEntityHandle::Invalid();
+	for (const TUniquePtr<FElysiumEntity>& Candidate : EntityList)
+	{
+		if (Candidate && !Candidate->IsDead() && Candidate->Def
+			&& Candidate->Def->Classname.Equals(TEXT("npc_VPlayerController"), ESearchCase::IgnoreCase))
+		{
+			PlayerControllerEntity = Candidate->Handle;
+			break;
 		}
 	}
 
@@ -1099,6 +1213,128 @@ void FElysiumEntityWorld::ClearScriptedCamera()
 	ScriptedCameraFile.Reset();
 }
 
+void FElysiumEntityWorld::PublishTrackCamera(bool bTargetRole,
+	const FElysiumEntityHandle& TrackOwner, const FVector& Point, const FRotator& Rotation,
+	float Roll, float FieldOfView, float BlendInSeconds, bool bCameraCut)
+{
+	IElysiumEmbodiment* E = Embodiment();
+	if (!E || !TrackOwner.IsSet())
+	{
+		return;
+	}
+
+	const FElysiumEntityHandle PreviousOwner = bTargetRole
+		? TrackCameraTargetOwner
+		: TrackCameraPositionOwner;
+	const bool bRoleChanged = PreviousOwner != TrackOwner;
+	if (bTargetRole)
+	{
+		TrackCameraTargetOwner = TrackOwner;
+		TrackCameraTarget = Point;
+	}
+	else
+	{
+		TrackCameraPositionOwner = TrackOwner;
+		TrackCameraPosition = Point;
+		TrackCameraRotation = Rotation;
+		TrackCameraRoll = Roll;
+		TrackCameraFov = FieldOfView;
+	}
+
+	// A target may publish one queue entry before its paired position. Seed the missing half from
+	// the live player view once; the position track replaces it later in the same drain.
+	if (!TrackCameraPositionOwner.IsSet() && TrackCameraShot == 0)
+	{
+		FVector ViewPoint;
+		FRotator ViewRotation;
+		if (E->GetPlayerViewPoint(ViewPoint, ViewRotation))
+		{
+			TrackCameraPosition = ViewPoint;
+			TrackCameraRotation = ViewRotation;
+		}
+	}
+
+	FElysiumCameraShot Shot;
+	Shot.Origin = TrackCameraPosition;
+	Shot.Roll = TrackCameraRoll;
+	Shot.FieldOfView = TrackCameraFov;
+	Shot.BlendSeconds = FMath::Max(0.0f, BlendInSeconds);
+	// camera_track already owns the full per-frame path, including target interpolation and hard
+	// cuts. The generic shot channel's default 90-degree/second tracking limiter is for moving
+	// entity anchors; applying it here adds a second interpolator and turns authored cuts into pans.
+	Shot.MaxTurnRate = FVector::ZeroVector;
+	// A new zero-blend owner is itself a cut (the embrace -> courtroom handoff); a zero-time
+	// keyframe crossing supplies bCameraCut while an existing owner continues.
+	Shot.bCameraCut = bCameraCut
+		|| (BlendInSeconds <= KINDA_SMALL_NUMBER && (TrackCameraShot == 0 || bRoleChanged));
+	Shot.DebugName = TEXT("camera_track");
+	if (TrackCameraTargetOwner.IsSet())
+	{
+		Shot.bUseLookAt = true;
+		Shot.LookAt = TrackCameraTarget;
+	}
+	else
+	{
+		Shot.bUseLookAt = false;
+		Shot.Rotation = TrackCameraRotation;
+	}
+
+	if (TrackCameraShot == 0)
+	{
+		TrackCameraShot = E->PushCameraShotValue(Shot);
+	}
+	else
+	{
+		E->UpdateCameraShotValue(TrackCameraShot, Shot);
+	}
+}
+
+void FElysiumEntityWorld::RestoreTrackCamera(bool bTargetRole,
+	const FElysiumEntityHandle& TrackOwner, float BlendOutSeconds)
+{
+	FElysiumEntityHandle& OwnerSlot = bTargetRole
+		? TrackCameraTargetOwner
+		: TrackCameraPositionOwner;
+	if (OwnerSlot != TrackOwner)
+	{
+		return; // a stale Restore cannot tear down a newer track that owns the role
+	}
+	OwnerSlot = FElysiumEntityHandle::Invalid();
+
+	if (!TrackCameraPositionOwner.IsSet() && !TrackCameraTargetOwner.IsSet())
+	{
+		ClearTrackCamera(BlendOutSeconds);
+		return;
+	}
+
+	// Refresh the surviving role without repushing; UpdateCameraShotValue preserves the original
+	// blend-in while changing whether this value carries an authored look-at.
+	if (TrackCameraPositionOwner.IsSet())
+	{
+		PublishTrackCamera(false, TrackCameraPositionOwner, TrackCameraPosition,
+			TrackCameraRotation, TrackCameraRoll, TrackCameraFov, 0.0f);
+	}
+	else
+	{
+		PublishTrackCamera(true, TrackCameraTargetOwner, TrackCameraTarget,
+			TrackCameraRotation, TrackCameraRoll, TrackCameraFov, 0.0f);
+	}
+}
+
+void FElysiumEntityWorld::ClearTrackCamera(float BlendOutSeconds)
+{
+	if (TrackCameraShot != 0)
+	{
+		if (IElysiumEmbodiment* E = Embodiment())
+		{
+			E->PopCameraShot(TrackCameraShot, FMath::Max(0.0f, BlendOutSeconds));
+		}
+	}
+	TrackCameraShot = 0;
+	TrackCameraPositionOwner = FElysiumEntityHandle::Invalid();
+	TrackCameraTargetOwner = FElysiumEntityHandle::Invalid();
+}
+
 void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 {
 	const FElysiumEntityHandle Closing = OpenDialogOwner;
@@ -1440,6 +1676,14 @@ void FElysiumEntityWorld::ResolveTargets(const FElysiumIOEvent& Event, TArray<FE
 		}
 		return;
 	}
+	if (T.Equals(TEXT("!playercontroller"), ESearchCase::IgnoreCase))
+	{
+		if (FElysiumEntity* E = FindPlayerController())
+		{
+			Out.Add(E);
+		}
+		return;
+	}
 
 	// Targetnames are non-unique — fan out over every live (non-dead) match. A wire may name a
 	// trailing-`*` prefix (RE29); 68 shipped outputs do, `patrol_cop_*` alone 51 times.
@@ -1465,6 +1709,15 @@ const FElysiumEntity* FElysiumEntityWorld::Resolve(const FElysiumEntityHandle& H
 
 FElysiumEntity* FElysiumEntityWorld::FindByName(const FString& Name)
 {
+	if (Name.Equals(TEXT("!playercontroller"), ESearchCase::IgnoreCase))
+	{
+		if (FElysiumEntity* Controller = FindPlayerController())
+		{
+			return Controller;
+		}
+		// During snapshot reconstruction the relationship handle is rebound after the state walk;
+		// fall through to the entity's literal targetname so scene restore can bind in that window.
+	}
 	// FindEntityByName with a null start entity: the first live match, under the same matching rule
 	// everything else uses (RE29) — so a trailing-`*` name resolves here too.
 	FElysiumEntity* Found = nullptr;
@@ -1618,7 +1871,8 @@ void FElysiumEntityWorld::Teardown()
 	}
 	Player = FElysiumEntityHandle::Invalid();
 
-	// A scripted camera does not outlive the map that pushed it.
+	// Scripted cameras do not outlive the map that pushed them.
+	ClearTrackCamera(/*BlendOutSeconds*/ 0.0f);
 	ClearScriptedCamera();
 
 	// Epoch 0 matches no minted handle, so every outstanding handle goes stale at once (R3).

@@ -172,6 +172,10 @@ struct FElysiumPlayerRecord
 
 	int32 Money = 0;         // m_iMoney — not a Stat in `stats.txt`
 
+	// Which authored M_BodyN/F_BodyN the player wears. This is appearance identity, not the
+	// Armor_Rating sheet trait; callers clamp it to the six body slots VtMB's clan templates expose.
+	int32 ArmorSlot = 0;
+
 	int32 Health = 0;        // carried across a travel; 0 = "not seeded yet" (the entity seeds it)
 	int32 MaxHealth = 0;
 
@@ -240,6 +244,8 @@ public:
 	virtual bool PlayAnimClip(const FString& ClipName, bool bLoop, float* OutSeconds = nullptr) override;
 	virtual bool PlayCinematicClip(const FString& AnimSetModel, const FString& BoneRoot,
 		const FString& ClipName, bool bLoop, float* OutSeconds = nullptr) override;
+	virtual bool SeekCinematicClip(float PositionSeconds) override;
+	virtual void StopCinematicClip() override;
 	virtual bool ResetAnimToIdle() override;
 	virtual bool SetDispositionName(const FString& NewDisposition) override;
 
@@ -439,8 +445,9 @@ public:
 
 	// The pawn follows the entity: a write to origin/angles places the body.
 	virtual void OnRuntimeTransformChanged() override;
-	// The player's model is the pawn, not a spawned skeletal body — nothing to rebuild.
-	virtual void OnRuntimeModelChanged() override {}
+	// SetModel swaps the skeletal surface attached to the movement pawn. The pawn/hull itself stays
+	// put; the same component remains the FElysiumAnimating visual used by choreo clip playback.
+	virtual void OnRuntimeModelChanged() override;
 
 	// The run ends: fire OnDeath, then tell the session (which raises the game-over screen).
 	virtual void OnKilled() override;
