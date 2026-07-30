@@ -44,9 +44,12 @@
 #include "MaterialShared.h"
 #include "RHIShaderPlatform.h"
 #include "Misc/FileHelper.h"
+#include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "PhysicsEngine/BodySetup.h"
 #include "Serialization/MemoryWriter.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 
 static constexpr EAutomationTestFlags GElysiumContentTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -3373,6 +3376,104 @@ bool FElysiumSceneAnimSetsTest::RunTest(const FString&)
 	TestEqual(TEXT("every scene actor's bonerename root resolves to a bank"),
 		NumActorBindsResolved, NumActorBinds);
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAudioCatalogContentTest,
+	"Elysium.Content.AudioCatalog", GElysiumContentTestFlags)
+
+bool FElysiumAudioCatalogContentTest::RunTest(const FString&)
+{
+	const FString Path = FElysiumContentPaths::Root() / TEXT("audio/catalog.json");
+	FString Text;
+	if (!FFileHelper::LoadFileToString(Text, *Path))
+	{
+		AddInfo(TEXT("audio catalog not exported; skipping"));
+		return true;
+	}
+	TSharedPtr<FJsonObject> Root;
+	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Text);
+	TestTrue(TEXT("audio catalog JSON parses"), FJsonSerializer::Deserialize(Reader, Root));
+	if (!Root)
+	{
+		return false;
+	}
+	TestEqual(TEXT("audio catalog contract version"), Root->GetIntegerField(TEXT("version")), 1);
+	const TArray<TSharedPtr<FJsonValue>>* Entries = nullptr;
+	TestTrue(TEXT("audio catalog has entries"), Root->TryGetArrayField(TEXT("entries"), Entries));
+	if (!Entries)
+	{
+		return false;
+	}
+	TSet<FString> Canonical;
+	int32 ExplicitMissing = 0;
+	for (const TSharedPtr<FJsonValue>& Value : *Entries)
+	{
+		const TSharedPtr<FJsonObject> Entry = Value->AsObject();
+		if (!Entry)
+		{
+			AddError(TEXT("audio catalog contains a non-object entry"));
+			continue;
+		}
+		const FString Rel = Entry->GetStringField(TEXT("canonical_path"));
+		TestFalse(FString::Printf(TEXT("duplicate canonical audio path: %s"), *Rel),
+			Canonical.Contains(Rel));
+		Canonical.Add(Rel);
+		const FString Disposition = Entry->GetStringField(TEXT("disposition"));
+		const bool bKnown = Disposition == TEXT("present") ||
+			Disposition == TEXT("optional") || Disposition == TEXT("missing_content");
+		TestTrue(FString::Printf(TEXT("%s has an explicit validation disposition"), *Rel), bKnown);
+		if (Disposition == TEXT("missing_content"))
+		{
+			++ExplicitMissing;
+		}
+	}
+	AddInfo(FString::Printf(TEXT("%d canonical audio entries; %d explicit missing-content records"),
+		Canonical.Num(), ExplicitMissing));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAudioRoutingAssetsContentTest,
+	"Elysium.Content.AudioRoutingAssets", GElysiumContentTestFlags)
+
+bool FElysiumAudioRoutingAssetsContentTest::RunTest(const FString&)
+{
+	static const TCHAR* Packages[] = {
+		TEXT("/Game/VtMB/Audio/SC_Master"),
+		TEXT("/Game/VtMB/Audio/SC_Music"),
+		TEXT("/Game/VtMB/Audio/SC_Dialogue"),
+		TEXT("/Game/VtMB/Audio/SC_Ambience"),
+		TEXT("/Game/VtMB/Audio/SC_SFX"),
+		TEXT("/Game/VtMB/Audio/SC_UI"),
+		TEXT("/Game/VtMB/Audio/SM_Master"),
+		TEXT("/Game/VtMB/Audio/SM_Music"),
+		TEXT("/Game/VtMB/Audio/SM_Dialogue"),
+		TEXT("/Game/VtMB/Audio/SM_Ambience"),
+		TEXT("/Game/VtMB/Audio/SM_SFX"),
+		TEXT("/Game/VtMB/Audio/SM_UI"),
+		TEXT("/Game/VtMB/Audio/SM_ReverbReturn"),
+		TEXT("/Game/VtMB/Audio/CB_Master"),
+		TEXT("/Game/VtMB/Audio/CB_Music"),
+		TEXT("/Game/VtMB/Audio/CB_Dialogue"),
+		TEXT("/Game/VtMB/Audio/CB_Ambience"),
+		TEXT("/Game/VtMB/Audio/CB_SFX"),
+		TEXT("/Game/VtMB/Audio/CB_UI"),
+		TEXT("/Game/VtMB/Audio/CBM_User"),
+		TEXT("/Game/VtMB/Audio/Concurrency_Music"),
+		TEXT("/Game/VtMB/Audio/Concurrency_Dialogue"),
+		TEXT("/Game/VtMB/Audio/Concurrency_Ambience"),
+		TEXT("/Game/VtMB/Audio/Concurrency_SFX"),
+		TEXT("/Game/VtMB/Audio/Concurrency_UI"),
+		TEXT("/Game/VtMB/Audio/Attenuation_Point"),
+		TEXT("/Game/VtMB/Audio/Attenuation_Dialogue"),
+		TEXT("/Game/VtMB/Audio/Attenuation_Mover"),
+		TEXT("/Game/VtMB/Audio/Attenuation_Ambient"),
+	};
+	for (const TCHAR* Package : Packages)
+	{
+		TestTrue(FString::Printf(TEXT("generated routing asset exists: %s"), Package),
+			FPackageName::DoesPackageExist(Package));
+	}
 	return true;
 }
 

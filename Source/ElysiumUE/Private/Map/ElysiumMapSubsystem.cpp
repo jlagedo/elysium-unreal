@@ -106,6 +106,7 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	{
 		GreenRoomRun = MakePimpl<FElysiumGreenRoomRun>(this);
 	}
+#if !UE_BUILD_SHIPPING
 	// Under -ElysiumProbe, arm the headless light-attribution probe (one map per launch).
 	if (FElysiumProbeRun::IsRequested())
 	{
@@ -117,6 +118,7 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	{
 		MoveRun = MakePimpl<FElysiumMoveRun>(this);
 	}
+#endif
 }
 
 void UElysiumMapSubsystem::Deinitialize()

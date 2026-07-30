@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumAudioSubsystem.h"
 #include "ElysiumEntity.h"
 
 // P4.1 — the brush-mover substrate. `animation_and_movers.md` Part B (decompiled `vampire.dll`:
@@ -95,7 +96,7 @@ protected:
 	FString LastMoverSound;                    // debug: the last sound played (rel), or empty
 
 private:
-	int32 MoverLoopVoiceId = 0;                // the looping moving voice id (0 = none), for StopMoverLoop
+	FElysiumVoiceHandle MoverLoopVoice;         // generation-safe looping travel voice
 
 
 	EMoveKind CurrentMove = EMoveKind::None;

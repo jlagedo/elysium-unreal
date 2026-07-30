@@ -23,11 +23,12 @@ namespace
 			return;
 		}
 
-		// VtMB's virtual-model contract binds compatible biped-local animation tracks by bone name.
-		// Do not enable glTFRuntime's generic rest-pose retargeter: cinematic roots carry absolute
-		// placement inside the scene and the other tracks already use the target biped's local frame.
-		// Rest-pose retargeting expands a normal 1-3 m body into a 4-8 m pose, while a post-transform
-		// on Bip01 also double-applies the authored stage placement.
+		// The current importer binds sparse donor tracks by bone name. Do not enable glTFRuntime's
+		// generic rest-pose retargeter: cinematic roots carry absolute placement inside the scene,
+		// so it expands a normal 1-3 m body into a 4-8 m pose or double-applies Bip01 placement.
+		// This is only the current loading policy, not VtMB's complete virtual-model contract:
+		// retail evaluates donor-bind fallback and an optional outer position map. See
+		// animation_and_movers.md, "The shared animation library".
 		//
 		// Banks may carry optional hair, toe and nub tracks absent from a particular body. Filter
 		// those tracks before animation construction; the target leaves those bones at bind pose.

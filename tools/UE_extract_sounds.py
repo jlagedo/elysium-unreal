@@ -1,4 +1,4 @@
-"""Extract the audio assets a map's entities reference, verbatim, into out/sound/.
+"""Build the patch-first audio mirror and its runtime catalog under ``out/audio``.
 
 P6 6.1 (WAV) + 6.2 (MP3) asset-delivery step. The runtime decodes VtMB's audio *in C++* --
 dr_wav for the proprietary WAV encodings (Microsoft ADPCM tag 0x02, IMA ADPCM 0x11, PCM16),
@@ -46,6 +46,7 @@ Usage:
 import glob
 import json
 import os
+import struct
 import sys
 
 import install
@@ -54,6 +55,8 @@ import kv
 TOOLS = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(TOOLS, "out")
 SOUND_OUT = os.path.join(OUT, "sound")
+AUDIO_OUT = os.path.join(OUT, "audio")
+AUDIO_CONTRACT_VERSION = 1
 
 # Audio references the runtime can decode today: WAV (dr_wav) + MP3 (dr_mp3).
 AUDIO_EXTS = (".wav", ".mp3")
@@ -244,6 +247,167 @@ def extract(refs, idx=None):
     return written, cached, missing
 
 
+def _normalise(path):
+    """The offline half of the runtime's one logical-path rule."""
+    path = path.strip().replace("\\", "/").lstrip("/")
+    if path.lower().startswith("sound/"):
+        path = path[6:]
+    return os.path.normpath(path).replace("\\", "/").lstrip("./").lower()
+
+
+def _wav_metadata(path):
+    """Read the RIFF fmt/data facts without asking Python's PCM-only wave module."""
+    with open(path, "rb") as f:
+        data = f.read()
+    if len(data) < 12 or data[:4] != b"RIFF" or data[8:12] != b"WAVE":
+        raise ValueError("not RIFF/WAVE")
+    pos = 12
+    fmt = None
+    data_bytes = 0
+    fact_frames = 0
+    while pos + 8 <= len(data):
+        chunk, size = struct.unpack_from("<4sI", data, pos)
+        payload = pos + 8
+        if chunk == b"fmt " and size >= 16:
+            fmt = struct.unpack_from("<HHIIHH", data, payload)
+        elif chunk == b"data":
+            data_bytes += min(size, max(0, len(data) - payload))
+        elif chunk == b"fact" and size >= 4:
+            fact_frames = struct.unpack_from("<I", data, payload)[0]
+        pos = payload + size + (size & 1)
+    if not fmt:
+        raise ValueError("missing fmt chunk")
+    tag, channels, rate, avg_bytes, block_align, bits = fmt
+    frames = fact_frames or (data_bytes // block_align if block_align else 0)
+    duration = (data_bytes / avg_bytes) if avg_bytes else (frames / rate if rate else 0)
+    return {
+        "codec": "wav",
+        "format_tag": tag,
+        "channels": channels,
+        "sample_rate": rate,
+        "bits_per_sample": bits,
+        "frame_count": frames,
+        "duration_seconds": round(duration, 6),
+    }
+
+
+def _mp3_metadata(path):
+    """Find the first MPEG audio frame. Duration is byte-rate based and marked estimated."""
+    with open(path, "rb") as f:
+        data = f.read()
+    pos = 0
+    if data[:3] == b"ID3" and len(data) >= 10:
+        size = ((data[6] & 0x7f) << 21) | ((data[7] & 0x7f) << 14) | \
+               ((data[8] & 0x7f) << 7) | (data[9] & 0x7f)
+        pos = 10 + size
+    bitrates = {
+        3: [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320],
+        2: [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160],
+    }
+    rates = {3: [44100, 48000, 32000], 2: [22050, 24000, 16000], 0: [11025, 12000, 8000]}
+    while pos + 4 <= len(data):
+        word = struct.unpack_from(">I", data, pos)[0]
+        if word & 0xffe00000 == 0xffe00000:
+            version_bits = (word >> 19) & 3
+            layer_bits = (word >> 17) & 3
+            bitrate_i = (word >> 12) & 0xf
+            rate_i = (word >> 10) & 3
+            if version_bits != 1 and layer_bits == 1 and bitrate_i not in (0, 15) and rate_i != 3:
+                version = 3 if version_bits == 3 else (2 if version_bits == 2 else 0)
+                table = 3 if version == 3 else 2
+                kbps = bitrates[table][bitrate_i]
+                rate = rates[version][rate_i]
+                channels = 1 if ((word >> 6) & 3) == 3 else 2
+                duration = max(0, len(data) - pos) * 8 / (kbps * 1000)
+                return {
+                    "codec": "mp3",
+                    "channels": channels,
+                    "sample_rate": rate,
+                    "bits_per_sample": 16,
+                    "frame_count": round(duration * rate),
+                    "duration_seconds": round(duration, 6),
+                    "duration_estimated": True,
+                    "bit_rate_kbps": kbps,
+                }
+        pos += 1
+    raise ValueError("no MPEG audio frame")
+
+
+def _category(rel):
+    low = rel.lower()
+    if low.startswith(("character/dlg/", "dialogue/")):
+        return "dialogue"
+    if low.startswith(("music/", "licensed/", "radio/")) or low.endswith(".mp3"):
+        return "music"
+    if low.startswith(("ui/", "interface/")):
+        return "ui"
+    if low.startswith(("environmental/", "ambient/", "schemes/")):
+        return "ambience"
+    return "sfx"
+
+
+def write_audio_contract(refs, idx, map_refs, scheme_rels, soundgroups):
+    """Write catalog + typed reference sidecars. Every source path is patch-first because ``idx``
+    has already collapsed base/VPK/patch candidates to the winning install entry."""
+    os.makedirs(AUDIO_OUT, exist_ok=True)
+    entries = []
+    spellings = {}
+    for authored in refs:
+        spellings.setdefault(_normalise(authored), set()).add(authored)
+    case_collisions = []
+    for canonical, authored_set in sorted(spellings.items()):
+        if len(authored_set) > 1:
+            case_collisions.append(
+                {"canonical": canonical, "spellings": sorted(authored_set, key=str.lower)})
+        authored = sorted(authored_set, key=lambda value: (value.lower() != canonical, value))[0]
+        path = os.path.join(SOUND_OUT, canonical.replace("/", os.sep))
+        item = {
+            "canonical_path": canonical,
+            "actual_path": canonical,
+            "authored_path": authored,
+            "category": _category(canonical),
+            "decode_policy": "stream" if canonical.endswith(".mp3") else "pcm_lru",
+            "provenance": "patch_first_install_index",
+            "references": sorted(name for name, values in map_refs.items()
+                                 if canonical in {_normalise(v) for v in values}),
+            "aliases": [f"sound/{canonical}"],
+            "fallbacks": ([canonical[:-4] + ".wav"] if canonical.endswith(".mp3") else []),
+            "disposition": "present" if os.path.exists(path) else "missing_content",
+            "validation": {"present": os.path.exists(path), "error": ""},
+        }
+        try:
+            item.update(_mp3_metadata(path) if canonical.endswith(".mp3") else _wav_metadata(path))
+        except (OSError, ValueError) as exc:
+            item["validation"]["error"] = str(exc)
+        entries.append(item)
+    catalog = {
+        "contract": "elysium.audio.catalog",
+        "version": AUDIO_CONTRACT_VERSION,
+        "generation": {"entry_count": len(entries)},
+        "case_collisions": case_collisions,
+        "entries": entries,
+    }
+    with open(os.path.join(AUDIO_OUT, "catalog.json"), "w", encoding="utf-8") as f:
+        json.dump(catalog, f, indent=1, sort_keys=True)
+
+    maps_dir = os.path.join(AUDIO_OUT, "maps")
+    os.makedirs(maps_dir, exist_ok=True)
+    for map_name, values in sorted(map_refs.items()):
+        with open(os.path.join(maps_dir, map_name + ".json"), "w", encoding="utf-8") as f:
+            json.dump({"version": AUDIO_CONTRACT_VERSION, "map": map_name,
+                       "references": sorted({_normalise(v) for v in values})},
+                      f, indent=1, sort_keys=True)
+    with open(os.path.join(AUDIO_OUT, "schemes.json"), "w", encoding="utf-8") as f:
+        json.dump({"version": AUDIO_CONTRACT_VERSION, "schemes": sorted(scheme_rels)},
+                  f, indent=1, sort_keys=True)
+    with open(os.path.join(AUDIO_OUT, "entity_events.json"), "w", encoding="utf-8") as f:
+        json.dump({"version": AUDIO_CONTRACT_VERSION, "soundgroups": soundgroups},
+                  f, indent=1, sort_keys=True)
+    print(f"[audio-contract] v{AUDIO_CONTRACT_VERSION}: {len(entries)} catalog entries, "
+          f"{len(map_refs)} map reference sets, {len(case_collisions)} case collision(s) -> "
+          f"{os.path.relpath(AUDIO_OUT, TOOLS)}/", flush=True)
+
+
 def main(maps=None, radio=False, schemes=True):
     """Extract the sounds referenced by the named maps (default: every exported map). With
     radio=True, also mirror the loose radio_loop_*.mp3 set as MP3 decode test material. With
@@ -259,8 +423,12 @@ def main(maps=None, radio=False, schemes=True):
         print("[sound] no .ents sidecars found -- export maps first", flush=True)
         return
 
-    refs = collect_audio_refs(ents_paths)
     idx = install.build_index(SOUND_DIRS)
+    map_refs = {}
+    for path in ents_paths:
+        map_name = os.path.splitext(os.path.basename(path))[0]
+        map_refs[map_name] = collect_audio_refs([path])
+    refs = set().union(*map_refs.values()) if map_refs else set()
 
     # 6.4 — mover soundgroups: mirror the referenced usable/<cat>/<group>/*.wav sets and write the
     # manifest the runtime resolves door/button `soundgroup` tokens through.
@@ -286,6 +454,8 @@ def main(maps=None, radio=False, schemes=True):
         refs.update(s_assets)
         print(f"[scheme] {len(scheme_rels)} scheme(s): {s_written} copied, {s_cached} present, "
               f"{s_missing} missing; {len(s_assets)} referenced assets folded in", flush=True)
+    else:
+        scheme_rels = set()
 
     if radio:
         # Whatever radio loops this install actually carries (retail lists 5; installs vary).
@@ -293,12 +463,17 @@ def main(maps=None, radio=False, schemes=True):
                             if k.startswith("sound/radio/") and k.endswith(".mp3"))
         refs.update(radio_refs)
         print(f"[sound] --radio: {len(radio_refs)} loose radio loop(s) found", flush=True)
+    # Dynamic Python constructs filenames that cannot be reduced to a static reference list.
+    # Mirror the whole supported patch-first tree so those paths resolve through the same catalog.
+    refs.update(k[len("sound/"):] for k in idx
+                if k.startswith("sound/") and k.endswith(AUDIO_EXTS))
     n_mp3 = sum(1 for r in refs if r.lower().endswith(".mp3"))
-    print(f"[sound] {len(refs)} distinct sounds referenced by {len(ents_paths)} map(s) "
+    print(f"[sound] {len(refs)} supported patch-first files for {len(ents_paths)} map(s) "
           f"({len(refs) - n_mp3} WAV, {n_mp3} MP3)", flush=True)
     written, cached, missing = extract(refs, idx)
     print(f"[sound] {written} copied, {cached} already present, {missing} missing "
           f"-> {os.path.relpath(SOUND_OUT, TOOLS)}/", flush=True)
+    write_audio_contract(refs, idx, map_refs, scheme_rels, sg_manifest)
 
 
 if __name__ == "__main__":

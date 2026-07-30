@@ -87,11 +87,13 @@ public:
 
 	FElysiumSoundSchemeManager(const FElysiumSoundSchemeManager&) = delete;
 	FElysiumSoundSchemeManager& operator=(const FElysiumSoundSchemeManager&) = delete;
+	void SetMapEpoch(uint64 InMapEpoch) { MapEpoch = InMapEpoch; }
 
 	// Crossfade a scheme in as the active one (fading out whatever was active). SchemeRel is engine-
 	// relative ("sound/Schemes/x.txt"); Anchor is the ambient_soundscheme entity origin (Unreal cm),
 	// the centre of polar random placement. FadeSeconds 0 = instant (start_enabled at map load).
 	void FadeInScheme(UElysiumAudioSubsystem* Audio, const FString& SchemeRel, const FVector& Anchor, float FadeSeconds);
+	void PrimeScheme(UElysiumAudioSubsystem* Audio, const FString& SchemeRel);
 	// Fade the named scheme out if it is the active one (else no-op).
 	void FadeOutScheme(UElysiumAudioSubsystem* Audio, const FString& SchemeRel, float FadeSeconds);
 
@@ -146,4 +148,5 @@ private:
 	FActiveScheme Active;
 	EElysiumMusicState CurrentMusicState = EElysiumMusicState::Explore;
 	double Elapsed = 0.0;   // manager clock (accumulated Dt), drives the random scheduler
+	uint64 MapEpoch = 0;
 };

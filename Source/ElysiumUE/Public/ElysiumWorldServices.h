@@ -137,8 +137,17 @@ class IElysiumAudio
 public:
 	virtual ~IElysiumAudio() = default;
 
-	// Decode Rel and start a voice per Params; an invalid handle means the file was missing or
-	// undecodable. A looping voice plays until StopVoice; a one-shot self-reaps.
+	// The map implementation stamps its active epoch before forwarding. Stable ownership remains
+	// logical here; a weak attachment is only resolved by the subsystem on the game thread.
+	virtual FElysiumVoiceHandle Submit(FElysiumAudioRequest Request) = 0;
+	virtual void Prefetch(const FElysiumAudioSource& Source) = 0;
+	virtual void PauseVoice(FElysiumVoiceHandle Handle, bool bPaused) = 0;
+	virtual void SeekVoice(FElysiumVoiceHandle Handle, float MediaOffsetSeconds) = 0;
+	virtual void SetVoicePitch(FElysiumVoiceHandle Handle, float Pitch) = 0;
+	virtual void CancelAudioOwner(FElysiumAudioOwner Owner, float FadeSeconds = 0.f) = 0;
+
+	// Compatibility translation for the existing entity leaves. New integrations submit a typed
+	// request above; this method constructs exactly that request rather than owning a second path.
 	virtual FElysiumAudioVoiceHandle PlayVoice(const FString& Rel, const FElysiumPlayParams& Params) = 0;
 	virtual void StopVoice(FElysiumAudioVoiceHandle Handle, float FadeSeconds) = 0;
 	virtual void SetVoiceVolume(FElysiumAudioVoiceHandle Handle, float Volume) = 0;

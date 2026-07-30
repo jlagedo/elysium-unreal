@@ -13,6 +13,7 @@
 struct FElysiumSignData;
 
 class FElysiumDlgConversation;
+class FElysiumLineService;
 class AActor;
 class UElysiumBrushComponent;
 class UElysiumGameStateSubsystem;
@@ -299,6 +300,7 @@ public:
 	IElysiumAudio*      Audio() const      { return WorldServices.Audio; }
 	IElysiumTravel*     Travel() const     { return WorldServices.Travel; }
 	IElysiumPresenter*  Presenter() const  { return WorldServices.Presenter; }
+	FElysiumLineService* Lines() const { return LineService.Get(); }
 
 	// Debug tap seam (P2.3 `ent_*`): install an extra I/O sink, owned by the world and torn down
 	// with it. The ent_* debug subsystem taps the two chokepoints for its overlay/break tooling
@@ -390,6 +392,7 @@ private:
 	AActor* Owner = nullptr;                          // component outer + VLOG context; not owned
 	UElysiumGameStateSubsystem* GameState = nullptr;  // clock + script host; outlives the world
 	FElysiumWorldServices WorldServices;              // the outbound seam (11.2); members may be null
+	TUniquePtr<FElysiumLineService> LineService;
 	uint32 Epoch = 0;
 	bool bActive = false;
 

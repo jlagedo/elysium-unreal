@@ -1,7 +1,10 @@
 #include "ElysiumSoundCache.h"
 
+#include "Audio/ElysiumPcmSoundWave.h"
 #include "Sound/SoundWaveProcedural.h"
 #include "HAL/PlatformTime.h"
+#include "HAL/CriticalSection.h"
+#include "Misc/ScopeLock.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 
@@ -15,16 +18,22 @@ THIRD_PARTY_INCLUDES_END
 // unity blob can't hold two DEFINE_LOG_CATEGORY_STATIC of the same name). This is the decode layer.
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumSoundCache, Log, All);
 
-// The audio engine treats a wave whose Duration is >= this sentinel as endlessly looping. Mirrors
-// AudioMixerCore's INDEFINITELY_LOOPING_DURATION (10000.0f) without pulling in that module's header.
-static constexpr float ElysiumIndefiniteLoopDuration = 10000.0f;
-
 namespace
 {
 	// Process-lifetime path -> decoded PCM cache. A miss (Info.Error set) is cached too, so a
-	// broken/undecodable file is only decoded once. M0/M1 load one map at a time, so unbounded
-	// caching is fine; FlushAll drops it on unload.
-	TMap<FString, TUniquePtr<FElysiumSoundCache::FDecoded>> GSoundCache;
+	// broken/undecodable file is only decoded once. Successful decodes compete in a byte-budgeted
+	// LRU; the deliberately small UI/foley working set is pinned.
+	struct FCacheEntry
+	{
+		TSharedPtr<FElysiumSoundCache::FDecoded, ESPMode::ThreadSafe> Decoded;
+		uint64 LastUse = 0;
+		bool bPinned = false;
+	};
+	TMap<FString, FCacheEntry> GSoundCache;
+	FCriticalSection GSoundCacheMutex;
+	uint64 GSoundCacheSerial = 0;
+	int64 GSoundCacheBytes = 0;
+	constexpr int64 GSoundCacheBudgetBytes = 64ll * 1024ll * 1024ll;
 
 	// Decode a WAV (MS-ADPCM / IMA / PCM) to interleaved int16 with dr_wav. FileData must outlive
 	// the call -- dr_wav decodes from memory without copying the input. Fills Decoded->Info/Pcm16;
@@ -131,20 +140,57 @@ FString FElysiumSoundInfo::FormatName() const
 	}
 }
 
-const FElysiumSoundCache::FDecoded* FElysiumSoundCache::LoadSoundDecoded(const FString& Dir, const FString& Rel)
+FElysiumSoundCache::FDecodedPtr FElysiumSoundCache::LoadSoundDecoded(
+	const FString& Dir, const FString& Rel)
 {
 	const FString Path = FPaths::Combine(Dir, Rel);
-	if (const TUniquePtr<FDecoded>* Found = GSoundCache.Find(Path))
+	FScopeLock Lock(&GSoundCacheMutex);
+	if (FCacheEntry* Found = GSoundCache.Find(Path))
 	{
-		return Found->Get();
+		Found->LastUse = ++GSoundCacheSerial;
+		return Found->Decoded;
 	}
 
-	TUniquePtr<FDecoded> Decoded = MakeUnique<FDecoded>();
+	TSharedPtr<FDecoded, ESPMode::ThreadSafe> Decoded = MakeShared<FDecoded, ESPMode::ThreadSafe>();
 	Decoded->Info.Path = Path;
 
-	auto CacheAndReturn = [&Path, &Decoded]() -> const FDecoded*
+	auto CacheAndReturn = [&Path, &Decoded]() -> FDecodedPtr
 	{
-		return GSoundCache.Add(Path, MoveTemp(Decoded)).Get();
+		const int64 Bytes = Decoded->Pcm16.Num();
+		// UI and foley entries are deliberately pinned; everything else competes in the byte LRU.
+		const FString Normal = Path.Replace(TEXT("\\"), TEXT("/")).ToLower();
+		const bool bPinned = Normal.Contains(TEXT("/sound/ui/")) ||
+			Normal.Contains(TEXT("/sound/foley/"));
+		if (Bytes <= GSoundCacheBudgetBytes)
+		{
+			FCacheEntry Entry;
+			Entry.Decoded = Decoded;
+			Entry.LastUse = ++GSoundCacheSerial;
+			Entry.bPinned = bPinned;
+			GSoundCache.Add(Path, MoveTemp(Entry));
+			GSoundCacheBytes += Bytes;
+
+			while (GSoundCacheBytes > GSoundCacheBudgetBytes)
+			{
+				FString Victim;
+				uint64 Oldest = MAX_uint64;
+				for (const TPair<FString, FCacheEntry>& Pair : GSoundCache)
+				{
+					if (Pair.Key != Path && !Pair.Value.bPinned && Pair.Value.LastUse < Oldest)
+					{
+						Victim = Pair.Key;
+						Oldest = Pair.Value.LastUse;
+					}
+				}
+				if (Victim.IsEmpty())
+				{
+					break;
+				}
+				GSoundCacheBytes -= GSoundCache[Victim].Decoded->Pcm16.Num();
+				GSoundCache.Remove(Victim);
+			}
+		}
+		return Decoded;
 	};
 
 	// Read the whole file. Both dr_wav and dr_mp3 decode from memory and do NOT copy the input,
@@ -186,45 +232,26 @@ const FElysiumSoundCache::FDecoded* FElysiumSoundCache::LoadSoundDecoded(const F
 	return CacheAndReturn();
 }
 
-USoundWaveProcedural* FElysiumSoundCache::MakeWave(const FDecoded& Decoded, bool bLoop)
+USoundWaveProcedural* FElysiumSoundCache::MakeWave(FDecodedPtr Decoded, bool bLoop)
 {
-	const FElysiumSoundInfo& Info = Decoded.Info;
-	if (Decoded.Pcm16.Num() == 0 || Info.Channels <= 0 || Info.SampleRate <= 0)
+	if (!Decoded)
+	{
+		return nullptr;
+	}
+	const FElysiumSoundInfo& Info = Decoded->Info;
+	if (Decoded->Pcm16.Num() == 0 || Info.Channels <= 0 || Info.SampleRate <= 0)
 	{
 		return nullptr;
 	}
 
-	USoundWaveProcedural* Wave = NewObject<USoundWaveProcedural>();
-	// Cast to uint32 so the canonical SetSampleRate(uint32,bool) overload is selected -- it sets
-	// the sample rate the audio mixer actually reads (the int32 overload only touches a proxy field).
-	Wave->SetSampleRate(static_cast<uint32>(Info.SampleRate));
-	Wave->NumChannels = Info.Channels;
-	Wave->Duration = bLoop ? ElysiumIndefiniteLoopDuration : Info.DurationSeconds;
-	Wave->SoundGroup = SOUNDGROUP_Default;
-	Wave->SampleByteSize = int32(sizeof(int16));   // interleaved int16 PCM
-	Wave->bLooping = false;   // procedural ignores this flag; looping = re-queue on underflow (below)
-
-	// QueueAudio copies the bytes into the wave's internal queue, so the cached PCM stays owned
-	// by the cache and can back many plays. BufferSize is bytes and must be a multiple of the
-	// sample byte size (2) -- always true for interleaved int16.
-	Wave->QueueAudio(Decoded.Pcm16.GetData(), Decoded.Pcm16.Num());
-
-	if (bLoop)
-	{
-		// The mixer drains the queue and, when it runs dry, calls this to ask for more; re-queue the
-		// whole clip to loop seamlessly. &Decoded is cache-stable (GSoundCache holds it until FlushAll,
-		// which runs on map unload after every voice is stopped), so the raw capture never dangles.
-		const FDecoded* Src = &Decoded;
-		Wave->OnSoundWaveProceduralUnderflow.BindLambda(
-			[Src](USoundWaveProcedural* InWave, int32 /*SamplesRequired*/)
-			{
-				InWave->QueueAudio(Src->Pcm16.GetData(), Src->Pcm16.Num());
-			});
-	}
+	UElysiumPcmSoundWave* Wave = NewObject<UElysiumPcmSoundWave>();
+	Wave->Initialize(MoveTemp(Decoded), bLoop);
 	return Wave;
 }
 
 void FElysiumSoundCache::FlushAll()
 {
+	FScopeLock Lock(&GSoundCacheMutex);
 	GSoundCache.Empty();
+	GSoundCacheBytes = 0;
 }

@@ -33,6 +33,7 @@
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumContentPaths.h"
+#include "ElysiumLineService.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -848,18 +849,6 @@ public:
 	// FUN_10081700: build sound/<param>, swap the extension for .mp3, and play that if the
 	// filesystem has it — else the authored .wav. The shipped lines are .mp3 on disk while every
 	// `.vcd` names a `.wav`, so this rule is what makes any of them resolve at all.
-	static FString ResolveSoundRel(const FString& Param)
-	{
-		if (Param.IsEmpty())
-		{
-			return FString();
-		}
-		FString Rel = Param;
-		Rel.ReplaceInline(TEXT("\\"), TEXT("/"));
-		const FString AsMp3 = FPaths::ChangeExtension(Rel, TEXT("mp3"));
-		return IFileManager::Get().FileExists(*FElysiumContentPaths::SoundFile(AsMp3)) ? AsMp3 : Rel;
-	}
-
 	float VoiceOffset(const FElysiumSceneEvent& Event, float SceneTime)
 	{
 		const int32 Index = EventIndex(Event);
@@ -874,44 +863,31 @@ public:
 
 	void SpeakLine(const FElysiumSceneEvent& Event, float SceneTime)
 	{
-		if (World == nullptr || World->Audio() == nullptr || Event.Param.IsEmpty())
+		if (World == nullptr || World->Lines() == nullptr || Event.Param.IsEmpty())
 		{
 			return;
 		}
-		const FString Rel = ResolveSoundRel(Event.Param);
-		if (!IFileManager::Get().FileExists(*FElysiumContentPaths::SoundFile(Rel)))
-		{
-			++NumUnresolvedSpeak;
-			if (!bLoggedMissingSpeak)
-			{
-				bLoggedMissingSpeak = true;
-				// out/sound holds only the map-referenced ambients; no Character/dlg/** audio is
-				// exported yet, so every spoken line misses here. 12.2 owns that mirror pass.
-				UE_LOG(LogElysiumChoreo, Log,
-					TEXT("%s: line '%s' is not exported (further misses counted, not logged)"),
-					*DebugString(), *Rel);
-			}
-			return;
-		}
-
-		FElysiumPlayParams P;
-		P.b3D = true;
+		USceneComponent* AttachTo = nullptr;
+		FVector LineOrigin = Origin;
 		if (FElysiumEntity* A = ActorOf(Event))
 		{
-			P.AttachTo = A->GetSkeletalBody();
-			P.Location = A->Origin;
-		}
-		else
-		{
-			P.Location = Origin;
+			AttachTo = A->GetSkeletalBody();
+			LineOrigin = A->Origin;
 		}
 		// param2 is a dB level ("70dB"). Parsed and carried; the dB->gain curve and full_sound are
 		// 12.2's, so the line plays at the seam's own level for now.
-		P.StartTimeSeconds = VoiceOffset(Event, SceneTime);
-		const FElysiumAudioVoiceHandle Voice = World->Audio()->PlayVoice(Rel, P);
+		const FString Session = FString::Printf(TEXT("scene:%u:%d:event:%d"),
+			Handle.Epoch, Handle.Index, EventIndex(Event));
+		const FElysiumAudioVoiceHandle Voice = World->Lines()->PlayDirect(
+			Session, Event.Param, LineOrigin, AttachTo, EElysiumAudioCategory::Dialogue,
+			VoiceOffset(Event, SceneTime));
 		if (Voice.IsValid())
 		{
 			Voices.Add(EventIndex(Event), Voice);
+		}
+		else
+		{
+			++NumUnresolvedSpeak;
 		}
 	}
 
@@ -933,32 +909,29 @@ public:
 	// 80 and floored at 75.
 	void BodySound(const FElysiumSceneEvent& Event, float SceneTime)
 	{
-		if (World == nullptr || World->Audio() == nullptr || Event.Param.IsEmpty())
+		if (World == nullptr || World->Lines() == nullptr || Event.Param.IsEmpty())
 		{
 			return;
 		}
-		const FString Rel = ResolveSoundRel(Event.Param);
-		if (!IFileManager::Get().FileExists(*FElysiumContentPaths::SoundFile(Rel)))
-		{
-			++NumUnresolvedSpeak;
-			return;
-		}
-		FElysiumPlayParams P;
-		P.b3D = true;
+		USceneComponent* AttachTo = nullptr;
+		FVector LineOrigin = Origin;
 		if (FElysiumEntity* A = ActorOf(Event))
 		{
-			P.AttachTo = A->GetSkeletalBody();
-			P.Location = A->Origin;
+			AttachTo = A->GetSkeletalBody();
+			LineOrigin = A->Origin;
 		}
-		else
-		{
-			P.Location = Origin;
-		}
-		P.StartTimeSeconds = VoiceOffset(Event, SceneTime);
-		const FElysiumAudioVoiceHandle Voice = World->Audio()->PlayVoice(Rel, P);
+		const FString Session = FString::Printf(TEXT("scene:%u:%d:event:%d"),
+			Handle.Epoch, Handle.Index, EventIndex(Event));
+		const FElysiumAudioVoiceHandle Voice = World->Lines()->PlayDirect(
+			Session, Event.Param, LineOrigin, AttachTo, EElysiumAudioCategory::Sfx,
+			VoiceOffset(Event, SceneTime));
 		if (Voice.IsValid())
 		{
 			Voices.Add(EventIndex(Event), Voice);
+		}
+		else
+		{
+			++NumUnresolvedSpeak;
 		}
 	}
 

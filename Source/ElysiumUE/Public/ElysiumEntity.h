@@ -87,6 +87,8 @@ public:
 	bool    bBlocksTraces = false;                   // blocks_traces
 	FString DamageFilterName;                        // dmg_filter_name
 	FString UseFilterName;                           // use_filter_name
+	FString SoundOverrideEntityName;                 // SetSoundOverrideEnt logical attachment owner
+	bool    bFakeSilence = false;                    // SetFakeSilence gates direct/line playback
 	int32   UseIcon = 0;                             // use_icon — reticle icon index (1-based; 0 = none)
 	int32   LockedIcon = 0;                          // locked_icon — reticle icon when use-locked
 
@@ -118,6 +120,9 @@ public:
 	void Kill();          // terminal: mark dead + go inert (world reaps in P1.4)
 	void ScriptHide();    // whole-entity OFF (saves prior think; body gated in P1.5)
 	void ScriptUnhide();  // the exact inverse
+	void PlayDialogFile(const FString& AuthoredPath);
+	void SetSoundOverrideEnt(const FString& EntityName);
+	void SetFakeSilence(bool bEnabled);
 
 	// Fire a named output through the world (R2 → the event queue). No-op on a worldless probe
 	// entity. Leaf classes (P1.6+) call this from their inputs and touch hooks.

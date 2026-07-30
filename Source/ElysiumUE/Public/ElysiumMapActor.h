@@ -44,6 +44,7 @@ struct FElysiumMapRuntimePrerequisites
 
 	bool bConstructionComplete = false;
 	bool bEntityWorldReady = false;
+	bool bAudioCatalogReady = true;
 	bool bMenuBackdrop = false;
 	bool bCollisionReady = false;   // Ready or intentionally Disabled
 	bool bCollisionFailed = false;
@@ -264,6 +265,12 @@ public:
 	// --- IElysiumAudio ----------------------------------------------------------------------
 	// Voices forward to the GI-scoped UElysiumAudioSubsystem; the scheme calls drive this map's own
 	// FElysiumSoundSchemeManager. All no-op safely with no subsystem / no scheme manager.
+	virtual FElysiumVoiceHandle Submit(FElysiumAudioRequest Request) override;
+	virtual void Prefetch(const FElysiumAudioSource& Source) override;
+	virtual void PauseVoice(FElysiumVoiceHandle Handle, bool bPaused) override;
+	virtual void SeekVoice(FElysiumVoiceHandle Handle, float MediaOffsetSeconds) override;
+	virtual void SetVoicePitch(FElysiumVoiceHandle Handle, float Pitch) override;
+	virtual void CancelAudioOwner(FElysiumAudioOwner AudioOwner, float FadeSeconds = 0.f) override;
 	virtual FElysiumAudioVoiceHandle PlayVoice(const FString& Rel, const FElysiumPlayParams& Params) override;
 	virtual void StopVoice(FElysiumAudioVoiceHandle Handle, float FadeSeconds) override;
 	virtual void SetVoiceVolume(FElysiumAudioVoiceHandle Handle, float Volume) override;
@@ -390,6 +397,7 @@ private:
 	bool bMenuBackdrop = false;
 	double RuntimeWaitStartSeconds = 0.0;
 	double RuntimeWaitDurationSeconds = 0.0;
+	uint64 AudioMapEpoch = 0;
 	FString RuntimeFailureReason;
 	FOnElysiumMapRuntimeReady RuntimeReady;
 	FOnElysiumMapRuntimeFailed RuntimeFailed;

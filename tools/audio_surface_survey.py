@@ -179,6 +179,10 @@ def survey_maps(maps):
                             "event": output.get("name", ""),
                             "target": output.get("target", ""),
                             "input": input_name,
+                            # The map authored an audio wire but the exported entity set contains
+                            # no matching target. Keep it as an explicit content disposition; the
+                            # runtime's ordinary unknown-target diagnostic remains the live guard.
+                            "disposition": "missing_target",
                         })
                     continue
                 for target_class in target_classes:
@@ -240,7 +244,8 @@ def print_report(data):
     print("Authored audio I/O wires")
     for name, count in list(maps["io"]["routes"].items())[:16]:
         print("  %-44s %5d" % (name, count))
-    print("  unresolved audio wires: %d" % len(maps["io"]["unresolved"]))
+    print("  missing-target audio wires (explicit disposition): %d"
+          % len(maps["io"]["unresolved"]))
     print()
     print("Python audio-facing calls")
     for name in PYTHON_AUDIO_METHODS:

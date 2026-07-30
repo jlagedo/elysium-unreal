@@ -4,6 +4,9 @@
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumLineService.h"
+
+#include "Components/SkeletalMeshComponent.h"
 
 void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHandle InHandle, const FElysiumClassDesc& InClass)
 {
@@ -81,6 +84,23 @@ void FElysiumEntity::Kill()
 	{
 		return;
 	}
+	if (World)
+	{
+		if (IElysiumAudio* Audio = World->Audio())
+		{
+			FElysiumAudioOwner AudioOwner;
+			AudioOwner.Kind = EElysiumAudioOwnerKind::MapEntity;
+			AudioOwner.StableId =
+				FString::Printf(TEXT("entity:%u:%d"), Handle.Epoch, Handle.Index);
+			Audio->CancelAudioOwner(MoveTemp(AudioOwner));
+		}
+		if (World->Lines())
+		{
+			World->Lines()->CancelSession(
+				FString::Printf(TEXT("direct:%u:%d"), Handle.Epoch, Handle.Index));
+			World->Lines()->CancelDialogue(Handle);
+		}
+	}
 	bDead = true;
 	NextThink = ELYSIUM_NEVER_THINK;
 	if (!bHidden)
@@ -92,6 +112,42 @@ void FElysiumEntity::Kill()
 		// Already hidden (OnDormancyChanged is skipped), but the visual state still changed
 		// hidden -> dead, so a retained visualizer must still be told.
 		World->NotifyVisualChanged(*this);
+	}
+}
+
+void FElysiumEntity::PlayDialogFile(const FString& AuthoredPath)
+{
+	if (!World || bFakeSilence || AuthoredPath.IsEmpty() || !World->Lines())
+	{
+		return;
+	}
+	FElysiumEntity* SoundOwner = this;
+	if (!SoundOverrideEntityName.IsEmpty())
+	{
+		if (FElysiumEntity* Override = World->FindByName(SoundOverrideEntityName))
+		{
+			SoundOwner = Override;
+		}
+	}
+	const FString Session =
+		FString::Printf(TEXT("direct:%u:%d"), Handle.Epoch, Handle.Index);
+	World->Lines()->PlayDirect(Session, AuthoredPath, SoundOwner->Origin,
+		SoundOwner->GetSkeletalBody(), EElysiumAudioCategory::Auto);
+}
+
+void FElysiumEntity::SetSoundOverrideEnt(const FString& EntityName)
+{
+	SoundOverrideEntityName = EntityName.TrimStartAndEnd();
+}
+
+void FElysiumEntity::SetFakeSilence(bool bEnabled)
+{
+	bFakeSilence = bEnabled;
+	if (bEnabled && World && World->Lines())
+	{
+		World->Lines()->CancelSession(
+			FString::Printf(TEXT("direct:%u:%d"), Handle.Epoch, Handle.Index));
+		World->Lines()->CancelDialogue(Handle);
 	}
 }
 

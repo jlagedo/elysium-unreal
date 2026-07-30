@@ -69,6 +69,24 @@ multiply against. Array of `NumBones` (@240) at `BoneIndex` (@244).
 parent=−1 `pos=(0,0,39.67)`, uniform `posscale=(1/256,…)`, `rotscale ~1e-5`; stride
 160 verified end-to-end (bone[70] name `"tire iron"` = a weapon-carry bone).
 
+A patch-first whole-install audit (`tools/validate_skeletal_pipeline.py`) reads
+**433 character skeletons / 30,530 bones**. Every bind quaternion is normalized
+within `9.24e-8`, every parent precedes its child, and every one of the **373**
+`Flags & 0x2` bones is `Bip01 Spine1`. All 373 split bones' `poseToBone`
+matrices are conventional hierarchy-FK inverse binds (worst identity error
+`7.36e-6`), not inverse binds made from split-inheritance FK. Split inheritance
+is therefore a live-pose application rule only; the skin bind remains ordinary.
+The only material whole-cast inverse-bind exceptions are the two weighted tooth
+bones in `doppleganger_female.mdl`, whose source `poseToBone` matrices do not
+invert their declared hierarchy bind. That model is not in the current generated
+cast and remains a source-data exception rather than a reason to rewrite all
+inverse binds.
+
+The same audit finds **3,104 bones with `ProcType != 0`**. Their rule payloads
+and retail application are not decoded by `mdl_skel.py`, so the generated
+skeleton preserves their ordinary bind/animation channels but omits the
+procedural contribution.
+
 ## A.3 Sequences and animations
 
 **`StudioAnimDesc` — 72 bytes** [data-verified] (`NumLocalAnims`@264 /
@@ -90,6 +108,14 @@ parent=−1 `pos=(0,0,39.67)`, uniform `posscale=(1/256,…)`, `rotscale ~1e-5`;
 (VtMB has **none** of modern Source's `animblockindex`/`sectionindex`/`zeroframe`
 streaming fields — older HL2-Beta layout.)
 
+Across the whole character tree, **1,386 of 6,382 animdescs** carry **23,347**
+movement records. The exporter does not decode them. This is not confined to the
+original `move_and_ranged` probe: any consumer that moves an actor from the
+ordinary local bone tracks alone omits authored root displacement.
+All 6,382 animdescs have `numikrules == 0`; there is no animdesc IK payload to
+recover in this corpus, although sequence-tail IK locks and autolayers remain
+outside the first-pass exporter.
+
 **`StudioSeqDesc` (`mstudioseqdesc_t`) — 764 bytes** [data-verified — stride
 confirmed] (`NumLocalSeq`@272 / `LocalSeqIndex`@276). The game-facing entries; each
 references anims through a blend grid: `szlabelindex`@0, `szactivitynameindex`@4,
@@ -105,6 +131,14 @@ stride that resolves every sequence name across models of every size — jeanett
 resolves the names on any model. On these NPCs the mapping is **1 seq ↔ 1 anim,
 blends=1** (`anim[0][0]` → local anim), so a first pass reads
 `seq → anim[0][0] → animdesc` and skips blend interpolation.
+
+That statement is deliberately limited to the original probes. The whole
+character tree contains **6,074 sequences**, of which **294** across 22 models
+have `numblends > 1` (maximum 9). They include ordinary shared-bank locomotion
+(`walk`, `run`, weapon movement/aim layers), frenzy runs, monster movement, and
+hit/combat moves. `mdl_skel.local_sequences` and the GLB exporter still select
+only `anim[0][0]`; the generated clip is a valid base cell, not a faithful
+evaluation of those 294 blend grids.
 
 ### The activity name is the selection key [data-verified]
 
@@ -145,7 +179,8 @@ change with a build, while the name is what the `.mdl` ships. Landmarks: `ACT_ID
 `idle01` reads 0 while being a looping idle, and the values 2 and 0x14 are unmapped — the bit
 meanings are **not** established, so looping is a consumer policy rather than a read of this
 field. `numevents`@20 is non-zero on **124 of `move_and_ranged`'s 602** sequences; the event
-array is located but not decoded.
+array is located but not decoded. Whole-install scope is **1,044 event-bearing
+sequences / 1,714 events**. The current exporter writes no event timeline.
 
 ## A.4 Animation data — the 32B/bone record + `{valid,total}` RLE [data-verified]
 
@@ -329,17 +364,23 @@ mesh; the exporter fills it directly from that model's
 `StudioBone.Flags & 0x2`. This is retained as diagnostic metadata only. Shared
 and cinematic banks remain raw local channels.
 
-A rejected runtime experiment replaced each flagged bone's Unreal component
-rotation with the decoded local quaternion after crossfading. In the live theatre
-this bent every ordinary biped by roughly a quarter-turn at `Bip01 Spine1`,
-detached heads from torsos, and folded several actors out of view. The experiment
-therefore proves only that directly transplanting the Source-space matrix branch
-into an Unreal local-pose correction is invalid. It does **not** disprove the
-decompiled retail branch. The unresolved seam is the exact Source
-`boneToWorld` → glTF → Unreal basis and multiplication convention required to
-represent that branch without introducing a discontinuity. Until a rendered
-retail invariant closes that seam, the runtime uses the conventional imported
-hierarchy and does not consume `split_bones`.
+The source-to-output validator found that the local generated corpus predates
+that raw-key policy: **286 GLBs / 4,276 flagged-bone rotation tracks / 611,191
+samples** contain the exact discarded fixed rewrite
+`q_generated = (0.5,0.5,-0.5,0.5) * q_raw` (xyzw). All non-flagged tracks match
+the current exporter equation. The live experiment that subsequently replaced
+the flagged component rotation after crossfading therefore operated on already
+rewritten keys. Its quarter-turn discontinuity is evidence of stale output plus
+double/misapplied correction, not evidence against the decompiled retail branch.
+
+The coordinate seam itself is closed below. After regenerating raw keys, the
+equivalent Unreal local rotation for a flagged bone is the parent component
+rotation inverse multiplied by the raw decoded local rotation, evaluated
+**after** sequence/layer blending; the fixed skeletal-component yaw remains
+outside the pose. The current runtime still evaluates a conventional hierarchy
+and does not consume `split_bones`, so the post-blend correction remains
+implementation work. The rendered retail invariant below pins the behavior it
+must reproduce.
 
 ## A.4b Retail pose pipeline — durable Ghidra proof path
 
@@ -468,6 +509,77 @@ consume the proven palette and submit already-transformed dynamic vertices.
 `CStudioRender` destructor and is retained as an eliminated lead in the tracked
 specification.
 
+### Live rendered retail invariant
+
+A hash-gated, read-only probe (`tools/capture_live_pose.py`) polls the two
+`CStudioRender` buffers with `ReadProcessMemory`; it does not attach a debugger,
+suspend a thread, or write into the game process. The probe refuses an
+unrecognized `StudioRender.dll`; the validated binary SHA-256 is
+`13d56ce90de2c5faedc0df26d36b24e90f30eded5055625f616cd97e301e124b`.
+It derives the requested target's checksum and bone count from the merged,
+patch-first install. The first validated target was
+`models/character/pc/male/tremere/armor0/tremere_Male_Armor_0.mdl`,
+checksum `0x40e9c200`, with 80 bones. Each captured frame contains both 80-entry
+row-major 3×4 arrays: `boneToWorld` and the final skin palette. Longer scene
+passes may accept a partial result because `CStudioRender` exposes only the
+actor currently being drawn; an off-camera actor is not evidence of an
+unchanged pose.
+
+The reproducible protocol reloads `sp_tutorial_1` to clear the forced player
+sequence, uses third person, and fixes simulation/render timing:
+
+```text
+sv_cheats 1
+thirdperson
+fps_max 30
+host_timescale 1
+host_framerate 0.033333333
+pausable 0
+```
+
+The console alias first creates the arm file printed by the probe and then runs
+`player_sequence howl`. A completed `player_sequence` remains the selected forced
+player sequence; `unpause` does not clear it, while reloading the map does. The
+fixed `host_framerate` value is seconds per frame on this build, not frames per
+second.
+
+One clean capture recorded 81 distinct palettes over 2.717989 seconds. Patch-first
+resolution identifies `howl` in `models/character/shared/male/misc.mdl` as an
+81-frame, 30-FPS, non-looping clip. `tools/validate_live_pose_capture.py` compares
+the live buffers to the source MDLs, and `tools/compare_pose_captures.py` compares
+two sessions after removing the entity/root transform.
+
+The live data independently verifies both load-bearing matrix rules:
+
+- Across all 81 frames,
+  `skinPalette[i] = boneToWorld[i] * poseToBone[i]` has median frame RMS
+  `4.0481e-5`; the worst matrix-element error is `2.44073e-4`.
+- After the entry transition, live frames 8–77 align monotonically with authored
+  frames 9–78 over the 53 name-shared target/donor bones. Applying the retail
+  split-inheritance hierarchy gives median frame RMS `7.92464e-4` and maximum
+  `0.0176376`. A conventional hierarchy gives median `7.48408` and maximum
+  `8.55726`. On `Bip01 Spine1` itself, the split rule gives median `1.51184e-4`
+  against `0.681111` for conventional inheritance. This is a rendered
+  discrimination of the `Flags & 0x2` branch, not only a decompile inference.
+
+Raw palette hashes are deliberately not the acceptance metric: map reloads may
+place the player under a different entity transform, and the first/last live
+frames include transition history. Root-relative matrices and authored-frame
+alignment isolate the skeletal evaluation. The 27 target-only helper/attachment
+bones also expose a remaining contract: propagating their target bind locals
+under the donor-driven parents gives median frame RMS `0.143857`, so simple
+target-bind fallback does not reproduce their live result. The capture proves
+the mismatch but does not yet attribute it among the outer virtual-model map,
+controllers, or another post-base-pose stage.
+
+Re-run the source/capture check with:
+
+```powershell
+python tools/validate_live_pose_capture.py `
+  tools/out/_live_pose/<session> `
+  --report tools/out/_live_pose/live_pose_validation.json
+```
+
 The end-to-end trace is complete only when Ghidra evidence identifies and verifies
 all of these seams:
 
@@ -478,6 +590,20 @@ all of these seams:
 5. ~~parent-local hierarchy concatenation into model-space bone matrices;~~
 6. ~~`Bip01` root composition with entity origin/angles and cinematic placement;~~
 7. ~~`poseToBone` use in CPU/GPU skinning and final render submission.~~
+
+The independent source/output audit is:
+
+```powershell
+python tools/validate_skeletal_pipeline.py `
+  --report tools/out/_tests/skeletal_pipeline_validation.json
+```
+
+It reads the patch-first retail files rather than trusting exporter output, then
+compares generated node binds, inverse binds, skin joints/weights, timelines, and
+every emitted animation sample. A structurally valid/loadable GLB is not proof of
+retail semantics: the report separately inventories procedural bones, blend
+grids, movement, events, split inheritance, and included-model bind fallback
+that the current exporter/runtime does not apply.
 
 Each newly confirmed format or behavior fact is corrected into this document in
 the same pass. The context specification keeps unresolved addresses and working
@@ -501,6 +627,10 @@ for i in 0..2:
 `boneToWorld * poseToBone`, then selects those skin matrices by `Bone[i]` and
 blends them using the stored byte weights. jeanette: 4132 verts 1-bone, 1761
 2-bone, 500 3-bone; weights sum to 255.
+
+A patch-first whole-character decode validates **1,621,270 weighted vertices /
+2,116,520 triangles**. Every non-zero influence names a source bone, normalized
+weights sum to one, and no `.mdl`/`.dx80.vtx` skin decode fails.
 
 ## A.6 Attachments & hitboxes [data-verified]
 
@@ -526,12 +656,13 @@ skeleton.
 
 **On-disk** [data-verified]: `NumIncludeModels`@404 / `IncludeModelIndex`@408 →
 `StudioModelGroup[]` (layout: `mdl_v2531.md`). The tree is a DAG — `frenzy`/`pc_idles` reappear
-via several parents — so resolution dedups by path. The shared Biped deformation core binds by
-bone name without proportion retargeting. A bank can also animate optional bones absent from a
-particular target — weapon/attachment bones, anatomy helpers, and toes on a few reduced skeletons.
-Those tracks have no target bone or weighted vertices and are skipped, leaving the target at its
-own bind pose. This is distinct from a broken skin: every non-zero vertex influence must still
-name a valid joint in the target GLB, and every joint must be reachable from the skin root.
+via several parents — so resolution dedups by path. The shared Biped deformation
+core is addressed by bone name. A bank can also animate optional bones absent
+from a particular target — weapon/attachment bones, anatomy helpers, and toes on
+a few reduced skeletons. Those tracks have no target bone or weighted vertices
+and are skipped. This is distinct from a broken skin: every non-zero vertex
+influence must still name a valid joint in the target GLB, and every joint must
+be reachable from the skin root.
 `m_iszPlay` and friends name a **sequence label** (`StudioSeqDesc.szlabel`@0 → `anim[0][0]`@56 →
 local anim); the pipeline keys clips by that label.
 
@@ -544,22 +675,34 @@ resolution plus the target mesh's diagnostic `split_bones` inventory. The runtim
 glb once and applies its clips to any NPC skeletal mesh by bone name (glTFRuntime
 `LoadSkeletalAnimation(mesh, …)`), which is VtMB's own virtualmodel bank-sharing.
 
-The runtime binds a bank's already-local animation tracks to the target reference skeleton by **bone
-name** and deliberately leaves glTFRuntime's generic rest-pose retargeter disabled. The shared biped
-tracks already use the target's local frame, while a whole-cast cinematic bank encodes authored stage
-placement in its `bip01` root. A second rest-frame/proportion transform scales a normal 1–3 m body
-into a 4–8 m exploded pose or double-applies that root placement. Source-node tracks with no target
-bone are removed before animation construction; this covers unweighted hair, toe, attachment, and nub
-helpers without hiding a broken weighted skin. Weighted influences and skin-root reachability remain
-strict errors. The target mesh's bone flags are retained separately from those
-shared clips, but are not yet applied by the runtime.
+Retail first evaluates the included model's complete pose. Its outer mapping then
+copies the donor quaternion verbatim and either copies its position or transforms
+that position by the authored 3×4 mapping matrix. A channel absent from the donor
+animation therefore falls back to the **donor bind**, not the target bind.
 
-`mdl_gltf.py` writes standard right-handed Y-up glTF. glTFRuntime's default Unreal import maps its
-ground plane into `(Source Y, Source X)`. Every skeletal component therefore applies **−90° yaw**
-before the reflected Source entity yaw. Ordinary NPCs, scene understudies, controller NPCs, and
-the pawn-attached player body use that same basis. NPC and player-material skeletal permutations keep
-separate mesh, asset, and clip cache identities; rebuilding the player body cannot replace an ordinary
-NPC's materials.
+The runtime instead binds the bank's sparse local tracks to the target reference
+skeleton by **bone name** and deliberately leaves glTFRuntime's generic
+rest-pose retargeter disabled. Source-node tracks with no target bone are removed
+before animation construction. Across **4,515** ordinary target/bank pairs,
+**3,158** have at least one donor/target bind difference, **154** differ in parent
+topology, and **2,692** actually use a source clip whose absent channel selects a
+different donor versus target bind fallback. This is a live virtual-model
+fidelity gap. Generic proportion retargeting is still not the answer: a faithful
+resolver must evaluate donor fallback and apply the recovered per-record outer
+position mapping, while the nested remap record semantics remain open. A
+whole-cast cinematic bank also encodes authored stage placement in its `Bip01`
+root, so applying an unrelated rest-frame transform can double that placement.
+
+`mdl_gltf.py` writes Source position `(x,y,z)` as right-handed Y-up glTF
+`(x,z,-y) * 0.0254`. glTFRuntime's default basis and `SceneScale=100` map that to
+skeletal-component position `(y,x,z) * 2.54` centimetres. The component's fixed
+**−90° yaw** then maps it to world `(x,-y,z) * 2.54`, exactly this project's
+Source→Unreal position convention. Quaternion conversion at both steps is basis
+conjugation, so it preserves multiplication order; the component yaw is outside
+the local pose. Ordinary NPCs, scene understudies, controller NPCs, and the
+pawn-attached player body use that same basis. NPC and player-material skeletal
+permutations keep separate mesh, asset, and clip cache identities; rebuilding the
+player body cannot replace an ordinary NPC's materials.
 
 ## A.8 Deviations from modern Source (v44–49) [ref/SDK]
 

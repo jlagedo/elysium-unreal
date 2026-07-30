@@ -695,9 +695,10 @@ namespace
 		}
 
 		// mdl_gltf maps Source (X forward, Y left, Z up) to glTF (X forward, Y up, Z right).
-		// A neutral pose may breathe and shift, but its first frame must not carry the former
-		// systematic Spine1 cant. The bad quaternion order measured 0.1244; the recovered order
-		// measures 0.0186, leaving generous room for source-data variation.
+		// This is a finite/upright envelope for the generated corpus, not a retail pose oracle:
+		// validate_skeletal_pipeline.py independently checks keys against the source bytes. Split
+		// inheritance must ultimately be evaluated after blending rather than inferred from this
+		// conventional local hierarchy.
 		const double Rise = FMath::Abs(Globals[Head][13] - Globals[Pelvis][13]);
 		const double Lateral = FMath::Abs(Globals[Head][14] - Globals[Pelvis][14]);
 		if (Rise < 1.e-4 || Lateral / Rise > 0.05)

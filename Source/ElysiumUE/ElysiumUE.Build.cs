@@ -23,6 +23,7 @@ public class ElysiumUE : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
 			"InputCore", "EnhancedInput",
+			"AudioMixer", "AudioModulation",
 			// Runtime asset loading: build meshes in code (no editor bake) and
 			// decode textures from disk into transient UTexture2D.
 			"ProceduralMeshComponent", "ImageWrapper", "ImageCore", "RenderCore", "RHI",
@@ -54,7 +55,8 @@ public class ElysiumUE : ModuleRules
 			"MoviePlayer"
 		});
 
-		// P6 audio: vendored single-header decoders under Private/ThirdParty (public domain) --
+		// P6 audio: Audio Mixer/Modulation own semantic routing and user control buses. Loose
+		// VtMB media remains procedural and uses the vendored single-header decoders below --
 		// dr_wav (6.1, MS-ADPCM/IMA/PCM) and dr_mp3 (6.2, dialogue/music/radio MP3). Only the
 		// include path is added -- USoundWave/USoundWaveProcedural and PlaySound2D/SpawnSound2D
 		// all live in Engine (already a public dep), so no audio module dependency is needed.

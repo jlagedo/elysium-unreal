@@ -32,10 +32,11 @@ struct FElysiumSoundInfo
 	FString FormatName() const;
 };
 
-// Process-wide path -> decoded-PCM cache. Unlike FElysiumTextureCache (which caches a
-// UObject), this caches the raw PCM16 bytes + metadata: a USoundWaveProcedural's queue is
-// consumed on playback, so a fresh wave is minted per play from the cached bytes. The cache
-// is plain memory (no UObject), so there is nothing for the GC to trace.
+// Process-wide, thread-safe, byte-budgeted path -> decoded-PCM LRU. Unlike
+// FElysiumTextureCache (which caches a UObject), this caches the raw PCM16 bytes + metadata:
+// a USoundWaveProcedural's queue is consumed on playback, so a fresh wave is minted per play
+// from the cached bytes. The cache is plain memory (no UObject), so there is nothing for the
+// GC to trace. Configured UI/foley entries are pinned; other entries are evictable.
 struct FElysiumSoundCache
 {
 	// One decoded clip: interleaved int16 PCM + its metadata (WAV or MP3 -- MakeWave is agnostic).
@@ -44,21 +45,20 @@ struct FElysiumSoundCache
 		TArray<uint8> Pcm16;         // interleaved little-endian int16, Channels-interleaved
 		FElysiumSoundInfo Info;
 	};
+	using FDecodedPtr = TSharedPtr<const FDecoded, ESPMode::ThreadSafe>;
 
 	// Decode (or fetch cached) the clip at Dir/Rel, picking the codec from the file extension
 	// (.mp3 -> dr_mp3, everything else -> dr_wav). Returns nullptr only when the file is
 	// missing/unreadable; a decode *error* is a cached entry whose Info.Error is set, so a
 	// bad file is decoded once and then reported cheaply (same policy as the texture cache).
-	static const FDecoded* LoadSoundDecoded(const FString& Dir, const FString& Rel);
+	static FDecodedPtr LoadSoundDecoded(const FString& Dir, const FString& Rel);
 
-	// Build a fresh procedural wave queued from decoded PCM. Call once per playback (the
-	// queue drains as it plays). Returns nullptr if the decode carried no samples.
+	// Build a fresh procedural wave backed by an Audio Mixer sound generator. Call once per
+	// playback. Returns nullptr if the decode carried no samples.
 	//
-	// bLoop wires the 6.3 looping path: a USoundWaveProcedural ends its voice when its queue
-	// drains, so a looping wave binds OnSoundWaveProceduralUnderflow to re-queue the whole clip
-	// each time the mixer runs it dry — a seamless loop with no extra copy (the delegate reads the
-	// cache-owned PCM, which outlives every wave it backs, up to FlushAll on map unload).
-	static USoundWaveProcedural* MakeWave(const FDecoded& Decoded, bool bLoop = false);
+	// bLoop wraps the generator's sample cursor. A one-shot instead reports generator EOF after
+	// its final sample, allowing UAudioComponent::OnAudioFinished to drive request completion.
+	static USoundWaveProcedural* MakeWave(FDecodedPtr Decoded, bool bLoop = false);
 
 	// Drop every cached decode (map unload / manual flush).
 	static void FlushAll();

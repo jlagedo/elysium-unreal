@@ -244,17 +244,20 @@ void FElysiumCogWindow_Audio::RenderContent()
 			for (const FElysiumAudioVoice& V : Live)
 			{
 				ImGui::TableNextRow();
-				ImGui::TableNextColumn(); ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*V.Rel));
-				ImGui::TableNextColumn(); ImGui::TextUnformatted(V.bLooping ? (V.b3D ? "loop 3D" : "loop 2D") : (V.b3D ? "1shot 3D" : "1shot 2D"));
-				ImGui::TableNextColumn(); ImGui::Text("%.2f", V.Volume);
-				ImGui::TableNextColumn(); ImGui::Text("%.2f", V.Pitch);
+				ImGui::TableNextColumn(); ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*V.Event.ResolvedPath));
+				ImGui::TableNextColumn(); ImGui::TextUnformatted(
+					V.Request.bLooping
+						? (V.Request.Placement.bSpatialized ? "loop 3D" : "loop 2D")
+						: (V.Request.Placement.bSpatialized ? "1shot 3D" : "1shot 2D"));
+				ImGui::TableNextColumn(); ImGui::Text("%.2f", V.Request.Gain);
+				ImGui::TableNextColumn(); ImGui::Text("%.2f", V.Request.Pitch);
 				ImGui::TableNextColumn();
-				ImGui::TextUnformatted(Audio->IsVoicePlaying(FElysiumAudioVoiceHandle{ V.Id }) ? "yes" : "-");
+				ImGui::TextUnformatted(Audio->IsVoicePlaying(V.Handle) ? "yes" : "-");
 				ImGui::TableNextColumn();
-				ImGui::PushID(V.Id);
+				ImGui::PushID(static_cast<int>(V.Handle.Slot));
 				if (ImGui::SmallButton("Stop"))
 				{
-					Audio->StopVoice(FElysiumAudioVoiceHandle{ V.Id });
+					Audio->StopVoice(V.Handle);
 				}
 				ImGui::PopID();
 			}

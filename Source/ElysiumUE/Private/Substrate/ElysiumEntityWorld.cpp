@@ -6,6 +6,7 @@
 #include "ElysiumDlg.h"
 #include "ElysiumEditorLabels.h"
 #include "ElysiumGameStateSubsystem.h"
+#include "ElysiumLineService.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPlayer.h"
@@ -88,6 +89,7 @@ FElysiumEntityWorld::FElysiumEntityWorld(AActor* InOwner, UElysiumGameStateSubsy
 	, WorldServices(InServices)
 	, Epoch(GElysiumNextWorldEpoch++)
 {
+	LineService = MakeUnique<FElysiumLineService>(WorldServices.Audio);
 	// R5 — the chokepoints are never uninstrumented: the ring buffer (always-on history) and
 	// the log/VLOG stream are installed before any entity spawns. Phase 2 UI adds more sinks.
 	TUniquePtr<FElysiumRingBufferSink> RingSink = MakeUnique<FElysiumRingBufferSink>(*this, 1000);
@@ -98,6 +100,10 @@ FElysiumEntityWorld::FElysiumEntityWorld(AActor* InOwner, UElysiumGameStateSubsy
 
 FElysiumEntityWorld::~FElysiumEntityWorld()
 {
+	if (LineService)
+	{
+		LineService->Shutdown();
+	}
 	Teardown();
 }
 
@@ -1178,6 +1184,16 @@ void FElysiumEntityWorld::OpenDialog(const FElysiumEntityHandle& NewOwner,
 	}
 	OpenDialogOwner = NewOwner;
 	OpenDialogConv = Conversation;
+	if (LineService)
+	{
+		if (const FElysiumDlgLine* Line = OpenDialogConv->CurrentNpcLine())
+		{
+			FElysiumEntity* Speaker = Resolve(OpenDialogOwner);
+			LineService->PlayDialogueTurn(OpenDialogOwner, OpenDialogConv->File().SourcePath,
+				Line->Id, Speaker ? Speaker->Origin : FVector::ZeroVector,
+				Speaker ? Speaker->GetSkeletalBody() : nullptr);
+		}
+	}
 
 	if (IElysiumPresenter* P = Presenter())
 	{
@@ -1199,6 +1215,16 @@ void FElysiumEntityWorld::PlayerDialogChoose(int32 VisibleIndex)
 		return;
 	}
 	OpenDialogConv->Choose(VisibleIndex);
+	if (!OpenDialogConv->IsOver() && LineService)
+	{
+		if (const FElysiumDlgLine* Line = OpenDialogConv->CurrentNpcLine())
+		{
+			FElysiumEntity* Speaker = Resolve(OpenDialogOwner);
+			LineService->PlayDialogueTurn(OpenDialogOwner, OpenDialogConv->File().SourcePath,
+				Line->Id, Speaker ? Speaker->Origin : FVector::ZeroVector,
+				Speaker ? Speaker->GetSkeletalBody() : nullptr);
+		}
+	}
 	if (OpenDialogConv->IsOver())
 	{
 		EndDialogSession(/*bSilent*/ false);
@@ -1381,6 +1407,10 @@ void FElysiumEntityWorld::ClearTrackCamera(float BlendOutSeconds)
 void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 {
 	const FElysiumEntityHandle Closing = OpenDialogOwner;
+	if (LineService)
+	{
+		LineService->CancelDialogue(Closing);
+	}
 	OpenDialogOwner = FElysiumEntityHandle();
 	OpenDialogConv.Reset();
 

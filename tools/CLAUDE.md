@@ -149,6 +149,28 @@ each exported map's `logic_choreographed_scene` entities — the `models/cinemat
 
 `mdl_gltf.export` (single clip) is the spike/CLI probe.
 
+`validate_skeletal_pipeline.py` is the independent patch-first fidelity audit. It
+compares the user's source `.mdl`/`.dx80.vtx` bytes with generated GLB binds,
+inverse binds, skin payloads, timelines, and animation samples, and separately
+reports source semantics the exporter/runtime does not consume. Run:
+
+```powershell
+python tools/validate_skeletal_pipeline.py --report tools/out/_tests/skeletal_pipeline_validation.json
+```
+
+A non-zero exit means the generated corpus differs from the current
+exporter/source contract.
+
+`capture_live_pose.py` is the hash-gated, read-only retail pose probe. It derives
+the requested model checksum and bone count from the patch-first install, polls
+StudioRender's live `boneToWorld` and skin-palette buffers, and writes
+game-derived sessions under `out/_live_pose/`. `compare_pose_captures.py` removes
+the entity root transform before comparing two sessions.
+`validate_live_pose_capture.py` verifies `boneToWorld * poseToBone` and compares
+the live pose with either an included-model clip or one named actor root in an
+external cinematic MDL. Findings and the fixed-step console protocol live in
+`animation_and_movers.md` A.4b.
+
 ## Texture upscaling (`upscale_bench.py`, `sky_upscale.py`, `retex_dds.py`)
 
 Standalone tuning tools, not part of the map pipeline — scaffolding for the asset-enhancement

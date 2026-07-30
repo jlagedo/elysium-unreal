@@ -93,6 +93,13 @@ public:
 		// waits for a PlaySound input; a hidden one plays when ScriptUnhide reveals it (if desired).
 		const bool bStartSilent = (SpawnFlags & SF_AMBIENT_START_SILENT) != 0;
 		bDesiredPlaying = !bStartSilent;
+		if (bDesiredPlaying && !SoundRel.IsEmpty())
+		{
+			if (IElysiumAudio* Audio = World ? World->Audio() : nullptr)
+			{
+				Audio->Prefetch(FElysiumAudioSource::Path(SoundRel));
+			}
+		}
 		// Defer the initial play to the first think: brush bodies are built after the spawn pass, so a
 		// SourceEntityName parent (a mover) does not exist yet in Spawn(). One think later it does.
 		if (bDesiredPlaying && !IsInert() && !SoundRel.IsEmpty())
@@ -155,17 +162,29 @@ private:
 		}
 		Audio->StopVoice(VoiceHandle, 0.f);
 
-		FElysiumPlayParams P;
-		P.Volume = Volume;
-		P.Pitch = Pitch;
-		P.bLooping = bLoop;
-		P.b3D = !bEverywhere;
-		P.AttenuationRadiusCm = RadiusCm;
-		P.FadeInSeconds = FadeInSeconds;
-		P.Location = Def ? Def->Origin : FVector::ZeroVector;
-		P.AttachTo = ResolveParentComponent();   // SourceEntityName's body, if any
+		FElysiumAudioRequest Request;
+		Request.Source = FElysiumAudioSource::Path(SoundRel);
+		Request.Owner.Kind = EElysiumAudioOwnerKind::MapEntity;
+		Request.Owner.StableId = FString::Printf(TEXT("entity:%u:%d"), Handle.Epoch, Handle.Index);
+		Request.Category = EElysiumAudioCategory::Auto;
+		Request.Gain = Volume;
+		Request.Pitch = Pitch;
+		Request.bLooping = bLoop;
+		Request.Placement.bSpatialized = !bEverywhere;
+		Request.AttenuationRadiusCm = RadiusCm;
+		Request.FadeInSeconds = FadeInSeconds;
+		Request.Placement.Location = Def ? Def->Origin : FVector::ZeroVector;
+		Request.Placement.AttachTo = ResolveParentComponent();
+		if (AmbientKeyBool(Def, TEXT("flag_no_voice_duck")))
+		{
+			Request.Routing |= EElysiumAudioRouting::NoVoiceDuck;
+		}
+		if (AmbientKeyBool(Def, TEXT("flag_no_sfx")))
+		{
+			Request.Routing |= EElysiumAudioRouting::NoGameplayNoise;
+		}
 
-		VoiceHandle = Audio->PlayVoice(SoundRel, P);
+		VoiceHandle = Audio->Submit(MoveTemp(Request));
 		if (!VoiceHandle.IsValid())
 		{
 			UE_LOG(LogElysiumAmbient, Verbose, TEXT("%s: PlaySound '%s' failed (missing/undecodable)"),

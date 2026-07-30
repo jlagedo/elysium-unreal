@@ -139,7 +139,8 @@ first popup arms itself:
   *Acceptance:* feeding on the blueblood enables the chopshop dialogue trigger. *Deps:* B3.
 
 Parallel, non-blocking: 4.7 Source movement (the current pawn walks the beat fine),
-`PlayDialogFile` audio (decode is 6.2-done; the call path lands with B4), PL4 batch NPC export
+`PlayDialogFile` is part of the 6.5/9.2 shared line-service gate (codec decode alone does not make
+the script call audible); PL4 batch NPC export
 for Jack's real model. B-tasks that are slices of phase tasks (B2/B4/B5) flip here **and** feed
 their parent task's status in the same change.
 
@@ -982,14 +983,16 @@ included**. **RE19** closes the scene format and event semantics
 `out/lip/`; **RE20** closes the flex/eyeball chunks, `.lip` grammar, and
 phoneme→controller tables (`docs/facial_animation.md`). **PL10** bakes the faces into the NPC
 export — morph targets in each glb, the flex rig in `out/npc/facial/<stem>.json`, and
-`out/expressions/`. **RE32 remains open:** the exporter preserves each target model's
-`Flags & 0x2` inventory, but a live experiment applying the decompiled
-split-inheritance branch after Unreal local-pose crossfading folded every biped at
-`Bip01 Spine1`. That implementation has been removed and the metadata is
-diagnostic-only. Final theatre acceptance needs the Source→glTF→Unreal pose-basis
-seam proven from rendered retail invariants, the rainbow-cloth material failure
+`out/expressions/`. **RE32 remains open:** the full
+Source→glTF→glTFRuntime→skeletal-component basis is proven algebraically, but the
+local generated corpus still contains 286 GLBs with 4,276 flagged-bone tracks
+from a discarded fixed-quaternion exporter rewrite. That stale data confounded
+the removed live split-inheritance experiment, so it did not reject the
+decompiled rule. Final theatre acceptance needs raw output regenerated,
+post-blend `Flags & 0x2` evaluation implemented, the included-model donor-bind
+fallback/outer position remap reproduced, the rainbow-cloth material failure
 resolved, nested virtual-model remap semantics closed or proven irrelevant, and
-one aggregate live run.
+one aggregate live run against rendered retail invariants.
 
 RE20 changes what 12.4 can be: **no model in the install carries eyeball data** — the whole
 cast ships `NumEyeballs == 0`, so there is no authored eye pose, look-at cone or procedural
@@ -1025,10 +1028,11 @@ it was never authored.
     clips. The authored-camera `embrace` gate derives 63 current-map samples across every cut,
     movement midpoint, and fade boundary; it applies the six fades, records eight key bones per actor,
     and confirms all five cast members enter frame outside opaque fades. Target-model
-    `split_bones` metadata preserves the source flag inventory for further RE, but
-    runtime application is deliberately disabled after the post-crossfade
-    experiment produced quarter-turn `Bip01 Spine1` discontinuities across the
-    live cast. `sp_theatre` is exported and baked.
+    `split_bones` metadata preserves the source flag inventory, but runtime
+    application remains disabled. The generated inputs to the removed
+    post-crossfade experiment already carried the discarded fixed-quaternion
+    rewrite, so its quarter-turn discontinuities do not adjudicate the recovered
+    retail rule. `sp_theatre` is exported and baked.
   - **Live acceptance:** `newgame_ttd` activates both camera owners, renders exact-zero edits as
     clean cuts, and carries the authored positive-time moves without the generic look tracker or
     Unreal motion blur turning them into scrolls. The PC and `player_understudy` are visible and
@@ -1152,7 +1156,7 @@ retail end to end, and `test.bat Play` proves it headlessly.
 | RE29 | Entity-name matching is case-insensitive with final-`*` prefix semantics. → `entity_io.md`. | entity I/O | [x] |
 | RE30 | Recover `trigger_environmental_audio` touch behavior and the precedence/interpolation among its `room_type`, SoundScheme `RoomDSP`, and the player's networked `m_sndRoomDSP`/`m_sndPlayerDSP`. → `audio_pipeline.md`. | 6.7 | [ ] |
 | RE31 | Recover the SoundScheme RandomSound frequency scheduler/distribution and transition edge cases; the current approximate curve is not a faithful baseline. → `audio_pipeline.md`. | 6.7 | [ ] |
-| RE32 | **Retail skeletal pose application, end to end.** The live base path is recovered from v2531 RLE local channels through hierarchy/entity composition, transition-history saved/current conversion, `Flags & 0x2` split inheritance, the outer virtual-model position remap, `boneToWorld * poseToBone`, and StudioRender's CPU vertex deformation; three binary-pinned specifications under `tools/research_specs/` preserve the cross-DLL proof path. Target-model flag metadata is exported, but direct post-crossfade application in Unreal is a rejected hypothesis: live evidence showed a quarter-turn discontinuity at `Bip01 Spine1`, so the runtime pass was removed. Remaining close gates are the exact Source→glTF→Unreal pose-basis/multiplication seam, nested virtual-model remap semantics, the material/packed-vertex cause of rainbow cloth, and isolated retail/green-room invariants for root placement, skinning, and material failures. Details and commands: `animation_and_movers.md` A.4b. | 8.5, 8.11, 12.1 | [~] |
+| RE32 | **Retail skeletal pose application, end to end.** The live base path is recovered from v2531 RLE local channels through hierarchy/entity composition, transition-history saved/current conversion, `Flags & 0x2` split inheritance, the outer virtual-model position remap, `boneToWorld * poseToBone`, and StudioRender's CPU vertex deformation; three binary-pinned specifications under `tools/research_specs/` preserve the cross-DLL proof path. A hash-gated retail Tremere/`howl` capture now independently validates the final skin palette and discriminates the split-inheritance evaluator from a conventional hierarchy over 70 aligned authored frames. The Source→glTF→Unreal basis is closed, and all 373 flagged bones use conventional inverse binds. The generated corpus nevertheless has 286 stale GLBs/4,276 flagged tracks from a discarded fixed-quaternion rewrite, which confounded the removed live runtime experiment. Remaining close gates are raw regeneration plus runtime post-blend split evaluation, donor-bind fallback and the outer position map for included models (the live capture additionally rejects simple target-bind fallback for 27 target-only helpers; 2,692 of 4,515 used target/bank pairs can diverge today), nested virtual-model remap semantics, the material/packed-vertex cause of rainbow cloth, and isolated retail/green-room invariants for root placement and material failures. Details and commands: `animation_and_movers.md` A.4b. | 8.5, 8.11, 12.1 | [~] |
 | SKY | The sky/ambience rework is complete; remaining work is tracked as 3.10–3.13 and RE17. Facts: `sky-ambience.md`. | 3.6, 3.7 | [x] |
 
 The Ghidra extraction findings behind the closed rows (the RE1/RE2/RE3/RE4 detail: addresses,

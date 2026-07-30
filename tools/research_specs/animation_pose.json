@@ -10,7 +10,7 @@
   },
   "lock_delay_seconds": 9,
   "questions": [
-    "Can the split rotation/translation inheritance of Flags & 0x2 be represented faithfully across runtime animation blending without a custom pose evaluator?",
+    "How must the recovered post-blend split-inheritance correction be integrated across sequence-player, single-node, and direct playback paths, and which rendered retail invariant validates it?",
     "What are the complete nested virtual-model remap record semantics in the transformed branch inside 0x10089c40?",
     "Which model/material decode defect causes the observed rainbow cloth independently of skeletal pose?"
   ],
@@ -68,6 +68,12 @@
       "fact": "The outer included-model remap optionally transforms position by a per-record 3x4 matrix but always copies quaternion verbatim.",
       "evidence": "client.dll 0x100969fb-0x10096ae8; 0x3c-byte mapping records and TransformPoint 0x10107f80.",
       "consequence": "A faithful virtual-model resolver must retain authored position-frame mappings without inventing a rotation retarget at this layer."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Every Flags & 0x2 bone in the patch-first character corpus uses the conventional hierarchy-FK inverse bind, not a split-inheritance inverse bind.",
+      "evidence": "tools/validate_skeletal_pipeline.py independently evaluates all 373 flagged bones across 433 character skeletons; worst boneToWorld * poseToBone identity error is 7.36e-6.",
+      "consequence": "Split inheritance belongs only to live pose construction; skin binding and generated inverse binds remain conventional."
     }
   ],
   "functions": [

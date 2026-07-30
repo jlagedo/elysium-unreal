@@ -79,6 +79,22 @@ as optional; the runtime never silently invents a replacement.
 
 ## 3. Request and handle model
 
+The public contract is concrete:
+
+- `FElysiumAudioSource` is either a direct logical path or typed `{Domain, EventId}`.
+- `FElysiumAudioOwner` is `{Kind, StableId, MapEpoch}`. Kinds are application, map entity,
+  scene, dialogue session and gameplay system. Components are never owners.
+- `FElysiumAudioRequest` carries source, owner, category, placement, gain/pitch, attenuation,
+  loop/start/fade policy, routing flags, priority, concurrency key and an optional
+  `FElysiumNoiseEvent`.
+- `FElysiumVoiceHandle` is `{Slot, Generation}`. A slot generation changes before reuse.
+- `FElysiumVoiceEvent` carries state, resolved path, authoritative scheduled audio-clock start,
+  media offset, duration and completion reason.
+
+`Submit`, `Prefetch`, `Stop`/fade, `Pause`, `Seek`, `SetGain`, `SetPitch`, `CancelOwner` and
+`RetireMapEpoch` are the mutation surface. Read-only request snapshots expose the ledger to debug
+and tests. Every event callback is marshalled to the game thread.
+
 `FElysiumAudioRequest` is the single description passed into the subsystem:
 
 | Field | Meaning |
@@ -104,9 +120,11 @@ also address the owner's named voice set. Reusing a pooled component cannot make
 control a new sound.
 
 Voice state distinguishes `PendingDecode`, `Scheduled`, `Playing`, `Virtual`, `Fading`,
-`Paused`, `Complete` and `Failed`. Completion is published on the game thread with the actual
-audio start time, logical duration and reason. Dialogue, choreography, subtitles and lipsync all
-join on that clock instead of each estimating when a line began.
+`Paused`, `Complete` and `Failed`. Completion is published on the game thread with the
+**authoritative scheduled audio start**, logical duration and reason. The mixer does not expose a
+portable, exact physical DAC-start timestamp; the architecture does not claim one. Dialogue,
+choreography, subtitles and lipsync join on the scheduled mixer clock instead of each estimating
+when a line began.
 
 ## 4. Loose-file decode and streaming
 
@@ -205,6 +223,11 @@ Audio Gameplay Volumes match this component model and can be the adapter when th
 status is acceptable. The resolver remains application-owned so the same semantics can target
 stable Audio Volumes or direct submix overrides without changing map entities.
 
+Translating selected VtMB/Miles DSP graphs into Unreal reverb and submix presets is a
+**presentation-layer remaster choice**. The authored preset selection and transition behavior are
+logic to reproduce; the signal-processing implementation is not a bit-identical Miles emulator.
+Calibration differences live beside the generated preset mapping.
+
 ## 7. System adapters
 
 ### `ambient_generic`
@@ -219,7 +242,8 @@ authored envelopes and sound-event ownership remain entity semantics; none belon
 There is one logical active map scheme, with outgoing and incoming transition states. A transition
 prefetches the destination, starts its stems on one audio-clock boundary, then crossfades. Explore,
 alert and combat are states of that scheme, driven by world combat/safe state and the six
-`events_world` music outputs. `NoPause`, `Dry`, `RandomSoundCount` and `RoomDSP` are honored.
+`events_world` music outputs. `NoPause`, `Dry`, `RandomSoundCount` and `RoomDSP` are inputs to that
+policy. They are not called faithful until RE30/RE31 settle precedence and scheduling.
 
 Random sounds use the game RNG stream and game clock for deterministic replay. The authored polar
 distribution is evaluated around the scheme anchor/listener as specified by the recovered behavior.
@@ -228,11 +252,24 @@ an approximation may exist only as a named, A/B-able divergence.
 
 ### Dialogue, choreography and body sound
 
-`PlayDialogFile`, `.dlg` playback, `.vcd` `speak`, `.vcd` `bodysound`, subtitles and lipsync enter
-one line service. It applies canonical path rules and MP3-first fallback, attaches the voice to the
-speaker, prefetches, schedules against the audio clock, and returns the authoritative start and
-duration. A `PlayDialogFile` path is not assumed to be dialogue content: shipped scripts also use
-it as a general speaker-attached direct playback verb.
+`FElysiumLineService` is map-owned. It owns story/entity joins, line replacement, subtitles and
+later lipsync; `UElysiumAudioSubsystem` remains GameInstance-owned and alone owns resolution,
+decode, scheduling and rendering. `PlayDialogFile`, `.dlg` playback, `.vcd` `speak`, `.vcd`
+`bodysound`, subtitles and lipsync enter that service. It applies canonical path rules and
+MP3-first fallback, attaches the voice to the speaker, prefetches, schedules against the audio
+clock, and returns the authoritative scheduled start and duration. A `PlayDialogFile` path is not
+assumed to be dialogue content: shipped scripts also use it as a general speaker-attached direct
+playback verb.
+
+For an NPC `.dlg` turn, the service derives
+`Character/dlg/<dialogue-dir>/<dialogue-stem>/line<ID>_col_e` from the dialogue source. A new NPC
+turn cancels the prior line and closing/replacing the conversation cancels its owner. PC choices
+do not start a voice.
+
+The audio catalog begins loading with the GameInstance subsystem. Map activation waits for catalog
+readiness and required start-enabled point/scheme prefetch work; only then does the initial
+entity/audio pass run. A retired epoch cancels queued decode before it can realize components.
+Application-owned requests with `PersistAcrossTravel` are outside that retirement set.
 
 Scene timelines use audio mixahead as a scheduling lead, not as an offset applied independently by
 each consumer. Quartz is used where sample-accurate stem/scene scheduling materially matters; the

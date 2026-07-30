@@ -241,27 +241,81 @@ struct FElysiumRecordingServices final
 	}
 
 	// --- IElysiumAudio ---------------------------------------------------------------------
+	virtual FElysiumVoiceHandle Submit(FElysiumAudioRequest Request) override
+	{
+		const FElysiumVoiceHandle H{ ++NextVoiceSlot, 1 };
+		Record(FString::Printf(TEXT("Submit %s owner=%s epoch=%llu gain=%.2f loop=%d"),
+			*UElysiumAudioSubsystem::ResolveSourcePath(Request.Source), *Request.Owner.StableId,
+			Request.Owner.MapEpoch, Request.Gain, Request.bLooping ? 1 : 0));
+		LiveVoices.Add(H);
+		Requests.Add(H, MoveTemp(Request));
+		return H;
+	}
+	virtual void Prefetch(const FElysiumAudioSource& Source) override
+	{
+		Record(FString::Printf(TEXT("Prefetch %s"),
+			*UElysiumAudioSubsystem::ResolveSourcePath(Source)));
+	}
+	virtual void PauseVoice(FElysiumVoiceHandle Handle, bool bPaused) override
+	{
+		Record(FString::Printf(TEXT("PauseVoice %u:%u %d"),
+			Handle.Slot, Handle.Generation, bPaused ? 1 : 0));
+	}
+	virtual void SeekVoice(FElysiumVoiceHandle Handle, float MediaOffsetSeconds) override
+	{
+		Record(FString::Printf(TEXT("SeekVoice %u:%u %.3f"),
+			Handle.Slot, Handle.Generation, MediaOffsetSeconds));
+	}
+	virtual void SetVoicePitch(FElysiumVoiceHandle Handle, float Pitch) override
+	{
+		Record(FString::Printf(TEXT("SetVoicePitch %u:%u %.2f"),
+			Handle.Slot, Handle.Generation, Pitch));
+	}
+	virtual void CancelAudioOwner(FElysiumAudioOwner Owner, float FadeSeconds = 0.f) override
+	{
+		Record(FString::Printf(TEXT("CancelAudioOwner %s epoch=%llu fade=%.2f"),
+			*Owner.StableId, Owner.MapEpoch, FadeSeconds));
+		TArray<FElysiumVoiceHandle> Remove;
+		for (const TPair<FElysiumVoiceHandle, FElysiumAudioRequest>& Pair : Requests)
+		{
+			if (Pair.Value.Owner == Owner)
+			{
+				Remove.Add(Pair.Key);
+			}
+		}
+		for (const FElysiumVoiceHandle H : Remove)
+		{
+			LiveVoices.Remove(H);
+			Requests.Remove(H);
+		}
+	}
 	virtual FElysiumAudioVoiceHandle PlayVoice(const FString& Rel, const FElysiumPlayParams& Params) override
 	{
 		Record(FString::Printf(TEXT("PlayVoice %s vol=%.2f loop=%d offset=%.3f"), *Rel, Params.Volume,
 			Params.bLooping ? 1 : 0, Params.StartTimeSeconds));
-		FElysiumAudioVoiceHandle H;
-		H.Id = ++NextVoiceId;
-		LiveVoices.Add(H.Id);
-		return H;
+		FElysiumAudioRequest Request;
+		Request.Source = FElysiumAudioSource::Path(Rel);
+		Request.Gain = Params.Volume;
+		Request.Pitch = Params.Pitch;
+		Request.bLooping = Params.bLooping;
+		Request.StartOffsetSeconds = Params.StartTimeSeconds;
+		return Submit(MoveTemp(Request));
 	}
 	virtual void StopVoice(FElysiumAudioVoiceHandle Handle, float FadeSeconds) override
 	{
-		Record(FString::Printf(TEXT("StopVoice %d fade=%.2f"), Handle.Id, FadeSeconds));
-		LiveVoices.Remove(Handle.Id);
+		Record(FString::Printf(TEXT("StopVoice %u:%u fade=%.2f"),
+			Handle.Slot, Handle.Generation, FadeSeconds));
+		LiveVoices.Remove(Handle);
+		Requests.Remove(Handle);
 	}
 	virtual void SetVoiceVolume(FElysiumAudioVoiceHandle Handle, float Volume) override
 	{
-		Record(FString::Printf(TEXT("SetVoiceVolume %d %.2f"), Handle.Id, Volume));
+		Record(FString::Printf(TEXT("SetVoiceVolume %u:%u %.2f"),
+			Handle.Slot, Handle.Generation, Volume));
 	}
 	virtual bool IsVoicePlaying(FElysiumAudioVoiceHandle Handle) const override
 	{
-		return LiveVoices.Contains(Handle.Id);
+		return LiveVoices.Contains(Handle);
 	}
 	virtual void FadeInScheme(const FString& SchemeRel, const FVector& Anchor, float FadeSeconds) override
 	{
@@ -337,9 +391,10 @@ private:
 	}
 	TArray<TStrongObjectPtr<UActorComponent>> Spawned;
 
-	int32 NextVoiceId = 0;
+	uint32 NextVoiceSlot = 0;
 	int32 NextCameraShotId = 0;
-	TSet<int32> LiveVoices;
+	TSet<FElysiumVoiceHandle> LiveVoices;
+	TMap<FElysiumVoiceHandle, FElysiumAudioRequest> Requests;
 };
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

@@ -202,6 +202,34 @@ void FElysiumSoundSchemeManager::FadeInScheme(UElysiumAudioSubsystem* Audio, con
 		*SchemeRel, Scheme ? TEXT("parsed") : TEXT("MISSING assets"), FadeSeconds);
 }
 
+void FElysiumSoundSchemeManager::PrimeScheme(
+	UElysiumAudioSubsystem* Audio, const FString& SchemeRel)
+{
+	const FElysiumSoundScheme* Scheme = Audio ? LoadScheme(SchemeRel) : nullptr;
+	if (!Scheme)
+	{
+		return;
+	}
+	auto Prime = [Audio](const FElysiumSchemeSound& Sound)
+	{
+		if (Sound.IsSet())
+		{
+			Audio->Prefetch(FElysiumAudioSource::Path(Sound.Filename));
+		}
+	};
+	Prime(Scheme->Ambient);
+	Prime(Scheme->Music);
+	Prime(Scheme->Combat);
+	Prime(Scheme->Alert);
+	for (const FElysiumRandomSound& Random : Scheme->RandomSounds)
+	{
+		if (!Random.Filename.IsEmpty())
+		{
+			Audio->Prefetch(FElysiumAudioSource::Path(Random.Filename));
+		}
+	}
+}
+
 void FElysiumSoundSchemeManager::FadeOutScheme(UElysiumAudioSubsystem* Audio, const FString& SchemeRel, float FadeSeconds)
 {
 	if (Active.SchemeRel != SchemeRel)
@@ -232,12 +260,16 @@ void FElysiumSoundSchemeManager::StartActiveVoices(UElysiumAudioSubsystem* Audio
 	// Ambient bed — a non-positional looping bed at its own volume.
 	if (S.Ambient.IsSet())
 	{
-		FElysiumPlayParams P;
-		P.Volume = S.Ambient.Volume;
-		P.bLooping = true;
-		P.b3D = false;
-		P.FadeInSeconds = FadeSeconds;
-		Active.Bed = Audio->PlayVoice(S.Ambient.Filename, P);
+		FElysiumAudioRequest Request;
+		Request.Source = FElysiumAudioSource::Path(S.Ambient.Filename);
+		Request.Owner = { EElysiumAudioOwnerKind::GameplaySystem,
+			FString::Printf(TEXT("scheme:%s"), *Active.SchemeRel), MapEpoch };
+		Request.Category = EElysiumAudioCategory::Ambience;
+		Request.Gain = S.Ambient.Volume;
+		Request.bLooping = true;
+		Request.Placement.bSpatialized = false;
+		Request.FadeInSeconds = FadeSeconds;
+		Active.Bed = Audio->Submit(Request);
 	}
 
 	// Music stems — all present stems start together (looping, 2D) so they stay phase-locked; only
@@ -245,12 +277,17 @@ void FElysiumSoundSchemeManager::StartActiveVoices(UElysiumAudioSubsystem* Audio
 	auto StartStem = [&](const FElysiumSchemeSound& Stem) -> FElysiumAudioVoiceHandle
 	{
 		if (!Stem.IsSet()) { return FElysiumAudioVoiceHandle::Invalid(); }
-		FElysiumPlayParams P;
-		P.Volume = 0.f;             // ApplyMusicVolumes sets the real level below
-		P.bLooping = true;
-		P.b3D = false;
-		P.FadeInSeconds = FadeSeconds;
-		return Audio->PlayVoice(Stem.Filename, P);
+		FElysiumAudioRequest Request;
+		Request.Source = FElysiumAudioSource::Path(Stem.Filename);
+		Request.Owner = { EElysiumAudioOwnerKind::GameplaySystem,
+			FString::Printf(TEXT("scheme:%s"), *Active.SchemeRel), MapEpoch };
+		Request.Category = EElysiumAudioCategory::Music;
+		Request.Gain = 0.f;             // ApplyMusicVolumes sets the real level below
+		Request.bLooping = true;
+		Request.Placement.bSpatialized = false;
+		Request.FadeInSeconds = FadeSeconds;
+		Request.ConcurrencyKey = TEXT("scheme.music");
+		return Audio->Submit(Request);
 	};
 	Active.Explore = StartStem(S.Music);
 	Active.Combat  = StartStem(S.Combat);
@@ -325,14 +362,18 @@ void FElysiumSoundSchemeManager::TickRandom(UElysiumAudioSubsystem* Audio, const
 			const float Ang = FMath::DegreesToRadians(FMath::FRandRange(AMin, AMax));
 			const FVector Loc = Active.Anchor + FVector(FMath::Cos(Ang) * Dist, FMath::Sin(Ang) * Dist, Height);
 
-			FElysiumPlayParams P;
-			P.Volume = R.Volume;
-			P.Pitch = FMath::FRandRange((float)R.PitchMin, (float)R.PitchMax) / 100.f;
-			P.bLooping = false;
-			P.b3D = true;
-			P.AttenuationRadiusCm = R.AudibleRadius * SchemeInchToCm;
-			P.Location = Loc;
-			const FElysiumAudioVoiceHandle H = Audio->PlayVoice(R.Filename, P);
+			FElysiumAudioRequest Request;
+			Request.Source = FElysiumAudioSource::Path(R.Filename);
+			Request.Owner = { EElysiumAudioOwnerKind::GameplaySystem,
+				FString::Printf(TEXT("scheme:%s"), *Active.SchemeRel), MapEpoch };
+			Request.Category = EElysiumAudioCategory::Ambience;
+			Request.Gain = R.Volume;
+			Request.Pitch = FMath::FRandRange((float)R.PitchMin, (float)R.PitchMax) / 100.f;
+			Request.Placement.bSpatialized = true;
+			Request.AttenuationRadiusCm = R.AudibleRadius * SchemeInchToCm;
+			Request.Placement.Location = Loc;
+			Request.ConcurrencyKey = TEXT("scheme.random");
+			const FElysiumAudioVoiceHandle H = Audio->Submit(Request);
 			if (H.IsValid())
 			{
 				Active.RandomVoices.Add(H);

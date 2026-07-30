@@ -37,7 +37,9 @@
 #include "ElysiumHUD.h"
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
+#include "ElysiumLineService.h"
 #include "ElysiumMapActor.h"
+#include "ElysiumSoundCache.h"
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
@@ -74,6 +76,8 @@
 #include "Components/SceneComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "Sound/SoundGenerator.h"
+#include "Sound/SoundWaveProcedural.h"
 
 // One context flag (runs anywhere) + the product filter (this project's own suite bucket).
 // EAutomationTestFlags is a strong enum in 5.8, so the constant carries that type (ENUM_CLASS_FLAGS
@@ -4454,7 +4458,22 @@ bool FElysiumWorldServicesTest::RunTest(const FString&)
 		TestTrue(TEXT("SetAnimation reached the embodiment"),
 			Rec.Saw(TEXT("PlayNpcClip jack cower_idle")));
 		TestTrue(TEXT("ambient_generic played a voice through the audio service"),
-			Rec.Saw(TEXT("PlayVoice ambient/tutorial/hum.wav")));
+			Rec.Saw(TEXT("Submit ambient/tutorial/hum.wav owner=entity:")));
+		if (FElysiumEntity* Jack = World.FindByName(TEXT("jack")))
+		{
+			World.EnqueueInput(TEXT("!self"), FName(TEXT("PlayDialogFile")),
+				FElysiumVariant::String(TEXT("sound/character/dlg/jack/direct_line")),
+				0.0, FElysiumEntityHandle::Invalid(), Jack->Handle);
+			World.Tick(0.3);
+			TestTrue(TEXT("PlayDialogFile enters the owned line-service request path"),
+				Rec.Saw(TEXT("Submit character/dlg/jack/direct_line.mp3 owner=direct:")));
+		}
+		World.EnqueueInput(TEXT("!self"), FName(TEXT("Whisper")),
+			FElysiumVariant::String(TEXT("Crying")), 0.0,
+			FElysiumEntityHandle::Invalid(), World.PlayerHandle());
+		World.Tick(0.4);
+		TestTrue(TEXT("player Whisper enters the typed request path"),
+			Rec.Saw(TEXT("Submit whispers/crying")));
 		TestTrue(TEXT("env_fade announced the fade to the presenter"),
 			Rec.Saw(TEXT("StartFade dur=2.50 hold=1.50")));
 
@@ -7273,6 +7292,79 @@ bool FElysiumAnimationBindingIdentityTest::RunTest(const FString&)
 	Single.Roots.Add(TEXT("bip01"), TEXT("solo_bank"));
 	TestEqual(TEXT("a single-actor set may omit bonerename"),
 		Single.BankForRoot(FString()), FString(TEXT("solo_bank")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAudioContractsTest,
+	"Elysium.Substrate.AudioContracts", GElysiumTestFlags)
+
+bool FElysiumAudioContractsTest::RunTest(const FString&)
+{
+	TestEqual(TEXT("leading sound and slash/case normalize once"),
+		UElysiumAudioSubsystem::NormalizeSourcePath(
+			TEXT(" /Sound\\Character/Dlg/Jack/LINE1_COL_E.MP3 ")),
+		FString(TEXT("character/dlg/jack/line1_col_e.mp3")));
+	TestEqual(TEXT("dialogue source derives its NPC line stem"),
+		FElysiumLineService::DialogueLineSource(
+			TEXT("E:/game/dlg/Main Characters/jack_tutorial.dlg"), 42),
+		FString(TEXT("character/dlg/Main Characters/jack_tutorial/line42_col_e")));
+
+	const FElysiumVoiceHandle First{ 7, 2 };
+	const FElysiumVoiceHandle Reused{ 7, 3 };
+	TestTrue(TEXT("generation distinguishes a reused slot"), First != Reused);
+	TSet<FElysiumVoiceHandle> Handles;
+	Handles.Add(First);
+	TestFalse(TEXT("stale generation cannot find a reused voice"), Handles.Contains(Reused));
+
+	TSharedPtr<FElysiumSoundCache::FDecoded, ESPMode::ThreadSafe> Pcm =
+		MakeShared<FElysiumSoundCache::FDecoded, ESPMode::ThreadSafe>();
+	Pcm->Info.Channels = 1;
+	Pcm->Info.SampleRate = 4;
+	Pcm->Info.FrameCount = 4;
+	Pcm->Info.DurationSeconds = 1.f;
+	const int16 Samples[] = { MIN_int16, -1, 0, MAX_int16 };
+	Pcm->Pcm16.Append(reinterpret_cast<const uint8*>(Samples), sizeof(Samples));
+
+	FSoundGeneratorInitParams GeneratorParams;
+	GeneratorParams.NumChannels = 1;
+	GeneratorParams.NumFramesPerCallback = 8;
+	GeneratorParams.StartTime = 0.f;
+
+	USoundWaveProcedural* OneShot = FElysiumSoundCache::MakeWave(Pcm, false);
+	TestNotNull(TEXT("one-shot wave is created"), OneShot);
+	if (OneShot)
+	{
+		ISoundGeneratorPtr Generator = OneShot->CreateSoundGenerator(GeneratorParams);
+		float Out[8] = {};
+		TestEqual(TEXT("one-shot generator stops at decoded EOF"),
+			Generator->GetNextBuffer(Out, UE_ARRAY_COUNT(Out)), 4);
+		TestTrue(TEXT("one-shot generator reports completion"), Generator->IsFinished());
+	}
+
+	USoundWaveProcedural* Loop = FElysiumSoundCache::MakeWave(Pcm, true);
+	TestNotNull(TEXT("looping wave is created"), Loop);
+	if (Loop)
+	{
+		ISoundGeneratorPtr Generator = Loop->CreateSoundGenerator(GeneratorParams);
+		float Out[10] = {};
+		TestEqual(TEXT("looping generator fills across sample wrap"),
+			Generator->GetNextBuffer(Out, UE_ARRAY_COUNT(Out)), 10);
+		TestFalse(TEXT("looping generator does not report completion"), Generator->IsFinished());
+		TestEqual(TEXT("loop wrap restarts at the first sample"), Out[4], Out[0]);
+	}
+
+	const FElysiumClassRegistry& Registry = FElysiumClassRegistry::Get();
+	const FElysiumClassDesc* Base = Registry.BaseDesc();
+	TestNotNull(TEXT("base entity descriptor exists"), Base);
+	if (Base)
+	{
+		TestTrue(TEXT("PlayDialogFile is a real base input"),
+			Registry.FindInput(*Base, TEXT("PlayDialogFile")) != nullptr);
+		TestTrue(TEXT("SetSoundOverrideEnt is a real base input"),
+			Registry.FindInput(*Base, TEXT("SetSoundOverrideEnt")) != nullptr);
+		TestTrue(TEXT("SetFakeSilence is a real base input"),
+			Registry.FindInput(*Base, TEXT("SetFakeSilence")) != nullptr);
+	}
 	return true;
 }
 

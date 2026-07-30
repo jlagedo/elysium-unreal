@@ -137,6 +137,12 @@ static FElysiumClassRegistrar GRegBaseEntity(
 		D.Input(TEXT("Kill"),         [](FElysiumEntity& E, const FElysiumInputArgs&) { E.Kill(); });
 		D.Input(TEXT("ScriptHide"),   [](FElysiumEntity& E, const FElysiumInputArgs&) { E.ScriptHide(); });
 		D.Input(TEXT("ScriptUnhide"), [](FElysiumEntity& E, const FElysiumInputArgs&) { E.ScriptUnhide(); });
+		D.Input(TEXT("PlayDialogFile"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
+			{ E.PlayDialogFile(A.Param.ToString()); });
+		D.Input(TEXT("SetSoundOverrideEnt"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
+			{ E.SetSoundOverrideEnt(A.Param.ToString()); });
+		D.Input(TEXT("SetFakeSilence"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
+			{ E.SetFakeSilence(A.Param.ToInt() != 0); });
 
 		// Base keyfields — the CBaseEntity datamap contract (python_bridge.md). All keyable
 		// (the base builder sets flags bit 0x8); the fields with no consumer yet still round-

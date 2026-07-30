@@ -1041,7 +1041,23 @@ static FElysiumClassRegistrar GRegPlayer(
 		// only 10 were recovered from the builder dump — the eleventh is still unidentified,
 		// `script_api.md`.)
 		D.Input(TEXT("Whisper"),         [](FElysiumEntity& E, const FElysiumInputArgs& A)
-			{ static_cast<FP&>(E).PendingInput(TEXT("Whisper"), TEXT("9.2 — dialogue line audio"), A); });
+			{
+				if (!E.World || !E.World->Audio())
+				{
+					return;
+				}
+				FElysiumAudioRequest Request;
+				Request.Source = FElysiumAudioSource::Event(
+					EElysiumAudioSourceDomain::Whisper, A.Param.ToString());
+				Request.Owner.Kind = EElysiumAudioOwnerKind::GameplaySystem;
+				Request.Owner.StableId =
+					FString::Printf(TEXT("player.whisper:%u:%d"), E.Handle.Epoch, E.Handle.Index);
+				Request.Category = EElysiumAudioCategory::Dialogue;
+				Request.Placement.bSpatialized = false;
+				Request.Routing = EElysiumAudioRouting::NoGameplayNoise;
+				Request.ConcurrencyKey = TEXT("player.whisper");
+				E.World->Audio()->Submit(MoveTemp(Request));
+			});
 		// RemoveCamera — the other half of `SetCamera`: hand the view back to the player. It clears the
 		// map's one scripted camera whether a script, a wire or the theatre put it up (11.7).
 		D.Input(TEXT("RemoveCamera"),    [](FElysiumEntity& E, const FElysiumInputArgs&)

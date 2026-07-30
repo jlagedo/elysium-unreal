@@ -29,6 +29,7 @@
 #include "Misc/FileHelper.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysium, Log, All);
+static TAtomic<uint64> GNextElysiumAudioMapEpoch(0);
 
 const TCHAR* ElysiumMapRuntimePhaseName(EElysiumMapRuntimePhase Phase)
 {
@@ -48,6 +49,7 @@ FString FElysiumMapRuntimePrerequisites::Missing() const
 	TArray<FString> MissingItems;
 	if (!bConstructionComplete) { MissingItems.Add(TEXT("runtime construction")); }
 	if (!bEntityWorldReady)     { MissingItems.Add(TEXT("entity substrate")); }
+	if (!bAudioCatalogReady)    { MissingItems.Add(TEXT("audio catalog")); }
 	if (bCollisionFailed)       { MissingItems.Add(TEXT("world collision failed")); }
 	else if (!bCollisionReady)  { MissingItems.Add(TEXT("world collision cooking")); }
 
@@ -76,6 +78,11 @@ EElysiumMapReadinessResult FElysiumMapRuntimePrerequisites::Evaluate(
 	if (bConstructionComplete && !bEntityWorldReady)
 	{
 		OutFailure = TEXT("runtime construction produced no entity substrate");
+		return EElysiumMapReadinessResult::Failed;
+	}
+	if (bConstructionComplete && !bAudioCatalogReady && WaitSeconds >= WatchdogSeconds)
+	{
+		OutFailure = TEXT("audio catalog did not become ready");
 		return EElysiumMapReadinessResult::Failed;
 	}
 	if (bConstructionComplete && !bMenuBackdrop
@@ -282,6 +289,7 @@ void AElysiumMapActor::EnsureTickPrerequisites()
 void AElysiumMapActor::BeginPlay()
 {
 	Super::BeginPlay();
+	AudioMapEpoch = ++GNextElysiumAudioMapEpoch;
 	RuntimePhase = EElysiumMapRuntimePhase::Building;
 	RuntimeWaitStartSeconds = FPlatformTime::Seconds();
 
@@ -402,6 +410,7 @@ void AElysiumMapActor::LoadMap()
 				// ambient_soundscheme fades its scheme in from its own Spawn() (P6.3), and it
 				// reaches it through this actor's IElysiumAudio.
 				SchemeManager = MakePimpl<FElysiumSoundSchemeManager>();
+				SchemeManager->SetMapEpoch(AudioMapEpoch);
 
 				// 11.2 — hand the substrate its outbound seam. This actor is three of the four
 				// services; the fourth is the world-scoped presentation subsystem (11.8), which is
@@ -787,10 +796,70 @@ bool AElysiumMapActor::PopCameraShot(int32 ShotId, float BlendOutSeconds)
 	return CameraDirector ? CameraDirector->Pop(PlayerCamera(), ShotId, BlendOutSeconds) : false;
 }
 
+FElysiumVoiceHandle AElysiumMapActor::Submit(FElysiumAudioRequest Request)
+{
+	Request.Owner.MapEpoch = AudioMapEpoch;
+	UElysiumAudioSubsystem* Audio = GetAudioSubsystem();
+	return Audio ? Audio->Submit(Request) : FElysiumVoiceHandle::Invalid();
+}
+
+void AElysiumMapActor::Prefetch(const FElysiumAudioSource& Source)
+{
+	if (UElysiumAudioSubsystem* Audio = GetAudioSubsystem())
+	{
+		Audio->Prefetch(Source);
+	}
+}
+
+void AElysiumMapActor::PauseVoice(FElysiumVoiceHandle Handle, bool bPaused)
+{
+	if (UElysiumAudioSubsystem* Audio = GetAudioSubsystem())
+	{
+		Audio->Pause(Handle, bPaused);
+	}
+}
+
+void AElysiumMapActor::SeekVoice(FElysiumVoiceHandle Handle, float MediaOffsetSeconds)
+{
+	if (UElysiumAudioSubsystem* Audio = GetAudioSubsystem())
+	{
+		Audio->Seek(Handle, MediaOffsetSeconds);
+	}
+}
+
+void AElysiumMapActor::SetVoicePitch(FElysiumVoiceHandle Handle, float Pitch)
+{
+	if (UElysiumAudioSubsystem* Audio = GetAudioSubsystem())
+	{
+		Audio->SetPitch(Handle, Pitch);
+	}
+}
+
+void AElysiumMapActor::CancelAudioOwner(FElysiumAudioOwner AudioOwner, float FadeSeconds)
+{
+	AudioOwner.MapEpoch = AudioMapEpoch;
+	if (UElysiumAudioSubsystem* Audio = GetAudioSubsystem())
+	{
+		Audio->CancelOwner(AudioOwner, FadeSeconds);
+	}
+}
+
 FElysiumAudioVoiceHandle AElysiumMapActor::PlayVoice(const FString& Rel, const FElysiumPlayParams& Params)
 {
-	UElysiumAudioSubsystem* Audio = GetAudioSubsystem();
-	return Audio ? Audio->PlayVoice(Rel, Params) : FElysiumAudioVoiceHandle::Invalid();
+	FElysiumAudioRequest Request;
+	Request.Source = FElysiumAudioSource::Path(Rel);
+	Request.Owner.Kind = EElysiumAudioOwnerKind::GameplaySystem;
+	Request.Owner.StableId = TEXT("legacy.map");
+	Request.Gain = Params.Volume;
+	Request.Pitch = Params.Pitch;
+	Request.bLooping = Params.bLooping;
+	Request.Placement.bSpatialized = Params.b3D;
+	Request.Placement.Location = Params.Location;
+	Request.Placement.AttachTo = Params.AttachTo;
+	Request.AttenuationRadiusCm = Params.AttenuationRadiusCm;
+	Request.FadeInSeconds = Params.FadeInSeconds;
+	Request.StartOffsetSeconds = Params.StartTimeSeconds;
+	return Submit(MoveTemp(Request));
 }
 
 void AElysiumMapActor::StopVoice(FElysiumAudioVoiceHandle Handle, float FadeSeconds)
@@ -819,6 +888,10 @@ void AElysiumMapActor::FadeInScheme(const FString& SchemeRel, const FVector& Anc
 {
 	if (RuntimePhase != EElysiumMapRuntimePhase::Active)
 	{
+		if (SchemeManager)
+		{
+			SchemeManager->PrimeScheme(GetAudioSubsystem(), SchemeRel);
+		}
 		bHasDeferredSchemeFadeIn = true;
 		DeferredSchemeRel = SchemeRel;
 		DeferredSchemeAnchor = Anchor;
@@ -1008,7 +1081,7 @@ void AElysiumMapActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 			{
 				SchemeManager->StopAll(Audio);
 			}
-			Audio->StopAllVoices();
+			Audio->RetireMapEpoch(AudioMapEpoch);
 		}
 	}
 	Super::EndPlay(EndPlayReason);
@@ -1107,6 +1180,8 @@ FElysiumMapRuntimePrerequisites AElysiumMapActor::CollectRuntimePrerequisites() 
 	FElysiumMapRuntimePrerequisites P;
 	P.bConstructionComplete = bRuntimeConstructionComplete;
 	P.bEntityWorldReady = EntityWorld.Get() != nullptr;
+	const UElysiumAudioSubsystem* Audio = GetAudioSubsystem();
+	P.bAudioCatalogReady = !Audio || Audio->IsReadyForMapActivation();
 	P.bMenuBackdrop = bMenuBackdrop;
 	const EElysiumCollisionBuildState CollisionState = Collision
 		? Collision->GetBuildState() : EElysiumCollisionBuildState::Failed;

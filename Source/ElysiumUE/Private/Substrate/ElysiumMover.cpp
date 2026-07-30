@@ -363,13 +363,17 @@ void FElysiumMoverBase::PlayMoverSoundRel(const FString& Rel)
 	{
 		return;
 	}
-	FElysiumPlayParams P;
-	P.b3D = true;
-	P.bLooping = false;
-	P.AttenuationRadiusCm = ElysiumMoverSoundRadiusCm;
-	P.AttachTo = Body;                                              // tracks the moving leaf (null → static)
-	P.Location = Body ? Body->GetComponentLocation() : (Def ? Def->Origin : FVector::ZeroVector);
-	Audio->PlayVoice(Rel, P);
+	FElysiumAudioRequest Request;
+	Request.Source = FElysiumAudioSource::Path(Rel);
+	Request.Owner.Kind = EElysiumAudioOwnerKind::MapEntity;
+	Request.Owner.StableId = FString::Printf(TEXT("entity:%u:%d"), Handle.Epoch, Handle.Index);
+	Request.Category = EElysiumAudioCategory::Sfx;
+	Request.Placement.bSpatialized = true;
+	Request.AttenuationRadiusCm = ElysiumMoverSoundRadiusCm;
+	Request.Placement.AttachTo = Body;
+	Request.Placement.Location =
+		Body ? Body->GetComponentLocation() : (Def ? Def->Origin : FVector::ZeroVector);
+	Audio->Submit(MoveTemp(Request));
 	LastMoverSound = Rel;
 }
 
@@ -394,26 +398,31 @@ void FElysiumMoverBase::StartMoverLoop(FName Sub)
 	{
 		return;
 	}
-	FElysiumPlayParams P;
-	P.b3D = true;
-	P.bLooping = true;                                             // the moving sound loops for the travel
-	P.AttenuationRadiusCm = ElysiumMoverSoundRadiusCm;
-	P.AttachTo = Body;
-	P.Location = Body ? Body->GetComponentLocation() : (Def ? Def->Origin : FVector::ZeroVector);
-	MoverLoopVoiceId = Audio->PlayVoice(*Rel, P).Id;
+	FElysiumAudioRequest Request;
+	Request.Source = FElysiumAudioSource::Path(*Rel);
+	Request.Owner.Kind = EElysiumAudioOwnerKind::MapEntity;
+	Request.Owner.StableId = FString::Printf(TEXT("entity:%u:%d"), Handle.Epoch, Handle.Index);
+	Request.Category = EElysiumAudioCategory::Sfx;
+	Request.Placement.bSpatialized = true;
+	Request.bLooping = true;
+	Request.AttenuationRadiusCm = ElysiumMoverSoundRadiusCm;
+	Request.Placement.AttachTo = Body;
+	Request.Placement.Location =
+		Body ? Body->GetComponentLocation() : (Def ? Def->Origin : FVector::ZeroVector);
+	MoverLoopVoice = Audio->Submit(MoveTemp(Request));
 	LastMoverSound = *Rel;
 }
 
 void FElysiumMoverBase::StopMoverLoop()
 {
-	if (MoverLoopVoiceId != 0 && World)
+	if (MoverLoopVoice.IsValid() && World)
 	{
 		if (IElysiumAudio* Audio = World->Audio())
 		{
-			Audio->StopVoice(FElysiumAudioVoiceHandle{ MoverLoopVoiceId }, /*FadeSeconds=*/0.f);
+			Audio->StopVoice(MoverLoopVoice, /*FadeSeconds=*/0.f);
 		}
 	}
-	MoverLoopVoiceId = 0;
+	MoverLoopVoice = FElysiumVoiceHandle::Invalid();
 }
 
 void FElysiumMoverBase::AppendSoundDebug(TArray<TPair<FString, FString>>& Out) const

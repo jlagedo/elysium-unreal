@@ -1289,7 +1289,7 @@ namespace ElysiumMcpImpl
 		{
 			FSchema Schema;
 			Out.Add(MakeTool(TEXT("elysium_audio_state"),
-				TEXT("Read the audio layer: global mute (default ON — a fresh run is silent until asked otherwise), every live voice with its file and volume, and the active SoundScheme with its music state. Use this to assert a sound actually started, not just that its entity fired."),
+				TEXT("Read the audio request ledger, live voices, routing ownership, and the active SoundScheme."),
 				Schema,
 				[](const TSharedPtr<FJsonObject>&) -> FModelContextProtocolToolResult
 				{
@@ -1308,12 +1308,17 @@ namespace ElysiumMcpImpl
 					for (const FElysiumAudioVoice& Voice : Audio->ActiveVoices())
 					{
 						TSharedRef<FJsonObject> Row = Obj();
-						Row->SetNumberField(TEXT("id"), Voice.Id);
-						Row->SetStringField(TEXT("file"), Voice.Rel);
-						Row->SetBoolField(TEXT("looping"), Voice.bLooping);
-						Row->SetBoolField(TEXT("spatialized"), Voice.b3D);
-						Row->SetNumberField(TEXT("volume"), Voice.Volume);
-						Row->SetNumberField(TEXT("pitch"), Voice.Pitch);
+						Row->SetNumberField(TEXT("slot"), Voice.Handle.Slot);
+						Row->SetNumberField(TEXT("generation"), Voice.Handle.Generation);
+						Row->SetStringField(TEXT("file"), Voice.Event.ResolvedPath);
+						Row->SetStringField(TEXT("owner"), Voice.Request.Owner.StableId);
+						Row->SetNumberField(TEXT("map_epoch"), static_cast<double>(Voice.Request.Owner.MapEpoch));
+						Row->SetNumberField(TEXT("state"), static_cast<int32>(Voice.Event.State));
+						Row->SetBoolField(TEXT("looping"), Voice.Request.bLooping);
+						Row->SetBoolField(TEXT("spatialized"), Voice.Request.Placement.bSpatialized);
+						Row->SetNumberField(TEXT("volume"), Voice.Request.Gain);
+						Row->SetNumberField(TEXT("pitch"), Voice.Request.Pitch);
+						Row->SetNumberField(TEXT("scheduled_audio_clock"), Voice.Event.ScheduledAudioClock);
 						Voices.Add(MakeShared<FJsonValueObject>(Row));
 					}
 					Body->SetArrayField(TEXT("voices"), Voices);
