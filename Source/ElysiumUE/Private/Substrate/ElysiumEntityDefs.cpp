@@ -126,6 +126,20 @@ bool FElysiumEntityDefs::Parse(const FString& EntsPath, FElysiumEntityDefs& Out,
 		E->TryGetNumberField(TEXT("model"), Def.Model);
 		E->TryGetNumberField(TEXT("contents"), Def.Contents);
 		E->TryGetBoolField(TEXT("blocks_player"), Def.bBlocksPlayer);
+		E->TryGetStringField(TEXT("brush_mesh"), Def.BrushMesh);
+
+		const TArray<TSharedPtr<FJsonValue>>* FloorsArr = nullptr;
+		if (E->TryGetArrayField(TEXT("elevator_floors"), FloorsArr))
+		{
+			Def.ElevatorFloors.Reserve(FloorsArr->Num());
+			for (const TSharedPtr<FJsonValue>& Floor : *FloorsArr)
+			{
+				if (Floor.IsValid())
+				{
+					Def.ElevatorFloors.Add(static_cast<float>(Floor->AsNumber()));
+				}
+			}
+		}
 
 		const TArray<TSharedPtr<FJsonValue>>* HullsArr = nullptr;
 		if (E->TryGetArrayField(TEXT("hulls"), HullsArr))

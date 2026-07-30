@@ -5,6 +5,7 @@
 #include "ElysiumEntityHandle.h"
 
 class FElysiumDlgConversation;
+class USceneComponent;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
 struct FElysiumCameraShot;
@@ -77,6 +78,11 @@ public:
 		const FString& ClipName, bool bLoop, float* OutSeconds) = 0;
 	virtual void ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
 		const FString& StaticStem, int32 Family) = 0;
+
+	// A BSP brush entity's baked, local-pivot render surface. ParentBody owns its transform and
+	// collision; the returned mesh is visual-only and attached at identity.
+	virtual UStaticMeshComponent* BuildBrushVisual(const FString& Stem,
+		USceneComponent* ParentBody, float UniformScale, bool bSky) = 0;
 
 	// 8.3 — stand a non-solid dynamic-prop body. 8.4 — stand the same mesh with its `.phy` collision
 	// and authored mass, ready for the leaf to drive SetSimulatePhysics. Null on an unbaked model.

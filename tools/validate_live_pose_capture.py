@@ -209,6 +209,37 @@ def nearest_frame_matches(
     return nearest, nearest_rms
 
 
+def local_rotations(matrices: np.ndarray, bones, indices: np.ndarray) -> np.ndarray:
+    rotations = []
+    for bone_index in indices:
+        bone = bones[int(bone_index)]
+        parent_rotation = matrices[:, bone.parent, :3, :3]
+        child_rotation = matrices[:, bone.index, :3, :3]
+        rotations.append(
+            np.einsum("...ji,...jk->...ik", parent_rotation, child_rotation)
+        )
+    return np.stack(rotations, axis=1)
+
+
+def local_positions(matrices: np.ndarray, bones, indices: np.ndarray) -> np.ndarray:
+    positions = []
+    for bone_index in indices:
+        bone = bones[int(bone_index)]
+        inverse_parent = np.linalg.inv(matrices[:, bone.parent])
+        child_translation = matrices[:, bone.index, :, 3]
+        homogeneous = np.concatenate(
+            [
+                child_translation[:, :3],
+                np.ones((len(matrices), 1), dtype=np.float64),
+            ],
+            axis=1,
+        )
+        positions.append(
+            np.einsum("...ij,...j->...i", inverse_parent, homogeneous)[:, :3]
+        )
+    return np.stack(positions, axis=1)
+
+
 def validate(
     session: Path,
     model_key: str,
@@ -217,6 +248,8 @@ def validate(
     animation_model: str | None = None,
     bone_root: str | None = None,
     alignment_threshold: float = 0.05,
+    time_anchor_seconds: float | None = None,
+    time_fps: float | None = None,
 ) -> dict[str, object]:
     manifest = json.loads((session / "manifest.json").read_text(encoding="utf-8"))
     if manifest["captured_frames"] != len(manifest["frames"]):
@@ -338,11 +371,96 @@ def validate(
     )
     if not len(shared):
         raise ValueError("target and animation model have no shared bone names")
-    nearest_authored, nearest_rms = nearest_frame_matches(
-        live_relative[:, shared, :, :],
-        predicted_split[:, shared, :, :],
+    rotation_shared = np.asarray(
+        [
+            bone.index
+            for bone in target_bones
+            if bone.parent >= 0
+            and not bone.flags & 0x2
+            and bone.name.lower() in owner_by_name
+        ],
+        dtype=np.int32,
     )
-    credible = nearest_rms <= alignment_threshold
+    if animation_model:
+        if not len(rotation_shared):
+            raise ValueError("no ordinary shared bones are available for rotation alignment")
+        live_alignment = local_rotations(
+            np.stack(live_bone_world), target_bones, rotation_shared
+        )
+        authored_alignment = np.stack(
+            [
+                np.stack(
+                    [
+                        matrix_from_quaternion(
+                            owner_frames[frame_index][
+                                owner_by_name[
+                                    target_bones[int(bone_index)].name.lower()
+                                ].index
+                            ][0],
+                            owner_frames[frame_index][
+                                owner_by_name[
+                                    target_bones[int(bone_index)].name.lower()
+                                ].index
+                            ][1],
+                        )[:3, :3]
+                        for bone_index in rotation_shared
+                    ]
+                )
+                for frame_index in range(sequence.frames)
+            ]
+        )
+        alignment_method = (
+            "parent-relative rotation-matrix RMS over ordinary "
+            "case-insensitive name-shared bones"
+        )
+    else:
+        live_alignment = live_relative[:, shared, :, :]
+        authored_alignment = predicted_split[:, shared, :, :]
+        alignment_method = (
+            "root-relative matrix RMS over case-insensitive name-shared bones"
+        )
+    if time_anchor_seconds is not None:
+        alignment_fps = time_fps or sequence.fps
+        capture_times = np.asarray(
+            [frame["seconds_after_arm"] for frame in manifest["frames"]],
+            dtype=np.float64,
+        )
+        nearest_authored = np.rint(
+            (capture_times - time_anchor_seconds) * alignment_fps
+        ).astype(np.int32)
+        in_range = (nearest_authored >= 0) & (nearest_authored < sequence.frames)
+        nearest_rms = np.full(len(live_alignment), np.nan, dtype=np.float64)
+        valid_live = np.where(in_range)[0]
+        if len(valid_live):
+            differences = (
+                live_alignment[valid_live]
+                - authored_alignment[nearest_authored[valid_live]]
+            )
+            nearest_rms[valid_live] = np.sqrt(
+                np.mean(differences * differences, axis=tuple(
+                    range(1, differences.ndim)
+                ))
+            )
+        credible = in_range
+        aligned_pairs = []
+        last_authored = -1
+        for live_index in valid_live:
+            authored_index = int(nearest_authored[live_index])
+            if authored_index > last_authored:
+                aligned_pairs.append((int(live_index), authored_index))
+                last_authored = authored_index
+        alignment_method = (
+            f"simulation-clock mapping at {alignment_fps:g} fps from "
+            f"capture +{time_anchor_seconds:.9f}s; diagnostics use "
+            + alignment_method
+        )
+    else:
+        nearest_authored, nearest_rms = nearest_frame_matches(
+            live_alignment,
+            authored_alignment,
+        )
+        credible = nearest_rms <= alignment_threshold
+        aligned_pairs = longest_increasing_pairs(nearest_authored, credible)
     offsets = Counter(
         int(authored - live)
         for live, authored in enumerate(nearest_authored)
@@ -354,13 +472,34 @@ def validate(
             f"{alignment_threshold}"
         )
     dominant_offset, _ = offsets.most_common(1)[0]
-    aligned_pairs = longest_increasing_pairs(nearest_authored, credible)
 
     shared_split_rms: list[float] = []
     shared_conventional_rms: list[float] = []
     target_only_bind_rms: list[float] = []
     split_bones: dict[str, list[float]] = {
         bone.name: [] for bone in target_bones if bone.flags & 0x2
+    }
+    shared_with_parent = np.asarray(
+        [
+            bone.index
+            for bone in target_bones
+            if bone.parent >= 0 and bone.name.lower() in owner_by_name
+        ],
+        dtype=np.int32,
+    )
+    live_local_position = local_positions(
+        np.stack(live_bone_world), target_bones, shared_with_parent
+    )
+    live_local_rotation = local_rotations(
+        np.stack(live_bone_world), target_bones, rotation_shared
+    )
+    local_position_rms: list[float] = []
+    local_rotation_rms: list[float] = []
+    position_by_bone: dict[str, list[float]] = {
+        target_bones[int(index)].name: [] for index in shared_with_parent
+    }
+    rotation_by_bone: dict[str, list[float]] = {
+        target_bones[int(index)].name: [] for index in rotation_shared
     }
     for live_index, authored_index in aligned_pairs:
         live = live_relative[live_index]
@@ -379,6 +518,46 @@ def validate(
                 split_bones[bone.name].append(
                     rms(live[bone.index] - predicted_split[authored_index, bone.index])
                 )
+        authored_positions = np.asarray(
+            [
+                owner_frames[authored_index][
+                    owner_by_name[
+                        target_bones[int(index)].name.lower()
+                    ].index
+                ][0]
+                for index in shared_with_parent
+            ],
+            dtype=np.float64,
+        )
+        position_errors = live_local_position[live_index] - authored_positions
+        local_position_rms.append(rms(position_errors))
+        for position_index, bone_index in enumerate(shared_with_parent):
+            position_by_bone[target_bones[int(bone_index)].name].append(
+                rms(position_errors[position_index])
+            )
+        authored_rotations = np.stack(
+            [
+                matrix_from_quaternion(
+                    owner_frames[authored_index][
+                        owner_by_name[
+                            target_bones[int(index)].name.lower()
+                        ].index
+                    ][0],
+                    owner_frames[authored_index][
+                        owner_by_name[
+                            target_bones[int(index)].name.lower()
+                        ].index
+                    ][1],
+                )[:3, :3]
+                for index in rotation_shared
+            ]
+        )
+        rotation_errors = live_local_rotation[live_index] - authored_rotations
+        local_rotation_rms.append(rms(rotation_errors))
+        for rotation_index, bone_index in enumerate(rotation_shared):
+            rotation_by_bone[target_bones[int(bone_index)].name].append(
+                rms(rotation_errors[rotation_index])
+            )
 
     return {
         "version": 1,
@@ -407,14 +586,18 @@ def validate(
             "flags": sequence.flags,
         },
         "live_to_authored_alignment": {
-            "method": "root-relative RMS over case-insensitive name-shared bones",
+            "method": alignment_method,
             "alignment_threshold": alignment_threshold,
             "shared_bones": int(len(shared)),
+            "rotation_alignment_bones": int(len(rotation_shared)),
             "target_only_bones": int(len(target_only)),
             "dominant_authored_minus_live_frame": dominant_offset,
             "credible_nearest_pair_count": int(np.count_nonzero(credible)),
             "nearest_authored_frames": [int(value) for value in nearest_authored],
-            "nearest_authored_rms": [float(value) for value in nearest_rms],
+            "nearest_authored_rms": [
+                float(value) if math.isfinite(value) else None
+                for value in nearest_rms
+            ],
             "aligned_pairs": [[live, authored] for live, authored in aligned_pairs],
             "aligned_pair_count": len(aligned_pairs),
             "split_hierarchy_shared_bone_rms": summary(shared_split_rms),
@@ -424,6 +607,14 @@ def validate(
             "target_bind_fallback_rms": (
                 summary(target_only_bind_rms) if target_only_bind_rms else None
             ),
+            "local_rotation_copy_rms": summary(local_rotation_rms),
+            "local_position_direct_copy_rms": summary(local_position_rms),
+            "local_rotation_by_bone": {
+                name: summary(values) for name, values in rotation_by_bone.items()
+            },
+            "local_position_by_bone": {
+                name: summary(values) for name, values in position_by_bone.items()
+            },
             "split_bones": {
                 name: summary(values) for name, values in split_bones.items()
             },
@@ -445,6 +636,16 @@ def main() -> int:
     )
     parser.add_argument("--clip", default="howl")
     parser.add_argument("--alignment-threshold", type=float, default=0.05)
+    parser.add_argument(
+        "--time-anchor",
+        type=float,
+        help="Capture seconds corresponding to authored frame zero.",
+    )
+    parser.add_argument(
+        "--time-fps",
+        type=float,
+        help="Authored frames per capture second (defaults to the sequence FPS).",
+    )
     parser.add_argument("--report", type=Path)
     args = parser.parse_args()
 
@@ -455,6 +656,8 @@ def main() -> int:
         animation_model=args.anim_model,
         bone_root=args.bone_root,
         alignment_threshold=args.alignment_threshold,
+        time_anchor_seconds=args.time_anchor,
+        time_fps=args.time_fps,
     )
     rendered = json.dumps(report, indent=2) + "\n"
     if args.report:

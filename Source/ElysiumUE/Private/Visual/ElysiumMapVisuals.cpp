@@ -269,6 +269,8 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 	WorldActors.Reset();
 	SkyActors.Reset();
 	PropActors.Reset();
+	RuntimeWorldBrushes.Reset();
+	RuntimeSkyBrushes.Reset();
 	SkyLight = nullptr;
 	HeightFog = nullptr;
 	PostProcess = nullptr;
@@ -460,6 +462,35 @@ void UElysiumMapVisuals::ApplyMaterialOverrides()
 		Cover(WorldActors);
 		Cover(SkyActors);
 		Cover(PropActors);
+		auto CoverComponents = [this](const TArray<TObjectPtr<UStaticMeshComponent>>& Components)
+		{
+			for (UStaticMeshComponent* Comp : Components)
+			{
+				if (!Comp)
+				{
+					continue;
+				}
+				for (int32 Slot = 0; Slot < Comp->GetNumMaterials(); ++Slot)
+				{
+					UMaterialInterface* Baked = Comp->GetMaterial(Slot);
+					if (!Baked || Baked->IsA<UMaterialInstanceDynamic>())
+					{
+						continue;
+					}
+					TObjectPtr<UMaterialInstanceDynamic>& Mid = MaterialOverrides.FindOrAdd(Baked);
+					if (!Mid)
+					{
+						Mid = UMaterialInstanceDynamic::Create(Baked, this);
+					}
+					if (Mid)
+					{
+						Comp->SetMaterial(Slot, Mid);
+					}
+				}
+			}
+		};
+		CoverComponents(RuntimeWorldBrushes);
+		CoverComponents(RuntimeSkyBrushes);
 	}
 
 	for (const TPair<TObjectPtr<UMaterialInterface>, TObjectPtr<UMaterialInstanceDynamic>>& Pair
@@ -837,6 +868,22 @@ void UElysiumMapVisuals::ApplySceneFog()
 
 	const int32 WorldStamped = Stamp(WorldActors, WorldData) + Stamp(PropActors, WorldData);
 	const int32 SkyStamped = Stamp(SkyActors, SkyData);
+	auto StampComponents = [](const TArray<TObjectPtr<UStaticMeshComponent>>& Components,
+		const TArray<float>& Data)
+	{
+		int32 Count = 0;
+		for (UStaticMeshComponent* Comp : Components)
+		{
+			if (Comp)
+			{
+				Comp->SetCustomPrimitiveDataFloatArray(ElysiumFog::SlotColor, Data);
+				++Count;
+			}
+		}
+		return Count;
+	};
+	const int32 RuntimeWorldStamped = StampComponents(RuntimeWorldBrushes, WorldData);
+	const int32 RuntimeSkyStamped = StampComponents(RuntimeSkyBrushes, SkyData);
 
 	auto Describe = [](const TArray<float>& Data)
 	{
@@ -846,7 +893,43 @@ void UElysiumMapVisuals::ApplySceneFog()
 			: FString(TEXT("off"));
 	};
 	UE_LOG(LogElysiumVisuals, Log, TEXT("fog: world %s on %d primitives, 3D skybox %s on %d"),
-		*Describe(WorldData), WorldStamped, *Describe(SkyData), SkyStamped);
+		*Describe(WorldData), WorldStamped + RuntimeWorldStamped,
+		*Describe(SkyData), SkyStamped + RuntimeSkyStamped);
+}
+
+void UElysiumMapVisuals::RegisterRuntimeBrush(UStaticMeshComponent* Comp, bool bSky)
+{
+	if (!Comp)
+	{
+		return;
+	}
+	(bSky ? RuntimeSkyBrushes : RuntimeWorldBrushes).Add(Comp);
+	ApplySceneFog();
+
+	// If an A/B material override session is already live, bring the late-created mover into
+	// the same MID set. In the neutral shipped state MaterialOverrides is empty and the baked
+	// instances remain untouched.
+	if (MaterialOverrides.Num() > 0)
+	{
+		for (int32 Slot = 0; Slot < Comp->GetNumMaterials(); ++Slot)
+		{
+			UMaterialInterface* Baked = Comp->GetMaterial(Slot);
+			if (!Baked || Baked->IsA<UMaterialInstanceDynamic>())
+			{
+				continue;
+			}
+			TObjectPtr<UMaterialInstanceDynamic>& Mid = MaterialOverrides.FindOrAdd(Baked);
+			if (!Mid)
+			{
+				Mid = UMaterialInstanceDynamic::Create(Baked, this);
+			}
+			if (Mid)
+			{
+				Comp->SetMaterial(Slot, Mid);
+			}
+		}
+		ApplyMaterialOverrides();
+	}
 }
 
 void UElysiumMapVisuals::ToggleProps()

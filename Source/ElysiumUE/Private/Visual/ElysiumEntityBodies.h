@@ -11,6 +11,7 @@ class USkeletalMesh;
 class USkeletalMeshComponent;
 class UStaticMesh;
 class UStaticMeshComponent;
+class USceneComponent;
 
 // The BODY FACTORY behind IElysiumEmbodiment's mesh half: every render component an entity stands
 // in the world, plus the per-map asset caches behind them. AElysiumMapActor stays the interface's
@@ -83,6 +84,9 @@ public:
 	// entities place it). Null + a warning naming the bake command when the map has no such asset.
 	// Shared by both prop build paths, so a model used by a dynamic and a physics prop loads once.
 	UStaticMesh* ResolvePropMesh(const FString& Stem);
+	UStaticMesh* ResolveBrushMesh(const FString& Stem);
+	UStaticMeshComponent* BuildBrushVisual(const FString& Stem, USceneComponent* ParentBody,
+		float UniformScale, bool bSky);
 
 	// 8.3 — build one dynamic-prop body: stand a movable UStaticMeshComponent on the owning actor
 	// at the given transform, drawing the baked prop mesh. Non-solid — a prop_dynamic is dressing,
@@ -139,6 +143,7 @@ private:
 	// 8.3 dynamic-prop static meshes: per-stem cache, GC-rooted here so a model placed by several
 	// prop entities builds once and survives until unload.
 	UPROPERTY() TMap<FString, TObjectPtr<UStaticMesh>> PropMeshCache;
+	UPROPERTY() TMap<FString, TObjectPtr<UStaticMesh>> BrushMeshCache;
 	// The map's baked prop skin table, loaded once on first use. bPropSkinsLoaded separates
 	// "not looked for yet" from "this map has none" (most maps have none, and a miss must not
 	// re-hit LoadObject per prop).

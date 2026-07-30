@@ -76,6 +76,12 @@ namespace
 		FString AnyPhysStem;
 		int32 PhysHinge = 0;
 		int32 PhysHingeWithAxis = 0;
+		int32 BrushEntities = 0;
+		int32 BrushMeshes = 0;
+		int32 HiddenBrushMeshes = 0;
+		int32 TriggerBrushMeshes = 0;
+		int32 ElevatorsWithFloors = 0;
+		FString AnyBrushStem;
 
 		int32 CountClass(const TCHAR* Class) const
 		{
@@ -137,6 +143,23 @@ namespace
 				{
 					++Out.PhysHingeWithAxis;
 				}
+			}
+			if (Def.IsBrush())
+			{
+				++Out.BrushEntities;
+				if (!Def.BrushMesh.IsEmpty())
+				{
+					++Out.BrushMeshes;
+					Out.AnyBrushStem = Def.BrushMesh;
+					Out.HiddenBrushMeshes += Def.bStartHidden ? 1 : 0;
+					Out.TriggerBrushMeshes += Def.Classname.StartsWith(
+						TEXT("trigger_"), ESearchCase::IgnoreCase) ? 1 : 0;
+				}
+			}
+			if (Def.Classname.Equals(TEXT("func_elevator"), ESearchCase::IgnoreCase)
+				&& Def.ElevatorFloors.Num() == 8)
+			{
+				++Out.ElevatorsWithFloors;
 			}
 		}
 		return true;
@@ -200,6 +223,40 @@ bool FElysiumTutorialEntsTest::RunTest(const FString&)
 	}
 	AddInfo(FString::Printf(TEXT("sp_tutorial_1 prop_dynamic: %d (%d with model_mesh)"),
 		Survey.PropDynamic, Survey.PropDynamicWithMesh));
+
+	// Renderable BSP submodels are no longer welded into the static world. Each annotation
+	// resolves to a local-space OBJ; tools-only trigger brushes remain collision-only, while
+	// StartHidden brushes retain their reversible visual.
+	TestTrue(TEXT("tutorial carries renderable brush-mesh annotations"), Survey.BrushMeshes > 0);
+	TestTrue(TEXT("StartHidden renderable brushes retain their meshes"),
+		Survey.HiddenBrushMeshes > 0);
+	TestEqual(TEXT("trigger-only brushes remain meshless"), Survey.TriggerBrushMeshes, 0);
+	TestTrue(TEXT("func_elevator carries its eight pre-converted floors"),
+		Survey.ElevatorsWithFloors > 0);
+	if (!Survey.AnyBrushStem.IsEmpty())
+	{
+		const FString Obj = FPaths::GetPath(FElysiumContentPaths::MapEnts(TEXT("sp_tutorial_1")))
+			/ TEXT("brushes") / (Survey.AnyBrushStem + TEXT(".obj"));
+		TestTrue(TEXT("a brush_mesh annotation resolves to a local OBJ"),
+			IFileManager::Get().FileExists(*Obj));
+		UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr,
+			*FElysiumContentPaths::BakedBrushMesh(TEXT("sp_tutorial_1"), Survey.AnyBrushStem));
+		if (Mesh == nullptr)
+		{
+			AddInfo(FString::Printf(TEXT("skipping baked brush assertions: no mesh for '%s' ")
+				TEXT("(run: bake.bat sp_tutorial_1 world)"), *Survey.AnyBrushStem));
+		}
+		else
+		{
+			TestTrue(TEXT("a baked brush mesh has render triangles"), Mesh->GetNumTriangles(0) > 0);
+			TestTrue(TEXT("a baked brush mesh has material slots"), Mesh->GetStaticMaterials().Num() > 0);
+			if (UBodySetup* Body = Mesh->GetBodySetup())
+			{
+				TestEqual(TEXT("a baked brush mesh has no simple collision"),
+					Body->AggGeom.GetElementCount(), 0);
+			}
+		}
+	}
 
 	// 8.4 — physics props/hinges. prop_physics/phys_hinge register; a prop_physics record carries a
 	// decoded model_mesh + a `.phys` collision sidecar (VtMB's own convex hulls, out of the model's

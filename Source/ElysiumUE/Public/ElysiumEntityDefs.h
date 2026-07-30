@@ -50,6 +50,13 @@ struct FElysiumEntityDef
 	TArray<FElysiumConvexHull> Hulls;       // entity-local convex volumes
 	int32 Contents = 0;                     // OR of the brushes' CONTENTS flags
 	bool bBlocksPlayer = false;             // Contents & BLOCK_MASK (computed at export)
+	// Renderable BSP brush model, baked under /ElysiumBaked/<map>/Brushes. Empty for
+	// tools-only triggers and other collision-only brush entities.
+	FString BrushMesh;
+
+	// CFuncElevator's eight absolute floor Z coordinates, pre-converted by the UE_ exporter
+	// into Unreal centimetres. Empty for non-elevators and older exports.
+	TArray<float> ElevatorFloors;
 
 	// Spawns fully OFF — non-solid, non-thinking, undrawn — until a ScriptUnhide (R6).
 	bool bStartHidden = false;

@@ -146,6 +146,20 @@ struct FElysiumRecordingServices final
 	{
 		Record(FString::Printf(TEXT("ApplyAnimatedPropSkin %s family=%d"), *StaticStem, Family));
 	}
+	virtual UStaticMeshComponent* BuildBrushVisual(const FString& Stem,
+		USceneComponent* ParentBody, float UniformScale, bool bSky) override
+	{
+		Record(FString::Printf(TEXT("BuildBrushVisual %s scale=%.2f sky=%d"),
+			*Stem, UniformScale, bSky ? 1 : 0));
+		UStaticMeshComponent* Visual = NewComponent<UStaticMeshComponent>();
+		if (ParentBody)
+		{
+			Visual->SetupAttachment(ParentBody);
+			Visual->SetRelativeTransform(FTransform::Identity);
+		}
+		Visual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		return Visual;
+	}
 
 	// The authored length every stub clip reports. A scripted_sequence's OnEndSequence lands here.
 	float ClipSeconds = 1.0f;

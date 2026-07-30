@@ -6,7 +6,10 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumLineService.h"
 
+#include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumEntityBase, Log, All);
 
 void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHandle InHandle, const FElysiumClassDesc& InClass)
 {
@@ -154,6 +157,31 @@ void FElysiumEntity::SetFakeSilence(bool bEnabled)
 UPrimitiveComponent* FElysiumEntity::GetAttachBody() const
 {
 	return Body;   // a brush entity's body; null for point/logic ents (a physics prop overrides this)
+}
+
+void FElysiumEntity::PostSpawn()
+{
+	if (ParentName.IsEmpty() || !World)
+	{
+		return;
+	}
+	FElysiumEntity* Parent = World->FindByName(ParentName);
+	UPrimitiveComponent* ChildBody = GetAttachBody();
+	UPrimitiveComponent* ParentBody = Parent ? Parent->GetAttachBody() : nullptr;
+	if (!Parent || Parent == this || !ChildBody || !ParentBody)
+	{
+		UE_LOG(LogElysiumEntityBase, Warning, TEXT("%s cannot attach to parent '%s'"),
+			*DebugString(), *ParentName);
+		return;
+	}
+	const FTransform ParentWorld = ParentBody->GetComponentTransform();
+	if (!ChildBody->AttachToComponent(ParentBody, FAttachmentTransformRules::KeepWorldTransform))
+	{
+		UE_LOG(LogElysiumEntityBase, Warning, TEXT("%s failed to attach to parent '%s'"),
+			*DebugString(), *ParentName);
+		return;
+	}
+	OnParentAttached(ParentWorld);
 }
 
 void FElysiumEntity::OnDormancyChanged()

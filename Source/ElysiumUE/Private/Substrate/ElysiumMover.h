@@ -132,6 +132,7 @@ public:
 	// a player +use on one leaf toggles both (VtMB's CBaseDoor::DoorknobUse). Resolved lazily.
 	FString LinkedDoorName;
 	FElysiumEntityHandle LinkedDoor;   // cached partner handle; resolved on first Use
+	FString UseOverrideName;           // named entity that receives Use instead of this leaf
 
 	// The activator that last opened the door — propagated onto its outputs (Source m_hActivator).
 	FElysiumEntityHandle LastActivator;
@@ -156,6 +157,7 @@ public:
 	virtual bool IsUseLocked() const override { return bLocked; }   // locked_icon on the reticle (P4.4)
 	virtual void Use(const FElysiumEntityHandle& Activator) override { DoorUse(Activator); }
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
+	virtual void OnParentAttached(const FTransform& ParentWorldTransform) override;
 	virtual FElysiumDoorBase* AsDoorBase() override { return this; }
 
 	// --- Lifecycle ---------------------------------------------------------------------

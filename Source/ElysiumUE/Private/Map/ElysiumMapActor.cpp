@@ -565,6 +565,18 @@ void AElysiumMapActor::ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
 	}
 }
 
+UStaticMeshComponent* AElysiumMapActor::BuildBrushVisual(const FString& Stem,
+	USceneComponent* ParentBody, float UniformScale, bool bSky)
+{
+	UStaticMeshComponent* Comp = Bodies
+		? Bodies->BuildBrushVisual(Stem, ParentBody, UniformScale, bSky) : nullptr;
+	if (Comp && Visuals)
+	{
+		Visuals->RegisterRuntimeBrush(Comp, bSky);
+	}
+	return Comp;
+}
+
 UStaticMeshComponent* AElysiumMapActor::BuildPropVisual(const FString& Stem, const FVector& Location,
 	const FQuat& Rotation, float UniformScale)
 {

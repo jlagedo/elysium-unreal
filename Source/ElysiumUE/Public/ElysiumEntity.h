@@ -64,6 +64,7 @@ public:
 	// the chain walk. These are the live, writable copies (TargetName/Model mirror the def).
 	FString TargetName;
 	FString Target;
+	FString ParentName;                            // parentname — carry this body with another entity
 	FString Model;
 	int32   SpawnFlags = 0;
 	int32   Health = 0;
@@ -177,9 +178,9 @@ public:
 	// registry tables don't carry because they are internal state, not keyvalues. Base emits nothing.
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const {}
 
-	// The primitive body a physics constraint (phys_hinge) should attach to (8.4). Base returns the
-	// brush body (a movable brush entity can be constrained); a physics prop overrides to its
-	// simulating static-mesh body. Null = nothing to constrain (attach to world / skip).
+	// The primitive used for parentname/physics attachment. Base returns a brush body; rendered
+	// point props return their standing component and physics props return their simulating body.
+	// Null = nothing physical to attach.
 	virtual class UPrimitiveComponent* GetAttachBody() const;
 
 	// The skeletal body a camera shot's `Bone:` / `Attachment:` attach point resolves against (11.7),
@@ -265,11 +266,15 @@ public:
 	virtual void Spawn() {}
 
 	// Second-phase init, run after EVERY entity on the map has Spawn()'d (Source's Activate()
-	// pass). A constraint (phys_hinge) resolves and wires its attached bodies here, because they
-	// must already exist — a Spawn()-time resolve would race the def order. Base no-op.
-	virtual void PostSpawn() {}
+	// pass). The base resolves parentname and attaches this entity's body while preserving its
+	// exported world pose; constraints and other leaves extend this after every body exists.
+	virtual void PostSpawn();
 
 	virtual void Think() {}
+
+	// A mover whose endpoints were computed from exported world coordinates can translate them
+	// into its new parent-local space here. Point visuals and non-movers need no adjustment.
+	virtual void OnParentAttached(const FTransform& ParentWorldTransform) {}
 
 	// Body hook (R6): mirror dormancy onto the attached body's collision. No-op while an entity
 	// has no body (all point/logic entities).

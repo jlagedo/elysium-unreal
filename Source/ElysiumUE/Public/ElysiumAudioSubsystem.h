@@ -69,6 +69,7 @@ enum class EElysiumVoiceCompletion : uint8
 	DecodeFailed,
 	MissingSource,
 	ConcurrencyRejected,
+	PlaybackRejected,
 	DeadlineMiss,
 	Underflow,
 };
@@ -225,6 +226,7 @@ struct FElysiumAudioVoice
 	FElysiumAudioRequest Request;
 	FElysiumVoiceEvent Event;
 	double DestroyAudioClock = -1.0;
+	double InactiveSinceAudioClock = -1.0;
 };
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FElysiumVoiceEventDelegate, const FElysiumVoiceEvent&);

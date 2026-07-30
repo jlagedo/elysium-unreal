@@ -24,10 +24,8 @@ void FElysiumCogWindow_Audio::Initialize()
 void FElysiumCogWindow_Audio::RenderHelp()
 {
 	ImGui::Text(
-		"Mute is the global audio gate (cvar elysium.Mute) and defaults to ON: every voice - "
-		"ambient_generic, scheme beds/music/randoms, mover sounds and the previews below - plays at "
-		"zero gain until it is cleared. Muting does not stop anything, so unmuting rejoins the "
-		"ambience mid-stream.\n\n"
+		"Mute is the non-persistent global debug gate (cvar elysium.Mute) and defaults to OFF. "
+		"Muting does not stop any voice, so unmuting rejoins the ambience mid-stream.\n\n"
 		"Runtime audio decoder test harness (P6.1 WAV / P6.2 MP3). Type a path under out/sound/ (or "
 		"click one of this map's ambient_generic references) and Play it 2D, or Info to decode without "
 		"playing. dr_wav decodes VtMB's Microsoft ADPCM, IMA ADPCM and PCM WAVs; dr_mp3 decodes the loose "
@@ -78,8 +76,7 @@ void FElysiumCogWindow_Audio::RenderContent()
 	}
 
 	// --- Global mute --------------------------------------------------------------------------
-	// The gate over every voice the subsystem owns, previews included. Muted is the default, so this
-	// is the first thing the window shows: a silent Play button otherwise reads as a broken decoder.
+	// The non-persistent debug gate over every voice the subsystem owns, previews included.
 	ImGui::SeparatorText("Output");
 	bool bMuted = Audio->IsMuted();
 	if (ImGui::Checkbox("Mute all audio", &bMuted))

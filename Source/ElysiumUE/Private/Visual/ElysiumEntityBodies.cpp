@@ -461,10 +461,62 @@ void UElysiumEntityBodies::ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
 	}
 }
 
-// The bake already produced every prop model as a real asset — Nanite, compressed textures, and the
-// DDC-fitted Lumen cards a runtime-built mesh can never have — so an entity prop stands the same mesh
-// the level's static props do. Cached per stem so a model placed by several entities resolves once; a
-// stem that failed is not cached, so it retries.
+// The bake already produced each BSP submodel as a local-pivot asset, so the moving collision body
+// can carry the same authored surfaces without rebuilding render geometry at runtime. Cached per
+// stem; a failed load is not cached, so it can retry after a bake.
+UStaticMesh* UElysiumEntityBodies::ResolveBrushMesh(const FString& Stem)
+{
+	const TObjectPtr<UStaticMesh>* Cached = BrushMeshCache.Find(Stem);
+	if (UStaticMesh* Mesh = Cached ? Cached->Get() : nullptr)
+	{
+		return Mesh;
+	}
+	UStaticMesh* Mesh = LoadObject<UStaticMesh>(
+		nullptr, *FElysiumContentPaths::BakedBrushMesh(MapName, Stem));
+	if (!Mesh)
+	{
+		UE_LOG(LogElysiumBodies, Warning,
+			TEXT("brush '%s': no baked mesh (run: bake.bat %s world)"), *Stem, *MapName);
+		return nullptr;
+	}
+	BrushMeshCache.Add(Stem, Mesh);
+	return Mesh;
+}
+
+UStaticMeshComponent* UElysiumEntityBodies::BuildBrushVisual(const FString& Stem,
+	USceneComponent* ParentBody, float UniformScale, bool bSky)
+{
+	AActor* Owner = GetOwner();
+	if (!Owner || !ParentBody || Stem.IsEmpty())
+	{
+		return nullptr;
+	}
+	UStaticMesh* Mesh = ResolveBrushMesh(Stem);
+	if (!Mesh)
+	{
+		return nullptr;
+	}
+
+	UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(Owner);
+	Comp->SetMobility(EComponentMobility::Movable);
+	Comp->SetStaticMesh(Mesh);
+	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Comp->SetupAttachment(ParentBody);
+	Comp->SetRelativeLocationAndRotation(FVector::ZeroVector, FQuat::Identity);
+	if (UniformScale != 1.f)
+	{
+		Comp->SetRelativeScale3D(FVector(UniformScale));
+	}
+	if (bSky)
+	{
+		Comp->SetCastShadow(false);
+		Comp->SetVisibleInRayTracing(false);
+	}
+	Comp->RegisterComponent();
+	Owner->AddInstanceComponent(Comp);
+	return Comp;
+}
+
 UStaticMesh* UElysiumEntityBodies::ResolvePropMesh(const FString& Stem)
 {
 	const TObjectPtr<UStaticMesh>* Cached = PropMeshCache.Find(Stem);

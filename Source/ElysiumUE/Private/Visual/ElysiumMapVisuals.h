@@ -14,6 +14,7 @@ class UExponentialHeightFogComponent;
 class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class UProceduralMeshComponent;
+class UStaticMeshComponent;
 class USkyLightComponent;
 struct FElysiumSkyDef;
 struct FElysiumTextureCache;
@@ -81,6 +82,7 @@ public:
 	// the two share screen depth and a deferred fog pass cannot scope by anything else
 	// (ElysiumFog.h). Re-run by elysium.Fog, which stamps zeros instead.
 	void ApplySceneFog();
+	void RegisterRuntimeBrush(UStaticMeshComponent* Comp, bool bSky);
 
 	// --- Visibility A/Bs --------------------------------------------------------------------
 	// Show/hide the 3D skybox miniature and the backdrop dome together (elysium.togglesky).
@@ -157,6 +159,8 @@ private:
 	UPROPERTY() TArray<TObjectPtr<AStaticMeshActor>> WorldActors;
 	UPROPERTY() TArray<TObjectPtr<AStaticMeshActor>> SkyActors;
 	UPROPERTY() TArray<TObjectPtr<AStaticMeshActor>> PropActors;
+	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> RuntimeWorldBrushes;
+	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> RuntimeSkyBrushes;
 	bool bPropsVisible = true;
 	bool bSkyVisible = true;
 

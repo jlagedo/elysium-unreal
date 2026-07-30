@@ -223,7 +223,13 @@ void FElysiumEntityWorld::BuildBrushBody(FElysiumEntity& Ent)
 		return;
 	}
 
-	const EElysiumBrushSolidity Sol = ElysiumBrushSolidityForClass(Ent.Def->Classname);
+	EElysiumBrushSolidity Sol = ElysiumBrushSolidityForClass(Ent.Def->Classname);
+	if ((Ent.Def->Classname.Equals(TEXT("func_door"), ESearchCase::IgnoreCase)
+		|| Ent.Def->Classname.Equals(TEXT("func_door_rotating"), ESearchCase::IgnoreCase))
+		&& (Ent.SpawnFlags & 0x8) != 0)
+	{
+		Sol = EElysiumBrushSolidity::Passable;
+	}
 
 	// Standard runtime-component recipe: NewObject → cook the setup + place → SetupAttachment →
 	// RegisterComponent (which creates the physics body from the now-valid setup, at the origin).
@@ -247,6 +253,14 @@ void FElysiumEntityWorld::BuildBrushBody(FElysiumEntity& Ent)
 
 	Ent.Body = Body;
 	Bodies.Add(Body);
+	if (!Ent.Def->BrushMesh.IsEmpty())
+	{
+		if (IElysiumEmbodiment* Embodiment = WorldServices.Embodiment)
+		{
+			Body->SetVisual(Embodiment->BuildBrushVisual(
+				Ent.Def->BrushMesh, Body, Embodiment->BodyScaleFor(*Ent.Def), Ent.Def->bSky));
+		}
+	}
 
 	// Born hidden (R6) → the body starts non-solid/untouchable. Construct set bHidden without a
 	// body to gate; do it now.
@@ -1686,35 +1700,70 @@ void FElysiumEntityWorld::AcceptInput(const FString& Target, FName Input, const 
 		return;
 	}
 
-	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
 	for (FElysiumEntity* T : Targets)
 	{
-		const FElysiumInputThunk Thunk = T->Class ? Reg.FindInput(*T->Class, Input) : nullptr;
-		if (!Thunk)
+		DeliverInputTo(*T, Ev, Now);
+	}
+}
+
+void FElysiumEntityWorld::AcceptInput(const FElysiumEntityHandle& Target, FName Input,
+	const FElysiumVariant& Param, const FElysiumEntityHandle& Activator,
+	const FElysiumEntityHandle& Caller)
+{
+	if (!IsTriggerResolutionEnabled())
+	{
+		return;
+	}
+	const double Now = NowSeconds();
+	FElysiumIOEvent Ev;
+	Ev.FireTime = Now;
+	Ev.Target = DescribeHandle(Target);
+	Ev.Input = Input;
+	Ev.Param = Param;
+	Ev.Activator = Activator;
+	Ev.Caller = Caller;
+	if (FElysiumEntity* Resolved = Resolve(Target))
+	{
+		DeliverInputTo(*Resolved, Ev, Now);
+		return;
+	}
+	++UnknownTargetCount;
+	for (const TUniquePtr<IElysiumIOSink>& Sink : Sinks)
+	{
+		Sink->OnUnknownTarget(Now, Ev);
+	}
+}
+
+void FElysiumEntityWorld::DeliverInputTo(
+	FElysiumEntity& Target, const FElysiumIOEvent& Event, double Now)
+{
+	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+	const FElysiumInputThunk Thunk = Target.Class
+		? Reg.FindInput(*Target.Class, Event.Input) : nullptr;
+	if (!Thunk)
+	{
+		++UnknownInputCount;
+		const FString Key = FString::Printf(
+			TEXT("%s.%s"), *Target.Def->Classname, *Event.Input.ToString());
+		if (!UnknownLogged.Contains(Key))
 		{
-			++UnknownInputCount;
-			const FString Key = FString::Printf(TEXT("%s.%s"), *T->Def->Classname, *Input.ToString());
-			if (!UnknownLogged.Contains(Key))
+			UnknownLogged.Add(Key);
+			for (const TUniquePtr<IElysiumIOSink>& Sink : Sinks)
 			{
-				UnknownLogged.Add(Key);
-				for (const TUniquePtr<IElysiumIOSink>& Sink : Sinks)
-				{
-					Sink->OnUnknownInput(Now, *T, Ev);
-				}
+				Sink->OnUnknownInput(Now, Target, Event);
 			}
-			continue;
 		}
+		return;
+	}
 
-		FElysiumInputArgs Args;
-		Args.Param = Param;
-		Args.Activator = Activator;
-		Args.Caller = Caller;
-		Thunk(*T, Args);
-
-		for (const TUniquePtr<IElysiumIOSink>& Sink : Sinks)
-		{
-			Sink->OnDelivered(Now, *T, Ev);
-		}
+	FElysiumInputArgs Args;
+	Args.Param = Event.Param;
+	Args.Activator = Event.Activator;
+	Args.Caller = Event.Caller;
+	Thunk(Target, Args);
+	for (const TUniquePtr<IElysiumIOSink>& Sink : Sinks)
+	{
+		Sink->OnDelivered(Now, Target, Event);
 	}
 }
 

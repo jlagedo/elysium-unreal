@@ -604,7 +604,8 @@ def decode_prop_models(idx, model_paths, propdir, tex_cache, valid):
     return resolved, ok, missing
 
 
-def write_entities(data, out_dir, base, idx, propdir, tex_cache, valid, sky=None):
+def write_entities(data, out_dir, base, idx, propdir, tex_cache, valid, sky=None,
+                   brush_meshes=None):
     """Emit `<base>.ents` (JSON): every entity's keyvalues + outputs, and for brush
     entities ("model" "*N") their brush volumes as convex hulls.
 
@@ -623,9 +624,9 @@ def write_entities(data, out_dir, base, idx, propdir, tex_cache, valid, sky=None
     `npc_*` models are excluded — they belong to the glTFRuntime NPC track (roadmap 8.2/8.5).
 
     This is the data the runtime needs to spawn the interaction layer - trigger
-    volumes, use volumes, doors. It is deliberately *unfiltered*: the render passes
-    drop tools/* and StartHidden faces, but those same entities carry the level's
-    behaviour, so dropping them from the data too would throw the game away.
+    volumes, use volumes, doors. Tools-only surfaces remain collision/I/O records
+    without a mesh. StartHidden renderable brushes keep their mesh annotation because
+    visibility is a reversible runtime state.
 
     Hulls are entity-local Unreal centimetres and `origin` is the Unreal-space offset
     the engine translates the brush to at spawn; world = origin + hull (source_to_unreal
@@ -638,6 +639,7 @@ def write_entities(data, out_dir, base, idx, propdir, tex_cache, valid, sky=None
     models_l = read_lump(data, 14)
     ents = read_lump(data, 0).decode("ascii", "replace")
 
+    brush_meshes = brush_meshes or {}
     out, n_brush, n_hull, n_out, n_sky = [], 0, 0, 0, 0
     for pairs in _parse_ent_blocks(ents):
         keys, outputs = {}, []
@@ -691,8 +693,22 @@ def write_entities(data, out_dir, base, idx, propdir, tex_cache, valid, sky=None
                 e["hulls"] = hulls
                 e["contents"] = cont_or
                 e["blocks_player"] = bool(cont_or & BLOCK_MASK)
+                if mi in brush_meshes:
+                    e["brush_mesh"] = brush_meshes[mi]
                 n_brush += 1
                 n_hull += len(hulls)
+
+        # CFuncElevator's floor table is an array of absolute Source Z coordinates. Convert it
+        # here, alongside origin/hulls, so the runtime never performs Source->Unreal math.
+        if e["classname"].lower() == "func_elevator":
+            floors = []
+            for floor in range(1, 9):
+                try:
+                    src_z = float(keys.get("floor%d" % floor, "0"))
+                except ValueError:
+                    src_z = 0.0
+                floors.append(round(float(source_to_unreal(0.0, 0.0, src_z)[2]), 5))
+            e["elevator_floors"] = floors
 
         # StartHidden: the entity spawns fully OFF - SOLID_NONE, think disabled and
         # undrawn - until a ScriptUnhide input restores it (docs/entity_io.md).
@@ -937,40 +953,29 @@ def main(bsp_path, out_dir):
     else:
         print("3D skybox: no sky_camera - every face exports as world")
 
-    # Brush-entity placement: a brush model referenced by an entity ("model" "*N")
-    # is authored centered at (0,0,0); the engine translates it to the entity's
-    # "origin" at spawn (for doors, "origin" is also the hinge). Without this every
-    # door / detail brush piles up at the world origin. Build face -> offset.
+    # Brush-entity geometry is emitted as one LOCAL-space mesh per BSP model and excluded from
+    # the static world. The runtime attaches that mesh to the entity's collision body, whose
+    # origin is the door hinge / mover pivot. Model 0 remains the static world.
+    # The decal projector pass below still needs each face's authored world offset.
     model_origin = {}
-    hidden_models = set()
     for m in re.finditer(r"\{[^{}]*\}", ents):
         blk = m.group(0)
         mo = re.search(r'"model"\s+"\*(\d+)"', blk)
         if not mo:
             continue
-        mi = int(mo.group(1))
         og = re.search(r'"origin"\s+"(-?[\d.]+) (-?[\d.]+) (-?[\d.]+)"', blk)
         if og:
-            model_origin[mi] = tuple(float(x) for x in og.groups())
-        # "StartHidden" "1": the entity spawns invisible and a ScriptUnhide input
-        # reveals it, so its faces are not part of the visible map (the buttons'
-        # DEBUG/DEBUGEMPTY volumes, a func_brush's broken-window state, ...).
-        # See docs/entity_io.md.
-        if re.search(r'"StartHidden"\s+"1"', blk, re.I):
-            hidden_models.add(mi)
+            model_origin[int(mo.group(1))] = tuple(float(x) for x in og.groups())
     models_l = read_lump(data, 14)
     MODEL_SIZE = 48   # dmodel_t: mins[3]f maxs[3]f origin[3]f headnode i firstface i numfaces i
+    face_model = {}
     face_offset = {}
-    hidden_faces = set()
     for mi in range(len(models_l) // MODEL_SIZE):
         ff, nf = struct.unpack_from("<2i", models_l, mi * MODEL_SIZE + 40)
-        if mi in hidden_models:
-            hidden_faces.update(range(ff, ff + nf))
-        off = model_origin.get(mi)
-        if off is None:
-            continue
         for f in range(ff, ff + nf):
-            face_offset[f] = off
+            face_model[f] = mi
+            if mi in model_origin:
+                face_offset[f] = model_origin[mi]
 
     # Two scenes: "world" (playable map) and "sky" (3D skybox miniature). Per scene:
     # positions, uvs (albedo), groups (material->tris), and blend (per-vertex
@@ -978,9 +983,9 @@ def main(bsp_path, out_dir):
     # vertex). blend rides a `.blend` sidecar and becomes vertex COLOR.r. (Decals are
     # not meshed -- they ride the `.decals` projector sidecar; see the infodecal block.)
     scenes = {"world": ([], [], {}, []), "sky": ([], [], {}, [])}
+    brush_scenes = {}
 
     skipped_tools = 0
-    skipped_hidden = 0
     disp_collision = []   # world-space (Unreal cm) disp triangles for concave collision
     # Env-patched materials split into one OBJ group per cubemap: the same base
     # material near two env_cubemaps samples two baked cubemaps, so each becomes its
@@ -995,9 +1000,6 @@ def main(bsp_path, out_dir):
         ti = struct.unpack_from("<h", faces_l, base + TI_OFS)[0]
         disp = struct.unpack_from("<h", faces_l, base + DISP_OFS)[0]   # -1 = flat
         if numedges < 3 or ti < 0:
-            continue
-        if fi in hidden_faces:
-            skipped_hidden += 1
             continue
         raw_name, s, t, tw, th = material_of(ti)
         mat = base_material(raw_name)
@@ -1016,22 +1018,23 @@ def main(bsp_path, out_dir):
             se = surfedges[firstedge + k]
             v = edges[se][0] if se >= 0 else edges[-se][1]
             src.append(vertexes[v])
-        # brush-entity origin offset (0 for world model 0); UVs/lightmap stay in
-        # brush-local space, only the emitted world position is translated.
-        ox, oy, oz = face_offset.get(fi, (0.0, 0.0, 0.0))
-        # A brush entity's faces are its own model's, never in model 0's leaves,
-        # so they are world by construction - as the engine draws them.
-        is_sky = fi in sky_faces
-        positions, uvs, groups, blend = scenes["sky" if is_sky else "world"]
+        mi = face_model.get(fi, 0)
+        is_brush = mi > 0
+        is_sky = not is_brush and fi in sky_faces
+        if is_brush:
+            positions, uvs, groups, blend = brush_scenes.setdefault(mi, ([], [], {}, []))
+        else:
+            positions, uvs, groups, blend = scenes["sky" if is_sky else "world"]
 
         # Append one vertex (position + planar albedo UV); returns its index. Shared by
-        # flat faces and displacement grid vertices. UVs use brush-local source coords;
-        # only the emitted position gets the entity origin offset. (For displacements
-        # sx,sy,sz is the displaced position.)
+        # flat faces and displacement grid vertices. BSP submodel vertices are already
+        # brush-local; the entity origin is supplied later by the runtime body.
         def emit(sx, sy, sz, a=0.0):
             u = (sx*s[0] + sy*s[1] + sz*s[2] + s[3]) / tw   # planar UV projection
             vv = (sx*t[0] + sy*t[1] + sz*t[2] + t[3]) / th
-            positions.append(source_to_unreal(sx+ox, sy+oy, sz+oz))  # -> Unreal cm
+            # Model 0 and the sky miniature are already world-authored. Brush models stay
+            # entity-local: the runtime body supplies origin/rotation/scale.
+            positions.append(source_to_unreal(sx, sy, sz))  # -> Unreal cm
             uvs.append((u, vv))
             blend.append(a)                                 # WVT blend alpha (0 = tex1)
             return len(positions) - 1
@@ -1040,7 +1043,7 @@ def main(bsp_path, out_dir):
         if 0 <= disp < len(dispinfos) and len(src) == 4:
             gtris = disp_grid(src, dispinfos[disp], dispverts, emit)
             tris.extend(gtris)
-            if not is_sky:   # concave terrain collision (skybox is backdrop only)
+            if not is_sky and not is_brush:   # world terrain only; brush hulls own mover collision
                 for (a, bb, cc) in gtris:
                     disp_collision.append((positions[a], positions[bb], positions[cc]))
         else:
@@ -1049,11 +1052,18 @@ def main(bsp_path, out_dir):
                 tris.append((corners[0], corners[k], corners[k+1]))
 
     all_mats = set(scenes["world"][2]) | set(scenes["sky"][2])
+    for scene in brush_scenes.values():
+        all_mats.update(scene[2])
     print(f"faces: {n_faces}  materials: {len(all_mats)}  skipped TOOLS: {skipped_tools}"
-          f"  skipped StartHidden: {skipped_hidden}")
+          f"  brush models: {len(brush_scenes)}")
     print(f"  world groups: {len(scenes['world'][2])}   sky groups: {len(scenes['sky'][2])}")
     # sorted -> deterministic material order in the .mtl/.obj (was set-iteration order)
-    groups = {m: scenes["world"][2].get(m, []) + scenes["sky"][2].get(m, []) for m in sorted(all_mats)}
+    groups = {}
+    for mat in sorted(all_mats):
+        indices = scenes["world"][2].get(mat, []) + scenes["sky"][2].get(mat, [])
+        for scene in brush_scenes.values():
+            indices += scene[2].get(mat, [])
+        groups[mat] = indices
 
     # --- resolve + decode each material's texture ---
     # (read_material_bytes/read_material_text + the install index and PAKFILE are
@@ -1534,12 +1544,15 @@ def main(bsp_path, out_dir):
           f"skybox {'on' if sky_fog['on'] else 'off'} "
           f"{sky_fog['start']:.0f}->{sky_fog['end']:.0f}cm")
 
-    def write_obj(suffix, scene):
+    def write_obj(suffix, scene, subdir="", mtl=None):
         positions, uvs, groups, blend = scene
         if not positions:
-            return
-        with open(os.path.join(out_dir, base + suffix + ".obj"), "w") as o:
-            o.write(f"mtllib {base}.mtl\n")
+            return False
+        target_dir = os.path.join(out_dir, subdir)
+        os.makedirs(target_dir, exist_ok=True)
+        stem = base + suffix
+        with open(os.path.join(target_dir, stem + ".obj"), "w") as o:
+            o.write(f"mtllib {mtl or (base + '.mtl')}\n")
             for (x, y, z) in positions:
                 o.write(f"v {x:.4f} {y:.4f} {z:.4f}\n")
             for (u, v) in uvs:
@@ -1557,12 +1570,36 @@ def main(bsp_path, out_dir):
         # written when the scene actually carries blend weights (disp terrain); the
         # loader stamps it onto vertex COLOR.r for the shader's tex1/tex2 mix.
         if len(blend) == len(positions) and any(blend):
-            with open(os.path.join(out_dir, base + suffix + ".blend"), "w") as o:
+            with open(os.path.join(target_dir, stem + ".blend"), "w") as o:
                 for a in blend:
                     o.write(f"{a:.4f}\n")
+        return True
 
     write_obj("", scenes["world"])
     write_obj("_sky", scenes["sky"])
+    brush_meshes = {}
+    brush_dir = os.path.join(out_dir, "brushes")
+    os.makedirs(brush_dir, exist_ok=True)
+    wanted_brush_files = set()
+    for mi in sorted(brush_scenes):
+        stem = "brush_%d" % mi
+        if write_obj("_%d" % mi, brush_scenes[mi], subdir="brushes",
+                     mtl="../%s.mtl" % base):
+            # write_obj prefixes the map base; normalize to the stable public stem.
+            old_obj = os.path.join(brush_dir, "%s_%d.obj" % (base, mi))
+            new_obj = os.path.join(brush_dir, stem + ".obj")
+            os.replace(old_obj, new_obj)
+            old_blend = os.path.join(brush_dir, "%s_%d.blend" % (base, mi))
+            new_blend = os.path.join(brush_dir, stem + ".blend")
+            if os.path.isfile(old_blend):
+                os.replace(old_blend, new_blend)
+                wanted_brush_files.add(os.path.basename(new_blend))
+            brush_meshes[mi] = stem
+            wanted_brush_files.add(os.path.basename(new_obj))
+    for leaf in os.listdir(brush_dir):
+        if (leaf.endswith(".obj") or leaf.endswith(".blend")) and leaf not in wanted_brush_files:
+            os.remove(os.path.join(brush_dir, leaf))
+    print(f"brush meshes: {len(brush_meshes)} -> brushes/")
 
     # Decal projector sidecar (roadmap 7.2): one line per placed infodecal, consumed by
     # the runtime as a deferred UDecalComponent (material + centre + normal + s/t axes +
@@ -1603,7 +1640,8 @@ def main(bsp_path, out_dir):
     prop_tex_cache, prop_valid = {}, set()
 
     write_collision(data, out_dir, base, sky)
-    write_entities(data, out_dir, base, idx, propdir, prop_tex_cache, prop_valid, sky)
+    write_entities(data, out_dir, base, idx, propdir, prop_tex_cache, prop_valid, sky,
+                   brush_meshes)
     write_lights(data, out_dir, base, sky)
     write_sprites(data, out_dir, base, idx, sky)
     write_ropes(data, out_dir, base, idx)

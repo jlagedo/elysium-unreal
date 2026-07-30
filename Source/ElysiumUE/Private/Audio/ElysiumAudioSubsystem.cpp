@@ -456,26 +456,49 @@ void UElysiumAudioSubsystem::RealizeVoice(
 	UAudioComponent* Comp = nullptr;
 	USceneComponent* Attach = Request.Placement.AttachTo.Get();
 	const TCHAR* CategoryName = CategoryAssetName(Voice.Request.Category);
-	USoundConcurrency* Concurrency = LoadObject<USoundConcurrency>(nullptr,
-		*FString::Printf(TEXT("/Game/VtMB/Audio/Concurrency_%s.Concurrency_%s"),
-			CategoryName, CategoryName));
+	USoundConcurrency* Concurrency = nullptr;
+	if (!Request.ConcurrencyKey.IsNone())
+	{
+		Concurrency = LoadObject<USoundConcurrency>(nullptr,
+			*FString::Printf(TEXT("/Game/VtMB/Audio/Concurrency_%s.Concurrency_%s"),
+				CategoryName, CategoryName));
+	}
 	if (!Request.Placement.bSpatialized)
 	{
 		Comp = UGameplayStatics::SpawnSound2D(World, Wave, StartGain, Request.Pitch,
 			Request.StartOffsetSeconds, Concurrency,
 			EnumHasAnyFlags(Request.Routing, EElysiumAudioRouting::PersistAcrossTravel), false);
 	}
-	else if (Attach)
-	{
-		Comp = UGameplayStatics::SpawnSoundAttached(Wave, Attach, NAME_None, FVector::ZeroVector,
-			FRotator::ZeroRotator, EAttachLocation::SnapToTarget, true, StartGain, Request.Pitch,
-			Request.StartOffsetSeconds, nullptr, Concurrency, false);
-	}
 	else
 	{
-		Comp = UGameplayStatics::SpawnSoundAtLocation(World, Wave, Request.Placement.Location,
-			FRotator::ZeroRotator, StartGain, Request.Pitch, Request.StartOffsetSeconds,
-			nullptr, Concurrency, false);
+		// Create without a location first so UE's short-sound distance optimization cannot
+		// discard the component before the request ledger can observe a completion. Apply all
+		// spatial policy before Play so virtualization sees the authored attenuation from frame 0.
+		Comp = UGameplayStatics::CreateSound2D(World, Wave, StartGain, Request.Pitch,
+			Request.StartOffsetSeconds, Concurrency, false, false);
+		if (Comp)
+		{
+			Comp->bIsUISound = false;
+			Comp->bAllowSpatialization = true;
+			if (Request.AttenuationRadiusCm > 0.f)
+			{
+				Comp->bOverrideAttenuation = true;
+				Comp->AttenuationOverrides = MakeSphereAttenuation(
+					Request.AttenuationRadiusCm);
+			}
+			if (Attach)
+			{
+				Comp->AttachToComponent(Attach,
+					FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+				Comp->SetRelativeLocation(FVector::ZeroVector);
+				Comp->bStopWhenOwnerDestroyed = true;
+			}
+			else
+			{
+				Comp->SetWorldLocation(Request.Placement.Location);
+			}
+			Comp->Play(Request.StartOffsetSeconds);
+		}
 	}
 
 	if (!Comp)
@@ -489,15 +512,15 @@ void UElysiumAudioSubsystem::RealizeVoice(
 		return;
 	}
 
-	if (Request.Placement.bSpatialized && Request.AttenuationRadiusCm > 0.f)
-	{
-		Comp->AdjustAttenuation(MakeSphereAttenuation(Request.AttenuationRadiusCm));
-	}
 	Comp->SoundClassOverride = LoadObject<USoundClass>(nullptr,
 		*FString::Printf(TEXT("/Game/VtMB/Audio/SC_%s.SC_%s"), CategoryName, CategoryName));
 	if (Request.FadeInSeconds > 0.f)
 	{
-		Comp->AdjustVolume(Request.FadeInSeconds, OutputGain(Voice.Request));
+		const float TargetGain = OutputGain(Voice.Request);
+		// UAudioComponent treats an AdjustVolume target of exactly zero as FadeOut and destroys
+		// the active sound. Keep silent phase-locked stems alive at an inaudible floor instead.
+		Comp->AdjustVolume(Request.FadeInSeconds,
+			FMath::IsNearlyZero(TargetGain) ? 0.0001f : TargetGain);
 	}
 	if (EnumHasAnyFlags(Request.Routing, EElysiumAudioRouting::NoPause))
 	{
@@ -607,10 +630,23 @@ void UElysiumAudioSubsystem::SetGain(FElysiumVoiceHandle Handle, float Gain, flo
 {
 	if (FElysiumAudioVoice* Voice = FindVoice(Handle))
 	{
+		// The request ledger is authoritative even while decode is pending. Scheme stems are
+		// submitted at zero and immediately assigned their state volume, often before realization.
+		Voice->Request.Gain = Gain;
 		if (IsValid(Voice->Comp))
 		{
-			Voice->Request.Gain = Gain;
-			Voice->Comp->AdjustVolume(FMath::Max(FadeSeconds, 0.f), OutputGain(Voice->Request));
+			const float TargetGain = OutputGain(Voice->Request);
+			if (FadeSeconds <= 0.f)
+			{
+				// SetVolumeMultiplier accepts exact zero without changing play state.
+				Voice->Comp->SetVolumeMultiplier(TargetGain);
+			}
+			else
+			{
+				// AdjustVolume(…, 0) means FadeOut in UE and would destroy a phase-locked stem.
+				Voice->Comp->AdjustVolume(FadeSeconds,
+					FMath::IsNearlyZero(TargetGain) ? 0.0001f : TargetGain);
+			}
 		}
 	}
 }
@@ -619,9 +655,9 @@ void UElysiumAudioSubsystem::SetPitch(FElysiumVoiceHandle Handle, float Pitch)
 {
 	if (FElysiumAudioVoice* Voice = FindVoice(Handle))
 	{
+		Voice->Request.Pitch = Pitch;
 		if (IsValid(Voice->Comp))
 		{
-			Voice->Request.Pitch = Pitch;
 			Voice->Comp->SetPitchMultiplier(Pitch);
 		}
 	}
@@ -678,8 +714,9 @@ void UElysiumAudioSubsystem::RetireMapEpoch(uint64 MapEpoch)
 
 bool UElysiumAudioSubsystem::IsVoicePlaying(FElysiumAudioVoiceHandle Handle) const
 {
-	const FElysiumAudioVoice* Voice = FindVoice(Handle);
-	return Voice && IsValid(Voice->Comp) && Voice->Comp->IsPlaying();
+	// This compatibility query is intentionally ledger-authoritative. Pending decode,
+	// scheduled, virtual, and paused requests still occupy their owner's concurrency slot.
+	return FindVoice(Handle) != nullptr;
 }
 
 bool UElysiumAudioSubsystem::IsMuted() const
@@ -732,7 +769,8 @@ void UElysiumAudioSubsystem::ApplyMasterGain()
 	{
 		if (Voice.Event.State != EElysiumVoiceState::Fading && IsValid(Voice.Comp))
 		{
-			Voice.Comp->AdjustVolume(0.f, OutputGain(Voice.Request));
+			// Exact-zero debug/user muting must not stop or complete the underlying request.
+			Voice.Comp->SetVolumeMultiplier(OutputGain(Voice.Request));
 		}
 	}
 }
@@ -753,6 +791,7 @@ void UElysiumAudioSubsystem::CompleteAt(int32 VoiceIndex, EElysiumVoiceCompletio
 	else if (Completion == EElysiumVoiceCompletion::DecodeFailed ||
 		Completion == EElysiumVoiceCompletion::MissingSource ||
 		Completion == EElysiumVoiceCompletion::ConcurrencyRejected ||
+		Completion == EElysiumVoiceCompletion::PlaybackRejected ||
 		Completion == EElysiumVoiceCompletion::DeadlineMiss ||
 		Completion == EElysiumVoiceCompletion::Underflow)
 	{
@@ -789,7 +828,7 @@ void UElysiumAudioSubsystem::TickAudio(float /*DeltaSeconds*/)
 	const double Now = AudioClock();
 	for (int32 Index = Voices.Num() - 1; Index >= 0; --Index)
 	{
-		const FElysiumAudioVoice& Voice = Voices[Index];
+		FElysiumAudioVoice& Voice = Voices[Index];
 		if (Voice.Event.State == EElysiumVoiceState::PendingDecode ||
 			Voice.Event.State == EElysiumVoiceState::Scheduled)
 		{
@@ -806,8 +845,30 @@ void UElysiumAudioSubsystem::TickAudio(float /*DeltaSeconds*/)
 		if (!IsValid(Voice.Comp))
 		{
 			CompleteAt(Index, EElysiumVoiceCompletion::NaturalEnd);
+			continue;
 		}
-		else if (Voice.DestroyAudioClock >= 0.0 && Now >= Voice.DestroyAudioClock)
+		else if (!Voice.Request.bLooping &&
+			Voice.Event.State == EElysiumVoiceState::Playing &&
+			!Voice.Comp->IsPlaying())
+		{
+			// UE suppresses OnAudioFinished when an active sound fails to start (for example
+			// due to an engine-level playback rejection). Give a normal completion callback
+			// one game-thread grace window, then retire the otherwise orphaned request.
+			if (Voice.InactiveSinceAudioClock < 0.0)
+			{
+				Voice.InactiveSinceAudioClock = Now;
+			}
+			else if (Now - Voice.InactiveSinceAudioClock >= 0.1)
+			{
+				CompleteAt(Index, EElysiumVoiceCompletion::PlaybackRejected);
+				continue;
+			}
+		}
+		else
+		{
+			Voice.InactiveSinceAudioClock = -1.0;
+		}
+		if (Voice.DestroyAudioClock >= 0.0 && Now >= Voice.DestroyAudioClock)
 		{
 			CompleteAt(Index, Voice.Event.Completion);
 		}

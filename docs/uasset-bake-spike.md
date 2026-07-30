@@ -13,8 +13,8 @@ runtime-rendering path for the baked look.
 
 | | |
 |---|---|
-| **Baked** — real assets in the `.umap` | world + 3D-skybox geometry, materials, textures, static props, projected decals, lights, sky light, height fog |
-| **Runtime** — built by `AElysiumMapActor` | `.hulls`/`.dispcol` collision, `.ropes` cables, the sky cubemap + backdrop, the `.ents` entity substrate and every entity-driven body, NPC glTF skeletals, audio, dialogue, scripting |
+| **Baked** — real assets in the `.umap` | world + 3D-skybox geometry, materials, textures, static props, unplaced movable brush meshes, projected decals, lights, sky light, height fog |
+| **Runtime** — built by `AElysiumMapActor` | `.hulls`/`.dispcol` collision, `.ropes` cables, the sky cubemap + backdrop, the `.ents` entity substrate and every entity-driven body, movable-brush placement, NPC glTF skeletals, audio, dialogue, scripting |
 
 `UElysiumMapSubsystem::Travel` opens `/ElysiumBaked/<map>/<map>` directly — each map is its own
 level, and the `/Game/Elysium` shell is now only the boot world. The map actor is spawned into that
@@ -40,7 +40,7 @@ bake_verify.py              reads the result back off the assets, not off the ba
 |---|---|---|
 | `textures` | `.mtl` + `tex/`, `props/tex/` | `Texture2D`, sRGB/`TC_NORMALMAP`/`TC_MASKS` by role |
 | `materials` | `.mtl` | `MaterialInstanceConstant` off the five committed masters — a `decal 1` surface is a projector, not geometry, so it splits off onto `M_Decal` in its own package |
-| `world` | `.obj`, `.blend` | one `SM_World_*` per 2048 cm cell |
+| `world` | `.obj`, `.blend`, `brushes/brush_*.obj` | one `SM_World_*` per 2048 cm cell plus unplaced `/Brushes/SM_brush_*` assets |
 | `sky` | `_sky.obj` | `SM_Sky_*` |
 | `props` | `props/*.obj`, `props/*.skins`, `props/*.phys` | one `SM_*` per model + `DA_<map>_PropSkins` |
 | `level` | `.props`, `.decals`, `.lights`, `.env`, `.sky`, `.spawn` | the `.umap` |
@@ -51,24 +51,35 @@ intensity, reach, falloff and specular from the raw `.lights` row at load. So th
 not whatever the bake happened to write — is what the map renders, and a Cog slider drag and a fresh
 load agree exactly.
 
+Renderable BSP entity models never belong to the baked static level. The exporter partitions
+their faces out of `<map>.obj`, preserves materials, UVs, blend/cubemap assignment and
+`StartHidden` geometry, and writes one pivot-local `brushes/brush_<model>.obj`. Tools-only
+trigger surfaces have hulls but no `brush_mesh`. The world stage builds each annotation with
+the map's shared materials and material-driven Nanite policy, without an actor or mesh
+collision. World, sky, prop and brush stages each prune stale assets from the name family they
+own before the level stage discovers actors. At entity build, the runtime attaches the mesh at
+identity to the movable `UElysiumBrushComponent`; that body remains the authoritative collision,
+transform, dormancy and teardown object.
+
 ## What it produces
 
 ```
-MaterialInstanceConstant     710      level: 1447 actors
-StaticMesh                   339        StaticMeshActor 927   PointLight 224
-Texture2D                    694        SpotLight 170         DecalActor 123
+MaterialInstanceConstant     764      level: 1442 actors
+StaticMesh                   404        StaticMeshActor 921   PointLight 224
+Texture2D                    866        SpotLight 170         DecalActor 123
 World                          1        DirectionalLight 1    SkyLight 1
-meshes 339, Nanite on 311, off 28      PlayerStart 1
-1379 material slots (0 unbound)
+meshes 404, Nanite on 366, off 38      PlayerStart 1
+1443 material slots (0 unbound)
 ```
 
 | | meshes | triangles | dropped |
 |---|---|---|---|
-| world | 116 | 29,522 | 0 |
-| sky | 2 | 3,494 | 0 |
-| props | 221 | 134,006 | 0 |
+| world | 110 | 24,789 | 0 |
+| sky | 2 | 3,573 | 0 |
+| movable brushes | 73 | 5,114 | 0 |
+| props | 219 | 133,590 | 0 |
 
-The 28 non-Nanite meshes are exactly the translucent + additive surfaces. Nanite is a whole-mesh
+The 38 non-Nanite meshes are exactly the translucent + additive surfaces. Nanite is a whole-mesh
 setting and does not support translucency, so the world chunker splits each cell into a Nanite bucket
 and a non-Nanite sibling, and a prop model with any translucent slot falls back wholesale.
 
@@ -81,7 +92,7 @@ LightRig: adopted 395 baked lights (10 animated) +sun +skyambient
 brush collision: 2561 convex hulls / displacement collision: 3584 triangles
 ropes: 70 cables
 sky 'la': cubemap IBL + backdrop
-baked 'sp_tutorial_1': 1446 actors (116 world, 2 sky, 809 props, 123 decals), 395 lights, 2561 hulls
+baked 'sp_tutorial_1': 1441 actors (110 world, 2 sky, 809 props, 123 decals), 395 lights, 2561 hulls
 world 'sp_tutorial_1' live: 1868 entities (185 brush bodies), epoch 1
 loaded sp_tutorial_1 in 2.50s
 ```

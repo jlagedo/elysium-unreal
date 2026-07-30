@@ -151,6 +151,7 @@ static FElysiumClassRegistrar GRegBaseEntity(
 		D.Field(TEXT("model"),           &FElysiumEntity::Model);
 		D.Field(TEXT("target"),          &FElysiumEntity::Target);
 		D.Field(TEXT("targetname"),      &FElysiumEntity::TargetName);
+		D.Field(TEXT("parentname"),      &FElysiumEntity::ParentName);
 		D.Field(TEXT("spawnflags"),      &FElysiumEntity::SpawnFlags);
 		D.Field(TEXT("health"),          &FElysiumEntity::Health);
 		D.Field(TEXT("max_health"),      &FElysiumEntity::MaxHealth);

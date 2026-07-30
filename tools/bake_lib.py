@@ -457,6 +457,22 @@ def prune_package(package, keep):
     return gone
 
 
+def prune_package_prefix(package, prefix, keep):
+    """Delete directly-owned assets whose object names start with `prefix` and are not in
+    `keep`. Use this when several stages share one package but own disjoint name families."""
+    if not unreal.EditorAssetLibrary.does_directory_exist(package):
+        return 0
+    gone = 0
+    for path in unreal.EditorAssetLibrary.list_assets(package, recursive=False,
+                                                      include_folder=False):
+        name = path.rsplit("/", 1)[-1].split(".")[0]
+        if not name.startswith(prefix) or name in keep:
+            continue
+        if unreal.EditorAssetLibrary.delete_asset(path):
+            gone += 1
+    return gone
+
+
 def set_tex_param(mic, param, texture):
     _mel.set_material_instance_texture_parameter_value(mic, param, texture)
 
@@ -573,7 +589,7 @@ def set_phy_collision(static_mesh, phys):
     return _collision.get_simple_collision_shape_count(combined)
 
 
-def create_static_mesh(mesh, asset_path, materials, slot_names, nanite):
+def create_static_mesh(mesh, asset_path, materials, slot_names, nanite, collision=True):
     """Write a UDynamicMesh out as a real StaticMesh asset and bind its material slots.
     Returns the asset, or None when the build failed."""
     if unreal.EditorAssetLibrary.does_asset_exist(asset_path):
@@ -585,8 +601,9 @@ def create_static_mesh(mesh, asset_path, materials, slot_names, nanite):
     options.enable_recompute_tangents = True
     options.enable_nanite = nanite
     options.nanite_settings = nanite_settings
-    # A body setup has to exist before either collision helper above can touch it.
-    options.enable_collision = True
+    # A body setup has to exist before either collision helper can touch it. Runtime brush
+    # visuals deliberately opt out: their separately cooked entity hull is authoritative.
+    options.enable_collision = collision
     # BSP soup is non-manifold; keeping the source vertex order stops the build from welding
     # face-boundary corners back together and smoothing the flat shading away.
     options.use_original_vertex_order = True

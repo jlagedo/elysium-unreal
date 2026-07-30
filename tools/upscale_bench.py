@@ -97,27 +97,32 @@ class Model:
         self.device = device
 
     def _run(self, rgb: np.ndarray) -> np.ndarray:
+        return self._run_batch([rgb])[0]
+
+    def _run_batch(self, rgbs: list[np.ndarray]) -> list[np.ndarray]:
+        """Run equal-sized tiles as one GPU batch to improve device occupancy."""
         torch = self._torch
-        t = torch.from_numpy(rgb).permute(2, 0, 1).unsqueeze(0).float() / 255.0
+        arr = np.stack(rgbs)
+        t = torch.from_numpy(arr).permute(0, 3, 1, 2).float() / 255.0
         t = t.to(self.device)
         if self.fp16:
             t = t.half()
-        with torch.no_grad():
+        with torch.inference_mode():
             out = self.model(t)
-        out = out.clamp(0, 1).squeeze(0).permute(1, 2, 0).float().cpu().numpy()
-        return (out * 255.0 + 0.5).astype(np.uint8)
+        out = out.clamp(0, 1).permute(0, 2, 3, 1).float().cpu().numpy()
+        return list((out * 255.0 + 0.5).astype(np.uint8))
 
     def upscale_rgb(self, rgb: np.ndarray, tile: int, seamless: bool,
-                    margin: int = 24) -> np.ndarray:
+                    margin: int = 24, tile_batch: int = 1) -> np.ndarray:
         if seamless:
             padded = wrap_pad(rgb, margin)
-            big = self._run_tiled(padded, tile)
+            big = self._run_tiled(padded, tile, tile_batch)
             m = margin * self.scale
             return big[m:-m, m:-m]
-        return self._run_tiled(rgb, tile)
+        return self._run_tiled(rgb, tile, tile_batch)
 
     def upscale_alpha(self, alpha: np.ndarray, tile: int, seamless: bool,
-                      method: str, margin: int = 24) -> np.ndarray:
+                      method: str, margin: int = 24, tile_batch: int = 1) -> np.ndarray:
         if method == "lanczos":
             h, w = alpha.shape
             big = Image.fromarray(alpha, "L").resize(
@@ -125,10 +130,10 @@ class Model:
             return np.asarray(big)
         # 'model': replicate to 3 channels, run, take luma-ish mean.
         rep = np.dstack([alpha, alpha, alpha])
-        out = self.upscale_rgb(rep, tile, seamless, margin)
+        out = self.upscale_rgb(rep, tile, seamless, margin, tile_batch)
         return out.mean(axis=2).round().astype(np.uint8)
 
-    def _run_tiled(self, rgb: np.ndarray, tile: int) -> np.ndarray:
+    def _run_tiled(self, rgb: np.ndarray, tile: int, tile_batch: int = 1) -> np.ndarray:
         if tile <= 0 or (rgb.shape[0] <= tile and rgb.shape[1] <= tile):
             return self._run(rgb)
         # Overlap-blend tiles to hide seams from the tiling itself.
@@ -136,22 +141,41 @@ class Model:
         h, w, _ = rgb.shape
         out = np.zeros((h * s, w * s, 3), np.float32)
         acc = np.zeros((h * s, w * s, 1), np.float32)
+        pieces: dict[tuple[int, int], list[tuple[int, int, int, int, np.ndarray]]] = {}
         for y in range(0, h, tile):
             for x in range(0, w, tile):
                 y0, x0 = max(0, y - ov), max(0, x - ov)
                 y1, x1 = min(h, y + tile + ov), min(w, x + tile + ov)
-                piece = self._run(rgb[y0:y1, x0:x1])
-                out[y0 * s:y1 * s, x0 * s:x1 * s] += piece
-                acc[y0 * s:y1 * s, x0 * s:x1 * s] += 1
+                piece = rgb[y0:y1, x0:x1]
+                pieces.setdefault(piece.shape[:2], []).append((y0, y1, x0, x1, piece))
+        batch_size = max(1, tile_batch)
+        for records in pieces.values():
+            for start in range(0, len(records), batch_size):
+                batch = records[start:start + batch_size]
+                results = self._run_batch([record[4] for record in batch])
+                for (y0, y1, x0, x1, _), piece in zip(batch, results):
+                    out[y0 * s:y1 * s, x0 * s:x1 * s] += piece
+                    acc[y0 * s:y1 * s, x0 * s:x1 * s] += 1
         return (out / np.maximum(acc, 1)).round().astype(np.uint8)
 
 
 def process_texture(model: Model, img: Image.Image, args) -> Image.Image:
     rgb, alpha = split_rgba(img)
-    big_rgb = model.upscale_rgb(rgb, args.tile, args.seamless)
+    big_rgb = model.upscale_rgb(
+        rgb,
+        args.tile,
+        args.seamless,
+        tile_batch=args.tile_batch,
+    )
     big_a = None
     if alpha is not None:
-        big_a = model.upscale_alpha(alpha, args.tile, args.seamless, args.alpha)
+        big_a = model.upscale_alpha(
+            alpha,
+            args.tile,
+            args.seamless,
+            args.alpha,
+            tile_batch=args.tile_batch,
+        )
     return merge_rgba(big_rgb, big_a)
 
 
@@ -224,6 +248,8 @@ def main():
                     help="how to upscale the alpha mask (default: model)")
     ap.add_argument("--tile", type=int, default=0,
                     help="tile size for low-VRAM inference (0 = whole image)")
+    ap.add_argument("--tile-batch", type=int, default=1,
+                    help="equal-sized tiles per GPU pass (default: 1)")
     ap.add_argument("--sheet", action="store_true",
                     help="also write a side-by-side comparison sheet per texture")
     ap.add_argument("--cpu", action="store_true", help="force CPU")

@@ -29,6 +29,11 @@ struct FElysiumContentPaths
 		const FString Asset = TEXT("SM_") + Stem;
 		return BakedMapDir(Map) / TEXT("Props") / Asset + TEXT(".") + Asset;
 	}
+	static FString BakedBrushMesh(const FString& Map, const FString& Stem)
+	{
+		const FString Asset = TEXT("SM_") + Stem;
+		return BakedMapDir(Map) / TEXT("Brushes") / Asset + TEXT(".") + Asset;
+	}
 	// The map's prop skin table (UElysiumPropSkinSet) -- every alternate skin family of every
 	// prop model it places, as material instances resolved at bake time. Absent for a map whose
 	// models all carry a single family.

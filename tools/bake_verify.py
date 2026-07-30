@@ -5,6 +5,8 @@
 # Run headless:
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript -script="tools/bake_verify.py"
 #       -BakeMap=sp_tutorial_1 -unattended -nosplash -nopause
+import json
+import os
 import unreal
 
 MOUNT = "/ElysiumBaked"
@@ -77,6 +79,68 @@ def main():
         tris, slots, unbound))
     unreal.log("[verify] physics props %d, %d convex collision shapes, %d with authored mass"
                % (phys_meshes, phys_shapes, massed))
+
+    ents_path = os.path.join(unreal.Paths.project_dir(), "tools", "out", map_name,
+                             map_name + ".ents")
+    annotated = set()
+    if os.path.isfile(ents_path):
+        with open(ents_path, "r", encoding="utf-8") as handle:
+            for entity in json.load(handle).get("entities", []):
+                stem = entity.get("brush_mesh")
+                if stem:
+                    annotated.add(stem)
+    baked = set()
+    baked_assets = {}
+    for data in registry.get_assets_by_path(package + "/Brushes", recursive=False):
+        if str(data.asset_class_path.asset_name) == "StaticMesh":
+            name = str(data.asset_name)
+            if name.startswith("SM_"):
+                stem = name[3:]
+                baked.add(stem)
+                baked_assets[stem] = data.get_asset()
+    missing = sorted(annotated - baked)
+    stale = sorted(baked - annotated)
+    unreal.log("[verify] brush meshes %d annotated / %d baked / %d missing / %d stale" % (
+        len(annotated), len(baked), len(missing), len(stale)))
+    for stem in missing:
+        unreal.log_error("[verify] missing brush mesh: %s" % stem)
+    for stem in stale:
+        unreal.log_error("[verify] stale brush mesh: %s" % stem)
+    brush_tris = 0
+    brush_slots = 0
+    brush_unbound = 0
+    brush_collision = 0
+    for stem, mesh in sorted(baked_assets.items()):
+        if not mesh:
+            unreal.log_error("[verify] brush mesh failed to load: %s" % stem)
+            continue
+        try:
+            mesh_tris = mesh.get_num_triangles(0)
+        except Exception:
+            mesh_tris = 0
+        materials = mesh.get_editor_property("static_materials")
+        unbound_slots = sum(
+            1 for slot in materials
+            if not slot.get_editor_property("material_interface"))
+        body = mesh.get_editor_property("body_setup")
+        collision_shapes = 0
+        if body is not None:
+            collision_shapes = unreal.GeometryScript_Collision.get_simple_collision_shape_count(
+                unreal.GeometryScript_Collision.get_simple_collision_from_static_mesh(mesh))
+        brush_tris += mesh_tris
+        brush_slots += len(materials)
+        brush_unbound += unbound_slots
+        brush_collision += collision_shapes
+        if mesh_tris <= 0:
+            unreal.log_error("[verify] brush mesh has no triangles: %s" % stem)
+        if not materials or unbound_slots:
+            unreal.log_error("[verify] brush mesh material slots invalid: %s (%d slots, %d unbound)"
+                             % (stem, len(materials), unbound_slots))
+        if collision_shapes:
+            unreal.log_error("[verify] brush mesh owns %d simple collision shapes: %s"
+                             % (collision_shapes, stem))
+    unreal.log("[verify] brush geometry %d tris / %d slots / %d unbound / %d collision shapes" % (
+        brush_tris, brush_slots, brush_unbound, brush_collision))
 
     level = "%s/%s" % (package, map_name)
     if unreal.EditorAssetLibrary.does_asset_exist(level):

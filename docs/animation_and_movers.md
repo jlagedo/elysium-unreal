@@ -572,6 +572,58 @@ target-bind fallback does not reproduce their live result. The capture proves
 the mismatch but does not yet attribute it among the outer virtual-model map,
 controllers, or another post-base-pose stage.
 
+The polling probe is intentionally target-specific. A companion native probe
+captures the whole visible scene instead:
+
+```powershell
+python tools/build_live_pose_capture.py
+python tools/capture_live_scene.py start --duration 0
+```
+
+`capture_live_scene.py` injects a 32-bit, hash-gated hook into the user's retail
+process and replaces only `CStudioRender::DrawModel`'s vtable slot for the
+capture interval. The hook calls the original function, then queues the studio
+header, client entity, checksum, model name, `boneToWorld`, and final skin
+palette for every draw. Stop restores the slot before unloading. The `ELPOSE2`
+reader rejects an incomplete record tail and reports queued, written, and
+dropped counts. This is not the polling probe's read-only process contract; it
+is an explicit temporary mutation of the running retail renderer.
+
+One complete `sp_theatre` retry trace contains **229,201 draw records**, **69
+models**, and **915,533,348 bytes** over **215.2831204 seconds**, with zero
+dropped records and zero incomplete tail bytes. The trace SHA-256 is
+`db35b31fcad43bce5854bea6d21290a034810b68e965b16fc56775c8a4213c8d`.
+It includes 11,657 Lacroix draws, 7,750 Malkavian-male draws, 6,382 Ash draws,
+5,633 Vampire4/Ventrue-female draws, 4,432 Jack draws, 3,593 Nines draws, and
+the courtroom stake, sword, and cigar. Render capture is necessarily
+visibility-gated; absence while culled is not an unchanged pose.
+
+`archive_courtroom_poses.py` closes that coverage gap on the authored side. Its
+seven NPZs retain **32,907 frame samples** (4,701 frames for each scene),
+**1,955 cinematic bones**, and all local positions, quaternions, binds,
+parents, flags, and inverse binds. The manifest binds all 23 VCD actor slots
+to their source `BipNN` root and target model. For the broken seat,
+`Vampire4/Bip01` resolves to
+`ventrue_female_Armor_1.mdl`; extracting consecutive changes yields 1,261 live
+poses over 132.105408 seconds.
+
+The Vampire4 join rejects the current cinematic exporter's direct name-fold
+as a complete retail model. Over 1,229 time-selected rendered samples before
+the VCD end, copying the authored local rotation has median rotation-matrix RMS
+`0.247766`. A constant per-bone rest-frame candidate derived from the held
+entry pose reduces that to `0.033134`; it is evidence for the still-open
+virtual-model mapping/transition stages, not yet their final equation. Position
+is decisive: direct authored-local copy has median RMS `0.075187` Source
+inches, while
+`heldLiveLocal + authoredLocal - cinematicBindLocal` has median RMS
+`3.65247e-6` over the active interval. In a later held-output interval that
+residual becomes `0.045551`, cleanly separating a pose-state transition from
+decoder noise. The retail output therefore cannot be recovered
+by prefix renaming plus generic target-rest retargeting alone. The nested
+virtual-model map and transition/layer order must be closed before baking a
+rotation correction, and `Flags & 0x2` split inheritance is still applied
+after those local-pose stages.
+
 Re-run the source/capture check with:
 
 ```powershell
@@ -812,6 +864,11 @@ lineage (RTTI-confirmed: `CBaseDoor→CRotDoor`, `CBaseButton→CRotButton`,
   `wait -1` disables autoclose. The **locked path** plays the locked/unlocked sound
   and fires `OnLockedUse`. Blocked-while-closing deals `dmg`, reverses, and fires
   `OnBlockedClosing` (`CBaseDoor::Blocked` `FUN_100f14a0`).
+  `CBaseDoor::Use` checks `use_override` first: a resolved override receives its normal
+  `Use(activator)` with the door as caller exactly once, then the door returns without
+  toggling. A missing/unusable target therefore fails closed. PASSABLE (`0x8`) changes
+  solidity, not usability: player/physics collision is disabled while use/debug traces
+  can still address the door.
 - **Button — `CBaseButton`**: press-in (`speed`, `lip`-adjusted) → `TriggerAndWait`
   (fire `OnPressed`, hold `wait`s) → `ButtonReturn`/`ButtonBackHome` spring-back, or
   latch when `wait -1`.
@@ -821,6 +878,30 @@ lineage (RTTI-confirmed: `CBaseDoor→CRotDoor`, `CBaseButton→CRotButton`,
 - **Keyframe mover**: interpolate along the `mover_keyframe` `NextKey` linked-list at
   `speed`, firing `OnReached`/`OnReachedKeyframe` per node. Elevator: move to the
   requested `floorN` Z at `speed`, `OnReachFloorAny`/`OnReachFloorN` on arrival.
+
+### B.4.1 `func_elevator` [VtMB — decompiled]
+
+`CFuncElevator` is factory `0x1020e740`; its 37-row datamap is `0x105aadf0`
+(builder `0x1020e8d0`). The absolute Source-Z floor table is `+0x608`, `numfloors`
+`+0x62c`, current floor `+0x630`, target floor `+0x634`, original position `+0x800`,
+and lock byte `+0x80c`.
+
+- `GotoFloor` (`0x1020f3f0`) converts its one-based input to an index. A locked
+  elevator and an elevator whose current floor is `-1` (moving) ignore the request,
+  so there is no mid-move retarget.
+- A request for the current floor completes **synchronously** without
+  `OnMoveStart`: it fires `OnReachFloorAny`, then `OnReachFloorN`, then writes the
+  current-floor field. The tutorial's initial floor-one request relies on these
+  outputs; no invented deferred completion is needed.
+- A valid new floor moves vertically from `(original X, original Y)` to the
+  absolute `floorN` Z at constant `speed`, sets target/current to moving state,
+  starts the authored sound, then fires `OnMoveStart`.
+- Crossing an intermediate floor fires `OnPassFloorAny` then its
+  `OnPassFloor2..7`; arrival (`0x1020f6c0`/`0x1020f700`) stops the sound, fires
+  `OnReachFloorAny` then `OnReachFloorN`, and only then records the resting floor.
+- `Lock`, `Unlock`, `SnapToFloor` and `CallCurrentFloorOutputs` are dedicated
+  inputs. Persistence resolves an in-progress move at its requested destination
+  in a resting state, matching the mover save policy.
 
 ## B.5 Spawnflag bits [VtMB — decompiled, per-bit confirmed]
 

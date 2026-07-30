@@ -4540,6 +4540,316 @@ bool FElysiumWorldServicesTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// Brush movers — visible body attachment, PASSABLE doors, use_override, prop_button,
+// and the recovered func_elevator state machine exercised as one authored-style chain.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDoorElevatorTest,
+	"Elysium.Substrate.DoorElevator", GElysiumTestFlags)
+bool FElysiumDoorElevatorTest::RunTest(const FString&)
+{
+	FTestWorldWrapper TestWorld;
+	if (!TestWorld.CreateTestWorld(EWorldType::Game)
+		|| !TestWorld.BeginPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	UWorld* EngineWorld = TestWorld.GetTestWorld();
+	AActor* Owner = EngineWorld ? EngineWorld->SpawnActor<AActor>() : nullptr;
+	if (!TestNotNull(TEXT("mover owner spawned"), Owner))
+	{
+		return false;
+	}
+	USceneComponent* Root = NewObject<USceneComponent>(Owner, TEXT("MoverRoot"));
+	Owner->SetRootComponent(Root);
+	Root->RegisterComponent();
+	Owner->AddInstanceComponent(Root);
+
+	auto BoxHull = []()
+	{
+		FElysiumConvexHull Hull;
+		for (float X : { -20.f, 20.f })
+		{
+			for (float Y : { -20.f, 20.f })
+			{
+				for (float Z : { -20.f, 20.f })
+				{
+					Hull.Vertices.Emplace(X, Y, Z);
+				}
+			}
+		}
+		return Hull;
+	};
+	auto Wire = [](FElysiumEntityDef& From, const TCHAR* Output, const TCHAR* Target,
+		const TCHAR* Input, const TCHAR* Param = TEXT(""))
+	{
+		FElysiumOutputDef W;
+		W.Name = Output;
+		W.Target = Target;
+		W.Input = Input;
+		W.Param = Param;
+		W.Times = -1;
+		From.Outputs.Add(MoveTemp(W));
+	};
+	auto CounterValue = [](const FElysiumEntity* Entity)
+	{
+		TArray<TPair<FString, FString>> State;
+		Entity->GetDebugState(State);
+		for (const TPair<FString, FString>& Row : State)
+		{
+			if (Row.Key == TEXT("Value"))
+			{
+				return FCString::Atof(*Row.Value);
+			}
+		}
+		return -1.f;
+	};
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__door_elevator__");
+	auto AddCounter = [&Defs](const TCHAR* Name)
+	{
+		FElysiumEntityDef Counter;
+		Counter.Classname = TEXT("math_counter");
+		Counter.TargetName = Name;
+		Defs.Defs.Add(MoveTemp(Counter));
+	};
+	for (const TCHAR* Name : { TEXT("pressed"), TEXT("locked_press"), TEXT("state2"),
+		TEXT("move_start"), TEXT("reach_any"), TEXT("reach1"), TEXT("reach2"),
+		TEXT("invalid_open"), TEXT("case_default") })
+	{
+		AddCounter(Name);
+	}
+
+	// The tutorial resets this counter to zero on every elevator arrival and forwards OutValue to
+	// logic_case_toggle.InValue. Retail InValue is value matching (not the added delta input), so
+	// zero misses Case01/02 and terminates at OnDefault instead of recursively requesting a floor.
+	FElysiumEntityDef TutorialCounter;
+	TutorialCounter.Classname = TEXT("math_counter");
+	TutorialCounter.TargetName = TEXT("counter_elev");
+	Wire(TutorialCounter, TEXT("OutValue"), TEXT("case_elev"), TEXT("InValue"));
+	Defs.Defs.Add(MoveTemp(TutorialCounter));
+
+	FElysiumEntityDef TutorialCase;
+	TutorialCase.Classname = TEXT("logic_case_toggle");
+	TutorialCase.TargetName = TEXT("case_elev");
+	TutorialCase.Keys.Add(TEXT("InitialCase"), TEXT("1"));
+	TutorialCase.Keys.Add(TEXT("Case01"), TEXT("1"));
+	TutorialCase.Keys.Add(TEXT("Case02"), TEXT("2"));
+	Wire(TutorialCase, TEXT("OnCase01"), TEXT("lift"), TEXT("GotoFloor"), TEXT("1"));
+	Wire(TutorialCase, TEXT("OnCase02"), TEXT("lift"), TEXT("GotoFloor"), TEXT("2"));
+	Wire(TutorialCase, TEXT("OnDefault"), TEXT("case_default"), TEXT("Add"), TEXT("1"));
+	Defs.Defs.Add(MoveTemp(TutorialCase));
+
+	FElysiumEntityDef Button;
+	Button.Classname = TEXT("prop_button");
+	Button.TargetName = TEXT("elev_button");
+	Button.ModelMesh = TEXT("elevator_button");
+	Button.Keys.Add(TEXT("model"), TEXT("models/elevator_button.mdl"));
+	Button.Keys.Add(TEXT("parentname"), TEXT("lift"));
+	Button.Keys.Add(TEXT("max_states"), TEXT("2"));
+	Button.Keys.Add(TEXT("current_state"), TEXT("0"));
+	Button.Keys.Add(TEXT("use_icon"), TEXT("7"));
+	Button.Keys.Add(TEXT("locked_icon"), TEXT("8"));
+	Wire(Button, TEXT("OnPressed"), TEXT("pressed"), TEXT("Add"), TEXT("1"));
+	Wire(Button, TEXT("OnPressedLocked"), TEXT("locked_press"), TEXT("Add"), TEXT("1"));
+	Wire(Button, TEXT("OnSetState2"), TEXT("state2"), TEXT("Add"), TEXT("1"));
+	Defs.Defs.Add(MoveTemp(Button));
+
+	FElysiumEntityDef Elevator;
+	Elevator.Classname = TEXT("func_elevator");
+	Elevator.TargetName = TEXT("lift");
+	Elevator.Model = 1;
+	Elevator.Hulls.Add(BoxHull());
+	Elevator.BrushMesh = TEXT("brush_1");
+	Elevator.ElevatorFloors = { 0.f, 254.f };
+	Elevator.Keys.Add(TEXT("model"), TEXT("*1"));
+	Elevator.Keys.Add(TEXT("speed"), TEXT("100"));       // one second per 100 Source inches
+	Elevator.Keys.Add(TEXT("numfloors"), TEXT("2"));
+	Wire(Elevator, TEXT("OnMoveStart"), TEXT("move_start"), TEXT("Add"), TEXT("1"));
+	Wire(Elevator, TEXT("OnReachFloorAny"), TEXT("reach_any"), TEXT("Add"), TEXT("1"));
+	Wire(Elevator, TEXT("OnReachFloorAny"), TEXT("counter_elev"), TEXT("SetValue"), TEXT("0"));
+	Wire(Elevator, TEXT("OnReachFloor1"), TEXT("reach1"), TEXT("Add"), TEXT("1"));
+	Wire(Elevator, TEXT("OnReachFloor2"), TEXT("reach2"), TEXT("Add"), TEXT("1"));
+	Defs.Defs.Add(MoveTemp(Elevator));
+
+	FElysiumEntityDef Door;
+	Door.Classname = TEXT("func_door");
+	Door.TargetName = TEXT("lift_door");
+	Door.Origin = FVector(50.f, 0.f, 0.f);
+	Door.Model = 2;
+	Door.Hulls.Add(BoxHull());
+	Door.BrushMesh = TEXT("brush_2");
+	Door.Keys.Add(TEXT("model"), TEXT("*2"));
+	Door.Keys.Add(TEXT("parentname"), TEXT("lift"));
+	Door.Keys.Add(TEXT("spawnflags"), TEXT("8"));        // PASSABLE
+	Door.Keys.Add(TEXT("use_override"), TEXT("elev_button"));
+	Defs.Defs.Add(MoveTemp(Door));
+
+	FElysiumEntityDef InvalidDoor;
+	InvalidDoor.Classname = TEXT("func_door");
+	InvalidDoor.TargetName = TEXT("invalid_override");
+	InvalidDoor.Origin = FVector(100.f, 0.f, 0.f);
+	InvalidDoor.Model = 3;
+	InvalidDoor.Hulls.Add(BoxHull());
+	InvalidDoor.BrushMesh = TEXT("brush_3");
+	InvalidDoor.Keys.Add(TEXT("model"), TEXT("*3"));
+	InvalidDoor.Keys.Add(TEXT("use_override"), TEXT("does_not_exist"));
+	Wire(InvalidDoor, TEXT("OnOpen"), TEXT("invalid_open"), TEXT("Add"), TEXT("1"));
+	Defs.Defs.Add(MoveTemp(InvalidDoor));
+
+	FElysiumEntityDefs RestoreDefs = Defs;
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(Owner, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+
+	FElysiumEntity* LiveButton = World.FindByName(TEXT("elev_button"));
+	FElysiumEntity* LiveElevator = World.FindByName(TEXT("lift"));
+	FElysiumEntity* LiveDoor = World.FindByName(TEXT("lift_door"));
+	FElysiumEntity* LiveInvalid = World.FindByName(TEXT("invalid_override"));
+	if (!TestNotNull(TEXT("prop_button resolved"), LiveButton)
+		|| !TestNotNull(TEXT("elevator resolved"), LiveElevator)
+		|| !TestNotNull(TEXT("door resolved"), LiveDoor)
+		|| !TestNotNull(TEXT("invalid override door resolved"), LiveInvalid))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("every annotated brush requested one visual"),
+		Services.Count(TEXT("BuildBrushVisual")), 3);
+	TestTrue(TEXT("door visual is attached at identity to collision"),
+		LiveDoor->Body && LiveDoor->Body->GetVisual()
+		&& LiveDoor->Body->GetVisual()->GetAttachParent() == LiveDoor->Body
+		&& LiveDoor->Body->GetVisual()->GetRelativeTransform().Equals(FTransform::Identity));
+	TestEqual(TEXT("PASSABLE door keeps its dedicated traceable profile"),
+		LiveDoor->Body->GetCollisionProfileName(), FName(TEXT("ElysiumBrushPassable")));
+	TestTrue(TEXT("parentname attaches the door to the elevator body"),
+		LiveDoor->Body->GetAttachParent() == LiveElevator->Body);
+	TestTrue(TEXT("parentname attaches the cabin button visual to the elevator body"),
+		LiveButton->GetAttachBody()
+		&& LiveButton->GetAttachBody()->GetAttachParent() == LiveElevator->Body);
+	TestTrue(TEXT("attachment preserves the exported world pose"),
+		LiveDoor->Body->GetComponentLocation().Equals(FVector(50.f, 0.f, 0.f), 0.1f));
+
+	World.AcceptInput(TEXT("lift_door"), FName(TEXT("Use")), FElysiumVariant::Void(),
+		LiveDoor->Handle, LiveDoor->Handle);
+	World.Tick(0.0);
+	TestEqual(TEXT("use_override delegates one normal Use"), CounterValue(World.FindByName(TEXT("pressed"))), 1.f);
+	TestEqual(TEXT("button cycles skin/state after OnPressed"), CounterValue(World.FindByName(TEXT("state2"))), 1.f);
+	World.AcceptInput(TEXT("elev_button"), FName(TEXT("Lock")), FElysiumVariant::Void(),
+		LiveButton->Handle, LiveButton->Handle);
+	World.AcceptInput(TEXT("lift_door"), FName(TEXT("Use")), FElysiumVariant::Void(),
+		LiveDoor->Handle, LiveDoor->Handle);
+	World.Tick(0.0);
+	TestEqual(TEXT("locked override emits only OnPressedLocked"),
+		CounterValue(World.FindByName(TEXT("locked_press"))), 1.f);
+	TestEqual(TEXT("locked use does not emit OnPressed again"),
+		CounterValue(World.FindByName(TEXT("pressed"))), 1.f);
+	TestEqual(TEXT("locked button exposes locked icon"), LiveButton->GetUseIcon(), 8);
+
+	const FVector InvalidStart = LiveInvalid->Body->GetRelativeLocation();
+	World.AcceptInput(TEXT("invalid_override"), FName(TEXT("Use")), FElysiumVariant::Void(),
+		LiveInvalid->Handle, LiveInvalid->Handle);
+	World.Tick(0.0);
+	TestTrue(TEXT("missing use_override target fails closed"),
+		LiveInvalid->Body->GetRelativeLocation().Equals(InvalidStart));
+	TestEqual(TEXT("missing use_override never opens the door"),
+		CounterValue(World.FindByName(TEXT("invalid_open"))), 0.f);
+
+	// Retail completes an already-current GotoFloor synchronously: Any first, then the floor row.
+	World.AcceptInput(TEXT("lift"), FName(TEXT("GotoFloor")), FElysiumVariant::Int(1),
+		LiveButton->Handle, LiveButton->Handle);
+	World.Tick(0.0);
+	TestEqual(TEXT("current-floor request emits the generic arrival immediately"),
+		CounterValue(World.FindByName(TEXT("reach_any"))), 1.f);
+	TestEqual(TEXT("current-floor request emits floor-one arrival immediately"),
+		CounterValue(World.FindByName(TEXT("reach1"))), 1.f);
+	TestEqual(TEXT("current-floor request does not start movement"),
+		CounterValue(World.FindByName(TEXT("move_start"))), 0.f);
+	TestEqual(TEXT("tutorial arrival reset misses configured cases and terminates at OnDefault"),
+		CounterValue(World.FindByName(TEXT("case_default"))), 1.f);
+
+	AddExpectedError(TEXT("invalid floor"), EAutomationExpectedErrorFlags::Contains, 1);
+	World.AcceptInput(TEXT("lift"), FName(TEXT("GotoFloor")), FElysiumVariant::Int(9),
+		LiveButton->Handle, LiveButton->Handle);
+	TestEqual(TEXT("invalid floor does not start movement"),
+		CounterValue(World.FindByName(TEXT("move_start"))), 0.f);
+
+	World.AcceptInput(TEXT("counter_elev"), FName(TEXT("SetValue")), FElysiumVariant::Int(2),
+		LiveButton->Handle, LiveButton->Handle);
+	World.Tick(0.0);
+	TestEqual(TEXT("tutorial SetValue(2) matches Case02 and starts the requested floor"),
+		CounterValue(World.FindByName(TEXT("move_start"))), 1.f);
+	World.Tick(0.5);
+	TestTrue(TEXT("elevator advances at constant speed"),
+		FMath::IsNearlyEqual(LiveElevator->Body->GetRelativeLocation().Z, 127.f, 1.f));
+	TestTrue(TEXT("parented door stays aligned while elevator moves"),
+		FMath::IsNearlyEqual(LiveDoor->Body->GetComponentLocation().Z, 127.f, 1.f));
+	TestTrue(TEXT("parented cabin button stays aligned while elevator moves"),
+		LiveButton->GetAttachBody()
+		&& FMath::IsNearlyEqual(LiveButton->GetAttachBody()->GetComponentLocation().Z, 127.f, 1.f));
+	FElysiumMapSnapshot MovingSnapshot;
+	World.Freeze(MovingSnapshot);
+	World.AcceptInput(TEXT("lift"), FName(TEXT("GotoFloor")), FElysiumVariant::Int(1),
+		LiveButton->Handle, LiveButton->Handle); // ignored while moving
+	World.Tick(1.1);
+	TestTrue(TEXT("elevator reaches the requested absolute floor"),
+		FMath::IsNearlyEqual(LiveElevator->Body->GetRelativeLocation().Z, 254.f, 0.1f));
+	TestEqual(TEXT("arrival fires generic output once for the completed move"),
+		CounterValue(World.FindByName(TEXT("reach_any"))), 2.f);
+	TestEqual(TEXT("arrival fires floor-two output"),
+		CounterValue(World.FindByName(TEXT("reach2"))), 1.f);
+	TestEqual(TEXT("floor-two reset returns through the non-recursive default path"),
+		CounterValue(World.FindByName(TEXT("case_default"))), 2.f);
+	TestEqual(TEXT("mid-move retarget was ignored"),
+		CounterValue(World.FindByName(TEXT("move_start"))), 1.f);
+
+	// The mover save policy resolves an in-flight request at its destination, resting.
+	AActor* RestoreOwner = EngineWorld->SpawnActor<AActor>();
+	USceneComponent* RestoreRoot = NewObject<USceneComponent>(RestoreOwner, TEXT("RestoreRoot"));
+	RestoreOwner->SetRootComponent(RestoreRoot);
+	RestoreRoot->RegisterComponent();
+	RestoreOwner->AddInstanceComponent(RestoreRoot);
+	FElysiumRecordingServices RestoreServices;
+	FElysiumEntityWorld Restored(RestoreOwner, nullptr, RestoreServices.Bundle());
+	Restored.Load(MoveTemp(RestoreDefs));
+	Restored.ApplySnapshot(MovingSnapshot);
+	Restored.Activate(0.5);
+	Restored.Tick(0.5);
+	FElysiumEntity* RestoredElevator = Restored.FindByName(TEXT("lift"));
+	TestTrue(TEXT("restored in-flight elevator seats at its requested destination"),
+		RestoredElevator && RestoredElevator->Body
+		&& FMath::IsNearlyEqual(RestoredElevator->Body->GetRelativeLocation().Z, 254.f, 0.1f));
+	if (RestoredElevator)
+	{
+		TArray<TPair<FString, FString>> State;
+		RestoredElevator->GetDebugState(State);
+		const TPair<FString, FString>* Current = State.FindByPredicate(
+			[](const TPair<FString, FString>& Row) { return Row.Key == TEXT("Current floor"); });
+		const TPair<FString, FString>* Target = State.FindByPredicate(
+			[](const TPair<FString, FString>& Row) { return Row.Key == TEXT("Target floor"); });
+		TestTrue(TEXT("restored elevator is resting at floor two"),
+			Current && Current->Value == TEXT("2")
+			&& Target && Target->Value == TEXT("(none)"));
+	}
+
+	World.AcceptInput(TEXT("lift_door"), FName(TEXT("ScriptHide")), FElysiumVariant::Void(),
+		LiveDoor->Handle, LiveDoor->Handle);
+	TestEqual(TEXT("hidden mover drops collision"), LiveDoor->Body->GetCollisionEnabled(),
+		ECollisionEnabled::NoCollision);
+	TestFalse(TEXT("hidden mover hides its attached visual"), LiveDoor->Body->GetVisual()->IsVisible());
+	World.AcceptInput(TEXT("lift_door"), FName(TEXT("ScriptUnhide")), FElysiumVariant::Void(),
+		LiveDoor->Handle, LiveDoor->Handle);
+	TestEqual(TEXT("unhidden PASSABLE mover restores its profile"),
+		LiveDoor->Body->GetCollisionProfileName(), FName(TEXT("ElysiumBrushPassable")));
+	TestTrue(TEXT("unhidden mover restores its attached visual"), LiveDoor->Body->GetVisual()->IsVisible());
+
+	return true;
+}
+
+// =====================================================================================
 // The camera (11.7) — the weight driver and the scripted-shot channel.
 //
 // VtMB ships one camera with a blend weight, not two cameras, and the whole first<->third
@@ -7334,6 +7644,8 @@ bool FElysiumAudioContractsTest::RunTest(const FString&)
 	TestNotNull(TEXT("one-shot wave is created"), OneShot);
 	if (OneShot)
 	{
+		TestEqual(TEXT("one-shot advances to EOF while inaudible"),
+			OneShot->VirtualizationMode, EVirtualizationMode::PlayWhenSilent);
 		ISoundGeneratorPtr Generator = OneShot->CreateSoundGenerator(GeneratorParams);
 		float Out[8] = {};
 		TestEqual(TEXT("one-shot generator stops at decoded EOF"),
@@ -7345,10 +7657,12 @@ bool FElysiumAudioContractsTest::RunTest(const FString&)
 	TestNotNull(TEXT("looping wave is created"), Loop);
 	if (Loop)
 	{
+		TestEqual(TEXT("loop retains phase while inaudible"),
+			Loop->VirtualizationMode, EVirtualizationMode::PlayWhenSilent);
 		ISoundGeneratorPtr Generator = Loop->CreateSoundGenerator(GeneratorParams);
 		float Out[10] = {};
 		TestEqual(TEXT("looping generator fills across sample wrap"),
-			Generator->GetNextBuffer(Out, UE_ARRAY_COUNT(Out)), 10);
+			Generator->GetNextBuffer(Out, UE_ARRAY_COUNT(Out)), 8);
 		TestFalse(TEXT("looping generator does not report completion"), Generator->IsFinished());
 		TestEqual(TEXT("loop wrap restarts at the first sample"), Out[4], Out[0]);
 	}

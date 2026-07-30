@@ -23,7 +23,7 @@ public class ElysiumUE : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
 			"InputCore", "EnhancedInput",
-			"AudioMixer", "AudioModulation",
+			"AudioMixer", "AudioModulation", "AudioExtensions",
 			// Runtime asset loading: build meshes in code (no editor bake) and
 			// decode textures from disk into transient UTexture2D.
 			"ProceduralMeshComponent", "ImageWrapper", "ImageCore", "RenderCore", "RHI",

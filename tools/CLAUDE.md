@@ -113,6 +113,11 @@ decodes each once into `<out>/props/<safename>.obj` with a shared `props/tex/`, 
 the `model_mesh`/`model_quat` annotation on their `.ents` record (format: `rebuild-strategy.md`).
 Skeletal `npc_*` models are **excluded** — they belong to the glTFRuntime NPC track below.
 
+BSP entity submodels with renderable surfaces are partitioned out of the static map OBJ into
+`out/<map>/brushes/brush_<model>.obj` in entity-local Unreal space. Their `.ents` rows carry
+`brush_mesh`; tools-only triggers remain meshless, and `StartHidden` brushes retain the asset
+for runtime visibility changes.
+
 `phys_hinge` (and the `phys_*` constraint family) additionally get `hinge_axis` in `<map>.ents`
 (format: `rebuild-strategy.md`); the physics hull sidecar itself is `props/<stem>.phys`
 (`phy_vphysics.md`). CoACD decomposes per map, not cross-map — a scaling cost for the full export.
@@ -170,6 +175,20 @@ the entity root transform before comparing two sessions.
 the live pose with either an included-model clip or one named actor root in an
 external cinematic MDL. Findings and the fixed-step console protocol live in
 `animation_and_movers.md` A.4b.
+
+`build_live_pose_capture.py` builds the x86 `live_pose_hook.dll` and injector
+used for a whole-scene retail trace. Unlike the polling probe, this is an
+in-process hook: `capture_live_scene.py` hash-gates `StudioRender.dll`, injects
+the hook, records every `CStudioRender::DrawModel` submission to an `ELPOSE2`
+stream, restores the vtable entry on stop, and writes a model/entity index.
+`extract_live_scene_model.py` reduces one model/entity stream to consecutive
+pose changes. `archive_courtroom_poses.py` stores every authored channel from
+the seven courtroom cinematic MDLs so visibility-culling gaps in the live
+trace still have a complete source timeline.
+`analyze_cinematic_pose_composition.py` joins an extracted actor stream to that
+archive and compares direct-copy and donor-bind/rest-frame composition laws.
+All binaries, traces, extracted matrices, and reports remain game-derived under
+`out/_live_pose/`.
 
 ## Texture upscaling (`upscale_bench.py`, `sky_upscale.py`, `retex_dds.py`)
 

@@ -174,6 +174,7 @@ class Bake(object):
         self.mat_pkg = "%s/Materials" % self.pkg
         self.decal_mat_pkg = "%s/Materials/Decals" % self.pkg
         self.mesh_pkg = "%s/Meshes" % self.pkg
+        self.brush_pkg = "%s/Brushes" % self.pkg
         self.prop_pkg = "%s/Props" % self.pkg
         self.prop_tex_pkg = "%s/Props/Textures" % self.pkg
         self.prop_mat_pkg = "%s/Props/Materials" % self.pkg
@@ -185,6 +186,8 @@ class Bake(object):
         self.textures = {}               # (package, asset name) -> Texture2D
         self.materials = {}              # (package, material key) -> MaterialInstanceConstant
         self.prop_models = {}            # stem -> ObjModel
+        self.brush_models = {}           # brush_<model> -> local-space ObjModel
+        self.brush_blend = {}            # stem -> per-vertex WVT weight
         self.prop_mats = {}              # stem -> {name: MatDef}
         self.prop_skins = {}             # stem -> {family: {authored material: family material}}
         self.prop_phys = {}              # stem -> {"mass": kg, "hulls": [(verts, tris)]}
@@ -246,6 +249,19 @@ class Bake(object):
                 "%d physics (%d convex hulls) (%.1fs)" % (
                     len(self.prop_models), tris, len(self.prop_skins),
                     len(self.prop_phys), hulls, time.time() - start))
+
+        brush_dir = os.path.join(self.dir, "brushes")
+        if os.path.isdir(brush_dir):
+            for entry in sorted(os.listdir(brush_dir)):
+                if not entry.endswith(".obj"):
+                    continue
+                stem = entry[:-4]
+                self.brush_models[stem] = bl.read_obj(os.path.join(brush_dir, entry))
+                self.brush_blend[stem] = bl.read_floats(
+                    os.path.join(brush_dir, stem + ".blend"))
+            log("brushes: %d local-space models / %d tris" % (
+                len(self.brush_models),
+                sum(m.tri_count for m in self.brush_models.values())))
         return True
 
     # ---------------------------------------------------------------- textures
@@ -438,21 +454,23 @@ class Bake(object):
                 if unreal.EditorAssetLibrary.does_asset_exist(path):
                     self.materials[(mat_pkg, key)] = unreal.EditorAssetLibrary.load_asset(path)
 
-    def _emit(self, asset_path, sections, names, materials, nanite, phys=None):
+    def _emit(self, asset_path, sections, names, materials, nanite, phys=None,
+              collision=True):
         """Build one StaticMesh from prepared sections.
         Returns (triangles kept, dropped, simple collision shapes)."""
         want = sum(len(s[4]) for s in sections) // 3
         mesh = bl.build_dynamic_mesh(sections)
         got = bl.mesh_triangle_count(mesh)
         static_mesh = bl.create_static_mesh(
-            mesh, asset_path, materials, [bl.safe_name(n) for n in names], nanite=nanite)
+            mesh, asset_path, materials, [bl.safe_name(n) for n in names], nanite=nanite,
+            collision=collision or phys is not None)
         if not static_mesh:
             fail("mesh build failed: %s" % asset_path)
             return 0, want, 0
         # A physics prop simulates, so it needs real simple collision -- VtMB's own convex
         # hulls. Everything else makes its render triangles the collision.
         shapes = bl.set_phy_collision(static_mesh, phys) if phys else 0
-        if not phys:
+        if not phys and collision:
             bl.set_complex_collision(static_mesh)
         self.saved.append(asset_path)
         return got, want - got, shapes
@@ -517,6 +535,7 @@ class Bake(object):
         built = 0
         tris = 0
         dropped = 0
+        wanted = set()
         start = time.time()
         for key in sorted(buckets.keys()):
             cx, cy, cz, opaque = key
@@ -529,8 +548,38 @@ class Bake(object):
             tris += kept
             dropped += lost
             built += 1 if kept else 0
-        log("world: %d chunk meshes / %d tris / %d dropped (%.1fs)" % (
-            built, tris, dropped, time.time() - start))
+            if kept:
+                wanted.add(asset_path.rsplit("/", 1)[-1])
+        pruned = bl.prune_package_prefix(self.mesh_pkg, "SM_World_", wanted)
+        log("world: %d chunk meshes / %d tris / %d dropped / %d stale pruned (%.1fs)" % (
+            built, tris, dropped, pruned, time.time() - start))
+
+        # Brush entities are one local-pivot mesh each. They are never placed in the baked
+        # level: the runtime attaches them to the convex entity body that owns movement,
+        # collision, hiding and teardown.
+        bl.ensure_dir(self.brush_pkg)
+        wanted = set()
+        brush_tris = 0
+        brush_dropped = 0
+        for stem, brush in sorted(self.brush_models.items()):
+            normals = bl.vertex_normals(brush.positions, brush.groups.values())
+            blend = self.brush_blend.get(stem, [])
+            sections, names = self._sections(
+                brush, normals, blend, brush.groups, (0.0, 0.0, 0.0))
+            asset_path = "%s/SM_%s" % (self.brush_pkg, stem)
+            materials = [self.materials.get((self.mat_pkg, name)) for name in names]
+            nanite = all(self.world_mats.get(name).opaque
+                         if self.world_mats.get(name) else True for name in names)
+            kept, lost, _ = self._emit(
+                asset_path, sections, names, materials, nanite=nanite,
+                collision=False)
+            if kept:
+                wanted.add("SM_%s" % stem)
+            brush_tris += kept
+            brush_dropped += lost
+        pruned = bl.prune_package(self.brush_pkg, wanted)
+        log("brushes: %d meshes / %d tris / %d dropped / %d stale pruned" % (
+            len(wanted), brush_tris, brush_dropped, pruned))
 
     # --------------------------------------------------------------------- sky
 
@@ -547,6 +596,7 @@ class Bake(object):
         built = 0
         tris = 0
         dropped = 0
+        wanted = set()
         cell = CELL_CM * 4
         for key in sorted(buckets.keys()):
             cx, cy, cz, opaque = key
@@ -559,8 +609,11 @@ class Bake(object):
             tris += kept
             dropped += lost
             built += 1 if kept else 0
-        log("sky: %d meshes / %d tris / %d dropped (%.1fs)" % (
-            built, tris, dropped, time.time() - start))
+            if kept:
+                wanted.add(asset_path.rsplit("/", 1)[-1])
+        pruned = bl.prune_package_prefix(self.mesh_pkg, "SM_Sky_", wanted)
+        log("sky: %d meshes / %d tris / %d dropped / %d stale pruned (%.1fs)" % (
+            built, tris, dropped, pruned, time.time() - start))
 
     # ------------------------------------------------------------------- props
 
@@ -572,6 +625,7 @@ class Bake(object):
         dropped = 0
         phys_meshes = 0
         phys_shapes = 0
+        wanted = set()
         for stem in sorted(self.prop_models.keys()):
             model = self.prop_models[stem]
             mats = self.prop_mats.get(stem, {})
@@ -599,14 +653,18 @@ class Bake(object):
             tris += kept
             dropped += lost
             built += 1 if kept else 0
+            if kept:
+                wanted.add(asset_path.rsplit("/", 1)[-1])
             if phys:
                 phys_meshes += 1
                 phys_shapes += shapes
                 if shapes != len(phys["hulls"]):
                     fail("%s: %d hulls in the sidecar but %d collision shapes"
                          % (stem, len(phys["hulls"]), shapes))
-        log("props: %d meshes / %d tris / %d dropped / %d physics (%d convex shapes) (%.1fs)"
-            % (built, tris, dropped, phys_meshes, phys_shapes, time.time() - start))
+        pruned = bl.prune_package_prefix(self.prop_pkg, "SM_", wanted)
+        log("props: %d meshes / %d tris / %d dropped / %d physics (%d convex shapes) / "
+            "%d stale pruned (%.1fs)"
+            % (built, tris, dropped, phys_meshes, phys_shapes, pruned, time.time() - start))
         self._author_skin_set()
 
     def _author_skin_set(self):

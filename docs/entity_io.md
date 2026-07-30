@@ -148,11 +148,11 @@ clears the hidden flag with `byte [this+0xf4] = 0`. The collision object lives a
   surface flag. Hidden entities carry ordinary render values (`renderamt 255`,
   `rendermode 0`) and ordinary surface flags.
 
-**The exporter honours it.** Beyond filtering `tools/*` geometry by material name,
-`bsp_to_scene.py` reads the entity keyvalues, collects the `StartHidden 1` brush
-models into `hidden_models`, and drops their faces from the world/sky render (it
-prints a `skipped StartHidden: N` count). So the two states that would otherwise leak
-stay hidden until the game (once ported) reveals them:
+**The exporter and runtime honour it.** `UE_bsp_to_scene.py` removes every renderable
+brush entity from the static world and writes it as a local-space `brush_mesh`, including
+`StartHidden 1` models. The runtime attaches that mesh to the entity's collision body and
+gates both through the same dormancy switch. Thus the hidden geometry exists for a later
+`ScriptUnhide`, but cannot leak out of the static level:
 
 - Six `func_button` volumes in `sp_tutorial_1` skinned `DEBUG/DEBUGEMPTY` (a 32×32
   half-red/half-blue placeholder) — no longer rendered as red/blue rectangles by the
@@ -164,10 +164,11 @@ stay hidden until the game (once ported) reveals them:
 
 The complete JSON contract is `rebuild-strategy.md` → "Sidecar contracts." Entity I/O relies
 on three properties: entities are exported unfiltered; `outputs[]` preserves all seven fields;
-and brush `hulls` are entity-local Unreal-centimetre convexes whose world transform is the
-entity origin. `start_hidden` gates solidity and monitoring, while `keys` retains every raw
-keyvalue needed by a class handler. This doc owns the behavior of those fields, not a second
-copy of their wire schema.
+and brush `hulls` and `brush_mesh` vertices are entity-local Unreal-centimetre geometry whose
+world transform is the entity origin. `elevator_floors` is the fixed eight-entry absolute-Z
+table already converted to Unreal centimetres. `start_hidden` gates collision, visibility and
+monitoring, while `keys` retains every raw keyvalue needed by a class handler. This doc owns
+the behavior of those fields, not a second copy of their wire schema.
 
 ## The usable set
 
@@ -230,6 +231,51 @@ engine bit). **On buttons VtMB keeps the stock layout: `0x100`=touch, `0x400`=us
 decompile, not assumed: the `0x400`-armed handler (`0x100c9250`) gates on `PassesUseFilter` (the use
 path), and all six `sp_tutorial_1` `func_button`s are `spawnflags 1057` (`0x400` + `use_icon 12`),
 i.e. +use switches. Matches `animation_and_movers.md` B.5.
+
+### `prop_button` [VtMB — decompiled]
+
+`CPropButton` is a point prop rather than `CBaseButton` brush movement. Its datamap
+(`vampire.dll` `0x105ac050`, 21 rows, builder `0x10214e30`) exposes `Use`, `Lock`,
+`Unlock`, `ToggleLock` and `SetState`; fields are `locked` (`+0x738`),
+`current_state` (`+0x73c`), `max_states` (`+0x740`), `use_icon` and `locked_icon`.
+`Spawn` (`0x10215750`) clamps `max_states` to 0..7 and `current_state` to 0..max,
+then sets the model skin to that zero-based state.
+
+`Use` (`0x10215a30`) is ordered:
+
+1. if locked, fire `OnPressedLocked` and stop;
+2. otherwise fire `OnPressed`;
+3. advance `current_state`, wrapping max back to zero;
+4. fire `OnSetStateN`, then write the matching skin/state.
+
+`SetState` takes a one-based external state and selects the corresponding zero-based
+`OnSetState1..8`/skin row; its retail cap excludes the cycle's terminal max row.
+Locking affects the use path and icon choice, not explicit state writes.
+
+### `logic_case_toggle` [VtMB — decompiled]
+
+`CLogicCaseToggle` adds two inputs to the stock `CLogicCase` datamap
+(`vampire.dll` `0x10576f80`, builder `0x101345f0`): `InValue` is a string
+variant and `InValueDelta` is an integer. They are deliberately different:
+
+- `InValue` (`0x10134780`) case-insensitively matches the incoming value
+  against `Case01..16`, records the matching index and fires `OnCaseNN`; a
+  non-string variant is converted with retail's compact representation (`2.0`
+  becomes `"2"`). A miss records `-1` and fires `OnDefault`.
+- `InValueDelta` (`0x101348a0` through `0x101346e0`) advances the current
+  pointer by that many configured slots, skipping empty slots and wrapping,
+  then fires the selected `OnCaseNN`. Zero warns but still re-fires the current
+  case.
+- `Spawn` (`0x10134620`) validates `InitialCase` in 0..15, prepositions the
+  pointer one slot behind it, then seeks backward to the preceding configured
+  slot. This prepares the first positive delta; it does not change `InValue`
+  into a delta input.
+
+This distinction is load-bearing in the tutorial elevator. `counter_elev`
+forwards its arrival reset value `0` to `case_elev.InValue`. Neither configured
+case is `0`, so retail takes the unwired `OnDefault` path and the chain stops.
+Treating `InValue` as a zero delta instead re-fires the current floor request
+and creates an infinite arrival loop.
 
 ## Trigger activation filter (`trigger_multiple` / `trigger_once`)
 

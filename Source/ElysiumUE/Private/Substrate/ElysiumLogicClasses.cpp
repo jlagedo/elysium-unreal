@@ -236,9 +236,9 @@ private:
 // A shared base carries the 16 Case-value strings + the OnCase01..OnCase16 / OnDefault outputs.
 // logic_case (stock): InValue matches the value against the case strings, fires the matching
 //   OnCaseNN (else OnDefault); PickRandom fires a random configured case.
-// logic_case_toggle (VtMB, FUN_101344f0/FUN_101346e0): a current-case pointer initialised from
-//   InitialCase; InValue is a *delta* that advances the pointer that many configured cases
-//   (skipping empty slots, wrapping 0..15), then fires the new current case's OnCaseNN.
+// logic_case_toggle (VtMB, FUN_101344f0/FUN_10134620): InValue retains logic_case's value-match
+//   behavior and updates a current-case pointer. Its added InValueDelta input advances that pointer
+//   by the requested number of configured cases (skipping empty slots, wrapping 0..15).
 // ============================================================================================
 
 class FElysiumLogicCaseBase : public FElysiumEntity
@@ -261,6 +261,15 @@ public:
 	}
 
 protected:
+	static FString CaseString(const FElysiumVariant& Value)
+	{
+		// variant_t::String() uses compact `%g` formatting for floats. That distinction is
+		// observable: math_counter OutValue(2) must match a Hammer CaseNN value of "2".
+		return Value.Type == EElysiumVariantType::Float
+			? FString::Printf(TEXT("%g"), static_cast<double>(Value.AsFloat))
+			: Value.ToString();
+	}
+
 	// Fire OnCase<1-based idx> for a configured slot; no-op otherwise. `idx` is 0-based.
 	void FireCase(int32 Idx, const FElysiumEntityHandle& Activator, const FElysiumVariant& Value)
 	{
@@ -292,7 +301,7 @@ public:
 	// InValue: fire the first case whose value string equals the incoming value, else OnDefault.
 	void InputInValue(const FElysiumInputArgs& A)
 	{
-		const FString In = A.Param.ToString();
+		const FString In = CaseString(A.Param);
 		for (int32 i = 0; i < NumCases; ++i)
 		{
 			if (bCaseSet[i] && CaseValues[i] == In)
@@ -324,19 +333,47 @@ public:
 class FElysiumLogicCaseToggle final : public FElysiumLogicCaseBase
 {
 public:
-	int32 InitialCase = 0;   // InitialCase keyvalue (1-based in the .ents; 0 = none)
+	int32 InitialCase = 0;
 
 	virtual void Spawn() override
 	{
 		FElysiumLogicCaseBase::Spawn();
-		// The current-case pointer starts at InitialCase (1-based) - 1; clamp into range, default 0.
-		CurrentCase = FMath::Clamp(InitialCase - 1, 0, NumCases - 1);
+		// FUN_10134620 validates InitialCase as 0..15, moves the raw index back one, then advances
+		// backward to the preceding configured slot. This prepositions the pointer for a later
+		// positive InValueDelta; it is separate from the value-matching InValue path.
+		CurrentCase = FMath::Clamp(InitialCase, 0, NumCases - 1) - 1;
+		if (ConfiguredCount() > 0)
+		{
+			Advance(-1);
+		}
+		else
+		{
+			// Retail would spin while seeking a configured case. Fail closed for malformed maps.
+			CurrentCase = 0;
+		}
 	}
 
-	// InValue is a delta (FUN_101346e0): advance the pointer that many *configured* cases, skipping
-	// empty slots and wrapping 0..15, then fire the new current case. A zero/absent delta re-fires
-	// the current case (matching the decompile's warn-and-fall-through).
+	// FUN_10134780: match the incoming string against Case01..Case16, update the pointer, and fire
+	// that case. A miss sets the pointer to -1 and emits OnDefault.
 	void InputInValue(const FElysiumInputArgs& A)
+	{
+		const FString In = CaseString(A.Param);
+		for (int32 i = 0; i < NumCases; ++i)
+		{
+			if (bCaseSet[i] && CaseValues[i].Equals(In, ESearchCase::IgnoreCase))
+			{
+				CurrentCase = i;
+				FireCase(i, A.Activator, A.Param);
+				return;
+			}
+		}
+		CurrentCase = -1;
+		FireDefault(A.Activator, A.Param);
+	}
+
+	// FUN_101348a0/FUN_101346e0: advance by configured slots, then fire the selected case. A zero
+	// delta warns in retail but deliberately re-fires the current case.
+	void InputInValueDelta(const FElysiumInputArgs& A)
 	{
 		Advance(A.Param.ToInt());
 		FireCase(CurrentCase, A.Activator, A.Param);
@@ -354,9 +391,11 @@ public:
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
 	{
-		Out.Emplace(TEXT("Kind"), TEXT("delta-advance (VtMB toggle)"));
-		Out.Emplace(TEXT("Current case"), FString::Printf(TEXT("%02d%s"), CurrentCase + 1,
-			bCaseSet[CurrentCase] ? TEXT("") : TEXT(" (empty)")));
+		Out.Emplace(TEXT("Kind"), TEXT("match + delta-advance (VtMB toggle)"));
+		Out.Emplace(TEXT("Current case"), CurrentCase >= 0
+			? FString::Printf(TEXT("%02d%s"), CurrentCase + 1,
+				bCaseSet[CurrentCase] ? TEXT("") : TEXT(" (empty)"))
+			: TEXT("(default)"));
 		Out.Emplace(TEXT("Cases set"), FString::Printf(TEXT("%d / %d"), ConfiguredCount(), NumCases));
 		Out.Emplace(TEXT("Initial case"), FString::Printf(TEXT("%d"), InitialCase));
 	}
@@ -372,12 +411,20 @@ private:
 		}
 		while (Delta > 0)
 		{
-			CurrentCase = (CurrentCase + 1) % NumCases;
+			++CurrentCase;
+			if (CurrentCase < 0 || CurrentCase >= NumCases)
+			{
+				CurrentCase = 0;
+			}
 			if (bCaseSet[CurrentCase]) { --Delta; }
 		}
 		while (Delta < 0)
 		{
-			CurrentCase = (CurrentCase + NumCases - 1) % NumCases;
+			--CurrentCase;
+			if (CurrentCase < 0 || CurrentCase >= NumCases)
+			{
+				CurrentCase = NumCases - 1;
+			}
 			if (bCaseSet[CurrentCase]) { ++Delta; }
 		}
 	}
@@ -658,6 +705,7 @@ static FElysiumClassRegistrar GRegLogicCaseToggle(
 	[](FElysiumClassDesc& D)
 	{
 		D.Input(TEXT("InValue"),    [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumLogicCaseToggle&>(E).InputInValue(A); });
+		D.Input(TEXT("InValueDelta"), [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumLogicCaseToggle&>(E).InputInValueDelta(A); });
 		D.Input(TEXT("PickRandom"), [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumLogicCaseToggle&>(E).InputPickRandom(A); });
 		AddLogicField(D, TEXT("InitialCase"), &FElysiumLogicCaseToggle::InitialCase);
 	});

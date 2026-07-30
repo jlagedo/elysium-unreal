@@ -84,17 +84,29 @@ namespace
 {
 	// Register a field backed by a subclass member (the base FElysiumClassDesc::Field only reaches
 	// FElysiumEntity members). Mirrors AddNpcField — file-unique name so all of them can land in one
-	// unity blob. Only the int case this leaf needs.
+	// unity blob.
 	template <typename TClass, typename TMember>
 	void AddPropField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member, EElysiumField Flags = ElysiumFieldDefault)
 	{
 		static_assert(std::is_base_of_v<FElysiumEntity, TClass>, "TClass must derive from FElysiumEntity");
-		static_assert(std::is_same_v<TMember, int32>, "AddPropField: only int32 members are used here");
 		FElysiumFieldAccessor Acc;
 		Acc.ApplyFlags(Flags);
-		Acc.Type = EElysiumVariantType::Int;
-		Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Int(static_cast<const TClass&>(E).*Member); };
-		Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt(); };
+		if constexpr (std::is_same_v<TMember, int32>)
+		{
+			Acc.Type = EElysiumVariantType::Int;
+			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Int(static_cast<const TClass&>(E).*Member); };
+			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt(); };
+		}
+		else if constexpr (std::is_same_v<TMember, bool>)
+		{
+			Acc.Type = EElysiumVariantType::Bool;
+			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Bool(static_cast<const TClass&>(E).*Member); };
+			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt() != 0; };
+		}
+		else
+		{
+			static_assert(sizeof(TMember) == 0, "AddPropField: unsupported member type");
+		}
 		D.Fields.Add(FName(Name), MoveTemp(Acc));
 	}
 
@@ -119,7 +131,7 @@ namespace
 // stands a decoded prop mesh at its placement and exposes the dynamic-prop inputs over it.
 // ============================================================================================
 
-class FElysiumProp final : public FElysiumEntity
+class FElysiumProp : public FElysiumEntity
 {
 public:
 	// Exactly one representation is live. Ordinary props retain the baked static mesh; a model in
@@ -137,6 +149,12 @@ public:
 	{
 		BuildBody(/*bFromSetModel=*/false);
 		PlayAuthoredDefault();
+	}
+
+	virtual UPrimitiveComponent* GetAttachBody() const override
+	{
+		return Visual ? static_cast<UPrimitiveComponent*>(Visual)
+			: static_cast<UPrimitiveComponent*>(AnimatedVisual);
 	}
 
 	virtual void Serialize(FElysiumSaveArchive& Ar) override
@@ -160,11 +178,11 @@ public:
 		const FQuat Rot(FRotator(0.0f, -Angles.Y, 0.0f));
 		if (Visual)
 		{
-			Visual->SetRelativeLocationAndRotation(Origin, Rot);
+			Visual->SetWorldLocationAndRotation(Origin, Rot);
 		}
 		if (AnimatedVisual)
 		{
-			AnimatedVisual->SetRelativeLocationAndRotation(Origin, Rot);
+			AnimatedVisual->SetWorldLocationAndRotation(Origin, Rot);
 		}
 	}
 
@@ -357,6 +375,72 @@ private:
 			AnimatedVisual->SetVisibility(bShown);
 			AnimatedVisual->SetComponentTickEnabled(bShown);
 		}
+	}
+};
+
+// VtMB CPropButton (vampire.dll 0x10214d60; datamap builder 0x10214e30).
+// State values are skin indices 0..max_states. Use fires OnPressed before cycling the state;
+// SetState's external value is one-based and maps back to a zero-based skin/output index.
+class FElysiumPropButton final : public FElysiumProp
+{
+public:
+	bool bLocked = false;
+	int32 CurrentState = 0;
+	int32 MaxStates = 0;
+
+	virtual void Spawn() override
+	{
+		FElysiumProp::Spawn();
+		MaxStates = FMath::Clamp(MaxStates, 0, 7);
+		CurrentState = FMath::Clamp(CurrentState, 0, MaxStates);
+		SetSkin(CurrentState);
+	}
+
+	virtual bool IsUsable() const override { return true; }
+	virtual bool IsUseLocked() const override { return bLocked; }
+	virtual void Use(const FElysiumEntityHandle& Activator) override { ButtonUse(Activator); }
+
+	void InputLock() { bLocked = true; }
+	void InputUnlock() { bLocked = false; }
+	void InputToggleLock() { bLocked = !bLocked; }
+	void InputSetState(int32 ExternalState, const FElysiumEntityHandle& Activator)
+	{
+		const int32 LastSettable = FMath::Max(0, MaxStates - 1);
+		SetButtonState(FMath::Clamp(ExternalState - 1, 0, LastSettable), Activator);
+	}
+
+	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
+	{
+		FElysiumProp::GetDebugState(Out);
+		Out.Emplace(TEXT("Locked"), bLocked ? TEXT("yes") : TEXT("no"));
+		Out.Emplace(TEXT("Button state"), FString::Printf(TEXT("%d / %d"), CurrentState, MaxStates));
+	}
+
+private:
+	void ButtonUse(const FElysiumEntityHandle& Activator)
+	{
+		if (IsInert())
+		{
+			return;
+		}
+		if (bLocked)
+		{
+			static const FName OnPressedLocked(TEXT("OnPressedLocked"));
+			FireOutput(OnPressedLocked, Activator);
+			return;
+		}
+
+		static const FName OnPressed(TEXT("OnPressed"));
+		FireOutput(OnPressed, Activator);
+		SetButtonState(CurrentState >= MaxStates ? 0 : CurrentState + 1, Activator);
+	}
+
+	void SetButtonState(int32 NewState, const FElysiumEntityHandle& Activator)
+	{
+		CurrentState = FMath::Clamp(NewState, 0, MaxStates);
+		const FName Output(*FString::Printf(TEXT("OnSetState%d"), CurrentState + 1));
+		FireOutput(Output, Activator);
+		SetSkin(CurrentState);
 	}
 };
 // ============================================================================================
@@ -722,6 +806,7 @@ private:
 // --- Registration -----------------------------------------------------------------------------
 
 static TUniquePtr<FElysiumEntity> MakeProp() { return MakeUnique<FElysiumProp>(); }
+static TUniquePtr<FElysiumEntity> MakePropButton() { return MakeUnique<FElysiumPropButton>(); }
 static TUniquePtr<FElysiumEntity> MakePhysProp() { return MakeUnique<FElysiumPhysProp>(); }
 static TUniquePtr<FElysiumEntity> MakePhysHinge() { return MakeUnique<FElysiumPhysHinge>(); }
 
@@ -747,6 +832,24 @@ static void BuildPropClass(FElysiumClassDesc& D)
 static void BuildPropBodyClass(FElysiumClassDesc& D)
 {
 	AddPropSkinField<FElysiumProp>(D);
+}
+
+static void BuildPropButtonClass(FElysiumClassDesc& D)
+{
+	BuildPropBodyClass(D);
+	D.Input(TEXT("Use"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
+		{ static_cast<FElysiumPropButton&>(E).Use(A.Activator); });
+	D.Input(TEXT("Lock"), [](FElysiumEntity& E, const FElysiumInputArgs&)
+		{ static_cast<FElysiumPropButton&>(E).InputLock(); });
+	D.Input(TEXT("Unlock"), [](FElysiumEntity& E, const FElysiumInputArgs&)
+		{ static_cast<FElysiumPropButton&>(E).InputUnlock(); });
+	D.Input(TEXT("ToggleLock"), [](FElysiumEntity& E, const FElysiumInputArgs&)
+		{ static_cast<FElysiumPropButton&>(E).InputToggleLock(); });
+	D.Input(TEXT("SetState"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
+		{ static_cast<FElysiumPropButton&>(E).InputSetState(A.Param.ToInt(), A.Activator); });
+	AddPropField(D, TEXT("locked"), &FElysiumPropButton::bLocked);
+	AddPropField(D, TEXT("current_state"), &FElysiumPropButton::CurrentState);
+	AddPropField(D, TEXT("max_states"), &FElysiumPropButton::MaxStates);
 }
 
 // prop_physics (8.4): the RE'd CPhysicsProp/CBreakableProp input surface. Wake + Break are real;
@@ -798,7 +901,7 @@ struct FElysiumPropRegistrar
 		// The exporter already decodes their models (8.1), so without this they were logic-valid
 		// but invisible records.
 		static const TCHAR* const PropBodyClasses[] = {
-			TEXT("prop_button"), TEXT("prop_switch"), TEXT("prop_sign"), TEXT("prop_hacking"),
+			TEXT("prop_switch"), TEXT("prop_sign"), TEXT("prop_hacking"),
 			TEXT("prop_doorknob"), TEXT("prop_doorknob_electronic"),
 			TEXT("item_container"), TEXT("item_container_animated"), TEXT("item_container_lock"),
 		};
@@ -806,6 +909,8 @@ struct FElysiumPropRegistrar
 		{
 			BuildPropBodyClass(Reg.Register(FName(Name), ElysiumBaseClassName(), &MakeProp));
 		}
+		BuildPropButtonClass(Reg.Register(
+			FName(TEXT("prop_button")), ElysiumBaseClassName(), &MakePropButton));
 		BuildPhysPropClass(Reg.Register(FName(TEXT("prop_physics")), ElysiumBaseClassName(), &MakePhysProp));
 		BuildPhysHingeClass(Reg.Register(FName(TEXT("phys_hinge")), ElysiumBaseClassName(), &MakePhysHinge));
 	}

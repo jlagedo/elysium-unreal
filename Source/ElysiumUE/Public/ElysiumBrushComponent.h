@@ -7,6 +7,7 @@
 
 struct FElysiumConvexHull;
 class UBodySetup;
+class UStaticMeshComponent;
 
 // The runtime solidity of a brush entity's body. In Source (and VtMB) solidity is a per-class
 // property, not a brush-contents flag — the `.ents` `contents`/`blocks_player` fields do not
@@ -15,6 +16,7 @@ enum class EElysiumBrushSolidity : uint8
 {
 	Solid,    // blocks the player + world (func_door/button/brush/elevator/…): BlockAll
 	Trigger,  // non-solid overlap volume (trigger_*): QueryOnly, overlaps, raises begin/end touch
+	Passable, // query-only: ignores actors/physics, blocks only ElysiumUse/ElysiumPick
 	None,     // non-solid, no touch (func_illusionary): the body carries the handle only
 };
 
@@ -43,9 +45,11 @@ public:
 	void InitBrush(const FElysiumEntityHandle& InOwner, const TArray<FElysiumConvexHull>& Hulls,
 		EElysiumBrushSolidity Solidity);
 
-	// Dormancy (R6): dormant → collision off (cannot be touched/traced); active → restore the
-	// built solidity. Nothing to gate for rendering — the component draws nothing.
+	// Dormancy (R6): dormant → collision off (cannot be touched/traced) and visual hidden;
+	// active → restore the built solidity and attached visual.
 	void SetDormant(bool bDormant);
+	void SetVisual(UStaticMeshComponent* InVisual);
+	UStaticMeshComponent* GetVisual() const { return Visual; }
 
 	const FElysiumEntityHandle& GetOwningEntity() const { return OwningEntity; }
 	EElysiumBrushSolidity GetSolidity() const { return BuiltSolidity; }
@@ -56,6 +60,7 @@ public:
 
 private:
 	UPROPERTY() TObjectPtr<UBodySetup> BrushBodySetup;
+	UPROPERTY() TObjectPtr<UStaticMeshComponent> Visual;
 
 	FElysiumEntityHandle OwningEntity;
 	EElysiumBrushSolidity BuiltSolidity = EElysiumBrushSolidity::Solid;

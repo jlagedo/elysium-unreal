@@ -5,6 +5,7 @@
 #include "ElysiumMapActor.h"
 
 #include "GameFramework/Pawn.h"
+#include "Components/StaticMeshComponent.h"
 #include "PhysicsEngine/BodySetup.h"
 
 EElysiumBrushSolidity ElysiumBrushSolidityForClass(const FString& Classname)
@@ -85,6 +86,10 @@ void UElysiumBrushComponent::ApplySolidity(EElysiumBrushSolidity Solidity)
 		SetCollisionProfileName(TEXT("OverlapAllDynamic"));
 		SetGenerateOverlapEvents(true);
 		break;
+	case EElysiumBrushSolidity::Passable:
+		SetCollisionProfileName(TEXT("ElysiumBrushPassable"));
+		SetGenerateOverlapEvents(false);
+		break;
 	case EElysiumBrushSolidity::None:
 		SetCollisionProfileName(TEXT("NoCollision"));
 		SetGenerateOverlapEvents(false);
@@ -103,6 +108,15 @@ void UElysiumBrushComponent::SetDormant(bool bDormant)
 	{
 		ApplySolidity(BuiltSolidity);
 	}
+	if (Visual)
+	{
+		Visual->SetVisibility(!bDormant, true);
+	}
+}
+
+void UElysiumBrushComponent::SetVisual(UStaticMeshComponent* InVisual)
+{
+	Visual = InVisual;
 }
 
 FBoxSphereBounds UElysiumBrushComponent::CalcBounds(const FTransform& LocalToWorld) const

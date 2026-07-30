@@ -312,8 +312,13 @@ M1 leftovers that live in this lane.
   translation by its own depth minus `lip`, per the decompiled `CBaseDoor::Spawn`); the full
   spawnflag table honoured (`START_OPEN`/`REVERSE`/`LOCKED`/`NO_AUTO_RETURN`/**`PUSE`**); the
   doorknob `DoorUse()` path with **`linked_door`** partner mirroring; mover runtime state in the
-  Cog Inspector via the new `GetDebugState` hook. *Verified:* the tutorial elevator pair slides
-  open together. *Deps:* 4.1.
+  Cog Inspector via the new `GetDebugState` hook. Renderable BSP submodels are split from the
+  static world, baked as unplaced local meshes, and attached to their runtime hulls, so translation,
+  rotation, hiding and teardown carry collision and visuals together. `use_override` delegates
+  once through the target's normal Use path and fails closed; PASSABLE keeps use/debug traces while
+  dropping pawn/physics collision. *Verified:* the tutorial front doors and elevator door have
+  annotated brush meshes; substrate coverage exercises attachment, override, PASSABLE and dormancy.
+  *Deps:* 4.1.
 - [x] **4.4 `+use` verb + use-icon HUD** — a dedicated use-only trace channel (`ElysiumUse`,
   `ECC_GameTraceChannel1`) + the context-icon HUD: `use_icon`/`locked_icon` base fields,
   `GetUseIcon()` locked resolution, ring + icon cell drawn from the PL3 atlas
@@ -321,8 +326,8 @@ M1 leftovers that live in this lane.
   Inspector. PL3 (use-icon atlas export) done. *Deps:* 4.2, PL3.
 - [x] **4.5 Tutorial logic classes** — the tutorial's logic/point/brush + trigger classes as
   decompile-grounded leaves (`ElysiumLogicClasses.cpp`): `math_counter`, `logic_timer`,
-  `logic_case` + the VtMB-divergent **`logic_case_toggle`** (InValue is a *delta* advancing a
-  configured-case pointer), `env_fade`, `func_brush`, `point_teleport`,
+  `logic_case` + the VtMB-divergent **`logic_case_toggle`** (`InValue` matches case strings while
+  the added `InValueDelta` advances a configured-case pointer), `env_fade`, `func_brush`, `point_teleport`,
   `trigger_hurt`/`trigger_look`/`trigger_autosave`; the Source `COutput<T>` value seam
   (`FireOutput` fills an empty map-param); the `Elysium.Logic` Cog window.
   `trigger_stealth_mod`/`trigger_inventory_check`/`trigger_environmental_audio` stay inert (their
@@ -392,9 +397,12 @@ M1 leftovers that live in this lane.
   surveyed vantages (`elysium.campos`) before their baselines mean anything; ducked speed uses
   Source's `/3` rather than a read-out VtMB value, since retail's is animation-driven.
   *Deps:* 11.6, 11.11.
-- [ ] **4.8 Rotating/linear/elevator family** — `func_rotating` (spin-up/down, hurt-touch),
-  `func_movelinear`, `func_elevator` (`GotoFloor`, floor Z table), keyframed movers if the
-  tutorial needs them. **Carries the mover-push remainder 11.11 left**: movers are `MOVETYPE_PUSH`
+- [ ] **4.8 Rotating/linear/elevator family** — `func_elevator` is implemented from its recovered
+  datamap/handlers: one-based `GotoFloor`, constant-speed vertical travel, lock/current/target
+  state, start/pass/arrival outputs and sounds, same-floor completion, ignored mid-move retargets,
+  and destination-rest persistence. `prop_button` supplies the tutorial car controls with recovered
+  lock/use/state/output/skin behavior. Still open: `func_rotating` (spin-up/down, hurt-touch),
+  `func_movelinear`, keyframed movers, and **the mover-push remainder 11.11**: movers are `MOVETYPE_PUSH`
   and displace what they touch from their own side, which is what makes the move-first frame safe.
   `FElysiumMoverBase` sweeps instead, and Chaos resolving that sweep already shoves the pawn out of
   a closing door's arc (measured) — so nothing tunnels, but VtMB's authored push is not reproduced:
@@ -992,7 +1000,15 @@ decompiled rule. Final theatre acceptance needs raw output regenerated,
 post-blend `Flags & 0x2` evaluation implemented, the included-model donor-bind
 fallback/outer position remap reproduced, the rainbow-cloth material failure
 resolved, nested virtual-model remap semantics closed or proven irrelevant, and
-one aggregate live run against rendered retail invariants.
+one aggregate UE run against the captured rendered-retail invariants. The
+whole-scene retail oracle is now present: a zero-drop 229,201-record
+StudioRender trace covers 69 visible models, while seven authored archives
+cover every one of the courtroom banks' 32,907 frame samples and all 23 actor
+slots. Vampire4's extracted 1,261-pose stream rejects direct cinematic-local
+copy: its position channels match a held-entry/rest-frame delta to
+`3.65247e-6` Source inches median, versus `0.075187` for direct copy, while the
+remaining rotation residual localizes the open work to virtual-model
+mapping/transition composition before split-inheritance evaluation.
 
 RE20 changes what 12.4 can be: **no model in the install carries eyeball data** — the whole
 cast ships `NumEyeballs == 0`, so there is no authored eye pose, look-at cone or procedural
@@ -1156,7 +1172,7 @@ retail end to end, and `test.bat Play` proves it headlessly.
 | RE29 | Entity-name matching is case-insensitive with final-`*` prefix semantics. → `entity_io.md`. | entity I/O | [x] |
 | RE30 | Recover `trigger_environmental_audio` touch behavior and the precedence/interpolation among its `room_type`, SoundScheme `RoomDSP`, and the player's networked `m_sndRoomDSP`/`m_sndPlayerDSP`. → `audio_pipeline.md`. | 6.7 | [ ] |
 | RE31 | Recover the SoundScheme RandomSound frequency scheduler/distribution and transition edge cases; the current approximate curve is not a faithful baseline. → `audio_pipeline.md`. | 6.7 | [ ] |
-| RE32 | **Retail skeletal pose application, end to end.** The live base path is recovered from v2531 RLE local channels through hierarchy/entity composition, transition-history saved/current conversion, `Flags & 0x2` split inheritance, the outer virtual-model position remap, `boneToWorld * poseToBone`, and StudioRender's CPU vertex deformation; three binary-pinned specifications under `tools/research_specs/` preserve the cross-DLL proof path. A hash-gated retail Tremere/`howl` capture now independently validates the final skin palette and discriminates the split-inheritance evaluator from a conventional hierarchy over 70 aligned authored frames. The Source→glTF→Unreal basis is closed, and all 373 flagged bones use conventional inverse binds. The generated corpus nevertheless has 286 stale GLBs/4,276 flagged tracks from a discarded fixed-quaternion rewrite, which confounded the removed live runtime experiment. Remaining close gates are raw regeneration plus runtime post-blend split evaluation, donor-bind fallback and the outer position map for included models (the live capture additionally rejects simple target-bind fallback for 27 target-only helpers; 2,692 of 4,515 used target/bank pairs can diverge today), nested virtual-model remap semantics, the material/packed-vertex cause of rainbow cloth, and isolated retail/green-room invariants for root placement and material failures. Details and commands: `animation_and_movers.md` A.4b. | 8.5, 8.11, 12.1 | [~] |
+| RE32 | **Retail skeletal pose application, end to end.** The live base path is recovered from v2531 RLE local channels through hierarchy/entity composition, transition-history saved/current conversion, `Flags & 0x2` split inheritance, the outer virtual-model position remap, `boneToWorld * poseToBone`, and StudioRender's CPU vertex deformation; three binary-pinned specifications under `tools/research_specs/` preserve the cross-DLL proof path. A hash-gated retail Tremere/`howl` capture independently validates the final skin palette and discriminates the split-inheritance evaluator from a conventional hierarchy over 70 aligned authored frames. A second native whole-scene oracle records every visible StudioRender draw: the clean courtroom pass has 229,201 records/69 models/zero drops, its complete authored companion has 32,907 frame samples across seven banks and 23 actor slots, and Vampire4 contributes 1,261 extracted rendered poses. That join rejects direct `BipNN` name-fold/copy: held-entry plus donor-minus-donor-bind position matches retail to `3.65247e-6` Source inches median versus `0.075187` for direct copy; rotation improves under a constant rest-frame candidate but retains transition/mapping residual, so no guessed correction is promoted. The Source→glTF→Unreal basis is closed, and all 373 flagged bones use conventional inverse binds. The generated corpus nevertheless has 286 stale GLBs/4,276 flagged tracks from a discarded fixed-quaternion rewrite, which confounded the removed live runtime experiment. Remaining close gates are raw regeneration plus runtime post-blend split evaluation, donor-bind fallback and the outer/nested position/remap records for included models (the live captures additionally reject simple target-bind fallback for 27 target-only helpers; 2,692 of 4,515 used target/bank pairs can diverge today), the material/packed-vertex cause of rainbow cloth, and UE/retail comparisons for root placement and material failures. Details and commands: `animation_and_movers.md` A.4b. | 8.5, 8.11, 12.1 | [~] |
 | SKY | The sky/ambience rework is complete; remaining work is tracked as 3.10–3.13 and RE17. Facts: `sky-ambience.md`. | 3.6, 3.7 | [x] |
 
 The Ghidra extraction findings behind the closed rows (the RE1/RE2/RE3/RE4 detail: addresses,

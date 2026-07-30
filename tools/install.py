@@ -20,10 +20,12 @@ import os
 import vpk
 
 GAME_ROOT = r"E:/dev_game/Vampire The Masquerade - Bloodlines"
-GAME = os.path.join(GAME_ROOT, "Vampire")            # retail: maps + the VPKs
+GAME = os.path.join(GAME_ROOT, "Vampire")            # retail: loose files + the VPKs
 PATCH = os.path.join(GAME_ROOT, "Unofficial_Patch")  # the loose search path
 
-# Search paths in engine order: earlier shadows later, and all shadow the VPKs.
+# Additional loose search paths in engine order. These shadow the retail loose tree, which in turn
+# shadows the retail VPKs. GAME remains separate because callers use LOOSE_ROOTS specifically for
+# patch/add-on roots.
 LOOSE_ROOTS = [PATCH]
 
 # The trees the converters read from, so the walk stays cheap. The patch also
@@ -35,7 +37,9 @@ def build_index(dirs=ASSET_DIRS, verbose=True):
     """Index the install the way the engine searches it: loose files shadow VPKs."""
     idx = {k: ("vpk", v) for k, v in vpk.index_all(GAME).items()}
     shadowed = added = 0
-    for root in LOOSE_ROOTS:
+    # Assignment into idx is last-writer-wins, so walk the engine's loose search path from lowest
+    # to highest precedence: retail loose first, then patch/add-on roots in reverse search order.
+    for root in reversed(LOOSE_ROOTS + [GAME]):
         for sub in dirs:
             for dirpath, _, files in os.walk(os.path.join(root, sub)):
                 for fn in files:

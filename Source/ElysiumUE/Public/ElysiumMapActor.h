@@ -235,6 +235,8 @@ public:
 		const FString& ClipName, bool bLoop, float* OutSeconds) override;
 	virtual void ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
 		const FString& StaticStem, int32 Family) override;
+	virtual UStaticMeshComponent* BuildBrushVisual(const FString& Stem,
+		USceneComponent* ParentBody, float UniformScale, bool bSky) override;
 	virtual UStaticMeshComponent* BuildPropVisual(const FString& Stem, const FVector& Location,
 		const FQuat& Rotation, float UniformScale) override;
 	virtual UStaticMeshComponent* BuildPhysPropVisual(const FString& Stem, const FVector& Location,

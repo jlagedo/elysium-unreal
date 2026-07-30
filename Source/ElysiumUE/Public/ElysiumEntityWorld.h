@@ -82,6 +82,10 @@ public:
 	// Unknown target/input: notify (log-once) and keep going. The only input path in the game.
 	void AcceptInput(const FString& Target, FName Input, const FElysiumVariant& Param,
 		const FElysiumEntityHandle& Activator, const FElysiumEntityHandle& Caller);
+	// Single-target form for resolved-handle relationships such as door use_override. It keeps
+	// the original caller provenance without fanning out over duplicate targetnames.
+	void AcceptInput(const FElysiumEntityHandle& Target, FName Input, const FElysiumVariant& Param,
+		const FElysiumEntityHandle& Activator, const FElysiumEntityHandle& Caller);
 	// Fire a named output from an entity: for each matching def row whose `times` is not spent,
 	// count it down and queue the delivery at now + delay (attaching field-6 Python). The only
 	// way outputs become queue entries. `ValueOverride` (P4.5) is a Source COutput<T> runtime value:
@@ -373,6 +377,7 @@ private:
 	void ServiceEvents(double Now);
 	void RunThinks(double Now);
 	void DeliverEvent(const FElysiumIOEvent& Event, double Now);
+	void DeliverInputTo(FElysiumEntity& Target, const FElysiumIOEvent& Event, double Now);
 	// Resolve a due event's target string to live entities (skips dead), honouring !self/!activator.
 	void ResolveTargets(const FElysiumIOEvent& Event, TArray<FElysiumEntity*>& Out);
 	// The one name-search walk (RE29), shared by ForEachNamed / FindByName / ResolveTargets so a

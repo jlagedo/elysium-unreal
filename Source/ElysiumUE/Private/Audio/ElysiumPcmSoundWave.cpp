@@ -10,8 +10,8 @@ namespace
 		FElysiumPcmGenerator(FElysiumSoundCache::FDecodedPtr InDecoded, bool bInLooping,
 			float StartTimeSeconds, int32 InSamplesPerCallback)
 			: Decoded(MoveTemp(InDecoded))
-			, bLooping(bInLooping)
 			, SamplesPerCallback(FMath::Max(InSamplesPerCallback, 1))
+			, bLooping(bInLooping)
 		{
 			if (!Decoded || Decoded->Info.Channels <= 0 || Decoded->Info.SampleRate <= 0)
 			{
@@ -111,6 +111,10 @@ void UElysiumPcmSoundWave::Initialize(
 	// Procedural sources always use LOOP_Never inside Audio Mixer. The generator itself owns wrap
 	// versus EOF and reports IsFinished for a one-shot.
 	bLooping = false;
+	// Spatial procedural audio must keep its media clock advancing while inaudible. Otherwise
+	// Audio Mixer can stop a component without reaching generator EOF or firing OnAudioFinished;
+	// one-shots then leak and loops lose their authored phase when the listener returns.
+	VirtualizationMode = EVirtualizationMode::PlayWhenSilent;
 }
 
 ISoundGeneratorPtr UElysiumPcmSoundWave::CreateSoundGenerator(
