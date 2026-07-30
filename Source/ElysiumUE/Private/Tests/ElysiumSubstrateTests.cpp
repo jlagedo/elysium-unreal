@@ -2208,6 +2208,24 @@ bool FElysiumActivationLifecycleTest::RunTest(const FString&)
 	TestEqual(TEXT("a genuine exit and re-entry emits a new edge"), CounterValue(CounterEntity), 33.0f);
 	TestEqual(TEXT("one exit was recorded"), World.TouchEnds(), 1);
 	TestEqual(TEXT("the re-entry is the second begin"), World.TouchBegins(), 2);
+
+	// `elysium.trigger off` is a global exploration gate, broader than ent_pause: overlap ingress,
+	// entity automation and queued I/O all hold together. It is intentionally reversible, so map
+	// load work queued while off starts only when the owner explicitly re-enables it.
+	FElysiumEntityWorld::SetTriggerResolutionEnabled(false);
+	World.EnqueueInput(TEXT("counter1"), FName(TEXT("Add")), FElysiumVariant::Int(5), 0.0,
+		Player, Player);
+	World.RouteBrushTouch(TriggerEntity->Handle, Player, false);
+	World.RouteBrushTouch(TriggerEntity->Handle, Player, true);
+	World.RunPlayerThink(10.0);
+	World.Tick(10.0);
+	TestEqual(TEXT("trigger-off holds entity automation and queued I/O"), CounterValue(CounterEntity), 33.0f);
+	TestEqual(TEXT("trigger-off ignores proximity ingress"), World.TouchBegins(), 2);
+	TestEqual(TEXT("trigger-off keeps queued work for an explicit resume"), World.Queue().Num(), 1);
+
+	FElysiumEntityWorld::SetTriggerResolutionEnabled(true);
+	World.Tick(10.0);
+	TestEqual(TEXT("trigger-on resumes the held timer and queued I/O"), CounterValue(CounterEntity), 49.0f);
 	return true;
 }
 
@@ -3817,20 +3835,26 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimatedPropManifestTest,
 	"Elysium.Substrate.AnimatedPropManifest", GElysiumTestFlags)
 bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
 {
-	const FString MinimalNpc = TEXT("\"npcs\":{\"dummy\":{\"glb\":\"dummy.glb\",\"model\":\"models/dummy.mdl\",\"clips\":1}}");
+	const FString MinimalNpc = TEXT("\"npcs\":{\"dummy\":{\"glb\":\"dummy.glb\","
+		"\"model\":\"models/dummy.mdl\",\"clips\":1,\"split_bones\":[\"Bip01 Spine1\"]}}");
 	FString Error;
 	FElysiumNpcIndex V3;
 	const FString Json3 = FString::Printf(TEXT("{\"manifest_version\":3,%s,\"banks\":{},\"cinematics\":{}}"), *MinimalNpc);
 	TestTrue(FString::Printf(TEXT("v3 manifest parses: %s"), *Error), V3.LoadJsonText(Json3, Error));
 	TestEqual(TEXT("v3 version retained"), V3.ManifestVersion, 3);
 	TestTrue(TEXT("v3 reads animated_props as empty"), V3.AnimatedProps.IsEmpty());
+	TestEqual(TEXT("optional split-bone metadata is accepted in a v3 index"),
+		V3.Npcs[TEXT("dummy")].SplitRotationBones.Num(), 1);
+	TestEqual(TEXT("split-bone name is retained"),
+		V3.Npcs[TEXT("dummy")].SplitRotationBones[0], FString(TEXT("Bip01 Spine1")));
 	TestNull(TEXT("v3 resolves no animated prop"),
 		V3.FindAnimatedProp(TEXT("models/cinematic/cin_wineglass.mdl")));
 
 	FElysiumNpcIndex V4;
 	const FString Json4 = FString::Printf(TEXT("{\"manifest_version\":4,%s,\"banks\":{},\"cinematics\":{},"
 		"\"animated_props\":{\"cin_wineglass\":{\"glb\":\"animated_props/cin_wineglass.glb\","
-		"\"model\":\"models/cinematic/cin_wineglass.mdl\",\"bones\":4,\"clips\":[\"Idle\",\"Pour\"]}}}"),
+		"\"model\":\"models/cinematic/cin_wineglass.mdl\",\"bones\":4,"
+		"\"split_bones\":[\"glass hinge\"],\"clips\":[\"Idle\",\"Pour\"]}}}"),
 		*MinimalNpc);
 	Error.Reset();
 	TestTrue(FString::Printf(TEXT("v4 manifest parses: %s"), *Error), V4.LoadJsonText(Json4, Error));
@@ -3843,6 +3867,8 @@ bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
 			FString(TEXT("animated_props/cin_wineglass.glb")));
 		TestTrue(TEXT("clip lookup folds case"), Glass->HasClip(TEXT("POUR")));
 		TestEqual(TEXT("clip inventory retained"), Glass->Clips.Num(), 2);
+		TestEqual(TEXT("animated-prop split-bone metadata is retained"),
+			Glass->SplitRotationBones.Num(), 1);
 	}
 
 	FElysiumNpcIndex Future;

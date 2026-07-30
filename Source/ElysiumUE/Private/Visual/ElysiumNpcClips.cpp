@@ -19,6 +19,24 @@ namespace ElysiumActivity
 
 namespace
 {
+	void ReadStringArray(const TSharedPtr<FJsonObject>& Object, const TCHAR* Field,
+		TArray<FString>& Out)
+	{
+		const TArray<TSharedPtr<FJsonValue>>* Values = nullptr;
+		if (!Object->TryGetArrayField(Field, Values) || Values == nullptr)
+		{
+			return;
+		}
+		for (const TSharedPtr<FJsonValue>& Value : *Values)
+		{
+			FString Text;
+			if (Value.IsValid() && Value->TryGetString(Text) && !Text.IsEmpty())
+			{
+				Out.Add(Text);
+			}
+		}
+	}
+
 	bool ReadJsonFile(const FString& Path, TSharedPtr<FJsonObject>& OutRoot, FString& OutError)
 	{
 		FString Raw;
@@ -56,6 +74,7 @@ namespace
 			(*Obj)->TryGetStringField(TEXT("model"), E.Model);
 			(*Obj)->TryGetNumberField(TEXT("bones"), E.Bones);
 			(*Obj)->TryGetNumberField(TEXT("clips"), E.ClipCount);
+			ReadStringArray(*Obj, TEXT("split_bones"), E.SplitRotationBones);
 			Out.Add(Pair.Key, MoveTemp(E));
 		}
 	}
@@ -268,6 +287,7 @@ bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 				(*Obj)->TryGetStringField(TEXT("glb"), Entry.Glb);
 				(*Obj)->TryGetStringField(TEXT("model"), Entry.Model);
 				(*Obj)->TryGetNumberField(TEXT("bones"), Entry.Bones);
+				ReadStringArray(*Obj, TEXT("split_bones"), Entry.SplitRotationBones);
 				Entry.Model.ReplaceInline(TEXT("\\"), TEXT("/"));
 				Entry.Model.ToLowerInline();
 				const TArray<TSharedPtr<FJsonValue>>* Clips = nullptr;

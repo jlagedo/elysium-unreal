@@ -56,7 +56,7 @@ multiply against. Array of `NumBones` (@240) at `BoneIndex` (@244).
 | 60 | Vector | `posscale` (3f) | position-delta scale (anim short × this, added to bind) |
 | 72 | Quaternion | `rotscale` (4f) | **quaternion**-component scale (anim short × this = the component itself, per §A.4 — not a delta) |
 | 88 | matrix3x4 | `poseToBone` | 12f row-major — inverse-bind (world→bone) |
-| 136 | int | `Flags` | `BONE_USED_BY_*` / physics mask; **bit `0x2` = `BONEFLAG_ORIENTATION`** (animation stored in a permuted axis frame — see §A.4a) |
+| 136 | int | `Flags` | `BONE_USED_BY_*` / physics mask; bit `0x2` selects split rotation/translation inheritance during `BuildTransformations` — see §A.4a |
 | 140 | int | `ProcType` | procedural rule (1=axisinterp, 2=quatinterp, jiggle); 0=none |
 | 144 | int | `ProcIndex` | → procedural-rule struct (rel. bone base) |
 | 148 | int | `PhysicsBone` | ragdoll bone index |
@@ -216,35 +216,274 @@ an idle clip animates only their `w` channel (`......1`), so a 0-fill gives
 the correct rest shoulder. The exporter (`tools/mdl_gltf.py`) consumes this
 decode verbatim.
 
-## A.4a Bone flag `0x2` is not an animation-channel transform [VtMB — decompiled + data-verified]
+## A.4a Bone flag `0x2`: split rotation/translation inheritance
 
-One bone per ordinary biped — normally **`Bip01 Spine1`** — carries `Flags & 0x2`
-at bone offset 136. That bit does **not** change the v2531 quaternion decode. The
-retail client pose evaluator `FUN_10089b20` calls quaternion decoder
-`FUN_100889f0` once per selected bone. The decoder walks all four rotation offsets,
-uses the corresponding bind quaternion component when an offset is zero, otherwise
-decodes `RLE_short * rotscale`, and slerps adjacent frames. It receives the 160-byte
-bone record but never reads `flags@136`; the normalized result is consumed verbatim.
+**Status: application verified through bone-to-world construction.** One bone per ordinary biped — normally
+**`Bip01 Spine1`** — carries `Flags & 0x2` at bone offset 136. The local animation
+channel decoder does not branch on it: `client.dll` `FUN_10089b20` walks the
+selected bones and calls `FUN_100889f0` for rotation plus `FUN_10088ba0` for
+position. `FUN_100889f0` reads all four rotation offsets, substitutes the bind
+quaternion component for an absent channel, decodes `RLE_short * rotscale` for a
+present channel, and interpolates adjacent frames. It receives the 160-byte bone
+record but never reads `flags@136`. This verifies §A.4's **local-channel** formula;
+the flag is a post-decode hierarchy rule rather than an alternate channel format.
 
-The `Flags & 0x2` branch at `FUN_10091110` belongs to a separate ragdoll/physics
-matrix merge. It is not evidence for changing animation keys. VAMPTools
-`Animation.cpp` also special-cases this bit, but its inverse-quaternion, Euler
-re-decomposition, and fixed axis swap are an FBX-export accommodation. They are not
-portable to a direct glTF quaternion conversion.
+The live rule is in `client.dll` `FUN_1008fd00`, identified by its VProf string as
+`C_BaseAnimating::BuildTransformations`. `C_BaseAnimating::SetupBones`
+(`FUN_100919c0`) calls the standard pose builder through vtable slot `+0x208`, then
+calls this function through slot `+0x1ec`. Raw stack arguments prove its compact
+contract is `(positions, quaternions, rootToWorld, selectedBones)`.
 
-Accordingly the runtime-facing decode is simply:
+For every selected bone, the function builds a local 3×4 matrix `L` from decoded
+quaternion `q[i]` and position `p[i]`. With Source's
+`ConcatTransforms(A, B) = A * B`, it then executes:
+
+```text
+if parent[i] == -1:
+    boneToWorld[i] = rootToWorld * L
+else if (flags[i] & 0x2) == 0:
+    boneToWorld[i] = boneToWorld[parent[i]] * L
+else:
+    rotation(boneToWorld[i]) = rotation(rootToWorld) * rotation(L)
+    translation(boneToWorld[i]) =
+        TransformPoint(boneToWorld[parent[i]], p[i])
+```
+
+The flag test is at `0x1008ffc5`; the split-inheritance branch is
+`0x1008fff3–0x100901b5`. Thus a flagged spine keeps its positional attachment to
+its parent but does **not** inherit that parent's rotation. Its orientation is
+rooted directly in the entity transform. This is steady live pose construction,
+not a courtroom special case.
+
+A separate client path at `FUN_10091110` does read the flag. It is the sequence
+transition-maintenance path, not a ragdoll path or the local-channel decoder. The
+two live pose builders at `FUN_10091650` and `FUN_100979b0` call it
+immediately after resolving the current base sequence pose and before autoplay
+sequences, weighted layers, virtual hooks, and bone controllers.
+
+`FUN_10091110` maintains a variable array at entity offsets `+0x67c/+0x688` whose
+entries are 0x4c-byte previous-sequence records. It detects a sequence change,
+records sequence/cycle/time, computes transition weights, evaluates each surviving
+previous sequence through `FUN_100968a0`, and blends it into the current pose through
+`FUN_10096b30`. A record whose byte `+0x18` is set also carries a saved 3×4 entity
+transform at `+0x1c`.
+
+Only while rebuilding one of those saved previous poses does it special-case every
+root bone or bone with `Flags & 0x2`. Raw stack accounting establishes the full
+frame conversion:
+
+```text
+savedEntity = AngleMatrix(savedAngles, savedOrigin)
+currentEntity = AngleMatrix(currentRenderAngles, currentRenderOrigin)
+delta = inverse(currentEntity) * savedEntity
+adjusted = delta * Matrix(decodedQuaternion[i], decodedPosition[i])
+
+decodedQuaternion[i] = Quaternion(MatrixAngles(adjusted))
+if parent[i] == -1:
+    decodedPosition[i] = TranslationColumn(adjusted)
+```
+
+The saved matrix is captured at record `+0x1c`. Matrix inverse
+`FUN_10108450`, concat `FUN_10108a50`, matrix-to-angles `FUN_10107eb0`,
+angles-to-quaternion `FUN_1010a650`, and column extraction `FUN_10108510`
+agree on this order. A flagged non-root bone receives the adjusted rotation but
+keeps its decoded position; a root receives both. The branch therefore preserves
+root/special-bone orientation, plus root position, when a previous pose sampled in
+the saved entity frame is blended under the current render frame. It is not
+evidence for baking a fixed multiplier into every exported animation key.
+
+VAMPTools confirms that `0x2` is semantically significant, but not how retail
+applies it. Its `Animation.cpp::ConvertToEuler` path inverts the quaternion,
+re-decomposes it, and permutes axes while producing FBX Euler tracks. That is a
+reference-export operation, not proof that a fixed quaternion should be pre- or
+post-multiplied into direct glTF keys.
+
+Three simple exporter candidates are all contradicted by at least one pose:
+
+- a fixed left multiplication keeps a shared neutral stance upright but makes the
+  courtroom seated torso unnaturally straight;
+- no flag-specific operation makes that seated lean plausible but folds the
+  ordinary neutral stance sideways;
+- the VAMPTools-like/right-multiply candidate can put the seated head below the
+  pelvis.
+
+The retail rule explains why none is an oracle. A conventional glTF hierarchy
+always inherits the parent's rotation. To reproduce one sampled retail pose with
+such a hierarchy, the equivalent flagged-bone local rotation would have to be:
+
+```text
+inverse(rotation(parentBoneToWorld))
+    * rotation(rootToWorld)
+    * rotation(decodedLocal)
+```
+
+That correction changes as the parent pose changes. A fixed left or right
+multiplier cannot reproduce it, and independently correcting each source clip
+does not automatically preserve the rule after runtime sequence/layer blending.
+The faithful representation therefore needs either split-inheritance evaluation
+at runtime or fully evaluated model-space animation data with explicit blending
+semantics.
+
+`npc_index.json` v3/v4 accepts an optional `split_bones` array on each target
+mesh; the exporter fills it directly from that model's
+`StudioBone.Flags & 0x2`. This is retained as diagnostic metadata only. Shared
+and cinematic banks remain raw local channels.
+
+A rejected runtime experiment replaced each flagged bone's Unreal component
+rotation with the decoded local quaternion after crossfading. In the live theatre
+this bent every ordinary biped by roughly a quarter-turn at `Bip01 Spine1`,
+detached heads from torsos, and folded several actors out of view. The experiment
+therefore proves only that directly transplanting the Source-space matrix branch
+into an Unreal local-pose correction is invalid. It does **not** disprove the
+decompiled retail branch. The unresolved seam is the exact Source
+`boneToWorld` → glTF → Unreal basis and multiplication convention required to
+represent that branch without introducing a discontinuity. Until a rendered
+retail invariant closes that seam, the runtime uses the conventional imported
+hierarchy and does not consume `split_bones`.
+
+## A.4b Retail pose pipeline — durable Ghidra proof path
+
+**Status: in progress.** Three tracked investigation specifications divide the
+retail path at its DLL boundaries: `animation_pose.json` (`client.dll`),
+`animation_skinning.json` (`engine.dll`), and `animation_studiorender.json`
+(`StudioRender.dll`) under `tools/research_specs/`. They preserve pinned binary
+hashes, seed addresses, working aliases, direct call edges, confidence,
+eliminated leads, and open questions independently of the gitignored Ghidra
+project. The tracked driver serializes Ghidra runs with the required project-lock
+delay and rebuilds a local context pack:
+
+```powershell
+python tools/ghidra_context.py tools/research_specs/animation_pose.json --dry-run
+python tools/ghidra_context.py tools/research_specs/animation_pose.json --binary <client.dll>
+python tools/ghidra_context.py tools/research_specs/animation_pose.json --address 10091110
+```
+
+Binary-derived decompilation, assembly, xrefs, a run log, and an index land under
+`tools/ghidra/out/animation_pose/` and remain uncommitted. A Ghidra re-import does
+not discard the investigation entry points because the specification recreates
+the pack.
+
+The evidence labels in this section mean:
+
+- **confirmed:** direct listing/decompile behavior whose arguments and offsets
+  agree, or a byte-level fixture independently reproduces it;
+- **partial:** the local behavior is known but its caller, consumer, or coordinate
+  frame is not;
+- **hypothesis:** a semantic working name used to direct the next xref/caller
+  pass; it is not an implementation contract.
+
+The confirmed local decode chain is:
 
 ```
-q = normalize(decode §A.4)
+FUN_100968a0  virtual-model/base-model pose selection
+  -> FUN_10089c40  local/include pose dispatch
+     -> FUN_10089740  sequence/blend evaluation
+        -> FUN_10089b20  selected-bone loop
+           -> FUN_100889f0  quaternion channels
+           -> FUN_10088ba0  position channels
 ```
 
-No fixed quaternion is pre- or post-multiplied. The courtroom seated-Bip01 probe
-makes the distinction observable: the retail decode places the head 8.3 inches
-above and 12.7 inches forward of the pelvis. A fixed left multiplication produces
-an unnaturally straight 21.6-inch rise and reverses the upper-body presentation;
-the corresponding right multiplication turns the upper body below the pelvis.
+`FUN_100968a0`'s base-model path calls `FUN_10089c40`. Its include-model path
+evaluates into temporary position/quaternion arrays, then consumes 0x3c-byte
+mapping records containing source bone, target bone, a position-transform byte,
+and a 3×4 matrix at record `+0x0c`. A clear byte copies the source position; a set
+byte applies `TransformPoint(sourcePosition, mappingMatrix)` through
+`FUN_10107f80`. The source quaternion is copied verbatim to the target in both
+cases. Thus this outer virtual-model remap changes position frame when authored
+but does not transform local rotation. Nested include records inside
+`FUN_10089c40` have a second, more complex remap branch whose complete record
+semantics remain open.
 
-## A.5 Skinning [data-verified]
+The two callers place the transitioner in the live pose order:
+
+```
+FUN_10091650  base pose -> transitions -> autoplay -> virtual hook -> controllers
+FUN_100979b0  base pose -> transitions -> weighted layers -> virtual hook -> controllers
+```
+
+`FUN_10091650` has 228 data references across client vtables, so this is a broadly
+shared render-pose path rather than a courtroom-only or physics-only behavior. The
+exact retail class/method names remain working aliases until RTTI/vtable ownership
+is recovered.
+
+`FUN_100919c0` is confirmed as `C_BaseAnimating::SetupBones` by its VProf string.
+Its raw call sites establish the next two stages and their arguments:
+
+```text
+SetupBones
+  -> vtable +0x208 (FUN_10091650)
+       (selectedBones, positions, quaternions)
+  -> vtable +0x1ec (FUN_1008fd00, C_BaseAnimating::BuildTransformations)
+       (positions, quaternions, rootToWorld, selectedBones)
+```
+
+`BuildTransformations` performs ordinary parent-local concatenation, root/entity
+composition, and the verified `Flags & 0x2` split-inheritance branch above. The
+renderer continuation crosses two interfaces and three retail DLLs:
+
+```text
+client.dll C_BaseAnimating::InternalDrawModel (0x10092970)
+  -> VEngineModel006 +0x08
+engine.dll CModelRender::DrawModel (0x200a6640)
+  -> TStudioRender012 +0x40: obtain CStudioRender bone buffer
+  -> IClientRenderable +0x3c: SetupBones writes boneToWorld[]
+  -> CModelRender::RenderModel (0x200a5f00)
+     -> TStudioRender012 +0x58
+StudioRender.dll CStudioRender::DrawModel (0x2c004f00)
+  -> build skin palette (0x2c004e10)
+  -> mesh branch and specialized vertex dispatch
+```
+
+The `TStudioRender012` object uses vtable `0x2c06c150`. Slot `+0x40`
+(`0x2c004a20`) returns its `this+0x5c` buffer, which engine passes as the output
+argument to client `SetupBones`. Before drawing, `0x2c004e10` loops all studio
+bones and computes a separate palette at `this+0x60`:
+
+```text
+skinMatrix[i] = boneToWorld[i] * StudioBone[i].poseToBone
+```
+
+The second operand is read at `StudioBone + 0x58`, exactly `poseToBone@88` in the
+160-byte v2531 bone. Matrix-concat routine `0x2c00eba0` proves the operand order;
+there is no shader-layout transpose or reversed inverse bind hidden at this seam.
+
+Both ordinary StudioRender mesh branches call `0x2c01aaf0`, which selects a
+generated specialization and passes the `this+0x60` palette. The observed
+specializations apply skinning on the CPU:
+
+- `0x2c01aff0` selects one to four palette matrices by the vertex bone indices
+  and forms their byte-weighted matrix blend;
+- table entry `0x2c01e4e0` transforms position with the affine matrix, transforms
+  normal with its 3×3 rotation, copies UV, and advances the dynamic-mesh streams;
+- direct flex path `0x2c01cb60` performs the equivalent one-to-four influence
+  weighted position/normal calculation;
+- packed-vertex table entry `0x2c04cdb0` decodes its compact source fields and
+  applies the supplied matrix before writing the same streams.
+
+The specialization tables begin at `0x2c07f9c8`, `0x2c07fc08`, and
+`0x2c07fc28`. Their complete selector-field meanings and whether every generated
+entry is CPU-skinned remain open, but the observed main/flex/packed paths all
+consume the proven palette and submit already-transformed dynamic vertices.
+`0x2c0054f0`, initially found as another `this+0x60` reader, is only the
+`CStudioRender` destructor and is retained as an eliminated lead in the tracked
+specification.
+
+The end-to-end trace is complete only when Ghidra evidence identifies and verifies
+all of these seams:
+
+1. studio header/sequence/animation record selection;
+2. RLE local position and quaternion evaluation;
+3. sequence blends, layers, and virtual-model remapping;
+4. ~~the complete `Flags & 0x2` post-decode path and its coordinate frame;~~
+5. ~~parent-local hierarchy concatenation into model-space bone matrices;~~
+6. ~~`Bip01` root composition with entity origin/angles and cinematic placement;~~
+7. ~~`poseToBone` use in CPU/GPU skinning and final render submission.~~
+
+Each newly confirmed format or behavior fact is corrected into this document in
+the same pass. The context specification keeps unresolved addresses and working
+aliases; it does not promote a hypothesis into a VtMB fact.
+
+## A.5 Skinning [data-verified + VtMB decompiled]
 
 All character models are `VertexListType==0` (SKINNED, 44B `StudioVertex`); the
 per-vertex `BoneWeight` (layout: `mdl_v2531.md`) *is* the skin. **`NumBones` reads 0
@@ -257,9 +496,11 @@ for i in 0..2:
     if Weight[i] > 0:  influence(bone=Bone[i], weight=Weight[i]/255.0)
 ```
 
-`Bone[i]` indexes the same `StudioBone` array; `poseToBone`@88 is the inverse-bind
-matrix (or compose it from the parent-relative `pos`/`quat`). jeanette: 4132 verts
-1-bone, 1761 2-bone, 500 3-bone; weights sum to 255.
+`Bone[i]` indexes the same `StudioBone` array. Retail application proves that
+`poseToBone`@88 is the inverse-bind matrix: StudioRender computes
+`boneToWorld * poseToBone`, then selects those skin matrices by `Bone[i]` and
+blends them using the stored byte weights. jeanette: 4132 verts 1-bone, 1761
+2-bone, 500 3-bone; weights sum to 255.
 
 ## A.6 Attachments & hitboxes [data-verified]
 
@@ -299,9 +540,9 @@ local anim); the pipeline keys clips by that label.
 (a ~94 MB / ~90k-accessor monolith × the cast ≈ 4.2 GB), each model's own clips bake **once** —
 the NPC's dialogue into `out/npc/<npc>.glb`, each shared bank into `out/npc/banks/<bank>.glb`
 (skeleton + clips, no mesh) — and `npc_manifest.json` records the per-NPC `clip → owning-stem`
-resolution. The runtime loads a bank glb once and applies its clips to any NPC skeletal mesh by
-bone name (glTFRuntime `LoadSkeletalAnimation(mesh, …)`), which is VtMB's own virtualmodel
-bank-sharing. Full cast: 45 NPCs / 62 banks / ~410 MB.
+resolution plus the target mesh's diagnostic `split_bones` inventory. The runtime loads a bank
+glb once and applies its clips to any NPC skeletal mesh by bone name (glTFRuntime
+`LoadSkeletalAnimation(mesh, …)`), which is VtMB's own virtualmodel bank-sharing.
 
 The runtime binds a bank's already-local animation tracks to the target reference skeleton by **bone
 name** and deliberately leaves glTFRuntime's generic rest-pose retargeter disabled. The shared biped
@@ -310,7 +551,8 @@ placement in its `bip01` root. A second rest-frame/proportion transform scales a
 into a 4–8 m exploded pose or double-applies that root placement. Source-node tracks with no target
 bone are removed before animation construction; this covers unweighted hair, toe, attachment, and nub
 helpers without hiding a broken weighted skin. Weighted influences and skin-root reachability remain
-strict errors.
+strict errors. The target mesh's bone flags are retained separately from those
+shared clips, but are not yet applied by the runtime.
 
 `mdl_gltf.py` writes standard right-handed Y-up glTF. glTFRuntime's default Unreal import maps its
 ground plane into `(Source Y, Source X)`. Every skeletal component therefore applies **−90° yaw**

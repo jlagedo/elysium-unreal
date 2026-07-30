@@ -95,8 +95,10 @@ asset enhancement — re-sequenced then.
 
 Open tasks whose dependencies are met, ordered by playable-path payoff:
 
-1. **11.10** — finish PP0 with the played-input harness.
-2. **9.8 / 9.9 / 9.10** — inventory, NPC reactions, and economy on the durable player/entity spine.
+1. **RE32 / 12.1** — recover the retail skeletal pose application path end to end, then correct
+   the theatre cast from proven bone/root semantics.
+2. **11.10** — finish PP0 with the played-input harness.
+3. **9.8 / 9.9 / 9.10** — inventory, NPC reactions, and economy on the durable player/entity spine.
 
 P12's remaining content and behavior gaps are tracked on its task rows. The lighting/look lane
 (3.1–3.13 and the P7 remainder) stays frozen under playable-path rule 2.
@@ -975,13 +977,19 @@ Save and Load round-trip the run, and `test.bat Play` asserts the whole thing he
 The intro cinematic (`sp_theatre` — embrace + trial) as VtMB plays it: `logic_choreographed_scene`
 driving actors, scripted camera (11.7), line audio, subtitles, and facial animation. The fidelity
 bar is an owner call: the scene is not done until the faces are alive — **eyes and lipsync
-included**. The RE unknowns were front-loaded in "Now" because this is the highest-variance
-work on the path, and both halves are now closed: **RE19** (the scene format and event
-semantics — `docs/choreographed_scenes.md`), **PL9** (the corpus on disk at `out/scenes/`,
-`out/lip/`) and **RE20** (the flex/eyeball chunks, the `.lip` grammar and the
-phoneme→controller tables — `docs/facial_animation.md`). **PL10** then baked the faces into
-the NPC export — morph targets in each glb, the flex rig in `out/npc/facial/<stem>.json`,
-and `out/expressions/`. Every remaining task here is runtime work.
+included**. **RE19** closes the scene format and event semantics
+(`docs/choreographed_scenes.md`); **PL9** supplies the corpus under `out/scenes/` and
+`out/lip/`; **RE20** closes the flex/eyeball chunks, `.lip` grammar, and
+phoneme→controller tables (`docs/facial_animation.md`). **PL10** bakes the faces into the NPC
+export — morph targets in each glb, the flex rig in `out/npc/facial/<stem>.json`, and
+`out/expressions/`. **RE32 remains open:** the exporter preserves each target model's
+`Flags & 0x2` inventory, but a live experiment applying the decompiled
+split-inheritance branch after Unreal local-pose crossfading folded every biped at
+`Bip01 Spine1`. That implementation has been removed and the metadata is
+diagnostic-only. Final theatre acceptance needs the Source→glTF→Unreal pose-basis
+seam proven from rendered retail invariants, the rainbow-cloth material failure
+resolved, nested virtual-model remap semantics closed or proven irrelevant, and
+one aggregate live run.
 
 RE20 changes what 12.4 can be: **no model in the install carries eyeball data** — the whole
 cast ships `NumEyeballs == 0`, so there is no authored eye pose, look-at cone or procedural
@@ -989,7 +997,7 @@ lid. Eyes in VtMB are *eyelids*: eight `eyelid` flex controllers driving 16 eyel
 through four RPN rules. Blink and lid shaping are reproducible; gaze is not RE-able because
 it was never authored.
 
-- [x] **12.1 Choreographed scenes** — `logic_choreographed_scene` as a real class + the scene-file
+- [~] **12.1 Choreographed scenes** — `logic_choreographed_scene` as a real class + the scene-file
   parser (PL9) + an event timeline on the game clock, `Start`/`Pause`/`Resume`/`Cancel` inputs and
   the seven outputs; actors resolve **by name** and play through the 8.5 anim seam. Spec:
   `docs/choreographed_scenes.md` (RE19) — nine live event types (`speak`, `silence`, `loud`,
@@ -998,7 +1006,8 @@ it was never authored.
   `firetrigger "N"` → `OnTriggerN`. *Acceptance:* the theatre's first scene runs its actors and
   fires its completion wires in the built game. *Deps:* 8.5, 11.1, RE19 [x], PL9 [x], PL16 — a
   `SceneFile` resolves to `out/scenes/` + the path with its `sound/` prefix stripped.
-  - **Landed:** the reader/timeline/entity cover all four inputs, seven outputs, nine live event
+  - **Implemented, pending the remaining RE32 material/remap work and live acceptance:** the reader/timeline/entity
+    cover all four inputs, seven outputs, nine live event
     types, `active 0`, absolute seek/stop, pause catch-up, exact completion/cancel ordering,
     `position_end == 3`, actor/dialogue/controller binding, diagnostic reset, voice ownership and
     mid-scene snapshot restore without duplicate instantaneous outputs. `camera_track` and
@@ -1015,8 +1024,11 @@ it was never authored.
     six player-body binds). Rendered isolation is green for all five bodies and all nine named prop
     clips. The authored-camera `embrace` gate derives 63 current-map samples across every cut,
     movement midpoint, and fade boundary; it applies the six fades, records eight key bones per actor,
-    and confirms all five cast members enter frame outside opaque fades. `sp_theatre` is exported and
-    baked.
+    and confirms all five cast members enter frame outside opaque fades. Target-model
+    `split_bones` metadata preserves the source flag inventory for further RE, but
+    runtime application is deliberately disabled after the post-crossfade
+    experiment produced quarter-turn `Bip01 Spine1` discontinuities across the
+    live cast. `sp_theatre` is exported and baked.
   - **Live acceptance:** `newgame_ttd` activates both camera owners, renders exact-zero edits as
     clean cuts, and carries the authored positive-time moves without the generic look tracker or
     Unreal motion blur turning them into scrolls. The PC and `player_understudy` are visible and
@@ -1140,6 +1152,7 @@ retail end to end, and `test.bat Play` proves it headlessly.
 | RE29 | Entity-name matching is case-insensitive with final-`*` prefix semantics. → `entity_io.md`. | entity I/O | [x] |
 | RE30 | Recover `trigger_environmental_audio` touch behavior and the precedence/interpolation among its `room_type`, SoundScheme `RoomDSP`, and the player's networked `m_sndRoomDSP`/`m_sndPlayerDSP`. → `audio_pipeline.md`. | 6.7 | [ ] |
 | RE31 | Recover the SoundScheme RandomSound frequency scheduler/distribution and transition edge cases; the current approximate curve is not a faithful baseline. → `audio_pipeline.md`. | 6.7 | [ ] |
+| RE32 | **Retail skeletal pose application, end to end.** The live base path is recovered from v2531 RLE local channels through hierarchy/entity composition, transition-history saved/current conversion, `Flags & 0x2` split inheritance, the outer virtual-model position remap, `boneToWorld * poseToBone`, and StudioRender's CPU vertex deformation; three binary-pinned specifications under `tools/research_specs/` preserve the cross-DLL proof path. Target-model flag metadata is exported, but direct post-crossfade application in Unreal is a rejected hypothesis: live evidence showed a quarter-turn discontinuity at `Bip01 Spine1`, so the runtime pass was removed. Remaining close gates are the exact Source→glTF→Unreal pose-basis/multiplication seam, nested virtual-model remap semantics, the material/packed-vertex cause of rainbow cloth, and isolated retail/green-room invariants for root placement, skinning, and material failures. Details and commands: `animation_and_movers.md` A.4b. | 8.5, 8.11, 12.1 | [~] |
 | SKY | The sky/ambience rework is complete; remaining work is tracked as 3.10–3.13 and RE17. Facts: `sky-ambience.md`. | 3.6, 3.7 | [x] |
 
 The Ghidra extraction findings behind the closed rows (the RE1/RE2/RE3/RE4 detail: addresses,

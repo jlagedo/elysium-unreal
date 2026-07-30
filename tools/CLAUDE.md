@@ -222,6 +222,15 @@ mechanics extractor.
 `tools/ghidra/run.ps1` is the headless runner. The whole `tools/ghidra/` tree is a local-only RE
 reference — gitignored, never committed. `tools/re/` is the same.
 
+`tools/ghidra_context.py` is the tracked wrapper for investigations that must survive a Ghidra
+project re-import. It reads a tracked specification under `tools/research_specs/`, serializes
+`DumpFuncs`/`DumpAsm`/`DumpXrefs`/`DumpFieldRefs` runs with the required lock-release delay, and
+rebuilds a binary-derived context pack under `tools/ghidra/out/<topic>/`. Each specification pins
+the source DLL by size and hashes and carries working addresses, confidence, eliminated leads,
+relationships, and open questions. Pass the user's DLL with `--binary <path>` to reject a
+different build before using its addresses. Confirmed VtMB facts still belong only in their owning
+`docs/` topic.
+
 Scripts are the `.java` files in `tools/ghidra/`, passed as `-Script <name>` without the
 extension. `EnableAIF` is a pre-script: it enables analysis for vtable-only-reached code.
 `-Program` picks the imported binary. **Multi-value args take one address per run** — the arg

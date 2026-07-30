@@ -37,7 +37,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumGreenRoom, Log, All);
 
 namespace
 {
-	constexpr int32 BootSettleFrames = 8;
+	constexpr int32 GreenRoomBootSettleFrames = 8;
 	constexpr int32 PoseWarmupFrames = 4;
 
 	FString VecJson(const FVector& V)
@@ -81,9 +81,14 @@ FElysiumGreenRoomRun::FElysiumGreenRoomRun(UElysiumMapSubsystem* InSubsystem)
 {
 	FParse::Value(FCommandLine::Get(), TEXT("GreenRoomCase="), Selector);
 	FParse::Value(FCommandLine::Get(), TEXT("GreenRoomSettle="), SettleFrames);
+	FParse::Value(FCommandLine::Get(), TEXT("GreenRoomStem="), ReviewStem);
+	FParse::Value(FCommandLine::Get(), TEXT("GreenRoomClip="), ReviewClip);
+	FParse::Value(FCommandLine::Get(), TEXT("GreenRoomAnimSet="), ReviewAnimSet);
+	FParse::Value(FCommandLine::Get(), TEXT("GreenRoomBoneRoot="), ReviewBoneRoot);
 	Selector = Selector.ToLower();
 	SettleFrames = FMath::Max(2, SettleFrames);
 	Fractions = { 0.0f, 0.25f, 0.5f, 0.75f, 0.99f };
+	ReviewViewYaws = { 0.0f, 45.0f, 90.0f, 180.0f };
 
 	UE_LOG(LogElysiumGreenRoom, Log, TEXT("green room armed: case=%s settle=%d"),
 		*Selector, SettleFrames);
@@ -165,7 +170,24 @@ void FElysiumGreenRoomRun::ResolveCases()
 	ActiveCases.Reset();
 	bTheatreCamera = Selector == TEXT("embrace");
 	bCourtroom = Selector == TEXT("courtroom");
+	bReview = Selector == TEXT("review");
 	bEnsemble = Selector == TEXT("opening") || bTheatreCamera || bCourtroom;
+	if (bReview)
+	{
+		if (ReviewStem.IsEmpty() || ReviewClip.IsEmpty())
+		{
+			UE_LOG(LogElysiumGreenRoom, Warning,
+				TEXT("review needs -GreenRoomStem=<stem> and -GreenRoomClip=<clip>"));
+			bAnyFailure = true;
+			return;
+		}
+		const bool bCinematic = !ReviewAnimSet.IsEmpty() && !ReviewBoneRoot.IsEmpty();
+		ActiveCases.Add({
+			ReviewStem, ReviewStem, ReviewAnimSet, ReviewBoneRoot,
+			false, false, false, ReviewClip, !bCinematic
+		});
+		return;
+	}
 	if (bCourtroom)
 	{
 		ActiveCases = Courtroom;
@@ -255,6 +277,12 @@ bool FElysiumGreenRoomRun::CreateStage()
 	};
 	Floor = MakePanel(TEXT("GreenRoomFloor"));
 	Wall = MakePanel(TEXT("GreenRoomWall"));
+	if (UStaticMeshComponent* WallComp = Wall.Get())
+	{
+		// A backdrop is useful for deterministic single-view captures, but it occludes the
+		// rear half of a human review orbit. Review uses the floor and neutral sky instead.
+		WallComp->SetVisibility(!bReview);
+	}
 
 	auto MakeLight = [Actor, Root](const TCHAR* Name, float Intensity)
 	{
@@ -576,11 +604,15 @@ bool FElysiumGreenRoomRun::BuildBodies()
 		Body->SetComponentTickEnabled(true);
 
 		float Duration = 0.0f;
+		const FString ClipName = Case.ClipName.IsEmpty()
+			? TEXT("entire_scene") : Case.ClipName;
 		const bool bPlayed = Case.bAnimatedProp
 			? Map->PlayAnimatedPropClip(Body, Case.MeshStem, Case.AnimSetModel,
 				Case.bLoop, &Duration)
-			: Map->PlayCinematicClip(Body, Case.MeshStem, Case.AnimSetModel, Case.BoneRoot,
-				TEXT("entire_scene"), false, &Duration);
+			: Case.bResolvedClip
+				? Map->PlayNpcClip(Body, Case.MeshStem, ClipName, Case.bLoop, &Duration)
+				: Map->PlayCinematicClip(Body, Case.MeshStem, Case.AnimSetModel, Case.BoneRoot,
+					ClipName, Case.bLoop, &Duration);
 		if (!bPlayed)
 		{
 			if (Case.bAnimatedProp)
@@ -589,11 +621,17 @@ bool FElysiumGreenRoomRun::BuildBodies()
 					TEXT("%s: failed to play animated prop %s/%s"),
 					*Case.Label, *Case.MeshStem, *Case.AnimSetModel);
 			}
+			else if (Case.bResolvedClip)
+			{
+				UE_LOG(LogElysiumGreenRoom, Warning,
+					TEXT("%s: failed to resolve clip %s on %s"),
+					*Case.Label, *ClipName, *Case.MeshStem);
+			}
 			else
 			{
 				UE_LOG(LogElysiumGreenRoom, Warning,
-					TEXT("%s: failed to bind cinematic %s/%s"),
-					*Case.Label, *Case.MeshStem, *Case.AnimSetModel);
+					TEXT("%s: failed to bind cinematic %s/%s %s"),
+					*Case.Label, *Case.MeshStem, *Case.AnimSetModel, *ClipName);
 			}
 			Body->DestroyComponent();
 			bAnyFailure = true;
@@ -605,10 +643,16 @@ bool FElysiumGreenRoomRun::BuildBodies()
 			UE_LOG(LogElysiumGreenRoom, Log, TEXT("%s: %s clip %s loop=%d (%.3fs)"),
 				*Case.Label, *Case.MeshStem, *Case.AnimSetModel, Case.bLoop ? 1 : 0, Duration);
 		}
+		else if (Case.bResolvedClip)
+		{
+			UE_LOG(LogElysiumGreenRoom, Log, TEXT("%s: %s clip %s (%.3fs)"),
+				*Case.Label, *Case.MeshStem, *ClipName, Duration);
+		}
 		else
 		{
-			UE_LOG(LogElysiumGreenRoom, Log, TEXT("%s: %s <- %s/%s entire_scene (%.3fs)"),
-				*Case.Label, *Case.MeshStem, *Case.AnimSetModel, *Case.BoneRoot, Duration);
+			UE_LOG(LogElysiumGreenRoom, Log, TEXT("%s: %s <- %s/%s %s (%.3fs)"),
+				*Case.Label, *Case.MeshStem, *Case.AnimSetModel, *Case.BoneRoot,
+				*ClipName, Duration);
 		}
 	}
 	return Bodies.Num() == End - Begin;
@@ -829,7 +873,9 @@ void FElysiumGreenRoomRun::UpdateStage(const FBox& Bounds)
 	}
 	if (UPointLightComponent* Light = FillLight.Get())
 	{
-		Light->SetWorldLocation(Center + FVector(80.0f, 300.0f, 120.0f));
+		Light->SetWorldLocation(Center + (bReview
+			? FVector(-260.0f, 220.0f, 220.0f)
+			: FVector(80.0f, 300.0f, 120.0f)));
 	}
 }
 
@@ -844,13 +890,19 @@ void FElysiumGreenRoomRun::PublishCamera(const FBox& Bounds)
 	const FVector Extent = Bounds.GetExtent();
 	const bool bSmallProp = ActiveCases.IsValidIndex(CaseIndex)
 		&& ActiveCases[CaseIndex].bAnimatedProp;
-	const float Distance = FMath::Max(bSmallProp ? 25.0f : 280.0f,
-		FMath::Max(Extent.Y / 0.50f, Extent.Z / 0.28f) + Extent.X
-			+ (bSmallProp ? 12.0f : 100.0f));
+	const float Distance = bReview
+		? FMath::Max(220.0f, Extent.Z / 0.34f + Extent.X + 50.0f)
+		: FMath::Max(bSmallProp ? 25.0f : 280.0f,
+			FMath::Max(Extent.Y / 0.50f, Extent.Z / 0.28f) + Extent.X
+				+ (bSmallProp ? 12.0f : 100.0f));
 	// Courtroom_bip5 places its seated audience on the positive-X side looking toward LaCroix.
 	// Put the oracle camera on LaCroix's side so the expected result is Vampire4's face, not the
 	// back view produced by the generic +X green-room camera.
-	CameraLocation = Center + FVector(bCourtroom ? -Distance : Distance, 0.0f, 0.0f);
+	const float ReviewYaw = bReview && ReviewViewYaws.IsValidIndex(ViewIndex)
+		? ReviewViewYaws[ViewIndex] : 0.0f;
+	const FVector CameraOffset = FRotator(0.0f, ReviewYaw, 0.0f)
+		.RotateVector(FVector(bCourtroom ? -Distance : Distance, 0.0f, 0.0f));
+	CameraLocation = Center + CameraOffset;
 	CameraRotation = (Center - CameraLocation).Rotation();
 
 	FElysiumCameraShot Shot;
@@ -1002,30 +1054,38 @@ FString FElysiumGreenRoomRun::CurrentLabel() const
 
 FString FElysiumGreenRoomRun::OutputDirectory() const
 {
-	return FElysiumContentPaths::Root() / TEXT("_greenroom") / Selector;
+	return FElysiumContentPaths::Root() / TEXT("_greenroom")
+		/ (bReview ? TEXT("review") : Selector);
 }
 
 void FElysiumGreenRoomRun::BeginCapture()
 {
 	const float Fraction = Fractions[FractionIndex];
 	const FString Label = CurrentLabel();
+	const float ViewYaw = bReview && ReviewViewYaws.IsValidIndex(ViewIndex)
+		? ReviewViewYaws[ViewIndex] : 0.0f;
 	const int32 TimeCode = bTheatreCamera
 		? FMath::RoundToInt(CurrentSceneTime() * 100.0f)
 		: FMath::RoundToInt(Fraction * 100.0f);
 	const FString Path = OutputDirectory() / (bTheatreCamera
 		? FString::Printf(TEXT("%s_s%05d.png"), *Label, TimeCode)
-		: FString::Printf(TEXT("%s_t%03d.png"), *Label, TimeCode));
+		: bReview
+			? FString::Printf(TEXT("review_t%03d_v%03d.png"), TimeCode,
+				FMath::RoundToInt(ViewYaw))
+			: FString::Printf(TEXT("%s_t%03d.png"), *Label, TimeCode));
 	const TArray<FBodyMetric> Metrics = CurrentMetrics;
 	const FCameraMetric Camera = CurrentCamera;
 	bAwaitingCapture = true;
 
 	const bool bRequested = ElysiumScreenshot::Request(
-		[this, Path, Label, Fraction, Metrics, Camera](int32 Width, int32 Height, const TArray<FColor>& Bitmap)
+		[this, Path, Label, Fraction, ViewYaw, Metrics, Camera](
+			int32 Width, int32 Height, const TArray<FColor>& Bitmap)
 		{
 			FShot Shot;
 			Shot.Label = Label;
 			Shot.File = Path;
 			Shot.Fraction = Fraction;
+			Shot.ViewYaw = ViewYaw;
 			Shot.Width = Width;
 			Shot.Height = Height;
 			Shot.Bodies = Metrics;
@@ -1056,6 +1116,13 @@ void FElysiumGreenRoomRun::BeginCapture()
 
 void FElysiumGreenRoomRun::Advance()
 {
+	if (bReview && ++ViewIndex < ReviewViewYaws.Num())
+	{
+		FrameInPhase = 0;
+		Phase = EPhase::PoseWarmup;
+		return;
+	}
+	ViewIndex = 0;
 	if (++FractionIndex < Fractions.Num())
 	{
 		SeekPose();
@@ -1124,6 +1191,13 @@ void FElysiumGreenRoomRun::Finish()
 	FString Json;
 	Json += TEXT("{\n");
 	Json += FString::Printf(TEXT("  \"selector\": \"%s\",\n"), *Selector);
+	if (bReview)
+	{
+		Json += FString::Printf(TEXT("  \"review_stem\": \"%s\",\n"), *ReviewStem);
+		Json += FString::Printf(TEXT("  \"review_clip\": \"%s\",\n"), *ReviewClip);
+		Json += FString::Printf(TEXT("  \"review_anim_set\": \"%s\",\n"), *ReviewAnimSet);
+		Json += FString::Printf(TEXT("  \"review_bone_root\": \"%s\",\n"), *ReviewBoneRoot);
+	}
 	Json += FString::Printf(TEXT("  \"ensemble\": %s,\n"), bEnsemble ? TEXT("true") : TEXT("false"));
 	Json += FString::Printf(TEXT("  \"ok\": %s,\n"), bAnyFailure ? TEXT("false") : TEXT("true"));
 	Json += TEXT("  \"shots\": [\n");
@@ -1131,8 +1205,9 @@ void FElysiumGreenRoomRun::Finish()
 	{
 		const FShot& Shot = Shots[ShotIndex];
 		Json += TEXT("    {\n");
-		Json += FString::Printf(TEXT("      \"label\": \"%s\", \"fraction\": %.3f,\n"),
-			*Shot.Label, Shot.Fraction);
+		Json += FString::Printf(
+			TEXT("      \"label\": \"%s\", \"fraction\": %.3f, \"view_yaw\": %.1f,\n"),
+			*Shot.Label, Shot.Fraction, Shot.ViewYaw);
 		Json += FString::Printf(TEXT("      \"file\": \"%s\", \"width\": %d, \"height\": %d, \"ok\": %s,\n"),
 			*FPaths::GetCleanFilename(Shot.File), Shot.Width, Shot.Height, Shot.bOk ? TEXT("true") : TEXT("false"));
 		Json += TEXT("      \"bodies\": [\n");
@@ -1217,7 +1292,7 @@ bool FElysiumGreenRoomRun::Tick(float /*DeltaSeconds*/)
 	switch (Phase)
 	{
 	case EPhase::WaitReady:
-		if (Map && Map->IsSpawnDone() && PC && Pawn && ++FrameInPhase >= BootSettleFrames)
+		if (Map && Map->IsSpawnDone() && PC && Pawn && ++FrameInPhase >= GreenRoomBootSettleFrames)
 		{
 			ResolveCases();
 			if (ActiveCases.IsEmpty() || !CreateStage() || !BuildBodies())

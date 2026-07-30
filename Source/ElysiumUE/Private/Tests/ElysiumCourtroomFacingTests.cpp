@@ -19,7 +19,7 @@ static constexpr EAutomationTestFlags GElysiumCourtroomPoseFlags =
 
 namespace
 {
-	void BuildComponentPose(const FReferenceSkeleton& Ref, IAnimationDataModel& Model,
+	void BuildCourtroomComponentPose(const FReferenceSkeleton& Ref, IAnimationDataModel& Model,
 		const TSet<FName>& AnimatedTracks, int32 Frame, TArray<FTransform>& Out)
 	{
 		Out = Ref.GetRefBonePose();
@@ -87,28 +87,27 @@ bool FElysiumCourtroomSeatedPoseTest::RunTest(const FString&)
 		const TSet<FName> AnimatedTracks(TrackNames);
 		const int32 LastFrame = Model->GetNumberOfFrames();
 
-		// Retail client FUN_100889f0 consumes Spine1's decoded quaternion verbatim. After the
-		// Source->glTF->Unreal basis, the authored static seated lean is this component-space
-		// head-from-pelvis vector. A fixed left multiply produces approximately
-		// (-0.1,-9.3,55.0) cm; the VAMPTools/FBX right multiply puts the head below the pelvis.
-		const FVector RetailHeadFromPelvis(-32.24f, -4.69f, 21.09f);
+		// This is deliberately only a geometry-sanity test. A prior coordinate target was
+		// sampled from the implementation under test and falsely promoted to a retail oracle.
+		// Facing/lean acceptance requires a rendered retail invariant.
 		for (const int32 Frame : { 0, LastFrame / 4, LastFrame / 2,
 			(LastFrame * 3) / 4, LastFrame })
 		{
 			TArray<FTransform> Pose;
-			BuildComponentPose(Ref, *Model, AnimatedTracks, Frame, Pose);
+			BuildCourtroomComponentPose(Ref, *Model, AnimatedTracks, Frame, Pose);
 			const FVector HeadFromPelvis =
 				Pose[Head].GetTranslation() - Pose[Pelvis].GetTranslation();
-			const float ErrorCm = FVector::Distance(
-				HeadFromPelvis, RetailHeadFromPelvis);
 			TestTrue(FString::Printf(
-				TEXT("frame %d keeps the retail seated upper-body frame (error %.2f cm)"),
-				Frame, ErrorCm), ErrorCm < 5.0f);
+				TEXT("frame %d produces finite head placement"), Frame),
+				!HeadFromPelvis.ContainsNaN());
+			TestTrue(FString::Printf(
+				TEXT("frame %d keeps the upper body at human scale"), Frame),
+				HeadFromPelvis.Size() > 20.0f && HeadFromPelvis.Size() < 90.0f);
 			TestTrue(FString::Printf(
 				TEXT("frame %d keeps the head above the pelvis"), Frame),
 				HeadFromPelvis.Z > 10.0f);
-			AddInfo(FString::Printf(TEXT("frame %d: head-from-pelvis %s (retail error %.2f cm)"),
-				Frame, *HeadFromPelvis.ToCompactString(), ErrorCm));
+			AddInfo(FString::Printf(TEXT("frame %d: head-from-pelvis %s"),
+				Frame, *HeadFromPelvis.ToCompactString()));
 		}
 	}
 

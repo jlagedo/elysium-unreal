@@ -41,6 +41,8 @@ private:
 		bool bPlayerSurface = false;
 		bool bAnimatedProp = false;
 		bool bLoop = false;
+		FString ClipName;
+		bool bResolvedClip = false;
 	};
 
 	struct FBodyEntry
@@ -105,6 +107,7 @@ private:
 		FString Label;
 		FString File;
 		float Fraction = 0.0f;
+		float ViewYaw = 0.0f;
 		int32 Width = 0;
 		int32 Height = 0;
 		bool bOk = false;
@@ -145,10 +148,16 @@ private:
 	int32 SettleFrames = 15;
 	int32 CaseIndex = 0;
 	int32 FractionIndex = 0;
+	int32 ViewIndex = 0;
 	FString Selector = TEXT("player");
+	FString ReviewStem;
+	FString ReviewClip;
+	FString ReviewAnimSet;
+	FString ReviewBoneRoot;
 	bool bEnsemble = false;
 	bool bTheatreCamera = false;
 	bool bCourtroom = false;
+	bool bReview = false;
 	bool bPlayerSurfaceActive = false;
 	bool bAwaitingCapture = false;
 	bool bAnyFailure = false;
@@ -157,6 +166,7 @@ private:
 	TArray<FCase> ActiveCases;
 	TArray<FBodyEntry> Bodies;
 	TArray<float> Fractions;
+	TArray<float> ReviewViewYaws;
 	TArray<FBodyMetric> CurrentMetrics;
 	FCameraMetric CurrentCamera;
 	TArray<FShot> Shots;

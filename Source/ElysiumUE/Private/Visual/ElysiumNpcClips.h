@@ -79,6 +79,9 @@ struct FElysiumNpcIndexEntry
 	FString Model;      // the source .mdl, for diagnostics
 	int32   Bones = 0;  // NPCs only
 	int32   ClipCount = 0;
+	// StudioBone names whose Flags & 0x2 select retail split rotation/translation inheritance.
+	// Optional in v3/v4 manifests; an older sidecar therefore retains conventional composition.
+	TArray<FString> SplitRotationBones;
 };
 
 // One cinematic anim set (12.1 / PL16): the whole-cast performance a choreo scene's
@@ -102,6 +105,7 @@ struct FElysiumAnimatedPropEntry
 	FString Glb;       // relative to out/npc, normally animated_props/<stem>.glb
 	FString Model;     // normalized source .mdl path
 	int32 Bones = 0;
+	TArray<FString> SplitRotationBones;
 	TSet<FString> Clips;
 
 	bool HasClip(const FString& Label) const { return Clips.Contains(Label.ToLower()); }

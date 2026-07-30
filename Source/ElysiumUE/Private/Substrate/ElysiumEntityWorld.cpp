@@ -39,6 +39,8 @@ static TAutoConsoleVariable<int32> CVarBrushBodies(
 
 namespace
 {
+	bool GElysiumTriggerResolutionEnabled = true;
+
 	// Every world instance takes a unique epoch (game thread only), so a handle minted by one
 	// map load never falsely resolves against the next. Starts at 1 — Teardown sets a world's
 	// epoch to 0, which no live handle carries.
@@ -52,6 +54,32 @@ namespace
 	const TCHAR* const GCallerTarget = TEXT("!caller");
 	const TCHAR* const GActivatorTarget = TEXT("!activator");
 }
+
+static FAutoConsoleCommand GElysiumTrigger(
+	TEXT("elysium.trigger"),
+	TEXT("elysium.trigger <on|off> -- globally resume or suspend map trigger resolution, entity thinks, and deferred I/O/Python."),
+	FConsoleCommandWithArgsDelegate::CreateLambda([](const TArray<FString>& Args)
+	{
+		if (Args.Num() != 1)
+		{
+			UE_LOG(LogElysiumWorld, Display, TEXT("usage: elysium.trigger <on|off> (currently %s)"),
+				FElysiumEntityWorld::IsTriggerResolutionEnabled() ? TEXT("on") : TEXT("off"));
+			return;
+		}
+
+		if (Args[0].Equals(TEXT("on"), ESearchCase::IgnoreCase))
+		{
+			FElysiumEntityWorld::SetTriggerResolutionEnabled(true);
+		}
+		else if (Args[0].Equals(TEXT("off"), ESearchCase::IgnoreCase))
+		{
+			FElysiumEntityWorld::SetTriggerResolutionEnabled(false);
+		}
+		else
+		{
+			UE_LOG(LogElysiumWorld, Warning, TEXT("elysium.trigger: expected 'on' or 'off', got '%s'"), *Args[0]);
+		}
+	}));
 
 FElysiumEntityWorld::FElysiumEntityWorld(AActor* InOwner, UElysiumGameStateSubsystem* InGameState,
 	const FElysiumWorldServices& InServices)
@@ -71,6 +99,21 @@ FElysiumEntityWorld::FElysiumEntityWorld(AActor* InOwner, UElysiumGameStateSubsy
 FElysiumEntityWorld::~FElysiumEntityWorld()
 {
 	Teardown();
+}
+
+void FElysiumEntityWorld::SetTriggerResolutionEnabled(bool bEnabled)
+{
+	if (GElysiumTriggerResolutionEnabled == bEnabled)
+	{
+		return;
+	}
+	GElysiumTriggerResolutionEnabled = bEnabled;
+	UE_LOG(LogElysiumWorld, Display, TEXT("map trigger resolution %s"), bEnabled ? TEXT("enabled") : TEXT("disabled"));
+}
+
+bool FElysiumEntityWorld::IsTriggerResolutionEnabled()
+{
+	return GElysiumTriggerResolutionEnabled;
 }
 
 double FElysiumEntityWorld::NowSeconds() const
@@ -843,7 +886,7 @@ void FElysiumEntityWorld::RouteBrushTouch(const FElysiumEntityHandle& Brush,
 	// Engine overlap callbacks can arrive while procedural collision and the pawn placement are
 	// still settling. Dormant observations are deliberately forgotten: activation reconciles the
 	// final overlap state once, after the pawn is at its authoritative transform.
-	if (!bActive)
+	if (!bActive || !IsTriggerResolutionEnabled())
 	{
 		return;
 	}
@@ -905,7 +948,7 @@ namespace
 
 void FElysiumEntityWorld::UpdateUseCursor()
 {
-	if (!bActive)
+	if (!bActive || !IsTriggerResolutionEnabled())
 	{
 		return;
 	}
@@ -951,7 +994,7 @@ void FElysiumEntityWorld::UpdateUseCursor()
 
 void FElysiumEntityWorld::PlayerUse()
 {
-	if (!bActive)
+	if (!bActive || !IsTriggerResolutionEnabled())
 	{
 		return;
 	}
@@ -1366,6 +1409,10 @@ void FElysiumEntityWorld::RunPlayerThink(double Now)
 		return;
 	}
 	LastTickNow = Now;
+	if (!IsTriggerResolutionEnabled())
+	{
+		return;
+	}
 	// The pre-move pass. Retail runs the player's own think inside CPlayerMove::RunCommand — the
 	// PreThink -> think -> move -> PostThink shell the engine drives while draining `clc_move` —
 	// and NOT in Physics_RunThinkFunctions, which is why it is a separate call rather than an
@@ -1391,6 +1438,10 @@ void FElysiumEntityWorld::Tick(double Now)
 		return;
 	}
 	LastTickNow = Now;
+	if (!IsTriggerResolutionEnabled())
+	{
+		return;
+	}
 	// 11.4 — sample the pawn into the player entity first, so everything this frame reads (a think
 	// measuring distance, a landmark offset, `pc.GetOrigin()`) sees where the player actually is.
 	// The body moved earlier in THIS frame (step 4), which is the relationship retail has: the move
@@ -1575,6 +1626,10 @@ void FElysiumEntityWorld::AcceptInput(const FString& Target, FName Input, const 
 {
 	// Chokepoint 1 (R5): the sole input path. A transient event carries the dispatch context to
 	// the sinks whether the caller is the queue (DeliverEvent) or a hand-fired console verb.
+	if (!IsTriggerResolutionEnabled())
+	{
+		return;
+	}
 	const double Now = NowSeconds();
 	FElysiumIOEvent Ev;
 	Ev.FireTime = Now;

@@ -59,6 +59,13 @@ public:
 	void Activate(double Now);
 	bool IsActive() const { return bActive; }
 
+	// Global exploration gate (`elysium.trigger on|off`). Off suspends all map-driven gameplay:
+	// trigger-overlap ingress, +use dispatch, entity thinks/timers, and the deferred I/O/Python
+	// queue. It deliberately leaves queued work intact, so `on` resumes the same map state without
+	// a reload. This is process-wide so it can be set before a map is activated.
+	static void SetTriggerResolutionEnabled(bool bEnabled);
+	static bool IsTriggerResolutionEnabled();
+
 	// The frame's PRE-move drive (map actor PreMoveTick): the player entity's own think, and only
 	// that. Retail runs it inside CPlayerMove::RunCommand rather than in the think pass, so it is
 	// the one entity whose think lands before the pawn moves.

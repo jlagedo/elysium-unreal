@@ -725,10 +725,24 @@ bool FElysiumSkeletalGlbContractsTest::RunTest(const FString&)
 
 	FGltfStats Stats;
 	bool bValid = true;
+	int32 SplitBodies = 0;
 	for (const TPair<FString, FElysiumNpcIndexEntry>& Pair : Index.Npcs)
 	{
 		FGltfContract Contract(*this, FElysiumContentPaths::NpcBankGlb(Pair.Value.Glb));
 		bValid &= Contract.Load() && Contract.Validate(/*bRequireSkin=*/true, Stats);
+		if (!Pair.Value.SplitRotationBones.IsEmpty())
+		{
+			++SplitBodies;
+			if (Pair.Value.SplitRotationBones.Num() != 1
+				|| !Pair.Value.SplitRotationBones[0].Equals(
+					TEXT("Bip01 Spine1"), ESearchCase::CaseSensitive))
+			{
+				AddError(FString::Printf(
+					TEXT("%s carries an unexpected Flags & 2 inventory: %s"),
+					*Pair.Key, *FString::Join(Pair.Value.SplitRotationBones, TEXT(", "))));
+				bValid = false;
+			}
+		}
 	}
 	for (const TPair<FString, FElysiumNpcIndexEntry>& Pair : Index.Banks)
 	{
@@ -744,8 +758,22 @@ bool FElysiumSkeletalGlbContractsTest::RunTest(const FString&)
 	}
 
 	AddInfo(FString::Printf(TEXT("validated %lld GLBs: %lld joints, %lld weighted vertices, "
-		"%lld clips, %lld channels, %lld sampled transforms"), Stats.Files, Stats.Joints,
-		Stats.Vertices, Stats.Clips, Stats.Channels, Stats.Samples));
+		"%lld clips, %lld channels, %lld sampled transforms; %d target bodies carry "
+		"Flags & 2 metadata"), Stats.Files, Stats.Joints, Stats.Vertices, Stats.Clips,
+		Stats.Channels, Stats.Samples, SplitBodies));
+	TestTrue(TEXT("the generated cast preserves target-model Flags & 2 metadata"),
+		SplitBodies > 100);
+	if (const FElysiumNpcIndexEntry* CourtroomBody =
+		Index.Npcs.Find(TEXT("ventrue_female_armor_1")))
+	{
+		TestTrue(TEXT("the seated courtroom player body records Bip01 Spine1 Flags & 2"),
+			CourtroomBody->SplitRotationBones.Contains(TEXT("Bip01 Spine1")));
+	}
+	else
+	{
+		AddError(TEXT("ventrue_female_armor_1 is absent from the generated target-model index"));
+		bValid = false;
+	}
 	TestTrue(TEXT("every generated skeletal GLB satisfies the binding and animation contract"), bValid);
 	return true;
 }

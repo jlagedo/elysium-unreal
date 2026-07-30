@@ -462,9 +462,11 @@ def export_npc(idx, model_path, out_dir, stem=None, anorms=None):
     """Write `<out_dir>/<stem>.glb`: skinned mesh + skeleton + the NPC's OWN clips (the
     dialogue anims that live only in this .mdl) + its facial morph targets. Shared clips come
     from bank glbs applied by bone name at runtime. Returns
-    {stem, glb, model, bones, clips:[mdl_skel.Seq,...], facial} — the clip list is what
-    actually baked, so a sequence whose tracks came out empty is absent, and `facial` is None
-    for a model with no flex rig (or when the `anorms` table could not be read)."""
+    {stem, glb, model, bones, split_bones, clips:[mdl_skel.Seq,...], facial} — the clip list
+    is what actually baked, so a sequence whose tracks came out empty is absent, and `facial`
+    is None for a model with no flex rig (or when the `anorms` table could not be read).
+    `split_bones` preserves the target model's StudioBone `Flags & 0x2` inventory for the
+    runtime pose builder; it is application metadata, not an alternate channel decode."""
     dv = mdl.load(idx, model_path)
     if not dv:
         raise SystemExit(f"model not found: {model_path}")
@@ -492,7 +494,9 @@ def export_npc(idx, model_path, out_dir, stem=None, anorms=None):
     print(f"  npc {stem}: {len(built['bones'])} bones, {tris} tris, {len(labels)} own clips"
           f"{morphs} -> {glb} ({os.path.getsize(glb) // 1024} KB)")
     return dict(stem=stem, glb=os.path.basename(glb), model=model_path,
-                bones=len(built["bones"]), clips=labels, facial=face)
+                bones=len(built["bones"]),
+                split_bones=[b.name for b in built["bones"] if b.flags & 0x2],
+                clips=labels, facial=face)
 
 
 def export_bank(idx, model_path, out_dir, stem):

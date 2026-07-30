@@ -191,6 +191,7 @@ What lands with M3 (names mirror Source so the muscle memory transfers):
 | `elysium.ent_text` / `ent_bbox` / `ent_messages` | Per-entity debug **bitmask** + overhead text/box/timed I/O overlays via `DrawDebugString`/`DrawDebugBox`. `ent_messages` draws `(time) input caller ← / output → target,delay` lines anchored to the entity, fading after ~10 s. |
 | *(no argument)* → **picker** | Every `ent_*` verb resolves its target by targetname, else classname, else **the entity under the crosshair** — Source's single highest-leverage debug design decision. |
 | `elysium.ent_pause` / `ent_step [n]` | Freeze the event queue; release one queued event at a time. Pause also stops overlay fade (the evidence stays on screen). A single-stepper for causality bugs. |
+| `elysium.trigger on` / `off` | Globally suspend or resume map-driven gameplay for exploration: proximity and use-trigger ingress, entity thinks/timers, and deferred I/O/Python execution. Work already queued is held and resumes on `on`; set it off before travel to hold map-load ignition. |
 | `elysium.ent_dump <name>` / `ent_info <classname>` | Live keyvalue/state dump of an entity; schema dump (supported inputs/outputs) of a class. Driven by the entity records + input tables — no per-class code. |
 | `elysium.showtriggers` | Render trigger volumes as wireframes, colored by classname (or enabled/disabled state); I/O beam lines (`DrawDebugDirectionalArrow` with duration) from caller to target on fire — exceeding Source, which only drew textual arrows. |
 | `elysium.developer 2` equivalent | Every dispatch logs `(sim-time) input caller: target.Input(param) [python]` to a dedicated log category (the field-6 Python string is VtMB-specific and must be in the line). |
@@ -278,6 +279,14 @@ Non-finite values, zero or exploded bounds, missing key bones/assets/clips, a fa
 disagreeing camera clocks, or any cast member never entering frame outside an opaque fade makes `ok`
 false and exits the batch with status 1. This separates model/clip/material faults from placement,
 framing, cuts, and fades before `newgame_ttd` is allowed to be the aggregate integration test.
+
+`modelroom.bat <mesh-stem> <clip> [map]` is the human-form review surface over the same production
+loader. For a cinematic bank, append `<anim-set-model> <bone-root> [map]`. It isolates exactly one
+body and clip, freezes it at 0/25/50/75/99 percent, captures front, three-quarter, profile, and back
+views, then assembles and opens `tools/out/_greenroom/review/review_sheet.png`. The sheet is the
+visual acceptance surface: bounds and matrix checks may reject broken data, but they cannot certify
+an anatomically plausible lean, seated posture, silhouette, cloth deformation, or facing direction.
+Those observations are recorded from the owner before a pose hypothesis is enabled in the runtime.
 
 ## Tracking
 

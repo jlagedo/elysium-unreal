@@ -256,6 +256,7 @@ def write_sidecars(manifest):
                 "facial/<stem>.json. Both paths, like the bank glb paths, are relative to "
                 "this file's directory.",
         "npcs": {s: {"glb": r["glb"], "model": r["model"], "bones": r["bones"],
+                     "split_bones": r.get("split_bones", []),
                      "clips": len(r["clips"]), "own_clips": len(r["own_clips"]),
                      **({"facial": r["facial"], "morphs": r["morphs"]} if r.get("facial")
                         else {})}
@@ -270,7 +271,9 @@ def write_sidecars(manifest):
         # version 4 readers get the GLB plus the exact baked clip inventory.
         "animated_props": {
             stem: {"glb": rec["glb"], "model": rec["model"],
-                   "bones": rec.get("bones", 0), "clips": sorted(rec.get("clips", {}))}
+                   "bones": rec.get("bones", 0),
+                   "split_bones": rec.get("split_bones", []),
+                   "clips": sorted(rec.get("clips", {}))}
             for stem, rec in manifest.get("animated_props", {}).items()
         },
     }
@@ -424,6 +427,7 @@ def main(only=None):
             continue
         npc_index[info["stem"]] = {
             "glb": info["glb"], "model": info["model"], "bones": info["bones"],
+            "split_bones": info["split_bones"],
             "clips": npc_records.get(m, {}),
             "own_clips": {c.label: _clip_meta(c) for c in info["clips"]},
             **write_facial(info["stem"], info["model"], info["facial"]),
@@ -453,6 +457,7 @@ def main(only=None):
             "glb": "animated_props/" + info["glb"],
             "model": info["model"],
             "bones": info["bones"],
+            "split_bones": info["split_bones"],
             "clips": {c.label: _clip_meta(c) for c in info["clips"]},
         }
 
