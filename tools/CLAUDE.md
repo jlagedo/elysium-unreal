@@ -185,6 +185,9 @@ stream, restores the vtable entry on stop, and writes a model/entity index.
 pose changes. `archive_courtroom_poses.py` stores every authored channel from
 the seven courtroom cinematic MDLs so visibility-culling gaps in the live
 trace still have a complete source timeline.
+`analyze_live_animation_stages.py` reads the companion `ELANIM2` resolver
+stream, pairs BASE/final records by pose-buffer identity, applies the recorded
+bone masks, and can join exact phase samples to an extracted held-entry pose.
 `analyze_cinematic_pose_composition.py` joins an extracted actor stream to that
 archive and compares direct-copy and donor-bind/rest-frame composition laws.
 All binaries, traces, extracted matrices, and reports remain game-derived under

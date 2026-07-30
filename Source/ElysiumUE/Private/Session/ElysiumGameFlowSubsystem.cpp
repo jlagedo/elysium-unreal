@@ -214,11 +214,14 @@ void UElysiumGameFlowSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	// is this subsystem's. The argument form is unchanged.
 	ConsoleObjects.Add(Console.RegisterConsoleCommand(
 		TEXT("elysium.newgame"),
-		TEXT("elysium.newgame [clan] [m|f] [entry] — seed a new story context and enter it. clan = a "
-			"name (brujah..ventrue) or the 2..8 script encoding; entry = story|tutorial|<map>[@<landmark>]"),
+		TEXT("elysium.newgame [clan] [m|f] [entry] — seed a new story context and enter it. Defaults "
+			"to Tremere male at sp_tutorial_1's tutorial landmark; clan = a name (brujah..ventrue) or "
+			"the 2..8 script encoding; entry = story|tutorial|<map>[@<landmark>]"),
 		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
 		{
 			FElysiumNewGameRequest Request;
+			Request.Clan = FElysiumSheet::ClanFromName(TEXT("Tremere"));
+			Request.EntryPoint = TEXT("tutorial");
 			if (Args.Num() > 0)
 			{
 				const int32 Parsed = FElysiumSheet::ClanFromName(Args[0]);
@@ -243,10 +246,9 @@ void UElysiumGameFlowSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	// The theatre-opening replay door. `sp_theatre`'s opening is a single trigger_once the player
 	// spawns straight onto at the `newgame` landmark, so once it has fired, re-entering the map
 	// correctly finds it spent — a fire-once trigger staying fired is faithful, and the map
-	// snapshot is right to replay it. This is the dev way back in: seed the same mock pre-chargen
-	// player as a parameterless New Game (the chain reads pc.clan/pc.IsMale in
-	// chooseSire/castUnderstudy and expects Story_State=-4), and forget the theatre's map state so
-	// the whole embrace chain runs again.
+	// snapshot is right to replay it. This is the dev way back in: seed a female Tremere mock
+	// pre-chargen player (the chain reads pc.clan/pc.IsMale in chooseSire/castUnderstudy and expects
+	// Story_State=-4), and forget the theatre's map state so the whole embrace chain runs again.
 	//
 	// The forget is a request consumed on arrival, not a clear here: NewGame's travel tears the
 	// current map down at end of frame, and that teardown re-freezes it.
@@ -254,6 +256,8 @@ void UElysiumGameFlowSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		[this]()
 		{
 			FElysiumNewGameRequest Request;
+			Request.Clan = FElysiumSheet::ClanFromName(TEXT("Tremere"));
+			Request.bMale = false;
 			Request.EntryPoint = TEXT("sp_theatre@newgame");
 
 			UGameInstance* GI = GetGameInstance();

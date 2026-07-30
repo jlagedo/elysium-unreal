@@ -13,6 +13,8 @@ record carries retail's normalized sequence phase, so the authored sample is
 `phase * (frames - 1)` and no wall-clock alignment or rendered-frame inference
 is involved.  ELANIM2 also records the selected-bone bit list; array slots
 outside that list are stale scratch data and must never enter a comparison.
+With `--held-pose`, the same exact-phase records are compared against the
+actor's first rendered local pose under the donor-bind composition candidates.
 """
 
 from __future__ import annotations
@@ -33,6 +35,7 @@ from capture_live_scene import (
     ANIMATION_FILE_HEADER,
     ANIMATION_RECORD_HEADER,
 )
+from analyze_cinematic_pose_composition import load_matrix, local_transforms
 
 
 DEFAULT_MODEL = (
@@ -288,6 +291,14 @@ def main() -> int:
     )
     parser.add_argument("--bone-root", default="Bip01")
     parser.add_argument("--clip", default="entire_scene")
+    parser.add_argument(
+        "--held-pose",
+        type=Path,
+        help=(
+            "Optional extract_live_scene_model.py pose-change directory. "
+            "Its first rendered pose is the actor local held at scene entry."
+        ),
+    )
     parser.add_argument("--report", type=Path)
     args = parser.parse_args()
 
@@ -326,6 +337,12 @@ def main() -> int:
             source_quaternion = archived["local_quaternion"].astype(
                 np.float64
             )
+            source_bind_position = archived["bind_position"].astype(
+                np.float64
+            )
+            source_bind_quaternion = archived["bind_quaternion"].astype(
+                np.float64
+            )
             archived_names = archived["bone_name"]
         if source_position.shape != (
             sequence.frames,
@@ -360,6 +377,12 @@ def main() -> int:
             [[pose[1] for pose in frame] for frame in source_frames],
             dtype=np.float64,
         )
+        source_bind_position = np.asarray(
+            [bone.pos for bone in source_bones], dtype=np.float64
+        )
+        source_bind_quaternion = np.asarray(
+            [bone.quat for bone in source_bones], dtype=np.float64
+        )
 
     source_descendants = descendants(source_bones, args.bone_root)
     source_by_target_name: dict[str, int] = {}
@@ -385,8 +408,28 @@ def main() -> int:
     if not len(shared_target):
         raise ValueError("target and cinematic root share no bone names")
 
+    held_pose_path = args.held_pose.resolve() if args.held_pose else None
+    held_local = None
+    if held_pose_path:
+        held_manifest = json.loads(
+            (held_pose_path / "manifest.json").read_text(encoding="utf-8")
+        )
+        if held_manifest["bone_count"] != len(target_bones):
+            raise ValueError(f"{held_pose_path}: held pose bone count changed")
+        held_frame = held_manifest["frames"][0]
+        held_world = load_matrix(
+            held_pose_path / held_frame["bone_to_world"], len(target_bones)
+        )
+        held_local = local_transforms(
+            held_world,
+            np.asarray([bone.parent for bone in target_bones], dtype=np.int32),
+        )
+
     by_sequence: dict[int, dict[str, list[float]]] = defaultdict(
         lambda: defaultdict(list)
+    )
+    held_sums: dict[int, dict[str, list[float]]] = defaultdict(
+        lambda: defaultdict(lambda: [0.0, 0.0])
     )
     samples: dict[int, list[list[float]]] = defaultdict(list)
     selected_counts: dict[int, list[int]] = defaultdict(list)
@@ -431,6 +474,74 @@ def main() -> int:
                     - authored_position
                 )
             )
+            if held_local is not None:
+                ordinary = np.asarray(
+                    [
+                        target_bones[target].parent >= 0
+                        and not (target_bones[target].flags & 0x2)
+                        and not (source_bones[source].flags & 0x2)
+                        for target, source in zip(selected_target, selected_source)
+                    ],
+                    dtype=bool,
+                )
+                if np.any(ordinary):
+                    ordinary_target = selected_target[ordinary]
+                    ordinary_source = selected_source[ordinary]
+                    authored_position_ordinary = authored_position[ordinary]
+                    authored_rotation_ordinary = authored_rotation[ordinary]
+                    live_position_ordinary = record.positions[
+                        ordinary_target
+                    ].astype(np.float64)
+                    live_rotation_ordinary = live_rotation[ordinary]
+                    held_position = held_local[
+                        ordinary_target, :3, 3
+                    ]
+                    held_rotation = held_local[
+                        ordinary_target, :3, :3
+                    ]
+                    bind_position = source_bind_position[ordinary_source]
+                    bind_rotation = rotation_from_quaternion(
+                        source_bind_quaternion[ordinary_source]
+                    )
+                    inverse_bind_rotation = np.swapaxes(
+                        bind_rotation, -1, -2
+                    )
+                    predictions = {
+                        "held_times_inverse_bind_times_authored": (
+                            held_rotation
+                            @ inverse_bind_rotation
+                            @ authored_rotation_ordinary
+                        ),
+                        "authored_times_inverse_bind_times_held": (
+                            authored_rotation_ordinary
+                            @ inverse_bind_rotation
+                            @ held_rotation
+                        ),
+                        "held_times_authored_times_inverse_bind": (
+                            held_rotation
+                            @ authored_rotation_ordinary
+                            @ inverse_bind_rotation
+                        ),
+                    }
+                    for law, predicted in predictions.items():
+                        difference = live_rotation_ordinary - predicted
+                        held_sums[record.sequence][law][0] += float(
+                            np.sum(difference * difference)
+                        )
+                        held_sums[record.sequence][law][1] += difference.size
+                    position_difference = live_position_ordinary - (
+                        held_position
+                        + authored_position_ordinary
+                        - bind_position
+                    )
+                    held_sums[record.sequence][
+                        "held_plus_authored_minus_bind_position"
+                    ][0] += float(
+                        np.sum(position_difference * position_difference)
+                    )
+                    held_sums[record.sequence][
+                        "held_plus_authored_minus_bind_position"
+                    ][1] += position_difference.size
             samples[record.sequence].append(
                 [record.entity_cycle, record.sample_phase]
             )
@@ -500,6 +611,13 @@ def main() -> int:
                     metrics["final_base_position"]
                 ),
                 "entity_cycle_to_resolver_phase_fit": cycle_fit,
+                "held_scene_entry_composition": {
+                    law: math.sqrt(total / count)
+                    for law, (total, count) in held_sums.get(
+                        studio_sequence, {}
+                    ).items()
+                    if count
+                } or None,
             }
         )
     sequence_rows.sort(
@@ -514,7 +632,7 @@ def main() -> int:
     )
 
     report = {
-        "version": 1,
+        "version": 2,
         "capture": str(trace),
         "capture_sha256": hashlib.sha256(trace.read_bytes()).hexdigest(),
         "capture_header": header,
@@ -522,6 +640,7 @@ def main() -> int:
         "target_checksum": f"0x{checksum:08x}",
         "animation_model": animation_key,
         "animation_archive": str(archive_path) if archive_path else None,
+        "held_pose": str(held_pose_path) if held_pose_path else None,
         "clip": {
             "label": sequence.label,
             "frames": sequence.frames,

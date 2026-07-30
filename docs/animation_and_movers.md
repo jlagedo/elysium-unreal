@@ -607,22 +607,74 @@ to their source `BipNN` root and target model. For the broken seat,
 `ventrue_female_Armor_1.mdl`; extracting consecutive changes yields 1,261 live
 poses over 132.105408 seconds.
 
-The Vampire4 join rejects the current cinematic exporter's direct name-fold
-as a complete retail model. Over 1,229 time-selected rendered samples before
-the VCD end, copying the authored local rotation has median rotation-matrix RMS
-`0.247766`. A constant per-bone rest-frame candidate derived from the held
-entry pose reduces that to `0.033134`; it is evidence for the still-open
-virtual-model mapping/transition stages, not yet their final equation. Position
-is decisive: direct authored-local copy has median RMS `0.075187` Source
-inches, while
-`heldLiveLocal + authoredLocal - cinematicBindLocal` has median RMS
-`3.65247e-6` over the active interval. In a later held-output interval that
-residual becomes `0.045551`, cleanly separating a pose-state transition from
-decoder noise. The retail output therefore cannot be recovered
-by prefix renaming plus generic target-rest retargeting alone. The nested
-virtual-model map and transition/layer order must be closed before baking a
-rotation correction, and `Flags & 0x2` split inheritance is still applied
-after those local-pose stages.
+The whole-scene join rejects direct cinematic name-fold/copy as a complete
+retail model. A second hook at `FUN_100968a0` records the resolver's normalized
+phase, BASE and final local arrays, selected-bone bitset, and pose-buffer
+identity. Its clean Vampire4 interval contains **4,684 resolver records**
+(2,342 BASE + 2,342 final), all correctly paired, with zero capture drops. The
+trace SHA-256 is
+`a9fb0ba9fa66df45a712bdddeb882cfba73616eea509fd0d1111218695a2c293`.
+The two selected masks cover the ordinary body and the detail/finger pass. Every
+paired final pose equals BASE exactly, so no transition, gesture, controller,
+or later local-pose layer changes the seated hold after external base
+resolution.
+
+Joining those exact BASE arrays to the held actor locals and the authored
+`Courtroom_bip5/Bip01` archive makes the following candidate nearly exact:
+
+```text
+livePosition = heldActorPosition + authoredPosition - cinematicBindPosition
+liveRotation = heldActorRotation * inverse(cinematicBindRotation) * authoredRotation
+```
+
+Across every selected ordinary non-root bone, the position RMS is `2.54121e-6`
+Source inches and the rotation matrix RMS is `1.91195e-5`. This does **not**
+close the composition law. The captured interval is a bind-like static hold:
+authored local approximately equals cinematic bind, so subtraction cancels and
+all three plausible non-commuting rotation orders collapse to the held pose.
+The small residual therefore proves the join and the static cancellation case,
+not the moving rotation order or a general donor-delta rule.
+
+A runtime experiment that promoted this candidate to the cinematic-bank
+contract keyed both channels for every donor bone and composed
+held-entry/authored/donor-bind locals for every actor. Live acceptance of the
+full courtroom scene failed: almost all NPCs disappeared, floated, or bent.
+That result rejects the generalized implementation. It was removed; cinematic
+banks remain sparse raw channels and the runtime remains on the preceding
+absolute playback path. No donor-bind manifest contract is accepted as a
+retail fact.
+
+The next decisive sample must be a phase-pinned **moving** resolver interval.
+It must record at least one actor whose selected non-root bones have a
+non-identity authored delta, then compare the candidate multiplication orders
+against the resolver BASE locals. `Flags & 0x2` split inheritance remains a
+separate later-stage requirement.
+
+The whole-scene draw capture is still useful as an identity/final-output
+archive. It contains 229,201 records over 215.283 seconds with zero drops:
+24 rendered character model instances with more than one draw, plus the
+animated `Cin_Stake`, `Cin_Sheriff_Sword`, and `Cin_Cigar` props. The seven
+courtroom VCDs deterministically assign 23 actor slots to
+`Courtroom_bip1`...`Courtroom_bip7`, a `BipNN` source root, and the
+`entire_scene` sequence. Model-path matching joins 17 of those slots to 16
+distinct rendered model records. It is not a complete actor join: the same
+Malkavian male model is authored for two slots, the player model is selected at
+runtime, several expected variants were not drawn, and the render hook records
+neither targetname nor entity index. Consequently the draw dump alone
+deterministically identifies final matrices by client pointer/model checksum,
+but not every VCD actor name or source sequence. A whole-cast resolver capture
+must add the entity handle/target identity and sequence/cycle fields to close
+that mapping.
+
+The phase/mask/buffer-identity join is reproducible with:
+
+```powershell
+python tools/analyze_live_animation_stages.py `
+  tools/out/_live_pose/<resolver-session> `
+  --archive tools/out/_live_pose/courtroom_authored/courtroom_bip5.npz `
+  --held-pose tools/out/_live_pose/<whole-scene-session>/vampire4_pose_changes `
+  --report tools/out/_live_pose/<resolver-session>/vampire4_animation_stages.json
+```
 
 Re-run the source/capture check with:
 
