@@ -105,8 +105,6 @@ if(NOT EXISTS "${REPORT}")
 endif()
 file(READ "${REPORT}" REPORT_TEXT)
 foreach(REQUIRED
-    "contract=elysium.retail-capture-finalization"
-    "version=1"
     "state=${EXPECTED_STATE}"
     "reason=${EXPECTED_REASON}"
     "probe_hook_installs=0"

@@ -58,9 +58,6 @@ Plugins/ElysiumBaked/Content/
 # Pinned third-party plugins are restored by `uv run elysium deps sync`.
 Plugins/External/
 
-# Pinned capture libraries are restored from source archives by dependency sync.
-/research/tooling/capture/native/third_party/
-
 # Scratch and backup files never carry durable project context.
 .codex-patch/
 /logs/

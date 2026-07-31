@@ -202,8 +202,4 @@ std::size_t BinaryProfileRegistry::ActiveCount() const noexcept {
     return Active_.size();
 }
 
-std::uint32_t BinaryProfileRegistry::CompiledRegistryVersion() noexcept {
-    return profiles::RegistryVersion;
-}
-
 }  // namespace elysium::capture

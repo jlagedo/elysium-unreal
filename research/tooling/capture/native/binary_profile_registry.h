@@ -69,8 +69,6 @@ public:
     std::size_t ProfileCount() const noexcept;
     const BinaryProfile* ProfileAt(std::size_t index) const noexcept;
     std::size_t ActiveCount() const noexcept;
-    static std::uint32_t CompiledRegistryVersion() noexcept;
-
 private:
     const BinaryProfile* Profiles_;
     std::size_t ProfileCount_;

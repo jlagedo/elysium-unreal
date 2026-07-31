@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "../generated_record_schemas.h"
+#include "probe_validation.h"
 
 namespace elysium::capture {
 
@@ -23,7 +23,6 @@ struct SupervisionRequest {
     std::string StartupProfile;
     std::string StartupConfig;
     const volatile LONG* ModuleNotificationCount;
-    const volatile LONG* BinaryProfileRegistryVersion;
     const volatile LONG* BinaryProfileCount;
     const volatile LONG* BinaryProfileMatchCount;
     const volatile LONG* BinaryProfileMissCount;
@@ -36,7 +35,7 @@ struct SupervisionRequest {
     const volatile LONG* ProbeValidationPassCount;
     const volatile LONG* ProbeHookInstallCount;
     const volatile LONG* ProbeDiagnosticWriteCount;
-    const ProbeActivationDiagnosticRecord* ProbeDiagnostics;
+    const ProbeValidationDiagnostic* ProbeDiagnostics;
     std::size_t ProbeDiagnosticCapacity;
 };
 

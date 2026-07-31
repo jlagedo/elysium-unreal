@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "../generated_record_schemas.h"
 #include "binary_profile_registry.h"
 
 namespace elysium::capture {
@@ -13,7 +12,6 @@ enum class ProbeDiagnosticReason : std::uint32_t {
     MissingModule = 2,
     UnexpectedPrologue = 3,
     InvalidVtableSlot = 4,
-    UnsupportedSchema = 5,
 };
 
 struct ProbeValidationDiagnostic {
@@ -43,8 +41,6 @@ enum class ProbeActivationOutcome {
 class ProbeActivationGate {
 public:
     ProbeActivationGate(
-        const CaptureRecordSchemaIdentity* compiledSchemas,
-        std::size_t compiledSchemaCount,
         ProbeDiagnosticSink sink,
         void* sinkContext) noexcept;
 
@@ -68,7 +64,6 @@ public:
     void RejectMissingModule(std::uint32_t profileIndex) const noexcept;
 
 private:
-    bool SupportsSchema(const RecordSchemaSupport& schema) const noexcept;
     void Reject(
         ProbeDiagnosticReason reason,
         std::uint32_t profileIndex,
@@ -78,8 +73,6 @@ private:
         std::uint32_t expected,
         std::uint32_t observed) const noexcept;
 
-    const CaptureRecordSchemaIdentity* CompiledSchemas_;
-    std::size_t CompiledSchemaCount_;
     ProbeDiagnosticSink Sink_;
     void* SinkContext_;
 };

@@ -44,7 +44,7 @@ public:
         HookHandle* handle) noexcept;
 
     // Disable restores the target but deliberately retains any trampoline.
-    // CAP2.5 owns the active-call drain between Disable and Release.
+    // The caller must drain active callbacks before Release frees it.
     static HookBackendResult Disable(HookHandle* handle) noexcept;
     static HookBackendResult Release(HookHandle* handle) noexcept;
 };

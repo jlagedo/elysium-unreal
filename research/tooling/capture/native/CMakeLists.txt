@@ -38,97 +38,6 @@ function(elysium_native_target target)
     target_link_options(${target} PRIVATE /INCREMENTAL:NO /Brepro)
 endfunction()
 
-set(ELYSIUM_FLATBUFFERS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/FlatBuffers")
-if(NOT EXISTS "${ELYSIUM_FLATBUFFERS_ROOT}/LICENSE")
-    message(
-        FATAL_ERROR
-        "Pinned FlatBuffers source is missing; run `uv run elysium deps sync`."
-    )
-endif()
-set(FLATBUFFERS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(FLATBUFFERS_INSTALL OFF CACHE BOOL "" FORCE)
-set(FLATBUFFERS_BUILD_FLATLIB OFF CACHE BOOL "" FORCE)
-set(FLATBUFFERS_BUILD_FLATC ON CACHE BOOL "" FORCE)
-set(FLATBUFFERS_BUILD_SHAREDLIB OFF CACHE BOOL "" FORCE)
-set(FLATBUFFERS_BUILD_GRPCTEST OFF CACHE BOOL "" FORCE)
-set(FLATBUFFERS_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
-add_subdirectory(
-    "${ELYSIUM_FLATBUFFERS_ROOT}"
-    "${CMAKE_BINARY_DIR}/third_party/FlatBuffers"
-    EXCLUDE_FROM_ALL
-)
-
-set(
-    FLATBUFFERS_SMOKE_SCHEMA
-    "${CMAKE_CURRENT_SOURCE_DIR}/../contracts/flatbuffers_smoke.fbs"
-)
-set(
-    FLATBUFFERS_SMOKE_GENERATED_ROOT
-    "${CMAKE_CURRENT_BINARY_DIR}/generated/flatbuffers_smoke"
-)
-set(
-    FLATBUFFERS_SMOKE_CPP_ROOT
-    "${FLATBUFFERS_SMOKE_GENERATED_ROOT}/cpp"
-)
-set(
-    FLATBUFFERS_SMOKE_PYTHON_ROOT
-    "${FLATBUFFERS_SMOKE_GENERATED_ROOT}/python"
-)
-set(
-    FLATBUFFERS_SMOKE_HEADER
-    "${FLATBUFFERS_SMOKE_CPP_ROOT}/flatbuffers_smoke_generated.h"
-)
-set(
-    FLATBUFFERS_SMOKE_PYTHON_MODULE
-    "${FLATBUFFERS_SMOKE_PYTHON_ROOT}/Elysium/Capture/Smoke/SmokeRecord.py"
-)
-add_custom_command(
-    OUTPUT
-        "${FLATBUFFERS_SMOKE_HEADER}"
-        "${FLATBUFFERS_SMOKE_PYTHON_MODULE}"
-    COMMAND
-        ${CMAKE_COMMAND} -E make_directory
-        "${FLATBUFFERS_SMOKE_CPP_ROOT}"
-        "${FLATBUFFERS_SMOKE_PYTHON_ROOT}"
-    COMMAND
-        $<TARGET_FILE:flatc>
-        --cpp
-        -o "${FLATBUFFERS_SMOKE_CPP_ROOT}"
-        "${FLATBUFFERS_SMOKE_SCHEMA}"
-    COMMAND
-        $<TARGET_FILE:flatc>
-        --python
-        -o "${FLATBUFFERS_SMOKE_PYTHON_ROOT}"
-        "${FLATBUFFERS_SMOKE_SCHEMA}"
-    DEPENDS
-        flatc
-        "${FLATBUFFERS_SMOKE_SCHEMA}"
-    COMMENT "Generating FlatBuffers smoke bindings with pinned flatc"
-    VERBATIM
-)
-add_custom_target(
-    flatbuffers_smoke_bindings
-    DEPENDS
-        "${FLATBUFFERS_SMOKE_HEADER}"
-        "${FLATBUFFERS_SMOKE_PYTHON_MODULE}"
-)
-
-add_executable(
-    flatbuffers_smoke_producer
-    flatbuffers_smoke_producer.cpp
-    "${FLATBUFFERS_SMOKE_HEADER}"
-)
-add_dependencies(flatbuffers_smoke_producer flatbuffers_smoke_bindings)
-target_include_directories(
-    flatbuffers_smoke_producer
-    PRIVATE "${FLATBUFFERS_SMOKE_CPP_ROOT}"
-)
-target_include_directories(
-    flatbuffers_smoke_producer
-    SYSTEM PRIVATE "${ELYSIUM_FLATBUFFERS_ROOT}/include"
-)
-elysium_native_target(flatbuffers_smoke_producer)
-
 add_library(retail_hook_backends STATIC hook_backend.cpp)
 target_include_directories(retail_hook_backends PUBLIC .)
 elysium_native_target(retail_hook_backends)
@@ -249,37 +158,7 @@ elysium_native_target(hook_backend_test)
 
 enable_testing()
 add_test(
-    NAME flatbuffers_generated_drift
-    COMMAND
-        ${Python3_EXECUTABLE}
-        ${CMAKE_CURRENT_SOURCE_DIR}/../contracts/generate_flatbuffers_smoke.py
-        --flatc $<TARGET_FILE:flatc>
-        --check
-)
-set_tests_properties(
-    flatbuffers_generated_drift
-    PROPERTIES
-        PASS_REGULAR_EXPRESSION "flatbuffers-smoke-generated-v1 state=current"
-        TIMEOUT 30
-)
-
-add_test(
-    NAME flatbuffers_cross_language_smoke
-    COMMAND
-        ${Python3_EXECUTABLE}
-        ${CMAKE_CURRENT_SOURCE_DIR}/../flatbuffers_smoke_reader.py
-        --producer $<TARGET_FILE:flatbuffers_smoke_producer>
-        --generated-python "${FLATBUFFERS_SMOKE_PYTHON_ROOT}"
-)
-set_tests_properties(
-    flatbuffers_cross_language_smoke
-    PROPERTIES
-        PASS_REGULAR_EXPRESSION "flatbuffers-smoke-python-v1 state=complete"
-        TIMEOUT 30
-)
-
-add_test(
-    NAME binary_profile_contract_check
+    NAME binary_profile_generation_check
     COMMAND
         ${Python3_EXECUTABLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/../contracts/generate_binary_profiles.py

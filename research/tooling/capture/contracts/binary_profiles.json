@@ -1,5 +1,4 @@
 {
-  "registry_version": 2,
   "profiles": [
     {
       "id": "owner-unofficial-patch-vampire-6b15fae4",
@@ -16,7 +15,6 @@
         "section_count": 5,
         "characteristics": "0x012e"
       },
-      "supported_record_schemas": [],
       "targets": []
     },
     {
@@ -35,11 +33,6 @@
         "section_count": 4,
         "characteristics": "0x210e"
       },
-      "supported_record_schemas": [
-        {"name": "animation_file_header", "version": 2},
-        {"name": "animation_base", "version": 2},
-        {"name": "animation_final", "version": 2}
-      ],
       "targets": [
         {
           "semantic_label": "client.resolve_virtual_model_pose",
@@ -48,10 +41,7 @@
           "backend": "inline_detour",
           "rva": "0x000968a0",
           "calling_convention": "thiscall",
-          "expected_bytes": "83ec345355",
-          "supported_record_schemas": [
-            {"name": "animation_base", "version": 2}
-          ]
+          "expected_bytes": "83ec345355"
         },
         {
           "semantic_label": "client.build_transformations",
@@ -60,10 +50,7 @@
           "backend": "inline_detour",
           "rva": "0x0008fd00",
           "calling_convention": "thiscall",
-          "expected_bytes": "b84c6f0000",
-          "supported_record_schemas": [
-            {"name": "animation_final", "version": 2}
-          ]
+          "expected_bytes": "b84c6f0000"
         },
         {
           "semantic_label": "client.get_studio_hdr",
@@ -71,11 +58,7 @@
           "backend": "none",
           "rva": "0x0008f900",
           "calling_convention": "thiscall",
-          "expected_bytes": "8b4424045685c08b",
-          "supported_record_schemas": [
-            {"name": "animation_base", "version": 2},
-            {"name": "animation_final", "version": 2}
-          ]
+          "expected_bytes": "8b4424045685c08b"
         }
       ]
     },
@@ -95,7 +78,6 @@
         "section_count": 5,
         "characteristics": "0x210e"
       },
-      "supported_record_schemas": [],
       "targets": []
     },
     {
@@ -114,10 +96,6 @@
         "section_count": 4,
         "characteristics": "0x210e"
       },
-      "supported_record_schemas": [
-        {"name": "pose_file_header", "version": 2},
-        {"name": "pose", "version": 2}
-      ],
       "targets": [
         {
           "semantic_label": "studiorender.draw_model",
@@ -131,10 +109,7 @@
             "object_rva": "0x00082b30",
             "expected_vtable_rva": "0x0006c150",
             "slot": 22
-          },
-          "supported_record_schemas": [
-            {"name": "pose", "version": 2}
-          ]
+          }
         }
       ]
     }

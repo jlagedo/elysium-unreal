@@ -24,11 +24,6 @@ enum class HookBackendKind : std::uint32_t {
     VtableReplacement = 2,
 };
 
-struct RecordSchemaSupport {
-    std::uint32_t RecordId;
-    std::uint32_t SchemaVersion;
-};
-
 struct PeIdentity {
     std::uint16_t Machine;
     std::uint16_t OptionalMagic;
@@ -51,8 +46,6 @@ struct BinaryTargetProfile {
     std::uint32_t ObjectRva;
     std::uint32_t ExpectedVtableRva;
     std::uint32_t VtableSlot;
-    const RecordSchemaSupport* SupportedSchemas;
-    std::uint32_t SupportedSchemaCount;
 };
 
 struct BinaryProfile {
@@ -61,8 +54,6 @@ struct BinaryProfile {
     std::uint64_t FileSize;
     std::uint8_t Sha256[32];
     PeIdentity Pe;
-    const RecordSchemaSupport* SupportedSchemas;
-    std::uint32_t SupportedSchemaCount;
     const BinaryTargetProfile* Targets;
     std::uint32_t TargetCount;
 };

@@ -30,7 +30,7 @@ from pathlib import Path
 import numpy as np
 
 from elysium_pipeline.formats import install, mdl_skel
-from research.tooling.capture.generated_record_schemas import (
+from research.tooling.capture.capture_live_scene import (
     ANIMATION_FILE_HEADER,
     ANIMATION_RECORD_HEADER,
 )

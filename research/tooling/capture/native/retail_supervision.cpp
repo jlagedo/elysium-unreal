@@ -58,7 +58,6 @@ struct Finalization {
     std::string StartupProfile;
     std::string StartupConfig;
     LONG ModuleNotifications = 0;
-    LONG BinaryProfileRegistryVersion = 0;
     LONG BinaryProfileCount = 0;
     LONG BinaryProfileMatches = 0;
     LONG BinaryProfileMisses = 0;
@@ -71,7 +70,7 @@ struct Finalization {
     LONG ProbeValidationPasses = 0;
     LONG ProbeHookInstalls = 0;
     LONG ProbeDiagnosticWrites = 0;
-    std::array<ProbeActivationDiagnosticRecord, 16>
+    std::array<ProbeValidationDiagnostic, 16>
         ProbeDiagnostics{};
     std::size_t ProbeDiagnosticCount = 0;
     bool ProcessResumed = false;
@@ -180,8 +179,6 @@ const char* ProbeDiagnosticReasonName(std::uint32_t reason) {
             return "unexpected-prologue";
         case 4:
             return "invalid-vtable-slot";
-        case 5:
-            return "unsupported-schema";
         default:
             return "unknown-reason";
     }
@@ -195,8 +192,6 @@ bool WriteFinalization(
         document,
         sizeof(document),
         _TRUNCATE,
-        "contract=elysium.retail-capture-finalization\n"
-        "version=1\n"
         "state=%s\n"
         "reason=%s\n"
         "partial=%d\n"
@@ -209,7 +204,6 @@ bool WriteFinalization(
         "process_exit_code=%lu\n"
         "collector_exit_code=%lu\n"
         "module_notifications=%ld\n"
-        "binary_profile_registry_version=%ld\n"
         "binary_profile_count=%ld\n"
         "binary_profile_matches=%ld\n"
         "binary_profile_misses=%ld\n"
@@ -235,7 +229,6 @@ bool WriteFinalization(
         result.ProcessExitCode,
         result.CollectorExitCode,
         result.ModuleNotifications,
-        result.BinaryProfileRegistryVersion,
         result.BinaryProfileCount,
         result.BinaryProfileMatches,
         result.BinaryProfileMisses,
@@ -255,27 +248,25 @@ bool WriteFinalization(
     for (std::size_t index = 0;
          index < result.ProbeDiagnosticCount;
          ++index) {
-        const ProbeActivationDiagnosticRecord& record =
+        const ProbeValidationDiagnostic& record =
             result.ProbeDiagnostics[index];
         const int appended = _snprintf_s(
             document + length,
             sizeof(document) - static_cast<std::size_t>(length),
             _TRUNCATE,
             "probe_diagnostic_%zu="
-            "record_id:%lu,schema:%lu,reason:%s,"
-            "profile:%lu,target:%lu,image_base:0x%08lx,"
+            "reason:%s,profile:%lu,target:%lu,image_base:0x%08lx,"
             "target_rva:0x%08lx,expected:0x%08lx,"
             "observed:0x%08lx\n",
             index,
-            static_cast<unsigned long>(record.recordId),
-            static_cast<unsigned long>(record.schemaVersion),
-            ProbeDiagnosticReasonName(record.reason),
-            static_cast<unsigned long>(record.profileIndex),
-            static_cast<unsigned long>(record.targetIndex),
-            static_cast<unsigned long>(record.imageBase),
-            static_cast<unsigned long>(record.targetRva),
-            static_cast<unsigned long>(record.expected),
-            static_cast<unsigned long>(record.observed));
+            ProbeDiagnosticReasonName(
+                static_cast<std::uint32_t>(record.Reason)),
+            static_cast<unsigned long>(record.ProfileIndex),
+            static_cast<unsigned long>(record.TargetIndex),
+            static_cast<unsigned long>(record.ImageBase),
+            static_cast<unsigned long>(record.TargetRva),
+            static_cast<unsigned long>(record.Expected),
+            static_cast<unsigned long>(record.Observed));
         if (appended < 0) {
             return false;
         }
@@ -486,10 +477,6 @@ int RunSupervision(const SupervisionRequest& request) {
     MemoryBarrier();
     if (request.ModuleNotificationCount != nullptr) {
         result.ModuleNotifications = *request.ModuleNotificationCount;
-    }
-    if (request.BinaryProfileRegistryVersion != nullptr) {
-        result.BinaryProfileRegistryVersion =
-            *request.BinaryProfileRegistryVersion;
     }
     if (request.BinaryProfileCount != nullptr) {
         result.BinaryProfileCount = *request.BinaryProfileCount;

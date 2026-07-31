@@ -45,8 +45,6 @@ BinaryTargetProfile InlineDeclaration(
         0,
         0,
         0,
-        nullptr,
-        0,
     };
 }
 
@@ -79,8 +77,6 @@ int wmain() {
             imageSize,
             0,
         },
-        nullptr,
-        0,
         nullptr,
         0,
     };
@@ -277,8 +273,6 @@ int wmain() {
         objectRva,
         vtableRva,
         vtableSlot,
-        nullptr,
-        0,
     };
     HookHandle vtableHandle{};
     auto** vtable = reinterpret_cast<void**>(image + vtableRva);

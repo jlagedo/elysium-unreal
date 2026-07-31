@@ -98,14 +98,6 @@ def main() -> int:
     subprocess.run(
         [
             sys.executable,
-            str(ROOT / "contracts" / "generate_record_schemas.py"),
-            "--check",
-        ],
-        check=True,
-    )
-    subprocess.run(
-        [
-            sys.executable,
             str(ROOT / "contracts" / "generate_binary_profiles.py"),
             "--check",
         ],

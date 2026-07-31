@@ -12,7 +12,6 @@ import re
 ROOT = Path(__file__).resolve().parent
 REPOSITORY_ROOT = ROOT.parents[3]
 REGISTRY = ROOT / "binary_profiles.json"
-RECORD_SCHEMAS = ROOT / "record_schemas.json"
 PYTHON_OUTPUT = ROOT.parent / "generated_binary_profiles.py"
 CPP_OUTPUT = ROOT.parent / "native" / "generated_binary_profiles.h"
 
@@ -40,41 +39,6 @@ def _integer(value: object, label: str, maximum: int = 0xFFFFFFFF) -> int:
         raise ValueError(f"{label} must be an integer")
     if result < 0 or result > maximum:
         raise ValueError(f"{label} is out of range")
-    return result
-
-
-def _record_registry() -> dict[str, dict[str, object]]:
-    document = json.loads(RECORD_SCHEMAS.read_text(encoding="utf-8"))
-    return {record["name"]: record for record in document["records"]}
-
-
-def _schema_refs(
-    values: object,
-    records: dict[str, dict[str, object]],
-    label: str,
-) -> list[dict[str, int | str]]:
-    if not isinstance(values, list):
-        raise ValueError(f"{label} must be a list")
-    result: list[dict[str, int | str]] = []
-    seen: set[tuple[int, int]] = set()
-    for index, source in enumerate(values):
-        if not isinstance(source, dict):
-            raise ValueError(f"{label}[{index}] must be an object")
-        name = source.get("name")
-        version = source.get("version")
-        if name not in records:
-            raise ValueError(f"{label}[{index}] names unknown record {name!r}")
-        record = records[name]
-        if version != record["schema_version"]:
-            raise ValueError(
-                f"{label}[{index}] version {version!r} does not match "
-                f"{name} version {record['schema_version']}"
-            )
-        key = (int(record["id"]), int(version))
-        if key in seen:
-            raise ValueError(f"{label} duplicates {name} version {version}")
-        seen.add(key)
-        result.append({"name": name, "id": key[0], "version": key[1]})
     return result
 
 
@@ -114,12 +78,9 @@ def _validate_source_spec(profile: dict[str, object]) -> None:
 
 def load_registry() -> dict[str, object]:
     document = json.loads(REGISTRY.read_text(encoding="utf-8"))
-    if document.get("registry_version") != 2:
-        raise ValueError("unsupported binary profile registry version")
     profiles = document.get("profiles")
     if not isinstance(profiles, list) or not profiles:
         raise ValueError("binary profile registry must contain profiles")
-    records = _record_registry()
     profile_ids: set[str] = set()
     identities: set[tuple[str, str]] = set()
     semantic_labels: set[str] = set()
@@ -180,15 +141,6 @@ def load_registry() -> dict[str, object]:
             ),
         }
         profile["pe"] = pe
-        profile_schemas = _schema_refs(
-            profile.get("supported_record_schemas"),
-            records,
-            f"{profile_id}.supported_record_schemas",
-        )
-        profile["supported_record_schemas"] = profile_schemas
-        profile_schema_keys = {
-            (schema["id"], schema["version"]) for schema in profile_schemas
-        }
         targets = profile.get("targets")
         if not isinstance(targets, list):
             raise ValueError(f"{profile_id}.targets must be a list")
@@ -234,17 +186,6 @@ def load_registry() -> dict[str, object]:
                 target["expected_bytes"] = bytes.fromhex(expected)
             except ValueError as error:
                 raise ValueError(f"{label}.expected_bytes is invalid") from error
-            target_schemas = _schema_refs(
-                target.get("supported_record_schemas"),
-                records,
-                f"{label}.supported_record_schemas",
-            )
-            if any(
-                (schema["id"], schema["version"]) not in profile_schema_keys
-                for schema in target_schemas
-            ):
-                raise ValueError(f"{label} uses a schema unsupported by its module")
-            target["supported_record_schemas"] = target_schemas
             vtable = target.get("vtable")
             if kind == "vtable":
                 if not isinstance(vtable, dict):
@@ -263,22 +204,11 @@ def load_registry() -> dict[str, object]:
         profile["targets"] = normalized_targets
         _validate_source_spec(profile)
         normalized.append(profile)
-    return {"registry_version": 2, "profiles": normalized}
+    return {"profiles": normalized}
 
 
 def _hex_bytes(data: bytes) -> str:
     return ", ".join(f"0x{value:02x}" for value in data)
-
-
-def _cpp_schema_array(name: str, schemas: list[dict[str, object]]) -> list[str]:
-    if not schemas:
-        return []
-    lines = [f"inline constexpr RecordSchemaSupport {name}[] = {{"]
-    lines.extend(
-        f"    {{{schema['id']}u, {schema['version']}u}}," for schema in schemas
-    )
-    lines.append("};")
-    return lines
 
 
 def render_cpp(registry: dict[str, object]) -> str:
@@ -290,32 +220,15 @@ def render_cpp(registry: dict[str, object]) -> str:
         "",
         "namespace elysium::capture::profiles {",
         "",
-        f"inline constexpr std::uint32_t RegistryVersion = {registry['registry_version']}u;",
-        "",
     ]
     profile_names: list[str] = []
     for profile_index, profile in enumerate(registry["profiles"]):
         prefix = f"Profile{profile_index}"
         profile_names.append(prefix)
-        lines.extend(
-            _cpp_schema_array(
-                f"{prefix}Schemas", profile["supported_record_schemas"]
-            )
-        )
-        if profile["supported_record_schemas"]:
-            lines.append("")
         target_names: list[str] = []
         for target_index, target in enumerate(profile["targets"]):
             target_prefix = f"{prefix}Target{target_index}"
             target_names.append(target_prefix)
-            lines.extend(
-                _cpp_schema_array(
-                    f"{target_prefix}Schemas",
-                    target["supported_record_schemas"],
-                )
-            )
-            if target["supported_record_schemas"]:
-                lines.append("")
             lines.extend(
                 [
                     f"inline constexpr std::uint8_t {target_prefix}ExpectedBytes[] = {{",
@@ -328,7 +241,6 @@ def render_cpp(registry: dict[str, object]) -> str:
             lines.append(f"inline constexpr BinaryTargetProfile {prefix}Targets[] = {{")
             for target_name, target in zip(target_names, profile["targets"], strict=True):
                 vtable = target.get("vtable", {})
-                schemas = target["supported_record_schemas"]
                 lines.extend(
                     [
                         "    {",
@@ -342,15 +254,12 @@ def render_cpp(registry: dict[str, object]) -> str:
                         f"        0x{vtable.get('object_rva', 0):08x}u,",
                         f"        0x{vtable.get('expected_vtable_rva', 0):08x}u,",
                         f"        {vtable.get('slot', 0)}u,",
-                        f"        {'%sSchemas' % target_name if schemas else 'nullptr'},",
-                        f"        {f'{len(schemas)}u' if schemas else '0u'},",
                         "    },",
                     ]
                 )
             lines.extend(["};", ""])
         digest = bytes.fromhex(profile["sha256"])
         pe = profile["pe"]
-        profile_schemas = profile["supported_record_schemas"]
         lines.extend(
             [
                 f"inline constexpr BinaryProfile {prefix} = {{",
@@ -368,8 +277,6 @@ def render_cpp(registry: dict[str, object]) -> str:
                 f"        0x{pe['size_of_image']:08x}u,",
                 f"        0x{pe['checksum']:08x}u,",
                 "    },",
-                f"    {f'{prefix}Schemas' if profile_schemas else 'nullptr'},",
-                f"    {f'{len(profile_schemas)}u' if profile_schemas else '0u'},",
                 f"    {f'{prefix}Targets' if target_names else 'nullptr'},",
                 f"    {f'{len(target_names)}u' if target_names else '0u'},",
                 "};",
@@ -390,7 +297,7 @@ def render_cpp(registry: dict[str, object]) -> str:
 
 
 def _jsonable(registry: dict[str, object]) -> dict[str, object]:
-    result = {"registry_version": registry["registry_version"], "profiles": []}
+    result = {"profiles": []}
     for source_profile in registry["profiles"]:
         profile = dict(source_profile)
         profile["sha256"] = str(profile["sha256"])
@@ -415,7 +322,6 @@ def render_python(registry: dict[str, object]) -> str:
             '"""Generated by contracts/generate_binary_profiles.py; do not edit."""',
             "",
             f"REGISTRY = {payload}",
-            "REGISTRY_VERSION = REGISTRY['registry_version']",
             "PROFILES = REGISTRY['profiles']",
             "PROFILES_BY_ID = {profile['id']: profile for profile in PROFILES}",
             "",

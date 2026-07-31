@@ -407,6 +407,16 @@ repository-relative corpus fallback. The reverse-engineering
 toolchain (Crowbar/TemplePlus/VAMPTools/source-engine) and the `$ELYSIUM_WORK_ROOT/research/ghidra/` workspace are
 local-only, read-only RE references (never committed).
 
+The retail animation instrument is deliberately private and exact-build. It
+captures bounded raw registers, stack bytes, pointers, and memory spans at
+debugger-validated resource, evaluation, simulation, deformation, and render
+boundaries. Unknown bytes remain available to offline analyzers; decoded fields
+are hypotheses, not a durable capture contract. Writer and reader evolve
+together, and offline indexes are rebuildable. Only measured callback cost,
+memory pressure, writer backlog, or trace volume justifies capture/storage
+optimization. The detailed resource-to-render investigation order is
+`docs/project/retail-capture-roadmap.md`.
+
 New sidecar formats and decoder fixes land in `pipeline/`. The pipeline backlog
 (entity-model export, script/`.dlg` copies, use-icon atlas, NPC batch export +
 include-model resolution, sound-scheme/`vdata` copies, texlight merge, space fixes) is

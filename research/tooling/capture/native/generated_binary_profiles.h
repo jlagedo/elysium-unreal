@@ -5,8 +5,6 @@
 
 namespace elysium::capture::profiles {
 
-inline constexpr std::uint32_t RegistryVersion = 2u;
-
 inline constexpr BinaryProfile Profile0 = {
     "owner-unofficial-patch-vampire-6b15fae4",
     L"Vampire.exe",
@@ -24,35 +22,14 @@ inline constexpr BinaryProfile Profile0 = {
     },
     nullptr,
     0u,
-    nullptr,
-    0u,
-};
-
-inline constexpr RecordSchemaSupport Profile1Schemas[] = {
-    {3u, 2u},
-    {4u, 2u},
-    {5u, 2u},
-};
-
-inline constexpr RecordSchemaSupport Profile1Target0Schemas[] = {
-    {4u, 2u},
 };
 
 inline constexpr std::uint8_t Profile1Target0ExpectedBytes[] = {
     0x83, 0xec, 0x34, 0x53, 0x55
 };
 
-inline constexpr RecordSchemaSupport Profile1Target1Schemas[] = {
-    {5u, 2u},
-};
-
 inline constexpr std::uint8_t Profile1Target1ExpectedBytes[] = {
     0xb8, 0x4c, 0x6f, 0x00, 0x00
-};
-
-inline constexpr RecordSchemaSupport Profile1Target2Schemas[] = {
-    {4u, 2u},
-    {5u, 2u},
 };
 
 inline constexpr std::uint8_t Profile1Target2ExpectedBytes[] = {
@@ -71,8 +48,6 @@ inline constexpr BinaryTargetProfile Profile1Targets[] = {
         0x00000000u,
         0x00000000u,
         0u,
-        Profile1Target0Schemas,
-        1u,
     },
     {
         "client.build_transformations",
@@ -85,8 +60,6 @@ inline constexpr BinaryTargetProfile Profile1Targets[] = {
         0x00000000u,
         0x00000000u,
         0u,
-        Profile1Target1Schemas,
-        1u,
     },
     {
         "client.get_studio_hdr",
@@ -99,8 +72,6 @@ inline constexpr BinaryTargetProfile Profile1Targets[] = {
         0x00000000u,
         0x00000000u,
         0u,
-        Profile1Target2Schemas,
-        2u,
     },
 };
 
@@ -119,8 +90,6 @@ inline constexpr BinaryProfile Profile1 = {
         0x006e9000u,
         0x00000000u,
     },
-    Profile1Schemas,
-    3u,
     Profile1Targets,
     3u,
 };
@@ -142,17 +111,6 @@ inline constexpr BinaryProfile Profile2 = {
     },
     nullptr,
     0u,
-    nullptr,
-    0u,
-};
-
-inline constexpr RecordSchemaSupport Profile3Schemas[] = {
-    {1u, 2u},
-    {2u, 2u},
-};
-
-inline constexpr RecordSchemaSupport Profile3Target0Schemas[] = {
-    {2u, 2u},
 };
 
 inline constexpr std::uint8_t Profile3Target0ExpectedBytes[] = {
@@ -171,8 +129,6 @@ inline constexpr BinaryTargetProfile Profile3Targets[] = {
         0x00082b30u,
         0x0006c150u,
         22u,
-        Profile3Target0Schemas,
-        1u,
     },
 };
 
@@ -191,8 +147,6 @@ inline constexpr BinaryProfile Profile3 = {
         0x0026c000u,
         0x00000000u,
     },
-    Profile3Schemas,
-    2u,
     Profile3Targets,
     1u,
 };

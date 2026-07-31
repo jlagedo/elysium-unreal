@@ -1,9 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-#include <cstring>
 #include <cwchar>
-#include <iterator>
 #include <new>
 
 #include "binary_profile_registry.h"
@@ -45,22 +43,7 @@ void EmitProbeDiagnostic(
     const std::uint32_t slot =
         static_cast<std::uint32_t>(sequence - 1) %
         ProbeDiagnosticCapacity;
-    ProbeActivationDiagnosticRecord record{};
-    std::memcpy(record.magic, "DIAG", sizeof(record.magic));
-    record.recordBytes = sizeof(record);
-    record.recordId =
-        kProbeActivationDiagnosticRecordRecordId;
-    record.schemaVersion =
-        kProbeActivationDiagnosticRecordSchemaVersion;
-    record.reason = static_cast<std::uint32_t>(diagnostic.Reason);
-    record.profileIndex = diagnostic.ProfileIndex;
-    record.targetIndex = diagnostic.TargetIndex;
-    record.imageBase =
-        static_cast<std::uint32_t>(diagnostic.ImageBase);
-    record.targetRva = diagnostic.TargetRva;
-    record.expected = diagnostic.Expected;
-    record.observed = diagnostic.Observed;
-    Handshake->ProbeDiagnostics[slot] = record;
+    Handshake->ProbeDiagnostics[slot] = diagnostic;
     MemoryBarrier();
 }
 
@@ -234,10 +217,6 @@ DWORD WINAPI BootstrapWorker(void*) {
         return 5;
     }
     InterlockedExchange(
-        &Handshake->BinaryProfileRegistryVersion,
-        static_cast<LONG>(
-            BinaryProfileRegistry::CompiledRegistryVersion()));
-    InterlockedExchange(
         &Handshake->BinaryProfileCount,
         static_cast<LONG>(ProfileRegistry->ProfileCount()));
     InterlockedExchange(
@@ -245,8 +224,6 @@ DWORD WINAPI BootstrapWorker(void*) {
         1);
 
     ActivationGate = new (std::nothrow) ProbeActivationGate(
-        kCaptureRecordSchemas,
-        std::size(kCaptureRecordSchemas),
         EmitProbeDiagnostic,
         nullptr);
     if (ActivationGate == nullptr) {

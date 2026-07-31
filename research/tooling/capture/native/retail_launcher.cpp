@@ -551,7 +551,6 @@ public:
             Handshake_->ModuleObserverArmed != 1 ||
             Handshake_->TransportArmed != 1 ||
             Handshake_->BinaryProfileRegistryLoaded != 1 ||
-            Handshake_->BinaryProfileRegistryVersion <= 0 ||
             Handshake_->BinaryProfileCount <= 0) {
             std::fwprintf(stderr, L"probe-host ready contract is invalid\n");
             return false;
@@ -755,7 +754,7 @@ int RunAttach(const Options& options, const std::wstring& probeHost) {
         L"retail-launch-v1 event=bootstrap_ready mode=attached pid=%lu "
         L"distribution=%ls version=%lu observer_armed=%ld "
         L"transport_armed=%ld probe_thread=%lu observer_thread=%ld "
-        L"bootstrap_modules=%ld profile_registry=%ld profiles=%ld "
+        L"bootstrap_modules=%ld profiles=%ld "
         L"profile_matches=%ld profile_misses=%ld\n",
         options.AttachPid,
         options.Distribution.c_str(),
@@ -765,7 +764,6 @@ int RunAttach(const Options& options, const std::wstring& probeHost) {
         ready.ProbeThreadId,
         ready.ModuleObserver.WorkerThreadId,
         ready.ModuleObserver.BootstrapEventCount,
-        ready.BinaryProfileRegistryVersion,
         ready.BinaryProfileCount,
         ready.BinaryProfileMatchCount,
         ready.BinaryProfileMissCount);
@@ -1006,7 +1004,7 @@ int wmain(int argc, wchar_t** argv) {
         L"retail-launch-v1 event=bootstrap_ready mode=launched pid=%lu "
         L"version=%lu observer_armed=%ld transport_armed=%ld "
         L"probe_thread=%lu observer_thread=%ld bootstrap_modules=%ld "
-        L"profile_registry=%ld profiles=%ld profile_matches=%ld "
+        L"profiles=%ld profile_matches=%ld "
         L"profile_misses=%ld\n",
         created.dwProcessId,
         static_cast<unsigned long>(ready.Version),
@@ -1015,7 +1013,6 @@ int wmain(int argc, wchar_t** argv) {
         ready.ProbeThreadId,
         ready.ModuleObserver.WorkerThreadId,
         ready.ModuleObserver.BootstrapEventCount,
-        ready.BinaryProfileRegistryVersion,
         ready.BinaryProfileCount,
         ready.BinaryProfileMatchCount,
         ready.BinaryProfileMissCount);
@@ -1049,7 +1046,6 @@ int wmain(int argc, wchar_t** argv) {
                 ? "Unofficial_Patch/cfg/elysium_load.cfg"
                 : "",
             &ready.ModuleNotificationCount,
-            &ready.BinaryProfileRegistryVersion,
             &ready.BinaryProfileCount,
             &ready.BinaryProfileMatchCount,
             &ready.BinaryProfileMissCount,

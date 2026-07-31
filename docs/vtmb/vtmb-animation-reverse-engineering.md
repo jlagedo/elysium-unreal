@@ -699,7 +699,10 @@ Use the debugger to identify and validate the first hook. Move repetitive captur
 
 ### 7.8 MinHook
 
-MinHook is a small x86/x64 Windows API hooking library. It is suitable for a persistent 32-bit probe DLL after the target function, calling convention, and lifetime have been established.
+MinHook is a small x86/x64 Windows API hooking library and remains a useful
+reference for detour behavior. The project already has one shared
+instruction-aware backend, so replacing it is justified only by a concrete
+retail target that the existing backend cannot relocate or manage safely.
 
 Use it after debugger validation, not as the initial discovery mechanism.
 
@@ -909,48 +912,27 @@ Function names such as `SetupBones` or `BuildTransformations` are conceptual lan
 
 ### 9.6 Stage E — capture final CPU matrices
 
-The first persistent probe should capture the final pose after the original function returns.
+The first persistent probe should capture the final pose after the original
+function returns. Its record is raw and self-bounded, not a decoded model of
+what the structure is believed to mean.
 
-Minimum record:
+Minimum evidence:
 
-```json
-{
-  "schema": 1,
-  "capture_id": "controlled-idle-001",
-  "game": {
-    "exe_sha256": "...",
-    "module": "studiorender.dll",
-    "module_sha256": "..."
-  },
-  "frame": 1834,
-  "time_seconds": 61.133333,
-  "entity": {
-    "runtime_id": "0x...",
-    "name": "optional",
-    "model": "models/character/...",
-    "origin": [0.0, 0.0, 0.0],
-    "angles": [0.0, 0.0, 0.0]
-  },
-  "animation": {
-    "sequence_index": 12,
-    "sequence_name": "idle_03",
-    "cycle": 0.4382,
-    "playback_rate": 1.0,
-    "layers": [],
-    "pose_parameters": []
-  },
-  "pose": {
-    "space": "unknown",
-    "layout": "3x4-row-major-candidate",
-    "bone_count": 53,
-    "matrices": [
-      [1.0, 0.0, 0.0, 12.4, 0.0, 1.0, 0.0, -3.1, 0.0, 0.0, 1.0, 55.8]
-    ]
-  }
-}
-```
+- exact executable and module hashes plus the hook's module-relative address;
+- entry or exit, QPC, thread ID, record length, and sequence number;
+- the x86 register snapshot and a bounded stack window;
+- each requested memory span's original address, requested length, copied
+  length, status, and unmodified bytes;
+- the output matrix pointer and a bounded copy large enough for the observed
+  bone count;
+- drop, truncation, unreadable-span, and incomplete-tail accounting.
 
-If names or sequence metadata are not known initially, store raw pointers and module-relative addresses. Never fabricate semantic fields.
+The capture recipe records how registers, stack slots, and pointer expressions
+selected those spans. Optional labels such as entity, sequence, bone count, or
+matrix space are analyzer hypotheses and may change without migrating old
+captures. If names or sequence metadata are not known, retain raw pointers,
+module-relative addresses, and neighboring unknown bytes. Never fabricate
+semantic fields or discard unexplained flags and padding.
 
 ### 9.7 Stage F — determine matrix space
 
@@ -1032,9 +1014,14 @@ After debugger validation:
 - use a lock-free or bounded queue to a writer thread;
 - fail closed when signatures do not match;
 - never continue with an “almost matching” signature;
-- include a capture schema version.
+- record the exact capture recipe and tool commit with the session;
+- keep durable records length-delimited and recoverable after a partial tail;
+- let writer, reader, and recipe evolve together without a compatibility
+  surface.
 
-MinHook is a reasonable detour implementation once the boundary is understood.
+Use the existing shared hook backend while it handles the validated boundary.
+Replace it only when a concrete retail target demonstrates a relocation or
+lifecycle failure.
 
 ### 9.11 What not to do first
 
@@ -1651,8 +1638,7 @@ Every generated Unreal animation asset should have a sidecar or metadata record 
 
 - source logical path;
 - source hashes;
-- importer version;
-- decoder schema version;
+- importer and decoder commit;
 - sequence name/index;
 - conversion basis and scale;
 - verification status;
@@ -1693,14 +1679,9 @@ RenderDoc states that its official support channels are for debugging software u
 
 Always record:
 
-- Steam/GOG or other installation family;
-- official patch level;
-- Unofficial Patch version;
-- other mods;
 - executable and DLL hashes;
-- Crowbar/SDK versions;
 - model and animation-library hashes;
-- capture schema;
+- exact capture recipe and tool commit;
 - coordinate conversion.
 
 An address without module hash and RVA is not durable evidence.

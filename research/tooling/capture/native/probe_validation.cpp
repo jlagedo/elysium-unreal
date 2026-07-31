@@ -52,13 +52,9 @@ std::uint32_t FirstWord(
 }  // namespace
 
 ProbeActivationGate::ProbeActivationGate(
-    const CaptureRecordSchemaIdentity* compiledSchemas,
-    std::size_t compiledSchemaCount,
     ProbeDiagnosticSink sink,
     void* sinkContext) noexcept
-    : CompiledSchemas_(compiledSchemas),
-      CompiledSchemaCount_(compiledSchemaCount),
-      Sink_(sink),
+    : Sink_(sink),
       SinkContext_(sinkContext) {}
 
 bool ProbeActivationGate::ValidateTarget(
@@ -66,23 +62,6 @@ bool ProbeActivationGate::ValidateTarget(
     std::uint32_t profileIndex,
     const BinaryTargetProfile& target,
     std::uint32_t targetIndex) const noexcept {
-    for (std::uint32_t index = 0;
-         index < target.SupportedSchemaCount;
-         ++index) {
-        const RecordSchemaSupport& schema = target.SupportedSchemas[index];
-        if (!SupportsSchema(schema)) {
-            Reject(
-                ProbeDiagnosticReason::UnsupportedSchema,
-                profileIndex,
-                targetIndex,
-                active.ImageBase,
-                target.Rva,
-                schema.RecordId,
-                schema.SchemaVersion);
-            return false;
-        }
-    }
-
     if (target.ExpectedBytes == nullptr ||
         target.ExpectedByteCount == 0 ||
         !IsImageRangeValid(
@@ -260,20 +239,6 @@ void ProbeActivationGate::RejectMissingModule(
         0,
         1,
         0);
-}
-
-bool ProbeActivationGate::SupportsSchema(
-    const RecordSchemaSupport& schema) const noexcept {
-    for (std::size_t index = 0;
-         index < CompiledSchemaCount_;
-         ++index) {
-        if (CompiledSchemas_[index].RecordId == schema.RecordId &&
-            CompiledSchemas_[index].SchemaVersion ==
-                schema.SchemaVersion) {
-            return true;
-        }
-    }
-    return false;
 }
 
 void ProbeActivationGate::Reject(

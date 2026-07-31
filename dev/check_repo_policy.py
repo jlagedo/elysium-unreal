@@ -42,7 +42,6 @@ FORBIDDEN_PREFIXES = (
     "research/captures/",
     "research/reports/",
     "research/models/",
-    "research/tooling/capture/native/third_party/",
 )
 AUTHORED_EXTENSIONS = {
     ".py", ".ps1", ".java", ".cpp", ".c", ".h", ".hpp",
@@ -62,7 +61,6 @@ IGNORED_AUTHORED_ALLOWLIST = (
     "Plugins/ElysiumBaked/Content/",
     "Saved/",
     "Source/ElysiumUE/ThirdParty/CPython27/",
-    "research/tooling/capture/native/third_party/",
 )
 
 

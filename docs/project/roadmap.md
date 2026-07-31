@@ -6,9 +6,9 @@ sections of `docs/project/rebuild-strategy.md` (milestones M0–M6, pipeline bac
 **design/reference detail** behind the tasks here; this doc owns project-wide sequencing,
 playable-path priority, and roll-up status.
 
-The retail capture and original-runtime animation, scene-placement,
-secondary-motion/physics, facial, and lip-sync investigation delegates its
-detailed task status to `docs/project/retail-capture-roadmap.md`; this file
+The private, exact-build retail animation instrument and its resource-to-render
+investigation delegate detailed task status to
+`docs/project/retail-capture-roadmap.md`; this file
 retains the parent rows `0.10`, `RE32`, and `RE33`. That is the only scoped
 subtracker. There is no as-built archive and no decision log: git history is the
 as-built record, and a decision's outcome is a present-tense fact in the doc
@@ -101,10 +101,10 @@ asset enhancement — re-sequenced then.
 
 Open tasks whose dependencies are met, ordered by playable-path payoff:
 
-1. **0.10 / RE32 / RE33 / 12.1** — build the launcher-driven retail capture
-   harness, close scene placement and skeletal composition, capture character
-   secondary motion including Jeanette's skirt, then capture facial/lip runtime
-   composition. Detailed order and exit gates:
+1. **0.10 / RE32 / RE33 / 12.1** — finish the small raw recorder, then trace
+   character resources from load and runtime construction through skeletal and
+   scene evaluation, secondary motion, facial/lip processing, deformation, and
+   render submission. Detailed order and retail evidence gates:
    `docs/project/retail-capture-roadmap.md`.
 2. **11.10** — finish PP0 with the played-input harness.
 3. **9.8 / 9.9 / 9.10** — inventory, NPC reactions, and economy on the durable player/entity spine.
@@ -180,10 +180,10 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
   classnames / 24,081 outputs**. → `docs/vtmb/entity_io.md`.
 - [x] **0.9 The uasset-bake architecture** — the world's *look* bakes offline into the gitignored
   `/ElysiumBaked` mount, everything else stays runtime-built. → `docs/architecture/uasset-bake-spike.md`. Residue handed on: **PL11**.
-- [~] **0.10 Retail runtime capture harness** — launcher-controlled early injection,
-  exact-binary cross-module probes, bounded external collection, indexed traces, and
-  reproducible analyzers for animation, scene placement, secondary motion/physics,
-  facial, and lip-sync research. Detailed tasks and acceptance:
+- [~] **0.10 Retail animation RE instrument** — a private one-build launcher/probe
+  with editable raw byte-span recipes, bounded append-only capture, rebuildable
+  offline indexes, and focused analyzers from resource load through rendering; no
+  stable capture schema or public compatibility surface. Detailed tasks and acceptance:
   `docs/project/retail-capture-roadmap.md`.
 
 ## P1 — Entity substrate *(design: `docs/architecture/engine-core.md` — read it; steps here are the tracker)*
@@ -1176,8 +1176,8 @@ retail end to end, and `uv run elysium test Play` proves it headlessly.
 | RE29 | Entity-name matching is case-insensitive with final-`*` prefix semantics. → `docs/vtmb/entity_io.md`. | entity I/O | [x] |
 | RE30 | Recover `trigger_environmental_audio` touch behavior and the precedence/interpolation among its `room_type`, SoundScheme `RoomDSP`, and the player's networked `m_sndRoomDSP`/`m_sndPlayerDSP`. → `docs/vtmb/audio_pipeline.md`. | 6.7 | [ ] |
 | RE31 | Recover the SoundScheme RandomSound frequency scheduler/distribution and transition edge cases; the current approximate curve is not a faithful baseline. → `docs/vtmb/audio_pipeline.md`. | 6.7 | [ ] |
-| RE32 | Retail skeletal, scene-placement, and character secondary-motion evaluation, from v2531 channels through selection, composition, initial actor placement, root/entity motion, procedural/jiggle and cloth/hair physics, hierarchy, physical-state handoff, and final deformation. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/animation_and_movers.md` and `docs/vtmb/choreographed_scenes.md`. | 8.5, 8.11, 12.1 | [~] |
-| RE33 | Retail facial-expression and lip-sync evaluation, from VCD/audio/`.lip` time through expression tables, controller mixing, flex rules/ramps, eyelids, amplitude mouth, and final deformation. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/facial_animation.md`. | 12.3–12.5 | [~] |
+| RE32 | Trace exact character resources from path and source bytes through runtime construction, v2531 skeletal selection/composition, scene placement, root/entity motion, procedural/jiggle and cloth/hair physics, hierarchy, handoff, and final render matrices. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/animation_and_movers.md` and `docs/vtmb/choreographed_scenes.md`. | 8.5, 8.11, 12.1 | [~] |
+| RE33 | Trace expression, VCD/audio, and `.lip` resources from source bytes through runtime objects, controller mixing, flex rules/ramps, eyelids, amplitude mouth, vertex deformation, and render submission. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/facial_animation.md`. | 12.3–12.5 | [~] |
 | SKY | The sky/ambience rework is complete; remaining work is tracked as 3.10–3.13 and RE17. Facts: `docs/vtmb/sky-ambience.md`. | 3.6, 3.7 | [x] |
 
 The Ghidra extraction findings behind the closed rows (the RE1/RE2/RE3/RE4 detail: addresses,

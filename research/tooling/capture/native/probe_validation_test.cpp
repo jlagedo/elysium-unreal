@@ -20,18 +20,6 @@ using elysium::capture::ProbeActivationGate;
 using elysium::capture::ProbeActivationOutcome;
 using elysium::capture::ProbeDiagnosticReason;
 using elysium::capture::ProbeValidationDiagnostic;
-using elysium::capture::RecordSchemaSupport;
-
-constexpr CaptureRecordSchemaIdentity CompiledSchemas[] = {
-    {2, 2},
-    {4, 2},
-};
-constexpr RecordSchemaSupport TargetSchemas[] = {
-    {4, 2},
-};
-constexpr RecordSchemaSupport UnsupportedSchemas[] = {
-    {4, 99},
-};
 constexpr std::uint8_t ExpectedBytes[] = {
     0x83, 0xec, 0x08, 0x53,
 };
@@ -113,8 +101,6 @@ int wmain() {
         objectRva,
         vtableRva,
         vtableSlot,
-        TargetSchemas,
-        1,
     };
     const BinaryProfile profile{
         "synthetic",
@@ -131,8 +117,6 @@ int wmain() {
             imageSize,
             0,
         },
-        TargetSchemas,
-        1,
         &target,
         1,
     };
@@ -144,8 +128,6 @@ int wmain() {
 
     DiagnosticLog diagnostics{};
     const ProbeActivationGate gate(
-        CompiledSchemas,
-        std::size(CompiledSchemas),
         CaptureDiagnostic,
         &diagnostics);
     std::uint32_t installCount = 0;
@@ -209,39 +191,20 @@ int wmain() {
         return Fail(L"invalid vtable slot was not fail-closed", 5);
     }
 
-    BinaryTargetProfile unsupportedTarget = target;
-    unsupportedTarget.SupportedSchemas = UnsupportedSchemas;
-    const ProbeActivationOutcome schemaResult =
-        gate.ValidateAndInstall(
-            active,
-            3,
-            unsupportedTarget,
-            0,
-            CountInstall,
-            &installCount);
-    if (schemaResult != ProbeActivationOutcome::Rejected ||
-        installCount != 1 ||
-        diagnostics.Count != 3 ||
-        diagnostics.Records[2].Reason !=
-            ProbeDiagnosticReason::UnsupportedSchema) {
-        VirtualFree(image, 0, MEM_RELEASE);
-        return Fail(L"unsupported schema was not fail-closed", 6);
-    }
-
     gate.RejectUnknownHash(1, base, 0x20);
     gate.RejectMissingModule(3);
     if (installCount != 1 ||
-        diagnostics.Count != 5 ||
-        diagnostics.Records[3].Reason !=
+        diagnostics.Count != 4 ||
+        diagnostics.Records[2].Reason !=
             ProbeDiagnosticReason::UnknownHash ||
-        diagnostics.Records[4].Reason !=
+        diagnostics.Records[3].Reason !=
             ProbeDiagnosticReason::MissingModule ||
-        diagnostics.Records[4].TargetIndex !=
+        diagnostics.Records[3].TargetIndex !=
             std::numeric_limits<std::uint32_t>::max()) {
         VirtualFree(image, 0, MEM_RELEASE);
         return Fail(
             L"hash/module rejection diagnostics are incomplete",
-            7);
+            6);
     }
 
     VirtualFree(image, 0, MEM_RELEASE);

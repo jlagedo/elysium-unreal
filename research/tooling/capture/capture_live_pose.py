@@ -10,6 +10,7 @@ import argparse
 import ctypes
 from ctypes import wintypes
 import hashlib
+import json
 import math
 from pathlib import Path
 import re
@@ -19,16 +20,6 @@ import time
 
 from elysium_pipeline.formats import install, mdl_skel
 from elysium_pipeline.paths import research_root
-from research.tooling.capture.capture_contracts import (
-    DEFAULT_EXPERIMENT,
-    analyzer_versions,
-    create_session_manifest,
-    load_experiment,
-    output_metadata,
-    parse_assignments,
-    process_launch_context,
-    write_session_manifest,
-)
 from research.tooling.capture.generated_binary_profiles import (
     match_profile,
     target as profile_target,
@@ -249,31 +240,7 @@ def main() -> int:
         type=Path,
         help="Write line-buffered stdout/stderr to this file for detached capture.",
     )
-    parser.add_argument("--map", default="sp_theatre")
-    parser.add_argument("--distribution", default="user-owned-retail")
-    parser.add_argument("--patch", default="Unofficial Patch 11.4")
-    parser.add_argument("--probe-profile", default="retained-palette-polling-v1")
-    parser.add_argument(
-        "--experiment",
-        type=Path,
-        default=DEFAULT_EXPERIMENT,
-    )
-    parser.add_argument(
-        "--environment",
-        action="append",
-        default=[],
-        metavar="NAME=VALUE",
-        help="Declared launch environment value; repeat as needed.",
-    )
-    parser.add_argument(
-        "--clock-control",
-        action="append",
-        default=[],
-        metavar="NAME=VALUE",
-        help="Declared retail clock control; repeat as needed.",
-    )
     args = parser.parse_args()
-    load_experiment(args.experiment)
 
     if args.log_file:
         args.log_file.parent.mkdir(parents=True, exist_ok=True)
@@ -330,15 +297,10 @@ def main() -> int:
     session.mkdir(parents=True, exist_ok=False)
     _, _, executable_path = find_module(pid, "vampire.exe")
     manifest_path = session / "manifest.json"
-    manifest = create_session_manifest(
-        session=session,
-        capture_command=[sys.executable, str(Path(__file__).resolve()), *sys.argv[1:]],
-        pid=pid,
-        launch=process_launch_context(pid, mode="attached"),
-        environment=parse_assignments(args.environment, "environment"),
-        distribution=args.distribution,
-        patch=args.patch,
-        modules={
+    manifest = {
+        "method": "ReadProcessMemory",
+        "pid": pid,
+        "modules": {
             "vampire.exe": {
                 "path": str(executable_path),
                 "sha256": hashlib.sha256(executable_path.read_bytes()).hexdigest(),
@@ -348,50 +310,22 @@ def main() -> int:
                 "sha256": module_hash,
             },
         },
-        probe_profile=args.probe_profile,
-        map_name=args.map,
-        experiment_path=args.experiment,
-        clock_controls=parse_assignments(
-            args.clock_control or ["mode=uncontrolled"],
-            "clock-control",
-        ),
-        analyzers=analyzer_versions(
-            [
-                Path(__file__).resolve(),
-                Path(__file__).resolve().parent / "validate_live_pose_capture.py",
-                Path(__file__).resolve().parent / "compare_pose_captures.py",
-            ]
-        ),
-        capture={
-            "method": "ReadProcessMemory",
-            "model": studio_model_name,
-            "model_key": model_key,
-            "model_checksum": f"0x{target_checksum:08x}",
-            "bone_count": target_bones,
-            "requested_frames": args.frames,
-            "allow_partial": args.allow_partial,
-            "binary_profile": studio_profile["id"],
-        },
+        "binary_profile": studio_profile["id"],
+        "model": studio_model_name,
+        "model_key": model_key,
+        "model_checksum": f"0x{target_checksum:08x}",
+        "bone_count": target_bones,
+        "matrix_layout": "row-major matrix3x4, 12 little-endian float32",
+        "matrix_bytes_per_palette": matrix_bytes,
+        "requested_frames": args.frames,
+        "captured_frames": 0,
+        "complete": False,
+        "allow_partial": args.allow_partial,
+        "frames": [],
+    }
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
     )
-    manifest.update(
-        {
-            "version": 1,
-            "method": "ReadProcessMemory",
-            "model": studio_model_name,
-            "model_key": model_key,
-            "model_checksum": f"0x{target_checksum:08x}",
-            "bone_count": target_bones,
-            "matrix_layout": "row-major matrix3x4, 12 little-endian float32",
-            "matrix_bytes_per_palette": matrix_bytes,
-            "studio_render_sha256": module_hash,
-            "requested_frames": args.frames,
-            "captured_frames": 0,
-            "complete": False,
-            "allow_partial": args.allow_partial,
-            "frames": [],
-        }
-    )
-    write_session_manifest(manifest_path, manifest)
 
     frames: list[dict[str, object]] = []
     reader: ProcessReader | None = None
@@ -522,40 +456,22 @@ def main() -> int:
             raise TimeoutError(
                 f"captured {len(frames)}/{args.frames} unique palettes"
             )
-        artifact_paths = [
-            session / frame[artifact]
-            for frame in frames
-            for artifact in ("bone_to_world", "skin_palette")
-        ]
-        manifest["state"] = "complete"
-        manifest["outputs"] = output_metadata(session, artifact_paths)
-        manifest["records"] = {
-            "captured": len(frames),
-            "written": len(frames),
-            "dropped": 0,
-            "incomplete": args.frames - len(frames),
-        }
-        manifest["hook_health"] = {
-            "state": "healthy",
-            "details": {
-                "target_seen": True,
-                "arm_seen": True,
-            },
-        }
-        manifest["capture"].update(
-            {
-                "captured_frames": len(frames),
-                "complete": len(frames) == args.frames,
-            }
-        )
         manifest.update(
             {
                 "captured_frames": len(frames),
                 "complete": len(frames) == args.frames,
                 "frames": frames,
+                "records": {
+                    "captured": len(frames),
+                    "written": len(frames),
+                    "dropped": 0,
+                    "incomplete": max(0, args.frames - len(frames)),
+                },
             }
         )
-        write_session_manifest(manifest_path, manifest)
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+        )
         print(f"Manifest={manifest_path}", flush=True)
 
         if len(frames) != args.frames:
@@ -566,27 +482,23 @@ def main() -> int:
             )
         return 0
     except Exception as exc:
-        artifact_paths = [
-            path
+        written = sum(
+            (session / frame[name]).exists()
             for frame in frames
-            for artifact in ("bone_to_world", "skin_palette")
-            if (path := session / frame[artifact]).exists()
-        ]
-        manifest["state"] = "failed"
-        manifest["outputs"] = output_metadata(session, artifact_paths)
+            for name in ("bone_to_world", "skin_palette")
+        ) // 2
+        manifest["error"] = str(exc)
+        manifest["captured_frames"] = len(frames)
+        manifest["frames"] = frames
         manifest["records"] = {
             "captured": len(frames),
-            "written": len(artifact_paths) // 2,
+            "written": written,
             "dropped": 0,
             "incomplete": max(0, args.frames - len(frames)),
         }
-        manifest["hook_health"] = {
-            "state": "failed",
-            "details": {"error": str(exc)},
-        }
-        manifest["captured_frames"] = len(frames)
-        manifest["frames"] = frames
-        write_session_manifest(manifest_path, manifest)
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+        )
         raise
     finally:
         if reader:

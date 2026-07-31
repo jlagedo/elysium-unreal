@@ -21,11 +21,6 @@ using elysium::capture::CallingConvention;
 using elysium::capture::PeIdentity;
 using elysium::capture::ProcessedModuleEvent;
 using elysium::capture::ProfileActivationResult;
-using elysium::capture::RecordSchemaSupport;
-
-constexpr RecordSchemaSupport Schemas[] = {
-    {4, 2},
-};
 constexpr std::uint8_t ExpectedBytes[] = {
     0x83, 0xec, 0x34, 0x53, 0x55,
 };
@@ -41,8 +36,6 @@ constexpr BinaryTargetProfile Targets[] = {
         0,
         0,
         0,
-        Schemas,
-        static_cast<std::uint32_t>(std::size(Schemas)),
     },
 };
 constexpr BinaryProfile Profiles[] = {
@@ -66,8 +59,6 @@ constexpr BinaryProfile Profiles[] = {
             0x20000,
             0,
         },
-        Schemas,
-        static_cast<std::uint32_t>(std::size(Schemas)),
         Targets,
         static_cast<std::uint32_t>(std::size(Targets)),
     },
@@ -124,7 +115,6 @@ int wmain() {
             "client.resolve_virtual_model_pose");
     if (target == nullptr ||
         target->Convention != CallingConvention::Thiscall ||
-        target->SupportedSchemas[0].RecordId != 4 ||
         BinaryProfileRegistry::ResolveTarget(active, *target) !=
             event.ImageBase + 0x1000) {
         return Fail(L"target metadata or runtime RVA resolution is invalid", 4);
@@ -173,9 +163,8 @@ int wmain() {
     }
     std::wprintf(
         L"binary-profile-registry-test-v1 state=complete profiles=%zu "
-        L"targets=%u schemas=%u\n",
+        L"targets=%u\n",
         registry.ProfileCount(),
-        Profiles[0].TargetCount,
-        Profiles[0].SupportedSchemaCount);
+        Profiles[0].TargetCount);
     return 0;
 }

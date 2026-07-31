@@ -5,8 +5,8 @@
 #include <cstdint>
 #include <string>
 
-#include "../generated_record_schemas.h"
 #include "module_observer.h"
+#include "probe_validation.h"
 
 namespace elysium::capture {
 
@@ -34,7 +34,6 @@ struct BootstrapHandshake {
     volatile LONG ModuleNotificationCount;
     ModuleObserverCounters ModuleObserver;
     volatile LONG BinaryProfileRegistryLoaded;
-    volatile LONG BinaryProfileRegistryVersion;
     volatile LONG BinaryProfileCount;
     volatile LONG BinaryProfileMatchCount;
     volatile LONG BinaryProfileMissCount;
@@ -47,14 +46,13 @@ struct BootstrapHandshake {
     volatile LONG ProbeValidationPassCount;
     volatile LONG ProbeHookInstallCount;
     volatile LONG ProbeDiagnosticWriteCount;
-    ProbeActivationDiagnosticRecord
-        ProbeDiagnostics[ProbeDiagnosticCapacity];
+    ProbeValidationDiagnostic ProbeDiagnostics[ProbeDiagnosticCapacity];
     DWORD ErrorCode;
     wchar_t Message[64];
 };
 #pragma pack(pop)
 
-static_assert(sizeof(BootstrapHandshake) == 968);
+static_assert(sizeof(BootstrapHandshake) == 708);
 
 inline std::wstring BootstrapMappingName(DWORD processId) {
     return L"Local\\ElysiumRetailBootstrap.v5." +
