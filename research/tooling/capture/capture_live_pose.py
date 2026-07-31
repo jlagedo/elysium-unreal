@@ -230,10 +230,16 @@ def main() -> int:
         type=Path,
         default=research_root() / "live-pose",
     )
-    parser.add_argument(
+    arm_group = parser.add_mutually_exclusive_group()
+    arm_group.add_argument(
         "--arm-file",
         type=Path,
         help="Marker file; defaults to <output>/ARM_LIVE_POSE.",
+    )
+    arm_group.add_argument(
+        "--arm-after-target-seconds",
+        type=float,
+        help="Arm this many wall-clock seconds after the target first renders.",
     )
     parser.add_argument(
         "--log-file",
@@ -250,6 +256,8 @@ def main() -> int:
 
     if args.frames < 1:
         parser.error("--frames must be positive")
+    if args.arm_after_target_seconds is not None and args.arm_after_target_seconds < 0:
+        parser.error("--arm-after-target-seconds cannot be negative")
 
     model_key = args.model.replace("\\", "/")
     if not model_key.lower().startswith("models/"):
@@ -266,13 +274,34 @@ def main() -> int:
     studio_model_name = model_key[7:] if model_key.lower().startswith("models/") else model_key
 
     pid = args.pid or find_process("vampire.exe")
-    module_base, _, module_path = find_module(pid, "studiorender.dll")
-    module_hash = hashlib.sha256(module_path.read_bytes()).hexdigest()
-    studio_profile = match_profile(
-        module_path.name,
-        module_path.stat().st_size,
-        module_hash,
-    )
+    module_records: dict[str, dict[str, object]] = {}
+    module_locations: dict[str, tuple[int, int, Path]] = {}
+    module_profiles: dict[str, dict[str, object]] = {}
+    for module_name in (
+        "Vampire.exe",
+        "client.dll",
+        "engine.dll",
+        "StudioRender.dll",
+    ):
+        location = find_module(pid, module_name)
+        _, module_size, module_path = location
+        module_hash = hashlib.sha256(module_path.read_bytes()).hexdigest()
+        profile = match_profile(
+            module_path.name,
+            module_path.stat().st_size,
+            module_hash,
+        )
+        module_locations[module_name] = location
+        module_profiles[module_name] = profile
+        module_records[module_name] = {
+            "path": str(module_path),
+            "image_size": module_size,
+            "file_size": module_path.stat().st_size,
+            "sha256": module_hash,
+            "binary_profile": profile["id"],
+        }
+    module_base, _, module_path = module_locations["StudioRender.dll"]
+    studio_profile = module_profiles["StudioRender.dll"]
     draw_model = profile_target(
         studio_profile,
         "studiorender.draw_model",
@@ -280,12 +309,14 @@ def main() -> int:
 
     output_root = args.output.resolve()
     output_root.mkdir(parents=True, exist_ok=True)
-    arm_file = (
-        args.arm_file.resolve()
-        if args.arm_file
-        else output_root / "ARM_LIVE_POSE"
-    )
-    if arm_file.exists():
+    arm_file = None
+    if args.arm_after_target_seconds is None:
+        arm_file = (
+            args.arm_file.resolve()
+            if args.arm_file
+            else output_root / "ARM_LIVE_POSE"
+        )
+    if arm_file is not None and arm_file.exists():
         arm_file.unlink()
 
     raw_label = args.label or Path(model_key).stem
@@ -295,29 +326,29 @@ def main() -> int:
     session_stamp = time.strftime("%Y%m%d_%H%M%S")
     session = output_root / f"{session_label}_{session_stamp}"
     session.mkdir(parents=True, exist_ok=False)
-    _, _, executable_path = find_module(pid, "vampire.exe")
     manifest_path = session / "manifest.json"
     manifest = {
         "method": "ReadProcessMemory",
         "pid": pid,
-        "modules": {
-            "vampire.exe": {
-                "path": str(executable_path),
-                "sha256": hashlib.sha256(executable_path.read_bytes()).hexdigest(),
-            },
-            "StudioRender.dll": {
-                "path": str(module_path),
-                "sha256": module_hash,
-            },
-        },
+        "modules": module_records,
         "binary_profile": studio_profile["id"],
         "model": studio_model_name,
         "model_key": model_key,
+        "model_file_size": len(model_data),
+        "model_sha256": hashlib.sha256(model_data).hexdigest(),
         "model_checksum": f"0x{target_checksum:08x}",
         "bone_count": target_bones,
         "matrix_layout": "row-major matrix3x4, 12 little-endian float32",
         "matrix_bytes_per_palette": matrix_bytes,
         "requested_frames": args.frames,
+        "arming": (
+            {
+                "mode": "target-visible-delay",
+                "seconds": args.arm_after_target_seconds,
+            }
+            if args.arm_after_target_seconds is not None
+            else {"mode": "file", "path": str(arm_file)}
+        ),
         "captured_frames": 0,
         "complete": False,
         "allow_partial": args.allow_partial,
@@ -349,49 +380,75 @@ def main() -> int:
         print(f"Target={studio_model_name}")
         print(f"Checksum=0x{target_checksum:08x}")
         print(f"Bones={target_bones}")
-        print(f"ArmFile={arm_file}")
-        print("Waiting for the target and arm marker...", flush=True)
+        if args.arm_after_target_seconds is not None:
+            print(f"ArmAfterTargetSeconds={args.arm_after_target_seconds}")
+            print("Waiting for the target and arm delay...", flush=True)
+        else:
+            print(f"ArmFile={arm_file}")
+            print("Waiting for the target and arm marker...", flush=True)
 
         last_prearm_hash: str | None = None
         pending_snapshot: tuple[bytes, bytes] | None = None
         target_seen = False
+        target_seen_at: float | None = None
         arm_seen = False
+        capture_ready = False
         arm_detected_at: float | None = None
+        last_read_error: OSError | None = None
         wait_deadline = time.perf_counter() + args.timeout
         while time.perf_counter() < wait_deadline:
-            snapshot = stable_target_snapshot(
-                reader,
-                studio_object,
-                target_checksum,
-                target_bones,
-                matrix_bytes,
-            )
+            try:
+                snapshot = stable_target_snapshot(
+                    reader,
+                    studio_object,
+                    target_checksum,
+                    target_bones,
+                    matrix_bytes,
+                )
+            except OSError as exc:
+                last_read_error = exc
+                continue
             if snapshot is not None:
                 if not target_seen:
                     target_seen = True
+                    target_seen_at = time.perf_counter()
                     print("Target visible.", flush=True)
-                if arm_file.exists():
+                snapshot_hash = hashlib.sha256(snapshot[0] + snapshot[1]).hexdigest()
+                delayed_arm = (
+                    args.arm_after_target_seconds is not None
+                    and target_seen_at is not None
+                    and time.perf_counter() - target_seen_at
+                    >= args.arm_after_target_seconds
+                )
+                file_arm = arm_file is not None and arm_file.exists()
+                if delayed_arm or file_arm:
+                    arm_detected_at = time.perf_counter()
                     pending_snapshot = snapshot
+                    last_prearm_hash = snapshot_hash
+                    capture_ready = True
+                    if delayed_arm:
+                        print("Target-relative arm delay elapsed.", flush=True)
                     break
-                last_prearm_hash = hashlib.sha256(
-                    snapshot[0] + snapshot[1]
-                ).hexdigest()
-            if arm_file.exists() and not arm_seen:
+                last_prearm_hash = snapshot_hash
+            if arm_file is not None and arm_file.exists() and not arm_seen:
                 arm_seen = True
                 arm_detected_at = time.perf_counter()
                 print(
                     "Arm marker detected; waiting for the target to render...",
                     flush=True,
                 )
-        if pending_snapshot is None:
+        if not capture_ready:
             missing = []
             if not target_seen:
                 missing.append("target model")
-            if not arm_file.exists():
+            if arm_file is not None and not arm_file.exists():
                 missing.append("arm marker")
+            if args.arm_after_target_seconds is not None and target_seen:
+                missing.append("arm delay")
+            detail = f"; last read error: {last_read_error}" if last_read_error else ""
             raise TimeoutError(
                 f"{' and '.join(missing) or 'capture prerequisites'} "
-                "not observed before timeout"
+                f"not observed before timeout{detail}"
             )
 
         capture_started_at = time.perf_counter()
@@ -405,13 +462,16 @@ def main() -> int:
             snapshot = pending_snapshot
             pending_snapshot = None
             if snapshot is None:
-                snapshot = stable_target_snapshot(
-                    reader,
-                    studio_object,
-                    target_checksum,
-                    target_bones,
-                    matrix_bytes,
-                )
+                try:
+                    snapshot = stable_target_snapshot(
+                        reader,
+                        studio_object,
+                        target_checksum,
+                        target_bones,
+                        matrix_bytes,
+                    )
+                except OSError:
+                    continue
             if snapshot is None:
                 continue
             bones, skin = snapshot

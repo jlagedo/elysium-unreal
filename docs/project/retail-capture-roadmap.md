@@ -103,7 +103,7 @@ continues is out of scope.
 
 | Order | Priority | Phase | Outcome |
 |---:|---|---|---|
-| 1 | P0 — next | CAP1 — automated player-animation corpus | One clean unattended player capture scales to the raw resolved player-animation inventory and is compared across the current export/decoder stack, with explicit evidence for every failure or skip |
+| 1 | P0 — current | CAP1 — automated player-animation corpus | The validated unattended seed capture scales to the raw resolved player-animation inventory and is compared across the current export/decoder stack, with explicit evidence for every failure or skip |
 | 2 | P0 | CAP2 — first skeletal path | One simple actor is traced from requested files through runtime objects and local transforms to final draw matrices |
 | 3 | P0 | CAP3 — skeletal mismatches | Only the shipped timing, blend, remap, layer, root-motion, and procedural cases that break the simple evaluator are recovered |
 | 4 | P1 | CAP4 — theatre scene | One authored scene is traced through binding, placement, layered animation, movement, events, and completion |
@@ -111,31 +111,21 @@ continues is out of scope.
 | 6 | P2 | CAP6 — secondary motion | One visible accessory, hair, cloth-like, or jiggle behavior is classified and reproduced without assuming its mechanism first |
 | 7 | P2 | CAP7 — reproduction handoff | The recovered paths run in engine-neutral code, have focused retail comparisons, and feed Unreal |
 
-**The next and only current task is CAP1.1.** The existing final-pose capture is
+**The next and only current task is CAP1.3.** The existing final-pose capture is
 used before adding generic raw hooks. Later tasks may identify a missing span or
 stage, but they do not authorize building capture infrastructure early.
 
 ## CAP1 — Automated player-animation corpus
 
-- [ ] **CAP1.1 Reproducible unattended seed capture.** Turn the validated launch
-  shape (`-game Unofficial_Patch -dev -console -sw +exec`) into one repeatable
-  `howl` capture on the current player model. Load the fixed save, let the world
-  settle at normal time, enter third person, pulse and release movement to reset
-  the player idle timer, allow locomotion to settle, arm the existing final-pose
-  recorder, and only then run `player_sequence howl`. Acceptance requires the
-  exact executable/module/model hashes and launch recipe, bounded capture
-  counters, no stuck retail process, and monotonic live-to-authored `howl`
-  alignment without an idle or locomotion interruption.
-- [ ] **CAP1.2 Raw resolved player-animation inventory.** Enumerate every raw
-  sequence descriptor and animation descriptor reachable through the include-
-  model graphs of the installed player body models. Do not use the current
-  `local_sequences` convenience view as the coverage authority: it deduplicates
-  labels and exposes only blend cell `[0][0]`. Preserve target model, owner model,
-  raw sequence and animation indices, name, the complete 16×16 animation grid,
-  frames, FPS, flags, blend/pose metadata, neighboring unknown bytes, and the
-  list of compatible player models. Deduplicate only identical owner/sequence/
-  animation-data identities across clans and armor variants; never collapse
-  duplicate names that resolve to different bytes.
+- [x] **CAP1.1 Reproducible unattended seed capture.** The retained, explicitly
+  installed `+exec` recipe records exact identities and captured 238/238
+  zero-drop palettes; one clean pass aligned contiguously from authored `howl`
+  frames 9–77, retail exited naturally, and no process remained.
+- [x] **CAP1.2 Raw resolved player-animation inventory.** The patch-first player
+  union resolves without missing models to 122 owners, 3,330 raw sequences,
+  3,615 raw animations, and 5,482 active blend cells. The disposable JSONL index
+  preserves exact spans, complete descriptors and 16×16 grids, target
+  compatibility, duplicate labels, and 227 unreferenced animation descriptors.
 - [ ] **CAP1.3 Automated player-sequence capture.** Drive every inventory row
   that is unambiguously addressable through `player_sequence` using the CAP1.1
   reset/settle/play/capture recipe, initially with one fresh retail launch per
@@ -343,4 +333,4 @@ experiment needs it.
 | Raw evidence becomes difficult to query | Keep records self-bounded and add a disposable index only for a demonstrated slow query |
 | Player idle or locomotion contaminates a forced sequence | Pulse movement before capture, release it, allow a fixed settle window, and reject non-monotonic authored alignment |
 | Batch coverage silently omits duplicate names or unselectable sequences | Inventory by owner/index/data identity and require one terminal result for every row |
-| Infrastructure expands faster than evidence | The chronological order is binding and CAP1.1 is the only current task |
+| Infrastructure expands faster than evidence | The chronological order is binding and CAP1.3 is the only current task |

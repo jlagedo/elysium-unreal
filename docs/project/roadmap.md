@@ -101,13 +101,12 @@ asset enhancement — re-sequenced then.
 
 Open tasks whose dependencies are met, ordered by playable-path payoff:
 
-1. **0.10 / RE32 / RE33 / 12.1** — automate one clean player-sequence capture,
-   build the raw non-deduplicated animation inventory resolved by the installed
-   player models, capture every addressable sequence, and compare the corpus
-   against the patch-first source/export decoder stack. Use the mismatch groups
-   to choose the first resource-to-final-matrix trace and expand only from
-   observed differences into layers/remaps, theatre scenes, facial/lip
-   processing, and secondary motion. Detailed order and retail evidence gates:
+1. **0.10 / RE32 / RE33 / 12.1** — with the clean unattended player-sequence
+   seed and raw player-animation inventory established, capture every addressable
+   sequence and compare the corpus against the patch-first source/export decoder
+   stack. Use the mismatch groups to choose the first resource-to-final-matrix
+   trace and expand only from observed differences into layers/remaps, theatre
+   scenes, facial/lip processing, and secondary motion. Detailed order and retail evidence gates:
    `docs/project/retail-capture-roadmap.md`.
 2. **11.10** — finish PP0 with the played-input harness.
 3. **9.8 / 9.9 / 9.10** — inventory, NPC reactions, and economy on the durable player/entity spine.

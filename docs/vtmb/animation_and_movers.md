@@ -140,6 +140,21 @@ hit/combat moves. `mdl_skel.local_sequences` and the GLB exporter still select
 only `anim[0][0]`; the generated clip is a valid base cell, not a faithful
 evaluation of those 294 blend grids.
 
+The patch-first player-body union is a narrower, capture-oriented view of that
+corpus. `clandoc000.txt` contains 216 indexed body references across 18 clan
+table blocks, resolving to 56 distinct player MDLs. Their transitive include
+graphs contain 122 owner MDLs with no missing includes, 3,330 raw sequence
+descriptors, 3,615 raw animation descriptors, and 5,482 active blend cells.
+There are 270 multi-blend sequences: 219 use a 9×1 grid, 49 use 3×3, and two use
+5×1. Of the animations, 3,388 are referenced by an active cell and 227 are not.
+
+Names cannot define coverage for this union. The 3,330 raw sequences collapse
+to only 1,484 case-insensitive labels, and 1,430 of those label groups contain
+more than one owner/sequence identity. The capture inventory therefore keys an
+entry by exact owner model and raw index, retains the complete 764-byte sequence
+descriptor and 16×16 grid, and records target-model compatibility separately.
+The same rule applies to all 3,615 raw 72-byte animation descriptors.
+
 ### The activity name is the selection key [data-verified]
 
 `activity`@12 reads **`-1` on disk for every sequence** — the game DLL resolves the *name*
@@ -548,17 +563,24 @@ freezes the world and restores `host_timescale 1` adjacent to selection, or fire
 selection immediately after the movement pulse, is not a clean capture stimulus:
 normal idle/locomotion can visibly contaminate the forced clip.
 
-The console alias first creates the arm file printed by the probe and then runs
-`player_sequence howl`. Once cleanly selected after the controller settles, a
-completed `player_sequence` remains the selected forced player sequence;
-`unpause` does not clear it, while reloading the map does. The fixed
-`host_framerate` value is seconds per frame on this build, not frames per second.
+The unattended recipe arms the recorder when the target is first rendered and
+keeps a bounded pre-roll instead of guessing how long save loading takes. It
+issues `player_sequence howl` twice: issuing the same command again restarts the
+forced clip, so offline alignment can reject the controller transition around
+the first selection and select one uninterrupted pass. A completed
+`player_sequence` remains the selected forced player sequence; `unpause` does
+not clear it, while reloading the map does. The fixed `host_framerate` value is
+seconds per frame on this build, not frames per second.
 
-One clean capture recorded 81 distinct palettes over 2.717989 seconds. Patch-first
-resolution identifies `howl` in `models/character/shared/male/misc.mdl` as an
-81-frame, 30-FPS, non-looping clip. `research/tooling/capture/validate_live_pose_capture.py` compares
-the live buffers to the source MDLs, and `research/tooling/capture/compare_pose_captures.py` compares
-two sessions after removing the entity/root transform.
+The accepted unattended seed run recorded all 238 requested palettes with no
+drops or incomplete records, exited retail naturally, and left no process. Its
+longest clean live-to-authored span is 69 consecutive pairs covering authored
+`howl` frames 9–77. Patch-first resolution identifies `howl` in
+`models/character/shared/male/misc.mdl` as an 81-frame, 30-FPS, non-looping
+clip. `research/tooling/capture/validate_live_pose_capture.py` compares the live
+buffers to the source MDLs, and
+`research/tooling/capture/compare_pose_captures.py` compares two sessions after
+removing the entity/root transform.
 
 The live data independently verifies both load-bearing matrix rules:
 

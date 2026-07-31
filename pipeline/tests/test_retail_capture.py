@@ -2,13 +2,176 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import struct
+import tempfile
 import unittest
+
+from research.tooling.capture.inventory_player_animations import (
+    parse_owner,
+    player_slots,
+)
+from research.tooling.capture.capture_player_sequence import (
+    ARM_AFTER_TARGET_SECONDS,
+    MAX_PRE_SEQUENCE_FRAMES,
+    MOVEMENT_SETTLE_WAITS,
+    POST_SEQUENCE_WAITS,
+    PRE_THIRD_PERSON_WAITS,
+    REPEAT_GAP_WAITS,
+    SEQUENCE_REPETITIONS,
+    TARGET_READY_WAITS,
+    assess_seed,
+    build_config,
+    read_load_command,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NATIVE_ROOT = REPO_ROOT / "research" / "tooling" / "capture" / "native"
 
 
 class RetailCaptureTests(unittest.TestCase):
+    def test_player_animation_inventory_preserves_duplicate_sequences_and_grid(self) -> None:
+        data = bytearray(4096)
+        data[:4] = b"IDST"
+        struct.pack_into("<i", data, 4, 2531)
+        struct.pack_into("<i", data, 240, 1)
+        struct.pack_into("<ii", data, 264, 2, 2048)
+        struct.pack_into("<ii", data, 272, 2, 512)
+        for index in range(2):
+            base = 512 + index * 764
+            label = 3600 + index * 32
+            activity = label + 12
+            struct.pack_into("<i", data, base, label - base)
+            struct.pack_into("<i", data, base + 4, activity - base)
+            struct.pack_into("<i", data, base + 12, -1)
+            struct.pack_into("<i", data, base + 16, 1)
+            struct.pack_into("<i", data, base + 52, 2)
+            struct.pack_into("<h", data, base + 56, index)
+            struct.pack_into("<h", data, base + 56 + 16 * 2, 1 - index)
+            struct.pack_into("<2i", data, base + 572, 2, 1)
+            data[label : label + 10] = b"duplicate\0"
+            data[activity : activity + 9] = b"ACT_TEST\0"
+        for index in range(2):
+            base = 2048 + index * 72
+            name = 3800 + index * 24
+            struct.pack_into("<i", data, base, name - base)
+            struct.pack_into("<f", data, base + 4, 30.0)
+            struct.pack_into("<i", data, base + 12, 81)
+            struct.pack_into("<i", data, base + 48, 512)
+            data[name : name + 7] = f"@anim{index}".encode() + b"\0"
+
+        parsed = parse_owner("models/test.mdl", bytes(data))
+        self.assertEqual(
+            [sequence["label"] for sequence in parsed["sequences"]],
+            ["duplicate", "duplicate"],
+        )
+        self.assertEqual(
+            parsed["sequences"][0]["blend_grid"][1][0],
+            1,
+        )
+        self.assertEqual(
+            [cell["animation_index"] for cell in parsed["sequences"][0]["active_blend_cells"]],
+            [0, 1],
+        )
+        self.assertEqual(len(parsed["sequences"][0]["descriptor_hex"]), 764 * 2)
+
+    def test_player_animation_inventory_reads_only_indexed_body_slots(self) -> None:
+        slots = player_slots(
+            b'''ClanDataTables
+            {
+                ClanData
+                {
+                    General
+                    {
+                        Clan "Tremere"
+                        M_Body "models/npc/not_player.mdl"
+                        M_Body0 "models/character/pc/male/test.mdl"
+                        M_Body1 "models/character/pc/male/test.mdl"
+                        F_Body0 "models/character/pc/female/test.mdl"
+                    }
+                }
+            }'''
+        )
+        self.assertEqual(len(slots), 3)
+        self.assertEqual({slot["model"] for slot in slots}, {
+            "models/character/pc/male/test.mdl",
+            "models/character/pc/female/test.mdl",
+        })
+
+    def test_player_sequence_seed_recipe_orders_reset_arm_and_trigger(self) -> None:
+        rendered = build_config("load Vampire-002", "howl")
+        lines = rendered.splitlines()
+        forward = lines.index("+forward")
+        release = lines.index("-forward")
+        triggers = [
+            index
+            for index, line in enumerate(lines)
+            if line == "player_sequence howl"
+        ]
+        self.assertLess(lines.index("thirdperson"), forward)
+        self.assertEqual(lines[forward + 1], "wait")
+        self.assertEqual(release, forward + 2)
+        self.assertEqual(len(triggers), SEQUENCE_REPETITIONS)
+        self.assertEqual(lines[triggers[0] - 1], "echo ELYSIUM_CAP11_ARM")
+        self.assertEqual(lines[triggers[1] - 1], "wait")
+        between_triggers = lines[triggers[0] + 1 : triggers[1]]
+        self.assertEqual(between_triggers[0], "echo ELYSIUM_CAP11_TRIGGERED")
+        self.assertEqual(
+            between_triggers.count("wait"),
+            81 + REPEAT_GAP_WAITS,
+        )
+        self.assertNotIn("host_timescale 0", lines)
+        self.assertFalse(any(line.startswith("writeconfig") for line in lines))
+        self.assertEqual(ARM_AFTER_TARGET_SECONDS, 0.0)
+        self.assertEqual(
+            MAX_PRE_SEQUENCE_FRAMES,
+            TARGET_READY_WAITS + 1 + MOVEMENT_SETTLE_WAITS,
+        )
+        self.assertEqual(
+            lines.count("wait"),
+            PRE_THIRD_PERSON_WAITS
+            + TARGET_READY_WAITS
+            + 1
+            + MOVEMENT_SETTLE_WAITS
+            + 81
+            + REPEAT_GAP_WAITS
+            + POST_SEQUENCE_WAITS,
+        )
+
+    def test_player_sequence_seed_reads_one_active_load_command(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "elysium_load.cfg"
+            path.write_text(
+                "// owner save\n\nload Vampire-002\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(read_load_command(path), "load Vampire-002")
+
+    def test_player_sequence_seed_acceptance_requires_long_match(self) -> None:
+        capture = {
+            "complete": True,
+            "records": {"dropped": 0, "incomplete": 0},
+        }
+        clean_pairs = [[live, live + 1] for live in range(8, 78)]
+        clean = assess_seed(
+            capture,
+            {
+                "clip": {"frames": 81},
+                "live_to_authored_alignment": {"aligned_pairs": clean_pairs},
+            },
+        )
+        self.assertTrue(clean["passed"])
+        interrupted = assess_seed(
+            capture,
+            {
+                "clip": {"frames": 81},
+                "live_to_authored_alignment": {
+                    "aligned_pairs": [[live, live - 1] for live in range(6, 16)]
+                },
+            },
+        )
+        self.assertFalse(interrupted["passed"])
+        self.assertFalse(interrupted["checks"]["contiguous_authored_run"])
+
     def test_native_capture_project_has_explicit_win32_presets(self) -> None:
         presets = json.loads(
             (NATIVE_ROOT / "CMakePresets.json").read_text(encoding="utf-8")

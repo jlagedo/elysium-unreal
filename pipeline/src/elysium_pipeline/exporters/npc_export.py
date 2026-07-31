@@ -177,13 +177,14 @@ def pc_models_from_clandoc(out_root=OUT):
 
     No entity in any map carries a player model, so the `.ents` seed above cannot reach the
     PC bodies. The rulebook is the seed instead -- the same table 8.11a selects a body
-    through, so the exported set cannot drift from it: each `ClanData.General` carries
-    `M_Body0..5`/`F_Body0..5`, 7 playable clans x 2 sexes x 6 armour slots whose top two
-    repeat the tier-3 suit, so 84 slots resolve to **56 distinct models**. The multiplayer and
-    `unused*` templates repeat the same paths and the un-indexed `M_Body`/`F_Body` of the
-    human templates name NPC models, so only the indexed keys are read.
+    through, so the exported set cannot drift from it: each playable `ClanData.General`
+    carries `M_Body0..5`/`F_Body0..5`, with the top two slots repeating the tier-3 suit.
+    The base clan blocks contribute 84 references; multiplayer and unused templates raise
+    the raw indexed-key count to 216 without adding paths, so the union is **56 distinct
+    models**. Un-indexed `M_Body`/`F_Body` keys name NPC models and are not read.
 
-    Requires PL5b's `$ELYSIUM_EXPORT_ROOT/vdata/` mirror; returns `[]` (with a note) when it is absent."""
+    Requires PL5b's `$ELYSIUM_EXPORT_ROOT/vdata/` mirror; returns `[]` (with a
+    note) when it is absent."""
     path = os.path.join(out_root, CLANDOC)
     if not os.path.exists(path):
         print(f"[npc] {path} not found - PC bodies skipped (run the vdata export first)")
