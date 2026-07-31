@@ -827,6 +827,28 @@ Record:
 
 Do not start with Jeanette/Therese dialogue, combat, or a model with elaborate hair/facial behavior.
 
+The first controlled case is also the seed for breadth. After one player clip
+has clean live-to-authored alignment, enumerate every raw sequence descriptor,
+animation descriptor, and blend-grid entry resolved through the installed player
+models' include graphs. The `local_sequences` convenience view is not a coverage
+oracle because it deduplicates labels and selects only blend cell `[0][0]`.
+Replay each unambiguously addressable identity through the same unattended
+recipe. Deduplicate identical data across clan and armor targets, but retain
+duplicate names that resolve to different bytes. Every raw inventory row
+receives a validated capture or exact failure evidence; unsupported selection,
+interruption, parameterization, and ambiguity are inputs to the next focused
+experiment rather than silent coverage gaps.
+
+For each clean capture, resolve the exact patch-first owner, source sequence and
+animation bytes, and exported animation; evaluate the project decoder at the
+captured times; normalize entity/root placement; and compare local transforms,
+composed matrices, and the final skin palette per frame and bone. Mismatch
+clusters can suggest timing, flag, missing-channel, blend, remap, or hierarchy
+rules, but a rule is confirmed only when it predicts held-out captures or a
+focused repeat. This breadth pass does not require decoding every animation rule
+first and does not pretend a finite list of base clips exhausts a continuous
+pose-parameter or layered state space.
+
 ### 9.3 Stage B — locate large vertex-shader constant uploads
 
 `IDirect3DDevice9::SetVertexShaderConstantF` receives:
@@ -1396,19 +1418,26 @@ detailed task order and current front are in
 The durable investigation sequence is:
 
 1. choose one ordinary humanoid, one simple clip, and one repeatable scene;
-2. use final CPU matrices and correlated draw data as the first runtime oracle;
-3. attach raw resource bytes and runtime-object identity to that output path;
-4. compare the engine-neutral evaluator at the same model, sequence, and time;
-5. trace backward only from the first mismatching bone, vertex, or frame;
-6. add layers, included-model remaps, root motion, procedural work, scenes,
+2. prove unattended reset, settle, selection, capture, and cleanup on that clip;
+3. enumerate the raw sequence descriptors, animation descriptors, and blend-grid
+   entries resolved by the installed player models;
+4. capture every unambiguously addressable identity with final CPU matrices and
+   correlated draw data, retaining explicit evidence for the rest;
+5. match each capture to patch-first source bytes and exported animation, then
+   compare the engine-neutral evaluator per frame and bone;
+6. use corpus failure and mismatch clusters to select a concrete case;
+7. attach raw resource bytes and runtime-object identity to that output path;
+8. trace backward only from the first mismatching bone, vertex, or frame;
+9. add layers, included-model remaps, root motion, procedural work, scenes,
    facial/lip processing, and secondary motion one demonstrated mismatch at a
    time;
-7. keep source equivalence separate from Unreal basis conversion, retargeting,
+10. keep source equivalence separate from Unreal basis conversion, retargeting,
    and presentation acceptance.
 
-Capture/storage work follows the same rule: start with the smallest bounded raw
-record and append writer, measure it in retail, and add queue, blob, index, or
-compression machinery only for an observed limit.
+Capture/storage work follows the same rule: reuse the existing bounded final-pose
+capture for the corpus, add the smallest raw record only when a selected
+mismatch needs an earlier stage, measure it in retail, and add queue, blob,
+index, process-reuse, or compression machinery only for an observed limit.
 
 ## 14. Task ownership
 
@@ -1641,4 +1670,10 @@ targeted hook or disassembly
 regression test
 ```
 
-Once that chain works, scale it across models, clips, layers, and facial systems. Until then, broad rewrites, deep unrestricted disassembly, and visual-only debugging will produce far more uncertainty than knowledge.
+Once the seed chain works, scale the same unattended capture across the raw
+resolved player-animation inventory and compare every clean result with the
+patch-first export/decoder stack before deepening the hooks. Let duplicate-name
+and selection failures plus per-frame/per-bone mismatch clusters choose the next
+resource, blend, layer, procedural, scene, or facial experiment. Until then,
+broad rewrites, deep unrestricted disassembly, and visual-only debugging will
+produce far more uncertainty than knowledge.

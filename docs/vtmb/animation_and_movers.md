@@ -538,11 +538,21 @@ host_framerate 0.033333333
 pausable 0
 ```
 
+For unattended `+exec` playback from a loaded save, the player controller must
+be settled before selection. The working stimulus keeps simulation at normal
+time, waits for the map and third-person player model, pulses `+forward` for one
+command frame, releases it, allows 45 fixed wait frames for locomotion to settle,
+and then runs `player_sequence howl`. This resets the player's idle timer without
+carrying the movement transition into the selected sequence. A recipe that
+freezes the world and restores `host_timescale 1` adjacent to selection, or fires
+selection immediately after the movement pulse, is not a clean capture stimulus:
+normal idle/locomotion can visibly contaminate the forced clip.
+
 The console alias first creates the arm file printed by the probe and then runs
-`player_sequence howl`. A completed `player_sequence` remains the selected forced
-player sequence; `unpause` does not clear it, while reloading the map does. The
-fixed `host_framerate` value is seconds per frame on this build, not frames per
-second.
+`player_sequence howl`. Once cleanly selected after the controller settles, a
+completed `player_sequence` remains the selected forced player sequence;
+`unpause` does not clear it, while reloading the map does. The fixed
+`host_framerate` value is seconds per frame on this build, not frames per second.
 
 One clean capture recorded 81 distinct palettes over 2.717989 seconds. Patch-first
 resolution identifies `howl` in `models/character/shared/male/misc.mdl` as an

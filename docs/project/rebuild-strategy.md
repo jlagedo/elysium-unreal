@@ -407,16 +407,23 @@ repository-relative corpus fallback. The reverse-engineering
 toolchain (Crowbar/TemplePlus/VAMPTools/source-engine) and the `$ELYSIUM_WORK_ROOT/research/ghidra/` workspace are
 local-only, read-only RE references (never committed).
 
-The retail animation instrument is deliberately private and exact-build. It
-captures bounded raw registers, stack bytes, pointers, and memory spans at
-debugger-validated resource, evaluation, simulation, deformation, and render
-boundaries. Unknown bytes remain available to offline analyzers; decoded fields
+The retail animation instrument is deliberately private and exact-build. Its
+first intermediate result is an unattended final-matrix corpus for the union of
+raw sequence and animation descriptors resolved by the installed player models:
+prove one clean sequence, automate the same reset/settle/play/capture recipe for
+every addressable identity, and retain exact evidence for duplicate-name,
+blend-cell, parameterized, or otherwise unaddressable rows. Each clean capture
+is matched to its patch-first source bytes and exported animation, then compared
+per frame and bone with the engine-neutral decoder. Held-out captures test rules
+suggested by mismatch clusters; correlation alone does not promote a hypothesis.
+Only then does a focused experiment add the bounded raw registers, stack bytes,
+pointers, and memory spans needed at the first unexplained resource, evaluation,
+simulation, deformation, or render boundary. Unknown bytes remain available to offline analyzers; decoded fields
 are hypotheses, not a durable capture contract. Writer and reader evolve
-together. When an offline index is useful, it is disposable and rebuildable.
-Only measured callback cost, memory pressure, writer backlog, trace volume, or
-query time justifies capture/storage optimization. The investigation starts
-with one resource-to-final-output path and expands only from observed
-mismatches; its detailed order is `docs/project/retail-capture-roadmap.md`.
+together. Offline indexes are disposable and rebuildable. Only measured
+callback cost, memory pressure, writer backlog, trace volume, startup cost, or
+query time justifies capture/storage optimization. The detailed order is
+`docs/project/retail-capture-roadmap.md`.
 
 New sidecar formats and decoder fixes land in `pipeline/`. The pipeline backlog
 (entity-model export, script/`.dlg` copies, use-icon atlas, NPC batch export +

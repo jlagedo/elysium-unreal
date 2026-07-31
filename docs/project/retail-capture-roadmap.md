@@ -103,7 +103,7 @@ continues is out of scope.
 
 | Order | Priority | Phase | Outcome |
 |---:|---|---|---|
-| 1 | P0 — next | CAP1 — minimal raw recorder | One configurable raw record flows from the known hooks to Python without unbounded memory growth |
+| 1 | P0 — next | CAP1 — automated player-animation corpus | One clean unattended player capture scales to the raw resolved player-animation inventory and is compared across the current export/decoder stack, with explicit evidence for every failure or skip |
 | 2 | P0 | CAP2 — first skeletal path | One simple actor is traced from requested files through runtime objects and local transforms to final draw matrices |
 | 3 | P0 | CAP3 — skeletal mismatches | Only the shipped timing, blend, remap, layer, root-motion, and procedural cases that break the simple evaluator are recovered |
 | 4 | P1 | CAP4 — theatre scene | One authored scene is traced through binding, placement, layered animation, movement, events, and completion |
@@ -111,32 +111,68 @@ continues is out of scope.
 | 6 | P2 | CAP6 — secondary motion | One visible accessory, hair, cloth-like, or jiggle behavior is classified and reproduced without assuming its mechanism first |
 | 7 | P2 | CAP7 — reproduction handoff | The recovered paths run in engine-neutral code, have focused retail comparisons, and feed Unreal |
 
-**The next and only current task is CAP1.1.** Later tasks may inform what CAP1
-must record, but they do not authorize building their infrastructure early.
+**The next and only current task is CAP1.1.** The existing final-pose capture is
+used before adding generic raw hooks. Later tasks may identify a missing span or
+stage, but they do not authorize building capture infrastructure early.
 
-## CAP1 — Minimal raw recorder
+## CAP1 — Automated player-animation corpus
 
-- [ ] **CAP1.1 Generic BASE/FINL/DrawModel record.** Replace the three known typed
-  payload assumptions with one local editable recipe and one self-bounded raw
-  record. Record hook ID, entry/exit, QPC, thread ID, sequence, x86 registers,
-  a bounded stack window, and configured memory spans with original address,
-  requested length, copied length, and status. Express the current typed pose
-  buffers as labeled spans and prove that Python can recover the same useful
-  values as the existing readers.
-- [ ] **CAP1.2 Bounded streaming trace.** Reuse the existing worker-writer path.
-  Append length-delimited records as the run proceeds, cap queued bytes, count
-  every drop/copy/write failure, and let the Python scanner stop cleanly at a
-  partial tail. Do not add chunk protocols, a blob store, a database, or
-  compression here.
-- [ ] **CAP1.3 Controlled retail measurement.** Capture one simple actor on the
-  supported build, stop the writer, and exit without a crash or stuck process.
-  Record exact hashes, zero drops in the controlled run, callback time, peak
-  queued bytes, write rate, and trace growth. Change storage mechanics only if
-  these measurements expose a real limit.
+- [ ] **CAP1.1 Reproducible unattended seed capture.** Turn the validated launch
+  shape (`-game Unofficial_Patch -dev -console -sw +exec`) into one repeatable
+  `howl` capture on the current player model. Load the fixed save, let the world
+  settle at normal time, enter third person, pulse and release movement to reset
+  the player idle timer, allow locomotion to settle, arm the existing final-pose
+  recorder, and only then run `player_sequence howl`. Acceptance requires the
+  exact executable/module/model hashes and launch recipe, bounded capture
+  counters, no stuck retail process, and monotonic live-to-authored `howl`
+  alignment without an idle or locomotion interruption.
+- [ ] **CAP1.2 Raw resolved player-animation inventory.** Enumerate every raw
+  sequence descriptor and animation descriptor reachable through the include-
+  model graphs of the installed player body models. Do not use the current
+  `local_sequences` convenience view as the coverage authority: it deduplicates
+  labels and exposes only blend cell `[0][0]`. Preserve target model, owner model,
+  raw sequence and animation indices, name, the complete 16×16 animation grid,
+  frames, FPS, flags, blend/pose metadata, neighboring unknown bytes, and the
+  list of compatible player models. Deduplicate only identical owner/sequence/
+  animation-data identities across clans and armor variants; never collapse
+  duplicate names that resolve to different bytes.
+- [ ] **CAP1.3 Automated player-sequence capture.** Drive every inventory row
+  that is unambiguously addressable through `player_sequence` using the CAP1.1
+  reset/settle/play/capture recipe, initially with one fresh retail launch per
+  sequence for isolation. Capture final bone/world and skin matrices plus the
+  existing draw correlation, enforce per-run timeout and cleanup, and retain a
+  terminal result for every raw inventory row. Duplicate-name, pose-parameter,
+  blend-cell, layer-only, and otherwise unaddressable rows remain explicit and
+  identify the smallest additional stimulus or selection probe they require.
+  Reuse one process only if measured startup cost makes the isolated loop
+  impractical.
+- [ ] **CAP1.4 Corpus-wide export and decoder differential.** Match every clean
+  retail capture to the exact patch-first source bytes, raw owner/sequence/
+  animation identity, and exported animation produced by the current stack.
+  Evaluate the engine-neutral decoder at the captured times, remove entity/root
+  placement, and report per-frame/per-bone local position, local rotation,
+  composed matrix, and skin-palette error. Cluster failures by owner bank,
+  sequence flags, blend grid, pose parameters, bone flags, missing channels,
+  timing, and boundary behavior. A proposed rule counts as inferred only when it
+  predicts held-out captures or a focused repeat; correlation alone remains a
+  hypothesis.
+- [ ] **CAP1.5 Corpus audit and mismatch queue.** Write a disposable JSONL or CSV
+  index with attempted, captured, deduplicated, ambiguous, interrupted,
+  unselectable, timed-out, and failed counts; capture paths and hashes; authored
+  alignment and decoder-comparison coverage; and the first mismatching frame,
+  stage, and bone. Retry contamination rather than accepting it. A sequence that
+  `player_sequence` cannot address by name keeps its exact failure evidence and
+  becomes a focused selection-state case for CAP3 instead of disappearing from
+  coverage.
 
-CAP1 closes when the generic trace replaces the typed formats for new work. The
-old readers may remain only while an existing capture or comparison still uses
-them.
+For CAP1, **all player animations** means every unique skeletal sequence in the
+resolved player-model union has a terminal status: validated capture, proven
+identity deduplication, or an exact evidenced blocker with a focused follow-up.
+Facial flexes, scene-only actor control, ragdoll, and secondary solvers remain in
+their owning later phases. Every validated capture is also matched to source and
+export identities and compared against the current decoder. CAP1 closes on that
+complete inventory, corpus, and differential report, not on a claim that every
+animation path or every point in a continuous blend space is already understood.
 
 ## CAP2 — First resource-to-final-matrix path
 
@@ -149,10 +185,13 @@ them.
   constructed object addresses to the model/entity pointers observed at BASE,
   FINL, and DrawModel. Preserve neighboring unknown bytes; do not build a
   universal object database.
-- [ ] **CAP2.3 Simple skeletal stage trace.** For matched model, sequence, and
-  time, capture evaluator inputs, the compressed bytes it consumes, decoded
-  local position/quaternion output, hierarchy composition, final CPU matrices,
-  and the matrix data consumed for the draw.
+- [ ] **CAP2.3 Targeted skeletal stage trace.** For matched model, sequence, and
+  time, start from the CAP1 final matrices and add only the smallest editable raw
+  hook recipe needed to capture evaluator inputs, compressed bytes consumed,
+  decoded local position/quaternion output, hierarchy composition, and draw
+  input. Each record preserves registers, bounded stack and pointed-to spans,
+  original addresses, copied lengths, and failures; no durable generic schema is
+  required.
 - [ ] **CAP2.4 First ordinary-clip equivalence.** Compare the retail locals and
   final matrices with the current decoder and retained reference output. Trace
   backward from the first bad bone/frame, fix only the demonstrated rule, add a
@@ -270,6 +309,7 @@ These are responses to evidence, not scheduled prerequisites:
 | Disk write rate is the bottleneck | Batch or compress on the writer thread after measuring the codec cost |
 | A hook is too noisy | Add the one model/entity/time/call filter required by that experiment |
 | The shared hook backend fails on a validated target | Repair or replace only the failing backend behavior |
+| One-process-per-sequence startup dominates the corpus run | Reuse the settled world only after measuring the cost and proving reset isolation between sequences |
 
 No triggered improvement becomes a general subsystem unless more than one real
 experiment needs it.
@@ -285,6 +325,8 @@ experiment needs it.
 - a complete process dump or recursive pointer-graph crawler;
 - exhaustive cache, solver, save/load, ragdoll, and teardown coverage before a
   selected shipped case requires it;
+- duplicate captures for clan or armor models that resolve to the same owner,
+  sequence, animation data, and compatible skeleton;
 - explaining or discarding every unknown bit before useful behavior can be
   reproduced.
 
@@ -299,4 +341,6 @@ experiment needs it.
 | Runtime data cannot be tied to an asset or actor | Capture addresses, caller, time/thread, exact hashes, and establish CAP2 identity before widening hooks |
 | Final output hides the cause of a mismatch | Trace backward only from the first mismatching bone, vertex, or frame |
 | Raw evidence becomes difficult to query | Keep records self-bounded and add a disposable index only for a demonstrated slow query |
+| Player idle or locomotion contaminates a forced sequence | Pulse movement before capture, release it, allow a fixed settle window, and reject non-monotonic authored alignment |
+| Batch coverage silently omits duplicate names or unselectable sequences | Inventory by owner/index/data identity and require one terminal result for every row |
 | Infrastructure expands faster than evidence | The chronological order is binding and CAP1.1 is the only current task |

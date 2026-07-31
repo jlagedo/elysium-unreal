@@ -101,11 +101,13 @@ asset enhancement — re-sequenced then.
 
 Open tasks whose dependencies are met, ordered by playable-path payoff:
 
-1. **0.10 / RE32 / RE33 / 12.1** — finish the small raw recorder, follow one
-   simple actor from resource load through skeletal evaluation to final draw
-   matrices, then expand only from observed mismatches into layers/remaps,
-   theatre scenes, facial/lip processing, and secondary motion. Detailed order
-   and retail evidence gates:
+1. **0.10 / RE32 / RE33 / 12.1** — automate one clean player-sequence capture,
+   build the raw non-deduplicated animation inventory resolved by the installed
+   player models, capture every addressable sequence, and compare the corpus
+   against the patch-first source/export decoder stack. Use the mismatch groups
+   to choose the first resource-to-final-matrix trace and expand only from
+   observed differences into layers/remaps, theatre scenes, facial/lip
+   processing, and secondary motion. Detailed order and retail evidence gates:
    `docs/project/retail-capture-roadmap.md`.
 2. **11.10** — finish PP0 with the played-input harness.
 3. **9.8 / 9.9 / 9.10** — inventory, NPC reactions, and economy on the durable player/entity spine.
@@ -182,9 +184,12 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
 - [x] **0.9 The uasset-bake architecture** — the world's *look* bakes offline into the gitignored
   `/ElysiumBaked` mount, everything else stays runtime-built. → `docs/architecture/uasset-bake-spike.md`. Residue handed on: **PL11**.
 - [~] **0.10 Retail animation RE instrument** — a private one-build launcher/probe
-  with editable raw byte-span recipes, bounded streaming capture, and focused
-  resource-to-render analyzers; storage and indexes expand only after measured
-  capture or query pain, with no stable schema or public compatibility surface.
+  whose first intermediate goal is an unattended, indexed final-matrix corpus
+  for the raw player-animation inventory plus a per-frame/per-bone differential
+  against the patch-first export/decoder stack. Editable raw byte-span recipes
+  are added only when a corpus mismatch needs an earlier stage; storage expands
+  only after measured capture or query pain, with no stable schema or public
+  compatibility surface.
   Detailed tasks and acceptance:
   `docs/project/retail-capture-roadmap.md`.
 
@@ -1178,7 +1183,7 @@ retail end to end, and `uv run elysium test Play` proves it headlessly.
 | RE29 | Entity-name matching is case-insensitive with final-`*` prefix semantics. → `docs/vtmb/entity_io.md`. | entity I/O | [x] |
 | RE30 | Recover `trigger_environmental_audio` touch behavior and the precedence/interpolation among its `room_type`, SoundScheme `RoomDSP`, and the player's networked `m_sndRoomDSP`/`m_sndPlayerDSP`. → `docs/vtmb/audio_pipeline.md`. | 6.7 | [ ] |
 | RE31 | Recover the SoundScheme RandomSound frequency scheduler/distribution and transition edge cases; the current approximate curve is not a faithful baseline. → `docs/vtmb/audio_pipeline.md`. | 6.7 | [ ] |
-| RE32 | Trace exact character resources from path and source bytes through runtime construction, v2531 skeletal selection/composition, scene placement, root/entity motion, procedural/jiggle and cloth/hair physics, hierarchy, handoff, and final render matrices. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/animation_and_movers.md` and `docs/vtmb/choreographed_scenes.md`. | 8.5, 8.11, 12.1 | [~] |
+| RE32 | First build the raw resolved player-animation inventory, automate final-matrix capture for every addressable sequence, and compare each capture against the exact patch-first source/export decoder output; then trace selected mismatch groups from resource paths and bytes through runtime construction, v2531 skeletal selection/composition, scene placement, root/entity motion, procedural/jiggle and cloth/hair physics, hierarchy, handoff, and final render matrices. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/animation_and_movers.md` and `docs/vtmb/choreographed_scenes.md`. | 8.5, 8.11, 12.1 | [~] |
 | RE33 | Trace expression, VCD/audio, and `.lip` resources from source bytes through runtime objects, controller mixing, flex rules/ramps, eyelids, amplitude mouth, vertex deformation, and render submission. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/facial_animation.md`. | 12.3–12.5 | [~] |
 | SKY | The sky/ambience rework is complete; remaining work is tracked as 3.10–3.13 and RE17. Facts: `docs/vtmb/sky-ambience.md`. | 3.6, 3.7 | [x] |
 
