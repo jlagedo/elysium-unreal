@@ -15,6 +15,12 @@ landmark from GI-scoped state, adopts the actors stamped by the bake, and builds
 entities, scripting, audio, NPCs, and other runtime systems on `BeginPlay`. Cross-map state
 lives at GameInstance scope and survives the travel; per-map state dies with the world.
 
+In an editor-built `UnrealEditor.exe -game` process, `UWorld::PostLoad` gives a loaded map asset
+`RF_Standalone`, while `UEngine::LoadMap` removes the outgoing world from the root set without
+clearing that editor asset flag. Elysium clears it immediately before `OpenLevel`, matching
+`UWorld::DestroyWorld`, so same-map reloads and ordinary map transitions can collect the old world.
+Packaged game worlds do not acquire the editor-only flag.
+
 `BeginPlay` is the start of Elysium's runtime construction, not its gameplay-ready signal. The map
 actor advances through `Building → WaitingForPrerequisites → Activating → Active|Failed`; the
 entity substrate remains dormant and the application remains `Loading` until `Active`.

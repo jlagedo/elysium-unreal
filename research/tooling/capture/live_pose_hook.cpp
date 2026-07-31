@@ -783,9 +783,13 @@ DWORD WINAPI CaptureWorker(void*) {
     }
 
     HMODULE studioRender = nullptr;
-    for (int attempt = 0; attempt < 200 && !studioRender; ++attempt) {
+    HMODULE client = nullptr;
+    for (int attempt = 0;
+         attempt < 1200 && (!studioRender || !client);
+         ++attempt) {
         studioRender = GetModuleHandleW(L"StudioRender.dll");
-        if (!studioRender) {
+        client = GetModuleHandleW(L"client.dll");
+        if (!studioRender || !client) {
             Sleep(25);
         }
     }
@@ -793,7 +797,6 @@ DWORD WINAPI CaptureWorker(void*) {
         WriteMarker(gDonePath, "error=StudioRender.dll not loaded\n");
         return 2;
     }
-    HMODULE client = GetModuleHandleW(L"client.dll");
     if (animationOutputPath[0] && !client) {
         WriteMarker(gDonePath, "error=client.dll not loaded\n");
         return 2;

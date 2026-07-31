@@ -36,6 +36,8 @@ struct FElysiumContentPaths
 		return Value;
 	}
 	static bool IsConfigured() { return !Root().IsEmpty(); }
+	// Offline/content-test completeness signal only. Gameplay reads the artifacts that are present
+	// and must never refuse to boot solely because this marker exists.
 	static FString IncompleteMarker() { return Root() / TEXT(".elysium-incomplete"); }
 	static bool IsIncomplete()
 	{
@@ -43,7 +45,6 @@ struct FElysiumContentPaths
 		return !Value.IsEmpty() &&
 			IFileManager::Get().FileExists(*(Value / TEXT(".elysium-incomplete")));
 	}
-	static bool IsReady() { return IsConfigured() && !IsIncomplete(); }
 
 	// --- Baked content (pipeline/unreal/bake_map.py) ---------------------------------------------
 	// The look of a map — world + sky geometry, materials, textures, props, lights, fog — is

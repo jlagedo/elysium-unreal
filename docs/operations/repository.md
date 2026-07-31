@@ -69,5 +69,7 @@ complete tasks whose outputs still exist; `--force` bypasses that cache.
 export corpus, `Content/VtMB/`, `Content/Elysium.umap`, and
 `Plugins/ElysiumBaked/Content/`. It immediately writes
 `$ELYSIUM_EXPORT_ROOT/.elysium-incomplete`; successful export, package generation, bake,
-and verification remove the marker. Runtime map travel, repository diagnostics, and
-content tests refuse or skip an incomplete corpus rather than treating it as valid.
+and verification remove the marker. Repository diagnostics and content tests refuse or skip an
+incomplete corpus rather than treating it as valid. Runtime gameplay does not consult the marker;
+it loads the generated artifacts that are actually present and reports a missing map or sidecar at
+the point of use.

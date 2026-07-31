@@ -91,6 +91,8 @@ def build_config(load_command: str, clip: str, sequence_frames: int = 81) -> str
         "host_framerate 0.033333333",
         "host_timescale 1",
         "pausable 0",
+        "cl_mouselook 0",
+        "cl_mouseenable 0",
         load_command,
         *_wait_lines(PRE_THIRD_PERSON_WAITS),
         "thirdperson",
@@ -296,6 +298,10 @@ def run(args: argparse.Namespace) -> int:
         "-dev",
         "-console",
         "-sw",
+        "-w",
+        "1024",
+        "-h",
+        "768",
         "+exec",
         config_name,
     ]
@@ -305,7 +311,6 @@ def run(args: argparse.Namespace) -> int:
         Path(__file__).with_name("capture_live_pose.py").resolve(),
     ]
     run_manifest: dict[str, Any] = {
-        "version": 1,
         "status": "running",
         "tool": {
             "git": _git_identity(repo_root),

@@ -70,8 +70,11 @@ struct Options {
     std::wstring WorkingDirectory;
     std::wstring Distribution;
     std::wstring ProbeHost;
+    std::wstring CaptureHook;
     std::wstring Collector;
     std::wstring FinalizationPath;
+    std::wstring CaptureStopPath;
+    std::wstring CaptureDonePath;
     StartupProfile Profile = StartupProfile::Direct;
     std::vector<std::wstring> EnvironmentOverrides;
     std::vector<std::wstring> CollectorArguments;
@@ -182,6 +185,12 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
             options->Executable = value;
         } else if (std::wcscmp(option, L"--probe-host") == 0) {
             options->ProbeHost = value;
+        } else if (std::wcscmp(option, L"--capture-hook") == 0) {
+            options->CaptureHook = value;
+        } else if (std::wcscmp(option, L"--capture-stop") == 0) {
+            options->CaptureStopPath = value;
+        } else if (std::wcscmp(option, L"--capture-done") == 0) {
+            options->CaptureDonePath = value;
         } else if (std::wcscmp(option, L"--collector") == 0) {
             options->Collector = value;
         } else if (std::wcscmp(option, L"--collector-argument") == 0) {
@@ -266,6 +275,9 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
         if (actions != 0 || options->ProbeHost.empty() ||
             !options->Executable.empty() ||
             !options->WorkingDirectory.empty() ||
+            !options->CaptureHook.empty() ||
+            !options->CaptureStopPath.empty() ||
+            !options->CaptureDonePath.empty() ||
             !options->Collector.empty() ||
             !options->FinalizationPath.empty() ||
             !options->EnvironmentOverrides.empty() ||
@@ -305,6 +317,21 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
         std::fwprintf(
             stderr,
             L"--finalization is required with --supervise\n");
+        return false;
+    }
+    if (options->CaptureStopPath.empty() !=
+        options->CaptureDonePath.empty()) {
+        std::fwprintf(
+            stderr,
+            L"--capture-stop and --capture-done must be provided together\n");
+        return false;
+    }
+    if ((!options->CaptureStopPath.empty() ||
+         !options->CaptureDonePath.empty()) &&
+        (!options->Supervise || options->CaptureHook.empty())) {
+        std::fwprintf(
+            stderr,
+            L"capture markers require --supervise and --capture-hook\n");
         return false;
     }
     return true;
@@ -645,7 +672,7 @@ bool InjectLibrary(
         std::fwprintf(stderr, L"remote LoadLibraryW failed\n");
         return false;
     }
-    return bootstrap->WaitReady(30000);
+    return bootstrap == nullptr || bootstrap->WaitReady(30000);
 }
 
 bool SameProcessArchitecture(HANDLE process) {
@@ -832,7 +859,9 @@ int wmain(int argc, wchar_t** argv) {
             L"[--startup-profile direct|unofficial-patch|"
             L"unofficial-patch-save] "
             L"[--environment NAME=VALUE] [--verify-suspended-ms N] "
-            L"[--probe-host PATH] [--collector PATH] "
+            L"[--probe-host PATH] [--capture-hook PATH] "
+            L"[--capture-stop PATH --capture-done PATH] "
+            L"[--collector PATH] "
             L"[--collector-argument VALUE] [--timeout-ms N] "
             L"[--normal-exit-code N] "
             L"[--finalization PATH] "
@@ -845,17 +874,26 @@ int wmain(int argc, wchar_t** argv) {
     std::wstring executable;
     std::wstring workingDirectory;
     std::wstring probeHost;
+    std::wstring captureHook;
     std::wstring collector;
     std::wstring finalizationPath;
+    std::wstring captureStopPath;
+    std::wstring captureDonePath;
     if ((options.AttachPid == 0 &&
          (!FullPath(options.Executable, &executable) ||
           !FullPath(options.WorkingDirectory, &workingDirectory))) ||
         (!options.ProbeHost.empty() &&
          !FullPath(options.ProbeHost, &probeHost)) ||
+        (!options.CaptureHook.empty() &&
+         !FullPath(options.CaptureHook, &captureHook)) ||
         (!options.Collector.empty() &&
          !FullPath(options.Collector, &collector)) ||
         (!options.FinalizationPath.empty() &&
-         !FullPath(options.FinalizationPath, &finalizationPath))) {
+         !FullPath(options.FinalizationPath, &finalizationPath)) ||
+        (!options.CaptureStopPath.empty() &&
+         !FullPath(options.CaptureStopPath, &captureStopPath)) ||
+        (!options.CaptureDonePath.empty() &&
+         !FullPath(options.CaptureDonePath, &captureDonePath))) {
         std::fwprintf(stderr, L"cannot resolve launch paths\n");
         return 3;
     }
@@ -885,6 +923,15 @@ int wmain(int argc, wchar_t** argv) {
         if (probeAttributes == INVALID_FILE_ATTRIBUTES ||
             (probeAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
             std::fwprintf(stderr, L"invalid probe-host DLL\n");
+            return 4;
+        }
+    }
+    if (!captureHook.empty()) {
+        const DWORD captureHookAttributes =
+            GetFileAttributesW(captureHook.c_str());
+        if (captureHookAttributes == INVALID_FILE_ATTRIBUTES ||
+            (captureHookAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+            std::fwprintf(stderr, L"invalid capture-hook DLL\n");
             return 4;
         }
     }
@@ -1018,6 +1065,18 @@ int wmain(int argc, wchar_t** argv) {
         ready.BinaryProfileMissCount);
     std::fflush(stdout);
 
+    if (!captureHook.empty()) {
+        if (!InjectLibrary(process.Get(), captureHook, nullptr)) {
+            return failLaunch(L"capture-hook preload failed", 14);
+        }
+        std::wprintf(
+            L"retail-launch-v1 event=capture_hook_preloaded "
+            L"mode=launched pid=%lu hook=\"%ls\"\n",
+            created.dwProcessId,
+            captureHook.c_str());
+        std::fflush(stdout);
+    }
+
     if (options.InjectAndTerminate) {
         if (!TerminateAndWait(process.Get(), 0)) {
             return failLaunch(L"cannot terminate bootstrapped child", 14);
@@ -1039,6 +1098,8 @@ int wmain(int argc, wchar_t** argv) {
             collector,
             options.CollectorArguments,
             finalizationPath,
+            captureStopPath,
+            captureDonePath,
             options.TimeoutMs,
             options.NormalExitCodes,
             ProfileNameAscii(options.Profile),

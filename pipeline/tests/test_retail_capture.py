@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sqlite3
 import struct
 import tempfile
 import unittest
@@ -23,12 +24,171 @@ from research.tooling.capture.capture_player_sequence import (
     build_config,
     read_load_command,
 )
+from research.tooling.capture.capture_theatre import (
+    PRE_MAP_WAITS,
+    build_config as build_theatre_config,
+)
+from research.tooling.capture.finalize_capture_database import (
+    ANIMATION_FILE_HEADER,
+    ANIMATION_RECORD_HEADER,
+    POSE_FILE_HEADER,
+    POSE_RECORD_HEADER,
+    finalize,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NATIVE_ROOT = REPO_ROOT / "research" / "tooling" / "capture" / "native"
 
 
 class RetailCaptureTests(unittest.TestCase):
+    def test_theatre_recipe_delays_map_until_capture_hook_can_arm(self) -> None:
+        lines = build_theatre_config().splitlines()
+        map_line = lines.index("map sp_theatre")
+        self.assertEqual(lines[map_line - 1], "echo ELYSIUM_CAP11_MAP_SP_THEATRE")
+        self.assertEqual(lines[:map_line].count("wait"), PRE_MAP_WAITS)
+        self.assertLess(lines.index("cl_mouselook 0"), map_line)
+        self.assertLess(lines.index("cl_mouseenable 0"), map_line)
+        self.assertNotIn("player_sequence", "\n".join(lines))
+
+    def test_capture_finalizer_retains_exact_records_in_one_sqlite_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            (session / "launch.json").write_text(
+                json.dumps(
+                    {
+                        "created_utc": "test",
+                        "tool_git": {"commit": "abc", "dirty": False},
+                        "map": "sp_theatre",
+                        "capture_duration_seconds": 30,
+                        "retail_exit_code": 28,
+                        "launch_arguments": ["-game", "Unofficial_Patch"],
+                        "modules": [
+                            {
+                                "name": "Vampire.exe",
+                                "path": "Vampire.exe",
+                                "file_size": 3,
+                                "sha256": "0" * 64,
+                                "binary_profile": "owner-test",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (session / "recipe.cfg").write_text("map sp_theatre\n", encoding="ascii")
+            (session / "done.txt").write_text(
+                "complete=1\nqueued=2\nwritten=2\ndropped=0\n",
+                encoding="ascii",
+            )
+            (session / "supervision.txt").write_text(
+                "reason=timeout\ncapture_done=1\nbinary_profile_misses=0\n"
+                "probe_diagnostic_writes=0\n",
+                encoding="ascii",
+            )
+
+            pose_payload = bytes(range(96))
+            pose_header = POSE_RECORD_HEADER.pack(
+                b"POSE",
+                POSE_RECORD_HEADER.size + len(pose_payload),
+                1,
+                100,
+                7,
+                0x1000,
+                0x2000,
+                0x3000,
+                1,
+                0x4000,
+                1,
+                2,
+                3,
+                4,
+                5,
+                b"models/test.mdl\0",
+            )
+            (session / "scene.elpose").write_bytes(
+                POSE_FILE_HEADER.pack(
+                    b"ELPOSE2",
+                    2,
+                    POSE_FILE_HEADER.size,
+                    10_000,
+                    90,
+                    12,
+                    0x5000,
+                    0x6000,
+                    0x7000,
+                    0x8000,
+                    b"1" * 64 + b"\0",
+                    b"",
+                )
+                + pose_header
+                + pose_payload
+            )
+            animation_payload = struct.pack("<7fI", *([0.0] * 7), 1)
+            animation_header = ANIMATION_RECORD_HEADER.pack(
+                b"BASE",
+                ANIMATION_RECORD_HEADER.size + len(animation_payload),
+                2,
+                101,
+                7,
+                0x2000,
+                0x1000,
+                0x3000,
+                1,
+                4,
+                0.25,
+                0.5,
+                1,
+                0x9000,
+                0xA000,
+            )
+            (session / "animation.elanim").write_bytes(
+                ANIMATION_FILE_HEADER.pack(
+                    b"ELANIM2",
+                    2,
+                    ANIMATION_FILE_HEADER.size,
+                    10_000,
+                    90,
+                    12,
+                    0xB000,
+                    0xC000,
+                    0xD000,
+                    0,
+                    b"2" * 64 + b"\0",
+                    b"",
+                )
+                + animation_header
+                + animation_payload
+            )
+
+            report = finalize(session)
+            database = Path(report["database"])
+            self.assertTrue(database.is_file())
+            self.assertFalse((session / "scene.elpose").exists())
+            self.assertFalse((session / "animation.elanim").exists())
+            connection = sqlite3.connect(database)
+            try:
+                self.assertEqual(
+                    connection.execute("SELECT count(*) FROM records").fetchone()[0],
+                    2,
+                )
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT raw_payload FROM records WHERE kind = 'POSE'"
+                    ).fetchone()[0],
+                    pose_payload,
+                )
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT value FROM capture_metadata WHERE key = 'map'"
+                    ).fetchone()[0],
+                    '"sp_theatre"',
+                )
+                self.assertEqual(
+                    connection.execute("PRAGMA user_version").fetchone()[0], 0
+                )
+            finally:
+                connection.close()
+
     def test_player_animation_inventory_preserves_duplicate_sequences_and_grid(self) -> None:
         data = bytearray(4096)
         data[:4] = b"IDST"
@@ -108,6 +268,8 @@ class RetailCaptureTests(unittest.TestCase):
             if line == "player_sequence howl"
         ]
         self.assertLess(lines.index("thirdperson"), forward)
+        self.assertLess(lines.index("cl_mouselook 0"), lines.index("load Vampire-002"))
+        self.assertLess(lines.index("cl_mouseenable 0"), lines.index("load Vampire-002"))
         self.assertEqual(lines[forward + 1], "wait")
         self.assertEqual(release, forward + 2)
         self.assertEqual(len(triggers), SEQUENCE_REPETITIONS)
@@ -246,6 +408,8 @@ class RetailCaptureTests(unittest.TestCase):
         self.assertIn('"--startup-profile"', public_driver)
         self.assertIn('target_arguments[:1] == ["--"]', public_driver)
         self.assertIn('"--target-argument"', public_driver)
+        self.assertIn('"--capture-hook"', public_driver)
+        self.assertIn('"--capture-stop"', public_driver)
 
     def test_bootstrap_injection_uses_a_versioned_loadlibrary_handshake(self) -> None:
         cmake = (NATIVE_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
@@ -336,6 +500,8 @@ class RetailCaptureTests(unittest.TestCase):
         self.assertIn("CTRL_C_EVENT", supervision)
         self.assertNotIn("GenerateConsoleCtrlEvent", supervision)
         self.assertIn("MoveFileExW(", supervision)
+        self.assertIn("WaitForCaptureDone(", supervision)
+        self.assertIn('"capture_done=%d\\n"', supervision)
         self.assertIn('"state=%s\\n"', supervision)
         for reason in ("process-crash", "collector-exit", "timeout", "ctrl-c"):
             self.assertIn(f'"{reason}"', supervision)

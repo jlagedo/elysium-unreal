@@ -62,3 +62,7 @@ Use `uv run elysium debug` for profiling, probes, screenshots, movement, greenro
 modelroom harnesses. Research, IDE, and MCP integration are available through `research`,
 `ide vscode`, and `mcp`. See [repository operations](docs/operations/repository.md) for
 the complete contract.
+
+For a clean standalone game launch, use `play.bat [map]`. It reads the same local path
+configuration, supplies the export corpus and DX12, opens Unreal's live log console, and does not
+enable a development harness.

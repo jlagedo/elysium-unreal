@@ -58,7 +58,9 @@ Grep entry points, one line each — semantics live in the design doc named per 
 **Map** (`docs/architecture/map-architecture.md`, `docs/architecture/engine-core.md`): `AElysiumMapActor` (owns one map's
 epoch) with three components — `UElysiumMapVisuals` (`Visual/`, the look), `UElysiumMapCollision`
 (`Map/`, the walkable surface), `UElysiumEntityBodies` (`Visual/`, NPC/prop body factory) — exposed
-as `GetVisuals()`/`GetCollision()`/`GetBodies()`, no forwarders. Visual readers:
+as `GetVisuals()`/`GetCollision()`/`GetBodies()`, no forwarders. Its runtime phase is
+`Building → WaitingForPrerequisites → Activating → Active|Failed`; the map subsystem forwards the
+current actor's one-shot ready/failed delegates. Visual readers:
 `FElysiumObjModel`, `FElysiumTextureCache`, `FElysiumMaterialFactory`, `ElysiumReflections.h`,
 `FElysiumDecals`, `FElysiumRopes`, `UElysiumLightRig`, `FElysiumSkyDef`,
 `ElysiumEnvironment.{h,cpp}`, `ElysiumFog.h`.
@@ -69,6 +71,7 @@ as `GetVisuals()`/`GetCollision()`/`GetBodies()`, no forwarders. Visual readers:
 `AElysiumMapActor`), `UElysiumBrushComponent`, `FElysiumEventQueue`/`FElysiumIOEvent`,
 `IElysiumIOSink`. Every input goes through `FElysiumEntityWorld::AcceptInput`/the event queue, and
 time comes from the substrate clock, never `FTimerManager` — this holds everywhere in the layer.
+`Load()` constructs a dormant world; a direct caller must `Activate(Now)` before driving gameplay.
 
 The character chain in `Public/ElysiumPlayer.h` is VtMB's own: `FElysiumEntity` (CBaseEntity) →
 `FElysiumAnimating` (CBaseAnimating) → `FElysiumCombatCharacter` (CBaseCombatCharacter) →
@@ -166,7 +169,9 @@ Hard-won, non-obvious, and easy to undo:
 - **`FCogImguiContext::SetEnableInput` dereferences the ImGui context**, which Cog creates lazily on
   its first tick. Every call site guards on `GetEnableInput()` first; unguarded at boot it crashes.
 - **The loading screen hooks `IGameMoviePlayer::OnPrepareLoadingScreen`, not `PreLoadMap`** — the
-  movie player binds `PreLoadMap` itself at engine init, ahead of any GI subsystem.
+  movie player binds `PreLoadMap` itself at engine init, ahead of any GI subsystem. Its blocking
+  screen auto-completes; `PostLoadMapWithWorld` installs the same pure-Slate tree as a viewport
+  overlay until the map actor publishes ready.
 - **A `UCommonActivatableWidget` added straight to the viewport stays collapsed until
   `ActivateWidget()`** (`bAutoActivate` fires only inside a container).
 - **`UElysiumCameraComponent::CalcCameraFor` must delegate to `UCameraComponent::GetCameraView`
@@ -214,7 +219,7 @@ task's acceptance list is a set of things that must be **true**, not a set of ru
 
 **A live run is proposed, never assumed — ask the owner first, with a recommendation.** The ask names
 what the live run would answer *that the tiers cannot*. **Worth it** when the claim only exists in a
-built world: the tick graph and its prerequisites, map build and actor adoption, the spawn hold,
+built world: the tick graph and its prerequisites, map build/adoption and activation barrier,
 pawn ↔ mover collision, the camera solve, anything tracing real geometry, or a script/dialogue path
 needing the level script running. **Not worth it** for plain-C++ work the Substrate tier covers, for
 doc-only changes, or for anything a green tier already answered. When in doubt the recommendation is

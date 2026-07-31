@@ -78,6 +78,21 @@ def main() -> int:
         help="Optional external collector owned by the supervision job.",
     )
     parser.add_argument(
+        "--capture-hook",
+        type=Path,
+        help="Optional capture DLL to preload before the retail thread resumes.",
+    )
+    parser.add_argument(
+        "--capture-stop",
+        type=Path,
+        help="Marker created when supervision requests the capture hook to flush.",
+    )
+    parser.add_argument(
+        "--capture-done",
+        type=Path,
+        help="Marker awaited after --capture-stop and before retail termination.",
+    )
+    parser.add_argument(
         "--collector-argument",
         action="append",
         default=[],
@@ -86,7 +101,7 @@ def main() -> int:
     parser.add_argument(
         "--finalization",
         type=Path,
-        help="Versioned finalization report path for supervised execution.",
+        help="Finalization report path for supervised execution.",
     )
     parser.add_argument(
         "--target-argument",
@@ -171,6 +186,13 @@ def main() -> int:
     collector = args.collector.resolve() if args.collector else None
     if collector is not None and not collector.is_file():
         raise FileNotFoundError(collector)
+    capture_hook = args.capture_hook.resolve() if args.capture_hook else None
+    if capture_hook is not None and not capture_hook.is_file():
+        raise FileNotFoundError(capture_hook)
+    if (args.capture_stop is None) != (args.capture_done is None):
+        parser.error("--capture-stop and --capture-done must be provided together")
+    capture_stop = args.capture_stop.resolve() if args.capture_stop else None
+    capture_done = args.capture_done.resolve() if args.capture_done else None
     command = [
         os.fspath(launcher),
         "--executable",
@@ -188,6 +210,17 @@ def main() -> int:
     ]
     for value in args.environment:
         command.extend(("--environment", value))
+    if capture_hook is not None:
+        command.extend(("--capture-hook", os.fspath(capture_hook)))
+    if capture_stop is not None and capture_done is not None:
+        command.extend(
+            (
+                "--capture-stop",
+                os.fspath(capture_stop),
+                "--capture-done",
+                os.fspath(capture_done),
+            )
+        )
     finalization = None
     if args.run:
         finalization = (

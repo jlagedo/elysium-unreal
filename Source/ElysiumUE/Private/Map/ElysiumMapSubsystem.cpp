@@ -143,19 +143,11 @@ bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
 	{
 		return false;
 	}
-	if (!FElysiumContentPaths::IsReady())
+	if (!FElysiumContentPaths::IsConfigured())
 	{
-		if (FElysiumContentPaths::IsIncomplete())
-		{
-			UE_LOG(LogElysiumMap, Error,
-				TEXT("export corpus is marked incomplete; run: uv run elysium export grid"));
-		}
-		else
-		{
-			UE_LOG(LogElysiumMap, Error,
-				TEXT("export root is not configured; pass -ElysiumContentRoot=... or set ")
-				TEXT("ELYSIUM_EXPORT_ROOT / ELYSIUM_WORK_ROOT"));
-		}
+		UE_LOG(LogElysiumMap, Error,
+			TEXT("export root is not configured; pass -ElysiumContentRoot=... or set ")
+			TEXT("ELYSIUM_EXPORT_ROOT / ELYSIUM_WORK_ROOT"));
 		return false;
 	}
 
@@ -198,6 +190,17 @@ bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
 	CurrentMap = nullptr;
 	UE_LOG(LogElysiumMap, Log, TEXT("hard travel -> %s%s"), *Map,
 		Landmark.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" @ %s"), *Landmark));
+
+#if WITH_EDITOR
+	// UWorld::PostLoad marks map assets RF_Standalone whenever GIsEditor is true, including an
+	// UnrealEditor.exe -game process. UEngine::LoadMap removes the outgoing world from the root set
+	// but, unlike UWorld::DestroyWorld, does not clear that asset flag. The old world then has no
+	// reference chain yet survives GC, and the next hard travel is fatal under world-leak checking.
+	// Normalize the outgoing editor-game world to the lifetime LoadMap expects before deferring the
+	// travel. Packaged game worlds never acquire the flag.
+	World->ClearFlags(RF_Standalone);
+#endif
+
 	UGameplayStatics::OpenLevel(World, FName(*Level));
 	return true;
 }

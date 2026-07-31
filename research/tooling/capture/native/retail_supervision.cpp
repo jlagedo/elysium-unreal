@@ -75,6 +75,8 @@ struct Finalization {
     std::size_t ProbeDiagnosticCount = 0;
     bool ProcessResumed = false;
     bool CollectorStarted = false;
+    bool CaptureStopRequested = false;
+    bool CaptureDone = false;
 };
 
 HANDLE ConsoleShutdownEvent = nullptr;
@@ -169,6 +171,42 @@ bool WriteAll(HANDLE file, const char* data, DWORD bytes) {
         written == bytes;
 }
 
+bool TouchFile(const std::wstring& path) {
+    UniqueHandle file(CreateFileW(
+        path.c_str(),
+        GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        nullptr,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        nullptr));
+    return file.Get() != INVALID_HANDLE_VALUE &&
+        FlushFileBuffers(file.Get());
+}
+
+bool FileExists(const std::wstring& path) {
+    const DWORD attributes = GetFileAttributesW(path.c_str());
+    return attributes != INVALID_FILE_ATTRIBUTES &&
+        (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+}
+
+bool WaitForCaptureDone(
+    const std::wstring& path,
+    HANDLE process,
+    DWORD timeoutMs) {
+    const ULONGLONG start = GetTickCount64();
+    while (GetTickCount64() - start < timeoutMs) {
+        if (FileExists(path)) {
+            return true;
+        }
+        if (WaitForSingleObject(process, 0) == WAIT_OBJECT_0) {
+            return FileExists(path);
+        }
+        Sleep(10);
+    }
+    return FileExists(path);
+}
+
 const char* ProbeDiagnosticReasonName(std::uint32_t reason) {
     switch (reason) {
         case 1:
@@ -201,6 +239,8 @@ bool WriteFinalization(
         "collector_id=%lu\n"
         "process_resumed=%d\n"
         "collector_started=%d\n"
+        "capture_stop_requested=%d\n"
+        "capture_done=%d\n"
         "process_exit_code=%lu\n"
         "collector_exit_code=%lu\n"
         "module_notifications=%ld\n"
@@ -226,6 +266,8 @@ bool WriteFinalization(
         result.CollectorId,
         result.ProcessResumed ? 1 : 0,
         result.CollectorStarted ? 1 : 0,
+        result.CaptureStopRequested ? 1 : 0,
+        result.CaptureDone ? 1 : 0,
         result.ProcessExitCode,
         result.CollectorExitCode,
         result.ModuleNotifications,
@@ -458,6 +500,27 @@ int RunSupervision(const SupervisionRequest& request) {
     }
 
     SetEvent(collectorStop.Get());
+    if (!request.CaptureStopPath.empty() &&
+        WaitForSingleObject(request.Process, 0) != WAIT_OBJECT_0) {
+        result.CaptureStopRequested =
+            TouchFile(request.CaptureStopPath);
+        if (result.CaptureStopRequested) {
+            result.CaptureDone = WaitForCaptureDone(
+                request.CaptureDonePath,
+                request.Process,
+                15000);
+        }
+        if (!result.CaptureStopRequested || !result.CaptureDone) {
+            result.State = "partial";
+            result.Reason = "capture-finalization-error";
+        }
+    } else if (!request.CaptureDonePath.empty()) {
+        result.CaptureDone = FileExists(request.CaptureDonePath);
+        if (!result.CaptureDone) {
+            result.State = "partial";
+            result.Reason = "capture-finalization-error";
+        }
+    }
     if (WaitForSingleObject(request.Process, 0) != WAIT_OBJECT_0) {
         TerminateAndWait(request.Process, 0xE9U);
     }

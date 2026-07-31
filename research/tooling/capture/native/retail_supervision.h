@@ -18,6 +18,8 @@ struct SupervisionRequest {
     std::wstring Collector;
     std::vector<std::wstring> CollectorArguments;
     std::wstring FinalizationPath;
+    std::wstring CaptureStopPath;
+    std::wstring CaptureDonePath;
     DWORD TimeoutMs;
     std::vector<DWORD> NormalExitCodes;
     std::string StartupProfile;
