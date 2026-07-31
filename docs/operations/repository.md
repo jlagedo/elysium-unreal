@@ -31,7 +31,8 @@ The repository rejects:
   source;
 - captures, generated reports, logs, backups, scratch files, `.orig`, and
   `.codex-patch/**`;
-- downloaded dependency source under `Plugins/External/`.
+- downloaded dependency source under `Plugins/External/` and
+  `research/tooling/capture/native/third_party/`.
 
 Git LFS is not an exception. `uv run elysium doctor` enforces the boundary and the
 tracked pre-commit hook runs the repository-only check. Configure it with:
@@ -45,7 +46,10 @@ git config core.hooksPath .githooks
 `dev/dependencies.lock.json` pins fetched source and artifacts.
 `uv run elysium deps sync` populates ignored managed locations, applies the tracked
 patches under `dev/dependencies/patches/`, verifies post-patch tree hashes, and writes an
-ownership marker. Never place project source in `Plugins/External/`.
+ownership marker. Capture-native source packages additionally pin their repository,
+revision, archive and installed-tree hashes, license path, and safe destination below
+`research/tooling/capture/native/third_party/`. Never place project source in either
+managed dependency root.
 
 ## Public command
 

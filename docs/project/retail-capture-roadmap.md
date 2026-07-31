@@ -220,31 +220,30 @@ adjacent slices:
 the pin/build smoke, code migration, synthetic acceptance, and retail gate are
 separate evidence boundaries. Work proceeds in this order:
 
-**Immediate next slice: CAP0.7.** Mark it complete before starting CAP2.9a.
+**Immediate next slice: CAP2.9a.**
 CAP0.2 remains an independent live-manifest acceptance item; none of the tool
 integration slices closes it implicitly.
 
-1. CAP0.7: add generic pinned source-package support to `deps sync|check`.
-2. CAP2.9a–CAP2.9d: integrate MinHook, remove the custom inline relocator, and
+1. CAP2.9a–CAP2.9d: integrate MinHook, remove the custom inline relocator, and
    pass the separate retail direct-save gate.
-3. CAP2.10a–CAP2.10c: add the `pefile` verifier/importer and verify the four
+2. CAP2.10a–CAP2.10c: add the `pefile` verifier/importer and verify the four
    owner binaries. This supports CAP2.8; it does not change runtime activation.
-4. CAP0.8a–CAP0.8e: install the FlatBuffers toolchain, migrate the six current
+3. CAP0.8b–CAP0.8e: define the FlatBuffers contracts, migrate the six current
    durable record types one family at a time, then prove legacy equivalence.
-5. CAP3.1–CAP3.22: integrate the callback queue, IPC, transport encoding, MCAP,
+4. CAP3.1–CAP3.22: integrate the callback queue, IPC, transport encoding, MCAP,
    codecs, and SQLite in order. CAP3.20 is the synthetic system gate, CAP3.21
    freezes the retail budget, and CAP3.22 is the retail comparison gate.
-6. CAP2.5–CAP2.7: finish active-call lifetime, correlation, and health on the
+5. CAP2.5–CAP2.7: finish active-call lifetime, correlation, and health on the
    incorporated backends.
-7. CAP12.9a–CAP12.9d: add property/state-machine coverage after the formats and
+6. CAP12.9a–CAP12.9d: add property/state-machine coverage after the formats and
    failure behavior stop changing.
-8. CAP4.3–CAP4.6 and CAP7.1–CAP7.5: establish stable actor identity and the
+7. CAP4.3–CAP4.6 and CAP7.1–CAP7.5: establish stable actor identity and the
    complete scene-entry/render/completion checkpoint chain.
-9. CAP6.6: run the phase-pinned moving resolver experiment that discriminates
+8. CAP6.6: run the phase-pinned moving resolver experiment that discriminates
    the cinematic composition order.
-10. CAP8.1–CAP8.6: classify and capture Jeanette's skirt from source data through
+9. CAP8.1–CAP8.6: classify and capture Jeanette's skirt from source data through
    final deformed vertices before generalizing to other secondary-motion cases.
-11. CAP10–CAP11: add controller/flex/phoneme checkpoints using the stable harness.
+10. CAP10–CAP11: add controller/flex/phoneme checkpoints using the stable harness.
 
 ## CAP0 — Contracts and retained baseline
 
@@ -276,7 +275,7 @@ integration slices closes it implicitly.
   weights, and final vertex error in
   `research/tooling/capture/contracts/numerical_policy.json`. Bands report
   evidence; they are not loosened to make a case pass.
-- [ ] **CAP0.7 Pinned source-package support** — extend
+- [x] **CAP0.7 Pinned source-package support** — extend
   `dev/dependencies.lock.json` and `pipeline/src/elysium_pipeline/dependencies.py`
   with a generic source-package entry for capture libraries. Each entry records
   repository, revision, source/archive hash, license file, destination below
@@ -287,7 +286,7 @@ integration slices closes it implicitly.
   *Done when:* all new dependency tests pass and an empty clean checkout can
   restore and check one fixture source package without network access in the
   test.
-- [ ] **CAP0.8a FlatBuffers pin and build smoke** — add pinned FlatBuffers source
+- [x] **CAP0.8a FlatBuffers pin and build smoke** — add pinned FlatBuffers source
   and license entries through CAP0.7, pin the Python runtime in `uv.lock`, and
   make the native CMake project invoke the pinned `flatc`. Add one throwaway
   schema compiled to 32-bit C++ and imported from Python. *Done when:* Debug and

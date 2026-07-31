@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "plugins": [
     {
       "name": "Cog",
@@ -27,6 +27,19 @@
       "url": "https://github.com/qnox/python-2.7/releases/download/v20260109/cpython-2.7.18%2B20260109-x86_64-pc-windows-msvc-install_only.tar.gz",
       "sha256": "0eab8de590076f74a17802d8b613ad74ec050b0081ccd0e2c7a47432c9b169b8",
       "destination": "Source/ElysiumUE/ThirdParty/CPython27"
+    }
+  ],
+  "source_packages": [
+    {
+      "name": "FlatBuffers",
+      "repository": "https://github.com/google/flatbuffers.git",
+      "revision": "7e163021e59cca4f8e1e35a7c828b5c6b7915953",
+      "archive_url": "https://github.com/google/flatbuffers/archive/7e163021e59cca4f8e1e35a7c828b5c6b7915953.tar.gz",
+      "archive_sha256": "4236c5d22309abeac2384d3800febcc8d60423e8cb2f573abfa8f798352c4536",
+      "destination": "research/tooling/capture/native/third_party/FlatBuffers",
+      "source_subdirectory": "flatbuffers-7e163021e59cca4f8e1e35a7c828b5c6b7915953",
+      "license_file": "LICENSE",
+      "content_tree_sha256": "99057aaec976d416b06be131c113b69ec1f82d8d8c626de537287219531d9689"
     }
   ]
 }

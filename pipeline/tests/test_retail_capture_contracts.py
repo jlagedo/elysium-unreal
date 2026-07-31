@@ -187,6 +187,44 @@ class RetailCaptureContractTests(unittest.TestCase):
         self.assertIn("/WX", cmake)
         self.assertIn("CMAKE_SIZEOF_VOID_P EQUAL 4", cmake)
 
+    def test_flatbuffers_smoke_uses_pinned_flatc_and_cross_language_read(self) -> None:
+        cmake = (NATIVE_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+        for contract in (
+            "third_party/FlatBuffers",
+            "FLATBUFFERS_BUILD_FLATC ON",
+            "$<TARGET_FILE:flatc>",
+            "flatbuffers_smoke_producer",
+            "flatbuffers_generated_drift",
+            "flatbuffers_cross_language_smoke",
+        ):
+            self.assertIn(contract, cmake)
+
+        schema = (
+            NATIVE_ROOT.parent / "contracts" / "flatbuffers_smoke.fbs"
+        ).read_text(encoding="utf-8")
+        self.assertIn('file_identifier "ELFS";', schema)
+        self.assertIn("root_type SmokeRecord;", schema)
+
+        generated_cpp = (NATIVE_ROOT / "flatbuffers_smoke_generated.h").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("FLATBUFFERS_VERSION_MAJOR == 25", generated_cpp)
+        generated_python = (
+            NATIVE_ROOT.parent
+            / "generated_flatbuffers_smoke"
+            / "Elysium"
+            / "Capture"
+            / "Smoke"
+            / "SmokeRecord.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("SmokeRecordBufferHasIdentifier", generated_python)
+
+        reader = (NATIVE_ROOT.parent / "flatbuffers_smoke_reader.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("SmokeRecord.GetRootAs", reader)
+        self.assertIn("EXPECTED_SEQUENCE", reader)
+
     def test_synthetic_retail_contract_names_modules_and_hook_targets(self) -> None:
         cmake = (NATIVE_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
         target = (NATIVE_ROOT / "synthetic_retail.cpp").read_text(

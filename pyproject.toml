@@ -8,6 +8,7 @@ version = "0.2.0"
 description = "Unified build, export, bake, validation, and development tooling for Elysium-Unreal"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "flatbuffers==25.12.19",
     "numpy",
     "Pillow",
     "psutil",
