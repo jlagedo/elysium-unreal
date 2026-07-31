@@ -75,6 +75,7 @@ struct Options {
     std::vector<std::wstring> EnvironmentOverrides;
     std::vector<std::wstring> CollectorArguments;
     std::vector<std::wstring> TargetArguments;
+    std::vector<DWORD> NormalExitCodes{0};
     DWORD AttachPid = 0;
     DWORD VerifySuspendedMs = 25;
     DWORD TimeoutMs = 0;
@@ -110,6 +111,22 @@ bool ParseProcessId(
     const unsigned long value = std::wcstoul(text, &end, 10);
     if (errno == ERANGE || end == text || *end != L'\0' ||
         value == 0 ||
+        value > std::numeric_limits<DWORD>::max()) {
+        std::fwprintf(stderr, L"invalid %ls value: %ls\n", option, text);
+        return false;
+    }
+    *destination = static_cast<DWORD>(value);
+    return true;
+}
+
+bool ParseExitCode(
+    const wchar_t* text,
+    const wchar_t* option,
+    DWORD* destination) {
+    errno = 0;
+    wchar_t* end = nullptr;
+    const unsigned long value = std::wcstoul(text, &end, 10);
+    if (errno == ERANGE || end == text || *end != L'\0' ||
         value > std::numeric_limits<DWORD>::max()) {
         std::fwprintf(stderr, L"invalid %ls value: %ls\n", option, text);
         return false;
@@ -207,6 +224,17 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
         } else if (std::wcscmp(option, L"--timeout-ms") == 0) {
             if (!ParseUnsigned(value, option, &options->TimeoutMs)) {
                 return false;
+            }
+        } else if (std::wcscmp(option, L"--normal-exit-code") == 0) {
+            DWORD exitCode = 0;
+            if (!ParseExitCode(value, option, &exitCode)) {
+                return false;
+            }
+            if (std::find(
+                    options->NormalExitCodes.begin(),
+                    options->NormalExitCodes.end(),
+                    exitCode) == options->NormalExitCodes.end()) {
+                options->NormalExitCodes.push_back(exitCode);
             }
         } else {
             std::fwprintf(stderr, L"unknown launcher option: %ls\n", option);
@@ -602,7 +630,7 @@ bool InjectLibrary(
         std::fwprintf(stderr, L"remote LoadLibraryW failed\n");
         return false;
     }
-    return bootstrap->WaitReady(15000);
+    return bootstrap->WaitReady(30000);
 }
 
 bool SameProcessArchitecture(HANDLE process) {
@@ -710,13 +738,16 @@ int RunAttach(const Options& options, const std::wstring& probeHost) {
     std::wprintf(
         L"retail-launch-v1 event=bootstrap_ready mode=attached pid=%lu "
         L"distribution=%ls version=%lu observer_armed=%ld "
-        L"transport_armed=%ld probe_thread=%lu\n",
+        L"transport_armed=%ld probe_thread=%lu observer_thread=%ld "
+        L"bootstrap_modules=%ld\n",
         options.AttachPid,
         options.Distribution.c_str(),
         static_cast<unsigned long>(ready.Version),
         ready.ModuleObserverArmed,
         ready.TransportArmed,
-        ready.ProbeThreadId);
+        ready.ProbeThreadId,
+        ready.ModuleObserver.WorkerThreadId,
+        ready.ModuleObserver.BootstrapEventCount);
     std::wprintf(
         L"retail-launch-v1 event=attach_complete mode=attached pid=%lu\n",
         options.AttachPid);
@@ -767,6 +798,7 @@ int wmain(int argc, wchar_t** argv) {
             L"[--environment NAME=VALUE] [--verify-suspended-ms N] "
             L"[--probe-host PATH] [--collector PATH] "
             L"[--collector-argument VALUE] [--timeout-ms N] "
+            L"[--normal-exit-code N] "
             L"[--finalization PATH] "
             L"(--resume-synthetic|--inject-and-terminate|"
             L"--supervise|--terminate-after-verification) "
@@ -935,12 +967,14 @@ int wmain(int argc, wchar_t** argv) {
     std::wprintf(
         L"retail-launch-v1 event=bootstrap_ready mode=launched pid=%lu "
         L"version=%lu observer_armed=%ld transport_armed=%ld "
-        L"probe_thread=%lu\n",
+        L"probe_thread=%lu observer_thread=%ld bootstrap_modules=%ld\n",
         created.dwProcessId,
         static_cast<unsigned long>(ready.Version),
         ready.ModuleObserverArmed,
         ready.TransportArmed,
-        ready.ProbeThreadId);
+        ready.ProbeThreadId,
+        ready.ModuleObserver.WorkerThreadId,
+        ready.ModuleObserver.BootstrapEventCount);
     std::fflush(stdout);
 
     if (options.InjectAndTerminate) {
@@ -965,6 +999,7 @@ int wmain(int argc, wchar_t** argv) {
             options.CollectorArguments,
             finalizationPath,
             options.TimeoutMs,
+            options.NormalExitCodes,
             &ready.ModuleNotificationCount,
         };
         const int supervisionResult =
@@ -987,21 +1022,48 @@ int wmain(int argc, wchar_t** argv) {
         return 17;
     }
     MemoryBarrier();
-    const LONG moduleNotifications =
-        bootstrap.Handshake().ModuleNotificationCount;
-    if (moduleNotifications < 3) {
+    const BootstrapHandshake& complete = bootstrap.Handshake();
+    const LONG moduleNotifications = complete.ModuleNotificationCount;
+    const auto& observer = complete.ModuleObserver;
+    if (observer.BootstrapEventCount < 3 ||
+        observer.LoadEventCount < 3 ||
+        observer.UnloadEventCount < 3 ||
+        observer.HashSuccessCount < 3 ||
+        observer.ActivationDispatchCount < 3 ||
+        observer.QueueDropCount != 0 ||
+        observer.PathTruncationCount != 0) {
         std::fwprintf(
             stderr,
-            L"probe host observed only %ld module notifications\n",
+            L"probe host module observer acceptance failed: "
+            L"bootstrap=%ld loads=%ld unloads=%ld processed=%ld "
+            L"hashes=%ld activation_dispatches=%ld drops=%ld "
+            L"truncated_paths=%ld notifications=%ld\n",
+            observer.BootstrapEventCount,
+            observer.LoadEventCount,
+            observer.UnloadEventCount,
+            observer.ProcessedEventCount,
+            observer.HashSuccessCount,
+            observer.ActivationDispatchCount,
+            observer.QueueDropCount,
+            observer.PathTruncationCount,
             moduleNotifications);
         return 18;
     }
     std::wprintf(
         L"retail-launch-v1 event=launch_complete mode=launched pid=%lu "
         L"exit_code=%lu "
-        L"module_notifications=%ld\n",
+        L"module_notifications=%ld bootstrap_modules=%ld loads=%ld "
+        L"unloads=%ld processed=%ld hashes=%ld "
+        L"activation_dispatches=%ld queue_drops=%ld\n",
         created.dwProcessId,
         exitCode,
-        moduleNotifications);
+        moduleNotifications,
+        observer.BootstrapEventCount,
+        observer.LoadEventCount,
+        observer.UnloadEventCount,
+        observer.ProcessedEventCount,
+        observer.HashSuccessCount,
+        observer.ActivationDispatchCount,
+        observer.QueueDropCount);
     return exitCode == 0 ? 0 : 19;
 }

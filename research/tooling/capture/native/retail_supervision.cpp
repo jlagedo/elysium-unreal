@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+#include <algorithm>
 #include <cstring>
 #include <cstdio>
 #include <string>
@@ -345,7 +346,11 @@ int RunSupervision(const SupervisionRequest& request) {
 
     if (wait == WAIT_OBJECT_0) {
         result.ProcessExitCode = ExitCode(request.Process);
-        if (result.ProcessExitCode == 0) {
+        if (std::find(
+                request.NormalExitCodes.begin(),
+                request.NormalExitCodes.end(),
+                result.ProcessExitCode) !=
+            request.NormalExitCodes.end()) {
             result.State = "complete";
             result.Reason = "process-exit";
         } else {

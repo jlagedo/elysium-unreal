@@ -5,10 +5,12 @@
 #include <cstdint>
 #include <string>
 
+#include "module_observer.h"
+
 namespace elysium::capture {
 
 inline constexpr std::uint32_t BootstrapMagic = 0x31484245U;  // EBH1
-inline constexpr std::uint32_t BootstrapVersion = 1;
+inline constexpr std::uint32_t BootstrapVersion = 2;
 
 enum class BootstrapState : LONG {
     Created = 0,
@@ -28,20 +30,21 @@ struct BootstrapHandshake {
     volatile LONG ModuleObserverArmed;
     volatile LONG TransportArmed;
     volatile LONG ModuleNotificationCount;
+    ModuleObserverCounters ModuleObserver;
     DWORD ErrorCode;
     wchar_t Message[64];
 };
 #pragma pack(pop)
 
-static_assert(sizeof(BootstrapHandshake) == 168);
+static_assert(sizeof(BootstrapHandshake) == 208);
 
 inline std::wstring BootstrapMappingName(DWORD processId) {
-    return L"Local\\ElysiumRetailBootstrap.v1." +
+    return L"Local\\ElysiumRetailBootstrap.v2." +
         std::to_wstring(processId);
 }
 
 inline std::wstring BootstrapSignalName(DWORD processId) {
-    return L"Local\\ElysiumRetailBootstrap.v1." +
+    return L"Local\\ElysiumRetailBootstrap.v2." +
         std::to_wstring(processId) + L".signal";
 }
 

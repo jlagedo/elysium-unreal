@@ -64,6 +64,15 @@ def main() -> int:
         help="Supervised runtime limit; zero waits indefinitely.",
     )
     parser.add_argument(
+        "--normal-exit-code",
+        action="append",
+        type=int,
+        help=(
+            "Process exit code accepted as normal; repeat as needed. "
+            "Retail defaults to 0 and 1."
+        ),
+    )
+    parser.add_argument(
         "--collector",
         type=Path,
         help="Optional external collector owned by the supervision job.",
@@ -113,6 +122,13 @@ def main() -> int:
         parser.error("--verify-suspended-ms must be between 0 and 600000")
     if args.timeout_seconds < 0 or args.timeout_seconds > 600:
         parser.error("--timeout-seconds must be between 0 and 600")
+    normal_exit_codes = (
+        args.normal_exit_code
+        if args.normal_exit_code is not None
+        else [0, 1]
+    )
+    if any(code < 0 or code > 0xFFFFFFFF for code in normal_exit_codes):
+        parser.error("--normal-exit-code must be between 0 and 4294967295")
     for value in args.environment:
         name, separator, _ = value.partition("=")
         if not separator or not name:
@@ -163,6 +179,8 @@ def main() -> int:
                 str(args.timeout_seconds * 1000),
             )
         )
+        for exit_code in normal_exit_codes:
+            command.extend(("--normal-exit-code", str(exit_code)))
         if collector is not None:
             command.extend(("--collector", os.fspath(collector)))
             for value in args.collector_argument:

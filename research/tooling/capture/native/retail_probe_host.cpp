@@ -3,8 +3,10 @@
 
 #include <cstring>
 #include <cwchar>
+#include <new>
 
 #include "bootstrap_contract.h"
+#include "module_observer.h"
 
 namespace {
 
@@ -12,29 +14,12 @@ using elysium::capture::BootstrapHandshake;
 using elysium::capture::BootstrapMagic;
 using elysium::capture::BootstrapState;
 using elysium::capture::BootstrapVersion;
-
-using DllNotificationCallback = void(CALLBACK*)(
-    ULONG reason,
-    const void* data,
-    void* context);
-using RegisterDllNotificationFn = LONG(NTAPI*)(
-    ULONG flags,
-    DllNotificationCallback callback,
-    void* context,
-    void** cookie);
+using elysium::capture::ModuleObserver;
+using elysium::capture::ProcessedModuleEvent;
 
 HANDLE BootstrapMapping = nullptr;
 BootstrapHandshake* Handshake = nullptr;
-void* NotificationCookie = nullptr;
-
-template <typename Function>
-Function Export(HMODULE module, const char* name) {
-    const FARPROC address = GetProcAddress(module, name);
-    Function function = nullptr;
-    static_assert(sizeof(function) == sizeof(address));
-    std::memcpy(&function, &address, sizeof(function));
-    return function;
-}
+ModuleObserver* Observer = nullptr;
 
 void CopyMessage(BootstrapHandshake* handshake, const wchar_t* message) {
     wcsncpy_s(
@@ -57,12 +42,11 @@ void SetError(
     SetEvent(signal);
 }
 
-void CALLBACK ObserveModuleLoad(
-    ULONG,
-    const void*,
-    void* context) {
-    auto* handshake = static_cast<BootstrapHandshake*>(context);
-    InterlockedIncrement(&handshake->ModuleNotificationCount);
+void ActivateProfiledProbes(
+    const ProcessedModuleEvent&,
+    void*) noexcept {
+    // CAP2.2 supplies the exact-binary profile registry. CAP2.1 owns this
+    // worker-thread activation seam and invokes it only after SHA-256 succeeds.
 }
 
 DWORD WINAPI BootstrapWorker(void*) {
@@ -116,33 +100,44 @@ DWORD WINAPI BootstrapWorker(void*) {
         static_cast<LONG>(BootstrapState::HostStarting));
     InterlockedExchange(&Handshake->TransportArmed, 1);
 
-    HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
-    const RegisterDllNotificationFn registerNotification =
-        Export<RegisterDllNotificationFn>(
-            ntdll,
-            "LdrRegisterDllNotification");
-    if (registerNotification == nullptr) {
+    Observer = new (std::nothrow) ModuleObserver();
+    if (Observer == nullptr) {
         SetError(
             Handshake,
             signal,
-            ERROR_PROC_NOT_FOUND,
-            L"LdrRegisterDllNotification is unavailable");
+            ERROR_OUTOFMEMORY,
+            L"cannot allocate module observer");
         CloseHandle(signal);
         return 5;
     }
-    const LONG status = registerNotification(
-        0,
-        ObserveModuleLoad,
-        Handshake,
-        &NotificationCookie);
-    if (status < 0) {
+    DWORD observerError = ERROR_SUCCESS;
+    if (!Observer->Start(
+            &Handshake->ModuleObserver,
+            &Handshake->ModuleNotificationCount,
+            ActivateProfiledProbes,
+            nullptr,
+            &observerError)) {
         SetError(
             Handshake,
             signal,
-            static_cast<DWORD>(status),
-            L"module notification registration failed");
+            observerError,
+            L"module observer startup failed");
+        delete Observer;
+        Observer = nullptr;
         CloseHandle(signal);
         return 6;
+    }
+    if (!Observer->WaitUntilIdle(25000)) {
+        SetError(
+            Handshake,
+            signal,
+            ERROR_TIMEOUT,
+            L"bootstrap module processing timed out");
+        Observer->Stop();
+        delete Observer;
+        Observer = nullptr;
+        CloseHandle(signal);
+        return 7;
     }
 
     InterlockedExchange(&Handshake->ModuleObserverArmed, 1);

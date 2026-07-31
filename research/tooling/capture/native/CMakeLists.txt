@@ -105,12 +105,37 @@ target_include_directories(retail_launcher PRIVATE .)
 add_library(retail_probe_host SHARED retail_probe_host.cpp)
 set_target_properties(retail_probe_host PROPERTIES OUTPUT_NAME retail_probe_host)
 target_include_directories(retail_probe_host PRIVATE .)
+target_sources(retail_probe_host PRIVATE module_observer.cpp)
+target_link_libraries(retail_probe_host PRIVATE bcrypt)
 elysium_native_target(retail_probe_host)
 
 add_executable(synthetic_collector synthetic_collector.cpp)
 elysium_native_target(synthetic_collector)
 
+add_executable(
+    module_observer_test
+    module_observer_test.cpp
+    module_observer.cpp
+)
+target_include_directories(module_observer_test PRIVATE .)
+target_link_libraries(module_observer_test PRIVATE bcrypt)
+elysium_native_target(module_observer_test)
+add_dependencies(module_observer_test synthetic_client)
+
 enable_testing()
+add_test(
+    NAME module_observer_bootstrap_load_unload
+    COMMAND
+        $<TARGET_FILE:module_observer_test>
+        $<TARGET_FILE:synthetic_client>
+)
+set_tests_properties(
+    module_observer_bootstrap_load_unload
+    PROPERTIES
+        PASS_REGULAR_EXPRESSION "module-observer-test-v1 state=complete"
+        TIMEOUT 30
+)
+
 add_test(
     NAME synthetic_retail_lifecycle
     COMMAND
@@ -253,6 +278,20 @@ add_test(
 )
 
 add_test(
+    NAME synthetic_supervision_accepted_exit_one
+    COMMAND
+        ${CMAKE_COMMAND}
+        -DLAUNCHER=$<TARGET_FILE:retail_launcher>
+        -DTARGET=$<TARGET_FILE:synthetic_retail>
+        -DBIN_DIR=$<TARGET_FILE_DIR:synthetic_retail>
+        -DPROBE=$<TARGET_FILE:retail_probe_host>
+        -DCOLLECTOR=$<TARGET_FILE:synthetic_collector>
+        -DREPORT=${CMAKE_BINARY_DIR}/supervision-accepted-exit-one.txt
+        -DSCENARIO=accepted-exit-one
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_supervision.cmake
+)
+
+add_test(
     NAME synthetic_supervision_collector_exit
     COMMAND
         ${CMAKE_COMMAND}
@@ -286,6 +325,7 @@ set_tests_properties(
     synthetic_supervision_normal_exit
     synthetic_supervision_timeout
     synthetic_supervision_crash
+    synthetic_supervision_accepted_exit_one
     synthetic_supervision_collector_exit
     PROPERTIES TIMEOUT 15
 )

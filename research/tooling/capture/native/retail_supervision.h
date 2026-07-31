@@ -16,6 +16,7 @@ struct SupervisionRequest {
     std::vector<std::wstring> CollectorArguments;
     std::wstring FinalizationPath;
     DWORD TimeoutMs;
+    std::vector<DWORD> NormalExitCodes;
     const volatile LONG* ModuleNotificationCount;
 };
 

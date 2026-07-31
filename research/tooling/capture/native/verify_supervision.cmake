@@ -29,6 +29,20 @@ elseif(SCENARIO STREQUAL "crash")
         --lifetime-ms 1
         --exit-code 42
     )
+elseif(SCENARIO STREQUAL "accepted-exit-one")
+    set(EXPECTED_REASON "process-exit")
+    set(EXPECTED_STATE "complete")
+    set(EXPECTED_RESULT 0)
+    set(TIMEOUT_MS 5000)
+    set(LAUNCHER_ARGUMENTS
+        --normal-exit-code 1
+    )
+    set(TARGET_ARGUMENTS
+        --initial-delay-ms 0
+        --module-delay-ms 1
+        --lifetime-ms 1
+        --exit-code 1
+    )
 elseif(SCENARIO STREQUAL "collector")
     set(EXPECTED_REASON "collector-exit")
     set(EXPECTED_STATE "partial")
@@ -58,6 +72,7 @@ execute_process(
         --distribution synthetic-test
         --startup-profile direct
         --probe-host "${PROBE}"
+        ${LAUNCHER_ARGUMENTS}
         --collector "${COLLECTOR}"
         ${COLLECTOR_ARGUMENTS}
         --finalization "${REPORT}"

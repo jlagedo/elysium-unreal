@@ -268,10 +268,12 @@ Work proceeds in this order:
 
 ## CAP2 — Probe host and binary profiles
 
-- [ ] **CAP2.1 Module observer** — enumerate modules already present at bootstrap
+- [x] **CAP2.1 Module observer** — enumerate modules already present at bootstrap
   and observe later loads/unloads. Loader callbacks only enqueue base/size/path
   events; a worker performs hashing and probe activation outside loader-sensitive
-  callbacks.
+  callbacks. Bootstrap processing completes before the ready handshake. Release
+  and Debug acceptance cover standalone bootstrap/load/unload processing and the
+  100-cycle injected lifecycle with zero queue drops.
 - [ ] **CAP2.2 Binary profile registry** — track executable/module size, SHA-256,
   PE identity, image base, RVAs, calling conventions, expected bytes, semantic
   labels, and supported record schemas. Profiles are data, not hard-coded
