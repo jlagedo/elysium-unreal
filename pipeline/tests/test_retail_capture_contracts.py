@@ -40,6 +40,7 @@ GENERATOR = (
     / "contracts"
     / "generate_record_schemas.py"
 )
+NATIVE_ROOT = REPO_ROOT / "research" / "tooling" / "capture" / "native"
 
 
 def _write_pose_capture(path: Path) -> None:
@@ -157,6 +158,51 @@ def _direct_animation_summary(path: Path) -> dict[str, object]:
 
 
 class RetailCaptureContractTests(unittest.TestCase):
+    def test_native_capture_project_has_explicit_win32_presets(self) -> None:
+        presets = json.loads(
+            (NATIVE_ROOT / "CMakePresets.json").read_text(encoding="utf-8")
+        )
+        configure = {
+            preset["name"]: preset for preset in presets["configurePresets"]
+        }
+        for name, configuration in (
+            ("win32-debug", "Debug"),
+            ("win32-release", "Release"),
+        ):
+            self.assertEqual(
+                configure[name]["cacheVariables"]["CMAKE_BUILD_TYPE"],
+                configuration,
+            )
+            self.assertEqual(configure[name]["inherits"], "win32-base")
+        base = configure["win32-base"]
+        self.assertEqual(base["generator"], "Ninja")
+        self.assertEqual(
+            base["cacheVariables"]["ELYSIUM_TARGET_ARCH"], "x86"
+        )
+        self.assertIn("ELYSIUM_NATIVE_BUILD_ROOT", base["binaryDir"])
+
+        cmake = (NATIVE_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertIn("CMAKE_MSVC_RUNTIME_LIBRARY", cmake)
+        self.assertIn("/W4", cmake)
+        self.assertIn("/WX", cmake)
+        self.assertIn("CMAKE_SIZEOF_VOID_P EQUAL 4", cmake)
+
+    def test_synthetic_retail_contract_names_modules_and_hook_targets(self) -> None:
+        cmake = (NATIVE_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+        target = (NATIVE_ROOT / "synthetic_retail.cpp").read_text(
+            encoding="utf-8"
+        )
+        module = (NATIVE_ROOT / "synthetic_module.cpp").read_text(
+            encoding="utf-8"
+        )
+        for name in ("client.dll", "engine.dll", "StudioRender.dll"):
+            self.assertIn(name, cmake)
+            self.assertIn(name, target)
+        self.assertIn("ElysiumSyntheticHookTarget", target)
+        self.assertIn("ElysiumSyntheticHookTarget", module)
+        self.assertIn("synthetic_retail_lifecycle", cmake)
+        self.assertIn("event=shutdown_complete modules=3", cmake)
+
     def test_generated_record_contracts_are_current_and_unique(self) -> None:
         subprocess.run(
             [sys.executable, str(GENERATOR), "--check"],

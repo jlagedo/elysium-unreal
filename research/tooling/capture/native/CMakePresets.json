@@ -1,0 +1,64 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "win32-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "$env{ELYSIUM_NATIVE_BUILD_ROOT}/${presetName}",
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "cl.exe",
+        "ELYSIUM_TARGET_ARCH": "x86"
+      }
+    },
+    {
+      "name": "win32-debug",
+      "displayName": "Win32 Debug (MSVC static runtime)",
+      "inherits": "win32-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "win32-release",
+      "displayName": "Win32 Release (MSVC static runtime)",
+      "inherits": "win32-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "win32-debug",
+      "configurePreset": "win32-debug",
+      "jobs": 4
+    },
+    {
+      "name": "win32-release",
+      "configurePreset": "win32-release",
+      "jobs": 4
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "win32-debug",
+      "configurePreset": "win32-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "win32-release",
+      "configurePreset": "win32-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

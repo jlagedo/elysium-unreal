@@ -233,11 +233,11 @@ Work proceeds in this order:
 
 ## CAP1 — Retail launcher
 
-- [ ] **CAP1.1 Native project** — create a CMake-based MSVC project under
+- [x] **CAP1.1 Native project** — create a CMake-based MSVC project under
   `research/tooling/capture/native/` with explicit Win32 Release/Debug presets,
   static runtime policy, warnings-as-errors, and deterministic output paths.
   `uv run elysium research` remains the public command surface.
-- [ ] **CAP1.2 Synthetic retail process** — build a 32-bit fake executable that
+- [x] **CAP1.2 Synthetic retail process** — build a 32-bit fake executable that
   loads fake `client`, `engine`, and `StudioRender` DLLs at controlled times and
   exposes safe test hook targets. *Acceptance:* launcher and lifecycle tests run
   without the game installation.
