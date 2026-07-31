@@ -33,7 +33,11 @@ fixtures remain under `$ELYSIUM_WORK_ROOT/research`.
 Status marks are `[ ]` open, `[~]` in progress or partially proved, `[x]`
 verified, and `[P]` parked with an explicit revisit trigger.
 
-A capture task is complete only when all of the following hold:
+An infrastructure integration slice is complete when its own *Done when* clause
+passes in the stated build configurations. A pin/build or synthetic slice never
+closes a separate retail-gate slice.
+
+An evidence/oracle task is complete only when all of the following hold:
 
 1. The exact executable and module hashes are recorded.
 2. The controlled input and launch procedure are reproducible.
@@ -128,21 +132,25 @@ flowchart LR
     M --> E["engine.dll probes"]
     M --> S["StudioRender.dll probes"]
     M --> P["Additional profiled DLL probes"]
-    V --> T["Bounded shared transport"]
-    C --> T
-    E --> T
-    S --> T
-    P --> T
+    V --> Q["Preallocated moodycamel queue"]
+    C --> Q
+    E --> Q
+    S --> Q
+    P --> Q
+    Q --> F["Probe worker and FlatBuffers encoder"]
+    F --> T["Bounded Boost.Interprocess queue"]
     T --> W["External collector"]
-    W --> R["Raw indexed capture"]
-    R --> I["Semantic index and analyzers"]
+    W --> R["MCAP and generated SQLite sidecar"]
+    R --> I["Streaming and indexed analyzers"]
     I --> O["Executable retail oracle"]
 ```
 
 The probe host is deliberately small. Loader notifications and hook callbacks
-copy bounded records and return; they do not hash files, allocate unbounded
-memory, compress data, build indexes, or perform blocking file I/O. The
-collector and analyzers remain outside the retail process.
+copy fixed snapshots into preallocated storage and return; they do not hash
+files, serialize durable payloads, allocate unbounded memory, compress data,
+build indexes, or perform blocking file I/O. A probe worker serializes and sends
+bounded records to the collector. The collector and analyzers remain outside the
+retail process.
 
 ## Current baseline
 
@@ -157,12 +165,34 @@ collector and analyzers remain outside the retail process.
 | Whole-scene and authored-pose analyzers | Available | `research/tooling/capture/` |
 | Launcher-controlled suspended launch/bootstrap | Available | `research/tooling/capture/native/` |
 | General module/probe registry | Partial | CAP2 |
+| Battle-tested inline-hook dependency | Missing | CAP2.9a–CAP2.9d |
 | Bounded process-external transport | Missing | CAP3 |
 | Unified recoverable indexed trace | Missing | CAP3 |
+| Generated evolvable payload schemas | Missing | CAP0.8a–CAP0.8e, CAP3.8–CAP3.10 |
 | Scene placement and physical-state oracle | Missing | CAP7 |
 | Cloth/hair/accessory secondary-motion oracle | Missing | CAP8 |
 | Complete skeletal runtime oracle | Partial | CAP5–CAP9 |
 | Complete facial/lip runtime oracle | Partial | CAP10–CAP11 |
+
+## Recommended dependency stack
+
+These projects replace generic infrastructure that is already solved and
+battle-tested outside Elysium. CAP0.7 establishes the native-source fetch/check
+mechanism; Python packages remain pinned by `uv.lock`. Each owning task records
+its license before integration. A backend becomes authoritative only in the
+final slice of its task range.
+
+| Project | Replaces or supplies | Owning task |
+|---|---|---|
+| [MinHook](https://github.com/TsudaKageyu/minhook) | Project-owned x86 instruction relocation and inline patching | CAP2.9a–CAP2.9d |
+| [moodycamel ConcurrentQueue](https://github.com/cameron314/concurrentqueue) | Callback-to-worker MPMC queue | CAP3.1–CAP3.3 |
+| [FlatBuffers](https://github.com/google/flatbuffers) | Handwritten durable record layouts and transport serialization | CAP0.8a–CAP0.8e, CAP3.8–CAP3.10 |
+| [Boost.Interprocess](https://www.boost.org/libs/interprocess/) | Bespoke worker-to-collector shared-memory IPC | CAP3.4–CAP3.7 |
+| [MCAP](https://github.com/foxglove/mcap) | Custom durable trace framing, chunk indexes, and recovery metadata | CAP3.11–CAP3.14 |
+| [LZ4](https://github.com/lz4/lz4) and [Zstandard](https://github.com/facebook/zstd) | Project-owned compression | CAP3.15–CAP3.16 |
+| [SQLite](https://sqlite.org/) | Project-owned semantic-index storage | CAP3.17–CAP3.19 |
+| [`pefile`](https://github.com/erocarrera/pefile) | Offline PE metadata extraction and RVA verification | CAP2.10a–CAP2.10c |
+| [Hypothesis](https://github.com/HypothesisWorks/hypothesis) | Handwritten-only malformed-input and stateful transport cases | CAP12.9a–CAP12.9d |
 
 ## Program ladder
 
@@ -185,20 +215,36 @@ collector and analyzers remain outside the retail process.
 
 ## Current front
 
-Work proceeds in this order:
+Each checkbox below is one independently closable work item. Do not combine
+adjacent slices:
+the pin/build smoke, code migration, synthetic acceptance, and retail gate are
+separate evidence boundaries. Work proceeds in this order:
 
-1. CAP0.2: retain one live emitted and validated session manifest from each
-   current capture driver.
-2. CAP1: make launcher-controlled injection the primary run path.
-3. CAP2 and CAP3: move hook configuration into profiles and move capture
-   transport/file work out of the game.
-4. CAP4.3–CAP4.6 and CAP7.1–CAP7.5: establish stable actor identity and the
+**Immediate next slice: CAP0.7.** Mark it complete before starting CAP2.9a.
+CAP0.2 remains an independent live-manifest acceptance item; none of the tool
+integration slices closes it implicitly.
+
+1. CAP0.7: add generic pinned source-package support to `deps sync|check`.
+2. CAP2.9a–CAP2.9d: integrate MinHook, remove the custom inline relocator, and
+   pass the separate retail direct-save gate.
+3. CAP2.10a–CAP2.10c: add the `pefile` verifier/importer and verify the four
+   owner binaries. This supports CAP2.8; it does not change runtime activation.
+4. CAP0.8a–CAP0.8e: install the FlatBuffers toolchain, migrate the six current
+   durable record types one family at a time, then prove legacy equivalence.
+5. CAP3.1–CAP3.22: integrate the callback queue, IPC, transport encoding, MCAP,
+   codecs, and SQLite in order. CAP3.20 is the synthetic system gate, CAP3.21
+   freezes the retail budget, and CAP3.22 is the retail comparison gate.
+6. CAP2.5–CAP2.7: finish active-call lifetime, correlation, and health on the
+   incorporated backends.
+7. CAP12.9a–CAP12.9d: add property/state-machine coverage after the formats and
+   failure behavior stop changing.
+8. CAP4.3–CAP4.6 and CAP7.1–CAP7.5: establish stable actor identity and the
    complete scene-entry/render/completion checkpoint chain.
-5. CAP6.6: run the phase-pinned moving resolver experiment that discriminates
+9. CAP6.6: run the phase-pinned moving resolver experiment that discriminates
    the cinematic composition order.
-6. CAP8.1–CAP8.6: classify and capture Jeanette's skirt from source data through
+10. CAP8.1–CAP8.6: classify and capture Jeanette's skirt from source data through
    final deformed vertices before generalizing to other secondary-motion cases.
-7. CAP10–CAP11: add controller/flex/phoneme checkpoints using the stable harness.
+11. CAP10–CAP11: add controller/flex/phoneme checkpoints using the stable harness.
 
 ## CAP0 — Contracts and retained baseline
 
@@ -230,6 +276,49 @@ Work proceeds in this order:
   weights, and final vertex error in
   `research/tooling/capture/contracts/numerical_policy.json`. Bands report
   evidence; they are not loosened to make a case pass.
+- [ ] **CAP0.7 Pinned source-package support** — extend
+  `dev/dependencies.lock.json` and `pipeline/src/elysium_pipeline/dependencies.py`
+  with a generic source-package entry for capture libraries. Each entry records
+  repository, revision, source/archive hash, license file, destination below
+  `research/tooling/capture/native/third_party/`, and expected content tree.
+  `deps sync` stages then atomically installs it; `deps check` detects missing,
+  modified, or unlicensed content. Add local-fixture sync, tamper, bad-hash,
+  unsafe-path, and missing-license cases to `pipeline/tests/test_dependencies.py`.
+  *Done when:* all new dependency tests pass and an empty clean checkout can
+  restore and check one fixture source package without network access in the
+  test.
+- [ ] **CAP0.8a FlatBuffers pin and build smoke** — add pinned FlatBuffers source
+  and license entries through CAP0.7, pin the Python runtime in `uv.lock`, and
+  make the native CMake project invoke the pinned `flatc`. Add one throwaway
+  schema compiled to 32-bit C++ and imported from Python. *Done when:* Debug and
+  Release build the smoke producer, Python reads its buffer, and `deps check`
+  plus a generated-file drift check pass from a clean dependency restore.
+- [ ] **CAP0.8b Common envelope and control schemas** — add tracked `.fbs`
+  definitions for session sequence, QPC, thread/probe/correlation identity,
+  module events, and `probe_activation_diagnostic`. Preserve DIAG record ID 6
+  and its current meaning; assign the module record the next free stable ID and
+  add explicit field IDs, bounds, and compatibility comments. *Done when:* C++
+  and Python generated bindings round-trip module/DIAG golden values and reject
+  truncated, bad-offset, and wrong-union buffers.
+- [ ] **CAP0.8c Pose schema** — define the `pose_file_header` and `pose` payloads,
+  including model identity, draw arguments, bone count, and matrix vectors. Do
+  not copy callback memory directly into the durable buffer. *Done when:* a
+  synthetic maximum-bone POSE buffer round-trips through 32-bit C++ and Python,
+  exposes bounded NumPy matrix views, and rejects inconsistent vector lengths.
+- [ ] **CAP0.8d Animation schema** — define `animation_file_header`,
+  `animation_base`, and `animation_final`, sharing one declared pose-vector
+  layout without duplicating fields. *Done when:* BASE and FINL golden buffers
+  round-trip across C++ and Python and reject mismatched bone, position,
+  quaternion, or selection-word counts.
+- [ ] **CAP0.8e Legacy equivalence and schema cutover** — adapt `ELPOSE2` and
+  `ELANIM2` readers into the generated FlatBuffers model, compare analyzer
+  summaries with the frozen legacy goldens, then remove the handwritten durable
+  layout generator and duplicate C++/Python structs. Callback-private POD
+  snapshots may remain internal. *Done when:* legacy summary tests are identical,
+  `flatc --conform` runs in the contract check, and the generated FlatBuffers
+  bindings are the only durable schema authority for the six current record
+  types. Future record families are added by their owning capture phase, not
+  invented here.
 
 ## CAP1 — Retail launcher
 
@@ -330,42 +419,182 @@ Work proceeds in this order:
 - [ ] **CAP2.8 Retail profile coverage** — begin with the currently hash-pinned
   binaries. Additional Steam/GOG/patch profiles are added only from owner-supplied
   binaries and independently verified signatures.
+- [ ] **CAP2.9a Pin and compile MinHook** — add MinHook source and license through
+  CAP0.7 and build it as a static x86 target in the native Debug and Release
+  presets. Add a standalone synthetic executable that initializes MinHook,
+  hooks one exported function, verifies original and replacement calls, removes
+  the hook, and uninitializes. *Done when:* both presets pass the smoke test and
+  `deps check` detects a modified MinHook tree.
+- [ ] **CAP2.9b Put MinHook behind `HookBackends`** — replace only the
+  `InlineDetour` path in `native/hook_backend.cpp` with `MH_CreateHook`, queued
+  enable/disable, and `MH_ApplyQueued`. Keep exact profile/hash/RVA,
+  expected-byte, calling-convention, schema, and target-byte validation before
+  calling MinHook. Queue/apply hook changes from the worker/install control path,
+  never a loader callback. Keep vtable replacement unchanged. Map every MinHook
+  failure to an explicit `HookBackendResult` and diagnostic. *Done when:* existing
+  callers and hook declarations compile unchanged and install/disable/release
+  tests pass for inline and vtable backends.
+- [ ] **CAP2.9c Remove the custom inline relocator** — move every supported
+  prologue and relative-control-flow fixture from `hook_backend_test.cpp` through
+  the MinHook adapter, retain fail-closed target-byte tests, and delete the
+  project-owned instruction decoder, branch rewriter, trampoline allocator, and
+  inline patch writer. *Done when:* Debug and Release contract tests plus the
+  100-cycle synthetic lifecycle pass, and a source search finds no reachable
+  project-owned instruction-relocation implementation.
+- [ ] **CAP2.9d MinHook retail gate** — run the hash-pinned direct-save profile
+  with the MinHook-only inline backend and retain the manifest/finalization
+  report. *Done when:* the run captures the read-only draw, BASE, and FINL
+  channels with zero hook failures and zero drops, uninstall completes cleanly,
+  and record/analyzer summaries match the retained CAP2.4 baseline within the
+  frozen numerical policy. Synthetic evidence cannot close this task.
+- [ ] **CAP2.10a Pin `pefile` and add a normalized PE reader** — pin `pefile` in
+  `pyproject.toml`/`uv.lock` and add one small capture-contract module that
+  returns the PE fields already stored by binary-profile registry v2 plus
+  section bounds and RVA/file-offset mapping. *Done when:* synthetic PE32,
+  truncated DOS/NT header, invalid optional header, overlapping section, and
+  out-of-range RVA fixtures have explicit pass/fail tests.
+- [ ] **CAP2.10b Verify profiles against binaries** — add
+  `generate_binary_profiles.py --verify-binary-root <path>`. For every present
+  registered binary, use `pefile` to compare file size, SHA-256, PE identity,
+  section bounds, target RVA mapping, and expected target bytes before emitting
+  generated native/Python surfaces. Missing owner binaries produce an explicit
+  skip; mismatches fail. *Done when:* fixture profiles detect each mismatched
+  field and two identical runs produce byte-identical generated files.
+- [ ] **CAP2.10c Owner-binary profile gate** — run CAP2.10b against the four
+  registered owner binaries and retain its report under `ELYSIUM_WORK_ROOT`.
+  Remove any redundant offline handwritten PE/RVA parser discovered during the
+  cutover; keep the fixed native runtime PE identity reader because injected
+  activation cannot depend on Python. *Done when:* `Vampire.exe`, `client.dll`,
+  `engine.dll`, and `StudioRender.dll` all verify, while runtime exact-hash and
+  fail-closed behavior remain unchanged.
 
 ## CAP3 — Transport, capture, and indexes
 
-- [ ] **CAP3.1 Bounded callback transport** — replace callback-time heap
-  allocation and the unbounded linked queue with preallocated bounded storage.
-  Saturation drops a whole record, increments a per-probe counter, and never
-  blocks the retail thread.
-- [ ] **CAP3.2 Process-external collector** — move file I/O, compression,
-  checksums, and index construction into a supervised collector connected through
-  named shared memory and explicit wake/stop events.
-- [ ] **CAP3.3 Unified capture container** — write module, diagnostic, entity,
-  skeletal, scene, secondary-motion/physics, facial, lip, and optional vertex
-  channels into one timestamped, recoverable file. The implementation target is
-  MCAP with versioned engine-neutral binary payloads; a custom container remains
-  the fallback only if the Win32 writer/reader spike fails the throughput or
-  recovery gates.
-- [ ] **CAP3.4 Chunk and record integrity** — use length framing, schema IDs,
-  chunk checksums, monotonic sequence checks, and an explicit incomplete-tail
-  report. A killed collector preserves every complete recoverable chunk.
-- [ ] **CAP3.5 Native indexes** — enable time/channel indexes and model-specific
-  pose, scene-placement, and physical-instance channels so a reader can seek to
-  one model and interval without scanning a whole scene.
-- [ ] **CAP3.6 Semantic sidecar index** — build a generated SQLite index over
-  session, module, probe, model checksum, stable entity identity, sequence,
-  cycle/phase, scene actor, procedural instance, line, phoneme, and correlation
-  IDs. Matrices, persistent simulation state, and vertex arrays remain in the
-  capture container.
-- [ ] **CAP3.7 Reader API** — expose streaming and indexed Python readers that
-  return NumPy views or bounded copies and reject unknown incompatible schemas.
-- [ ] **CAP3.8 Stress and recovery** — sustain at least one million mixed records,
-  force transport saturation, terminate the collector mid-record and mid-chunk,
-  rebuild indexes, and account exactly for written, recovered, and dropped
-  records.
-- [ ] **CAP3.9 Retail overhead budget** — measure callback time, memory footprint,
-  collector throughput, frame-time effect, and capture volume for focused and
-  whole-scene profiles. Whole-scene capture remains opt-in.
+- [ ] **CAP3.1 Pin and compile moodycamel** — add ConcurrentQueue source and
+  license through CAP0.7, expose one CMake interface target, and compile an x86
+  producer/consumer smoke test in Debug and Release. *Done when:* the smoke test
+  moves a fixed trivially-copyable snapshot and `deps check` detects source or
+  license drift.
+- [ ] **CAP3.2 Replace the module-observer queue** — add one reusable bounded
+  callback-queue wrapper and replace `ModuleObserver::Impl`'s Win32 SList free
+  and pending queues. Construct the queue and its loader producer token before
+  `LdrRegisterDllNotification`; the callback assigns sequence/QPC, calls only
+  `try_enqueue`, and accounts a whole-event drop. *Done when:* bootstrap,
+  load/unload, capacity, saturation, stop, and path-truncation tests pass with
+  zero callback allocations under the test allocator.
+- [ ] **CAP3.3 Move existing hook callbacks onto the queue** — route DIAG, POSE,
+  BASE, and FINL fixed snapshots through the same wrapper with predeclared
+  producer capacity. Remove callback-time file writes and heap allocation; the
+  probe worker owns dequeue. *Done when:* Debug and Release capture fixtures
+  produce the same accepted records, saturation produces exact per-probe drop
+  counts, and a one-million-snapshot contention test has no waits, partial
+  records, or unreported loss.
+- [ ] **CAP3.4 Pin and compile Boost.Interprocess** — add the required Boost
+  source and license through CAP0.7 and link a minimal x86
+  `boost::interprocess::message_queue` producer/consumer test. *Done when:* both
+  native presets create, open, exchange one fixed message, close, and remove a
+  session-named queue without a stale object.
+- [ ] **CAP3.5 Define the worker/collector IPC contract** — add one versioned
+  header for queue name, maximum message size, capacity, start/ready/stop
+  handshake, and counters. The launcher creates a session-unique name and owns
+  stale-object removal. *Done when:* contract tests reject version, size, and
+  capacity mismatches before either side sends data.
+- [ ] **CAP3.6 Connect the probe worker to the collector** — after dequeue, the
+  probe worker uses same-priority nonblocking `try_send`; the supervised external
+  collector opens the queue and drains complete messages. IPC exceptions and
+  setup failures become diagnostics. No IPC call is reachable from a hook or
+  loader callback. *Done when:* synthetic launch transfers ordered sequence IDs,
+  acknowledges stop, drains accepted records, and exits with no named object.
+- [ ] **CAP3.7 IPC failure acceptance** — exercise queue full, collector exit
+  before ready, collector crash while active, probe stop, launcher timeout, and
+  immediate relaunch with the same target PID. *Done when:* only complete
+  records are accepted, every loss is counted, supervision finalizes a partial
+  report, and no stale queue prevents relaunch.
+- [ ] **CAP3.8 Encode control records with FlatBuffers** — make the probe worker
+  convert module and DIAG snapshots into the CAP0.8 generated envelope using a
+  reused bounded builder, then send the verified buffer through CAP3.6. *Done when:*
+  collector-side verification accepts valid buffers, rejects each
+  corrupted offset/length/discriminant fixture, and accounts serialization
+  failures without terminating either process.
+- [ ] **CAP3.9 Encode skeletal records with FlatBuffers** — migrate POSE, BASE,
+  and FINL worker encoders one record type at a time; reserve vectors from the
+  validated bone count and enforce the schema bounds before building. *Done when:*
+  minimum, representative, and maximum-bone records cross the 32-bit C++
+  producer/collector boundary with values identical to the legacy reader.
+- [ ] **CAP3.10 Add the Python transport reader** — decode verified module,
+  DIAG, POSE, BASE, and FINL buffers through generated Python bindings and expose
+  bounded NumPy views for numeric vectors. Unknown incompatible schemas fail;
+  legacy sessions still enter through their adapters. *Done when:* streaming
+  reader summaries equal the frozen legacy summaries for every current record
+  family.
+- [ ] **CAP3.11 Pin MCAP C++ and Python** — add official MCAP C++ source/license
+  through CAP0.7, pin its Python package in `uv.lock`, and build an uncompressed
+  x86 writer plus Python reader smoke test. *Done when:* Python reads the schema,
+  channel, timestamp, sequence, and payload written by C++ in both native
+  presets.
+- [ ] **CAP3.12 Write one end-to-end MCAP channel** — replace the synthetic text
+  trace for DIAG records with an `.mcap.partial` written by the external
+  collector. Enable chunk CRC, message index, summary offsets, and statistics;
+  close then atomically rename only on clean stop. *Done when:* C++ and Python
+  report identical DIAG count/order and a killed writer leaves the partial file
+  without claiming a complete capture.
+- [ ] **CAP3.13 Add current channel layout and indexed reads** — register module,
+  DIAG, POSE, BASE, and FINL channels with their FlatBuffers schemas and stable
+  metadata. Add streaming reads plus time/channel and model-specific seek APIs.
+  *Done when:* seeking one model and interval returns the same records as a full
+  streaming scan without reading unrelated payloads.
+- [ ] **CAP3.14 MCAP interruption recovery** — scan complete records/chunks from
+  `.mcap.partial`, verify CRC and monotonic sequences, report the incomplete
+  tail, rebuild the MCAP summary, and promote only the validated recovered file.
+  *Done when:* termination at every tested record/chunk boundary recovers exactly
+  the complete prefix in both C++ and Python readers.
+- [ ] **CAP3.15 Pin and enable LZ4/Zstandard** — add LZ4 and Zstandard source and
+  licenses through CAP0.7, require Zstandard 1.5.7 or newer for any 32-bit build,
+  and enable both official MCAP compression backends. *Done when:* the same
+  deterministic mixed-record fixture round-trips uncompressed, LZ4, and
+  Zstandard with identical decoded hashes.
+- [ ] **CAP3.16 Select the capture compression default** — benchmark the three
+  modes on the one-million mixed-record fixture and record throughput, output
+  size, peak memory, and recovery time. *Done when:* the default is selected by
+  a checked-in threshold/policy, both non-default modes remain selectable, and
+  the slowest accepted mode still meets the synthetic collector budget.
+- [ ] **CAP3.17 Pin SQLite and create the sidecar schema** — add the upstream
+  SQLite amalgamation and license through CAP0.7, compile it directly into the
+  collector/finalizer with no ORM, and create tables/indexes for session,
+  channel, sequence/QPC, probe, model, entity/scene, line/phoneme, and
+  correlation identity. Large matrices, simulation state, and vertex arrays
+  remain only in MCAP. *Done when:* schema creation and migration tests pass in
+  Debug and Release.
+- [ ] **CAP3.18 Build and rebuild the semantic sidecar** — commit bounded SQLite
+  transactions only after the owning MCAP chunk is durable and record the MCAP
+  content identity. Rebuild the disposable database solely from verified MCAP
+  records after absence, corruption, or schema change. *Done when:* forced
+  termination cannot make an incomplete row authoritative and two rebuilds are
+  logically equivalent by table/index counts and query results.
+- [ ] **CAP3.19 Prove index/query equivalence** — implement joins by
+  entity/model/scene/line/correlation identity and compare every indexed query
+  with the streaming analyzer result. *Done when:* deterministic mixed sessions,
+  duplicate timestamps, missing optional identities, and legacy-adapted sessions
+  return the same ordered record identities through both paths.
+- [ ] **CAP3.20 Synthetic transport-system gate** — run one million mixed records,
+  forced callback and IPC saturation, collector termination at framing/chunk
+  boundaries, index deletion/corruption, and clean restart across the complete
+  queue → worker → IPC → FlatBuffers → MCAP → SQLite stack. *Done when:* written,
+  recovered, rejected, and dropped counts balance exactly and no target,
+  collector, handle, or named object survives the test.
+- [ ] **CAP3.21 Freeze the retail overhead policy** — before running the new
+  stack on retail, repeat capture-disabled and retained direct-write focused and
+  whole-scene profiles. Record callback p50/p95/p99, frame-time p50/p95/p99,
+  process memory, output rate, and capture volume; write the allowed deltas and
+  zero-unreported-loss rule to a validated tracked performance-policy contract.
+  *Done when:* repeated baselines are stable enough for the contract's bands and
+  the policy is committed before CAP3.22 data is collected.
+- [ ] **CAP3.22 Retail transport gate** — run the same focused and opt-in
+  whole-scene direct-save profiles through the complete new stack and retain the
+  manifest, performance report, finalization report, and analyzer summaries.
+  *Done when:* every CAP3.21 threshold passes, reported counts balance, there is
+  zero unreported loss, and summaries match the retained direct-write baseline
+  within the frozen numerical policy. Synthetic evidence cannot close this task.
 
 ## CAP4 — Experiment controller and semantic identity
 
@@ -704,6 +933,26 @@ rigid-body or ragdoll motion, vertex/flex deformation, and material/stream fault
   camera, expression, eyelids, lip/audio clocks, completion/cancellation, and
   final actor state. Every visible mismatch is assigned to a captured stage,
   classified as presentation-only, or retained as an explicit open blocker.
+- [ ] **CAP12.9a Pin Hypothesis and define the test profile** — pin Hypothesis in
+  `pyproject.toml`/`uv.lock`, add one deterministic capture-test profile, and
+  persist seed plus minimized failing example below `ELYSIUM_WORK_ROOT` without
+  committing game-derived bytes. *Done when:* a deliberately failing sample
+  shrinks reproducibly and the reported seed replays it locally.
+- [ ] **CAP12.9b Add binary/parser strategies** — generate bounded offsets,
+  strides, reference graphs, hierarchy/channel runs, sequence grids, and PE/RVA
+  edge cases for the offline capture parsers. *Done when:* each strategy has a
+  positive invariant and a seeded invalid case, and fixed parser failures are
+  retained as small game-independent regression fixtures.
+- [ ] **CAP12.9c Add schema-evolution strategies** — generate valid and malformed
+  FlatBuffers plus compatible field additions/defaults and incompatible field
+  changes. *Done when:* generated verifiers reject malformed buffers,
+  `flatc --conform` agrees with the property expectation, and legacy adapters
+  preserve summaries for compatible cases.
+- [ ] **CAP12.9d Add transport/recovery state machines** — model enqueue/drop,
+  worker send, collector crash/restart, MCAP truncation/recovery, and SQLite
+  delete/rebuild transitions. *Done when:* state-machine accounting always
+  balances accepted, written, recovered, rejected, and dropped identities, and
+  injected implementation faults shrink to deterministic operation sequences.
 
 ## CAP13 — Rebuild handoff
 
@@ -771,5 +1020,9 @@ rigid-body or ragdoll motion, vertex/flex deformation, and material/stream fault
 | History-dependent secondary motion looks nondeterministic | Repeat captures disagree or first frames explode | Capture frame delta and persistent state; specify initialization, reset, and warm-up checkpoints |
 | Physics hooks perturb the simulation | The observer changes the cloth result | Use bounded sampled records, measure overhead, and compare reduced-probe repeats |
 | Debug experiment changes timing | Observer perturbs behavior | Measure overhead, repeat with reduced probes, compare clocks |
+| Hook-library thread suspension perturbs or deadlocks retail | Installation changes the behavior under observation | Pin MinHook; batch changes before resume or after disarm; drain active callbacks before removal; measure the retail delta |
+| IPC setup, exception, or stale named object escapes the worker | Probe crash, stranded queue, or silent capture loss | Keep Boost.Interprocess outside callbacks; catch and diagnose failures; use session-unique ownership and synthetic crash cleanup |
+| FlatBuffers schema evolution silently reinterprets data | Old captures produce plausible but wrong values | Explicit field IDs, `flatc --conform`, generated verifiers, golden legacy adapters, and incompatible-schema rejection |
+| Third-party dependency drift or license loss | A rebuild changes evidence or becomes undistributable | Pin repository, revision, archive hash, license, architecture, and build options; enforce them through `deps check` |
 | Corpus unavailable locally | False regression | Hash-gated local generation and explicit skip diagnostics |
 | Exploration expands without a stop rule | Endless engine archaeology | Program exit criterion and shipped-content coverage govern scope |
