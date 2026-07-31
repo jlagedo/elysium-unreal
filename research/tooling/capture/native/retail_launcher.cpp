@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "bootstrap_contract.h"
+#include "retail_supervision.h"
 
 namespace {
 
@@ -67,12 +68,17 @@ struct Options {
     std::wstring WorkingDirectory;
     std::wstring Distribution;
     std::wstring ProbeHost;
+    std::wstring Collector;
+    std::wstring FinalizationPath;
     StartupProfile Profile = StartupProfile::Direct;
     std::vector<std::wstring> EnvironmentOverrides;
+    std::vector<std::wstring> CollectorArguments;
     std::vector<std::wstring> TargetArguments;
     DWORD VerifySuspendedMs = 25;
+    DWORD TimeoutMs = 0;
     bool ResumeSynthetic = false;
     bool InjectAndTerminate = false;
+    bool Supervise = false;
     bool TerminateAfterVerification = false;
 };
 
@@ -126,6 +132,10 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
             options->InjectAndTerminate = true;
             continue;
         }
+        if (std::wcscmp(option, L"--supervise") == 0) {
+            options->Supervise = true;
+            continue;
+        }
 
         const wchar_t* value = nullptr;
         if (!TakeValue(argc, argv, &index, &value)) {
@@ -135,6 +145,12 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
             options->Executable = value;
         } else if (std::wcscmp(option, L"--probe-host") == 0) {
             options->ProbeHost = value;
+        } else if (std::wcscmp(option, L"--collector") == 0) {
+            options->Collector = value;
+        } else if (std::wcscmp(option, L"--collector-argument") == 0) {
+            options->CollectorArguments.emplace_back(value);
+        } else if (std::wcscmp(option, L"--finalization") == 0) {
+            options->FinalizationPath = value;
         } else if (std::wcscmp(option, L"--working-directory") == 0) {
             options->WorkingDirectory = value;
         } else if (std::wcscmp(option, L"--distribution") == 0) {
@@ -165,6 +181,10 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
             if (!ParseUnsigned(value, option, &options->VerifySuspendedMs)) {
                 return false;
             }
+        } else if (std::wcscmp(option, L"--timeout-ms") == 0) {
+            if (!ParseUnsigned(value, option, &options->TimeoutMs)) {
+                return false;
+            }
         } else {
             std::fwprintf(stderr, L"unknown launcher option: %ls\n", option);
             return false;
@@ -186,6 +206,7 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
     const int actions =
         (options->ResumeSynthetic ? 1 : 0) +
         (options->InjectAndTerminate ? 1 : 0) +
+        (options->Supervise ? 1 : 0) +
         (options->TerminateAfterVerification ? 1 : 0);
     if (actions != 1) {
         std::fwprintf(
@@ -193,11 +214,18 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
             L"select exactly one launch completion action\n");
         return false;
     }
-    if ((options->ResumeSynthetic || options->InjectAndTerminate) &&
+    if ((options->ResumeSynthetic || options->InjectAndTerminate ||
+         options->Supervise) &&
         options->ProbeHost.empty()) {
         std::fwprintf(
             stderr,
             L"--probe-host is required for bootstrap injection\n");
+        return false;
+    }
+    if (options->Supervise && options->FinalizationPath.empty()) {
+        std::fwprintf(
+            stderr,
+            L"--finalization is required with --supervise\n");
         return false;
     }
     return true;
@@ -572,9 +600,11 @@ int wmain(int argc, wchar_t** argv) {
             L"--working-directory PATH --distribution NAME "
             L"[--startup-profile direct|unofficial-patch] "
             L"[--environment NAME=VALUE] [--verify-suspended-ms N] "
-            L"[--probe-host PATH] "
+            L"[--probe-host PATH] [--collector PATH] "
+            L"[--collector-argument VALUE] [--timeout-ms N] "
+            L"[--finalization PATH] "
             L"(--resume-synthetic|--inject-and-terminate|"
-            L"--terminate-after-verification) "
+            L"--supervise|--terminate-after-verification) "
             L"[-- target arguments]\n");
         return 2;
     }
@@ -582,10 +612,16 @@ int wmain(int argc, wchar_t** argv) {
     std::wstring executable;
     std::wstring workingDirectory;
     std::wstring probeHost;
+    std::wstring collector;
+    std::wstring finalizationPath;
     if (!FullPath(options.Executable, &executable) ||
         !FullPath(options.WorkingDirectory, &workingDirectory) ||
         (!options.ProbeHost.empty() &&
-         !FullPath(options.ProbeHost, &probeHost))) {
+         !FullPath(options.ProbeHost, &probeHost)) ||
+        (!options.Collector.empty() &&
+         !FullPath(options.Collector, &collector)) ||
+        (!options.FinalizationPath.empty() &&
+         !FullPath(options.FinalizationPath, &finalizationPath))) {
         std::fwprintf(stderr, L"cannot resolve launch paths\n");
         return 3;
     }
@@ -605,6 +641,15 @@ int wmain(int argc, wchar_t** argv) {
         if (probeAttributes == INVALID_FILE_ATTRIBUTES ||
             (probeAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
             std::fwprintf(stderr, L"invalid probe-host DLL\n");
+            return 4;
+        }
+    }
+    if (!collector.empty()) {
+        const DWORD collectorAttributes =
+            GetFileAttributesW(collector.c_str());
+        if (collectorAttributes == INVALID_FILE_ATTRIBUTES ||
+            (collectorAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+            std::fwprintf(stderr, L"invalid collector executable\n");
             return 4;
         }
     }
@@ -630,7 +675,8 @@ int wmain(int argc, wchar_t** argv) {
     startup.cb = sizeof(startup);
     PROCESS_INFORMATION created{};
     const DWORD creationFlags =
-        CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT;
+        CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT |
+        CREATE_NEW_PROCESS_GROUP;
     const BOOL launched = CreateProcessW(
         executable.c_str(),
         mutableCommandLine.data(),
@@ -729,6 +775,24 @@ int wmain(int argc, wchar_t** argv) {
             L"retail-launch-v1 event=bootstrap_verified pid=%lu\n",
             created.dwProcessId);
         return 0;
+    }
+
+    if (options.Supervise) {
+        const elysium::capture::SupervisionRequest request{
+            process.Get(),
+            thread.Get(),
+            created.dwProcessId,
+            workingDirectory,
+            collector,
+            options.CollectorArguments,
+            finalizationPath,
+            options.TimeoutMs,
+            &ready.ModuleNotificationCount,
+        };
+        const int supervisionResult =
+            elysium::capture::RunSupervision(request);
+        childActive = false;
+        return supervisionResult;
     }
 
     if (ResumeThread(thread.Get()) != 1) {

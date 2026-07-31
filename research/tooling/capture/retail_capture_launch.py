@@ -1,11 +1,13 @@
 """Create the selected retail process suspended and bootstrap the probe host.
 
-Until CAP1.5 owns complete process supervision, this command verifies the
-versioned ready/error handshake and terminates before resuming retail:
+By default this command verifies the handshake and terminates before resuming
+retail. ``--run`` enables supervised execution; press Ctrl-C once to perform
+the required human cancellation acceptance:
 
     uv run elysium research retail_capture_launch \
-        --distribution steam \
-        --startup-profile unofficial-patch
+        --distribution owner-configured \
+        --startup-profile unofficial-patch \
+        --run --timeout-seconds 300
 """
 
 from __future__ import annotations
@@ -14,8 +16,9 @@ import argparse
 import os
 from pathlib import Path
 import subprocess
+import time
 
-from elysium_pipeline.paths import vtmb_root
+from elysium_pipeline.paths import research_root, vtmb_root
 from research.tooling.capture.retail_capture_native import (
     native_output_dir,
     run as run_native,
@@ -50,12 +53,45 @@ def main() -> int:
     parser.add_argument("--verify-suspended-ms", type=int, default=25)
     parser.add_argument("--config", choices=("Debug", "Release"), default="Release")
     parser.add_argument(
+        "--run",
+        action="store_true",
+        help="Resume after bootstrap and supervise through a terminal condition.",
+    )
+    parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=300,
+        help="Supervised runtime limit; zero waits indefinitely.",
+    )
+    parser.add_argument(
+        "--collector",
+        type=Path,
+        help="Optional external collector owned by the supervision job.",
+    )
+    parser.add_argument(
+        "--collector-argument",
+        action="append",
+        default=[],
+        help="Collector argument; repeat once for every argument.",
+    )
+    parser.add_argument(
+        "--finalization",
+        type=Path,
+        help="Versioned finalization report path for supervised execution.",
+    )
+    parser.add_argument(
+        "--target-argument",
+        action="append",
+        default=[],
+        help="Retail argument; repeat once for every argument.",
+    )
+    parser.add_argument(
         "target_arguments",
         nargs=argparse.REMAINDER,
         help="Arguments after -- are reproduced on the retail command line.",
     )
     args = parser.parse_args()
-    target_arguments = args.target_arguments
+    target_arguments = [*args.target_argument, *args.target_arguments]
     if target_arguments[:1] == ["--"]:
         target_arguments = target_arguments[1:]
 
@@ -75,6 +111,8 @@ def main() -> int:
         raise NotADirectoryError(working_directory)
     if args.verify_suspended_ms < 0 or args.verify_suspended_ms > 600000:
         parser.error("--verify-suspended-ms must be between 0 and 600000")
+    if args.timeout_seconds < 0 or args.timeout_seconds > 600:
+        parser.error("--timeout-seconds must be between 0 and 600")
     for value in args.environment:
         name, separator, _ = value.partition("=")
         if not separator or not name:
@@ -84,6 +122,9 @@ def main() -> int:
     native_output = native_output_dir(args.config)
     launcher = native_output / "retail_launcher.exe"
     probe_host = native_output / "retail_probe_host.dll"
+    collector = args.collector.resolve() if args.collector else None
+    if collector is not None and not collector.is_file():
+        raise FileNotFoundError(collector)
     command = [
         os.fspath(launcher),
         "--executable",
@@ -101,12 +142,52 @@ def main() -> int:
     ]
     for value in args.environment:
         command.extend(("--environment", value))
-    command.append("--inject-and-terminate")
+    finalization = None
+    if args.run:
+        finalization = (
+            args.finalization.resolve()
+            if args.finalization is not None
+            else (
+                research_root()
+                / "retail-capture"
+                / "supervision"
+                / f"{time.strftime('%Y%m%d_%H%M%S')}-finalization.txt"
+            ).resolve()
+        )
+        finalization.parent.mkdir(parents=True, exist_ok=True)
+        command.extend(
+            (
+                "--finalization",
+                os.fspath(finalization),
+                "--timeout-ms",
+                str(args.timeout_seconds * 1000),
+            )
+        )
+        if collector is not None:
+            command.extend(("--collector", os.fspath(collector)))
+            for value in args.collector_argument:
+                command.extend(("--collector-argument", value))
+        command.append("--supervise")
+    else:
+        command.append("--inject-and-terminate")
     if target_arguments:
         command.append("--")
         command.extend(target_arguments)
-    subprocess.run(command, check=True)
-    return 0
+    if not args.run:
+        subprocess.run(command, check=True)
+        return 0
+
+    print(f"finalization report: {finalization}", flush=True)
+    process = subprocess.Popen(command)
+    try:
+        return process.wait()
+    except KeyboardInterrupt:
+        print("Ctrl-C received; waiting for supervised finalization...", flush=True)
+        try:
+            return process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.terminate()
+            return process.wait(timeout=5)
 
 
 if __name__ == "__main__":

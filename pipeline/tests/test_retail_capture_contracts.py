@@ -208,7 +208,8 @@ class RetailCaptureContractTests(unittest.TestCase):
         launcher = (NATIVE_ROOT / "retail_launcher.cpp").read_text(
             encoding="utf-8"
         )
-        self.assertIn("add_executable(retail_launcher", cmake)
+        self.assertIn("retail_launcher.cpp", cmake)
+        self.assertIn("retail_supervision.cpp", cmake)
         self.assertIn("synthetic_suspended_launch", cmake)
         self.assertIn("CREATE_SUSPENDED", launcher)
         self.assertIn("CREATE_UNICODE_ENVIRONMENT", launcher)
@@ -230,6 +231,7 @@ class RetailCaptureContractTests(unittest.TestCase):
         self.assertIn('"retail_probe_host.dll"', public_driver)
         self.assertIn('"--startup-profile"', public_driver)
         self.assertIn('target_arguments[:1] == ["--"]', public_driver)
+        self.assertIn('"--target-argument"', public_driver)
 
     def test_bootstrap_injection_uses_a_versioned_loadlibrary_handshake(self) -> None:
         cmake = (NATIVE_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
@@ -257,6 +259,31 @@ class RetailCaptureContractTests(unittest.TestCase):
             launcher.index("bootstrap->WaitReady"),
             launcher.rindex("ResumeThread(thread.Get())"),
         )
+
+    def test_supervision_owns_children_and_finalizes_partial_captures(self) -> None:
+        cmake = (NATIVE_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+        launcher = (NATIVE_ROOT / "retail_launcher.cpp").read_text(
+            encoding="utf-8"
+        )
+        supervision = (NATIVE_ROOT / "retail_supervision.cpp").read_text(
+            encoding="utf-8"
+        )
+        for name in (
+            "synthetic_supervision_normal_exit",
+            "synthetic_supervision_timeout",
+            "synthetic_supervision_crash",
+            "synthetic_supervision_collector_exit",
+        ):
+            self.assertIn(name, cmake)
+        self.assertIn("RunSupervision(request)", launcher)
+        self.assertIn("JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE", supervision)
+        self.assertIn("SetConsoleCtrlHandler(", supervision)
+        self.assertIn("CTRL_C_EVENT", supervision)
+        self.assertNotIn("GenerateConsoleCtrlEvent", supervision)
+        self.assertIn("MoveFileExW(", supervision)
+        self.assertIn("elysium.retail-capture-finalization", supervision)
+        for reason in ("process-crash", "collector-exit", "timeout", "ctrl-c"):
+            self.assertIn(f'"{reason}"', supervision)
 
     def test_generated_record_contracts_are_current_and_unique(self) -> None:
         subprocess.run(

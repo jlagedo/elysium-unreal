@@ -22,6 +22,7 @@ struct Options {
     DWORD InitialDelayMs = 0;
     DWORD ModuleDelayMs = 25;
     DWORD LifetimeMs = 100;
+    DWORD ExitCode = 0;
     const wchar_t* CommandToken = nullptr;
     const wchar_t* ExpectedWorkingDirectory = nullptr;
     const wchar_t* ExpectedModDirectory = nullptr;
@@ -117,6 +118,8 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
             destination = &options->ModuleDelayMs;
         } else if (std::wcscmp(argv[index], L"--lifetime-ms") == 0) {
             destination = &options->LifetimeMs;
+        } else if (std::wcscmp(argv[index], L"--exit-code") == 0) {
+            destination = &options->ExitCode;
         } else if (std::wcscmp(argv[index], L"--command-token") == 0) {
             options->CommandToken = argv[index + 1];
             continue;
@@ -145,6 +148,10 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
             return false;
         }
         if (!ParseDelay(argv[index + 1], argv[index], destination)) {
+            return false;
+        }
+        if (destination == &options->ExitCode && options->ExitCode > 255) {
+            std::fwprintf(stderr, L"--exit-code must not exceed 255\n");
             return false;
         }
     }
@@ -367,5 +374,5 @@ int wmain(int argc, wchar_t** argv) {
         QpcNow(),
         Modules.size());
     std::fflush(stdout);
-    return 0;
+    return static_cast<int>(options.ExitCode);
 }

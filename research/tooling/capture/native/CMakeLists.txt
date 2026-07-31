@@ -94,7 +94,11 @@ add_dependencies(
     synthetic_studiorender
 )
 
-add_executable(retail_launcher retail_launcher.cpp)
+add_executable(
+    retail_launcher
+    retail_launcher.cpp
+    retail_supervision.cpp
+)
 elysium_native_target(retail_launcher)
 target_include_directories(retail_launcher PRIVATE .)
 
@@ -102,6 +106,9 @@ add_library(retail_probe_host SHARED retail_probe_host.cpp)
 set_target_properties(retail_probe_host PROPERTIES OUTPUT_NAME retail_probe_host)
 target_include_directories(retail_probe_host PRIVATE .)
 elysium_native_target(retail_probe_host)
+
+add_executable(synthetic_collector synthetic_collector.cpp)
+elysium_native_target(synthetic_collector)
 
 enable_testing()
 add_test(
@@ -184,4 +191,68 @@ set_tests_properties(
     PROPERTIES
         PASS_REGULAR_EXPRESSION "event=verification_complete"
         TIMEOUT 15
+)
+
+add_test(
+    NAME synthetic_supervision_normal_exit
+    COMMAND
+        ${CMAKE_COMMAND}
+        -DLAUNCHER=$<TARGET_FILE:retail_launcher>
+        -DTARGET=$<TARGET_FILE:synthetic_retail>
+        -DBIN_DIR=$<TARGET_FILE_DIR:synthetic_retail>
+        -DPROBE=$<TARGET_FILE:retail_probe_host>
+        -DCOLLECTOR=$<TARGET_FILE:synthetic_collector>
+        -DREPORT=${CMAKE_BINARY_DIR}/supervision-normal.txt
+        -DSCENARIO=normal
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_supervision.cmake
+)
+
+add_test(
+    NAME synthetic_supervision_timeout
+    COMMAND
+        ${CMAKE_COMMAND}
+        -DLAUNCHER=$<TARGET_FILE:retail_launcher>
+        -DTARGET=$<TARGET_FILE:synthetic_retail>
+        -DBIN_DIR=$<TARGET_FILE_DIR:synthetic_retail>
+        -DPROBE=$<TARGET_FILE:retail_probe_host>
+        -DCOLLECTOR=$<TARGET_FILE:synthetic_collector>
+        -DREPORT=${CMAKE_BINARY_DIR}/supervision-timeout.txt
+        -DSCENARIO=timeout
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_supervision.cmake
+)
+
+add_test(
+    NAME synthetic_supervision_crash
+    COMMAND
+        ${CMAKE_COMMAND}
+        -DLAUNCHER=$<TARGET_FILE:retail_launcher>
+        -DTARGET=$<TARGET_FILE:synthetic_retail>
+        -DBIN_DIR=$<TARGET_FILE_DIR:synthetic_retail>
+        -DPROBE=$<TARGET_FILE:retail_probe_host>
+        -DCOLLECTOR=$<TARGET_FILE:synthetic_collector>
+        -DREPORT=${CMAKE_BINARY_DIR}/supervision-crash.txt
+        -DSCENARIO=crash
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_supervision.cmake
+)
+
+add_test(
+    NAME synthetic_supervision_collector_exit
+    COMMAND
+        ${CMAKE_COMMAND}
+        -DLAUNCHER=$<TARGET_FILE:retail_launcher>
+        -DTARGET=$<TARGET_FILE:synthetic_retail>
+        -DBIN_DIR=$<TARGET_FILE_DIR:synthetic_retail>
+        -DPROBE=$<TARGET_FILE:retail_probe_host>
+        -DCOLLECTOR=$<TARGET_FILE:synthetic_collector>
+        -DREPORT=${CMAKE_BINARY_DIR}/supervision-collector.txt
+        -DSCENARIO=collector
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_supervision.cmake
+)
+
+set_tests_properties(
+    synthetic_supervision_normal_exit
+    synthetic_supervision_timeout
+    synthetic_supervision_crash
+    synthetic_supervision_collector_exit
+    PROPERTIES TIMEOUT 15
 )

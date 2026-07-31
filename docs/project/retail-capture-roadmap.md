@@ -248,9 +248,12 @@ Work proceeds in this order:
   `LoadLibraryW` path, wait for a versioned ready/error handshake, and resume the
   primary thread only after module observation and transport are armed. Manual
   mapping is not used.
-- [ ] **CAP1.5 Supervision** — own process exit, collector exit, timeout, Ctrl-C,
+- [x] **CAP1.5 Supervision** — own process exit, collector exit, timeout, Ctrl-C,
   crash detection, and partial-capture finalization. The launcher never leaves a
-  suspended retail process or an orphaned collector.
+  suspended retail process or an orphaned collector. Normal exit, crash,
+  collector exit, timeout, atomic finalization, cleanup, and owner Ctrl-C
+  acceptance pass; cancellation records a partial `reason=ctrl-c` report and
+  leaves no game or collector process.
 - [ ] **CAP1.6 Attach fallback** — preserve an explicit attach-to-PID mode for
   debugger-led discovery. Session metadata distinguishes launched and attached
   captures; reproducible acceptance uses launch mode.
