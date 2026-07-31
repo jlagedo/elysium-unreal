@@ -101,10 +101,11 @@ asset enhancement — re-sequenced then.
 
 Open tasks whose dependencies are met, ordered by playable-path payoff:
 
-1. **0.10 / RE32 / RE33 / 12.1** — finish the small raw recorder, then trace
-   character resources from load and runtime construction through skeletal and
-   scene evaluation, secondary motion, facial/lip processing, deformation, and
-   render submission. Detailed order and retail evidence gates:
+1. **0.10 / RE32 / RE33 / 12.1** — finish the small raw recorder, follow one
+   simple actor from resource load through skeletal evaluation to final draw
+   matrices, then expand only from observed mismatches into layers/remaps,
+   theatre scenes, facial/lip processing, and secondary motion. Detailed order
+   and retail evidence gates:
    `docs/project/retail-capture-roadmap.md`.
 2. **11.10** — finish PP0 with the played-input harness.
 3. **9.8 / 9.9 / 9.10** — inventory, NPC reactions, and economy on the durable player/entity spine.
@@ -181,9 +182,10 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
 - [x] **0.9 The uasset-bake architecture** — the world's *look* bakes offline into the gitignored
   `/ElysiumBaked` mount, everything else stays runtime-built. → `docs/architecture/uasset-bake-spike.md`. Residue handed on: **PL11**.
 - [~] **0.10 Retail animation RE instrument** — a private one-build launcher/probe
-  with editable raw byte-span recipes, bounded append-only capture, rebuildable
-  offline indexes, and focused analyzers from resource load through rendering; no
-  stable capture schema or public compatibility surface. Detailed tasks and acceptance:
+  with editable raw byte-span recipes, bounded streaming capture, and focused
+  resource-to-render analyzers; storage and indexes expand only after measured
+  capture or query pain, with no stable schema or public compatibility surface.
+  Detailed tasks and acceptance:
   `docs/project/retail-capture-roadmap.md`.
 
 ## P1 — Entity substrate *(design: `docs/architecture/engine-core.md` — read it; steps here are the tracker)*

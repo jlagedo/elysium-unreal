@@ -1,6 +1,6 @@
 # VTMB Animation Reverse Engineering
 
-## Consolidated status, evidence model, runtime-capture strategy, and implementation roadmap
+## Evidence model, runtime-capture strategy, and investigation method
 
 **Game:** *Vampire: The Masquerade — Bloodlines* (2004)  
 **Primary target:** Troika's modified early Source engine and MDL version `2531`  
@@ -73,7 +73,7 @@ This document covers:
 - a structured trace and comparison format;
 - a Codex-friendly automation workflow;
 - an evidence hierarchy and experiment discipline;
-- an implementation roadmap for faithful Unreal playback;
+- an investigation method for faithful Unreal playback;
 - legal, safety, reproducibility, and project-management cautions.
 
 This document does **not** claim to be:
@@ -1387,197 +1387,35 @@ Next experiment:
 
 ---
 
-## 13. Roadmap
+## 13. Investigation order
 
-### Milestone 0 — Reproducible corpus discovery
+This document owns the evidence model and method, not task status. The only
+detailed task order and current front are in
+`docs/project/retail-capture-roadmap.md`.
 
-**Deliverables**
+The durable investigation sequence is:
 
-- local game-install detector;
-- file-hash manifest generator;
-- animation-library dependency report;
-- no copyrighted data committed.
+1. choose one ordinary humanoid, one simple clip, and one repeatable scene;
+2. use final CPU matrices and correlated draw data as the first runtime oracle;
+3. attach raw resource bytes and runtime-object identity to that output path;
+4. compare the engine-neutral evaluator at the same model, sequence, and time;
+5. trace backward only from the first mismatching bone, vertex, or frame;
+6. add layers, included-model remaps, root motion, procedural work, scenes,
+   facial/lip processing, and secondary motion one demonstrated mismatch at a
+   time;
+7. keep source equivalence separate from Unreal basis conversion, retargeting,
+   and presentation acceptance.
 
-**Exit criteria**
+Capture/storage work follows the same rule: start with the smallest bounded raw
+record and append writer, measure it in retail, and add queue, blob, index, or
+compression machinery only for an observed limit.
 
-- one chosen character resolves to its skeleton and external animation libraries;
-- all source files have hashes;
-- missing corpus produces a clear skip, not a misleading test failure.
+## 14. Task ownership
 
-### Milestone 1 — Offline decoded-pose comparison
-
-**Deliverables**
-
-- project decoder JSON exporter;
-- SMD parser;
-- Crowbar runner or documented import;
-- quaternion-preserving canonical pose format;
-- per-bone comparison report.
-
-**Exit criteria**
-
-- one simple sequence can be compared for every frame;
-- first mismatch is identified by bone and channel;
-- coordinate transforms are explicit and tested.
-
-### Milestone 2 — D3D9 boundary tracer
-
-**Deliverables**
-
-- 32-bit D3D9 probe;
-- shader-constant and draw-call log;
-- candidate matrix scorer;
-- caller-RVA grouping report.
-
-**Exit criteria**
-
-- one candidate palette is reliably correlated with the chosen character;
-- the same call path repeats across frames;
-- trace overhead is acceptable.
-
-### Milestone 3 — Final CPU pose hook
-
-**Deliverables**
-
-- stable signature for one supported executable/module version;
-- final matrix capture;
-- entity/model correlation;
-- module and signature verification.
-
-**Exit criteria**
-
-- 300 consecutive frames captured without crash;
-- matrix space is classified;
-- repeated captures are deterministic within tolerance.
-
-### Milestone 4 — Runtime metadata capture
-
-**Deliverables**
-
-- sequence index/name;
-- cycle;
-- playback rate;
-- entity transform;
-- relevant layer and pose-parameter state where discoverable.
-
-**Exit criteria**
-
-- runtime and offline evaluators can be sampled at the same semantic time;
-- sequence changes and loop boundaries are visible in the trace.
-
-### Milestone 5 — Ordinary body-clip equivalence
-
-**Deliverables**
-
-- runtime-vs-project pose comparison;
-- minimized mismatch fixtures;
-- verified fixes for ordinary clips.
-
-**Exit criteria**
-
-- representative idle, walk, run, turn, and one scripted body sequence meet agreed tolerances;
-- no Unreal retargeting is involved in the equivalence test.
-
-### Milestone 6 — Root motion and locomotion policy
-
-**Deliverables**
-
-- entity/root/pelvis trace;
-- motion-source classification;
-- Unreal root-motion policy.
-
-**Exit criteria**
-
-- stationary and AI-driven playback are both explained;
-- no double application of movement occurs.
-
-### Milestone 7 — Layers, gestures, and pose parameters
-
-**Deliverables**
-
-- controlled layer sweeps;
-- inferred priority and bone masks;
-- transition timing;
-- runtime state representation.
-
-**Exit criteria**
-
-- one base idle plus one upper-body gesture matches the original;
-- one pose-parameter-driven blend matches over a sweep.
-
-### Milestone 8 — Procedural bones and IK
-
-**Deliverables**
-
-- pre/post-stage capture if obtainable;
-- behavior classification;
-- Unreal-native replacement or faithful evaluator.
-
-**Exit criteria**
-
-- representative head aim and accessory/jiggle case are understood;
-- unsupported cases are explicit.
-
-### Milestone 9 — Facial expression, eyes, and lip sync
-
-**Deliverables**
-
-- dialogue capture protocol;
-- flex/eye/head/LIP layer isolation;
-- model-specific expression inventory;
-- Unreal facial mapping.
-
-**Exit criteria**
-
-- one controlled spoken line matches timing and broad deformation;
-- named expression plus lip sync can be composed without abrupt invalid state;
-- approximation is labeled where exact recovery is not possible.
-
-### Milestone 10 — Unreal integration
-
-**Deliverables**
-
-- verified animation-sequence import;
-- skeleton-family mapping;
-- event and root-motion metadata;
-- dialogue-layer runtime;
-- non-retargeted equivalence tests plus retargeted presentation tests.
-
-**Exit criteria**
-
-- raw imported pose matches the verified decoder;
-- retargeting is tested separately;
-- final in-game playback passes both numerical and visual acceptance.
-
----
-
-## 14. Concrete next steps
-
-The first implementation sprint should do only the following:
-
-1. Select one simple humanoid model and one idle sequence.
-2. Generate a manifest of the model and all linked animation files.
-3. Pin Crowbar 0.74 by source commit, executable version, and hash.
-4. Export bone-animation SMD files and preserve the decompile log.
-5. Add a strict SMD parser that retains raw Euler values.
-6. Export the project's own per-frame local quaternion/translation data.
-7. Define the canonical decoded-pose JSON schema.
-8. Implement local-space and model-space comparisons.
-9. Produce a first-mismatch report.
-10. Do **not** change the decoder unless the report exposes a concrete mismatch.
-
-Then:
-
-11. Build a minimal 32-bit `SetVertexShaderConstantF` logger.
-12. Group candidate uploads by caller RVA and vector count.
-13. Correlate one candidate with the character draw.
-14. Trace backward in x32dbg to the CPU pose buffer.
-15. Capture final matrices for the same idle sequence.
-16. Classify matrix space using frozen-cycle entity translation/rotation.
-17. Compare original runtime, project decoder, and Crowbar output.
-18. Fix only the first experimentally isolated discrepancy.
-
-Do not start face, dialogue layering, or native animation compilation during this sprint.
+Completed capabilities, open research slices, priorities, and acceptance gates
+are not duplicated here. They live in
+`docs/project/retail-capture-roadmap.md`; project roll-up and playable-path
+priority live in `docs/project/roadmap.md`.
 
 ---
 
