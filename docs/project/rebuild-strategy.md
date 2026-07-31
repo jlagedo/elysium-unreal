@@ -89,7 +89,7 @@ no swap, scale, or winding flip:
   `.props`/`.decals` origins, `.spawn`, `.sky`) = `source_to_unreal(sx,sy,sz) = (sx, -sy, sz) * 2.54`.
   Both spaces are Z-up; the Y negation flips handedness (Source is right-handed).
 - **Winding**: the Y negation is a reflection (det −1), so `UE_bsp_to_scene.py` (and
-  `mdl.write_obj_scene(ue_space=True)` for prop meshes) reverses triangle winding once, at
+  `mdl.write_obj_scene` for prop meshes) reverses triangle winding once, at
   OBJ-write time. `ElysiumObjModel.cpp` reads tris as-is.
 - **Directions** (`.lights` beam vectors) = `source_dir_to_unreal(x,y,z) = (x, -y, z)`,
   re-normalised (no scale).
@@ -98,9 +98,9 @@ no swap, scale, or winding flip:
   emitted as a unit quaternion `qx qy qz qw` and read straight into `FQuat` — no runtime math.
 - **Scalars**: radii, sprite sizes, and fog distances are emitted in centimetres
   (`INCH_TO_CM`); `.spawn` yaw is emitted already negated (the Y flip reverses yaw sense).
-- The Source→Unreal math lives once in `pipeline/src/elysium_pipeline/formats/bsp.py` — never inline it. Legacy non-`UE_`
-  exporters still emit Godot Y-up/metres (`source_to_godot`) and are flagged for review
-  (see `/CLAUDE.md` → "The `UE_` exporter convention", and `/pipeline/CLAUDE.md`).
+- The Source→Unreal math lives once in `pipeline/src/elysium_pipeline/formats/bsp.py` — never
+  inline it. Every coordinate-bearing OBJ/sidecar exporter emits this space (see
+  `/CLAUDE.md` → "The `UE_` exporter convention", and `/pipeline/CLAUDE.md`).
 
 ## Sidecar contracts (what the runtime consumes)
 
@@ -393,10 +393,10 @@ The decode/export pipeline lives in this repo's `pipeline/`: format readers unde
 `pipeline/src/elysium_pipeline/validation/`, and editor-only generators under
 `pipeline/unreal/`. Reusable probes and reverse-engineering instruments live under
 `research/tooling/`. `pipeline/CLAUDE.md` owns the folder map, with `pipeline/pyproject.toml`
-for deps (`Pillow`, `numpy`, `matplotlib` core; `torch`, `torchvision`, `spandrel`, `einops`,
-`safetensors` optional, ESRGAN upscalers only). It is engine-neutral Python; the only "Godot" in
-it is the `source_to_godot` convention still used by legacy non-`UE_` exporters (Coordinate
-conventions, above). `$ELYSIUM_EXPORT_ROOT/`, Python environments, caches, models, and the
+for deps (`Pillow`, `numpy` core; `torch`, `torchvision`, `spandrel`, `einops`,
+`safetensors` optional, ESRGAN upscalers only). It is engine-neutral Python; coordinate-bearing
+products are Unreal-native or standard self-describing glTF (Coordinate conventions, above).
+`$ELYSIUM_EXPORT_ROOT/`, Python environments, caches, models, and the
 entire `$ELYSIUM_WORK_ROOT/research/ghidra/` + `$ELYSIUM_WORK_ROOT/research/reference-source/` RE trees remain outside Git. `FElysiumContentPaths::Root()` resolves
 `-ElysiumContentRoot`, then `ELYSIUM_EXPORT_ROOT`, then `$ELYSIUM_WORK_ROOT/exports`; it has no
 repository-relative corpus fallback. The reverse-engineering

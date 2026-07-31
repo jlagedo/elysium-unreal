@@ -23,7 +23,7 @@ from elysium_pipeline.formats import install, mdl, mdl_skel as S
 from elysium_pipeline.paths import export_root
 
 SCALE = 0.0254
-# Source->Godot basis M: (x,y,z) -> (x, z, -y), a -90deg rotation about X.
+# Source->glTF basis M: (x,y,z) -> (x, z, -y), a -90deg rotation about X.
 M = np.array([[1, 0, 0], [0, 0, 1], [0, -1, 0]], dtype=np.float64)
 
 

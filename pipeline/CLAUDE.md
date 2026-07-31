@@ -38,10 +38,10 @@ at export time. Runtime readers consume Unreal-native files verbatim and perform
 coordinate conversion.
 
 An exporter with a `UE_` filename emits centimetres, Z-up, left-handed Unreal data with
-the required winding. A non-`UE_` exporter is not safe to consume as Unreal-native until
-reviewed and renamed with all callers and documentation updated. `mdl_gltf.py` is the
-standing exemption because standard glTF 2.0 is self-describing and glTFRuntime performs
-its import transform.
+the required winding. Every tracked coordinate-bearing OBJ/sidecar exporter follows this
+rule; parsers and orchestration modules do not emit coordinate products. `mdl_gltf.py` is
+the standing exemption because standard glTF 2.0 is self-describing and glTFRuntime
+performs its import transform.
 
 ## Products
 

@@ -16,7 +16,7 @@
 > What this doc is for: the record of what the original UI contains and why — the `GameUI.dll`
 > decompile findings (§7), the source-data inventory (§2), the scheme and `.res` semantics, the
 > font roles and metrics, the particle background. The design intent every re-skinned screen is
-> checked against, and what `menu_extract.py` (PL8) extracts to.
+> checked against, and what `UE_extract_ui.py` extracts for the Slate/UMG implementation.
 
 **Goal:** rebuild the VtMB main menu + in-game pause menu as a faithful port of the
 original Valve **VGUI2** UI — real fonts, real scheme, real `.res` layouts, real 3D
@@ -28,8 +28,8 @@ Companion: `docs/project/rebuild-strategy.md` (this is the drill-down for its M0
 Decompile tooling + dumps live under `$ELYSIUM_WORK_ROOT/research/ghidra/` (`README.md`).
 
 **Bring-your-own:** every byte below comes from the user's own install. The pipeline
-(`pipeline/src/elysium_pipeline/exporters/menu_extract.py`) extracts to `game/content/ui/` at build time; nothing
-game-sourced is committed. The repo keeps Elysium branding.
+(`pipeline/src/elysium_pipeline/exporters/UE_extract_ui.py`) extracts to
+`$ELYSIUM_EXPORT_ROOT/ui/`; nothing game-sourced is committed. The repo keeps Elysium branding.
 
 **Locked:** runtime `.fnt` fonts · a general `.res`→`Control`
 loader rendering every dialog (inert where unbacked) · geometry informed by a

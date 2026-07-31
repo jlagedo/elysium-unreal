@@ -4,7 +4,7 @@ Companion to `mdl.py` (static geometry). Decodes the animated half documented in
 `docs/vtmb/animation_and_movers.md` Part A: the `StudioBone` skeleton, per-vertex skin
 weights, and the `{valid,total}` RLE animation tracks (7 channels/bone: posXYZ +
 quat XYZW). Positions/rotations stay in **Source** coordinates (inches, Z-up); the
-glTF writer applies the Source->glTF/Godot basis change.
+glTF writer applies the Source->glTF basis change.
 
 Include-model banks (the shared animation libraries an NPC idles/moves/fights from) are
 resolved here: `resolve_tree` walks the studiohdr include tree transitively and

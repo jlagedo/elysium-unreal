@@ -109,6 +109,6 @@ legacy spheremap, dropped); the container they ship in is `docs/vtmb/texture_for
 
 ## Coordinates
 
-The Source→Unreal (and legacy Source→Godot) transforms live once in `pipeline/src/elysium_pipeline/formats/bsp.py` and are
+The Source→Unreal transforms live once in `pipeline/src/elysium_pipeline/formats/bsp.py` and are
 described in the repo-root `CLAUDE.md` → "Coordinates are read verbatim" and
 `docs/project/rebuild-strategy.md` → "Coordinate conventions" — not repeated here.

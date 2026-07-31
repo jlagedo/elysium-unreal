@@ -3,7 +3,7 @@
 Decodes a VtMB static-model into per-material meshes (LOD0). Struct layout and the
 three embedded-vertex formats are documented in `docs/vtmb/mdl_v2531.md` and validated by
 `research/tooling/probes/probe_mdl.py`. Pure Python, no Bloodlines SDK. Positions are returned in
-**Source** coordinates (inches); callers apply the Source→Godot transform.
+**Source** coordinates (inches); the Unreal OBJ writer applies the shared Source→Unreal transform.
 
 API:
   decode(mdl_bytes, vtx_bytes) -> list[Mesh]
@@ -13,10 +13,8 @@ API:
     Mesh.tris     : [(i,j,k), ...]       indices into verts
   skin_families(mdl_bytes) -> [[material name per skinref], ...]   index 0 = the authored set
 
-CLI: python pipeline/src/elysium_pipeline/formats/mdl.py <model-path-in-vpk> [<out_dir>]
-  writes <out_dir>/<name>.obj + .mtl + tex/*.png (Godot-ready, like bsp_to_scene).
 """
-import struct, sys, os, re
+import struct, os, re
 from elysium_pipeline.formats import bsp
 
 STATIC_PROP_FLAG = 0x10
@@ -234,9 +232,7 @@ def sanitize(name):
     return "".join(c if c.isalnum() or c in "._-" else "_" for c in name.lower())
 
 
-# --- reusable OBJ-scene writer (shared texture pipeline, world-compatible) ---
-
-SCALE = 0.0254   # Source inches -> Godot metres
+# --- reusable Unreal OBJ-scene writer (shared texture pipeline, world-compatible) ---
 
 
 def _envmask_png(info, bt, img, read_bytes, out_dir, tex_cache):
@@ -415,14 +411,11 @@ def _write_skins(meshes, skins, name, out_dir):
             f.write(f"{fam} {pairs}\n")
 
 
-def write_obj_scene(meshes, name, out_dir, search, read_bytes, tex_cache, *, ue_space=False,
-                    skins=None):
+def write_obj_scene(meshes, name, out_dir, search, read_bytes, tex_cache, *, skins=None):
     """Write out_dir/<name>.obj + .mtl, decoding textures into out_dir/tex/
-    (shared across models via tex_cache). UVs as-is.
-
-    ue_space=False: Godot Y-up/metres (legacy, the non-UE_ default).
-    ue_space=True:  Unreal cm/Z-up/left-handed via bsp.source_to_unreal, with triangle
-    winding reversed (the Y negation is a reflection) -- read verbatim by the runtime.
+    (shared across models via tex_cache). Vertices are Unreal cm/Z-up/left-handed via
+    bsp.source_to_unreal and triangle winding is reversed because the Y negation is a
+    reflection. UVs are unchanged and the runtime reads the result verbatim.
 
     skins: `skin_families(d)` -- when the model has alternate families, every material any of
     them names is resolved into the .mtl too (so the bake authors a material instance for it),
@@ -463,21 +456,15 @@ def write_obj_scene(meshes, name, out_dir, search, read_bytes, tex_cache, *, ue_
         vbase = 1
         for mesh in meshes:
             for (x, y, z, u, vv) in mesh.verts:
-                if ue_space:
-                    ux, uy, uz = bsp.source_to_unreal(x, y, z)
-                    f.write(f"v {ux:.6f} {uy:.6f} {uz:.6f}\n")
-                else:
-                    f.write(f"v {x*SCALE:.6f} {z*SCALE:.6f} {-y*SCALE:.6f}\n")
+                ux, uy, uz = bsp.source_to_unreal(x, y, z)
+                f.write(f"v {ux:.6f} {uy:.6f} {uz:.6f}\n")
             for (_, _, _, u, vv) in mesh.verts:
                 f.write(f"vt {u:.6f} {vv:.6f}\n")
             f.write(f"usemtl {sanitize(mesh.material)}\n")
             for (a, b, c) in mesh.tris:
                 a, b, c = a + vbase, b + vbase, c + vbase
                 # Unreal space is reflected (det -1), so reverse winding to stay front-facing.
-                if ue_space:
-                    f.write(f"f {a}/{a} {c}/{c} {b}/{b}\n")
-                else:
-                    f.write(f"f {a}/{a} {b}/{b} {c}/{c}\n")
+                f.write(f"f {a}/{a} {c}/{c} {b}/{b}\n")
             vbase += len(mesh.verts)
     return sum(len(m.verts) for m in meshes), sum(len(m.tris) for m in meshes)
 
@@ -488,26 +475,3 @@ def load(idx, model_path):
     stem = model_path[:-4] if model_path.lower().endswith(".mdl") else model_path
     d, v = install.read(idx, stem + ".mdl"), install.read(idx, stem + ".dx80.vtx")
     return (d, v) if d and v else None
-
-
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("usage: python -m elysium_pipeline.formats.mdl <model-path-in-vpk> [<out_dir>]"); sys.exit(1)
-    from elysium_pipeline.formats import install
-    from elysium_pipeline.paths import export_root
-    mp = sys.argv[1]
-    out = sys.argv[2] if len(sys.argv) > 2 else os.path.join(
-        os.fspath(export_root()), "_props", os.path.splitext(os.path.basename(mp))[0])
-    os.makedirs(out, exist_ok=True)
-    idx = install.build_index()
-    dv = load(idx, mp)
-    if not dv:
-        print(f"missing mdl/vtx for {mp}"); sys.exit(1)
-    d, v = dv
-    meshes = decode(d, v)
-    name = os.path.splitext(os.path.basename(mp))[0]
-    read_bytes = lambda key: install.read(idx, key)
-    fams = skin_families(d)
-    verts, tris = write_obj_scene(meshes, name, out, search_paths(d), read_bytes, {}, skins=fams)
-    print(f"{name}: {len(meshes)} meshes, {verts} verts, {tris} tris, "
-          f"{len(fams)} skin famil{'y' if len(fams) == 1 else 'ies'} -> {out}")

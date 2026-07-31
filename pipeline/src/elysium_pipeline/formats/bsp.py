@@ -11,7 +11,6 @@ BSP is a container of 64 lumps. Header: `int ident "VBSP"`, `int version (17)`,
 """
 import struct, io, zipfile
 
-INCH_TO_M = 0.0254
 INCH_TO_CM = 2.54
 
 # --- lump indices (the ones we touch) ---------------------------------------
@@ -99,14 +98,6 @@ def read_lump(data, i):
     """Raw bytes of lump `i`."""
     o, l = lump_ptr(data, i)
     return data[o:o + l]
-
-
-def source_to_godot(x, y, z):
-    """Source (Z-up, right-handed, inches) -> Godot (Y-up, metres).
-
-    Legacy: only the un-converted (non-UE_) exporters still emit this space.
-    The UE_ pipeline uses source_to_unreal below."""
-    return (x * INCH_TO_M, z * INCH_TO_M, -y * INCH_TO_M)
 
 
 def source_to_unreal(x, y, z):

@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from elysium_pipeline.formats import bsp
+from elysium_pipeline.formats import bsp, mdl
 from elysium_pipeline import paths
 
 
@@ -39,6 +39,9 @@ class CoordinateContractTests(unittest.TestCase):
                     definitions.append(source)
         self.assertEqual(definitions, [REPO / "pipeline/src/elysium_pipeline/formats/bsp.py"])
 
+    def test_legacy_godot_transform_is_absent(self) -> None:
+        self.assertFalse(hasattr(bsp, "source_to_godot"))
+
     def test_obj_writer_reverses_reflected_winding(self) -> None:
         source = (
             REPO / "pipeline/src/elysium_pipeline/exporters/UE_bsp_to_scene.py"
@@ -47,6 +50,27 @@ class CoordinateContractTests(unittest.TestCase):
             'o.write(f"f {a+1}/{a+1} {c+1}/{c+1} {b+1}/{b+1}\\n")',
             source,
         )
+
+    def test_model_obj_writer_is_unreal_only(self) -> None:
+        mesh = mdl.Mesh("test")
+        mesh.verts = [
+            (1.0, 2.0, 3.0, 0.0, 0.0),
+            (2.0, 2.0, 3.0, 1.0, 0.0),
+            (1.0, 3.0, 3.0, 0.0, 1.0),
+        ]
+        mesh.tris = [(0, 1, 2)]
+        with tempfile.TemporaryDirectory() as out:
+            mdl.write_obj_scene(
+                [mesh],
+                "test",
+                out,
+                [],
+                lambda _key: None,
+                {},
+            )
+            obj = (Path(out) / "test.obj").read_text(encoding="utf-8")
+        self.assertIn("v 2.540000 -5.080000 7.620000", obj)
+        self.assertIn("f 1/1 3/3 2/2", obj)
 
 
 class PathContractTests(unittest.TestCase):
@@ -72,6 +96,18 @@ class PathContractTests(unittest.TestCase):
 
 
 class NamingContractTests(unittest.TestCase):
+    def test_legacy_godot_scripts_are_absent(self) -> None:
+        legacy = (
+            "pipeline/src/elysium_pipeline/exporters/bsp_to_obj.py",
+            "pipeline/src/elysium_pipeline/exporters/menu_extract.py",
+            "pipeline/src/elysium_pipeline/enhancement/build_grade_lut.py",
+            "pipeline/src/elysium_pipeline/validation/make_testmap.py",
+            "pipeline/src/elysium_pipeline/validation/render_obj.py",
+            "research/tooling/probes/sdfgi_probe.py",
+            "research/tooling/probes/probe_lightstyles_where.py",
+        )
+        self.assertFalse([path for path in legacy if (REPO / path).exists()])
+
     def test_unreal_exporters_keep_ue_prefix(self) -> None:
         exporters = REPO / "pipeline/src/elysium_pipeline/exporters"
         expected = {

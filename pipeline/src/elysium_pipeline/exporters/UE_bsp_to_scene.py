@@ -3,8 +3,7 @@
 UE_* exporter: verified to emit **Unreal-native** intermediates directly — all
 geometry and sidecars are in Unreal space (centimetres, Z-up, left-handed), with
 triangle winding pre-reversed, so the C++ runtime reads every file 1:1 with no
-coordinate conversion. There is no Godot legacy in this file. (Exporters without the
-UE_ prefix still emit the old Godot Y-up/metres space and are flagged for review.)
+coordinate conversion.
 
 Pulls together everything we reverse-engineered:
   * geometry  : v17 dface_t (104B) -> surfedges -> edges -> vertexes
@@ -597,7 +596,7 @@ def decode_prop_models(idx, model_paths, propdir, tex_cache, valid):
         try:
             meshes = MDL.decode(*dv)
             MDL.write_obj_scene(meshes, safe, propdir, MDL.search_paths(dv[0]), read_bytes,
-                                tex_cache, ue_space=True, skins=MDL.skin_families(dv[0]))
+                                tex_cache, skins=MDL.skin_families(dv[0]))
             valid.add(safe); resolved[model_path] = safe; ok += 1
         except Exception as e:
             print(f"  prop decode failed {model_path}: {e}"); missing += 1
@@ -834,7 +833,7 @@ def write_props(data, out_dir, base, idx, propdir, tex_cache, valid, sky=None):
     the sky transform instead of in the playable world (roofline cutouts, cloud planes, the
     pier ferris wheel -- 1,043 props game-wide).
 
-    Unreal-native: the prop meshes are written via mdl.write_obj_scene(ue_space=True)
+    Unreal-native: the prop meshes are written via mdl.write_obj_scene
     (cm/Z-up/left-handed, winding reversed) and the origin/angles here are converted to
     source_to_unreal (origin) + source_angles_to_unreal_quat (a unit quaternion). The
     runtime reads both verbatim -- no coordinate conversion at load."""
@@ -1645,9 +1644,9 @@ def main(bsp_path, out_dir):
     write_lights(data, out_dir, base, sky)
     write_sprites(data, out_dir, base, idx, sky)
     write_ropes(data, out_dir, base, idx)
-    # Concave displacement collision: one triangle per line (9 godot floats).
-    # Convex brushes can't represent sculpted terrain, so the viewer loads these
-    # as a ConcavePolygonShape3D alongside the .hulls convex bodies.
+    # Concave displacement collision: one triangle per line (9 Unreal-space floats).
+    # Convex brushes cannot represent sculpted terrain, so the runtime loads these
+    # as triangle meshes alongside the .hulls convex bodies.
     if disp_collision:
         with open(os.path.join(out_dir, base + ".dispcol"), "w") as f:
             for tri in disp_collision:

@@ -84,10 +84,9 @@ their licences, and directory policy; Unreal packages are generated locally and 
 
 An exporter prefixed **`UE_`** (e.g. `UE_bsp_to_scene.py`) is verified to emit
 **Unreal-native** output: centimetres, Z-up, left-handed, triangle winding pre-reversed —
-so the C++ runtime reads every file 1:1 with **no coordinate conversion**. An exporter
-**without** the prefix (`mdl.py`, `bsp_to_obj.py`, …) still emits the old Godot Y-up/metres
-space (`source_to_godot`) and is **flagged for review** — do not consume its output as Unreal
-space until it is converted and renamed (rename + update callers + docs in the same pass).
+so the C++ runtime reads every file 1:1 with **no coordinate conversion**. Every tracked
+coordinate-bearing OBJ/sidecar exporter is Unreal-native; do not add a coordinate exporter
+without the prefix. Format parsers and orchestration modules are not coordinate exporters.
 `mdl_gltf.py` is the one standing exemption: standard glTF 2.0 is self-describing, so
 glTFRuntime reorients it at load. Details: `pipeline/CLAUDE.md`.
 
