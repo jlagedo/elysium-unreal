@@ -38,11 +38,17 @@ function(elysium_native_target target)
     target_link_options(${target} PRIVATE /INCREMENTAL:NO /Brepro)
 endfunction()
 
+add_library(retail_hook_backends STATIC hook_backend.cpp)
+target_include_directories(retail_hook_backends PUBLIC .)
+elysium_native_target(retail_hook_backends)
+
 # Retain the existing attach-time tools in the common native build while the
 # launcher-controlled path is brought up beside them.
 add_library(retail_live_pose_hook SHARED ../live_pose_hook.cpp)
 set_target_properties(retail_live_pose_hook PROPERTIES OUTPUT_NAME live_pose_hook)
 target_include_directories(retail_live_pose_hook PRIVATE ..)
+target_include_directories(retail_live_pose_hook PRIVATE .)
+target_link_libraries(retail_live_pose_hook PRIVATE retail_hook_backends)
 elysium_native_target(retail_live_pose_hook)
 
 add_executable(retail_live_pose_injector ../live_pose_injector.cpp)
@@ -146,6 +152,10 @@ add_executable(
 target_include_directories(probe_validation_test PRIVATE .)
 elysium_native_target(probe_validation_test)
 
+add_executable(hook_backend_test hook_backend_test.cpp)
+target_link_libraries(hook_backend_test PRIVATE retail_hook_backends)
+elysium_native_target(hook_backend_test)
+
 enable_testing()
 add_test(
     NAME binary_profile_contract_check
@@ -170,6 +180,18 @@ set_tests_properties(
 add_test(
     NAME probe_validation_fail_closed
     COMMAND $<TARGET_FILE:probe_validation_test>
+)
+
+add_test(
+    NAME hook_backends_instruction_aware
+    COMMAND $<TARGET_FILE:hook_backend_test>
+)
+set_tests_properties(
+    hook_backends_instruction_aware
+    PROPERTIES
+        PASS_REGULAR_EXPRESSION
+            "hook-backend-test-v1 state=complete.*relative_relocations=1"
+        TIMEOUT 15
 )
 set_tests_properties(
     probe_validation_fail_closed

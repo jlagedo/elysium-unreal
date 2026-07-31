@@ -33,6 +33,7 @@ constexpr BinaryTargetProfile Targets[] = {
     {
         "client.resolve_virtual_model_pose",
         BinaryTargetKind::Inline,
+        elysium::capture::HookBackendKind::InlineDetour,
         CallingConvention::Thiscall,
         0x1000,
         ExpectedBytes,

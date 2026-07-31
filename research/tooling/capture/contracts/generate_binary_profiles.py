@@ -18,6 +18,11 @@ CPP_OUTPUT = ROOT.parent / "native" / "generated_binary_profiles.h"
 
 SHA256 = re.compile(r"[0-9a-f]{64}")
 KINDS = {"symbol": "Symbol", "inline": "Inline", "vtable": "Vtable"}
+BACKENDS = {
+    "none": "None",
+    "inline_detour": "InlineDetour",
+    "vtable_replacement": "VtableReplacement",
+}
 CONVENTIONS = {
     "cdecl": "Cdecl",
     "stdcall": "Stdcall",
@@ -109,7 +114,7 @@ def _validate_source_spec(profile: dict[str, object]) -> None:
 
 def load_registry() -> dict[str, object]:
     document = json.loads(REGISTRY.read_text(encoding="utf-8"))
-    if document.get("registry_version") != 1:
+    if document.get("registry_version") != 2:
         raise ValueError("unsupported binary profile registry version")
     profiles = document.get("profiles")
     if not isinstance(profiles, list) or not profiles:
@@ -194,6 +199,7 @@ def load_registry() -> dict[str, object]:
             target = dict(source_target)
             label = target.get("semantic_label")
             kind = target.get("kind")
+            backend = target.get("backend")
             convention = target.get("calling_convention")
             expected = target.get("expected_bytes")
             if not isinstance(label, str) or not label:
@@ -203,6 +209,15 @@ def load_registry() -> dict[str, object]:
             semantic_labels.add(label)
             if kind not in KINDS:
                 raise ValueError(f"{label}.kind is unsupported")
+            expected_backend = {
+                "symbol": "none",
+                "inline": "inline_detour",
+                "vtable": "vtable_replacement",
+            }[kind]
+            if backend not in BACKENDS or backend != expected_backend:
+                raise ValueError(
+                    f"{label}.backend must be {expected_backend!r} for {kind}"
+                )
             if convention not in CONVENTIONS:
                 raise ValueError(f"{label}.calling_convention is unsupported")
             target["rva"] = _integer(target.get("rva"), f"{label}.rva")
@@ -248,7 +263,7 @@ def load_registry() -> dict[str, object]:
         profile["targets"] = normalized_targets
         _validate_source_spec(profile)
         normalized.append(profile)
-    return {"registry_version": 1, "profiles": normalized}
+    return {"registry_version": 2, "profiles": normalized}
 
 
 def _hex_bytes(data: bytes) -> str:
@@ -319,6 +334,7 @@ def render_cpp(registry: dict[str, object]) -> str:
                         "    {",
                         f'        "{target["semantic_label"]}",',
                         f"        BinaryTargetKind::{KINDS[target['kind']]},",
+                        f"        HookBackendKind::{BACKENDS[target['backend']]},",
                         f"        CallingConvention::{CONVENTIONS[target['calling_convention']]},",
                         f"        0x{target['rva']:08x}u,",
                         f"        {target_name}ExpectedBytes,",

@@ -89,6 +89,10 @@ def build_if_needed() -> None:
         ROOT / "contracts" / "binary_profiles.json",
         ROOT / "contracts" / "generate_binary_profiles.py",
         ROOT / "live_pose_hook.cpp",
+        ROOT / "native" / "binary_profile_contract.h",
+        ROOT / "native" / "generated_binary_profiles.h",
+        ROOT / "native" / "hook_backend.cpp",
+        ROOT / "native" / "hook_backend.h",
         ROOT / "live_pose_injector.cpp",
     ]
     newest_source = max(path.stat().st_mtime for path in sources)

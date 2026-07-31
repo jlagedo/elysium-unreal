@@ -69,8 +69,9 @@ def compile_one(
     output: Path,
     *,
     dll: bool,
+    extra_sources: tuple[Path, ...] = (),
 ) -> None:
-    object_path = OUTPUT / f"{source.stem}.obj"
+    sources = (source, *extra_sources)
     command = [
         compiler,
         "/nologo",
@@ -80,8 +81,8 @@ def compile_one(
         "/MT",
         "/W4",
         "/WX",
-        f"/Fo{object_path}",
-        str(source),
+        f"/Fo{OUTPUT}\\",
+        *(str(item) for item in sources),
         "/link",
         "/INCREMENTAL:NO",
         f"/OUT:{output}",
@@ -125,6 +126,7 @@ def main() -> int:
         SOURCE / "live_pose_hook.cpp",
         OUTPUT / "live_pose_hook.dll",
         dll=True,
+        extra_sources=(SOURCE / "native" / "hook_backend.cpp",),
     )
     compile_one(
         compiler,

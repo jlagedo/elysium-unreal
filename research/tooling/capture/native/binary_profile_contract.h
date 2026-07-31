@@ -18,6 +18,12 @@ enum class CallingConvention : std::uint32_t {
     Fastcall = 4,
 };
 
+enum class HookBackendKind : std::uint32_t {
+    None = 0,
+    InlineDetour = 1,
+    VtableReplacement = 2,
+};
+
 struct RecordSchemaSupport {
     std::uint32_t RecordId;
     std::uint32_t SchemaVersion;
@@ -37,6 +43,7 @@ struct PeIdentity {
 struct BinaryTargetProfile {
     const char* SemanticLabel;
     BinaryTargetKind Kind;
+    HookBackendKind Backend;
     CallingConvention Convention;
     std::uint32_t Rva;
     const std::uint8_t* ExpectedBytes;

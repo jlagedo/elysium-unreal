@@ -263,6 +263,44 @@ class RetailCaptureContractTests(unittest.TestCase):
             launcher.rindex("ResumeThread(thread.Get())"),
         )
 
+    def test_hook_declarations_select_shared_instruction_aware_backends(self) -> None:
+        capture_root = REPO_ROOT / "research" / "tooling" / "capture"
+        registry = json.loads(
+            (capture_root / "contracts" / "binary_profiles.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        targets = {
+            target["semantic_label"]: target
+            for profile in registry["profiles"]
+            for target in profile["targets"]
+        }
+        self.assertEqual(
+            targets["client.resolve_virtual_model_pose"]["backend"],
+            "inline_detour",
+        )
+        self.assertEqual(
+            targets["studiorender.draw_model"]["backend"],
+            "vtable_replacement",
+        )
+        self.assertEqual(
+            targets["client.get_studio_hdr"]["backend"], "none"
+        )
+        backend = (NATIVE_ROOT / "hook_backend.cpp").read_text(
+            encoding="utf-8"
+        )
+        retained_probe = (capture_root / "live_pose_hook.cpp").read_text(
+            encoding="utf-8"
+        )
+        cmake = (NATIVE_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertIn("DecodeInstruction(", backend)
+        self.assertIn("RelativeDestination(", backend)
+        self.assertIn("RelativeKind::ShortCondition", backend)
+        self.assertIn("hook_backends_instruction_aware", cmake)
+        self.assertIn("HookBackends::Install(", retained_probe)
+        self.assertNotIn("VirtualProtect(", retained_probe)
+        self.assertNotIn("trampoline", retained_probe.lower())
+
     def test_supervision_owns_children_and_finalizes_partial_captures(self) -> None:
         cmake = (NATIVE_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
         launcher = (NATIVE_ROOT / "retail_launcher.cpp").read_text(

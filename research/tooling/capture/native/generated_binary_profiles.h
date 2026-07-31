@@ -5,7 +5,7 @@
 
 namespace elysium::capture::profiles {
 
-inline constexpr std::uint32_t RegistryVersion = 1u;
+inline constexpr std::uint32_t RegistryVersion = 2u;
 
 inline constexpr BinaryProfile Profile0 = {
     "owner-unofficial-patch-vampire-6b15fae4",
@@ -63,6 +63,7 @@ inline constexpr BinaryTargetProfile Profile1Targets[] = {
     {
         "client.resolve_virtual_model_pose",
         BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
         CallingConvention::Thiscall,
         0x000968a0u,
         Profile1Target0ExpectedBytes,
@@ -76,6 +77,7 @@ inline constexpr BinaryTargetProfile Profile1Targets[] = {
     {
         "client.build_transformations",
         BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
         CallingConvention::Thiscall,
         0x0008fd00u,
         Profile1Target1ExpectedBytes,
@@ -89,6 +91,7 @@ inline constexpr BinaryTargetProfile Profile1Targets[] = {
     {
         "client.get_studio_hdr",
         BinaryTargetKind::Symbol,
+        HookBackendKind::None,
         CallingConvention::Thiscall,
         0x0008f900u,
         Profile1Target2ExpectedBytes,
@@ -160,6 +163,7 @@ inline constexpr BinaryTargetProfile Profile3Targets[] = {
     {
         "studiorender.draw_model",
         BinaryTargetKind::Vtable,
+        HookBackendKind::VtableReplacement,
         CallingConvention::Thiscall,
         0x00004f00u,
         Profile3Target0ExpectedBytes,

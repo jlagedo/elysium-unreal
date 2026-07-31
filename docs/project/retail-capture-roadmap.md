@@ -303,9 +303,20 @@ Work proceeds in this order:
   versions, exact bounded prologue bytes, and—when declared—the exact in-image
   object, vtable, and slot target. Release and Debug acceptance exercise every
   rejection reason and prove the install path remains untouched.
-- [ ] **CAP2.4 Hook backends** — support validated vtable replacement and an
+- [x] **CAP2.4 Hook backends** — support validated vtable replacement and an
   instruction-aware inline detour backend. Hook declarations select the backend;
-  probe code does not implement trampolines.
+  probe code does not implement trampolines. Binary-profile registry v2 declares
+  `none`, `inline_detour`, or `vtable_replacement`; one shared native backend
+  performs compare-and-exchange vtable replacement or decodes whole x86
+  instructions, relocates relative calls and branches, expands supported short
+  branches, and rejects unsupported control flow before modifying the target.
+  Disable restores the declaration-owned target while retaining its trampoline
+  until a separate release, the boundary needed by CAP2.5. The live-pose probe now only
+  resolves generated declarations and calls this backend. Release and Debug
+  acceptance cover multi-byte prologues, relative relocation, rejection without
+  writes, vtable replacement, and restore/release; live direct-save acceptance
+  retained 3,737 draw records plus 189 BASE and 162 final animation records with
+  zero drops.
 - [ ] **CAP2.5 Active-call lifetime** — disabling a probe stops new capture,
   restores the target, waits for active callbacks, drains committed records, and
   only then releases trampolines or unloads.

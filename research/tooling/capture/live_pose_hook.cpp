@@ -9,11 +9,13 @@
 #include <cwchar>
 
 #include "generated_record_schemas.h"
+#include "native/generated_binary_profiles.h"
+#include "native/hook_backend.h"
 
 namespace {
 
 constexpr int kMaximumBones = 1024;
-constexpr DWORD kInlinePatchBytes = 5;
+constexpr DWORD kConfiguredSignatureBytes = 5;
 
 struct PendingRecord {
     PendingRecord* next;
@@ -31,20 +33,14 @@ using BuildTransformationsFn = void(__thiscall*)(
     void*, float*, float*, float*, void*);
 using GetStudioHdrFn = unsigned char*(__thiscall*)(void*, int);
 
-struct InlineHook {
-    unsigned char* target = nullptr;
-    unsigned char original[kInlinePatchBytes]{};
-    unsigned char* trampoline = nullptr;
-};
-
 HMODULE gSelf = nullptr;
 DrawModelFn gOriginalDrawModel = nullptr;
 ResolveVirtualModelPoseFn gOriginalResolveVirtualModelPose = nullptr;
 BuildTransformationsFn gOriginalBuildTransformations = nullptr;
 GetStudioHdrFn gGetStudioHdr = nullptr;
-void** gDrawModelSlot = nullptr;
-InlineHook gResolveVirtualModelPoseHook;
-InlineHook gBuildTransformationsHook;
+elysium::capture::HookHandle gDrawModelHook;
+elysium::capture::HookHandle gResolveVirtualModelPoseHook;
+elysium::capture::HookHandle gBuildTransformationsHook;
 HANDLE gOutput = INVALID_HANDLE_VALUE;
 HANDLE gAnimationOutput = INVALID_HANDLE_VALUE;
 HANDLE gWake = nullptr;
@@ -70,8 +66,9 @@ DWORD gDrawModelSlotIndex = 0;
 DWORD gResolveVirtualModelPoseRva = 0;
 DWORD gBuildTransformationsRva = 0;
 DWORD gGetStudioHdrRva = 0;
-unsigned char gResolveExpected[kInlinePatchBytes]{};
-unsigned char gBuildExpected[kInlinePatchBytes]{};
+unsigned char gResolveExpected[kConfiguredSignatureBytes]{};
+unsigned char gBuildExpected[kConfiguredSignatureBytes]{};
+char gHookInstallError[128] = "unspecified";
 
 bool WriteAll(HANDLE file, const void* data, DWORD bytes) {
     const auto* cursor = static_cast<const unsigned char*>(data);
@@ -382,105 +379,115 @@ void __fastcall HookBuildTransformations(
     InterlockedDecrement(&gActiveHooks);
 }
 
-bool PrepareInlineHook(
-    InlineHook& hook, unsigned char* target,
-    const unsigned char* expected) {
-    if (std::memcmp(target, expected, kInlinePatchBytes) != 0) {
-        return false;
+const elysium::capture::BinaryProfile* FindProfile(
+    const wchar_t* moduleName) {
+    for (const auto& profile : elysium::capture::profiles::Registry) {
+        if (_wcsicmp(profile.ModuleName, moduleName) == 0) {
+            return &profile;
+        }
     }
-    hook.target = target;
-    std::memcpy(hook.original, target, kInlinePatchBytes);
-    hook.trampoline = static_cast<unsigned char*>(VirtualAlloc(
-        nullptr, kInlinePatchBytes + 5, MEM_COMMIT | MEM_RESERVE,
-        PAGE_EXECUTE_READWRITE));
-    if (!hook.trampoline) {
-        return false;
-    }
-    std::memcpy(hook.trampoline, target, kInlinePatchBytes);
-    hook.trampoline[kInlinePatchBytes] = 0xE9;
-    *reinterpret_cast<std::int32_t*>(
-        hook.trampoline + kInlinePatchBytes + 1) =
-        static_cast<std::int32_t>(
-            (target + kInlinePatchBytes) -
-            (hook.trampoline + kInlinePatchBytes + 5));
-    return true;
+    return nullptr;
 }
 
-bool EnableInlineHook(InlineHook& hook, void* replacement) {
-    unsigned char* target = hook.target;
-    if (!target || !hook.trampoline) {
-        return false;
+const elysium::capture::BinaryTargetProfile* FindTarget(
+    const elysium::capture::BinaryProfile& profile,
+    const char* semanticLabel) {
+    for (std::uint32_t index = 0; index < profile.TargetCount; ++index) {
+        if (std::strcmp(
+                profile.Targets[index].SemanticLabel,
+                semanticLabel) == 0) {
+            return &profile.Targets[index];
+        }
     }
-    DWORD previousProtection = 0;
-    if (!VirtualProtect(
-            target, kInlinePatchBytes, PAGE_EXECUTE_READWRITE,
-            &previousProtection)) {
-        VirtualFree(hook.trampoline, 0, MEM_RELEASE);
-        hook.trampoline = nullptr;
-        hook.target = nullptr;
-        return false;
-    }
-    target[0] = 0xE9;
-    *reinterpret_cast<std::int32_t*>(target + 1) =
-        static_cast<std::int32_t>(
-            static_cast<unsigned char*>(replacement) - (target + 5));
-    DWORD ignored = 0;
-    VirtualProtect(
-        target, kInlinePatchBytes, previousProtection, &ignored);
-    FlushInstructionCache(
-        GetCurrentProcess(), target, kInlinePatchBytes);
-    return true;
+    return nullptr;
 }
 
-void RestoreInlineHook(InlineHook& hook) {
-    if (!hook.target || !hook.trampoline) {
-        return;
+bool MatchesConfiguredProfile(
+    const elysium::capture::BinaryTargetProfile& drawModel,
+    const elysium::capture::BinaryTargetProfile& resolvePose,
+    const elysium::capture::BinaryTargetProfile& buildTransformations,
+    const elysium::capture::BinaryTargetProfile& getStudioHdr,
+    bool animationEnabled) {
+    const bool drawMatches = drawModel.Rva == gDrawModelRva &&
+        drawModel.ObjectRva == gStudioObjectRva &&
+        drawModel.ExpectedVtableRva == gStudioVtableRva &&
+        drawModel.VtableSlot == gDrawModelSlotIndex;
+    if (!drawMatches || !animationEnabled) {
+        return drawMatches;
     }
-    DWORD previousProtection = 0;
-    if (VirtualProtect(
-            hook.target, kInlinePatchBytes, PAGE_EXECUTE_READWRITE,
-            &previousProtection)) {
-        std::memcpy(
-            hook.target, hook.original, kInlinePatchBytes);
-        DWORD ignored = 0;
-        VirtualProtect(
-            hook.target, kInlinePatchBytes, previousProtection, &ignored);
-        FlushInstructionCache(
-            GetCurrentProcess(), hook.target, kInlinePatchBytes);
-    }
+    return
+        resolvePose.Rva == gResolveVirtualModelPoseRva &&
+        buildTransformations.Rva == gBuildTransformationsRva &&
+        getStudioHdr.Rva == gGetStudioHdrRva &&
+        resolvePose.ExpectedByteCount == kConfiguredSignatureBytes &&
+        buildTransformations.ExpectedByteCount ==
+            kConfiguredSignatureBytes &&
+        std::memcmp(
+            resolvePose.ExpectedBytes,
+            gResolveExpected,
+            kConfiguredSignatureBytes) == 0 &&
+        std::memcmp(
+            buildTransformations.ExpectedBytes,
+            gBuildExpected,
+            kConfiguredSignatureBytes) == 0;
 }
 
 bool InstallHooks(HMODULE studioRender, HMODULE client) {
-    auto* base = reinterpret_cast<unsigned char*>(studioRender);
-    auto* object = base + gStudioObjectRva;
-    auto** vtable = *reinterpret_cast<void***>(object);
-    if (vtable != reinterpret_cast<void**>(base + gStudioVtableRva)) {
+    using elysium::capture::ActiveBinaryProfile;
+    using elysium::capture::HookBackendResult;
+    using elysium::capture::HookBackends;
+
+    const auto* studioProfile = FindProfile(L"StudioRender.dll");
+    const auto* clientProfile = FindProfile(L"client.dll");
+    if (studioProfile == nullptr || clientProfile == nullptr) {
+        strcpy_s(gHookInstallError, "profile-not-found");
         return false;
     }
-    if (vtable[gDrawModelSlotIndex] != base + gDrawModelRva) {
+    const auto* drawModel = FindTarget(
+        *studioProfile, "studiorender.draw_model");
+    const auto* resolvePose = FindTarget(
+        *clientProfile, "client.resolve_virtual_model_pose");
+    const auto* buildTransformations = FindTarget(
+        *clientProfile, "client.build_transformations");
+    const auto* getStudioHdr = FindTarget(
+        *clientProfile, "client.get_studio_hdr");
+    if (drawModel == nullptr || resolvePose == nullptr ||
+        buildTransformations == nullptr || getStudioHdr == nullptr ||
+        !MatchesConfiguredProfile(
+            *drawModel,
+            *resolvePose,
+            *buildTransformations,
+            *getStudioHdr,
+            gAnimationOutput != INVALID_HANDLE_VALUE)) {
+        strcpy_s(gHookInstallError, "declaration-mismatch");
         return false;
     }
 
-    gDrawModelSlot = &vtable[gDrawModelSlotIndex];
-    DWORD previousProtection = 0;
-    if (!VirtualProtect(
-            gDrawModelSlot, sizeof(void*), PAGE_EXECUTE_READWRITE,
-            &previousProtection)) {
+    const ActiveBinaryProfile studioActive{
+        studioProfile,
+        reinterpret_cast<std::uintptr_t>(studioRender),
+        studioProfile->Pe.SizeOfImage,
+    };
+    const ActiveBinaryProfile clientActive{
+        clientProfile,
+        reinterpret_cast<std::uintptr_t>(client),
+        clientProfile->Pe.SizeOfImage,
+    };
+    const HookBackendResult drawResult = HookBackends::Install(
+            studioActive,
+            *drawModel,
+            reinterpret_cast<void*>(&HookDrawModel),
+            &gDrawModelHook);
+    if (drawResult != HookBackendResult::Installed) {
+        std::snprintf(
+            gHookInstallError,
+            sizeof(gHookInstallError),
+            "draw-model-backend-%u",
+            static_cast<unsigned>(drawResult));
         return false;
     }
     gOriginalDrawModel = reinterpret_cast<DrawModelFn>(
-        InterlockedExchangePointer(
-            reinterpret_cast<void* volatile*>(gDrawModelSlot),
-            reinterpret_cast<void*>(&HookDrawModel)));
-    DWORD ignored = 0;
-    VirtualProtect(
-        gDrawModelSlot, sizeof(void*), previousProtection, &ignored);
-    FlushInstructionCache(
-        GetCurrentProcess(), gDrawModelSlot, sizeof(void*));
-    if (gOriginalDrawModel != reinterpret_cast<DrawModelFn>(
-            base + gDrawModelRva)) {
-        return false;
-    }
+        gDrawModelHook.Original);
 
     if (gAnimationOutput == INVALID_HANDLE_VALUE) {
         return true;
@@ -488,73 +495,58 @@ bool InstallHooks(HMODULE studioRender, HMODULE client) {
 
     auto* clientBase = reinterpret_cast<unsigned char*>(client);
     gGetStudioHdr = reinterpret_cast<GetStudioHdrFn>(
-        clientBase + gGetStudioHdrRva);
-    if (!PrepareInlineHook(
-            gResolveVirtualModelPoseHook,
-            clientBase + gResolveVirtualModelPoseRva,
-            gResolveExpected)) {
+        clientBase + getStudioHdr->Rva);
+    const HookBackendResult resolveResult = HookBackends::Install(
+            clientActive,
+            *resolvePose,
+            reinterpret_cast<void*>(&HookResolveVirtualModelPose),
+            &gResolveVirtualModelPoseHook);
+    if (resolveResult != HookBackendResult::Installed) {
+        std::snprintf(
+            gHookInstallError,
+            sizeof(gHookInstallError),
+            "resolve-pose-backend-%u",
+            static_cast<unsigned>(resolveResult));
         return false;
     }
     gOriginalResolveVirtualModelPose =
         reinterpret_cast<ResolveVirtualModelPoseFn>(
-            gResolveVirtualModelPoseHook.trampoline);
-    if (!EnableInlineHook(
-            gResolveVirtualModelPoseHook,
-            reinterpret_cast<void*>(&HookResolveVirtualModelPose))) {
-        return false;
-    }
-    if (!PrepareInlineHook(
-            gBuildTransformationsHook,
-            clientBase + gBuildTransformationsRva,
-            gBuildExpected)) {
-        RestoreInlineHook(gResolveVirtualModelPoseHook);
+            gResolveVirtualModelPoseHook.Original);
+    const HookBackendResult buildResult = HookBackends::Install(
+            clientActive,
+            *buildTransformations,
+            reinterpret_cast<void*>(&HookBuildTransformations),
+            &gBuildTransformationsHook);
+    if (buildResult != HookBackendResult::Installed) {
+        std::snprintf(
+            gHookInstallError,
+            sizeof(gHookInstallError),
+            "build-transformations-backend-%u",
+            static_cast<unsigned>(buildResult));
         return false;
     }
     gOriginalBuildTransformations =
         reinterpret_cast<BuildTransformationsFn>(
-            gBuildTransformationsHook.trampoline);
-    if (!EnableInlineHook(
-            gBuildTransformationsHook,
-            reinterpret_cast<void*>(&HookBuildTransformations))) {
-        RestoreInlineHook(gResolveVirtualModelPoseHook);
-        return false;
-    }
+            gBuildTransformationsHook.Original);
     return true;
 }
 
 void RemoveHooks() {
+    using elysium::capture::HookBackends;
+
     InterlockedExchange(&gCapturing, 0);
-    RestoreInlineHook(gBuildTransformationsHook);
-    RestoreInlineHook(gResolveVirtualModelPoseHook);
-    if (!gDrawModelSlot || !gOriginalDrawModel) {
-        return;
-    }
-    DWORD previousProtection = 0;
-    if (VirtualProtect(
-            gDrawModelSlot, sizeof(void*), PAGE_EXECUTE_READWRITE,
-            &previousProtection)) {
-        InterlockedExchangePointer(
-            reinterpret_cast<void* volatile*>(gDrawModelSlot),
-            reinterpret_cast<void*>(gOriginalDrawModel));
-        DWORD ignored = 0;
-        VirtualProtect(
-            gDrawModelSlot, sizeof(void*), previousProtection, &ignored);
-        FlushInstructionCache(
-            GetCurrentProcess(), gDrawModelSlot, sizeof(void*));
-    }
+    HookBackends::Disable(&gBuildTransformationsHook);
+    HookBackends::Disable(&gResolveVirtualModelPoseHook);
+    HookBackends::Disable(&gDrawModelHook);
     while (InterlockedCompareExchange(&gActiveHooks, 0, 0)) {
         Sleep(1);
     }
-    if (gBuildTransformationsHook.trampoline) {
-        VirtualFree(
-            gBuildTransformationsHook.trampoline, 0, MEM_RELEASE);
-        gBuildTransformationsHook.trampoline = nullptr;
-    }
-    if (gResolveVirtualModelPoseHook.trampoline) {
-        VirtualFree(
-            gResolveVirtualModelPoseHook.trampoline, 0, MEM_RELEASE);
-        gResolveVirtualModelPoseHook.trampoline = nullptr;
-    }
+    HookBackends::Release(&gBuildTransformationsHook);
+    HookBackends::Release(&gResolveVirtualModelPoseHook);
+    HookBackends::Release(&gDrawModelHook);
+    gOriginalBuildTransformations = nullptr;
+    gOriginalResolveVirtualModelPose = nullptr;
+    gOriginalDrawModel = nullptr;
 }
 
 bool ReadProfileDword(
@@ -598,7 +590,7 @@ bool ReadExpectedBytes(
     const wchar_t* iniPath,
     const wchar_t* key,
     unsigned char* bytes) {
-    wchar_t text[kInlinePatchBytes * 2 + 1]{};
+    wchar_t text[kConfiguredSignatureBytes * 2 + 1]{};
     GetPrivateProfileStringW(
         L"capture",
         key,
@@ -606,10 +598,12 @@ bool ReadExpectedBytes(
         text,
         ARRAYSIZE(text),
         iniPath);
-    if (std::wcslen(text) != kInlinePatchBytes * 2) {
+    if (std::wcslen(text) != kConfiguredSignatureBytes * 2) {
         return false;
     }
-    for (DWORD index = 0; index < kInlinePatchBytes; ++index) {
+    for (DWORD index = 0;
+         index < kConfiguredSignatureBytes;
+         ++index) {
         const int high = HexDigit(text[index * 2]);
         const int low = HexDigit(text[index * 2 + 1]);
         if (high < 0 || low < 0) {
@@ -806,7 +800,13 @@ DWORD WINAPI CaptureWorker(void*) {
 
     if (!InstallHooks(studioRender, client)) {
         RemoveHooks();
-        WriteMarker(gDonePath, "error=capture hook validation failed\n");
+        char error[192]{};
+        std::snprintf(
+            error,
+            sizeof(error),
+            "error=capture hook validation failed: %s\n",
+            gHookInstallError);
+        WriteMarker(gDonePath, error);
         return 5;
     }
     InterlockedExchange(&gCapturing, 1);

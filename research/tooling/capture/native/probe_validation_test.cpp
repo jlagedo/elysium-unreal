@@ -105,6 +105,7 @@ int wmain() {
     const BinaryTargetProfile target{
         "synthetic.draw_model",
         BinaryTargetKind::Vtable,
+        elysium::capture::HookBackendKind::VtableReplacement,
         CallingConvention::Thiscall,
         targetRva,
         ExpectedBytes,
