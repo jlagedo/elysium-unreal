@@ -1,7 +1,7 @@
 # Recovered mechanic — World of Darkness dice resolution
 
 Source: `vampire.dll` `FUN_101d8b40` (anchor string `"Dice Results:"`), decompiled via
-Ghidra headless (`tools/re/ghidra_extract_mechanics.java` → `tools/re/out/vtmb_mechanics.c`).
+Ghidra headless (`research/tooling/ghidra/scripts/ghidra_extract_mechanics.java` → `$ELYSIUM_WORK_ROOT/research/ghidra/$ELYSIUM_EXPORT_ROOT/vtmb_mechanics.c`).
 
 **Status: verified (RE5 closed).** Confirmed by decompilation across the whole roll cluster
 (constructor `FUN_101d88b0`, roller `FUN_101d8b40`, `vroll` handler `0x100d7040`, the RNG /

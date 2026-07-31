@@ -13,7 +13,7 @@
 // The character screen performs what this reports; the commit onto the player entity is the UI
 // subsystem's.
 //
-// The VtMB facts: `docs/game_runtime.md` section 3 ("The point pools", "Buying a dot"). Every rule
+// The VtMB facts: `docs/vtmb/game_runtime.md` section 3 ("The point pools", "Buying a dot"). Every rule
 // below is the engine's.
 //
 // **Chargen spends dots, not experience.** A category point buys one dot outright; the `Costs`
@@ -228,7 +228,7 @@ namespace ElysiumChargen
 // clicked.
 //
 // **Route 3, the Society of Leopold hunter campaign, is omitted** — a marked, reversible divergence
-// recorded in `docs/game_runtime.md`. The action that leads to it is filtered out of the entry
+// recorded in `docs/vtmb/game_runtime.md`. The action that leads to it is filtered out of the entry
 // popup rather than left to open a path that dead-ends.
 struct FElysiumWizRun
 {

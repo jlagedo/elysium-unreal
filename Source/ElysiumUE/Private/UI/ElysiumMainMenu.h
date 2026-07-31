@@ -12,7 +12,7 @@ class UTexture2D;
 struct FSlateBrush;
 
 // The commands `gamemenu.res` binds, reduced to the ones this rebuild can service. VtMB routes
-// these through `RunMenuCommand`; the tokens and the item sets are RE'd in `docs/vtmb-ui.md` §2.
+// these through `RunMenuCommand`; the tokens and the item sets are RE'd in `docs/vtmb/vtmb-ui.md` §2.
 UENUM()
 enum class EElysiumMenuCommand : uint8
 {
@@ -29,7 +29,7 @@ enum class EElysiumMenuCommand : uint8
 // The main / pause / game-over menu (roadmap 8.6, driven by the app state machine at 11.3). A
 // `UCommonActivatableWidget` whose visual tree is built in C++ Slate — CommonUI supplies the
 // activation stack, input routing and focus; no Widget Blueprint asset is involved
-// (`docs/ui-architecture.md`).
+// (`docs/architecture/ui-architecture.md`).
 //
 // The screen has **two layouts**, A/B'd live by `elysium.MenuLayout`, both authored in VtMB's own
 // 1024x768 virtual canvas under one `SDPIScaler` at `ScreenH/768`:
@@ -38,7 +38,7 @@ enum class EElysiumMenuCommand : uint8
 //    by mid-frame, so the backdrop's own darkness carries the type and the lit half of the scene is
 //    never dimmed to rescue it. Items rest in bone and arm in blood, marked by one tick sliding
 //    along the rail's hairline; the seal behind them is a `mm_<clan>` sigil off the menu particle
-//    sheet. Why this diverges from the recovered law: `docs/ui-architecture.md`.
+//    sheet. Why this diverges from the recovered law: `docs/architecture/ui-architecture.md`.
 //  - **Classic** (0) — `CVMainMenu::PerformLayout` verbatim: every item sized to the **widest**
 //    label plus 20x4 virtual px, stacked at `pitch = height + 2`, the column centred, the whole
 //    screen behind it knocked back by `elysium.MenuScrim`. Kept so the divergence stays measurable.
@@ -54,7 +54,7 @@ public:
 
 	// Which item set to build. Pause swaps to Continue/Reload/.../Main Menu and enables Save Game,
 	// which is the *entire* main-menu-vs-pause difference in retail — `CBasePanel::OnThink` does
-	// nothing but gate `SaveGame` on `IsInGame` (`docs/vtmb-ui.md` §2). GameOver is ours: the run is
+	// nothing but gate `SaveGame` on `IsInGame` (`docs/vtmb/vtmb-ui.md` §2). GameOver is ours: the run is
 	// over, so only Load / Main Menu / Quit are offered and the title lockup is replaced by the
 	// reason the run ended. Call before the widget is constructed.
 	void SetMenuMode(EElysiumMenuMode InMode) { Mode = InMode; }

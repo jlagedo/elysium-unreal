@@ -7,7 +7,7 @@ class FElysiumEntityWorld;
 // P4.10 — the `SignData` panel a `game_sign`/`prop_sign` names through `definition_file`.
 //
 // Provenance: the whole draw model below is read out of the decompiled **client.dll**
-// (`CSignUI`; dumps in tools/ghidra/out/signui_*.txt). The entity and its `definition_file`
+// (`CSignUI`; dumps in $ELYSIUM_WORK_ROOT/research/ghidra/out/signui_*.txt). The entity and its `definition_file`
 // resolution live in `vampire.dll` (`CGameSign::LoadSignData` @0x10212da0), but every pixel
 // decision — the coordinate space, the defaults, the font buckets — is client-side:
 //

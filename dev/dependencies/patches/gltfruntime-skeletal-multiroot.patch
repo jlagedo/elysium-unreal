@@ -1,0 +1,111 @@
+diff --git a/Source/glTFRuntime/Private/glTFRuntimeParser.cpp b/Source/glTFRuntime/Private/glTFRuntimeParser.cpp
+index a15ed17..ab50a5d 100644
+--- a/Source/glTFRuntime/Private/glTFRuntimeParser.cpp
++++ b/Source/glTFRuntime/Private/glTFRuntimeParser.cpp
+@@ -126,7 +126,7 @@ TSharedPtr<FglTFRuntimeParser> FglTFRuntimeParser::FromRawDataAndArchive(const u
+ 
+ 		if (!LoaderConfig.bAsBlob && Filename.IsEmpty())
+ 		{
+-			UE_LOG(LogGLTFRuntime, Error, TEXT("Unable to find entry point from Archive."), *Filename);
++			UE_LOG(LogGLTFRuntime, Error, TEXT("Unable to find entry point from Archive."));
+ 			return nullptr;
+ 		}
+ 
+@@ -6806,4 +6806,4 @@ void FglTFRuntimeParser::UpdateSceneScale(const float& InSceneScale)
+ float FglTFRuntimeParser::GetSceneScale() const
+ {
+ 	return SceneScale;
+-}
+\ No newline at end of file
++}
+diff --git a/Source/glTFRuntime/Private/glTFRuntimeParserCustom.cpp b/Source/glTFRuntime/Private/glTFRuntimeParserCustom.cpp
+index 51bd109..83e8f33 100644
+--- a/Source/glTFRuntime/Private/glTFRuntimeParserCustom.cpp
++++ b/Source/glTFRuntime/Private/glTFRuntimeParserCustom.cpp
+@@ -192,6 +192,10 @@ TArray<FString> FglTFRuntimeParser::GetJSONObjectKeysFromPath(const TArray<FglTF
+ 	bFound = false;
+ 	TArray<FString> Keys;
+ 
++#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 8
++	TArray<UE::FSharedString> SharedKeys;
++#endif
++
+ 	TSharedPtr<FJsonValue> CurrentObject = GetJSONObjectFromPath(Path);
+ 	if (CurrentObject)
+ 	{
+@@ -199,7 +203,15 @@ TArray<FString> FglTFRuntimeParser::GetJSONObjectKeysFromPath(const TArray<FglTF
+ 		if (CurrentObject->TryGetObject(JsonObject))
+ 		{
+ 			bFound = true;
++#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 8
++			(*JsonObject)->Values.GetKeys(SharedKeys);
++			for (const UE::FSharedString& SharedString : SharedKeys)
++			{
++				Keys.Add(*SharedString);
++			}
++#else
+ 			(*JsonObject)->Values.GetKeys(Keys);
++#endif
+ 		}
+ 	}
+ 
+@@ -272,4 +284,4 @@ TMap<FString, FString> FglTFRuntimeParser::GetJSONStringMapFromPath(const TArray
+ 	}
+ 
+ 	return StringMap;
+-}
+\ No newline at end of file
++}
+diff --git a/Source/glTFRuntime/Private/glTFRuntimeParserSkeletalMeshes.cpp b/Source/glTFRuntime/Private/glTFRuntimeParserSkeletalMeshes.cpp
+index 9ccf0e0..2a60680 100644
+--- a/Source/glTFRuntime/Private/glTFRuntimeParserSkeletalMeshes.cpp
++++ b/Source/glTFRuntime/Private/glTFRuntimeParserSkeletalMeshes.cpp
+@@ -234,6 +234,14 @@ bool glTFRuntime::FillSkeletalMeshRenderData(FSkeletalMeshRenderData* RenderData
+ 		int32 LODIndex = RenderData->LODRenderData.Add(LodRenderData);
+ 
+ 		LodRenderData->RenderSections.SetNumUninitialized(LOD->Primitives.Num());
++		// Elysium local fix: construct every section up front. This function can early-return mid-loop
++		// (e.g. an unmapped skin bone below) and would otherwise leave the trailing sections as raw
++		// uninitialized memory; the orphaned half-built USkeletalMesh then faults in
++		// ~FDuplicatedVerticesBuffer (releasing a garbage RHI ref) when GC later destroys it.
++		for (int32 SectionIndex = 0; SectionIndex < LodRenderData->RenderSections.Num(); SectionIndex++)
++		{
++			new(&LodRenderData->RenderSections[SectionIndex]) FSkelMeshRenderSection();
++		}
+ 
+ 		bool bUseHighPrecisionUVs = false;
+ 		bool bUseHighPrecisionWeights = false;
+@@ -287,7 +295,6 @@ bool glTFRuntime::FillSkeletalMeshRenderData(FSkeletalMeshRenderData* RenderData
+ 		{
+ 			FglTFRuntimePrimitive& Primitive = LOD->Primitives[PrimitiveIndex];
+ 
+-			new(&LodRenderData->RenderSections[PrimitiveIndex]) FSkelMeshRenderSection();
+ 			FSkelMeshRenderSection& MeshSection = LodRenderData->RenderSections[PrimitiveIndex];
+ 
+ 			MeshSection.MaterialIndex = PrimitiveIndex;
+@@ -3008,10 +3015,18 @@ UAnimSequence* FglTFRuntimeParser::CreateSkeletalAnimationFromPath(USkeletalMesh
+ 
+ 		for (const FName& KeyName : MorphTargetKeys)
+ 		{
++#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 8
++			if (JsonFrameObject->Values.Contains(UE::FSharedString(KeyName.ToString())))
++#else
+ 			if (JsonFrameObject->Values.Contains(KeyName.ToString()))
++#endif
+ 			{
+ 				double Value = 0;
++#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 8
++				if (!JsonFrameObject->Values[UE::FSharedString(KeyName.ToString())]->TryGetNumber(Value))
++#else
+ 				if (!JsonFrameObject->Values[KeyName.ToString()]->TryGetNumber(Value))
++#endif
+ 				{
+ 					Value = 0;
+ 				}
+@@ -4584,4 +4599,4 @@ bool FglTFRuntimeParser::SanitizeBoneTrack(const FReferenceSkeleton& RefSkeleton
+ 	}
+ 
+ 	return true;
+-}
+\ No newline at end of file
++}

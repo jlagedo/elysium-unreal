@@ -44,7 +44,7 @@ public:
 	virtual void BeginPlay() override;
 
 	// --- Build, in load order --------------------------------------------------------------
-	// Walk the baked level once and bucket its actors by the tag tools/bake_map.py stamped on them
+	// Walk the baked level once and bucket its actors by the tag pipeline/unreal/bake_map.py stamped on them
 	// (elysium.world / .sky / .prop / .light / .skylight / .fog / .postprocess / .decal), filling the
 	// actor buckets, SkyLight, HeightFog and PostProcess, and handing the light rig its sources to
 	// adopt. Stands the material overrides up in the same pass. Returns the number of tagged actors

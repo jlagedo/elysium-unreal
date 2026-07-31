@@ -97,7 +97,7 @@ namespace
 		const TCHAR* Help;
 	};
 
-	// `controls.md` § "What is bindable" in declaration order. A verb with no implementation names
+	// `docs/vtmb/controls.md` § "What is bindable" in declaration order. A verb with no implementation names
 	// the roadmap task that owns it, so `elysium.commands` reads as a work list.
 	const FRow GInventory[] = {
 		// --- Movement ---------------------------------------------------------------------
@@ -180,7 +180,7 @@ namespace
 		{ TEXT("togglechareditor"), EK::Once,   EG::Interface, EB::None,        TEXT("toggle the character sheet -- 9.4") },
 		{ TEXT("questlog"),     EK::ButtonPair, EG::Interface, EB::QuestLog,    TEXT("quest log -- 9.6") },
 		// The genesis map's `newplayer` trigger reaches this through `ccmd.createplayer`. Deliberately
-		// NOT in `controls.md`'s bindable inventory, so it gets no default bind: it is a verb the
+		// NOT in `docs/vtmb/controls.md`'s bindable inventory, so it gets no default bind: it is a verb the
 		// content calls, not one the player presses.
 		{ TEXT("createplayer"), EK::Once,       EG::Interface, EB::None,        TEXT("open character creation") },
 		{ TEXT("dlghist"),      EK::Once,       EG::Interface, EB::None,        TEXT("dialogue history -- 9.2") },
@@ -207,7 +207,7 @@ namespace
 		{ TEXT("skill"),        EK::Once,       EG::Cheat,    EB::None,         TEXT("set an attribute/ability -- 9.4") },
 		{ TEXT("player_sequence"), EK::Once,    EG::Cheat,    EB::None,         TEXT("play an animation on the player -- 12.x") },
 		// The chargen wizard's own exit: on close it runs `teleport_player firetrans`, which is what
-		// carries the run out of genesis (`level_transitions.md`). Content calls it, so no default bind.
+		// carries the run out of genesis (`docs/vtmb/level_transitions.md`). Content calls it, so no default bind.
 		{ TEXT("teleport_player"), EK::Once,    EG::Cheat,    EB::None,         TEXT("teleport the player to a named entity, or to an X Y Z") },
 		{ TEXT("infobar_message"), EK::Once,    EG::Cheat,    EB::None,         TEXT("post an info-bar message -- 9.2") },
 	};

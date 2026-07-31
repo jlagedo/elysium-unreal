@@ -7,22 +7,22 @@ entity substrate, entity-driven bodies, the sky cubemap — from the pipeline's 
 with no coordinate conversion.
 
 **This file maps what exists and where, not how it behaves.** Design — lifetimes, the frame, the
-object graph, ownership rationale — belongs to `docs/runtime-architecture.md` (the spine),
-`docs/engine-core.md` (entity object model), `docs/save-architecture.md` (persistence),
-`docs/camera-view-modes.md`, `docs/ui-architecture.md`, `docs/input-architecture.md`,
-`docs/python_bridge.md`, `docs/debug-tooling.md`, `docs/map-architecture.md`. Per-task status:
-`docs/roadmap.md`. Gotchas below are the one exception.
+object graph, ownership rationale — belongs to `docs/architecture/runtime-architecture.md` (the spine),
+`docs/architecture/engine-core.md` (entity object model), `docs/architecture/save-architecture.md` (persistence),
+`docs/vtmb/camera-view-modes.md`, `docs/architecture/ui-architecture.md`, `docs/architecture/input-architecture.md`,
+`docs/vtmb/python_bridge.md`, `docs/architecture/debug-tooling.md`, `docs/architecture/map-architecture.md`. Per-task status:
+`docs/project/roadmap.md`. Gotchas below are the one exception.
 
 ## Module
 
 UE 5.8. Module `ElysiumUE` (Runtime, Default loading phase).
 
 - **Plugins:** `ProceduralMeshComponent`; `PythonScriptPlugin` (offline scaffolding only); `Cog`
-  (vendored MIT debug-UI shell, `Plugins/Cog/`, stripped from Shipping via `ENABLE_COG`);
+  (vendored MIT debug-UI shell, `Plugins/External/Cog/`, stripped from Shipping via `ENABLE_COG`);
   `glTFRuntime` (vendored MIT, the NPC skeletal path — `USkeletalMesh` + `UAnimSequence` from `.glb`
   at runtime, no editor import).
 - **Third party:** vendored `dr_wav`/`dr_mp3`; CPython 2.7.18 SDK under `ThirdParty/CPython27/`
-  (**fetched, not committed** — `tools/fetch_cpython27.py`, gitignored, `ELYSIUM_WITH_CPYTHON`,
+  (**fetched, not committed** — `pipeline/src/elysium_pipeline/devtools/fetch_cpython27.py`, gitignored, `ELYSIUM_WITH_CPYTHON`,
   Win64 only).
 
 ## Source layout
@@ -48,14 +48,14 @@ file. `Public/` stays flat — the module's API surface, not a layering.
 
 `Config/DefaultEngine.ini` (boot map, game mode/instance, render path, trace channels) and
 `Config/DefaultInput.ini` (engine-side settings only — no action/axis mappings; those are
-installed by `UElysiumInputRouter`). Boot decision + flow: `docs/runtime-architecture.md`.
-`FElysiumContentPaths::Root()` is the pipeline's `tools/out` mount point.
+installed by `UElysiumInputRouter`). Boot decision + flow: `docs/architecture/runtime-architecture.md`.
+`FElysiumContentPaths::Root()` is the pipeline's `$ELYSIUM_EXPORT_ROOT` mount point.
 
 ## Key type index
 
 Grep entry points, one line each — semantics live in the design doc named per group.
 
-**Map** (`docs/map-architecture.md`, `docs/engine-core.md`): `AElysiumMapActor` (owns one map's
+**Map** (`docs/architecture/map-architecture.md`, `docs/architecture/engine-core.md`): `AElysiumMapActor` (owns one map's
 epoch) with three components — `UElysiumMapVisuals` (`Visual/`, the look), `UElysiumMapCollision`
 (`Map/`, the walkable surface), `UElysiumEntityBodies` (`Visual/`, NPC/prop body factory) — exposed
 as `GetVisuals()`/`GetCollision()`/`GetBodies()`, no forwarders. Visual readers:
@@ -63,7 +63,7 @@ as `GetVisuals()`/`GetCollision()`/`GetBodies()`, no forwarders. Visual readers:
 `FElysiumDecals`, `FElysiumRopes`, `UElysiumLightRig`, `FElysiumSkyDef`,
 `ElysiumEnvironment.{h,cpp}`, `ElysiumFog.h`.
 
-**Entity substrate / Track B** (`docs/engine-core.md`), plain C++, no UObject reflection:
+**Entity substrate / Track B** (`docs/architecture/engine-core.md`), plain C++, no UObject reflection:
 `FElysiumVariant`, `FElysiumEntityHandle`, `FElysiumEntityDef`/`FElysiumEntityDefs`,
 `FElysiumEntity`, `FElysiumClassDesc`/`FElysiumClassRegistry`, `FElysiumEntityWorld` (owned by
 `AElysiumMapActor`), `UElysiumBrushComponent`, `FElysiumEventQueue`/`FElysiumIOEvent`,
@@ -107,25 +107,25 @@ func_brush, point_teleport), `ElysiumMover.{h,cpp}` (`FElysiumMoverBase`, `FElys
 timeline `ElysiumScenePlayer.{h,cpp}` — both free of the world so 12.2's per-line dialogue path can
 reuse them).
 
-**The outbound seam** (`docs/runtime-architecture.md`): everything the substrate needs from the
+**The outbound seam** (`docs/architecture/runtime-architecture.md`): everything the substrate needs from the
 engine arrives as `FElysiumWorldServices`. `IElysiumEmbodiment` (bodies + the player's own view/
 teleport/damage/`+use`/camera, implemented by `AElysiumMapActor`), `IElysiumAudio` (voice,
 `AElysiumMapActor`), `IElysiumTravel` (`AElysiumMapActor`), `IElysiumPresenter` (fades/signs/
 dialog moments, `UElysiumPresentationSubsystem`). Any member may be null; every call site handles
 it. `Private/Tests/ElysiumTestServices.h` is the recording stub implementing all four.
 
-**Subsystems by scope** (`docs/runtime-architecture.md`): GameInstance —
+**Subsystems by scope** (`docs/architecture/runtime-architecture.md`): GameInstance —
 `UElysiumGameFlowSubsystem` (app state), `UElysiumGameStateSubsystem` (`G`, quest map, player
 record, clock, snapshots, script host), `UElysiumMapSubsystem` (travel), `UElysiumSaveSubsystem`,
 `UElysiumUISubsystem`, `UElysiumAudioSubsystem`, `UElysiumNpcAnimSubsystem`,
 `UElysiumRulebookSubsystem`. World — `UElysiumPresentationSubsystem`. LocalPlayer —
 `UElysiumInputSubsystem` (the only `SetInputMode` caller). Engine — `UElysiumMcpSubsystem`.
 
-**Player, commands, camera** (`docs/controls.md`, `docs/input-architecture.md`,
-`docs/camera-view-modes.md`): `FElysiumCommands` (`Public/ElysiumCommands.h`, the verb registry),
+**Player, commands, camera** (`docs/vtmb/controls.md`, `docs/architecture/input-architecture.md`,
+`docs/vtmb/camera-view-modes.md`): `FElysiumCommands` (`Public/ElysiumCommands.h`, the verb registry),
 `ElysiumCommandBus`, `FElysiumConsole`, `FElysiumUserCmd`/`Builder`/`Stream`, `ElysiumBinds`,
 `UElysiumInputRouter`, `IElysiumPlayerBody`, `AElysiumPawn` + `UElysiumMovementComponent` (the
-faithful body) over `ElysiumMoveSolve.h` (`docs/source_movement.md`: `namespace ElysiumMove`'s
+faithful body) over `ElysiumMoveSolve.h` (`docs/vtmb/source_movement.md`: `namespace ElysiumMove`'s
 constants + the `CGameMovement` math as free functions, plus `FElysiumMoveTuning`'s `sv_*` cvar
 surface — the same pure-rules/engine-half split as `ElysiumCameraSolve.h`),
 `AElysiumCapsulePawn` (the `elysium.SourceMovement 0` A/B baseline),
@@ -147,17 +147,17 @@ ones (`_Status`, `_Maps`, `_Lights`, `_Entities`, `_Inspector`, `_EventQueue`, `
 `_Audio`, `_SoundScheme`, `_Logic`, `_Scripting`, `_Npc`) over `FElysiumCogWindow`.
 `UElysiumEntityDebugSubsystem` hosts the `elysium.ent_*` verbs and world-viz layers.
 `ElysiumPick.{h,cpp}` is click-selection; `FElysiumGizmoLayer` the retained gizmo ISM.
-`UElysiumMcpSubsystem` is Layer 3, reached through `tools/mcp_proxy.py`. Design:
-`docs/debug-tooling.md`.
+`UElysiumMcpSubsystem` is Layer 3, reached through `pipeline/src/elysium_pipeline/devtools/mcp_proxy.py`. Design:
+`docs/architecture/debug-tooling.md`.
 
 Headless self-driving harnesses, all armed from `UElysiumMapSubsystem::Initialize` on a
 command-line flag and all exiting when done: `FElysiumProfileRun` (`-ElysiumProfile`),
 `FElysiumShotRun` (`-ElysiumShots`), `FElysiumProbeRun` (`-ElysiumProbe`), `FElysiumMoveRun`
-(`-ElysiumMove`, courses in `ElysiumMoveCourses.h`, driven by `move.bat`, compared by
-`tools/move_diff.py`).
+(`-ElysiumMove`, courses in `ElysiumMoveCourses.h`, driven by `dev/elysium.ps1 move`, compared by
+`pipeline/src/elysium_pipeline/validation/move_diff.py`).
 
 Automation tests live in `Private/Tests/`: `ElysiumSubstrateTests.cpp` (content-free, `-nullrhi`)
-and `ElysiumContentTests.cpp` (parses real exports, self-skips when `tools/out` is empty).
+and `ElysiumContentTests.cpp` (parses real exports, self-skips when `$ELYSIUM_EXPORT_ROOT` is empty).
 
 ## Engine gotchas
 
@@ -201,13 +201,13 @@ Hard-won, non-obvious, and easy to undo:
 
 ## Build and test loop
 
-After a C++ change: `build.bat`, then `test.bat <tier>` — `Substrate` for anything under the
-substrate, scripting, session, player or UI layers, `Content` when the change reads `tools/out`. Both
+After a C++ change: `dev/elysium.ps1 build`, then `dev/elysium.ps1 test <tier>` — `Substrate` for anything under the
+substrate, scripting, session, player or UI layers, `Content` when the change reads `$ELYSIUM_EXPORT_ROOT`. Both
 are cheap: the build is adaptive non-unity (~10 s for a handful of files), and the Substrate tier
 runs in about the same under `-nullrhi`.
 
 **The result surface is the report, not stdout.** Every run writes JSON + HTML under
-`tools/out/_tests/` and `test.bat` echoes the path and propagates the exit code.
+`$ELYSIUM_EXPORT_ROOT/_tests/` and `dev/elysium.ps1 test` reports the path and propagates the exit code.
 
 **One run per change, not one per claim.** A green tier stays green until code moves. A roadmap
 task's acceptance list is a set of things that must be **true**, not a set of runs to perform.

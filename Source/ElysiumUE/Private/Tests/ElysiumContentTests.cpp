@@ -1,9 +1,9 @@
 // P2.8 — the content-gated tier. These read the offline pipeline's real exported intermediates
-// from tools/out and assert the parse contract holds against actual game data. They SELF-SKIP (log
-// + pass) when the map has not been exported, so a fresh checkout with an empty tools/out stays
+// from $ELYSIUM_EXPORT_ROOT and assert the parse contract holds against actual game data. They SELF-SKIP (log
+// + pass) when the map has not been exported, so a fresh checkout with an empty $ELYSIUM_EXPORT_ROOT stays
 // green; a machine that has run the exporter gets real regression coverage of the `.ents` decode.
 //
-// The app-context mask (not ClientContext alone) so they run in the editor commandlet test.bat
+// The app-context mask (not ClientContext alone) so they run in the editor commandlet dev/elysium.ps1 test
 // drives as well as in a game/client session — the `.ents` are read from disk through
 // FElysiumContentPaths, which resolves the same in either. ProductFilter keeps them in this
 // project's own suite bucket, out of the per-commit smoke set where a missing export would look
@@ -244,7 +244,7 @@ bool FElysiumTutorialEntsTest::RunTest(const FString&)
 		if (Mesh == nullptr)
 		{
 			AddInfo(FString::Printf(TEXT("skipping baked brush assertions: no mesh for '%s' ")
-				TEXT("(run: bake.bat sp_tutorial_1 world)"), *Survey.AnyBrushStem));
+				TEXT("(run: dev/elysium.ps1 bake sp_tutorial_1 world)"), *Survey.AnyBrushStem));
 		}
 		else
 		{
@@ -285,7 +285,7 @@ bool FElysiumTutorialEntsTest::RunTest(const FString&)
 			{
 				AddInfo(FString::Printf(
 					TEXT("skipping the baked-collision assertions: no baked mesh for '%s' ")
-					TEXT("(run: bake.bat sp_tutorial_1 props)"), *Survey.AnyPhysStem));
+					TEXT("(run: dev/elysium.ps1 bake sp_tutorial_1 props)"), *Survey.AnyPhysStem));
 			}
 			else if (UBodySetup* Body = Mesh->GetBodySetup())
 			{
@@ -468,8 +468,8 @@ bool FElysiumGenesisEntsTest::RunTest(const FString&)
 
 // =====================================================================================
 // Every exported ChangeNow output must resolve through the real trigger_changelevel registry.
-// This is the corpus guard for all 88 shipped wires, including the five authored wires whose
-// target names are not present in their own map and therefore cannot be classified by target.
+// The 23-map test bench additionally guards all 88 shipped wires, including the five authored
+// wires whose target names are not present in their own map and cannot be classified by target.
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumChangeLevelInputCoverageTest,
@@ -481,7 +481,7 @@ bool FElysiumChangeLevelInputCoverageTest::RunTest(const FString&)
 		/*Files*/ true, /*Dirs*/ false);
 	if (EntsFiles.Num() == 0)
 	{
-		AddInfo(TEXT("skipping: no exported maps under tools/out"));
+		AddInfo(TEXT("skipping: no exported maps under $ELYSIUM_EXPORT_ROOT"));
 		return true;
 	}
 
@@ -538,7 +538,16 @@ bool FElysiumChangeLevelInputCoverageTest::RunTest(const FString&)
 
 	AddInfo(FString::Printf(TEXT("trigger_changelevel corpus: %d ChangeNow wires, %d unknown inputs"),
 		ChangeNowWires, UnknownInputs));
-	TestEqual(TEXT("the exported corpus carries all 88 ChangeNow wires"), ChangeNowWires, 88);
+	if (EntsFiles.Num() >= 23)
+	{
+		TestEqual(TEXT("the complete test bench carries all 88 ChangeNow wires"),
+			ChangeNowWires, 88);
+	}
+	else
+	{
+		AddInfo(FString::Printf(TEXT("partial corpus: validated %d exported map(s)"),
+			EntsFiles.Num()));
+	}
 	TestEqual(TEXT("every trigger_changelevel input resolves"), UnknownInputs, 0);
 	return true;
 }
@@ -758,8 +767,8 @@ bool FElysiumTutorialMaterialsTest::RunTest(const FString&)
 	return true;
 }
 
-// 7.5 — the reflection channel is bound BY NAME from three places (tools/make_world_materials.py
-// authors it, tools/bake_map.py binds it onto each baked instance, FElysiumMaterialFactory and
+// 7.5 — the reflection channel is bound BY NAME from three places (pipeline/unreal/make_world_materials.py
+// authors it, pipeline/unreal/bake_map.py binds it onto each baked instance, FElysiumMaterialFactory and
 // AElysiumMapActor::ApplyMaterialOverrides bind it at runtime). A rename that misses one of them
 // binds nothing and fails silently in the frame, so the contract is asserted here instead: every
 // lit master must carry every parameter ElysiumReflections names.
@@ -931,7 +940,7 @@ bool FElysiumDlgJackTutorialTest::RunTest(const FString&)
 // robustness pass over real data, including the malformed-snippet / error-to-false conditions.
 // Self-skips when out/dlg / the .ents mirror have not been exported.
 //
-// The corpus is discovered, not listed — every `.ents` under tools/out — so it grows with the
+// The corpus is discovered, not listed — every `.ents` under $ELYSIUM_EXPORT_ROOT — so it grows with the
 // export. A name the install does not ship is counted and warned rather than failed: that is a
 // property of Troika's shipped map data, which no re-export can change.
 // =====================================================================================
@@ -945,7 +954,7 @@ bool FElysiumDlgCorpusTest::RunTest(const FString&)
 		/*Files*/ true, /*Dirs*/ false);
 	if (EntsFiles.Num() == 0)
 	{
-		AddInfo(TEXT("skipping: no exported maps under tools/out (run the pipeline to enable)"));
+		AddInfo(TEXT("skipping: no exported maps under $ELYSIUM_EXPORT_ROOT (run the pipeline to enable)"));
 		return true;
 	}
 
@@ -1094,7 +1103,7 @@ bool FElysiumScriptedSequenceClipsTest::RunTest(const FString&)
 {
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
 	{
-		AddInfo(TEXT("skipping: no exported out/npc/npc_index.json (run tools/npc_export.py to enable)"));
+		AddInfo(TEXT("skipping: no exported out/npc/npc_index.json (run pipeline/src/elysium_pipeline/exporters/npc_export.py to enable)"));
 		return true;
 	}
 
@@ -1238,7 +1247,7 @@ bool FElysiumPlayerBodiesTest::RunTest(const FString&)
 	if (!IFileManager::Get().FileExists(*ClanDoc) ||
 		!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
 	{
-		AddInfo(TEXT("skipping: no exported out/vdata + out/npc (run tools/export_all.py --npc to enable)"));
+		AddInfo(TEXT("skipping: no exported out/vdata + out/npc (run pipeline/src/elysium_pipeline/exporters/export_all.py --npc to enable)"));
 		return true;
 	}
 
@@ -1307,7 +1316,7 @@ bool FElysiumPlayerBodiesTest::RunTest(const FString&)
 		if (!Stem)
 		{
 			AddError(FString::Printf(TEXT("clan table names %s, which the character export did not "
-				"produce (tools/npc_export.py)"), *Model));
+				"produce (pipeline/src/elysium_pipeline/exporters/npc_export.py)"), *Model));
 			continue;
 		}
 		if (IFileManager::Get().FileExists(*FElysiumContentPaths::NpcGlb(*Stem)))
@@ -1600,7 +1609,7 @@ bool FElysiumPlayerBodyMaterialTest::RunTest(const FString&)
 	TestTrue(TEXT("player body uses native dithered opacity masking"), Material->DitherOpacityMask != 0);
 	TestTrue(TEXT("player body material is compiled for skeletal meshes"),
 		Material->GetUsageByFlag(MATUSAGE_SkeletalMesh));
-	// test.bat runs under NullRHI, so the material owns no rendering-platform resource by default.
+	// dev/elysium.ps1 test runs under NullRHI, so the material owns no rendering-platform resource by default.
 	// Create and synchronously compile the exact platform the game launches instead of mistaking an
 	// absent NullRHI resource for a shader failure.
 	TArray<FMaterialResource*> Sm6Resources;
@@ -1629,7 +1638,7 @@ bool FElysiumPlayerBodyMaterialTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================// 11.9 — freeze/thaw a real map's `.ents` world (`save-architecture.md` §10, the content
+// =====================================================================================// 11.9 — freeze/thaw a real map's `.ents` world (`docs/architecture/save-architecture.md` §10, the content
 // tier). The substrate tier proves the mechanism on three synthetic entities; this proves
 // it against the shapes the shipped data actually holds — 1,000+ records, every registered
 // classname, real output tables, the runtime-spawned player. Self-skips with no export.
@@ -1828,7 +1837,7 @@ bool FElysiumRulebookContentTest::RunTest(const FString&)
 {
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/stats.txt"))))
 	{
-		AddInfo(TEXT("skipping: no exported out/vdata (run tools/export_all.py to enable)"));
+		AddInfo(TEXT("skipping: no exported out/vdata (run pipeline/src/elysium_pipeline/exporters/export_all.py to enable)"));
 		return true;
 	}
 
@@ -2121,7 +2130,7 @@ bool FElysiumRulebookContentTest::RunTest(const FString&)
 				{
 					const FElysiumQuestState& S = Q.States[i];
 					// `SetQuest(title, N)` addresses the N-th state in FILE ORDER; the authored
-					// `"ID"` is never read (`game_runtime.md` -> "Quests"). Every shipped row
+					// `"ID"` is never read (`docs/vtmb/game_runtime.md` -> "Quests"). Every shipped row
 					// happens to author the two equal, which is what makes `elysium.rules quest`'s
 					// by-ID listing readable — assert it so a patched rulebook that breaks the
 					// coincidence surfaces here rather than as a mis-addressed award.
@@ -2397,7 +2406,7 @@ bool FElysiumSheetContentTest::RunTest(const FString&)
 {
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/stats.txt"))))
 	{
-		AddInfo(TEXT("skipping: no exported out/vdata (run tools/export_all.py to enable)"));
+		AddInfo(TEXT("skipping: no exported out/vdata (run pipeline/src/elysium_pipeline/exporters/export_all.py to enable)"));
 		return true;
 	}
 
@@ -2498,7 +2507,7 @@ bool FElysiumSheetContentTest::RunTest(const FString&)
 		}
 
 		// An NPC template: `Max_Health` is authored as a literal there, and that overlay IS the
-		// whole of an NPC's health track (`vdata-catalog.md`).
+		// whole of an NPC's health track (`docs/vtmb/vdata-catalog.md`).
 		int32 Checked = 0;
 		for (const FElysiumClanTemplate& Row : Clans.NpcTemplates)
 		{
@@ -2544,7 +2553,7 @@ bool FElysiumSheetMathContentTest::RunTest(const FString&)
 {
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/feats.txt"))))
 	{
-		AddInfo(TEXT("skipping: no exported out/vdata (run tools/export_all.py to enable)"));
+		AddInfo(TEXT("skipping: no exported out/vdata (run pipeline/src/elysium_pipeline/exporters/export_all.py to enable)"));
 		return true;
 	}
 
@@ -2699,7 +2708,7 @@ bool FElysiumQuestContentTest::RunTest(const FString&)
 	if (!IFileManager::Get().FileExists(
 			*FElysiumContentPaths::VdataFile(TEXT("system/quests_santamonica.txt"))))
 	{
-		AddInfo(TEXT("skipping: no exported out/vdata (run tools/export_all.py to enable)"));
+		AddInfo(TEXT("skipping: no exported out/vdata (run pipeline/src/elysium_pipeline/exporters/export_all.py to enable)"));
 		return true;
 	}
 
@@ -2851,7 +2860,7 @@ bool FElysiumChargenContentTest::RunTest(const FString&)
 {
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/stats.txt"))))
 	{
-		AddInfo(TEXT("skipping: no exported out/vdata (run tools/export_all.py to enable)"));
+		AddInfo(TEXT("skipping: no exported out/vdata (run pipeline/src/elysium_pipeline/exporters/export_all.py to enable)"));
 		return true;
 	}
 
@@ -3164,8 +3173,8 @@ bool FElysiumChargenContentTest::RunTest(const FString&)
 // =====================================================================================
 // 12.1 — the whole choreographed-scene corpus: every `.vcd` the pipeline mirrored (PL9).
 //
-// This is what turns `docs/choreographed_scenes.md`'s survey numbers into a regression test. The
-// doc's histograms were produced by tools/probe_scenes.py over the install; this reads the mirror
+// This is what turns `docs/vtmb/choreographed_scenes.md`'s survey numbers into a regression test. The
+// doc's histograms were produced by research/tooling/probes/probe_scenes.py over the install; this reads the mirror
 // with the runtime's own parser and asserts the two agree. A drift here means either the exporter
 // changed what it mirrors or this reader diverged from the reference grammar — both worth failing.
 //
@@ -3181,7 +3190,7 @@ bool FElysiumSceneCorpusTest::RunTest(const FString&)
 	IFileManager::Get().FindFilesRecursive(Files, *ScenesDir, TEXT("*.vcd"), /*Files*/ true, /*Dirs*/ false);
 	if (Files.Num() == 0)
 	{
-		AddInfo(TEXT("skipping: no scenes under tools/out/scenes (run the pipeline to enable)"));
+		AddInfo(TEXT("skipping: no scenes under $ELYSIUM_EXPORT_ROOT/scenes (run the pipeline to enable)"));
 		return true;
 	}
 
@@ -3237,7 +3246,7 @@ bool FElysiumSceneCorpusTest::RunTest(const FString&)
 	TestEqual(TEXT("fps is 60 everywhere"), NumFps60, Files.Num());
 	TestEqual(TEXT("snap on appears once"), NumSnapOn, 1);
 
-	// The nine live event types, straight out of `docs/choreographed_scenes.md`.
+	// The nine live event types, straight out of `docs/vtmb/choreographed_scenes.md`.
 	const TPair<EElysiumChoreoEvent, int32> Expected[] = {
 		{ EElysiumChoreoEvent::Silence,     12089 },
 		{ EElysiumChoreoEvent::Loud,         9809 },

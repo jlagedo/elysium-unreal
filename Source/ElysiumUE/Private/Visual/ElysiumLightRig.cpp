@@ -23,7 +23,7 @@ static TAutoConsoleVariable<float> CVarLightScale(
 	ECVF_Default);
 
 // Per-area brightness rebalance from the baked lightmap: multiply each light's intensity by
-// its `<map>.lightfit` line (reverse-engineered by tools/probe_light_attribution.py), so
+// its `<map>.lightfit` line (reverse-engineered by research/tooling/probes/probe_light_attribution.py), so
 // areas VtMB lit brighter/darker than the dynamic rig get nudged toward the baked balance.
 // Applied at map load; re-travel to A/B. 0 = ignore the sidecar.
 static TAutoConsoleVariable<int32> CVarLightFit(

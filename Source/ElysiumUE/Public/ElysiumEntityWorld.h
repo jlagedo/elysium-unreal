@@ -140,7 +140,7 @@ public:
 	// `EndSession` returns).
 	void ForgetPlayer() { Player = FElysiumEntityHandle::Invalid(); }
 
-	// --- Persistence (11.9, `save-architecture.md` §5) ----------------------------------
+	// --- Persistence (11.9, `docs/architecture/save-architecture.md` §5) ----------------------------------
 	// Freeze this map to a snapshot. Pure read: the same call serves a travel boundary and a save,
 	// which is what keeps the two from drifting apart. Every entity is diffed against a **fresh
 	// build of its own def** and contributes nothing when it matches — the generalisation of VtMB's

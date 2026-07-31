@@ -1,4 +1,4 @@
-// Lumen card baking, editor side (docs/uasset-bake-spike.md).
+// Lumen card baking, editor side (docs/architecture/uasset-bake-spike.md).
 //
 // A runtime-built UStaticMesh has no card representation, so Lumen drops it from the surface
 // cache. Standing in six cards on the mesh bounds covers a prop but not architecture: a box card

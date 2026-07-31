@@ -4,7 +4,7 @@
 #include "ElysiumAudioSubsystem.h"
 #include "ElysiumEntity.h"
 
-// P4.1 — the brush-mover substrate. `animation_and_movers.md` Part B (decompiled `vampire.dll`:
+// P4.1 — the brush-mover substrate. `docs/vtmb/animation_and_movers.md` Part B (decompiled `vampire.dll`:
 // the Source CBaseToggle/CBaseDoor lineage, RTTI-confirmed) is the reference for everything here.
 //
 // FElysiumMoverBase is the CBaseToggle primitive: LinearMove/AngularMove drive the entity's brush
@@ -164,7 +164,7 @@ public:
 	virtual void Spawn() override;
 	virtual void Think() override;
 
-	// 11.9 — the door's derived state is exactly the case `save-architecture.md` §4 carves out for a
+	// 11.9 — the door's derived state is exactly the case `docs/architecture/save-architecture.md` §4 carves out for a
 	// leaf hook: `m_toggle_state` and the lock are neither keyvalues nor registered fields, and a
 	// rebuild from the def cannot re-derive them (it would put every door back at its spawn pose).
 	virtual void Serialize(FElysiumSaveArchive& Ar) override;

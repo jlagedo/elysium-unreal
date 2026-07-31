@@ -412,7 +412,7 @@ void UElysiumUISubsystem::ShowChargen()
 	Chargen->Currency = EElysiumChargenCurrency::Pools;
 	Chargen->Name = State->PlayerName();
 	// Whatever the session already seeded stands as the opening selection - `createplayer` commits
-	// OVER a player that exists, it does not build one (`docs/game_runtime.md`). The quiz route
+	// OVER a player that exists, it does not build one (`docs/vtmb/game_runtime.md`). The quiz route
 	// overwrites both before the sheet is raised.
 	{
 		const FElysiumSheet& Seeded = State->PlayerSheet();

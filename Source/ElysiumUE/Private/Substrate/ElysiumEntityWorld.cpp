@@ -185,7 +185,7 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 	}
 
 	// 11.9 — the spawn pass is finished, so this is what a rebuild of this map produces: record it
-	// as the omission baseline a freeze diffs against (`save-architecture.md` §4).
+	// as the omission baseline a freeze diffs against (`docs/architecture/save-architecture.md` §4).
 	Baseline.Reset();
 	Baseline.SetNum(EntityList.Num());
 	for (int32 i = 0; i < EntityList.Num(); ++i)
@@ -481,7 +481,7 @@ bool FElysiumEntityWorld::RemovePlayerControllerEntity()
 
 // --- Persistence (11.9) ------------------------------------------------------------------
 // The map snapshot. Both halves run against the *same* world the game runs against, which is what
-// `save-architecture.md` §5 means by "a snapshot is produced by exactly the same code path a save
+// `docs/architecture/save-architecture.md` §5 means by "a snapshot is produced by exactly the same code path a save
 // uses": a travel boundary and a Save Game call reach Freeze identically.
 
 FElysiumEntityState FElysiumEntityWorld::CaptureState(const FElysiumEntity& E) const
@@ -1992,7 +1992,7 @@ void FElysiumEntityWorld::Teardown()
 			PlayerEnt->Dehydrate(GameState->PlayerRecord());
 
 			// 11.9 — and the map itself is frozen into the session, beside the record, by the same
-			// call a save uses (`save-architecture.md` §5). Gated on there having been a player: a
+			// call a save uses (`docs/architecture/save-architecture.md` §5). Gated on there having been a player: a
 			// menu backdrop and a headless logic world run the substrate in full but are not part of
 			// anyone's run, so they must not join the visited-map set.
 			if (!bDetached && !Defs.MapName.IsEmpty())

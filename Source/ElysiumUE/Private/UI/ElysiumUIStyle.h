@@ -10,7 +10,7 @@ class UFont;
 // the metric scale, so every screen reads the same values instead of re-deriving them.
 //
 // **The virtual canvas is VtMB's own.** `client.dll` authors its UI in a 1024x768 space and
-// scales it by `screenW/1024` / `screenH/768` (`docs/vtmb-ui.md` §2, recovered from
+// scales it by `screenW/1024` / `screenH/768` (`docs/vtmb/vtmb-ui.md` §2, recovered from
 // `CVMainMenu::PerformLayout`) — the same canvas `CSignUI` uses. Every size below is in that
 // space and is multiplied by `ElysiumUI::ScaleFor(ScreenH)` at draw time, so the layout law the
 // RE recovered *is* the layout code and the UI is resolution-independent by construction.
@@ -89,7 +89,7 @@ namespace ElysiumUI
 	}
 }
 
-// Which of the three Nocturne families a piece of text belongs to (docs/ui-architecture.md).
+// Which of the three Nocturne families a piece of text belongs to (docs/architecture/ui-architecture.md).
 enum class EElysiumFontRole : uint8
 {
 	Label,   // Spectral SC — small caps: menu items, sheet rows, HUD labels, headers
@@ -104,9 +104,9 @@ enum class EElysiumFontWeight : uint8
 	Italic,   // Body only; falls back to Regular on the other two roles
 };
 
-// Resolves role+weight to a drawable face, composing the committed `UFontFace` assets under
+// Resolves role+weight to a drawable face, composing the generated local `UFontFace` assets under
 // `/Game/VtMB/UI/Fonts` into runtime `UFont`s. The faces are real cooked assets (built by
-// `tools/make_ui_fonts.py`), not loose TTFs read at draw time — so they stream and cook like any
+// `pipeline/unreal/make_ui_fonts.py`), not loose TTFs read at draw time — so they stream and cook like any
 // other content. One `UFont` is built per role, with the weights as named typeface entries.
 class FElysiumUIFontLibrary
 {

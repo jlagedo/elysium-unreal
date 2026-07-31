@@ -11,7 +11,7 @@
 //
 // It exists because `ACharacter` cannot take a box root and Source's `StepMove` depends on the hull
 // being an AABB: a capsule's rounded bottom catches a step's top edge and reports ~0.65 against the
-// 0.7 standable test, so *every* climb is rejected (`source_movement.md` § StepMove). So the body is
+// 0.7 standable test, so *every* climb is rejected (`docs/vtmb/source_movement.md` § StepMove). So the body is
 // an `APawn` with a `UBoxComponent` and this replaces `UCharacterMovementComponent` wholesale.
 //
 // The structure is Source's and the constants are RE'd; the math itself lives in
@@ -52,7 +52,7 @@ public:
 	bool IsDucking() const { return bDucking; }
 	EElysiumWaterLevel GetWaterLevel() const { return WaterLevel; }
 	// What the substrate calls when a water brush reports the body's depth. Nothing calls it yet —
-	// no exported map places one (`docs/source_movement.md` → "Water").
+	// no exported map places one (`docs/vtmb/source_movement.md` → "Water").
 	void SetWaterLevel(EElysiumWaterLevel InLevel) { WaterLevel = InLevel; }
 	float GetSurfaceFriction() const { return SurfaceFriction; }
 
@@ -138,6 +138,6 @@ private:
 
 	// 1.0 on every world surface, which is what retail computes: VtMB scales the material's friction
 	// by 1.25 and clamps to 1.0, and 1 of the install's 11,624 VMTs carries a `$surfaceprop`, so
-	// everything resolves to the `default` prop at 0.8 (`docs/source_movement.md`).
+	// everything resolves to the `default` prop at 0.8 (`docs/vtmb/source_movement.md`).
 	float SurfaceFriction = 1.0f;
 };

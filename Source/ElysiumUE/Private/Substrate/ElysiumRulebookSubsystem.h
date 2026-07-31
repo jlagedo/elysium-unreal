@@ -11,7 +11,7 @@
 //
 // Session-lifetime and never invalidated, because **no `vdata` value is ever saved**: the sheet
 // stores indices into these tables and the tables are re-read from disk at load, which is what
-// lets a patched rulebook re-apply to a save made before the patch (`savegame_format.md`).
+// lets a patched rulebook re-apply to a save made before the patch (`docs/vtmb/savegame_format.md`).
 //
 // Each table loads lazily on its first accessor and is cached for the session; a load failure is
 // logged once and remembered, so a missing export costs one warning rather than one per read.

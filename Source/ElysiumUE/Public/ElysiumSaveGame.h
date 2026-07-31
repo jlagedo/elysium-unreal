@@ -4,7 +4,7 @@
 #include "GameFramework/SaveGame.h"
 #include "ElysiumSaveGame.generated.h"
 
-// 11.9 — the container (`save-architecture.md` §2). `USaveGame` buys slot management, platform-safe
+// 11.9 — the container (`docs/architecture/save-architecture.md` §2). `USaveGame` buys slot management, platform-safe
 // paths and `UGameplayStatics::AsyncSaveGameToSlot` **without owning the content**: the payload is
 // our own versioned, compressed block stream, written by `FElysiumSaveArchive`, because none of the
 // game state is UPROPERTY-reflected and none of it should become so (engine-core.md R1).

@@ -2,8 +2,13 @@
 	"mcpServers": {
 		"elysium": {
 			"type": "stdio",
-			"command": "python",
-			"args": ["${CLAUDE_PROJECT_DIR:-.}/tools/mcp_proxy.py"],
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-File",
+				"${CLAUDE_PROJECT_DIR:-.}/dev/elysium.ps1",
+				"mcp"
+			],
 			"env": {
 				"PYTHONUNBUFFERED": "1"
 			}

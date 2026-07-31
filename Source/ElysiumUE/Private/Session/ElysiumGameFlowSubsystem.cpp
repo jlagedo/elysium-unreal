@@ -33,7 +33,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumFlow, Log, All);
 // The menu backdrop camera, as "x,y,z,pitch,yaw" in world centimetres and degrees. Deliberately
 // NOT an entry in ElysiumVantages::Table: that table is the profiling and screenshot baseline, and
 // Resolve("") returns every vantage for a map — adding one there would silently change what
-// profile.bat and shots.bat measure. Retune in-game with `elysium.campos`, which logs a
+// dev/elysium.ps1 profile and dev/elysium.ps1 shots measure. Retune in-game with `elysium.campos`, which logs a
 // paste-ready position/rotation including pitch.
 static TAutoConsoleVariable<FString> CVarMenuVantage(
 	TEXT("elysium.MenuVantage"),
@@ -63,7 +63,7 @@ static TAutoConsoleVariable<int32> CVarBootMenu(
 // that act would have delivered to — applied once, at the travel funnel (ElysiumStory::ResolveIntroSkip,
 // UElysiumMapSubsystem::RequestLandmarkTravel). Ours, not VtMB's: retail's own switch is the
 // `vchar_skip_intro` ConVar behind the wizard's `Skip Intro` checkbox, whose reader is not yet
-// recovered (`level_transitions.md`). Reversible — 0 takes the authored route.
+// recovered (`docs/vtmb/level_transitions.md`). Reversible — 0 takes the authored route.
 static TAutoConsoleVariable<int32> CVarSkipIntro(
 	TEXT("elysium.SkipIntro"),
 	1,
@@ -349,7 +349,7 @@ void UElysiumGameFlowSubsystem::RegisterCommands()
 	// it UI-only and the controller sees nothing. Both arrive here, which is what 11.5 left open.
 	Bindings.Add(Registry.Bind(TEXT("cancelselect"), [this](const FElysiumCommandCall&)
 	{
-		// "Close panel, else open menu" — VtMB's own reading of Escape (`controls.md`). A panel the
+		// "Close panel, else open menu" — VtMB's own reading of Escape (`docs/vtmb/controls.md`). A panel the
 		// player opened is what Escape is for first; only with nothing to close does it reach pause.
 		if (UElysiumUISubsystem* UI = GetGameInstance()->GetSubsystem<UElysiumUISubsystem>())
 		{
@@ -474,7 +474,7 @@ void UElysiumGameFlowSubsystem::ReleasePauseHold()
 
 void UElysiumGameFlowSubsystem::BootFromCommandLine()
 {
-	// An explicit map (play.bat <map>) is the dev path: load it bare, with the mock character seeded
+	// An explicit map (dev/elysium.ps1 play <map>) is the dev path: load it bare, with the mock character seeded
 	// so the dialogue gates that read the player sheet resolve.
 	int32 NewGameFlag = 1;
 	FParse::Value(FCommandLine::Get(), TEXT("ElysiumNewGame="), NewGameFlag);
@@ -620,7 +620,7 @@ bool UElysiumGameFlowSubsystem::ResolveEntryPoint(const FString& EntryPoint,
 		// landmark, because nothing transitioned into it. From there the map drives itself: the spawn
 		// lands inside the `newplayer` trigger, which fires `G.Story_State = -5` and
 		// `ccmd.createplayer`, and the wizard's close teleports the player onto the exit
-		// (`level_transitions.md`). Where that exit *goes* is the skip's business, not this function's.
+		// (`docs/vtmb/level_transitions.md`). Where that exit *goes* is the skip's business, not this function's.
 		OutMap = ElysiumStory::ChargenMap;
 		OutLandmark.Reset();
 		return true;

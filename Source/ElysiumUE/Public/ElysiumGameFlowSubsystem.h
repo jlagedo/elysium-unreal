@@ -22,7 +22,7 @@ enum class EElysiumSaveKind : uint8
 	Auto,
 };
 
-// Why the run ended. Both are VtMB loss conditions (`game_runtime.md` §3): the combat character's
+// Why the run ended. Both are VtMB loss conditions (`docs/vtmb/game_runtime.md` §3): the combat character's
 // death path, and the masquerade meter reaching 5.
 enum class EElysiumGameOverReason : uint8
 {
@@ -31,7 +31,7 @@ enum class EElysiumGameOverReason : uint8
 };
 
 // What a New Game is, as data. The four-map retail chain is driven entirely by the maps' own
-// entities and landmarks (`level_transitions.md`), so the only thing the flow chooses is where the
+// entities and landmarks (`docs/vtmb/level_transitions.md`), so the only thing the flow chooses is where the
 // chain is entered — everything after that is content.
 struct FElysiumNewGameRequest
 {
@@ -57,7 +57,7 @@ struct FElysiumNewGameRequest
 	FString EntryPoint;
 };
 
-// The retail New Game chain, in order (`runtime-architecture.md` §10). Held as data because the
+// The retail New Game chain, in order (`docs/architecture/runtime-architecture.md` §10). Held as data because the
 // transitions between these maps are the maps' own `trigger_changelevel` wires, not code.
 namespace ElysiumStory
 {
@@ -86,7 +86,7 @@ namespace ElysiumStory
 	// and that anchor means nothing against the tutorial's `tutorial`, so the rewrite is a
 	// direct-entry placement (bHasYaw false = face the landmark's own angles).
 	//
-	// A divergence, and marked as one in `level_transitions.md` — reversible by `elysium.SkipIntro 0`,
+	// A divergence, and marked as one in `docs/vtmb/level_transitions.md` — reversible by `elysium.SkipIntro 0`,
 	// which takes the authored route. Pure so the rule is testable with no world and no cvar.
 	bool ResolveIntroSkip(bool bSkip, FString& Map, FString& Landmark, FVector& Offset, bool& bHasYaw);
 }
@@ -97,7 +97,7 @@ namespace ElysiumStory
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnElysiumAppStateChanged, EElysiumAppState /*Old*/, EElysiumAppState /*New*/);
 
 // The application state machine and the session's entry points (roadmap 11.3,
-// `runtime-architecture.md` §10). GI-scoped: boot, the session and the app state all outlive any
+// `docs/architecture/runtime-architecture.md` §10). GI-scoped: boot, the session and the app state all outlive any
 // one world, and travel is exactly when they change.
 //
 // This is the only owner of `EElysiumAppState`, of the boot decision, and of the loading screen.

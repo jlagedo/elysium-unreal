@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 #include "Math/RandomStream.h"
 
-// S8 determinism (`save-architecture.md` §8) — every game-visible random draw comes from a **named,
+// S8 determinism (`docs/architecture/save-architecture.md` §8) — every game-visible random draw comes from a **named,
 // owned stream** whose state is in the save's `Session` block. `FMath::Rand()` is banned in gameplay
 // code for the same reason `FTimerManager` is: a save is only worth as much as the run that follows
 // it, and a draw the save cannot carry makes the run after a load a different run.

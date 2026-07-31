@@ -69,7 +69,7 @@ public:
 	// --- `G` — the global flag bag -------------------------------------------------
 	// Engine-owned in VtMB (a `PyDataManager` injected into __main__), one flat namespace,
 	// values overwhelmingly small ints. Default-on-miss is integer 0 (decompiled tp_getattr,
-	// `python_bridge.md`): Get never fails. Setting a Void value deletes the key, mirroring
+	// `docs/vtmb/python_bridge.md`): Get never fails. Setting a Void value deletes the key, mirroring
 	// tp_setattr where assigning None removes it.
 
 	FElysiumVariant GetGlobal(const FString& Key) const;
@@ -88,7 +88,7 @@ public:
 	// --- Quests --------------------------------------------------------------------
 	// String->int quest state; miss -> 0. The map stays authoritative (732 `SetQuest` call sites,
 	// default-0 on miss is VtMB's own contract); what hangs off it is everything that happens
-	// AROUND a change — the completion state's awards and the journal row (`game_runtime.md` ->
+	// AROUND a change — the completion state's awards and the journal row (`docs/vtmb/game_runtime.md` ->
 	// "Quests"). The state value is the completion state's 1-based ORDINAL in file order, which is
 	// what `SetQuest`'s second argument is.
 	int32 GetQuestState(const FString& Quest) const;
@@ -113,7 +113,7 @@ public:
 
 	// Clear the unread marker on every row belonging to `Hub` (and to the cross-hub `main` table,
 	// which the screen shows in every tab). **Ours, not VtMB's** — the engine sets the byte on every
-	// write and never reads it, so the panel's own clear rule is unrecovered (`ui-architecture.md`).
+	// write and never reads it, so the panel's own clear rule is unrecovered (`docs/architecture/ui-architecture.md`).
 	void MarkQuestsRead(int32 Hub);
 
 	// --- The player record + New Game (11.4) ---------------------------------------
@@ -155,7 +155,7 @@ public:
 	void NotifyMasqueradeBreach();
 
 	// Seed the state a fresh story run starts from. New Game in retail is four maps
-	// (`level_transitions.md`): chargen on `sp_genesisdevice_1` writes the sheet, then the theatre
+	// (`docs/vtmb/level_transitions.md`): chargen on `sp_genesisdevice_1` writes the sheet, then the theatre
 	// embrace + trial, then a landmark transition into `sp_tutorial_1`. Chargen (8.6) and the
 	// choreographed intro (P9) are unbuilt, so this seeds exactly what survives that chain and is
 	// read afterwards, and the caller travels straight to the story entry.
@@ -186,7 +186,7 @@ public:
 
 	// --- The per-map snapshots (11.9) ------------------------------------------------
 	// A run holds the current map plus a frozen snapshot of every other map visited, so walking back
-	// into Santa Monica finds it as you left it (`save-architecture.md` §5). They live here for the
+	// into Santa Monica finds it as you left it (`docs/architecture/save-architecture.md` §5). They live here for the
 	// same reason `G` does: session lifetime, not map lifetime. The entity world writes one at every
 	// teardown and reads one back at every build, which is why travel and save cannot drift apart.
 	const FElysiumMapSnapshot* FindMapSnapshot(const FString& Map) const;

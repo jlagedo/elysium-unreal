@@ -8,7 +8,7 @@
 #include "ElysiumRng.h"
 #include "ElysiumVariant.h"
 
-// 11.9 — the four blocks a save holds (`save-architecture.md` §3), as plain C++ structs we own.
+// 11.9 — the four blocks a save holds (`docs/architecture/save-architecture.md` §3), as plain C++ structs we own.
 // None of this is UPROPERTY-reflected and none of it should become so: the substrate is plain C++
 // precisely so serialization, determinism and travel teardown stay in our hands (engine-core.md R1).
 // `UElysiumSaveGame` is the only reflected part, and it carries these as an opaque byte payload.
@@ -35,7 +35,7 @@ struct FElysiumSaveVersion
 	};
 
 	// The oldest payload this build can read. A payload below it is rejected with a readable
-	// reason rather than half-read (`save-architecture.md` §2).
+	// reason rather than half-read (`docs/architecture/save-architecture.md` §2).
 	//
 	// `Sheet` restructured the player's trait storage from a name -> value bag into VtMB's four
 	// fixed containers. `Xp` added the award accumulators beside them, `Journal` the quest rows, and
@@ -51,7 +51,7 @@ struct FElysiumSaveVersion
 inline constexpr uint32 ElysiumSaveMagic = 0x53594C45u;
 
 // ------------------------------------------------------------------------------------------------
-// The `Maps` block — one frozen map (`save-architecture.md` §5)
+// The `Maps` block — one frozen map (`docs/architecture/save-architecture.md` §5)
 // ------------------------------------------------------------------------------------------------
 
 // One entity's saved state. Identity is the **def index** (R3: stable across runs, never reused
@@ -81,7 +81,7 @@ struct FElysiumEntityState
 	TArray<TPair<FName, FElysiumVariant>> Fields;   // sorted by name; only the differing ones
 
 	// A leaf's derived runtime state (a mover's phase, a sequence cursor) — the one thing that does
-	// not fit the field walk, written by FElysiumEntity::SaveState (`save-architecture.md` §4).
+	// not fit the field walk, written by FElysiumEntity::SaveState (`docs/architecture/save-architecture.md` §4).
 	TArray<uint8> LeafState;
 
 	// Runtime-spawned entities (npc_maker.Spawn, CreateEntityNoSpawn) live past the def array, so
@@ -139,7 +139,7 @@ struct FElysiumMapSnapshot
 
 // `G`, the quest map, the clock and the RNG streams — everything that outlives any one map and is
 // not the player. `G` serializes as a variant map with no pickling and no interpreter involvement,
-// because it already lives in C++ (`save-architecture.md` §7). The CPython VM's own namespace is
+// because it already lives in C++ (`docs/architecture/save-architecture.md` §7). The CPython VM's own namespace is
 // **not** saved and does not need to be: level-script names are re-imported per map at load, and
 // every durable value a script writes goes to `G`, the quest map or an entity field.
 struct FElysiumSessionBlock
@@ -180,7 +180,7 @@ struct FElysiumSaveHeaderData
 	FString Kind;                      // "manual" | "quick" | "auto"
 };
 
-// The whole payload: the four blocks, in the order `save-architecture.md` §3 lists them.
+// The whole payload: the four blocks, in the order `docs/architecture/save-architecture.md` §3 lists them.
 struct FElysiumSavePayload
 {
 	FElysiumSessionBlock Session;

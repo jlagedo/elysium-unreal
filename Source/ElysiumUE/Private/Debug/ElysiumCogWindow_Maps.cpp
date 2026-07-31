@@ -27,7 +27,7 @@ void FElysiumCogWindow_Maps::Initialize()
 void FElysiumCogWindow_Maps::RenderHelp()
 {
 	ImGui::Text(
-		"Map lifecycle. Lists every map the pipeline has exported under tools/out; click Travel to "
+		"Map lifecycle. Lists every map the pipeline has exported under $ELYSIUM_EXPORT_ROOT; click Travel to "
 		"load one (the current map is highlighted). Reload re-loads the current map without a recook "
 		"- the export->reload hot loop, same as elysium.reload. Below, the current map's per-phase "
 		"load timings and surface/light/prop counts.");
@@ -54,7 +54,7 @@ void FElysiumCogWindow_Maps::RenderContent()
 	}
 	ImGui::EndDisabled();
 	ImGui::SameLine();
-	FCogWidgets::HelpMarker("Re-Travel the current map: edit the exporter, re-export to tools/out, "
+	FCogWidgets::HelpMarker("Re-Travel the current map: edit the exporter, re-export to $ELYSIUM_EXPORT_ROOT, "
 		"then Reload here to see it - no editor recook. Same as the elysium.reload console command.");
 
 	// --- Exported map list ---------------------------------------------------------------------
@@ -62,7 +62,7 @@ void FElysiumCogWindow_Maps::RenderContent()
 	const TArray<FString> Names = Maps->ExportedMaps();
 	if (Names.Num() == 0)
 	{
-		ImGui::TextDisabled("No exported maps under tools/out. Run the pipeline first.");
+		ImGui::TextDisabled("No exported maps under $ELYSIUM_EXPORT_ROOT. Run the pipeline first.");
 	}
 	else if (ImGui::BeginTable("##Maps", 2,
 		ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchProp,

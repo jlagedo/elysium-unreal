@@ -1,7 +1,7 @@
 // P6.3 — SoundScheme runtime: the KeyValues scheme parser, the playback manager (ambient bed +
 // music state machine + polar random-one-shot scheduler), and the `ambient_soundscheme` entity.
 // Reference: audio_pipeline.md §5/§6 + the decompiled CSoundScheme parser (vampire.dll @0x1022a930,
-// tools/ghidra/out/aud_scheme_parser.txt) — the field set and every retail default below come from
+// $ELYSIUM_WORK_ROOT/research/ghidra/out/aud_scheme_parser.txt) — the field set and every retail default below come from
 // that decompile. The music-stem crossfade is documented (§6); the exact combat-state driver is
 // Python world.SetSafeArea (P9), so until then the state is cvar/Cog-driven (elysium.MusicState).
 

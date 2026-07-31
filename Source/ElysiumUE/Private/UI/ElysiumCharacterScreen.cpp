@@ -32,7 +32,7 @@ namespace
 {
 	// Layout, in VtMB's 1024x768 virtual canvas. Horizontal values are measured from an edge, never
 	// as a fraction of 1024: the canvas widens with the aspect ratio, so a fraction would drift the
-	// content inward on ultrawide (`docs/ui-architecture.md` section 2).
+	// content inward on ultrawide (`docs/architecture/ui-architecture.md` section 2).
 	namespace Layout
 	{
 		inline constexpr float PadX        = 34.0f;   // from the left and right edges
@@ -253,7 +253,7 @@ void UElysiumCharacterScreen::SetHub(int32 InHub)
 		return;
 	}
 	// Leaving a hub is what marks its rows read: the player has now seen them. Ours, not VtMB's —
-	// the engine writes the unread byte and never reads it (`docs/ui-architecture.md`).
+	// the engine writes the unread byte and never reads it (`docs/architecture/ui-architecture.md`).
 	if (UElysiumGameStateSubsystem* State = StateFor(this))
 	{
 		State->MarkQuestsRead(Hub);
@@ -325,7 +325,7 @@ const FSlateBrush* UElysiumCharacterScreen::Art(const TCHAR* RelPath, const FLin
 			// Not fatal anywhere: every caller draws the token version instead. Verbose because a
 			// clone with no export would otherwise log a dozen warnings per open.
 			UE_LOG(LogElysiumCharScreen, Verbose,
-				TEXT("no sheet art at %s — run: python tools/UE_extract_ui.py"), *Path);
+				TEXT("no sheet art at %s — run: dev/elysium.ps1 export <map>"), *Path);
 			ArtMissing.Add(Key);
 			return nullptr;
 		}
@@ -731,7 +731,7 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildFooter()
 			// **Disabled, deliberately.** Retail's auto-spend has no recovered algorithm: the clan's
 			// `_CharGen` leveling template is the BASELINE and has already run by the time the pools
 			// exist, so there is no authored spend order left to follow. Inventing one would be a
-			// silent divergence (`docs/game_runtime.md`), so the button states its shape and does
+			// silent divergence (`docs/vtmb/game_runtime.md`), so the button states its shape and does
 			// nothing until the handler is RE'd.
 			AddButton(NSLOCTEXT("Elysium", "AutoSpend", "AUTO-SPEND POINTS"), false, nullptr);
 			// ACCEPT arms only once every pool is spent out, which is retail's own gate.
@@ -1470,7 +1470,7 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildChoiceRow(const FText& Heading
 	// A row of selectable words rather than a dropdown: at chargen every list is short enough to
 	// show whole, and a list that is always open is one fewer state than a combo box. The retail
 	// screen's dropdown is a 640x480 concession, and the UI has no classic mode
-	// (`docs/remaster-direction.md`).
+	// (`docs/project/remaster-direction.md`).
 	TSharedRef<SHorizontalBox> Row = SNew(SHorizontalBox);
 	for (int32 i = 0; i < Options.Num(); ++i)
 	{

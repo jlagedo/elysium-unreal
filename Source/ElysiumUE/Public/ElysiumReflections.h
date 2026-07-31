@@ -10,13 +10,13 @@
 // an unlit room stays dark. That is already a light-modulated specular response in all but
 // name, which is what makes a real reflection channel the faithful port rather than a
 // liberty. The exported `tex/cube/` faces are never sampled; Lumen resolves the reflection
-// against the live scene. Full RE + the whole-game authoring survey: docs/reflections.md.
+// against the live scene. Full RE + the whole-game authoring survey: docs/vtmb/reflections.md.
 //
-// Keep these in sync with tools/make_world_materials.py (the master's parameter defaults) and
-// tools/bake_map.py (what a baked material instance binds over them).
+// Keep these in sync with pipeline/unreal/make_world_materials.py (the master's parameter defaults) and
+// pipeline/unreal/bake_map.py (what a baked material instance binds over them).
 namespace ElysiumReflections
 {
-	// The non-reflective end is Lambert, which is what VtMB's world is (docs/lighting.md:
+	// The non-reflective end is Lambert, which is what VtMB's world is (docs/vtmb/lighting.md:
 	// METALLIC 0, SPECULAR 0, ROUGHNESS 1) and what the light rig already assumes when it sets
 	// specular_scale = 0 on every source. A surface reflects because its VMT carries $envmap.
 	inline constexpr float RoughBase = 1.0f;

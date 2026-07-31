@@ -33,7 +33,7 @@ UClass* AElysiumGameMode::GetDefaultPawnClassForController_Implementation(AContr
 	{
 		return nullptr;
 	}
-	// The box hull is a recovered requirement, not a preference (`source_movement.md` § StepMove);
+	// The box hull is a recovered requirement, not a preference (`docs/vtmb/source_movement.md` § StepMove);
 	// the capsule stays reachable so a feel change has something known-good to be compared against.
 	return CVarSourceMovement.GetValueOnGameThread() != 0
 		? AElysiumPawn::StaticClass()

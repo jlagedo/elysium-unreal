@@ -180,8 +180,8 @@ void UElysiumCameraComponent::SolveBoom(const FVector& Eye, const FRotator& View
 
 	// 2) The boom direction. The camera looks *along* it, from behind and above the eye — Source's
 	// pitch is down-positive, so a `cam_targetangle` of 15 (above the eye line) subtracts here
-	// (`docs/rebuild-strategy.md` -> Coordinate conventions). The exact composition inside
-	// `0x100fd350` is only partially recovered (`camera-view-modes.md` -> Not yet recovered); this is
+	// (`docs/project/rebuild-strategy.md` -> Coordinate conventions). The exact composition inside
+	// `0x100fd350` is only partially recovered (`docs/vtmb/camera-view-modes.md` -> Not yet recovered); this is
 	// the reading the observed cvar roles support.
 	FRotator BoomRot;
 	BoomRot.Pitch = FMath::Clamp(View.Pitch - SolvedPitch, -89.0f, 89.0f);
@@ -192,7 +192,7 @@ void UElysiumCameraComponent::SolveBoom(const FVector& Eye, const FRotator& View
 	float Allowed = SolvedDistance;
 
 	// 3) Collision. VtMB traces a box hull; a sphere is the closer match to how the retract actually
-	// reads in motion and is the substitution `camera-view-modes.md` records as a feel delta.
+	// reads in motion and is the substitution `docs/vtmb/camera-view-modes.md` records as a feel delta.
 	bClipped = false;
 	const UWorld* World = GetWorld();
 	if (Cvars.bCollide && World)

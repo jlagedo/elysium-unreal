@@ -54,7 +54,7 @@ struct FElysiumPropSkinModel
 	UPROPERTY(EditAnywhere) TArray<FElysiumSkinFamily> Families;
 };
 
-// The map's whole prop-skin table, authored by tools/bake_map.py next to the prop meshes. One asset
+// The map's whole prop-skin table, authored by pipeline/unreal/bake_map.py next to the prop meshes. One asset
 // per map rather than one per model: a map carries ~23 multi-family models, so a single asset loads
 // once at map load and costs one lookup, and the hard references keep every alternate material
 // reachable from the level.

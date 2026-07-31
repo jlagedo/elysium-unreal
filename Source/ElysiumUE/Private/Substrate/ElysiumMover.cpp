@@ -1,6 +1,6 @@
 // P4.1-4.3 — the mover base (CBaseToggle constant-velocity primitive + the CBaseDoor 4-state
 // machine), both door leaves (func_door_rotating swings, func_door slides), and func_button.
-// Reference: `animation_and_movers.md` Part B + the decompiled `vampire.dll` (CBaseDoor::Spawn
+// Reference: `docs/vtmb/animation_and_movers.md` Part B + the decompiled `vampire.dll` (CBaseDoor::Spawn
 // FUN_100ef260, CBaseDoor::Use FUN_100efc90, CBaseButton::Spawn FUN_100c8d60). P4.3 completes the
 // door: the full spawnflag table (B.5), the sliding leaf (open pose = pos + movedir·(|size·movedir|
 // − lip)), NO_AUTO_RETURN, the PUSE +use doorknob path, and `linked_door` (the paired-leaf swing).
@@ -260,7 +260,7 @@ void FElysiumMoverBase::TickMove(double Now)
 // Mover sounds (P6.4) — the soundgroup manifest + per-mover playback
 // ============================================================================================
 //
-// Reference: `docs/audio_pipeline.md` + the decompiled CBaseDoor::Spawn (FUN_100ef060, reads the
+// Reference: `docs/vtmb/audio_pipeline.md` + the decompiled CBaseDoor::Spawn (FUN_100ef060, reads the
 // subkeys "close"/"open"/"swing"/"locked") and CBaseButton::Spawn (FUN_100c8810, reads "on"/"off").
 // VtMB has no soundgroup *data file*: a `soundgroup` token resolves by directory convention to
 // sound/usable/<category>/<token>/<subkey>.wav (openable=doors, switches=buttons). The offline

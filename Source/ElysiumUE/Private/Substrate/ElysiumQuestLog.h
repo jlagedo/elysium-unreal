@@ -10,7 +10,7 @@
 // says what is owed, so the whole decision is plain C++ over a catalogue and an array, testable with
 // no world and no subsystem. Same split `ElysiumSheetMath` makes for the sheet.
 //
-// The VtMB facts: `docs/game_runtime.md` section 3 ("Quests"), read off `CVPlayer::SetQuest`
+// The VtMB facts: `docs/vtmb/game_runtime.md` section 3 ("Quests"), read off `CVPlayer::SetQuest`
 // (`1017CC20`) and the two `QuestJournal` halves it calls. Every rule below is the engine's.
 
 namespace ElysiumQuestLog

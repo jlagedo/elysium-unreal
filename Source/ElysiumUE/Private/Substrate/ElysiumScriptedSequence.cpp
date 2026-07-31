@@ -19,7 +19,7 @@
 // chaining.
 //
 // What is NOT: locomotion. 66 of the 108 sequences carry `m_fMoveTo != 0`, and this runtime has no
-// navmesh, no walk cycle driver, and no decoded root motion (`animation_and_movers.md` A.3), so the
+// navmesh, no walk cycle driver, and no decoded root motion (`docs/vtmb/animation_and_movers.md` A.3), so the
 // NPC is **placed at the marker** instead of walking to it — the authored end state, without the
 // transit. `m_iszCustomMove` is read and held for that work but has
 // nothing to drive. `OnScriptEvent01..08` (5 wires) need decoded animation events and do not fire.

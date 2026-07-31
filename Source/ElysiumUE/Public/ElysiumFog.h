@@ -4,7 +4,7 @@
 
 // Source's distance fog, as the Custom Primitive Data slots every world / 3D-skybox / prop
 // primitive carries. This namespace is the whole contract between the material graph
-// (tools/mat_fog.py), the bake (tools/bake_map.py, FOG_CPD_*) and AElysiumMapActor::ApplySceneFog.
+// (pipeline/unreal/mat_fog.py), the bake (pipeline/unreal/bake_map.py, FOG_CPD_*) and AElysiumMapActor::ApplySceneFog.
 //
 // WHY IT IS PER-PRIMITIVE. VtMB fogs the world and the 3D-skybox miniature with two different
 // linear fogs, pushed and popped around two separate renders (RE-A8/RE-A9). Ported as one scene

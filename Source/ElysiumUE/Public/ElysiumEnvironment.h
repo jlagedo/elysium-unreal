@@ -56,7 +56,7 @@ namespace ElysiumEnvironment
 	// `.env` sidecar's `skyconv`. Version 1: the exported `sky_<face>.png` are verbatim decodes
 	// carrying VtMB's own canonical orientation — rt=+X, lf=-X, bk=+Y, ft=-Y, up=+Z, dn=-Z in
 	// Source space, image row 0 the top of the face, no face rotated or mirrored
-	// (docs/sky-ambience.md -> "K1 ... (settled)"). Everything BuildSkyCube does to a face is
+	// (docs/vtmb/sky-ambience.md -> "K1 ... (settled)"). Everything BuildSkyCube does to a face is
 	// derived from that plus Unreal's own cube layout, so a sidecar written under a different
 	// convention would silently draw wrong.
 	inline constexpr int32 SkyConventionVersion = 1;

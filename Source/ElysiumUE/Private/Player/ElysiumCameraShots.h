@@ -8,7 +8,7 @@ class FElysiumEntityWorld;
 class UElysiumCameraComponent;
 
 // `vdata/camerashots/` — VtMB's cinematic shot files, and what `SetCamera(shotfile)` names
-// (115 script calls; `docs/script_api.md`). The format is documented by Troika themselves in the
+// (115 script calls; `docs/vtmb/script_api.md`). The format is documented by Troika themselves in the
 // shipped `camera shots how-to.txt`, so this is a read of an authored grammar rather than a
 // reconstruction:
 //

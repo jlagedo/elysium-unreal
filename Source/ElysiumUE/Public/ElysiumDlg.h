@@ -6,7 +6,7 @@
 
 // P9 9.1 / B4 — VtMB `.dlg` conversations. Three separable pieces, each unit-testable on its own:
 //
-//   * FElysiumDlgFile     — the 13-field CRLF/Latin-1 parser (physical format, docs/game_runtime.md §5).
+//   * FElysiumDlgFile     — the 13-field CRLF/Latin-1 parser (physical format, docs/vtmb/game_runtime.md §5).
 //   * ElysiumDlgExpr      — the `dlgexpr` front-normalizer that rewrites a raw field-4/5 string into the
 //                           pure-Python subset the installed script host evaluates (skillchecks ->
 //                           CalcFeat compares; the condition-level `&`/`|` -> `and`/`or`; the action-level
@@ -112,7 +112,7 @@ namespace ElysiumDlgExpr
 	FString ActionToPython(const FString& Raw);
 }
 
-// The conversation branch state machine (docs/game_runtime.md §5 "Runtime / branching"), driven by two
+// The conversation branch state machine (docs/vtmb/game_runtime.md §5 "Runtime / branching"), driven by two
 // injected callbacks so it is host-agnostic and unit-testable:
 //   * CondFn(rawCondition) -> bool : evaluate a PC choice's col-4 (the caller normalizes + routes to the
 //                                    script host, or fakes it in a test). Never called for an empty gate.

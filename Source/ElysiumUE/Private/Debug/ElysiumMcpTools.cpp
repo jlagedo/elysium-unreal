@@ -505,7 +505,7 @@ namespace ElysiumMcpImpl
 		{
 			FSchema Schema;
 			Out.Add(MakeTool(TEXT("elysium_maps_list"),
-				TEXT("List the VtMB maps the offline pipeline has exported (folders under tools/out holding a <name>.obj), and which one is loaded right now. Call this first — every other map tool takes a name from here."),
+				TEXT("List the VtMB maps the offline pipeline has exported (folders under $ELYSIUM_EXPORT_ROOT holding a <name>.obj), and which one is loaded right now. Call this first — every other map tool takes a name from here."),
 				Schema,
 				[](const TSharedPtr<FJsonObject>&) -> FModelContextProtocolToolResult
 				{
@@ -574,7 +574,7 @@ namespace ElysiumMcpImpl
 					if (!bOk)
 					{
 						Body->SetStringField(TEXT("error"),
-							FString::Printf(TEXT("map '%s' has no exported .obj under tools/out"), *Map));
+							FString::Printf(TEXT("map '%s' has no exported .obj under $ELYSIUM_EXPORT_ROOT"), *Map));
 					}
 					return Structured(Body);
 				}));
@@ -604,7 +604,7 @@ namespace ElysiumMcpImpl
 			Schema.Add(TEXT("clan"), TEXT("integer"), TEXT("Clan in the level-script 2..8 encoding (2 Brujah .. 8 Ventrue). Default 2."))
 				.Add(TEXT("male"), TEXT("boolean"), TEXT("Player sex. Default true."));
 			Out.Add(MakeTool(TEXT("elysium_new_game"),
-				TEXT("Seed a fresh story context (G flags, quest map, player sheet) and travel to the story entry: sp_tutorial_1 at its `tutorial` info_landmark. This is the boot path play.bat takes with no map argument — use it when a test needs the seeded flags the tutorial's own scripts read. The story state is seeded synchronously (clan/clan_name are valid immediately), but the map travel is deferred when a map is already loaded — returns pending=true; poll elysium_maps_list until pending_travel clears and spawn_done is true."),
+				TEXT("Seed a fresh story context (G flags, quest map, player sheet) and travel to the story entry: sp_tutorial_1 at its `tutorial` info_landmark. This is the boot path dev/elysium.ps1 play takes with no map argument — use it when a test needs the seeded flags the tutorial's own scripts read. The story state is seeded synchronously (clan/clan_name are valid immediately), but the map travel is deferred when a map is already loaded — returns pending=true; poll elysium_maps_list until pending_travel clears and spawn_done is true."),
 				Schema,
 				[](const TSharedPtr<FJsonObject>& Params) -> FModelContextProtocolToolResult
 				{

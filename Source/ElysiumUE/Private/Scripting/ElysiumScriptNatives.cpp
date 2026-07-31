@@ -16,7 +16,7 @@ namespace
 	//
 	// **`Whisper` and `FrenzyTrigger` are deliberately absent, and must stay absent.** `vamputil.py`
 	// defines both as script helpers, and both are also datamap **input** names, so the binding is a
-	// property of the call site rather than of the name (`docs/script_api.md`): a bare
+	// property of the call site rather than of the name (`docs/vtmb/script_api.md`): a bare
 	// `Whisper("Crying")` (24 `.dlg` sites) runs the helper, which forwards to `pc.Whisper(...)`, while
 	// the receiver-qualified `pc.Whisper("Crying")` (9 sites) fires the player datamap input directly;
 	// `FrenzyTrigger(char)` hands the input a `1` where `pc.FrenzyTrigger()` hands it nothing. A row
@@ -88,7 +88,7 @@ namespace
 		{
 			RolledOnFrame = GFrameCounter;
 			// S8 — the roll comes from the session's own OneOfSet stream, whose position is in the
-			// save (`save-architecture.md` §8). A conversation reopened after a load then selects the
+			// save (`docs/architecture/save-architecture.md` §8). A conversation reopened after a load then selects the
 			// same row it would have without one, which is the whole point of the per-frame draw.
 			Roll = ElysiumRng::Stream(EElysiumRngStream::OneOfSet).RandHelper(MAX_int32);
 		}
@@ -211,7 +211,7 @@ namespace ElysiumScriptNatives
 
 		// Real backing: the game-state subsystem's quest funnel — the map write plus the completion
 		// state's awards and journal row (9.4d). The receiver is deliberately ignored, as VtMB's own
-		// thunk ignores it: `SetQuest` always lands on the player (`script_api.md`).
+		// thunk ignores it: `SetQuest` always lands on the player (`docs/vtmb/script_api.md`).
 		if (Method == FName(TEXT("SetQuest")))
 		{
 			if (State && Args.Num() >= 2) { State->SetQuestState(Args[0].ToString(), Args[1].ToInt()); }

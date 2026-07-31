@@ -10,7 +10,7 @@
 // and queued I/O in a single frame. It lives here rather than beside the movement math because it
 // is a property of **the frame**, and game time and player motion must agree about how long the
 // frame was — a clamp that covered only one of them would put them into disagreement.
-// (`docs/source_movement.md` → "Frame timing".)
+// (`docs/vtmb/source_movement.md` → "Frame timing".)
 namespace ElysiumFrame
 {
 	inline constexpr double MinFrameSeconds = 0.001;

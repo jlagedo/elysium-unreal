@@ -32,7 +32,7 @@ public class ElysiumUE : ModuleRules
 			"MeshDescription", "StaticMeshDescription", "PhysicsCore",
 			// P8 NPCs: glTFRuntime loads USkeletalMesh + UAnimSequence from the .glb NPC exports
 			// (out/npc, standard glTF 2.0) at runtime -- no editor import. Vendored under
-			// Plugins/glTFRuntime; a runtime module, so it stays in every config.
+			// Plugins/External/glTFRuntime; a runtime module, so it stays in every config.
 			"glTFRuntime",
 			// 8.7 ropes: the stock (enabled-by-default) CableComponent plugin's UCableComponent
 			// renders each overhead cable as a Verlet-simulated strand built at map load.
@@ -86,7 +86,7 @@ public class ElysiumUE : ModuleRules
 				// JsonUtilities carries FJsonObjectWrapper, the base of FModelContextProtocolToolResult.
 				"ModelContextProtocol", "ModelContextProtocolEngine", "JsonUtilities"
 			});
-			// Lumen card baking (docs/uasset-bake-spike.md). IMeshUtilities::GenerateCardRepresentationData
+			// Lumen card baking (docs/architecture/uasset-bake-spike.md). IMeshUtilities::GenerateCardRepresentationData
 			// is the real surfel-fitted card builder; it ray-traces the mesh through Embree, so it only
 			// exists in the editor. The bake runs here and writes a sidecar the runtime deserializes,
 			// which is what keeps Embree out of the shipping build.

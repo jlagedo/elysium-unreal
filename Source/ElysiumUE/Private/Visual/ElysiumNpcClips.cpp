@@ -311,7 +311,7 @@ bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 
 	if (Npcs.IsEmpty())
 	{
-		OutError = TEXT("index carries no NPCs (re-run: python tools/npc_export.py --reindex)");
+		OutError = TEXT("index carries no NPCs (re-run: dev/elysium.ps1 export <map> --npc)");
 		return false;
 	}
 	return true;

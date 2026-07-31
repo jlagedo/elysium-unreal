@@ -13,7 +13,7 @@
 #include "GameFramework/Pawn.h"
 
 // The timestep A/B. **0 is the faithful baseline** — VtMB has no tick, so its movement really is
-// frame-rate dependent (`docs/source_movement.md` → "Frame timing"). A non-zero value opts into
+// frame-rate dependent (`docs/vtmb/source_movement.md` → "Frame timing"). A non-zero value opts into
 // frame-rate independence and is a recorded divergence, not the reference behaviour.
 static TAutoConsoleVariable<float> CVarMoveFixedStep(
 	TEXT("elysium.move.FixedStep"),
@@ -26,7 +26,7 @@ static TAutoConsoleVariable<float> CVarMoveFixedStep(
 // How long the jump's push keeps being applied. 0 = use `rules.txt`'s `JumpHoldTime` (0.2). This
 // is **ours, not a VtMB cvar** — it exists because `rules.txt` carries two candidate windows
 // (`JumpHoldTime` 0.2 and the Feat-indexed `JumpDuration`, 0.11 at rank 1) and which one the
-// engine uses is not transcribed. `docs/source_movement.md` records that as unverified.
+// engine uses is not transcribed. `docs/vtmb/source_movement.md` records that as unverified.
 static TAutoConsoleVariable<float> CVarJumpHoldSeconds(
 	TEXT("elysium.jump.HoldSeconds"),
 	0.0f,
@@ -57,7 +57,7 @@ float UElysiumMovementComponent::GetMaxSpeed() const
 	const float Base = PendingCmd.IsDown(EElysiumButton::Speed)
 		? ElysiumMove::WalkSpeed : ElysiumMove::RunSpeed;
 	// Source's duck speed is a third of the gait — `sv_sneakscale` 2.3 divides it in the retail
-	// PreThink, but that path is animation-driven (`source_movement.md` § "Player speed is
+	// PreThink, but that path is animation-driven (`docs/vtmb/source_movement.md` § "Player speed is
 	// animation-driven"), so this is the one movement number still standing on Source's own default
 	// rather than a read-out VtMB value. Marked so it is not mistaken for RE'd.
 	return (bDucked || bDucking) ? Base / 3.0f : Base;
@@ -147,7 +147,7 @@ void UElysiumMovementComponent::CategorizePosition()
 	}
 	// 1.0 is the retail value, not a placeholder: VtMB scales the surface's friction by 1.25 and
 	// clamps to 1.0, and every world surface resolves to the `default` prop at 0.8
-	// (`source_movement.md` § surfaceFriction is 1.0 on every world surface).
+	// (`docs/vtmb/source_movement.md` § surfaceFriction is 1.0 on every world surface).
 	SurfaceFriction = 1.0f;
 	if (bOnGround && Velocity.Z < 0.0f)
 	{
@@ -301,7 +301,7 @@ void UElysiumMovementComponent::Duck()
 	// straight through to `Finish(Un)Duck`. That is what makes the crouch-jump exist: the hull
 	// shrinks on the frame the button goes down, mid-flight, lifting the feet 18 units. Ramping
 	// instead would put the shrink 0.4s after the press — longer than the whole 0.5s jump — so a
-	// step between 25 and 43 units becomes unclimbable (`docs/source_movement.md` → "Ducking").
+	// step between 25 and 43 units becomes unclimbable (`docs/vtmb/source_movement.md` → "Ducking").
 	const bool bInAir = !bOnGround;
 
 	if (bWantsDuck)
@@ -477,7 +477,7 @@ void UElysiumMovementComponent::PlayerMove(float DeltaTime)
 		return;
 	}
 
-	// PlayerMove's own order (`source_movement.md` → "Where each move function lives"): the timers
+	// PlayerMove's own order (`docs/vtmb/source_movement.md` → "Where each move function lives"): the timers
 	// and the duck run first, so the ground trace below sees the hull this step will move with.
 	ReduceTimers(DeltaTime);
 	Duck();
@@ -555,7 +555,7 @@ void UElysiumMovementComponent::AirMove(float DeltaTime)
 void UElysiumMovementComponent::WaterMove(float DeltaTime)
 {
 	// Formula-faithful and unexercised: nothing sets WaterLevel, because no exported map places a
-	// water brush (`source_movement.md` → "Water"). It is here so the state machine is Source's
+	// water brush (`docs/vtmb/source_movement.md` → "Water"). It is here so the state machine is Source's
 	// shape rather than a subset, and so the day a water map exports this is wiring, not a port.
 	const AController* C = PawnOwner ? PawnOwner->GetController() : nullptr;
 	const FRotator ViewRot = C ? C->GetControlRotation()

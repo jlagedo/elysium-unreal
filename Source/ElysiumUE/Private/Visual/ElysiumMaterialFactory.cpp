@@ -155,7 +155,7 @@ UMaterialInstanceDynamic* FElysiumMaterialFactory::Build(const FElysiumMaterialD
 	// down, Specular up -- so the fully-dynamic Lumen reflection appears. A reflective surface
 	// with no $envmapmask reflects uniformly, so a 1x1 white mask stands in. Masks are linear
 	// reflectivity, not colour. Non-reflective surfaces never enter here, so they keep the
-	// master's Lambert base (RoughBase 1 / SpecBase 0). Full term: docs/reflections.md.
+	// master's Lambert base (RoughBase 1 / SpecBase 0). Full term: docs/vtmb/reflections.md.
 	if (Def && Def->bEnvmap)
 	{
 		UTexture2D* Mask = Def->EnvMask.IsEmpty()

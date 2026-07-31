@@ -196,7 +196,7 @@ public:
 
 	// The sheet, from `stats.txt`'s defaults overlaid with this NPC's `stattemplate`. That overlay
 	// is the whole of an NPC's health track: `npctemplate*` authors `Max_Health` as a literal, and a
-	// template that omits it inherits `stats.txt`'s `Default 100` (`vdata-catalog.md`). Without it
+	// template that omits it inherits `stats.txt`'s `Default 100` (`docs/vtmb/vdata-catalog.md`). Without it
 	// every NPC had a zero ceiling and TakeDamage only logged.
 	void SeedSheet()
 	{

@@ -21,7 +21,7 @@ class UElysiumPlayerBody : public UInterface
 // and nothing else, which is exactly the surface here.
 //
 // It is an interface because 11.6 ships two of them and they cannot share a base: `AElysiumPawn`
-// (`APawn` + a **box** root + `UElysiumMovementComponent` — the faithful hull, `source_movement.md`)
+// (`APawn` + a **box** root + `UElysiumMovementComponent` — the faithful hull, `docs/vtmb/source_movement.md`)
 // and `AElysiumCapsulePawn` (`ACharacter`, the A/B baseline behind `elysium.SourceMovement 0`).
 // `ACharacter` creates its capsule as its root and does not allow substitution, so the split is the
 // engine's, not a preference.

@@ -24,7 +24,7 @@ struct FElysiumMaterialDef
 	FLinearColor Color = FLinearColor(0.6f, 0.6f, 0.65f);   // Kd fallback when no albedo
 
 	// $envmaptint splits two ways, and the population is bimodal rather than a continuum
-	// (docs/reflections.md): grey is a reflection-strength dim-down, chromatic names a metal.
+	// (docs/vtmb/reflections.md): grey is a reflection-strength dim-down, chromatic names a metal.
 	// Translucent/additive surfaces are excluded -- the chromatic tints there are coloured
 	// glass, which stays dielectric. Metalness is read off VtMB's authoring, never inferred.
 	static constexpr float ChromaticSpread = 0.02f;

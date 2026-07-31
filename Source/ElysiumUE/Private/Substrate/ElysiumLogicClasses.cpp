@@ -10,7 +10,7 @@
 // func_brush FUN_1013dd30, point_teleport FUN_1018d940). math_counter / logic_timer are stock
 // Source semantics (confirmed present, unmodified); logic_case_toggle is a VtMB divergence —
 // InValue is a *delta* that advances a current-case pointer over the configured cases (skipping
-// empty slots, wrapping 0..15), then fires that case's OnCaseNN. See docs/entity_io.md.
+// empty slots, wrapping 0..15), then fires that case's OnCaseNN. See docs/vtmb/entity_io.md.
 
 #include "ElysiumBrushComponent.h"
 #include "ElysiumClassRegistry.h"
@@ -214,7 +214,7 @@ private:
 	float Interval() const
 	{
 		// S8 — an owned, seeded stream, not FMath: the interval is game-visible time, so a load has to
-		// reproduce the sequence the save was in the middle of (`save-architecture.md` §8).
+		// reproduce the sequence the save was in the middle of (`docs/architecture/save-architecture.md` §8).
 		return bUseRandomTime
 			? ElysiumRng::Stream(EElysiumRngStream::LogicTimer).FRandRange(LowerRandomBound, UpperRandomBound)
 			: RefireTime;

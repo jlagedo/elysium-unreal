@@ -19,7 +19,7 @@ class USkeletalMeshComponent;
 // The root is a **box**, not a capsule, and that is a recovered requirement rather than a
 // preference: Source's player hull is an AABB (`-16,-16,0`..`16,16,72`) and `StepMove` depends on
 // it — a capsule's rounded bottom catches a step's top edge and reports a normal of ~0.65 against
-// the 0.7 standable test, so every climb is rejected (`docs/source_movement.md`). `ACharacter`
+// the 0.7 standable test, so every climb is rejected (`docs/vtmb/source_movement.md`). `ACharacter`
 // creates a `UCapsuleComponent` as its root and does not allow substitution, so this derives from
 // `APawn` and brings its own `UElysiumMovementComponent`. `AElysiumCapsulePawn` is the A/B baseline
 // behind `elysium.SourceMovement 0`.
@@ -56,7 +56,7 @@ public:
 	virtual void SetPlayerVisual(USkeletalMeshComponent* InVisual) override;
 	virtual void ApplyPlayerModelAlpha(float Alpha) override;
 
-	// Swap the hull between the standing and ducked sizes (`docs/source_movement.md` → "The hulls
+	// Swap the hull between the standing and ducked sizes (`docs/vtmb/source_movement.md` → "The hulls
 	// and the view offsets"). The mover owns *when*; the pawn owns *how*, because the box extent
 	// and the camera's relative Z have to move together or the view detaches from the body for a
 	// frame. Not on `IElysiumPlayerBody` — `AElysiumCapsulePawn` has no mover and must not grow a

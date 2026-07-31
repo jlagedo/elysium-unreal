@@ -2,7 +2,7 @@
 // the decode logic (ElysiumSoundCache.cpp includes the header declarations-only) so the
 // large public-domain C header is emitted exactly once, and so a unity build never merges
 // two copies of DR_WAV_IMPLEMENTATION. dr_wav decodes VtMB's Microsoft ADPCM (tag 0x02),
-// IMA/DVI ADPCM (0x11) and PCM16 WAVs natively -- no offline transcode (docs/audio_pipeline.md).
+// IMA/DVI ADPCM (0x11) and PCM16 WAVs natively -- no offline transcode (docs/vtmb/audio_pipeline.md).
 #include "CoreMinimal.h"
 
 #define DR_WAV_IMPLEMENTATION

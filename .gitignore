@@ -32,23 +32,68 @@ compile_commands.json
 # Compiled source
 *.pyc
 
-# Offline pipeline: generated content + local env (regenerable from the user's install)
-tools/out/
-# Baked .uasset content decoded from the user's own VtMB install (tools/bake_map.py).
-# Game-derived and regenerable, so it is never committed; only the .uplugin descriptor is.
-Plugins/ElysiumBaked/Content/
-tools/.venv/
-tools/__pycache__/
-tools/models/
+# Local path configuration and Python environments
+.elysium.local.env
+pipeline/.venv/
+*.egg-info/
+**/__pycache__/
 
-# Ghidra + RE workspace: the entire tools/ghidra*/ and tools/re/ trees are local-only
-# RE references, never committed. This covers the hand-authored scripts (Dump*.java,
-# run.ps1, README, dll_recon.py, ghidra_extract_mechanics.*), the vendored Ghidra
-# 12.1.2 distro, the analyzed DB + decompilation dumps derived from the user's own game
-# binaries (bring-your-own), and the read-only reference clones (VAMPTools, Crowbar,
-# TemplePlus, source-engine, VtMBFontEditor).
-tools/ghidra*/
-tools/re/
+# Unreal packages are always generated or externally supplied. Git LFS is not
+# an exception: no Unreal binary package belongs in this repository.
+*.uasset
+*.umap
+*.ubulk
+*.uexp
+*.uptnl
+*.pak
+*.ucas
+*.utoc
+
+# Generated project packages. The virtual package paths remain /Game and
+# /ElysiumBaked; only their Git posture changes.
+Content/VtMB/
+Content/Elysium.umap
+Plugins/ElysiumBaked/Content/
+
+# Pinned third-party plugins are restored by dev/bootstrap.ps1.
+Plugins/External/
+
+# Scratch and backup files never carry durable project context.
+.codex-patch/
+/logs/
+/scratch/
+*.orig
+*.bak
+*.pid
+
+# Raw game containers, extracted binaries, and decompiler workspaces belong
+# under ELYSIUM_WORK_ROOT, never beside authored project source.
+*.bsp
+*.mdl
+*.phy
+*.vpk
+*.tth
+*.ttz
+*.vtf
+*.vmt
+*.vcd
+*.dlg
+*.sav
+*.gpr
+*.gzf
+*.gdt
+*.dll
+*.exe
+*.pdb
+*.lib
+/game/
+/extracted/
+/decompilation/
+/research/evidence/
+/research/generated/
+/research/captures/
+/research/reports/
+/research/models/
 
 # Precompiled headers / object files
 *.pch
@@ -58,14 +103,6 @@ tools/re/
 # Packaging / cook output
 Saved/StagedBuilds/
 Saved/Cooked/
-
-# Valve Source SDK sources kept locally as an entity/I-O reverse-engineering
-# reference (proprietary, Copyright Valve — never ours to ship or commit).
-/sdk/
-
-# VtMB screenshots kept locally as a UI/HUD reference (game-sourced, never ours
-# to ship or commit).
-/reference/
 
 # Build / export logs
 *.log

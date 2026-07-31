@@ -1,0 +1,21 @@
+name: repository-policy
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  policy:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python dev/check_repo_policy.py --repo-only
+      - run: python -m compileall -q pipeline/src research dev
+      - run: |
+          $env:PYTHONPATH = "pipeline/src"
+          python -m unittest discover -s pipeline/tests -v

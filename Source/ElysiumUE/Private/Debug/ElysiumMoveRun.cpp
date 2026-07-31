@@ -138,7 +138,7 @@ void FElysiumMoveRun::Sample()
 	const bool bGround = Move->IsOnGround();
 
 	// Positions and velocities are emitted in **Source units**, not cm, so a row reads directly
-	// against `source_movement.md`'s numbers (and against a retail demo dump, if one is ever taken).
+	// against `docs/vtmb/source_movement.md`'s numbers (and against a retail demo dump, if one is ever taken).
 	const double Inv = 1.0 / ElysiumMove::U;
 
 	Rows.Add(FString::Printf(

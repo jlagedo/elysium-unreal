@@ -33,7 +33,7 @@ namespace
 	// collide with `CBaseEntity`'s own `health`/`max_health` keyfields — and our registry resolves
 	// derived-shadows-base, so a sheet field named `health` would silently repoint `trigger_hurt`.
 	// RE24 sampled `base_vmax_health` off the datamap directly; `vhealth` is **inferred** from that
-	// pattern and has not been read out of the image (`docs/game_runtime.md` section 3).
+	// pattern and has not been read out of the image (`docs/vtmb/game_runtime.md` section 3).
 	const FElysiumSheetSlot GAttributeSlots[] =
 	{
 		SLOT( 0, "attrib_order",             "Attrib_Order"),

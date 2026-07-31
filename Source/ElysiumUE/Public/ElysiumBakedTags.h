@@ -2,12 +2,12 @@
 
 #include "CoreMinimal.h"
 
-// The actor tags tools/bake_map.py stamps on the baked level's actors, and the only contract
+// The actor tags pipeline/unreal/bake_map.py stamps on the baked level's actors, and the only contract
 // between the offline bake and AElysiumMapActor::AdoptBakedLevel. Tags (not Outliner folder
 // paths) carry this because folders are editor-only metadata and vanish in a -game build, while
 // AActor::Tags is plain serialized runtime data.
 //
-// Keep these in sync with the TAG_* constants in tools/bake_map.py.
+// Keep these in sync with the TAG_* constants in pipeline/unreal/bake_map.py.
 namespace ElysiumBakedTags
 {
 	// One spatial cell of the world's baked geometry.

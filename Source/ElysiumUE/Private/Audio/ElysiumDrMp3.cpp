@@ -3,7 +3,7 @@
 // public-domain C header is emitted exactly once and a unity build never merges two copies of
 // DR_MP3_IMPLEMENTATION -- the same convention ElysiumDrWav.cpp establishes for dr_wav. dr_mp3
 // decodes VtMB's loose dialogue/music/radio MP3s to int16 PCM at runtime -- no offline transcode
-// (MP3 patents expired; docs/audio_pipeline.md). The runtime has no other MP3 route: Unreal only
+// (MP3 patents expired; docs/vtmb/audio_pipeline.md). The runtime has no other MP3 route: Unreal only
 // decodes cooked USoundWave assets, not loose .mp3 on disk.
 #include "CoreMinimal.h"
 

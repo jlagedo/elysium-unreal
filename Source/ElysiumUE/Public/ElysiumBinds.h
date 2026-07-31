@@ -5,7 +5,7 @@
 
 // VtMB's default bind set, as `FKey` -> console command string (roadmap 11.6; the Enhanced Input
 // mapping contexts this becomes are **10.6**'s). It is `cfg/default.cfg` from the Unofficial Patch,
-// which is the set that ships (`docs/controls.md` § "Default bindings"):
+// which is the set that ships (`docs/vtmb/controls.md` § "Default bindings"):
 // the patch's arrow/comma-period swap, its ten `vhotkey` slots and its numpad camera verbs, with
 // `vphysicshand` dropped and the `kb_def.lst` disagreements resolved to `default.cfg`.
 //
@@ -30,7 +30,7 @@ namespace ElysiumBinds
 	const TArray<FElysiumDefaultBind>& Defaults();
 
 	// The bare keys the **development layer** occupies, which no default bind and no player rebind
-	// may take (`docs/input-architecture.md` § "Reserved keys"). Everything else the dev layer uses
+	// may take (`docs/architecture/input-architecture.md` § "Reserved keys"). Everything else the dev layer uses
 	// is a chord — Cog's shell is `Ctrl+F1`–`Ctrl+F4`, and Elysium's own dev toggles are `Ctrl+V`
 	// (noclip) and `Ctrl+T` (the 3D-skybox A/B), precisely so `v` and `t` stay the player's.
 	//

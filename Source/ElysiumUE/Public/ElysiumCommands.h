@@ -5,11 +5,11 @@
 
 class FElysiumEntityWorld;
 
-// S7 — one command registry (roadmap 11.6, `runtime-architecture.md` §8.2). VtMB has no action
+// S7 — one command registry (roadmap 11.6, `docs/architecture/runtime-architecture.md` §8.2). VtMB has no action
 // abstraction: **an action is a console command string**, and the Unofficial Patch's whole
 // vocabulary is aliases over those strings (`f` → `vm_feed` → `checkFeed()`), so a key bound to a
 // compiled verb and a key bound to a user alias have to be indistinguishable. That is only true if
-// the compiled verbs have names, which is what this is — the inventory `controls.md` documents,
+// the compiled verbs have names, which is what this is — the inventory `docs/vtmb/controls.md` documents,
 // declared once, so a key, a gamepad button, a level script, a `.dlg` action, `-ExecCmds` and an
 // MCP tool all fire the same verb the same way.
 //
@@ -166,7 +166,7 @@ private:
 
 namespace ElysiumCommands
 {
-	// The VtMB bindable-verb inventory (`controls.md` § "What is bindable"), declared into the
+	// The VtMB bindable-verb inventory (`docs/vtmb/controls.md` § "What is bindable"), declared into the
 	// registry. Called once by FElysiumCommands::Get(); exposed so a test can assert the table
 	// itself. `vphysicshand` is deliberately absent — it is bound by both shipped `default.cfg`s and
 	// exists in no binary and no script.

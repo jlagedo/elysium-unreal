@@ -1,0 +1,2 @@
+#!/bin/sh
+python dev/check_repo_policy.py --repo-only

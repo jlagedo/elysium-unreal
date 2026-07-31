@@ -23,8 +23,8 @@ struct FElysiumSheetEffects;   // Private/Substrate/ElysiumSheetMath.h — the t
 //
 // The chain mirrors VtMB's because VtMB's *data* is authored against it: a `.dlg` action calls
 // `npc.SetDisposition(...)` and a Hammer wire fires `MoneyAdd` on the same class, so one name table
-// per class (R2) only pays off if the classes are the same ones. Design: `runtime-architecture.md`
-// sections 5-6; the input inventory: `script_api.md`.
+// per class (R2) only pays off if the classes are the same ones. Design: `docs/architecture/runtime-architecture.md`
+// sections 5-6; the input inventory: `docs/vtmb/script_api.md`.
 
 // The chain-node classnames. They never appear in a `.ents` file — they exist so the registry's
 // base-chain walk reaches the inputs and fields they own.
@@ -48,7 +48,7 @@ inline const TCHAR* ElysiumPlayerTargetName() { return TEXT("!player"); }
 // slot's authored `Default`, and `RecomputeCurrent` clamps to its authored `Min`/`Max`.
 //
 // `Clan` uses the LEVEL-SCRIPT indexing 2..8 (Brujah 2 ... Ventrue 8) that `pc.clan` carries — not
-// the 1..7 `ClanNameFunc` display enum, and not `clandoc`'s ordering. `game_runtime.md` section 3
+// the 1..7 `ClanNameFunc` display enum, and not `clandoc`'s ordering. `docs/vtmb/game_runtime.md` section 3
 // records that two indexings exist; the scripts (`IsClan`, `unhidePlus`'s 9/10/11 patch-type
 // sentinels) speak this one.
 struct FElysiumSheet
@@ -110,14 +110,14 @@ struct FElysiumSheet
 };
 
 // One EXPERIENCE_ENTRY row: the XP ledger is itemised in VtMB's save, not a total
-// (`savegame_format.md`). `AwardExperience` names a `vdata` entry, so the string is the key.
+// (`docs/vtmb/savegame_format.md`). `AwardExperience` names a `vdata` entry, so the string is the key.
 struct FElysiumXpEntry
 {
 	FString Entry;
 	int32   Amount = 0;
 };
 
-// One ASSIGNED_QUEST row — the journal as VtMB holds it (`savegame_format.md`). A quest is absent
+// One ASSIGNED_QUEST row — the journal as VtMB holds it (`docs/vtmb/savegame_format.md`). A quest is absent
 // from the journal until it holds a state, and holds exactly one row for as long as it does.
 struct FElysiumAssignedQuest
 {
@@ -153,7 +153,7 @@ struct FElysiumLawState
 // at 11.9, into the save.
 //
 // Health is deliberately NOT a "player stat" here: `m_iHealth` is a Save-flagged entity field on the
-// chain (`save-architecture.md` section 4 — VtMB's own placement), and the copy below exists only
+// chain (`docs/architecture/save-architecture.md` section 4 — VtMB's own placement), and the copy below exists only
 // because our entity dies with its map, so something has to carry the value across a travel. The
 // entity's field stays the one the save walk enumerates.
 //
@@ -224,7 +224,7 @@ class FElysiumAnimating : public FElysiumEntity
 public:
 	// `skin` — a material family swap. One VtMB datamap record flagged both KEY and INPUT with a
 	// null inputFunc, so the keyvalue, the wire and `.skin =` are the same direct write
-	// (`entity_io.md`). Carried here for the whole chain; only the prop leaf paints with it today.
+	// (`docs/vtmb/entity_io.md`). Carried here for the whole chain; only the prop leaf paints with it today.
 	int32 Skin = 0;
 
 	// `default_disposition` — the emotional stance that selects the standing animation set through
@@ -269,7 +269,7 @@ protected:
 
 // ============================================================================================
 // FElysiumCombatCharacter — CBaseCombatCharacter. The sheet, and the 25 datamap inputs
-// `script_api.md` recovered from datamap 0x1061664c. Shared by the player and every NPC, which is
+// `docs/vtmb/script_api.md` recovered from datamap 0x1061664c. Shared by the player and every NPC, which is
 // where VtMB put it: `MoneyAdd` on a Hammer wire and `pc.MoneyAdd(50)` from a level script are the
 // same input on the same class.
 //
@@ -302,7 +302,7 @@ public:
 	// --- The 25 CBaseCombatCharacter inputs -------------------------------------------------
 	// Backed: the four counters. VtMB's own InputMoneyAdd is
 	//     if (value.fieldType == FIELD_INTEGER && value.int != 0) MoneyAdd(value.int);
-	// i.e. a zero-valued input is a silent no-op (`script_api.md`, worked semantics). The typed
+	// i.e. a zero-valued input is a silent no-op (`docs/vtmb/script_api.md`, worked semantics). The typed
 	// half of that test cannot be reproduced — a Hammer wire hands us a string param — so the
 	// non-zero half is what survives, applied to every counter input for consistency.
 	void InputMoneyAdd(const FElysiumInputArgs& Args);
@@ -353,7 +353,7 @@ public:
 
 	// --- The sheet reads the script surface calls (9.4c) --------------------------------------
 	// `CalcFeat(feat)` — the feat RATING, not a roll. A name the feat table does not own falls back
-	// to the trait of that name (`script_api.md`, a marked divergence); neither resolving reads 0.
+	// to the trait of that name (`docs/vtmb/script_api.md`, a marked divergence); neither resolving reads 0.
 	int32 CalcFeat(const FString& Name) const;
 	// `BumpStat(stat, times)` — `times` dots onto the BASE, each under VtMB's own hardcoded
 	// `GetBase < 5` ceiling and the stat's own gate. Cannot decrement. Returns the dots that landed.
@@ -399,7 +399,7 @@ protected:
 
 // ============================================================================================
 // FElysiumPlayer — CBasePlayer / CHL2_Player. The player character: the sheet above, the 10
-// recovered player-datamap inputs (`script_api.md`, datamap 0x10580edc — the header states 11 and
+// recovered player-datamap inputs (`docs/vtmb/script_api.md`, datamap 0x10580edc — the header states 11 and
 // one is still unrecovered), and the link to the pawn that is its body.
 //
 // Its origin and facing are the pawn's, sampled once a frame by the world, so `GetOrigin()`,

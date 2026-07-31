@@ -10,8 +10,8 @@
 // the per-line dialogue path (12.2's CInstancedSceneEntity, ~5,300 of the 5,444 shipped scenes) can
 // reuse the same reader and timeline without an entity.
 //
-// Format, event-type enum and the shipped corpus counts: `docs/choreographed_scenes.md`.
-// The reference implementation this is ported from is `tools/probe_scenes.py` (`tokenize_line` /
+// Format, event-type enum and the shipped corpus counts: `docs/vtmb/choreographed_scenes.md`.
+// The reference implementation this is ported from is `research/tooling/probes/probe_scenes.py` (`tokenize_line` /
 // `parse`); the two must stay in step, because `Elysium.Content.SceneCorpus` asserts this reader
 // reproduces that doc's histograms over all 5,444 files.
 
@@ -159,7 +159,7 @@ namespace ElysiumScene
 	TSharedPtr<const FElysiumSceneData> Load(const FString& SceneFile);
 
 	// Seed the cache with scene text under a key, so a headless test can drive a scene without
-	// touching `tools/out`. Overwrites any cached entry for that key.
+	// touching `$ELYSIUM_EXPORT_ROOT`. Overwrites any cached entry for that key.
 	void RegisterInline(const FString& Key, const FString& Text);
 
 	void ClearCache();

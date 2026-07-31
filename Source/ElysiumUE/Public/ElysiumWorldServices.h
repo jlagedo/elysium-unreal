@@ -28,7 +28,7 @@ struct FElysiumSignData;
 // is a state the game already ships.
 //
 // What it buys: a Substrate-tier test can drive a whole map's logic headlessly against a recording
-// stub — with no RHI, no actors and no `tools/out` — which is the missing middle tier between
+// stub — with no RHI, no actors and no `$ELYSIUM_EXPORT_ROOT` — which is the missing middle tier between
 // variant arithmetic and launching the game (Elysium.Substrate.WorldServices).
 
 // --------------------------------------------------------------------------------------------

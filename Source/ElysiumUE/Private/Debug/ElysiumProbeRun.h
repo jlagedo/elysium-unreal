@@ -9,7 +9,7 @@ class UElysiumMapSubsystem;
 
 // Headless light-probe harness (`-ElysiumProbe`), the third of the self-driving runs beside
 // -ElysiumProfile and -ElysiumShots. It waits for the map to finish its spawn pass, runs
-// ElysiumLightProbe over the whole rig, and exits — so `probe.bat` can walk every exported map
+// ElysiumLightProbe over the whole rig, and exits — so `dev/elysium.ps1 probe` can walk every exported map
 // unattended instead of the attribution data needing a hand-driven session per map.
 //
 // One map per launch, like the other two harnesses: the probe reads the built scene, and a fresh

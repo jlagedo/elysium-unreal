@@ -5,7 +5,7 @@ description: Regenerate the local VS Code IntelliSense config for the ElysiumUE 
 
 # VS Code IntelliSense
 
-`python tools/setup_vscode.py` regenerates the local editor config — it runs UBT's
+`dev/elysium.ps1 ide vscode` regenerates the local editor config — it runs UBT's
 `-projectfiles -vscode` generator, then mirrors the module's include paths + forced includes into
 `.vscode/settings.json` as `C_Cpp.default.*` (the fallback for every file the compile database
 does not name, i.e. all headers). `settings.json` is separate because UBT overwrites

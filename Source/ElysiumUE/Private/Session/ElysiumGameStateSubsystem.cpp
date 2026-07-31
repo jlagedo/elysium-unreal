@@ -90,7 +90,7 @@ void UElysiumGameStateSubsystem::BeginNewGame(int32 Clan, bool bMale)
 	Visited.Reset();
 
 	// S8 — every game-visible draw comes from an owned, seeded stream whose state is in the save
-	// (`save-architecture.md` §8). A run takes one session seed; the five streams derive from it.
+	// (`docs/architecture/save-architecture.md` §8). A run takes one session seed; the five streams derive from it.
 	ElysiumRng::SeedAll(static_cast<int32>(FPlatformTime::Cycles()));
 
 	Record.Reset();
@@ -616,7 +616,7 @@ void UElysiumGameStateSubsystem::SetQuestState(const FString& Quest, int32 State
 	if (!Outcome.Event.IsEmpty())
 	{
 		// The `Event` key is script data handed to the interpreter — a dispatch path beside the
-		// field-6/pythoncheck/dialogue/ScheduleTask four (`python_bridge.md`). It goes through the
+		// field-6/pythoncheck/dialogue/ScheduleTask four (`docs/vtmb/python_bridge.md`). It goes through the
 		// same seam, so it resolves the level script's names and lands in the recent-eval log.
 		FString Error;
 		EvalScript(Outcome.Event, Error);

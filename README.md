@@ -1,44 +1,61 @@
 # Elysium-Unreal
 
-*Vampire: The Masquerade – Bloodlines* rebuilt as a playable game on **Unreal Engine 5.8 +
-C++**. The runtime decodes the original game's proprietary formats into engine-neutral
-intermediates (offline, in `tools/`) and builds all engine objects in code at map-load time
-— no asset baking, no editor content pipeline.
+*Vampire: The Masquerade – Bloodlines* rebuilt as a playable remaster on Unreal
+Engine 5.8 and C++.
 
-**Status: M0 verified, M1 in progress** — world + lighting + props, the entity/I-O substrate,
-brush movers (doors/buttons), signs/popups, decoded audio + sound schemes, an expression and
-embedded-CPython scripting host, a glTFRuntime NPC skeletal-mesh spike, and cross-map landmark
-travel, all proven on VtMB's tutorial map and several neighbors. Full phase-by-phase status
-lives in **[`docs/roadmap.md`](docs/roadmap.md)**; the strategy/design reference is
-**[`docs/rebuild-strategy.md`](docs/rebuild-strategy.md)**.
+The repository contains the runtime, the offline decode/export pipeline, reproducible
+research tooling, and project documentation. It contains no VtMB files, decompilation
+results, generated Unreal packages, or downloaded plugin source. The pipeline reads the
+user's own install and writes engine-neutral intermediates outside the checkout. Unreal
+opens locally baked levels and reads those intermediates at runtime; it never invokes the
+offline Python pipeline during play.
 
-## Bring your own game
+Current status lives only in [the roadmap](docs/project/roadmap.md). The governing
+strategy and remaster boundaries are
+[rebuild-strategy.md](docs/project/rebuild-strategy.md) and
+[remaster-direction.md](docs/project/remaster-direction.md).
 
-**No game content is distributed here.** The pipeline reads *your own VtMB install* and
-writes to `tools/out/` (gitignored). The only committed assets are hand-authored and
-game-agnostic (an empty boot map + one master material).
+## Repository boundaries
 
-## Layout
-
-| Path | What |
+| Path | Ownership |
 |---|---|
-| `Source/ElysiumUE/` | the C++ runtime module (loads intermediates, builds the world) + runtime facts (`Source/ElysiumUE/CLAUDE.md`) |
-| `tools/` | the offline Python decode/export pipeline (`UE_bsp_to_scene.py`, …) + format docs (`tools/CLAUDE.md`) |
-| `docs/` | reverse-engineering reference + the rebuild strategy |
-| `Content/` | committed assets only: `Elysium.umap` (boot) + the `M_World_*`/`M_Additive`/`M_Sky`/`M_Decal`/`M_Gizmo*` master materials |
-| `CLAUDE.md` | project fact sheet + documentation index (start here after this README) |
+| `Source/`, `Config/` | Unreal runtime source and configuration |
+| `Content/Fonts/` | Licensed loose source fonts |
+| `Content/VtMB/`, `Content/Elysium.umap` | Generated local `/Game` packages; ignored |
+| `Plugins/ElysiumBaked/Content/` | Generated local `/ElysiumBaked` packages; ignored |
+| `Plugins/External/` | Bootstrap-managed plugin source; ignored |
+| `pipeline/` | Offline formats, exporters, processors, validation, and editor-only generators |
+| `research/` | Reproducible probes, capture source, Ghidra automation, and hash-pinned cases |
+| `docs/` | Project, architecture, VtMB facts, recovered facts, and operations |
+| `dev/` | The public command, dependency lock, patches, bootstrap, and repository policy |
 
-## Build & run (Windows, UE 5.8)
+Game-derived exports, research evidence, caches, logs, and scratch state live under
+`ELYSIUM_WORK_ROOT`, outside this repository.
 
-The `.bat` files pin `UE_ROOT=D:\Epic\UE_5.8` — edit to match your engine install. You must
-also run the `tools/` pipeline against your VtMB install to export at least `sp_tutorial_1`.
+## Local setup
 
+Copy `dev/paths.example.env` to `.elysium.local.env` and configure:
+
+```text
+ELYSIUM_UE_ROOT=D:\Epic\UE_5.8
+ELYSIUM_VTMB_ROOT=E:\Games\Vampire The Masquerade - Bloodlines
+ELYSIUM_WORK_ROOT=E:\elysium-work
 ```
-build.bat            # compile the editor target (UnrealBuildTool)
-editor.bat           # open in the Unreal editor (Play = PIE)
-play.bat [map]       # launch standalone (default: sp_tutorial_1); WASD + mouse to fly
+
+Then use the single command surface:
+
+```powershell
+dev/elysium.ps1 bootstrap
+dev/elysium.ps1 doctor
+dev/elysium.ps1 build
+dev/elysium.ps1 content
+dev/elysium.ps1 export sp_tutorial_1
+dev/elysium.ps1 bake sp_tutorial_1
+dev/elysium.ps1 test Substrate
+dev/elysium.ps1 play sp_tutorial_1
 ```
 
-See **[`CLAUDE.md`](CLAUDE.md)** for the project fact sheet, the load-bearing rules, and the
-documentation index; **[`Source/ElysiumUE/CLAUDE.md`](Source/ElysiumUE/CLAUDE.md)** for
-engine/module facts and the runtime types.
+Run `dev/elysium.ps1` with `profile`, `probe`, `shots`, `move`, `greenroom`,
+`modelroom`, `research`, `ide vscode`, or `mcp` for the corresponding development
+surface. See [repository operations](docs/operations/repository.md) for the complete
+contract.

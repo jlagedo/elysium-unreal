@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// The camera's rule set (roadmap 11.7, `docs/camera-view-modes.md`).
+// The camera's rule set (roadmap 11.7, `docs/vtmb/camera-view-modes.md`).
 //
 // VtMB ships **one** player camera with a **blend weight**, not two cameras: `togglecamera` flips a
 // bool, a per-frame driver ramps a 0..1 weight, and every third-person effect — the boom offset, the
@@ -66,7 +66,7 @@ namespace ElysiumCam
 // The four weights
 // --------------------------------------------------------------------------------------------
 
-// `CInput`'s camera block (`camera-view-modes.md` §2). Four weights and three latches; there is no
+// `CInput`'s camera block (`docs/vtmb/camera-view-modes.md` §2). Four weights and three latches; there is no
 // state machine and no transition object, which is exactly why reversing mid-blend resumes from
 // where it is instead of restarting.
 struct FElysiumCameraWeights
@@ -79,7 +79,7 @@ struct FElysiumCameraWeights
 	// Weapon-class arbitration forced first person (class 0x08).
 	bool bForcedFirst = false;
 	// The feed / seduction / death camera's request latch. The weight it drives is recovered; the
-	// **rate** is not (its solver `0x100fdfa0` is in `camera-view-modes.md` § Not yet recovered), so
+	// **rate** is not (its solver `0x100fdfa0` is in `docs/vtmb/camera-view-modes.md` § Not yet recovered), so
 	// it is run at the same 2.0/s the toggle uses until that lands.
 	bool bFeed = false;
 
@@ -215,7 +215,7 @@ private:
 // The cvar surface
 // --------------------------------------------------------------------------------------------
 
-// VtMB's camera cvars, reproduced 1:1 by name and default (`camera-view-modes.md` §1). They are
+// VtMB's camera cvars, reproduced 1:1 by name and default (`docs/vtmb/camera-view-modes.md` §1). They are
 // **declared into the VtMB console store**, not registered as `elysium.*` engine cvars, so a user's
 // `config.cfg` and the patch's `cam_restore` / `cam_rotateleft` aliases keep governing and
 // `elysium.cmd cam_idealdist 50` is the same write the game itself would make.
@@ -251,7 +251,7 @@ struct FElysiumCameraCvars
 
 	// The spring damper. **Two constants** — stiffer against a wall than in open space — which is the
 	// single most characteristic part of the VtMB camera and the reason the stock spring arm is not
-	// enough (`camera-view-modes.md` § Options considered and rejected).
+	// enough (`docs/vtmb/camera-view-modes.md` § Options considered and rejected).
 	bool bDampOn = true;                          // cdamp_on 1
 	float HookesConstant = 4.0f;                  // cdamp_hookesconstant
 	float HookesConstantWall = 15.0f;             // cdamp_hookesconstantwall
@@ -270,7 +270,7 @@ struct FElysiumCameraCvars
 	float ApproachDistSpeed = 400.0f * ElysiumCam::U;
 	float ApproachAngleSpeed = 360.0f;
 
-	// The extra pull-in on wall contact (`camera-view-modes.md` §4).
+	// The extra pull-in on wall contact (`docs/vtmb/camera-view-modes.md` §4).
 	float WallPullIn = 7.0f * ElysiumCam::U;
 
 	// Re-read the whole surface. `Lookup` returns a cvar's value string or empty for one the store
@@ -289,7 +289,7 @@ namespace ElysiumCam
 
 	// One row of the cvar surface: the VtMB name, its default **as typed** (Source units / degrees /
 	// a flag), and what it does. The table is the declaration; `FElysiumCameraCvars::LoadFrom` is the
-	// read. Ordered as `camera-view-modes.md` §1 lists them.
+	// read. Ordered as `docs/vtmb/camera-view-modes.md` §1 lists them.
 	struct FCvarDef
 	{
 		const TCHAR* Name;

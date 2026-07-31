@@ -19,7 +19,7 @@
 // but the compiled array and the save array are both 13, so the Numina rows are file-only: a feat
 // or a trait effect can name one, and a vampire-mode character has nowhere to store its value.
 //
-// The VtMB facts: `docs/game_runtime.md` section 3 ("How a trait is addressed"), `docs/savegame_format.md`.
+// The VtMB facts: `docs/vtmb/game_runtime.md` section 3 ("How a trait is addressed"), `docs/vtmb/savegame_format.md`.
 
 // The four containers, in `stats.txt`'s own declaration order — which is also the category tag
 // VtMB writes at `CVStatList_t+0x10`.

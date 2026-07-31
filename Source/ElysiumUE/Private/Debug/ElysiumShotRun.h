@@ -9,13 +9,13 @@ class UElysiumMapSubsystem;
 // `-ElysiumShots`. It removes the human from "load the map, walk to each vantage, take a shot":
 // once the boot map's pawn has settled, it visits each vantage in ElysiumVantages.h, pins the
 // camera stock-still, lets the frame settle (Lumen temporal accumulation + first-run shader
-// compile), captures the viewport as a PNG under tools/out/_shots/<map>/, writes a manifest, and
+// compile), captures the viewport as a PNG under $ELYSIUM_EXPORT_ROOT/_shots/<map>/, writes a manifest, and
 // exits. No interaction.
 //
 // Unlike the profiler, a real RHI is REQUIRED and there is no null-RHI guard beyond a warning: a
 // screenshot under -nullrhi is a blank frame, so the harness self-cancels if the null RHI is
 // active. Baselines are derived from the user's own VtMB install, so they live under the gitignored
-// tools/out and are never committed.
+// $ELYSIUM_EXPORT_ROOT and are never committed.
 class FElysiumShotRun
 {
 public:

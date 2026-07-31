@@ -11,7 +11,7 @@ class APlayerController;
 class UInputComponent;
 
 // The one thing that turns keys into verbs and verbs into intent (roadmap 11.6,
-// `runtime-architecture.md` §8.2–8.3). It sits on `AElysiumPlayerController` and does three jobs,
+// `docs/architecture/runtime-architecture.md` §8.2–8.3). It sits on `AElysiumPlayerController` and does three jobs,
 // in this order, every frame:
 //
 //   1. **binds** — every key in the default bind table fires its VtMB console line through
@@ -81,7 +81,7 @@ private:
 	void ApplyLook(const FElysiumUserCmd& Cmd);
 
 	// Degrees per mouse count: `sensitivity` x `m_yaw` / `m_pitch`, read off the VtMB console store
-	// so the options slider and the cvar are one settings truth (`input-architecture.md`).
+	// so the options slider and the cvar are one settings truth (`docs/architecture/input-architecture.md`).
 	float MouseYawScale() const;
 	float MousePitchScale() const;
 

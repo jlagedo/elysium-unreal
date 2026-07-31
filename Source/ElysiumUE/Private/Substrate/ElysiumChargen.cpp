@@ -644,7 +644,7 @@ const TCHAR* const WizEntryPopup = TEXT("Help_Popup0");
 namespace
 {
 	// The Society of Leopold hunter campaign. **Omitted** — a marked, reversible divergence
-	// (`docs/game_runtime.md`): its templates are the multiplayer clans 9..11, which the sheet's
+	// (`docs/vtmb/game_runtime.md`): its templates are the multiplayer clans 9..11, which the sheet's
 	// clan encoding, the clan sigils and the body lookup all stop short of. The entry popup's third
 	// action is dropped rather than left to open a path that dead-ends.
 	const TCHAR* const GOmittedPopup = TEXT("Hunter_Selection");

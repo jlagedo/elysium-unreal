@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// The mover's rule set (roadmap 4.7, `docs/source_movement.md`).
+// The mover's rule set (roadmap 4.7, `docs/vtmb/source_movement.md`).
 //
 // VtMB runs an early-Source `CGameMovement`: the *math* is stock Source, the *constants* are
 // Troika's, and several differ from Half-Life 2. What lives here is that math as plain C++ with no
@@ -94,7 +94,7 @@ enum class EElysiumWaterLevel : uint8
 // --------------------------------------------------------------------------------------------
 //
 // Every one of these is a value transform on a velocity: no component, no pawn, no UWorld. That is
-// what lets `Elysium.Substrate.Movement` assert the numbers `source_movement.md` records rather
+// what lets `Elysium.Substrate.Movement` assert the numbers `docs/vtmb/source_movement.md` records rather
 // than asserting that a pawn moved.
 
 namespace ElysiumMove
@@ -154,7 +154,7 @@ namespace ElysiumMove
 //
 // **The faithful answer is "it isn't."** `Host_FilterTime` bounds a *variable* frametime and
 // returns — there is no accumulator and no fixed interval anywhere in the engine, which is what
-// pins VtMB to the pre-tick Source branch (`game_runtime.md` § "Time model"). So retail's movement
+// pins VtMB to the pre-tick Source branch (`docs/vtmb/game_runtime.md` § "Time model"). So retail's movement
 // really is frame-rate dependent: `AirAccelerate`'s `addspeed` clamp stops binding above ~117 fps,
 // and the full-step gravity puts the jump apex at `JumpBoost - 100*dt` rather than a flat
 // `JumpBoost`.
@@ -162,7 +162,7 @@ namespace ElysiumMove
 // **A fixed step is therefore a divergence, not the baseline** — `elysium.move.FixedStep` defaults
 // to 0 (raw delta, faithful) and a non-zero value opts into frame-rate independence. It is worth
 // having because it is the only way to A/B the two, and because the difference is measurable
-// rather than a matter of taste. Recorded as a divergence in `docs/source_movement.md`.
+// rather than a matter of taste. Recorded as a divergence in `docs/vtmb/source_movement.md`.
 //
 // Either way the move body is written once: this decides only how many times and with what dt.
 struct FElysiumMoveStepper
@@ -194,7 +194,7 @@ private:
 // The cvar surface
 // --------------------------------------------------------------------------------------------
 
-// VtMB's movement cvars, reproduced 1:1 by name and default (`source_movement.md` § Movement).
+// VtMB's movement cvars, reproduced 1:1 by name and default (`docs/vtmb/source_movement.md` § Movement).
 // They are **declared into the VtMB console store**, not registered as `elysium.*` engine cvars, so
 // a user's `config.cfg` keeps governing and `elysium.cmd sv_gravity 400` is the same write the game
 // itself would make.
@@ -217,7 +217,7 @@ struct FElysiumMoveTuning
 	// VtMB does **not** use Source's jump. Its own model is a *constant upward push held for a
 	// window*, under reduced gravity, preceded by an instant origin pop — all four numbers below
 	// come from `vdata/system/rules.txt` → `RuleData/Jumping`, not from a `CGameMovement` constant
-	// (`docs/source_movement.md` → "The jump is not stock Source's").
+	// (`docs/vtmb/source_movement.md` → "The jump is not stock Source's").
 
 	// `BaseJumpVelocity`, cm/s. The velocity ADDED on the press frame and re-asserted every frame
 	// the button stays down inside the hold window.

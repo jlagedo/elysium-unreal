@@ -49,7 +49,7 @@ static TAutoConsoleVariable<float> CVarSkyBrightness(
 	TEXT("Debug multiplier on the sky backdrop texel. 1 = parity with VtMB's identity transfer."),
 	ECVF_Default);
 
-// The offline enhancement track's A/B (docs/asset-enhancement.md), off by default: prefer the
+// The offline enhancement track's A/B (docs/architecture/asset-enhancement.md), off by default: prefer the
 // super-resolved `tex_hi/` set over the faithful `tex/` decode wherever a map has one. The sky
 // is its first consumer; the world/prop texture path joins it as that track lands. Faithful is
 // the default everywhere, per the direction charter — this is an opt-in layer, not a
@@ -162,7 +162,7 @@ static TAutoConsoleVariable<int32> CVarFog(
 // chain are checked with one set of faces. Read at map load; elysium.reload to apply.
 static TAutoConsoleVariable<int32> CVarSkyProbe(
 	TEXT("elysium.SkyProbe"), 0,
-	TEXT("Build the sky cube from the labelled tools/out/_skyprobe faces (1) or the map's own (0). "
+	TEXT("Build the sky cube from the labelled $ELYSIUM_EXPORT_ROOT/_skyprobe faces (1) or the map's own (0). "
 	     "Applied at map load."),
 	ECVF_Default);
 
@@ -382,7 +382,7 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 	if (Tagged == 0)
 	{
 		UE_LOG(LogElysiumVisuals, Warning,
-			TEXT("'%s' has no baked actors — this world is not a baked level (run: bake.bat %s)"),
+			TEXT("'%s' has no baked actors — this world is not a baked level (run: dev/elysium.ps1 bake %s)"),
 			*MapName, *MapName);
 	}
 	// The PPV is the one adopted actor whose absence is silent — the D3 knobs simply stop
@@ -694,7 +694,7 @@ void UElysiumMapVisuals::ApplyEnvironment(const FString& MapName)
 		if (bProbe)
 		{
 			UE_LOG(LogElysiumVisuals, Warning,
-				TEXT("elysium.SkyProbe: no labelled '%s' face set under %s — run tools/sky_probe.py"),
+				TEXT("elysium.SkyProbe: no labelled '%s' face set under %s — run research/tooling/probes/sky_probe.py"),
 				*Env.SkyName, *FElysiumContentPaths::SkyProbeDir());
 		}
 		return;
@@ -763,7 +763,7 @@ void UElysiumMapVisuals::ApplyEnvironment(const FString& MapName)
 
 float UElysiumMapVisuals::SkyAmbientIntensity(float CubeUpperMean) const
 {
-	// C1/C2 (D2, docs/sky-ambience.md): the SkyLight actor stays on every map, and its level
+	// C1/C2 (D2, docs/vtmb/sky-ambience.md): the SkyLight actor stays on every map, and its level
 	// is DATA, not a constant. VtMB states the sky's own radiance once per map, as the type-5
 	// `emit_skyambient` row — the colour its light cache returns for a sky-hitting bounce ray
 	// (RE-A3) — and VRAD divides no falloff out of a `light_environment`, so that number is a
@@ -971,7 +971,7 @@ bool UElysiumMapVisuals::AreLightsVisible() const
 
 // The 3D-skybox A/B is a **dev** verb, not a player one, so it lives on plane 1: an `elysium.*`
 // console command, reached by a chord (Ctrl+T) rather than by a bare key — `t` is `toggleuiside` in
-// VtMB's default set (`docs/input-architecture.md` § "Reserved keys").
+// VtMB's default set (`docs/architecture/input-architecture.md` § "Reserved keys").
 static FAutoConsoleCommandWithWorld GElysiumToggleSky(
 	TEXT("elysium.togglesky"),
 	TEXT("Show/hide the 3D skybox miniature and the backdrop dome together."),

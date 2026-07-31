@@ -20,6 +20,7 @@
 #include "Substrate/ElysiumCameraTrack.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumCommands.h"
+#include "ElysiumContentPaths.h"
 #include "Debug/ElysiumConsole.h"
 #include "Visual/ElysiumDecals.h"
 #include "Visual/ElysiumEntityBodies.h"
@@ -177,7 +178,7 @@ bool FElysiumExprTest::RunTest(const FString&)
 // the set reads one roll. Both halves test here, then again through the real expression
 // host, which is where a dialogue gate reaches it.
 //
-// The second half guards the collapse `script_api.md` warns about: `Whisper` and
+// The second half guards the collapse `docs/vtmb/script_api.md` warns about: `Whisper` and
 // `FrenzyTrigger` are both `vamputil.py` helpers AND datamap input names, so they must never
 // join the shared native table — the bare spelling belongs to the script, the qualified one
 // to the datamap.
@@ -677,20 +678,20 @@ bool FElysiumScriptFSTest::RunTest(const FString&)
 	// that is its `python/` tree — which is why hunter mode's keybinding copy finds nothing.
 	FString Real;
 	TestTrue(TEXT("cfg is mounted"), FElysiumScriptFS::MapToMirror(TEXT("cfg/config.cfg"), Real));
-	TestTrue(TEXT("cfg maps under out/cfg"), Real.Replace(TEXT("\\"), TEXT("/"))
-		.Contains(TEXT("tools/out/cfg/config.cfg")));
+	TestTrue(TEXT("cfg maps under the export root"), Real.Replace(TEXT("\\"), TEXT("/"))
+		.EndsWith(TEXT("/cfg/config.cfg")));
 	TestTrue(TEXT("vdata is mounted"),
 		FElysiumScriptFS::MapToMirror(TEXT("vdata/system/stats.txt"), Real));
-	TestTrue(TEXT("vdata maps under out/vdata"), Real.Replace(TEXT("\\"), TEXT("/"))
-		.Contains(TEXT("tools/out/vdata/system/stats.txt")));
+	TestTrue(TEXT("vdata maps under the export root"), Real.Replace(TEXT("\\"), TEXT("/"))
+		.EndsWith(TEXT("/vdata/system/stats.txt")));
 	TestTrue(TEXT("vdata/signs is mounted ahead of vdata"),
 		FElysiumScriptFS::MapToMirror(TEXT("vdata/signs/death.txt"), Real));
-	TestTrue(TEXT("signs maps under out/signs, not out/vdata"), Real.Replace(TEXT("\\"), TEXT("/"))
-		.Contains(TEXT("tools/out/signs/death.txt")));
-	TestTrue(TEXT("python maps onto out/scripts"),
+	TestTrue(TEXT("signs map under the export root"), Real.Replace(TEXT("\\"), TEXT("/"))
+		.EndsWith(TEXT("/signs/death.txt")));
+	TestTrue(TEXT("python maps onto the exported script mirror"),
 		FElysiumScriptFS::MapToMirror(TEXT("python/tutorial/tutorial.py"), Real));
-	TestTrue(TEXT("python -> out/scripts"), Real.Replace(TEXT("\\"), TEXT("/"))
-		.Contains(TEXT("tools/out/scripts/tutorial/tutorial.py")));
+	TestTrue(TEXT("python maps under the export root"), Real.Replace(TEXT("\\"), TEXT("/"))
+		.EndsWith(TEXT("/scripts/tutorial/tutorial.py")));
 	TestTrue(TEXT("a mount point itself resolves (nt.listdir on a tree)"),
 		FElysiumScriptFS::MapToMirror(TEXT("cfg"), Real));
 	TestFalse(TEXT("VtMB's own scripts/ has no mirror"),
@@ -707,7 +708,7 @@ bool FElysiumScriptFSTest::RunTest(const FString&)
 		TEXT("Vampire/vdata/hackterminals/haven_pc.txt"), EElysiumFsAccess::Write, Real, Err));
 	TestTrue(TEXT("the write landed in the overlay"), Real.StartsWith(Root));
 	TestFalse(TEXT("the write did NOT land in the content mirror"),
-		Real.Replace(TEXT("\\"), TEXT("/")).Contains(TEXT("tools/out/vdata")));
+		Real.StartsWith(FPaths::ConvertRelativePathToFull(FElysiumContentPaths::VdataDir())));
 
 	TestFalse(TEXT("an escaping write is denied"), FElysiumScriptFS::Resolve(
 		TEXT("../../../Windows/system32/x.dll"), EElysiumFsAccess::Write, Real, Err));
@@ -1457,7 +1458,7 @@ bool FElysiumTimeControlTest::RunTest(const FString&)
 	TestEqual(TEXT("now advanced by the dilated delta"), Clock.GetNow(), 0.09);
 	Time.SetScale(1.0);
 
-	// The frame bound (`source_movement.md` → "Frame timing"): VtMB's `Host_FilterTime` clamps
+	// The frame bound (`docs/vtmb/source_movement.md` → "Frame timing"): VtMB's `Host_FilterTime` clamps
 	// host_frametime to [0.001, 0.1] before the game DLL sees it, so a hitch cannot fire a whole
 	// interval's thinks and queued I/O in one frame. **The mover clamps with this same constant** —
 	// game time and player motion must not disagree about how long the frame was.
@@ -1523,7 +1524,7 @@ bool FElysiumTimeControlTest::RunTest(const FString&)
 }
 
 // =====================================================================================
-// The mover's arithmetic (4.7) — every number here is one `docs/source_movement.md` records
+// The mover's arithmetic (4.7) — every number here is one `docs/vtmb/source_movement.md` records
 // off the decompile, asserted without a pawn, a world or an RHI.
 // =====================================================================================
 
@@ -2774,7 +2775,7 @@ bool FElysiumWorldMaterialsTest::RunTest(const FString&)
 		TestFalse(TEXT("marble is not a metal"), M->IsChromatic());
 	}
 	// 7.5 — $envmaptint splits two ways, and the split is what decides Metallic. The population
-	// is bimodal (docs/reflections.md), so these are the two sides plus the glass exclusion.
+	// is bimodal (docs/vtmb/reflections.md), so these are the two sides plus the glass exclusion.
 	if (const FElysiumMaterialDef* D = Mats.Find(TEXT("dimtile")))
 	{
 		TestFalse(TEXT("a grey tint is not a metal"), D->IsChromatic());
@@ -3315,7 +3316,7 @@ namespace
 {
 	// K1, carried into Unreal space by source_to_unreal (x, -y, z): the direction a Source sky
 	// face's image pixel (u, v) looks along, v = 0 the top row.
-	// docs/sky-ambience.md -> "K1 ... (settled)" / B3.
+	// docs/vtmb/sky-ambience.md -> "K1 ... (settled)" / B3.
 	FVector ElysiumK1FaceDir(const FString& Face, double U, double V)
 	{
 		const double S = 2.0 * U - 1.0;
@@ -3402,8 +3403,8 @@ bool FElysiumSkyCubeTest::RunTest(const FString&)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFogPackTest, "Elysium.Substrate.FogPack", GElysiumTestFlags)
 bool FElysiumFogPackTest::RunTest(const FString&)
 {
-	// The slots the material graph reads (tools/mat_fog.py) and the bake writes
-	// (tools/bake_map.py FOG_CPD_*). A colour is a float4, so it owns 0..3.
+	// The slots the material graph reads (pipeline/unreal/mat_fog.py) and the bake writes
+	// (pipeline/unreal/bake_map.py FOG_CPD_*). A colour is a float4, so it owns 0..3.
 	TestEqual(TEXT("colour is the first slot"), ElysiumFog::SlotColor, 0);
 	TestEqual(TEXT("start follows the colour's float4"), ElysiumFog::SlotStart, 4);
 	TestEqual(TEXT("inverse range follows start"), ElysiumFog::SlotInvRange, 5);
@@ -3611,7 +3612,7 @@ bool FElysiumScriptedSequenceTest::RunTest(const FString&)
 // special case: it is a registry class on VtMB's own chain, it answers to a targetname the
 // maps already write (`!player`), its inputs arrive through the same R2 walk from either
 // direction, it is a real `!activator`, and `point_teleport` moves it exactly as it moves
-// anything else. No RHI, no actors, no `tools/out` — the recording stub is the body.
+// anything else. No RHI, no actors, no `$ELYSIUM_EXPORT_ROOT` — the recording stub is the body.
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerEntityTest, "Elysium.Substrate.PlayerEntity", GElysiumTestFlags)
@@ -4302,7 +4303,7 @@ bool FElysiumStorySkipTest::RunTest(const FString&)
 // =====================================================================================
 // FElysiumWorldServices (11.2) — the substrate's outbound seam. Runs the shape of the
 // tutorial's own logic_auto chain end to end against the recording stub: no RHI, no actors,
-// no `tools/out`. sp_tutorial_1's five logic_autos fire OnMapLoad at an NPC (WillTalk), a
+// no `$ELYSIUM_EXPORT_ROOT`. sp_tutorial_1's five logic_autos fire OnMapLoad at an NPC (WillTalk), a
 // door (Lock), a math_counter and a delayed wire; this reproduces that shape and adds one
 // entity per service, so all four seams are exercised by the same ignition.
 //
@@ -4854,7 +4855,7 @@ bool FElysiumDoorElevatorTest::RunTest(const FString&)
 //
 // VtMB ships one camera with a blend weight, not two cameras, and the whole first<->third
 // transition is that weight ramping at a fixed rate with a priority order over three latches
-// (`camera-view-modes.md` §3). That is a pure function of time and flags, so it is asserted here
+// (`docs/vtmb/camera-view-modes.md` §3). That is a pure function of time and flags, so it is asserted here
 // with no pawn, no world and no RHI — which is also what makes "0 -> 1 in 0.5 s" a number rather
 // than a stopwatch.
 // =====================================================================================
@@ -5042,7 +5043,7 @@ bool FElysiumCameraTest::RunTest(const FString&)
 			FMath::IsNearlyEqual(Cvars.IdealDist, 50.0f * 2.54f, 0.01f));
 		TestFalse(TEXT("and cdamp_on 0 bypasses the damper"), Cvars.bDampOn);
 
-		// Every name `camera-view-modes.md` §1 lists is declared, so none of them can fall through to
+		// Every name `docs/vtmb/camera-view-modes.md` §1 lists is declared, so none of them can fall through to
 		// Python when a user's config.cfg or the patch's aliases write it.
 		TestTrue(TEXT("the whole cvar surface is declared"), ElysiumCam::CvarDefs().Num() >= 24);
 		bool bFoundPrefs = false;
@@ -5558,7 +5559,7 @@ bool FElysiumViewStateTest::RunTest(const FString&)
 }
 
 // =====================================================================================
-// 11.9 — persistence. `save-architecture.md` §10 asks for the strongest harness in the
+// 11.9 — persistence. `docs/architecture/save-architecture.md` §10 asks for the strongest harness in the
 // project, because a silent save bug surfaces hours later. Three tests, all content-free:
 // a freeze/rebuild/apply/re-freeze **digest** round trip on a bare world, the payload
 // container's version and integrity gates, and the schema rules that let a payload survive
@@ -6055,7 +6056,7 @@ bool FElysiumSaveSchemaTest::RunTest(const FString&)
 // ==================================================================================================
 // 9.4d — the quest log: the decision and the journal bookkeeping, with no world and no disk.
 // `FElysiumQuestTables` is plain C++ with public arrays, so the catalogue below is hand-built and
-// every rule `game_runtime.md` -> "Quests" records is driven directly.
+// every rule `docs/vtmb/game_runtime.md` -> "Quests" records is driven directly.
 // ==================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumQuestLogTest, "Elysium.Substrate.QuestLog", GElysiumTestFlags)
@@ -6749,7 +6750,7 @@ bool FElysiumChargenTest::RunTest(const FString&)
 // =====================================================================================
 // 12.1 — the `.vcd` choreo grammar.
 //
-// Ported from tools/probe_scenes.py; these cases pin the traps that make such a port wrong.
+// Ported from research/tooling/probes/probe_scenes.py; these cases pin the traps that make such a port wrong.
 // The whole-corpus histogram check over all 5,444 shipped files is the Content tier's
 // `Elysium.Content.SceneCorpus` — this one is content-free and runs on inline text.
 // =====================================================================================
@@ -7009,7 +7010,7 @@ namespace
 	}
 
 	// Build one `event` block in the shape the shipped corpus actually uses: the brace on its own
-	// line. (Neither this reader nor tools/probe_scenes.py accepts a `{ … }` opened and closed on
+	// line. (Neither this reader nor research/tooling/probes/probe_scenes.py accepts a `{ … }` opened and closed on
 	// one line — no shipped `.vcd` writes that, and the two grammars are kept identical.)
 	FString SceneEvent(const TCHAR* Type, const TCHAR* Name, float Start, float End,
 		const TCHAR* Param = nullptr)

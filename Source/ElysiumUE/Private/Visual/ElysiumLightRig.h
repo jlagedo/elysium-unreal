@@ -7,7 +7,7 @@
 class ULightComponent;
 
 // Real-time light rig: one Unreal light per VtMB WORLDLIGHTS source. The light *actors* are baked
-// into the map's level (tools/bake_map.py, one per `<map>.lights` line, tagged with its line
+// into the map's level (pipeline/unreal/bake_map.py, one per `<map>.lights` line, tagged with its line
 // index); this rig adopts them and owns their behaviour — it re-derives every intensity and reach
 // from the raw sidecar row at load, animates the lightstyles, and re-applies the whole calibration
 // on demand so the Lights Cog window can tune the map live. The sidecar (UE_bsp_to_scene) is

@@ -436,7 +436,7 @@ void AElysiumMapActor::LoadMap()
 
 					// 11.9 — if the run has been here before (this session, or a loaded save), the
 					// map is not new: apply the frozen snapshot over the freshly-built world
-					// (`save-architecture.md` §5). After SpawnPlayer, so the player exists for the
+					// (`docs/architecture/save-architecture.md` §5). After SpawnPlayer, so the player exists for the
 					// records that reference it, and before the first Tick, so nothing has run yet.
 					//
 					// A dev fresh-state entry (`elysium.newgame_ttd`) drops the snapshot here rather

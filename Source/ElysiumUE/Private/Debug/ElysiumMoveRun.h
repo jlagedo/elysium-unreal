@@ -18,7 +18,7 @@ class UElysiumMapSubsystem;
 //
 // It replays a fixed `FElysiumUserCmdStream` per course through the **real input router**, so the
 // harness exercises the same path a player does, and writes one CSV per course plus a JSON summary
-// under `tools/out/_move/`. `tools/move_diff.py` is the comparator.
+// under `$ELYSIUM_EXPORT_ROOT/_move/`. `pipeline/src/elysium_pipeline/validation/move_diff.py` is the comparator.
 class FElysiumMoveRun
 {
 public:

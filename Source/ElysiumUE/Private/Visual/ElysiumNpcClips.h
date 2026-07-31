@@ -6,7 +6,7 @@
 //
 // A VtMB NPC's own `.mdl` carries only its own clips (mostly dialogue); idle, locomotion and
 // combat come from shared **animation banks** pulled in through the studiohdr include DAG
-// (`docs/animation_and_movers.md` A.7). `tools/npc_export.py` resolves that DAG offline and
+// (`docs/vtmb/animation_and_movers.md` A.7). `pipeline/src/elysium_pipeline/exporters/npc_export.py` resolves that DAG offline and
 // writes, per NPC, which stem owns each clip label — so the runtime never walks includes, it
 // looks a label up and is told which glb to load.
 //
@@ -124,7 +124,7 @@ struct FElysiumNpcIndex
 	bool IsValid() const { return !Npcs.IsEmpty(); }
 	bool Load(FString& OutError);
 	// Parse an already-loaded manifest. This is the same compatibility gate as Load(), exposed so
-	// generated-content validation can cover old/new schema migration without rewriting tools/out.
+	// generated-content validation can cover old/new schema migration without rewriting $ELYSIUM_EXPORT_ROOT.
 	bool LoadJsonText(const FString& JsonText, FString& OutError);
 
 	// Absolute path to a bank's glb, or empty when the stem is not a known bank.

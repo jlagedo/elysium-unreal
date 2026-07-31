@@ -1,5 +1,5 @@
 // P4.10 — SignData parsing + the CSignUI coordinate model. See ElysiumSignData.h for the
-// decompile provenance (client.dll CSignUI; tools/ghidra/out/signui_*.txt).
+// decompile provenance (client.dll CSignUI; $ELYSIUM_WORK_ROOT/research/ghidra/out/signui_*.txt).
 
 #include "Substrate/ElysiumSignData.h"
 

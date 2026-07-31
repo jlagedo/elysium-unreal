@@ -15,7 +15,7 @@ namespace ElysiumQuestView { struct FEntry; }
 
 // What a dot costs when the player clicks it. **Not** "editable vs read-only": the Sheet body is
 // editable in both modes — chargen spends the category pools, the in-game sheet spends experience —
-// and only the currency and the ceiling differ (`docs/vtmb-ui.md`). `None` is Info and Quest Log.
+// and only the currency and the ceiling differ (`docs/vtmb/vtmb-ui.md`). `None` is Info and Quest Log.
 enum class EElysiumSpendMode : uint8
 {
 	None,
@@ -37,7 +37,7 @@ struct FElysiumCharacterScreenMode
 // which is what makes them two doors into one screen rather than two screens.
 //
 // A `UCommonActivatableWidget` whose tree is built in C++ Slate under one `SDPIScaler` at
-// `ScreenH/768`, like the menu (`docs/ui-architecture.md`). The chrome is VtMB's own decoded sheet
+// `ScreenH/768`, like the menu (`docs/architecture/ui-architecture.md`). The chrome is VtMB's own decoded sheet
 // art, each piece guarded: `out/ui/art/` is gitignored, so every image degrades to a token-drawn
 // equivalent rather than leaving a hole.
 //

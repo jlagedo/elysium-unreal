@@ -23,15 +23,15 @@ inline FString ElysiumFold(const FString& S) { return S.ToLower(); }
 //     both `ClanDataTables`.
 //   * **File order is the engine's index.** A trait is `(container, position)`, a clan is its
 //     position in `clandoc000.txt`, a history is its position in `histories000.txt` — and the save
-//     stores those indices, not names (`savegame_format.md`). Nothing here sorts.
+//     stores those indices, not names (`docs/vtmb/savegame_format.md`). Nothing here sorts.
 //   * **An empty container is legal, not an error.** `quests_main.txt` holds no quests,
 //     `npctemplate019/021.txt` hold no templates, `rules.txt`'s `Tables` block is a stub.
 //
 // Nothing in `vdata/` is ever saved, so these tables are session-lifetime and re-read at load —
 // which is what lets a patched rulebook re-apply to an existing save.
 //
-// The VtMB facts these model: `docs/game_runtime.md` §3. The per-file inventory:
-// `docs/vdata-catalog.md`. `dispositiontable.txt` is not here — it is read by
+// The VtMB facts these model: `docs/vtmb/game_runtime.md` §3. The per-file inventory:
+// `docs/vtmb/vdata-catalog.md`. `dispositiontable.txt` is not here — it is read by
 // `FElysiumDispositionTable`, which the NPC animation subsystem owns.
 
 namespace ElysiumKeyValues { struct FKvNode; }
@@ -495,7 +495,7 @@ private:
 struct FElysiumQuestState
 {
 	// The authored `"ID"`. DECORATIVE: `QuestJournal::AddCompletionState` never reads the key —
-	// `SetQuest(title, N)` addresses the N-th state in FILE ORDER (`game_runtime.md` → "Quests").
+	// `SetQuest(title, N)` addresses the N-th state in FILE ORDER (`docs/vtmb/game_runtime.md` → "Quests").
 	// Kept because every shipped row authors it equal to its own position, which is worth asserting.
 	int32 Id = 0;
 	FString Description;        // the journal body
@@ -660,9 +660,9 @@ private:
 //
 // The wizard is a `client.dll` panel, so nothing here is a layout: `Region`/`TextRegion` are read
 // as authored *intent* (which answer sits above which, how much room the question wanted), never as
-// a runtime coordinate system (`remaster-direction.md` axis 1). What is load-bearing is the graph —
+// a runtime coordinate system (`docs/project/remaster-direction.md` axis 1). What is load-bearing is the graph —
 // which popup follows which, which answer increments which abstract trait, and how the tallies
-// score each clan. The model: `docs/game_runtime.md` → "Chargen — a personality quiz".
+// score each clan. The model: `docs/vtmb/game_runtime.md` → "Chargen — a personality quiz".
 
 // A rectangle exactly as authored, in the file's own 1024x768 terms.
 struct FElysiumWizRegion

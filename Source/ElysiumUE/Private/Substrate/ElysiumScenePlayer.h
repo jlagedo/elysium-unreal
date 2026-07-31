@@ -10,7 +10,7 @@
 // `IChoreoEventCallback` (vampire.dll carries its RTTI, `.?AVIChoreoEventCallback@@`). Scene end is
 // `SimulationFinished()` — the clock past the last event AND nothing still running.
 //
-// Spec: `docs/choreographed_scenes.md` → "The timing model".
+// Spec: `docs/vtmb/choreographed_scenes.md` → "The timing model".
 
 #pragma once
 

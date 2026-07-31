@@ -286,7 +286,7 @@ namespace ElysiumFeats
 			bOutIsFeat = true;
 			return FeatValue(*Feat, Sheet, Effects);
 		}
-		// **A divergence, marked** (`script_api.md`): VtMB's `CalcFeat` raises on a non-feat name,
+		// **A divergence, marked** (`docs/vtmb/script_api.md`): VtMB's `CalcFeat` raises on a non-feat name,
 		// because its `.dlg` layer resolves a stat check without going through it. Our dlgexpr
 		// normalizer routes every `"<Name> <int>"` check through `CalcFeat`, and the corpus checks
 		// `Humanity`(272), `Dominate`(102) and `Thaumaturgy`(55) that way — all traits, not feats.

@@ -131,7 +131,7 @@ void FElysiumShotRun::BeginCapture()
 	const FString Map = Sub ? Sub->GetCurrentMapName() : TEXT("unknown");
 	const FString CamName = ElysiumVantages::Table[RunList[CamIndex]].Name;
 
-	// tools/out/_shots/<map>/<map>_<cam>.png — gitignored, derived from the user's own install.
+	// $ELYSIUM_EXPORT_ROOT/_shots/<map>/<map>_<cam>.png — gitignored, derived from the user's own install.
 	const FString Path = FElysiumContentPaths::Root() / TEXT("_shots") / Map
 		/ (FString::Printf(TEXT("%s_%s.png"), *Map, *CamName));
 
@@ -173,7 +173,7 @@ void FElysiumShotRun::Finish()
 	const UElysiumMapSubsystem* Sub = Subsystem.Get();
 	const FString Map = Sub ? Sub->GetCurrentMapName() : TEXT("unknown");
 
-	// A manifest beside the shots, so tools/ (a future image-diff) knows what was captured.
+	// A manifest beside the shots lets the offline validation pipeline identify each capture.
 	FString Json;
 	Json += TEXT("{\n");
 	Json += FString::Printf(TEXT("  \"map\": \"%s\",\n"), *Map);

@@ -101,7 +101,7 @@ void AElysiumPawn::SetHullHeight(float HeightCm, float EyeAboveFeetCm, bool bAnc
 	// `FinishDuck` moves the origin by **half** the height difference (`+18u` ducking, `-18u`
 	// standing up) rather than the whole of it — the feet rise 18 and the head drops 18, which is
 	// exactly a **fixed centre**. So the airborne case is a pure resize with no shift, and that half
-	// — not the full 36 — is the crouch-jump's reach (`docs/source_movement.md` → "Ducking").
+	// — not the full 36 — is the crouch-jump's reach (`docs/vtmb/source_movement.md` → "Ducking").
 	const float Shift = bAnchorFeet ? (NewHalf - OldHalf) : 0.0f;
 
 	Hull->SetBoxExtent(FVector(ElysiumMove::HullHalfWidth, ElysiumMove::HullHalfWidth, NewHalf),

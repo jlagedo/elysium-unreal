@@ -17,7 +17,7 @@ class UTexture2D;
 
 // The game HUD. Always-on: the centre crosshair (or the +use context cursor), the sign/popup
 // panel, and the env_fade screen fade. Player pose, FPS, and movement/skybox/light state live
-// in the Cog Maps window's Player section (`docs/debug-tooling.md`), not here.
+// in the Cog Maps window's Player section (`docs/architecture/debug-tooling.md`), not here.
 //
 // **It reads FElysiumViewState and nothing else** (11.8): no map-actor walk, no FElysiumEntityWorld,
 // no per-draw-path IsMenuUp() check. `UElysiumPresentationSubsystem` publishes the state in step 9

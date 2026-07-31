@@ -5,11 +5,11 @@
 // VtMB's authored UI string table, read verbatim from the user's install (roadmap PL8 mirrors
 // `resource/gameui_english.txt` to `out/ui/strings.json`). Every player-facing string in the UI
 // comes from here — the remaster re-skins the craft, never the content
-// (`docs/remaster-direction.md` axis 1).
+// (`docs/project/remaster-direction.md` axis 1).
 //
 // Two namespaces live in the one table and the distinction is load-bearing: `#GameUI_*` skins
 // `GameUI.dll`'s dialogs, while the main menu's own labels are **`VMainMenu_BTN_*`** tokens
-// (`docs/vtmb-ui.md` §2). Resolution mirrors `CVMainMenu`'s: look the token up, and on a miss
+// (`docs/vtmb/vtmb-ui.md` §2). Resolution mirrors `CVMainMenu`'s: look the token up, and on a miss
 // fall back to a built-in English default rather than showing the raw token — which is exactly
 // what `FUN_10065eb0` does with its hardcoded fallback table.
 class FElysiumUIStrings

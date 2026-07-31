@@ -143,12 +143,20 @@ bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
 	{
 		return false;
 	}
+	if (!FElysiumContentPaths::IsConfigured())
+	{
+		UE_LOG(LogElysiumMap, Error,
+			TEXT("export root is not configured; pass -ElysiumContentRoot=... or set ")
+			TEXT("ELYSIUM_EXPORT_ROOT / ELYSIUM_WORK_ROOT"));
+		return false;
+	}
 
 	const FString Level = FElysiumContentPaths::BakedLevel(Map);
 	if (!FPackageName::DoesPackageExist(Level))
 	{
 		UE_LOG(LogElysiumMap, Warning,
-			TEXT("no baked level for '%s' (%s) — run: bake.bat %s"), *Map, *Level, *Map);
+			TEXT("no baked level for '%s' (%s) — run: dev/elysium.ps1 bake %s"),
+			*Map, *Level, *Map);
 		return false;
 	}
 	// The sidecars the runtime still reads (.ents, .hulls, .ropes, .spawn) live beside the export,
@@ -396,6 +404,10 @@ FString UElysiumMapSubsystem::GetCurrentMapName() const
 TArray<FString> UElysiumMapSubsystem::ExportedMaps() const
 {
 	TArray<FString> Names;
+	if (!FElysiumContentPaths::IsConfigured())
+	{
+		return Names;
+	}
 	IFileManager& FM = IFileManager::Get();
 	TArray<FString> Dirs;
 	FM.FindFiles(Dirs, *(FElysiumContentPaths::Root() / TEXT("*")), false, true);

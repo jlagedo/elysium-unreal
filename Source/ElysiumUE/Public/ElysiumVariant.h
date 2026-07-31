@@ -7,7 +7,7 @@
 // `fieldtype_t` codes — the field tables (P1.3) map each VtMB code to one of these when
 // they marshal a value in or out (e.g. FLOAT/TIME -> Float, STRING/MODELNAME/SOUNDNAME ->
 // String, VECTOR/POSITION_VECTOR -> Vector, INTEGER -> Int, BOOLEAN -> Bool, the EHANDLE
-// family -> Handle; see `python_bridge.md` "Divergence").
+// family -> Handle; see `docs/vtmb/python_bridge.md` "Divergence").
 enum class EElysiumVariantType : uint8
 {
 	Void,

@@ -10,7 +10,7 @@ struct FElysiumScriptContext;
 // Process-global embedded CPython 2.7 VM (P5 5.5 decision -> 9.3 foundation).
 //
 // VtMB's real VM is stock CPython 2.1 (vampire_python21.dll, 653 exports); the loose level scripts
-// (tools/out/scripts, 16.5k lines) run 1:1 on 2.7 -- verified against all 36 scripts: no string
+// ($ELYSIUM_EXPORT_ROOT/scripts, 16.5k lines) run 1:1 on 2.7 -- verified against all 36 scripts: no string
 // exceptions (removed in 2.6), no `from __future__`, classic division and old-style classes are the
 // default on both. So we embed the maintained qnox/python-2.7 2.7.18 build rather than reimplement
 // the language (ElysiumExpr is an expression evaluator; these scripts have 1,119 defs, 45 classes,

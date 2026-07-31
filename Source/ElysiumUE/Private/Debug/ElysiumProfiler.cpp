@@ -186,7 +186,7 @@ void FElysiumProfileRun::Finish()
 	const int32 LightCount = Visuals ? Visuals->WorldLightCount : 0;
 	const bool bSM6 = (GMaxRHIFeatureLevel >= ERHIFeatureLevel::SM6);
 
-	// Machine-readable summary; tools/profile_report.py joins it with the per-pass CSVs.
+	// Machine-readable summary; pipeline/src/elysium_pipeline/validation/profile_report.py joins it with the per-pass CSVs.
 	FString Json;
 	Json += TEXT("{\n");
 	Json += FString::Printf(TEXT("  \"map\": \"%s\",\n"), *Map);

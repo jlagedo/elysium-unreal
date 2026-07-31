@@ -38,7 +38,7 @@ namespace ElysiumScriptNatives
 	bool IsCharacterMethod(const FString& Name);
 
 	// --- OneOfSet (9.7d) -------------------------------------------------------------------------
-	// VtMB's 1-based one-of-N selector, the gate behind 589 `.dlg` rows (`docs/script_api.md`):
+	// VtMB's 1-based one-of-N selector, the gate behind 589 `.dlg` rows (`docs/vtmb/script_api.md`):
 	// `(roll % count) == which - 1`. The corpus authors it in sets — N sibling rows carrying the same
 	// choice text, row i gated on `OneOfSet(i, N)` — so exactly one row passes only when every gate in
 	// the set sees ONE roll. `OneOfSetRoll` is that value: one draw per engine frame, which is the

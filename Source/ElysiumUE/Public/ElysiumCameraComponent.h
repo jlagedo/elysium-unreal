@@ -8,8 +8,8 @@
 
 #include "ElysiumCameraComponent.generated.h"
 
-// The player camera (roadmap 11.7). Design + the recovered solve: `docs/camera-view-modes.md`;
-// where it sits in the spine: `docs/runtime-architecture.md` §9.
+// The player camera (roadmap 11.7). Design + the recovered solve: `docs/vtmb/camera-view-modes.md`;
+// where it sits in the spine: `docs/architecture/runtime-architecture.md` §9.
 //
 // It is a `UCameraComponent` subclass rather than a state object beside one, because VtMB has
 // **one** camera: the FOV, the post-process settings and the first-person-rendering flags all stay

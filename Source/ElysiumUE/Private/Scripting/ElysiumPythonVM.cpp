@@ -524,7 +524,7 @@ bool FElysiumPythonVM::EnsureStarted(FString& OutError)
 
 	// Shared level-script root on sys.path (per-map dirs are added by LoadLevelScript).
 	const FString ScriptsDir = FPaths::ConvertRelativePathToFull(
-		FPaths::Combine(FPaths::ProjectDir(), TEXT("tools/out/scripts"))).Replace(TEXT("\\"), TEXT("/"));
+		FElysiumContentPaths::ScriptsDir()).Replace(TEXT("\\"), TEXT("/"));
 	FString PathErr;
 	RunRaw(FString::Printf(TEXT("import sys\nsys.path.insert(0, u'%s')\n"), *ScriptsDir), PathErr);
 
@@ -917,9 +917,9 @@ static FAutoConsoleCommandWithWorldAndArgs GElysiumPyLoad(
 	{
 		BindStore(World);
 		const FString Map = Args.Num() > 0 ? Args[0] : TEXT("tutorial");
-		// scripts live at tools/out/scripts/<name>/<name>.py (tutorial, downtown, ...).
-		const FString Abs = FPaths::ConvertRelativePathToFull(FPaths::Combine(
-			FPaths::ProjectDir(), TEXT("tools/out/scripts"), Map, Map + TEXT(".py")));
+		// Scripts live under the $ELYSIUM_EXPORT_ROOT.
+		const FString Abs = FPaths::ConvertRelativePathToFull(
+			FElysiumContentPaths::ScriptModuleFile(Map));
 		FString ModName, Err;
 		if (FElysiumPythonVM::Get().LoadLevelScript(Abs, ModName, Err))
 		{
@@ -963,8 +963,8 @@ static FAutoConsoleCommandWithWorldAndArgs GElysiumPyPoc(
 			bRoundTrip ? TEXT("PASS") : TEXT("FAIL"), Read);
 
 		// 3) import the real tutorial.py level script
-		const FString Abs = FPaths::ConvertRelativePathToFull(FPaths::Combine(
-			FPaths::ProjectDir(), TEXT("tools/out/scripts/tutorial/tutorial.py")));
+		const FString Abs = FPaths::ConvertRelativePathToFull(
+			FElysiumContentPaths::ScriptModuleFile(TEXT("tutorial")));
 		FString ModName;
 		const bool bLoad = VM.LoadLevelScript(Abs, ModName, Err);
 		bAll &= bLoad;

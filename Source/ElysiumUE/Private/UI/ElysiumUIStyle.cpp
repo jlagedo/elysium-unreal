@@ -10,7 +10,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumUIStyle, Log, All);
 
 namespace
 {
-	// The committed face assets, by role. `tools/make_ui_fonts.py` imports these from
+	// The generated local face assets, by role. `pipeline/unreal/make_ui_fonts.py` imports these from
 	// Content/Fonts; the names are FF_<Family>_<Weight> by construction, so the path is derivable.
 	struct FRoleFaces
 	{
@@ -65,7 +65,7 @@ namespace
 		if (!Face)
 		{
 			UE_LOG(LogElysiumUIStyle, Warning,
-				TEXT("UI font face missing: %s — run tools/make_ui_fonts.py in the editor"), AssetPath);
+				TEXT("UI font face missing: %s — run pipeline/unreal/make_ui_fonts.py in the editor"), AssetPath);
 			return false;
 		}
 		FTypefaceEntry& Entry =

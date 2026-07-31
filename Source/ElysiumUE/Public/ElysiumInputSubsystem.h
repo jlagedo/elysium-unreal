@@ -12,7 +12,7 @@ class APlayerController;
 class IConsoleObject;
 class UGameInstance;
 
-// S6 — the one input-mode arbiter (roadmap 11.5, `runtime-architecture.md` §8.1). Mode, cursor and
+// S6 — the one input-mode arbiter (roadmap 11.5, `docs/architecture/runtime-architecture.md` §8.1). Mode, cursor and
 // (at 10.6) mapping contexts come from the top of one priority stack, and nothing else in the
 // project calls SetInputMode: the menu, the dialogue box, sign panels, cutscenes, chargen and Cog
 // all push a scope while they are up and pop it when they go away.

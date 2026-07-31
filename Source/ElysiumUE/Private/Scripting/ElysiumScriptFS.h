@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// The embedded VM's own filesystem namespace (docs/python_bridge.md -> "The script filesystem").
+// The embedded VM's own filesystem namespace (docs/vtmb/python_bridge.md -> "The script filesystem").
 //
 // VtMB's level scripts were written to run inside the game process, whose cwd is the install folder
 // and whose `sys.moddir` is "Vampire". They spell paths three ways, and only the first consults a

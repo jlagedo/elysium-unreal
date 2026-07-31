@@ -110,7 +110,7 @@ namespace ElysiumNpcVisual
 				TEXT("/Game/VtMB/Materials/M_PlayerBody.M_PlayerBody"));
 			if (BodyMaterial == nullptr)
 			{
-				OutError = TEXT("M_PlayerBody is missing; run content.bat");
+				OutError = TEXT("M_PlayerBody is missing; run dev/elysium.ps1 content");
 				return nullptr;
 			}
 			for (uint8 Raw = static_cast<uint8>(EglTFRuntimeMaterialType::Opaque);

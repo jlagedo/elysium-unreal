@@ -13,7 +13,7 @@ class UElysiumCharacterScreen;
 // Which body the character screen shows. Retail splits these across three client.dll classes
 // (`VCharWizardUI`, `CharEditPanel`, `QuestLogPanel`) that share art and layout but not code; we
 // carry one screen and switch the body, which is what the player sees either way
-// (`docs/vtmb-ui.md`). `Base` belongs to chargen (9.4f) and is not built yet.
+// (`docs/vtmb/vtmb-ui.md`). `Base` belongs to chargen (9.4f) and is not built yet.
 enum class EElysiumCharacterTab : uint8
 {
 	Sheet,
@@ -23,7 +23,7 @@ enum class EElysiumCharacterTab : uint8
 };
 
 // Which item set the menu screen is showing. Retail's own main/pause split is a single gate on
-// `IsInGame` (`docs/vtmb-ui.md` §2); GameOver is the third, reached from the app state machine's
+// `IsInGame` (`docs/vtmb/vtmb-ui.md` §2); GameOver is the third, reached from the app state machine's
 // loss condition (11.3) and offering only Load / Main Menu / Quit.
 enum class EElysiumMenuMode : uint8
 {
@@ -85,7 +85,7 @@ public:
 	bool IsCharacterScreenOpen() const { return CharacterScreen != nullptr; }
 
 	// Close the topmost screen the PLAYER opened, and report whether there was one. This is what
-	// Escape asks first (`controls.md`: "close panel / open menu").
+	// Escape asks first (`docs/vtmb/controls.md`: "close panel / open menu").
 	//
 	// The menu is deliberately NOT closable this way: its lifetime belongs to
 	// `UElysiumGameFlowSubsystem`'s app state, so tearing it down here would leave a paused run with

@@ -1,6 +1,6 @@
 // 11.4 — the player entity and the two chain nodes above it (S3).
 //
-// `runtime-architecture.md` sections 5-6 is the design; `script_api.md` is the input inventory. The
+// `docs/architecture/runtime-architecture.md` sections 5-6 is the design; `docs/vtmb/script_api.md` is the input inventory. The
 // three classes here are ordinary registry nodes: nothing about the player is special-cased, which
 // is the whole point — `pc.MoneyAdd(50)` from a level script, `MoneyAdd` on a Hammer wire and
 // `elysium.ent_fire !player MoneyAdd 50` from the console are one input, reached by one R2 walk.
@@ -559,7 +559,7 @@ void FElysiumCombatCharacter::InputWillTalk(const FElysiumInputArgs& Args)
 void FElysiumCombatCharacter::SyncHealthFromSheet()
 {
 	// `CBaseCombatCharacter::HealthToPercent` projects the sheet pair onto Source's engine-space
-	// health (`game_runtime.md` section 3). Our `health` / `max_health` keyfields ARE that engine
+	// health (`docs/vtmb/game_runtime.md` section 3). Our `health` / `max_health` keyfields ARE that engine
 	// space — what the save walk enumerates, what a `.ents` `health` key writes, and what the body
 	// reads — so they are derived, never the truth.
 	MaxHealth = Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::MaxHealth);
@@ -713,7 +713,7 @@ void FElysiumPlayer::RefreshClanEffects()
 	}
 	// `clandoc000.txt` names the player templates `Player_<Clan>`, and each one names the
 	// `TraitEffectGroup` carrying that clan's gift and bane — which is where every bane lives:
-	// nothing about a clan is special-cased in code (`game_runtime.md` section 3).
+	// nothing about a clan is special-cased in code (`docs/vtmb/game_runtime.md` section 3).
 	FString Group;
 	FElysiumClanTemplate Resolved;
 	if (Rules->Clans().Resolve(FString::Printf(TEXT("Player_%s"), FElysiumSheet::ClanName(Sheet.Clan())), Resolved))
@@ -978,7 +978,7 @@ static FElysiumClassRegistrar GRegAnimating(
 			});
 	});
 
-// CBaseCombatCharacter — datamap 0x1061664c, 25 inputs (`script_api.md`).
+// CBaseCombatCharacter — datamap 0x1061664c, 25 inputs (`docs/vtmb/script_api.md`).
 static FElysiumClassRegistrar GRegCombatCharacter(
 	ElysiumCombatCharacterClassName(), ElysiumAnimatingClassName(), nullptr,
 	[](FElysiumClassDesc& D)
@@ -1039,7 +1039,7 @@ static FElysiumClassRegistrar GRegPlayer(
 
 		// The rest of the recovered ten: no system yet. (The datamap header states 11 inputs and
 		// only 10 were recovered from the builder dump — the eleventh is still unidentified,
-		// `script_api.md`.)
+		// `docs/vtmb/script_api.md`.)
 		D.Input(TEXT("Whisper"),         [](FElysiumEntity& E, const FElysiumInputArgs& A)
 			{
 				if (!E.World || !E.World->Audio())

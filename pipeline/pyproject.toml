@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "elysium-pipeline"
+version = "0.1.0"
+description = "Tracked VtMB decode, export, bake and validation tooling for Elysium-Unreal"
+requires-python = ">=3.11"
+dependencies = [
+    "matplotlib",
+    "numpy",
+    "Pillow",
+]
+
+[project.optional-dependencies]
+enhancement = [
+    "einops",
+    "safetensors",
+    "spandrel",
+    "torch",
+    "torchvision",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

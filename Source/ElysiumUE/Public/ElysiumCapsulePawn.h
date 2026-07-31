@@ -13,7 +13,7 @@ class USkeletalMeshComponent;
 // The A/B baseline body, behind `elysium.SourceMovement 0`: `ACharacter` on a capsule over
 // `UCharacterMovementComponent`, which is what the player had before 11.6 put the faithful box hull
 // and `UElysiumMovementComponent` in front of it. It is kept so a movement or feel change can be
-// compared against something that is known to work, which is what `remaster-direction.md`'s
+// compared against something that is known to work, which is what `docs/project/remaster-direction.md`'s
 // "keep it A/B-able" asks for.
 //
 // It consumes the same `FElysiumUserCmd` the box body does (S5) — the A/B is over the *mover*, not

@@ -45,7 +45,7 @@ public:
 		Events.Insert(MoveTemp(Event), Insert);
 	}
 
-	// 11.9 — the restore path (`save-architecture.md` §6). A saved event already carries the serial
+	// 11.9 — the restore path (`docs/architecture/save-architecture.md` §6). A saved event already carries the serial
 	// it was queued under, so re-adding it must keep that serial rather than mint a new one: the
 	// serial is the FIFO tiebreaker, and re-numbering would reorder equal-time events. Insertion is
 	// the same (FireTime, Serial) ordering Add uses, so a payload written out of order still lands

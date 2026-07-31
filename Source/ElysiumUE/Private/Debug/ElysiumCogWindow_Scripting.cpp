@@ -38,7 +38,7 @@ void FElysiumCogWindow_Scripting::RenderHelp()
 {
 	ImGui::Text(
 		"VtMB's story runs on loose plain-text Python 2.1 level scripts (out/scripts) and dlgexpr "
-		"dialogue (out/dlg), copied verbatim from the install by tools/UE_extract_scripts.py.\n\n"
+		"dialogue (out/dlg), copied verbatim from the install by pipeline/src/elysium_pipeline/exporters/UE_extract_scripts.py.\n\n"
 		"5.1 (top): a read-only delivery pre-flight - confirms the mirror is on disk and resolves the "
 		"current map's worldspawn.levelscript module.\n\n"
 		"5.2 (runtime): the expression evaluator + the G flag store. Type an expression and Eval it "
@@ -121,7 +121,7 @@ void FElysiumCogWindow_Scripting::RenderContent()
 		}
 		else
 		{
-			ImGui::TextColored(GColorBad, "missing - run tools/UE_extract_scripts.py");
+			ImGui::TextColored(GColorBad, "missing - run dev/elysium.ps1 export <map>");
 		}
 		if (ImGui::IsItemHovered())
 		{
@@ -295,7 +295,7 @@ void FElysiumCogWindow_Scripting::RenderCPythonPanel()
 			LastPyResult = bLastPyError ? Err : FString::Printf(TEXT("imported module '%s'"), *ModName);
 		}
 	}
-	ImGui::TextColored(GColorDim, "(tools/out/scripts/<name>/<name>.py)");
+	ImGui::TextColored(GColorDim, "($ELYSIUM_EXPORT_ROOT/scripts/<name>/<name>.py)");
 
 	const FString Loaded = VM.GetLoadedModule();
 	if (!Loaded.IsEmpty())

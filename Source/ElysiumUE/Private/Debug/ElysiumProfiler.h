@@ -15,10 +15,10 @@ class UElysiumMapSubsystem;
 // the CSV profiler — per-pass GPU stats land in the CSV when the process is launched with
 // -csvGpuStats — plus a one-frame ProfileGPU dump to the log as a human-readable backup.
 // Averaged stat-unit frame times, the SM6/DX12 confirmation, and the rig light count are
-// written to a JSON summary under tools/out/_profile/, then the process exits.
+// written to a JSON summary under $ELYSIUM_EXPORT_ROOT/_profile/, then the process exits.
 //
 // A real RHI is required (GPU timings are meaningless under -nullrhi); the run self-cancels
-// if the null RHI is active. tools/profile_report.py turns the CSVs into the roadmap table.
+// if the null RHI is active. pipeline/src/elysium_pipeline/validation/profile_report.py turns the CSVs into the roadmap table.
 class FElysiumProfileRun
 {
 public:

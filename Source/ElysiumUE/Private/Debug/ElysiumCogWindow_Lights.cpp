@@ -45,7 +45,7 @@ namespace
 
 	// Level authors copy-paste lights, so an exact raw-attribute tuple identifies one authored
 	// decision — on sp_tutorial_1, 83 of 85 such batches were unanimous in the hand survey
-	// (docs/light-attribution.md). Exact float equality is the point: batch members come from
+	// (docs/vtmb/light-attribution.md). Exact float equality is the point: batch members come from
 	// identical sidecar rows, so their derived values are bit-identical.
 	bool SameBatch(const UElysiumLightRig::FLightSource& A, const UElysiumLightRig::FLightSource& B)
 	{
@@ -105,7 +105,7 @@ void FElysiumCogWindow_Lights::RenderHelp()
 		"than an inference. Copy-pasted lights (an identical colour/mag/radius/type/style tuple) form "
 		"a batch, and the selected light's batch can be switched off or marked reviewed in one go.\n\n"
 		"Save writes the verdict out: the switched-off set plus every hand-set attribute, and the "
-		"reviewed index list, keyed by .lights line index, to tools/out/_lights/<map>.json. One file "
+		"reviewed index list, keyed by .lights line index, to $ELYSIUM_EXPORT_ROOT/_lights/<map>.json. One file "
 		"per map, overwritten each save. The save is the map's standing hand-authored light state: "
 		"map load auto-applies its disabled + reviewed sets (elysium.LightSurvey 0 turns that off, "
 		"loading the full faithful rig), and the Load button is the same pass mid-session. Attribute "
@@ -655,7 +655,7 @@ void FElysiumCogWindow_Lights::RenderEditActions(UElysiumLightRig& Rig, const FS
 		SaveStatus = Message;
 	}
 	ImGui::SetItemTooltip("Write the switched-off set, every hand-set attribute, and the reviewed "
-		"index list to tools/out/_lights/<map>.json, keyed by .lights line index. One file per map, "
+		"index list to $ELYSIUM_EXPORT_ROOT/_lights/<map>.json, keyed by .lights line index. One file per map, "
 		"overwritten each save.");
 
 	ImGui::SameLine();

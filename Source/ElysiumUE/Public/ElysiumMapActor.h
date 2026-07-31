@@ -115,7 +115,7 @@ struct TStructOpsTypeTraits<FElysiumPostMoveTickFunction> : public TStructOpsTyp
 
 // One loaded VtMB map. The map's *look* — world and 3D-skybox geometry, materials, textures,
 // static props, lights, fog — is baked offline into real .uasset content and a real .umap
-// (tools/bake_map.py), which UElysiumMapSubsystem::Travel opens; this actor is spawned into that
+// (pipeline/unreal/bake_map.py), which UElysiumMapSubsystem::Travel opens; this actor is spawned into that
 // level. Spawned only by UElysiumMapSubsystem (deferred, MapName set before FinishSpawning);
 // BeginPlay builds the map.
 //

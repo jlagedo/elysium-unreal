@@ -31,7 +31,7 @@ enum class EElysiumIdleTier : uint8
 // binds each one to a specific USkeletalMesh's USkeleton, and meshes are per-map-epoch, so those
 // belong to AElysiumMapActor and die with it.
 //
-// The clip -> owning-stem resolution is entirely offline (tools/npc_export.py walks the studiohdr
+// The clip -> owning-stem resolution is entirely offline (pipeline/src/elysium_pipeline/exporters/npc_export.py walks the studiohdr
 // include DAG); this subsystem never sees an include.
 UCLASS()
 class UElysiumNpcAnimSubsystem : public UGameInstanceSubsystem

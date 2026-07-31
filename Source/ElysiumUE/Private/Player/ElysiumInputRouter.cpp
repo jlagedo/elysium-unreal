@@ -122,7 +122,7 @@ void UElysiumInputRouter::BindLookAxes(UInputComponent* Input)
 void UElysiumInputRouter::BindDebugChords(UInputComponent* Input)
 {
 #if !UE_BUILD_SHIPPING
-	// The dev layer occupies no bare key a player can bind (`input-architecture.md` § Reserved keys):
+	// The dev layer occupies no bare key a player can bind (`docs/architecture/input-architecture.md` § Reserved keys):
 	// `v` is `+movedown` and `t` is `toggleuiside`, so the two Elysium dev toggles are chords.
 	BindLine(Input, FInputChord(EKeys::V, /*bShift*/ false, /*bCtrl*/ true, false, false), IE_Pressed,
 		TEXT("noclip"), /*bEngineCommand*/ false);

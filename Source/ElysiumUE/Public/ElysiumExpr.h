@@ -11,7 +11,7 @@ class UElysiumGameStateSubsystem;
 // (field-6 call strings, logic_pythoncheck gates, and — later — dlgexpr, 9.1). It is the one
 // evaluator; there is no second dispatch mechanism.
 //
-// The binding surface (`python_bridge.md`):
+// The binding surface (`docs/vtmb/python_bridge.md`):
 //   * `G.<flag>`      -> the game-state global bag, default-on-miss integer 0 (decompiled tp_getattr).
 //                        `G.<flag> = <expr>` writes it; assigning `None` deletes the key (tp_setattr).
 //   * a bare name     -> an entity resolved by targetname against the current entity world.

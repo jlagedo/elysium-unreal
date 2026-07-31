@@ -240,7 +240,7 @@ public:
 
 	// --- Persistence (11.9) -------------------------------------------------------------
 	// Everything a class registers as a `Save` field is enumerated by the R2 walk and needs no code
-	// here (`save-architecture.md` §4). This is the hook for the one thing that does not fit it: a
+	// here (`docs/architecture/save-architecture.md` §4). This is the hook for the one thing that does not fit it: a
 	// leaf's *derived* runtime state — a mover's phase and its move endpoints, a sequence cursor —
 	// state that is neither a keyvalue nor a field, and that a rebuild from the def cannot re-derive.
 	// Called after the field walk, in both directions (the archive knows which). Bodies are never
@@ -250,7 +250,7 @@ public:
 	// True when this entity leaves the map with the player rather than staying behind — an inventory
 	// item, once 9.8 makes items owned entities. The freeze records such an entity in the snapshot's
 	// `AbsentEntities` set instead of its state, which is what stops walking back into a map from
-	// re-materialising everything carried out of it (VtMB's `.HL3`, `save-architecture.md` §5).
+	// re-materialising everything carried out of it (VtMB's `.HL3`, `docs/architecture/save-architecture.md` §5).
 	virtual bool TravelsWithPlayer() const { return false; }
 
 	// ScriptUnhide's stashed think. Exposed because the snapshot carries it: an entity frozen while

@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// S5 — intent is data (roadmap 11.6, `runtime-architecture.md` §8.3). One frame of player intent as
+// S5 — intent is data (roadmap 11.6, `docs/architecture/runtime-architecture.md` §8.3). One frame of player intent as
 // a value: what the player asked for, not which key is currently down. Movement, the camera and the
 // command bus all read this, and nothing anywhere polls a key — which is what makes headless play,
 // deterministic replay and a rebindable `+speed` gait the same mechanism rather than three.
@@ -12,7 +12,7 @@
 
 // The button set. **The names are Source's `in_buttons.h`; the bit values are ours** — nothing
 // crosses an engine or a file boundary except our own recorded command streams, and VtMB's ± verb
-// inventory (`controls.md`) is 34 pairs, past what Source's own uint32 carries, because its camera
+// inventory (`docs/vtmb/controls.md`) is 34 pairs, past what Source's own uint32 carries, because its camera
 // and look-mode pairs are client-side state rather than user-command bits.
 enum class EElysiumButton : uint64
 {
@@ -49,7 +49,7 @@ enum class EElysiumButton : uint64
 	CharEditor  = 1ull << 23,
 	QuestLog    = 1ull << 24,
 
-	// Camera (`camera-view-modes.md`; consumed at 11.7)
+	// Camera (`docs/vtmb/camera-view-modes.md`; consumed at 11.7)
 	CamIn       = 1ull << 25,
 	CamOut      = 1ull << 26,
 	CamPitchUp  = 1ull << 27,
@@ -74,7 +74,7 @@ namespace ElysiumInput
 	// `Buttons` rendered as `Forward|Speed`, or "-" when nothing is down.
 	FString DescribeButtons(uint64 Buttons);
 
-	// VtMB's keyboard look rates (`source_movement.md` § View / camera). Degrees per second.
+	// VtMB's keyboard look rates (`docs/vtmb/source_movement.md` § View / camera). Degrees per second.
 	inline constexpr float KeyboardYawSpeed   = 210.0f;   // cl_yawspeed
 	inline constexpr float KeyboardPitchSpeed = 225.0f;   // cl_pitchspeed
 
@@ -149,7 +149,7 @@ struct FElysiumUserCmd
 struct FElysiumUserCmdBuilder
 {
 	// A `+cmd` / `-cmd` pair. Idempotent: two keys bound to one verb both press and the release of
-	// the first does not lift the latch, matching VtMB's one-key-owns-the-press rule (`controls.md`).
+	// the first does not lift the latch, matching VtMB's one-key-owns-the-press rule (`docs/vtmb/controls.md`).
 	void SetButton(EElysiumButton Button, bool bDown);
 	void SetButtonBits(uint64 Bits, bool bDown);
 

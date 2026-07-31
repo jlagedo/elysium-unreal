@@ -11,7 +11,7 @@
 // The storage and the names are `Public/ElysiumSheetSlots.h`'s and the values are the rulebook's;
 // this is the third piece — what the two produce together when something asks for a number.
 //
-// The VtMB facts: `docs/game_runtime.md` section 3 ("Feats", "Trait effects"). The effect
+// The VtMB facts: `docs/vtmb/game_runtime.md` section 3 ("Feats", "Trait effects"). The effect
 // accumulator below is `CVTraitEffectQuery`'s, read off the image — its field layout, its per-
 // operator rules and its finalize arithmetic — not a reconstruction.
 

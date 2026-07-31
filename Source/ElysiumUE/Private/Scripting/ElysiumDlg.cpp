@@ -6,7 +6,7 @@
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumDlg, Log, All);
 
 // ================================================================================================
-// Parser — 13-field, `}{`-joined, CRLF rows, Latin-1 (docs/game_runtime.md §5 "Physical format").
+// Parser — 13-field, `}{`-joined, CRLF rows, Latin-1 (docs/vtmb/game_runtime.md §5 "Physical format").
 // ================================================================================================
 
 namespace
@@ -159,7 +159,7 @@ bool FElysiumDlgFile::LoadFile(const FString& Path, FElysiumDlgFile& Out, FStrin
 
 // ================================================================================================
 // dlgexpr normalizer — rewrite the engine skill-check grammar into the pure-Python subset the host
-// evaluates. The dlgexpr grammar (docs/python_bridge.md) has no bitwise operators, so every top-level
+// evaluates. The dlgexpr grammar (docs/vtmb/python_bridge.md) has no bitwise operators, so every top-level
 // `&`/`|` is a logical join and every bare `IDENT [relop] INT` run is a skill-check.
 // ================================================================================================
 
@@ -296,7 +296,7 @@ namespace ElysiumDlgExprImpl
 					// `M_`/`F_` is the check's SEX GATE, not part of the trait name:
 					// `CDialogDependency::TestSimple` carries a required-gender field beside the check
 					// and rejects the line outright when it does not match the character's
-					// `CBaseCombatCharacter::IsMale` (`game_runtime.md` section 3). 36 corpus
+					// `CBaseCombatCharacter::IsMale` (`docs/vtmb/game_runtime.md` section 3). 36 corpus
 					// conditions use it — `M_Persuasion 3` and `F_Persuasion 3` on the same beat, with
 					// different lines.
 					FString Feat = T.Text;
@@ -365,7 +365,7 @@ FString ElysiumDlgExpr::ActionToPython(const FString& Raw)
 }
 
 // ================================================================================================
-// Branch machine (docs/game_runtime.md §5 "Runtime / branching").
+// Branch machine (docs/vtmb/game_runtime.md §5 "Runtime / branching").
 // ================================================================================================
 
 FElysiumDlgConversation::FElysiumDlgConversation(TSharedRef<const FElysiumDlgFile> InFile,

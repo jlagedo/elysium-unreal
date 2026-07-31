@@ -29,7 +29,7 @@
 //   - The `m_bAutomated` pause-automation block and the intro-skip global at 0x106e7e91 are not
 //     reproduced — nothing in any map or script reaches either.
 //
-// Format, event enum, keyvalues, the completion contract: `docs/choreographed_scenes.md`.
+// Format, event enum, keyvalues, the completion contract: `docs/vtmb/choreographed_scenes.md`.
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumContentPaths.h"

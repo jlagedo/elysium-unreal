@@ -2,3 +2,6 @@
 # so an LF-only .bat is parsed with drifting offsets and leading characters are lost.
 *.bat text eol=crlf
 *.cmd text eol=crlf
+
+# Patch payloads preserve upstream indentation and blank context verbatim.
+*.patch -whitespace

@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// VtMB's console surface -- the fifth scripting surface (docs/python_bridge.md). It is a table of
+// VtMB's console surface -- the fifth scripting surface (docs/vtmb/python_bridge.md). It is a table of
 // **aliases** and **cvars** parsed from `out/cfg/*.cfg` (Valve console syntax), plus the execute
 // path a `ccmd` attribute-set drives: a script runs `c.patchtype = ""` and the console executes
 // the command `patchtype`. Resolution, per command word -- the precedence is stated here once and

@@ -150,7 +150,7 @@ namespace
 	};
 
 	// Unreal's cube slice order is +X, -X, +Y, -Y, +Z, -Z, and this table is the whole of the
-	// K1 x K2 transform (docs/sky-ambience.md -> "K2 ... What it makes our binding"). Both halves
+	// K1 x K2 transform (docs/vtmb/sky-ambience.md -> "K2 ... What it makes our binding"). Both halves
 	// are recovered, neither is a guess:
 	//
 	//   K1 - VtMB's own draw tables (engine.dll R_DrawSkyBox/MakeSkyVec) bind each face to a
