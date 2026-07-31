@@ -259,9 +259,12 @@ Work proceeds in this order:
   captures; reproducible acceptance uses launch mode. Synthetic acceptance
   injects and handshakes against an already-running target, then proves the
   non-owning launcher returned without terminating it.
-- [ ] **CAP1.7 Lifecycle soak** — complete 100 launch → inject → module load →
+- [x] **CAP1.7 Lifecycle soak** — complete 100 launch → inject → module load →
   capture → stop → process-exit cycles against the synthetic target with no
-  leaked handles, stranded hooks, or corrupt trace.
+  leaked handles, stranded hooks, or corrupt trace. Release and Debug each pass
+  100-cycle acceptance with 100 atomic complete traces and finalization reports,
+  no surviving target or collector PID, all synthetic modules unloaded, and no
+  coordinator handle growth.
 
 ## CAP2 — Probe host and binary profiles
 

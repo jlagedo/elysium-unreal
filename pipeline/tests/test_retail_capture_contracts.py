@@ -305,6 +305,26 @@ class RetailCaptureContractTests(unittest.TestCase):
         self.assertIn("retail_capture_launch", attach)
         self.assertNotIn("TerminateProcess", attach)
 
+    def test_lifecycle_soak_runs_one_hundred_complete_capture_cycles(self) -> None:
+        cmake = (NATIVE_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+        soak = (NATIVE_ROOT / "verify_lifecycle_soak.ps1").read_text(
+            encoding="utf-8"
+        )
+        collector = (NATIVE_ROOT / "synthetic_collector.cpp").read_text(
+            encoding="utf-8"
+        )
+        contract = (
+            NATIVE_ROOT / "synthetic_capture_contract.h"
+        ).read_text(encoding="utf-8")
+        self.assertIn("synthetic_lifecycle_soak_100", cmake)
+        self.assertIn("-Cycles 100", cmake)
+        self.assertIn("Get-SelfHandleCount", soak)
+        self.assertIn("Assert-ProcessExited", soak)
+        self.assertIn("event=module_unloaded", soak)
+        self.assertIn("SyntheticTraceContract", collector)
+        self.assertIn("elysium.synthetic-capture-trace", contract)
+        self.assertIn("MOVEFILE_WRITE_THROUGH", collector)
+
     def test_generated_record_contracts_are_current_and_unique(self) -> None:
         subprocess.run(
             [sys.executable, str(GENERATOR), "--check"],

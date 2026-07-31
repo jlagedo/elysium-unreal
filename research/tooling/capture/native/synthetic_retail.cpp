@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include "synthetic_capture_contract.h"
+
 namespace {
 
 static_assert(sizeof(void*) == 4, "the synthetic retail process must be 32-bit");
@@ -22,6 +24,7 @@ struct Options {
     DWORD InitialDelayMs = 0;
     DWORD ModuleDelayMs = 25;
     DWORD LifetimeMs = 100;
+    DWORD CaptureStopTimeoutMs = 0;
     DWORD ExitCode = 0;
     const wchar_t* CommandToken = nullptr;
     const wchar_t* ExpectedWorkingDirectory = nullptr;
@@ -118,6 +121,11 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
             destination = &options->ModuleDelayMs;
         } else if (std::wcscmp(argv[index], L"--lifetime-ms") == 0) {
             destination = &options->LifetimeMs;
+        } else if (
+            std::wcscmp(
+                argv[index],
+                L"--capture-stop-timeout-ms") == 0) {
+            destination = &options->CaptureStopTimeoutMs;
         } else if (std::wcscmp(argv[index], L"--exit-code") == 0) {
             destination = &options->ExitCode;
         } else if (std::wcscmp(argv[index], L"--command-token") == 0) {
@@ -267,7 +275,8 @@ int wmain(int argc, wchar_t** argv) {
         std::fwprintf(
             stderr,
             L"usage: vampire.exe [--initial-delay-ms N] "
-            L"[--module-delay-ms N] [--lifetime-ms N]\n");
+            L"[--module-delay-ms N] [--lifetime-ms N] "
+            L"[--capture-stop-timeout-ms N]\n");
         return 2;
     }
     if (!VerifyStartup(options)) {
@@ -280,6 +289,34 @@ int wmain(int argc, wchar_t** argv) {
             static_cast<DWORD>(std::size(executableDirectory)))) {
         std::fwprintf(stderr, L"cannot resolve executable directory\n");
         return 3;
+    }
+
+    HANDLE captureReady = nullptr;
+    HANDLE captureStop = nullptr;
+    if (options.CaptureStopTimeoutMs != 0) {
+        const DWORD processId = GetCurrentProcessId();
+        captureReady = CreateEventW(
+            nullptr,
+            TRUE,
+            FALSE,
+            elysium::capture::SyntheticCaptureReadyName(
+                processId).c_str());
+        captureStop = CreateEventW(
+            nullptr,
+            TRUE,
+            FALSE,
+            elysium::capture::SyntheticCaptureStopName(
+                processId).c_str());
+        if (captureReady == nullptr || captureStop == nullptr) {
+            if (captureReady != nullptr) {
+                CloseHandle(captureReady);
+            }
+            if (captureStop != nullptr) {
+                CloseHandle(captureStop);
+            }
+            std::fwprintf(stderr, L"cannot create synthetic capture events\n");
+            return 3;
+        }
     }
 
     Emit(L"process_started");
@@ -349,7 +386,23 @@ int wmain(int argc, wchar_t** argv) {
     }
 
     Emit(L"all_modules_ready");
-    Sleep(options.LifetimeMs);
+    if (captureStop != nullptr) {
+        SetEvent(captureReady);
+        Emit(L"capture_armed");
+        if (WaitForSingleObject(
+                captureStop,
+                options.CaptureStopTimeoutMs) != WAIT_OBJECT_0) {
+            CloseHandle(captureStop);
+            CloseHandle(captureReady);
+            std::fwprintf(stderr, L"synthetic capture stop timed out\n");
+            return 10;
+        }
+        Emit(L"capture_stop_received");
+        CloseHandle(captureStop);
+        CloseHandle(captureReady);
+    } else {
+        Sleep(options.LifetimeMs);
+    }
 
     for (std::size_t index = loaded.size(); index > 0; --index) {
         const std::size_t moduleIndex = index - 1;

@@ -266,10 +266,32 @@ add_test(
         -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_supervision.cmake
 )
 
+add_test(
+    NAME synthetic_lifecycle_soak_100
+    COMMAND
+        powershell
+        -NoProfile
+        -ExecutionPolicy Bypass
+        -File ${CMAKE_CURRENT_SOURCE_DIR}/verify_lifecycle_soak.ps1
+        -Launcher $<TARGET_FILE:retail_launcher>
+        -Target $<TARGET_FILE:synthetic_retail>
+        -BinDir $<TARGET_FILE_DIR:synthetic_retail>
+        -Probe $<TARGET_FILE:retail_probe_host>
+        -Collector $<TARGET_FILE:synthetic_collector>
+        -OutputDir ${CMAKE_BINARY_DIR}/lifecycle-soak
+        -Cycles 100
+)
+
 set_tests_properties(
     synthetic_supervision_normal_exit
     synthetic_supervision_timeout
     synthetic_supervision_crash
     synthetic_supervision_collector_exit
     PROPERTIES TIMEOUT 15
+)
+set_tests_properties(
+    synthetic_lifecycle_soak_100
+    PROPERTIES
+        RUN_SERIAL TRUE
+        TIMEOUT 180
 )

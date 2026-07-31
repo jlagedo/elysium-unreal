@@ -6,6 +6,10 @@
 #include <cstdlib>
 #include <cwchar>
 #include <limits>
+#include <string>
+
+#include "bootstrap_contract.h"
+#include "synthetic_capture_contract.h"
 
 namespace {
 
@@ -14,6 +18,9 @@ struct Options {
     DWORD TargetPid = 0;
     DWORD ExitAfterMs = 0;
     DWORD ExitCode = 0;
+    DWORD RequestTargetStopMs = 0;
+    const wchar_t* TracePath = nullptr;
+    bool RequestTargetStop = false;
 };
 
 bool ParseUnsigned(
@@ -65,11 +72,105 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
                     &options->ExitCode)) {
                 return false;
             }
+        } else if (
+            std::wcscmp(
+                argv[index],
+                L"--request-target-stop-ms") == 0) {
+            if (!ParseUnsigned(
+                    argv[index + 1],
+                    argv[index],
+                    600000,
+                    &options->RequestTargetStopMs)) {
+                return false;
+            }
+            options->RequestTargetStop = true;
+        } else if (std::wcscmp(argv[index], L"--trace") == 0) {
+            options->TracePath = argv[index + 1];
         } else {
             return false;
         }
     }
-    return options->StopEvent != nullptr && options->TargetPid != 0;
+    return options->StopEvent != nullptr &&
+        options->TargetPid != 0 &&
+        (!options->RequestTargetStop || options->TracePath != nullptr);
+}
+
+bool WaitForNamedEvent(
+    const std::wstring& name,
+    HANDLE target,
+    HANDLE* event) {
+    for (DWORD elapsed = 0; elapsed < 5000; ++elapsed) {
+        *event = OpenEventW(SYNCHRONIZE | EVENT_MODIFY_STATE, FALSE, name.c_str());
+        if (*event != nullptr) {
+            return true;
+        }
+        if (WaitForSingleObject(target, 0) == WAIT_OBJECT_0) {
+            return false;
+        }
+        Sleep(1);
+    }
+    return false;
+}
+
+bool WriteTrace(
+    const Options& options,
+    LONG moduleNotifications,
+    bool targetExited) {
+    char document[512]{};
+    const int length = _snprintf_s(
+        document,
+        sizeof(document),
+        _TRUNCATE,
+        "contract=%s\n"
+        "version=%lu\n"
+        "state=complete\n"
+        "target_pid=%lu\n"
+        "module_notifications=%ld\n"
+        "capture_started=1\n"
+        "stop_requested=1\n"
+        "target_exited=%d\n",
+        elysium::capture::SyntheticTraceContract,
+        elysium::capture::SyntheticTraceVersion,
+        options.TargetPid,
+        moduleNotifications,
+        targetExited ? 1 : 0);
+    if (length < 0) {
+        return false;
+    }
+
+    const std::wstring tracePath(options.TracePath);
+    const std::wstring temporary = tracePath + L".tmp";
+    HANDLE file = CreateFileW(
+        temporary.c_str(),
+        GENERIC_WRITE,
+        0,
+        nullptr,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        nullptr);
+    if (file == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+    DWORD written = 0;
+    const bool complete =
+        WriteFile(
+            file,
+            document,
+            static_cast<DWORD>(length),
+            &written,
+            nullptr) &&
+        written == static_cast<DWORD>(length) &&
+        FlushFileBuffers(file);
+    CloseHandle(file);
+    if (!complete ||
+        !MoveFileExW(
+            temporary.c_str(),
+            tracePath.c_str(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        DeleteFileW(temporary.c_str());
+        return false;
+    }
+    return true;
 }
 
 }  // namespace
@@ -92,21 +193,146 @@ int wmain(int argc, wchar_t** argv) {
         return 3;
     }
 
+    HANDLE mapping = nullptr;
+    const elysium::capture::BootstrapHandshake* handshake = nullptr;
+    HANDLE captureReady = nullptr;
+    HANDLE captureStop = nullptr;
+    if (options.RequestTargetStop) {
+        mapping = OpenFileMappingW(
+            FILE_MAP_READ,
+            FALSE,
+            elysium::capture::BootstrapMappingName(
+                options.TargetPid).c_str());
+        if (mapping != nullptr) {
+            handshake = static_cast<
+                const elysium::capture::BootstrapHandshake*>(
+                    MapViewOfFile(
+                        mapping,
+                        FILE_MAP_READ,
+                        0,
+                        0,
+                        sizeof(elysium::capture::BootstrapHandshake)));
+        }
+        if (handshake == nullptr ||
+            !WaitForNamedEvent(
+                elysium::capture::SyntheticCaptureReadyName(
+                    options.TargetPid),
+                target,
+                &captureReady) ||
+            !WaitForNamedEvent(
+                elysium::capture::SyntheticCaptureStopName(
+                    options.TargetPid),
+                target,
+                &captureStop)) {
+            if (handshake != nullptr) {
+                UnmapViewOfFile(handshake);
+            }
+            if (mapping != nullptr) {
+                CloseHandle(mapping);
+            }
+            if (captureReady != nullptr) {
+                CloseHandle(captureReady);
+            }
+            if (captureStop != nullptr) {
+                CloseHandle(captureStop);
+            }
+            CloseHandle(target);
+            CloseHandle(stop);
+            return 5;
+        }
+    }
+
     std::wprintf(
         L"synthetic-collector-v1 event=ready target_pid=%lu\n",
         options.TargetPid);
     std::fflush(stdout);
+    LONG capturedNotifications = 0;
+    if (options.RequestTargetStop) {
+        HANDLE captureWaits[2]{captureReady, target};
+        if (WaitForMultipleObjects(
+                2,
+                captureWaits,
+                FALSE,
+                5000) != WAIT_OBJECT_0) {
+            UnmapViewOfFile(handshake);
+            CloseHandle(mapping);
+            CloseHandle(captureReady);
+            CloseHandle(captureStop);
+            CloseHandle(target);
+            CloseHandle(stop);
+            return 6;
+        }
+        MemoryBarrier();
+        capturedNotifications = handshake->ModuleNotificationCount;
+        if (handshake->Magic != elysium::capture::BootstrapMagic ||
+            handshake->Version != elysium::capture::BootstrapVersion ||
+            capturedNotifications < 3) {
+            UnmapViewOfFile(handshake);
+            CloseHandle(mapping);
+            CloseHandle(captureReady);
+            CloseHandle(captureStop);
+            CloseHandle(target);
+            CloseHandle(stop);
+            return 7;
+        }
+        std::wprintf(
+            L"synthetic-collector-v1 event=capture_started "
+            L"module_notifications=%ld\n",
+            capturedNotifications);
+        std::fflush(stdout);
+        Sleep(options.RequestTargetStopMs);
+        std::wprintf(
+            L"synthetic-collector-v1 event=capture_stop_requested\n");
+        std::fflush(stdout);
+        if (!SetEvent(captureStop)) {
+            UnmapViewOfFile(handshake);
+            CloseHandle(mapping);
+            CloseHandle(captureReady);
+            CloseHandle(captureStop);
+            CloseHandle(target);
+            CloseHandle(stop);
+            return 8;
+        }
+    }
+
     HANDLE waits[2]{stop, target};
     const DWORD timeout =
         options.ExitAfterMs == 0 ? INFINITE : options.ExitAfterMs;
     const DWORD wait = WaitForMultipleObjects(2, waits, FALSE, timeout);
-    CloseHandle(target);
-    CloseHandle(stop);
     if (wait != WAIT_OBJECT_0 &&
         wait != WAIT_OBJECT_0 + 1 &&
         wait != WAIT_TIMEOUT) {
+        CloseHandle(target);
+        CloseHandle(stop);
         return 4;
     }
+    bool targetExited =
+        WaitForSingleObject(target, 2000) == WAIT_OBJECT_0;
+    if (options.RequestTargetStop) {
+        MemoryBarrier();
+        const LONG finalNotifications =
+            handshake->ModuleNotificationCount;
+        if (!targetExited ||
+            !WriteTrace(options, finalNotifications, targetExited)) {
+            UnmapViewOfFile(handshake);
+            CloseHandle(mapping);
+            CloseHandle(captureReady);
+            CloseHandle(captureStop);
+            CloseHandle(target);
+            CloseHandle(stop);
+            return 9;
+        }
+        std::wprintf(
+            L"synthetic-collector-v1 event=trace_finalized "
+            L"module_notifications=%ld\n",
+            finalNotifications);
+        UnmapViewOfFile(handshake);
+        CloseHandle(mapping);
+        CloseHandle(captureReady);
+        CloseHandle(captureStop);
+    }
+    CloseHandle(target);
+    CloseHandle(stop);
     std::wprintf(
         L"synthetic-collector-v1 event=exit code=%lu\n",
         options.ExitCode);
