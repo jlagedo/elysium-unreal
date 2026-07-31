@@ -2,6 +2,7 @@
 #include <windows.h>
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <cstdio>
 #include <string>
@@ -54,7 +55,25 @@ struct Finalization {
     DWORD CollectorId = 0;
     DWORD ProcessExitCode = STILL_ACTIVE;
     DWORD CollectorExitCode = STILL_ACTIVE;
+    std::string StartupProfile;
+    std::string StartupConfig;
     LONG ModuleNotifications = 0;
+    LONG BinaryProfileRegistryVersion = 0;
+    LONG BinaryProfileCount = 0;
+    LONG BinaryProfileMatches = 0;
+    LONG BinaryProfileMisses = 0;
+    LONG BinaryProfileUnloads = 0;
+    LONG ActiveBinaryProfiles = 0;
+    LONG BinaryProfileObservedMask = 0;
+    LONG BinaryProfileMatchedMask = 0;
+    LONG BinaryProfileLastMismatchIndex = 0;
+    LONG BinaryProfileLastMismatchFlags = 0;
+    LONG ProbeValidationPasses = 0;
+    LONG ProbeHookInstalls = 0;
+    LONG ProbeDiagnosticWrites = 0;
+    std::array<ProbeActivationDiagnosticRecord, 16>
+        ProbeDiagnostics{};
+    std::size_t ProbeDiagnosticCount = 0;
     bool ProcessResumed = false;
     bool CollectorStarted = false;
 };
@@ -151,11 +170,28 @@ bool WriteAll(HANDLE file, const char* data, DWORD bytes) {
         written == bytes;
 }
 
+const char* ProbeDiagnosticReasonName(std::uint32_t reason) {
+    switch (reason) {
+        case 1:
+            return "unknown-hash";
+        case 2:
+            return "missing-module";
+        case 3:
+            return "unexpected-prologue";
+        case 4:
+            return "invalid-vtable-slot";
+        case 5:
+            return "unsupported-schema";
+        default:
+            return "unknown-reason";
+    }
+}
+
 bool WriteFinalization(
     const std::wstring& path,
     const Finalization& result) {
-    char document[1024]{};
-    const int length = _snprintf_s(
+    char document[8192]{};
+    int length = _snprintf_s(
         document,
         sizeof(document),
         _TRUNCATE,
@@ -165,24 +201,85 @@ bool WriteFinalization(
         "reason=%s\n"
         "partial=%d\n"
         "process_id=%lu\n"
+        "startup_profile=%s\n"
+        "startup_config=%s\n"
         "collector_id=%lu\n"
         "process_resumed=%d\n"
         "collector_started=%d\n"
         "process_exit_code=%lu\n"
         "collector_exit_code=%lu\n"
-        "module_notifications=%ld\n",
+        "module_notifications=%ld\n"
+        "binary_profile_registry_version=%ld\n"
+        "binary_profile_count=%ld\n"
+        "binary_profile_matches=%ld\n"
+        "binary_profile_misses=%ld\n"
+        "binary_profile_unloads=%ld\n"
+        "active_binary_profiles=%ld\n"
+        "binary_profile_observed_mask=0x%08lx\n"
+        "binary_profile_matched_mask=0x%08lx\n"
+        "binary_profile_last_mismatch_index=%ld\n"
+        "binary_profile_last_mismatch_flags=0x%08lx\n"
+        "probe_validation_passes=%ld\n"
+        "probe_hook_installs=%ld\n"
+        "probe_diagnostic_writes=%ld\n"
+        "probe_diagnostic_records=%zu\n",
         result.State,
         result.Reason,
         result.State[0] == 'c' ? 0 : 1,
         result.ProcessId,
+        result.StartupProfile.c_str(),
+        result.StartupConfig.c_str(),
         result.CollectorId,
         result.ProcessResumed ? 1 : 0,
         result.CollectorStarted ? 1 : 0,
         result.ProcessExitCode,
         result.CollectorExitCode,
-        result.ModuleNotifications);
+        result.ModuleNotifications,
+        result.BinaryProfileRegistryVersion,
+        result.BinaryProfileCount,
+        result.BinaryProfileMatches,
+        result.BinaryProfileMisses,
+        result.BinaryProfileUnloads,
+        result.ActiveBinaryProfiles,
+        result.BinaryProfileObservedMask,
+        result.BinaryProfileMatchedMask,
+        result.BinaryProfileLastMismatchIndex,
+        result.BinaryProfileLastMismatchFlags,
+        result.ProbeValidationPasses,
+        result.ProbeHookInstalls,
+        result.ProbeDiagnosticWrites,
+        result.ProbeDiagnosticCount);
     if (length < 0) {
         return false;
+    }
+    for (std::size_t index = 0;
+         index < result.ProbeDiagnosticCount;
+         ++index) {
+        const ProbeActivationDiagnosticRecord& record =
+            result.ProbeDiagnostics[index];
+        const int appended = _snprintf_s(
+            document + length,
+            sizeof(document) - static_cast<std::size_t>(length),
+            _TRUNCATE,
+            "probe_diagnostic_%zu="
+            "record_id:%lu,schema:%lu,reason:%s,"
+            "profile:%lu,target:%lu,image_base:0x%08lx,"
+            "target_rva:0x%08lx,expected:0x%08lx,"
+            "observed:0x%08lx\n",
+            index,
+            static_cast<unsigned long>(record.recordId),
+            static_cast<unsigned long>(record.schemaVersion),
+            ProbeDiagnosticReasonName(record.reason),
+            static_cast<unsigned long>(record.profileIndex),
+            static_cast<unsigned long>(record.targetIndex),
+            static_cast<unsigned long>(record.imageBase),
+            static_cast<unsigned long>(record.targetRva),
+            static_cast<unsigned long>(record.expected),
+            static_cast<unsigned long>(record.observed));
+        if (appended < 0) {
+            return false;
+        }
+        length += appended;
     }
 
     const std::wstring temporary = path + L".tmp";
@@ -228,6 +325,8 @@ bool ConfigureKillJob(HANDLE job, HANDLE process) {
 int RunSupervision(const SupervisionRequest& request) {
     Finalization result{};
     result.ProcessId = request.ProcessId;
+    result.StartupProfile = request.StartupProfile;
+    result.StartupConfig = request.StartupConfig;
 
     UniqueHandle job(CreateJobObjectW(nullptr, nullptr));
     if (job.Get() == nullptr ||
@@ -387,6 +486,74 @@ int RunSupervision(const SupervisionRequest& request) {
     MemoryBarrier();
     if (request.ModuleNotificationCount != nullptr) {
         result.ModuleNotifications = *request.ModuleNotificationCount;
+    }
+    if (request.BinaryProfileRegistryVersion != nullptr) {
+        result.BinaryProfileRegistryVersion =
+            *request.BinaryProfileRegistryVersion;
+    }
+    if (request.BinaryProfileCount != nullptr) {
+        result.BinaryProfileCount = *request.BinaryProfileCount;
+    }
+    if (request.BinaryProfileMatchCount != nullptr) {
+        result.BinaryProfileMatches = *request.BinaryProfileMatchCount;
+    }
+    if (request.BinaryProfileMissCount != nullptr) {
+        result.BinaryProfileMisses = *request.BinaryProfileMissCount;
+    }
+    if (request.BinaryProfileUnloadCount != nullptr) {
+        result.BinaryProfileUnloads = *request.BinaryProfileUnloadCount;
+    }
+    if (request.ActiveBinaryProfileCount != nullptr) {
+        result.ActiveBinaryProfiles = *request.ActiveBinaryProfileCount;
+    }
+    if (request.BinaryProfileObservedMask != nullptr) {
+        result.BinaryProfileObservedMask =
+            *request.BinaryProfileObservedMask;
+    }
+    if (request.BinaryProfileMatchedMask != nullptr) {
+        result.BinaryProfileMatchedMask =
+            *request.BinaryProfileMatchedMask;
+    }
+    if (request.BinaryProfileLastMismatchIndex != nullptr) {
+        result.BinaryProfileLastMismatchIndex =
+            *request.BinaryProfileLastMismatchIndex;
+    }
+    if (request.BinaryProfileLastMismatchFlags != nullptr) {
+        result.BinaryProfileLastMismatchFlags =
+            *request.BinaryProfileLastMismatchFlags;
+    }
+    if (request.ProbeValidationPassCount != nullptr) {
+        result.ProbeValidationPasses =
+            *request.ProbeValidationPassCount;
+    }
+    if (request.ProbeHookInstallCount != nullptr) {
+        result.ProbeHookInstalls =
+            *request.ProbeHookInstallCount;
+    }
+    if (request.ProbeDiagnosticWriteCount != nullptr) {
+        result.ProbeDiagnosticWrites =
+            *request.ProbeDiagnosticWriteCount;
+    }
+    if (request.ProbeDiagnostics != nullptr &&
+        request.ProbeDiagnosticCapacity != 0 &&
+        result.ProbeDiagnosticWrites > 0) {
+        const std::size_t capacity = (std::min)(
+            request.ProbeDiagnosticCapacity,
+            result.ProbeDiagnostics.size());
+        const std::size_t retained = (std::min)(
+            capacity,
+            static_cast<std::size_t>(
+                result.ProbeDiagnosticWrites));
+        const std::size_t firstSequence =
+            static_cast<std::size_t>(
+                result.ProbeDiagnosticWrites) - retained;
+        for (std::size_t index = 0; index < retained; ++index) {
+            const std::size_t source =
+                (firstSequence + index) % capacity;
+            result.ProbeDiagnostics[index] =
+                request.ProbeDiagnostics[source];
+        }
+        result.ProbeDiagnosticCount = retained;
     }
 
     SetConsoleCtrlHandler(ConsoleControlHandler, FALSE);

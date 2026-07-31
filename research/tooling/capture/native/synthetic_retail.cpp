@@ -29,9 +29,14 @@ struct Options {
     const wchar_t* CommandToken = nullptr;
     const wchar_t* ExpectedWorkingDirectory = nullptr;
     const wchar_t* ExpectedModDirectory = nullptr;
+    const wchar_t* ExpectedExecConfig = nullptr;
     std::array<const wchar_t*, 8> ExpectedEnvironment{};
     std::size_t ExpectedEnvironmentCount = 0;
     const wchar_t* ModDirectory = nullptr;
+    const wchar_t* ExecConfig = nullptr;
+    bool Development = false;
+    bool Console = false;
+    bool Windowed = false;
 };
 
 struct ModuleSpec {
@@ -109,7 +114,22 @@ bool ParseDelay(
 }
 
 bool ParseOptions(int argc, wchar_t** argv, Options* options) {
-    for (int index = 1; index < argc; index += 2) {
+    for (int index = 1; index < argc;) {
+        if (std::wcscmp(argv[index], L"-dev") == 0) {
+            options->Development = true;
+            ++index;
+            continue;
+        }
+        if (std::wcscmp(argv[index], L"-console") == 0) {
+            options->Console = true;
+            ++index;
+            continue;
+        }
+        if (std::wcscmp(argv[index], L"-sw") == 0) {
+            options->Windowed = true;
+            ++index;
+            continue;
+        }
         if (index + 1 >= argc) {
             std::fwprintf(stderr, L"missing value for %ls\n", argv[index]);
             return false;
@@ -130,15 +150,15 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
             destination = &options->ExitCode;
         } else if (std::wcscmp(argv[index], L"--command-token") == 0) {
             options->CommandToken = argv[index + 1];
-            continue;
         } else if (
             std::wcscmp(argv[index], L"--expect-working-directory") == 0) {
             options->ExpectedWorkingDirectory = argv[index + 1];
-            continue;
         } else if (
             std::wcscmp(argv[index], L"--expect-mod-directory") == 0) {
             options->ExpectedModDirectory = argv[index + 1];
-            continue;
+        } else if (
+            std::wcscmp(argv[index], L"--expect-exec-config") == 0) {
+            options->ExpectedExecConfig = argv[index + 1];
         } else if (std::wcscmp(argv[index], L"--expect-environment") == 0) {
             if (options->ExpectedEnvironmentCount >=
                 options->ExpectedEnvironment.size()) {
@@ -147,21 +167,27 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
             }
             options->ExpectedEnvironment[
                 options->ExpectedEnvironmentCount++] = argv[index + 1];
-            continue;
         } else if (std::wcscmp(argv[index], L"-game") == 0) {
             options->ModDirectory = argv[index + 1];
-            continue;
+        } else if (std::wcscmp(argv[index], L"+exec") == 0) {
+            options->ExecConfig = argv[index + 1];
         } else {
             std::fwprintf(stderr, L"unknown option: %ls\n", argv[index]);
             return false;
         }
-        if (!ParseDelay(argv[index + 1], argv[index], destination)) {
-            return false;
+        if (destination != nullptr) {
+            if (!ParseDelay(
+                    argv[index + 1],
+                    argv[index],
+                    destination)) {
+                return false;
+            }
         }
         if (destination == &options->ExitCode && options->ExitCode > 255) {
             std::fwprintf(stderr, L"--exit-code must not exceed 255\n");
             return false;
         }
+        index += 2;
     }
     return true;
 }
@@ -212,6 +238,17 @@ bool VerifyStartup(const Options& options) {
              options.ModDirectory,
              options.ExpectedModDirectory) != 0)) {
         std::fwprintf(stderr, L"mod-directory startup mismatch\n");
+        return false;
+    }
+    if (options.ExpectedExecConfig != nullptr &&
+        (options.ExecConfig == nullptr ||
+         std::wcscmp(
+             options.ExecConfig,
+             options.ExpectedExecConfig) != 0 ||
+         !options.Development ||
+         !options.Console ||
+         !options.Windowed)) {
+        std::fwprintf(stderr, L"direct-save startup mismatch\n");
         return false;
     }
     if (options.ExpectedWorkingDirectory != nullptr) {

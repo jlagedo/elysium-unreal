@@ -102,6 +102,14 @@ def main() -> int:
         ],
         check=True,
     )
+    subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "contracts" / "generate_binary_profiles.py"),
+            "--check",
+        ],
+        check=True,
+    )
     OUTPUT.mkdir(parents=True, exist_ok=True)
     environment = visual_studio_environment()
     search_path = next(

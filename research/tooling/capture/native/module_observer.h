@@ -6,6 +6,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "binary_profile_contract.h"
+
 namespace elysium::capture {
 
 enum class ModuleEventKind : std::uint32_t {
@@ -31,11 +33,16 @@ struct ProcessedModuleEvent {
     ModuleEventKind Kind;
     std::uintptr_t ImageBase;
     std::uint32_t ImageSize;
+    std::uint64_t FileSize;
+    PeIdentity Pe;
+    const wchar_t* ModuleName;
+    std::size_t ModuleNameCharacters;
     const wchar_t* Path;
     std::size_t PathCharacters;
     bool PathTruncated;
     bool Duplicate;
     bool HashSucceeded;
+    bool IdentitySucceeded;
     std::array<std::uint8_t, 32> Sha256;
 };
 

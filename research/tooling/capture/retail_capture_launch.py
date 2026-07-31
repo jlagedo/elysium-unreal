@@ -6,7 +6,7 @@ the required human cancellation acceptance:
 
     uv run elysium research retail_capture_launch \
         --distribution owner-configured \
-        --startup-profile unofficial-patch \
+        --startup-profile unofficial-patch-save \
         --run --timeout-seconds 300
 """
 
@@ -40,7 +40,7 @@ def main() -> int:
     parser.add_argument("--distribution", required=True)
     parser.add_argument(
         "--startup-profile",
-        choices=("direct", "unofficial-patch"),
+        choices=("direct", "unofficial-patch", "unofficial-patch-save"),
         default="direct",
     )
     parser.add_argument(
@@ -118,6 +118,36 @@ def main() -> int:
         raise FileNotFoundError(executable)
     if not working_directory.is_dir():
         raise NotADirectoryError(working_directory)
+    if args.startup_profile == "unofficial-patch-save":
+        load_config = (
+            working_directory
+            / "Unofficial_Patch"
+            / "cfg"
+            / "elysium_load.cfg"
+        )
+        if not load_config.is_file():
+            raise FileNotFoundError(load_config)
+        active_commands = [
+            line.strip()
+            for line in load_config.read_text(
+                encoding="utf-8-sig",
+            ).splitlines()
+            if line.strip() and not line.lstrip().startswith("//")
+        ]
+        load_commands = [
+            command
+            for command in active_commands
+            if command.partition(" ")[0].casefold() == "load"
+        ]
+        if not load_commands:
+            raise ValueError(
+                f"{load_config} contains no active load command"
+            )
+        print(
+            f"direct-save config: {load_config} "
+            f"command={load_commands[0]!r}",
+            flush=True,
+        )
     if args.verify_suspended_ms < 0 or args.verify_suspended_ms > 600000:
         parser.error("--verify-suspended-ms must be between 0 and 600000")
     if args.timeout_seconds < 0 or args.timeout_seconds > 600:

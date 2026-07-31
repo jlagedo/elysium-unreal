@@ -121,6 +121,7 @@ def render_cpp(registry: dict[str, object]) -> str:
         "pose": "PoseRecordHeader",
         "animation_file_header": "AnimationFileHeader",
         "animation_base": "AnimationRecordHeader",
+        "probe_activation_diagnostic": "ProbeActivationDiagnosticRecord",
     }
     records = {
         record["name"]: record for record in _expanded_records(registry)
@@ -133,8 +134,24 @@ def render_cpp(registry: dict[str, object]) -> str:
         "",
         f"constexpr std::uint32_t kCaptureSchemaRegistryVersion = {registry['registry_version']}u;",
         "",
-        "#pragma pack(push, 1)",
+        "struct CaptureRecordSchemaIdentity {",
+        "    std::uint32_t RecordId;",
+        "    std::uint32_t SchemaVersion;",
+        "};",
+        "",
+        "inline constexpr CaptureRecordSchemaIdentity kCaptureRecordSchemas[] = {",
     ]
+    for record in records.values():
+        lines.append(
+            f"    {{{record['id']}u, {record['schema_version']}u}},"
+        )
+    lines.extend(
+        [
+            "};",
+            "",
+        "#pragma pack(push, 1)",
+        ]
+    )
     for record_name, cpp_name in names.items():
         record = records[record_name]
         lines.append(f"struct {cpp_name} {{")
@@ -159,6 +176,7 @@ def render_cpp(registry: dict[str, object]) -> str:
             f"static_assert(sizeof(PoseRecordHeader) == {records['pose']['minimum_bytes']}, \"pose record header changed\");",
             f"static_assert(sizeof(AnimationFileHeader) == {records['animation_file_header']['minimum_bytes']}, \"animation capture file header changed\");",
             f"static_assert(sizeof(AnimationRecordHeader) == {records['animation_base']['minimum_bytes']}, \"animation record header changed\");",
+            f"static_assert(sizeof(ProbeActivationDiagnosticRecord) == {records['probe_activation_diagnostic']['minimum_bytes']}, \"probe diagnostic record changed\");",
             "",
         ]
     )

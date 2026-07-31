@@ -13,6 +13,8 @@ if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
     message(FATAL_ERROR "Retail capture binaries must be 32-bit.")
 endif()
 
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -105,7 +107,13 @@ target_include_directories(retail_launcher PRIVATE .)
 add_library(retail_probe_host SHARED retail_probe_host.cpp)
 set_target_properties(retail_probe_host PROPERTIES OUTPUT_NAME retail_probe_host)
 target_include_directories(retail_probe_host PRIVATE .)
-target_sources(retail_probe_host PRIVATE module_observer.cpp)
+target_sources(
+    retail_probe_host
+    PRIVATE
+        binary_profile_registry.cpp
+        module_observer.cpp
+        probe_validation.cpp
+)
 target_link_libraries(retail_probe_host PRIVATE bcrypt)
 elysium_native_target(retail_probe_host)
 
@@ -122,7 +130,55 @@ target_link_libraries(module_observer_test PRIVATE bcrypt)
 elysium_native_target(module_observer_test)
 add_dependencies(module_observer_test synthetic_client)
 
+add_executable(
+    binary_profile_registry_test
+    binary_profile_registry_test.cpp
+    binary_profile_registry.cpp
+)
+target_include_directories(binary_profile_registry_test PRIVATE .)
+elysium_native_target(binary_profile_registry_test)
+
+add_executable(
+    probe_validation_test
+    probe_validation_test.cpp
+    probe_validation.cpp
+)
+target_include_directories(probe_validation_test PRIVATE .)
+elysium_native_target(probe_validation_test)
+
 enable_testing()
+add_test(
+    NAME binary_profile_contract_check
+    COMMAND
+        ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../contracts/generate_binary_profiles.py
+        --check
+)
+
+add_test(
+    NAME binary_profile_registry_exact_match
+    COMMAND $<TARGET_FILE:binary_profile_registry_test>
+)
+set_tests_properties(
+    binary_profile_registry_exact_match
+    PROPERTIES
+        PASS_REGULAR_EXPRESSION
+            "binary-profile-registry-test-v1 state=complete"
+        TIMEOUT 15
+)
+
+add_test(
+    NAME probe_validation_fail_closed
+    COMMAND $<TARGET_FILE:probe_validation_test>
+)
+set_tests_properties(
+    probe_validation_fail_closed
+    PROPERTIES
+        PASS_REGULAR_EXPRESSION
+            "probe-validation-test-v1 state=complete.*rejected_installs=0"
+        TIMEOUT 15
+)
+
 add_test(
     NAME module_observer_bootstrap_load_unload
     COMMAND
@@ -197,6 +253,32 @@ set_tests_properties(
     synthetic_bootstrap_termination
     PROPERTIES
         PASS_REGULAR_EXPRESSION "event=bootstrap_verified"
+        TIMEOUT 15
+)
+
+add_test(
+    NAME synthetic_direct_save_startup
+    COMMAND
+        $<TARGET_FILE:retail_launcher>
+        --executable $<TARGET_FILE:synthetic_retail>
+        --working-directory $<TARGET_FILE_DIR:synthetic_retail>
+        --distribution synthetic-test
+        --startup-profile unofficial-patch-save
+        --verify-suspended-ms 25
+        --probe-host $<TARGET_FILE:retail_probe_host>
+        --resume-synthetic
+        --
+        --initial-delay-ms 0
+        --module-delay-ms 1
+        --lifetime-ms 1
+        --expect-mod-directory Unofficial_Patch
+        --expect-exec-config elysium_load.cfg
+)
+set_tests_properties(
+    synthetic_direct_save_startup
+    PROPERTIES
+        PASS_REGULAR_EXPRESSION
+            "event=launch_complete.*exit_code=0"
         TIMEOUT 15
 )
 

@@ -241,6 +241,9 @@ class RetailCaptureContractTests(unittest.TestCase):
         host = (NATIVE_ROOT / "retail_probe_host.cpp").read_text(
             encoding="utf-8"
         )
+        observer = (NATIVE_ROOT / "module_observer.cpp").read_text(
+            encoding="utf-8"
+        )
         contract = (NATIVE_ROOT / "bootstrap_contract.h").read_text(
             encoding="utf-8"
         )
@@ -249,10 +252,10 @@ class RetailCaptureContractTests(unittest.TestCase):
         self.assertIn('"LoadLibraryW"', launcher)
         self.assertIn("CreateRemoteThread(", launcher)
         self.assertNotIn("manual map", launcher.lower())
-        self.assertIn("BootstrapVersion = 1", contract)
+        self.assertIn("BootstrapVersion = 5", contract)
         self.assertIn("ModuleObserverArmed", contract)
         self.assertIn("TransportArmed", contract)
-        self.assertIn('"LdrRegisterDllNotification"', host)
+        self.assertIn('"LdrRegisterDllNotification"', observer)
         self.assertIn("BootstrapState::Ready", host)
         self.assertIn("bootstrap->WaitReady", launcher)
         self.assertLess(

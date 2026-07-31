@@ -5,6 +5,20 @@
 
 constexpr std::uint32_t kCaptureSchemaRegistryVersion = 1u;
 
+struct CaptureRecordSchemaIdentity {
+    std::uint32_t RecordId;
+    std::uint32_t SchemaVersion;
+};
+
+inline constexpr CaptureRecordSchemaIdentity kCaptureRecordSchemas[] = {
+    {1u, 2u},
+    {2u, 2u},
+    {3u, 2u},
+    {4u, 2u},
+    {5u, 2u},
+    {6u, 1u},
+};
+
 #pragma pack(push, 1)
 struct FileHeader {
     char magic[8];
@@ -77,6 +91,22 @@ struct AnimationRecordHeader {
 constexpr std::uint32_t kAnimationRecordHeaderRecordId = 4u;
 constexpr std::uint32_t kAnimationRecordHeaderSchemaVersion = 2u;
 
+struct ProbeActivationDiagnosticRecord {
+    char magic[4];
+    std::uint32_t recordBytes;
+    std::uint32_t recordId;
+    std::uint32_t schemaVersion;
+    std::uint32_t reason;
+    std::uint32_t profileIndex;
+    std::uint32_t targetIndex;
+    std::uint32_t imageBase;
+    std::uint32_t targetRva;
+    std::uint32_t expected;
+    std::uint32_t observed;
+};
+constexpr std::uint32_t kProbeActivationDiagnosticRecordRecordId = 6u;
+constexpr std::uint32_t kProbeActivationDiagnosticRecordSchemaVersion = 1u;
+
 constexpr std::uint32_t kAnimationFinalRecordId = 5u;
 constexpr std::uint32_t kAnimationFinalSchemaVersion = 2u;
 
@@ -86,3 +116,4 @@ static_assert(sizeof(FileHeader) == 128, "capture file header changed");
 static_assert(sizeof(PoseRecordHeader) == 132, "pose record header changed");
 static_assert(sizeof(AnimationFileHeader) == 128, "animation capture file header changed");
 static_assert(sizeof(AnimationRecordHeader) == 68, "animation record header changed");
+static_assert(sizeof(ProbeActivationDiagnosticRecord) == 44, "probe diagnostic record changed");

@@ -29,6 +29,10 @@ from research.tooling.capture.capture_contracts import (
     process_launch_context,
     write_session_manifest,
 )
+from research.tooling.capture.generated_binary_profiles import (
+    match_profile,
+    target as profile_target,
+)
 
 
 PROCESS_QUERY_INFORMATION = 0x0400
@@ -39,11 +43,6 @@ TH32CS_SNAPMODULE32 = 0x00000010
 MAX_PATH = 260
 MAX_MODULE_NAME32 = 255
 
-STUDIO_RENDER_OBJECT_RVA = 0x82B30
-STUDIO_RENDER_VTABLE_RVA = 0x6C150
-EXPECTED_STUDIO_RENDER_SHA256 = (
-    "13d56ce90de2c5faedc0df26d36b24e90f30eded5055625f616cd97e301e124b"
-)
 DEFAULT_MODEL = (
     "models/character/pc/male/tremere/armor0/tremere_Male_Armor_0.mdl"
 )
@@ -302,10 +301,15 @@ def main() -> int:
     pid = args.pid or find_process("vampire.exe")
     module_base, _, module_path = find_module(pid, "studiorender.dll")
     module_hash = hashlib.sha256(module_path.read_bytes()).hexdigest()
-    if module_hash != EXPECTED_STUDIO_RENDER_SHA256:
-        raise RuntimeError(
-            f"unexpected StudioRender.dll SHA-256: {module_hash}"
-        )
+    studio_profile = match_profile(
+        module_path.name,
+        module_path.stat().st_size,
+        module_hash,
+    )
+    draw_model = profile_target(
+        studio_profile,
+        "studiorender.draw_model",
+    )
 
     output_root = args.output.resolve()
     output_root.mkdir(parents=True, exist_ok=True)
@@ -366,6 +370,7 @@ def main() -> int:
             "bone_count": target_bones,
             "requested_frames": args.frames,
             "allow_partial": args.allow_partial,
+            "binary_profile": studio_profile["id"],
         },
     )
     manifest.update(
@@ -392,8 +397,12 @@ def main() -> int:
     reader: ProcessReader | None = None
     try:
         reader = ProcessReader(pid)
-        studio_object = module_base + STUDIO_RENDER_OBJECT_RVA
-        expected_vtable = module_base + STUDIO_RENDER_VTABLE_RVA
+        studio_object = (
+            module_base + draw_model["vtable"]["object_rva"]
+        )
+        expected_vtable = (
+            module_base + draw_model["vtable"]["expected_vtable_rva"]
+        )
         actual_vtable = reader.u32(studio_object)
         if actual_vtable != expected_vtable:
             raise RuntimeError(

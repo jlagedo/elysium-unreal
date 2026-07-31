@@ -13,6 +13,7 @@
 #include <new>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "module_observer.h"
 
@@ -23,6 +24,7 @@ constexpr ULONG DllNotificationLoaded = 1;
 constexpr ULONG DllNotificationUnloaded = 2;
 constexpr std::size_t QueueCapacity = 128;
 constexpr std::size_t ModulePathCapacity = 32768;
+constexpr std::size_t ModuleNameCapacity = 512;
 
 struct DllLoadedNotificationData {
     ULONG Flags;
@@ -97,6 +99,95 @@ bool ModuleStillLoaded(std::uintptr_t imageBase) noexcept {
     return reinterpret_cast<std::uintptr_t>(module) == imageBase;
 }
 
+template <typename Value>
+Value ReadLittleEndian(const std::uint8_t* data) noexcept {
+    Value value{};
+    std::memcpy(&value, data, sizeof(value));
+    return value;
+}
+
+bool ReadExactAt(
+    HANDLE file,
+    std::uint64_t offset,
+    void* destination,
+    DWORD bytes) noexcept {
+    LARGE_INTEGER position{};
+    position.QuadPart = static_cast<LONGLONG>(offset);
+    if (!SetFilePointerEx(file, position, nullptr, FILE_BEGIN)) {
+        return false;
+    }
+    DWORD read = 0;
+    return ReadFile(file, destination, bytes, &read, nullptr) &&
+        read == bytes;
+}
+
+bool ReadPeIdentity(
+    HANDLE file,
+    std::uint64_t* fileSize,
+    PeIdentity* identity) noexcept {
+    LARGE_INTEGER size{};
+    if (!GetFileSizeEx(file, &size) || size.QuadPart < 0) {
+        return false;
+    }
+    *fileSize = static_cast<std::uint64_t>(size.QuadPart);
+
+    std::array<std::uint8_t, 64> dos{};
+    if (!ReadExactAt(
+            file,
+            0,
+            dos.data(),
+            static_cast<DWORD>(dos.size())) ||
+        dos[0] != 'M' ||
+        dos[1] != 'Z') {
+        return false;
+    }
+    const std::uint32_t peOffset =
+        ReadLittleEndian<std::uint32_t>(dos.data() + 0x3c);
+    std::array<std::uint8_t, 24> fileHeader{};
+    if (!ReadExactAt(
+            file,
+            peOffset,
+            fileHeader.data(),
+            static_cast<DWORD>(fileHeader.size())) ||
+        std::memcmp(fileHeader.data(), "PE\0\0", 4) != 0) {
+        return false;
+    }
+    const std::uint16_t optionalBytes =
+        ReadLittleEndian<std::uint16_t>(fileHeader.data() + 20);
+    if (optionalBytes < 68) {
+        return false;
+    }
+    std::array<std::uint8_t, 68> optional{};
+    if (!ReadExactAt(
+            file,
+            static_cast<std::uint64_t>(peOffset) + fileHeader.size(),
+            optional.data(),
+            static_cast<DWORD>(optional.size()))) {
+        return false;
+    }
+
+    identity->Machine =
+        ReadLittleEndian<std::uint16_t>(fileHeader.data() + 4);
+    identity->SectionCount =
+        ReadLittleEndian<std::uint16_t>(fileHeader.data() + 6);
+    identity->Timestamp =
+        ReadLittleEndian<std::uint32_t>(fileHeader.data() + 8);
+    identity->Characteristics =
+        ReadLittleEndian<std::uint16_t>(fileHeader.data() + 22);
+    identity->OptionalMagic =
+        ReadLittleEndian<std::uint16_t>(optional.data());
+    if (identity->OptionalMagic != IMAGE_NT_OPTIONAL_HDR32_MAGIC) {
+        return false;
+    }
+    identity->PreferredImageBase =
+        ReadLittleEndian<std::uint32_t>(optional.data() + 28);
+    identity->SizeOfImage =
+        ReadLittleEndian<std::uint32_t>(optional.data() + 56);
+    identity->Checksum =
+        ReadLittleEndian<std::uint32_t>(optional.data() + 64);
+    return true;
+}
+
 HANDLE CreateModuleSnapshot() noexcept {
     constexpr unsigned int MaximumAttempts = 16;
     for (unsigned int attempt = 0; attempt < MaximumAttempts; ++attempt) {
@@ -118,6 +209,9 @@ HANDLE CreateModuleSnapshot() noexcept {
 bool HashFile(
     BCRYPT_ALG_HANDLE algorithm,
     const wchar_t* path,
+    std::uint64_t* fileSize,
+    PeIdentity* identity,
+    bool* identitySucceeded,
     std::array<std::uint8_t, 32>* digest) noexcept {
     HANDLE file = CreateFileW(
         path,
@@ -128,6 +222,12 @@ bool HashFile(
         FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
         nullptr);
     if (file == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+    *identitySucceeded = ReadPeIdentity(file, fileSize, identity);
+    LARGE_INTEGER start{};
+    if (!SetFilePointerEx(file, start, nullptr, FILE_BEGIN)) {
+        CloseHandle(file);
         return false;
     }
 
@@ -182,7 +282,10 @@ struct ModuleObserver::Impl {
         std::uintptr_t ImageBase;
         std::uint32_t ImageSize;
         std::uint16_t PathCharacters;
+        std::uint16_t ModuleNameCharacters;
         bool PathTruncated;
+        bool ModuleNameTruncated;
+        wchar_t ModuleName[ModuleNameCapacity];
         wchar_t Path[ModulePathCapacity];
     };
 #pragma warning(pop)
@@ -199,8 +302,10 @@ struct ModuleObserver::Impl {
     volatile LONG* NotificationCount = nullptr;
     ModuleEventProcessor Processor = nullptr;
     void* ProcessorContext = nullptr;
+    std::unordered_set<std::uintptr_t> ObservedModules;
     std::unordered_set<std::uintptr_t> ActiveModules;
     volatile LONG OutstandingEvents = 0;
+    volatile LONG WorkerBusy = 0;
     volatile LONG StopRequested = 0;
 
     static void CALLBACK OnDllNotification(
@@ -221,13 +326,15 @@ struct ModuleObserver::Impl {
                 ModuleEventKind::Loaded,
                 data->Loaded.DllBase,
                 data->Loaded.SizeOfImage,
-                data->Loaded.FullDllName);
+                data->Loaded.FullDllName,
+                data->Loaded.BaseDllName);
         } else if (reason == DllNotificationUnloaded) {
             self->EnqueueNotification(
                 ModuleEventKind::Unloaded,
                 data->Unloaded.DllBase,
                 data->Unloaded.SizeOfImage,
-                data->Unloaded.FullDllName);
+                data->Unloaded.FullDllName,
+                data->Unloaded.BaseDllName);
         }
     }
 
@@ -255,16 +362,24 @@ struct ModuleObserver::Impl {
                 2,
                 waits,
                 FALSE,
-                stopping ? 0 : INFINITE);
+                stopping ? 0 : 250);
             if (wait == WAIT_OBJECT_0) {
                 stopping = true;
             } else if (wait != WAIT_OBJECT_0 + 1 &&
                        wait != WAIT_TIMEOUT) {
                 break;
             }
+            InterlockedExchange(&self->WorkerBusy, 1);
             self->Drain(algorithmStatus >= 0 ? algorithm : nullptr);
+            if (!stopping) {
+                self->Reconcile(
+                    algorithmStatus >= 0 ? algorithm : nullptr);
+            }
+            InterlockedExchange(&self->WorkerBusy, 0);
         }
+        InterlockedExchange(&self->WorkerBusy, 1);
         self->Drain(algorithmStatus >= 0 ? algorithm : nullptr);
+        InterlockedExchange(&self->WorkerBusy, 0);
         if (algorithm != nullptr) {
             BCryptCloseAlgorithmProvider(algorithm, 0);
         }
@@ -275,17 +390,26 @@ struct ModuleObserver::Impl {
         ModuleEventKind kind,
         const void* imageBase,
         std::uint32_t imageSize,
-        const UNICODE_STRING* path) noexcept {
+        const UNICODE_STRING* path,
+        const UNICODE_STRING* moduleName) noexcept {
         const wchar_t* characters =
             path == nullptr ? nullptr : path->Buffer;
         const std::size_t characterCount =
             path == nullptr ? 0 : path->Length / sizeof(wchar_t);
+        const wchar_t* moduleCharacters =
+            moduleName == nullptr ? nullptr : moduleName->Buffer;
+        const std::size_t moduleCharacterCount =
+            moduleName == nullptr
+                ? 0
+                : moduleName->Length / sizeof(wchar_t);
         if (!TryEnqueue(
                 kind,
                 imageBase,
                 imageSize,
                 characters,
-                characterCount)) {
+                characterCount,
+                moduleCharacters,
+                moduleCharacterCount)) {
             InterlockedIncrement(&Counters->QueueDropCount);
         }
     }
@@ -295,7 +419,9 @@ struct ModuleObserver::Impl {
         const void* imageBase,
         std::uint32_t imageSize,
         const wchar_t* path,
-        std::size_t pathCharacters) noexcept {
+        std::size_t pathCharacters,
+        const wchar_t* moduleName,
+        std::size_t moduleNameCharacters) noexcept {
         PSLIST_ENTRY freeLink =
             InterlockedPopEntrySList(&FreeEntries);
         if (freeLink == nullptr) {
@@ -324,8 +450,23 @@ struct ModuleObserver::Impl {
                 copiedCharacters * sizeof(wchar_t));
         }
         entry->Path[copiedCharacters] = L'\0';
+        const std::size_t copiedModuleNameCharacters = std::min(
+            moduleNameCharacters,
+            ModuleNameCapacity - 1);
+        entry->ModuleNameCharacters =
+            static_cast<std::uint16_t>(copiedModuleNameCharacters);
+        entry->ModuleNameTruncated =
+            moduleNameCharacters > copiedModuleNameCharacters;
+        if (moduleName != nullptr &&
+            copiedModuleNameCharacters != 0) {
+            std::memcpy(
+                entry->ModuleName,
+                moduleName,
+                copiedModuleNameCharacters * sizeof(wchar_t));
+        }
+        entry->ModuleName[copiedModuleNameCharacters] = L'\0';
 
-        if (entry->PathTruncated) {
+        if (entry->PathTruncated || entry->ModuleNameTruncated) {
             InterlockedIncrement(
                 &Counters->PathTruncationCount);
         }
@@ -375,6 +516,73 @@ struct ModuleObserver::Impl {
         }
     }
 
+    void Reconcile(BCRYPT_ALG_HANDLE algorithm) noexcept {
+        HANDLE snapshot = CreateModuleSnapshot();
+        if (snapshot == INVALID_HANDLE_VALUE) {
+            return;
+        }
+        MODULEENTRY32W module{};
+        module.dwSize = sizeof(module);
+        if (!Module32FirstW(snapshot, &module)) {
+            CloseHandle(snapshot);
+            return;
+        }
+
+        std::unordered_set<std::uintptr_t> current;
+        BOOL hasModule = TRUE;
+        do {
+            const auto imageBase =
+                reinterpret_cast<std::uintptr_t>(module.modBaseAddr);
+            current.insert(imageBase);
+            if (ObservedModules.find(imageBase) ==
+                ObservedModules.end()) {
+                QueueEntry entry{};
+                entry.Kind = ModuleEventKind::Loaded;
+                entry.ImageBase = imageBase;
+                entry.ImageSize = module.modBaseSize;
+                const std::size_t pathCharacters = wcsnlen_s(
+                    module.szExePath,
+                    _countof(module.szExePath));
+                entry.PathCharacters =
+                    static_cast<std::uint16_t>(pathCharacters);
+                std::memcpy(
+                    entry.Path,
+                    module.szExePath,
+                    pathCharacters * sizeof(wchar_t));
+                entry.Path[pathCharacters] = L'\0';
+                const std::size_t moduleNameCharacters = wcsnlen_s(
+                    module.szModule,
+                    _countof(module.szModule));
+                entry.ModuleNameCharacters =
+                    static_cast<std::uint16_t>(
+                        moduleNameCharacters);
+                std::memcpy(
+                    entry.ModuleName,
+                    module.szModule,
+                    moduleNameCharacters * sizeof(wchar_t));
+                entry.ModuleName[moduleNameCharacters] = L'\0';
+                InterlockedIncrement(&Counters->LoadEventCount);
+                Process(entry, algorithm);
+            }
+            hasModule = Module32NextW(snapshot, &module);
+        } while (hasModule);
+        CloseHandle(snapshot);
+
+        std::vector<std::uintptr_t> missing;
+        for (const std::uintptr_t imageBase : ObservedModules) {
+            if (current.find(imageBase) == current.end()) {
+                missing.push_back(imageBase);
+            }
+        }
+        for (const std::uintptr_t imageBase : missing) {
+            QueueEntry entry{};
+            entry.Kind = ModuleEventKind::Unloaded;
+            entry.ImageBase = imageBase;
+            InterlockedIncrement(&Counters->UnloadEventCount);
+            Process(entry, algorithm);
+        }
+    }
+
     void Process(
         const QueueEntry& entry,
         BCRYPT_ALG_HANDLE algorithm) noexcept {
@@ -382,9 +590,14 @@ struct ModuleObserver::Impl {
             entry.Kind,
             entry.ImageBase,
             entry.ImageSize,
+            0,
+            {},
+            entry.ModuleName,
+            entry.ModuleNameCharacters,
             entry.Path,
             entry.PathCharacters,
             entry.PathTruncated,
+            false,
             false,
             false,
             {},
@@ -393,28 +606,67 @@ struct ModuleObserver::Impl {
         const bool loadEvent = IsLoadEvent(entry.Kind);
         processed.Duplicate =
             loadEvent &&
-            ActiveModules.find(entry.ImageBase) != ActiveModules.end();
+            ObservedModules.find(entry.ImageBase) !=
+                ObservedModules.end();
         const bool loaded =
             loadEvent &&
-            !processed.Duplicate &&
             ModuleStillLoaded(entry.ImageBase);
+        std::array<wchar_t, ModulePathCapacity> canonicalPath{};
+        if (loaded) {
+            const DWORD canonicalCharacters = GetModuleFileNameW(
+                reinterpret_cast<HMODULE>(entry.ImageBase),
+                canonicalPath.data(),
+                static_cast<DWORD>(canonicalPath.size()));
+            if (canonicalCharacters != 0 &&
+                canonicalCharacters < canonicalPath.size()) {
+                processed.Path = canonicalPath.data();
+                processed.PathCharacters = canonicalCharacters;
+                const wchar_t* slash =
+                    std::wcsrchr(canonicalPath.data(), L'\\');
+                const wchar_t* forwardSlash =
+                    std::wcsrchr(canonicalPath.data(), L'/');
+                const wchar_t* separator = slash;
+                if (forwardSlash != nullptr &&
+                    (separator == nullptr ||
+                     forwardSlash > separator)) {
+                    separator = forwardSlash;
+                }
+                processed.ModuleName =
+                    separator == nullptr
+                        ? canonicalPath.data()
+                        : separator + 1;
+                processed.ModuleNameCharacters =
+                    std::wcslen(processed.ModuleName);
+            }
+        }
         if (loaded && algorithm != nullptr &&
-            entry.PathCharacters != 0) {
+            processed.PathCharacters != 0) {
             processed.HashSucceeded =
-                HashFile(algorithm, entry.Path, &processed.Sha256);
+                HashFile(
+                    algorithm,
+                    processed.Path,
+                    &processed.FileSize,
+                    &processed.Pe,
+                    &processed.IdentitySucceeded,
+                    &processed.Sha256);
             InterlockedIncrement(
                 processed.HashSucceeded
                     ? &Counters->HashSuccessCount
                     : &Counters->HashFailureCount);
-        } else if (loadEvent && !processed.Duplicate) {
+        } else if (loadEvent) {
             InterlockedIncrement(&Counters->HashFailureCount);
         }
 
-        if (loaded && processed.HashSucceeded) {
+        if (loaded && processed.HashSucceeded &&
+            processed.IdentitySucceeded) {
             ActiveModules.insert(entry.ImageBase);
             InterlockedIncrement(
                 &Counters->ActivationDispatchCount);
+        }
+        if (loaded) {
+            ObservedModules.insert(entry.ImageBase);
         } else if (entry.Kind == ModuleEventKind::Unloaded) {
+            ObservedModules.erase(entry.ImageBase);
             ActiveModules.erase(entry.ImageBase);
         }
         if (Processor != nullptr) {
@@ -567,7 +819,11 @@ bool ModuleObserver::Start(
                    module.modBaseAddr,
                    module.modBaseSize,
                    observedPath,
-                   observedPathCharacters)) {
+                   observedPathCharacters,
+                   module.szModule,
+                   wcsnlen_s(
+                       module.szModule,
+                       _countof(module.szModule)))) {
             Sleep(1);
         }
         hasModule = Module32NextW(snapshot, &module);
@@ -592,6 +848,10 @@ bool ModuleObserver::WaitUntilIdle(
     const ULONGLONG start = GetTickCount64();
     while (InterlockedCompareExchange(
                &Implementation_->OutstandingEvents,
+               0,
+               0) != 0 ||
+           InterlockedCompareExchange(
+               &Implementation_->WorkerBusy,
                0,
                0) != 0) {
         if (GetTickCount64() - start >= timeoutMilliseconds) {

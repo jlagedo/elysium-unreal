@@ -1,0 +1,138 @@
+{
+  "registry_version": 1,
+  "profiles": [
+    {
+      "id": "owner-unofficial-patch-vampire-6b15fae4",
+      "module": "Vampire.exe",
+      "file_size": 188536,
+      "sha256": "6b15fae4e5514f88e023a2f17ee84e2a3cdee35ce663d5af39b8178a58e3765a",
+      "pe": {
+        "machine": "0x014c",
+        "timestamp": "0x6a211e0d",
+        "optional_magic": "0x010b",
+        "preferred_image_base": "0x00400000",
+        "size_of_image": "0x00040000",
+        "checksum": "0x00000000",
+        "section_count": 5,
+        "characteristics": "0x012e"
+      },
+      "supported_record_schemas": [],
+      "targets": []
+    },
+    {
+      "id": "vtmb-retail-client-e88beae0",
+      "module": "client.dll",
+      "source_spec": "research/cases/animation-pose/specs/animation_pose.json",
+      "file_size": 3428425,
+      "sha256": "e88beae0dd03af06493c71c5e8d87a6993b54e590cb6ad37cd3513c588582870",
+      "pe": {
+        "machine": "0x014c",
+        "timestamp": "0x41afaf63",
+        "optional_magic": "0x010b",
+        "preferred_image_base": "0x10000000",
+        "size_of_image": "0x006e9000",
+        "checksum": "0x00000000",
+        "section_count": 4,
+        "characteristics": "0x210e"
+      },
+      "supported_record_schemas": [
+        {"name": "animation_file_header", "version": 2},
+        {"name": "animation_base", "version": 2},
+        {"name": "animation_final", "version": 2}
+      ],
+      "targets": [
+        {
+          "semantic_label": "client.resolve_virtual_model_pose",
+          "source_function_label": "resolve_virtual_model_pose",
+          "kind": "inline",
+          "rva": "0x000968a0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "83ec345355",
+          "supported_record_schemas": [
+            {"name": "animation_base", "version": 2}
+          ]
+        },
+        {
+          "semantic_label": "client.build_transformations",
+          "source_function_label": "c_baseanimating_build_transformations",
+          "kind": "inline",
+          "rva": "0x0008fd00",
+          "calling_convention": "thiscall",
+          "expected_bytes": "b84c6f0000",
+          "supported_record_schemas": [
+            {"name": "animation_final", "version": 2}
+          ]
+        },
+        {
+          "semantic_label": "client.get_studio_hdr",
+          "kind": "symbol",
+          "rva": "0x0008f900",
+          "calling_convention": "thiscall",
+          "expected_bytes": "8b4424045685c08b",
+          "supported_record_schemas": [
+            {"name": "animation_base", "version": 2},
+            {"name": "animation_final", "version": 2}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "vtmb-retail-engine-9d00b2c1",
+      "module": "engine.dll",
+      "source_spec": "research/cases/animation-pose/specs/animation_skinning.json",
+      "file_size": 1986620,
+      "sha256": "9d00b2c1e5edbad052fb0b514634ba54574666e12d1b408c46ce141d51ed2313",
+      "pe": {
+        "machine": "0x014c",
+        "timestamp": "0x41afaf48",
+        "optional_magic": "0x010b",
+        "preferred_image_base": "0x20000000",
+        "size_of_image": "0x013bb000",
+        "checksum": "0x00000000",
+        "section_count": 5,
+        "characteristics": "0x210e"
+      },
+      "supported_record_schemas": [],
+      "targets": []
+    },
+    {
+      "id": "vtmb-retail-studiorender-13d56ce9",
+      "module": "StudioRender.dll",
+      "source_spec": "research/cases/animation-pose/specs/animation_studiorender.json",
+      "file_size": 561222,
+      "sha256": "13d56ce90de2c5faedc0df26d36b24e90f30eded5055625f616cd97e301e124b",
+      "pe": {
+        "machine": "0x014c",
+        "timestamp": "0x4164cc40",
+        "optional_magic": "0x010b",
+        "preferred_image_base": "0x2c000000",
+        "size_of_image": "0x0026c000",
+        "checksum": "0x00000000",
+        "section_count": 4,
+        "characteristics": "0x210e"
+      },
+      "supported_record_schemas": [
+        {"name": "pose_file_header", "version": 2},
+        {"name": "pose", "version": 2}
+      ],
+      "targets": [
+        {
+          "semantic_label": "studiorender.draw_model",
+          "source_function_label": "c_studiorender_drawmodel",
+          "kind": "vtable",
+          "rva": "0x00004f00",
+          "calling_convention": "thiscall",
+          "expected_bytes": "83ec08538b1dccc0",
+          "vtable": {
+            "object_rva": "0x00082b30",
+            "expected_vtable_rva": "0x0006c150",
+            "slot": 22
+          },
+          "supported_record_schemas": [
+            {"name": "pose", "version": 2}
+          ]
+        }
+      ]
+    }
+  ]
+}

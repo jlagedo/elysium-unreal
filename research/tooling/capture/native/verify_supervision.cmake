@@ -109,6 +109,9 @@ foreach(REQUIRED
     "version=1"
     "state=${EXPECTED_STATE}"
     "reason=${EXPECTED_REASON}"
+    "probe_hook_installs=0"
+    "reason:unknown-hash"
+    "reason:missing-module"
 )
     string(FIND "${REPORT_TEXT}" "${REQUIRED}" POSITION)
     if(POSITION EQUAL -1)
@@ -116,3 +119,8 @@ foreach(REQUIRED
             "supervision report lacks ${REQUIRED}:\n${REPORT_TEXT}")
     endif()
 endforeach()
+if(NOT REPORT_TEXT MATCHES "probe_diagnostic_writes=[1-9][0-9]*" OR
+   NOT REPORT_TEXT MATCHES "probe_diagnostic_records=[1-9][0-9]*")
+    message(FATAL_ERROR
+        "supervision report lacks retained probe diagnostics:\n${REPORT_TEXT}")
+endif()

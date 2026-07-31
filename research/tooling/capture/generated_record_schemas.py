@@ -45,6 +45,14 @@ RECORDS = {
         'maximum_bytes': 28868,
         'struct': struct.Struct('<4sIQqIIIIIiffiII'),
     },
+    'probe_activation_diagnostic': {
+        'id': 6,
+        'schema_version': 1,
+        'magic': b'DIAG',
+        'minimum_bytes': 44,
+        'maximum_bytes': 44,
+        'struct': struct.Struct('<4sIIIIIIIIII'),
+    },
 }
 
 RECORD_ID_POSE_FILE_HEADER = 1
@@ -57,6 +65,8 @@ RECORD_ID_ANIMATION_BASE = 4
 SCHEMA_VERSION_ANIMATION_BASE = 2
 RECORD_ID_ANIMATION_FINAL = 5
 SCHEMA_VERSION_ANIMATION_FINAL = 2
+RECORD_ID_PROBE_ACTIVATION_DIAGNOSTIC = 6
+SCHEMA_VERSION_PROBE_ACTIVATION_DIAGNOSTIC = 1
 
 POSE_FILE_HEADER = RECORDS['pose_file_header']['struct']
 POSE_RECORD_HEADER = RECORDS['pose']['struct']

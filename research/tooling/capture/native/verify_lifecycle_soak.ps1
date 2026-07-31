@@ -140,8 +140,12 @@ for ($cycle = 1; $cycle -le $Cycles; ++$cycle) {
         partial = "0"
         process_resumed = "1"
         collector_started = "1"
+        startup_profile = "direct"
+        startup_config = ""
         process_exit_code = "0"
         collector_exit_code = "0"
+        binary_profile_registry_version = "1"
+        binary_profile_count = "4"
     }.GetEnumerator()) {
         if ($finalization[$expectation.Key] -ne $expectation.Value) {
             throw (

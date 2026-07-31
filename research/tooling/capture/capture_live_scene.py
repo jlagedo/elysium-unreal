@@ -35,17 +35,17 @@ from research.tooling.capture.generated_record_schemas import (
     POSE_FILE_HEADER as FILE_HEADER,
     POSE_RECORD_HEADER as POSE_HEADER,
 )
+from research.tooling.capture.generated_binary_profiles import (
+    match_profile,
+    target as profile_target,
+)
 
 
 ROOT = Path(__file__).resolve().parent
 OUTPUT_ROOT = research_root() / "live-pose"
 BUILD_ROOT = OUTPUT_ROOT / "bin"
-EXPECTED_STUDIO_RENDER_SHA256 = (
-    "13d56ce90de2c5faedc0df26d36b24e90f30eded5055625f616cd97e301e124b"
-)
-EXPECTED_CLIENT_SHA256 = (
-    "e88beae0dd03af06493c71c5e8d87a6993b54e590cb6ad37cd3513c588582870"
-)
+
+
 def file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -85,6 +85,9 @@ def build_if_needed() -> None:
         ROOT / "generated_record_schemas.py",
         ROOT / "contracts" / "record_schemas.json",
         ROOT / "contracts" / "generate_record_schemas.py",
+        ROOT / "generated_binary_profiles.py",
+        ROOT / "contracts" / "binary_profiles.json",
+        ROOT / "contracts" / "generate_binary_profiles.py",
         ROOT / "live_pose_hook.cpp",
         ROOT / "live_pose_injector.cpp",
     ]
@@ -398,12 +401,34 @@ def start_capture(args) -> int:
     pid = args.pid or find_process("vampire.exe")
     _, _, studio_path = find_module(pid, "studiorender.dll")
     studio_hash = hashlib.sha256(studio_path.read_bytes()).hexdigest()
-    if studio_hash != EXPECTED_STUDIO_RENDER_SHA256:
-        raise RuntimeError(f"unexpected StudioRender.dll SHA-256: {studio_hash}")
+    studio_profile = match_profile(
+        studio_path.name,
+        studio_path.stat().st_size,
+        studio_hash,
+    )
+    draw_model = profile_target(
+        studio_profile,
+        "studiorender.draw_model",
+    )
     _, _, client_path = find_module(pid, "client.dll")
     client_hash = hashlib.sha256(client_path.read_bytes()).hexdigest()
-    if client_hash != EXPECTED_CLIENT_SHA256:
-        raise RuntimeError(f"unexpected client.dll SHA-256: {client_hash}")
+    client_profile = match_profile(
+        client_path.name,
+        client_path.stat().st_size,
+        client_hash,
+    )
+    resolve_pose = profile_target(
+        client_profile,
+        "client.resolve_virtual_model_pose",
+    )
+    build_transformations = profile_target(
+        client_profile,
+        "client.build_transformations",
+    )
+    get_studio_hdr = profile_target(
+        client_profile,
+        "client.get_studio_hdr",
+    )
     animation_model = None
     target_checksum = 0
     if args.animation_model:
@@ -423,6 +448,21 @@ def start_capture(args) -> int:
         "done": session / "done.txt",
         "studiorender_sha256": studio_hash,
         "client_sha256": client_hash,
+        "studio_object_rva": f"0x{draw_model['vtable']['object_rva']:x}",
+        "studio_vtable_rva": (
+            f"0x{draw_model['vtable']['expected_vtable_rva']:x}"
+        ),
+        "draw_model_rva": f"0x{draw_model['rva']:x}",
+        "draw_model_slot": draw_model["vtable"]["slot"],
+        "resolve_virtual_model_pose_rva": f"0x{resolve_pose['rva']:x}",
+        "resolve_virtual_model_pose_expected": resolve_pose["expected_bytes"],
+        "build_transformations_rva": (
+            f"0x{build_transformations['rva']:x}"
+        ),
+        "build_transformations_expected": (
+            build_transformations["expected_bytes"]
+        ),
+        "get_studio_hdr_rva": f"0x{get_studio_hdr['rva']:x}",
         "animation_output": (
             session / "animation.elanim" if animation_model else ""
         ),
@@ -475,6 +515,10 @@ def start_capture(args) -> int:
             "animation_model_checksum": (
                 f"0x{target_checksum:08x}" if animation_model else None
             ),
+            "binary_profiles": [
+                studio_profile["id"],
+                client_profile["id"],
+            ],
             "session": str(session.resolve()),
         },
     )

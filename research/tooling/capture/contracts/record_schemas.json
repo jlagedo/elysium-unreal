@@ -105,6 +105,27 @@
       "maximum_bytes": 28868,
       "variable_payload": "boneCount position float3 values, boneCount quaternion float4 values, then ceil(boneCount/32) little-endian uint32 selection words",
       "layout_from": "animation_base"
+    },
+    {
+      "name": "probe_activation_diagnostic",
+      "id": 6,
+      "schema_version": 1,
+      "magic": "DIAG",
+      "minimum_bytes": 44,
+      "maximum_bytes": 44,
+      "fields": [
+        ["magic", "char", 4],
+        ["recordBytes", "uint32"],
+        ["recordId", "uint32"],
+        ["schemaVersion", "uint32"],
+        ["reason", "uint32"],
+        ["profileIndex", "uint32"],
+        ["targetIndex", "uint32"],
+        ["imageBase", "uint32"],
+        ["targetRva", "uint32"],
+        ["expected", "uint32"],
+        ["observed", "uint32"]
+      ]
     }
   ]
 }

@@ -12,13 +12,6 @@
 
 namespace {
 
-constexpr DWORD kStudioObjectRva = 0x82B30;
-constexpr DWORD kStudioVtableRva = 0x6C150;
-constexpr DWORD kDrawModelRva = 0x4F00;
-constexpr DWORD kDrawModelSlot = 0x58 / sizeof(void*);
-constexpr DWORD kResolveVirtualModelPoseRva = 0x968A0;
-constexpr DWORD kBuildTransformationsRva = 0x8FD00;
-constexpr DWORD kGetStudioHdrRva = 0x8F900;
 constexpr int kMaximumBones = 1024;
 constexpr DWORD kInlinePatchBytes = 5;
 
@@ -70,6 +63,15 @@ wchar_t gStopPath[MAX_PATH * 4]{};
 wchar_t gDonePath[MAX_PATH * 4]{};
 DWORD gDurationSeconds = 300;
 DWORD gTargetChecksum = 0;
+DWORD gStudioObjectRva = 0;
+DWORD gStudioVtableRva = 0;
+DWORD gDrawModelRva = 0;
+DWORD gDrawModelSlotIndex = 0;
+DWORD gResolveVirtualModelPoseRva = 0;
+DWORD gBuildTransformationsRva = 0;
+DWORD gGetStudioHdrRva = 0;
+unsigned char gResolveExpected[kInlinePatchBytes]{};
+unsigned char gBuildExpected[kInlinePatchBytes]{};
 
 bool WriteAll(HANDLE file, const void* data, DWORD bytes) {
     const auto* cursor = static_cast<const unsigned char*>(data);
@@ -450,16 +452,16 @@ void RestoreInlineHook(InlineHook& hook) {
 
 bool InstallHooks(HMODULE studioRender, HMODULE client) {
     auto* base = reinterpret_cast<unsigned char*>(studioRender);
-    auto* object = base + kStudioObjectRva;
+    auto* object = base + gStudioObjectRva;
     auto** vtable = *reinterpret_cast<void***>(object);
-    if (vtable != reinterpret_cast<void**>(base + kStudioVtableRva)) {
+    if (vtable != reinterpret_cast<void**>(base + gStudioVtableRva)) {
         return false;
     }
-    if (vtable[kDrawModelSlot] != base + kDrawModelRva) {
+    if (vtable[gDrawModelSlotIndex] != base + gDrawModelRva) {
         return false;
     }
 
-    gDrawModelSlot = &vtable[kDrawModelSlot];
+    gDrawModelSlot = &vtable[gDrawModelSlotIndex];
     DWORD previousProtection = 0;
     if (!VirtualProtect(
             gDrawModelSlot, sizeof(void*), PAGE_EXECUTE_READWRITE,
@@ -476,7 +478,7 @@ bool InstallHooks(HMODULE studioRender, HMODULE client) {
     FlushInstructionCache(
         GetCurrentProcess(), gDrawModelSlot, sizeof(void*));
     if (gOriginalDrawModel != reinterpret_cast<DrawModelFn>(
-            base + kDrawModelRva)) {
+            base + gDrawModelRva)) {
         return false;
     }
 
@@ -486,15 +488,11 @@ bool InstallHooks(HMODULE studioRender, HMODULE client) {
 
     auto* clientBase = reinterpret_cast<unsigned char*>(client);
     gGetStudioHdr = reinterpret_cast<GetStudioHdrFn>(
-        clientBase + kGetStudioHdrRva);
-    const unsigned char resolveExpected[kInlinePatchBytes] = {
-        0x83, 0xEC, 0x34, 0x53, 0x55};
-    const unsigned char buildExpected[kInlinePatchBytes] = {
-        0xB8, 0x4C, 0x6F, 0x00, 0x00};
+        clientBase + gGetStudioHdrRva);
     if (!PrepareInlineHook(
             gResolveVirtualModelPoseHook,
-            clientBase + kResolveVirtualModelPoseRva,
-            resolveExpected)) {
+            clientBase + gResolveVirtualModelPoseRva,
+            gResolveExpected)) {
         return false;
     }
     gOriginalResolveVirtualModelPose =
@@ -507,8 +505,8 @@ bool InstallHooks(HMODULE studioRender, HMODULE client) {
     }
     if (!PrepareInlineHook(
             gBuildTransformationsHook,
-            clientBase + kBuildTransformationsRva,
-            buildExpected)) {
+            clientBase + gBuildTransformationsRva,
+            gBuildExpected)) {
         RestoreInlineHook(gResolveVirtualModelPoseHook);
         return false;
     }
@@ -559,6 +557,69 @@ void RemoveHooks() {
     }
 }
 
+bool ReadProfileDword(
+    const wchar_t* iniPath,
+    const wchar_t* key,
+    DWORD* value) {
+    wchar_t text[32]{};
+    GetPrivateProfileStringW(
+        L"capture",
+        key,
+        L"",
+        text,
+        ARRAYSIZE(text),
+        iniPath);
+    if (!text[0]) {
+        return false;
+    }
+    wchar_t* end = nullptr;
+    const unsigned long parsed = std::wcstoul(text, &end, 0);
+    if (end == text || *end != L'\0') {
+        return false;
+    }
+    *value = static_cast<DWORD>(parsed);
+    return true;
+}
+
+int HexDigit(wchar_t value) {
+    if (value >= L'0' && value <= L'9') {
+        return value - L'0';
+    }
+    if (value >= L'a' && value <= L'f') {
+        return value - L'a' + 10;
+    }
+    if (value >= L'A' && value <= L'F') {
+        return value - L'A' + 10;
+    }
+    return -1;
+}
+
+bool ReadExpectedBytes(
+    const wchar_t* iniPath,
+    const wchar_t* key,
+    unsigned char* bytes) {
+    wchar_t text[kInlinePatchBytes * 2 + 1]{};
+    GetPrivateProfileStringW(
+        L"capture",
+        key,
+        L"",
+        text,
+        ARRAYSIZE(text),
+        iniPath);
+    if (std::wcslen(text) != kInlinePatchBytes * 2) {
+        return false;
+    }
+    for (DWORD index = 0; index < kInlinePatchBytes; ++index) {
+        const int high = HexDigit(text[index * 2]);
+        const int low = HexDigit(text[index * 2 + 1]);
+        if (high < 0 || low < 0) {
+            return false;
+        }
+        bytes[index] = static_cast<unsigned char>((high << 4) | low);
+    }
+    return true;
+}
+
 bool ReadConfiguration(
     wchar_t* iniPath, wchar_t* outputPath, wchar_t* animationOutputPath,
     wchar_t* studioHash, wchar_t* clientHash) {
@@ -599,7 +660,47 @@ bool ReadConfiguration(
     gTargetChecksum = std::wcstoul(targetChecksum, nullptr, 0);
     gDurationSeconds = GetPrivateProfileIntW(
         L"capture", L"duration_seconds", 300, iniPath);
-    return outputPath[0] && gReadyPath[0] && gStopPath[0] && gDonePath[0];
+    const bool studioProfile =
+        ReadProfileDword(
+            iniPath,
+            L"studio_object_rva",
+            &gStudioObjectRva) &&
+        ReadProfileDword(
+            iniPath,
+            L"studio_vtable_rva",
+            &gStudioVtableRva) &&
+        ReadProfileDword(
+            iniPath,
+            L"draw_model_rva",
+            &gDrawModelRva) &&
+        ReadProfileDword(
+            iniPath,
+            L"draw_model_slot",
+            &gDrawModelSlotIndex);
+    const bool clientProfile =
+        !animationOutputPath[0] ||
+        (ReadProfileDword(
+             iniPath,
+             L"resolve_virtual_model_pose_rva",
+             &gResolveVirtualModelPoseRva) &&
+         ReadExpectedBytes(
+             iniPath,
+             L"resolve_virtual_model_pose_expected",
+             gResolveExpected) &&
+         ReadProfileDword(
+             iniPath,
+             L"build_transformations_rva",
+             &gBuildTransformationsRva) &&
+         ReadExpectedBytes(
+             iniPath,
+             L"build_transformations_expected",
+             gBuildExpected) &&
+         ReadProfileDword(
+             iniPath,
+             L"get_studio_hdr_rva",
+             &gGetStudioHdrRva));
+    return outputPath[0] && gReadyPath[0] && gStopPath[0] &&
+        gDonePath[0] && studioProfile && clientProfile;
 }
 
 DWORD WINAPI CaptureWorker(void*) {
@@ -662,9 +763,9 @@ DWORD WINAPI CaptureWorker(void*) {
     fileHeader.studioRenderBase =
         static_cast<std::uint32_t>(
             reinterpret_cast<std::uintptr_t>(studioRender));
-    fileHeader.studioObject = fileHeader.studioRenderBase + kStudioObjectRva;
-    fileHeader.studioVtable = fileHeader.studioRenderBase + kStudioVtableRva;
-    fileHeader.drawModelRva = kDrawModelRva;
+    fileHeader.studioObject = fileHeader.studioRenderBase + gStudioObjectRva;
+    fileHeader.studioVtable = fileHeader.studioRenderBase + gStudioVtableRva;
+    fileHeader.drawModelRva = gDrawModelRva;
     std::size_t converted = 0;
     wcstombs_s(
         &converted, fileHeader.studioRenderSha256,
@@ -685,9 +786,9 @@ DWORD WINAPI CaptureWorker(void*) {
         animationHeader.clientBase = static_cast<std::uint32_t>(
             reinterpret_cast<std::uintptr_t>(client));
         animationHeader.resolveVirtualModelPoseRva =
-            kResolveVirtualModelPoseRva;
+            gResolveVirtualModelPoseRva;
         animationHeader.buildTransformationsRva =
-            kBuildTransformationsRva;
+            gBuildTransformationsRva;
         animationHeader.targetChecksum = gTargetChecksum;
         converted = 0;
         wcstombs_s(

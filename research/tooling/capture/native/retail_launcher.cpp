@@ -62,6 +62,7 @@ private:
 enum class StartupProfile {
     Direct,
     UnofficialPatch,
+    UnofficialPatchSave,
 };
 
 struct Options {
@@ -200,6 +201,11 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
                 options->Profile = StartupProfile::Direct;
             } else if (std::wcscmp(value, L"unofficial-patch") == 0) {
                 options->Profile = StartupProfile::UnofficialPatch;
+            } else if (
+                std::wcscmp(
+                    value,
+                    L"unofficial-patch-save") == 0) {
+                options->Profile = StartupProfile::UnofficialPatchSave;
             } else {
                 std::fwprintf(
                     stderr,
@@ -356,9 +362,16 @@ std::wstring BuildCommandLine(
     const Options& options) {
     std::vector<std::wstring> arguments;
     arguments.push_back(executable);
-    if (options.Profile == StartupProfile::UnofficialPatch) {
+    if (options.Profile != StartupProfile::Direct) {
         arguments.emplace_back(L"-game");
         arguments.emplace_back(L"Unofficial_Patch");
+    }
+    if (options.Profile == StartupProfile::UnofficialPatchSave) {
+        arguments.emplace_back(L"-dev");
+        arguments.emplace_back(L"-console");
+        arguments.emplace_back(L"-sw");
+        arguments.emplace_back(L"+exec");
+        arguments.emplace_back(L"elysium_load.cfg");
     }
     arguments.insert(
         arguments.end(),
@@ -536,7 +549,10 @@ public:
             Handshake_->Bytes != sizeof(BootstrapHandshake) ||
             Handshake_->ProbeThreadId == 0 ||
             Handshake_->ModuleObserverArmed != 1 ||
-            Handshake_->TransportArmed != 1) {
+            Handshake_->TransportArmed != 1 ||
+            Handshake_->BinaryProfileRegistryLoaded != 1 ||
+            Handshake_->BinaryProfileRegistryVersion <= 0 ||
+            Handshake_->BinaryProfileCount <= 0) {
             std::fwprintf(stderr, L"probe-host ready contract is invalid\n");
             return false;
         }
@@ -739,7 +755,8 @@ int RunAttach(const Options& options, const std::wstring& probeHost) {
         L"retail-launch-v1 event=bootstrap_ready mode=attached pid=%lu "
         L"distribution=%ls version=%lu observer_armed=%ld "
         L"transport_armed=%ld probe_thread=%lu observer_thread=%ld "
-        L"bootstrap_modules=%ld\n",
+        L"bootstrap_modules=%ld profile_registry=%ld profiles=%ld "
+        L"profile_matches=%ld profile_misses=%ld\n",
         options.AttachPid,
         options.Distribution.c_str(),
         static_cast<unsigned long>(ready.Version),
@@ -747,7 +764,11 @@ int RunAttach(const Options& options, const std::wstring& probeHost) {
         ready.TransportArmed,
         ready.ProbeThreadId,
         ready.ModuleObserver.WorkerThreadId,
-        ready.ModuleObserver.BootstrapEventCount);
+        ready.ModuleObserver.BootstrapEventCount,
+        ready.BinaryProfileRegistryVersion,
+        ready.BinaryProfileCount,
+        ready.BinaryProfileMatchCount,
+        ready.BinaryProfileMissCount);
     std::wprintf(
         L"retail-launch-v1 event=attach_complete mode=attached pid=%lu\n",
         options.AttachPid);
@@ -778,9 +799,25 @@ bool TerminateAndWait(HANDLE process, UINT exitCode) {
 }
 
 const wchar_t* ProfileName(StartupProfile profile) {
-    return profile == StartupProfile::UnofficialPatch
-        ? L"unofficial-patch"
-        : L"direct";
+    switch (profile) {
+        case StartupProfile::UnofficialPatch:
+            return L"unofficial-patch";
+        case StartupProfile::UnofficialPatchSave:
+            return L"unofficial-patch-save";
+        default:
+            return L"direct";
+    }
+}
+
+const char* ProfileNameAscii(StartupProfile profile) {
+    switch (profile) {
+        case StartupProfile::UnofficialPatch:
+            return "unofficial-patch";
+        case StartupProfile::UnofficialPatchSave:
+            return "unofficial-patch-save";
+        default:
+            return "direct";
+    }
 }
 
 }  // namespace
@@ -794,7 +831,8 @@ int wmain(int argc, wchar_t** argv) {
             L"--distribution NAME --probe-host PATH) | "
             L"(--executable PATH "
             L"--working-directory PATH --distribution NAME "
-            L"[--startup-profile direct|unofficial-patch] "
+            L"[--startup-profile direct|unofficial-patch|"
+            L"unofficial-patch-save] "
             L"[--environment NAME=VALUE] [--verify-suspended-ms N] "
             L"[--probe-host PATH] [--collector PATH] "
             L"[--collector-argument VALUE] [--timeout-ms N] "
@@ -967,14 +1005,20 @@ int wmain(int argc, wchar_t** argv) {
     std::wprintf(
         L"retail-launch-v1 event=bootstrap_ready mode=launched pid=%lu "
         L"version=%lu observer_armed=%ld transport_armed=%ld "
-        L"probe_thread=%lu observer_thread=%ld bootstrap_modules=%ld\n",
+        L"probe_thread=%lu observer_thread=%ld bootstrap_modules=%ld "
+        L"profile_registry=%ld profiles=%ld profile_matches=%ld "
+        L"profile_misses=%ld\n",
         created.dwProcessId,
         static_cast<unsigned long>(ready.Version),
         ready.ModuleObserverArmed,
         ready.TransportArmed,
         ready.ProbeThreadId,
         ready.ModuleObserver.WorkerThreadId,
-        ready.ModuleObserver.BootstrapEventCount);
+        ready.ModuleObserver.BootstrapEventCount,
+        ready.BinaryProfileRegistryVersion,
+        ready.BinaryProfileCount,
+        ready.BinaryProfileMatchCount,
+        ready.BinaryProfileMissCount);
     std::fflush(stdout);
 
     if (options.InjectAndTerminate) {
@@ -1000,7 +1044,26 @@ int wmain(int argc, wchar_t** argv) {
             finalizationPath,
             options.TimeoutMs,
             options.NormalExitCodes,
+            ProfileNameAscii(options.Profile),
+            options.Profile == StartupProfile::UnofficialPatchSave
+                ? "Unofficial_Patch/cfg/elysium_load.cfg"
+                : "",
             &ready.ModuleNotificationCount,
+            &ready.BinaryProfileRegistryVersion,
+            &ready.BinaryProfileCount,
+            &ready.BinaryProfileMatchCount,
+            &ready.BinaryProfileMissCount,
+            &ready.BinaryProfileUnloadCount,
+            &ready.ActiveBinaryProfileCount,
+            &ready.BinaryProfileObservedMask,
+            &ready.BinaryProfileMatchedMask,
+            &ready.BinaryProfileLastMismatchIndex,
+            &ready.BinaryProfileLastMismatchFlags,
+            &ready.ProbeValidationPassCount,
+            &ready.ProbeHookInstallCount,
+            &ready.ProbeDiagnosticWriteCount,
+            ready.ProbeDiagnostics,
+            elysium::capture::ProbeDiagnosticCapacity,
         };
         const int supervisionResult =
             elysium::capture::RunSupervision(request);
@@ -1054,7 +1117,10 @@ int wmain(int argc, wchar_t** argv) {
         L"exit_code=%lu "
         L"module_notifications=%ld bootstrap_modules=%ld loads=%ld "
         L"unloads=%ld processed=%ld hashes=%ld "
-        L"activation_dispatches=%ld queue_drops=%ld\n",
+        L"activation_dispatches=%ld queue_drops=%ld "
+        L"profile_matches=%ld profile_misses=%ld profile_unloads=%ld "
+        L"active_profiles=%ld probe_validation_passes=%ld "
+        L"probe_hook_installs=%ld probe_diagnostics=%ld\n",
         created.dwProcessId,
         exitCode,
         moduleNotifications,
@@ -1064,6 +1130,13 @@ int wmain(int argc, wchar_t** argv) {
         observer.ProcessedEventCount,
         observer.HashSuccessCount,
         observer.ActivationDispatchCount,
-        observer.QueueDropCount);
+        observer.QueueDropCount,
+        complete.BinaryProfileMatchCount,
+        complete.BinaryProfileMissCount,
+        complete.BinaryProfileUnloadCount,
+        complete.ActiveBinaryProfileCount,
+        complete.ProbeValidationPassCount,
+        complete.ProbeHookInstallCount,
+        complete.ProbeDiagnosticWriteCount);
     return exitCode == 0 ? 0 : 19;
 }

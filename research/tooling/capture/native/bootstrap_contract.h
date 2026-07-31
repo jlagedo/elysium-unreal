@@ -5,12 +5,14 @@
 #include <cstdint>
 #include <string>
 
+#include "../generated_record_schemas.h"
 #include "module_observer.h"
 
 namespace elysium::capture {
 
 inline constexpr std::uint32_t BootstrapMagic = 0x31484245U;  // EBH1
-inline constexpr std::uint32_t BootstrapVersion = 2;
+inline constexpr std::uint32_t BootstrapVersion = 5;
+inline constexpr std::uint32_t ProbeDiagnosticCapacity = 16;
 
 enum class BootstrapState : LONG {
     Created = 0,
@@ -31,20 +33,36 @@ struct BootstrapHandshake {
     volatile LONG TransportArmed;
     volatile LONG ModuleNotificationCount;
     ModuleObserverCounters ModuleObserver;
+    volatile LONG BinaryProfileRegistryLoaded;
+    volatile LONG BinaryProfileRegistryVersion;
+    volatile LONG BinaryProfileCount;
+    volatile LONG BinaryProfileMatchCount;
+    volatile LONG BinaryProfileMissCount;
+    volatile LONG BinaryProfileUnloadCount;
+    volatile LONG ActiveBinaryProfileCount;
+    volatile LONG BinaryProfileObservedMask;
+    volatile LONG BinaryProfileMatchedMask;
+    volatile LONG BinaryProfileLastMismatchIndex;
+    volatile LONG BinaryProfileLastMismatchFlags;
+    volatile LONG ProbeValidationPassCount;
+    volatile LONG ProbeHookInstallCount;
+    volatile LONG ProbeDiagnosticWriteCount;
+    ProbeActivationDiagnosticRecord
+        ProbeDiagnostics[ProbeDiagnosticCapacity];
     DWORD ErrorCode;
     wchar_t Message[64];
 };
 #pragma pack(pop)
 
-static_assert(sizeof(BootstrapHandshake) == 208);
+static_assert(sizeof(BootstrapHandshake) == 968);
 
 inline std::wstring BootstrapMappingName(DWORD processId) {
-    return L"Local\\ElysiumRetailBootstrap.v2." +
+    return L"Local\\ElysiumRetailBootstrap.v5." +
         std::to_wstring(processId);
 }
 
 inline std::wstring BootstrapSignalName(DWORD processId) {
-    return L"Local\\ElysiumRetailBootstrap.v2." +
+    return L"Local\\ElysiumRetailBootstrap.v5." +
         std::to_wstring(processId) + L".signal";
 }
 

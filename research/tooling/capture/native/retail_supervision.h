@@ -2,8 +2,11 @@
 
 #include <windows.h>
 
+#include <cstddef>
 #include <string>
 #include <vector>
+
+#include "../generated_record_schemas.h"
 
 namespace elysium::capture {
 
@@ -17,7 +20,24 @@ struct SupervisionRequest {
     std::wstring FinalizationPath;
     DWORD TimeoutMs;
     std::vector<DWORD> NormalExitCodes;
+    std::string StartupProfile;
+    std::string StartupConfig;
     const volatile LONG* ModuleNotificationCount;
+    const volatile LONG* BinaryProfileRegistryVersion;
+    const volatile LONG* BinaryProfileCount;
+    const volatile LONG* BinaryProfileMatchCount;
+    const volatile LONG* BinaryProfileMissCount;
+    const volatile LONG* BinaryProfileUnloadCount;
+    const volatile LONG* ActiveBinaryProfileCount;
+    const volatile LONG* BinaryProfileObservedMask;
+    const volatile LONG* BinaryProfileMatchedMask;
+    const volatile LONG* BinaryProfileLastMismatchIndex;
+    const volatile LONG* BinaryProfileLastMismatchFlags;
+    const volatile LONG* ProbeValidationPassCount;
+    const volatile LONG* ProbeHookInstallCount;
+    const volatile LONG* ProbeDiagnosticWriteCount;
+    const ProbeActivationDiagnosticRecord* ProbeDiagnostics;
+    std::size_t ProbeDiagnosticCapacity;
 };
 
 int RunSupervision(const SupervisionRequest& request);

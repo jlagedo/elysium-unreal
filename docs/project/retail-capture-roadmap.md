@@ -156,7 +156,7 @@ collector and analyzers remain outside the retail process.
 | Cross-DLL binary proof specifications | Available | `research/cases/animation-pose/specs/` |
 | Whole-scene and authored-pose analyzers | Available | `research/tooling/capture/` |
 | Launcher-controlled suspended launch/bootstrap | Available | `research/tooling/capture/native/` |
-| General module/probe registry | Missing | CAP2 |
+| General module/probe registry | Partial | CAP2 |
 | Bounded process-external transport | Missing | CAP3 |
 | Unified recoverable indexed trace | Missing | CAP3 |
 | Scene placement and physical-state oracle | Missing | CAP7 |
@@ -243,7 +243,14 @@ Work proceeds in this order:
   without the game installation.
 - [x] **CAP1.3 Suspended launch** — reproduce the selected retail command line,
   working directory, inherited environment, and distribution-specific startup
-  while creating `vampire.exe` suspended.
+  while creating `vampire.exe` suspended. The
+  `unofficial-patch-save` profile is the reproducible direct-save path:
+  `-game Unofficial_Patch -dev -console -sw +exec elysium_load.cfg`.
+  The owner-local `Unofficial_Patch/cfg/elysium_load.cfg` names the save with a
+  `load` command, remains outside the repository, and is validated before launch.
+  Run it through
+  `uv run elysium research retail_capture_launch --distribution owner-configured
+  --startup-profile unofficial-patch-save --run --timeout-seconds 300`.
 - [x] **CAP1.4 Bootstrap injection** — inject the probe host through a conventional
   `LoadLibraryW` path, wait for a versioned ready/error handshake, and resume the
   primary thread only after module observation and transport are armed. Manual
@@ -253,7 +260,9 @@ Work proceeds in this order:
   suspended retail process or an orphaned collector. Normal exit, crash,
   collector exit, timeout, atomic finalization, cleanup, and owner Ctrl-C
   acceptance pass; cancellation records a partial `reason=ctrl-c` report and
-  leaves no game or collector process.
+  leaves no game or collector process. Finalization records the startup profile
+  and direct-save cfg path so retained reports identify how retail reached its
+  capture state.
 - [x] **CAP1.6 Attach fallback** — preserve an explicit attach-to-PID mode for
   debugger-led discovery. Session metadata distinguishes launched and attached
   captures; reproducible acceptance uses launch mode. Synthetic acceptance
@@ -271,16 +280,29 @@ Work proceeds in this order:
 - [x] **CAP2.1 Module observer** — enumerate modules already present at bootstrap
   and observe later loads/unloads. Loader callbacks only enqueue base/size/path
   events; a worker performs hashing and probe activation outside loader-sensitive
-  callbacks. Bootstrap processing completes before the ready handshake. Release
-  and Debug acceptance cover standalone bootstrap/load/unload processing and the
-  100-cycle injected lifecycle with zero queue drops.
-- [ ] **CAP2.2 Binary profile registry** — track executable/module size, SHA-256,
+  callbacks. The worker also reconciles the live module snapshot because the
+  patched retail runtime can add gameplay modules without a corresponding loader
+  notification. Bootstrap processing completes before the ready handshake.
+  Release and Debug acceptance cover standalone bootstrap/load/unload processing
+  and the 100-cycle injected lifecycle with zero queue drops.
+- [x] **CAP2.2 Binary profile registry** — track executable/module size, SHA-256,
   PE identity, image base, RVAs, calling conventions, expected bytes, semantic
   labels, and supported record schemas. Profiles are data, not hard-coded
-  constants scattered through probes.
-- [ ] **CAP2.3 Fail-closed validation** — unknown hash, missing module, unexpected
+  constants scattered through probes. One canonical JSON registry generates the
+  native and Python profile surfaces, cross-validates source specifications and
+  record schemas, and selects only exact size/SHA-256/PE identities while retaining
+  the loader/runtime image base for RVA resolution. Release and Debug contract and
+  exact-match tests pass; an owner-profile launch matched all four registered
+  binaries (`Vampire.exe`, `client.dll`, `engine.dll`, and `StudioRender.dll`).
+- [x] **CAP2.3 Fail-closed validation** — unknown hash, missing module, unexpected
   prologue, invalid vtable slot, or unsupported schema installs no hook and emits
-  a diagnostic record. There is no fuzzy "near match" mode.
+  a diagnostic record. There is no fuzzy "near match" mode. The generated
+  record registry owns the fixed `DIAG` layout; the bootstrap handshake retains
+  a bounded diagnostic ring and supervision writes its records into the atomic
+  finalization report. Target validation admits only compiled schema IDs and
+  versions, exact bounded prologue bytes, and—when declared—the exact in-image
+  object, vtable, and slot target. Release and Debug acceptance exercise every
+  rejection reason and prove the install path remains untouched.
 - [ ] **CAP2.4 Hook backends** — support validated vtable replacement and an
   instruction-aware inline detour backend. Hook declarations select the backend;
   probe code does not implement trampolines.
