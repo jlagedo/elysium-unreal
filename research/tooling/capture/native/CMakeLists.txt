@@ -96,6 +96,12 @@ add_dependencies(
 
 add_executable(retail_launcher retail_launcher.cpp)
 elysium_native_target(retail_launcher)
+target_include_directories(retail_launcher PRIVATE .)
+
+add_library(retail_probe_host SHARED retail_probe_host.cpp)
+set_target_properties(retail_probe_host PROPERTIES OUTPUT_NAME retail_probe_host)
+target_include_directories(retail_probe_host PRIVATE .)
+elysium_native_target(retail_probe_host)
 
 enable_testing()
 add_test(
@@ -123,6 +129,7 @@ add_test(
         --startup-profile unofficial-patch
         --environment ELYSIUM_CAP1_OVERRIDE=override-value
         --verify-suspended-ms 25
+        --probe-host $<TARGET_FILE:retail_probe_host>
         --resume-synthetic
         --
         --initial-delay-ms 0
@@ -139,6 +146,25 @@ set_tests_properties(
     PROPERTIES
         ENVIRONMENT "ELYSIUM_CAP1_PARENT=parent-value"
         PASS_REGULAR_EXPRESSION "event=launch_complete.*exit_code=0"
+        TIMEOUT 15
+)
+
+add_test(
+    NAME synthetic_bootstrap_termination
+    COMMAND
+        $<TARGET_FILE:retail_launcher>
+        --executable $<TARGET_FILE:synthetic_retail>
+        --working-directory $<TARGET_FILE_DIR:synthetic_retail>
+        --distribution synthetic-test
+        --startup-profile direct
+        --verify-suspended-ms 25
+        --probe-host $<TARGET_FILE:retail_probe_host>
+        --inject-and-terminate
+)
+set_tests_properties(
+    synthetic_bootstrap_termination
+    PROPERTIES
+        PASS_REGULAR_EXPRESSION "event=bootstrap_verified"
         TIMEOUT 15
 )
 

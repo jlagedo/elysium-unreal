@@ -226,9 +226,37 @@ class RetailCaptureContractTests(unittest.TestCase):
             / "retail_capture_launch.py"
         ).read_text(encoding="utf-8")
         self.assertIn('run_native("build"', public_driver)
-        self.assertIn('"--terminate-after-verification"', public_driver)
+        self.assertIn('"--inject-and-terminate"', public_driver)
+        self.assertIn('"retail_probe_host.dll"', public_driver)
         self.assertIn('"--startup-profile"', public_driver)
         self.assertIn('target_arguments[:1] == ["--"]', public_driver)
+
+    def test_bootstrap_injection_uses_a_versioned_loadlibrary_handshake(self) -> None:
+        cmake = (NATIVE_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+        launcher = (NATIVE_ROOT / "retail_launcher.cpp").read_text(
+            encoding="utf-8"
+        )
+        host = (NATIVE_ROOT / "retail_probe_host.cpp").read_text(
+            encoding="utf-8"
+        )
+        contract = (NATIVE_ROOT / "bootstrap_contract.h").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("add_library(retail_probe_host SHARED", cmake)
+        self.assertIn("synthetic_bootstrap_termination", cmake)
+        self.assertIn('"LoadLibraryW"', launcher)
+        self.assertIn("CreateRemoteThread(", launcher)
+        self.assertNotIn("manual map", launcher.lower())
+        self.assertIn("BootstrapVersion = 1", contract)
+        self.assertIn("ModuleObserverArmed", contract)
+        self.assertIn("TransportArmed", contract)
+        self.assertIn('"LdrRegisterDllNotification"', host)
+        self.assertIn("BootstrapState::Ready", host)
+        self.assertIn("bootstrap->WaitReady", launcher)
+        self.assertLess(
+            launcher.index("bootstrap->WaitReady"),
+            launcher.rindex("ResumeThread(thread.Get())"),
+        )
 
     def test_generated_record_contracts_are_current_and_unique(self) -> None:
         subprocess.run(

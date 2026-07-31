@@ -155,7 +155,7 @@ collector and analyzers remain outside the retail process.
 | Versioned `ELPOSE2` / `ELANIM2` readers | Available | `research/tooling/capture/capture_live_scene.py` |
 | Cross-DLL binary proof specifications | Available | `research/cases/animation-pose/specs/` |
 | Whole-scene and authored-pose analyzers | Available | `research/tooling/capture/` |
-| Launcher-controlled early injection | Missing | CAP1 |
+| Launcher-controlled suspended launch/bootstrap | Available | `research/tooling/capture/native/` |
 | General module/probe registry | Missing | CAP2 |
 | Bounded process-external transport | Missing | CAP3 |
 | Unified recoverable indexed trace | Missing | CAP3 |
@@ -244,7 +244,7 @@ Work proceeds in this order:
 - [x] **CAP1.3 Suspended launch** — reproduce the selected retail command line,
   working directory, inherited environment, and distribution-specific startup
   while creating `vampire.exe` suspended.
-- [ ] **CAP1.4 Bootstrap injection** — inject the probe host through a conventional
+- [x] **CAP1.4 Bootstrap injection** — inject the probe host through a conventional
   `LoadLibraryW` path, wait for a versioned ready/error handshake, and resume the
   primary thread only after module observation and transport are armed. Manual
   mapping is not used.

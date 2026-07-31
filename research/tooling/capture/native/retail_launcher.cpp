@@ -5,15 +5,23 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <cwchar>
 #include <limits>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "bootstrap_contract.h"
+
 namespace {
 
 static_assert(sizeof(void*) == 4, "the retail launcher must be 32-bit");
+
+using elysium::capture::BootstrapHandshake;
+using elysium::capture::BootstrapMagic;
+using elysium::capture::BootstrapState;
+using elysium::capture::BootstrapVersion;
 
 class UniqueHandle {
 public:
@@ -58,11 +66,13 @@ struct Options {
     std::wstring Executable;
     std::wstring WorkingDirectory;
     std::wstring Distribution;
+    std::wstring ProbeHost;
     StartupProfile Profile = StartupProfile::Direct;
     std::vector<std::wstring> EnvironmentOverrides;
     std::vector<std::wstring> TargetArguments;
     DWORD VerifySuspendedMs = 25;
     bool ResumeSynthetic = false;
+    bool InjectAndTerminate = false;
     bool TerminateAfterVerification = false;
 };
 
@@ -112,6 +122,10 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
             options->TerminateAfterVerification = true;
             continue;
         }
+        if (std::wcscmp(option, L"--inject-and-terminate") == 0) {
+            options->InjectAndTerminate = true;
+            continue;
+        }
 
         const wchar_t* value = nullptr;
         if (!TakeValue(argc, argv, &index, &value)) {
@@ -119,6 +133,8 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
         }
         if (std::wcscmp(option, L"--executable") == 0) {
             options->Executable = value;
+        } else if (std::wcscmp(option, L"--probe-host") == 0) {
+            options->ProbeHost = value;
         } else if (std::wcscmp(option, L"--working-directory") == 0) {
             options->WorkingDirectory = value;
         } else if (std::wcscmp(option, L"--distribution") == 0) {
@@ -167,12 +183,21 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
             L"are required\n");
         return false;
     }
-    if (options->ResumeSynthetic ==
-        options->TerminateAfterVerification) {
+    const int actions =
+        (options->ResumeSynthetic ? 1 : 0) +
+        (options->InjectAndTerminate ? 1 : 0) +
+        (options->TerminateAfterVerification ? 1 : 0);
+    if (actions != 1) {
         std::fwprintf(
             stderr,
-            L"select exactly one of --resume-synthetic or "
-            L"--terminate-after-verification\n");
+            L"select exactly one launch completion action\n");
+        return false;
+    }
+    if ((options->ResumeSynthetic || options->InjectAndTerminate) &&
+        options->ProbeHost.empty()) {
+        std::fwprintf(
+            stderr,
+            L"--probe-host is required for bootstrap injection\n");
         return false;
     }
     return true;
@@ -329,6 +354,184 @@ bool BuildEnvironment(
     return true;
 }
 
+class BootstrapSession {
+public:
+    ~BootstrapSession() {
+        if (Handshake_ != nullptr) {
+            UnmapViewOfFile(Handshake_);
+        }
+    }
+
+    BootstrapSession(const BootstrapSession&) = delete;
+    BootstrapSession& operator=(const BootstrapSession&) = delete;
+    BootstrapSession() = default;
+
+    bool Create(DWORD processId) {
+        const std::wstring mappingName =
+            elysium::capture::BootstrapMappingName(processId);
+        const std::wstring signalName =
+            elysium::capture::BootstrapSignalName(processId);
+        Mapping_ = UniqueHandle(CreateFileMappingW(
+            INVALID_HANDLE_VALUE,
+            nullptr,
+            PAGE_READWRITE,
+            0,
+            sizeof(BootstrapHandshake),
+            mappingName.c_str()));
+        if (Mapping_.Get() == nullptr ||
+            GetLastError() == ERROR_ALREADY_EXISTS) {
+            return false;
+        }
+        Handshake_ = static_cast<BootstrapHandshake*>(
+            MapViewOfFile(
+                Mapping_.Get(),
+                FILE_MAP_READ | FILE_MAP_WRITE,
+                0,
+                0,
+                sizeof(BootstrapHandshake)));
+        if (Handshake_ == nullptr) {
+            return false;
+        }
+        Signal_ = UniqueHandle(CreateEventW(
+            nullptr,
+            FALSE,
+            FALSE,
+            signalName.c_str()));
+        if (Signal_.Get() == nullptr ||
+            GetLastError() == ERROR_ALREADY_EXISTS) {
+            return false;
+        }
+
+        ZeroMemory(Handshake_, sizeof(*Handshake_));
+        Handshake_->Magic = BootstrapMagic;
+        Handshake_->Version = BootstrapVersion;
+        Handshake_->Bytes = sizeof(BootstrapHandshake);
+        Handshake_->ProcessId = processId;
+        InterlockedExchange(
+            &Handshake_->State,
+            static_cast<LONG>(BootstrapState::Created));
+        return true;
+    }
+
+    bool WaitReady(DWORD timeoutMs) const {
+        if (WaitForSingleObject(Signal_.Get(), timeoutMs) != WAIT_OBJECT_0) {
+            std::fwprintf(stderr, L"probe-host handshake timed out\n");
+            return false;
+        }
+        MemoryBarrier();
+        const auto state =
+            static_cast<BootstrapState>(Handshake_->State);
+        if (state == BootstrapState::Error) {
+            std::fwprintf(
+                stderr,
+                L"probe-host error 0x%08lx: %ls\n",
+                Handshake_->ErrorCode,
+                Handshake_->Message);
+            return false;
+        }
+        if (state != BootstrapState::Ready ||
+            Handshake_->Magic != BootstrapMagic ||
+            Handshake_->Version != BootstrapVersion ||
+            Handshake_->Bytes != sizeof(BootstrapHandshake) ||
+            Handshake_->ProbeThreadId == 0 ||
+            Handshake_->ModuleObserverArmed != 1 ||
+            Handshake_->TransportArmed != 1) {
+            std::fwprintf(stderr, L"probe-host ready contract is invalid\n");
+            return false;
+        }
+        return true;
+    }
+
+    const BootstrapHandshake& Handshake() const {
+        return *Handshake_;
+    }
+
+private:
+    UniqueHandle Mapping_;
+    UniqueHandle Signal_;
+    BootstrapHandshake* Handshake_ = nullptr;
+};
+
+template <typename Function>
+Function Export(HMODULE module, const char* name) {
+    const FARPROC address = GetProcAddress(module, name);
+    Function function = nullptr;
+    static_assert(sizeof(function) == sizeof(address));
+    std::memcpy(&function, &address, sizeof(function));
+    return function;
+}
+
+bool InjectLibrary(
+    HANDLE process,
+    const std::wstring& library,
+    BootstrapSession* bootstrap) {
+    const SIZE_T pathBytes =
+        (library.size() + 1) * sizeof(wchar_t);
+    void* remotePath = VirtualAllocEx(
+        process,
+        nullptr,
+        pathBytes,
+        MEM_COMMIT | MEM_RESERVE,
+        PAGE_READWRITE);
+    if (remotePath == nullptr) {
+        std::fwprintf(stderr, L"cannot allocate remote DLL path\n");
+        return false;
+    }
+
+    SIZE_T written = 0;
+    if (!WriteProcessMemory(
+            process,
+            remotePath,
+            library.c_str(),
+            pathBytes,
+            &written) ||
+        written != pathBytes) {
+        std::fwprintf(stderr, L"cannot write remote DLL path\n");
+        VirtualFreeEx(process, remotePath, 0, MEM_RELEASE);
+        return false;
+    }
+
+    const auto loadLibrary = Export<LPTHREAD_START_ROUTINE>(
+        GetModuleHandleW(L"kernel32.dll"),
+        "LoadLibraryW");
+    if (loadLibrary == nullptr) {
+        std::fwprintf(stderr, L"cannot resolve LoadLibraryW\n");
+        VirtualFreeEx(process, remotePath, 0, MEM_RELEASE);
+        return false;
+    }
+    UniqueHandle loader(CreateRemoteThread(
+        process,
+        nullptr,
+        0,
+        loadLibrary,
+        remotePath,
+        0,
+        nullptr));
+    if (loader.Get() == nullptr) {
+        std::fwprintf(
+            stderr,
+            L"CreateRemoteThread failed: %lu\n",
+            GetLastError());
+        VirtualFreeEx(process, remotePath, 0, MEM_RELEASE);
+        return false;
+    }
+    if (WaitForSingleObject(loader.Get(), 15000) != WAIT_OBJECT_0) {
+        std::fwprintf(stderr, L"remote LoadLibraryW timed out\n");
+        return false;
+    }
+
+    DWORD remoteModule = 0;
+    const bool loaded =
+        GetExitCodeThread(loader.Get(), &remoteModule) &&
+        remoteModule != 0;
+    VirtualFreeEx(process, remotePath, 0, MEM_RELEASE);
+    if (!loaded) {
+        std::fwprintf(stderr, L"remote LoadLibraryW failed\n");
+        return false;
+    }
+    return bootstrap->WaitReady(15000);
+}
+
 bool IsSyntheticTarget(const std::wstring& executable) {
     HMODULE module = LoadLibraryExW(
         executable.c_str(),
@@ -369,15 +572,20 @@ int wmain(int argc, wchar_t** argv) {
             L"--working-directory PATH --distribution NAME "
             L"[--startup-profile direct|unofficial-patch] "
             L"[--environment NAME=VALUE] [--verify-suspended-ms N] "
-            L"(--resume-synthetic|--terminate-after-verification) "
+            L"[--probe-host PATH] "
+            L"(--resume-synthetic|--inject-and-terminate|"
+            L"--terminate-after-verification) "
             L"[-- target arguments]\n");
         return 2;
     }
 
     std::wstring executable;
     std::wstring workingDirectory;
+    std::wstring probeHost;
     if (!FullPath(options.Executable, &executable) ||
-        !FullPath(options.WorkingDirectory, &workingDirectory)) {
+        !FullPath(options.WorkingDirectory, &workingDirectory) ||
+        (!options.ProbeHost.empty() &&
+         !FullPath(options.ProbeHost, &probeHost))) {
         std::fwprintf(stderr, L"cannot resolve launch paths\n");
         return 3;
     }
@@ -390,6 +598,15 @@ int wmain(int argc, wchar_t** argv) {
         (directoryAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0) {
         std::fwprintf(stderr, L"invalid executable or working directory\n");
         return 4;
+    }
+    if (!probeHost.empty()) {
+        const DWORD probeAttributes =
+            GetFileAttributesW(probeHost.c_str());
+        if (probeAttributes == INVALID_FILE_ATTRIBUTES ||
+            (probeAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+            std::fwprintf(stderr, L"invalid probe-host DLL\n");
+            return 4;
+        }
     }
     if (options.ResumeSynthetic && !IsSyntheticTarget(executable)) {
         std::fwprintf(
@@ -484,22 +701,64 @@ int wmain(int argc, wchar_t** argv) {
         return 0;
     }
 
+    BootstrapSession bootstrap;
+    if (!bootstrap.Create(created.dwProcessId)) {
+        return failLaunch(L"cannot create bootstrap handshake", 12);
+    }
+    if (!InjectLibrary(process.Get(), probeHost, &bootstrap)) {
+        return failLaunch(L"probe-host bootstrap injection failed", 13);
+    }
+    const BootstrapHandshake& ready = bootstrap.Handshake();
+    std::wprintf(
+        L"retail-launch-v1 event=bootstrap_ready pid=%lu "
+        L"version=%lu observer_armed=%ld transport_armed=%ld "
+        L"probe_thread=%lu\n",
+        created.dwProcessId,
+        static_cast<unsigned long>(ready.Version),
+        ready.ModuleObserverArmed,
+        ready.TransportArmed,
+        ready.ProbeThreadId);
+    std::fflush(stdout);
+
+    if (options.InjectAndTerminate) {
+        if (!TerminateAndWait(process.Get(), 0)) {
+            return failLaunch(L"cannot terminate bootstrapped child", 14);
+        }
+        childActive = false;
+        std::wprintf(
+            L"retail-launch-v1 event=bootstrap_verified pid=%lu\n",
+            created.dwProcessId);
+        return 0;
+    }
+
     if (ResumeThread(thread.Get()) != 1) {
-        return failLaunch(L"cannot resume synthetic primary thread", 12);
+        return failLaunch(L"cannot resume synthetic primary thread", 15);
     }
     const DWORD wait = WaitForSingleObject(process.Get(), 15000);
     if (wait != WAIT_OBJECT_0) {
-        return failLaunch(L"synthetic child did not exit within 15 seconds", 13);
+        return failLaunch(L"synthetic child did not exit within 15 seconds", 16);
     }
     childActive = false;
     DWORD exitCode = 0;
     if (!GetExitCodeProcess(process.Get(), &exitCode)) {
         std::fwprintf(stderr, L"cannot read synthetic exit code\n");
-        return 14;
+        return 17;
+    }
+    MemoryBarrier();
+    const LONG moduleNotifications =
+        bootstrap.Handshake().ModuleNotificationCount;
+    if (moduleNotifications < 3) {
+        std::fwprintf(
+            stderr,
+            L"probe host observed only %ld module notifications\n",
+            moduleNotifications);
+        return 18;
     }
     std::wprintf(
-        L"retail-launch-v1 event=launch_complete pid=%lu exit_code=%lu\n",
+        L"retail-launch-v1 event=launch_complete pid=%lu exit_code=%lu "
+        L"module_notifications=%ld\n",
         created.dwProcessId,
-        exitCode);
-    return exitCode == 0 ? 0 : 15;
+        exitCode,
+        moduleNotifications);
+    return exitCode == 0 ? 0 : 19;
 }

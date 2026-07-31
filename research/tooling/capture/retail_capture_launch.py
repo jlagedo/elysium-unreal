@@ -1,7 +1,7 @@
-"""Create the selected retail process suspended and verify its launch contract.
+"""Create the selected retail process suspended and bootstrap the probe host.
 
-Until CAP1.4 arms injection before resume, this command terminates the process
-while it is still suspended:
+Until CAP1.5 owns complete process supervision, this command verifies the
+versioned ready/error handshake and terminates before resuming retail:
 
     uv run elysium research retail_capture_launch \
         --distribution steam \
@@ -81,7 +81,9 @@ def main() -> int:
             parser.error(f"--environment must be NAME=VALUE: {value!r}")
 
     run_native("build", args.config)
-    launcher = native_output_dir(args.config) / "retail_launcher.exe"
+    native_output = native_output_dir(args.config)
+    launcher = native_output / "retail_launcher.exe"
+    probe_host = native_output / "retail_probe_host.dll"
     command = [
         os.fspath(launcher),
         "--executable",
@@ -94,10 +96,12 @@ def main() -> int:
         args.startup_profile,
         "--verify-suspended-ms",
         str(args.verify_suspended_ms),
+        "--probe-host",
+        os.fspath(probe_host),
     ]
     for value in args.environment:
         command.extend(("--environment", value))
-    command.append("--terminate-after-verification")
+    command.append("--inject-and-terminate")
     if target_arguments:
         command.append("--")
         command.extend(target_arguments)
