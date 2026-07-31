@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "1.0",
 	"FriendlyName": "Elysium Baked Content",
-	"Description": "Mount point for local baked packages generated from the user's own VtMB install by dev/elysium.ps1 bake. Content is game-derived, ignored and regenerable; only this descriptor is tracked.",
+	"Description": "Mount point for local baked packages generated from the user's own VtMB install by uv run elysium export. Content is game-derived, ignored and regenerable; only this descriptor is tracked.",
 	"Category": "Elysium",
 	"CreatedBy": "Elysium",
 	"CanContainContent": true,

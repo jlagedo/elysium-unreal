@@ -121,7 +121,7 @@ void FElysiumCogWindow_Scripting::RenderContent()
 		}
 		else
 		{
-			ImGui::TextColored(GColorBad, "missing - run dev/elysium.ps1 export <map>");
+			ImGui::TextColored(GColorBad, "missing - run: uv run elysium export bundle scripts");
 		}
 		if (ImGui::IsItemHovered())
 		{

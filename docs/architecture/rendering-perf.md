@@ -13,7 +13,7 @@ The title must read **`PCD3D_SM6`**. This one config was the difference between 
 
 - `Config/DefaultEngine.ini` → `[/Script/WindowsTargetPlatform.WindowsTargetSettings]`:
   `DefaultGraphicsRHI=DefaultGraphicsRHI_DX12` + `D3D12TargetedShaderFormats=PCD3D_SM6`.
-- `dev/elysium.ps1 play` passes `-dx12` as belt-and-suspenders.
+- `uv run elysium run play` passes `-dx12` as belt-and-suspenders.
 - HWRT additionally requires `r.SkinCache.CompileShaders=True` (a hard fatal error otherwise).
 
 First launch after enabling SM6 recompiles the whole shader set (slow once, then cached).
@@ -181,7 +181,7 @@ Nuclear brackets to attribute cost: `r.Lumen.HardwareRayTracing 0` (HWRT's share
 
 ## Profiling
 
-**Headless and repeatable:** `dev/elysium.ps1 profile <map> [cam]` launches standalone
+**Headless and repeatable:** `uv run elysium debug profile <map> [cam]` launches standalone
 at 2560×1440 / SM6 and drives the `-ElysiumProfile` harness
 (`Source/ElysiumUE/Private/Debug/ElysiumProfiler.cpp`) — it pins the camera to each fixed vantage
 near spawn (the `GProfileCams[]` table), warms up 120 frames, captures 300 through the CSV
@@ -194,17 +194,17 @@ one run covers both the render-path check and the engagement check. Capture a ne
 vantage by flying there in-game and running `elysium.campos` (logs a paste-ready
 `GProfileCams[]` row with the exact pitch the HUD omits).
 
-The fixed vantages double as **rendering-regression test points**: re-run `dev/elysium.ps1 profile` after
+The fixed vantages double as **rendering-regression test points**: re-run `uv run elysium debug profile` after
 any render-path change and diff the per-vantage GPU ms against the committed baseline below.
 
 Manual knobs for interactive digging: `stat unit` (frame/game/GPU ms), `stat GPU` (per-pass
 GPU time), `ProfileGPU` (one-frame pass breakdown), Unreal Insights for a timeline. Always
-profile a **standalone** build (`dev/elysium.ps1 play` / `dev/elysium.ps1 profile`), not a PIE editor session — editor
+profile a **standalone** build (`uv run elysium run play` / `uv run elysium debug profile`), not a PIE editor session — editor
 overhead skews the numbers.
 
 ## Profiling baseline
 
-Captured by `dev/elysium.ps1 profile` (see "Profiling" above for the harness). Full per-vantage reports
+Captured by `uv run elysium debug profile` (see "Profiling" above for the harness). Full per-vantage reports
 (incl. the heaviest-pass breakdown) regenerate at `$ELYSIUM_EXPORT_ROOT/_profile/<map>_report.md`.
 
 **Dev GPU: RTX 5070 Ti · D3D12 / `PCD3D_SM6` · 2560×1440 **native** · warmup 120 / capture 300
@@ -214,10 +214,10 @@ reality" above). Vantage coordinates are baked in `GProfileCams[]` and echoed in
 report's vantage headers.
 
 **Resolution caveat.** The harness does not record the resolution it rendered at, and
-`Saved/Config/WindowsEditor/GameUserSettings.ini` overrides `dev/elysium.ps1 profile`'s `-resx/-resy/-windowed`
+`Saved/Config/WindowsEditor/GameUserSettings.ini` overrides `uv run elysium debug profile`'s `-resx/-resy/-windowed`
 — its `FullscreenMode=1` makes the window borderless, so on a 4K display the 1440p backbuffer is
 composited up to fill the screen and *looks* native 4K. Confirm the real backbuffer by reading the
-pixel dimensions of a `dev/elysium.ps1 shots` PNG (`$ELYSIUM_EXPORT_ROOT/_shots/<map>/`); the captures below were
+pixel dimensions of a `uv run elysium debug shots` PNG (`$ELYSIUM_EXPORT_ROOT/_shots/<map>/`); the captures below were
 verified 2560×1440 that way.
 
 ### sp_tutorial_1 — 395 world lights — GPU ms per vantage

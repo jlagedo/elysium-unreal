@@ -55,6 +55,7 @@ IGNORED_AUTHORED_ALLOWLIST = (
     "Content/VtMB/",
     "DerivedDataCache/",
     "Intermediate/",
+    ".venv/",
     "pipeline/.venv/",
     "Plugins/External/",
     "Plugins/ElysiumBaked/Content/",
@@ -155,7 +156,7 @@ def workspace_warnings() -> list[str]:
         root = REPO / "Plugins" / "External" / plugin
         marker = root / ".elysium-managed.json"
         if not marker.is_file():
-            warnings.append(f"managed plugin is missing: {plugin}; run bootstrap")
+            warnings.append(f"managed plugin is missing: {plugin}; run `uv run elysium deps sync`")
             continue
         data = json.loads(marker.read_text(encoding="utf-8-sig"))
         expected = locked_plugins[plugin]
@@ -163,7 +164,10 @@ def workspace_warnings() -> list[str]:
             data.get("revision") != expected["revision"]
             or data.get("post_patch_tree") != expected["post_patch_tree"]
         ):
-            warnings.append(f"managed plugin does not match the lock: {plugin}; run bootstrap")
+            warnings.append(
+                f"managed plugin does not match the lock: {plugin}; "
+                "run `uv run elysium deps sync`"
+            )
             continue
         lines = []
         for path in (
@@ -177,33 +181,73 @@ def workspace_warnings() -> list[str]:
         lines.sort()
         actual = hashlib.sha256(("\n".join(lines) + "\n").encode()).hexdigest()
         if not data.get("content_hash") or actual != data["content_hash"]:
-            warnings.append(f"managed plugin is stale or modified: {plugin}; run bootstrap")
+            warnings.append(
+                f"managed plugin is stale or modified: {plugin}; "
+                "run `uv run elysium deps sync`"
+            )
     generated = (
         REPO / "Content" / "Elysium.umap",
         REPO / "Content" / "VtMB" / "Materials" / "M_World_Opaque.uasset",
     )
     for path in generated:
         if not path.is_file():
-            warnings.append(f"generated project package is missing: {path.relative_to(REPO)}; run content")
+            warnings.append(
+                f"generated project package is missing: {path.relative_to(REPO)}; "
+                "run `uv run elysium export bundle policy`"
+            )
     baked = REPO / "Plugins" / "ElysiumBaked" / "Content"
     if not baked.is_dir() or not any(baked.rglob("*.umap")):
-        warnings.append("no generated baked map package is present; run bake <map>")
+        warnings.append("no generated baked map package is present; run export map <map>")
+    export_root = os.environ.get("ELYSIUM_EXPORT_ROOT", "").strip()
+    if not export_root:
+        work_root = os.environ.get("ELYSIUM_WORK_ROOT", "").strip()
+        export_root = os.fspath(Path(work_root) / "exports") if work_root else ""
+    if export_root and (Path(export_root) / ".elysium-incomplete").is_file():
+        warnings.append(
+            f"export corpus is marked incomplete: {Path(export_root) / '.elysium-incomplete'}"
+        )
+    npc_index = Path(export_root) / "npc" / "npc_index.json" if export_root else None
+    if npc_index and npc_index.is_file():
+        try:
+            npc_data = json.loads(npc_index.read_text(encoding="utf-8"))
+            for item in npc_data.get("warnings", []):
+                warnings.append(
+                    "NPC export warning "
+                    f"[{item.get('code', 'unknown')}] {item.get('model', 'unknown')}: "
+                    f"{item.get('detail', 'no detail')} "
+                    f"(fallback: {item.get('fallback', 'none')})"
+                )
+        except (OSError, ValueError, TypeError) as exc:
+            warnings.append(f"could not read NPC export warnings from {npc_index}: {exc}")
     return warnings
+
+
+def audit(*, history: bool = False, repo_only: bool = False) -> tuple[list[str], list[str]]:
+    errors = tracked_violations()
+    warnings = ignored_authored_warnings()
+    if history:
+        errors.extend(history_violations())
+    if not repo_only:
+        warnings.extend(workspace_warnings())
+    return errors, warnings
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--history", action="store_true", help="also audit every reachable Git object")
     parser.add_argument("--repo-only", action="store_true", help="skip local workspace prerequisites")
+    parser.add_argument("--json", action="store_true", help="write a stable JSON result")
     args = parser.parse_args()
 
-    errors = tracked_violations()
-    warnings = ignored_authored_warnings()
-    if args.history:
-        errors.extend(history_violations())
-    if not args.repo_only:
-        warnings.extend(workspace_warnings())
+    errors, warnings = audit(history=args.history, repo_only=args.repo_only)
 
+    if args.json:
+        print(json.dumps({
+            "ok": not errors,
+            "errors": errors,
+            "warnings": warnings,
+        }, indent=2, sort_keys=True))
+        return 1 if errors else 0
     for warning in warnings:
         print(f"WARNING: {warning}")
     for error in errors:

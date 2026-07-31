@@ -16,8 +16,8 @@
 # The licensed .ttf sources are tracked under Content/Fonts.
 #
 # Importing a `UFontFace` flushes Slate's font cache, so this generator runs as the
-# Slate-enabled second pass of `dev/elysium.ps1 content`, outside the commandlet-only
-# `build_content.py` pass.
+# Slate-enabled policy-content pass coordinated by ``elysium``, outside the
+# commandlet-only `build_content.py` pass.
 import os
 
 import unreal
@@ -84,7 +84,7 @@ def main():
     if missing:
         unreal.log_error(
             "[make_ui_fonts] %d source .ttf missing from Content/Fonts (%s) -- "
-            "run: pipeline/.venv/Scripts/python -m elysium_pipeline.devtools.fetch_ui_fonts"
+            "run: uv run elysium deps sync"
             % (len(missing), ", ".join(missing)))
 
     unreal.log("[make_ui_fonts] %d imported, %d already current, %d missing -> %s"

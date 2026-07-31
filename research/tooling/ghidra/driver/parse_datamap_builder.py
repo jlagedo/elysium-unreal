@@ -21,8 +21,8 @@ symbol carries the literal. A `FUN_<addr>` value in the `inputFunc` slot is the 
 to decompile next.
 
 Usage:
-    python research/tooling/ghidra/driver/parse_datamap_builder.py <builder_dump.txt> --recs <hex> [--count N]
-                                                 [--json <path>]
+    uv run elysium research parse_datamap_builder <builder_dump.txt> --recs <hex> [--count N]
+                                                        [--json <path>]
 
 `--recs` is the record-array base the builder's tail assigns to `datamap_t.dataDesc`
 (the `_DAT_<map> = &DAT_<recs>` pair at the end of the function). Local-only RE instrument,

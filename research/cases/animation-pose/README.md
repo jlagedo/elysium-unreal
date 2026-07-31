@@ -19,12 +19,12 @@ builds a local `INDEX.md` beside the generated decompile, assembly, xref, and fi
 dumps.
 
 ```powershell
-dev/elysium.ps1 research animation-pose research/cases/animation-pose/specs/animation_pose.json --dry-run
-dev/elysium.ps1 research animation-pose research/cases/animation-pose/specs/animation_pose.json `
+uv run elysium research animation-pose research/cases/animation-pose/specs/animation_pose.json --dry-run
+uv run elysium research animation-pose research/cases/animation-pose/specs/animation_pose.json `
   --binary "E:\path\to\Vampire\cl_dlls\client.dll"
-dev/elysium.ps1 research animation-pose research/cases/animation-pose/specs/animation_pose.json `
+uv run elysium research animation-pose research/cases/animation-pose/specs/animation_pose.json `
   --address 10091110 --kinds funcs,asm,xrefs
-dev/elysium.ps1 research animation-pose research/cases/animation-pose/specs/animation_pose.json --index-only
+uv run elysium research animation-pose research/cases/animation-pose/specs/animation_pose.json --index-only
 ```
 
 The three animation specifications divide the call chain at binary boundaries:

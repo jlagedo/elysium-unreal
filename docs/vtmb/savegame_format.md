@@ -444,11 +444,11 @@ Unreal mapping: see `docs/architecture/save-architecture.md`.
 table, entity table, decal list). `research/tooling/probes/probe_sav.py` is the CLI over it:
 
 ```
-python research/tooling/probes/probe_sav.py <file.sav>                   # container + section summary
-python research/tooling/probes/probe_sav.py <file.sav> --map sm_hub_1    # preamble, blocks, classname census
-python research/tooling/probes/probe_sav.py <file.sav> --entity player   # every field of matching entities
-python research/tooling/probes/probe_sav.py <file.sav> --python          # the pickled namespaces
-python research/tooling/probes/probe_sav.py <file.sav> --extract DIR     # inflated .HL1/.HL2/.HL3 sections
+uv run elysium research probe_sav <file.sav>                   # container + section summary
+uv run elysium research probe_sav <file.sav> --map sm_hub_1    # preamble, blocks, classname census
+uv run elysium research probe_sav <file.sav> --entity player   # every field of matching entities
+uv run elysium research probe_sav <file.sav> --python          # the pickled namespaces
+uv run elysium research probe_sav <file.sav> --extract DIR     # inflated .HL1/.HL2/.HL3 sections
 ```
 
 Both read a save file the user points them at and touch no game install. Pickles are loaded

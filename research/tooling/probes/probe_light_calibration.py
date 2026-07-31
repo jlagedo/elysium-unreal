@@ -25,7 +25,7 @@ for "how much does this map need real GI". Absolute brightness still needs one o
 anchor (VtMB overbright + gamma + Unreal's tonemap); the *relative* structure (exponent,
 ambient ratio, per-light relative brightness) transfers straight to the LightRig knobs.
 
-Usage:  python probe_light_calibration.py [map_name]   (default sp_tutorial_1)
+Usage:  uv run elysium research probe_light_calibration [map_name]   (default sp_tutorial_1)
 """
 import sys
 import struct

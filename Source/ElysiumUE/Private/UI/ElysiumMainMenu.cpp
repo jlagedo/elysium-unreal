@@ -294,7 +294,7 @@ UTexture2D* UElysiumMainMenu::ResolveSeal()
 	{
 		// The rail reads without it — it is a watermark, not a load-bearing element.
 		UE_LOG(LogElysiumMenu, Verbose,
-			TEXT("no menu seal at %s — run: dev/elysium.ps1 export <map>"), *Path);
+			TEXT("no menu seal at %s — run: uv run elysium export bundle ui"), *Path);
 	}
 	return Tex;
 }
@@ -435,7 +435,7 @@ TSharedRef<SWidget> UElysiumMainMenu::BuildRail(const TArray<FMenuEntry>& Items,
 			// Absent (no export yet) -> the wordmark is set in type instead, so the menu still
 			// reads rather than showing a hole.
 			UE_LOG(LogElysiumMenu, Warning,
-				TEXT("no title lockup at %s — run: dev/elysium.ps1 export <map>"),
+				TEXT("no title lockup at %s — run: uv run elysium export bundle ui"),
 				*FElysiumContentPaths::UiTitle());
 			Head = SNew(STextBlock)
 				.Text(NSLOCTEXT("Elysium", "TitleFallback", "Elysium"))

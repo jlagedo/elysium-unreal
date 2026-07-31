@@ -2,11 +2,10 @@
 	"mcpServers": {
 		"elysium": {
 			"type": "stdio",
-			"command": "pwsh",
+			"command": "uv",
 			"args": [
-				"-NoProfile",
-				"-File",
-				"${CLAUDE_PROJECT_DIR:-.}/dev/elysium.ps1",
+				"run",
+				"elysium",
 				"mcp"
 			],
 			"env": {

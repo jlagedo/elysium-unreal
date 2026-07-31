@@ -9,9 +9,7 @@ It also inventories source semantics which the current first-pass exporter does 
 (procedural bones, blend grids, root motion, and events), and audits included-model donor/target
 bind differences.  Those are reported as fidelity gaps, not malformed generated files.
 
-Usage:
-    python pipeline/src/elysium_pipeline/validation/validate_skeletal_pipeline.py
-    python pipeline/src/elysium_pipeline/validation/validate_skeletal_pipeline.py --report $ELYSIUM_EXPORT_ROOT/_tests/skeletal_pipeline.json
+Internal validation library module; not a public project-tooling entrypoint.
 """
 from __future__ import annotations
 

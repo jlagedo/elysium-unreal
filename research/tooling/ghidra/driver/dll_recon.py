@@ -4,7 +4,7 @@ C++ class names from RTTI, and buckets strings (leaked source paths, dice/WoD
 resolution, disciplines, stats/skills, verbs, vdata) so a subsequent Ghidra pass can
 target functions surgically instead of scanning thousands of unnamed ones.
 
-Usage:  python research/tooling/ghidra/driver/dll_recon.py [path-to-dll]
+Usage:  uv run elysium research dll_recon [path-to-dll]
 Default target: <game>/Vampire/dlls/vampire.dll
 """
 import os, struct, re, sys

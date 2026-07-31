@@ -29,10 +29,10 @@ Faces are encoded with the format, flags and mip policy of the face they shadow
 `santamonica` are uncompressed BGR888 and round-trip bit-exact; the DXT5 sets (`la`,
 `holly`, `chinatown`) take a block-compression hit that the labels easily survive.
 
-    python research/tooling/probes/sky_probe.py                      # render + report, touch nothing
-    python research/tooling/probes/sky_probe.py --install            # write the loose set
-    python research/tooling/probes/sky_probe.py --uninstall          # remove it again
-    python research/tooling/probes/sky_probe.py --skyname la --install
+    uv run elysium research sky_probe                      # render + report, touch nothing
+    uv run elysium research sky_probe --install            # write the loose set
+    uv run elysium research sky_probe --uninstall          # remove it again
+    uv run elysium research sky_probe --skyname la --install
 """
 import argparse
 import hashlib

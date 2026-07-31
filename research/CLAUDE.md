@@ -18,6 +18,6 @@ A case records input hashes and provenance, the question, eliminated leads, open
 questions, and its consuming `docs/vtmb/` topic or RE identifier. Findings are written
 into the owning topic document; generated evidence is not copied into Git.
 
-Research commands run through `dev/elysium.ps1 research <case>`. A command that modifies
+Research commands run through `uv run elysium research <case>`. A command that modifies
 the original VtMB install must require an explicit install action and provide a verified
 uninstall path.

@@ -168,6 +168,8 @@ Difficulty and balance are **not** QoL — they are the logic layer, governed by
 
 ## Where the work lives
 
-Implementation status and sequencing live only in `docs/project/roadmap.md`. Topic design remains split by
+Project implementation status and sequencing live in `docs/project/roadmap.md`; detailed retail
+capture and original-runtime animation/facial investigation status lives in its declared scoped
+subtracker, `docs/project/retail-capture-roadmap.md`. Topic design remains split by
 concern: `docs/architecture/ui-architecture.md` for the Unreal UI, `docs/architecture/asset-enhancement.md` for surfaces, and the
 owning behavior doc for every deliberate divergence.

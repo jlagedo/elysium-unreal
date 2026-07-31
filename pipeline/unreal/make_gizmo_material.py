@@ -7,7 +7,7 @@
 # the depth test (drawn on top, the "all" x-ray mode). A UMaterial graph only compiles offline, so
 # these are generated locally; the runtime only instances them.
 #
-# Normally rebuilt by the umbrella (dev/elysium.ps1 content -> pipeline/unreal/build_content.py, which the export runs);
+# Normally rebuilt by the umbrella (uv run elysium export bundle policy -> pipeline/unreal/build_content.py, which the export runs);
 # also runnable standalone:
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript -script="pipeline/unreal/make_gizmo_material.py" -unattended -nosplash -nopause
 import unreal

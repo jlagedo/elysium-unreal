@@ -19,9 +19,9 @@ This is the data half of RE-A4 (the decompile half is `engine.dll`'s `Mod_LoadFa
      `light*` entities' `style`/`pattern` keys.
 
 Usage:
-    python research/tooling/probes/probe_daynight.py              # every map in the install (108)
-    python research/tooling/probes/probe_daynight.py sp_tutorial_1 sm_hub_1
-    python research/tooling/probes/probe_daynight.py --verbose    # per-map lines, not just the rollup
+    uv run elysium research probe_daynight              # every map in the install (108)
+    uv run elysium research probe_daynight sp_tutorial_1 sm_hub_1
+    uv run elysium research probe_daynight --verbose    # per-map lines, not just the rollup
 """
 import collections
 import re

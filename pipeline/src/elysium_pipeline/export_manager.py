@@ -1,0 +1,523 @@
+"""High-level export workflows spanning offline decoders and Unreal asset baking."""
+
+from __future__ import annotations
+
+from collections.abc import Iterable, Sequence
+import hashlib
+import json
+from pathlib import Path
+
+from elysium_pipeline.clean import (
+    INCOMPLETE_FILE,
+    MANIFEST_FILE,
+    adopt_export_root,
+    clean_generated,
+    mark_complete,
+    validate_clean_targets,
+)
+from elysium_pipeline.tasking import Manifest, Task, TaskGraph, TaskResult, fingerprint_paths
+from elysium_pipeline import unreal
+
+
+class OfflineExportFailure(RuntimeError):
+    exit_code = 5
+
+
+class ExportBakeFailure(RuntimeError):
+    exit_code = 6
+
+
+def default_jobs() -> int:
+    try:
+        import psutil
+
+        physical = psutil.cpu_count(logical=False) or 1
+    except Exception:
+        physical = 1
+    return min(4, max(1, physical // 2))
+
+
+def _require_export_config(config) -> None:
+    if config.game_root is None or config.work_root is None or config.export_root is None:
+        raise ValueError("export requires configured game and work roots")
+
+
+def _source_index_fingerprint(index: dict) -> str:
+    digest = hashlib.sha256()
+    for key in sorted(index):
+        kind, value = index[key]
+        digest.update(key.encode("utf-8", errors="surrogateescape"))
+        digest.update(b"\0")
+        digest.update(str(kind).encode("ascii", errors="replace"))
+        if kind == "loose":
+            path = Path(value)
+            try:
+                stat = path.stat()
+                detail = f"{path}:{stat.st_size}:{stat.st_mtime_ns}"
+            except OSError:
+                detail = f"{path}:missing"
+        else:
+            detail = repr(value)
+        digest.update(detail.encode("utf-8", errors="surrogateescape"))
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _raise_results(results) -> None:
+    failures = [result for result in results if not result.ok]
+    if failures:
+        raise OfflineExportFailure(
+            "; ".join(f"{item.name}: {item.error or item.status}" for item in failures)
+        )
+
+
+def _map_tasks(config, map_names: Sequence[str], index: dict, source_fingerprint: str) -> list[Task]:
+    from elysium_pipeline.exporters import export_all
+    from elysium_pipeline.formats import install
+
+    code_inputs = (
+        config.repo_root
+        / "pipeline"
+        / "src"
+        / "elysium_pipeline"
+        / "exporters"
+        / "UE_bsp_to_scene.py",
+        config.repo_root / "pipeline" / "src" / "elysium_pipeline" / "formats" / "bsp.py",
+    )
+    tasks: list[Task] = []
+    for map_name in map_names:
+        bsp_path = Path(install.map_path(map_name))
+        output_dir = config.export_root / map_name
+
+        def action(name=map_name) -> None:
+            _raise_results(
+                export_all.export_maps(
+                    [name],
+                    out_root=config.export_root,
+                    index=index,
+                    continue_on_error=False,
+                )
+            )
+
+        def fingerprint(path=bsp_path, name=map_name) -> str:
+            return fingerprint_paths(
+                [path, *code_inputs],
+                extra=("map", name, source_fingerprint),
+            )
+
+        tasks.append(
+            Task(
+                name=f"map:{map_name}",
+                action=action,
+                fingerprint=fingerprint,
+                outputs=(
+                    output_dir / f"{map_name}.obj",
+                    output_dir / f"{map_name}.ents",
+                ),
+            )
+        )
+    return tasks
+
+
+def _bundle_outputs(export_root: Path, bundle: str) -> tuple[Path, ...]:
+    mapping = {
+        "audio": (export_root / "audio" / "catalog.json",),
+        "scripts": (export_root / "scripts", export_root / "dlg"),
+        "signs": (export_root / "signs" / "backgrounds.json",),
+        "vdata": (export_root / "vdata",),
+        "cfg": (export_root / "cfg",),
+        "scenes": (export_root / "scenes",),
+        "ui": (export_root / "ui" / "strings.json",),
+        "use-icons": (
+            export_root / "hud" / "use_icons.json",
+            export_root / "hud" / "use_icons.png",
+        ),
+        "npc": (export_root / "npc" / "npc_index.json",),
+    }
+    return mapping.get(bundle, ())
+
+
+def _bundle_tasks(
+    config,
+    bundles: Sequence[str],
+    maps: Sequence[str],
+    index: dict,
+    source_fingerprint: str,
+) -> list[Task]:
+    from elysium_pipeline.exporters import export_all
+
+    tasks: list[Task] = []
+    prior: tuple[str, ...] = ()
+    all_map_dependencies = tuple(f"map:{name}" for name in maps)
+    for bundle in bundles:
+        name = f"bundle:{bundle}"
+        dependencies = all_map_dependencies
+        if prior:
+            dependencies += prior
+
+        def action(bundle_name=bundle) -> None:
+            _raise_results(
+                export_all.export_bundles(
+                    [bundle_name],
+                    maps=maps,
+                    force=True,
+                    inventory=True,
+                    index=index,
+                    continue_on_error=False,
+                )
+            )
+
+        code = (
+            config.repo_root
+            / "pipeline"
+            / "src"
+            / "elysium_pipeline"
+            / "exporters"
+            / (
+                "npc_export.py"
+                if bundle == "npc"
+                else "UE_use_icons.py"
+                if bundle == "use-icons"
+                else "export_all.py"
+            )
+        )
+        tasks.append(
+            Task(
+                name=name,
+                action=action,
+                dependencies=dependencies,
+                fingerprint=lambda b=bundle, p=code: fingerprint_paths(
+                    [p], extra=("bundle", b, source_fingerprint, *maps)
+                ),
+                outputs=_bundle_outputs(config.export_root, bundle),
+            )
+        )
+        # Global mirrors intentionally run once and serially. This also keeps vdata
+        # before NPC and ensures scenes sees every completed map.
+        prior = (name,)
+    return tasks
+
+
+def run_offline_profile(
+    config,
+    profile: str,
+    *,
+    clean: bool,
+    force: bool,
+    jobs: int,
+) -> tuple[list[str], dict[str, TaskResult]]:
+    _require_export_config(config)
+    if clean:
+        targets = validate_clean_targets(
+            repo_root=config.repo_root,
+            game_root=config.game_root,
+            work_root=config.work_root,
+            export_root=config.export_root,
+        )
+        clean_generated(targets)
+        force = True
+    else:
+        adopt_export_root(config.export_root, config.work_root)
+    config.export_root.mkdir(parents=True, exist_ok=True)
+
+    # Lazy imports are load-bearing: config.apply_environment() must run first.
+    from elysium_pipeline.exporters import export_all
+    from elysium_pipeline.formats import install
+
+    maps = export_all.maps_for_profile(profile)
+    bundles = export_all.bundles_for_profile(profile)
+    index = install.build_index()
+    source_fingerprint = fingerprint_paths(
+        [
+            config.repo_root / "pipeline" / "src" / "elysium_pipeline" / "formats",
+            config.repo_root / "pipeline" / "src" / "elysium_pipeline" / "exporters",
+        ],
+        extra=(_source_index_fingerprint(index),),
+    )
+    manifest = Manifest(config.export_root / MANIFEST_FILE)
+    dependency_fingerprint = fingerprint_paths(
+        [config.repo_root / "dev" / "dependencies.lock.json"]
+    )
+    manifest.set_context(
+        profile=profile,
+        source_fingerprint=source_fingerprint,
+        dependency_fingerprint=dependency_fingerprint,
+        configuration={
+            "game_root": str(config.game_root),
+            "export_root": str(config.export_root),
+            "jobs": max(1, jobs),
+        },
+        maps=list(maps),
+        bundles=list(bundles),
+    )
+    graph = TaskGraph(
+        [
+            *_map_tasks(config, maps, index, source_fingerprint),
+            *_bundle_tasks(config, bundles, maps, index, source_fingerprint),
+        ]
+    )
+    results = graph.run(
+        jobs=max(1, jobs),
+        force=force,
+        manifest=manifest,
+        fail_fast=True,
+    )
+    return maps, results
+
+
+def _policy_fingerprint(config) -> str:
+    scripts = [
+        config.repo_root / "pipeline" / "unreal",
+        config.repo_root / "Content" / "Fonts",
+    ]
+    return fingerprint_paths(scripts, extra=("policy",))
+
+
+def ensure_policy_content(config, runner, *, force: bool = False) -> TaskResult:
+    manifest = Manifest(config.export_root / MANIFEST_FILE)
+    outputs = (
+        config.repo_root / "Content" / "Elysium.umap",
+        config.repo_root / "Content" / "VtMB" / "Materials" / "M_World_Opaque.uasset",
+        config.repo_root
+        / "Content"
+        / "VtMB"
+        / "UI"
+        / "Fonts"
+        / unreal.FONT_ASSETS[0],
+    )
+    task = Task(
+        "unreal:policy",
+        lambda: unreal.generate_policy_content(config, runner),
+        fingerprint=lambda: _policy_fingerprint(config),
+        outputs=outputs,
+    )
+    return TaskGraph([task]).run(force=force, manifest=manifest)["unreal:policy"]
+
+
+def _baked_package(config, map_name: str) -> Path:
+    return (
+        config.repo_root
+        / "Plugins"
+        / "ElysiumBaked"
+        / "Content"
+        / map_name
+        / f"{map_name}.umap"
+    )
+
+
+def bake_and_verify(
+    config,
+    runner,
+    maps: Sequence[str],
+    *,
+    force: bool = False,
+    changed_maps: Iterable[str] = (),
+) -> None:
+    manifest = Manifest(config.export_root / MANIFEST_FILE)
+    changed = set(changed_maps)
+    wanted: list[str] = []
+    for name in maps:
+        output = _baked_package(config, name)
+        fingerprint = fingerprint_paths(
+            [
+                config.export_root / name,
+                config.repo_root / "pipeline" / "unreal" / "bake_map.py",
+                config.repo_root / "pipeline" / "unreal" / "bake_lib.py",
+            ],
+            extra=("bake", name),
+        )
+        probe = Task(
+            f"bake:{name}",
+            lambda: None,
+            fingerprint=lambda value=fingerprint: value,
+            outputs=(output,),
+        )
+        if force or name in changed or not manifest.can_skip(probe, fingerprint):
+            wanted.append(name)
+    if wanted:
+        try:
+            unreal.bake_maps(config, runner, wanted)
+        except Exception as exc:
+            raise ExportBakeFailure(str(exc)) from exc
+        for name in wanted:
+            output = _baked_package(config, name)
+            if not output.is_file():
+                raise ExportBakeFailure(f"bake did not produce {output}")
+            fingerprint = fingerprint_paths(
+                [
+                    config.export_root / name,
+                    config.repo_root / "pipeline" / "unreal" / "bake_map.py",
+                    config.repo_root / "pipeline" / "unreal" / "bake_lib.py",
+                ],
+                extra=("bake", name),
+            )
+            manifest.record(
+                TaskResult(
+                    name=f"bake:{name}",
+                    status="ok",
+                    duration_seconds=0.0,
+                    fingerprint=fingerprint,
+                    outputs=[str(output)],
+                )
+            )
+    unreal.verify_bakes(config, runner, maps)
+
+
+def export_profile(
+    config,
+    runner,
+    profile: str,
+    *,
+    clean: bool = False,
+    force: bool = False,
+    jobs: int | None = None,
+) -> list[str]:
+    maps, results = run_offline_profile(
+        config,
+        profile,
+        clean=clean,
+        force=force,
+        jobs=jobs or default_jobs(),
+    )
+    try:
+        ensure_policy_content(config, runner, force=force or clean)
+    except Exception as exc:
+        raise ExportBakeFailure(str(exc)) from exc
+    changed = [
+        name.removeprefix("map:")
+        for name, result in results.items()
+        if name.startswith("map:") and result.status == "ok"
+    ]
+    bake_and_verify(config, runner, maps, force=force or clean, changed_maps=changed)
+    mark_complete(config.export_root)
+    return maps
+
+
+def export_targeted_maps(
+    config,
+    runner,
+    maps: Sequence[str],
+    *,
+    force: bool = False,
+    intermediate_only: bool = False,
+) -> list[str]:
+    _require_export_config(config)
+    adopt_export_root(config.export_root, config.work_root)
+    from elysium_pipeline.exporters import export_all
+    from elysium_pipeline.formats import install
+
+    names = list(dict.fromkeys(maps))
+    index = install.build_index()
+    source_fingerprint = fingerprint_paths(
+        [
+            config.repo_root / "pipeline" / "src" / "elysium_pipeline" / "formats",
+            config.repo_root / "pipeline" / "src" / "elysium_pipeline" / "exporters",
+        ],
+        extra=(_source_index_fingerprint(index),),
+    )
+    manifest = Manifest(config.export_root / MANIFEST_FILE)
+    manifest.set_context(
+        profile="targeted-map",
+        source_fingerprint=source_fingerprint,
+        dependency_fingerprint=fingerprint_paths(
+            [config.repo_root / "dev" / "dependencies.lock.json"]
+        ),
+        configuration={
+            "game_root": str(config.game_root),
+            "export_root": str(config.export_root),
+            "jobs": 1,
+        },
+        maps=list(names),
+        bundles=["audio"],
+    )
+    TaskGraph(_map_tasks(config, names, index, source_fingerprint)).run(
+        jobs=1,
+        force=force,
+        manifest=manifest,
+    )
+    _raise_results(
+        export_all.export_bundles(
+            ["audio"],
+            maps=names,
+            force=force,
+            index=index,
+            continue_on_error=False,
+        )
+    )
+    if not intermediate_only:
+        try:
+            ensure_policy_content(config, runner, force=force)
+        except Exception as exc:
+            raise ExportBakeFailure(str(exc)) from exc
+        bake_and_verify(config, runner, names, force=True, changed_maps=names)
+    return names
+
+
+def export_bundle(config, runner, bundle: str, *, force: bool = False) -> None:
+    _require_export_config(config)
+    adopt_export_root(config.export_root, config.work_root)
+    if bundle == "policy":
+        ensure_policy_content(config, runner, force=force)
+        return
+    from elysium_pipeline.exporters import export_all
+    from elysium_pipeline.formats import install
+
+    index = install.build_index()
+    _raise_results(
+        export_all.export_bundles(
+            [bundle],
+            force=force,
+            index=index,
+            continue_on_error=False,
+        )
+    )
+
+
+def export_model(
+    config,
+    runner,
+    model: str,
+    *,
+    animation: str | None = None,
+    integrate: bool = False,
+) -> Path:
+    _require_export_config(config)
+    from elysium_pipeline.formats import install, mdl_gltf
+
+    index = install.build_index()
+    normalized = model.replace("\\", "/")
+    if not normalized.lower().endswith(".mdl"):
+        normalized += ".mdl"
+    if not integrate:
+        destination = config.work_root / "scratch" / "models" / Path(normalized).stem
+        destination.mkdir(parents=True, exist_ok=True)
+        mdl_gltf.export(normalized, animation, destination, index=index)
+        return destination
+
+    adopt_export_root(config.export_root, config.work_root)
+    from elysium_pipeline.exporters import npc_export
+
+    npc_export.main(only=[normalized], index=index, integrate=True, strict=True)
+    dependent_maps: list[str] = []
+    needle = normalized.lower().removesuffix(".mdl")
+    for ents in config.export_root.glob("*/*.ents"):
+        try:
+            text = ents.read_text(encoding="utf-8").lower()
+        except OSError:
+            continue
+        if needle in text:
+            dependent_maps.append(ents.parent.name)
+    if dependent_maps:
+        ensure_policy_content(config, runner)
+        bake_and_verify(
+            config,
+            runner,
+            dependent_maps,
+            force=True,
+            changed_maps=dependent_maps,
+        )
+    return config.export_root / "npc"
+
+
+def export_is_incomplete(export_root: Path) -> bool:
+    return (export_root / INCOMPLETE_FILE).is_file()

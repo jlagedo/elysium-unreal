@@ -29,11 +29,12 @@ regenerable exactly like `$ELYSIUM_EXPORT_ROOT/`. Only `ElysiumBaked.uplugin` is
 ## The pipeline
 
 ```
-dev/elysium.ps1 bake [map] [stages]
-  -> UnrealEditor-Cmd -run=pythonscript -script=pipeline/unreal/bake_map.py -BakeMap= -BakeStages=
+uv run elysium export map <map> [--force]
+  -> offline map export
+  -> UnrealEditor-Cmd -run=pythonscript -script=pipeline/unreal/bake_map.py -BakeMap=
        pipeline/unreal/bake_lib.py    sidecar readers + editor asset factories
        pipeline/unreal/bake_map.py    the six stages
-bake_verify.py              reads the result back off the assets, not off the bake's own log
+  -> bake_verify.py                   reads the result back off the assets, not off the bake's own log
 ```
 
 | Stage | Reads | Writes |
@@ -233,13 +234,13 @@ are tracked in `docs/project/roadmap.md`; this document does not mirror their st
 ## Repro
 
 ```
-dev/elysium.ps1 content                                  # masters need bUsedWithNanite
-dev/elysium.ps1 bake sp_tutorial_1                       # all stages, ~4 min cold
-dev/elysium.ps1 bake sp_tutorial_1 world,level           # re-run a subset
-pipeline/unreal/bake_verify.py                         # read the result back off the assets
-dev/elysium.ps1 play sp_tutorial_1                       # the game, on the baked level
+uv run elysium export map sp_tutorial_1
+uv run elysium export map sp_tutorial_1 --force
+uv run elysium run play sp_tutorial_1
 ```
 
 Requires the `GeometryScripting` and `ElysiumBaked` plugins (both enabled in the `.uproject`) and an
-export of the map under `$ELYSIUM_EXPORT_ROOT/`. A map with no bake is refused by `Travel` with the command to
-run. The running game holds the `.umap` open — quit before re-baking the `level` stage.
+export of the map under `$ELYSIUM_EXPORT_ROOT/`. The export command generates the policy
+assets, bakes the map, and verifies the saved packages. A map with no bake is refused by
+`Travel` with the command to run. The running game holds the `.umap` open — quit before
+forcing a re-export.

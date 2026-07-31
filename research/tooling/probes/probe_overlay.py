@@ -18,7 +18,7 @@ Modern Source `doverlay_t` (OVERLAY_BSP_FACE_COUNT = 64):
 Early Source may use a different OVERLAY_BSP_FACE_COUNT; the divisibility scan
 below reports which candidate sizes fit so we don't assume 352.
 
-Usage: python research/tooling/probes/probe_overlay.py <bsp> [<bsp> ...]
+Usage: uv run elysium research probe_overlay <bsp> [<bsp> ...]
 """
 import struct, sys, os
 from elysium_pipeline.formats import bsp as B

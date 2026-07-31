@@ -13,11 +13,11 @@ install resolves and reports the grammar the runtime parser has to satisfy:
   * which scenes the maps actually reference (`SceneFile`), and which are orphans
 
 Usage:
-    python research/tooling/probes/probe_scenes.py                    # rollup over every .vcd
-    python research/tooling/probes/probe_scenes.py --markdown         # the doc tables
-    python research/tooling/probes/probe_scenes.py --dump <path>      # pretty-print one parsed scene
-    python research/tooling/probes/probe_scenes.py --referenced       # only map-referenced scenes
-    python research/tooling/probes/probe_scenes.py --json <path>      # write the full survey
+    uv run elysium research probe_scenes                    # rollup over every .vcd
+    uv run elysium research probe_scenes --markdown         # the doc tables
+    uv run elysium research probe_scenes --dump <path>      # pretty-print one parsed scene
+    uv run elysium research probe_scenes --referenced       # only map-referenced scenes
+    uv run elysium research probe_scenes --json <path>      # write the full survey
 
 Findings are written up in ../docs/vtmb/choreographed_scenes.md (roadmap RE19).
 Read-only over the user's own install; produces no runtime intermediate.

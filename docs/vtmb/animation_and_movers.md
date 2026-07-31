@@ -384,7 +384,8 @@ must reproduce.
 
 ## A.4b Retail pose pipeline — durable Ghidra proof path
 
-**Status: in progress.** Three tracked investigation specifications divide the
+Detailed capture and experiment status is tracked in
+`docs/project/retail-capture-roadmap.md`. Three tracked investigation specifications divide the
 retail path at its DLL boundaries: `animation_pose.json` (`client.dll`),
 `animation_skinning.json` (`engine.dll`), and `animation_studiorender.json`
 (`StudioRender.dll`) under `research/cases/animation-pose/specs/`. They preserve pinned binary
@@ -394,9 +395,9 @@ project. The tracked driver serializes Ghidra runs with the required project-loc
 delay and rebuilds a local context pack:
 
 ```powershell
-dev/elysium.ps1 research animation-pose research/cases/animation-pose/specs/animation_pose.json --dry-run
-dev/elysium.ps1 research animation-pose research/cases/animation-pose/specs/animation_pose.json --binary <client.dll>
-dev/elysium.ps1 research animation-pose research/cases/animation-pose/specs/animation_pose.json --address 10091110
+uv run elysium research animation-pose research/cases/animation-pose/specs/animation_pose.json --dry-run
+uv run elysium research animation-pose research/cases/animation-pose/specs/animation_pose.json --binary <client.dll>
+uv run elysium research animation-pose research/cases/animation-pose/specs/animation_pose.json --address 10091110
 ```
 
 Binary-derived decompilation, assembly, xrefs, a run log, and an index land under
@@ -576,8 +577,8 @@ The polling probe is intentionally target-specific. A companion native probe
 captures the whole visible scene instead:
 
 ```powershell
-python research/tooling/capture/build_live_pose_capture.py
-python research/tooling/capture/capture_live_scene.py start --duration 0
+uv run elysium research build_live_pose_capture
+uv run elysium research capture_live_scene start --duration 0
 ```
 
 `capture_live_scene.py` injects a 32-bit, hash-gated hook into the user's retail
@@ -669,7 +670,7 @@ that mapping.
 The phase/mask/buffer-identity join is reproducible with:
 
 ```powershell
-python research/tooling/capture/analyze_live_animation_stages.py `
+uv run elysium research analyze_live_animation_stages `
   $ELYSIUM_EXPORT_ROOT/_live_pose/<resolver-session> `
   --archive $ELYSIUM_EXPORT_ROOT/_live_pose/courtroom_authored/courtroom_bip5.npz `
   --held-pose $ELYSIUM_EXPORT_ROOT/_live_pose/<whole-scene-session>/vampire4_pose_changes `
@@ -679,7 +680,7 @@ python research/tooling/capture/analyze_live_animation_stages.py `
 Re-run the source/capture check with:
 
 ```powershell
-python research/tooling/capture/validate_live_pose_capture.py `
+uv run elysium research validate_live_pose_capture `
   $ELYSIUM_EXPORT_ROOT/_live_pose/<session> `
   --report $ELYSIUM_EXPORT_ROOT/_live_pose/live_pose_validation.json
 ```
@@ -695,12 +696,9 @@ all of these seams:
 6. ~~`Bip01` root composition with entity origin/angles and cinematic placement;~~
 7. ~~`poseToBone` use in CPU/GPU skinning and final render submission.~~
 
-The independent source/output audit is:
-
-```powershell
-python pipeline/src/elysium_pipeline/validation/validate_skeletal_pipeline.py `
-  --report $ELYSIUM_EXPORT_ROOT/_tests/skeletal_pipeline_validation.json
-```
+The independent source/output audit is implemented by the internal
+`elysium_pipeline.validation.validate_skeletal_pipeline` library module. It is not a
+public project-tooling entrypoint.
 
 It reads the patch-first retail files rather than trusting exporter output, then
 compares generated node binds, inverse binds, skin joints/weights, timelines, and
@@ -778,6 +776,16 @@ the NPC's dialogue into `$ELYSIUM_EXPORT_ROOT/npc/<npc>.glb`, each shared bank i
 resolution plus the target mesh's diagnostic `split_bones` inventory. The runtime loads a bank
 glb once and applies its clips to any NPC skeletal mesh by bone name (glTFRuntime
 `LoadSkeletalAnimation(mesh, …)`), which is VtMB's own virtualmodel bank-sharing.
+
+The patch-first grid contains four explicit source exceptions. The Night Watchman in
+`sm_junkyard_1` references
+`models/character/npc/doppleganger/doppleganger.mdl`, which is absent even though the
+`common/doppleganger` male and female variants exist. Three animated props —
+`bottleb.mdl`, `bottlec.mdl`, and `stage_light.mdl` — carry truncated skeletal mesh
+records. Their per-map static `model_mesh` geometry decodes successfully, so they remain
+visible through the static path while skeletal animation is unavailable. The exporter
+downgrades only these exact paths to structured warnings in `npc_manifest.json` and
+`npc_index.json`; every other missing model or decode failure remains fatal.
 
 Retail first evaluates the included model's complete pose. Its outer mapping then
 copies the donor quaternion verbatim and either copies its position or transforms

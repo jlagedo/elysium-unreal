@@ -14,7 +14,7 @@ Pulls together everything we reverse-engineered:
 TOOLS/* faces (nodraw, clip, trigger, skybox, hint...) are skipped - they are
 invisible engine surfaces, not geometry to draw.
 """
-import struct, os, re, sys, json
+import struct, os, re, json
 import numpy as np
 from elysium_pipeline.formats import install, vmt
 from elysium_pipeline.formats import bsp as B
@@ -889,7 +889,7 @@ def write_props(data, out_dir, base, idx, propdir, tex_cache, valid, sky=None):
           f"{len(model_paths)} models ({ok} decoded, {missing} missing) -> {base}.props")
 
 
-def main(bsp_path, out_dir):
+def main(bsp_path, out_dir, *, index=None):
     data = open(bsp_path, "rb").read()
     verts_l = read_lump(data, 3)
     edges_l = read_lump(data, 12)
@@ -908,7 +908,9 @@ def main(bsp_path, out_dir):
     # cubemap-patched materials) first, then the install (patch before the VPKs -
     # see install.py). Defined up here because the bump-lightmap pre-pass below
     # needs each face's VMT before the atlas is built.
-    idx = install.build_index()
+    # A profile export builds this expensive patch-first index once and shares it
+    # across every map.  Direct library callers may still omit it.
+    idx = index if index is not None else install.build_index()
     pak = read_pakfile(data)
     def read_material_bytes(key):
         key = key.lower()
@@ -1742,46 +1744,16 @@ def main(bsp_path, out_dir):
     flat, dropped = retex_dds.flat_index(idx)
     retex_dds.emit_dir(idx, flat, dropped, out_dir, base)
 
-# The maps we actively test against. `python bsp_to_scene.py --all` re-exports the
-# whole set (use it after any pipeline change so no scene is left stale); keep it in
-# sync with what lives under $ELYSIUM_EXPORT_ROOT/. Each is a hub or set-piece exercising a
-# different feature: sm_hub_1 (animated lightstyles + props), hw_hub_1/hw_redspot_1
-# (displacement terrain), la_hub_1 (largest prop count), ch_hub_1 (0-disp baseline),
-# sp_tutorial_1 (patch-merged staging areas), sp_ninesintro (set piece).
-TEST_MAPS = [
-    "ch_hub_1", "hw_hub_1", "hw_redspot_1", "la_hub_1",
-    "sm_hub_1", "sp_ninesintro", "sp_tutorial_1",
-]
-
-# The viewer only loads from $ELYSIUM_EXPORT_ROOT/, so the default output anchors to this
-# script's own directory ($ELYSIUM_EXPORT_ROOT/<name> beside bsp_to_scene.py) rather than the current
-# working directory - running the exporter from anywhere lands in the right place.
+# The default library output is the configured external export root.
 from elysium_pipeline.paths import export_root
 
 _OUT_ROOT = os.fspath(export_root())
 
-def _export(name_or_path, out_dir=None):
+def _export(name_or_path, out_dir=None, *, index=None):
     """Export one map. `name_or_path` is a bare map name (resolved patch-first through
     install.map_path) or an explicit .bsp path (taken as given)."""
     bsp = install.map_path(name_or_path)
     base = os.path.splitext(os.path.basename(bsp))[0]
     out = out_dir if out_dir else os.path.join(_OUT_ROOT, base)
     print(f"map: {bsp}")
-    main(bsp, out)
-
-if __name__ == "__main__":
-    arg = sys.argv[1] if len(sys.argv) > 1 else "ch_hub_1"
-    if arg in ("--all", "all"):
-        failed = []
-        for i, name in enumerate(TEST_MAPS):
-            print(f"\n===== [{i+1}/{len(TEST_MAPS)}] {name} =====")
-            try:
-                _export(name)
-            except Exception as e:
-                print(f"  EXPORT FAILED {name}: {e}")
-                failed.append(name)
-        print(f"\nall: {len(TEST_MAPS)-len(failed)}/{len(TEST_MAPS)} exported"
-              + (f"; failed: {', '.join(failed)}" if failed else ""))
-        sys.exit(1 if failed else 0)
-    # Single map. An explicit out_dir (argv[2]) is honoured as-is, relative to CWD.
-    _export(arg, sys.argv[2] if len(sys.argv) > 2 else None)
+    main(bsp, out, index=index)

@@ -5,7 +5,7 @@ walks bodyparts -> models -> meshes in lockstep with the VTX strip tree, reconst
 LOD0 triangles, looks up the embedded StudioVertex array, and sanity-checks positions
 against the model hull. Prints everything so offsets can be eyeballed/corrected.
 
-Usage: python research/tooling/probes/probe_mdl.py [models/scenery/.../foo.mdl]
+Usage: uv run elysium research probe_mdl [models/scenery/.../foo.mdl]
 Default model: models/scenery/structural/diner/pillars.mdl
 """
 import struct, sys, os

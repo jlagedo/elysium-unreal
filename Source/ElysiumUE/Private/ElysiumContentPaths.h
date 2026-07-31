@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "HAL/FileManager.h"
 #include "HAL/PlatformMisc.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
@@ -35,6 +36,14 @@ struct FElysiumContentPaths
 		return Value;
 	}
 	static bool IsConfigured() { return !Root().IsEmpty(); }
+	static FString IncompleteMarker() { return Root() / TEXT(".elysium-incomplete"); }
+	static bool IsIncomplete()
+	{
+		const FString Value = Root();
+		return !Value.IsEmpty() &&
+			IFileManager::Get().FileExists(*(Value / TEXT(".elysium-incomplete")));
+	}
+	static bool IsReady() { return IsConfigured() && !IsIncomplete(); }
 
 	// --- Baked content (pipeline/unreal/bake_map.py) ---------------------------------------------
 	// The look of a map — world + sky geometry, materials, textures, props, lights, fog — is

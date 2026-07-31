@@ -1,7 +1,7 @@
-"""Compare a `dev/elysium.ps1 shots` capture against a kept baseline — the pixel half of the screenshot
+"""Compare a `uv run elysium debug shots` capture against a kept baseline — the pixel half of the screenshot
 regression harness (roadmap P2.9, sky-ambience B6).
 
-`dev/elysium.ps1 shots` renders each configured vantage to `$ELYSIUM_EXPORT_ROOT/_shots/<map>/`. That answers "what does it
+`uv run elysium debug shots` renders each configured vantage to `$ELYSIUM_EXPORT_ROOT/_shots/<map>/`. That answers "what does it
 look like now"; this answers "what changed", which is the question a regression asks. Promote a
 run you trust to `$ELYSIUM_EXPORT_ROOT/_shots/_baseline/<map>/`, and every later run is a diff against it: a look
 regression becomes a number and a heat map instead of an eyeball and a memory.
@@ -9,10 +9,9 @@ regression becomes a number and a heat map instead of an eyeball and a memory.
 Baselines live under `$ELYSIUM_EXPORT_ROOT/`, so they are game-derived and gitignored like every capture. They
 are a local instrument, not a committed fixture.
 
-    python pipeline/src/elysium_pipeline/validation/shots_diff.py --save                 # promote the current run(s) to baseline
-    python pipeline/src/elysium_pipeline/validation/shots_diff.py                        # diff every map that has a baseline
-    python pipeline/src/elysium_pipeline/validation/shots_diff.py sm_hub_1               # one map
-    python pipeline/src/elysium_pipeline/validation/shots_diff.py --tol 4 --max-changed 1.0
+This comparison is an internal library module, not a public project-tooling
+entrypoint. `uv run elysium debug shots` captures screenshots but does not promote
+or compare baselines.
 
 Exit status is 1 when any vantage moves more than `--max-changed` percent of its pixels by more
 than `--tol` levels, so it can gate a change rather than merely report on one.
@@ -77,7 +76,7 @@ def main():
 
     names = runs(args.map)
     if not names:
-        print(f"no captures under {OUT} — run dev/elysium.ps1 shots first")
+        print(f"no captures under {OUT} — run: uv run elysium debug shots")
         raise SystemExit(2)
 
     if args.save:

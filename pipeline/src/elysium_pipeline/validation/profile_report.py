@@ -88,7 +88,7 @@ def heaviest_gpu(passes: dict[str, float], top: int = 20) -> list[tuple[str, flo
 def report(map_name: str) -> int:
     summary_path = os.path.join(PROFILE_DIR, f"{map_name}_summary.json")
     if not os.path.exists(summary_path):
-        print(f"[profile] no summary at {summary_path} — run dev/elysium.ps1 profile {map_name} first.",
+        print(f"[profile] no summary at {summary_path} — run: uv run elysium debug profile {map_name}",
               file=sys.stderr)
         return 1
     with open(summary_path, encoding="utf-8") as fh:

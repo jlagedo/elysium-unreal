@@ -20,9 +20,9 @@ VtMB's sky transfer is the identity -- a sky pixel is the decoded texel, unscale
 sky's brightness one-for-one, and one that reshapes the histogram changes its contrast. A
 resolution change may not smuggle in a grade.
 
-Usage:
-    python sky_upscale.py --map la_hub_1 --model models/RealESRGAN_x4plus.pth
-    # writes $ELYSIUM_EXPORT_ROOT/<map>/tex_hi/sky_*.png and $ELYSIUM_EXPORT_ROOT/<map>_sky_compare.png
+Internal enhancement experiment; not a public project-tooling entrypoint. It writes
+`$ELYSIUM_EXPORT_ROOT/<map>/tex_hi/sky_*.png` and
+`$ELYSIUM_EXPORT_ROOT/<map>_sky_compare.png`.
 """
 import argparse
 from pathlib import Path

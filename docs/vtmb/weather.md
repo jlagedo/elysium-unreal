@@ -391,4 +391,4 @@ timers, which script calls — is Logic and is reproduced from the exported enti
 **Budget.** The risk is translucent overdraw, not particle count — rain is thin, numerous and
 screen-filling. Two engine facts to verify before committing rain to a lit translucent
 material: how MegaLights treats translucency, and whether the VSM pass stays neutral.
-`dev/elysium.ps1 profile` and `dev/elysium.ps1 shots` already cover the outdoor vantages, so this is measurable.
+`uv run elysium debug profile` and `uv run elysium debug shots` already cover the outdoor vantages, so this is measurable.

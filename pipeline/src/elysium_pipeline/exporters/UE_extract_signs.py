@@ -26,8 +26,8 @@ Produces (under $ELYSIUM_EXPORT_ROOT/signs/):
 Source bytes stay the user's install; the output is gitignored and regenerable.
 
 Usage:
-  python pipeline/src/elysium_pipeline/exporters/UE_extract_signs.py            # copy definitions + decode backgrounds
-  python pipeline/src/elysium_pipeline/exporters/UE_extract_signs.py --force    # redo files already present
+  uv run elysium export bundle signs            # copy definitions + decode backgrounds
+  uv run elysium export bundle signs --force    # redo files already present
 """
 import json
 import os

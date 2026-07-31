@@ -1,21 +1,27 @@
-# Elysium-Unreal — Consolidated Roadmap (single source of truth)
+# Elysium-Unreal — Consolidated Master Roadmap
 
-**This document is the one work tracker.** It consolidates and supersedes the plan/tracking
+**This document is the master work tracker.** It consolidates and supersedes the plan/tracking
 sections of `docs/project/rebuild-strategy.md` (milestones M0–M6, pipeline backlog),
 `docs/architecture/debug-tooling.md` (build order), and `docs/architecture/engine-core.md` (Phases 1–2). Those docs remain the
-**design/reference detail** behind the tasks here; this doc owns **sequencing and status**.
-If a task exists anywhere, it exists here.
+**design/reference detail** behind the tasks here; this doc owns project-wide sequencing,
+playable-path priority, and roll-up status.
 
-This file is the **only** status file. There is no as-built archive and no decision log: git
-history is the as-built record, and a decision's outcome is a present-tense fact in the doc that
-owns the system.
+The retail capture and original-runtime animation, scene-placement,
+secondary-motion/physics, facial, and lip-sync investigation delegates its
+detailed task status to `docs/project/retail-capture-roadmap.md`; this file
+retains the parent rows `0.10`, `RE32`, and `RE33`. That is the only scoped
+subtracker. There is no as-built archive and no decision log: git history is the
+as-built record, and a decision's outcome is a present-tense fact in the doc
+that owns the system.
 
 ## How to use this doc
 
 - Status marks: `[ ]` open · `[~]` in progress/partial · `[x]` done (verified) · `[P]` parked
   (deliberately deferred — revisit trigger stated).
+- The detailed capture tracker uses the same marks. Any child change that changes a parent
+  roll-up updates `0.10`, `RE32`, or `RE33` here in the same change.
 - Every open task: **ID — name — why/where — acceptance — deps**. Detail lives in the linked
-  design doc; don't duplicate it here — link it.
+  design doc or scoped tracker; don't duplicate it here — link it.
 - **Landing a task — two writes, and a hard cap:**
   1. Durable how-it-works facts → the **owning design doc** (`docs/CLAUDE.md` maps which).
      This is the only place implementation detail is written in prose.
@@ -86,7 +92,7 @@ it waits. Three standing rules:
 | **PP3 — land the tutorial** | the chain hands the player to Jack; the first conversation runs with sound and reactions | 9.2, 9.9 |
 | **PP4 — core mechanics** | faithful movement (owner call: **in** the path), camera modes, the body's gait, feeding, items + object interaction, dice, the vitals HUD | 4.7, 8.11b, 10.6, B6, 9.8, 9.6, 8.9 |
 | **PP5 — persistence** | save / quick / autosave + load mid-run; `trigger_autosave` live | **[x]** *(11.9 = 9.5)* |
-| **PP6 — complete the tutorial** | stealth, disciplines, firearms — every retail beat to the exit, proven headlessly | 13.1, 13.2, 13.3 → P9's slice acceptance as `dev/elysium.ps1 test Play` |
+| **PP6 — complete the tutorial** | stealth, disciplines, firearms — every retail beat to the exit, proven headlessly | 13.1, 13.2, 13.3 → P9's slice acceptance as `uv run elysium test Play` |
 
 **After PP6 (the thaw):** 9.10 economy/barter, 8.8, 8.10, the P3/P7 look lanes, 10.1–10.5 and
 asset enhancement — re-sequenced then.
@@ -95,8 +101,11 @@ asset enhancement — re-sequenced then.
 
 Open tasks whose dependencies are met, ordered by playable-path payoff:
 
-1. **RE32 / 12.1** — recover the retail skeletal pose application path end to end, then correct
-   the theatre cast from proven bone/root semantics.
+1. **0.10 / RE32 / RE33 / 12.1** — build the launcher-driven retail capture
+   harness, close scene placement and skeletal composition, capture character
+   secondary motion including Jeanette's skirt, then capture facial/lip runtime
+   composition. Detailed order and exit gates:
+   `docs/project/retail-capture-roadmap.md`.
 2. **11.10** — finish PP0 with the played-input harness.
 3. **9.8 / 9.9 / 9.10** — inventory, NPC reactions, and economy on the durable player/entity spine.
 
@@ -153,7 +162,7 @@ their parent task's status in the same change.
 
 Cheap tasks that unblock or de-risk everything downstream. Do these before/alongside P1.
 
-- [x] **0.1 Profiling baseline** — `dev/elysium.ps1 profile` / `-ElysiumProfile` over fixed vantages;
+- [x] **0.1 Profiling baseline** — `uv run elysium debug profile` / `-ElysiumProfile` over fixed vantages;
   `PCD3D_SM6` confirmed. → `docs/architecture/rendering-perf.md` → "Profiling baseline".
 - [x] **0.2 MegaLights engagement check** — MegaLights dominates, many-light cost ~flat, no silent
   VSM fallback, so 3.1 is not urgent. → `docs/architecture/rendering-perf.md` → "Profiling baseline".
@@ -171,6 +180,11 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
   classnames / 24,081 outputs**. → `docs/vtmb/entity_io.md`.
 - [x] **0.9 The uasset-bake architecture** — the world's *look* bakes offline into the gitignored
   `/ElysiumBaked` mount, everything else stays runtime-built. → `docs/architecture/uasset-bake-spike.md`. Residue handed on: **PL11**.
+- [~] **0.10 Retail runtime capture harness** — launcher-controlled early injection,
+  exact-binary cross-module probes, bounded external collection, indexed traces, and
+  reproducible analyzers for animation, scene placement, secondary motion/physics,
+  facial, and lip-sync research. Detailed tasks and acceptance:
+  `docs/project/retail-capture-roadmap.md`.
 
 ## P1 — Entity substrate *(design: `docs/architecture/engine-core.md` — read it; steps here are the tracker)*
 
@@ -209,7 +223,7 @@ as script-host log lines; ring buffer holds the session history — observable w
   over the engine `ModelContextProtocol` plugin; on by default in dev builds. → `docs/architecture/debug-tooling.md`
   Layer 3.
 - [x] **2.8 Automation tests (both tiers)** — the `Substrate` (`-nullrhi`) and `Content`
-  (self-skipping) tiers in `Private/Tests/`, driven by `dev/elysium.ps1 test`.
+  (self-skipping) tiers in `Private/Tests/`, driven by `uv run elysium test`.
 - [x] **2.9 Screenshot-regression harness** — `FElysiumShotRun` (`-ElysiumShots`) over the
   profiler's vantages + `pipeline/src/elysium_pipeline/validation/shots_diff.py` baseline promote/diff. A baseline is only valid
   against a fixed bake *and* fixed content assets.
@@ -367,7 +381,7 @@ M1 leftovers that live in this lane.
   (that is *modern* Source's default). **A fixed-step accumulator is therefore a
   divergence, not the baseline** — it ships behind `elysium.move.FixedStep` (default 0 = faithful
   variable delta), recorded in `docs/vtmb/source_movement.md`. **And the residual frame-rate dependence is
-  smaller than the shape of the code suggested**, measured over `dev/elysium.ps1 move` at 60/120/240 Hz: the
+  smaller than the shape of the code suggested**, measured over `uv run elysium debug move` at 60/120/240 Hz: the
   jump apex is a flat **25.00 units at every rate** — the half-step split plus VtMB's *additive*
   `CheckJumpButton` (`0x101226b0`, `v.z += impulse`, not an overwrite) is exact velocity-Verlet, and
   the old `25 − 100·dt` prediction was what a *full*-step gravity would give. What does drift is
@@ -390,7 +404,7 @@ M1 leftovers that live in this lane.
   machine is `UElysiumMovementComponent` in `PlayerMove`/`FullWalkMove` order; the frame bound is
   `ElysiumFrame::ClampFrameDelta` in `ElysiumGameClock.h`, read by the clock, the router and the
   mover. *Verified:* `Elysium.Substrate.Movement` (content-free, the formulas and the hulls) plus
-  **`dev/elysium.ps1 move`** — a new `-ElysiumMove` harness replaying fixed command streams over eight courses
+  **`uv run elysium debug move`** — a new `-ElysiumMove` harness replaying fixed command streams over eight courses
   against real geometry, with `pipeline/src/elysium_pipeline/validation/move_diff.py` as the comparator (`--save` promotes a baseline,
   `--hz` does the cross-rate check). It caught two real defects the unit tests could not: the jump
   overwriting `v.z` instead of adding to it, and courses inheriting the previous course's velocity.
@@ -554,7 +568,7 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
   non-reflective world becomes **Lambert** and `$envmaptint`'s chromatic half drives `Metallic`
   off the mask (VtMB's own metal mask). Props gained the channel — the *larger* half of the
   reflective set, 1,419 of 2,610 VMTs, previously none. RE + whole-game survey:
-  **`docs/vtmb/reflections.md`**; decision:. *Verified:* build + `dev/elysium.ps1 test`
+  **`docs/vtmb/reflections.md`**; decision:. *Verified:* build + `uv run elysium test`
   green, 10 maps re-exported/re-baked, shots re-baselined, Lumen reflections 0.15–0.22 ms against
   the committed 0.18–0.25. *Deps:* 3.5, 7.4.
 - [ ] **7.6 Bloom/glow tuning** *(was L3.2)* — VtMB's overbright neon/selfillum vs pinned
@@ -637,8 +651,8 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   `elysium.menu.close`, `elysium.MenuVantage`, `elysium.BootMenu`. Six owner calls:.
 
   Three findings the build forced, all recorded in `docs/architecture/ui-architecture.md`: `make_ui_fonts.py`
-  **cannot** run in the `dev/elysium.ps1 content` umbrella (a `UFontFace` import flushes Slate's font cache and
-  `FSlateApplication::Get()` asserts in a commandlet); a `UCommonActivatableWidget` added straight
+  **cannot** run in the headless content commandlet, so the policy export coordinates a
+  Slate-enabled editor pass; a `UCommonActivatableWidget` added straight
   to the viewport is **collapsed until `ActivateWidget()`**; and `ElysiumScreenshot::Request` grew a
   `bShowUI` flag because the harness's UI-free capture silently omits every Slate widget — the MCP
   tool now passes true, the regression harness keeps false so baselines hold.
@@ -646,7 +660,7 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   **Remaining:** the `CommonUIInputData` config asset + gamepad/keyboard nav pass (11.3 routes Esc
   through the player controller and the menu's own `NativeOnKeyDown` precisely because CommonUI's
   Back action needs that asset); New Game click path untested end to end (the seam is wired, the
-  console equivalent works); chargen ahead of New Game (9.4). **Open risk:** `dev/elysium.ps1 shots` cannot see
+  console equivalent works); chargen ahead of New Game (9.4). **Open risk:** `uv run elysium debug shots` cannot see
   the UI layer, so 8.9's HUD needs UI-inclusive vantages or its regressions go unwatched.
 
   **Acceptance:** main menu and pause menu are legible and correctly proportioned at 1080p,
@@ -721,7 +735,7 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   *Acceptance (a):* on `sp_tutorial_1`, `togglecamera` shows the PC's own clan model on the boom,
   dissolving in across `cam_fadeend`→`cam_fadestart` and culled at weight 0; the theatre's scenes
   animate it. *(b):* the gait matches the mover's reported state through a walk/run/crouch pass, and
-  a `dev/elysium.ps1 test Play` beat asserts it.
+  a `uv run elysium test Play` beat asserts it.
 
 **Slice acceptance** *(M5 criterion)*: New Game starts from a real, modern menu that is legible
 and correctly proportioned from 1080p to 4K and at 21:9; the HUD and the tutorial's popup signs
@@ -857,7 +871,7 @@ dialogue, scripted flow, quests, save/load included.
   Sub-steps, in build order:
   - **a. Action table + generator** — hand-authored `Config/ElysiumInputActions.csv` (the
     committed spec; **not** generated from the user's `kb_act.lst`, which is game-derived) →
-    `IA_*`/`IMC_*` assets emitted by `pipeline/unreal/build_content.py`, so `dev/elysium.ps1 content` keeps them in
+    `IA_*`/`IMC_*` assets emitted by `pipeline/unreal/build_content.py`, so `uv run elysium export bundle policy` keeps them in
     lockstep.
   - **b. `IMC_Player_KBM` + analog actions + `UElysiumInputRouter`** — retires the legacy
     mappings and `bEnableLegacyInputScales`; contexts replace VtMB's `CClientMode*` split
@@ -958,7 +972,7 @@ Steps are ordered so each compiles, ships and is observable alone. **11.4 was th
   the beat-script driver (`do`/`wait`/`assert`/`shot` over the command registry, injected input, `G`/
   quest/entity predicates and the 2.9 shot baseline), command-stream replay, the save round-trip, and
   the matching MCP tools (`input_inject`, `beat_run`, `save`/`load`, `time`). *Acceptance:*
-  `dev/elysium.ps1 test Play` walks the tutorial opening unassisted and fails loudly when a beat regresses — P9's
+  `uv run elysium test Play` walks the tutorial opening unassisted and fails loudly when a beat regresses — P9's
   slice acceptance becomes a CI run rather than a manual play-through. *Deps:* 11.6, 2.7, 2.9.
 
 - [x] **11.11 Rework the frame to retail order — move first, then think** *(reversed 11.1's tick
@@ -980,7 +994,7 @@ Steps are ordered so each compiles, ships and is observable alone. **11.4 was th
 
 **Slice acceptance:** from a cold launch — the menu comes up over the backdrop, New Game runs chargen
 and enters the story, the tutorial's opening beats play on rebindable controls with a HUD, Esc pauses,
-Save and Load round-trip the run, and `dev/elysium.ps1 test Play` asserts the whole thing headlessly.
+Save and Load round-trip the run, and `uv run elysium test Play` asserts the whole thing headlessly.
 
 ## P12 — The theatre: choreography & faces *(the PP2 rung — everything blocks)*
 
@@ -992,24 +1006,12 @@ included**. **RE19** closes the scene format and event semantics
 `$ELYSIUM_EXPORT_ROOT/lip/`; **RE20** closes the flex/eyeball chunks, `.lip` grammar, and
 phoneme→controller tables (`docs/vtmb/facial_animation.md`). **PL10** bakes the faces into the NPC
 export — morph targets in each glb, the flex rig in `$ELYSIUM_EXPORT_ROOT/npc/facial/<stem>.json`, and
-`$ELYSIUM_EXPORT_ROOT/expressions/`. **RE32 remains open:** the full
-Source→glTF→glTFRuntime→skeletal-component basis is proven algebraically. Final
-theatre acceptance still needs post-blend `Flags & 0x2` evaluation, the general
-included-model outer/nested remap and target-only-helper behavior, the
-rainbow-cloth material failure resolved, a phase-pinned moving interval to close
-non-commuting rotation order outside a bind-like hold, and one aggregate UE run
-against the captured rendered-retail invariants. The whole-scene retail oracle
-is present: a zero-drop 229,201-record
-StudioRender trace covers 69 visible models, while seven authored archives
-cover every one of the courtroom banks' 32,907 frame samples and all 23 actor
-slots. A separate ELANIM2 resolver trace contributes 2,342 exactly paired
-Vampire4 BASE/final poses with recorded masks and zero drops; final equals BASE
-throughout the bind-like hold. Its exact phase join reproduces the
-held-entry/authored/donor-bind candidate to `2.54121e-6` Source inches position
-RMS and `1.91195e-5` rotation-matrix RMS, but the static cancellation case
-cannot select a general composition law. Promoting it to complete donor
-channels plus a three-pose runtime deformed the moving cast in live acceptance,
-so that experiment is removed and not treated as a retail fact.
+`$ELYSIUM_EXPORT_ROOT/expressions/`. **RE32 and RE33 remain open:** skeletal pose,
+scene placement, secondary-motion/physics, and facial/lip runtime equivalence are
+consumed here, while their capture-harness tasks, experiments, evidence gates, and current status live in
+`docs/project/retail-capture-roadmap.md`. Confirmed behavior remains in
+`docs/vtmb/animation_and_movers.md`, `docs/vtmb/choreographed_scenes.md`, and
+`docs/vtmb/facial_animation.md`.
 
 RE20 changes what 12.4 can be: **no model in the install carries eyeball data** — the whole
 cast ships `NumEyeballs == 0`, so there is no authored eye pose, look-at cone or procedural
@@ -1073,14 +1075,14 @@ it was never authored.
   primitive, so the skeletal-mesh config must set `MorphTargetsDuplicateStrategy::Merge`, and a
   morph target is one *flex record*, not one flexdesc — the eyelid pairs hinge a single flexdesc
   into two ramps. Spec: `docs/vtmb/facial_animation.md`. *Acceptance:* a flex authored in the model
-  moves the face in-game. *Deps:* 8.5, RE20 [x], PL10 [x].
+  moves the face in-game. *Deps:* 8.5, RE20 [x], RE33, PL10 [x].
 - [ ] **12.4 Eyelids** *(was "Eyes")* — blink + lid shaping off the eight `eyelid` controllers
   and their four rules (`raiser × (1 − droop·0.8) × (1 − blink)` and its complements). **There is
   no eyeball data to consume** — RE20 found `NumEyeballs == 0` on all 4,444 models, so eye posing
   and look-at have no faithful baseline. *Acceptance:* actors blink and their lids shape through
   the theatre scene. *Open owner call:* whether to add gaze/look-at at all — it is an invention
   under `docs/project/remaster-direction.md`'s Feel layer, not a reproduction, so it needs an owner call
-  recorded in `docs/vtmb/facial_animation.md` before it is built. *Deps:* 12.3.
+  recorded in `docs/vtmb/facial_animation.md` before it is built. *Deps:* 12.3, RE33.
 - [ ] **12.5 Lipsync** — `.lip` phoneme tracks (RE20 [x]; 9.3c already logs the scripts' `.lip`
   probes as a named divergence) driving mouth flexes against 12.2's line audio; the 7,136 files
   are on disk in `$ELYSIUM_EXPORT_ROOT/lip/` (PL9 [x]), keyed by the line's own sound path. A **three-file join
@@ -1090,7 +1092,7 @@ it was never authored.
   *string* — the `.lip` numeric code is not stable across the corpus. All three inputs are on
   disk: `$ELYSIUM_EXPORT_ROOT/lip/`, `$ELYSIUM_EXPORT_ROOT/expressions/` (the 249 `.txt` tables, PL10 [x]) and `mouths` in
   `$ELYSIUM_EXPORT_ROOT/npc/facial/<stem>.json`. Spec: `docs/vtmb/facial_animation.md`. *Acceptance:* mouths move
-  with the words on every theatre line. *Deps:* 12.2, 12.3.
+  with the words on every theatre line. *Deps:* 12.2, 12.3, RE33.
 
 **Slice acceptance** *(PP2)*: New Game runs genesis, then the full theatre act plays start to
 finish — choreography, camera moves, audible subtitled lines, live faces — and hands the player
@@ -1112,7 +1114,7 @@ to the tutorial chain, unassisted, from real input.
   melee lessons complete as retail. *Deps:* 9.8, 9.6, 11.4.
 
 **Slice acceptance** *(PP6 = P9's criterion, mechanised)*: `sp_tutorial_1` is completable as in
-retail end to end, and `dev/elysium.ps1 test Play` proves it headlessly.
+retail end to end, and `uv run elysium test Play` proves it headlessly.
 
 ## Pipeline backlog (indexed; owned by phases above)
 
@@ -1133,6 +1135,7 @@ retail end to end, and `dev/elysium.ps1 test Play` proves it headlessly.
 | PL14 | **Export the first-person hand viewmodels.** `clandoc000.txt` also names `M_Hands`/`F_Hands` per clan — the patch-restored per-clan viewmodels under `models/hands/**` (21 in the merged install) — and PL13 deliberately left them out: they are the first-person half of the body and 8.11a's acceptance is the third-person boom. Same seed function, one more key pair; none carries a flex rig | 8.11a |
 | PL16 [x] | Cinematic animation sets are exported and split into actor-addressable banks. → `docs/vtmb/choreographed_scenes.md`. | 12.1 |
 | PL17 | Build the patch-first audio catalog + typed sidecars: codec/channel/rate/frame/duration metadata, complete static reference closure, parsed map + entity sound schemes, sentences/surfaces, item/discipline events, radio/news, case collisions and missing refs. Raw game audio remains gitignored under `$ELYSIUM_EXPORT_ROOT/sound/`. → `docs/vtmb/audio_pipeline.md`, `docs/architecture/audio-architecture.md`. | 6.5–6.8, 9.2, 12.2 |
+| PL18 | Resolve the four structured NPC-export source warnings: the absent generic Night Watchman doppleganger model and the truncated skeletal records in `bottleb`, `bottlec`, and `stage_light`. The current export records all four; the three props use their successfully decoded static `model_mesh` fallback. → `docs/vtmb/animation_and_movers.md`. | 8.5, 12.1 |
 | PL7 [x] | The sidecar-space audit found no fixes: all consumed sidecars are already Unreal centimetres. | 0.4 [x] |
 | PL9 [x] | Choreographed scenes and `.lip` files are mirrored patch-first. → `docs/vtmb/choreographed_scenes.md`, `docs/vtmb/facial_animation.md`. | 12.1, 12.5 |
 | PL10 [x] | NPC flex data, morph targets, facial sidecars, and expression tables are exported. → `docs/vtmb/facial_animation.md`. | 12.3–12.5 |
@@ -1173,7 +1176,8 @@ retail end to end, and `dev/elysium.ps1 test Play` proves it headlessly.
 | RE29 | Entity-name matching is case-insensitive with final-`*` prefix semantics. → `docs/vtmb/entity_io.md`. | entity I/O | [x] |
 | RE30 | Recover `trigger_environmental_audio` touch behavior and the precedence/interpolation among its `room_type`, SoundScheme `RoomDSP`, and the player's networked `m_sndRoomDSP`/`m_sndPlayerDSP`. → `docs/vtmb/audio_pipeline.md`. | 6.7 | [ ] |
 | RE31 | Recover the SoundScheme RandomSound frequency scheduler/distribution and transition edge cases; the current approximate curve is not a faithful baseline. → `docs/vtmb/audio_pipeline.md`. | 6.7 | [ ] |
-| RE32 | **Retail skeletal pose application, end to end.** The live base path is recovered from v2531 RLE local channels through hierarchy/entity composition, transition-history saved/current conversion, `Flags & 0x2` split inheritance, the outer virtual-model position remap, `boneToWorld * poseToBone`, and StudioRender's CPU vertex deformation; three binary-pinned specifications under `research/cases/animation-pose/specs/` preserve the cross-DLL proof path. A hash-gated Tremere/`howl` capture validates the final skin palette and discriminates split inheritance over 70 aligned frames. The whole-scene courtroom oracle has 229,201 draws/69 models/zero drops plus 32,907 authored samples over seven banks and 23 actor slots. Its ELANIM2 companion has 2,342 mask- and buffer-identity-paired Vampire4 BASE/final poses; final equals BASE throughout the bind-like hold. The exact phase join reproduces held-entry/authored/donor-bind candidates to `2.54121e-6` Source inches position RMS and `1.91195e-5` rotation-matrix RMS, but cannot select a general law because authored approximately equals donor bind. A complete-channel/three-pose runtime experiment deformed the moving cast in live acceptance and is removed. Remaining close gates are a phase-pinned moving resolver capture, runtime post-blend split evaluation, outer/nested include remaps and target-only helpers (2,692 of 4,515 used target/bank pairs can diverge), the rainbow-cloth packed-vertex/material cause, and aggregate UE/retail root/material acceptance. Details and commands: `docs/vtmb/animation_and_movers.md` A.4b. | 8.5, 8.11, 12.1 | [~] |
+| RE32 | Retail skeletal, scene-placement, and character secondary-motion evaluation, from v2531 channels through selection, composition, initial actor placement, root/entity motion, procedural/jiggle and cloth/hair physics, hierarchy, physical-state handoff, and final deformation. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/animation_and_movers.md` and `docs/vtmb/choreographed_scenes.md`. | 8.5, 8.11, 12.1 | [~] |
+| RE33 | Retail facial-expression and lip-sync evaluation, from VCD/audio/`.lip` time through expression tables, controller mixing, flex rules/ramps, eyelids, amplitude mouth, and final deformation. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/facial_animation.md`. | 12.3–12.5 | [~] |
 | SKY | The sky/ambience rework is complete; remaining work is tracked as 3.10–3.13 and RE17. Facts: `docs/vtmb/sky-ambience.md`. | 3.6, 3.7 | [x] |
 
 The Ghidra extraction findings behind the closed rows (the RE1/RE2/RE3/RE4 detail: addresses,

@@ -34,20 +34,22 @@ Baking needs the unit-vector table out of the user's own `Bin/StudioRender.dll`
 so it is read at export time and never committed. No model in the install carries eyeball
 data, so there is none to export. Format: `docs/vtmb/facial_animation.md`.
 
-CLI:
-  dev/elysium.ps1 export --npc
-  pipeline/.venv/Scripts/python -m elysium_pipeline.exporters.npc_export <model.mdl ...>
-`export_all.py --npc` calls `main()` at the end of a run.
+The public tooling CLI exposes full and targeted exports.  Targeted runtime
+integration merges into the existing manifest; it never replaces the complete
+index with a one-model partial index.
 """
 import glob
 import json
 import os
 import re
-import sys
 
 from elysium_pipeline.formats import install, kv, mdl, mdl_gltf
 from elysium_pipeline.formats import mdl_skel as S
 from elysium_pipeline.paths import export_root
+from elysium_pipeline.exporters.source_warnings import (
+    animated_prop_warning,
+    missing_npc_warning,
+)
 
 OUT = os.fspath(export_root())
 NPC_DIR = os.path.join(OUT, "npc")
@@ -124,6 +126,25 @@ def animated_prop_models_from_ents(out_root=OUT):
             if animated and model.endswith(".mdl"):
                 models.add(model if model.startswith("models/") else "models/" + model)
     return sorted(models)
+
+
+def static_model_fallbacks_from_ents(out_root=OUT):
+    """Models whose per-map entity record already names decoded static geometry."""
+
+    models = set()
+    for ents in glob.glob(os.path.join(out_root, "*", "*.ents")):
+        try:
+            data = json.load(open(ents, encoding="utf-8"))
+        except Exception:
+            continue
+        for ent in data.get("entities", []):
+            if not ent.get("model_mesh"):
+                continue
+            model = str(ent.get("keys", {}).get("model", "")).strip().lower()
+            model = model.replace("\\", "/")
+            if model.endswith(".mdl"):
+                models.add(model if model.startswith("models/") else "models/" + model)
+    return models
 
 
 def cinematic_models_from_ents(out_root=OUT):
@@ -274,6 +295,7 @@ def write_sidecars(manifest):
                    "clips": sorted(rec.get("clips", {}))}
             for stem, rec in manifest.get("animated_props", {}).items()
         },
+        "warnings": manifest.get("warnings", []),
     }
     with open(INDEX, "w", encoding="utf-8") as f:
         json.dump(index, f, indent=1)
@@ -306,8 +328,21 @@ def write_sidecars(manifest):
           f"({total/1e6:.1f} MB total, {total/max(1, len(manifest['npcs']))/1024:.0f} KB each)")
 
 
-def main(only=None):
-    idx = install.build_index()
+def main(only=None, *, index=None, integrate=False, strict=False):
+    """Export the runtime skeletal corpus.
+
+    ``only`` selects model keys.  With ``integrate=True`` those records and any
+    newly required banks are merged into the current complete manifest before
+    its runtime projections are regenerated.  Without integration, targeted
+    calls intentionally produce a standalone manifest and should therefore use
+    an isolated output root configured by the caller.
+
+    ``strict`` keeps best-effort decoding inside individual format operations
+    but refuses to publish a new manifest if a requested model/bank failed.
+    """
+    idx = index if index is not None else install.build_index()
+    failures = []
+    warnings = []
     load_mdl = lambda k: (r if (r := install.read(idx, (k[:-4] if k.lower().endswith(".mdl")
                                                          else k) + ".mdl")) else None)
 
@@ -329,9 +364,18 @@ def main(only=None):
     npcs = [m for m in seed if load_mdl(m) is not None]
     missing = [m for m in seed if load_mdl(m) is None]
     for m in missing:
-        print(f"  ! {m}: no .mdl in install - skipped")
+        warning = missing_npc_warning(m)
+        if warning:
+            warnings.append(warning)
+            print(f"  ! warning {warning['code']}: {m} - {warning['detail']}")
+        else:
+            print(f"  ! {m}: no .mdl in install - skipped")
+            failures.append(f"missing model: {m}")
     if not npcs and not cinematics and not animated_props:
-        print("[npc] no character, cinematic, or animated-prop models to export")
+        message = "[npc] no character, cinematic, or animated-prop models to export"
+        print(message)
+        if strict:
+            raise RuntimeError(message)
         return
 
     # NPC stems are basenames (the console/`elysium.npc.load` ergonomic); fall back to a
@@ -370,8 +414,9 @@ def main(only=None):
     for key in sorted(banks_needed):
         try:
             info = mdl_gltf.export_bank(idx, key, NPC_DIR, banks_needed[key])
-        except Exception as e:
+        except (Exception, SystemExit) as e:
             print(f"  !! bank {banks_needed[key]} FAILED: {e}")
+            failures.append(f"bank {banks_needed[key]}: {e}")
             continue
         if info:
             bank_index[info["stem"]] = {
@@ -391,12 +436,14 @@ def main(only=None):
     for key in cinematics:
         if load_mdl(key) is None:
             print(f"  ! {key}: no .mdl in install - skipped")
+            failures.append(f"missing cinematic model: {key}")
             continue
         stem = bank_stem(key)
         try:
             banks = mdl_gltf.export_cinematic(idx, key, NPC_DIR, stem)
-        except Exception as e:
+        except (Exception, SystemExit) as e:
             print(f"  !! cinematic {stem} FAILED: {e}")
+            failures.append(f"cinematic {stem}: {e}")
             continue
         if not banks:
             continue
@@ -420,8 +467,9 @@ def main(only=None):
     for m in npcs:
         try:
             info = mdl_gltf.export_npc(idx, m, NPC_DIR, npc_stem[m], anorms)
-        except Exception as e:
+        except (Exception, SystemExit) as e:
             print(f"  !! npc {npc_stem[m]} FAILED: {e}")
+            failures.append(f"npc {npc_stem[m]}: {e}")
             continue
         npc_index[info["stem"]] = {
             "glb": info["glb"], "model": info["model"], "bones": info["bones"],
@@ -435,6 +483,7 @@ def main(only=None):
     # this index promises an animated representation, while ordinary props retain their baked
     # Nanite/static path. Props own their clips directly; no NPC include-bank vocabulary is needed.
     animated_prop_index = {}
+    static_fallbacks = static_model_fallbacks_from_ents()
     if animated_props:
         os.makedirs(ANIMATED_PROP_DIR, exist_ok=True)
         print(f"[npc] exporting {len(animated_props)} animated prop model(s) -> "
@@ -443,13 +492,27 @@ def main(only=None):
     for model in animated_props:
         if load_mdl(model) is None:
             print(f"  ! animated prop {model}: no .mdl in install - skipped")
+            failures.append(f"missing animated prop model: {model}")
             continue
         stem = (_basename_stem(model) if prop_counts[_basename_stem(model)] == 1
                 else bank_stem(model))
         try:
             info = mdl_gltf.export_npc(idx, model, ANIMATED_PROP_DIR, stem, anorms=None)
-        except Exception as e:
-            print(f"  !! animated prop {stem} FAILED: {e}")
+        except (Exception, SystemExit) as e:
+            warning = animated_prop_warning(
+                model,
+                e,
+                has_static_fallback=model in static_fallbacks,
+            )
+            if warning:
+                warnings.append(warning)
+                print(
+                    f"  ! warning {warning['code']}: {stem} uses "
+                    f"{warning['fallback']} ({warning['detail']})"
+                )
+            else:
+                print(f"  !! animated prop {stem} FAILED: {e}")
+                failures.append(f"animated prop {stem}: {e}")
             continue
         animated_prop_index[stem] = {
             "glb": "animated_props/" + info["glb"],
@@ -488,7 +551,38 @@ def main(only=None):
         "banks": bank_index,
         "cinematics": cinematic_index,
         "animated_props": animated_prop_index,
+        "warnings": warnings,
     }
+
+    if strict and failures:
+        raise RuntimeError("; ".join(failures))
+
+    if integrate and os.path.isfile(MANIFEST):
+        with open(MANIFEST, encoding="utf-8") as f:
+            previous = json.load(f)
+        version = previous.get("manifest_version")
+        if version != MANIFEST_VERSION:
+            raise RuntimeError(
+                f"cannot integrate into NPC manifest v{version}; expected v{MANIFEST_VERSION}"
+            )
+        for key in ("npcs", "banks", "cinematics", "animated_props"):
+            merged = dict(previous.get(key, {}))
+            merged.update(manifest.get(key, {}))
+            manifest[key] = merged
+        by_key = {
+            (item.get("code"), item.get("model")): item
+            for item in previous.get("warnings", [])
+        }
+        by_key.update(
+            {
+                (item.get("code"), item.get("model")): item
+                for item in manifest.get("warnings", [])
+            }
+        )
+        manifest["warnings"] = [
+            by_key[key] for key in sorted(by_key, key=lambda item: tuple(map(str, item)))
+        ]
+
     with open(MANIFEST, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=1)
     write_sidecars(manifest)
@@ -512,14 +606,13 @@ def main(only=None):
           f"{sum(r['morphs'] for r in rigged)} morph targets -> {FACIAL_DIR}/")
     print(f"[npc] size: banks {bank_bytes/1e6:.0f} MB (shared) + meshes {npc_bytes/1e6:.0f} MB, "
           f"manifest {os.path.getsize(MANIFEST)/1e6:.1f} MB")
+    if warnings:
+        print(
+            f"[npc] warnings: {len(warnings)} known source issue(s) recorded in "
+            f"{MANIFEST} and {INDEX}"
+        )
+def reindex() -> None:
+    """Re-derive runtime sidecars from the canonical manifest."""
 
-
-if __name__ == "__main__":
-    if "--reindex" in sys.argv:
-        # Re-derive the runtime sidecars from the manifest already on disk. Everything they
-        # carry is a projection of it, so this needs no install and no glb re-bake.
-        with open(MANIFEST, encoding="utf-8") as f:
-            write_sidecars(json.load(f))
-        sys.exit(0)
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    main(only=args or None)
+    with open(MANIFEST, encoding="utf-8") as f:
+        write_sidecars(json.load(f))

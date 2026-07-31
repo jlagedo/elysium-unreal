@@ -13,7 +13,8 @@ and which system reads it. Implementation priority and status for wiring each ta
 `pipeline/src/elysium_pipeline/exporters/UE_extract_vdata.py` mirrors the tree **verbatim** (no parse/transcode) into
 `$ELYSIUM_EXPORT_ROOT/vdata/`, resolved patch-first (patch loose > retail loose > VPK — the engine's own search
 order), same bring-your-own-game posture as the script/dialogue/sign mirrors (gitignored,
-regenerable). `export_all.py` runs it once at end of a run (`--no-vdata` to skip). Two
+regenerable). `uv run elysium export bundle vdata` runs it directly, while complete
+export profiles schedule the bundle once. Two
 exclusions: `vdata/signs/` (owned by `UE_extract_signs.py`, which also decodes
 the sign art → `$ELYSIUM_EXPORT_ROOT/signs/`) and `stealth.xls` (a design-source spreadsheet, not engine data).
 Counts: **465** files mirrored (`system/` 97, `items/` 244, `camerashots/` 66,

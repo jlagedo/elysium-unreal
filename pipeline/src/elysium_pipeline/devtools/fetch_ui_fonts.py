@@ -9,10 +9,10 @@ Spectral and Spectral SC ship real static weights upstream and are copied verbat
 Inter ships only a variable file, so the weights we use are instanced out of it with
 `fontTools.varLib.instancer` -- deterministic, and re-runnable from this script.
 
-Run once when a face is added or replaced; `dev/elysium.ps1 content` does **not** touch these
+Run once when a face is added or replaced; `uv run elysium export bundle policy` does **not** touch these
 (they are static files, not editor-built `.uasset`s). Requires network.
 
-    pipeline/.venv/Scripts/python -m elysium_pipeline.devtools.fetch_ui_fonts [--force]
+    uv run elysium deps sync
 """
 import argparse
 import io
@@ -79,7 +79,7 @@ def main():
             from fontTools.ttLib import TTFont
             from fontTools.varLib import instancer
         except ImportError:
-            sys.exit("fontTools is required to instance Inter: pip install -r pipeline/pyproject.toml")
+            sys.exit("fontTools is required to instance Inter; install it in the uv environment")
 
         cache = {}
         for fam, src, axes, out in INSTANCED:

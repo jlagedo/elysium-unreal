@@ -325,7 +325,7 @@ const FSlateBrush* UElysiumCharacterScreen::Art(const TCHAR* RelPath, const FLin
 			// Not fatal anywhere: every caller draws the token version instead. Verbose because a
 			// clone with no export would otherwise log a dozen warnings per open.
 			UE_LOG(LogElysiumCharScreen, Verbose,
-				TEXT("no sheet art at %s — run: dev/elysium.ps1 export <map>"), *Path);
+				TEXT("no sheet art at %s — run: uv run elysium export bundle ui"), *Path);
 			ArtMissing.Add(Key);
 			return nullptr;
 		}

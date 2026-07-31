@@ -14,7 +14,7 @@ its SHA-256, and lays it out under Source/ElysiumUE/ThirdParty/CPython27/ exactl
     ThirdParty/CPython27/PythonHome/Lib/   (stdlib for Py_Initialize bootstrap)
 
 Windows x64 only (the embed is Win64-only; elsewhere ELYSIUM_WITH_CPYTHON=0).
-Run through ``dev/elysium.ps1 bootstrap``.
+Run through ``uv run elysium deps sync``.
 """
 
 import hashlib

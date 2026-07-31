@@ -9,11 +9,15 @@ engine-neutral intermediates.
 
 ## Read first
 
-- **`docs/project/roadmap.md`** — the single source of truth work tracker: the playable-path ladder
-  (PP0–PP6, the master sequence), phases P0–P13, per-task status, pipeline + RE backlogs, risk
-  register. **Status lives there and nowhere else** — including this file. There is no as-built
-  archive and no decision log; git history is the as-built record, and a decision's outcome is a
-  present-tense fact in the doc that owns the system.
+- **`docs/project/roadmap.md`** — the master work tracker: the playable-path ladder
+  (PP0–PP6, the master sequence), phases P0–P13, project roll-up status, pipeline + RE backlogs,
+  and risk register.
+- **`docs/project/retail-capture-roadmap.md`** — the only scoped subtracker: detailed status for
+  the retail capture harness and original-runtime animation/facial investigation. The master
+  roadmap owns its roll-up and priority. Status lives in those two trackers and nowhere else,
+  including this file. There is no as-built archive and no decision log; git history is the
+  as-built record, and a decision's outcome is a present-tense fact in the doc that owns the
+  system.
 - **`docs/project/rebuild-strategy.md`** — the strategy reference: north star, principles, the two
   tracks, sidecar contracts, per-system design targets.
 - **`docs/project/remaster-direction.md`** — the direction charter: what may be modernized, what must
@@ -67,11 +71,11 @@ their licences, and directory policy; Unreal packages are generated locally and 
 - **Offline — `pipeline/`** (Python): decodes VtMB's proprietary formats (BSP v17, MDL v2531,
   TTH/TTZ, VPK, VMT, `.fnt`, `.res`) into intermediates under `$ELYSIUM_EXPORT_ROOT/<map>/`
   (OBJ+MTL+PNG/DDS, glTF `.glb`, plain-text/JSON sidecars). `UE_bsp_to_scene.py` is the map
-  exporter; `export_all.py` batches. Runs against the user's install; its Python package and
-  dependencies are declared in `pipeline/pyproject.toml`. A second offline stage, `dev/elysium.ps1 bake` →
-  `pipeline/unreal/bake_map.py`, turns each
-  exported map's *look* into real assets and a `.umap` on the `/ElysiumBaked` mount — an editor
-  commandlet, so an editor build is a prerequisite for content, never for running.
+  exporter; `uv run elysium export` coordinates map and whole-game profiles. Its Python package,
+  dependencies, and command entrypoint are declared in `pyproject.toml` and locked by `uv.lock`.
+  The same export command invokes `pipeline/unreal/bake_map.py` to turn each exported map's
+  *look* into real assets and a `.umap` on the `/ElysiumBaked` mount. That stage is an editor
+  commandlet, so an editor build is a prerequisite for export, never for running.
 - **Runtime — `Source/ElysiumUE/`** (C++): opens the baked level and **adopts** its actors
   (bucketed by the tags the bake stamped), then builds everything else in code from the
   intermediates on disk — collision, ropes, the sky cubemap, the entity substrate, NPCs, audio,
@@ -100,7 +104,8 @@ rules: `docs/project/rebuild-strategy.md` → "Coordinate conventions".
 ### Docs describe design, RE, and status — not the current build
 
 Documentation exists for what the code cannot say for itself: design intent, VtMB
-reverse-engineering facts, and `docs/project/roadmap.md` status. The source is the as-built record — read
+reverse-engineering facts, and status in the master roadmap plus its declared retail-capture
+subtracker. The source is the as-built record — read
 it rather than paraphrasing it. The five directory orientation `CLAUDE.md` files (`Source/ElysiumUE/
 CLAUDE.md`, `pipeline/CLAUDE.md`, `research/CLAUDE.md`, `docs/CLAUDE.md`, `Content/CLAUDE.md`) point at *where* something
 lives — module/plugin list, folder → layer map, build/test commands — never *how* the current
@@ -117,13 +122,14 @@ Every `CLAUDE.md` in this repo — this file and its four sub-files (`Source/Ely
 `pipeline/CLAUDE.md`, `research/CLAUDE.md`, `docs/CLAUDE.md`, `Content/CLAUDE.md`) — states present-tense facts only, same
 as every other doc (`docs/CLAUDE.md` → "House rules"). **Never** write a roadmap task-ID
 parenthetical (`(11.9)`, `roadmap 8.6`, `(PL13)`), a date, or a change/migration narrative
-("was X, now Y") into any of them — task tracking lives only in `docs/project/roadmap.md`. Cite a doc by
-name, with no date or task number attached.
+("was X, now Y") into any of them — task tracking lives only in the master roadmap and its
+declared retail-capture subtracker. Cite a doc by name, with no date or task number attached.
 
 ## What runs today
 
-**Per-task status, as-built detail, and what is next: `docs/project/roadmap.md`.** Runtime types and
-where they live: `Source/ElysiumUE/CLAUDE.md`.
+**Project priority and roll-up status: `docs/project/roadmap.md`; detailed retail-capture
+status: `docs/project/retail-capture-roadmap.md`.** Runtime types and where they live:
+`Source/ElysiumUE/CLAUDE.md`.
 
 ## Target hardware
 
@@ -143,17 +149,18 @@ calibration findings: **`docs/architecture/rendering-perf.md`**.
 ## Build & run (Windows)
 
 Copy `dev/paths.example.env` to `.elysium.local.env`, configure the UE, VtMB and work roots,
-then use `dev/elysium.ps1` as the only public command surface.
+then use `uv run elysium` as the only public command surface.
 
-- `bootstrap` restores pinned external plugins and fetched SDKs.
+- `reconstruct [--clean] [--rebuild]` restores the complete project from its declared inputs.
+- `deps sync|check` restores or verifies pinned external plugins and fetched SDKs.
 - `doctor` checks repository policy, local paths, dependency ownership and generated prerequisites.
-- `build [rebuild|clean|analyze]` drives UnrealBuildTool.
-- `content` generates local `/Game/Elysium` and `/Game/VtMB/**` packages.
-- `export [maps] [options]` runs the offline pipeline into the $ELYSIUM_EXPORT_ROOT.
-- `bake [map] [stages]` generates `/ElysiumBaked/<map>/**` from pre-exported files.
+- `build [--rebuild|--clean|--analyze]` drives UnrealBuildTool.
+- `export grid|all` runs a complete profile; `export map|model|bundle` handles focused work.
+- Export generates the required `/Game/Elysium`, `/Game/VtMB/**`, and
+  `/ElysiumBaked/<map>/**` packages unless an explicit intermediate-only mode is selected.
 - `test [filter]` runs the `Substrate`, `Content`, or fully qualified automation tier.
-- `editor`, `play`, `profile`, `probe`, `shots`, `move`, `greenroom`, and `modelroom` expose
-  the Unreal development and acceptance harnesses.
+- `run editor|play` and `debug profile|probe|shots|move|greenroom|modelroom` expose the Unreal
+  development and acceptance harnesses.
 - `research <case>`, `ide vscode`, and `mcp` expose research, IDE and control tooling.
 
 The running game receives `-ElysiumContentRoot` and reads the export corpus from disk. It never
@@ -168,7 +175,7 @@ unless explicitly asked.
 
 `docs/index.yaml` is the ownership and kind index. The documentation set is divided into:
 
-- `docs/project/` — the roadmap, strategy and direction charter;
+- `docs/project/` — the master and scoped roadmaps, strategy, and direction charter;
 - `docs/architecture/` — Unreal system designs;
 - `docs/vtmb/` — engine-neutral VtMB formats and behavior;
 - `docs/recovered/` — explicitly uncertain reconstructions;

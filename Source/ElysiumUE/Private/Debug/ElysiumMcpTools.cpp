@@ -604,7 +604,7 @@ namespace ElysiumMcpImpl
 			Schema.Add(TEXT("clan"), TEXT("integer"), TEXT("Clan in the level-script 2..8 encoding (2 Brujah .. 8 Ventrue). Default 2."))
 				.Add(TEXT("male"), TEXT("boolean"), TEXT("Player sex. Default true."));
 			Out.Add(MakeTool(TEXT("elysium_new_game"),
-				TEXT("Seed a fresh story context (G flags, quest map, player sheet) and travel to the story entry: sp_tutorial_1 at its `tutorial` info_landmark. This is the boot path dev/elysium.ps1 play takes with no map argument — use it when a test needs the seeded flags the tutorial's own scripts read. The story state is seeded synchronously (clan/clan_name are valid immediately), but the map travel is deferred when a map is already loaded — returns pending=true; poll elysium_maps_list until pending_travel clears and spawn_done is true."),
+				TEXT("Seed a fresh story context (G flags, quest map, player sheet) and travel to the story entry: sp_tutorial_1 at its `tutorial` info_landmark. This is the boot path uv run elysium run play takes with no map argument — use it when a test needs the seeded flags the tutorial's own scripts read. The story state is seeded synchronously (clan/clan_name are valid immediately), but the map travel is deferred when a map is already loaded — returns pending=true; poll elysium_maps_list until pending_travel clears and spawn_done is true."),
 				Schema,
 				[](const TSharedPtr<FJsonObject>& Params) -> FModelContextProtocolToolResult
 				{

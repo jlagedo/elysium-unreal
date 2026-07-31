@@ -16,8 +16,8 @@ Step 2 is a separate file on purpose: UBT overwrites `c_cpp_properties.json` and
 `.vscode/` is gitignored; re-run this script after adding a module dependency, a
 plugin, or a source file that IntelliSense does not resolve.
 
-    dev/elysium.ps1 ide vscode             # generate project files, then settings
-    dev/elysium.ps1 ide vscode --no-ubt    # settings only, from the existing .rsp
+    uv run elysium ide vscode             # generate project files, then settings
+    uv run elysium ide vscode --no-ubt    # settings only, from the existing .rsp
 """
 
 from __future__ import annotations

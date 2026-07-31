@@ -28,7 +28,7 @@ bound name is real or a logged stub, and `D.Input(TEXT("..."))` across the class
 says which entity inputs exist. The report ranks every gap by call count, so the build order is
 demand-ordered rather than guessed.
 
-Read-only. Usage: `python research/tooling/probes/script_api_survey.py [--json <path>] [--top N]`.
+Read-only. Usage: `uv run elysium research script_api_survey [--json <path>] [--top N]`.
 Sibling of `ent_survey.py` (entity/I-O layer) and `dlg_sheet_survey.py` (player-sheet reads).
 """
 import argparse

@@ -1,10 +1,11 @@
-# The vendored CPython 2.7 SDK (~37 MB) is open source (PSF), not game-sourced, and regenerable
-# via dev/elysium.ps1 bootstrap, so it is fetched rather than committed.
-# Keep only the provenance marker + this file tracked.
+# The CPython 2.7 SDK is open source, fetched, and regenerable with:
+#   uv run elysium deps sync
+# Keep only the provenance text and this policy file tracked.
 /include/
 /libs/
 /bin/
 /PythonHome/
 /_extract/
+/.elysium-managed.json
 !VERSION.txt
 !.gitignore

@@ -311,7 +311,7 @@ bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 
 	if (Npcs.IsEmpty())
 	{
-		OutError = TEXT("index carries no NPCs (re-run: dev/elysium.ps1 export <map> --npc)");
+		OutError = TEXT("index carries no NPCs (re-run: uv run elysium export bundle npc)");
 		return false;
 	}
 	return true;

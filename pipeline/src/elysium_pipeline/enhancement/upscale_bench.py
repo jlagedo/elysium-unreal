@@ -19,14 +19,7 @@ Model loading uses spandrel (the same loader chaiNNer uses), so any architecture
 -- ESRGAN / RealPLKSR / DAT / Compact / HAT / SPAN -- loads from one .pth or
 .safetensors with no per-arch code here.
 
-Usage:
-    pip install spandrel torch --index-url https://download.pytorch.org/whl/cu128
-    python upscale_bench.py --in $ELYSIUM_EXPORT_ROOT/ch_hub_1/tex --models models --out $ELYSIUM_EXPORT_ROOT/bench --sheet
-    python upscale_bench.py --in $ELYSIUM_EXPORT_ROOT/ch_hub_1/tex/brick_chinawlla.png --models models --seamless
-
-    # tune on a representative handful first:
-    python upscale_bench.py --in $ELYSIUM_EXPORT_ROOT/ch_hub_1/tex --models models --sheet \
-        --only brick_chinawlla,building_chinabldg08,signs_lotus,concrete_*,metal_*
+Internal enhancement benchmark; not a public project-tooling entrypoint.
 
 Notes:
   * cu128 wheels are what an RTX 50-series (Blackwell / sm_120) needs. If torch

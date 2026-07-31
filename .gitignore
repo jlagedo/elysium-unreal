@@ -34,7 +34,7 @@ compile_commands.json
 
 # Local path configuration and Python environments
 .elysium.local.env
-pipeline/.venv/
+.venv/
 *.egg-info/
 **/__pycache__/
 
@@ -55,7 +55,7 @@ Content/VtMB/
 Content/Elysium.umap
 Plugins/ElysiumBaked/Content/
 
-# Pinned third-party plugins are restored by dev/bootstrap.ps1.
+# Pinned third-party plugins are restored by `uv run elysium deps sync`.
 Plugins/External/
 
 # Scratch and backup files never carry durable project context.

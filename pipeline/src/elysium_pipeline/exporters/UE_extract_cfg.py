@@ -18,8 +18,8 @@ Whole-game, not map-scoped, so `export_all.py` runs it once at the end of a run
 (`--no-cfg` to skip).
 
 Usage:
-  python pipeline/src/elysium_pipeline/exporters/UE_extract_cfg.py            # copy cfg files
-  python pipeline/src/elysium_pipeline/exporters/UE_extract_cfg.py --force    # re-copy even files already present
+  uv run elysium export bundle cfg            # copy cfg files
+  uv run elysium export bundle cfg --force    # re-copy even files already present
 """
 import os
 import sys

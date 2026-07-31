@@ -10,7 +10,7 @@
 # The output is derived from the user's own VtMB install, so it is gitignored and regenerable
 # exactly like $ELYSIUM_EXPORT_ROOT -- only the .uplugin mount descriptor is committed.
 #
-# Run headless (normally via dev/elysium.ps1 bake):
+# Internal editor worker coordinated by `uv run elysium export map`:
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript -script="pipeline/unreal/bake_map.py"
 #       -BakeMap=sp_tutorial_1 -unattended -nosplash -nopause
 #
@@ -903,7 +903,7 @@ class Bake(object):
         world = unreal.EditorLoadingAndSavingUtils.new_blank_map(False)
         if not world:
             fail("new_blank_map returned null")
-            return
+            return False
         actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
 
         # The 3D skybox is a miniature authored at 1/scale in a corner of the map, with the
@@ -970,8 +970,10 @@ class Bake(object):
         map_path = "%s/%s" % (self.pkg, self.map)
         if unreal.EditorLoadingAndSavingUtils.save_map(world, map_path):
             log("level: saved %s (%.1fs)" % (map_path, time.time() - start))
+            return True
         else:
             fail("level save failed: %s" % map_path)
+            return False
 
     def _read_env(self):
         """<map>.env as key -> [tokens]. Absent on a map with no environment sidecar at all."""
@@ -1162,21 +1164,11 @@ class Bake(object):
         return failed
 
 
-def main():
-    map_name = cmdline_arg("BakeMap", "sp_tutorial_1")
-    stages = [s.strip() for s in cmdline_arg("BakeStages", ",".join(ALL_STAGES)).split(",")
-              if s.strip()]
-    log("map=%s stages=%s" % (map_name, ",".join(stages)))
-
-    # A fresh commandlet has not indexed the mount, so does_asset_exist reports False for
-    # assets already on disk and every create_asset call then trips the unattended
-    # overwrite guard. Scan it up front so re-runs reuse what is there.
-    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(
-        [MOUNT], force_rescan=True)
-
+def bake_one(map_name, stages):
+    """Bake one map in the current editor process."""
     bake = Bake(map_name)
     if not bake.load_masters() or not bake.load_sources():
-        raise SystemExit(1)
+        return False
 
     # Textures and materials are prerequisites for every mesh stage, so they always run --
     # a restricted -BakeStages skips their asset *creation*, not the lookup.
@@ -1193,10 +1185,55 @@ def main():
     if "props" in stages:
         bake.stage_props()
     if bake.flush():
+        return False
+    if "level" in stages and not bake.stage_level():
+        return False
+    log("%s done" % map_name)
+    return True
+
+
+def _collect_garbage():
+    collect = getattr(unreal.SystemLibrary, "collect_garbage", None)
+    if collect:
+        collect()
+
+
+def main():
+    raw_maps = cmdline_arg("BakeMaps", "")
+    map_names = [item.strip() for item in raw_maps.split(",") if item.strip()]
+    if not map_names:
+        map_names = [cmdline_arg("BakeMap", "sp_tutorial_1")]
+    stages = [s.strip() for s in cmdline_arg("BakeStages", ",".join(ALL_STAGES)).split(",")
+              if s.strip()]
+    unknown = sorted(set(stages) - set(ALL_STAGES))
+    if unknown:
+        fail("unknown stage(s): %s" % ", ".join(unknown))
         raise SystemExit(1)
-    if "level" in stages:
-        bake.stage_level()
-    log("done")
+    log("maps=%s stages=%s" % (",".join(map_names), ",".join(stages)))
+
+    # A fresh commandlet has not indexed the mount, so does_asset_exist reports False for
+    # assets already on disk and every create_asset call then trips the unattended
+    # overwrite guard. Scan it up front so re-runs reuse what is there.
+    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(
+        [MOUNT], force_rescan=True)
+
+    failed = []
+    for position, map_name in enumerate(map_names, 1):
+        log("--- [%d/%d] %s ---" % (position, len(map_names), map_name))
+        try:
+            if not bake_one(map_name, stages):
+                failed.append(map_name)
+        except (Exception, SystemExit) as exc:
+            fail("%s raised: %s" % (map_name, exc))
+            failed.append(map_name)
+        finally:
+            _collect_garbage()
+
+    if failed:
+        fail("%d of %d map bake(s) failed: %s" % (
+            len(failed), len(map_names), ", ".join(failed)))
+        raise SystemExit(1)
+    log("all %d map bake(s) completed" % len(map_names))
 
 
 main()

@@ -476,7 +476,7 @@ UStaticMesh* UElysiumEntityBodies::ResolveBrushMesh(const FString& Stem)
 	if (!Mesh)
 	{
 		UE_LOG(LogElysiumBodies, Warning,
-			TEXT("brush '%s': no baked mesh (run: dev/elysium.ps1 bake %s world)"), *Stem, *MapName);
+			TEXT("brush '%s': no baked mesh (run: uv run elysium export map %s --force)"), *Stem, *MapName);
 		return nullptr;
 	}
 	BrushMeshCache.Add(Stem, Mesh);
@@ -527,7 +527,7 @@ UStaticMesh* UElysiumEntityBodies::ResolvePropMesh(const FString& Stem)
 	UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, *FElysiumContentPaths::BakedPropMesh(MapName, Stem));
 	if (Mesh == nullptr)
 	{
-		UE_LOG(LogElysiumBodies, Warning, TEXT("prop '%s': no baked mesh (run: dev/elysium.ps1 bake %s props)"),
+		UE_LOG(LogElysiumBodies, Warning, TEXT("prop '%s': no baked mesh (run: uv run elysium export map %s --force)"),
 			*Stem, *MapName);
 		return nullptr;
 	}

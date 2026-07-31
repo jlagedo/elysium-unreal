@@ -571,7 +571,7 @@ arriving is the *weight ramp*; the shot itself starts where it was authored.
 
 ### Verification hooks
 
-- `Elysium.Substrate.Camera` (`dev/elysium.ps1 test Substrate`, `-nullrhi`) over the weight driver and the shot
+- `Elysium.Substrate.Camera` (`uv run elysium test Substrate`, `-nullrhi`) over the weight driver and the shot
   stack alone: 0→1 in 0.5 s at time scale 1, frame-rate independence, correct scaling by time scale,
   clamping, the priority order, symmetric resume on a mid-blend reversal, and the stack's
   out-of-order pop / no-op double pop / ramp-preserving refresh.
@@ -582,7 +582,7 @@ arriving is the *weight ramp*; the shot itself starts where it was authored.
 - `elysium_player_get` (MCP) reports the view mode, the deciding latch, the weight, the scripted
   weight, the solved boom length, the model alpha and the live shot name, so an agent can drive the
   toggle and assert the transition. `elysium.camera` is the same state as a console dump.
-- `dev/elysium.ps1 shots` vantages captured at weight 0, 0.5 and 1 give a look-regression baseline for the
+- `uv run elysium debug shots` vantages captured at weight 0, 0.5 and 1 give a look-regression baseline for the
   blend.
 
 ---

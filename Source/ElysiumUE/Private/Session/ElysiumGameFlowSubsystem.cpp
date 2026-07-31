@@ -33,7 +33,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumFlow, Log, All);
 // The menu backdrop camera, as "x,y,z,pitch,yaw" in world centimetres and degrees. Deliberately
 // NOT an entry in ElysiumVantages::Table: that table is the profiling and screenshot baseline, and
 // Resolve("") returns every vantage for a map — adding one there would silently change what
-// dev/elysium.ps1 profile and dev/elysium.ps1 shots measure. Retune in-game with `elysium.campos`, which logs a
+// uv run elysium debug profile and uv run elysium debug shots measure. Retune in-game with `elysium.campos`, which logs a
 // paste-ready position/rotation including pitch.
 static TAutoConsoleVariable<FString> CVarMenuVantage(
 	TEXT("elysium.MenuVantage"),
@@ -474,7 +474,7 @@ void UElysiumGameFlowSubsystem::ReleasePauseHold()
 
 void UElysiumGameFlowSubsystem::BootFromCommandLine()
 {
-	// An explicit map (dev/elysium.ps1 play <map>) is the dev path: load it bare, with the mock character seeded
+	// An explicit map (uv run elysium run play <map>) is the dev path: load it bare, with the mock character seeded
 	// so the dialogue gates that read the player sheet resolve.
 	int32 NewGameFlag = 1;
 	FParse::Value(FCommandLine::Get(), TEXT("ElysiumNewGame="), NewGameFlag);

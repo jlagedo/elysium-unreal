@@ -80,7 +80,7 @@ records:
 | `share` | the fraction of the illumination arriving at the points this light reaches that comes from **this** light |
 
 - `elysium.lightprobe [rays]` — live, in-session
-- `-ElysiumProbe` / `dev/elysium.ps1 probe [map...]` — headless, one process per map; all ten exported maps in
+- `-ElysiumProbe` / `uv run elysium debug probe [map...]` — headless, one process per map; all ten exported maps in
   ~3.5 minutes. Writes `$ELYSIUM_EXPORT_ROOT/_lights/<map>.probe.json`
 
 `<map>.proposal.json` holds the classifier's protected/fill/review index lists, ready to load as a

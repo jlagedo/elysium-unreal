@@ -143,11 +143,19 @@ bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
 	{
 		return false;
 	}
-	if (!FElysiumContentPaths::IsConfigured())
+	if (!FElysiumContentPaths::IsReady())
 	{
-		UE_LOG(LogElysiumMap, Error,
-			TEXT("export root is not configured; pass -ElysiumContentRoot=... or set ")
-			TEXT("ELYSIUM_EXPORT_ROOT / ELYSIUM_WORK_ROOT"));
+		if (FElysiumContentPaths::IsIncomplete())
+		{
+			UE_LOG(LogElysiumMap, Error,
+				TEXT("export corpus is marked incomplete; run: uv run elysium export grid"));
+		}
+		else
+		{
+			UE_LOG(LogElysiumMap, Error,
+				TEXT("export root is not configured; pass -ElysiumContentRoot=... or set ")
+				TEXT("ELYSIUM_EXPORT_ROOT / ELYSIUM_WORK_ROOT"));
+		}
 		return false;
 	}
 
@@ -155,7 +163,7 @@ bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
 	if (!FPackageName::DoesPackageExist(Level))
 	{
 		UE_LOG(LogElysiumMap, Warning,
-			TEXT("no baked level for '%s' (%s) — run: dev/elysium.ps1 bake %s"),
+			TEXT("no baked level for '%s' (%s) — run: uv run elysium export map %s --force"),
 			*Map, *Level, *Map);
 		return false;
 	}

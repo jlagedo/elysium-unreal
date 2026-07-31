@@ -23,8 +23,8 @@ def arg(key, default=""):
     return default
 
 
-def main():
-    map_name = arg("BakeMap", "sp_tutorial_1")
+def verify_map(map_name):
+    errors = []
     package = "%s/%s" % (MOUNT, map_name)
     registry = unreal.AssetRegistryHelpers.get_asset_registry()
     registry.scan_paths_synchronous([MOUNT], force_rescan=True)
@@ -51,6 +51,9 @@ def main():
     for data in meshes:
         mesh = data.get_asset()
         if not mesh:
+            message = "static mesh failed to load: %s" % str(data.asset_name)
+            unreal.log_error("[verify] " + message)
+            errors.append(message)
             continue
         if mesh.get_editor_property("nanite_settings").get_editor_property("enabled"):
             nanite_on += 1
@@ -80,6 +83,8 @@ def main():
         len(meshes), nanite_on, len(meshes) - nanite_on))
     unreal.log("[verify] triangles %d across %d material slots (%d unbound)" % (
         tris, slots, unbound))
+    if unbound:
+        errors.append("%d unbound static-mesh material slot(s)" % unbound)
     unreal.log("[verify] physics props %d, %d convex collision shapes, %d with authored mass"
                % (phys_meshes, phys_shapes, massed))
 
@@ -106,8 +111,10 @@ def main():
         len(annotated), len(baked), len(missing), len(stale)))
     for stem in missing:
         unreal.log_error("[verify] missing brush mesh: %s" % stem)
+        errors.append("missing brush mesh: %s" % stem)
     for stem in stale:
         unreal.log_error("[verify] stale brush mesh: %s" % stem)
+        errors.append("stale brush mesh: %s" % stem)
     brush_tris = 0
     brush_slots = 0
     brush_unbound = 0
@@ -115,6 +122,7 @@ def main():
     for stem, mesh in sorted(baked_assets.items()):
         if not mesh:
             unreal.log_error("[verify] brush mesh failed to load: %s" % stem)
+            errors.append("brush mesh failed to load: %s" % stem)
             continue
         try:
             mesh_tris = mesh.get_num_triangles(0)
@@ -135,12 +143,15 @@ def main():
         brush_collision += collision_shapes
         if mesh_tris <= 0:
             unreal.log_error("[verify] brush mesh has no triangles: %s" % stem)
+            errors.append("brush mesh has no triangles: %s" % stem)
         if not materials or unbound_slots:
             unreal.log_error("[verify] brush mesh material slots invalid: %s (%d slots, %d unbound)"
                              % (stem, len(materials), unbound_slots))
+            errors.append("brush mesh material slots invalid: %s" % stem)
         if collision_shapes:
             unreal.log_error("[verify] brush mesh owns %d simple collision shapes: %s"
                              % (collision_shapes, stem))
+            errors.append("brush mesh owns simple collision: %s" % stem)
     unreal.log("[verify] brush geometry %d tris / %d slots / %d unbound / %d collision shapes" % (
         brush_tris, brush_slots, brush_unbound, brush_collision))
 
@@ -155,6 +166,28 @@ def main():
         unreal.log("[verify] level %s: %d actors" % (level, len(actors)))
         for key in sorted(census, key=lambda k: -census[k]):
             unreal.log("[verify]   %-28s %d" % (key, census[key]))
+    else:
+        message = "level missing: %s" % level
+        unreal.log_error("[verify] " + message)
+        errors.append(message)
+    return errors
+
+
+def main():
+    raw_maps = arg("BakeMaps", "")
+    map_names = [item.strip() for item in raw_maps.split(",") if item.strip()]
+    if not map_names:
+        map_names = [arg("BakeMap", "sp_tutorial_1")]
+    failures = {}
+    for map_name in map_names:
+        errors = verify_map(map_name)
+        if errors:
+            failures[map_name] = errors
+    if failures:
+        unreal.log_error("[verify] %d of %d map(s) failed verification" % (
+            len(failures), len(map_names)))
+        raise SystemExit(1)
+    unreal.log("[verify] all %d map(s) passed" % len(map_names))
 
 
 main()

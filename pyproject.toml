@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "elysium-pipeline"
+version = "0.2.0"
+description = "Unified build, export, bake, validation, and development tooling for Elysium-Unreal"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "numpy",
+    "Pillow",
+    "psutil",
+    "rich",
+    "typer",
+]
+
+[project.optional-dependencies]
+enhancement = [
+    "einops",
+    "safetensors",
+    "spandrel",
+    "torch",
+    "torchvision",
+]
+
+[project.scripts]
+elysium = "elysium_pipeline.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["pipeline/src"]
+
+[tool.setuptools.package-data]
+elysium_pipeline = ["exporters/*.toml"]
+
+[tool.uv]
+package = true

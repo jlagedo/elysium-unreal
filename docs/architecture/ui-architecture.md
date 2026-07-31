@@ -104,10 +104,11 @@ typeface entries, because `FSlateFontInfo` resolves a composite font, not a bare
 
 Two constraints:
 
-- **`make_ui_fonts.py` cannot run in the dev/elysium.ps1 content umbrella.** Importing a `UFontFace` flushes
-  Slate's font cache and `FSlateApplication::Get()` asserts in a commandlet (`-run=pythonscript`
-  never creates a Slate application; `-AllowCommandletRendering` does not help). It needs a
-  Slate-enabled editor and is run by hand — a rare regeneration, only when a typeface changes.
+- **`make_ui_fonts.py` cannot run in the headless content commandlet.** Importing a
+  `UFontFace` flushes Slate's font cache and `FSlateApplication::Get()` asserts in a
+  commandlet (`-run=pythonscript` never creates a Slate application;
+  `-AllowCommandletRendering` does not help). `uv run elysium export bundle policy`
+  therefore coordinates a second, Slate-enabled editor pass for the font packages.
 - Sizes in `ElysiumUI::Type` are virtual px. The sign panel still resolves the older Plex/Zilla set
   through `ElysiumSignFonts.cpp`; 8.8 migrates it onto this ramp.
 
@@ -139,7 +140,7 @@ Two things are knobs rather than constants for that reason (§3): `elysium.MenuS
 
 The menu camera is deliberately **not** an entry in `ElysiumVantages::Table`: that table is the
 profiling and screenshot baseline and `Resolve("")` returns every vantage for a map, so adding one
-there would silently change what `dev/elysium.ps1 profile` and `dev/elysium.ps1 shots` measure. Retune with
+there would silently change what `uv run elysium debug profile` and `uv run elysium debug shots` measure. Retune with
 `elysium.campos`, which logs a paste-ready position/rotation.
 
 `elysium.BootMenu 0` boots straight into play for A/B; `-ElysiumMap=` bypasses the menu entirely.
@@ -148,7 +149,7 @@ there would silently change what `dev/elysium.ps1 profile` and `dev/elysium.ps1 
 
 `ElysiumScreenshot::Request` takes **`bShowUI`**, default false.
 
-- The **regression harness** (`FElysiumShotRun`, `dev/elysium.ps1 shots`) keeps `false`: a shot must not change
+- The **regression harness** (`FElysiumShotRun`, `uv run elysium debug shots`) keeps `false`: a shot must not change
   because a Cog window happened to be open, and every existing baseline was captured that way.
 - The **MCP `elysium_screenshot` tool** passes `true`, because its job is to show what the player
   sees and since 8.6 that includes the menu.

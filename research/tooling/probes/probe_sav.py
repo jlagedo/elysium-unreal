@@ -5,11 +5,11 @@ Reads a save file the user points it at; touches no game install. Format referen
 `docs/vtmb/savegame_format.md`; decoder: `pipeline/src/elysium_pipeline/formats/sav.py`.
 
 Usage
-  python research/tooling/probes/probe_sav.py <file.sav>                 container + section summary
-  python research/tooling/probes/probe_sav.py <file.sav> --map <name>    that section in detail
-  python research/tooling/probes/probe_sav.py <file.sav> --entity player fields of matching entities
-  python research/tooling/probes/probe_sav.py <file.sav> --python        the pickled script namespaces
-  python research/tooling/probes/probe_sav.py <file.sav> --extract DIR   write inflated sections out
+  uv run elysium research probe_sav <file.sav>                 container + section summary
+  uv run elysium research probe_sav <file.sav> --map <name>    that section in detail
+  uv run elysium research probe_sav <file.sav> --entity player fields of matching entities
+  uv run elysium research probe_sav <file.sav> --python        the pickled script namespaces
+  uv run elysium research probe_sav <file.sav> --extract DIR   write inflated sections out
 """
 import argparse
 import io

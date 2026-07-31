@@ -26,7 +26,7 @@ Honest caveats: the ratio folds bounce + occlusion into "too dark/bright" (an ar
 the bake from shadowing will ask for a boost the runtime's Lumen may not want), so keep the
 clamp tight and A/B in engine. It rebalances relative areas; it does not set absolute level.
 
-Usage:  python probe_light_attribution.py [map_name] [--exp P] [--cell IN] [--budget N]
+Usage:  uv run elysium research probe_light_attribution [map_name] [--exp P] [--cell IN] [--budget N]
 """
 import os
 import sys

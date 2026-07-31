@@ -8,7 +8,7 @@ mips, and bit-identical texels by reading the original blocks instead. PNGs stay
 reference/fallback (and cover generated textures with no .tth source: _ke self-illum,
 _envmask, normal maps).
 
-  py retex_dds.py [map ...]      default: every exported map under $ELYSIUM_EXPORT_ROOT
+Internal enhancement experiment; not a public project-tooling entrypoint.
 """
 import glob
 import os

@@ -83,6 +83,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOpeningPoseEnvelopeTest,
 
 bool FElysiumOpeningPoseEnvelopeTest::RunTest(const FString&)
 {
+	if (FElysiumContentPaths::IsIncomplete())
+	{
+		AddInfo(TEXT("skipping: export corpus is marked incomplete"));
+		return true;
+	}
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
 	{
 		AddInfo(TEXT("skipping: NPC export is absent"));
@@ -222,6 +227,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOpeningScenePlacementTest,
 
 bool FElysiumOpeningScenePlacementTest::RunTest(const FString&)
 {
+	if (FElysiumContentPaths::IsIncomplete())
+	{
+		AddInfo(TEXT("skipping: export corpus is marked incomplete"));
+		return true;
+	}
 	const FString EntsPath = FElysiumContentPaths::MapEnts(TEXT("sp_theatre"));
 	if (!IFileManager::Get().FileExists(*EntsPath)
 		|| !IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))

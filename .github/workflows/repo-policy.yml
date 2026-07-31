@@ -14,8 +14,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python dev/check_repo_policy.py --repo-only
-      - run: python -m compileall -q pipeline/src research dev
-      - run: |
-          $env:PYTHONPATH = "pipeline/src"
-          python -m unittest discover -s pipeline/tests -v
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run elysium doctor --repo-only
+      - run: uv run python -m compileall -q pipeline/src research dev
+      - run: uv run python -m unittest discover -s pipeline/tests -v

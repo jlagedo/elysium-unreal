@@ -33,7 +33,7 @@ The repository rejects:
   `.codex-patch/**`;
 - downloaded dependency source under `Plugins/External/`.
 
-Git LFS is not an exception. `dev/elysium.ps1 doctor` enforces the boundary and the
+Git LFS is not an exception. `uv run elysium doctor` enforces the boundary and the
 tracked pre-commit hook runs the repository-only check. Configure it with:
 
 ```powershell
@@ -43,12 +43,31 @@ git config core.hooksPath .githooks
 ## Dependencies
 
 `dev/dependencies.lock.json` pins fetched source and artifacts.
-`dev/elysium.ps1 bootstrap` populates ignored managed locations, applies the tracked
+`uv run elysium deps sync` populates ignored managed locations, applies the tracked
 patches under `dev/dependencies/patches/`, verifies post-patch tree hashes, and writes an
 ownership marker. Never place project source in `Plugins/External/`.
 
 ## Public command
 
-`dev/elysium.ps1` is the sole development entrypoint. It owns bootstrap, doctor, build,
-content, export, bake, tests, play, profiling, probes, screenshots, movement, greenroom,
-modelroom, research, IDE setup, and MCP startup. No compatibility wrappers exist.
+`uv run elysium` is the sole development entrypoint. It owns dependency synchronization,
+repository diagnostics, UE compilation, export and bake orchestration, tests, play,
+profiling, probes, screenshots, movement, greenroom, modelroom, research, IDE setup, and
+MCP startup. `uv run elysium reconstruct --clean --rebuild` is the clean-checkout path
+that restores dependencies, compiles the editor, exports and bakes the corpus, verifies
+the products, and runs the required tests. No compatibility wrappers exist.
+
+The focused surfaces are `export map`, `export model`, and `export bundle`. The complete
+profiles are `export grid` and `export all`; only those profiles and `reconstruct` accept
+`--clean`.
+
+Complete exports record their profile, tool and dependency fingerprints, task
+dependencies, expected outputs, and completion state in
+`$ELYSIUM_EXPORT_ROOT/.elysium-manifest.json`. Incremental runs reuse only matching
+complete tasks whose outputs still exist; `--force` bypasses that cache.
+
+`--clean` validates the work-root ownership marker before deleting only the configured
+export corpus, `Content/VtMB/`, `Content/Elysium.umap`, and
+`Plugins/ElysiumBaked/Content/`. It immediately writes
+`$ELYSIUM_EXPORT_ROOT/.elysium-incomplete`; successful export, package generation, bake,
+and verification remove the marker. Runtime map travel, repository diagnostics, and
+content tests refuse or skip an incomplete corpus rather than treating it as valid.

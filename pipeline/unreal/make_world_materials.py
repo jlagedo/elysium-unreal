@@ -33,7 +33,7 @@
 #
 # A UMaterial graph only compiles in the editor, so these are authored here and committed; the
 # runtime only instances them (FElysiumMaterialFactory picks the master by blend flag and binds the
-# parameters above). Rebuilt by the umbrella (dev/elysium.ps1 content -> pipeline/unreal/build_content.py, which the
+# parameters above). Rebuilt by the umbrella (uv run elysium export bundle policy -> pipeline/unreal/build_content.py, which the
 # export runs); also runnable standalone:
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript -script="pipeline/unreal/make_world_materials.py" -unattended -nosplash -nopause
 import os

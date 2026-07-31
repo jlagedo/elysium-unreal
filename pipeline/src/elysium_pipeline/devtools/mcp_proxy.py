@@ -52,7 +52,7 @@ PORT_CHECK_TIMEOUT = 0.5
 
 GAME_DOWN_TEXT = (
     "The Elysium game is not running, so its MCP tools are unavailable right now. "
-    "Launch it (dev/elysium.ps1 play / dev/elysium.ps1 editor) and retry — this proxy reconnects on its own, "
+    "Launch it (uv run elysium run play / uv run elysium run editor) and retry — this proxy reconnects on its own, "
     "with no /mcp reconnect needed."
 )
 

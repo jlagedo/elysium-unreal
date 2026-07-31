@@ -2,7 +2,7 @@
   Ghidra headless runner for the VtMB binaries (menu / GameUI RE).
 
   Usage (from repo root):
-    dev/elysium.ps1 research <case>
+    uv run elysium research <case>
 
   Everything derived (the project DB under project\, the $ELYSIUM_EXPORT_ROOT\ dumps) is gitignored;
   only the .java scripts + this runner + README are committed.

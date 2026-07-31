@@ -4,7 +4,7 @@
 # parameter). It is unlit and two-sided, and samples the cube along the per-pixel view ray so
 # the sky reads as infinitely far regardless of the mesh it is drawn on.
 #
-# Normally rebuilt by the umbrella (dev/elysium.ps1 content -> pipeline/unreal/build_content.py, which the export
+# Normally rebuilt by the umbrella (uv run elysium export bundle policy -> pipeline/unreal/build_content.py, which the export
 # runs); also runnable standalone:
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript -script="pipeline/unreal/make_sky_material.py" -unattended -nosplash -nopause
 import unreal

@@ -500,7 +500,8 @@ set by its dialogue clips (`heather` +2.4 %) and the whole of a glb that has non
 - No player body carries a flex rig (inventory above), so the PC has no morph targets to
   drive and no `facial/` sidecar — it animates with a still face.
 
-Task status for this system: `docs/project/roadmap.md`.
+Implementation roll-up status for this system is in `docs/project/roadmap.md`; detailed retail
+facial/lip capture status is in `docs/project/retail-capture-roadmap.md`.
 
 ## Provenance
 

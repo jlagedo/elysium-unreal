@@ -22,8 +22,8 @@ The hunter/vampire trait split is left intact: `<name>.txt` is byte-identical to
 companion-mode variant. All are copied verbatim; consumers read the base (unsuffixed) file.
 
 Usage:
-  python pipeline/src/elysium_pipeline/exporters/UE_extract_vdata.py            # copy vdata tables
-  python pipeline/src/elysium_pipeline/exporters/UE_extract_vdata.py --force    # re-copy even files already present
+  uv run elysium export bundle vdata            # copy vdata tables
+  uv run elysium export bundle vdata --force    # re-copy even files already present
 """
 import os
 import sys

@@ -6,9 +6,8 @@ sp_tutorial_1 and six from sp_theatre.  It covers repeating world surfaces,
 prop atlases, text/posters, and alpha cutouts.  Outputs are written under
 $ELYSIUM_EXPORT_ROOT/_upscale_spike/ and therefore remain game-derived and gitignored.
 
-Usage:
-    pipeline\\.venv\\Scripts\\python -m elysium_pipeline.enhancement.upscale_spike
-    pipeline\\.venv\\Scripts\\python -m elysium_pipeline.enhancement.upscale_spike --limit 2
+Internal enhancement experiment; not a public project-tooling entrypoint. Its
+environment is managed by uv.
 """
 
 from __future__ import annotations

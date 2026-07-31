@@ -38,10 +38,10 @@ loads to resolve a token -> its subkey WAVs. Explicit button `locked_sound`/`unl
 are direct WAV paths, so they arrive via the ordinary `collect_audio_refs` path already.
 
 Usage:
-  python pipeline/src/elysium_pipeline/exporters/UE_extract_sounds.py                 # every exported map under $ELYSIUM_EXPORT_ROOT/ (+ schemes)
-  python pipeline/src/elysium_pipeline/exporters/UE_extract_sounds.py sp_tutorial_1   # only the named maps' refs
-  python pipeline/src/elysium_pipeline/exporters/UE_extract_sounds.py --radio         # + mirror the radio_loop_*.mp3 test set
-  python pipeline/src/elysium_pipeline/exporters/UE_extract_sounds.py --no-schemes    # skip the PL5a scheme copies
+  uv run elysium export bundle audio  # every exported map under $ELYSIUM_EXPORT_ROOT/ (+ schemes)
+
+Focused per-map audio export is coordinated by `uv run elysium export map <map>`.
+Radio and scheme switches are internal exporter controls, not public project commands.
 """
 import glob
 import json

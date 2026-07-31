@@ -1,0 +1,50 @@
+[profiles.grid]
+maps = [
+  "sp_tutorial_1",
+  "sp_theatre",
+  "sm_hub_1",
+  "sm_diner_1",
+  "sm_bailbonds_1",
+  "sm_junkyard_1",
+  "sm_asylum_1",
+  "sm_gallery_1",
+  "sm_pawnshop_1",
+  "sm_pawnshop_2",
+  "sm_medical_1",
+  "sm_pier_1",
+  "sm_basement_1",
+  "sm_apartment_1",
+  "sm_warehouse_1",
+  "la_hub_1",
+  "sm_tattoo",
+  "sm_vamparena",
+  "sm_shreknet_1",
+  "sm_oceanhouse_1",
+  "sm_coffee_1",
+  "sm_smoke_1",
+]
+bundles = [
+  "audio",
+  "scripts",
+  "signs",
+  "vdata",
+  "cfg",
+  "scenes",
+  "ui",
+  "use-icons",
+  "npc",
+]
+
+[profiles.all]
+discover = true
+bundles = [
+  "audio",
+  "scripts",
+  "signs",
+  "vdata",
+  "cfg",
+  "scenes",
+  "ui",
+  "use-icons",
+  "npc",
+]

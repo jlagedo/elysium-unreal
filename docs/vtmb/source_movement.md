@@ -85,7 +85,7 @@ shape of the code suggests**, and the jump is not among it:
   of the rate.
 
 So reproducing VtMB faithfully means reproducing a small residual air-control drift, not a
-wandering jump height. Measurements are `dev/elysium.ps1 move` + `pipeline/src/elysium_pipeline/validation/move_diff.py --hz 60 120 240`.
+wandering jump height. Measurements are `uv run elysium debug move` + `pipeline/src/elysium_pipeline/validation/move_diff.py --hz 60 120 240`.
 
 *Provenance: `DumpFuncs funcs=2008ba30 depth=1` on `engine.dll`; the four constants read from
 `.rdata` directly.*

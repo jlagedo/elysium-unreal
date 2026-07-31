@@ -20,12 +20,12 @@ that table from the user's own DLL (nothing is committed) and `--verify` decodes
 every flex through it.
 
 Usage:
-    python research/tooling/probes/probe_facial.py                 # rollup over the whole install
-    python research/tooling/probes/probe_facial.py --markdown      # the doc tables
-    python research/tooling/probes/probe_facial.py --model <key>   # dump one model's facial data
-    python research/tooling/probes/probe_facial.py --lip <path>    # pretty-print one .lip
-    python research/tooling/probes/probe_facial.py --anorms <out>  # write the unit-vector table as JSON
-    python research/tooling/probes/probe_facial.py --json <path>   # write the full survey
+    uv run elysium research probe_facial                 # rollup over the whole install
+    uv run elysium research probe_facial --markdown      # the doc tables
+    uv run elysium research probe_facial --model <key>   # dump one model's facial data
+    uv run elysium research probe_facial --lip <path>    # pretty-print one .lip
+    uv run elysium research probe_facial --anorms <out>  # write the unit-vector table as JSON
+    uv run elysium research probe_facial --json <path>   # write the full survey
 
 Findings are written up in ../docs/vtmb/facial_animation.md (roadmap RE20).
 Read-only over the user's own install; produces no runtime intermediate.

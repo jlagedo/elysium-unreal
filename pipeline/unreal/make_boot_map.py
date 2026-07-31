@@ -2,7 +2,7 @@
 # (no template floor / sky / lights). The game boots into this clean world and the runtime
 # module spawns everything from source, so nothing has to be stripped at runtime.
 #
-# Normally rebuilt by the umbrella (dev/elysium.ps1 content -> pipeline/unreal/build_content.py, which the export
+# Normally rebuilt by the umbrella (uv run elysium export bundle policy -> pipeline/unreal/build_content.py, which the export
 # runs); also runnable standalone:
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript -script="pipeline/unreal/make_boot_map.py" -unattended -nosplash -nopause
 import unreal

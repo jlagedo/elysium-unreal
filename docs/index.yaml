@@ -1,6 +1,7 @@
 version: 1
 documents:
   - {path: project/roadmap.md, kind: tracker, owner: project, subject: project status}
+  - {path: project/retail-capture-roadmap.md, kind: tracker, owner: retail capture, subject: original-runtime animation scene physics facial and lip capture status}
   - {path: project/rebuild-strategy.md, kind: strategy, owner: project, subject: rebuild strategy}
   - {path: project/remaster-direction.md, kind: charter, owner: project, subject: remaster direction}
   - {path: operations/repository.md, kind: operations, owner: repository, subject: repository and workspace policy}
@@ -23,6 +24,7 @@ documents:
   - {path: vtmb/mdl_v2531.md, kind: vtmb-fact, owner: models, subject: MDL v2531 static geometry}
   - {path: vtmb/phy_vphysics.md, kind: vtmb-fact, owner: physics, subject: PHY collision models}
   - {path: vtmb/animation_and_movers.md, kind: vtmb-fact, owner: animation, subject: skeletal animation and brush movers}
+  - {path: vtmb/vtmb-animation-reverse-engineering.md, kind: research-brief, owner: retail capture, subject: animation reverse-engineering survey}
   - {path: vtmb/facial_animation.md, kind: vtmb-fact, owner: facial animation, subject: flex and lip animation}
   - {path: vtmb/choreographed_scenes.md, kind: vtmb-fact, owner: choreographed scenes, subject: VCD playback}
   - {path: vtmb/entity_io.md, kind: vtmb-fact, owner: entity I/O, subject: Source entity I/O}

@@ -10,7 +10,7 @@ clan (`IsClan(pc,...)`), gender (`pc.IsMale()`), ability skill-checks (the dlgex
 what the tutorial (`sp_tutorial_1`) consumes first — the 9.4 sheet/Character-API build order.
 
 Read-only analysis over `$ELYSIUM_EXPORT_ROOT/` (the gitignored, regenerable mirror); writes nothing. Sibling
-of `ent_survey.py`. Usage: `python research/tooling/probes/dlg_sheet_survey.py` (findings recorded 2026-07-24 in
+of `ent_survey.py`. Usage: `uv run elysium research dlg_sheet_survey` (findings recorded 2026-07-24 in
 `docs/vtmb/game_runtime.md`).
 """
 import collections

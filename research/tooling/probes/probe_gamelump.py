@@ -4,7 +4,7 @@ Confirms the Phase-0 unknowns on real maps: game-lump fourCC byte order, that
 directory offsets are file-absolute, the `sprp` static-prop version + count +
 model dictionary, and the PAKFILE file listing.
 
-Usage: python research/tooling/probes/probe_gamelump.py <bsp> [<bsp> ...]
+Usage: uv run elysium research probe_gamelump <bsp> [<bsp> ...]
 """
 import struct, sys, os
 from elysium_pipeline.formats import bsp as B

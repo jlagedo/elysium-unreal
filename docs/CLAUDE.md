@@ -5,7 +5,10 @@ Source code remains the as-built record.
 
 ## Ownership
 
-- `project/roadmap.md` is the only status and work tracker.
+- `project/roadmap.md` owns master sequencing, playable-path priority, and roll-up status.
+- `project/retail-capture-roadmap.md` is the only scoped subtracker; it owns detailed status
+  for the retail capture harness and original-runtime animation, scene placement,
+  secondary-motion/physics, facial, and lip-sync investigation.
 - `project/rebuild-strategy.md` owns strategy, milestone vocabulary, and sidecar contracts.
 - `project/remaster-direction.md` owns modernization boundaries.
 - `architecture/` owns Unreal system designs and integration seams.
@@ -23,7 +26,8 @@ Source code remains the as-built record.
   identify the explicit owner call.
 - Mark uncertain reconstructions and say what evidence would verify them.
 - Correct contradicted facts in place.
-- Never place status outside `project/roadmap.md`.
+- Never place status outside `project/roadmap.md` and its one declared scoped subtracker,
+  `project/retail-capture-roadmap.md`.
 
 Directory `CLAUDE.md` files orient readers to code and workflow. They do not own VtMB
 facts or roadmap status.

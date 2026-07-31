@@ -14,9 +14,9 @@ Selection is by **activity**, not by label: `regular_cop` resolves 229 clips wit
 the name, of which `Stance_Dead_Idle_1` and `Bed_Left_Idle` are not standing idles.
 
 CLI:
-  python research/tooling/probes/probe_npc_clips.py              # per-NPC rollup + the manifest invariants
-  python research/tooling/probes/probe_npc_clips.py --acts       # the activity histogram over every baked clip
-  python research/tooling/probes/probe_npc_clips.py <stem> ...   # one NPC's resolved idle set, in detail
+  uv run elysium research probe_npc_clips              # per-NPC rollup + the manifest invariants
+  uv run elysium research probe_npc_clips --acts       # the activity histogram over every baked clip
+  uv run elysium research probe_npc_clips <stem> ...   # one NPC's resolved idle set, in detail
 """
 import json
 import os
@@ -38,7 +38,7 @@ def load():
         m = json.load(f)
     if m.get("manifest_version") != 2:
         sys.exit(f"{MANIFEST}: expected manifest_version 2, got {m.get('manifest_version')!r} "
-                 f"-- re-run `python pipeline/src/elysium_pipeline/exporters/npc_export.py`")
+                 f"-- re-run `uv run elysium export bundle npc --force`")
     return m
 
 

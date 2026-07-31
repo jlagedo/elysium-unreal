@@ -10,7 +10,7 @@ has to satisfy:
   * the visibility subsystem: StartHidden / ScriptHide / ScriptUnhide
 
 Usage:
-    python research/tooling/probes/ent_survey.py [<maps_dir>] [--patch] [--map <name>]
+    uv run elysium research ent_survey [<maps_dir>] [--patch] [--map <name>]
 
 Default is the retail map set (`Vampire/maps`). `--patch` surveys the
 **engine-loaded** set instead (`Unofficial_Patch/maps`, which the runtime resolves

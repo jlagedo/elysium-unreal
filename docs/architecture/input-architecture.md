@@ -98,7 +98,7 @@ game-agnostic, so they live in `Content/` under the same rule as the master mate
   generated from the user's `kb_act.lst`. That file is game-derived and cannot be committed;
   bring-your-own-game requires the shipped action list to stand alone.
 - `build_content.py` emits `Content/Input/Actions/IA_*.uasset` and `Content/Input/IMC_*.uasset`,
-  so `dev/elysium.ps1 content` keeps assets and table in lockstep and the CSV is the spec.
+  so `uv run elysium export bundle policy` keeps assets and table in lockstep and the CSV is the spec.
 
 ## Mapping contexts are the client modes
 
@@ -221,7 +221,7 @@ three things consume it:
    live key profile. `UElysiumInputRouter::Setup` already refuses to install a default bind that
    lands on a reserved key, and says so.
 
-An action added to the CSV with `DefaultPrimary=F1` therefore fails `dev/elysium.ps1 test` rather than silently
+An action added to the CSV with `DefaultPrimary=F1` therefore fails `uv run elysium test` rather than silently
 shadowing the debug menu. `elysium.input.ReserveDebugKeys 0` (dev builds only) unlocks the set for
 an A/B against retail muscle memory.
 

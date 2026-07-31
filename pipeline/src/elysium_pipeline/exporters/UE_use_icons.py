@@ -20,7 +20,7 @@ Produces (under $ELYSIUM_EXPORT_ROOT/hud/):
 
 Source bytes stay the user's install; the output is gitignored and regenerable.
 
-Usage:  python pipeline/src/elysium_pipeline/exporters/UE_use_icons.py
+Usage:  uv run elysium export bundle use-icons
 """
 import os, sys, json
 from elysium_pipeline.formats import install, vmt, tex_to_png
@@ -90,10 +90,11 @@ def decode_icon(idx, name, resolve_inc):
     return tex_to_png.decode(tth, ttz), mat
 
 
-def main():
-    os.makedirs(OUT, exist_ok=True)
+def main(*, index=None, out_dir=None, strict=False):
+    target = os.fspath(out_dir) if out_dir is not None else OUT
+    os.makedirs(target, exist_ok=True)
     print("indexing install...")
-    idx = install.build_index(dirs=("materials",))
+    idx = index if index is not None else install.build_index(dirs=("materials",))
     resolve_inc = resolve_include(idx)
 
     # Decode each distinct material once; keep first-seen order for a stable atlas.
@@ -143,14 +144,18 @@ def main():
         "icons": [{"n": i + 1, "name": ICONS[i], **entry(icon_mat[i])} for i in range(len(ICONS))],
     }
 
-    atlas.save(os.path.join(OUT, "use_icons.png"))
-    with open(os.path.join(OUT, "use_icons.json"), "w", encoding="utf-8") as f:
+    atlas.save(os.path.join(target, "use_icons.png"))
+    with open(os.path.join(target, "use_icons.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=1)
 
     print(f"  {len(ICONS)} enum slots, {n} unique cells ({cols}x{rows}, {aw}x{ah})")
     if missing:
         print(f"  ! {len(missing)} missing (transparent placeholder): {sorted(set(missing))}")
-    print(f"wrote use-icon atlas -> {os.path.normpath(OUT)}")
+    print(f"wrote use-icon atlas -> {os.path.normpath(target)}")
+    if strict and missing:
+        raise RuntimeError(
+            f"use-icon export incomplete: {len(set(missing))} material(s) unresolved"
+        )
 
 
 if __name__ == "__main__":

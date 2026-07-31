@@ -634,7 +634,7 @@ makes **a playthrough** an assertion instead of a demo (**S10**).
 `$ELYSIUM_EXPORT_ROOT`, self-skips), a tier that drives a real headless world:
 
 ```
-dev/elysium.ps1 test Play
+uv run elysium test Play
 ```
 
 A **beat script** is a list of steps over the surfaces that already exist:

@@ -67,7 +67,7 @@ Things Unreal already does that only need hooking up:
   the PIE World Outliner becomes a free scene browser: runtime-spawned actors appear live,
   their `UPROPERTY` state is inspectable in Details, **Eject (F8)** detaches into a free
   editor camera while the game runs, and pause + frame-step work. Caveats: edits there are
-  ephemeral (fine — data comes from the pipeline), and none of this exists in `dev/elysium.ps1 play`
+  ephemeral (fine — data comes from the pipeline), and none of this exists in `uv run elysium run play`
   standalone (`-game` has no Outliner) — which is why Layer 1 exists.
 - **The `elysium.*` console surface stays the single tuning mechanism.** CVars
   (`TAutoConsoleVariable`) for every tunable, `FAutoConsoleCommandWithWorldAndArgs` for verbs.
@@ -85,7 +85,7 @@ Things Unreal already does that only need hooking up:
 - **Visual Logger (`UE_VLOG*`) as the "rewind" answer.** Recording works in standalone
   (`.vlog` files), scrubbing happens later in the editor's Visual Logger tab: per-actor,
   per-category snapshots and shapes on a timeline. Once the entity layer fires events, every
-  I/O dispatch gets a VLOG line — post-hoc scrubbable causality for a whole `dev/elysium.ps1 play`
+  I/O dispatch gets a VLOG line — post-hoc scrubbable causality for a whole `uv run elysium run play`
   session. No engine surveyed does true time-rewind; recorded history is what actually ships.
 - **Perf/introspection built-ins** (all work in `-game` dev builds): `stat unit/gpu/memory`,
   custom `DECLARE_CYCLE_STAT` groups for map-load phases, Unreal Insights via `-trace=`,
@@ -99,7 +99,7 @@ Things Unreal already does that only need hooking up:
 
 - It is the strongest fit for a world with no editor representation: an ImGui **object
   browser + reflection-driven property grid** that finds and edits any live `UObject` —
-  actors, components, MIDs — in the running game, PIE *and* `dev/elysium.ps1 play` standalone alike.
+  actors, components, MIDs — in the running game, PIE *and* `uv run elysium run play` standalone alike.
 - ~40 stock windows we'd otherwise hand-write: inspector, console, output log with
   per-category filtering, collision viewer, plots/metrics, tweaks, spawn, time scale,
   scalability. The GAS/AI windows are ignorable dead weight.
@@ -248,10 +248,10 @@ toolsets are skipped, having nothing to act on in a project that builds no edito
 `ELYSIUMUE_API` exports for a separate test module to link): a **content-free** suite under
 `-nullrhi` (variant/expr/KeyValues/queue/registry + one end-to-end `logic_relay→math_counter` I/O
 chain on a bare entity world) that is the real regression net, and a **content-gated** suite that
-parses the real exported `.ents` and **self-skips** when `$ELYSIUM_EXPORT_ROOT` is empty. `dev/elysium.ps1 test` runs them
+parses the real exported `.ents` and **self-skips** when `$ELYSIUM_EXPORT_ROOT` is empty. `uv run elysium test` runs them
 headless with a JSON+HTML report; the design and flags are in `docs/project/roadmap.md` P2.8.
 
-**Closing the loop visually (P2.9).** `FElysiumShotRun` (`-ElysiumShots`, `dev/elysium.ps1 shots`) is the
+**Closing the loop visually (P2.9).** `FElysiumShotRun` (`-ElysiumShots`, `uv run elysium debug shots`) is the
 screenshot-regression sibling of the profiler — it visits the *same* fixed vantages
 (`ElysiumVantages.h`, shared so a look regression and a cost regression are the same frame),
 captures the viewport to the gitignored `$ELYSIUM_EXPORT_ROOT/_shots/` (baselines are game-derived), and shares
@@ -260,7 +260,7 @@ fire→screenshot→assert loop the agent runs live and the harness runs headles
 
 ### Rendered skeletal green room
 
-`dev/elysium.ps1 greenroom <case> [map]` is the real-RHI gate between structural animation tests and an aggregate
+`uv run elysium debug greenroom <case> [map]` is the real-RHI gate between structural animation tests and an aggregate
 story launch. It loads the production skeletal mesh/material/clip paths, seeks fixed absolute poses,
 renders off-screen at 1920×1080 DX12/SM6, and writes PNGs plus `manifest.json` under
 `$ELYSIUM_EXPORT_ROOT/_greenroom/<case>/`. Individual `player`, `sire`, `vampire1`, `vampire2`, `sheriff`, and
@@ -280,7 +280,7 @@ disagreeing camera clocks, or any cast member never entering frame outside an op
 false and exits the batch with status 1. This separates model/clip/material faults from placement,
 framing, cuts, and fades before `newgame_ttd` is allowed to be the aggregate integration test.
 
-`dev/elysium.ps1 modelroom <mesh-stem> <clip> [map]` is the human-form review surface over the same production
+`uv run elysium debug modelroom <mesh-stem> <clip> [map]` is the human-form review surface over the same production
 loader. For a cinematic bank, append `<anim-set-model> <bone-root> [map]`. It isolates exactly one
 body and clip, freezes it at 0/25/50/75/99 percent, captures front, three-quarter, profile, and back
 views, then assembles and opens `$ELYSIUM_EXPORT_ROOT/_greenroom/review/review_sheet.png`. The sheet is the

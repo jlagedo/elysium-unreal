@@ -37,10 +37,10 @@ probe reads the *retail* BSP by default and refuses a patch-recompiled bake unle
 asked (`--patch`). `--provenance` prints the full split.
 
 Usage:
-    python research/tooling/probes/probe_skyambient.py                     # ch_fishmarket_1
-    python research/tooling/probes/probe_skyambient.py ch_temple_1 sp_taxiride
-    python research/tooling/probes/probe_skyambient.py --all               # every retail sky-pair map
-    python research/tooling/probes/probe_skyambient.py --provenance        # which bakes are Troika's
+    uv run elysium research probe_skyambient                     # ch_fishmarket_1
+    uv run elysium research probe_skyambient ch_temple_1 sp_taxiride
+    uv run elysium research probe_skyambient --all               # every retail sky-pair map
+    uv run elysium research probe_skyambient --provenance        # which bakes are Troika's
 """
 import argparse
 import json

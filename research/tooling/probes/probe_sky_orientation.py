@@ -19,8 +19,8 @@ so an ambiguous face (a near-flat `up`, a near-black `dn`) shows up as a small m
 rather than a confident wrong answer.
 
 Usage:
-    python research/tooling/probes/probe_sky_orientation.py                # every exported map
-    python research/tooling/probes/probe_sky_orientation.py sp_tutorial_1  # one map
+    uv run elysium research probe_sky_orientation                # every exported map
+    uv run elysium research probe_sky_orientation sp_tutorial_1  # one map
 """
 import sys
 from itertools import permutations

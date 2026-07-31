@@ -1235,9 +1235,9 @@ key is absent (or the map has no `sky_camera`).
 ### How to re-measure
 
 ```
-python research/tooling/probes/probe_sky_inventory.py             # the rollup, every map in the install
-python research/tooling/probes/probe_sky_inventory.py --markdown  # + the four tables above
-python research/tooling/probes/probe_sky_inventory.py sm_hub_1    # one map
+uv run elysium research probe_sky_inventory             # the rollup, every map in the install
+uv run elysium research probe_sky_inventory --markdown  # + the four tables above
+uv run elysium research probe_sky_inventory sm_hub_1    # one map
 ```
 
 It writes `$ELYSIUM_EXPORT_ROOT/_sky/inventory.json` — every measured field per map, including the sky
@@ -1638,7 +1638,7 @@ The rework is calibrated against data we already hold plus the original game:
 - **The user's VtMB install, running** — reference screenshots at known map/camera positions
   (`elysium.campos` vantages have Source-space equivalents via the inverse transform). Loose
   files shadow the VPKs, so a labelled skybox drops in without repacking (RE-A2).
-- **Our headless harnesses** — `dev/elysium.ps1 shots` (same vantages, PNG + manifest), `dev/elysium.ps1 probe`,
+- **Our headless harnesses** — `uv run elysium debug shots` (same vantages, PNG + manifest), `uv run elysium debug probe`,
   `elysium.lightprobe`, the MCP screenshot/teleport tools for scripted A/Bs.
 - **`research/tooling/probes/probe_sky_orientation.py`** — scores the decoded faces against a predicted cube
   assembly (ring order × mirrors, poles × the eight dihedral transforms) by seam error,

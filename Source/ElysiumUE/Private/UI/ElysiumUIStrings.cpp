@@ -30,7 +30,7 @@ void FElysiumUIStrings::LoadOnce()
 	{
 		UE_LOG(LogElysiumUIStrings, Warning,
 			TEXT("no UI string table at %s — falling back to built-in English. "
-			     "Run: dev/elysium.ps1 export <map>"), *Path);
+			     "Run: uv run elysium export bundle ui"), *Path);
 		return;
 	}
 

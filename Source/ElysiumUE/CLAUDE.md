@@ -156,7 +156,7 @@ ones (`_Status`, `_Maps`, `_Lights`, `_Entities`, `_Inspector`, `_EventQueue`, `
 Headless self-driving harnesses, all armed from `UElysiumMapSubsystem::Initialize` on a
 command-line flag and all exiting when done: `FElysiumProfileRun` (`-ElysiumProfile`),
 `FElysiumShotRun` (`-ElysiumShots`), `FElysiumProbeRun` (`-ElysiumProbe`), `FElysiumMoveRun`
-(`-ElysiumMove`, courses in `ElysiumMoveCourses.h`, driven by `dev/elysium.ps1 move`, compared by
+(`-ElysiumMove`, courses in `ElysiumMoveCourses.h`, driven by `uv run elysium debug move`, compared by
 `pipeline/src/elysium_pipeline/validation/move_diff.py`).
 
 Automation tests live in `Private/Tests/`: `ElysiumSubstrateTests.cpp` (content-free, `-nullrhi`)
@@ -206,13 +206,13 @@ Hard-won, non-obvious, and easy to undo:
 
 ## Build and test loop
 
-After a C++ change: `dev/elysium.ps1 build`, then `dev/elysium.ps1 test <tier>` — `Substrate` for anything under the
+After a C++ change: `uv run elysium build`, then `uv run elysium test <tier>` — `Substrate` for anything under the
 substrate, scripting, session, player or UI layers, `Content` when the change reads `$ELYSIUM_EXPORT_ROOT`. Both
 are cheap: the build is adaptive non-unity (~10 s for a handful of files), and the Substrate tier
 runs in about the same under `-nullrhi`.
 
 **The result surface is the report, not stdout.** Every run writes JSON + HTML under
-`$ELYSIUM_EXPORT_ROOT/_tests/` and `dev/elysium.ps1 test` reports the path and propagates the exit code.
+`$ELYSIUM_EXPORT_ROOT/_tests/` and `uv run elysium test` reports the path and propagates the exit code.
 
 **One run per change, not one per claim.** A green tier stays green until code moves. A roadmap
 task's acceptance list is a set of things that must be **true**, not a set of runs to perform.

@@ -21,10 +21,10 @@ is the engine's own: `area(point_leaf(x)) == area(point_leaf(sky_camera.origin))
 where `area` is the 9-bit low half of the uint16 at leaf offset 6.
 
 Usage:
-    python research/tooling/probes/probe_sky_inventory.py                 # every map (108), rollup
-    python research/tooling/probes/probe_sky_inventory.py sp_tutorial_1 sm_hub_1
-    python research/tooling/probes/probe_sky_inventory.py --markdown      # + the doc tables
-    python research/tooling/probes/probe_sky_inventory.py --verbose       # + a line per map
+    uv run elysium research probe_sky_inventory                 # every map (108), rollup
+    uv run elysium research probe_sky_inventory sp_tutorial_1 sm_hub_1
+    uv run elysium research probe_sky_inventory --markdown      # + the doc tables
+    uv run elysium research probe_sky_inventory --verbose       # + a line per map
 
 Writes `$ELYSIUM_EXPORT_ROOT/_sky/inventory.json` (every measured field, per map) so a later
 pass can re-table it without re-scanning.

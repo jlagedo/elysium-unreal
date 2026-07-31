@@ -45,6 +45,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCourtroomSeatedPoseTest,
 
 bool FElysiumCourtroomSeatedPoseTest::RunTest(const FString&)
 {
+	if (FElysiumContentPaths::IsIncomplete())
+	{
+		AddInfo(TEXT("skipping: export corpus is marked incomplete"));
+		return true;
+	}
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
 	{
 		AddInfo(TEXT("skipping: NPC export is absent"));

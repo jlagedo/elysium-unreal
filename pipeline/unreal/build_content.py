@@ -1,14 +1,14 @@
 # The single umbrella that (re)builds every generated local Content/ package from its generator, in
 # one headless editor session. A UMaterial shading graph and a .umap can only be compiled by
 # the engine (not by the standalone export), so these few assets are the accepted exception to
-# "build everything in code" -- they are authored offline here and committed. Wiring them all
-# through one driver (invoked by the export, see export_all.py) means none can be forgotten and
-# silently go stale, the way M_Sky did.
+# "build everything in code" -- they are authored offline here, generated locally, and ignored.
+# Wiring them all through one driver lets the project tooling reproduce the complete policy
+# package set without any generated Unreal package entering Git.
 #
 # Registering a new local package transform = add its script filename to GENERATORS below.
 # Each generator is a standalone `-script` (also runnable on its own); this just runs them all.
 #
-# Run headless (normally invoked by dev/elysium.ps1 content / export_all.py):
+# Run headless as the commandlet policy-content phase coordinated by ``elysium``:
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript -script="pipeline/unreal/build_content.py" -unattended -nosplash -nopause
 import os, runpy, traceback
 import unreal
@@ -31,10 +31,8 @@ GENERATORS = [
 
 # NOT in the umbrella: `make_ui_fonts.py`. Importing a `UFontFace` flushes Slate's font cache,
 # and `FSlateApplication::Get()` asserts in a commandlet -- `-run=pythonscript` never creates a
-# Slate application, with or without `-AllowCommandletRendering`. Running it here would take
-# dev/elysium.ps1 content (and every `export_all.py` run) down with it. It needs a Slate-enabled editor and
-# is a rare regeneration -- only when a typeface is added or replaced -- so it is invoked by
-# hand; see its header.
+# Slate application, with or without `-AllowCommandletRendering`. It therefore remains the
+# separate Slate-enabled policy-content phase coordinated by ``elysium``.
 
 
 def run_one(script):

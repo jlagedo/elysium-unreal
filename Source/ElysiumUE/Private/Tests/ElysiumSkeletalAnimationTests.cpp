@@ -716,6 +716,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSkeletalGlbContractsTest,
 	"Elysium.Content.SkeletalGlbContracts", GElysiumSkeletalContentFlags)
 bool FElysiumSkeletalGlbContractsTest::RunTest(const FString&)
 {
+	if (FElysiumContentPaths::IsIncomplete())
+	{
+		AddInfo(TEXT("skipping: export corpus is marked incomplete"));
+		return true;
+	}
 	FElysiumNpcIndex Index;
 	FString Error;
 	if (!Index.Load(Error))
@@ -867,6 +872,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTheatreSkeletonBindingTest,
 	"Elysium.Content.TheatreSkeletonBinding", GElysiumSkeletalContentFlags)
 bool FElysiumTheatreSkeletonBindingTest::RunTest(const FString&)
 {
+	if (FElysiumContentPaths::IsIncomplete())
+	{
+		AddInfo(TEXT("skipping: export corpus is marked incomplete"));
+		return true;
+	}
 	const FString EntsPath = FElysiumContentPaths::MapEnts(TEXT("sp_theatre"));
 	if (!IFileManager::Get().FileExists(*EntsPath))
 	{

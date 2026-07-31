@@ -32,8 +32,8 @@ Whole-game, not map-scoped, so `export_all.py` runs it once at the end of a run
 (`--no-scenes` to skip).
 
 Usage:
-  python pipeline/src/elysium_pipeline/exporters/UE_extract_scenes.py            # copy scenes + phonemes + expressions
-  python pipeline/src/elysium_pipeline/exporters/UE_extract_scenes.py --force    # re-copy even files already present
+  uv run elysium export bundle scenes            # copy scenes + phonemes + expressions
+  uv run elysium export bundle scenes --force    # re-copy even files already present
 """
 import glob
 import json

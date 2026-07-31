@@ -15,9 +15,10 @@ The embedded CPython runtime is a separate game-logic system.
 - `tests/fixtures/synthetic/` is the only location for committed fixtures; fixtures must be
   game-independent.
 
-All standalone Python entrypoints run as modules through `dev/elysium.ps1`. Imports are
-absolute `elysium_pipeline.*` imports. No module constructs a repository-relative output
-path, mutates `sys.path`, or assumes a current directory.
+`uv run elysium` is the public Python entrypoint. Internal exporters and Unreal editor
+scripts are library or worker surfaces called by that command. Imports are absolute
+`elysium_pipeline.*` imports. No module constructs a repository-relative output path,
+mutates `sys.path`, or assumes a current directory.
 
 ## Path contract
 
@@ -28,7 +29,7 @@ path, mutates `sys.path`, or assumes a current directory.
 - `ELYSIUM_EXPORT_ROOT` optionally overrides `$ELYSIUM_WORK_ROOT/exports`.
 
 VtMB and work roots have no repository-relative fallback. Resolution and user-facing
-configuration are owned by `dev/elysium.ps1` and `.elysium.local.env`.
+configuration are owned by `uv run elysium` and `.elysium.local.env`.
 
 ## Coordinate contract
 
@@ -45,9 +46,10 @@ performs its import transform.
 
 ## Products
 
-`UE_bsp_to_scene.py` writes per-map geometry and sidecars. `export_all.py` orchestrates
-maps and global mirrors; `--npc` adds skeletal meshes, animation banks, indexes, and
-facial sidecars. These outputs are game-derived and never tracked.
+`UE_bsp_to_scene.py` writes per-map geometry and sidecars. The CLI task graph coordinates
+the `grid` and `all` profiles, focused map or model exports, and the global mirrors.
+Integrated NPC export adds skeletal meshes, animation banks, indexes, and facial sidecars.
+These outputs are game-derived and never tracked.
 
 `pipeline/unreal/` consumes pre-exported files in an editor process:
 

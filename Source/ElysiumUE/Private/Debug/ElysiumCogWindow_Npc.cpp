@@ -160,7 +160,7 @@ void FElysiumCogWindow_Npc::RenderContent()
 	if (Stems.Num() == 0)
 	{
 		ImGui::TextDisabled("No .glb under out/npc. Export one:");
-		ImGui::TextDisabled("  dev/elysium.ps1 export <map> --npc");
+		ImGui::TextDisabled("  uv run elysium export bundle npc");
 	}
 	else
 	{

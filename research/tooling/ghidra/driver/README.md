@@ -187,7 +187,7 @@ builder, then replay it:
 ```powershell
 research/tooling/ghidra/driver/run.ps1 -Program vampire.dll -Script DumpFuncs `
   -ScriptArgs "funcs=1031a600 depth=0 out=…/bcc_builder.txt"
-python research/tooling/ghidra/driver/parse_datamap_builder.py …/bcc_builder.txt --recs 10616694 --count 305
+uv run elysium research parse_datamap_builder …/bcc_builder.txt --recs 10616694 --count 305
 ```
 
 The builder's tail names both arguments — `_DAT_<map+4> = <count>; _DAT_<map> = &DAT_<recs>;`.

@@ -1,12 +1,12 @@
 """Compare movement-harness runs (roadmap 4.7).
 
-`dev/elysium.ps1 move` writes one CSV per course under `$ELYSIUM_EXPORT_ROOT/_move/`; this turns "the step still climbs"
+`uv run elysium debug move` writes one CSV per course under `$ELYSIUM_EXPORT_ROOT/_move/`; this turns "the step still climbs"
 into a number and a non-zero exit code. Modelled on `shots_diff.py`: a bare run diffs the current
 output against the promoted baseline, `--save` promotes a run to be the new baseline.
 
-    python pipeline/src/elysium_pipeline/validation/move_diff.py --save                 # promote the current run
-    python pipeline/src/elysium_pipeline/validation/move_diff.py                        # diff against the baseline
-    python pipeline/src/elysium_pipeline/validation/move_diff.py --hz 60 120 240        # cross-rate agreement check
+This comparison is an internal library module, not a public project-tooling
+entrypoint. `uv run elysium debug move` records a movement run but does not promote
+or compare baselines.
 
 The cross-rate mode is the one that answers the timestep question empirically: run the same course
 at three frame rates and compare. Under the faithful variable step the three disagree -- that IS

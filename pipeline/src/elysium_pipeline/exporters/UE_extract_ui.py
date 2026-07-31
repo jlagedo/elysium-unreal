@@ -33,9 +33,10 @@ Produces (under $ELYSIUM_EXPORT_ROOT/ui/):
 Source bytes stay the user's install; the output is gitignored and regenerable.
 
 Usage:
-  python pipeline/src/elysium_pipeline/exporters/UE_extract_ui.py              # layouts, strings, menu scene, HUD + screen art
-  python pipeline/src/elysium_pipeline/exporters/UE_extract_ui.py --inventory  # also the ~350 item/armor inventory icons
-  python pipeline/src/elysium_pipeline/exporters/UE_extract_ui.py --force      # redo files already present
+  uv run elysium export bundle ui            # layouts, strings, menu scene, HUD + screen art
+  uv run elysium export bundle ui --force    # redo files already present
+
+Inventory-icon inclusion is selected by the grid and all export profiles.
 """
 import argparse
 import json

@@ -12,7 +12,7 @@
 # offline, so this is generated locally; the runtime only instances it
 # (FElysiumMaterialFactory::BuildDecal binds Albedo / Emissive / EmissiveScale).
 #
-# Normally rebuilt by the umbrella (dev/elysium.ps1 content -> pipeline/unreal/build_content.py, which the export runs);
+# Normally rebuilt by the umbrella (uv run elysium export bundle policy -> pipeline/unreal/build_content.py, which the export runs);
 # also runnable standalone:
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript -script="pipeline/unreal/make_decal_material.py" -unattended -nosplash -nopause
 import os

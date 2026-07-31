@@ -6,7 +6,7 @@ VtMB drives its world with Source's entity I/O: an entity fires an **output**
 below from the shipped maps.
 
 Scale across the **engine-loaded map set** — the 108 maps the runtime resolves
-patch-first (`Unofficial_Patch/maps`; `python research/tooling/probes/ent_survey.py --patch [--map <name>]`):
+patch-first (`Unofficial_Patch/maps`; `uv run elysium research ent_survey --patch [--map <name>]`):
 **71,096 entities**, **326 classnames**, **24,081 outputs**, **6,956 with a Python
 payload**. Every table below is based on this set. The retail set (`Vampire/maps`, 101
 maps, the tool's default) is **63,861 / 299 / 16,125 / 1,591** — carried through as a

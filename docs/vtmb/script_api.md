@@ -17,7 +17,7 @@ row, so recovering one is a single `DumpFuncs` run, done by the system task that
 
 Two halves, both reproducible from the user's own install.
 
-**Demand** — `python research/tooling/probes/script_api_survey.py --json $ELYSIUM_EXPORT_ROOT/_mcp/script_api.json`. Reads
+**Demand** — `uv run elysium research script_api_survey --json $ELYSIUM_EXPORT_ROOT/_mcp/script_api.json`. Reads
 only `$ELYSIUM_EXPORT_ROOT/` (the gitignored mirror): 36 level scripts, 147 `.dlg` (50,393 rows, columns 4 and 5),
 and the exported maps' output field-6 payloads. It folds module-level aliases — every level
 script opens with `Find = __main__.FindEntityByName`, and 1,911 calls hide behind that one line —
@@ -35,7 +35,7 @@ research/tooling/ghidra/driver/run.ps1 -Program vampire.dll -Script DumpPyMethod
 # a class datamap: the builder, then replay its assignments
 research/tooling/ghidra/driver/run.ps1 -Program vampire.dll -Script DumpFuncs `
   -ScriptArgs "funcs=1031a600 depth=0 out=…/bcc_builder.txt"
-python research/tooling/ghidra/driver/parse_datamap_builder.py …/bcc_builder.txt --recs 10616694 --count 305
+uv run elysium research parse_datamap_builder …/bcc_builder.txt --recs 10616694 --count 305
 ```
 
 ### Reading a datamap takes both techniques

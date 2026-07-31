@@ -14,13 +14,12 @@ Two products (`npc_export.py` drives the batch):
   animation library retargeted onto NPC skeletons by bone name at load (A.7), so shared clips
   are stored once, not baked into every NPC.
 
-CLI: python pipeline/src/elysium_pipeline/formats/mdl_gltf.py <model-path-in-vpk> [<anim-name>] [<out_dir>]  (single-clip probe)
+The public tooling CLI exposes the single-clip probe through ``export model``.
 """
-import json, struct, os, sys
+import json, struct, os
 from collections import Counter
 import numpy as np
 from elysium_pipeline.formats import install, mdl, mdl_skel as S
-from elysium_pipeline.paths import export_root
 
 SCALE = 0.0254
 # Source->glTF basis M: (x,y,z) -> (x, z, -y), a -90deg rotation about X.
@@ -687,16 +686,22 @@ def export_cinematic(idx, model_path, out_dir, stem):
     return out or None
 
 
-def export(model_path, anim_name, out_dir):
+def export(model_path, anim_name=None, out_dir=None, *, index=None):
     """Single-clip probe (the CLI / 8.2 spike): mesh + skeleton + one named clip, found by
     sequence label first, then by raw anim name."""
-    idx = install.build_index()
+    idx = index if index is not None else install.build_index()
     dv = mdl.load(idx, model_path)
     if not dv:
         raise SystemExit(f"model not found: {model_path}")
     d, v = dv
+    local = S.local_sequences(d)
+    if anim_name is None:
+        clip = next(iter(local), None)
+        if clip is None:
+            raise SystemExit(f"model has no local animation clips: {model_path}")
+        anim_name = clip.label
     want = anim_name.lstrip("@").lower()
-    clip = next((c for c in S.local_sequences(d) if c.label.lower() == want), None)
+    clip = next((c for c in local if c.label.lower() == want), None)
     if clip is None:
         found = S.find_anim(d, anim_name)
         if not found:
@@ -705,6 +710,8 @@ def export(model_path, anim_name, out_dir):
         clip = S.Seq(label=anim_name, base=ab, frames=nframes, fps=fps,
                      activity="", actweight=0, flags=0)
 
+    if out_dir is None:
+        raise ValueError("out_dir is required")
     g = Gltf()
     built = _build_skinned(g, idx, d, v, model_path, out_dir, load_anorms())
     anim = _bake_animation(g, d, built["bones"], clip.label, clip.base, clip.frames, clip.fps)
@@ -732,11 +739,3 @@ def _write_glb(gltf, bin_data, path):
         f.write(struct.pack("<III", 0x46546C67, 2, total))
         f.write(struct.pack("<II", len(js), 0x4E4F534A)); f.write(js)
         f.write(struct.pack("<II", len(bd), 0x004E4942)); f.write(bd)
-
-
-if __name__ == "__main__":
-    model = sys.argv[1] if len(sys.argv) > 1 else \
-        "models/character/npc/common/gangmember_male_2/gangmember_male_2.mdl"
-    anim = sys.argv[2] if len(sys.argv) > 2 else "patron_barstand"
-    out = sys.argv[3] if len(sys.argv) > 3 else os.fspath(export_root() / "_skeltest")
-    export(model, anim, out)

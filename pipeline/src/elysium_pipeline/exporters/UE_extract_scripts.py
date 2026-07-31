@@ -19,8 +19,8 @@ loose copy shadows the retail loose copy, which shadows the VPK. Two format fact
 Scripts/dialogue are whole-game, not map-scoped, so one mirror is written (not per-map).
 
 Usage:
-  python pipeline/src/elysium_pipeline/exporters/UE_extract_scripts.py            # copy scripts + dialogue
-  python pipeline/src/elysium_pipeline/exporters/UE_extract_scripts.py --force    # re-copy even files already present
+  uv run elysium export bundle scripts            # copy scripts + dialogue
+  uv run elysium export bundle scripts --force    # re-copy even files already present
 """
 import os
 import sys

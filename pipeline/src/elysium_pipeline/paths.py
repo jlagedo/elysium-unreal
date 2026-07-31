@@ -1,8 +1,8 @@
 """One path contract for every offline command.
 
 No game install or generated corpus defaults inside the repository. The
-PowerShell command surface loads ``.elysium.local.env`` before invoking Python;
-direct callers may set the same environment variables themselves.
+``elysium`` command loads ``.elysium.local.env`` before importing decoders;
+direct library callers may set the same environment variables themselves.
 """
 
 from __future__ import annotations

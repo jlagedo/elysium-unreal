@@ -382,7 +382,7 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 	if (Tagged == 0)
 	{
 		UE_LOG(LogElysiumVisuals, Warning,
-			TEXT("'%s' has no baked actors — this world is not a baked level (run: dev/elysium.ps1 bake %s)"),
+			TEXT("'%s' has no baked actors — this world is not a baked level (run: uv run elysium export map %s --force)"),
 			*MapName, *MapName);
 	}
 	// The PPV is the one adopted actor whose absence is silent — the D3 knobs simply stop
