@@ -10,7 +10,6 @@ import argparse
 import ctypes
 from ctypes import wintypes
 import hashlib
-import json
 import math
 from pathlib import Path
 import re
@@ -20,6 +19,16 @@ import time
 
 from elysium_pipeline.formats import install, mdl_skel
 from elysium_pipeline.paths import research_root
+from research.tooling.capture.capture_contracts import (
+    DEFAULT_EXPERIMENT,
+    analyzer_versions,
+    create_session_manifest,
+    load_experiment,
+    output_metadata,
+    parse_assignments,
+    process_launch_context,
+    write_session_manifest,
+)
 
 
 PROCESS_QUERY_INFORMATION = 0x0400
@@ -241,7 +250,31 @@ def main() -> int:
         type=Path,
         help="Write line-buffered stdout/stderr to this file for detached capture.",
     )
+    parser.add_argument("--map", default="sp_theatre")
+    parser.add_argument("--distribution", default="user-owned-retail")
+    parser.add_argument("--patch", default="Unofficial Patch 11.4")
+    parser.add_argument("--probe-profile", default="retained-palette-polling-v1")
+    parser.add_argument(
+        "--experiment",
+        type=Path,
+        default=DEFAULT_EXPERIMENT,
+    )
+    parser.add_argument(
+        "--environment",
+        action="append",
+        default=[],
+        metavar="NAME=VALUE",
+        help="Declared launch environment value; repeat as needed.",
+    )
+    parser.add_argument(
+        "--clock-control",
+        action="append",
+        default=[],
+        metavar="NAME=VALUE",
+        help="Declared retail clock control; repeat as needed.",
+    )
     args = parser.parse_args()
+    load_experiment(args.experiment)
 
     if args.log_file:
         args.log_file.parent.mkdir(parents=True, exist_ok=True)
@@ -291,9 +324,74 @@ def main() -> int:
     session_stamp = time.strftime("%Y%m%d_%H%M%S")
     session = output_root / f"{session_label}_{session_stamp}"
     session.mkdir(parents=True, exist_ok=False)
+    _, _, executable_path = find_module(pid, "vampire.exe")
+    manifest_path = session / "manifest.json"
+    manifest = create_session_manifest(
+        session=session,
+        capture_command=[sys.executable, str(Path(__file__).resolve()), *sys.argv[1:]],
+        pid=pid,
+        launch=process_launch_context(pid),
+        environment=parse_assignments(args.environment, "environment"),
+        distribution=args.distribution,
+        patch=args.patch,
+        modules={
+            "vampire.exe": {
+                "path": str(executable_path),
+                "sha256": hashlib.sha256(executable_path.read_bytes()).hexdigest(),
+            },
+            "StudioRender.dll": {
+                "path": str(module_path),
+                "sha256": module_hash,
+            },
+        },
+        probe_profile=args.probe_profile,
+        map_name=args.map,
+        experiment_path=args.experiment,
+        clock_controls=parse_assignments(
+            args.clock_control or ["mode=uncontrolled"],
+            "clock-control",
+        ),
+        analyzers=analyzer_versions(
+            [
+                Path(__file__).resolve(),
+                Path(__file__).resolve().parent / "validate_live_pose_capture.py",
+                Path(__file__).resolve().parent / "compare_pose_captures.py",
+            ]
+        ),
+        capture={
+            "method": "ReadProcessMemory",
+            "model": studio_model_name,
+            "model_key": model_key,
+            "model_checksum": f"0x{target_checksum:08x}",
+            "bone_count": target_bones,
+            "requested_frames": args.frames,
+            "allow_partial": args.allow_partial,
+        },
+    )
+    manifest.update(
+        {
+            "version": 1,
+            "method": "ReadProcessMemory",
+            "model": studio_model_name,
+            "model_key": model_key,
+            "model_checksum": f"0x{target_checksum:08x}",
+            "bone_count": target_bones,
+            "matrix_layout": "row-major matrix3x4, 12 little-endian float32",
+            "matrix_bytes_per_palette": matrix_bytes,
+            "studio_render_sha256": module_hash,
+            "requested_frames": args.frames,
+            "captured_frames": 0,
+            "complete": False,
+            "allow_partial": args.allow_partial,
+            "frames": [],
+        }
+    )
+    write_session_manifest(manifest_path, manifest)
 
-    reader = ProcessReader(pid)
+    frames: list[dict[str, object]] = []
+    reader: ProcessReader | None = None
     try:
+        reader = ProcessReader(pid)
         studio_object = module_base + STUDIO_RENDER_OBJECT_RVA
         expected_vtable = module_base + STUDIO_RENDER_VTABLE_RVA
         actual_vtable = reader.u32(studio_object)
@@ -356,7 +454,6 @@ def main() -> int:
         capture_started_at = time.perf_counter()
         armed_at = arm_detected_at or capture_started_at
         deadline = capture_started_at + args.timeout
-        frames: list[dict[str, object]] = []
         payloads: list[tuple[bytes, bytes]] = []
         last_hash = last_prearm_hash
         print("ARMED. Waiting for the first post-trigger palette...", flush=True)
@@ -410,34 +507,48 @@ def main() -> int:
             (session / frame["bone_to_world"]).write_bytes(bones)
             (session / frame["skin_palette"]).write_bytes(skin)
 
-        manifest = {
-            "version": 1,
-            "method": "ReadProcessMemory",
-            "pid": pid,
-            "model": studio_model_name,
-            "model_key": model_key,
-            "model_checksum": f"0x{target_checksum:08x}",
-            "bone_count": target_bones,
-            "matrix_layout": "row-major matrix3x4, 12 little-endian float32",
-            "matrix_bytes_per_palette": matrix_bytes,
-            "studio_render_sha256": module_hash,
-            "requested_frames": args.frames,
-            "captured_frames": len(frames),
-            "complete": len(frames) == args.frames,
-            "allow_partial": args.allow_partial,
-            "frames": frames,
-        }
-        (session / "manifest.json").write_text(
-            json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
-        )
-        print(f"Manifest={session / 'manifest.json'}", flush=True)
-
         if not frames:
             raise TimeoutError("captured no post-trigger palettes")
         if len(frames) != args.frames and not args.allow_partial:
             raise TimeoutError(
                 f"captured {len(frames)}/{args.frames} unique palettes"
             )
+        artifact_paths = [
+            session / frame[artifact]
+            for frame in frames
+            for artifact in ("bone_to_world", "skin_palette")
+        ]
+        manifest["state"] = "complete"
+        manifest["outputs"] = output_metadata(session, artifact_paths)
+        manifest["records"] = {
+            "captured": len(frames),
+            "written": len(frames),
+            "dropped": 0,
+            "incomplete": args.frames - len(frames),
+        }
+        manifest["hook_health"] = {
+            "state": "healthy",
+            "details": {
+                "target_seen": True,
+                "arm_seen": True,
+            },
+        }
+        manifest["capture"].update(
+            {
+                "captured_frames": len(frames),
+                "complete": len(frames) == args.frames,
+            }
+        )
+        manifest.update(
+            {
+                "captured_frames": len(frames),
+                "complete": len(frames) == args.frames,
+                "frames": frames,
+            }
+        )
+        write_session_manifest(manifest_path, manifest)
+        print(f"Manifest={manifest_path}", flush=True)
+
         if len(frames) != args.frames:
             print(
                 f"Partial capture accepted: {len(frames)}/{args.frames} "
@@ -445,8 +556,32 @@ def main() -> int:
                 flush=True,
             )
         return 0
+    except Exception as exc:
+        artifact_paths = [
+            path
+            for frame in frames
+            for artifact in ("bone_to_world", "skin_palette")
+            if (path := session / frame[artifact]).exists()
+        ]
+        manifest["state"] = "failed"
+        manifest["outputs"] = output_metadata(session, artifact_paths)
+        manifest["records"] = {
+            "captured": len(frames),
+            "written": len(artifact_paths) // 2,
+            "dropped": 0,
+            "incomplete": max(0, args.frames - len(frames)),
+        }
+        manifest["hook_health"] = {
+            "state": "failed",
+            "details": {"error": str(exc)},
+        }
+        manifest["captured_frames"] = len(frames)
+        manifest["frames"] = frames
+        write_session_manifest(manifest_path, manifest)
+        raise
     finally:
-        reader.close()
+        if reader:
+            reader.close()
 
 
 if __name__ == "__main__":

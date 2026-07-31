@@ -8,6 +8,8 @@
 #include <cstring>
 #include <cwchar>
 
+#include "generated_record_schemas.h"
+
 namespace {
 
 constexpr DWORD kStudioObjectRva = 0x82B30;
@@ -19,80 +21,6 @@ constexpr DWORD kBuildTransformationsRva = 0x8FD00;
 constexpr DWORD kGetStudioHdrRva = 0x8F900;
 constexpr int kMaximumBones = 1024;
 constexpr DWORD kInlinePatchBytes = 5;
-
-#pragma pack(push, 1)
-struct FileHeader {
-    char magic[8];
-    std::uint32_t version;
-    std::uint32_t headerBytes;
-    std::uint64_t qpcFrequency;
-    std::int64_t startQpc;
-    std::uint32_t pid;
-    std::uint32_t studioRenderBase;
-    std::uint32_t studioObject;
-    std::uint32_t studioVtable;
-    std::uint32_t drawModelRva;
-    char studioRenderSha256[65];
-    char reserved[11];
-};
-
-struct PoseRecordHeader {
-    char magic[4];
-    std::uint32_t recordBytes;
-    std::uint64_t sequence;
-    std::int64_t qpc;
-    std::uint32_t threadId;
-    std::uint32_t studioHdr;
-    std::uint32_t clientEntity;
-    std::uint32_t checksum;
-    std::uint32_t boneCount;
-    std::uint32_t modelInfo;
-    std::uint32_t drawArguments[5];
-    char modelName[64];
-};
-
-struct AnimationFileHeader {
-    char magic[8];
-    std::uint32_t version;
-    std::uint32_t headerBytes;
-    std::uint64_t qpcFrequency;
-    std::int64_t startQpc;
-    std::uint32_t pid;
-    std::uint32_t clientBase;
-    std::uint32_t resolveVirtualModelPoseRva;
-    std::uint32_t buildTransformationsRva;
-    std::uint32_t targetChecksum;
-    char clientSha256[65];
-    char reserved[11];
-};
-
-struct AnimationRecordHeader {
-    char magic[4];
-    std::uint32_t recordBytes;
-    std::uint64_t sequence;
-    std::int64_t qpc;
-    std::uint32_t threadId;
-    std::uint32_t clientEntity;
-    std::uint32_t studioHdr;
-    std::uint32_t checksum;
-    std::uint32_t boneCount;
-    std::int32_t studioSequence;
-    float samplePhase;
-    float entityCycle;
-    std::int32_t result;
-    std::uint32_t positions;
-    std::uint32_t quaternions;
-};
-#pragma pack(pop)
-
-static_assert(sizeof(FileHeader) == 128, "capture file header changed");
-static_assert(sizeof(PoseRecordHeader) == 132, "pose record header changed");
-static_assert(
-    sizeof(AnimationFileHeader) == 128,
-    "animation capture file header changed");
-static_assert(
-    sizeof(AnimationRecordHeader) == 68,
-    "animation record header changed");
 
 struct PendingRecord {
     PendingRecord* next;

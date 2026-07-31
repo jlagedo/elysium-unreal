@@ -1,0 +1,110 @@
+{
+  "registry_version": 1,
+  "byte_order": "little",
+  "compatibility": "Readers accept a record only when its numeric ID is known, its schema version is supported, and its framed byte count satisfies the registered bounds. New fields require a new schema version; new record meanings require a new numeric ID.",
+  "records": [
+    {
+      "name": "pose_file_header",
+      "id": 1,
+      "schema_version": 2,
+      "magic": "ELPOSE2",
+      "minimum_bytes": 128,
+      "maximum_bytes": 128,
+      "fields": [
+        ["magic", "char", 8],
+        ["version", "uint32"],
+        ["headerBytes", "uint32"],
+        ["qpcFrequency", "uint64"],
+        ["startQpc", "int64"],
+        ["pid", "uint32"],
+        ["studioRenderBase", "uint32"],
+        ["studioObject", "uint32"],
+        ["studioVtable", "uint32"],
+        ["drawModelRva", "uint32"],
+        ["studioRenderSha256", "char", 65],
+        ["reserved", "char", 11]
+      ]
+    },
+    {
+      "name": "pose",
+      "id": 2,
+      "schema_version": 2,
+      "magic": "POSE",
+      "minimum_bytes": 132,
+      "maximum_bytes": 98436,
+      "variable_payload": "boneCount repetitions of two row-major matrix3x4 values, each 12 little-endian float32 values",
+      "fields": [
+        ["magic", "char", 4],
+        ["recordBytes", "uint32"],
+        ["sequence", "uint64"],
+        ["qpc", "int64"],
+        ["threadId", "uint32"],
+        ["studioHdr", "uint32"],
+        ["clientEntity", "uint32"],
+        ["checksum", "uint32"],
+        ["boneCount", "uint32"],
+        ["modelInfo", "uint32"],
+        ["drawArguments", "uint32", 5],
+        ["modelName", "char", 64]
+      ]
+    },
+    {
+      "name": "animation_file_header",
+      "id": 3,
+      "schema_version": 2,
+      "magic": "ELANIM2",
+      "minimum_bytes": 128,
+      "maximum_bytes": 128,
+      "fields": [
+        ["magic", "char", 8],
+        ["version", "uint32"],
+        ["headerBytes", "uint32"],
+        ["qpcFrequency", "uint64"],
+        ["startQpc", "int64"],
+        ["pid", "uint32"],
+        ["clientBase", "uint32"],
+        ["resolveVirtualModelPoseRva", "uint32"],
+        ["buildTransformationsRva", "uint32"],
+        ["targetChecksum", "uint32"],
+        ["clientSha256", "char", 65],
+        ["reserved", "char", 11]
+      ]
+    },
+    {
+      "name": "animation_base",
+      "id": 4,
+      "schema_version": 2,
+      "magic": "BASE",
+      "minimum_bytes": 68,
+      "maximum_bytes": 28868,
+      "variable_payload": "boneCount position float3 values, boneCount quaternion float4 values, then ceil(boneCount/32) little-endian uint32 selection words",
+      "fields": [
+        ["magic", "char", 4],
+        ["recordBytes", "uint32"],
+        ["sequence", "uint64"],
+        ["qpc", "int64"],
+        ["threadId", "uint32"],
+        ["clientEntity", "uint32"],
+        ["studioHdr", "uint32"],
+        ["checksum", "uint32"],
+        ["boneCount", "uint32"],
+        ["studioSequence", "int32"],
+        ["samplePhase", "float32"],
+        ["entityCycle", "float32"],
+        ["result", "int32"],
+        ["positions", "uint32"],
+        ["quaternions", "uint32"]
+      ]
+    },
+    {
+      "name": "animation_final",
+      "id": 5,
+      "schema_version": 2,
+      "magic": "FINL",
+      "minimum_bytes": 68,
+      "maximum_bytes": 28868,
+      "variable_payload": "boneCount position float3 values, boneCount quaternion float4 values, then ceil(boneCount/32) little-endian uint32 selection words",
+      "layout_from": "animation_base"
+    }
+  ]
+}

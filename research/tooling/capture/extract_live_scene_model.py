@@ -8,7 +8,10 @@ import json
 from pathlib import Path
 import struct
 
-from research.tooling.capture.capture_live_scene import FILE_HEADER, POSE_HEADER
+from research.tooling.capture.generated_record_schemas import (
+    POSE_FILE_HEADER as FILE_HEADER,
+    POSE_RECORD_HEADER as POSE_HEADER,
+)
 
 
 def file_sha256(path: Path) -> str:

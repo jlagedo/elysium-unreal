@@ -1,0 +1,34 @@
+{
+  "specification_version": 1,
+  "id": "retained-baseline",
+  "question": "Do the retained ELPOSE2 and ELANIM2 capture paths reproduce their hash-gated palette and BASE/final stage summaries without record loss?",
+  "controlled_variables": {
+    "retail_binary_profile": "unofficial-patch-11.4",
+    "map": "sp_theatre",
+    "target_model": "declared by the capture command",
+    "clock": "declared by the session manifest"
+  },
+  "required_probes": [
+    "studiorender.draw_model",
+    "client.resolve_virtual_model_pose",
+    "client.build_transformations"
+  ],
+  "expected_invariants": [
+    "Every module hash matches the selected probe profile.",
+    "ELPOSE2 contains only framed POSE records within the registered bounds.",
+    "ELANIM2 contains only framed BASE or FINL records within the registered bounds.",
+    "The capture reports zero dropped records."
+  ],
+  "acceptance_bands": {
+    "local_translation_cm": "numerical-policy-v1",
+    "quaternion_angle_degrees": "numerical-policy-v1",
+    "matrix_rms": "numerical-policy-v1"
+  },
+  "artifacts": [
+    "manifest.json",
+    "scene.elpose",
+    "scene_index.json",
+    "animation.elanim",
+    "animation_index.json"
+  ]
+}

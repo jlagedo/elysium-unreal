@@ -187,8 +187,8 @@ collector and analyzers remain outside the retail process.
 
 Work proceeds in this order:
 
-1. CAP0.2–CAP0.5: freeze the session, schema, and evidence contracts around the
-   working prototype.
+1. CAP0.2: retain one live emitted and validated session manifest from each
+   current capture driver.
 2. CAP1: make launcher-controlled injection the primary run path.
 3. CAP2 and CAP3: move hook configuration into profiles and move capture
    transport/file work out of the game.
@@ -206,27 +206,30 @@ Work proceeds in this order:
   capture, whole-scene trace, BASE/final resolver trace, analyzers, and three
   cross-DLL Ghidra specifications remain the reference behavior for migration.
   → `docs/vtmb/animation_and_movers.md`.
-- [ ] **CAP0.2 Canonical session manifest** — define one versioned manifest for
+- [~] **CAP0.2 Canonical session manifest** — one versioned manifest covers
   launch command, working directory, environment, retail distribution and patch,
   module hashes, probe profile, map, experiment, clock controls, output hashes,
-  record/drop counts, and analyzer versions. *Acceptance:* every new capture
-  command emits and validates it.
-- [ ] **CAP0.3 Record-schema registry** — give every record type a stable numeric
+  record/drop counts, and analyzer versions. Both retained capture drivers emit
+  and validate the contract; live emitted-session acceptance remains.
+  *Acceptance:* every new capture command emits and validates it.
+- [x] **CAP0.3 Record-schema registry** — every record type has a stable numeric
   ID, schema version, explicit little-endian layout, bounds, and compatibility
-  rule. Generate C++ and Python constants from one source. *Acceptance:* no
-  duplicated handwritten `struct` layouts remain.
-- [ ] **CAP0.4 Experiment specification** — add a tracked, game-independent
+  rule in `research/tooling/capture/contracts/record_schemas.json`; generated C++
+  and Python constants are checked for drift. *Acceptance:* no duplicated
+  handwritten `struct` layouts remain.
+- [x] **CAP0.4 Experiment specification** — the tracked, game-independent
   specification shape containing one falsifiable question, controlled variables,
   required probes, expected invariants, acceptance bands, and artifact names.
   *Acceptance:* the runner rejects an underspecified experiment.
-- [ ] **CAP0.5 Legacy-session preservation** — freeze readers and golden metadata
-  for `ELPOSE2` and `ELANIM2`, then provide a converter into the unified reader
+- [x] **CAP0.5 Legacy-session preservation** — readers and golden metadata are
+  frozen for `ELPOSE2` and `ELANIM2`, with adapters into the unified reader
   interface. *Acceptance:* current analyzers produce equivalent summaries before
   and after conversion.
-- [ ] **CAP0.6 Numerical policy** — define per-domain reporting bands for local
+- [x] **CAP0.6 Numerical policy** — versioned per-domain reporting bands cover local
   translation, quaternion angle, model/world translation, matrix RMS, flex
-  weights, and final vertex error. Bands report evidence; they are not loosened
-  to make a case pass.
+  weights, and final vertex error in
+  `research/tooling/capture/contracts/numerical_policy.json`. Bands report
+  evidence; they are not loosened to make a case pass.
 
 ## CAP1 — Retail launcher
 

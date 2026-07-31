@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 from elysium_pipeline.paths import research_root
 
 
@@ -93,6 +94,14 @@ def compile_one(
 def main() -> int:
     if not VSWHERE.exists():
         raise FileNotFoundError(VSWHERE)
+    subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "contracts" / "generate_record_schemas.py"),
+            "--check",
+        ],
+        check=True,
+    )
     OUTPUT.mkdir(parents=True, exist_ok=True)
     environment = visual_studio_environment()
     search_path = next(

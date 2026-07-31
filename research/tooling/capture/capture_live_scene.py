@@ -17,7 +17,24 @@ import time
 
 from elysium_pipeline.formats import install
 from elysium_pipeline.paths import research_root
+from research.tooling.capture.capture_contracts import (
+    DEFAULT_EXPERIMENT,
+    analyzer_versions,
+    create_session_manifest,
+    load_experiment,
+    output_metadata,
+    parse_assignments,
+    process_launch_context,
+    validate_session_manifest,
+    write_session_manifest,
+)
 from research.tooling.capture.capture_live_pose import find_module, find_process
+from research.tooling.capture.generated_record_schemas import (
+    ANIMATION_FILE_HEADER,
+    ANIMATION_RECORD_HEADER,
+    POSE_FILE_HEADER as FILE_HEADER,
+    POSE_RECORD_HEADER as POSE_HEADER,
+)
 
 
 ROOT = Path(__file__).resolve().parent
@@ -29,12 +46,6 @@ EXPECTED_STUDIO_RENDER_SHA256 = (
 EXPECTED_CLIENT_SHA256 = (
     "e88beae0dd03af06493c71c5e8d87a6993b54e590cb6ad37cd3513c588582870"
 )
-FILE_HEADER = struct.Struct("<8sIIQqIIIII65s11s")
-POSE_HEADER = struct.Struct("<4sIQqIIIIII5I64s")
-ANIMATION_FILE_HEADER = struct.Struct("<8sIIQqIIIII65s11s")
-ANIMATION_RECORD_HEADER = struct.Struct("<4sIQqIIIIIiffi2I")
-
-
 def file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -70,6 +81,10 @@ def build_if_needed() -> None:
     sources = [
         Path(__file__).resolve(),
         ROOT / "build_live_pose_capture.py",
+        ROOT / "generated_record_schemas.h",
+        ROOT / "generated_record_schemas.py",
+        ROOT / "contracts" / "record_schemas.json",
+        ROOT / "contracts" / "generate_record_schemas.py",
         ROOT / "live_pose_hook.cpp",
         ROOT / "live_pose_injector.cpp",
     ]
@@ -378,6 +393,7 @@ def summarize_animation(session: Path) -> dict[str, object] | None:
 
 
 def start_capture(args) -> int:
+    load_experiment(args.experiment)
     build_if_needed()
     pid = args.pid or find_process("vampire.exe")
     _, _, studio_path = find_module(pid, "studiorender.dll")
@@ -414,42 +430,81 @@ def start_capture(args) -> int:
         "duration_seconds": args.duration,
     }
     write_ini(ini, values)
-    manifest = {
-        "version": 1,
-        "method": "injected StudioRender DrawModel vtable hook",
-        "pid": pid,
-        "label": args.label,
-        "duration_seconds": args.duration,
-        "studio_render_path": str(studio_path),
-        "studio_render_sha256": studio_hash,
-        "client_path": str(client_path),
-        "client_sha256": client_hash,
-        "animation_model": animation_model,
-        "animation_model_checksum": (
-            f"0x{target_checksum:08x}" if animation_model else None
+    _, _, executable_path = find_module(pid, "vampire.exe")
+    manifest = create_session_manifest(
+        session=session,
+        capture_command=[sys.executable, str(Path(__file__).resolve()), *sys.argv[1:]],
+        pid=pid,
+        launch=process_launch_context(pid),
+        environment=parse_assignments(args.environment, "environment"),
+        distribution=args.distribution,
+        patch=args.patch,
+        modules={
+            "vampire.exe": {
+                "path": str(executable_path),
+                "sha256": file_sha256(executable_path),
+            },
+            "StudioRender.dll": {
+                "path": str(studio_path),
+                "sha256": studio_hash,
+            },
+            "client.dll": {
+                "path": str(client_path),
+                "sha256": client_hash,
+            },
+        },
+        probe_profile=args.probe_profile,
+        map_name=args.map,
+        experiment_path=args.experiment,
+        clock_controls=parse_assignments(
+            args.clock_control or ["mode=uncontrolled"],
+            "clock-control",
         ),
-        "session": str(session.resolve()),
-    }
-    (session / "manifest.json").write_text(
-        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+        analyzers=analyzer_versions(
+            [
+                ROOT / "capture_live_scene.py",
+                ROOT / "analyze_live_animation_stages.py",
+                ROOT / "analyze_cinematic_pose_composition.py",
+            ]
+        ),
+        capture={
+            "method": "injected StudioRender DrawModel vtable hook",
+            "label": args.label,
+            "duration_seconds": args.duration,
+            "animation_model": animation_model,
+            "animation_model_checksum": (
+                f"0x{target_checksum:08x}" if animation_model else None
+            ),
+            "session": str(session.resolve()),
+        },
     )
-    subprocess.run(
-        [
-            str(BUILD_ROOT / "live_pose_injector.exe"),
-            str(hook.resolve()),
-            str(pid),
-        ],
-        check=True,
-    )
-    ready = session / "ready.txt"
-    deadline = time.monotonic() + 15.0
-    while time.monotonic() < deadline and not ready.exists():
-        done = read_done(session / "done.txt")
-        if "error" in done:
-            raise RuntimeError(done["error"])
-        time.sleep(0.05)
-    if not ready.exists():
-        raise TimeoutError("hook DLL did not report ready within 15 seconds")
+    write_session_manifest(session / "manifest.json", manifest)
+    try:
+        subprocess.run(
+            [
+                str(BUILD_ROOT / "live_pose_injector.exe"),
+                str(hook.resolve()),
+                str(pid),
+            ],
+            check=True,
+        )
+        ready = session / "ready.txt"
+        deadline = time.monotonic() + 15.0
+        while time.monotonic() < deadline and not ready.exists():
+            done = read_done(session / "done.txt")
+            if "error" in done:
+                raise RuntimeError(done["error"])
+            time.sleep(0.05)
+        if not ready.exists():
+            raise TimeoutError("hook DLL did not report ready within 15 seconds")
+    except Exception as exc:
+        manifest["state"] = "failed"
+        manifest["hook_health"] = {
+            "state": "failed",
+            "details": {"error": str(exc)},
+        }
+        write_session_manifest(session / "manifest.json", manifest)
+        raise
     print(session.resolve())
     print(f"automatic_stop_seconds={args.duration}")
     return 0
@@ -457,6 +512,10 @@ def start_capture(args) -> int:
 
 def stop_capture(args) -> int:
     session = args.session.resolve()
+    manifest_path = session / "manifest.json"
+    manifest = validate_session_manifest(
+        json.loads(manifest_path.read_text(encoding="utf-8"))
+    )
     (session / "stop.txt").write_text("stop\n", encoding="ascii")
     deadline = time.monotonic() + args.wait
     while time.monotonic() < deadline and not (session / "done.txt").exists():
@@ -465,6 +524,43 @@ def stop_capture(args) -> int:
         raise TimeoutError("capture hook did not stop within the wait interval")
     report = summarize(session)
     animation = summarize_animation(session)
+    done = report["done"]
+    capture_records = report["record_count"] + (
+        animation["record_count"] if animation else 0
+    )
+    incomplete = report["incomplete_tail_bytes"] + (
+        animation["incomplete_tail_bytes"] if animation else 0
+    )
+    dropped = int(done.get("dropped", "0"))
+    written = int(done.get("written", str(capture_records)))
+    clean = (
+        done.get("complete") == "1"
+        and dropped == 0
+        and incomplete == 0
+        and written == capture_records
+    )
+    output_paths = [session / "scene.elpose", session / "scene_index.json"]
+    if animation:
+        output_paths.extend(
+            [session / "animation.elanim", session / "animation_index.json"]
+        )
+    manifest["state"] = "complete" if clean else "failed"
+    manifest["outputs"] = output_metadata(session, output_paths)
+    manifest["records"] = {
+        "captured": capture_records,
+        "written": written,
+        "dropped": dropped,
+        "incomplete": incomplete,
+    }
+    manifest["hook_health"] = {
+        "state": "healthy" if clean else "degraded",
+        "details": done,
+    }
+    manifest["capture"]["summary"] = {
+        "scene_index": "scene_index.json",
+        "animation_index": "animation_index.json" if animation else None,
+    }
+    write_session_manifest(manifest_path, manifest)
     print(json.dumps(
         {
             "session": report["session"],
@@ -482,10 +578,11 @@ def stop_capture(args) -> int:
                 else None
             ),
             "done": report["done"],
+            "manifest_state": manifest["state"],
         },
         indent=2,
     ))
-    return 0
+    return 0 if clean else 1
 
 
 def main() -> int:
@@ -495,6 +592,29 @@ def main() -> int:
     start.add_argument("--pid", type=int)
     start.add_argument("--label", default="live_scene")
     start.add_argument("--duration", type=int, default=300)
+    start.add_argument("--map", default="sp_theatre")
+    start.add_argument("--distribution", default="user-owned-retail")
+    start.add_argument("--patch", default="Unofficial Patch 11.4")
+    start.add_argument("--probe-profile", default="retained-baseline-v1")
+    start.add_argument(
+        "--experiment",
+        type=Path,
+        default=DEFAULT_EXPERIMENT,
+    )
+    start.add_argument(
+        "--environment",
+        action="append",
+        default=[],
+        metavar="NAME=VALUE",
+        help="Declared launch environment value; repeat as needed.",
+    )
+    start.add_argument(
+        "--clock-control",
+        action="append",
+        default=[],
+        metavar="NAME=VALUE",
+        help="Declared retail clock control; repeat as needed.",
+    )
     start.add_argument(
         "--animation-model",
         help=(
