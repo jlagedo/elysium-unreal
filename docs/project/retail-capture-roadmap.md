@@ -254,9 +254,11 @@ Work proceeds in this order:
   collector exit, timeout, atomic finalization, cleanup, and owner Ctrl-C
   acceptance pass; cancellation records a partial `reason=ctrl-c` report and
   leaves no game or collector process.
-- [ ] **CAP1.6 Attach fallback** — preserve an explicit attach-to-PID mode for
+- [x] **CAP1.6 Attach fallback** — preserve an explicit attach-to-PID mode for
   debugger-led discovery. Session metadata distinguishes launched and attached
-  captures; reproducible acceptance uses launch mode.
+  captures; reproducible acceptance uses launch mode. Synthetic acceptance
+  injects and handshakes against an already-running target, then proves the
+  non-owning launcher returned without terminating it.
 - [ ] **CAP1.7 Lifecycle soak** — complete 100 launch → inject → module load →
   capture → stop → process-exit cycles against the synthetic target with no
   leaked handles, stranded hooks, or corrupt trace.

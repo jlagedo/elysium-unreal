@@ -435,7 +435,7 @@ def start_capture(args) -> int:
         session=session,
         capture_command=[sys.executable, str(Path(__file__).resolve()), *sys.argv[1:]],
         pid=pid,
-        launch=process_launch_context(pid),
+        launch=process_launch_context(pid, mode="attached"),
         environment=parse_assignments(args.environment, "environment"),
         distribution=args.distribution,
         patch=args.patch,

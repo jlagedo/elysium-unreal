@@ -322,7 +322,7 @@ int RunSupervision(const SupervisionRequest& request) {
     }
     result.ProcessResumed = true;
     std::wprintf(
-        L"retail-launch-v1 event=supervision_started pid=%lu "
+        L"retail-launch-v1 event=supervision_started mode=launched pid=%lu "
         L"collector=%d timeout_ms=%lu\n",
         request.ProcessId,
         result.CollectorStarted ? 1 : 0,
@@ -389,7 +389,7 @@ int RunSupervision(const SupervisionRequest& request) {
     const bool finalized =
         WriteFinalization(request.FinalizationPath, result);
     std::wprintf(
-        L"retail-launch-v1 event=supervision_finalized pid=%lu "
+        L"retail-launch-v1 event=supervision_finalized mode=launched pid=%lu "
         L"state=%hs reason=%hs partial=%d process_exit=%lu "
         L"collector_exit=%lu module_notifications=%ld report=\"%ls\"\n",
         request.ProcessId,

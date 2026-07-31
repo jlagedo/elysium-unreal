@@ -24,7 +24,7 @@ DEFAULT_EXPERIMENT = (
     / "retained-baseline.json"
 )
 MANIFEST_CONTRACT = "elysium.retail-capture-session"
-MANIFEST_VERSION = 1
+MANIFEST_VERSION = 2
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -121,9 +121,11 @@ def parse_assignments(values: Iterable[str], field: str) -> dict[str, str]:
     return result
 
 
-def process_launch_context(pid: int) -> dict[str, object]:
+def process_launch_context(pid: int, *, mode: str) -> dict[str, object]:
+    _require(mode in {"launched", "attached"}, "invalid launch mode")
     process = psutil.Process(pid)
     return {
+        "mode": mode,
         "command": process.cmdline(),
         "working_directory": process.cwd(),
     }
@@ -205,7 +207,8 @@ def create_session_manifest(
 
 def validate_session_manifest(manifest: dict[str, object]) -> dict[str, object]:
     _require(manifest.get("contract") == MANIFEST_CONTRACT, "unknown session manifest contract")
-    _require(manifest.get("schema_version") == MANIFEST_VERSION, "unsupported session manifest schema_version")
+    schema_version = manifest.get("schema_version")
+    _require(schema_version in {1, MANIFEST_VERSION}, "unsupported session manifest schema_version")
     for field in ("session_id", "created_utc", "probe_profile", "map"):
         _nonempty_string(manifest.get(field), field)
     _require(manifest.get("state") in {"capturing", "complete", "failed"}, "invalid session state")
@@ -215,6 +218,11 @@ def validate_session_manifest(manifest: dict[str, object]) -> dict[str, object]:
         _nonempty_string(argument, f"capture_command[{index}]")
     launch = manifest.get("launch")
     _require(isinstance(launch, dict), "launch must be an object")
+    if schema_version == MANIFEST_VERSION:
+        _require(
+            launch.get("mode") in {"launched", "attached"},
+            "launch.mode must be launched or attached",
+        )
     launch_command = launch.get("command")
     _require(isinstance(launch_command, list) and bool(launch_command), "launch.command must be non-empty")
     for index, argument in enumerate(launch_command):

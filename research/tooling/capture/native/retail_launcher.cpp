@@ -1,5 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <tlhelp32.h>
 
 #include <algorithm>
 #include <cerrno>
@@ -74,6 +75,7 @@ struct Options {
     std::vector<std::wstring> EnvironmentOverrides;
     std::vector<std::wstring> CollectorArguments;
     std::vector<std::wstring> TargetArguments;
+    DWORD AttachPid = 0;
     DWORD VerifySuspendedMs = 25;
     DWORD TimeoutMs = 0;
     bool ResumeSynthetic = false;
@@ -91,6 +93,23 @@ bool ParseUnsigned(
     const unsigned long value = std::wcstoul(text, &end, 10);
     if (errno == ERANGE || end == text || *end != L'\0' ||
         value > 600000UL ||
+        value > std::numeric_limits<DWORD>::max()) {
+        std::fwprintf(stderr, L"invalid %ls value: %ls\n", option, text);
+        return false;
+    }
+    *destination = static_cast<DWORD>(value);
+    return true;
+}
+
+bool ParseProcessId(
+    const wchar_t* text,
+    const wchar_t* option,
+    DWORD* destination) {
+    errno = 0;
+    wchar_t* end = nullptr;
+    const unsigned long value = std::wcstoul(text, &end, 10);
+    if (errno == ERANGE || end == text || *end != L'\0' ||
+        value == 0 ||
         value > std::numeric_limits<DWORD>::max()) {
         std::fwprintf(stderr, L"invalid %ls value: %ls\n", option, text);
         return false;
@@ -155,6 +174,10 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
             options->WorkingDirectory = value;
         } else if (std::wcscmp(option, L"--distribution") == 0) {
             options->Distribution = value;
+        } else if (std::wcscmp(option, L"--attach-pid") == 0) {
+            if (!ParseProcessId(value, option, &options->AttachPid)) {
+                return false;
+            }
         } else if (std::wcscmp(option, L"--startup-profile") == 0) {
             if (std::wcscmp(value, L"direct") == 0) {
                 options->Profile = StartupProfile::Direct;
@@ -194,13 +217,10 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
         options->TargetArguments.emplace_back(argv[index]);
     }
 
-    if (options->Executable.empty() ||
-        options->WorkingDirectory.empty() ||
-        options->Distribution.empty()) {
+    if (options->Distribution.empty()) {
         std::fwprintf(
             stderr,
-            L"--executable, --working-directory, and --distribution "
-            L"are required\n");
+            L"--distribution is required\n");
         return false;
     }
     const int actions =
@@ -208,6 +228,31 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
         (options->InjectAndTerminate ? 1 : 0) +
         (options->Supervise ? 1 : 0) +
         (options->TerminateAfterVerification ? 1 : 0);
+    if (options->AttachPid != 0) {
+        if (actions != 0 || options->ProbeHost.empty() ||
+            !options->Executable.empty() ||
+            !options->WorkingDirectory.empty() ||
+            !options->Collector.empty() ||
+            !options->FinalizationPath.empty() ||
+            !options->EnvironmentOverrides.empty() ||
+            !options->CollectorArguments.empty() ||
+            !options->TargetArguments.empty()) {
+            std::fwprintf(
+                stderr,
+                L"--attach-pid is a separate non-owning mode and accepts "
+                L"only --distribution and --probe-host\n");
+            return false;
+        }
+        return true;
+    }
+    if (options->Executable.empty() ||
+        options->WorkingDirectory.empty()) {
+        std::fwprintf(
+            stderr,
+            L"--executable and --working-directory are required in "
+            L"launch mode\n");
+        return false;
+    }
     if (actions != 1) {
         std::fwprintf(
             stderr,
@@ -560,6 +605,124 @@ bool InjectLibrary(
     return bootstrap->WaitReady(15000);
 }
 
+bool SameProcessArchitecture(HANDLE process) {
+    BOOL launcherWow64 = FALSE;
+    BOOL targetWow64 = FALSE;
+    if (!IsWow64Process(GetCurrentProcess(), &launcherWow64) ||
+        !IsWow64Process(process, &targetWow64)) {
+        std::fwprintf(stderr, L"cannot determine target architecture\n");
+        return false;
+    }
+    if (launcherWow64 != targetWow64) {
+        std::fwprintf(
+            stderr,
+            L"attach target architecture does not match the x86 launcher\n");
+        return false;
+    }
+    return true;
+}
+
+bool ModuleLoaded(
+    DWORD processId,
+    const std::wstring& modulePath,
+    bool* loaded) {
+    const std::size_t separator = modulePath.find_last_of(L"\\/");
+    const std::wstring moduleName =
+        separator == std::wstring::npos
+            ? modulePath
+            : modulePath.substr(separator + 1);
+    UniqueHandle snapshot(CreateToolhelp32Snapshot(
+        TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32,
+        processId));
+    if (snapshot.Get() == INVALID_HANDLE_VALUE) {
+        std::fwprintf(
+            stderr,
+            L"cannot enumerate attach target modules: %lu\n",
+            GetLastError());
+        return false;
+    }
+
+    MODULEENTRY32W entry{};
+    entry.dwSize = sizeof(entry);
+    if (!Module32FirstW(snapshot.Get(), &entry)) {
+        std::fwprintf(
+            stderr,
+            L"cannot read attach target modules: %lu\n",
+            GetLastError());
+        return false;
+    }
+    do {
+        if (_wcsicmp(entry.szModule, moduleName.c_str()) == 0) {
+            *loaded = true;
+            return true;
+        }
+    } while (Module32NextW(snapshot.Get(), &entry));
+    *loaded = false;
+    return true;
+}
+
+int RunAttach(const Options& options, const std::wstring& probeHost) {
+    constexpr DWORD Access =
+        PROCESS_CREATE_THREAD |
+        PROCESS_QUERY_INFORMATION |
+        PROCESS_VM_OPERATION |
+        PROCESS_VM_WRITE |
+        PROCESS_VM_READ |
+        SYNCHRONIZE;
+    UniqueHandle process(OpenProcess(Access, FALSE, options.AttachPid));
+    if (process.Get() == nullptr) {
+        std::fwprintf(
+            stderr,
+            L"cannot open attach target %lu: %lu\n",
+            options.AttachPid,
+            GetLastError());
+        return 20;
+    }
+    if (WaitForSingleObject(process.Get(), 0) != WAIT_TIMEOUT) {
+        std::fwprintf(stderr, L"attach target is not running\n");
+        return 21;
+    }
+    if (!SameProcessArchitecture(process.Get())) {
+        return 22;
+    }
+    bool loaded = false;
+    if (!ModuleLoaded(options.AttachPid, probeHost, &loaded)) {
+        return 23;
+    }
+    if (loaded) {
+        std::fwprintf(
+            stderr,
+            L"probe host is already loaded in attach target %lu\n",
+            options.AttachPid);
+        return 24;
+    }
+
+    BootstrapSession bootstrap;
+    if (!bootstrap.Create(options.AttachPid)) {
+        std::fwprintf(stderr, L"cannot create attach bootstrap handshake\n");
+        return 25;
+    }
+    if (!InjectLibrary(process.Get(), probeHost, &bootstrap)) {
+        std::fwprintf(stderr, L"attach probe-host injection failed\n");
+        return 26;
+    }
+    const BootstrapHandshake& ready = bootstrap.Handshake();
+    std::wprintf(
+        L"retail-launch-v1 event=bootstrap_ready mode=attached pid=%lu "
+        L"distribution=%ls version=%lu observer_armed=%ld "
+        L"transport_armed=%ld probe_thread=%lu\n",
+        options.AttachPid,
+        options.Distribution.c_str(),
+        static_cast<unsigned long>(ready.Version),
+        ready.ModuleObserverArmed,
+        ready.TransportArmed,
+        ready.ProbeThreadId);
+    std::wprintf(
+        L"retail-launch-v1 event=attach_complete mode=attached pid=%lu\n",
+        options.AttachPid);
+    return 0;
+}
+
 bool IsSyntheticTarget(const std::wstring& executable) {
     HMODULE module = LoadLibraryExW(
         executable.c_str(),
@@ -596,7 +759,9 @@ int wmain(int argc, wchar_t** argv) {
     if (!ParseOptions(argc, argv, &options)) {
         std::fwprintf(
             stderr,
-            L"usage: retail_launcher.exe --executable PATH "
+            L"usage: retail_launcher.exe (--attach-pid PID "
+            L"--distribution NAME --probe-host PATH) | "
+            L"(--executable PATH "
             L"--working-directory PATH --distribution NAME "
             L"[--startup-profile direct|unofficial-patch] "
             L"[--environment NAME=VALUE] [--verify-suspended-ms N] "
@@ -605,7 +770,7 @@ int wmain(int argc, wchar_t** argv) {
             L"[--finalization PATH] "
             L"(--resume-synthetic|--inject-and-terminate|"
             L"--supervise|--terminate-after-verification) "
-            L"[-- target arguments]\n");
+            L"[-- target arguments])\n");
         return 2;
     }
 
@@ -614,8 +779,9 @@ int wmain(int argc, wchar_t** argv) {
     std::wstring probeHost;
     std::wstring collector;
     std::wstring finalizationPath;
-    if (!FullPath(options.Executable, &executable) ||
-        !FullPath(options.WorkingDirectory, &workingDirectory) ||
+    if ((options.AttachPid == 0 &&
+         (!FullPath(options.Executable, &executable) ||
+          !FullPath(options.WorkingDirectory, &workingDirectory))) ||
         (!options.ProbeHost.empty() &&
          !FullPath(options.ProbeHost, &probeHost)) ||
         (!options.Collector.empty() &&
@@ -624,6 +790,16 @@ int wmain(int argc, wchar_t** argv) {
          !FullPath(options.FinalizationPath, &finalizationPath))) {
         std::fwprintf(stderr, L"cannot resolve launch paths\n");
         return 3;
+    }
+    if (options.AttachPid != 0) {
+        const DWORD probeAttributes =
+            GetFileAttributesW(probeHost.c_str());
+        if (probeAttributes == INVALID_FILE_ATTRIBUTES ||
+            (probeAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+            std::fwprintf(stderr, L"invalid probe-host DLL\n");
+            return 4;
+        }
+        return RunAttach(options, probeHost);
     }
     const DWORD executableAttributes = GetFileAttributesW(executable.c_str());
     const DWORD directoryAttributes =
@@ -724,7 +900,7 @@ int wmain(int argc, wchar_t** argv) {
     }
 
     std::wprintf(
-        L"retail-launch-v1 event=process_suspended pid=%lu "
+        L"retail-launch-v1 event=process_suspended mode=launched pid=%lu "
         L"distribution=%ls startup_profile=%ls "
         L"working_directory=\"%ls\" command_line=\"%ls\" "
         L"environment_overrides=%zu\n",
@@ -742,7 +918,8 @@ int wmain(int argc, wchar_t** argv) {
         }
         childActive = false;
         std::wprintf(
-            L"retail-launch-v1 event=verification_complete pid=%lu\n",
+            L"retail-launch-v1 event=verification_complete "
+            L"mode=launched pid=%lu\n",
             created.dwProcessId);
         return 0;
     }
@@ -756,7 +933,7 @@ int wmain(int argc, wchar_t** argv) {
     }
     const BootstrapHandshake& ready = bootstrap.Handshake();
     std::wprintf(
-        L"retail-launch-v1 event=bootstrap_ready pid=%lu "
+        L"retail-launch-v1 event=bootstrap_ready mode=launched pid=%lu "
         L"version=%lu observer_armed=%ld transport_armed=%ld "
         L"probe_thread=%lu\n",
         created.dwProcessId,
@@ -772,7 +949,8 @@ int wmain(int argc, wchar_t** argv) {
         }
         childActive = false;
         std::wprintf(
-            L"retail-launch-v1 event=bootstrap_verified pid=%lu\n",
+            L"retail-launch-v1 event=bootstrap_verified "
+            L"mode=launched pid=%lu\n",
             created.dwProcessId);
         return 0;
     }
@@ -819,7 +997,8 @@ int wmain(int argc, wchar_t** argv) {
         return 18;
     }
     std::wprintf(
-        L"retail-launch-v1 event=launch_complete pid=%lu exit_code=%lu "
+        L"retail-launch-v1 event=launch_complete mode=launched pid=%lu "
+        L"exit_code=%lu "
         L"module_notifications=%ld\n",
         created.dwProcessId,
         exitCode,

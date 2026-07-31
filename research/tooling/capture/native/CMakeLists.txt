@@ -208,6 +208,23 @@ add_test(
 )
 
 add_test(
+    NAME synthetic_attach_fallback
+    COMMAND
+        powershell
+        -NoProfile
+        -ExecutionPolicy Bypass
+        -File ${CMAKE_CURRENT_SOURCE_DIR}/verify_attach.ps1
+        -Launcher $<TARGET_FILE:retail_launcher>
+        -Target $<TARGET_FILE:synthetic_retail>
+        -BinDir $<TARGET_FILE_DIR:synthetic_retail>
+        -Probe $<TARGET_FILE:retail_probe_host>
+)
+set_tests_properties(
+    synthetic_attach_fallback
+    PROPERTIES TIMEOUT 15
+)
+
+add_test(
     NAME synthetic_supervision_timeout
     COMMAND
         ${CMAKE_COMMAND}

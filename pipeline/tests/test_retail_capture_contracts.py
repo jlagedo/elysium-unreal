@@ -285,6 +285,26 @@ class RetailCaptureContractTests(unittest.TestCase):
         for reason in ("process-crash", "collector-exit", "timeout", "ctrl-c"):
             self.assertIn(f'"{reason}"', supervision)
 
+    def test_attach_fallback_is_explicit_non_owning_and_versioned(self) -> None:
+        launcher = (NATIVE_ROOT / "retail_launcher.cpp").read_text(
+            encoding="utf-8"
+        )
+        cmake = (NATIVE_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+        attach = (
+            REPO_ROOT
+            / "research"
+            / "tooling"
+            / "capture"
+            / "retail_capture_attach.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("--attach-pid", launcher)
+        self.assertIn("OpenProcess(", launcher)
+        self.assertIn("mode=attached", launcher)
+        self.assertIn("mode=launched", launcher)
+        self.assertIn("synthetic_attach_fallback", cmake)
+        self.assertIn("retail_capture_launch", attach)
+        self.assertNotIn("TerminateProcess", attach)
+
     def test_generated_record_contracts_are_current_and_unique(self) -> None:
         subprocess.run(
             [sys.executable, str(GENERATOR), "--check"],
@@ -348,6 +368,7 @@ class RetailCaptureContractTests(unittest.TestCase):
                 capture_command=["capture", "start"],
                 pid=123,
                 launch={
+                    "mode": "launched",
                     "command": ["vampire.exe", "-console"],
                     "working_directory": r"C:\Games\Vampire",
                 },
@@ -369,6 +390,13 @@ class RetailCaptureContractTests(unittest.TestCase):
             )
             self.assertEqual(
                 validate_session_manifest(manifest)["state"], "capturing"
+            )
+            self.assertEqual(manifest["launch"]["mode"], "launched")
+            legacy = json.loads(json.dumps(manifest))
+            legacy["schema_version"] = 1
+            del legacy["launch"]["mode"]
+            self.assertEqual(
+                validate_session_manifest(legacy)["state"], "capturing"
             )
             del manifest["records"]["dropped"]
             with self.assertRaisesRegex(ContractError, "records.dropped"):
