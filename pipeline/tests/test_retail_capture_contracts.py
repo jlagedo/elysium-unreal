@@ -203,6 +203,33 @@ class RetailCaptureContractTests(unittest.TestCase):
         self.assertIn("synthetic_retail_lifecycle", cmake)
         self.assertIn("event=shutdown_complete modules=3", cmake)
 
+    def test_native_launcher_creates_and_verifies_a_suspended_process(self) -> None:
+        cmake = (NATIVE_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+        launcher = (NATIVE_ROOT / "retail_launcher.cpp").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("add_executable(retail_launcher", cmake)
+        self.assertIn("synthetic_suspended_launch", cmake)
+        self.assertIn("CREATE_SUSPENDED", launcher)
+        self.assertIn("CREATE_UNICODE_ENVIRONMENT", launcher)
+        self.assertIn("CreateProcessW(", launcher)
+        self.assertIn("SuspendThread(thread.Get())", launcher)
+        self.assertIn("previousSuspendCount != 1", launcher)
+        self.assertIn("BuildEnvironment(", launcher)
+        self.assertIn("QuoteArgument(", launcher)
+        self.assertIn("Unofficial_Patch", launcher)
+        public_driver = (
+            REPO_ROOT
+            / "research"
+            / "tooling"
+            / "capture"
+            / "retail_capture_launch.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('run_native("build"', public_driver)
+        self.assertIn('"--terminate-after-verification"', public_driver)
+        self.assertIn('"--startup-profile"', public_driver)
+        self.assertIn('target_arguments[:1] == ["--"]', public_driver)
+
     def test_generated_record_contracts_are_current_and_unique(self) -> None:
         subprocess.run(
             [sys.executable, str(GENERATOR), "--check"],

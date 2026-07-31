@@ -241,7 +241,7 @@ Work proceeds in this order:
   loads fake `client`, `engine`, and `StudioRender` DLLs at controlled times and
   exposes safe test hook targets. *Acceptance:* launcher and lifecycle tests run
   without the game installation.
-- [ ] **CAP1.3 Suspended launch** — reproduce the selected retail command line,
+- [x] **CAP1.3 Suspended launch** — reproduce the selected retail command line,
   working directory, inherited environment, and distribution-specific startup
   while creating `vampire.exe` suspended.
 - [ ] **CAP1.4 Bootstrap injection** — inject the probe host through a conventional

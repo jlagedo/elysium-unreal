@@ -94,6 +94,9 @@ add_dependencies(
     synthetic_studiorender
 )
 
+add_executable(retail_launcher retail_launcher.cpp)
+elysium_native_target(retail_launcher)
+
 enable_testing()
 add_test(
     NAME synthetic_retail_lifecycle
@@ -107,5 +110,52 @@ set_tests_properties(
     synthetic_retail_lifecycle
     PROPERTIES
         PASS_REGULAR_EXPRESSION "event=shutdown_complete modules=3"
+        TIMEOUT 15
+)
+
+add_test(
+    NAME synthetic_suspended_launch
+    COMMAND
+        $<TARGET_FILE:retail_launcher>
+        --executable $<TARGET_FILE:synthetic_retail>
+        --working-directory $<TARGET_FILE_DIR:synthetic_retail>
+        --distribution synthetic-test
+        --startup-profile unofficial-patch
+        --environment ELYSIUM_CAP1_OVERRIDE=override-value
+        --verify-suspended-ms 25
+        --resume-synthetic
+        --
+        --initial-delay-ms 0
+        --module-delay-ms 1
+        --lifetime-ms 1
+        --expect-environment ELYSIUM_CAP1_PARENT=parent-value
+        --expect-environment ELYSIUM_CAP1_OVERRIDE=override-value
+        --expect-working-directory $<TARGET_FILE_DIR:synthetic_retail>
+        --expect-mod-directory Unofficial_Patch
+        --command-token "argument with spaces"
+)
+set_tests_properties(
+    synthetic_suspended_launch
+    PROPERTIES
+        ENVIRONMENT "ELYSIUM_CAP1_PARENT=parent-value"
+        PASS_REGULAR_EXPRESSION "event=launch_complete.*exit_code=0"
+        TIMEOUT 15
+)
+
+add_test(
+    NAME synthetic_suspended_termination
+    COMMAND
+        $<TARGET_FILE:retail_launcher>
+        --executable $<TARGET_FILE:synthetic_retail>
+        --working-directory $<TARGET_FILE_DIR:synthetic_retail>
+        --distribution synthetic-test
+        --startup-profile direct
+        --verify-suspended-ms 25
+        --terminate-after-verification
+)
+set_tests_properties(
+    synthetic_suspended_termination
+    PROPERTIES
+        PASS_REGULAR_EXPRESSION "event=verification_complete"
         TIMEOUT 15
 )

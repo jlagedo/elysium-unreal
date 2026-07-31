@@ -8,6 +8,8 @@
 #include <cstring>
 #include <cwchar>
 #include <limits>
+#include <string>
+#include <vector>
 
 namespace {
 
@@ -20,6 +22,12 @@ struct Options {
     DWORD InitialDelayMs = 0;
     DWORD ModuleDelayMs = 25;
     DWORD LifetimeMs = 100;
+    const wchar_t* CommandToken = nullptr;
+    const wchar_t* ExpectedWorkingDirectory = nullptr;
+    const wchar_t* ExpectedModDirectory = nullptr;
+    std::array<const wchar_t*, 8> ExpectedEnvironment{};
+    std::size_t ExpectedEnvironmentCount = 0;
+    const wchar_t* ModDirectory = nullptr;
 };
 
 struct ModuleSpec {
@@ -66,6 +74,19 @@ void EmitModule(
     std::fflush(stdout);
 }
 
+void EmitValue(
+    const wchar_t* eventName,
+    const wchar_t* value) {
+    std::wprintf(
+        L"synthetic-retail-v1 sequence=%lu qpc=%lld event=%ls "
+        L"value=\"%ls\"\n",
+        ++Sequence,
+        QpcNow(),
+        eventName,
+        value);
+    std::fflush(stdout);
+}
+
 bool ParseDelay(
     const wchar_t* text,
     const wchar_t* option,
@@ -96,11 +117,107 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
             destination = &options->ModuleDelayMs;
         } else if (std::wcscmp(argv[index], L"--lifetime-ms") == 0) {
             destination = &options->LifetimeMs;
+        } else if (std::wcscmp(argv[index], L"--command-token") == 0) {
+            options->CommandToken = argv[index + 1];
+            continue;
+        } else if (
+            std::wcscmp(argv[index], L"--expect-working-directory") == 0) {
+            options->ExpectedWorkingDirectory = argv[index + 1];
+            continue;
+        } else if (
+            std::wcscmp(argv[index], L"--expect-mod-directory") == 0) {
+            options->ExpectedModDirectory = argv[index + 1];
+            continue;
+        } else if (std::wcscmp(argv[index], L"--expect-environment") == 0) {
+            if (options->ExpectedEnvironmentCount >=
+                options->ExpectedEnvironment.size()) {
+                std::fwprintf(stderr, L"too many environment expectations\n");
+                return false;
+            }
+            options->ExpectedEnvironment[
+                options->ExpectedEnvironmentCount++] = argv[index + 1];
+            continue;
+        } else if (std::wcscmp(argv[index], L"-game") == 0) {
+            options->ModDirectory = argv[index + 1];
+            continue;
         } else {
             std::fwprintf(stderr, L"unknown option: %ls\n", argv[index]);
             return false;
         }
         if (!ParseDelay(argv[index + 1], argv[index], destination)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool VerifyEnvironment(const wchar_t* expectation) {
+    const wchar_t* separator = std::wcschr(expectation, L'=');
+    if (separator == nullptr || separator == expectation) {
+        std::fwprintf(
+            stderr,
+            L"invalid environment expectation: %ls\n",
+            expectation);
+        return false;
+    }
+    const std::wstring name(expectation, separator);
+    const wchar_t* expected = separator + 1;
+    const DWORD required = GetEnvironmentVariableW(name.c_str(), nullptr, 0);
+    if (required == 0) {
+        std::fwprintf(
+            stderr,
+            L"missing inherited environment: %ls\n",
+            name.c_str());
+        return false;
+    }
+    std::vector<wchar_t> value(required);
+    if (GetEnvironmentVariableW(
+            name.c_str(),
+            value.data(),
+            required) >= required ||
+        std::wcscmp(value.data(), expected) != 0) {
+        std::fwprintf(
+            stderr,
+            L"environment mismatch for %ls\n",
+            name.c_str());
+        return false;
+    }
+    return true;
+}
+
+bool CanonicalPath(const wchar_t* input, wchar_t* output, DWORD capacity) {
+    const DWORD length = GetFullPathNameW(input, capacity, output, nullptr);
+    return length != 0 && length < capacity;
+}
+
+bool VerifyStartup(const Options& options) {
+    if (options.ExpectedModDirectory != nullptr &&
+        (options.ModDirectory == nullptr ||
+         std::wcscmp(
+             options.ModDirectory,
+             options.ExpectedModDirectory) != 0)) {
+        std::fwprintf(stderr, L"mod-directory startup mismatch\n");
+        return false;
+    }
+    if (options.ExpectedWorkingDirectory != nullptr) {
+        wchar_t current[32768]{};
+        wchar_t expected[32768]{};
+        if (GetCurrentDirectoryW(
+                static_cast<DWORD>(std::size(current)),
+                current) == 0 ||
+            !CanonicalPath(
+                options.ExpectedWorkingDirectory,
+                expected,
+                static_cast<DWORD>(std::size(expected))) ||
+            _wcsicmp(current, expected) != 0) {
+            std::fwprintf(stderr, L"working-directory startup mismatch\n");
+            return false;
+        }
+    }
+    for (std::size_t index = 0;
+         index < options.ExpectedEnvironmentCount;
+         ++index) {
+        if (!VerifyEnvironment(options.ExpectedEnvironment[index])) {
             return false;
         }
     }
@@ -146,6 +263,9 @@ int wmain(int argc, wchar_t** argv) {
             L"[--module-delay-ms N] [--lifetime-ms N]\n");
         return 2;
     }
+    if (!VerifyStartup(options)) {
+        return 3;
+    }
 
     wchar_t executableDirectory[32768]{};
     if (!ExecutableDirectory(
@@ -156,6 +276,12 @@ int wmain(int argc, wchar_t** argv) {
     }
 
     Emit(L"process_started");
+    if (options.ModDirectory != nullptr) {
+        EmitValue(L"mod_directory", options.ModDirectory);
+    }
+    if (options.CommandToken != nullptr) {
+        EmitValue(L"command_token", options.CommandToken);
+    }
     const int processTarget = ElysiumSyntheticExecutableHookTarget(17);
     if (processTarget != 4017) {
         std::fwprintf(stderr, L"executable hook target failed\n");
