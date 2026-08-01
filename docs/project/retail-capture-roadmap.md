@@ -1,370 +1,379 @@
-# Retail Animation Reverse-Engineering Roadmap
+# Retail Animation Capture and Verification Roadmap
 
 ## Goal and ownership
 
-This tracker drives one private reverse-engineering instrument for one exact
-owner-controlled VtMB retail build. Its purpose is to recover how that build
-loads character resources and turns them into the skeletal, scene, secondary-
-motion, facial, lip-sync, deformation, and render state that Elysium must
-reproduce.
+This tracker drives one private instrument against one exact owner-controlled VtMB
+retail build, and one executable loop over it:
 
-The executable and module bytes are the contract. The capture format, reader,
-recipes, and analyzers may change together whenever an experiment needs better
-evidence. Unknown bytes are evidence, not schema defects.
+> **build the capture → run `sp_theatre` → capture → decode and index → inspect against
+> the export and the current decoder → name what is missing → extend the capture.**
 
-`docs/project/roadmap.md` owns project priority and the roll-up rows `0.10`,
-`RE32`, and `RE33`. This file owns the detailed task order. Confirmed VtMB facts
-belong in the relevant `docs/vtmb/` document. Game-derived binaries, captures,
-decompilation, indexes, and reports stay under `$ELYSIUM_WORK_ROOT/research`.
+The program answers one question: which parts of the retail character transformation
+chain — requested resource bytes, skeletons, fired animation contributions, composed
+matrices, skin palettes, flexes — does the offline decoder fail to reproduce, and why.
+File archaeology alone has not answered it. The running process is the only oracle that
+shows which source bytes are actually read and which transforms actually result.
+
+The executable and module bytes are the contract. The capture format, reader, recipes,
+and analyzers change together whenever an experiment needs better evidence. Unknown bytes
+are evidence, not schema defects.
+
+**The Unofficial Patch is part of the exact build.** The unpatched install does not launch,
+so the capture target is the retail engine modules running under the patch's executable,
+startup profile, and content — never something to strip for a "purer" capture. The bound on
+what that costs is narrow and pinned in the binary profiles: the patch supplies the process
+launcher, while `client.dll`, `engine.dll`, and `StudioRender.dll` are the original retail
+modules loaded from the base install, and every hooked animation target lives in those
+three. Source joins resolve patch-first for the same reason.
+
+`docs/project/roadmap.md` owns project priority and the roll-up rows `0.10`, `RE32`, and
+`RE33`. This file owns the detailed task order. Confirmed VtMB facts belong in the
+relevant `docs/vtmb/` document; hook target addresses, prototypes, confidence, and
+relationships belong in `research/cases/animation-pose/specs/`; evidence model and method
+belong in `docs/vtmb/vtmb-animation-reverse-engineering.md`. Game-derived binaries,
+captures, decompilation, indexes, and reports stay under `$ELYSIUM_WORK_ROOT/research`.
+
+## The loop
+
+| Step | Owned by | Produces |
+|---|---|---|
+| Run the exact build with hooks armed before map load | CAP1 | one finalized capture database plus its calibration measurement |
+| Complete what the capture records | CAP2 | grouping, actor/model/skeleton census, source attribution, consumed byte spans |
+| Decode and index the streams | CAP3 | one queryable, deduplicated, joinable database |
+| Inspect retail against export and decoder | CAP4 | byte-coverage and per-bone transform differences |
+| Close what the difference proves | CAP5 | recovered rules, regressions, facts in the owning `docs/vtmb/` topic |
+
+The loop repeats. Each pass extends the capture only where the previous pass named a
+missing byte range, an unjoinable identity, or a mismatching stage. Face and lips
+(CAP6) run the same loop over flex and phoneme state once the skeletal pass closes.
 
 ## Finish line
 
-The program is successful when engine-neutral code can consume the owner's
-original resources and reproduce the retail outputs needed by Elysium for
-representative shipped cases. The useful comparison boundaries are:
+The program succeeds when engine-neutral code consumes the owner's original resources and
+reproduces the retail outputs Elysium needs for the theatre corpus. The comparison
+boundaries are:
 
-1. requested resource bytes;
-2. constructed runtime objects and state;
-3. decoded local bone transforms;
-4. composed model/world and skin matrices;
+1. requested resource bytes and the spans the runtime dereferences;
+2. constructed runtime objects, skeletons, and actor identity;
+3. decoded local bone transforms per fired contribution;
+4. composed model/world, bone-to-world, and skin matrices;
 5. scene/root/entity movement;
-6. secondary-motion state and writeback;
-7. facial controllers, flex weights, and deformed vertices;
-8. final render inputs.
+6. facial controllers, flex weights, and deformed vertices;
+7. final render inputs.
 
-Completion does not require naming every field, proving every unknown byte is a
-no-op, supporting another executable, or recreating the original engine as a
-general library. Unexplained bytes remain attached to their raw source spans and
-are recorded as risks when they affect a reproduced path.
+Completion does not require naming every field, proving every unknown byte is a no-op,
+supporting another executable, or recreating the original engine as a general library.
+Unexplained bytes stay attached to their raw source spans and are recorded as risks when
+they affect a reproduced path.
 
 ## Working rules
 
-1. **Start from a visible output.** Use the final matrix, flex, vertex, or draw
-   state as an oracle, then trace backward only to the first unexplained stage.
-2. **Capture raw evidence before decoding it.** A record keeps registers, stack
-   bytes, pointer values, bounded pointed-to spans, original addresses, and copy
-   outcomes. Field names are analyzer hypotheses.
-3. **Work on one controlled case at a time.** Add a hook or span to answer one
-   question about one actor, resource, animation, scene, line, or visible
-   secondary effect.
-4. **Keep the live path bounded.** The game callback validates and copies bounded
-   spans, accounts for failures and drops, and returns. It does not decode,
-   index, compress, or retain a whole run in memory.
-5. **Evolve the tool freely.** There is no schema registry, migration system, or
-   public compatibility promise. A finalized run is nevertheless one
-   self-contained, queryable evidence file whose raw payloads remain readable by
-   the current research tools.
-6. **Optimize only capture and analysis pain that is observed.** The 915 MB
-   whole-theatre trace and frame-file workflow establish the current storage and
-   query problem. Live callbacks still only enqueue bounded raw records; an
-   offline finalizer owns indexing, lossless compression, and deduplication.
-7. **Do not build ahead.** A later animation system does not justify capture
-   infrastructure before its first concrete experiment.
-8. **Delete dead machinery.** A hook, reader, control, dependency, or test stays
-   only while it protects the exact build, preserves useful evidence, or answers
-   a current research question.
+1. **Capture what the runtime reads, not only what it emits.** A pose that matches proves
+   nothing about a field the decoder silently skipped. Consumed byte spans are first-class
+   evidence.
+2. **Immutable source bytes are a dictionary, not a stream.** Model images, skeletons, and
+   animation descriptors are stored once by content hash; per-call records keep identity
+   and offsets only.
+3. **Start from a visible output.** Use the final matrix, flex, vertex, or draw state as an
+   oracle, then trace backward only to the first unexplained stage.
+4. **Capture raw evidence before decoding it.** A record keeps registers, stack bytes,
+   pointer values, bounded pointed-to spans, original addresses, and copy outcomes. Field
+   names are analyzer hypotheses.
+5. **Keep the live path bounded.** The game callback validates and copies bounded spans,
+   accounts for failures and drops, and returns. It does not decode, index, compress, or
+   retain a run in memory.
+6. **Measure before optimizing.** The first run replaces every storage, filter, and rate
+   estimate in this document with a number.
+7. **Evolve the tool freely.** There is no schema registry, migration system, or public
+   compatibility promise. A finalized run is nevertheless one self-contained, queryable
+   evidence file whose raw payloads stay readable by the current research tools.
+8. **Do not build ahead.** A later animation system does not justify capture infrastructure
+   before the difference report names it.
+9. **Delete dead machinery.** A hook, reader, control, dependency, or test stays only while
+   it protects the exact build, preserves useful evidence, or answers a current question.
 
 ## Evidence gate for a research conclusion
 
 A task that claims retail behavior closes only when:
 
 1. the executable/module hashes, tool commit, and capture recipe are recorded;
-2. captured, written, dropped, truncated, unreadable, and incomplete counts are
+2. captured, written, dropped, truncated, unreadable, unjoined, and incomplete counts are
    reported;
 3. the relevant input and output spans are preserved as raw bytes;
-4. an offline analyzer or evaluator can use the trace without reading the live
-   process;
+4. an offline analyzer can use the database without reading the live process;
 5. a repeat capture or independent byte comparison supports the conclusion;
 6. the fact is written in its owning `docs/vtmb/` document;
-7. the recovered rule has a game-independent regression or a local hash-gated
-   retail comparison.
+7. the recovered rule has a game-independent regression or a local hash-gated retail
+   comparison.
 
-Synthetic tests establish probe safety and recorder mechanics only. They never
-close a task that claims game behavior.
+Synthetic tests establish probe safety and recorder mechanics only. They never close a task
+that claims game behavior.
 
 ## Existing baseline
 
-- [x] **CAP0.1 Existing evidence and analyzers.** `ELPOSE2` and `ELANIM2` BASE,
-  FINL, DrawModel, matrix, whole-scene, authored-pose, and cinematic comparison
-  paths remain usable as reference evidence.
-- [x] **CAP0.2 Exact-build access.** The Win32 harness launches suspended or
-  attaches, injects the probe, observes modules, records exact identity, and
-  activates only matching profiles and signatures.
-- [x] **CAP0.3 Reusable hook mechanics.** The validated vtable and instruction-
-  aware inline-hook backends, worker writer, failure accounting, supervision,
-  and synthetic lifecycle coverage remain available.
-- [x] **CAP0.4 Contract cleanup.** Stable record schemas, generated registries,
-  schema migration tests, FlatBuffers, strict experiment manifests, numerical-
-  policy infrastructure, and planned generic IPC/MCAP/MinHook work are absent.
-- [x] **CAP0.5 Player-command experiment and source dictionary.** One unattended
-  `howl` run proves the final-pose oracle, while the patch-first player inventory
-  preserves exact owner/sequence/animation identities and unknown descriptor
-  bytes. Forced `player_sequence` playback is not the corpus strategy.
+- [x] **CAP0.1 Exact-build access.** The Win32 launcher creates the target suspended under
+  the Unofficial Patch startup profile, injects the probe host, observes module loads,
+  hash-gates each module against its binary profile, byte-validates every hook target, and
+  activates only matching profiles.
+- [x] **CAP0.2 Hook mechanics.** Validated vtable and instruction-aware inline backends,
+  worker-thread writer, failure accounting, supervision, and synthetic lifecycle coverage.
+- [x] **CAP0.3 Three armed hooks.** `CStudioRender::DrawModel` yields bone-to-world plus
+  skin palette; `resolve_virtual_model_pose` yields decoded locals and the selected-bone
+  mask; `C_BaseAnimating::BuildTransformations` yields composed locals and the root/entity
+  transform.
+- [x] **CAP0.4 One-run database boundary.** The theatre recipe installs one inert cfg that
+  waits before issuing `map sp_theatre`, so hooks arm before map resources load; on stop the
+  temporary streams finalize transactionally into one SQLite file carrying module hashes,
+  launch recipe, counts, failures, artifacts, and raw payloads. The recipe is implemented
+  and not yet exercised against the theatre; CAP1.1 is the run.
+- [x] **CAP0.5 Player-command experiment and source dictionary.** One unattended `howl` run
+  proves the final-pose oracle; the patch-first player inventory preserves exact
+  owner/sequence/animation identities and unknown descriptor bytes. Forced `player_sequence`
+  playback is not the corpus strategy.
+- [x] **CAP0.6 Contract cleanup.** Stable record schemas, generated registries, schema
+  migration tests, FlatBuffers, strict experiment manifests, and planned generic IPC/MCAP
+  work are absent.
 
-These are baseline capabilities, not a platform to expand. The injected probe
-stays loaded for the target process lifetime; hot unloading it while the game
-continues is out of scope.
+These are capabilities, not a platform to expand. The injected probe stays loaded for the
+target process lifetime; hot unloading it while the game continues is out of scope.
+
+## What one theatre run has to hold
+
+`sp_theatre` is the corpus because it exercises the whole chain at once: 42 skeletal NPC
+entities across 33 distinct character models, 42 dynamic props, 12 choreographed scenes,
+7 scripted sequences, and a tracked camera. One named participant resolves over 1,600
+clips through 31 owner model files, so include-graph attribution is exercised on the first
+run rather than deferred.
+
+Uncompressed, a 72-bone actor costs roughly 7 KB per draw record and 2 KB per skeletal
+contribution record, so an unfiltered four-minute run at 30 fps projects into the low
+gigabytes. The existing 915 MB whole-theatre trace and its frame-file workflow already
+establish the storage and query problem. CAP1.2 replaces this projection with a
+measurement; CAP3.1 is the sanctioned response.
 
 ## Priority and chronological order
 
 | Order | Priority | Phase | Outcome |
 |---:|---|---|---|
-| 1 | P0 — current | CAP1 — source-attributed theatre capture | One hook-active launch records every encountered skeletal actor, relevant resource load, fired animation contribution, and final transformation from process start through `sp_theatre`, then finalizes one queryable capture database |
-| 2 | P0 | CAP2 — first observed skeletal path | One ordinary evaluation selected from the theatre database is reproduced from exact source bytes through decoded locals and final matrices |
-| 3 | P0 | CAP3 — skeletal mismatches | Only the shipped timing, blend, remap, layer, root-motion, and procedural cases that break the simple evaluator are recovered |
-| 4 | P1 | CAP4 — theatre scene | One authored scene is traced through binding, placement, layered animation, movement, events, and completion |
-| 5 | P1 | CAP5 — face and lips | One spoken line is traced from VCD/DLG/audio/LIP/model resources to final flexed vertices |
-| 6 | P2 | CAP6 — secondary motion | One visible accessory, hair, cloth-like, or jiggle behavior is classified and reproduced without assuming its mechanism first |
-| 7 | P2 | CAP7 — reproduction handoff | The recovered paths run in engine-neutral code, have focused retail comparisons, and feed Unreal |
+| 1 | P0 — current | CAP1 — first run and calibration | The instrument that exists produces one finalized `sp_theatre` database, and its measured rates, counts, and joins replace every estimate |
+| 2 | P0 | CAP2 — complete the capture | Contributions group, actors and skeletons are identified, and every fired contribution names its source owner, indices, and consumed byte spans |
+| 3 | P0 | CAP3 — decode and index | One deduplicated, compressed, joinable database answers per-actor and per-time questions without re-running the game |
+| 4 | P0 | CAP4 — inspect against export and decoder | Byte ranges the runtime reads that we do not, and the first mismatching stage and bone per pose group |
+| 5 | P1 | CAP5 — close what the difference proves | Recovered rules, each with a regression and a fact in the owning topic |
+| 6 | P1 | CAP6 — face and lips | The same loop over expression, flex, phoneme, and deformed-vertex state |
+| 7 | P2 | CAP7 — handoff and trim | Engine-neutral evaluator feeds Unreal; unused probes and readers are deleted |
 
-**The next and only current task is CAP1.1.** CAP1 advances through small
-instrumented passes—actors/models, resource identity, fired evaluations, and
-correlation—before the full theatre run. Later tasks may identify a missing span
-or stage, but they do not authorize unrelated capture infrastructure early.
+**The next and only current task is CAP1.1.**
 
-## CAP1 — Source-attributed `sp_theatre` skeletal capture
+## CAP1 — First theatre run and calibration
 
-- [ ] **CAP1.1 One-run capture database and launch boundary.** Launch the exact
-  retail build with the probe active before `sp_theatre` begins loading. Live
-  hooks append bounded, self-length-delimited records through the existing
-  worker; they never run SQL, decode, compress, or index. On stop, finalize the
-  temporary streams transactionally into one SQLite file containing exact
-  executable/module hashes, launch recipe, record counts, failures, and raw
-  payloads. The database is the retained artifact; a partial temporary stream
-  remains recoverable after a crash. No schema registry or migration system is
-  added.
-- [ ] **CAP1.2 Actors, models, and skeletons.** In the first small theatre pass,
-  record every encountered skeletal client entity and its lifetime, handle or
-  index when available, classname/target identity when cheaply reachable,
-  runtime studio-header pointer, model path/checksum, skin/body selection, bone
-  count, bone names/parents/flags, bind locals, inverse binds, and rendered draw
-  identity. Store immutable model and skeleton data once and reference it from
-  later events. This census establishes which actors and props actually need
-  deeper hooks.
-- [ ] **CAP1.3 Animation/model resource loads.** With the probe active before map
-  load, record only resource requests that construct or feed the encountered
-  skeletal models or trigger their scene animation: requested normalized path
-  and resource class, request caller, success/failure, returned byte span or
-  exact file hash, constructed runtime object/header address, include-model
-  relationships, and unload/reuse events. This includes the encountered MDL and
-  companion model data plus VCD/animation-set inputs, but not unrelated map,
-  texture, audio, or UI traffic. Join runtime pointers to the patch-first
-  installed bytes without crawling unrelated files or building a universal
-  object database.
-- [ ] **CAP1.4 Fired animation triggers and source evaluations.** Record every
-  sequence/activity change and every lower-level skeletal sequence evaluation
-  actually fired for every model during the theatre run. Each contribution keeps
-  the target entity/model, trigger caller, source owner studio header and model
-  identity, owner-local sequence and animation indices, phase/cycle, playback
-  time, pose parameters, active blend cells/weights, selected-bone mask, local
-  positions/quaternions, raw source descriptor identity, and copy failures.
-  Capture repeated calls as events; deduplication may share payload storage but
-  never erases timing or call multiplicity.
-- [ ] **CAP1.5 Evaluation-to-skeleton-to-draw correlation.** Assign one pose-build
-  generation identity that groups all base, transition, autoplay, layer, gesture,
-  controller, and included-model contributions for an entity. Carry it through
-  BASE, FINL, root/entity/world composition, `boneToWorld`, skin palette, and
-  DrawModel. Retain the source-to-target skeleton mapping actually used—mapping
-  object identity, source and target bone indices/names, absent bones, and raw
-  remap flags/matrices—without interpreting every field yet. Record engine
-  frame/tick, QPC, thread, pose-buffer identity, entity origin/angles,
-  visibility/draw outcome, and pointer lifetimes so correlation does not depend
-  on nearest timestamps or model names alone.
-- [ ] **CAP1.6 Full theatre acquisition and integrity audit.** Run from clean
-  process launch through `sp_theatre` load, authored playback, and completion.
-  The finalized database reports every relevant resource, actor/model/skeleton,
-  fired trigger, source evaluation, pose-build group, and final draw; written,
-  dropped, truncated, unreadable, unjoined, and incomplete counts; queue and disk
-  high-water marks; process/map/scene boundary markers; capture span; and natural
-  or forced cleanup. Repeat only if the first run is contaminated or an identity
-  join is missing.
-- [ ] **CAP1.7 Source/export join and question report.** Join each captured source
-  contribution by exact owner path/checksum plus owner-local sequence/animation
-  identity to the patch-first descriptor bytes, CAP0.5 inventory where
-  applicable, current decoder, and exported animation. Report observed coverage,
-  unresolved runtime identities, BASE-to-FINL and FINL-to-draw differences, and
-  the first mismatching stage/bone. The report selects the smallest CAP2, CAP3,
-  CAP4, CAP5, or CAP6 follow-up; it does not claim that unobserved animations or
-  continuous blend space were covered.
+The instrument is built; it has never been pointed at the theatre. Running it first is
+deliberate: every filter, budget, and schema decision below depends on numbers this run
+produces.
 
-CAP1 captures every skeletal evaluation **actually fired** during the controlled
-theatre run, including repeated and layered contributions. It does not force or
-enumerate every possible game animation. Facial flexes remain CAP5, and solver
-state behind visible secondary motion remains CAP6; CAP1 still retains their
-encountered model resources and final skeletal outputs when present.
+`sp_theatre` is a cutscene from end to end: one arrival trigger starts it and it finishes by
+loading `sp_tutorial_1`, with no choice to make in between. A console `map` load spawns the
+player short of that trigger, which has no targetname, so the operator walks the gap once and
+every stage after it is authored.
 
-For any selected theatre time/entity, the database must answer: which actor,
-target model, and target skeleton existed; which resources constructed them;
-what request caused an animation change; which source owner/sequence/animation
-contributions were evaluated; how source bones mapped to the target skeleton;
-what BASE, FINL, entity/world, bone-to-world, and skin transforms resulted; which
-stage changed the pose; and whether the exact source identity and output join to
-the current decoder/export. An explicit unknown is an acceptable answer; a lost
-join or silently missing event is not.
+That walk lands at a different moment every run, so the run is bracketed by its own events
+rather than by elapsed time: it stamps the trigger instant from the same performance counter
+the hook writes on every record, and it stops on the map transition. Analysis aligns two
+captures on the stamp, so a slow walk costs a longer idle prefix and nothing else.
 
-## CAP2 — First observed resource-to-final-matrix path
+- [ ] **CAP1.1 First theatre acquisition.** Build the native tools, install the inert cfg,
+  launch the exact retail build with the probe armed before `sp_theatre` loads, capture the
+  cutscene from the arrival trigger to the map transition, and finalize one SQLite database.
+  *Acceptance:* the hook reports clean completion with zero drops, no stream carries an
+  incomplete tail, the console log carries every recipe marker, the report stamps the trigger
+  instant, and the run stops on the observed transition out of `sp_theatre` rather than on its
+  duration backstop.
+- [ ] **CAP1.2 Calibration measurement.** From that one database report record and byte
+  rates per stream, queue and disk high-water marks, dropped/truncated/unreadable counts,
+  distinct runtime studio headers with their model identity and bone counts, distinct
+  client entities, per-actor record rates, and capture span against wall clock. This
+  measurement is the input to CAP2's filters and CAP3's storage design.
+- [ ] **CAP1.3 Entity-pointer join verification.** Determine whether the draw stream's
+  render-info entity field and the skeletal streams' instance pointer occupy one pointer
+  space, and report the distribution of their difference per model. A single constant delta
+  makes the existing streams joinable as they are; anything else makes CAP2.1 the only
+  join, and says so in the report rather than silently correlating by timestamp.
 
-- [ ] **CAP2.1 Select one ordinary observed evaluation.** Choose one complete,
-  source-attributed CAP1 pose-build group whose source bytes and export are
-  available and whose final draw is uncontaminated. Pin its resource, entity,
-  source owner, sequence/animation, time, selected bones, and final matrices.
-- [ ] **CAP2.2 Targeted skeletal stage trace.** Starting from that group, add only
-  the smallest editable raw hook recipe needed to capture evaluator inputs,
-  compressed bytes consumed, decoded local position/quaternion output, hierarchy
-  composition, and draw input. Preserve registers, bounded stack and pointed-to
-  spans, original addresses, copied lengths, neighboring unknown bytes, and
-  failures; no generic hook schema is required.
-- [ ] **CAP2.3 First ordinary-path equivalence.** Compare the retail locals and
-  final matrices with the current decoder and retained reference output. Trace
-  backward from the first bad bone/frame, fix only the demonstrated rule, add a
-  minimized regression, and record the confirmed behavior.
+## CAP2 — Complete the capture
 
-The final draw is an oracle in CAP2, not a late phase after every animation
-system has been decoded.
+Each task adds the smallest hook or span that closes one named gap in CAP1's report.
+Targets whose prototype confidence is still partial get a Ghidra pass pinning arguments and
+calling convention into the case specification before a hook is written.
 
-## CAP3 — Skeletal expansion driven by mismatches
+- [ ] **CAP2.1 Pose-build generation identity.** Bracket the confirmed `SetupBones` entry
+  and exit with a per-thread generation counter and stamp it on every nested record.
+  *Acceptance:* every composed-pose record and its contributing evaluations for one entity
+  share one generation, and no record in a full run is unassigned.
+- [ ] **CAP2.2 Model and skeleton census.** Once per distinct runtime studio header record
+  model path, checksum, bone count, bone names/parents/flags, bind locals, inverse binds,
+  and the header span itself; reference it from later events rather than repeating it.
+  Record first observation, reuse, and unload.
+- [ ] **CAP2.3 Actor identity and lifetime.** Record each skeletal client entity's
+  construction and destruction, classname/target identity where cheaply reachable,
+  model/skin/body selection, origin and angles, and draw outcome, under a scoped generation
+  so pointer reuse cannot join unrelated actors.
+- [ ] **CAP2.4 Source attribution per contribution.** For every fired contribution record
+  the resolved owner studio header and model identity, owner-local sequence and animation
+  indices, active blend cells and weights, cycle and playback time, pose parameters,
+  selected-bone mask, trigger caller, and copy failures. Repeated calls stay separate
+  events; shared payload storage never erases timing or call multiplicity.
+- [ ] **CAP2.5 Consumed byte spans.** Convert each contribution's descriptor and animation
+  block pointers into offsets within the owning model image and retain the exact spans the
+  runtime dereferences. This is what makes CAP4.2 possible; without it a matching pose
+  cannot distinguish a correct decoder from a lucky one.
+- [ ] **CAP2.6 Trigger and scene events.** Record every sequence/activity change and
+  scene-driven animation request with caller, target entity, and time, so a pose group is
+  attributable to what asked for it.
+- [ ] **CAP2.7 Second acquisition.** Repeat CAP1.1 with the completed capture and report the
+  same integrity counts plus unjoined-record counts. This database, not CAP1's, is the one
+  CAP4 inspects.
 
-- [ ] **CAP3.1 Sampling and time.** Exercise the shipped boundary cases that
-  produce a mismatch: frame selection, interpolation, looping/clamping,
-  playback rate, pause, seek, transition, and first-frame/reset state.
-- [ ] **CAP3.2 Selection, blends, and layers.** Recover sequence/activity choice,
-  blend inputs, pose parameters, base pose, overlays, gestures, transitions,
-  masks, weights, and missing-channel defaults one failing case at a time.
-- [ ] **CAP3.3 Included-model remapping.** For a selected model that uses shared
-  animation data, recover include resolution, sequence/bone remaps, donor bind
-  use, absent-bone behavior, and the runtime cache identity needed to reproduce
-  it. Cache lifetime and invalidation are investigated only if they change an
-  observed result or pointer relationship.
-- [ ] **CAP3.4 Controllers and procedural order.** Locate bone controllers,
-  procedural rules, IK-like work, and other post-decode adjustments only when
-  they cause the first remaining mismatch. Record raw state immediately before
-  and after the contributing stage.
-- [ ] **CAP3.5 Root and entity motion.** Separate animated root/pelvis movement,
-  entity movement, and the outer world transform so Elysium neither loses nor
-  double-applies motion.
-- [ ] **CAP3.6 Representative skeletal closure.** The engine-neutral evaluator
-  matches selected ordinary clips, one layered/gesture case, one included-model
-  case, and every additional skeletal case required by the current Elysium
-  consumer. Unknown fields remain preserved and explicitly unresolved; they do
-  not block closure unless they change covered output.
+## CAP3 — Decode and index
 
-Save/load, ragdoll, map teardown, and exhaustive animation-cache behavior are
-not default skeletal tasks. Add a focused case only when a shipped behavior
-needed by Elysium exposes a mismatch there.
+- [ ] **CAP3.1 Content-addressed payload store.** The offline finalizer deduplicates and
+  losslessly compresses payloads by content hash while retaining every event row. Immutable
+  model, skeleton, and descriptor bytes are stored once and referenced.
+- [ ] **CAP3.2 Join schema.** Resources, models, skeleton bones, actors, pose-build groups,
+  contributions, and draws hang off one time-ordered event spine keyed by generation rather
+  than nearest timestamp. *Acceptance:* for any theatre time and entity the database answers
+  which actor, model, and skeleton existed; which resources constructed them; what request
+  changed the animation; which owner/sequence/animation contributions were evaluated; how
+  source bones mapped to the target skeleton; and what local, composed, bone-to-world, and
+  skin transforms resulted. An explicit unknown is an acceptable answer; a lost join is not.
+- [ ] **CAP3.3 Integrity audit.** The finalized database reports written, dropped,
+  truncated, unreadable, unjoined, and incomplete counts; queue and disk high-water marks;
+  process, map, and scene boundary markers; capture span; and natural or forced cleanup.
 
-## CAP4 — Authored scene placement and movement
+## CAP4 — Inspect against the export and the current decoder
 
-- [ ] **CAP4.1 Interpret one captured scene binding.** Starting from CAP1's raw
-  theatre resource, trigger, entity, and pose-build records, follow one VCD's
-  participant lookup, animation set, actor/understudy substitution, target
-  entity, and initial state. Add another trigger hook only if the retained events
-  cannot identify the binding.
-- [ ] **CAP4.2 Placement and per-frame ownership.** Recover the selected scene's
-  stage anchor, local-to-world placement, yaw/origin rules, animation layers,
-  root/entity movement, collision changes, event timing, and the owner of each
-  transform component through final matrices.
-- [ ] **CAP4.3 Completion path.** Capture the interruption, completion, and
-  restoration behavior exercised by the selected theatre path and reproduce its
-  actor trajectory, event order, and final state. Other lifecycle edges are
-  added only when a concrete scene needs them.
+This phase is the point of the program. It runs entirely offline against the database.
 
-## CAP5 — Facial animation and lip sync
+- [ ] **CAP4.1 Source join.** Join each captured contribution to the patch-first installed
+  bytes by exact model path and checksum plus owner-local sequence and animation indices,
+  and to the current exported animation and the CAP0.5 inventory. Report observed coverage
+  and every unresolved runtime identity explicitly.
+- [ ] **CAP4.2 Byte-coverage difference.** Mark the byte ranges of each owning model image
+  that the retail runtime dereferenced, and the ranges the current decoder reads. Ranges
+  read by retail and unread by us are the missing-data list. Ranges read by neither stay
+  recorded as unknown rather than assumed inert.
+- [ ] **CAP4.3 Transform difference.** For every joined pose-build group evaluate the
+  current decoder at the captured identity and time, normalize entity and root placement,
+  and compare decoded locals, composed matrices, bone-to-world, and skin palette per frame
+  and bone. Report the first mismatching stage and bone, descendant propagation, and the
+  worst bone. Numerical bands and comparison rules are owned by
+  `docs/vtmb/vtmb-animation-reverse-engineering.md`.
+- [ ] **CAP4.4 Missing-work report.** One ranked list of what the run proves is missing:
+  unread byte ranges by model, unresolved identities, mismatch clusters by stage, and stages
+  the theatre never exercised. This report is the only thing that authorizes CAP5 work, and
+  it never claims that unobserved animations or continuous blend space were covered.
 
-- [ ] **CAP5.1 One spoken line's resource path.** Follow one controlled theatre
-  line from VCD/DLG/audio/LIP and model facial bytes through load, runtime object
-  construction, timing identity, and the pointers used by facial evaluation.
-- [ ] **CAP5.2 Controller contribution trace.** Capture raw state before and
-  after expression, phoneme, amplitude-mouth, eyelid, blink, and gaze stages
-  that actually contribute to the selected line. Recover lookup, ramps,
-  clamping, defaults, and mixing order from isolated changes.
-- [ ] **CAP5.3 Flex and vertex path.** Trace the encountered vertex-animation
-  encoding and flex rules through controller/flexdesc weights to representative
-  final deformed vertices and render inputs.
-- [ ] **CAP5.4 Controlled-line equivalence.** Reproduce controller values, lip
-  timing, flex weights, and selected final vertices for the controlled line,
-  then expand only to another line/model that exposes a new mismatch.
+## CAP5 — Close what the difference proves
 
-## CAP6 — Secondary motion and physics
+- [ ] **CAP5.1 One mismatch at a time.** Take the highest-ranked cluster, trace backward
+  from the first mismatching bone or frame, make the smallest change that explains the
+  evidence, add a game-independent regression, and write the confirmed behavior into the
+  owning `docs/vtmb/` topic.
+- [ ] **CAP5.2 Deeper stage capture on demand.** When a mismatch cannot be explained from
+  the retained spans, add the smallest editable raw hook recipe at the decoder, blend,
+  remap, or procedural site it names. Preserve registers, bounded stack and pointed-to
+  spans, original addresses, copied lengths, neighbouring unknown bytes, and failures.
+- [ ] **CAP5.3 Theatre-corpus closure.** The engine-neutral evaluator matches the joined
+  theatre corpus within the recorded bands, including layered, transition, and
+  included-model cases the run exercised. Unknown fields stay preserved and explicitly
+  unresolved; they do not block closure unless they change covered output.
 
-- [ ] **CAP6.1 Mechanism classification.** Select one visible shipped effect and
-  use pre/post stage captures to determine whether it is an animated bone,
-  procedural rule, jiggle/spring update, cloth-like solver, collision response,
-  or another mechanism. Do not begin with an exhaustive list of assumed
-  systems.
-- [ ] **CAP6.2 Resource and persistent state.** For the classified mechanism,
-  connect raw parameters to their source bytes and capture prior-frame state,
-  delta time, input transforms/velocities, relevant forces or collisions, reset
-  flags, and output/writeback.
-- [ ] **CAP6.3 Update and discontinuity.** Isolate the observed update order and
-  reproduce steady motion plus one relevant discontinuity such as pause,
-  teleport, scene restart, or visibility change. Add solver details only when
-  the trace demonstrates them.
-- [ ] **CAP6.4 Representative secondary-motion equivalence.** Match the selected
-  effect from captured initial state and inputs. Add another mechanism only
-  when it is visibly shipped and needed by an Elysium character. Ragdoll
-  handoff is not part of this phase unless it becomes such a selected case.
+### Candidate causes for a mismatch
 
-## CAP7 — Reproduction and handoff
+Reference for classifying a CAP4.3 cluster. It is a vocabulary, not a work plan; a row
+becomes work only when the difference report points at it.
 
-- [ ] **CAP7.1 End-to-end evidence paths.** For each recovered track, retain one
-  focused recipe, raw trace, analyzer, and regression that navigates from source
-  resource bytes to the final matrix or vertex evidence used for comparison.
-- [ ] **CAP7.2 Engine-neutral evaluator.** The evaluator consumes original
-  resources plus explicit runtime state and matches the selected retail
-  skeletal, scene, facial, and secondary-motion outputs without Unreal
-  retargeting or presentation transforms in the equivalence test.
-- [ ] **CAP7.3 Unreal handoff.** Unreal consumes the verified evaluator output
-  before basis conversion/retargeting. Numerical source equivalence and
-  retargeted visual acceptance remain separate tests.
-- [ ] **CAP7.4 Final tool trim.** Delete probes, readers, fixtures, controls, and
-  dependencies that no retained evidence path or active investigation uses.
+| Class | Typical signature |
+|---|---|
+| Sampling and time | frame selection, interpolation, loop/clamp boundary, playback rate, seek, first-frame reset |
+| Selection, blends, layers | sequence/activity choice, blend inputs, pose parameters, overlays, gestures, transitions, masks, missing-channel defaults |
+| Included-model remapping | include resolution, sequence/bone remaps, donor bind use, absent bones, runtime cache identity |
+| Controllers and procedural order | bone controllers, procedural rules, IK-like work, post-decode adjustment order |
+| Root and entity motion | animated root/pelvis versus entity movement versus the outer world transform |
+| Hierarchy composition | split inheritance, parent multiplication order, inverse-bind convention |
+
+## CAP6 — Face and lips
+
+Runs the same loop over facial state once CAP5.3 closes. Skeletal work is not blocked on it,
+and it is not started before the skeletal difference report exists.
+
+- [ ] **CAP6.1 One line's resource and object path.** Follow one controlled theatre line
+  from its expression, VCD, audio, `.lip`, and model facial bytes through load, runtime
+  object construction, timing identity, and the pointers facial evaluation uses.
+- [ ] **CAP6.2 Controller and flex stage capture.** Capture raw state before and after the
+  expression, phoneme, amplitude-mouth, eyelid, blink, and gaze stages that actually
+  contribute to that line, plus the flex weights and representative deformed vertices they
+  produce.
+- [ ] **CAP6.3 Controlled-line equivalence.** Reproduce controller values, lip timing, flex
+  weights, and selected final vertices for that line, then expand only to another line or
+  model that exposes a new mismatch.
+
+## CAP7 — Handoff and trim
+
+- [ ] **CAP7.1 Engine-neutral evaluator and Unreal handoff.** The evaluator consumes
+  original resources plus explicit runtime state and matches the verified retail outputs
+  without Unreal retargeting or presentation transforms in the equivalence test. Unreal
+  consumes its output before basis conversion; numerical source equivalence and retargeted
+  visual acceptance stay separate tests.
+- [ ] **CAP7.2 Final trim.** Delete probes, readers, fixtures, controls, and dependencies
+  that no retained evidence path or active investigation uses.
 
 ## Triggered capture and storage improvements
 
-These are responses to evidence, not scheduled prerequisites:
+Responses to measurement, not scheduled prerequisites.
 
 | Observed problem | Smallest allowed response |
 |---|---|
 | Callback time or heap allocation is measurable | Reuse fixed-size slots or a preallocated pool for the active recipe |
-| Queue reaches its byte cap | Narrow spans/filter first, then tune the cap or batching from measurements |
+| Queue reaches its byte cap | Narrow spans or filter first, then tune the cap or batching from measurements |
 | Immutable resource bytes dominate the trace | Store that blob once by hash and reference its byte range |
-| A finalized SQLite query is materially slow | Add only the index or derived summary table required by that measured query |
+| Exact pose payloads dominate the database | Losslessly compress and content-deduplicate in the offline finalizer while retaining every event row |
+| A finalized query is materially slow | Add only the index or derived summary table that query requires |
 | Disk write rate is the bottleneck | Batch or compress on the writer thread after measuring the codec cost |
-| A hook is too noisy | Add the one model/entity/time/call filter required by that experiment |
+| A hook is too noisy | Add the one model, entity, time, or call filter that experiment requires |
 | The shared hook backend fails on a validated target | Repair or replace only the failing backend behavior |
-| Exact pose payloads dominate the database | Losslessly compress and content-deduplicate payloads in the offline finalizer while retaining every event row |
 
-No triggered improvement becomes a general subsystem unless more than one real
-experiment needs it.
+No triggered improvement becomes a general subsystem unless more than one real experiment
+needs it.
 
 ## Explicit non-goals
 
 - hot unloading the probe while the target keeps running;
 - multiple game builds, schema versions, migrations, or public consumers;
-- a general hook SDK, remote collector, IPC framework, or database-backed live
-  capture service;
-- chunk/container design beyond the length-delimited recovery the current trace
-  needs;
+- a general hook SDK, remote collector, IPC framework, or database-backed live capture
+  service;
+- a pre-planned ladder for secondary motion, scene lifecycle, save/load, ragdoll, or
+  teardown — each is a CAP5 case only when the difference report names it;
 - a complete process dump or recursive pointer-graph crawler;
-- exhaustive cache, solver, save/load, ragdoll, and teardown coverage before a
-  selected shipped case requires it;
-- duplicate captures for clan or armor models that resolve to the same owner,
-  sequence, animation data, and compatible skeleton;
-- explaining or discarding every unknown bit before useful behavior can be
-  reproduced.
+- forcing or enumerating every possible game animation; the run captures what actually
+  fires;
+- duplicate captures for clan or armor models that resolve to the same owner, sequence,
+  animation data, and compatible skeleton;
+- explaining or discarding every unknown bit before useful behavior can be reproduced;
+- native VtMB authoring, model compilation, or writing animation back into the original
+  game.
 
 ## Risks
 
 | Risk | Response |
 |---|---|
-| A decoder matches common cases but loses rare flags | Keep bounded original source bytes and unknown neighbors in the evidence path |
+| The operator reaches the arrival trigger at a different moment every run | Bracket the cutscene on its own events: stamp the trigger instant from the shared performance counter, stop on the map transition, and align analysis on the stamp rather than on elapsed time |
+| Draw and skeletal records occupy different pointer spaces | CAP1.3 measures it before any analysis depends on the join; CAP2.1 removes the dependency |
 | Capture volume overwhelms memory or disk | Stream with a hard queue-byte cap, filter first, measure, then apply one triggered optimization |
+| A decoder matches common cases but loses rare flags | CAP2.5 and CAP4.2 make unread bytes visible instead of inferring correctness from a matching pose |
 | Instrumentation changes game timing | Measure callback and frame time; narrow or sample before adding machinery |
 | A stale pointer crashes the game | Validate pages, cap reads, catch faults, report failures, and fail closed |
-| Runtime data cannot be tied to an asset or actor | CAP1 captures the resource/header/entity lifetime chain before widening the evaluation hook |
-| Final output hides the cause of a mismatch | Trace backward only from the first mismatching bone, vertex, or frame |
-| Raw evidence becomes difficult to query | Keep records self-bounded and add a disposable index only for a demonstrated slow query |
-| Pointer reuse joins unrelated actors or sources | Record construction/unload events and use scoped generation identities rather than raw addresses alone |
-| One final pose hides multiple animation contributors | Record every lower evaluator call and group contributions under the enclosing pose-build generation |
+| Pointer reuse joins unrelated actors or sources | Record construction and unload events and use scoped generation identities rather than raw addresses |
+| One final pose hides multiple contributors | Record every evaluator call and group contributions under the enclosing pose-build generation |
 | Render visibility omits an actor | Distinguish fired evaluation, completed pose build, and final draw coverage instead of treating no draw as no animation |
+| Raw evidence becomes difficult to query | Keep records self-bounded and add a disposable index only for a demonstrated slow query |
 | Infrastructure expands faster than evidence | The chronological order is binding and CAP1.1 is the only current task |

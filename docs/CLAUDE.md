@@ -7,8 +7,8 @@ Source code remains the as-built record.
 
 - `project/roadmap.md` owns master sequencing, playable-path priority, and roll-up status.
 - `project/retail-capture-roadmap.md` is the only scoped subtracker; it owns detailed status
-  for the retail capture harness and original-runtime animation, scene placement,
-  secondary-motion/physics, facial, and lip-sync investigation.
+  for the retail capture harness and the capture-index-inspect loop that verifies the
+  original-runtime animation and facial decode against the export.
 - `project/rebuild-strategy.md` owns strategy, milestone vocabulary, and sidecar contracts.
 - `project/remaster-direction.md` owns modernization boundaries.
 - `architecture/` owns Unreal system designs and integration seams.

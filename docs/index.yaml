@@ -1,7 +1,7 @@
 version: 1
 documents:
   - {path: project/roadmap.md, kind: tracker, owner: project, subject: project status}
-  - {path: project/retail-capture-roadmap.md, kind: tracker, owner: retail capture, subject: original-runtime animation scene physics facial and lip capture status}
+  - {path: project/retail-capture-roadmap.md, kind: tracker, owner: retail capture, subject: retail animation capture and decoder verification status}
   - {path: project/rebuild-strategy.md, kind: strategy, owner: project, subject: rebuild strategy}
   - {path: project/remaster-direction.md, kind: charter, owner: project, subject: remaster direction}
   - {path: operations/repository.md, kind: operations, owner: repository, subject: repository and workspace policy}
