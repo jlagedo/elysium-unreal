@@ -87,6 +87,37 @@
           "rva": "0x0008f5c0",
           "calling_convention": "thiscall",
           "expected_bytes": "5356578bf9"
+        },
+        {
+          "semantic_label": "client.evaluate_sequence_pose",
+          "source_function_label": "evaluate_sequence_pose",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00089740",
+          "calling_convention": "cdecl",
+          "expected_bytes": "a0c9024910",
+          "relocated_operand": {
+            "offset": 1,
+            "size": 4
+          }
+        },
+        {
+          "semantic_label": "client.decode_selected_bones",
+          "source_function_label": "decode_selected_bones",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00089b20",
+          "calling_convention": "cdecl",
+          "expected_bytes": "83ec085355"
+        },
+        {
+          "semantic_label": "client.resolve_blend_axis_weight",
+          "source_function_label": "resolve_blend_axis_weight",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00089500",
+          "calling_convention": "cdecl",
+          "expected_bytes": "83ec08538b5c241c"
         }
       ]
     },

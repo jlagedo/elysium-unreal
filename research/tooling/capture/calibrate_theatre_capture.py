@@ -35,6 +35,8 @@ from research.tooling.capture.finalize_capture_database import (
     ANIMATION_RECORD_HEADER_V3,
     BRACKET_RECORD_HEADER,
     CENSUS_FILE_HEADER,
+    CONTRIBUTION_FILE_HEADER,
+    CONTRIBUTION_RECORD_HEADER,
     MODEL_IMAGE_HEADER,
     MODEL_OBSERVATION_HEADER,
     POSE_FILE_HEADER,
@@ -63,7 +65,10 @@ MAX_REPORTED_SEQUENCE_GAPS = 64
 MAX_REPORTED_STUDIO_SEQUENCES = 200
 
 
-def record_bytes_expression(headers: dict[str, dict[str, Any]]) -> str:
+def record_bytes_expression(
+    headers: dict[str, dict[str, Any]],
+    columns: set[str] | None = None,
+) -> str:
     """Build the closed form for record size from each stream's version.
 
     Size stays a function of kind and bone count, so byte accounting needs no
@@ -100,7 +105,21 @@ def record_bytes_expression(headers: dict[str, dict[str, Any]]) -> str:
         f"THEN {BRACKET_RECORD_HEADER.size} "
         f"WHEN kind IN ('BASE', 'FINL') THEN {evaluation.size} "
         f"+ 28 * bone_count + 4 * ((bone_count + 31) / 32) + {root} "
-        "ELSE NULL END"
+        # A contribution stores both span widths, so its size reads them back
+        # rather than re-deriving which kind carries which. A database finalized
+        # before the stream existed carries neither column and no such row, so
+        # the arm is dropped rather than referencing a column SQLite would
+        # refuse to parse.
+        + (
+            f"WHEN kind IN ('SEQP', 'ANIM') THEN "
+            f"{CONTRIBUTION_RECORD_HEADER.size} "
+            "+ COALESCE(pose_parameter_bytes, 0) "
+            "+ COALESCE(selected_bone_bytes, 0) "
+            if columns is None
+            or {"pose_parameter_bytes", "selected_bone_bytes"} <= columns
+            else ""
+        )
+        + "ELSE NULL END"
     )
 
 
@@ -199,6 +218,8 @@ def stream_headers(connection: sqlite3.Connection) -> dict[str, dict[str, Any]]:
             if name == "census"
             else ACTOR_FILE_HEADER
             if name == "actor"
+            else CONTRIBUTION_FILE_HEADER
+            if name == "contribution"
             else ANIMATION_FILE_HEADER
         )
         fields = layout.unpack(blob)
@@ -485,7 +506,8 @@ def census(
         f"""
         SELECT stream_name, client_entity, count(*), sum({record_bytes}),
                min(qpc), max(qpc), count(DISTINCT checksum)
-        FROM records GROUP BY stream_name, client_entity ORDER BY min(qpc)
+        FROM records WHERE client_entity IS NOT NULL
+        GROUP BY stream_name, client_entity ORDER BY min(qpc)
         """
     ):
         stream, entity, count, payload, first, last, checksums = row

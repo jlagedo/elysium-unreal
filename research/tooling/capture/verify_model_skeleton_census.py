@@ -44,6 +44,7 @@ from research.tooling.capture.calibrate_theatre_capture import (
     record_bytes_expression,
     resolve_session,
     stream_headers,
+    table_columns,
 )
 from research.tooling.capture.finalize_capture_database import (
     CENSUS_FILE_HEADER,
@@ -799,7 +800,9 @@ def overhead(
     done: dict[str, str],
 ) -> dict[str, Any]:
     """Report what the census cost against CAP2.1's baseline."""
-    record_bytes = record_bytes_expression(headers)
+    record_bytes = record_bytes_expression(
+        headers, table_columns(connection, "records")
+    )
     frequency = next(iter(headers.values()))["qpc_frequency"]
     first, last, records, payload = connection.execute(
         f"SELECT min(qpc), max(qpc), count(*), sum({record_bytes}) FROM records"

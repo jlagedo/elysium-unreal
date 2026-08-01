@@ -388,6 +388,56 @@ bool IsImageRangeValid(
         bytes <= static_cast<std::size_t>(active.ImageSize - rva);
 }
 
+// Compare the declared prologue against memory, rebasing the one operand the
+// loader is allowed to have rewritten.
+//
+// A declaration records the bytes as they appear in the file. When the module
+// is not at its preferred base, an absolute address encoded in the prologue is
+// relocated, so those bytes cannot match and a plain comparison would reject a
+// target that is exactly what was declared. Adding the load delta to the
+// declared operand keeps the check exact rather than masking the bytes away.
+bool MatchesDeclaredPrologue(
+    const ActiveBinaryProfile& active,
+    const BinaryTargetProfile& declaration,
+    const std::uint8_t* target) noexcept {
+    const std::uint32_t size = declaration.RelocatedOperandSize;
+    if (size == 0) {
+        return std::memcmp(
+            target,
+            declaration.ExpectedBytes,
+            declaration.ExpectedByteCount) == 0;
+    }
+    const std::uint32_t offset = declaration.RelocatedOperandOffset;
+    if (size != 2 && size != 4) {
+        return false;
+    }
+    if (offset > declaration.ExpectedByteCount ||
+        declaration.ExpectedByteCount - offset < size) {
+        return false;
+    }
+    if (offset != 0 &&
+        std::memcmp(target, declaration.ExpectedBytes, offset) != 0) {
+        return false;
+    }
+    const std::uint32_t tail = offset + size;
+    if (tail < declaration.ExpectedByteCount &&
+        std::memcmp(
+            target + tail,
+            declaration.ExpectedBytes + tail,
+            declaration.ExpectedByteCount - tail) != 0) {
+        return false;
+    }
+    std::uint32_t declared = 0;
+    std::uint32_t observed = 0;
+    std::memcpy(&declared, declaration.ExpectedBytes + offset, size);
+    std::memcpy(&observed, target + offset, size);
+    const auto delta = static_cast<std::uint32_t>(
+        active.ImageBase - active.Profile->Pe.PreferredImageBase);
+    const std::uint32_t mask =
+        size == 4 ? 0xffffffffu : 0x0000ffffu;
+    return ((declared + delta) & mask) == (observed & mask);
+}
+
 bool WriteProtected(
     void* destination,
     const void* source,
@@ -496,10 +546,7 @@ HookBackendResult InstallInline(
     }
     auto* target = reinterpret_cast<std::uint8_t*>(
         active.ImageBase + declaration.Rva);
-    if (std::memcmp(
-            target,
-            declaration.ExpectedBytes,
-            declaration.ExpectedByteCount) != 0) {
+    if (!MatchesDeclaredPrologue(active, declaration, target)) {
         return HookBackendResult::TargetChanged;
     }
 
@@ -684,10 +731,7 @@ HookBackendResult HookBackends::Install(
     }
     const auto* target = reinterpret_cast<const std::uint8_t*>(
         active.ImageBase + declaration.Rva);
-    if (std::memcmp(
-            target,
-            declaration.ExpectedBytes,
-            declaration.ExpectedByteCount) != 0) {
+    if (!MatchesDeclaredPrologue(active, declaration, target)) {
         return HookBackendResult::TargetChanged;
     }
     if (declaration.Backend == HookBackendKind::InlineDetour &&

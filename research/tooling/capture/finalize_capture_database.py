@@ -34,6 +34,14 @@ MODEL_IMAGE_HEADER = struct.Struct("<4sIQq7I")
 # table, never widening `records`.
 ACTOR_FILE_HEADER = struct.Struct("<8sIIQqIIII80s")
 ACTOR_OBSERVATION_HEADER = struct.Struct("<4sIQq9I64s")
+# The contribution stream. Unlike the census and the actor stream these rows are
+# events on the same generation spine as the evaluations they nest inside, so
+# they land in `records` rather than in a table of their own.
+CONTRIBUTION_FILE_HEADER = struct.Struct("<8sIIQqIIIII65s11s")
+CONTRIBUTION_RECORD_HEADER = struct.Struct("<4sIQq9I2i3Ifi2i2i2i2f3I")
+# Mirrors kPoseParameterBytes: the 24 slots the include-model remap walks.
+POSE_PARAMETER_BYTES = 96
+CONTRIBUTION_KINDS = (b"SEQP", b"ANIM")
 # The observation reasons that carry a model identity. Construction and
 # destruction name an address and a time only.
 ACTOR_IDENTITY_REASONS = (1, 2, 3)
@@ -259,6 +267,81 @@ def _animation_records(
         yield values, raw_header, payload
 
 
+def _contribution_records(
+    stream: BinaryIO,
+) -> Iterator[tuple[dict[str, object], bytes, bytes] | bytes]:
+    """Read one fired contribution per record.
+
+    A sequence carries the live pose parameters and the selected-bone mask; a
+    decoded cell carries neither, because every cell inside one sequence shares
+    the same mask pointer. The declared span counts rather than the kind decide
+    the width, so the size stays a closed form and a record claiming anything
+    else did not come from the hook that wrote the stream.
+    """
+    headers = {magic: CONTRIBUTION_RECORD_HEADER for magic in CONTRIBUTION_KINDS}
+    while True:
+        record = _read_record(stream, headers)
+        if record is None:
+            return
+        if isinstance(record, bytes):
+            yield record
+            return
+        raw_header, payload, header = record
+        fields = header.unpack(raw_header)
+        kind = fields[0].decode("ascii")
+        bone_count = int(fields[12])
+        pose_bytes = int(fields[29])
+        selected_bytes = int(fields[30])
+        sequence_kind = kind == "SEQP"
+        expected_selected = (
+            ((bone_count + 31) // 32) * 4 if sequence_kind else 0
+        )
+        expected_pose = POSE_PARAMETER_BYTES if sequence_kind else 0
+        if (
+            bone_count < 1
+            or bone_count > MAXIMUM_BONES
+            or pose_bytes != expected_pose
+            or selected_bytes != expected_selected
+            or int(fields[1]) != header.size + pose_bytes + selected_bytes
+        ):
+            yield raw_header + payload + stream.read()
+            return
+        yield (
+            {
+                "kind": kind,
+                "sequence_number": int(fields[2]),
+                "qpc": int(fields[3]),
+                "thread_id": int(fields[4]),
+                "generation": int(fields[5]),
+                "generation_depth": int(fields[6]),
+                "generation_entity": int(fields[7]),
+                "contribution": int(fields[8]),
+                "caller_address": int(fields[9]),
+                "owner_studio_hdr": int(fields[10]),
+                "owner_checksum": int(fields[11]),
+                "bone_count": bone_count,
+                "sequence_index": int(fields[13]),
+                "animation_index": int(fields[14]),
+                "sequence_descriptor": int(fields[15]),
+                "animation_descriptor": int(fields[16]),
+                "bone_mask": int(fields[17]),
+                "cycle": float(fields[18]),
+                "num_blends": int(fields[19]),
+                "group_size": json.dumps([int(fields[20]), int(fields[21])]),
+                "param_index": json.dumps([int(fields[22]), int(fields[23])]),
+                "blend_cell": json.dumps([int(fields[24]), int(fields[25])]),
+                "blend_weight": json.dumps(
+                    [float(fields[26]), float(fields[27])]
+                ),
+                "faults": int(fields[28]),
+                "pose_parameter_bytes": pose_bytes,
+                "selected_bone_bytes": selected_bytes,
+            },
+            raw_header,
+            payload,
+        )
+
+
 def _census_records(
     stream: BinaryIO,
 ) -> Iterator[tuple[str, dict[str, object], bytes, bytes] | bytes]:
@@ -435,6 +518,24 @@ CREATE TABLE records (
     root_transform INTEGER,
     root_transform_bytes INTEGER,
     render_info TEXT,
+    contribution INTEGER,
+    caller_address INTEGER,
+    owner_studio_hdr INTEGER,
+    owner_checksum INTEGER,
+    sequence_index INTEGER,
+    animation_index INTEGER,
+    sequence_descriptor INTEGER,
+    animation_descriptor INTEGER,
+    bone_mask INTEGER,
+    cycle REAL,
+    num_blends INTEGER,
+    group_size TEXT,
+    param_index TEXT,
+    blend_cell TEXT,
+    blend_weight TEXT,
+    faults INTEGER,
+    pose_parameter_bytes INTEGER,
+    selected_bone_bytes INTEGER,
     raw_header BLOB NOT NULL,
     raw_payload BLOB NOT NULL,
     UNIQUE(stream_name, ordinal)
@@ -510,6 +611,8 @@ CREATE INDEX records_entity_time ON records(client_entity, qpc);
 CREATE INDEX records_model_time ON records(checksum, qpc);
 CREATE INDEX records_kind_time ON records(kind, qpc);
 CREATE INDEX records_generation ON records(generation);
+CREATE INDEX records_owner ON records(owner_checksum, sequence_index);
+CREATE INDEX records_contribution ON records(contribution);
 CREATE INDEX model_headers_identity ON model_headers(studio_hdr, checksum);
 CREATE INDEX model_images_checksum ON model_images(checksum);
 CREATE INDEX actor_observations_identity
@@ -563,6 +666,10 @@ INSERT INTO records (
     draw_arguments, positions, quaternions, generation, generation_parent,
     generation_depth, generation_entity, carry_generation, entry_qpc,
     bracket_arguments, root_transform, root_transform_bytes, render_info,
+    contribution, caller_address, owner_studio_hdr, owner_checksum,
+    sequence_index, animation_index, sequence_descriptor, animation_descriptor,
+    bone_mask, cycle, num_blends, group_size, param_index, blend_cell,
+    blend_weight, faults, pose_parameter_bytes, selected_bone_bytes,
     raw_header, raw_payload
 ) VALUES (
     :stream_name, :ordinal, :kind, :sequence_number, :qpc, :thread_id,
@@ -571,11 +678,19 @@ INSERT INTO records (
     :draw_arguments, :positions, :quaternions, :generation, :generation_parent,
     :generation_depth, :generation_entity, :carry_generation, :entry_qpc,
     :bracket_arguments, :root_transform, :root_transform_bytes, :render_info,
-    :raw_header, :raw_payload
+    :contribution, :caller_address, :owner_studio_hdr, :owner_checksum,
+    :sequence_index, :animation_index, :sequence_descriptor,
+    :animation_descriptor, :bone_mask, :cycle, :num_blends, :group_size,
+    :param_index, :blend_cell, :blend_weight, :faults, :pose_parameter_bytes,
+    :selected_bone_bytes, :raw_header, :raw_payload
 )
 """
 
 RECORD_DEFAULTS: dict[str, object] = {
+    # A contribution names no client entity of its own: it is scoped by the
+    # generation whose bracket already named one, and the frames it hooks
+    # receive a studio header rather than an entity.
+    "client_entity": None,
     "studio_sequence": None,
     "sample_phase": None,
     "entity_cycle": None,
@@ -598,6 +713,24 @@ RECORD_DEFAULTS: dict[str, object] = {
     "root_transform": None,
     "root_transform_bytes": None,
     "render_info": None,
+    "contribution": None,
+    "caller_address": None,
+    "owner_studio_hdr": None,
+    "owner_checksum": None,
+    "sequence_index": None,
+    "animation_index": None,
+    "sequence_descriptor": None,
+    "animation_descriptor": None,
+    "bone_mask": None,
+    "cycle": None,
+    "num_blends": None,
+    "group_size": None,
+    "param_index": None,
+    "blend_cell": None,
+    "blend_weight": None,
+    "faults": None,
+    "pose_parameter_bytes": None,
+    "selected_bone_bytes": None,
 }
 
 
@@ -613,6 +746,8 @@ def _insert_stream(
         if name == "census"
         else ACTOR_FILE_HEADER
         if name == "actor"
+        else CONTRIBUTION_FILE_HEADER
+        if name == "contribution"
         else ANIMATION_FILE_HEADER
     )
     with path.open("rb") as stream:
@@ -642,6 +777,10 @@ def _insert_stream(
             if (magic, version) not in {(b"ELACT1", 1), (b"ELACT2", 2)}:
                 raise ValueError(f"{path} is not a supported ELACT stream")
             records = _actor_records(stream)
+        elif name == "contribution":
+            if (magic, version) != (b"ELCON1", 1):
+                raise ValueError(f"{path} is not a supported ELCON stream")
+            records = _contribution_records(stream)
         else:
             if (magic, version) not in {
                 (b"ELANIM1", 1),
@@ -765,6 +904,7 @@ def finalize(
         ("animation", session / "animation.elanim"),
         ("census", session / "model.elmdl"),
         ("actor", session / "actor.elact"),
+        ("contribution", session / "contribution.elcon"),
     ]
     stream_paths = [(name, path) for name, path in stream_paths if path.is_file()]
     if not stream_paths:
@@ -881,6 +1021,18 @@ def finalize(
             "actor_vanished": (
                 int(done.get("actor_vanished", "0")),
                 "recorded actors whose model header no longer reads at stop",
+            ),
+            "contribution_faults": (
+                int(done.get("contribution_faults", "0")),
+                "contributions that could not name one of their sources",
+            ),
+            "contribution_overflow": (
+                int(done.get("contribution_overflow", "0")),
+                "contribution scopes refused because the nesting cap was hit",
+            ),
+            "contribution_unscoped": (
+                int(done.get("contribution_unscoped", "0")),
+                "decoded cells emitted outside every contribution scope",
             ),
             "incomplete_streams": (
                 sum(1 for value in tails.values() if value),

@@ -48,6 +48,18 @@ inline constexpr std::uint8_t Profile1Target5ExpectedBytes[] = {
     0x53, 0x56, 0x57, 0x8b, 0xf9
 };
 
+inline constexpr std::uint8_t Profile1Target6ExpectedBytes[] = {
+    0xa0, 0xc9, 0x02, 0x49, 0x10
+};
+
+inline constexpr std::uint8_t Profile1Target7ExpectedBytes[] = {
+    0x83, 0xec, 0x08, 0x53, 0x55
+};
+
+inline constexpr std::uint8_t Profile1Target8ExpectedBytes[] = {
+    0x83, 0xec, 0x08, 0x53, 0x8b, 0x5c, 0x24, 0x1c
+};
+
 inline constexpr BinaryTargetProfile Profile1Targets[] = {
     {
         "client.resolve_virtual_model_pose",
@@ -57,6 +69,8 @@ inline constexpr BinaryTargetProfile Profile1Targets[] = {
         0x000968a0u,
         Profile1Target0ExpectedBytes,
         5u,
+        0u,
+        0u,
         0x00000000u,
         0x00000000u,
         0u,
@@ -69,6 +83,8 @@ inline constexpr BinaryTargetProfile Profile1Targets[] = {
         0x0008fd00u,
         Profile1Target1ExpectedBytes,
         5u,
+        0u,
+        0u,
         0x00000000u,
         0x00000000u,
         0u,
@@ -81,6 +97,8 @@ inline constexpr BinaryTargetProfile Profile1Targets[] = {
         0x000919c0u,
         Profile1Target2ExpectedBytes,
         5u,
+        0u,
+        0u,
         0x00000000u,
         0x00000000u,
         0u,
@@ -93,6 +111,8 @@ inline constexpr BinaryTargetProfile Profile1Targets[] = {
         0x0008f900u,
         Profile1Target3ExpectedBytes,
         8u,
+        0u,
+        0u,
         0x00000000u,
         0x00000000u,
         0u,
@@ -105,6 +125,8 @@ inline constexpr BinaryTargetProfile Profile1Targets[] = {
         0x0008f3c0u,
         Profile1Target4ExpectedBytes,
         6u,
+        0u,
+        0u,
         0x00000000u,
         0x00000000u,
         0u,
@@ -117,6 +139,50 @@ inline constexpr BinaryTargetProfile Profile1Targets[] = {
         0x0008f5c0u,
         Profile1Target5ExpectedBytes,
         5u,
+        0u,
+        0u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
+    {
+        "client.evaluate_sequence_pose",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Cdecl,
+        0x00089740u,
+        Profile1Target6ExpectedBytes,
+        5u,
+        1u,
+        4u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
+    {
+        "client.decode_selected_bones",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Cdecl,
+        0x00089b20u,
+        Profile1Target7ExpectedBytes,
+        5u,
+        0u,
+        0u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
+    {
+        "client.resolve_blend_axis_weight",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Cdecl,
+        0x00089500u,
+        Profile1Target8ExpectedBytes,
+        8u,
+        0u,
+        0u,
         0x00000000u,
         0x00000000u,
         0u,
@@ -139,7 +205,7 @@ inline constexpr BinaryProfile Profile1 = {
         0x00000000u,
     },
     Profile1Targets,
-    6u,
+    9u,
 };
 
 inline constexpr std::uint8_t Profile2Target0ExpectedBytes[] = {
@@ -159,6 +225,8 @@ inline constexpr BinaryTargetProfile Profile2Targets[] = {
         0x000a6640u,
         Profile2Target0ExpectedBytes,
         9u,
+        0u,
+        0u,
         0x00000000u,
         0x00000000u,
         0u,
@@ -171,6 +239,8 @@ inline constexpr BinaryTargetProfile Profile2Targets[] = {
         0x000a6990u,
         Profile2Target1ExpectedBytes,
         6u,
+        0u,
+        0u,
         0x00000000u,
         0x00000000u,
         0u,
@@ -209,6 +279,8 @@ inline constexpr BinaryTargetProfile Profile3Targets[] = {
         0x00004f00u,
         Profile3Target0ExpectedBytes,
         8u,
+        0u,
+        0u,
         0x00082b30u,
         0x0006c150u,
         22u,

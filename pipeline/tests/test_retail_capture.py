@@ -37,9 +37,12 @@ from research.tooling.capture.finalize_capture_database import (
     ANIMATION_RECORD_HEADER,
     BRACKET_RECORD_HEADER,
     CENSUS_FILE_HEADER,
+    CONTRIBUTION_FILE_HEADER,
+    CONTRIBUTION_RECORD_HEADER,
     MODEL_IMAGE_HEADER,
     MODEL_OBSERVATION_HEADER,
     POSE_FILE_HEADER,
+    POSE_PARAMETER_BYTES,
     POSE_RECORD_HEADER,
     RENDER_INFO_BYTES,
     ROOT_TRANSFORM_BYTES,
@@ -53,6 +56,9 @@ from research.tooling.capture.verify_model_skeleton_census import (
 )
 from research.tooling.capture.verify_actor_identity_lifetime import (
     verify as verify_actors,
+)
+from research.tooling.capture.verify_source_attribution import (
+    verify as verify_attribution,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -289,6 +295,15 @@ def model_image(
     struct.pack_into("<i", blob, 244, BONE_ARRAY_OFFSET)
     struct.pack_into("<i", blob, 404, 0)
     struct.pack_into("<i", blob, 408, 0)
+    # The sequence and animation arrays a contribution's owner-local index is
+    # range-checked against. Nothing decodes the descriptors themselves here;
+    # the counts and the array bases are what the attribution verifier reads.
+    struct.pack_into(
+        "<ii", blob, 264, CONTRIBUTION_NUM_ANIM, CONTRIBUTION_ANIM_INDEX_OFF
+    )
+    struct.pack_into(
+        "<ii", blob, 272, CONTRIBUTION_NUM_SEQ, CONTRIBUTION_SEQ_INDEX_OFF
+    )
 
     world = {}
     for index, (name, parent, pos) in enumerate(bones):
@@ -379,6 +394,95 @@ def image_record(
     )
 
 
+CONTRIBUTION_OWNER_HDR = 0x5000
+CONTRIBUTION_SEQ_INDEX_OFF = 0x1000
+CONTRIBUTION_ANIM_INDEX_OFF = 0x800
+CONTRIBUTION_NUM_SEQ = 4
+CONTRIBUTION_NUM_ANIM = 6
+
+
+def contribution_record(
+    magic: bytes,
+    sequence: int,
+    qpc: int,
+    *,
+    scope: int = 1,
+    generation: int = 1,
+    entity: int = 0x1FFC,
+    bones: int = 3,
+    checksum: int = 0xABCD,
+    studio_hdr: int = CONTRIBUTION_OWNER_HDR,
+    sequence_index: int = -1,
+    animation_index: int = -1,
+    num_blends: int = 1,
+    group_size: tuple[int, int] = (1, 1),
+    blend_cell: tuple[int, int] = (0, 0),
+    blend_weight: tuple[float, float] = (0.0, 0.0),
+    faults: int = 0,
+    caller: int = 0x10091700,
+    sequence_descriptor: int | None = None,
+    animation_descriptor: int | None = None,
+) -> bytes:
+    """One fired contribution, laid out as the probe writes it.
+
+    The descriptor pointers default to the arithmetic the verifier checks, so a
+    test that wants a misplaced pointer has to say so.
+    """
+    is_sequence = magic == b"SEQP"
+    pose_bytes = POSE_PARAMETER_BYTES if is_sequence else 0
+    mask_bytes = (((bones + 31) // 32) * 4) if is_sequence else 0
+    size = CONTRIBUTION_RECORD_HEADER.size + pose_bytes + mask_bytes
+    if sequence_descriptor is None:
+        sequence_descriptor = (
+            studio_hdr + CONTRIBUTION_SEQ_INDEX_OFF + sequence_index * 764
+            if is_sequence
+            else 0
+        )
+    if animation_descriptor is None:
+        animation_descriptor = (
+            0
+            if is_sequence
+            else studio_hdr + CONTRIBUTION_ANIM_INDEX_OFF + animation_index * 72
+        )
+    return (
+        CONTRIBUTION_RECORD_HEADER.pack(
+            magic,
+            size,
+            sequence,
+            qpc,
+            7,
+            generation,
+            1,
+            entity,
+            scope,
+            caller,
+            studio_hdr,
+            checksum,
+            bones,
+            sequence_index,
+            animation_index,
+            sequence_descriptor,
+            animation_descriptor,
+            0x30000000,
+            0.25,
+            num_blends,
+            group_size[0],
+            group_size[1],
+            0,
+            -1,
+            blend_cell[0],
+            blend_cell[1],
+            blend_weight[0],
+            blend_weight[1],
+            faults,
+            pose_bytes,
+            mask_bytes,
+        )
+        + b"\x11" * pose_bytes
+        + b"\x22" * mask_bytes
+    )
+
+
 def write_session(
     session: Path,
     *,
@@ -386,6 +490,7 @@ def write_session(
     animation_records: bytes,
     census_records: bytes | None = None,
     actor_records: bytes | None = None,
+    contribution_records: bytes | None = None,
     actor_version: int = 2,
     done: str = "complete=1\nqueued=2\nwritten=2\ndropped=0\n",
     boundary: dict[str, object] | None = None,
@@ -495,6 +600,24 @@ def write_session(
                 b"",
             )
             + actor_records
+        )
+    if contribution_records is not None:
+        (session / "contribution.elcon").write_bytes(
+            CONTRIBUTION_FILE_HEADER.pack(
+                b"ELCON1",
+                1,
+                CONTRIBUTION_FILE_HEADER.size,
+                QPC_FREQUENCY,
+                90,
+                12,
+                0x10000000,
+                0x89740,
+                0x89B20,
+                0x89500,
+                b"2" * 64 + b"\0",
+                b"",
+            )
+            + contribution_records
         )
 
 
@@ -2462,6 +2585,448 @@ class RetailCaptureTests(unittest.TestCase):
         self.assertIn("SyntheticTraceContract", collector)
         self.assertIn("elysium.synthetic-capture-trace", contract)
         self.assertIn("MOVEFILE_WRITE_THROUGH", collector)
+
+    def test_actor_verifier_credits_reuse_separated_by_a_destruction(
+        self,
+    ) -> None:
+        """An address rebuilt as a different actor is two witnessed lifetimes.
+
+        A theatre run reuses an address across a destruction rather than
+        changing its model in place. The census records construct/first/destruct
+        twice, which accounts for the second identity exactly; requiring an
+        identity-change observation as well would fault a complete census.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            entity = 0x1FFC
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=(
+                    animation_record(
+                        b"BASE", 2, 101, client_entity=entity, checksum=0x3000
+                    )
+                    + animation_record(
+                        b"BASE", 3, 200, client_entity=entity, checksum=0x4000
+                    )
+                ),
+                actor_records=(
+                    actor_lifetime_record(4, 90, 4, entity=entity)
+                    + actor_record(
+                        5, 91, "models/first.mdl", entity=entity,
+                        checksum=0x3000,
+                    )
+                    + actor_lifetime_record(6, 150, 5, entity=entity)
+                    + actor_lifetime_record(7, 160, 4, entity=entity)
+                    + actor_record(
+                        8, 161, "models/second.mdl", entity=entity,
+                        checksum=0x4000,
+                    )
+                    + actor_lifetime_record(9, 250, 5, entity=entity)
+                ),
+                done=(
+                    "complete=1\nqueued=9\nwritten=9\ndropped=0\n"
+                    "actor_records=6\nactor_resident=0\nactor_vanished=0\n"
+                    "actor_overflow=0\nactor_faults=0\n"
+                ),
+            )
+            finalize(session)
+            report = verify_actors(session)
+            self.assertEqual(report["reuse"]["reused_entity_addresses"], 1)
+            self.assertEqual(
+                report["reuse"]["extra_identities_at_reused_addresses"], 1
+            )
+            # No identity change at all; the destructions are what separate them.
+            self.assertEqual(report["reuse"]["identity_change_observations"], 0)
+            self.assertEqual(report["reuse"]["destruction_observations"], 2)
+            self.assertEqual(report["reuse"]["unwitnessed"], [])
+            self.assertTrue(report["reuse"]["changes_account_for_reuse"])
+
+    # --- CAP2.4 source attribution per contribution ------------------------
+
+    def _attribution_session(
+        self,
+        session: Path,
+        contributions: bytes,
+        *,
+        done_extra: str = "",
+    ) -> None:
+        """A run whose contributions hang off one bracketed pose build.
+
+        The owner is a bank model: the census observes it and carries its image,
+        but no evaluation names it, which is the population CAP2.2's census
+        could not reach.
+        """
+        write_session(
+            session,
+            pose_records=pose_record(
+                1, 100, "models/test.mdl", generation=1, client_entity=0x1FFC
+            ),
+            animation_records=(
+                bracket_record(
+                    b"PBLD", 2, 100, 101, generation=1, client_entity=0x1FFC
+                )
+                + animation_record(
+                    b"BASE", 3, 102, client_entity=0x1FF8, generation=1
+                )
+            ),
+            census_records=(
+                # The entity's own model, which the evaluation names.
+                observation_record(4, 88, "models/test.mdl")
+                + image_record(
+                    5, 89, model_image(0x3000, "models/test.mdl")
+                )
+                # And the bank the contributions resolve through, which no
+                # evaluation names and only the contribution path observes.
+                + observation_record(
+                    6,
+                    90,
+                    "models/bank.mdl",
+                    studio_hdr=CONTRIBUTION_OWNER_HDR,
+                    checksum=0xABCD,
+                )
+                + image_record(
+                    7,
+                    91,
+                    model_image(0xABCD, "models/bank.mdl"),
+                    studio_hdr=CONTRIBUTION_OWNER_HDR,
+                    checksum=0xABCD,
+                )
+            ),
+            contribution_records=contributions,
+            done=(
+                "complete=1\nqueued=8\nwritten=8\ndropped=0\nqueue_peak=12\n"
+                "unbracketed=0\nbracket_overflow=0\n"
+                "contribution_sequences=1\ncontribution_animations=1\n"
+                "contribution_faults=0\ncontribution_overflow=0\n"
+                "contribution_unscoped=0\n" + done_extra
+            ),
+        )
+        finalize(session)
+
+    def _clean_contributions(self) -> bytes:
+        return contribution_record(
+            b"SEQP", 8, 103, sequence_index=2, num_blends=9,
+            group_size=(9, 1), blend_cell=(4, 0), blend_weight=(0.5, 0.0),
+        ) + contribution_record(b"ANIM", 9, 104, animation_index=5)
+
+    def test_attribution_verifier_accepts_a_fully_attributed_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._attribution_session(session, self._clean_contributions())
+            report = verify_attribution(session)
+            self.assertTrue(report["support"]["carries_contributions"])
+            self.assertEqual(report["coverage"]["sequences"], 1)
+            self.assertEqual(report["coverage"]["cells"], 1)
+            self.assertEqual(report["coverage"]["unscoped"], 0)
+            self.assertEqual(report["coverage"]["unbracketed"], 0)
+            self.assertEqual(report["owners"]["unobserved_count"], 0)
+            self.assertEqual(report["owners"]["without_image_count"], 0)
+            # The owner animates no actor, which is exactly why the
+            # contribution path has to observe it.
+            self.assertEqual(report["owners"]["bank_only_owners"], 1)
+            self.assertEqual(report["indices"]["out_of_range_count"], 0)
+            self.assertEqual(report["indices"]["misplaced_count"], 0)
+            self.assertTrue(report["blends"]["closed"])
+            self.assertEqual(report["blends"]["grids"], {"9x1": 1})
+            self.assertTrue(report["faults"]["clean"])
+            self.assertTrue(report["overhead"]["byte_closure"])
+            self.assertTrue(report["verdict"]["attribution_complete"])
+            self.assertTrue(report["verdict"]["sources_resolved"])
+
+    def test_attribution_verifier_reports_a_cell_outside_every_scope(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._attribution_session(
+                session,
+                contribution_record(
+                    b"SEQP", 8, 103, sequence_index=2,
+                )
+                + contribution_record(
+                    b"ANIM", 9, 104, animation_index=5, scope=0
+                ),
+            )
+            report = verify_attribution(session)
+            self.assertEqual(report["coverage"]["unscoped"], 1)
+            self.assertFalse(report["verdict"]["attribution_complete"])
+            self.assertIn("outside every", report["verdict"]["statement"])
+
+    def test_attribution_verifier_reports_a_contribution_outside_a_pose_build(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._attribution_session(
+                session,
+                contribution_record(
+                    b"SEQP", 8, 103, sequence_index=2, generation=0
+                )
+                + contribution_record(b"ANIM", 9, 104, animation_index=5),
+            )
+            report = verify_attribution(session)
+            self.assertEqual(report["coverage"]["unbracketed"], 1)
+            self.assertFalse(report["verdict"]["attribution_complete"])
+
+    def test_attribution_verifier_reports_an_owner_without_a_census_row(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._attribution_session(
+                session,
+                contribution_record(
+                    b"SEQP", 8, 103, sequence_index=2, checksum=0x1234
+                )
+                + contribution_record(
+                    b"ANIM", 9, 104, animation_index=5, checksum=0x1234
+                ),
+            )
+            report = verify_attribution(session)
+            self.assertEqual(report["owners"]["unobserved_count"], 1)
+            self.assertFalse(report["verdict"]["sources_resolved"])
+            self.assertIn("census observation", report["verdict"]["statement"])
+
+    def test_attribution_verifier_reports_an_index_beyond_the_owners_count(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._attribution_session(
+                session,
+                contribution_record(
+                    b"SEQP", 8, 103, sequence_index=CONTRIBUTION_NUM_SEQ
+                )
+                + contribution_record(b"ANIM", 9, 104, animation_index=5),
+            )
+            report = verify_attribution(session)
+            self.assertEqual(report["indices"]["out_of_range_count"], 1)
+            self.assertFalse(report["verdict"]["sources_resolved"])
+
+    def test_attribution_verifier_reports_a_descriptor_off_its_stride(
+        self,
+    ) -> None:
+        """A pointer that is not index * stride means one of the two is wrong."""
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._attribution_session(
+                session,
+                contribution_record(
+                    b"SEQP", 8, 103, sequence_index=2,
+                    sequence_descriptor=CONTRIBUTION_OWNER_HDR
+                    + CONTRIBUTION_SEQ_INDEX_OFF
+                    + 2 * 764
+                    + 8,
+                )
+                + contribution_record(b"ANIM", 9, 104, animation_index=5),
+            )
+            report = verify_attribution(session)
+            self.assertEqual(report["indices"]["misplaced_count"], 1)
+            self.assertFalse(report["verdict"]["sources_resolved"])
+
+    def test_attribution_verifier_reports_a_blend_grid_that_does_not_close(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._attribution_session(
+                session,
+                contribution_record(
+                    b"SEQP", 8, 103, sequence_index=2, num_blends=9,
+                    group_size=(3, 1),
+                )
+                + contribution_record(b"ANIM", 9, 104, animation_index=5),
+            )
+            report = verify_attribution(session)
+            self.assertEqual(report["blends"]["group_product_mismatch"], 1)
+            self.assertFalse(report["verdict"]["sources_resolved"])
+
+    def test_attribution_verifier_reports_an_unwitnessed_blend_weight(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._attribution_session(
+                session,
+                contribution_record(
+                    b"SEQP", 8, 103, sequence_index=2, faults=1 << 5
+                )
+                + contribution_record(b"ANIM", 9, 104, animation_index=5),
+            )
+            report = verify_attribution(session)
+            self.assertEqual(report["blends"]["unwitnessed"], 1)
+            self.assertEqual(
+                report["faults"]["by_name"], {"blend_unwitnessed": 1}
+            )
+            self.assertFalse(report["verdict"]["sources_resolved"])
+
+    def test_attribution_verifier_answers_a_capture_without_contributions(
+        self,
+    ) -> None:
+        """A database predating the stream is answered, not rejected."""
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=animation_record(b"BASE", 2, 101),
+            )
+            finalize(session)
+            report = verify_attribution(session)
+            self.assertFalse(report["support"]["carries_contributions"])
+            self.assertFalse(report["verdict"]["judgeable"])
+            self.assertIn(
+                "cannot be judged", report["verdict"]["statement"]
+            )
+
+    def test_contributions_are_events_rather_than_a_dictionary(self) -> None:
+        """They join the generation spine, so they belong in `records`."""
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._attribution_session(session, self._clean_contributions())
+            connection = sqlite3.connect(session / "capture.sqlite")
+            try:
+                kinds = {
+                    row[0]
+                    for row in connection.execute(
+                        "SELECT DISTINCT kind FROM records"
+                    )
+                }
+                self.assertIn("SEQP", kinds)
+                self.assertIn("ANIM", kinds)
+                tables = {
+                    row[0]
+                    for row in connection.execute(
+                        "SELECT name FROM sqlite_master WHERE type = 'table'"
+                    )
+                }
+                self.assertNotIn("contributions", tables)
+            finally:
+                connection.close()
+
+    def test_calibration_closes_byte_accounting_over_the_contribution_stream(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._attribution_session(session, self._clean_contributions())
+            report = calibrate(session)
+            self.assertTrue(report["volume"]["byte_closure"])
+
+    def test_prior_verdicts_survive_a_contribution_stream(self) -> None:
+        """The four earlier tasks re-establish on the widened database."""
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._attribution_session(session, self._clean_contributions())
+            generation = verify_generation(session)
+            self.assertEqual(
+                generation["coverage"]["unassigned"], 0, generation["verdict"]
+            )
+            census = verify_census(session, join_source=False)
+            self.assertEqual(census["coverage"]["identities_unobserved"], 0)
+
+    def test_contribution_layouts_match_the_probe_that_writes_them(
+        self,
+    ) -> None:
+        # The C++ struct is the definition and the reader re-declares it, so
+        # nothing but this test stops the two drifting apart.
+        source = (
+            REPO_ROOT
+            / "research"
+            / "tooling"
+            / "capture"
+            / "live_pose_hook.cpp"
+        ).read_text(encoding="utf-8")
+        for struct_name, layout in (
+            ("ContributionFileHeader", CONTRIBUTION_FILE_HEADER),
+            ("ContributionRecordHeader", CONTRIBUTION_RECORD_HEADER),
+        ):
+            self.assertIn(
+                f"sizeof({struct_name}) == {layout.size}", source, struct_name
+            )
+        self.assertIn('std::memcpy(contributionHeader.magic, "ELCON1", 6)', source)
+        # The owner census is what makes a bank model joinable at all.
+        self.assertIn("ObserveStudioHeader(ownerHdr, checksum)", source)
+
+    def test_contribution_targets_are_declared_against_the_specification(
+        self,
+    ) -> None:
+        """The generator asserts image_base + rva equals the spec's address."""
+        profiles = json.loads(
+            (
+                REPO_ROOT
+                / "research"
+                / "tooling"
+                / "capture"
+                / "contracts"
+                / "binary_profiles.json"
+            ).read_text(encoding="utf-8")
+        )
+        client = next(
+            profile
+            for profile in profiles["profiles"]
+            if profile["module"] == "client.dll"
+        )
+        targets = {
+            target["semantic_label"]: target for target in client["targets"]
+        }
+        for label, source_label in (
+            ("client.evaluate_sequence_pose", "evaluate_sequence_pose"),
+            ("client.decode_selected_bones", "decode_selected_bones"),
+            ("client.resolve_blend_axis_weight", "resolve_blend_axis_weight"),
+        ):
+            self.assertIn(label, targets)
+            self.assertEqual(
+                targets[label]["source_function_label"], source_label
+            )
+            # Every exit of the three is a bare RET, so the caller cleans.
+            self.assertEqual(targets[label]["calling_convention"], "cdecl")
+        # evaluate_sequence_pose begins MOV AL,[0x104902c9]. That operand is an
+        # absolute address the loader rewrites whenever client.dll is not at its
+        # preferred base, which it never is under ASLR, so the declaration has
+        # to name the span rather than let a fixed comparison reject it.
+        operand = targets["client.evaluate_sequence_pose"]["relocated_operand"]
+        self.assertEqual(operand, {"offset": 1, "size": 4})
+        self.assertEqual(
+            targets["client.evaluate_sequence_pose"]["expected_bytes"],
+            "a0c9024910",
+        )
+        # The other two carry no absolute operand, so they declare none.
+        for label in (
+            "client.decode_selected_bones",
+            "client.resolve_blend_axis_weight",
+        ):
+            self.assertIsNone(targets[label].get("relocated_operand"))
+
+    def test_relocated_operand_reaches_both_generated_registries(self) -> None:
+        """The backend compares against the declaration the generator emits."""
+        header = (
+            REPO_ROOT
+            / "research"
+            / "tooling"
+            / "capture"
+            / "native"
+            / "generated_binary_profiles.h"
+        ).read_text(encoding="utf-8")
+        index = header.index('"client.evaluate_sequence_pose"')
+        block = header[index : header.index("},", index)]
+        # Rva, ExpectedBytes, count, then the operand offset and size.
+        self.assertIn("5u,\n        1u,\n        4u,", block)
+        registry = (
+            REPO_ROOT
+            / "research"
+            / "tooling"
+            / "capture"
+            / "generated_binary_profiles.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("'relocated_operand': {'offset': 1, 'size': 4}", registry)
+        backend = (
+            NATIVE_ROOT / "hook_backend.cpp"
+        ).read_text(encoding="utf-8")
+        # Rebased, not masked: the operand is still compared, byte for byte.
+        self.assertIn("MatchesDeclaredPrologue", backend)
+        self.assertIn("active.Profile->Pe.PreferredImageBase", backend)
 
 
 if __name__ == "__main__":

@@ -569,6 +569,13 @@ def reuse(connection: sqlite3.Connection) -> dict[str, Any]:
     complete run, so an address join was only valid inside a lifetime nothing
     recorded. An identity change that no observation witnessed is the fault this
     section looks for.
+
+    Two observations witness a transition, not one. An address may change model
+    in place, which the census emits as an identity change; or it may be
+    destroyed and rebuilt as a different actor, which is two lifetimes each
+    bracketed by its own construction and destruction. Requiring an identity
+    change for the second case would fault a run whose census recorded it
+    exactly, so a destruction counts as a witnessed separation too.
     """
     reused = connection.execute(
         """
@@ -590,23 +597,34 @@ def reuse(connection: sqlite3.Connection) -> dict[str, Any]:
         "SELECT count(*) FROM actor_observations WHERE reason = ?",
         (OBSERVATION_IDENTITY_CHANGE,),
     ).fetchone()[0]
+    separations = connection.execute(
+        "SELECT count(*) FROM actor_observations WHERE reason = ?",
+        (OBSERVATION_DESTRUCT,),
+    ).fetchone()[0]
+    witnessed_transitions = (
+        f"""(SELECT count(*) FROM actor_observations a
+              WHERE a.entity = u.entity
+                AND a.reason IN ({OBSERVATION_IDENTITY_CHANGE},
+                                 {OBSERVATION_DESTRUCT}))"""
+    )
     unwitnessed = [
         {
             "entity": address(entity),
             "models": models,
             "identity_changes": changes_seen,
+            "destructions": destructions_seen,
         }
-        for entity, models, changes_seen in connection.execute(
+        for entity, models, changes_seen, destructions_seen in connection.execute(
             f"""
             SELECT u.entity, count(DISTINCT u.checksum),
                    (SELECT count(*) FROM actor_observations a
                      WHERE a.entity = u.entity
-                       AND a.reason = {OBSERVATION_IDENTITY_CHANGE})
-            FROM actor_usage u GROUP BY u.entity
-            HAVING count(DISTINCT u.checksum) - 1 >
+                       AND a.reason = {OBSERVATION_IDENTITY_CHANGE}),
                    (SELECT count(*) FROM actor_observations a
                      WHERE a.entity = u.entity
-                       AND a.reason = {OBSERVATION_IDENTITY_CHANGE})
+                       AND a.reason = {OBSERVATION_DESTRUCT})
+            FROM actor_usage u GROUP BY u.entity
+            HAVING count(DISTINCT u.checksum) - 1 > {witnessed_transitions}
             LIMIT ?
             """,
             (MAX_REPORTED_FAULTS,),
@@ -616,6 +634,7 @@ def reuse(connection: sqlite3.Connection) -> dict[str, Any]:
         "reused_entity_addresses": reused,
         "extra_identities_at_reused_addresses": extra,
         "identity_change_observations": changes,
+        "destruction_observations": separations,
         "unwitnessed": unwitnessed,
         "changes_account_for_reuse": not unwitnessed,
         "baseline_reused_entity_addresses": BASELINE_REUSED_ENTITY_ADDRESSES,
@@ -777,7 +796,9 @@ def overhead(
     done: dict[str, str],
 ) -> dict[str, Any]:
     """Report what the actor census costs against CAP2.2's baseline."""
-    record_bytes = record_bytes_expression(headers)
+    record_bytes = record_bytes_expression(
+        headers, table_columns(connection, "records")
+    )
     frequency = next(iter(headers.values()))["qpc_frequency"]
     first, last, records, payload = connection.execute(
         f"SELECT min(qpc), max(qpc), count(*), sum({record_bytes}) FROM records"
@@ -873,9 +894,10 @@ def decide(
         verdict["statement"] = (
             f"{reused['extra_identities_at_reused_addresses']} extra identities "
             f"appear at {reused['reused_entity_addresses']} reused addresses but "
-            f"{reused['identity_change_observations']} identity changes were "
-            "observed, so an address changed actor without the census seeing "
-            "it and a join on that address is still unbounded."
+            f"{reused['identity_change_observations']} identity changes and "
+            f"{reused['destruction_observations']} destructions were observed, "
+            "so an address changed actor without the census seeing it and a "
+            "join on that address is still unbounded."
         )
         return verdict
     verdict["identity_complete"] = True
@@ -927,8 +949,9 @@ def decide(
     verdict["statement"] = (
         f"All {counts['identities_used']} actor identities were observed at or "
         f"before first use across {named['distinct_actors']} addresses, "
-        f"{reused['identity_change_observations']} identity changes account for "
-        f"every one of {reused['reused_entity_addresses']} reused addresses, "
+        f"{reused['identity_change_observations']} identity changes and "
+        f"{reused['destruction_observations']} destructions account for every "
+        f"one of {reused['reused_entity_addresses']} reused addresses, "
         f"and no record falls outside its interval, so an address join is "
         f"bounded. The observed renderable sits {delta} above the entity, which "
         f"is CAP1.3's relation measured a fourth way. {closing}"

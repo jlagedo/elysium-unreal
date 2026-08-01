@@ -208,8 +208,15 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
   witnesses, so an address join is bounded by the window in which that address meant that
   actor rather than by the address alone. Every actor a full run posed is identified before it
   is used, every reused address is accounted for, and the composed pose now retains the frame
-  it is placed into. Open:
-  reproducing the run on a second cutscene,
+  it is placed into. A fifth stream names the source of every fired contribution: the frames
+  below the virtual-model resolver take the owning studio header as an argument, so a
+  contribution records the owner model, the owner-local sequence and animation indices, the
+  active blend cells and the weights the runtime itself resolved, the cycle, the pose
+  parameters, the selected-bone mask and its immediate caller, with repeated calls kept as
+  separate events. A fifth offline reader proves every contribution is scoped to a pose build,
+  every owner reached the model census with an image, and every captured descriptor pointer
+  equals the index and stride it claims. Two complete cutscenes reproduce it with no dropped,
+  faulted or unscoped record, which also closes the second-acquisition requirement. Open:
   joining the observed source identities to the patch-first export/decoder stack,
   and the byte-span coverage that join needs. Header residency stays as it is: there is no
   single model-cache free to hook, so an unload event would cost three brackets and still
@@ -1210,7 +1217,7 @@ retail end to end, and `uv run elysium test Play` proves it headlessly.
 | RE29 | Entity-name matching is case-insensitive with final-`*` prefix semantics. → `docs/vtmb/entity_io.md`. | entity I/O | [x] |
 | RE30 | Recover `trigger_environmental_audio` touch behavior and the precedence/interpolation among its `room_type`, SoundScheme `RoomDSP`, and the player's networked `m_sndRoomDSP`/`m_sndPlayerDSP`. → `docs/vtmb/audio_pipeline.md`. | 6.7 | [ ] |
 | RE31 | Recover the SoundScheme RandomSound frequency scheduler/distribution and transition edge cases; the current approximate curve is not a faithful baseline. → `docs/vtmb/audio_pipeline.md`. | 6.7 | [ ] |
-| RE32 | Capture one source-attributed `sp_theatre` run from pre-map resource loads through actors/models/skeletons, every fired skeletal contribution, pose-build stages, and final render matrices in one queryable database. Join observed owner/sequence/animation identities to exact patch-first bytes and current export/decoder output, then trace only selected mismatches through decoding, blends/remaps, scene placement, root/entity motion, procedural work, hierarchy, and render handoff. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/animation_and_movers.md`, `docs/vtmb/choreographed_scenes.md`, and `docs/vtmb/vtmb-animation-reverse-engineering.md`. | 8.5, 8.11, 12.1 | [~] |
+| RE32 | Capture one source-attributed `sp_theatre` run from pre-map resource loads through actors/models/skeletons, every fired skeletal contribution, pose-build stages, and final render matrices in one queryable database. Join observed owner/sequence/animation identities to exact patch-first bytes and current export/decoder output, then trace only selected mismatches through decoding, blends/remaps, scene placement, root/entity motion, procedural work, hierarchy, and render handoff. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/animation_and_movers.md`, `docs/vtmb/mdl_v2531.md`, `docs/vtmb/choreographed_scenes.md`, and `docs/vtmb/vtmb-animation-reverse-engineering.md`. | 8.5, 8.11, 12.1 | [~] |
 | RE33 | Trace expression, VCD/audio, and `.lip` resources from source bytes through runtime objects, controller mixing, flex rules/ramps, eyelids, amplitude mouth, vertex deformation, and render submission. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/facial_animation.md`. | 12.3–12.5 | [~] |
 | SKY | The sky/ambience rework is complete; remaining work is tracked as 3.10–3.13 and RE17. Facts: `docs/vtmb/sky-ambience.md`. | 3.6, 3.7 | [x] |
 

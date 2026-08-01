@@ -41,8 +41,16 @@ struct BinaryTargetProfile {
     HookBackendKind Backend;
     CallingConvention Convention;
     std::uint32_t Rva;
+    // The declared prologue as it appears in the file on disk.
     const std::uint8_t* ExpectedBytes;
     std::uint32_t ExpectedByteCount;
+    // A prologue may encode an absolute address the loader rewrites when the
+    // module is not at its preferred base, in which case the declared bytes
+    // never match memory. The operand is compared after adding the load delta
+    // rather than being masked out, so the check still verifies every byte.
+    // RelocatedOperandSize of zero means the prologue carries no such operand.
+    std::uint32_t RelocatedOperandOffset;
+    std::uint32_t RelocatedOperandSize;
     std::uint32_t ObjectRva;
     std::uint32_t ExpectedVtableRva;
     std::uint32_t VtableSlot;

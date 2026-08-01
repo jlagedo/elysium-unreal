@@ -195,8 +195,8 @@ The later Valve Source SDK is useful because VTMB shares architectural ancestry 
 | Decode compressed model vertex types 1 and 2 | Known trouble cases | Medium | Corpus-wide correctness |
 | Exact clip timing and loop-boundary behavior | Not proven | Low | Runtime trace |
 | Exact root-motion policy | Unknown/partial | Low | Entity plus bone trace |
-| Exact sequence blending and animation layers | Not publicly complete | Low | Runtime state and pose trace |
-| Pose parameters | Structurally visible, behavior incomplete | Low–medium | Controlled parameter sweeps |
+| Exact sequence blending and animation layers | Blend axes and autolayer recursion decoded; weighted-layer path open | Medium | Runtime state and pose trace |
+| Pose parameters | Descriptor, range, wrapping and blend mapping decoded; defaults and interpolation open | Medium–high | Controlled parameter sweeps |
 | IK and procedural-bone evaluation | Not publicly complete | Low | Pre/post-stage captures |
 | Exact facial expression, eye, and lip blend | Not publicly complete | Low | Dialogue capture |
 | Compile arbitrary new multi-bone animation to native VTMB | Not generally supported | High confidence in limitation | A reproducible counterexample |
@@ -386,9 +386,13 @@ Potential failure modes:
 
 An exported SMD contains sampled integer frames. The runtime may operate on normalized cycle and interpolate between samples.
 
+**Duration divides by `frames - 1`.** The retail per-cell decoder computes
+`floor((numframes - 1) * cycle)` and passes the remainder as the interpolation fraction,
+so a clip's last sample sits at cycle `1.0` rather than one step short of it. Owned by
+`docs/vtmb/animation_and_movers.md` A.4b.
+
 Unknowns that need measurement:
 
-- whether duration is `frames / fps` or `(frames - 1) / fps`;
 - how a looping clip interpolates across the end boundary;
 - whether cycle `1.0` aliases `0.0`;
 - how playback rate and negative rate behave;
@@ -450,14 +454,14 @@ Unknowns include:
 
 ### 6.6 Pose parameters
 
-MDL structures expose pose-parameter descriptors, but that does not establish runtime semantics. A correct reimplementation needs to know:
+MDL structures expose pose-parameter descriptors, but that does not establish runtime semantics. Name, range, wrapping, normalization and the blend mapping are established — the descriptor
+layout and the axis-resolution rule are owned by `docs/vtmb/animation_and_movers.md` A.3,
+and a capture witnesses the resolved cell and weight rather than recomputing them.
 
-- parameter name and range;
-- wrapping behavior;
-- default;
-- sequence blend mapping;
-- whether values are normalized before lookup;
-- interpolation policy;
+What a correct reimplementation still needs to know:
+
+- the default a parameter holds before anything writes it;
+- interpolation policy between successive values;
 - which Python/entity methods drive them.
 
 The efficient method is a controlled parameter sweep while capturing final matrices.
@@ -1269,7 +1273,70 @@ identity-bearing observation names are actors; the addresses only ever seen
 constructed are ordinary client entities. Counting them together turns 49 actors
 into 611.
 
-### 9.15 What not to do first
+A reuse rule stated as "every extra identity at a reused address has an identity
+change" is too narrow, and a later cutscene with more churn shows why. An address
+may instead be destroyed and rebuilt as a different actor, which the census
+records as construct/first/destruct twice. Both are witnessed separations; a
+check that accepts only the first faults a census that recorded the second
+exactly.
+
+### 9.15 Attributing a contribution to the bytes it was decoded from
+
+A pose that matches proves nothing unless the source it came from is named, and
+the sequence index an entity carries is not that name. A character resolves its
+clips through include models, so the index is meaningful only beside the header
+it was resolved against.
+
+Capture the frames below the virtual-model resolver rather than the resolver
+itself. They receive the owning `studiohdr` as argument zero, so the owner is
+witnessed rather than inferred; capturing higher up yields a target-local index
+that joins to nothing. Three frames are enough: the sequence evaluator for
+identity, cycle, pose parameters and the selected-bone mask; the per-cell decoder
+for the animation descriptor of each cell that actually fired; and the blend-axis
+resolver, which emits no record of its own but stashes its result for the
+sequence frame to fold in, so witnessed weights cost no record volume.
+
+Four rules keep the evidence honest.
+
+**Store identity, not bytes.** The model census already holds the whole owner
+image and the runtime header is that image at offset 0, so a descriptor pointer
+is stored raw and converted to a file offset offline. Only live state no image
+carries — the pose parameters — travels on the record.
+
+**Observe the owner from the contribution path.** A bank model is nobody's entity
+model, so an earlier census keyed on entity models never sees it. Half the owners
+in a theatre run are in that population; without observing them the attribution
+joins to an image that was never captured.
+
+**Scope before the frame runs.** The cells a sequence decodes reach the queue
+while the sequence is still on the stack, so the scope is opened before the
+original call and carried by the nested records, exactly as the pose-build
+generation is.
+
+**Refuse a foreign stash.** The blend resolver has callers other than the one
+being captured, so the stashed axis is keyed by descriptor pointer and a
+mismatch is recorded as a fault rather than read.
+
+The check that makes this evidence rather than convention is arithmetic the
+capture cannot fake: a captured descriptor pointer minus the owner's header base
+must equal the declared array index times the declared stride. Two complete
+cutscenes satisfy it on 961,518 of 961,518 contributions, which verifies the
+displacements, the strides and the owner attribution together.
+
+Measured cost, per complete cutscene: 89 MB of contribution records against a
+4.2 GB database — 3.4% — at 8.60 MB/s mean against a baseline of 8.42, with the
+writer queue peaking at 239 and 357 against the 368 the actor census already
+reached. The records are numerous and small, so they cost record count rather
+than volume.
+
+Two bounds travel with a run like this. An idle prefix fires no multi-blend
+sequence at all, so a short probe does not exercise the blend path and must not be
+read as covering it. And the caller of a contribution is an address: resolving
+which builder asked for it is a lookup against the case specification by nearest
+preceding seed, so an address inside an unlisted function is reported unresolved
+rather than attributed to the seed below it.
+
+### 9.16 What not to do first
 
 Avoid:
 
@@ -1803,19 +1870,24 @@ Reverse-engineering experiments often coexist with unrelated animation work. Pre
 | Final CPU matrices are the best runtime oracle | Recommendation | They collapse many unknown intermediate stages | Implement and validate hook |
 | Render info `+0x18` is the `C_BaseAnimating` instance plus 4 | Verified | Three complete `sp_theatre` captures: the same −4 across 39 shared models resolving all 49 instances, with no instance address shared between runs, plus draw-side values four above an eight-aligned address; a fourth capture measures a constant +4 between the entity and renderable addresses the actor census records separately | None — instance reuse is now scoped by the actor interval and the witnessed lifetime |
 | The interface subobject at `this+0x4` is a declared layout, not a heap artefact | Verified | `C_BaseEntity::C_BaseEntity` and `~C_BaseEntity` install and restore five subobject vtables at `+0x0`, `+0x4`, `+0x8`, `+0xc`, `+0x10`; the second is the interface both the draw field and `SetupBones` name | None |
-| Every skeletal actor is identified before it is used | Verified | One complete `sp_theatre` capture: 54 identities across 49 addresses, none unobserved, none observed late, and no evaluation record outside the interval in which its address meant the model it names | Reproduction on a second cutscene |
-| An address that changes actor is always witnessed | Verified | The same capture: five addresses serve more than one model and five identity changes account for all five; separately, 615 constructions and 49 destructions show three addresses rebuilt into a new actor under an unchanged checksum | Reproduction on a second cutscene |
+| Every skeletal actor is identified before it is used | Verified | Three complete `sp_theatre` captures, the latest two carrying 54 identities across 48 addresses, none unobserved, none observed late, and no evaluation record outside the interval in which its address meant the model it names | None |
+| An address that changes actor is always witnessed | Verified | Two transitions witness it, not one. A later capture reuses six addresses under five identity changes: the sixth records construct/first/destruct twice, so a destruction separates two actors where no in-place change occurs. Across two complete cutscenes every extra identity at a reused address is accounted for by an identity change or a destruction | None |
 | A vtable carrying the pose slots identifies a shared construction path | Contradicted | `0x101e3cfc` has one data reference and its writer `0x10002d80` one caller; a capture hooked there records no construction while skeletal actors are posed | None — the shared pair is `C_BaseEntity`'s constructor and destructor |
 | The composed-pose stage receives the frame the pose is placed into | Verified | Its third argument is retained on every composed pose: 237,903 of 237,903 carry one, and 256 sampled decode as a rotation and a translation with worst determinant error 5.57e-08 | Whether that translation is the entity's own origin field, which needs a pinned displacement |
 | `SetupBones` receives the same interface subobject the draw field stores | Verified | Its prologue adjusts `this` down four bytes to reach the instance, and the captured bracket entity equals the draw entity on every draw whose frame built a pose | None |
 | A pose build covers exactly one entity | Verified | One complete `sp_theatre` capture: across 237,929 composed poses no generation spans several entities or carries an evaluation naming another | None |
 | One draw frame encloses every draw of an actor | Contradicted | The same entity is drawn 793 times inside a `CModelRender::DrawModel` frame and 7,632 times outside one; 31 of 141 drawn models appear on both paths | None — the second path is `CModelRender::DrawModelShadow`, and two frames are now bracketed |
 | Exactly two engine frames submit a studio draw | Verified | Only `engine.dll` and `StudioRender.dll` hold `TStudioRender012`; its single global `0x20d63ef0` is read 72 times in `engine.dll`, and following each read to the vtable register it feeds finds slot `+0x58` called at `0x200a6221` and `0x200a6ce4` only | None |
-| Every studio draw is enclosed by a bracket | Verified | One complete `sp_theatre` capture: all 1,693,202 records carry a generation, with the hook's own counters reporting zero unbracketed records | Reproduction on a second cutscene |
+| Every studio draw is enclosed by a bracket | Verified | Reproduced on a second and third cutscene carrying contribution records too: all 2,170,793 records of one carry a generation, with the hook's own counters reporting zero unbracketed records | None |
 | The shadow frame builds its own pose | Verified | `CModelRender::DrawModelShadow` calls the same renderable slot `+0x3c` at `0x200a6c7b`, and the capture records 165,086 shadow frames | None |
 | `SetupBones` argument five is a required output pointer | Contradicted | The shadow frame passes `NULL` where `CModelRender::DrawModel` passes the address of a stack local | What the callee writes through it when non-null |
 | The runtime `studiohdr` is the whole `.mdl` image at offset 0 | Verified | One census capture retained all 141 runtime images and compared each against the patch-first installed file of the same `Checksum`: every `Length`@140 equals the installed file size, and 42 images are byte-identical | None |
 | A runtime pointer minus its `studiohdr` base is a model-image offset | Verified | Follows from the above, and 99 of 141 images differ from disk only inside ranges that are themselves at known array strides | None for the conversion; which ranges are unreliable is the next row |
+| A fired contribution names the model it was decoded from | Verified | The three frames below `resolve_virtual_model_pose` take the owning `studiohdr` as argument zero on one seven-dword `__cdecl` contract. Two complete cutscenes record 238,529 and 238,793 sequence contributions naming 34 and 35 owner identities, all observed at or before first use with an image each, and 17 and 18 of them are owners no actor animates under | None |
+| A captured descriptor pointer agrees with the index and stride it claims | Verified | Across two cutscenes, 961,518 of 961,518 contributions satisfy `pointer - studiohdr == LocalSeqIndex + index * 764` or `LocalAnimIndex + index * 72`, with every index inside the owner's own declared count | None |
+| The sequence blend grid is a `groupsize[0] × groupsize[1]` space | Verified | `groupsize[0] * groupsize[1] == numblends` on 294 of 294 multi-blend sequences in the installed character tree; two captures fire 3,440 and 3,434 multi-blend contributions, every one a 9×1 grid evaluating two adjacent cells | Whether any shipped sequence exercises the four-cell path |
+| The unindexed region before `LocalAnimIndex` is unreachable | Contradicted | It is the include-model bone remap array, addressed by `StudioModelGroup`+0x10 relative to the group entry. Over 27 include-carrying models the offset is byte-identical on disk in 41 of 41 groups and every array base lands inside the region, which the arrays span completely | None |
+| A hook signature can be a fixed byte sequence | Contradicted | `evaluate_sequence_pose` begins `MOV AL,[0x104902c9]`, whose absolute operand the loader rewrites; `client.dll` loaded at three different bases across three runs. A declaration must name the relocated span and compare it after adding the load delta | None |
 | The loader patches the model image in place | Verified | 26,958 differing bytes in one run, all inside `StudioBone.Flags`, `StudioMesh.VertexData`, `StudioSeqDesc`+0xc, the include-model records, `MDLHeader.Flags`/`NumLocalNodes`, and one unindexed gap | What each rewritten field becomes; layout is owned by `mdl_v2531.md` |
 | `StudioBone.Flags & 0x2` on disk is what the runtime uses | Verified | Comparing all 2,286 captured bones against their disk bytes: 627 flag words change, every change only *sets* bits and none is ever cleared, and the same 27 bones carry `0x2` on disk and at runtime with none disagreeing | None; the split-inheritance rule and the exported `split_bones` inventory are unaffected |
 | The rest of `StudioBone.Flags` on disk is what the runtime uses | Contradicted | The loader sets `0x4`, `0x8` and `0x20`–`0x8000` on 27 models, so any bit but `0x2` read from disk is a pre-load value | What each set bit means; they look like usage flags computed from hitboxes, attachments and vertex LODs |

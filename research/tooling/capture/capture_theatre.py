@@ -208,11 +208,15 @@ def write_hook_ini(path: Path, session: Path, duration_seconds: int) -> None:
         engine, "engine.model_render_draw_model_shadow")
     construct = target(client, "client.base_entity_construct")
     destruct = target(client, "client.base_entity_destruct")
+    evaluate_sequence = target(client, "client.evaluate_sequence_pose")
+    decode_bones = target(client, "client.decode_selected_bones")
+    blend_axis = target(client, "client.resolve_blend_axis_weight")
     values = {
         "output": session / "scene.elpose",
         "animation_output": session / "animation.elanim",
         "census_output": session / "model.elmdl",
         "actor_output": session / "actor.elact",
+        "contribution_output": session / "contribution.elcon",
         "ready": session / "ready.txt",
         "stop": session / "stop.txt",
         "done": session / "done.txt",
@@ -241,6 +245,12 @@ def write_hook_ini(path: Path, session: Path, duration_seconds: int) -> None:
         "base_entity_construct_expected": construct["expected_bytes"],
         "base_entity_destruct_rva": f"0x{destruct['rva']:x}",
         "base_entity_destruct_expected": destruct["expected_bytes"],
+        "evaluate_sequence_pose_rva": f"0x{evaluate_sequence['rva']:x}",
+        "evaluate_sequence_pose_expected": evaluate_sequence["expected_bytes"],
+        "decode_selected_bones_rva": f"0x{decode_bones['rva']:x}",
+        "decode_selected_bones_expected": decode_bones["expected_bytes"],
+        "resolve_blend_axis_weight_rva": f"0x{blend_axis['rva']:x}",
+        "resolve_blend_axis_weight_expected": blend_axis["expected_bytes"],
         "target_checksum": "0x00000000",
         "duration_seconds": duration_seconds + 60,
     }

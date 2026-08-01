@@ -186,6 +186,27 @@ def load_registry() -> dict[str, object]:
                 target["expected_bytes"] = bytes.fromhex(expected)
             except ValueError as error:
                 raise ValueError(f"{label}.expected_bytes is invalid") from error
+            # A prologue may encode an absolute address that the loader rewrites
+            # when the module is not at its preferred base. Declaring the span
+            # lets the probe compare it after adding the load delta instead of
+            # ignoring it, so the check stays exact.
+            operand = target.get("relocated_operand")
+            if operand is None:
+                target["relocated_operand"] = {"offset": 0, "size": 0}
+            elif not isinstance(operand, dict):
+                raise ValueError(f"{label}.relocated_operand must be an object")
+            else:
+                offset = _integer(operand.get("offset"), f"{label}.operand offset")
+                size = _integer(operand.get("size"), f"{label}.operand size")
+                if size not in (2, 4):
+                    raise ValueError(
+                        f"{label}.relocated_operand size must be 2 or 4"
+                    )
+                if offset + size > len(target["expected_bytes"]):
+                    raise ValueError(
+                        f"{label}.relocated_operand lies outside expected_bytes"
+                    )
+                target["relocated_operand"] = {"offset": offset, "size": size}
             vtable = target.get("vtable")
             if kind == "vtable":
                 if not isinstance(vtable, dict):
@@ -251,6 +272,8 @@ def render_cpp(registry: dict[str, object]) -> str:
                         f"        0x{target['rva']:08x}u,",
                         f"        {target_name}ExpectedBytes,",
                         f"        {len(target['expected_bytes'])}u,",
+                        f"        {target['relocated_operand']['offset']}u,",
+                        f"        {target['relocated_operand']['size']}u,",
                         f"        0x{vtable.get('object_rva', 0):08x}u,",
                         f"        0x{vtable.get('expected_vtable_rva', 0):08x}u,",
                         f"        {vtable.get('slot', 0)}u,",

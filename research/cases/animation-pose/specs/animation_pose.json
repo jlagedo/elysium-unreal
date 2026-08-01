@@ -112,6 +112,66 @@
       "fact": "Every Flags & 0x2 bone in the patch-first character corpus uses the conventional hierarchy-FK inverse bind, not a split-inheritance inverse bind.",
       "evidence": "pipeline/src/elysium_pipeline/validation/validate_skeletal_pipeline.py independently evaluates all 373 flagged bones across 433 character skeletons; worst boneToWorld * poseToBone identity error is 7.36e-6.",
       "consequence": "Split inheritance belongs only to live pose construction; skin binding and generated inverse binds remain conventional."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The pose chain below resolve_virtual_model_pose shares one seven-dword __cdecl contract: (studiohdr, positions, quaternions, sequence, cycle, poseParameters, boneMask).",
+      "evidence": "0x100968a0 is __thiscall ending RET 0x18 and forwards its six stack arguments plus the studiohdr it obtains from 0x1008f900(-1) to 0x10089c40 at 0x1009693a, cleaning with ADD ESP,0x1c. 0x10089c40 reaches its arguments at frame+0x27c8..0x27e0 after MOV EAX,0x27c4 / _chkstk and ends in a bare RET, and stages the same seven for 0x10089740 at 0x1008a046 with ADD ESP,0x1c.",
+      "consequence": "A capture hook at either frame reads the owner studiohdr as argument zero rather than inferring it, and the two frames take the same argument decoder."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "decode_selected_bones is __cdecl (studiohdr, positions, quaternions, StudioAnimDesc, cycle, boneMask); its fourth argument is the animation descriptor of one blend cell.",
+      "evidence": "0x10089b20 reads its arguments at frame+0x04..0x18 after SUB ESP,0x8 and four pushes, and ends in a bare RET; the single-cell call site 0x1008993d builds the fourth argument as studiohdr + LocalAnimIndex@268 + grid cell * 72 and cleans with ADD ESP,0x18. The callee reads numframes at +0xc and animindex at +0x30 of that pointer.",
+      "consequence": "Owner-local animation identity is witnessed per fired cell as a pointer into the owner image, so CAP2.5's file offset is that pointer minus the studiohdr and the index is (pointer - hdr - LocalAnimIndex) / 72."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Frame selection is floor((numframes - 1) * cycle), and the remainder is the interpolation fraction passed to both channel decoders.",
+      "evidence": "0x10089b41-0x10089b5e loads numframes@+0xc of the animation descriptor, decrements it, multiplies by the cycle argument, calls __ftol, and passes both the integer and the difference to 0x100889f0 and 0x10088ba0.",
+      "consequence": "Clip duration divides by frames - 1, not frames, which settles the sampling-law question the evidence document lists as open."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The per-bone animation records inside a StudioAnimDesc have a fixed 32-byte stride, and the selected-bone mask is a dword array beginning four bytes into the mask argument.",
+      "evidence": "0x10089b20 walks NumBones@240 advancing the bone by 0xa0, positions by 0xc, quaternions by 0x10 and the animation record by 0x20 per bone, and gates each bone on mask[4 + (i >> 5) * 4] & (1 << (i & 31)).",
+      "consequence": "The animation block is indexable without decoding preceding bones, and the +4 the capture probe already copies is the array itself rather than a guessed displacement."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "StudioSeqDesc carries the blend axes at groupsize[2]@572, paramindex[2]@580, paramstart[2]@588 and paramend[2]@596, and its 16x16 animation grid at 56 has a 32-byte row stride.",
+      "evidence": "0x10089500 indexes all four arrays as base + axis * 4 off the descriptor; 0x10089740 branches on groupsize[1] then groupsize[0] at 0x100898fd to select one, two or four cells, reading grid[i1][i0] at descriptor+0x38+(i1*16+i0)*2 and grid[i1+1][i0] at descriptor+0x58+(i1*16+i0)*2. Across the installed character tree all 294 multi-blend sequences satisfy groupsize[0] * groupsize[1] == numblends@52, with distribution 9x1 235, 3x3 49, 2x1 6 and 5x1 4.",
+      "consequence": "The grid is a groupsize[0] by groupsize[1] blend space rather than a raw 16x16 array, and a decoder that reads only cell [0][0] silently drops every one of those 294 sequences."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "A pose parameter descriptor is 20 bytes at LocalPoseParamIndex@388 with name@0, flags@4, start@8, end@12 and loop@16; a sequence axis normalizes its parameter into [0,1] over paramstart..paramend and clamps.",
+      "evidence": "0x10089500 reads hdr+0x184 + index * 0x14 and uses +0x10 as a wrap modulus when non-zero, then normalizes (value - start@8) / (end@12 - start@8) and remaps through the descriptor's paramstart and paramend before clamping to 0..1 and deriving the cell index against groupsize. The installed corpus reads move_yaw and hit_yaw with flags 1, start -180, end 180 and loop 360, matching the -180/180 paramstart/paramend of every 9x1 sequence that selects them.",
+      "consequence": "Pose parameter range, wrapping, normalization and blend mapping are established, so a reproduced evaluator no longer has to guess whether values are normalized before lookup."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "StudioSeqDesc carries an autolayer count at 660 and an autolayer index at 664, and each entry is a four-byte sequence index the dispatcher evaluates recursively.",
+      "evidence": "0x1008a06b reads descriptor+0x294 as a loop bound and 0x1008a079 reads descriptor+0x298 as the array base, advancing four bytes per iteration and passing each dword as the sequence argument to a recursive 0x10089c40 call followed by 0x10088e10.",
+      "consequence": "A sequence contribution can fire further sequence contributions inside one pose build, so contribution multiplicity is a property of the data rather than of the caller."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The virtual sequence index space is the last include group's sequence base plus its count, and an index below NumLocalSeq@272 resolves against the model's own sequences.",
+      "evidence": "0x100968e5-0x10096917 computes the bound from the last of NumIncludeModels@404 groups at IncludeModelIndex@408 with stride 0x74, reading base at group+0x08 and count at group+0x0c, and falls back to NumLocalSeq when the model has no include models; 0x10089c5b takes the local path on the same comparison.",
+      "consequence": "A captured sequence index is only meaningful beside the studiohdr it was resolved against, which is why owner identity travels on every contribution record."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "A runtime include-model group is 116 bytes carrying the loaded model at +0x04, its sequence base at +0x08, its sequence count at +0x0c, a bone remap array at +0x10 with 56-byte records, and a 24-entry pose parameter remap at +0x44.",
+      "evidence": "0x10089c84-0x10089d1b walks the groups at stride 0x74, calls vtable slot +0x4 on the object at group+0x04 to obtain the included studiohdr, remaps 0x18 pose parameter slots through the shorts at group+0x44, and then walks group+0x10 records advancing 0x38 per target bone.",
+      "consequence": "Owner resolution and the shared-animation remap are both reachable from the group entry, and the 24-slot pose parameter remap bounds the parameter span a contribution record must retain."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The three contribution frames take a five-byte inline detour without prologue relocation: 0x10089740 is a0c9024910, 0x10089c40 is b8c4270000, and 0x10089b20 is 83ec085355.",
+      "evidence": "Read from the pinned client.dll at file offsets for those RVAs; 0x10089740 is one MOV AL,moffs32 with an absolute operand, 0x10089c40 is one MOV EAX,imm32, and 0x10089b20 is SUB ESP,0x8 with two pushes. No branch inside any of the three targets a byte in its first five. The same extraction reproduces the already-installed setup_bones signature b830270000.",
+      "consequence": "All three take the shared inline backend on the same terms as the existing targets; 0x10089500 begins 83ec08538b5c241c and needs the instruction-aware relocation the backend already performs."
     }
   ],
   "functions": [
@@ -119,7 +179,7 @@
       "address": "10089c40",
       "label": "dispatch_model_pose",
       "confidence": "partial",
-      "role": "Selects local or included animation data and reaches the sequence evaluator.",
+      "role": "Resolves a virtual sequence index to its owning include model, remaps pose parameters and bones across the group boundary, reaches the sequence evaluator on the local path, and recurses over the descriptor's autolayers. The nested transformed remap branch remains open.",
       "depth": 2,
       "cap": 120,
       "asm_count": 2200
@@ -127,11 +187,20 @@
     {
       "address": "10089740",
       "label": "evaluate_sequence_pose",
-      "confidence": "partial",
-      "role": "Evaluates sequence blend cells and repeatedly calls the per-bone animation loop.",
+      "confidence": "confirmed",
+      "role": "Resolves both blend axes through 0x10089500, selects one, two or four cells of the sequence descriptor's 16x16 animation grid on the two group sizes, and calls the per-bone animation loop once per cell.",
       "depth": 2,
       "cap": 120,
       "asm_count": 1400
+    },
+    {
+      "address": "10089500",
+      "label": "resolve_blend_axis_weight",
+      "confidence": "confirmed",
+      "role": "Maps one pose parameter onto one blend axis of a sequence descriptor, wrapping and normalizing it against the parameter descriptor and the axis range, and returning the cell index and the fractional weight evaluate_sequence_pose blends with. Four callers: two per evaluation from 0x10089740 and two from 0x1008c060.",
+      "depth": 2,
+      "cap": 60,
+      "asm_count": 400
     },
     {
       "address": "10089b20",
@@ -458,6 +527,24 @@
       "to": "1008fd00",
       "confidence": "confirmed",
       "evidence": "C_BaseAnimating vtable +0x1ec; slot address 0x101e3ee8"
+    },
+    {
+      "from": "10089740",
+      "to": "10089500",
+      "confidence": "confirmed",
+      "evidence": "two calls at 0x10089830 and 0x10089843, one per blend axis, each cleaning ADD ESP,0x18 as part of the shared 0x30"
+    },
+    {
+      "from": "10089c40",
+      "to": "10089c40",
+      "confidence": "confirmed",
+      "evidence": "recursive calls at 0x10089d5f for the resolved include owner and 0x1008a0af for each autolayer entry"
+    },
+    {
+      "from": "10089c40",
+      "to": "10088e10",
+      "confidence": "confirmed",
+      "evidence": "xref at 0x1008a0e7; the autolayer accumulator invoked after each recursive evaluation"
     }
   ]
 }

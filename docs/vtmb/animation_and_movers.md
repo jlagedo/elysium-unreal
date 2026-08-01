@@ -123,8 +123,8 @@ references anims through a blend grid: `szlabelindex`@0, `szactivitynameindex`@4
 bbox@28, `numblends`@52,
 then **`short anim[16][16]`@56** (512B **inline** blend grid; `MAXSTUDIOBLENDS=16`, a
 v2531 fixed-size divergence from modern Source's variable `blend[]` pointer), then a
-**196-byte trailing region** (568..763: `paramindex[2]`, `fadein/out`, autolayers, IK
-locks, keyvalues). The **fixed stride is 764B**, established by data: it is the unique
+**196-byte trailing region** (568..763) whose blend and autolayer fields are decoded
+below. The **fixed stride is 764B**, established by data: it is the unique
 stride that resolves every sequence name across models of every size — jeanette
 (22: `Jeanette_Line1_Col_E`…`ragdoll`), mingxiao (29: `run`…`mingXiao_death`),
 `move_and_ranged` (602: `walk`…`holy_light_idle`); no other stride in [200,1400]
@@ -154,6 +154,39 @@ more than one owner/sequence identity. The capture inventory therefore keys an
 entry by exact owner model and raw index, retains the complete 764-byte sequence
 descriptor and 16×16 grid, and records target-model compatibility separately.
 The same rule applies to all 3,615 raw 72-byte animation descriptors.
+
+### The blend grid is two axes, not a raw 16×16 [data-verified + VtMB decompiled]
+
+The trailing region carries the blend space. Read from the runtime evaluator
+(`FUN_10089500`, A.4b) and then checked against the installed corpus:
+
+| Off | Type | Field | Note |
+|---|---|---|---|
+| 572 | int[2] | `groupsize` | extent of each axis; the grid is `groupsize[0] × groupsize[1]`, not 16×16 |
+| 580 | int[2] | `paramindex` | pose parameter driving each axis, `-1` when the axis is unused |
+| 588 | float[2] | `paramstart` | axis range, in the parameter's own units |
+| 596 | float[2] | `paramend` | |
+| 660/664 | int | `numautolayers` / `autolayerindex` | four bytes per entry, each a sequence index the dispatcher evaluates recursively |
+
+A cell is `anim[i1][i0]` at `56 + (i1 * 16 + i0) * 2`: the row stride is a fixed 16
+`short`s regardless of `groupsize`, so the authored grid is a sub-rectangle of the
+inline 16×16 array.
+
+`groupsize[0] * groupsize[1] == numblends`@52 holds for **294 of 294** multi-blend
+sequences across the installed character tree, which is what establishes these as the
+axis extents rather than nearby integers. Their distribution is 9×1 (235), 3×3 (49),
+2×1 (6) and 5×1 (4).
+
+**Pose parameter descriptors — 20 bytes** (`NumLocalPoseParameters`@384 /
+`LocalPoseParamIndex`@388): `nameindex`@0, `flags`@4, `start`@8, `end`@12, `loop`@16.
+A non-zero `loop` is a wrap modulus. The player-body corpus reads `move_yaw` and
+`hit_yaw` with `flags` 1, `start` −180, `end` 180 and `loop` 360 — matching the
+`paramstart`/`paramend` of every 9×1 sequence that selects them.
+
+An axis resolves by wrapping the parameter into its loop range, normalizing it over the
+descriptor's `start`..`end`, remapping through the sequence's `paramstart`..`paramend`,
+clamping to 0..1, and scaling against `groupsize` to yield a cell index and a fractional
+weight. An axis whose `paramindex` is `-1` yields cell 0 and weight 0.
 
 ### The activity name is the selection key [data-verified]
 
@@ -440,6 +473,38 @@ FUN_100968a0  virtual-model/base-model pose selection
            -> FUN_10088ba0  position channels
 ```
 
+**The four frames share one seven-dword `__cdecl` contract**
+`(studiohdr, positions, quaternions, sequence, cycle, poseParameters, boneMask)`, except
+`FUN_10089b20`, which takes the animation descriptor of one cell in place of the sequence
+index and receives no pose parameters. `FUN_100968a0` is the only `__thiscall` of the
+group: it obtains the entity's `studiohdr` from `C_BaseAnimating::GetStudioHdr(-1)` and
+forwards its own six stack arguments unchanged. Every exit below it is a bare `RET` and
+every caller cleans, so the owning studio header is argument zero at each stage rather
+than something a consumer has to infer.
+
+That is what makes source attribution possible: a capture on these frames reads the
+*owner* — which for a character is usually a shared bank that is nobody's entity model.
+Two complete `sp_theatre` runs record 238,529 and 238,793 sequence contributions naming
+34 and 35 owner identities, of which 17 and 18 are owners no actor animates under.
+
+**Frame selection is `floor((numframes - 1) * cycle)`**, and the remainder is the
+interpolation fraction handed to both channel decoders. `FUN_10089b20` reads
+`numframes`@12 of the descriptor, decrements it, multiplies by the cycle argument and
+truncates. Clip duration therefore divides by `frames - 1`, not `frames`.
+
+**A cell is addressed from the owner, not the target.** The captured descriptor pointers
+satisfy `pointer - studiohdr == LocalSeqIndex@276 + index * 764` and
+`LocalAnimIndex@268 + index * 72` on **961,518 of 961,518** contributions across the two
+runs, with every index inside the owner's own `NumLocalSeq`/`NumLocalAnims`. Combined
+with the loaded image being the file unrelocated (`docs/vtmb/mdl_v2531.md`), a captured
+pointer minus the header base is a file offset.
+
+**Blend cells fire per axis pair.** `FUN_10089740` resolves both axes through
+`FUN_10089500`, then evaluates one, two or four cells according to `groupsize[1]` and
+`groupsize[0]` (A.3). Across the two runs 3,440 and 3,434 sequence contributions are
+multi-blend, every one of them a 9×1 grid — the shared-bank `move_yaw` locomotion
+blends — and each fires exactly two cells from adjacent rows.
+
 `FUN_100968a0`'s base-model path calls `FUN_10089c40`. Its include-model path
 evaluates into temporary position/quaternion arrays, then consumes 0x3c-byte
 mapping records containing source bone, target bone, a position-transform byte,
@@ -450,6 +515,18 @@ cases. Thus this outer virtual-model remap changes position frame when authored
 but does not transform local rotation. Nested include records inside
 `FUN_10089c40` have a second, more complex remap branch whose complete record
 semantics remain open.
+
+`FUN_10089c40` is where an owner is resolved. A sequence index below `NumLocalSeq`@272
+takes the local path straight to `FUN_10089740`; otherwise it walks the include groups at
+`NumIncludeModels`@404 / `IncludeModelIndex`@408 (116-byte stride) for the group whose
+sequence range contains the index, remaps 24 pose-parameter slots through the `short`
+array at group `+0x44`, recurses with that group's `studiohdr` and its owner-local index,
+and then walks the group's bone remap array at group `+0x10` — 56 bytes per bone of the
+including model — to map the result back. Afterwards it evaluates `numautolayers`@660
+further sequences recursively, which is why one pose build can carry several sequence
+contributions: two runs show 659 and a comparable count of layered generations, up to
+three sequences deep. The group's runtime field layout is owned by
+`docs/vtmb/mdl_v2531.md`.
 
 The two callers place the transitioner in the live pose order:
 
@@ -845,9 +922,10 @@ uv run elysium research validate_live_pose_capture `
 The end-to-end trace is complete only when Ghidra evidence identifies and verifies
 all of these seams:
 
-1. studio header/sequence/animation record selection;
+1. ~~studio header/sequence/animation record selection;~~
 2. RLE local position and quaternion evaluation;
-3. sequence blends, layers, and virtual-model remapping;
+3. the nested virtual-model remap branch inside `FUN_10089c40` — the outer remap,
+   sequence blends, and autolayer recursion are closed;
 4. ~~the complete `Flags & 0x2` post-decode path and its coordinate frame;~~
 5. ~~parent-local hierarchy concatenation into model-space bone matrices;~~
 6. ~~`Bip01` root composition with entity origin/angles and cinematic placement;~~

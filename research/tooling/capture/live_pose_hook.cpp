@@ -1,6 +1,8 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+#include <intrin.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -53,6 +55,40 @@ constexpr DWORD kRootTransformBytes = kRootTransformFloats * sizeof(float);
 // reads no further, so this is the whole struct as both sides use it.
 constexpr DWORD kRenderInfoBytes = 32;
 
+// A sequence blends over two axes, and the include-model group remaps exactly
+// 0x18 pose parameter slots, so both bounds come from the code rather than from
+// a guess about how many a model declares.
+constexpr std::uint32_t kBlendAxes = 2;
+constexpr std::uint32_t kMaximumPoseParameters = 24;
+constexpr DWORD kPoseParameterBytes =
+    kMaximumPoseParameters * sizeof(float);
+// Displacements inside the studio header and the sequence descriptor that the
+// contribution hooks read. Named here because the record stores identity rather
+// than the descriptor bytes: the model census already holds the whole owner
+// image, and the runtime header is that image at offset 0, so a descriptor
+// pointer minus the header base is the offset CAP2.5 needs.
+constexpr DWORD kStudioLocalSeqCount = 0x110;
+constexpr DWORD kStudioLocalSeqIndex = 0x114;
+constexpr DWORD kStudioLocalAnimIndex = 0x10c;
+constexpr DWORD kSequenceDescriptorBytes = 764;
+constexpr DWORD kAnimationDescriptorBytes = 72;
+constexpr DWORD kSequenceNumBlends = 0x34;
+constexpr DWORD kSequenceGroupSize = 0x23c;
+constexpr DWORD kSequenceParamIndex = 0x244;
+// Why a contribution record could not name something it should have. A fault is
+// per record rather than a global counter, because CAP2.4 asks which
+// contribution failed to resolve, not how many did.
+enum ContributionFault : std::uint32_t {
+    kFaultOwnerHeader = 1u << 0,
+    kFaultSequenceDescriptor = 1u << 1,
+    kFaultAnimationDescriptor = 1u << 2,
+    kFaultPoseParameters = 1u << 3,
+    kFaultSelectedBones = 1u << 4,
+    kFaultBlendUnwitnessed = 1u << 5,
+    kFaultSequenceOutOfRange = 1u << 6,
+    kFaultNoContributionScope = 1u << 7,
+};
+
 // Which stream a queued record belongs to. The writer routes on this and frees
 // to the heap it names, so census payloads never touch the game's heap.
 enum StreamIndex : std::uint32_t {
@@ -60,6 +96,7 @@ enum StreamIndex : std::uint32_t {
     kStreamAnimation = 1,
     kStreamCensus = 2,
     kStreamActor = 3,
+    kStreamContribution = 4,
 };
 
 // Why an observation was emitted. Reuse is a pointer that served one checksum
@@ -282,6 +319,68 @@ struct ActorObservationHeader {
     std::uint32_t boneCount;
     char modelName[64];
 };
+
+struct ContributionFileHeader {
+    char magic[8];
+    std::uint32_t version;
+    std::uint32_t headerBytes;
+    std::uint64_t qpcFrequency;
+    std::int64_t startQpc;
+    std::uint32_t pid;
+    std::uint32_t clientBase;
+    std::uint32_t evaluateSequencePoseRva;
+    std::uint32_t decodeSelectedBonesRva;
+    std::uint32_t resolveBlendAxisWeightRva;
+    char clientSha256[65];
+    char reserved[11];
+};
+
+// One fired contribution. `SEQP` is a sequence evaluation and `ANIM` one of the
+// blend cells it decoded, so a repeated call is a repeated record and shared
+// payload never collapses two of them.
+//
+// Bytes are deliberately absent. The sequence and animation descriptors are
+// stored as pointers because the model census already holds the whole owner
+// image and the runtime studio header is that image at offset zero, so a
+// pointer minus `ownerStudioHdr` is the file offset without a second copy. The
+// live pose parameters are the one thing no image carries, so they are the one
+// span that travels.
+struct ContributionRecordHeader {
+    char magic[4];
+    std::uint32_t recordBytes;
+    std::uint64_t sequence;
+    std::int64_t qpc;
+    std::uint32_t threadId;
+    std::uint32_t generation;
+    std::uint32_t generationDepth;
+    std::uint32_t generationEntity;
+    // Opened by the sequence frame before it runs, so the cells it decodes carry
+    // it even though their records reach the queue first.
+    std::uint32_t contribution;
+    // The immediate call site. Resolved offline against the case specification
+    // rather than named here, because which builder asked for a contribution is
+    // an analyzer conclusion.
+    std::uint32_t callerAddress;
+    std::uint32_t ownerStudioHdr;
+    std::uint32_t ownerChecksum;
+    std::uint32_t ownerBoneCount;
+    std::int32_t sequenceIndex;
+    std::int32_t animationIndex;
+    std::uint32_t sequenceDescriptor;
+    std::uint32_t animationDescriptor;
+    std::uint32_t boneMask;
+    float cycle;
+    std::int32_t numBlends;
+    std::int32_t groupSize[kBlendAxes];
+    std::int32_t paramIndex[kBlendAxes];
+    // Witnessed from the blend resolver rather than recomputed from the pose
+    // parameters, which is the difference between evidence and our own decoder.
+    std::int32_t blendCell[kBlendAxes];
+    float blendWeight[kBlendAxes];
+    std::uint32_t faults;
+    std::uint32_t poseParameterBytes;
+    std::uint32_t selectedBoneBytes;
+};
 #pragma pack(pop)
 
 static_assert(sizeof(FileHeader) == 128, "capture file header changed");
@@ -307,6 +406,12 @@ static_assert(
 static_assert(
     sizeof(ActorObservationHeader) == 124,
     "actor observation record header changed");
+static_assert(
+    sizeof(ContributionFileHeader) == 128,
+    "contribution capture file header changed");
+static_assert(
+    sizeof(ContributionRecordHeader) == 132,
+    "contribution record header changed");
 
 struct PendingRecord {
     PendingRecord* next;
@@ -344,6 +449,21 @@ using ModelRenderDrawModelFn = int(__thiscall*)(
 // exits of 0x200a6990, EAX untouched).
 using ModelRenderDrawModelShadowFn = void(__thiscall*)(
     void*, std::uint32_t, std::uint32_t, std::uint32_t, std::uint32_t);
+// The three contribution frames share one seven-dword __cdecl contract with
+// resolve_virtual_model_pose, which forwards its own arguments to them
+// unchanged: (studiohdr, positions, quaternions, sequence, cycle,
+// poseParameters, boneMask). Every exit is a bare RET and each caller cleans
+// 0x1c, so the studio header is argument zero rather than something to infer.
+using EvaluateSequencePoseFn = void(__cdecl*)(
+    unsigned char*, float*, float*, int, float, float*, void*);
+// The per-cell decoder takes the owning header and the animation descriptor of
+// the cell that fired, cleaned with ADD ESP,0x18 at every call site.
+using DecodeSelectedBonesFn = void(__cdecl*)(
+    unsigned char*, float*, float*, unsigned char*, float, void*);
+// One blend axis: (studiohdr, poseParameters, sequenceDescriptor, axis,
+// outWeight, outCell), cleaned 0x18.
+using ResolveBlendAxisWeightFn = void(__cdecl*)(
+    unsigned char*, float*, unsigned char*, int, float*, int*);
 
 // The bracket a record was produced inside. Nothing here is shared between
 // threads, so a push and a pop cost no interlocked operation and no
@@ -355,6 +475,19 @@ struct ThreadPoseState {
     std::uint32_t depth;
     std::uint32_t lastPoseGeneration;
     std::uint32_t lastPoseEntity;
+    // The sequence frame recurses through the include dispatcher for autolayers,
+    // so contributions nest the same way pose builds do and get the same stack
+    // rather than a single slot.
+    std::uint32_t contributions[kMaximumBracketDepth];
+    std::uint32_t contributionDepth;
+    // The blend resolver writes its result here and the sequence frame that
+    // called it reads it back, so a witnessed weight rides on the contribution
+    // record instead of costing a record of its own. Keyed by the descriptor
+    // because 0x1008c060 calls the same resolver for its own purposes, and a
+    // stale or foreign entry is refused rather than trusted.
+    std::uint32_t blendDescriptor[kBlendAxes];
+    std::int32_t blendCell[kBlendAxes];
+    float blendWeight[kBlendAxes];
 };
 
 // An open-addressed slot claimed by its own key rather than by a separate
@@ -390,6 +523,9 @@ ModelRenderDrawModelFn gOriginalModelRenderDrawModel = nullptr;
 ModelRenderDrawModelShadowFn gOriginalModelRenderDrawModelShadow = nullptr;
 BaseEntityConstructFn gOriginalBaseEntityConstruct = nullptr;
 BaseEntityDestructFn gOriginalBaseEntityDestruct = nullptr;
+EvaluateSequencePoseFn gOriginalEvaluateSequencePose = nullptr;
+DecodeSelectedBonesFn gOriginalDecodeSelectedBones = nullptr;
+ResolveBlendAxisWeightFn gOriginalResolveBlendAxisWeight = nullptr;
 elysium::capture::HookHandle gDrawModelHook;
 elysium::capture::HookHandle gResolveVirtualModelPoseHook;
 elysium::capture::HookHandle gBuildTransformationsHook;
@@ -398,11 +534,15 @@ elysium::capture::HookHandle gModelRenderDrawModelHook;
 elysium::capture::HookHandle gModelRenderDrawModelShadowHook;
 elysium::capture::HookHandle gBaseEntityConstructHook;
 elysium::capture::HookHandle gBaseEntityDestructHook;
+elysium::capture::HookHandle gEvaluateSequencePoseHook;
+elysium::capture::HookHandle gDecodeSelectedBonesHook;
+elysium::capture::HookHandle gResolveBlendAxisWeightHook;
 __declspec(thread) ThreadPoseState gThread{};
 HANDLE gOutput = INVALID_HANDLE_VALUE;
 HANDLE gAnimationOutput = INVALID_HANDLE_VALUE;
 HANDLE gCensusOutput = INVALID_HANDLE_VALUE;
 HANDLE gActorOutput = INVALID_HANDLE_VALUE;
+HANDLE gContributionOutput = INVALID_HANDLE_VALUE;
 // Census payloads are the largest allocation the probe ever makes. Taking the
 // game's process heap lock for a multi-megabyte block from a render callback
 // is the one hitch this design could introduce, so they come from a heap of
@@ -444,6 +584,14 @@ volatile LONG gActorFaults = 0;
 volatile LONG gActorConstructions = 0;
 volatile LONG gActorDestructions = 0;
 volatile LONG64 gActorBytes = 0;
+volatile LONG gContributionSequences = 0;
+volatile LONG gContributionAnimations = 0;
+volatile LONG gContributionFaults = 0;
+volatile LONG gContributionOverflow = 0;
+volatile LONG gContributionUnscoped = 0;
+volatile LONG64 gContributionBytes = 0;
+// Contribution scope 0 is the unassigned sentinel, so the counter starts at 1.
+volatile LONG gContributionScope = 0;
 // Headers keyed by address, images keyed by checksum.
 CensusSlot gCensusHeaders[kCensusSlots]{};
 CensusSlot gCensusImageSlots[kCensusImageSlots]{};
@@ -468,6 +616,9 @@ DWORD gModelRenderDrawModelRva = 0;
 DWORD gModelRenderDrawModelShadowRva = 0;
 DWORD gBaseEntityConstructRva = 0;
 DWORD gBaseEntityDestructRva = 0;
+DWORD gEvaluateSequencePoseRva = 0;
+DWORD gDecodeSelectedBonesRva = 0;
+DWORD gResolveBlendAxisWeightRva = 0;
 ConfiguredSignature gResolveExpected{};
 ConfiguredSignature gBuildExpected{};
 ConfiguredSignature gSetupBonesExpected{};
@@ -475,6 +626,9 @@ ConfiguredSignature gModelRenderDrawModelExpected{};
 ConfiguredSignature gModelRenderDrawModelShadowExpected{};
 ConfiguredSignature gBaseEntityConstructExpected{};
 ConfiguredSignature gBaseEntityDestructExpected{};
+ConfiguredSignature gEvaluateSequencePoseExpected{};
+ConfiguredSignature gDecodeSelectedBonesExpected{};
+ConfiguredSignature gResolveBlendAxisWeightExpected{};
 char gHookInstallError[128] = "unspecified";
 
 bool WriteAll(HANDLE file, const void* data, DWORD bytes) {
@@ -543,6 +697,8 @@ HANDLE StreamHandle(std::uint32_t stream) {
             return gCensusOutput;
         case kStreamActor:
             return gActorOutput;
+        case kStreamContribution:
+            return gContributionOutput;
         default:
             return gOutput;
     }
@@ -661,6 +817,40 @@ std::uint32_t CurrentGeneration() {
         return 0;
     }
     return gThread.generations[gThread.depth - 1];
+}
+
+// A contribution scope is opened before the sequence frame runs, because the
+// cells it decodes emit their records while it is still on the stack. The
+// dispatcher recurses for autolayers, so the scopes nest.
+std::uint32_t BeginContribution() {
+    if (!InterlockedCompareExchange(&gCapturing, 0, 0)) {
+        return 0;
+    }
+    if (gThread.contributionDepth >= kMaximumBracketDepth) {
+        InterlockedIncrement(&gContributionOverflow);
+        return 0;
+    }
+    const auto scope =
+        static_cast<std::uint32_t>(InterlockedIncrement(&gContributionScope));
+    gThread.contributions[gThread.contributionDepth] = scope;
+    ++gThread.contributionDepth;
+    return scope;
+}
+
+void EndContribution(std::uint32_t scope) {
+    if (!scope || !gThread.contributionDepth ||
+        gThread.contributions[gThread.contributionDepth - 1] != scope) {
+        return;
+    }
+    --gThread.contributionDepth;
+}
+
+std::uint32_t CurrentContribution() {
+    if (!gThread.contributionDepth) {
+        InterlockedIncrement(&gContributionUnscoped);
+        return 0;
+    }
+    return gThread.contributions[gThread.contributionDepth - 1];
 }
 
 // The generation a census record sits inside, if any. Unlike CurrentGeneration
@@ -1427,6 +1617,220 @@ void CaptureAnimation(
     }
 }
 
+// One fired contribution. `ownerHdr` is argument zero of the frame that fired,
+// so the owner is witnessed rather than resolved from the entity's own model —
+// which is the whole point of the task: a bank model is nobody's entity model.
+void CaptureContribution(
+    const char (&magic)[5], std::uint32_t scope, unsigned char* ownerHdr,
+    int sequenceIndex, unsigned char* animationDescriptor, float cycle,
+    const float* poseParameters, const void* selectedBones,
+    std::uintptr_t callerAddress) {
+    if (gContributionOutput == INVALID_HANDLE_VALUE) {
+        return;
+    }
+    if (!ownerHdr) {
+        InterlockedIncrement(&gSkipped);
+        return;
+    }
+
+    __try {
+        const DWORD checksum = *reinterpret_cast<DWORD*>(ownerHdr + 0x08);
+        if (gTargetChecksum && checksum != gTargetChecksum) {
+            InterlockedIncrement(&gFiltered);
+            return;
+        }
+        const int boneCount =
+            *reinterpret_cast<int*>(ownerHdr + 0xF0);
+        if (boneCount <= 0 || boneCount > kMaximumBones) {
+            InterlockedIncrement(&gSkipped);
+            return;
+        }
+        // The owner is what a later join needs the bytes of, and a bank model
+        // reaches no other census path, so the contribution is where it is
+        // observed.
+        ObserveStudioHeader(ownerHdr, checksum);
+
+        std::uint32_t faults = 0;
+        if (!scope) {
+            faults |= kFaultNoContributionScope;
+        }
+
+        const bool isSequence = std::memcmp(magic, "SEQP", 4) == 0;
+        unsigned char* sequenceDescriptor = nullptr;
+        std::int32_t numBlends = 0;
+        std::int32_t groupSize[kBlendAxes] = {0, 0};
+        std::int32_t paramIndex[kBlendAxes] = {0, 0};
+        std::int32_t blendCell[kBlendAxes] = {0, 0};
+        float blendWeight[kBlendAxes] = {0.0f, 0.0f};
+        std::int32_t resolvedSequence = sequenceIndex;
+        if (isSequence) {
+            __try {
+                const int localCount = *reinterpret_cast<int*>(
+                    ownerHdr + kStudioLocalSeqCount);
+                // The callee clamps an out-of-range index to zero before it
+                // indexes, so the record names the descriptor that was actually
+                // read and flags that the argument disagreed.
+                if (resolvedSequence < 0 || resolvedSequence >= localCount) {
+                    resolvedSequence = 0;
+                    faults |= kFaultSequenceOutOfRange;
+                }
+                sequenceDescriptor =
+                    ownerHdr +
+                    *reinterpret_cast<int*>(ownerHdr + kStudioLocalSeqIndex) +
+                    static_cast<DWORD>(resolvedSequence) *
+                        kSequenceDescriptorBytes;
+                numBlends = *reinterpret_cast<std::int32_t*>(
+                    sequenceDescriptor + kSequenceNumBlends);
+                for (std::uint32_t axis = 0; axis < kBlendAxes; ++axis) {
+                    groupSize[axis] = *reinterpret_cast<std::int32_t*>(
+                        sequenceDescriptor + kSequenceGroupSize + axis * 4);
+                    paramIndex[axis] = *reinterpret_cast<std::int32_t*>(
+                        sequenceDescriptor + kSequenceParamIndex + axis * 4);
+                }
+            } __except (EXCEPTION_EXECUTE_HANDLER) {
+                sequenceDescriptor = nullptr;
+                faults |= kFaultSequenceDescriptor;
+            }
+            const auto descriptorKey = static_cast<std::uint32_t>(
+                reinterpret_cast<std::uintptr_t>(sequenceDescriptor));
+            for (std::uint32_t axis = 0; axis < kBlendAxes; ++axis) {
+                // A stash entry from 0x1008c060's own use of the resolver names
+                // a different descriptor, so it is refused rather than read.
+                if (descriptorKey &&
+                    gThread.blendDescriptor[axis] == descriptorKey) {
+                    blendCell[axis] = gThread.blendCell[axis];
+                    blendWeight[axis] = gThread.blendWeight[axis];
+                } else {
+                    faults |= kFaultBlendUnwitnessed;
+                }
+            }
+        }
+
+        std::int32_t animationIndex = -1;
+        if (animationDescriptor) {
+            __try {
+                const std::ptrdiff_t offset =
+                    animationDescriptor - ownerHdr -
+                    *reinterpret_cast<int*>(ownerHdr + kStudioLocalAnimIndex);
+                animationIndex =
+                    offset >= 0 && offset % kAnimationDescriptorBytes == 0
+                        ? static_cast<std::int32_t>(
+                              offset / kAnimationDescriptorBytes)
+                        : -1;
+            } __except (EXCEPTION_EXECUTE_HANDLER) {
+                animationIndex = -1;
+                faults |= kFaultAnimationDescriptor;
+            }
+        }
+
+        // The mask travels with the sequence frame only. Every cell inside it
+        // receives the same pointer, so repeating it per cell would pay for the
+        // same bytes once per blend.
+        const DWORD selectedBytes =
+            isSequence
+                ? static_cast<DWORD>((boneCount + 31) / 32) * sizeof(DWORD)
+                : 0u;
+        const DWORD poseBytes = isSequence ? kPoseParameterBytes : 0u;
+        const DWORD diskBytes =
+            static_cast<DWORD>(sizeof(ContributionRecordHeader)) + poseBytes +
+            selectedBytes;
+        const SIZE_T allocation =
+            offsetof(PendingRecord, payload) + static_cast<SIZE_T>(diskBytes);
+        auto* pending = static_cast<PendingRecord*>(
+            HeapAlloc(GetProcessHeap(), 0, allocation));
+        if (!pending) {
+            InterlockedIncrement(&gDropped);
+            return;
+        }
+
+        pending->next = nullptr;
+        pending->bytes = diskBytes;
+        pending->stream = kStreamContribution;
+        auto* header =
+            reinterpret_cast<ContributionRecordHeader*>(pending->payload);
+        std::memset(header, 0, sizeof(*header));
+        std::memcpy(header->magic, magic, 4);
+        header->recordBytes = diskBytes;
+        header->sequence =
+            static_cast<std::uint32_t>(InterlockedIncrement(&gSequence));
+        LARGE_INTEGER now{};
+        QueryPerformanceCounter(&now);
+        header->qpc = now.QuadPart;
+        header->threadId = GetCurrentThreadId();
+        header->generation = CurrentGeneration();
+        header->generationDepth = gThread.depth;
+        header->generationEntity =
+            gThread.depth ? gThread.entities[gThread.depth - 1] : 0;
+        header->contribution = scope;
+        header->callerAddress = static_cast<std::uint32_t>(callerAddress);
+        header->ownerStudioHdr = static_cast<std::uint32_t>(
+            reinterpret_cast<std::uintptr_t>(ownerHdr));
+        header->ownerChecksum = checksum;
+        header->ownerBoneCount = static_cast<std::uint32_t>(boneCount);
+        header->sequenceIndex = isSequence ? resolvedSequence : -1;
+        header->animationIndex = animationIndex;
+        header->sequenceDescriptor = static_cast<std::uint32_t>(
+            reinterpret_cast<std::uintptr_t>(sequenceDescriptor));
+        header->animationDescriptor = static_cast<std::uint32_t>(
+            reinterpret_cast<std::uintptr_t>(animationDescriptor));
+        header->boneMask = static_cast<std::uint32_t>(
+            reinterpret_cast<std::uintptr_t>(selectedBones));
+        header->cycle = cycle;
+        header->numBlends = numBlends;
+        for (std::uint32_t axis = 0; axis < kBlendAxes; ++axis) {
+            header->groupSize[axis] = groupSize[axis];
+            header->paramIndex[axis] = paramIndex[axis];
+            header->blendCell[axis] = blendCell[axis];
+            header->blendWeight[axis] = blendWeight[axis];
+        }
+
+        auto* cursor = pending->payload + sizeof(*header);
+        if (poseBytes) {
+            if (poseParameters) {
+                __try {
+                    std::memcpy(cursor, poseParameters, poseBytes);
+                } __except (EXCEPTION_EXECUTE_HANDLER) {
+                    std::memset(cursor, 0, poseBytes);
+                    faults |= kFaultPoseParameters;
+                }
+            } else {
+                std::memset(cursor, 0, poseBytes);
+                faults |= kFaultPoseParameters;
+            }
+            cursor += poseBytes;
+        }
+        if (selectedBytes) {
+            if (selectedBones) {
+                __try {
+                    std::memcpy(
+                        cursor,
+                        static_cast<const unsigned char*>(selectedBones) + 4,
+                        selectedBytes);
+                } __except (EXCEPTION_EXECUTE_HANDLER) {
+                    std::memset(cursor, 0, selectedBytes);
+                    faults |= kFaultSelectedBones;
+                }
+            } else {
+                std::memset(cursor, 0, selectedBytes);
+                faults |= kFaultSelectedBones;
+            }
+        }
+        header->faults = faults;
+        header->poseParameterBytes = poseBytes;
+        header->selectedBoneBytes = selectedBytes;
+        if (faults) {
+            InterlockedIncrement(&gContributionFaults);
+        }
+        InterlockedIncrement(
+            isSequence ? &gContributionSequences : &gContributionAnimations);
+        InterlockedExchangeAdd64(
+            &gContributionBytes, static_cast<LONG64>(diskBytes));
+        Enqueue(pending);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        InterlockedIncrement(&gDropped);
+    }
+}
+
 std::uintptr_t __fastcall HookDrawModel(
     void* self, void*, std::uintptr_t argument0, std::uintptr_t argument1,
     std::uintptr_t argument2, std::uintptr_t argument3,
@@ -1508,6 +1912,75 @@ void __fastcall HookBuildTransformations(
         CaptureAnimation(
             "FINL", self, studioHdr, positions, quaternions,
             studioSequence, -1.0f, cycle, 0, selectedBones, rootTransform);
+    }
+    InterlockedDecrement(&gActiveHooks);
+}
+
+// The blend resolver emits no record of its own. It stashes the axis it just
+// resolved on the calling thread, and the sequence frame that asked for it
+// folds both axes into one contribution record, so witnessed weights cost no
+// record volume at all.
+void __cdecl HookResolveBlendAxisWeight(
+    unsigned char* studioHdr, float* poseParameters,
+    unsigned char* sequenceDescriptor, int axis, float* outWeight,
+    int* outCell) {
+    InterlockedIncrement(&gActiveHooks);
+    gOriginalResolveBlendAxisWeight(
+        studioHdr, poseParameters, sequenceDescriptor, axis, outWeight,
+        outCell);
+    if (InterlockedCompareExchange(&gCapturing, 0, 0) &&
+        axis >= 0 && static_cast<std::uint32_t>(axis) < kBlendAxes) {
+        __try {
+            gThread.blendCell[axis] = outCell ? *outCell : 0;
+            gThread.blendWeight[axis] = outWeight ? *outWeight : 0.0f;
+            gThread.blendDescriptor[axis] = static_cast<std::uint32_t>(
+                reinterpret_cast<std::uintptr_t>(sequenceDescriptor));
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            gThread.blendDescriptor[axis] = 0;
+        }
+    }
+    InterlockedDecrement(&gActiveHooks);
+}
+
+// The sequence frame opens its scope before running, because the cells it
+// decodes reach the queue while it is still on the stack. __finally keeps the
+// pop and the unload refcount correct across an unwind out of retail, on the
+// same terms as the bracket detours below.
+void __cdecl HookEvaluateSequencePose(
+    unsigned char* studioHdr, float* positions, float* quaternions,
+    int sequence, float cycle, float* poseParameters, void* selectedBones) {
+    InterlockedIncrement(&gActiveHooks);
+    const std::uintptr_t caller =
+        reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    const std::uint32_t scope = BeginContribution();
+    __try {
+        gOriginalEvaluateSequencePose(
+            studioHdr, positions, quaternions, sequence, cycle, poseParameters,
+            selectedBones);
+    } __finally {
+        if (InterlockedCompareExchange(&gCapturing, 0, 0)) {
+            CaptureContribution(
+                "SEQP", scope, studioHdr, sequence, nullptr, cycle,
+                poseParameters, selectedBones, caller);
+        }
+        EndContribution(scope);
+        InterlockedDecrement(&gActiveHooks);
+    }
+}
+
+void __cdecl HookDecodeSelectedBones(
+    unsigned char* studioHdr, float* positions, float* quaternions,
+    unsigned char* animationDescriptor, float cycle, void* selectedBones) {
+    InterlockedIncrement(&gActiveHooks);
+    const std::uintptr_t caller =
+        reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    gOriginalDecodeSelectedBones(
+        studioHdr, positions, quaternions, animationDescriptor, cycle,
+        selectedBones);
+    if (InterlockedCompareExchange(&gCapturing, 0, 0)) {
+        CaptureContribution(
+            "ANIM", CurrentContribution(), studioHdr, -1, animationDescriptor,
+            cycle, nullptr, selectedBones, caller);
     }
     InterlockedDecrement(&gActiveHooks);
 }
@@ -1684,7 +2157,10 @@ bool MatchesConfiguredProfile(
     const elysium::capture::BinaryTargetProfile& modelRenderDrawModelShadow,
     const elysium::capture::BinaryTargetProfile& baseEntityConstruct,
     const elysium::capture::BinaryTargetProfile& baseEntityDestruct,
-    bool animationEnabled, bool lifetimeEnabled) {
+    const elysium::capture::BinaryTargetProfile& evaluateSequencePose,
+    const elysium::capture::BinaryTargetProfile& decodeSelectedBones,
+    const elysium::capture::BinaryTargetProfile& resolveBlendAxisWeight,
+    bool animationEnabled, bool lifetimeEnabled, bool contributionEnabled) {
     const bool drawMatches = drawModel.Rva == gDrawModelRva &&
         drawModel.ObjectRva == gStudioObjectRva &&
         drawModel.ExpectedVtableRva == gStudioVtableRva &&
@@ -1699,6 +2175,18 @@ bool MatchesConfiguredProfile(
           MatchesConfiguredSignature(
               baseEntityDestruct, gBaseEntityDestructRva,
               gBaseEntityDestructExpected))) {
+        return false;
+    }
+    if (contributionEnabled &&
+        !(MatchesConfiguredSignature(
+              evaluateSequencePose, gEvaluateSequencePoseRva,
+              gEvaluateSequencePoseExpected) &&
+          MatchesConfiguredSignature(
+              decodeSelectedBones, gDecodeSelectedBonesRva,
+              gDecodeSelectedBonesExpected) &&
+          MatchesConfiguredSignature(
+              resolveBlendAxisWeight, gResolveBlendAxisWeightRva,
+              gResolveBlendAxisWeightExpected))) {
         return false;
     }
     return getStudioHdr.Rva == gGetStudioHdrRva &&
@@ -1747,12 +2235,22 @@ bool InstallHooks(HMODULE studioRender, HMODULE client, HMODULE engine) {
         *clientProfile, "client.base_entity_construct");
     const auto* baseEntityDestruct = FindTarget(
         *clientProfile, "client.base_entity_destruct");
+    const auto* evaluateSequencePose = FindTarget(
+        *clientProfile, "client.evaluate_sequence_pose");
+    const auto* decodeSelectedBones = FindTarget(
+        *clientProfile, "client.decode_selected_bones");
+    const auto* resolveBlendAxisWeight = FindTarget(
+        *clientProfile, "client.resolve_blend_axis_weight");
     const bool lifetimeEnabled = gActorOutput != INVALID_HANDLE_VALUE;
+    const bool contributionEnabled =
+        gContributionOutput != INVALID_HANDLE_VALUE;
     if (drawModel == nullptr || resolvePose == nullptr ||
         buildTransformations == nullptr || getStudioHdr == nullptr ||
         setupBones == nullptr || modelRenderDrawModel == nullptr ||
         modelRenderDrawModelShadow == nullptr ||
         baseEntityConstruct == nullptr || baseEntityDestruct == nullptr ||
+        evaluateSequencePose == nullptr || decodeSelectedBones == nullptr ||
+        resolveBlendAxisWeight == nullptr ||
         !MatchesConfiguredProfile(
             *drawModel,
             *resolvePose,
@@ -1763,8 +2261,12 @@ bool InstallHooks(HMODULE studioRender, HMODULE client, HMODULE engine) {
             *modelRenderDrawModelShadow,
             *baseEntityConstruct,
             *baseEntityDestruct,
+            *evaluateSequencePose,
+            *decodeSelectedBones,
+            *resolveBlendAxisWeight,
             gAnimationOutput != INVALID_HANDLE_VALUE,
-            lifetimeEnabled)) {
+            lifetimeEnabled,
+            contributionEnabled)) {
         strcpy_s(gHookInstallError, "declaration-mismatch");
         return false;
     }
@@ -1902,6 +2404,72 @@ bool InstallHooks(HMODULE studioRender, HMODULE client, HMODULE engine) {
         reinterpret_cast<ModelRenderDrawModelShadowFn>(
             gModelRenderDrawModelShadowHook.Original);
 
+    if (contributionEnabled) {
+        // The blend resolver goes in first: it only stashes, and the sequence
+        // frame that reads the stash must never be live while the resolver
+        // feeding it is not, or a contribution would report an unwitnessed
+        // blend that in fact happened.
+        const HookBackendResult blendResult = HookBackends::Install(
+                clientActive,
+                *resolveBlendAxisWeight,
+                reinterpret_cast<void*>(&HookResolveBlendAxisWeight),
+                &gResolveBlendAxisWeightHook);
+        if (blendResult != HookBackendResult::Installed) {
+            std::snprintf(
+                gHookInstallError,
+                sizeof(gHookInstallError),
+                "resolve-blend-axis-weight-backend-%u rva=%08x bytes=%u",
+                static_cast<unsigned>(blendResult),
+                static_cast<unsigned>(resolveBlendAxisWeight->Rva),
+                static_cast<unsigned>(
+                    resolveBlendAxisWeight->ExpectedByteCount));
+            return false;
+        }
+        gOriginalResolveBlendAxisWeight =
+            reinterpret_cast<ResolveBlendAxisWeightFn>(
+                gResolveBlendAxisWeightHook.Original);
+        const HookBackendResult sequenceResult = HookBackends::Install(
+                clientActive,
+                *evaluateSequencePose,
+                reinterpret_cast<void*>(&HookEvaluateSequencePose),
+                &gEvaluateSequencePoseHook);
+        if (sequenceResult != HookBackendResult::Installed) {
+            std::snprintf(
+                gHookInstallError,
+                sizeof(gHookInstallError),
+                "evaluate-sequence-pose-backend-%u rva=%08x bytes=%u",
+                static_cast<unsigned>(sequenceResult),
+                static_cast<unsigned>(evaluateSequencePose->Rva),
+                static_cast<unsigned>(
+                    evaluateSequencePose->ExpectedByteCount));
+            return false;
+        }
+        gOriginalEvaluateSequencePose =
+            reinterpret_cast<EvaluateSequencePoseFn>(
+                gEvaluateSequencePoseHook.Original);
+        // Last of the three, so a cell can never be recorded before the scope
+        // that owns it can be opened.
+        const HookBackendResult decodeResult = HookBackends::Install(
+                clientActive,
+                *decodeSelectedBones,
+                reinterpret_cast<void*>(&HookDecodeSelectedBones),
+                &gDecodeSelectedBonesHook);
+        if (decodeResult != HookBackendResult::Installed) {
+            std::snprintf(
+                gHookInstallError,
+                sizeof(gHookInstallError),
+                "decode-selected-bones-backend-%u rva=%08x bytes=%u",
+                static_cast<unsigned>(decodeResult),
+                static_cast<unsigned>(decodeSelectedBones->Rva),
+                static_cast<unsigned>(
+                    decodeSelectedBones->ExpectedByteCount));
+            return false;
+        }
+        gOriginalDecodeSelectedBones =
+            reinterpret_cast<DecodeSelectedBonesFn>(
+                gDecodeSelectedBonesHook.Original);
+    }
+
     if (!lifetimeEnabled) {
         return true;
     }
@@ -1953,6 +2521,9 @@ void RemoveHooks() {
     InterlockedExchange(&gCapturing, 0);
     HookBackends::Disable(&gBaseEntityDestructHook);
     HookBackends::Disable(&gBaseEntityConstructHook);
+    HookBackends::Disable(&gDecodeSelectedBonesHook);
+    HookBackends::Disable(&gEvaluateSequencePoseHook);
+    HookBackends::Disable(&gResolveBlendAxisWeightHook);
     HookBackends::Disable(&gModelRenderDrawModelShadowHook);
     HookBackends::Disable(&gModelRenderDrawModelHook);
     HookBackends::Disable(&gSetupBonesHook);
@@ -1964,6 +2535,9 @@ void RemoveHooks() {
     }
     HookBackends::Release(&gBaseEntityDestructHook);
     HookBackends::Release(&gBaseEntityConstructHook);
+    HookBackends::Release(&gDecodeSelectedBonesHook);
+    HookBackends::Release(&gEvaluateSequencePoseHook);
+    HookBackends::Release(&gResolveBlendAxisWeightHook);
     HookBackends::Release(&gModelRenderDrawModelShadowHook);
     HookBackends::Release(&gModelRenderDrawModelHook);
     HookBackends::Release(&gSetupBonesHook);
@@ -1972,6 +2546,9 @@ void RemoveHooks() {
     HookBackends::Release(&gDrawModelHook);
     gOriginalBaseEntityDestruct = nullptr;
     gOriginalBaseEntityConstruct = nullptr;
+    gOriginalDecodeSelectedBones = nullptr;
+    gOriginalEvaluateSequencePose = nullptr;
+    gOriginalResolveBlendAxisWeight = nullptr;
     gOriginalModelRenderDrawModelShadow = nullptr;
     gOriginalModelRenderDrawModel = nullptr;
     gOriginalSetupBones = nullptr;
@@ -2049,7 +2626,8 @@ bool ReadExpectedBytes(
 
 bool ReadConfiguration(
     wchar_t* iniPath, wchar_t* outputPath, wchar_t* animationOutputPath,
-    wchar_t* censusOutputPath, wchar_t* actorOutputPath, wchar_t* studioHash,
+    wchar_t* censusOutputPath, wchar_t* actorOutputPath,
+    wchar_t* contributionOutputPath, wchar_t* studioHash,
     wchar_t* clientHash) {
     wchar_t modulePath[MAX_PATH * 4]{};
     const DWORD length =
@@ -2076,6 +2654,9 @@ bool ReadConfiguration(
         MAX_PATH * 4, iniPath);
     GetPrivateProfileStringW(
         L"capture", L"actor_output", L"", actorOutputPath,
+        MAX_PATH * 4, iniPath);
+    GetPrivateProfileStringW(
+        L"capture", L"contribution_output", L"", contributionOutputPath,
         MAX_PATH * 4, iniPath);
     GetPrivateProfileStringW(
         L"capture", L"ready", L"", gReadyPath, ARRAYSIZE(gReadyPath), iniPath);
@@ -2177,8 +2758,37 @@ bool ReadConfiguration(
              iniPath,
              L"base_entity_destruct_expected",
              &gBaseEntityDestructExpected));
+    // Likewise the three contribution frames: a recipe that wants poses without
+    // source attribution stays configurable by leaving the stream out.
+    const bool contributionProfile =
+        !contributionOutputPath[0] ||
+        (ReadProfileDword(
+             iniPath,
+             L"evaluate_sequence_pose_rva",
+             &gEvaluateSequencePoseRva) &&
+         ReadExpectedBytes(
+             iniPath,
+             L"evaluate_sequence_pose_expected",
+             &gEvaluateSequencePoseExpected) &&
+         ReadProfileDword(
+             iniPath,
+             L"decode_selected_bones_rva",
+             &gDecodeSelectedBonesRva) &&
+         ReadExpectedBytes(
+             iniPath,
+             L"decode_selected_bones_expected",
+             &gDecodeSelectedBonesExpected) &&
+         ReadProfileDword(
+             iniPath,
+             L"resolve_blend_axis_weight_rva",
+             &gResolveBlendAxisWeightRva) &&
+         ReadExpectedBytes(
+             iniPath,
+             L"resolve_blend_axis_weight_expected",
+             &gResolveBlendAxisWeightExpected));
     return outputPath[0] && gReadyPath[0] && gStopPath[0] &&
-        gDonePath[0] && studioProfile && clientProfile && lifetimeProfile;
+        gDonePath[0] && studioProfile && clientProfile && lifetimeProfile &&
+        contributionProfile;
 }
 
 DWORD WINAPI CaptureWorker(void*) {
@@ -2187,11 +2797,12 @@ DWORD WINAPI CaptureWorker(void*) {
     wchar_t animationOutputPath[MAX_PATH * 4]{};
     wchar_t censusOutputPath[MAX_PATH * 4]{};
     wchar_t actorOutputPath[MAX_PATH * 4]{};
+    wchar_t contributionOutputPath[MAX_PATH * 4]{};
     wchar_t studioHash[80]{};
     wchar_t clientHash[80]{};
     if (!ReadConfiguration(
             iniPath, outputPath, animationOutputPath, censusOutputPath,
-            actorOutputPath, studioHash, clientHash)) {
+            actorOutputPath, contributionOutputPath, studioHash, clientHash)) {
         return 1;
     }
 
@@ -2247,13 +2858,23 @@ DWORD WINAPI CaptureWorker(void*) {
             CREATE_NEW,
             FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
     }
+    // Contributions nest inside the skeletal evaluation, so they share its
+    // precondition.
+    if (contributionOutputPath[0] && animationOutputPath[0]) {
+        gContributionOutput = CreateFileW(
+            contributionOutputPath, GENERIC_WRITE, FILE_SHARE_READ, nullptr,
+            CREATE_NEW,
+            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+    }
     if (!gWake || gOutput == INVALID_HANDLE_VALUE ||
         (animationOutputPath[0] &&
          gAnimationOutput == INVALID_HANDLE_VALUE) ||
         (censusOutputPath[0] &&
          (gCensusOutput == INVALID_HANDLE_VALUE || !gCensusHeap)) ||
         (actorOutputPath[0] && animationOutputPath[0] &&
-         gActorOutput == INVALID_HANDLE_VALUE)) {
+         gActorOutput == INVALID_HANDLE_VALUE) ||
+        (contributionOutputPath[0] && animationOutputPath[0] &&
+         gContributionOutput == INVALID_HANDLE_VALUE)) {
         WriteMarker(gDonePath, "error=cannot create capture output\n");
         return 3;
     }
@@ -2354,6 +2975,32 @@ DWORD WINAPI CaptureWorker(void*) {
         }
     }
 
+    if (gContributionOutput != INVALID_HANDLE_VALUE) {
+        ContributionFileHeader contributionHeader{};
+        std::memcpy(contributionHeader.magic, "ELCON1", 6);
+        contributionHeader.version = 1;
+        contributionHeader.headerBytes = sizeof(contributionHeader);
+        contributionHeader.qpcFrequency = frequency.QuadPart;
+        contributionHeader.startQpc = gStartQpc.QuadPart;
+        contributionHeader.pid = GetCurrentProcessId();
+        contributionHeader.clientBase = static_cast<std::uint32_t>(
+            reinterpret_cast<std::uintptr_t>(client));
+        contributionHeader.evaluateSequencePoseRva = gEvaluateSequencePoseRva;
+        contributionHeader.decodeSelectedBonesRva = gDecodeSelectedBonesRva;
+        contributionHeader.resolveBlendAxisWeightRva =
+            gResolveBlendAxisWeightRva;
+        wcstombs_s(
+            &converted, contributionHeader.clientSha256,
+            sizeof(contributionHeader.clientSha256), clientHash, _TRUNCATE);
+        if (!WriteAll(
+                gContributionOutput, &contributionHeader,
+                sizeof(contributionHeader))) {
+            WriteMarker(
+                gDonePath, "error=cannot write contribution capture header\n");
+            return 4;
+        }
+    }
+
     if (!InstallHooks(studioRender, client, engine)) {
         RemoveHooks();
         char error[192]{};
@@ -2366,12 +3013,13 @@ DWORD WINAPI CaptureWorker(void*) {
         return 5;
     }
     InterlockedExchange(&gCapturing, 1);
-    char ready[160]{};
+    char ready[192]{};
     std::snprintf(
-        ready, sizeof(ready), "ready=1\nformat=ELPOSE4%s%s%s\n",
+        ready, sizeof(ready), "ready=1\nformat=ELPOSE4%s%s%s%s\n",
         gAnimationOutput == INVALID_HANDLE_VALUE ? "" : "+ELANIM4",
         gCensusOutput == INVALID_HANDLE_VALUE ? "" : "+ELMDL1",
-        gActorOutput == INVALID_HANDLE_VALUE ? "" : "+ELACT2");
+        gActorOutput == INVALID_HANDLE_VALUE ? "" : "+ELACT2",
+        gContributionOutput == INVALID_HANDLE_VALUE ? "" : "+ELCON1");
     WriteMarker(gReadyPath, ready);
 
     for (;;) {
@@ -2413,8 +3061,13 @@ DWORD WINAPI CaptureWorker(void*) {
         CloseHandle(gActorOutput);
         gActorOutput = INVALID_HANDLE_VALUE;
     }
+    if (gContributionOutput != INVALID_HANDLE_VALUE) {
+        FlushFileBuffers(gContributionOutput);
+        CloseHandle(gContributionOutput);
+        gContributionOutput = INVALID_HANDLE_VALUE;
+    }
 
-    char done[1536]{};
+    char done[1792]{};
     std::snprintf(
         done, sizeof(done),
         "complete=1\nqueued=%ld\nwritten=%ld\ndropped=%ld\n"
@@ -2426,7 +3079,11 @@ DWORD WINAPI CaptureWorker(void*) {
         "actor_records=%ld\nactor_identity_changes=%ld\nactor_resident=%ld\n"
         "actor_vanished=%ld\nactor_overflow=%ld\nactor_faults=%ld\n"
         "actor_constructions=%ld\nactor_destructions=%ld\n"
-        "actor_bytes=%lld\n",
+        "actor_bytes=%lld\n"
+        "contribution_sequences=%ld\ncontribution_animations=%ld\n"
+        "contribution_scopes=%ld\ncontribution_faults=%ld\n"
+        "contribution_overflow=%ld\ncontribution_unscoped=%ld\n"
+        "contribution_bytes=%lld\n",
         gQueued, gWritten, gDropped, gQueuePeak, gSkipped, gFiltered,
         static_cast<long long>(gBytesWritten), gGeneration, gUnbracketed,
         gBracketOverflow, gCensusRecords, gCensusImages, gCensusReplacements,
@@ -2434,7 +3091,10 @@ DWORD WINAPI CaptureWorker(void*) {
         gCensusCapped, static_cast<long long>(gCensusBytes), gActorRecords,
         gActorIdentityChanges, gActorResident, gActorVanished, gActorOverflow,
         gActorFaults, gActorConstructions, gActorDestructions,
-        static_cast<long long>(gActorBytes));
+        static_cast<long long>(gActorBytes), gContributionSequences,
+        gContributionAnimations, gContributionScope, gContributionFaults,
+        gContributionOverflow, gContributionUnscoped,
+        static_cast<long long>(gContributionBytes));
     WriteMarker(gDonePath, done);
     CloseHandle(gWake);
     if (gCensusHeap) {

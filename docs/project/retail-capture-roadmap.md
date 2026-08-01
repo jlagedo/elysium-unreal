@@ -164,14 +164,14 @@ a later, longer corpus makes volume bite.
 | Order | Priority | Phase | Outcome |
 |---:|---|---|---|
 | 1 | P0 — done | CAP1 — first run and calibration | The instrument that exists produces one finalized `sp_theatre` database, and its measured rates, counts, and joins replace every estimate |
-| 2 | P0 — current | CAP2 — complete the capture | Contributions group, actors and skeletons are identified, and every fired contribution names its source owner, indices, and consumed byte spans |
+| 2 | P0 — in progress | CAP2 — complete the capture | Contributions group, actors and skeletons are identified, and every fired contribution names its source owner, indices, and consumed byte spans |
 | 3 | P0 | CAP3 — decode and index | One deduplicated, compressed, joinable database answers per-actor and per-time questions without re-running the game |
 | 4 | P0 | CAP4 — inspect against export and decoder | Byte ranges the runtime reads that we do not, and the first mismatching stage and bone per pose group |
 | 5 | P1 | CAP5 — close what the difference proves | Recovered rules, each with a regression and a fact in the owning topic |
 | 6 | P1 | CAP6 — face and lips | The same loop over expression, flex, phoneme, and deformed-vertex state |
 | 7 | P2 | CAP7 — handoff and trim | Engine-neutral evaluator feeds Unreal; unused probes and readers are deleted |
 
-**The next and only current task is CAP2.4.**
+**The next and only current task is CAP2.5.**
 
 ## CAP1 — First theatre run and calibration
 
@@ -436,11 +436,75 @@ calling convention into the case specification before a hook is written.
   construction target chosen from the vtable carrying the pose slots turned out to belong to
   one concrete class rather than to every skeletal entity; it is retained as an eliminated
   lead in `animation_pose.json` with the evidence that killed it. Each has a regression.
-- [ ] **CAP2.4 Source attribution per contribution.** For every fired contribution record
+- [x] **CAP2.4 Source attribution per contribution.** For every fired contribution record
   the resolved owner studio header and model identity, owner-local sequence and animation
   indices, active blend cells and weights, cycle and playback time, pose parameters,
   selected-bone mask, trigger caller, and copy failures. Repeated calls stay separate
   events; shared payload storage never erases timing or call multiplicity.
+
+  A fifth stream `contribution.elcon` (`ELCON1`) carries two kinds — one per fired sequence
+  and one per decoded blend cell — as events in `records` rather than as a dictionary,
+  because a contribution sits on the same generation spine as the evaluation it nests
+  inside. Three new client hooks feed it. `evaluate_sequence_pose` gives sequence identity,
+  cycle, pose parameters and the selected-bone mask; `decode_selected_bones` gives the
+  animation descriptor of each cell that fired; `resolve_blend_axis_weight` emits no record
+  at all and stashes its axis result for the sequence frame to fold in, so witnessed blend
+  weights cost no record volume. A contribution scope opens before the sequence frame runs,
+  because the cells it decodes reach the queue while it is still on the stack. `uv run
+  elysium research verify_source_attribution <session>…` reads a finalized database
+  read-only and reports coverage, owner census closure, index and pointer range, blend
+  closure, caller attribution, multiplicity, faults and cost.
+
+  **The owner is witnessed, not inferred.** All four frames below
+  `resolve_virtual_model_pose` share one seven-dword `__cdecl` contract that takes the
+  owning `studiohdr` as argument zero, so a hook reads it rather than deriving it from the
+  entity — which for a character is usually a shared bank that is nobody's entity model.
+
+  Two complete cutscenes carry **2,171,485** and a comparable record count with **zero**
+  drops, skipped, filtered, unbracketed and bracket overflow, **zero** contribution faults,
+  overflow and unscoped records, and no incomplete tail on any of the five streams. They
+  record **238,529** and **238,793** sequence contributions plus **241,969** and **242,227**
+  decoded cells, every one scoped and inside a pose build. Across both, **961,518 of
+  961,518** contributions satisfy `pointer - studiohdr == LocalSeqIndex + index * 764` or
+  `LocalAnimIndex + index * 72` with every index inside the owner's declared count — the
+  check that makes this evidence rather than convention, since it verifies displacement,
+  stride and owner attribution together. **34** and **35** owner identities were observed at
+  or before first use with an image each, **17** and **18** of them owners no actor animates
+  under. **3,440** and **3,434** sequence contributions are multi-blend, every one a 9×1
+  grid firing two adjacent cells, with **zero** unwitnessed weights. Caller addresses resolve
+  to four sites, all of them the instruction after a call identified statically beforehand.
+
+  The cost is **89 MB**, 3.4% of a 4.2 GB database, at **8.60 MB/s** mean against CAP2.3's
+  8.42; the queue peaked at **239** and **357** against the 368 CAP2.3 already reached, so
+  the contribution stream never became the binding constraint. CAP1.2, CAP1.3, CAP2.1,
+  CAP2.2 and CAP2.3 all re-establish on both databases, and CAP2.2's census grows from
+  **141** used identities to **158** and **159** observed — the difference being exactly the
+  bank models only this path can see. Facts: `docs/vtmb/animation_and_movers.md` A.3 and
+  A.4b, `docs/vtmb/mdl_v2531.md`; method and measurements:
+  `docs/vtmb/vtmb-animation-reverse-engineering.md`.
+
+  **CAP2.2's open gap is closed on the way.** The 24,234 loader-written bytes before
+  `LocalAnimIndex` are not unreachable and are not a gap: they are the include-model bone
+  remap arrays, addressed by `StudioModelGroup`+0x10 relative to the group entry. Over the
+  27 include-carrying models the offset is byte-identical on disk in **41 of 41** groups, so
+  it is authored rather than written, every array base lands inside the region, and the
+  arrays span **173,320 of 173,320 bytes — 100.0%** of it.
+
+  Two bounds travel with the run. **An idle prefix exercises no blend at all** — a 90-second
+  probe over the theatre before the cutscene fires 8,959 contributions and zero multi-blend
+  sequences, so a short run must not be read as covering that path. And **the caller is an
+  address, not a name**: which builder asked for a contribution is a lookup against the case
+  specification by nearest preceding seed, so an address inside an unlisted function is
+  reported unresolved rather than attributed to the seed below it.
+
+  Two defects were closed on the way. A hook signature could not be a fixed byte sequence:
+  `evaluate_sequence_pose` begins `MOV AL,[0x104902c9]`, whose absolute operand the loader
+  rewrites, and `client.dll` loaded at a different base on every run — so the profile
+  contract now declares the relocated span and the backend compares it after adding the load
+  delta, keeping the check exact instead of masking the operand away. And CAP2.3's reuse
+  check required an identity change for every extra identity at a reused address, which
+  faulted a census that recorded the alternative exactly: an address destroyed and rebuilt as
+  a different actor. A destruction is a witnessed separation too. Each has a regression.
 - [ ] **CAP2.5 Consumed byte spans.** Convert each contribution's descriptor and animation
   block pointers into offsets within the owning model image and retain the exact spans the
   runtime dereferences. This is what makes CAP4.2 possible; without it a matching pose
