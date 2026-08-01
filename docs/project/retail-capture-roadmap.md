@@ -514,7 +514,10 @@ calling convention into the case specification before a hook is written.
   attributable to what asked for it.
 - [ ] **CAP2.7 Second acquisition.** Repeat CAP1.1 with the completed capture and report the
   same integrity counts plus unjoined-record counts. This database, not CAP1's, is the one
-  CAP4 inspects.
+  CAP4 inspects. The scene must include off-center ranged aiming on both axes: every 3×3
+  blend grid in the corpus is a weapon aim layer that no cutscene reaches, so a second
+  cutscene leaves the four-cell blend path unexercised through CAP4. The attribution
+  report's grid distribution and per-sequence cell counts are what show whether it fired.
 
 ## CAP3 — Decode and index
 
