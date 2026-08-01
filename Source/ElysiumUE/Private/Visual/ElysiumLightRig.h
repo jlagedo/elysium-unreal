@@ -14,16 +14,15 @@ class ULightComponent;
 // already Unreal cm / Z-up / left-handed. A component on the map actor, so it unloads with the map.
 //
 //   type 1 point      -> UPointLightComponent
-//   type 2 spot       -> USpotLightComponent   (cone from stopdot2)
+//   type 2 spot       -> USpotLightComponent   (inner/outer cone from stopdot/stopdot2)
 //   type 3 skylight   -> UDirectionalLightComponent (the sun; its own lux scale)
 //   type 5 skyambient -> SkyAmbient colour + SkyAmbientMag (no light; the map actor drives
 //                        its SkyLight's tint AND level from them)
 //   type 0 emit_surface (texlight) -> shadowless point light (clustering deferred)
 //
-// VtMB point/spot intensities are pure inverse-square radiosity magnitudes with a
-// `radius` cutoff — which is exactly Unreal's physical light model, so radius maps
-// straight onto AttenuationRadius and intensity onto candelas (no falloff-exponent hack
-// needed). The sun's near-unit intensity gets its own lux scale.
+// Point/spot use a unitless, non-inverse-square brightness with a gentle exponent: the baked
+// lightmap calibration shows VtMB's authored reach is nearly flat before its radius cutoff, while
+// inverse-square produces a hot source and a cliff to black. The sun keeps its own lux scale.
 UCLASS()
 class UElysiumLightRig : public USceneComponent
 {
@@ -71,13 +70,19 @@ public:
 		int32 Type = 1;             // 0 texlight, 1 point, 2 spot, 3 sun/directional
 		float Mag = 0.f;            // raw linear intensity magnitude (max of rgb)
 		float RadiusCm = 0.f;       // authored cutoff radius (0 -> FallbackRadiusCm)
+		float StopDot = 0.f;        // spotlight inner-cone cosine
+		float StopDot2 = 0.f;       // spotlight outer-cone cosine
 		float FitMult = 1.f;        // per-area .lightfit rebalance multiplier
 		int32 Style = 0;            // animated lightstyle index (0 = unanimated)
 		float BaseIntensity = 0.f;  // current pre-style intensity (styled lights scale this per frame)
 		FLinearColor Color = FLinearColor::White;   // the sidecar's normalized hue, for revert
+		FTransform AuthoredTransform = FTransform::Identity;
+		float AuthoredSourceRadiusCm = 0.f;
+		float AuthoredSoftSourceRadiusCm = 0.f;
+		float AuthoredSourceLengthCm = 0.f;
+		bool bAuthoredCastVolumetricShadow = true;
 		bool bOverridden = false;   // hand-set in the Lights window; the calibration passes skip it
 		bool bDisabled = false;     // switched off by hand in the Lights window
-		bool bReviewed = false;     // survey verdict recorded (kept or killed) in the Lights window
 		bool bSky = false;          // lights the 3D-skybox miniature, not the playable world
 	};
 
@@ -90,7 +95,7 @@ public:
 	// overridden, which takes it out of both passes that would otherwise write over the edit: the
 	// global calibration (ApplyLiveTuning, which every calibration slider triggers) and the
 	// per-frame lightstyle animation. The rest of the rig keeps following the sliders as usual.
-	// Nothing here persists — a map reload re-derives every source from the sidecar.
+	// Save edits persists the complete override and LoadSurvey restores it by source-line index.
 	ULightComponent* SourceLight(int32 Index) const;
 	bool IsSourceOverridden(int32 Index) const;
 	void SetSourceOverridden(int32 Index, bool bOverride);
@@ -111,29 +116,23 @@ public:
 	bool IsSourceDisabled(int32 Index) const;
 	void SetSourceDisabled(int32 Index, bool bDisable);
 	void EnableAllSources();
+	// Project terminology: "volumetric lights" means every non-spot source (tex, point and sun),
+	// not Unreal's VolumetricScatteringIntensity. Used by the Lights window's two batch buttons.
+	void SetNonSpotSourcesDisabled(bool bDisable);
 	// Should this source be lit right now, per the master toggle and its own disable? The Lights
 	// window's isolate pass restores visibility through this rather than to a plain "on".
 	bool ShouldSourceBeLit(int32 Index) const;
 
-	// --- per-source reviewed mark ----------------------------------------------------------------
-	// The survey's "judged" bit, distinct from the disable: a save records disabled lights only, so
-	// without it a kept light and a never-visited one are indistinguishable. Disabling a source
-	// marks it reviewed by itself (a kill is a verdict); re-enabling does not clear the mark (that
-	// is a deliberate keep). Pure bookkeeping — no visual effect, nothing reads it but the save.
-	bool IsSourceReviewed(int32 Index) const;
-	void SetSourceReviewed(int32 Index, bool bReviewed);
-
 	// Re-apply the map's saved survey (`_lights/<map>.json`, written by the Lights window) to the
-	// running rig: the disabled set and the reviewed marks, joined on the `.lights` line index.
-	// Additive — it sets marks, never clears them — and attribute overrides are not restored.
+	// running rig: global calibration, disabled sources and complete per-source overrides, joined
+	// on the `.lights` line index. Loading is deterministic: current edits are reverted first.
 	// Adopt runs this automatically when a save exists (elysium.LightSurvey 0 turns that off), so
 	// the survey is the map's standing hand-authored light state; the Lights window's Load button
 	// is the same call mid-session. Returns false and fills OutMessage on failure.
 	bool LoadSurvey(FString& OutMessage);
 
-	// Re-derive every light's intensity, reach, falloff exponent, and specular from the current
-	// tuning fields (PointSpotScale, MaxBrightness, RadiusScale, FalloffExponent, SunScaleLux,
-	// SpecularScale). Lets the Lights window tune the live rig without re-travelling the map.
+	// Re-derive every non-overridden light from the current calibration, including light transport,
+	// shadows, source shape, exact spot cone, and the renderer-critical MegaLights policy.
 	void ApplyLiveTuning();
 
 	// Filled by Build, read by the debug HUD / the map actor.
@@ -163,7 +162,12 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float FalloffExponent = 1.0f;
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float RadiusScale = 1.0f;
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float SpecularScale = 0.0f;
+	// Per-light Lumen injection multiplier (not the post-process precomputed-lighting control).
+	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float IndirectLightingScale = 1.0f;
+	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float VolumetricScatteringScale = 1.0f;
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float SunScaleLux = 8.0f;
+	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float SunSourceAngleDegrees = 0.5357f;
+	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float SunSoftSourceAngleDegrees = 0.0f;
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float FallbackRadiusCm = 2500.f;
 	// B7 — the 3D-skybox miniature's uniform scale, applied to a sky source's reach only (its
 	// position is baked already scaled). Set from `<map>.sky` at Adopt; 1 on a map with no

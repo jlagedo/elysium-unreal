@@ -456,6 +456,28 @@ that finishes early or late does not shift what follows it — the keyframe trac
 `theatre.py::tutorialLoad()`, which calls `ChangeMap(2.5, "tutorial", "tutorial_change")`, is
 dead: no entity output references it, and step 5 is what actually ends the map.
 
+#### The chain is observable in a live draw capture
+
+Instrumenting `CStudioRender::DrawModel` on the retail build makes each step above visible as a
+batch of character models drawn for the first time within one simulation step. Timed from
+step 1, on runs that rendered at the pinned 30 fps:
+
+| Instant | Models first drawn | Step |
+|---:|---|---|
+| −1.8 s | `Sheriff`, `doppleganger_male`, and two player models | map load places the map's own actors |
+| 0.0 s | four player models | `chooseSire()` + `castUnderstudy()` |
+| +64.6 s | fifteen — the nine named Camarilla NPCs plus six player models | `courtroomSire()` + `fillSeats()` at step 3 |
+| +68.1 s, +72.7 s | one, then two | the remaining courtroom arrivals |
+
+Two facts follow. The cast is **pre-selected, not progressive**: `castUnderstudy()` draws its
+whole set in a single step, and the courtroom fills in one step 64.6 s later, so a running
+cutscene looks flat in an actor census even though scenes are playing. And the selection is
+**stable across runs** — four captures cast the same four models at step 1 and the same fifteen
+at step 3, and three of them place step 3 within 0.12 s of each other. The fourth rendered at
+roughly half speed and reached step 3 at +115.6 s: `host_framerate` pins the simulation step
+rather than the wall clock, so a slower render stretches the whole chain in wall time without
+changing the order or the composition of the batches.
+
 ## `CInstancedSceneEntity` — the dialogue path
 
 RTTI `.?AVCInstancedSceneEntity@@`, vftable `0x1044f584`. A `CSceneEntity` subclass the

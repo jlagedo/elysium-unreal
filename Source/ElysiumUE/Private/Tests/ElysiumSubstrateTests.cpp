@@ -25,6 +25,7 @@
 #include "Visual/ElysiumDecals.h"
 #include "Visual/ElysiumEntityBodies.h"
 #include "Visual/ElysiumNpcAnimInstance.h"
+#include "Visual/ElysiumLightRig.h"
 #include "ElysiumDlg.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
@@ -75,10 +76,16 @@
 #include "Tests/AutomationCommon.h"
 
 #include "Components/SceneComponent.h"
+#include "Components/DirectionalLightComponent.h"
+#include "Components/PointLightComponent.h"
+#include "Components/SpotLightComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "Sound/SoundGenerator.h"
 #include "Sound/SoundWaveProcedural.h"
+#include "HAL/FileManager.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 
 // One context flag (runs anywhere) + the product filter (this project's own suite bucket).
 // EAutomationTestFlags is a strong enum in 5.8, so the constant carries that type (ENUM_CLASS_FLAGS
@@ -7680,6 +7687,117 @@ bool FElysiumAudioContractsTest::RunTest(const FString&)
 		TestTrue(TEXT("SetFakeSilence is a real base input"),
 			Registry.FindInput(*Base, TEXT("SetFakeSilence")) != nullptr);
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLightRigTest,
+	"Elysium.Substrate.LightRig", GElysiumTestFlags)
+
+bool FElysiumLightRigTest::RunTest(const FString&)
+{
+	IFileManager::Get().MakeDirectory(*FPaths::AutomationTransientDir(), /*Tree*/ true);
+	const FString LightsPath = FPaths::CreateTempFilename(
+		*FPaths::AutomationTransientDir(), TEXT("ElysiumLightRig_"), TEXT(".lights"));
+	const FString Sidecar =
+		TEXT("1 0 0 0 0 0 0 100 50 25 1000 0 0 1 0 0\n")
+		TEXT("2 0 0 0 1 0 0 50 40 30 2000 0.9396926 0.7660444 1 0 0\n")
+		TEXT("3 0 0 0 0 0 -1 1 1 1 0 0 0 1 0 0\n");
+	TestTrue(TEXT("synthetic light sidecar writes"), FFileHelper::SaveStringToFile(Sidecar, *LightsPath));
+
+	UElysiumLightRig* Rig = NewObject<UElysiumLightRig>();
+	UPointLightComponent* Point = NewObject<UPointLightComponent>();
+	USpotLightComponent* Spot = NewObject<USpotLightComponent>();
+	UDirectionalLightComponent* Sun = NewObject<UDirectionalLightComponent>();
+	Point->SetWorldLocation(FVector(100.f, 200.f, 300.f));
+
+	TArray<UElysiumLightRig::FAdoptedLight> Adopted;
+	Adopted.Add({Point, 0});
+	Adopted.Add({Spot, 1});
+	Adopted.Add({Sun, 2});
+	TestEqual(TEXT("all synthetic sources adopt"), Rig->Adopt(Adopted, LightsPath), 3);
+
+	TestFalse(TEXT("point baseline is non-inverse-square"), Point->bUseInverseSquaredFalloff != 0);
+	TestTrue(TEXT("local source explicitly allows MegaLights"), Point->bAllowMegaLights != 0);
+	TestEqual(TEXT("local source pins RT MegaLights shadows"),
+		Point->MegaLightsShadowMethod.GetValue(), EMegaLightsShadowMethod::RayTracing);
+	TestTrue(TEXT("point shadows are wired from rig calibration"), Point->CastShadows != 0);
+	TestTrue(TEXT("spot inner cone comes from stopdot"), FMath::IsNearlyEqual(Spot->InnerConeAngle, 20.f, 0.05f));
+	TestTrue(TEXT("spot outer cone comes from stopdot2"), FMath::IsNearlyEqual(Spot->OuterConeAngle, 40.f, 0.05f));
+
+	Rig->SetNonSpotSourcesDisabled(true);
+	TestTrue(TEXT("volumetric batch disables point"), Rig->IsSourceDisabled(0));
+	TestFalse(TEXT("volumetric batch leaves spot alone"), Rig->IsSourceDisabled(1));
+	TestTrue(TEXT("volumetric batch disables sun"), Rig->IsSourceDisabled(2));
+	Rig->SetNonSpotSourcesDisabled(false);
+
+	Point->SetSourceRadius(125.f);
+	Point->SetIndirectLightingIntensity(3.f);
+	Point->SetWorldLocation(FVector(999.f));
+	Rig->SetSourceOverridden(0, true);
+	Rig->RevertSource(0);
+	TestFalse(TEXT("revert returns source to calibration"), Rig->IsSourceOverridden(0));
+	TestTrue(TEXT("revert restores source shape"), FMath::IsNearlyZero(Point->SourceRadius));
+	TestTrue(TEXT("revert restores Lumen contribution"),
+		FMath::IsNearlyEqual(Point->IndirectLightingIntensity, 1.f));
+	TestTrue(TEXT("revert restores authored transform"),
+		Point->GetComponentLocation().Equals(FVector(100.f, 200.f, 300.f)));
+
+	// The map-load contract restores global calibration first, then the complete override by the
+	// stable sidecar index. Use the test's unique sidecar stem so no real survey can collide.
+	const FString EditPath = FElysiumContentPaths::LightEdits(FPaths::GetBaseFilename(LightsPath));
+	IFileManager::Get().MakeDirectory(*FElysiumContentPaths::LightEditsDir(), /*Tree*/ true);
+	const FString SavedEdit = TEXT(R"JSON({
+		"calibration": {
+			"point_spot_scale": 0.004,
+			"max_brightness": 12.0,
+			"falloff_exponent": 1.5,
+			"radius_scale": 1.25,
+			"indirect_lighting_scale": 1.5,
+			"volumetric_scattering_scale": 0.75,
+			"point_shadows": false
+		},
+		"edits": [{
+			"index": 0,
+			"disabled": true,
+			"overridden": true,
+			"intensity": 2.5,
+			"pos_cm": [10.0, 20.0, 30.0],
+			"rot_deg": [0.0, 45.0, 0.0],
+			"color": [0.2, 0.4, 0.8],
+			"reach_cm": 3456.0,
+			"falloff_exponent": 2.25,
+			"source_radius_cm": 75.0,
+			"soft_source_radius_cm": 50.0,
+			"source_length_cm": 120.0,
+			"indirect_lighting_scale": 2.0,
+			"volumetric_scatter": 0.5,
+			"specular_scale": 0.25,
+			"cast_shadows": true,
+			"cast_volumetric_shadow": false
+		}]
+	})JSON");
+	TestTrue(TEXT("synthetic light edit writes"), FFileHelper::SaveStringToFile(SavedEdit, *EditPath));
+	FString LoadMessage;
+	TestTrue(TEXT("saved light edit loads"), Rig->LoadSurvey(LoadMessage));
+	TestTrue(TEXT("saved calibration restores"), FMath::IsNearlyEqual(Rig->PointSpotScale, 0.004f));
+	TestTrue(TEXT("saved override restores"), Rig->IsSourceOverridden(0));
+	TestTrue(TEXT("saved disabled state restores"), Rig->IsSourceDisabled(0));
+	TestTrue(TEXT("saved intensity restores"), FMath::IsNearlyEqual(Point->Intensity, 2.5f));
+	TestTrue(TEXT("saved transform restores"), Point->GetComponentLocation().Equals(FVector(10.f, 20.f, 30.f)));
+	TestTrue(TEXT("saved reach restores"), FMath::IsNearlyEqual(Point->AttenuationRadius, 3456.f));
+	TestTrue(TEXT("saved source shape restores"),
+		FMath::IsNearlyEqual(Point->SourceRadius, 75.f)
+		&& FMath::IsNearlyEqual(Point->SoftSourceRadius, 50.f)
+		&& FMath::IsNearlyEqual(Point->SourceLength, 120.f));
+	TestTrue(TEXT("saved light transport restores"),
+		FMath::IsNearlyEqual(Point->IndirectLightingIntensity, 2.f)
+		&& FMath::IsNearlyEqual(Point->VolumetricScatteringIntensity, 0.5f)
+		&& FMath::IsNearlyEqual(Point->SpecularScale, 0.25f));
+	TestTrue(TEXT("saved shadow overrides restore"), Point->CastShadows != 0
+		&& Point->bCastVolumetricShadow == 0);
+
+	IFileManager::Get().Delete(*EditPath, /*RequireExists*/ false, /*EvenReadOnly*/ true);
+	IFileManager::Get().Delete(*LightsPath, /*RequireExists*/ false, /*EvenReadOnly*/ true);
 	return true;
 }
 

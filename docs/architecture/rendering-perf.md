@@ -149,10 +149,9 @@ a big FPS drop, so confirm engagement before touching any other knob:
    `r.MegaLights.EnableForProject=True`.)
 2. **Console check:** `r.MegaLights.EnableForProject` and `r.MegaLights.Allow` both read
    non-zero.
-3. **Per-light eligibility:** each light needs **Allow MegaLights** on (default for
-   *movable* local lights — the rig sets every light `Movable`, so they qualify) and
-   **MegaLights Shadow Method = Ray Tracing** (not Virtual Shadow Maps — VSM method is
-   per-light and defeats the constant-cost win).
+3. **Per-light eligibility:** each local rig light has **Allow MegaLights** and
+   **MegaLights Shadow Method = Ray Tracing** pinned again when the baked component is adopted.
+   Virtual Shadow Maps have significant per-light cost and defeat the constant-cost win.
 4. **Visualize:** `r.MegaLights.Debug 1` (or the MegaLights show-flag) highlights the lights
    MegaLights is handling. Lights it *isn't* handling are the expensive ones.
 5. **Profile the proof:** `ProfileGPU` (or `stat GPU`) and compare the **MegaLights** pass

@@ -73,6 +73,15 @@ class CoordinateContractTests(unittest.TestCase):
         self.assertIn("f 1/1 3/3 2/2", obj)
 
 
+class LightingBakeContractTests(unittest.TestCase):
+    def test_spot_cones_use_both_authored_cosines(self) -> None:
+        source = (REPO / "pipeline/unreal/bake_map.py").read_text(encoding="utf-8")
+        self.assertIn("stopdot = float(tok[11])", source)
+        self.assertIn("stopdot2 = float(tok[12])", source)
+        self.assertIn("component.set_inner_cone_angle(min(inner, outer))", source)
+        self.assertNotIn("outer * 0.6", source)
+
+
 class PathContractTests(unittest.TestCase):
     def test_work_root_derivations(self) -> None:
         with tempfile.TemporaryDirectory() as work:

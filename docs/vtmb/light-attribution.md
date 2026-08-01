@@ -32,30 +32,29 @@ changes no value, so a light comes back exactly as it was, and it outranks both 
 toggle and the window's isolate pass. Walking a map flipping that switch is how a labelled set is
 produced.
 
-Each source also carries a **Reviewed** mark — the "judged" bit, distinct from disabled: switching
-a light off marks it reviewed by itself (a kill is a verdict), a kept light is marked by hand, and
-re-enabling clears nothing. Copy-pasted lights (an identical colour/mag/radius/type/style tuple)
-form a **batch** the selected light's panel acts on in one go — off, on, reviewed, or cycling the
-members — matching the authored-batches finding below. **Next unreviewed** selects the nearest
-unjudged light.
+Copy-pasted lights (an identical colour/mag/radius/type/style tuple) form a **batch** the selected
+light's panel acts on in one go — off, on, or cycling the members — matching the authored-batches
+finding below. The map-wide **Volumetric lights on/off** pair acts on every non-spot source
+(texlight, point and sun); this project term describes the group and is unrelated to Unreal's
+volumetric-fog scattering property.
 
-The save is the map's **standing hand-authored light state**: map load auto-applies its disabled +
-reviewed sets (`UElysiumLightRig::LoadSurvey`; `elysium.LightSurvey 0` turns that off and loads
-the full faithful rig — the A/B back to VtMB's as-authored source set), and the window's **Load**
-button runs the same pass mid-session. The apply is additive — it sets marks, never clears them —
-and attribute overrides are not restored either way.
+The save is the map's **standing hand-authored light state**: map load restores its calibration,
+disabled set and complete per-source overrides (`UElysiumLightRig::LoadSurvey`;
+`elysium.LightSurvey 0` turns that off and loads the full faithful rig — the A/B back to VtMB's
+as-authored source set), and the window's **Load** button runs the same deterministic pass
+mid-session. Loading first returns the rig to its saved calibration baseline, then applies edits by
+stable `.lights` line index.
 
 **Save** writes `$ELYSIUM_EXPORT_ROOT/_lights/<map>.json` — one file per map, overwritten each save:
 
-- `counts` (sources / disabled / overridden / reviewed) — the denominator, so "how many were left
-  on" and coverage are answerable from the file alone
+- `schema` — the JSON contract version
+- `counts` (sources / disabled / overridden) — the denominator, so "how many were left on" is
+  answerable from the file alone
 - `calibration` — the rig tuning the judgement was made under. Which lights read as redundant
   depends on how hard the rig was driving all of them, so the verdict is uninterpretable without it
-- `edits[]` — only the edited sources, each with `index`, `row`, colour, position, magnitude,
-  radius, style, intensity, and the disabled/overridden/reviewed flags
-- `reviewed[]` — every reviewed source's `.lights` line index, disabled ones included. The
-  coverage record: a source absent here was never judged, so scoring restricts to this list
-  instead of inferring coverage from where the disabled lights sit
+- `edits[]` — only disabled or overridden sources, each with `index`, `row`, raw source identity,
+  enabled state, transform, colour, intensity, reach, falloff, Lumen/fog contribution, source
+  shape, cone, sun angle and shadow state as applicable to its Unreal light type
 
 `index` is the source's **`<map>.lights` line**; `row` is its position in the window's list. They
 are not the same — the skyambient row is skipped and sources are appended in the order the baked
@@ -210,11 +209,11 @@ Recorded so these are not re-derived:
 - **A map can hold more than one playable area.** `sp_tutorial_1` has a second one at ~170 m
   (125 lights) that the survey never covered; `sm_hub_1` has one at −148 m. Scoring must be
   restricted to the surveyed band or precision is measured against lights nobody looked at.
-- **"Kept" is not the same as "judged" in the four existing surveys.** They predate the reviewed
-  mark, so in their saves an unvisited light is indistinguishable from an examined-and-approved
-  one. Coverage on `sp_tutorial_1` was verified after the fact (disabled lights span the full
-  extent, 18 of 25 grid cells); the other three carry no such check. A survey made with the
-  reviewed mark records coverage as data — score it against `reviewed[]` only.
+- **"Kept" is not the same as "judged" in the existing surveys.** An enabled source is
+  indistinguishable from an unvisited one. Coverage on `sp_tutorial_1` was verified after the fact
+  (disabled lights span the full extent, 18 of 25 grid cells); the other three carry no such check.
+  Classifier scoring therefore needs an explicitly recorded surveyed area or a declared full-map
+  pass; enabled state alone is not coverage evidence.
 
 ## Classifier and measured scores
 

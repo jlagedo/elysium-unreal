@@ -704,7 +704,7 @@ class Bake(object):
 
     def _place_lights(self, actors, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
         """One light actor per WORLDLIGHTS `.lights` line, with UElysiumLightRig's calibration
-        applied verbatim: 16 fields `type x y z dx dy dz r g b radius _ stopdot2 _ style sky`,
+        applied verbatim: 16 fields `type x y z dx dy dz r g b radius stopdot stopdot2 _ style sky`,
         soft non-inverse-square falloff, specular killed, everything Movable.
 
         Lightstyle animation (field 15) has no baked equivalent -- a styled source is placed at
@@ -734,6 +734,7 @@ class Bake(object):
                 direction = unreal.Vector(float(tok[4]), float(tok[5]), float(tok[6]))
                 rgb = (float(tok[7]), float(tok[8]), float(tok[9]))
                 radius_cm = float(tok[10])
+                stopdot = float(tok[11])
                 stopdot2 = float(tok[12])
 
                 mag = max(rgb)
@@ -768,7 +769,9 @@ class Bake(object):
                         # Texlights stay shadowless, as the rig has them.
                         component.set_cast_shadows(kind != 0)
                 elif kind == 2:
+                    inner = math.degrees(math.acos(max(-1.0, min(1.0, stopdot))))
                     outer = math.degrees(math.acos(max(-1.0, min(1.0, stopdot2))))
+                    inner = max(1.0, min(80.0, inner))
                     outer = max(1.0, min(80.0, outer))
                     actor = actors.spawn_actor_from_class(
                         unreal.SpotLight, origin, _dir_rotator(direction))
@@ -777,7 +780,7 @@ class Bake(object):
                         component.set_attenuation_radius(reach)
                         component.set_intensity(soft)
                         component.set_outer_cone_angle(outer)
-                        component.set_inner_cone_angle(max(1.0, outer * 0.6))
+                        component.set_inner_cone_angle(min(inner, outer))
                         component.set_cast_shadows(True)
                 elif kind == 3:
                     actor = actors.spawn_actor_from_class(
@@ -883,7 +886,7 @@ class Bake(object):
         # What it provides is the place a per-map value goes when C4/C5 measure a deficit that
         # justifies one: Skylight Leaking (+ its full-leaking distance) as the sanctioned
         # replacement for load-bearing author fill where Lumen has nothing to bounce off, and
-        # Indirect Lighting Intensity as the bounce-strength A/B. Landing the mechanism now
+        # Lumen Diffuse Color Boost as the bounce-strength A/B. Landing the mechanism now
         # means such a decision is one number in one place, not new plumbing under time
         # pressure. Ambient Cubemap is deliberately NOT among them: a flat occlusion-ignoring
         # term is the contrast-killer both Epic and the direction charter warn against.

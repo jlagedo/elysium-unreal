@@ -11,22 +11,21 @@
 class UElysiumLightRig;
 
 // P2.5 Lights window: the F1-first surface for the real-time light rig (UElysiumLightRig). A
-// visibility toggle, live calibration sliders (point/spot scale, max brightness, falloff, reach,
-// specular, sun lux) that re-tune the running rig with no map reload, a source-type breakdown, and
+// visibility toggle, human-scale live calibration controls (brightness, reach, Lumen bounce,
+// fog scattering, source shape, shadows and sun) that re-tune the running rig with no map reload, and
 // a scrollable per-source list (type / colour / raw magnitude / reach / lightstyle). It also owns
 // the map's ambience — the baked sky light's intensity/colour/cubemap and the height fog — because
 // how much the sky contributes and how much the per-source rig must carry is one calibration, not
 // two. Subsumes the Canvas HUD's lights readout.
 //
 // Per-light inspector: one source is selected at a time, from the list or by clicking its marker
-// in the world, and its own intensity/colour/reach/cone/shadow is edited directly, with a 3D gizmo
-// on its transform. Editing a light marks it overridden in the rig, which is what keeps the global
+// in the world, and its output/transport/shape/cone/shadow is edited directly, with a 3D gizmo on
+// its transform. Editing a light marks it overridden in the rig, which keeps the global
 // sliders and the lightstyle animation from writing back over the edit. A separate Enabled switch
 // takes one light out of the map without touching its values.
 //
-// The running rig is still the only live state — a map reload restores the sidecar's calibration —
-// but Save writes the edits out as JSON (one file per map under `_lights/`, overwritten each time),
-// so an in-game survey of which sources are real fixtures and which are fill comes back as data.
+// Save writes the complete calibration, disabled set and overrides as JSON (one file per map under
+// `_lights/`, overwritten each time); map load restores it by stable `.lights` source index.
 //
 // Lights carry no collision, so the world pick here is its own thing rather than ElysiumPick — it
 // is a screen-space nearest-marker test, which is also what makes a light inside solid geometry
@@ -45,7 +44,7 @@ private:
 	// The selected source's own attributes, plus its transform gizmo. Returns nothing; every edit
 	// goes straight to the live component.
 	void RenderSelectedSource(UElysiumLightRig& Rig, int32 Index);
-	// The map-wide edit actions (revert all / enable all / save), rendered whether or not a source
+	// The map-wide edit actions (revert/enable/non-spot batch/save), rendered whether or not a source
 	// is selected — they act on the whole rig, not on the selection.
 	void RenderEditActions(UElysiumLightRig& Rig, const FString& MapName);
 	// Write the map's edits to FElysiumContentPaths::LightEdits(MapName), overwriting any previous

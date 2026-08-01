@@ -5,6 +5,7 @@
 
 #include "Components/DirectionalLightComponent.h"
 #include "Components/LightComponent.h"
+#include "Components/LocalLightComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/SpotLightComponent.h"
 #include "Dom/JsonObject.h"
@@ -31,13 +32,12 @@ static TAutoConsoleVariable<int32> CVarLightFit(
 	TEXT("Apply the <map>.lightfit per-area brightness rebalance to the LightRig (0/1)."),
 	ECVF_Default);
 
-// The map's saved light survey (`_lights/<map>.json`, written by the Lights window) is applied
-// at map load when it exists: hand-killed lights come up switched off, reviewed marks restored.
-// That makes the survey the map's standing hand-authored light state; 0 loads the full faithful
-// rig, which is the A/B back to VtMB's as-authored source set.
+// The map's saved light edits (`_lights/<map>.json`, written by the Lights window) are applied at
+// map load when present: calibration, switched-off sources and full attribute overrides. That
+// makes the file the standing hand-authored state; 0 loads the full faithful source set.
 static TAutoConsoleVariable<int32> CVarLightSurvey(
 	TEXT("elysium.LightSurvey"), 1,
-	TEXT("Auto-apply the saved light survey (disabled set + reviewed marks) at map load (0/1)."),
+	TEXT("Auto-apply saved light calibration, disabled sources and overrides at map load (0/1)."),
 	ECVF_Default);
 
 namespace
@@ -61,6 +61,54 @@ namespace
 	};
 	constexpr int32 LsCount = UE_ARRAY_COUNT(LsPatterns);
 	constexpr float LsFps = 10.f;
+
+	float ConeDegrees(float Cosine)
+	{
+		return FMath::Clamp(FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(Cosine, -1.f, 1.f))),
+			1.f, 80.f);
+	}
+
+	bool ReadNumber(const FJsonObject& Object, const TCHAR* Field, float& Out)
+	{
+		double Value = 0.0;
+		if (!Object.TryGetNumberField(Field, Value) || !FMath::IsFinite(Value))
+		{
+			return false;
+		}
+		Out = static_cast<float>(Value);
+		return true;
+	}
+
+	bool ReadVector(const FJsonObject& Object, const TCHAR* Field, FVector& Out)
+	{
+		const TArray<TSharedPtr<FJsonValue>>* Values = nullptr;
+		if (!Object.TryGetArrayField(Field, Values) || Values->Num() != 3)
+		{
+			return false;
+		}
+		double X = 0.0, Y = 0.0, Z = 0.0;
+		if (!(*Values)[0]->TryGetNumber(X) || !(*Values)[1]->TryGetNumber(Y)
+			|| !(*Values)[2]->TryGetNumber(Z))
+		{
+			return false;
+		}
+		Out = FVector(X, Y, Z);
+		return !Out.ContainsNaN();
+	}
+
+	bool ReadColor(const FJsonObject& Object, const TCHAR* Field, FLinearColor& Out)
+	{
+		FVector RGB;
+		if (!ReadVector(Object, Field, RGB))
+		{
+			return false;
+		}
+		Out = FLinearColor(
+			FMath::Max(static_cast<float>(RGB.X), 0.f),
+			FMath::Max(static_cast<float>(RGB.Y), 0.f),
+			FMath::Max(static_cast<float>(RGB.Z), 0.f));
+		return true;
+	}
 
 	// Current intensity multiplier (0..~2) for a style, lerped between 10 Hz keyframes.
 	// Style 0, the unanimated 12-31, and the switchable 32+ all return 1 (held ON).
@@ -148,6 +196,8 @@ int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FStrin
 		int32 Type = 1;
 		float Mag = 0.f;
 		float RadiusCm = 0.f;
+		float StopDot = 0.f;
+		float StopDot2 = 0.f;
 		int32 Style = 0;
 		FLinearColor Color = FLinearColor::White;
 		bool bSky = false;
@@ -190,6 +240,8 @@ int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FStrin
 		Row.Type = Type;
 		Row.Mag = Mag;
 		Row.RadiusCm = FCString::Atof(*P[10]);
+		Row.StopDot = FCString::Atof(*P[11]);
+		Row.StopDot2 = FCString::Atof(*P[12]);
 		// Field 16 (optional on older exports): the source lights the 3D-skybox miniature.
 		Row.bSky = P.Num() >= 16 && FCString::Atoi(*P[15]) != 0;
 		const int32 Style = FCString::Atoi(*P[14]);
@@ -218,8 +270,27 @@ int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FStrin
 		// constants is left to ApplyLiveTuning, which is the single place those live.
 		Entry.Light->SetLightColor(Row.Color);
 		Lights.Add(Entry.Light);
-		LightSources.Add({ Entry.Light, Entry.SourceIndex, Row.Type, Row.Mag, Row.RadiusCm, FitMult,
-			Row.Style, 0.f, Row.Color, false, false, false, Row.bSky });
+		FLightSource Source;
+		Source.Light = Entry.Light;
+		Source.SourceIndex = Entry.SourceIndex;
+		Source.Type = Row.Type;
+		Source.Mag = Row.Mag;
+		Source.RadiusCm = Row.RadiusCm;
+		Source.StopDot = Row.StopDot;
+		Source.StopDot2 = Row.StopDot2;
+		Source.FitMult = FitMult;
+		Source.Style = Row.Style;
+		Source.Color = Row.Color;
+		Source.AuthoredTransform = Entry.Light->GetComponentTransform();
+		Source.bAuthoredCastVolumetricShadow = Entry.Light->bCastVolumetricShadow;
+		if (const UPointLightComponent* Point = Cast<UPointLightComponent>(Entry.Light))
+		{
+			Source.AuthoredSourceRadiusCm = Point->SourceRadius;
+			Source.AuthoredSoftSourceRadiusCm = Point->SoftSourceRadius;
+			Source.AuthoredSourceLengthCm = Point->SourceLength;
+		}
+		Source.bSky = Row.bSky;
+		LightSources.Add(MoveTemp(Source));
 		bHasSun |= (Row.Type == 3);
 		++LightCount;
 	}
@@ -275,9 +346,44 @@ bool UElysiumLightRig::LoadSurvey(FString& OutMessage)
 		return false;
 	}
 
+	// Restore the saved global calibration before resetting sources, so RevertAllSources derives
+	// the same baseline the edits were authored against. Missing fields keep current defaults, which
+	// makes older survey-only files forward-compatible.
+	if (const TSharedPtr<FJsonObject>* Calibration = nullptr;
+		Root->TryGetObjectField(TEXT("calibration"), Calibration))
+	{
+		float Value = 0.f;
+		if (ReadNumber(**Calibration, TEXT("point_spot_scale"), Value))
+			PointSpotScale = FMath::Clamp(Value, 0.00001f, 0.1f);
+		if (ReadNumber(**Calibration, TEXT("max_brightness"), Value))
+			MaxBrightness = FMath::Clamp(Value, 0.01f, 100.f);
+		if (ReadNumber(**Calibration, TEXT("falloff_exponent"), Value))
+			FalloffExponent = FMath::Clamp(Value, 0.1f, 16.f);
+		if (ReadNumber(**Calibration, TEXT("radius_scale"), Value))
+			RadiusScale = FMath::Clamp(Value, 0.01f, 10.f);
+		if (ReadNumber(**Calibration, TEXT("specular_scale"), Value))
+			SpecularScale = FMath::Clamp(Value, 0.f, 1.f);
+		if (ReadNumber(**Calibration, TEXT("indirect_lighting_scale"), Value))
+			IndirectLightingScale = FMath::Clamp(Value, 0.f, 6.f);
+		if (ReadNumber(**Calibration, TEXT("volumetric_scattering_scale"), Value))
+			VolumetricScatteringScale = FMath::Clamp(Value, 0.f, 4.f);
+		if (ReadNumber(**Calibration, TEXT("sun_lux_scale"), Value))
+			SunScaleLux = FMath::Clamp(Value, 0.01f, 100.f);
+		if (ReadNumber(**Calibration, TEXT("sun_source_angle_deg"), Value))
+			SunSourceAngleDegrees = FMath::Clamp(Value, 0.f, 5.f);
+		if (ReadNumber(**Calibration, TEXT("sun_soft_source_angle_deg"), Value))
+			SunSoftSourceAngleDegrees = FMath::Clamp(Value, 0.f, 5.f);
+		(*Calibration)->TryGetBoolField(TEXT("point_shadows"), bPointShadows);
+		(*Calibration)->TryGetBoolField(TEXT("spot_shadows"), bSpotShadows);
+		(*Calibration)->TryGetBoolField(TEXT("sun_shadows"), bSunShadows);
+	}
+
+	EnableAllSources();
+	RevertAllSources();
+
 	// The save keys on the `.lights` line; this rig arrays by adoption order. Join through
-	// SourceIndex — a saved index with no live source (a re-export changed the sidecar) is
-	// counted, not guessed at.
+	// SourceIndex — a saved index with no live source (a re-export changed the sidecar) is counted,
+	// not guessed at.
 	TMap<int32, int32> RowBySource;
 	RowBySource.Reserve(LightSources.Num());
 	for (int32 Row = 0; Row < LightSources.Num(); ++Row)
@@ -285,7 +391,7 @@ bool UElysiumLightRig::LoadSurvey(FString& OutMessage)
 		RowBySource.Add(LightSources[Row].SourceIndex, Row);
 	}
 
-	int32 NumDisabled = 0, NumReviewed = 0, NumUnmatched = 0;
+	int32 NumDisabled = 0, NumOverridden = 0, NumUnmatched = 0;
 
 	const TArray<TSharedPtr<FJsonValue>>* Edits = nullptr;
 	if (Root->TryGetArrayField(TEXT("edits"), Edits))
@@ -297,53 +403,117 @@ bool UElysiumLightRig::LoadSurvey(FString& OutMessage)
 			{
 				continue;
 			}
-			bool bDisabled = false;
-			if (!(*Edit)->TryGetBoolField(TEXT("disabled"), bDisabled) || !bDisabled)
-			{
-				continue;
-			}
 			int32 SourceIndex = INDEX_NONE;
 			if (!(*Edit)->TryGetNumberField(TEXT("index"), SourceIndex))
 			{
 				continue;
 			}
-			if (const int32* Row = RowBySource.Find(SourceIndex))
-			{
-				SetSourceDisabled(*Row, true);   // also marks it reviewed
-				++NumDisabled;
-			}
-			else
+			const int32* Row = RowBySource.Find(SourceIndex);
+			if (Row == nullptr)
 			{
 				++NumUnmatched;
+				continue;
 			}
-		}
-	}
 
-	// Older saves carry no reviewed list; their disabled restore above still marks those reviewed.
-	const TArray<TSharedPtr<FJsonValue>>* Reviewed = nullptr;
-	if (Root->TryGetArrayField(TEXT("reviewed"), Reviewed))
-	{
-		for (const TSharedPtr<FJsonValue>& Value : *Reviewed)
-		{
-			int32 SourceIndex = INDEX_NONE;
-			if (!Value.IsValid() || !Value->TryGetNumber(SourceIndex))
+			FLightSource& Source = LightSources[*Row];
+			ULightComponent* Light = Source.Light.Get();
+			if (Light == nullptr)
 			{
 				continue;
 			}
-			if (const int32* Row = RowBySource.Find(SourceIndex))
+
+			bool bDisabled = false;
+			if ((*Edit)->TryGetBoolField(TEXT("disabled"), bDisabled) && bDisabled)
 			{
-				SetSourceReviewed(*Row, true);
-				++NumReviewed;
+				SetSourceDisabled(*Row, true);
+				++NumDisabled;
 			}
-			else
+
+			bool bOverride = false;
+			if (!(*Edit)->TryGetBoolField(TEXT("overridden"), bOverride) || !bOverride)
 			{
-				++NumUnmatched;
+				continue;
 			}
+
+			float Number = 0.f;
+			FVector Vector;
+			FLinearColor Color;
+			if (ReadVector(**Edit, TEXT("pos_cm"), Vector)
+				|| ReadVector(**Edit, TEXT("pos"), Vector))
+			{
+				Light->SetWorldLocation(Vector);
+			}
+			if (ReadVector(**Edit, TEXT("rot_deg"), Vector))
+			{
+				Light->SetWorldRotation(FRotator(Vector.X, Vector.Y, Vector.Z));
+			}
+			if (ReadNumber(**Edit, TEXT("intensity"), Number))
+			{
+				SetSourceIntensity(*Row, FMath::Max(Number, 0.f));
+			}
+			if (ReadColor(**Edit, TEXT("color"), Color))
+			{
+				Light->SetLightColor(Color);
+			}
+			if (ReadNumber(**Edit, TEXT("indirect_lighting_scale"), Number))
+				Light->SetIndirectLightingIntensity(FMath::Clamp(Number, 0.f, 6.f));
+			if (ReadNumber(**Edit, TEXT("volumetric_scatter"), Number))
+				Light->SetVolumetricScatteringIntensity(FMath::Clamp(Number, 0.f, 4.f));
+			if (ReadNumber(**Edit, TEXT("specular_scale"), Number))
+			{
+				Light->SpecularScale = FMath::Clamp(Number, 0.f, 1.f);
+				Light->MarkRenderStateDirty();
+			}
+			bool bFlag = false;
+			if ((*Edit)->TryGetBoolField(TEXT("cast_shadows"), bFlag))
+				Light->SetCastShadows(bFlag);
+			if ((*Edit)->TryGetBoolField(TEXT("cast_volumetric_shadow"), bFlag))
+			{
+				Light->bCastVolumetricShadow = bFlag;
+				Light->MarkRenderStateDirty();
+			}
+
+			if (ULocalLightComponent* Local = Cast<ULocalLightComponent>(Light))
+			{
+				if (ReadNumber(**Edit, TEXT("reach_cm"), Number))
+					Local->SetAttenuationRadius(FMath::Clamp(Number, 1.f, 100000.f));
+			}
+			if (UPointLightComponent* Point = Cast<UPointLightComponent>(Light))
+			{
+				if (ReadNumber(**Edit, TEXT("falloff_exponent"), Number))
+					Point->SetLightFalloffExponent(FMath::Clamp(Number, 0.1f, 16.f));
+				if (ReadNumber(**Edit, TEXT("source_radius_cm"), Number))
+					Point->SetSourceRadius(FMath::Clamp(Number, 0.f, 10000.f));
+				if (ReadNumber(**Edit, TEXT("soft_source_radius_cm"), Number))
+					Point->SetSoftSourceRadius(FMath::Clamp(Number, 0.f, 10000.f));
+				if (ReadNumber(**Edit, TEXT("source_length_cm"), Number))
+					Point->SetSourceLength(FMath::Clamp(Number, 0.f, 10000.f));
+			}
+			if (USpotLightComponent* Spot = Cast<USpotLightComponent>(Light))
+			{
+				float Inner = Spot->InnerConeAngle;
+				float Outer = Spot->OuterConeAngle;
+				ReadNumber(**Edit, TEXT("inner_cone_deg"), Inner);
+				ReadNumber(**Edit, TEXT("outer_cone_deg"), Outer);
+				Outer = FMath::Clamp(Outer, 1.f, 80.f);
+				Spot->SetOuterConeAngle(Outer);
+				Spot->SetInnerConeAngle(FMath::Clamp(Inner, 0.f, Outer));
+			}
+			if (UDirectionalLightComponent* Sun = Cast<UDirectionalLightComponent>(Light))
+			{
+				if (ReadNumber(**Edit, TEXT("source_angle_deg"), Number))
+					Sun->SetLightSourceAngle(FMath::Clamp(Number, 0.f, 5.f));
+				if (ReadNumber(**Edit, TEXT("soft_source_angle_deg"), Number))
+					Sun->SetLightSourceSoftAngle(FMath::Clamp(Number, 0.f, 5.f));
+			}
+
+			Source.bOverridden = true;
+			++NumOverridden;
 		}
 	}
 
-	OutMessage = FString::Printf(TEXT("loaded %d off · %d reviewed%s from %s"),
-		NumDisabled, NumReviewed,
+	OutMessage = FString::Printf(TEXT("loaded %d off · %d override%s%s from %s"),
+		NumDisabled, NumOverridden, NumOverridden == 1 ? TEXT("") : TEXT("s"),
 		NumUnmatched > 0 ? *FString::Printf(TEXT(" · %d unmatched"), NumUnmatched) : TEXT(""),
 		*Path);
 	return true;
@@ -454,26 +624,9 @@ void UElysiumLightRig::SetSourceDisabled(int32 Index, bool bDisable)
 		return;
 	}
 	LightSources[Index].bDisabled = bDisable;
-	if (bDisable)
-	{
-		LightSources[Index].bReviewed = true;
-	}
 	if (ULightComponent* Light = LightSources[Index].Light.Get())
 	{
 		Light->SetVisibility(ShouldSourceBeLit(Index));
-	}
-}
-
-bool UElysiumLightRig::IsSourceReviewed(int32 Index) const
-{
-	return LightSources.IsValidIndex(Index) && LightSources[Index].bReviewed;
-}
-
-void UElysiumLightRig::SetSourceReviewed(int32 Index, bool bReviewed)
-{
-	if (LightSources.IsValidIndex(Index))
-	{
-		LightSources[Index].bReviewed = bReviewed;
 	}
 }
 
@@ -485,6 +638,17 @@ void UElysiumLightRig::EnableAllSources()
 	}
 }
 
+void UElysiumLightRig::SetNonSpotSourcesDisabled(bool bDisable)
+{
+	for (int32 Index = 0; Index < LightSources.Num(); ++Index)
+	{
+		if (LightSources[Index].Type != 2)
+		{
+			SetSourceDisabled(Index, bDisable);
+		}
+	}
+}
+
 void UElysiumLightRig::ApplyToSource(FLightSource& S)
 {
 	ULightComponent* Light = S.Light.Get();
@@ -492,6 +656,12 @@ void UElysiumLightRig::ApplyToSource(FLightSource& S)
 	{
 		return;
 	}
+
+	// A non-overridden source is the faithful row plus the current map-wide calibration. Keeping
+	// every owned attribute here makes Revert complete and prevents an editor/bake value from
+	// silently surviving after the runtime takes ownership.
+	Light->SetWorldTransform(S.AuthoredTransform);
+	Light->SetLightColor(S.Color);
 
 	if (S.Type == 3)
 	{
@@ -508,19 +678,50 @@ void UElysiumLightRig::ApplyToSource(FLightSource& S)
 			Reach = FMath::Max(Reach * SkyReachScale, MinSkyReachCm);
 		}
 		S.BaseIntensity = FMath::Min(S.Mag * PointSpotScale * S.FitMult, MaxBrightness);
-		if (UPointLightComponent* PL = Cast<UPointLightComponent>(Light))
+		if (ULocalLightComponent* Local = Cast<ULocalLightComponent>(Light))
 		{
-			PL->SetAttenuationRadius(Reach);
-			PL->SetLightFalloffExponent(FalloffExponent);
-		}
-		else if (USpotLightComponent* SL = Cast<USpotLightComponent>(Light))
-		{
-			SL->SetAttenuationRadius(Reach);
-			SL->SetLightFalloffExponent(FalloffExponent);
+			Local->SetAttenuationRadius(Reach);
 		}
 	}
 
+	if (UPointLightComponent* Point = Cast<UPointLightComponent>(Light))
+	{
+		Point->SetUseInverseSquaredFalloff(false);
+		Point->SetLightFalloffExponent(FalloffExponent);
+		Point->SetSourceRadius(S.AuthoredSourceRadiusCm);
+		Point->SetSoftSourceRadius(S.AuthoredSoftSourceRadiusCm);
+		Point->SetSourceLength(S.AuthoredSourceLengthCm);
+	}
+	if (USpotLightComponent* Spot = Cast<USpotLightComponent>(Light))
+	{
+		const float Outer = ConeDegrees(S.StopDot2);
+		Spot->SetOuterConeAngle(Outer);
+		Spot->SetInnerConeAngle(FMath::Min(ConeDegrees(S.StopDot), Outer));
+	}
+	if (UDirectionalLightComponent* Sun = Cast<UDirectionalLightComponent>(Light))
+	{
+		Sun->SetLightSourceAngle(FMath::Clamp(SunSourceAngleDegrees, 0.f, 5.f));
+		Sun->SetLightSourceSoftAngle(FMath::Clamp(SunSoftSourceAngleDegrees, 0.f, 5.f));
+	}
+
+	const bool bCastShadows = S.Type == 0 ? false
+		: S.Type == 2 ? bSpotShadows
+		: S.Type == 3 ? bSunShadows
+		: bPointShadows;
+	Light->SetCastShadows(bCastShadows);
+	Light->bCastVolumetricShadow = S.bAuthoredCastVolumetricShadow;
+	Light->SetIndirectLightingIntensity(FMath::Clamp(IndirectLightingScale, 0.f, 6.f));
+	Light->SetVolumetricScatteringIntensity(FMath::Clamp(VolumetricScatteringScale, 0.f, 4.f));
 	Light->SpecularScale = SpecularScale;
+	// Elysium's hundreds of movable local lights depend on fixed-cost RT MegaLights. This is a
+	// renderer contract, not an art override; never let baked defaults or a prior editor setting
+	// send one source through per-light VSM shadowing.
+	if (S.Type != 3)
+	{
+		Light->bAllowMegaLights = true;
+		Light->MegaLightsShadowMethod = EMegaLightsShadowMethod::RayTracing;
+	}
+	Light->MarkRenderStateDirty();
 	// Styled lights get their per-frame flicker off this new base next tick; set the base now
 	// so unanimated lights update immediately (and animated ones don't stall on a paused clock).
 	Light->SetIntensity(S.BaseIntensity);
