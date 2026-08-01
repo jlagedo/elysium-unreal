@@ -340,8 +340,10 @@ calling convention into the case specification before a hook is written.
   `StudioBone.Flags`, `StudioMesh.VertexData`, `StudioSeqDesc`+0xc, the include-model
   records, `MDLHeader.Flags`/`NumLocalNodes`, and one unindexed gap written on exactly the 27
   models carrying include models and no other. Those are the ranges CAP4.2 must treat as
-  loader-written rather than as source bytes, and the bone-flag row means a disk read of
-  `StudioBone.Flags` is not what the runtime uses. Facts:
+  loader-written rather than as source bytes. The bone-flag rewrite is additive only — over
+  all 2,286 captured bones the loader sets bits and clears none, and `0x2` is untouched, so
+  the split-inheritance rule and the exported `split_bones` inventory read a value the loader
+  leaves alone. Facts:
   `docs/vtmb/mdl_v2531.md`. Reproduction on a second cutscene is CAP2.7; identifying the
   gap's records is CAP2.4's remap work.
 
