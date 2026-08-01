@@ -13,24 +13,40 @@ from typing import BinaryIO, Iterator
 
 
 POSE_FILE_HEADER = struct.Struct("<8sIIQqIIIII65s11s")
-POSE_RECORD_HEADER = struct.Struct("<4sIQqIIIIII5I64s3I")
+POSE_RECORD_HEADER = struct.Struct("<4sIQqIIIIII5I64s3II32s")
 ANIMATION_FILE_HEADER = struct.Struct("<8sIIQqIIIII65sII3s")
-ANIMATION_RECORD_HEADER = struct.Struct("<4sIQqIIIIIiffi4I")
+ANIMATION_RECORD_HEADER = struct.Struct("<4sIQqIIIIIiffi6I")
 BRACKET_RECORD_HEADER = struct.Struct("<4sIQqqIIIII9I")
 # Streams captured before the pose-build generation existed. Their records are
 # narrower and carry no generation, so the reader picks the header by stream
-# version and those columns stay NULL.
+# version and those columns stay NULL. V3 is the generation-bearing record from
+# before the composed-pose stage kept its root/entity transform.
 POSE_RECORD_HEADER_V2 = struct.Struct("<4sIQqIIIIII5I64s")
+POSE_RECORD_HEADER_V3 = struct.Struct("<4sIQqIIIIII5I64s3I")
 ANIMATION_RECORD_HEADER_V2 = struct.Struct("<4sIQqIIIIIiffi2I")
+ANIMATION_RECORD_HEADER_V3 = struct.Struct("<4sIQqIIIIIiffi4I")
 # The census stream. Its rows are a dictionary rather than events, so they land
 # in their own tables and never widen `records`.
 CENSUS_FILE_HEADER = struct.Struct("<8sIIQqIIIII76s")
 MODEL_OBSERVATION_HEADER = struct.Struct("<4sIQq13I128s")
 MODEL_IMAGE_HEADER = struct.Struct("<4sIQq7I")
+# The actor stream. Same split as the census: identity per sighting in its own
+# table, never widening `records`.
+ACTOR_FILE_HEADER = struct.Struct("<8sIIQqIIII80s")
+ACTOR_OBSERVATION_HEADER = struct.Struct("<4sIQq9I64s")
+# The observation reasons that carry a model identity. Construction and
+# destruction name an address and a time only.
+ACTOR_IDENTITY_REASONS = (1, 2, 3)
 MAXIMUM_BONES = 1024
 # Mirrors kCensusImageCap in the probe; a record claiming more than this did
 # not come from the hook that wrote the stream.
 MAXIMUM_IMAGE_BYTES = 8 * 1024 * 1024
+# Mirrors kRootTransformBytes: a 3x4 root/entity transform, or nothing on an
+# evaluation that never receives one.
+ROOT_TRANSFORM_BYTES = 48
+# Mirrors kRenderInfoBytes: the eight dwords the engine writes into the render
+# info and the studio draw reads back.
+RENDER_INFO_BYTES = 32
 
 
 def file_sha256(path: Path) -> str:
@@ -85,8 +101,14 @@ def _pose_records(
     stream: BinaryIO,
     *,
     generations: bool,
+    render_info: bool,
 ) -> Iterator[tuple[dict[str, object], bytes, bytes] | bytes]:
-    header = POSE_RECORD_HEADER if generations else POSE_RECORD_HEADER_V2
+    if render_info:
+        header = POSE_RECORD_HEADER
+    elif generations:
+        header = POSE_RECORD_HEADER_V3
+    else:
+        header = POSE_RECORD_HEADER_V2
     while True:
         record = _read_record(stream, {b"POSE": header})
         if record is None:
@@ -126,6 +148,16 @@ def _pose_records(
                     "carry_generation": int(fields[18]),
                 }
             )
+        if render_info:
+            span = int(fields[19])
+            if span != RENDER_INFO_BYTES:
+                yield raw_header + payload + stream.read()
+                return
+            # Kept as the dwords the engine wrote, not as named fields: only
+            # +0x00 and +0x18 are decoded, and the rest stay evidence.
+            values["render_info"] = json.dumps(
+                list(struct.unpack("<8I", fields[20]))
+            )
         yield values, raw_header, payload
 
 
@@ -149,10 +181,14 @@ def _animation_records(
     *,
     selected_bones: bool,
     generations: bool,
+    root_transform: bool,
 ) -> Iterator[tuple[dict[str, object], bytes, bytes] | bytes]:
-    evaluation = (
-        ANIMATION_RECORD_HEADER if generations else ANIMATION_RECORD_HEADER_V2
-    )
+    if root_transform:
+        evaluation = ANIMATION_RECORD_HEADER
+    elif generations:
+        evaluation = ANIMATION_RECORD_HEADER_V3
+    else:
+        evaluation = ANIMATION_RECORD_HEADER_V2
     headers = {b"BASE": evaluation, b"FINL": evaluation}
     if generations:
         headers[b"PBLD"] = BRACKET_RECORD_HEADER
@@ -175,10 +211,17 @@ def _animation_records(
             continue
         bone_count = int(fields[8])
         selected_bytes = ((bone_count + 31) // 32) * 4 if selected_bones else 0
-        expected_bytes = header.size + bone_count * 7 * 4 + selected_bytes
+        # The stored count rather than the kind: an evaluation that received no
+        # root transform carries none, and a record claiming any other width did
+        # not come from the hook that wrote the stream.
+        root_bytes = int(fields[18]) if root_transform else 0
+        expected_bytes = (
+            header.size + bone_count * 7 * 4 + selected_bytes + root_bytes
+        )
         if (
             bone_count < 1
             or bone_count > MAXIMUM_BONES
+            or root_bytes not in (0, ROOT_TRANSFORM_BYTES)
             or int(fields[1]) != expected_bytes
         ):
             yield raw_header + payload + stream.read()
@@ -204,6 +247,13 @@ def _animation_records(
                 {
                     "generation": int(fields[15]),
                     "generation_depth": int(fields[16]),
+                }
+            )
+        if root_transform:
+            values.update(
+                {
+                    "root_transform": int(fields[17]),
+                    "root_transform_bytes": root_bytes,
                 }
             )
         yield values, raw_header, payload
@@ -281,6 +331,52 @@ def _census_records(
         )
 
 
+def _actor_records(
+    stream: BinaryIO,
+) -> Iterator[tuple[dict[str, object], bytes, bytes] | bytes]:
+    while True:
+        record = _read_record(stream, {b"ACTR": ACTOR_OBSERVATION_HEADER})
+        if record is None:
+            return
+        if isinstance(record, bytes):
+            yield record
+            return
+        raw_header, payload, header = record
+        fields = header.unpack(raw_header)
+        bone_count = int(fields[12])
+        # A lifetime record names an address and nothing else, so it carries no
+        # model identity by construction; an identity record that carries none
+        # did not come from the hook that writes this stream.
+        identity = int(fields[7]) in ACTOR_IDENTITY_REASONS
+        if (
+            bone_count > MAXIMUM_BONES
+            or (bone_count < 1 if identity else bone_count != 0)
+            or int(fields[1]) != ACTOR_OBSERVATION_HEADER.size
+        ):
+            yield raw_header + payload + stream.read()
+            return
+        yield (
+            {
+                "sequence_number": int(fields[2]),
+                "qpc": int(fields[3]),
+                "thread_id": int(fields[4]),
+                "entity": int(fields[5]),
+                "renderable": int(fields[6]),
+                "reason": int(fields[7]),
+                "generation": int(fields[8]),
+                "studio_hdr": int(fields[9]),
+                "checksum": int(fields[10]),
+                "previous_checksum": int(fields[11]),
+                "bone_count": bone_count,
+                "model_name": fields[13]
+                .split(b"\0", 1)[0]
+                .decode("ascii", "replace"),
+            },
+            raw_header,
+            payload,
+        )
+
+
 SCHEMA = """
 CREATE TABLE capture_metadata (
     key TEXT PRIMARY KEY,
@@ -336,6 +432,9 @@ CREATE TABLE records (
     carry_generation INTEGER,
     entry_qpc INTEGER,
     bracket_arguments TEXT,
+    root_transform INTEGER,
+    root_transform_bytes INTEGER,
+    render_info TEXT,
     raw_header BLOB NOT NULL,
     raw_payload BLOB NOT NULL,
     UNIQUE(stream_name, ordinal)
@@ -379,6 +478,25 @@ CREATE TABLE model_images (
     image BLOB NOT NULL,
     UNIQUE(stream_name, ordinal)
 );
+CREATE TABLE actor_observations (
+    id INTEGER PRIMARY KEY,
+    stream_name TEXT NOT NULL REFERENCES streams(name),
+    ordinal INTEGER NOT NULL,
+    sequence_number INTEGER NOT NULL,
+    qpc INTEGER NOT NULL,
+    thread_id INTEGER NOT NULL,
+    entity INTEGER NOT NULL,
+    renderable INTEGER NOT NULL,
+    reason INTEGER NOT NULL,
+    generation INTEGER NOT NULL,
+    studio_hdr INTEGER NOT NULL,
+    checksum INTEGER NOT NULL,
+    previous_checksum INTEGER NOT NULL,
+    bone_count INTEGER NOT NULL,
+    model_name TEXT NOT NULL,
+    raw_header BLOB NOT NULL,
+    UNIQUE(stream_name, ordinal)
+);
 CREATE TABLE failures (
     category TEXT PRIMARY KEY,
     count INTEGER NOT NULL,
@@ -394,6 +512,8 @@ CREATE INDEX records_kind_time ON records(kind, qpc);
 CREATE INDEX records_generation ON records(generation);
 CREATE INDEX model_headers_identity ON model_headers(studio_hdr, checksum);
 CREATE INDEX model_images_checksum ON model_images(checksum);
+CREATE INDEX actor_observations_identity
+    ON actor_observations(entity, checksum);
 """
 
 
@@ -422,6 +542,19 @@ INSERT INTO model_images (
 """
 
 
+INSERT_ACTOR_OBSERVATION = """
+INSERT INTO actor_observations (
+    stream_name, ordinal, sequence_number, qpc, thread_id, entity, renderable,
+    reason, generation, studio_hdr, checksum, previous_checksum, bone_count,
+    model_name, raw_header
+) VALUES (
+    :stream_name, :ordinal, :sequence_number, :qpc, :thread_id, :entity,
+    :renderable, :reason, :generation, :studio_hdr, :checksum,
+    :previous_checksum, :bone_count, :model_name, :raw_header
+)
+"""
+
+
 INSERT_RECORD = """
 INSERT INTO records (
     stream_name, ordinal, kind, sequence_number, qpc, thread_id,
@@ -429,14 +562,16 @@ INSERT INTO records (
     sample_phase, entity_cycle, result, model_info, model_name,
     draw_arguments, positions, quaternions, generation, generation_parent,
     generation_depth, generation_entity, carry_generation, entry_qpc,
-    bracket_arguments, raw_header, raw_payload
+    bracket_arguments, root_transform, root_transform_bytes, render_info,
+    raw_header, raw_payload
 ) VALUES (
     :stream_name, :ordinal, :kind, :sequence_number, :qpc, :thread_id,
     :client_entity, :studio_hdr, :checksum, :bone_count, :studio_sequence,
     :sample_phase, :entity_cycle, :result, :model_info, :model_name,
     :draw_arguments, :positions, :quaternions, :generation, :generation_parent,
     :generation_depth, :generation_entity, :carry_generation, :entry_qpc,
-    :bracket_arguments, :raw_header, :raw_payload
+    :bracket_arguments, :root_transform, :root_transform_bytes, :render_info,
+    :raw_header, :raw_payload
 )
 """
 
@@ -460,6 +595,9 @@ RECORD_DEFAULTS: dict[str, object] = {
     "studio_hdr": None,
     "checksum": None,
     "bone_count": None,
+    "root_transform": None,
+    "root_transform_bytes": None,
+    "render_info": None,
 }
 
 
@@ -473,6 +611,8 @@ def _insert_stream(
         if name == "pose"
         else CENSUS_FILE_HEADER
         if name == "census"
+        else ACTOR_FILE_HEADER
+        if name == "actor"
         else ANIMATION_FILE_HEADER
     )
     with path.open("rb") as stream:
@@ -483,24 +623,38 @@ def _insert_stream(
         magic = fields[0].rstrip(b"\0")
         version = int(fields[1])
         if name == "pose":
-            if (magic, version) not in {(b"ELPOSE2", 2), (b"ELPOSE3", 3)}:
+            if (magic, version) not in {
+                (b"ELPOSE2", 2),
+                (b"ELPOSE3", 3),
+                (b"ELPOSE4", 4),
+            }:
                 raise ValueError(f"{path} is not a supported ELPOSE stream")
-            records = _pose_records(stream, generations=version >= 3)
+            records = _pose_records(
+                stream,
+                generations=version >= 3,
+                render_info=version >= 4,
+            )
         elif name == "census":
             if (magic, version) != (b"ELMDL1", 1):
                 raise ValueError(f"{path} is not a supported ELMDL stream")
             records = _census_records(stream)
+        elif name == "actor":
+            if (magic, version) not in {(b"ELACT1", 1), (b"ELACT2", 2)}:
+                raise ValueError(f"{path} is not a supported ELACT stream")
+            records = _actor_records(stream)
         else:
             if (magic, version) not in {
                 (b"ELANIM1", 1),
                 (b"ELANIM2", 2),
                 (b"ELANIM3", 3),
+                (b"ELANIM4", 4),
             }:
                 raise ValueError(f"{path} is not a supported ELANIM stream")
             records = _animation_records(
                 stream,
                 selected_bones=version >= 2,
                 generations=version >= 3,
+                root_transform=version >= 4,
             )
 
         connection.execute(
@@ -543,6 +697,19 @@ def _insert_stream(
                 if kind == "MIMG":
                     row["image"] = raw_payload
                 connection.execute(statement, row)
+                record_count += 1
+                continue
+            if name == "actor":
+                values, raw_header, _ = record
+                connection.execute(
+                    INSERT_ACTOR_OBSERVATION,
+                    {
+                        "stream_name": name,
+                        "ordinal": ordinal,
+                        "raw_header": raw_header,
+                        **values,
+                    },
+                )
                 record_count += 1
                 continue
             values, raw_header, raw_payload = record
@@ -597,6 +764,7 @@ def finalize(
         ("pose", session / "scene.elpose"),
         ("animation", session / "animation.elanim"),
         ("census", session / "model.elmdl"),
+        ("actor", session / "actor.elact"),
     ]
     stream_paths = [(name, path) for name, path in stream_paths if path.is_file()]
     if not stream_paths:
@@ -702,6 +870,18 @@ def finalize(
                 int(done.get("census_vanished", "0")),
                 "recorded headers that no longer read as one at capture stop",
             ),
+            "actor_overflow": (
+                int(done.get("actor_overflow", "0")),
+                "skeletal entities refused because the actor table was full",
+            ),
+            "actor_faults": (
+                int(done.get("actor_faults", "0")),
+                "actor reads or allocations that failed and released a claim",
+            ),
+            "actor_vanished": (
+                int(done.get("actor_vanished", "0")),
+                "recorded actors whose model header no longer reads at stop",
+            ),
             "incomplete_streams": (
                 sum(1 for value in tails.values() if value),
                 _json_value(tails),
@@ -722,11 +902,17 @@ def finalize(
             )
         connection.commit()
         integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
-        # Census rows land in their own tables, so the count that must match
-        # is the total across all three rather than `records` alone.
+        # Census and actor rows land in their own tables, so the count that must
+        # match is the total across every one of them rather than `records`
+        # alone.
         stored_records = sum(
             connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
-            for table in ("records", "model_headers", "model_images")
+            for table in (
+                "records",
+                "model_headers",
+                "model_images",
+                "actor_observations",
+            )
         )
         if integrity != "ok" or stored_records != sum(counts.values()):
             raise RuntimeError(

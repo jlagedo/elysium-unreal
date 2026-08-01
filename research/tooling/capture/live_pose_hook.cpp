@@ -40,12 +40,26 @@ constexpr DWORD kCensusImageCap = 8u * 1024u * 1024u;
 constexpr std::uint32_t kStudioMagic = 0x54534449u;  // "IDST"
 constexpr std::uint32_t kStudioVersion = 2531u;
 
+// One slot per skeletal actor address. A theatre run animates 49 of them, so
+// the table is sized for two orders of growth rather than for the corpus.
+constexpr std::uint32_t kActorSlots = 512;
+constexpr std::uint32_t kActorProbeLimit = 64;
+// The root/entity transform BuildTransformations receives: a 3x4 row-major
+// matrix, appended to the composed-pose record rather than to every evaluation.
+constexpr DWORD kRootTransformFloats = 12;
+constexpr DWORD kRootTransformBytes = kRootTransformFloats * sizeof(float);
+// The span of the render info the engine builds and the studio draw consumes.
+// The producer writes eight dwords at +0x00 through +0x1c and the consumer
+// reads no further, so this is the whole struct as both sides use it.
+constexpr DWORD kRenderInfoBytes = 32;
+
 // Which stream a queued record belongs to. The writer routes on this and frees
 // to the heap it names, so census payloads never touch the game's heap.
 enum StreamIndex : std::uint32_t {
     kStreamPose = 0,
     kStreamAnimation = 1,
     kStreamCensus = 2,
+    kStreamActor = 3,
 };
 
 // Why an observation was emitted. Reuse is a pointer that served one checksum
@@ -55,6 +69,22 @@ enum ObservationReason : std::uint32_t {
     kObservationFirst = 1,
     kObservationReplacement = 2,
     kObservationResidentAtStop = 3,
+};
+
+// Why an actor observation was emitted. The three reasons here are what the
+// hooks already armed can witness: a skeletal entity this run has not posed at
+// this address, an address whose model identity changed under it, and the sweep
+// at capture stop. Construction and destruction are separate reasons carried by
+// a later stream version, once a target for them is pinned.
+enum ActorReason : std::uint32_t {
+    kActorFirst = 1,
+    kActorIdentityChange = 2,
+    kActorResidentAtStop = 3,
+    // A lifetime record names an address and nothing else. The constructor has
+    // not given the object a model yet and the destructor is taking it away, so
+    // reading identity at either point would read a half-built or dying object.
+    kActorConstruct = 4,
+    kActorDestruct = 5,
 };
 
 #pragma pack(push, 1)
@@ -93,6 +123,12 @@ struct PoseRecordHeader {
     std::uint32_t generation;
     std::uint32_t generationEntity;
     std::uint32_t carryGeneration;
+    // The render info the draw is submitted with, copied verbatim. Two fields
+    // in it are already decoded — the studio header at +0x00 and the entity at
+    // +0x18 — and the rest are kept as bytes rather than named, because what
+    // they mean is a hypothesis and a wrong name would outlive the run.
+    std::uint32_t renderInfoBytes;
+    unsigned char renderInfo[kRenderInfoBytes];
 };
 
 struct BracketRecordHeader {
@@ -149,6 +185,11 @@ struct AnimationRecordHeader {
     std::uint32_t quaternions;
     std::uint32_t generation;
     std::uint32_t generationDepth;
+    // The root/entity transform, which only the composed-pose stage receives.
+    // Its byte count is stored rather than implied so record size stays a
+    // closed form of kind and bone count for a stream carrying both kinds.
+    std::uint32_t rootTransform;
+    std::uint32_t rootTransformBytes;
 };
 
 struct CensusFileHeader {
@@ -206,10 +247,45 @@ struct ModelImageHeader {
     std::uint32_t capped;
     std::uint32_t reserved;
 };
+
+struct ActorFileHeader {
+    char magic[8];
+    std::uint32_t version;
+    std::uint32_t headerBytes;
+    std::uint64_t qpcFrequency;
+    std::int64_t startQpc;
+    std::uint32_t pid;
+    std::uint32_t clientBase;
+    std::uint32_t slotCount;
+    std::uint32_t setupBonesRva;
+    char reserved[80];
+};
+
+// One sighting of a skeletal client entity at one address. Both terms of
+// CAP1.3's relation are stored rather than one and a delta: `entity` is the
+// C_BaseAnimating the evaluators run on, `renderable` the subobject four bytes
+// above it that the draw stream records, so a reader joins either stream
+// without re-deriving the offset the run is supposed to be evidence for.
+struct ActorObservationHeader {
+    char magic[4];
+    std::uint32_t recordBytes;
+    std::uint64_t sequence;
+    std::int64_t qpc;
+    std::uint32_t threadId;
+    std::uint32_t entity;
+    std::uint32_t renderable;
+    std::uint32_t reason;
+    std::uint32_t generation;
+    std::uint32_t studioHdr;
+    std::uint32_t checksum;
+    std::uint32_t previousChecksum;
+    std::uint32_t boneCount;
+    char modelName[64];
+};
 #pragma pack(pop)
 
 static_assert(sizeof(FileHeader) == 128, "capture file header changed");
-static_assert(sizeof(PoseRecordHeader) == 144, "pose record header changed");
+static_assert(sizeof(PoseRecordHeader) == 180, "pose record header changed");
 static_assert(
     sizeof(BracketRecordHeader) == 88,
     "pose-build bracket record header changed");
@@ -217,7 +293,7 @@ static_assert(
     sizeof(AnimationFileHeader) == 128,
     "animation capture file header changed");
 static_assert(
-    sizeof(AnimationRecordHeader) == 76,
+    sizeof(AnimationRecordHeader) == 84,
     "animation record header changed");
 static_assert(
     sizeof(CensusFileHeader) == 128, "census capture file header changed");
@@ -226,6 +302,11 @@ static_assert(
     "model observation record header changed");
 static_assert(
     sizeof(ModelImageHeader) == 52, "model image record header changed");
+static_assert(
+    sizeof(ActorFileHeader) == 128, "actor capture file header changed");
+static_assert(
+    sizeof(ActorObservationHeader) == 124,
+    "actor observation record header changed");
 
 struct PendingRecord {
     PendingRecord* next;
@@ -242,6 +323,12 @@ using ResolveVirtualModelPoseFn = int(__thiscall*)(
 using BuildTransformationsFn = void(__thiscall*)(
     void*, float*, float*, float*, void*);
 using GetStudioHdrFn = unsigned char*(__thiscall*)(void*, int);
+// Pinned from the callee: no stack arguments, returning `this` in EAX. This is
+// the shared base of the client entity hierarchy, not a skeletal one.
+using BaseEntityConstructFn = void*(__thiscall*)(void*);
+// Pinned from the callee: no stack arguments, no return value, one exit that
+// tail-calls its base teardown.
+using BaseEntityDestructFn = void(__thiscall*)(void*);
 // Pinned from the callee: every SetupBones exit is RET 0x14 and returns bool
 // in AL.
 using SetupBonesFn = bool(__thiscall*)(
@@ -282,6 +369,17 @@ struct CensusSlot {
     LONG reserved;
 };
 
+// The same claim-by-key discipline for actors, plus the studio header the actor
+// last named. The sweep at capture stop runs on the writer thread, so it
+// re-reads that address directly instead of calling a game function to resolve
+// the header from an entity that may no longer be there.
+struct ActorSlot {
+    volatile LONG key;
+    volatile LONG value;
+    volatile LONG published;
+    volatile LONG studioHdr;
+};
+
 HMODULE gSelf = nullptr;
 DrawModelFn gOriginalDrawModel = nullptr;
 ResolveVirtualModelPoseFn gOriginalResolveVirtualModelPose = nullptr;
@@ -290,16 +388,21 @@ GetStudioHdrFn gGetStudioHdr = nullptr;
 SetupBonesFn gOriginalSetupBones = nullptr;
 ModelRenderDrawModelFn gOriginalModelRenderDrawModel = nullptr;
 ModelRenderDrawModelShadowFn gOriginalModelRenderDrawModelShadow = nullptr;
+BaseEntityConstructFn gOriginalBaseEntityConstruct = nullptr;
+BaseEntityDestructFn gOriginalBaseEntityDestruct = nullptr;
 elysium::capture::HookHandle gDrawModelHook;
 elysium::capture::HookHandle gResolveVirtualModelPoseHook;
 elysium::capture::HookHandle gBuildTransformationsHook;
 elysium::capture::HookHandle gSetupBonesHook;
 elysium::capture::HookHandle gModelRenderDrawModelHook;
 elysium::capture::HookHandle gModelRenderDrawModelShadowHook;
+elysium::capture::HookHandle gBaseEntityConstructHook;
+elysium::capture::HookHandle gBaseEntityDestructHook;
 __declspec(thread) ThreadPoseState gThread{};
 HANDLE gOutput = INVALID_HANDLE_VALUE;
 HANDLE gAnimationOutput = INVALID_HANDLE_VALUE;
 HANDLE gCensusOutput = INVALID_HANDLE_VALUE;
+HANDLE gActorOutput = INVALID_HANDLE_VALUE;
 // Census payloads are the largest allocation the probe ever makes. Taking the
 // game's process heap lock for a multi-megabyte block from a render callback
 // is the one hitch this design could introduce, so they come from a heap of
@@ -332,9 +435,20 @@ volatile LONG gCensusOverflow = 0;
 volatile LONG gCensusFaults = 0;
 volatile LONG gCensusCapped = 0;
 volatile LONG64 gCensusBytes = 0;
+volatile LONG gActorRecords = 0;
+volatile LONG gActorIdentityChanges = 0;
+volatile LONG gActorResident = 0;
+volatile LONG gActorVanished = 0;
+volatile LONG gActorOverflow = 0;
+volatile LONG gActorFaults = 0;
+volatile LONG gActorConstructions = 0;
+volatile LONG gActorDestructions = 0;
+volatile LONG64 gActorBytes = 0;
 // Headers keyed by address, images keyed by checksum.
 CensusSlot gCensusHeaders[kCensusSlots]{};
 CensusSlot gCensusImageSlots[kCensusImageSlots]{};
+// Actors keyed by the C_BaseAnimating address.
+ActorSlot gActors[kActorSlots]{};
 volatile LONG64 gBytesWritten = 0;
 LARGE_INTEGER gStartQpc{};
 wchar_t gReadyPath[MAX_PATH * 4]{};
@@ -352,11 +466,15 @@ DWORD gGetStudioHdrRva = 0;
 DWORD gSetupBonesRva = 0;
 DWORD gModelRenderDrawModelRva = 0;
 DWORD gModelRenderDrawModelShadowRva = 0;
+DWORD gBaseEntityConstructRva = 0;
+DWORD gBaseEntityDestructRva = 0;
 ConfiguredSignature gResolveExpected{};
 ConfiguredSignature gBuildExpected{};
 ConfiguredSignature gSetupBonesExpected{};
 ConfiguredSignature gModelRenderDrawModelExpected{};
 ConfiguredSignature gModelRenderDrawModelShadowExpected{};
+ConfiguredSignature gBaseEntityConstructExpected{};
+ConfiguredSignature gBaseEntityDestructExpected{};
 char gHookInstallError[128] = "unspecified";
 
 bool WriteAll(HANDLE file, const void* data, DWORD bytes) {
@@ -423,6 +541,8 @@ HANDLE StreamHandle(std::uint32_t stream) {
             return gAnimationOutput;
         case kStreamCensus:
             return gCensusOutput;
+        case kStreamActor:
+            return gActorOutput;
         default:
             return gOutput;
     }
@@ -825,6 +945,288 @@ void SweepResidentHeaders() {
     }
 }
 
+// The identity an actor's studio header carries. The caller has already
+// validated the header, so this is the same read the census performs, narrowed
+// to the fields an actor record keeps.
+bool ReadActorIdentity(
+    unsigned char* studioHdr, ActorObservationHeader* fields) {
+    __try {
+        const std::uint32_t magic =
+            *reinterpret_cast<std::uint32_t*>(studioHdr + 0x00);
+        const std::uint32_t version =
+            *reinterpret_cast<std::uint32_t*>(studioHdr + 0x04);
+        if (magic != kStudioMagic || version != kStudioVersion) {
+            return false;
+        }
+        const int boneCount = *reinterpret_cast<int*>(studioHdr + 0xF0);
+        if (boneCount <= 0 || boneCount > kMaximumBones) {
+            return false;
+        }
+        fields->checksum =
+            *reinterpret_cast<std::uint32_t*>(studioHdr + 0x08);
+        fields->boneCount = static_cast<std::uint32_t>(boneCount);
+        std::memcpy(fields->modelName, studioHdr + 0x0C, 64);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+// The renderable subobject the enclosing pose build was entered on. Taking it
+// from the open bracket rather than computing it from the entity is what keeps
+// CAP1.3's relation evidence: both addresses are recorded as observed, and
+// whether they differ by four stays a question the offline verifier answers.
+std::uint32_t EnclosingBracketEntity() {
+    return gThread.depth ? gThread.entities[gThread.depth - 1] : 0;
+}
+
+bool EmitActorObservation(
+    ActorSlot* slot, unsigned char* entity, std::uint32_t renderable,
+    unsigned char* studioHdr, const ActorObservationHeader& fields,
+    std::uint32_t reason, std::uint32_t previousChecksum) {
+    const DWORD diskBytes = static_cast<DWORD>(sizeof(ActorObservationHeader));
+    const SIZE_T allocation =
+        offsetof(PendingRecord, payload) + static_cast<SIZE_T>(diskBytes);
+    auto* pending = static_cast<PendingRecord*>(
+        HeapAlloc(GetProcessHeap(), 0, allocation));
+    if (!pending) {
+        return false;
+    }
+    pending->next = nullptr;
+    pending->bytes = diskBytes;
+    pending->stream = kStreamActor;
+    auto* header = reinterpret_cast<ActorObservationHeader*>(pending->payload);
+    std::memcpy(header, &fields, sizeof(*header));
+    std::memcpy(header->magic, "ACTR", 4);
+    header->recordBytes = diskBytes;
+    header->sequence =
+        static_cast<std::uint32_t>(InterlockedIncrement(&gSequence));
+    LARGE_INTEGER now{};
+    QueryPerformanceCounter(&now);
+    header->qpc = now.QuadPart;
+    header->threadId = GetCurrentThreadId();
+    header->entity =
+        static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(entity));
+    header->renderable = renderable;
+    header->reason = reason;
+    header->generation = EnclosingGeneration();
+    header->studioHdr =
+        static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(studioHdr));
+    header->previousChecksum = previousChecksum;
+    Enqueue(pending);
+    InterlockedIncrement(&gActorRecords);
+    InterlockedExchangeAdd64(&gActorBytes, static_cast<LONG64>(diskBytes));
+    // Published after the record reaches the queue, for the same reason the
+    // census publishes late: a slot marked published promises the actor was
+    // recorded, so a racing thread that stops looking cannot lose one.
+    InterlockedExchange(
+        &slot->studioHdr, static_cast<LONG>(header->studioHdr));
+    InterlockedExchange(&slot->value, static_cast<LONG>(fields.checksum));
+    InterlockedExchange(&slot->published, 1);
+    return true;
+}
+
+// Emits the actor census for a skeletal entity this run has not evaluated at
+// this address. The header and checksum come from the caller, which validated
+// them to build its own record, so the steady-state cost is one hash, one
+// interlocked compare and a return.
+void ObserveActor(
+    unsigned char* entity, unsigned char* studioHdr, std::uint32_t checksum) {
+    if (gActorOutput == INVALID_HANDLE_VALUE || !entity || !studioHdr) {
+        return;
+    }
+    const LONG key =
+        static_cast<LONG>(reinterpret_cast<std::uintptr_t>(entity));
+    const LONG value = static_cast<LONG>(checksum);
+    if (!key) {
+        return;
+    }
+    const std::uint32_t renderable = EnclosingBracketEntity();
+    std::uint32_t index =
+        (static_cast<std::uint32_t>(key) >> 4) & (kActorSlots - 1);
+    for (std::uint32_t probe = 0; probe < kActorProbeLimit; ++probe) {
+        ActorSlot& slot = gActors[index];
+        const LONG occupant = InterlockedCompareExchange(&slot.key, key, 0);
+        if (occupant == 0) {
+            ActorObservationHeader fields{};
+            if (ReadActorIdentity(studioHdr, &fields) &&
+                EmitActorObservation(
+                    &slot, entity, renderable, studioHdr, fields, kActorFirst,
+                    0)) {
+                return;
+            }
+            // Released rather than stranded, as the census releases: an actor
+            // whose header does not read stays recoverable on a later pose
+            // build, at the cost of one re-emitted observation that is counted.
+            InterlockedExchange(&slot.key, 0);
+            InterlockedIncrement(&gActorFaults);
+            return;
+        }
+        if (occupant == key) {
+            if (!InterlockedCompareExchange(&slot.published, 0, 0)) {
+                return;
+            }
+            const LONG previous =
+                InterlockedCompareExchange(&slot.value, 0, 0);
+            if (previous == value) {
+                return;
+            }
+            // This address evaluated one model and now evaluates another.
+            // Without a destruction target it is the only reuse this capture
+            // witnesses, and it is what bounds an address join to an interval.
+            if (InterlockedCompareExchange(&slot.value, value, previous) !=
+                previous) {
+                return;
+            }
+            ActorObservationHeader fields{};
+            if (ReadActorIdentity(studioHdr, &fields) &&
+                EmitActorObservation(
+                    &slot, entity, renderable, studioHdr, fields,
+                    kActorIdentityChange,
+                    static_cast<std::uint32_t>(previous))) {
+                InterlockedIncrement(&gActorIdentityChanges);
+            } else {
+                InterlockedIncrement(&gActorFaults);
+            }
+            return;
+        }
+        index = (index + 1) & (kActorSlots - 1);
+    }
+    InterlockedIncrement(&gActorOverflow);
+}
+
+// Emits a lifetime record: an address, a generation and a time, and nothing
+// read off the object. A constructor has not given it a model yet and a
+// destructor is taking it away, so any identity read at either point would be
+// read from an object that does not have one.
+bool EmitActorLifetime(unsigned char* entity, std::uint32_t reason) {
+    if (gActorOutput == INVALID_HANDLE_VALUE || !entity) {
+        return false;
+    }
+    const DWORD diskBytes = static_cast<DWORD>(sizeof(ActorObservationHeader));
+    const SIZE_T allocation =
+        offsetof(PendingRecord, payload) + static_cast<SIZE_T>(diskBytes);
+    auto* pending = static_cast<PendingRecord*>(
+        HeapAlloc(GetProcessHeap(), 0, allocation));
+    if (!pending) {
+        InterlockedIncrement(&gActorFaults);
+        return false;
+    }
+    pending->next = nullptr;
+    pending->bytes = diskBytes;
+    pending->stream = kStreamActor;
+    auto* header = reinterpret_cast<ActorObservationHeader*>(pending->payload);
+    std::memset(header, 0, sizeof(*header));
+    std::memcpy(header->magic, "ACTR", 4);
+    header->recordBytes = diskBytes;
+    header->sequence =
+        static_cast<std::uint32_t>(InterlockedIncrement(&gSequence));
+    LARGE_INTEGER now{};
+    QueryPerformanceCounter(&now);
+    header->qpc = now.QuadPart;
+    header->threadId = GetCurrentThreadId();
+    header->entity =
+        static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(entity));
+    header->reason = reason;
+    header->generation = EnclosingGeneration();
+    Enqueue(pending);
+    InterlockedIncrement(&gActorRecords);
+    InterlockedExchangeAdd64(&gActorBytes, static_cast<LONG64>(diskBytes));
+    return true;
+}
+
+// Releases the slot an address held, so the next actor at that address is a
+// first sighting rather than a continuation of the one that just died.
+void RetireActor(unsigned char* entity) {
+    const LONG key =
+        static_cast<LONG>(reinterpret_cast<std::uintptr_t>(entity));
+    if (!key) {
+        return;
+    }
+    std::uint32_t index =
+        (static_cast<std::uint32_t>(key) >> 4) & (kActorSlots - 1);
+    for (std::uint32_t probe = 0; probe < kActorProbeLimit; ++probe) {
+        ActorSlot& slot = gActors[index];
+        const LONG occupant = InterlockedCompareExchange(&slot.key, 0, 0);
+        if (occupant == key) {
+            InterlockedExchange(&slot.published, 0);
+            InterlockedExchange(&slot.value, 0);
+            InterlockedExchange(&slot.studioHdr, 0);
+            InterlockedExchange(&slot.key, 0);
+            return;
+        }
+        if (!occupant) {
+            return;
+        }
+        index = (index + 1) & (kActorSlots - 1);
+    }
+}
+
+// True when this address is one the actor census already published. The
+// destructor fires for every client entity, not only the skeletal ones, so this
+// is what keeps the destruction record on the population CAP2.3 names.
+bool IsPublishedActor(unsigned char* entity) {
+    const LONG key =
+        static_cast<LONG>(reinterpret_cast<std::uintptr_t>(entity));
+    if (!key) {
+        return false;
+    }
+    std::uint32_t index =
+        (static_cast<std::uint32_t>(key) >> 4) & (kActorSlots - 1);
+    for (std::uint32_t probe = 0; probe < kActorProbeLimit; ++probe) {
+        ActorSlot& slot = gActors[index];
+        const LONG occupant = InterlockedCompareExchange(&slot.key, 0, 0);
+        if (occupant == key) {
+            return InterlockedCompareExchange(&slot.published, 0, 0) != 0;
+        }
+        if (!occupant) {
+            return false;
+        }
+        index = (index + 1) & (kActorSlots - 1);
+    }
+    return false;
+}
+
+// Re-reads every recorded actor's studio header at capture stop. No hooked
+// target sees a client entity destructed, so residency is what this capture can
+// state instead, and it is a statement about the model the actor named rather
+// than about the object: a header that still reads as the same model was never
+// replaced under that actor. The renderable is zero because the sweep runs on
+// the writer thread with no bracket open, so no subobject address was observed.
+void SweepResidentActors() {
+    if (gActorOutput == INVALID_HANDLE_VALUE) {
+        return;
+    }
+    for (std::uint32_t index = 0; index < kActorSlots; ++index) {
+        ActorSlot& slot = gActors[index];
+        if (!InterlockedCompareExchange(&slot.published, 0, 0)) {
+            continue;
+        }
+        const LONG key = InterlockedCompareExchange(&slot.key, 0, 0);
+        const LONG recorded = InterlockedCompareExchange(&slot.studioHdr, 0, 0);
+        if (!key || !recorded) {
+            continue;
+        }
+        const LONG previous = InterlockedCompareExchange(&slot.value, 0, 0);
+        auto* entity = reinterpret_cast<unsigned char*>(
+            static_cast<std::uintptr_t>(static_cast<std::uint32_t>(key)));
+        auto* studioHdr = reinterpret_cast<unsigned char*>(
+            static_cast<std::uintptr_t>(static_cast<std::uint32_t>(recorded)));
+        ActorObservationHeader fields{};
+        if (!ReadActorIdentity(studioHdr, &fields)) {
+            InterlockedIncrement(&gActorVanished);
+            continue;
+        }
+        if (EmitActorObservation(
+                &slot, entity, 0, studioHdr, fields, kActorResidentAtStop,
+                static_cast<std::uint32_t>(previous))) {
+            InterlockedIncrement(&gActorResident);
+        } else {
+            InterlockedIncrement(&gActorFaults);
+        }
+    }
+}
+
 void CapturePose(
     void* self, std::uintptr_t modelInfo, const std::uintptr_t* drawArguments) {
     if (!modelInfo) {
@@ -899,6 +1301,10 @@ void CapturePose(
         header->generation = CurrentGeneration();
         header->generationEntity = gThread.lastPoseEntity;
         header->carryGeneration = gThread.lastPoseGeneration;
+        // The info pointer was validated above by reading the studio header
+        // through it, so this copy is bounded and off a page already touched.
+        std::memcpy(header->renderInfo, info, kRenderInfoBytes);
+        header->renderInfoBytes = kRenderInfoBytes;
         std::memcpy(pending->payload + sizeof(*header), boneToWorld, matrixBytes);
         std::memcpy(
             pending->payload + sizeof(*header) + matrixBytes,
@@ -913,7 +1319,7 @@ void CaptureAnimation(
     const char (&magic)[5], void* self, unsigned char* studioHdr,
     float* positions, float* quaternions, int studioSequence,
     float samplePhase, float entityCycle, int result,
-    const void* selectedBones) {
+    const void* selectedBones, const float* rootTransform) {
     if (gAnimationOutput == INVALID_HANDLE_VALUE) {
         return;
     }
@@ -937,6 +1343,11 @@ void CaptureAnimation(
         // After the configured filter: a run that asked for one model must not
         // pay a model image for every other one it happened to see.
         ObserveStudioHeader(studioHdr, checksum);
+        // `self` is the C_BaseAnimating on both evaluation paths, and the
+        // header and checksum are already validated here, so the actor census
+        // costs no further read off the entity.
+        ObserveActor(
+            static_cast<unsigned char*>(self), studioHdr, checksum);
 
         const DWORD positionBytes =
             static_cast<DWORD>(boneCount) * 3u * sizeof(float);
@@ -944,9 +1355,10 @@ void CaptureAnimation(
             static_cast<DWORD>(boneCount) * 4u * sizeof(float);
         const DWORD selectedBytes =
             static_cast<DWORD>((boneCount + 31) / 32) * sizeof(DWORD);
+        const DWORD rootBytes = rootTransform ? kRootTransformBytes : 0u;
         const DWORD diskBytes =
             static_cast<DWORD>(sizeof(AnimationRecordHeader)) +
-            positionBytes + quaternionBytes + selectedBytes;
+            positionBytes + quaternionBytes + selectedBytes + rootBytes;
         const SIZE_T allocation =
             offsetof(PendingRecord, payload) + static_cast<SIZE_T>(diskBytes);
         auto* pending = static_cast<PendingRecord*>(
@@ -986,6 +1398,9 @@ void CaptureAnimation(
             reinterpret_cast<std::uintptr_t>(quaternions));
         header->generation = CurrentGeneration();
         header->generationDepth = gThread.depth;
+        header->rootTransform = static_cast<std::uint32_t>(
+            reinterpret_cast<std::uintptr_t>(rootTransform));
+        header->rootTransformBytes = rootBytes;
         std::memcpy(
             pending->payload + sizeof(*header), positions, positionBytes);
         std::memcpy(
@@ -1001,6 +1416,10 @@ void CaptureAnimation(
                 selectedBytes);
         } else {
             std::memset(selectedOutput, 0, selectedBytes);
+        }
+        if (rootBytes) {
+            std::memcpy(selectedOutput + selectedBytes, rootTransform,
+                        rootBytes);
         }
         Enqueue(pending);
     } __except (EXCEPTION_EXECUTE_HANDLER) {
@@ -1051,7 +1470,7 @@ int __fastcall HookResolveVirtualModelPose(
         CaptureAnimation(
             "BASE", self, studioHdr, positions, quaternions,
             studioSequence, samplePhase, entityCycle, result,
-            selectedBones);
+            selectedBones, nullptr);
     }
     InterlockedDecrement(&gActiveHooks);
     return result;
@@ -1083,9 +1502,12 @@ void __fastcall HookBuildTransformations(
             studioSequence = -1;
             cycle = 0.0f;
         }
+        // The root/entity transform is the third argument the composed-pose
+        // stage already receives; nothing else on the skeletal path carries the
+        // frame the pose is placed into.
         CaptureAnimation(
             "FINL", self, studioHdr, positions, quaternions,
-            studioSequence, -1.0f, cycle, 0, selectedBones);
+            studioSequence, -1.0f, cycle, 0, selectedBones, rootTransform);
     }
     InterlockedDecrement(&gActiveHooks);
 }
@@ -1161,6 +1583,62 @@ void __fastcall HookModelRenderDrawModelShadow(
     }
 }
 
+// Construction is recorded after the original returns, because that is when the
+// subobject vtables exist and the address is an entity rather than raw storage.
+//
+// This is the shared base constructor, so it fires for every client entity and
+// not only the skeletal ones. A live filter is impossible here — the object has
+// no model yet, and the derived constructor that would give it one has not run
+// — so the record keeps the address and the offline join against the actor
+// census is what narrows it to the population CAP2.3 names.
+void RecordActorConstruction(void* self) {
+    if (!InterlockedCompareExchange(&gCapturing, 0, 0)) {
+        return;
+    }
+    // A constructor reusing an address the census still holds means the
+    // previous actor died without this run seeing it, so the slot is released
+    // before the record rather than after.
+    RetireActor(static_cast<unsigned char*>(self));
+    if (EmitActorLifetime(
+            static_cast<unsigned char*>(self), kActorConstruct)) {
+        InterlockedIncrement(&gActorConstructions);
+    }
+}
+
+void* __fastcall HookBaseEntityConstruct(void* self, void*) {
+    InterlockedIncrement(&gActiveHooks);
+    void* result = nullptr;
+    __try {
+        result = gOriginalBaseEntityConstruct(self);
+    } __finally {
+        RecordActorConstruction(self);
+        InterlockedDecrement(&gActiveHooks);
+    }
+    return result;
+}
+
+// Destruction is recorded before the original runs and only for an address the
+// census already published. Every client entity passes through here, so the
+// filter is what keeps the record on the skeletal population; and recording
+// first is what stops a slot being re-claimed at the same address ahead of its
+// own destruction record.
+void __fastcall HookBaseEntityDestruct(void* self, void*) {
+    InterlockedIncrement(&gActiveHooks);
+    if (InterlockedCompareExchange(&gCapturing, 0, 0) &&
+        IsPublishedActor(static_cast<unsigned char*>(self))) {
+        if (EmitActorLifetime(
+                static_cast<unsigned char*>(self), kActorDestruct)) {
+            InterlockedIncrement(&gActorDestructions);
+        }
+        RetireActor(static_cast<unsigned char*>(self));
+    }
+    __try {
+        gOriginalBaseEntityDestruct(self);
+    } __finally {
+        InterlockedDecrement(&gActiveHooks);
+    }
+}
+
 const elysium::capture::BinaryProfile* FindProfile(
     const wchar_t* moduleName) {
     for (const auto& profile : elysium::capture::profiles::Registry) {
@@ -1204,13 +1682,24 @@ bool MatchesConfiguredProfile(
     const elysium::capture::BinaryTargetProfile& setupBones,
     const elysium::capture::BinaryTargetProfile& modelRenderDrawModel,
     const elysium::capture::BinaryTargetProfile& modelRenderDrawModelShadow,
-    bool animationEnabled) {
+    const elysium::capture::BinaryTargetProfile& baseEntityConstruct,
+    const elysium::capture::BinaryTargetProfile& baseEntityDestruct,
+    bool animationEnabled, bool lifetimeEnabled) {
     const bool drawMatches = drawModel.Rva == gDrawModelRva &&
         drawModel.ObjectRva == gStudioObjectRva &&
         drawModel.ExpectedVtableRva == gStudioVtableRva &&
         drawModel.VtableSlot == gDrawModelSlotIndex;
     if (!drawMatches || !animationEnabled) {
         return drawMatches;
+    }
+    if (lifetimeEnabled &&
+        !(MatchesConfiguredSignature(
+              baseEntityConstruct, gBaseEntityConstructRva,
+              gBaseEntityConstructExpected) &&
+          MatchesConfiguredSignature(
+              baseEntityDestruct, gBaseEntityDestructRva,
+              gBaseEntityDestructExpected))) {
+        return false;
     }
     return getStudioHdr.Rva == gGetStudioHdrRva &&
         MatchesConfiguredSignature(
@@ -1254,10 +1743,16 @@ bool InstallHooks(HMODULE studioRender, HMODULE client, HMODULE engine) {
         *engineProfile, "engine.model_render_draw_model");
     const auto* modelRenderDrawModelShadow = FindTarget(
         *engineProfile, "engine.model_render_draw_model_shadow");
+    const auto* baseEntityConstruct = FindTarget(
+        *clientProfile, "client.base_entity_construct");
+    const auto* baseEntityDestruct = FindTarget(
+        *clientProfile, "client.base_entity_destruct");
+    const bool lifetimeEnabled = gActorOutput != INVALID_HANDLE_VALUE;
     if (drawModel == nullptr || resolvePose == nullptr ||
         buildTransformations == nullptr || getStudioHdr == nullptr ||
         setupBones == nullptr || modelRenderDrawModel == nullptr ||
         modelRenderDrawModelShadow == nullptr ||
+        baseEntityConstruct == nullptr || baseEntityDestruct == nullptr ||
         !MatchesConfiguredProfile(
             *drawModel,
             *resolvePose,
@@ -1266,7 +1761,10 @@ bool InstallHooks(HMODULE studioRender, HMODULE client, HMODULE engine) {
             *setupBones,
             *modelRenderDrawModel,
             *modelRenderDrawModelShadow,
-            gAnimationOutput != INVALID_HANDLE_VALUE)) {
+            *baseEntityConstruct,
+            *baseEntityDestruct,
+            gAnimationOutput != INVALID_HANDLE_VALUE,
+            lifetimeEnabled)) {
         strcpy_s(gHookInstallError, "declaration-mismatch");
         return false;
     }
@@ -1403,6 +1901,49 @@ bool InstallHooks(HMODULE studioRender, HMODULE client, HMODULE engine) {
     gOriginalModelRenderDrawModelShadow =
         reinterpret_cast<ModelRenderDrawModelShadowFn>(
             gModelRenderDrawModelShadowHook.Original);
+
+    if (!lifetimeEnabled) {
+        return true;
+    }
+    // Last, so a lifetime hook can never be live while the census it feeds is
+    // not: an actor construction recorded before the evaluation hooks exist
+    // would open an interval nothing could close.
+    const HookBackendResult constructResult = HookBackends::Install(
+            clientActive,
+            *baseEntityConstruct,
+            reinterpret_cast<void*>(&HookBaseEntityConstruct),
+            &gBaseEntityConstructHook);
+    if (constructResult != HookBackendResult::Installed) {
+        std::snprintf(
+            gHookInstallError,
+            sizeof(gHookInstallError),
+            "base-entity-construct-backend-%u rva=%08x bytes=%u",
+            static_cast<unsigned>(constructResult),
+            static_cast<unsigned>(baseEntityConstruct->Rva),
+            static_cast<unsigned>(baseEntityConstruct->ExpectedByteCount));
+        return false;
+    }
+    gOriginalBaseEntityConstruct =
+        reinterpret_cast<BaseEntityConstructFn>(
+            gBaseEntityConstructHook.Original);
+    const HookBackendResult destructResult = HookBackends::Install(
+            clientActive,
+            *baseEntityDestruct,
+            reinterpret_cast<void*>(&HookBaseEntityDestruct),
+            &gBaseEntityDestructHook);
+    if (destructResult != HookBackendResult::Installed) {
+        std::snprintf(
+            gHookInstallError,
+            sizeof(gHookInstallError),
+            "base-entity-destruct-backend-%u rva=%08x bytes=%u",
+            static_cast<unsigned>(destructResult),
+            static_cast<unsigned>(baseEntityDestruct->Rva),
+            static_cast<unsigned>(baseEntityDestruct->ExpectedByteCount));
+        return false;
+    }
+    gOriginalBaseEntityDestruct =
+        reinterpret_cast<BaseEntityDestructFn>(
+            gBaseEntityDestructHook.Original);
     return true;
 }
 
@@ -1410,6 +1951,8 @@ void RemoveHooks() {
     using elysium::capture::HookBackends;
 
     InterlockedExchange(&gCapturing, 0);
+    HookBackends::Disable(&gBaseEntityDestructHook);
+    HookBackends::Disable(&gBaseEntityConstructHook);
     HookBackends::Disable(&gModelRenderDrawModelShadowHook);
     HookBackends::Disable(&gModelRenderDrawModelHook);
     HookBackends::Disable(&gSetupBonesHook);
@@ -1419,12 +1962,16 @@ void RemoveHooks() {
     while (InterlockedCompareExchange(&gActiveHooks, 0, 0)) {
         Sleep(1);
     }
+    HookBackends::Release(&gBaseEntityDestructHook);
+    HookBackends::Release(&gBaseEntityConstructHook);
     HookBackends::Release(&gModelRenderDrawModelShadowHook);
     HookBackends::Release(&gModelRenderDrawModelHook);
     HookBackends::Release(&gSetupBonesHook);
     HookBackends::Release(&gBuildTransformationsHook);
     HookBackends::Release(&gResolveVirtualModelPoseHook);
     HookBackends::Release(&gDrawModelHook);
+    gOriginalBaseEntityDestruct = nullptr;
+    gOriginalBaseEntityConstruct = nullptr;
     gOriginalModelRenderDrawModelShadow = nullptr;
     gOriginalModelRenderDrawModel = nullptr;
     gOriginalSetupBones = nullptr;
@@ -1502,7 +2049,8 @@ bool ReadExpectedBytes(
 
 bool ReadConfiguration(
     wchar_t* iniPath, wchar_t* outputPath, wchar_t* animationOutputPath,
-    wchar_t* censusOutputPath, wchar_t* studioHash, wchar_t* clientHash) {
+    wchar_t* censusOutputPath, wchar_t* actorOutputPath, wchar_t* studioHash,
+    wchar_t* clientHash) {
     wchar_t modulePath[MAX_PATH * 4]{};
     const DWORD length =
         GetModuleFileNameW(gSelf, modulePath, ARRAYSIZE(modulePath));
@@ -1525,6 +2073,9 @@ bool ReadConfiguration(
         MAX_PATH * 4, iniPath);
     GetPrivateProfileStringW(
         L"capture", L"census_output", L"", censusOutputPath,
+        MAX_PATH * 4, iniPath);
+    GetPrivateProfileStringW(
+        L"capture", L"actor_output", L"", actorOutputPath,
         MAX_PATH * 4, iniPath);
     GetPrivateProfileStringW(
         L"capture", L"ready", L"", gReadyPath, ARRAYSIZE(gReadyPath), iniPath);
@@ -1606,8 +2157,28 @@ bool ReadConfiguration(
              iniPath,
              L"model_render_draw_model_shadow_expected",
              &gModelRenderDrawModelShadowExpected));
+    // The lifetime pair is only required when an actor stream was asked for, so
+    // a recipe that captures poses without actors stays configurable.
+    const bool lifetimeProfile =
+        !actorOutputPath[0] ||
+        (ReadProfileDword(
+             iniPath,
+             L"base_entity_construct_rva",
+             &gBaseEntityConstructRva) &&
+         ReadExpectedBytes(
+             iniPath,
+             L"base_entity_construct_expected",
+             &gBaseEntityConstructExpected) &&
+         ReadProfileDword(
+             iniPath,
+             L"base_entity_destruct_rva",
+             &gBaseEntityDestructRva) &&
+         ReadExpectedBytes(
+             iniPath,
+             L"base_entity_destruct_expected",
+             &gBaseEntityDestructExpected));
     return outputPath[0] && gReadyPath[0] && gStopPath[0] &&
-        gDonePath[0] && studioProfile && clientProfile;
+        gDonePath[0] && studioProfile && clientProfile && lifetimeProfile;
 }
 
 DWORD WINAPI CaptureWorker(void*) {
@@ -1615,11 +2186,12 @@ DWORD WINAPI CaptureWorker(void*) {
     wchar_t outputPath[MAX_PATH * 4]{};
     wchar_t animationOutputPath[MAX_PATH * 4]{};
     wchar_t censusOutputPath[MAX_PATH * 4]{};
+    wchar_t actorOutputPath[MAX_PATH * 4]{};
     wchar_t studioHash[80]{};
     wchar_t clientHash[80]{};
     if (!ReadConfiguration(
             iniPath, outputPath, animationOutputPath, censusOutputPath,
-            studioHash, clientHash)) {
+            actorOutputPath, studioHash, clientHash)) {
         return 1;
     }
 
@@ -1667,18 +2239,28 @@ DWORD WINAPI CaptureWorker(void*) {
             CREATE_NEW,
             FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
     }
+    // The actor census is emitted from the skeletal evaluation path, so it is
+    // only populated when the animation stream is enabled.
+    if (actorOutputPath[0] && animationOutputPath[0]) {
+        gActorOutput = CreateFileW(
+            actorOutputPath, GENERIC_WRITE, FILE_SHARE_READ, nullptr,
+            CREATE_NEW,
+            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+    }
     if (!gWake || gOutput == INVALID_HANDLE_VALUE ||
         (animationOutputPath[0] &&
          gAnimationOutput == INVALID_HANDLE_VALUE) ||
         (censusOutputPath[0] &&
-         (gCensusOutput == INVALID_HANDLE_VALUE || !gCensusHeap))) {
+         (gCensusOutput == INVALID_HANDLE_VALUE || !gCensusHeap)) ||
+        (actorOutputPath[0] && animationOutputPath[0] &&
+         gActorOutput == INVALID_HANDLE_VALUE)) {
         WriteMarker(gDonePath, "error=cannot create capture output\n");
         return 3;
     }
 
     FileHeader fileHeader{};
-    std::memcpy(fileHeader.magic, "ELPOSE3", 7);
-    fileHeader.version = 3;
+    std::memcpy(fileHeader.magic, "ELPOSE4", 7);
+    fileHeader.version = 4;
     fileHeader.headerBytes = sizeof(fileHeader);
     LARGE_INTEGER frequency{};
     QueryPerformanceFrequency(&frequency);
@@ -1703,8 +2285,8 @@ DWORD WINAPI CaptureWorker(void*) {
 
     if (gAnimationOutput != INVALID_HANDLE_VALUE) {
         AnimationFileHeader animationHeader{};
-        std::memcpy(animationHeader.magic, "ELANIM3", 7);
-        animationHeader.version = 3;
+        std::memcpy(animationHeader.magic, "ELANIM4", 7);
+        animationHeader.version = 4;
         animationHeader.headerBytes = sizeof(animationHeader);
         animationHeader.qpcFrequency = frequency.QuadPart;
         animationHeader.startQpc = gStartQpc.QuadPart;
@@ -1753,6 +2335,25 @@ DWORD WINAPI CaptureWorker(void*) {
         }
     }
 
+    if (gActorOutput != INVALID_HANDLE_VALUE) {
+        ActorFileHeader actorHeader{};
+        std::memcpy(actorHeader.magic, "ELACT2", 6);
+        actorHeader.version = 2;
+        actorHeader.headerBytes = sizeof(actorHeader);
+        actorHeader.qpcFrequency = frequency.QuadPart;
+        actorHeader.startQpc = gStartQpc.QuadPart;
+        actorHeader.pid = GetCurrentProcessId();
+        actorHeader.clientBase = static_cast<std::uint32_t>(
+            reinterpret_cast<std::uintptr_t>(client));
+        actorHeader.slotCount = kActorSlots;
+        actorHeader.setupBonesRva = gSetupBonesRva;
+        if (!WriteAll(gActorOutput, &actorHeader, sizeof(actorHeader))) {
+            WriteMarker(
+                gDonePath, "error=cannot write actor capture header\n");
+            return 4;
+        }
+    }
+
     if (!InstallHooks(studioRender, client, engine)) {
         RemoveHooks();
         char error[192]{};
@@ -1767,9 +2368,10 @@ DWORD WINAPI CaptureWorker(void*) {
     InterlockedExchange(&gCapturing, 1);
     char ready[160]{};
     std::snprintf(
-        ready, sizeof(ready), "ready=1\nformat=ELPOSE3%s%s\n",
-        gAnimationOutput == INVALID_HANDLE_VALUE ? "" : "+ELANIM3",
-        gCensusOutput == INVALID_HANDLE_VALUE ? "" : "+ELMDL1");
+        ready, sizeof(ready), "ready=1\nformat=ELPOSE4%s%s%s\n",
+        gAnimationOutput == INVALID_HANDLE_VALUE ? "" : "+ELANIM4",
+        gCensusOutput == INVALID_HANDLE_VALUE ? "" : "+ELMDL1",
+        gActorOutput == INVALID_HANDLE_VALUE ? "" : "+ELACT2");
     WriteMarker(gReadyPath, ready);
 
     for (;;) {
@@ -1790,6 +2392,7 @@ DWORD WINAPI CaptureWorker(void*) {
     // Before the hooks come out, while the game is still running and every
     // header the run recorded is still where it was recorded.
     SweepResidentHeaders();
+    SweepResidentActors();
     RemoveHooks();
     DrainQueue();
     FlushFileBuffers(gOutput);
@@ -1805,8 +2408,13 @@ DWORD WINAPI CaptureWorker(void*) {
         CloseHandle(gCensusOutput);
         gCensusOutput = INVALID_HANDLE_VALUE;
     }
+    if (gActorOutput != INVALID_HANDLE_VALUE) {
+        FlushFileBuffers(gActorOutput);
+        CloseHandle(gActorOutput);
+        gActorOutput = INVALID_HANDLE_VALUE;
+    }
 
-    char done[1024]{};
+    char done[1536]{};
     std::snprintf(
         done, sizeof(done),
         "complete=1\nqueued=%ld\nwritten=%ld\ndropped=%ld\n"
@@ -1814,12 +2422,19 @@ DWORD WINAPI CaptureWorker(void*) {
         "generations=%ld\nunbracketed=%ld\nbracket_overflow=%ld\n"
         "census_records=%ld\ncensus_images=%ld\ncensus_replacements=%ld\n"
         "census_resident=%ld\ncensus_vanished=%ld\ncensus_overflow=%ld\n"
-        "census_faults=%ld\ncensus_capped=%ld\ncensus_bytes=%lld\n",
+        "census_faults=%ld\ncensus_capped=%ld\ncensus_bytes=%lld\n"
+        "actor_records=%ld\nactor_identity_changes=%ld\nactor_resident=%ld\n"
+        "actor_vanished=%ld\nactor_overflow=%ld\nactor_faults=%ld\n"
+        "actor_constructions=%ld\nactor_destructions=%ld\n"
+        "actor_bytes=%lld\n",
         gQueued, gWritten, gDropped, gQueuePeak, gSkipped, gFiltered,
         static_cast<long long>(gBytesWritten), gGeneration, gUnbracketed,
         gBracketOverflow, gCensusRecords, gCensusImages, gCensusReplacements,
         gCensusResident, gCensusVanished, gCensusOverflow, gCensusFaults,
-        gCensusCapped, static_cast<long long>(gCensusBytes));
+        gCensusCapped, static_cast<long long>(gCensusBytes), gActorRecords,
+        gActorIdentityChanges, gActorResident, gActorVanished, gActorOverflow,
+        gActorFaults, gActorConstructions, gActorDestructions,
+        static_cast<long long>(gActorBytes));
     WriteMarker(gDonePath, done);
     CloseHandle(gWake);
     if (gCensusHeap) {

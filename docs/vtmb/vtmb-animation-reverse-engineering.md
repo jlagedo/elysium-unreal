@@ -1206,7 +1206,70 @@ image-relative. A checksum that resolves to no installed file is reported as
 unresolved, never as a mismatch — the two would otherwise be indistinguishable on
 a machine without the install.
 
-### 9.14 What not to do first
+### 9.14 Bounding an actor's identity and lifetime
+
+A censused model says what bytes a pose came from. It does not say how long the
+pointer that named the actor meant *that* actor. Ten entity addresses serve more
+than one model inside a single run, so an address join is only valid inside a
+window nothing was recording.
+
+Two windows are recorded, and they catch different failures.
+
+The **identity interval** opens where an address first evaluates a model and
+closes where the same address evaluates a different one. It needs no new hook:
+the skeletal evaluators already hold the entity, the studio header and the
+checksum, so an actor observation is one hash, one interlocked compare and a
+return on a path already copying bone matrices. It catches an address that
+changed model under a join.
+
+The **witnessed lifetime** opens at `C_BaseEntity::C_BaseEntity` and closes at
+`C_BaseEntity::~C_BaseEntity`. It catches what the interval cannot: an address
+freed and rebuilt into a *different actor under the same model*, where the
+checksum never changes and only the destructor separates the two.
+
+Three rules make the pair cheap and honest:
+
+- **Read nothing off a half-built or dying object.** A constructor has not given
+  the entity a model and a destructor is taking it away, so a lifetime record
+  keeps an address, a generation and a time, and nothing else. Identity is
+  snapshotted later, from the evaluator, where the object is whole.
+- **Filter offline, not live.** Construction fires for every client entity
+  because the hook is the shared base; narrowing it to skeletal actors is a join
+  against the actor census, and the entities that were constructed but never
+  posed are counted rather than hidden. Destruction is cheap to filter live,
+  because by then the census either published that address or did not.
+- **Record both addresses, never one and an offset.** The observation stores the
+  entity and the renderable subobject as separately observed values, so whether
+  they differ by four stays a measurement rather than an assumption the capture
+  was supposed to test.
+
+What one complete `sp_theatre` capture establishes:
+
+- **Every actor is identified before it is used.** 54 identities across 49
+  addresses, none unobserved and none observed late. The 49 is the same count
+  CAP1.2 and CAP1.3 measured for skeletal client entities, reached independently.
+- **Every reuse is witnessed.** Five addresses serve more than one model and five
+  identity changes account for all five, so no address changed actor unseen.
+- **Nothing is attributed outside its window.** No evaluation record falls
+  outside the interval in which its address meant the model it names, nor outside
+  a witnessed lifetime of that address.
+- **The lifetime catches what the interval cannot.** 615 constructions and 49
+  destructions, of which three addresses were rebuilt into a new actor — invisible
+  to a checksum comparison.
+- **The `+4` holds a fourth way.** The renderable sits a constant four bytes above
+  the entity across all 49, measured from two independently recorded addresses,
+  and the constructors declare the same layout statically.
+
+The cost is negligible and was measured rather than estimated: 0.089 MB of actor
+records against a 3.5 GB database, at an unchanged mean throughput. The
+construction hook's volume was the one real risk, and one run answered it.
+
+Two populations must not be conflated in a report like this. The addresses an
+identity-bearing observation names are actors; the addresses only ever seen
+constructed are ordinary client entities. Counting them together turns 49 actors
+into 611.
+
+### 9.15 What not to do first
 
 Avoid:
 
@@ -1738,7 +1801,12 @@ Reverse-engineering experiments often coexist with unrelated animation work. Pre
 | Later Source `SetupBones` behavior applies unchanged | Hypothesis only | Architectural similarity | VTMB disassembly/capture |
 | Final D3D9 constants can help locate the palette | Strong technical basis | D3D9 API and common skinning layout | VTMB-specific trace |
 | Final CPU matrices are the best runtime oracle | Recommendation | They collapse many unknown intermediate stages | Implement and validate hook |
-| Render info `+0x18` is the `C_BaseAnimating` instance plus 4 | Verified | Three complete `sp_theatre` captures: the same −4 across 39 shared models resolving all 49 instances, with no instance address shared between runs, plus draw-side values four above an eight-aligned address | None for actor identity; instance reuse still needs a scoped generation |
+| Render info `+0x18` is the `C_BaseAnimating` instance plus 4 | Verified | Three complete `sp_theatre` captures: the same −4 across 39 shared models resolving all 49 instances, with no instance address shared between runs, plus draw-side values four above an eight-aligned address; a fourth capture measures a constant +4 between the entity and renderable addresses the actor census records separately | None — instance reuse is now scoped by the actor interval and the witnessed lifetime |
+| The interface subobject at `this+0x4` is a declared layout, not a heap artefact | Verified | `C_BaseEntity::C_BaseEntity` and `~C_BaseEntity` install and restore five subobject vtables at `+0x0`, `+0x4`, `+0x8`, `+0xc`, `+0x10`; the second is the interface both the draw field and `SetupBones` name | None |
+| Every skeletal actor is identified before it is used | Verified | One complete `sp_theatre` capture: 54 identities across 49 addresses, none unobserved, none observed late, and no evaluation record outside the interval in which its address meant the model it names | Reproduction on a second cutscene |
+| An address that changes actor is always witnessed | Verified | The same capture: five addresses serve more than one model and five identity changes account for all five; separately, 615 constructions and 49 destructions show three addresses rebuilt into a new actor under an unchanged checksum | Reproduction on a second cutscene |
+| A vtable carrying the pose slots identifies a shared construction path | Contradicted | `0x101e3cfc` has one data reference and its writer `0x10002d80` one caller; a capture hooked there records no construction while skeletal actors are posed | None — the shared pair is `C_BaseEntity`'s constructor and destructor |
+| The composed-pose stage receives the frame the pose is placed into | Verified | Its third argument is retained on every composed pose: 237,903 of 237,903 carry one, and 256 sampled decode as a rotation and a translation with worst determinant error 5.57e-08 | Whether that translation is the entity's own origin field, which needs a pinned displacement |
 | `SetupBones` receives the same interface subobject the draw field stores | Verified | Its prologue adjusts `this` down four bytes to reach the instance, and the captured bracket entity equals the draw entity on every draw whose frame built a pose | None |
 | A pose build covers exactly one entity | Verified | One complete `sp_theatre` capture: across 237,929 composed poses no generation spans several entities or carries an evaluation naming another | None |
 | One draw frame encloses every draw of an actor | Contradicted | The same entity is drawn 793 times inside a `CModelRender::DrawModel` frame and 7,632 times outside one; 31 of 141 drawn models appear on both paths | None — the second path is `CModelRender::DrawModelShadow`, and two frames are now bracketed |
@@ -1752,7 +1820,7 @@ Reverse-engineering experiments often coexist with unrelated animation work. Pre
 | `StudioBone.Flags & 0x2` on disk is what the runtime uses | Verified | Comparing all 2,286 captured bones against their disk bytes: 627 flag words change, every change only *sets* bits and none is ever cleared, and the same 27 bones carry `0x2` on disk and at runtime with none disagreeing | None; the split-inheritance rule and the exported `split_bones` inventory are unaffected |
 | The rest of `StudioBone.Flags` on disk is what the runtime uses | Contradicted | The loader sets `0x4`, `0x8` and `0x20`–`0x8000` on 27 models, so any bit but `0x2` read from disk is a pre-load value | What each set bit means; they look like usage flags computed from hitboxes, attachments and vertex LODs |
 | The shared-animation remap is built inside the model image | Strong evidence | The gap between the include-model array and `LocalAnimIndex` is written on exactly the 27 models with include models and on no other, 24,234 bytes, with zero exceptions either way | Identifying the records; the spec's open question on nested remap records inside `0x10089c40` is the same question |
-| A model image stays resident for the whole capture | Verified for this corpus | The sweep at capture stop re-read all 141 recorded headers: 141 still read as their own studio header, none vanished, and no address served a second checksum | Whether a longer or map-changing corpus frees one; a true unload event needs a model-cache target no specification declares |
+| A model image stays resident for the whole capture | Contradicted for a run that reaches the map change | A capture stopping on the `sp_tutorial_1` transition swept 143 recorded headers and found 38 resident and 103 no longer reading as their own header, with no address serving a second checksum | Which target frees them: `CEngineClient::UnloadModel` dispatches through the model-loader interface slot `+0x18`, but the slot is unresolved and the Quake cache's free is inlined across ten functions |
 
 ---
 

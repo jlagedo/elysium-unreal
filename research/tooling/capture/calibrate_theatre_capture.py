@@ -27,9 +27,12 @@ from typing import Any
 
 from elysium_pipeline.paths import research_root
 from research.tooling.capture.finalize_capture_database import (
+    ACTOR_FILE_HEADER,
+    ACTOR_OBSERVATION_HEADER,
     ANIMATION_FILE_HEADER,
     ANIMATION_RECORD_HEADER,
     ANIMATION_RECORD_HEADER_V2,
+    ANIMATION_RECORD_HEADER_V3,
     BRACKET_RECORD_HEADER,
     CENSUS_FILE_HEADER,
     MODEL_IMAGE_HEADER,
@@ -37,6 +40,7 @@ from research.tooling.capture.finalize_capture_database import (
     POSE_FILE_HEADER,
     POSE_RECORD_HEADER,
     POSE_RECORD_HEADER_V2,
+    POSE_RECORD_HEADER_V3,
     read_key_values,
 )
 
@@ -71,22 +75,31 @@ def record_bytes_expression(headers: dict[str, dict[str, Any]]) -> str:
     it, and byte closure fails loudly; falling through to another kind's
     formula would produce a plausible wrong number instead.
     """
-    pose = (
-        POSE_RECORD_HEADER
-        if headers.get("pose", {}).get("version", 3) >= 3
-        else POSE_RECORD_HEADER_V2
-    )
-    evaluation = (
-        ANIMATION_RECORD_HEADER
-        if headers.get("animation", {}).get("version", 3) >= 3
-        else ANIMATION_RECORD_HEADER_V2
+    pose_version = headers.get("pose", {}).get("version", 3)
+    if pose_version >= 4:
+        pose = POSE_RECORD_HEADER
+    elif pose_version >= 3:
+        pose = POSE_RECORD_HEADER_V3
+    else:
+        pose = POSE_RECORD_HEADER_V2
+    animation_version = headers.get("animation", {}).get("version", 3)
+    if animation_version >= 4:
+        evaluation = ANIMATION_RECORD_HEADER
+    elif animation_version >= 3:
+        evaluation = ANIMATION_RECORD_HEADER_V3
+    else:
+        evaluation = ANIMATION_RECORD_HEADER_V2
+    # The trailer is stored per record rather than implied by kind, so the
+    # closed form reads it back instead of asserting which stage receives one.
+    root = (
+        "COALESCE(root_transform_bytes, 0)" if animation_version >= 4 else "0"
     )
     return (
         f"CASE WHEN kind = 'POSE' THEN {pose.size} + 96 * bone_count "
         f"WHEN kind IN ('PBLD', 'DBLD', 'SHDW') "
         f"THEN {BRACKET_RECORD_HEADER.size} "
         f"WHEN kind IN ('BASE', 'FINL') THEN {evaluation.size} "
-        "+ 28 * bone_count + 4 * ((bone_count + 31) / 32) "
+        f"+ 28 * bone_count + 4 * ((bone_count + 31) / 32) + {root} "
         "ELSE NULL END"
     )
 
@@ -103,6 +116,18 @@ def census_bytes_expression() -> str:
         "qpc FROM model_headers UNION ALL "
         f"SELECT {MODEL_IMAGE_HEADER.size} + captured_bytes, 'MIMG', qpc "
         "FROM model_images"
+    )
+
+
+def actor_bytes_expression() -> str:
+    """The actor stream's bytes, from its own table.
+
+    An actor observation is a fixed-size dictionary row with no payload, so its
+    size is the header width and nothing needs deriving from bone count.
+    """
+    return (
+        f"SELECT {ACTOR_OBSERVATION_HEADER.size} AS bytes, 'ACTR' AS kind, "
+        "qpc FROM actor_observations"
     )
 
 
@@ -172,6 +197,8 @@ def stream_headers(connection: sqlite3.Connection) -> dict[str, dict[str, Any]]:
             if name == "pose"
             else CENSUS_FILE_HEADER
             if name == "census"
+            else ACTOR_FILE_HEADER
+            if name == "actor"
             else ANIMATION_FILE_HEADER
         )
         fields = layout.unpack(blob)
@@ -203,21 +230,54 @@ def stream_headers(connection: sqlite3.Connection) -> dict[str, dict[str, Any]]:
 
 
 # The hook stamps one counter across every stream it writes, so density is only
-# a proof that nothing was lost if every table it reaches is counted. Census
-# rows are a dictionary rather than events and live in their own tables, but
-# they draw from the same counter and would otherwise read as holes.
-SEQUENCE_TABLES = ("records", "model_headers", "model_images")
-SEQUENCE_UNION = " UNION ALL ".join(
-    f"SELECT sequence_number FROM {table}" for table in SEQUENCE_TABLES
+# a proof that nothing was lost if every table it reaches is counted. Census and
+# actor rows are a dictionary rather than events and live in their own tables,
+# but they draw from the same counter and would otherwise read as holes.
+SEQUENCE_TABLES = (
+    "records",
+    "model_headers",
+    "model_images",
+    "actor_observations",
 )
+def table_columns(connection: sqlite3.Connection, table: str) -> set[str]:
+    """The column names a table actually carries.
+
+    A database finalized before a column existed still has to be answerable, so
+    every query that reads a late-added column asks first rather than failing
+    with a SQL error that reads like a corrupt capture.
+    """
+    return {
+        row[1] for row in connection.execute(f"PRAGMA table_info({table})")
+    }
+
+
+def sequence_union(connection: sqlite3.Connection) -> str:
+    """Union every sequence-bearing table this database actually carries.
+
+    A table missing because the run predates the stream that fills it is not a
+    hole in the counter; reading it unconditionally would turn an older database
+    into a query error rather than an answer.
+    """
+    present = {
+        name
+        for (name,) in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        )
+    }
+    return " UNION ALL ".join(
+        f"SELECT sequence_number FROM {table}"
+        for table in SEQUENCE_TABLES
+        if table in present
+    )
 
 
 def sequence_continuity(connection: sqlite3.Connection) -> dict[str, Any]:
+    union = sequence_union(connection)
     low, high, distinct, total = connection.execute(
         f"""
         SELECT min(sequence_number), max(sequence_number),
                count(DISTINCT sequence_number), count(*)
-        FROM ({SEQUENCE_UNION})
+        FROM ({union})
         """
     ).fetchone()
     dense = (
@@ -237,8 +297,7 @@ def sequence_continuity(connection: sqlite3.Connection) -> dict[str, Any]:
     seen = [
         value
         for (value,) in connection.execute(
-            f"SELECT sequence_number FROM ({SEQUENCE_UNION}) "
-            "ORDER BY sequence_number"
+            f"SELECT sequence_number FROM ({union}) ORDER BY sequence_number"
         )
     ]
     gaps: list[dict[str, int]] = []
@@ -292,20 +351,25 @@ def volume(
             stream_bytes.get(entry["stream"], 0) + entry["bytes"]
         )
 
-    # The census stream is measured from its own tables and reported beside the
-    # event streams rather than mixed into them, so the per-second event rates
-    # CAP1.2 published stay the same numbers.
+    # The dictionary streams are measured from their own tables and reported
+    # beside the event streams rather than mixed into them, so the per-second
+    # event rates CAP1.2 published stay the same numbers.
     census_kinds = []
-    if "census" in headers:
+    for stream, expression in (
+        ("census", census_bytes_expression()),
+        ("actor", actor_bytes_expression()),
+    ):
+        if stream not in headers:
+            continue
         for kind, count, payload, first, last in connection.execute(
             f"""
             SELECT kind, count(*), sum(bytes), min(qpc), max(qpc)
-            FROM ({census_bytes_expression()}) GROUP BY kind ORDER BY kind
+            FROM ({expression}) GROUP BY kind ORDER BY kind
             """
         ):
             census_kinds.append(
                 {
-                    "stream": "census",
+                    "stream": stream,
                     "kind": kind,
                     "records": count,
                     "bytes": payload,
@@ -313,7 +377,7 @@ def volume(
                     "last_qpc": last,
                 }
             )
-            stream_bytes["census"] = stream_bytes.get("census", 0) + payload
+            stream_bytes[stream] = stream_bytes.get(stream, 0) + payload
 
     closure = {
         name: {

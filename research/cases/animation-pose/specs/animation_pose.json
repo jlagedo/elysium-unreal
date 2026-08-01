@@ -91,6 +91,24 @@
     },
     {
       "confidence": "confirmed",
+      "fact": "A client entity class writes one vtable per subobject, and the second subobject sits at this+0x4.",
+      "evidence": "0x10002d8b through 0x10002dab store 0x101e3cfc at +0x0, 0x101e3ca4 at +0x4, 0x101e3c6c at +0x8, 0x101e3c30 at +0xc and 0x101e3c1c at +0x10; C_BaseEntity::C_BaseEntity at 0x1008f3c0 writes the same five displacements with its own vtables at 0x1022d6d4, 0x1022d67c, 0x1022d644, 0x1022d608 and 0x1022d5f4, and C_BaseEntity::~C_BaseEntity restores exactly those five.",
+      "consequence": "CAP1.3's +4 is a declared multiple-inheritance layout rather than a heap coincidence: the interface subobject the draw stream and SetupBones both name is the second base, four bytes into the object, and the constructors say so independently of any capture. One theatre capture measures the same +4 between the entity and renderable addresses the actor census records."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "A vtable carrying BuildTransformations at +0x1ec belongs to one concrete class rather than to every skeletal entity, so it does not identify a shared construction path.",
+      "evidence": "0x101e3cfc carries slot +0x1ec = 0x1008fd00 and slot +0x208 = 0x10091650, the two dispatch targets SetupBones pins, yet exactly one instruction references it as data (0x10002d8b) and its writer 0x10002d80 has exactly one caller (0x10002c40). A hook installed on 0x10002d80 for a 90-second theatre capture recorded zero constructions while four skeletal actors were posed.",
+      "consequence": "Each derived class carries its own vtable with the same inherited slots, so a construction target must be the shared base C_BaseEntity::C_BaseEntity rather than any class whose vtable happens to hold the pose slots."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "C_BaseEntity::C_BaseEntity is 0x1008f3c0 and C_BaseEntity::~C_BaseEntity is 0x1008f5c0; both are __thiscall with no stack arguments and both are the shared base of the client entity hierarchy.",
+      "evidence": "The constructor is 53 55 56 57 8b f1 (PUSH EBX; PUSH EBP; PUSH ESI; PUSH EDI; MOV ESI,ECX) with 12 callers; the destructor is 53 56 57 8b f9 (PUSH EBX; PUSH ESI; PUSH EDI; MOV EDI,ECX) with 15 callers and one exit at 0x1008f6e5 that restores this into ECX and JMPs to 0x1009ddc0 rather than returning. Each prologue is complete instructions with no relative operand, nothing branches into either, and the two are the only references to the vtable 0x1022d6d4.",
+      "consequence": "Every client entity construction and destruction passes through this pair, so a lifetime record covers the whole hierarchy; restricting it to the skeletal actors CAP2.3 names is an offline join against the actor census rather than a live filter."
+    },
+    {
+      "confidence": "confirmed",
       "fact": "Every Flags & 0x2 bone in the patch-first character corpus uses the conventional hierarchy-FK inverse bind, not a split-inheritance inverse bind.",
       "evidence": "pipeline/src/elysium_pipeline/validation/validate_skeletal_pipeline.py independently evaluates all 373 flagged bones across 433 character skeletons; worst boneToWorld * poseToBone identity error is 7.36e-6.",
       "consequence": "Split inheritance belongs only to live pose construction; skin binding and generated inverse binds remain conventional."
@@ -321,6 +339,33 @@
       "depth": 2,
       "cap": 160,
       "asm_count": 2400
+    },
+    {
+      "address": "10002d80",
+      "label": "concrete_animating_construct",
+      "confidence": "eliminated-lead",
+      "role": "Constructor of one concrete class derived from C_BaseAnimating; writes the vtable 0x101e3cfc whose slots the pose specification samples. It has one caller and a theatre capture hooked on it recorded no construction, so it is not the shared skeletal construction path.",
+      "depth": 1,
+      "cap": 40,
+      "asm_count": 40
+    },
+    {
+      "address": "1008f3c0",
+      "label": "c_baseentity_construct",
+      "confidence": "confirmed",
+      "role": "C_BaseEntity::C_BaseEntity; writes the five C_BaseEntity subobject vtables at 0x1022d6d4 and has 12 callers, so every client entity's construction chain reaches it.",
+      "depth": 1,
+      "cap": 60,
+      "asm_count": 400
+    },
+    {
+      "address": "1008f5c0",
+      "label": "c_baseentity_destruct",
+      "confidence": "confirmed",
+      "role": "C_BaseEntity::~C_BaseEntity; restores the same five subobject vtables at entry and tail-calls its base teardown, and has 15 callers, so every client entity destruction passes through it.",
+      "depth": 1,
+      "cap": 60,
+      "asm_count": 400
     }
   ],
   "relationships": [

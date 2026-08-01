@@ -69,6 +69,24 @@
           "rva": "0x0008f900",
           "calling_convention": "thiscall",
           "expected_bytes": "8b4424045685c08b"
+        },
+        {
+          "semantic_label": "client.base_entity_construct",
+          "source_function_label": "c_baseentity_construct",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x0008f3c0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "535556578bf1"
+        },
+        {
+          "semantic_label": "client.base_entity_destruct",
+          "source_function_label": "c_baseentity_destruct",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x0008f5c0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "5356578bf9"
         }
       ]
     },

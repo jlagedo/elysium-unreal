@@ -206,10 +206,13 @@ def write_hook_ini(path: Path, session: Path, duration_seconds: int) -> None:
     model_render = target(engine, "engine.model_render_draw_model")
     model_render_shadow = target(
         engine, "engine.model_render_draw_model_shadow")
+    construct = target(client, "client.base_entity_construct")
+    destruct = target(client, "client.base_entity_destruct")
     values = {
         "output": session / "scene.elpose",
         "animation_output": session / "animation.elanim",
         "census_output": session / "model.elmdl",
+        "actor_output": session / "actor.elact",
         "ready": session / "ready.txt",
         "stop": session / "stop.txt",
         "done": session / "done.txt",
@@ -234,6 +237,10 @@ def write_hook_ini(path: Path, session: Path, duration_seconds: int) -> None:
         "model_render_draw_model_shadow_expected": (
             model_render_shadow["expected_bytes"]
         ),
+        "base_entity_construct_rva": f"0x{construct['rva']:x}",
+        "base_entity_construct_expected": construct["expected_bytes"],
+        "base_entity_destruct_rva": f"0x{destruct['rva']:x}",
+        "base_entity_destruct_expected": destruct["expected_bytes"],
         "target_checksum": "0x00000000",
         "duration_seconds": duration_seconds + 60,
     }

@@ -68,13 +68,21 @@ def entity_sets(connection: sqlite3.Connection) -> dict[str, set[int]]:
 
     Only streams that contributed event records are asked. A database may
     carry a stream whose rows are a dictionary rather than events — the model
-    census is one — and it names no entity at all.
+    census and the actor census are two — and neither names an entity at all.
+
+    Within a stream, only the records naming a model take part. A bracket
+    record's `this` is the renderable for a pose build and the CModelRender
+    singleton for an engine draw frame, and neither is an entity in the space
+    being compared, so counting them would put a singleton in the population
+    every skeletal instance is required to resolve against.
     """
     return {
         stream: {
             value
             for (value,) in connection.execute(
-                "SELECT DISTINCT client_entity FROM records WHERE stream_name = ?",
+                "SELECT DISTINCT client_entity FROM records "
+                "WHERE stream_name = ? AND checksum IS NOT NULL "
+                "AND bone_count IS NOT NULL",
                 (stream,),
             )
         }
@@ -187,10 +195,16 @@ def cross_field_sweep(
 
 def model_groups(connection: sqlite3.Connection) -> dict[int, dict[str, Any]]:
     groups: dict[int, dict[str, Any]] = {}
+    # Only the records that name a model take part in the pointer-space
+    # comparison. A bracket record names a frame or a renderable and carries no
+    # checksum or bone count, so including it would group every bracket under a
+    # null checksum whose bone count no row can supply.
     for checksum, stream, entity, bones in connection.execute(
         """
         SELECT checksum, stream_name, client_entity, max(bone_count)
-        FROM records GROUP BY checksum, stream_name, client_entity
+        FROM records
+        WHERE checksum IS NOT NULL AND bone_count IS NOT NULL
+        GROUP BY checksum, stream_name, client_entity
         """
     ):
         group = groups.setdefault(

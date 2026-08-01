@@ -43,6 +43,7 @@ from research.tooling.capture.calibrate_theatre_capture import (
     record_bytes_expression,
     resolve_session,
     stream_headers,
+    table_columns,
 )
 
 
@@ -101,13 +102,21 @@ def prepare(connection: sqlite3.Connection) -> None:
     The database stays read-only; temporary objects live in this connection
     alone and are discarded when it closes.
     """
+    # The root-transform trailer is part of a record's size, so the byte closure
+    # below needs it in the copy. A database finalized before it existed carries
+    # no such column and is answered with a null one rather than a SQL error.
+    root_bytes = (
+        "root_transform_bytes"
+        if "root_transform_bytes" in table_columns(connection, "records")
+        else "NULL AS root_transform_bytes"
+    )
     connection.execute(
-        """
+        f"""
         CREATE TEMP TABLE event AS
         SELECT stream_name, kind, sequence_number, qpc, entry_qpc, thread_id,
                client_entity, bone_count, model_name, generation,
                generation_parent, generation_depth, generation_entity,
-               carry_generation
+               carry_generation, {root_bytes}
         FROM records
         """
     )

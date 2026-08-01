@@ -40,6 +40,14 @@ inline constexpr std::uint8_t Profile1Target3ExpectedBytes[] = {
     0x8b, 0x44, 0x24, 0x04, 0x56, 0x85, 0xc0, 0x8b
 };
 
+inline constexpr std::uint8_t Profile1Target4ExpectedBytes[] = {
+    0x53, 0x55, 0x56, 0x57, 0x8b, 0xf1
+};
+
+inline constexpr std::uint8_t Profile1Target5ExpectedBytes[] = {
+    0x53, 0x56, 0x57, 0x8b, 0xf9
+};
+
 inline constexpr BinaryTargetProfile Profile1Targets[] = {
     {
         "client.resolve_virtual_model_pose",
@@ -89,6 +97,30 @@ inline constexpr BinaryTargetProfile Profile1Targets[] = {
         0x00000000u,
         0u,
     },
+    {
+        "client.base_entity_construct",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Thiscall,
+        0x0008f3c0u,
+        Profile1Target4ExpectedBytes,
+        6u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
+    {
+        "client.base_entity_destruct",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Thiscall,
+        0x0008f5c0u,
+        Profile1Target5ExpectedBytes,
+        5u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
 };
 
 inline constexpr BinaryProfile Profile1 = {
@@ -107,7 +139,7 @@ inline constexpr BinaryProfile Profile1 = {
         0x00000000u,
     },
     Profile1Targets,
-    4u,
+    6u,
 };
 
 inline constexpr std::uint8_t Profile2Target0ExpectedBytes[] = {

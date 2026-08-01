@@ -171,7 +171,7 @@ a later, longer corpus makes volume bite.
 | 6 | P1 | CAP6 — face and lips | The same loop over expression, flex, phoneme, and deformed-vertex state |
 | 7 | P2 | CAP7 — handoff and trim | Engine-neutral evaluator feeds Unreal; unused probes and readers are deleted |
 
-**The next and only current task is CAP2.3.**
+**The next and only current task is CAP2.4.**
 
 ## CAP1 — First theatre run and calibration
 
@@ -357,8 +357,13 @@ calling convention into the case specification before a hook is written.
   Unload is scoped to what is observable. No case specification declares a model-cache
   free and no hooked target sees one, so the run records first observation, reuse at a
   reused address, and a resident-at-stop sweep, and counts headers that no longer read as
-  their own header. A true unload event needs a Ghidra pass on the model cache; it is not
-  part of this task and is a prerequisite of CAP2.3's lifetime work.
+  their own header. A run that stops on the map transition sweeps its headers mid-teardown
+  and finds most of them gone, which is the free happening and being seen only as absence.
+  A true unload event still needs the model-cache target: `CEngineClient::UnloadModel`
+  dispatches through the model-loader interface slot `+0x18`, but that slot is unresolved
+  and the Quake cache's own free is inlined across ten functions, so no target may be
+  declared yet. Actor lifetime does not depend on it — that pair is `C_BaseEntity`'s
+  constructor and destructor, and CAP2.3 closes on them.
 
   Three defects were closed on the way. `client.get_studio_hdr` was the one hook-contract
   target with no `source_function_label`, so the generator never checked it against a
@@ -368,10 +373,64 @@ calling convention into the case specification before a hook is written.
   `records`, so census rows drawing from the same global counter read as holes and turned
   CAP1.2's loss proof into a false alarm; it now counts every table the counter reaches.
   Each has a regression.
-- [ ] **CAP2.3 Actor identity and lifetime.** Record each skeletal client entity's
+- [x] **CAP2.3 Actor identity and lifetime.** Record each skeletal client entity's
   construction and destruction, classname/target identity where cheaply reachable,
   model/skin/body selection, origin and angles, and draw outcome, under a scoped generation
   so pointer reuse cannot join unrelated actors.
+
+  A fourth stream `actor.elact` (`ELACT2`) lands in its own `actor_observations` table, on
+  the same split the model census uses: identity per sighting, keyed by the entity address.
+  Three reasons come free from the skeletal evaluators, which already hold the entity, the
+  header and the checksum — first sighting, identity change, resident at stop — and two come
+  from `C_BaseEntity`'s constructor and destructor. `uv run elysium research
+  verify_actor_identity_lifetime <session>…` reads a finalized database read-only and reports
+  coverage, the actor dictionary, intervals, the witnessed lifetime, reuse, placement, draw
+  outcome and cost.
+
+  One complete cutscene carries **1,692,922** records with **zero** drops, skipped, filtered,
+  unbracketed and bracket overflow, zero actor faults or overflow, and zero incomplete tail
+  across all four streams. **All 54 actor identities across 49 addresses were observed at or
+  before first use**, none late; **five addresses served more than one model and five observed
+  identity changes account for all five**; and **no evaluation record falls outside the
+  interval in which its address meant the model it names, nor outside a witnessed lifetime of
+  that address**. The 49 is CAP1.2's and CAP1.3's skeletal entity count reached independently.
+
+  **The lifetime is what closes CAP1.3's residual.** 615 constructions and 49 destructions
+  show **three addresses rebuilt into a new actor under an unchanged checksum** — invisible to
+  an identity interval, because only the destructor separates the two actors. The renderable
+  sits a constant **+4** above the entity across all 49, measured from two separately recorded
+  addresses rather than derived from one.
+
+  Two fields were already arguments the probe discarded. The composed-pose stage's third
+  argument is the root/entity transform: **237,903 of 237,903** composed poses now carry it,
+  and 256 sampled decode as a rotation and a translation with worst determinant error
+  **5.57e-08**. The draw hook's render info is retained as a 32-byte span rather than named
+  fields — **38,768 of 38,768** draws agree with the two fields decoded out of it. Facts:
+  `docs/vtmb/animation_and_movers.md`; method and measurements:
+  `docs/vtmb/vtmb-animation-reverse-engineering.md`.
+
+  The census cost **0.089 MB**, 0.0035% of a 3.5 GB database, at an unchanged **8.42 MB/s**
+  mean against CAP2.2's 8.35. The construction hook's volume was the one real risk and one run
+  answered it, so no filter was added. CAP1.2, CAP1.3, CAP2.1 and CAP2.2 all re-establish on
+  the same database. The queue high-water rose to **368** against CAP2.2's 141 with nothing
+  dropped and no cap reached; two probe runs measured 67 before the lifetime hooks and 31
+  after, so the cause is not the new records and is not yet established — CAP2.7 is where it
+  reproduces or does not.
+
+  Three bounds travel with the task. **There is no targetname on the client**: it is
+  server-side, so client identity is the address, the renderable subobject and the model.
+  **Construction covers every client entity**, because the hookable pair is the shared base;
+  narrowing to actors is an offline join and the 562 addresses constructed but never posed are
+  counted apart. And **the render info's two 16-bit fields are captured, not named** — every
+  draw in an idle capture carries their `0xffff` default, so what they select is open.
+
+  Two defects were closed on the way. `verify_entity_pointer_join` grouped bracket records,
+  which carry neither checksum nor bone count, into a null-checksum group whose bone count no
+  row could supply, so it failed on any bracketed capture and counted the `CModelRender`
+  singleton as an entity; both sites now read only records that name a model. And a
+  construction target chosen from the vtable carrying the pose slots turned out to belong to
+  one concrete class rather than to every skeletal entity; it is retained as an eliminated
+  lead in `animation_pose.json` with the evidence that killed it. Each has a regression.
 - [ ] **CAP2.4 Source attribution per contribution.** For every fired contribution record
   the resolved owner studio header and model identity, owner-local sequence and animation
   indices, active blend cells and weights, cycle and playback time, pose parameters,

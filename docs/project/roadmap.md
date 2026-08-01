@@ -203,10 +203,17 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
   runtime pointer becomes a model-image offset. A fourth offline reader decodes those images
   against the pipeline's own bone decoder and against the patch-first install, and proves the
   runtime header is the `.mdl` image at offset 0 while naming the narrow ranges the loader
-  patches in place. Open:
+  patches in place. A fourth stream censuses the actors: identity per sighting keyed by the
+  entity address, plus the construction and destruction the shared client-entity pair
+  witnesses, so an address join is bounded by the window in which that address meant that
+  actor rather than by the address alone. Every actor a full run posed is identified before it
+  is used, every reused address is accounted for, and the composed pose now retains the frame
+  it is placed into. Open:
   reproducing the run on a second cutscene,
-  joining the observed source identities to the patch-first export/decoder stack, and
-  the byte-span coverage that join needs. Editable raw byte-span recipes are added
+  joining the observed source identities to the patch-first export/decoder stack,
+  the byte-span coverage that join needs, and
+  the model-cache target that would turn header residency into an unload event.
+  Editable raw byte-span recipes are added
   only when the first mismatching stage needs them; there is no public
   compatibility surface or migration system.
   Detailed tasks and acceptance:

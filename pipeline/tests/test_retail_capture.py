@@ -29,8 +29,10 @@ from research.tooling.capture.capture_theatre import (
     build_config as build_theatre_config,
 )
 from research.tooling.capture.calibrate_theatre_capture import calibrate
-from research.tooling.capture.verify_entity_pointer_join import verify
+from research.tooling.capture.verify_entity_pointer_join import address, verify
 from research.tooling.capture.finalize_capture_database import (
+    ACTOR_FILE_HEADER,
+    ACTOR_OBSERVATION_HEADER,
     ANIMATION_FILE_HEADER,
     ANIMATION_RECORD_HEADER,
     BRACKET_RECORD_HEADER,
@@ -39,6 +41,8 @@ from research.tooling.capture.finalize_capture_database import (
     MODEL_OBSERVATION_HEADER,
     POSE_FILE_HEADER,
     POSE_RECORD_HEADER,
+    RENDER_INFO_BYTES,
+    ROOT_TRANSFORM_BYTES,
     finalize,
 )
 from research.tooling.capture.verify_pose_build_generation import (
@@ -46,6 +50,9 @@ from research.tooling.capture.verify_pose_build_generation import (
 )
 from research.tooling.capture.verify_model_skeleton_census import (
     verify as verify_census,
+)
+from research.tooling.capture.verify_actor_identity_lifetime import (
+    verify as verify_actors,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -90,6 +97,20 @@ def pose_record(
             generation,
             generation_entity,
             carry_generation,
+            RENDER_INFO_BYTES,
+            # The render info as the engine wrote it: the studio header at
+            # +0x00 and the entity at +0x18 are the two decoded fields.
+            struct.pack(
+                "<8I",
+                studio_hdr,
+                0xC000,
+                0xFFFF | (0xFFFF << 16),
+                0xD000,
+                0xE000,
+                0,
+                client_entity,
+                0xF000,
+            ),
         )
         + payload
     )
@@ -106,8 +127,24 @@ def animation_record(
     studio_hdr: int = 0x1000,
     generation: int = 0,
     generation_depth: int = 0,
+    root_transform: bool | None = None,
 ) -> bytes:
+    # The composed-pose stage is the only one that receives a root transform, so
+    # a FINL record carries the trailer and a BASE record carries none unless a
+    # test is deliberately building a malformed one.
+    carries_root = magic == b"FINL" if root_transform is None else root_transform
     payload = bytes(bone_count * 7 * 4 + ((bone_count + 31) // 32) * 4)
+    root_bytes = ROOT_TRANSFORM_BYTES if carries_root else 0
+    if carries_root:
+        # A real root/entity transform: identity rotation and a translation, so
+        # the verifier's unit-determinant check has something to measure rather
+        # than a zero-filled block that would fail it for the wrong reason.
+        payload += struct.pack(
+            "<12f",
+            1.0, 0.0, 0.0, 64.0,
+            0.0, 1.0, 0.0, -32.0,
+            0.0, 0.0, 1.0, 16.0,
+        )
     return (
         ANIMATION_RECORD_HEADER.pack(
             magic,
@@ -127,8 +164,64 @@ def animation_record(
             0xA000,
             generation,
             generation_depth,
+            0xB000 if carries_root else 0,
+            root_bytes,
         )
         + payload
+    )
+
+
+def actor_lifetime_record(
+    sequence: int, qpc: int, reason: int, *, entity: int = 0x1FFC
+) -> bytes:
+    """A construction or destruction: an address and a time, no identity."""
+    return ACTOR_OBSERVATION_HEADER.pack(
+        b"ACTR",
+        ACTOR_OBSERVATION_HEADER.size,
+        sequence,
+        qpc,
+        7,
+        entity,
+        0,
+        reason,
+        0,
+        0,
+        0,
+        0,
+        0,
+        b"\0",
+    )
+
+
+def actor_record(
+    sequence: int,
+    qpc: int,
+    model_name: str,
+    *,
+    entity: int = 0x1FFC,
+    renderable: int = 0x2000,
+    reason: int = 1,
+    generation: int = 0,
+    studio_hdr: int = 0x1000,
+    checksum: int = 0x3000,
+    previous_checksum: int = 0,
+    bone_count: int = 1,
+) -> bytes:
+    return ACTOR_OBSERVATION_HEADER.pack(
+        b"ACTR",
+        ACTOR_OBSERVATION_HEADER.size,
+        sequence,
+        qpc,
+        7,
+        entity,
+        renderable,
+        reason,
+        generation,
+        studio_hdr,
+        checksum,
+        previous_checksum,
+        bone_count,
+        model_name.encode("ascii") + b"\0",
     )
 
 
@@ -292,6 +385,8 @@ def write_session(
     pose_records: bytes,
     animation_records: bytes,
     census_records: bytes | None = None,
+    actor_records: bytes | None = None,
+    actor_version: int = 2,
     done: str = "complete=1\nqueued=2\nwritten=2\ndropped=0\n",
     boundary: dict[str, object] | None = None,
     console: str | None = None,
@@ -334,8 +429,8 @@ def write_session(
         (session / "console.log").write_text(console, encoding="utf-8")
     (session / "scene.elpose").write_bytes(
         POSE_FILE_HEADER.pack(
-            b"ELPOSE3",
-            3,
+            b"ELPOSE4",
+            4,
             POSE_FILE_HEADER.size,
             QPC_FREQUENCY,
             90,
@@ -351,8 +446,8 @@ def write_session(
     )
     (session / "animation.elanim").write_bytes(
         ANIMATION_FILE_HEADER.pack(
-            b"ELANIM3",
-            3,
+            b"ELANIM4",
+            4,
             ANIMATION_FILE_HEADER.size,
             QPC_FREQUENCY,
             90,
@@ -385,6 +480,22 @@ def write_session(
             )
             + census_records
         )
+    if actor_records is not None:
+        (session / "actor.elact").write_bytes(
+            ACTOR_FILE_HEADER.pack(
+                f"ELACT{actor_version}".encode("ascii"),
+                actor_version,
+                ACTOR_FILE_HEADER.size,
+                QPC_FREQUENCY,
+                90,
+                12,
+                0xB000,
+                512,
+                0xE000,
+                b"",
+            )
+            + actor_records
+        )
 
 
 def write_generation_session(
@@ -392,6 +503,7 @@ def write_generation_session(
     actors: list[dict[str, object]],
     done_extra: str = "unbracketed=0\nbracket_overflow=0\n",
     census_records: bytes | None = None,
+    actor_records: bytes | None = None,
 ) -> None:
     """Finalize a session whose records are bracketed as retail brackets them.
 
@@ -481,6 +593,7 @@ def write_generation_session(
         pose_records=b"".join(poses),
         animation_records=b"".join(animations),
         census_records=census_records,
+        actor_records=actor_records,
         done=(
             "complete=1\nqueued=2\nwritten=2\ndropped=0\nqueue_peak=9\n"
             + done_extra
@@ -1058,6 +1171,532 @@ class RetailCaptureTests(unittest.TestCase):
             self.assertIsNone(report["skeletons"])
             self.assertIn("predates", report["verdict"]["statement"])
 
+    def test_actor_record_layouts_match_the_probe_that_writes_them(
+        self,
+    ) -> None:
+        # The C++ struct is the definition and the reader re-declares it, so
+        # nothing but this test stops the two drifting apart.
+        source = (
+            REPO_ROOT
+            / "research"
+            / "tooling"
+            / "capture"
+            / "live_pose_hook.cpp"
+        ).read_text(encoding="utf-8")
+        for struct_name, layout in (
+            ("ActorFileHeader", ACTOR_FILE_HEADER),
+            ("ActorObservationHeader", ACTOR_OBSERVATION_HEADER),
+            ("AnimationRecordHeader", ANIMATION_RECORD_HEADER),
+        ):
+            self.assertIn(
+                f"sizeof({struct_name}) == {layout.size}",
+                source,
+                struct_name,
+            )
+
+    def test_actor_finalizer_keeps_the_dictionary_out_of_the_event_table(
+        self,
+    ) -> None:
+        # An actor observation is a dictionary entry, not an event, so it lands
+        # in its own table and `records` keeps exactly the events it had.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=animation_record(b"BASE", 2, 101),
+                actor_records=actor_record(3, 99, "models/test.mdl"),
+            )
+            result = finalize(session)
+            self.assertEqual(result["records"]["actor"], 1)
+            connection = sqlite3.connect(session / "capture.sqlite")
+            try:
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT count(*) FROM records"
+                    ).fetchone()[0],
+                    2,
+                )
+                entity, renderable, name, reason = connection.execute(
+                    "SELECT entity, renderable, model_name, reason "
+                    "FROM actor_observations"
+                ).fetchone()
+                # Both addresses are stored as observed; neither is derived.
+                self.assertEqual(entity, 0x1FFC)
+                self.assertEqual(renderable, 0x2000)
+                self.assertEqual(name, "models/test.mdl")
+                self.assertEqual(reason, 1)
+            finally:
+                connection.close()
+
+    def test_actor_verifier_accepts_a_fully_observed_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                # The evaluators run on the C_BaseAnimating; the draw stream
+                # names the renderable subobject four bytes above it.
+                animation_records=(
+                    animation_record(b"BASE", 2, 101, client_entity=0x1FFC)
+                    + animation_record(b"FINL", 3, 102, client_entity=0x1FFC)
+                ),
+                actor_records=actor_record(4, 99, "models/test.mdl"),
+                done=(
+                    "complete=1\nqueued=4\nwritten=4\ndropped=0\n"
+                    "actor_records=1\nactor_resident=0\nactor_vanished=0\n"
+                    "actor_overflow=0\nactor_faults=0\n"
+                ),
+            )
+            finalize(session)
+            report = verify_actors(session)
+            self.assertTrue(report["support"]["carries_actors"])
+            self.assertTrue(report["support"]["carries_root_transform"])
+            self.assertEqual(report["coverage"]["identities_used"], 1)
+            self.assertEqual(report["coverage"]["identities_unobserved"], 0)
+            self.assertTrue(report["coverage"]["complete"])
+            # The renderable is four bytes above the entity, measured from the
+            # two addresses the probe recorded rather than derived from one.
+            self.assertTrue(report["actors"]["renderable_delta_is_constant"])
+            self.assertEqual(report["actors"]["renderable_delta"], 4)
+            self.assertTrue(report["actors"]["matches_cap1_3_delta"])
+            self.assertEqual(
+                report["lifetime"]["records_outside_their_interval"], 0
+            )
+            self.assertTrue(report["lifetime"]["bounded"])
+            self.assertTrue(report["verdict"]["identity_complete"])
+            self.assertTrue(report["verdict"]["lifetime_bounded"])
+            # This run armed the lifetime targets but the actor predates them,
+            # so it is counted as already alive rather than faulted.
+            self.assertTrue(report["verdict"]["lifetime_witnessed"])
+            self.assertEqual(
+                report["lifetime"]["entities_without_a_construction"], 1
+            )
+
+    def test_actor_verifier_reports_an_entity_used_without_an_observation(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=(
+                    animation_record(b"BASE", 2, 101, client_entity=0x1FFC)
+                    + animation_record(
+                        b"BASE", 3, 102, client_entity=0x4FFC, checksum=0x7000
+                    )
+                ),
+                actor_records=actor_record(4, 99, "models/test.mdl"),
+            )
+            finalize(session)
+            report = verify_actors(session)
+            self.assertEqual(report["coverage"]["identities_used"], 2)
+            self.assertEqual(report["coverage"]["identities_unobserved"], 1)
+            self.assertFalse(report["coverage"]["complete"])
+            self.assertFalse(report["verdict"]["identity_complete"])
+            self.assertEqual(
+                report["coverage"]["unobserved"][0]["entity"], "0x00004ffc"
+            )
+
+    def test_actor_verifier_bounds_a_reused_address_by_its_identity_change(
+        self,
+    ) -> None:
+        # CAP1.3's open residual: an address that serves two models is only
+        # joinable inside an interval. An observed identity change is what
+        # closes the first interval and opens the second.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=(
+                    animation_record(b"BASE", 2, 101, client_entity=0x1FFC)
+                    + animation_record(
+                        b"BASE", 5, 300, client_entity=0x1FFC, checksum=0x7000
+                    )
+                ),
+                actor_records=(
+                    actor_record(3, 99, "models/test.mdl")
+                    + actor_record(
+                        4,
+                        299,
+                        "models/other.mdl",
+                        reason=2,
+                        checksum=0x7000,
+                        previous_checksum=0x3000,
+                    )
+                ),
+            )
+            finalize(session)
+            report = verify_actors(session)
+            self.assertEqual(report["reuse"]["reused_entity_addresses"], 1)
+            self.assertEqual(
+                report["reuse"]["extra_identities_at_reused_addresses"], 1
+            )
+            self.assertEqual(
+                report["reuse"]["identity_change_observations"], 1
+            )
+            self.assertTrue(report["reuse"]["changes_account_for_reuse"])
+            # The first identity's interval closes where the second opens, and
+            # neither record falls outside the interval that names it.
+            self.assertEqual(report["lifetime"]["intervals"], 2)
+            self.assertEqual(
+                report["lifetime"]["intervals_closed_by_an_identity_change"], 1
+            )
+            self.assertEqual(
+                report["lifetime"]["records_outside_their_interval"], 0
+            )
+            self.assertTrue(report["verdict"]["lifetime_bounded"])
+
+    def test_actor_verifier_reports_a_record_outside_its_actors_interval(
+        self,
+    ) -> None:
+        # The same address serving two models, but an evaluation of the first
+        # model arrives after the change that gave the address the second. A
+        # join on the raw address would silently attribute it to the wrong
+        # actor; the interval is what makes it visible.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=(
+                    animation_record(b"BASE", 2, 101, client_entity=0x1FFC)
+                    + animation_record(
+                        b"BASE", 5, 300, client_entity=0x1FFC, checksum=0x7000
+                    )
+                    + animation_record(b"BASE", 6, 400, client_entity=0x1FFC)
+                ),
+                actor_records=(
+                    actor_record(3, 99, "models/test.mdl")
+                    + actor_record(
+                        4,
+                        299,
+                        "models/other.mdl",
+                        reason=2,
+                        checksum=0x7000,
+                        previous_checksum=0x3000,
+                    )
+                ),
+            )
+            finalize(session)
+            report = verify_actors(session)
+            self.assertTrue(report["verdict"]["identity_complete"])
+            self.assertEqual(
+                report["lifetime"]["records_outside_their_interval"], 1
+            )
+            self.assertFalse(report["lifetime"]["bounded"])
+            self.assertFalse(report["verdict"]["lifetime_bounded"])
+            self.assertEqual(
+                report["lifetime"]["outside"][0]["entity"], "0x00001ffc"
+            )
+
+    def test_actor_verifier_witnesses_a_construction_and_a_destruction(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=animation_record(
+                    b"BASE", 3, 120, client_entity=0x1FFC
+                ),
+                actor_records=(
+                    actor_lifetime_record(2, 90, 4)
+                    + actor_record(4, 119, "models/test.mdl")
+                    + actor_lifetime_record(5, 200, 5)
+                ),
+                done=(
+                    "complete=1\nqueued=4\nwritten=4\ndropped=0\n"
+                    "actor_constructions=1\nactor_destructions=1\n"
+                ),
+            )
+            finalize(session)
+            report = verify_actors(session)
+            self.assertTrue(report["support"]["carries_lifetime"])
+            lived = report["lifetime"]
+            self.assertTrue(lived["witnessed"])
+            self.assertEqual(lived["lifetimes"], 1)
+            self.assertEqual(lived["lifetimes_closed_by_a_destruction"], 1)
+            self.assertEqual(lived["entities_without_a_construction"], 0)
+            self.assertEqual(lived["records_outside_any_lifetime"], 0)
+            self.assertEqual(lived["constructions_of_entities_never_posed"], 0)
+            self.assertTrue(report["verdict"]["lifetime_bounded"])
+            self.assertTrue(report["verdict"]["lifetime_witnessed"])
+
+    def test_actor_verifier_counts_a_construction_that_was_never_posed(
+        self,
+    ) -> None:
+        # Destruction is only recorded for addresses the census published, so a
+        # skeletal entity built and dropped without ever being posed would pair
+        # as a lifetime still open at capture stop if it were counted as one.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=animation_record(
+                    b"BASE", 3, 120, client_entity=0x1FFC
+                ),
+                actor_records=(
+                    actor_lifetime_record(2, 90, 4)
+                    + actor_record(4, 119, "models/test.mdl")
+                    + actor_lifetime_record(5, 95, 4, entity=0x9FFC)
+                ),
+            )
+            finalize(session)
+            lived = verify_actors(session)["lifetime"]
+            self.assertEqual(lived["lifetimes"], 1)
+            self.assertEqual(lived["lifetimes_open_at_capture_stop"], 1)
+            self.assertEqual(lived["constructions_of_entities_never_posed"], 1)
+
+    def test_actor_verifier_reports_a_record_outside_any_witnessed_lifetime(
+        self,
+    ) -> None:
+        # An address rebuilt into a new actor under the same model is exactly
+        # what an identity interval cannot see: the checksum never changes, so
+        # only the destruction separates the two actors.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=(
+                    animation_record(b"BASE", 3, 120, client_entity=0x1FFC)
+                    # Fires after the destruction and before any reconstruction.
+                    + animation_record(b"BASE", 6, 250, client_entity=0x1FFC)
+                ),
+                actor_records=(
+                    actor_lifetime_record(2, 90, 4)
+                    + actor_record(4, 119, "models/test.mdl")
+                    + actor_lifetime_record(5, 200, 5)
+                ),
+            )
+            finalize(session)
+            report = verify_actors(session)
+            self.assertTrue(report["verdict"]["identity_complete"])
+            # The identity interval alone sees nothing wrong; the lifetime does.
+            self.assertEqual(
+                report["lifetime"]["records_outside_their_interval"], 0
+            )
+            self.assertEqual(
+                report["lifetime"]["records_outside_any_lifetime"], 1
+            )
+            self.assertFalse(report["lifetime"]["bounded"])
+            self.assertFalse(report["verdict"]["lifetime_bounded"])
+
+    def test_actor_verifier_counts_an_entity_alive_before_the_hooks_armed(
+        self,
+    ) -> None:
+        # The probe arms before map load but does not create the world, so an
+        # entity with no construction is counted, not faulted.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=animation_record(
+                    b"BASE", 2, 101, client_entity=0x1FFC
+                ),
+                actor_records=actor_record(3, 99, "models/test.mdl"),
+            )
+            finalize(session)
+            report = verify_actors(session)
+            self.assertTrue(report["lifetime"]["witnessed"])
+            self.assertEqual(report["lifetime"]["lifetimes"], 0)
+            self.assertEqual(
+                report["lifetime"]["entities_without_a_construction"], 1
+            )
+            self.assertEqual(
+                report["lifetime"]["records_outside_any_lifetime"], 0
+            )
+            self.assertTrue(report["verdict"]["lifetime_bounded"])
+
+    def test_actor_verifier_answers_a_capture_without_lifetime_targets(
+        self,
+    ) -> None:
+        # An ELACT1 run carried the census without the construction and
+        # destruction targets, so it is answered with a bounded interval and an
+        # explicitly unwitnessed lifetime.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=animation_record(
+                    b"BASE", 2, 101, client_entity=0x1FFC
+                ),
+                actor_records=actor_record(3, 99, "models/test.mdl"),
+                actor_version=1,
+            )
+            finalize(session)
+            report = verify_actors(session)
+            self.assertTrue(report["support"]["carries_actors"])
+            self.assertFalse(report["support"]["carries_lifetime"])
+            self.assertFalse(report["lifetime"]["witnessed"])
+            self.assertTrue(report["verdict"]["lifetime_bounded"])
+            self.assertFalse(report["verdict"]["lifetime_witnessed"])
+            self.assertIn("unwitnessed", report["verdict"]["statement"])
+
+    def test_actor_verifier_answers_a_capture_without_an_actor_stream(
+        self,
+    ) -> None:
+        # A CAP2.2 database is a valid capture that predates the actor census,
+        # so it is answered rather than rejected.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=animation_record(b"BASE", 2, 101),
+            )
+            finalize(session)
+            report = verify_actors(session)
+            self.assertFalse(report["support"]["carries_actors"])
+            self.assertIsNone(report["coverage"])
+            self.assertIsNone(report["lifetime"])
+            self.assertIn("predates", report["verdict"]["statement"])
+
+    def test_census_and_generation_verdicts_survive_an_actor_stream(
+        self,
+    ) -> None:
+        # The actor stream draws from the same global sequence counter, so a
+        # verifier that counted only the tables it reads would report the other
+        # tables' rows as holes and turn CAP1.2's loss proof into a false alarm.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            image = model_image(0x3000, "models/test.mdl")
+            write_generation_session(
+                session,
+                [{"entity": 0x2000, "checksum": 0x3000}],
+                # One bracketed actor writes sequences 1..5, so the dictionary
+                # rows continue the same counter rather than leaving a hole in
+                # it that would read as loss.
+                census_records=(
+                    observation_record(
+                        6, 1, "models/test.mdl", model_length=len(image)
+                    )
+                    + image_record(7, 1, image)
+                ),
+                actor_records=actor_record(8, 1, "models/test.mdl"),
+            )
+            generation = verify_generation(session)
+            self.assertTrue(generation["verdict"]["generations_complete"])
+            self.assertTrue(generation["verdict"]["attributions_agree"])
+            census = verify_census(session, join_source=False)
+            self.assertTrue(census["verdict"]["census_complete"])
+            sequences = calibrate(session)["integrity"]["sequence_numbers"]
+            self.assertTrue(sequences["dense"], sequences)
+            self.assertEqual(sequences["gaps"], [])
+
+    def test_calibration_closes_byte_accounting_over_the_actor_stream(
+        self,
+    ) -> None:
+        # Record size stays a closed form of kind and bone count across four
+        # streams, and the composed-pose trailer is part of it, so summing it
+        # has to reproduce every stream's file size exactly.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=(
+                    animation_record(b"BASE", 2, 101, client_entity=0x1FFC)
+                    + animation_record(b"FINL", 3, 102, client_entity=0x1FFC)
+                ),
+                actor_records=(
+                    actor_record(4, 99, "models/test.mdl")
+                    + actor_record(5, 400, "models/test.mdl", reason=3)
+                ),
+            )
+            finalize(session)
+            report = calibrate(session)
+            for stream in ("pose", "animation", "actor"):
+                self.assertTrue(
+                    report["volume"]["byte_closure"][stream]["closes"], stream
+                )
+            sequences = report["integrity"]["sequence_numbers"]
+            self.assertTrue(sequences["dense"], sequences)
+            self.assertEqual(sequences["records"], 5)
+
+    def test_composed_pose_carries_the_root_transform_and_base_carries_none(
+        self,
+    ) -> None:
+        # The root/entity transform is the third argument only the composed-pose
+        # stage receives, so the trailer is on FINL and nowhere else.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=(
+                    animation_record(b"BASE", 2, 101, client_entity=0x1FFC)
+                    + animation_record(b"FINL", 3, 102, client_entity=0x1FFC)
+                ),
+                actor_records=actor_record(4, 99, "models/test.mdl"),
+            )
+            finalize(session)
+            connection = sqlite3.connect(session / "capture.sqlite")
+            try:
+                rows = dict(
+                    connection.execute(
+                        "SELECT kind, root_transform_bytes FROM records "
+                        "WHERE kind IN ('BASE', 'FINL')"
+                    )
+                )
+            finally:
+                connection.close()
+            self.assertEqual(rows["FINL"], ROOT_TRANSFORM_BYTES)
+            self.assertEqual(rows["BASE"], 0)
+            report = verify_actors(session)
+            self.assertTrue(report["placement"]["available"])
+            self.assertEqual(report["placement"]["composed_poses"], 1)
+            self.assertEqual(
+                report["placement"]["composed_poses_carrying_a_transform"], 1
+            )
+            self.assertEqual(
+                report["placement"]["other_kinds_carrying_a_transform"], 0
+            )
+
+    def test_draw_record_keeps_the_render_info_span_it_decodes_two_fields_from(
+        self,
+    ) -> None:
+        # The engine writes eight dwords into the render info and the studio
+        # draw reads them back. Only +0x00 and +0x18 are decoded; the rest are
+        # kept as bytes because what they mean is still a hypothesis. The two
+        # decoded columns must agree with the span they were read from, or the
+        # span is not the struct those fields came from.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_session(
+                session,
+                pose_records=pose_record(
+                    1,
+                    100,
+                    "models/test.mdl",
+                    studio_hdr=0x1234,
+                    client_entity=0x5678,
+                ),
+                animation_records=animation_record(b"BASE", 2, 101),
+            )
+            finalize(session)
+            connection = sqlite3.connect(session / "capture.sqlite")
+            try:
+                studio_hdr, entity, info = connection.execute(
+                    "SELECT studio_hdr, client_entity, render_info "
+                    "FROM records WHERE kind = 'POSE'"
+                ).fetchone()
+            finally:
+                connection.close()
+            words = json.loads(info)
+            self.assertEqual(len(words), RENDER_INFO_BYTES // 4)
+            self.assertEqual(words[0], studio_hdr)
+            self.assertEqual(words[6], entity)
+            self.assertEqual(studio_hdr, 0x1234)
+            self.assertEqual(entity, 0x5678)
+
     def test_calibration_closes_byte_accounting_over_the_census_stream(
         self,
     ) -> None:
@@ -1358,6 +1997,32 @@ class RetailCaptureTests(unittest.TestCase):
             self.assertIsNone(row["constant_delta"])
             self.assertEqual(row["distinct_differences"], 2)
             self.assertTrue(all(entry["candidate"] for entry in row["differences"]))
+
+    def test_entity_join_ignores_the_bracket_records_sharing_its_table(
+        self,
+    ) -> None:
+        # A bracket record names a frame or a renderable and carries neither a
+        # checksum nor a bone count. Grouping it with the records that do name a
+        # model put every bracket under one null checksum whose bone count no
+        # row could supply, so the join failed on any bracketed capture.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_generation_session(
+                session, [{"entity": 0x2004, "checksum": 0x3000}]
+            )
+            report = verify(session)
+            self.assertEqual(
+                [entry["checksum"] for entry in report["per_model"]["shared_models"]],
+                ["0x00003000"],
+            )
+            # The bracket's CModelRender singleton is not an entity in either
+            # pointer space, so it must not reach the populations the coverage
+            # test is measured over.
+            self.assertEqual(report["space"]["animation"]["distinct"], 1)
+            self.assertEqual(report["space"]["pose"]["distinct"], 1)
+            self.assertNotIn(
+                address(MODEL_RENDER), report["space"]["animation_values"]
+            )
 
     def test_entity_join_names_a_draw_field_that_already_carries_the_instance(
         self,
@@ -1661,9 +2326,26 @@ class RetailCaptureTests(unittest.TestCase):
             "client.setup_bones",
             "engine.model_render_draw_model",
             "engine.model_render_draw_model_shadow",
+            "client.base_entity_construct",
+            "client.base_entity_destruct",
         ):
             self.assertEqual(targets[label]["backend"], "inline_detour")
             self.assertEqual(targets[label]["calling_convention"], "thiscall")
+        # Every declaration is checked against the case specification, which
+        # only happens for a target that names its source function.
+        for target in targets.values():
+            self.assertIn("source_function_label", target)
+        # The lifetime pair is the shared base of the client entity hierarchy,
+        # not a skeletal class: a vtable carrying the pose slots belongs to one
+        # concrete class, so hooking its constructor would miss most actors.
+        self.assertEqual(
+            targets["client.base_entity_construct"]["source_function_label"],
+            "c_baseentity_construct",
+        )
+        self.assertEqual(
+            targets["client.base_entity_destruct"]["source_function_label"],
+            "c_baseentity_destruct",
+        )
         backend = (NATIVE_ROOT / "hook_backend.cpp").read_text(
             encoding="utf-8"
         )
@@ -1701,6 +2383,17 @@ class RetailCaptureTests(unittest.TestCase):
             self.assertLess(retained_probe.rindex("__try", 0, call), call)
             body = retained_probe[closing : retained_probe.index("}", closing)]
             self.assertIn("EndBracket(", body)
+            self.assertIn("InterlockedDecrement(&gActiveHooks)", body)
+        # The lifetime detours hold no bracket, but they still hold the unload
+        # refcount across the original, so an unwind must release it.
+        for original in (
+            "gOriginalBaseEntityConstruct(",
+            "gOriginalBaseEntityDestruct(",
+        ):
+            call = retained_probe.index(original)
+            closing = retained_probe.index("__finally", call)
+            self.assertLess(retained_probe.rindex("__try", 0, call), call)
+            body = retained_probe[closing : retained_probe.index("}", closing)]
             self.assertIn("InterlockedDecrement(&gActiveHooks)", body)
 
     def test_supervision_owns_children_and_finalizes_partial_captures(self) -> None:

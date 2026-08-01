@@ -535,6 +535,53 @@ Which of the two frames a given draw belongs to, and how the capture proves it,
 are owned by `vtmb-animation-reverse-engineering.md` → "Grouping records by pose
 build".
 
+#### The client entity hierarchy is built and torn down through one pair
+
+`C_BaseEntity::C_BaseEntity` is `0x1008f3c0` and `C_BaseEntity::~C_BaseEntity` is
+`0x1008f5c0`. Both are `__thiscall` with no stack arguments; the constructor has
+12 callers and the destructor 15, so every client entity passes through the pair
+whether or not it is skeletal. The constructor's relocatable prologue is
+`53 55 56 57 8b f1` and the destructor's is `53 56 57 8b f9`, each complete
+instructions with no relative operand, and nothing branches into either. The
+destructor leaves through a single exit at `0x1008f6e5` that restores `this` into
+`ECX` and jumps to `0x1009ddc0` rather than returning.
+
+Both touch five subobject vtables at `+0x0`, `+0x4`, `+0x8`, `+0xc` and `+0x10` —
+the constructor installing `0x1022d6d4` and its four siblings, the destructor
+restoring exactly those five. **The second subobject sits at `this+0x4`.** That is
+the declared multiple-inheritance layout behind the render-info relation: the
+interface the draw stream names, and the one `SetupBones` receives, is the second
+base four bytes into the instance, and the constructors say so without any
+capture.
+
+**A vtable carrying the pose slots does not identify a shared construction path.**
+`0x101e3cfc` holds `BuildTransformations` at `+0x1ec` and the standard pose
+builder at `+0x208`, yet exactly one instruction references it as data and its
+writer `0x10002d80` has exactly one caller. It belongs to one concrete class;
+every other class derived from `C_BaseAnimating` carries its own vtable with the
+same inherited slots. A capture hooked on `0x10002d80` records no construction at
+all while skeletal actors are being posed.
+
+#### The render info a studio draw receives
+
+`CModelRender::RenderModel` builds the struct `CStudioRender::DrawModel` takes as
+its first argument, at `0x200a6191`–`0x200a61d5`, and passes it at `0x200a6210`:
+
+| Offset | Contents |
+|---|---|
+| `+0x00` | the `studiohdr` |
+| `+0x04` | the renderable plus `0xc0` |
+| `+0x08` | 16-bit; `0xffff` unless a per-instance record supplies it |
+| `+0x0a` | 16-bit; same default and same source |
+| `+0x0c`, `+0x10`, `+0x14` | passed on to the mesh dispatch |
+| `+0x18` | the entity, which is the instance plus four |
+| `+0x1c` | taken from the caller's model record |
+
+The two 16-bit fields default to `0xffff` and are otherwise loaded from a
+24-byte-stride table indexed by a 16-bit id; the studio draw zero-extends both at
+`0x2c005150` and `0x2c005110`. What they select is not established. The consumer
+reads nothing past `+0x1c`, so 32 bytes is the whole struct as both sides use it.
+
 The `TStudioRender012` object uses vtable `0x2c06c150`. Slot `+0x40`
 (`0x2c004a20`) returns its `this+0x5c` buffer, which engine passes as the output
 argument to client `SetupBones`. Before drawing, `0x2c004e10` loops all studio

@@ -13,9 +13,23 @@
   "lock_delay_seconds": 9,
   "questions": [
     "What does the fifth engine-private SetupBones callback argument point at? Its optionality is settled - CModelRender::DrawModel passes the address of a stack local and CModelRender::DrawModelShadow passes NULL for the same slot - but what the callee writes there is not.",
-    "Which CModelRender state fields choose the StudioRender ordinary, flexed, and material-specific mesh branches?"
+    "Which CModelRender state fields choose the StudioRender ordinary, flexed, and material-specific mesh branches?",
+    "Which function does the model-loader interface slot +0x18 resolve to, and is it the complete set of paths that free a studio header from the model cache?",
+    "What do the render info's two 16-bit fields at +0x08 and +0x0a select, and what are the dwords at +0x0c, +0x10, +0x14 and +0x1c?"
   ],
   "findings": [
+    {
+      "confidence": "confirmed",
+      "fact": "CModelRender::RenderModel builds the studio draw's render info as eight dwords at +0x00 through +0x1c, and CStudioRender::DrawModel reads no further.",
+      "evidence": "0x200a6191-0x200a61d5 fills the stack local passed as the first argument at 0x200a6210-0x200a6221: +0x00 the studio header, +0x04 the renderable plus 0xc0, two 16-bit fields at +0x08 and +0x0a defaulted to 0xffff and otherwise loaded from a 24-byte-stride per-instance table, dwords at +0x0c, +0x10, +0x14 and +0x1c, and the entity at +0x18. StudioRender 0x2c004fc7 reads +0x00, 0x2c005150 and 0x2c005110 zero-extend the two 16-bit fields, and 0x2c00511d-0x2c005119 pass +0x0c, +0x10 and +0x14 on.",
+      "consequence": "The whole struct is a bounded 32-byte copy off a pointer the draw hook already holds, so the capture retains it verbatim; only +0x00 and +0x18 are decoded, and what the remaining fields mean stays an open question rather than a field name."
+    },
+    {
+      "confidence": "hypothesis",
+      "fact": "CEngineClient::UnloadModel dispatches a model release through the model-loader interface at vtable slot +0x18 with a flag of 8.",
+      "evidence": "0x2001a7b0 pushes the VProf marker string \"CEngineClient::UnloadModel\" at 0x201976f4 and then calls (**(code **)(*(int *)0x201a6774 + 0x18))(model, 8). CModelLoader is present as an RTTI class with no methods attributed, its named members are FindModel 0x200b87a0, LoadModel 0x200b8960, GetExtraData 0x200bb6f0 and Map_IsValid 0x200bb8d0, and the Quake cache asserts \"Cache_Free: not allocated\" and \"Cache_UnlinkLRU: NULL link\" appear inlined across ten functions rather than in one Cache_Free body.",
+      "consequence": "A model-cache free target for the census exists but is not yet pinned: the interface slot has to be resolved to a function and proved to be the complete set of free paths before a hook may be declared, the way the two engine draw frames were. Until then the census reports residency and a vanished count instead of an unload event."
+    },
     {
       "confidence": "confirmed",
       "fact": "client.dll submits animated entities through VEngineModel006 method slot +0x8.",
