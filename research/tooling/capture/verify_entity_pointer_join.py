@@ -64,6 +64,12 @@ def address(value: int) -> str:
 
 
 def entity_sets(connection: sqlite3.Connection) -> dict[str, set[int]]:
+    """The client entities each event stream names.
+
+    Only streams that contributed event records are asked. A database may
+    carry a stream whose rows are a dictionary rather than events — the model
+    census is one — and it names no entity at all.
+    """
     return {
         stream: {
             value
@@ -72,7 +78,9 @@ def entity_sets(connection: sqlite3.Connection) -> dict[str, set[int]]:
                 (stream,),
             )
         }
-        for (stream,) in connection.execute("SELECT name FROM streams")
+        for (stream,) in connection.execute(
+            "SELECT DISTINCT stream_name FROM records ORDER BY stream_name"
+        )
     }
 
 

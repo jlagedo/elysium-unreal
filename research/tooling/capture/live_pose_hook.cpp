@@ -27,6 +27,36 @@ struct ConfiguredSignature {
 // counted rather than silently overwriting a live entry.
 constexpr std::uint32_t kMaximumBracketDepth = 8;
 
+// The census keeps identity per sighting and bytes once per checksum, so the
+// two live at different table sizes: a model loaded at several addresses costs
+// several observations and one image.
+constexpr std::uint32_t kCensusSlots = 1024;
+constexpr std::uint32_t kCensusImageSlots = 512;
+constexpr std::uint32_t kCensusProbeLimit = 64;
+// The largest model in the install is under 7 MB. The cap bounds one copy off
+// a validated header rather than trusting Length; a model above it is recorded
+// truncated and flagged instead of being skipped.
+constexpr DWORD kCensusImageCap = 8u * 1024u * 1024u;
+constexpr std::uint32_t kStudioMagic = 0x54534449u;  // "IDST"
+constexpr std::uint32_t kStudioVersion = 2531u;
+
+// Which stream a queued record belongs to. The writer routes on this and frees
+// to the heap it names, so census payloads never touch the game's heap.
+enum StreamIndex : std::uint32_t {
+    kStreamPose = 0,
+    kStreamAnimation = 1,
+    kStreamCensus = 2,
+};
+
+// Why an observation was emitted. Reuse is a pointer that served one checksum
+// and now serves another; residency is what the sweep at capture stop reports
+// in place of the unload event no hooked target can currently see.
+enum ObservationReason : std::uint32_t {
+    kObservationFirst = 1,
+    kObservationReplacement = 2,
+    kObservationResidentAtStop = 3,
+};
+
 #pragma pack(push, 1)
 struct FileHeader {
     char magic[8];
@@ -120,6 +150,62 @@ struct AnimationRecordHeader {
     std::uint32_t generation;
     std::uint32_t generationDepth;
 };
+
+struct CensusFileHeader {
+    char magic[8];
+    std::uint32_t version;
+    std::uint32_t headerBytes;
+    std::uint64_t qpcFrequency;
+    std::int64_t startQpc;
+    std::uint32_t pid;
+    std::uint32_t clientBase;
+    std::uint32_t studioRenderBase;
+    std::uint32_t imageCap;
+    std::uint32_t slotCount;
+    char reserved[76];
+};
+
+// One sighting of a studio header at one address. The name is the full 128
+// bytes the header carries, not the 64 a draw record keeps, so a model path
+// longer than a draw record's field is recoverable here.
+struct ModelObservationHeader {
+    char magic[4];
+    std::uint32_t recordBytes;
+    std::uint64_t sequence;
+    std::int64_t qpc;
+    std::uint32_t threadId;
+    std::uint32_t studioHdr;
+    std::uint32_t checksum;
+    std::uint32_t previousChecksum;
+    std::uint32_t boneCount;
+    std::uint32_t boneIndex;
+    std::uint32_t modelLength;
+    std::uint32_t includeModelCount;
+    std::uint32_t includeModelIndex;
+    std::uint32_t studioVersion;
+    std::uint32_t reason;
+    std::uint32_t imageCaptured;
+    std::uint32_t generation;
+    char modelName[128];
+};
+
+// The model image the header sits at the front of, stored once per checksum.
+// Every index field in the header is an offset from the header base, so
+// keeping the image is what makes those offsets resolvable offline and what
+// lets a captured runtime pointer become a model-image offset.
+struct ModelImageHeader {
+    char magic[4];
+    std::uint32_t recordBytes;
+    std::uint64_t sequence;
+    std::int64_t qpc;
+    std::uint32_t threadId;
+    std::uint32_t studioHdr;
+    std::uint32_t checksum;
+    std::uint32_t modelLength;
+    std::uint32_t capturedBytes;
+    std::uint32_t capped;
+    std::uint32_t reserved;
+};
 #pragma pack(pop)
 
 static_assert(sizeof(FileHeader) == 128, "capture file header changed");
@@ -133,11 +219,18 @@ static_assert(
 static_assert(
     sizeof(AnimationRecordHeader) == 76,
     "animation record header changed");
+static_assert(
+    sizeof(CensusFileHeader) == 128, "census capture file header changed");
+static_assert(
+    sizeof(ModelObservationHeader) == 204,
+    "model observation record header changed");
+static_assert(
+    sizeof(ModelImageHeader) == 52, "model image record header changed");
 
 struct PendingRecord {
     PendingRecord* next;
     DWORD bytes;
-    bool animation;
+    std::uint32_t stream;
     unsigned char payload[1];
 };
 
@@ -177,6 +270,18 @@ struct ThreadPoseState {
     std::uint32_t lastPoseEntity;
 };
 
+// An open-addressed slot claimed by its own key rather than by a separate
+// state word: the interlocked exchange that writes `key` is the claim, so a
+// slot never carries a key a racing reader cannot trust. `published` says the
+// record for that key has reached the queue, which is the only point at which
+// a second thread may stop looking.
+struct CensusSlot {
+    volatile LONG key;
+    volatile LONG value;
+    volatile LONG published;
+    LONG reserved;
+};
+
 HMODULE gSelf = nullptr;
 DrawModelFn gOriginalDrawModel = nullptr;
 ResolveVirtualModelPoseFn gOriginalResolveVirtualModelPose = nullptr;
@@ -194,6 +299,12 @@ elysium::capture::HookHandle gModelRenderDrawModelShadowHook;
 __declspec(thread) ThreadPoseState gThread{};
 HANDLE gOutput = INVALID_HANDLE_VALUE;
 HANDLE gAnimationOutput = INVALID_HANDLE_VALUE;
+HANDLE gCensusOutput = INVALID_HANDLE_VALUE;
+// Census payloads are the largest allocation the probe ever makes. Taking the
+// game's process heap lock for a multi-megabyte block from a render callback
+// is the one hitch this design could introduce, so they come from a heap of
+// our own and DrainQueue frees to the heap the record's stream names.
+HANDLE gCensusHeap = nullptr;
 HANDLE gWake = nullptr;
 CRITICAL_SECTION gQueueLock;
 PendingRecord* gQueueHead = nullptr;
@@ -212,6 +323,18 @@ volatile LONG gFiltered = 0;
 volatile LONG gGeneration = 0;
 volatile LONG gUnbracketed = 0;
 volatile LONG gBracketOverflow = 0;
+volatile LONG gCensusRecords = 0;
+volatile LONG gCensusImages = 0;
+volatile LONG gCensusReplacements = 0;
+volatile LONG gCensusResident = 0;
+volatile LONG gCensusVanished = 0;
+volatile LONG gCensusOverflow = 0;
+volatile LONG gCensusFaults = 0;
+volatile LONG gCensusCapped = 0;
+volatile LONG64 gCensusBytes = 0;
+// Headers keyed by address, images keyed by checksum.
+CensusSlot gCensusHeaders[kCensusSlots]{};
+CensusSlot gCensusImageSlots[kCensusImageSlots]{};
 volatile LONG64 gBytesWritten = 0;
 LARGE_INTEGER gStartQpc{};
 wchar_t gReadyPath[MAX_PATH * 4]{};
@@ -294,12 +417,27 @@ PendingRecord* TakeQueue() {
     return list;
 }
 
+HANDLE StreamHandle(std::uint32_t stream) {
+    switch (stream) {
+        case kStreamAnimation:
+            return gAnimationOutput;
+        case kStreamCensus:
+            return gCensusOutput;
+        default:
+            return gOutput;
+    }
+}
+
+HANDLE StreamHeap(std::uint32_t stream) {
+    return stream == kStreamCensus && gCensusHeap ? gCensusHeap
+                                                  : GetProcessHeap();
+}
+
 void DrainQueue() {
     PendingRecord* record = TakeQueue();
     while (record) {
         PendingRecord* next = record->next;
-        const HANDLE output =
-            record->animation ? gAnimationOutput : gOutput;
+        const HANDLE output = StreamHandle(record->stream);
         if (output != INVALID_HANDLE_VALUE &&
             WriteAll(output, record->payload, record->bytes)) {
             InterlockedIncrement(&gWritten);
@@ -309,7 +447,7 @@ void DrainQueue() {
             InterlockedIncrement(&gDropped);
         }
         InterlockedDecrement(&gQueueDepth);
-        HeapFree(GetProcessHeap(), 0, record);
+        HeapFree(StreamHeap(record->stream), 0, record);
         record = next;
     }
 }
@@ -333,7 +471,7 @@ void CaptureBracket(
 
     pending->next = nullptr;
     pending->bytes = diskBytes;
-    pending->animation = true;
+    pending->stream = kStreamAnimation;
     auto* header = reinterpret_cast<BracketRecordHeader*>(pending->payload);
     std::memset(header, 0, sizeof(*header));
     std::memcpy(header->magic, magic, 4);
@@ -405,6 +543,288 @@ std::uint32_t CurrentGeneration() {
     return gThread.generations[gThread.depth - 1];
 }
 
+// The generation a census record sits inside, if any. Unlike CurrentGeneration
+// this does not count an unbracketed record: a header sighting is not an
+// evaluation, and the sweep at capture stop runs on the writer thread with no
+// bracket at all, so counting either would move a total CAP2.1 measured.
+std::uint32_t EnclosingGeneration() {
+    return gThread.depth ? gThread.generations[gThread.depth - 1] : 0;
+}
+
+PendingRecord* AllocateCensusRecord(DWORD diskBytes) {
+    const SIZE_T allocation =
+        offsetof(PendingRecord, payload) + static_cast<SIZE_T>(diskBytes);
+    auto* pending = static_cast<PendingRecord*>(
+        HeapAlloc(StreamHeap(kStreamCensus), 0, allocation));
+    if (!pending) {
+        return nullptr;
+    }
+    pending->next = nullptr;
+    pending->bytes = diskBytes;
+    pending->stream = kStreamCensus;
+    return pending;
+}
+
+// Reads the fixed studio-header fields the census keeps. Returns false when
+// the pointer does not carry a v2531 studio header, so a stale or half-loaded
+// pointer is rejected before anything large is copied off it.
+bool ReadStudioHeaderFields(
+    unsigned char* studioHdr, ModelObservationHeader* fields) {
+    __try {
+        const std::uint32_t magic =
+            *reinterpret_cast<std::uint32_t*>(studioHdr + 0x00);
+        const std::uint32_t version =
+            *reinterpret_cast<std::uint32_t*>(studioHdr + 0x04);
+        if (magic != kStudioMagic || version != kStudioVersion) {
+            return false;
+        }
+        const std::uint32_t modelLength =
+            *reinterpret_cast<std::uint32_t*>(studioHdr + 0x8C);
+        const int boneCount = *reinterpret_cast<int*>(studioHdr + 0xF0);
+        const int boneIndex = *reinterpret_cast<int*>(studioHdr + 0xF4);
+        if (!modelLength || boneCount <= 0 || boneCount > kMaximumBones ||
+            boneIndex < 0) {
+            return false;
+        }
+        fields->checksum =
+            *reinterpret_cast<std::uint32_t*>(studioHdr + 0x08);
+        fields->boneCount = static_cast<std::uint32_t>(boneCount);
+        fields->boneIndex = static_cast<std::uint32_t>(boneIndex);
+        fields->modelLength = modelLength;
+        fields->includeModelCount =
+            *reinterpret_cast<std::uint32_t*>(studioHdr + 0x194);
+        fields->includeModelIndex =
+            *reinterpret_cast<std::uint32_t*>(studioHdr + 0x198);
+        fields->studioVersion = version;
+        std::memcpy(fields->modelName, studioHdr + 0x0C, 128);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+// Copies the model image the header sits at the front of. The sequence number
+// is stamped only once the copy has succeeded, so a fault costs a counted
+// failure rather than a gap in the counter that proves nothing was lost.
+bool CaptureModelImage(
+    unsigned char* studioHdr, const ModelObservationHeader& fields) {
+    DWORD capturedBytes = fields.modelLength;
+    DWORD capped = 0;
+    if (capturedBytes > kCensusImageCap) {
+        capturedBytes = kCensusImageCap;
+        capped = 1;
+    }
+    const DWORD diskBytes =
+        static_cast<DWORD>(sizeof(ModelImageHeader)) + capturedBytes;
+    PendingRecord* pending = AllocateCensusRecord(diskBytes);
+    if (!pending) {
+        return false;
+    }
+    auto* header = reinterpret_cast<ModelImageHeader*>(pending->payload);
+    std::memset(header, 0, sizeof(*header));
+    __try {
+        std::memcpy(
+            pending->payload + sizeof(*header), studioHdr, capturedBytes);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        HeapFree(StreamHeap(kStreamCensus), 0, pending);
+        return false;
+    }
+
+    std::memcpy(header->magic, "MIMG", 4);
+    header->recordBytes = diskBytes;
+    header->sequence =
+        static_cast<std::uint32_t>(InterlockedIncrement(&gSequence));
+    LARGE_INTEGER now{};
+    QueryPerformanceCounter(&now);
+    header->qpc = now.QuadPart;
+    header->threadId = GetCurrentThreadId();
+    header->studioHdr =
+        static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(studioHdr));
+    header->checksum = fields.checksum;
+    header->modelLength = fields.modelLength;
+    header->capturedBytes = capturedBytes;
+    header->capped = capped;
+    if (capped) {
+        InterlockedIncrement(&gCensusCapped);
+    }
+    InterlockedExchangeAdd64(
+        &gCensusBytes, static_cast<LONG64>(capturedBytes));
+    Enqueue(pending);
+    return true;
+}
+
+// Stores the image once per checksum. A model loaded at two addresses produces
+// two observations and one image, which is what keeps immutable source bytes a
+// dictionary rather than a stream.
+bool ObserveModelImage(
+    unsigned char* studioHdr, const ModelObservationHeader& fields) {
+    const LONG key = static_cast<LONG>(fields.checksum);
+    if (!key) {
+        return false;
+    }
+    std::uint32_t index =
+        static_cast<std::uint32_t>(key) & (kCensusImageSlots - 1);
+    for (std::uint32_t probe = 0; probe < kCensusProbeLimit; ++probe) {
+        CensusSlot& slot = gCensusImageSlots[index];
+        const LONG occupant = InterlockedCompareExchange(&slot.key, key, 0);
+        if (occupant == 0) {
+            if (CaptureModelImage(studioHdr, fields)) {
+                InterlockedExchange(&slot.published, 1);
+                InterlockedIncrement(&gCensusImages);
+                return true;
+            }
+            InterlockedExchange(&slot.key, 0);
+            InterlockedIncrement(&gCensusFaults);
+            return false;
+        }
+        if (occupant == key) {
+            return false;
+        }
+        index = (index + 1) & (kCensusImageSlots - 1);
+    }
+    InterlockedIncrement(&gCensusOverflow);
+    return false;
+}
+
+bool EmitObservation(
+    unsigned char* studioHdr, CensusSlot* slot,
+    const ModelObservationHeader& fields, std::uint32_t reason,
+    std::uint32_t previousChecksum) {
+    const bool imageCaptured = ObserveModelImage(studioHdr, fields);
+    const DWORD diskBytes =
+        static_cast<DWORD>(sizeof(ModelObservationHeader));
+    PendingRecord* pending = AllocateCensusRecord(diskBytes);
+    if (!pending) {
+        return false;
+    }
+    auto* header =
+        reinterpret_cast<ModelObservationHeader*>(pending->payload);
+    std::memcpy(header, &fields, sizeof(*header));
+    std::memcpy(header->magic, "MOBS", 4);
+    header->recordBytes = diskBytes;
+    header->sequence =
+        static_cast<std::uint32_t>(InterlockedIncrement(&gSequence));
+    LARGE_INTEGER now{};
+    QueryPerformanceCounter(&now);
+    header->qpc = now.QuadPart;
+    header->threadId = GetCurrentThreadId();
+    header->studioHdr =
+        static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(studioHdr));
+    header->previousChecksum = previousChecksum;
+    header->reason = reason;
+    header->imageCaptured = imageCaptured ? 1u : 0u;
+    header->generation = EnclosingGeneration();
+    Enqueue(pending);
+    InterlockedIncrement(&gCensusRecords);
+    // Publishing after the record reaches the queue is the whole ordering: a
+    // slot marked published is a promise that the header was recorded, so a
+    // racing thread that stops looking cannot be the reason one goes missing.
+    InterlockedExchange(&slot->value, static_cast<LONG>(fields.checksum));
+    InterlockedExchange(&slot->published, 1);
+    return true;
+}
+
+// Emits the census for a studio header this run has not seen at this address.
+// The common case is one hash, one interlocked compare and a return, on a path
+// that is already copying bone matrices.
+void ObserveStudioHeader(unsigned char* studioHdr, std::uint32_t checksum) {
+    if (gCensusOutput == INVALID_HANDLE_VALUE || !studioHdr) {
+        return;
+    }
+    const LONG key =
+        static_cast<LONG>(reinterpret_cast<std::uintptr_t>(studioHdr));
+    const LONG value = static_cast<LONG>(checksum);
+    if (!key) {
+        return;
+    }
+    std::uint32_t index =
+        (static_cast<std::uint32_t>(key) >> 4) & (kCensusSlots - 1);
+    for (std::uint32_t probe = 0; probe < kCensusProbeLimit; ++probe) {
+        CensusSlot& slot = gCensusHeaders[index];
+        const LONG occupant = InterlockedCompareExchange(&slot.key, key, 0);
+        if (occupant == 0) {
+            ModelObservationHeader fields{};
+            if (ReadStudioHeaderFields(studioHdr, &fields) &&
+                EmitObservation(
+                    studioHdr, &slot, fields, kObservationFirst, 0)) {
+                return;
+            }
+            // Releasing the claim rather than stranding it keeps the header
+            // recoverable on a later sighting. The cost is that a probe chain
+            // another key walked past this slot can miss once, which re-emits
+            // one observation and is counted; stranding it would lose the
+            // header for the whole run instead.
+            InterlockedExchange(&slot.key, 0);
+            InterlockedIncrement(&gCensusFaults);
+            return;
+        }
+        if (occupant == key) {
+            if (!InterlockedCompareExchange(&slot.published, 0, 0)) {
+                return;
+            }
+            const LONG previous =
+                InterlockedCompareExchange(&slot.value, 0, 0);
+            if (previous == value) {
+                return;
+            }
+            // This address served one model and now serves another, which is
+            // the only free this capture can observe. Only the thread that
+            // wins the exchange emits, so one change cannot be recorded twice.
+            if (InterlockedCompareExchange(&slot.value, value, previous) !=
+                previous) {
+                return;
+            }
+            ModelObservationHeader fields{};
+            if (ReadStudioHeaderFields(studioHdr, &fields) &&
+                EmitObservation(
+                    studioHdr, &slot, fields, kObservationReplacement,
+                    static_cast<std::uint32_t>(previous))) {
+                InterlockedIncrement(&gCensusReplacements);
+            } else {
+                InterlockedIncrement(&gCensusFaults);
+            }
+            return;
+        }
+        index = (index + 1) & (kCensusSlots - 1);
+    }
+    InterlockedIncrement(&gCensusOverflow);
+}
+
+// Re-reads every published header at capture stop. No hooked target sees a
+// model-cache free, so residency is what this capture can state instead: a
+// header that still reads as its own studio header was never unloaded, and one
+// that no longer does is counted rather than claimed as an unload event.
+void SweepResidentHeaders() {
+    if (gCensusOutput == INVALID_HANDLE_VALUE) {
+        return;
+    }
+    for (std::uint32_t index = 0; index < kCensusSlots; ++index) {
+        CensusSlot& slot = gCensusHeaders[index];
+        if (!InterlockedCompareExchange(&slot.published, 0, 0)) {
+            continue;
+        }
+        const LONG key = InterlockedCompareExchange(&slot.key, 0, 0);
+        if (!key) {
+            continue;
+        }
+        const LONG previous = InterlockedCompareExchange(&slot.value, 0, 0);
+        auto* studioHdr = reinterpret_cast<unsigned char*>(
+            static_cast<std::uintptr_t>(static_cast<std::uint32_t>(key)));
+        ModelObservationHeader fields{};
+        if (!ReadStudioHeaderFields(studioHdr, &fields)) {
+            InterlockedIncrement(&gCensusVanished);
+            continue;
+        }
+        if (EmitObservation(
+                studioHdr, &slot, fields, kObservationResidentAtStop,
+                static_cast<std::uint32_t>(previous))) {
+            InterlockedIncrement(&gCensusResident);
+        } else {
+            InterlockedIncrement(&gCensusFaults);
+        }
+    }
+}
+
 void CapturePose(
     void* self, std::uintptr_t modelInfo, const std::uintptr_t* drawArguments) {
     if (!modelInfo) {
@@ -424,6 +844,12 @@ void CapturePose(
             InterlockedIncrement(&gSkipped);
             return;
         }
+        const std::uint32_t checksum =
+            *reinterpret_cast<std::uint32_t*>(studioHdr + 0x08);
+        // Before the matrix buffers are checked: a header this run has not
+        // seen is worth recording even on a draw whose pose buffers are not
+        // allocated yet.
+        ObserveStudioHeader(studioHdr, checksum);
         auto* object = static_cast<unsigned char*>(self);
         auto* boneToWorld = *reinterpret_cast<unsigned char**>(object + 0x5C);
         auto* skinPalette = *reinterpret_cast<unsigned char**>(object + 0x60);
@@ -446,7 +872,7 @@ void CapturePose(
 
         pending->next = nullptr;
         pending->bytes = diskBytes;
-        pending->animation = false;
+        pending->stream = kStreamPose;
         auto* header =
             reinterpret_cast<PoseRecordHeader*>(pending->payload);
         std::memset(header, 0, sizeof(*header));
@@ -462,7 +888,7 @@ void CapturePose(
             static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(studioHdr));
         header->clientEntity =
             *reinterpret_cast<std::uint32_t*>(info + 0x18);
-        header->checksum = *reinterpret_cast<std::uint32_t*>(studioHdr + 0x08);
+        header->checksum = checksum;
         header->boneCount = static_cast<std::uint32_t>(boneCount);
         header->modelInfo = static_cast<std::uint32_t>(modelInfo);
         for (int index = 0; index < 5; ++index) {
@@ -508,6 +934,9 @@ void CaptureAnimation(
             InterlockedIncrement(&gSkipped);
             return;
         }
+        // After the configured filter: a run that asked for one model must not
+        // pay a model image for every other one it happened to see.
+        ObserveStudioHeader(studioHdr, checksum);
 
         const DWORD positionBytes =
             static_cast<DWORD>(boneCount) * 3u * sizeof(float);
@@ -529,7 +958,7 @@ void CaptureAnimation(
 
         pending->next = nullptr;
         pending->bytes = diskBytes;
-        pending->animation = true;
+        pending->stream = kStreamAnimation;
         auto* header =
             reinterpret_cast<AnimationRecordHeader*>(pending->payload);
         std::memset(header, 0, sizeof(*header));
@@ -1073,7 +1502,7 @@ bool ReadExpectedBytes(
 
 bool ReadConfiguration(
     wchar_t* iniPath, wchar_t* outputPath, wchar_t* animationOutputPath,
-    wchar_t* studioHash, wchar_t* clientHash) {
+    wchar_t* censusOutputPath, wchar_t* studioHash, wchar_t* clientHash) {
     wchar_t modulePath[MAX_PATH * 4]{};
     const DWORD length =
         GetModuleFileNameW(gSelf, modulePath, ARRAYSIZE(modulePath));
@@ -1093,6 +1522,9 @@ bool ReadConfiguration(
         L"capture", L"output", L"", outputPath, MAX_PATH * 4, iniPath);
     GetPrivateProfileStringW(
         L"capture", L"animation_output", L"", animationOutputPath,
+        MAX_PATH * 4, iniPath);
+    GetPrivateProfileStringW(
+        L"capture", L"census_output", L"", censusOutputPath,
         MAX_PATH * 4, iniPath);
     GetPrivateProfileStringW(
         L"capture", L"ready", L"", gReadyPath, ARRAYSIZE(gReadyPath), iniPath);
@@ -1182,10 +1614,11 @@ DWORD WINAPI CaptureWorker(void*) {
     wchar_t iniPath[MAX_PATH * 4]{};
     wchar_t outputPath[MAX_PATH * 4]{};
     wchar_t animationOutputPath[MAX_PATH * 4]{};
+    wchar_t censusOutputPath[MAX_PATH * 4]{};
     wchar_t studioHash[80]{};
     wchar_t clientHash[80]{};
     if (!ReadConfiguration(
-            iniPath, outputPath, animationOutputPath,
+            iniPath, outputPath, animationOutputPath, censusOutputPath,
             studioHash, clientHash)) {
         return 1;
     }
@@ -1227,9 +1660,18 @@ DWORD WINAPI CaptureWorker(void*) {
             CREATE_NEW,
             FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
     }
+    if (censusOutputPath[0]) {
+        gCensusHeap = HeapCreate(0, 0, 0);
+        gCensusOutput = CreateFileW(
+            censusOutputPath, GENERIC_WRITE, FILE_SHARE_READ, nullptr,
+            CREATE_NEW,
+            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+    }
     if (!gWake || gOutput == INVALID_HANDLE_VALUE ||
         (animationOutputPath[0] &&
-         gAnimationOutput == INVALID_HANDLE_VALUE)) {
+         gAnimationOutput == INVALID_HANDLE_VALUE) ||
+        (censusOutputPath[0] &&
+         (gCensusOutput == INVALID_HANDLE_VALUE || !gCensusHeap))) {
         WriteMarker(gDonePath, "error=cannot create capture output\n");
         return 3;
     }
@@ -1290,6 +1732,27 @@ DWORD WINAPI CaptureWorker(void*) {
         }
     }
 
+    if (gCensusOutput != INVALID_HANDLE_VALUE) {
+        CensusFileHeader censusHeader{};
+        std::memcpy(censusHeader.magic, "ELMDL1", 6);
+        censusHeader.version = 1;
+        censusHeader.headerBytes = sizeof(censusHeader);
+        censusHeader.qpcFrequency = frequency.QuadPart;
+        censusHeader.startQpc = gStartQpc.QuadPart;
+        censusHeader.pid = GetCurrentProcessId();
+        censusHeader.clientBase = static_cast<std::uint32_t>(
+            reinterpret_cast<std::uintptr_t>(client));
+        censusHeader.studioRenderBase = fileHeader.studioRenderBase;
+        censusHeader.imageCap = kCensusImageCap;
+        censusHeader.slotCount = kCensusSlots;
+        if (!WriteAll(
+                gCensusOutput, &censusHeader, sizeof(censusHeader))) {
+            WriteMarker(
+                gDonePath, "error=cannot write census capture header\n");
+            return 4;
+        }
+    }
+
     if (!InstallHooks(studioRender, client, engine)) {
         RemoveHooks();
         char error[192]{};
@@ -1302,11 +1765,12 @@ DWORD WINAPI CaptureWorker(void*) {
         return 5;
     }
     InterlockedExchange(&gCapturing, 1);
-    WriteMarker(
-        gReadyPath,
-        gAnimationOutput == INVALID_HANDLE_VALUE
-            ? "ready=1\nformat=ELPOSE3\n"
-            : "ready=1\nformat=ELPOSE3+ELANIM3\n");
+    char ready[160]{};
+    std::snprintf(
+        ready, sizeof(ready), "ready=1\nformat=ELPOSE3%s%s\n",
+        gAnimationOutput == INVALID_HANDLE_VALUE ? "" : "+ELANIM3",
+        gCensusOutput == INVALID_HANDLE_VALUE ? "" : "+ELMDL1");
+    WriteMarker(gReadyPath, ready);
 
     for (;;) {
         WaitForSingleObject(gWake, 50);
@@ -1323,6 +1787,9 @@ DWORD WINAPI CaptureWorker(void*) {
         }
     }
 
+    // Before the hooks come out, while the game is still running and every
+    // header the run recorded is still where it was recorded.
+    SweepResidentHeaders();
     RemoveHooks();
     DrainQueue();
     FlushFileBuffers(gOutput);
@@ -1333,18 +1800,32 @@ DWORD WINAPI CaptureWorker(void*) {
         CloseHandle(gAnimationOutput);
         gAnimationOutput = INVALID_HANDLE_VALUE;
     }
+    if (gCensusOutput != INVALID_HANDLE_VALUE) {
+        FlushFileBuffers(gCensusOutput);
+        CloseHandle(gCensusOutput);
+        gCensusOutput = INVALID_HANDLE_VALUE;
+    }
 
-    char done[512]{};
+    char done[1024]{};
     std::snprintf(
         done, sizeof(done),
         "complete=1\nqueued=%ld\nwritten=%ld\ndropped=%ld\n"
         "queue_peak=%ld\nskipped=%ld\nfiltered=%ld\nbytes_written=%lld\n"
-        "generations=%ld\nunbracketed=%ld\nbracket_overflow=%ld\n",
+        "generations=%ld\nunbracketed=%ld\nbracket_overflow=%ld\n"
+        "census_records=%ld\ncensus_images=%ld\ncensus_replacements=%ld\n"
+        "census_resident=%ld\ncensus_vanished=%ld\ncensus_overflow=%ld\n"
+        "census_faults=%ld\ncensus_capped=%ld\ncensus_bytes=%lld\n",
         gQueued, gWritten, gDropped, gQueuePeak, gSkipped, gFiltered,
         static_cast<long long>(gBytesWritten), gGeneration, gUnbracketed,
-        gBracketOverflow);
+        gBracketOverflow, gCensusRecords, gCensusImages, gCensusReplacements,
+        gCensusResident, gCensusVanished, gCensusOverflow, gCensusFaults,
+        gCensusCapped, static_cast<long long>(gCensusBytes));
     WriteMarker(gDonePath, done);
     CloseHandle(gWake);
+    if (gCensusHeap) {
+        HeapDestroy(gCensusHeap);
+        gCensusHeap = nullptr;
+    }
     DeleteCriticalSection(&gQueueLock);
     FreeLibraryAndExitThread(gSelf, 0);
 }

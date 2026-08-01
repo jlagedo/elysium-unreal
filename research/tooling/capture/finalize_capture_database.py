@@ -22,7 +22,15 @@ BRACKET_RECORD_HEADER = struct.Struct("<4sIQqqIIIII9I")
 # version and those columns stay NULL.
 POSE_RECORD_HEADER_V2 = struct.Struct("<4sIQqIIIIII5I64s")
 ANIMATION_RECORD_HEADER_V2 = struct.Struct("<4sIQqIIIIIiffi2I")
+# The census stream. Its rows are a dictionary rather than events, so they land
+# in their own tables and never widen `records`.
+CENSUS_FILE_HEADER = struct.Struct("<8sIIQqIIIII76s")
+MODEL_OBSERVATION_HEADER = struct.Struct("<4sIQq13I128s")
+MODEL_IMAGE_HEADER = struct.Struct("<4sIQq7I")
 MAXIMUM_BONES = 1024
+# Mirrors kCensusImageCap in the probe; a record claiming more than this did
+# not come from the hook that wrote the stream.
+MAXIMUM_IMAGE_BYTES = 8 * 1024 * 1024
 
 
 def file_sha256(path: Path) -> str:
@@ -201,6 +209,78 @@ def _animation_records(
         yield values, raw_header, payload
 
 
+def _census_records(
+    stream: BinaryIO,
+) -> Iterator[tuple[str, dict[str, object], bytes, bytes] | bytes]:
+    headers = {
+        b"MOBS": MODEL_OBSERVATION_HEADER,
+        b"MIMG": MODEL_IMAGE_HEADER,
+    }
+    while True:
+        record = _read_record(stream, headers)
+        if record is None:
+            return
+        if isinstance(record, bytes):
+            yield record
+            return
+        raw_header, payload, header = record
+        fields = header.unpack(raw_header)
+        if header is MODEL_OBSERVATION_HEADER:
+            bone_count = int(fields[8])
+            if (
+                bone_count < 1
+                or bone_count > MAXIMUM_BONES
+                or int(fields[1]) != MODEL_OBSERVATION_HEADER.size
+            ):
+                yield raw_header + payload + stream.read()
+                return
+            values: dict[str, object] = {
+                "sequence_number": int(fields[2]),
+                "qpc": int(fields[3]),
+                "thread_id": int(fields[4]),
+                "studio_hdr": int(fields[5]),
+                "checksum": int(fields[6]),
+                "previous_checksum": int(fields[7]),
+                "bone_count": bone_count,
+                "bone_index": int(fields[9]),
+                "model_length": int(fields[10]),
+                "include_model_count": int(fields[11]),
+                "include_model_index": int(fields[12]),
+                "studio_version": int(fields[13]),
+                "reason": int(fields[14]),
+                "image_captured": int(fields[15]),
+                "generation": int(fields[16]),
+                "model_name": fields[17]
+                .split(b"\0", 1)[0]
+                .decode("ascii", "replace"),
+            }
+            yield "MOBS", values, raw_header, payload
+            continue
+        captured = int(fields[8])
+        if (
+            captured < 1
+            or captured > MAXIMUM_IMAGE_BYTES
+            or int(fields[1]) != MODEL_IMAGE_HEADER.size + captured
+        ):
+            yield raw_header + payload + stream.read()
+            return
+        yield (
+            "MIMG",
+            {
+                "sequence_number": int(fields[2]),
+                "qpc": int(fields[3]),
+                "thread_id": int(fields[4]),
+                "studio_hdr": int(fields[5]),
+                "checksum": int(fields[6]),
+                "model_length": int(fields[7]),
+                "captured_bytes": captured,
+                "capped": int(fields[9]),
+            },
+            raw_header,
+            payload,
+        )
+
+
 SCHEMA = """
 CREATE TABLE capture_metadata (
     key TEXT PRIMARY KEY,
@@ -260,6 +340,45 @@ CREATE TABLE records (
     raw_payload BLOB NOT NULL,
     UNIQUE(stream_name, ordinal)
 );
+CREATE TABLE model_headers (
+    id INTEGER PRIMARY KEY,
+    stream_name TEXT NOT NULL REFERENCES streams(name),
+    ordinal INTEGER NOT NULL,
+    sequence_number INTEGER NOT NULL,
+    qpc INTEGER NOT NULL,
+    thread_id INTEGER NOT NULL,
+    studio_hdr INTEGER NOT NULL,
+    checksum INTEGER NOT NULL,
+    previous_checksum INTEGER NOT NULL,
+    bone_count INTEGER NOT NULL,
+    bone_index INTEGER NOT NULL,
+    model_length INTEGER NOT NULL,
+    include_model_count INTEGER NOT NULL,
+    include_model_index INTEGER NOT NULL,
+    studio_version INTEGER NOT NULL,
+    reason INTEGER NOT NULL,
+    image_captured INTEGER NOT NULL,
+    generation INTEGER NOT NULL,
+    model_name TEXT NOT NULL,
+    raw_header BLOB NOT NULL,
+    UNIQUE(stream_name, ordinal)
+);
+CREATE TABLE model_images (
+    id INTEGER PRIMARY KEY,
+    stream_name TEXT NOT NULL REFERENCES streams(name),
+    ordinal INTEGER NOT NULL,
+    sequence_number INTEGER NOT NULL,
+    qpc INTEGER NOT NULL,
+    thread_id INTEGER NOT NULL,
+    studio_hdr INTEGER NOT NULL,
+    checksum INTEGER NOT NULL,
+    model_length INTEGER NOT NULL,
+    captured_bytes INTEGER NOT NULL,
+    capped INTEGER NOT NULL,
+    raw_header BLOB NOT NULL,
+    image BLOB NOT NULL,
+    UNIQUE(stream_name, ordinal)
+);
 CREATE TABLE failures (
     category TEXT PRIMARY KEY,
     count INTEGER NOT NULL,
@@ -273,6 +392,33 @@ CREATE INDEX records_entity_time ON records(client_entity, qpc);
 CREATE INDEX records_model_time ON records(checksum, qpc);
 CREATE INDEX records_kind_time ON records(kind, qpc);
 CREATE INDEX records_generation ON records(generation);
+CREATE INDEX model_headers_identity ON model_headers(studio_hdr, checksum);
+CREATE INDEX model_images_checksum ON model_images(checksum);
+"""
+
+
+INSERT_MODEL_HEADER = """
+INSERT INTO model_headers (
+    stream_name, ordinal, sequence_number, qpc, thread_id, studio_hdr,
+    checksum, previous_checksum, bone_count, bone_index, model_length,
+    include_model_count, include_model_index, studio_version, reason,
+    image_captured, generation, model_name, raw_header
+) VALUES (
+    :stream_name, :ordinal, :sequence_number, :qpc, :thread_id, :studio_hdr,
+    :checksum, :previous_checksum, :bone_count, :bone_index, :model_length,
+    :include_model_count, :include_model_index, :studio_version, :reason,
+    :image_captured, :generation, :model_name, :raw_header
+)
+"""
+
+INSERT_MODEL_IMAGE = """
+INSERT INTO model_images (
+    stream_name, ordinal, sequence_number, qpc, thread_id, studio_hdr,
+    checksum, model_length, captured_bytes, capped, raw_header, image
+) VALUES (
+    :stream_name, :ordinal, :sequence_number, :qpc, :thread_id, :studio_hdr,
+    :checksum, :model_length, :captured_bytes, :capped, :raw_header, :image
+)
 """
 
 
@@ -323,7 +469,11 @@ def _insert_stream(
     name: str,
 ) -> tuple[int, int]:
     file_header_struct = (
-        POSE_FILE_HEADER if name == "pose" else ANIMATION_FILE_HEADER
+        POSE_FILE_HEADER
+        if name == "pose"
+        else CENSUS_FILE_HEADER
+        if name == "census"
+        else ANIMATION_FILE_HEADER
     )
     with path.open("rb") as stream:
         file_header = stream.read(file_header_struct.size)
@@ -336,6 +486,10 @@ def _insert_stream(
             if (magic, version) not in {(b"ELPOSE2", 2), (b"ELPOSE3", 3)}:
                 raise ValueError(f"{path} is not a supported ELPOSE stream")
             records = _pose_records(stream, generations=version >= 3)
+        elif name == "census":
+            if (magic, version) != (b"ELMDL1", 1):
+                raise ValueError(f"{path} is not a supported ELMDL stream")
+            records = _census_records(stream)
         else:
             if (magic, version) not in {
                 (b"ELANIM1", 1),
@@ -373,6 +527,24 @@ def _insert_stream(
             if isinstance(record, bytes):
                 incomplete_tail = record
                 break
+            if name == "census":
+                kind, values, raw_header, raw_payload = record
+                statement = (
+                    INSERT_MODEL_HEADER
+                    if kind == "MOBS"
+                    else INSERT_MODEL_IMAGE
+                )
+                row = {
+                    "stream_name": name,
+                    "ordinal": ordinal,
+                    "raw_header": raw_header,
+                    **values,
+                }
+                if kind == "MIMG":
+                    row["image"] = raw_payload
+                connection.execute(statement, row)
+                record_count += 1
+                continue
             values, raw_header, raw_payload = record
             connection.execute(
                 INSERT_RECORD,
@@ -424,6 +596,7 @@ def finalize(
     stream_paths = [
         ("pose", session / "scene.elpose"),
         ("animation", session / "animation.elanim"),
+        ("census", session / "model.elmdl"),
     ]
     stream_paths = [(name, path) for name, path in stream_paths if path.is_file()]
     if not stream_paths:
@@ -513,6 +686,22 @@ def finalize(
                 int(done.get("bracket_overflow", "0")),
                 "brackets refused because the nesting depth cap was reached",
             ),
+            "census_overflow": (
+                int(done.get("census_overflow", "0")),
+                "studio headers refused because a census table was full",
+            ),
+            "census_faults": (
+                int(done.get("census_faults", "0")),
+                "census reads or allocations that failed and released a claim",
+            ),
+            "census_capped": (
+                int(done.get("census_capped", "0")),
+                "model images truncated at the configured capture cap",
+            ),
+            "census_vanished": (
+                int(done.get("census_vanished", "0")),
+                "recorded headers that no longer read as one at capture stop",
+            ),
             "incomplete_streams": (
                 sum(1 for value in tails.values() if value),
                 _json_value(tails),
@@ -533,7 +722,12 @@ def finalize(
             )
         connection.commit()
         integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
-        stored_records = connection.execute("SELECT count(*) FROM records").fetchone()[0]
+        # Census rows land in their own tables, so the count that must match
+        # is the total across all three rather than `records` alone.
+        stored_records = sum(
+            connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+            for table in ("records", "model_headers", "model_images")
+        )
         if integrity != "ok" or stored_records != sum(counts.values()):
             raise RuntimeError(
                 f"SQLite verification failed: integrity={integrity!r} "

@@ -31,6 +31,9 @@ from research.tooling.capture.finalize_capture_database import (
     ANIMATION_RECORD_HEADER,
     ANIMATION_RECORD_HEADER_V2,
     BRACKET_RECORD_HEADER,
+    CENSUS_FILE_HEADER,
+    MODEL_IMAGE_HEADER,
+    MODEL_OBSERVATION_HEADER,
     POSE_FILE_HEADER,
     POSE_RECORD_HEADER,
     POSE_RECORD_HEADER_V2,
@@ -63,6 +66,10 @@ def record_bytes_expression(headers: dict[str, dict[str, Any]]) -> str:
     blob reads and still checks itself against the stream size the finalizer
     stored. Reading the header width from the stream rather than pinning it is
     what keeps a database captured before the generation existed measurable.
+
+    Every kind is named. A kind with no arm evaluates to NULL, ``sum`` skips
+    it, and byte closure fails loudly; falling through to another kind's
+    formula would produce a plausible wrong number instead.
     """
     pose = (
         POSE_RECORD_HEADER
@@ -78,8 +85,24 @@ def record_bytes_expression(headers: dict[str, dict[str, Any]]) -> str:
         f"CASE WHEN kind = 'POSE' THEN {pose.size} + 96 * bone_count "
         f"WHEN kind IN ('PBLD', 'DBLD', 'SHDW') "
         f"THEN {BRACKET_RECORD_HEADER.size} "
-        f"ELSE {evaluation.size} + 28 * bone_count "
-        "+ 4 * ((bone_count + 31) / 32) END"
+        f"WHEN kind IN ('BASE', 'FINL') THEN {evaluation.size} "
+        "+ 28 * bone_count + 4 * ((bone_count + 31) / 32) "
+        "ELSE NULL END"
+    )
+
+
+def census_bytes_expression() -> str:
+    """The census stream's payload bytes, from its own two tables.
+
+    Census rows are a dictionary rather than events, so they never reach
+    ``records`` and their bytes cannot come from the record expression. An
+    image's size is stored rather than derived, so this reads no blob either.
+    """
+    return (
+        f"SELECT {MODEL_OBSERVATION_HEADER.size} AS bytes, 'MOBS' AS kind, "
+        "qpc FROM model_headers UNION ALL "
+        f"SELECT {MODEL_IMAGE_HEADER.size} + captured_bytes, 'MIMG', qpc "
+        "FROM model_images"
     )
 
 
@@ -144,7 +167,13 @@ def stream_headers(connection: sqlite3.Connection) -> dict[str, dict[str, Any]]:
         FROM streams
         """
     ):
-        layout = POSE_FILE_HEADER if name == "pose" else ANIMATION_FILE_HEADER
+        layout = (
+            POSE_FILE_HEADER
+            if name == "pose"
+            else CENSUS_FILE_HEADER
+            if name == "census"
+            else ANIMATION_FILE_HEADER
+        )
         fields = layout.unpack(blob)
         headers[name] = {
             "source_name": source,
@@ -173,12 +202,22 @@ def stream_headers(connection: sqlite3.Connection) -> dict[str, dict[str, Any]]:
     return headers
 
 
+# The hook stamps one counter across every stream it writes, so density is only
+# a proof that nothing was lost if every table it reaches is counted. Census
+# rows are a dictionary rather than events and live in their own tables, but
+# they draw from the same counter and would otherwise read as holes.
+SEQUENCE_TABLES = ("records", "model_headers", "model_images")
+SEQUENCE_UNION = " UNION ALL ".join(
+    f"SELECT sequence_number FROM {table}" for table in SEQUENCE_TABLES
+)
+
+
 def sequence_continuity(connection: sqlite3.Connection) -> dict[str, Any]:
     low, high, distinct, total = connection.execute(
-        """
+        f"""
         SELECT min(sequence_number), max(sequence_number),
                count(DISTINCT sequence_number), count(*)
-        FROM records
+        FROM ({SEQUENCE_UNION})
         """
     ).fetchone()
     dense = (
@@ -198,7 +237,8 @@ def sequence_continuity(connection: sqlite3.Connection) -> dict[str, Any]:
     seen = [
         value
         for (value,) in connection.execute(
-            "SELECT sequence_number FROM records ORDER BY sequence_number"
+            f"SELECT sequence_number FROM ({SEQUENCE_UNION}) "
+            "ORDER BY sequence_number"
         )
     ]
     gaps: list[dict[str, int]] = []
@@ -251,6 +291,30 @@ def volume(
         stream_bytes[entry["stream"]] = (
             stream_bytes.get(entry["stream"], 0) + entry["bytes"]
         )
+
+    # The census stream is measured from its own tables and reported beside the
+    # event streams rather than mixed into them, so the per-second event rates
+    # CAP1.2 published stay the same numbers.
+    census_kinds = []
+    if "census" in headers:
+        for kind, count, payload, first, last in connection.execute(
+            f"""
+            SELECT kind, count(*), sum(bytes), min(qpc), max(qpc)
+            FROM ({census_bytes_expression()}) GROUP BY kind ORDER BY kind
+            """
+        ):
+            census_kinds.append(
+                {
+                    "stream": "census",
+                    "kind": kind,
+                    "records": count,
+                    "bytes": payload,
+                    "first_qpc": first,
+                    "last_qpc": last,
+                }
+            )
+            stream_bytes["census"] = stream_bytes.get("census", 0) + payload
+
     closure = {
         name: {
             "derived_payload_bytes": stream_bytes.get(name, 0),
@@ -275,6 +339,7 @@ def volume(
     peak_bytes = max(seconds.items(), key=lambda item: item[1]["bytes"])
     return {
         "per_kind": per_kind,
+        "census_per_kind": census_kinds,
         "byte_closure": closure,
         "peak_second": {
             "by_records": {"second": peak_records[0], **peak_records[1]},

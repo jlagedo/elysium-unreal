@@ -34,12 +34,18 @@ from research.tooling.capture.finalize_capture_database import (
     ANIMATION_FILE_HEADER,
     ANIMATION_RECORD_HEADER,
     BRACKET_RECORD_HEADER,
+    CENSUS_FILE_HEADER,
+    MODEL_IMAGE_HEADER,
+    MODEL_OBSERVATION_HEADER,
     POSE_FILE_HEADER,
     POSE_RECORD_HEADER,
     finalize,
 )
 from research.tooling.capture.verify_pose_build_generation import (
     verify as verify_generation,
+)
+from research.tooling.capture.verify_model_skeleton_census import (
+    verify as verify_census,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -161,11 +167,131 @@ def bracket_record(
     )
 
 
+BONE_ARRAY_OFFSET = 512
+BONE_STRIDE = 160
+
+
+def model_image(
+    checksum: int,
+    model_name: str,
+    *,
+    bones: tuple[tuple[str, int, tuple[float, float, float]], ...] = (
+        ("Bip01", -1, (0.0, 0.0, 0.0)),
+        ("Bip01 Spine", 0, (1.0, 2.0, 3.0)),
+    ),
+) -> bytes:
+    """A minimal v2531 model image the pipeline bone decoder can read.
+
+    Bind rotations are identity and each bone's ``poseToBone`` is the exact
+    inverse of its composed bind, so a correctly decoded skeleton returns the
+    identity and the census verifier's soundness check has something real to
+    measure.
+    """
+    names_offset = BONE_ARRAY_OFFSET + BONE_STRIDE * len(bones)
+    blob = bytearray(names_offset)
+    struct.pack_into("<4sI", blob, 0, b"IDST", 2531)
+    struct.pack_into("<I", blob, 8, checksum)
+    blob[12 : 12 + len(model_name)] = model_name.encode("ascii")
+    struct.pack_into("<i", blob, 240, len(bones))
+    struct.pack_into("<i", blob, 244, BONE_ARRAY_OFFSET)
+    struct.pack_into("<i", blob, 404, 0)
+    struct.pack_into("<i", blob, 408, 0)
+
+    world = {}
+    for index, (name, parent, pos) in enumerate(bones):
+        base = BONE_ARRAY_OFFSET + BONE_STRIDE * index
+        origin = world.get(parent, (0.0, 0.0, 0.0))
+        composed = tuple(origin[axis] + pos[axis] for axis in range(3))
+        world[index] = composed
+        struct.pack_into("<i", blob, base, len(blob) - base)
+        blob += name.encode("ascii") + b"\0"
+        struct.pack_into("<i", blob, base + 4, parent)
+        struct.pack_into("<3f", blob, base + 32, *pos)
+        struct.pack_into("<4f", blob, base + 44, 0.0, 0.0, 0.0, 1.0)
+        struct.pack_into("<3f", blob, base + 60, 1.0, 1.0, 1.0)
+        struct.pack_into("<4f", blob, base + 72, 1.0, 1.0, 1.0, 1.0)
+        struct.pack_into(
+            "<12f",
+            blob,
+            base + 88,
+            1.0, 0.0, 0.0, -composed[0],
+            0.0, 1.0, 0.0, -composed[1],
+            0.0, 0.0, 1.0, -composed[2],
+        )
+        struct.pack_into("<i", blob, base + 136, 0)
+    struct.pack_into("<i", blob, 140, len(blob))
+    return bytes(blob)
+
+
+def observation_record(
+    sequence: int,
+    qpc: int,
+    model_name: str,
+    *,
+    studio_hdr: int = 0x1000,
+    checksum: int = 0x3000,
+    previous_checksum: int = 0,
+    bone_count: int = 2,
+    model_length: int = 1024,
+    reason: int = 1,
+    image_captured: int = 1,
+    generation: int = 0,
+) -> bytes:
+    return MODEL_OBSERVATION_HEADER.pack(
+        b"MOBS",
+        MODEL_OBSERVATION_HEADER.size,
+        sequence,
+        qpc,
+        7,
+        studio_hdr,
+        checksum,
+        previous_checksum,
+        bone_count,
+        BONE_ARRAY_OFFSET,
+        model_length,
+        0,
+        0,
+        2531,
+        reason,
+        image_captured,
+        generation,
+        model_name.encode("ascii") + b"\0",
+    )
+
+
+def image_record(
+    sequence: int,
+    qpc: int,
+    image: bytes,
+    *,
+    studio_hdr: int = 0x1000,
+    checksum: int = 0x3000,
+    capped: int = 0,
+) -> bytes:
+    return (
+        MODEL_IMAGE_HEADER.pack(
+            b"MIMG",
+            MODEL_IMAGE_HEADER.size + len(image),
+            sequence,
+            qpc,
+            7,
+            studio_hdr,
+            checksum,
+            len(image),
+            len(image),
+            capped,
+            0,
+        )
+        + image
+    )
+
+
 def write_session(
     session: Path,
     *,
     pose_records: bytes,
     animation_records: bytes,
+    census_records: bytes | None = None,
     done: str = "complete=1\nqueued=2\nwritten=2\ndropped=0\n",
     boundary: dict[str, object] | None = None,
     console: str | None = None,
@@ -242,12 +368,30 @@ def write_session(
         )
         + animation_records
     )
+    if census_records is not None:
+        (session / "model.elmdl").write_bytes(
+            CENSUS_FILE_HEADER.pack(
+                b"ELMDL1",
+                1,
+                CENSUS_FILE_HEADER.size,
+                QPC_FREQUENCY,
+                90,
+                12,
+                0xB000,
+                0x5000,
+                8 * 1024 * 1024,
+                1024,
+                b"",
+            )
+            + census_records
+        )
 
 
 def write_generation_session(
     session: Path,
     actors: list[dict[str, object]],
     done_extra: str = "unbracketed=0\nbracket_overflow=0\n",
+    census_records: bytes | None = None,
 ) -> None:
     """Finalize a session whose records are bracketed as retail brackets them.
 
@@ -336,6 +480,7 @@ def write_generation_session(
         session,
         pose_records=b"".join(poses),
         animation_records=b"".join(animations),
+        census_records=census_records,
         done=(
             "complete=1\nqueued=2\nwritten=2\ndropped=0\nqueue_peak=9\n"
             + done_extra
@@ -655,6 +800,335 @@ class RetailCaptureTests(unittest.TestCase):
             self.assertFalse(report["support"]["carries_generations"])
             self.assertIsNone(report["coverage"])
             self.assertIn("predates", report["verdict"]["statement"])
+
+    def test_census_record_layouts_match_the_probe_that_writes_them(
+        self,
+    ) -> None:
+        # The C++ struct is the definition and the reader re-declares it, so
+        # nothing but this test stops the two drifting apart.
+        source = (
+            REPO_ROOT
+            / "research"
+            / "tooling"
+            / "capture"
+            / "live_pose_hook.cpp"
+        ).read_text(encoding="utf-8")
+        for struct_name, layout in (
+            ("CensusFileHeader", CENSUS_FILE_HEADER),
+            ("ModelObservationHeader", MODEL_OBSERVATION_HEADER),
+            ("ModelImageHeader", MODEL_IMAGE_HEADER),
+        ):
+            self.assertIn(
+                f"sizeof({struct_name}) == {layout.size}",
+                source,
+                struct_name,
+            )
+
+    def test_census_finalizer_keeps_the_dictionary_out_of_the_event_table(
+        self,
+    ) -> None:
+        # A census row is a dictionary entry, not an event, so it lands in its
+        # own tables and `records` keeps exactly the events it had before.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            image = model_image(0x3000, "models/test.mdl")
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=animation_record(b"BASE", 2, 101),
+                census_records=(
+                    observation_record(
+                        3, 99, "models/test.mdl", model_length=len(image)
+                    )
+                    + image_record(4, 99, image)
+                ),
+            )
+            result = finalize(session)
+            self.assertEqual(result["records"]["census"], 2)
+            connection = sqlite3.connect(session / "capture.sqlite")
+            try:
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT count(*) FROM records"
+                    ).fetchone()[0],
+                    2,
+                )
+                name, bones, length, reason = connection.execute(
+                    "SELECT model_name, bone_count, model_length, reason "
+                    "FROM model_headers"
+                ).fetchone()
+                self.assertEqual(name, "models/test.mdl")
+                self.assertEqual(bones, 2)
+                self.assertEqual(length, len(image))
+                self.assertEqual(reason, 1)
+                stored, captured = connection.execute(
+                    "SELECT image, captured_bytes FROM model_images"
+                ).fetchone()
+                # The retained bytes are the model image verbatim; nothing in
+                # the finalizer decodes or rewrites them.
+                self.assertEqual(stored, image)
+                self.assertEqual(captured, len(image))
+            finally:
+                connection.close()
+
+    def test_census_verifier_accepts_a_fully_observed_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            image = model_image(0x3000, "models/test.mdl")
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=animation_record(b"BASE", 2, 101),
+                census_records=(
+                    observation_record(
+                        3, 99, "models/test.mdl", model_length=len(image)
+                    )
+                    + image_record(4, 99, image)
+                ),
+            )
+            finalize(session)
+            report = verify_census(session, join_source=False)
+            self.assertTrue(report["support"]["carries_census"])
+            self.assertEqual(report["coverage"]["identities_used"], 1)
+            self.assertEqual(report["coverage"]["identities_unobserved"], 0)
+            self.assertEqual(report["coverage"]["identities_observed_late"], 0)
+            self.assertTrue(report["coverage"]["complete"])
+            self.assertTrue(report["census"]["one_image_per_checksum"])
+            self.assertTrue(report["census"]["every_checksum_has_an_image"])
+            # The captured bytes decode as a skeleton whose composed bind and
+            # stored inverse bind return the identity.
+            self.assertEqual(report["skeletons"]["skeletons"], 1)
+            self.assertEqual(report["skeletons"]["bones"], 2)
+            self.assertTrue(report["skeletons"]["sound"])
+            self.assertLess(
+                report["skeletons"]["worst_inverse_bind_error"], 1e-6
+            )
+            self.assertTrue(report["verdict"]["census_complete"])
+            self.assertEqual(report["verdict"]["source_join"], "unavailable")
+
+    def test_census_verifier_reports_a_header_used_without_an_observation(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            image = model_image(0x3000, "models/test.mdl")
+            write_session(
+                session,
+                pose_records=(
+                    pose_record(1, 100, "models/test.mdl")
+                    + pose_record(
+                        2, 101, "models/other.mdl", studio_hdr=0x5000,
+                        checksum=0x7000,
+                    )
+                ),
+                animation_records=animation_record(b"BASE", 3, 102),
+                census_records=(
+                    observation_record(
+                        4, 99, "models/test.mdl", model_length=len(image)
+                    )
+                    + image_record(5, 99, image)
+                ),
+            )
+            finalize(session)
+            report = verify_census(session, join_source=False)
+            self.assertEqual(report["coverage"]["identities_used"], 2)
+            self.assertEqual(report["coverage"]["identities_unobserved"], 1)
+            self.assertEqual(
+                report["coverage"]["unobserved"][0]["checksum"], "0x00007000"
+            )
+            self.assertFalse(report["verdict"]["census_complete"])
+            self.assertIn(
+                "without ever being observed", report["verdict"]["statement"]
+            )
+
+    def test_census_verifier_accounts_for_a_reused_address(self) -> None:
+        # One address serving two models is the only free this capture can
+        # observe, so the replacement observation has to account for it.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            first = model_image(0x3000, "models/first.mdl")
+            second = model_image(0x7000, "models/second.mdl")
+            write_session(
+                session,
+                pose_records=(
+                    pose_record(1, 100, "models/first.mdl")
+                    + pose_record(2, 200, "models/second.mdl", checksum=0x7000)
+                ),
+                animation_records=animation_record(b"BASE", 3, 101),
+                census_records=(
+                    observation_record(
+                        4, 99, "models/first.mdl", model_length=len(first)
+                    )
+                    + image_record(5, 99, first)
+                    + observation_record(
+                        6,
+                        199,
+                        "models/second.mdl",
+                        checksum=0x7000,
+                        previous_checksum=0x3000,
+                        reason=2,
+                        model_length=len(second),
+                    )
+                    + image_record(7, 199, second, checksum=0x7000)
+                ),
+            )
+            finalize(session)
+            report = verify_census(session, join_source=False)
+            self.assertEqual(report["reuse"]["reused_header_addresses"], 1)
+            self.assertEqual(
+                report["reuse"]["extra_identities_at_reused_addresses"], 1
+            )
+            self.assertEqual(report["reuse"]["replacement_observations"], 1)
+            self.assertTrue(report["reuse"]["replacements_account_for_reuse"])
+            self.assertEqual(report["census"]["distinct_studio_headers"], 1)
+            self.assertEqual(report["census"]["distinct_checksums"], 2)
+            self.assertTrue(report["verdict"]["census_complete"])
+
+    def test_census_verifier_refuses_a_truncated_model_image(self) -> None:
+        # A capped image cannot answer an offset past the cap, so it is a
+        # completeness failure rather than a warning.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            image = model_image(0x3000, "models/test.mdl")
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=animation_record(b"BASE", 2, 101),
+                census_records=(
+                    observation_record(
+                        3, 99, "models/test.mdl", model_length=len(image) * 4
+                    )
+                    + image_record(4, 99, image, capped=1)
+                ),
+            )
+            finalize(session)
+            report = verify_census(session, join_source=False)
+            self.assertTrue(report["coverage"]["complete"])
+            self.assertEqual(report["census"]["images_capped"], 1)
+            self.assertFalse(report["verdict"]["census_complete"])
+            self.assertIn("truncated", report["verdict"]["statement"])
+
+    def test_census_verifier_measures_the_truncated_draw_name(self) -> None:
+        # The draw record keeps 64 of the header's 128 name bytes, so a long
+        # path reaches the database cut with no flag. The census carries the
+        # whole field, which turns that into a number.
+        long_name = (
+            "models/character/npc/unique/society_of_leopold/"
+            "average_vampire_hunter/average_vampire_hunter.mdl"
+        )
+        self.assertGreater(len(long_name), 64)
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            image = model_image(0x3000, long_name)
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, long_name[:64]),
+                animation_records=animation_record(b"BASE", 2, 101),
+                census_records=(
+                    observation_record(
+                        3, 99, long_name, model_length=len(image)
+                    )
+                    + image_record(4, 99, image)
+                ),
+            )
+            finalize(session)
+            report = verify_census(session, join_source=False)
+            self.assertEqual(report["names"]["longest_name"], len(long_name))
+            self.assertEqual(
+                report["names"]["names_at_or_over_the_draw_field"], 1
+            )
+            self.assertEqual(
+                report["names"]["draw_records_carrying_a_truncated_name"], 1
+            )
+
+    def test_census_verifier_answers_a_capture_without_a_census(self) -> None:
+        # A CAP2.1 database is a valid capture that predates the census, so it
+        # is answered rather than rejected.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=animation_record(b"BASE", 2, 101),
+            )
+            finalize(session)
+            report = verify_census(session, join_source=False)
+            self.assertFalse(report["support"]["carries_census"])
+            self.assertIsNone(report["coverage"])
+            self.assertIsNone(report["skeletons"])
+            self.assertIn("predates", report["verdict"]["statement"])
+
+    def test_calibration_closes_byte_accounting_over_the_census_stream(
+        self,
+    ) -> None:
+        # The census stream is measured from its own tables, so its bytes have
+        # to close against its file size the same way the event streams do.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            image = model_image(0x3000, "models/test.mdl")
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=animation_record(b"BASE", 2, 101),
+                census_records=(
+                    observation_record(
+                        3, 99, "models/test.mdl", model_length=len(image)
+                    )
+                    + image_record(4, 99, image)
+                ),
+            )
+            finalize(session)
+            report = calibrate(session)
+            closure = report["volume"]["byte_closure"]
+            for stream in ("pose", "animation", "census"):
+                self.assertTrue(closure[stream]["closes"], stream)
+            # The hook stamps one counter across all three streams, so density
+            # is only a proof that nothing was lost if the census tables are
+            # counted too; reading `records` alone turns them into holes.
+            sequences = report["integrity"]["sequence_numbers"]
+            self.assertTrue(sequences["dense"], sequences)
+            self.assertEqual(sequences["records"], 4)
+            kinds = {
+                entry["kind"]: entry
+                for entry in report["volume"]["census_per_kind"]
+            }
+            self.assertEqual(kinds["MOBS"]["records"], 1)
+            self.assertEqual(kinds["MIMG"]["records"], 1)
+            self.assertEqual(
+                kinds["MIMG"]["bytes"], MODEL_IMAGE_HEADER.size + len(image)
+            )
+            # The census adds no event record, so the studio-header census the
+            # calibration already published is unchanged by it.
+            self.assertEqual(report["census"]["distinct_studio_headers"], 1)
+
+    def test_generation_verdict_survives_a_census_stream(self) -> None:
+        # The census keeps its rows out of `records`, so CAP2.1's coverage
+        # section still sees only records that carry a generation. This is the
+        # guard on that separation.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            image = model_image(0x3000, "models/test.mdl")
+            write_generation_session(
+                session,
+                [
+                    {
+                        "entity": 0x2004,
+                        "model": "models/test.mdl",
+                        "checksum": 0x3000,
+                        "studio_hdr": 0x1000,
+                    }
+                ],
+                census_records=(
+                    observation_record(
+                        900, 1, "models/test.mdl", model_length=len(image)
+                    )
+                    + image_record(901, 1, image)
+                ),
+            )
+            report = verify_generation(session)
+            self.assertEqual(report["coverage"]["unassigned"], 0)
+            self.assertTrue(report["verdict"]["generations_complete"])
+            self.assertTrue(report["verdict"]["attributions_agree"])
 
     def test_calibration_closes_byte_accounting_and_reports_lost_records(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

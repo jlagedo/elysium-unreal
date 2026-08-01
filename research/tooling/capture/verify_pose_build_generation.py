@@ -70,6 +70,9 @@ SETUP_BONES_DELTA = 0
 # The generation counter starts at 1 so that zero stays the unassigned
 # sentinel a record can carry without ambiguity.
 UNASSIGNED = 0
+# The streams whose records carry a generation. Every section below reads only
+# these, so only these decide whether the database can be judged.
+EVENT_STREAMS = ("pose", "animation")
 # CAP1.2's measured baseline for one complete run, which the overhead section
 # reports against rather than re-deriving.
 BASELINE_MEAN_MB_PER_SECOND = 8.1
@@ -158,14 +161,24 @@ def capability(headers: dict[str, dict[str, Any]]) -> dict[str, Any]:
     A CAP1 database is a valid capture that predates the bracket, so it is
     answered rather than rejected: every later section reports null and the
     verdict says the run cannot be judged.
+
+    Only the streams this report reads are gated. A database may carry other
+    streams on their own versions — the model census is one — and a stream no
+    section below queries cannot decide whether the brackets are judgeable.
     """
     versions = {name: header.get("version") for name, header in headers.items()}
+    gated = {
+        name: version
+        for name, version in versions.items()
+        if name in EVENT_STREAMS
+    }
     supported = all(
-        (version or 0) >= MINIMUM_GENERATION_VERSION for version in versions.values()
+        (version or 0) >= MINIMUM_GENERATION_VERSION for version in gated.values()
     )
     return {
         "stream_versions": versions,
-        "carries_generations": bool(supported and versions),
+        "gated_streams": sorted(gated),
+        "carries_generations": bool(supported and gated),
         "minimum_version": MINIMUM_GENERATION_VERSION,
     }
 

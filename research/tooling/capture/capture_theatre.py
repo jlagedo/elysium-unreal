@@ -209,6 +209,7 @@ def write_hook_ini(path: Path, session: Path, duration_seconds: int) -> None:
     values = {
         "output": session / "scene.elpose",
         "animation_output": session / "animation.elanim",
+        "census_output": session / "model.elmdl",
         "ready": session / "ready.txt",
         "stop": session / "stop.txt",
         "done": session / "done.txt",

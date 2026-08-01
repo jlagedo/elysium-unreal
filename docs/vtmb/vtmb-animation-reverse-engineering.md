@@ -1164,7 +1164,49 @@ of the bytes, and the drain queue's high-water mark rises from 82 to 178 against
 a mean of 8.3 MB/s (baseline 8.1) and a peak second of 22.1 MB (baseline 21.4).
 Nothing was dropped, but the queue is the headroom that would go first.
 
-### 9.13 What not to do first
+### 9.13 Censusing the models and skeletons a run used
+
+A grouped record still names its model only by a pointer, a checksum and a
+64-byte name. Nothing about the bones behind that pointer survives the run, so a
+decoded pose can be compared against ours while the bytes it was decoded *from*
+remain unavailable. The census closes that: once per distinct studio header it
+records the header's identity and, once per checksum, the model image the header
+sits at the front of.
+
+The split is the method's whole content. **Identity is per sighting; bytes are
+per checksum.** A model loaded at two addresses is two observations and one
+image, so the same immutable bytes are never stored twice, and a per-call record
+keeps only a pointer and offsets. Storing the image rather than a header prefix
+is what makes the rest possible: every `*Index` in the header is an offset from
+the header base, so a prefix retains pointers into bytes that were discarded,
+while the image makes a captured runtime pointer resolvable by subtraction.
+
+Nothing is decoded in the process. The probe validates `IDST`/2531 and a
+plausible `Length`, then copies; bones are read offline by the same decoder the
+export uses, where a wrong field hypothesis costs a re-run of a script rather
+than a re-run of the game.
+
+Three observation reasons are distinguished, and the third is a boundary worth
+stating plainly. **First** is a header this run has not seen at this address.
+**Replacement** is an address that served one checksum and now serves another —
+the only free this capture can witness. **Resident at stop** is a sweep that
+re-reads every recorded header while the game still runs. There is no unload
+event: no hooked target sees a model-cache free, and no case specification
+declares one, so the capture reports residency and counts headers that no longer
+read as their own header rather than presenting either as an unload. A real
+unload event needs a Ghidra pass on the model cache first.
+
+Two checks make the census falsifiable rather than merely self-consistent.
+Offline, each captured image must decode to a skeleton whose composed bind
+transform and stored `poseToBone` return the identity. Against the install, each
+image is compared byte for byte with the patch-first file carrying the same
+checksum; ranges that differ are what the loader fixes up in place, and those are
+exactly the ranges a pointer-to-offset conversion may not treat as
+image-relative. A checksum that resolves to no installed file is reported as
+unresolved, never as a mismatch — the two would otherwise be indistinguishable on
+a machine without the install.
+
+### 9.14 What not to do first
 
 Avoid:
 
@@ -1704,6 +1746,12 @@ Reverse-engineering experiments often coexist with unrelated animation work. Pre
 | Every studio draw is enclosed by a bracket | Verified | One complete `sp_theatre` capture: all 1,693,202 records carry a generation, with the hook's own counters reporting zero unbracketed records | Reproduction on a second cutscene |
 | The shadow frame builds its own pose | Verified | `CModelRender::DrawModelShadow` calls the same renderable slot `+0x3c` at `0x200a6c7b`, and the capture records 165,086 shadow frames | None |
 | `SetupBones` argument five is a required output pointer | Contradicted | The shadow frame passes `NULL` where `CModelRender::DrawModel` passes the address of a stack local | What the callee writes through it when non-null |
+| The runtime `studiohdr` is the whole `.mdl` image at offset 0 | Verified | One census capture retained all 141 runtime images and compared each against the patch-first installed file of the same `Checksum`: every `Length`@140 equals the installed file size, and 42 images are byte-identical | None |
+| A runtime pointer minus its `studiohdr` base is a model-image offset | Verified | Follows from the above, and 99 of 141 images differ from disk only inside ranges that are themselves at known array strides | None for the conversion; which ranges are unreliable is the next row |
+| The loader patches the model image in place | Verified | 26,958 differing bytes in one run, all inside `StudioBone.Flags`, `StudioMesh.VertexData`, `StudioSeqDesc`+0xc, the include-model records, `MDLHeader.Flags`/`NumLocalNodes`, and one unindexed gap | What each rewritten field becomes; layout is owned by `mdl_v2531.md` |
+| `StudioBone.Flags` on disk is what the runtime uses | Contradicted | The loader rewrites one byte per bone at the 160-byte stride on all 27 models carrying include models | What it writes, and whether the `& 0x2` split-inheritance rule survives it |
+| The shared-animation remap is built inside the model image | Strong evidence | The gap between the include-model array and `LocalAnimIndex` is written on exactly the 27 models with include models and on no other, 24,234 bytes, with zero exceptions either way | Identifying the records; the spec's open question on nested remap records inside `0x10089c40` is the same question |
+| A model image stays resident for the whole capture | Verified for this corpus | The sweep at capture stop re-read all 141 recorded headers: 141 still read as their own studio header, none vanished, and no address served a second checksum | Whether a longer or map-changing corpus frees one; a true unload event needs a model-cache target no specification declares |
 
 ---
 

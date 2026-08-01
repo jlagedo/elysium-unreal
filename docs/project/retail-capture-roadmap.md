@@ -171,7 +171,7 @@ a later, longer corpus makes volume bite.
 | 6 | P1 | CAP6 — face and lips | The same loop over expression, flex, phoneme, and deformed-vertex state |
 | 7 | P2 | CAP7 — handoff and trim | Engine-neutral evaluator feeds Unreal; unused probes and readers are deleted |
 
-**The next and only current task is CAP2.2.**
+**The next and only current task is CAP2.3.**
 
 ## CAP1 — First theatre run and calibration
 
@@ -298,10 +298,74 @@ calling convention into the case specification before a hook is written.
   produce no evaluation — both consistent with a bone cache answering a second call for an
   actor already posed this frame. Such a draw is reported as having no pose build rather
   than being attributed to an earlier one. Reproduction on a second cutscene is CAP2.7.
-- [ ] **CAP2.2 Model and skeleton census.** Once per distinct runtime studio header record
+- [x] **CAP2.2 Model and skeleton census.** Once per distinct runtime studio header record
   model path, checksum, bone count, bone names/parents/flags, bind locals, inverse binds,
   and the header span itself; reference it from later events rather than repeating it.
   Record first observation, reuse, and unload.
+
+  The census adds no hook: both existing paths already hold
+  the `studiohdr` pointer, so it reads more from a pointer in hand under the four binary
+  profiles that were already validated. A third stream `model.elmdl` (`ELMDL1`) carries two
+  kinds — one observation per sighting of a header at an address, carrying the full 128-byte
+  name, checksum, bone count and index, `Length`, and the include-model array; and one model
+  image per checksum. Identity per sighting, bytes once: a model loaded at two addresses
+  costs two observations and one image. The image is the whole model, not a header prefix,
+  because every `*Index` in the header is an offset from the header base — which is what
+  makes CAP2.5's pointer-to-offset conversion a subtraction rather than a second capture pass.
+  Bones are decoded offline by the pipeline's own decoder; the probe validates and copies.
+
+  Census rows land in their own `model_headers` and `model_images` tables rather than in
+  `records`, because a dictionary entry is not an event and CAP2.1's coverage section counts
+  every row it finds. `uv run elysium research verify_model_skeleton_census <session>…` reads
+  a finalized database read-only and reports coverage, the header dictionary, reuse,
+  residency, decoded skeletons, the truncated-name measurement, the repeated-dictionary cost,
+  the source join, and the cost against CAP2.1's baseline.
+
+  One complete cutscene carries **1,696,055** records and **423** census rows — **141** first
+  observations, **141** images and **141** resident-at-stop re-reads — with **zero** drops,
+  faults, overflow, capped images, unobserved identities and late observations. All **141**
+  used `(studio_hdr, checksum)` identities were observed at or before their first use, one
+  image per checksum and an image for every checksum. The **141** images decode to
+  **2,286** bones whose composed bind and stored `poseToBone` return the identity within
+  **1.03e-4**, over 27 split-inheritance bones. The census costs **38.0 MB**, **1.46%** of a
+  3.7 GB database, at an unchanged **8.35 MB/s** mean and a **22.0 MB** peak second; the queue
+  high-water is **141**, below CAP2.1's 178. CAP2.1 re-establishes on the same database —
+  every record assigned, **250,057 of 250,057** posed draws agreeing — and byte closure and
+  sequence density still hold across all three streams.
+
+  **The source join is the result.** Every one of the 141 `Length`@140 values equals its
+  installed file size and 42 images are byte-identical, so the runtime `studiohdr` is the
+  `.mdl` image at offset 0 and a captured pointer minus the header base is a file offset —
+  which is what CAP2.5 needed. The other 99 differ in 26,958 bytes confined to
+  `StudioBone.Flags`, `StudioMesh.VertexData`, `StudioSeqDesc`+0xc, the include-model
+  records, `MDLHeader.Flags`/`NumLocalNodes`, and one unindexed gap written on exactly the 27
+  models carrying include models and no other. Those are the ranges CAP4.2 must treat as
+  loader-written rather than as source bytes, and the bone-flag row means a disk read of
+  `StudioBone.Flags` is not what the runtime uses. Facts:
+  `docs/vtmb/mdl_v2531.md`. Reproduction on a second cutscene is CAP2.7; identifying the
+  gap's records is CAP2.4's remap work.
+
+  Two measurements bound what this run proves. `sp_theatre` loads no model whose name reaches
+  the draw record's 64-byte field — the longest is 63 — so that field is lossless for this
+  corpus even though 50 of the 4,445 installed models would overflow it. And no studio header
+  address served a second model, so the replacement path is implemented and exercised only by
+  tests; the 11 client-entity addresses that did serve several models are CAP1.3's population,
+  not this one.
+
+  Unload is scoped to what is observable. No case specification declares a model-cache
+  free and no hooked target sees one, so the run records first observation, reuse at a
+  reused address, and a resident-at-stop sweep, and counts headers that no longer read as
+  their own header. A true unload event needs a Ghidra pass on the model cache; it is not
+  part of this task and is a prerequisite of CAP2.3's lifetime work.
+
+  Three defects were closed on the way. `client.get_studio_hdr` was the one hook-contract
+  target with no `source_function_label`, so the generator never checked it against a
+  specification; it is now declared in `animation_pose.json`. The pose-build verifier gated
+  on every stream's version rather than the two it reads, so a database carrying any further
+  stream would have reported itself unjudgeable. And the sequence-density check read only
+  `records`, so census rows drawing from the same global counter read as holes and turned
+  CAP1.2's loss proof into a false alarm; it now counts every table the counter reaches.
+  Each has a regression.
 - [ ] **CAP2.3 Actor identity and lifetime.** Record each skeletal client entity's
   construction and destruction, classname/target identity where cheaply reachable,
   model/skin/body selection, origin and angles, and draw outcome, under a scoped generation

@@ -224,6 +224,15 @@
       "asm_count": 3000
     },
     {
+      "address": "1008f900",
+      "label": "c_baseanimating_get_studio_hdr",
+      "confidence": "confirmed",
+      "role": "Resolves the entity's studiohdr_t from the model cache; called with -1 for the entity's own model. The capture probe calls it rather than hooking it, so the skeletal streams name the same header the draw stream reads.",
+      "depth": 1,
+      "cap": 80,
+      "asm_count": 300
+    },
+    {
       "address": "100979b0",
       "label": "build_layered_pose",
       "confidence": "partial",

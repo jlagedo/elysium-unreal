@@ -63,6 +63,7 @@
         },
         {
           "semantic_label": "client.get_studio_hdr",
+          "source_function_label": "c_baseanimating_get_studio_hdr",
           "kind": "symbol",
           "backend": "none",
           "rva": "0x0008f900",

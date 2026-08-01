@@ -197,10 +197,16 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
   they enclose, and a third offline reader reports assignment coverage, bracket integrity,
   and whether the enclosing generation and the carried instance identity agree. Every record
   in a full run is assigned and the two attributions never disagree, so a pose group is
-  scoped by construction rather than by pointer lifetime. Open:
-  reproducing that on a second cutscene, joining the
-  observed source identities to the patch-first export/decoder stack, and
-  the resource-load and byte-span coverage that join needs. Editable raw byte-span recipes are added
+  scoped by construction rather than by pointer lifetime. A third stream censuses the models
+  themselves: one observation per sighting of a studio header at an address and one model
+  image per checksum, so the bytes a pose was decoded from survive the run and a captured
+  runtime pointer becomes a model-image offset. A fourth offline reader decodes those images
+  against the pipeline's own bone decoder and against the patch-first install, and proves the
+  runtime header is the `.mdl` image at offset 0 while naming the narrow ranges the loader
+  patches in place. Open:
+  reproducing the run on a second cutscene,
+  joining the observed source identities to the patch-first export/decoder stack, and
+  the byte-span coverage that join needs. Editable raw byte-span recipes are added
   only when the first mismatching stage needs them; there is no public
   compatibility surface or migration system.
   Detailed tasks and acceptance:
