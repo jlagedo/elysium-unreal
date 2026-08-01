@@ -183,13 +183,15 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
   classnames / 24,081 outputs**. → `docs/vtmb/entity_io.md`.
 - [x] **0.9 The uasset-bake architecture** — the world's *look* bakes offline into the gitignored
   `/ElysiumBaked` mount, everything else stays runtime-built. → `docs/architecture/uasset-bake-spike.md`. Residue handed on: **PL11**.
-- [~] **0.10 Retail animation RE instrument** — a private one-build launcher/probe
-  whose first intermediate goal is one hook-active `sp_theatre` run consolidated
-  into a queryable capture database: relevant resource loads, actor/model/skeleton
-  identity, every fired source animation contribution, BASE/FINL state, and final
-  matrices. The observed source identities join to the patch-first export/decoder
-  stack. Editable raw byte-span recipes are added only when the first mismatching
-  stage needs them; there is no public compatibility surface or migration system.
+- [~] **0.10 Retail animation RE instrument** — a private one-build launcher/probe.
+  It produces hook-active `sp_theatre` cutscene runs consolidated into one queryable
+  capture database per run, carrying actor/model/skeleton identity, every fired
+  source animation contribution, BASE/FINL state, and final matrices, bracketed by
+  the cutscene's own trigger and map-transition events. Open: joining the observed
+  source identities to the patch-first export/decoder stack, and the resource-load
+  and byte-span coverage that join needs. Editable raw byte-span recipes are added
+  only when the first mismatching stage needs them; there is no public
+  compatibility surface or migration system.
   Detailed tasks and acceptance:
   `docs/project/retail-capture-roadmap.md`.
 

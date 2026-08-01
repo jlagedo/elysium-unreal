@@ -125,7 +125,7 @@ that claims game behavior.
   waits before issuing `map sp_theatre`, so hooks arm before map resources load; on stop the
   temporary streams finalize transactionally into one SQLite file carrying module hashes,
   launch recipe, counts, failures, artifacts, and raw payloads. The recipe is implemented
-  and not yet exercised against the theatre; CAP1.1 is the run.
+  and exercised against the theatre; CAP1.1 records what it produced.
 - [x] **CAP0.5 Player-command experiment and source dictionary.** One unattended `howl` run
   proves the final-pose oracle; the patch-first player inventory preserves exact
   owner/sequence/animation identities and unknown descriptor bytes. Forced `player_sequence`
@@ -145,11 +145,12 @@ entities across 33 distinct character models, 42 dynamic props, 12 choreographed
 clips through 31 owner model files, so include-graph attribution is exercised on the first
 run rather than deferred.
 
-Uncompressed, a 72-bone actor costs roughly 7 KB per draw record and 2 KB per skeletal
-contribution record, so an unfiltered four-minute run at 30 fps projects into the low
-gigabytes. The existing 915 MB whole-theatre trace and its frame-file workflow already
-establish the storage and query problem. CAP1.2 replaces this projection with a
-measurement; CAP3.1 is the sanctioned response.
+Uncompressed and unfiltered, one captured cutscene costs **3.5 GB**: ~872,000 records over a
+~308 s span, split ~395,000 draw records and ~477,000 skeletal contribution records, across
+141 distinct runtime studio headers. Storage is therefore not the binding constraint at this
+scale. CAP1.2 turns the rest of the run report into the per-stream and per-actor rates that
+CAP2's filters and CAP3's storage design need; CAP3.1 stays the sanctioned response if a
+later, longer corpus makes volume bite.
 
 ## Priority and chronological order
 
@@ -163,13 +164,12 @@ measurement; CAP3.1 is the sanctioned response.
 | 6 | P1 | CAP6 — face and lips | The same loop over expression, flex, phoneme, and deformed-vertex state |
 | 7 | P2 | CAP7 — handoff and trim | Engine-neutral evaluator feeds Unreal; unused probes and readers are deleted |
 
-**The next and only current task is CAP1.1.**
+**The next and only current task is CAP1.2.**
 
 ## CAP1 — First theatre run and calibration
 
-The instrument is built; it has never been pointed at the theatre. Running it first is
-deliberate: every filter, budget, and schema decision below depends on numbers this run
-produces.
+The instrument has run against the theatre and holds two complete cutscene captures. Every
+filter, budget, and schema decision below is measured from them rather than estimated.
 
 `sp_theatre` is a cutscene from end to end: one arrival trigger starts it and it finishes by
 loading `sp_tutorial_1`, with no choice to make in between. A console `map` load spawns the
@@ -181,18 +181,22 @@ rather than by elapsed time: it stamps the trigger instant from the same perform
 the hook writes on every record, and it stops on the map transition. Analysis aligns two
 captures on the stamp, so a slow walk costs a longer idle prefix and nothing else.
 
-- [ ] **CAP1.1 First theatre acquisition.** Build the native tools, install the inert cfg,
-  launch the exact retail build with the probe armed before `sp_theatre` loads, capture the
-  cutscene from the arrival trigger to the map transition, and finalize one SQLite database.
-  *Acceptance:* the hook reports clean completion with zero drops, no stream carries an
-  incomplete tail, the console log carries every recipe marker, the report stamps the trigger
-  instant, and the run stops on the observed transition out of `sp_theatre` rather than on its
-  duration backstop.
-- [ ] **CAP1.2 Calibration measurement.** From that one database report record and byte
+- [x] **CAP1.1 First theatre acquisition.** `uv run elysium research capture_theatre` builds the
+  native tools, installs the inert cfg, launches the exact retail build with the probe armed
+  before `sp_theatre` loads, captures the cutscene from the arrival trigger to the map
+  transition, and finalizes one SQLite database. Two runs each carry ~872,000 records over a
+  ~308 s span with **zero drops and no incomplete tail**, all four binary profiles matched,
+  every recipe marker present, no level-script traceback, and a stop on the observed
+  `sp_tutorial_1` transition rather than the duration backstop. The two record counts differ by
+  0.07%, so the cutscene is reproducible enough to diff against the decoder.
+- [ ] **CAP1.2 Calibration measurement.** From the captured runs report record and byte
   rates per stream, queue and disk high-water marks, dropped/truncated/unreadable counts,
   distinct runtime studio headers with their model identity and bone counts, distinct
-  client entities, per-actor record rates, and capture span against wall clock. This
-  measurement is the input to CAP2's filters and CAP3's storage design.
+  client entities, per-actor record rates, and capture span against wall clock. Derive the
+  trigger instant from the stream — the `SetModel` batch the arrival trigger fires lands
+  within 0.15 s of the console stamp and is frame-exact — and report the two runs against
+  each other on that zero. This measurement is the input to CAP2's filters and CAP3's
+  storage design.
 - [ ] **CAP1.3 Entity-pointer join verification.** Determine whether the draw stream's
   render-info entity field and the skeletal streams' instance pointer occupy one pointer
   space, and report the distribution of their difference per model. A single constant delta
@@ -376,4 +380,4 @@ needs it.
 | One final pose hides multiple contributors | Record every evaluator call and group contributions under the enclosing pose-build generation |
 | Render visibility omits an actor | Distinguish fired evaluation, completed pose build, and final draw coverage instead of treating no draw as no animation |
 | Raw evidence becomes difficult to query | Keep records self-bounded and add a disposable index only for a demonstrated slow query |
-| Infrastructure expands faster than evidence | The chronological order is binding and CAP1.1 is the only current task |
+| Infrastructure expands faster than evidence | The chronological order is binding and only one task is current at a time |
