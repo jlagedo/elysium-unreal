@@ -55,6 +55,24 @@
     },
     {
       "confidence": "confirmed",
+      "fact": "C_BaseAnimating::SetupBones is __thiscall with five callee-cleaned dword stack arguments, and its first five prologue bytes are one complete instruction with no relative operand.",
+      "evidence": "All four exits at 0x10091a2d, 0x10091a50, 0x100920cc and 0x100921cc are RET 0x14; 0x100919c0 is b830270000 (MOV EAX,0x2730) ahead of the _chkstk call at 0x101d0f00, and no instruction in the function branches to 0x100919c0-0x100919c4.",
+      "consequence": "The callee independently confirms the five arguments engine.dll stages, and the target takes an inline detour on the same shared backend as build_transformations without prologue relocation risk."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "C_BaseAnimating::SetupBones receives the IClientRenderable subobject as this and adjusts down four bytes to reach the C_BaseAnimating, so its this equals the entity value the draw stream stores.",
+      "evidence": "0x100919d6 moves ECX into EDI and 0x100919ea computes LEA ESI,[EDI-0x4] before dispatching on ESI; one theatre capture records the SetupBones bracket entity equal to the DrawModel render-info entity on every draw that resolved a bracket.",
+      "consequence": "This is CAP1.3's +4 seen from the other end: the skeletal evaluators run on the C_BaseAnimating while the renderable interface, the draw field, and SetupBones all share the subobject address, so a pose build joins a draw at delta zero and an evaluation at delta four."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "C_BaseAnimating::InternalDrawModel is __thiscall with two callee-cleaned dword stack arguments, and its first five prologue bytes are three complete instructions with no relative operand.",
+      "evidence": "All five exits at 0x10092983, 0x100929b4, 0x100929cc, 0x100932e9 and 0x1009335f are RET 0x8; 0x10092970 is 83ec7c5356 (SUB ESP,0x7c; PUSH EBX; PUSH ESI), and no instruction in the function branches to 0x10092970-0x10092974.",
+      "consequence": "The outer draw frame takes an inline detour on the same shared backend as resolve_virtual_model_pose, so a pose build and the StudioRender draw it feeds can be bracketed under one enclosing generation."
+    },
+    {
+      "confidence": "confirmed",
       "fact": "C_BaseAnimating::InternalDrawModel submits the client renderable through VEngineModel006 slot +0x8.",
       "evidence": "client.dll 0x10092f18-0x10092f51; VEngineModel006 acquisition at 0x100cb5e7-0x100cb5f3.",
       "consequence": "The downstream SetupBones callback and palette application continue in engine.dll and StudioRender.dll, tracked by the companion specifications."

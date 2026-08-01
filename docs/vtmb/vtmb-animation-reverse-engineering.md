@@ -1045,7 +1045,126 @@ Use the existing shared hook backend while it handles the validated boundary.
 Replace it only when a concrete retail target demonstrates a relocation or
 lifecycle failure.
 
-### 9.11 What not to do first
+### 9.11 Joining the draw and skeletal streams
+
+The armed hooks express actor identity in two different terms. The draw hook on
+`CStudioRender::DrawModel` records the field the render info carries at `+0x18`.
+The skeletal hooks on `resolve_virtual_model_pose` and
+`C_BaseAnimating::BuildTransformations` record their own `this`. The two sets
+never share a value, so a naive join finds nothing.
+
+They are nevertheless **one pointer space** (Verified). The render-info field is
+the `C_BaseAnimating` instance pointer **plus 4**: the draw side holds an
+interface subobject four bytes into the instance, and subtracting four recovers
+the instance. The `studio_hdr` pointers coincide across the streams already,
+because both read the same model-cache header.
+
+A third term settles which subobject that is (Verified). The engine reaches
+`C_BaseAnimating::SetupBones` through `IClientRenderable` slot `+0x3c`, so the
+`this` it receives is the interface subobject rather than the instance, and the
+function adjusts down to the instance itself before using it. That adjustment is
+visible in the prologue, and the captured value matches the draw field exactly
+on every draw whose frame built a pose. The relation is therefore one object
+seen from three places: the renderable interface, the draw record's entity
+field, and `SetupBones` all carry the same address, while the skeletal
+evaluators carry that address minus four.
+
+Establish a relation like this from **identity, never from time**. A per-frame
+stream makes almost any pairing look plausible in time, so a timestamp
+correlation cannot distinguish a real relation from a coincidence. The method
+that does:
+
+- group both streams by model checksum and keep the checksums present in both;
+- take the pairwise differences within each group and keep only the differences
+  that hold across *every* shared group;
+- require the surviving difference to resolve *every* skeletal instance to a
+  drawn entity;
+- repeat over independent runs, and check that the runs do not share instance
+  addresses — a difference that repeats while addresses do not is a fixed offset
+  in the object, whereas one that repeats because the heap did is nothing.
+
+Three complete `sp_theatre` captures each yield the same −4 across 39 shared
+models, resolving all 49 skeletal instances, while sharing zero instance
+addresses between runs. Address alignment corroborates it with no pairing at
+all: every draw-side value sits four above an eight-aligned address, and every
+skeletal value is eight-aligned. No `DrawModel` argument and neither the
+render-info nor the studio-header pointer carries the instance pointer, so the
++4 relation is the only route between the streams.
+
+Two bounds travel with the join, and both are properties of the engine rather
+than of the capture:
+
+- **A skeletal actor need not be drawn under the model it animates under.** One
+  theatre doppelganger animates two instances under its own model and draws the
+  second under a different one, so a per-model bijection fails where the global
+  pointer relation holds. Coverage is the test; per-model symmetry is not.
+- **An instance address can serve more than one model inside a single run.** Ten
+  addresses do so per theatre run, so a raw-address join is valid only inside an
+  address's lifetime. Scoped construction/destruction records and a generation
+  identity are what make it safe across reuse; see §9.10.
+
+### 9.12 Grouping records by pose build
+
+A pointer relation says which records concern the same actor. It does not say
+which of that actor's records belong to the *same* construction of its pose, and
+one final pose can hide several contributors. The grouping key is a generation:
+a counter allocated when a bracketed frame is entered, held on a per-thread
+stack, and stamped on every record produced inside it.
+
+Three frames are bracketed: the client's `SetupBones`, and both engine frames
+that submit a studio draw. A draw frame and the pose build inside it are
+**siblings rather than parent and child** (Verified). An engine draw frame
+obtains the bone buffer, calls the client's `SetupBones` through the renderable
+interface, and only then submits the draw, so the pose build has already closed
+by the time `CStudioRender::DrawModel` runs. Decoded locals and composed locals
+nest inside the pose build exactly; a draw does not nest inside it at all, and
+must be related to it rather than contained by it.
+
+Bracketing one draw frame is not enough. Two engine frames submit studio draws —
+`CModelRender::DrawModel` and `CModelRender::DrawModelShadow` — and they are
+siblings, so the same actor is drawn on both within a frame. The two are
+enumerated exhaustively in `animation_and_movers.md` → "Exactly two engine frames
+submit a studio draw"; that the set is closed is what lets an unenclosed draw be
+read as an instrument fault rather than an unknown path.
+
+What one complete `sp_theatre` capture establishes:
+
+- **Every record carries a generation.** All 1,693,202 of them, with none
+  unassigned, across 820,827 generations.
+- **A pose build covers exactly one entity.** Across 419,700 pose builds, no
+  generation spans several entities and none carries an evaluation naming
+  another entity, so a composed pose and its contributing evaluations share one
+  generation.
+- **Brackets are well formed.** No record names a missing bracket, no bracket
+  has a missing parent, no span is inverted, no evaluation falls outside its
+  bracket's span, and none crosses a thread.
+- **Both engine frames carry real traffic.** 236,041 ordinary draw frames against
+  165,086 shadow frames.
+- **`SetupBones` runs far more often than it builds a pose.** 181,751 of 419,700
+  calls produce no evaluation at all, which is consistent with a bone cache
+  satisfying a second call for an actor already posed this frame.
+- **A draw frame does not always build a pose.** 146,247 of 395,785 draws are
+  submitted by a frame that produced no pose build, for the same reason. Such a
+  draw is reported as having no pose build rather than being attributed to an
+  earlier one.
+
+Attribution is confirmed twice over: the enclosing generation and the
+independently carried instance identity agree on all 249,538 draws whose frame
+built a pose, with no disagreement. Two independently derived attributions that
+never contradict each other is what makes the grouping evidence rather than
+convention; a single derivation could not detect its own failure.
+
+The instrument states the same result before any query runs — the hook's own
+counters report zero unbracketed records, zero bracket overflows and zero drops —
+and the byte-closure self-check reproduces both stream sizes exactly from record
+kind and bone count, with a dense global sequence.
+
+Bracketing is not free. Bracket records are 48.5% of all records for roughly 1.4%
+of the bytes, and the drain queue's high-water mark rises from 82 to 178 against
+a mean of 8.3 MB/s (baseline 8.1) and a peak second of 22.1 MB (baseline 21.4).
+Nothing was dropped, but the queue is the headroom that would go first.
+
+### 9.13 What not to do first
 
 Avoid:
 
@@ -1577,6 +1696,14 @@ Reverse-engineering experiments often coexist with unrelated animation work. Pre
 | Later Source `SetupBones` behavior applies unchanged | Hypothesis only | Architectural similarity | VTMB disassembly/capture |
 | Final D3D9 constants can help locate the palette | Strong technical basis | D3D9 API and common skinning layout | VTMB-specific trace |
 | Final CPU matrices are the best runtime oracle | Recommendation | They collapse many unknown intermediate stages | Implement and validate hook |
+| Render info `+0x18` is the `C_BaseAnimating` instance plus 4 | Verified | Three complete `sp_theatre` captures: the same −4 across 39 shared models resolving all 49 instances, with no instance address shared between runs, plus draw-side values four above an eight-aligned address | None for actor identity; instance reuse still needs a scoped generation |
+| `SetupBones` receives the same interface subobject the draw field stores | Verified | Its prologue adjusts `this` down four bytes to reach the instance, and the captured bracket entity equals the draw entity on every draw whose frame built a pose | None |
+| A pose build covers exactly one entity | Verified | One complete `sp_theatre` capture: across 237,929 composed poses no generation spans several entities or carries an evaluation naming another | None |
+| One draw frame encloses every draw of an actor | Contradicted | The same entity is drawn 793 times inside a `CModelRender::DrawModel` frame and 7,632 times outside one; 31 of 141 drawn models appear on both paths | None — the second path is `CModelRender::DrawModelShadow`, and two frames are now bracketed |
+| Exactly two engine frames submit a studio draw | Verified | Only `engine.dll` and `StudioRender.dll` hold `TStudioRender012`; its single global `0x20d63ef0` is read 72 times in `engine.dll`, and following each read to the vtable register it feeds finds slot `+0x58` called at `0x200a6221` and `0x200a6ce4` only | None |
+| Every studio draw is enclosed by a bracket | Verified | One complete `sp_theatre` capture: all 1,693,202 records carry a generation, with the hook's own counters reporting zero unbracketed records | Reproduction on a second cutscene |
+| The shadow frame builds its own pose | Verified | `CModelRender::DrawModelShadow` calls the same renderable slot `+0x3c` at `0x200a6c7b`, and the capture records 165,086 shadow frames | None |
+| `SetupBones` argument five is a required output pointer | Contradicted | The shadow frame passes `NULL` where `CModelRender::DrawModel` passes the address of a stack local | What the callee writes through it when non-null |
 
 ---
 

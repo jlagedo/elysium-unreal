@@ -117,10 +117,10 @@ that claims game behavior.
   activates only matching profiles.
 - [x] **CAP0.2 Hook mechanics.** Validated vtable and instruction-aware inline backends,
   worker-thread writer, failure accounting, supervision, and synthetic lifecycle coverage.
-- [x] **CAP0.3 Three armed hooks.** `CStudioRender::DrawModel` yields bone-to-world plus
-  skin palette; `resolve_virtual_model_pose` yields decoded locals and the selected-bone
+- [x] **CAP0.3 The three evaluation hooks.** `CStudioRender::DrawModel` yields bone-to-world
+  plus skin palette; `resolve_virtual_model_pose` yields decoded locals and the selected-bone
   mask; `C_BaseAnimating::BuildTransformations` yields composed locals and the root/entity
-  transform.
+  transform. CAP2.1's three bracket hooks are armed beside them.
 - [x] **CAP0.4 One-run database boundary.** The theatre recipe installs one inert cfg that
   waits before issuing `map sp_theatre`, so hooks arm before map resources load; on stop the
   temporary streams finalize transactionally into one SQLite file carrying module hashes,
@@ -145,31 +145,38 @@ entities across 33 distinct character models, 42 dynamic props, 12 choreographed
 clips through 31 owner model files, so include-graph attribution is exercised on the first
 run rather than deferred.
 
-Uncompressed and unfiltered, one captured cutscene costs **3.5 GB**: ~872,000 records over a
-~308 s span, split ~395,000 draw records and ~477,000 skeletal contribution records, across
-141 distinct runtime studio headers. Storage is therefore not the binding constraint at this
-scale. CAP1.2 turns the rest of the run report into the per-stream and per-actor rates that
-CAP2's filters and CAP3's storage design need; CAP3.1 stays the sanctioned response if a
-later, longer corpus makes volume bite.
+Uncompressed and unfiltered, one captured cutscene costs **3.5 GB** before the CAP2.1
+brackets: ~872,000 records over a ~308 s span, split ~396,000 draw records and ~477,000
+skeletal contribution records, across 141 distinct runtime studio headers and 416 client
+entities. Mean throughput is **8.1 MB/s** and the peak second is **21.4 MB**, so a filter
+budget sized on the mean is 2.7× short.
+
+The brackets cost record count rather than volume. They raise one cutscene to **1,693,202**
+records and a **3.7 GB** database, but only to **8.3 MB/s** mean and a **22.1 MB** peak
+second, because a bracket record carries no bone payload — 48% of the records for roughly
+1.4% of the bytes. The writer absorbs it, though the queue high-water rises from **82** to
+**178**, so a third of the drain headroom is now spent and the queue is what would go first.
+Storage is not the binding constraint at this scale; CAP3.1 stays the sanctioned response if
+a later, longer corpus makes volume bite.
 
 ## Priority and chronological order
 
 | Order | Priority | Phase | Outcome |
 |---:|---|---|---|
-| 1 | P0 — current | CAP1 — first run and calibration | The instrument that exists produces one finalized `sp_theatre` database, and its measured rates, counts, and joins replace every estimate |
-| 2 | P0 | CAP2 — complete the capture | Contributions group, actors and skeletons are identified, and every fired contribution names its source owner, indices, and consumed byte spans |
+| 1 | P0 — done | CAP1 — first run and calibration | The instrument that exists produces one finalized `sp_theatre` database, and its measured rates, counts, and joins replace every estimate |
+| 2 | P0 — current | CAP2 — complete the capture | Contributions group, actors and skeletons are identified, and every fired contribution names its source owner, indices, and consumed byte spans |
 | 3 | P0 | CAP3 — decode and index | One deduplicated, compressed, joinable database answers per-actor and per-time questions without re-running the game |
 | 4 | P0 | CAP4 — inspect against export and decoder | Byte ranges the runtime reads that we do not, and the first mismatching stage and bone per pose group |
 | 5 | P1 | CAP5 — close what the difference proves | Recovered rules, each with a regression and a fact in the owning topic |
 | 6 | P1 | CAP6 — face and lips | The same loop over expression, flex, phoneme, and deformed-vertex state |
 | 7 | P2 | CAP7 — handoff and trim | Engine-neutral evaluator feeds Unreal; unused probes and readers are deleted |
 
-**The next and only current task is CAP1.2.**
+**The next and only current task is CAP2.2.**
 
 ## CAP1 — First theatre run and calibration
 
-The instrument has run against the theatre and holds two complete cutscene captures. Every
-filter, budget, and schema decision below is measured from them rather than estimated.
+The instrument holds three complete cutscene captures. Every filter, budget, and schema
+decision below is measured from them rather than estimated.
 
 `sp_theatre` is a cutscene from end to end: one arrival trigger starts it and it finishes by
 loading `sp_tutorial_1`, with no choice to make in between. A console `map` load spawns the
@@ -178,30 +185,80 @@ every stage after it is authored.
 
 That walk lands at a different moment every run, so the run is bracketed by its own events
 rather than by elapsed time: it stamps the trigger instant from the same performance counter
-the hook writes on every record, and it stops on the map transition. Analysis aligns two
-captures on the stamp, so a slow walk costs a longer idle prefix and nothing else.
+the hook writes on every record, and it stops on the map transition. Analysis aligns captures
+on a zero derived from the stream itself and uses the console stamp only to confirm it, so a
+slow walk costs a longer idle prefix and nothing else.
 
 - [x] **CAP1.1 First theatre acquisition.** `uv run elysium research capture_theatre` builds the
   native tools, installs the inert cfg, launches the exact retail build with the probe armed
   before `sp_theatre` loads, captures the cutscene from the arrival trigger to the map
-  transition, and finalizes one SQLite database. Two runs each carry ~872,000 records over a
+  transition, and finalizes one SQLite database. Three runs each carry ~872,000 records over a
   ~308 s span with **zero drops and no incomplete tail**, all four binary profiles matched,
   every recipe marker present, no level-script traceback, and a stop on the observed
-  `sp_tutorial_1` transition rather than the duration backstop. The two record counts differ by
-  0.07%, so the cutscene is reproducible enough to diff against the decoder.
-- [ ] **CAP1.2 Calibration measurement.** From the captured runs report record and byte
-  rates per stream, queue and disk high-water marks, dropped/truncated/unreadable counts,
-  distinct runtime studio headers with their model identity and bone counts, distinct
-  client entities, per-actor record rates, and capture span against wall clock. Derive the
-  trigger instant from the stream — the `SetModel` batch the arrival trigger fires lands
-  within 0.15 s of the console stamp and is frame-exact — and report the two runs against
-  each other on that zero. This measurement is the input to CAP2's filters and CAP3's
-  storage design.
-- [ ] **CAP1.3 Entity-pointer join verification.** Determine whether the draw stream's
-  render-info entity field and the skeletal streams' instance pointer occupy one pointer
-  space, and report the distribution of their difference per model. A single constant delta
-  makes the existing streams joinable as they are; anything else makes CAP2.1 the only
-  join, and says so in the report rather than silently correlating by timestamp.
+  `sp_tutorial_1` transition rather than the duration backstop. Their record counts span
+  **0.16%**, so the cutscene is reproducible enough to diff against the decoder.
+- [x] **CAP1.2 Calibration measurement.** `uv run elysium research calibrate_theatre_capture
+  <session>…` reads a finalized database read-only and reports identity and integrity, rates
+  and volume, the model/header/actor census, the derived run zero, and a cross-run comparison.
+  The measured baseline, per complete run: **8.1 MB/s** mean and a **21.4 MB** peak second;
+  **141** distinct runtime studio headers over 1–96 bones, of which 29 carry more than 20;
+  **367** draw and **49** skeletal client entities; **60** distinct studio sequences; a
+  per-actor draw rate spanning **10 rec/s** at the median to **75 rec/s** at the top, so the
+  busiest actor is drawn about 2.5× per simulation step; and 1.40× SQLite inflation over the
+  raw streams. Record size is a closed form of the bone count, and summing it reproduces each
+  stream's file size exactly, so byte accounting is self-checking. The global sequence counter
+  is dense with no gaps or duplicates in every run, which proves independently of the hook's
+  own counters that nothing was lost between emission and flush. The run zero is derived from
+  the stream — the first frame after the map-load batch in which two or more unseen
+  `character/pc` models are drawn, which is `chooseSire()`/`castUnderstudy()` — and the console
+  stamp is a cross-check the report accepts or rejects rather than a source of truth. A sound
+  stamp trails the derived zero by **0.15–0.22 s**, because the console line is written when
+  the trigger's script output fires and the cast is drawn a few frames later; a stamp matched
+  against a stale console log is tens of seconds out and is rejected. On the derived zero the
+  three runs place the courtroom batch within **0.12 s** of each other at 64.6 s.
+
+  The hook accounts for its own writer: a queue depth high-water, a skipped counter for
+  callbacks reaching no readable header or pose buffer, a filtered counter for the configured
+  checksum filter, and a written-byte total. The finalizer archives `boundary.json` and
+  `console.log`, so the run zero and the console evidence travel inside the database.
+  Measured: queue high-water **82** records, **zero** skipped, **zero** filtered, and a
+  written-byte total agreeing with the finalized stream sizes to the byte.
+
+  Wall-clock span is an operating point of the machine, not a property of the cutscene.
+  `host_framerate` pins the simulation step rather than the wall clock, so a slower render
+  stretches the same authored sequence over more wall time without changing which step fires
+  or what it draws. The pinned rate is **29.3** steps per second; an unfocused game window
+  halves it to **16.3**, which stretches the cutscene from ~308 s to ~553 s. Only runs that
+  reached the transition are compared on span, and every per-second rate in this tracker is
+  quoted at the pinned rate.
+- [x] **CAP1.3 Entity-pointer join verification.** `uv run elysium research
+  verify_entity_pointer_join <session>…` reads a finalized database read-only and reports
+  pointer-space geometry, a cross-field sweep of every pointer the draw record already
+  carries, the per-model difference distribution, the verdict, and a cross-run comparison.
+  The two streams are **one pointer space**: the draw stream's render-info entity field is
+  the skeletal instance pointer **plus 4**. That difference is the only one holding across
+  all **39** shared models, and it resolves **49 of 49** skeletal instance pointers to a
+  drawn entity in every run. The three runs share **zero** instance addresses yet produce
+  the same **−4**, so it is a fixed offset inside the object rather than a heap coincidence
+  — the draw side stores an interface subobject 4 bytes into the `C_BaseAnimating`. Address
+  alignment corroborates it without any pairing at all: every draw-side value is 4 above an
+  8-aligned address (328 at `0x…4`, 39 at `0x…c`) while every skeletal value is 8-aligned.
+
+  The delta is derived from model identity alone. Timing appears only as a labelled
+  diagnostic — all 53 matched pairs overlap in lifetime — and no pairing in the report comes
+  from a timestamp. None of the five raw `DrawModel` arguments and neither the render-info
+  nor `studio_hdr` pointer carries the instance pointer, so the +4 relation is the only
+  route between the streams.
+
+  Two bounds travel with the join. **49 of 367** drawn entities have a skeletal counterpart;
+  the remaining 318 are drawn without any skeletal evaluation. And **10** addresses served
+  more than one model checksum inside a single run, so the join holds only inside an
+  address's lifetime. One model group is lopsided —
+  `character/npc/common/doppleganger/doppleganger_male.mdl` animates two actors and draws
+  one under that model, while the second resolves to a draw under a different model. That
+  is model attribution, not a pointer-space failure. The engine fact and the method that
+  establishes a relation like it are owned by
+  `docs/vtmb/vtmb-animation-reverse-engineering.md`.
 
 ## CAP2 — Complete the capture
 
@@ -209,10 +266,38 @@ Each task adds the smallest hook or span that closes one named gap in CAP1's rep
 Targets whose prototype confidence is still partial get a Ghidra pass pinning arguments and
 calling convention into the case specification before a hook is written.
 
-- [ ] **CAP2.1 Pose-build generation identity.** Bracket the confirmed `SetupBones` entry
+- [x] **CAP2.1 Pose-build generation identity.** Bracket the confirmed `SetupBones` entry
   and exit with a per-thread generation counter and stamp it on every nested record.
   *Acceptance:* every composed-pose record and its contributing evaluations for one entity
   share one generation, and no record in a full run is unassigned.
+
+  Three frames are bracketed on entry and exit — `C_BaseAnimating::SetupBones` in the
+  client, and both engine frames that submit a studio draw, `CModelRender::DrawModel` and
+  `CModelRender::DrawModelShadow` — each opening a generation on a per-thread stack that
+  every nested record carries. `uv run elysium research verify_pose_build_generation
+  <session>…` reads a finalized database read-only and reports assignment coverage, bracket
+  integrity, the per-entity statement, the attribution cross-check, and the bracket cost.
+
+  One complete cutscene carries **1,693,202** records across **820,827** generations with
+  **zero** drops, skipped and filtered records, **zero** unbracketed records and **zero**
+  bracket overflow, exact byte closure, a dense sequence counter, and a stop on the observed
+  transition. Every record is assigned; across **419,700** pose builds no generation spans
+  several entities or carries an evaluation naming another; all five integrity checks are
+  zero. The enclosing generation and the independently carried instance identity agree on
+  **249,538 of 249,538** draws whose frame built a pose, with no disagreement, which is what
+  makes the grouping evidence rather than convention.
+
+  Two engine frames were needed because the same actor is drawn on both, and the shadow
+  frame reaches the studio draw without passing through the ordinary one. That the two are
+  the *complete* set is what lets an unenclosed draw be read as a missing hook; the engine
+  fact and its evidence are owned by `docs/vtmb/animation_and_movers.md`, the grouping
+  method and its measurements by `docs/vtmb/vtmb-animation-reverse-engineering.md`.
+
+  Two measured facts bound what the generation can be asked. **146,247 of 395,785** draws
+  are submitted by a frame that built no pose, and **181,751 of 419,700** `SetupBones` calls
+  produce no evaluation — both consistent with a bone cache answering a second call for an
+  actor already posed this frame. Such a draw is reported as having no pose build rather
+  than being attributed to an earlier one. Reproduction on a second cutscene is CAP2.7.
 - [ ] **CAP2.2 Model and skeleton census.** Once per distinct runtime studio header record
   model path, checksum, bone count, bone names/parents/flags, bind locals, inverse binds,
   and the header span itself; reference it from later events rather than repeating it.
@@ -370,9 +455,10 @@ needs it.
 
 | Risk | Response |
 |---|---|
-| The operator reaches the arrival trigger at a different moment every run | Bracket the cutscene on its own events: stamp the trigger instant from the shared performance counter, stop on the map transition, and align analysis on the stamp rather than on elapsed time |
-| Draw and skeletal records occupy different pointer spaces | CAP1.3 measures it before any analysis depends on the join; CAP2.1 removes the dependency |
-| Capture volume overwhelms memory or disk | Stream with a hard queue-byte cap, filter first, measure, then apply one triggered optimization |
+| The operator reaches the arrival trigger at a different moment every run | Bracket the cutscene on its own events: derive the zero from the casting batch in the stream, stop on the map transition, and treat the console stamp as a cross-check the calibration may reject |
+| The same cutscene occupies different wall-clock spans on different runs | `host_framerate` pins the simulation step, so a slower render stretches wall time without changing what fires. An unfocused game window halves the rate, and the engine exposes no cvar or launch switch to stop it, so the operator keeps the window focused and the backstop covers the throttled rate with margin; only runs that reached the transition are compared on span |
+| Draw and skeletal records occupy different pointer spaces | Measured: they are one space separated by a fixed +4, so the streams join on actor identity as they are. Pointer reuse still bounds that join to an address's lifetime; CAP2.1's generation scopes every record in a run, so the join no longer rests on an address alone |
+| Capture volume overwhelms memory or disk | The writer queue reports its depth high-water and the hook reports its written bytes; filter first, measure, then apply one triggered optimization |
 | A decoder matches common cases but loses rare flags | CAP2.5 and CAP4.2 make unread bytes visible instead of inferring correctness from a matching pose |
 | Instrumentation changes game timing | Measure callback and frame time; narrow or sample before adding machinery |
 | A stale pointer crashes the game | Validate pages, cap reads, catch faults, report failures, and fail closed |

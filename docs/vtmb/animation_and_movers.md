@@ -491,6 +491,50 @@ StudioRender.dll CStudioRender::DrawModel (0x2c004f00)
   -> mesh branch and specialized vertex dispatch
 ```
 
+#### Exactly two engine frames submit a studio draw
+
+The chain above is one of them. The other is the shadow pass, entered from the
+client shadow manager rather than from `C_BaseAnimating`:
+
+```text
+client.dll shadow manager (call site 0x100d7bc5)
+  -> VEngineModel006 +0x44
+engine.dll CModelRender::DrawModelShadow (0x200a6990)
+  -> VEngineModel006 +0x34 -> TStudioRender012 +0x40: obtain bone buffer
+  -> IClientRenderable +0x3c: SetupBones, fifth argument NULL
+  -> TStudioRender012 +0x58            (0x200a6ce4, no RenderModel)
+StudioRender.dll CStudioRender::DrawModel (0x2c004f00)
+```
+
+The two frames are siblings: `CModelRender::RenderModel` has one direct caller,
+`0x200a6945` inside `CModelRender::DrawModel`, and no vtable slot holds it, so
+the shadow frame cannot reach the studio draw through it.
+
+**The set of routes is closed, not merely enumerated.** Only `engine.dll` and
+`StudioRender.dll` contain the string `TStudioRender012`, so no other module
+holds the interface. Inside `engine.dll` the pointer lives in one global,
+`0x20d63ef0`, written only by its acquisition at `0x200a5a40` and cleared at
+`0x200a5aa1`; following every one of the 72 reads of that global to the vtable
+register it feeds yields slot `+0x58` at `0x200a6221` and `0x200a6ce4` and
+nowhere else. A studio draw that neither frame encloses would therefore be a
+missing hook rather than an unknown path.
+
+The shadow frame builds its own pose through the same renderable slot `+0x3c`,
+staging the bone buffer, boneMask `0x15e` and an LOD-shifted maxBones exactly as
+the ordinary frame does. It differs in one argument: where
+`CModelRender::DrawModel` passes the address of a stack local as the fifth
+argument (`0x200a68a7`), the shadow frame passes `NULL` (`0x200a6c5b`). That
+argument is therefore an optional caller-supplied pointer; what the callee writes
+through it is still unknown.
+
+`CModelRender::DrawModelShadow` is `__thiscall` with four callee-cleaned dword
+arguments and no return value — both exits, `0x200a6e1f` and `0x200a6e52`, are
+`RET 0x10` with `EAX` untouched.
+
+Which of the two frames a given draw belongs to, and how the capture proves it,
+are owned by `vtmb-animation-reverse-engineering.md` → "Grouping records by pose
+build".
+
 The `TStudioRender012` object uses vtable `0x2c06c150`. Slot `+0x40`
 (`0x2c004a20`) returns its `this+0x5c` buffer, which engine passes as the output
 argument to client `SetupBones`. Before drawing, `0x2c004e10` loops all studio

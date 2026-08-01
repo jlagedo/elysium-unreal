@@ -13,9 +13,15 @@ from typing import BinaryIO, Iterator
 
 
 POSE_FILE_HEADER = struct.Struct("<8sIIQqIIIII65s11s")
-POSE_RECORD_HEADER = struct.Struct("<4sIQqIIIIII5I64s")
-ANIMATION_FILE_HEADER = struct.Struct("<8sIIQqIIIII65s11s")
-ANIMATION_RECORD_HEADER = struct.Struct("<4sIQqIIIIIiffi2I")
+POSE_RECORD_HEADER = struct.Struct("<4sIQqIIIIII5I64s3I")
+ANIMATION_FILE_HEADER = struct.Struct("<8sIIQqIIIII65sII3s")
+ANIMATION_RECORD_HEADER = struct.Struct("<4sIQqIIIIIiffi4I")
+BRACKET_RECORD_HEADER = struct.Struct("<4sIQqqIIIII9I")
+# Streams captured before the pose-build generation existed. Their records are
+# narrower and carry no generation, so the reader picks the header by stream
+# version and those columns stay NULL.
+POSE_RECORD_HEADER_V2 = struct.Struct("<4sIQqIIIIII5I64s")
+ANIMATION_RECORD_HEADER_V2 = struct.Struct("<4sIQqIIIIIiffi2I")
 MAXIMUM_BONES = 1024
 
 
@@ -40,112 +46,159 @@ def read_key_values(path: Path) -> dict[str, str]:
 
 def _read_record(
     stream: BinaryIO,
-    header: struct.Struct,
-) -> tuple[bytes, bytes] | bytes | None:
-    raw_header = stream.read(header.size)
-    if not raw_header:
+    headers: dict[bytes, struct.Struct],
+) -> tuple[bytes, bytes, struct.Struct] | bytes | None:
+    """Read one record, choosing its header layout by magic.
+
+    Magic and record length sit at the same offset in every record type, so
+    one stream can carry differently shaped records and still be read without
+    reconstructing where the boundaries are.
+    """
+    prefix = stream.read(8)
+    if not prefix:
         return None
-    if len(raw_header) != header.size:
-        return raw_header
-    record_bytes = struct.unpack_from("<I", raw_header, 4)[0]
-    if record_bytes < header.size:
-        return raw_header + stream.read()
+    if len(prefix) != 8:
+        return prefix
+    magic, record_bytes = struct.unpack("<4sI", prefix)
+    header = headers.get(magic)
+    if header is None or record_bytes < header.size:
+        return prefix + stream.read()
+    remainder = stream.read(header.size - 8)
+    if len(remainder) != header.size - 8:
+        return prefix + remainder
+    raw_header = prefix + remainder
     payload = stream.read(record_bytes - header.size)
     if len(payload) != record_bytes - header.size:
         return raw_header + payload
-    return raw_header, payload
+    return raw_header, payload, header
 
 
 def _pose_records(
     stream: BinaryIO,
+    *,
+    generations: bool,
 ) -> Iterator[tuple[dict[str, object], bytes, bytes] | bytes]:
+    header = POSE_RECORD_HEADER if generations else POSE_RECORD_HEADER_V2
     while True:
-        record = _read_record(stream, POSE_RECORD_HEADER)
+        record = _read_record(stream, {b"POSE": header})
         if record is None:
             return
         if isinstance(record, bytes):
             yield record
             return
-        raw_header, payload = record
-        fields = POSE_RECORD_HEADER.unpack(raw_header)
+        raw_header, payload, _ = record
+        fields = header.unpack(raw_header)
         bone_count = int(fields[8])
-        expected_bytes = POSE_RECORD_HEADER.size + bone_count * 12 * 4 * 2
+        expected_bytes = header.size + bone_count * 12 * 4 * 2
         if (
-            fields[0] != b"POSE"
-            or bone_count < 1
+            bone_count < 1
             or bone_count > MAXIMUM_BONES
             or int(fields[1]) != expected_bytes
         ):
             yield raw_header + payload + stream.read()
             return
-        yield (
-            {
-                "kind": "POSE",
-                "sequence_number": int(fields[2]),
-                "qpc": int(fields[3]),
-                "thread_id": int(fields[4]),
-                "studio_hdr": int(fields[5]),
-                "client_entity": int(fields[6]),
-                "checksum": int(fields[7]),
-                "bone_count": bone_count,
-                "model_info": int(fields[9]),
-                "draw_arguments": json.dumps([int(value) for value in fields[10:15]]),
-                "model_name": fields[15].split(b"\0", 1)[0].decode(
-                    "ascii", "replace"
-                ),
-            },
-            raw_header,
-            payload,
-        )
+        values: dict[str, object] = {
+            "kind": "POSE",
+            "sequence_number": int(fields[2]),
+            "qpc": int(fields[3]),
+            "thread_id": int(fields[4]),
+            "studio_hdr": int(fields[5]),
+            "client_entity": int(fields[6]),
+            "checksum": int(fields[7]),
+            "bone_count": bone_count,
+            "model_info": int(fields[9]),
+            "draw_arguments": json.dumps([int(value) for value in fields[10:15]]),
+            "model_name": fields[15].split(b"\0", 1)[0].decode("ascii", "replace"),
+        }
+        if generations:
+            values.update(
+                {
+                    "generation": int(fields[16]),
+                    "generation_entity": int(fields[17]),
+                    "carry_generation": int(fields[18]),
+                }
+            )
+        yield values, raw_header, payload
+
+
+def _bracket_values(fields: tuple[object, ...]) -> dict[str, object]:
+    return {
+        "kind": fields[0].decode("ascii"),
+        "sequence_number": int(fields[2]),
+        "qpc": int(fields[3]),
+        "entry_qpc": int(fields[4]),
+        "thread_id": int(fields[5]),
+        "generation": int(fields[6]),
+        "generation_parent": int(fields[7]),
+        "generation_depth": int(fields[8]),
+        "client_entity": int(fields[9]),
+        "bracket_arguments": json.dumps([int(value) for value in fields[10:19]]),
+    }
 
 
 def _animation_records(
     stream: BinaryIO,
     *,
     selected_bones: bool,
+    generations: bool,
 ) -> Iterator[tuple[dict[str, object], bytes, bytes] | bytes]:
+    evaluation = (
+        ANIMATION_RECORD_HEADER if generations else ANIMATION_RECORD_HEADER_V2
+    )
+    headers = {b"BASE": evaluation, b"FINL": evaluation}
+    if generations:
+        headers[b"PBLD"] = BRACKET_RECORD_HEADER
+        headers[b"DBLD"] = BRACKET_RECORD_HEADER
+        headers[b"SHDW"] = BRACKET_RECORD_HEADER
     while True:
-        record = _read_record(stream, ANIMATION_RECORD_HEADER)
+        record = _read_record(stream, headers)
         if record is None:
             return
         if isinstance(record, bytes):
             yield record
             return
-        raw_header, payload = record
-        fields = ANIMATION_RECORD_HEADER.unpack(raw_header)
+        raw_header, payload, header = record
+        fields = header.unpack(raw_header)
+        if header is BRACKET_RECORD_HEADER:
+            if int(fields[1]) != BRACKET_RECORD_HEADER.size:
+                yield raw_header + payload + stream.read()
+                return
+            yield _bracket_values(fields), raw_header, payload
+            continue
         bone_count = int(fields[8])
         selected_bytes = ((bone_count + 31) // 32) * 4 if selected_bones else 0
-        expected_bytes = (
-            ANIMATION_RECORD_HEADER.size + bone_count * 7 * 4 + selected_bytes
-        )
+        expected_bytes = header.size + bone_count * 7 * 4 + selected_bytes
         if (
-            fields[0] not in {b"BASE", b"FINL"}
-            or bone_count < 1
+            bone_count < 1
             or bone_count > MAXIMUM_BONES
             or int(fields[1]) != expected_bytes
         ):
             yield raw_header + payload + stream.read()
             return
-        yield (
-            {
-                "kind": fields[0].decode("ascii"),
-                "sequence_number": int(fields[2]),
-                "qpc": int(fields[3]),
-                "thread_id": int(fields[4]),
-                "client_entity": int(fields[5]),
-                "studio_hdr": int(fields[6]),
-                "checksum": int(fields[7]),
-                "bone_count": bone_count,
-                "studio_sequence": int(fields[9]),
-                "sample_phase": float(fields[10]),
-                "entity_cycle": float(fields[11]),
-                "result": int(fields[12]),
-                "positions": int(fields[13]),
-                "quaternions": int(fields[14]),
-            },
-            raw_header,
-            payload,
-        )
+        values: dict[str, object] = {
+            "kind": fields[0].decode("ascii"),
+            "sequence_number": int(fields[2]),
+            "qpc": int(fields[3]),
+            "thread_id": int(fields[4]),
+            "client_entity": int(fields[5]),
+            "studio_hdr": int(fields[6]),
+            "checksum": int(fields[7]),
+            "bone_count": bone_count,
+            "studio_sequence": int(fields[9]),
+            "sample_phase": float(fields[10]),
+            "entity_cycle": float(fields[11]),
+            "result": int(fields[12]),
+            "positions": int(fields[13]),
+            "quaternions": int(fields[14]),
+        }
+        if generations:
+            values.update(
+                {
+                    "generation": int(fields[15]),
+                    "generation_depth": int(fields[16]),
+                }
+            )
+        yield values, raw_header, payload
 
 
 SCHEMA = """
@@ -196,6 +249,13 @@ CREATE TABLE records (
     draw_arguments TEXT,
     positions INTEGER,
     quaternions INTEGER,
+    generation INTEGER,
+    generation_parent INTEGER,
+    generation_depth INTEGER,
+    generation_entity INTEGER,
+    carry_generation INTEGER,
+    entry_qpc INTEGER,
+    bracket_arguments TEXT,
     raw_header BLOB NOT NULL,
     raw_payload BLOB NOT NULL,
     UNIQUE(stream_name, ordinal)
@@ -212,6 +272,7 @@ CREATE TABLE artifacts (
 CREATE INDEX records_entity_time ON records(client_entity, qpc);
 CREATE INDEX records_model_time ON records(checksum, qpc);
 CREATE INDEX records_kind_time ON records(kind, qpc);
+CREATE INDEX records_generation ON records(generation);
 """
 
 
@@ -220,14 +281,40 @@ INSERT INTO records (
     stream_name, ordinal, kind, sequence_number, qpc, thread_id,
     client_entity, studio_hdr, checksum, bone_count, studio_sequence,
     sample_phase, entity_cycle, result, model_info, model_name,
-    draw_arguments, positions, quaternions, raw_header, raw_payload
+    draw_arguments, positions, quaternions, generation, generation_parent,
+    generation_depth, generation_entity, carry_generation, entry_qpc,
+    bracket_arguments, raw_header, raw_payload
 ) VALUES (
     :stream_name, :ordinal, :kind, :sequence_number, :qpc, :thread_id,
     :client_entity, :studio_hdr, :checksum, :bone_count, :studio_sequence,
     :sample_phase, :entity_cycle, :result, :model_info, :model_name,
-    :draw_arguments, :positions, :quaternions, :raw_header, :raw_payload
+    :draw_arguments, :positions, :quaternions, :generation, :generation_parent,
+    :generation_depth, :generation_entity, :carry_generation, :entry_qpc,
+    :bracket_arguments, :raw_header, :raw_payload
 )
 """
+
+RECORD_DEFAULTS: dict[str, object] = {
+    "studio_sequence": None,
+    "sample_phase": None,
+    "entity_cycle": None,
+    "result": None,
+    "model_info": None,
+    "model_name": None,
+    "draw_arguments": None,
+    "positions": None,
+    "quaternions": None,
+    "generation": None,
+    "generation_parent": None,
+    "generation_depth": None,
+    "generation_entity": None,
+    "carry_generation": None,
+    "entry_qpc": None,
+    "bracket_arguments": None,
+    "studio_hdr": None,
+    "checksum": None,
+    "bone_count": None,
+}
 
 
 def _insert_stream(
@@ -244,19 +331,22 @@ def _insert_stream(
             raise ValueError(f"{path} has no complete file header")
         fields = file_header_struct.unpack(file_header)
         magic = fields[0].rstrip(b"\0")
+        version = int(fields[1])
         if name == "pose":
-            if magic != b"ELPOSE2" or int(fields[1]) != 2:
-                raise ValueError(f"{path} is not an ELPOSE2 stream")
-            records = _pose_records(stream)
+            if (magic, version) not in {(b"ELPOSE2", 2), (b"ELPOSE3", 3)}:
+                raise ValueError(f"{path} is not a supported ELPOSE stream")
+            records = _pose_records(stream, generations=version >= 3)
         else:
-            if (magic, int(fields[1])) not in {
+            if (magic, version) not in {
                 (b"ELANIM1", 1),
                 (b"ELANIM2", 2),
+                (b"ELANIM3", 3),
             }:
                 raise ValueError(f"{path} is not a supported ELANIM stream")
             records = _animation_records(
                 stream,
-                selected_bones=int(fields[1]) >= 2,
+                selected_bones=version >= 2,
+                generations=version >= 3,
             )
 
         connection.execute(
@@ -289,15 +379,7 @@ def _insert_stream(
                 {
                     "stream_name": name,
                     "ordinal": ordinal,
-                    "studio_sequence": None,
-                    "sample_phase": None,
-                    "entity_cycle": None,
-                    "result": None,
-                    "model_info": None,
-                    "model_name": None,
-                    "draw_arguments": None,
-                    "positions": None,
-                    "quaternions": None,
+                    **RECORD_DEFAULTS,
                     "raw_header": raw_header,
                     "raw_payload": raw_payload,
                     **values,
@@ -397,6 +479,8 @@ def finalize(
             "done.txt",
             "ready.txt",
             "live_pose_hook.ini",
+            "boundary.json",
+            "console.log",
         ):
             artifact = session / artifact_name
             if artifact.is_file():
@@ -413,6 +497,22 @@ def finalize(
         supervision = read_key_values(session / "supervision.txt")
         failures = {
             "hook_dropped": (int(done.get("dropped", "0")), "hook writer drops"),
+            "hook_skipped": (
+                int(done.get("skipped", "0")),
+                "callbacks that reached no readable header or pose buffer",
+            ),
+            "hook_filtered": (
+                int(done.get("filtered", "0")),
+                "callbacks excluded by the configured target checksum",
+            ),
+            "hook_unbracketed": (
+                int(done.get("unbracketed", "0")),
+                "records emitted outside every pose-build bracket",
+            ),
+            "hook_bracket_overflow": (
+                int(done.get("bracket_overflow", "0")),
+                "brackets refused because the nesting depth cap was reached",
+            ),
             "incomplete_streams": (
                 sum(1 for value in tails.values() if value),
                 _json_value(tails),

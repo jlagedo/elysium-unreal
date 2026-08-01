@@ -89,6 +89,11 @@ struct Options {
     bool TerminateAfterVerification = false;
 };
 
+// A supervised cutscene capture runs for its whole authored length, and an
+// unfocused game window halves the frame rate without shortening the cutscene,
+// so the ceiling covers a throttled theatre run rather than a short probe.
+constexpr unsigned long kMaximumMilliseconds = 900000UL;
+
 bool ParseUnsigned(
     const wchar_t* text,
     const wchar_t* option,
@@ -97,7 +102,7 @@ bool ParseUnsigned(
     wchar_t* end = nullptr;
     const unsigned long value = std::wcstoul(text, &end, 10);
     if (errno == ERANGE || end == text || *end != L'\0' ||
-        value > 600000UL ||
+        value > kMaximumMilliseconds ||
         value > std::numeric_limits<DWORD>::max()) {
         std::fwprintf(stderr, L"invalid %ls value: %ls\n", option, text);
         return false;

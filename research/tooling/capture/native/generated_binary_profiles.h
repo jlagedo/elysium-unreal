@@ -33,6 +33,10 @@ inline constexpr std::uint8_t Profile1Target1ExpectedBytes[] = {
 };
 
 inline constexpr std::uint8_t Profile1Target2ExpectedBytes[] = {
+    0xb8, 0x30, 0x27, 0x00, 0x00
+};
+
+inline constexpr std::uint8_t Profile1Target3ExpectedBytes[] = {
     0x8b, 0x44, 0x24, 0x04, 0x56, 0x85, 0xc0, 0x8b
 };
 
@@ -62,12 +66,24 @@ inline constexpr BinaryTargetProfile Profile1Targets[] = {
         0u,
     },
     {
+        "client.setup_bones",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Thiscall,
+        0x000919c0u,
+        Profile1Target2ExpectedBytes,
+        5u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
+    {
         "client.get_studio_hdr",
         BinaryTargetKind::Symbol,
         HookBackendKind::None,
         CallingConvention::Thiscall,
         0x0008f900u,
-        Profile1Target2ExpectedBytes,
+        Profile1Target3ExpectedBytes,
         8u,
         0x00000000u,
         0x00000000u,
@@ -91,7 +107,42 @@ inline constexpr BinaryProfile Profile1 = {
         0x00000000u,
     },
     Profile1Targets,
-    3u,
+    4u,
+};
+
+inline constexpr std::uint8_t Profile2Target0ExpectedBytes[] = {
+    0x83, 0xec, 0x24, 0x8b, 0x15, 0x28, 0x33, 0x17, 0x20
+};
+
+inline constexpr std::uint8_t Profile2Target1ExpectedBytes[] = {
+    0x8b, 0x15, 0x28, 0x33, 0x17, 0x20
+};
+
+inline constexpr BinaryTargetProfile Profile2Targets[] = {
+    {
+        "engine.model_render_draw_model",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Thiscall,
+        0x000a6640u,
+        Profile2Target0ExpectedBytes,
+        9u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
+    {
+        "engine.model_render_draw_model_shadow",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Thiscall,
+        0x000a6990u,
+        Profile2Target1ExpectedBytes,
+        6u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
 };
 
 inline constexpr BinaryProfile Profile2 = {
@@ -109,8 +160,8 @@ inline constexpr BinaryProfile Profile2 = {
         0x013bb000u,
         0x00000000u,
     },
-    nullptr,
-    0u,
+    Profile2Targets,
+    2u,
 };
 
 inline constexpr std::uint8_t Profile3Target0ExpectedBytes[] = {

@@ -28,16 +28,362 @@ from research.tooling.capture.capture_theatre import (
     PRE_MAP_WAITS,
     build_config as build_theatre_config,
 )
+from research.tooling.capture.calibrate_theatre_capture import calibrate
+from research.tooling.capture.verify_entity_pointer_join import verify
 from research.tooling.capture.finalize_capture_database import (
     ANIMATION_FILE_HEADER,
     ANIMATION_RECORD_HEADER,
+    BRACKET_RECORD_HEADER,
     POSE_FILE_HEADER,
     POSE_RECORD_HEADER,
     finalize,
 )
+from research.tooling.capture.verify_pose_build_generation import (
+    verify as verify_generation,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NATIVE_ROOT = REPO_ROOT / "research" / "tooling" / "capture" / "native"
+QPC_FREQUENCY = 10_000_000
+MODEL_RENDER = 0x20D63830
+FRAME_TICKS = QPC_FREQUENCY // 30
+
+
+def pose_record(
+    sequence: int,
+    qpc: int,
+    model_name: str,
+    *,
+    bone_count: int = 1,
+    client_entity: int = 0x2000,
+    checksum: int = 0x3000,
+    studio_hdr: int = 0x1000,
+    generation: int = 0,
+    generation_entity: int = 0,
+    carry_generation: int = 0,
+) -> bytes:
+    payload = bytes(bone_count * 12 * 4 * 2)
+    return (
+        POSE_RECORD_HEADER.pack(
+            b"POSE",
+            POSE_RECORD_HEADER.size + len(payload),
+            sequence,
+            qpc,
+            7,
+            studio_hdr,
+            client_entity,
+            checksum,
+            bone_count,
+            0x4000,
+            1,
+            2,
+            3,
+            4,
+            5,
+            model_name.encode("ascii") + b"\0",
+            generation,
+            generation_entity,
+            carry_generation,
+        )
+        + payload
+    )
+
+
+def animation_record(
+    magic: bytes,
+    sequence: int,
+    qpc: int,
+    *,
+    bone_count: int = 1,
+    client_entity: int = 0x2000,
+    checksum: int = 0x3000,
+    studio_hdr: int = 0x1000,
+    generation: int = 0,
+    generation_depth: int = 0,
+) -> bytes:
+    payload = bytes(bone_count * 7 * 4 + ((bone_count + 31) // 32) * 4)
+    return (
+        ANIMATION_RECORD_HEADER.pack(
+            magic,
+            ANIMATION_RECORD_HEADER.size + len(payload),
+            sequence,
+            qpc,
+            7,
+            client_entity,
+            studio_hdr,
+            checksum,
+            bone_count,
+            4,
+            0.25,
+            0.5,
+            1,
+            0x9000,
+            0xA000,
+            generation,
+            generation_depth,
+        )
+        + payload
+    )
+
+
+def bracket_record(
+    magic: bytes,
+    sequence: int,
+    entry_qpc: int,
+    exit_qpc: int,
+    *,
+    generation: int,
+    parent: int = 0,
+    depth: int = 0,
+    client_entity: int = 0x2000,
+    thread_id: int = 7,
+) -> bytes:
+    return BRACKET_RECORD_HEADER.pack(
+        magic,
+        BRACKET_RECORD_HEADER.size,
+        sequence,
+        exit_qpc,
+        entry_qpc,
+        thread_id,
+        generation,
+        parent,
+        depth,
+        client_entity,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+    )
+
+
+def write_session(
+    session: Path,
+    *,
+    pose_records: bytes,
+    animation_records: bytes,
+    done: str = "complete=1\nqueued=2\nwritten=2\ndropped=0\n",
+    boundary: dict[str, object] | None = None,
+    console: str | None = None,
+) -> None:
+    (session / "launch.json").write_text(
+        json.dumps(
+            {
+                "created_utc": "test",
+                "tool_git": {"commit": "abc", "dirty": False},
+                "map": "sp_theatre",
+                "capture_duration_seconds": 30,
+                "retail_exit_code": 28,
+                "launch_arguments": ["-game", "Unofficial_Patch"],
+                "modules": [
+                    {
+                        "name": "Vampire.exe",
+                        "path": "Vampire.exe",
+                        "file_size": 3,
+                        "sha256": "0" * 64,
+                        "binary_profile": "owner-test",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (session / "recipe.cfg").write_text("map sp_theatre\n", encoding="ascii")
+    (session / "done.txt").write_text(done, encoding="ascii")
+    (session / "supervision.txt").write_text(
+        "reason=timeout\nstate=complete\ncapture_done=1\n"
+        "binary_profile_matches=4\nbinary_profile_misses=0\n"
+        "probe_diagnostic_writes=0\n",
+        encoding="ascii",
+    )
+    if boundary is not None:
+        (session / "boundary.json").write_text(
+            json.dumps(boundary), encoding="utf-8"
+        )
+    if console is not None:
+        (session / "console.log").write_text(console, encoding="utf-8")
+    (session / "scene.elpose").write_bytes(
+        POSE_FILE_HEADER.pack(
+            b"ELPOSE3",
+            3,
+            POSE_FILE_HEADER.size,
+            QPC_FREQUENCY,
+            90,
+            12,
+            0x5000,
+            0x6000,
+            0x7000,
+            0x8000,
+            b"1" * 64 + b"\0",
+            b"",
+        )
+        + pose_records
+    )
+    (session / "animation.elanim").write_bytes(
+        ANIMATION_FILE_HEADER.pack(
+            b"ELANIM3",
+            3,
+            ANIMATION_FILE_HEADER.size,
+            QPC_FREQUENCY,
+            90,
+            12,
+            0xB000,
+            0xC000,
+            0xD000,
+            0,
+            b"2" * 64 + b"\0",
+            0xE000,
+            0xF000,
+            b"",
+        )
+        + animation_records
+    )
+
+
+def write_generation_session(
+    session: Path,
+    actors: list[dict[str, object]],
+    done_extra: str = "unbracketed=0\nbracket_overflow=0\n",
+) -> None:
+    """Finalize a session whose records are bracketed as retail brackets them.
+
+    One actor produces the nesting the hooks create: an engine draw bracket
+    that encloses a pose build, the evaluations inside that pose build, and the
+    draw record the pose build feeds. ``frame`` selects which engine frame
+    encloses the actor, since the ordinary draw and the shadow draw are
+    siblings that both build a pose. ``carry_generation`` may be overridden per
+    actor so a test can make the structural and carried attributions disagree.
+
+    ``entity`` is the IClientRenderable subobject, which is what the bracket
+    hooks and the draw field both see. The skeletal evaluators are called on
+    the C_BaseAnimating four bytes below it, so the fixture reproduces that
+    offset rather than using one address everywhere.
+    """
+    poses: list[bytes] = []
+    animations: list[bytes] = []
+    sequence = 0
+    generation = 0
+    qpc = 1_000_000
+    for actor in actors:
+        entity = int(actor["entity"])
+        name = str(actor.get("model", "models/test.mdl"))
+        generation += 1
+        draw_generation = generation
+        generation += 1
+        pose_generation = generation
+        entry = qpc
+        qpc += 10
+        sequence += 1
+        animations.append(
+            bracket_record(
+                b"PBLD",
+                sequence,
+                entry + 1,
+                qpc,
+                generation=pose_generation,
+                parent=draw_generation,
+                depth=1,
+                client_entity=entity,
+            )
+        )
+        for magic in (b"BASE", b"FINL"):
+            sequence += 1
+            animations.append(
+                animation_record(
+                    magic,
+                    sequence,
+                    entry + 2,
+                    client_entity=entity - 4,
+                    generation=pose_generation,
+                    generation_depth=1,
+                )
+            )
+        sequence += 1
+        poses.append(
+            pose_record(
+                sequence,
+                qpc + 1,
+                name,
+                client_entity=entity,
+                generation=int(actor.get("pose_generation", draw_generation)),
+                generation_entity=int(actor.get("generation_entity", entity)),
+                carry_generation=int(
+                    actor.get("carry_generation", pose_generation)
+                ),
+            )
+        )
+        sequence += 1
+        animations.append(
+            bracket_record(
+                bytes(actor.get("frame", b"DBLD")),
+                sequence,
+                entry,
+                qpc + 2,
+                generation=draw_generation,
+                parent=0,
+                depth=0,
+                # The engine draw frame's `this` is the CModelRender
+                # singleton, the same value on every draw.
+                client_entity=MODEL_RENDER,
+            )
+        )
+        qpc += 100
+    write_session(
+        session,
+        pose_records=b"".join(poses),
+        animation_records=b"".join(animations),
+        done=(
+            "complete=1\nqueued=2\nwritten=2\ndropped=0\nqueue_peak=9\n"
+            + done_extra
+        ),
+    )
+    finalize(session)
+
+
+def write_join_session(
+    session: Path, cast: dict[str, tuple[int, list[int], list[int]]]
+) -> None:
+    """Finalize a session whose two streams carry the given per-model entities.
+
+    ``cast`` maps a model name to its checksum, its draw-stream entity values,
+    and its skeletal-stream entity values.
+    """
+    poses: list[bytes] = []
+    animations: list[bytes] = []
+    sequence = 0
+    for name, (checksum, pose_entities, animation_entities) in cast.items():
+        for entity in pose_entities:
+            sequence += 1
+            poses.append(
+                pose_record(
+                    sequence,
+                    1_000_000,
+                    name,
+                    checksum=checksum,
+                    client_entity=entity,
+                )
+            )
+        for entity in animation_entities:
+            sequence += 1
+            animations.append(
+                animation_record(
+                    b"BASE",
+                    sequence,
+                    1_000_000,
+                    checksum=checksum,
+                    client_entity=entity,
+                )
+            )
+    write_session(
+        session,
+        pose_records=b"".join(poses),
+        animation_records=b"".join(animations),
+    )
+    finalize(session)
 
 
 class RetailCaptureTests(unittest.TestCase):
@@ -59,111 +405,11 @@ class RetailCaptureTests(unittest.TestCase):
     def test_capture_finalizer_retains_exact_records_in_one_sqlite_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             session = Path(directory)
-            (session / "launch.json").write_text(
-                json.dumps(
-                    {
-                        "created_utc": "test",
-                        "tool_git": {"commit": "abc", "dirty": False},
-                        "map": "sp_theatre",
-                        "capture_duration_seconds": 30,
-                        "retail_exit_code": 28,
-                        "launch_arguments": ["-game", "Unofficial_Patch"],
-                        "modules": [
-                            {
-                                "name": "Vampire.exe",
-                                "path": "Vampire.exe",
-                                "file_size": 3,
-                                "sha256": "0" * 64,
-                                "binary_profile": "owner-test",
-                            }
-                        ],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            (session / "recipe.cfg").write_text("map sp_theatre\n", encoding="ascii")
-            (session / "done.txt").write_text(
-                "complete=1\nqueued=2\nwritten=2\ndropped=0\n",
-                encoding="ascii",
-            )
-            (session / "supervision.txt").write_text(
-                "reason=timeout\ncapture_done=1\nbinary_profile_misses=0\n"
-                "probe_diagnostic_writes=0\n",
-                encoding="ascii",
-            )
-
-            pose_payload = bytes(range(96))
-            pose_header = POSE_RECORD_HEADER.pack(
-                b"POSE",
-                POSE_RECORD_HEADER.size + len(pose_payload),
-                1,
-                100,
-                7,
-                0x1000,
-                0x2000,
-                0x3000,
-                1,
-                0x4000,
-                1,
-                2,
-                3,
-                4,
-                5,
-                b"models/test.mdl\0",
-            )
-            (session / "scene.elpose").write_bytes(
-                POSE_FILE_HEADER.pack(
-                    b"ELPOSE2",
-                    2,
-                    POSE_FILE_HEADER.size,
-                    10_000,
-                    90,
-                    12,
-                    0x5000,
-                    0x6000,
-                    0x7000,
-                    0x8000,
-                    b"1" * 64 + b"\0",
-                    b"",
-                )
-                + pose_header
-                + pose_payload
-            )
-            animation_payload = struct.pack("<7fI", *([0.0] * 7), 1)
-            animation_header = ANIMATION_RECORD_HEADER.pack(
-                b"BASE",
-                ANIMATION_RECORD_HEADER.size + len(animation_payload),
-                2,
-                101,
-                7,
-                0x2000,
-                0x1000,
-                0x3000,
-                1,
-                4,
-                0.25,
-                0.5,
-                1,
-                0x9000,
-                0xA000,
-            )
-            (session / "animation.elanim").write_bytes(
-                ANIMATION_FILE_HEADER.pack(
-                    b"ELANIM2",
-                    2,
-                    ANIMATION_FILE_HEADER.size,
-                    10_000,
-                    90,
-                    12,
-                    0xB000,
-                    0xC000,
-                    0xD000,
-                    0,
-                    b"2" * 64 + b"\0",
-                    b"",
-                )
-                + animation_header
-                + animation_payload
+            pose_payload = bytes(12 * 4 * 2)
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=animation_record(b"BASE", 2, 101),
             )
 
             report = finalize(session)
@@ -194,6 +440,473 @@ class RetailCaptureTests(unittest.TestCase):
                 )
             finally:
                 connection.close()
+
+    def test_capture_finalizer_archives_the_run_zero_beside_the_records(self) -> None:
+        # A calibration reading only the database has to find the trigger
+        # stamp, so the boundary block travels inside the evidence file.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=animation_record(b"BASE", 2, 101),
+                boundary={"arm_qpc": 4242, "arm_marker": "marker"},
+                console="ELYSIUM_CAP11_BOOT\n",
+                done=(
+                    "complete=1\nqueued=2\nwritten=2\ndropped=0\n"
+                    "queue_peak=9\nskipped=3\nfiltered=1\nbytes_written=200\n"
+                ),
+            )
+            report = finalize(session)
+            connection = sqlite3.connect(Path(report["database"]))
+            try:
+                archived = {
+                    name
+                    for (name,) in connection.execute("SELECT name FROM artifacts")
+                }
+                self.assertIn("boundary.json", archived)
+                self.assertIn("console.log", archived)
+                failures = dict(
+                    connection.execute("SELECT category, count FROM failures")
+                )
+                self.assertEqual(failures["hook_skipped"], 3)
+                self.assertEqual(failures["hook_filtered"], 1)
+            finally:
+                connection.close()
+
+    def test_finalizer_reads_brackets_and_evaluations_from_one_stream(self) -> None:
+        # Bracket records are header-only and interleave with the evaluations
+        # they enclose, so the reader has to pick a layout per record.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_generation_session(session, [{"entity": 0x2000}])
+            connection = sqlite3.connect(session / "capture.sqlite")
+            try:
+                kinds = dict(
+                    connection.execute(
+                        "SELECT kind, count(*) FROM records GROUP BY kind"
+                    )
+                )
+                self.assertEqual(
+                    kinds, {"POSE": 1, "BASE": 1, "FINL": 1, "PBLD": 1, "DBLD": 1}
+                )
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT count(*) FROM records WHERE generation IS NULL"
+                    ).fetchone()[0],
+                    0,
+                )
+                # A bracket record carries no bone payload, so a reader that
+                # sized it like an evaluation would have desynchronised here.
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT length(raw_payload) FROM records WHERE kind = 'DBLD'"
+                    ).fetchone()[0],
+                    0,
+                )
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT generation_parent FROM records WHERE kind = 'PBLD'"
+                    ).fetchone()[0],
+                    connection.execute(
+                        "SELECT generation FROM records WHERE kind = 'DBLD'"
+                    ).fetchone()[0],
+                )
+            finally:
+                connection.close()
+
+            report = calibrate(session)
+            self.assertTrue(
+                all(
+                    entry["closes"]
+                    for entry in report["volume"]["byte_closure"].values()
+                )
+            )
+
+    def test_generation_verifier_accepts_a_fully_bracketed_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_generation_session(
+                session, [{"entity": 0x2000}, {"entity": 0x3000}]
+            )
+            report = verify_generation(session)
+            self.assertEqual(report["coverage"]["unassigned"], 0)
+            self.assertTrue(report["integrity"]["sound"])
+            self.assertTrue(report["pose_groups"]["one_generation_per_entity"])
+            self.assertEqual(report["cross_check"]["disagreeing"], 0)
+            self.assertTrue(report["verdict"]["attributions_agree"])
+            self.assertEqual(report["verdict"]["join_owner"], "CAP2.1-generation")
+
+    def test_generation_verifier_attributes_a_shadow_framed_draw(self) -> None:
+        # The client shadow manager enters CModelRender::DrawModelShadow, which
+        # reaches the StudioRender draw without passing through
+        # CModelRender::DrawModel. A verifier that only knew the ordinary frame
+        # would leave every shadow draw unassigned.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_generation_session(
+                session,
+                [
+                    {"entity": 0x2000},
+                    {"entity": 0x2000, "frame": b"SHDW"},
+                ],
+            )
+            connection = sqlite3.connect(session / "capture.sqlite")
+            try:
+                kinds = dict(
+                    connection.execute(
+                        "SELECT kind, count(*) FROM records GROUP BY kind"
+                    )
+                )
+                self.assertEqual(kinds["SHDW"], 1)
+                self.assertEqual(kinds["DBLD"], 1)
+            finally:
+                connection.close()
+            report = verify_generation(session)
+            self.assertEqual(report["coverage"]["unassigned"], 0)
+            self.assertTrue(report["integrity"]["sound"])
+            self.assertEqual(report["cross_check"]["draws"], 2)
+            self.assertEqual(report["cross_check"]["disagreeing"], 0)
+            self.assertTrue(report["verdict"]["attributions_agree"])
+            # Byte closure is what proves the new kind is sized correctly.
+            calibration = calibrate(session)
+            self.assertTrue(
+                all(
+                    entry["closes"]
+                    for entry in calibration["volume"]["byte_closure"].values()
+                )
+            )
+
+    def test_generation_verifier_reports_an_unassigned_record(self) -> None:
+        # A draw produced outside every bracket carries generation 0. That is
+        # an explicit unknown, and it must fail acceptance rather than be
+        # attributed to whichever bracket happens to be nearest.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_generation_session(
+                session,
+                [{"entity": 0x2000}, {"entity": 0x3000, "pose_generation": 0}],
+                done_extra="unbracketed=1\nbracket_overflow=0\n",
+            )
+            report = verify_generation(session)
+            self.assertEqual(report["coverage"]["unassigned"], 1)
+            self.assertFalse(report["coverage"]["complete"])
+            self.assertFalse(report["verdict"]["generations_complete"])
+            self.assertIn("carry no", report["verdict"]["statement"])
+            # The cost measurement stands on its own: an incomplete run still
+            # has to say what the brackets cost.
+            self.assertEqual(report["overhead"]["unbracketed"], 1)
+
+    def test_generation_verifier_reports_disagreeing_attributions(self) -> None:
+        # The failure carry-over alone cannot see: the draw names a pose build
+        # belonging to a different draw, while the entity still satisfies
+        # CAP1.3's +4 delta. Structural nesting is what catches it, and the
+        # verifier has to call that a fault rather than pick a winner.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_generation_session(
+                session,
+                [
+                    {"entity": 0x2000},
+                    # Actor two carries actor one's pose build (generation 2).
+                    {"entity": 0x3000, "carry_generation": 2},
+                ],
+            )
+            report = verify_generation(session)
+            self.assertEqual(report["coverage"]["unassigned"], 0)
+            self.assertTrue(report["integrity"]["sound"])
+            cross = report["cross_check"]
+            self.assertEqual(cross["disagreeing"], 1)
+            self.assertEqual(cross["draws"], 2)
+            # The carried generation resolves and the delta holds; only the
+            # nesting relation exposes the wrong pose build.
+            fault = cross["faults"][0]
+            self.assertTrue(fault["carry_resolved"])
+            self.assertTrue(fault["delta_agrees"])
+            self.assertFalse(fault["carry_nested_in_structural"])
+            self.assertTrue(report["verdict"]["generations_complete"])
+            self.assertFalse(report["verdict"]["attributions_agree"])
+
+    def test_generation_verifier_answers_a_capture_without_generations(self) -> None:
+        # A CAP1 database is a valid capture that predates the bracket, so it
+        # is answered rather than rejected.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=animation_record(b"BASE", 2, 101),
+            )
+            finalize(session)
+            database = session / "capture.sqlite"
+            connection = sqlite3.connect(database)
+            try:
+                header = connection.execute(
+                    "SELECT file_header FROM streams WHERE name = 'pose'"
+                ).fetchone()[0]
+                connection.execute(
+                    "UPDATE streams SET file_header = ? WHERE name = 'pose'",
+                    (b"ELPOSE2\0" + (2).to_bytes(4, "little") + header[12:],),
+                )
+                connection.commit()
+            finally:
+                connection.close()
+            report = verify_generation(session)
+            self.assertFalse(report["support"]["carries_generations"])
+            self.assertIsNone(report["coverage"])
+            self.assertIn("predates", report["verdict"]["statement"])
+
+    def test_calibration_closes_byte_accounting_and_reports_lost_records(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            poses = b"".join(
+                pose_record(
+                    index + 1,
+                    100 + index * FRAME_TICKS,
+                    "models/test.mdl",
+                    bone_count=index + 1,
+                )
+                for index in range(40)
+            )
+            # Sequence 43 never reaches the file, so the global counter is no
+            # longer dense and the report has to say so.
+            animations = b"".join(
+                animation_record(
+                    b"BASE", sequence, 100 + sequence * FRAME_TICKS, bone_count=33
+                )
+                for sequence in (41, 42, 44)
+            )
+            write_session(
+                session, pose_records=poses, animation_records=animations
+            )
+            finalize(session)
+
+            report = calibrate(session)
+            self.assertTrue(
+                all(
+                    entry["closes"]
+                    for entry in report["volume"]["byte_closure"].values()
+                )
+            )
+            sequences = report["integrity"]["sequence_numbers"]
+            self.assertFalse(sequences["dense"])
+            self.assertEqual(sequences["gaps"], [{"after": 42, "missing": 1}])
+            self.assertEqual(
+                report["census"]["client_entities"]["intersection"], 1
+            )
+            self.assertIsNone(report["volume"]["queue_peak"])
+
+    def test_calibration_derives_the_run_zero_from_the_casting_batch(self) -> None:
+        # The map load draws its own character models one second before the
+        # arrival trigger casts the sire and understudies; the zero is the
+        # later batch, not the first character frame.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            batches = (
+                (0, ("character/npc/unique/sheriff.mdl", "character/pc/extra.mdl")),
+                (
+                    QPC_FREQUENCY,
+                    ("character/pc/sire.mdl", "character/pc/understudy.mdl"),
+                ),
+                (
+                    3 * QPC_FREQUENCY,
+                    (
+                        "character/npc/seat_a.mdl",
+                        "character/npc/seat_b.mdl",
+                        "character/npc/seat_c.mdl",
+                    ),
+                ),
+            )
+            records = []
+            sequence = 0
+            for offset, models in batches:
+                for index, model in enumerate(models):
+                    sequence += 1
+                    records.append(
+                        pose_record(
+                            sequence,
+                            1_000_000 + offset,
+                            model,
+                            checksum=0x3000 + sequence,
+                            client_entity=0x2000 + sequence,
+                        )
+                    )
+            write_session(
+                session,
+                pose_records=b"".join(records),
+                animation_records=animation_record(b"BASE", sequence + 1, 1_000_000),
+            )
+            finalize(session)
+
+            zero = calibrate(session)["zero"]
+            self.assertEqual(zero["trigger_batch"]["seconds"], 0.0)
+            self.assertEqual(
+                zero["trigger_batch"]["models"],
+                ["character/pc/sire.mdl", "character/pc/understudy.mdl"],
+            )
+            self.assertEqual(zero["map_load_batch"]["seconds"], -1.0)
+            self.assertEqual(zero["largest_batch_after_trigger"]["seconds"], 2.0)
+            self.assertFalse(zero["console_stamp"]["accepted"])
+
+    def test_entity_join_proves_one_pointer_space_from_a_constant_delta(self) -> None:
+        # Every skeletal entity sits a fixed offset above the draw stream's
+        # render-info field, in every model, so the streams join as they are.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_join_session(
+                session,
+                {
+                    "character/npc/a.mdl": (
+                        0x3001,
+                        [0x40000000, 0x40001000],
+                        [0x40000008, 0x40001008],
+                    ),
+                    "character/npc/b.mdl": (0x3002, [0x40002000], [0x40002008]),
+                },
+            )
+
+            report = verify(session)
+            verdict = report["verdict"]
+            self.assertTrue(verdict["one_pointer_space"])
+            self.assertEqual(verdict["constant_delta"], "0x00000008")
+            self.assertEqual(verdict["constant_delta_signed"], 8)
+            self.assertEqual(verdict["join_owner"], "CAP1.3-delta")
+            self.assertEqual(report["space"]["shared_values"], 0)
+            self.assertEqual(report["cross_field"]["carrying_fields"], [])
+            candidates = report["delta"]["candidates"]
+            self.assertEqual(len(candidates), 1)
+            self.assertTrue(candidates[0]["covers_all"])
+            self.assertEqual(candidates[0]["bijective_models"], 2)
+            self.assertEqual(candidates[0]["resolved_animation_entities"], 3)
+            self.assertEqual(candidates[0]["pose_with_counterpart"], 3)
+            # Timing never derives the delta; it only reports on the pairs the
+            # delta already produced.
+            self.assertFalse(report["timing"]["authoritative"])
+            self.assertEqual(report["timing"]["pairs"], 3)
+
+    def test_entity_join_survives_a_skeletal_actor_drawn_as_another_model(
+        self,
+    ) -> None:
+        # One model animates two actors and draws one of them; the second is
+        # drawn under a different model. That is model attribution, not a
+        # pointer-space failure, so the delta still stands.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_join_session(
+                session,
+                {
+                    "character/npc/doppleganger.mdl": (
+                        0x3001,
+                        [0x40000000],
+                        [0x3FFFFFFC, 0x40001FFC],
+                    ),
+                    "character/npc/host.mdl": (0x3002, [0x40002000], [0x40001FFC]),
+                },
+            )
+
+            report = verify(session)
+            candidate = report["delta"]["candidates"][0]
+            self.assertTrue(report["verdict"]["one_pointer_space"])
+            self.assertEqual(candidate["delta_signed"], -4)
+            self.assertTrue(candidate["covers_all"])
+            self.assertEqual(candidate["bijective_models"], 1)
+            divergent = candidate["models_not_bijective"]
+            self.assertEqual(len(divergent), 1)
+            self.assertEqual(
+                divergent[0]["model_name"], "character/npc/doppleganger.mdl"
+            )
+            self.assertEqual(divergent[0]["unmatched_drawn_as_another_model"], 1)
+
+    def test_entity_join_hands_a_disjoint_pointer_space_to_the_generation_join(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_join_session(
+                session,
+                {
+                    "character/npc/a.mdl": (
+                        0x3001,
+                        [0x40000000, 0x40001000],
+                        [0x50000000, 0x50004000],
+                    ),
+                    "character/npc/b.mdl": (0x3002, [0x40002000], [0x50008000]),
+                },
+            )
+
+            report = verify(session)
+            verdict = report["verdict"]
+            self.assertFalse(verdict["one_pointer_space"])
+            self.assertIsNone(verdict["constant_delta"])
+            self.assertFalse(verdict["ambiguous"])
+            self.assertEqual(verdict["join_owner"], "CAP2.1-generation")
+            self.assertIn("CAP2.1", verdict["statement"])
+            self.assertEqual(report["delta"]["candidates"], [])
+            self.assertEqual(report["delta"]["shared_models"], 2)
+            self.assertEqual(report["cross_field"]["carrying_fields"], [])
+            # A negative verdict must not fall back to correlating by time.
+            self.assertEqual(report["timing"]["pairs"], 0)
+            self.assertEqual(
+                verdict["derivation"],
+                "model identity only; no timestamp correlation",
+            )
+
+    def test_entity_join_reports_several_surviving_deltas_as_ambiguity(self) -> None:
+        # Two differences hold across every shared model, so neither is proven.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_join_session(
+                session,
+                {
+                    "character/npc/a.mdl": (
+                        0x3001,
+                        [0x40000000],
+                        [0x40000008, 0x40000010],
+                    ),
+                    "character/npc/b.mdl": (
+                        0x3002,
+                        [0x40002000],
+                        [0x40002008, 0x40002010],
+                    ),
+                },
+            )
+
+            report = verify(session)
+            verdict = report["verdict"]
+            self.assertTrue(verdict["ambiguous"])
+            self.assertFalse(verdict["one_pointer_space"])
+            self.assertEqual(verdict["join_owner"], "CAP2.1-generation")
+            self.assertEqual(
+                [entry["delta"] for entry in report["delta"]["candidates"]],
+                ["0x00000008", "0x00000010"],
+            )
+            row = report["per_model"]["shared_models"][0]
+            self.assertIsNone(row["constant_delta"])
+            self.assertEqual(row["distinct_differences"], 2)
+            self.assertTrue(all(entry["candidate"] for entry in row["differences"]))
+
+    def test_entity_join_names_a_draw_field_that_already_carries_the_instance(
+        self,
+    ) -> None:
+        # The five raw DrawModel arguments and the render-info pointer are
+        # already captured, so a join hiding in one of them costs no new hook.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_join_session(
+                session, {"character/npc/a.mdl": (0x3001, [0x40000000], [0x4000])}
+            )
+
+            report = verify(session)
+            self.assertEqual(report["cross_field"]["carrying_fields"], ["model_info"])
+            carried = next(
+                entry
+                for entry in report["cross_field"]["fields"]
+                if entry["field"] == "model_info"
+            )
+            self.assertEqual(carried["entities_stable"], 1)
+            # One shared model is one coincidence, not a pointer-space rule.
+            self.assertFalse(report["verdict"]["one_pointer_space"])
+            self.assertEqual(report["verdict"]["join_owner"], "CAP2.1-generation")
 
     def test_player_animation_inventory_preserves_duplicate_sequences_and_grid(self) -> None:
         data = bytearray(4096)
@@ -470,6 +1183,13 @@ class RetailCaptureTests(unittest.TestCase):
         self.assertEqual(
             targets["client.get_studio_hdr"]["backend"], "none"
         )
+        for label in (
+            "client.setup_bones",
+            "engine.model_render_draw_model",
+            "engine.model_render_draw_model_shadow",
+        ):
+            self.assertEqual(targets[label]["backend"], "inline_detour")
+            self.assertEqual(targets[label]["calling_convention"], "thiscall")
         backend = (NATIVE_ROOT / "hook_backend.cpp").read_text(
             encoding="utf-8"
         )
@@ -484,6 +1204,30 @@ class RetailCaptureTests(unittest.TestCase):
         self.assertIn("HookBackends::Install(", retained_probe)
         self.assertNotIn("VirtualProtect(", retained_probe)
         self.assertNotIn("trampoline", retained_probe.lower())
+
+    def test_bracket_detours_pop_and_release_under_an_unwind(self) -> None:
+        # The bracket hooks are the only ones that run work before the
+        # original. An unwind out of retail that skipped the pop would leak a
+        # generation, and one that skipped the refcount would leave
+        # RemoveHooks spinning forever, so both live in __finally.
+        retained_probe = (
+            REPO_ROOT
+            / "research"
+            / "tooling"
+            / "capture"
+            / "live_pose_hook.cpp"
+        ).read_text(encoding="utf-8")
+        for original in (
+            "gOriginalSetupBones(",
+            "gOriginalModelRenderDrawModel(",
+            "gOriginalModelRenderDrawModelShadow(",
+        ):
+            call = retained_probe.index(original)
+            closing = retained_probe.index("__finally", call)
+            self.assertLess(retained_probe.rindex("__try", 0, call), call)
+            body = retained_probe[closing : retained_probe.index("}", closing)]
+            self.assertIn("EndBracket(", body)
+            self.assertIn("InterlockedDecrement(&gActiveHooks)", body)
 
     def test_supervision_owns_children_and_finalizes_partial_captures(self) -> None:
         cmake = (NATIVE_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")

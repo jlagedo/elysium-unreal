@@ -53,6 +53,15 @@
           "expected_bytes": "b84c6f0000"
         },
         {
+          "semantic_label": "client.setup_bones",
+          "source_function_label": "c_baseanimating_setupbones",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x000919c0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "b830270000"
+        },
+        {
           "semantic_label": "client.get_studio_hdr",
           "kind": "symbol",
           "backend": "none",
@@ -78,7 +87,26 @@
         "section_count": 5,
         "characteristics": "0x210e"
       },
-      "targets": []
+      "targets": [
+        {
+          "semantic_label": "engine.model_render_draw_model",
+          "source_function_label": "c_modelrender_drawmodel",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x000a6640",
+          "calling_convention": "thiscall",
+          "expected_bytes": "83ec248b1528331720"
+        },
+        {
+          "semantic_label": "engine.model_render_draw_model_shadow",
+          "source_function_label": "c_modelrender_drawmodelshadow",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x000a6990",
+          "calling_convention": "thiscall",
+          "expected_bytes": "8b1528331720"
+        }
+      ]
     },
     {
       "id": "vtmb-retail-studiorender-13d56ce9",

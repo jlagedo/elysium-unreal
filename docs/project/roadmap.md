@@ -187,9 +187,20 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
   It produces hook-active `sp_theatre` cutscene runs consolidated into one queryable
   capture database per run, carrying actor/model/skeleton identity, every fired
   source animation contribution, BASE/FINL state, and final matrices, bracketed by
-  the cutscene's own trigger and map-transition events. Open: joining the observed
-  source identities to the patch-first export/decoder stack, and the resource-load
-  and byte-span coverage that join needs. Editable raw byte-span recipes are added
+  the cutscene's own trigger and map-transition events. An offline calibration reads
+  a finalized database read-only and reports its integrity, rates, census, and derived
+  run zero, so filter and storage decisions are measured rather than estimated. A second
+  offline reader joins the draw and skeletal streams on the measured fixed +4 between the
+  render-info entity field and the `C_BaseAnimating` instance, so a captured pose and the
+  draw it produced name one actor. Entry/exit brackets on the client pose builder and on
+  both engine frames that submit a studio draw stamp a per-thread generation on every record
+  they enclose, and a third offline reader reports assignment coverage, bracket integrity,
+  and whether the enclosing generation and the carried instance identity agree. Every record
+  in a full run is assigned and the two attributions never disagree, so a pose group is
+  scoped by construction rather than by pointer lifetime. Open:
+  reproducing that on a second cutscene, joining the
+  observed source identities to the patch-first export/decoder stack, and
+  the resource-load and byte-span coverage that join needs. Editable raw byte-span recipes are added
   only when the first mismatching stage needs them; there is no public
   compatibility surface or migration system.
   Detailed tasks and acceptance:
@@ -1185,7 +1196,7 @@ retail end to end, and `uv run elysium test Play` proves it headlessly.
 | RE29 | Entity-name matching is case-insensitive with final-`*` prefix semantics. → `docs/vtmb/entity_io.md`. | entity I/O | [x] |
 | RE30 | Recover `trigger_environmental_audio` touch behavior and the precedence/interpolation among its `room_type`, SoundScheme `RoomDSP`, and the player's networked `m_sndRoomDSP`/`m_sndPlayerDSP`. → `docs/vtmb/audio_pipeline.md`. | 6.7 | [ ] |
 | RE31 | Recover the SoundScheme RandomSound frequency scheduler/distribution and transition edge cases; the current approximate curve is not a faithful baseline. → `docs/vtmb/audio_pipeline.md`. | 6.7 | [ ] |
-| RE32 | Capture one source-attributed `sp_theatre` run from pre-map resource loads through actors/models/skeletons, every fired skeletal contribution, pose-build stages, and final render matrices in one queryable database. Join observed owner/sequence/animation identities to exact patch-first bytes and current export/decoder output, then trace only selected mismatches through decoding, blends/remaps, scene placement, root/entity motion, procedural work, hierarchy, and render handoff. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/animation_and_movers.md` and `docs/vtmb/choreographed_scenes.md`. | 8.5, 8.11, 12.1 | [~] |
+| RE32 | Capture one source-attributed `sp_theatre` run from pre-map resource loads through actors/models/skeletons, every fired skeletal contribution, pose-build stages, and final render matrices in one queryable database. Join observed owner/sequence/animation identities to exact patch-first bytes and current export/decoder output, then trace only selected mismatches through decoding, blends/remaps, scene placement, root/entity motion, procedural work, hierarchy, and render handoff. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/animation_and_movers.md`, `docs/vtmb/choreographed_scenes.md`, and `docs/vtmb/vtmb-animation-reverse-engineering.md`. | 8.5, 8.11, 12.1 | [~] |
 | RE33 | Trace expression, VCD/audio, and `.lip` resources from source bytes through runtime objects, controller mixing, flex rules/ramps, eyelids, amplitude mouth, vertex deformation, and render submission. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/facial_animation.md`. | 12.3–12.5 | [~] |
 | SKY | The sky/ambience rework is complete; remaining work is tracked as 3.10–3.13 and RE17. Facts: `docs/vtmb/sky-ambience.md`. | 3.6, 3.7 | [x] |
 

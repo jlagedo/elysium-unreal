@@ -57,7 +57,13 @@ TRANSITION_MAP = "sp_tutorial_1"
 ARM_MARKER = "Setting Variable: G.Story_State = -4"
 CUTSCENE_SECONDS = 370
 PROBE_SECONDS = 90
-BACKSTOP_SECONDS = 480
+# host_framerate pins the simulation step, not the wall clock, so a run that
+# renders below 30 fps stretches the same cutscene over more wall-clock time.
+# An unfocused window halves the rate and VtMB has no cvar or launch switch to
+# stop that, so the backstop covers the walk plus the cutscene at the slowest
+# observed rate with margin, not the authored length.
+BACKSTOP_SECONDS = 720
+MAXIMUM_DURATION_SECONDS = 900
 CONSOLE_LOG_RELATIVE = Path("logs") / "console.log"
 CONSOLE_LOG_ROOTS = (Path("."), Path("Unofficial_Patch"), Path("Vampire"))
 # psutil terminates with SIGTERM semantics on Windows, so the watcher's own
@@ -195,6 +201,11 @@ def write_hook_ini(path: Path, session: Path, duration_seconds: int) -> None:
     resolve = target(client, "client.resolve_virtual_model_pose")
     build = target(client, "client.build_transformations")
     get_header = target(client, "client.get_studio_hdr")
+    setup_bones = target(client, "client.setup_bones")
+    engine = _profile("engine.dll")
+    model_render = target(engine, "engine.model_render_draw_model")
+    model_render_shadow = target(
+        engine, "engine.model_render_draw_model_shadow")
     values = {
         "output": session / "scene.elpose",
         "animation_output": session / "animation.elanim",
@@ -212,6 +223,16 @@ def write_hook_ini(path: Path, session: Path, duration_seconds: int) -> None:
         "build_transformations_rva": f"0x{build['rva']:x}",
         "build_transformations_expected": build["expected_bytes"],
         "get_studio_hdr_rva": f"0x{get_header['rva']:x}",
+        "setup_bones_rva": f"0x{setup_bones['rva']:x}",
+        "setup_bones_expected": setup_bones["expected_bytes"],
+        "model_render_draw_model_rva": f"0x{model_render['rva']:x}",
+        "model_render_draw_model_expected": model_render["expected_bytes"],
+        "model_render_draw_model_shadow_rva": (
+            f"0x{model_render_shadow['rva']:x}"
+        ),
+        "model_render_draw_model_shadow_expected": (
+            model_render_shadow["expected_bytes"]
+        ),
         "target_checksum": "0x00000000",
         "duration_seconds": duration_seconds + 60,
     }
@@ -472,7 +493,9 @@ def run(args: argparse.Namespace) -> int:
         f"when '{MAP_MARKER}' appears, walk forward onto the arrival trigger. "
         "Take as long as you like: the run stamps the trigger instant, so a "
         f"slow walk only lengthens the idle prefix. The cutscene then runs "
-        f"itself (~{CUTSCENE_SECONDS}s). "
+        f"itself (~{CUTSCENE_SECONDS}s). Leave the game window focused for the "
+        "whole run: an unfocused window halves the frame rate, which stretches "
+        "the cutscene toward the backstop without changing what it plays. "
         + (
             f"This probe stops at its {args.duration_seconds}s backstop."
             if args.probe
@@ -496,10 +519,6 @@ def run(args: argparse.Namespace) -> int:
             "capture hook did not flush cleanly: "
             f"supervision={finalization.get('reason')} hook={hook_done}"
         )
-    database_report = finalize(
-        session,
-        retain_temporary_streams=args.retain_temporary_streams,
-    )
     boundary = {
         "probe": bool(args.probe),
         "arm_marker": ARM_MARKER,
@@ -518,6 +537,16 @@ def run(args: argparse.Namespace) -> int:
             if "Traceback" in line or "Error:" in line
         ],
     }
+    # The finalizer archives this file, so the run zero travels inside the
+    # evidence database instead of only in the result roll-up beside it.
+    (session / "boundary.json").write_text(
+        json.dumps(boundary, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    database_report = finalize(
+        session,
+        retain_temporary_streams=args.retain_temporary_streams,
+    )
     clean = (
         int(hook_done.get("dropped", "0")) == 0
         and not any(database_report["incomplete_tail_bytes"].values())
@@ -561,8 +590,10 @@ def main() -> int:
     args = parser.parse_args()
     if args.duration_seconds is None:
         args.duration_seconds = PROBE_SECONDS if args.probe else BACKSTOP_SECONDS
-    if args.duration_seconds < 15 or args.duration_seconds > 600:
-        parser.error("--duration-seconds must be between 15 and 600")
+    if args.duration_seconds < 15 or args.duration_seconds > MAXIMUM_DURATION_SECONDS:
+        parser.error(
+            f"--duration-seconds must be between 15 and {MAXIMUM_DURATION_SECONDS}"
+        )
     if args.pre_map_waits < 1 or args.pre_map_waits > 1800:
         parser.error("--pre-map-waits must be between 1 and 1800")
     return run(args)
