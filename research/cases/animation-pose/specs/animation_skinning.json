@@ -14,7 +14,7 @@
   "questions": [
     "What does the fifth engine-private SetupBones callback argument point at? Its optionality is settled - CModelRender::DrawModel passes the address of a stack local and CModelRender::DrawModelShadow passes NULL for the same slot - but what the callee writes there is not.",
     "Which CModelRender state fields choose the StudioRender ordinary, flexed, and material-specific mesh branches?",
-    "Which function does the model-loader interface slot +0x18 resolve to, and is it the complete set of paths that free a studio header from the model cache?",
+    "Do the allocator variants 0x201139c0, 0x201134e0 and 0x201136e0 ever evict a studio model's cache_user, or only hunk allocations that no model owns?",
     "What do the render info's two 16-bit fields at +0x08 and +0x0a select, and what are the dwords at +0x0c, +0x10, +0x14 and +0x1c?"
   ],
   "findings": [
@@ -25,10 +25,22 @@
       "consequence": "The whole struct is a bounded 32-byte copy off a pointer the draw hook already holds, so the capture retains it verbatim; only +0x00 and +0x18 are decoded, and what the remaining fields mean stays an open question rather than a field name."
     },
     {
-      "confidence": "hypothesis",
-      "fact": "CEngineClient::UnloadModel dispatches a model release through the model-loader interface at vtable slot +0x18 with a flag of 8.",
-      "evidence": "0x2001a7b0 pushes the VProf marker string \"CEngineClient::UnloadModel\" at 0x201976f4 and then calls (**(code **)(*(int *)0x201a6774 + 0x18))(model, 8). CModelLoader is present as an RTTI class with no methods attributed, its named members are FindModel 0x200b87a0, LoadModel 0x200b8960, GetExtraData 0x200bb6f0 and Map_IsValid 0x200bb8d0, and the Quake cache asserts \"Cache_Free: not allocated\" and \"Cache_UnlinkLRU: NULL link\" appear inlined across ten functions rather than in one Cache_Free body.",
-      "consequence": "A model-cache free target for the census exists but is not yet pinned: the interface slot has to be resolved to a function and proved to be the complete set of free paths before a hook may be declared, the way the two engine draw frames were. Until then the census reports residency and a vanished count instead of an unload event."
+      "confidence": "confirmed",
+      "fact": "A studio model's bytes are a Quake cache_user_t at model_t+0xb0, so the studiohdr is *(model+0xb0) and the model owns no other copy of it.",
+      "evidence": "CModelLoader::GetExtraData 0x200bb6f0 branches on the type at model+0x88 — 2 returns model+0xb8 directly, 3 takes model+0xb0, calls Cache_Check 0x20114780 with it, and on a zero result calls CModelLoader::LoadModel 0x200b8960 before returning *(model+0xb0) and reporting \"CModelLoader::GetExtraData: re-caching %s failed\" if it is still zero.",
+      "consequence": "A studiohdr address stops being valid exactly when that one word is nulled, and an evicted model returns from a later GetExtraData at a different address, which is what a census sweep sees as a header that no longer reads as its own."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "CModelLoader::UnloadModel is 0x200b8e60 and only clears reference bits; it frees nothing.",
+      "evidence": "CEngineClient::UnloadModel 0x2001a7b0 loads the model-loader singleton from 0x201a6774 (0x21007598), whose only writer 0x200b63f0 installs vtable 0x20174f74, whose slot +0x18 is 0x200b8e60; slot +0xc is 0x200bb6f0, the GetExtraData its own string names. 0x200b8e60 is two instructions: *(uint *)(model+0x84) &= ~flags.",
+      "consequence": "The interface slot reached from CEngineClient::UnloadModel is an unreference, so a hook on it would record a reference drop and never a freed studiohdr."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The cache free is a store inlined at several allocator sites rather than one callable boundary, and the standalone Cache_Free is bypassed by the two paths a map change takes.",
+      "evidence": "Cache_Free 0x201146f0 takes one cache_user_t, asserts \"Cache_Free: not allocated\", unlinks and nulls *cache_user. The same body is inlined in Cache_Alloc 0x201147f0, whose eviction loop takes the LRU victim at DAT_21306748[1] and nulls it whenever Cache_TryAlloc 0x20114200 fails; in Cache_Flush 0x201143a0, which walks the whole LRU list from DAT_21306744 doing the same; and in the allocator variants 0x201139c0, 0x201134e0 and 0x201136e0. Every copy is identified by the assert it guards the store with.",
+      "consequence": "No single hookable function is the model-cache free. Catching one needs Cache_Alloc and Cache_Flush bracketed alongside Cache_Free and a sweep of the recorded headers after each, and even then the event is 'these headers no longer read' rather than a per-model free, because the store has no call boundary of its own."
     },
     {
       "confidence": "confirmed",

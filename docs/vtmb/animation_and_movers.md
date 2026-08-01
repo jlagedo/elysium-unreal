@@ -562,6 +562,40 @@ every other class derived from `C_BaseAnimating` carries its own vtable with the
 same inherited slots. A capture hooked on `0x10002d80` records no construction at
 all while skeletal actors are being posed.
 
+#### A studio model's bytes live in a cache slot with no free to hook
+
+A `model_t` holds its type at `+0x88` — `2` for brush, `3` for studio — its
+reference flags at `+0x84`, and for a studio model a Quake `cache_user_t` at
+`+0xb0`. **The `studiohdr` is `*(model + 0xb0)`**, and the model owns no other
+copy of it.
+
+`CModelLoader::GetExtraData` (`0x200bb6f0`) is the sole route from a model to its
+header. For a studio model it calls `Cache_Check` (`0x20114780`) on the cache
+user and, when that returns zero, calls `CModelLoader::LoadModel`
+(`0x200b8960`) to re-cache before returning the word again. So a header address
+stops being valid exactly when that one word is nulled, and an evicted model
+comes back from a later `GetExtraData` **at a different address** rather than the
+old one.
+
+`CModelLoader::UnloadModel` frees nothing. It is `0x200b8e60`, the model-loader
+interface's slot `+0x18` reached from `CEngineClient::UnloadModel`
+(`0x2001a7b0`), and it is two instructions: `model->flags &= ~flags`. It drops a
+reference.
+
+The free itself is a store without a call boundary. `Cache_Free` (`0x201146f0`)
+takes one cache user, unlinks it and nulls it — but the same body is **inlined**
+into `Cache_Alloc` (`0x201147f0`), whose eviction loop nulls the LRU victim
+whenever `Cache_TryAlloc` (`0x20114200`) fails, and into `Cache_Flush`
+(`0x201143a0`), which walks the whole LRU list doing the same. Three allocator
+variants (`0x201139c0`, `0x201134e0`, `0x201136e0`) carry the body too. Every
+copy is identifiable by the `Cache_Free: not allocated` assert guarding it.
+
+Those two inlined paths are the ones a map change takes, so hooking `Cache_Free`
+would miss the case that matters. Observing an unload means bracketing
+`Cache_Alloc` and `Cache_Flush` as well and re-reading the recorded headers
+afterwards, and the result is still "these headers no longer read as their own"
+rather than a per-model free event.
+
 #### The render info a studio draw receives
 
 `CModelRender::RenderModel` builds the struct `CStudioRender::DrawModel` takes as

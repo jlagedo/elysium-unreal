@@ -359,11 +359,16 @@ calling convention into the case specification before a hook is written.
   reused address, and a resident-at-stop sweep, and counts headers that no longer read as
   their own header. A run that stops on the map transition sweeps its headers mid-teardown
   and finds most of them gone, which is the free happening and being seen only as absence.
-  A true unload event still needs the model-cache target: `CEngineClient::UnloadModel`
-  dispatches through the model-loader interface slot `+0x18`, but that slot is unresolved
-  and the Quake cache's own free is inlined across ten functions, so no target may be
-  declared yet. Actor lifetime does not depend on it — that pair is `C_BaseEntity`'s
-  constructor and destructor, and CAP2.3 closes on them.
+
+  **There is no single model-cache free to hook, and residency is the right shape.** A studio
+  model's bytes are a cache slot at `model+0xb0`; `CModelLoader::UnloadModel` only drops a
+  reference; and the free is a store inlined into `Cache_Alloc`'s eviction loop and
+  `Cache_Flush`'s walk, which are exactly the two paths a map change takes, so the standalone
+  `Cache_Free` is bypassed. Catching an unload would mean bracketing all three and re-reading
+  the recorded headers afterwards, and the event would still be "these headers no longer read"
+  rather than a per-model free. Facts: `docs/vtmb/animation_and_movers.md`. That work is
+  parked until a difference report names it; actor lifetime never depended on it, since that
+  pair is `C_BaseEntity`'s constructor and destructor and CAP2.3 closes on them.
 
   Three defects were closed on the way. `client.get_studio_hdr` was the one hook-contract
   target with no `source_function_label`, so the generator never checked it against a

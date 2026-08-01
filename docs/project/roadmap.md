@@ -211,9 +211,10 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
   it is placed into. Open:
   reproducing the run on a second cutscene,
   joining the observed source identities to the patch-first export/decoder stack,
-  the byte-span coverage that join needs, and
-  the model-cache target that would turn header residency into an unload event.
-  Editable raw byte-span recipes are added
+  and the byte-span coverage that join needs. Header residency stays as it is: there is no
+  single model-cache free to hook, so an unload event would cost three brackets and still
+  report absence rather than a per-model free, and it is parked until a difference report
+  names it. Editable raw byte-span recipes are added
   only when the first mismatching stage needs them; there is no public
   compatibility surface or migration system.
   Detailed tasks and acceptance:
