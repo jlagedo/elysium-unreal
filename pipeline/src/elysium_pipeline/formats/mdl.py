@@ -280,13 +280,15 @@ def _envmask_png(info, bt, img, read_bytes, out_dir, tex_cache):
 
 
 def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
-    """material name -> dict(albedo, emis, additive, envmap, envmask, envtint). The albedo PNG
-    (and the self-illum emission mask derived from its alpha) is decoded once per basetexture
-    and cached; selfillum/additive/envmap are per-material (per-VMT), so two materials that
-    share a basetexture but differ in those flags do not inherit each other's."""
+    """material name -> dict(albedo, emis, additive, translucent, alphatest, envmap, envmask,
+    envtint). The albedo PNG (and the self-illum emission mask derived from its alpha) is
+    decoded once per basetexture and cached; selfillum/additive/translucent/alphatest/envmap
+    are per-material (per-VMT), so two materials that share a basetexture but differ in those
+    flags do not inherit each other's."""
     from elysium_pipeline.formats import vmt
     from elysium_pipeline.formats.tex_to_png import decode as decode_texture
     none = {"albedo": None, "emis": None, "additive": False,
+            "translucent": False, "alphatest": False,
             "envmap": None, "envmask": None, "envtint": None}
     vmt_txt = None
     for sp in search:
@@ -306,6 +308,8 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
         return dict(none)
     bt = _norm(bt.replace("\\", "/").lstrip("/"))   # prop VMTs carry leading/doubled slashes
     additive = bool(info.get("additive"))
+    translucent = bool(info.get("translucent"))
+    alphatest = bool(info.get("alphatest"))
 
     # Cache per basetexture: [albedo_png, emis_png_or_None, decoded_img_or_None].
     # emis is generated lazily the first time a selfillum material references this
@@ -354,6 +358,8 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
         "albedo": albedo,
         "emis": emis if info.get("selfillum") else None,
         "additive": additive,
+        "translucent": translucent,
+        "alphatest": alphatest,
         "envmap": envmap,
         "envmask": envmask,
         "envtint": envtint,
@@ -441,8 +447,12 @@ def write_obj_scene(meshes, name, out_dir, search, read_bytes, tex_cache, *, ski
             if m["emis"]:
                 f.write(f"map_Ke tex/{m['emis']}\n")
             if m["additive"]:
-                f.write("additive 1\n")
-            # Same three lines UE_bsp_to_scene writes for a reflective world surface, so one
+                f.write("additive 1\n")             # our flag: additive glow overlay (unlit)
+            elif m["translucent"]:
+                f.write("blend 1\n")                # our flag: alpha-blended
+            elif m["alphatest"]:
+                f.write("illum 4\n")                # our flag: alpha-tested (scissor)
+            # Same envmap lines UE_bsp_to_scene writes for a reflective world surface, so one
             # MTL contract covers world and props. $envmapcontrast/$envmapsaturation are not
             # emitted: VtMB's shipped shaders carry no term for either (docs/vtmb/reflections.md).
             if m["envmap"]:

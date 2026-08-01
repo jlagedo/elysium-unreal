@@ -73,6 +73,36 @@ class CoordinateContractTests(unittest.TestCase):
         self.assertIn("f 1/1 3/3 2/2", obj)
 
 
+class PropMaterialContractTests(unittest.TestCase):
+    def _mtl_for_vmt(self, vmt_body: str) -> str:
+        mesh = mdl.Mesh("glasswin")
+        mesh.verts = [
+            (1.0, 2.0, 3.0, 0.0, 0.0),
+            (2.0, 2.0, 3.0, 1.0, 0.0),
+            (1.0, 3.0, 3.0, 0.0, 1.0),
+        ]
+        mesh.tris = [(0, 1, 2)]
+
+        def read_bytes(path):
+            return vmt_body.encode("ascii") if path == "materials/glasswin.vmt" else None
+
+        with tempfile.TemporaryDirectory() as out:
+            mdl.write_obj_scene([mesh], "test", out, [], read_bytes, {})
+            return (Path(out) / "test.mtl").read_text(encoding="utf-8")
+
+    def test_translucent_prop_material_carries_blend_flag(self) -> None:
+        mtl = self._mtl_for_vmt(
+            '"VertexLitGeneric"\n{\n"$basetexture" "props/glasswin"\n"$translucent" "1"\n}\n'
+        )
+        self.assertIn("blend 1", mtl)
+
+    def test_alphatest_prop_material_carries_illum_flag(self) -> None:
+        mtl = self._mtl_for_vmt(
+            '"VertexLitGeneric"\n{\n"$basetexture" "props/glasswin"\n"$alphatest" "1"\n}\n'
+        )
+        self.assertIn("illum 4", mtl)
+
+
 class LightingBakeContractTests(unittest.TestCase):
     def test_spot_cones_use_both_authored_cosines(self) -> None:
         source = (REPO / "pipeline/unreal/bake_map.py").read_text(encoding="utf-8")
