@@ -421,6 +421,41 @@ in one burst. Unobservable in shipped content — no map wires `Pause` or `Resum
 the code does. `Cancel` stops the scene's events, unhides, fires `OnCanceled` with the stored
 activator, and clears both flags — without touching `position_end`.
 
+### A map sequences scenes with triggers and camera keyframes, not with scene outputs
+
+None of the shipped `logic_choreographed_scene` entities on `sp_theatre` wires an output — the
+only one in the map that does is `embrace_o_matic`, whose `OnTrigger1` opens a door. Scenes do
+not chain to each other. The clock that advances a cutscene is the **camera keyframe track**:
+each `camera_keyframe` carries `MoveTime` and `Pause`, and its `OnReachedKeyframe` at a chosen
+index fires the next stage.
+
+`sp_theatre` is the worked example, and it is a cutscene end to end — one touch starts it and it
+finishes by loading the next map, with nothing to decide in between:
+
+1. An **unnamed** `trigger_once` at `(-4169.72, 1232, -309.85)` runs `chooseSire()`,
+   `castUnderstudy()`, `controller CreateControllerNPC`, the `embrace_camera`/`embrace_target`
+   tracks, `embrace_o_matic` + `_2 Start`, five prop `SetAnimation`s, and `G.Story_State = -4`.
+   Arriving from `sp_genesisdevice_1` spawns the player at `info_landmark newgame`, which lies
+   inside it, so the cutscene starts on arrival. `info_player_start` — where a console `map`
+   load spawns — is 77 units short of it, and the player has to cross that gap.
+2. `embrace_camera_22 OnReachedKeyframe` → +4.0 → `move_embrace_actors Teleport` moves `!player`
+   into the `start_courtroom` volume.
+3. `start_courtroom OnTrigger` → +1.0 → `courtroom_scene_relay`, which starts seven
+   `courtroom_scene_bip*` scenes at once, the courtroom camera pair, three prop animations, and
+   `fillSeats()`.
+4. `courtroom_target_36 OnReachedKeyframe` → `scene_over_fade` +1.0 and `scene_over_relay` +4.0,
+   which kills the courtroom cast and triggers `walk_out_relay` — four `scripted_sequence`
+   `BeginSequence` walk-outs behind a second camera pair.
+5. `walk_out_cam_k OnReachedKeyframe` → +21.0 → `tutorial_change ScriptUnhide`, revealing the
+   `trigger_changelevel` that ends the map.
+6. `walk_out_fade` → +2.0 → `walk_out_fade_relay` → +3.5 → `male_or_female Test` →
+   `Prince_Escort_Male`/`Female`, whose escort walks the player through that changelevel.
+
+Two consequences for a rebuild. **Scene playback is driven by an external clock**, so a scene
+that finishes early or late does not shift what follows it — the keyframe track does. And
+`theatre.py::tutorialLoad()`, which calls `ChangeMap(2.5, "tutorial", "tutorial_change")`, is
+dead: no entity output references it, and step 5 is what actually ends the map.
+
 ## `CInstancedSceneEntity` — the dialogue path
 
 RTTI `.?AVCInstancedSceneEntity@@`, vftable `0x1044f584`. A `CSceneEntity` subclass the

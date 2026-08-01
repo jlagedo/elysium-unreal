@@ -5,11 +5,17 @@ This tool installs one inert cfg into the selected Unofficial Patch only when
 suspended, bootstraps the exact-build probe, preloads the skeletal hook, and
 only then resumes retail. The cfg waits before issuing ``map sp_theatre`` so
 the client and StudioRender hooks are armed before map resources begin loading.
+
+``sp_theatre`` is a cutscene from end to end. A console ``map`` load spawns the
+player short of the unnamed arrival trigger that starts it, so the operator
+walks onto that trigger once; every stage after it is authored. The run stops
+when the cutscene ends by loading ``sp_tutorial_1``.
 """
 
 from __future__ import annotations
 
 import argparse
+import ctypes
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -17,6 +23,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import threading
 import time
 
 import psutil
@@ -40,6 +47,22 @@ from research.tooling.capture.retail_capture_native import (
 CONFIG_NAME = "elysium_cap11_theatre.cfg"
 CONFIG_SIGNATURE = "// Generated retained CAP1.1 sp_theatre capture recipe."
 PRE_MAP_WAITS = 180
+BOOT_MARKER = "ELYSIUM_CAP11_BOOT"
+MAP_MARKER = "ELYSIUM_CAP11_MAP_SP_THEATRE"
+MARKERS = (BOOT_MARKER, MAP_MARKER)
+TRANSITION_MAP = "sp_tutorial_1"
+# One of the arrival trigger's own OnStartTouch outputs, logged once. The
+# console map load places the player on that trigger, so this is when the
+# cutscene starts and is the only sound zero for comparing two runs.
+ARM_MARKER = "Setting Variable: G.Story_State = -4"
+CUTSCENE_SECONDS = 370
+PROBE_SECONDS = 90
+BACKSTOP_SECONDS = 480
+CONSOLE_LOG_RELATIVE = Path("logs") / "console.log"
+CONSOLE_LOG_ROOTS = (Path("."), Path("Unofficial_Patch"), Path("Vampire"))
+# psutil terminates with SIGTERM semantics on Windows, so the watcher's own
+# shutdown surfaces as this exit code and is a normal end of run.
+WATCHER_EXIT_CODE = 15
 
 
 def sha256(path: Path) -> str:
@@ -56,19 +79,74 @@ def build_config(pre_map_waits: int = PRE_MAP_WAITS) -> str:
     lines = [
         CONFIG_SIGNATURE,
         "// Uninstall: delete this file.",
-        "echo ELYSIUM_CAP11_BOOT",
+        f"echo {BOOT_MARKER}",
         "developer 1",
         "sv_cheats 1",
         "fps_max 30",
+        # A fixed simulation step makes every actor sample exactly 30 times per
+        # game-second, which is what makes the captured rates comparable.
+        "host_framerate 0.033333333",
+        "host_timescale 1",
+        # The operator alt-tabs to this terminal mid-cutscene; pausing there
+        # would stall the capture against the backstop.
         "pausable 0",
-        "cl_mouselook 0",
-        "cl_mouseenable 0",
         *(["wait"] * pre_map_waits),
-        "echo ELYSIUM_CAP11_MAP_SP_THEATRE",
+        f"echo {MAP_MARKER}",
         "map sp_theatre",
         "",
     ]
     return "\n".join(lines)
+
+
+def console_log_candidates(game_root: Path) -> list[Path]:
+    return [game_root / root / CONSOLE_LOG_RELATIVE for root in CONSOLE_LOG_ROOTS]
+
+
+def read_console_log(game_root: Path) -> tuple[Path | None, str]:
+    for candidate in console_log_candidates(game_root):
+        if not candidate.is_file():
+            continue
+        try:
+            return candidate, candidate.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return candidate, ""
+    return None, ""
+
+
+def performance_counter() -> tuple[int, int]:
+    """Read the same system counter the hook stamps on every record.
+
+    ``QueryPerformanceCounter`` is machine-wide, so a value read here is
+    directly comparable to ``records.qpc`` without correlating clocks.
+    """
+    counter = ctypes.c_int64()
+    frequency = ctypes.c_int64()
+    kernel32 = ctypes.windll.kernel32
+    kernel32.QueryPerformanceCounter(ctypes.byref(counter))
+    kernel32.QueryPerformanceFrequency(ctypes.byref(frequency))
+    return counter.value, frequency.value
+
+
+def transition_state_files(game_root: Path) -> set[str]:
+    save_root = game_root / "Unofficial_Patch" / "Save"
+    if not save_root.is_dir():
+        return set()
+    return {path.name for path in save_root.glob("sp_theatre.HL*")}
+
+
+def transition_signal(game_root: Path, baseline: set[str]) -> str | None:
+    """Name the signal proving retail left ``sp_theatre``, or ``None``.
+
+    Retail writes ``<map>.HL*`` transition state when a ``trigger_changelevel``
+    hands off, so a file the run did not start with is independent evidence of
+    the same event the console log reports.
+    """
+    _, text = read_console_log(game_root)
+    if TRANSITION_MAP in text:
+        return "console-log"
+    if transition_state_files(game_root) - baseline:
+        return "map-transition-state"
+    return None
 
 
 def _module_paths(game_root: Path) -> dict[str, Path]:
@@ -174,6 +252,81 @@ def running_vampire_pids() -> list[int]:
     return sorted(matches)
 
 
+class TransitionWatcher:
+    """Bracket the cutscene: stamp where it starts, stop where it ends.
+
+    The arm stamp is a raw performance counter, so analysis aligns two runs on
+    the trigger instant rather than on wall clock. Touching ``stop.txt`` is
+    what makes the hook drain, flush and close its streams and write
+    ``done.txt``; retail is only terminated afterwards, so ending the run at
+    the boundary never costs a partial stream.
+    """
+
+    def __init__(self, game_root: Path, session: Path, probe: bool) -> None:
+        self._game_root = game_root
+        self._stop_path = session / "stop.txt"
+        self._done_path = session / "done.txt"
+        self._probe = probe
+        self._baseline = transition_state_files(game_root)
+        self._finished = threading.Event()
+        self._started = time.monotonic()
+        self._thread = threading.Thread(target=self._poll, daemon=True)
+        self.signal: str | None = None
+        self.seconds: float | None = None
+        self.arm_qpc: int | None = None
+        self.arm_seconds: float | None = None
+        self.qpc_frequency: int | None = None
+
+    def __enter__(self) -> "TransitionWatcher":
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self._finished.set()
+
+    def _poll(self) -> None:
+        while not self._finished.wait(0.25):
+            _, console_text = read_console_log(self._game_root)
+            # The map marker is this run's own echo, so requiring it first
+            # keeps any surviving earlier log from arming the run.
+            if (
+                self.arm_qpc is None
+                and MAP_MARKER in console_text
+                and ARM_MARKER in console_text.split(MAP_MARKER, 1)[1]
+            ):
+                self.arm_qpc, self.qpc_frequency = performance_counter()
+                self.arm_seconds = round(time.monotonic() - self._started, 3)
+                print(
+                    f"cutscene armed at {self.arm_seconds}s (qpc={self.arm_qpc})",
+                    flush=True,
+                )
+            if self._probe:
+                continue
+            signal = transition_signal(self._game_root, self._baseline)
+            if signal is None:
+                continue
+            self.signal = signal
+            self.seconds = round(time.monotonic() - self._started, 3)
+            print(
+                f"transition={signal} after {self.seconds}s; "
+                "flushing the capture",
+                flush=True,
+            )
+            self._stop_path.touch()
+            while not self._finished.wait(0.5):
+                if self._done_path.is_file():
+                    break
+            self._terminate_retail()
+            return
+
+    def _terminate_retail(self) -> None:
+        for pid in running_vampire_pids():
+            try:
+                psutil.Process(pid).terminate()
+            except (psutil.AccessDenied, psutil.NoSuchProcess):
+                continue
+
+
 def _run_and_log(command: list[str], log_path: Path, cwd: Path) -> int:
     with log_path.open("w", encoding="utf-8", buffering=1) as log:
         process = subprocess.Popen(
@@ -235,11 +388,22 @@ def run(args: argparse.Namespace) -> int:
     hook_ini = hook.with_suffix(".ini")
     write_hook_ini(hook_ini, session, args.duration_seconds)
 
+    # Retail resolves `logs/console.log` against a root it does not create, so
+    # every candidate directory has to exist before `-condebug` can write. A
+    # log left by an earlier run has to go: the watcher arms on a line the
+    # previous run also wrote, and would match it before retail reopens the
+    # file.
+    console_candidates = console_log_candidates(game_root)
+    for candidate in console_candidates:
+        candidate.parent.mkdir(parents=True, exist_ok=True)
+        candidate.unlink(missing_ok=True)
     launch_arguments = [
         "-game",
         "Unofficial_Patch",
         "-dev",
         "-console",
+        "-condebug",
+        "-conclearlog",
         "-sw",
         "-w",
         "1024",
@@ -253,13 +417,17 @@ def run(args: argparse.Namespace) -> int:
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "tool_git": git_identity(repo_root),
         "map": "sp_theatre",
+        "probe": bool(args.probe),
         "capture_duration_seconds": args.duration_seconds,
         "pre_map_waits": args.pre_map_waits,
         "executable": os.fspath(executable),
         "modules": modules,
         "launch_arguments": launch_arguments,
         "installed_config": os.fspath(config_path),
-        "uninstall": [os.fspath(config_path)],
+        "uninstall": [
+            os.fspath(config_path),
+            *(os.fspath(candidate) for candidate in console_candidates),
+        ],
         "retail_exit_code": None,
     }
     launch_path = session / "launch.json"
@@ -289,16 +457,37 @@ def run(args: argparse.Namespace) -> int:
         str(args.duration_seconds * 1000),
         "--normal-exit-code",
         "1",
+        "--normal-exit-code",
+        str(WATCHER_EXIT_CODE),
         "--supervise",
         "--",
         *launch_arguments[2:],
     ]
     print(f"install={config_path}", flush=True)
     print(f"uninstall={config_path}", flush=True)
+    for candidate in console_candidates:
+        print(f"uninstall={candidate}", flush=True)
     print(f"session={session}", flush=True)
-    result = _run_and_log(command, session / "launcher.log", game_root)
+    print(
+        f"when '{MAP_MARKER}' appears, walk forward onto the arrival trigger. "
+        "Take as long as you like: the run stamps the trigger instant, so a "
+        f"slow walk only lengthens the idle prefix. The cutscene then runs "
+        f"itself (~{CUTSCENE_SECONDS}s). "
+        + (
+            f"This probe stops at its {args.duration_seconds}s backstop."
+            if args.probe
+            else f"Capture stops when {TRANSITION_MAP} loads."
+        ),
+        flush=True,
+    )
+    with TransitionWatcher(game_root, session, args.probe) as watcher:
+        result = _run_and_log(command, session / "launcher.log", game_root)
     launch["retail_exit_code"] = result
     launch_path.write_text(json.dumps(launch, indent=2) + "\n", encoding="utf-8")
+
+    console_source, console_text = read_console_log(game_root)
+    if console_source is not None:
+        (session / "console.log").write_text(console_text, encoding="utf-8")
 
     finalization = read_key_values(supervision)
     hook_done = read_key_values(session / "done.txt")
@@ -311,13 +500,35 @@ def run(args: argparse.Namespace) -> int:
         session,
         retain_temporary_streams=args.retain_temporary_streams,
     )
+    boundary = {
+        "probe": bool(args.probe),
+        "arm_marker": ARM_MARKER,
+        "arm_qpc": watcher.arm_qpc,
+        "arm_seconds": watcher.arm_seconds,
+        "qpc_frequency": watcher.qpc_frequency,
+        "signal": watcher.signal,
+        "seconds": watcher.seconds,
+        "console_log": (
+            os.fspath(console_source) if console_source is not None else None
+        ),
+        "markers": [marker for marker in MARKERS if marker in console_text],
+        "python_errors": [
+            line
+            for line in console_text.splitlines()
+            if "Traceback" in line or "Error:" in line
+        ],
+    }
     clean = (
         int(hook_done.get("dropped", "0")) == 0
         and not any(database_report["incomplete_tail_bytes"].values())
+        and list(boundary["markers"]) == list(MARKERS)
+        and watcher.arm_qpc is not None
+        and (args.probe or watcher.signal is not None)
     )
     result_path = session / "result.json"
     result_document = {
         "complete": clean,
+        "boundary": boundary,
         "supervision": finalization,
         "hook": hook_done,
         **database_report,
@@ -335,11 +546,21 @@ def main() -> int:
     parser.add_argument("--install-config", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--duration-seconds", type=int, default=240)
+    parser.add_argument("--duration-seconds", type=int)
+    parser.add_argument(
+        "--probe",
+        action="store_true",
+        help=(
+            "Short unattended run over the idle theatre. Measures rates and "
+            "proves the hook flushes without reaching the cutscene."
+        ),
+    )
     parser.add_argument("--pre-map-waits", type=int, default=PRE_MAP_WAITS)
     parser.add_argument("--config", choices=("Debug", "Release"), default="Release")
     parser.add_argument("--retain-temporary-streams", action="store_true")
     args = parser.parse_args()
+    if args.duration_seconds is None:
+        args.duration_seconds = PROBE_SECONDS if args.probe else BACKSTOP_SECONDS
     if args.duration_seconds < 15 or args.duration_seconds > 600:
         parser.error("--duration-seconds must be between 15 and 600")
     if args.pre_map_waits < 1 or args.pre_map_waits > 1800:

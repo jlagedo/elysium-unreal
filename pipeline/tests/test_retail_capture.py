@@ -46,9 +46,15 @@ class RetailCaptureTests(unittest.TestCase):
         map_line = lines.index("map sp_theatre")
         self.assertEqual(lines[map_line - 1], "echo ELYSIUM_CAP11_MAP_SP_THEATRE")
         self.assertEqual(lines[:map_line].count("wait"), PRE_MAP_WAITS)
-        self.assertLess(lines.index("cl_mouselook 0"), map_line)
-        self.assertLess(lines.index("cl_mouseenable 0"), map_line)
+        self.assertLess(lines.index("host_framerate 0.033333333"), map_line)
         self.assertNotIn("player_sequence", "\n".join(lines))
+
+    def test_theatre_recipe_leaves_input_live_and_retail_running(self) -> None:
+        # The operator walks onto the arrival trigger, and the hook only
+        # flushes while retail is alive, so neither may be taken away.
+        lines = build_theatre_config().splitlines()
+        for forbidden in ("cl_mouselook 0", "cl_mouseenable 0", "quit"):
+            self.assertNotIn(forbidden, lines)
 
     def test_capture_finalizer_retains_exact_records_in_one_sqlite_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
