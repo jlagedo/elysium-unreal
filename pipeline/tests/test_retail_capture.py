@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import shutil
 import sqlite3
 import struct
 import tempfile
@@ -26,9 +27,19 @@ from research.tooling.capture.capture_player_sequence import (
 )
 from research.tooling.capture.capture_theatre import (
     PRE_MAP_WAITS,
+    RECIPES,
+    THEATRE,
+    TUTORIAL,
+    arm_signal,
+    beat_marks,
     build_config as build_theatre_config,
+    transition_signal,
 )
-from research.tooling.capture.calibrate_theatre_capture import calibrate
+from research.tooling.capture import calibrate_theatre_capture
+from research.tooling.capture.calibrate_theatre_capture import (
+    calibrate,
+    resolve_session,
+)
 from research.tooling.capture.verify_entity_pointer_join import address, verify
 from research.tooling.capture.finalize_capture_database import (
     ACTOR_FILE_HEADER,
@@ -56,12 +67,16 @@ from research.tooling.capture.verify_pose_build_generation import (
     verify as verify_generation,
 )
 from research.tooling.capture.verify_model_skeleton_census import (
+    compare as compare_census,
     verify as verify_census,
 )
 from research.tooling.capture.verify_actor_identity_lifetime import (
+    compare as compare_actors,
     verify as verify_actors,
 )
 from research.tooling.capture.verify_source_attribution import (
+    compare as compare_attribution,
+    missing_grids,
     verify as verify_attribution,
 )
 from research.tooling.capture.resolve_consumed_spans import (
@@ -82,7 +97,27 @@ from research.tooling.capture.verify_consumed_spans import (
     verify as verify_spans,
 )
 from research.tooling.capture.verify_scene_requests import (
+    compare as compare_scene,
     verify as verify_scene,
+)
+from research.tooling.capture.verify_capture_integrity import (
+    SHARDS,
+    SIDECARS,
+    _tools as integrity_tools,
+    aggregate as aggregate_integrity,
+    resolve as resolve_shard,
+)
+from research.tooling.capture.compact_capture_payloads import (
+    EVENT_TABLE,
+    compact,
+    event_table_ddl,
+)
+from research.tooling.capture.index_capture_database import (
+    INDEX_TABLES,
+    index as index_capture,
+)
+from research.tooling.capture.verify_capture_index import (
+    verify as verify_index,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -723,6 +758,7 @@ def contribution_record(
     animation_index: int = -1,
     num_blends: int = 1,
     group_size: tuple[int, int] = (1, 1),
+    param_index: tuple[int, int] = (0, -1),
     blend_cell: tuple[int, int] = (0, 0),
     blend_weight: tuple[float, float] = (0.0, 0.0),
     faults: int = 0,
@@ -831,8 +867,8 @@ def contribution_record(
             num_blends,
             group_size[0],
             group_size[1],
-            0,
-            -1,
+            param_index[0],
+            param_index[1],
             blend_cell[0],
             blend_cell[1],
             blend_weight[0],
@@ -867,13 +903,20 @@ def write_session(
     done: str = "complete=1\nqueued=2\nwritten=2\ndropped=0\n",
     boundary: dict[str, object] | None = None,
     console: str | None = None,
+    map_name: str = "sp_theatre",
+    run_zero_rule: str | None = None,
 ) -> None:
     (session / "launch.json").write_text(
         json.dumps(
             {
                 "created_utc": "test",
                 "tool_git": {"commit": "abc", "dirty": False},
-                "map": "sp_theatre",
+                "map": map_name,
+                **(
+                    {"run_zero_rule": run_zero_rule}
+                    if run_zero_rule is not None
+                    else {}
+                ),
                 "capture_duration_seconds": 30,
                 "retail_exit_code": 28,
                 "launch_arguments": ["-game", "Unofficial_Patch"],
@@ -890,7 +933,7 @@ def write_session(
         ),
         encoding="utf-8",
     )
-    (session / "recipe.cfg").write_text("map sp_theatre\n", encoding="ascii")
+    (session / "recipe.cfg").write_text(f"map {map_name}\n", encoding="ascii")
     (session / "done.txt").write_text(done, encoding="ascii")
     (session / "supervision.txt").write_text(
         "reason=timeout\nstate=complete\ncapture_done=1\n"
@@ -1163,7 +1206,7 @@ def write_join_session(
 
 class RetailCaptureTests(unittest.TestCase):
     def test_theatre_recipe_delays_map_until_capture_hook_can_arm(self) -> None:
-        lines = build_theatre_config().splitlines()
+        lines = build_theatre_config(THEATRE).splitlines()
         map_line = lines.index("map sp_theatre")
         self.assertEqual(lines[map_line - 1], "echo ELYSIUM_CAP11_MAP_SP_THEATRE")
         self.assertEqual(lines[:map_line].count("wait"), PRE_MAP_WAITS)
@@ -1173,9 +1216,278 @@ class RetailCaptureTests(unittest.TestCase):
     def test_theatre_recipe_leaves_input_live_and_retail_running(self) -> None:
         # The operator walks onto the arrival trigger, and the hook only
         # flushes while retail is alive, so neither may be taken away.
-        lines = build_theatre_config().splitlines()
+        lines = build_theatre_config(THEATRE).splitlines()
         for forbidden in ("cl_mouselook 0", "cl_mouseenable 0", "quit"):
             self.assertNotIn(forbidden, lines)
+
+    def test_tutorial_recipe_enters_its_scene_through_the_named_save(self) -> None:
+        lines = build_theatre_config(TUTORIAL, save="Vampire-007").splitlines()
+        entry = lines.index("load Vampire-007")
+        self.assertEqual(lines[entry - 1], f"echo {TUTORIAL.map_marker}")
+        self.assertEqual(lines[:entry].count("wait"), PRE_MAP_WAITS)
+        self.assertLess(lines.index("host_framerate 0.033333333"), entry)
+        # Every beat is a keypress, because the operator marks one mid-fight.
+        for key, marker in TUTORIAL.beat_binds:
+            self.assertIn(f'bind "{key}" "echo {marker}"', lines)
+        self.assertNotIn("sp_theatre", "\n".join(lines))
+        for forbidden in ("cl_mouselook 0", "cl_mouseenable 0", "quit"):
+            self.assertNotIn(forbidden, lines)
+
+    def test_a_recipe_requiring_a_save_refuses_to_build_without_one(self) -> None:
+        # A cfg that silently loads nothing captures an idle main menu and
+        # reports itself clean, which is the one failure worth making loud.
+        with self.assertRaises(ValueError):
+            build_theatre_config(TUTORIAL)
+        with self.assertRaises(ValueError):
+            build_theatre_config(THEATRE, save="Vampire-007")
+        with self.assertRaises(ValueError):
+            build_theatre_config(TUTORIAL, save="a b; quit")
+
+    def test_every_recipe_names_itself_uniquely(self) -> None:
+        # Two recipes sharing a cfg name would clobber each other in the
+        # install, and the signature guard would then accept the wrong file.
+        for field in ("config_name", "config_signature", "map_marker"):
+            values = [getattr(r, field) for r in RECIPES.values()]
+            self.assertEqual(len(values), len(set(values)), field)
+
+    def test_watcher_arms_on_the_map_marker_when_no_arm_marker_is_declared(
+        self,
+    ) -> None:
+        self.assertFalse(arm_signal(TUTORIAL, "nothing yet"))
+        self.assertTrue(arm_signal(TUTORIAL, f"x\n{TUTORIAL.map_marker}\ny"))
+        # The theatre still requires its authored trigger line, and requires it
+        # after its own map echo, so a surviving earlier log cannot arm a run.
+        stale = f"{THEATRE.arm_marker}\n{THEATRE.map_marker}\n"
+        self.assertFalse(arm_signal(THEATRE, stale))
+        self.assertTrue(
+            arm_signal(THEATRE, f"{THEATRE.map_marker}\n{THEATRE.arm_marker}\n")
+        )
+
+    def test_beat_marks_are_reported_once_each_in_console_order(self) -> None:
+        text = "\n".join(
+            [
+                "ELYSIUM_CAP27_BEAT_FIGHT",  # before the marker: not this run
+                TUTORIAL.map_marker,
+                "ELYSIUM_CAP27_BEAT_PLAYER_AIM",
+                "ELYSIUM_CAP27_BEAT_FIGHT",
+                "ELYSIUM_CAP27_BEAT_PLAYER_AIM",
+            ]
+        )
+        self.assertEqual(
+            beat_marks(TUTORIAL, text),
+            ["ELYSIUM_CAP27_BEAT_PLAYER_AIM", "ELYSIUM_CAP27_BEAT_FIGHT"],
+        )
+        self.assertEqual(beat_marks(THEATRE, text), [])
+
+    def _game_root_with_console(self, root: Path, text: str) -> Path:
+        log = root / "logs" / "console.log"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text(text, encoding="utf-8")
+        return root
+
+    def test_transition_signal_uses_the_recipe_stop_tokens(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            saves = root / "Unofficial_Patch" / "Save"
+            saves.mkdir(parents=True)
+            self._game_root_with_console(root, "still playing\n")
+            self.assertIsNone(transition_signal(root, TUTORIAL, set()))
+            # The scene's own name is not its ending.
+            self._game_root_with_console(root, "sp_tutorial_1 loaded\n")
+            self.assertIsNone(transition_signal(root, TUTORIAL, set()))
+            self._game_root_with_console(root, "sm_pawnshop_1\n")
+            self.assertEqual(
+                transition_signal(root, TUTORIAL, set()), "console-log"
+            )
+            # The independent signal: transition state named after this scene.
+            self._game_root_with_console(root, "still playing\n")
+            (saves / "sp_tutorial_1.HL0").write_bytes(b"")
+            self.assertEqual(
+                transition_signal(root, TUTORIAL, set()), "map-transition-state"
+            )
+            # The theatre's globs do not match, so recipes cannot cross-signal.
+            self.assertIsNone(transition_signal(root, THEATRE, set()))
+
+    def test_an_operator_stop_is_named_apart_from_the_authored_ending(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._game_root_with_console(root, "ELYSIUM_CAP27_STOP\n")
+            # Not an ending unless the run opted in.
+            self.assertIsNone(transition_signal(root, TUTORIAL, set()))
+            self.assertEqual(
+                transition_signal(root, TUTORIAL, set(), True),
+                "operator-console-token",
+            )
+            # The authored ending still wins when both are present, so a run
+            # that reached it is never demoted.
+            self._game_root_with_console(
+                root, "ELYSIUM_CAP27_STOP\nsm_pawnshop_1\n"
+            )
+            self.assertEqual(
+                transition_signal(root, TUTORIAL, set(), True), "console-log"
+            )
+
+    def test_census_comparison_across_scenes_reports_models_as_coverage(
+        self,
+    ) -> None:
+        # Two scenes load different models by construction, so reporting that
+        # as "complete without being reproducible" claims a comparison the runs
+        # were never entitled to make.
+        theatre = {
+            "session": "cap11_a",
+            "identity": {"map": "sp_theatre"},
+            "coverage": {"identities_used": 141, "identities_unobserved": 0},
+            "census": {
+                "distinct_studio_headers": 141,
+                "distinct_checksums": 141,
+                "checksums": [1, 2, 3],
+                "addresses": [10, 11],
+            },
+            "verdict": {"census_complete": True, "source_join": True},
+        }
+        tutorial = {
+            **theatre,
+            "session": "cap27_b",
+            "identity": {"map": "sp_tutorial_1"},
+            "census": {
+                **theatre["census"],
+                "checksums": [3, 4, 5],
+                "addresses": [12, 13],
+            },
+        }
+        across = compare_census([theatre, tutorial])
+        self.assertFalse(across["same_map"])
+        self.assertNotIn("without being reproducible", across["statement"])
+        self.assertIn("coverage rather than agreement", across["statement"])
+        self.assertIn("5 distinct checksums", across["statement"])
+        # Two runs of one scene still have to agree.
+        within = compare_census([theatre, {**tutorial, "identity": {"map": "sp_theatre"}}])
+        self.assertIn("without being reproducible", within["statement"])
+
+    def test_actor_comparison_across_scenes_still_claims_the_renderable_offset(
+        self,
+    ) -> None:
+        # The shared-address count belongs to two runs of one scene. The +4
+        # renderable offset does not: reproducing it across a different cast is
+        # a stronger result, so that is the claim the statement has to make.
+        theatre = {
+            "session": "cap11_a",
+            "identity": {"map": "sp_theatre"},
+            "coverage": {"identities_used": 54, "identities_unobserved": 0},
+            "actors": {
+                "distinct_actors": 54,
+                "renderable_delta": 4,
+                "actors": [{"entity": 0x1000}, {"entity": 0x1004}],
+            },
+            "reuse": {"reused_entity_addresses": 5},
+            "verdict": {"identity_complete": True, "lifetime_bounded": True},
+        }
+        tutorial = {
+            **theatre,
+            "session": "cap27_b",
+            "identity": {"map": "sp_tutorial_1"},
+            "actors": {
+                **theatre["actors"],
+                "actors": [{"entity": 0x9000}, {"entity": 0x9004}],
+            },
+        }
+        across = compare_actors([theatre, tutorial])
+        self.assertFalse(across["same_map"])
+        self.assertTrue(across["renderable_delta_agrees"])
+        self.assertEqual(across["shared_addresses"], 0)
+        self.assertIn("+4", across["statement"])
+        self.assertIn("across a different cast", across["statement"])
+        # A genuine disagreement on the offset is still a disagreement.
+        disagreeing = compare_actors(
+            [theatre, {**tutorial, "actors": {**tutorial["actors"], "renderable_delta": 8}}]
+        )
+        self.assertFalse(disagreeing["renderable_delta_agrees"])
+        self.assertIn("not a fixed offset", disagreeing["statement"])
+
+    def test_scene_shape_comparison_does_not_pass_on_an_empty_intersection(
+        self,
+    ) -> None:
+        # "The 0 scene files present in every run dispatched an identical
+        # sequence of events" is not evidence. This fires whenever two runs
+        # share no scene file, whether or not they captured different scenes.
+        base = {
+            "session": "cap11_a",
+            "identity": {"map": "sp_theatre"},
+            "coverage": {"records": 10, "scenes_started": 2, "distinct_scene_files": 1},
+            "binding": {"bindings_resolved": 4},
+            "requests": {"sequence_changes": 9},
+            "shapes": {"theatre_a.vcd": "digest-a"},
+            "verdict": {"judgeable": True, "requests_joined": True},
+        }
+        other = {
+            **base,
+            "session": "cap27_b",
+            "identity": {"map": "sp_tutorial_1"},
+            "shapes": {"tutorial_b.vcd": "digest-b"},
+        }
+        across = compare_scene([base, other])
+        self.assertFalse(across["shape_claim_tested"])
+        self.assertEqual(across["compared_scene_files"], 0)
+        self.assertIn("untested", across["statement"])
+        self.assertIn("sp_tutorial_1", across["statement"])
+        # Same scene, disjoint walks: still untested, and still not a pass.
+        same_scene = compare_scene(
+            [base, {**other, "identity": {"map": "sp_theatre"}}]
+        )
+        self.assertFalse(same_scene["shape_claim_tested"])
+        self.assertIn("untested", same_scene["statement"])
+        # A genuine shared shape is still compared and still claimed.
+        shared = compare_scene([base, {**other, "shapes": base["shapes"]}])
+        self.assertTrue(shared["shape_claim_tested"])
+        self.assertIn("identical sequence of events", shared["statement"])
+
+    def test_session_resolution_finds_a_session_under_any_recipe_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            captures = root / "retail-capture"
+            (captures / "theatre" / "cap11_a").mkdir(parents=True)
+            (captures / "tutorial" / "cap27_b").mkdir(parents=True)
+            (captures / "theatre" / "shared").mkdir()
+            (captures / "tutorial" / "shared").mkdir()
+            original = calibrate_theatre_capture.research_root
+            calibrate_theatre_capture.research_root = lambda: root
+            try:
+                self.assertEqual(
+                    resolve_session("cap27_b"),
+                    (captures / "tutorial" / "cap27_b").resolve(),
+                )
+                self.assertEqual(
+                    resolve_session("cap11_a"),
+                    (captures / "theatre" / "cap11_a").resolve(),
+                )
+                absolute = (captures / "theatre" / "cap11_a").resolve()
+                self.assertEqual(resolve_session(str(absolute)), absolute)
+                # The wrong database reads as a clean run of the wrong scene,
+                # so a name in two roots is named rather than picked.
+                with self.assertRaises(ValueError) as ambiguous:
+                    resolve_session("shared")
+                self.assertIn("theatre", str(ambiguous.exception))
+                self.assertIn("tutorial", str(ambiguous.exception))
+                with self.assertRaises(FileNotFoundError):
+                    resolve_session("cap11_missing")
+            finally:
+                calibrate_theatre_capture.research_root = original
+
+    def test_save_state_is_not_a_transition_before_the_scene_is_up(self) -> None:
+        # A load recipe restores transition state as part of loading its save.
+        # Against a baseline taken before launch those files read as an ending
+        # and stop the capture at load, so the watcher holds the baseline at
+        # None until its own map marker appears.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            saves = root / "Unofficial_Patch" / "Save"
+            saves.mkdir(parents=True)
+            self._game_root_with_console(root, "loading\n")
+            (saves / "sp_tutorial_1.HL0").write_bytes(b"")
+            self.assertIsNone(transition_signal(root, TUTORIAL, None))
+            self.assertEqual(
+                transition_signal(root, TUTORIAL, set()), "map-transition-state"
+            )
 
     def test_capture_finalizer_retains_exact_records_in_one_sqlite_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -2379,6 +2691,118 @@ class RetailCaptureTests(unittest.TestCase):
             self.assertEqual(zero["map_load_batch"]["seconds"], -1.0)
             self.assertEqual(zero["largest_batch_after_trigger"]["seconds"], 2.0)
             self.assertFalse(zero["console_stamp"]["accepted"])
+            # A database predating recipes still derives exactly this zero.
+            self.assertEqual(zero["rule_name"], "player_cast_batch")
+            self.assertEqual(zero["rule_source"], "map-default")
+
+    def test_calibration_reports_the_recipe_run_zero_rule_on_another_scene(
+        self,
+    ) -> None:
+        # A scene entered from a save inside it never casts two player models,
+        # which under the theatre's rule leaves the zero underived and every
+        # relative timestamp below it None. The recipe names its own rule.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            records = []
+            sequence = 0
+            for offset, model in (
+                (0, "character/npc/common/gangmember_male_2.mdl"),
+                (0, "character/npc/common/gangmember_male_2_alt.mdl"),
+                (2 * QPC_FREQUENCY, "character/npc/common/cop.mdl"),
+            ):
+                sequence += 1
+                records.append(
+                    pose_record(
+                        sequence,
+                        1_000_000 + offset,
+                        model,
+                        checksum=0x3000 + sequence,
+                        client_entity=0x2000 + sequence,
+                    )
+                )
+            write_session(
+                session,
+                pose_records=b"".join(records),
+                animation_records=animation_record(b"BASE", sequence + 1, 1_000_000),
+                map_name="sp_tutorial_1",
+                run_zero_rule="map_load_batch",
+                boundary={
+                    "probe": False,
+                    "arm_marker": None,
+                    "arm_qpc": 1_000_000,
+                    "qpc_frequency": QPC_FREQUENCY,
+                    "signal": "console-log",
+                    "beats": [
+                        {
+                            "marker": "ELYSIUM_CAP27_BEAT_FIGHT",
+                            "qpc": 1_000_000 + 2 * QPC_FREQUENCY,
+                        }
+                    ],
+                },
+            )
+            finalize(session)
+
+            report = calibrate(session)
+            zero = report["zero"]
+            self.assertEqual(zero["rule_name"], "map_load_batch")
+            self.assertEqual(zero["rule_source"], "capture-metadata")
+            self.assertNotIn("reason", zero)
+            self.assertEqual(zero["derived_qpc"], 1_000_000)
+            self.assertEqual(zero["trigger_batch"]["seconds"], 0.0)
+            # No authored arm marker means no tolerance test to accept or fail.
+            self.assertIsNone(zero["console_stamp"]["accepted"])
+            self.assertIsNotNone(zero["console_stamp"]["reason"])
+            # A beat is placed on the derived zero like any other milestone.
+            self.assertEqual(
+                zero["beats"],
+                [{"marker": "ELYSIUM_CAP27_BEAT_FIGHT", "seconds": 2.0}],
+            )
+            # A run with no blend grid says so rather than omitting the field.
+            self.assertIsNone(zero["first_multi_blend_contribution"])
+            self.assertTrue(
+                any("run-zero rule" not in note for note in report["limitations"])
+            )
+
+    def test_calibration_comparison_across_scenes_states_non_applicability(
+        self,
+    ) -> None:
+        theatre = {
+            "session": "cap11_a",
+            "identity": {"map": "sp_theatre"},
+            "zero": {"rule_name": "player_cast_batch", "map_load_batch": None},
+            "census": {
+                "models": [
+                    {
+                        "model_name": "a.mdl",
+                        "bone_count": 1,
+                        "records": 100,
+                        "first_seconds": 0.0,
+                    }
+                ]
+            },
+            "volume": {"per_kind": [{"records": 100, "bytes": 1000}]},
+        }
+        tutorial = {
+            "session": "cap27_b",
+            "identity": {"map": "sp_tutorial_1"},
+            "zero": {"rule_name": "map_load_batch", "map_load_batch": None},
+            "census": {"models": [{"model_name": "b.mdl", "bone_count": 2}]},
+            "volume": {"per_kind": [{"records": 250, "bytes": 4000}]},
+        }
+        across = calibrate_theatre_capture.compare([theatre, tutorial])
+        self.assertFalse(across["same_map"])
+        self.assertEqual(across["maps"], ["sp_theatre", "sp_tutorial_1"])
+        # The first run's whole cast would otherwise read as missing.
+        self.assertEqual(across["models_only_in_some_runs"], [])
+        self.assertNotIn("delta_percent", across["totals"][1])
+        self.assertIn("sp_tutorial_1", across["statement"])
+        self.assertIn("coverage rather than agreement", across["statement"])
+
+        within = calibrate_theatre_capture.compare(
+            [theatre, {**theatre, "session": "cap11_b"}]
+        )
+        self.assertTrue(within["same_map"])
+        self.assertIn("delta_percent", within["totals"][1])
 
     def test_entity_join_proves_one_pointer_space_from_a_constant_delta(self) -> None:
         # Every skeletal entity sits a fixed offset above the draw stream's
@@ -3101,10 +3525,16 @@ class RetailCaptureTests(unittest.TestCase):
         finalize(session)
 
     def _clean_contributions(self) -> bytes:
-        return contribution_record(
-            b"SEQP", 8, 103, sequence_index=2, num_blends=9,
-            group_size=(9, 1), blend_cell=(4, 0), blend_weight=(0.5, 0.0),
-        ) + contribution_record(b"ANIM", 9, 104, animation_index=5)
+        # A 9x1 resolved to cell 4 fires that cell and the one after it, so a
+        # faithful scope carries two decoded cells rather than one.
+        return (
+            contribution_record(
+                b"SEQP", 8, 103, sequence_index=2, num_blends=9,
+                group_size=(9, 1), blend_cell=(4, 0), blend_weight=(0.5, 0.0),
+            )
+            + contribution_record(b"ANIM", 9, 104, animation_index=5)
+            + contribution_record(b"ANIM", 10, 105, animation_index=6)
+        )
 
     def test_attribution_verifier_accepts_a_fully_attributed_run(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -3113,7 +3543,7 @@ class RetailCaptureTests(unittest.TestCase):
             report = verify_attribution(session)
             self.assertTrue(report["support"]["carries_contributions"])
             self.assertEqual(report["coverage"]["sequences"], 1)
-            self.assertEqual(report["coverage"]["cells"], 1)
+            self.assertEqual(report["coverage"]["cells"], 2)
             self.assertEqual(report["coverage"]["unscoped"], 0)
             self.assertEqual(report["coverage"]["unbracketed"], 0)
             self.assertEqual(report["owners"]["unobserved_count"], 0)
@@ -3129,6 +3559,140 @@ class RetailCaptureTests(unittest.TestCase):
             self.assertTrue(report["overhead"]["byte_closure"])
             self.assertTrue(report["verdict"]["attribution_complete"])
             self.assertTrue(report["verdict"]["sources_resolved"])
+
+    def test_a_four_cell_grid_reports_a_3x3_off_centre_on_both_axes(self) -> None:
+        """The evidence CAP2.7 exists to produce.
+
+        Every multi-blend sequence three theatre captures reached is a 9x1
+        firing two cells. All 49 3x3 grids in the game are weapon aim layers on
+        aim_yaw and aim_pitch, which no cutscene enters. This proves the whole
+        path -- probe record layout, finalizer, blend detail, declared-versus-
+        observed span, verdict -- without a game.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._attribution_session(
+                session,
+                contribution_record(
+                    b"SEQP", 8, 103, sequence_index=2, num_blends=9,
+                    group_size=(3, 3), param_index=(2, 3),
+                    blend_cell=(1, 1), blend_weight=(0.4, 0.6),
+                )
+                # A 3x3 resolved to (1, 1) reads four slots, so a faithful
+                # scope carries four decoded cells.
+                + b"".join(
+                    contribution_record(
+                        b"ANIM", 9 + index, 104 + index, animation_index=5
+                    )
+                    for index in range(4)
+                ),
+            )
+            report = verify_attribution(session)
+            blended = report["blends"]
+            self.assertEqual(blended["grids"], {"3x3": 1})
+            detail = blended["grid_detail"]["3x3"]
+            self.assertEqual(
+                [axis["param_index"] for axis in detail["axes"]], [[2], [3]]
+            )
+            for axis in detail["axes"]:
+                self.assertEqual(axis["size"], 3)
+                self.assertEqual(axis["cells"], {"1": 1})
+                self.assertEqual(axis["weights"]["interior"], 1)
+                self.assertTrue(axis["off_centre"])
+            self.assertTrue(detail["off_centre_on_both_axes"])
+            self.assertEqual(blended["off_centre_grids"], ["3x3"])
+            self.assertEqual(
+                blended["corpus_grid_coverage"]["reached"], ["3x3"]
+            )
+            self.assertIn("9x1", blended["corpus_grid_coverage"]["unreached"])
+
+            # Two quantities from two observation points: the axis cells the
+            # blend resolver witnessed, and the cell records the decoder wrote.
+            spanned = report["declared_cells"]
+            self.assertEqual(spanned["by_declared_span"], {"4": 1})
+            self.assertEqual(spanned["disagreeing"], 0)
+            self.assertTrue(spanned["closed"])
+            self.assertEqual(report["multiplicity"]["cells_per_sequence"]["4"], 1)
+
+            self.assertTrue(report["verdict"]["sources_resolved"])
+            self.assertEqual(report["verdict"]["blend_grids"], {"3x3": 1})
+            self.assertEqual(report["verdict"]["off_centre_grids"], ["3x3"])
+            self.assertIn("3x3", report["verdict"]["statement"])
+            self.assertEqual(missing_grids(report, ["3x3"]), [])
+            self.assertEqual(missing_grids(report, ["9x1"]), ["9x1"])
+
+    def test_a_centred_grid_is_not_reported_as_off_centre(self) -> None:
+        # A 3x3 whose every record sits at cell zero with weight zero read the
+        # centre cell alone. It still appears in the shape histogram, which is
+        # why the histogram alone cannot evidence the four-cell path.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._attribution_session(
+                session,
+                contribution_record(
+                    b"SEQP", 8, 103, sequence_index=2, num_blends=9,
+                    group_size=(3, 3), param_index=(2, 3),
+                    blend_cell=(0, 0), blend_weight=(0.0, 0.0),
+                )
+                + b"".join(
+                    contribution_record(
+                        b"ANIM", 9 + index, 104 + index, animation_index=5
+                    )
+                    for index in range(4)
+                ),
+            )
+            report = verify_attribution(session)
+            self.assertEqual(report["blends"]["grids"], {"3x3": 1})
+            detail = report["blends"]["grid_detail"]["3x3"]
+            for axis in detail["axes"]:
+                self.assertEqual(axis["cells"], {"0": 1})
+                self.assertEqual(axis["weights"]["at_zero"], 1)
+                self.assertFalse(axis["off_centre"])
+            self.assertFalse(detail["off_centre_on_both_axes"])
+            self.assertEqual(report["blends"]["off_centre_grids"], [])
+            # Reaching no off-centre grid is a coverage fact, not an
+            # attribution failure, so the verdict itself still holds.
+            self.assertTrue(report["verdict"]["sources_resolved"])
+            self.assertEqual(missing_grids(report, ["3x3"]), ["3x3"])
+
+    def test_attribution_comparison_across_scenes_reports_grid_coverage(
+        self,
+    ) -> None:
+        # Owner count is a property of a scene's cast, so two scenes differ on
+        # it by construction and a difference is not a disagreement. What does
+        # compare across scenes is which grids each one reached.
+        theatre = {
+            "session": "cap11_a",
+            "identity": {"map": "sp_theatre"},
+            "coverage": {"sequences": 3440, "cells": 3600},
+            "owners": {"identities": 34, "bank_only_owners": 17},
+            "blends": {"grids": {"9x1": 3440}, "off_centre_grids": ["9x1"]},
+            "declared_cells": {"by_declared_span": {"2": 3440}},
+            "verdict": {"sources_resolved": True},
+        }
+        tutorial = {
+            **theatre,
+            "session": "cap27_b",
+            "identity": {"map": "sp_tutorial_1"},
+            "owners": {"identities": 12, "bank_only_owners": 4},
+            "blends": {
+                "grids": {"9x1": 900, "3x3": 40},
+                "off_centre_grids": ["3x3", "9x1"],
+            },
+            "declared_cells": {"by_declared_span": {"2": 900, "4": 40}},
+        }
+        across = compare_attribution([theatre, tutorial])
+        self.assertFalse(across["same_map"])
+        self.assertNotIn("disagree", across["statement"])
+        self.assertIn("coverage rather than agreement", across["statement"])
+        self.assertIn("3x3", across["statement"])
+        self.assertEqual(across["rows"][1]["four_cell_scopes"], 40)
+        self.assertEqual(across["rows"][0]["four_cell_scopes"], None)
+        # A run that failed still reads as a disagreement, whatever the maps.
+        failing = compare_attribution(
+            [theatre, {**tutorial, "verdict": {"sources_resolved": False}}]
+        )
+        self.assertIn("did not resolve every source", failing["statement"])
 
     def test_attribution_verifier_reports_a_cell_outside_every_scope(
         self,
@@ -4324,6 +4888,223 @@ class RetailCaptureTests(unittest.TestCase):
                 report["verdict"]["statement"],
             )
 
+    def test_an_anim_set_binding_without_a_renderable_is_counted_not_dropped(
+        self,
+    ) -> None:
+        # A binding whose entity index the census never observed a renderable
+        # for was skipped before the denominator was incremented, so it left
+        # numerator and denominator alike and the join read as closed over a
+        # population it never saw. A lost join is not an acceptable answer.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._scene_session(
+                session,
+                self._clean_scene_records(),
+                # The scene binds handle index 40; this actor carries 41, so
+                # the binding resolves to no renderable at all.
+                actor_records=actor_record(
+                    3,
+                    99,
+                    "models/courtroom_bip1.mdl",
+                    ref_handle=(7 << 13) | 41,
+                ),
+            )
+            connection = sqlite3.connect(session / "capture.sqlite")
+            try:
+                connection.execute(
+                    "INSERT INTO model_headers (stream_name, ordinal,"
+                    " sequence_number, qpc, thread_id, studio_hdr, checksum,"
+                    " previous_checksum, bone_count, bone_index, model_length,"
+                    " include_model_count, include_model_index,"
+                    " studio_version, reason, image_captured, generation,"
+                    " model_name, raw_header)"
+                    " VALUES ('census', 99, 99, 99, 7, 4096, 12345, 0, 1, 0, 0,"
+                    " 0, 0, 2531, 1, 1, 0,"
+                    " 'models/cinematic/Courtroom_bip1.mdl', x'00')"
+                )
+                connection.execute(
+                    "UPDATE records SET owner_checksum = 12345,"
+                    " generation_entity = 8192, qpc = 300 WHERE id ="
+                    " (SELECT min(id) FROM records)"
+                )
+                connection.commit()
+            finally:
+                connection.close()
+            report = verify_scene(session)
+            animset = report["join"]["anim_set_owner"]
+            self.assertTrue(animset["available"])
+            self.assertEqual(animset["bindings"], 1)
+            self.assertEqual(animset["compared"], 0)
+            self.assertEqual(animset["without_a_renderable"], 1)
+            self.assertEqual(
+                animset["without_a_renderable_detail"][0]["entity_index"], 40
+            )
+
+    def test_the_unjoined_aggregate_names_every_shard_with_its_own_denominator(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._scene_session(session, self._clean_scene_records())
+            report = aggregate_integrity(session, join_source=False)
+
+            names = [row["name"] for row in report["shards"]]
+            self.assertEqual(len(names), len(set(names)))
+            self.assertEqual(len(report["shards"]), len(SHARDS))
+            for row in report["shards"]:
+                self.assertIn(
+                    row["status"],
+                    ("present", "unavailable", "tool-unavailable", "missing"),
+                )
+                self.assertTrue(row["bucket"])
+                if row["expected_nonzero"]:
+                    self.assertTrue(row["because"], row["name"])
+
+            # No bucket sums counts across shards: they measure different
+            # populations, so a total would mean nothing.
+            for entry in report["by_bucket"].values():
+                self.assertNotIn("count", entry)
+                self.assertLessEqual(entry["available"], entry["shards"])
+                self.assertLessEqual(entry["nonzero"], entry["available"])
+
+            # A shard whose non-zero value is a known property of the runtime
+            # is reported with its reason and never folded into a pass.
+            accounted = {row["name"] for row in report["accounted_nonzero"]}
+            self.assertIn(
+                "draws submitted by a frame that built no pose", accounted
+            )
+            for row in report["accounted_nonzero"]:
+                self.assertTrue(row["because"])
+                self.assertNotIn(
+                    row["name"], {r["name"] for r in report["unexpected_nonzero"]}
+                )
+
+    def test_the_aggregate_separates_an_absent_stream_from_a_wrong_key(
+        self,
+    ) -> None:
+        # Without this the table rots silently the first time a verifier
+        # renames a key: the shard drops out and the population it counted
+        # reads as accounted for.
+        available = {"coverage": {"unassigned": 3, "records": 9}}
+        self.assertEqual(
+            resolve_shard(available, ("coverage", "unassigned")), (3, "present")
+        )
+        self.assertEqual(
+            resolve_shard(available, ("coverage", "renamed")), (None, "missing")
+        )
+        # A whole section absent, None, or marked unavailable is a stream this
+        # capture does not carry -- not a defect in the table.
+        self.assertEqual(
+            resolve_shard(available, ("requests", "unattributed")),
+            (None, "unavailable"),
+        )
+        self.assertEqual(
+            resolve_shard({"requests": None}, ("requests", "x")),
+            (None, "unavailable"),
+        )
+        self.assertEqual(
+            resolve_shard(
+                {"requests": {"available": False, "reason": "no stream"}},
+                ("requests", "unattributed"),
+            ),
+            (None, "unavailable"),
+        )
+        # Counts arrive as integers, as lists whose length is the count, and as
+        # decimal strings, because the hook's counters travel through done.txt.
+        self.assertEqual(
+            resolve_shard({"a": {"b": [1, 2]}}, ("a", "b")), (2, "present")
+        )
+        self.assertEqual(
+            resolve_shard({"a": {"b": "7"}}, ("a", "b")), (7, "present")
+        )
+        self.assertEqual(
+            resolve_shard({"a": {"b": True}}, ("a", "b")), (None, "missing")
+        )
+
+    def test_every_declared_shard_path_exists_in_its_verifier_report(
+        self,
+    ) -> None:
+        # Walked against live reports rather than a fixture of expectations,
+        # so a verifier renaming a key fails here instead of silently dropping
+        # the population that key counted.
+        for name, build in (
+            ("scene", lambda s: self._scene_session(s, self._clean_scene_records())),
+            (
+                "attribution",
+                lambda s: self._attribution_session(s, self._clean_contributions()),
+            ),
+        ):
+            with tempfile.TemporaryDirectory() as directory:
+                session = Path(directory)
+                build(session)
+                report = aggregate_integrity(session, join_source=False)
+                self.assertEqual(
+                    report["missing_paths"],
+                    [],
+                    f"{name}: {[row['path'] for row in report['missing_paths']]}",
+                )
+                self.assertTrue(report["verdict"]["table_intact"])
+                self.assertGreater(report["verdict"]["shards_available"], 20)
+
+    def test_each_declared_sidecar_is_the_file_its_verifier_writes(self) -> None:
+        # --reuse-reports reads these instead of re-running eight verifiers
+        # over a multi-gigabyte database. A stale name would make it read
+        # someone else's report, or fail claiming the verifier had not run.
+        modules = {
+            "calibrate": "calibrate_theatre_capture",
+            "generation": "verify_pose_build_generation",
+            "census": "verify_model_skeleton_census",
+            "actors": "verify_actor_identity_lifetime",
+            "join": "verify_entity_pointer_join",
+            "attribution": "verify_source_attribution",
+            "spans": "verify_consumed_spans",
+            "scene": "verify_scene_requests",
+        }
+        self.assertEqual(set(modules), set(SIDECARS))
+        self.assertEqual(set(modules), {shard.tool for shard in SHARDS})
+        for tool, module in modules.items():
+            source = (
+                REPO_ROOT
+                / "research"
+                / "tooling"
+                / "capture"
+                / f"{module}.py"
+            ).read_text(encoding="utf-8")
+            self.assertIn(
+                f'session / "{SIDECARS[tool]}"',
+                source,
+                f"{module} does not write {SIDECARS[tool]}",
+            )
+
+    def test_an_unexpected_nonzero_shard_fails_the_aggregate_verdict(self) -> None:
+        clean = {
+            "calibrate": {
+                "identity": {"map": "sp_theatre"},
+                "volume": {"per_kind": [], "bytes_written": 10, "queue_peak": 4},
+                "integrity": {
+                    "hook": {"dropped": "0"},
+                    "failures": {
+                        "hook_skipped": {"count": 0},
+                        "hook_filtered": {"count": 0},
+                        "incomplete_streams": {"count": 0},
+                    },
+                    "sequence_numbers": {"gaps": [], "duplicates": 0},
+                },
+            }
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            report = aggregate_integrity(session, reports=clean)
+            self.assertTrue(report["verdict"]["integrity_complete"])
+            self.assertEqual(report["unexpected_nonzero"], [])
+
+            dropped = json.loads(json.dumps(clean))
+            dropped["calibrate"]["integrity"]["hook"]["dropped"] = "3"
+            report = aggregate_integrity(session, reports=dropped)
+            self.assertFalse(report["verdict"]["integrity_complete"])
+            self.assertEqual(len(report["unexpected_nonzero"]), 1)
+            self.assertIn("unaccounted for", report["verdict"]["statement"])
+
     def test_scene_verifier_reports_an_animset_no_owner_matches(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             session = Path(directory)
@@ -4544,6 +5325,347 @@ class RetailCaptureTests(unittest.TestCase):
         # Patch-first, falling through to the base install.
         self.assertIn('"Unofficial_Patch" / "dlls" / "vampire.dll"', source)
         self.assertIn('"Vampire" / "dlls" / "vampire.dll"', source)
+
+    # --- CAP3: the join spine, the roll-up, and the payload store ----------
+
+    def _indexable_session(self, session: Path) -> None:
+        """One session carrying enough of every stream for the spine to join."""
+        write_generation_session(
+            session,
+            [
+                {
+                    "entity": 0x1000,
+                    "checksum": 0xAA,
+                    "bones": 3,
+                    "frame": b"DBLD",
+                },
+                {
+                    "entity": 0x2000,
+                    "checksum": 0xBB,
+                    "bones": 2,
+                    "frame": b"SHDW",
+                },
+            ],
+        )
+
+    def test_the_spine_materializes_every_bracket_as_one_generation(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._indexable_session(session)
+            result = index_capture(session, rollup=False)
+            connection = sqlite3.connect(session / "capture.sqlite")
+            try:
+                brackets = connection.execute(
+                    "SELECT count(*) FROM generation_bracket"
+                ).fetchone()[0]
+                records = connection.execute(
+                    "SELECT count(*) FROM records "
+                    "WHERE kind IN ('PBLD', 'DBLD', 'SHDW')"
+                ).fetchone()[0]
+                # Every bracket record becomes exactly one generation, and no
+                # generation is opened twice.
+                self.assertEqual(brackets, records)
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT count(*) FROM (SELECT generation FROM "
+                        "generation_bracket GROUP BY generation "
+                        "HAVING count(*) > 1)"
+                    ).fetchone()[0],
+                    0,
+                )
+                # The bracket owner is the renderable and the evaluations name
+                # the C_BaseAnimating; both are stored as recorded, so the
+                # offset between them is measured here rather than assumed.
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT count(*) FROM pose_group WHERE actor_entity "
+                        "IS NOT NULL AND bracket_entity != actor_entity + 4"
+                    ).fetchone()[0],
+                    0,
+                )
+            finally:
+                connection.close()
+            self.assertEqual(result["counts"]["pose_groups"], 2)
+
+    def test_the_spine_refuses_a_second_pass_without_rewrite(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._indexable_session(session)
+            index_capture(session, rollup=False)
+            with self.assertRaises(ValueError):
+                index_capture(session, rollup=False)
+            # The guard makes a second pass deliberate, not impossible.
+            index_capture(session, rollup=False, rewrite=True)
+            connection = sqlite3.connect(session / "capture.sqlite")
+            try:
+                for table in INDEX_TABLES:
+                    connection.execute(f"SELECT count(*) FROM {table}")
+            finally:
+                connection.close()
+
+    def test_the_roll_up_is_stored_with_the_counts_cap33_names(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._indexable_session(session)
+            index_capture(session, rollup=True, join_source=False)
+            connection = sqlite3.connect(session / "capture.sqlite")
+            try:
+                stored = {
+                    key
+                    for (key,) in connection.execute(
+                        "SELECT key FROM integrity_summary"
+                    )
+                }
+                shards = connection.execute(
+                    "SELECT count(*) FROM integrity_shard"
+                ).fetchone()[0]
+            finally:
+                connection.close()
+            self.assertEqual(shards, len(SHARDS))
+            # The database reports its own counts rather than needing the
+            # verifiers re-run to learn them.
+            for key in ("hook", "failures", "sequence_numbers", "volume", "zero"):
+                self.assertIn(key, stored)
+            # The spine's own unjoined counts are not in the roll-up, which is
+            # computed before this pass writes, so they are stored beside it.
+            self.assertIn("spine", stored)
+
+    def test_compaction_keeps_every_record_byte_for_byte(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._indexable_session(session)
+            database = session / "capture.sqlite"
+            connection = sqlite3.connect(database)
+            try:
+                before = connection.execute(
+                    "SELECT * FROM records ORDER BY id"
+                ).fetchall()
+                columns = [
+                    row[1]
+                    for row in connection.execute("PRAGMA table_info(records)")
+                ]
+            finally:
+                connection.close()
+            report = compact(session)
+            connection = sqlite3.connect(database)
+            try:
+                after = connection.execute(
+                    "SELECT * FROM records ORDER BY id"
+                ).fetchall()
+                columns_after = [
+                    row[1]
+                    for row in connection.execute("PRAGMA table_info(records)")
+                ]
+                kind = connection.execute(
+                    "SELECT type FROM sqlite_master WHERE name = 'records'"
+                ).fetchone()[0]
+            finally:
+                connection.close()
+            # The view is the flat table's shape, column for column and in the
+            # same order, so a reader unpacking a row positionally is unaffected.
+            self.assertEqual(columns, columns_after)
+            self.assertEqual(before, after)
+            self.assertEqual(kind, "view")
+            self.assertLess(report["counts"]["distinct_payloads"], len(before))
+
+    def test_compaction_preserves_the_unique_constraint_and_its_autoindex(
+        self,
+    ) -> None:
+        # PRAGMA table_info reports neither table-level UNIQUE nor foreign
+        # keys, so a base table generated from it would silently drop both --
+        # and with the constraint goes the autoindex two verifiers search on.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._indexable_session(session)
+            compact(session)
+            connection = sqlite3.connect(session / "capture.sqlite")
+            try:
+                unique = [
+                    row
+                    for row in connection.execute(
+                        f"SELECT name, \"unique\", origin FROM "
+                        f"pragma_index_list('{EVENT_TABLE}')"
+                    )
+                    if row[2] == "u"
+                ]
+                parents = {
+                    row[0]
+                    for row in connection.execute(
+                        f"SELECT \"table\" FROM "
+                        f"pragma_foreign_key_list('{EVENT_TABLE}')"
+                    )
+                }
+                targets = {
+                    row[0]: row[1]
+                    for row in connection.execute(
+                        "SELECT name, tbl_name FROM sqlite_master "
+                        "WHERE type = 'index' AND name LIKE 'records_%'"
+                    )
+                }
+            finally:
+                connection.close()
+            self.assertEqual(len(unique), 1)
+            self.assertIn("streams", parents)
+            self.assertIn("payloads", parents)
+            self.assertTrue(targets)
+            for name, table in targets.items():
+                self.assertEqual(table, EVENT_TABLE, name)
+
+    def test_event_table_ddl_refuses_a_database_with_no_payload_column(
+        self,
+    ) -> None:
+        with self.assertRaises(ValueError):
+            event_table_ddl(
+                "CREATE TABLE records (\n    id INTEGER PRIMARY KEY\n)"
+            )
+
+    def test_compaction_assigns_payload_ids_in_first_use_order(self) -> None:
+        # Two passes over one input must produce the same file: the digest of a
+        # compacted database is recorded provenance, and an id assignment that
+        # followed whatever scan the planner picked would move under it.
+        digests = []
+        for _ in range(2):
+            with tempfile.TemporaryDirectory() as directory:
+                session = Path(directory)
+                self._indexable_session(session)
+                compact(session)
+                connection = sqlite3.connect(session / "capture.sqlite")
+                try:
+                    digests.append(
+                        connection.execute(
+                            "SELECT group_concat(id || ':' || "
+                            "hex(sha256), '|') FROM (SELECT id, sha256 "
+                            "FROM payloads ORDER BY id)"
+                        ).fetchone()[0]
+                    )
+                    dense = connection.execute(
+                        "SELECT min(id), max(id), count(*) FROM payloads"
+                    ).fetchone()
+                finally:
+                    connection.close()
+        self.assertEqual(digests[0], digests[1])
+        self.assertEqual(dense[0], 1)
+        self.assertEqual(dense[1], dense[2])
+
+    def test_every_verifier_reads_a_compacted_database_the_same_way(
+        self,
+    ) -> None:
+        # The one test that catches a verifier silently changing its answer
+        # because `records` became a view. Both sessions carry the same name so
+        # the reports differ in nothing but what the pass actually changed.
+        with tempfile.TemporaryDirectory() as directory:
+            flat = Path(directory) / "flat" / "run"
+            compacted = Path(directory) / "compacted" / "run"
+            flat.parent.mkdir()
+            flat.mkdir()
+            self._indexable_session(flat)
+            compacted.parent.mkdir()
+            shutil.copytree(flat, compacted)
+            compact(compacted)
+
+            def scrub(value: object, root: Path) -> object:
+                if isinstance(value, dict):
+                    return {
+                        key: scrub(item, root)
+                        for key, item in value.items()
+                        if not key.startswith("compact_")
+                    }
+                if isinstance(value, list):
+                    return [scrub(item, root) for item in value]
+                if isinstance(value, str):
+                    for form in (str(root), root.as_posix()):
+                        value = value.replace(form, "SESSION")
+                return value
+
+            for name, run in integrity_tools(False).items():
+                left = scrub(run(flat), flat)
+                right = scrub(run(compacted), compacted)
+                if name == "calibrate":
+                    # The file size is what this pass changes; everything the
+                    # calibration says about the capture must not move.
+                    for report in (left, right):
+                        report.pop("database", None)
+                self.assertEqual(
+                    json.dumps(left, sort_keys=True, default=repr),
+                    json.dumps(right, sort_keys=True, default=repr),
+                    f"{name} reads a compacted database differently",
+                )
+
+    def test_the_sequence_counter_still_covers_events_through_a_view(
+        self,
+    ) -> None:
+        # A catalogue query asking only for tables would drop `records` from
+        # the union and report a dense counter as full of holes, turning
+        # CAP1.2's loss proof into a false alarm.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._indexable_session(session)
+            compact(session)
+            connection = sqlite3.connect(session / "capture.sqlite")
+            try:
+                union = calibrate_theatre_capture.sequence_union(connection)
+                continuity = calibrate_theatre_capture.sequence_continuity(
+                    connection
+                )
+            finally:
+                connection.close()
+            self.assertIn("FROM records", union)
+            self.assertTrue(continuity["dense"])
+            self.assertEqual(continuity["gaps"], [])
+
+    def test_the_span_resolver_runs_on_a_compacted_database(self) -> None:
+        # Its record_span_sets foreign key names `records`, which compaction
+        # turns into a view. SQLite accepts the CREATE either way and refuses
+        # only at the first insert -- after the previous dictionary is dropped.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._span_session(session, self._clean_contributions())
+            resolve_spans(session)
+            compact(session)
+            resolve_spans(session, rewrite=True)
+            connection = sqlite3.connect(session / "capture.sqlite")
+            try:
+                parents = {
+                    row[0]
+                    for row in connection.execute(
+                        "SELECT \"table\" FROM "
+                        "pragma_foreign_key_list('record_span_sets')"
+                    )
+                }
+                self.assertEqual(
+                    connection.execute(
+                        "PRAGMA foreign_key_check"
+                    ).fetchall(),
+                    [],
+                )
+            finally:
+                connection.close()
+            self.assertIn(EVENT_TABLE, parents)
+
+    def test_the_index_verifier_judges_a_spine_it_can_read(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._indexable_session(session)
+            unindexed = verify_index(session)
+            self.assertFalse(unindexed["verdict"]["judgeable"])
+            index_capture(session, rollup=True, join_source=False)
+            report = verify_index(session)
+            self.assertTrue(report["verdict"]["judgeable"])
+            self.assertTrue(report["verdict"]["spine_joined"])
+            self.assertTrue(report["verdict"]["payloads_intact"])
+            self.assertFalse(report["support"]["carries_payload_store"])
+            compact(session)
+            compacted = verify_index(session)
+            self.assertTrue(compacted["support"]["carries_payload_store"])
+            self.assertTrue(compacted["verdict"]["payloads_intact"])
+            self.assertEqual(
+                compacted["payloads"]["dangling_payload_ids"], 0
+            )
+            self.assertEqual(
+                compacted["payloads"]["payloads_not_matching_their_digest"], 0
+            )
 
 
 GESTURE_EVENT_TYPE = 6

@@ -216,9 +216,17 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
   separate events. A fifth offline reader proves every contribution is scoped to a pose build,
   every owner reached the model census with an image, and every captured descriptor pointer
   equals the index and stride it claims. Two complete cutscenes reproduce it with no dropped,
-  faulted or unscoped record, which also closes the second-acquisition requirement. Open:
-  joining the observed source identities to the patch-first export/decoder stack,
-  and the byte-span coverage that join needs. Header residency stays as it is: there is no
+  faulted or unscoped record, which also closes the second-acquisition requirement. An offline
+  walker then converts each fired contribution's witnessed pointers into spans of the owning
+  model image and is checked against the probe's own witnesses rather than against itself, and
+  a sixth stream records the server-side scene requests, so a pose group is attributable to
+  what asked for it through a handle both modules record independently. A finalized database
+  is finally deduplicated by content hash and indexed: each distinct payload is stored once
+  behind a view that returns the original bytes, and the joins the readers used to rebuild
+  per-tool become one spine keyed on the generation every record already carries, with the
+  integrity roll-up stored so the database reports its own counts. Open: joining the observed
+  source identities to the patch-first export/decoder stack, and the byte-coverage and
+  per-bone transform differences that join makes possible. Header residency stays as it is: there is no
   single model-cache free to hook, so an unload event would cost three brackets and still
   report absence rather than a per-model free, and it is parked until a difference report
   names it. Editable raw byte-span recipes are added

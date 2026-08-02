@@ -1243,6 +1243,13 @@ def finalize(
             "created_utc": launch.get("created_utc"),
             "tool_git": launch.get("tool_git"),
             "map": launch.get("map"),
+            "recipe": launch.get("recipe"),
+            # The offline analyzers pick their run-zero rule from this rather
+            # than from the map name, so a database carries the rule its own
+            # recipe declared instead of one inferred from what it captured.
+            "run_zero_rule": launch.get("run_zero_rule"),
+            "entry_command": launch.get("entry_command"),
+            "save": launch.get("save"),
             "capture_duration_seconds": launch.get("capture_duration_seconds"),
             "retail_exit_code": launch.get("retail_exit_code"),
         }.items():

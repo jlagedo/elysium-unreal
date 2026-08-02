@@ -286,6 +286,12 @@ def qualify(
         "bijective_models": bijective,
         "animation_entities": len(animation_entities),
         "resolved_animation_entities": len(resolved),
+        # Reported as its own count, not left to be subtracted: a skeletal
+        # instance the draw stream cannot reach is the join failing, and a
+        # roll-up over every verifier needs to read it rather than derive it.
+        "unresolved_animation_entities": (
+            len(animation_entities) - len(resolved)
+        ),
         "covers_all": len(resolved) == len(animation_entities),
         "pose_entities": len(pose_entities),
         "pose_with_counterpart": sum(
@@ -518,6 +524,16 @@ def decide(search: dict[str, Any], reuse: dict[str, Any]) -> dict[str, Any]:
     candidate = candidates[0]
     verdict["constant_delta"] = candidate["delta"]
     verdict["constant_delta_signed"] = candidate["delta_signed"]
+    # The statement below quotes these, but only as prose. Carrying them as
+    # numbers is what lets an integrity roll-up read the join's own residual
+    # instead of re-deriving it from the candidate list.
+    verdict["animation_entities"] = candidate["animation_entities"]
+    verdict["resolved_animation_entities"] = candidate[
+        "resolved_animation_entities"
+    ]
+    verdict["unresolved_animation_entities"] = candidate[
+        "unresolved_animation_entities"
+    ]
     if shared < MINIMUM_SHARED_MODELS:
         verdict["statement"] = (
             f"Only {shared} model appears in both streams, which is too little "

@@ -42,6 +42,7 @@ from typing import Any
 from research.tooling.capture.calibrate_theatre_capture import (
     DATABASE_NAME,
     artifact_key_values,
+    compared_maps,
     open_database,
     record_bytes_expression,
     resolve_session,
@@ -51,6 +52,10 @@ from research.tooling.capture.calibrate_theatre_capture import (
 from research.tooling.capture.finalize_capture_database import (
     CONTRIBUTION_FILE_HEADER,
 )
+# The 1/2/4 cell span is one rule with one owner. Importing it keeps the
+# declared-versus-observed check from becoming a second transcription that can
+# drift away from the walker whose spans CAP4.2 reads.
+from research.tooling.capture.resolve_consumed_spans import _fired_cells
 
 CONTRIBUTION_STREAM = "contribution"
 ANIMATION_STREAM = "animation"
@@ -85,8 +90,13 @@ ANIMATION_DESCRIPTOR_BYTES = 72
 BASELINE_MEAN_MB_PER_SECOND = 8.42
 BASELINE_QUEUE_HIGH_WATER = 368
 # The whole installed character tree carries 294 multi-blend sequences; a run
-# that exercises none of them has not tested the blend path at all.
+# that exercises none of them has not tested the blend path at all. The shapes
+# it never reaches are what a coverage claim has to name, so the distribution
+# travels beside the count.
 CORPUS_MULTI_BLEND_SEQUENCES = 294
+CORPUS_GRID_DISTRIBUTION = {"9x1": 235, "3x3": 49, "2x1": 6, "5x1": 4}
+# A resolved axis weight this close to a cell boundary read that cell alone.
+AXIS_CENTRE_EPSILON = 1e-4
 
 MAX_REPORTED_FAULTS = 64
 MAX_REPORTED_OWNERS = 200
@@ -446,8 +456,73 @@ def indices(connection: sqlite3.Connection, support: dict[str, Any]) -> dict[str
     }
 
 
+def _axis_detail() -> dict[str, Any]:
+    return {
+        "param_index": set(),
+        "size": 0,
+        "cells": {},
+        "at_zero": 0,
+        "interior": 0,
+        "at_one": 0,
+        "minimum": None,
+        "maximum": None,
+        "total": 0.0,
+    }
+
+
+def _fold_axis(detail: dict[str, Any], cell: int, weight: float) -> None:
+    detail["cells"][str(cell)] = detail["cells"].get(str(cell), 0) + 1
+    if weight <= AXIS_CENTRE_EPSILON:
+        detail["at_zero"] += 1
+    elif weight >= 1.0 - AXIS_CENTRE_EPSILON:
+        detail["at_one"] += 1
+    else:
+        detail["interior"] += 1
+    detail["minimum"] = (
+        weight if detail["minimum"] is None else min(detail["minimum"], weight)
+    )
+    detail["maximum"] = (
+        weight if detail["maximum"] is None else max(detail["maximum"], weight)
+    )
+    detail["total"] += weight
+
+
+def _close_axis(detail: dict[str, Any], samples: int) -> dict[str, Any]:
+    """Name whether this axis ever left its centre cell.
+
+    A grid that only ever evaluates cell zero at weight zero degenerates to a
+    single cell. It still appears in the shape histogram, so the histogram
+    alone cannot say the multi-cell path was exercised; this can.
+    """
+    off_centre = any(cell != "0" for cell in detail["cells"]) or detail[
+        "interior"
+    ] > 0
+    return {
+        "param_index": sorted(detail["param_index"]),
+        "size": detail["size"],
+        "cells": dict(sorted(detail["cells"].items())),
+        "weights": {
+            "at_zero": detail["at_zero"],
+            "interior": detail["interior"],
+            "at_one": detail["at_one"],
+            "minimum": detail["minimum"],
+            "maximum": detail["maximum"],
+            "mean": (
+                None if not samples else round(detail["total"] / samples, 6)
+            ),
+        },
+        "off_centre": off_centre,
+    }
+
+
 def blends(connection: sqlite3.Connection) -> dict[str, Any]:
-    """Blend closure: the grid the descriptor declares and the cells that fired."""
+    """Blend closure: the grid the descriptor declares and the cells that fired.
+
+    The shape histogram says which grids were evaluated. It does not say the
+    evaluation was non-degenerate, so each shape also carries per-axis cell and
+    weight detail: a 3x3 whose every record sits at cell zero with weight zero
+    read the centre cell alone and exercised nothing the 1x1 path does not.
+    """
     total = 0
     multi = 0
     product_mismatch = 0
@@ -455,9 +530,12 @@ def blends(connection: sqlite3.Connection) -> dict[str, Any]:
     weight_out_of_range = 0
     unwitnessed = 0
     grids: dict[str, int] = {}
-    for num_blends, group_size, blend_cell, blend_weight, faults in (
+    detail: dict[str, list[dict[str, Any]]] = {}
+    samples: dict[str, int] = {}
+    for num_blends, group_size, param_index, blend_cell, blend_weight, faults in (
         connection.execute(
-            "SELECT num_blends, group_size, blend_cell, blend_weight, faults "
+            "SELECT num_blends, group_size, param_index, blend_cell, "
+            "blend_weight, faults "
             f"FROM contribution_row WHERE kind = '{SEQUENCE_KIND}'"
         )
     ):
@@ -465,13 +543,24 @@ def blends(connection: sqlite3.Connection) -> dict[str, Any]:
         sizes = json.loads(group_size)
         cells = json.loads(blend_cell)
         weights = json.loads(blend_weight)
+        parameters = json.loads(param_index) if param_index else []
         if faults & (1 << 5):
             unwitnessed += 1
         if (num_blends or 0) > 1:
             multi += 1
-            grids[f"{sizes[0]}x{sizes[1]}"] = grids.get(
-                f"{sizes[0]}x{sizes[1]}", 0
-            ) + 1
+            shape = f"{sizes[0]}x{sizes[1]}"
+            grids[shape] = grids.get(shape, 0) + 1
+            axes = detail.setdefault(shape, [_axis_detail(), _axis_detail()])
+            samples[shape] = samples.get(shape, 0) + 1
+            for axis in range(2):
+                axes[axis]["size"] = sizes[axis]
+                if axis < len(parameters):
+                    axes[axis]["param_index"].add(parameters[axis])
+                _fold_axis(
+                    axes[axis],
+                    cells[axis] if axis < len(cells) else 0,
+                    weights[axis] if axis < len(weights) else 0.0,
+                )
         if sizes[0] * sizes[1] != num_blends:
             product_mismatch += 1
         for axis, size in enumerate(sizes):
@@ -480,10 +569,35 @@ def blends(connection: sqlite3.Connection) -> dict[str, Any]:
         for weight in weights:
             if not -1e-6 <= weight <= 1.0 + 1e-6:
                 weight_out_of_range += 1
+    shapes = {}
+    for shape, axes in detail.items():
+        closed = [_close_axis(axis, samples[shape]) for axis in axes]
+        shapes[shape] = {
+            "sequences": grids[shape],
+            "axes": closed,
+            # Both axes wider than one and both off centre: the four-cell path.
+            "off_centre_on_both_axes": all(
+                axis["size"] > 1 and axis["off_centre"] for axis in closed
+            ),
+        }
     return {
         "sequences": total,
         "multi_blend_sequences": multi,
         "grids": dict(sorted(grids.items(), key=lambda item: -item[1])),
+        "grid_detail": shapes,
+        "off_centre_grids": sorted(
+            shape
+            for shape, entry in shapes.items()
+            if entry["off_centre_on_both_axes"]
+        ),
+        "corpus_grid_coverage": {
+            "corpus_multi_blend_sequences": CORPUS_MULTI_BLEND_SEQUENCES,
+            "corpus_grids": CORPUS_GRID_DISTRIBUTION,
+            "reached": sorted(shape for shape in grids if shape in CORPUS_GRID_DISTRIBUTION),
+            "unreached": sorted(
+                shape for shape in CORPUS_GRID_DISTRIBUTION if shape not in grids
+            ),
+        },
         "group_product_mismatch": product_mismatch,
         "cell_out_of_range": cell_out_of_range,
         "weight_out_of_range": weight_out_of_range,
@@ -492,6 +606,59 @@ def blends(connection: sqlite3.Connection) -> dict[str, Any]:
         and cell_out_of_range == 0
         and weight_out_of_range == 0
         and unwitnessed == 0,
+    }
+
+
+def declared_cells(connection: sqlite3.Connection) -> dict[str, Any]:
+    """Check each scope's decoded cells against the span its grids declare.
+
+    Two quantities recorded at different observation points: the axis cells the
+    blend resolver witnessed on the sequence record, and the number of cell
+    records the decoder emitted inside that scope. Neither is derived from the
+    other, so their agreement is what makes a four-cell evaluation evidence
+    rather than a shape read out of a descriptor.
+
+    Autolayer recursion puts several sequences in one scope, so the comparison
+    is the sum of the declared spans against the observed count.
+    """
+    declared: dict[int, int] = {}
+    for scope, num_blends, group_size, blend_cell in connection.execute(
+        "SELECT contribution, num_blends, group_size, blend_cell "
+        f"FROM contribution_row WHERE kind = '{SEQUENCE_KIND}' "
+        "AND contribution != 0"
+    ):
+        declared[scope] = declared.get(scope, 0) + len(
+            _fired_cells(
+                json.loads(blend_cell),
+                json.loads(group_size),
+                num_blends or 0,
+            )
+        )
+    checked = 0
+    agreeing = 0
+    offenders = []
+    by_span: dict[str, int] = {}
+    for scope, cells in connection.execute(
+        "SELECT scope, cells FROM contribution_scope WHERE sequences > 0"
+    ):
+        expected = declared.get(scope)
+        if expected is None:
+            continue
+        checked += 1
+        by_span[str(expected)] = by_span.get(str(expected), 0) + 1
+        if expected == cells:
+            agreeing += 1
+        elif len(offenders) < MAX_REPORTED_FAULTS:
+            offenders.append(
+                {"scope": scope, "declared": expected, "observed": cells}
+            )
+    return {
+        "scopes_checked": checked,
+        "agreeing": agreeing,
+        "disagreeing": checked - agreeing,
+        "by_declared_span": dict(sorted(by_span.items(), key=lambda i: int(i[0]))),
+        "offenders": offenders,
+        "closed": checked == agreeing,
     }
 
 
@@ -679,6 +846,7 @@ def decide(
     owned: dict[str, Any] | None,
     ranged: dict[str, Any] | None,
     blended: dict[str, Any] | None,
+    spanned: dict[str, Any] | None,
     failed: dict[str, Any] | None,
     cost: dict[str, Any] | None,
 ) -> dict[str, Any]:
@@ -701,10 +869,17 @@ def decide(
             and ranged.get("in_range")
             and blended
             and blended["closed"]
+            and spanned
+            and spanned["closed"]
             and failed
             and failed["clean"]
         ),
         "judgeable": True,
+        # Which grid shapes fired, as a fact a caller can gate on without
+        # parsing the statement. A run that reaches none is not a failure of
+        # attribution, so this never enters sources_resolved.
+        "blend_grids": dict(blended["grids"]) if blended else {},
+        "off_centre_grids": list(blended["off_centre_grids"]) if blended else [],
     }
     if counts and counts["unscoped"]:
         verdict["statement"] = (
@@ -753,6 +928,13 @@ def decide(
             "no witnessed weight."
         )
         return verdict
+    if spanned and not spanned["closed"]:
+        verdict["statement"] = (
+            f"{spanned['disagreeing']} of {spanned['scopes_checked']} scopes "
+            "decoded a different number of cells than their grids and "
+            "witnessed axis cells declare."
+        )
+        return verdict
     if failed and not failed["clean"]:
         verdict["statement"] = (
             f"{failed['records_with_a_fault']} contributions carry a copy "
@@ -768,8 +950,23 @@ def decide(
         f"image each; every index lies inside its owner's declared counts and "
         f"every descriptor pointer matches the declared stride; "
         f"{blended['multi_blend_sequences'] if blended else 0} multi-blend "
-        "sequences close on their grids with witnessed weights; and no record "
-        "carries a copy fault."
+        f"sequences close on their grids with witnessed weights "
+        f"({blended['grids'] if blended else {}}"
+        + (
+            ", off centre on both axes in "
+            + ", ".join(blended["off_centre_grids"])
+            if blended and blended["off_centre_grids"]
+            else ", none off centre on both axes"
+        )
+        + "); "
+        + (
+            f"{spanned['agreeing']} of {spanned['scopes_checked']} scopes "
+            f"decoded exactly the cells their grids declare "
+            f"({spanned['by_declared_span']} by declared span); "
+            if spanned
+            else ""
+        )
+        + "and no record carries a copy fault."
     )
     return verdict
 
@@ -794,17 +991,21 @@ def verify(session: Path) -> dict[str, Any]:
         done = artifact_key_values(connection, session, "done.txt")
 
         counts = owned = ranged = blended = called = repeated = failed = cost = None
+        spanned = None
         if support["carries_contributions"]:
             prepare(connection)
             counts = coverage(connection)
             owned = owners(connection, support)
             ranged = indices(connection, support)
             blended = blends(connection)
+            spanned = declared_cells(connection)
             called = callers(connection, support)
             repeated = multiplicity(connection)
             failed = faults(connection)
             cost = overhead(connection, headers, done)
-        verdict = decide(support, counts, owned, ranged, blended, failed, cost)
+        verdict = decide(
+            support, counts, owned, ranged, blended, spanned, failed, cost
+        )
 
         return {
             "session": session.name,
@@ -827,6 +1028,7 @@ def verify(session: Path) -> dict[str, Any]:
             "owners": owned,
             "indices": ranged,
             "blends": blended,
+            "declared_cells": spanned,
             "callers": called,
             "multiplicity": repeated,
             "faults": failed,
@@ -842,22 +1044,44 @@ def compare(reports: list[dict[str, Any]]) -> dict[str, Any]:
     for report in reports:
         counts = report.get("coverage") or {}
         owned = report.get("owners") or {}
+        blended = report.get("blends") or {}
+        spanned = report.get("declared_cells") or {}
         rows.append(
             {
                 "session": report["session"],
+                "map": (report.get("identity") or {}).get("map"),
                 "sequences": counts.get("sequences"),
                 "cells": counts.get("cells"),
                 "owners": owned.get("identities"),
                 "bank_only": owned.get("bank_only_owners"),
+                "grids": blended.get("grids"),
+                "off_centre_grids": blended.get("off_centre_grids"),
+                "four_cell_scopes": (spanned.get("by_declared_span") or {}).get(
+                    "4"
+                ),
                 "resolved": report["verdict"].get("sources_resolved"),
             }
         )
+    same_map, maps = compared_maps(reports)
     failing = [row["session"] for row in rows if not row["resolved"]]
+    coverage_note = "; ".join(
+        f"{row['session']} reached {row['grids'] or {}}" for row in rows
+    )
     if failing:
         statement = (
             "Runs disagree because "
             + ", ".join(failing)
             + " did not resolve every source."
+        )
+    elif not same_map:
+        # Owner count is a property of a scene's cast, so two scenes differ on
+        # it by construction. Grid coverage is the comparison that means
+        # something across scenes, and it is a union rather than a match.
+        statement = (
+            "These runs captured different scenes ("
+            + ", ".join(maps)
+            + "), so their owner counts are coverage rather than agreement. "
+            "Grid coverage: " + coverage_note + "."
         )
     elif len({row["owners"] for row in rows}) > 1:
         statement = (
@@ -867,9 +1091,23 @@ def compare(reports: list[dict[str, Any]]) -> dict[str, Any]:
     else:
         statement = (
             f"All {len(rows)} runs resolve every source and agree on "
-            f"{rows[0]['owners']} owner identities."
+            f"{rows[0]['owners']} owner identities. Grid coverage: "
+            + coverage_note
+            + "."
         )
-    return {"rows": rows, "statement": statement}
+    return {"rows": rows, "maps": maps, "same_map": same_map, "statement": statement}
+
+
+def missing_grids(report: dict[str, Any], required: list[str]) -> list[str]:
+    """Which required grid shapes this run failed to exercise off centre.
+
+    A shape present in the histogram but centred on both axes read one cell,
+    so it is reported missing: the point of requiring it is the multi-cell
+    path, not the descriptor's declared shape.
+    """
+    blended = report.get("blends") or {}
+    reached = set(blended.get("off_centre_grids") or [])
+    return [shape for shape in required if shape not in reached]
 
 
 def summarize(report: dict[str, Any]) -> str:
@@ -906,7 +1144,27 @@ def summarize(report: dict[str, Any]) -> str:
         lines.append(
             f"blends       multi={blended['multi_blend_sequences']} "
             f"grids={blended['grids']} "
+            f"off_centre={blended['off_centre_grids']} "
             f"unwitnessed={blended['unwitnessed']}"
+        )
+        for shape, entry in blended["grid_detail"].items():
+            axes = " ".join(
+                f"axis{index}(param={axis['param_index']} size={axis['size']} "
+                f"cells={axis['cells']} interior={axis['weights']['interior']})"
+                for index, axis in enumerate(entry["axes"])
+            )
+            lines.append(f"  {shape:<8} {axes}")
+        lines.append(
+            "  unreached corpus grids: "
+            f"{blended['corpus_grid_coverage']['unreached']}"
+        )
+    spanned = report.get("declared_cells")
+    if spanned:
+        lines.append(
+            f"cell spans   scopes={spanned['scopes_checked']} "
+            f"agreeing={spanned['agreeing']} "
+            f"disagreeing={spanned['disagreeing']} "
+            f"by_span={spanned['by_declared_span']}"
         )
     called = report.get("callers")
     if called and called.get("available"):
@@ -937,9 +1195,22 @@ def main() -> int:
         action="store_true",
         help="Do not write source-attribution.json beside each database.",
     )
+    parser.add_argument(
+        "--require-grid",
+        action="append",
+        default=[],
+        metavar="SHAPE",
+        help=(
+            "Fail unless every run drove this grid shape off centre on both "
+            "axes, e.g. 3x3. Affects the exit code only: a run that reaches no "
+            "such grid has still resolved its sources, so the verdict itself "
+            "never depends on which scene was captured."
+        ),
+    )
     args = parser.parse_args()
 
     reports = []
+    unmet: list[tuple[str, list[str]]] = []
     for value in args.sessions:
         session = resolve_session(value)
         report = verify(session)
@@ -949,6 +1220,14 @@ def main() -> int:
                 json.dumps(report, indent=2) + "\n", encoding="utf-8"
             )
         print(summarize(report), flush=True)
+        missing = missing_grids(report, args.require_grid)
+        if missing:
+            unmet.append((report["session"], missing))
+            print(
+                f"required grids not driven off centre in {report['session']}: "
+                + ", ".join(missing),
+                flush=True,
+            )
 
     combined = {
         "sessions": [report["session"] for report in reports],
@@ -965,7 +1244,8 @@ def main() -> int:
         print(args.report.resolve(), flush=True)
     return (
         0
-        if all(
+        if not unmet
+        and all(
             report["verdict"]["attribution_complete"]
             and report["verdict"]["sources_resolved"]
             for report in reports

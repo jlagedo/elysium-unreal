@@ -172,7 +172,7 @@ CREATE TABLE span_roles (
     PRIMARY KEY (checksum, role)
 ) WITHOUT ROWID;
 CREATE TABLE record_span_sets (
-    record_id INTEGER PRIMARY KEY REFERENCES records(id),
+    record_id INTEGER PRIMARY KEY REFERENCES {records_table}(id),
     span_set_id INTEGER REFERENCES span_sets(id),
     frame INTEGER,
     resolved INTEGER NOT NULL,
@@ -180,6 +180,12 @@ CREATE TABLE record_span_sets (
 );
 CREATE INDEX span_sets_checksum ON span_sets(checksum);
 """
+# An indexed database reaches its event rows through a view, and a foreign key
+# cannot reference one. SQLite accepts the CREATE either way and only refuses at
+# the first insert -- by which point this pass has already dropped the previous
+# dictionary -- so the parent is chosen from the catalogue rather than assumed.
+EVENT_TABLE = "record_events"
+DEFAULT_EVENT_TABLE = "records"
 
 
 class Coverage:
@@ -640,7 +646,13 @@ def resolve(
             for table in (*LEGACY_SPAN_TABLES, *reversed(SPAN_TABLES)):
                 connection.execute(f"DROP TABLE IF EXISTS {table}")
             connection.execute("PRAGMA foreign_keys = ON")
-        connection.executescript(SCHEMA)
+        connection.executescript(
+            SCHEMA.format(
+                records_table=(
+                    EVENT_TABLE if EVENT_TABLE in existing else DEFAULT_EVENT_TABLE
+                )
+            )
+        )
         images = load_images(connection)
         rows = connection.execute(
             """

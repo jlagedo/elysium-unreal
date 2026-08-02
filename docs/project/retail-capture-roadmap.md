@@ -48,7 +48,7 @@ captures, decompilation, indexes, and reports stay under `$ELYSIUM_WORK_ROOT/res
 |---|---|---|
 | Run the exact build with hooks armed before map load | CAP1 | one finalized capture database plus its calibration measurement |
 | Complete what the capture records | CAP2 | grouping, actor/model/skeleton census, source attribution, consumed byte spans, the request that caused each pose group |
-| Decode and index the streams | CAP3 | one queryable, deduplicated, joinable database |
+| Decode and index the streams | CAP3 | one queryable, deduplicated, joinable database that reports its own counts |
 | Inspect retail against export and decoder | CAP4 | byte-coverage and per-bone transform differences |
 | Close what the difference proves | CAP5 | recovered rules, regressions, facts in the owning `docs/vtmb/` topic |
 
@@ -165,8 +165,10 @@ records and a **3.7 GB** database, but only to **8.3 MB/s** mean and a **22.1 MB
 second, because a bracket record carries no bone payload — 48% of the records for roughly
 1.4% of the bytes. The writer absorbs it, though the queue high-water rises from **82** to
 **178**, so a third of the drain headroom is now spent and the queue is what would go first.
-Storage is not the binding constraint at this scale; CAP3.1 stays the sanctioned response if
-a later, longer corpus makes volume bite.
+Storage is not the binding constraint at this scale. CAP3.1 nevertheless removes a quarter of
+a finalized database offline, because the duplication is real rather than anticipated: a
+cutscene draws the same actor several times a frame and decodes the same channel bitmaps over
+and over, so **42%** of one run's payload bytes repeat bytes it already holds.
 
 ## Priority and chronological order
 
@@ -174,13 +176,13 @@ a later, longer corpus makes volume bite.
 |---:|---|---|---|
 | 1 | P0 — done | CAP1 — first run and calibration | The instrument that exists produces one finalized `sp_theatre` database, and its measured rates, counts, and joins replace every estimate |
 | 2 | P0 — in progress | CAP2 — complete the capture | Contributions group, actors and skeletons are identified, every fired contribution names its source owner, indices, and consumed byte spans, and each pose group names the request that caused it |
-| 3 | P0 | CAP3 — decode and index | One deduplicated, compressed, joinable database answers per-actor and per-time questions without re-running the game |
+| 3 | P0 — done | CAP3 — decode and index | One deduplicated, joinable database answers per-actor and per-time questions without re-running the game, and reports its own counts |
 | 4 | P0 | CAP4 — inspect against export and decoder | Byte ranges the runtime reads that we do not, and the first mismatching stage and bone per pose group |
 | 5 | P1 | CAP5 — close what the difference proves | Recovered rules, each with a regression and a fact in the owning topic |
 | 6 | P1 | CAP6 — face and lips | The same loop over expression, flex, phoneme, and deformed-vertex state |
 | 7 | P2 | CAP7 — handoff and trim | Engine-neutral evaluator feeds Unreal; unused probes and readers are deleted |
 
-**The next and only current task is CAP2.7.**
+**CAP2.8 and CAP2.9 are deferred behind the theatre track and block nothing.**
 
 ## CAP1 — First theatre run and calibration
 
@@ -306,7 +308,9 @@ calling convention into the case specification before a hook is written.
   are submitted by a frame that built no pose, and **181,751 of 419,700** `SetupBones` calls
   produce no evaluation — both consistent with a bone cache answering a second call for an
   actor already posed this frame. Such a draw is reported as having no pose build rather
-  than being attributed to an earlier one. Reproduction on a second cutscene is CAP2.7.
+  than being attributed to an earlier one. Both reproduce on a second scene that is not a
+  cutscene: CAP2.7 measures **108,340 of 166,233** and **44,710 of 76,832** on
+  `sp_tutorial_1`, so the cache is a property of the engine rather than of the theatre.
 - [x] **CAP2.2 Model and skeleton census.** Once per distinct runtime studio header record
   model path, checksum, bone count, bone names/parents/flags, bind locals, inverse binds,
   and the header span itself; reference it from later events rather than repeating it.
@@ -353,8 +357,11 @@ calling convention into the case specification before a hook is written.
   all 2,286 captured bones the loader sets bits and clears none, and `0x2` is untouched, so
   the split-inheritance rule and the exported `split_bones` inventory read a value the loader
   leaves alone. Facts:
-  `docs/vtmb/mdl_v2531.md`. Reproduction on a second cutscene is CAP2.7; identifying the
-  gap's records is CAP2.4's remap work.
+  `docs/vtmb/mdl_v2531.md`. The loader-written spans reproduce on a second scene — CAP2.7
+  reports **45 of 64** captured images differing from the installed bytes for the same
+  checksum, in the same bone and include-model ranges — so they are what the loader fixes up
+  in place rather than a property of one map's cast. Identifying the gap's records is
+  CAP2.4's remap work.
 
   Two measurements bound what this run proves. `sp_theatre` loads no model whose name reaches
   the draw record's 64-byte field — the longest is 63 — so that field is lossless for this
@@ -428,8 +435,9 @@ calling convention into the case specification before a hook is written.
   answered it, so no filter was added. CAP1.2, CAP1.3, CAP2.1 and CAP2.2 all re-establish on
   the same database. The queue high-water rose to **368** against CAP2.2's 141 with nothing
   dropped and no cap reached; two probe runs measured 67 before the lifetime hooks and 31
-  after, so the cause is not the new records and is not yet established — CAP2.7 is where it
-  reproduces or does not.
+  after, so the cause is not the new records. It does not reproduce: CAP2.7 measures a
+  high-water of **160** on a second scene carrying every stream, so 368 is a property of that
+  run rather than of the hook set, and the queue is not the binding constraint it looked like.
 
   Three bounds travel with the task. **There is no targetname on the client**: it is
   server-side, so client identity is the address, the renderable subobject and the model.
@@ -566,8 +574,9 @@ calling convention into the case specification before a hook is written.
   **Two engine facts close on the way.** The selected-bone mask reaches the cell unchanged
   through the include-model dispatcher — 463,396 cells across both runs, no exceptions —
   which `dispatch_model_pose`'s partial confidence left open. And a cell whose mask selects
-  no bone dereferences exactly sixteen bytes and decodes nothing: **10,311** in each run,
-  the same count in both, so it is authored rather than sampled.
+  no bone dereferences exactly sixteen bytes and decodes nothing: **10,311** in each run.
+  A third run since records **10,353**, so the behaviour is authored and the count is a
+  sample — two runs agreeing exactly is what a narrow corpus looks like.
 
   Three bounds travel with the task. **The walk inside a track is transcribed, not
   witnessed** — the run-skipping and key-selection rules come from the confirmed decompilation
@@ -575,8 +584,8 @@ calling convention into the case specification before a hook is written.
   them are what the capture refutes. **The sequence descriptor is partly claimed**, so its
   byte totals are a floor and the rest of the 764 bytes stay unknown rather than inert. And
   **no cutscene fires a 3×3 grid**: every multi-blend sequence in both runs is a 9×1, so the
-  four-cell path is unexercised and CAP2.7 needs a scene with off-center ranged aiming rather
-  than a third theatre run.
+  four-cell path needs a scene with off-center ranged aiming rather than a third theatre run.
+  CAP2.7 supplies one and the four-cell walk resolves there.
 
   Four defects were closed on the way. The span dictionary keyed sets by frame, which on a
   cutscene means 143,610 sets against the 122 that are actually distinct and turned a 4 GB
@@ -636,32 +645,212 @@ calling convention into the case specification before a hook is written.
   observable only as a sequence change**: the selection data is recovered, but no selector
   is located in either module, so the run counts sequence transitions and dispatched
   sequence labels and never an activity.
-- [ ] **CAP2.7 Second acquisition.** Repeat CAP1.1 with the completed capture and report the
-  same integrity counts plus unjoined-record counts. This database, not CAP1's, is the one
-  CAP4 inspects. The scene must include off-center ranged aiming on both axes: every 3×3
-  blend grid in the corpus is a weapon aim layer that no cutscene reaches, so a second
-  cutscene leaves the four-cell blend path unexercised through CAP4. The attribution
-  report's grid distribution and per-sequence cell counts are what show whether it fired.
+- [x] **CAP2.7 Second acquisition.** Repeat CAP1.1 with the completed capture and report the
+  same integrity counts plus unjoined-record counts. The scene must include off-center ranged
+  aiming on both axes: every 3×3 blend grid in the corpus is a weapon aim layer that no
+  cutscene reaches, so a second cutscene leaves the four-cell blend path unexercised through
+  CAP4. The attribution report's grid distribution and per-sequence cell counts are what show
+  whether it fired.
 
-  The scene it captures is not the theatre, so it exercises a different request
-  population: `verify_scene_requests` reports over whatever scenes that map runs, and its
-  cross-run shape digest compares only the scene files a run shares with another.
+  The scene is `sp_tutorial_1`, entered from an owner save placed inside it and stopped by
+  the authored transition to `sm_pawnshop_1`. A `Recipe` record carries everything a scene
+  binds — entry command, console markers, stop signals, run-zero rule and durations — so the
+  launch, hook, finalization and analysis paths stay scene-independent and `--map` selects
+  between them. A `load` recipe restores transition state as part of loading its save, so the
+  watcher takes its save-state baseline when its own map marker appears rather than before
+  launch; a set snapshotted earlier reads those files as an ending and stops the capture at
+  load. Beats are bound to keys and stamped in `boundary.json` apart from the arm stamp,
+  because an operator keystroke is a bookmark and not the scene's own start.
+
+  **The four-cell path fires.** One complete run carries **2,766** 3×3 sequence contributions
+  off centre on both axes, on pose parameters 2 and 3, beside **2,033** 9×1 and **64** 5×1;
+  of the corpus distribution only 2×1 stays unreached. **43,935 of 43,935** contribution
+  scopes decode exactly the cells their grid and witnessed axis cells declare, split
+  `{1: 39,072, 2: 2,097, 4: 2,766}`, with none disagreeing — two quantities recorded at
+  different observation points, neither derived from the other. The four decode sites inside
+  `evaluate_sequence_pose` each fire exactly 2,766 times and the two two-cell sites exactly
+  2,097, so the one/two/four-cell branch is witnessed at runtime rather than only decompiled.
+  Spans resolve over **22** owner images and **49,712 of 49,712** decoded-bone sets equal the
+  selected-bone mask of their enclosing sequence.
+
+  The run stops on the authored transition with **zero** drops, skipped, filtered and
+  incomplete tails across all six streams, a queue high-water of **160** against CAP2.5's
+  368, exact byte closure and a dense sequence counter. **817 of 817** sequence changes
+  reproduce CAP1.3's fixed renderable offset on a second map, which is the class of claim a
+  cross-scene comparison is entitled to make; cast, model set, scene files and record count
+  are not, and the comparators state non-applicability rather than reporting a difference as
+  a disagreement.
+
+  **Four populations stay unaccounted, and one cause explains the first two.** 3,926 complete
+  pose evaluations — 3,926 `BASE` plus 3,926 `SEQP` plus 3,926 `ANIM`, **11,778 of 586,673**
+  records — fire on the render thread with no bracket open, which is the same population the
+  attribution report counts as **7,852 of 43,935** unbracketed contributions. Beside them,
+  595 records fall outside the interval in which their address meant the model they name, and
+  1 of 18 skeletal entities resolves to no drawn entity. CAP2.8 owns the cause.
+
+  `uv run elysium research verify_capture_integrity <session>` reports the roll-up: each
+  verifier's own unjoined count against its own denominator, a bucket aggregate that never
+  sums across populations because they measure different ones, and a stated reason beside
+  every count whose non-zero value is a recorded property of the runtime rather than a
+  defect. CAP3.3 stores that roll-up in the database; the tool computes it and still carries
+  no writer.
+
+  **CAP4 inspects the theatre corpus first — an explicit owner call.** The blend-coverage
+  requirement is met by this database whichever corpus CAP4 reads, so the tutorial run is
+  evidence on disk rather than a prerequisite, and completing it is CAP2.9.
+- [ ] **CAP2.8 The fourth pose-build frame.** CAP2.1 holds that `C_BaseAnimating::SetupBones`
+  and the two engine frames that submit a studio draw are the complete set reaching a pose
+  build, and that completeness is what lets an unenclosed record be read as a missing hook.
+  Melee combat refutes it: 3,926 pose evaluations owned by
+  `models/character/shared/male/baseball.mdl` and `shared/female/tireiron.mdl` run on the
+  render thread with `generation` and `generation_entity` both zero. Their callers are the
+  ordinary `dispatch_model_pose` and `evaluate_sequence_pose` sites, so the unhooked frame is
+  the one above those. Find it by walking the callers of `resolve_virtual_model_pose` that
+  reach none of the three, then bracket it beside them. *Acceptance:* the same scene records
+  zero unassigned, and the 595 out-of-interval records and the unresolved skeletal entity are
+  either closed with it or counted apart with a reason.
+- [ ] **CAP2.9 Complete the `sp_tutorial_1` corpus.** The captures that exist cover one
+  authored ending. What stays open is whether a longer combat run reaches the 2×1 grids, what
+  the melee frame changes once CAP2.8 brackets it, and whether the run's own request
+  population closes the way the theatre's does. Deferred behind the theatre track; it blocks
+  nothing.
 
 ## CAP3 — Decode and index
 
-- [ ] **CAP3.1 Content-addressed payload store.** The offline finalizer deduplicates and
-  losslessly compresses payloads by content hash while retaining every event row. Immutable
-  model, skeleton, and descriptor bytes are stored once and referenced.
-- [ ] **CAP3.2 Join schema.** Resources, models, skeleton bones, actors, pose-build groups,
-  contributions, and draws hang off one time-ordered event spine keyed by generation rather
-  than nearest timestamp. *Acceptance:* for any theatre time and entity the database answers
-  which actor, model, and skeleton existed; which resources constructed them; what request
-  changed the animation; which owner/sequence/animation contributions were evaluated; how
-  source bones mapped to the target skeleton; and what local, composed, bone-to-world, and
-  skin transforms resulted. An explicit unknown is an acceptable answer; a lost join is not.
-- [ ] **CAP3.3 Integrity audit.** The finalized database reports written, dropped,
-  truncated, unreadable, unjoined, and incomplete counts; queue and disk high-water marks;
-  process, map, and scene boundary markers; capture span; and natural or forced cleanup.
+The three tasks landed as one pass over one corpus, because they interlock: the join schema
+wants the payload store's identity, and an audit can only report an *unjoined* count against
+the schema that defines what a join is.
+
+The corpus is a working copy, not an acquisition. `golden_theater` is the chronologically
+last theatre run copied out of the capture tree and verified byte-identical against the
+digest the finalizer recorded, so the passes below rewrite it while the acquisition stays
+untouched and available as an independent oracle. Order is pinned finalize → resolve →
+compact → index, and each pass records the digest of the file it consumed.
+
+- [x] **CAP3.1 Content-addressed payload store.** `uv run elysium research
+  compact_capture_payloads <session>` rewrites a finalized database so each distinct payload
+  is stored once by content hash and every event row keeps its place. `records` becomes a
+  view over `record_events` and `payloads`, column for column and in the original order, so a
+  reader that selects `raw_payload` still receives the exact bytes the probe wrote.
+
+  **Nothing is compressed, and the measurement is why.** Deduplication removes **24%** of the
+  file; the best codec over the deduplicated set removes a further **5.4%**, because this is
+  float32 matrix data — zlib reaches only 0.844, and byte-transposition helps the draw stream
+  (0.830 → 0.784) while actively hurting the three others. That 5.4% would cost an inflate on
+  every read of CAP4.3's core loop, permanently. `raw_header` is not a target either: it is
+  **2,181,209 of 2,181,209** distinct, because every header embeds the dense global sequence
+  counter. Model images were already stored once per checksum by the probe at capture time.
+
+  One complete cutscene holds **2,181,209** records whose **2,467,495,928** payload bytes are
+  **566,164** distinct payloads totalling **1,431,297,652** — a ratio of **0.580061** — and
+  the database falls from **4,373,876,736** to **3,224,928,256** bytes. The draw stream
+  carries the duplication: **0.412** of its bytes are distinct against 0.869 for the composed
+  and decoded locals, and the channel bitmaps reduce to **47** distinct payloads across
+  242,561 cells.
+
+  **The store is proved against the bytes it replaced, not against its own hash.** Before the
+  file is replaced, every stored payload is re-hashed to the key it is filed under, every
+  event's digest taken from the *original* bytes is matched to the payload it now points at,
+  and one true byte comparison per distinct payload runs against the record that first
+  produced it — so the proof does not rest on sha256 being collision free. The view is then
+  required to return the same row count and the same **2,467,495,928** byte total the flat
+  table did, with no dangling reference, a clean `foreign_key_check`, and a clean
+  `integrity_check`. Payload identities are assigned in first-use order over record id, so two
+  passes over one input produce the same file — the digest of a compacted database is recorded
+  provenance and must not move under it.
+
+  Three consequences travel with the shape. The base table's DDL is derived from the
+  catalogue's own stored SQL rather than from `PRAGMA table_info`, which reports neither
+  table-level `UNIQUE` nor foreign keys and would have silently dropped
+  `UNIQUE(stream_name, ordinal)` — and with it the autoindex two verifiers search on. The view
+  reaches the store through a correlated scalar subquery rather than a join, because SQLite
+  offers the omit-noop-join optimization only on the non-aggregate path and every verifier
+  here aggregates: as a `LEFT JOIN`, `count(*)` alone measured three orders of magnitude
+  slower. And a foreign key cannot reference a view, so `record_span_sets` takes its parent
+  from the catalogue; SQLite accepts either `CREATE` and refuses only at the first insert,
+  which in the resolver's rewrite path lands after the previous dictionary is already dropped.
+
+  **Every reader re-establishes, and most get faster.** Run over the corpus before and after,
+  eight of the nine reports are identical field for field; the two differences are the
+  calibration's own file size and the inflation ratio it derives from it, which is what the
+  pass changes. Aggregating over `records` used to drag the whole capture off disk, so moving
+  the payloads out of the event rows pays for itself: the actor verifier runs at **0.37×** its
+  former time, the pointer join at **0.53×**, the census at **0.54×**, the calibration at
+  **0.58×**, and the sweep as a whole falls from **424 s to 325 s**. Only the span verifier is
+  slower, at **1.03×** — it is the one reader that genuinely materializes payloads, and
+  first-use identity ordering keeps even that walk reading mostly forward. Three catalogue
+  queries had to be corrected for the view to be transparent: `sqlite_master WHERE type =
+  'table'` does not match one, which would have dropped every event row from the sequence
+  counter's union and turned CAP1.2's loss proof into a false alarm, and would have flipped
+  the scene verifier's contribution support silently false.
+- [x] **CAP3.2 Join schema.** `uv run elysium research index_capture_database <session>`
+  materializes the joins six verifiers each rebuilt as their own TEMP tables, keyed on the
+  generation every record already carries. Ten tables: `generation_bracket`, `pose_group`,
+  `actor_interval`, `actor_life`, `actor_renderable`, `entity_slot`, `model_identity`,
+  `skeleton_bone`, `bone_remap_group`, and `scene_binding`.
+
+  **Nothing is joined by time.** Every key is an identity — a generation, an address and a
+  checksum, an entity index, a scope — and a timestamp appears only as the containment
+  predicate on a pairing an identity already established, or as a `min`/`max` tie-break inside
+  one identity's own group. The established SQL is lifted from the verifier that owns each
+  grain rather than paraphrased.
+
+  One complete cutscene builds **824,187** brackets — exactly the PBLD, DBLD and SHDW record
+  counts summed, and exactly the run's zero-length-payload row count reached independently —
+  over **420,978** pose groups, **54** actor identity intervals across **49** addresses,
+  **50** witnessed lifetimes, **49** renderable bridges, **158** model identities, **160**
+  decoded skeletons carrying **5,517** bones with none failing, **41** include-model remap
+  groups every one of which locates its array inside its image, and **132** scene bindings.
+  The 54-across-49 and the 158 are CAP2.3's and CAP2.4's counts reached by a different route.
+
+  **A pose group stores both addresses it is known by.** The bracket owner is the renderable
+  subobject and the evaluations name the `C_BaseAnimating`; deriving one from the other would
+  erase the relation four separate verifiers exist to establish, so both are stored as
+  recorded and the offset between them is measured rather than assumed.
+
+  Three bounds travel with the schema. **`model_identity` resolves a real disagreement**: the
+  model census excludes the capture-stop residency sweep from its observation grain and source
+  attribution did not, so the same identity could be "observed before first use" in one report
+  and late in the other; the spine excludes it, which is the stricter of the two and the one
+  whose exclusion is reasoned. **The client side carries no entity serial** — `actor_observations`
+  records an index and no serial while the scene tables record both — so a slot is bounded by
+  its address's own intervals and the serial is recorded where it exists and stated unknown
+  where it does not. And **the bone remap arrays are located, not interpreted.** Their
+  addressing is confirmed — an authored offset at `StudioModelGroup`+0x10 relative to the group
+  entry, one 56-byte record per bone of the including model — but the nested branch that
+  consumes them is an open seam, so the arrays are stored raw as evidence and no field is
+  decoded. The join from owner model to include group to array is complete; the meaning of the
+  56 bytes is an explicit unknown.
+
+  *Acceptance, answered:* for one instant and one entity the spine names the actor, its model
+  and its 60-bone skeleton; the image those bones decoded from; the `Courtroom_bip4_scene.vcd`
+  request and the animation set it applied; the pose build running at that instant with both
+  addresses it is known by, differing by the expected four; the five contributions it
+  evaluated with their owner banks, indices and cycle; the include group mapping
+  `npc_allsequences.mdl` onto that skeleton at **60 records of 56 bytes**, one per bone of the
+  including model exactly as `docs/vtmb/mdl_v2531.md` states; and the decoded locals, the
+  composed pose with its 48-byte root frame, and the 5,760-byte draw that resulted. Nothing in
+  that chain is unresolved. The whole corpus builds with **no unjoined population**: five
+  counts are non-zero and each carries the reason it is — chiefly the **182,557** pose builds
+  that produce no evaluation, which is the bone cache CAP2.1 already measured.
+- [x] **CAP3.3 Integrity audit.** The same pass stores the roll-up into `integrity_shard`,
+  `integrity_bucket` and `integrity_summary`, so the database reports its own written,
+  dropped, truncated, unjoined and incomplete counts, its queue and disk high-water marks, its
+  process/map/scene boundary markers, its capture span, and whether cleanup was natural or
+  forced, without the verifiers being re-run to learn them.
+
+  `verify_capture_integrity` computes it and still has no writer: re-deriving fifty predicates
+  in the pass would fork them from the verifiers that own them, and the first correction to any
+  one would silently stop applying. The roll-up is computed **before** the write connection
+  opens, because each verifier takes its own read-only connection and running them underneath
+  an open write transaction would have them read around it.
+
+  That ordering is also why the spine's own unjoined counts are not among the shards — the
+  roll-up can only describe a database with no spine in it — so they are measured with the same
+  query the verifier judges them by and stored beside it. `uv run elysium research
+  verify_capture_index <session>` reads the result read-only and reports spine coverage,
+  payload-store integrity, and stored-versus-declared shard agreement, separating counts that
+  are defects from counts whose non-zero value is a recorded property of the runtime.
 
 ## CAP4 — Inspect against the export and the current decoder
 
@@ -750,7 +939,7 @@ Responses to measurement, not scheduled prerequisites.
 | Callback time or heap allocation is measurable | Reuse fixed-size slots or a preallocated pool for the active recipe |
 | Queue reaches its byte cap | Narrow spans or filter first, then tune the cap or batching from measurements |
 | Immutable resource bytes dominate the trace | Store that blob once by hash and reference its byte range |
-| Exact pose payloads dominate the database | Losslessly compress and content-deduplicate in the offline finalizer while retaining every event row |
+| Exact pose payloads dominate the database | Content-deduplicate offline while retaining every event row. Compression is not the response: measured over the corpus it buys 5.4% of the file after deduplication and costs an inflate on every payload read |
 | A finalized query is materially slow | Add only the index or derived summary table that query requires |
 | Disk write rate is the bottleneck | Batch or compress on the writer thread after measuring the codec cost |
 | A hook is too noisy | Add the one model, entity, time, or call filter that experiment requires |

@@ -552,8 +552,10 @@ therefore the same object at both ends of the dispatch.
 **A cell whose mask selects no bone still reads sixteen bytes.** `FUN_10089b20` reads
 `NumBones`@240 and `BoneIndex`@244 from the header and `numframes`@12 and `animindex`@48
 from the descriptor before it examines the mask, then walks the bones calling nothing.
-Both runs record **10,311** such cells — the same count in each, so it is an authored
-property of the cutscene rather than a sampling artefact.
+Two runs record **10,311** such cells and a third records **10,353**, so the behaviour is
+authored and the count is not: two runs agreeing exactly is what a narrow sample looks like,
+and the third is 0.4% away. What reproduces is that the cell reads sixteen bytes and decodes
+nothing, not how many times a given cutscene reaches one.
 
 `FUN_100968a0`'s base-model path calls `FUN_10089c40`. Its include-model path
 evaluates into temporary position/quaternion arrays, then consumes 0x3c-byte

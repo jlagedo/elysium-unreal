@@ -44,6 +44,7 @@ from research.tooling.capture.calibrate_theatre_capture import (
     DATABASE_NAME,
     actor_bytes_expression,
     artifact_key_values,
+    compared_maps,
     open_database,
     record_bytes_expression,
     resolve_session,
@@ -1058,6 +1059,7 @@ def compare(reports: list[dict[str, Any]]) -> dict[str, Any]:
         if len(rows) > 1
         else set()
     )
+    same_map, maps = compared_maps(reports)
     if len(bounded) != len(rows):
         statement = (
             f"{len(rows) - len(bounded)} of {len(rows)} runs leave an actor "
@@ -1070,6 +1072,19 @@ def compare(reports: list[dict[str, Any]]) -> dict[str, Any]:
             f"disagree on the renderable offset ({sorted(deltas)}), so the "
             "relation is not a fixed offset inside the object."
         )
+    elif not same_map:
+        # The shared-address count is a property of two runs of one scene. The
+        # renderable offset is not: it is a fixed displacement inside the
+        # object, so two different scenes agreeing on it is a stronger result
+        # than two runs of one scene agreeing, and it is what gets claimed.
+        statement = (
+            f"All {len(rows)} runs observed every actor they posed. They "
+            "captured different scenes (" + ", ".join(maps) + "), so their "
+            "actor populations are coverage rather than agreement, but every "
+            f"one reproduces a renderable offset of +{next(iter(deltas))} "
+            "across a different cast, which is what makes it an offset inside "
+            "the object rather than a property of one scene's heap."
+        )
     else:
         statement = (
             f"All {len(rows)} runs observed every actor they posed and agree on "
@@ -1079,8 +1094,11 @@ def compare(reports: list[dict[str, Any]]) -> dict[str, Any]:
         )
     return {
         "sessions": [report["session"] for report in reports],
+        "maps": maps,
+        "same_map": same_map,
         "runs": rows,
         "shared_addresses": len(shared_addresses),
+        "renderable_delta_agrees": len(deltas) == 1,
         "statement": statement,
     }
 

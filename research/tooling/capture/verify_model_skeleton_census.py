@@ -40,6 +40,7 @@ from research.tooling.capture.calibrate_theatre_capture import (
     DATABASE_NAME,
     artifact_key_values,
     census_bytes_expression,
+    compared_maps,
     open_database,
     record_bytes_expression,
     resolve_session,
@@ -1078,16 +1079,31 @@ def compare(reports: list[dict[str, Any]]) -> dict[str, Any]:
         if len(rows) > 1
         else set()
     )
+    same_map, maps = compared_maps(reports)
     if len(complete) != len(rows):
         statement = (
             f"{len(rows) - len(complete)} of {len(rows)} runs leave a used "
             "header identity unobserved, so the census is not yet established "
             "across runs."
         )
+    elif not same_map:
+        # Which models a run loads is a property of the scene's cast, so two
+        # scenes differ on it by construction. Reporting that as a failure of
+        # reproducibility would claim a comparison that was never entitled to
+        # hold; the union is coverage.
+        union = set().union(*(set(row["checksums"]) for row in rows))
+        statement = (
+            f"All {len(rows)} runs censused every identity they used. They "
+            "captured different scenes (" + ", ".join(maps) + "), so their "
+            f"model sets are coverage rather than agreement: {len(union)} "
+            "distinct checksums across the runs, "
+            f"{len(set.intersection(*(set(r['checksums']) for r in rows)))} "
+            "of them loaded by every one."
+        )
     elif len(checksum_sets) != 1:
         statement = (
             f"All {len(rows)} runs censused every identity they used, but the "
-            "runs do not agree on which models the cutscene loads, so the "
+            "runs do not agree on which models the scene loads, so the "
             "census is complete without being reproducible."
         )
     else:
@@ -1099,6 +1115,8 @@ def compare(reports: list[dict[str, Any]]) -> dict[str, Any]:
         )
     return {
         "sessions": [report["session"] for report in reports],
+        "maps": maps,
+        "same_map": same_map,
         "runs": rows,
         "shared_addresses": len(shared_addresses),
         "statement": statement,

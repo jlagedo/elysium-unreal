@@ -51,6 +51,7 @@ from typing import Any
 from research.tooling.capture.calibrate_theatre_capture import (
     DATABASE_NAME,
     artifact_key_values,
+    compared_maps,
     open_database,
     record_bytes_expression,
     resolve_session,
@@ -134,10 +135,12 @@ def capability(
 ) -> dict[str, Any]:
     """What this database can be asked, so an older one is answered not rejected."""
     columns = table_columns(connection, "records")
+    # Views count, so an indexed database reaching its event rows through one is
+    # still seen carrying them.
     tables = {
         name
         for (name,) in connection.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table'"
+            "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
         )
     }
     version = int(headers.get(CONTRIBUTION_STREAM, {}).get("version", 0) or 0)
@@ -804,6 +807,7 @@ def verify(session: Path) -> dict[str, Any]:
             "session_path": str(session),
             "database": str(session / DATABASE_NAME),
             "identity": {
+                "map": metadata.get("map"),
                 "spans_source_database_sha256": metadata.get(
                     "spans_source_database_sha256"
                 ),
@@ -881,6 +885,7 @@ def compare(reports: list[dict[str, Any]]) -> dict[str, Any]:
     divergent = sorted(
         shape for shape, seen in common.items() if len(set(seen.values())) > 1
     )
+    same_map, maps = compared_maps(reports)
     if failing:
         statement = (
             "Runs disagree because "
@@ -893,18 +898,38 @@ def compare(reports: list[dict[str, Any]]) -> dict[str, Any]:
             "produced different spans, so the walk is not a function of the "
             "shape alone: " + ", ".join(divergent[:6])
         )
+    elif not common:
+        statement = (
+            f"All {len(rows)} runs resolve every span and place every witnessed "
+            "pointer where the walker predicts, but they share no shape, so "
+            "the claim that the walk is a function of the shape alone is "
+            "untested across them."
+        )
     else:
+        # This comparison deliberately takes no different-scene guard. Its key
+        # is the shape -- owner, animation index and decoded-bone bitmaps --
+        # not the cast, so two different scenes producing byte-identical spans
+        # for a shape they both reach is a strictly stronger result than two
+        # runs of one scene producing them.
         statement = (
             f"All {len(rows)} runs resolve every span and place every witnessed "
             f"pointer where the walker predicts, and all {len(common)} shapes "
-            "they share produce byte-identical spans, so the walk is a function "
-            "of the shape and nothing else. Their consumed unions differ by "
-            "which frames each run happened to sample, which is coverage rather "
-            "than disagreement."
+            "they share produce byte-identical spans"
+            + (
+                " across different scenes (" + ", ".join(maps) + "), which the "
+                "shape key makes a stronger result than one scene repeated"
+                if not same_map
+                else ", so the walk is a function of the shape and nothing else"
+            )
+            + ". Their consumed unions differ by which frames each run happened "
+            "to sample, which is coverage rather than disagreement."
         )
     return {
         "rows": rows,
+        "maps": maps,
+        "same_map": same_map,
         "shared_shapes": len(common),
+        "shape_claim_tested": bool(common),
         "divergent_shapes": divergent,
         "statement": statement,
     }

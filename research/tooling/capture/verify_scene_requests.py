@@ -52,6 +52,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from research.tooling.capture.calibrate_theatre_capture import (  # noqa: E402
     DATABASE_NAME,
     artifact_key_values,
+    compared_maps,
     open_database,
     resolve_session,
     scene_bytes_expression,
@@ -166,10 +167,13 @@ def capability(
     A database that predates a column is answered as unjudgeable rather than
     raised on, which is why every gate below asks for the column it reads.
     """
+    # Views count: an indexed database reaches its event rows through one, and
+    # asking only for tables would leave `records` unseen, its columns unread,
+    # and every contribution-gated section below silently unjudged.
     tables = {
         name
         for (name,) in connection.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table'"
+            "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
         )
     }
     # The tables exist in every database this schema creates, so presence is no
@@ -376,6 +380,7 @@ def join(
         ).fetchall()
         compared = 0
         agreeing = 0
+        without_renderable: list[dict[str, Any]] = []
         disagreeing: list[dict[str, Any]] = []
         for scene_entity, base_anim, index, applied in rows:
             # An evaluation is scoped by the pose build it sits in, and that
@@ -392,6 +397,18 @@ def join(
                 )
             ]
             if not entities:
+                # The scene applied an animation set to an index the census
+                # never observed a renderable for. Skipping it silently would
+                # drop it from numerator and denominator alike, so the join
+                # would read as closed over a population it never saw.
+                if len(without_renderable) < MAX_REPORTED_OFFENDERS:
+                    without_renderable.append(
+                        {
+                            "scene": address(scene_entity),
+                            "base_anim": base_anim,
+                            "entity_index": index,
+                        }
+                    )
                 continue
             compared += 1
             wanted = _model_key(base_anim)
@@ -416,9 +433,12 @@ def join(
                 )
         animset = {
             "available": True,
+            "bindings": len(rows),
             "compared": compared,
             "agreeing": agreeing,
             "disagreeing": compared - agreeing,
+            "without_a_renderable": len(without_renderable),
+            "without_a_renderable_detail": without_renderable,
             "offenders": disagreeing,
         }
 
@@ -914,8 +934,11 @@ def compare(reports: list[dict[str, Any]]) -> dict[str, Any]:
     if divergent:
         return {
             "rows": rows,
+            "maps": compared_maps(reports)[1],
+            "same_map": compared_maps(reports)[0],
             "shapes": shapes,
             "compared_scene_files": len(common),
+            "shape_claim_tested": True,
             "divergent_scene_files": divergent,
             "reached_by_some_runs_only": coverage_only,
             "statement": (
@@ -924,6 +947,11 @@ def compare(reports: list[dict[str, Any]]) -> dict[str, Any]:
                 "reproducible: " + ", ".join(divergent[:8])
             ),
         }
+    same_map, maps = compared_maps(reports)
+    joined = (
+        f"All {len(rows)} runs join every scene request to the pose group "
+        "that carried it out"
+    )
     if unjudgeable:
         statement = (
             f"{len(unjudgeable)} of {len(rows)} runs cannot be judged: "
@@ -931,17 +959,36 @@ def compare(reports: list[dict[str, Any]]) -> dict[str, Any]:
         )
     elif not all(row["requests_joined"] for row in rows):
         statement = "At least one run does not join its requests to pose groups."
+    elif not common:
+        # An empty intersection makes the authored-shape claim vacuous: "the 0
+        # scene files present in every run agreed" is not evidence of anything.
+        # Two scenes share no .vcd at all, and two runs of one scene can also
+        # diverge completely, so this is reported as untested either way.
+        statement = (
+            joined
+            + ", but no scene file is present in every run"
+            + (
+                " because they captured different scenes (" + ", ".join(maps) + ")"
+                if not same_map
+                else ""
+            )
+            + f", so the authored-shape claim is untested; {len(shapes)} scene "
+            "files were reached by some run only."
+        )
     else:
         statement = (
-            f"All {len(rows)} runs join every scene request to the pose group "
-            f"that carried it out, and the {len(common)} scene files present "
-            "in every run dispatched an identical sequence of events at "
-            "identical scene-relative times."
+            joined
+            + f", and the {len(common)} scene files present in every run "
+            "dispatched an identical sequence of events at identical "
+            "scene-relative times."
         )
     return {
         "rows": rows,
+        "maps": maps,
+        "same_map": same_map,
         "shapes": shapes,
         "compared_scene_files": len(common),
+        "shape_claim_tested": bool(common),
         "divergent_scene_files": divergent,
         "reached_by_some_runs_only": coverage_only,
         "statement": statement,

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import sqlite3
 import struct
@@ -187,11 +188,35 @@ def scene_bytes_expression() -> str:
     )
 
 
+CAPTURE_ROOT = "retail-capture"
+
+
 def resolve_session(value: str) -> Path:
+    """Resolve a bare session name under any capture recipe's own root.
+
+    Each recipe writes its sessions to its own subdirectory, so a bare name is
+    searched across all of them rather than assumed to be a theatre run. Two
+    roots holding the same name is named as ambiguous instead of resolved to
+    whichever sorts first, because the wrong database reads as a clean run of
+    the wrong scene.
+    """
     candidate = Path(value)
     if candidate.is_absolute() or candidate.exists():
         return candidate.resolve()
-    return (research_root() / "retail-capture" / "theatre" / value).resolve()
+    root = research_root() / CAPTURE_ROOT
+    matches = sorted(path for path in root.glob(f"*/{value}") if path.is_dir())
+    if len(matches) == 1:
+        return matches[0].resolve()
+    if not matches:
+        known = sorted(path.name for path in root.glob("*") if path.is_dir())
+        raise FileNotFoundError(
+            f"no capture session named {value!r} under {root}; "
+            f"known recipe roots: {known}"
+        )
+    raise ValueError(
+        f"ambiguous session {value!r}: "
+        + ", ".join(os.fspath(match) for match in matches)
+    )
 
 
 def open_database(session: Path) -> sqlite3.Connection:
@@ -326,11 +351,16 @@ def sequence_union(connection: sqlite3.Connection) -> str:
     A table missing because the run predates the stream that fills it is not a
     hole in the counter; reading it unconditionally would turn an older database
     into a query error rather than an answer.
+
+    Views count. An indexed database reaches its event rows through one, and
+    asking only for tables would drop every record from the union and report a
+    dense counter as full of holes -- CAP1.2's proof that nothing was lost
+    between emission and flush, turned into a false alarm by a catalogue query.
     """
     present = {
         name
         for (name,) in connection.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table'"
+            "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
         )
     }
     return " UNION ALL ".join(
@@ -647,14 +677,10 @@ def character_batches(
     return batches
 
 
-def run_zero(
-    connection: sqlite3.Connection,
-    frequency: int,
-    boundary: dict[str, Any] | None,
-) -> dict[str, Any]:
-    batches = character_batches(connection, frequency)
-    if not batches:
-        return {"derived": None, "reason": "no character model was ever drawn"}
+def _zero_player_cast_batch(
+    batches: list[dict[str, Any]],
+) -> tuple[dict[str, Any] | None, str | None]:
+    """chooseSire() and castUnderstudy() both run from the arrival trigger."""
     trigger = next(
         (
             batch
@@ -664,9 +690,98 @@ def run_zero(
         None,
     )
     if trigger is None:
+        return None, "no batch after the map load cast two player models"
+    return trigger, None
+
+
+def _zero_map_load_batch(
+    batches: list[dict[str, Any]],
+) -> tuple[dict[str, Any] | None, str | None]:
+    """A scene entered inside itself starts where its cast is first drawn."""
+    return batches[0], None
+
+
+RUN_ZERO_RULES = {
+    "player_cast_batch": (
+        _zero_player_cast_batch,
+        "earliest frame after the first character frame in which two or "
+        "more previously unseen character/pc models are first drawn",
+    ),
+    "map_load_batch": (
+        _zero_map_load_batch,
+        "the first frame in which a character model is drawn, which for a "
+        "scene entered from a save inside it is the load itself",
+    ),
+}
+
+
+def resolve_run_zero_rule(metadata: dict[str, Any]) -> tuple[str, str]:
+    """Name this database's run-zero rule and where the name came from.
+
+    A capture written before recipes existed carries no rule, so the map name
+    supplies it; that keeps every theatre database deriving exactly the zero it
+    always did rather than silently changing what its timestamps are relative
+    to.
+    """
+    declared = metadata.get("run_zero_rule")
+    if isinstance(declared, str) and declared in RUN_ZERO_RULES:
+        return declared, "capture-metadata"
+    if metadata.get("map") == "sp_theatre":
+        return "player_cast_batch", "map-default"
+    return "map_load_batch", "map-default"
+
+
+def first_multi_blend_contribution(
+    connection: sqlite3.Connection, zero: int, frequency: int
+) -> dict[str, Any] | None:
+    """When this run first evaluated a grid with more than one cell.
+
+    A capture finalized before the contribution stream existed has no such
+    column, so the milestone is absent rather than zero.
+    """
+    if "num_blends" not in table_columns(connection, "records"):
+        return None
+    row = connection.execute(
+        "SELECT qpc, num_blends, group_size, blend_cell, blend_weight "
+        "FROM records WHERE kind = 'SEQP' AND num_blends > 1 "
+        "ORDER BY qpc LIMIT 1"
+    ).fetchone()
+    if row is None:
+        return None
+    qpc, blends, sizes, cell, weight = row
+    grid = json.loads(sizes) if sizes else [0, 0]
+    return {
+        "seconds": round((qpc - zero) / frequency, 3),
+        "num_blends": blends,
+        "grid": f"{grid[0]}x{grid[1]}",
+        "cell": json.loads(cell) if cell else None,
+        "weights": json.loads(weight) if weight else None,
+    }
+
+
+def run_zero(
+    connection: sqlite3.Connection,
+    frequency: int,
+    boundary: dict[str, Any] | None,
+    rule_name: str = "player_cast_batch",
+    rule_source: str = "map-default",
+) -> dict[str, Any]:
+    select, description = RUN_ZERO_RULES[rule_name]
+    batches = character_batches(connection, frequency)
+    if not batches:
         return {
             "derived": None,
-            "reason": "no batch after the map load cast two player models",
+            "rule_name": rule_name,
+            "rule_source": rule_source,
+            "reason": "no character model was ever drawn",
+        }
+    trigger, reason = select(batches)
+    if trigger is None:
+        return {
+            "derived": None,
+            "rule_name": rule_name,
+            "rule_source": rule_source,
+            "reason": reason,
         }
     zero = trigger["qpc"]
     largest = max(
@@ -686,16 +801,39 @@ def run_zero(
 
     stamp = (boundary or {}).get("arm_qpc")
     delta = None if stamp is None else round((stamp - zero) / frequency, 3)
+    # A recipe whose scene starts where it loads declares no authored arm
+    # marker, so its stamp is the load echo rather than a trigger output. The
+    # tolerance test is meaningless there and is reported as a measurement.
+    authored_arm = (boundary or {}).get("arm_marker") is not None
+    accepted: bool | None = (
+        delta is not None and abs(delta) <= CONSOLE_STAMP_TOLERANCE_SECONDS
+        if authored_arm
+        else None
+    )
     return {
         "derived_qpc": zero,
-        "rule": (
-            "earliest frame after the first character frame in which two or "
-            "more previously unseen character/pc models are first drawn"
-        ),
+        "rule_name": rule_name,
+        "rule_source": rule_source,
+        "rule": description,
         "frame_seconds": FRAME_SECONDS,
         "map_load_batch": milestone(batches[0]),
         "trigger_batch": milestone(trigger),
         "largest_batch_after_trigger": milestone(largest),
+        # The point of a capture that reaches the four-cell blend path.
+        "first_multi_blend_contribution": first_multi_blend_contribution(
+            connection, zero, frequency
+        ),
+        "beats": [
+            {
+                "marker": beat.get("marker"),
+                "seconds": (
+                    None
+                    if beat.get("qpc") is None
+                    else round((int(beat["qpc"]) - zero) / frequency, 3)
+                ),
+            }
+            for beat in (boundary or {}).get("beats", [])
+        ],
         "batches": [
             {
                 "seconds": round((batch["qpc"] - zero) / frequency, 3),
@@ -708,9 +846,12 @@ def run_zero(
             "arm_qpc": stamp,
             "arm_marker": (boundary or {}).get("arm_marker"),
             "delta_seconds": delta,
-            "accepted": (
-                delta is not None
-                and abs(delta) <= CONSOLE_STAMP_TOLERANCE_SECONDS
+            "accepted": accepted,
+            "reason": (
+                None
+                if authored_arm
+                else "this recipe declares no authored arm marker, so the "
+                "stamp is the load echo and its delta is a measurement"
             ),
         },
         # None means the run ended on its duration backstop rather than on the
@@ -754,7 +895,8 @@ def calibrate(session: Path) -> dict[str, Any]:
         frequency = next(iter(headers.values()))["qpc_frequency"]
         origin = connection.execute("SELECT min(qpc) FROM records").fetchone()[0]
         record_bytes = record_bytes_expression(headers)
-        zero = run_zero(connection, frequency, boundary)
+        rule_name, rule_source = resolve_run_zero_rule(metadata)
+        zero = run_zero(connection, frequency, boundary, rule_name, rule_source)
         counts = volume(connection, headers, frequency, origin)
         identity = census(
             connection, record_bytes, frequency, zero.get("derived_qpc")
@@ -775,6 +917,12 @@ def calibrate(session: Path) -> dict[str, Any]:
             limitations.append(
                 "This run predates the hook's queue depth counter, so the "
                 "queue high-water mark is unmeasured rather than zero."
+            )
+        if rule_source == "map-default":
+            limitations.append(
+                "This database declares no run-zero rule, so the rule was "
+                f"assumed from its map name: {rule_name}. Every relative "
+                "timestamp below is measured against that assumption."
             )
         if (boundary or {}).get("signal") is None and not (boundary or {}).get(
             "probe"
@@ -843,41 +991,70 @@ def calibrate(session: Path) -> dict[str, Any]:
         connection.close()
 
 
+def compared_maps(reports: list[dict[str, Any]]) -> tuple[bool, list[str]]:
+    """Whether every run captured the same scene, and which scenes they are.
+
+    A claim about a run's cast, its scene files or its record count is a claim
+    about what the scene authored. Two runs of different scenes disagree on all
+    of it by construction, so a comparator states that the claim does not apply
+    rather than reporting a difference it was never entitled to measure.
+    """
+    names = sorted(
+        {
+            (report.get("identity") or {}).get("map")
+            for report in reports
+        },
+        key=lambda name: (name is None, name),
+    )
+    present = [name for name in names if name is not None]
+    return len(names) == 1, present
+
+
 def compare(reports: list[dict[str, Any]]) -> dict[str, Any]:
     base = reports[0]
     base_models = {
         entry["model_name"]: entry for entry in base["census"]["models"]
     }
+    same_map, maps = compared_maps(reports)
+    same_rule = len({report["zero"].get("rule_name") for report in reports}) == 1
 
     milestones = []
-    for key in ("map_load_batch", "largest_batch_after_trigger"):
-        row: dict[str, Any] = {"milestone": key}
-        for report in reports:
-            entry = report["zero"].get(key)
-            row[report["session"]] = None if entry is None else entry["seconds"]
-        milestones.append(row)
+    # A milestone is a time relative to each run's own zero, so comparing two
+    # runs that derived their zero by different rules compares two origins.
+    if same_rule:
+        for key in ("map_load_batch", "largest_batch_after_trigger"):
+            row: dict[str, Any] = {"milestone": key}
+            for report in reports:
+                entry = report["zero"].get(key)
+                row[report["session"]] = (
+                    None if entry is None else entry["seconds"]
+                )
+            milestones.append(row)
 
+    # The table is keyed off the first run's cast, so across scenes it would
+    # report the whole of that cast as missing from every other run.
     models = []
-    for name, entry in base_models.items():
-        row = {"model_name": name, "bone_count": entry["bone_count"]}
-        for report in reports:
-            other = next(
-                (
-                    candidate
-                    for candidate in report["census"]["models"]
-                    if candidate["model_name"] == name
-                ),
-                None,
-            )
-            row[report["session"]] = (
-                None
-                if other is None
-                else {
-                    "records": other["records"],
-                    "first_seconds": other["first_seconds"],
-                }
-            )
-        models.append(row)
+    if same_map:
+        for name, entry in base_models.items():
+            row = {"model_name": name, "bone_count": entry["bone_count"]}
+            for report in reports:
+                other = next(
+                    (
+                        candidate
+                        for candidate in report["census"]["models"]
+                        if candidate["model_name"] == name
+                    ),
+                    None,
+                )
+                row[report["session"]] = (
+                    None
+                    if other is None
+                    else {
+                        "records": other["records"],
+                        "first_seconds": other["first_seconds"],
+                    }
+                )
+            models.append(row)
 
     totals = [
         {
@@ -889,14 +1066,20 @@ def compare(reports: list[dict[str, Any]]) -> dict[str, Any]:
         }
         for report in reports
     ]
-    reference = totals[0]["records"]
-    for entry in totals:
-        entry["delta_percent"] = round(
-            100.0 * (entry["records"] - reference) / reference, 4
-        )
+    # A record-count delta measures reproducibility, which only two runs of the
+    # same scene have. Across scenes it is a difference in what was played.
+    if same_map:
+        reference = totals[0]["records"]
+        for entry in totals:
+            entry["delta_percent"] = round(
+                100.0 * (entry["records"] - reference) / reference, 4
+            )
 
     return {
         "sessions": [report["session"] for report in reports],
+        "maps": maps,
+        "same_map": same_map,
+        "same_run_zero_rule": same_rule,
         "totals": totals,
         "milestones_on_derived_zero": milestones,
         "models": models,
@@ -905,6 +1088,15 @@ def compare(reports: list[dict[str, Any]]) -> dict[str, Any]:
             for row in models
             if any(row[report["session"]] is None for report in reports)
         ],
+        "statement": (
+            "These runs captured different scenes ("
+            + ", ".join(maps)
+            + "), so cast, record count and milestone comparisons are "
+            "coverage rather than agreement and are not reported."
+            if not same_map
+            else "These runs captured the same scene, so cast and record "
+            "counts are compared as reproducibility."
+        ),
     }
 
 
@@ -937,16 +1129,36 @@ def summarize(report: dict[str, Any]) -> str:
     )
     if zero.get("derived_qpc") is not None:
         stamp = zero["console_stamp"]
+        # A scene entered from a save inside it can draw its whole cast in one
+        # batch, so there is not always a later one to name.
+        later = zero.get("largest_batch_after_trigger")
         lines.append(
-            f"  zero from {len(zero['trigger_batch']['models'])} cast models; "
+            f"  zero by {zero['rule_name']} ({zero['rule_source']}) from "
+            f"{len(zero['trigger_batch']['models'])} cast models; "
             f"console stamp delta={stamp['delta_seconds']}s "
             f"accepted={stamp['accepted']}; "
-            f"largest later batch at "
-            f"{zero['largest_batch_after_trigger']['seconds']}s; "
-            f"stop={zero['stop_signal'] or 'duration-backstop'}"
+            + (
+                f"largest later batch at {later['seconds']}s; "
+                if later is not None
+                else "no later batch; "
+            )
+            + f"stop={zero['stop_signal'] or 'duration-backstop'}"
+        )
+        blend = zero.get("first_multi_blend_contribution")
+        lines.append(
+            "  first multi-blend contribution: "
+            + (
+                f"{blend['grid']} at {blend['seconds']}s cell={blend['cell']} "
+                f"weights={blend['weights']}"
+                if blend
+                else "none -- this run exercised no blend grid"
+            )
         )
     else:
-        lines.append(f"  zero not derived: {zero.get('reason')}")
+        lines.append(
+            f"  zero not derived by {zero.get('rule_name')}: "
+            f"{zero.get('reason')}"
+        )
     return "\n".join(lines)
 
 
