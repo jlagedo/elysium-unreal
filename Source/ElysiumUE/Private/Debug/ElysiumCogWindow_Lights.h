@@ -65,6 +65,9 @@ private:
 	// to reload and rebuild it from the six exported face images. Weak: the cube is outer'd to the
 	// map actor, so a map unload takes it and the toggle simply disappears with the sky light.
 	TWeakObjectPtr<class UTextureCube> SkyCubemap;
+	// Row indices and all editor-only state below belong to one adopted rig. A rig change clears
+	// them so travel cannot apply a previous map's selection or isolate state to the next map.
+	TWeakObjectPtr<UElysiumLightRig> ActiveRig;
 
 	int32 SelectedSource = INDEX_NONE;   // index into UElysiumLightRig::Sources()
 	bool bClickToSelect = true;          // LMB over the world selects the nearest light marker

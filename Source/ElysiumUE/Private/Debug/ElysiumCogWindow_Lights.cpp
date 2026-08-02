@@ -132,6 +132,35 @@ void FElysiumCogWindow_Lights::RenderTick(float DeltaTime)
 	AElysiumMapActor* Map = GetMapActor();
 	UElysiumMapVisuals* Visuals = Map ? Map->GetVisuals() : nullptr;
 	UElysiumLightRig* Rig = Visuals ? Visuals->GetLightRig() : nullptr;
+	if (Rig != ActiveRig.Get())
+	{
+		// A row number only identifies a source inside one rig. Carrying it across travel can select
+		// (and, when Isolate is armed, hide everything except) an unrelated light on the next map.
+		// Restore the old rig before dropping its transient UI state in case both map actors overlap
+		// for a frame during travel.
+		if (UElysiumLightRig* OldRig = ActiveRig.Get(); OldRig != nullptr && bIsolateApplied)
+		{
+			for (int32 Index = 0; Index < OldRig->Sources().Num(); ++Index)
+			{
+				if (ULightComponent* Light = OldRig->SourceLight(Index))
+				{
+					Light->SetVisibility(OldRig->ShouldSourceBeLit(Index));
+				}
+			}
+		}
+
+		ActiveRig = Rig;
+		SkyCubemap.Reset();
+		SelectedSource = INDEX_NONE;
+		HoveredSource = INDEX_NONE;
+		bScrollToSelected = false;
+		bIsolate = false;
+		bIsolateApplied = false;
+		bSelectPending = false;
+		bClearPending = false;
+		SaveStatus.Reset();
+		bSaveFailed = false;
+	}
 	if (Rig == nullptr)
 	{
 		return;
@@ -611,18 +640,19 @@ void FElysiumCogWindow_Lights::RenderContent()
 				const UElysiumLightRig::FLightSource& S = Sources[Row];
 				const ULightComponent* Light = S.Light.Get();
 				ImGui::TableNextRow();
+				// The row owns more than its selectable: every colour swatch also has the hidden
+				// label "##c". Keep the row on the ID stack until every interactive item is drawn.
+				ImGui::PushID(Row);
 
 				ImGui::TableNextColumn();
 				// The whole row is the hit target (SpanAllColumns), so the index cell doubles as
 				// the selectable. The index carries both edit states, so the list shows at a
 				// glance which lights are off the global calibration and which are switched off.
-				ImGui::PushID(Row);
 				if (ImGui::Selectable("##row", Row == SelectedSource,
 					ImGuiSelectableFlags_SpanAllColumns))
 				{
 					SelectedSource = (Row == SelectedSource) ? INDEX_NONE : Row;
 				}
-				ImGui::PopID();
 				if (bScrollToSelected && Row == SelectedSource)
 				{
 					ImGui::SetScrollHereY(0.5f);
@@ -681,6 +711,7 @@ void FElysiumCogWindow_Lights::RenderContent()
 				{
 					ImGui::TextDisabled("-");
 				}
+				ImGui::PopID();
 			}
 		}
 		ImGui::EndTable();
@@ -909,6 +940,12 @@ void FElysiumCogWindow_Lights::RenderSelectedSource(UElysiumLightRig& Rig, int32
 		ImGui::TextDisabled("Light %d is gone (map reloaded?).", Index);
 		return;
 	}
+
+	// Several visible names intentionally mirror the global calibration controls (Reach, Lumen
+	// bounce, sun angles and Specular). ImGui labels are identities, not just captions, so scope the
+	// whole editor by both its role and selected row instead of maintaining fragile label suffixes.
+	ImGui::PushID("SelectedSourceEditor");
+	ImGui::PushID(Index);
 
 	// Both numbers, because the list row and the sidecar line are not the same and the saved JSON
 	// keys on the latter.
@@ -1197,6 +1234,9 @@ void FElysiumCogWindow_Lights::RenderSelectedSource(UElysiumLightRig& Rig, int32
 			Rig.SetSourceOverridden(Index, true);
 		}
 	}
+
+	ImGui::PopID();
+	ImGui::PopID();
 }
 
 #endif // ENABLE_COG
