@@ -21,3 +21,220 @@ index e2c7054..bd5f673 100644
          }
  
          //---------------------------------------------------------------------------------
+diff --git a/Plugins/Cog/Source/Cog/Private/CogSubsystem.cpp b/Plugins/Cog/Source/Cog/Private/CogSubsystem.cpp
+index cf88d9f..6f1e28b 100644
+--- a/Plugins/Cog/Source/Cog/Private/CogSubsystem.cpp
++++ b/Plugins/Cog/Source/Cog/Private/CogSubsystem.cpp
+@@ -733,35 +733,15 @@ void UCogSubsystem::RenderOptionMenu(FMenu& Menu)
+ //--------------------------------------------------------------------------------------------------------------------------
+ void UCogSubsystem::RenderMenuItem(FCogWindow& Window, const char* MenuItemName)
+ {
+-    if (Settings->bShowWindowsInMainMenu)
++    // Elysium keeps the launcher predictable: menu rows open or close windows, while the window
++    // itself owns its live content. Rendering an entire tool as a hover submenu makes navigation
++    // unexpectedly deep, expensive, and easy to trigger while moving across the menu bar.
++    bool bIsVisible = Window.GetIsVisible();
++    if (ImGui::MenuItem(MenuItemName, nullptr, &bIsVisible))
+     {
+-        ImGui::SetNextWindowSizeConstraints(
+-            ImVec2(FCogWidgets::GetFontWidth() * 40, ImGui::GetTextLineHeightWithSpacing() * 5),
+-            ImVec2(FCogWidgets::GetFontWidth() * 50, ImGui::GetTextLineHeightWithSpacing() * 60));
+-
+-        if (ImGui::BeginMenu(MenuItemName))
+-        {
+-            Window.RenderContent();
+-            ImGui::EndMenu();
+-        }
+-
+-        if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+-        {
+-            Window.SetIsVisible(!Window.GetIsVisible());
+-        }
+-        
+-        RenderMenuItemHelp(Window);
+-    }
+-    else
+-    {
+-        bool bIsVisible = Window.GetIsVisible();
+-        if (ImGui::MenuItem(MenuItemName, nullptr, &bIsVisible))
+-        {
+-            Window.SetIsVisible(bIsVisible);
+-        }
+-     
+-        RenderMenuItemHelp(Window);
++        Window.SetIsVisible(bIsVisible);
+     }
++    RenderMenuItemHelp(Window);
+ }
+ 
+ //--------------------------------------------------------------------------------------------------------------------------
+@@ -1140,4 +1120,4 @@ void UCogSubsystem::TryDisableCommandsConflictingWithShortcuts(UPlayerInput* Pla
+     }
+         
+     FCogImguiInputHelper::DisableCommandsConflictingWithShortcuts(*PlayerInput);
+-}
+\ No newline at end of file
++}
+diff --git a/Plugins/Cog/Source/Cog/Private/CogWindow_Settings.cpp b/Plugins/Cog/Source/Cog/Private/CogWindow_Settings.cpp
+index 074f327..1444d99 100644
+--- a/Plugins/Cog/Source/Cog/Private/CogWindow_Settings.cpp
++++ b/Plugins/Cog/Source/Cog/Private/CogWindow_Settings.cpp
+@@ -73,9 +73,13 @@ void FCogWindow_Settings::RenderContent()
+     
+     ImGuiIO& IO = ImGui::GetIO();
+     FCogImguiContext& Context = GetOwner()->GetContext();
++    if (!ImGui::BeginTabBar("##CogSettingsViews"))
++    {
++        return;
++    }
+ 
+     //-------------------------------------------------------------------------------------------
+-    if (ImGui::CollapsingHeader("Input", ImGuiTreeNodeFlags_DefaultOpen))
++    if (ImGui::BeginTabItem("Input"))
+     {
+         bool bEnableInput = Context.GetEnableInput();
+         if (ImGui::Checkbox("Enable Input", &bEnableInput))
+@@ -140,10 +144,11 @@ void FCogWindow_Settings::RenderContent()
+         FCogWidgets::ItemTooltipWrappedText("Disable Cog's shortcuts (ToggleInput, ToggleSelectionMode, LoadLayout, ...) when ImGui want text input."
+ 				" This can be required if the shortcuts are mapped by keys generating a text input (letters, or Backspace for example)."
+                 " This is not required if the shortcuts are set to keys such as F1 or F2.");
++        ImGui::EndTabItem();
+     }
+     
+     //-------------------------------------------------------------------------------------------
+-    if (ImGui::CollapsingHeader("Window", ImGuiTreeNodeFlags_DefaultOpen))
++    if (ImGui::BeginTabItem("Appearance"))
+     {
+         if (ImGui::Checkbox("Enable Viewports", &Config->bEnableViewports))
+         {
+@@ -159,10 +164,6 @@ void FCogWindow_Settings::RenderContent()
+         ImGui::Checkbox("Transparent Mode", &Config->bTransparentMode);
+         FCogWidgets::ItemTooltipWrappedText("Enable transparent mode.");
+     
+-        //-------------------------------------------------------------------------------------------
+-        ImGui::Checkbox("Show Windows In Main Menu", &Config->bShowWindowsInMainMenu);
+-        FCogWidgets::ItemTooltipWrappedText("Show the content of the windows when hovering the window menu item.");
+-
+         //-------------------------------------------------------------------------------------------
+         ImGui::Checkbox("Show Help", &Config->bShowHelp);
+         FCogWidgets::ItemTooltipWrappedText("Show windows help on the window menu items.");
+@@ -180,10 +181,11 @@ void FCogWindow_Settings::RenderContent()
+             ImGui::TextUnformatted("Reset DPi Scale  [Middle Mouse]");
+             ImGui::EndTooltip();
+         }
++        ImGui::EndTabItem();
+     }
+ 
+     //-------------------------------------------------------------------------------------------
+-    if (ImGui::CollapsingHeader("Widgets (?)", ImGuiTreeNodeFlags_DefaultOpen))
++    if (ImGui::BeginTabItem("Menu widgets"))
+     {
+         FCogWidgets::ItemTooltipWrappedText("Widgets appear in the main menu bar.");
+         
+@@ -242,10 +244,11 @@ void FCogWindow_Settings::RenderContent()
+             }
+         }
+         ImGui::EndChild();
++        ImGui::EndTabItem();
+     }
+     
+     //-------------------------------------------------------------------------------------------
+-    if (ImGui::CollapsingHeader("Font", ImGuiTreeNodeFlags_DefaultOpen))
++    if (ImGui::BeginTabItem("Font"))
+     {
+         IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+ 
+@@ -284,10 +287,11 @@ void FCogWindow_Settings::RenderContent()
+             ImGui::EndChild();
+         }
+ 
++        ImGui::EndTabItem();
+     }
+ 
+     //-------------------------------------------------------------------------------------------
+-    if (ImGui::CollapsingHeader("Shortcuts", ImGuiTreeNodeFlags_DefaultOpen))
++    if (ImGui::BeginTabItem("Shortcuts"))
+     {
+         for (TObjectPtr SomeConfig : GetOwner()->GetConfigs())
+         {
+@@ -306,27 +310,38 @@ void FCogWindow_Settings::RenderContent()
+                 }
+             }
+         }
++        ImGui::EndTabItem();
+     }
++    ImGui::EndTabBar();
+     
+     //-------------------------------------------------------------------------------------------
+-    if (ImGui::CollapsingHeader("Settings", ImGuiTreeNodeFlags_DefaultOpen))
++    ImGui::Separator();
++    if (ImGui::Button("Save settings"))
+     {
+-        if (ImGui::Button("Save All Settings", ImVec2(ImGui::GetContentRegionAvail().x, 0.0f)))
++        GetOwner()->SaveAllSettings();
++    }
++    ImGui::SameLine();
++    if (ImGui::Button("Reset..."))
++    {
++        ImGui::OpenPopup("Reset Cog settings?");
++    }
++    if (ImGui::BeginPopupModal("Reset Cog settings?", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
++    {
++        ImGui::TextUnformatted("Reset every Cog window and shortcut to its defaults?");
++        ImGui::TextDisabled("This cannot be undone after settings are saved.");
++        if (ImGui::Button("Cancel"))
+         {
+-            GetOwner()->SaveAllSettings();
++            ImGui::CloseCurrentPopup();
+         }
+-
+-        // if (ImGui::Button("Reload All Settings", ImVec2(ImGui::GetContentRegionAvail().x, 0.0f)))
+-        // {
+-        //     GetOwner()->ReloadAllSettings();
+-        // }
+-
+-        FCogWidgets::PushButtonBackColor(ImVec4(1.0f, 0.0f, 0.0f, 1));
+-        if (ImGui::Button("Reset All Settings", ImVec2(ImGui::GetContentRegionAvail().x, 0.0f)))
++        ImGui::SameLine();
++        FCogWidgets::PushButtonBackColor(ImVec4(0.55f, 0.10f, 0.13f, 1.0f));
++        if (ImGui::Button("Reset all"))
+         {
+             GetOwner()->ResetAllWindowsConfig();
++            ImGui::CloseCurrentPopup();
+         }
+         FCogWidgets::PopButtonBackColor();
++        ImGui::EndPopup();
+     }
+ }
+ 
+diff --git a/Plugins/Cog/Source/Cog/Public/CogWindow_Settings.h b/Plugins/Cog/Source/Cog/Public/CogWindow_Settings.h
+index d9e8af4..33629bd 100644
+--- a/Plugins/Cog/Source/Cog/Public/CogWindow_Settings.h
++++ b/Plugins/Cog/Source/Cog/Public/CogWindow_Settings.h
+@@ -69,7 +69,9 @@ public:
+     bool bShowHelp = true;
+ 
+     UPROPERTY(Config)
+-    bool bShowWindowsInMainMenu = true;
++    // Retained for config compatibility. Elysium's launcher is always click-to-open; live window
++    // previews inside navigation menus are intentionally disabled in UCogSubsystem::RenderMenuItem.
++    bool bShowWindowsInMainMenu = false;
+ 
+     UPROPERTY(Config)
+     bool bEnableInput = false;
+@@ -146,7 +148,7 @@ public:
+         bCompactMode = false;
+         bTransparentMode = false;
+         bShowHelp = true;
+-        bShowWindowsInMainMenu = true;
++        bShowWindowsInMainMenu = false;
+         bEnableInput = false;
+         bShareMouse = false;
+         bShareMouseWithGameplay = false;
+@@ -168,4 +170,4 @@ public:
+         Shortcut_ResetLayout = FCogInputChord();
+         Font = FString();
+     }
+-};
+\ No newline at end of file
++};

@@ -620,21 +620,26 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
   (`M_World_Opaque`, `M_World_Masked`, `M_World_Translucent`, `M_World_Glass`, `M_Refract`,
   `M_Additive`) from one generator
   (`pipeline/unreal/make_world_materials.py`), the full feature set as named params: `Albedo`,
-  `Emissive`+scale, `BumpMap`, `EnvMask`+`EnvStrength` ($envmap → **Lumen roughness**, see
+  `Emissive`+scale, `BumpMap`, `EnvMask`+`EnvStrength` (the `$envmap` inputs whose translated
+  response is owned by 7.5, see
   `docs/vtmb/reflections.md`), `BaseTex2`+`BlendAmount` (WorldVertexTransition via the `.blend` sidecar →
   vertex colour; `.emc` bumped to EMC2). The runtime picks the master per blend flag and binds
   per-channel. Substrate + content tests (439 tutorial materials). *(7.5 supersedes the reflection
   half of this entry, and the `elysium.*` material knobs now reach the baked instances through
   `ApplyMaterialOverrides` rather than the factory.)* *Deps:* none.
-- [x] **7.5 Real reflections** *(was L3.1)* — the `$envmap` channel, RE'd, tuned, and extended to
-  props. VtMB's composite is `(base + cube·mask·tint) · lightmap · 2` — an **albedo** term the
-  light multiplies, not an additive overlay — read out of its own shipped DX8 assembly; the
-  non-reflective world becomes **Lambert** and `$envmaptint`'s chromatic half drives `Metallic`
-  off the mask (VtMB's own metal mask). Props gained the channel — the *larger* half of the
-  reflective set, 1,419 of 2,610 VMTs, previously none. RE + whole-game survey:
-  **`docs/vtmb/reflections.md`**; decision:. *Verified:* build + `uv run elysium test`
-  green, 10 maps re-exported/re-baked, shots re-baselined, Lumen reflections 0.15–0.22 ms against
-  the committed 0.18–0.25. *Deps:* 3.5, 7.4.
+- [ ] **7.5 Real reflections** *(was L3.1)* — the `$envmap` RE and whole-game inventory are
+  complete: VtMB's composite is `(base + cube·mask·tint) · lightmap · 2`, an albedo term the light
+  multiplies, with no Fresnel; props are the larger half of the reflective set (1,419 of 2,610
+  VMTs). Presentation acceptance is open. The fixed roughness/specular-only translation preserves
+  neither the source cube's radiance nor `GlobalWetness`'s tint semantics and produces an unusable
+  high-frequency direct-specular response in the `sm_hub_1` wetness A/B. Target: one graph samples
+  the exported cube through the raw linear mask as a primary-view additive term for the source
+  endpoint, excludes that view-dependent term from Lumen's Surface Cache, and crossfades it against
+  a coarse-mask roughness/specular response to the live scene. The first acceptance surface is the
+  14 patch-first `sm_hub_1` wet materials; general world/prop cubes and the 102 chromatic-tint metal candidates
+  follow the same contract after that slice. The existing green build/tests, ten-map rebake, and
+  0.15–0.22 ms Lumen measurement prove the superseded PBR-only path, not this acceptance. Full:
+  **`docs/vtmb/reflections.md`**. *Deps:* 3.5, 7.4.
 - [ ] **7.6 Bloom/glow tuning** *(was L3.2)* — VtMB's overbright neon/selfillum vs pinned
   exposure. *Deps:* 3.6.
 - [ ] **7.7 Shadow quality** *(was L3.4)* — contact shadows on hero lights, penumbra softness,
@@ -647,15 +652,18 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
 - [ ] **7.9 Weather & wetness** *(facts + translation boundary: `docs/vtmb/weather.md`)* — the
   verified `sm_hub_1` work is retained as data and logic: strict patch-first particle/VMT closure,
   versioned weather sidecar, corrected 2048² R16 cover map, serializable wetness/emitter ramps,
-  `env_particle` I/O/fanout, and rain audio fades. The patch-first wetness slice is live through one
-  `IElysiumWeather` service and one shared world-material graph: authored transitions drive the
-  environment MPC, while `Elysium.Environment` exposes a presentation-only override, live state,
-  the patch's `0.56 / 0.60 / 1.00` material groups, output scale, source-reference mode, enhanced
-  tuning, and authored timer buttons. The override never alters or pauses entity/save state.
-  `env_particle` presentation remains data-only while RE23 settles `attach_type=11`, `bounds`,
-  distribution, lifetime/keyframe units, blend/mask semantics, retail appearance, and the wetness
-  interpolation units. Sewer drips, fixed `func_particle` boxes, NPC shelter behavior, lightning,
-  other maps, and a general particle runtime remain deferred. *Deps:* PL12, RE23.
+  `env_particle` I/O/fanout, and rain audio fades. The patch-first logic/controller slice is live
+  through one `IElysiumWeather` service: authored transitions drive the environment MPC, and the
+  `Elysium.Environment` override never alters or pauses entity/save state. Material presentation
+  acceptance now shares 7.5's one-graph contract: bind `cubemapdefault` and a linear mask for the
+  source endpoint; keep the view-dependent cube out of the Lumen Surface Cache; use a coarse mask
+  for the enhanced PBR response; and coordinate source retain, wet roughness/specular, and darkening
+  under the single `RainEnhancement` value. The panel must expose those values plus mask/cube/source
+  debug views before tuning. `env_particle` presentation remains data-only while RE23 settles
+  `attach_type=11`, `bounds`, distribution, lifetime/keyframe units, blend/mask semantics, retail
+  appearance, and the wetness interpolation units. Sewer drips, fixed `func_particle` boxes, NPC
+  shelter behavior, lightning, other maps, and a general particle runtime remain deferred.
+  *Deps:* 7.5 material slice, PL12, RE23.
 
 **Slice acceptance** *(Track A criterion, re-based)*: side-by-side A/B match with the
 original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
@@ -1077,11 +1085,17 @@ consumed here, while their capture-harness tasks, experiments, evidence gates, a
 `docs/vtmb/animation_and_movers.md`, `docs/vtmb/choreographed_scenes.md`, and
 `docs/vtmb/facial_animation.md`.
 
+**RE33 verifies 12.3–12.5; it does not gate them.** RE20 closed the facial format end to end
+and PL10 exported every input it names, so the face is built from that specification and
+captured against retail only where the build diverges — the rule the retail tracker states as
+"capture is the oracle, not the gate". None of the three carries RE33 as a dependency below.
+
 RE20 changes what 12.4 can be: **no model in the install carries eyeball data** — the whole
 cast ships `NumEyeballs == 0`, so there is no authored eye pose, look-at cone or procedural
 lid. Eyes in VtMB are *eyelids*: eight `eyelid` flex controllers driving 16 eyelid flexdescs
 through four RPN rules. Blink and lid shaping are reproducible; gaze is not RE-able because
-it was never authored.
+it was never authored — so 12.4's eye half is built as a deliberate addition rather than
+recovered, on the owner call recorded there and in `docs/vtmb/facial_animation.md`.
 
 - [~] **12.1 Choreographed scenes** — `logic_choreographed_scene` as a real class + the scene-file
   parser (PL9) + an event timeline on the game clock, `Start`/`Pause`/`Resume`/`Cancel` inputs and
@@ -1139,14 +1153,23 @@ it was never authored.
   primitive, so the skeletal-mesh config must set `MorphTargetsDuplicateStrategy::Merge`, and a
   morph target is one *flex record*, not one flexdesc — the eyelid pairs hinge a single flexdesc
   into two ramps. Spec: `docs/vtmb/facial_animation.md`. *Acceptance:* a flex authored in the model
-  moves the face in-game. *Deps:* 8.5, RE20 [x], RE33, PL10 [x].
-- [ ] **12.4 Eyelids** *(was "Eyes")* — blink + lid shaping off the eight `eyelid` controllers
-  and their four rules (`raiser × (1 − droop·0.8) × (1 − blink)` and its complements). **There is
-  no eyeball data to consume** — RE20 found `NumEyeballs == 0` on all 4,444 models, so eye posing
-  and look-at have no faithful baseline. *Acceptance:* actors blink and their lids shape through
-  the theatre scene. *Open owner call:* whether to add gaze/look-at at all — it is an invention
-  under `docs/project/remaster-direction.md`'s Feel layer, not a reproduction, so it needs an owner call
-  recorded in `docs/vtmb/facial_animation.md` before it is built. *Deps:* 12.3, RE33.
+  moves the face in-game. *Deps:* 8.5, RE20 [x], PL10 [x] — all met.
+- [ ] **12.4 Eyes and eyelids** — two halves on different footings. The **lids** are a
+  reproduction: blink and lid shaping off the eight `eyelid` controllers and their four rules
+  (`raiser × (1 − droop·0.8) × (1 − blink)` and its complements). The **eyes** are an
+  addition, because **there is no eyeball data to consume** — RE20 found `NumEyeballs == 0` on
+  all 4,444 models, so eye posing, look-at, iris and glint have no faithful baseline anywhere
+  in the install and eyes ship as painted head texture.
+
+  **Owner call, made: the cast has living eyes.** Faces carry the theatre in close-up and the
+  slice's fidelity bar names eyes explicitly, so a dead painted stare is not acceptable even
+  though it is what retail does. This is an invention on
+  `docs/project/remaster-direction.md`'s Feel layer, not a reproduction; the faithful
+  behaviour and this divergence beside it are recorded in `docs/vtmb/facial_animation.md`.
+  What that buys is open in the detail and closed in the intent — gaze targeting, saccades,
+  iris and glint are the candidates, built one at a time and A/B-able against the painted
+  baseline. *Acceptance:* actors blink, their lids shape, and their eyes are alive and aimed
+  through the theatre scene. *Deps:* 12.3.
 - [ ] **12.5 Lipsync** — `.lip` phoneme tracks (RE20 [x]; 9.3c already logs the scripts' `.lip`
   probes as a named divergence) driving mouth flexes against 12.2's line audio; the 7,136 files
   are on disk in `$ELYSIUM_EXPORT_ROOT/lip/` (PL9 [x]), keyed by the line's own sound path. A **three-file join
@@ -1156,7 +1179,7 @@ it was never authored.
   *string* — the `.lip` numeric code is not stable across the corpus. All three inputs are on
   disk: `$ELYSIUM_EXPORT_ROOT/lip/`, `$ELYSIUM_EXPORT_ROOT/expressions/` (the 249 `.txt` tables, PL10 [x]) and `mouths` in
   `$ELYSIUM_EXPORT_ROOT/npc/facial/<stem>.json`. Spec: `docs/vtmb/facial_animation.md`. *Acceptance:* mouths move
-  with the words on every theatre line. *Deps:* 12.2, 12.3, RE33.
+  with the words on every theatre line. *Deps:* 12.2, 12.3.
 
 **Slice acceptance** *(PP2)*: New Game runs genesis, then the full theatre act plays start to
 finish — choreography, camera moves, audible subtitled lines, live faces — and hands the player
@@ -1241,7 +1264,7 @@ retail end to end, and `uv run elysium test Play` proves it headlessly.
 | RE30 | Recover `trigger_environmental_audio` touch behavior and the precedence/interpolation among its `room_type`, SoundScheme `RoomDSP`, and the player's networked `m_sndRoomDSP`/`m_sndPlayerDSP`. → `docs/vtmb/audio_pipeline.md`. | 6.7 | [ ] |
 | RE31 | Recover the SoundScheme RandomSound frequency scheduler/distribution and transition edge cases; the current approximate curve is not a faithful baseline. → `docs/vtmb/audio_pipeline.md`. | 6.7 | [ ] |
 | RE32 | Capture one source-attributed `sp_theatre` run from pre-map resource loads through actors/models/skeletons, every fired skeletal contribution, pose-build stages, and final render matrices in one queryable database. Join observed owner/sequence/animation identities to exact patch-first bytes and current export/decoder output, then trace only selected mismatches through decoding, blends/remaps, scene placement, root/entity motion, procedural work, hierarchy, and render handoff. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/animation_and_movers.md`, `docs/vtmb/mdl_v2531.md`, `docs/vtmb/choreographed_scenes.md`, and `docs/vtmb/vtmb-animation-reverse-engineering.md`. | 8.5, 8.11, 12.1 | [~] |
-| RE33 | Trace expression, VCD/audio, and `.lip` resources from source bytes through runtime objects, controller mixing, flex rules/ramps, eyelids, amplitude mouth, vertex deformation, and render submission. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/facial_animation.md`. | 12.3–12.5 | [~] |
+| RE33 | Trace expression, VCD/audio, and `.lip` resources from source bytes through runtime objects, controller mixing, flex rules/ramps, eyelids, amplitude mouth, vertex deformation, and render submission. **It verifies 12.3–12.5 rather than gating them** — RE20 closed the facial format and PL10 exported every input it names, so the face is built from that specification and captured only where the build diverges. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/facial_animation.md`. | 12.3–12.5 (as verification) | [~] |
 | SKY | The sky/ambience rework is complete; remaining work is tracked as 3.10–3.13 and RE17. Facts: `docs/vtmb/sky-ambience.md`. | 3.6, 3.7 | [x] |
 
 The Ghidra extraction findings behind the closed rows (the RE1/RE2/RE3/RE4 detail: addresses,

@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from pathlib import Path
 import shutil
 import sqlite3
 import struct
 import tempfile
 import unittest
+
+import numpy as np
 
 from research.tooling.capture.inventory_player_animations import (
     parse_owner,
@@ -129,6 +132,20 @@ from research.tooling.capture.decoder_coverage import (
     UnmeasuredRead,
     instrumented,
 )
+from research.tooling.capture import decoder_pose
+from research.tooling.capture.verify_transform_difference import (
+    ACCOUNTED as TRANSFORM_ACCOUNTED,
+    DEFECTS as TRANSFORM_DEFECTS,
+    MAX_REPORTED_BONES,
+    MAX_REPORTED_CLUSTERS,
+    MAX_REPORTED_EXEMPLARS,
+    MAX_REPORTED_MODELS,
+    REPORT_NAME,
+    UNREACHED,
+    compare as compare_transform,
+    summarize as summarize_transform,
+    verify as verify_transform,
+)
 from research.tooling.capture.verify_byte_coverage import (
     ACCOUNTED,
     DEFECTS,
@@ -159,8 +176,23 @@ def pose_record(
     generation: int = 0,
     generation_entity: int = 0,
     carry_generation: int = 0,
+    bone_to_world: list[tuple[float, ...]] | None = None,
+    skin_palette: list[tuple[float, ...]] | None = None,
 ) -> bytes:
-    payload = bytes(bone_count * 12 * 4 * 2)
+    # The draw payload is the whole bone-to-world array followed by the whole
+    # skin palette, each one 3x4 row-major per bone, exactly as the two pointers
+    # at object+0x5C and +0x60 are copied. A caller that names neither gets the
+    # zero fill every test predating the transform arms already produced.
+    if bone_to_world is None and skin_palette is None:
+        payload = bytes(bone_count * 12 * 4 * 2)
+    else:
+        first = bone_to_world or [IDENTITY_3X4] * bone_count
+        second = skin_palette or [IDENTITY_3X4] * bone_count
+        payload = struct.pack(
+            f"<{bone_count * 24}f",
+            *[value for matrix in first for value in matrix],
+            *[value for matrix in second for value in matrix],
+        )
     return (
         POSE_RECORD_HEADER.pack(
             b"POSE",
@@ -213,12 +245,36 @@ def animation_record(
     generation: int = 0,
     generation_depth: int = 0,
     root_transform: bool | None = None,
+    local_pose: list[tuple[tuple[float, ...], tuple[float, ...]]] | None = None,
+    selected: set[int] | None = None,
+    root: tuple[float, ...] | None = None,
 ) -> bytes:
     # The composed-pose stage is the only one that receives a root transform, so
     # a FINL record carries the trailer and a BASE record carries none unless a
     # test is deliberately building a malformed one.
     carries_root = magic == b"FINL" if root_transform is None else root_transform
-    payload = bytes(bone_count * 7 * 4 + ((bone_count + 31) // 32) * 4)
+    # The evaluation payload is the whole position array followed by the whole
+    # quaternion array, because the hook copies two separate buffers rather than
+    # one interleaved one.
+    mask_words = (bone_count + 31) // 32
+    if local_pose is None:
+        payload = bytearray(bone_count * 7 * 4)
+    else:
+        payload = bytearray(
+            struct.pack(
+                f"<{bone_count * 7}f",
+                *[axis for position, _ in local_pose for axis in position],
+                *[axis for _, quaternion in local_pose for axis in quaternion],
+            )
+        )
+    words = [0] * mask_words
+    for index in range(bone_count) if selected is None else selected:
+        words[index // 32] |= 1 << (index % 32)
+    # A caller naming no selection gets the zero mask every test predating the
+    # transform arms already produced; naming one selects exactly those bones.
+    payload += struct.pack(
+        f"<{mask_words}I", *(words if selected is not None else [0] * mask_words)
+    )
     root_bytes = ROOT_TRANSFORM_BYTES if carries_root else 0
     if carries_root:
         # A real root/entity transform: identity rotation and a translation, so
@@ -226,9 +282,11 @@ def animation_record(
         # than a zero-filled block that would fail it for the wrong reason.
         payload += struct.pack(
             "<12f",
-            1.0, 0.0, 0.0, 64.0,
-            0.0, 1.0, 0.0, -32.0,
-            0.0, 0.0, 1.0, 16.0,
+            *(root if root is not None else (
+                1.0, 0.0, 0.0, 64.0,
+                0.0, 1.0, 0.0, -32.0,
+                0.0, 0.0, 1.0, 16.0,
+            )),
         )
     return (
         ANIMATION_RECORD_HEADER.pack(
@@ -484,6 +542,202 @@ ANIM_RECORD_STRIDE = 32
 CHANNEL_COUNT = 7
 
 
+# --- CAP4.3: transform arithmetic, written out by hand -----------------------
+#
+# The comparison tools build these matrices with numpy. These exist so a
+# fixture's expected value never comes from the code under test: an agreement
+# test that computed both sides with `decoder_pose` would assert nothing.
+#
+# A transform is a flat 12-tuple, row-major, the same shape the probe copies out
+# of the process and the same shape `StudioBone.poseToBone` is stored in.
+
+
+def _matrix_3x4(
+    position: tuple[float, float, float],
+    quaternion: tuple[float, float, float, float],
+) -> tuple[float, ...]:
+    x, y, z, w = quaternion
+    return (
+        1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w), position[0],
+        2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w), position[1],
+        2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y), position[2],
+    )
+
+
+def _multiply_3x4(a: tuple[float, ...], b: tuple[float, ...]) -> tuple[float, ...]:
+    out = []
+    for row in range(3):
+        for column in range(4):
+            total = sum(a[row * 4 + k] * b[k * 4 + column] for k in range(3))
+            if column == 3:
+                total += a[row * 4 + 3]
+            out.append(total)
+    return tuple(out)
+
+
+def _invert_rigid_3x4(matrix: tuple[float, ...]) -> tuple[float, ...]:
+    out = [0.0] * 12
+    for row in range(3):
+        for column in range(3):
+            out[row * 4 + column] = matrix[column * 4 + row]
+    for row in range(3):
+        out[row * 4 + 3] = -sum(
+            matrix[k * 4 + row] * matrix[k * 4 + 3] for k in range(3)
+        )
+    return tuple(out)
+
+
+IDENTITY_3X4 = (1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+
+
+def _bone_spec(entry) -> tuple[str, int, tuple[float, ...], tuple[float, ...], int]:
+    """Normalize a fixture bone entry.
+
+    A three-element entry is the identity-rotation, unflagged bone every caller
+    predating CAP4.3 writes; a five-element one names its bind rotation and its
+    flags, which is what the split-inheritance and palette arms discriminate on.
+    """
+    name, parent, position = entry[0], entry[1], tuple(entry[2])
+    quaternion = tuple(entry[3]) if len(entry) > 3 else (0.0, 0.0, 0.0, 1.0)
+    flags = int(entry[4]) if len(entry) > 4 else 0
+    return name, int(parent), position, quaternion, flags
+
+
+def _bind_world(bones) -> list[tuple[float, ...]]:
+    """Bind-pose bone-to-model by the ordinary hierarchy.
+
+    The split-inheritance flag is not consulted: a flagged bone's inverse bind is
+    the conventional one, which `research/cases/animation-pose/specs/
+    animation_pose.json` records as confirmed.
+    """
+    world: list[tuple[float, ...]] = []
+    for entry in bones:
+        _, parent, position, quaternion, _ = _bone_spec(entry)
+        local = _matrix_3x4(position, quaternion)
+        # A parent the forward pass has not reached yet composes against the
+        # slot as it stands, which is the identity. That is what a deliberately
+        # non-topological fixture is for; the decoder names it as a fault rather
+        # than the fixture refusing to build it.
+        if parent < 0 or parent >= len(world):
+            world.append(local)
+        else:
+            world.append(_multiply_3x4(world[parent], local))
+    return world
+
+
+def _expected_world(
+    bones,
+    locals_: list[tuple[tuple[float, ...], tuple[float, ...]]],
+    root: tuple[float, ...] | None = None,
+    *,
+    split: bool,
+    seed: list[tuple[float, ...]] | None = None,
+    selected: set[int] | None = None,
+    procedural: dict[int, tuple] | None = None,
+) -> list[tuple[float, ...]]:
+    """Bone-to-world for one pose, by hand.
+
+    ``split`` takes a flagged bone's rotation from the root rather than from its
+    parent, and its translation from its parent as usual. A bone outside
+    ``selected`` is taken from ``seed`` rather than composed, which is how a
+    stage is fed retail's own input for the slots retail wrote and nothing else.
+    """
+    frame = root if root is not None else IDENTITY_3X4
+    world: list[tuple[float, ...]] = []
+    for index, entry in enumerate(bones):
+        _, parent, _, _, flags = _bone_spec(entry)
+        if selected is not None and index not in selected:
+            assert seed is not None, "an unselected bone needs a seed"
+            world.append(seed[index])
+            continue
+        position, quaternion = locals_[index]
+        local = _matrix_3x4(position, quaternion)
+        rule = (procedural or {}).get(index)
+        if rule is not None and parent >= 0:
+            # A driven bone ignores its animated local and takes the table's.
+            # The two flags are disjoint on real models, so it composes off its
+            # parent rather than through the split branch.
+            world.append(_multiply_3x4(world[parent], _axis_interp_local(rule, world, bones)))
+        elif parent < 0 or parent >= len(world):
+            world.append(_multiply_3x4(frame, local))
+        elif split and flags & 0x2:
+            rotation = _multiply_3x4(frame, _matrix_3x4((0.0, 0.0, 0.0), quaternion))
+            translation = _multiply_3x4(world[parent], _matrix_3x4(position, (0.0, 0.0, 0.0, 1.0)))
+            world.append(
+                tuple(
+                    translation[row * 4 + 3] if column == 3 else rotation[row * 4 + column]
+                    for row in range(3)
+                    for column in range(4)
+                )
+            )
+        else:
+            world.append(_multiply_3x4(world[parent], local))
+    return world
+
+
+def _slerp_one(a, b, alpha):
+    """Shortest-arc quaternion interpolation of two 4-tuples, by hand."""
+    a = list(a)
+    b = list(b)
+    dot = sum(x * y for x, y in zip(a, b))
+    if dot < 0.0:
+        b = [-y for y in b]
+        dot = -dot
+    dot = max(-1.0, min(1.0, dot))
+    if dot > 0.9995:
+        out = [(1.0 - alpha) * x + alpha * y for x, y in zip(a, b)]
+    else:
+        theta = math.acos(dot)
+        sine = math.sin(theta)
+        out = [
+            math.sin((1.0 - alpha) * theta) / sine * x
+            + math.sin(alpha * theta) / sine * y
+            for x, y in zip(a, b)
+        ]
+    norm = math.sqrt(sum(v * v for v in out)) or 1.0
+    return tuple(v / norm for v in out)
+
+
+def _axis_interp_local(rule, world, bones):
+    """The local a `ProcType == 1` table produces, by hand.
+
+    `docs/vtmb/procedural_bones.md` owns the rule; this transcribes it a second
+    time so an agreement with `decoder_pose` is between two formulations.
+    """
+    control, axis, positions, quaternions = rule
+    driver = [world[control][row * 4 + axis] for row in range(3)]
+    parent = _bone_spec(bones[control])[1]
+    if parent >= 0:
+        frame = world[parent]
+        driver = [
+            sum(frame[row * 4 + col] * driver[row] for row in range(3))
+            for col in range(3)
+        ]
+    picked = (
+        0 if driver[0] >= 0 else 1,
+        2 if driver[1] >= 0 else 3,
+        4 if driver[2] >= 0 else 5,
+    )
+    a1, a2, a3 = (abs(v) for v in driver)
+    if a1 + a2 > 0.0:
+        scale = 1.0 / (a1 + a2 + a3)
+        quaternion = _slerp_one(
+            _slerp_one(quaternions[picked[1]], quaternions[picked[0]], a1 / (a1 + a2)),
+            quaternions[picked[2]],
+            a3 * scale,
+        )
+        position = tuple(
+            a1 * scale * positions[picked[0]][axis_index]
+            + a2 * scale * positions[picked[1]][axis_index]
+            + a3 * scale * positions[picked[2]][axis_index]
+            for axis_index in range(3)
+        )
+    else:
+        quaternion = quaternions[picked[2]]
+        position = positions[picked[2]]
+    return _matrix_3x4(position, quaternion)
+
+
 class Track:
     """One channel's RLE runs, as ``(total, keys)`` per run.
 
@@ -597,7 +851,7 @@ def model_image(
     checksum: int,
     model_name: str,
     *,
-    bones: tuple[tuple[str, int, tuple[float, float, float]], ...] = (
+    bones: tuple[tuple, ...] = (
         ("Bip01", -1, (0.0, 0.0, 0.0)),
         ("Bip01 Spine", 0, (1.0, 2.0, 3.0)),
     ),
@@ -606,13 +860,28 @@ def model_image(
     labels: tuple[str, ...] = (),
     activities: tuple[str, ...] = (),
     base_cells: tuple[int, ...] = (),
+    pose_to_bone: str | tuple[tuple[float, ...], ...] = "inverse",
+    procedural: dict[int, tuple] | None = None,
 ) -> bytes:
     """A minimal v2531 model image the pipeline bone decoder can read.
 
-    Bind rotations are identity and each bone's ``poseToBone`` is the exact
-    inverse of its composed bind, so a correctly decoded skeleton returns the
-    identity and the census verifier's soundness check has something real to
-    measure.
+    A bone is ``(name, parent, position)`` or
+    ``(name, parent, position, quaternion, flags)``; the short form is the
+    identity-rotation, unflagged bone and keeps every caller predating the
+    rotation arms working unchanged.
+
+    Each bone's ``poseToBone`` is by default the exact inverse of its composed
+    bind, so a correctly decoded skeleton returns the identity, the census
+    verifier's soundness check has something real to measure, and a palette
+    built over the bind pose is the identity. ``pose_to_bone="identity"`` writes
+    an inverse bind that is deliberately not that, and an explicit sequence
+    writes one 12-tuple per bone.
+
+    ``procedural`` maps a bone index to ``(control, axis, pos6, quat6)`` and
+    writes a real ``ProcType == 1`` axis-interpolation table for it, setting
+    ``Flags & 0x1`` and a ``ProcIndex`` reaching the 176-byte record. Mapping a
+    bone to ``None`` declares the rule and leaves ``ProcIndex`` at zero, which is
+    the unreadable case.
 
     The animation and sequence arrays sit at the two fixed offsets a
     contribution's default descriptor pointers are built from, so a span walk
@@ -638,28 +907,42 @@ def model_image(
         "<ii", blob, 272, sequences, CONTRIBUTION_SEQ_INDEX_OFF
     )
 
-    world = {}
-    for index, (name, parent, pos) in enumerate(bones):
+    composed = _bind_world(bones)
+    for index, entry in enumerate(bones):
+        name, parent, position, quaternion, flags = _bone_spec(entry)
         base = BONE_ARRAY_OFFSET + BONE_STRIDE * index
-        origin = world.get(parent, (0.0, 0.0, 0.0))
-        composed = tuple(origin[axis] + pos[axis] for axis in range(3))
-        world[index] = composed
+        if pose_to_bone == "inverse":
+            inverse = _invert_rigid_3x4(composed[index])
+        elif pose_to_bone == "identity":
+            inverse = IDENTITY_3X4
+        else:
+            inverse = tuple(pose_to_bone[index])
         struct.pack_into("<i", blob, base, len(blob) - base)
         blob += name.encode("ascii") + b"\0"
         struct.pack_into("<i", blob, base + 4, parent)
-        struct.pack_into("<3f", blob, base + 32, *pos)
-        struct.pack_into("<4f", blob, base + 44, 0.0, 0.0, 0.0, 1.0)
+        struct.pack_into("<3f", blob, base + 32, *position)
+        struct.pack_into("<4f", blob, base + 44, *quaternion)
         struct.pack_into("<3f", blob, base + 60, 1.0, 1.0, 1.0)
         struct.pack_into("<4f", blob, base + 72, 1.0, 1.0, 1.0, 1.0)
-        struct.pack_into(
-            "<12f",
-            blob,
-            base + 88,
-            1.0, 0.0, 0.0, -composed[0],
-            0.0, 1.0, 0.0, -composed[1],
-            0.0, 0.0, 1.0, -composed[2],
-        )
-        struct.pack_into("<i", blob, base + 136, 0)
+        rule = (procedural or {}).get(index, False)
+        if rule is not False:
+            flags |= 0x1
+            struct.pack_into("<i", blob, base + 140, 1)
+        struct.pack_into("<12f", blob, base + 88, *inverse)
+        struct.pack_into("<i", blob, base + 136, flags)
+
+    # The axis-interpolation tables, after the bone array and the name strings.
+    # `ProcIndex` is relative to the bone record, so it is back-patched once the
+    # table's absolute position is known.
+    for index, rule in sorted((procedural or {}).items()):
+        if rule is None:
+            continue
+        control, axis, positions, quaternions = rule
+        base = BONE_ARRAY_OFFSET + BONE_STRIDE * index
+        struct.pack_into("<i", blob, base + 144, len(blob) - base)
+        blob += struct.pack("<ii", control, axis)
+        blob += struct.pack("<18f", *[v for entry in positions for v in entry])
+        blob += struct.pack("<24f", *[v for entry in quaternions for v in entry])
 
     animation = _animation_section(len(bones), clips)
     if len(blob) > CONTRIBUTION_ANIM_INDEX_OFF or (
@@ -6898,6 +7181,1353 @@ class ByteCoverageTests(unittest.TestCase):
         comparison = compare_coverage([first, second])
         self.assertEqual(len(comparison["retail_only_bytes"]), 2)
         self.assertIn("side by side", comparison["statement"])
+
+
+# --- CAP4.3 transform difference ---------------------------------------------
+
+# A skeleton whose binds carry real rotations and whose third bone does not
+# inherit its parent's rotation, which is the one thing the split arm
+# discriminates on. Rotations are exact quaternions so the hand-written oracle
+# and the numpy evaluator can be required to agree to floating-point noise
+# rather than to a band.
+HALF = math.sqrt(0.5)
+ROTATED_BONES = (
+    ("Bip01", -1, (0.0, 0.0, 0.0), (0.0, 0.0, HALF, HALF), 0),
+    ("Bip01 Spine", 0, (1.0, 2.0, 3.0), (HALF, 0.0, 0.0, HALF), 0),
+    ("Bip01 Neck", 1, (0.0, 4.0, 0.0), (0.0, HALF, 0.0, HALF), 0x2),
+    ("Bip01 Head", 2, (0.0, 1.0, 0.0), (0.0, 0.0, 0.0, 1.0), 0),
+)
+
+
+def _identity_pose(bones) -> list[tuple[tuple[float, ...], tuple[float, ...]]]:
+    """The bind pose as a local pose: every bone at its own bind transform."""
+    return [
+        (spec[2], spec[3])
+        for spec in (_bone_spec(entry) for entry in bones)
+    ]
+
+
+def _bind_locals(bones):
+    return [(spec[2], spec[3]) for spec in (_bone_spec(entry) for entry in bones)]
+
+
+class DecoderPoseTests(unittest.TestCase):
+    """CAP4.3: the transform arithmetic the difference arms are built from.
+
+    Every expected value here is produced by the hand-written helpers at the top
+    of this module rather than by `decoder_pose`, so an agreement is between two
+    independent formulations and not a tautology.
+    """
+
+    def _skeleton(self, bones=ROTATED_BONES, **kwargs):
+        image = model_image(0x3000, "models/rotated.mdl", bones=bones, **kwargs)
+        return decoder_pose.skeleton_from_image(image, 0x3000)
+
+    def test_a_skeleton_decodes_its_binds_flags_and_inverse_binds(self) -> None:
+        skeleton = self._skeleton()
+        self.assertEqual(skeleton.bones, 4)
+        self.assertEqual(skeleton.faults, ())
+        self.assertEqual(list(skeleton.parent), [-1, 0, 1, 2])
+        self.assertEqual(list(skeleton.depth), [0, 1, 2, 3])
+        self.assertEqual(list(skeleton.split), [False, False, True, False])
+        expected = _bind_world(ROTATED_BONES)
+        for index, matrix in enumerate(expected):
+            self.assertTrue(
+                np.allclose(
+                    skeleton.pose_to_bone[index],
+                    np.asarray(_invert_rigid_3x4(matrix)).reshape(3, 4),
+                    atol=1.0e-6,
+                )
+            )
+
+    def test_a_parent_at_or_after_its_child_is_a_named_fault(self) -> None:
+        skeleton = self._skeleton(
+            bones=(
+                ("Bip01", -1, (0.0, 0.0, 0.0)),
+                ("Bip01 Spine", 1, (1.0, 0.0, 0.0)),
+            )
+        )
+        self.assertIn("skeleton_parent_not_topological", skeleton.faults)
+
+    def test_the_split_branch_takes_its_rotation_from_the_root(self) -> None:
+        skeleton = self._skeleton()
+        locals_ = _bind_locals(ROTATED_BONES)
+        root = (0.0, -1.0, 0.0, 5.0, 1.0, 0.0, 0.0, -7.0, 0.0, 0.0, 1.0, 2.0)
+        for split in (True, False):
+            expected = _expected_world(ROTATED_BONES, locals_, root, split=split)
+            actual = decoder_pose.compose(
+                decoder_pose.matrices_from_local(
+                    np.array([p for p, _ in locals_]),
+                    np.array([q for _, q in locals_]),
+                ),
+                skeleton,
+                np.asarray(root, dtype=np.float64).reshape(3, 4),
+                split=split,
+            )
+            for index, matrix in enumerate(expected):
+                self.assertTrue(
+                    np.allclose(
+                        actual[index], np.asarray(matrix).reshape(3, 4), atol=1.0e-9
+                    ),
+                    f"split={split} bone {index}",
+                )
+
+    def test_the_two_rules_differ_only_on_the_flagged_bone_and_below(self) -> None:
+        skeleton = self._skeleton()
+        locals_ = _bind_locals(ROTATED_BONES)
+        local = decoder_pose.matrices_from_local(
+            np.array([p for p, _ in locals_]), np.array([q for _, q in locals_])
+        )
+        split = decoder_pose.compose(local, skeleton, None, split=True)
+        ordinary = decoder_pose.compose(local, skeleton, None, split=False)
+        differs = [
+            not np.allclose(split[index], ordinary[index], atol=1.0e-9)
+            for index in range(skeleton.bones)
+        ]
+        # Bone 2 carries the flag; bone 3 inherits the divergence and nothing
+        # above bone 2 moves at all.
+        self.assertEqual(differs, [False, False, True, True])
+        self.assertEqual(list(skeleton.descendants(2)), [False, False, True, True])
+
+    def test_bone_to_world_equals_the_root_times_the_model_space_pose(self) -> None:
+        skeleton = self._skeleton()
+        locals_ = _bind_locals(ROTATED_BONES)
+        local = decoder_pose.matrices_from_local(
+            np.array([p for p, _ in locals_]), np.array([q for _, q in locals_])
+        )
+        angle = 0.7
+        root = np.asarray(
+            (
+                math.cos(angle), -math.sin(angle), 0.0, 11.0,
+                math.sin(angle), math.cos(angle), 0.0, -3.0,
+                0.0, 0.0, 1.0, 0.5,
+            ),
+            dtype=np.float64,
+        ).reshape(3, 4)
+        for split in (True, False):
+            model = decoder_pose.compose(local, skeleton, None, split=split)
+            world = decoder_pose.compose(local, skeleton, root, split=split)
+            self.assertTrue(
+                np.allclose(decoder_pose.multiply(root, model), world, atol=1.0e-9),
+                f"split={split}",
+            )
+
+    def test_a_seeded_bone_is_passed_through_and_its_children_compose_off_it(
+        self,
+    ) -> None:
+        skeleton = self._skeleton()
+        locals_ = _bind_locals(ROTATED_BONES)
+        local = decoder_pose.matrices_from_local(
+            np.array([p for p, _ in locals_]), np.array([q for _, q in locals_])
+        )
+        seed = np.tile(np.asarray(decoder_pose.IDENTITY), (skeleton.bones, 1, 1))
+        seed[1, :, 3] = (9.0, 9.0, 9.0)
+        selected = np.array([True, False, True, True])
+        world = decoder_pose.compose(
+            local, skeleton, None, split=False, seed=seed, selected=selected
+        )
+        self.assertTrue(np.allclose(world[1], seed[1], atol=1.0e-12))
+        expected = _expected_world(
+            ROTATED_BONES,
+            locals_,
+            None,
+            split=False,
+            seed=[tuple(matrix.ravel()) for matrix in seed],
+            selected={0, 2, 3},
+        )
+        for index, matrix in enumerate(expected):
+            self.assertTrue(
+                np.allclose(world[index], np.asarray(matrix).reshape(3, 4), atol=1.0e-9)
+            )
+
+    def test_the_palette_of_the_bind_pose_is_the_identity(self) -> None:
+        skeleton = self._skeleton()
+        locals_ = _bind_locals(ROTATED_BONES)
+        local = decoder_pose.matrices_from_local(
+            np.array([p for p, _ in locals_]), np.array([q for _, q in locals_])
+        )
+        # The ordinary hierarchy, because a flagged bone's inverse bind is the
+        # conventional one and the palette is what proves it.
+        world = decoder_pose.compose(local, skeleton, None, split=False)
+        skin = decoder_pose.palette(world, skeleton.pose_to_bone)
+        self.assertTrue(
+            np.allclose(skin, np.asarray(decoder_pose.IDENTITY), atol=1.0e-5)
+        )
+
+    def test_the_regenerated_inverse_bind_reproduces_a_conventional_pose_to_bone(
+        self,
+    ) -> None:
+        skeleton = self._skeleton()
+        self.assertTrue(
+            np.allclose(
+                decoder_pose.regenerated_inverse_bind(skeleton),
+                skeleton.pose_to_bone,
+                atol=1.0e-5,
+            )
+        )
+
+    def test_a_pose_to_bone_that_is_not_the_conventional_inverse_differs(
+        self,
+    ) -> None:
+        skeleton = self._skeleton(pose_to_bone="identity")
+        difference = decoder_pose.translation_error(
+            decoder_pose.regenerated_inverse_bind(skeleton), skeleton.pose_to_bone
+        )
+        self.assertGreater(float(difference.max()), 1.0)
+
+    def test_the_axis_interp_rule_matches_an_independent_transcription(
+        self,
+    ) -> None:
+        skeleton = self._skeleton(bones=PROCEDURAL_BONES, procedural={3: AXIS_RULE})
+        self.assertEqual(len(skeleton.axis_interp), 1)
+        self.assertEqual(skeleton.axis_interp[0].bone, 3)
+        self.assertEqual(skeleton.axis_interp[0].control, 1)
+        self.assertEqual(list(skeleton.procedural), [False, False, False, True])
+        locals_ = _bind_locals(PROCEDURAL_BONES)
+        local = decoder_pose.matrices_from_local(
+            np.array([p for p, _ in locals_]), np.array([q for _, q in locals_])
+        )
+        root = np.asarray(TRANSFORM_ROOT, dtype=np.float64).reshape(3, 4)
+        world = decoder_pose.compose(
+            local, skeleton, root, split=True, procedural=True
+        )
+        expected = _expected_world(
+            PROCEDURAL_BONES, locals_, TRANSFORM_ROOT, split=True,
+            procedural={3: AXIS_RULE},
+        )
+        for index, matrix in enumerate(expected):
+            self.assertTrue(
+                np.allclose(
+                    world[index], np.asarray(matrix).reshape(3, 4), atol=1.0e-9
+                ),
+                f"bone {index}",
+            )
+        # The rule replaces the animated local rather than adjusting it, so the
+        # driven bone moves relative to composing without it.
+        plain = decoder_pose.compose(local, skeleton, root, split=True)
+        self.assertGreater(
+            float(decoder_pose.matrix_rotation_angle_degrees(world[3], plain[3])),
+            1.0,
+        )
+
+    def test_an_unreadable_procedural_rule_is_a_named_fault(self) -> None:
+        skeleton = self._skeleton(procedural={3: None})
+        self.assertIn("procedural_rule_unreadable", skeleton.faults)
+        self.assertEqual(skeleton.axis_interp, ())
+        self.assertTrue(bool(skeleton.procedural[3]))
+
+    def test_the_rotation_metric_reads_zero_for_a_quaternion_and_its_negation(
+        self,
+    ) -> None:
+        quaternion = np.array([[0.1, 0.2, 0.3, 0.927361849]])
+        self.assertAlmostEqual(
+            float(decoder_pose.rotation_angle_degrees(quaternion, -quaternion)[0]),
+            0.0,
+            places=9,
+        )
+        matrix = decoder_pose.matrices_from_local(np.zeros((1, 3)), quaternion)
+        self.assertAlmostEqual(
+            float(decoder_pose.matrix_rotation_angle_degrees(matrix, matrix)[0]),
+            0.0,
+            places=9,
+        )
+
+    def test_a_row_scale_deficit_is_not_read_as_a_rotation(self) -> None:
+        """The float32 noise a captured matrix carries is not an angle.
+
+        A row 3e-4 short moves `(trace - 1) / 2` to 0.9991, and `arccos` turns
+        that into 2.4 degrees of rotation that is not there. It is the ordinary
+        precision of a `matrix3x4_t` the game wrote, and it is measured as
+        orthonormality rather than as an angle.
+        """
+        matrix = decoder_pose.matrices_from_local(
+            np.zeros(3), np.array([0.1, 0.2, 0.3, 0.927361849])
+        )
+        shrunk = matrix.copy()
+        shrunk[..., :3] *= 1.0 - 3.0e-4
+        self.assertLess(
+            float(decoder_pose.matrix_rotation_angle_degrees(matrix, shrunk)),
+            1.0e-6,
+        )
+        # The deficit is still reported, as the thing it actually is.
+        self.assertAlmostEqual(
+            float(decoder_pose.row_length_error(shrunk)), 3.0e-4, places=9
+        )
+
+    def test_a_ninety_degree_difference_reads_as_ninety_degrees(self) -> None:
+        a = np.array([[0.0, 0.0, 0.0, 1.0]])
+        b = np.array([[0.0, 0.0, HALF, HALF]])
+        self.assertAlmostEqual(
+            float(decoder_pose.rotation_angle_degrees(a, b)[0]), 90.0, places=6
+        )
+
+    def test_row_length_error_measures_the_worst_row(self) -> None:
+        matrix = np.asarray(decoder_pose.IDENTITY).copy()
+        matrix[1, :3] *= 1.25
+        self.assertAlmostEqual(
+            float(decoder_pose.row_length_error(matrix)), 0.25, places=9
+        )
+
+    def test_the_accumulator_holds_exact_maxima_and_band_counts(self) -> None:
+        accumulator = decoder_pose.BoneAccumulator(2, decoder_pose.BANDS["model_translation"])
+        accumulator.add(np.array([[0.001, 0.5], [0.05, 0.3]]), np.array([3, 1]))
+        self.assertEqual(list(accumulator.count), [4, 4])
+        self.assertAlmostEqual(float(accumulator.maximum[0]), 0.05)
+        self.assertAlmostEqual(float(accumulator.maximum[1]), 0.5)
+        # Bone 0: 0.001 (excellent, x3) and 0.05 (investigate, x1).
+        self.assertEqual(list(accumulator.banded[0]), [3, 1, 0])
+        # Bone 1: both above 0.2, so both definite.
+        self.assertEqual(list(accumulator.banded[1]), [0, 0, 4])
+        self.assertEqual(accumulator.summary()["bands"]["definite"], 4)
+
+    def test_the_accumulator_quantile_brackets_the_true_quantile(self) -> None:
+        accumulator = decoder_pose.BoneAccumulator(1, decoder_pose.BANDS["rotation_degrees"])
+        values = np.linspace(0.01, 1.0, 100).reshape(100, 1)
+        accumulator.add(values, 1)
+        true_p99 = float(np.quantile(values, 0.99))
+        reported = float(accumulator.quantile(0.99)[0])
+        # The histogram reports the upper edge of the bucket the value falls in,
+        # so it is an upper bound accurate to one bucket ratio.
+        self.assertGreaterEqual(reported, true_p99)
+        self.assertLessEqual(reported, true_p99 * decoder_pose.QUANTILE_RESOLUTION)
+
+    def test_an_evaluation_payload_reads_back_as_two_separate_arrays(self) -> None:
+        pose = [((1.0, 2.0, 3.0), (0.0, 0.0, 0.0, 1.0)), ((4.0, 5.0, 6.0), (0.0, 0.0, HALF, HALF))]
+        record = animation_record(
+            b"FINL", 1, 100, bone_count=2, local_pose=pose, selected={1}
+        )
+        payload = record[ANIMATION_RECORD_HEADER.size:]
+        positions, quaternions = decoder_pose.payload_local_pose(payload, 2)
+        self.assertTrue(np.allclose(positions, [[1, 2, 3], [4, 5, 6]]))
+        self.assertTrue(np.allclose(quaternions[1], [0.0, 0.0, HALF, HALF]))
+        self.assertEqual(list(decoder_pose.payload_selected(payload, 2)), [False, True])
+
+    def test_a_draw_payload_reads_back_as_two_matrix_arrays(self) -> None:
+        world = [tuple(range(12)), tuple(range(12, 24))]
+        skin = [tuple(range(24, 36)), tuple(range(36, 48))]
+        record = pose_record(
+            1, 100, "models/x.mdl", bone_count=2, bone_to_world=world, skin_palette=skin
+        )
+        payload = record[POSE_RECORD_HEADER.size:]
+        first = decoder_pose.payload_matrices(payload, 2)
+        second = decoder_pose.payload_matrices(payload, 2, offset=2 * 48)
+        self.assertTrue(np.allclose(first[1].ravel(), list(range(12, 24))))
+        self.assertTrue(np.allclose(second[0].ravel(), list(range(24, 36))))
+
+
+TRANSFORM_CHECKSUM = 0x3000
+TRANSFORM_MODEL = "models/rotated.mdl"
+TRANSFORM_ENTITY = 0x1FF8
+TRANSFORM_RENDERABLE = TRANSFORM_ENTITY + 4
+TRANSFORM_ROOT = (
+    0.0, -1.0, 0.0, 12.0,
+    1.0, 0.0, 0.0, -4.0,
+    0.0, 0.0, 1.0, 3.0,
+)
+# A pose that is not the bind pose, so a wrong composition rule has somewhere to
+# go: every bone is displaced and two of them are rotated.
+#
+# The last bone's offset is deliberately off-axis. The split and ordinary rules
+# differ on bone 2 by a rotation about Y, so a child displaced along Y alone
+# would land in the same place under both and the translation metrics would read
+# zero while only the rotation moved.
+MOVED_POSE = (
+    ((0.5, -0.25, 2.0), (0.0, 0.0, 0.0, 1.0)),
+    ((1.0, 2.0, 3.5), (0.0, 0.0, HALF, HALF)),
+    ((0.0, 4.0, 0.25), (HALF, 0.0, 0.0, HALF)),
+    ((0.75, 1.0, -0.5), (0.0, 0.0, 0.0, 1.0)),
+)
+
+# A skeleton whose control bone carries an oblique bind rotation. Exact 90°
+# binds drive the axis-interpolation rule onto one table entry, so the selection
+# runs and the two slerps never do; an oblique one gives a driver with three
+# non-zero components and exercises the whole rule.
+OBLIQUE = tuple(v / math.sqrt(0.3**2 + 0.2**2 + 0.1**2 + 0.9**2)
+                for v in (0.3, 0.2, 0.1, 0.9))
+PROCEDURAL_BONES = (
+    ("Bip01", -1, (0.0, 0.0, 0.0), (0.0, 0.0, HALF, HALF), 0),
+    ("Bip01 Spine", 0, (1.0, 2.0, 3.0), OBLIQUE, 0),
+    ("Bip01 Neck", 1, (0.0, 4.0, 0.0), (0.0, HALF, 0.0, HALF), 0x2),
+    ("Bip01 L Bicep", 1, (0.75, 1.0, -0.5), (0.0, 0.0, 0.0, 1.0), 0),
+)
+
+# One `ProcType == 1` table: `(control, axis, pos[6], quat[6])`. The six
+# rotations are distinct so the interpolation has somewhere to go, and the six
+# positions repeat one value, which is what the shipped tables overwhelmingly
+# do — see `docs/vtmb/procedural_bones.md`.
+AXIS_RULE = (
+    1,
+    2,
+    ((0.4, 1.1, -0.2),) * 6,
+    (
+        (0.0, 0.0, 0.0, 1.0),
+        (0.0, 0.0, HALF, HALF),
+        (HALF, 0.0, 0.0, HALF),
+        (0.0, HALF, 0.0, HALF),
+        (0.0, 0.0, -HALF, HALF),
+        (-HALF, 0.0, 0.0, HALF),
+    ),
+)
+
+# The basis the model exporter writes its glbs in, restated here so the expected
+# value of a converted table never comes from the exporter that produced it. M is
+# a proper rotation, `(x, y, z) -> (x, z, -y)`, and the scale is inches to metres.
+GLTF_M = ((1.0, 0.0, 0.0), (0.0, 0.0, 1.0), (0.0, -1.0, 0.0))
+GLTF_SCALE = 0.0254
+
+
+def _raw_axis_interp(image: bytes, bone: int) -> bytes:
+    """The 176-byte `mstudioaxisinterpbone_t` a bone record's `ProcIndex` points at."""
+    record = struct.unpack_from("<i", image, 244)[0] + BONE_STRIDE * bone
+    offset = record + struct.unpack_from("<i", image, record + 144)[0]
+    return bytes(image[offset : offset + 176])
+
+
+def _decoded_axis_interp(raw: bytes):
+    """A raw rule record as `_axis_interp_local` takes it.
+
+    The record stores float32, so a comparison that fed the exporter the stored
+    bytes and the transcription the fixture's own float64 would be reading two
+    different tables and calling the difference a conversion error.
+    """
+    control, axis = struct.unpack_from("<ii", raw, 0)
+    positions = [struct.unpack_from("<3f", raw, 8 + 12 * i) for i in range(6)]
+    quaternions = [struct.unpack_from("<4f", raw, 80 + 16 * i) for i in range(6)]
+    return control, axis, positions, quaternions
+
+
+def _to_gltf_3x4(matrix: tuple[float, ...]) -> tuple[float, ...]:
+    """A Source-basis 3x4 in the glb's basis.
+
+    A change of basis conjugates a transform, so the rotation goes to `M R M^T`
+    while the translation is carried through `M` once and scaled.
+    """
+    rotation = [
+        [
+            sum(
+                GLTF_M[row][k] * matrix[k * 4 + l] * GLTF_M[column][l]
+                for k in range(3)
+                for l in range(3)
+            )
+            for column in range(3)
+        ]
+        for row in range(3)
+    ]
+    translation = [
+        GLTF_SCALE * sum(GLTF_M[row][k] * matrix[k * 4 + 3] for k in range(3))
+        for row in range(3)
+    ]
+    return tuple(
+        value for row in range(3) for value in (*rotation[row], translation[row])
+    )
+
+
+def _exported_axis_interp_local(rule, driver_axes, world, bones):
+    """The local an exported rule produces, read out of the exported table alone.
+
+    The same rule as `_axis_interp_local`, stated the way the sidecar states it: the
+    driver is `axis` rotated by the control bone's local rotation rather than a
+    column named by an index, and term `k`'s signed weight is its dot product with
+    `driver_axes[k]` rather than its `k`-th component. Nothing here knows which
+    Source axis any of that came from, which is the point — a table that named the
+    wrong axis after conversion would evaluate to a different correction here and
+    the same one under `_axis_interp_local`.
+    """
+    control = rule["control_index"]
+    frame = world[control]
+    driver = [
+        sum(frame[row * 4 + column] * rule["axis"][column] for column in range(3))
+        for row in range(3)
+    ]
+    parent = _bone_spec(bones[control])[1]
+    if parent >= 0:
+        outer = world[parent]
+        driver = [
+            sum(outer[row * 4 + column] * driver[row] for row in range(3))
+            for column in range(3)
+        ]
+    weights = [sum(a * b for a, b in zip(axis, driver)) for axis in driver_axes]
+    picked = tuple(2 * k if weights[k] >= 0.0 else 2 * k + 1 for k in range(3))
+    a1, a2, a3 = (abs(value) for value in weights)
+    positions, quaternions = rule["pos"], rule["quat"]
+    if a1 + a2 > 0.0:
+        scale = 1.0 / (a1 + a2 + a3)
+        quaternion = _slerp_one(
+            _slerp_one(quaternions[picked[1]], quaternions[picked[0]], a1 / (a1 + a2)),
+            quaternions[picked[2]],
+            a3 * scale,
+        )
+        position = tuple(
+            a1 * scale * positions[picked[0]][axis_index]
+            + a2 * scale * positions[picked[1]][axis_index]
+            + a3 * scale * positions[picked[2]][axis_index]
+            for axis_index in range(3)
+        )
+    else:
+        quaternion = quaternions[picked[2]]
+        position = positions[picked[2]]
+    return _matrix_3x4(position, quaternion)
+
+
+class ProceduralRuleExportTests(unittest.TestCase):
+    """CAP7.1: the `ProcType == 1` rule table the model exporter carries out.
+
+    A rule's six entries and its axis index are Source quantities and the export's
+    change of basis conjugates a bone local, so the table is checked in both
+    directions: back into VtMB's basis against the bytes it was read from, and
+    forward against the transcription of the rule this module already holds. A
+    table that named the wrong axis after conversion passes neither.
+    """
+
+    def _image(self, axis: int = 2, rule=None) -> bytes:
+        control, _, positions, quaternions = rule or AXIS_RULE
+        return model_image(
+            TRANSFORM_CHECKSUM,
+            TRANSFORM_MODEL,
+            bones=PROCEDURAL_BONES,
+            procedural={3: (control, axis, positions, quaternions)},
+        )
+
+    def _rules(self, image):
+        from elysium_pipeline.formats import mdl_gltf, mdl_skel
+
+        return mdl_gltf.axis_interp_rules(image, mdl_skel.read_bones(image))
+
+    def test_the_exporter_carries_the_source_axes_into_the_glb_basis(self) -> None:
+        """The three vectors every exported rule is read against.
+
+        Source Y becomes negative glTF Z and Source Z becomes glTF Y, so an export
+        that carried the axis index through unchanged would name the wrong one on
+        two rules in three. This is the assertion that says so out loud.
+        """
+        from elysium_pipeline.formats import mdl_gltf
+
+        self.assertTrue(np.allclose(np.asarray(mdl_gltf.M), np.asarray(GLTF_M)))
+        self.assertEqual(mdl_gltf.SCALE, GLTF_SCALE)
+        self.assertEqual(
+            mdl_gltf.DRIVER_AXES,
+            [[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]],
+        )
+
+    def test_the_table_takes_the_same_basis_change_the_mesh_and_clips_take(self) -> None:
+        """The quaternion route the table uses names the rotation `conv_quat` does.
+
+        The table is read back and re-evaluated rather than only drawn, so it goes
+        through the quaternion rather than the rotation matrix -- which keeps the
+        representative the model authored and inverts to the float32 it was read
+        from. That is a different route to the same conjugation, and this is what
+        says so: the two agree as rotations to floating-point noise.
+        """
+        from elysium_pipeline.formats import mdl_gltf
+
+        for quaternion in (*AXIS_RULE[3], OBLIQUE, (0.0, HALF, 0.0, -HALF)):
+            with self.subTest(quaternion=quaternion):
+                exact = mdl_gltf.conv_quat_exact(quaternion)
+                self.assertTrue(
+                    np.allclose(
+                        mdl_gltf.rot_matrix(exact),
+                        mdl_gltf.rot_matrix(mdl_gltf.conv_quat(quaternion)),
+                        atol=1.0e-12,
+                    )
+                )
+                self.assertEqual(mdl_gltf.unconv_quat(exact), tuple(quaternion))
+
+    def test_the_exported_table_inverts_to_the_bytes_it_was_read_from(self) -> None:
+        from elysium_pipeline.formats import mdl_gltf
+
+        for axis in range(3):
+            with self.subTest(axis=axis):
+                image = self._image(axis)
+                rules, faults = self._rules(image)
+                self.assertEqual(faults, [])
+                self.assertEqual(len(rules), 1)
+                rule = rules[0]
+                self.assertEqual(rule["bone"], "Bip01 L Bicep")
+                self.assertEqual(rule["bone_index"], 3)
+                self.assertEqual(rule["control"], "Bip01 Spine")
+                self.assertEqual(rule["control_index"], 1)
+                # The axis is carried as a direction, so recovering the index it
+                # was written from is a lookup rather than a conversion.
+                rebuilt = struct.pack(
+                    "<ii", rule["control_index"], mdl_gltf.DRIVER_AXES.index(rule["axis"])
+                )
+                rebuilt += struct.pack(
+                    "<18f",
+                    *[c for entry in rule["pos"] for c in mdl_gltf.unconv_pos(entry)],
+                )
+                rebuilt += struct.pack(
+                    "<24f",
+                    *[c for entry in rule["quat"] for c in mdl_gltf.unconv_quat(entry)],
+                )
+                self.assertEqual(rebuilt, _raw_axis_interp(image, 3))
+
+    def test_the_exported_table_evaluates_to_the_converted_correction(self) -> None:
+        from elysium_pipeline.formats import mdl_gltf
+
+        locals_ = _bind_locals(PROCEDURAL_BONES)
+        # The control bone's bind is oblique, so the driver has three non-zero
+        # components on every axis and the whole rule runs rather than landing on
+        # one table entry.
+        world = _expected_world(PROCEDURAL_BONES, locals_, TRANSFORM_ROOT, split=True)
+        converted = [_to_gltf_3x4(matrix) for matrix in world]
+        for axis in range(3):
+            with self.subTest(axis=axis):
+                image = self._image(axis)
+                raw = _decoded_axis_interp(_raw_axis_interp(image, 3))
+                self.assertEqual(raw[1], axis)
+                expected = _to_gltf_3x4(_axis_interp_local(raw, world, PROCEDURAL_BONES))
+                rules, _ = self._rules(image)
+                produced = _exported_axis_interp_local(
+                    rules[0], mdl_gltf.DRIVER_AXES, converted, PROCEDURAL_BONES
+                )
+                for index, (a, b) in enumerate(zip(produced, expected)):
+                    self.assertAlmostEqual(a, b, places=9, msg=f"element {index}")
+                # The rule has to be doing work, or agreeing about nothing would
+                # pass: the correction is not the bone's own animated local.
+                self.assertFalse(
+                    np.allclose(produced, _to_gltf_3x4(world[3]), atol=1.0e-3)
+                )
+
+    def test_a_rule_that_does_not_resolve_is_a_named_fault(self) -> None:
+        rules, faults = self._rules(self._image(rule=(1, 2, *AXIS_RULE[2:])))
+        self.assertEqual(len(rules), 1)
+        self.assertEqual(faults, [])
+
+        # `ProcIndex` left at zero resolves onto the bone record itself, whose
+        # first field is a string index rather than a bone.
+        image = model_image(
+            TRANSFORM_CHECKSUM, TRANSFORM_MODEL,
+            bones=PROCEDURAL_BONES, procedural={3: None},
+        )
+        rules, faults = self._rules(image)
+        self.assertEqual(rules, [])
+        self.assertEqual(len(faults), 1)
+        self.assertIn("control bone", faults[0])
+
+    def test_a_rule_naming_an_axis_outside_the_three_is_a_named_fault(self) -> None:
+        image = bytearray(self._image())
+        record = struct.unpack_from("<i", image, 244)[0] + BONE_STRIDE * 3
+        offset = record + struct.unpack_from("<i", image, record + 144)[0]
+        struct.pack_into("<i", image, offset + 4, 3)
+        rules, faults = self._rules(bytes(image))
+        self.assertEqual(rules, [])
+        self.assertEqual(len(faults), 1)
+        self.assertIn("axis 3", faults[0])
+
+
+class TransformDifferenceTests(unittest.TestCase):
+    """CAP4.3 pass one: the bone-to-world and skin-palette difference.
+
+    Every session is synthetic and game-independent. The retail side is written
+    by the hand-rolled helpers at the top of this module, so a stage agreeing
+    with the tool is two independent formulations agreeing and not the tool
+    agreeing with itself.
+    """
+
+    def _payloads(
+        self,
+        *,
+        bones=ROTATED_BONES,
+        pose=MOVED_POSE,
+        root=TRANSFORM_ROOT,
+        split: bool = True,
+        selected: set[int] | None = None,
+        pose_to_bone: str = "inverse",
+        perturb: dict[int, tuple[float, float, float]] | None = None,
+        procedural: dict[int, tuple] | None = None,
+    ):
+        """The captured bone-to-world and palette for one pose, by hand."""
+        count = len(bones)
+        chosen = set(range(count)) if selected is None else selected
+        seed = [IDENTITY_3X4] * count
+        world = _expected_world(
+            bones, list(pose), root, split=split, seed=seed, selected=chosen,
+            procedural=procedural,
+        )
+        for index, offset in (perturb or {}).items():
+            row = list(world[index])
+            for axis in range(3):
+                row[axis * 4 + 3] += offset[axis]
+            world[index] = tuple(row)
+        binds = _bind_world(bones)
+        inverse = [
+            IDENTITY_3X4 if pose_to_bone == "identity" else _invert_rigid_3x4(matrix)
+            for matrix in binds
+        ]
+        skin = [_multiply_3x4(world[i], inverse[i]) for i in range(count)]
+        return world, skin, chosen
+
+    def _session(
+        self,
+        session: Path,
+        *,
+        bones=ROTATED_BONES,
+        pose=MOVED_POSE,
+        root=TRANSFORM_ROOT,
+        split: bool = True,
+        selected: set[int] | None = None,
+        pose_to_bone: str = "inverse",
+        perturb: dict[int, tuple[float, float, float]] | None = None,
+        procedural: dict[int, tuple] | None = None,
+        world: list | None = None,
+        skin: list | None = None,
+        carry_generation: int | None = None,
+        client_entity: int = TRANSFORM_RENDERABLE,
+        image: bytes | None = None,
+        extra_pose: bytes = b"",
+        index_it: bool = True,
+    ) -> None:
+        built, built_skin, chosen = self._payloads(
+            bones=bones, pose=pose, root=root, split=split, selected=selected,
+            pose_to_bone=pose_to_bone, perturb=perturb, procedural=procedural,
+        )
+        world = built if world is None else world
+        skin = built_skin if skin is None else skin
+        count = len(bones)
+        write_session(
+            session,
+            pose_records=pose_record(
+                1, 100, TRANSFORM_MODEL,
+                bone_count=count,
+                checksum=TRANSFORM_CHECKSUM,
+                client_entity=client_entity,
+                generation=2,
+                carry_generation=1 if carry_generation is None else carry_generation,
+                bone_to_world=world,
+                skin_palette=skin,
+            ) + extra_pose,
+            animation_records=(
+                bracket_record(
+                    b"PBLD", 2, 100, 101,
+                    generation=1, client_entity=TRANSFORM_RENDERABLE,
+                )
+                + animation_record(
+                    b"FINL", 3, 101,
+                    bone_count=count,
+                    checksum=TRANSFORM_CHECKSUM,
+                    client_entity=TRANSFORM_ENTITY,
+                    generation=1,
+                    local_pose=list(pose),
+                    selected=chosen,
+                    root=root,
+                )
+            ),
+            census_records=(
+                observation_record(
+                    4, 88, TRANSFORM_MODEL,
+                    checksum=TRANSFORM_CHECKSUM, bone_count=count,
+                )
+                + image_record(
+                    5, 89,
+                    image
+                    if image is not None
+                    else model_image(
+                        TRANSFORM_CHECKSUM, TRANSFORM_MODEL,
+                        bones=bones, pose_to_bone=pose_to_bone,
+                        procedural=procedural,
+                    ),
+                    checksum=TRANSFORM_CHECKSUM,
+                )
+            ),
+        )
+        finalize(session)
+        if index_it:
+            index_capture(session, rollup=False)
+
+    def _report(self, directory: str, **kwargs) -> dict:
+        session = Path(directory)
+        self._session(session, **kwargs)
+        return verify_transform(session)
+
+    def _bands(self, report, stage, candidate, metric):
+        """One metric's per-bone band split.
+
+        Distinct from `records_by_band`, which counts a record once at its worst
+        band over every metric and bone rather than once per bone.
+        """
+        return report["stages"][stage]["candidates"][candidate][metric][
+            "bone_observations_by_band"
+        ]
+
+    def _records_by_band(self, report, stage, candidate):
+        return report["stages"][stage]["candidates"][candidate]["records_by_band"]
+
+    # ---- stage 3: bone-to-world ----
+
+    def test_bone_to_world_reproduces_the_captured_draw_under_the_split_rule(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        stage = report["stages"]["bone_to_world"]
+        self.assertTrue(stage["available"], stage.get("reason"))
+        self.assertEqual(stage["records"], 1)
+        for metric in ("model_translation", "world_translation", "rotation_degrees"):
+            bands = self._bands(report, "bone_to_world", "split", metric)
+            self.assertEqual(bands["investigate"] + bands["definite"], 0, metric)
+        self.assertTrue(report["verdict"]["transform_difference_compared"])
+
+    def test_the_conventional_hierarchy_differs_only_on_the_flagged_subtree(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        conventional = report["stages"]["bone_to_world"]["candidates"]["conventional"]
+        self.assertGreater(conventional["rotation_degrees"]["max"], 0.5)
+        self.assertGreater(conventional["world_translation"]["max"], 0.2)
+        # One record, counted once at its worst band rather than once per bone.
+        self.assertEqual(
+            self._records_by_band(report, "bone_to_world", "conventional"),
+            {"excellent": 0, "investigate": 0, "definite": 1},
+        )
+        over = [
+            row
+            for row in report["clusters"]
+            if row["candidate"] == "conventional" and row["stage"] == "bone_to_world"
+        ]
+        # Bone 2 carries `Flags & 0x2` and bone 3 hangs below it; nothing above
+        # bone 2 can move, because the two rules agree everywhere else.
+        self.assertEqual({row["bone"] for row in over}, {2, 3})
+        self.assertGreater(
+            report["stages"]["bone_to_world"]["counts"][
+                "stage3_conventional_hierarchy_over_the_band"
+            ],
+            0,
+        )
+
+    def test_each_metric_carries_its_own_record_band_split(self) -> None:
+        """A clean translation beside a wrong rotation must stay readable.
+
+        Collapsing the metrics into one worst-of number would report a stage
+        whose positions are exact and whose rotations are not as uniformly
+        broken, which is the opposite of what such a run is evidence for.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        candidate = report["stages"]["bone_to_world"]["candidates"]["conventional"]
+        self.assertEqual(
+            candidate["rotation_degrees"]["records_by_band"]["definite"], 1
+        )
+        self.assertEqual(
+            candidate["model_translation"]["records_by_band"]["definite"], 1
+        )
+        # The combined figure counts the record once, not once per metric.
+        self.assertEqual(sum(candidate["records_by_band"].values()), 1)
+
+    def test_the_flagged_bones_are_reported_apart_from_the_ordinary_ones(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        candidates = report["stages"]["bone_to_world"]["candidates"]
+        split = candidates["split"]["rotation_degrees"][
+            "bone_observations_by_inheritance"
+        ]
+        ordinary = candidates["conventional"]["rotation_degrees"][
+            "bone_observations_by_inheritance"
+        ]
+        # One bone of the four carries `Flags & 0x2`. The split rule is right on
+        # it and the ordinary hierarchy is wrong on it, which is the whole claim
+        # the two candidates exist to separate.
+        self.assertEqual(split["split_inheritance"]["excellent"], 1)
+        self.assertEqual(split["split_inheritance"]["definite"], 0)
+        self.assertEqual(ordinary["split_inheritance"]["definite"], 1)
+        self.assertEqual(ordinary["split_inheritance"]["excellent"], 0)
+
+    def test_a_procedural_bone_is_labelled_and_reported_apart(self) -> None:
+        """`ProcType != 0` names a stage the plain hierarchy does not evaluate.
+
+        A hierarchy difference and a missing procedural stage look identical in
+        the numbers and are different work, so the classification comes from
+        what the bone is rather than from how large its error was.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(
+                directory, procedural={3: None}, perturb={3: (0.0, 0.0, 9.0)}
+            )
+        cluster = next(
+            row
+            for row in report["clusters"]
+            if row["candidate"] == "split" and row["bone"] == 3
+        )
+        self.assertEqual(cluster["proc_type"], 1)
+        self.assertEqual(
+            cluster["candidate_cause"], "controllers and procedural order"
+        )
+        split = report["stages"]["bone_to_world"]["candidates"]["split"][
+            "world_translation"
+        ]["bone_observations_by_procedural"]
+        self.assertEqual(split["procedural"]["definite"], 1)
+        self.assertEqual(split["ordinary"]["definite"], 0)
+
+    def test_an_unreadable_procedural_rule_is_counted_and_the_model_still_compares(
+        self,
+    ) -> None:
+        """A rule that will not read costs its bone the correction, not the model."""
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory, procedural={3: None})
+        self.assertEqual(
+            report["skeletons"]["counts"]["procedural_rule_unreadable"], 1
+        )
+        self.assertEqual(report["skeletons"]["skeletons"], 1)
+        self.assertTrue(report["stages"]["bone_to_world"]["available"])
+        self.assertTrue(report["verdict"]["transform_difference_compared"])
+
+    def test_the_procedural_candidate_reproduces_a_draw_the_rule_produced(
+        self,
+    ) -> None:
+        """The rule is what closes the gap, and its absence is what opens it.
+
+        The captured side applies the axis-interpolation table; the plain
+        hierarchy cannot reach it, and the candidate that evaluates the table
+        does. Both sides are built from independent transcriptions of the rule.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory, procedural={3: AXIS_RULE})
+        candidates = report["stages"]["bone_to_world"]["candidates"]
+        for metric in ("world_translation", "rotation_degrees"):
+            with_rule = candidates["split_procedural"][metric]["records_by_band"]
+            self.assertEqual(
+                with_rule["investigate"] + with_rule["definite"], 0, metric
+            )
+        # Without it the driven bone is somewhere else entirely.
+        self.assertGreater(
+            candidates["split"]["rotation_degrees"]["max"], 0.5
+        )
+        self.assertEqual(
+            report["stages"]["bone_to_world"]["counts"][
+                "stage3_procedural_rule_over_the_band"
+            ],
+            0,
+        )
+        self.assertGreater(
+            report["stages"]["bone_to_world"]["counts"][
+                "stage3_records_in_the_definite_band"
+            ],
+            0,
+        )
+
+    def test_the_ladder_does_not_report_a_difference_the_rule_explains(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory, procedural={3: AXIS_RULE})
+        self.assertEqual(report["ladder"]["by_stage"]["bone_to_world"], 0)
+        self.assertEqual(report["ladder"]["by_stage"]["none"], 1)
+        self.assertIn("split_procedural", report["ladder"]["population"])
+
+    def test_the_root_transform_is_divided_out_for_the_model_space_metric(
+        self,
+    ) -> None:
+        """Two runs differing only in where the entity stands.
+
+        The model-space numbers must be identical and the world-space ones must
+        not, which is what makes entity placement separable from the
+        composition rule rather than folded into it.
+        """
+        moved = (0.0, -1.0, 0.0, 900.0, 1.0, 0.0, 0.0, -4.0, 0.0, 0.0, 1.0, 3.0)
+        reports = []
+        for root in (TRANSFORM_ROOT, moved):
+            with tempfile.TemporaryDirectory() as directory:
+                # A wrong palette in both runs so there is a non-zero number to
+                # compare rather than two zeros agreeing trivially.
+                reports.append(
+                    self._report(
+                        directory, root=root, perturb={3: (0.0, 0.0, 5.0)}
+                    )
+                )
+        first, second = (
+            report["stages"]["bone_to_world"]["candidates"]["split"]
+            for report in reports
+        )
+        self.assertAlmostEqual(
+            first["model_translation"]["max"],
+            second["model_translation"]["max"],
+            places=4,
+        )
+        self.assertGreater(first["model_translation"]["max"], 0.2)
+
+    def test_an_unselected_bone_is_seeded_from_retail_and_never_compared(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory, selected={0, 1, 3})
+        stage = report["stages"]["bone_to_world"]
+        self.assertEqual(stage["counts"]["bones_outside_the_selected_mask"], 1)
+        # Bone 3's parent is bone 2, which retail did not write, so bone 3
+        # composes off retail's own value for it.
+        self.assertEqual(
+            stage["counts"][
+                "bones_seeded_from_retail_because_their_parent_was_unselected"
+            ],
+            1,
+        )
+        bands = self._bands(report, "bone_to_world", "split", "world_translation")
+        self.assertEqual(bands["investigate"] + bands["definite"], 0)
+
+    def test_a_wrong_bone_is_named_and_its_descendants_carry_it(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory, perturb={1: (0.0, 0.0, 4.0)})
+        first = report["ladder"]["by_bone"][0]
+        self.assertEqual(first["stage"], "bone_to_world")
+        self.assertEqual(first["bone"], 1)
+        spread = report["ladder"]["descendant_propagation"][0]
+        self.assertEqual(spread["first_bone"], "Bip01 Spine")
+        # Only the perturbed bone moved, so the subtree below it is not carrying
+        # the error and the rate says so rather than the report implying spread.
+        self.assertEqual(spread["non_descendants"]["over_band"], 0)
+
+    def test_a_root_transform_that_is_not_rigid_is_excluded_rather_than_inverted(
+        self,
+    ) -> None:
+        """A singular root has no inverse, so the record leaves the comparison.
+
+        The theatre corpus carries such roots on four named NPCs, so this is a
+        property of the run rather than a broken read; the distinct count is
+        what tells the two apart, and it is reported beside the total.
+        """
+        singular = (
+            0.0, 1.0, -329.8, -3374.25,
+            0.0, 1.0, 0.0, 907.575,
+            0.0, 0.0, 1.0, -321.8,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory, root=singular)
+        stage = report["stages"]["bone_to_world"]
+        self.assertEqual(stage["counts"]["root_transform_not_rigid"], 1)
+        self.assertEqual(stage["distinct_non_rigid_roots"], 1)
+        self.assertGreater(stage["worst_non_rigid_root_row_length"], 1.0)
+        self.assertEqual(stage["records"], 0)
+        self.assertEqual(report["verdict"]["defects"], {})
+        self.assertIn(
+            "root_transform_not_rigid", report["verdict"]["accounted_counts"]
+        )
+        # The palette stage does not depend on the root, so it still runs.
+        self.assertEqual(report["stages"]["skin_palette"]["records"], 1)
+        self.assertTrue(report["verdict"]["transform_difference_compared"])
+
+    def test_a_non_topological_parent_is_a_defect(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(
+                directory,
+                bones=(
+                    ("Bip01", -1, (0.0, 0.0, 0.0)),
+                    ("Bip01 Spine", 1, (1.0, 0.0, 0.0)),
+                ),
+                pose=MOVED_POSE[:2],
+            )
+        self.assertEqual(
+            report["skeletons"]["counts"]["skeleton_parent_not_topological"], 1
+        )
+        self.assertFalse(report["verdict"]["transform_difference_compared"])
+
+    # ---- stage 4: the skin palette ----
+
+    def test_the_skin_palette_is_the_bone_to_world_times_pose_to_bone(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        stage = report["stages"]["skin_palette"]
+        self.assertTrue(stage["available"], stage.get("reason"))
+        self.assertEqual(stage["records"], 1)
+        for metric in ("translation", "rotation_degrees"):
+            bands = self._bands(report, "skin_palette", "pose_to_bone", metric)
+            self.assertEqual(bands["investigate"] + bands["definite"], 0, metric)
+
+    def test_a_pose_to_bone_that_is_not_the_conventional_inverse_is_priced(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory, pose_to_bone="identity")
+        # The stored bind still reproduces the palette retail wrote, because
+        # retail wrote it with that bind; what changes is what the regenerated
+        # one costs.
+        bands = self._bands(report, "skin_palette", "pose_to_bone", "translation")
+        self.assertEqual(bands["investigate"] + bands["definite"], 0)
+        self.assertGreater(
+            report["stages"]["skin_palette"]["counts"][
+                "stage4_regenerated_inverse_bind_over_the_band"
+            ],
+            0,
+        )
+        self.assertGreater(report["static_bind"]["bones_over_the_band"], 0)
+
+    def test_a_wrong_palette_is_reported_as_the_skin_stage(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            world, skin, _ = self._payloads()
+            broken = list(skin)
+            row = list(broken[2])
+            row[7] += 3.0
+            broken[2] = tuple(row)
+            self._session(session, world=world, skin=broken)
+            report = verify_transform(session)
+        bands = self._bands(report, "skin_palette", "pose_to_bone", "translation")
+        self.assertGreater(bands["definite"], 0)
+        # The bone-to-world stage is clean, so the ladder must attribute the
+        # record to the palette rather than to the stage before it.
+        self.assertEqual(report["ladder"]["by_stage"]["bone_to_world"], 0)
+        self.assertEqual(report["ladder"]["by_stage"]["skin_palette"], 1)
+
+    def test_a_bone_the_renderer_never_wrote_is_excluded_from_both_metrics(
+        self,
+    ) -> None:
+        """Two zero matrices are identical, and the rotation metric says 120.
+
+        `acos((trace(0) - 1) / 2)` is `acos(-0.5)`, so an unwritten slot reads
+        as the largest possible disagreement while the translation reads as a
+        perfect one. Neither is a comparison, so the bone leaves both.
+        """
+        zero = (0.0,) * 12
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            world, skin, _ = self._payloads()
+            world, skin = list(world), list(skin)
+            world[3], skin[3] = zero, zero
+            self._session(session, world=world, skin=skin)
+            report = verify_transform(session)
+        for stage in ("bone_to_world", "skin_palette"):
+            self.assertEqual(
+                report["stages"][stage]["counts"]["bones_the_renderer_never_wrote"],
+                1,
+                stage,
+            )
+        rotation = self._bands(
+            report, "skin_palette", "pose_to_bone", "rotation_degrees"
+        )
+        self.assertEqual(rotation["investigate"] + rotation["definite"], 0)
+        self.assertTrue(report["verdict"]["transform_difference_compared"])
+
+    def test_a_draw_with_no_composed_pose_still_reaches_the_palette_stage(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory, carry_generation=99)
+        self.assertFalse(report["stages"]["bone_to_world"]["available"])
+        self.assertEqual(report["stages"]["skin_palette"]["records"], 1)
+        self.assertEqual(
+            report["pairing"]["counts"][
+                "draws_whose_consumed_pose_build_produced_no_composed_pose"
+            ],
+            1,
+        )
+        self.assertTrue(report["verdict"]["transform_difference_compared"])
+
+    def test_a_draw_naming_another_actor_is_counted_rather_than_compared(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory, client_entity=TRANSFORM_ENTITY + 64)
+        self.assertFalse(report["stages"]["bone_to_world"]["available"])
+        self.assertEqual(
+            report["pairing"]["counts"][
+                "draws_whose_carry_generation_names_another_actor"
+            ],
+            1,
+        )
+        self.assertTrue(report["verdict"]["transform_difference_compared"])
+
+    # ---- mechanics, verdict and shape ----
+
+    def test_a_repeated_payload_is_compared_once_and_counted_many_times(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            world, skin, _ = self._payloads()
+            extra = b"".join(
+                pose_record(
+                    ordinal, 100 + ordinal, TRANSFORM_MODEL,
+                    bone_count=len(ROTATED_BONES),
+                    checksum=TRANSFORM_CHECKSUM,
+                    client_entity=TRANSFORM_RENDERABLE,
+                    generation=2,
+                    carry_generation=1,
+                    bone_to_world=world,
+                    skin_palette=skin,
+                )
+                for ordinal in (11, 12, 13)
+            )
+            self._session(session, extra_pose=extra)
+            report = verify_transform(session)
+            compact(session)
+            compacted = verify_transform(session)
+        self.assertEqual(report["stages"]["skin_palette"]["records"], 4)
+        self.assertEqual(compacted["stages"]["skin_palette"]["records"], 4)
+        # Uncompacted, identity is the row; compacted, it is the bytes.
+        self.assertEqual(report["stages"]["skin_palette"]["distinct_payload_keys"], 4)
+        self.assertEqual(
+            compacted["stages"]["skin_palette"]["distinct_payload_keys"], 1
+        )
+        self.assertEqual(
+            report["stages"]["skin_palette"]["candidates"],
+            compacted["stages"]["skin_palette"]["candidates"],
+        )
+        self.assertEqual(
+            report["pairing"]["counts"]["payload_store_absent"], 4
+        )
+        self.assertNotIn(
+            "payload_store_absent", compacted["pairing"]["counts"]
+        )
+
+    def test_two_runs_over_one_session_produce_the_same_report(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._session(session)
+            first = verify_transform(session)
+            second = verify_transform(session)
+        for report in (first, second):
+            for stage in ("bone_to_world", "skin_palette"):
+                report["stages"][stage].pop("elapsed_seconds", None)
+        self.assertEqual(first, second)
+
+    def test_the_sample_bound_is_counted_rather_than_silently_dropping_records(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._session(session)
+            report = verify_transform(session, sample=0, batch=1)
+        excluded = report["stages"]["skin_palette"]["counts"][
+            "records_excluded_by_the_sample_bound"
+        ]
+        self.assertEqual(excluded, 1)
+        self.assertIn(
+            "records_excluded_by_the_sample_bound",
+            report["verdict"]["accounted_counts"],
+        )
+
+    def test_every_reported_list_is_bounded_by_its_cap(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory, perturb={1: (0.0, 0.0, 4.0)})
+        self.assertLessEqual(len(report["clusters"]), MAX_REPORTED_CLUSTERS)
+        self.assertLessEqual(len(report["worst_bones"]), MAX_REPORTED_BONES)
+        self.assertLessEqual(len(report["ladder"]["by_bone"]), MAX_REPORTED_BONES)
+        self.assertLessEqual(len(report["static_bind"]["worst"]), MAX_REPORTED_MODELS)
+        for row in report["clusters"]:
+            self.assertLessEqual(len(row["exemplars"]), MAX_REPORTED_EXEMPLARS)
+
+    def test_every_emitted_population_is_declared_once(self) -> None:
+        self.assertEqual(set(TRANSFORM_DEFECTS) & set(TRANSFORM_ACCOUNTED), set())
+        emitted: set[str] = set()
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory, perturb={1: (0.0, 0.0, 4.0)})
+        sections = [report["skeletons"], report["pairing"], report["static_bind"]]
+        sections += [report["stages"][name] for name in ("bone_to_world", "skin_palette")]
+        for section in sections:
+            emitted |= set(section.get("counts") or {})
+        undeclared = emitted - set(TRANSFORM_DEFECTS) - set(TRANSFORM_ACCOUNTED)
+        self.assertEqual(undeclared, set())
+
+    def test_a_mismatch_is_accounted_rather_than_a_defect(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory, perturb={1: (0.0, 0.0, 40.0)})
+        self.assertGreater(
+            report["stages"]["bone_to_world"]["counts"][
+                "stage3_records_in_the_definite_band"
+            ],
+            0,
+        )
+        self.assertEqual(report["verdict"]["defects"], {})
+        self.assertTrue(report["verdict"]["transform_difference_compared"])
+
+    def test_an_absent_entity_image_is_a_defect(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._session(session)
+            connection = sqlite3.connect(session / "capture.sqlite")
+            try:
+                connection.execute("DELETE FROM model_images")
+                connection.commit()
+            finally:
+                connection.close()
+            report = verify_transform(session)
+        self.assertGreater(
+            report["stages"]["skin_palette"]["counts"]["entity_image_absent"], 0
+        )
+        self.assertFalse(report["verdict"]["transform_difference_compared"])
+
+    def test_a_database_without_the_spine_is_unjudgeable_rather_than_failing(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._session(session, index_it=False)
+            report = verify_transform(session)
+        self.assertFalse(report["verdict"]["judgeable"])
+        self.assertFalse(report["verdict"]["transform_difference_compared"])
+        self.assertIn("index_capture_database", report["verdict"]["statement"])
+
+    def test_the_unreached_stages_report_a_reason_rather_than_being_omitted(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        for name in ("decoded_locals", "composed_locals"):
+            stage = report["stages"][name]
+            self.assertFalse(stage["available"])
+            self.assertEqual(stage["reason"], UNREACHED)
+        self.assertIn(UNREACHED, report["verdict"]["accounted"])
+
+    def test_nothing_is_written_into_the_capture(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._session(session)
+            database = session / "capture.sqlite"
+            before = hashlib.sha256(database.read_bytes()).hexdigest()
+            report = verify_transform(session)
+            (session / REPORT_NAME).write_text(json.dumps(report))
+            after = hashlib.sha256(database.read_bytes()).hexdigest()
+        self.assertEqual(before, after)
+
+    def test_the_report_names_the_decoder_the_evaluator_and_the_exporter(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        identity = report["identity"]
+        self.assertEqual(identity["decoder_module"], decoder_pose.SHIPPED)
+        for key in ("decoder_sha256", "evaluator_sha256", "exporter_sha256"):
+            self.assertRegex(identity[key], r"^[0-9a-f]{64}$")
+        self.assertIn("11.3", identity["bands"]["source"])
+        self.assertGreater(identity["bands"]["quantile_resolution"], 1.0)
+
+    def test_the_report_states_that_the_composition_stages_are_not_shipped_code(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        for name in ("bone_to_world", "skin_palette"):
+            self.assertIn(
+                "no shipped Elysium implementation",
+                report["stages"][name]["implementation"],
+            )
+
+    def test_the_summary_names_the_first_mismatching_stage(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory, perturb={1: (0.0, 0.0, 4.0)})
+        text = summarize_transform(report)
+        self.assertIn("first mismatching stage", text)
+        self.assertIn("first mismatching bone", text)
+        self.assertIn("bone_to_world", text)
+
+    def test_a_cluster_key_is_stable_across_two_sessions(self) -> None:
+        keys = []
+        for _ in range(2):
+            with tempfile.TemporaryDirectory() as directory:
+                report = self._report(directory, perturb={1: (0.0, 0.0, 4.0)})
+            keys.append([row["cluster_key"] for row in report["clusters"]])
+        self.assertEqual(keys[0], keys[1])
+        self.assertTrue(all("Bip01" in key for key in keys[0]))
+
+    def test_two_sessions_are_reported_side_by_side(self) -> None:
+        reports = []
+        for _ in range(2):
+            with tempfile.TemporaryDirectory() as directory:
+                reports.append(self._report(directory, perturb={1: (0.0, 0.0, 4.0)}))
+        comparison = compare_transform(reports)
+        self.assertEqual(len(comparison["bone_to_world_split"]), 2)
+        self.assertTrue(comparison["clusters_in_every_run"])
+        self.assertIn("coverage", comparison["statement"])
 
 
 if __name__ == "__main__":

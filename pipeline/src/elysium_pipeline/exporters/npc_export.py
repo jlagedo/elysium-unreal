@@ -59,6 +59,7 @@ MANIFEST = os.path.join(NPC_DIR, "npc_manifest.json")
 INDEX = os.path.join(NPC_DIR, "npc_index.json")
 CLIPS_DIR = os.path.join(NPC_DIR, "clips")
 FACIAL_DIR = os.path.join(NPC_DIR, "facial")
+PROCEDURAL_DIR = os.path.join(NPC_DIR, "procedural")
 ANIMATED_PROP_DIR = os.path.join(NPC_DIR, "animated_props")
 MANIFEST_VERSION = 4
 
@@ -253,6 +254,38 @@ def write_facial(stem, model, rig):
     return {"facial": "facial/" + os.path.basename(path), "morphs": len(rig["morphs"])}
 
 
+def write_procedural(stem, model, rules, prefix=""):
+    """Write one character's procedural bone rules to `<prefix>procedural/<stem>.json` -> the
+    manifest fields naming it.
+
+    Kept out of `npc_manifest.json` for the reason the flex rigs are: a rigged model carries
+    12-21 driven bones, each a 176-byte table, and a map places 17-22 models. `{}` for a model
+    with none -- 110 of the 339 v2531 models in the patch tree declare any.
+
+    A driven bone's animation channels are decoded and then discarded: the runtime recomputes
+    its local from this table after the graph blends and the hierarchy composes, which is why
+    the correction cannot be baked into the clips. The evaluation is
+    `docs/vtmb/procedural_bones.md`; the Unreal stage that runs it is
+    `docs/architecture/animation-architecture.md`."""
+    if not rules:
+        return {}
+    rel = "/".join(filter(None, (prefix, "procedural", stem + ".json")))
+    path = os.path.join(NPC_DIR, *rel.split("/"))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"stem": stem, "model": model,
+                   "note": "A rule replaces its driven bone's local transform. Rotate `axis` "
+                           "by the control bone's local rotation to get w; term k's signed "
+                           "weight is dot(driver_axes[k], w), selecting entry 2k when "
+                           "positive and 2k+1 when negative and weighting it by |weight|. "
+                           "pos/quat are in <stem>.glb's own basis, written by the same "
+                           "conversion that basis's mesh and clips are. See "
+                           "docs/vtmb/procedural_bones.md.",
+                   "driver_axes": mdl_gltf.DRIVER_AXES,
+                   "rules": rules}, f, separators=(",", ":"))
+    return {"procedural": rel, "procedural_bones": len(rules)}
+
+
 def write_sidecars(manifest):
     """The runtime-facing split of `npc_manifest.json` (roadmap 8.5).
 
@@ -272,13 +305,17 @@ def write_sidecars(manifest):
     os.makedirs(CLIPS_DIR, exist_ok=True)
     index = {
         "manifest_version": manifest["manifest_version"],
-        "note": "counts only; a clip vocabulary lives in clips/<stem>.json and a flex rig in "
-                "facial/<stem>.json. Both paths, like the bank glb paths, are relative to "
-                "this file's directory.",
+        "note": "counts only; a clip vocabulary lives in clips/<stem>.json, a flex rig in "
+                "facial/<stem>.json and a procedural bone rule table in "
+                "procedural/<stem>.json. Those paths, like the bank glb paths, are relative "
+                "to this file's directory.",
         "npcs": {s: {"glb": r["glb"], "model": r["model"], "bones": r["bones"],
                      "split_bones": r.get("split_bones", []),
                      "clips": len(r["clips"]), "own_clips": len(r["own_clips"]),
                      **({"facial": r["facial"], "morphs": r["morphs"]} if r.get("facial")
+                        else {}),
+                     **({"procedural": r["procedural"],
+                         "procedural_bones": r["procedural_bones"]} if r.get("procedural")
                         else {})}
                  for s, r in manifest["npcs"].items()},
         "banks": {s: {"glb": r["glb"], "model": r["model"], "clips": len(r["clips"])}
@@ -293,6 +330,9 @@ def write_sidecars(manifest):
             stem: {"glb": rec["glb"], "model": rec["model"],
                    "bones": rec.get("bones", 0),
                    "split_bones": rec.get("split_bones", []),
+                   **({"procedural": rec["procedural"],
+                       "procedural_bones": rec["procedural_bones"]} if rec.get("procedural")
+                      else {}),
                    "clips": sorted(rec.get("clips", {}))}
             for stem, rec in manifest.get("animated_props", {}).items()
         },
@@ -465,6 +505,7 @@ def main(only=None, *, index=None, integrate=False, strict=False):
     anorms = mdl_gltf.load_anorms()
     print(f"[npc] exporting {len(npcs)} NPC mesh glb(s) -> {NPC_DIR}/ ...", flush=True)
     npc_index = {}
+    procedural_faults = []
     for m in npcs:
         try:
             info = mdl_gltf.export_npc(idx, m, NPC_DIR, npc_stem[m], anorms)
@@ -478,7 +519,9 @@ def main(only=None, *, index=None, integrate=False, strict=False):
             "clips": npc_records.get(m, {}),
             "own_clips": {c.label: _clip_meta(c) for c in info["clips"]},
             **write_facial(info["stem"], info["model"], info["facial"]),
+            **write_procedural(info["stem"], info["model"], info["procedural"]),
         }
+        procedural_faults.extend((info["stem"], f) for f in info["procedural_faults"])
 
     # Skeletal prop GLBs are intentionally separate from NPCs: prop_dynamic selects them only when
     # this index promises an animated representation, while ordinary props retain their baked
@@ -521,7 +564,9 @@ def main(only=None, *, index=None, integrate=False, strict=False):
             "bones": info["bones"],
             "split_bones": info["split_bones"],
             "clips": {c.label: _clip_meta(c) for c in info["clips"]},
+            **write_procedural(stem, info["model"], info["procedural"], "animated_props"),
         }
+        procedural_faults.extend((stem, f) for f in info["procedural_faults"])
 
     # Reconcile: a sequence the include tree advertises but whose owner failed to bake (empty
     # tracks, or a bank export that raised) must not appear as resolvable. Filtering here is
@@ -605,6 +650,13 @@ def main(only=None, *, index=None, integrate=False, strict=False):
     rigged = [r for r in npc_index.values() if r.get("facial")]
     print(f"[npc] faces: {len(rigged)}/{len(npc_index)} rigged, "
           f"{sum(r['morphs'] for r in rigged)} morph targets -> {FACIAL_DIR}/")
+    driven = [r for r in (*npc_index.values(), *animated_prop_index.values())
+              if r.get("procedural")]
+    scanned = len(npc_index) + len(animated_prop_index)
+    print(f"[npc] procedural bones: {len(driven)}/{scanned} models carry a rule table, "
+          f"{sum(r['procedural_bones'] for r in driven)} driven bones -> {PROCEDURAL_DIR}/")
+    for stem, fault in procedural_faults:
+        print(f"  ! {stem}: procedural rule - {fault}")
     print(f"[npc] size: banks {bank_bytes/1e6:.0f} MB (shared) + meshes {npc_bytes/1e6:.0f} MB, "
           f"manifest {os.path.getsize(MANIFEST)/1e6:.1f} MB")
     if warnings:

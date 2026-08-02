@@ -59,30 +59,36 @@ void FElysiumCogWindow_EventQueue::RenderContent()
 	}
 	ImGui::EndDisabled();
 
-	// Its own line: three buttons plus this status string is wider than the window at any sane size.
-	ImGui::Text("now %.2f s  ·", Now);
+	ImGui::SameLine();
+	ImGui::TextDisabled("%.2f s", Now);
 	ImGui::SameLine();
 	ImGui::TextColored(bPaused ? ElysiumCogStyle::ColWarn : ElysiumCogStyle::ColOk, "%s",
-		bPaused ? "PAUSED" : "running");
+		bPaused ? "paused" : "running");
 	if (bPaused && Queue.StepsPending() > 0)
 	{
 		ImGui::SameLine();
 		ImGui::TextDisabled("(%d step armed)", Queue.StepsPending());
 	}
 
-	// --- Pending events --------------------------------------------------------------------
 	const TArray<FElysiumIOEvent>& Pending = Queue.Pending();
-	ImGui::SeparatorText(COG_TCHAR_TO_CHAR(*FString::Printf(TEXT("Pending (%d)"), Pending.Num())));
-
-	if (Pending.Num() == 0)
+	const FElysiumRingBufferSink& Ring = World->RingBuffer();
+	if (!ImGui::BeginTabBar("##EventFlowViews"))
 	{
-		ImGui::TextDisabled("Queue empty.");
+		return;
 	}
-	else if (ImGui::BeginTable("##Pending", 6,
+
+	const FString PendingLabel = FString::Printf(TEXT("Pending  %d###Pending"), Pending.Num());
+	if (ImGui::BeginTabItem(COG_TCHAR_TO_CHAR(*PendingLabel)))
+	{
+		if (Pending.Num() == 0)
+		{
+			ImGui::TextDisabled("Nothing is waiting to fire.");
+		}
+		else if (ImGui::BeginTable("##Pending", 6,
 		ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY |
 		ImGuiTableFlags_ScrollX | ImGuiTableFlags_SizingFixedFit,
-		ImVec2(0, GetDpiScale() * 180.0f)))
-	{
+		ImVec2(0, 0)))
+		{
 		ImGui::TableSetupScrollFreeze(0, 1);
 		ImGui::TableSetupColumn("In");
 		ImGui::TableSetupColumn("Target");
@@ -113,36 +119,38 @@ void FElysiumCogWindow_EventQueue::RenderContent()
 				ImGui::TextColored(ElysiumCogStyle::ColName, "%s", COG_TCHAR_TO_CHAR(*Ev.PythonSrc));
 			}
 		}
-		ImGui::EndTable();
+			ImGui::EndTable();
+		}
+		ImGui::EndTabItem();
 	}
 
-	// --- I/O history ring buffer -----------------------------------------------------------
-	const FElysiumRingBufferSink& Ring = World->RingBuffer();
-	ImGui::SeparatorText(COG_TCHAR_TO_CHAR(*FString::Printf(
-		TEXT("I/O history (%d / %d)"), Ring.Num(), Ring.Capacity())));
-
-	TArray<FString> Lines;
-	Ring.CollectOrdered(HistoryLines, Lines);
-	if (Lines.Num() == 0)
+	const FString HistoryLabel = FString::Printf(TEXT("History  %d###History"), Ring.Num());
+	if (ImGui::BeginTabItem(COG_TCHAR_TO_CHAR(*HistoryLabel)))
 	{
-		ImGui::TextDisabled("No I/O delivered yet.");
-	}
-	else
-	{
-		// EndChild must always follow BeginChild, so keep the pair inside this branch.
-		ImGui::BeginChild("##History", ImVec2(0, 0), ImGuiChildFlags_Borders,
-			ImGuiWindowFlags_HorizontalScrollbar);
-		for (const FString& L : Lines)
+		ImGui::TextDisabled("Showing the latest %d of %d deliveries", HistoryLines, Ring.Capacity());
+		TArray<FString> Lines;
+		Ring.CollectOrdered(HistoryLines, Lines);
+		if (Lines.Num() == 0)
 		{
-			ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*L));
+			ImGui::TextDisabled("No I/O has been delivered yet.");
 		}
-		// Follow the tail as new lines land (the ring records newest-last).
-		if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+		else
 		{
-			ImGui::SetScrollHereY(1.0f);
+			ImGui::BeginChild("##History", ImVec2(0, 0), ImGuiChildFlags_Borders,
+				ImGuiWindowFlags_HorizontalScrollbar);
+			for (const FString& L : Lines)
+			{
+				ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*L));
+			}
+			if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+			{
+				ImGui::SetScrollHereY(1.0f);
+			}
+			ImGui::EndChild();
 		}
-		ImGui::EndChild();
+		ImGui::EndTabItem();
 	}
+	ImGui::EndTabBar();
 }
 
 #endif // ENABLE_COG

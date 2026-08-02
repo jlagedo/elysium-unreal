@@ -1546,6 +1546,77 @@ both sides rather than measured and found absent. And the difference authorizes 
 its own: repairing what it names is separate work, because a pass that measures a decoder
 and repairs it in the same breath can no longer say which it did.
 
+### 9.15e Differencing a decoder's transform output against a capture
+
+Byte coverage says which bytes an offline decoder never reads; it says nothing about the
+values that come out of the bytes it does. Answering that means evaluating our rules at
+the captured identity and comparing per bone against what the runtime produced — and the
+method is mostly about making sure each number measures one thing.
+
+**Feed every stage the runtime's own input for that stage.** A chain compares a stage
+against an input its own earlier stage produced, so one wrong rule makes everything below
+it wrong too and the report names the last stage instead of the first. Composing the
+captured composed-locals rather than our decoded ones, and skinning the captured
+bone-to-world rather than our composed one, keeps each stage's number attributable to its
+own rule. Chaining is then a separate, later measurement whose subject is propagation.
+
+**Carry a second candidate for every rule that is not shipped code.** A transcribed rule
+has no implementation to be a difference from, so a report that carries only the
+transcription answers "is the decompilation right" and leaves "what does the current export
+cost" unasked. Running the ordinary hierarchy beside the split one, and the regenerated
+inverse bind beside the stored one, answers both from the same pass — and the contrast is
+what turns a confirmation into evidence: a rule that matches where the alternative is 100°
+wrong is established in a way that a rule which merely matches is not.
+
+**Divide the placement out and report both frames.** Composition and entity placement are
+separable exactly, because `boneToWorld = rootToWorld · modelSpace` holds through the split
+branch as well as the ordinary one. Reporting only world space folds an entity standing
+somewhere unexpected into every bone's error; reporting only model space hides a wrong
+placement entirely. Both cost one multiply.
+
+**Not every slot is a comparison.** Three exclusions are load-bearing and each has to be
+counted rather than scored. A bone outside the composed pose's selected mask was never
+written and holds whatever the bone cache left there. A bone whose captured matrix is
+singular holds zeros — and two zero matrices are *identical*, yet a trace-based rotation
+metric reports `acos(-0.5)` = 120° for them while translation reports a perfect match, so
+both numbers are artefacts of comparing nothing. And a composed pose handed a root that is
+not a frame has nothing to be placed by and no inverse to divide out.
+
+**A rotation metric must not measure scale.** `arccos` near one is violently sensitive: a
+rotation row 3e-4 short moves `(trace − 1)/2` to 0.9991 and reads as 2.4° of rotation that
+is not there. 3e-4 is the ordinary orthonormality of a captured `matrix3x4_t` — retail's
+own float32 pipeline sits there, above §11.3's 1e-4 excellent ceiling for row length — so
+an un-normalized angle reports the engine's precision as a disagreement, on every bone, at
+a magnitude that swamps the real ones. Normalizing the rotation blocks first and reporting
+orthonormality as itself separates the two.
+
+**Label a mismatching bone by what it is, not by how large its error was.** A bone a
+procedural rule drives after the hierarchy composes and a bone the hierarchy composes
+wrongly produce the same numbers and are different work. `StudioBone.ProcType` is in the
+image already, so carrying it on every cluster classifies the cluster from the model rather
+than from the residual. Measured over one cutscene, that single field separates the two
+completely: procedural bones carry 748,666 of 968,910 over-band rotation observations while
+ordinary bones are 99.3% excellent, and every cluster the run ranks is procedural.
+
+**Fold, never retain.** Hundreds of thousands of records over up to 96 bones will not fit
+as values. Maxima and per-band counts fold exactly; a quantile folds into a log-spaced
+histogram and is then an upper bound whose resolution the report states. What must not fold
+together is a bone count and a record count: summing bands over bones reports one wrong
+pose ninety-six times, so a record is counted once at its worst band and the two are named
+apart.
+
+**Deduplicate on payload identity.** A cutscene draws the same actor several times a frame
+from the same buffers, and a comparison is a function of the bytes and the skeleton and of
+nothing else, so a distinct payload can be compared once and multiplied by its record
+count. It is exact rather than a sample, and it is what puts a 397,796-draw corpus inside
+a minute.
+
+**What the report may not be.** It authorizes nothing: a pass that measures a decoder and
+repairs it in the same breath can no longer say which it did. Its denominators are plural
+and stated, because only a draw whose consumed pose build produced a composed pose for the
+same entity and model can reach a composition comparison. And the bound is the corpus — a
+bone this run never posed is unmeasured, not correct.
+
 ### 9.16 What not to do first
 
 Avoid:
@@ -1785,6 +1856,14 @@ Suggested starting bands:
 | Orthonormal row-length error | ≤ 1e-4 | 1e-4–1e-3 | > 1e-3 |
 
 Adjust only after observing real floating-point and capture noise. Do not loosen thresholds to make a test pass without recording why.
+
+Two observations from the theatre capture bear on them, and neither loosens a band.
+Retail's own bone-to-world matrices sit at a **median row-length error of 3e-4**, above the
+1e-4 excellent ceiling, so that row measures the engine's float32 pipeline rather than a
+difference from ours and no comparison against a captured matrix can claim to be tighter.
+And the rotation row is only meaningful on normalized rotation blocks: at 3e-4 of row
+scale an `arccos`-based angle reads 2.4°, which would consume the whole 0.05–0.5° band
+before any real disagreement arrived. §9.15e carries the method that follows from both.
 
 ---
 

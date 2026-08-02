@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import tarfile
 import tempfile
 from typing import Any, Iterable
@@ -139,6 +140,18 @@ def _content_hash(directory: Path) -> str:
     return hashlib.sha256(("\n".join(lines) + "\n").encode("utf-8")).hexdigest()
 
 
+def _remove_tree(directory: Path) -> None:
+    """Remove managed staging on Windows even when Git marked objects read-only."""
+
+    def make_writable_and_retry(function: Any, path: str, error: BaseException) -> None:
+        if not isinstance(error, PermissionError):
+            raise error
+        os.chmod(path, stat.S_IWRITE)
+        function(path)
+
+    shutil.rmtree(directory, onexc=make_writable_and_retry)
+
+
 def _read_marker(path: Path) -> dict[str, Any] | None:
     try:
         value = json.loads(path.read_text(encoding="utf-8-sig"))
@@ -190,7 +203,7 @@ def sync_plugins(repo_root: Path, lock: DependencyLock) -> list[str]:
             ready.append(plugin.name)
             continue
         if staging.exists():
-            shutil.rmtree(staging)
+            _remove_tree(staging)
         staging.mkdir(parents=True)
         try:
             _git(repo_root, staging, "init", "--quiet")
@@ -232,14 +245,14 @@ def sync_plugins(repo_root: Path, lock: DependencyLock) -> list[str]:
                     f"{plugin.name} source subdirectory is missing: {subtree}"
                 )
             if subtree == ".":
-                shutil.rmtree(staging / ".git")
+                _remove_tree(staging / ".git")
             if destination.exists():
-                shutil.rmtree(destination)
+                _remove_tree(destination)
             if subtree == ".":
                 staging.rename(destination)
             else:
                 source.rename(destination)
-                shutil.rmtree(staging)
+                _remove_tree(staging)
             content_hash = _content_hash(destination)
             _write_marker(
                 destination,
@@ -254,7 +267,7 @@ def sync_plugins(repo_root: Path, lock: DependencyLock) -> list[str]:
             ready.append(plugin.name)
         except Exception:
             if staging.exists():
-                shutil.rmtree(staging)
+                _remove_tree(staging)
             raise
     return ready
 
@@ -337,7 +350,7 @@ def _install_cpython27(
         repo_root, staging.relative_to(repo_root.resolve()).as_posix()
     )
     if staging.exists():
-        shutil.rmtree(staging)
+        _remove_tree(staging)
     staging.mkdir(parents=True)
     try:
         with tempfile.TemporaryDirectory() as temporary:
@@ -376,11 +389,11 @@ def _install_cpython27(
             },
         )
         if destination.exists():
-            shutil.rmtree(destination)
+            _remove_tree(destination)
         staging.rename(destination)
     except Exception:
         if staging.exists():
-            shutil.rmtree(staging)
+            _remove_tree(staging)
         raise
 
 

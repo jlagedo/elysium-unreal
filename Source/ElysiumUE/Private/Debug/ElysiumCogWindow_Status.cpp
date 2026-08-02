@@ -51,35 +51,29 @@ void FElysiumCogWindow_Status::RenderContent()
 	const UElysiumMapVisuals* Visuals = Map->GetVisuals();
 	const UElysiumMapCollision* Collision = Map->GetCollision();
 
-	ImGui::SeparatorText("Map");
+	ImGui::TextColored(ElysiumCogStyle::ColName, "%s",
+		COG_TCHAR_TO_CHAR(*(Map->LoadedMap.IsEmpty() ? FString(TEXT("Loading map...")) : Map->LoadedMap)));
+	ImGui::SameLine();
+	ImGui::TextDisabled("%s", ElysiumMapRuntimePhaseName(Map->GetRuntimePhase()));
+	ImGui::Separator();
+
 	Row("Name", Map->LoadedMap.IsEmpty() ? TEXT("(loading)") : Map->LoadedMap);
 	Row("Surfaces", FString::Printf(TEXT("%d world · %d sky"), Visuals->WorldSurfaceCount, Visuals->SkySurfaceCount));
 	Row("Lights", FString::Printf(TEXT("%d"), Visuals->WorldLightCount));
 	Row("Props", FString::Printf(TEXT("%d inst · %d models"), Visuals->PropInstanceCount, Visuals->PropModelCount));
 	Row("Decals", FString::Printf(TEXT("%d"), Visuals->DecalCount));
-
-	ImGui::SeparatorText("Collision");
-	Row("Collider", Collision->bBrushCollision ? TEXT("brush hulls") : TEXT("render trimesh"));
-	Row("Hulls", FString::Printf(TEXT("%d"), Collision->HullCount));
-	Row("Disp tris", FString::Printf(TEXT("%d"), Collision->DispTriCount));
-
-	ImGui::SeparatorText("Entities");
 	Row("Records", FString::Printf(TEXT("%d"), Map->EntityCount));
 	Row("Brush bodies", FString::Printf(TEXT("%d"), Map->BrushBodyCount));
 
 	if (const FElysiumEntityWorld* World = GetEntityWorld())
 	{
 		Row("Queue pending", FString::Printf(TEXT("%d"), World->Queue().Num()));
-		Row("I/O history", FString::Printf(TEXT("%d / %d"), World->RingBuffer().Num(), World->RingBuffer().Capacity()));
-		Row("Touches", FString::Printf(TEXT("%d begin · %d end"), World->TouchBegins(), World->TouchEnds()));
-		Row("Dead wires", FString::Printf(TEXT("%d target · %d input"), World->UnknownTargets(), World->UnknownInputs()));
 	}
 	else
 	{
 		ImGui::TextDisabled("No .ents substrate on this map.");
 	}
 
-	ImGui::SeparatorText("Clock");
 	if (const UElysiumGameStateSubsystem* GameState = GetGameState())
 	{
 		const FElysiumGameClock& Clock = GameState->GameClock();
@@ -89,6 +83,19 @@ void FElysiumCogWindow_Status::RenderContent()
 	else
 	{
 		ImGui::TextDisabled("No game-state subsystem.");
+	}
+
+	if (ImGui::CollapsingHeader("Technical details"))
+	{
+		Row("Collider", Collision->bBrushCollision ? TEXT("brush hulls") : TEXT("render trimesh"));
+		Row("Hulls", FString::Printf(TEXT("%d"), Collision->HullCount));
+		Row("Disp tris", FString::Printf(TEXT("%d"), Collision->DispTriCount));
+		if (const FElysiumEntityWorld* World = GetEntityWorld())
+		{
+			Row("I/O history", FString::Printf(TEXT("%d / %d"), World->RingBuffer().Num(), World->RingBuffer().Capacity()));
+			Row("Touches", FString::Printf(TEXT("%d begin · %d end"), World->TouchBegins(), World->TouchEnds()));
+			Row("Dead wires", FString::Printf(TEXT("%d target · %d input"), World->UnknownTargets(), World->UnknownInputs()));
+		}
 	}
 }
 

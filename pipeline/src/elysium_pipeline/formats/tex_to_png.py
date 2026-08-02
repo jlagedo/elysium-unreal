@@ -129,6 +129,37 @@ def decode_cubemap(tth: bytes, ttz) -> list:
     hi = data[len(data) - fs * 7:]           # the full-res mip's seven faces
     return [_decode_mip(hi[i*fs:(i+1)*fs], w, h, fmt) for i in range(6)]  # drop spheremap
 
+
+def cubemap_dds(faces) -> bytes:
+    """Encode six equally-sized PIL faces as one uncompressed BGRA8 DDS cubemap.
+
+    ``faces`` stays in VTF/D3D cubemap order (+X, -X, +Y, -Y, +Z, -Z).  No
+    rotation or mirroring belongs here: the material applies the one established
+    Source-to-Unreal handedness correction to its reflection vector instead.
+    """
+    if len(faces) != 6:
+        raise ValueError("a cubemap requires exactly six faces")
+    sizes = {face.size for face in faces}
+    if len(sizes) != 1:
+        raise ValueError("cubemap faces must have equal dimensions")
+    width, height = next(iter(sizes))
+    if width <= 0 or height <= 0 or width != height:
+        raise ValueError("cubemap faces must be non-empty squares")
+
+    # DDS_HEADER + DDS_PIXELFORMAT. Unreal imports this legacy DX9 form directly
+    # as UTextureCube and preserves the canonical D3D face order above.
+    header = bytearray(128)
+    struct.pack_into("<4sIIIIIII", header, 0,
+                     b"DDS ", 124, 0x0000100F, height, width, width * 4, 0, 0)
+    struct.pack_into("<IIIIIIII", header, 76,
+                     32, 0x41, 0, 32,
+                     0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000)
+    struct.pack_into("<II", header, 108, 0x1008, 0xFE00)
+    payload = b"".join(
+        face.convert("RGBA").tobytes("raw", "BGRA") for face in faces
+    )
+    return bytes(header) + payload
+
 def decode(tth: bytes, ttz: bytes) -> Image.Image:
     w, h, fmt, mips = parse_tth(tth)
     data = zlib.decompress(ttz)

@@ -87,6 +87,16 @@ and retail application are not decoded by `mdl_skel.py`, so the generated
 skeleton preserves their ordinary bind/animation channels but omits the
 procedural contribution.
 
+`Flags & 0x1` marks the same bones: over the 160 model images of one theatre
+capture, **295 of 295** bones with `ProcType != 0` carry it and no other bone
+does. Those bones never carry `Flags & 0x2` — the two sets are disjoint across
+the same corpus — so split inheritance and the procedural stage are independent
+rules on independent bones.
+
+The rule these fields declare, what omitting it costs a composed pose, and the
+persistent bone-to-world array it is evaluated into are owned by
+`docs/vtmb/procedural_bones.md`.
+
 ## A.3 Sequences and animations
 
 **`StudioAnimDesc` — 72 bytes** [data-verified] (`NumLocalAnims`@264 /
@@ -372,6 +382,37 @@ The flag test is at `0x1008ffc5`; the split-inheritance branch is
 its parent but does **not** inherit that parent's rotation. Its orientation is
 rooted directly in the entity transform. This is steady live pose construction,
 not a courtroom special case.
+
+**The rule reproduces the captured matrices.** Composing a capture's own composed
+locals under it and placing them by the captured root frame returns the
+bone-to-world the same draw recorded: over 110,082 paired records of one theatre
+cutscene, **0 of 84,202** `Flags & 0x2` bone observations leave the excellent band
+of `docs/vtmb/vtmb-animation-reverse-engineering.md` §11.3 on translation,
+model-space translation or rotation. The ordinary hierarchy leaves it on **8,142
+of the same 84,202** — and on **rotation only**, with translation identical under
+both rules, which is the pseudocode's own shape measured rather than assumed: the
+branch changes where a flagged bone's orientation comes from and leaves its
+position attached to its parent either way. That the ordinary rule agrees on the
+other 90% is expected rather than a weakening, since the two coincide whenever a
+flagged bone's parent chain carries no rotation relative to the entity transform.
+
+The two frames are related exactly — `boneToWorld = rootToWorld · modelSpace`
+holds through the split branch as well as the ordinary one, since
+`rotation(rootToWorld) · rotation(L)` is the rotation of
+`rootToWorld · modelSpace[i]` — so entity placement divides out of a comparison
+rather than being estimated.
+
+**A slot outside the selected mask is not written, and a root is not always a
+frame.** `BuildTransformations` writes only the bones its fourth argument selects,
+so an unselected slot holds whatever the bone cache last left there — frequently
+zeros — and reads as a matrix without being one. Separately, the `rootToWorld` the
+stage receives is not always a rotation and a translation: **4,415 of 238,421**
+composed poses in one cutscene carry a **singular** root, and they are only **two
+distinct matrices**, on `Sheriff.mdl`, `Ash.mdl`, `Skelter.mdl` and `Isaac.mdl` —
+scratch the caller never filled in rather than a transform. Both are properties of
+the runtime; what they cost a reader is that a comparison must exclude such a slot
+instead of scoring it, because two zero matrices agree exactly on translation and
+disagree by `acos(-0.5)` = 120° on rotation, and neither number means anything.
 
 A separate client path at `FUN_10091110` does read the flag. It is the sequence
 transition-maintenance path, not a ragdoll path or the local-channel decoder. The
@@ -1039,6 +1080,17 @@ for i in 0..2:
 `boneToWorld * poseToBone`, then selects those skin matrices by `Bone[i]` and
 blends them using the stored byte weights. jeanette: 4132 verts 1-bone, 1761
 2-bone, 500 3-bone; weights sum to 255.
+
+**The palette relation is measured, not only decompiled.** Multiplying a draw's
+own captured bone-to-world by the stored `poseToBone` returns the skin palette the
+same draw recorded on **397,796 of 397,796** draws across 141 models of one theatre
+cutscene — worst translation **3.46e-4** source units and worst rotation
+**2.96e-06°**, with no bone outside the excellent band of
+`docs/vtmb/vtmb-animation-reverse-engineering.md` §11.3 on either metric. The
+same corpus establishes that the stored bind is the ordinary one: `poseToBone`
+equals the conventional hierarchy-FK inverse on **all 5,517** captured bones, none
+over the band, which is §A.2's whole-install finding reached over the models a run
+actually drew.
 
 A patch-first whole-character decode validates **1,621,270 weighted vertices /
 2,116,520 triangles**. Every non-zero influence names a source bone, normalized

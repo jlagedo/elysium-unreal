@@ -121,6 +121,13 @@ Custom Cog windows grow with the runtime, reading Elysium's own data structures 
 (ImGui code is plain immediate-mode C++ — no reflection or UI assets needed, which matters
 because tier-1 logic entities are plain C++ objects, not UObjects):
 
+The launcher is task-based rather than a flat inventory: Elysium tools are grouped under Session,
+World, Look, Audio, Characters, and Gameplay; engine tools under World, Diagnostics, Performance,
+and Session. Menu rows are conventional click-to-open toggles — they never expand an entire live
+window on hover. Within a tool, tabs separate current state from editing, inventories, and history;
+low-frequency diagnostics and map-wide actions are collapsed. This keeps the F1-first rule without
+making every capability compete for attention at once.
+
 - **Maps** — map list, travel, `elysium.reload`, load-phase timings, and the player pose
   (metres/Source units/yaw), movement/skybox/light state, and FPS readout (the Canvas HUD
   itself keeps only the reticle, sign panels, and the `env_fade` screen fade).

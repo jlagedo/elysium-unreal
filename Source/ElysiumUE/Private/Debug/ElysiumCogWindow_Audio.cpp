@@ -75,9 +75,7 @@ void FElysiumCogWindow_Audio::RenderContent()
 		return;
 	}
 
-	// --- Global mute --------------------------------------------------------------------------
 	// The non-persistent debug gate over every voice the subsystem owns, previews included.
-	ImGui::SeparatorText("Output");
 	bool bMuted = Audio->IsMuted();
 	if (ImGui::Checkbox("Mute all audio", &bMuted))
 	{
@@ -94,9 +92,14 @@ void FElysiumCogWindow_Audio::RenderContent()
 	}
 	ImGui::SameLine();
 	ImGui::TextDisabled("(elysium.Mute)");
+	if (!ImGui::BeginTabBar("##AudioViews"))
+	{
+		return;
+	}
 
-	// --- Play a clip by path ---------------------------------------------------------------
-	ImGui::SeparatorText("Play a clip  (WAV/MP3 path under out/sound/)");
+	if (ImGui::BeginTabItem("Preview"))
+	{
+	ImGui::TextDisabled("WAV/MP3 path under the exported sound folder");
 	ImGui::SetNextItemWidth(-FLT_MIN);   // full width: these are long relative paths
 	FCogWidgets::InputTextWithHint("##Path", "Environmental/Fire/Fire_Roaring.wav", PendingPath);
 	ImGui::BeginDisabled(PendingPath.IsEmpty());
@@ -121,7 +124,7 @@ void FElysiumCogWindow_Audio::RenderContent()
 		bRefsDirty = false;
 	}
 
-	ImGui::SeparatorText("ambient_generic references");
+	ImGui::SeparatorText("Sounds referenced by this map");
 	if (MapRefs.Num() == 0)
 	{
 		ImGui::TextDisabled("No ambient_generic audio references on this map.");
@@ -159,7 +162,7 @@ void FElysiumCogWindow_Audio::RenderContent()
 	// The offline manifest resolves a token to its subkey WAVs by directory convention (no VtMB data
 	// file). Browse it and Play any subkey 2D to audition what a door/button will emit.
 	const TMap<FString, TMap<FString, TMap<FName, FString>>>& Manifest = ElysiumMoverSoundManifest();
-	ImGui::SeparatorText("Mover soundgroups");
+	ImGui::SeparatorText("Door and switch sound groups");
 	if (Manifest.Num() == 0)
 	{
 		ImGui::TextDisabled("No soundgroups.json manifest (run UE_extract_sounds.py).");
@@ -214,10 +217,13 @@ void FElysiumCogWindow_Audio::RenderContent()
 		}
 		ImGui::EndChild();
 	}
+		ImGui::EndTabItem();
+	}
 
-	// --- Live voices (runtime playback: ambient_generic + scheme bed/music/random) ----------
 	const TArray<FElysiumAudioVoice>& Live = Audio->ActiveVoices();
-	ImGui::SeparatorText("Live voices");
+	const FString LiveLabel = FString::Printf(TEXT("Live voices  %d###LiveVoices"), Live.Num());
+	if (ImGui::BeginTabItem(COG_TCHAR_TO_CHAR(*LiveLabel)))
+	{
 	ImGui::Text("%d playing", Live.Num());
 	ImGui::SameLine();
 	if (ImGui::SmallButton("Stop all"))
@@ -261,8 +267,13 @@ void FElysiumCogWindow_Audio::RenderContent()
 			ImGui::EndTable();
 		}
 	}
+		else
+		{
+			ImGui::TextDisabled("No voices are playing.");
+		}
+		ImGui::EndTabItem();
+	}
 
-	// --- Decode summary + results table -----------------------------------------------------
 	const TMap<FString, FElysiumSoundInfo>& Results = Audio->Results();
 
 	int32 NumMsAdpcm = 0, NumImaAdpcm = 0, NumPcm = 0, NumMp3 = 0, NumOther = 0, NumFailed = 0;
@@ -282,9 +293,9 @@ void FElysiumCogWindow_Audio::RenderContent()
 		}
 	}
 
-	// Two lines: the totals, then the codec mix. One line ran to ~110 characters and was clipped at
-	// every window width this thing is actually used at.
-	ImGui::SeparatorText("Decoded this session");
+	const FString DecodeLabel = FString::Printf(TEXT("Decode log  %d###DecodeLog"), Results.Num());
+	if (ImGui::BeginTabItem(COG_TCHAR_TO_CHAR(*DecodeLabel)))
+	{
 	ImGui::Text("%d decoded  ·  %.1f ms total", Results.Num(), TotalDecodeMs);
 	if (NumFailed > 0)
 	{
@@ -360,6 +371,9 @@ void FElysiumCogWindow_Audio::RenderContent()
 		}
 		ImGui::EndTable();
 	}
+		ImGui::EndTabItem();
+	}
+	ImGui::EndTabBar();
 }
 
 #endif // ENABLE_COG

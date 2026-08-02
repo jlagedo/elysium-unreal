@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from elysium_pipeline.formats import particles, vmt, weather
+from elysium_pipeline.formats import particles, tex_to_png, vmt, weather
 
 
 def wet_vmt(scales=(0.6, 0.6, 0.6), *, comments=False):
@@ -45,6 +45,71 @@ class GlobalWetnessVmtTests(unittest.TestCase):
             resolve_include=lambda _path: wet_vmt((0.25, 0.25, 0.25)),
         )
         self.assertEqual(result["globalwetness"], 0.25)
+
+
+class CubemapDdsTests(unittest.TestCase):
+    def test_six_faces_keep_vtf_order_and_bgra_bytes(self):
+        colours = [
+            (1, 2, 3, 4), (11, 12, 13, 14), (21, 22, 23, 24),
+            (31, 32, 33, 34), (41, 42, 43, 44), (51, 52, 53, 54),
+        ]
+        data = tex_to_png.cubemap_dds([
+            Image.new("RGBA", (2, 2), colour) for colour in colours
+        ])
+        self.assertEqual(data[:4], b"DDS ")
+        self.assertEqual(int.from_bytes(data[12:16], "little"), 2)
+        self.assertEqual(int.from_bytes(data[16:20], "little"), 2)
+        self.assertEqual(int.from_bytes(data[112:116], "little"), 0xFE00)
+        pixels = data[128:]
+        face_bytes = 2 * 2 * 4
+        for index, (r, g, b, a) in enumerate(colours):
+            self.assertEqual(
+                pixels[index * face_bytes:index * face_bytes + 4], bytes((b, g, r, a))
+            )
+
+    def test_missing_unequal_and_non_square_faces_fail(self):
+        with self.assertRaises(ValueError):
+            tex_to_png.cubemap_dds([Image.new("RGBA", (2, 2))] * 5)
+        with self.assertRaises(ValueError):
+            tex_to_png.cubemap_dds(
+                [Image.new("RGBA", (2, 2))] * 5 + [Image.new("RGBA", (4, 4))]
+            )
+        with self.assertRaises(ValueError):
+            tex_to_png.cubemap_dds([Image.new("RGBA", (2, 3))] * 6)
+
+
+class WorldMaterialWetnessGraphTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.source = (
+            Path(__file__).resolve().parents[1] / "unreal" / "make_world_materials.py"
+        ).read_text(encoding="utf-8")
+
+    def test_source_cube_is_additive_and_excluded_from_lumen_capture(self):
+        self.assertIn(
+            'mat, "WetnessUsesSourceCube", darkened_base, base_color', self.source
+        )
+        self.assertIn(
+            'connect(source_view, "", lumen_safe_source, "Normal")', self.source
+        )
+        self.assertIn(
+            'connect(black, "", lumen_safe_source, "RayTraced")', self.source
+        )
+        self.assertIn(
+            'connect(lumen_safe_source, "", primary_emissive, "B")', self.source
+        )
+
+    def test_reflection_debug_range_compares_debug_value_against_threshold(self):
+        self.assertIn(
+            'lower.set_editor_property("const_y", index - 0.5)', self.source
+        )
+        self.assertIn('connect(debug, "", lower, "X")', self.source)
+        self.assertIn(
+            'upper.set_editor_property("const_y", index + 0.5)', self.source
+        )
+        self.assertIn('connect(debug, "", upper, "X")', self.source)
+        self.assertIn('debug_enabled.set_editor_property("const_y", 0.5)', self.source)
+        self.assertIn('connect(debug, "", debug_enabled, "X")', self.source)
 
 
 class ParticleClosureTests(unittest.TestCase):

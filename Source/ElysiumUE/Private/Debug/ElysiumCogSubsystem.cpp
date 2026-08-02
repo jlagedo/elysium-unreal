@@ -100,37 +100,37 @@ void UElysiumCogSubsystem::PostInitialize()
 	// Dear ImGui / ImPlot demo, metrics, debug-log and style-editor toggles, which are
 	// ImGui's own showcase, not this project's debug surface. Press F1 in PIE/standalone
 	// to open the main menu.
-	Cog->AddWindow<FCogEngineWindow_Inspector>("Engine.Inspector");
-	Cog->AddWindow<FCogEngineWindow_Selection>("Engine.Selection");
-	Cog->AddWindow<FCogEngineWindow_CollisionViewer>("Engine.Collision Viewer");
-	Cog->AddWindow<FCogEngineWindow_Levels>("Engine.Levels");
-	Cog->AddWindow<FCogEngineWindow_Transform>("Engine.Transform");
-	Cog->AddWindow<FCogEngineWindow_Console>("Engine.Console");
-	Cog->AddWindow<FCogEngineWindow_OutputLog>("Engine.Output Log");
-	Cog->AddWindow<FCogEngineWindow_LogCategories>("Engine.Log Categories");
-	Cog->AddWindow<FCogEngineWindow_Stats>("Engine.Stats");
-	Cog->AddWindow<FCogEngineWindow_Metrics>("Engine.Metrics");
-	Cog->AddWindow<FCogEngineWindow_Plots>("Engine.Plots");
-	Cog->AddWindow<FCogEngineWindow_TimeScale>("Engine.Time Scale");
-	Cog->AddWindow<FCogEngineWindow_Scalability>("Engine.Scalability");
-	Cog->AddWindow<FCogEngineWindow_DebugSettings>("Engine.Debug Settings");
+	Cog->AddWindow<FCogEngineWindow_Inspector>("Engine.World.Actor Inspector");
+	Cog->AddWindow<FCogEngineWindow_Selection>("Engine.World.Selection");
+	Cog->AddWindow<FCogEngineWindow_CollisionViewer>("Engine.World.Collision");
+	Cog->AddWindow<FCogEngineWindow_Levels>("Engine.World.Levels");
+	Cog->AddWindow<FCogEngineWindow_Transform>("Engine.World.Transform");
+	Cog->AddWindow<FCogEngineWindow_Console>("Engine.Diagnostics.Console");
+	Cog->AddWindow<FCogEngineWindow_OutputLog>("Engine.Diagnostics.Output Log");
+	Cog->AddWindow<FCogEngineWindow_LogCategories>("Engine.Diagnostics.Log Filters");
+	Cog->AddWindow<FCogEngineWindow_Stats>("Engine.Performance.Stats");
+	Cog->AddWindow<FCogEngineWindow_Metrics>("Engine.Performance.Metrics");
+	Cog->AddWindow<FCogEngineWindow_Plots>("Engine.Performance.Plots");
+	Cog->AddWindow<FCogEngineWindow_Scalability>("Engine.Performance.Quality");
+	Cog->AddWindow<FCogEngineWindow_TimeScale>("Engine.Session.Time Control");
+	Cog->AddWindow<FCogEngineWindow_DebugSettings>("Engine.Session.Debug Settings");
 
 	// Custom Elysium windows, grouped under an "Elysium" main-menu category (the "Elysium."
 	// name prefix). They read Elysium's own runtime data structures directly — the Track-B
 	// entities are plain C++, invisible to Cog's UObject reflection — via FElysiumCogWindow.
-	Cog->AddWindow<FElysiumCogWindow_Status>("Elysium.Status");
-	Cog->AddWindow<FElysiumCogWindow_Maps>("Elysium.Maps");
-	Cog->AddWindow<FElysiumCogWindow_Lights>("Elysium.Lights");
-	Cog->AddWindow<FElysiumCogWindow_Environment>("Elysium.Environment");
-	Cog->AddWindow<FElysiumCogWindow_Entities>("Elysium.Entities");
-	Cog->AddWindow<FElysiumCogWindow_Inspector>("Elysium.Entity Inspector");
-	Cog->AddWindow<FElysiumCogWindow_Logic>("Elysium.Logic");
-	Cog->AddWindow<FElysiumCogWindow_EventQueue>("Elysium.Event Queue");
-	Cog->AddWindow<FElysiumCogWindow_WorldViz>("Elysium.World Viz");
-	Cog->AddWindow<FElysiumCogWindow_Audio>("Elysium.Audio");
-	Cog->AddWindow<FElysiumCogWindow_SoundScheme>("Elysium.Sound Schemes");
-	Cog->AddWindow<FElysiumCogWindow_Npc>("Elysium.NPC");
-	Cog->AddWindow<FElysiumCogWindow_Scripting>("Elysium.Scripting");
+	Cog->AddWindow<FElysiumCogWindow_Status>("Elysium.Session.Overview");
+	Cog->AddWindow<FElysiumCogWindow_Maps>("Elysium.Session.Maps & Travel");
+	Cog->AddWindow<FElysiumCogWindow_Entities>("Elysium.World.Entity Browser");
+	Cog->AddWindow<FElysiumCogWindow_Inspector>("Elysium.World.Entity Inspector");
+	Cog->AddWindow<FElysiumCogWindow_Logic>("Elysium.World.Logic Monitor");
+	Cog->AddWindow<FElysiumCogWindow_EventQueue>("Elysium.World.Event Flow");
+	Cog->AddWindow<FElysiumCogWindow_WorldViz>("Elysium.World.Overlays");
+	Cog->AddWindow<FElysiumCogWindow_Lights>("Elysium.Look.Lighting");
+	Cog->AddWindow<FElysiumCogWindow_Environment>("Elysium.Look.Wetness & Reflections");
+	Cog->AddWindow<FElysiumCogWindow_Audio>("Elysium.Audio.Playback");
+	Cog->AddWindow<FElysiumCogWindow_SoundScheme>("Elysium.Audio.Soundscape");
+	Cog->AddWindow<FElysiumCogWindow_Npc>("Elysium.Characters.NPCs");
+	Cog->AddWindow<FElysiumCogWindow_Scripting>("Elysium.Gameplay.Scripting");
 
 	// Boot dormant: Cog is compiled in (non-Shipping) and F1 opens it, but nothing should be on
 	// screen until then, and it must not be holding the mouse — a captured cursor makes the game's

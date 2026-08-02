@@ -19,7 +19,7 @@ The public tooling CLI exposes the single-clip probe through ``export model``.
 import json, struct, os
 from collections import Counter
 import numpy as np
-from elysium_pipeline.formats import install, mdl, mdl_skel as S
+from elysium_pipeline.formats import mdl, mdl_skel as S
 
 SCALE = 0.0254
 # Source->glTF basis M: (x,y,z) -> (x, z, -y), a -90deg rotation about X.
@@ -34,6 +34,16 @@ def conv_dir(p):
     """The same basis change without the inch->metre scale, for a direction (a normal, or a
     flex's normal delta) rather than a point."""
     return (p[0], p[2], -p[1])
+
+
+def unconv_pos(p):
+    """`conv_pos` inverted: a glTF-space point back to Source inches."""
+    return (p[0] / SCALE, -p[2] / SCALE, p[1] / SCALE)
+
+
+def unconv_dir(p):
+    """`conv_dir` inverted: a glTF-space direction back into Source space."""
+    return (p[0], -p[2], p[1])
 
 
 def load_anorms():
@@ -65,6 +75,21 @@ def conv_quat(q):
     return mat_to_quat(M @ rot_matrix(q) @ M.T)
 
 
+def conv_quat_exact(q):
+    """The same basis change as `conv_quat`, taken through the quaternion rather than through
+    the rotation matrix.
+
+    M is a proper rotation, so conjugating a rotation by it carries the quaternion `(v, w)` to
+    `(M v, w)`. Reaching it that way keeps two things the matrix route drops: which of the two
+    quaternions naming the rotation comes back, and enough precision to invert to the float32
+    the value was read from. A stored table is read back and re-evaluated rather than only
+    drawn, so both matter to it and neither does to a baked mesh or clip."""
+    return (*conv_dir(q[:3]), q[3])
+
+
+def unconv_quat(q):
+    """`conv_quat_exact` inverted."""
+    return (*unconv_dir(q[:3]), q[3])
 
 
 def mat_to_quat(R):
@@ -335,6 +360,76 @@ def facial_rig(d, morphs):
     }
 
 
+AXIS_INTERP = 1                    # StudioBone.ProcType; the only rule kind VtMB declares
+BONE_STRIDE = 160
+BONE_FLAGS, BONE_PROC_TYPE, BONE_PROC_INDEX = 136, 140, 144
+AXIS_INTERP_BYTES = 176
+SOURCE_AXES = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+# The three Source axes a rule's terms are indexed by, carried into glTF space by the basis
+# change the mesh and the clips go through. `-0.0` is normalized away so the exported vectors
+# read as the signed unit vectors they are.
+DRIVER_AXES = [[c + 0.0 for c in conv_dir(a)] for a in SOURCE_AXES]
+
+
+def axis_interp_rules(d, bones):
+    """Every `ProcType == 1` correction table the model declares, in the glb's own basis.
+
+    A procedural bone ignores its animation channels: its local transform is recomputed from
+    the current orientation of a control bone through a six-entry table authored into the
+    model, after the locals blend and the hierarchy composes. That correction is in no clip,
+    so it ships as data beside the glb. The rule, its evidence and the order it evaluates in
+    are `docs/vtmb/procedural_bones.md`.
+
+    The basis is the difficulty. The six entries and the axis index are Source quantities, and
+    a change of basis conjugates a bone local -- so the axis a rule names is not the same axis
+    afterwards, and may be negated. Carrying the axis as a *direction* and the three term
+    weights as the images of the Source axes states the rule in the glb's own space: with `w`
+    the control bone's local rotation applied to `axis`, term `k`'s signed weight is
+    `dot(DRIVER_AXES[k], w)`, a positive weight selecting entry `2k` and a negative one
+    `2k+1`. The entries go through `conv_pos` and `conv_quat`, the same functions that write
+    the mesh and the clips, which makes the table and the artifact consistent by construction
+    rather than by agreement.
+
+    Returns `(rules, faults)`. A rule that does not resolve inside the image, or names a
+    control bone or an axis out of range, is a named fault rather than a silent drop.
+    """
+    base = struct.unpack_from("<i", d, 244)[0]
+    rules, faults = [], []
+    for b in bones:
+        record = base + b.index * BONE_STRIDE
+        proc_type = struct.unpack_from("<i", d, record + BONE_PROC_TYPE)[0]
+        # Either field identifies a driven bone on its own over the shipped corpus, so a
+        # disagreement is a model this reader has not seen before rather than a preference.
+        if bool(b.flags & 0x1) != bool(proc_type):
+            faults.append(f"{b.name}: Flags 0x{b.flags:x} and ProcType {proc_type} disagree")
+        if not proc_type:
+            continue
+        if proc_type != AXIS_INTERP:
+            faults.append(f"{b.name}: ProcType {proc_type} is not axis interpolation")
+            continue
+        offset = record + struct.unpack_from("<i", d, record + BONE_PROC_INDEX)[0]
+        if offset < 0 or offset + AXIS_INTERP_BYTES > len(d):
+            faults.append(f"{b.name}: ProcIndex resolves to {offset}, outside the image")
+            continue
+        control, axis = struct.unpack_from("<ii", d, offset)
+        if not 0 <= control < len(bones):
+            faults.append(f"{b.name}: control bone {control} outside 0..{len(bones) - 1}")
+            continue
+        if not 0 <= axis <= 2:
+            faults.append(f"{b.name}: axis {axis} outside 0..2")
+            continue
+        pos = [struct.unpack_from("<3f", d, offset + 8 + 12 * i) for i in range(6)]
+        quat = [struct.unpack_from("<4f", d, offset + 80 + 16 * i) for i in range(6)]
+        rules.append({
+            "bone": b.name, "bone_index": b.index,
+            "control": bones[control].name, "control_index": control,
+            "axis": list(DRIVER_AXES[axis]),
+            "pos": [[float(c) for c in conv_pos(p)] for p in pos],
+            "quat": [[float(c) for c in conv_quat_exact(q)] for q in quat],
+        })
+    return rules, faults
+
+
 def _build_skinned(g, idx, d, v, model_path, out_dir, anorms=None):
     """Skeleton nodes + skin + per-material mesh primitives + materials into `g`.
 
@@ -343,6 +438,8 @@ def _build_skinned(g, idx, d, v, model_path, out_dir, anorms=None):
     path, unchanged -- only the animation set differs between products. With `anorms` (the
     unit-vector table out of the user's own `StudioRender.dll`) the model's flexes are baked
     into morph targets as well, and `facial` carries the rows describing them."""
+    from elysium_pipeline.formats import install
+
     bones = S.read_bones(d)
     mesh_map = []
     surfaces = S.decode_skinned(d, v, mesh_map)
@@ -462,11 +559,14 @@ def export_npc(idx, model_path, out_dir, stem=None, anorms=None):
     """Write `<out_dir>/<stem>.glb`: skinned mesh + skeleton + the NPC's OWN clips (the
     dialogue anims that live only in this .mdl) + its facial morph targets. Shared clips come
     from bank glbs applied by bone name at runtime. Returns
-    {stem, glb, model, bones, split_bones, clips:[mdl_skel.Seq,...], facial} — the clip list
-    is what actually baked, so a sequence whose tracks came out empty is absent, and `facial`
-    is None for a model with no flex rig (or when the `anorms` table could not be read).
+    {stem, glb, model, bones, split_bones, clips:[mdl_skel.Seq,...], facial, procedural,
+    procedural_faults} — the clip list is what actually baked, so a sequence whose tracks came
+    out empty is absent, and `facial` is None for a model with no flex rig (or when the
+    `anorms` table could not be read).
     `split_bones` preserves the target model's StudioBone `Flags & 0x2` inventory for the
-    runtime pose builder; it is application metadata, not an alternate channel decode."""
+    runtime pose builder; it is application metadata, not an alternate channel decode.
+    `procedural` is the model's `ProcType == 1` rule table in this glb's basis
+    (`axis_interp_rules`), which the runtime evaluates after the hierarchy composes."""
     dv = mdl.load(idx, model_path)
     if not dv:
         raise SystemExit(f"model not found: {model_path}")
@@ -491,12 +591,17 @@ def export_npc(idx, model_path, out_dir, stem=None, anorms=None):
     tris = sum(len(s["tris"]) for s in built["surfaces"].values())
     face = built["facial"]
     morphs = f", {len(face['morphs'])} morphs" if face and face["morphs"] else ""
+    rules, rule_faults = axis_interp_rules(d, built["bones"])
+    driven = f", {len(rules)} driven bones" if rules else ""
     print(f"  npc {stem}: {len(built['bones'])} bones, {tris} tris, {len(labels)} own clips"
-          f"{morphs} -> {glb} ({os.path.getsize(glb) // 1024} KB)")
+          f"{morphs}{driven} -> {glb} ({os.path.getsize(glb) // 1024} KB)")
+    for fault in rule_faults:
+        print(f"  ! {stem}: procedural rule - {fault}")
     return dict(stem=stem, glb=os.path.basename(glb), model=model_path,
                 bones=len(built["bones"]),
                 split_bones=[b.name for b in built["bones"] if b.flags & 0x2],
-                clips=labels, facial=face)
+                clips=labels, facial=face,
+                procedural=rules, procedural_faults=rule_faults)
 
 
 def export_bank(idx, model_path, out_dir, stem):
@@ -504,6 +609,8 @@ def export_bank(idx, model_path, out_dir, stem):
     clips, no mesh/materials -- an animation library retargeted onto NPC skeletons by bone
     name at load (A.7). Returns {stem, glb, model, clips:[mdl_skel.Seq,...]} or None if the
     bank defines no animated clip (aggregator/plumbing models)."""
+    from elysium_pipeline.formats import install
+
     key = model_path[:-4] if model_path.lower().endswith(".mdl") else model_path
     d = install.read(idx, key + ".mdl")
     if not d:
@@ -582,6 +689,8 @@ def export_cinematic(idx, model_path, out_dir, stem):
 
     Returns a list of bank dicts (as `export_bank`), each with an extra `root` key, or None.
     """
+    from elysium_pipeline.formats import install
+
     key = model_path[:-4] if model_path.lower().endswith(".mdl") else model_path
     d = install.read(idx, key + ".mdl")
     if not d:
@@ -689,6 +798,8 @@ def export_cinematic(idx, model_path, out_dir, stem):
 def export(model_path, anim_name=None, out_dir=None, *, index=None):
     """Single-clip probe (the CLI / 8.2 spike): mesh + skeleton + one named clip, found by
     sequence label first, then by raw anim name."""
+    from elysium_pipeline.formats import install
+
     idx = index if index is not None else install.build_index()
     dv = mdl.load(idx, model_path)
     if not dv:

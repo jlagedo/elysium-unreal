@@ -54,9 +54,13 @@ void FElysiumCogWindow_WorldViz::RenderContent()
 
 	UElysiumEntityDebugSubsystem::FVizSettings& V = Dbg->Viz();
 	using EGizmoMode = UElysiumEntityDebugSubsystem::EGizmoMode;
+	if (!ImGui::BeginTabBar("##OverlayViews"))
+	{
+		return;
+	}
 
-	// --- Entity gizmos ---------------------------------------------------------------------
-	ImGui::SeparatorText("Entity gizmos");
+	if (ImGui::BeginTabItem("Entity markers"))
+	{
 	int Mode = static_cast<int>(V.GizmoMode);
 	ImGui::TextUnformatted("Mode");
 	ImGui::SameLine();
@@ -74,7 +78,7 @@ void FElysiumCogWindow_WorldViz::RenderContent()
 
 	// Filter by class. Doubles as the colour legend it replaces — each row is drawn in the colour
 	// that class's gizmos are, so reading the key and choosing what to show is one control.
-	if (ImGui::CollapsingHeader("Filter by type", ImGuiTreeNodeFlags_DefaultOpen))
+	if (ImGui::CollapsingHeader("Filter by type"))
 	{
 		if (ImGui::SmallButton("Select all"))
 		{
@@ -109,16 +113,19 @@ void FElysiumCogWindow_WorldViz::RenderContent()
 		ImGui::TextDisabled("(hidden/dormant entities draw dimmed)");
 	}
 	ImGui::EndDisabled();
+		ImGui::EndTabItem();
+	}
 
-	// --- Show triggers ---------------------------------------------------------------------
-	ImGui::SeparatorText("Show triggers");
+	if (ImGui::BeginTabItem("Triggers & events"))
+	{
+	ImGui::SeparatorText("Trigger volumes");
 	ImGui::Checkbox("Wireframe trigger hulls", &V.bShowTriggers);
 	ImGui::BeginDisabled(!V.bShowTriggers);
 	ImGui::Checkbox("Color by enabled/dormant state (else by class)", &V.bTriggerColorByState);
 	ImGui::EndDisabled();
 
 	// --- I/O beams -------------------------------------------------------------------------
-	ImGui::SeparatorText("I/O beams");
+	ImGui::SeparatorText("Event beams");
 	ImGui::Checkbox("Fading caller->target arrows on fire", &V.bShowBeams);
 	ImGui::BeginDisabled(!V.bShowBeams);
 	// Stretch minus a gutter for the label ImGui draws to the slider's right (see the Lights window).
@@ -145,8 +152,11 @@ void FElysiumCogWindow_WorldViz::RenderContent()
 			++NumTriggers;
 		}
 	}
-	ImGui::SeparatorText("Scene");
-	ImGui::Text("%d entities · %d triggers", NumLive, NumTriggers);
+	ImGui::Separator();
+	ImGui::TextDisabled("%d live entities · %d trigger volumes", NumLive, NumTriggers);
+		ImGui::EndTabItem();
+	}
+	ImGui::EndTabBar();
 }
 
 #endif // ENABLE_COG

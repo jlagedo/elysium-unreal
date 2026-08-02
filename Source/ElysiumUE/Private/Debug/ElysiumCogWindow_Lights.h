@@ -73,6 +73,7 @@ private:
 	bool bClickToSelect = true;          // LMB over the world selects the nearest light marker
 	bool bDrawMarkers = true;            // draw the per-light markers over the world
 	bool bScrollToSelected = false;      // a world pick asks the list to scroll its row into view
+	bool bSelectEditorTab = true;         // first open lands on the task this window is primarily for
 
 	// Isolate: while on, every light but the selected one is hidden, which is the fastest way to
 	// tell which fixture a row actually is. Tracked separately from the selection so changing the

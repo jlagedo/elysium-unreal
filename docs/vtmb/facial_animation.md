@@ -277,6 +277,27 @@ authored eyeball geometry orientation. Any gaze/look-at behaviour is either bone
 absent. Roadmap **12.4 must be built on that basis** — it cannot decode an eye pose that was
 never authored.
 
+### Divergence — Elysium gives the cast living eyes
+
+**Faithful behaviour:** eyes do not move. The eye surface is head texture, the only authored
+eye motion is the lids, and no model carries a `StudioEyeball` record to orient, aim, or
+glint. A reproduction of VtMB renders a fixed painted stare under moving eyelids.
+
+**The divergence, on an explicit owner call:** the cast has living eyes. Faces carry the
+theatre act in close-up and the slice's fidelity bar names eyes explicitly, so the painted
+stare is rejected even though it is what retail draws. This is an addition on
+`docs/project/remaster-direction.md`'s Feel layer — there is no VtMB behaviour to be faithful
+to here, so the usual "reproduce by default" resolution has nothing to resolve to.
+
+The intent is settled and the mechanism is not. Gaze targeting, saccades, an oriented iris
+and a glint are the candidates; each is built one at a time and stays A/B-able against the
+painted baseline, per the Feel-layer rule that a delta is polished by explicit owner call
+rather than in a batch. Whatever is built is **new data beside the model**, since the
+140-byte `StudioEyeball` layout above is decoded but never populated by any shipped file —
+it documents a chunk VtMB's own tools never wrote.
+
+Roadmap 12.4 owns the build; this section owns the call.
+
 ## The unit-vector table
 
 `0x2C06E008` in `StudioRender.dll`: 5,314 `Vector` entries, 99.8 % unit length, beginning
@@ -491,8 +512,9 @@ set by its dialogue clips (`heather` +2.4 %) and the whole of a glb that has non
 - The controller → rule → flexdesc evaluation has to run at load time, not as a flat morph
   list: 44 controllers drive 65 morphs through 60 RPN rules, and the rules are where the
   eyelid interaction lives.
-- There is no eyeball data to consume (eyeballs section above); gaze must come from bones
-  or from a deliberate remaster addition under `docs/project/remaster-direction.md`'s rule.
+- There is no eyeball data to consume (eyeballs section above), so nothing decodes an eye
+  pose. Elysium adds living eyes anyway, on the owner call recorded beside that section as a
+  divergence; the lids stay a reproduction.
 - Lip sync is a three-file join per line — `.lip` for timing, `expressions/<stem>_phonemes`
   for the weights, `mstudiomouth_t` for the amplitude jaw — with the phoneme *string* as the
   key. All three are on disk: `$ELYSIUM_EXPORT_ROOT/lip/`, `$ELYSIUM_EXPORT_ROOT/expressions/`, and `mouths` in the facial

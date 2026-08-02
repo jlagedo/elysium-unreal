@@ -8,7 +8,7 @@
       "destination": "Plugins/External/Cog",
       "source_subdirectory": "Plugins/Cog",
       "patch": "dev/dependencies/patches/cog-input-capture.patch",
-      "post_patch_tree": "ec2512ba56301ed266c641eb9e70687fc9e0c3e6"
+      "post_patch_tree": "d48490e2cd42fc2563a44d30062cbf003648716b"
     },
     {
       "name": "glTFRuntime",

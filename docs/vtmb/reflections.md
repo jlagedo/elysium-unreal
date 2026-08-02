@@ -96,65 +96,115 @@ gold), `0.74 0.57 0.31` and `0.52 0.36 0.25` (copper), `1.0 0.0 0.0`, and a blue
 hand-authored metal mask, which is exactly what `docs/architecture/asset-enhancement.md` requires before any
 surface is allowed to go metallic — it is read here, never inferred.
 
-## The Unreal channel
+## The Unreal translation
 
-The render path is fully dynamic HWRT Lumen (`docs/architecture/rendering-perf.md`) and the baked level gives
-every surface DDC-fitted Lumen cards (`docs/architecture/uasset-bake-spike.md`), so **Lumen produces the
-reflection** and the exported `tex/cube/` faces are not sampled by the world or prop graph. They
-remain the 2D sky's source.
+The translation is one material graph with one reflection state and two coordinated terms. The
+source term samples VtMB's authored cube; the optional native term changes the same surface's PBR
+response so Lumen can reflect the rebuilt scene. `elysium.RainEnhancement` is a blend inside that
+graph, not a selector between faithful and enhanced materials, controllers, or assets.
 
-The masters (`pipeline/unreal/make_world_materials.py`) carry the term as named parameters:
+### Source cube term
+
+For the primary view, the graph reconstructs the shipped input in linear colour:
 
 ```
-env       = saturate(EnvMask.r · EnvStrength)
-Roughness = lerp(RoughBase, RoughReflect, env)
-Specular  = lerp(SpecBase,  SpecReflect,  env) · (1 − f)
-Metallic  = env                                   -- chromatic-tint materials only
-BaseColor = ... tinted by EnvTint on those same materials
+source = SampleCube(SourceCube, (UE.X, -UE.Y, UE.Z)) · EnvMaskLinear · EnvTint
 ```
 
-`f` is the per-primitive distance-fog term (`mat_fog.py`); the reflection response fades with
-it, or a reflection would shine through fog the diffuse had already faded.
+For a `GlobalWetness` material, `EnvTint` is the presented wetness multiplied by the proxy's
+authored scale. Ordinary `$envmaptint` materials use their static RGB tint. The source cube is
+colour data and receives the texture's normal sRGB decode; the mask is data, imported with sRGB
+off/`TC_Masks` and sampled with UE's `Masks` sampler type. A linear one-pixel white mask is the
+unmasked fallback. The Y negation is the established Source-to-Unreal handedness correction; face
+order stays VTF/DDS `+X,-X,+Y,-Y,+Z,-Z`.
 
-`RoughBase` 1.0 / `SpecBase` 0 makes the non-`$envmap` world **Lambert**, which is what the
-material data says (`METALLIC 0`, `SPECULAR 0`, `ROUGHNESS 1`) and what the light rig already
-assumes when it sets `specular_scale = 0` on every source. Reflective surfaces are the
-exception, and the `$envmapmask` is what localises them — a mask puts the reflection on the
-brass fittings, not on the whole wall.
+The primary view receives `source` as an additive Emissive contribution, after the stable surface
+Base Color. This is a translation boundary rather than a claim that VtMB marks the term emissive:
+VtMB adds the cube before its authored lightmap composite, but the rebuilt UE scene has dynamic
+lighting instead of that lightmap. Putting the term in UE Base Color made it vanish on the dark
+Santa Monica street even though the cube sample was valid. Emissive preserves the visible additive
+environment term. `Ray Tracing Quality Switch` replaces it with black for ray shaders and Lumen
+card capture, so the camera-dependent reflection vector cannot enter global illumination or
+secondary reflections. The stable Base Color remains on both branches.
 
-**What a reflection can and cannot see.** The 2D backdrop and the 3D-skybox miniature are both
-`SetVisibleInRayTracing(false)` — a scene-enclosing mesh is the canonical HWRT overlap cost — so
-a reflection never shows either directly. The sky reaches a reflection only through the SkyLight
-IBL, whose level is the map's own type-5 `emit_skyambient` magnitude and is **zero on the 83
-maps that author no `light_environment`** (`docs/vtmb/sky-ambience.md` → C1/C2). On those maps an outdoor
-reflective surface has no sky term in its reflection at all.
+The six exported faces become one `UTextureCube` without upscaling or invented HDR range. Import
+must prove Source-to-Unreal face orientation and handedness with a labelled axis cube before any
+brightness judgement. UE's DDS face order is +X, -X, +Y, -Y, +Z, -Z; a yaw control cannot repair a
+face swap or mirror. Default cube sampling and its mip chain provide the source-like filtered
+lookup; no roughness value is inferred from cube resolution.
+
+### Enhanced Lumen term
+
+Let `E` be the `0..1` enhancement value. The source reflection remains the reference at `E=0`:
+
+```
+source_weight = lerp(1, SourceRetain, E)
+coverage      = E · wetness · EnvMaskCoarse · Exposure · Upward
+Roughness     = saturate(RoughBase - WetRoughnessReduction · coverage)
+Specular      = lerp(SpecBase,  WetSpecular,  coverage)
+```
+
+`EnvMaskCoarse` is a coarser mip or otherwise low-frequency reading of the same mask. `Exposure` is
+the per-map rain-height cover test and `Upward` is the upward-facing world-normal gate; both affect
+the enhanced wet response only. The raw mask still controls the authored cube's intensity, including
+under cover, because the VMT proxy does not encode roof exposure. Using the raw mask's cracks and
+aggregate directly as PBR roughness creates glitter and broad local-light glare. `SourceRetain` is
+tuned against fixed-camera captures because a material cannot read the completed Lumen reflection
+and perform an exact energy-conserving crossfade. The enhancement therefore lowers the source term
+as it enables Lumen, instead of stacking two full-strength reflections.
+
+At `E=0`, `RoughBase=1` and `SpecBase=0` keep the source-reference world Lambert outside the sampled
+cube term. At `E>0`, Lumen reflects the rebuilt geometry, props, characters, signs, and dynamically
+lit surfaces. The light rig's local-light `SpecularScale` remains zero at the source baseline and is
+an independent diagnostic, not an automatic part of wetness. Chromatic `$envmaptint` may still
+classify an enhanced material as metallic, but that is a presentation divergence and is outside the
+grey `sm_hub_1` wetness slice.
+
+### Cubes are not reconstructed lights
+
+The map sky cube and a material `$envmap` cube have different jobs. `ElysiumMapVisuals` assigns the
+map's `sky_` cube to the movable Sky Light; Unreal filters it into specular mips and diffuse sky
+irradiance, and Lumen applies the map-authored sky-ambient magnitude with sky occlusion. A material
+cube is sampled locally by the material graph. Assigning it to the Sky Light would make it an
+infinite global light, affect dry and non-proxy surfaces, and duplicate radiance already represented
+by the reconstructed `.lights` rig.
+
+`sm_hub_1` authors no type-5 sky-ambient row, so its faithful Sky Light magnitude is zero even though
+the sky is visible. Its 32x32 LDR `cubemapdefault` remains material reflection data; it is not
+normalised into a new sky light. Reflection Capture actors are also outside this translation: they
+project UE's static PBR environment rather than VtMB's flat masked term, and UE 5.8 does not use
+them as the default Lumen hit-lighting path. Extracting point or spot lights from the cube would be a
+new inverse-lighting reconstruction with no depth or source positions, while those positions already
+exist in the map light data.
 
 ## The divergence
 
-Faithful: `base + cube·mask·tint`, all of it multiplied by baked light, no Fresnel, one baked
-cube per surface. Chosen: a roughness/specular channel Lumen resolves against the live scene,
-plus `Metallic` from the mask on the 102 chromatic-tint materials.
+Source evidence: `base + cube·mask·tint`, all multiplied by VtMB's lightmap, with no Fresnel and one
+authored cube lookup per surface. UE source-reference presentation keeps Base Color stable and maps
+the cube term to primary-view Emissive because the dynamic Lumen/direct-light solution cannot stand
+in for the authored lightmap at this composite point. Enhanced presentation retains a tunable
+fraction of that term while a low-frequency wet coverage enables Lumen roughness/specular response
+against the live Unreal scene. The enhanced term changes appearance only; it does not change the
+authored cube, mask, tint, wetness state, or map lighting.
 
 ## Known gaps
 
-- **The reflection's *magnitude* is not derived from VtMB's own data.** The mask says *where* a
-  surface reflects and the tint scales it, but VtMB's actual reflection brightness came from the
-  radiance of the cube it sampled — a dark night cube contributes very little. Our channel
-  replaces that with a fixed `RoughReflect`/`SpecReflect` pair, so a near-white mask means a
-  strong reflection regardless of how dark the original cube was. The exported `tex/cube/` faces
-  are still on disk, so a per-material strength derived from each cube's own mean radiance is
-  available without new decoding, and would reproduce the original's magnitude rather than
-  approximate it. Not attempted; the fixed pair is what is measured and baselined.
-- **The metal path is thinly exercised.** 102 materials game-wide, and only 3 across the two
-  re-baselined maps (`soccurtainrod`, `lantern`, one on `ch_temple_1`). The maps where it
-  concentrates — Hollywood and Chinatown brass — have no shot baseline, so `Metallic` from the
-  tint is verified as *bound and classified*, not as *looking right*.
-- **What a reflection can and cannot see** (above) is a consequence of C1/C2 + the HWRT overlap
-  rule, not of this task; unmeasured.
+- **UE lighting is not VtMB's lightmap.** The primary-view Emissive placement preserves the visible
+  additive cube on dark dynamically lit surfaces, but it cannot reproduce the exact per-luxel
+  `lightmap · 2` modulation. Original-retail A/B decides the accepted magnitude.
+- **Cube orientation needs an executable proof.** The exported faces exist, but the environment
+  path's Source-to-Unreal face mapping must be validated for material reflection vectors rather
+  than assumed from the sky backdrop.
+- **The enhanced crossfade is empirical.** `SourceRetain`, wet roughness, and wet specular require
+  fixed-camera tuning; a single material graph cannot sample Lumen's completed reflection energy.
+- **The metal path is thinly exercised.** The grey `sm_hub_1` proxy corpus does not validate the
+  102 chromatic-tint materials or their enhanced metallic classification.
+- **What a reflection can and cannot see** remains constrained by Lumen. The 2D backdrop and the
+  3D-skybox miniature are excluded from ray tracing; sky radiance reaches Lumen only through the
+  map's authored Sky Light level.
 - **A live knob costs texture streaming.** `ApplyMaterialOverrides` is lazy precisely because a
   runtime `SetMaterial` drops the primitive's built streaming data; during an A/B session the
-  world will be briefly blurry while mips settle. Acceptable for a tuning tool, wrong for the
-  shipped path.
+  world can be briefly blurry while mips settle. Acceptable for tuning, wrong for a shipped path.
 
 ## How to re-measure
 

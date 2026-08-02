@@ -102,9 +102,14 @@ void FElysiumCogWindow_Scripting::RenderContent()
 	{
 		Rescan();
 	}
+	if (!ImGui::BeginTabBar("##ScriptingViews"))
+	{
+		return;
+	}
 
-	// --- Mirror presence (out/scripts + out/dlg) ------------------------------------------
-	ImGui::SeparatorText("Script + dialogue mirror");
+	if (ImGui::BeginTabItem("Overview"))
+	{
+	ImGui::SeparatorText("Exported scripts");
 	// A fixed value column, not "%-8s": ImGui's font is proportional, so space padding does not line
 	// the two rows up.
 	const float MirrorColumn = GetDpiScale() * 64.0f;
@@ -185,23 +190,37 @@ void FElysiumCogWindow_Scripting::RenderContent()
 			}
 		}
 	}
+		ImGui::EndTabItem();
+	}
 
-	// --- 5.5 embedded CPython VM ----------------------------------------------------------
-	RenderCPythonPanel();
-
-	// --- 5.2 runtime ----------------------------------------------------------------------
-	RenderEvalPanel();
-	RenderGStore();
-	RenderRecentEvals();
-
-	// --- 5.3 native bindings --------------------------------------------------------------
-	RenderNativeBindings();
-	RenderRecentNativeCalls();
+	if (ImGui::BeginTabItem("Python runtime"))
+	{
+		RenderCPythonPanel();
+		ImGui::EndTabItem();
+	}
+	if (ImGui::BeginTabItem("Evaluate & state"))
+	{
+		RenderEvalPanel();
+		RenderGStore();
+		ImGui::EndTabItem();
+	}
+	if (ImGui::BeginTabItem("Bindings"))
+	{
+		RenderNativeBindings();
+		ImGui::EndTabItem();
+	}
+	if (ImGui::BeginTabItem("History"))
+	{
+		RenderRecentEvals();
+		RenderRecentNativeCalls();
+		ImGui::EndTabItem();
+	}
+	ImGui::EndTabBar();
 }
 
 void FElysiumCogWindow_Scripting::RenderCPythonPanel()
 {
-	ImGui::SeparatorText("Embedded CPython 2.7 (5.5)");
+	ImGui::SeparatorText("Embedded Python 2.7");
 
 	FElysiumPythonVM& VM = FElysiumPythonVM::Get();
 	UElysiumGameStateSubsystem* State = GetGameState();
@@ -364,7 +383,7 @@ void FElysiumCogWindow_Scripting::RenderCPythonPanel()
 
 void FElysiumCogWindow_Scripting::RenderEvalPanel()
 {
-	ImGui::SeparatorText("Evaluator (5.2)");
+	ImGui::SeparatorText("Expression runner");
 
 	UElysiumGameStateSubsystem* State = GetGameState();
 	if (State == nullptr)
@@ -429,7 +448,7 @@ void FElysiumCogWindow_Scripting::RenderGStore()
 	}
 
 	const FElysiumGlobalMap& Globals = State->GetGlobals();
-	ImGui::SeparatorText("G store");
+	ImGui::SeparatorText("Game flags (G)");
 	ImGui::Text("%d flags set", Globals.Num());
 	ImGui::SameLine();
 	if (ImGui::SmallButton("Clear all"))
@@ -541,7 +560,7 @@ void FElysiumCogWindow_Scripting::RenderNativeBindings()
 {
 	UElysiumGameStateSubsystem* State = GetGameState();
 
-	ImGui::SeparatorText("Native bindings (5.3)");
+	ImGui::SeparatorText("Available script bindings");
 	ImGui::TextColored(GColorDim,
 		"The engine 'vampire' module: 11 globals + 24 Character methods. Most log a stub (no backing "
 		"system yet); SetQuest/GetQuestState route to the quest map. FindPlayer() returns the PC.");

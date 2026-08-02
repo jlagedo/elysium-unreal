@@ -59,6 +59,16 @@ static TAutoConsoleVariable<float> CVarRainWetRoughness(
 	TEXT("elysium.RainWetRoughness"), 0.10f, TEXT("Maximum enhanced full-wet roughness reduction."));
 static TAutoConsoleVariable<float> CVarRainLightResponse(
 	TEXT("elysium.RainLightResponse"), 0.25f, TEXT("Translucent rain response to local lights."));
+static TAutoConsoleVariable<float> CVarRainSourceRetain(
+	TEXT("elysium.RainSourceRetain"), 1.0f,
+	TEXT("Source cubemap weight retained at full wetness enhancement."));
+static TAutoConsoleVariable<float> CVarRainWetSpecular(
+	TEXT("elysium.RainWetSpecular"), 0.50f,
+	TEXT("Enhanced wet-surface dielectric specular level."));
+static TAutoConsoleVariable<int32> CVarRainReflectionDebug(
+	TEXT("elysium.RainReflectionDebug"), 0,
+	TEXT("Wet reflection view: 0 final, 1 raw mask, 2 coarse mask, 3 wet factor, "
+		"4 cube sample, 5 source contribution, 6 enhanced coverage."));
 static TAutoConsoleVariable<int32> CVarEnvironmentWetnessOverride(
 	TEXT("elysium.EnvironmentWetnessOverride"), 0,
 	TEXT("1 = present the manual environment wetness value; 0 = present authored entity state."));
@@ -1327,6 +1337,15 @@ void AElysiumMapActor::ApplyWeatherTuning()
 		UKismetMaterialLibrary::SetScalarParameterValue(GetWorld(), EnvironmentParameters,
 			TEXT("RainLightResponse"), FMath::Clamp(
 				CVarRainLightResponse.GetValueOnGameThread(), 0.0f, 1.0f));
+		UKismetMaterialLibrary::SetScalarParameterValue(GetWorld(), EnvironmentParameters,
+			TEXT("RainSourceRetain"), FMath::Clamp(
+				CVarRainSourceRetain.GetValueOnGameThread(), 0.0f, 1.0f));
+		UKismetMaterialLibrary::SetScalarParameterValue(GetWorld(), EnvironmentParameters,
+			TEXT("RainWetSpecular"), FMath::Clamp(
+				CVarRainWetSpecular.GetValueOnGameThread(), 0.0f, 1.0f));
+		UKismetMaterialLibrary::SetScalarParameterValue(GetWorld(), EnvironmentParameters,
+			TEXT("RainReflectionDebug"), static_cast<float>(FMath::Clamp(
+				CVarRainReflectionDebug.GetValueOnGameThread(), 0, 6)));
 	}
 	const float EnhancedRate = FMath::Lerp(1.0f,
 		FMath::Max(0.0f, CVarRainRateScale.GetValueOnGameThread()), Enhancement);

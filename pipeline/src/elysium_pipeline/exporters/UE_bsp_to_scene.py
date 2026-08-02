@@ -24,7 +24,7 @@ from elysium_pipeline.formats import phy
 from elysium_pipeline.formats.glass import derive_normal as derive_glass_normal, is_glass
 from elysium_pipeline.enhancement import retex_dds
 from elysium_pipeline.formats.tex_to_png import (
-    decode as decode_texture, decode_cubemap, dudv_to_normal,
+    cubemap_dds, decode as decode_texture, decode_cubemap, dudv_to_normal,
     reflectivity as tth_reflectivity,
 )
 from elysium_pipeline.formats.bsp import (read_lump, source_to_unreal, source_dir_to_unreal, source_angles_to_unreal_quat,
@@ -1081,7 +1081,7 @@ def main(bsp_path, out_dir, *, index=None):
     albedo_cache = {}    # basetexture -> albedo png filename
     emis_cache = {}      # basetexture -> emission png filename
     normal_cache = {}    # normalmap -> normal png filename
-    cube_cache = {}      # cube id -> bool (six face PNGs written under tex/cube/)
+    cube_cache = {}      # cube id -> bool (six face PNGs + importable DDS written under tex/cube/)
     mask_cache = {}      # envmapmask source key -> mask png filename (or None)
     mat_info = {}        # gkey -> (albedo_png, emission_png, alphatest, translucent)
     refl_info = {}       # gkey -> vtex's average albedo (r,g,b), for the bounce term
@@ -1220,12 +1220,9 @@ def main(bsp_path, out_dir, *, index=None):
                 "normalmap": npng,
                 "amount": float(info.get("refractamount") or 0.0),
             }
-        # $envmap. The surface is reflective because its VMT says so -- not because a baked
-        # cube decoded. The runtime resolves the reflection through Lumen and never samples
-        # `tex/cube/` (docs/vtmb/reflections.md), so gating the channel on the cube would silently
-        # matte any surface whose cube failed to decode, and every `$envmap env_cubemap` face
-        # VBSP left unpatched. The cube is still decoded where one exists, for the record and
-        # for anything that wants the original's own reflection source.
+        # $envmap. General reflective materials retain the current PBR path. The sm_hub_1
+        # GlobalWetness closure is stricter: its patch-authored cubemap is an input to the wet
+        # endpoint, so the six decoded faces and their DDS container are required below.
         env_ref = info.get("envmap")
         mask_img = None
         if bt and env_ref:
@@ -1240,8 +1237,11 @@ def main(bsp_path, out_dir, *, index=None):
                         try:
                             cdir = os.path.join(out_dir, "tex", "cube")
                             os.makedirs(cdir, exist_ok=True)
-                            for i, face in enumerate(decode_cubemap(ctth, cttz)):
+                            faces = decode_cubemap(ctth, cttz)
+                            for i, face in enumerate(faces):
                                 face.convert("RGB").save(os.path.join(cdir, f"{cube_id}_{i}.png"))
+                            with open(os.path.join(cdir, f"{cube_id}.dds"), "wb") as cube_file:
+                                cube_file.write(cubemap_dds(faces))
                             ok = True
                         except Exception:
                             ok = False
@@ -1336,6 +1336,24 @@ def main(bsp_path, out_dir, *, index=None):
                     warnings.append(f"{mat}: VMT has no $basetexture")
             elif albedo_png is None:
                 problems.append(f"{mat}: $basetexture '{bt}' texture missing/undecodable")
+
+    if lm_base == "sm_hub_1":
+        for wet_material in sorted(wetness_info):
+            wet_env = env_info.get(wet_material)
+            if wet_env is None:
+                raise SystemExit(
+                    f"export aborted: {wet_material} is GlobalWetness-driven but has no resolved envmap"
+                )
+            cube_id = wet_env["cube"]
+            if cube_id != "cubemapdefault":
+                raise SystemExit(
+                    f"export aborted: {wet_material} requires cubemapdefault, resolved {cube_id!r}"
+                )
+            cube_path = os.path.join(out_dir, "tex", "cube", f"{cube_id}.dds")
+            if not cube_cache.get(cube_id) or not os.path.isfile(cube_path):
+                raise SystemExit(
+                    f"export aborted: {wet_material} requires six valid {cube_id} faces"
+                )
 
     print(f"textures decoded: {decoded}  emission masks: {len(emis_cache)}  failed/missing: {failed}")
     _tinted = sum(1 for e in env_info.values() if max(e["tint"]) - min(e["tint"]) >= 0.02)

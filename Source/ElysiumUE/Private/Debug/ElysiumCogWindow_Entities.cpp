@@ -49,56 +49,25 @@ void FElysiumCogWindow_Entities::RenderContent()
 	}
 
 	const TArray<TUniquePtr<FElysiumEntity>>& Entities = World->Entities();
-
-	FCogWidgets::SearchBar("##EntityFilter", Filter);
-
-	ImGui::Checkbox("Live", &bShowLive);       ImGui::SameLine();
-	ImGui::Checkbox("Hidden", &bShowHidden);   ImGui::SameLine();
-	ImGui::Checkbox("Dead", &bShowDead);       ImGui::SameLine();
-	ImGui::Checkbox("Records", &bShowRecordOnly);
-
-	// --- Class histogram (chain over all records; cheap for ~1,200 entities) ----------------
-	if (ImGui::CollapsingHeader("Class histogram"))
+	if (!ImGui::BeginTabBar("##EntityViews"))
 	{
-		TMap<FName, int32> Counts;
-		for (const TUniquePtr<FElysiumEntity>& EntPtr : Entities)
-		{
-			if (EntPtr)
-			{
-				Counts.FindOrAdd(FName(*EntPtr->Def->Classname))++;
-			}
-		}
-		TArray<TPair<FName, int32>> Sorted;
-		Sorted.Reserve(Counts.Num());
-		for (const TPair<FName, int32>& KV : Counts)
-		{
-			Sorted.Add(KV);
-		}
-		Sorted.Sort([](const TPair<FName, int32>& A, const TPair<FName, int32>& B) { return A.Value > B.Value; });
-
-		int32 MaxCount = 1;
-		for (const TPair<FName, int32>& KV : Sorted)
-		{
-			MaxCount = FMath::Max(MaxCount, KV.Value);
-		}
-
-		ImGui::Text("%d classes over %d records", Sorted.Num(), Entities.Num());
-		if (ImGui::BeginChild("##Hist", ImVec2(0, GetDpiScale() * 180.0f), ImGuiChildFlags_Borders))
-		{
-			for (const TPair<FName, int32>& KV : Sorted)
-			{
-				const FString Overlay = FString::Printf(TEXT("%s  (%d)"), *KV.Key.ToString(), KV.Value);
-				ImGui::ProgressBar((float)KV.Value / (float)MaxCount, ImVec2(-1, 0), COG_TCHAR_TO_CHAR(*Overlay));
-			}
-		}
-		ImGui::EndChild();
+		return;
 	}
 
-	// --- Filtered index list ---------------------------------------------------------------
-	TArray<int32> Rows;
-	Rows.Reserve(Entities.Num());
-	for (int32 i = 0; i < Entities.Num(); ++i)
+	if (ImGui::BeginTabItem("Browse"))
 	{
+		FCogWidgets::SearchBar("##EntityFilter", Filter);
+
+		ImGui::Checkbox("Live", &bShowLive);       ImGui::SameLine();
+		ImGui::Checkbox("Hidden", &bShowHidden);   ImGui::SameLine();
+		ImGui::Checkbox("Dead", &bShowDead);       ImGui::SameLine();
+		ImGui::Checkbox("Unhandled", &bShowRecordOnly);
+
+	// --- Filtered index list ---------------------------------------------------------------
+		TArray<int32> Rows;
+		Rows.Reserve(Entities.Num());
+		for (int32 i = 0; i < Entities.Num(); ++i)
+		{
 		const FElysiumEntity* Ent = Entities[i].Get();
 		if (Ent == nullptr)
 		{
@@ -117,8 +86,8 @@ void FElysiumCogWindow_Entities::RenderContent()
 		{
 			continue;
 		}
-		Rows.Add(i);
-	}
+			Rows.Add(i);
+		}
 
 	ImGui::Text("%d / %d records", Rows.Num(), Entities.Num());
 
@@ -126,8 +95,8 @@ void FElysiumCogWindow_Entities::RenderContent()
 		ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY |
 		ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchProp;
 
-	if (ImGui::BeginTable("##Entities", 4, TableFlags))
-	{
+		if (ImGui::BeginTable("##Entities", 4, TableFlags))
+		{
 		ImGui::TableSetupScrollFreeze(0, 1);
 		ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 44.0f);
 		ImGui::TableSetupColumn("Targetname");
@@ -177,8 +146,50 @@ void FElysiumCogWindow_Entities::RenderContent()
 				ImGui::TextColored(StateColor, "%s", State);
 			}
 		}
-		ImGui::EndTable();
+			ImGui::EndTable();
+		}
+		ImGui::EndTabItem();
 	}
+
+	if (ImGui::BeginTabItem("Class breakdown"))
+	{
+		TMap<FName, int32> Counts;
+		for (const TUniquePtr<FElysiumEntity>& EntPtr : Entities)
+		{
+			if (EntPtr)
+			{
+				Counts.FindOrAdd(FName(*EntPtr->Def->Classname))++;
+			}
+		}
+		TArray<TPair<FName, int32>> Sorted;
+		Sorted.Reserve(Counts.Num());
+		for (const TPair<FName, int32>& KV : Counts)
+		{
+			Sorted.Add(KV);
+		}
+		Sorted.Sort([](const TPair<FName, int32>& A, const TPair<FName, int32>& B)
+		{
+			return A.Value > B.Value;
+		});
+
+		int32 MaxCount = 1;
+		for (const TPair<FName, int32>& KV : Sorted)
+		{
+			MaxCount = FMath::Max(MaxCount, KV.Value);
+		}
+
+		ImGui::TextDisabled("%d classes across %d records", Sorted.Num(), Entities.Num());
+		ImGui::BeginChild("##ClassBreakdown", ImVec2(0, 0), ImGuiChildFlags_Borders);
+		for (const TPair<FName, int32>& KV : Sorted)
+		{
+			const FString Overlay = FString::Printf(TEXT("%s  (%d)"), *KV.Key.ToString(), KV.Value);
+			ImGui::ProgressBar((float)KV.Value / (float)MaxCount, ImVec2(-1, 0),
+				COG_TCHAR_TO_CHAR(*Overlay));
+		}
+		ImGui::EndChild();
+		ImGui::EndTabItem();
+	}
+	ImGui::EndTabBar();
 }
 
 #endif // ENABLE_COG

@@ -6,7 +6,8 @@ This tracker drives one private instrument against one exact owner-controlled Vt
 retail build, and one executable loop over it:
 
 > **build the capture → run `sp_theatre` → capture → decode and index → inspect against
-> the export and the current decoder → name what is missing → extend the capture.**
+> the export and the current decoder → name what is missing → close it in the export and the
+> runtime, and extend the capture only where closing it needs more evidence.**
 
 The program answers one question: which parts of the retail character transformation
 chain — requested resource bytes, skeletons, fired animation contributions, composed
@@ -51,10 +52,19 @@ captures, decompilation, indexes, and reports stay under `$ELYSIUM_WORK_ROOT/res
 | Decode and index the streams | CAP3 | one queryable, deduplicated, joinable database that reports its own counts |
 | Inspect retail against export and decoder | CAP4 | byte-coverage and per-bone transform differences |
 | Close what the difference proves | CAP5 | recovered rules, regressions, facts in the owning `docs/vtmb/` topic |
+| Carry a closed rule into the export and the runtime | CAP7 | `sp_theatre` animating in Unreal under the recovered rules |
+| Verify facial state where the built face diverges | CAP6 | flex, phoneme and deformed-vertex evidence for a named divergence |
 
 The loop repeats. Each pass extends the capture only where the previous pass named a
-missing byte range, an unjoinable identity, or a mismatching stage. Face and lips
-(CAP6) run the same loop over flex and phoneme state once the skeletal pass closes.
+missing byte range, an unjoinable identity, or a mismatching stage.
+
+**Capture is the oracle, not the gate.** Two consequences decide what runs when. A rule that
+has passed the evidence gate is carried into the export and the runtime immediately, beside
+whatever capture work is still open — CAP7 runs alongside CAP4 and CAP5 rather than behind
+them. And a system whose format is already closed is **built from that specification and
+captured only where the build diverges**: facial state is decoded, exported and specified end
+to end (`docs/vtmb/facial_animation.md`), so CAP6 is a response to a divergence rather than a
+prerequisite for one.
 
 ## Finish line
 
@@ -74,6 +84,46 @@ Completion does not require naming every field, proving every unknown byte is a 
 supporting another executable, or recreating the original engine as a general library.
 Unexplained bytes stay attached to their raw source spans and are recorded as risks when
 they affect a reproduced path.
+
+**The delivered outcome is `sp_theatre` playing with every animation live**: skeletal pose
+under the recovered composition rules, scene-driven placement, facial flex, eyelids and lip
+sync, and whatever moves the secondary-motion bones. A boundary above is *reproduced* when
+the offline comparison closes; the program is *finished* when the built act shows it.
+
+## The critical path to a fully animated `sp_theatre`
+
+Seven things stand between the evidence already on disk and the act playing with every
+animation live. They are listed in the order work can start rather than in phase order.
+
+| # | What | Owned by | Waiting on |
+|---:|---|---|---|
+| 1 | The two closed composition rules reach the runtime — a rule table out of the exporter, two skeletal controls in retail's own order | CAP7.1, CAP7.2 | nothing; both rules passed the evidence gate |
+| 2 | The face is built from its closed specification — flex rig, eyelids, lip sync | `docs/project/roadmap.md` 12.3–12.5 | nothing in this tracker; CAP6 is verification, not a prerequisite |
+| 3 | The shipped clip decoder is differenced against retail for the first time | CAP4.3 | nothing |
+| 4 | Blend grids and the animation weight are carried out of the model | CAP5.3, then CAP7.3 | nothing |
+| 5 | Secondary motion — cloth and hair — is named or adjudicated | CAP5.5 | nothing; two of its three steps are offline |
+| 6 | The persistent partial update is adjudicated | CAP5.4 | nothing; the replay that measures it exists |
+| 7 | **The cast has living eyes** — an owner-called addition, since no model authors eyeball data | `docs/project/roadmap.md` 12.4 | the lid half needs row 2's flex runtime; the eye half needs nothing |
+
+**Only two rows on this list depend on anything else on it.** Row 4 is one exporter change
+feeding one runtime change, and row 7's eyelids sit on row 2's flex evaluation. What the
+phase numbering implies — that the Unreal handoff waits for facial research, which waits for
+skeletal closure — is not a dependency any of the seven carries. Skeletal pose, faces,
+secondary motion and eyes converge on one acceptance run, CAP7.5.
+
+**Row 7 is a deliberate divergence, and no capture can close it.** RE20 measured
+`NumEyeballs == 0` on all 4,444 models, so VtMB authors no eye pose, look-at, iris or glint
+data anywhere — eyes in the shipped rig are eyelids and painted head texture. The owner call
+is that the cast has living eyes regardless, which makes it an invention under
+`docs/project/remaster-direction.md`'s Feel layer rather than a reproduction. It is on the
+critical path because the theatre is shot in close-up and the fidelity bar for the act is an
+owner call that names eyes explicitly. The faithful baseline and the divergence beside it are
+`docs/vtmb/facial_animation.md`.
+
+Two known unknowns sit on the path and neither blocks starting it. Row 3 can still find that
+the shipped decoder diverges, which would add CAP5.1 work under a stage nothing has measured
+yet. Row 5 can resolve to a mechanism driven by runtime state no installed file carries, in
+which case what the rebuild does instead is an owner call rather than a reproduction.
 
 ## Working rules
 
@@ -96,8 +146,11 @@ they affect a reproduced path.
 7. **Evolve the tool freely.** There is no schema registry, migration system, or public
    compatibility promise. A finalized run is nevertheless one self-contained, queryable
    evidence file whose raw payloads stay readable by the current research tools.
-8. **Do not build ahead.** A later animation system does not justify capture infrastructure
-   before the difference report names it.
+8. **Do not build ahead, and do not capture behind.** A later animation system does not
+   justify capture infrastructure before the difference report names it. Equally, a rule that
+   has passed the evidence gate is carried into the export and the runtime without waiting
+   for the rest of its phase, and a system whose format is already closed is built from that
+   specification rather than re-derived through a capture pass.
 9. **Delete dead machinery.** A hook, reader, control, dependency, or test stays only while
    it protects the exact build, preserves useful evidence, or answers a current question.
 
@@ -175,14 +228,21 @@ and over, so **42%** of one run's payload bytes repeat bytes it already holds.
 | Order | Priority | Phase | Outcome |
 |---:|---|---|---|
 | 1 | P0 — done | CAP1 — first run and calibration | The instrument that exists produces one finalized `sp_theatre` database, and its measured rates, counts, and joins replace every estimate |
-| 2 | P0 — in progress | CAP2 — complete the capture | Contributions group, actors and skeletons are identified, every fired contribution names its source owner, indices, and consumed byte spans, and each pose group names the request that caused it |
+| 2 | P2 — deferred | CAP2 — complete the capture | Contributions group, actors and skeletons are identified, every fired contribution names its source owner, indices, and consumed byte spans, and each pose group names the request that caused it. CAP2.1–CAP2.7 landed; only the two off-path tasks below remain |
 | 3 | P0 — done | CAP3 — decode and index | One deduplicated, joinable database answers per-actor and per-time questions without re-running the game, and reports its own counts |
-| 4 | P0 — in progress | CAP4 — inspect against export and decoder | Byte ranges the runtime reads that we do not, and the first mismatching stage and bone per pose group |
-| 5 | P1 | CAP5 — close what the difference proves | Recovered rules, each with a regression and a fact in the owning topic |
-| 6 | P1 | CAP6 — face and lips | The same loop over expression, flex, phoneme, and deformed-vertex state |
-| 7 | P2 | CAP7 — handoff and trim | Engine-neutral evaluator feeds Unreal; unused probes and readers are deleted |
+| 4 | P0 — current | CAP4 — inspect against export and decoder | Byte ranges the runtime reads that we do not, and the first mismatching stage and bone per pose group |
+| 5 | P0 — current, beside CAP4 | CAP7 — deliver the animation in Unreal | `sp_theatre` animates under the two closed composition rules, from a rule table the model exporter writes |
+| 6 | P1 | CAP5 — close what the difference proves | Recovered rules and carried byte ranges, each with a regression and a fact in the owning topic |
+| 7 | P1 — build-first | CAP6 — face and lips | The built face is captured against retail only where it diverges |
+| 8 | P2 | CAP8 — trim | Unused probes, readers and fixtures are deleted |
 
-**CAP2.8 and CAP2.9 are deferred behind the theatre track and block nothing.**
+Order is the sequence work may *start* in, and rows 4, 5 and 6 overlap by design: CAP7
+consumes rules that already closed, so holding it behind the phases still measuring other
+rules buys nothing (Working rule 8).
+
+**CAP2.8 and CAP2.9 are deferred and block nothing.** Both are `sp_tutorial_1` populations —
+CAP2.8's unbracketed frame is melee, on `baseball.mdl` and `tireiron.mdl`, which no cutscene
+reaches — so neither is on the `sp_theatre` path.
 
 ## CAP1 — First theatre run and calibration
 
@@ -906,7 +966,8 @@ This phase is the point of the program. It runs entirely offline against the dat
   replays `local_sequences`'s own rules over the installed image with indices preserved, so a
   missing clip is attributed to the rule that dropped it — empty label, first-wins lowercased
   dedup, base cell outside `NumLocalAnims` — rather than reported as an unexplained absence.
-  Changing the exporter is CAP5 work that CAP4.4 authorizes. **Only the install arm can
+  Changing the exporter is CAP5.3, which this pass authorizes by naming what is absent and
+  why. **Only the install arm can
   fail**: an identity that reaches no installed bytes, or whose pointer misses the array
   position the installed header declares, is a defect because every later comparison would
   read the wrong bytes, while an identity the export or the inventory cannot name is a
@@ -975,19 +1036,169 @@ This phase is the point of the program. It runs entirely offline against the dat
   outside the comparison on both sides rather than measured and found absent. **A byte is
   only in retail's set if this run fired the identity that reads it**, so a range read by
   neither means unread by this run. And **the pass measures the decoder without repairing
-  it** — changing the exporter is CAP5 work that CAP4.4 authorizes.
+  it** — changing the exporter is CAP5.3, which this pass authorizes by naming the five
+  ranges.
 - [ ] **CAP4.3 Transform difference.** For every joined pose-build group evaluate the
   current decoder at the captured identity and time, normalize entity and root placement,
   and compare decoded locals, composed matrices, bone-to-world, and skin palette per frame
   and bone. Report the first mismatching stage and bone, descendant propagation, and the
   worst bone. Numerical bands and comparison rules are owned by
   `docs/vtmb/vtmb-animation-reverse-engineering.md`.
+
+  **The two composition stages are done; the two decode stages are what remains.**
+  Bone-to-world and skin palette need no `BASE`-to-contribution binding and no clip decode,
+  so they run over the largest population the capture holds and land first — an explicit
+  owner call. `uv run elysium research verify_transform_difference <session>…` reads a
+  finalized, indexed database read-only and writes one `transform-difference.json` beside
+  it. **Nothing is written into the capture**, for CAP4.1's reason, and the report names
+  the decoder, the evaluator and the exporter by content hash. The transcription layer and
+  every metric live in `decoder_pose.py`, a library beside the tool on the shape
+  `decoder_coverage.py` established. Each stage is fed **retail's own input for that
+  stage**, so no earlier error cascades into a later stage's numbers.
+
+  **The skin palette closes.** `boneToWorld × StudioBone.poseToBone` reproduces the palette
+  retail wrote on **397,796 of 397,796** draws over 141 models — worst translation
+  **3.46e-4** source units and worst rotation **2.96e-06°**, with nothing outside the
+  excellent band on either metric. The static-bind arm adds why the exporter gets away with
+  discarding the stored bind: `poseToBone` is the conventional hierarchy-FK inverse on
+  **all 5,517** captured bones, **0** of them over the band.
+
+  **Split inheritance is confirmed against a running engine.** Over **110,082** paired
+  records, **0 of 84,202** `Flags & 0x2` bone observations leave the excellent band on
+  translation, model-space translation or rotation. The ordinary hierarchy leaves it on
+  **8,142** of the same observations, and on rotation only — translation is identical under
+  both rules, which is A.4a's pseudocode shape measured rather than assumed. The two
+  coincide on the rest because a flagged bone's parent chain often carries no rotation
+  relative to the entity transform, so the disagreement is the rule firing rather than the
+  rule being marginal.
+
+  **The procedural rule is corroborated from the other direction, and it closes.** The
+  hierarchy alone puts **748,666 of 968,910** procedural bone observations outside the
+  rotation band against **37,712 of 5,702,073** ordinary ones — all **32** of its clusters
+  procedural, and `StudioBone.ProcType` alone separates the two populations. Adding the
+  `ProcType == 1` correction `docs/vtmb/procedural_bones.md` owns, as a third candidate
+  evaluated inside the composition, takes that to **0 of 968,910** on translation,
+  model-space translation and rotation alike. Rotation over the whole stage goes from
+  **46,972** excellent records to **107,763**, and **107,654 of 110,082** records now
+  reproduce completely. That document reached the rule by decompilation and replay; this
+  pass reached the same bones by differencing transforms with no knowledge of it, and then
+  reproduces the capture once the rule is applied — two methods, one result.
+
+  **What remains is a rotation-only stage the model does not declare.** **2,428** records
+  stay over the band with the complete rule applied, on `left`/`right breast`
+  (`Therese.mdl`), `Bone`-chain bones under `Bip01 Head` and `Bip01 Spine1` (`VV.mdl`,
+  `Damsel.mdl`), and `Sheriff Sword` (`Cin_Sheriff_Sword.mdl`). None carries `ProcType`,
+  `Flags & 0x1` or `Flags & 0x2`.
+
+  Three measurements over `Therese.mdl`'s two breast bones, on the **728** draws that
+  select them, say what the divergence is:
+
+  - **no clip animates them** — the captured composed local is the bind pose exactly, to
+    `0.0000` in position and `0.002°` in rotation, on every record;
+  - **translation composes exactly** — `parent bone-to-world × local` reproduces retail's
+    translation to a median `1e-5` and a maximum `1e-4`;
+  - **only the rotation diverges, and intermittently** — `right breast` by a median
+    **4.64°** and `left breast` by a median `0.0002°`, both peaking at **20°**. Two mirror
+    bones behaving differently is state rather than a formula.
+
+  So something replaces the orientation of bones no clip touches and no model field
+  declares, leaving their position alone. That is the shape of the axis-interpolation rule
+  without the rule, and `docs/vtmb/procedural_bones.md` records that VtMB's `ProcType` enum
+  stops at `AXISINTERP` and never reaches the later `JIGGLE`, so a second *declared*
+  mechanism is unlikely to exist in the format. What fits is a runtime stage writing
+  bone-to-world after the pose build: `FINL` captures the composed locals and the draw
+  captures `object+0x5C`, so a write between the two is invisible in the locals and visible
+  only in the drawn matrix — which is exactly the discrepancy measured.
+
+  Two hypotheses are already eliminated. **These are not attachments**: none appears in its
+  model's `StudioAttachment` array, and `Sheriff Sword` is the sole bone of a separate prop
+  model drawn as its own entity, which is entity-level parenting and a different question.
+  And **`StudioBone.PhysicsBone` does not distinguish them**: it takes 15 distinct values
+  across `Therese.mdl`'s 79 bones and the breast bones share `1` with their parent
+  `Bip01 Spine1`, so it is a ragdoll-part index every bone carries and says nothing about
+  the live pose.
+
+  *Evidence that would settle it, cheapest first:* correlate the divergence against the
+  entity's own motion offline, from the root transforms the capture already stores — a
+  secondary-motion solve should go quiet when the actor is still, and the intermittency
+  already points that way. If that holds, bracket the window between
+  `C_BaseAnimating::BuildTransformations` and the studio draw and record who writes those
+  slots, which is a CAP5.2 recipe rather than new capture infrastructure.
+
+  **2,209** records separately keep a definite *translation* mismatch, worst **12.16**
+  source units. Which bones carry it this pass does not isolate: `worst_bones` is ranked
+  across every candidate, so the deliberately-wrong hierarchy and inverse-bind arms crowd
+  the complete rule out of the list. Ranking per candidate is the fix and it is not made
+  yet.
+
+  The pass costs **~95 s** over a 3.2 GB database for three bone-to-world candidates and
+  two palette ones, because payload identity does the work: 397,796 draws are **99,493**
+  distinct comparisons and 110,082 paired records are **95,151**. The capture's digest is
+  unchanged by a run.
+
+  **Three instrument defects were closed on the way, each found by the corpus and not by a
+  test.** Two identical *zero* matrices — a slot the renderer never wrote — read as a
+  perfect translation match and an `acos(-0.5)` = **120°** rotation disagreement, so
+  singular slots now leave both metrics under their own name. A rotation metric built on
+  `arccos` turned a row **3e-4** short, which is the ordinary float32 noise a captured
+  `matrix3x4_t` carries, into **2.4°** of rotation that is not there; the metric now
+  normalizes and orthonormality is reported as itself. And per-bone band counts were
+  reported under names that claimed records, which multiplied one wrong pose by a 96-bone
+  actor. Each has a regression.
+
+  Four bounds travel with the pass. **Neither stage measures shipped code** — Unreal
+  composes glTF conventionally through glTFRuntime and `mdl_gltf` regenerates inverse binds
+  by ordinary FK, so both stages carry a second candidate whose band counts are the cost of
+  the current export rather than a defect of the transcribed rule. **There is no single
+  denominator**: every draw reaches the palette stage, but only a draw whose consumed pose
+  build produced a composed pose for the same entity and model reaches bone-to-world, and
+  the three excluded populations — **243,692**, **39,607** and **139,651** — are counted
+  with their reasons. **Maxima and band counts are exact; quantiles are not**, being the
+  upper edge of a log-spaced bucket. And **the corpus is one cutscene**, so a bone this run
+  never posed is unmeasured rather than correct.
+
+  *Remaining, and it is the program's only measurement of the shipped decoder.* Every
+  number above grades a rule transcribed for this pass. `mdl_skel` — the decoder the export
+  actually runs — has never been differenced against retail at all, which makes the two
+  decode stages the largest unmeasured surface in the chain rather than the last two rungs
+  of a ladder. Four steps:
+
+  1. bind each `BASE` record to the contributions nested below it on the generation spine;
+  2. evaluate `mdl_skel` at the witnessed owner, sequence, animation, frame and blend cells,
+     and difference the **decoded locals**;
+  3. difference the **composed locals** against `FINL`, which is what separates a decode
+     error from a blend, layer or remap error;
+  4. rank `worst_bones` per candidate rather than across all of them, so the complete rule
+     is not crowded out of its own list by the deliberately-wrong hierarchy and inverse-bind
+     arms — the reason the 2,209 translation mismatches are currently unattributed.
+
+  Then chain all four stages, so an error is measured as it propagates across stages rather
+  than only down a hierarchy. *Acceptance:* a decoded-local difference per fired `(owner,
+  sequence, animation, frame)` naming its first mismatching bone, or the statement that the
+  shipped decoder reproduces the corpus — and either way the 2,209 translation mismatches
+  attributed to bones.
 - [ ] **CAP4.4 Missing-work report.** One ranked list of what the run proves is missing:
   unread byte ranges by model, unresolved identities, mismatch clusters by stage, and stages
-  the theatre never exercised. This report is the only thing that authorizes CAP5 work, and
-  it never claims that unobserved animations or continuous blend space were covered.
+  the theatre never exercised. It never claims that unobserved animations or continuous blend
+  space were covered.
+
+  **It consolidates; it no longer gates.** CAP4.1, CAP4.2 and CAP4.3's composition half each
+  named their own missing work explicitly and with counts — four absent owners and ten
+  unexported blend cells, five unread field ranges, one 2,428-record secondary-motion
+  population with a measured signature — so CAP5.3 and CAP5.5 are authorized by the pass that
+  named them rather than by this report. Requiring a further report before work those passes
+  already specify would add a rung without adding knowledge. What CAP4.4 still owes is the
+  ranking *across* passes and the decode-stage result CAP4.3 has not produced, so that the
+  order CAP5 works in is measured rather than chosen.
 
 ## CAP5 — Close what the difference proves
+
+**Two task shapes, because the difference reports produced two kinds of finding.** A
+*mismatch cluster* is a stage that runs and disagrees; CAP5.1 traces it backward from the
+first wrong bone. A *missing-data range* is a field retail reads that nothing on our side
+carries, where nothing disagrees because nothing is there; CAP5.3 carries the bytes. Neither
+is a special case of the other, and treating the second as the first is why the blend grids
+have had no rung to sit on since CAP4.1 named them.
 
 - [ ] **CAP5.1 One mismatch at a time.** Take the highest-ranked cluster, trace backward
   from the first mismatching bone or frame, make the smallest change that explains the
@@ -995,12 +1206,99 @@ This phase is the point of the program. It runs entirely offline against the dat
   owning `docs/vtmb/` topic.
 - [ ] **CAP5.2 Deeper stage capture on demand.** When a mismatch cannot be explained from
   the retained spans, add the smallest editable raw hook recipe at the decoder, blend,
-  remap, or procedural site it names. Preserve registers, bounded stack and pointed-to
-  spans, original addresses, copied lengths, neighbouring unknown bytes, and failures.
-- [ ] **CAP5.3 Theatre-corpus closure.** The engine-neutral evaluator matches the joined
+  remap, procedural, or post-composition site it names. Preserve registers, bounded stack
+  and pointed-to spans, original addresses, copied lengths, neighbouring unknown bytes, and
+  failures.
+
+  CAP4.3 names the first such site: the window between
+  `C_BaseAnimating::BuildTransformations` and the studio draw, where something reorients
+  bones no clip animates and no model field declares. It is CAP5.5's third step and runs only
+  if the two offline steps above it fail, because a hook costs a capture cycle and they do
+  not.
+- [ ] **CAP5.3 The missing-data ranges, closed at the exporter.** CAP4.2 names five field
+  ranges retail reads that nothing offline does, and CAP4.1 names the export shortfall they
+  cause. Nothing mismatches here, so CAP5.1's shape does not apply: the work is to carry the
+  bytes.
+
+  **Blend grids are all of it but one field.** `local_sequences` bakes cell `[0][0]` alone,
+  so `numblends`@52, `groupsize`@572, `paramindex`@580 and the fired `anim[16][16]`@56 cells
+  beyond the base go unread and the grid has no representation in the export at all — which
+  is why CAP4.1 found ten fired cells over 6,878 records with no exported counterpart, on the
+  male and female `move_and_ranged` walk grids. The corpus fires **9×1** grids through the
+  theatre and **3×3** grids on the `sp_tutorial_1` weapon-aim layers, on pose parameters 2
+  and 3 (CAP2.7). What the exporter must emit is the grid extents, the pose-parameter
+  binding, and every cell — data beside the clips rather than a new clip format.
+
+  **`StudioAnimRecord.weight`@0 is a zero test, not a value.** It is 1.0 on all 2,254 decoded
+  `(owner, animation, bone)` triples this corpus reached, so what is missing is the branch: a
+  zero-weight record decodes as an ordinary one instead of the zero output retail writes.
+  Cheap to add, and unvalidatable on this corpus — so it lands with a game-independent
+  regression and a recorded statement that no captured record exercises it.
+
+  *Acceptance:* CAP4.2 re-runs with its missing list empty, and CAP4.1's ten unexported blend
+  cells each reach a clip.
+- [ ] **CAP5.4 Adjudicate the persistent partial update.** `docs/vtmb/procedural_bones.md`
+  records the behaviour and leaves the rebuild call open. Retail's bone-to-world array is
+  persistent and each build refreshes only the bones a mask selects, so a drawn skeleton is
+  an accumulation across builds — and two theatre models never refresh a complete skeleton at
+  any point in the run. An evaluator that composes every bone each frame therefore cannot
+  reproduce a draw whose bones were composed against a root transform that has since moved,
+  which is a divergence whether or not it is chosen deliberately.
+
+  **Measure it before choosing it.** The accumulation replay reproduces **54,742 of 54,742**
+  draws; the same pass with every bone refreshed on every build measures what a
+  compose-everything evaluator gets wrong, on which bones and by how much. That number is
+  what the owner call needs and nothing else produces it. The replay is promoted into
+  `research/tooling/capture/` as part of this task — it is currently the one instrument
+  behind a published finding that is not a tracked tool.
+
+  **The alternative to diverging is recomputation, not capture.** The mask bits are
+  loader-written and read as unset on disk, but Source computes them from hitboxes,
+  attachments and per-LOD skinned vertices, and all three are in the installed image — so
+  `0x10` is derivable from the LOD0 vertex references and `0x4` tracks the procedural
+  declaration the decoder already parses. Whether recomputing them offline costs less than
+  accepting the divergence is the second half of the same call, and it is answerable from the
+  measurement.
+
+  *Acceptance:* one measured divergence population with its worst bone and worst error, a
+  recorded owner call, and — if the call is to diverge — that divergence written beside the
+  faithful behaviour in `docs/vtmb/procedural_bones.md`, with
+  `docs/architecture/animation-architecture.md` carrying the number rather than the
+  assertion.
+- [ ] **CAP5.5 Secondary motion — the bones no rule covers.** The residual CAP4.3 measured is
+  cloth and hair: `left`/`right breast` on `Therese.mdl`, `Bone`-chains under `Bip01 Head` and
+  `Bip01 Spine1` on `VV.mdl` and `Damsel.mdl`, and `Sheriff Sword` under `Bip01 R Hand` —
+  **2,428** records over the band on bones carrying no `ProcType`, no `Flags & 0x1` and no
+  `Flags & 0x2`. The signature is specific enough to work from: the local equals bind exactly,
+  the translation composes to `1e-4`, and only the orientation diverges — intermittently, and
+  differently between mirror bones, which is state rather than a formula.
+
+  Three steps, cheapest first; the first two need no new capture and no game run.
+
+  1. **Correlate the divergence against the actor's own motion**, from the root transforms the
+     capture already stores. A secondary-motion solve goes quiet when the actor is still, and
+     the intermittency already points that way.
+  2. **Difference the drawn orientation against the previous draw's** for the same bone, to
+     separate a first-order lag on the parent from a solve carrying a velocity term. The
+     capture's dense global sequence counter orders the draws for free.
+  3. Only if neither settles it, the CAP5.2 recipe on the window between
+     `C_BaseAnimating::BuildTransformations` and the studio draw.
+
+  *Acceptance:* the mechanism named and written into the owning `docs/vtmb/` topic with a
+  game-independent regression — or, if it resolves to a stage driven by runtime state no
+  installed file carries, a recorded owner call on what the rebuild does instead. Cloth and
+  hair are visible on the theatre's cast, so an invented substitute is a Feel-layer change
+  under `docs/project/remaster-direction.md` and needs the call rather than the default.
+- [ ] **CAP5.6 Theatre-corpus closure.** The engine-neutral evaluator matches the joined
   theatre corpus within the recorded bands, including layered, transition, and
   included-model cases the run exercised. Unknown fields stay preserved and explicitly
   unresolved; they do not block closure unless they change covered output.
+
+  **Closure is stated against the adjudicated baseline, not against retail unconditionally.**
+  If CAP5.4's call is to compose every bone each frame, the population that accepted
+  divergence explains is counted and bounded rather than matched, and closure means every
+  *other* record inside the bands. Stated the old way the task is unachievable by
+  construction, because the evaluator it describes does not reproduce the accumulation.
 
 ### Candidate causes for a mismatch
 
@@ -1015,32 +1313,119 @@ becomes work only when the difference report points at it.
 | Controllers and procedural order | bone controllers, procedural rules, IK-like work, post-decode adjustment order |
 | Root and entity motion | animated root/pelvis versus entity movement versus the outer world transform |
 | Hierarchy composition | split inheritance, parent multiplication order, inverse-bind convention |
+| Post-composition writes | a bone-to-world slot the composed locals do not explain: secondary motion, a follow constraint, or any stage running between the pose build and the draw. Signature: the bone's local equals its bind, its translation composes exactly, and only its orientation diverges |
 
 ## CAP6 — Face and lips
 
-Runs the same loop over facial state once CAP5.3 closes. Skeletal work is not blocked on it,
-and it is not started before the skeletal difference report exists.
+**The face is built from its closed specification and captured only where the build
+diverges.** `docs/vtmb/facial_animation.md` closes the entire chain — the studiohdr facial
+block, 44 flex controllers, 60 RPN flex rules, 65 flexdescs, the per-flex target ramp,
+`mstudiomouth_t`, the `.lip` grammar and the phoneme→controller tables — and the export
+already ships every input: morph targets in each rigged NPC's `.glb`, the rig in
+`$ELYSIUM_EXPORT_ROOT/npc/facial/<stem>.json`, 249 phoneme tables under
+`$ELYSIUM_EXPORT_ROOT/expressions/`, and 7,136 `.lip` files. Nothing in this phase is a
+prerequisite for animating a face. `docs/project/roadmap.md` owns that build as 12.3, 12.4
+and 12.5, and it does not wait here.
+
+What this phase owns is the skeletal track's oracle pointed at what the built face cannot
+explain: flex weights that the rules do not account for, a phoneme the three-file join cannot
+key, a controller with no source, or a mouth that mistimes against the line audio. It fires
+on a named divergence and stays closed otherwise.
+
+One thing capture cannot supply, so no task below should be opened expecting it: **there is
+no eyeball data anywhere in the install** — `NumEyeballs == 0` on all 4,444 models — so gaze,
+iris and glint have no faithful baseline to recover. Eyes in VtMB are eyelids plus painted
+head texture, and lids are reproducible. Living eyes are an **owner-called addition** under
+`docs/project/remaster-direction.md`'s Feel layer, built by `docs/project/roadmap.md` 12.4
+and recorded as a divergence in `docs/vtmb/facial_animation.md`. This phase can verify the
+lids against retail and can say nothing at all about the eyes, because retail has none to
+compare against.
 
 - [ ] **CAP6.1 One line's resource and object path.** Follow one controlled theatre line
   from its expression, VCD, audio, `.lip`, and model facial bytes through load, runtime
   object construction, timing identity, and the pointers facial evaluation uses.
 - [ ] **CAP6.2 Controller and flex stage capture.** Capture raw state before and after the
-  expression, phoneme, amplitude-mouth, eyelid, blink, and gaze stages that actually
-  contribute to that line, plus the flex weights and representative deformed vertices they
-  produce.
+  expression, phoneme, amplitude-mouth, eyelid and blink stages that actually contribute to
+  that line, plus the flex weights and representative deformed vertices they produce. Gaze is
+  not among them, for the reason above.
 - [ ] **CAP6.3 Controlled-line equivalence.** Reproduce controller values, lip timing, flex
   weights, and selected final vertices for that line, then expand only to another line or
   model that exposes a new mismatch.
 
-## CAP7 — Handoff and trim
+## CAP7 — Deliver the animation in Unreal
 
-- [ ] **CAP7.1 Engine-neutral evaluator and Unreal handoff.** The evaluator consumes
-  original resources plus explicit runtime state and matches the verified retail outputs
-  without Unreal retargeting or presentation transforms in the equivalence test. Unreal
-  consumes its output before basis conversion; numerical source equivalence and retargeted
-  visual acceptance stay separate tests.
-- [ ] **CAP7.2 Final trim.** Delete probes, readers, fixtures, controls, and dependencies
-  that no retained evidence path or active investigation uses.
+The recovered rules reach the built game here. Two of the three composition stages are closed
+and confirmed against a running engine, and **neither is implemented**: the runtime carries no
+skeletal control node at all, and the `split_bones` inventory the model export already writes
+is read by nothing. The design — where the stages sit in Unreal's pipeline, what the export
+has to carry, and why the basis forces a single exporter — is
+`docs/architecture/animation-architecture.md`; this phase owns its status.
+
+**It runs beside CAP4 and CAP5, not after them.** Everything below consumes a rule that has
+already passed the evidence gate, so none of it waits on the decode stages, the
+secondary-motion cause, or the facial build.
+
+- [ ] **CAP7.1 Carry the rule table out of the model.** Per model: the driven bone, its
+  control bone, the axis, and `pos[6]`/`quat[6]` — the 176-byte `mstudioaxisinterpbone_t`
+  emitted as data the runtime reads, beside the `split_bones` inventory the character index
+  already carries.
+
+  **The basis is the hazard and it decides the arrangement.** The rule's six entries and its
+  *axis index* are expressed in VtMB's basis, and a change of basis conjugates bone locals —
+  so the axis a rule names is not the same axis after conversion, and may be negated. The
+  table is therefore converted by the same exporter and the same conversion functions that
+  write the model's mesh and clips, which makes the two consistent by construction rather
+  than by agreement; a separately authored native exporter reintroduces exactly the
+  reconciliation this avoids.
+
+  *Acceptance:* the exported table evaluates to the corrections the capture replay produces,
+  on the five models the replay covers.
+- [ ] **CAP7.2 The two composition stages as skeletal controls.** Both derive
+  `FAnimNode_SkeletalControlBase` and run in a post-process Anim Blueprint — retail's slot
+  exactly, after the graph blends locals and before skinning. Split inheritance first
+  (`Flags & 0x2`: rotation from the component root, translation from the parent,
+  `docs/vtmb/animation_and_movers.md` A.4a), then axis interpolation (`ProcType == 1`,
+  `docs/vtmb/procedural_bones.md`). **Their order is load-bearing**: a graph that runs them
+  the other way produces a different skeleton.
+
+  The correction cannot be baked into clips instead. It is non-linear — sign-selected among
+  six entries, two slerps, a `1/(a1+a2+a3)` normalisation — so evaluating per clip and
+  blending the results is not the same as blending first and evaluating once, measured at up
+  to **5°** on the shoulders and biceps at a 50/50 blend. Blend grids, transitions and
+  layered sequences all occur in the corpus.
+
+  Bone indices resolve once in `InitializeBoneReferences`; `LODThreshold` drops the
+  correction where limb twist is not resolvable. *Acceptance:* a theatre actor holds its
+  retail wrist, bicep and shoulder orientation through a blended sequence, and `split_bones`
+  runtime application is enabled rather than disabled.
+- [ ] **CAP7.3 Blend spaces from the exported grids.** Consumes CAP5.3. A 9×1 grid becomes a
+  one-dimensional blend space and a 3×3 a two-dimensional one, driven by the sequence's own
+  pose parameters. *Acceptance:* the theatre's `move_and_ranged` walk grids blend across
+  their cells instead of playing cell `[0][0]`.
+- [ ] **CAP7.4 Numerical equivalence, separately from the visual.** The offline evaluator
+  consumes original resources plus explicit runtime state and matches the verified retail
+  outputs with no Unreal retargeting or presentation transform in the test.
+
+  **It is an oracle, not a runtime.** Unreal owns decoding, blending, skinning and LOD, and
+  CAP7.2's nodes add only the stages Unreal has no equivalent for — so there is no
+  engine-neutral evaluator in the shipped path waiting to hand Unreal a pose. Numerical
+  source equivalence and retargeted visual acceptance stay separate tests, and this task owns
+  the first.
+- [ ] **CAP7.5 `sp_theatre` animation acceptance.** The delivered outcome: the theatre act
+  plays with skeletal pose under both composition rules, scene-driven placement, faces
+  running their flex rig, lids blinking, mouths on the line audio, and the secondary-motion
+  bones doing whatever CAP5.5 adjudicated. Skeletal, facial and secondary motion are judged
+  on one run rather than three, because the cast shows all three at once and each has had its
+  own pass above. The scene, camera, audio and subtitle halves of the same act belong to
+  `docs/project/roadmap.md` 12.1–12.5; this task judges the animation.
+
+## CAP8 — Trim
+
+- [ ] **CAP8.1 Final trim.** Delete probes, readers, fixtures, controls, and dependencies
+  that no retained evidence path or active investigation uses. The community-decoder
+  harnesses are a retained evidence path rather than dead machinery:
+  `docs/vtmb/procedural_bones.md` and `docs/vtmb/vtmb-animation-reverse-engineering.md` both
+  rest on measurements that only a run of Crowbar's and VAMPTools' own sources produces.
 
 ## Triggered capture and storage improvements
 
@@ -1066,8 +1451,10 @@ needs it.
 - multiple game builds, schema versions, migrations, or public consumers;
 - a general hook SDK, remote collector, IPC framework, or database-backed live capture
   service;
-- a pre-planned ladder for secondary motion, scene lifecycle, save/load, ragdoll, or
-  teardown — each is a CAP5 case only when the difference report names it;
+- a pre-planned ladder for scene lifecycle, save/load, ragdoll, or teardown — each is a CAP5
+  case only when the difference report names it. **Secondary motion is no longer among
+  them**: CAP4.3 named it with a count, a bone list and a measured signature, so CAP5.5 is
+  that clause discharging rather than an exception to it;
 - a complete process dump or recursive pointer-graph crawler;
 - forcing or enumerating every possible game animation; the run captures what actually
   fires;
@@ -1092,4 +1479,7 @@ needs it.
 | One final pose hides multiple contributors | Record every evaluator call and group contributions under the enclosing pose-build generation |
 | Render visibility omits an actor | Distinguish fired evaluation, completed pose build, and final draw coverage instead of treating no draw as no animation |
 | Raw evidence becomes difficult to query | Keep records self-bounded and add a disposable index only for a demonstrated slow query |
-| Infrastructure expands faster than evidence | The chronological order is binding and only one task is current at a time |
+| Infrastructure expands faster than evidence | The chronological order is binding *inside* a track and one task is current in each. There are two: the evidence loop (CAP4–CAP6) and the delivery (CAP7). Only a rule that has passed the evidence gate crosses between them |
+| A closed rule sits unbuilt because the phase it closed in is still open | CAP7 is authorized by the evidence gate rather than by phase completion, and the critical-path table states which rules have passed it |
+| A system whose format is already closed is re-derived through a capture pass | CAP6 fires on a named divergence in a built face, never as a prerequisite for building one. The same test applies to any later system whose `docs/vtmb/` topic is complete |
+| An evaluator that composes every bone cannot reproduce an accumulated draw | CAP5.4 measures the divergence before it is chosen, and CAP5.6 states closure against the adjudicated baseline rather than against retail unconditionally |

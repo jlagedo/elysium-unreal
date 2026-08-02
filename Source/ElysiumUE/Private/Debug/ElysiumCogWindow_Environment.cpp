@@ -9,7 +9,10 @@
 #include "Visual/ElysiumLightRig.h"
 #include "Visual/ElysiumMapVisuals.h"
 
+#include "Engine/TextureCube.h"
 #include "HAL/IConsoleManager.h"
+#include "Materials/MaterialInstance.h"
+#include "UObject/UObjectIterator.h"
 #include "imgui.h"
 
 namespace
@@ -31,6 +34,12 @@ namespace
 		return Variable ? Variable->GetInt() != 0 : Fallback;
 	}
 
+	int32 ReadInt(const TCHAR* Name, int32 Fallback)
+	{
+		const IConsoleVariable* Variable = FindCVar(Name);
+		return Variable ? Variable->GetInt() : Fallback;
+	}
+
 	void WriteFloat(const TCHAR* Name, float Value)
 	{
 		if (IConsoleVariable* Variable = FindCVar(Name))
@@ -44,6 +53,14 @@ namespace
 		if (IConsoleVariable* Variable = FindCVar(Name))
 		{
 			Variable->Set(bValue ? 1 : 0);
+		}
+	}
+
+	void WriteInt(const TCHAR* Name, int32 Value)
+	{
+		if (IConsoleVariable* Variable = FindCVar(Name))
+		{
+			Variable->Set(Value);
 		}
 	}
 
@@ -63,6 +80,53 @@ namespace
 	{
 		return FMath::Clamp(Wetness * OutputScale * AuthoredScale, 0.0f, 1.0f);
 	}
+
+	struct FSourceBindingSummary
+	{
+		int32 Responding = 0;
+		int32 Missing = 0;
+		FString Cube;
+		bool bMultipleCubes = false;
+	};
+
+	FSourceBindingSummary InspectSourceBindings(const AElysiumMapActor& Map)
+	{
+		FSourceBindingSummary Summary;
+		const FString Prefix = FString::Printf(
+			TEXT("/ElysiumBaked/%s/Materials/"), *Map.MapName);
+		for (TObjectIterator<UMaterialInstance> It; It; ++It)
+		{
+			UMaterialInstance* Instance = *It;
+			if (!IsValid(Instance) || !Instance->GetPathName().StartsWith(Prefix))
+			{
+				continue;
+			}
+			float WetnessDriven = 0.0f;
+			if (!Instance->GetScalarParameterValue(TEXT("WetnessDriven"), WetnessDriven)
+				|| WetnessDriven < 0.5f)
+			{
+				continue;
+			}
+			UTexture* Texture = nullptr;
+			if (!Instance->GetTextureParameterValue(TEXT("SourceCube"), Texture)
+				|| !Texture || !Texture->IsA<UTextureCube>())
+			{
+				++Summary.Missing;
+				continue;
+			}
+			++Summary.Responding;
+			const FString CubePath = Texture->GetPathName();
+			if (Summary.Cube.IsEmpty())
+			{
+				Summary.Cube = CubePath;
+			}
+			else if (Summary.Cube != CubePath)
+			{
+				Summary.bMultipleCubes = true;
+			}
+		}
+		return Summary;
+	}
 }
 
 void FElysiumCogWindow_Environment::Initialize()
@@ -77,8 +141,9 @@ void FElysiumCogWindow_Environment::RenderHelp()
 		"Live control of MPC_ElysiumEnvironment. Authored sm_hub_1 timers continue updating the "
 		"engine-neutral wetness state at all times. Override substitutes only the visible material "
 		"input; Follow authored reconnects to the state already in progress. The output-scale and "
-		"enhancement controls tune the one shared material graph. Local-light specular is the same "
-		"live light-rig value exposed by Elysium.Lights. Niagara remains disconnected.");
+		"source-cube and enhancement controls tune the one shared material graph. Debug modes render "
+		"the selected channel through Emissive. Local-light specular is the same "
+		"live light-rig value exposed by Look > Lighting. Niagara remains disconnected.");
 }
 
 void FElysiumCogWindow_Environment::RenderContent()
@@ -96,8 +161,15 @@ void FElysiumCogWindow_Environment::RenderContent()
 	const float Presented = Map->GetPresentedWetness();
 	const float OutputScale = Map->GetPresentedWetnessScale();
 	const bool bOverrideApplied = Map->IsEnvironmentWetnessOverridden();
+	UElysiumMapVisuals* Visuals = Map->GetVisuals();
+	UElysiumLightRig* LightRig = Visuals ? Visuals->GetLightRig() : nullptr;
+	if (!ImGui::BeginTabBar("##EnvironmentViews"))
+	{
+		return;
+	}
 
-	ImGui::SeparatorText("Live wetness");
+	if (ImGui::BeginTabItem("Wetness"))
+	{
 	if (Presented > KINDA_SMALL_NUMBER)
 	{
 		ImGui::TextColored(ElysiumCogStyle::ColOk, "WET  %.3f", Presented);
@@ -165,7 +237,22 @@ void FElysiumCogWindow_Environment::RenderContent()
 	}
 	ImGui::TextDisabled("The timer graph and save state continue underneath an override.");
 
-	ImGui::SeparatorText("Material response");
+	ImGui::SeparatorText("Authored events");
+	if (ImGui::Button("Start rain timer"))
+	{
+		Map->FireWeatherTimer(true);
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Stop rain timer"))
+	{
+		Map->FireWeatherTimer(false);
+	}
+	ImGui::TextDisabled("Uses the map's existing timer path, including its authored 10 second delay.");
+		ImGui::EndTabItem();
+	}
+
+	if (ImGui::BeginTabItem("Material look"))
+	{
 	SliderCVar("Output scale", TEXT("elysium.EnvironmentWetnessScale"), 0.0f, 4.0f, "%.2fx");
 	ImGui::TextDisabled("Multiplies, then saturates, each patch-authored material scale.");
 	if (ImGui::BeginTable("##WetnessScales", 3,
@@ -188,15 +275,55 @@ void FElysiumCogWindow_Environment::RenderContent()
 		ImGui::EndTable();
 	}
 
+	if (ImGui::CollapsingHeader("Source cube diagnostics"))
+	{
+	const FSourceBindingSummary Bindings = InspectSourceBindings(*Map);
+	if (Bindings.Cube.IsEmpty())
+	{
+		ImGui::TextDisabled("Bound cube: none loaded");
+	}
+	else
+	{
+		ImGui::TextWrapped("Bound cube: %s%s", TCHAR_TO_UTF8(*Bindings.Cube),
+			Bindings.bMultipleCubes ? " (multiple)" : "");
+	}
+	ImGui::Text("Responding wet materials: %d", Bindings.Responding);
+	if (Bindings.Missing > 0)
+	{
+		ImGui::TextColored(ElysiumCogStyle::ColError, "Missing SourceCube bindings: %d", Bindings.Missing);
+	}
+	else
+	{
+		ImGui::TextColored(ElysiumCogStyle::ColOk, "Missing SourceCube bindings: 0");
+	}
+	SliderCVar("Source retain", TEXT("elysium.RainSourceRetain"), 0.0f, 1.0f, "%.2f");
+	SliderCVar("Wet specular", TEXT("elysium.RainWetSpecular"), 0.0f, 1.0f, "%.2f");
+	static const char* DebugModes[] = {
+		"Final", "Raw Mask", "Coarse Mask", "Wet Factor", "Cube Sample",
+		"Source Contribution", "Enhanced Coverage"
+	};
+	int32 DebugMode = FMath::Clamp(ReadInt(TEXT("elysium.RainReflectionDebug"), 0), 0, 6);
+	if (ImGui::Combo("Debug view", &DebugMode, DebugModes, UE_ARRAY_COUNT(DebugModes)))
+	{
+		WriteInt(TEXT("elysium.RainReflectionDebug"), DebugMode);
+	}
+	}
+
 	ImGui::SeparatorText("Presentation enhancement");
 	SliderCVar("Enhancement", TEXT("elysium.RainEnhancement"), 0.0f, 1.0f, "%.2f");
 	SliderCVar("Full-wet darken", TEXT("elysium.RainWetDarken"), 0.0f, 0.25f, "%.3f");
 	SliderCVar("Roughness reduction", TEXT("elysium.RainWetRoughness"), 0.0f, 0.50f, "%.3f");
 	SliderCVar("Rain light response", TEXT("elysium.RainLightResponse"), 0.0f, 1.0f, "%.2f");
 	ImGui::TextDisabled("Light response is retained for the future particle slice; it has no visible wetness effect.");
-	if (ImGui::Button("Authored reference"))
+	if (ImGui::Button("Source reference"))
 	{
 		WriteFloat(TEXT("elysium.RainEnhancement"), 0.0f);
+		WriteInt(TEXT("elysium.RainReflectionDebug"), 0);
+		if (LightRig)
+		{
+			LightRig->SpecularScale = 0.0f;
+			LightRig->ApplyLiveTuning();
+		}
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Enhanced defaults"))
@@ -205,12 +332,13 @@ void FElysiumCogWindow_Environment::RenderContent()
 		WriteFloat(TEXT("elysium.RainWetDarken"), 0.06f);
 		WriteFloat(TEXT("elysium.RainWetRoughness"), 0.10f);
 		WriteFloat(TEXT("elysium.RainLightResponse"), 0.25f);
+		WriteFloat(TEXT("elysium.RainSourceRetain"), 1.0f);
+		WriteFloat(TEXT("elysium.RainWetSpecular"), 0.50f);
+		WriteInt(TEXT("elysium.RainReflectionDebug"), 0);
 		WriteFloat(TEXT("elysium.EnvironmentWetnessScale"), 1.0f);
 	}
 
 	ImGui::SeparatorText("Reflection energy");
-	UElysiumMapVisuals* Visuals = Map->GetVisuals();
-	UElysiumLightRig* LightRig = Visuals ? Visuals->GetLightRig() : nullptr;
 	if (LightRig)
 	{
 		float Specular = LightRig->SpecularScale;
@@ -239,17 +367,9 @@ void FElysiumCogWindow_Environment::RenderContent()
 		ImGui::TextDisabled("The map light rig is not available yet.");
 	}
 
-	ImGui::SeparatorText("Authored I/O");
-	if (ImGui::Button("Fire rain_on_timer"))
-	{
-		Map->FireWeatherTimer(true);
+		ImGui::EndTabItem();
 	}
-	ImGui::SameLine();
-	if (ImGui::Button("Fire rain_off_timer"))
-	{
-		Map->FireWeatherTimer(false);
-	}
-	ImGui::TextDisabled("These buttons fire the existing map timers. FadeGlobalWetness arrives after its authored 10 s delay.");
+	ImGui::EndTabBar();
 }
 
 #endif // ENABLE_COG

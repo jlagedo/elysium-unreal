@@ -480,6 +480,22 @@ class BakeTextureImportContractTests(unittest.TestCase):
         self.assertEqual(mat.refract_amount, 0.01)
         self.assertEqual(mat.refract_map, "tex/rain_refract_n.png")
 
+    def test_bake_mtl_parser_keeps_exact_env_cube_identifier(self) -> None:
+        fake_unreal = SimpleNamespace(
+            AssetToolsHelpers=SimpleNamespace(get_asset_tools=lambda: object()),
+            MaterialEditingLibrary=object(),
+            GeometryScript_Collision=object(),
+        )
+        module = self._load_bake_lib(fake_unreal)
+        with tempfile.TemporaryDirectory() as out:
+            path = Path(out) / "wet.mtl"
+            path.write_text(
+                "newmtl wet\nenvmap cubemapdefault\nglobalwetness 0.600000\n",
+                encoding="utf-8")
+            mat = module.read_mtl(path)["wet"]
+        self.assertEqual(mat.env_cube, "cubemapdefault")
+        self.assertTrue(mat.wetness_driven)
+
 
 class UnrealBakeDriverContractTests(unittest.TestCase):
     def test_texture_bake_enables_commandlet_rendering(self) -> None:

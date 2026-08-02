@@ -9,8 +9,10 @@
 // ALBEDO term the light then multiplies, not an additive overlay -- so a reflective surface in
 // an unlit room stays dark. That is already a light-modulated specular response in all but
 // name, which is what makes a real reflection channel the faithful port rather than a
-// liberty. The exported `tex/cube/` faces are never sampled; Lumen resolves the reflection
-// against the live scene. Full RE + the whole-game authoring survey: docs/vtmb/reflections.md.
+// liberty. General reflective materials use that PBR/Lumen path. The sm_hub_1 wetness closure
+// preserves the patch-authored SourceCube primary-view composite; a ray-tracing quality switch
+// excludes its camera-dependent sample from Lumen surface-cache and ray-hit evaluation. Full RE
+// + the whole-game authoring survey: docs/vtmb/reflections.md.
 //
 // Keep these in sync with pipeline/unreal/make_world_materials.py (the master's parameter defaults) and
 // pipeline/unreal/bake_map.py (what a baked material instance binds over them).
@@ -30,6 +32,8 @@ namespace ElysiumReflections
 	namespace Params
 	{
 		inline const FName EnvMask(TEXT("EnvMask"));
+		inline const FName SourceCube(TEXT("SourceCube"));
+		inline const FName WetnessUsesSourceCube(TEXT("WetnessUsesSourceCube"));
 		inline const FName EnvStrength(TEXT("EnvStrength"));
 		inline const FName EnvTint(TEXT("EnvTint"));
 		inline const FName MetalMask(TEXT("MetalMask"));

@@ -36,7 +36,6 @@ void FElysiumCogWindow_Npc::RenderHelp()
 void FElysiumCogWindow_Npc::RenderLiveNpcs()
 {
 	FElysiumEntityWorld* EW = GetEntityWorld();
-	ImGui::SeparatorText("Live NPCs  (map entities)");
 	if (EW == nullptr)
 	{
 		ImGui::TextDisabled("No entity world (load a map).");
@@ -96,13 +95,26 @@ void FElysiumCogWindow_Npc::RenderLiveNpcs()
 void FElysiumCogWindow_Npc::RenderContent()
 {
 	Super::RenderContent();
+	if (!ImGui::BeginTabBar("##NpcViews"))
+	{
+		return;
+	}
 
-	RenderLiveNpcs();
+	if (ImGui::BeginTabItem("Live map NPCs"))
+	{
+		RenderLiveNpcs();
+		ImGui::EndTabItem();
+	}
+
+	if (ImGui::BeginTabItem("Preview lab"))
+	{
 
 	UElysiumNpcSubsystem* Npc = GetNpcSubsystem();
 	if (Npc == nullptr)
 	{
 		ImGui::TextDisabled("NPC subsystem unavailable.");
+		ImGui::EndTabItem();
+		ImGui::EndTabBar();
 		return;
 	}
 
@@ -119,7 +131,7 @@ void FElysiumCogWindow_Npc::RenderContent()
 	// --- Load an NPC ------------------------------------------------------------------------
 	// Both boxes stretch to the window, minus the Rescan button beside the first, so the two fields
 	// line up at the same right edge instead of at ImGui's default 65%-of-window item width.
-	ImGui::SeparatorText("Load an NPC  (.glb under out/npc)");
+	ImGui::TextDisabled("Load an exported character beside the player to inspect its runtime mesh and clips.");
 	const float RescanWidth = ImGui::CalcTextSize("Rescan").x + ImGui::GetStyle().FramePadding.x * 2.0f
 		+ ImGui::GetStyle().ItemSpacing.x;
 	const float FieldWidth = FMath::Max(GetDpiScale() * 120.0f,
@@ -193,6 +205,8 @@ void FElysiumCogWindow_Npc::RenderContent()
 	ImGui::Text("%d spawned", Live.Num());
 	if (Live.Num() == 0)
 	{
+		ImGui::EndTabItem();
+		ImGui::EndTabBar();
 		return;
 	}
 
@@ -252,6 +266,9 @@ void FElysiumCogWindow_Npc::RenderContent()
 			ImGui::PopID();
 		}
 	}
+		ImGui::EndTabItem();
+	}
+	ImGui::EndTabBar();
 }
 
 #endif // ENABLE_COG

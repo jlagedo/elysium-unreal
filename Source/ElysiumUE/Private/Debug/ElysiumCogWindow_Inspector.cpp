@@ -348,7 +348,6 @@ void FElysiumCogWindow_Inspector::RenderTick(float DeltaTime)
 
 void FElysiumCogWindow_Inspector::RenderPickDetails(const FElysiumPickResult& InPick)
 {
-	ImGui::SeparatorText("Selection");
 	if (!InPick.IsSet())
 	{
 		// The entity below can outlive a pick, and can exist without one at all — the Entities
@@ -433,16 +432,21 @@ void FElysiumCogWindow_Inspector::RenderContent()
 	Super::RenderContent();
 
 	// --- Pick controls + what the last click resolved to --------------------------------------
-	ImGui::Checkbox("Click to select", &bClickToSelect);
+	ImGui::Checkbox("Pick from world", &bClickToSelect);
 	ImGui::SetItemTooltip("LMB over the world picks; RMB clears. Armed only while this window is "
 		"open and the Cog menu owns the mouse. The selection itself survives closing either.");
 	ImGui::SameLine();
-	ImGui::Checkbox("Highlight", &bDrawHighlight);
-	ImGui::SetItemTooltip("Draw the translucent fill + outline + label on the selection.");
-	ImGui::SameLine();
-	ImGui::Checkbox("Hover", &bHoverPreview);
-	ImGui::SetItemTooltip("Outline whatever the cursor is over before you commit. Costs one CPU "
-		"ray-cast per frame while the menu is open.");
+	if (ImGui::SmallButton("Display options"))
+	{
+		ImGui::OpenPopup("##PickDisplayOptions");
+	}
+	if (ImGui::BeginPopup("##PickDisplayOptions"))
+	{
+		ImGui::Checkbox("Highlight selection", &bDrawHighlight);
+		ImGui::Checkbox("Preview on hover", &bHoverPreview);
+		ImGui::TextDisabled("Hover preview performs one CPU ray-cast per frame.");
+		ImGui::EndPopup();
+	}
 
 	// Everything below the control row lives in a scrolling region, so the window's height is
 	// whatever the user dragged it to rather than however tall this entity's data happens to be —
@@ -454,27 +458,36 @@ void FElysiumCogWindow_Inspector::RenderContent()
 		return;
 	}
 
-	RenderPickDetails(GetPick());
-
 	// The entity half is sticky: picking a wall or a prop leaves the last entity selected, so a
 	// half-finished test harness survives a stray click.
 	FElysiumEntityWorld* World = GetEntityWorld();
-
-	ImGui::SeparatorText("Entity");
 	FElysiumEntity* Ent = World ? World->Resolve(GetSelection()) : nullptr;
-	if (World == nullptr)
+	if (ImGui::BeginTabBar("##InspectorViews"))
 	{
-		ImGui::TextDisabled("No .ents substrate on this map (surface inspect only).");
-	}
-	else if (Ent == nullptr)
-	{
-		ImGui::TextDisabled("No entity selected. Click one in the world (F1 open), or pick from the Entities window.");
-	}
-	else
-	{
-		const bool bSelectionChanged = !(LastDetailSelection == Ent->Handle);
-		LastDetailSelection = Ent->Handle;
-		RenderEntityDetails(*Ent, *World, bSelectionChanged);
+		if (ImGui::BeginTabItem("Entity"))
+		{
+			if (World == nullptr)
+			{
+				ImGui::TextDisabled("No entity substrate on this map.");
+			}
+			else if (Ent == nullptr)
+			{
+				ImGui::TextDisabled("No entity selected. Pick one in the world or use the Entity Browser.");
+			}
+			else
+			{
+				const bool bSelectionChanged = !(LastDetailSelection == Ent->Handle);
+				LastDetailSelection = Ent->Handle;
+				RenderEntityDetails(*Ent, *World, bSelectionChanged);
+			}
+			ImGui::EndTabItem();
+		}
+		if (ImGui::BeginTabItem("Surface & material"))
+		{
+			RenderPickDetails(GetPick());
+			ImGui::EndTabItem();
+		}
+		ImGui::EndTabBar();
 	}
 
 	ImGui::EndChild();
@@ -496,9 +509,13 @@ void FElysiumCogWindow_Inspector::RenderEntityDetails(FElysiumEntity& EntRef, FE
 	{
 		ElysiumCogStyle::LabelValue(Label, COG_TCHAR_TO_CHAR(*Value), ValueColumn);
 	};
+	if (!ImGui::BeginTabBar("##EntityDetailViews"))
+	{
+		return;
+	}
 
-	// --- Identity --------------------------------------------------------------------------
-	ImGui::SeparatorText("Identity");
+	if (ImGui::BeginTabItem("Overview"))
+	{
 	Row("Entity", Ent->DebugString());
 	Row("Targetname", Ent->TargetName.IsEmpty() ? TEXT("(none)") : Ent->TargetName);
 	Row("Class", FString::Printf(TEXT("%s%s"), *Ent->Def->Classname,
@@ -574,8 +591,11 @@ void FElysiumCogWindow_Inspector::RenderEntityDetails(FElysiumEntity& EntRef, FE
 			if (bBreak) { Dbg->ArmBreakOn(Ent->Handle); } else { Dbg->ClearBreak(); }
 		}
 	}
+		ImGui::EndTabItem();
+	}
 
-	// --- Live fields (chain-resolved) ------------------------------------------------------
+	if (ImGui::BeginTabItem("Fields & keys"))
+	{
 	// Every record inherits the CBaseEntity chain whether or not its class uses it, so an inert
 	// record like info_node (3 keyvalues on disk) shows ~20 fields, all at their default. The
 	// values are collected first so the header can carry the set/total count and the table can
@@ -615,10 +635,8 @@ void FElysiumCogWindow_Inspector::RenderEntityDetails(FElysiumEntity& EntRef, FE
 	// A real class leads with its fields; an inert record leads with its keyvalues, which are the
 	// only data it has. Re-seated only when the selection changes, so toggling a section by hand
 	// sticks while you work on one entity.
-	if (bSelectionChanged)
-	{
-		ImGui::SetNextItemOpen(!Ent->IsRecordOnly() && FieldRows.Num() > 0, ImGuiCond_Always);
-	}
+	ImGui::SetNextItemOpen(!Ent->IsRecordOnly() && FieldRows.Num() > 0,
+		bSelectionChanged ? ImGuiCond_Always : ImGuiCond_Appearing);
 	// The "###Fields" suffix pins the ImGui ID so the changing count in the label does not reset
 	// the section's open state.
 	const FString FieldsLabel = FString::Printf(TEXT("Fields  (%d of %d set)###Fields"),
@@ -667,10 +685,8 @@ void FElysiumCogWindow_Inspector::RenderEntityDetails(FElysiumEntity& EntRef, FE
 	// --- Raw keyvalues ---------------------------------------------------------------------
 	// The verbatim `.ents` record. For the inert majority (light, info_node, infodecal, env_sprite)
 	// this is the whole of what the map author wrote, so it opens by default for them.
-	if (bSelectionChanged)
-	{
-		ImGui::SetNextItemOpen(Ent->IsRecordOnly() || FieldsSet == 0, ImGuiCond_Always);
-	}
+	ImGui::SetNextItemOpen(Ent->IsRecordOnly() || FieldsSet == 0,
+		bSelectionChanged ? ImGuiCond_Always : ImGuiCond_Appearing);
 	const FString KeysLabel = FString::Printf(TEXT("Keyvalues  (%d)###Keyvalues"),
 		Ent->Def->Keys.Num());
 	if (ImGui::CollapsingHeader(COG_TCHAR_TO_CHAR(*KeysLabel)))
@@ -698,14 +714,15 @@ void FElysiumCogWindow_Inspector::RenderEntityDetails(FElysiumEntity& EntRef, FE
 			ImGui::EndTable();
 		}
 	}
+		ImGui::EndTabItem();
+	}
 
-	// --- Outputs (7 fields: name, target, input, param, delay, times, python) --------------
+	if (ImGui::BeginTabItem("Inputs & outputs"))
+	{
 	// Most records wire nothing, so the section only opens for the ones that do.
 	const TArray<FElysiumOutputDef>& Outputs = Ent->Def->Outputs;
-	if (bSelectionChanged)
-	{
-		ImGui::SetNextItemOpen(Outputs.Num() > 0, ImGuiCond_Always);
-	}
+	ImGui::SetNextItemOpen(Outputs.Num() > 0,
+		bSelectionChanged ? ImGuiCond_Always : ImGuiCond_Appearing);
 	const FString OutputsLabel = FString::Printf(TEXT("Outputs  (%d)###Outputs"), Outputs.Num());
 	if (ImGui::CollapsingHeader(COG_TCHAR_TO_CHAR(*OutputsLabel)))
 	{
@@ -809,6 +826,9 @@ void FElysiumCogWindow_Inspector::RenderEntityDetails(FElysiumEntity& EntRef, FE
 			}
 		}
 	}
+		ImGui::EndTabItem();
+	}
+	ImGui::EndTabBar();
 }
 
 #endif // ENABLE_COG

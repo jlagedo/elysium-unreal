@@ -405,17 +405,22 @@ void FElysiumCogWindow_Lights::RenderContent()
 	ImGui::Checkbox("Markers", &bDrawMarkers);
 	ImGui::SetItemTooltip("Draw a dot per light over the world, in that light's own colour. "
 		"Hollow = hidden.");
-
-	// --- Live calibration ----------------------------------------------------------------------
-	ImGui::SeparatorText("Calibration (live)");
-
-	// Wide-range quantities use logarithmic sliders and human-facing multipliers/metres. Ctrl-click
-	// still accepts an exact number; right-click restores the faithful default.
 	const float LabelGutter = ImGui::CalcTextSize("Volumetric scattering").x
 		+ ImGui::GetStyle().ItemInnerSpacing.x;
 	const float SliderWidth = FMath::Max(GetDpiScale() * 110.0f,
 		ImGui::GetContentRegionAvail().x - LabelGutter);
+	if (!ImGui::BeginTabBar("##LightingViews"))
+	{
+		CommitPendingPick();
+		return;
+	}
 
+	if (ImGui::BeginTabItem("Rig tuning"))
+	{
+	ImGui::TextDisabled("Global controls update every light that has not been individually overridden.");
+
+	// Wide-range quantities use logarithmic sliders and human-facing multipliers/metres. Ctrl-click
+	// still accepts an exact number; right-click restores the faithful default.
 	bool bChanged = false;
 	float PointSpotMult = Rig->PointSpotScale / 0.003f;
 	ImGui::SetNextItemWidth(SliderWidth);
@@ -494,14 +499,15 @@ void FElysiumCogWindow_Lights::RenderContent()
 	{
 		Rig->ApplyLiveTuning();
 	}
+		ImGui::EndTabItem();
+	}
 
-	// --- Ambience ------------------------------------------------------------------------------
+	if (ImGui::BeginTabItem("Sky & fog"))
+	{
 	// The sky light and height fog are actors baked into the level, adopted by the map actor. They
 	// belong here because they are the other half of the same calibration: with a real cubemap on
 	// the sky light Lumen occludes it properly, so how much the sky contributes and how much the
 	// per-source rig has to carry are one decision, not two.
-	ImGui::SeparatorText("Ambience (live)");
-
 	if (USkyLightComponent* Sky = Visuals->GetSkyLight())
 	{
 		float Intensity = Sky->Intensity;
@@ -588,8 +594,12 @@ void FElysiumCogWindow_Lights::RenderContent()
 	{
 		ImGui::TextDisabled("No height fog in this level (the map's .env has fog off).");
 	}
+		ImGui::EndTabItem();
+	}
 
-	// --- The selected light --------------------------------------------------------------------
+	const ImGuiTabItemFlags EditorTabFlags = bSelectEditorTab ? ImGuiTabItemFlags_SetSelected : 0;
+	if (ImGui::BeginTabItem("Edit lights", nullptr, EditorTabFlags))
+	{
 	// Above the source list, not below it: the list is a picker you visit once, while the editor is
 	// what the map is actually being worked through, so it sits with the other live controls.
 	ImGui::SeparatorText("Selected light");
@@ -608,11 +618,8 @@ void FElysiumCogWindow_Lights::RenderContent()
 	if (Sources.Num() == 0)
 	{
 		ImGui::TextDisabled("No lights loaded.");
-		CommitPendingPick();
-		return;
 	}
-
-	if (ImGui::BeginTable("##Lights", 5,
+	else if (ImGui::BeginTable("##Lights", 5,
 		ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders | ImGuiTableFlags_SizingFixedFit,
 		ImVec2(0.0f, GetDpiScale() * 220.0f)))
 	{
@@ -718,6 +725,10 @@ void FElysiumCogWindow_Lights::RenderContent()
 	}
 	bScrollToSelected = false;
 	ImGui::TextDisabled("* overridden · x switched off");
+		ImGui::EndTabItem();
+	}
+	bSelectEditorTab = false;
+	ImGui::EndTabBar();
 
 	// After the gizmo, so a click that grabbed a handle is not also read as a new selection.
 	CommitPendingPick();
@@ -741,53 +752,46 @@ void FElysiumCogWindow_Lights::RenderEditActions(UElysiumLightRig& Rig, const FS
 	}
 	ImGui::SetItemTooltip("Write calibration, switched-off sources, transforms and every hand-set "
 		"light attribute to $ELYSIUM_EXPORT_ROOT/_lights/<map>.json. One file per map.");
-
-	ImGui::SameLine();
-	if (ImGui::Button("Load"))
-	{
-		FString Message;
-		bSaveFailed = !Rig.LoadSurvey(Message);
-		SaveStatus = Message;
-	}
-	ImGui::SetItemTooltip("Deterministically restore the saved calibration, disabled sources and "
-		"complete overrides. Map load runs the same pass unless elysium.LightSurvey is zero.");
-
-	ImGui::SameLine();
-	ImGui::BeginDisabled(NumOverridden == 0);
-	if (ImGui::Button("Revert all"))
-	{
-		Rig.RevertAllSources();
-	}
-	ImGui::EndDisabled();
-	ImGui::SetItemTooltip("Drop every per-light attribute override in the map. Leaves the "
-		"switched-off set alone.");
-
-	ImGui::SameLine();
-	ImGui::BeginDisabled(NumDisabled == 0);
-	if (ImGui::Button("Enable all"))
-	{
-		Rig.EnableAllSources();
-	}
-	ImGui::EndDisabled();
-	ImGui::SetItemTooltip("Switch every disabled source back on.");
-
 	ImGui::SameLine();
 	ImGui::TextColored(NumDisabled + NumOverridden > 0 ? ElysiumCogStyle::ColWarn : ElysiumCogStyle::ColDim,
 		"%d off · %d overridden", NumDisabled, NumOverridden);
 
-	if (ImGui::Button("Volumetric lights on"))
+	if (ImGui::CollapsingHeader("Map-wide actions"))
 	{
-		Rig.SetNonSpotSourcesDisabled(false);
+		if (ImGui::Button("Reload saved edits"))
+		{
+			FString Message;
+			bSaveFailed = !Rig.LoadSurvey(Message);
+			SaveStatus = Message;
+		}
+		ImGui::SetItemTooltip("Restore the saved calibration, disabled sources and complete overrides.");
+		ImGui::SameLine();
+		ImGui::BeginDisabled(NumOverridden == 0);
+		if (ImGui::Button("Revert overrides"))
+		{
+			Rig.RevertAllSources();
+		}
+		ImGui::EndDisabled();
+		ImGui::SameLine();
+		ImGui::BeginDisabled(NumDisabled == 0);
+		if (ImGui::Button("Enable all"))
+		{
+			Rig.EnableAllSources();
+		}
+		ImGui::EndDisabled();
+
+		if (ImGui::Button("Volumetric lights on"))
+		{
+			Rig.SetNonSpotSourcesDisabled(false);
+		}
+		ImGui::SetItemTooltip("Enable every non-spot source: texlights, points and the sun.");
+		ImGui::SameLine();
+		if (ImGui::Button("Volumetric lights off"))
+		{
+			Rig.SetNonSpotSourcesDisabled(true);
+		}
+		ImGui::SetItemTooltip("Disable non-spot sources while leaving spotlights unchanged.");
 	}
-	ImGui::SetItemTooltip("Enable every non-spot source (texlight, point and sun). This is the "
-		"project's volumetric-light group, not the fog-scattering scalar.");
-	ImGui::SameLine();
-	if (ImGui::Button("Volumetric lights off"))
-	{
-		Rig.SetNonSpotSourcesDisabled(true);
-	}
-	ImGui::SetItemTooltip("Disable every non-spot source while leaving spotlights unchanged. "
-		"Save edits to persist the result.");
 
 	if (!SaveStatus.IsEmpty())
 	{

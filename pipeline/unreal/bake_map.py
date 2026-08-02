@@ -19,6 +19,7 @@
 import math
 import json
 import os
+import struct
 import sys
 import time
 
@@ -127,6 +128,19 @@ def fail(msg):
     unreal.log_error("[bake] %s" % msg)
 
 
+def png_coarse_mip(path):
+    """Mip level whose larger axis is approximately eight texels."""
+    try:
+        with open(path, "rb") as handle:
+            header = handle.read(24)
+        if header[:8] != b"\x89PNG\r\n\x1a\n":
+            return 5.0
+        width, height = struct.unpack(">II", header[16:24])
+        return max(0.0, math.log(max(width, height), 2.0) - 3.0)
+    except (OSError, ValueError, struct.error):
+        return 5.0
+
+
 def fog_color(env, prefix=""):
     """One `.env` fog colour, decoded to linear. `.env` transports the authored value verbatim
     (/255); VtMB's colours are gamma-encoded and its own math decodes them with a plain 2.2
@@ -172,6 +186,7 @@ class Bake(object):
         self.dir = os.path.join(OUT_ROOT, map_name)
         self.pkg = "%s/%s" % (MOUNT, map_name)
         self.tex_pkg = "%s/Textures" % self.pkg
+        self.cube_pkg = "%s/Textures/Cubes" % self.pkg
         self.mat_pkg = "%s/Materials" % self.pkg
         self.decal_mat_pkg = "%s/Materials/Decals" % self.pkg
         self.mesh_pkg = "%s/Meshes" % self.pkg
@@ -186,6 +201,7 @@ class Bake(object):
         self.blend = []                  # per-vertex WVT weight
         self.decals = []                 # DecalDef, in sidecar order
         self.textures = {}               # (package, asset name) -> Texture2D
+        self.cubemaps = {}               # exact MTL envmap id -> TextureCube
         self.materials = {}              # (package, material key) -> MaterialInstanceConstant
         self.prop_models = {}            # stem -> ObjModel
         self.brush_models = {}           # brush_<model> -> local-space ObjModel
@@ -315,6 +331,37 @@ class Bake(object):
                 self.textures[(package, name)] = texture
                 self.saved.append("%s/%s" % (package, name))
             log("textures: %d into %s (%.1fs)" % (len(imported), package, time.time() - start))
+
+        # This slice deliberately imports only the patch-authored wetness closure. General
+        # world/prop cubemap conversion remains the later reflection rollout.
+        wet_materials = [mat for mat in self.world_mats.values() if mat.wetness_driven]
+        if self.map == "sm_hub_1":
+            if len(wet_materials) != 14:
+                raise SystemExit(
+                    "[bake] sm_hub_1 requires 14 GlobalWetness materials, found %d"
+                    % len(wet_materials))
+            cube_ids = {mat.env_cube for mat in wet_materials}
+            if cube_ids != {"cubemapdefault"}:
+                raise SystemExit(
+                    "[bake] sm_hub_1 wet materials require cubemapdefault, found %r"
+                    % sorted(cube_ids))
+            jobs = []
+            for cube_id in sorted(cube_ids):
+                source = os.path.join(self.dir, "tex", "cube", cube_id + ".dds")
+                if not os.path.isfile(source):
+                    raise SystemExit("[bake] wet cubemap missing: %s" % source)
+                jobs.append((source, "TC_" + bl.safe_name(cube_id)))
+            imported = bl.import_textures(jobs, self.cube_pkg)
+            for cube_id in sorted(cube_ids):
+                name = "TC_" + bl.safe_name(cube_id)
+                texture = imported.get(name)
+                if not texture or texture.get_class().get_name() != "TextureCube":
+                    raise SystemExit(
+                        "[bake] %s/%s did not import as TextureCube" % (self.cube_pkg, name))
+                bl.configure_texture(texture, "cube")
+                self.cubemaps[cube_id] = texture
+                self.saved.append("%s/%s" % (self.cube_pkg, name))
+            log("wet cubemaps: %d into %s" % (len(imported), self.cube_pkg))
         if self.weather:
             relative = self.weather["height_texture"]["path"]
             source = os.path.join(self.dir, relative.replace("/", os.sep))
@@ -415,10 +462,12 @@ class Bake(object):
         if bump:
             bl.set_tex_param(mic, "BumpMap", bump)
             bl.set_scalar_param(mic, "BumpAmount", BUMP_AMOUNT)
-        if mat.envmap:
+        if mat.env_cube:
             mask = tex(mat.env_mask)
             if mask:
                 bl.set_tex_param(mic, "EnvMask", mask)
+                mask_source = os.path.join(self.dir, mat.env_mask.replace("/", os.sep))
+                bl.set_scalar_param(mic, "EnvMaskCoarseMip", png_coarse_mip(mask_source))
             # An unmasked reflective surface reflects uniformly; the master's own white
             # default stands in for the runtime's 1x1 white texture.
             bl.set_scalar_param(mic, "EnvStrength", ENV_STRENGTH)
@@ -439,6 +488,13 @@ class Bake(object):
         if mat.wetness_driven:
             bl.set_scalar_param(mic, "WetnessDriven", 1.0)
             bl.set_scalar_param(mic, "WetnessScale", mat.wetness_scale)
+            source_cube = self.cubemaps.get(mat.env_cube)
+            if not source_cube:
+                raise SystemExit(
+                    "[bake] wet material %s has no imported SourceCube %r"
+                    % (mat.name, mat.env_cube))
+            bl.set_tex_param(mic, "SourceCube", source_cube)
+            bl.set_static_switch_param(mic, "WetnessUsesSourceCube", True)
             if self.weather and self.rain_height:
                 bounds = self.weather["world_bounds_cm"]
                 minimum, maximum = bounds["min"], bounds["max"]
@@ -520,6 +576,14 @@ class Bake(object):
                 path = "%s/%s" % (package, name)
                 if unreal.EditorAssetLibrary.does_asset_exist(path):
                     self.textures[(package, name)] = unreal.EditorAssetLibrary.load_asset(path)
+        if self.map == "sm_hub_1":
+            for mat in self.world_mats.values():
+                if not mat.wetness_driven or mat.env_cube in self.cubemaps:
+                    continue
+                name = "TC_" + bl.safe_name(mat.env_cube)
+                path = "%s/%s" % (self.cube_pkg, name)
+                if unreal.EditorAssetLibrary.does_asset_exist(path):
+                    self.cubemaps[mat.env_cube] = unreal.EditorAssetLibrary.load_asset(path)
         if self.weather and not self.rain_height:
             path = "%s/T_RainHeight" % self.weather_pkg
             if unreal.EditorAssetLibrary.does_asset_exist(path):

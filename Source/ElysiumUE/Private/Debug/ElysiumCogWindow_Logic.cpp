@@ -36,6 +36,7 @@ void FElysiumCogWindow_Logic::RenderContent()
 		ImGui::TextDisabled("No .ents substrate on this map.");
 		return;
 	}
+	ImGui::TextDisabled("Only entity families present on this map are shown. Open one to inspect or fire it.");
 
 	// --- env_fade screen fade (what the HUD draws this frame) -------------------------------
 	ImGui::SeparatorText("Screen fade (env_fade)");
@@ -96,7 +97,7 @@ void FElysiumCogWindow_Logic::RenderClassSection(const char* Label, const TCHAR*
 	}
 
 	const FString Header = FString::Printf(TEXT("%hs  (%d)"), Label, Matches.Num());
-	if (!ImGui::CollapsingHeader(COG_TCHAR_TO_CHAR(*Header), ImGuiTreeNodeFlags_DefaultOpen))
+	if (!ImGui::CollapsingHeader(COG_TCHAR_TO_CHAR(*Header)))
 	{
 		return;
 	}

@@ -52,8 +52,13 @@ void FElysiumCogWindow_SoundScheme::RenderContent()
 		ImGui::TextDisabled("No SoundScheme manager (no map / no .ents loaded).");
 		return;
 	}
+	if (!ImGui::BeginTabBar("##SoundscapeViews"))
+	{
+		return;
+	}
 
-	// --- Music state machine ----------------------------------------------------------------
+	if (ImGui::BeginTabItem("Current soundscape"))
+	{
 	ImGui::SeparatorText("Music state");
 	const EElysiumMusicState State = Mgr->MusicState();
 	const char* StateNames[] = { "Explore (safe)", "Combat", "Alert" };
@@ -142,53 +147,60 @@ void FElysiumCogWindow_SoundScheme::RenderContent()
 			ImGui::TreePop();
 		}
 	}
+		ImGui::EndTabItem();
+	}
 
-	// --- This map's ambient_soundscheme anchors ---------------------------------------------
-	ImGui::SeparatorText("ambient_soundscheme anchors");
-	const FElysiumEntityWorld* World = GetEntityWorld();
-	if (World == nullptr)
+	if (ImGui::BeginTabItem("Map anchors"))
 	{
-		ImGui::TextDisabled("No entity world.");
-		return;
-	}
-	int32 Shown = 0;
-	for (const TUniquePtr<FElysiumEntity>& EPtr : World->Entities())
-	{
-		const FElysiumEntity* E = EPtr.Get();
-		if (E == nullptr || E->Def == nullptr ||
-			!E->Def->Classname.Equals(TEXT("ambient_soundscheme"), ESearchCase::IgnoreCase))
+		const FElysiumEntityWorld* World = GetEntityWorld();
+		if (World == nullptr)
 		{
-			continue;
+			ImGui::TextDisabled("No entity world.");
 		}
-		++Shown;
-		const FString Rel = E->Def->Keys.FindRef(TEXT("scheme_file")).Replace(TEXT("\\"), TEXT("/"));
-		const FVector Anchor = E->Def->Origin;
-		const bool bActive = Mgr->ActiveSchemeRel() == Rel;
+		else
+		{
+			int32 Shown = 0;
+			for (const TUniquePtr<FElysiumEntity>& EPtr : World->Entities())
+			{
+				const FElysiumEntity* E = EPtr.Get();
+				if (E == nullptr || E->Def == nullptr ||
+					!E->Def->Classname.Equals(TEXT("ambient_soundscheme"), ESearchCase::IgnoreCase))
+				{
+					continue;
+				}
+				++Shown;
+				const FString Rel = E->Def->Keys.FindRef(TEXT("scheme_file")).Replace(TEXT("\\"), TEXT("/"));
+				const FVector Anchor = E->Def->Origin;
+				const bool bActive = Mgr->ActiveSchemeRel() == Rel;
 
-		ImGui::PushID(E->Handle.Index);
-		if (ImGui::SmallButton("FadeIn"))
-		{
-			Mgr->FadeInScheme(Audio, Rel, Anchor, 2.f);
+				ImGui::PushID(E->Handle.Index);
+				if (ImGui::SmallButton("Fade in"))
+				{
+					Mgr->FadeInScheme(Audio, Rel, Anchor, 2.f);
+				}
+				ImGui::SameLine();
+				if (ImGui::SmallButton("Fade out"))
+				{
+					Mgr->FadeOutScheme(Audio, Rel, 2.f);
+				}
+				ImGui::SameLine();
+				if (bActive) { ImGui::TextColored(ElysiumCogStyle::ColOk, "%s", COG_TCHAR_TO_CHAR(*Rel)); }
+				else         { ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*Rel)); }
+				if (!E->TargetName.IsEmpty())
+				{
+					ImGui::SameLine();
+					ImGui::TextDisabled("(%s)", COG_TCHAR_TO_CHAR(*E->TargetName));
+				}
+				ImGui::PopID();
+			}
+			if (Shown == 0)
+			{
+				ImGui::TextDisabled("No soundscape anchors on this map.");
+			}
 		}
-		ImGui::SameLine();
-		if (ImGui::SmallButton("FadeOut"))
-		{
-			Mgr->FadeOutScheme(Audio, Rel, 2.f);
-		}
-		ImGui::SameLine();
-		if (bActive) { ImGui::TextColored(ElysiumCogStyle::ColOk, "%s", COG_TCHAR_TO_CHAR(*Rel)); }
-		else         { ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*Rel)); }
-		if (!E->TargetName.IsEmpty())
-		{
-			ImGui::SameLine();
-			ImGui::TextDisabled("(%s)", COG_TCHAR_TO_CHAR(*E->TargetName));
-		}
-		ImGui::PopID();
+		ImGui::EndTabItem();
 	}
-	if (Shown == 0)
-	{
-		ImGui::TextDisabled("No ambient_soundscheme entities on this map.");
-	}
+	ImGui::EndTabBar();
 }
 
 #endif // ENABLE_COG

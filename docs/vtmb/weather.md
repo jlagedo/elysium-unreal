@@ -409,30 +409,67 @@ two unequal `bounds` values are the missing part of that distribution rule.
 
 ### Wetness presentation slice
 
-The live Unreal slice connects only the material environment output. The entity world remains the
-single authority for the authored current/target transition and continues to process and serialize
-timers while a debug override is visible. `env_particle` state crosses the same `IElysiumWeather`
-seam as values, but this slice creates no Niagara components.
+The material slice and the future particle presentation share one weather authority. The entity
+world owns the authored current/target transition and continues to process and serialize timers
+while a debug override is visible. `env_particle` state crosses the same `IElysiumWeather` seam as
+values, but this slice creates no Niagara components.
 
-One shared world-material graph maps the patch-authored reflection channel as:
+One shared world-material graph computes:
 
-`wet = saturate(GlobalWetness × authored material scale × WetnessOutputScale)`
+```
+wet             = saturate(GlobalWetness · authoredScale · WetnessOutputScale)
+sourceWeight     = lerp(1, RainSourceRetain, RainEnhancement)
+sourceReflection = SourceCube((UE.X, -UE.Y, UE.Z)) · EnvMaskLinear · wet · sourceWeight
+enhancedCoverage = RainEnhancement · wet · EnvMaskCoarse · Exposure · Upward
+```
 
 `GlobalWetness` is the presented `0..1` state. `WetnessOutputScale` defaults to `1.0` and is an
-owner tuning multiplier; the authored per-material values remain `0.56`, `0.60`, and `1.00`.
-Materials without a valid `GlobalWetness` proxy remain unchanged. Source-reference presentation is
-the default (`RainEnhancement=0`): wetness changes the existing reflection response only. The same
-graph can add restrained base-colour darkening and roughness reduction when `RainEnhancement` is
-raised; it does not select another material or weather system.
+owner tuning multiplier; the patch-authored per-material values remain `0.56`, `0.60`, and `1.00`.
+Materials without a complete `GlobalWetness` proxy remain unchanged. The 14 `sm_hub_1` proxy
+materials bind the one exported 32x32 LDR `cubemapdefault`; the cube is colour, while the
+`$envmapmask` is linear `TC_Masks` data read through UE's `Masks` sampler. The bake derives
+`EnvMaskCoarseMip` from the longest image axis: the present 512-axis masks select mip 6 and the
+1024-axis masks select mip 7, producing the intended roughly 8-texel coarse footprint. Inactive
+`BaseTex2`, bump, and emissive slots in the shared master are not missing wetness layers: none of
+these 14 VMTs authors those channels.
 
-The Cog window `Elysium.Environment` exposes the live authored and presented values, transition
-time, patch material groups, output scale, enhancement parameters, and authored timer buttons. Its
-manual wetness override replaces presentation only: the entity state and scheduled I/O keep running,
-and selecting **Follow authored** reveals the current authored value without restarting the cycle.
-It also exposes the light rig's existing `SpecularScale` as **Local-light specular**, shared live
-with `Elysium.Lights` rather than stored as a second environment value. Zero is the source-light
-baseline. A non-zero value affects every non-overridden light and is an explicit presentation test,
-not part of the authored `GlobalWetness` channel.
+Source-reference presentation is `RainEnhancement=0`. The primary-view graph adds the authored
+cube/mask/wetness term through Emissive while keeping the stable albedo in Base Color. This maps the
+visible additive response into UE's dynamic-light scene; it does not claim VtMB marks `$envmap` as
+emissive. `Ray Tracing Quality Switch` replaces that view-dependent term with black for Lumen card
+capture and ray-hit evaluation. At this endpoint wetness does not change PBR roughness or specular.
+This is the wet-material specialization of the general `$envmap` translation in
+`docs/vtmb/reflections.md`.
+
+Raising `RainEnhancement` does not select another material or weather system. It enables a stable,
+low-frequency PBR response in the same graph: a coarse mip of the mask gates the wet region,
+the rain-height texture suppresses that response under cover, the world normal limits it to upward-
+facing surfaces, `RainWetRoughness` reduces roughness, and `RainWetSpecular` sets the dielectric
+reflection target.
+At the same time `RainSourceRetain` reduces the source cube at the enhanced endpoint so the two
+terms do not remain at full strength together. The raw, high-frequency mask continues to control
+the source cube only; using it directly as roughness is the rejected glitter/glare interpretation.
+Enhanced base-colour darkening remains a restrained optional term on upward-facing exposed
+surfaces. It does not alter the authored proxy scale.
+
+`cubemapdefault` is never assigned to the map Sky Light and is not converted into point, spot, or
+rect lights. The Sky Light continues to use the map's separate `sky_` cube and authored type-5
+sky-ambient magnitude; `sm_hub_1` has no such row, so its source-reference magnitude is zero.
+Promoting the material cube to a Sky Light would globally relight dry and non-proxy surfaces and
+duplicate radiance already represented by the reconstructed `.lights` rig.
+
+The Cog window `Elysium.Environment` is the one tuning surface. It exposes the live authored and
+presented values, transition time, patch material groups, output scale, source cube identity,
+source retain, enhanced roughness/specular/darkening, reflection debug views, and authored timer
+buttons. Its manual wetness override replaces presentation only: the entity state and scheduled
+I/O keep running, and selecting **Follow authored** reveals the current authored value without
+restarting the cycle. Debug views isolate the linear mask, wet factor, cube sample, completed source
+term, and enhanced coverage without creating alternate materials.
+
+The panel also exposes the light rig's existing `SpecularScale` as **Local-light specular**, shared
+live with `Elysium.Lights` rather than stored as a second environment value. Zero is the source-light
+baseline. A non-zero value affects every non-overridden light and is an independent presentation
+diagnostic, never an automatic consequence of wetness.
 
 | Console variable | Default | Live role |
 |---|---:|---|
@@ -440,8 +477,11 @@ not part of the authored `GlobalWetness` channel.
 | `elysium.EnvironmentWetness` | `1.0` | Manual presented wetness |
 | `elysium.EnvironmentWetnessScale` | `1.0` | Output multiplier after the authored material scale |
 | `elysium.RainEnhancement` | `0.0` | Blend source-reference and enhanced response in the same graph |
+| `elysium.RainSourceRetain` | `1.0` initially | Source-cube fraction at full enhancement; tuned before enhanced acceptance |
 | `elysium.RainWetDarken` | `0.06` | Maximum full-wet enhanced base-colour darkening |
 | `elysium.RainWetRoughness` | `0.10` | Maximum full-wet enhanced roughness reduction |
+| `elysium.RainWetSpecular` | `0.50` | Full-wet enhanced dielectric specular target |
+| `elysium.RainReflectionDebug` | `0` | Final, mask, wet factor, cube, source term, or enhanced-coverage view |
 | `elysium.RainLightResponse` | `0.25` | Retained particle tuning; no effect while Niagara is disconnected |
 
 ### Static cover data
@@ -471,11 +511,15 @@ camera-motion behavior are comparison evidence, not artist tuning targets until 
 
 Deferred source-defined work remains the sewer `WaterDrops_Timer` layer, fixed `func_particle`
 rain boxes, NPC shelter behavior, lightning, other maps, and the general particle runtime. The
-disabled base-game `RainSheets`/`RainMist2` blocks remain disabled. Enhanced wet darkening and
-roughness remain zero by default and owner-tunable beside the source response; local-light response
-and any additional mist stay behind the particle retail gate.
+disabled base-game `RainSheets`/`RainMist2` blocks remain disabled. Enhanced darkening,
+roughness/specular response, and source-cube retention are owner-tunable in the one graph and have
+no effective contribution while `RainEnhancement=0`; local-light response and any additional mist
+stay behind the particle retail gate.
 
 When presentation work resumes, measure fresh dry/rain A/B pairs on one fixed generated asset set
-at the existing `sm_hub_1` vantages. At 2560×1440 native on the measured RTX 5070 Ti, rain may add
-at most 1.0 ms GPU or 20%; reduce presentation tuning before changing authored rates. An RTX
-4060-class result is not claimed without that hardware.
+at the existing `sm_hub_1` vantages. Acceptance includes a labelled cube-orientation proof, linear
+mask and white-fallback validation, `RainEnhancement=0` source-cube isolation with local-light
+specular zero, a Surface Cache view free of the view-dependent cube, and the tuned enhanced
+crossfade. At 2560×1440 native on the measured RTX 5070 Ti, rain may add at most 1.0 ms GPU or 20%;
+reduce presentation tuning before changing authored rates. An RTX 4060-class result is not claimed
+without that hardware.

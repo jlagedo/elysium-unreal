@@ -22,7 +22,7 @@ class DependencyLockTests(unittest.TestCase):
         )
         self.assertEqual(
             plugins["Cog"].post_patch_tree,
-            "ec2512ba56301ed266c641eb9e70687fc9e0c3e6",
+            "d48490e2cd42fc2563a44d30062cbf003648716b",
         )
         self.assertEqual(
             plugins["glTFRuntime"].post_patch_tree,
@@ -52,6 +52,18 @@ class DependencyLockTests(unittest.TestCase):
             (root / "Intermediate").mkdir()
             (root / "Intermediate" / "generated.obj").write_bytes(b"generated")
             self.assertEqual(dependencies._content_hash(root), expected)
+
+    def test_managed_tree_cleanup_handles_read_only_git_objects(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            staging = Path(temporary) / "Cog.__fetch"
+            git_object = staging / ".git" / "objects" / "ab" / "object"
+            git_object.parent.mkdir(parents=True)
+            git_object.write_bytes(b"git object")
+            git_object.chmod(0o444)
+
+            dependencies._remove_tree(staging)
+
+            self.assertFalse(staging.exists())
 
     def test_plugin_destination_cannot_escape_managed_root(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

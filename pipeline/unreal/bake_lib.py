@@ -32,7 +32,7 @@ class MatDef(object):
 
     __slots__ = ("name", "albedo", "emissive", "bump", "refract_map", "env_mask",
                  "base_tex2", "scissor", "blend", "additive", "glass", "refract",
-                 "refract_amount", "envmap", "env_tint", "wetness_driven",
+                 "refract_amount", "env_cube", "env_tint", "wetness_driven",
                  "wetness_scale", "decal", "color")
 
     # Channel spread above which an $envmaptint counts as CHROMATIC rather than a grey
@@ -55,7 +55,7 @@ class MatDef(object):
         self.glass = False        # glass 1    -> UE Thin Translucent glass master
         self.refract = False      # refract N  -> Source framebuffer-distortion master
         self.refract_amount = 0.0 # authored $refractamount, PNO-neutral when zero
-        self.envmap = False
+        self.env_cube = ""
         self.env_tint = (1.0, 1.0, 1.0)   # envtint -> $envmaptint, white when unauthored
         self.wetness_driven = False
         self.wetness_scale = 0.0
@@ -74,7 +74,7 @@ class MatDef(object):
         Translucent and additive surfaces are excluded even when their tint is chromatic --
         the blue/teal tints in that population are coloured GLASS, which stays dielectric.
         Metalness is never inferred here; it is read off the game's own authoring."""
-        if not self.envmap or not self.opaque:
+        if not self.env_cube or not self.opaque:
             return False
         return max(self.env_tint) - min(self.env_tint) >= self.CHROMATIC_SPREAD
 
@@ -127,7 +127,7 @@ def read_mtl(path):
             elif key == "envmapmask" and len(tok) >= 2:
                 cur.env_mask = tok[1]
             elif key == "envmap" and len(tok) >= 2:
-                cur.envmap = True
+                cur.env_cube = tok[1]
             elif key == "envtint" and len(tok) >= 4:
                 cur.env_tint = (float(tok[1]), float(tok[2]), float(tok[3]))
             elif key == "globalwetness" and len(tok) >= 2:
@@ -374,7 +374,8 @@ def import_textures(jobs, package):
 def configure_texture(texture, role):
     """Set the compression/colour-space a texture's role needs. `role` is one of
     'albedo' (sRGB colour + alpha), 'normal' (tangent-space bump), 'mask' (linear
-    single-channel reflectivity), or 'height' (linear 16-bit rain-cover height)."""
+    single-channel reflectivity), 'cube' (sRGB source reflection), or 'height'
+    (linear 16-bit rain-cover height)."""
     if role == "height":
         texture.set_editor_property("srgb", False)
         texture.set_editor_property("compression_settings",
@@ -504,6 +505,10 @@ def set_scalar_param(mic, param, value):
 
 def set_vector_param(mic, param, value):
     _mel.set_material_instance_vector_parameter_value(mic, param, value)
+
+
+def set_static_switch_param(mic, param, value):
+    _mel.set_material_instance_static_switch_parameter_value(mic, param, value)
 
 
 def build_dynamic_mesh(sections):

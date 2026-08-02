@@ -17,7 +17,8 @@
 #   EmissiveScale (float) self-illum brightness, 0 by default (a surface with no map_Ke never glows)
 #   BumpMap     (tex)     $bumpmap tangent-space normal; blended toward flat by BumpAmount
 #   BumpAmount  (float)   0 by default (unbound surface stays geometrically smooth)
-#   EnvMask     (tex)     $envmap reflectivity mask; .r lowers Roughness so Lumen reflections appear
+#   EnvMask     (tex)     linear $envmap reflectivity mask
+#   SourceCube  (cube)    source cubemap used by the patch-authored wetness endpoint
 #   EnvStrength (float)   0 by default (unbound surface stays matte at the calibrated 0.5 roughness)
 #   BaseTex2    (tex)     WorldVertexTransition second albedo; lerp(Albedo, BaseTex2, VertexColor.r x BlendAmount)
 #   BlendAmount (float)   0 by default (non-WVT surface ignores BaseTex2 and its vertex colour)
@@ -27,11 +28,11 @@
 # share screen depth, which no engine-side fog mechanism can separate. Unwritten data is zero,
 # which is "not fogged", so the term is neutral on any primitive nobody wrote to.
 #
-# $envmap is handled the modern way (roadmap decision 2026-07-24): NOT a baked-cube sample but a
-# reflectivity mask that lowers Roughness, so the fully-dynamic Lumen path produces the reflection
-# (roadmap 7.5 tunes it). The exported tex/cube/ faces stay unused by the world path (the 2D sky
-# still uses them). Base Roughness is held at 0.5 -- the value the old unconnected pin defaulted to
-# -- so non-$envmap surfaces keep their calibrated look; only masked surfaces drop toward 0.15.
+# General $envmap surfaces keep the existing PBR/Lumen response. A static switch on the same
+# shared graph selects the patch-authored wetness endpoint for sm_hub_1: it samples SourceCube as
+# an additive primary-view emissive term while a Ray Tracing Quality Switch keeps that
+# camera-dependent colour out of Lumen surface-cache and ray-hit evaluation. Enhanced wetness
+# remains a tunable second term.
 #
 # A UMaterial graph only compiles in the editor, so these are authored here and committed; the
 # runtime only instances them (FElysiumMaterialFactory picks the master by blend flag and binds the
@@ -63,12 +64,13 @@ def connect_property(src, src_out, prop):
 PKG = "/Game/VtMB/Materials"
 DEFAULT_TEX = "/Engine/EngineResources/DefaultTexture.DefaultTexture"
 DEFAULT_NORMAL = "/Engine/EngineMaterials/DefaultNormal.DefaultNormal"
+DEFAULT_CUBE = "/Engine/EngineResources/DefaultTextureCube.DefaultTextureCube"
 # EnvMask needs a WHITE default, not DefaultTexture: 228 of the game's reflective materials
 # carry $envmap with no $envmapmask and reflect uniformly, and nothing overwrites the sampler
 # for them. DefaultTexture is a 128x128 greenish-grey noise image (mean RGB 122/140/131), so
 # it would both dim and mottle exactly those surfaces. Matches the runtime factory, which
 # binds a 1x1 white for the same case.
-WHITE_TEX = "/Engine/EngineResources/WhiteSquareTexture.WhiteSquareTexture"
+LINEAR_WHITE_MASK = "%s/T_LinearWhiteMask" % PKG
 
 # The $envmap-mask -> Lumen reflection channel (roadmap 7.5). These are the master's parameter
 # DEFAULTS; the bake binds a per-material value over them.
@@ -97,7 +99,7 @@ tools = unreal.AssetToolsHelpers.get_asset_tools()
 # miss both leaves the sampler defaultless and trips the commandlet's error-exit.
 _default_tex = unreal.load_asset(DEFAULT_TEX)
 _default_normal = unreal.load_asset(DEFAULT_NORMAL)
-_white_tex = unreal.load_asset(WHITE_TEX)
+_default_cube = unreal.load_asset(DEFAULT_CUBE)
 
 
 def _png_chunk(kind, data):
@@ -138,7 +140,44 @@ def make_height_placeholder():
     return texture
 
 
+def make_linear_white_mask():
+    """A real linear 1x1 mask for genuinely unmasked $envmap materials."""
+    existing = unreal.load_asset(LINEAR_WHITE_MASK)
+    if existing:
+        existing.set_editor_property("srgb", False)
+        existing.set_editor_property(
+            "compression_settings", unreal.TextureCompressionSettings.TC_MASKS)
+        existing.set_editor_property("mip_gen_settings", unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS)
+        unreal.EditorAssetLibrary.save_asset(LINEAR_WHITE_MASK, only_if_is_dirty=False)
+        return existing
+    source = Path(export_root()) / ".policy" / "linear_white_mask.png"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_bytes(
+        b"\x89PNG\r\n\x1a\n"
+        + _png_chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 0, 0, 0, 0))
+        + _png_chunk(b"IDAT", zlib.compress(b"\x00\xff"))
+        + _png_chunk(b"IEND", b"")
+    )
+    task = unreal.AssetImportTask()
+    task.set_editor_property("filename", str(source))
+    task.set_editor_property("destination_path", PKG)
+    task.set_editor_property("destination_name", "T_LinearWhiteMask")
+    task.set_editor_property("automated", True)
+    task.set_editor_property("replace_existing", True)
+    task.set_editor_property("save", False)
+    tools.import_asset_tasks([task])
+    texture = unreal.load_asset(LINEAR_WHITE_MASK)
+    if not texture:
+        raise SystemExit("[make_world_materials] could not import linear white mask")
+    texture.set_editor_property("srgb", False)
+    texture.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_MASKS)
+    texture.set_editor_property("mip_gen_settings", unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS)
+    unreal.EditorAssetLibrary.save_asset(LINEAR_WHITE_MASK, only_if_is_dirty=False)
+    return texture
+
+
 _height_placeholder = make_height_placeholder()
+_linear_white_mask = make_linear_white_mask()
 
 
 def make_environment_collection():
@@ -157,6 +196,9 @@ def make_environment_collection():
         "RainWetDarken": 0.06,
         "RainWetRoughness": 0.10,
         "RainLightResponse": 0.25,
+        "RainSourceRetain": 1.0,
+        "RainWetSpecular": 0.50,
+        "RainReflectionDebug": 0.0,
     }
     parameters = []
     for name, default in values.items():
@@ -203,10 +245,30 @@ def _tex_param(mat, name, x, y, normal=False, white=False, grayscale=False):
         n.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR)
         n.set_editor_property("texture", _height_placeholder)
     else:
-        n.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR)
-        fallback = _white_tex if white else _default_tex
+        n.set_editor_property(
+            "sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_MASKS
+            if white else unreal.MaterialSamplerType.SAMPLERTYPE_COLOR)
+        fallback = _linear_white_mask if white else _default_tex
         if fallback:
             n.set_editor_property("texture", fallback)
+    return n
+
+
+def _cube_param(mat, name, x, y):
+    n = mel.create_material_expression(mat, unreal.MaterialExpressionTextureSampleParameterCube, x, y)
+    n.set_editor_property("parameter_name", name)
+    n.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR)
+    if _default_cube:
+        n.set_editor_property("texture", _default_cube)
+    return n
+
+
+def _static_switch(mat, name, true_value, false_value, x, y, default=False):
+    n = mel.create_material_expression(mat, unreal.MaterialExpressionStaticSwitchParameter, x, y)
+    n.set_editor_property("parameter_name", name)
+    n.set_editor_property("default_value", default)
+    connect(true_value, "", n, "True")
+    connect(false_value, "", n, "False")
     return n
 
 
@@ -242,15 +304,53 @@ def build_world_graph(mat):
     """Author the shared lit world-surface graph; wire BaseColor/Emissive/Normal/Roughness/
     Specular/Metallic. Returns the Albedo sampler so a caller can also drive Opacity/
     OpacityMask from its alpha."""
-    # --- $envmap reach: env = saturate(EnvMask.r x EnvStrength) ---
-    # Computed first because three outputs read it: Roughness, Specular, and -- through the
-    # metal branch -- BaseColor. EnvStrength defaults to 0, so a surface with no $envmap is
-    # untouched by every one of them.
+    def mask(source, channel, x, y):
+        node = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, x, y)
+        for name in ("r", "g", "b", "a"):
+            node.set_editor_property(name, name == channel)
+        connect(source, "", node, "")
+        return node
+
+    def constant(value, x, y):
+        node = mel.create_material_expression(mat, unreal.MaterialExpressionConstant, x, y)
+        node.set_editor_property("r", value)
+        return node
+
+    zero = constant(0.0, -1080, 2080)
+    one = constant(1.0, -1080, 2160)
+    black = mel.create_material_expression(mat, unreal.MaterialExpressionConstant3Vector, -1080, 2000)
+    black.set_editor_property("constant", unreal.LinearColor(0.0, 0.0, 0.0, 0.0))
+
+    # Raw and deliberately coarse linear masks. The bake derives EnvMaskCoarseMip from each
+    # imported mask's dimensions so this second sample is approximately an 8x8 footprint.
     env_mask = _tex_param(mat, "EnvMask", -900, 1060, white=True)
-    env_str = _scalar(mat, "EnvStrength", 0.0, -900, 1240)
+    # UE's Python material API cannot refresh the dynamic MipLevel input after MipValueMode is
+    # changed. The sm_hub_1 wet-mask corpus needs only mip 6 (512 axis) and mip 7 (1024 axis),
+    # so author both constant-level samples and select between them per material instance. This
+    # still resolves every current mask to an approximately 8x8 coarse footprint.
+    env_mask_mip6 = _tex_param(mat, "EnvMask", -900, 1140, white=True)
+    env_mask_mip6.set_editor_property(
+        "mip_value_mode", unreal.TextureMipValueMode.TMVM_MIP_LEVEL)
+    env_mask_mip6.set_editor_property("const_mip_value", 6)
+    env_mask_mip7 = _tex_param(mat, "EnvMask", -900, 1220, white=True)
+    env_mask_mip7.set_editor_property(
+        "mip_value_mode", unreal.TextureMipValueMode.TMVM_MIP_LEVEL)
+    env_mask_mip7.set_editor_property("const_mip_value", 7)
+    coarse_mip = _scalar(mat, "EnvMaskCoarseMip", 6.0, -900, 1300)
+    coarse_high = mel.create_material_expression(mat, unreal.MaterialExpressionStep, -660, 1260)
+    coarse_high.set_editor_property("const_x", 6.5)
+    connect(coarse_mip, "", coarse_high, "Y")
+    env_mask_coarse = mel.create_material_expression(
+        mat, unreal.MaterialExpressionLinearInterpolate, -460, 1180)
+    connect(env_mask_mip6, "R", env_mask_coarse, "A")
+    connect(env_mask_mip7, "R", env_mask_coarse, "B")
+    connect(coarse_high, "", env_mask_coarse, "Alpha")
+    env_str = _scalar(mat, "EnvStrength", 0.0, -900, 1400)
     env_amt = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -640, 1100)
     connect(env_mask, "R", env_amt, "A")
     connect(env_str, "", env_amt, "B")
+
+    # Authoritative wetness is shared by both the source endpoint and the enhancement branch.
     global_wetness = _collection_scalar(mat, "GlobalWetness", -900, 2160)
     wetness_scale = _scalar(mat, "WetnessScale", 0.0, -900, 2240)
     wetness_driven = _scalar(mat, "WetnessDriven", 0.0, -900, 2320)
@@ -263,8 +363,6 @@ def build_world_graph(mat):
     connect(wetness_output_scale, "", wet_scaled, "B")
     wet_amount = mel.create_material_expression(mat, unreal.MaterialExpressionSaturate, -340, 2160)
     connect(wet_scaled, "", wet_amount, "")
-    one = mel.create_material_expression(mat, unreal.MaterialExpressionConstant, -660, 2320)
-    one.set_editor_property("r", 1.0)
     wet_selector = mel.create_material_expression(
         mat, unreal.MaterialExpressionLinearInterpolate, -160, 2240)
     connect(one, "", wet_selector, "A")
@@ -276,16 +374,44 @@ def build_world_graph(mat):
     env = mel.create_material_expression(mat, unreal.MaterialExpressionSaturate, -260, 1100)
     connect(env_wet, "", env, "")
 
+    # Patch-authored endpoint: sample the imported VTF-order cube with the one established
+    # handedness correction (UE.X, -UE.Y, UE.Z). Enhancement controls retention, not identity.
+    reflection = mel.create_material_expression(
+        mat, unreal.MaterialExpressionReflectionVectorWS, -900, 1760)
+    handedness = mel.create_material_expression(
+        mat, unreal.MaterialExpressionConstant3Vector, -900, 1840)
+    handedness.set_editor_property("constant", unreal.LinearColor(1.0, -1.0, 1.0, 0.0))
+    source_direction = mel.create_material_expression(
+        mat, unreal.MaterialExpressionMultiply, -660, 1780)
+    connect(reflection, "", source_direction, "A")
+    connect(handedness, "", source_direction, "B")
+    source_cube = _cube_param(mat, "SourceCube", -420, 1760)
+    connect(source_direction, "", source_cube, "UVs")
+    enhancement = _collection_scalar(mat, "RainEnhancement", 740, 3000)
+    source_retain = _collection_scalar(mat, "RainSourceRetain", -420, 1940)
+    source_weight = mel.create_material_expression(
+        mat, unreal.MaterialExpressionLinearInterpolate, -160, 1900)
+    connect(one, "", source_weight, "A")
+    connect(source_retain, "", source_weight, "B")
+    connect(enhancement, "", source_weight, "Alpha")
+    source_mask = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -80, 1760)
+    connect(env_mask, "R", source_mask, "A")
+    connect(wet_amount, "", source_mask, "B")
+    source_mask_weight = mel.create_material_expression(
+        mat, unreal.MaterialExpressionMultiply, 100, 1760)
+    connect(source_mask, "", source_mask_weight, "A")
+    connect(source_weight, "", source_mask_weight, "B")
+    source_contribution = mel.create_material_expression(
+        mat, unreal.MaterialExpressionMultiply, 280, 1760)
+    connect(source_cube, "RGB", source_contribution, "A")
+    connect(source_mask_weight, "", source_contribution, "B")
+    source_view = _static_switch(
+        mat, "WetnessUsesSourceCube", source_contribution, black, 480, 1760)
+
     # Enhanced-only exposure: upward surfaces at the top-down cover height. At tuning zero this
-    # whole branch is mathematically zero; the faithful reflection term above remains active.
+    # whole branch is mathematically zero; the source cubemap endpoint above remains active.
     world_pos = mel.create_material_expression(mat, unreal.MaterialExpressionWorldPosition,
                                                -1480, 2500)
-    def mask(source, channel, x, y):
-        node = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, x, y)
-        for name in ("r", "g", "b", "a"):
-            node.set_editor_property(name, name == channel)
-        connect(source, "", node, "")
-        return node
     world_x = mask(world_pos, "r", -1280, 2440)
     world_y = mask(world_pos, "g", -1280, 2520)
     world_z = mask(world_pos, "b", -1280, 2600)
@@ -338,28 +464,25 @@ def build_world_graph(mat):
     connect(normal_ws, "", upward_dot, "A"); connect(up, "", upward_dot, "B")
     upward = mel.create_material_expression(mat, unreal.MaterialExpressionSaturate, 1100, 2800)
     connect(upward_dot, "", upward, "")
-    enhancement = _collection_scalar(mat, "RainEnhancement", 740, 3000)
     enhanced_a = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, 1280, 2640)
     connect(wet_amount, "", enhanced_a, "A"); connect(wetness_driven, "", enhanced_a, "B")
     enhanced_b = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, 1460, 2640)
-    connect(enhanced_a, "", enhanced_b, "A"); connect(exposed_valid, "", enhanced_b, "B")
+    connect(enhanced_a, "", enhanced_b, "A"); connect(env_mask_coarse, "", enhanced_b, "B")
     enhanced_c = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, 1640, 2640)
-    connect(enhanced_b, "", enhanced_c, "A"); connect(upward, "", enhanced_c, "B")
+    connect(enhanced_b, "", enhanced_c, "A"); connect(exposed_valid, "", enhanced_c, "B")
+    enhanced_d = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, 1820, 2640)
+    connect(enhanced_c, "", enhanced_d, "A"); connect(upward, "", enhanced_d, "B")
     enhanced_wet = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, 1820, 2640)
-    connect(enhanced_c, "", enhanced_wet, "A"); connect(enhancement, "", enhanced_wet, "B")
+    connect(enhanced_d, "", enhanced_wet, "A"); connect(enhancement, "", enhanced_wet, "B")
 
-    # --- Metallic: env x MetalMask ---
-    # VtMB names its own metals. $envmaptint multiplies the reflection, and on 102 of the
-    # game's 2,610 reflective materials it is CHROMATIC -- brass 0.65/0.5/0, copper
-    # 0.74/0.57/0.31 -- which is a hand-authored statement that the surface is metal and what
-    # colour it reflects (docs/vtmb/reflections.md). MetalMask defaults to 0, so metalness is never
-    # inferred: the bake sets it only where the game's own tint says so, and the $envmapmask
-    # then localises it to the metal texels rather than the whole surface.
+    # General $envmap surfaces keep the existing metal/PBR response. Wet source-cube
+    # permutations bypass it; their authored mask never drives Metallic/Specular/Roughness.
     metal_mask = _scalar(mat, "MetalMask", 0.0, -900, 1420)
     metal = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -420, 1420)
     connect(env, "", metal, "A")
     connect(metal_mask, "", metal, "B")
-    connect_property(metal, "", unreal.MaterialProperty.MP_METALLIC)
+    metal_output = _static_switch(mat, "WetnessUsesSourceCube", zero, metal, -220, 1420)
+    connect_property(metal_output, "", unreal.MaterialProperty.MP_METALLIC)
 
     # --- WorldVertexTransition base colour: lerp(Albedo, BaseTex2, VertexColor.r x BlendAmount) ---
     albedo = _tex_param(mat, "Albedo", -900, -260)
@@ -374,9 +497,7 @@ def build_world_graph(mat):
     connect(basetex2, "RGB", wvt, "B")
     connect(wvt_alpha, "", wvt, "Alpha")
 
-    # A metal's BaseColor IS its reflection colour, so the tint lands here rather than on a
-    # specular level UE ignores once Metallic is up. Away from the metal branch the lerp
-    # resolves to white and this is a multiply by 1.
+    # Legacy metal tint. The source-cube permutation uses the unmodified WVT albedo instead.
     env_tint = _vec_param(mat, "EnvTint", -900, 1600)
     white = mel.create_material_expression(mat, unreal.MaterialExpressionConstant3Vector, -900, 1740)
     white.set_editor_property("constant", unreal.LinearColor(1.0, 1.0, 1.0, 1.0))
@@ -395,36 +516,51 @@ def build_world_graph(mat):
     mel.connect_material_expressions(emis, "RGB", emis_mul, "A")
     mel.connect_material_expressions(emis_scale, "", emis_mul, "B")
 
-    # --- Source's distance fog, per primitive (mat_fog / sky-ambience B8b) ---
-    # The world and the 3D-skybox miniature carry two different fogs and share screen depth, so
-    # the term is driven by each primitive's own Custom Primitive Data. Unwritten data reads as
-    # zero, which is f = 0, so this passes BaseColor/Specular/Emissive through unchanged.
+    # Enhanced base darkening is applied only to source-cube wet materials.
     f, inv_f, fog_color = mat_fog.fog_from_primitive(mat)
     wet_darken = _collection_scalar(mat, "RainWetDarken", -120, -20)
     dark_amount = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, 80, -20)
     connect(enhanced_wet, "", dark_amount, "A"); connect(wet_darken, "", dark_amount, "B")
     dark_factor = mel.create_material_expression(mat, unreal.MaterialExpressionOneMinus, 240, -20)
     connect(dark_amount, "", dark_factor, "")
-    wet_base_color = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, 400, -100)
-    connect(base_color, "", wet_base_color, "A"); connect(dark_factor, "", wet_base_color, "B")
-    connect_property(mat_fog.fade(mat, wet_base_color, "", inv_f, 580, -160),
-                     "", unreal.MaterialProperty.MP_BASE_COLOR)
-    connect_property(
-        mat_fog.inscatter(mat, mat_fog.fade(mat, emis_mul, "", inv_f, -180, 420),
-                          f, fog_color, 40, 420),
-        "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    darkened_base = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, 400, -100)
+    connect(wvt, "", darkened_base, "A"); connect(dark_factor, "", darkened_base, "B")
+    # Source's environment term is additive after the surface texture. Putting it in UE Base
+    # Color makes the cube disappear wherever the rebuilt dynamic-light solution is dark. Keep
+    # Base Color stable and carry the view-dependent term through Emissive instead. UE 5.8's
+    # Ray Tracing Quality Switch selects RayTraced for both ray shaders and LUMEN_CARD_CAPTURE,
+    # so the black replacement prevents the camera vector from entering secondary lighting.
+    selected_base = _static_switch(
+        mat, "WetnessUsesSourceCube", darkened_base, base_color, 960, -100)
+    lumen_safe_source = mel.create_material_expression(
+        mat, unreal.MaterialExpressionRayTracingQualitySwitch, 760, 120)
+    connect(source_view, "", lumen_safe_source, "Normal")
+    connect(black, "", lumen_safe_source, "RayTraced")
+    primary_emissive = mel.create_material_expression(
+        mat, unreal.MaterialExpressionAdd, 580, 420)
+    connect(emis_mul, "", primary_emissive, "A")
+    connect(lumen_safe_source, "", primary_emissive, "B")
+    fogged_base = mat_fog.fade(mat, selected_base, "", inv_f, 1160, -160)
+    fogged_emissive = mat_fog.inscatter(
+        mat, mat_fog.fade(mat, primary_emissive, "", inv_f, -180, 420),
+        f, fog_color, 40, 420)
 
-    # --- Specular: lerp(SpecBase, SpecReflect, env), faded by the fog ---
-    # SpecBase 0 is the Lambert floor; the reflection channel raises it only where the mask
-    # does. The grey half of $envmaptint (362 materials) is a reflection-strength dim-down and
-    # the bake folds its luminance into SpecReflect, so it needs no node of its own.
+    # General PBR specular versus enhanced source-cube specular.
     spec_base = _scalar(mat, "SpecBase", SPEC_BASE, -900, 1900)
     spec_reflect = _scalar(mat, "SpecReflect", SPEC_REFLECT, -900, 1980)
     spec = mel.create_material_expression(mat, unreal.MaterialExpressionLinearInterpolate, -640, 1940)
     connect(spec_base, "", spec, "A")
     connect(spec_reflect, "", spec, "B")
     connect(env, "", spec, "Alpha")
-    connect_property(mat_fog.specular(mat, inv_f, -400, 1900, source=spec),
+    wet_specular = _collection_scalar(mat, "RainWetSpecular", -420, 2060)
+    enhanced_spec = mel.create_material_expression(
+        mat, unreal.MaterialExpressionLinearInterpolate, -160, 2020)
+    connect(spec_base, "", enhanced_spec, "A")
+    connect(wet_specular, "", enhanced_spec, "B")
+    connect(enhanced_wet, "", enhanced_spec, "Alpha")
+    selected_spec = _static_switch(
+        mat, "WetnessUsesSourceCube", enhanced_spec, spec, 40, 1980)
+    connect_property(mat_fog.specular(mat, inv_f, 220, 1900, source=selected_spec),
                      "", unreal.MaterialProperty.MP_SPECULAR)
 
     # --- $bumpmap normal: lerp(flat (0,0,1), BumpMap, BumpAmount) ---
@@ -438,9 +574,7 @@ def build_world_graph(mat):
     mel.connect_material_expressions(bump_amt, "", normal, "Alpha")
     mel.connect_material_property(normal, "", unreal.MaterialProperty.MP_NORMAL)
 
-    # --- Roughness: lerp(RoughBase, RoughReflect, env) ---
-    # Both ends are parameters, not constants, so the calibration is a bake binding (and a
-    # live cvar over the baked instance) rather than a re-authored graph.
+    # General PBR roughness versus enhanced source-cube roughness.
     r_base = _scalar(mat, "RoughBase", ROUGH_BASE, -900, 1240 + 60)
     r_reflect = _scalar(mat, "RoughReflect", ROUGH_REFLECT, -900, 1320 + 60)
     rough = mel.create_material_expression(mat, unreal.MaterialExpressionLinearInterpolate, -420, 1160)
@@ -451,10 +585,60 @@ def build_world_graph(mat):
     rough_delta = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, 120, 1260)
     connect(enhanced_wet, "", rough_delta, "A"); connect(wet_roughness, "", rough_delta, "B")
     wet_rough = mel.create_material_expression(mat, unreal.MaterialExpressionSubtract, 300, 1160)
-    connect(rough, "", wet_rough, "A"); connect(rough_delta, "", wet_rough, "B")
+    connect(r_base, "", wet_rough, "A"); connect(rough_delta, "", wet_rough, "B")
     wet_rough_sat = mel.create_material_expression(mat, unreal.MaterialExpressionSaturate, 480, 1160)
     connect(wet_rough, "", wet_rough_sat, "")
-    connect_property(wet_rough_sat, "", unreal.MaterialProperty.MP_ROUGHNESS)
+    selected_rough = _static_switch(
+        mat, "WetnessUsesSourceCube", wet_rough_sat, rough, 660, 1160)
+    connect_property(selected_rough, "", unreal.MaterialProperty.MP_ROUGHNESS)
+
+    # Reflection diagnostics. Integer modes 1..6 select one channel; mode zero is Final.
+    debug = _collection_scalar(mat, "RainReflectionDebug", 600, 2160)
+
+    def debug_select(index, x, y):
+        lower = mel.create_material_expression(mat, unreal.MaterialExpressionStep, x, y)
+        lower.set_editor_property("const_y", index - 0.5)
+        connect(debug, "", lower, "X")
+        upper = mel.create_material_expression(mat, unreal.MaterialExpressionStep, x, y + 80)
+        upper.set_editor_property("const_y", index + 0.5)
+        connect(debug, "", upper, "X")
+        before_upper = mel.create_material_expression(mat, unreal.MaterialExpressionOneMinus, x + 160, y + 80)
+        connect(upper, "", before_upper, "")
+        selected = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, x + 320, y)
+        connect(lower, "", selected, "A"); connect(before_upper, "", selected, "B")
+        return selected
+
+    debug_values = [env_mask, env_mask_coarse, wet_amount, source_cube,
+                    source_contribution, enhanced_wet]
+    debug_outputs = ["R", "", "", "RGB", "", ""]
+    debug_sum = black
+    for index, (value, output) in enumerate(zip(debug_values, debug_outputs), 1):
+        selector = debug_select(index, 820 + (index % 2) * 520, 2140 + index * 180)
+        weighted = mel.create_material_expression(
+            mat, unreal.MaterialExpressionMultiply, 1740, 2140 + index * 180)
+        connect(value, output, weighted, "A"); connect(selector, "", weighted, "B")
+        added = mel.create_material_expression(
+            mat, unreal.MaterialExpressionAdd, 1940, 2140 + index * 180)
+        connect(debug_sum, "", added, "A"); connect(weighted, "", added, "B")
+        debug_sum = added
+    wet_debug_color = _static_switch(
+        mat, "WetnessUsesSourceCube", debug_sum, black, 2160, 2520)
+    debug_enabled = mel.create_material_expression(mat, unreal.MaterialExpressionStep, 2160, 2340)
+    debug_enabled.set_editor_property("const_y", 0.5)
+    connect(debug, "", debug_enabled, "X")
+    wet_debug_enabled = _static_switch(
+        mat, "WetnessUsesSourceCube", debug_enabled, zero, 2340, 2340)
+    final_base = mel.create_material_expression(
+        mat, unreal.MaterialExpressionLinearInterpolate, 2520, -100)
+    connect(fogged_base, "", final_base, "A"); connect(black, "", final_base, "B")
+    connect(wet_debug_enabled, "", final_base, "Alpha")
+    final_emissive = mel.create_material_expression(
+        mat, unreal.MaterialExpressionLinearInterpolate, 2520, 420)
+    connect(fogged_emissive, "", final_emissive, "A")
+    connect(wet_debug_color, "", final_emissive, "B")
+    connect(wet_debug_enabled, "", final_emissive, "Alpha")
+    connect_property(final_base, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    connect_property(final_emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
 
     return albedo
 

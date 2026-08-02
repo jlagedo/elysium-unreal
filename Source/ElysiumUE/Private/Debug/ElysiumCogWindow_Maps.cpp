@@ -56,9 +56,13 @@ void FElysiumCogWindow_Maps::RenderContent()
 	ImGui::SameLine();
 	FCogWidgets::HelpMarker("Re-Travel the current map: edit the exporter, re-export to $ELYSIUM_EXPORT_ROOT, "
 		"then Reload here to see it - no editor recook. Same as the elysium.reload console command.");
+	if (!ImGui::BeginTabBar("##MapViews"))
+	{
+		return;
+	}
 
-	// --- Exported map list ---------------------------------------------------------------------
-	ImGui::SeparatorText("Exported maps");
+	if (ImGui::BeginTabItem("Travel"))
+	{
 	const TArray<FString> Names = Maps->ExportedMaps();
 	if (Names.Num() == 0)
 	{
@@ -100,14 +104,18 @@ void FElysiumCogWindow_Maps::RenderContent()
 		}
 		ImGui::EndTable();
 	}
-
-	// --- Current map detail --------------------------------------------------------------------
-	const AElysiumMapActor* Map = GetMapActor();
-	if (Map == nullptr)
-	{
-		ImGui::TextDisabled("No map loaded.");
-		return;
+		ImGui::EndTabItem();
 	}
+
+	if (ImGui::BeginTabItem("Current map"))
+	{
+		const AElysiumMapActor* Map = GetMapActor();
+		if (Map == nullptr)
+		{
+			ImGui::TextDisabled("No map loaded.");
+		}
+		else
+		{
 
 	const float ValueColumn = GetDpiScale() * 96.0f;
 	auto Row = [ValueColumn](const char* Label, const FString& Value)
@@ -118,7 +126,6 @@ void FElysiumCogWindow_Maps::RenderContent()
 	const UElysiumMapVisuals* Visuals = Map->GetVisuals();
 	const UElysiumMapCollision* Collision = Map->GetCollision();
 
-	ImGui::SeparatorText("Current map");
 	Row("Name", Map->LoadedMap.IsEmpty() ? TEXT("(loading)") : Map->LoadedMap);
 	Row("Runtime", FString::Printf(TEXT("%s · %.2fs"),
 		ElysiumMapRuntimePhaseName(Map->GetRuntimePhase()), Map->GetRuntimeWaitSeconds()));
@@ -175,6 +182,10 @@ void FElysiumCogWindow_Maps::RenderContent()
 			ImGui::EndTable();
 		}
 	}
+		}
+		ImGui::EndTabItem();
+	}
+	ImGui::EndTabBar();
 }
 
 void FElysiumCogWindow_Maps::RenderPlayer()

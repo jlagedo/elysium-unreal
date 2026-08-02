@@ -53,13 +53,15 @@ namespace
 		C[ImGuiCol_SliderGrab] = Blood;
 		C[ImGuiCol_SliderGrabActive] = BloodBright;
 
-		C[ImGuiCol_Button] = ImVec4(0.208f, 0.106f, 0.118f, 1.0f);
-		C[ImGuiCol_ButtonHovered] = Blood;
-		C[ImGuiCol_ButtonActive] = BloodHi;
+		// Keep the accent meaningful. A debug surface can have dozens of buttons in view; making every
+		// one blood-red turns the whole panel into an undifferentiated call to action.
+		C[ImGuiCol_Button] = Frame;
+		C[ImGuiCol_ButtonHovered] = FrameHovered;
+		C[ImGuiCol_ButtonActive] = BloodDim;
 
-		C[ImGuiCol_Header] = Alpha(BloodDim, 0.85f);
-		C[ImGuiCol_HeaderHovered] = Alpha(Blood, 0.80f);
-		C[ImGuiCol_HeaderActive] = BloodHi;
+		C[ImGuiCol_Header] = InkTitle;
+		C[ImGuiCol_HeaderHovered] = FrameHovered;
+		C[ImGuiCol_HeaderActive] = BloodDim;
 
 		C[ImGuiCol_Separator] = Border;
 		C[ImGuiCol_SeparatorHovered] = Blood;
@@ -105,10 +107,10 @@ namespace
 		// Tight but not cramped: these windows are dense tables of small numbers, so the win is in
 		// row height and cell padding rather than in generous margins. Corners stay nearly square —
 		// the game's panels are cut edges and hard rules, not rounded chrome.
-		Style.WindowPadding = ImVec2(8.0f, 6.0f);
-		Style.FramePadding = ImVec2(5.0f, 3.0f);
-		Style.CellPadding = ImVec2(5.0f, 3.0f);
-		Style.ItemSpacing = ImVec2(7.0f, 5.0f);
+		Style.WindowPadding = ImVec2(10.0f, 8.0f);
+		Style.FramePadding = ImVec2(6.0f, 4.0f);
+		Style.CellPadding = ImVec2(6.0f, 4.0f);
+		Style.ItemSpacing = ImVec2(8.0f, 6.0f);
 		Style.ItemInnerSpacing = ImVec2(5.0f, 4.0f);
 		Style.IndentSpacing = 18.0f;
 		Style.ScrollbarSize = 12.0f;
@@ -128,10 +130,10 @@ namespace
 		Style.GrabRounding = 2.0f;
 		Style.TabRounding = 2.0f;
 
-		Style.WindowTitleAlign = ImVec2(0.5f, 0.5f);
-		Style.SeparatorTextBorderSize = 2.0f;
+		Style.WindowTitleAlign = ImVec2(0.0f, 0.5f);
+		Style.SeparatorTextBorderSize = 1.0f;
 		Style.SeparatorTextAlign = ImVec2(0.0f, 0.5f);
-		Style.SeparatorTextPadding = ImVec2(16.0f, 4.0f);
+		Style.SeparatorTextPadding = ImVec2(8.0f, 3.0f);
 	}
 }
 

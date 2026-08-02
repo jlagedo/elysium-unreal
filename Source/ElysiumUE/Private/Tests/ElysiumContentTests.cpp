@@ -39,8 +39,11 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture.h"
 #include "Engine/Texture2D.h"
+#include "Engine/TextureCube.h"
 #include "HAL/FileManager.h"
 #include "Materials/Material.h"
+#include "Materials/MaterialExpressionRayTracingQualitySwitch.h"
+#include "Materials/MaterialExpressionTextureSampleParameterCube.h"
 #include "Materials/MaterialInstance.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialParameterCollection.h"
@@ -799,7 +802,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReflectionParamsTest,
 	"Elysium.Content.ReflectionParams", GElysiumContentTestFlags)
 bool FElysiumReflectionParamsTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	// This validates generated Unreal packages only. A corpus-wide export marker must not hide
+	// missing parameters or a broken master graph after a focused map/policy bake.
 	static const TCHAR* LitMasters[] = {
 		TEXT("/Game/VtMB/Materials/M_World_Opaque.M_World_Opaque"),
 		TEXT("/Game/VtMB/Materials/M_World_Masked.M_World_Masked"),
@@ -840,9 +844,54 @@ bool FElysiumReflectionParamsTest::RunTest(const FString&)
 			Master->GetTextureParameterValue(ElysiumReflections::Params::EnvMask, Mask))
 			&& TestNotNull(TEXT("EnvMask has a fallback texture"), Mask))
 		{
-			TestEqual(*FString::Printf(TEXT("%s EnvMask falls back to white"), Path),
+			TestEqual(*FString::Printf(TEXT("%s EnvMask falls back to linear white"), Path),
 				Mask->GetPathName(),
-				FString(TEXT("/Engine/EngineResources/WhiteSquareTexture.WhiteSquareTexture")));
+				FString(TEXT("/Game/VtMB/Materials/T_LinearWhiteMask.T_LinearWhiteMask")));
+			if (const UTexture2D* Mask2D = Cast<UTexture2D>(Mask))
+			{
+				TestFalse(TEXT("white mask is linear"), Mask2D->SRGB);
+				TestEqual(TEXT("white mask uses mask compression"),
+					Mask2D->CompressionSettings, TC_Masks);
+			}
+		}
+		UTexture* SourceCube = nullptr;
+		TestTrue(*FString::Printf(TEXT("%s carries SourceCube"), Path),
+			Master->GetTextureParameterValue(ElysiumReflections::Params::SourceCube, SourceCube));
+		TArray<FMaterialParameterInfo> Switches;
+		TArray<FGuid> SwitchIds;
+		Master->GetAllStaticSwitchParameterInfo(Switches, SwitchIds);
+		TestTrue(*FString::Printf(TEXT("%s carries WetnessUsesSourceCube"), Path),
+			Switches.ContainsByPredicate([](const FMaterialParameterInfo& Info)
+			{
+				return Info.Name == ElysiumReflections::Params::WetnessUsesSourceCube;
+			}));
+		if (UMaterial* Material = Master->GetMaterial())
+		{
+			TestTrue(TEXT("master contains source cube sample"),
+				Algo::AnyOf(Material->GetExpressions(), [](const UMaterialExpression* Expression)
+				{
+					return Expression && Expression->IsA<UMaterialExpressionTextureSampleParameterCube>();
+				}));
+			TestTrue(TEXT("master separates primary source contribution from ray and card capture"),
+				Algo::AnyOf(Material->GetExpressions(), [](const UMaterialExpression* Expression)
+				{
+					return Expression && Expression->IsA<UMaterialExpressionRayTracingQualitySwitch>();
+				}));
+			TArray<FMaterialResource*> Sm6Resources;
+			FMaterialResource* Sm6 = FindOrCreateMaterialResource(
+				Sm6Resources, Material, nullptr, SP_PCD3D_SM6, EMaterialQualityLevel::High);
+			if (TestNotNull(*FString::Printf(TEXT("%s creates a PCD3D_SM6 resource"), Path), Sm6))
+			{
+				TestTrue(*FString::Printf(TEXT("%s compiles for PCD3D_SM6"), Path),
+					Sm6->CacheShaders(EMaterialShaderPrecompileMode::None));
+				for (const FString& Error : Sm6->GetCompileErrors())
+				{
+					AddError(FString::Printf(TEXT("%s PCD3D_SM6: %s"), Path, *Error));
+				}
+				TestNotNull(*FString::Printf(TEXT("%s has an SM6 shader map"), Path),
+					Sm6->GetGameThreadShaderMap());
+			}
+			FMaterial::DeferredDeleteArray(Sm6Resources);
 		}
 
 		// The Lambert base is the shipped default, and it is what makes a non-$envmap surface
@@ -1814,7 +1863,8 @@ bool FElysiumSantaMonicaRainContentTest::RunTest(const FString&)
 		for (const FName Name : {FName(TEXT("GlobalWetness")), FName(TEXT("WetnessOutputScale")),
 			FName(TEXT("RainEnhancement")),
 			FName(TEXT("RainWetDarken")), FName(TEXT("RainWetRoughness")),
-			FName(TEXT("RainLightResponse"))})
+			FName(TEXT("RainLightResponse")), FName(TEXT("RainSourceRetain")),
+			FName(TEXT("RainWetSpecular")), FName(TEXT("RainReflectionDebug"))})
 		{
 			TestTrue(FString::Printf(TEXT("MPC exposes %s"), *Name.ToString()), Names.Contains(Name));
 		}
@@ -1852,6 +1902,11 @@ bool FElysiumSantaMonicaRainContentTest::RunTest(const FString&)
 			{
 				return Info.Name == FName(TEXT("RainHeightTexture"));
 			}));
+		TestTrue(FString::Printf(TEXT("%s exposes SourceCube"), Path),
+			Textures.ContainsByPredicate([](const FMaterialParameterInfo& Info)
+			{
+				return Info.Name == ElysiumReflections::Params::SourceCube;
+			}));
 	}
 
 	UNiagaraSystem* RainSystem = LoadObject<UNiagaraSystem>(nullptr,
@@ -1882,6 +1937,79 @@ bool FElysiumSantaMonicaRainContentTest::RunTest(const FString&)
 		TestFalse(TEXT("rain height is linear"), Height->SRGB);
 		TestEqual(TEXT("rain height uses displacement compression"),
 			Height->CompressionSettings, TC_Displacementmap);
+	}
+
+	UTextureCube* SourceCube = LoadObject<UTextureCube>(nullptr,
+		TEXT("/ElysiumBaked/sm_hub_1/Textures/Cubes/TC_cubemapdefault.TC_cubemapdefault"));
+	if (TestNotNull(TEXT("patch source cubemap loads"), SourceCube))
+	{
+#if WITH_EDITORONLY_DATA
+		TestEqual(TEXT("source cubemap width"), SourceCube->Source.GetSizeX(), int64(32));
+		TestEqual(TEXT("source cubemap height"), SourceCube->Source.GetSizeY(), int64(32));
+#endif
+		TestTrue(TEXT("source cubemap is sRGB colour"), SourceCube->SRGB);
+	}
+	struct FWetMaterialExpectation
+	{
+		const TCHAR* Name;
+		float Scale;
+	};
+	static const FWetMaterialExpectation WetMaterials[] = {
+		{TEXT("asphalt_asphaltasan_cubemapdefault"), 0.56f},
+		{TEXT("concrete_curbredsan_cubemapdefault"), 1.00f},
+		{TEXT("concrete_holsidewalkasan_cubemapdefault"), 1.00f},
+		{TEXT("concrete_ohcurbasan_cubemapdefault"), 1.00f},
+		{TEXT("concrete_ohsidewalkasan_cubemapdefault"), 1.00f},
+		{TEXT("grass_grassasan_cubemapdefault"), 1.00f},
+		{TEXT("ground_stnstreetasan_cubemapdefault"), 1.00f},
+		{TEXT("ground_streetasan_cubemapdefault"), 0.60f},
+		{TEXT("ground_streetbsan_cubemapdefault"), 0.60f},
+		{TEXT("ground_streetbsantrans_cubemapdefault"), 0.60f},
+		{TEXT("ground_streetcsan_cubemapdefault"), 0.60f},
+		{TEXT("ground_streetdsan_cubemapdefault"), 0.60f},
+		{TEXT("ground_streetesan_cubemapdefault"), 0.60f},
+		{TEXT("tile_tilefsan_cubemapdefault"), 1.00f},
+	};
+	for (const FWetMaterialExpectation& Expected : WetMaterials)
+	{
+		const FString Path = FString::Printf(
+			TEXT("/ElysiumBaked/sm_hub_1/Materials/MI_%s.MI_%s"),
+			Expected.Name, Expected.Name);
+		UMaterialInstance* Instance = LoadObject<UMaterialInstance>(nullptr, *Path);
+		if (!TestNotNull(*FString::Printf(TEXT("wet MIC loads: %s"), *Path), Instance))
+		{
+			continue;
+		}
+		float Scale = -1.0f;
+		TestTrue(TEXT("wet MIC carries authored scale"),
+			Instance->GetScalarParameterValue(TEXT("WetnessScale"), Scale));
+		TestEqual(TEXT("wet MIC preserves patch scale"), Scale, Expected.Scale, 1e-4f);
+		UTexture* BoundCube = nullptr;
+		TestTrue(TEXT("wet MIC binds SourceCube"),
+			Instance->GetTextureParameterValue(TEXT("SourceCube"), BoundCube));
+		TestTrue(TEXT("all wet MICs bind the same cube"), BoundCube == SourceCube);
+		bool bUsesSourceCube = false;
+		FGuid SwitchGuid;
+		TestTrue(TEXT("wet MIC overrides WetnessUsesSourceCube"),
+			Instance->GetStaticSwitchParameterValue(
+				FHashedMaterialParameterInfo(TEXT("WetnessUsesSourceCube")),
+				bUsesSourceCube, SwitchGuid, true));
+		TestTrue(TEXT("wet MIC selects the source-cube permutation"), bUsesSourceCube);
+		TArray<FMaterialResource*> Sm6Resources;
+		FMaterialResource* Sm6 = FindOrCreateMaterialResource(
+			Sm6Resources, Instance->GetMaterial(), Instance,
+			SP_PCD3D_SM6, EMaterialQualityLevel::High);
+		if (TestNotNull(TEXT("wet MIC creates its PCD3D_SM6 static permutation"), Sm6))
+		{
+			TestTrue(TEXT("wet MIC compiles its PCD3D_SM6 static permutation"),
+				Sm6->CacheShaders(EMaterialShaderPrecompileMode::None));
+			for (const FString& Error : Sm6->GetCompileErrors())
+			{
+				AddError(FString::Printf(TEXT("%s PCD3D_SM6: %s"), *Path, *Error));
+			}
+			TestNotNull(TEXT("wet MIC has an SM6 shader map"), Sm6->GetGameThreadShaderMap());
+		}
+		FMaterial::DeferredDeleteArray(Sm6Resources);
 	}
 	UMaterialInstance* RainMic = LoadObject<UMaterialInstance>(nullptr,
 		TEXT("/ElysiumBaked/sm_hub_1/Weather/MI_ElysiumRain.MI_ElysiumRain"));

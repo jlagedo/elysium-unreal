@@ -168,8 +168,11 @@ and `ElysiumContentTests.cpp` (parses real exports, self-skips when `$ELYSIUM_EX
 
 Hard-won, non-obvious, and easy to undo:
 
-- **`FCogImguiContext::SetEnableInput` dereferences the ImGui context**, which Cog creates lazily on
-  its first tick. Every call site guards on `GetEnableInput()` first; unguarded at boot it crashes.
+- **The vendored Cog shell has two local interaction patches.** `FCogImguiContext::SetEnableInput`
+  fully restores high-precision locked mouselook when Cog closes, and `UCogSubsystem::RenderMenuItem`
+  keeps navigation click-to-open instead of rendering whole live windows on hover. Reapply both when
+  updating Cog. `SetEnableInput` dereferences the lazily created ImGui context, so every boot-time call
+  guards on `GetEnableInput()` first.
 - **The loading screen hooks `IGameMoviePlayer::OnPrepareLoadingScreen`, not `PreLoadMap`** — the
   movie player binds `PreLoadMap` itself at engine init, ahead of any GI subsystem. Its blocking
   screen auto-completes; `PostLoadMapWithWorld` installs the same pure-Slate tree as a viewport
