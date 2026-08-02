@@ -60,6 +60,9 @@ private:
 	// Raw -ProfileCam= value (a single index/name), applied when the run list is resolved.
 	// Empty means "every vantage for this map".
 	FString CamSelector;
+	// Acceptance profiles release the front-end clock so authored weather timers and ramps can run.
+	bool bWeatherAcceptance = false;
+	double LastObservedWeatherClock = -1.0;
 
 	// The vantages this run will visit (indices into the static cam table), resolved once
 	// the current map is known (see ResolveRunList).

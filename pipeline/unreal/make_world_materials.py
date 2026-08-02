@@ -39,12 +39,16 @@
 # export runs); also runnable standalone:
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript -script="pipeline/unreal/make_world_materials.py" -unattended -nosplash -nopause
 import os
+from pathlib import Path
+import struct
 import sys
+import zlib
 
 import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from pipeline.unreal import mat_fog
+from elysium_pipeline.paths import export_root
 
 # A refused pin compiles anyway against the input's constant default, so a wrong output name
 # becomes a wrongly-rendering material instead of a failed build. These raise instead.
@@ -96,6 +100,78 @@ _default_normal = unreal.load_asset(DEFAULT_NORMAL)
 _white_tex = unreal.load_asset(WHITE_TEX)
 
 
+def _png_chunk(kind, data):
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(
+        ">I", zlib.crc32(kind + data) & 0xffffffff)
+
+
+def make_height_placeholder():
+    """A real G16 default keeps the height sampler valid before any map instance overrides it."""
+    asset = "/Game/VtMB/Particles/T_RainHeightPlaceholder"
+    existing = unreal.load_asset(asset)
+    if existing:
+        return existing
+    source = Path(export_root()) / ".policy" / "rain_height_placeholder.png"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_bytes(
+        b"\x89PNG\r\n\x1a\n"
+        + _png_chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 16, 0, 0, 0, 0))
+        + _png_chunk(b"IDAT", zlib.compress(b"\x00\x00\x00"))
+        + _png_chunk(b"IEND", b"")
+    )
+    task = unreal.AssetImportTask()
+    task.set_editor_property("filename", str(source))
+    task.set_editor_property("destination_path", "/Game/VtMB/Particles")
+    task.set_editor_property("destination_name", "T_RainHeightPlaceholder")
+    task.set_editor_property("automated", True)
+    task.set_editor_property("replace_existing", True)
+    task.set_editor_property("save", False)
+    tools.import_asset_tasks([task])
+    texture = unreal.load_asset(asset)
+    if not texture:
+        raise SystemExit("[make_world_materials] could not import G16 height placeholder")
+    texture.set_editor_property("srgb", False)
+    texture.set_editor_property(
+        "compression_settings", unreal.TextureCompressionSettings.TC_DISPLACEMENTMAP)
+    texture.set_editor_property("mip_gen_settings", unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS)
+    unreal.EditorAssetLibrary.save_asset(asset, only_if_is_dirty=False)
+    return texture
+
+
+_height_placeholder = make_height_placeholder()
+
+
+def make_environment_collection():
+    asset = "%s/MPC_ElysiumEnvironment" % PKG
+    collection = unreal.load_asset(asset)
+    if not collection:
+        collection = tools.create_asset(
+            "MPC_ElysiumEnvironment", PKG, unreal.MaterialParameterCollection,
+            unreal.MaterialParameterCollectionFactoryNew())
+    if not collection:
+        raise SystemExit("[make_world_materials] could not create %s" % asset)
+    values = {
+        "GlobalWetness": 0.0,
+        "RainEnhancement": 1.0,
+        "RainWetDarken": 0.06,
+        "RainWetRoughness": 0.10,
+        "RainLightResponse": 0.25,
+    }
+    parameters = []
+    for name, default in values.items():
+        parameter = unreal.CollectionScalarParameter()
+        parameter.set_editor_property("parameter_name", name)
+        parameter.set_editor_property("default_value", default)
+        parameters.append(parameter)
+    collection.set_editor_property("scalar_parameters", parameters)
+    if not unreal.EditorAssetLibrary.save_asset(asset, only_if_is_dirty=False):
+        raise SystemExit("[make_world_materials] could not save %s" % asset)
+    return collection
+
+
+environment_collection = make_environment_collection()
+
+
 def _fresh(name):
     """Delete + recreate the asset so a re-run authors a clean graph (idempotent)."""
     asset = "%s/%s" % (PKG, name)
@@ -115,13 +191,16 @@ def _fresh(name):
     return mat, asset
 
 
-def _tex_param(mat, name, x, y, normal=False, white=False):
+def _tex_param(mat, name, x, y, normal=False, white=False, grayscale=False):
     n = mel.create_material_expression(mat, unreal.MaterialExpressionTextureSampleParameter2D, x, y)
     n.set_editor_property("parameter_name", name)
     if normal:
         n.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL)
         if _default_normal:
             n.set_editor_property("texture", _default_normal)
+    elif grayscale:
+        n.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR)
+        n.set_editor_property("texture", _height_placeholder)
     else:
         n.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR)
         fallback = _white_tex if white else _default_tex
@@ -135,6 +214,14 @@ def _scalar(mat, name, default, x, y):
     n.set_editor_property("parameter_name", name)
     n.set_editor_property("default_value", default)
     return n
+
+
+def _collection_scalar(mat, name, x, y):
+    node = mel.create_material_expression(
+        mat, unreal.MaterialExpressionCollectionParameter, x, y)
+    node.set_editor_property("collection", environment_collection)
+    node.set_editor_property("parameter_name", name)
+    return node
 
 
 def _vec_param(mat, name, x, y, default=(1.0, 1.0, 1.0)):
@@ -163,8 +250,96 @@ def build_world_graph(mat):
     env_amt = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -640, 1100)
     connect(env_mask, "R", env_amt, "A")
     connect(env_str, "", env_amt, "B")
-    env = mel.create_material_expression(mat, unreal.MaterialExpressionSaturate, -520, 1100)
-    connect(env_amt, "", env, "")
+    global_wetness = _collection_scalar(mat, "GlobalWetness", -900, 2160)
+    wetness_scale = _scalar(mat, "WetnessScale", 0.0, -900, 2240)
+    wetness_driven = _scalar(mat, "WetnessDriven", 0.0, -900, 2320)
+    wet_amount = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -660, 2200)
+    connect(global_wetness, "", wet_amount, "A")
+    connect(wetness_scale, "", wet_amount, "B")
+    one = mel.create_material_expression(mat, unreal.MaterialExpressionConstant, -660, 2320)
+    one.set_editor_property("r", 1.0)
+    wet_selector = mel.create_material_expression(
+        mat, unreal.MaterialExpressionLinearInterpolate, -440, 2240)
+    connect(one, "", wet_selector, "A")
+    connect(wet_amount, "", wet_selector, "B")
+    connect(wetness_driven, "", wet_selector, "Alpha")
+    env_wet = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -420, 1100)
+    connect(env_amt, "", env_wet, "A")
+    connect(wet_selector, "", env_wet, "B")
+    env = mel.create_material_expression(mat, unreal.MaterialExpressionSaturate, -260, 1100)
+    connect(env_wet, "", env, "")
+
+    # Enhanced-only exposure: upward surfaces at the top-down cover height. At tuning zero this
+    # whole branch is mathematically zero; the faithful reflection term above remains active.
+    world_pos = mel.create_material_expression(mat, unreal.MaterialExpressionWorldPosition,
+                                               -1480, 2500)
+    def mask(source, channel, x, y):
+        node = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, x, y)
+        for name in ("r", "g", "b", "a"):
+            node.set_editor_property(name, name == channel)
+        connect(source, "", node, "")
+        return node
+    world_x = mask(world_pos, "r", -1280, 2440)
+    world_y = mask(world_pos, "g", -1280, 2520)
+    world_z = mask(world_pos, "b", -1280, 2600)
+    min_x = _scalar(mat, "RainBoundsMinX", 0.0, -1480, 2700)
+    min_y = _scalar(mat, "RainBoundsMinY", 0.0, -1480, 2780)
+    size_x = _scalar(mat, "RainBoundsSizeX", 1.0, -1480, 2860)
+    size_y = _scalar(mat, "RainBoundsSizeY", 1.0, -1480, 2940)
+    sub_x = mel.create_material_expression(mat, unreal.MaterialExpressionSubtract, -1060, 2440)
+    sub_y = mel.create_material_expression(mat, unreal.MaterialExpressionSubtract, -1060, 2520)
+    connect(world_x, "", sub_x, "A"); connect(min_x, "", sub_x, "B")
+    connect(world_y, "", sub_y, "A"); connect(min_y, "", sub_y, "B")
+    uv_x = mel.create_material_expression(mat, unreal.MaterialExpressionDivide, -860, 2440)
+    uv_y = mel.create_material_expression(mat, unreal.MaterialExpressionDivide, -860, 2520)
+    connect(sub_x, "", uv_x, "A"); connect(size_x, "", uv_x, "B")
+    connect(sub_y, "", uv_y, "A"); connect(size_y, "", uv_y, "B")
+    uv = mel.create_material_expression(mat, unreal.MaterialExpressionAppendVector, -660, 2480)
+    connect(uv_x, "", uv, "A"); connect(uv_y, "", uv, "B")
+    height_tex = _tex_param(mat, "RainHeightTexture", -440, 2480, grayscale=True)
+    connect(uv, "", height_tex, "UVs")
+    sample_r = mask(height_tex, "r", -220, 2480)
+    max_u16 = mel.create_material_expression(mat, unreal.MaterialExpressionConstant, -220, 2680)
+    max_u16.set_editor_property("r", 65535.0)
+    sample_u16 = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, 0, 2480)
+    connect(sample_r, "", sample_u16, "A"); connect(max_u16, "", sample_u16, "B")
+    one_u16 = mel.create_material_expression(mat, unreal.MaterialExpressionConstant, 0, 2680)
+    one_u16.set_editor_property("r", 1.0)
+    sample_index = mel.create_material_expression(mat, unreal.MaterialExpressionSubtract, 180, 2480)
+    connect(sample_u16, "", sample_index, "A"); connect(one_u16, "", sample_index, "B")
+    height_scale = _scalar(mat, "RainHeightZScale", 1.0, -220, 2780)
+    height_min = _scalar(mat, "RainHeightMinZ", 0.0, -220, 2860)
+    decoded_mul = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, 380, 2480)
+    connect(sample_index, "", decoded_mul, "A"); connect(height_scale, "", decoded_mul, "B")
+    decoded_height = mel.create_material_expression(mat, unreal.MaterialExpressionAdd, 560, 2480)
+    connect(decoded_mul, "", decoded_height, "A"); connect(height_min, "", decoded_height, "B")
+    tolerance = mel.create_material_expression(mat, unreal.MaterialExpressionConstant, 560, 2660)
+    tolerance.set_editor_property("r", 5.0)
+    cover_floor = mel.create_material_expression(mat, unreal.MaterialExpressionSubtract, 740, 2480)
+    connect(decoded_height, "", cover_floor, "A"); connect(tolerance, "", cover_floor, "B")
+    exposed = mel.create_material_expression(mat, unreal.MaterialExpressionStep, 920, 2480)
+    connect(cover_floor, "", exposed, "X"); connect(world_z, "", exposed, "Y")
+    sentinel = mel.create_material_expression(mat, unreal.MaterialExpressionStep, 920, 2600)
+    sentinel.set_editor_property("const_x", 0.000001)
+    connect(sample_r, "", sentinel, "Y")
+    exposed_valid = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, 1100, 2520)
+    connect(exposed, "", exposed_valid, "A"); connect(sentinel, "", exposed_valid, "B")
+    normal_ws = mel.create_material_expression(mat, unreal.MaterialExpressionPixelNormalWS, 740, 2760)
+    up = mel.create_material_expression(mat, unreal.MaterialExpressionConstant3Vector, 740, 2860)
+    up.set_editor_property("constant", unreal.LinearColor(0.0, 0.0, 1.0, 0.0))
+    upward_dot = mel.create_material_expression(mat, unreal.MaterialExpressionDotProduct, 920, 2800)
+    connect(normal_ws, "", upward_dot, "A"); connect(up, "", upward_dot, "B")
+    upward = mel.create_material_expression(mat, unreal.MaterialExpressionSaturate, 1100, 2800)
+    connect(upward_dot, "", upward, "")
+    enhancement = _collection_scalar(mat, "RainEnhancement", 740, 3000)
+    enhanced_a = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, 1280, 2640)
+    connect(wet_amount, "", enhanced_a, "A"); connect(wetness_driven, "", enhanced_a, "B")
+    enhanced_b = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, 1460, 2640)
+    connect(enhanced_a, "", enhanced_b, "A"); connect(exposed_valid, "", enhanced_b, "B")
+    enhanced_c = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, 1640, 2640)
+    connect(enhanced_b, "", enhanced_c, "A"); connect(upward, "", enhanced_c, "B")
+    enhanced_wet = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, 1820, 2640)
+    connect(enhanced_c, "", enhanced_wet, "A"); connect(enhancement, "", enhanced_wet, "B")
 
     # --- Metallic: env x MetalMask ---
     # VtMB names its own metals. $envmaptint multiplies the reflection, and on 102 of the
@@ -218,7 +393,14 @@ def build_world_graph(mat):
     # the term is driven by each primitive's own Custom Primitive Data. Unwritten data reads as
     # zero, which is f = 0, so this passes BaseColor/Specular/Emissive through unchanged.
     f, inv_f, fog_color = mat_fog.fog_from_primitive(mat)
-    connect_property(mat_fog.fade(mat, base_color, "", inv_f, -180, -160),
+    wet_darken = _collection_scalar(mat, "RainWetDarken", -120, -20)
+    dark_amount = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, 80, -20)
+    connect(enhanced_wet, "", dark_amount, "A"); connect(wet_darken, "", dark_amount, "B")
+    dark_factor = mel.create_material_expression(mat, unreal.MaterialExpressionOneMinus, 240, -20)
+    connect(dark_amount, "", dark_factor, "")
+    wet_base_color = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, 400, -100)
+    connect(base_color, "", wet_base_color, "A"); connect(dark_factor, "", wet_base_color, "B")
+    connect_property(mat_fog.fade(mat, wet_base_color, "", inv_f, 580, -160),
                      "", unreal.MaterialProperty.MP_BASE_COLOR)
     connect_property(
         mat_fog.inscatter(mat, mat_fog.fade(mat, emis_mul, "", inv_f, -180, 420),
@@ -258,7 +440,14 @@ def build_world_graph(mat):
     connect(r_base, "", rough, "A")
     connect(r_reflect, "", rough, "B")
     connect(env, "", rough, "Alpha")
-    connect_property(rough, "", unreal.MaterialProperty.MP_ROUGHNESS)
+    wet_roughness = _collection_scalar(mat, "RainWetRoughness", -80, 1260)
+    rough_delta = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, 120, 1260)
+    connect(enhanced_wet, "", rough_delta, "A"); connect(wet_roughness, "", rough_delta, "B")
+    wet_rough = mel.create_material_expression(mat, unreal.MaterialExpressionSubtract, 300, 1160)
+    connect(rough, "", wet_rough, "A"); connect(rough_delta, "", wet_rough, "B")
+    wet_rough_sat = mel.create_material_expression(mat, unreal.MaterialExpressionSaturate, 480, 1160)
+    connect(wet_rough, "", wet_rough_sat, "")
+    connect_property(wet_rough_sat, "", unreal.MaterialProperty.MP_ROUGHNESS)
 
     return albedo
 

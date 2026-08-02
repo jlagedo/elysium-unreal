@@ -26,10 +26,85 @@
 #include "GameFramework/PawnMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetMaterialLibrary.h"
+#include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialParameterCollection.h"
 #include "Misc/FileHelper.h"
+#include "NiagaraComponent.h"
+#include "NiagaraDataSetAccessor.h"
+#include "NiagaraEmitterInstance.h"
+#include "NiagaraRendererProperties.h"
+#include "NiagaraSpriteRendererProperties.h"
+#include "NiagaraSystem.h"
+#include "NiagaraSystemInstance.h"
+#include "NiagaraSystemInstanceController.h"
+#include "Engine/Texture2D.h"
+#include "UObject/UObjectIterator.h"
+#include "HAL/IConsoleManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysium, Log, All);
 static TAtomic<uint64> GNextElysiumAudioMapEpoch(0);
+
+static TAutoConsoleVariable<float> CVarRainEnhancement(
+	TEXT("elysium.RainEnhancement"), 1.0f,
+	TEXT("Rain presentation tuning: 0 is the authored reference, 1 is the enhanced default."));
+static TAutoConsoleVariable<float> CVarRainRateScale(
+	TEXT("elysium.RainRateScale"), 1.0f, TEXT("Enhanced rain emission multiplier."));
+static TAutoConsoleVariable<float> CVarRainMist(
+	TEXT("elysium.RainMist"), 0.20f, TEXT("Additional enhanced rain mist amount."));
+static TAutoConsoleVariable<float> CVarRainWetDarken(
+	TEXT("elysium.RainWetDarken"), 0.06f, TEXT("Maximum enhanced full-wet base-color darkening."));
+static TAutoConsoleVariable<float> CVarRainWetRoughness(
+	TEXT("elysium.RainWetRoughness"), 0.10f, TEXT("Maximum enhanced full-wet roughness reduction."));
+static TAutoConsoleVariable<float> CVarRainLightResponse(
+	TEXT("elysium.RainLightResponse"), 0.25f, TEXT("Translucent rain response to local lights."));
+
+namespace
+{
+	TOptional<bool> GPendingWeatherTimer;
+
+	AElysiumMapActor* ActiveWeatherMap()
+	{
+		for (TObjectIterator<AElysiumMapActor> It; It; ++It)
+		{
+			if (IsValid(*It) && It->IsRuntimeActive())
+			{
+				return *It;
+			}
+		}
+		return nullptr;
+	}
+
+	void FireOrQueueWeatherTimer(const bool bRainOn)
+	{
+		if (AElysiumMapActor* Map = ActiveWeatherMap())
+		{
+			Map->FireWeatherTimer(bRainOn);
+			return;
+		}
+		// -ExecCmds can run before the boot map reaches RuntimeActive. Preserve the request and
+		// deliver it on the first active weather tick so automated captures still exercise the
+		// authored timer and entity I/O chain.
+		GPendingWeatherTimer = bRainOn;
+	}
+}
+
+static FAutoConsoleCommand GElysiumRainOn(
+	TEXT("elysium.weather.rain_on"),
+	TEXT("Fire sm_hub_1's authored rain_on_timer through the entity I/O queue."),
+	FConsoleCommandDelegate::CreateLambda([]()
+	{
+		FireOrQueueWeatherTimer(true);
+	}));
+
+static FAutoConsoleCommand GElysiumRainOff(
+	TEXT("elysium.weather.rain_off"),
+	TEXT("Fire sm_hub_1's authored rain_off_timer through the entity I/O queue."),
+	FConsoleCommandDelegate::CreateLambda([]()
+	{
+		FireOrQueueWeatherTimer(false);
+	}));
 
 const TCHAR* ElysiumMapRuntimePhaseName(EElysiumMapRuntimePhase Phase)
 {
@@ -421,6 +496,10 @@ void AElysiumMapActor::LoadMap()
 				Services.Audio      = this;
 				Services.Travel     = this;
 				Services.Presenter  = UElysiumPresentationSubsystem::Get(GetWorld());
+				// Weather presentation is intentionally disconnected while the retail particle
+				// semantics are unresolved.  The substrate still owns and serializes the authored
+				// timer, wetness, and env_particle state through its null-safe service seam.
+				Services.Weather    = nullptr;
 				EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState, Services);
 				EntityWorld->Load(MoveTemp(EntDefs));
 				BrushBodyCount = EntityWorld->NumBrushBodies();
@@ -1166,8 +1245,282 @@ void AElysiumMapActor::Tick(float DeltaSeconds)
 			}
 
 			TickAudio(DeltaSeconds);
+			// Weather presentation remains dormant until the retail reference settles its spawn,
+			// lifetime, blend, and attachment semantics.  Do not tick its MPC or Niagara bridge.
 		}
 	}
+}
+
+void AElysiumMapActor::ApplyWetness(const FElysiumWeatherTransition& Transition)
+{
+	WetnessTransition = Transition;
+	ApplyWeatherTuning();
+}
+
+void AElysiumMapActor::ApplyEmitter(const FElysiumWeatherEmitterState& Emitter)
+{
+	if (!Emitter.ParticleDefinition.Equals(TEXT("rain_follow_emitter"), ESearchCase::IgnoreCase))
+	{
+		return; // this slice deliberately does not become the general VtMB particle runtime
+	}
+	RainEmitterStates.Add(Emitter.Entity.Index, Emitter);
+	UNiagaraComponent* Component = RainComponents.FindRef(Emitter.Entity.Index);
+	if (!Component)
+	{
+		if (!RainSystem)
+		{
+			RainSystem = LoadObject<UNiagaraSystem>(
+				nullptr, TEXT("/Game/VtMB/Particles/NS_ElysiumRain.NS_ElysiumRain"));
+		}
+		if (!RainHeightTexture)
+		{
+			const FString HeightPath = FString::Printf(
+				TEXT("/ElysiumBaked/%s/Weather/T_RainHeight.T_RainHeight"), *MapName);
+			RainHeightTexture = LoadObject<UTexture2D>(nullptr, *HeightPath);
+		}
+		if (!RainMaterial)
+		{
+			const FString MaterialPath = FString::Printf(
+				TEXT("/ElysiumBaked/%s/Weather/MI_ElysiumRain.MI_ElysiumRain"), *MapName);
+			RainMaterial = LoadObject<UMaterialInterface>(nullptr, *MaterialPath);
+		}
+		if (!RainSystem)
+		{
+			UE_LOG(LogElysium, Warning, TEXT("weather: NS_ElysiumRain is missing; run the content bake"));
+			return;
+		}
+		if (RainMaterial && RainLayerMaterials.IsEmpty())
+		{
+			const TMap<FName, float> LayerValues = {
+				{FName(TEXT("Streaks")), 0.0f},
+				{FName(TEXT("ImpactsStains")), 0.5f},
+				{FName(TEXT("Mist")), 1.0f},
+			};
+			for (FNiagaraEmitterHandle& Handle : RainSystem->GetEmitterHandles())
+			{
+				const float* LayerValue = LayerValues.Find(Handle.GetName());
+				FVersionedNiagaraEmitterData* Data = Handle.GetEmitterData();
+				if (!LayerValue || !Data)
+				{
+					continue;
+				}
+				UMaterialInstanceDynamic* LayerMaterial = UMaterialInstanceDynamic::Create(
+					RainMaterial, this,
+					*FString::Printf(TEXT("RainMaterial_%s"), *Handle.GetName().ToString()));
+				LayerMaterial->SetScalarParameterValue(TEXT("RainLayer"), *LayerValue);
+				for (UNiagaraRendererProperties* Renderer : Data->GetRenderers())
+				{
+					if (UNiagaraSpriteRendererProperties* Sprite =
+							Cast<UNiagaraSpriteRendererProperties>(Renderer))
+					{
+						Sprite->Material = LayerMaterial;
+					}
+				}
+				RainLayerMaterials.Add(LayerMaterial);
+			}
+		}
+		Component = NewObject<UNiagaraComponent>(this,
+			*FString::Printf(TEXT("Rain_%d"), Emitter.Entity.Index));
+		AddInstanceComponent(Component);
+		Component->SetupAttachment(SceneRoot);
+		Component->SetAsset(RainSystem);
+		Component->SetAutoActivate(false);
+		Component->RegisterComponent();
+		RainComponents.Add(Emitter.Entity.Index, Component);
+	}
+	Component->SetWorldLocation(Emitter.LocationCm);
+	Component->SetVariableFloat(TEXT("User.BoundsCm"), Emitter.BoundsCm);
+	const float Extent = FMath::Max(1.0f, Emitter.BoundsCm);
+	Component->SetSystemFixedBounds(FBox(
+		FVector(-Extent, -Extent, -Extent), FVector(Extent, Extent, Extent * 2.0f)));
+	if (RainHeightTexture)
+	{
+		Component->SetVariableTexture(TEXT("User.HeightTexture"), RainHeightTexture);
+	}
+	if (Emitter.bActive)
+	{
+		if (!Component->IsActive()) { Component->Activate(false); }
+	}
+	else
+	{
+		Component->Deactivate();
+	}
+	ApplyWeatherTuning();
+}
+
+void AElysiumMapActor::RemoveEmitter(const FElysiumEntityHandle& Entity)
+{
+	RainEmitterStates.Remove(Entity.Index);
+	if (TObjectPtr<UNiagaraComponent> Component; RainComponents.RemoveAndCopyValue(Entity.Index, Component))
+	{
+		if (Component) { Component->DestroyComponent(); }
+	}
+}
+
+void AElysiumMapActor::TickWeatherPresentation()
+{
+	if (GPendingWeatherTimer.IsSet())
+	{
+		const bool bRainOn = GPendingWeatherTimer.GetValue();
+		GPendingWeatherTimer.Reset();
+		FireWeatherTimer(bRainOn);
+	}
+	FVector ViewLocation;
+	FRotator ViewRotation;
+	const bool bHasView = GetPlayerViewPoint(ViewLocation, ViewRotation);
+	for (const TPair<int32, FElysiumWeatherEmitterState>& Pair : RainEmitterStates)
+	{
+		if (Pair.Value.AttachType == 11 && bHasView)
+		{
+			if (UNiagaraComponent* Component = RainComponents.FindRef(Pair.Key))
+			{
+				Component->SetWorldLocation(ViewLocation);
+			}
+		}
+	}
+	ApplyWeatherTuning();
+}
+
+void AElysiumMapActor::ApplyWeatherTuning()
+{
+	const float Enhancement = FMath::Clamp(CVarRainEnhancement.GetValueOnGameThread(), 0.0f, 1.0f);
+	if (!EnvironmentParameters)
+	{
+		EnvironmentParameters = LoadObject<UMaterialParameterCollection>(
+			nullptr, TEXT("/Game/VtMB/Materials/MPC_ElysiumEnvironment.MPC_ElysiumEnvironment"));
+	}
+	if (EnvironmentParameters && GetWorld())
+	{
+		UKismetMaterialLibrary::SetScalarParameterValue(GetWorld(), EnvironmentParameters,
+			TEXT("GlobalWetness"), WetnessTransition.CurrentWetness);
+		UKismetMaterialLibrary::SetScalarParameterValue(GetWorld(), EnvironmentParameters,
+			TEXT("RainEnhancement"), Enhancement);
+		UKismetMaterialLibrary::SetScalarParameterValue(GetWorld(), EnvironmentParameters,
+			TEXT("RainWetDarken"), Enhancement * FMath::Max(0.0f, CVarRainWetDarken.GetValueOnGameThread()));
+		UKismetMaterialLibrary::SetScalarParameterValue(GetWorld(), EnvironmentParameters,
+			TEXT("RainWetRoughness"), Enhancement * FMath::Max(0.0f, CVarRainWetRoughness.GetValueOnGameThread()));
+		UKismetMaterialLibrary::SetScalarParameterValue(GetWorld(), EnvironmentParameters,
+			TEXT("RainLightResponse"), FMath::Clamp(
+				CVarRainLightResponse.GetValueOnGameThread(), 0.0f, 1.0f));
+	}
+	const float EnhancedRate = FMath::Lerp(1.0f,
+		FMath::Max(0.0f, CVarRainRateScale.GetValueOnGameThread()), Enhancement);
+	for (const TPair<int32, FElysiumWeatherEmitterState>& Pair : RainEmitterStates)
+	{
+		if (UNiagaraComponent* Component = RainComponents.FindRef(Pair.Key))
+		{
+			Component->SetVariableFloat(TEXT("User.RateScale"), Pair.Value.RateScale * EnhancedRate);
+			Component->SetVariableFloat(TEXT("User.Enhancement"), Enhancement);
+			// The Niagara rate expression applies Enhancement once.  Keep the mist control as
+			// the full-wet tuning value so intermediate enhancement values remain linear.
+			Component->SetVariableFloat(TEXT("User.MistEnhancement"),
+				FMath::Max(0.0f, CVarRainMist.GetValueOnGameThread()));
+			Component->SetVariableFloat(TEXT("User.LightResponse"), FMath::Max(0.0f,
+				CVarRainLightResponse.GetValueOnGameThread()));
+		}
+	}
+}
+
+void AElysiumMapActor::FireWeatherTimer(bool bRainOn)
+{
+	if (!EntityWorld)
+	{
+		return;
+	}
+	EntityWorld->EnqueueInput(bRainOn ? TEXT("rain_on_timer") : TEXT("rain_off_timer"),
+		FName(TEXT("FireTimer")), FElysiumVariant::Void(), 0.0,
+		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+}
+
+FString AElysiumMapActor::GetWeatherDebugSummary() const
+{
+	FString Result = FString::Printf(TEXT("wet %.3f->%.3f components %d"),
+		WetnessTransition.CurrentWetness, WetnessTransition.TargetWetness, RainComponents.Num());
+	if (RainSystem)
+	{
+		for (const FNiagaraEmitterHandle& Handle : RainSystem->GetEmitterHandles())
+		{
+			const FVersionedNiagaraEmitterData* Data = Handle.GetEmitterData();
+			if (!Data)
+			{
+				continue;
+			}
+			for (const UNiagaraRendererProperties* Renderer : Data->GetRenderers())
+			{
+				const UNiagaraSpriteRendererProperties* Sprite =
+					Cast<UNiagaraSpriteRendererProperties>(Renderer);
+				Result += Sprite ? FString::Printf(
+					TEXT(" | renderer=%s enabled=%d source=%d material=%s position=%s "
+						"color=%s size=%s visibility=%s:%u camera_cull=%d:%.1f..%.1f"),
+					*Handle.GetName().ToString(), Sprite->GetIsEnabled() ? 1 : 0,
+					static_cast<int32>(Sprite->SourceMode), *GetNameSafe(Sprite->Material),
+					*Sprite->PositionBinding.GetParamMapBindableVariable().GetName().ToString(),
+					*Sprite->ColorBinding.GetParamMapBindableVariable().GetName().ToString(),
+					*Sprite->SpriteSizeBinding.GetParamMapBindableVariable().GetName().ToString(),
+					*Sprite->RendererVisibilityTagBinding.GetParamMapBindableVariable().GetName().ToString(),
+					Sprite->RendererVisibility, Sprite->bEnableCameraDistanceCulling ? 1 : 0,
+					Sprite->MinCameraDistance, Sprite->MaxCameraDistance)
+					: FString::Printf(TEXT(" | renderer=%s non-sprite"), *Handle.GetName().ToString());
+			}
+		}
+	}
+	for (const TPair<int32, FElysiumWeatherEmitterState>& Pair : RainEmitterStates)
+	{
+		const UNiagaraComponent* Component = RainComponents.FindRef(Pair.Key);
+		FString Materials;
+		if (Component)
+		{
+			TArray<UMaterialInterface*> UsedMaterials;
+			Component->GetUsedMaterials(UsedMaterials, false);
+			for (const UMaterialInterface* Material : UsedMaterials)
+			{
+				Materials += Materials.IsEmpty() ? TEXT("") : TEXT(",");
+				Materials += GetNameSafe(Material);
+			}
+			if (const FNiagaraSystemInstanceControllerConstPtr Controller =
+					Component->GetSystemInstanceController())
+			{
+				if (const FNiagaraSystemInstance* Instance = Controller->GetSystemInstance_Unsafe())
+				{
+					for (const FNiagaraEmitterInstanceRef& EmitterRef : Instance->GetEmitters())
+					{
+						const FNiagaraEmitterInstance& Emitter = EmitterRef.Get();
+						const FNiagaraDataSet& Data = Emitter.GetParticleData();
+						const FNiagaraDataSetAccessor<FNiagaraPosition> Accessor(
+							Data, FName(TEXT("Position")));
+						const FNiagaraDataSetReaderFloat<FNiagaraPosition> Reader =
+							Accessor.GetReader(Data);
+						const FNiagaraDataSetAccessor<int32> VisibilityAccessor(
+							Data, FName(TEXT("VisibilityTag")));
+						const FNiagaraDataSetReaderInt32<int32> VisibilityReader =
+							VisibilityAccessor.GetReader(Data);
+						FNiagaraPosition Min(ForceInit), Max(ForceInit);
+						if (Reader.IsValid() && Emitter.GetNumParticles() > 0)
+						{
+							Reader.GetMinMax(Min, Max);
+						}
+						Materials += FString::Printf(TEXT(";%s:n=%d,p=%s..%s,visibility=%d"),
+							*Emitter.GetEmitterHandle().GetName().ToString(), Emitter.GetNumParticles(),
+							*FVector3f(Min).ToString(), *FVector3f(Max).ToString(),
+							VisibilityReader.IsValid() && Emitter.GetNumParticles() > 0
+								? VisibilityReader.Get(0) : INDEX_NONE);
+					}
+				}
+			}
+		}
+		Result += FString::Printf(
+			TEXT(" | #%d active=%d component=%d visible=%d render=%d rate=%.3f "
+				"loc=%s world_bounds=%s materials=%s"),
+			Pair.Key, Pair.Value.bActive ? 1 : 0,
+			Component && Component->IsActive() ? 1 : 0,
+			Component && Component->IsVisible() ? 1 : 0,
+			Component && Component->IsRenderStateCreated() ? 1 : 0,
+			Pair.Value.RateScale,
+			Component ? *Component->GetComponentLocation().ToCompactString() : TEXT("<none>"),
+			Component ? *Component->Bounds.GetBox().ToString() : TEXT("<none>"),
+			Materials.IsEmpty() ? TEXT("<none>") : *Materials);
+	}
+	return Result;
 }
 
 double AElysiumMapActor::GetRuntimeWaitSeconds() const

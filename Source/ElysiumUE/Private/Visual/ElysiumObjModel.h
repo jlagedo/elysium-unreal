@@ -22,6 +22,8 @@ struct FElysiumMaterialDef
 	bool bRefract = false;   // refract N  -> Source framebuffer-distortion overlay
 	float RefractAmount = 0.f; // N is the authored $refractamount; zero is PNO-neutral
 	bool bEnvmap = false;    // envmap     -> $envmap reflective (Lumen roughness path)
+	bool bWetnessDriven = false; // globalwetness -> authored GlobalWetness proxy triple
+	float WetnessScale = 0.0f;
 	// envtint -> $envmaptint. Multiplies the reflection in VtMB's own shader, so it is the
 	// reflection's colour and strength in one constant. White when unauthored.
 	FLinearColor EnvTint = FLinearColor::White;

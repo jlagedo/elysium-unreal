@@ -25,6 +25,7 @@ maps = [
 ]
 bundles = [
   "audio",
+  "particles",
   "scripts",
   "signs",
   "vdata",
@@ -39,6 +40,7 @@ bundles = [
 discover = true
 bundles = [
   "audio",
+  "particles",
   "scripts",
   "signs",
   "vdata",

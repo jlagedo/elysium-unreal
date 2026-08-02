@@ -1,6 +1,7 @@
 #include "Debug/ElysiumProfiler.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "Visual/ElysiumMapVisuals.h"
 #include "ElysiumMapSubsystem.h"
@@ -58,6 +59,7 @@ FElysiumProfileRun::FElysiumProfileRun(UElysiumMapSubsystem* InSubsystem)
 	FParse::Value(FCommandLine::Get(), TEXT("ProfileWarmup="), WarmupFrames);
 	FParse::Value(FCommandLine::Get(), TEXT("ProfileFrames="), CaptureFrames);
 	FParse::Value(FCommandLine::Get(), TEXT("ProfileCam="), CamSelector);
+	bWeatherAcceptance = FParse::Param(FCommandLine::Get(), TEXT("ElysiumWeatherAcceptance"));
 	WarmupFrames = FMath::Max(1, WarmupFrames);
 	CaptureFrames = FMath::Max(1, CaptureFrames);
 
@@ -129,7 +131,10 @@ void FElysiumProfileRun::PinCamera()
 	if (ACharacter* Char = Cast<ACharacter>(Pawn))
 	{
 		Char->GetCharacterMovement()->StopMovementImmediately();
-		Char->GetCharacterMovement()->SetMovementMode(MOVE_None);
+		if (!bWeatherAcceptance)
+		{
+			Char->GetCharacterMovement()->SetMovementMode(MOVE_None);
+		}
 	}
 	Pawn->SetActorLocation(PinLoc, false, nullptr, ETeleportType::TeleportPhysics);
 	PC->SetControlRotation(PinRot);
@@ -238,7 +243,27 @@ bool FElysiumProfileRun::Tick(float /*DeltaSeconds*/)
 	APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
 	APawn* Pawn = PC ? PC->GetPawn() : nullptr;
 	const UElysiumMapSubsystem* Sub = Subsystem.Get();
-	const AElysiumMapActor* MapActor = Sub ? Sub->GetCurrentMap() : nullptr;
+	AElysiumMapActor* MapActor = Sub ? Sub->GetCurrentMap() : nullptr;
+	if (bWeatherAcceptance && Phase != EPhase::WaitReady && MapActor && World)
+	{
+		if (UGameInstance* GI = World->GetGameInstance())
+		{
+			if (UElysiumGameStateSubsystem* State = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+			{
+				const double Now = State->GameClock().GetNow();
+				if (Now <= LastObservedWeatherClock + KINDA_SMALL_NUMBER)
+				{
+					MapActor->PreMoveTick(1.0f / 60.0f);
+					if (State->GameClock().GetNow() <= Now + KINDA_SMALL_NUMBER)
+					{
+						State->TimeControl().AdvanceFrame(1.0 / 60.0);
+					}
+					MapActor->Tick(1.0f / 60.0f);
+				}
+				LastObservedWeatherClock = State->GameClock().GetNow();
+			}
+		}
+	}
 
 	switch (Phase)
 	{
@@ -250,6 +275,27 @@ bool FElysiumProfileRun::Tick(float /*DeltaSeconds*/)
 		{
 			if (++FrameInPhase >= SettleFrames)
 			{
+				if (bWeatherAcceptance)
+				{
+					if (UGameInstance* GI = World->GetGameInstance())
+					{
+						if (UElysiumGameStateSubsystem* State =
+							GI->GetSubsystem<UElysiumGameStateSubsystem>())
+						{
+							const bool bWasPaused = State->TimeControl().IsPaused();
+							const bool bWorldWasPaused = World->IsPaused();
+							const double PreviousScale = State->TimeControl().GetScale();
+							State->TimeControl().SetPaused(false);
+							State->TimeControl().SetScale(1.0);
+							LastObservedWeatherClock = State->GameClock().GetNow();
+							UE_LOG(LogElysiumProfile, Display,
+								TEXT("weather acceptance clock released: clock %d->%d world %d->%d scale %.2f->%.2f"),
+								bWasPaused ? 1 : 0, State->TimeControl().IsPaused() ? 1 : 0,
+								bWorldWasPaused ? 1 : 0, World->IsPaused() ? 1 : 0,
+								PreviousScale, State->TimeControl().GetScale());
+						}
+					}
+				}
 				ResolveRunList();
 				if (RunList.Num() == 0)
 				{

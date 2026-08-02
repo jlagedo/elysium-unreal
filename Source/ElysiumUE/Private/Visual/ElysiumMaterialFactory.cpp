@@ -62,6 +62,8 @@ namespace
 	const FName& SpecReflectParam = ElysiumReflections::Params::SpecReflect;
 	const FName BaseTex2Param(TEXT("BaseTex2"));
 	const FName BlendAmountParam(TEXT("BlendAmount"));
+	const FName WetnessDrivenParam(TEXT("WetnessDriven"));
+	const FName WetnessScaleParam(TEXT("WetnessScale"));
 
 	// Load a master by path once and pin it with a strong ref (indexed by path so each of the
 	// four masters gets its own cached slot).
@@ -205,6 +207,11 @@ UMaterialInstanceDynamic* FElysiumMaterialFactory::Build(const FElysiumMaterialD
 					ElysiumReflections::SpecReflect * Def->TintLuma());
 			}
 		}
+	}
+	if (Def && Def->bWetnessDriven)
+	{
+		Mid->SetScalarParameterValue(WetnessDrivenParam, 1.0f);
+		Mid->SetScalarParameterValue(WetnessScaleParam, Def->WetnessScale);
 	}
 
 	// WorldVertexTransition ($basetexture2): the master blends lerp(Albedo, BaseTex2, VertexColor.r x

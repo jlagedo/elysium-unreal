@@ -3,6 +3,7 @@
 #include "ElysiumContentPaths.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
+#include "ElysiumGameStateSubsystem.h"
 #include "Debug/ElysiumScreenshot.h"
 #include "Debug/ElysiumVantages.h"
 
@@ -49,6 +50,7 @@ FElysiumShotRun::FElysiumShotRun(UElysiumMapSubsystem* InSubsystem)
 {
 	FParse::Value(FCommandLine::Get(), TEXT("ShotSettle="), SettleFrames);
 	FParse::Value(FCommandLine::Get(), TEXT("ShotCam="), CamSelector);
+	bWeatherAcceptance = FParse::Param(FCommandLine::Get(), TEXT("ElysiumWeatherAcceptance"));
 	SettleFrames = FMath::Max(1, SettleFrames);
 
 	// Clean plates: suppress game_sign/popup panels so a map-load popup (the tutorial's Loader.exe
@@ -119,7 +121,13 @@ void FElysiumShotRun::PinCamera()
 	if (ACharacter* Char = Cast<ACharacter>(Pawn))
 	{
 		Char->GetCharacterMovement()->StopMovementImmediately();
-		Char->GetCharacterMovement()->SetMovementMode(MOVE_None);
+		// The map gameplay pass is ordered after the movement component. Disabling that tick would
+		// also freeze the authored weather queue, so acceptance runs pin the transform every frame
+		// but leave the zero-velocity movement tick alive.
+		if (!bWeatherAcceptance)
+		{
+			Char->GetCharacterMovement()->SetMovementMode(MOVE_None);
+		}
 	}
 	Pawn->SetActorLocation(PinLoc, false, nullptr, ETeleportType::TeleportPhysics);
 	PC->SetControlRotation(PinRot);
@@ -130,6 +138,11 @@ void FElysiumShotRun::BeginCapture()
 	const UElysiumMapSubsystem* Sub = Subsystem.Get();
 	const FString Map = Sub ? Sub->GetCurrentMapName() : TEXT("unknown");
 	const FString CamName = ElysiumVantages::Table[RunList[CamIndex]].Name;
+	if (const AElysiumMapActor* MapActor = Sub ? Sub->GetCurrentMap() : nullptr)
+	{
+		UE_LOG(LogElysiumShots, Display, TEXT("weather capture state: %s"),
+			*MapActor->GetWeatherDebugSummary());
+	}
 
 	// $ELYSIUM_EXPORT_ROOT/_shots/<map>/<map>_<cam>.png — gitignored, derived from the user's own install.
 	const FString Path = FElysiumContentPaths::Root() / TEXT("_shots") / Map
@@ -209,7 +222,32 @@ bool FElysiumShotRun::Tick(float /*DeltaSeconds*/)
 	APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
 	APawn* Pawn = PC ? PC->GetPawn() : nullptr;
 	const UElysiumMapSubsystem* Sub = Subsystem.Get();
-	const AElysiumMapActor* MapActor = Sub ? Sub->GetCurrentMap() : nullptr;
+	AElysiumMapActor* MapActor = Sub ? Sub->GetCurrentMap() : nullptr;
+	if (bWeatherAcceptance && Phase != EPhase::WaitReady && MapActor && World)
+	{
+		if (UGameInstance* GI = World->GetGameInstance())
+		{
+			if (UElysiumGameStateSubsystem* State = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+			{
+				const double Now = State->GameClock().GetNow();
+				if (Now <= LastObservedWeatherClock + KINDA_SMALL_NUMBER)
+				{
+					// The headless shot loop renders a settled world without normal gameplay ticks.
+					// Reuse the map's production passes at the requested fixed 60 Hz; if the engine
+					// has advanced the clock itself, the guard above leaves it alone.
+					MapActor->PreMoveTick(1.0f / 60.0f);
+					if (State->GameClock().GetNow() <= Now + KINDA_SMALL_NUMBER)
+					{
+						// Some off-screen viewport loops omit actor tick functions entirely. Advance
+						// through the same time-control facade before invoking the normal gameplay pass.
+						State->TimeControl().AdvanceFrame(1.0 / 60.0);
+					}
+					MapActor->Tick(1.0f / 60.0f);
+				}
+				LastObservedWeatherClock = State->GameClock().GetNow();
+			}
+		}
+	}
 
 	switch (Phase)
 	{
@@ -219,6 +257,27 @@ bool FElysiumShotRun::Tick(float /*DeltaSeconds*/)
 		{
 			if (++FrameInPhase >= BootSettleFrames)
 			{
+				if (bWeatherAcceptance)
+				{
+					if (UGameInstance* GI = World->GetGameInstance())
+					{
+						if (UElysiumGameStateSubsystem* State =
+							GI->GetSubsystem<UElysiumGameStateSubsystem>())
+						{
+							const bool bWasPaused = State->TimeControl().IsPaused();
+							const bool bWorldWasPaused = World->IsPaused();
+							const double PreviousScale = State->TimeControl().GetScale();
+							State->TimeControl().SetPaused(false);
+							State->TimeControl().SetScale(1.0);
+							LastObservedWeatherClock = State->GameClock().GetNow();
+							UE_LOG(LogElysiumShots, Display,
+								TEXT("weather acceptance clock released: clock %d->%d world %d->%d scale %.2f->%.2f"),
+								bWasPaused ? 1 : 0, State->TimeControl().IsPaused() ? 1 : 0,
+								bWorldWasPaused ? 1 : 0, World->IsPaused() ? 1 : 0,
+								PreviousScale, State->TimeControl().GetScale());
+						}
+					}
+				}
 				ResolveRunList();
 				if (RunList.Num() == 0)
 				{

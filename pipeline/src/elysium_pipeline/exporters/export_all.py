@@ -183,6 +183,10 @@ def _run_bundle(
         from elysium_pipeline.exporters import UE_extract_sounds
 
         UE_extract_sounds.main(list(maps))
+    elif name == "particles":
+        from elysium_pipeline.exporters import UE_extract_particles
+
+        UE_extract_particles.main(force=force, index=index)
     elif name == "scripts":
         from elysium_pipeline.exporters import UE_extract_scripts
 

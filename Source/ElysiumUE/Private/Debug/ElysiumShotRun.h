@@ -50,6 +50,10 @@ private:
 
 	// Raw -ShotCam= value (index/name), applied when the run list is resolved.
 	FString CamSelector;
+	// Acceptance runs opt into advancing the game clock behind the otherwise paused front-end
+	// harness. The rain command itself still arrives through the authored timer I/O chain.
+	bool bWeatherAcceptance = false;
+	double LastObservedWeatherClock = -1.0;
 
 	// The vantages this run will visit (indices into ElysiumVantages::Table).
 	TArray<int32> RunList;

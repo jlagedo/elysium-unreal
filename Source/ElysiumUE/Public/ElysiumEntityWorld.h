@@ -304,6 +304,9 @@ public:
 	IElysiumAudio*      Audio() const      { return WorldServices.Audio; }
 	IElysiumTravel*     Travel() const     { return WorldServices.Travel; }
 	IElysiumPresenter*  Presenter() const  { return WorldServices.Presenter; }
+	IElysiumWeather*    Weather() const    { return WorldServices.Weather; }
+	const FElysiumWeatherState& GetWeatherState() const { return WeatherState; }
+	void FadeGlobalWetness(float Target);
 	FElysiumLineService* Lines() const { return LineService.Get(); }
 
 	// Debug tap seam (P2.3 `ent_*`): install an extra I/O sink, owned by the world and torn down
@@ -393,10 +396,12 @@ private:
 	// Record one entity's post-Load state as the omission baseline. Called for every entity at the
 	// end of Load and for each runtime entity as it spawns.
 	void CaptureBaseline(int32 Index);
+	void PublishWetness();
 
 	AActor* Owner = nullptr;                          // component outer + VLOG context; not owned
 	UElysiumGameStateSubsystem* GameState = nullptr;  // clock + script host; outlives the world
 	FElysiumWorldServices WorldServices;              // the outbound seam (11.2); members may be null
+	FElysiumWeatherState WeatherState;
 	TUniquePtr<FElysiumLineService> LineService;
 	uint32 Epoch = 0;
 	bool bActive = false;

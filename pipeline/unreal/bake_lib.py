@@ -32,7 +32,8 @@ class MatDef(object):
 
     __slots__ = ("name", "albedo", "emissive", "bump", "refract_map", "env_mask",
                  "base_tex2", "scissor", "blend", "additive", "glass", "refract",
-                 "refract_amount", "envmap", "env_tint", "decal", "color")
+                 "refract_amount", "envmap", "env_tint", "wetness_driven",
+                 "wetness_scale", "decal", "color")
 
     # Channel spread above which an $envmaptint counts as CHROMATIC rather than a grey
     # dim-down. The population is bimodal -- 361 of the game's 362 grey tints sit at exactly
@@ -56,6 +57,8 @@ class MatDef(object):
         self.refract_amount = 0.0 # authored $refractamount, PNO-neutral when zero
         self.envmap = False
         self.env_tint = (1.0, 1.0, 1.0)   # envtint -> $envmaptint, white when unauthored
+        self.wetness_driven = False
+        self.wetness_scale = 0.0
         self.decal = False        # decal 1    -> deferred-decal master
         self.color = (0.6, 0.6, 0.65)
 
@@ -127,6 +130,9 @@ def read_mtl(path):
                 cur.envmap = True
             elif key == "envtint" and len(tok) >= 4:
                 cur.env_tint = (float(tok[1]), float(tok[2]), float(tok[3]))
+            elif key == "globalwetness" and len(tok) >= 2:
+                cur.wetness_driven = True
+                cur.wetness_scale = float(tok[1])
             elif key == "basetex2" and len(tok) >= 2:
                 cur.base_tex2 = tok[1]
             elif key == "Kd" and len(tok) >= 4:
@@ -367,9 +373,15 @@ def import_textures(jobs, package):
 
 def configure_texture(texture, role):
     """Set the compression/colour-space a texture's role needs. `role` is one of
-    'albedo' (sRGB colour + alpha), 'normal' (tangent-space bump) or 'mask' (linear
-    single-channel reflectivity)."""
-    if role == "normal":
+    'albedo' (sRGB colour + alpha), 'normal' (tangent-space bump), 'mask' (linear
+    single-channel reflectivity), or 'height' (linear 16-bit rain-cover height)."""
+    if role == "height":
+        texture.set_editor_property("srgb", False)
+        texture.set_editor_property("compression_settings",
+                                    unreal.TextureCompressionSettings.TC_DISPLACEMENTMAP)
+        texture.set_editor_property("mip_gen_settings",
+                                    unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS)
+    elif role == "normal":
         texture.set_editor_property("srgb", False)
         texture.set_editor_property("compression_settings",
                                     unreal.TextureCompressionSettings.TC_NORMALMAP)

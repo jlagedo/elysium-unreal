@@ -221,6 +221,38 @@ public:
 	virtual void CloseDialog() = 0;
 };
 
+struct FElysiumWeatherTransition
+{
+	float CurrentWetness = 0.0f;
+	float TargetWetness = 0.0f;
+	double StartTime = 0.0;
+	float Duration = 0.0f;
+};
+
+struct FElysiumWeatherEmitterState
+{
+	FElysiumEntityHandle Entity;
+	FVector LocationCm = FVector::ZeroVector;
+	FString ParticleDefinition;
+	bool bActive = false;
+	int32 AttachType = 0;
+	float BoundsCm = 0.0f;
+	float RateScale = 0.0f;
+	float RampStartScale = 0.0f;
+	float RampTargetScale = 0.0f;
+	double RampStartTime = 0.0;
+	float RampDuration = 0.0f;
+};
+
+class IElysiumWeather
+{
+public:
+	virtual ~IElysiumWeather() = default;
+	virtual void ApplyWetness(const FElysiumWeatherTransition& Transition) = 0;
+	virtual void ApplyEmitter(const FElysiumWeatherEmitterState& Emitter) = 0;
+	virtual void RemoveEmitter(const FElysiumEntityHandle& Entity) = 0;
+};
+
 // The bundle FElysiumEntityWorld is constructed with. By value — four raw pointers to objects that
 // outlive the world (the map actor owns the world; the subsystems outlive the map). Default-
 // constructed is the fully headless case: a world with no engine behind it at all.
@@ -230,4 +262,5 @@ struct FElysiumWorldServices
 	IElysiumAudio*      Audio      = nullptr;
 	IElysiumTravel*     Travel     = nullptr;
 	IElysiumPresenter*  Presenter  = nullptr;
+	IElysiumWeather*    Weather    = nullptr;
 };

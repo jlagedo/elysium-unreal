@@ -58,8 +58,8 @@ class FElysiumAmbientGeneric final : public FElysiumEntity
 {
 public:
 	// --- Inputs (registered below; reach here through the class-chain thunk) ---------------
-	void InputPlaySound()  { bDesiredPlaying = true;  StartVoice(0.f); }
-	void InputStopSound()  { bDesiredPlaying = false; StopActiveVoice(0.f); }
+	void InputPlaySound()  { bDesiredPlaying = true;  StartVoice(AuthoredFadeIn); }
+	void InputStopSound()  { bDesiredPlaying = false; StopActiveVoice(AuthoredFadeOut); }
 	void InputToggleSound()
 	{
 		if (bDesiredPlaying) { InputStopSound(); } else { InputPlaySound(); }
@@ -84,6 +84,8 @@ public:
 		RadiusCm = FMath::Max(AmbientKeyFloat(Def, TEXT("radius"), 1250.f) * AmbientInchToCm, 1.f);
 		Pitch = FMath::Max(AmbientKeyFloat(Def, TEXT("pitch"), 100.f) / 100.f, 0.01f);
 		SourceEntityName = Def ? Def->Keys.FindRef(TEXT("SourceEntityName")) : FString();
+		AuthoredFadeIn = FMath::Max(0.0f, AmbientKeyFloat(Def, TEXT("fadein"), 0.0f));
+		AuthoredFadeOut = FMath::Max(0.0f, AmbientKeyFloat(Def, TEXT("fadeout"), 0.0f));
 
 		bEverywhere = (SpawnFlags & SF_AMBIENT_EVERYWHERE) != 0;
 		// Loops unless explicitly NOT_LOOPED, or forced by the VtMB `flag_force_looping` key.
@@ -143,6 +145,8 @@ public:
 			: FString::Printf(TEXT("3D · radius %.0f cm%s"), RadiusCm,
 				SourceEntityName.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" · parent '%s'"), *SourceEntityName)));
 		Out.Emplace(TEXT("Looping"), bLoop ? TEXT("yes") : TEXT("no (one-shot)"));
+		Out.Emplace(TEXT("Authored fade"), FString::Printf(TEXT("in %.2fs · out %.2fs"),
+			AuthoredFadeIn, AuthoredFadeOut));
 	}
 
 private:
@@ -222,6 +226,8 @@ private:
 	float   Volume = 1.f;        // 0..1 linear
 	float   RadiusCm = 1250.f * AmbientInchToCm;
 	float   Pitch = 1.f;
+	float   AuthoredFadeIn = 0.0f;
+	float   AuthoredFadeOut = 0.0f;
 	bool    bEverywhere = false;
 	bool    bLoop = true;
 	bool    bDesiredPlaying = false;   // the intent (PlaySound/StopSound); the actual voice mirrors it

@@ -215,6 +215,7 @@ def run_harness(config, runner, kind: str, args: Sequence[str]) -> Path | None:
         ]
         if len(values) > 1:
             launch.append(f"-ProfileCam={values[1]}")
+        launch.extend(values[2:])
         _run(config, runner, editor, launch)
         _run(
             config,
@@ -253,6 +254,7 @@ def run_harness(config, runner, kind: str, args: Sequence[str]) -> Path | None:
         ]
         if len(values) > 1:
             launch.append(f"-ShotCam={values[1]}")
+        launch.extend(values[2:])
         _run(config, runner, editor, launch)
         return None
     if kind == "move":

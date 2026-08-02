@@ -38,10 +38,14 @@
 #include "ElysiumSaveTypes.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture.h"
+#include "Engine/Texture2D.h"
 #include "HAL/FileManager.h"
 #include "Materials/Material.h"
+#include "Materials/MaterialInstance.h"
 #include "Materials/MaterialInterface.h"
+#include "Materials/MaterialParameterCollection.h"
 #include "MaterialShared.h"
+#include "NiagaraSystem.h"
 #include "RHIShaderPlatform.h"
 #include "Misc/FileHelper.h"
 #include "Misc/PackageName.h"
@@ -1764,6 +1768,131 @@ bool FElysiumPlayerBodyMaterialTest::RunTest(const FString&)
 		{
 			return Info.Name == FName(TEXT("ModelAlpha"));
 		}));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSantaMonicaRainContentTest,
+	"Elysium.Content.SantaMonicaRain", GElysiumContentTestFlags)
+bool FElysiumSantaMonicaRainContentTest::RunTest(const FString&)
+{
+	// This is a focused-map contract: an unrelated grid export may leave the corpus-wide
+	// incomplete marker behind, but a present sm_hub_1 weather sidecar must be validated.
+	const FString WeatherPath = FElysiumContentPaths::MapDir(TEXT("sm_hub_1"))
+		/ TEXT("sm_hub_1.weather.json");
+	if (!IFileManager::Get().FileExists(*WeatherPath))
+	{
+		AddInfo(FString::Printf(TEXT("sm_hub_1 weather not exported - skipping: %s"),
+			*WeatherPath));
+		return true;
+	}
+	FString WeatherText;
+	TSharedPtr<FJsonObject> Weather;
+	TestTrue(TEXT("weather sidecar reads"), FFileHelper::LoadFileToString(WeatherText, *WeatherPath));
+	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(WeatherText);
+	if (!TestTrue(TEXT("weather sidecar parses"), FJsonSerializer::Deserialize(Reader, Weather)
+		&& Weather.IsValid()))
+	{
+		return false;
+	}
+	TestEqual(TEXT("weather sidecar schema"), Weather->GetStringField(TEXT("schema")),
+		FString(TEXT("elysium.map-weather")));
+	TestEqual(TEXT("weather sidecar version"),
+		static_cast<int32>(Weather->GetNumberField(TEXT("version"))), 1);
+	TestEqual(TEXT("weather sidecar has two authored emitters"),
+		Weather->GetArrayField(TEXT("emitters")).Num(), 2);
+	const TSharedPtr<FJsonObject> HeightJson = Weather->GetObjectField(TEXT("height_texture"));
+	TestEqual(TEXT("weather height contract resolution"),
+		static_cast<int32>(HeightJson->GetNumberField(TEXT("resolution"))), 2048);
+	TestEqual(TEXT("weather height contract format"), HeightJson->GetStringField(TEXT("format")),
+		FString(TEXT("R16_UNORM")));
+
+	UMaterialParameterCollection* Collection = LoadObject<UMaterialParameterCollection>(nullptr,
+		TEXT("/Game/VtMB/Materials/MPC_ElysiumEnvironment.MPC_ElysiumEnvironment"));
+	if (TestNotNull(TEXT("one environment MPC loads"), Collection))
+	{
+		const TArray<FName> Names = Collection->GetScalarParameterNames();
+		for (const FName Name : {FName(TEXT("GlobalWetness")), FName(TEXT("RainEnhancement")),
+			FName(TEXT("RainWetDarken")), FName(TEXT("RainWetRoughness")),
+			FName(TEXT("RainLightResponse"))})
+		{
+			TestTrue(FString::Printf(TEXT("MPC exposes %s"), *Name.ToString()), Names.Contains(Name));
+		}
+	}
+
+	for (const TCHAR* Path : {
+		TEXT("/Game/VtMB/Materials/M_World_Opaque.M_World_Opaque"),
+		TEXT("/Game/VtMB/Materials/M_World_Masked.M_World_Masked"),
+		TEXT("/Game/VtMB/Materials/M_World_Translucent.M_World_Translucent")})
+	{
+		UMaterial* Master = LoadObject<UMaterial>(nullptr, Path);
+		if (!TestNotNull(FString::Printf(TEXT("wet world master loads: %s"), Path), Master))
+		{
+			continue;
+		}
+		TArray<FMaterialParameterInfo> Scalars;
+		TArray<FGuid> ScalarIds;
+		Master->GetAllScalarParameterInfo(Scalars, ScalarIds);
+		for (const FName Name : {FName(TEXT("WetnessDriven")), FName(TEXT("WetnessScale")),
+			FName(TEXT("RainBoundsMinX")), FName(TEXT("RainBoundsMinY")),
+			FName(TEXT("RainBoundsSizeX")), FName(TEXT("RainBoundsSizeY")),
+			FName(TEXT("RainHeightMinZ")), FName(TEXT("RainHeightZScale"))})
+		{
+			TestTrue(FString::Printf(TEXT("%s exposes %s"), Path, *Name.ToString()),
+				Scalars.ContainsByPredicate([Name](const FMaterialParameterInfo& Info)
+				{
+					return Info.Name == Name;
+				}));
+		}
+		TArray<FMaterialParameterInfo> Textures;
+		TArray<FGuid> TextureIds;
+		Master->GetAllTextureParameterInfo(Textures, TextureIds);
+		TestTrue(FString::Printf(TEXT("%s exposes RainHeightTexture"), Path),
+			Textures.ContainsByPredicate([](const FMaterialParameterInfo& Info)
+			{
+				return Info.Name == FName(TEXT("RainHeightTexture"));
+			}));
+	}
+
+	UNiagaraSystem* RainSystem = LoadObject<UNiagaraSystem>(nullptr,
+		TEXT("/Game/VtMB/Particles/NS_ElysiumRain.NS_ElysiumRain"));
+	UMaterialInterface* RainMaterial = LoadObject<UMaterialInterface>(nullptr,
+		TEXT("/Game/VtMB/Particles/M_ElysiumRain.M_ElysiumRain"));
+	TestNotNull(TEXT("the single generated Niagara rain system loads"), RainSystem);
+	TestNotNull(TEXT("the single generated rain material loads"), RainMaterial);
+	for (const TCHAR* Path : {
+		TEXT("/Game/VtMB/Particles/T_RainDroplet.T_RainDroplet"),
+		TEXT("/Game/VtMB/Particles/T_RainImpact.T_RainImpact"),
+		TEXT("/Game/VtMB/Particles/T_RainStain.T_RainStain"),
+		TEXT("/Game/VtMB/Particles/T_RainMist.T_RainMist")})
+	{
+		TestNotNull(FString::Printf(TEXT("rain dependency sprite loads: %s"), Path),
+			LoadObject<UTexture2D>(nullptr, Path));
+	}
+
+	UTexture2D* Height = LoadObject<UTexture2D>(nullptr,
+		TEXT("/ElysiumBaked/sm_hub_1/Weather/T_RainHeight.T_RainHeight"));
+	if (TestNotNull(TEXT("per-map rain height texture loads"), Height))
+	{
+#if WITH_EDITORONLY_DATA
+		TestEqual(TEXT("rain height source width"), Height->Source.GetSizeX(), int64(2048));
+		TestEqual(TEXT("rain height source height"), Height->Source.GetSizeY(), int64(2048));
+		TestEqual(TEXT("rain height source format"), Height->Source.GetFormat(), TSF_G16);
+#endif
+		TestFalse(TEXT("rain height is linear"), Height->SRGB);
+		TestEqual(TEXT("rain height uses displacement compression"),
+			Height->CompressionSettings, TC_Displacementmap);
+	}
+	UMaterialInstance* RainMic = LoadObject<UMaterialInstance>(nullptr,
+		TEXT("/ElysiumBaked/sm_hub_1/Weather/MI_ElysiumRain.MI_ElysiumRain"));
+	if (TestNotNull(TEXT("per-map rain material instance loads"), RainMic))
+	{
+		TestTrue(TEXT("per-map rain material uses the one master"), RainMic->Parent == RainMaterial);
+		UTexture* BoundHeight = nullptr;
+		TestTrue(TEXT("per-map rain material binds RainHeightTexture"),
+			RainMic->GetTextureParameterValue(
+				FHashedMaterialParameterInfo(TEXT("RainHeightTexture")), BoundHeight, true));
+		TestTrue(TEXT("per-map rain material binds the selected map height"), BoundHeight == Height);
+	}
 	return true;
 }
 

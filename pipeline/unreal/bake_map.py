@@ -17,6 +17,7 @@
 # Optional -BakeStages=<csv> restricts the run to a subset of:
 #   textures, materials, world, sky, props, level
 import math
+import json
 import os
 import sys
 import time
@@ -178,6 +179,7 @@ class Bake(object):
         self.prop_pkg = "%s/Props" % self.pkg
         self.prop_tex_pkg = "%s/Props/Textures" % self.pkg
         self.prop_mat_pkg = "%s/Props/Materials" % self.pkg
+        self.weather_pkg = "%s/Weather" % self.pkg
 
         self.world_obj = None            # ObjModel
         self.world_mats = {}             # name -> MatDef
@@ -193,6 +195,8 @@ class Bake(object):
         self.prop_phys = {}              # stem -> {"mass": kg, "hulls": [(verts, tris)]}
         self.masters = {}
         self.env = {}                    # <map>.env, key -> [tokens]
+        self.weather = None              # <map>.weather.json
+        self.rain_height = None
         self.saved = []                  # asset paths pending save
 
     # ------------------------------------------------------------------ inputs
@@ -217,6 +221,14 @@ class Bake(object):
         self.world_mats = bl.read_mtl(os.path.join(self.dir, "%s.mtl" % self.map))
         self.blend = bl.read_floats(os.path.join(self.dir, "%s.blend" % self.map))
         self.decals = bl.read_decals(os.path.join(self.dir, "%s.decals" % self.map))
+        weather_path = os.path.join(self.dir, "%s.weather.json" % self.map)
+        if os.path.isfile(weather_path):
+            with open(weather_path, "r", encoding="utf-8") as handle:
+                self.weather = json.load(handle)
+            if (self.weather.get("schema") != "elysium.map-weather"
+                    or self.weather.get("version") != 1):
+                fail("unsupported weather sidecar: %s" % weather_path)
+                return False
         log("world: %d verts / %d tris / %d groups / %d materials / %d decals (%.1fs)" % (
             len(self.world_obj.positions), self.world_obj.tri_count,
             len(self.world_obj.groups), len(self.world_mats), len(self.decals),
@@ -303,6 +315,19 @@ class Bake(object):
                 self.textures[(package, name)] = texture
                 self.saved.append("%s/%s" % (package, name))
             log("textures: %d into %s (%.1fs)" % (len(imported), package, time.time() - start))
+        if self.weather:
+            relative = self.weather["height_texture"]["path"]
+            source = os.path.join(self.dir, relative.replace("/", os.sep))
+            if not os.path.isfile(source):
+                fail("weather height texture missing: %s" % source)
+            else:
+                imported = bl.import_textures([(source, "T_RainHeight")], self.weather_pkg)
+                self.rain_height = imported.get("T_RainHeight")
+                if not self.rain_height:
+                    fail("weather height texture import failed")
+                else:
+                    bl.configure_texture(self.rain_height, "height")
+                    self.saved.append("%s/T_RainHeight" % self.weather_pkg)
 
     def _all_prop_mats(self):
         """Every prop material, keyed uniquely so identical names in different models do not
@@ -411,6 +436,20 @@ class Bake(object):
                     mat.env_tint[0], mat.env_tint[1], mat.env_tint[2], 1.0))
             else:
                 bl.set_scalar_param(mic, "SpecReflect", SPEC_REFLECT * mat.tint_luma)
+        if mat.wetness_driven:
+            bl.set_scalar_param(mic, "WetnessDriven", 1.0)
+            bl.set_scalar_param(mic, "WetnessScale", mat.wetness_scale)
+            if self.weather and self.rain_height:
+                bounds = self.weather["world_bounds_cm"]
+                minimum, maximum = bounds["min"], bounds["max"]
+                height = self.weather["height_texture"]
+                bl.set_tex_param(mic, "RainHeightTexture", self.rain_height)
+                bl.set_scalar_param(mic, "RainBoundsMinX", minimum[0])
+                bl.set_scalar_param(mic, "RainBoundsMinY", minimum[1])
+                bl.set_scalar_param(mic, "RainBoundsSizeX", maximum[0] - minimum[0])
+                bl.set_scalar_param(mic, "RainBoundsSizeY", maximum[1] - minimum[1])
+                bl.set_scalar_param(mic, "RainHeightMinZ", height["min_z_cm"])
+                bl.set_scalar_param(mic, "RainHeightZScale", height["z_scale_cm"])
         tex2 = tex(mat.base_tex2)
         if tex2:
             bl.set_tex_param(mic, "BaseTex2", tex2)
@@ -441,6 +480,33 @@ class Bake(object):
             log("materials: %d into %s%s (%.1fs)" % (
                 made, mat_pkg, ", %d stale pruned" % pruned if pruned else "",
                 time.time() - start))
+        if self.weather:
+            master = unreal.load_asset(
+                "/Game/VtMB/Particles/M_ElysiumRain.M_ElysiumRain")
+            system = unreal.load_asset(
+                "/Game/VtMB/Particles/NS_ElysiumRain.NS_ElysiumRain")
+            if not master or not system or not self.rain_height:
+                fail("rain policy assets or height texture are missing")
+                return
+            mic = bl.make_material_instance("MI_ElysiumRain", self.weather_pkg, master)
+            if not mic:
+                fail("weather rain material instance failed")
+                return
+            bounds = self.weather["world_bounds_cm"]
+            minimum, maximum = bounds["min"], bounds["max"]
+            height = self.weather["height_texture"]
+            bl.set_tex_param(mic, "RainHeightTexture", self.rain_height)
+            bl.set_scalar_param(mic, "RainBoundsMinX", minimum[0])
+            bl.set_scalar_param(mic, "RainBoundsMinY", minimum[1])
+            bl.set_scalar_param(mic, "RainBoundsSizeX", maximum[0] - minimum[0])
+            bl.set_scalar_param(mic, "RainBoundsSizeY", maximum[1] - minimum[1])
+            bl.set_scalar_param(mic, "RainHeightMinZ", height["min_z_cm"])
+            bl.set_scalar_param(mic, "RainHeightZScale", height["z_scale_cm"])
+            self.saved.append("%s/MI_ElysiumRain" % self.weather_pkg)
+            if not unreal.ElysiumRainAssetBuilder.bind_rain_material(system, mic):
+                fail("could not bind the map rain material to NS_ElysiumRain")
+                return
+            self.saved.append("/Game/VtMB/Particles/NS_ElysiumRain")
 
     def resolve_textures(self):
         """Load already-imported textures into the lookup, so the material stage can bind
@@ -454,6 +520,10 @@ class Bake(object):
                 path = "%s/%s" % (package, name)
                 if unreal.EditorAssetLibrary.does_asset_exist(path):
                     self.textures[(package, name)] = unreal.EditorAssetLibrary.load_asset(path)
+        if self.weather and not self.rain_height:
+            path = "%s/T_RainHeight" % self.weather_pkg
+            if unreal.EditorAssetLibrary.does_asset_exist(path):
+                self.rain_height = unreal.EditorAssetLibrary.load_asset(path)
 
     def resolve_materials(self):
         """Load already-baked material instances into the lookup, so a mesh or level stage can

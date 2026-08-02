@@ -16,6 +16,7 @@ class ExportProfileTests(unittest.TestCase):
     def test_profiles_include_every_required_offline_bundle(self) -> None:
         required = {
             "audio",
+            "particles",
             "scripts",
             "signs",
             "vdata",

@@ -15,8 +15,9 @@ TOOLS/* faces (nodraw, clip, trigger, skybox, hint...) are skipped - they are
 invisible engine surfaces, not geometry to draw.
 """
 import struct, os, re, json
+from pathlib import Path
 import numpy as np
-from elysium_pipeline.formats import install, vmt
+from elysium_pipeline.formats import install, vmt, weather
 from elysium_pipeline.formats import bsp as B
 from elysium_pipeline.formats import mdl as MDL
 from elysium_pipeline.formats import phy
@@ -1085,6 +1086,7 @@ def main(bsp_path, out_dir, *, index=None):
     mat_info = {}        # gkey -> (albedo_png, emission_png, alphatest, translucent)
     refl_info = {}       # gkey -> vtex's average albedo (r,g,b), for the bounce term
     env_info = {}        # gkey -> dict(cube, mask, tint, contrast, saturation)
+    wetness_info = {}    # gkey -> validated scalar GlobalWetness proxy response
     blend_info = {}      # gkey -> second albedo png (WorldVertexTransition tex2)
     bump_info = {}       # gkey -> normal-map png ($bumpmap; perturbs the reflection)
     glass_info = set()   # gkeys routed to UE's dedicated thin-glass master
@@ -1135,13 +1137,19 @@ def main(bsp_path, out_dir, *, index=None):
         info = {"basetexture": None, "selfillum": False, "translucent": False, "alphatest": False,
                 "water": False, "normalmap": None, "fogcolor": None, "fogstart": None,
                 "fogend": None, "reflecttint": None, "refract": False,
-                "dudvmap": None, "refractamount": None}
+                "dudvmap": None, "refractamount": None, "globalwetness": None}
         if vmt_txt:
             info = vmt.parse(vmt_txt, resolve_include=lambda p: read_material_text(
                 p if p.lower().endswith(".vmt") else p + ".vmt"))
         glass = is_glass(info, material_path)
         if glass:
             glass_info.add(gkey)
+        if info.get("globalwetness") is not None:
+            if not info.get("envmap"):
+                raise SystemExit(
+                    f"export aborted: {mat} has GlobalWetness proxies but no $envmap reflection"
+                )
+            wetness_info[gkey] = float(info["globalwetness"])
         bt = info["basetexture"]
         alphatest = info["alphatest"]
         translucent = info["translucent"]
@@ -1778,6 +1786,8 @@ def main(bsp_path, out_dir, *, index=None):
                     m.write(f"envmapmask tex/{e['mask']}\n")
                 t = e["tint"]
                 m.write(f"envtint {t[0]:.4f} {t[1]:.4f} {t[2]:.4f}\n")
+            if mat in wetness_info:
+                m.write(f"globalwetness {wetness_info[mat]:.6f}\n")
             if mat in glass_info:
                 m.write("glass 1\n")                 # our semantic: UE thin refractive glass
             if mat in blend_info:
@@ -1806,6 +1816,38 @@ def main(bsp_path, out_dir, *, index=None):
     # BGR888) gets none and the runtime's "failed to read .dds" log flags it unoptimized.
     flat, dropped = retex_dds.flat_index(idx)
     retex_dds.emit_dir(idx, flat, dropped, out_dir, base)
+
+    # Outdoor-rain contract: maximum cover height from the visible static world.
+    # Sky, decals, ropes and water are separate sidecars and therefore absent;
+    # explicit additive/refract effect cards are excluded below. Static-prop
+    # Solid, non-sky static props are placed from the exporter-owned sidecars.
+    if base == "sm_hub_1":
+        wpositions, _wuvs, wgroups, _wblend = scenes["world"]
+        cover_triangles = []
+        for gkey, material_triangles in wgroups.items():
+            if gkey in water_info or gkey in refract_info:
+                continue
+            material = mat_info.get(gkey)
+            if material and material[4]:  # additive cards are non-cover effects
+                continue
+            cover_triangles.extend(
+                (wpositions[a], wpositions[b], wpositions[c])
+                for a, b, c in material_triangles
+            )
+        cover_triangles.extend(weather.static_prop_cover_triangles(Path(out_dir), base))
+        if not wpositions:
+            raise SystemExit("sm_hub_1 weather export has no world geometry")
+        xyz = np.asarray(wpositions, dtype=np.float64)
+        bounds_min = tuple(float(value) for value in xyz.min(axis=0))
+        bounds_max = tuple(float(value) for value in xyz.max(axis=0))
+        entity_document = json.loads(
+            open(os.path.join(out_dir, base + ".ents"), encoding="utf-8").read()
+        )
+        weather_path = weather.write_weather(
+            base, Path(out_dir), entity_document, idx, cover_triangles, bounds_min, bounds_max
+        )
+        if weather_path:
+            print(f"weather: {len(cover_triangles)} cover triangles -> {weather_path.name}")
 
 # The default library output is the configured external export root.
 from elysium_pipeline.paths import export_root

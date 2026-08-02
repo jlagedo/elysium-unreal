@@ -23,6 +23,7 @@ public class ElysiumUE : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
 			"InputCore", "EnhancedInput",
+			"Niagara",
 			"AudioMixer", "AudioModulation", "AudioExtensions",
 			// Runtime asset loading: build meshes in code (no editor bake) and
 			// decode textures from disk into transient UTexture2D.
@@ -84,7 +85,10 @@ public class ElysiumUE : ModuleRules
 			PrivateDependencyModuleNames.AddRange(new string[]
 			{
 				// JsonUtilities carries FJsonObjectWrapper, the base of FModelContextProtocolToolResult.
-				"ModelContextProtocol", "ModelContextProtocolEngine", "JsonUtilities"
+				"ModelContextProtocol", "ModelContextProtocolEngine", "JsonUtilities",
+				// Offline weather-content generation authors the one native Niagara system
+				// through UE's editor stack API. No NiagaraEditor code reaches Game/Shipping.
+				"NiagaraEditor"
 			});
 			// Lumen card baking (docs/architecture/uasset-bake-spike.md). IMeshUtilities::GenerateCardRepresentationData
 			// is the real surfel-fitted card builder; it ray-traces the mesh through Embree, so it only

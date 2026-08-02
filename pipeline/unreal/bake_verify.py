@@ -35,6 +35,115 @@ def asset_tag(data, name):
     return str(result) if result is not None else ""
 
 
+def verify_sm_hub_1_weather(package, world_dir):
+    """Verify the authored data contract and the one generated UE weather presentation path."""
+    errors = []
+
+    def fail(message):
+        unreal.log_error("[verify] weather: " + message)
+        errors.append("weather: " + message)
+
+    sidecar_path = os.path.join(world_dir, "sm_hub_1.weather.json")
+    try:
+        with open(sidecar_path, "r", encoding="utf-8") as handle:
+            weather = json.load(handle)
+    except (OSError, ValueError) as exc:
+        fail("sidecar missing or invalid: %s" % exc)
+        return errors
+    if weather.get("schema") != "elysium.map-weather" or weather.get("version") != 1:
+        fail("sidecar schema/version is not elysium.map-weather v1")
+    emitters = weather.get("emitters", [])
+    if len(emitters) != 2 or any(
+            item.get("particle_definition") != "rain_follow_emitter"
+            or item.get("attach_type") != 11 for item in emitters):
+        fail("sidecar does not contain exactly two attach_type=11 rain_follow emitters")
+    bounds = weather.get("world_bounds_cm", {})
+    minimum = bounds.get("min", [])
+    maximum = bounds.get("max", [])
+    if len(minimum) != 3 or len(maximum) != 3:
+        fail("sidecar world bounds are incomplete")
+    else:
+        footprint = (maximum[0] - minimum[0], maximum[1] - minimum[1])
+        if abs(footprint[0] - 28971.24) > 0.01 or abs(footprint[1] - 19639.28) > 0.01:
+            fail("sidecar footprint drifted: %.3f x %.3f cm" % footprint)
+    height_meta = weather.get("height_texture", {})
+    if (height_meta.get("format") != "R16_UNORM"
+            or height_meta.get("resolution") != 2048
+            or height_meta.get("sentinel") != 0):
+        fail("height metadata is not 2048 R16_UNORM with zero sentinel")
+
+    height_path = package + "/Weather/T_RainHeight"
+    height = unreal.EditorAssetLibrary.load_asset(height_path)
+    if height is None:
+        fail("height texture asset is missing: " + height_path)
+    else:
+        # blueprint_get_size_* reports the currently resident RHI mip (32x32 in a
+        # commandlet), not the imported source. Dimensions is authored from Texture.Source.
+        dimensions = asset_tag(
+            unreal.EditorAssetLibrary.find_asset_data(height_path), "Dimensions")
+        if dimensions != "2048x2048":
+            fail("height texture source is %s, expected 2048x2048" % (
+                dimensions or "<unknown>"))
+        if (height.get_editor_property("srgb")
+                or height.get_editor_property("compression_settings")
+                != unreal.TextureCompressionSettings.TC_DISPLACEMENTMAP):
+            fail("height texture is not linear displacement-map R16")
+
+    expected_policy_assets = [
+        "/Game/VtMB/Materials/MPC_ElysiumEnvironment",
+        "/Game/VtMB/Particles/M_ElysiumRain",
+        "/Game/VtMB/Particles/NS_ElysiumRain",
+        "/Game/VtMB/Particles/T_RainDroplet",
+        "/Game/VtMB/Particles/T_RainImpact",
+        "/Game/VtMB/Particles/T_RainStain",
+        "/Game/VtMB/Particles/T_RainMist",
+    ]
+    for asset in expected_policy_assets:
+        if not unreal.EditorAssetLibrary.does_asset_exist(asset):
+            fail("generated policy asset is missing: " + asset)
+
+    rain_material = unreal.EditorAssetLibrary.load_asset(
+        "/Game/VtMB/Particles/M_ElysiumRain")
+    system = unreal.EditorAssetLibrary.load_asset(
+        "/Game/VtMB/Particles/NS_ElysiumRain")
+    mic_path = package + "/Weather/MI_ElysiumRain"
+    rain_mic = unreal.EditorAssetLibrary.load_asset(mic_path)
+    if rain_mic is None:
+        fail("per-map rain material instance is missing: " + mic_path)
+    else:
+        parent = rain_mic.get_editor_property("parent")
+        if parent is None or parent != rain_material:
+            fail("per-map rain material instance has the wrong parent")
+        bound_height = unreal.MaterialEditingLibrary.get_material_instance_texture_parameter_value(
+            rain_mic, "RainHeightTexture")
+        if height is None or bound_height != height:
+            fail("per-map rain material has no matching height texture")
+        validation = unreal.ElysiumRainAssetBuilder.validate_rain_system(system, rain_mic)
+        if validation:
+            fail(str(validation))
+
+    wetness_values = []
+    for mat in bl.read_mtl(os.path.join(world_dir, "sm_hub_1.mtl")).values():
+        if mat.wetness_driven:
+            wetness_values.append(float(mat.wetness_scale))
+    prop_dir = os.path.join(world_dir, "props")
+    if os.path.isdir(prop_dir):
+        for entry in os.listdir(prop_dir):
+            if entry.lower().endswith(".mtl"):
+                for mat in bl.read_mtl(os.path.join(prop_dir, entry)).values():
+                    if mat.wetness_driven:
+                        wetness_values.append(float(mat.wetness_scale))
+    expected_wetness = [0.56] + [0.60] * 6 + [1.0] * 7
+    if sorted(wetness_values) != sorted(expected_wetness):
+        fail("expected the exact 14-material GlobalWetness scalar corpus, found %r"
+             % sorted(wetness_values))
+
+    if not errors:
+        unreal.log("[verify] weather one system / 3 emitters / 4 sprites / "
+                   "2 authored placements / 14 wet materials / 2048 R16 cover")
+    return errors
+
+
 def verify_map(map_name):
     errors = []
     package = "%s/%s" % (MOUNT, map_name)
@@ -464,6 +573,9 @@ def verify_map(map_name):
             errors.append("brush mesh owns simple collision: %s" % stem)
     unreal.log("[verify] brush geometry %d tris / %d slots / %d unbound / %d collision shapes" % (
         brush_tris, brush_slots, brush_unbound, brush_collision))
+
+    if map_name == "sm_hub_1":
+        errors.extend(verify_sm_hub_1_weather(package, world_dir))
 
     level = "%s/%s" % (package, map_name)
     if unreal.EditorAssetLibrary.does_asset_exist(level):

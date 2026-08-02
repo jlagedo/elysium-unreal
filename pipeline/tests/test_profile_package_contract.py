@@ -51,6 +51,7 @@ class ProfileAndPackageContractTests(unittest.TestCase):
     def test_complete_profiles_include_use_icons_and_every_global_bundle(self) -> None:
         expected = {
             "audio",
+            "particles",
             "scripts",
             "signs",
             "vdata",

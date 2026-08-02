@@ -15,6 +15,12 @@ class UElysiumMapVisuals;
 class USceneComponent;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
+class UMaterialParameterCollection;
+class UMaterialInterface;
+class UMaterialInstanceDynamic;
+class UNiagaraComponent;
+class UNiagaraSystem;
+class UTexture2D;
 class AElysiumMapActor;
 
 // Elysium's map lifecycle, distinct from Unreal's package/actor lifecycle. BeginPlay only starts
@@ -142,7 +148,8 @@ UCLASS()
 class AElysiumMapActor : public AActor,
 	public IElysiumEmbodiment,
 	public IElysiumAudio,
-	public IElysiumTravel
+	public IElysiumTravel,
+	public IElysiumWeather
 {
 	GENERATED_BODY()
 
@@ -287,6 +294,13 @@ public:
 		const FVector& Offset, float Yaw) override;
 	virtual void ChangeMap(const FString& Map) override;
 
+	// --- IElysiumWeather --------------------------------------------------------------------
+	virtual void ApplyWetness(const FElysiumWeatherTransition& Transition) override;
+	virtual void ApplyEmitter(const FElysiumWeatherEmitterState& Emitter) override;
+	virtual void RemoveEmitter(const FElysiumEntityHandle& Entity) override;
+	void FireWeatherTimer(bool bRainOn);
+	FString GetWeatherDebugSummary() const;
+
 	// Live stats for the debug overlay, filled by LoadMap. The look and collider counts live on
 	// UElysiumMapVisuals / UElysiumMapCollision alongside the things they count.
 	FString LoadedMap;
@@ -320,6 +334,14 @@ private:
 	UPROPERTY() TObjectPtr<UElysiumMapVisuals> Visuals;
 	UPROPERTY() TObjectPtr<UElysiumMapCollision> Collision;
 	UPROPERTY() TObjectPtr<UElysiumEntityBodies> Bodies;
+	UPROPERTY(Transient) TObjectPtr<UMaterialParameterCollection> EnvironmentParameters;
+	UPROPERTY(Transient) TObjectPtr<UNiagaraSystem> RainSystem;
+	UPROPERTY(Transient) TObjectPtr<UTexture2D> RainHeightTexture;
+	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> RainMaterial;
+	UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInstanceDynamic>> RainLayerMaterials;
+	UPROPERTY(Transient) TMap<int32, TObjectPtr<UNiagaraComponent>> RainComponents;
+	TMap<int32, FElysiumWeatherEmitterState> RainEmitterStates;
+	FElysiumWeatherTransition WetnessTransition;
 
 	// B7 — the 3D-skybox miniature's placement (`<map>.sky`), or the identity on the 65 maps
 	// with no `sky_camera`. Read at map load and used twice: the def parser carries sky-scope
@@ -381,6 +403,8 @@ private:
 	void ActivateRuntime();
 	void FailRuntime(const FString& Reason);
 	void TickAudio(float DeltaSeconds);
+	void TickWeatherPresentation();
+	void ApplyWeatherTuning();
 	// UE can retain an already-overlapping pair across a non-swept/zero-distance teleport without
 	// emitting a fresh begin edge. Refresh the pawn's overlap cache, then reconcile every runtime
 	// brush currently containing it into the deduplicating entity touch bus.

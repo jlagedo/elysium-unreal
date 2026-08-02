@@ -4,7 +4,14 @@ VMTs are a keyvalues text file. We extract $basetexture and a few flags.
 Some VMTs use the "patch" shader that `include`s another VMT; we follow one
 level of that.
 """
+import math
 import re
+
+from elysium_pipeline.formats import kv
+
+
+class VmtContractError(ValueError):
+    """A live VMT construct cannot be represented without changing its meaning."""
 
 def _decomment(text):
     """Strip KeyValues `//` line comments, honouring quotes. A key inside a fully
@@ -74,10 +81,67 @@ def _norm_path(s):
     n = s.replace("\\", "/").lower()
     return re.sub(r"/+", "/", n).strip("/")
 
+
+def _global_wetness_scale(text):
+    """Return the scalar written by a complete ``GlobalWetness`` RGB proxy set.
+
+    VtMB authors the reflection response as three proxy blocks, one for each
+    ``$envmaptint`` component.  Unreal's material contract is scalar only while
+    the shipped corpus keeps those three scales equal, so reject partial,
+    duplicate, malformed, or unequal triples instead of silently recolouring a
+    material.
+    """
+
+    document = kv.parse(text)
+    proxies = document.get("proxies")
+    if not isinstance(proxies, dict) or "globalwetness" not in proxies:
+        return None
+    blocks = proxies["globalwetness"]
+    if not isinstance(blocks, list):
+        blocks = [blocks]
+
+    channels = {}
+    for block in blocks:
+        if not isinstance(block, dict):
+            raise VmtContractError("GlobalWetness proxy must be a KeyValues block")
+        result = str(block.get("resultvar", "")).strip().lower().replace(" ", "")
+        match = re.fullmatch(r"\$envmaptint\[([0-2])\]", result)
+        if not match:
+            raise VmtContractError(
+                f"GlobalWetness resultVar must target $envmaptint[0..2], got {result!r}"
+            )
+        channel = int(match.group(1))
+        if channel in channels:
+            raise VmtContractError(f"duplicate GlobalWetness channel {channel}")
+        raw_scale = str(block.get("scale", "")).strip()
+        try:
+            scale = float(raw_scale)
+        except ValueError as exc:
+            raise VmtContractError(
+                f"GlobalWetness channel {channel} has invalid scale {raw_scale!r}"
+            ) from exc
+        if not math.isfinite(scale) or scale < 0.0:
+            raise VmtContractError(
+                f"GlobalWetness channel {channel} scale must be finite and non-negative"
+            )
+        channels[channel] = scale
+
+    if set(channels) != {0, 1, 2}:
+        missing = sorted({0, 1, 2} - set(channels))
+        raise VmtContractError(f"GlobalWetness proxy triple is incomplete; missing {missing}")
+    if not math.isclose(channels[0], channels[1], abs_tol=1e-6) or not math.isclose(
+        channels[0], channels[2], abs_tol=1e-6
+    ):
+        raise VmtContractError(
+            "GlobalWetness RGB proxy scales differ; the scalar export contract cannot represent it"
+        )
+    return channels[0]
+
 def parse(text, resolve_include=None):
     """text: VMT contents. resolve_include: fn(path)->text for patch shaders.
     Returns dict with basetexture (normalized), selfillum, translucent, alphatest."""
     text = _decomment(text)
+    local_wetness = _global_wetness_scale(text)
     if re.match(r'\s*"?patch"?', text, re.IGNORECASE) and resolve_include:
         inc = _find_include(text)
         if inc:
@@ -88,6 +152,8 @@ def parse(text, resolve_include=None):
                 bt = _find(text, "basetexture")
                 if bt:
                     parent["basetexture"] = _norm_path(bt)
+                if local_wetness is not None:
+                    parent["globalwetness"] = local_wetness
                 return parent
 
     shader = _shader_name(text)
@@ -132,6 +198,9 @@ def parse(text, resolve_include=None):
         "envmaptint": _vec3(_find(text, "envmaptint")),        # [r,g,b] or None (=1,1,1)
         "envmapcontrast": _find_f(text, "envmapcontrast"),     # default 0 (no-op)
         "envmapsaturation": _find_f(text, "envmapsaturation"), # default 1 (no-op)
+        # Three equal GlobalWetness proxy blocks drive the reflection tint.  The
+        # parser validates the RGB triple above before collapsing it to a scalar.
+        "globalwetness": local_wetness,
         # WorldVertexTransition (terrain 2-texture blend keyed by vertex/disp alpha).
         "basetexture2": _norm_path(bt2),
         # $bumpmap: tangent-space normal map (2% of world materials).

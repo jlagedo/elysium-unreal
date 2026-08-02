@@ -28,6 +28,7 @@ struct FElysiumRecordingServices final
 	, public IElysiumAudio
 	, public IElysiumTravel
 	, public IElysiumPresenter
+	, public IElysiumWeather
 {
 	// One line per service call, in the order they happened: "PlayVoice ambient/x.wav".
 	// Mutable so the const interface methods can record too.
@@ -41,6 +42,7 @@ struct FElysiumRecordingServices final
 		S.Audio      = this;
 		S.Travel     = this;
 		S.Presenter  = this;
+		S.Weather    = this;
 		return S;
 	}
 
@@ -258,9 +260,10 @@ struct FElysiumRecordingServices final
 	virtual FElysiumVoiceHandle Submit(FElysiumAudioRequest Request) override
 	{
 		const FElysiumVoiceHandle H{ ++NextVoiceSlot, 1 };
-		Record(FString::Printf(TEXT("Submit %s owner=%s epoch=%llu gain=%.2f loop=%d"),
+		Record(FString::Printf(TEXT("Submit %s owner=%s epoch=%llu gain=%.2f loop=%d fade=%.2f"),
 			*UElysiumAudioSubsystem::ResolveSourcePath(Request.Source), *Request.Owner.StableId,
-			Request.Owner.MapEpoch, Request.Gain, Request.bLooping ? 1 : 0));
+			Request.Owner.MapEpoch, Request.Gain, Request.bLooping ? 1 : 0,
+			Request.FadeInSeconds));
 		LiveVoices.Add(H);
 		Requests.Add(H, MoveTemp(Request));
 		return H;
@@ -387,9 +390,30 @@ struct FElysiumRecordingServices final
 		OpenDialogOwner = FElysiumEntityHandle::Invalid();
 	}
 
+	// --- IElysiumWeather -------------------------------------------------------------------
+	virtual void ApplyWetness(const FElysiumWeatherTransition& Transition) override
+	{
+		LastWetness = Transition;
+		Record(FString::Printf(TEXT("ApplyWetness %.3f -> %.3f"),
+			Transition.CurrentWetness, Transition.TargetWetness));
+	}
+	virtual void ApplyEmitter(const FElysiumWeatherEmitterState& Emitter) override
+	{
+		Emitters.Add(Emitter.Entity.Index, Emitter);
+		Record(FString::Printf(TEXT("ApplyEmitter #%d %s rate=%.3f"), Emitter.Entity.Index,
+			Emitter.bActive ? TEXT("on") : TEXT("off"), Emitter.RateScale));
+	}
+	virtual void RemoveEmitter(const FElysiumEntityHandle& Entity) override
+	{
+		Emitters.Remove(Entity.Index);
+		Record(FString::Printf(TEXT("RemoveEmitter #%d"), Entity.Index));
+	}
+
 	FElysiumEntityHandle OpenSignOwner;
 	FElysiumEntityHandle OpenDialogOwner;
 	FString ActiveScheme;
+	FElysiumWeatherTransition LastWetness;
+	TMap<int32, FElysiumWeatherEmitterState> Emitters;
 
 private:
 	void Record(FString&& Line) const { Calls.Add(MoveTemp(Line)); }

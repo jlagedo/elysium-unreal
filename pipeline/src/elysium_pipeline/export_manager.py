@@ -83,6 +83,8 @@ def _map_tasks(config, map_names: Sequence[str], index: dict, source_fingerprint
         / "exporters"
         / "UE_bsp_to_scene.py",
         config.repo_root / "pipeline" / "src" / "elysium_pipeline" / "formats" / "bsp.py",
+        config.repo_root / "pipeline" / "src" / "elysium_pipeline" / "formats" / "weather.py",
+        config.repo_root / "pipeline" / "src" / "elysium_pipeline" / "formats" / "particles.py",
     )
     tasks: list[Task] = []
     for map_name in map_names:
@@ -113,7 +115,8 @@ def _map_tasks(config, map_names: Sequence[str], index: dict, source_fingerprint
                 outputs=(
                     output_dir / f"{map_name}.obj",
                     output_dir / f"{map_name}.ents",
-                ),
+                ) + ((output_dir / f"{map_name}.weather.json",)
+                     if map_name == "sm_hub_1" else ()),
             )
         )
     return tasks
@@ -122,6 +125,7 @@ def _map_tasks(config, map_names: Sequence[str], index: dict, source_fingerprint
 def _bundle_outputs(export_root: Path, bundle: str) -> tuple[Path, ...]:
     mapping = {
         "audio": (export_root / "audio" / "catalog.json",),
+        "particles": (export_root / "particles" / "manifest.json",),
         "scripts": (export_root / "scripts", export_root / "dlg"),
         "signs": (export_root / "signs" / "backgrounds.json",),
         "vdata": (export_root / "vdata",),
@@ -178,6 +182,8 @@ def _bundle_tasks(
                 if bundle == "npc"
                 else "UE_use_icons.py"
                 if bundle == "use-icons"
+                else "UE_extract_particles.py"
+                if bundle == "particles"
                 else "export_all.py"
             )
         )
@@ -269,11 +275,27 @@ def _policy_fingerprint(config) -> str:
     scripts = [
         config.repo_root / "pipeline" / "unreal",
         config.repo_root / "Content" / "Fonts",
+        config.export_root / "particles" / "manifest.json",
+        config.export_root / "particles" / "dropletfast.tga",
+        config.export_root / "particles" / "fortituderings.tga",
+        config.export_root / "particles" / "d_targetblob.tga",
+        config.export_root / "particles" / "furball.tga",
+        config.export_root / "particles" / "dropletfast.png",
+        config.export_root / "particles" / "fortituderings.png",
+        config.export_root / "particles" / "d_targetblob.png",
+        config.export_root / "particles" / "furball.png",
     ]
     return fingerprint_paths(scripts, extra=("policy",))
 
 
 def ensure_policy_content(config, runner, *, force: bool = False) -> TaskResult:
+    # The generated rain material imports normalized derivatives of the exact patch-first source
+    # sprites. Keep the raw full mirror and its four-item closure current even for a focused
+    # map/policy command, not only complete profiles.
+    from elysium_pipeline.exporters import UE_extract_particles
+    from elysium_pipeline.formats import install
+
+    UE_extract_particles.main(index=install.build_index(dirs=("particles",)))
     manifest = Manifest(config.export_root / MANIFEST_FILE)
     outputs = (
         config.repo_root / "Content" / "Elysium.umap",
@@ -284,6 +306,8 @@ def ensure_policy_content(config, runner, *, force: bool = False) -> TaskResult:
         / "UI"
         / "Fonts"
         / unreal.FONT_ASSETS[0],
+        config.repo_root / "Content" / "VtMB" / "Particles" / "M_ElysiumRain.uasset",
+        config.repo_root / "Content" / "VtMB" / "Particles" / "NS_ElysiumRain.uasset",
     )
     task = Task(
         "unreal:policy",

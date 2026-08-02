@@ -7,6 +7,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
 #include "ElysiumVariant.h"
+#include "ElysiumWeatherState.h"
 
 // 11.9 — the four blocks a save holds (`docs/architecture/save-architecture.md` §3), as plain C++ structs we own.
 // None of this is UPROPERTY-reflected and none of it should become so: the substrate is plain C++
@@ -29,6 +30,7 @@ struct FElysiumSaveVersion
 		Identity      = 5,   // the PC's name, and m_iCurrQuestLogArea — the quest log's hub tab
 		History       = 6,   // m_iVHistoryID — the background trait chargen writes
 		BodyIdentity  = 7,   // the authored M_BodyN/F_BodyN armor-slot appearance
+		Weather       = 8,   // map wetness transition and env_particle ramps
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
@@ -129,6 +131,7 @@ struct FElysiumMapSnapshot
 	uint64 QueueNextSerial = 1;
 
 	FElysiumSavedFade Fade;
+	FElysiumWeatherState Weather;
 
 	bool IsValid() const { return !MapName.IsEmpty(); }
 };

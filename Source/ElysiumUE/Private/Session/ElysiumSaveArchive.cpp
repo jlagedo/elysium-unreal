@@ -211,6 +211,18 @@ FArchive& operator<<(FArchive& Ar, FElysiumMapSnapshot& M)
 	Ar << M.AbsentEntities;
 	Ar << M.Queue << M.QueueNextSerial;
 	Ar << M.Fade;
+	if (Ar.IsSaving() || Ar.CustomVer(FElysiumSaveVersion::GUID) >= FElysiumSaveVersion::Weather)
+	{
+		Ar << M.Weather;
+	}
+	return Ar;
+}
+
+FArchive& operator<<(FArchive& Ar, FElysiumWeatherState& W)
+{
+	Ar << W.InitialWetness << W.CurrentWetness << W.TargetWetness;
+	Ar << W.TransitionStart << W.TransitionDuration;
+	Ar << W.WetnessFadeIn << W.WetnessFadeOut << W.WetnessFadeTarget;
 	return Ar;
 }
 

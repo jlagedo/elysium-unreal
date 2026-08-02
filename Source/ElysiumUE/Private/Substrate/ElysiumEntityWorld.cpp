@@ -54,6 +54,15 @@ namespace
 	const TCHAR* const GSelfTarget = TEXT("!self");
 	const TCHAR* const GCallerTarget = TEXT("!caller");
 	const TCHAR* const GActivatorTarget = TEXT("!activator");
+
+	float WeatherKeyFloat(const FElysiumEntityDef& Def, const TCHAR* Key, float Default)
+	{
+		if (const FString* Value = Def.Keys.Find(Key))
+		{
+			return FCString::Atof(**Value);
+		}
+		return Default;
+	}
 }
 
 static FAutoConsoleCommand GElysiumTrigger(
@@ -137,6 +146,18 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 {
 	bActive = false;
 	Defs = MoveTemp(InDefs);
+	for (const FElysiumEntityDef& Def : Defs.Defs)
+	{
+		if (Def.Classname.Equals(TEXT("worldspawn"), ESearchCase::IgnoreCase))
+		{
+			WeatherState.Configure(
+				WeatherKeyFloat(Def, TEXT("wetness_fadein"), 0.0f),
+				WeatherKeyFloat(Def, TEXT("wetness_fadeout"), 0.0f),
+				WeatherKeyFloat(Def, TEXT("wetness_fadetarget"), 0.0f),
+				NowSeconds());
+			break;
+		}
+	}
 
 	EntityList.Reserve(Defs.Num());
 	NameIndex.Reserve(Defs.Num());
@@ -205,6 +226,8 @@ void FElysiumEntityWorld::Activate(double Now)
 	}
 	LastTickNow = Now;
 	bActive = true;
+	WeatherState.Tick(Now);
+	PublishWetness();
 	UE_LOG(LogElysiumWorld, Log, TEXT("(%8.3f) world '%s' activated, epoch %u"),
 		Now, *Defs.MapName, Epoch);
 }
@@ -652,6 +675,7 @@ void FElysiumEntityWorld::Freeze(FElysiumMapSnapshot& Out) const
 	Out.Fade.bFadeIn      = ScreenFade.bFadeIn;
 	Out.Fade.bAutoReverse = ScreenFade.bAutoReverse;
 	Out.Fade.StartTime    = ScreenFade.StartTime;
+	Out.Weather = WeatherState;
 
 	UE_LOG(LogElysiumWorld, Log,
 		TEXT("froze '%s' at %.3f: %d/%d entity records, %d absent, %d queued"),
@@ -828,6 +852,9 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 	ScreenFade.bFadeIn      = Snapshot.Fade.bFadeIn;
 	ScreenFade.bAutoReverse = Snapshot.Fade.bAutoReverse;
 	ScreenFade.StartTime    = Snapshot.Fade.StartTime;
+	WeatherState = Snapshot.Weather;
+	WeatherState.Tick(NowSeconds());
+	PublishWetness();
 
 	UE_LOG(LogElysiumWorld, Log,
 		TEXT("applied snapshot '%s': %d/%d entity records, %d absent, %d queued"),
@@ -1486,6 +1513,8 @@ void FElysiumEntityWorld::Tick(double Now)
 	{
 		return;
 	}
+	WeatherState.Tick(Now);
+	PublishWetness();
 	// 11.4 — sample the pawn into the player entity first, so everything this frame reads (a think
 	// measuring distance, a landmark offset, `pc.GetOrigin()`) sees where the player actually is.
 	// The body moved earlier in THIS frame (step 4), which is the relationship retail has: the move
@@ -1496,6 +1525,25 @@ void FElysiumEntityWorld::Tick(double Now)
 	}
 	RunThinks(Now);
 	ServiceEvents(Now);
+}
+
+void FElysiumEntityWorld::FadeGlobalWetness(float Target)
+{
+	WeatherState.Retarget(Target, NowSeconds());
+	PublishWetness();
+}
+
+void FElysiumEntityWorld::PublishWetness()
+{
+	if (IElysiumWeather* Service = Weather())
+	{
+		FElysiumWeatherTransition Value;
+		Value.CurrentWetness = WeatherState.CurrentWetness;
+		Value.TargetWetness = WeatherState.TargetWetness;
+		Value.StartTime = WeatherState.TransitionStart;
+		Value.Duration = WeatherState.TransitionDuration;
+		Service->ApplyWetness(Value);
+	}
 }
 
 void FElysiumEntityWorld::RunThinks(double Now)

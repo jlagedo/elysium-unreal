@@ -31,6 +31,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEnvironment.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumWeatherState.h"
 #include "ElysiumFog.h"
 #include "ElysiumEventQueue.h"
 #include "ElysiumExpr.h"
@@ -3917,7 +3918,7 @@ bool FElysiumOpeningEmbodimentTest::RunTest(const FString&)
 	Services.PlayerRotation = FRotator(0.f, 35.f, 0.f);
 	Services.AnimatedPropModels.Add(TEXT("models/cinematic/cin_wineglass.mdl"), TEXT("cin_wineglass"));
 
-	auto BuildDefs = []()
+		auto BuildDefs = []()
 	{
 		FElysiumEntityDefs Defs;
 		Defs.MapName = TEXT("__opening_embodiment__");
@@ -5901,11 +5902,12 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	TestFalse(TEXT("a truncated payload is refused"), ElysiumSave::Read(Truncated, Rejected, Error));
 
 	// `BodyIdentity` is the first additive schema with an upgrade branch: v6 is still the floor,
-	// and its absent armor slot migrates to retail's first body.
+	// and its absent armor slot migrates to retail's first body. Weather is the current additive
+	// schema and leaves that compatibility floor unchanged.
 	TestEqual(TEXT("the floor remains the migratable history schema"),
 		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::History);
-	TestEqual(TEXT("body identity is the current schema"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::BodyIdentity);
+	TestEqual(TEXT("weather is the current schema"),
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::Weather);
 
 	// Build the exact v6 player byte stream (which has no ArmorSlot field) and read it through the
 	// current operator. This is deliberately manual: asking the current writer to emit v6 would
@@ -7815,6 +7817,259 @@ bool FElysiumLightRigTest::RunTest(const FString&)
 
 	IFileManager::Get().Delete(*EditPath, /*RequireExists*/ false, /*EvenReadOnly*/ true);
 	IFileManager::Get().Delete(*LightsPath, /*RequireExists*/ false, /*EvenReadOnly*/ true);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeatherStateTest,
+	"Elysium.Substrate.Weather.State", GElysiumTestFlags)
+bool FElysiumWeatherStateTest::RunTest(const FString&)
+{
+	FElysiumWeatherState State;
+	State.Configure(/*fade in*/ 10.0f, /*fade out*/ 20.0f, /*initial*/ 0.0f, 0.0);
+	State.Retarget(1.0f, 0.0);
+	State.Tick(5.0);
+	TestTrue(TEXT("ten-second wet fade is halfway at five seconds"),
+		FMath::IsNearlyEqual(State.CurrentWetness, 0.5f));
+
+	State.Retarget(0.0f, 5.0);
+	State.Tick(15.0);
+	TestTrue(TEXT("mid-fade retarget is continuous and uses the twenty-second dry duration"),
+		FMath::IsNearlyEqual(State.CurrentWetness, 0.25f));
+	State.Tick(15.0);
+	TestTrue(TEXT("a paused game clock does not advance wetness"),
+		FMath::IsNearlyEqual(State.CurrentWetness, 0.25f));
+	State.Retarget(2.0f, 15.0);
+	TestTrue(TEXT("wetness targets clamp to one"), FMath::IsNearlyEqual(State.TargetWetness, 1.0f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeatherEmitterTest,
+	"Elysium.Substrate.Weather.Emitters", GElysiumTestFlags)
+bool FElysiumWeatherEmitterTest::RunTest(const FString&)
+{
+	auto BuildDefs = []()
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("sm_hub_1");
+		FElysiumEntityDef World;
+		World.Classname = TEXT("worldspawn");
+		World.Keys.Add(TEXT("wetness_fadein"), TEXT("10"));
+		World.Keys.Add(TEXT("wetness_fadeout"), TEXT("20"));
+		World.Keys.Add(TEXT("wetness_fadetarget"), TEXT("0"));
+		Defs.Defs.Add(MoveTemp(World));
+		FElysiumEntityDef EventsWorld;
+		EventsWorld.Classname = TEXT("events_world");
+		EventsWorld.TargetName = TEXT("world");
+		Defs.Defs.Add(MoveTemp(EventsWorld));
+		for (int32 Index = 0; Index < 2; ++Index)
+		{
+			FElysiumEntityDef Emitter;
+			Emitter.Classname = TEXT("env_particle");
+			Emitter.TargetName = TEXT("rain_emitter");
+			Emitter.Origin = FVector(Index * 100.0f, 0.0f, 50.0f);
+			Emitter.Keys.Add(TEXT("active"), TEXT("1"));
+			Emitter.Keys.Add(TEXT("particle_definition"), TEXT("rain_follow_emitter"));
+			Emitter.Keys.Add(TEXT("attach_type"), TEXT("11"));
+			Emitter.Keys.Add(TEXT("bounds"), Index == 0 ? TEXT("512") : TEXT("256"));
+			Emitter.Keys.Add(TEXT("ramp_scale"), TEXT("0"));
+			Emitter.Keys.Add(TEXT("ramp_time"), TEXT("10"));
+			Defs.Defs.Add(MoveTemp(Emitter));
+		}
+		return Defs;
+	};
+
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(BuildDefs());
+	World.Activate(0.0);
+	TestEqual(TEXT("both authored emitters are represented"), Services.Emitters.Num(), 2);
+	for (const TPair<int32, FElysiumWeatherEmitterState>& Pair : Services.Emitters)
+	{
+		TestTrue(TEXT("emitters start active with an authored zero rate"),
+			Pair.Value.bActive && FMath::IsNearlyZero(Pair.Value.RateScale));
+	}
+
+	World.AcceptInput(TEXT("rain_emitter"), FName(TEXT("SetRateScale")),
+		FElysiumVariant::Float(1.0f), FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+	World.AcceptInput(TEXT("world"), FName(TEXT("FadeGlobalWetness")),
+		FElysiumVariant::Float(1.0f), FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+	World.Tick(5.0);
+	for (const TPair<int32, FElysiumWeatherEmitterState>& Pair : Services.Emitters)
+	{
+		TestTrue(TEXT("duplicate targetname fanout advances both ramps"),
+			FMath::IsNearlyEqual(Pair.Value.RateScale, 0.5f));
+	}
+
+	FElysiumMapSnapshot Snapshot;
+	World.Freeze(Snapshot);
+	FElysiumRecordingServices RestoredServices;
+	FElysiumEntityWorld Restored(nullptr, nullptr, RestoredServices.Bundle());
+	Restored.Load(BuildDefs());
+	Restored.ApplySnapshot(Snapshot);
+	Restored.Activate(5.0);
+	Restored.Tick(10.0);
+	TestTrue(TEXT("saved wetness fade resumes rather than restarts"),
+		FMath::IsNearlyEqual(RestoredServices.LastWetness.CurrentWetness, 1.0f));
+	for (const TPair<int32, FElysiumWeatherEmitterState>& Pair : RestoredServices.Emitters)
+	{
+		TestTrue(TEXT("saved ramps resume rather than restart"),
+			FMath::IsNearlyEqual(Pair.Value.RateScale, 1.0f));
+	}
+
+	// A missing presentation service is an explicitly supported headless state.
+	FElysiumEntityWorld NullWeather(nullptr, nullptr, FElysiumWorldServices());
+	NullWeather.Load(BuildDefs());
+	NullWeather.Activate(0.0);
+	NullWeather.AcceptInput(TEXT("world"), FName(TEXT("FadeGlobalWetness")),
+		FElysiumVariant::Float(1.0f), FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+	NullWeather.Tick(10.0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeatherTimerSequenceTest,
+	"Elysium.Substrate.Weather.TimerSequence", GElysiumTestFlags)
+bool FElysiumWeatherTimerSequenceTest::RunTest(const FString&)
+{
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("sm_hub_1");
+	auto AddWire = [](FElysiumEntityDef& Source, const TCHAR* Target,
+		const TCHAR* Input, const TCHAR* Param, float Delay)
+	{
+		FElysiumOutputDef Wire;
+		Wire.Name = TEXT("OnTimer");
+		Wire.Target = Target;
+		Wire.Input = Input;
+		Wire.Param = Param;
+		Wire.Delay = Delay;
+		Wire.Times = -1;
+		Source.Outputs.Add(MoveTemp(Wire));
+	};
+
+	FElysiumEntityDef WorldSpawn;
+	WorldSpawn.Classname = TEXT("worldspawn");
+	WorldSpawn.Keys.Add(TEXT("wetness_fadein"), TEXT("10"));
+	WorldSpawn.Keys.Add(TEXT("wetness_fadeout"), TEXT("20"));
+	WorldSpawn.Keys.Add(TEXT("wetness_fadetarget"), TEXT("0"));
+	Defs.Defs.Add(MoveTemp(WorldSpawn));
+	FElysiumEntityDef EventsWorld;
+	EventsWorld.Classname = TEXT("events_world");
+	EventsWorld.TargetName = TEXT("world");
+	Defs.Defs.Add(MoveTemp(EventsWorld));
+	for (int32 Index = 0; Index < 2; ++Index)
+	{
+		FElysiumEntityDef Emitter;
+		Emitter.Classname = TEXT("env_particle");
+		Emitter.TargetName = TEXT("rain_emitter");
+		Emitter.Keys.Add(TEXT("active"), TEXT("1"));
+		Emitter.Keys.Add(TEXT("particle_definition"), TEXT("rain_follow_emitter"));
+		Emitter.Keys.Add(TEXT("attach_type"), TEXT("11"));
+		Emitter.Keys.Add(TEXT("bounds"), Index == 0 ? TEXT("512") : TEXT("256"));
+		Emitter.Keys.Add(TEXT("ramp_scale"), TEXT("0"));
+		Emitter.Keys.Add(TEXT("ramp_time"), TEXT("10"));
+		Defs.Defs.Add(MoveTemp(Emitter));
+	}
+	FElysiumEntityDef Sound;
+	Sound.Classname = TEXT("ambient_generic");
+	Sound.TargetName = TEXT("rain_sounds");
+	Sound.Keys.Add(TEXT("spawnflags"), TEXT("17"));
+	Sound.Keys.Add(TEXT("message"), TEXT("area/Santa_Monica/rain_light_loop.wav"));
+	Sound.Keys.Add(TEXT("health"), TEXT("4"));
+	Sound.Keys.Add(TEXT("fadein"), TEXT("10"));
+	Sound.Keys.Add(TEXT("fadeout"), TEXT("10"));
+	Defs.Defs.Add(MoveTemp(Sound));
+
+	FElysiumEntityDef On;
+	On.Classname = TEXT("logic_timer");
+	On.TargetName = TEXT("rain_on_timer");
+	On.Keys.Add(TEXT("StartDisabled"), TEXT("0"));
+	On.Keys.Add(TEXT("UseRandomTime"), TEXT("1"));
+	On.Keys.Add(TEXT("LowerRandomBound"), TEXT("180"));
+	On.Keys.Add(TEXT("UpperRandomBound"), TEXT("300"));
+	AddWire(On, TEXT("rain_sounds"), TEXT("PlaySound"), TEXT(""), 0.0f);
+	AddWire(On, TEXT("rain_emitter"), TEXT("SetRateScale"), TEXT("1"), 0.0f);
+	AddWire(On, TEXT("world"), TEXT("FadeGlobalWetness"), TEXT("1"), 10.0f);
+	AddWire(On, TEXT("rain_on_timer"), TEXT("Disable"), TEXT(""), 1.0f);
+	AddWire(On, TEXT("rain_off_timer"), TEXT("Enable"), TEXT(""), 1.0f);
+	Defs.Defs.Add(MoveTemp(On));
+
+	FElysiumEntityDef Off;
+	Off.Classname = TEXT("logic_timer");
+	Off.TargetName = TEXT("rain_off_timer");
+	Off.Keys.Add(TEXT("StartDisabled"), TEXT("1"));
+	Off.Keys.Add(TEXT("UseRandomTime"), TEXT("1"));
+	Off.Keys.Add(TEXT("LowerRandomBound"), TEXT("180"));
+	Off.Keys.Add(TEXT("UpperRandomBound"), TEXT("500"));
+	AddWire(Off, TEXT("rain_sounds"), TEXT("StopSound"), TEXT(""), 0.0f);
+	AddWire(Off, TEXT("rain_emitter"), TEXT("SetRateScale"), TEXT("0"), 0.0f);
+	AddWire(Off, TEXT("world"), TEXT("FadeGlobalWetness"), TEXT("0"), 10.0f);
+	AddWire(Off, TEXT("rain_off_timer"), TEXT("Disable"), TEXT(""), 1.0f);
+	AddWire(Off, TEXT("rain_on_timer"), TEXT("Enable"), TEXT(""), 1.0f);
+	Defs.Defs.Add(MoveTemp(Off));
+
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+	FElysiumEntity* OnTimer = World.FindByName(TEXT("rain_on_timer"));
+	FElysiumEntity* OffTimer = World.FindByName(TEXT("rain_off_timer"));
+	if (!TestNotNull(TEXT("rain_on_timer exists"), OnTimer)
+		|| !TestNotNull(TEXT("rain_off_timer exists"), OffTimer))
+	{
+		return false;
+	}
+	TestTrue(TEXT("dry interval is authored random 180-300 seconds"),
+		OnTimer->NextThink >= 180.0f && OnTimer->NextThink <= 300.0f);
+	TestTrue(TEXT("rain-off timer starts disabled"), OffTimer->NextThink >= ELYSIUM_NEVER_THINK);
+	Services.Calls.Reset();
+
+	World.AcceptInput(TEXT("rain_on_timer"), FName(TEXT("FireTimer")),
+		FElysiumVariant::Void(), FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+	World.Tick(0.0);
+	TestEqual(TEXT("rain-on emits one audio start"), Services.Count(TEXT("Submit ")), 1);
+	TestTrue(TEXT("authored audio fade-in is applied"), Services.Saw(TEXT("Submit area/Santa_Monica/rain_light_loop.wav"))
+		&& Services.Calls.ContainsByPredicate([](const FString& Call)
+		{
+			return Call.StartsWith(TEXT("Submit ")) && Call.Contains(TEXT("fade=10.00"));
+		}));
+	for (const TPair<int32, FElysiumWeatherEmitterState>& Pair : Services.Emitters)
+	{
+		TestTrue(TEXT("rain-on fans out once to each emitter"),
+			FMath::IsNearlyEqual(Pair.Value.RampTargetScale, 1.0f));
+	}
+	World.Tick(1.0);
+	TestTrue(TEXT("rain-on disables after one second"), OnTimer->NextThink >= ELYSIUM_NEVER_THINK);
+	TestTrue(TEXT("rain duration is authored random 180-500 seconds"),
+		OffTimer->NextThink >= 181.0f && OffTimer->NextThink <= 501.0f);
+	World.Tick(10.0);
+	TestTrue(TEXT("delayed wetness-on reaches target one"),
+		FMath::IsNearlyEqual(Services.LastWetness.TargetWetness, 1.0f));
+
+	World.AcceptInput(TEXT("rain_off_timer"), FName(TEXT("FireTimer")),
+		FElysiumVariant::Void(), FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+	World.Tick(10.0);
+	TestTrue(TEXT("authored audio fade-out is applied"),
+		Services.Calls.ContainsByPredicate([](const FString& Call)
+		{
+			return Call.StartsWith(TEXT("StopVoice ")) && Call.Contains(TEXT("fade=10.00"));
+		}));
+	for (const TPair<int32, FElysiumWeatherEmitterState>& Pair : Services.Emitters)
+	{
+		TestTrue(TEXT("rain-off fans out once to each emitter"),
+			FMath::IsNearlyEqual(Pair.Value.RampTargetScale, 0.0f));
+	}
+	World.Tick(11.0);
+	TestTrue(TEXT("rain-off disables after one second"), OffTimer->NextThink >= ELYSIUM_NEVER_THINK);
+	TestTrue(TEXT("dry timer re-arms without duplicate output"),
+		OnTimer->NextThink >= 191.0f && OnTimer->NextThink <= 311.0f);
+	World.Tick(20.0);
+	TestTrue(TEXT("delayed wetness-off reaches target zero"),
+		FMath::IsNearlyZero(Services.LastWetness.TargetWetness));
+
+	World.AcceptInput(TEXT("rain_on_timer"), FName(TEXT("FireTimer")),
+		FElysiumVariant::Void(), FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+	World.Tick(20.0);
+	TestEqual(TEXT("the repeating cycle produces one audio start per rain-on"),
+		Services.Count(TEXT("Submit ")), 2);
 	return true;
 }
 

@@ -15,11 +15,12 @@ Related: `docs/vtmb/sky-ambience.md` (the 3D skybox miniature the rain draws ins
 
 ## Confidence
 
-The **entity inventory** and the **file inventory** are verified — read off our own exports and
-the user's own VPKs. The **particle-definition grammar** is a partial reconstruction from the
-shipped data plus parser diagnostic strings in `engine.dll`; the key roles marked *(inferred)*
-below are not confirmed against the decompile. The **wetness semantics** are unknown — see
-"What we do not know".
+The **entity inventory**, **patch-first particle closure**, **material proxy shape**, and
+`sm_hub_1` timer graph are verified from the user's current merged install and the generated
+intermediates. The **particle-definition grammar** is a partial reconstruction from the shipped
+data plus parser diagnostic strings in `engine.dll`; roles marked *(inferred)* are not confirmed
+against retail runtime behavior. `attach_type=11`, `bounds`, emitter ramp behavior, wetness time
+units, and `ambient_generic` rain fades remain retail-validation hypotheses.
 
 ## It is not Source's weather
 
@@ -107,6 +108,28 @@ The authored target is dry on every map, so wetness is driven at runtime — the
 fire the **`FadeGlobalWetness`** input (float target) and the map's own rates carry the
 interpolation.
 
+The material side is explicit. A wettable VMT contains three `GlobalWetness` proxy blocks whose
+`resultVar`s are `$envmaptint[0]`, `[1]`, and `[2]`; each block has a `scale`. This makes the
+faithful effect a per-channel reflection-tint response, not generic albedo darkening. The 14
+wettable materials used by `sm_hub_1` have equal RGB triples and therefore collapse without loss
+to one scalar each: asphalt `0.56`, six street materials `0.60`, and seven curb, sidewalk,
+grass, stone, and tile materials `1.00`. A missing channel, duplicate channel, malformed scale,
+unequal RGB triple, or proxy without `$envmap` is an export error.
+
+### `sm_hub_1`'s authored cycle
+
+`sm_hub_1` starts dry. `rain_on_timer` starts enabled and fires after a random **180–300 s**;
+`rain_off_timer` starts disabled and, once enabled by the on event, fires after **180–500 s**.
+Each timer disables itself after one second and enables the other, so the dry/rain cycle repeats.
+
+The on event starts `rain_sounds`, fans `SetRateScale 1` out to both `rain_emitter` entities,
+enables the authored rain spots, and queues `world.FadeGlobalWetness 1` after ten seconds. The
+off event mirrors that graph with `StopSound`, `SetRateScale 0`, disabled rain spots, and a
+ten-second-delayed `FadeGlobalWetness 0`. The world then interpolates for its own authored 10 s
+wet or 20 s dry duration. Both emitters are born `active=1`, `ramp_scale=0`, `ramp_time=10`,
+share targetname `rain_emitter`, use `attach_type=11`, and have Source bounds 512 and 256
+(1,300.48 and 650.24 cm).
+
 ### Lightning
 
 A consistent hand-built rig on five outdoor maps: `lightning.vmt` and `lightningglow.vmt`
@@ -125,12 +148,16 @@ per map in the timers' own keys.
 
 ### Audio
 
-`ambient_generic`s under `sound/Environmental/Weather/`: `rainsewers.wav` (10 in `la_hub_1`,
-4 in `sm_hub_1`) and `rain1.wav` (1 in `sm_pier_1`).
+The cycling `sm_hub_1` sound is `area/Santa_Monica/rain_light_loop.wav`, attached to `!player`,
+with authored `fadein=10` and `fadeout=10`. The current reading is seconds applied to
+`PlaySound`/`StopSound`; retail comparison decides whether that interpretation stays. Separate
+sewer ambience uses `Environmental/Weather/rainsewers.wav` four times in this map and is outside
+the outdoor-rain slice.
 
 ## The particle-definition format
 
-`particles/` holds **1,594 `.txt`** definitions and **309 `.tga`** sprites. The format is
+The current patch-first mirror holds **1,698 `.txt`** definitions and **318 `.tga`** sprites.
+The base install contributes 1,594 definitions and 309 sprites. The format is
 engine-wide — the same files drive fire, muzzle flashes, discipline effects and the main-menu
 background — so this section describes a general VtMB system that weather happens to be the
 largest coherent consumer of.
@@ -144,7 +171,7 @@ Files come in two roles, distinguished by content rather than by any declared ty
 **emitter** carries `spawn` sub-blocks naming other definitions, and a **particle** carries a
 `sprite` and its motion.
 
-### Emitter — `particles/rain_follow_emitter.txt`
+### Emitter — patch-first `particles/rain_follow_emitter.txt`
 
 ```
 Particle
@@ -154,42 +181,28 @@ Particle
 
 	spawn
 	{
-		particle "RainDrops"
-		rate "800"
+		particle "raindrops2"
+		rate "1000"
 		radius "0"
 		theta "0"
 	}
 
 	spawn
 	{
-		particle "RainDrops2"
-		rate "50"
-		radius "0"
-		theta "0"
-	}
-
-//	spawn
-	{
-		particle	"RainSheets"
-		rate		"100"
-		radius		"800"
-		theta		"0~360"
-		phi		"0"
-	}
-
-//	spawn
-	{
-		particle "RainMist2"
-		rate "100"
-		radius "1"
+		particle "rainfog"
+		rate "70"
+		radius "800"
 		theta "0~360"
+		phi "0"
 	}
 
 }
 ```
 
 The `spawn` block's `particle` value is a definition name, resolved without the `particles/`
-prefix or the `.txt` extension and case-insensitively.
+prefix or the `.txt` extension and case-insensitively. The base-game definition has the older
+drop layers and commented `RainSheets`/`RainMist2` blocks; the patch-first definition above is
+the one selected by the current merged install and consumed by the rebuild.
 
 ### Particle — `particles/raindrops2.txt`
 
@@ -197,11 +210,11 @@ prefix or the `.txt` extension and case-insensitively.
 Particle
 {
 	sprite		"DropletFast"
-	frames		"150"
+	frames		"15"
 	movealign	"1"
 	X_speed		"20"
 	Y_speed		"20"
-	Z_speed		"-300"
+	Z_speed		"-400~-600"
 	size		"3"
 	height		"10"
 	color		"0,80(10)"
@@ -212,7 +225,7 @@ Particle
 	{
 		spawn
 		{
-		particle 	RainSplashDummy
+		particle 	rainsplash_new
 		friction 	"0"
 		Bounce		"0"
 		}
@@ -256,8 +269,8 @@ Inside `spawn`:
 
 | Key | Example | Role |
 |---|---|---|
-| `particle` | `"RainDrops"` | child definition name |
-| `rate` | `"800"` | particles per second |
+| `particle` | `"raindrops2"` | child definition name |
+| `rate` | `"1000"` | particles per second |
 | `burst` | `"1"` | one-shot instead of continuous |
 | `radius` | `"1~200"` | spawn offset from the emitter origin |
 | `theta` / `phi` | `"0~360"` / `"0"` | spherical spawn direction, degrees |
@@ -267,9 +280,9 @@ Particle-level:
 | Key | Example | Role |
 |---|---|---|
 | `sprite` | `"DropletFast"` | resolves to `particles/<name>.tga`, case-insensitive |
-| `frames` | `"150"` | lifetime *(inferred)* |
+| `frames` | `"15"` | lifetime *(inferred)* |
 | `movealign` | `"1"` | orient the sprite to its velocity — what makes rain a streak |
-| `X_speed` / `Y_speed` / `Z_speed` | `"20"` / `"20"` / `"-300"` | initial velocity |
+| `X_speed` / `Y_speed` / `Z_speed` | `"20"` / `"20"` / `"-400~-600"` | initial velocity |
 | `theta_speed` / `phi_speed` / `radius_speed` | `"0"` / `"0"` / `"100,0"` | angular and radial motion |
 | `rotation` / `rotate` | `"0"` / `"-180~180,-180~180"` | sprite roll |
 | `size` | `"1,10"`, `"2~4"` | sprite size, rampable |
@@ -291,7 +304,7 @@ than the weather files exercise.
 
 | File | Role |
 |---|---|
-| `rain_follow_emitter` | viewer-tracking emitter — drops ×800/s + drops2 ×50/s |
+| `rain_follow_emitter` | viewer-tracking emitter — the current patch closure is drops2 ×1,000/s + rainfog ×70/s |
 | `rain_box_emitter` | volume emitter — drops (ramped 15→50→20→50→15) + drops2 + mist |
 | `rain_box_noprecip_emitter` | the sheltered variant — `RainDrops_NoPrecip` ×250/s, nothing else |
 | `rain_emitter` | volume emitter at heavier rates, `radius "1~200"` |
@@ -308,9 +321,9 @@ than the weather files exercise.
 
 ## Findings worth flagging
 
-- **Half the rain shipped disabled.** In `rain_follow_emitter` the `RainSheets` and `RainMist2`
-  spawn blocks are commented out. The follow path — the one that covers the player everywhere —
-  runs two layers of the four that were authored.
+- **The base definition's extra layers shipped disabled.** Its `RainSheets` and `RainMist2`
+  spawn blocks are commented out. The patch-first override replaces the live closure with
+  `raindrops2` and `rainfog`; the rebuild does not re-enable either commented block literally.
 - **`rainmist` names a sprite that does not exist.** It declares `sprite "could"`; the install
   has `particles/cloud.tga` and no `could.tga`. `rain_box_emitter` spawns `RainMist` live, not
   commented. Whether the engine substitutes a default or the mist silently fails to draw is
@@ -319,20 +332,26 @@ than the weather files exercise.
   differing only in the `precipitation` flag, so a sheltered volume keeps rendering when
   `particles_enable_precipitation` is off. This is an authored quality setting, not a
   geometry-driven one.
-- **Only `raindrops2` collides.** Splashes, rings and stains are all downstream of that single
-  layer; `raindrops` (the denser one, ×800/s on the follow emitter) passes through the world.
+- **Only `raindrops2` collides in the resolved follow closure.** Its 1,000 drops/s spawn
+  `rainsplash_new` and lay `rainstain`; `rainfog` has no collision relation.
+
+For `sm_hub_1`, the resolved Unreal-space contract is 7.62 × 25.4 cm motion-aligned droplets
+at `(50.8, -50.8, -1016…-1524)` cm/s, 63.5 cm maximum authored impact rings, 5.08–10.16 cm
+stains, and 1,270 cm fog sprites. Unsupported live fields anywhere in this five-definition,
+four-sprite closure are fatal rather than ignored.
 
 ## What we do not know
 
 Tracked as **RE23**.
 
-1. **`FadeGlobalWetness` semantics.** What the float target scales — a material parameter, a
-   texture blend, a reflection term — and which surfaces it reaches. `GlobalWetness` appears in
-   both `vampire.dll` and `client.dll`, so the value crosses to the render side.
-2. **Who calls it.** The level scripts fire it, but the call sites are not yet surveyed against
-   the exported `$ELYSIUM_EXPORT_ROOT/scripts/`, so we cannot say whether wetness tracks story beats or is set
-   once per map.
-3. **Whether the fade rates are seconds or frames.**
+1. **Exact retail interpolation and units.** The VMT proxies prove that global wetness scales
+   `$envmaptint` per channel, and `sm_hub_1`'s timers prove who targets it and when. Retail capture
+   must still confirm that `10.0`/`20.0` and the emitter/audio ramps are seconds with linear
+   interpolation.
+2. **`attach_type=11`.** Viewer-follow is the data-supported implementation hypothesis; retail
+   capture must confirm whether existing particles move with the viewer or only new spawns do.
+3. **`bounds`.** The current interpretation is the component/culling extent, not emission rate.
+   Retail density and movement across the two unequal values are the deciding evidence.
 4. **`frames` / `fps` semantics** — lifetime in ticks at a declared rate is the reading the
    data supports, unconfirmed.
 5. **The `v(n)` keyframe position unit** — frame index or percentage.
@@ -340,55 +359,75 @@ Tracked as **RE23**.
    and what `radius` means when the emitter is a volume rather than a point. The public FGD's
    `func_particle` block adds nothing over `env_particle` (no per-axis density key), so this
    stays a decompile-only question.
-7. ~~Whether `func_particle`/`env_particle` respect the standard I/O and `start_hidden`
-   surface~~ — **resolved above**, off the public FGD: yes (`TurnOn`/`TurnOff`), and the
-   spawn-state key is `active`, not `start_hidden`.
+7. **`func_particle` sampling.** `env_particle` I/O and the `active` spawn key are resolved, but
+   brush-volume spawn distribution is deferred with the fixed rain boxes.
 8. **Sprite render mode** — additive vs translucent, and whether `mask` is alpha or a separate
    mask channel.
 
-The community record helps only partway: `vampire.fgd` (Antitribu mirror) *does* define both
-`env_particle` and `func_particle` (keyvalue/I/O table above) — corrects the earlier read of
-this doc, which had them absent — but still annotates all three wetness keys and every
-particle-specific key `"Not tested yet..."`/`"Unknown yet..."`, and `lightningrotator` (an
-instance name, not a class — see "Lightning" above) appears nowhere in any of the three public
-FGD files (`vampire.fgd`, `vampire-base.fgd`, `vampire-adds.fgd`), consistent with it being a
-plain `func_rotating` given that targetname rather than a distinct entity. No public decoder
-for `particles/*.txt` exists.
+The community record helps only partway: `vampire.fgd` defines both `env_particle` and
+`func_particle`, but annotates the wetness and particle-specific keys as untested or unknown.
+`lightningrotator` is an instance name, not a class, and appears in none of the public FGD
+files. No public decoder for `particles/*.txt` exists.
 
-## The Unreal plan
+## Unreal translation boundary
 
-Five systems, not one. Per `docs/project/remaster-direction.md` the split is clean: the **appearance** is
-Presentation and is built native, the **authoring** — which volumes, which shelters, which
-timers, which script calls — is Logic and is reproduced from the exported entity data.
+General UE weather practice is an implementation-options catalogue, not evidence about VtMB.
+Camera-local GPU rain, distant rain sheets, dynamic wind, puddle accumulation, cloud and fog
+transitions, exposure traces, Niagara Data Channels, Niagara Fluids, and ray-traced collision are
+all valid techniques in other games; none follows from this map's particle, entity, material, or
+audio data. Public examples from other games likewise do not establish VtMB behavior.
 
-1. **Surface wetness.** A Material Parameter Collection scalar every world material reads:
-   roughness down, base colour slightly darkened, normals flattened. Driven by
-   `FElysiumWorldEvents::GlobalWetness` (the input already lands there) interpolated at the
-   map's own `wetness_fadein`/`fadeout` rates. Masked by up-facing normal and by occlusion.
-   With HWRT Lumen and the `$envmap` channel already built, this is the largest look delta for
-   the least work, and it needs no particle RE.
-2. **Occlusion.** Rain falling through roofs is the tell. The maps are static and small and the
-   world geometry is already on disk, so the top-down max-Z height map is **baked offline** from
-   `$ELYSIUM_EXPORT_ROOT/<map>/<map>.obj` rather than captured at runtime — `worldspawn`'s `world_mins`/`world_maxs`
-   give the footprint (`sm_hub_1` is 11406 × 7732 cm, so 1024² is ~11 cm/texel). Sampled by
-   world XY→UV from both the particles and the wetness material. No SceneCapture, no Global
-   Distance Field dependency.
-3. **Falling rain.** One camera-anchored GPU Niagara system with bounds wrapping — which is what
-   `rain_follow_emitter` already is. `movealign` → velocity-aligned sprites; `frames` → SubUV;
-   `a,b` ramps → curves over age; `a~b` → uniform ranges. The authored `func_particle` volumes
-   stay as the region definition; the height map handles within-region shelter, which 10
-   hand-placed boxes can only approximate.
-4. **Impacts and drips.** `rainsplash`/`rainring`/`rainstain` become a ground-impact emitter
-   masked by the same height map. The `WaterDrops_Timer` placements stay as authored point
-   emitters — they are deliberate content, not simulation.
-5. **Atmosphere and lightning.** The disabled `rainsheets`/`rainmist` layers map to volumetric
-   fog density rather than more sprites; the maps already carry `fogenable`/`fogstart`/`fogend`.
-   Lightning keeps its authored timer rhythm and replaces the sprite flash with a real light
-   pulse, so Lumen bounces it down the street — an effect the original renderer could not
-   produce. Re-enabling the disabled layers' *intent* is a divergence and needs an owner call,
-   recorded here beside the faithful behaviour.
+The translation keeps three categories separate:
 
-**Budget.** The risk is translucent overdraw, not particle count — rain is thin, numerous and
-screen-filling. Two engine facts to verify before committing rain to a lit translucent
-material: how MegaLights treats translucency, and whether the VSM pass stays neutral.
-`uv run elysium debug profile` and `uv run elysium debug shots` already cover the outdoor vantages, so this is measurable.
+| Category | `sm_hub_1` contract |
+|---|---|
+| Reproduced Logic | Timer schedule, targetname fanout, emitter rate ramps, audio I/O, wetness target and transition state, authored particle rates, and the collision child relationship |
+| Native technical bridge | One Unreal presentation asset may render the resolved live closure; static cover data may replace the original renderer's geometry query without adding rain content |
+| Presentation not implied by source | Extra near/mid/far layers, wind, puddles, storm lighting or atmosphere, indoor-zone logic, fluids, and re-enabled disabled definitions |
+
+The resolved live follow closure has two root layers, not a generic three-layer production-rain
+recipe: `raindrops2` at 1,000/s and `rainfog` at 70/s. `rainsplash_new` and `rainstain` are children
+of an actual `raindrops2` collision; they are not free-running ambient impact layers. `rainfog` is
+live patch content, not an optional invented mist enhancement. A future Unreal presentation must
+preserve those relationships regardless of whether Niagara represents them as emitters, renderer
+states, or particle attributes.
+
+The owner constraint remains one presentation implementation with tuning, never separate faithful
+and enhanced systems. That constraint does not settle the internal Niagara topology before the
+retail semantics do. In particular, the source does not yet justify a sphere, box, cylinder, or
+screen-space spawn field for the `radius=0` drop block: `precipitation=1`, `attach_type=11`, and the
+two unequal `bounds` values are the missing part of that distribution rule.
+
+### Static cover data
+
+`sm_hub_1.weather.json` is the versioned seam for the patch-first particle/VMT/entity facts. Its
+map footprint is **28,971.24 × 19,639.28 cm**, from Unreal-space `(-8285.48, -8585.20)` to
+`(20685.76, 11054.08)`. The generated 2048² R16 maximum-height texture uses 245,567 world and
+rain-blocking static-geometry triangles and has 964,071 covered texels. Sky, decals, ropes, water,
+and non-cover effects do not contribute. Sentinel zero means no cover; other samples decode as
+`min_z_cm + (sample - 1) × z_scale_cm`.
+
+Using this texture to find the first rain-blocking surface is a technical translation of the
+authored `raindrops2.collide` behavior, not evidence that VtMB used a height texture. It is suitable
+for this static map only. It can terminate a drop and locate its authored splash and stain without
+introducing Scene Depth, Distance Fields, ray tracing, an upward player trace, and hand-authored
+indoor zones as competing solutions.
+
+### Translation gates and deferred scope
+
+The entity world can own wetness transitions and emitter ramps without deciding how they render;
+those values serialize so logic does not restart after a save. A presentation is not a faithful
+baseline until original-retail evidence settles initial dry, onset, sustained rain, cover, rain-off,
+time units, audio fades, density, `attach_type=11`, `bounds`, lifetime/keyframe units, and sprite
+blend/mask semantics. Apparent drop width, length, lifetime, fog visibility, impact frequency, and
+camera-motion behavior are comparison evidence, not artist tuning targets until then.
+
+Deferred source-defined work remains the sewer `WaterDrops_Timer` layer, fixed `func_particle`
+rain boxes, NPC shelter behavior, lightning, other maps, and the general particle runtime. The
+disabled base-game `RainSheets`/`RainMist2` blocks remain disabled. Enhanced wet darkening,
+roughness, local-light response, and any additional mist stay behind the faithful retail gate.
+
+When presentation work resumes, measure fresh dry/rain A/B pairs on one fixed generated asset set
+at the existing `sm_hub_1` vantages. At 2560×1440 native on the measured RTX 5070 Ti, rain may add
+at most 1.0 ms GPU or 20%; reduce presentation tuning before changing authored rates. An RTX
+4060-class result is not claimed without that hardware.

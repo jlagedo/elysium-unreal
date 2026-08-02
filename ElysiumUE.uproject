@@ -20,6 +20,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "Niagara",
+			"Enabled": true
+		},
+		{
 			"Name": "PythonScriptPlugin",
 			"Enabled": true
 		},

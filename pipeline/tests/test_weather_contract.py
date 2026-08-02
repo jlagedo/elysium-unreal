@@ -1,0 +1,149 @@
+import tempfile
+import unittest
+from pathlib import Path
+
+import numpy as np
+from PIL import Image
+
+from elysium_pipeline.formats import particles, vmt, weather
+
+
+def wet_vmt(scales=(0.6, 0.6, 0.6), *, comments=False):
+    blocks = []
+    for channel, scale in enumerate(scales):
+        suffix = " // authored" if comments else ""
+        blocks.append(
+            f'''"gLoBaLwEtNeSs" {{ "resultVar" "$envmaptint[{channel}]" "scale" "{scale}" }}{suffix}'''
+        )
+    return '''"LightmappedGeneric" {
+        "$basetexture" "street/wet"
+        "$envmap" "env_cubemap"
+        "Proxies" { %s }
+    }''' % "\n".join(blocks)
+
+
+class GlobalWetnessVmtTests(unittest.TestCase):
+    def test_proxy_casing_comments_quoting_and_scalar_extraction(self):
+        self.assertEqual(vmt.parse(wet_vmt(comments=True))["globalwetness"], 0.6)
+
+    def test_absent_proxy_is_not_wetness_driven(self):
+        self.assertIsNone(vmt.parse('LightmappedGeneric { "$basetexture" "x" }')["globalwetness"])
+
+    def test_partial_malformed_and_unequal_triples_fail(self):
+        for document in (
+            wet_vmt((0.6, 0.6)),
+            wet_vmt((0.6, "nope", 0.6)),
+            wet_vmt((0.6, 0.5, 0.6)),
+        ):
+            with self.subTest(document=document):
+                with self.assertRaises(vmt.VmtContractError):
+                    vmt.parse(document)
+
+    def test_patch_inherits_parent_proxy(self):
+        result = vmt.parse(
+            'Patch { "include" "materials/base.vmt" }',
+            resolve_include=lambda _path: wet_vmt((0.25, 0.25, 0.25)),
+        )
+        self.assertEqual(result["globalwetness"], 0.25)
+
+
+class ParticleClosureTests(unittest.TestCase):
+    DEFINITIONS = {
+        "rain_follow_emitter": '''Particle {
+            loop 1 precipitation 1
+            // disabled blocks must not become live dependencies
+            // spawn { particle disabled rate 999 }
+            spawn { particle raindrops2 rate 1000 radius 0 theta "0~360" phi 0 }
+        }''',
+        "raindrops2": '''Particle {
+            sprite dropletfast frames 15 movealign 1
+            x_speed 20 y_speed 20 z_speed "-400~-600" size 3 height 10
+            color "0,80(10)" mask 0 precipitation 1
+            collide {
+                spawn { particle rainsplash_new friction 0 bounce 0 }
+                decal { particle rainstain }
+            }
+        }''',
+        "rainsplash_new": '''Particle {
+            sprite fortituderings frames 12 flat 1 x_speed 0 y_speed 0 z_speed 0
+            size "1,8,14" rotation 0 color "60,0" mask "40,0" precipitation 1
+        }''',
+        "rainstain": '''Particle {
+            sprite d_targetblob frames 30 size "2~4" color "10,0" mask "90,0"
+            precipitation 1
+        }''',
+    }
+
+    def compile(self, *, sprites=None):
+        available = sprites or {"dropletfast", "fortituderings", "d_targetblob"}
+        return particles.compile_closure(
+            ["rain_follow_emitter"], self.DEFINITIONS.get, available.__contains__
+        )
+
+    def test_comment_handling_dependency_collision_and_unit_conversion(self):
+        result = self.compile()
+        self.assertEqual(
+            list(result["definitions"]),
+            ["rain_follow_emitter", "raindrops2", "rainsplash_new", "rainstain"],
+        )
+        rain = result["definitions"]["raindrops2"]
+        self.assertAlmostEqual(rain["velocity_cm_per_second"]["x"]["values"][0], 50.8)
+        self.assertAlmostEqual(rain["velocity_cm_per_second"]["y"]["values"][0], -50.8)
+        self.assertEqual(rain["collision"]["decal"]["particle"], "rainstain")
+        self.assertNotIn("disabled", result["definitions"])
+
+    def test_missing_asset_and_unsupported_live_field_fail(self):
+        with self.assertRaises(particles.ParticleContractError):
+            self.compile(sprites={"dropletfast", "fortituderings"})
+        changed = dict(self.DEFINITIONS)
+        changed["raindrops2"] = changed["raindrops2"].replace(
+            "sprite dropletfast", "sprite dropletfast unknown_live_field 1"
+        )
+        with self.assertRaises(particles.ParticleContractError):
+            particles.compile_closure(
+                ["rain_follow_emitter"], changed.get,
+                {"dropletfast", "fortituderings", "d_targetblob"}.__contains__,
+            )
+
+
+class HeightTextureTests(unittest.TestCase):
+    def test_only_solid_non_sky_props_become_placed_cover(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "props").mkdir()
+            (root / "props" / "awning.obj").write_text(
+                "v 0 0 0\nv 10 0 0\nv 0 10 0\nf 1 2 3\n", encoding="utf-8"
+            )
+            (root / "map.props").write_text(
+                "awning 100 200 300 0 0 0 1 1 0 0\n"
+                "awning 400 500 600 0 0 0 1 0 0 0\n"
+                "awning 700 800 900 0 0 0 1 1 0 1\n",
+                encoding="utf-8",
+            )
+            triangles = weather.static_prop_cover_triangles(root, "map")
+            self.assertEqual(len(triangles), 1)
+            self.assertEqual(triangles[0][0], (100.0, 200.0, 300.0))
+            self.assertEqual(triangles[0][2], (100.0, 210.0, 300.0))
+
+    def test_r16_sentinel_bounds_resolution_and_decode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "height.png"
+            metadata = weather.rasterize_height(
+                [((0.0, 0.0, 50.0), (100.0, 0.0, 50.0), (0.0, 100.0, 50.0))],
+                path,
+                (0.0, 0.0, -100.0),
+                (28971.24, 19639.28, 1300.48),
+                resolution=2048,
+            )
+            image = np.asarray(Image.open(path), dtype=np.uint16)
+            self.assertEqual(image.shape, (2048, 2048))
+            self.assertEqual(int(image[-1, -1]), 0)
+            sample = int(image[1, 1])
+            self.assertGreater(sample, 0)
+            decoded = metadata["min_z_cm"] + (sample - 1) * metadata["z_scale_cm"]
+            self.assertAlmostEqual(decoded, 50.0, delta=metadata["z_scale_cm"])
+            self.assertEqual(metadata["format"], "R16_UNORM")
+
+
+if __name__ == "__main__":
+    unittest.main()

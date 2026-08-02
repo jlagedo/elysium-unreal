@@ -195,7 +195,6 @@ public:
 	bool  bNosferatuTolerant= false;  // SetNosferatuTolerant (bool)
 	bool  bNoFrenzyArea     = false;  // SetNoFrenzyArea (bool)
 	bool  bAIEnabled        = true;   // AIEnable (bool)
-	float GlobalWetness     = 0.0f;   // FadeGlobalWetness (float target)
 	bool  bCutsceneHidden   = false;  // Hide/UnhideCutsceneInterferingEntities
 
 	void InputSetSafeArea(const FElysiumInputArgs& A)           { SafeArea = A.Param.ToInt(); }
@@ -204,7 +203,13 @@ public:
 	void InputSetNosferatuTolerant(const FElysiumInputArgs& A)  { bNosferatuTolerant = A.Param.ToInt() != 0; }
 	void InputSetNoFrenzyArea(const FElysiumInputArgs& A)       { bNoFrenzyArea = A.Param.ToInt() != 0; }
 	void InputAIEnable(const FElysiumInputArgs& A)              { bAIEnabled = A.Param.ToInt() != 0; }
-	void InputFadeGlobalWetness(const FElysiumInputArgs& A)     { GlobalWetness = A.Param.ToFloat(); }
+	void InputFadeGlobalWetness(const FElysiumInputArgs& A)
+	{
+		if (World)
+		{
+			World->FadeGlobalWetness(A.Param.ToFloat());
+		}
+	}
 
 	void InputHideCutsceneInterferingEntities()   { bCutsceneHidden = true; }
 	void InputUnhideCutsceneInterferingEntities() { bCutsceneHidden = false; }
@@ -230,7 +235,10 @@ public:
 		Out.Emplace(TEXT("Nosferatu tolerant"),OnOff(bNosferatuTolerant));
 		Out.Emplace(TEXT("No-frenzy area"),    OnOff(bNoFrenzyArea));
 		Out.Emplace(TEXT("AI"),                OnOff(bAIEnabled));
-		Out.Emplace(TEXT("Global wetness"),    FString::SanitizeFloat(GlobalWetness));
+		Out.Emplace(TEXT("Global wetness"), World
+			? FString::Printf(TEXT("%.3f -> %.3f"), World->GetWeatherState().CurrentWetness,
+				World->GetWeatherState().TargetWetness)
+			: TEXT("(no world)"));
 		Out.Emplace(TEXT("Cutscene hide"),     OnOff(bCutsceneHidden));
 	}
 };

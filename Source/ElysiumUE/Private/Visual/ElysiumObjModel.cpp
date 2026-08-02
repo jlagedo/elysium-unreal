@@ -169,6 +169,11 @@ void FElysiumObjModel::ParseMtlLines(const TArray<FString>& Lines, TMap<FString,
 			Cur->EnvTint = FLinearColor(FCString::Atof(*Tok[1]), FCString::Atof(*Tok[2]),
 				FCString::Atof(*Tok[3]));
 		}
+		else if (Key == TEXT("globalwetness") && Tok.Num() >= 2)
+		{
+			Cur->bWetnessDriven = true;
+			Cur->WetnessScale = FMath::Max(0.0f, FCString::Atof(*Tok[1]));
+		}
 		else if (Key == TEXT("basetex2") && Tok.Num() >= 2)
 		{
 			Cur->BaseTex2 = Tok[1];

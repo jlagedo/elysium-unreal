@@ -418,7 +418,7 @@ def export_bundle(
     force: bool = typer.Option(False, "--force"),
 ) -> None:
     allowed = {
-        "audio", "scripts", "signs", "vdata", "cfg", "scenes",
+        "audio", "particles", "scripts", "signs", "vdata", "cfg", "scenes",
         "ui", "use-icons", "npc", "policy",
     }
     if bundle not in allowed:

@@ -49,6 +49,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumLawState& L);
 FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R);
 FArchive& operator<<(FArchive& Ar, FElysiumEntityState& S);
 FArchive& operator<<(FArchive& Ar, FElysiumSavedFade& F);
+FArchive& operator<<(FArchive& Ar, FElysiumWeatherState& W);
 FArchive& operator<<(FArchive& Ar, FElysiumMapSnapshot& M);
 FArchive& operator<<(FArchive& Ar, FElysiumSessionBlock& S);
 FArchive& operator<<(FArchive& Ar, FElysiumWorldBlock& W);

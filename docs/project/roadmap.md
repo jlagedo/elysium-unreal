@@ -622,18 +622,17 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
   reference). The local half exists (2.9 +
   `shots_diff.py`); respect its measured noise floor — re-baseline after any bake or content
   rebuild. *Deps:* 0.3, 3.9, RE17.
-- [ ] **7.9 Weather & wetness** *(facts + design: `docs/vtmb/weather.md`)* — the rain system, never
-  surveyed until now: `func_particle`/`env_particle` precipitation volumes on 6 maps, the
-  `worldspawn` wetness channel the level scripts drive through `FadeGlobalWetness`, the
-  `lightningrotator` rig on 5 maps, and the `Environmental/Weather` ambients. Landing order is
-  independent-first: **(a)** wetness as a Material Parameter Collection scalar off the existing
-  `FElysiumWorldEvents::GlobalWetness` (no particle RE needed, largest look delta); **(b)** the
-  baked top-down occlusion height map in the exporter + a debug view; **(c)** Niagara rain in
-  the authored volumes, occlusion-masked; **(d)** impacts + the hand-placed drip emitters;
-  **(e)** volumetric mist, and lightning as real Lumen-bounced light on its authored timer
-  rhythm. Appearance is Presentation (built native); the volumes, shelters, timers and script
-  calls are Logic (reproduced). Re-enabling the two shipped-disabled rain layers is a
-  divergence — owner call, recorded in `docs/vtmb/weather.md`. *Deps:* PL12, RE23 (c–e only; a–b are unblocked).
+- [ ] **7.9 Weather & wetness** *(facts + translation boundary: `docs/vtmb/weather.md`)* — the
+  verified `sm_hub_1` work is retained as data and logic: strict patch-first particle/VMT closure,
+  versioned weather sidecar, corrected 2048² R16 cover map, serializable wetness/emitter ramps,
+  `env_particle` I/O/fanout, and rain audio fades. The first Niagara/material prototype proved
+  the normal map-load and authored-I/O seam, but its spawn field, lifetime, size, opacity, impact,
+  fog, and cover presentation depended on unresolved semantics and did not establish a faithful
+  visual baseline. The presentation service is deliberately disconnected from normal map loads
+  while RE23 settles `attach_type=11`, `bounds`, distribution, lifetime/keyframe units, blend/mask
+  semantics, and retail appearance. Generated presentation code/assets remain a scaffold, not an
+  accepted implementation. Sewer drips, fixed `func_particle` boxes, NPC shelter behavior,
+  lightning, other maps, and a general particle runtime remain deferred. *Deps:* PL12, RE23.
 
 **Slice acceptance** *(Track A criterion, re-based)*: side-by-side A/B match with the
 original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
@@ -1171,7 +1170,7 @@ retail end to end, and `uv run elysium test Play` proves it headlessly.
 | PL5d [x] | Patch-first `cfg/*.cfg` mirroring landed; contracts: `docs/vtmb/controls.md`, `docs/vtmb/python_bridge.md`. | 9.3b [x] |
 | PL6 | Texlight merge in exporter | 3.4 |
 | PL11 | Remove the dead Lumen-card path the bake superseded (found by 0.9): `export_all.py`'s `bake_cards`/`--no-cards` calls a `cards.bat` that no longer exists and prints a "skipped" line every run; `ElysiumCardGen.cpp` (`ELYSIUM_WITH_CARDGEN`, `elysium.cards.probe`) still builds into editor targets. Nothing depends on either | 0.9 |
-| PL12 | Mirror `particles/*.txt` (**1,594**) + the `particles/*.tga` sprite set (**309**) verbatim → `$ELYSIUM_EXPORT_ROOT/particles/` — patch-first, wired into `export_all.py`. Weather is the immediate consumer (33 rain definitions) but the set is engine-wide: fire, muzzle flashes, disciplines, the menu background. Also bake the top-down occlusion height map per map from `<map>.obj` + `worldspawn`'s `world_mins`/`world_maxs` (1024², ~11 cm/texel on `sm_hub_1`). Format: `docs/vtmb/weather.md` | 7.9 |
+| PL12 | The current merged install mirrors `particles/*.txt` (**1,698**) + `particles/*.tga` (**318**) verbatim and patch-first into `$ELYSIUM_EXPORT_ROOT/particles/`, wired into export orchestration; the `sm_hub_1` closure is compiled strictly for 7.9. Per-map 2048² R16 top-down height maps use corrected exported geometry bounds; `sm_hub_1` is accepted, but grid-wide height-map generation/acceptance has not run, so PL12 remains open. Format: `docs/vtmb/weather.md` | 7.9 |
 | PL13 [x] | All 56 player bodies are exported from the clan table; animation/facial implications live in `docs/vtmb/animation_and_movers.md` and `docs/vtmb/facial_animation.md`. | 8.11 |
 | PL15 [x] | The Masquerade meter is a sub-rectangle of `cm_topbar`; no asset is missing. → `docs/vtmb/vtmb-ui.md`. | 8.9 |
 | PL14 | **Export the first-person hand viewmodels.** `clandoc000.txt` also names `M_Hands`/`F_Hands` per clan — the patch-restored per-clan viewmodels under `models/hands/**` (21 in the merged install) — and PL13 deliberately left them out: they are the first-person half of the body and 8.11a's acceptance is the third-person boom. Same seed function, one more key pair; none carries a flex rig | 8.11a |
@@ -1209,7 +1208,7 @@ retail end to end, and `uv run elysium test Play` proves it headlessly.
 | RE20 | MDL facial data, flex rules, eyeball absence, and `.lip` format are recovered. → `docs/vtmb/facial_animation.md`. | 12.3–12.5 | [x] |
 | RE21 | Player commands run before the think/event pass; the full frame order is recovered. → `docs/vtmb/game_runtime.md`. | 11.1, 11.11, 4.7 | [x] |
 | RE22 | Player hull/view constants and the absence of ladder movement are recovered. → `docs/vtmb/source_movement.md`. | 4.7, 11.6 | [x] |
-| RE23 | **The particle format + the wetness channel** — VtMB's weather is Troika-custom, not Source: no `func_precipitation` anywhere in the install, and the parser lives in a forked `Bin/engine.dll` (gate cvar `particles_enable_precipitation`). The `particles/*.txt` grammar is partly reconstructed (envelope, emitter-vs-particle roles, the `a~b` / `a,b,…` / `v(n)` value forms, the `collide { spawn / decal }` block) — `docs/vtmb/weather.md` marks what is inferred. Eight open questions, the load-bearing ones being **what `FadeGlobalWetness` actually scales** (`GlobalWetness` crosses into `client.dll`, so it reaches the render side), **who calls it** (survey `$ELYSIUM_EXPORT_ROOT/scripts/`), and whether `func_particle`/`env_particle` take the standard I/O + `start_hidden` surface. No public RE exists — the community FGD defines neither classname and annotates all three wetness keys "Not tested yet...". Full: `docs/vtmb/weather.md` | 7.9, PL12 | [ ] |
+| RE23 | **The particle format + the wetness channel** — VtMB's weather is Troika-custom, not Source; the versioned `sm_hub_1` closure now resolves particle dependencies, rates, Unreal units, sprites, and collision relations, and its VMT triples prove that `GlobalWetness` drives the three `$envmaptint` channels. The authored timer caller and `env_particle` I/O surface are known. Original-retail evidence still must settle interpolation/ramp/audio time units, density, `attach_type=11`, `bounds`, brush-volume sampling, lifetime/keyframe units, and sprite blend semantics. The community FGD defines both particle classnames but marks their special fields untested. Full: `docs/vtmb/weather.md` | 7.9, PL12 | [ ] |
 | RE24 | Sheet storage, feat/XP math, and health semantics are recovered. → `docs/vtmb/game_runtime.md` §3. | 9.4b–c | [x] |
 | RE25 | Chargen pools, costs, sentinel behavior, and trait-effect source are recovered. → `docs/vtmb/game_runtime.md`. | 9.4f | [x] |
 | RE26 | Trait-effect accumulation and dialogue sex gates are recovered. → `docs/vtmb/game_runtime.md`, `docs/vtmb/python_bridge.md`. | 9.4c–f, B4 | [x] |
