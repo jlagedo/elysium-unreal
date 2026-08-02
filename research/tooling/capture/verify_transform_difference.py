@@ -63,11 +63,19 @@ The decoded-locals stage is the one that does measure shipped code, and it is
 the only stage whose subject is a decoder rather than a rule. What surrounds
 `mdl_skel` there is not: the frame interpolation, the blend-cell mix, the
 owner-to-entity bone correspondence and the include-model position transform are
-runtime bindings, so the stage carries four candidates — the complete rule, the
+runtime bindings, so the stage carries five candidates — the complete rule, the
 same rule with the position transform the entity's own include group declares,
 the same rule without the frame interpolation the exporter defers to its
-runtime, and plain bone-name matching, which is what `mdl_gltf` bakes and
-glTFRuntime resolves at load.
+runtime, the correspondence the export actually ships, and plain bone-name
+matching.
+
+The shipped correspondence is not plain name matching, and reading it as such
+understates the export by the whole cinematic cast. `mdl_gltf.export_cinematic`
+splits a bank holding several complete actors into one bank per `BipNN` root,
+keeps only that root's chain and folds its prefix onto `Bip01`; the runtime
+resolves `(anim set, the scene actor's bonerename root)` to that bank, so an
+actor posed on `Bip02` already takes the `Bip02` chain. `cinematic_split` models
+that, and `bone_name` stays as the counterfactual it avoids.
 
 Which of the two remap candidates governs a record is not something the capture
 witnesses. An include group's transform belongs to the sequence resolving
@@ -192,30 +200,40 @@ CANDIDATES = (
 # difference an available rule already explains is not reported as one.
 LADDER_CANDIDATE = "split_procedural"
 
-# The decoded-locals rules, as (name, bone correspondence, frame interpolation).
-# `complete` is the whole offline rule; `frame_key` drops the interpolation, so
-# its residual is what `mdl_gltf` leaves to its runtime rather than a decode
-# error; `bone_name` drops the biped-family correspondence, so its residual is
-# what plain name matching costs on a bank holding more than one skeleton.
 # The decoded-locals rules, as (name, bone correspondence, frame interpolation,
-# include-model position transform). `complete` is A.4b's stated remap with the
-# transform byte clear — the position copied and the rotation copied;
-# `include_remap` adds the transform the entity's own group array declares for
-# the bones whose byte is set; `frame_key` drops the frame interpolation, so its
-# residual is what `mdl_gltf` leaves to its runtime rather than a decode error;
-# `bone_name` drops the biped-family correspondence too, so its residual is what
-# plain name matching costs on a bank holding more than one skeleton.
+# include-model position transform, inherits retail's selected mask).
+#
+# `complete` is A.4b's stated remap with the transform byte clear — the position
+# copied and the rotation copied; `include_remap` adds the transform the entity's
+# own group array declares for the bones whose byte is set; `frame_key` drops the
+# frame interpolation, so its residual is what `mdl_gltf` leaves to its runtime
+# rather than a decode error.
+#
+# `cinematic_split` is the shipped path. `export_cinematic` splits a bank holding
+# several complete actors into one bank per `BipNN` root, folded onto `Bip01`,
+# and the runtime picks the root from the choreo scene actor's
+# `bonerename "BipNN" "Bip01"`; a single-skeleton bank ships whole and resolves by
+# plain name. It takes the root from the owner's own witnessed mask rather than
+# from the scene, which is a join this database cannot make — those two agree on
+# 180,812 of 180,812 contributions the scene bindings do reach, and the ones they
+# do not reach are counted under `cinematic_root_unresolved` rather than scored.
+#
+# `bone_name` is plain name matching over the whole owner skeleton. It is what a
+# single-skeleton bank ships and what a multi-actor bank would cost without the
+# split, so it is the counterfactual the split is measured against — not a path
+# anything runs.
 #
 # The last element is whether the candidate inherits retail's selected mask. A
 # candidate reproducing retail's own evaluation does, because a bone the cell
-# decoder never ran for is not a comparison. `bone_name` does not, and must not:
-# the shipped path has no mask — glTFRuntime plays a clip on every bone whose
-# name matches — so gating it by a mask it never consults would credit it for
-# exactly the slots its correspondence gets wrong.
+# decoder never ran for is not a comparison. The two export candidates do not,
+# and must not: the shipped path has no mask — glTFRuntime plays a clip on every
+# bone whose name matches — so gating them by a mask they never consult would
+# credit them for exactly the slots their correspondence gets wrong.
 CLIP_CANDIDATES = (
     ("complete", "family_name", "linear", False, True),
     ("include_remap", "family_name", "linear", True, True),
     ("frame_key", "family_name", "frame", False, True),
+    ("cinematic_split", "cinematic_split", "linear", False, False),
     ("bone_name", "name", "linear", False, False),
 )
 CLIP_LADDER_CANDIDATE = "complete"
@@ -377,11 +395,20 @@ ACCOUNTED = {
         "between them, so this candidate holds retail's own frame against our "
         "nearest key and its residual is the interpolation, not a decode error."
     ),
+    "stage1_cinematic_split_over_the_band": (
+        "What the shipped export costs. `export_cinematic` splits a bank "
+        "holding several complete actors into one bank per `BipNN` root, folded "
+        "onto `Bip01`, and the runtime picks the root from the choreo scene "
+        "actor's `bonerename`; a one-skeleton bank ships whole and resolves by "
+        "plain name. This is the residual to read as the export's, and it is "
+        "the only stage-1 candidate that is a path anything runs."
+    ),
     "stage1_bone_name_over_the_band": (
-        "What plain bone-name matching costs. `mdl_gltf` keys a clip by bone "
-        "name and glTFRuntime resolves it at load, which is exact against a "
+        "What plain bone-name matching would cost — the counterfactual the "
+        "split avoids, not a path anything runs. It is exact against a "
         "one-skeleton bank and wrong against a cinematic bank holding several "
-        "bipeds, where the name alone cannot say which chain an actor is."
+        "bipeds, where the name alone cannot say which chain an actor is, so "
+        "the gap between it and `cinematic_split` is what the split buys."
     ),
     "stage2_records_in_the_investigate_band": (
         "A final local that differs from the base pose it was built from. "
@@ -419,6 +446,14 @@ ACCOUNTED = {
         "biped family token, or none, so which chain of a multi-skeleton bank "
         "the actor is cannot be read off the mask. The record leaves the "
         "family-name candidate rather than being matched by guess."
+    ),
+    "cinematic_root_unresolved": (
+        "A contribution from a bank holding several complete actors whose "
+        "(entity model, bank) pair never had one biped family named by a mask, "
+        "so which per-root bank the export ships for it cannot be read back out "
+        "of this database. The shipped-path candidate leaves the record rather "
+        "than scoring it against a chain chosen by guess; the complete rule, "
+        "which reads the family per contribution, still scores it."
     ),
     "bones_selected_with_no_owner_source": (
         "An entity bone the pose build selected that the owner's own mask has "
@@ -1231,6 +1266,49 @@ def bone_remaps(
     return resolved, disputed
 
 
+def split_roots(
+    connection: sqlite3.Connection,
+    flags: dict[str, Any],
+    names_of: Any,
+) -> tuple[dict[tuple[int, int], str], int]:
+    """The `BipNN` root each (entity model, multi-actor bank) pair is posed on.
+
+    The shipped path takes this root from the choreo scene actor's `bonerename`,
+    which is a fact about the scene and not about the clip: the same sequence of
+    the same bank is witnessed under four different roots, one per cast member,
+    so nothing per-sequence can carry it. This database holds no join from a
+    pose build to the scene actor that started it, so the root is read back off
+    the owner's own selected mask instead — the two agree wherever the scene
+    bindings do reach, and a pair whose masks never name one family is left
+    unresolved rather than guessed.
+
+    The pass is separate from the stage-1 loop because that loop flushes in
+    fixed-size batches: resolving a pair inside a batch would make the answer
+    depend on where the batch boundary fell.
+    """
+    join, column = _payload_join(flags, "sp", "sequence_key")
+    roots: dict[tuple[int, int], set[str]] = {}
+    for checksum, owner, owner_bones, offset, payload in connection.execute(
+        "SELECT g.checksum, g.owner_checksum, g.owner_bones, "
+        f"g.pose_parameter_bytes, {column} FROM clip_group g {join}"
+    ):
+        checksum, owner, owner_bones = int(checksum), int(owner), int(owner_bones)
+        owner_names = names_of(owner)
+        if owner_names is None or len(decoder_pose.biped_families(owner_names)) < 2:
+            continue
+        width = ((owner_bones + 31) // 32) * 4
+        if payload is None or len(payload) < int(offset) + width:
+            continue
+        family = _one_family(
+            owner_names,
+            decoder_pose.payload_selected(payload, owner_bones, offset=int(offset)),
+        )
+        if family:
+            roots.setdefault((checksum, owner), set()).add(family)
+    resolved = {pair: next(iter(found)) for pair, found in roots.items() if len(found) == 1}
+    return resolved, len(roots) - len(resolved)
+
+
 def _one_family(names: tuple[str, ...], selected: np.ndarray) -> str | None:
     """The single biped family a mask selects.
 
@@ -1349,6 +1427,7 @@ def clip_stages(
         "records_sampled_at_the_last_frame": 0,
         "witnessed_frame_disagrees_with_the_cycle_rule": 0,
         "owner_family_ambiguous": 0,
+        "cinematic_root_unresolved": 0,
         "bones_outside_the_selected_mask": 0,
         "bones_selected_with_no_owner_source": 0,
         "owner_bones_decoded_with_no_entity_target": 0,
@@ -1412,6 +1491,15 @@ def clip_stages(
             )
         return bone_names[checksum]
 
+    def known_names(checksum: int) -> tuple[str, ...] | None:
+        if checksum not in models and checksum not in images:
+            return None
+        return names_of(checksum)
+
+    # Which chain of a multi-actor bank each entity model is posed on, resolved
+    # once so the answer does not depend on where a batch boundary fell.
+    roots, unresolved_pairs = split_roots(connection, flags, known_names)
+
     def flush() -> None:
         nonlocal groups, records, composed_records, chain_records
         if not pending:
@@ -1425,6 +1513,10 @@ def clip_stages(
         skeleton = models[checksum]
         entity_names = names_of(checksum)
         owner_names = names_of(owner)
+        # Only a bank carrying more than one biped is split into per-root banks;
+        # anything else ships whole, so the shipped path is plain name matching
+        # and the two export candidates coincide.
+        multi_actor_owner = len(decoder_pose.biped_families(owner_names)) > 1
         multiplier = np.array([int(row[G_RECORDS]) for row in rows], dtype=np.int64)
         exemplars = [int(row[G_EXEMPLAR]) for row in rows]
         groups += len(rows)
@@ -1569,10 +1661,18 @@ def clip_stages(
                 [],
             ).append(index)
 
+        # The bank the export ships for this pair, and so the chain the shipped
+        # path reaches. It is a property of the (entity, bank) pair rather than
+        # of the contribution, because the scene names the actor's root once and
+        # every contribution under it plays that one bank — including the ones
+        # whose own mask selects no biped bone at all.
+        split_root = roots.get((checksum, owner)) if multi_actor_owner else None
+
         for (owner_family, entity_family), members in family_rows.items():
             picked = np.array(members, dtype=np.int64)
             for candidate, matching, interpolation, transform, masked in CLIP_CANDIDATES:
                 family = matching == "family_name"
+                split = matching == "cinematic_split"
                 if transform and checksum not in remaps:
                     continue
                 if family and owner_family is None:
@@ -1581,18 +1681,25 @@ def clip_stages(
                             multiplier[picked].sum()
                         )
                     continue
+                if split and multi_actor_owner and split_root is None:
+                    decoded_counts["cinematic_root_unresolved"] += int(
+                        multiplier[picked].sum()
+                    )
+                    continue
                 key = (
                     checksum,
                     owner,
+                    matching,
                     (entity_family or None) if family else None,
-                    (owner_family or None) if family else None,
+                    split_root if split else ((owner_family or None) if family else None),
                 )
                 if key not in correspondences:
                     correspondences[key] = decoder_pose.correspondence(
                         entity_names,
                         owner_names,
-                        entity_family=key[2],
-                        owner_family=key[3],
+                        matching=matching,
+                        entity_family=key[3],
+                        owner_family=key[4],
                     )
                 target, source = correspondences[key]
                 if target.size == 0:
@@ -1882,6 +1989,9 @@ def clip_stages(
         "include_remap"
     )
     decoded_counts["stage1_frame_key_over_the_band"] = decoded_arm.over_band("frame_key")
+    decoded_counts["stage1_cinematic_split_over_the_band"] = decoded_arm.over_band(
+        "cinematic_split"
+    )
     decoded_counts["stage1_bone_name_over_the_band"] = decoded_arm.over_band("bone_name")
     investigate, definite = composed_arm.band_totals(COMPOSED_LADDER_CANDIDATE)
     composed_counts["stage2_records_in_the_investigate_band"] = investigate
@@ -1909,6 +2019,8 @@ def clip_stages(
         "clips_decoded": clips.decoded,
         "clips_unreadable": clips.faults,
         "models_carrying_an_include_remap": len(remaps),
+        "cinematic_root_pairs_resolved": len(roots),
+        "cinematic_root_pairs_unresolved": unresolved_pairs,
         "elapsed_seconds": elapsed,
         "candidates": decoded_arm.summary(models),
         "by_owner": by_owner,

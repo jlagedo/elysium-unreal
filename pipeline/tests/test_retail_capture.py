@@ -7416,6 +7416,85 @@ class DecoderPoseTests(unittest.TestCase):
         self.assertEqual(skeleton.axis_interp, ())
         self.assertTrue(bool(skeleton.procedural[3]))
 
+    # ---- the owner-to-entity bone correspondence ----
+
+    #: An ordinary character: one biped, plus a bone that is not part of one.
+    TARGET_NAMES = ("Bip01", "Bip01 Spine", "Bip01 Head", "Dummy01")
+    #: A cinematic bank: two complete bipeds side by side, plus a camera dummy
+    #: belonging to neither, which is the shape 41 of the 85 multi-actor
+    #: cinematic models have.
+    BANK_NAMES = (
+        "Bip01", "Bip01 Spine", "Bip01 Head",
+        "Bip02", "Bip02 Spine", "Bip02 Head",
+        "Dummy01",
+    )
+
+    def _pairs(self, **kwargs):
+        target, source = decoder_pose.correspondence(
+            self.TARGET_NAMES, self.BANK_NAMES, **kwargs
+        )
+        return {
+            self.TARGET_NAMES[t]: self.BANK_NAMES[s]
+            for t, s in zip(target.tolist(), source.tolist())
+        }
+
+    def test_the_split_reaches_the_chain_the_scene_named_and_not_the_first_one(
+        self,
+    ) -> None:
+        """What `export_cinematic` ships, and why the export is already right.
+
+        The bank is written out once per `BipNN` root with the prefix folded
+        onto `Bip01`, so an actor the scene puts on `Bip02` loads a bank whose
+        `Bip01 Spine` is the bank's `Bip02 Spine`. Plain name matching would
+        hand it the bank's own `Bip01` chain — a real bone carrying another
+        actor's pose.
+        """
+        split = self._pairs(matching="cinematic_split", owner_family="bip02")
+        self.assertEqual(split["Bip01 Spine"], "Bip02 Spine")
+        self.assertEqual(split["Bip01 Head"], "Bip02 Head")
+        plain = self._pairs(matching="name")
+        self.assertEqual(plain["Bip01 Spine"], "Bip01 Spine")
+
+    def test_the_split_and_the_family_rule_reach_the_same_chain(self) -> None:
+        """The two are the same correspondence over the bones both reach.
+
+        This is what says the shipped export pays no family cost at all: the
+        rule read off retail's own mask and the rule the bake writes agree bone
+        for bone on every biped bone.
+        """
+        split = self._pairs(matching="cinematic_split", owner_family="bip02")
+        family = self._pairs(
+            matching="family_name", entity_family="bip01", owner_family="bip02"
+        )
+        biped = {name: bone for name, bone in family.items() if name != "Dummy01"}
+        self.assertEqual(
+            {name: bone for name, bone in split.items() if name != "Dummy01"}, biped
+        )
+
+    def test_the_split_drops_the_bone_that_belongs_to_no_biped(self) -> None:
+        """The one place the two part company, pinned rather than assumed.
+
+        `export_cinematic` writes only the chosen chain into a bank, so a bone
+        with no `BipNN` head reaches no target; the family rule still matches it
+        by its plain name. Measured over the install this moves nothing — the
+        only such names any character skeleton also carries come from three
+        banks no `logic_choreographed_scene` names — so the divergence is
+        recorded here rather than closed.
+        """
+        split = self._pairs(matching="cinematic_split", owner_family="bip02")
+        family = self._pairs(
+            matching="family_name", entity_family="bip01", owner_family="bip02"
+        )
+        self.assertNotIn("Dummy01", split)
+        self.assertEqual(family["Dummy01"], "Dummy01")
+
+    def test_a_single_skeleton_bank_is_not_split_and_matches_by_name(self) -> None:
+        """`export_cinematic` hands a one-root model to `export_bank` whole."""
+        self.assertEqual(
+            self._pairs(matching="cinematic_split", owner_family=None),
+            self._pairs(matching="name"),
+        )
+
     def test_the_rotation_metric_reads_zero_for_a_quaternion_and_its_negation(
         self,
     ) -> None:
@@ -8595,6 +8674,17 @@ FAMILY_MODEL = "models/bank.mdl"
 #: `Bip01` bones correspond to.
 FAMILY_OFFSET = 4
 
+# The same bank with its spare bone named for a camera dummy rather than for a
+# biped. A bone belonging to no `BipNN` chain is what 41 of the 85 multi-actor
+# cinematic models carry; `export_cinematic` writes it into no per-root bank, and
+# a contribution whose mask selects only bones like it names no family at all.
+SPLIT_BONES = FAMILY_BONES[:-1] + (
+    ("Dummy01", 6, (0.0, 2.0, 0.0), (0.0, 0.0, 0.0, 1.0), 0),
+)
+SPLIT_CLIPS = FAMILY_CLIPS
+#: The index of that bone in `SPLIT_BONES`.
+SPLIT_DUMMY = len(SPLIT_BONES) - 1
+
 
 def _track_samples(track: Track) -> list[int]:
     """One channel's per-frame keys, expanded by hand from its runs."""
@@ -8681,8 +8771,15 @@ class ClipStageTests(unittest.TestCase):
         selected: set[int] | None = None,
         sample_phase: float | None = None,
         perturb: dict[int, tuple[float, float, float]] | None = None,
+        second_mask_bones: tuple[int, ...] | None = None,
     ) -> None:
-        """One pose build: a fired contribution, its base pose, and its draw."""
+        """One pose build: a fired contribution, its base pose, and its draw.
+
+        `second_mask_bones` adds a second build on the same entity and owner
+        whose contribution selects a different mask. It is what a per-pair fact
+        is tested with: one build's mask can name a biped family while the
+        other's names none, and the export ships one bank for both.
+        """
         count = len(bones)
         owner = bones if owner_bones is None else owner_bones
         owner_clips = clips if owner_clips is None else owner_clips
@@ -8752,6 +8849,24 @@ class ClipStageTests(unittest.TestCase):
                     b"PBLD", 5, 100, 105,
                     generation=1, client_entity=TRANSFORM_RENDERABLE,
                 )
+                + (
+                    animation_record(
+                        b"BASE", 13, 113,
+                        bone_count=count,
+                        checksum=TRANSFORM_CHECKSUM,
+                        client_entity=TRANSFORM_ENTITY,
+                        generation=3,
+                        local_pose=list(base_pose),
+                        selected=chosen,
+                        sample_phase=cycle if sample_phase is None else sample_phase,
+                    )
+                    + bracket_record(
+                        b"PBLD", 14, 110, 115,
+                        generation=3, client_entity=TRANSFORM_RENDERABLE,
+                    )
+                    if second_mask_bones is not None
+                    else b""
+                )
             ),
             contribution_records=(
                 contribution_record(
@@ -8781,6 +8896,34 @@ class ClipStageTests(unittest.TestCase):
                     clips=owner_clips,
                     image_bones=owner_count,
                     cycle=cycle,
+                )
+                + (
+                    contribution_record(
+                        b"ANIM", 11, 111,
+                        scope=2,
+                        generation=3,
+                        bones=owner_count,
+                        checksum=checksum,
+                        animation_index=animation_index,
+                        channel_bones=second_mask_bones,
+                        clips=owner_clips,
+                        image_bones=owner_count,
+                        cycle=cycle,
+                    )
+                    + contribution_record(
+                        b"SEQP", 12, 112,
+                        scope=2,
+                        generation=3,
+                        bones=owner_count,
+                        checksum=checksum,
+                        sequence_index=0,
+                        mask_bones=second_mask_bones,
+                        clips=owner_clips,
+                        image_bones=owner_count,
+                        cycle=cycle,
+                    )
+                    if second_mask_bones is not None
+                    else b""
                 )
             ),
             census_records=(
@@ -8933,6 +9076,79 @@ class ClipStageTests(unittest.TestCase):
         self.assertEqual(
             self._bands(report, "decoded_locals", "bone_name"),
             {"excellent": 0, "investigate": 0, "definite": 1},
+        )
+
+    def test_the_shipped_split_takes_the_actors_own_chain(self) -> None:
+        """The export already carries the family, and this is what says so.
+
+        `export_cinematic` writes one bank per `BipNN` root folded onto `Bip01`
+        and the runtime picks the root from the scene actor's `bonerename`, so
+        the shipped path reaches the same chain the mask witnesses. Reading it
+        as plain name matching is what put a cinematic bank's whole cast in the
+        wrong pose in an earlier report.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(
+                directory,
+                owner_bones=FAMILY_BONES,
+                owner_clips=FAMILY_CLIPS,
+                mask_bones=(4, 5, 6, 7),
+            )
+        self.assertEqual(
+            self._bands(report, "decoded_locals", "cinematic_split"),
+            {"excellent": 1, "investigate": 0, "definite": 0},
+        )
+        self.assertEqual(
+            self._bands(report, "decoded_locals", "bone_name"),
+            {"excellent": 0, "investigate": 0, "definite": 1},
+        )
+        stage = self._stage(report, "decoded_locals")
+        self.assertEqual(stage["cinematic_root_pairs_resolved"], 1)
+        self.assertEqual(stage["counts"]["cinematic_root_unresolved"], 0)
+
+    def test_a_one_skeleton_bank_leaves_the_two_export_candidates_equal(self) -> None:
+        """Nothing to split means nothing to get wrong, and no pair to resolve."""
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        self.assertEqual(
+            self._bands(report, "decoded_locals", "cinematic_split"),
+            self._bands(report, "decoded_locals", "bone_name"),
+        )
+        stage = self._stage(report, "decoded_locals")
+        self.assertEqual(stage["cinematic_root_pairs_resolved"], 0)
+
+    def test_the_root_is_a_property_of_the_pair_and_not_of_one_contribution(
+        self,
+    ) -> None:
+        """A second build whose own mask names no biped still loads one bank.
+
+        The scene names an actor's `bonerename` root once and every contribution
+        under it plays that bank, including the ones whose mask selects only a
+        camera or prop bone — 17,168 of the theatre corpus's 239,122. Resolving
+        the root per contribution instead would drop those back onto plain name
+        matching, which is the bank's own `Bip01` chain and another actor's
+        pose.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(
+                directory,
+                owner_bones=SPLIT_BONES,
+                owner_clips=SPLIT_CLIPS,
+                mask_bones=(4, 5, 6, 7),
+                second_mask_bones=(SPLIT_DUMMY,),
+            )
+        stage = self._stage(report, "decoded_locals")
+        self.assertEqual(stage["records"], 2)
+        self.assertEqual(stage["cinematic_root_pairs_resolved"], 1)
+        self.assertEqual(stage["counts"]["cinematic_root_unresolved"], 0)
+        # Both builds, including the one that named no family itself.
+        self.assertEqual(
+            self._bands(report, "decoded_locals", "cinematic_split"),
+            {"excellent": 2, "investigate": 0, "definite": 0},
+        )
+        self.assertEqual(
+            self._bands(report, "decoded_locals", "bone_name"),
+            {"excellent": 0, "investigate": 0, "definite": 2},
         )
 
     def test_an_owner_bone_with_no_entity_bone_is_counted_rather_than_compared(

@@ -403,10 +403,20 @@ BIPED_FAMILY = re.compile(r"^(bip\d+)(?:\s+(.*))?$")
 #:
 #: `family_name` is the complete rule: the family token comes off the owner's own
 #: selected mask, so a cinematic bank's chains are told apart by evidence the
-#: capture carries rather than by which actor happens to be `Bip01`. `name` is
-#: plain name equality, which is what `mdl_gltf` bakes and glTFRuntime resolves
-#: at load, so its count is the cost of the current export.
-CORRESPONDENCES = ("family_name", "name")
+#: capture carries rather than by which actor happens to be `Bip01`.
+#:
+#: `cinematic_split` is what the export ships for a bank holding several complete
+#: actors. `mdl_gltf.export_cinematic` writes one bank per `BipNN` root, keeping
+#: only that root's chain and folding the prefix back to `Bip01`, and
+#: glTFRuntime then resolves those folded names against the target skeleton. It
+#: reaches the same chain `family_name` does; the two part company on an owner
+#: bone belonging to no family, which the split does not write into any bank.
+#:
+#: `name` is plain name equality over the whole owner skeleton. It is what
+#: `export_bank` ships for a single-skeleton bank, where it and the two rules
+#: above agree; on a multi-actor bank it is the counterfactual the split avoids,
+#: not a path anything runs.
+CORRESPONDENCES = ("family_name", "cinematic_split", "name")
 
 
 def biped_families(names: tuple[str, ...], selected: np.ndarray | None = None) -> set[str]:
@@ -433,6 +443,28 @@ def _match_key(name: str, family: str | None) -> str:
         # named for it; no studio bone name contains one.
         return "\x00" + (match.group(2) or "")
     return lowered
+
+
+#: The prefix `mdl_gltf.export_cinematic` folds every split bank's root onto.
+SPLIT_ROOT = "bip01"
+
+
+def _split_key(name: str, family: str) -> str | None:
+    """The name a split bank carries for an owner bone, or `None` if it has none.
+
+    `export_cinematic` subsets the owner to one `BipNN` chain and rewrites that
+    chain's prefix to `Bip01`, so a bone outside the chain is not in the bank at
+    all — which is a different answer from matching it on its plain name, and
+    the one the shipped path gives.
+    """
+    lowered = name.lower()
+    match = BIPED_FAMILY.match(lowered)
+    if match is None or match.group(1) != family:
+        return None
+    # The slice, rather than a rebuilt `root + " " + role`, is `export_cinematic`'s
+    # own `"Bip01" + name[len(root):]`: whatever separator the bone carries rides
+    # through unchanged.
+    return SPLIT_ROOT + lowered[len(match.group(1)):]
 
 
 # --- the include-model bone remap ---------------------------------------------
@@ -512,22 +544,43 @@ def correspondence(
     entity_names: tuple[str, ...],
     owner_names: tuple[str, ...],
     *,
+    matching: str = "family_name",
     entity_family: str | None = None,
     owner_family: str | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """`(entity bone, owner bone)` index pairs, first owner bone of a name wins.
 
-    With both families given the two skeletons are matched on the role alone,
-    which is what lets a 288-bone cinematic bank drive a 66-bone character. With
-    neither, this is plain name equality.
+    Under `family_name` with both families given the two skeletons are matched on
+    the role alone, which is what lets a 288-bone cinematic bank drive a 66-bone
+    character; with neither, that is plain name equality.
+
+    Under `cinematic_split` the owner is first reduced to the bank
+    `export_cinematic` writes for `owner_family` — one chain, folded onto
+    `Bip01` — and the entity is matched against it by plain name, which is what
+    glTFRuntime does at load. An `owner_family` of `None` means the owner carries
+    no second skeleton to split, so the whole skeleton is matched by name.
     """
     source: dict[str, int] = {}
     for index, name in enumerate(owner_names):
-        source.setdefault(_match_key(name, owner_family), index)
+        if matching == "cinematic_split":
+            if owner_family is None:
+                key = name.lower()
+            else:
+                split = _split_key(name, owner_family)
+                if split is None:
+                    continue
+                key = split
+        else:
+            key = _match_key(name, owner_family)
+        source.setdefault(key, index)
     target: list[int] = []
     origin: list[int] = []
     for index, name in enumerate(entity_names):
-        found = source.get(_match_key(name, entity_family))
+        found = source.get(
+            name.lower()
+            if matching == "cinematic_split"
+            else _match_key(name, entity_family)
+        )
         if found is not None:
             target.append(index)
             origin.append(found)
