@@ -232,8 +232,15 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
   where the installed header — a copy the probe never touched — declares its array position, and
   the descriptors are byte-identical to the captured copies outside the one dword the loader
   rewrites. What the current export cannot name is the product: the fired sequences it reaches,
-  the owner models no export seed reaches, and the blend cells it never bakes. Open: the
-  byte-coverage and per-bone transform differences that join makes possible. Header residency stays as it is: there is no
+  the owner models no export seed reaches, and the blend cells it never bakes. A final offline
+  reader then differences the bytes retail dereferenced against the bytes the pipeline's own
+  decoder reads, measured by running that decoder unmodified under observation rather than by
+  describing it, so the two sides are not one walker agreeing with itself. Re-walking the
+  stored span union reproduces it byte for byte, and the difference is five fields: the
+  per-bone animation weight the zero test reads, and the blend-grid extents, pose-parameter
+  indices, cell count and fired cells beyond the base one. Bytes read by neither stay recorded
+  as unknown. Open: the per-bone transform difference that join makes possible.
+  Header residency stays as it is: there is no
   single model-cache free to hook, so an unload event would cost three brackets and still
   report absence rather than a per-model free, and it is parked until a difference report
   names it. Editable raw byte-span recipes are added

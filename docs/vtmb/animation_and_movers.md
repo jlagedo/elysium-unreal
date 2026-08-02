@@ -269,6 +269,16 @@ the quaternion decoder reads the **following run's first key** at `run + valid*2
 the position decoder does not, and holds the key it already has. That asymmetry is the
 one place the two decoders disagree about which bytes they touch.
 
+**That look-ahead runs past the end of a track** [capture-verified]. Nothing conditions
+the offset on there being a following run: whenever the frame sits on the run's last key
+and the next frame leaves it, `run + valid*2 + 4` is read — and at the *last* run of a
+track that names two bytes the track does not contain, so the decoder reads whatever the
+image holds there. Measured on one `sp_theatre` capture differenced against a whole-track
+walk: two such bytes, on `scenery/structural/la/LAmanhole.mdl`, whose one-run rotation
+track is followed by the next clip's animation records, so the look-ahead lands in that
+clip's `weight`@0. Whether the value it reads reaches the output is not established; what
+is established is that the read leaves the track.
+
 `FUN_10088ba0` additionally resets the frame to zero on any run declaring
 `total < valid`, which no authored track in the corpus does.
 

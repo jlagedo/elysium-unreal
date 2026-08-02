@@ -125,6 +125,20 @@ from research.tooling.capture.verify_source_join import (
     install_key,
     verify as verify_join,
 )
+from research.tooling.capture.decoder_coverage import (
+    UnmeasuredRead,
+    instrumented,
+)
+from research.tooling.capture.verify_byte_coverage import (
+    ACCOUNTED,
+    DEFECTS,
+    HEADER_BYTES,
+    Layout,
+    _intervals,
+    _sequence_attribution,
+    compare as compare_coverage,
+    verify as verify_coverage,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NATIVE_ROOT = REPO_ROOT / "research" / "tooling" / "capture" / "native"
@@ -6360,6 +6374,530 @@ class SourceJoinTests(unittest.TestCase):
 
 GESTURE_EVENT_TYPE = 6
 SEQUENCE_EVENT = 7
+
+
+class DecoderCoverageTests(unittest.TestCase):
+    """CAP4.2: the harness that measures what the exporter's decoder reads.
+
+    Nothing here decides what the decoder ought to read. It checks that every
+    route the decoder takes to the image is measured, that a route the harness
+    does not model raises instead of returning bytes unrecorded, and that the
+    instrumentation does not survive the block it was installed for.
+    """
+
+    def test_struct_shim_records_every_offset_and_is_restored(self) -> None:
+        from elysium_pipeline.formats import mdl_skel
+
+        original = mdl_skel.struct
+        image = model_image(0xABCD, BANK_MODEL)
+        with instrumented(mdl_skel, image) as (data, recorder):
+            self.assertIsNot(mdl_skel.struct, original)
+            mdl_skel.read_bones(data)
+        self.assertIs(mdl_skel.struct, original)
+        self.assertGreater(recorder.reads, 0)
+        self.assertEqual(recorder.outside, 0)
+
+    def test_bone_reads_are_exactly_the_fields_read_bones_names(self) -> None:
+        """The measured set is checked against the offsets, not against itself.
+
+        `read_bones` reads eight fields of each 160-byte record plus the name
+        string each one points at, and nothing else. Computing that set here
+        from the fixture's own layout is what makes the harness evidence rather
+        than a recording of whatever happened.
+        """
+        from elysium_pipeline.formats import mdl_skel
+
+        bones = (("Bip01", -1, (0.0, 0.0, 0.0)), ("Bip01 Spine", 0, (1.0, 2.0, 3.0)))
+        image = model_image(0xABCD, BANK_MODEL, bones=bones)
+        with instrumented(mdl_skel, image) as (data, recorder):
+            mdl_skel.read_bones(data)
+        # NumBones@240 and BoneIndex@244, then each record's own fields.
+        expected: set[int] = set(range(240, 248))
+        for index, (name, _, _) in enumerate(bones):
+            base = BONE_ARRAY_OFFSET + BONE_STRIDE * index
+            for low, size in (
+                (0, 4), (4, 4), (32, 12), (44, 16), (60, 12), (72, 16),
+                (88, 48), (136, 4),
+            ):
+                expected.update(range(base + low, base + low + size))
+            start = base + struct.unpack_from("<i", image, base)[0]
+            # The terminator is read too: the scan stops on it.
+            expected.update(range(start, start + len(name) + 1))
+        covered = {
+            offset
+            for low, high in _intervals(recorder.coverage().bits, len(image))
+            for offset in range(low, high)
+        }
+        self.assertEqual(covered, expected)
+
+    def test_rle_run_headers_and_dynamic_key_widths_are_measured(self) -> None:
+        """`_rle_channel` reaches the image by two routes and both are recorded.
+
+        The run header is raw indexing and the keys are a format string built
+        from it, so a harness that watched only one of them would report a
+        track our decoder half-reads.
+        """
+        from elysium_pipeline.formats import mdl_skel
+
+        image = model_image(0xABCD, BANK_MODEL)
+        block = animation_block_offset(6)
+        with instrumented(mdl_skel, image) as (data, recorder):
+            bones = mdl_skel.read_bones(data)
+        with instrumented(mdl_skel, image) as (data, recorder):
+            descriptor = CONTRIBUTION_ANIM_INDEX_OFF + 72 * 6
+            mdl_skel.read_anim(data, bones, descriptor, DEFAULT_CLIPS[6].numframes)
+        covered = _intervals(recorder.coverage().bits, len(image))
+        track = block + struct.unpack_from("<i", image, block + 4 + 3 * 4)[0]
+        # Three runs of two keys: six bytes each, read end to end.
+        self.assertTrue(
+            any(low <= track and high >= track + 18 for low, high in covered),
+            covered,
+        )
+
+    def test_an_unmodelled_route_raises_rather_than_reading(self) -> None:
+        from elysium_pipeline.formats import mdl_skel
+
+        with instrumented(mdl_skel, b"\x00" * 64) as (data, _):
+            with self.assertRaises(UnmeasuredRead):
+                data.decode("ascii")
+            with self.assertRaises(UnmeasuredRead):
+                data[::2]
+            with self.assertRaises(UnmeasuredRead):
+                mdl_skel.struct.unpack("<i", data)
+            with self.assertRaises(UnmeasuredRead):
+                mdl_skel.struct.iter_unpack
+
+    def test_a_read_past_the_image_is_counted_not_recorded(self) -> None:
+        from elysium_pipeline.formats import mdl_skel
+
+        with instrumented(mdl_skel, b"\x00" * 8) as (data, recorder):
+            with self.assertRaises(struct.error):
+                mdl_skel.struct.unpack_from("<i", data, 6)
+        # Counted rather than swallowed: a decoder running off the image is a
+        # finding, and the offset it reached is not coverage of the image.
+        self.assertEqual(recorder.outside, 1)
+        self.assertEqual(recorder.trace, [])
+
+    def test_the_glb_writer_reads_no_byte_read_anim_does_not(self) -> None:
+        """Instrumenting the decoder measures the export path.
+
+        `mdl_gltf._bake_animation` re-reads `animindex` and the seven channel
+        offsets itself rather than taking them from `read_anim`. Both land
+        inside what `read_anim` already read, so measuring `mdl_skel` alone
+        measures what the exporter reads off an image.
+        """
+        from elysium_pipeline.formats import mdl_skel
+
+        image = model_image(0xABCD, BANK_MODEL)
+        descriptor = CONTRIBUTION_ANIM_INDEX_OFF + 72 * 6
+        with instrumented(mdl_skel, image) as (data, recorder):
+            bones = mdl_skel.read_bones(data)
+            mdl_skel.read_anim(data, bones, descriptor, DEFAULT_CLIPS[6].numframes)
+        covered = recorder.coverage().bits
+        records = descriptor + struct.unpack_from("<i", image, descriptor + 48)[0]
+        for offset, size in (
+            (descriptor + 48, 4),
+            *((records + bone * ANIM_RECORD_STRIDE + 4, 28) for bone in range(2)),
+        ):
+            for byte in range(offset, offset + size):
+                self.assertTrue(
+                    covered[byte >> 3] & (1 << (byte & 7)),
+                    f"offset {byte} is read by the glb writer and not by read_anim",
+                )
+
+
+class ByteCoverageTests(unittest.TestCase):
+    """CAP4.2: retail's consumed bytes against the current decoder's.
+
+    The session is the same synthetic capture the span tasks use, resolved by
+    the real `resolve_consumed_spans` pass, so the retail arm here is the one
+    that runs on a real capture rather than a stand-in for it.
+    """
+
+    def _bank(self) -> bytes:
+        return model_image(
+            0xABCD,
+            BANK_MODEL,
+            labels=BANK_LABELS,
+            activities=BANK_ACTIVITIES,
+            sequences=len(BANK_LABELS),
+            base_cells=(0, 4, 5, 6),
+        )
+
+    def _session(self, session: Path, contributions: bytes | None = None) -> None:
+        write_session(
+            session,
+            pose_records=pose_record(
+                1, 100, "models/test.mdl", generation=1, client_entity=0x1FFC
+            ),
+            animation_records=(
+                bracket_record(
+                    b"PBLD", 2, 100, 101, generation=1, client_entity=0x1FFC
+                )
+                + animation_record(
+                    b"BASE", 3, 102, client_entity=0x1FF8, generation=1
+                )
+            ),
+            census_records=(
+                observation_record(4, 88, "models/test.mdl")
+                + image_record(5, 89, model_image(0x3000, "models/test.mdl"))
+                + observation_record(
+                    6, 90, BANK_MODEL,
+                    studio_hdr=CONTRIBUTION_OWNER_HDR, checksum=0xABCD,
+                )
+                + image_record(
+                    7, 91, self._bank(),
+                    studio_hdr=CONTRIBUTION_OWNER_HDR, checksum=0xABCD,
+                )
+            ),
+            contribution_records=(
+                contributions
+                if contributions is not None
+                else (
+                    contribution_record(b"SEQP", 8, 103, sequence_index=1)
+                    + contribution_record(b"ANIM", 9, 104, animation_index=4)
+                    + contribution_record(b"ANIM", 10, 105, animation_index=6)
+                )
+            ),
+            done=(
+                "complete=1\nqueued=8\nwritten=8\ndropped=0\nqueue_peak=12\n"
+                "unbracketed=0\nbracket_overflow=0\n"
+                "contribution_sequences=1\ncontribution_animations=2\n"
+                "contribution_faults=0\ncontribution_overflow=0\n"
+                "contribution_unscoped=0\n"
+            ),
+        )
+        finalize(session)
+        resolve_spans(session)
+
+    def _report(self, directory: str, **kwargs: object) -> dict:
+        session = Path(directory)
+        self._session(session)
+        return verify_coverage(session, **kwargs)
+
+    def test_the_two_arms_describe_the_same_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        verdict = report["verdict"]
+        self.assertTrue(verdict["judgeable"], verdict)
+        self.assertEqual(verdict["defects"], {})
+        self.assertEqual(verdict["unclassified"], {})
+        self.assertTrue(verdict["byte_coverage_compared"], verdict["statement"])
+        self.assertTrue(report["retail"]["available"])
+        self.assertTrue(report["decoder"]["available"])
+
+    def test_the_rewalk_reproduces_the_stored_union(self) -> None:
+        """The self-check that makes the difference below it trustworthy.
+
+        The stored union came from one pass over the records; the re-walk comes
+        from the dictionary that pass wrote. Agreeing byte for byte is what says
+        neither drifted, and a disagreement invalidates every set derived from
+        them.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        retail = report["retail"]
+        self.assertEqual(retail["counts"]["rewalk_union_differs_from_stored"], 0)
+        self.assertEqual(retail["counts"]["retail_walk_faulted"], 0)
+        self.assertEqual(retail["stored_bytes"], retail["rewalk_bytes"])
+        self.assertGreater(retail["stored_bytes"], 0)
+
+    def test_the_sets_partition_every_byte_of_every_owner_image(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        totals = report["difference"]["totals"]
+        self.assertEqual(
+            totals["both_bytes"]
+            + totals["retail_only_bytes"]
+            + totals["ours_only_bytes"]
+            + totals["neither_bytes"],
+            totals["image_bytes"],
+        )
+        self.assertEqual(
+            totals["retail_bytes"], totals["both_bytes"] + totals["retail_only_bytes"]
+        )
+        self.assertEqual(
+            totals["ours_bytes"], totals["both_bytes"] + totals["ours_only_bytes"]
+        )
+
+    def test_a_missing_span_carries_the_bytes_nobody_read(self) -> None:
+        """The report outlives the gitignored capture it was taken over.
+
+        A range the decoder never reads is a claim about a value nobody looked
+        at, so the value comes along: here every missing weight dword is 1.0,
+        which is what says the guard is absent rather than the decode wrong.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        spans = report["difference"]["owners"][0]["retail_only_spans"]
+        self.assertTrue(spans)
+        weights = [
+            body
+            for _, _, body in spans
+            if len(body) == 8 and struct.unpack("<f", bytes.fromhex(body))[0] == 1.0
+        ]
+        self.assertTrue(weights, spans)
+
+    def test_the_report_names_the_build_it_is_a_difference_from(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        identity = report["identity"]
+        self.assertTrue(identity["modules"])
+        self.assertEqual(
+            identity["decoder_module"], "elysium_pipeline.formats.mdl_skel"
+        )
+        self.assertEqual(len(identity["decoder_sha256"]), 64)
+
+    def test_the_missing_list_names_the_weight_our_decoder_never_reads(
+        self,
+    ) -> None:
+        """The first finding, and the shape every finding takes.
+
+        Both retail channel decoders read `weight`@0 of a bone's 32-byte
+        animation record and return on zero; `read_anim` reads the seven channel
+        offsets at +4 and never the weight. So four bytes per decoded bone are
+        read by retail and by nobody on our side, and the field is named rather
+        than the offset being reported bare.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        missing = {entry["field"]: entry for entry in report["difference"]["missing_by_field"]}
+        self.assertIn("StudioAnimRecord.weight", missing, sorted(missing))
+        self.assertEqual(missing["StudioAnimRecord.weight"]["region"], "anim_records")
+        self.assertGreater(missing["StudioAnimRecord.weight"]["bytes"], 0)
+        self.assertEqual(missing["StudioAnimRecord.weight"]["bytes"] % 4, 0)
+
+    def test_the_missing_list_names_the_blend_fields_the_exporter_ignores(
+        self,
+    ) -> None:
+        """`local_sequences` reads a label and a base cell; retail reads a grid.
+
+        The exporter bakes cell [0][0] alone, so `numblends`, `groupsize` and
+        `paramindex` are read by the evaluator and by nothing of ours. CAP4.1
+        reported that as clips without a counterpart; here it is bytes.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        missing = {entry["field"] for entry in report["difference"]["missing_by_field"]}
+        self.assertIn("StudioSeqDesc.numblends", missing)
+        self.assertIn("StudioSeqDesc.groupsize", missing)
+        self.assertIn("StudioSeqDesc.paramindex", missing)
+
+    def test_retail_reaches_no_track_run_our_walk_skipped(self) -> None:
+        """The one containment the comparison is entitled to assert.
+
+        Retail walks a track to the sampled frame and reads two keys; the
+        exporter materializes every key of every run it enters. So the only
+        retail track byte that can escape ours is the quaternion look-ahead, two
+        bytes wide. Anything wider is a run our walk skipped.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        self.assertEqual(
+            report["difference"]["counts"]["retail_track_span_wider_than_one_key"],
+            0,
+        )
+
+    def test_the_quaternion_look_ahead_is_named_rather_than_read_as_a_field(
+        self,
+    ) -> None:
+        """A sampled last frame sends the look-ahead past the track it walked.
+
+        Clip 4's only track is a rotation channel of one run, and it is the last
+        thing in its animation block. Sampling its final frame makes the
+        quaternion decoder reach for the following run's first key, which is
+        past the track entirely. Those bytes are retail's and not ours, and
+        calling them a field we failed to read would name the wrong thing.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._session(
+                session,
+                contribution_record(b"SEQP", 8, 103, sequence_index=0, cycle=1.0)
+                + contribution_record(
+                    b"ANIM", 9, 104, animation_index=4, cycle=1.0
+                ),
+            )
+            report = verify_coverage(session)
+        counts = report["difference"]["counts"]
+        self.assertGreater(
+            counts["retail_track_bytes_past_our_whole_track_walk"], 0, counts
+        )
+        self.assertEqual(counts["retail_track_span_wider_than_one_key"], 0)
+        self.assertTrue(report["difference"]["track_lookahead_by_field"])
+        self.assertNotIn(
+            "mstudioanimvalue_t:*",
+            {entry["field"] for entry in report["difference"]["missing_by_field"]},
+        )
+        self.assertTrue(report["verdict"]["byte_coverage_compared"])
+
+    def test_bytes_read_by_neither_arm_stay_unknown(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        self.assertGreater(report["difference"]["totals"]["neither_bytes"], 0)
+        self.assertTrue(report["difference"]["unknown_by_field"])
+
+    def test_a_fired_identity_carries_its_own_difference(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        identities = report["difference"]["identities"]
+        self.assertTrue(identities)
+        for entry in identities:
+            self.assertGreater(entry["retail_only_bytes"], 0)
+            self.assertTrue(entry["retail_only_fields"])
+        self.assertTrue(
+            any(entry["kind"] == "ANIM" for entry in identities), identities
+        )
+
+    def test_every_emitted_population_is_declared_once(self) -> None:
+        """No count reaches the verdict without a declaration behind it."""
+        self.assertEqual(set(DEFECTS) & set(ACCOUNTED), set())
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        declared = set(DEFECTS) | set(ACCOUNTED)
+        for arm in ("retail", "decoder", "difference", "installed"):
+            for name in (report[arm].get("counts") or {}):
+                self.assertIn(name, declared, f"{arm}.{name}")
+
+    def test_an_absent_install_is_a_shortfall_rather_than_a_defect(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._session(session)
+            report = verify_coverage(
+                session, installed=True, install_reader=lambda key: None
+            )
+        self.assertEqual(report["loader_written"]["owners_resolved"], 0)
+        self.assertEqual(
+            report["installed"]["counts"]["installed_image_read_set_differs"], 0
+        )
+        self.assertGreater(report["installed"]["counts"]["installed_image_absent"], 0)
+        self.assertEqual(report["verdict"]["defects"], {})
+        self.assertTrue(report["verdict"]["byte_coverage_compared"])
+
+    def test_the_installed_arm_holds_when_the_loader_rewrote_a_byte(self) -> None:
+        """A loader-written byte must not change which bytes we read.
+
+        The captured image and its installed source differ in `StudioBone.Flags`
+        among others, and no branch of `local_sequences` or `read_anim` reads
+        one. Answering that with a second run rather than asserting it is what
+        keeps our arm a property of the source.
+        """
+        installed = bytearray(self._bank())
+        struct.pack_into("<i", installed, BONE_ARRAY_OFFSET + 136, 0x8)
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._session(session)
+            report = verify_coverage(
+                session,
+                installed=True,
+                install_reader=lambda key: (
+                    bytes(installed) if key == BANK_MODEL else None
+                ),
+            )
+        self.assertEqual(report["installed"]["owners_compared"], 1)
+        self.assertEqual(
+            report["installed"]["counts"]["installed_image_read_set_differs"], 0
+        )
+        self.assertEqual(report["installed"]["loader_written_bytes"], 1)
+
+    def test_a_missing_range_the_loader_wrote_is_marked_as_one(self) -> None:
+        """A byte the loader rewrote is not a byte the file carries.
+
+        `StudioSeqDesc`+0xc is the activity dword the loader writes at load, and
+        retail's walker claims nothing there — but when it does appear on the
+        missing side it must be reported as a runtime value rather than as
+        source bytes the decoder failed to read.
+        """
+        installed = bytearray(self._bank())
+        for index in range(len(BANK_LABELS)):
+            base = CONTRIBUTION_SEQ_INDEX_OFF + SEQ_DESC_STRIDE * index
+            # Differing in every byte of the dword, so the overlay is the whole
+            # field rather than whichever byte happened to change.
+            struct.pack_into("<i", installed, base + 52, 0x02020202)
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._session(session)
+            report = verify_coverage(
+                session,
+                install_reader=lambda key: (
+                    bytes(installed) if key == BANK_MODEL else None
+                ),
+            )
+        overlay = report["loader_written"]
+        self.assertTrue(overlay["available"], overlay)
+        self.assertEqual(overlay["owners_resolved"], 1)
+        self.assertEqual(overlay["missing_bytes_the_loader_wrote"], 4)
+        self.assertEqual(
+            [entry["field"] for entry in overlay["by_field"]],
+            ["StudioSeqDesc.numblends"],
+        )
+
+    def test_a_layout_names_the_field_at_a_known_offset(self) -> None:
+        layout = Layout(self._bank())
+        self.assertEqual(layout.num_bones, 2)
+        self.assertEqual(layout.seq_index, CONTRIBUTION_SEQ_INDEX_OFF)
+        self.assertEqual(
+            layout.attribute([(BONE_ARRAY_OFFSET + 136, BONE_ARRAY_OFFSET + 140)]),
+            {
+                "StudioBone.Flags": {
+                    "field": "StudioBone.Flags",
+                    "region": "bone_array",
+                    "bytes": 4,
+                    "first_offset": BONE_ARRAY_OFFSET + 136,
+                }
+            },
+        )
+        # A gap between two declared regions is bounded by the next one rather
+        # than swallowing every structure above it.
+        _, end, kind, _ = layout.region_at(HEADER_BYTES + 4)
+        self.assertEqual(kind, "unindexed")
+        self.assertLessEqual(end, BONE_ARRAY_OFFSET)
+
+    def test_a_label_string_is_attributed_to_the_descriptor_that_named_it(
+        self,
+    ) -> None:
+        """The trace is ordered, so a read outside the array has a cause.
+
+        `local_sequences` follows a descriptor-relative index to a label that
+        lives past the array. Attributing it by offset alone would leave it
+        unowned; attributing it to the descriptor last touched puts it on the
+        identity whose difference it belongs to.
+        """
+        from elysium_pipeline.formats import mdl_skel
+
+        image = self._bank()
+        with instrumented(mdl_skel, image) as (data, recorder):
+            mdl_skel.local_sequences(data)
+        attributed = _sequence_attribution(recorder, Layout(image))
+        base = CONTRIBUTION_SEQ_INDEX_OFF + SEQ_DESC_STRIDE * 1
+        label = base + struct.unpack_from("<i", image, base)[0]
+        self.assertTrue(
+            any(low <= label < high for low, high in attributed[1]),
+            attributed[1],
+        )
+        self.assertFalse(
+            any(low <= label < high for low, high in attributed.get(0, ())),
+        )
+
+    def test_a_database_without_spans_is_unjudgeable_rather_than_clean(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_join_session(session, {"models/test.mdl": (0x3000, [0x2000], [])})
+            report = verify_coverage(session)
+        self.assertFalse(report["verdict"]["judgeable"])
+        self.assertFalse(report["verdict"]["byte_coverage_compared"])
+        self.assertIn("resolve_consumed_spans", report["verdict"]["statement"])
+
+    def test_two_sessions_are_reported_side_by_side(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            first = self._report(directory)
+        with tempfile.TemporaryDirectory() as directory:
+            second = self._report(directory)
+        comparison = compare_coverage([first, second])
+        self.assertEqual(len(comparison["retail_only_bytes"]), 2)
+        self.assertIn("side by side", comparison["statement"])
 
 
 if __name__ == "__main__":

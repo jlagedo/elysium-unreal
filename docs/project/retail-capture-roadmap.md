@@ -914,10 +914,68 @@ This phase is the point of the program. It runs entirely offline against the dat
   resolving those bytes is the task. And **a population no declaration covers is not
   coverage**: a count that is neither a declared defect nor an accounted one fails the
   verdict rather than passing unremarked.
-- [ ] **CAP4.2 Byte-coverage difference.** Mark the byte ranges of each owning model image
+- [x] **CAP4.2 Byte-coverage difference.** Mark the byte ranges of each owning model image
   that the retail runtime dereferenced, and the ranges the current decoder reads. Ranges
   read by retail and unread by us are the missing-data list. Ranges read by neither stay
   recorded as unknown rather than assumed inert.
+
+  `uv run elysium research verify_byte_coverage <session>…` reads a finalized,
+  span-resolved database read-only and writes one `byte-coverage.json` beside it.
+  **Nothing is written into the capture**, for CAP4.1's reason: our arm is a claim about
+  this checkout's decoder at this commit, and the report names it — module hashes,
+  tool commit and the decoder's own digest — so a difference is readable against the
+  build it is a difference from.
+
+  **The subtrahend is measured, not described.** CAP2.5's walker is a transcription of
+  the decompilation, so a second walk written from the same understanding would agree
+  with it by construction. `decoder_coverage` instead runs
+  `elysium_pipeline.formats.mdl_skel` unmodified and observes it, swapping the module's
+  own `struct` global and wrapping the image for the handful of raw-indexing sites. A
+  read route it does not model raises rather than returning bytes unrecorded, so a
+  decoder change cannot silently shrink our side and read as retail requiring bytes we
+  already handle.
+
+  **The result is five fields.** One cutscene consumes **3,430,830** bytes across **34**
+  owner images, of which **9,936** are read by retail and by nothing offline:
+  `StudioAnimRecord.weight`@0 (9,016 bytes over 34 owners), `StudioSeqDesc.groupsize`@572
+  (360), `paramindex`@580 (360), `numblends`@52 (180) and the fired
+  `anim[16][16]`@56 cells beyond `[0][0]` (20 bytes over 2 owners). The four
+  descriptor figures reproduce CAP4.1's counts by a different route — 45 fired sequence
+  identities at 4, 8 and 8 bytes each, and ten 2-byte cells on the two `move_and_ranged`
+  owners CAP4.1 named as clips without a counterpart. **The weight is 1.0 on all 2,254
+  decoded `(owner, animation, bone)` triples**, so what is missing on this corpus is the
+  zero test rather than a value: a zero-weight record would decode as an ordinary one
+  instead of the zero output retail writes.
+
+  **The re-walk is what makes the difference trustworthy.** The stored per-model union
+  came from one pass over the records; re-walking it from the dictionary that pass wrote
+  reproduces it byte for byte — **3,430,830 = 3,430,830** over **143,612** span-set
+  frames — so neither pass drifted. **7,993,786** bytes are ours alone, each counted with
+  the reason it is: a whole-track walk against a to-frame one (7,358,840), every bone
+  against the masked ones (384,176), every declared sequence against the fired ones, and
+  the name strings no captured span claims. **35,858,024** bytes are read by neither and
+  stay unknown. Zero of the missing bytes are loader-written, and re-running the same
+  decode against the installed image rather than the captured one records the identical
+  byte set on all **34** owners, so an offline read set is a property of the source rather
+  than of the copy it was handed.
+
+  **One containment is checked rather than declared.** An offline walk reads every key of
+  every run it enters and retail reads two, and retail's look-ahead sits in the run after
+  the one it stopped in, which the offline walk also enters whenever frames remain — so
+  the only track byte retail can reach that we do not is the look-ahead running past a
+  track's last run. A retail-only track span wider than one two-byte key would be a run
+  our walk skipped and is a declared defect; there are none. **Two bytes are that
+  look-ahead**, on `scenery/structural/la/LAmanhole.mdl`, and are reported apart from the
+  missing list rather than as the `weight` field they landed in. Facts:
+  `docs/vtmb/mdl_v2531.md`, `docs/vtmb/animation_and_movers.md` A.4; method and
+  measurements: `docs/vtmb/vtmb-animation-reverse-engineering.md` 9.15d.
+
+  Three bounds travel with the report. **The frame is the animation path**: retail's spans
+  come from the animation evaluation hooks, so geometry, material, skin and flex reads are
+  outside the comparison on both sides rather than measured and found absent. **A byte is
+  only in retail's set if this run fired the identity that reads it**, so a range read by
+  neither means unread by this run. And **the pass measures the decoder without repairing
+  it** — changing the exporter is CAP5 work that CAP4.4 authorizes.
 - [ ] **CAP4.3 Transform difference.** For every joined pose-build group evaluate the
   current decoder at the captured identity and time, normalize entity and root placement,
   and compare decoded locals, composed matrices, bone-to-world, and skin palette per frame

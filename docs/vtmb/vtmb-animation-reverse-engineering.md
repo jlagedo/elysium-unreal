@@ -1493,6 +1493,59 @@ bound read as a fault on every run; folding the first into the second lets a bro
 A count belonging to neither category is itself a defect, because a population no declaration
 covers must not quietly become coverage.
 
+### 9.15d Differencing a decoder's byte coverage against a capture
+
+A pose that matches proves nothing about a field the decoder silently skipped, so the
+question is which bytes the runtime read that an offline decoder does not. Answering it
+takes three sets — read by retail alone, read offline alone, read by neither — and the
+method is mostly about keeping them from being the same measurement twice.
+
+**Measure the decoder; do not describe it.** The retail side is a transcription of the
+decompilation, so writing a second walk from the same understanding would produce a
+difference that agrees with itself by construction. The offline side therefore runs the
+real decoder unmodified and observes it. Observation costs nothing structural when every
+read goes through a module-global `struct` and a small number of raw-indexing sites: swap
+that one global for a recorder and wrap the image for the rest, and the decoder is
+measured without a line of it changing.
+
+**An unmodelled read must fail, not return.** A wrapper that quietly delegates whatever
+it does not model shrinks the offline side the moment a decoder learns a new route, and a
+byte we stop reading then reads as a byte retail requires. Raising instead turns that into
+a stopped run rather than a wrong finding.
+
+**Attribute by position, and split by role first.** A difference is a set of offsets, and
+naming what they are is a walk of the model's own declared arrays — which the image
+answers, so the same classifier serves both sides and can be checked against the roles the
+retail walker already recorded. One correction is needed before it can be trusted: a byte
+retail read *as part of a track walk* belongs to the track walk wherever it landed, and
+reporting it by the structure it fell into names the wrong thing. Two bytes in one capture
+are exactly that.
+
+**One containment is worth checking rather than declaring.** An offline walk that
+materialises a whole track reads every key of every run it enters, and retail reads two;
+retail's look-ahead sits in the run after the one it stopped in, which the offline walk
+also enters whenever frames remain. So the only track byte retail can reach that an
+offline walk does not is the look-ahead running past a track's last run — and that is
+falsifiable: a retail-only track span wider than one two-byte key is a run the offline
+walk skipped, which is a defect rather than a bound.
+
+**Produce the retail side twice and require the two to agree.** The per-model union the
+span dictionary already carries came from one pass over the records; re-walking it from
+the dictionary that pass wrote is a second production of the same set. Reproducing it byte
+for byte is what says neither drifted; a disagreement invalidates every set below it.
+Measured, both are 3,430,830 bytes over 34 owners across 143,612 span-set frames.
+
+**The bound is the corpus, and the third set says so.** A byte is only in the retail set
+if this run fired the identity that reads it, so a range read by neither means unread by
+this run. It is recorded as unknown; 35,858,024 bytes of the theatre's owner images are,
+and calling them inert would be the claim the whole method exists to avoid making.
+
+**What the report may not be.** The comparison covers the frame the capture covers — the
+animation evaluation hooks — so geometry, material, skin and flex reads are outside it on
+both sides rather than measured and found absent. And the difference authorizes nothing on
+its own: repairing what it names is separate work, because a pass that measures a decoder
+and repairs it in the same breath can no longer say which it did.
+
 ### 9.16 What not to do first
 
 Avoid:
