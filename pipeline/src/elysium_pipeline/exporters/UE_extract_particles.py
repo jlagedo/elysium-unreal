@@ -14,7 +14,6 @@ from pathlib import Path
 
 from PIL import Image
 
-from elysium_pipeline.formats import install
 from elysium_pipeline.paths import export_root
 
 
@@ -45,6 +44,8 @@ def normalise_rain_sprite(data: bytes, destination: Path) -> None:
 
 
 def main(*, force: bool = False, index=None) -> None:
+    from elysium_pipeline.formats import install
+
     idx = index if index is not None else install.build_index(dirs=("particles",))
     out = export_root() / "particles"
     out.mkdir(parents=True, exist_ok=True)

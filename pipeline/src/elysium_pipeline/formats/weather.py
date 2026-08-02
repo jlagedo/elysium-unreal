@@ -10,7 +10,6 @@ from typing import Iterable
 import numpy as np
 from PIL import Image
 
-from elysium_pipeline.formats import install
 from elysium_pipeline.formats.particles import compile_closure
 
 
@@ -115,6 +114,8 @@ def build_weather_document(
     bounds_max: tuple[float, float, float],
     height_metadata: dict,
 ) -> dict | None:
+    from elysium_pipeline.formats import install
+
     rain = _rain_entities(entity_document)
     if not rain:
         return None
