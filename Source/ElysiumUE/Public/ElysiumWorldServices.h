@@ -12,6 +12,30 @@ struct FElysiumCameraShot;
 struct FElysiumEntityDef;
 struct FElysiumSignData;
 
+// Engine-neutral view of a native Unreal NPC movement body. The implementation is an ACharacter
+// possessed by an AI controller; the substrate only owns the request/state contract, so no Unreal
+// AI or navigation type crosses this seam.
+enum class EElysiumNpcMoveStatus : uint8
+{
+	Unavailable,
+	Idle,
+	Moving,
+	Reached,
+	Failed,
+};
+
+class IElysiumNpcMotor
+{
+public:
+	virtual ~IElysiumNpcMotor() = default;
+	virtual bool MoveTo(const FVector& FeetDestination, float AcceptanceRadiusCm,
+		float SpeedCmPerSecond) = 0;
+	virtual void Stop() = 0;
+	virtual void Teleport(const FVector& FeetOrigin, float YawDegrees) = 0;
+	virtual void SetEnabled(bool bEnabled) = 0;
+	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) = 0;
+};
+
 // The substrate's outbound seam (runtime-architecture.md §7, roadmap 11.2).
 //
 // FElysiumEntityWorld and every entity class under it are plain C++. What they need from the
@@ -52,6 +76,13 @@ public:
 	// Null on a missing/failed glb or an empty stem.
 	virtual USkeletalMeshComponent* BuildNpcVisual(const FString& Stem, const FVector& Location,
 		const FRotator& Rotation, float UniformScale, const FString& Disposition, int32 IdleVariant) = 0;
+	// Promote an ordinary NPC's visual to a native movement body. Null is the supported headless,
+	// backdrop, disabled-navigation, or failed-spawn path; the NPC remains a standing entity.
+	virtual IElysiumNpcMotor* BuildNpcMotor(USkeletalMeshComponent* Body,
+		const FVector& FeetOrigin, float YawDegrees) { return nullptr; }
+	// The motor is engine-owned but logically belongs to the entity. Called on a model swap and
+	// entity-world teardown so a reload on a surviving map actor cannot leak collision capsules.
+	virtual void DestroyNpcMotor(IElysiumNpcMotor* Motor) {}
 	// Re-run the default-idle policy on a live body and crossfade to the result (a disposition change).
 	virtual bool RefreshNpcIdle(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& Disposition, int32 IdleVariant) = 0;
@@ -59,6 +90,10 @@ public:
 	// which is what a scripted_sequence schedules its OnEndSequence off.
 	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		bool bLoop, float* OutSeconds) = 0;
+	// Select and play a manifest clip by VtMB ACT_* activity. Ambient interesting-place data is
+	// authored in activities rather than clip labels; Variant makes its weighted pick repeatable.
+	virtual bool PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
+		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds) { return false; }
 
 	// 12.1 — a choreo scene's whole-cast performance. The clip lives in a cinematic anim set that
 	// no NPC's include tree names, so it is addressed by the scene's own anim-set model plus the

@@ -2823,9 +2823,8 @@ bool FElysiumWorldMaterialsTest::RunTest(const FString&)
 }
 
 // =====================================================================================
-// FElysiumNpc / npc_maker (B3) — registry coverage, npc_maker.Spawn creating a live child
-// on a bare world (Owner null, so the visual build no-ops), and the WillTalk latch +
-// OnDialogBegin fire. No RHI, no glTF: this is the AI-free substrate half of the beat.
+// FElysiumNpc / npc_maker — registry coverage, npc_maker.Spawn creating a live child on a bare
+// world, dialogue latches, and the engine-neutral half of named patrol resolution/persistence.
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcTest, "Elysium.Substrate.Npc", GElysiumTestFlags)
@@ -2840,7 +2839,8 @@ bool FElysiumNpcTest::RunTest(const FString&)
 		return false;
 	}
 	for (const TCHAR* In : { TEXT("WillTalk"), TEXT("UseInteresting"), TEXT("StartPlayerDialogRemote"),
-		TEXT("EndDialog"), TEXT("Kill") })
+		TEXT("EndDialog"), TEXT("SetupPatrolType"), TEXT("FollowPatrolPath"),
+		TEXT("ClearPatrolPath"), TEXT("Kill") })
 	{
 		TestNotNull(FString::Printf(TEXT("npc_VVampire.%s resolves"), In),
 			reinterpret_cast<const void*>(Reg.FindInput(*Vamp, FName(In))));
@@ -2849,6 +2849,28 @@ bool FElysiumNpcTest::RunTest(const FString&)
 	// resolve as a datamap field — otherwise the read raises AttributeError instead of returning 0.
 	TestNotNull(TEXT("npc_VVampire.times_talked resolves as a field"),
 		reinterpret_cast<const void*>(Reg.FindField(*Vamp, FName(TEXT("times_talked")))));
+	TestNotNull(TEXT("npc_VVampire.interesting_place_groups resolves as a field"),
+		reinterpret_cast<const void*>(Reg.FindField(*Vamp,
+			FName(TEXT("interesting_place_groups")))));
+
+	// The typo is the retail classname, not a fixture typo. It must resolve as a live capacity/
+	// timing entity or sm_hub_1's 76 authored destinations remain inert records.
+	const FElysiumClassDesc* InterestingDesc = Reg.Find(FName(TEXT("intersting_place")));
+	if (!TestNotNull(TEXT("intersting_place registered with retail spelling"), InterestingDesc))
+	{
+		return false;
+	}
+	for (const TCHAR* In : { TEXT("Enable"), TEXT("Disable"), TEXT("Toggle") })
+	{
+		TestNotNull(FString::Printf(TEXT("intersting_place.%s resolves"), In),
+			reinterpret_cast<const void*>(Reg.FindInput(*InterestingDesc, FName(In))));
+	}
+	for (const TCHAR* Field : { TEXT("type"), TEXT("enabled"), TEXT("max_npcs"),
+		TEXT("group_id"), TEXT("match_orientation"), TEXT("min_time"), TEXT("max_time") })
+	{
+		TestNotNull(FString::Printf(TEXT("intersting_place.%s resolves"), Field),
+			reinterpret_cast<const void*>(Reg.FindField(*InterestingDesc, FName(Field))));
+	}
 
 	// The maker leaf resolves Spawn/Enable.
 	const FElysiumClassDesc* MakerDesc = Reg.Find(FName(TEXT("npc_maker")));
@@ -2889,7 +2911,30 @@ bool FElysiumNpcTest::RunTest(const FString&)
 	BluebloodMaker.Keys.Add(TEXT("NPCType"), TEXT("npc_VPedestrian"));
 	BluebloodMaker.Keys.Add(TEXT("NPCTargetname"), TEXT("blueblood"));
 	BluebloodMaker.Keys.Add(TEXT("model"), TEXT("models/character/npc/common/blueblood/male/Blueblood_Male.mdl"));
+	BluebloodMaker.Keys.Add(TEXT("use_interesting"), TEXT("1"));
+	BluebloodMaker.Keys.Add(TEXT("interesting_place_groups"), TEXT("31"));
 	Defs.Defs.Add(MoveTemp(BluebloodMaker));
+
+	FElysiumEntityDef Interesting;
+	Interesting.Classname = TEXT("intersting_place");
+	Interesting.TargetName = TEXT("ambient_1");
+	Interesting.Origin = FVector(50.0f, 25.0f, 0.0f);
+	Interesting.Keys.Add(TEXT("type"), TEXT("Citizen_Idle"));
+	Interesting.Keys.Add(TEXT("enabled"), TEXT("1"));
+	Interesting.Keys.Add(TEXT("max_npcs"), TEXT("4"));
+	Interesting.Keys.Add(TEXT("group_id"), TEXT("31"));
+	Interesting.Keys.Add(TEXT("min_time"), TEXT("10"));
+	Interesting.Keys.Add(TEXT("max_time"), TEXT("20"));
+	Defs.Defs.Add(MoveTemp(Interesting));
+
+	for (int32 PointIndex = 1; PointIndex <= 2; ++PointIndex)
+	{
+		FElysiumEntityDef Point;
+		Point.Classname = TEXT("info_node_patrol_point");
+		Point.TargetName = FString::Printf(TEXT("route_%d"), PointIndex);
+		Point.Origin = FVector(static_cast<float>(PointIndex * 100), 25.0f, 0.0f);
+		Defs.Defs.Add(MoveTemp(Point));
+	}
 
 	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
 	World.Load(MoveTemp(Defs));
@@ -2902,6 +2947,12 @@ bool FElysiumNpcTest::RunTest(const FString&)
 		return false;
 	}
 	TestFalse(TEXT("Jack is a real class, not an inert record"), JackEnt->IsRecordOnly());
+	FElysiumEntity* InterestingEnt = World.FindByName(TEXT("ambient_1"));
+	if (TestNotNull(TEXT("interesting place resolved"), InterestingEnt))
+	{
+		TestFalse(TEXT("interesting place is live rather than record-only"),
+			InterestingEnt->IsRecordOnly());
+	}
 	const FElysiumEntityHandle JackHandle = JackEnt->Handle;
 
 	// npc_maker.Spawn produces the child NPC (the acceptance case).
@@ -2936,10 +2987,37 @@ bool FElysiumNpcTest::RunTest(const FString&)
 		}
 		return FString();
 	};
+	if (Blueblood)
+	{
+		TestEqual(TEXT("maker forwards interesting-place groups"),
+			DebugRow(Blueblood, TEXT("Interesting groups")), FString(TEXT("31")));
+	}
 
 	TestEqual(TEXT("WillTalk latched"), DebugRow(World.Resolve(JackHandle), TEXT("WillTalk")), FString(TEXT("yes")));
 	TestEqual(TEXT("OnDialogBegin fired once (counter=1)"),
 		FCString::Atof(*DebugRow(World.FindByName(TEXT("dlgcount")), TEXT("Value"))), 1.0f);
+
+	// The Python surface calls these exact names on sm_hub_1's two cops. The route remains armed
+	// without an engine motor in this test tier; native movement begins when the map embodiment
+	// supplies one after Recast is ready.
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("SetupPatrolType")),
+		FElysiumVariant::String(TEXT("255 0 FOLLOW_PATROL_PATH_WALK")), 0.0,
+		FElysiumEntityHandle::Invalid(), JackHandle);
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("FollowPatrolPath")),
+		FElysiumVariant::String(TEXT("route_1 route_2")), 0.0,
+		FElysiumEntityHandle::Invalid(), JackHandle);
+	World.Tick(0.0);
+	TestTrue(TEXT("named patrol resolves and arms both authored points"),
+		DebugRow(World.Resolve(JackHandle), TEXT("Patrol")).Contains(TEXT("point 1/2")));
+
+	FElysiumMapSnapshot PatrolSnapshot;
+	World.Freeze(PatrolSnapshot);
+	const FElysiumEntityState* SavedJack = PatrolSnapshot.Entities.FindByPredicate(
+		[JackHandle](const FElysiumEntityState& State) { return State.Index == JackHandle.Index; });
+	if (TestNotNull(TEXT("active patrol contributes a save record"), SavedJack))
+	{
+		TestTrue(TEXT("patrol cursor/path are carried by leaf state"), !SavedJack->LeafState.IsEmpty());
+	}
 
 	return true;
 }

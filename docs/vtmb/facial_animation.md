@@ -125,9 +125,22 @@ are Source's `StudioFlexOp_t`, confirmed by replaying the shipped rules:
 | | `CONST` | `FETCH1` | `FETCH2` | `ADD` | `SUB` | `MUL` | `DIV` |
 
 Only those seven appear across all 201 rigs (`FETCH1` 27,523 · `MUL` 21,648 · `CONST` 17,553
-· `SUB` 9,948 · `ADD` 7,800 · `FETCH2` 7,800 · `DIV` 1,755). `FETCH1`'s operand is a
-**flex-controller index**; the stack machine evaluates left to right and its final value is
-the weight of the rule's flexdesc. The shipped eyelid rules read straight back:
+· `SUB` 9,948 · `ADD` 7,800 · `FETCH2` 7,800 · `DIV` 1,755). The stack machine evaluates
+left to right and its final value is the weight of the rule's flexdesc.
+
+**The two fetches read different arrays.** `FETCH1`'s operand is a **flex-controller
+index**. `FETCH2`'s is a **flexdesc index** — it reads `dest[index]`, the weight an *earlier
+rule* already wrote. On `nines`, 14 of the 22 distinct `FETCH2` operands are ≥ 44 and so out
+of range for the 44-entry controller array; `right_lip_suppressor` is computed by rule 29 and
+read by rule 31. **Rules therefore evaluate in file order against the array they are filling**,
+not against a snapshot, and a consumer that treats `FETCH2` as a second controller fetch reads
+the wrong array and silently runs off the end of it.
+
+**The `DIV` guard is required, not defensive.** `1 / right_open` is a shipped rule and
+`right_open` is zero on a closed mouth, so without Source's `divisor > 0.0001 ? a / b : 0`
+every downstream weight is an infinity at rest.
+
+The shipped eyelid rules read straight back:
 
 ```
 upper_right_raiser  = fc0 * (1 - fc4 * 0.8) * (1 - fc6)
@@ -138,6 +151,32 @@ upper_right_lowerer = fc6
 with `fc0` = `right_lid_raiser`, `fc4` = `right_lid_droop`, `fc6` = `blink` — i.e. a raiser
 suppressed by droop and cancelled by a blink, its neutral the complement, and the lowerer
 driven by blink alone.
+
+**The four eyelid rules drive nothing on their own, and the gap is structural.** The
+flexdescs that carry eyelid *morphs* — `upper_right`, `lower_right`, `upper_left`,
+`lower_left`, flexdescs 0/4/8/12 — carry no rule. The `_lowerer`/`_neutral`/`_raiser`
+flexdescs the rules above compute carry no morph. Nothing in the shipped rig connects the
+two, so evaluating the rules exactly as authored moves no eyelid vertex at all.
+
+Source closes that gap inside `mstudioeyeball_t`, whose `upperlidflexdesc` takes
+`Σ(lid weight × uppertarget[k])` over the three lid states. VtMB ships no eyeball record on
+any model (see below), so the bridge is absent from the data rather than from our reading of
+it. The rig was authored for a structure the shipped files do not contain.
+
+**Elysium reconstructs the bridge — uncertain, and it may be an addition rather than a
+reproduction.** The three lid angles are recoverable from the ramps (`lowered` is the low
+ramp's `Target2`, `neutral` the hinge, `raised` the high ramp's `Target1`) and the three
+sources match by name. Two things support it: without it a blink moves nothing, and the
+resting lid sits at 0 rather than its 0.208 hinge, which leaves the lowered-lid morph on at
+0.565 on every face in the game; with it, all 84 deforming rigs resolve to exactly zero morph
+weight at rest. That last check is independent of how the bridge was constructed, which is
+what makes it evidence.
+
+What it does not establish is whether **retail** bridges it. If the original engine also
+found no eyeball record, VtMB's lids may never have moved, and this reconstruction is an
+improvement on the Feel layer rather than a recovery — the same footing as the eye divergence
+below. Evidence that would settle it: capture retail's lid flexdesc weights across a blink
+and see whether they ever leave zero.
 
 ### `mstudiomouth_t` — 20 bytes
 
@@ -492,13 +531,19 @@ authored one.
 |---|---|
 | `flexdescs` | the 65 FACS names, index = flexdesc id |
 | `controllers` | the 44 `{name, type, min, max}` rows, index = the `FETCH1` operand |
-| `rules` | 60 × `{flexdesc, ops}`; an op is `[name]`, or `[name, operand]` for `CONST` (float) and `FETCH1`/`FETCH2` (controller index) |
+| `rules` | 60 × `{flexdesc, ops}`; an op is `[name]`, or `[name, operand]` for `CONST` (float), `FETCH1` (controller index) and `FETCH2` (**flexdesc** index — see the opcode table above) |
 | `mouths` | `{bone, forward, flexdesc}` — the amplitude jaw, for 12.5 |
 | `morphs` | `{name, flexdesc, targets}` per glTF morph target, in order; `targets` is the four-value ramp |
 
 Not exported: **eyeballs** (none authored anywhere in the install) and the `.vfe` expression
 tables — `UE_extract_scenes.py` mirrors the readable `.txt` twins to `$ELYSIUM_EXPORT_ROOT/expressions/`
 instead.
+
+**A sidecar can be complete and still drive nothing**, so a consumer decides on morph targets
+rather than on the manifest parsing. `shovelhead` carries the full 65/44/60 rig with **zero**
+morph targets and `female_raver_1` a single flexdesc; both are real export states rather than
+faults, and a loader that treats a parsed sidecar as a working face moves nothing and reports
+success.
 
 Across the NPC set the exported maps place, **78 of 101 models are rigged**, carrying **4,015
 morph targets** (53 each on 68 of them; `mercurio`'s family 51–52) and 1.3 MB of manifests.

@@ -106,6 +106,20 @@ EElysiumCollisionBuildState UElysiumMapCollision::GetBuildState() const
 		: EElysiumCollisionBuildState::Cooking;
 }
 
+FBox UElysiumMapCollision::GetWorldBounds() const
+{
+	FBox WorldBox(ForceInit);
+	if (HullCollision)
+	{
+		WorldBox += HullCollision->Bounds.GetBox();
+	}
+	if (DispCollision)
+	{
+		WorldBox += DispCollision->Bounds.GetBox();
+	}
+	return WorldBox;
+}
+
 bool UElysiumMapCollision::LoadHulls(const FString& MapName)
 {
 	AActor* Owner = GetOwner();

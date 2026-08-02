@@ -17,10 +17,13 @@
 #include "Player/ElysiumCameraShots.h"
 #include "Visual/ElysiumEntityBodies.h"
 #include "Visual/ElysiumNpcAnimSubsystem.h"
+#include "Visual/ElysiumNpcBody.h"
 #include "Visual/ElysiumMapVisuals.h"
 
+#include "Components/BoxComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/GameInstance.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/DamageType.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PawnMovementComponent.h"
@@ -31,6 +34,9 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialParameterCollection.h"
 #include "Misc/FileHelper.h"
+#include "NavMesh/NavMeshBoundsVolume.h"
+#include "NavMesh/RecastNavMesh.h"
+#include "NavigationSystem.h"
 #include "NiagaraComponent.h"
 #include "NiagaraDataSetAccessor.h"
 #include "NiagaraEmitterInstance.h"
@@ -146,6 +152,11 @@ FString FElysiumMapRuntimePrerequisites::Missing() const
 	if (!bAudioCatalogReady)    { MissingItems.Add(TEXT("audio catalog")); }
 	if (bCollisionFailed)       { MissingItems.Add(TEXT("world collision failed")); }
 	else if (!bCollisionReady)  { MissingItems.Add(TEXT("world collision cooking")); }
+	if (bNavigationFailed)      { MissingItems.Add(TEXT("runtime navigation failed")); }
+	else if (bNavigationRequired && !bNavigationReady)
+	{
+		MissingItems.Add(TEXT("runtime navigation building"));
+	}
 
 	if (!bMenuBackdrop)
 	{
@@ -166,6 +177,11 @@ EElysiumMapReadinessResult FElysiumMapRuntimePrerequisites::Evaluate(
 	if (bCollisionFailed)
 	{
 		OutFailure = TEXT("required world collision failed");
+		return EElysiumMapReadinessResult::Failed;
+	}
+	if (bNavigationFailed)
+	{
+		OutFailure = TEXT("required runtime navigation failed");
 		return EElysiumMapReadinessResult::Failed;
 	}
 	// Once construction is declared complete, these inputs cannot arrive on a later engine tick.
@@ -411,6 +427,13 @@ void AElysiumMapActor::BeginPlay()
 void AElysiumMapActor::LoadMap()
 {
 	const double Start = FPlatformTime::Seconds();
+	if (NavigationBounds)
+	{
+		NavigationBounds->Destroy();
+		NavigationBounds = nullptr;
+	}
+	bNavigationBuildRequested = false;
+	bNavigationBuildFailed = false;
 
 	// Per-phase timing for the Maps Cog window: stamp closes the running phase and opens the next.
 	LoadPhases.Reset();
@@ -593,10 +616,77 @@ USkeletalMeshComponent* AElysiumMapActor::BuildNpcVisual(const FString& Stem, co
 	return Bodies->BuildNpcVisual(Stem, Location, Rotation, UniformScale, Disposition, IdleVariant);
 }
 
+IElysiumNpcMotor* AElysiumMapActor::BuildNpcMotor(USkeletalMeshComponent* Body,
+	const FVector& FeetOrigin, float YawDegrees)
+{
+	if (!Body || bMenuBackdrop || !GetWorld())
+	{
+		return nullptr;
+	}
+
+	FActorSpawnParameters Params;
+	Params.Owner = this;
+	Params.OverrideLevel = GetLevel();
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AElysiumNpcBody* Motor = GetWorld()->SpawnActor<AElysiumNpcBody>(
+		AElysiumNpcBody::StaticClass(), FTransform::Identity, Params);
+	if (!Motor)
+	{
+		UE_LOG(LogElysium, Warning, TEXT("failed to spawn native NPC body at %s"), *FeetOrigin.ToString());
+		return nullptr;
+	}
+
+	Motor->InitializeAtFeet(FeetOrigin, YawDegrees);
+	Motor->SetRuntimeReady(RuntimePhase == EElysiumMapRuntimePhase::Active);
+	NpcMotors.Add(Motor);
+	Body->AttachToComponent(Motor->GetRootComponent(), FAttachmentTransformRules::KeepWorldTransform);
+	if (UCharacterMovementComponent* Movement = Motor->GetCharacterMovement())
+	{
+		// The entity-world gameplay pass samples the position the native character movement produced
+		// this frame, matching the player's already-declared move-before-think relationship.
+		PrimaryActorTick.AddPrerequisite(Movement, Movement->PrimaryComponentTick);
+	}
+	return Motor;
+}
+
+void AElysiumMapActor::DestroyNpcMotor(IElysiumNpcMotor* Motor)
+{
+	if (bMotorsRetired)
+	{
+		// EndPlay already released them and the engine owns the actors now. This is the teardown
+		// call: ~AElysiumMapActor destroys the entity world, every FElysiumNpc destructor on the way
+		// out calls here, and by then the motor's UObject index has been freed — at which point even
+		// IsValid() asserts, because it reaches FUObjectArray::IndexToObject with index -1.
+		return;
+	}
+	AElysiumNpcBody* Body = static_cast<AElysiumNpcBody*>(Motor);
+	if (!Body)
+	{
+		return;
+	}
+	if (!IsValid(Body))
+	{
+		NpcMotors.RemoveSingleSwap(Body);
+		return; // world teardown already owns the pending-kill actor
+	}
+	if (UCharacterMovementComponent* Movement = Body->GetCharacterMovement())
+	{
+		PrimaryActorTick.RemovePrerequisite(Movement, Movement->PrimaryComponentTick);
+	}
+	NpcMotors.RemoveSingleSwap(Body);
+	Body->Destroy();
+}
+
 bool AElysiumMapActor::RefreshNpcIdle(USkeletalMeshComponent* Body, const FString& Stem,
 	const FString& Disposition, int32 IdleVariant)
 {
 	return Bodies->RefreshNpcIdle(Body, Stem, Disposition, IdleVariant);
+}
+
+bool AElysiumMapActor::PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
+	const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds)
+{
+	return Bodies->PlayNpcActivity(Body, Stem, Activity, Variant, bLoop, OutSeconds);
 }
 
 bool AElysiumMapActor::PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
@@ -1179,6 +1269,13 @@ void AElysiumMapActor::ResolveRestorePlacement()
 
 void AElysiumMapActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	// Retire the NPC motors while they are still real objects. The entity world is destroyed with
+	// this actor, and every FElysiumNpc destructor on that path calls DestroyNpcMotor — but by then
+	// the level's actors are gone and their UObject indices freed, so touching one at all is fatal.
+	// The engine destroys the motor actors itself; releasing the tracking array is the whole job.
+	bMotorsRetired = true;
+	NpcMotors.Reset();
+
 	// The audio subsystem is GameInstance-scoped and outlives this map actor, but every voice it
 	// holds is map-scoped (ambient_generic + the scheme bed/music/random one-shots). Stop them all
 	// on unload so nothing bleeds into the next map. StopAllVoices also covers the scheme voices, so
@@ -1499,6 +1596,10 @@ FElysiumMapRuntimePrerequisites AElysiumMapActor::CollectRuntimePrerequisites() 
 	P.bCollisionReady = CollisionState == EElysiumCollisionBuildState::Ready
 		|| CollisionState == EElysiumCollisionBuildState::Disabled;
 	P.bCollisionFailed = CollisionState == EElysiumCollisionBuildState::Failed;
+	P.bNavigationRequired = !bMenuBackdrop
+		&& CollisionState != EElysiumCollisionBuildState::Disabled;
+	P.bNavigationReady = !P.bNavigationRequired || IsRuntimeNavigationReady();
+	P.bNavigationFailed = bNavigationBuildFailed;
 	P.bSpawnTransformReady = bSpawnPending;
 	P.bPlayerEntityReady = EntityWorld && EntityWorld->PlayerHandle().IsSet();
 
@@ -1518,6 +1619,7 @@ FElysiumMapRuntimePrerequisites AElysiumMapActor::CollectRuntimePrerequisites() 
 
 void AElysiumMapActor::PollRuntimeActivation()
 {
+	EnsureRuntimeNavigation();
 	if (!bMenuBackdrop && bRuntimeConstructionComplete)
 	{
 		APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
@@ -1559,6 +1661,78 @@ void AElysiumMapActor::PollRuntimeActivation()
 	}
 }
 
+void AElysiumMapActor::EnsureRuntimeNavigation()
+{
+	if (bMenuBackdrop || bNavigationBuildRequested || bNavigationBuildFailed || !Collision
+		|| Collision->GetBuildState() != EElysiumCollisionBuildState::Ready)
+	{
+		return;
+	}
+
+	const FBox CollisionBounds = Collision->GetWorldBounds();
+	UWorld* World = GetWorld();
+	UNavigationSystemV1* Navigation = World
+		? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
+	if (!CollisionBounds.IsValid || !World || !Navigation)
+	{
+		bNavigationBuildFailed = true;
+		UE_LOG(LogElysium, Error, TEXT("runtime navigation %s: no valid collision bounds/navigation system"),
+			*MapName);
+		return;
+	}
+
+	// The nav-bounds actor normally carries an editor-authored brush. Generated maps intentionally
+	// carry no nav asset, so a no-collision UBoxComponent contributes the equivalent runtime bounds;
+	// UNavigationSystemV1 reads GetComponentsBoundingBox and Recast projects the actual colliders.
+	const FVector Center = CollisionBounds.GetCenter();
+	FVector Extent = CollisionBounds.GetExtent();
+	Extent.X += 500.0f;
+	Extent.Y += 500.0f;
+	Extent.Z += 300.0f;
+
+	FActorSpawnParameters Params;
+	Params.Owner = this;
+	Params.OverrideLevel = GetLevel();
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	NavigationBounds = World->SpawnActor<ANavMeshBoundsVolume>(
+		ANavMeshBoundsVolume::StaticClass(), FTransform(FRotator::ZeroRotator, Center), Params);
+	if (!NavigationBounds)
+	{
+		bNavigationBuildFailed = true;
+		UE_LOG(LogElysium, Error, TEXT("runtime navigation %s: failed to create bounds"), *MapName);
+		return;
+	}
+
+	UBoxComponent* BoundsBox = NewObject<UBoxComponent>(NavigationBounds, TEXT("ElysiumNavigationBounds"));
+	BoundsBox->SetMobility(EComponentMobility::Static);
+	BoundsBox->SetBoxExtent(Extent);
+	BoundsBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	BoundsBox->SetCanEverAffectNavigation(false);
+	BoundsBox->SetupAttachment(NavigationBounds->GetRootComponent());
+	NavigationBounds->AddInstanceComponent(BoundsBox);
+	BoundsBox->RegisterComponent();
+
+	Navigation->OnNavigationBoundsUpdated(NavigationBounds);
+	Navigation->Build();
+	bNavigationBuildRequested = true;
+	UE_LOG(LogElysium, Log, TEXT("runtime navigation %s: Recast build requested over %s"),
+		*MapName, *CollisionBounds.ToString());
+}
+
+bool AElysiumMapActor::IsRuntimeNavigationReady() const
+{
+	if (!bNavigationBuildRequested || bNavigationBuildFailed || !NavigationBounds)
+	{
+		return false;
+	}
+	UNavigationSystemV1* Navigation = GetWorld()
+		? FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()) : nullptr;
+	const ARecastNavMesh* Recast = Navigation
+		? Cast<ARecastNavMesh>(Navigation->GetMainNavData()) : nullptr;
+	return Recast && Recast->GetNumActiveTiles() > 0
+		&& !Navigation->IsNavigationBuildInProgress();
+}
+
 void AElysiumMapActor::ActivateRuntime()
 {
 	if (RuntimePhase != EElysiumMapRuntimePhase::Activating)
@@ -1572,6 +1746,16 @@ void AElysiumMapActor::ActivateRuntime()
 		if (const UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
 		{
 			Now = GameState->GameClock().GetNow();
+		}
+	}
+	// Characters are constructed with the entity world, before asynchronous collision and Recast
+	// exist. Release them only at the same atomic activation barrier as the player so they cannot
+	// fall through an uncooked map or request paths against a half-built navigation graph.
+	for (AElysiumNpcBody* Motor : NpcMotors)
+	{
+		if (IsValid(Motor))
+		{
+			Motor->SetRuntimeReady(true);
 		}
 	}
 

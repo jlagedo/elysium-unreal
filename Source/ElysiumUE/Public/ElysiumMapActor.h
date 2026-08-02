@@ -21,6 +21,8 @@ class UMaterialInstanceDynamic;
 class UNiagaraComponent;
 class UNiagaraSystem;
 class UTexture2D;
+class ANavMeshBoundsVolume;
+class AElysiumNpcBody;
 class AElysiumMapActor;
 
 // Elysium's map lifecycle, distinct from Unreal's package/actor lifecycle. BeginPlay only starts
@@ -54,6 +56,9 @@ struct FElysiumMapRuntimePrerequisites
 	bool bMenuBackdrop = false;
 	bool bCollisionReady = false;   // Ready or intentionally Disabled
 	bool bCollisionFailed = false;
+	bool bNavigationRequired = false;
+	bool bNavigationReady = false;
+	bool bNavigationFailed = false;
 	bool bSpawnTransformReady = false;
 	bool bPlayerEntityReady = false;
 	bool bPossessedPawnReady = false;
@@ -226,10 +231,15 @@ public:
 	// engine seam (ElysiumWorldServices.h) — the substrate never learns that a body factory exists.
 	virtual USkeletalMeshComponent* BuildNpcVisual(const FString& Stem, const FVector& Location,
 		const FRotator& Rotation, float UniformScale, const FString& Disposition, int32 IdleVariant) override;
+	virtual IElysiumNpcMotor* BuildNpcMotor(USkeletalMeshComponent* Body,
+		const FVector& FeetOrigin, float YawDegrees) override;
+	virtual void DestroyNpcMotor(IElysiumNpcMotor* Motor) override;
 	virtual bool RefreshNpcIdle(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& Disposition, int32 IdleVariant) override;
 	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		bool bLoop, float* OutSeconds) override;
+	virtual bool PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
+		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds) override;
 	virtual bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName,
 		bool bLoop, float* OutSeconds) override;
@@ -338,6 +348,8 @@ private:
 	UPROPERTY() TObjectPtr<UElysiumMapVisuals> Visuals;
 	UPROPERTY() TObjectPtr<UElysiumMapCollision> Collision;
 	UPROPERTY() TObjectPtr<UElysiumEntityBodies> Bodies;
+	UPROPERTY(Transient) TObjectPtr<ANavMeshBoundsVolume> NavigationBounds;
+	UPROPERTY(Transient) TArray<TObjectPtr<AElysiumNpcBody>> NpcMotors;
 	UPROPERTY(Transient) TObjectPtr<UMaterialParameterCollection> EnvironmentParameters;
 	UPROPERTY(Transient) TObjectPtr<UNiagaraSystem> RainSystem;
 	UPROPERTY(Transient) TObjectPtr<UTexture2D> RainHeightTexture;
@@ -406,6 +418,8 @@ private:
 	// final transform, observes asynchronous collision completion, and opens the atomic transaction
 	// only when every independent prerequisite is satisfied.
 	void PollRuntimeActivation();
+	void EnsureRuntimeNavigation();
+	bool IsRuntimeNavigationReady() const;
 	FElysiumMapRuntimePrerequisites CollectRuntimePrerequisites() const;
 	void ActivateRuntime();
 	void FailRuntime(const FString& Reason);
@@ -428,6 +442,11 @@ private:
 	EElysiumMapRuntimePhase RuntimePhase = EElysiumMapRuntimePhase::Building;
 	bool bRuntimeConstructionComplete = false;
 	bool bMenuBackdrop = false;
+	bool bNavigationBuildRequested = false;
+	bool bNavigationBuildFailed = false;
+	// Set in EndPlay. After it, a DestroyNpcMotor call is the entity world's own teardown running
+	// against actors the engine has already destroyed, and must do nothing.
+	bool bMotorsRetired = false;
 	double RuntimeWaitStartSeconds = 0.0;
 	double RuntimeWaitDurationSeconds = 0.0;
 	uint64 AudioMapEpoch = 0;

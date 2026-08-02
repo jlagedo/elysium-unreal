@@ -63,6 +63,8 @@ public:
 
 	bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		bool bLoop, float* OutSeconds);
+	bool PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
+		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds);
 
 	// v4 skeletal props. The model-path lookup chooses the animated representation; building and
 	// clip resolution stay separate so ordinary props never load glTF or animation data.

@@ -304,7 +304,8 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 		Comp->SetAnimInstanceClass(UElysiumNpcAnimInstance::StaticClass());
 	}
 	Comp->RegisterComponent();
-	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);   // no AI, no physics body (B3)
+	// The visible mesh never collides; mobile NPCs wrap it in a native character capsule.
+	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Owner->AddInstanceComponent(Comp);
 	// The face (12.3). A model with no facial sidecar gets a null rig and animates with a still
 	// face — the normal case for animals, crowd bodies and every player body, none of which carry
@@ -327,6 +328,16 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 		PlayNpcClip(Comp, Stem, IdleClip, /*bLoop=*/true, /*OutSeconds=*/nullptr);
 	}
 	return Comp;
+}
+
+bool UElysiumEntityBodies::PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
+	const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds)
+{
+	AActor* Owner = GetOwner();
+	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
+	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	const FString Clip = Anims ? Anims->PickActivityClip(Stem, Activity, Variant) : FString();
+	return !Clip.IsEmpty() && PlayNpcClip(Body, Stem, Clip, bLoop, OutSeconds);
 }
 
 FString UElysiumEntityBodies::AnimatedPropStemForModel(const FString& ModelPath) const

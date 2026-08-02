@@ -108,7 +108,7 @@ persistent bone-to-world array it is evaluated into are owned by
 | 4 | float | `fps` | **not uniform** — 30.0 on 1,436 of 1,502 sequences across six banks, but 18.0 ×54 (incl. `run`), 60.0 ×8, 20.0 ×4. A clip's own rate, so a consumer must read it rather than assume 30 |
 | 8 | int | `flags` | loop/delta |
 | 12 | int | `numframes` | 101–501 on probed clips |
-| 16/20 | int | `nummovements` / `movementindex` | **root motion — present, and load-bearing for locomotion.** 0 on the dialogue clips (jeanette et al.), but **66 of `move_and_ranged`'s 722 animdescs carry it**: `walk` 23 records, `run` 9, `sneak` 1, every weapon walk/run variant. The records are located but **not decoded**, so a locomotion clip bakes in place and its feet slide — a walk cycle on a stationary body reads as moonwalking. Harmless while NPCs do not move (8.5); a blocker for the locomotion task |
+| 16/20 | int | `nummovements` / `movementindex` | **root motion — present, and load-bearing for locomotion.** 0 on the dialogue clips (jeanette et al.), but **66 of `move_and_ranged`'s 722 animdescs carry it**: `walk` 23 records, `run` 9, `sneak` 1, every weapon walk/run variant. The records are located but **not decoded**, so a locomotion clip bakes in place. The native route motor moves the actor at retail walk speed, but its feet can slide until these records drive or calibrate the visual stride |
 | 24 | Vector | `bbmin` (3f) | per-anim bbox |
 | 36 | Vector | `bbmax` (3f) | |
 | 48 | int | **`animindex`** | → per-bone anim records, rel. animdesc base |

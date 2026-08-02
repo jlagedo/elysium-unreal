@@ -100,6 +100,7 @@ than left to registration order (**S2**).
 | 2 | advance the clock | `AElysiumMapActor::PreMoveTick`, **first** tick function | **the only place `Now` moves** (§4); ahead of the move, because the move runs on this frame's `now` |
 | 3 | the player's own think | `FElysiumEntityWorld::RunPlayerThink(Now)` | retail runs it inside `RunCommand`, not in the think pass; admitted only after map activation |
 | 4 | **move the pawn** | `UElysiumMovementComponent::TickComponent` (`TG_PrePhysics`, prereq on the pre-move tick) | consumes the frame's `FElysiumUserCmd`, on **the command's** delta |
+| 4b | **move NPC agents** | native `UCharacterMovementComponent` ticks (`TG_PrePhysics`) | follows Recast/Detour requests issued by the prior entity think; the gameplay tick has a prerequisite on each live motor |
 | 5 | run due thinks | `FElysiumEntityWorld::RunThinks(Now)` | `GameFrame` begins here; movers issue their swept kinematic moves |
 | 6 | service the queue | `FElysiumEntityWorld::ServiceEvents(Now)` | delayed I/O, field-6 Python, `ScheduleTask`; the audio/scheme pass follows |
 | 7 | physics + overlaps | engine (`TG_DuringPhysics`) | Chaos overlap callbacks → `RouteBrushTouch` |
@@ -118,7 +119,9 @@ Three mechanisms hold the order, all stock UE 5.8:
   gameplay tick takes one on the movement component. **The gameplay tick also takes one on the
   pre-move tick unconditionally**, wired at registration — the menu backdrop and a headless logic
   world seat no pawn, so the movement edge never forms there and the clock would otherwise advance
-  in registration order relative to the thinks reading it.
+  in registration order relative to the thinks reading it. Every native NPC motor adds the same
+  move-before-gameplay prerequisite while it lives, so `FElysiumNpc::Think` samples this frame's
+  feet/yaw before advancing a route or issuing the next request.
 - Before map activation, the pre-move and gameplay tick functions have `bTickEvenWhenPaused = true`
   so an inherited dev hold cannot deadlock readiness; their gameplay branches are phase-gated.
   Activation restores both to false. The post-move gameplay tick is always false, while the
@@ -318,6 +321,13 @@ view point, origin, teleport, damage, and the `+use` trace. Since 11.4 the subst
 the entity places the body, `trigger_hurt` reduces the entity's health — so what is left on the
 interface is the body's own geometry, the eye, and the camera — 11.7 added the scripted-shot channel
 here rather than to `IElysiumPresenter`, because the camera is part of the body.
+
+An NPC's visible skeleton and native motor use that same outbound boundary. The substrate asks
+`IElysiumEmbodiment` to build/play the glTF body, select a manifest clip by ACT activity, and create
+an engine-neutral `IElysiumNpcMotor`. The implementation is an `ACharacter` with Detour crowd path
+following; the interface exposes only move/stop/teleport/enable/sample. Recast, controllers and
+movement components therefore never enter the plain-C++ entity layer, while route/place ownership,
+I/O and serialization never enter Unreal AI state.
 
 Any member may be null, and every call site has to handle "no body" (`elysium.NpcBodies 0`,
 `elysium.BrushBodies 0`), so null-service is the existing A/B path formalised.
@@ -708,6 +718,6 @@ the durable architecture decision is stated in this document.
 
 ## 15. Not covered here
 
-Combat AI, navigation, barter, stealth, disciplines, firearms, and choreography remain separate
+Combat/perception AI beyond the native route motor, barter, stealth, disciplines, firearms, and choreography remain separate
 systems tracked in `docs/project/roadmap.md`. Each must join the class chain, frame, command registry, and save
 walk defined here without creating another dispatcher, clock, or input owner.

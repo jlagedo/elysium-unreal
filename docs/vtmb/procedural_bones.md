@@ -52,13 +52,23 @@ record naming a control bone within the model's bone count and an axis in `0..2`
 The rig shape mostly follows Valve's documented convention for helper bones, which requires
 the helper and its control to be immediate children of the same parent. Across 77 rules in
 five captured models the control is a **sibling** of the driven bone on 56, is the driven
-bone's own parent on 19, and neither on 2. The evaluation tolerates all three, because it
-inverse-rotates by the control bone's own parent whatever that turns out to be.
+bone's own parent on 19, and neither on 2. That tally is a narrow sample of the 3,123 rules
+the install carries, and the corpus holds shapes it has no bucket for: on `Lacroix`,
+`Bip01 L Ulna` and `Bip01 L Wrist` are driven by `Bip01 L Hand`, which is their own *child*.
+The evaluation tolerates every arrangement, because it inverse-rotates by the control bone's
+own parent whatever that turns out to be.
 
 ## Corpus
 
-Over the 339 v2531 models in the patch loose tree: **1,327 procedural bones across 110
-models**. Every one is `Flags & 0x1` with `ProcType == 1` and a non-zero `ProcIndex`.
+Over the whole engine-resolved install: **3,123 rules across 261 of 4,445 v2531 models**,
+with zero faults — every `ProcIndex` resolving inside its image, every control bone inside
+the model's bone count, every axis in `0..2`, and no bone carrying `Flags & 0x1` without
+`ProcType` or the reverse. Restricted to the 339 models of the patch loose tree it is
+**1,327 procedural bones across 110 models**. Every rule is `Flags & 0x1` with
+`ProcType == 1` and a non-zero `ProcIndex`.
+
+The named axis is not evenly spread: **X on 767 rules, Y on 1,076, Z on 1,280**. That
+distribution is what makes the basis hazard below expensive rather than theoretical.
 
 **`ProcType == 2` (quaternion interpolation) occurs nowhere**, and the cause is the
 format's age rather than this corpus. The rule kinds are an enum that grew over successive
@@ -217,12 +227,18 @@ other's accumulation model. A second transcription of the rule, written from the
 above and checked against the first bone for bone, is a regression in
 `pipeline/tests/test_retail_capture.py`.
 
-**What the rule does not explain.** **2,428** records stay outside the band with it
-applied, on bones carrying neither `ProcType` nor `Flags & 0x2`: `left`/`right breast` on
-`Therese.mdl`, `Bone`-chain bones under `Bip01 Head` and `Bip01 Spine1` on `VV.mdl` and
-`Damsel.mdl`, and `Sheriff Sword` under `Bip01 R Hand`. The names are secondary motion and
-a prop attachment. That is a further stage, not a shortfall of this one, and what drives it
-is unestablished.
+**What the rule does not explain is a different stage, and it is located.** **2,428**
+records stay outside the band with this rule applied, on **90 bones over 7 models** carrying
+neither `ProcType` nor `Flags & 0x2` — hair chains, `left`/`right breast`, ponytails. They
+are the authored per-bone angular limit `docs/vtmb/secondary_motion.md` owns: 47 of the 90
+are named by that table and the remaining 43 descend from a named bone. Nothing about it
+bears on this rule, and the two stages act on disjoint bone sets.
+
+`Sheriff Sword` was previously counted in that residual and does not belong there. Composed
+against retail's own captured `Bip01 R Hand` matrix it reproduces to a median **3.42e-06°**
+over 4,036 draws, inside the excellent band on every one. Its local sits a median 98.5° from
+bind, so unlike the secondary-motion bones it is animated; its residual flag came from
+composing its own model's `Bip01` chain upstream of it.
 
 Neither bone controllers nor IK rules participate: all five models declare
 `NumBoneControllers == 0`, no bone names a controller, and their local animations declare
@@ -261,7 +277,9 @@ six entries, two slerps, and a `1/(a1+a2+a3)` normalisation — so evaluating pe
 blending the results is not the same as blending first and evaluating once. Measured on one
 model at a 50/50 blend of nearby captured control poses, the two disagree by a median of
 0.004°–0.54° and up to **5°** on the shoulders and biceps; poses further apart diverge
-further. Blend grids, sequence transitions, and layered sequences all occur in the corpus.
+further. Measured again in a host animation graph, mid-crossfade between two of a real
+body's own clips, bake-then-blend departs from blend-then-evaluate by up to **9.6°**. Blend
+grids, sequence transitions, and layered sequences all occur in the corpus.
 
 The faithful arrangement is therefore to carry the rule table per model as data — driven
 bone, control bone, axis, `pos[6]`, `quat[6]`, 176 bytes each — and to evaluate it in
@@ -298,9 +316,9 @@ off is the ordering above: decode, blend, compose, then apply this rule, then sk
   `pipeline/tests/test_retail_capture.py`, which fixes the evaluation against drift. That
   the rule is *retail's* rule still rests on one capture corpus and the installed models it
   names, reached by two methods.
-- **What moves the residual bones is unestablished.** Breast, hair-chain and weapon bones
-  reproduce under neither this rule nor the hierarchy, and carry no flag that distinguishes
-  them. Evidence that would settle it: a hooked stage running between the pose build and the
-  draw, or a `.mdl` structure the bone names index that this document has not looked for.
-- The corpus scan covers the patch loose tree. Models reached only through the VPKs are
-  not counted in the 1,327.
+- **This rule and split inheritance commute on the shipped corpus.** No rule anywhere names a
+  split-inheritance bone as its *control* either — 0 of 1,535 over the models one host runtime
+  loads — and since the rule is a pure function of a local rotation while split inheritance
+  changes only component-space composition, the two stages touch disjoint data. Retail's order
+  remains the order to reproduce, but the corpus contains no case that distinguishes it, so an
+  implementation running them the other way could not be caught by this evidence.

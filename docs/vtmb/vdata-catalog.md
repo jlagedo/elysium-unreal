@@ -105,6 +105,15 @@ QuestTable { Quest { "Title" "DisplayName"
 |---|---|---|
 | `DispositionTable` | `dispositiontable.txt` | NPC disposition matrix |
 | `ReactionsData` | `reaction.txt`, `reactions000.txt` | NPC reaction rules |
+| `InterestingPlaceTypeList` | `interestingplacetypelist.txt` | ambient-NPC place types: repeated `InterestingPlaceType` rows identify a `Name`, weighted `Into_Activities` / `Activities` / `Outof_Activities`, and weighted `AcceptedClasses` entries that may name an NPC classname or stat template |
+
+The map entity spelling is **`intersting_place`** (missing the second `e`) in shipped data. Its
+keyfields select the table `type`, `group_id`, `max_npcs`, `min_time`/`max_time`,
+`match_orientation`, `enabled`, `rating` and `testflags`; NPCs author a space-separated
+`interesting_place_groups` allowlist and opt in with `use_interesting`. In the exported
+`sm_hub_1`, 17 placed `npc_VPedestrian` records opt in, 76 places supply the destinations, and the
+group relation keeps separate street/asylum/sewer populations from crossing zones. Nine of those
+places start disabled, so enable state is behavioral data rather than an editor-only hint.
 
 ### Items & economy
 
@@ -137,7 +146,6 @@ QuestTable { Quest { "Title" "DisplayName"
 | `LoadingTips` | `loadingtips.txt` (114 KB) | loading-screen tips |
 | `InfoBarMessages` | `infobartypes.txt` | HUD info-bar messages |
 | `KeyNames` | `keynames.txt` | input-key display names |
-| `InterestingPlaceTypeList` | `interestingplacetypelist.txt` | map POI types |
 | `DialogData` | `dialog.txt` | dialogue-subsystem config (stub) |
 | `ErrorMessages` / misc | `engineerrors.txt`, `credits*.txt`, `masquerade.txt`, `charaction_sounds.txt` | engine errors, credits, masquerade text, a note file |
 

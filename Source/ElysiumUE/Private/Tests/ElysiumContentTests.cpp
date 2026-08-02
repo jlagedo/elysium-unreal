@@ -26,6 +26,7 @@
 #include "ElysiumReflections.h"
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumChargen.h"
+#include "Substrate/ElysiumInterestingPlaces.h"
 #include "Substrate/ElysiumQuestLog.h"
 #include "Substrate/ElysiumQuestView.h"
 
@@ -1817,6 +1818,86 @@ bool FElysiumPlayerBodyMaterialTest::RunTest(const FString&)
 		{
 			return Info.Name == FName(TEXT("ModelAlpha"));
 		}));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSantaMonicaNpcRoutesContentTest,
+	"Elysium.Content.SantaMonicaNpcRoutes", GElysiumContentTestFlags)
+bool FElysiumSantaMonicaNpcRoutesContentTest::RunTest(const FString&)
+{
+	const FString EntsPath = FElysiumContentPaths::MapEnts(TEXT("sm_hub_1"));
+	if (!IFileManager::Get().FileExists(*EntsPath))
+	{
+		AddInfo(FString::Printf(TEXT("sm_hub_1 entities not exported - skipping: %s"), *EntsPath));
+		return true;
+	}
+	FElysiumEntityDefs Defs;
+	if (!TestTrue(TEXT("sm_hub_1 entities parse"), FElysiumEntityDefs::Parse(EntsPath, Defs)))
+	{
+		return false;
+	}
+
+	int32 InterestingPlaces = 0;
+	int32 InterestingPedestrians = 0;
+	TSet<FString> PatrolNodes;
+	for (const FElysiumEntityDef& Def : Defs.Defs)
+	{
+		if (Def.Classname.Equals(TEXT("intersting_place"), ESearchCase::IgnoreCase))
+		{
+			++InterestingPlaces;
+		}
+		else if (Def.Classname.Equals(TEXT("info_node_patrol_point"), ESearchCase::IgnoreCase))
+		{
+			// The name is the `Group` keyvalue, not the targetname: all 34 of Santa Monica's patrol
+			// points ship with an empty targetname, and `FollowPatrolPath("s1 s2 ...")` names their
+			// groups. Reading targetname here collapses the whole set onto one empty string.
+			PatrolNodes.Add(Def.Keys.FindRef(TEXT("Group")).ToLower());
+		}
+		else if (Def.Classname.Equals(TEXT("npc_VPedestrian"), ESearchCase::IgnoreCase)
+			&& Def.Keys.FindRef(TEXT("use_interesting")) == TEXT("1"))
+		{
+			++InterestingPedestrians;
+		}
+	}
+	TestEqual(TEXT("all authored Santa Monica interesting places survived export"),
+		InterestingPlaces, 76);
+	TestEqual(TEXT("all authored ambient pedestrians survived export"),
+		InterestingPedestrians, 17);
+	TestEqual(TEXT("all authored named patrol nodes survived export"), PatrolNodes.Num(), 34);
+	for (const TCHAR* Point : { TEXT("s1"), TEXT("s2"), TEXT("s3"), TEXT("s4"), TEXT("s7"),
+		TEXT("s8"), TEXT("s9"), TEXT("s10"), TEXT("s11"), TEXT("s12"), TEXT("s13"),
+		TEXT("s14"), TEXT("n1"), TEXT("n2"), TEXT("n3"), TEXT("n4"), TEXT("n5"),
+		TEXT("n6"), TEXT("n7"), TEXT("n8"), TEXT("n9"), TEXT("n10") })
+	{
+		TestTrue(FString::Printf(TEXT("retail patrol point %s resolves"), Point),
+			PatrolNodes.Contains(Point));
+	}
+
+	FElysiumInterestingPlaceTable Types;
+	FString Error;
+	if (!TestTrue(TEXT("retail interesting-place type table loads"), Types.Load(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	for (const TCHAR* Type : { TEXT("Idle"), TEXT("Citizen_Idle"), TEXT("Doorknock"),
+		TEXT("bum_rest"), TEXT("wall_lean"), TEXT("conversation_normal"), TEXT("cigarette"),
+		TEXT("piss"), TEXT("cellphone"), TEXT("can_drink"), TEXT("payphone") })
+	{
+		TestNotNull(FString::Printf(TEXT("interesting-place type %s resolves"), Type),
+			Types.Find(Type));
+	}
+
+	FString Script;
+	const FString ScriptPath = FElysiumContentPaths::ScriptModuleFile(TEXT("santamonica"));
+	if (TestTrue(TEXT("Santa Monica level script reads"),
+		FFileHelper::LoadFileToString(Script, *ScriptPath)))
+	{
+		TestTrue(TEXT("retail south cop route remains authored"),
+			Script.Contains(TEXT("FollowPatrolPath(\"s1 s2 s3 s4 s7 s8 s9 s10 s11 s12 s13 s14\")")));
+		TestTrue(TEXT("retail north cop route remains authored"),
+			Script.Contains(TEXT("FollowPatrolPath(\"n1 n2 n3 n4 n1 n2 n3 n4 n5 n6 n7 n8 n9 n10 n1 n2 n3 n4\")")));
+	}
 	return true;
 }
 

@@ -187,6 +187,10 @@ Hard-won, non-obvious, and easy to undo:
   texture-streaming data, so albedo and `EnvMask` fall back to a low mip.
 - **`UBodySetup::CalculateMass` reads the owning primitive's `FBodyInstance`**, which a runtime-built
   component never seeds from the asset — physics props re-apply mass to the component.
+- **`USkeleton::AddCurveMetaData` defaults `bTransact = true`**, which under `WITH_EDITOR` calls
+  `GEditor->BeginTransaction`. `run play` is `UnrealEditor.exe -game`, where `GEditor` is null, so a
+  runtime curve-metadata write crashes on a null dereference in `-game` while working fine in the
+  editor. Pass `bTransact = false` from any runtime path.
 - **`UElysiumNpcAnimInstance`'s proxy must implement `UpdateAnimationNode`** — a sequence player never
   `Update_AnyThread`'d holds its start frame forever.
 - **`+use` and the debug pick use dedicated channels** (`ELYSIUM_USE_CHANNEL` /

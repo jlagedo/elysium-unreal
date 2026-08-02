@@ -55,7 +55,9 @@ UElysiumGameInstance            process lifetime — session state
          ├─ UElysiumMapVisuals    the LOOK: adopted baked actors, material MIDs, sky, fog,
          │                        the PPV knobs, the light rig, the cables, the texture cache
          ├─ UElysiumMapCollision  the WALKABLE SURFACE: .hulls convex + .dispcol trimesh
+         ├─ Recast nav data       the NPC GRAPH: generated over that runtime collision
          ├─ UElysiumEntityBodies  the BODY FACTORY: NPC/prop bodies + the per-map asset caches
+         ├─ AElysiumNpcBody[]     native character capsules + Detour crowd controllers
          └─ FElysiumEntityWorld   Track B — the entity substrate (a plain-C++ member)
 ```
 
@@ -104,13 +106,17 @@ player body and final placement are mutually ready. Readiness is therefore an ex
 - `UElysiumMapCollision` reports `Ready` for every required procedural component. `Disabled` is an
   intentional satisfied state for `elysium.BrushCollision 0`; `Cooking` waits; missing input or a
   failed Chaos cook reports `Failed`.
+- gameplay maps generate Recast nav data over the completed runtime-collision bounds. A missing
+  navigation system, invalid bounds, or a failed/incomplete build is a required-prerequisite
+  failure; menu backdrops and the explicit collision-disabled A/B do not require navigation.
 
 The readiness poll uses wall-clock time because the game clock does not advance before activation.
 After eight seconds it fails closed with the missing prerequisite; it never releases a pawn into an
 incomplete world. The two lifecycle-bearing pre-physics ticks may poll through an inherited engine
 pause, but every gameplay branch remains phase-gated.
 
-Activation is one game-thread transaction at the unchanged game time: activate the entity world,
+Activation is one game-thread transaction at the unchanged game time: release native NPC character
+movement against the completed Recast graph, activate the entity world,
 refresh the finally placed pawn's overlaps, reconcile current brush containment, run the initial
 player-think/entity-think/event-queue pass, start initial audio scheduling, mark `Active`, release
 movement, then publish `MapReady`. Early overlap callbacks are discarded while dormant, so the
@@ -122,6 +128,22 @@ the blocking `OpenLevel` portion and auto-completes normally. `PostLoadMapWithWo
 same tree as a game-viewport overlay for the tick-driven readiness phase. `MapReady` removes it only
 after the initial activation pass; `MapFailed` keeps it visible with the failed prerequisite. The
 game thread is never held in `WaitForMovieToFinish` while readiness ticks.
+
+## Native NPC navigation
+
+The baked level deliberately carries no editor-authored NavMesh. After `.hulls` and `.dispcol`
+finish cooking, the map actor creates one transient `ANavMeshBoundsVolume` covering their combined
+bounds and requests a dynamic Recast build. Each mobile entity's visible runtime glTF component is
+attached to an `AElysiumNpcBody`: an Unreal `ACharacter` with `CharacterMovement`, a character
+capsule and `ADetourCrowdAIController`. Agents exist while the entity world is constructed but stay
+movement-disabled until the activation barrier, so they cannot fall through uncooked collision or
+request paths from a partial graph.
+
+Path selection is still authored game logic. `FElysiumNpc` resolves the original named patrol
+points, place groups, capacities, dwell times, activities, enable state and I/O outputs; the native
+body receives only feet destinations and reports movement state. This split keeps the behavior
+saveable and headless-testable instead of hiding VtMB state in controller/Behavior Tree memory.
+Full perception, combat and general schedule selection remain separate from this locomotion slice.
 
 ## Async loading (removing the load hitch)
 

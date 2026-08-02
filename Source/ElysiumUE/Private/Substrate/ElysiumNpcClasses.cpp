@@ -1,10 +1,12 @@
-// B3 — Minimal NPC presence: the `npc_*` character leaf and the `npc_maker` spawner.
+// NPC presence and the first native-Unreal locomotion slice: the `npc_*` character leaf and the
+// `npc_maker` spawner, plus the retail-authored named patrol routes.
 //
 // The first-beat path needs Jack (npc_VVampire) and blueblood_maker (npc_maker) to stop parsing as
 // inert records so `trig_off_porch.OnEndTouch` resolves — WillTalk / UseInteresting /
 // StartPlayerDialogRemote at Jack, Spawn at the maker — instead of dropping as `[no input]`, and so
-// the characters stand their real model on the map. This is the 8.5 carve-out the beat needs: NO AI,
-// no pathing, no combat. An NPC stands its glTF skeletal body (out/npc/<stem>.glb via
+// the characters stand their real model on the map. An ordinary NPC now promotes that visual to an
+// Unreal character/AI-controller body and can follow its retail named patrol; combat remains absent.
+// An NPC stands its glTF skeletal body (out/npc/<stem>.glb via
 // IElysiumEmbodiment::BuildNpcVisual, the 8.2 path) at its origin, latches the dialog-gating inputs,
 // and begins/ends a dialog "session" that fires OnDialogBegin/OnDialogEnd. `npc_maker.Spawn`
 // synthesizes one child NPC at runtime.
@@ -29,9 +31,11 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumSaveArchive.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
+#include "Substrate/ElysiumInterestingPlaces.h"
 
 #include "HAL/IConsoleManager.h"
 
@@ -77,17 +81,111 @@ namespace
 			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::String(static_cast<const TClass&>(E).*Member); };
 			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToString(); };
 		}
+		else if constexpr (std::is_same_v<TMember, float>)
+		{
+			Acc.Type = EElysiumVariantType::Float;
+			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Float(static_cast<const TClass&>(E).*Member); };
+			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToFloat(); };
+		}
 		else
 		{
 			static_assert(sizeof(TMember) == 0, "AddNpcField: unsupported member type");
 		}
 		D.Fields.Add(FName(Name), MoveTemp(Acc));
 	}
+
+	const FElysiumInterestingPlaceTable* InterestingPlaceTypes()
+	{
+		static FElysiumInterestingPlaceTable Table;
+		static bool bAttempted = false;
+		static bool bLoaded = false;
+		if (!bAttempted)
+		{
+			bAttempted = true;
+			FString Error;
+			bLoaded = Table.Load(Error);
+			if (!bLoaded)
+			{
+				UE_LOG(LogElysiumNpcEnt, Warning, TEXT("interesting-place types unavailable: %s"), *Error);
+			}
+			else
+			{
+				UE_LOG(LogElysiumNpcEnt, Log, TEXT("loaded %d interesting-place types"), Table.Num());
+			}
+		}
+		return bLoaded ? &Table : nullptr;
+	}
 }
 
 // ============================================================================================
-// FElysiumNpc — the AI-free character leaf shared by every living `npc_*` classname. It stands a
-// skeletal model at its origin and latches the dialog-gating inputs; dialogue itself is B4.
+// intersting_place — retail's shipped classname is misspelled. The entity owns enable/capacity,
+// the authored timing/orientation/type fields, and arrival/leave outputs. NPCs own reservations:
+// the logical state remains saveable in the substrate while Unreal only moves the body.
+// ============================================================================================
+
+class FElysiumInterestingPlace final : public FElysiumEntity
+{
+public:
+	FString Type;
+	bool bEnabled = true;
+	int32 MaxNpcs = 1;
+	int32 GroupId = 0;
+	int32 Rating = 0;
+	int32 TestFlags = 0;
+	bool bMatchOrientation = false;
+	float MinTime = 5.0f;
+	float MaxTime = 10.0f;
+
+	bool IsAvailable() const
+	{
+		return bEnabled && !IsInert() && Claimants.Num() < FMath::Max(1, MaxNpcs);
+	}
+	bool Claim(const FElysiumEntityHandle& Npc)
+	{
+		if (Claimants.Contains(Npc.Index))
+		{
+			return true;
+		}
+		if (!IsAvailable())
+		{
+			return false;
+		}
+		Claimants.Add(Npc.Index);
+		return true;
+	}
+	void Release(const FElysiumEntityHandle& Npc) { Claimants.Remove(Npc.Index); }
+	bool IsEnabledFor(const FElysiumEntityHandle& Npc) const
+	{
+		return bEnabled && !IsInert() && Claimants.Contains(Npc.Index);
+	}
+	void Arrived(const FElysiumEntityHandle& Npc)
+	{
+		FireOutput(FName(TEXT("OnNPCArrived")), Npc);
+	}
+	void Left(const FElysiumEntityHandle& Npc)
+	{
+		FireOutput(FName(TEXT("OnNPCLeft")), Npc);
+	}
+	void InputEnable(const FElysiumInputArgs&) { bEnabled = true; }
+	void InputDisable(const FElysiumInputArgs&) { bEnabled = false; }
+	void InputToggle(const FElysiumInputArgs&) { bEnabled = !bEnabled; }
+
+	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
+	{
+		Out.Emplace(TEXT("Enabled"), bEnabled ? TEXT("yes") : TEXT("no"));
+		Out.Emplace(TEXT("Type"), Type);
+		Out.Emplace(TEXT("Occupancy"), FString::Printf(TEXT("%d/%d"), Claimants.Num(), FMath::Max(1, MaxNpcs)));
+		Out.Emplace(TEXT("Group"), FString::FromInt(GroupId));
+		Out.Emplace(TEXT("Rating"), FString::FromInt(Rating));
+	}
+
+private:
+	TSet<int32> Claimants;
+};
+
+// ============================================================================================
+// FElysiumNpc — the character leaf shared by every living `npc_*` classname. It stands a skeletal
+// model at its origin, follows named patrols or interesting-place routes, and owns dialogue gates.
 // ============================================================================================
 
 class FElysiumNpc final : public FElysiumCombatCharacter
@@ -98,12 +196,500 @@ public:
 	int32 DialogFlags = 0;            // the StartPlayerDialogRemote param, kept for B4's runner
 	int32 TimesTalked = 0;            // times_talked — dialogue interaction count (engine-written; script-read)
 	FString StatTemplate;             // stattemplate — the `npctemplate*.txt` stat block this NPC wears
+	FString InterestingPlaceGroups;   // authored group allowlist; prevents cross-district wandering
+	FString PatrolType;               // raw SetupPatrolType contract (kept for save/debug and later modes)
+	FString PatrolPath;               // authored space-separated info_node_patrol_point names
+	int32 PatrolIndex = 0;            // next point in the looping authored sequence
+	enum class EAmbientPhase : uint8 { None, Moving, Into, Dwelling, Out };
+
+	virtual ~FElysiumNpc() override
+	{
+		DestroyMotor();
+	}
+
+	void DestroyMotor()
+	{
+		if (Motor && World && World->Embodiment())
+		{
+			World->Embodiment()->DestroyNpcMotor(Motor);
+		}
+		Motor = nullptr;
+	}
 
 	// The sheet, the WillTalk latch, `default_disposition`, the skeletal body and everything that
 	// plays a clip on it now come from the chain (11.4): FElysiumCombatCharacter over
 	// FElysiumAnimating, which is where VtMB puts them. This leaf is the dialogue half.
 
-	void InputUseInteresting(const FElysiumInputArgs& Args)  { bUseInteresting = Args.Param.ToInt() != 0; }
+	void InputUseInteresting(const FElysiumInputArgs& Args)
+	{
+		bUseInteresting = Args.Param.ToInt() != 0;
+		if (!bUseInteresting)
+		{
+			FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
+		}
+		else if (!bPatrolActive)
+		{
+			NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+		}
+	}
+
+	void InputSetupPatrolType(const FElysiumInputArgs& Args)
+	{
+		PatrolType = Args.Param.ToString();
+		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s SetupPatrolType(%s)"),
+			*DebugString(), *PatrolType);
+	}
+
+	void InputFollowPatrolPath(const FElysiumInputArgs& Args)
+	{
+		FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
+		PatrolPath = Args.Param.ToString();
+		PatrolIndex = 0;
+		bPatrolActive = ResolvePatrolPoints();
+		bMoveIssued = false;
+		if (bPatrolActive)
+		{
+			NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+		}
+		UE_LOG(LogElysiumNpcEnt, Log, TEXT("%s FollowPatrolPath: %d/%d points (%s)"),
+			*DebugString(), PatrolPoints.Num(), PatrolNames.Num(),
+			bPatrolActive ? TEXT("armed") : TEXT("not armed"));
+	}
+
+	void InputClearPatrolPath(const FElysiumInputArgs&)
+	{
+		bPatrolActive = false;
+		bMoveIssued = false;
+		PatrolIndex = 0;
+		PatrolPath.Reset();
+		PatrolNames.Reset();
+		PatrolPoints.Reset();
+		if (Motor)
+		{
+			Motor->Stop();
+		}
+		ResetAnimToIdle();
+		if (bUseInteresting)
+		{
+			NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+		}
+	}
+
+	// One name out of a `FollowPatrolPath` list.
+	//
+	// A patrol point is NOT addressed by targetname. Every `info_node_patrol_point` the maps author
+	// ships with an empty targetname and carries its name in a `Group` keyvalue — 34 of 34 on
+	// `sm_hub_1`, which is what the level script's `FollowPatrolPath("s1 s2 s3 ...")` names. The
+	// targetname path is kept ahead of it because it costs nothing and is what a hand-built fixture
+	// uses.
+	const FElysiumEntity* FindPatrolPoint(const FString& Name) const
+	{
+		if (const FElysiumEntity* Named = World->FindByName(Name))
+		{
+			return Named;
+		}
+		for (const TUniquePtr<FElysiumEntity>& Ent : World->Entities())
+		{
+			if (!Ent.IsValid() || Ent->Def == nullptr
+				|| !Ent->Def->Classname.Equals(TEXT("info_node_patrol_point"), ESearchCase::IgnoreCase))
+			{
+				continue;
+			}
+			if (Ent->Def->Keys.FindRef(TEXT("Group")).Equals(Name, ESearchCase::IgnoreCase))
+			{
+				return Ent.Get();
+			}
+		}
+		return nullptr;
+	}
+
+	bool ResolvePatrolPoints()
+	{
+		PatrolNames.Reset();
+		PatrolPoints.Reset();
+		PatrolPath.ParseIntoArrayWS(PatrolNames);
+		if (!World)
+		{
+			return false;
+		}
+		for (const FString& Name : PatrolNames)
+		{
+			if (const FElysiumEntity* Point = FindPatrolPoint(Name))
+			{
+				PatrolPoints.Add(Point->Origin);
+			}
+			else
+			{
+				UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s patrol point '%s' does not resolve"),
+					*DebugString(), *Name);
+			}
+		}
+		PatrolIndex = PatrolPoints.IsEmpty() ? 0 : PatrolIndex % PatrolPoints.Num();
+		return !PatrolPoints.IsEmpty();
+	}
+
+	bool IssuePatrolMove()
+	{
+		if (!Motor || !bPatrolActive || PatrolPoints.IsEmpty())
+		{
+			return false;
+		}
+		PatrolIndex = FMath::Clamp(PatrolIndex, 0, PatrolPoints.Num() - 1);
+		bMoveIssued = Motor->MoveTo(PatrolPoints[PatrolIndex], /*AcceptanceRadiusCm=*/20.0f,
+			/*SpeedCmPerSecond=*/254.0f);
+		if (bMoveIssued && !bWalkingAnimation)
+		{
+			bWalkingAnimation = StartWalkingAnimation();
+		}
+		return bMoveIssued;
+	}
+
+	bool StartWalkingAnimation()
+	{
+		IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+		if (Embodiment && Visual && Embodiment->PlayNpcActivity(Visual, ModelStem(),
+			TEXT("ACT_WALK"), FMath::Max(0, Handle.Index), /*bLoop=*/true, nullptr))
+		{
+			return true;
+		}
+		// A few early manifests only carry the retail label. Keep them mobile while the animation
+		// catalog remains strict for every model that does expose ACT_WALK.
+		return PlayAnimClip(TEXT("walk"), /*bLoop=*/true);
+	}
+
+	virtual void Think() override
+	{
+		if (bInDialog || IsInert())
+		{
+			return;
+		}
+		if (bPatrolActive && !PatrolPoints.IsEmpty())
+		{
+			ThinkPatrol();
+		}
+		else if (bUseInteresting)
+		{
+			ThinkAmbient();
+		}
+	}
+
+	void ThinkPatrol()
+	{
+		if (!bPatrolActive || PatrolPoints.IsEmpty())
+		{
+			return;
+		}
+		const double Now = World ? World->NowSeconds() : 0.0;
+		if (!Motor)
+		{
+			NextThink = static_cast<float>(Now + 0.25);
+			return;
+		}
+
+		FVector Feet = Origin;
+		float Yaw = -Angles.Y;
+		const EElysiumNpcMoveStatus Status = Motor->Sample(Feet, Yaw);
+		// CharacterMovement is the physical authority while a patrol is active. Write its feet/yaw
+		// straight into the entity rather than calling SetRuntimeOrigin, which would teleport it back.
+		Origin = Feet;
+		Angles.Y = -Yaw;
+		if (World)
+		{
+			World->NotifyVisualChanged(*this);
+		}
+
+		if (Status == EElysiumNpcMoveStatus::Reached)
+		{
+			PatrolIndex = (PatrolIndex + 1) % PatrolPoints.Num();
+			bMoveIssued = false;
+		}
+		else if (Status == EElysiumNpcMoveStatus::Failed)
+		{
+			bMoveIssued = false; // preserve the point and retry; never silently skip authored route data
+		}
+
+		if (!bMoveIssued)
+		{
+			IssuePatrolMove();
+		}
+		NextThink = static_cast<float>(Now + (bMoveIssued ? 0.05 : 0.25));
+	}
+
+	FElysiumInterestingPlace* CurrentAmbientSpot() const
+	{
+		if (!World || CurrentSpotIndex == INDEX_NONE)
+		{
+			return nullptr;
+		}
+		FElysiumEntity* Entity = World->Resolve(
+			FElysiumEntityHandle(CurrentSpotIndex, World->GetEpoch()));
+		return Entity && Entity->Def
+			&& Entity->Def->Classname.Equals(TEXT("intersting_place"), ESearchCase::IgnoreCase)
+			? static_cast<FElysiumInterestingPlace*>(Entity) : nullptr;
+	}
+
+	const FElysiumInterestingPlaceType* AmbientType(const FElysiumInterestingPlace* Spot) const
+	{
+		const FElysiumInterestingPlaceTable* Table = InterestingPlaceTypes();
+		return Table && Spot ? Table->Find(Spot->Type) : nullptr;
+	}
+
+	FElysiumInterestingPlace* ClaimAmbientSpot()
+	{
+		if (!World || !Def || !InterestingPlaceTypes())
+		{
+			return nullptr;
+		}
+		FElysiumInterestingPlace* Best = nullptr;
+		float BestDistanceSq = TNumericLimits<float>::Max();
+		for (const TUniquePtr<FElysiumEntity>& Candidate : World->Entities())
+		{
+			if (!Candidate || !Candidate->Def
+				|| !Candidate->Def->Classname.Equals(TEXT("intersting_place"), ESearchCase::IgnoreCase))
+			{
+				continue;
+			}
+			FElysiumInterestingPlace* Spot = static_cast<FElysiumInterestingPlace*>(Candidate.Get());
+			const FElysiumInterestingPlaceType* TypeRow = AmbientType(Spot);
+			if (!Spot->IsAvailable() || FailedSpotIndices.Contains(Spot->Handle.Index)
+				|| !AcceptsAmbientGroup(Spot->GroupId)
+				|| !TypeRow || TypeRow->Activities.IsEmpty()
+				|| !TypeRow->Accepts(Def->Classname, StatTemplate))
+			{
+				continue;
+			}
+			const float DistanceSq = FVector::DistSquared2D(Origin, Spot->Origin);
+			if (!Best || DistanceSq < BestDistanceSq
+				|| (FMath::IsNearlyEqual(DistanceSq, BestDistanceSq)
+					&& Spot->Handle.Index < Best->Handle.Index))
+			{
+				Best = Spot;
+				BestDistanceSq = DistanceSq;
+			}
+		}
+		if (Best && Best->Claim(Handle))
+		{
+			CurrentSpotIndex = Best->Handle.Index;
+			return Best;
+		}
+		return nullptr;
+	}
+
+	bool AcceptsAmbientGroup(int32 GroupId)
+	{
+		if (!bAmbientGroupsParsed)
+		{
+			bAmbientGroupsParsed = true;
+			TArray<FString> Tokens;
+			InterestingPlaceGroups.ParseIntoArrayWS(Tokens);
+			for (const FString& Token : Tokens)
+			{
+				AmbientGroups.Add(FCString::Atoi(*Token));
+			}
+		}
+		return AmbientGroups.IsEmpty() || AmbientGroups.Contains(GroupId);
+	}
+
+	bool PlayAmbientActivity(const TArray<FElysiumWeightedName>& Choices, bool bLoop,
+		double Now, double& OutEnd)
+	{
+		FElysiumInterestingPlace* Spot = CurrentAmbientSpot();
+		const FElysiumInterestingPlaceType* TypeRow = AmbientType(Spot);
+		IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+		if (!TypeRow || !Embodiment || !Visual)
+		{
+			return false;
+		}
+		const uint32 Seed = HashCombineFast(static_cast<uint32>(FMath::Max(0, Handle.Index)),
+			static_cast<uint32>(AmbientActivityCycle++));
+		const FString Activity = TypeRow->PickActivity(Choices, Seed);
+		float Seconds = 0.0f;
+		if (Activity.IsEmpty() || !Embodiment->PlayNpcActivity(Visual, ModelStem(), Activity,
+			AmbientActivityCycle, bLoop, &Seconds))
+		{
+			return false;
+		}
+		OutEnd = Now + FMath::Max(0.25f, Seconds);
+		return true;
+	}
+
+	void BeginAmbientUse(FElysiumInterestingPlace& Spot, double Now)
+	{
+		bAmbientArrived = true;
+		bMoveIssued = false;
+		bWalkingAnimation = false;
+		if (Motor)
+		{
+			Motor->Stop();
+			if (Spot.bMatchOrientation)
+			{
+				Motor->Teleport(Spot.Origin, -Spot.Angles.Y);
+				Origin = Spot.Origin;
+				Angles.Y = Spot.Angles.Y;
+			}
+		}
+		Spot.Arrived(Handle);
+
+		const uint32 StaySeed = HashCombineFast(static_cast<uint32>(FMath::Max(0, Handle.Index)),
+			static_cast<uint32>(FMath::Max(0, Spot.Handle.Index)));
+		const float Unit = static_cast<float>(StaySeed) / static_cast<float>(MAX_uint32);
+		const float Lo = FMath::Max(0.0f, FMath::Min(Spot.MinTime, Spot.MaxTime));
+		const float Hi = FMath::Max(Lo, FMath::Max(Spot.MinTime, Spot.MaxTime));
+		AmbientLeaveAt = Now + FMath::Lerp(Lo, Hi, Unit);
+
+		const FElysiumInterestingPlaceType* TypeRow = AmbientType(&Spot);
+		if (TypeRow && PlayAmbientActivity(TypeRow->IntoActivities, /*bLoop=*/false,
+			Now, AmbientNextActivityAt))
+		{
+			AmbientPhase = EAmbientPhase::Into;
+		}
+		else
+		{
+			AmbientPhase = EAmbientPhase::Dwelling;
+			AmbientNextActivityAt = Now;
+		}
+	}
+
+	void BeginAmbientLeave(double Now)
+	{
+		FElysiumInterestingPlace* Spot = CurrentAmbientSpot();
+		const FElysiumInterestingPlaceType* TypeRow = AmbientType(Spot);
+		if (TypeRow && PlayAmbientActivity(TypeRow->OutOfActivities, /*bLoop=*/false,
+			Now, AmbientNextActivityAt))
+		{
+			AmbientPhase = EAmbientPhase::Out;
+			return;
+		}
+		FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
+	}
+
+	void FinishAmbientUse(bool bFireLeft)
+	{
+		if (FElysiumInterestingPlace* Spot = CurrentAmbientSpot())
+		{
+			if (bFireLeft)
+			{
+				Spot->Left(Handle);
+			}
+			Spot->Release(Handle);
+		}
+		CurrentSpotIndex = INDEX_NONE;
+		AmbientPhase = EAmbientPhase::None;
+		bAmbientArrived = false;
+		bMoveIssued = false;
+		bWalkingAnimation = false;
+		ResetAnimToIdle();
+	}
+
+	void ThinkAmbient()
+	{
+		const double Now = World ? World->NowSeconds() : 0.0;
+		if (!Motor)
+		{
+			NextThink = static_cast<float>(Now + 0.5);
+			return;
+		}
+
+		FElysiumInterestingPlace* Spot = CurrentAmbientSpot();
+		if (AmbientPhase == EAmbientPhase::None || !Spot)
+		{
+			Spot = ClaimAmbientSpot();
+			if (!Spot)
+			{
+				if (!FailedSpotIndices.IsEmpty())
+				{
+					FailedSpotIndices.Reset();
+				}
+				NextThink = static_cast<float>(Now + 1.0);
+				return;
+			}
+			AmbientPhase = EAmbientPhase::Moving;
+			bMoveIssued = Motor->MoveTo(Spot->Origin, 24.0f, 254.0f);
+			if (bMoveIssued)
+			{
+				bWalkingAnimation = StartWalkingAnimation();
+			}
+			else
+			{
+				FailedSpotIndices.Add(Spot->Handle.Index);
+				FinishAmbientUse(/*bFireLeft=*/false);
+			}
+			NextThink = static_cast<float>(Now + 0.25);
+			return;
+		}
+
+		if (!Spot->IsEnabledFor(Handle))
+		{
+			if (!bAmbientArrived)
+			{
+				FinishAmbientUse(/*bFireLeft=*/false);
+				NextThink = static_cast<float>(Now + 0.5);
+				return;
+			}
+			if (AmbientPhase != EAmbientPhase::Out)
+			{
+				BeginAmbientLeave(Now);
+				NextThink = static_cast<float>(Now + 0.1);
+				return;
+			}
+			// An already-started out activity is allowed to finish below even though Disable made
+			// the place unavailable to new claimants.
+		}
+
+		if (AmbientPhase == EAmbientPhase::Moving)
+		{
+			FVector Feet = Origin;
+			float Yaw = -Angles.Y;
+			const EElysiumNpcMoveStatus Status = Motor->Sample(Feet, Yaw);
+			Origin = Feet;
+			Angles.Y = -Yaw;
+			if (World)
+			{
+				World->NotifyVisualChanged(*this);
+			}
+			if (Status == EElysiumNpcMoveStatus::Reached)
+			{
+				BeginAmbientUse(*Spot, Now);
+			}
+			else if (Status == EElysiumNpcMoveStatus::Failed)
+			{
+				FailedSpotIndices.Add(Spot->Handle.Index);
+				FinishAmbientUse(/*bFireLeft=*/false);
+			}
+			NextThink = static_cast<float>(Now + 0.05);
+			return;
+		}
+
+		if (AmbientPhase == EAmbientPhase::Out && Now >= AmbientNextActivityAt)
+		{
+			FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
+			NextThink = static_cast<float>(Now + 0.5);
+			return;
+		}
+		if (AmbientPhase == EAmbientPhase::Into && Now >= AmbientNextActivityAt)
+		{
+			AmbientPhase = EAmbientPhase::Dwelling;
+			AmbientNextActivityAt = Now;
+		}
+		if (AmbientPhase == EAmbientPhase::Dwelling)
+		{
+			if (Now >= AmbientLeaveAt)
+			{
+				BeginAmbientLeave(Now);
+			}
+			else if (Now >= AmbientNextActivityAt)
+			{
+				const FElysiumInterestingPlaceType* TypeRow = AmbientType(Spot);
+				if (!TypeRow || !PlayAmbientActivity(TypeRow->Activities, /*bLoop=*/false,
+					Now, AmbientNextActivityAt))
+				{
+					ResetAnimToIdle();
+					AmbientNextActivityAt = FMath::Min(AmbientLeaveAt, Now + 2.0);
+				}
+			}
+		}
+		NextThink = static_cast<float>(Now + 0.1);
+	}
 
 	// StartPlayerDialogRemote opens a dialog session: fire OnDialogBegin, then run the NPC's `.dlg`
 	// conversation (B4). When the `dialogname` file is missing/unloadable the session falls back to the
@@ -113,6 +699,12 @@ public:
 		if (IsInert() || bInDialog)
 		{
 			return;
+		}
+		FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
+		if (Motor && bPatrolActive)
+		{
+			Motor->Stop();
+			bMoveIssued = false;
 		}
 		bInDialog = true;
 		DialogFlags = Args.Param.ToInt();
@@ -138,6 +730,10 @@ public:
 		static const FName OnDialogEnd(TEXT("OnDialogEnd"));
 		FireOutput(OnDialogEnd, Args.Activator);
 		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s EndDialog (times_talked=%d)"), *DebugString(), TimesTalked);
+		if (bPatrolActive || bUseInteresting)
+		{
+			NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+		}
 	}
 
 	// Load this NPC's `dialogname` `.dlg`, open a branch conversation bound to the installed script host,
@@ -246,6 +842,35 @@ public:
 			return;   // gated off: a bodiless record whose I/O still resolves
 		}
 		BuildBody();
+		if (Visual)
+		{
+			if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
+			{
+				Motor = Embodiment->BuildNpcMotor(Visual, Origin, -Angles.Y);
+				if (Motor)
+				{
+					Motor->SetEnabled(!IsInert());
+				}
+			}
+		}
+		if (bUseInteresting && !IsInert())
+		{
+			NextThink = static_cast<float>((World ? World->NowSeconds() : 0.0)
+				+ 0.1 * static_cast<double>(FMath::Max(0, Handle.Index) % 10));
+		}
+	}
+
+	virtual void OnRuntimeTransformChanged() override
+	{
+		FElysiumEntity::OnRuntimeTransformChanged();
+		if (Motor)
+		{
+			Motor->Teleport(Origin, -Angles.Y);
+		}
+		else
+		{
+			FElysiumAnimating::OnRuntimeTransformChanged();
+		}
 	}
 
 	// SetModel: swap the NPC's appearance (bradbury Heather goth/normal, cemetery prostitute,
@@ -256,13 +881,98 @@ public:
 		{
 			return;
 		}
+		DestroyMotor();
 		FElysiumAnimating::OnRuntimeModelChanged();
+		if (Visual)
+		{
+			if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
+			{
+				Motor = Embodiment->BuildNpcMotor(Visual, Origin, -Angles.Y);
+				if (Motor)
+				{
+					Motor->SetEnabled(!IsInert());
+				}
+			}
+		}
+	}
+
+	virtual void OnDormancyChanged() override
+	{
+		FElysiumCombatCharacter::OnDormancyChanged();
+		if (IsInert())
+		{
+			FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
+		}
+		else if (bPatrolActive || bUseInteresting)
+		{
+			NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+		}
+		if (Motor)
+		{
+			Motor->SetEnabled(!IsInert());
+		}
+	}
+
+	virtual void Serialize(FElysiumSaveArchive& Ar) override
+	{
+		Ar << PatrolType;
+		Ar << PatrolPath;
+		Ar << PatrolIndex;
+		uint8 Active = bPatrolActive ? 1 : 0;
+		Ar << Active;
+		if (Ar.IsLoading() && Ar.AtEnd())
+		{
+			bPatrolActive = Active != 0 && ResolvePatrolPoints();
+			bMoveIssued = false;
+			bWalkingAnimation = false;
+			if (bPatrolActive)
+			{
+				NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+			}
+			return; // compatibility with snapshots written before ambient-place state existed
+		}
+		uint8 SavedAmbientPhase = static_cast<uint8>(AmbientPhase);
+		Ar << SavedAmbientPhase;
+		Ar << CurrentSpotIndex;
+		Ar << AmbientLeaveAt;
+		Ar << AmbientNextActivityAt;
+		Ar << AmbientActivityCycle;
+		uint8 SavedAmbientArrived = bAmbientArrived ? 1 : 0;
+		Ar << SavedAmbientArrived;
+		if (Ar.IsLoading())
+		{
+			bPatrolActive = Active != 0 && ResolvePatrolPoints();
+			bMoveIssued = false;
+			bWalkingAnimation = false;
+			AmbientPhase = static_cast<EAmbientPhase>(SavedAmbientPhase);
+			bAmbientArrived = SavedAmbientArrived != 0;
+			if (bPatrolActive)
+			{
+				CurrentSpotIndex = INDEX_NONE;
+				AmbientPhase = EAmbientPhase::None;
+				bAmbientArrived = false;
+				NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+			}
+			if (!bPatrolActive && AmbientPhase != EAmbientPhase::None)
+			{
+				FElysiumInterestingPlace* Spot = CurrentAmbientSpot();
+				if (!Spot || !Spot->Claim(Handle))
+				{
+					CurrentSpotIndex = INDEX_NONE;
+					AmbientPhase = EAmbientPhase::None;
+					bAmbientArrived = false;
+				}
+				NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+			}
+		}
 	}
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
 	{
 		FElysiumCombatCharacter::GetDebugState(Out);
 		Out.Emplace(TEXT("UseInteresting"), bUseInteresting ? TEXT("yes") : TEXT("no"));
+		Out.Emplace(TEXT("Interesting groups"), InterestingPlaceGroups.IsEmpty()
+			? TEXT("(all)") : InterestingPlaceGroups);
 		Out.Emplace(TEXT("In dialog"), bInDialog ? FString::Printf(TEXT("YES (flags %d)"), DialogFlags) : TEXT("no"));
 		Out.Emplace(TEXT("Times talked"), FString::FromInt(TimesTalked));
 		if (!StatTemplate.IsEmpty())
@@ -271,7 +981,32 @@ public:
 		}
 		Out.Emplace(TEXT("Model"), Model.IsEmpty() ? TEXT("(none)") : Model);
 		Out.Emplace(TEXT("Body"), Visual ? TEXT("skeletal (standing)") : TEXT("(none)"));
+		Out.Emplace(TEXT("Motor"), Motor ? TEXT("Unreal character + Detour crowd") : TEXT("(none)"));
+		Out.Emplace(TEXT("Patrol"), bPatrolActive
+			? FString::Printf(TEXT("point %d/%d: %s"), PatrolIndex + 1, PatrolPoints.Num(), *PatrolPath)
+			: TEXT("inactive"));
+		Out.Emplace(TEXT("Ambient place"), CurrentSpotIndex == INDEX_NONE
+			? TEXT("searching")
+			: FString::Printf(TEXT("#%d phase=%d"), CurrentSpotIndex,
+				static_cast<int32>(AmbientPhase)));
 	}
+
+private:
+	IElysiumNpcMotor* Motor = nullptr; // engine-owned; destroyed through the embodiment seam
+	TArray<FString> PatrolNames;
+	TArray<FVector> PatrolPoints;
+	bool bPatrolActive = false;
+	bool bMoveIssued = false;
+	bool bWalkingAnimation = false;
+	EAmbientPhase AmbientPhase = EAmbientPhase::None;
+	int32 CurrentSpotIndex = INDEX_NONE;
+	double AmbientLeaveAt = 0.0;
+	double AmbientNextActivityAt = 0.0;
+	int32 AmbientActivityCycle = 0;
+	bool bAmbientArrived = false;
+	TSet<int32> FailedSpotIndices;
+	TSet<int32> AmbientGroups;
+	bool bAmbientGroupsParsed = false;
 };
 
 // ============================================================================================
@@ -349,7 +1084,9 @@ public:
 		Child.TargetName = Def->Keys.FindRef(TEXT("NPCTargetname"));
 		Child.Origin = Def->Origin;
 		// Carry the template's appearance/identity so the child stands the maker's model.
-		for (const TCHAR* Key : { TEXT("model"), TEXT("stattemplate"), TEXT("base_gender"), TEXT("use_interesting") })
+		for (const TCHAR* Key : { TEXT("model"), TEXT("stattemplate"), TEXT("base_gender"),
+			TEXT("default_disposition"), TEXT("angles"), TEXT("use_interesting"),
+			TEXT("interesting_place_groups") })
 		{
 			if (const FString* V = Def->Keys.Find(Key))
 			{
@@ -381,6 +1118,7 @@ public:
 static TUniquePtr<FElysiumEntity> MakeNpc()       { return MakeUnique<FElysiumNpc>(); }
 static TUniquePtr<FElysiumEntity> MakeController(){ return MakeUnique<FElysiumPlayerControllerNpc>(); }
 static TUniquePtr<FElysiumEntity> MakeNpcMaker()  { return MakeUnique<FElysiumNpcMaker>(); }
+static TUniquePtr<FElysiumEntity> MakeInterestingPlace() { return MakeUnique<FElysiumInterestingPlace>(); }
 
 static void BuildNpcClass(FElysiumClassDesc& D)
 {
@@ -399,13 +1137,39 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 		{ static_cast<FElysiumNpc&>(E).InputStartDialog(Args); });
 	D.Input(TEXT("EndDialog"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumNpc&>(E).InputEndDialog(Args); });
+	D.Input(TEXT("SetupPatrolType"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumNpc&>(E).InputSetupPatrolType(Args); });
+	D.Input(TEXT("FollowPatrolPath"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumNpc&>(E).InputFollowPatrolPath(Args); });
+	D.Input(TEXT("ClearPatrolPath"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumNpc&>(E).InputClearPatrolPath(Args); });
 
 	AddNpcField(D, TEXT("use_interesting"), &FElysiumNpc::bUseInteresting);
 	AddNpcField(D, TEXT("stattemplate"),    &FElysiumNpc::StatTemplate);
+	AddNpcField(D, TEXT("interesting_place_groups"), &FElysiumNpc::InterestingPlaceGroups);
 	// times_talked: santamonica/chinatown/e3/demo read `npc.times_talked` to branch first-vs-repeat
 	// dialogue. Register it read-only (engine-written, script-read) so the read resolves to a defined
 	// value instead of raising AttributeError. B4's dialogue runner drives the count; it stays 0 until then.
 	AddNpcField(D, TEXT("times_talked"), &FElysiumNpc::TimesTalked, EElysiumField::Save);
+}
+
+static void BuildInterestingPlaceClass(FElysiumClassDesc& D)
+{
+	D.Input(TEXT("Enable"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumInterestingPlace&>(E).InputEnable(Args); });
+	D.Input(TEXT("Disable"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumInterestingPlace&>(E).InputDisable(Args); });
+	D.Input(TEXT("Toggle"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumInterestingPlace&>(E).InputToggle(Args); });
+	AddNpcField(D, TEXT("type"),              &FElysiumInterestingPlace::Type);
+	AddNpcField(D, TEXT("enabled"),           &FElysiumInterestingPlace::bEnabled);
+	AddNpcField(D, TEXT("max_npcs"),          &FElysiumInterestingPlace::MaxNpcs);
+	AddNpcField(D, TEXT("group_id"),          &FElysiumInterestingPlace::GroupId);
+	AddNpcField(D, TEXT("rating"),            &FElysiumInterestingPlace::Rating);
+	AddNpcField(D, TEXT("testflags"),         &FElysiumInterestingPlace::TestFlags);
+	AddNpcField(D, TEXT("match_orientation"), &FElysiumInterestingPlace::bMatchOrientation);
+	AddNpcField(D, TEXT("min_time"),          &FElysiumInterestingPlace::MinTime);
+	AddNpcField(D, TEXT("max_time"),          &FElysiumInterestingPlace::MaxTime);
 }
 
 static void BuildNpcMakerClass(FElysiumClassDesc& D)
@@ -428,6 +1192,8 @@ struct FElysiumNpcRegistrar
 	FElysiumNpcRegistrar()
 	{
 		FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+		BuildInterestingPlaceClass(Reg.Register(TEXT("intersting_place"),
+			ElysiumBaseClassName(), &MakeInterestingPlace));
 
 		static const TCHAR* const NpcClasses[] = {
 			TEXT("npc_VVampire"), TEXT("npc_VPedestrian"), TEXT("npc_VHumanCombatant"),

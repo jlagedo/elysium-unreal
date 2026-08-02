@@ -92,38 +92,48 @@ the offline comparison closes; the program is *finished* when the built act show
 
 ## The critical path to a fully animated `sp_theatre`
 
-Seven things stand between the evidence already on disk and the act playing with every
-animation live. They are listed in the order work can start rather than in phase order.
+What stands between the evidence on disk and the act playing with every animation live,
+listed in the order work can start rather than in phase order.
 
-| # | What | Owned by | Waiting on |
+| # | What | Owned by | State |
 |---:|---|---|---|
-| 1 | The two closed composition rules reach the runtime — a rule table out of the exporter, two skeletal controls in retail's own order | CAP7.1, CAP7.2 | nothing; both rules passed the evidence gate |
-| 2 | The face is built from its closed specification — flex rig, eyelids, lip sync | `docs/project/roadmap.md` 12.3–12.5 | nothing in this tracker; CAP6 is verification, not a prerequisite |
-| 3 | The shipped clip decoder is differenced against retail for the first time | CAP4.3 | nothing |
-| 4 | Blend grids and the animation weight are carried out of the model | CAP5.3, then CAP7.3 | nothing |
-| 5 | Secondary motion — cloth and hair — is named or adjudicated | CAP5.5 | nothing; two of its three steps are offline |
-| 6 | The persistent partial update is adjudicated | CAP5.4 | nothing; the replay that measures it exists |
-| 7 | **The cast has living eyes** — an owner-called addition, since no model authors eyeball data | `docs/project/roadmap.md` 12.4 | the lid half needs row 2's flex runtime; the eye half needs nothing |
+| 1 | The two closed composition rules reach the runtime — a rule table out of the exporter, two skeletal controls in retail's own order | CAP7.1, CAP7.2 | **done**; visual isolation still owed |
+| 2 | The shipped clip decoder is differenced against retail for the first time | CAP4.3 | **done — the decoder is clean**; what surrounds it is not |
+| 3 | **Cutscene actors are posed from the wrong biped.** A cinematic bank is one skeleton holding several complete actors; plain name matching gives an actor another's chain | CAP5.7 | open, and the largest single defect on this list |
+| 4 | The face is built from its closed specification — flex rig, eyelids, lip sync | `docs/project/roadmap.md` 12.3–12.5 | 12.3 done pending a clean visual; 12.4 and 12.5 open |
+| 5 | Blend grids and the animation weight are carried out of the model | CAP5.3, then CAP7.3 | open |
+| 6 | Frame interpolation and the include-model remap route | CAP5.8 | open; named with counts by CAP4.3 |
+| 7 | Secondary motion — cloth and hair | CAP5.5 | **the mechanism is located**; the clamp is proved, the solve it clamps is not |
+| 8 | The persistent partial update is adjudicated | CAP5.4 | open; the replay that measures it exists |
+| 9 | **The cast has living eyes** — an owner-called addition, since no model authors eyeball data | `docs/project/roadmap.md` 12.4 | open; the lid half sits on row 4's flex runtime |
+| 10 | A visual-acceptance harness that actually isolates one body | `pipeline/` green-room path | open; **now blocking rows 1 and 4** |
 
-**Only two rows on this list depend on anything else on it.** Row 4 is one exporter change
-feeding one runtime change, and row 7's eyelids sit on row 2's flex evaluation. What the
-phase numbering implies — that the Unreal handoff waits for facial research, which waits for
-skeletal closure — is not a dependency any of the seven carries. Skeletal pose, faces,
-secondary motion and eyes converge on one acceptance run, CAP7.5.
+**Row 3 is the correction to the earlier ordering.** Nothing on the list is blocked by
+anything else on it except row 5 feeding CAP7.3, row 9's lids sitting on row 4, and rows 1
+and 4 both waiting on row 10 to *demonstrate* what their numbers already establish. But row 3
+was invisible until CAP4.3 measured it, and it outranks most of what was on the list before:
+an actor wearing another actor's chain is 491 source units and 119° wrong, against a
+`bone_name` candidate sitting at 130,651 records over the band. Faces and procedural bones do
+not read correctly on a body posed from the wrong skeleton.
 
-**Row 7 is a deliberate divergence, and no capture can close it.** RE20 measured
+**Row 9 is a deliberate divergence, and no capture can close it.** RE20 measured
 `NumEyeballs == 0` on all 4,444 models, so VtMB authors no eye pose, look-at, iris or glint
 data anywhere — eyes in the shipped rig are eyelids and painted head texture. The owner call
 is that the cast has living eyes regardless, which makes it an invention under
 `docs/project/remaster-direction.md`'s Feel layer rather than a reproduction. It is on the
 critical path because the theatre is shot in close-up and the fidelity bar for the act is an
 owner call that names eyes explicitly. The faithful baseline and the divergence beside it are
-`docs/vtmb/facial_animation.md`.
+`docs/vtmb/facial_animation.md`. The eyelid *bridge* is a second, smaller case of the same
+question and is not yet adjudicated — the shipped rig connects no eyelid rule to an eyelid
+morph, and whether retail bridged that gap at all is what decides whether reproducing it is a
+recovery or an addition.
 
-Two known unknowns sit on the path and neither blocks starting it. Row 3 can still find that
-the shipped decoder diverges, which would add CAP5.1 work under a stage nothing has measured
-yet. Row 5 can resolve to a mechanism driven by runtime state no installed file carries, in
-which case what the rebuild does instead is an owner call rather than a reproduction.
+**Both of the path's known unknowns have resolved, and neither resolved badly.** The shipped
+decoder did *not* diverge, which retires the largest risk the program carried and makes every
+downstream visual discrepancy attributable. And secondary motion did *not* turn out to be
+runtime state outside the installed file — it is authored data in the model header, so it is
+reproducible rather than an owner call. What replaced them is narrower and better bounded:
+four undecoded floats beside a proved angular limit, and the biped-family defect at row 3.
 
 ## Working rules
 
@@ -230,9 +240,9 @@ and over, so **42%** of one run's payload bytes repeat bytes it already holds.
 | 1 | P0 — done | CAP1 — first run and calibration | The instrument that exists produces one finalized `sp_theatre` database, and its measured rates, counts, and joins replace every estimate |
 | 2 | P2 — deferred | CAP2 — complete the capture | Contributions group, actors and skeletons are identified, every fired contribution names its source owner, indices, and consumed byte spans, and each pose group names the request that caused it. CAP2.1–CAP2.7 landed; only the two off-path tasks below remain |
 | 3 | P0 — done | CAP3 — decode and index | One deduplicated, joinable database answers per-actor and per-time questions without re-running the game, and reports its own counts |
-| 4 | P0 — current | CAP4 — inspect against export and decoder | Byte ranges the runtime reads that we do not, and the first mismatching stage and bone per pose group |
-| 5 | P0 — current, beside CAP4 | CAP7 — deliver the animation in Unreal | `sp_theatre` animates under the two closed composition rules, from a rule table the model exporter writes |
-| 6 | P1 | CAP5 — close what the difference proves | Recovered rules and carried byte ranges, each with a regression and a fact in the owning topic |
+| 4 | P0 — CAP4.1–4.3 done | CAP4 — inspect against export and decoder | Byte ranges the runtime reads that we do not, and the first mismatching stage and bone per pose group. The shipped decoder reproduces the corpus; CAP4.4's consolidation is what remains |
+| 5 | P0 — current | CAP5 — close what the difference proves | Recovered rules and carried byte ranges, each with a regression and a fact in the owning topic. CAP5.7 is the ranking item: cutscene actors pose from the wrong biped |
+| 6 | P0 — current, beside CAP5 | CAP7 — deliver the animation in Unreal | `sp_theatre` animates under the two closed composition rules. CAP7.1 and CAP7.2 are done; blend spaces, the equivalence oracle and acceptance remain |
 | 7 | P1 — build-first | CAP6 — face and lips | The built face is captured against retail only where it diverges |
 | 8 | P2 | CAP8 — trim | Unused probes, readers and fixtures are deleted |
 
@@ -1038,7 +1048,7 @@ This phase is the point of the program. It runs entirely offline against the dat
   neither means unread by this run. And **the pass measures the decoder without repairing
   it** — changing the exporter is CAP5.3, which this pass authorizes by naming the five
   ranges.
-- [ ] **CAP4.3 Transform difference.** For every joined pose-build group evaluate the
+- [x] **CAP4.3 Transform difference.** For every joined pose-build group evaluate the
   current decoder at the captured identity and time, normalize entity and root placement,
   and compare decoded locals, composed matrices, bone-to-world, and skin palette per frame
   and bone. Report the first mismatching stage and bone, descendant propagation, and the
@@ -1157,26 +1167,73 @@ This phase is the point of the program. It runs entirely offline against the dat
   upper edge of a log-spaced bucket. And **the corpus is one cutscene**, so a bone this run
   never posed is unmeasured rather than correct.
 
-  *Remaining, and it is the program's only measurement of the shipped decoder.* Every
-  number above grades a rule transcribed for this pass. `mdl_skel` — the decoder the export
-  actually runs — has never been differenced against retail at all, which makes the two
-  decode stages the largest unmeasured surface in the chain rather than the last two rungs
-  of a ladder. Four steps:
+  **The shipped decoder reproduces the corpus, and that is the headline.** Every number
+  above grades a rule transcribed for this pass; `mdl_skel` — the decoder the export actually
+  runs — had never been differenced against retail at all. Run unmodified at the witnessed
+  owner, animation, frame and blend cells it reproduces retail's `BASE` locals over
+  **229,101** bound evaluations, leaving **2,452 (1.07%)** over the band once each population
+  is given the rule it needs, and **every residual is outside `mdl_skel`**. Worst clean
+  figures are ~`1e-5` source units and ~`0.02°`. The largest risk the program carried is
+  retired: a visual discrepancy downstream is now attributable rather than ambiguous.
 
-  1. bind each `BASE` record to the contributions nested below it on the generation spine;
-  2. evaluate `mdl_skel` at the witnessed owner, sequence, animation, frame and blend cells,
-     and difference the **decoded locals**;
-  3. difference the **composed locals** against `FINL`, which is what separates a decode
-     error from a blend, layer or remap error;
-  4. rank `worst_bones` per candidate rather than across all of them, so the complete rule
-     is not crowded out of its own list by the deliberately-wrong hierarchy and inverse-bind
-     arms — the reason the 2,209 translation mismatches are currently unattributed.
+  **What surrounds the decoder is where the work is.** Four candidates, each measured against
+  the same population:
 
-  Then chain all four stages, so an error is measured as it propagates across stages rather
-  than only down a hierarchy. *Acceptance:* a decoded-local difference per fired `(owner,
-  sequence, animation, frame)` naming its first mismatching bone, or the statement that the
-  shipped decoder reproduces the corpus — and either way the 2,209 translation mismatches
-  attributed to bones.
+  | Candidate | Over the band | What its residual is |
+  |---|---:|---|
+  | complete — family correspondence + frame interpolation + cell blend | 6,927 | the shared-bank position transform |
+  | `include_remap` — plus the include group's position transform | 72,523 | applied where it does not belong |
+  | `frame_key` — complete, no frame interpolation | 50,538 | only **15,336 of 242,561** cells fire at a whole frame |
+  | `bone_name` — plain name matching, **the shipped path** | 130,651 | what the export costs today |
+
+  **The biped family has to come off the owner's own mask, and it is the single largest thing
+  the export lacks.** A cinematic bank is one skeleton holding several complete actors —
+  `Courtroom_bip3.mdl` carries 288 bones over `Bip01`/`Bip02`/`Bip03` chains — so plain name
+  matching hands the Sheriff `Bip01`'s pose when he is `Bip02`, **491 source units and 119°**
+  wrong. The contribution's selected-bone mask names exactly one family, so the correct chain
+  is witnessed rather than fitted. CAP5.7 owns it.
+
+  **The include-model remap is real, and it is a position transform.**
+  `StudioModelGroup`+0x10's 56-byte record is a u16 source bone@0, a transform byte@3 and a
+  3×4 matrix@8, and A.4b's rule — clear byte copies the position, set byte transforms it,
+  rotation copied verbatim either way — holds for the nested include path too. Applying it
+  takes `doppleganger←misc` from 1,830 of 1,830 over the band to **0** and `Isaac←stances`
+  from 260 to **0**. But **each candidate closes the other's population and breaks it**:
+  split per owner, the cinematic bank reads 1,061 over under `complete` against 70,985 under
+  `include_remap`, while the shared bank reads 5,801 against 1,326. Which route an evaluation
+  took is not something the capture witnesses — the group's virtual sequence range is a
+  runtime field no image carries — so both are reported side by side with a per-owner split
+  rather than chosen. CAP5.8 owns it.
+
+  **The composed-locals stage separates cleanly.** `FINL` against retail's own `BASE` is
+  **227,836** excellent, 124 and 445 of 228,405 — so the transition/layer/controller stage
+  nothing offline models touches 0.25% of pose builds, and a decode error is now
+  distinguishable from a layer error. 685 builds evaluated more than one sequence.
+
+  **The 2,209 translation mismatches are attributed**, per-candidate-and-metric ranking having
+  fixed the crowding. They are `Bone` chains at depth 8–11 on `Therese` (0.38), `Damsel`
+  (1.94), `VV` (0.38), `Sheriff` (8.24), `malk_girl_armor_3` (12.16, the worst) and
+  `Gangrel_Male_Armor_2` (2.02) — the same bones as the rotation residual, so the
+  secondary-motion population diverges in translation as well. `docs/vtmb/secondary_motion.md`
+  explains both from one authored angle: the depth growth is the chord `2r·sin(θ/2)`
+  lengthening, not an accumulating solve. **The claim that translation composes exactly to
+  `1e-4` was measured on `Therese`'s two breast bones and does not hold for the `Bone`
+  chains.**
+
+  **The chain, our decode carried to the palette with nothing of retail's fed between**, over
+  100,789 records: decoded locals 3,909 → composed locals 433 → bone-to-world 1,428 → skin
+  palette 4,450, with **90,569 reproducing completely**. The palette figure is amplification
+  rather than a new fault — a within-band rotation error at the world stage becomes a larger
+  palette translation through the inverse bind's lever arm.
+
+  Binding is verified four ways and all four are zero: 0 unpaired `BASE`, 0 cycle
+  disagreements, 0 renderable-offset disagreements over 239,122 pairs and 242,561 cells, 0
+  disputed remap bones. `witnessed_frame_disagrees_with_the_cycle_rule` is **0** —
+  `floor((numframes − 1) × cycle)` reproduces every witnessed frame. Excluded and counted:
+  10,021 cells that decoded no bone, 1,353 records sampled at the last frame, 2,103,400 bone
+  observations with no owner source, 7,638,442 bones outside the selected mask, 123,924 pose
+  builds with no draw, 4,319 non-rigid root transforms, and 16 evaluations that are neither
+  the first nor the last of their build.
 - [ ] **CAP4.4 Missing-work report.** One ranked list of what the run proves is missing:
   unread byte ranges by model, unresolved identities, mismatch clusters by stage, and stages
   the theatre never exercised. It never claims that unobserved animations or continuous blend
@@ -1265,30 +1322,74 @@ have had no rung to sit on since CAP4.1 named them.
   faithful behaviour in `docs/vtmb/procedural_bones.md`, with
   `docs/architecture/animation-architecture.md` carrying the number rather than the
   assertion.
-- [ ] **CAP5.5 Secondary motion — the bones no rule covers.** The residual CAP4.3 measured is
-  cloth and hair: `left`/`right breast` on `Therese.mdl`, `Bone`-chains under `Bip01 Head` and
-  `Bip01 Spine1` on `VV.mdl` and `Damsel.mdl`, and `Sheriff Sword` under `Bip01 R Hand` —
-  **2,428** records over the band on bones carrying no `ProcType`, no `Flags & 0x1` and no
-  `Flags & 0x2`. The signature is specific enough to work from: the local equals bind exactly,
-  the translation composes to `1e-4`, and only the orientation diverges — intermittently, and
-  differently between mirror bones, which is state rather than a formula.
+- [~] **CAP5.5 Secondary motion — the bones no rule covers.** **The mechanism is located and
+  it is authored data**: a count/index pair at `MDLHeader` +396/+400 addressing 28-byte
+  per-bone records whose last float is an angular limit in degrees. 107 of 4,445 models carry
+  one, 600 records, zero faults. The facts are `docs/vtmb/secondary_motion.md`; what remains
+  here is the four undecoded floats beside the limit.
 
-  Three steps, cheapest first; the first two need no new capture and no game run.
+  **The limit is proved, three ways.** 48 of the 50 records across the capture's 7 carrying
+  models equal the measured ceiling exactly, and the 2 that differ are both *below* the
+  authored value on series too short to saturate. 585 of 600 records are exact multiples of
+  5°, with plateau spread of `1e-6` to `1e-3` degrees — a solve does not land on a round
+  number to six significant figures across hundreds of consecutive draws. And
+  `Smiling_Jack.mdl`'s three 100° records never engage across 1,570 paired draws, which is
+  what separates a ceiling from a fixed per-bone offset.
 
-  1. **Correlate the divergence against the actor's own motion**, from the root transforms the
-     capture already stores. A secondary-motion solve goes quiet when the actor is still, and
-     the intermittency already points that way.
-  2. **Difference the drawn orientation against the previous draw's** for the same bone, to
-     separate a first-order lag on the parent from a solve carrying a velocity term. The
-     capture's dense global sequence counter orders the draws for free.
-  3. Only if neither settles it, the CAP5.2 recipe on the window between
-     `C_BaseAnimating::BuildTransformations` and the studio draw.
+  **Steps 1 and 2 are firm negatives and should not be repeated.** Motion correlation is
+  refuted — Spearman medians of `+0.227`/`+0.030`/`+0.225`/`+0.183` spanning both signs, with
+  `Damsel` rooted on 673 of 683 samples while pinned at exactly 15.000°. So is a first-order
+  lag (`α` spreading 0.002–0.847 where one lag gives one `α`) and a visible spring (lag-1
+  autocorrelation `+0.728`, sign-change rate 0.08, no settling). VPhysics is eliminated
+  structurally: `Therese`, `VV` and `Damsel` ship byte-identical `.phy` files, and no hair,
+  breast or ponytail bone appears in their solids at all.
 
-  *Acceptance:* the mechanism named and written into the owning `docs/vtmb/` topic with a
-  game-independent regression — or, if it resolves to a stage driven by runtime state no
-  installed file carries, a recorded owner call on what the rebuild does instead. Cloth and
-  hair are visible on the theatre's cast, so an invented substitute is a Feel-layer change
-  under `docs/project/remaster-direction.md` and needs the call rather than the default.
+  **The residual is fully accounted.** 90 bones over 7 models: 47 named by the array, 43
+  descendants of a named bone. Descendants inherit it because retail composes a child off the
+  pre-correction parent and overwrites the parent's rotation in place, which predicts their
+  translation error as the chord of the clamped angle — `2 × 2.181 × sin 5° = 0.380` against a
+  measured 0.38, `0.82 + 2 × 2.152 × sin 15° = 1.934` against 1.94, nothing fitted. Two
+  independent analyses reached those numbers from opposite ends. `Sheriff Sword` was never
+  part of this population and is corrected out of it.
+
+  *Remaining:* `+8` `{9, 30, 60}`, `+12` `0…10`, `+16` `{0.05 … 0.97}` and `+20` `0…7` are
+  almost certainly the solve the limit clamps, and nothing establishes that. The corpus
+  saturates most frames, so sub-ceiling behaviour is barely sampled. Two routes, and the first
+  costs nothing: work the samples that fall *short* of the limit, and look for a model whose
+  limit is loose enough to leave the solve visible unclamped — `Smiling_Jack`'s 100° is the
+  candidate the corpus already contains. Failing that, the CAP5.2 recipe on the window between
+  `C_BaseAnimating::BuildTransformations` and the studio draw.
+
+  *Acceptance:* the four floats named in `docs/vtmb/secondary_motion.md` with a
+  game-independent regression, or a recorded statement of what the rebuild does with a proved
+  clamp over an undecoded solve. **Reproducing the clamp alone is worth measuring first** —
+  the corpus sits at the ceiling on most frames, so a limit-only implementation may be visually
+  indistinguishable for the theatre without the solve ever being decoded.
+- [ ] **CAP5.7 Biped family correspondence.** CAP4.3's largest finding and the largest defect
+  in the shipped export. A cinematic bank is one skeleton holding several complete actors, so
+  matching an actor's bones to a bank's by name gives an actor another actor's chain — 491
+  source units and 119° wrong, with the `bone_name` candidate at 130,651 records over the
+  band. The contribution's selected-bone mask names exactly one family, so the correct chain is
+  witnessed at runtime rather than inferred, and the export has to carry that correspondence
+  rather than resolve it by name.
+
+  This is why it outranks most of the list: every other animation stage is evaluated on top of
+  the pose this one selects, so a face, a procedural correction and a secondary-motion clamp
+  are all applied to the wrong skeleton until it is fixed. *Acceptance:* a theatre cutscene
+  actor poses from its own biped chain, and the `bone_name` candidate's 130,651 collapses.
+- [ ] **CAP5.8 Frame interpolation and the include-remap route.** Two clip-path corrections
+  CAP4.3 named with counts.
+
+  **Frame interpolation is not optional.** Only **15,336 of 242,561** cells fire at a whole
+  frame, and the export currently defers interpolation to the host loader; the `frame_key`
+  candidate sits at 50,538 over the band.
+
+  **The include-remap route is genuinely ambiguous and needs evidence the capture does not
+  hold.** Applying the include group's position transform closes `doppleganger←misc` and
+  `Isaac←stances` completely and breaks the cinematic banks; not applying it does the reverse.
+  The group's virtual sequence range is a runtime field no image carries, so which route ran is
+  unwitnessed. This is the CAP5.2 case: the smallest hook that records the dispatcher's own
+  choice settles it, and nothing offline will.
 - [ ] **CAP5.6 Theatre-corpus closure.** The engine-neutral evaluator matches the joined
   theatre corpus within the recorded bands, including layered, transition, and
   included-model cases the run exercised. Unknown fields stay preserved and explicitly
@@ -1365,7 +1466,7 @@ has to carry, and why the basis forces a single exporter — is
 already passed the evidence gate, so none of it waits on the decode stages, the
 secondary-motion cause, or the facial build.
 
-- [ ] **CAP7.1 Carry the rule table out of the model.** Per model: the driven bone, its
+- [x] **CAP7.1 Carry the rule table out of the model.** Per model: the driven bone, its
   control bone, the axis, and `pos[6]`/`quat[6]` — the 176-byte `mstudioaxisinterpbone_t`
   emitted as data the runtime reads, beside the `split_bones` inventory the character index
   already carries.
@@ -1378,26 +1479,53 @@ secondary-motion cause, or the facial build.
   than by agreement; a separately authored native exporter reintroduces exactly the
   reconciliation this avoids.
 
-  *Acceptance:* the exported table evaluates to the corrections the capture replay produces,
-  on the five models the replay covers.
-- [ ] **CAP7.2 The two composition stages as skeletal controls.** Both derive
+  **The axis ships as a direction, not an index.** Under the glTF conjugation Source Y maps
+  to −Z and Source Z to Y, so carrying the index through is wrong on **2,356 of the install's
+  3,123 rules**. Folding the change into the entry ordering does not work either: terms 1 and
+  2 are interchangeable under the inner slerp but term 3 is distinguished as the
+  `a1 + a2 == 0` fallback and the outer slerp target, and after conversion the distinguished
+  term reads glTF Y. So the sidecar states the extraction as data — the converted axis per
+  rule plus the three converted Source axes per file — and the runtime takes each term's
+  signed weight as a dot product, leaving entry order and the rule body retail's verbatim.
+
+  **Round-trip is byte-exact, not within a tolerance.** 3,123 of 3,123 rules re-encode to the
+  original float32, which required conjugating the quaternions through the quaternion rather
+  than through the rotation matrix — the matrix route loses which of the two representatives
+  names the rotation and costs about an ulp, neither of which matters to a baked mesh and both
+  of which matter to a table read back and re-evaluated.
+- [x] **CAP7.2 The two composition stages as skeletal controls.** Both derive
   `FAnimNode_SkeletalControlBase` and run in a post-process Anim Blueprint — retail's slot
   exactly, after the graph blends locals and before skinning. Split inheritance first
   (`Flags & 0x2`: rotation from the component root, translation from the parent,
   `docs/vtmb/animation_and_movers.md` A.4a), then axis interpolation (`ProcType == 1`,
-  `docs/vtmb/procedural_bones.md`). **Their order is load-bearing**: a graph that runs them
-  the other way produces a different skeleton.
+  `docs/vtmb/procedural_bones.md`), at the tail of the anim proxy's evaluation — this runtime
+  carries no Anim Blueprint asset, and that is the same slot.
 
   The correction cannot be baked into clips instead. It is non-linear — sign-selected among
   six entries, two slerps, a `1/(a1+a2+a3)` normalisation — so evaluating per clip and
-  blending the results is not the same as blending first and evaluating once, measured at up
-  to **5°** on the shoulders and biceps at a 50/50 blend. Blend grids, transitions and
-  layered sequences all occur in the corpus.
+  blending the results is not the same as blending first and evaluating once. Measured
+  mid-crossfade between two of a real body's own clips, bake-then-blend departs from
+  blend-then-evaluate by up to **9.6°**. Blend grids, transitions and layered sequences all
+  occur in the corpus.
 
-  Bone indices resolve once in `InitializeBoneReferences`; `LODThreshold` drops the
-  correction where limb twist is not resolvable. *Acceptance:* a theatre actor holds its
-  retail wrist, bicep and shoulder orientation through a blended sequence, and `split_bones`
-  runtime application is enabled rather than disabled.
+  Bone indices resolve once in `InitializeBoneReferences`; `LODThreshold` drops the correction
+  where limb twist is not resolvable. **`split_bones` runtime application is enabled**, so
+  12.1's note that it remains disabled no longer holds. Verified three ways: known locals into
+  a real compact pose against a second transcription written from the doc pseudocode with its
+  own slerp; **44 of 44** rules across three real models landing on the driven bone's own bind
+  translation in centimetres; and the blend measurement above. The A/B is not subtle — with the
+  stages off, a pedestrian's whole upper body folds about 90° forward.
+
+  Two things the design did not anticipate. **The sidecar takes the glb's import transform**,
+  read once from the same loader configuration the mesh is parsed with; without it every driven
+  bone's translation is off by a factor of 100, silently, and the bind-position check is what
+  catches it. And **the two stages commute on the shipped corpus** — no rule names a split bone
+  as driven or as control — so retail's order is kept because it is faithful, not because this
+  evidence could catch getting it wrong.
+
+  *Remaining:* a visual acceptance on an isolated body. The A/B above is a street pedestrian,
+  and the green-room harness yields no shots because it is passed empty `-GreenRoomAnimSet=`
+  and `-GreenRoomBoneRoot=` and takes the cinematic path.
 - [ ] **CAP7.3 Blend spaces from the exported grids.** Consumes CAP5.3. A 9×1 grid becomes a
   one-dimensional blend space and a 3×3 a two-dimensional one, driven by the sequence's own
   pose parameters. *Acceptance:* the theatre's `move_and_ranged` walk grids blend across

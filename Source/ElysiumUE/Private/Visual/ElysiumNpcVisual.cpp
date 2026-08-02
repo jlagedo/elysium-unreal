@@ -60,8 +60,17 @@ namespace
 		{
 			if (Morph != nullptr)
 			{
-				Skeleton->AccumulateCurveMetaData(Morph->GetFName(), /*bMaterialSet=*/false,
-					/*bMorphtargetSet=*/true);
+				// AccumulateCurveMetaData adds a missing entry with transactions enabled. That is
+				// correct for an editor import, but these skeletons are transient runtime objects and
+				// can be created while GEditor has no transaction buffer; the default path then calls
+				// through a null GEditor and crashes before the first NPC stands. Add without a
+				// transaction, then set the same metadata bit directly.
+				const FName CurveName = Morph->GetFName();
+				Skeleton->AddCurveMetaData(CurveName, /*bTransact=*/false);
+				if (FCurveMetaData* MetaData = Skeleton->GetCurveMetaData(CurveName))
+				{
+					MetaData->Type.bMorphtarget = true;
+				}
 			}
 		}
 	}

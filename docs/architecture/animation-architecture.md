@@ -45,9 +45,13 @@ the minimal reference shape.
    local rotation, evaluate the six-entry three-way blend, and replace the driven bone's
    local transform outright. The rule is `docs/vtmb/procedural_bones.md`.
 
-**Their order in the graph is load-bearing**: split inheritance first, then axis
-interpolation, matching the composition order the capture establishes. A graph that runs
-them the other way produces a different skeleton.
+**Their order in the graph is retail's**: split inheritance first, then axis interpolation,
+matching the composition order the capture establishes. On the shipped corpus the two
+commute — no rule names a split-inheritance bone as its driven bone *or* its control (0 of
+1,535 over the models the runtime loads), and the axis rule is a pure function of a local
+rotation while split inheritance changes only component-space composition. So the order is
+kept because it is faithful, not because this data could catch getting it wrong. A rule whose
+control was a split bone would distinguish them, and none exists.
 
 ## 3. Practical shape
 
@@ -85,6 +89,25 @@ reconciliation this avoids. One exporter emitting a companion table beside the a
 already writes is the arrangement that holds, and the character index already carries a
 `split_bones` array as the natural place for it.
 
+**The axis survives as a direction, not as an index.** Under the glTF conjugation Source Y
+maps to −Z and Source Z to Y, so a carried-through axis index is wrong on two axes in three —
+2,356 of the install's 3,123 rules. Folding the change into the entry ordering does not work
+either: terms 1 and 2 are interchangeable under the inner slerp, but term 3 is distinguished
+as both the `a1 + a2 == 0` fallback and the outer slerp target, and after conversion the
+distinguished term reads glTF Y. The table therefore ships the axis as a converted direction
+plus the three converted Source axes, and the runtime takes each term's signed weight as a
+dot product. Entry order is the raw record's, and the rule body stays retail's verbatim.
+
+**Consistency has to hold on the import side too.** The table ships in the glb's basis and in
+metres, and glTFRuntime conjugates every node by its scene basis and scales translation by
+100 — so the sidecar takes the *same* import transform the mesh does, read once from the same
+loader configuration rather than restated as a constant. This does not breach "convert
+nothing at runtime": `mdl_gltf` is the standing exemption to the `UE_` convention because
+glTF is self-describing, and a table written by that exporter in that basis inherits the
+exemption. Omitting it costs a factor of 100 on every driven bone's translation, silently.
+The check that catches it is the driven bone's own bind position, which arrives independently
+through the mesh.
+
 Two properties of the runtime glTF loader matter. Its loader configuration pins axis
 orientation and scaling rather than leaving them implicit, and its skeleton configuration
 can overwrite the reference skeleton from the asset — the documented way to avoid retarget
@@ -107,3 +130,9 @@ a mask selects, so bones legitimately carry matrices composed against older root
 bits are loader-written and cannot be recovered from the installed file
 (`docs/vtmb/procedural_bones.md`). Computing every bone each frame is the divergence this
 design takes, and it is recorded as one in the owning topic.
+
+**A third stage is coming, on disjoint bones.** VtMB clamps hair, ponytail, mane and breast
+bones to an authored per-bone angular limit read from a table in the `.mdl` header
+(`docs/vtmb/secondary_motion.md`). It touches none of the bones the two stages above act on,
+so it is a further node rather than a change to either — but the solve the limit clamps is
+undecoded, so what that node evaluates below the ceiling is not yet designable.

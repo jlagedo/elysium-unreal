@@ -688,9 +688,15 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
 - [x] **8.4 Physics props** — `prop_physics` / `phys_hinge` as Chaos rigid bodies on the baked
   `SM_<stem>`; collision and mass reproduce VtMB's own `.phy` exactly. **Chaos settle/push feel +
   hinge swing await an owner in-game play test.** → `docs/vtmb/phy_vphysics.md`.
-- [x] **8.5 NPC presence + `scripted_sequence` minimal** — NPCs idle on a disposition-selected
-  stance; `scripted_sequence` runs as a real class reproducing its beat outputs. **Not reproduced:**
-  locomotion (placed on the mark, not walked to it) and `OnScriptEvent01..08`.
+- [x] **8.5 NPC presence + native locomotion + `scripted_sequence` minimal** — NPCs idle on a
+  disposition-selected stance. Mobile NPCs are native Unreal characters over a runtime Recast
+  projection of the sidecar collision: `SetupPatrolType` / `FollowPatrolPath` loop the shipped
+  named `info_node_patrol_point` routes, while `use_interesting` pedestrians reserve the shipped
+  `intersting_place` entities by group/capacity and play the table's weighted ACT activities for
+  its authored dwell time. Route/place state survives Elysium saves. `scripted_sequence` runs as a
+  real class reproducing its beat outputs. **Not reproduced:** decoded locomotion root movement
+  (the actor moves at retail walk speed but the in-place cycle can foot-slide), walking to a
+  `scripted_sequence` mark (still placed there), `OnScriptEvent01..08`, or perception/combat AI.
 - [x] **8.6a New Game context + story entry** *(carve-out of 8.6)* — the player sheet +
   `UElysiumGameStateSubsystem::BeginNewGame` seed the fresh-story state (`Story_State=-4`,
   `Tut_Jack=0`, `Tut_Patch=0`, `Linux_Wine=1`) and travel to **`sp_tutorial_1` @ the `tutorial`
@@ -973,8 +979,9 @@ dialogue, scripted flow, quests, save/load included.
   against, and the `FElysiumUserCmd` the analog actions fill); 8.6/8.10 for the screen only.
 - [P] **10.7 Long tail** *(post-tutorial; promote to tasks when reached — **promoted 2026-07-26:**
   stealth → **13.1**, disciplines → **13.2**, weapons/combat basics → **13.3**, chargen → **9.4**,
-  choreography → **P12**)* — full combat AI (beyond 13.3's basics); real NPC AI (runtime NavMesh + BT/StateTree
-  replacing `info_node`); ragdoll/IK/anim blends; `.emc`-style cache for `.ents` if
+  choreography → **P12**)* — full combat AI (beyond 13.3's basics); NPC perception, reactions and
+  the schedule graph beyond 8.5's native patrol/interesting-place locomotion (BT/StateTree where
+  it adds value without replacing authored entity I/O); ragdoll/IK/anim blends; `.emc`-style cache for `.ents` if
   parse time bites; lump-8 lighting bake as a low-end contingency (parked with the dynamic-path
   commitment); retail `.sav` import (needs RE7 wire format — currently a non-goal). For the
   low-end contingency, **Lumen Lite** (5.8's medium-quality irradiance-field GI, ~2× faster,
@@ -989,7 +996,7 @@ dialogue, scripted flow, quests, save/load included.
   (`particleimpacttable`), **per-category entity sound schemes + AI-hearing volume**
   (`sndscheme_*`/`sound_volume_table` → **6.8**, distinct from PL5a's map SoundSchemes), and the **minor UI
   content tables** (`loadingtips`/`infobartypes`/`mapnames_localized`/`keynames`/
-  `interestingplacetypelist`). Promote any to its own task when reached.
+  `keynames`; `interestingplacetypelist` is consumed by 8.5). Promote any to its own task when reached.
 - [x] **10.8 OpenLevel map lifecycle** — hard travel opens each generated
   `/ElysiumBaked/<map>/<map>` level; GI-scoped state survives while the old world and its
   per-map runtime state are reclaimed. → `docs/architecture/map-architecture.md`, `docs/architecture/uasset-bake-spike.md`.
@@ -1124,12 +1131,19 @@ recovered, on the owner call recorded there and in `docs/vtmb/facial_animation.m
     six player-body binds). Rendered isolation is green for all five bodies and all nine named prop
     clips. The authored-camera `embrace` gate derives 63 current-map samples across every cut,
     movement midpoint, and fade boundary; it applies the six fades, records eight key bones per actor,
-    and confirms all five cast members enter frame outside opaque fades. Target-model
-    `split_bones` metadata preserves the source flag inventory, but runtime
-    application remains disabled. The generated inputs to the removed
+    and confirms all five cast members enter frame outside opaque fades. Both of VtMB's skeletal
+    composition stages now run over the blended pose as skeletal controls — split inheritance
+    (`split_bones` runtime application is **enabled**) then axis interpolation, from the rule table
+    the model export writes. The generated inputs to the removed
     post-crossfade experiment already carried the discarded fixed-quaternion
     rewrite, so its quarter-turn discontinuities do not adjudicate the recovered
     retail rule. `sp_theatre` is exported and baked.
+
+    **Cutscene actors still pose from the wrong biped.** A cinematic bank is one skeleton
+    carrying several complete actors, and matching bones by name hands an actor another's chain —
+    491 source units and 119° wrong. The selected-bone mask names the right family and the export
+    does not yet carry it; detail and status are the retail tracker's CAP5.7. Every stage above
+    composes on top of that pose, so it gates a faithful theatre act.
   - **Live acceptance:** `newgame_ttd` activates both camera owners, renders exact-zero edits as
     clean cuts, and carries the authored positive-time moves without the generic look tracker or
     Unreal motion blur turning them into scrolls. The PC and `player_understudy` are visible and
@@ -1154,6 +1168,23 @@ recovered, on the owner call recorded there and in `docs/vtmb/facial_animation.m
   morph target is one *flex record*, not one flexdesc — the eyelid pairs hinge a single flexdesc
   into two ramps. Spec: `docs/vtmb/facial_animation.md`. *Acceptance:* a flex authored in the model
   moves the face in-game. *Deps:* 8.5, RE20 [x], PL10 [x] — all met.
+  - **Built, pending an unobstructed visual.** `FElysiumFacialRig` reads the sidecar and evaluates
+    all three layers; the anim instance emits morph-target curves over the body pose; the rig is
+    cached per stem and answers null for a model with no face.
+    `elysium.npc.flex`/`flex_reset`/`flex_dump` and a Cog Facial tab drive it. Headless proof runs
+    on the real `nines` mesh through `USkeletalMeshComponent::MorphTargetWeights` — a blink drives
+    4 of 53 targets, rest is zero everywhere, and 6 of 53 come back merged across primitives, which
+    is the `Merge` contract failing loudly if it regresses. Live, 19 rigged bodies resolve
+    controller → flexdesc → morph end to end. What is missing is a close-up: the shot was blocked
+    by scene geometry on every angle, and the green-room harness cannot isolate a body because it
+    is passed empty `-GreenRoomAnimSet=`/`-GreenRoomBoneRoot=`.
+  - **Three spec corrections came out of the build**, all now in `docs/vtmb/facial_animation.md`:
+    `FETCH2`'s operand is a **flexdesc** index into the array the rules are filling, not a
+    controller index, so rules evaluate in file order; the `DIV` guard is required rather than
+    defensive (`1 / right_open`, zero at rest); and the four eyelid rules connect to no eyelid
+    morph in the shipped rig, a gap Source closes inside `mstudioeyeball_t` and VtMB ships none
+    of. The bridge Elysium reconstructs for it is marked uncertain in that document and is 12.4's
+    question, not this one's.
 - [ ] **12.4 Eyes and eyelids** — two halves on different footings. The **lids** are a
   reproduction: blink and lid shaping off the eight `eyelid` controllers and their four rules
   (`raiser × (1 − droop·0.8) × (1 − blink)` and its complements). The **eyes** are an
