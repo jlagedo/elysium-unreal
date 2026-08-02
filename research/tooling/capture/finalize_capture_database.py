@@ -33,7 +33,27 @@ MODEL_IMAGE_HEADER = struct.Struct("<4sIQq7I")
 # The actor stream. Same split as the census: identity per sighting in its own
 # table, never widening `records`.
 ACTOR_FILE_HEADER = struct.Struct("<8sIIQqIIII80s")
-ACTOR_OBSERVATION_HEADER = struct.Struct("<4sIQq9I64s")
+ACTOR_OBSERVATION_HEADER = struct.Struct("<4sIQq10I64s")
+# The actor stream from before the entity handle was recorded. Its rows carry no
+# index, so that column stays NULL and byte closure reads the narrower width.
+ACTOR_OBSERVATION_HEADER_V2 = struct.Struct("<4sIQq9I64s")
+# The scene stream. Its rows are requests made outside every pose-build bracket,
+# so they are neither a dictionary nor events on the generation spine, and they
+# land in their own tables rather than widening `records` with a generation no
+# scene record could carry.
+SCENE_FILE_HEADER = struct.Struct("<8sIIQqIIIIIII65s3s")
+SCENE_REQUEST_HEADER = struct.Struct("<4sIQqIIIIIIIIIIifffII128s64s128s128s64s")
+SEQUENCE_CHANGE_HEADER = struct.Struct("<4sIQqI10I")
+SCENE_REQUEST_KINDS = (b"SCNE", b"SEVT", b"SBND", b"SANM")
+SEQUENCE_CHANGE_KIND = b"SEQC"
+# Which reasons each scene magic may carry. A record naming a reason its own kind
+# never emits did not come from the hook that writes this stream.
+SCENE_REASONS = {
+    b"SCNE": (1, 2, 3),
+    b"SEVT": (4,),
+    b"SBND": (5,),
+    b"SANM": (6,),
+}
 # The contribution stream. Unlike the census and the actor stream these rows are
 # events on the same generation spine as the evaluations they nest inside, so
 # they land in `records` rather than in a table of their own.
@@ -437,10 +457,13 @@ def _census_records(
 
 
 def _actor_records(
-    stream: BinaryIO,
+    stream: BinaryIO, entity_index: bool
 ) -> Iterator[tuple[dict[str, object], bytes, bytes] | bytes]:
+    layout = (
+        ACTOR_OBSERVATION_HEADER if entity_index else ACTOR_OBSERVATION_HEADER_V2
+    )
     while True:
-        record = _read_record(stream, {b"ACTR": ACTOR_OBSERVATION_HEADER})
+        record = _read_record(stream, {b"ACTR": layout})
         if record is None:
             return
         if isinstance(record, bytes):
@@ -449,6 +472,7 @@ def _actor_records(
         raw_header, payload, header = record
         fields = header.unpack(raw_header)
         bone_count = int(fields[12])
+        ref_handle = int(fields[13]) if entity_index else None
         # A lifetime record names an address and nothing else, so it carries no
         # model identity by construction; an identity record that carries none
         # did not come from the hook that writes this stream.
@@ -456,7 +480,7 @@ def _actor_records(
         if (
             bone_count > MAXIMUM_BONES
             or (bone_count < 1 if identity else bone_count != 0)
-            or int(fields[1]) != ACTOR_OBSERVATION_HEADER.size
+            or int(fields[1]) != layout.size
         ):
             yield raw_header + payload + stream.read()
             return
@@ -473,13 +497,128 @@ def _actor_records(
                 "checksum": int(fields[10]),
                 "previous_checksum": int(fields[11]),
                 "bone_count": bone_count,
-                "model_name": fields[13]
+                "ref_handle": ref_handle,
+                "entity_index": _handle_index(ref_handle),
+                "model_name": fields[-1]
                 .split(b"\0", 1)[0]
                 .decode("ascii", "replace"),
             },
             raw_header,
             payload,
         )
+
+
+# An entity handle carries its index in the low 13 bits and a serial above them,
+# with all bits set meaning no entity. The raw handle is stored beside the index
+# so the split stays checkable rather than only its result surviving.
+HANDLE_INDEX_MASK = 0x1FFF
+HANDLE_SERIAL_SHIFT = 13
+INVALID_HANDLE = 0xFFFFFFFF
+# A record whose field was never written carries a zero handle, and zero decodes
+# to index zero with serial zero -- which is the world entity's slot with a
+# serial no live entity holds, never a scene actor. Reading it as an index would
+# turn every absent target into a spurious entity zero, so it is absent too.
+ABSENT_HANDLE = 0
+
+
+def _handle_index(handle: int | None) -> int | None:
+    if handle is None or handle in (INVALID_HANDLE, ABSENT_HANDLE):
+        return None
+    return handle & HANDLE_INDEX_MASK
+
+
+def _handle_serial(handle: int | None) -> int | None:
+    if handle is None or handle in (INVALID_HANDLE, ABSENT_HANDLE):
+        return None
+    return handle >> HANDLE_SERIAL_SHIFT
+
+
+def _scene_records(
+    stream: BinaryIO,
+) -> Iterator[tuple[dict[str, object], bytes, bytes] | bytes]:
+    layouts: dict[bytes, struct.Struct] = {
+        magic: SCENE_REQUEST_HEADER for magic in SCENE_REQUEST_KINDS
+    }
+    layouts[SEQUENCE_CHANGE_KIND] = SEQUENCE_CHANGE_HEADER
+    while True:
+        record = _read_record(stream, layouts)
+        if record is None:
+            return
+        if isinstance(record, bytes):
+            yield record
+            return
+        raw_header, payload, header = record
+        fields = header.unpack(raw_header)
+        magic = bytes(fields[0])[:4]
+        if int(fields[1]) != header.size:
+            yield raw_header + payload + stream.read()
+            return
+        if magic == SEQUENCE_CHANGE_KIND:
+            handle = int(fields[7])
+            yield (
+                {
+                    "kind": magic.decode("ascii"),
+                    "sequence_number": int(fields[2]),
+                    "qpc": int(fields[3]),
+                    "thread_id": int(fields[4]),
+                    "generation": int(fields[5]),
+                    "client_entity": int(fields[6]),
+                    "ref_handle": handle,
+                    "entity_index": _handle_index(handle),
+                    "entity_serial": _handle_serial(handle),
+                    "renderable": int(fields[8]),
+                    "studio_hdr": int(fields[9]),
+                    "checksum": int(fields[10]),
+                    "transitions_before": int(fields[11]),
+                    "transitions_after": int(fields[12]),
+                    "caller_address": int(fields[13]),
+                    "faults": int(fields[14]),
+                },
+                raw_header,
+                payload,
+            )
+            continue
+        reason = int(fields[5])
+        if reason not in SCENE_REASONS[magic]:
+            yield raw_header + payload + stream.read()
+            return
+        yield (
+            {
+                "kind": magic.decode("ascii"),
+                "sequence_number": int(fields[2]),
+                "qpc": int(fields[3]),
+                "thread_id": int(fields[4]),
+                "reason": reason,
+                "scope": int(fields[6]),
+                "parent_scope": int(fields[7]),
+                "scene_entity": int(fields[8]),
+                "scene_ref_handle": int(fields[9]),
+                "scene_entity_index": _handle_index(int(fields[9])),
+                "scene_vftable": int(fields[10]),
+                "target_entity": int(fields[11]),
+                "target_ref_handle": int(fields[12]),
+                "target_entity_index": _handle_index(int(fields[12])),
+                "target_entity_serial": _handle_serial(int(fields[12])),
+                "caller_address": int(fields[13]),
+                "event_type": int(fields[14]),
+                "event_start": float(fields[15]),
+                "event_end": float(fields[16]),
+                "scene_time": float(fields[17]),
+                "playing_back": int(fields[18]),
+                "faults": int(fields[19]),
+                "scene_file": _text(fields[20]),
+                "actor_name": _text(fields[21]),
+                "text0": _text(fields[22]),
+                "text1": _text(fields[23]),
+                "text2": _text(fields[24]),
+            },
+            raw_header,
+            payload,
+        )
+
+
+def _text(value: bytes) -> str:
+    return value.split(b"\0", 1)[0].decode("ascii", "replace")
 
 
 SCHEMA = """
@@ -623,7 +762,66 @@ CREATE TABLE actor_observations (
     checksum INTEGER NOT NULL,
     previous_checksum INTEGER NOT NULL,
     bone_count INTEGER NOT NULL,
+    ref_handle INTEGER,
+    entity_index INTEGER,
     model_name TEXT NOT NULL,
+    raw_header BLOB NOT NULL,
+    UNIQUE(stream_name, ordinal)
+);
+CREATE TABLE scene_events (
+    id INTEGER PRIMARY KEY,
+    stream_name TEXT NOT NULL REFERENCES streams(name),
+    ordinal INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    sequence_number INTEGER NOT NULL,
+    qpc INTEGER NOT NULL,
+    thread_id INTEGER NOT NULL,
+    reason INTEGER NOT NULL,
+    scope INTEGER NOT NULL,
+    parent_scope INTEGER NOT NULL,
+    scene_entity INTEGER NOT NULL,
+    scene_ref_handle INTEGER NOT NULL,
+    scene_entity_index INTEGER,
+    scene_vftable INTEGER NOT NULL,
+    target_entity INTEGER NOT NULL,
+    target_ref_handle INTEGER NOT NULL,
+    target_entity_index INTEGER,
+    target_entity_serial INTEGER,
+    caller_address INTEGER NOT NULL,
+    event_type INTEGER NOT NULL,
+    event_start REAL NOT NULL,
+    event_end REAL NOT NULL,
+    scene_time REAL NOT NULL,
+    playing_back INTEGER NOT NULL,
+    faults INTEGER NOT NULL,
+    scene_file TEXT NOT NULL,
+    actor_name TEXT NOT NULL,
+    text0 TEXT NOT NULL,
+    text1 TEXT NOT NULL,
+    text2 TEXT NOT NULL,
+    raw_header BLOB NOT NULL,
+    UNIQUE(stream_name, ordinal)
+);
+CREATE TABLE sequence_changes (
+    id INTEGER PRIMARY KEY,
+    stream_name TEXT NOT NULL REFERENCES streams(name),
+    ordinal INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    sequence_number INTEGER NOT NULL,
+    qpc INTEGER NOT NULL,
+    thread_id INTEGER NOT NULL,
+    generation INTEGER NOT NULL,
+    client_entity INTEGER NOT NULL,
+    ref_handle INTEGER NOT NULL,
+    entity_index INTEGER,
+    entity_serial INTEGER,
+    renderable INTEGER NOT NULL,
+    studio_hdr INTEGER NOT NULL,
+    checksum INTEGER NOT NULL,
+    transitions_before INTEGER NOT NULL,
+    transitions_after INTEGER NOT NULL,
+    caller_address INTEGER NOT NULL,
+    faults INTEGER NOT NULL,
     raw_header BLOB NOT NULL,
     UNIQUE(stream_name, ordinal)
 );
@@ -648,6 +846,13 @@ CREATE INDEX model_headers_identity ON model_headers(studio_hdr, checksum);
 CREATE INDEX model_images_checksum ON model_images(checksum);
 CREATE INDEX actor_observations_identity
     ON actor_observations(entity, checksum);
+CREATE INDEX actor_observations_index
+    ON actor_observations(entity_index, qpc);
+CREATE INDEX scene_events_target ON scene_events(target_entity_index, qpc);
+CREATE INDEX scene_events_scope ON scene_events(scope);
+CREATE INDEX scene_events_scene ON scene_events(scene_entity, qpc);
+CREATE INDEX sequence_changes_entity ON sequence_changes(entity_index, qpc);
+CREATE INDEX sequence_changes_generation ON sequence_changes(generation);
 """
 
 
@@ -680,11 +885,46 @@ INSERT_ACTOR_OBSERVATION = """
 INSERT INTO actor_observations (
     stream_name, ordinal, sequence_number, qpc, thread_id, entity, renderable,
     reason, generation, studio_hdr, checksum, previous_checksum, bone_count,
-    model_name, raw_header
+    ref_handle, entity_index, model_name, raw_header
 ) VALUES (
     :stream_name, :ordinal, :sequence_number, :qpc, :thread_id, :entity,
     :renderable, :reason, :generation, :studio_hdr, :checksum,
-    :previous_checksum, :bone_count, :model_name, :raw_header
+    :previous_checksum, :bone_count, :ref_handle, :entity_index, :model_name,
+    :raw_header
+)
+"""
+
+
+INSERT_SCENE_EVENT = """
+INSERT INTO scene_events (
+    stream_name, ordinal, kind, sequence_number, qpc, thread_id, reason, scope,
+    parent_scope, scene_entity, scene_ref_handle, scene_entity_index,
+    scene_vftable, target_entity, target_ref_handle, target_entity_index,
+    target_entity_serial, caller_address, event_type, event_start, event_end,
+    scene_time, playing_back, faults, scene_file, actor_name, text0, text1,
+    text2, raw_header
+) VALUES (
+    :stream_name, :ordinal, :kind, :sequence_number, :qpc, :thread_id, :reason,
+    :scope, :parent_scope, :scene_entity, :scene_ref_handle,
+    :scene_entity_index, :scene_vftable, :target_entity, :target_ref_handle,
+    :target_entity_index, :target_entity_serial, :caller_address, :event_type,
+    :event_start, :event_end, :scene_time, :playing_back, :faults, :scene_file,
+    :actor_name, :text0, :text1, :text2, :raw_header
+)
+"""
+
+
+INSERT_SEQUENCE_CHANGE = """
+INSERT INTO sequence_changes (
+    stream_name, ordinal, kind, sequence_number, qpc, thread_id, generation,
+    client_entity, ref_handle, entity_index, entity_serial, renderable,
+    studio_hdr, checksum, transitions_before, transitions_after,
+    caller_address, faults, raw_header
+) VALUES (
+    :stream_name, :ordinal, :kind, :sequence_number, :qpc, :thread_id,
+    :generation, :client_entity, :ref_handle, :entity_index, :entity_serial,
+    :renderable, :studio_hdr, :checksum, :transitions_before,
+    :transitions_after, :caller_address, :faults, :raw_header
 )
 """
 
@@ -790,6 +1030,8 @@ def _insert_stream(
         if name == "actor"
         else CONTRIBUTION_FILE_HEADER
         if name == "contribution"
+        else SCENE_FILE_HEADER
+        if name == "scene"
         else ANIMATION_FILE_HEADER
     )
     # Both contribution file headers are 128 bytes and agree on magic and
@@ -819,13 +1061,21 @@ def _insert_stream(
                 raise ValueError(f"{path} is not a supported ELMDL stream")
             records = _census_records(stream)
         elif name == "actor":
-            if (magic, version) not in {(b"ELACT1", 1), (b"ELACT2", 2)}:
+            if (magic, version) not in {
+                (b"ELACT1", 1),
+                (b"ELACT2", 2),
+                (b"ELACT3", 3),
+            }:
                 raise ValueError(f"{path} is not a supported ELACT stream")
-            records = _actor_records(stream)
+            records = _actor_records(stream, entity_index=version >= 3)
         elif name == "contribution":
             if (magic, version) not in {(b"ELCON1", 1), (b"ELCON2", 2)}:
                 raise ValueError(f"{path} is not a supported ELCON stream")
             records = _contribution_records(stream, channels=version >= 2)
+        elif name == "scene":
+            if (magic, version) != (b"ELSCN1", 1):
+                raise ValueError(f"{path} is not a supported ELSCN stream")
+            records = _scene_records(stream)
         else:
             if (magic, version) not in {
                 (b"ELANIM1", 1),
@@ -891,6 +1141,26 @@ def _insert_stream(
                         "stream_name": name,
                         "ordinal": ordinal,
                         "raw_header": raw_header,
+                        "ref_handle": None,
+                        "entity_index": None,
+                        **values,
+                    },
+                )
+                record_count += 1
+                continue
+            if name == "scene":
+                values, raw_header, _ = record
+                statement = (
+                    INSERT_SEQUENCE_CHANGE
+                    if values["kind"] == "SEQC"
+                    else INSERT_SCENE_EVENT
+                )
+                connection.execute(
+                    statement,
+                    {
+                        "stream_name": name,
+                        "ordinal": ordinal,
+                        "raw_header": raw_header,
                         **values,
                     },
                 )
@@ -950,6 +1220,7 @@ def finalize(
         ("census", session / "model.elmdl"),
         ("actor", session / "actor.elact"),
         ("contribution", session / "contribution.elcon"),
+        ("scene", session / "scene.elscn"),
     ]
     stream_paths = [(name, path) for name, path in stream_paths if path.is_file()]
     if not stream_paths:
@@ -1091,6 +1362,28 @@ def finalize(
                 int(done.get("channel_nested", "0")),
                 "selected-bone loops re-entered on one thread",
             ),
+            "scene_faults": (
+                int(done.get("scene_faults", "0")),
+                "scene records that could not name something they should have",
+            ),
+            "scene_overflow": (
+                int(done.get("scene_overflow", "0")),
+                "scene scopes refused because the nesting cap was hit",
+            ),
+            "scene_unscoped": (
+                int(done.get("scene_unscoped", "0")),
+                "scene records emitted outside every scene scope",
+            ),
+            "scene_truncated": (
+                int(done.get("scene_truncated", "0")),
+                "scene records whose source string was longer than its field",
+            ),
+            "scene_resolutions_unscoped": (
+                int(done.get("scene_resolutions_unscoped", "0")),
+                "actor resolutions outside every scene scope, which are the "
+                "per-frame re-pin a scene with position_start performs rather "
+                "than requests, counted here and recorded nowhere",
+            ),
             "incomplete_streams": (
                 sum(1 for value in tails.values() if value),
                 _json_value(tails),
@@ -1121,6 +1414,8 @@ def finalize(
                 "model_headers",
                 "model_images",
                 "actor_observations",
+                "scene_events",
+                "sequence_changes",
             )
         )
         if integrity != "ok" or stored_records != sum(counts.values()):

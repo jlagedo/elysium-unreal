@@ -423,6 +423,8 @@ add_test(
         -Collector $<TARGET_FILE:synthetic_collector>
         -OutputDir ${CMAKE_BINARY_DIR}/lifecycle-soak
         -Cycles 100
+        -ProfileRegistry
+            ${CMAKE_CURRENT_SOURCE_DIR}/generated_binary_profiles.h
 )
 
 set_tests_properties(

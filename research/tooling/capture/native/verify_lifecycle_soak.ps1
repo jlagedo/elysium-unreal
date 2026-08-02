@@ -13,10 +13,39 @@ param(
     [string] $OutputDir,
     [Parameter(Mandatory = $true)]
     [ValidateRange(1, 1000)]
-    [int] $Cycles
+    [int] $Cycles,
+    [Parameter(Mandatory = $true)]
+    [string] $ProfileRegistry
 )
 
 $ErrorActionPreference = "Stop"
+
+function Get-DeclaredProfileCount {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path
+    )
+    # The soak asserts the probe host loaded every declared binary profile. Reading
+    # the count out of the generated registry rather than repeating a literal keeps
+    # that a real assertion: a profile added without the host seeing it still fails,
+    # while adding a profile does not break the soak on its own.
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "missing generated binary profile registry: $Path"
+    }
+    $text = Get-Content -LiteralPath $Path -Raw
+    $registry = [regex]::Match(
+        $text, "(?s)BinaryProfile Registry\[\]\s*=\s*\{(.*?)\};")
+    if (-not $registry.Success) {
+        throw "generated binary profile registry declares no Registry array"
+    }
+    $count = [regex]::Matches($registry.Groups[1].Value, "(?m)^\s*Profile\d+,\s*$").Count
+    if ($count -lt 1) {
+        throw "generated binary profile registry is empty"
+    }
+    return $count
+}
+
+$expectedProfileCount = Get-DeclaredProfileCount -Path $ProfileRegistry
 
 function Get-SelfHandleCount {
     $process = [System.Diagnostics.Process]::GetCurrentProcess()
@@ -142,7 +171,7 @@ for ($cycle = 1; $cycle -le $Cycles; ++$cycle) {
         startup_config = ""
         process_exit_code = "0"
         collector_exit_code = "0"
-        binary_profile_count = "4"
+        binary_profile_count = "$expectedProfileCount"
     }.GetEnumerator()) {
         if ($finalization[$expectation.Key] -ne $expectation.Value) {
             throw (

@@ -1388,6 +1388,59 @@ consume the same bytes: which frames a run samples depends on where the operator
 the trigger, so two correct runs differ there. The claim that holds is that one shape
 produces one answer — checked by digest, and true of all 176 shapes the two runs share.
 
+### 9.15b Attributing a pose group to the request that caused it
+
+A pose group says which sequence an entity evaluated, never who asked for it. The request
+side is in the server game DLL, so answering it means observing a fifth module and joining
+its records to the client's.
+
+**Hook the frame that fires per transition, not the one that runs per frame.** A scene's
+processor classifies every event of every playing scene on every frame; at twelve
+concurrent scenes of roughly forty events over a five-minute cutscene that is on the order
+of four million classifications. The start-dispatch below it fires once per event
+transition instead, and because the map's scene class and the dialogue scene class reach
+the same body, one inline observation point covers both populations. The same trap sits
+one level down: the actor resolver looks like a per-scene binding and is really a
+per-frame one, because a scene that owns its cast's transforms re-pins and re-resolves
+them every frame. Measured, that is 281,353 resolutions against 40 animation-set
+applications in one run. Record the ones an enclosing request scope covers and count the
+rest; two runs reproduced the uncovered count exactly, which is what makes it a property
+of the content rather than of the run.
+
+**Scope requests the way pose builds are scoped, but on a separate stack.** A request
+frame opens a scope before it runs, because the work it causes reaches the queue while it
+is still live. That stack must be distinct from the pose-build stack: the scene system
+runs outside every pose-build bracket, so a request record asking for the enclosing
+generation would count itself unbracketed and move a total the grouping work measured at
+zero. Read the enclosing generation without counting, and record its absence as a fault of
+the request's own.
+
+**Join by an identity both modules independently carry.** An entity's handle packs an
+index and a serial, both modules store one, and the encoding is shared — so recording the
+raw handle on each side and deriving the index offline joins a server request to a client
+pose group without either side deriving the other. Three checks make that evidence rather
+than convention: an index must name one entity per side inside a witnessed lifetime; the
+renderable-to-entity offset must reproduce from this population, which is one the join
+work never measured; and every actor a scene bound must have evaluated under the animation
+set that scene applied. The last is the decisive one, because its four values come from
+four different observation points and none is computed from another.
+
+Three things will look like disagreements and are not. The animation set names the clip's
+owner, so a scene actor keeps its own character model and the match is against the
+evaluator's owning header, not the drawn model. The two names are rooted differently — a
+scene keyvalue is authored from the game root and a runtime studio header's name is
+relative to the model directory — so a comparison has to normalise before it can match. And
+an evaluation is scoped by a bracket entered on the renderable subobject, so a lookup keyed
+by the entity address finds nothing; use the renderable the census recorded rather than
+adding the offset and calling that evidence.
+
+**What a capture of the request side cannot claim.** The client change is an effect: the
+sequence index is networked, so a scene asks on the server and the client acts on it some
+frames later. The honest statement is that a scene asked and an entity changed inside its
+interval, never that one call caused the other. And an activity change is only observable
+as the sequence change it produces, because the selection data is recovered while the
+selector is not.
+
 ### 9.16 What not to do first
 
 Avoid:

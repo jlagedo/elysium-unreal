@@ -1,0 +1,318 @@
+{
+  "version": 1,
+  "topic": "scene_requests",
+  "consuming_document": "docs/vtmb/choreographed_scenes.md",
+  "research_id": "RE32",
+  "program": "vampire.dll",
+  "binary": {
+    "size": 7860281,
+    "sha256": "c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f",
+    "md5": "1a10efcfe332036a9ee60bce223303db",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "Which function implements the scripted_sequence BeginSequence input, via the aiscripted_sequence datamap at 0x10593628, and is m_iszPlay applied there or in a subsequent think?",
+    "What sets the one-shot intro-skip global at 0x106e7e91 that makes the first Start in the process skip the scene entirely?",
+    "How large is the CChoreoActor bonerename buffer at +0x13c, and is the pair ordered source-root then target-root or the reverse?",
+    "Does every DispatchStartEvent exit form RET 0xc, including the early Warning return when the event names an actor the scene cannot resolve?"
+  ],
+  "field_probes": [
+    {
+      "displacement": "450",
+      "label": "scene_file",
+      "role": "CSceneEntity::m_iszSceneFile. Enumerates readers of the .vcd path a scene entity plays, so the capture's declared read is grounded in the same population the datamap builder writes."
+    },
+    {
+      "displacement": "480",
+      "label": "base_anim_set",
+      "role": "CSceneEntity::m_iszBaseAnimSet. Enumerates readers of the cinematic model whose single clip every scene actor plays, which is the model the client later resolves contributions against."
+    },
+    {
+      "displacement": "498",
+      "label": "is_playing_back",
+      "role": "CSceneEntity::m_bIsPlayingBack. Enumerates the gate every lifecycle frame tests, so a playback interval is bounded by a field rather than by hook ordering."
+    },
+    {
+      "displacement": "4a0",
+      "label": "scene_current_time",
+      "role": "CSceneEntity::m_flCurrentTime, written as curtime minus m_flStartTime each think. Enumerates readers of the scene-relative clock every dispatched event is timed against."
+    },
+    {
+      "displacement": "4bc",
+      "label": "parsed_scene",
+      "role": "The parsed CChoreoScene pointer. Enumerates the frames that gate on a scene having been parsed, which is what separates a declined Start from an accepted one."
+    },
+    {
+      "displacement": "448",
+      "label": "entity_ref_handle",
+      "role": "CBaseEntity's own EHANDLE, which carries the server entity index in its low 13 bits. Enumerates every reader so the capture's direct field read is grounded in the population the accessor serves."
+    },
+    {
+      "displacement": "48c",
+      "label": "resolved_anim_set_models",
+      "role": "The three resolved animation-set model pointers (BaseAnim 0x48c, MaleAnim 0x490, FemaleAnim 0x494), distinct from the keyvalue strings twelve bytes below them. Enumerates the readers that pick between them."
+    }
+  ],
+  "findings": [
+    {
+      "confidence": "confirmed",
+      "fact": "The game DLL the process maps is a five-section plaintext image, not the seven-section image the retail installer wrote.",
+      "evidence": "Vampire/dlls/ holds both vampire.dll (7,860,281 bytes, sections .text .rdata .data .idata .reloc, sha256 c546f4de...) and vampire.dll.12 (9,094,142 bytes, adding sections stxt774 and stxt371). Both carry PE timestamp 0x41afafae and image base 0x10000000. Every address in this specification reads as coherent code in the former and as noise in the latter, which carries neither a .vcd string nor .?AVCSceneEntity@@ RTTI. Unofficial_Patch/dlls/ does not exist, so -game Unofficial_Patch resolves the base install's file.",
+      "consequence": "The .12 sibling is the wrapped shipped image and is never the capture target. The binary profile hash-gates the unwrapped file by identity, so an install carrying only the wrapped image fails to activate rather than hooking noise."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "vampire.dll is incrementally linked, so every virtual slot holds an E9 rel32 thunk rather than a function body.",
+      "evidence": "Reading CSceneEntity's vftable at 0x1044f05c, slot +0x3e0 holds 0x10010e8d, whose first byte is E9 and whose branch target is 0x10082ee0; the same indirection holds for all nine slots read (+0x218, +0x3c4, +0x3c8, +0x3cc, +0x3d0, +0x3d4, +0x3dc, +0x3e0, +0x430).",
+      "consequence": "A vtable-replacement hook on this module would validate and replace a thunk, not the function the specification names. Every capture target in vampire.dll is an inline detour on the resolved body."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "CInstancedSceneEntity shares every CSceneEntity virtual slot except the think at +0x218.",
+      "evidence": "Reading both vftables (0x1044f05c and 0x1044f584) through their thunks, +0x3c4, +0x3c8, +0x3cc, +0x3d0, +0x3d4, +0x3dc, +0x3e0 and +0x430 resolve to the same eight bodies; +0x218 resolves to 0x100819b0 for the map scene and 0x10084c80 for the instanced one. 0x10084c80's own prologue reads the parsed-scene pointer at +0x4bc, so the two classes share the object layout the shared bodies address.",
+      "consequence": "One inline detour on a shared body observes both the map's logic_choreographed_scene entities and the per-line dialogue scenes. A vtable hook on either vftable would observe only one of the two populations, and the record must carry the vftable to keep them separable."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The scene lifecycle frames gate on the two fields the consuming document names, which corroborates the object layout at the pinned identity.",
+      "evidence": "0x100829e0 opens 56 8b f1 8b 8e bc 04 00 00, reading the parsed scene at +0x4bc; 0x10082b80 opens 56 8b f1 8b 86 bc 04 00 00, reading the same field; 0x10081b60 opens 51 53 8b d9 8a 83 98 04 00 00, reading m_bIsPlayingBack at +0x498.",
+      "consequence": "A capture may read m_iszSceneFile, m_bIsPlayingBack and m_flCurrentTime off the frame's own this pointer rather than resolving the entity a second way."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "DispatchStartEvent is __thiscall(this, float currenttime, CChoreoScene*, CChoreoEvent*) and switches on the event type to reach one arm per type.",
+      "evidence": "Decompiled as void __thiscall FUN_10082ee0(void *this, undefined4 param_1, int *param_2, undefined4 *param_3), where every CChoreoEvent accessor is called on param_3 and the switch selector is FUN_10075b70(param_3), the type getter. Case 6 calls virtual +0x400 and case 7 calls virtual +0x418, which are the gesture and sequence arms the consuming document names. The prologue arithmetic agrees: after SUB ESP,0x38 and two pushes, [ESP+0x4c] is entry+0xc, the third stack argument, staged into EBP.",
+      "consequence": "One inline hook on this frame observes every dispatched choreographed event, of every type, for both scene classes, with the scene and the event both in hand as arguments."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Every CChoreoEvent field the capture needs is a direct inline field, reached through getters that are single instructions.",
+      "evidence": "Type 0x10075b70 = MOV EAX,[ECX]; RET (+0x000). Name 0x10075c00 = LEA EAX,[ECX+4]; RET (+0x004). Param 0x10075c50 = LEA EAX,[ECX+0x84]; RET (+0x084). Param2 0x10075ca0 = LEA EAX,[ECX+0x104]; RET (+0x104). Start time 0x10075e70 = FLD [ECX+0x184]; RET (+0x184). End time 0x10075f10 = FLD [ECX+0x188]; RET (+0x188). Actor 0x10076690 = MOV EAX,[ECX+0x2b4]; RET (+0x2b4). The three string members are inline buffers of exactly 0x80 bytes each, since consecutive accessors are 0x80 apart.",
+      "consequence": "The capture reads these displacements directly and calls nothing in the game, so a dispatched event costs six loads and three bounded string copies. Each 0x80 source buffer fits a 128-byte record field exactly, so param and param2 travel without truncation by construction."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "An event with no end time stores -1.0f rather than a separate flag.",
+      "evidence": "The has-end-time predicate at 0x10075f30 opens CMP DWORD PTR [ECX+0x188],0xbf800000 followed by a conditional set, and 0xbf800000 is -1.0f.",
+      "consequence": "An instantaneous event is identified from the end-time field alone, which is what the consuming document records as `time t -1`. The capture stores the raw float and leaves the interpretation to the analyzer."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "FindNamedEntity is __thiscall(this, const char* name, int context) and returns the entity or null.",
+      "evidence": "Decompiled as int * __thiscall FUN_10083cd0(void *this, char *param_1, int param_2). Every branch returns either an entity pointer or (int *)0x0; the Player and !player branches return UTIL_PlayerByIndex(1), the !targetN branches resolve a cached EHANDLE, and the default branch falls through to a name lookup that takes param_2 into account. The prologue's MOV EBX,[ESP+8] reads param_1 after the single push.",
+      "consequence": "One inline hook here observes every actor-name-to-entity resolution the scene system performs, and a null return is the 'unable find actor' population rather than a fault."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The anim-set frame is __thiscall(CSceneEntity, CChoreoScene*) and resolves each actor by name inside its own loop.",
+      "evidence": "Decompiled as void __thiscall FUN_100843d0(void *this, void *param_1). It selects the resolved model at this+0x490 or this+0x494 by the local player's gender predicate, then for each scene actor calls virtual +0x430 with the actor's name, casts the result, and calls actor virtual +0x3d4 with the scene, the two bonerename strings, the chosen model and this+0x48c. It recurses into subscene events, which carry type 0xb.",
+      "consequence": "The per-actor identity this frame produces is not visible at its own boundary, so the capture pairs one record for the frame with the FindNamedEntity records nested inside its scope. The keyvalue strings at 0x480/0x484/0x488 and the resolved model pointers at 0x48c/0x490/0x494 are different fields twelve bytes apart, and the frame reads the resolved ones."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "A CChoreoActor carries its name and its bonerename pair as inline buffers, and the actor name pointer the anim-set loop passes to FindNamedEntity is the actor object plus 0x14.",
+      "evidence": "Name 0x10072d90 = LEA EAX,[ECX+0x14]; RET. Bonerename members 0x10072e20 = LEA EAX,[ECX+0x114]; RET and 0x10072e40 = LEA EAX,[ECX+0x13c]; RET. The anim-set loop calls the name getter on the actor and hands its result straight to virtual +0x430.",
+      "consequence": "A binding record can recover the CChoreoActor from the name pointer it was handed, but only while the enclosing scope is an anim-set application; FindNamedEntity is also reached from the dispatch arms with an event param as the name, where that subtraction would name nothing. The capture therefore gates the bonerename read on the enclosing scope and reports it absent otherwise."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The server entity index is the low 13 bits of the entity's own EHANDLE at CBaseEntity+0x448.",
+      "evidence": "Virtual slot +4 resolves through its incremental-link thunk to 0x10027470 for CSceneEntity, CInstancedSceneEntity and the aiscripted_sequence class alike, and that body is LEA EAX,[ECX+0x448]; RET, so it is the shared CBaseEntity accessor rather than an override. FindNamedEntity's four !targetN branches decode a handle of that shape: an entity list at PTR_DAT_10566458 with 12-byte slots holding the entity at +4 and the serial at +8, indexed by handle & 0x1fff, accepted only when the slot's serial equals handle >> 0xd, with 0xffffffff as the invalid handle.",
+      "consequence": "A capture reads the index as one masked load off a pointer it already holds, with no call into the game and no entity-list walk. The four cached actor EHANDLEs the consuming document records at CSceneEntity+0x46c through +0x478 carry the same encoding, which is what corroborates the split independently of the accessor."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The client and the server share the EHANDLE encoding, so one index space joins the two modules.",
+      "evidence": "client.dll's C_BaseEntity primary vtable 0x1022d6d4 holds the handle setter at slot +0 (0x1009f050, MOV [ECX+0xe4],EDX) and the getter at slot +4 (0x1009f060, LEA EAX,[ECX+0xe4]; RET), so the client handle lives at C_BaseEntity+0xe4 and two independent accessors name the same displacement. The 13-bit split appears in both modules in near-equal counts of its two halves: client.dll carries 278 AND *,0x1fff against 269 SHR *,13, and vampire.dll 2227 against 2226, with the two paired inside 48 bytes 191 and 1622 times respectively.",
+      "consequence": "A server request record and a client sequence-change record can be joined on the index alone, bounded by the serial and by the witnessed lifetime of each address. This is the field the animation topic records as missing when it states that the render hook carries neither targetname nor entity index."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "InputStartPlayback opens with an absolute memory operand and is unsuitable as a byte-validated hook target.",
+      "evidence": "0x10081e00 opens a0 91 7e 6e 10 84 c0 75 0b, that is MOV AL,[0x106e7e91] against the one-shot intro-skip global the consuming document names, followed by a test and a branch that can decline the input entirely.",
+      "consequence": "The capture hooks the virtual implementation at 0x100829e0 instead. That frame is also where the parsed-and-not-already-playing gate is applied, so a record emitted there describes an accepted playback rather than a delivered input."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Every capture target in this module begins with whole instructions reaching at least five bytes and none of them carries a relocated absolute operand.",
+      "evidence": "0x100829e0 568bf18b8ebc040000 (9); 0x10081b60 51538bd98a8398040000 (10); 0x10082b80 568bf18b86bc040000 (9); 0x10082ee0 83ec385355 (5); 0x10083cd0 538b5c2408 (5); 0x100843d0 83ec085355 (5).",
+      "consequence": "Each target is declared with its exact whole-instruction width; the inline backend refuses a target whose decoded prologue exceeds the declared byte count, so the nine- and ten-byte declarations are required rather than optional. No target needs the relocated-operand comparison the client's evaluate_sequence_pose introduced."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "CChoreoScene::Process classifies every event of every playing scene on every frame, so it is a seed rather than a capture target.",
+      "evidence": "0x1007d7f0 opens 83 ec 5c d9 44 24 60, that is a frame reserving 0x5c bytes and loading a float from entry+4, consistent with __thiscall(this, float) reached as Process(m_flCurrentTime). The consuming document establishes that it emits START, CONTINUE, STOP or IGNORE for every event each call.",
+      "consequence": "Twelve concurrent theatre scenes of roughly forty events each, at the pinned 29.3 simulation steps per second over a 308-second cutscene, is on the order of four million classifications. Recording per classification would make this stream the binding constraint on its own, so the capture records the once-per-transition dispatch instead and this address is declared only so a captured caller address inside it resolves to a name."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "FindNamedEntity is a per-frame resolver, not a once-per-scene binding point.",
+      "evidence": "One complete sp_theatre capture with the resolver hooked and every call recorded produced 281,353 resolutions over a 334-second run against 40 animation-set applications and 20 playback transitions. All twelve of the map's scenes set position_start, which makes the scene own its cast's transforms and re-pin every actor to the scene's origin on every frame it plays; each re-pin resolves its actors by name again. Twelve scenes of roughly seven actors at the pinned 29.3 simulation steps per second accounts for the count.",
+      "consequence": "Only the resolutions a scene scope encloses are requests. The capture records those and counts the rest, because a record each costs fifty times the stream and says nothing the enclosing start or animation-set record does not already say. A reimplementation that resolves actors once at Start and caches them diverges from retail, which re-resolves by name every frame."
+    }
+  ],
+  "functions": [
+    {
+      "address": "100829e0",
+      "label": "scene_start_playback",
+      "confidence": "confirmed",
+      "role": "CSceneEntity playback start, virtual +0x3c8. Gates on a parsed scene at +0x4bc and on not already playing, then resets the simulation, binds the actors, applies the anim set, saves and teleports for position_start, arms the think, hides entities, and fires OnStart last.",
+      "depth": 2,
+      "cap": 140,
+      "asm_count": 2000
+    },
+    {
+      "address": "10081b60",
+      "label": "scene_on_finished",
+      "confidence": "confirmed",
+      "role": "OnSceneFinished, virtual +0x3dc. Stops the live events, resets, clears the playing and paused flags, zeroes the clock, applies position_end, restores the actors, fires OnCompletion, and unhides.",
+      "depth": 2,
+      "cap": 140,
+      "asm_count": 2000
+    },
+    {
+      "address": "10082b80",
+      "label": "scene_cancel_playback",
+      "confidence": "confirmed",
+      "role": "Cancel, virtual +0x3d4. Stops the scene's events, unhides, fires OnCanceled with the stored activator, and clears both flags without applying position_end.",
+      "depth": 2,
+      "cap": 100,
+      "asm_count": 1200
+    },
+    {
+      "address": "10082ee0",
+      "label": "scene_dispatch_start_event",
+      "confidence": "confirmed",
+      "role": "CSceneEntity::DispatchStartEvent, virtual +0x3e0. Reached once per event transition from CChoreoScene::Process and switched through the jump table at 0x10083500; the gesture and sequence arms carry an animation sequence label in the event's param.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 2800
+    },
+    {
+      "address": "10083cd0",
+      "label": "scene_find_named_entity",
+      "confidence": "confirmed",
+      "role": "CSceneEntity::FindNamedEntity, virtual +0x430. Resolves a .vcd actor name to a live entity, handling Player, !playercontroller, !dialogpartner and !target1 through !target4 before falling through to a name lookup.",
+      "depth": 2,
+      "cap": 140,
+      "asm_count": 2000
+    },
+    {
+      "address": "100843d0",
+      "label": "scene_apply_anim_set",
+      "confidence": "confirmed",
+      "role": "Applies the scene's animation set. Picks the male or female model by the local player, then for each scene actor resolves the entity, casts it to CBaseAnimating, and hands it the scene, the actor's bonerename pair, the chosen anim-set model and the BaseAnim model through actor virtual +0x3d4. Recurses over nested subscenes.",
+      "depth": 2,
+      "cap": 160,
+      "asm_count": 2400
+    },
+    {
+      "address": "1007d7f0",
+      "label": "choreo_scene_process",
+      "confidence": "confirmed",
+      "role": "CChoreoScene::Process. Classifies every event against the scene clock each frame and calls back through IChoreoEventCallback. Declared as a seed so a captured caller address resolves to a name; deliberately not a capture target, for the volume reason recorded in the findings.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 2800
+    },
+    {
+      "address": "100819b0",
+      "label": "scene_think",
+      "confidence": "confirmed",
+      "role": "CSceneEntity playback think, virtual +0x218. Re-arms itself every frame while playing, computes m_flCurrentTime as curtime minus m_flStartTime, hands the scene the sound-mixer lead, drives Process, and finishes or re-pins the actors. Declared as a seed for caller resolution.",
+      "depth": 2,
+      "cap": 140,
+      "asm_count": 2000
+    },
+    {
+      "address": "10084c80",
+      "label": "instanced_scene_think",
+      "confidence": "confirmed",
+      "role": "CInstancedSceneEntity think, the one virtual slot the dialogue-scene class does not share with CSceneEntity. Declared as a seed so a dispatch reached from the instanced population resolves to a name rather than to the map-scene think.",
+      "depth": 2,
+      "cap": 140,
+      "asm_count": 2000
+    },
+    {
+      "address": "10081e00",
+      "label": "scene_input_start_playback",
+      "confidence": "eliminated-lead",
+      "role": "InputStartPlayback. Rejected as a hook target: it opens with MOV AL,[0x106e7e91] against the one-shot intro-skip global, so its prologue carries a relocated absolute operand, and it can decline the input without ever reaching playback. Retained so the lead is not re-explored.",
+      "depth": 1,
+      "cap": 80,
+      "asm_count": 800
+    },
+    {
+      "address": "10027470",
+      "label": "c_baseentity_get_ref_ehandle",
+      "confidence": "confirmed",
+      "role": "CBaseEntity::GetRefEHandle; virtual slot +4 on every server entity class examined, returning this+0x448. The body the capture's direct field read is derived from.",
+      "depth": 1,
+      "cap": 40,
+      "asm_count": 40
+    },
+    {
+      "address": "101a6260",
+      "label": "cine_scripted_sequence_factory",
+      "confidence": "partial",
+      "role": "scripted_sequence factory over the CCineNPC constructor shared with aiscripted_sequence. Seed for locating the BeginSequence input handler through the datamap at 0x10593628.",
+      "depth": 2,
+      "cap": 100,
+      "asm_count": 1200
+    },
+    {
+      "address": "101a8fe0",
+      "label": "cine_aiscripted_sequence_factory",
+      "confidence": "partial",
+      "role": "aiscripted_sequence factory; allocates 0x608c and installs vftable 0x10477d1c with datamap 0x10593628. Seed for the same question.",
+      "depth": 2,
+      "cap": 100,
+      "asm_count": 1200
+    }
+  ],
+  "relationships": [
+    {
+      "from": "100819b0",
+      "to": "1007d7f0",
+      "confidence": "confirmed",
+      "evidence": "the playback think drives the scene clock through Process each frame"
+    },
+    {
+      "from": "1007d7f0",
+      "to": "10082ee0",
+      "confidence": "confirmed",
+      "evidence": "IChoreoEventCallback start dispatch, virtual +0x3e0"
+    },
+    {
+      "from": "10084c80",
+      "to": "1007d7f0",
+      "confidence": "confirmed",
+      "evidence": "the instanced dialogue think drives the same scene processor"
+    },
+    {
+      "from": "100829e0",
+      "to": "100843d0",
+      "confidence": "confirmed",
+      "evidence": "Start applies the animation set after binding the actors"
+    },
+    {
+      "from": "100843d0",
+      "to": "10083cd0",
+      "confidence": "confirmed",
+      "evidence": "the anim-set pass resolves each scene actor to an entity"
+    },
+    {
+      "from": "10082ee0",
+      "to": "10083cd0",
+      "confidence": "partial",
+      "evidence": "the lookat, face and cameramove arms resolve their param as an entity"
+    },
+    {
+      "from": "10081e00",
+      "to": "100829e0",
+      "confidence": "confirmed",
+      "evidence": "the Start input reaches playback through virtual +0x3c8 when it does not take the intro-skip branch"
+    }
+  ]
+}

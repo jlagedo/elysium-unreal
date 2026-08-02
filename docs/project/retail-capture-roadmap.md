@@ -26,6 +26,15 @@ launcher, while `client.dll`, `engine.dll`, and `StudioRender.dll` are the origi
 modules loaded from the base install, and every hooked animation target lives in those
 three. Source joins resolve patch-first for the same reason.
 
+The request side adds a fifth module with one caveat that travels with it. `vampire.dll`
+is the server game DLL, and the install carries two: the file the process maps is a
+five-section plaintext image, beside a seven-section `vampire.dll.12` whose extra `stxt*`
+sections are the wrapper the retail installer wrote and in which none of the recovered
+addresses exist. The capture target is therefore an owner-install image rather than the
+shipped bytes. Nothing about the method changes — the profile hash-gates whatever loads,
+so an install carrying only the wrapped image fails to activate rather than hooking noise
+— but the phrase "original retail modules" covers the other three and not this one.
+
 `docs/project/roadmap.md` owns project priority and the roll-up rows `0.10`, `RE32`, and
 `RE33`. This file owns the detailed task order. Confirmed VtMB facts belong in the
 relevant `docs/vtmb/` document; hook target addresses, prototypes, confidence, and
@@ -38,7 +47,7 @@ captures, decompilation, indexes, and reports stay under `$ELYSIUM_WORK_ROOT/res
 | Step | Owned by | Produces |
 |---|---|---|
 | Run the exact build with hooks armed before map load | CAP1 | one finalized capture database plus its calibration measurement |
-| Complete what the capture records | CAP2 | grouping, actor/model/skeleton census, source attribution, consumed byte spans |
+| Complete what the capture records | CAP2 | grouping, actor/model/skeleton census, source attribution, consumed byte spans, the request that caused each pose group |
 | Decode and index the streams | CAP3 | one queryable, deduplicated, joinable database |
 | Inspect retail against export and decoder | CAP4 | byte-coverage and per-bone transform differences |
 | Close what the difference proves | CAP5 | recovered rules, regressions, facts in the owning `docs/vtmb/` topic |
@@ -164,14 +173,14 @@ a later, longer corpus makes volume bite.
 | Order | Priority | Phase | Outcome |
 |---:|---|---|---|
 | 1 | P0 — done | CAP1 — first run and calibration | The instrument that exists produces one finalized `sp_theatre` database, and its measured rates, counts, and joins replace every estimate |
-| 2 | P0 — in progress | CAP2 — complete the capture | Contributions group, actors and skeletons are identified, and every fired contribution names its source owner, indices, and consumed byte spans |
+| 2 | P0 — in progress | CAP2 — complete the capture | Contributions group, actors and skeletons are identified, every fired contribution names its source owner, indices, and consumed byte spans, and each pose group names the request that caused it |
 | 3 | P0 | CAP3 — decode and index | One deduplicated, compressed, joinable database answers per-actor and per-time questions without re-running the game |
 | 4 | P0 | CAP4 — inspect against export and decoder | Byte ranges the runtime reads that we do not, and the first mismatching stage and bone per pose group |
 | 5 | P1 | CAP5 — close what the difference proves | Recovered rules, each with a regression and a fact in the owning topic |
 | 6 | P1 | CAP6 — face and lips | The same loop over expression, flex, phoneme, and deformed-vertex state |
 | 7 | P2 | CAP7 — handoff and trim | Engine-neutral evaluator feeds Unreal; unused probes and readers are deleted |
 
-**The next and only current task is CAP2.6.**
+**The next and only current task is CAP2.7.**
 
 ## CAP1 — First theatre run and calibration
 
@@ -576,15 +585,67 @@ calling convention into the case specification before a hook is written.
   JSON, which broke all four earlier verifiers. CAP2.4's fault check counted any bit in the
   fault word, so this task's new bits read as attribution failures. And the roots check
   assumed the first decoded bone was bone zero. Each has a regression.
-- [ ] **CAP2.6 Trigger and scene events.** Record every sequence/activity change and
+- [x] **CAP2.6 Trigger and scene events.** Record every sequence/activity change and
   scene-driven animation request with caller, target entity, and time, so a pose group is
   attributable to what asked for it.
+
+  The request side is in `vampire.dll`, so the capture stands the server game DLL up as a
+  fifth hash-gated module. Six inline detours cover the scene lifecycle, the choreographed
+  event dispatch, the actor resolver and the animation-set application, and one client
+  detour covers the sequence-change point; all seven are inline because the module is
+  incrementally linked and a vtable slot holds a thunk. A sixth stream `scene.elscn`
+  (`ELSCN1`) carries them in its own `scene_events` and `sequence_changes` tables rather
+  than in `records`, because a scene request runs outside every pose-build bracket and is
+  neither a dictionary row nor an event on the generation spine. `actor.elact` bumps to
+  `ELACT3` to carry each entity's own handle. `uv run elysium research
+  verify_scene_requests <session>…` reads a finalized database read-only and reports
+  coverage, binding, the join, attribution, the dispatched-event histogram, callers,
+  truncation, faults and cost.
+
+  **The join is the result.** A server request and a client pose group name the same entity
+  only if the handle each side records independently agrees: the server stores it at
+  `CBaseEntity+0x448` and the client at `C_BaseEntity+0xe4`, both packing a 13-bit index
+  and a serial. One complete cutscene resolves **470 of 470** actor bindings to an indexed
+  entity, reproduces the fixed renderable offset on **195 of 195** sequence changes — a
+  population CAP1.3 never measured — and closes **124 of 124** scene actors onto the
+  animation set their scene applied, four values from four observation points with none
+  derived from another. Facts: `docs/vtmb/choreographed_scenes.md`,
+  `docs/vtmb/animation_and_movers.md`; method and measurements:
+  `docs/vtmb/vtmb-animation-reverse-engineering.md`.
+
+  The run carries **zero** drops, skipped, filtered, unbracketed, bracket overflow,
+  contribution unscoped, scene unscoped, scene overflow and scene truncation, with no
+  incomplete tail on any of the six streams and exact byte closure over the scene stream.
+  It costs **0.4 MB** of a 4.08 GB database at a queue high-water of **176**, against the
+  368 CAP2.3 reached and CAP2.5's 180–268.
+
+  **The request side is reproducible.** Two acquisitions agree on every authored count —
+  **20** playback transitions, **113** dispatched events, **40** animation-set
+  applications and **173** scopes — and on the join, closing **124 of 124** scene actors
+  onto their animation set in both. Compared as authored shape rather than as reached set,
+  all **10** scene files present in both runs dispatched an identical ordered sequence of
+  event type, param, scene-relative time and actor, with none divergent and none reached
+  by one run only. The per-actor resolutions split **280,857 + 496** to exactly the
+  **281,353** the other run recorded whole.
+
+  Two measured facts bound what the run proves. **The actor resolver runs every frame, not
+  once per scene** — `position_start` makes a scene re-pin and re-resolve its whole cast
+  each frame, which is 281,353 resolutions against 40 animation-set applications, so only
+  the resolutions a request scope encloses are recorded and the rest are counted. Two runs
+  reproduced the uncovered count at **280,857** exactly. And **an activity change is
+  observable only as a sequence change**: the selection data is recovered, but no selector
+  is located in either module, so the run counts sequence transitions and dispatched
+  sequence labels and never an activity.
 - [ ] **CAP2.7 Second acquisition.** Repeat CAP1.1 with the completed capture and report the
   same integrity counts plus unjoined-record counts. This database, not CAP1's, is the one
   CAP4 inspects. The scene must include off-center ranged aiming on both axes: every 3×3
   blend grid in the corpus is a weapon aim layer that no cutscene reaches, so a second
   cutscene leaves the four-cell blend path unexercised through CAP4. The attribution
   report's grid distribution and per-sequence cell counts are what show whether it fired.
+
+  The scene it captures is not the theatre, so it exercises a different request
+  population: `verify_scene_requests` reports over whatever scenes that map runs, and its
+  cross-run shape digest compares only the scene files a run shares with another.
 
 ## CAP3 — Decode and index
 

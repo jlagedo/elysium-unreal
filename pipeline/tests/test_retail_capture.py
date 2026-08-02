@@ -32,6 +32,7 @@ from research.tooling.capture.calibrate_theatre_capture import calibrate
 from research.tooling.capture.verify_entity_pointer_join import address, verify
 from research.tooling.capture.finalize_capture_database import (
     ACTOR_FILE_HEADER,
+    ACTOR_OBSERVATION_HEADER_V2,
     ACTOR_OBSERVATION_HEADER,
     ANIMATION_FILE_HEADER,
     ANIMATION_RECORD_HEADER,
@@ -46,6 +47,9 @@ from research.tooling.capture.finalize_capture_database import (
     POSE_RECORD_HEADER,
     RENDER_INFO_BYTES,
     ROOT_TRANSFORM_BYTES,
+    SCENE_FILE_HEADER,
+    SCENE_REQUEST_HEADER,
+    SEQUENCE_CHANGE_HEADER,
     finalize,
 )
 from research.tooling.capture.verify_pose_build_generation import (
@@ -76,6 +80,9 @@ from research.tooling.capture.resolve_consumed_spans import (
 from research.tooling.capture.verify_consumed_spans import (
     compare as compare_spans,
     verify as verify_spans,
+)
+from research.tooling.capture.verify_scene_requests import (
+    verify as verify_scene,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -194,13 +201,131 @@ def animation_record(
     )
 
 
+# The server game DLL's load base in a synthetic session. A caller address is
+# resolved by subtracting it and adding the specification's image base, so the
+# two have to be distinguishable for that arithmetic to be exercised at all.
+VAMPIRE_BASE = 0x30000000
+# Reasons, mirroring SceneReason in the probe.
+SCENE_STARTED = 1
+SCENE_FINISHED = 2
+SCENE_CANCELLED = 3
+SCENE_EVENT = 4
+SCENE_BOUND = 5
+SCENE_ANIMSET = 6
+
+
+def scene_request_record(
+    magic: bytes,
+    sequence: int,
+    qpc: int,
+    reason: int,
+    *,
+    scope: int = 1,
+    parent_scope: int = 0,
+    scene_entity: int = 0x5000,
+    scene_ref_handle: int = (7 << 13) | 40,
+    scene_vftable: int = 0x1044F05C,
+    target_entity: int = 0,
+    target_ref_handle: int = 0xFFFFFFFF,
+    caller_address: int = VAMPIRE_BASE + 0x82F31,
+    event_type: int = -1,
+    event_start: float = 0.0,
+    event_end: float = -1.0,
+    scene_time: float = 0.0,
+    playing_back: int = 1,
+    faults: int = 0,
+    scene_file: str = "scenes/theatre/courtroom.vcd",
+    actor_name: str = "",
+    text0: str = "",
+    text1: str = "",
+    text2: str = "",
+) -> bytes:
+    return SCENE_REQUEST_HEADER.pack(
+        magic,
+        SCENE_REQUEST_HEADER.size,
+        sequence,
+        qpc,
+        7,
+        reason,
+        scope,
+        parent_scope,
+        scene_entity,
+        scene_ref_handle,
+        scene_vftable,
+        target_entity,
+        target_ref_handle,
+        caller_address,
+        event_type,
+        event_start,
+        event_end,
+        scene_time,
+        playing_back,
+        faults,
+        scene_file.encode("ascii") + b"\0",
+        actor_name.encode("ascii") + b"\0",
+        text0.encode("ascii") + b"\0",
+        text1.encode("ascii") + b"\0",
+        text2.encode("ascii") + b"\0",
+    )
+
+
+def sequence_change_record(
+    sequence: int,
+    qpc: int,
+    *,
+    generation: int = 1,
+    client_entity: int = 0x1FFC,
+    ref_handle: int = (7 << 13) | 40,
+    renderable: int = 0x2000,
+    studio_hdr: int = 0x1000,
+    checksum: int = 0x3000,
+    transitions_before: int = 0,
+    transitions_after: int = 1,
+    caller_address: int = 0x10091650,
+    faults: int = 0,
+) -> bytes:
+    return SEQUENCE_CHANGE_HEADER.pack(
+        b"SEQC",
+        SEQUENCE_CHANGE_HEADER.size,
+        sequence,
+        qpc,
+        7,
+        generation,
+        client_entity,
+        ref_handle,
+        renderable,
+        studio_hdr,
+        checksum,
+        transitions_before,
+        transitions_after,
+        caller_address,
+        faults,
+    )
+
+
+def _actor_layout(version: int) -> struct.Struct:
+    return (
+        ACTOR_OBSERVATION_HEADER
+        if version >= 3
+        else ACTOR_OBSERVATION_HEADER_V2
+    )
+
+
 def actor_lifetime_record(
-    sequence: int, qpc: int, reason: int, *, entity: int = 0x1FFC
+    sequence: int,
+    qpc: int,
+    reason: int,
+    *,
+    entity: int = 0x1FFC,
+    ref_handle: int = (7 << 13) | 40,
+    version: int = 3,
 ) -> bytes:
     """A construction or destruction: an address and a time, no identity."""
-    return ACTOR_OBSERVATION_HEADER.pack(
+    layout = _actor_layout(version)
+    tail = (ref_handle,) if version >= 3 else ()
+    return layout.pack(
         b"ACTR",
-        ACTOR_OBSERVATION_HEADER.size,
+        layout.size,
         sequence,
         qpc,
         7,
@@ -212,6 +337,7 @@ def actor_lifetime_record(
         0,
         0,
         0,
+        *tail,
         b"\0",
     )
 
@@ -229,10 +355,14 @@ def actor_record(
     checksum: int = 0x3000,
     previous_checksum: int = 0,
     bone_count: int = 1,
+    ref_handle: int = (7 << 13) | 40,
+    version: int = 3,
 ) -> bytes:
-    return ACTOR_OBSERVATION_HEADER.pack(
+    layout = _actor_layout(version)
+    tail = (ref_handle,) if version >= 3 else ()
+    return layout.pack(
         b"ACTR",
-        ACTOR_OBSERVATION_HEADER.size,
+        layout.size,
         sequence,
         qpc,
         7,
@@ -244,6 +374,7 @@ def actor_record(
         checksum,
         previous_checksum,
         bone_count,
+        *tail,
         model_name.encode("ascii") + b"\0",
     )
 
@@ -731,7 +862,8 @@ def write_session(
     census_records: bytes | None = None,
     actor_records: bytes | None = None,
     contribution_records: bytes | None = None,
-    actor_version: int = 2,
+    scene_records: bytes | None = None,
+    actor_version: int = 3,
     done: str = "complete=1\nqueued=2\nwritten=2\ndropped=0\n",
     boundary: dict[str, object] | None = None,
     console: str | None = None,
@@ -860,6 +992,26 @@ def write_session(
                 b"",
             )
             + contribution_records
+        )
+    if scene_records is not None:
+        (session / "scene.elscn").write_bytes(
+            SCENE_FILE_HEADER.pack(
+                b"ELSCN1",
+                1,
+                SCENE_FILE_HEADER.size,
+                QPC_FREQUENCY,
+                90,
+                12,
+                VAMPIRE_BASE,
+                0x10000000,
+                0x82EE0,
+                0x83CD0,
+                0x843D0,
+                0x91110,
+                b"3" * 64 + b"\0",
+                b"",
+            )
+            + scene_records
         )
 
 
@@ -1893,7 +2045,9 @@ class RetailCaptureTests(unittest.TestCase):
                 animation_records=animation_record(
                     b"BASE", 2, 101, client_entity=0x1FFC
                 ),
-                actor_records=actor_record(3, 99, "models/test.mdl"),
+                actor_records=actor_record(
+                    3, 99, "models/test.mdl", version=1
+                ),
                 actor_version=1,
             )
             finalize(session)
@@ -3746,6 +3900,654 @@ class RetailCaptureTests(unittest.TestCase):
         # Rebased, not masked: the operand is still compared, byte for byte.
         self.assertIn("MatchesDeclaredPrologue", backend)
         self.assertIn("active.Profile->Pe.PreferredImageBase", backend)
+
+    # ------------------------------------------------------------------
+    # CAP2.6 -- trigger and scene events
+    # ------------------------------------------------------------------
+
+    def _scene_session(
+        self,
+        session: Path,
+        scene_records: bytes,
+        *,
+        actor_records: bytes | None = None,
+        done_extra: str = "",
+    ) -> None:
+        write_session(
+            session,
+            pose_records=pose_record(1, 100, "models/courtroom_bip1.mdl"),
+            animation_records=animation_record(
+                b"BASE", 2, 101, client_entity=0x1FFC
+            ),
+            actor_records=(
+                actor_records
+                if actor_records is not None
+                else actor_record(3, 99, "models/courtroom_bip1.mdl")
+            ),
+            scene_records=scene_records,
+            done=(
+                "complete=1\nqueued=2\nwritten=2\ndropped=0\nqueue_peak=42\n"
+                "scene_faults=0\nscene_overflow=0\nscene_unscoped=0\n"
+                "scene_truncated=0\n" + done_extra
+            ),
+        )
+        finalize(session)
+
+    def _clean_scene_records(self) -> bytes:
+        """A scene that starts, applies its animation set, binds one actor and
+        dispatches one sequence event -- plus the client change it produced."""
+        return (
+            scene_request_record(b"SCNE", 10, 200, SCENE_STARTED)
+            + scene_request_record(
+                b"SANM",
+                11,
+                201,
+                SCENE_ANIMSET,
+                text1="models/cinematic/courtroom_bip1.mdl",
+            )
+            + scene_request_record(
+                b"SBND",
+                12,
+                202,
+                SCENE_BOUND,
+                target_entity=0x7000,
+                target_ref_handle=(7 << 13) | 40,
+                actor_name="Courtroom_bip1",
+                text2="Bip02>Bip01",
+            )
+            + scene_request_record(
+                b"SEVT",
+                13,
+                203,
+                SCENE_EVENT,
+                event_type=SEQUENCE_EVENT,
+                event_start=0.5,
+                event_end=15.3,
+                scene_time=0.5,
+                actor_name="Courtroom_bip1",
+                text0="entire_scene",
+            )
+            + sequence_change_record(14, 204)
+        )
+
+    def test_scene_finalizer_keeps_requests_out_of_the_event_table(
+        self,
+    ) -> None:
+        # A scene request is neither a dictionary row nor an event on the
+        # generation spine, so it lands in its own tables and never widens
+        # `records` with a generation no scene record could carry.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._scene_session(session, self._clean_scene_records())
+            connection = sqlite3.connect(session / "capture.sqlite")
+            try:
+                events = connection.execute(
+                    "SELECT count(*) FROM scene_events"
+                ).fetchone()[0]
+                changes = connection.execute(
+                    "SELECT count(*) FROM sequence_changes"
+                ).fetchone()[0]
+                scene_rows_in_records = connection.execute(
+                    "SELECT count(*) FROM records WHERE stream_name = 'scene'"
+                ).fetchone()[0]
+                index = connection.execute(
+                    "SELECT target_entity_index FROM scene_events"
+                    " WHERE kind = 'SBND'"
+                ).fetchone()[0]
+            finally:
+                connection.close()
+            self.assertEqual(events, 4)
+            self.assertEqual(changes, 1)
+            self.assertEqual(scene_rows_in_records, 0)
+            # The low 13 bits of the handle, decoded once at finalize time.
+            self.assertEqual(index, 40)
+
+    def test_scene_verifier_accepts_a_fully_attributed_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._scene_session(session, self._clean_scene_records())
+            report = verify_scene(session)
+            self.assertTrue(report["support"]["carries_scene"])
+            self.assertTrue(report["support"]["carries_indices"])
+            self.assertEqual(report["coverage"]["unscoped"], 0)
+            self.assertEqual(report["coverage"]["scenes_started"], 1)
+            self.assertEqual(report["binding"]["bindings_resolved"], 1)
+            self.assertEqual(report["binding"]["bindings_with_an_index"], 1)
+            self.assertEqual(report["activity"]["sequence_events"], 1)
+            self.assertFalse(report["activity"]["activity_enum_observed"])
+            self.assertTrue(report["truncation"]["lossless"])
+            self.assertTrue(report["faults"]["clean"])
+            self.assertTrue(report["overhead"]["byte_closure"])
+            self.assertTrue(report["verdict"]["judgeable"])
+            self.assertTrue(report["verdict"]["requests_complete"])
+            self.assertTrue(report["verdict"]["requests_joined"])
+
+    def test_scene_verifier_reproduces_the_renderable_offset(self) -> None:
+        # CAP1.3's fixed +4 re-derived from a population it never measured:
+        # both terms are recorded separately on every sequence change.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._scene_session(session, self._clean_scene_records())
+            report = verify_scene(session)
+            self.assertEqual(report["join"]["renderable_pairs"], 1)
+            self.assertEqual(report["join"]["renderable_agreeing"], 1)
+            self.assertTrue(report["join"]["joins"])
+
+    def test_scene_verifier_reports_an_index_serving_two_client_entities(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._scene_session(
+                session,
+                self._clean_scene_records(),
+                # One index, two live client entities, with no destruction
+                # between them to separate the two actors.
+                actor_records=(
+                    actor_record(3, 99, "models/courtroom_bip1.mdl")
+                    + actor_record(
+                        4,
+                        99,
+                        "models/other.mdl",
+                        entity=0x4000,
+                        renderable=0x4004,
+                    )
+                ),
+            )
+            report = verify_scene(session)
+            self.assertEqual(report["join"]["client_index_conflicts"], 1)
+            self.assertFalse(report["verdict"]["requests_joined"])
+            self.assertIn(
+                "named more than one entity", report["verdict"]["statement"]
+            )
+
+    def test_scene_verifier_reports_a_record_outside_every_scene_scope(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._scene_session(
+                session,
+                scene_request_record(b"SCNE", 10, 200, SCENE_STARTED)
+                + scene_request_record(
+                    b"SBND",
+                    11,
+                    201,
+                    SCENE_BOUND,
+                    scope=0,
+                    target_entity=0x7000,
+                    target_ref_handle=(7 << 13) | 40,
+                ),
+            )
+            report = verify_scene(session)
+            self.assertEqual(report["coverage"]["unscoped"], 1)
+            self.assertFalse(report["verdict"]["requests_complete"])
+            self.assertIn(
+                "outside every scene scope", report["verdict"]["statement"]
+            )
+
+    def test_scene_verifier_reports_an_event_whose_scene_never_started(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._scene_session(
+                session,
+                self._clean_scene_records()
+                + scene_request_record(
+                    b"SEVT",
+                    15,
+                    205,
+                    SCENE_EVENT,
+                    scene_entity=0x9999,
+                    event_type=GESTURE_EVENT_TYPE,
+                    text0="entire_scene",
+                ),
+            )
+            report = verify_scene(session)
+            self.assertEqual(
+                report["coverage"]["events_without_a_started_scene"], 1
+            )
+            self.assertIn(
+                "never saw start", report["verdict"]["statement"]
+            )
+
+    def test_scene_verifier_counts_an_actor_that_resolved_to_nothing(
+        self,
+    ) -> None:
+        # The engine logs and drops the event, and the rest of the scene
+        # continues, so this is an outcome to report rather than a failure.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._scene_session(
+                session,
+                self._clean_scene_records()
+                + scene_request_record(
+                    b"SBND",
+                    15,
+                    205,
+                    SCENE_BOUND,
+                    actor_name="Missing_Actor",
+                    faults=1 << 5,
+                ),
+            )
+            report = verify_scene(session)
+            self.assertEqual(report["binding"]["bindings_unresolved"], 1)
+            self.assertEqual(
+                report["binding"]["unresolved_actors"][0]["actor"],
+                "Missing_Actor",
+            )
+            self.assertTrue(report["faults"]["clean"])
+            self.assertTrue(report["verdict"]["requests_complete"])
+
+    def test_scene_verifier_measures_the_longest_string_it_saw(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._scene_session(
+                session,
+                scene_request_record(
+                    b"SCNE",
+                    10,
+                    200,
+                    SCENE_STARTED,
+                    scene_file="s" * 60,
+                ),
+            )
+            report = verify_scene(session)
+            self.assertEqual(report["truncation"]["longest_scene_file"], 60)
+            self.assertEqual(
+                report["truncation"]["field_widths"]["scene_file"], 128
+            )
+            self.assertTrue(report["truncation"]["lossless"])
+
+    def test_scene_verifier_reports_a_truncated_field(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._scene_session(
+                session,
+                scene_request_record(
+                    b"SCNE", 10, 200, SCENE_STARTED, faults=1 << 2
+                ),
+            )
+            report = verify_scene(session)
+            self.assertEqual(report["truncation"]["truncated_records"], 1)
+            self.assertFalse(report["truncation"]["lossless"])
+            self.assertFalse(report["faults"]["clean"])
+
+    def test_scene_verifier_resolves_a_caller_against_the_vampire_spec(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._scene_session(session, self._clean_scene_records())
+            report = verify_scene(session)
+            self.assertTrue(report["callers"]["available"])
+            labels = {
+                site["nearest_preceding_label"]
+                for site in report["callers"]["sites"]
+            }
+            # The synthetic caller sits inside DispatchStartEvent's own range.
+            self.assertIn("scene_dispatch_start_event", labels)
+            self.assertEqual(report["callers"]["unresolved_records"], 0)
+
+    def test_scene_verifier_answers_a_capture_without_a_scene_stream(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=animation_record(b"BASE", 2, 101),
+            )
+            finalize(session)
+            report = verify_scene(session)
+            self.assertFalse(report["support"]["carries_scene"])
+            self.assertFalse(report["verdict"]["judgeable"])
+            self.assertIn(
+                "carries no scene stream", report["verdict"]["statement"]
+            )
+
+    def test_scene_verifier_answers_a_capture_without_entity_indices(
+        self,
+    ) -> None:
+        # Every binding resolved to nothing, so no index was ever recorded.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._scene_session(
+                session,
+                scene_request_record(b"SCNE", 10, 200, SCENE_STARTED),
+            )
+            report = verify_scene(session)
+            self.assertTrue(report["support"]["carries_scene"])
+            self.assertFalse(report["support"]["carries_indices"])
+            self.assertFalse(report["verdict"]["judgeable"])
+            self.assertIn(
+                "predates the entity-index fields",
+                report["verdict"]["statement"],
+            )
+
+    def test_finalizer_reads_both_actor_stream_versions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=animation_record(
+                    b"BASE", 2, 101, client_entity=0x1FFC
+                ),
+                actor_records=actor_record(
+                    3, 99, "models/test.mdl", version=2
+                ),
+                actor_version=2,
+            )
+            finalize(session)
+            connection = sqlite3.connect(session / "capture.sqlite")
+            try:
+                row = connection.execute(
+                    "SELECT ref_handle, entity_index FROM actor_observations"
+                ).fetchone()
+            finally:
+                connection.close()
+            self.assertEqual(row, (None, None))
+
+    def test_prior_verdicts_survive_a_scene_stream(self) -> None:
+        # Every earlier verifier has to keep judging a database that carries
+        # the sixth stream and the widened actor stream.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._scene_session(session, self._clean_scene_records())
+            # Each earlier verifier still reaches a verdict on the widened
+            # database rather than failing to read it.
+            generation = verify_generation(session)
+            self.assertTrue(generation["verdict"]["statement"])
+            # The five scene rows stay out of the generation verifier's
+            # population entirely: it counts the pose and animation records and
+            # nothing else, so no scene record can read as unassigned.
+            self.assertEqual(
+                generation["coverage"]["assigned"]
+                + generation["coverage"]["unassigned"],
+                2,
+            )
+            actors = verify_actors(session)
+            self.assertTrue(actors["support"]["carries_actors"])
+            self.assertTrue(actors["verdict"]["statement"])
+            census = verify_census(session)
+            self.assertTrue(census["verdict"]["statement"])
+            attribution = verify_attribution(session)
+            self.assertTrue(attribution["verdict"]["statement"])
+            self.assertIsNotNone(verify(session))
+
+    def test_scene_verifier_closes_the_anim_set_on_the_owner_checksum(
+        self,
+    ) -> None:
+        # The decisive check, exercised over the verifier's own join: four
+        # values recorded by four different hooks have to agree, and none is
+        # derived from another. The contribution and census rows stand in for
+        # what a real capture's other streams supply.
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._scene_session(session, self._clean_scene_records())
+            connection = sqlite3.connect(session / "capture.sqlite")
+            try:
+                connection.execute(
+                    "INSERT INTO model_headers (stream_name, ordinal,"
+                    " sequence_number, qpc, thread_id, studio_hdr, checksum,"
+                    " previous_checksum, bone_count, bone_index, model_length,"
+                    " include_model_count, include_model_index,"
+                    " studio_version, reason, image_captured, generation,"
+                    " model_name, raw_header)"
+                    " VALUES ('census', 99, 99, 99, 7, 4096, 12345, 0, 1, 0, 0,"
+                    " 0, 0, 2531, 1, 1, 0,"
+                    " 'models/cinematic/Courtroom_bip1.mdl', x'00')"
+                )
+                # An evaluation is scoped by the pose build's bracket, which is
+                # entered on the renderable rather than on the entity, so the
+                # owner is reached through generation_entity.
+                connection.execute(
+                    "UPDATE records SET owner_checksum = 12345,"
+                    " generation_entity = 8192, qpc = 300 WHERE id ="
+                    " (SELECT min(id) FROM records)"
+                )
+                connection.commit()
+            finally:
+                connection.close()
+            report = verify_scene(session)
+            owner = report["join"]["anim_set_owner"]
+            self.assertTrue(owner["available"])
+            self.assertEqual(owner["compared"], 1)
+            self.assertEqual(owner["agreeing"], 1)
+            self.assertEqual(owner["disagreeing"], 0)
+            self.assertTrue(report["join"]["joins"])
+            self.assertIn(
+                "animated under the animation set",
+                report["verdict"]["statement"],
+            )
+
+    def test_scene_verifier_reports_an_animset_no_owner_matches(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._scene_session(session, self._clean_scene_records())
+            connection = sqlite3.connect(session / "capture.sqlite")
+            try:
+                connection.execute(
+                    "INSERT INTO model_headers (stream_name, ordinal,"
+                    " sequence_number, qpc, thread_id, studio_hdr, checksum,"
+                    " previous_checksum, bone_count, bone_index, model_length,"
+                    " include_model_count, include_model_index,"
+                    " studio_version, reason, image_captured, generation,"
+                    " model_name, raw_header)"
+                    " VALUES ('census', 99, 99, 99, 7, 4096, 12345, 0, 1, 0, 0,"
+                    " 0, 0, 2531, 1, 1, 0, 'models/other/unrelated.mdl',"
+                    " x'00')"
+                )
+                # An evaluation is scoped by the pose build's bracket, which is
+                # entered on the renderable rather than on the entity, so the
+                # owner is reached through generation_entity.
+                connection.execute(
+                    "UPDATE records SET owner_checksum = 12345,"
+                    " generation_entity = 8192, qpc = 300 WHERE id ="
+                    " (SELECT min(id) FROM records)"
+                )
+                connection.commit()
+            finally:
+                connection.close()
+            report = verify_scene(session)
+            owner = report["join"]["anim_set_owner"]
+            self.assertEqual(owner["disagreeing"], 1)
+            self.assertFalse(report["join"]["joins"])
+            self.assertIn(
+                "animated under no model matching",
+                report["verdict"]["statement"],
+            )
+
+    def test_calibration_closes_byte_accounting_over_the_scene_stream(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._scene_session(session, self._clean_scene_records())
+            report = calibrate(session)
+            closure = report["volume"]["byte_closure"]["scene"]
+            self.assertTrue(closure["closes"])
+            self.assertEqual(
+                closure["derived_payload_bytes"],
+                4 * SCENE_REQUEST_HEADER.size + SEQUENCE_CHANGE_HEADER.size,
+            )
+
+    def test_sequence_density_counts_the_scene_tables(self) -> None:
+        # The CAP2.2 defect in a new place: scene rows draw from the same global
+        # counter, so a density check that did not read their tables would turn
+        # CAP1.2's loss proof into a false alarm.
+        from research.tooling.capture.calibrate_theatre_capture import (
+            SEQUENCE_TABLES,
+        )
+
+        self.assertIn("scene_events", SEQUENCE_TABLES)
+        self.assertIn("sequence_changes", SEQUENCE_TABLES)
+
+    def test_scene_layouts_match_the_probe_that_writes_them(self) -> None:
+        source = (
+            REPO_ROOT
+            / "research"
+            / "tooling"
+            / "capture"
+            / "live_pose_hook.cpp"
+        ).read_text(encoding="utf-8")
+        self.assertEqual(SCENE_FILE_HEADER.size, 128)
+        self.assertEqual(SCENE_REQUEST_HEADER.size, 600)
+        self.assertEqual(SEQUENCE_CHANGE_HEADER.size, 68)
+        self.assertEqual(ACTOR_OBSERVATION_HEADER.size, 128)
+        self.assertIn("sizeof(SceneFileHeader) == 128", source)
+        self.assertIn("sizeof(SceneRequestHeader) == 600", source)
+        self.assertIn("sizeof(SequenceChangeHeader) == 68", source)
+        self.assertIn("sizeof(ActorObservationHeader) == 128", source)
+        self.assertIn('std::memcpy(sceneHeader.magic, "ELSCN1", 6)', source)
+        self.assertIn('std::memcpy(actorHeader.magic, "ELACT3", 6)', source)
+
+    def test_scene_hooks_are_installed_inside_out_and_removed_outside_in(
+        self,
+    ) -> None:
+        source = (
+            REPO_ROOT
+            / "research"
+            / "tooling"
+            / "capture"
+            / "live_pose_hook.cpp"
+        ).read_text(encoding="utf-8")
+        install = source.index("bool InstallSceneHooks(")
+        install_end = source.index("bool InstallHooks(", install)
+        block = source[install:install_end]
+        # A frame that opens a scope must not be live while the frames that
+        # record inside it are not.
+        order = [
+            block.index('"client.maintain_sequence_transitions"'),
+            block.index('"vampire.scene_find_named_entity"'),
+            block.index('"vampire.scene_apply_anim_set"'),
+            block.index('"vampire.scene_on_finished"'),
+            block.index('"vampire.scene_cancel_playback"'),
+            block.index('"vampire.scene_dispatch_start_event"'),
+            block.index('"vampire.scene_start_playback"'),
+        ]
+        self.assertEqual(order, sorted(order))
+
+        remove = source.index("void RemoveHooks()")
+        removal = source[remove:]
+        disable = removal.index("HookBackends::Disable(&gSceneStartPlaybackHook)")
+        for handle in (
+            "gSceneDispatchStartEventHook",
+            "gSceneCancelPlaybackHook",
+            "gSceneOnFinishedHook",
+            "gSceneApplyAnimSetHook",
+            "gSceneFindNamedEntityHook",
+            "gMaintainSequenceTransitionsHook",
+        ):
+            later = removal.index(f"HookBackends::Disable(&{handle})")
+            self.assertGreater(later, disable)
+            disable = later
+        release = removal.index("HookBackends::Release(&gSceneStartPlaybackHook)")
+        for handle in (
+            "gSceneDispatchStartEventHook",
+            "gSceneCancelPlaybackHook",
+            "gSceneOnFinishedHook",
+            "gSceneApplyAnimSetHook",
+            "gSceneFindNamedEntityHook",
+            "gMaintainSequenceTransitionsHook",
+        ):
+            later = removal.index(f"HookBackends::Release(&{handle})")
+            self.assertGreater(later, release)
+            release = later
+
+    def test_sequence_change_hook_reads_the_history_before_and_after(
+        self,
+    ) -> None:
+        source = (
+            REPO_ROOT
+            / "research"
+            / "tooling"
+            / "capture"
+            / "live_pose_hook.cpp"
+        ).read_text(encoding="utf-8")
+        start = source.index("HookMaintainSequenceTransitions(")
+        block = source[start : source.index("\nconst elysium", start)]
+        before = block.index("ReadTransitionCount(entity, &before)")
+        call = block.index("gOriginalMaintainSequenceTransitions(")
+        after = block.index("ReadTransitionCount(entity, &after)")
+        self.assertLess(before, call)
+        self.assertLess(call, after)
+        # Emitted only when the history actually grew.
+        self.assertIn("after != before", block)
+        # Never CurrentGeneration: that would move a total CAP2.1 measured.
+        self.assertIn("EnclosingGeneration()", source)
+
+    def test_scene_targets_are_declared_against_the_specification(self) -> None:
+        registry = json.loads(
+            (
+                REPO_ROOT
+                / "research"
+                / "tooling"
+                / "capture"
+                / "contracts"
+                / "binary_profiles.json"
+            ).read_text(encoding="utf-8")
+        )
+        profiles = {
+            profile["module"]: profile for profile in registry["profiles"]
+        }
+        self.assertIn("vampire.dll", profiles)
+        vampire = profiles["vampire.dll"]
+        spec = json.loads(
+            (
+                REPO_ROOT
+                / "research"
+                / "cases"
+                / "animation-pose"
+                / "specs"
+                / "scene_requests.json"
+            ).read_text(encoding="utf-8")
+        )
+        functions = {
+            entry["label"]: int(entry["address"], 16)
+            for entry in spec["functions"]
+        }
+        image_base = int(spec["binary"]["image_base"], 0)
+        self.assertEqual(len(vampire["targets"]), 6)
+        for target in vampire["targets"]:
+            # An incrementally linked module holds E9 thunks in its vtable
+            # slots, so a vtable backend would validate a thunk.
+            self.assertEqual(target["kind"], "inline")
+            self.assertEqual(target["backend"], "inline_detour")
+            self.assertNotIn("relocated_operand", target)
+            label = target["source_function_label"]
+            self.assertEqual(
+                functions[label], image_base + int(target["rva"], 0)
+            )
+        widths = {
+            target["source_function_label"]: len(target["expected_bytes"]) // 2
+            for target in vampire["targets"]
+        }
+        # The inline backend refuses a decoded prologue wider than the
+        # declaration, so the nine- and ten-byte widths are required.
+        self.assertEqual(widths["scene_start_playback"], 9)
+        self.assertEqual(widths["scene_cancel_playback"], 9)
+        self.assertEqual(widths["scene_on_finished"], 10)
+
+    def test_vampire_profile_names_the_module_the_process_loads(self) -> None:
+        source = (
+            REPO_ROOT
+            / "research"
+            / "tooling"
+            / "capture"
+            / "capture_theatre.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('"vampire.dll": _game_dll(game_root)', source)
+        # Patch-first, falling through to the base install.
+        self.assertIn('"Unofficial_Patch" / "dlls" / "vampire.dll"', source)
+        self.assertIn('"Vampire" / "dlls" / "vampire.dll"', source)
+
+
+GESTURE_EVENT_TYPE = 6
+SEQUENCE_EVENT = 7
 
 
 if __name__ == "__main__":

@@ -14,7 +14,8 @@
   "questions": [
     "How must the recovered post-blend split-inheritance correction be integrated across sequence-player, single-node, and direct playback paths, and which rendered retail invariant validates it?",
     "What are the complete nested virtual-model remap record semantics in the transformed branch inside 0x10089c40?",
-    "Which model/material decode defect causes the observed rainbow cloth independently of skeletal pose?"
+    "Which model/material decode defect causes the observed rainbow cloth independently of skeletal pose?",
+    "Where are SetSequence, ResetSequence, SelectWeightedSequence and the activity-name lookup implemented? The selection data is fully recovered (szactivitynameindex, actweight, and the 3,045-name activity table registered by vampire.dll 0x104126e0) but no selector function is located in either module, so an activity change is observable only as the sequence change it produces."
   ],
   "field_probes": [
     {
@@ -26,6 +27,11 @@
       "displacement": "724",
       "label": "setupbones_output_source",
       "role": "Enumerates readers of the field copied into SetupBones' optional output array."
+    },
+    {
+      "displacement": "e4",
+      "label": "client_entity_ref_handle",
+      "role": "C_BaseEntity's own EHANDLE, whose low 13 bits are the client entity index. Enumerates every reader so the capture's direct field read is grounded in the population the two accessors serve."
     }
   ],
   "findings": [
@@ -208,6 +214,12 @@
       "fact": "The two channel decoders take an inline detour over whole instructions with no relocated operand: 0x100889f0 is 8b4c241483ec20 over seven bytes and 0x10088ba0 is 8b4c2414d901 over six.",
       "evidence": "Read from the pinned client.dll at the file offsets for those RVAs by the same section walk that reproduces the installed 83ec085355 and a0c9024910 signatures. 0x100889f0 is MOV ECX,[ESP+0x14] then SUB ESP,0x20; 0x10088ba0 is MOV ECX,[ESP+0x14] then FLD dword [ECX]. The lowest branch target inside either function is 0x10088a1f and 0x10088bc2 respectively, both past the stolen bytes.",
       "consequence": "Both take the shared inline backend with no relocation declaration, the x87 opcode being one the backend's ModRM table already covers."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The client entity index is the low 13 bits of the entity's own EHANDLE at C_BaseEntity+0xe4.",
+      "evidence": "The constructor at 0x1008f3c0 installs five vtables, the primary at 0x1022d6d4 and subobject vtables at +4, +8, +0xc and +0x10; the +4 entry is the renderable CAP1.3 measured. Primary slot +0 is 0x1009f050, MOV [ECX+0xe4],EDX, and primary slot +4 is 0x1009f060, LEA EAX,[ECX+0xe4]; RET, so a setter and a getter independently name the same displacement. The 13-bit index and 19-bit serial split is shared with vampire.dll: client.dll carries 278 AND *,0x1fff against 269 SHR *,13 and vampire.dll 2227 against 2226, paired inside 48 bytes 191 and 1622 times.",
+      "consequence": "A client pose group can be joined to a server animation request on the index alone, bounded by the serial and by the witnessed lifetime of each address. This is the entity identity docs/vtmb/animation_and_movers.md records as missing from the render hook."
     }
   ],
   "functions": [
@@ -471,6 +483,24 @@
       "depth": 1,
       "cap": 60,
       "asm_count": 400
+    },
+    {
+      "address": "1009f060",
+      "label": "c_baseentity_get_ref_ehandle",
+      "confidence": "confirmed",
+      "role": "C_BaseEntity::GetRefEHandle; primary vtable slot +4, returning this+0xe4. One of the two independent accessors that fix the client handle displacement.",
+      "depth": 1,
+      "cap": 40,
+      "asm_count": 40
+    },
+    {
+      "address": "1009f050",
+      "label": "c_baseentity_set_ref_ehandle",
+      "confidence": "confirmed",
+      "role": "C_BaseEntity::SetRefEHandle; primary vtable slot +0, storing into this+0xe4. The second accessor, which agrees with the getter on the displacement.",
+      "depth": 1,
+      "cap": 40,
+      "asm_count": 40
     }
   ],
   "relationships": [

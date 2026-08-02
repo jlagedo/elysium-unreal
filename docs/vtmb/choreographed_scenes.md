@@ -536,6 +536,104 @@ activator, actor bindings, original transforms, hidden actors, event dispatched/
 elapsed and pause state, the player-controller relationship, and live voice offsets. Restore seeks
 the current pose and recreates active ranged events without replaying past instantaneous outputs.
 
+## What a live capture of the scene system shows
+
+Measured with the scene frames hooked in a running retail process over `sp_theatre`,
+against `vampire.dll` sha256 `c546f4de…`. Method and counts:
+`docs/vtmb/vtmb-animation-reverse-engineering.md`.
+
+### The module is incrementally linked, so a vtable slot is a thunk
+
+Every virtual slot read out of `0x1044f05c` holds an `E9 rel32` jump rather than a
+function body: slot `+0x3e0` holds `0x10010e8d`, whose branch target is `0x10082ee0`, and
+the same indirection holds for all nine slots the scene system uses. Anything that reads a
+slot expecting code — a disassembler seeded from the vftable, or a hook that replaces a
+slot — reaches the thunk and not the function this document names.
+
+**`CInstancedSceneEntity` shares every slot except the think.** Read through their thunks,
+`0x1044f05c` and `0x1044f584` resolve `+0x3c4`, `+0x3c8`, `+0x3cc`, `+0x3d0`, `+0x3d4`,
+`+0x3dc`, `+0x3e0` and `+0x430` to the same eight bodies; only `+0x218` differs
+(`0x100819b0` against `0x10084c80`). The instanced think's own prologue reads the parsed
+scene at `+0x4bc`, so the two classes share the object layout those bodies address. One
+observation point on a shared body therefore sees both the map's scenes and the per-line
+dialogue scenes at once, and the two populations are separable only by the vftable.
+
+### `DispatchStartEvent` and the fields it reads
+
+`FUN_10082ee0` is `__thiscall(this, float currenttime, CChoreoScene*, CChoreoEvent*)`,
+cleaning twelve bytes of stack arguments. It switches on the event's own type field, and
+case 6 reaches virtual `+0x400` while case 7 reaches `+0x418` — the gesture and sequence
+arms.
+
+`CChoreoEvent` stores everything the dispatcher needs inline, behind getters that are one
+instruction each [data-verified]:
+
+| Displacement | Field | Accessor |
+|---|---|---|
+| `+0x000` | type | `0x10075b70` — `MOV EAX,[ECX]` |
+| `+0x004` | name, 0x80-byte buffer | `0x10075c00` — `LEA EAX,[ECX+4]` |
+| `+0x084` | `param`, 0x80-byte buffer | `0x10075c50` |
+| `+0x104` | `param2`, 0x80-byte buffer | `0x10075ca0` |
+| `+0x184` | start time | `0x10075e70` — `FLD [ECX+0x184]` |
+| `+0x188` | end time | `0x10075f10` |
+| `+0x2b4` | actor | `0x10076690` |
+
+An event with no end time stores **`-1.0f`** rather than carrying a separate flag: the
+predicate at `0x10075f30` compares `[ECX+0x188]` against `0xbf800000`. That is the `time t
+-1` the file format section records, held as a value.
+
+`CChoreoActor` likewise stores its name at `+0x14` and its `bonerename` pair at `+0x114`
+and `+0x13c`. The anim-set pass passes the actor's own name member straight to
+`FindNamedEntity`, so an actor is recoverable from that pointer — but only from that call
+site, since the event arms pass an event `param` instead.
+
+### `FindNamedEntity` runs every frame, not once per scene
+
+One 336-second `sp_theatre` capture records **281,353** actor resolutions against 40
+animation-set applications and 20 playback transitions. The cause is `position_start`,
+which all twelve of the map's scenes set: the scene owns its cast's transforms and
+`FUN_100846c0` re-pins every actor on every frame it plays, resolving each of them by name
+again. Twelve scenes of roughly seven actors at 29.3 simulation steps per second accounts
+for the count, and two independent runs produced the same **280,857** resolutions outside
+any start or anim-set frame — identical to the record, which is what an authored scene
+under a pinned step should give.
+
+**A rebuild that resolves its cast once at `Start` and caches the handles diverges.**
+Retail re-resolves by name every frame, so an actor that is renamed, killed or replaced
+mid-scene is picked up or dropped on the next frame rather than held.
+
+### The animation set names the clip's owner, not the actor's model
+
+`FUN_100843d0` is `__thiscall(CSceneEntity, CChoreoScene*)`. The keyvalue strings at
+`0x480`/`0x484`/`0x488` and the resolved model pointers at `0x48c`/`0x490`/`0x494` are
+different members twelve bytes apart, and the frame reads the resolved ones — picking male
+or female by the local player, then handing each actor the scene, the `bonerename` pair,
+the chosen model and the `BaseAnim` model through actor virtual `+0x3d4`.
+
+Captured, a scene actor keeps its own character model and animates under the cinematic one:
+the entity bound at a given index draws as `Sheriff.mdl` or
+`toreador_Male_Armor_0.mdl` while the sequence evaluator's owning header is
+`cinematic/Santa_Monica/Courtroom/Courtroom_bip1.mdl`. Across one capture this holds for
+**124 of 124** scene actors. Note the two names are rooted differently — the keyvalue reads
+`models/cinematic/…` and the runtime studio header's own name field is relative to that
+directory — so comparing them requires stripping the prefix.
+
+### Actors and entities join by index
+
+A server `CBaseEntity` carries its own `EHANDLE` at **`+0x448`**; virtual slot `+4` is
+`LEA EAX,[ECX+0x448]; RET`, the same body for `CSceneEntity`, `CInstancedSceneEntity` and
+the `aiscripted_sequence` class alike, so it is the shared base accessor. The handle packs
+the entity index in its low **13** bits and a serial above them, with all bits set meaning
+no entity — which `FindNamedEntity`'s four `!targetN` branches decode directly, indexing an
+entity list at `PTR_DAT_10566458` whose 12-byte slots hold the entity at `+4` and the
+serial at `+8`, and accepting a slot only when its serial matches. The four cached actor
+`EHANDLE`s at `CSceneEntity+0x46c`–`+0x478` carry the same encoding.
+
+The client stores the same handle at `C_BaseEntity+0xe4`, and that encoding is shared:
+`client.dll` and `vampire.dll` both carry the 13-bit mask and the 13-bit shift in
+near-equal counts of the two halves. So one index space spans the two modules, bounded by
+the serial and by an address's lifetime.
+
 ## Where the rebuild diverges
 
 The runtime class is `FElysiumChoreoScene`
@@ -597,3 +695,12 @@ patch-first, with the `sound/` prefix stripped — so a `SceneFile` is that path
 | speak audio resolution | `FUN_10081700` |
 | actor save / re-pin / anim-set / `position_end` | `FUN_10081ed0` / `FUN_100846c0` / `FUN_100843d0` / `FUN_100821f0` |
 | `CInstancedSceneEntity` | vftable `0x1044f584`, think `0x10084c80` |
+| `CChoreoEvent` getters | type `0x10075b70`, name `0x10075c00`, `param` `0x10075c50`, `param2` `0x10075ca0`, start `0x10075e70`, end `0x10075f10`, has-end `0x10075f30`, actor `0x10076690` |
+| `CChoreoActor` getters | name `0x10072d90`, `bonerename` `0x10072e20` / `0x10072e40` |
+| `CChoreoScene::Process` / per-event classifier | `FUN_1007d7f0` / `FUN_1007d300` |
+| `CBaseEntity::GetRefEHandle` / entity list | `0x10027470` (`this+0x448`) / `PTR_DAT_10566458` |
+
+The live half is captured by `research/tooling/capture/`, whose scene stream hooks
+`0x100829e0`, `0x10081b60`, `0x10082b80`, `0x10082ee0`, `0x10083cd0` and `0x100843d0` as
+inline detours — never as vtable slots, because those hold thunks. Target addresses,
+prologues and confidence: `research/cases/animation-pose/specs/scene_requests.json`.

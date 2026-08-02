@@ -29,6 +29,7 @@ from elysium_pipeline.paths import research_root
 from research.tooling.capture.finalize_capture_database import (
     ACTOR_FILE_HEADER,
     ACTOR_OBSERVATION_HEADER,
+    ACTOR_OBSERVATION_HEADER_V2,
     ANIMATION_FILE_HEADER,
     ANIMATION_RECORD_HEADER,
     ANIMATION_RECORD_HEADER_V2,
@@ -44,6 +45,9 @@ from research.tooling.capture.finalize_capture_database import (
     POSE_RECORD_HEADER,
     POSE_RECORD_HEADER_V2,
     POSE_RECORD_HEADER_V3,
+    SCENE_FILE_HEADER,
+    SCENE_REQUEST_HEADER,
+    SEQUENCE_CHANGE_HEADER,
     read_key_values,
 )
 
@@ -153,15 +157,33 @@ def census_bytes_expression() -> str:
     )
 
 
-def actor_bytes_expression() -> str:
+def actor_bytes_expression(version: int = 3) -> str:
     """The actor stream's bytes, from its own table.
 
     An actor observation is a fixed-size dictionary row with no payload, so its
-    size is the header width and nothing needs deriving from bone count.
+    size is the header width and nothing needs deriving from bone count. The
+    width itself moved when the entity handle was added, so it is taken from the
+    stream version rather than assumed.
+    """
+    width = (
+        ACTOR_OBSERVATION_HEADER.size
+        if version >= 3
+        else ACTOR_OBSERVATION_HEADER_V2.size
+    )
+    return f"SELECT {width} AS bytes, 'ACTR' AS kind, qpc FROM actor_observations"
+
+
+def scene_bytes_expression() -> str:
+    """The scene stream's bytes, from its own two tables.
+
+    Both record kinds are a flat constant, so byte closure over this stream is a
+    multiplication rather than a sum over shapes -- which is why
+    ``record_bytes_expression`` needs no arm for it and never sees a scene row.
     """
     return (
-        f"SELECT {ACTOR_OBSERVATION_HEADER.size} AS bytes, 'ACTR' AS kind, "
-        "qpc FROM actor_observations"
+        f"SELECT {SCENE_REQUEST_HEADER.size} AS bytes, kind, qpc "
+        "FROM scene_events UNION ALL "
+        f"SELECT {SEQUENCE_CHANGE_HEADER.size}, kind, qpc FROM sequence_changes"
     )
 
 
@@ -235,6 +257,8 @@ def stream_headers(connection: sqlite3.Connection) -> dict[str, dict[str, Any]]:
             if name == "actor"
             else CONTRIBUTION_FILE_HEADER
             if name == "contribution"
+            else SCENE_FILE_HEADER
+            if name == "scene"
             else ANIMATION_FILE_HEADER
         )
         fields = layout.unpack(blob)
@@ -259,6 +283,13 @@ def stream_headers(connection: sqlite3.Connection) -> dict[str, dict[str, Any]]:
                     "studio_vtable": f"0x{int(fields[8]):08x}",
                 }
                 if name == "pose"
+                # The scene stream is the one whose hooks span two modules, so
+                # field 6 is the server game DLL and the client base follows it.
+                else {
+                    "vampire_base": f"0x{int(fields[6]):08x}",
+                    "client_base": f"0x{int(fields[7]):08x}",
+                }
+                if name == "scene"
                 else {"client_base": f"0x{int(fields[6]):08x}"}
             ),
         }
@@ -274,6 +305,8 @@ SEQUENCE_TABLES = (
     "model_headers",
     "model_images",
     "actor_observations",
+    "scene_events",
+    "sequence_changes",
 )
 def table_columns(connection: sqlite3.Connection, table: str) -> set[str]:
     """The column names a table actually carries.
@@ -393,7 +426,13 @@ def volume(
     census_kinds = []
     for stream, expression in (
         ("census", census_bytes_expression()),
-        ("actor", actor_bytes_expression()),
+        (
+            "actor",
+            actor_bytes_expression(
+                int(headers.get("actor", {}).get("version", 3) or 3)
+            ),
+        ),
+        ("scene", scene_bytes_expression()),
     ):
         if stream not in headers:
             continue

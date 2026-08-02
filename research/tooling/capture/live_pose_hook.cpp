@@ -99,6 +99,86 @@ enum ContributionFault : std::uint32_t {
     kFaultChannelOverflow = 1u << 11,
 };
 
+// An entity's own handle carries its index in the low bits and a serial in the
+// high ones, and both modules use the same split. The two displacements differ
+// because they are different classes in different binaries; the encoding is one
+// engine-wide type, which is what lets a server request and a client pose group
+// name the same entity. Facts: docs/vtmb/choreographed_scenes.md.
+constexpr DWORD kServerEntityRefHandle = 0x448;
+constexpr DWORD kClientEntityRefHandle = 0xe4;
+constexpr std::uint32_t kHandleIndexMask = 0x1fff;
+constexpr std::uint32_t kHandleSerialShift = 13;
+constexpr std::uint32_t kInvalidHandle = 0xffffffffu;
+
+// CSceneEntity fields. The keyvalue strings and the resolved model pointers are
+// different members twelve bytes apart; the capture keeps the strings, because a
+// resolved model pointer names nothing without dereferencing it.
+constexpr DWORD kSceneFileString = 0x450;
+constexpr DWORD kSceneBaseAnimString = 0x480;
+constexpr DWORD kSceneIsPlayingBack = 0x498;
+constexpr DWORD kSceneCurrentTime = 0x4a0;
+
+// CChoreoEvent fields. Every one is an inline member reached by a getter that is
+// a single instruction, so the capture reads them directly and calls nothing.
+// The three string members are 0x80-byte inline buffers.
+constexpr DWORD kEventType = 0x000;
+constexpr DWORD kEventName = 0x004;
+constexpr DWORD kEventParam = 0x084;
+constexpr DWORD kEventParam2 = 0x104;
+constexpr DWORD kEventStartTime = 0x184;
+constexpr DWORD kEventEndTime = 0x188;
+constexpr DWORD kEventActor = 0x2b4;
+
+// CChoreoActor fields. The anim-set loop hands the name getter's result straight
+// to the entity resolver, so a binding record can recover the actor from the
+// pointer it was given -- but only inside an anim-set scope, because the event
+// arms call the same resolver with an event param instead.
+constexpr DWORD kChoreoActorName = 0x14;
+constexpr DWORD kChoreoActorRenameFrom = 0x114;
+constexpr DWORD kChoreoActorRenameTo = 0x13c;
+
+// C_BaseAnimating's sequence-transition history is a CUtlVector, so the element
+// count sits three dwords above the buffer pointer. The capture reads the count
+// and nothing inside a record: which fields a 0x4c-byte entry carries is not
+// established, and a probe-side guess would be our inference rather than a
+// witness.
+constexpr DWORD kTransitionBuffer = 0x67c;
+constexpr DWORD kTransitionCount = 0x688;
+
+// Bounded string spans on a scene record. Every copy is bounded and flags its
+// own truncation, so a field width is measured by the run rather than assumed.
+constexpr DWORD kSceneFileBytes = 128;
+constexpr DWORD kSceneActorNameBytes = 64;
+constexpr DWORD kSceneTextBytes = 128;
+constexpr DWORD kSceneRenameBytes = 64;
+
+// Why a scene record could not name something it should have. Kept out of
+// ContributionFault so a widened contribution check never reads these bits as
+// attribution failures, which is the defect CAP2.5 closed.
+enum SceneFault : std::uint32_t {
+    kSceneFaultSceneEntity = 1u << 0,
+    kSceneFaultEvent = 1u << 1,
+    kSceneFaultSceneFileTruncated = 1u << 2,
+    kSceneFaultParamTruncated = 1u << 3,
+    kSceneFaultActorNameTruncated = 1u << 4,
+    kSceneFaultNoTargetEntity = 1u << 5,
+    kSceneFaultNoEntityIndex = 1u << 6,
+    kSceneFaultNoSceneScope = 1u << 7,
+    kSceneFaultNoGeneration = 1u << 8,
+    kSceneFaultTransitionArray = 1u << 9,
+    kSceneFaultRenameUnavailable = 1u << 10,
+};
+
+// Why a scene record was emitted.
+enum SceneReason : std::uint32_t {
+    kSceneStarted = 1,
+    kSceneFinished = 2,
+    kSceneCancelled = 3,
+    kSceneEventDispatched = 4,
+    kSceneActorBound = 5,
+    kSceneAnimSetApplied = 6,
+};
+
 // Which stream a queued record belongs to. The writer routes on this and frees
 // to the heap it names, so census payloads never touch the game's heap.
 enum StreamIndex : std::uint32_t {
@@ -107,6 +187,7 @@ enum StreamIndex : std::uint32_t {
     kStreamCensus = 2,
     kStreamActor = 3,
     kStreamContribution = 4,
+    kStreamScene = 5,
 };
 
 // Why an observation was emitted. Reuse is a pointer that served one checksum
@@ -327,6 +408,10 @@ struct ActorObservationHeader {
     std::uint32_t checksum;
     std::uint32_t previousChecksum;
     std::uint32_t boneCount;
+    // The entity's own handle, copied whole rather than masked, so the index and
+    // the serial both survive and the split stays something the offline verifier
+    // checks rather than something this record already assumed.
+    std::uint32_t refHandle;
     char modelName[64];
 };
 
@@ -414,6 +499,107 @@ struct ContributionRecordHeader {
     // dwords, quaternion first.
     std::uint32_t channelBoneBytes;
 };
+
+struct SceneFileHeader {
+    char magic[8];
+    std::uint32_t version;
+    std::uint32_t headerBytes;
+    std::uint64_t qpcFrequency;
+    std::int64_t startQpc;
+    std::uint32_t pid;
+    std::uint32_t vampireBase;
+    std::uint32_t clientBase;
+    std::uint32_t dispatchStartEventRva;
+    std::uint32_t findNamedEntityRva;
+    std::uint32_t applyAnimSetRva;
+    std::uint32_t maintainSequenceTransitionsRva;
+    char vampireSha256[65];
+    char reserved[3];
+};
+
+// One scene-driven animation request. `SCNE` is a playback lifecycle transition,
+// `SEVT` a dispatched choreographed event, `SBND` an actor name resolved to a
+// live entity, and `SANM` an animation set applied to a scene's cast.
+//
+// The four share one width because they share one field set; a kind that does
+// not carry a field leaves it zero, which keeps the record size a flat constant
+// and byte closure a multiplication rather than a sum over kinds.
+//
+// Strings travel and pointers do not, which is the opposite of the contribution
+// record and for the opposite reason: nothing in the capture holds an image of
+// the server's own heap, so a scene file or a sequence label that is not copied
+// here is not recoverable at all. Every copy is bounded and flags its own
+// truncation, so a width is measured rather than assumed.
+struct SceneRequestHeader {
+    char magic[4];
+    std::uint32_t recordBytes;
+    std::uint64_t sequence;
+    std::int64_t qpc;
+    std::uint32_t threadId;
+    std::uint32_t reason;
+    // The enclosing scene scope, opened by the lifecycle or anim-set frame
+    // before it runs, so the bindings it causes carry it even though their
+    // records reach the queue first.
+    std::uint32_t scope;
+    std::uint32_t parentScope;
+    std::uint32_t sceneEntity;
+    std::uint32_t sceneRefHandle;
+    // Which scene class this is. The map's logic_choreographed_scene and the
+    // per-line dialogue scenes reach the same hooked bodies and keep different
+    // clocks, so the populations have to stay separable offline.
+    std::uint32_t sceneVftable;
+    std::uint32_t targetEntity;
+    std::uint32_t targetRefHandle;
+    // The immediate call site, resolved offline against the case specification
+    // rather than named here.
+    std::uint32_t callerAddress;
+    std::int32_t eventType;
+    float eventStart;
+    float eventEnd;
+    float sceneTime;
+    std::uint32_t playingBack;
+    std::uint32_t faults;
+    char sceneFile[kSceneFileBytes];
+    char actorName[kSceneActorNameBytes];
+    // The dispatched event's param. Unused by the other kinds.
+    char text0[kSceneTextBytes];
+    // The dispatched event's param2, or the scene's BaseAnim model path.
+    char text1[kSceneTextBytes];
+    // The actor's bonerename pair, which selects which skeleton inside a shared
+    // cinematic model is this actor's.
+    char text2[kSceneRenameBytes];
+};
+
+// One witnessed sequence change on a client entity. The frame that detects a
+// change pushes a record onto the entity's transition history, so the capture
+// reads that vector's element count either side of the call and emits only when
+// it grew.
+//
+// What a 0x4c-byte history entry contains is not established, so nothing here
+// claims a previous sequence, cycle or transition time. The sequence that is now
+// playing is already carried by the contribution records sharing this
+// generation; what this record adds is when the change happened and which
+// entity, by index, it happened to.
+struct SequenceChangeHeader {
+    char magic[4];
+    std::uint32_t recordBytes;
+    std::uint64_t sequence;
+    std::int64_t qpc;
+    std::uint32_t threadId;
+    // EnclosingGeneration, never CurrentGeneration: a builder reached outside a
+    // pose build is a finding this record reports as a fault of its own rather
+    // than a move in a total CAP2.1 measured at zero.
+    std::uint32_t generation;
+    std::uint32_t clientEntity;
+    std::uint32_t refHandle;
+    std::uint32_t renderable;
+    std::uint32_t studioHdr;
+    std::uint32_t checksum;
+    std::uint32_t transitionsBefore;
+    std::uint32_t transitionsAfter;
+    std::uint32_t callerAddress;
+    std::uint32_t faults;
+};
 #pragma pack(pop)
 
 static_assert(sizeof(FileHeader) == 128, "capture file header changed");
@@ -437,7 +623,7 @@ static_assert(
 static_assert(
     sizeof(ActorFileHeader) == 128, "actor capture file header changed");
 static_assert(
-    sizeof(ActorObservationHeader) == 124,
+    sizeof(ActorObservationHeader) == 128,
     "actor observation record header changed");
 static_assert(
     sizeof(ContributionFileHeader) == 128,
@@ -445,6 +631,13 @@ static_assert(
 static_assert(
     sizeof(ContributionRecordHeader) == 160,
     "contribution record header changed");
+static_assert(
+    sizeof(SceneFileHeader) == 128, "scene capture file header changed");
+static_assert(
+    sizeof(SceneRequestHeader) == 600, "scene request record header changed");
+static_assert(
+    sizeof(SequenceChangeHeader) == 68,
+    "sequence change record header changed");
 
 struct PendingRecord {
     PendingRecord* next;
@@ -504,6 +697,28 @@ using ResolveBlendAxisWeightFn = void(__cdecl*)(
 using DecodeBoneChannelFn = void(__cdecl*)(
     unsigned char*, int, float, unsigned char*, unsigned char*, float*);
 
+// The scene frames, each declared at the stack width its own epilogue cleans.
+// __thiscall is callee-cleaned, so a wrong argument count would corrupt the
+// stack rather than merely mis-read a value; every one of these widths is read
+// from the RET immediate at the function's own epilogue.
+//
+// The three lifecycle frames return nothing, but the typedefs return a dword
+// anyway. Declaring a return costs nothing on x86, where EAX is caller-saved
+// either way, and it means a frame that turns out to return a value is
+// forwarded rather than silently truncated.
+using SceneLifecycleFn = std::uint32_t(__thiscall*)(void*);
+using SceneDispatchStartEventFn =
+    std::uint32_t(__thiscall*)(void*, float, void*, void*);
+using SceneFindNamedEntityFn =
+    unsigned char*(__thiscall*)(void*, const char*, std::uint32_t);
+using SceneApplyAnimSetFn = std::uint32_t(__thiscall*)(void*, void*);
+
+// The client sequence-transition frame. RET 0x14 at its own epilogue, so five
+// stack dwords beside the this pointer -- the same shape as SetupBones.
+using MaintainSequenceTransitionsFn = std::uint32_t(__thiscall*)(
+    void*, std::uint32_t, std::uint32_t, std::uint32_t, std::uint32_t,
+    std::uint32_t);
+
 // The bracket a record was produced inside. Nothing here is shared between
 // threads, so a push and a pop cost no interlocked operation and no
 // allocation on the render path.
@@ -546,6 +761,19 @@ struct ThreadPoseState {
     std::uint32_t channelFaults;
     std::uint32_t channelQuaternionBits[kMaximumBones / 32];
     std::uint32_t channelPositionBits[kMaximumBones / 32];
+    // The scene scope a request record sits inside. A second stack rather than a
+    // slot, because the anim-set frame recurses into subscenes and the scene
+    // system runs on the server think, outside every pose-build bracket -- so
+    // these never interleave with the generation stack above even when both are
+    // live on one thread.
+    std::uint32_t sceneScopes[kMaximumBracketDepth];
+    std::uint32_t sceneDepth;
+    // Set while an anim-set application is on the stack. The actor resolver is
+    // reached from there with a CChoreoActor's own name buffer and from the
+    // event arms with an event param, and only the first makes the actor
+    // recoverable from the pointer, so the bonerename read is gated on this
+    // rather than attempted on every binding.
+    std::uint32_t sceneAnimSetDepth;
 };
 
 // An open-addressed slot claimed by its own key rather than by a separate
@@ -586,6 +814,13 @@ DecodeSelectedBonesFn gOriginalDecodeSelectedBones = nullptr;
 ResolveBlendAxisWeightFn gOriginalResolveBlendAxisWeight = nullptr;
 DecodeBoneChannelFn gOriginalDecodeBoneQuaternion = nullptr;
 DecodeBoneChannelFn gOriginalDecodeBonePosition = nullptr;
+SceneLifecycleFn gOriginalSceneStartPlayback = nullptr;
+SceneLifecycleFn gOriginalSceneOnFinished = nullptr;
+SceneLifecycleFn gOriginalSceneCancelPlayback = nullptr;
+SceneDispatchStartEventFn gOriginalSceneDispatchStartEvent = nullptr;
+SceneFindNamedEntityFn gOriginalSceneFindNamedEntity = nullptr;
+SceneApplyAnimSetFn gOriginalSceneApplyAnimSet = nullptr;
+MaintainSequenceTransitionsFn gOriginalMaintainSequenceTransitions = nullptr;
 elysium::capture::HookHandle gDrawModelHook;
 elysium::capture::HookHandle gResolveVirtualModelPoseHook;
 elysium::capture::HookHandle gBuildTransformationsHook;
@@ -599,12 +834,20 @@ elysium::capture::HookHandle gDecodeSelectedBonesHook;
 elysium::capture::HookHandle gResolveBlendAxisWeightHook;
 elysium::capture::HookHandle gDecodeBoneQuaternionHook;
 elysium::capture::HookHandle gDecodeBonePositionHook;
+elysium::capture::HookHandle gSceneStartPlaybackHook;
+elysium::capture::HookHandle gSceneOnFinishedHook;
+elysium::capture::HookHandle gSceneCancelPlaybackHook;
+elysium::capture::HookHandle gSceneDispatchStartEventHook;
+elysium::capture::HookHandle gSceneFindNamedEntityHook;
+elysium::capture::HookHandle gSceneApplyAnimSetHook;
+elysium::capture::HookHandle gMaintainSequenceTransitionsHook;
 __declspec(thread) ThreadPoseState gThread{};
 HANDLE gOutput = INVALID_HANDLE_VALUE;
 HANDLE gAnimationOutput = INVALID_HANDLE_VALUE;
 HANDLE gCensusOutput = INVALID_HANDLE_VALUE;
 HANDLE gActorOutput = INVALID_HANDLE_VALUE;
 HANDLE gContributionOutput = INVALID_HANDLE_VALUE;
+HANDLE gSceneOutput = INVALID_HANDLE_VALUE;
 // Census payloads are the largest allocation the probe ever makes. Taking the
 // game's process heap lock for a multi-megabyte block from a render callback
 // is the one hitch this design could introduce, so they come from a heap of
@@ -661,6 +904,25 @@ volatile LONG gChannelStrideFaults = 0;
 volatile LONG gChannelNested = 0;
 // Contribution scope 0 is the unassigned sentinel, so the counter starts at 1.
 volatile LONG gContributionScope = 0;
+volatile LONG gSceneLifecycles = 0;
+volatile LONG gSceneEvents = 0;
+volatile LONG gSceneBinds = 0;
+volatile LONG gSceneAnimSets = 0;
+volatile LONG gSceneSequenceChanges = 0;
+volatile LONG gSceneFaults = 0;
+volatile LONG gSceneOverflow = 0;
+volatile LONG gSceneUnscoped = 0;
+volatile LONG gSceneTruncated = 0;
+// Actor resolutions reached outside every scene scope. A scene with
+// position_start set re-pins its whole cast to the scene's origin on every
+// frame it plays, and each re-pin resolves its actors by name again, so this
+// frame runs a few hundred times a second while a cutscene is up. Those are
+// maintenance rather than requests: they are counted here and recorded nowhere,
+// on the same terms as the per-call decoder totals the probe already refuses.
+volatile LONG gSceneResolutionsUnscoped = 0;
+volatile LONG64 gSceneBytes = 0;
+// Scene scope 0 is the unassigned sentinel, so the counter starts at 1.
+volatile LONG gSceneScope = 0;
 // Headers keyed by address, images keyed by checksum.
 CensusSlot gCensusHeaders[kCensusSlots]{};
 CensusSlot gCensusImageSlots[kCensusImageSlots]{};
@@ -690,6 +952,13 @@ DWORD gDecodeSelectedBonesRva = 0;
 DWORD gResolveBlendAxisWeightRva = 0;
 DWORD gDecodeBoneQuaternionRva = 0;
 DWORD gDecodeBonePositionRva = 0;
+DWORD gSceneStartPlaybackRva = 0;
+DWORD gSceneOnFinishedRva = 0;
+DWORD gSceneCancelPlaybackRva = 0;
+DWORD gSceneDispatchStartEventRva = 0;
+DWORD gSceneFindNamedEntityRva = 0;
+DWORD gSceneApplyAnimSetRva = 0;
+DWORD gMaintainSequenceTransitionsRva = 0;
 ConfiguredSignature gResolveExpected{};
 ConfiguredSignature gBuildExpected{};
 ConfiguredSignature gSetupBonesExpected{};
@@ -702,6 +971,13 @@ ConfiguredSignature gDecodeSelectedBonesExpected{};
 ConfiguredSignature gResolveBlendAxisWeightExpected{};
 ConfiguredSignature gDecodeBoneQuaternionExpected{};
 ConfiguredSignature gDecodeBonePositionExpected{};
+ConfiguredSignature gSceneStartPlaybackExpected{};
+ConfiguredSignature gSceneOnFinishedExpected{};
+ConfiguredSignature gSceneCancelPlaybackExpected{};
+ConfiguredSignature gSceneDispatchStartEventExpected{};
+ConfiguredSignature gSceneFindNamedEntityExpected{};
+ConfiguredSignature gSceneApplyAnimSetExpected{};
+ConfiguredSignature gMaintainSequenceTransitionsExpected{};
 char gHookInstallError[128] = "unspecified";
 
 bool WriteAll(HANDLE file, const void* data, DWORD bytes) {
@@ -772,6 +1048,8 @@ HANDLE StreamHandle(std::uint32_t stream) {
             return gActorOutput;
         case kStreamContribution:
             return gContributionOutput;
+        case kStreamScene:
+            return gSceneOutput;
         default:
             return gOutput;
     }
@@ -932,6 +1210,120 @@ std::uint32_t CurrentContribution() {
 // bracket at all, so counting either would move a total CAP2.1 measured.
 std::uint32_t EnclosingGeneration() {
     return gThread.depth ? gThread.generations[gThread.depth - 1] : 0;
+}
+
+// A scene scope is opened before its frame runs, because the bindings and
+// anim-set applications it causes emit their records while it is still on the
+// stack. The anim-set pass recurses into subscenes, so the scopes nest.
+std::uint32_t BeginSceneScope() {
+    if (!InterlockedCompareExchange(&gCapturing, 0, 0)) {
+        return 0;
+    }
+    if (gThread.sceneDepth >= kMaximumBracketDepth) {
+        InterlockedIncrement(&gSceneOverflow);
+        return 0;
+    }
+    const auto scope =
+        static_cast<std::uint32_t>(InterlockedIncrement(&gSceneScope));
+    gThread.sceneScopes[gThread.sceneDepth] = scope;
+    ++gThread.sceneDepth;
+    return scope;
+}
+
+void EndSceneScope(std::uint32_t scope) {
+    if (!scope || !gThread.sceneDepth ||
+        gThread.sceneScopes[gThread.sceneDepth - 1] != scope) {
+        return;
+    }
+    --gThread.sceneDepth;
+}
+
+std::uint32_t CurrentSceneScope() {
+    if (!gThread.sceneDepth) {
+        InterlockedIncrement(&gSceneUnscoped);
+        return 0;
+    }
+    return gThread.sceneScopes[gThread.sceneDepth - 1];
+}
+
+// The scope a scene record sits inside without counting an unscoped one, for the
+// frames that open a scope of their own and would otherwise report themselves
+// unscoped before their own push.
+std::uint32_t EnclosingSceneScope() {
+    return gThread.sceneDepth ? gThread.sceneScopes[gThread.sceneDepth - 1] : 0;
+}
+
+// The element count of an entity's sequence-transition history. A helper rather
+// than an inline guarded read because the frame that needs it reads the count
+// again from inside a termination block, where __except may not appear.
+bool ReadTransitionCount(unsigned char* entity, std::uint32_t* count) {
+    if (!entity) {
+        return false;
+    }
+    __try {
+        *count = *reinterpret_cast<std::uint32_t*>(entity + kTransitionCount);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+// An entity's own handle, read straight off the object. Both modules store one;
+// the displacement differs because they are different classes. Returns the raw
+// handle so the index and serial split stays an offline check, and the invalid
+// sentinel when the object does not read.
+std::uint32_t ReadRefHandle(unsigned char* entity, DWORD displacement) {
+    if (!entity) {
+        return kInvalidHandle;
+    }
+    __try {
+        return *reinterpret_cast<std::uint32_t*>(entity + displacement);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return kInvalidHandle;
+    }
+}
+
+// Copies a NUL-terminated string out of the game into a bounded field, always
+// terminating and reporting whether the source was longer than the field. A
+// truncation is a measurement rather than a silent loss: CAP2.2 found the model
+// name field lossless for the theatre only because it measured the longest name
+// it saw.
+bool CopyGameString(
+    const char* source, char* destination, DWORD capacity) {
+    destination[0] = '\0';
+    if (!source || capacity < 2) {
+        return false;
+    }
+    __try {
+        DWORD index = 0;
+        while (index + 1 < capacity && source[index]) {
+            destination[index] = source[index];
+            ++index;
+        }
+        destination[index] = '\0';
+        // Longer than the field only if the source has not ended here.
+        return source[index] != '\0';
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        destination[0] = '\0';
+        return false;
+    }
+}
+
+// Copies a string the game stores by pointer rather than inline.
+bool CopyGameStringPointer(
+    unsigned char* owner, DWORD displacement, char* destination,
+    DWORD capacity) {
+    destination[0] = '\0';
+    if (!owner) {
+        return false;
+    }
+    const char* source = nullptr;
+    __try {
+        source = *reinterpret_cast<const char**>(owner + displacement);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+    return CopyGameString(source, destination, capacity);
 }
 
 PendingRecord* AllocateCensusRecord(DWORD diskBytes) {
@@ -1276,6 +1668,7 @@ bool EmitActorObservation(
     header->studioHdr =
         static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(studioHdr));
     header->previousChecksum = previousChecksum;
+    header->refHandle = ReadRefHandle(entity, kClientEntityRefHandle);
     Enqueue(pending);
     InterlockedIncrement(&gActorRecords);
     InterlockedExchangeAdd64(&gActorBytes, static_cast<LONG64>(diskBytes));
@@ -1392,6 +1785,11 @@ bool EmitActorLifetime(unsigned char* entity, std::uint32_t reason) {
         static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(entity));
     header->reason = reason;
     header->generation = EnclosingGeneration();
+    // The constructor has already run by the time this fires and the destructor
+    // has not yet taken the object apart, so the handle reads at both ends of a
+    // lifetime -- which is what lets an index be bounded by the interval its
+    // address was one actor.
+    header->refHandle = ReadRefHandle(entity, kClientEntityRefHandle);
     Enqueue(pending);
     InterlockedIncrement(&gActorRecords);
     InterlockedExchangeAdd64(&gActorBytes, static_cast<LONG64>(diskBytes));
@@ -1942,6 +2340,257 @@ void CaptureContribution(
     }
 }
 
+// One scene-driven request. Every game read is guarded and every string copy is
+// bounded, so a half-torn scene entity costs fault bits on one record rather
+// than the run.
+//
+// The scene fields are read from the frame's own `this`, which the caller has
+// already been handed by the game; nothing here resolves an entity a second way
+// or calls back into the game.
+void CaptureSceneRequest(
+    const char (&magic)[5], std::uint32_t reason, std::uint32_t scope,
+    unsigned char* sceneEntity, unsigned char* targetEntity,
+    unsigned char* choreoEvent, unsigned char* choreoActor,
+    const char* animSetPath, const char* baseAnimPath,
+    std::uintptr_t callerAddress) {
+    if (gSceneOutput == INVALID_HANDLE_VALUE) {
+        return;
+    }
+    const DWORD diskBytes = static_cast<DWORD>(sizeof(SceneRequestHeader));
+    const SIZE_T allocation =
+        offsetof(PendingRecord, payload) + static_cast<SIZE_T>(diskBytes);
+    auto* pending = static_cast<PendingRecord*>(
+        HeapAlloc(GetProcessHeap(), 0, allocation));
+    if (!pending) {
+        InterlockedIncrement(&gSceneFaults);
+        return;
+    }
+    pending->next = nullptr;
+    pending->bytes = diskBytes;
+    pending->stream = kStreamScene;
+    auto* header = reinterpret_cast<SceneRequestHeader*>(pending->payload);
+    std::memset(header, 0, sizeof(*header));
+    std::memcpy(header->magic, magic, 4);
+    header->recordBytes = diskBytes;
+    header->sequence =
+        static_cast<std::uint32_t>(InterlockedIncrement(&gSequence));
+    LARGE_INTEGER now{};
+    QueryPerformanceCounter(&now);
+    header->qpc = now.QuadPart;
+    header->threadId = GetCurrentThreadId();
+    header->reason = reason;
+    header->scope = scope;
+    header->parentScope =
+        gThread.sceneDepth > 1 ? gThread.sceneScopes[gThread.sceneDepth - 2] : 0;
+    header->callerAddress = static_cast<std::uint32_t>(callerAddress);
+    header->eventType = -1;
+    header->sceneEntity = static_cast<std::uint32_t>(
+        reinterpret_cast<std::uintptr_t>(sceneEntity));
+    header->targetEntity = static_cast<std::uint32_t>(
+        reinterpret_cast<std::uintptr_t>(targetEntity));
+    std::uint32_t faults = 0;
+    if (!scope) {
+        faults |= kSceneFaultNoSceneScope;
+    }
+
+    if (sceneEntity) {
+        __try {
+            header->sceneVftable =
+                *reinterpret_cast<std::uint32_t*>(sceneEntity);
+            header->playingBack =
+                *reinterpret_cast<unsigned char*>(
+                    sceneEntity + kSceneIsPlayingBack);
+            header->sceneTime =
+                *reinterpret_cast<float*>(sceneEntity + kSceneCurrentTime);
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            faults |= kSceneFaultSceneEntity;
+        }
+        header->sceneRefHandle =
+            ReadRefHandle(sceneEntity, kServerEntityRefHandle);
+        if (CopyGameStringPointer(
+                sceneEntity, kSceneFileString, header->sceneFile,
+                kSceneFileBytes)) {
+            faults |= kSceneFaultSceneFileTruncated;
+        }
+    } else {
+        faults |= kSceneFaultSceneEntity;
+    }
+
+    if (targetEntity) {
+        header->targetRefHandle =
+            ReadRefHandle(targetEntity, kServerEntityRefHandle);
+        if (header->targetRefHandle == kInvalidHandle) {
+            faults |= kSceneFaultNoEntityIndex;
+        }
+    } else if (reason == kSceneActorBound) {
+        // The scene logs and drops the event when an actor resolves to nothing,
+        // and the rest of the scene continues, so this is a real outcome to
+        // count rather than a failure of the capture.
+        faults |= kSceneFaultNoTargetEntity;
+    }
+
+    if (choreoEvent) {
+        __try {
+            header->eventType =
+                *reinterpret_cast<std::int32_t*>(choreoEvent + kEventType);
+            header->eventStart =
+                *reinterpret_cast<float*>(choreoEvent + kEventStartTime);
+            header->eventEnd =
+                *reinterpret_cast<float*>(choreoEvent + kEventEndTime);
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            faults |= kSceneFaultEvent;
+        }
+        if (CopyGameString(
+                reinterpret_cast<const char*>(choreoEvent + kEventName),
+                header->actorName, kSceneActorNameBytes)) {
+            faults |= kSceneFaultActorNameTruncated;
+        }
+        if (CopyGameString(
+                reinterpret_cast<const char*>(choreoEvent + kEventParam),
+                header->text0, kSceneTextBytes)) {
+            faults |= kSceneFaultParamTruncated;
+        }
+        if (CopyGameString(
+                reinterpret_cast<const char*>(choreoEvent + kEventParam2),
+                header->text1, kSceneTextBytes)) {
+            faults |= kSceneFaultParamTruncated;
+        }
+    }
+
+    if (choreoActor) {
+        if (CopyGameString(
+                reinterpret_cast<const char*>(choreoActor + kChoreoActorName),
+                header->actorName, kSceneActorNameBytes)) {
+            faults |= kSceneFaultActorNameTruncated;
+        }
+        char rename[kSceneRenameBytes]{};
+        const DWORD half = kSceneRenameBytes / 2;
+        if (CopyGameString(
+                reinterpret_cast<const char*>(
+                    choreoActor + kChoreoActorRenameFrom),
+                rename, half)) {
+            faults |= kSceneFaultActorNameTruncated;
+        }
+        std::memcpy(header->text2, rename, half);
+        if (CopyGameString(
+                reinterpret_cast<const char*>(
+                    choreoActor + kChoreoActorRenameTo),
+                rename, half)) {
+            faults |= kSceneFaultActorNameTruncated;
+        }
+        std::memcpy(header->text2 + half, rename, half);
+    } else if (reason == kSceneActorBound) {
+        faults |= kSceneFaultRenameUnavailable;
+    }
+
+    if (animSetPath &&
+        CopyGameString(animSetPath, header->text0, kSceneTextBytes)) {
+        faults |= kSceneFaultParamTruncated;
+    }
+    if (baseAnimPath &&
+        CopyGameString(baseAnimPath, header->text1, kSceneTextBytes)) {
+        faults |= kSceneFaultParamTruncated;
+    }
+
+    header->faults = faults;
+    if (faults) {
+        InterlockedIncrement(&gSceneFaults);
+    }
+    if (faults &
+        (kSceneFaultSceneFileTruncated | kSceneFaultParamTruncated |
+         kSceneFaultActorNameTruncated)) {
+        InterlockedIncrement(&gSceneTruncated);
+    }
+    switch (reason) {
+        case kSceneEventDispatched:
+            InterlockedIncrement(&gSceneEvents);
+            break;
+        case kSceneActorBound:
+            InterlockedIncrement(&gSceneBinds);
+            break;
+        case kSceneAnimSetApplied:
+            InterlockedIncrement(&gSceneAnimSets);
+            break;
+        default:
+            InterlockedIncrement(&gSceneLifecycles);
+            break;
+    }
+    InterlockedExchangeAdd64(&gSceneBytes, static_cast<LONG64>(diskBytes));
+    Enqueue(pending);
+}
+
+// One witnessed sequence change. Emitted only when the entity's transition
+// history grew across the call, so the steady-state cost of the frame this sits
+// in is two loads and a comparison.
+void CaptureSequenceChange(
+    unsigned char* entity, std::uint32_t before, std::uint32_t after,
+    std::uintptr_t callerAddress) {
+    if (gSceneOutput == INVALID_HANDLE_VALUE) {
+        return;
+    }
+    const DWORD diskBytes = static_cast<DWORD>(sizeof(SequenceChangeHeader));
+    const SIZE_T allocation =
+        offsetof(PendingRecord, payload) + static_cast<SIZE_T>(diskBytes);
+    auto* pending = static_cast<PendingRecord*>(
+        HeapAlloc(GetProcessHeap(), 0, allocation));
+    if (!pending) {
+        InterlockedIncrement(&gSceneFaults);
+        return;
+    }
+    pending->next = nullptr;
+    pending->bytes = diskBytes;
+    pending->stream = kStreamScene;
+    auto* header = reinterpret_cast<SequenceChangeHeader*>(pending->payload);
+    std::memset(header, 0, sizeof(*header));
+    std::memcpy(header->magic, "SEQC", 4);
+    header->recordBytes = diskBytes;
+    header->sequence =
+        static_cast<std::uint32_t>(InterlockedIncrement(&gSequence));
+    LARGE_INTEGER now{};
+    QueryPerformanceCounter(&now);
+    header->qpc = now.QuadPart;
+    header->threadId = GetCurrentThreadId();
+    header->generation = EnclosingGeneration();
+    header->clientEntity =
+        static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(entity));
+    header->refHandle = ReadRefHandle(entity, kClientEntityRefHandle);
+    header->renderable = EnclosingBracketEntity();
+    header->transitionsBefore = before;
+    header->transitionsAfter = after;
+    header->callerAddress = static_cast<std::uint32_t>(callerAddress);
+    std::uint32_t faults = 0;
+    if (!header->generation) {
+        // A pose builder reached outside a SetupBones bracket is a finding this
+        // record reports; CurrentGeneration would instead move gUnbracketed,
+        // which CAP2.1 measured at zero.
+        faults |= kSceneFaultNoGeneration;
+    }
+    if (header->refHandle == kInvalidHandle) {
+        faults |= kSceneFaultNoEntityIndex;
+    }
+    ActorObservationHeader identity{};
+    unsigned char* studioHdr = nullptr;
+    if (gGetStudioHdr) {
+        __try {
+            studioHdr = gGetStudioHdr(entity, 0);
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            studioHdr = nullptr;
+        }
+    }
+    if (studioHdr && ReadActorIdentity(studioHdr, &identity)) {
+        header->studioHdr = static_cast<std::uint32_t>(
+            reinterpret_cast<std::uintptr_t>(studioHdr));
+        header->checksum = identity.checksum;
+    }
+    header->faults = faults;
+    if (faults) {
+        InterlockedIncrement(&gSceneFaults);
+    }
+    InterlockedIncrement(&gSceneSequenceChanges);
+    InterlockedExchangeAdd64(&gSceneBytes, static_cast<LONG64>(diskBytes));
+    Enqueue(pending);
+}
+
 std::uintptr_t __fastcall HookDrawModel(
     void* self, void*, std::uintptr_t argument0, std::uintptr_t argument1,
     std::uintptr_t argument2, std::uintptr_t argument3,
@@ -2332,6 +2981,232 @@ void __fastcall HookBaseEntityDestruct(void* self, void*) {
     }
 }
 
+// The three lifecycle frames. Each opens a scene scope before running, because
+// the bindings and anim-set applications a start causes emit their records while
+// it is still on the stack, and __finally keeps the pop correct across an unwind
+// out of retail on the same terms as the bracket detours.
+//
+// Playback start is hooked at the virtual implementation rather than at the
+// Start input: the input handler opens with an absolute operand against the
+// one-shot intro-skip global, and it can decline without ever reaching playback,
+// so a record emitted there would describe a delivered input rather than an
+// accepted scene.
+std::uint32_t __fastcall HookSceneStartPlayback(void* self, void*) {
+    InterlockedIncrement(&gActiveHooks);
+    const std::uintptr_t caller =
+        reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    const std::uint32_t scope = BeginSceneScope();
+    std::uint32_t result = 0;
+    __try {
+        result = gOriginalSceneStartPlayback(self);
+    } __finally {
+        if (InterlockedCompareExchange(&gCapturing, 0, 0)) {
+            CaptureSceneRequest(
+                "SCNE", kSceneStarted, scope,
+                static_cast<unsigned char*>(self), nullptr, nullptr, nullptr,
+                nullptr, nullptr, caller);
+        }
+        EndSceneScope(scope);
+        InterlockedDecrement(&gActiveHooks);
+    }
+    return result;
+}
+
+// Completion and cancellation are mutually exclusive, so the two together close
+// every playback interval a start opened.
+std::uint32_t __fastcall HookSceneOnFinished(void* self, void*) {
+    InterlockedIncrement(&gActiveHooks);
+    const std::uintptr_t caller =
+        reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    const std::uint32_t scope = BeginSceneScope();
+    std::uint32_t result = 0;
+    __try {
+        result = gOriginalSceneOnFinished(self);
+    } __finally {
+        if (InterlockedCompareExchange(&gCapturing, 0, 0)) {
+            CaptureSceneRequest(
+                "SCNE", kSceneFinished, scope,
+                static_cast<unsigned char*>(self), nullptr, nullptr, nullptr,
+                nullptr, nullptr, caller);
+        }
+        EndSceneScope(scope);
+        InterlockedDecrement(&gActiveHooks);
+    }
+    return result;
+}
+
+std::uint32_t __fastcall HookSceneCancelPlayback(void* self, void*) {
+    InterlockedIncrement(&gActiveHooks);
+    const std::uintptr_t caller =
+        reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    const std::uint32_t scope = BeginSceneScope();
+    std::uint32_t result = 0;
+    __try {
+        result = gOriginalSceneCancelPlayback(self);
+    } __finally {
+        if (InterlockedCompareExchange(&gCapturing, 0, 0)) {
+            CaptureSceneRequest(
+                "SCNE", kSceneCancelled, scope,
+                static_cast<unsigned char*>(self), nullptr, nullptr, nullptr,
+                nullptr, nullptr, caller);
+        }
+        EndSceneScope(scope);
+        InterlockedDecrement(&gActiveHooks);
+    }
+    return result;
+}
+
+// One dispatched choreographed event. This frame rather than the scene
+// processor: the processor classifies every event of every playing scene on
+// every frame, which for twelve concurrent theatre scenes is on the order of
+// four million classifications, while this one runs once per event transition.
+// Being an inline detour on a body both scene classes reach, it also observes
+// the map's scenes and the per-line dialogue scenes with one hook.
+std::uint32_t __fastcall HookSceneDispatchStartEvent(
+    void* self, void*, float currentTime, void* choreoScene,
+    void* choreoEvent) {
+    InterlockedIncrement(&gActiveHooks);
+    const std::uintptr_t caller =
+        reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    const std::uint32_t scope = BeginSceneScope();
+    std::uint32_t result = 0;
+    __try {
+        result = gOriginalSceneDispatchStartEvent(
+            self, currentTime, choreoScene, choreoEvent);
+    } __finally {
+        if (InterlockedCompareExchange(&gCapturing, 0, 0)) {
+            CaptureSceneRequest(
+                "SEVT", kSceneEventDispatched, scope,
+                static_cast<unsigned char*>(self), nullptr,
+                static_cast<unsigned char*>(choreoEvent), nullptr, nullptr,
+                nullptr, caller);
+        }
+        EndSceneScope(scope);
+        InterlockedDecrement(&gActiveHooks);
+    }
+    return result;
+}
+
+// The only point at which a .vcd actor name becomes a live entity, and so the
+// server half of the join.
+//
+// It is not a once-per-scene binding point. A scene whose position_start is set
+// owns its cast's transforms and re-pins every actor to the scene's origin on
+// every frame it plays, resolving each of them by name again -- which on the
+// theatre, where all twelve scenes set it, is a few hundred calls a second. Only
+// the resolutions a scene scope encloses are requests; the rest are counted and
+// recorded nowhere, because a record each would cost fifty times the stream for
+// nothing the enclosing records do not already say.
+//
+// The actor object is recovered from the name pointer, which the anim-set loop
+// takes from the actor's own name member. That subtraction is only valid there:
+// the event arms call this same resolver with an event param instead, where the
+// bytes below the pointer are another field entirely. Hence the gate on an
+// enclosing anim-set frame rather than an attempt on every binding.
+unsigned char* __fastcall HookSceneFindNamedEntity(
+    void* self, void*, const char* name, std::uint32_t context) {
+    InterlockedIncrement(&gActiveHooks);
+    const std::uintptr_t caller =
+        reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    unsigned char* result = nullptr;
+    __try {
+        result = gOriginalSceneFindNamedEntity(self, name, context);
+    } __finally {
+        if (InterlockedCompareExchange(&gCapturing, 0, 0)) {
+            const std::uint32_t scope = EnclosingSceneScope();
+            if (scope) {
+                unsigned char* choreoActor = nullptr;
+                if (gThread.sceneAnimSetDepth && name) {
+                    choreoActor = reinterpret_cast<unsigned char*>(
+                        const_cast<char*>(name) - kChoreoActorName);
+                }
+                CaptureSceneRequest(
+                    "SBND", kSceneActorBound, scope,
+                    static_cast<unsigned char*>(self), result, nullptr,
+                    choreoActor, nullptr, nullptr, caller);
+            } else {
+                InterlockedIncrement(&gSceneResolutionsUnscoped);
+            }
+        }
+        InterlockedDecrement(&gActiveHooks);
+    }
+    return result;
+}
+
+// The animation-set application. The per-actor identities it produces are not
+// visible at its own boundary, so this record names the scene and its BaseAnim
+// model while the bindings nested inside its scope name the actors.
+//
+// Which of the male and female variants was chosen is a local of the original
+// and is not witnessed here. It does not need to be: the model an actor actually
+// animated under is the owner checksum CAP2.4 already records, so the choice is
+// recovered offline from evidence rather than re-derived by the probe.
+std::uint32_t __fastcall HookSceneApplyAnimSet(
+    void* self, void*, void* choreoScene) {
+    InterlockedIncrement(&gActiveHooks);
+    const std::uintptr_t caller =
+        reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    const std::uint32_t scope = BeginSceneScope();
+    ++gThread.sceneAnimSetDepth;
+    std::uint32_t result = 0;
+    __try {
+        result = gOriginalSceneApplyAnimSet(self, choreoScene);
+    } __finally {
+        --gThread.sceneAnimSetDepth;
+        if (InterlockedCompareExchange(&gCapturing, 0, 0)) {
+            char baseAnim[kSceneTextBytes]{};
+            CopyGameStringPointer(
+                static_cast<unsigned char*>(self), kSceneBaseAnimString,
+                baseAnim, kSceneTextBytes);
+            CaptureSceneRequest(
+                "SANM", kSceneAnimSetApplied, scope,
+                static_cast<unsigned char*>(self), nullptr, nullptr, nullptr,
+                nullptr, baseAnim, caller);
+        }
+        EndSceneScope(scope);
+        InterlockedDecrement(&gActiveHooks);
+    }
+    return result;
+}
+
+// The client sequence-change point. This frame is what detects a change and
+// pushes an entry onto the entity's transition history, so reading that vector's
+// element count either side of the call witnesses the change without decoding an
+// entry whose fields are not established.
+//
+// It emits nothing on the common path. The frame runs about as often as
+// SetupBones, so the steady-state cost is two loads and a comparison, with no
+// interlocked operation and no allocation -- the same reason the channel
+// decoders fold into an accumulator rather than counting.
+std::uint32_t __fastcall HookMaintainSequenceTransitions(
+    void* self, void*, std::uint32_t argument0, std::uint32_t argument1,
+    std::uint32_t argument2, std::uint32_t argument3,
+    std::uint32_t argument4) {
+    InterlockedIncrement(&gActiveHooks);
+    const std::uintptr_t caller =
+        reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    auto* entity = static_cast<unsigned char*>(self);
+    const bool capturing =
+        InterlockedCompareExchange(&gCapturing, 0, 0) != 0;
+    std::uint32_t before = 0;
+    const bool readBefore =
+        capturing && ReadTransitionCount(entity, &before);
+    std::uint32_t result = 0;
+    __try {
+        result = gOriginalMaintainSequenceTransitions(
+            self, argument0, argument1, argument2, argument3, argument4);
+    } __finally {
+        if (readBefore && InterlockedCompareExchange(&gCapturing, 0, 0)) {
+            std::uint32_t after = before;
+            if (ReadTransitionCount(entity, &after) && after != before) {
+                CaptureSequenceChange(entity, before, after, caller);
+            }
+        }
+        InterlockedDecrement(&gActiveHooks);
+    }
+    return result;
+}
+
 const elysium::capture::BinaryProfile* FindProfile(
     const wchar_t* moduleName) {
     for (const auto& profile : elysium::capture::profiles::Registry) {
@@ -2365,6 +3240,50 @@ bool MatchesConfiguredSignature(
             target.ExpectedBytes,
             configured.bytes,
             configured.count) == 0;
+}
+
+// The same declaration check by label rather than by reference. The scene set is
+// large enough that threading seven more references through the check below
+// would obscure it; looking the target up here keeps each check one line and
+// still fails closed when a label is absent.
+bool MatchesConfiguredTarget(
+    const elysium::capture::BinaryProfile& profile, const char* semanticLabel,
+    DWORD configuredRva, const ConfiguredSignature& configured) {
+    const auto* target = FindTarget(profile, semanticLabel);
+    return target != nullptr &&
+        MatchesConfiguredSignature(*target, configuredRva, configured);
+}
+
+// Every scene target the INI named has to agree with the profile compiled into
+// this build, on the same terms as the animation set: the RVAs and prologues
+// arrive through configuration, and a mismatch means the two disagree about
+// which binary this is.
+bool MatchesSceneProfile(
+    const elysium::capture::BinaryProfile& vampire,
+    const elysium::capture::BinaryProfile& client) {
+    return MatchesConfiguredTarget(
+               vampire, "vampire.scene_find_named_entity",
+               gSceneFindNamedEntityRva, gSceneFindNamedEntityExpected) &&
+        MatchesConfiguredTarget(
+               vampire, "vampire.scene_apply_anim_set", gSceneApplyAnimSetRva,
+               gSceneApplyAnimSetExpected) &&
+        MatchesConfiguredTarget(
+               vampire, "vampire.scene_on_finished", gSceneOnFinishedRva,
+               gSceneOnFinishedExpected) &&
+        MatchesConfiguredTarget(
+               vampire, "vampire.scene_cancel_playback",
+               gSceneCancelPlaybackRva, gSceneCancelPlaybackExpected) &&
+        MatchesConfiguredTarget(
+               vampire, "vampire.scene_dispatch_start_event",
+               gSceneDispatchStartEventRva,
+               gSceneDispatchStartEventExpected) &&
+        MatchesConfiguredTarget(
+               vampire, "vampire.scene_start_playback", gSceneStartPlaybackRva,
+               gSceneStartPlaybackExpected) &&
+        MatchesConfiguredTarget(
+               client, "client.maintain_sequence_transitions",
+               gMaintainSequenceTransitionsRva,
+               gMaintainSequenceTransitionsExpected);
 }
 
 bool MatchesConfiguredProfile(
@@ -2432,7 +3351,110 @@ bool MatchesConfiguredProfile(
             gModelRenderDrawModelShadowExpected);
 }
 
-bool InstallHooks(HMODULE studioRender, HMODULE client, HMODULE engine) {
+// The scene set, installed inner frame first so a frame that opens a scope is
+// never live while the frames recording inside it are not -- otherwise a binding
+// would report itself unscoped for something that in fact had a scope. Removal
+// mirrors it exactly.
+//
+// Every target is an inline detour. vampire.dll is incrementally linked, so a
+// vtable slot holds an E9 thunk rather than a function body and a
+// vtable-replacement backend would validate the thunk.
+bool InstallSceneHooks(HMODULE vampire, HMODULE client) {
+    using elysium::capture::ActiveBinaryProfile;
+    using elysium::capture::HookBackendResult;
+    using elysium::capture::HookBackends;
+
+    const auto* vampireProfile = FindProfile(L"vampire.dll");
+    const auto* clientProfile = FindProfile(L"client.dll");
+    if (vampireProfile == nullptr || clientProfile == nullptr) {
+        strcpy_s(gHookInstallError, "scene-profile-not-found");
+        return false;
+    }
+    if (!MatchesSceneProfile(*vampireProfile, *clientProfile)) {
+        strcpy_s(gHookInstallError, "scene-declaration-mismatch");
+        return false;
+    }
+    const ActiveBinaryProfile vampireActive{
+        vampireProfile,
+        reinterpret_cast<std::uintptr_t>(vampire),
+        vampireProfile->Pe.SizeOfImage,
+    };
+    const ActiveBinaryProfile clientActive{
+        clientProfile,
+        reinterpret_cast<std::uintptr_t>(client),
+        clientProfile->Pe.SizeOfImage,
+    };
+
+    struct SceneInstall {
+        const ActiveBinaryProfile* active;
+        const char* label;
+        void* detour;
+        elysium::capture::HookHandle* handle;
+        void** original;
+    };
+    void* originals[7]{};
+    const SceneInstall installs[] = {
+        {&clientActive, "client.maintain_sequence_transitions",
+         reinterpret_cast<void*>(&HookMaintainSequenceTransitions),
+         &gMaintainSequenceTransitionsHook, &originals[0]},
+        {&vampireActive, "vampire.scene_find_named_entity",
+         reinterpret_cast<void*>(&HookSceneFindNamedEntity),
+         &gSceneFindNamedEntityHook, &originals[1]},
+        {&vampireActive, "vampire.scene_apply_anim_set",
+         reinterpret_cast<void*>(&HookSceneApplyAnimSet),
+         &gSceneApplyAnimSetHook, &originals[2]},
+        {&vampireActive, "vampire.scene_on_finished",
+         reinterpret_cast<void*>(&HookSceneOnFinished), &gSceneOnFinishedHook,
+         &originals[3]},
+        {&vampireActive, "vampire.scene_cancel_playback",
+         reinterpret_cast<void*>(&HookSceneCancelPlayback),
+         &gSceneCancelPlaybackHook, &originals[4]},
+        {&vampireActive, "vampire.scene_dispatch_start_event",
+         reinterpret_cast<void*>(&HookSceneDispatchStartEvent),
+         &gSceneDispatchStartEventHook, &originals[5]},
+        {&vampireActive, "vampire.scene_start_playback",
+         reinterpret_cast<void*>(&HookSceneStartPlayback),
+         &gSceneStartPlaybackHook, &originals[6]},
+    };
+    for (const auto& install : installs) {
+        const auto* target = FindTarget(*install.active->Profile, install.label);
+        if (target == nullptr) {
+            strcpy_s(gHookInstallError, "scene-target-not-found");
+            return false;
+        }
+        const HookBackendResult result = HookBackends::Install(
+            *install.active, *target, install.detour, install.handle);
+        if (result != HookBackendResult::Installed) {
+            std::snprintf(
+                gHookInstallError,
+                sizeof(gHookInstallError),
+                "scene-backend-%u rva=%08x bytes=%u",
+                static_cast<unsigned>(result),
+                static_cast<unsigned>(target->Rva),
+                static_cast<unsigned>(target->ExpectedByteCount));
+            return false;
+        }
+        *install.original = install.handle->Original;
+    }
+    gOriginalMaintainSequenceTransitions =
+        reinterpret_cast<MaintainSequenceTransitionsFn>(originals[0]);
+    gOriginalSceneFindNamedEntity =
+        reinterpret_cast<SceneFindNamedEntityFn>(originals[1]);
+    gOriginalSceneApplyAnimSet =
+        reinterpret_cast<SceneApplyAnimSetFn>(originals[2]);
+    gOriginalSceneOnFinished =
+        reinterpret_cast<SceneLifecycleFn>(originals[3]);
+    gOriginalSceneCancelPlayback =
+        reinterpret_cast<SceneLifecycleFn>(originals[4]);
+    gOriginalSceneDispatchStartEvent =
+        reinterpret_cast<SceneDispatchStartEventFn>(originals[5]);
+    gOriginalSceneStartPlayback =
+        reinterpret_cast<SceneLifecycleFn>(originals[6]);
+    return true;
+}
+
+bool InstallHooks(
+    HMODULE studioRender, HMODULE client, HMODULE engine, HMODULE vampire) {
     using elysium::capture::ActiveBinaryProfile;
     using elysium::capture::HookBackendResult;
     using elysium::capture::HookBackends;
@@ -2746,6 +3768,14 @@ bool InstallHooks(HMODULE studioRender, HMODULE client, HMODULE engine) {
                 gDecodeSelectedBonesHook.Original);
     }
 
+    // Before the lifetime pair and after the contribution set, so the scene
+    // scopes exist for every record that will name one and the lifetime pair
+    // stays last.
+    if (gSceneOutput != INVALID_HANDLE_VALUE &&
+        !InstallSceneHooks(vampire, client)) {
+        return false;
+    }
+
     if (!lifetimeEnabled) {
         return true;
     }
@@ -2797,6 +3827,14 @@ void RemoveHooks() {
     InterlockedExchange(&gCapturing, 0);
     HookBackends::Disable(&gBaseEntityDestructHook);
     HookBackends::Disable(&gBaseEntityConstructHook);
+    // The scene set, outermost frame first, mirroring the install exactly.
+    HookBackends::Disable(&gSceneStartPlaybackHook);
+    HookBackends::Disable(&gSceneDispatchStartEventHook);
+    HookBackends::Disable(&gSceneCancelPlaybackHook);
+    HookBackends::Disable(&gSceneOnFinishedHook);
+    HookBackends::Disable(&gSceneApplyAnimSetHook);
+    HookBackends::Disable(&gSceneFindNamedEntityHook);
+    HookBackends::Disable(&gMaintainSequenceTransitionsHook);
     HookBackends::Disable(&gDecodeSelectedBonesHook);
     HookBackends::Disable(&gDecodeBonePositionHook);
     HookBackends::Disable(&gDecodeBoneQuaternionHook);
@@ -2813,6 +3851,13 @@ void RemoveHooks() {
     }
     HookBackends::Release(&gBaseEntityDestructHook);
     HookBackends::Release(&gBaseEntityConstructHook);
+    HookBackends::Release(&gSceneStartPlaybackHook);
+    HookBackends::Release(&gSceneDispatchStartEventHook);
+    HookBackends::Release(&gSceneCancelPlaybackHook);
+    HookBackends::Release(&gSceneOnFinishedHook);
+    HookBackends::Release(&gSceneApplyAnimSetHook);
+    HookBackends::Release(&gSceneFindNamedEntityHook);
+    HookBackends::Release(&gMaintainSequenceTransitionsHook);
     HookBackends::Release(&gDecodeSelectedBonesHook);
     HookBackends::Release(&gDecodeBonePositionHook);
     HookBackends::Release(&gDecodeBoneQuaternionHook);
@@ -2909,8 +3954,8 @@ bool ReadExpectedBytes(
 bool ReadConfiguration(
     wchar_t* iniPath, wchar_t* outputPath, wchar_t* animationOutputPath,
     wchar_t* censusOutputPath, wchar_t* actorOutputPath,
-    wchar_t* contributionOutputPath, wchar_t* studioHash,
-    wchar_t* clientHash) {
+    wchar_t* contributionOutputPath, wchar_t* sceneOutputPath,
+    wchar_t* studioHash, wchar_t* clientHash, wchar_t* vampireHash) {
     wchar_t modulePath[MAX_PATH * 4]{};
     const DWORD length =
         GetModuleFileNameW(gSelf, modulePath, ARRAYSIZE(modulePath));
@@ -2941,6 +3986,9 @@ bool ReadConfiguration(
         L"capture", L"contribution_output", L"", contributionOutputPath,
         MAX_PATH * 4, iniPath);
     GetPrivateProfileStringW(
+        L"capture", L"scene_output", L"", sceneOutputPath,
+        MAX_PATH * 4, iniPath);
+    GetPrivateProfileStringW(
         L"capture", L"ready", L"", gReadyPath, ARRAYSIZE(gReadyPath), iniPath);
     GetPrivateProfileStringW(
         L"capture", L"stop", L"", gStopPath, ARRAYSIZE(gStopPath), iniPath);
@@ -2950,6 +3998,8 @@ bool ReadConfiguration(
         L"capture", L"studiorender_sha256", L"", studioHash, 80, iniPath);
     GetPrivateProfileStringW(
         L"capture", L"client_sha256", L"", clientHash, 80, iniPath);
+    GetPrivateProfileStringW(
+        L"capture", L"vampire_sha256", L"", vampireHash, 80, iniPath);
     wchar_t targetChecksum[32]{};
     GetPrivateProfileStringW(
         L"capture", L"target_checksum", L"0", targetChecksum,
@@ -3084,9 +4134,70 @@ bool ReadConfiguration(
              iniPath,
              L"decode_bone_position_expected",
              &gDecodeBonePositionExpected));
+    // And the seven scene frames, on the same terms. Six live in a fifth module
+    // the earlier recipes never named, so a recipe that predates the scene
+    // stream simply leaves the output out and configures none of them.
+    const bool sceneProfile =
+        !sceneOutputPath[0] ||
+        (ReadProfileDword(
+             iniPath,
+             L"scene_find_named_entity_rva",
+             &gSceneFindNamedEntityRva) &&
+         ReadExpectedBytes(
+             iniPath,
+             L"scene_find_named_entity_expected",
+             &gSceneFindNamedEntityExpected) &&
+         ReadProfileDword(
+             iniPath,
+             L"scene_apply_anim_set_rva",
+             &gSceneApplyAnimSetRva) &&
+         ReadExpectedBytes(
+             iniPath,
+             L"scene_apply_anim_set_expected",
+             &gSceneApplyAnimSetExpected) &&
+         ReadProfileDword(
+             iniPath,
+             L"scene_on_finished_rva",
+             &gSceneOnFinishedRva) &&
+         ReadExpectedBytes(
+             iniPath,
+             L"scene_on_finished_expected",
+             &gSceneOnFinishedExpected) &&
+         ReadProfileDword(
+             iniPath,
+             L"scene_cancel_playback_rva",
+             &gSceneCancelPlaybackRva) &&
+         ReadExpectedBytes(
+             iniPath,
+             L"scene_cancel_playback_expected",
+             &gSceneCancelPlaybackExpected) &&
+         ReadProfileDword(
+             iniPath,
+             L"scene_dispatch_start_event_rva",
+             &gSceneDispatchStartEventRva) &&
+         ReadExpectedBytes(
+             iniPath,
+             L"scene_dispatch_start_event_expected",
+             &gSceneDispatchStartEventExpected) &&
+         ReadProfileDword(
+             iniPath,
+             L"scene_start_playback_rva",
+             &gSceneStartPlaybackRva) &&
+         ReadExpectedBytes(
+             iniPath,
+             L"scene_start_playback_expected",
+             &gSceneStartPlaybackExpected) &&
+         ReadProfileDword(
+             iniPath,
+             L"maintain_sequence_transitions_rva",
+             &gMaintainSequenceTransitionsRva) &&
+         ReadExpectedBytes(
+             iniPath,
+             L"maintain_sequence_transitions_expected",
+             &gMaintainSequenceTransitionsExpected));
     return outputPath[0] && gReadyPath[0] && gStopPath[0] &&
         gDonePath[0] && studioProfile && clientProfile && lifetimeProfile &&
-        contributionProfile;
+        contributionProfile && sceneProfile;
 }
 
 DWORD WINAPI CaptureWorker(void*) {
@@ -3096,24 +4207,33 @@ DWORD WINAPI CaptureWorker(void*) {
     wchar_t censusOutputPath[MAX_PATH * 4]{};
     wchar_t actorOutputPath[MAX_PATH * 4]{};
     wchar_t contributionOutputPath[MAX_PATH * 4]{};
+    wchar_t sceneOutputPath[MAX_PATH * 4]{};
     wchar_t studioHash[80]{};
     wchar_t clientHash[80]{};
+    wchar_t vampireHash[80]{};
     if (!ReadConfiguration(
             iniPath, outputPath, animationOutputPath, censusOutputPath,
-            actorOutputPath, contributionOutputPath, studioHash, clientHash)) {
+            actorOutputPath, contributionOutputPath, sceneOutputPath,
+            studioHash, clientHash, vampireHash)) {
         return 1;
     }
 
     HMODULE studioRender = nullptr;
     HMODULE client = nullptr;
     HMODULE engine = nullptr;
+    HMODULE vampire = nullptr;
+    // The server game DLL is polled on the same terms as the other three. It is
+    // not resident when the probe host runs its bootstrap sweep, so the sweep
+    // reports it missing exactly as it already reports the other three, and the
+    // module observer activates it before this loop finishes.
     for (int attempt = 0;
-         attempt < 1200 && (!studioRender || !client || !engine);
+         attempt < 1200 && (!studioRender || !client || !engine || !vampire);
          ++attempt) {
         studioRender = GetModuleHandleW(L"StudioRender.dll");
         client = GetModuleHandleW(L"client.dll");
         engine = GetModuleHandleW(L"engine.dll");
-        if (!studioRender || !client || !engine) {
+        vampire = GetModuleHandleW(L"vampire.dll");
+        if (!studioRender || !client || !engine || !vampire) {
             Sleep(25);
         }
     }
@@ -3127,6 +4247,10 @@ DWORD WINAPI CaptureWorker(void*) {
     }
     if (animationOutputPath[0] && !engine) {
         WriteMarker(gDonePath, "error=engine.dll not loaded\n");
+        return 2;
+    }
+    if (sceneOutputPath[0] && !vampire) {
+        WriteMarker(gDonePath, "error=vampire.dll not loaded\n");
         return 2;
     }
 
@@ -3164,6 +4288,15 @@ DWORD WINAPI CaptureWorker(void*) {
             CREATE_NEW,
             FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
     }
+    // The scene stream needs the server game DLL rather than the skeletal
+    // evaluation, but its sequence-change half is a client frame that runs
+    // inside a pose build, so it shares the animation precondition too.
+    if (sceneOutputPath[0] && animationOutputPath[0]) {
+        gSceneOutput = CreateFileW(
+            sceneOutputPath, GENERIC_WRITE, FILE_SHARE_READ, nullptr,
+            CREATE_NEW,
+            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+    }
     if (!gWake || gOutput == INVALID_HANDLE_VALUE ||
         (animationOutputPath[0] &&
          gAnimationOutput == INVALID_HANDLE_VALUE) ||
@@ -3172,7 +4305,9 @@ DWORD WINAPI CaptureWorker(void*) {
         (actorOutputPath[0] && animationOutputPath[0] &&
          gActorOutput == INVALID_HANDLE_VALUE) ||
         (contributionOutputPath[0] && animationOutputPath[0] &&
-         gContributionOutput == INVALID_HANDLE_VALUE)) {
+         gContributionOutput == INVALID_HANDLE_VALUE) ||
+        (sceneOutputPath[0] && animationOutputPath[0] &&
+         gSceneOutput == INVALID_HANDLE_VALUE)) {
         WriteMarker(gDonePath, "error=cannot create capture output\n");
         return 3;
     }
@@ -3256,8 +4391,8 @@ DWORD WINAPI CaptureWorker(void*) {
 
     if (gActorOutput != INVALID_HANDLE_VALUE) {
         ActorFileHeader actorHeader{};
-        std::memcpy(actorHeader.magic, "ELACT2", 6);
-        actorHeader.version = 2;
+        std::memcpy(actorHeader.magic, "ELACT3", 6);
+        actorHeader.version = 3;
         actorHeader.headerBytes = sizeof(actorHeader);
         actorHeader.qpcFrequency = frequency.QuadPart;
         actorHeader.startQpc = gStartQpc.QuadPart;
@@ -3301,7 +4436,34 @@ DWORD WINAPI CaptureWorker(void*) {
         }
     }
 
-    if (!InstallHooks(studioRender, client, engine)) {
+    if (gSceneOutput != INVALID_HANDLE_VALUE) {
+        SceneFileHeader sceneHeader{};
+        std::memcpy(sceneHeader.magic, "ELSCN1", 6);
+        sceneHeader.version = 1;
+        sceneHeader.headerBytes = sizeof(sceneHeader);
+        sceneHeader.qpcFrequency = frequency.QuadPart;
+        sceneHeader.startQpc = gStartQpc.QuadPart;
+        sceneHeader.pid = GetCurrentProcessId();
+        sceneHeader.vampireBase = static_cast<std::uint32_t>(
+            reinterpret_cast<std::uintptr_t>(vampire));
+        sceneHeader.clientBase = static_cast<std::uint32_t>(
+            reinterpret_cast<std::uintptr_t>(client));
+        sceneHeader.dispatchStartEventRva = gSceneDispatchStartEventRva;
+        sceneHeader.findNamedEntityRva = gSceneFindNamedEntityRva;
+        sceneHeader.applyAnimSetRva = gSceneApplyAnimSetRva;
+        sceneHeader.maintainSequenceTransitionsRva =
+            gMaintainSequenceTransitionsRva;
+        wcstombs_s(
+            &converted, sceneHeader.vampireSha256,
+            sizeof(sceneHeader.vampireSha256), vampireHash, _TRUNCATE);
+        if (!WriteAll(gSceneOutput, &sceneHeader, sizeof(sceneHeader))) {
+            WriteMarker(
+                gDonePath, "error=cannot write scene capture header\n");
+            return 4;
+        }
+    }
+
+    if (!InstallHooks(studioRender, client, engine, vampire)) {
         RemoveHooks();
         char error[192]{};
         std::snprintf(
@@ -3315,11 +4477,12 @@ DWORD WINAPI CaptureWorker(void*) {
     InterlockedExchange(&gCapturing, 1);
     char ready[192]{};
     std::snprintf(
-        ready, sizeof(ready), "ready=1\nformat=ELPOSE4%s%s%s%s\n",
+        ready, sizeof(ready), "ready=1\nformat=ELPOSE4%s%s%s%s%s\n",
         gAnimationOutput == INVALID_HANDLE_VALUE ? "" : "+ELANIM4",
         gCensusOutput == INVALID_HANDLE_VALUE ? "" : "+ELMDL1",
-        gActorOutput == INVALID_HANDLE_VALUE ? "" : "+ELACT2",
-        gContributionOutput == INVALID_HANDLE_VALUE ? "" : "+ELCON2");
+        gActorOutput == INVALID_HANDLE_VALUE ? "" : "+ELACT3",
+        gContributionOutput == INVALID_HANDLE_VALUE ? "" : "+ELCON2",
+        gSceneOutput == INVALID_HANDLE_VALUE ? "" : "+ELSCN1");
     WriteMarker(gReadyPath, ready);
 
     for (;;) {
@@ -3366,6 +4529,11 @@ DWORD WINAPI CaptureWorker(void*) {
         CloseHandle(gContributionOutput);
         gContributionOutput = INVALID_HANDLE_VALUE;
     }
+    if (gSceneOutput != INVALID_HANDLE_VALUE) {
+        FlushFileBuffers(gSceneOutput);
+        CloseHandle(gSceneOutput);
+        gSceneOutput = INVALID_HANDLE_VALUE;
+    }
 
     char done[2048]{};
     std::snprintf(
@@ -3385,7 +4553,12 @@ DWORD WINAPI CaptureWorker(void*) {
         "contribution_overflow=%ld\ncontribution_unscoped=%ld\n"
         "contribution_bytes=%lld\n"
         "channel_unwitnessed=%ld\nchannel_stride_faults=%ld\n"
-        "channel_nested=%ld\n",
+        "channel_nested=%ld\n"
+        "scene_lifecycles=%ld\nscene_events=%ld\nscene_binds=%ld\n"
+        "scene_animsets=%ld\nscene_sequence_changes=%ld\nscene_scopes=%ld\n"
+        "scene_faults=%ld\nscene_overflow=%ld\nscene_unscoped=%ld\n"
+        "scene_truncated=%ld\nscene_resolutions_unscoped=%ld\n"
+        "scene_bytes=%lld\n",
         gQueued, gWritten, gDropped, gQueuePeak, gSkipped, gFiltered,
         static_cast<long long>(gBytesWritten), gGeneration, gUnbracketed,
         gBracketOverflow, gCensusRecords, gCensusImages, gCensusReplacements,
@@ -3397,7 +4570,10 @@ DWORD WINAPI CaptureWorker(void*) {
         gContributionAnimations, gContributionScope, gContributionFaults,
         gContributionOverflow, gContributionUnscoped,
         static_cast<long long>(gContributionBytes), gChannelUnwitnessed,
-        gChannelStrideFaults, gChannelNested);
+        gChannelStrideFaults, gChannelNested, gSceneLifecycles, gSceneEvents,
+        gSceneBinds, gSceneAnimSets, gSceneSequenceChanges, gSceneScope,
+        gSceneFaults, gSceneOverflow, gSceneUnscoped, gSceneTruncated,
+        gSceneResolutionsUnscoped, static_cast<long long>(gSceneBytes));
     WriteMarker(gDonePath, done);
     CloseHandle(gWake);
     if (gCensusHeap) {

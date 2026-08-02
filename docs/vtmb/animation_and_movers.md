@@ -376,6 +376,15 @@ previous sequence through `FUN_100968a0`, and blends it into the current pose th
 `FUN_10096b30`. A record whose byte `+0x18` is set also carries a saved 3×4 entity
 transform at `+0x1c`.
 
+The array is a `CUtlVector` at `+0x67c` — the frame takes its address as a `this`
+pointer and reads the buffer through it — with the **element count at `+0x688`**, which
+the function compares against zero before anything else. `FUN_10091110` is
+`__thiscall(this, five stack dwords)`, cleaning `0x14` at its own epilogue, the same shape
+as `SetupBones`. So a sequence change is observable from outside as a growth in that
+count, without decoding an entry: what the 0x4c bytes hold beyond the fields above is not
+established, and the sequence now playing is already named by the evaluations the same
+pose build fires.
+
 Only while rebuilding one of those saved previous poses does it special-case every
 root bone or bone with `Flags & 0x2`. Raw stack accounting establishes the full
 frame conversion:
@@ -938,9 +947,22 @@ Malkavian male model is authored for two slots, the player model is selected at
 runtime, several expected variants were not drawn, and the render hook records
 neither targetname nor entity index. Consequently the draw dump alone
 deterministically identifies final matrices by client pointer/model checksum,
-but not every VCD actor name or source sequence. A whole-cast resolver capture
-must add the entity handle/target identity and sequence/cycle fields to close
-that mapping.
+but not every VCD actor name or source sequence.
+
+**The entity identity that closes it is the client entity's own handle.**
+`C_BaseEntity` stores an `EHANDLE` at `+0xe4`, and two independent accessors on its
+primary vtable `0x1022d6d4` name that displacement: slot `+0` is `0x1009f050`,
+`MOV [ECX+0xe4],EDX`, and slot `+4` is `0x1009f060`, `LEA EAX,[ECX+0xe4]; RET`. The
+handle packs the entity index in its low **13** bits and a serial above them, with all
+bits set meaning no entity — the same encoding the server uses at `CBaseEntity+0x448`, so
+one index space spans the two modules. A capture that records the handle beside the
+address therefore joins a drawn actor to the scene that asked for its animation, bounded
+by the serial and by the interval the address was one actor.
+
+The constructor at `FUN_1008f3c0` installs five vtables — the primary at `0x1022d6d4` and
+subobject vtables at `+4`, `+8`, `+0xc` and `+0x10`. The one at `+4` is the renderable the
+draw stream records, which is where this document's fixed four-byte offset between the two
+comes from.
 
 The phase/mask/buffer-identity join is reproducible with:
 

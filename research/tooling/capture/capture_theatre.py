@@ -155,9 +155,25 @@ def transition_signal(game_root: Path, baseline: set[str]) -> str | None:
     return None
 
 
+def _game_dll(game_root: Path) -> Path:
+    """Resolve the server game DLL the process maps, patch-first.
+
+    The patch supplies the launcher rather than a game DLL, so this normally
+    falls through to the base install; writing the search order out is what
+    keeps that a choice rather than an accident. The profile hash-gates
+    whichever file it returns, and the wrapped ``vampire.dll.12`` sibling the
+    installer wrote is never a candidate because it is a different filename.
+    """
+    patched = game_root / "Unofficial_Patch" / "dlls" / "vampire.dll"
+    if patched.is_file():
+        return patched
+    return game_root / "Vampire" / "dlls" / "vampire.dll"
+
+
 def _module_paths(game_root: Path) -> dict[str, Path]:
     return {
         "Vampire.exe": game_root / "Vampire.exe",
+        "vampire.dll": _game_dll(game_root),
         "client.dll": game_root / "Vampire" / "cl_dlls" / "client.dll",
         "engine.dll": game_root / "Bin" / "engine.dll",
         "StudioRender.dll": game_root / "Bin" / "StudioRender.dll",
@@ -213,17 +229,33 @@ def write_hook_ini(path: Path, session: Path, duration_seconds: int) -> None:
     blend_axis = target(client, "client.resolve_blend_axis_weight")
     decode_quaternion = target(client, "client.decode_bone_quaternion")
     decode_position = target(client, "client.decode_bone_position")
+    vampire = _profile("vampire.dll")
+    scene_targets = {
+        name: target(vampire, f"vampire.{name}")
+        for name in (
+            "scene_start_playback",
+            "scene_on_finished",
+            "scene_cancel_playback",
+            "scene_dispatch_start_event",
+            "scene_find_named_entity",
+            "scene_apply_anim_set",
+        )
+    }
+    scene_targets["maintain_sequence_transitions"] = target(
+        client, "client.maintain_sequence_transitions")
     values = {
         "output": session / "scene.elpose",
         "animation_output": session / "animation.elanim",
         "census_output": session / "model.elmdl",
         "actor_output": session / "actor.elact",
         "contribution_output": session / "contribution.elcon",
+        "scene_output": session / "scene.elscn",
         "ready": session / "ready.txt",
         "stop": session / "stop.txt",
         "done": session / "done.txt",
         "studiorender_sha256": studio["sha256"],
         "client_sha256": client["sha256"],
+        "vampire_sha256": vampire["sha256"],
         "studio_object_rva": f"0x{draw['vtable']['object_rva']:x}",
         "studio_vtable_rva": f"0x{draw['vtable']['expected_vtable_rva']:x}",
         "draw_model_rva": f"0x{draw['rva']:x}",
@@ -260,6 +292,9 @@ def write_hook_ini(path: Path, session: Path, duration_seconds: int) -> None:
         "target_checksum": "0x00000000",
         "duration_seconds": duration_seconds + 60,
     }
+    for name, entry in scene_targets.items():
+        values[f"{name}_rva"] = f"0x{entry['rva']:x}"
+        values[f"{name}_expected"] = entry["expected_bytes"]
     path.write_text(
         "[capture]\n"
         + "\n".join(f"{key}={value}" for key, value in values.items())

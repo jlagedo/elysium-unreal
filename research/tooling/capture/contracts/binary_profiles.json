@@ -18,6 +18,79 @@
       "targets": []
     },
     {
+      "id": "vtmb-owner-vampire-c546f4de",
+      "module": "vampire.dll",
+      "source_spec": "research/cases/animation-pose/specs/scene_requests.json",
+      "file_size": 7860281,
+      "sha256": "c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f",
+      "pe": {
+        "machine": "0x014c",
+        "timestamp": "0x41afafae",
+        "optional_magic": "0x010b",
+        "preferred_image_base": "0x10000000",
+        "size_of_image": "0x00ab9000",
+        "checksum": "0x00000000",
+        "section_count": 5,
+        "characteristics": "0x210e"
+      },
+      "targets": [
+        {
+          "semantic_label": "vampire.scene_find_named_entity",
+          "source_function_label": "scene_find_named_entity",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00083cd0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "538b5c2408"
+        },
+        {
+          "semantic_label": "vampire.scene_apply_anim_set",
+          "source_function_label": "scene_apply_anim_set",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x000843d0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "83ec085355"
+        },
+        {
+          "semantic_label": "vampire.scene_on_finished",
+          "source_function_label": "scene_on_finished",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00081b60",
+          "calling_convention": "thiscall",
+          "expected_bytes": "51538bd98a8398040000"
+        },
+        {
+          "semantic_label": "vampire.scene_cancel_playback",
+          "source_function_label": "scene_cancel_playback",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00082b80",
+          "calling_convention": "thiscall",
+          "expected_bytes": "568bf18b86bc040000"
+        },
+        {
+          "semantic_label": "vampire.scene_dispatch_start_event",
+          "source_function_label": "scene_dispatch_start_event",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00082ee0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "83ec385355"
+        },
+        {
+          "semantic_label": "vampire.scene_start_playback",
+          "source_function_label": "scene_start_playback",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x000829e0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "568bf18b8ebc040000"
+        }
+      ]
+    },
+    {
       "id": "vtmb-retail-client-e88beae0",
       "module": "client.dll",
       "source_spec": "research/cases/animation-pose/specs/animation_pose.json",
@@ -136,6 +209,15 @@
           "rva": "0x00088ba0",
           "calling_convention": "cdecl",
           "expected_bytes": "8b4c2414d901"
+        },
+        {
+          "semantic_label": "client.maintain_sequence_transitions",
+          "source_function_label": "maintain_sequence_transitions",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00091110",
+          "calling_convention": "thiscall",
+          "expected_bytes": "b8f4260000"
         }
       ]
     },

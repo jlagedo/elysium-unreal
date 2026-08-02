@@ -27,10 +27,11 @@ uv run elysium research animation-pose research/cases/animation-pose/specs/anima
 uv run elysium research animation-pose research/cases/animation-pose/specs/animation_pose.json --index-only
 ```
 
-The three animation specifications divide the call chain at binary boundaries:
+The four animation specifications divide the call chain at binary boundaries:
 
 | Specification | Program | Scope |
 |---|---|---|
+| `scene_requests.json` | `vampire.dll` | scene playback lifecycle, choreographed event dispatch, actor binding, animation-set application |
 | `animation_pose.json` | `client.dll` | local decode, blends, transitions, hierarchy, entity/root composition, render submission |
 | `animation_skinning.json` | `engine.dll` | `VEngineModel006`, `SetupBones` callback, `TStudioRender012` bridge |
 | `animation_studiorender.json` | `StudioRender.dll` | inverse bind, skin palette, vertex deformation, mesh submission |

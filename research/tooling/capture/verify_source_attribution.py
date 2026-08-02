@@ -495,9 +495,14 @@ def blends(connection: sqlite3.Connection) -> dict[str, Any]:
     }
 
 
-def _spec_functions() -> list[tuple[int, str]]:
+def spec_functions(path: Path = SPEC_PATH) -> list[tuple[int, str]]:
+    """The seed entry points a case specification declares, ascending.
+
+    Shared with the scene verifier, which resolves callers in a second module
+    against a second specification by the same rule.
+    """
     try:
-        document = json.loads(SPEC_PATH.read_text(encoding="utf-8"))
+        document = json.loads(path.read_text(encoding="utf-8"))
     except Exception:  # noqa: BLE001 - an absent specification is an answer
         return []
     entries = []
@@ -509,6 +514,28 @@ def _spec_functions() -> list[tuple[int, str]]:
         except (KeyError, ValueError):
             continue
     return sorted(entries)
+
+
+def nearest_preceding_label(
+    functions: list[tuple[int, str]], virtual: int
+) -> str | None:
+    """The seed an address falls in, or None before the first one.
+
+    The specification carries entry points and no sizes, so an address is
+    attributed to the seed below it only when one exists; anything before the
+    first seed is unresolved rather than guessed at.
+    """
+    label = None
+    for start, name in functions:
+        if start <= virtual:
+            label = name
+        else:
+            break
+    return label
+
+
+def _spec_functions() -> list[tuple[int, str]]:
+    return spec_functions()
 
 
 def callers(connection: sqlite3.Connection, support: dict[str, Any]) -> dict[str, Any]:
@@ -532,12 +559,7 @@ def callers(connection: sqlite3.Connection, support: dict[str, Any]) -> dict[str
     unresolved = 0
     for kind, caller, count in rows:
         virtual = caller - client_base + 0x10000000
-        label = None
-        for start, name in functions:
-            if start <= virtual:
-                label = name
-            else:
-                break
+        label = nearest_preceding_label(functions, virtual)
         if label is None:
             unresolved += count
         if len(resolved) < MAX_REPORTED_CALLERS:
