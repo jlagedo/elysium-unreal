@@ -177,7 +177,7 @@ and over, so **42%** of one run's payload bytes repeat bytes it already holds.
 | 1 | P0 — done | CAP1 — first run and calibration | The instrument that exists produces one finalized `sp_theatre` database, and its measured rates, counts, and joins replace every estimate |
 | 2 | P0 — in progress | CAP2 — complete the capture | Contributions group, actors and skeletons are identified, every fired contribution names its source owner, indices, and consumed byte spans, and each pose group names the request that caused it |
 | 3 | P0 — done | CAP3 — decode and index | One deduplicated, joinable database answers per-actor and per-time questions without re-running the game, and reports its own counts |
-| 4 | P0 | CAP4 — inspect against export and decoder | Byte ranges the runtime reads that we do not, and the first mismatching stage and bone per pose group |
+| 4 | P0 — in progress | CAP4 — inspect against export and decoder | Byte ranges the runtime reads that we do not, and the first mismatching stage and bone per pose group |
 | 5 | P1 | CAP5 — close what the difference proves | Recovered rules, each with a regression and a fact in the owning topic |
 | 6 | P1 | CAP6 — face and lips | The same loop over expression, flex, phoneme, and deformed-vertex state |
 | 7 | P2 | CAP7 — handoff and trim | Engine-neutral evaluator feeds Unreal; unused probes and readers are deleted |
@@ -856,10 +856,64 @@ compact → index, and each pass records the digest of the file it consumed.
 
 This phase is the point of the program. It runs entirely offline against the database.
 
-- [ ] **CAP4.1 Source join.** Join each captured contribution to the patch-first installed
+- [x] **CAP4.1 Source join.** Join each captured contribution to the patch-first installed
   bytes by exact model path and checksum plus owner-local sequence and animation indices,
   and to the current exported animation and the CAP0.5 inventory. Report observed coverage
   and every unresolved runtime identity explicitly.
+
+  `uv run elysium research verify_source_join <session>…` reads a finalized database
+  read-only and writes one `source-join.json` beside it. **Nothing is written into the
+  capture.** The other CAP4 products derive from the capture alone, but this join depends on
+  the machine's install and export state, so storing it would put a claim about a moment
+  outside the evidence file inside it. The tool reads `model_headers` rather than the spine,
+  so a capture carrying the census and contribution streams answers whether or not it has
+  been indexed.
+
+  **Coverage is stated twice, because the two denominators answer different questions.** One
+  cutscene fires **34** owner models, **45** distinct `(owner, sequence index)` and **53**
+  distinct `(owner, animation index)` identities, across **481,683** contribution records —
+  six Courtroom cinematic banks carry over 170,000 of them while the two `character/pc`
+  owners carry 13. All **98** identities and all **481,683** records resolve to patch-first
+  installed bytes, over owners served from both the VPKs and the patch's loose tree.
+
+  **The join is falsified against a second source.** Every captured pointer's image
+  displacement equals `LocalSeqIndex + index × 764` or `LocalAnimIndex + index × 72` read
+  from the **installed file** — the same predicate CAP2.4 satisfies against the image the
+  probe copied out of the process, now answered by a copy of the header the probe never
+  touched. Byte for byte, **58** of the 98 descriptors are identical between the two copies
+  and **40** differ only in `StudioSeqDesc`+0xc, the activity dword the loader rewrites;
+  **none** differs anywhere else. Where the CAP0.5 inventory covers an identity, its
+  `descriptor_sha256` and `source_span` — produced by a tool that never saw the capture —
+  agree with the installed bytes on every one. The report carries each joined descriptor
+  verbatim, so a span is readable without the install it was joined against.
+
+  **The corpus bound is a number.** The run fires **45 of the 2,046** sequences its own
+  owners declare, which is what a coverage claim over this corpus may say and no more.
+
+  **What the current export cannot name is the result.** **41 of 45** fired sequences reach
+  an exported clip, and the manifest's activity, weight and flags agree with the installed
+  descriptor on every one. Four owners are absent from the export entirely —
+  `scenery/structural/la/LAmanhole.mdl`, `scenery/structural/doorknoba/drknobantiquel.mdl`,
+  `scenery/furniture/computer/monitor_useable.mdl` and
+  `hands/male/shared/v_shared_male_hands.mdl` — because the export seeds from entity lists
+  and clandoc bodies, which no scenery mover or viewmodel reaches. And **10** fired blend
+  cells over **6,878** records, all on the male and female `move_and_ranged` 9×1 walk grids,
+  have no exported counterpart, because `local_sequences` bakes cell `[0][0]` alone. The
+  inventory covers **8** sequence and **16** animation identities and leaves 74 outside its
+  player-body seed.
+
+  Three bounds travel with the report. **The export is measured, not changed**: the tool
+  replays `local_sequences`'s own rules over the installed image with indices preserved, so a
+  missing clip is attributed to the rule that dropped it — empty label, first-wins lowercased
+  dedup, base cell outside `NumLocalAnims` — rather than reported as an unexplained absence.
+  Changing the exporter is CAP5 work that CAP4.4 authorizes. **Only the install arm can
+  fail**: an identity that reaches no installed bytes, or whose pointer misses the array
+  position the installed header declares, is a defect because every later comparison would
+  read the wrong bytes, while an identity the export or the inventory cannot name is a
+  measured shortfall carrying the reason it holds. An unreadable install fails too, since
+  resolving those bytes is the task. And **a population no declaration covers is not
+  coverage**: a count that is neither a declared defect nor an accounted one fails the
+  verdict rather than passing unremarked.
 - [ ] **CAP4.2 Byte-coverage difference.** Mark the byte ranges of each owning model image
   that the retail runtime dereferenced, and the ranges the current decoder reads. Ranges
   read by retail and unread by us are the missing-data list. Ranges read by neither stay

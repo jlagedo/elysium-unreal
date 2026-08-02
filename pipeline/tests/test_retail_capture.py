@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -118,6 +119,11 @@ from research.tooling.capture.index_capture_database import (
 )
 from research.tooling.capture.verify_capture_index import (
     verify as verify_index,
+)
+from research.tooling.capture import verify_source_join
+from research.tooling.capture.verify_source_join import (
+    install_key,
+    verify as verify_join,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -583,6 +589,9 @@ def model_image(
     ),
     clips: tuple[Clip, ...] = DEFAULT_CLIPS,
     sequences: int = CONTRIBUTION_NUM_SEQ,
+    labels: tuple[str, ...] = (),
+    activities: tuple[str, ...] = (),
+    base_cells: tuple[int, ...] = (),
 ) -> bytes:
     """A minimal v2531 model image the pipeline bone decoder can read.
 
@@ -655,6 +664,19 @@ def model_image(
         struct.pack_into("<i", blob, desc + 52, 1)
         struct.pack_into("<ii", blob, desc + 572, 1, 1)
         struct.pack_into("<ii", blob, desc + 580, -1, -1)
+        if index < len(base_cells):
+            struct.pack_into("<h", blob, desc + 56, base_cells[index])
+    # Labels and activity names sit after the descriptor array, reached through
+    # the descriptor-relative index fields at +0 and +4. A sequence with no
+    # entry keeps the zero index the engine reads as an empty string, which is
+    # what every caller predating these arguments already produced.
+    for index in range(sequences):
+        desc = CONTRIBUTION_SEQ_INDEX_OFF + SEQ_DESC_STRIDE * index
+        for field, table in ((0, labels), (4, activities)):
+            if index >= len(table) or not table[index]:
+                continue
+            struct.pack_into("<i", blob, desc + field, len(blob) - desc)
+            blob += table[index].encode("ascii") + b"\0"
     struct.pack_into("<i", blob, 140, len(blob))
     return bytes(blob)
 
@@ -5666,6 +5688,674 @@ class RetailCaptureTests(unittest.TestCase):
             self.assertEqual(
                 compacted["payloads"]["payloads_not_matching_their_digest"], 0
             )
+
+
+BANK_CHECKSUM = 0xABCD
+BANK_MODEL = "models/bank.mdl"
+BANK_LABELS = ("stand", "walk", "idle", "turn")
+# Every sequence carries an activity literal. A descriptor whose activity
+# index is zero reads the label index field as a string, so a fixture that
+# leaves it unset compares garbage against the manifest.
+BANK_ACTIVITIES = ("ACT_STAND", "ACT_WALK", "ACT_IDLE", "ACT_TURN")
+FIRED_SEQUENCE = 2
+FIRED_ANIMATION = 0
+
+
+class SourceJoinTests(unittest.TestCase):
+    """CAP4.1: a fired identity against the install, the export and CAP0.5.
+
+    Every arm is synthetic. The install is a callable over an in-memory image,
+    the export manifest and the inventory are real files in a temporary tree,
+    and the model image is the same v2531 fixture the rest of this suite uses,
+    so nothing here depends on a game install.
+    """
+
+    def _bank(self, **kwargs: object) -> bytes:
+        options: dict[str, object] = {
+            "labels": BANK_LABELS,
+            "activities": BANK_ACTIVITIES,
+            "sequences": len(BANK_LABELS),
+        }
+        options.update(kwargs)
+        return model_image(BANK_CHECKSUM, BANK_MODEL, **options)
+
+    def _contributions(
+        self, *, sequence_index: int = FIRED_SEQUENCE,
+        animation_index: int = FIRED_ANIMATION,
+    ) -> bytes:
+        return contribution_record(
+            b"SEQP", 8, 103, sequence_index=sequence_index
+        ) + contribution_record(
+            b"ANIM", 9, 104, animation_index=animation_index
+        )
+
+    def _session(
+        self,
+        session: Path,
+        *,
+        image: bytes | None = None,
+        contributions: bytes | None = None,
+    ) -> None:
+        write_session(
+            session,
+            pose_records=pose_record(
+                1, 100, "models/test.mdl", generation=1, client_entity=0x1FFC
+            ),
+            animation_records=(
+                bracket_record(
+                    b"PBLD", 2, 100, 101, generation=1, client_entity=0x1FFC
+                )
+                + animation_record(
+                    b"BASE", 3, 102, client_entity=0x1FF8, generation=1
+                )
+            ),
+            census_records=(
+                observation_record(4, 88, "models/test.mdl")
+                + image_record(5, 89, model_image(0x3000, "models/test.mdl"))
+                + observation_record(
+                    6, 90, BANK_MODEL,
+                    studio_hdr=CONTRIBUTION_OWNER_HDR, checksum=BANK_CHECKSUM,
+                )
+                + image_record(
+                    7, 91, self._bank() if image is None else image,
+                    studio_hdr=CONTRIBUTION_OWNER_HDR, checksum=BANK_CHECKSUM,
+                )
+            ),
+            contribution_records=(
+                self._contributions() if contributions is None else contributions
+            ),
+            done=(
+                "complete=1\nqueued=8\nwritten=8\ndropped=0\nqueue_peak=12\n"
+                "unbracketed=0\nbracket_overflow=0\n"
+                "contribution_sequences=1\ncontribution_animations=1\n"
+                "contribution_faults=0\ncontribution_overflow=0\n"
+                "contribution_unscoped=0\n"
+            ),
+        )
+        finalize(session)
+
+    def _reader(self, installed: bytes | None):
+        """A patch-first install carrying one model, or carrying nothing."""
+
+        def read(key: str) -> dict[str, object] | None:
+            if installed is None or key != BANK_MODEL:
+                return None
+            return {"data": installed, "layer": "patch", "path": "/patch/" + key}
+
+        return read
+
+    def _export(self, root: Path, clips: dict[str, object] | None = None) -> Path:
+        """A manifest whose one bank names the owner model by its install key."""
+        if clips is None:
+            clips = {
+                BANK_LABELS[FIRED_SEQUENCE]: {
+                    "activity": BANK_ACTIVITIES[FIRED_SEQUENCE],
+                    "weight": 0, "flags": 0, "frames": 3, "fps": 30.0,
+                }
+            }
+        (root / "npc").mkdir(parents=True, exist_ok=True)
+        (root / "npc" / "npc_manifest.json").write_text(
+            json.dumps(
+                {
+                    "manifest_version": 4,
+                    "npcs": {},
+                    "banks": {
+                        "bank": {
+                            "glb": "banks/bank.glb",
+                            "model": BANK_MODEL,
+                            "clips": clips,
+                        }
+                    },
+                    "animated_props": {},
+                    "cinematics": {},
+                }
+            ),
+            encoding="utf-8",
+        )
+        return root
+
+    def _inventory(
+        self, root: Path, image: bytes, *, digest: str | None = None,
+        cells: list[dict[str, int]] | None = None,
+    ) -> Path:
+        sequence_offset = CONTRIBUTION_SEQ_INDEX_OFF + SEQ_DESC_STRIDE * FIRED_SEQUENCE
+        animation_offset = CONTRIBUTION_ANIM_INDEX_OFF + 72 * FIRED_ANIMATION
+        sequence_bytes = image[sequence_offset : sequence_offset + SEQ_DESC_STRIDE]
+        animation_bytes = image[animation_offset : animation_offset + 72]
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "manifest.json").write_text(
+            json.dumps({"tool": {"git": {"commit": "def", "dirty": False}}}),
+            encoding="utf-8",
+        )
+        (root / "owners.jsonl").write_text(
+            json.dumps(
+                {
+                    "owner_model": BANK_MODEL,
+                    "model_sha256": hashlib.sha256(image).hexdigest(),
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / "sequences.jsonl").write_text(
+            json.dumps(
+                {
+                    "identity": f"{BANK_MODEL}#sequence:{FIRED_SEQUENCE}",
+                    "owner_model": BANK_MODEL,
+                    "sequence_index": FIRED_SEQUENCE,
+                    "label": BANK_LABELS[FIRED_SEQUENCE],
+                    "source_span": {
+                        "offset": sequence_offset,
+                        "length": SEQ_DESC_STRIDE,
+                    },
+                    "descriptor_sha256": (
+                        digest or hashlib.sha256(sequence_bytes).hexdigest()
+                    ),
+                    "active_blend_cells": (
+                        [{"row": 0, "column": 0,
+                          "animation_index": FIRED_ANIMATION}]
+                        if cells is None
+                        else cells
+                    ),
+                    "unknown_tail_hex": "00ff",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / "animations.jsonl").write_text(
+            json.dumps(
+                {
+                    "identity": f"{BANK_MODEL}#animation:{FIRED_ANIMATION}",
+                    "owner_model": BANK_MODEL,
+                    "animation_index": FIRED_ANIMATION,
+                    "source_span": {"offset": animation_offset, "length": 72},
+                    "descriptor_sha256": hashlib.sha256(
+                        animation_bytes
+                    ).hexdigest(),
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return root
+
+    def _join(
+        self, directory: str, *, image: bytes | None = None,
+        contributions: bytes | None = None, installed: bytes | None = -1,
+        export: bool = True, inventory: bool = True,
+        clips: dict[str, object] | None = None,
+        digest: str | None = None, cells: list[dict[str, int]] | None = None,
+    ) -> dict[str, object]:
+        root = Path(directory)
+        session = root / "session"
+        session.mkdir()
+        captured = self._bank() if image is None else image
+        self._session(session, image=captured, contributions=contributions)
+        source = captured if installed == -1 else installed
+        return verify_join(
+            session,
+            export_root=self._export(root / "export", clips) if export else None,
+            inventory=(
+                self._inventory(root / "inv", source or captured,
+                                digest=digest, cells=cells)
+                if inventory
+                else root / "absent"
+            ),
+            install_reader=self._reader(source),
+            vtmb_root="/synthetic",
+        )
+
+    # ---- arm A: the patch-first installed bytes ----
+
+    def test_a_fired_identity_resolves_to_the_installed_descriptor(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._join(directory)
+            installed = report["install"]
+            self.assertTrue(installed["available"])
+            self.assertEqual(installed["owners"], 1)
+            self.assertEqual(installed["owners_resolved"], 1)
+            self.assertEqual(installed["joined_identities"], 2)
+            self.assertEqual(installed["counts"]["install_path_absent"], 0)
+            self.assertEqual(
+                installed["counts"]["descriptor_offset_disagrees"], 0
+            )
+            self.assertEqual(installed["unresolved_identities"], [])
+            self.assertEqual(installed["owner_entries"][0]["layer"], "patch")
+            self.assertTrue(report["verdict"]["sources_joined"])
+
+    def test_coverage_is_reported_by_identity_and_by_multiplicity(self) -> None:
+        """A one-record identity and a many-record one are one row and two
+        orders of magnitude apart, so both denominators have to be carried."""
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._join(
+                directory,
+                contributions=(
+                    contribution_record(
+                        b"SEQP", 8, 103, sequence_index=FIRED_SEQUENCE
+                    )
+                    + b"".join(
+                        contribution_record(
+                            b"ANIM", 9 + index, 104 + index,
+                            animation_index=FIRED_ANIMATION,
+                        )
+                        for index in range(5)
+                    )
+                ),
+            )
+            self.assertEqual(report["corpus"]["identities"], 2)
+            self.assertEqual(report["corpus"]["records"], 6)
+            self.assertEqual(report["corpus"]["sequence"]["records"], 1)
+            self.assertEqual(report["corpus"]["animation"]["records"], 5)
+            self.assertEqual(report["install"]["joined_identities"], 2)
+            self.assertEqual(report["install"]["joined_records"], 6)
+
+    def test_an_install_without_the_path_is_a_defect(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._join(directory, installed=None, inventory=False)
+            self.assertEqual(
+                report["install"]["counts"]["install_path_absent"], 2
+            )
+            self.assertEqual(
+                report["install"]["records_by_count"]["install_path_absent"], 2
+            )
+            self.assertIn(
+                "install_path_absent", report["verdict"]["defects"]
+            )
+            self.assertFalse(report["verdict"]["sources_joined"])
+
+    def test_an_installed_file_carrying_another_checksum_is_a_defect(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            other = bytearray(self._bank())
+            struct.pack_into("<I", other, 8, 0x1234)
+            report = self._join(directory, installed=bytes(other), inventory=False)
+            self.assertEqual(
+                report["install"]["counts"]["installed_checksum_differs"], 2
+            )
+            self.assertFalse(report["verdict"]["sources_joined"])
+
+    def test_an_index_outside_the_installed_count_is_a_defect(self) -> None:
+        """The count is read from the installed file, not from the capture."""
+        with tempfile.TemporaryDirectory() as directory:
+            narrowed = bytearray(self._bank())
+            struct.pack_into("<i", narrowed, 272, FIRED_SEQUENCE)
+            report = self._join(directory, installed=bytes(narrowed), inventory=False)
+            self.assertEqual(
+                report["install"]["counts"]["index_outside_declared_count"], 1
+            )
+            self.assertFalse(report["verdict"]["sources_joined"])
+
+    def test_a_captured_offset_the_install_does_not_place_is_a_defect(self) -> None:
+        """The falsifiable check: CAP2.4 ran this predicate against the image
+        the probe copied, and running it against the installed file is what
+        makes agreement evidence rather than one reader agreeing with itself."""
+        with tempfile.TemporaryDirectory() as directory:
+            moved = bytearray(self._bank())
+            struct.pack_into(
+                "<i", moved, 276, CONTRIBUTION_SEQ_INDEX_OFF + SEQ_DESC_STRIDE
+            )
+            report = self._join(directory, installed=bytes(moved), inventory=False)
+            self.assertEqual(
+                report["install"]["counts"]["descriptor_offset_disagrees"], 1
+            )
+            entry = next(
+                item
+                for item in report["install"]["unresolved_identities"]
+                if item["fault"] == "descriptor_offset_disagrees"
+            )
+            self.assertNotEqual(
+                entry["image_offset"], entry["expected_offset"]
+            )
+            self.assertFalse(report["verdict"]["sources_joined"])
+
+    def test_a_descriptor_differing_only_at_0xc_is_accounted(self) -> None:
+        """The loader rewrites StudioSeqDesc+0xc in place, so a captured
+        descriptor differing there and nowhere else is that fixup."""
+        with tempfile.TemporaryDirectory() as directory:
+            captured = bytearray(self._bank())
+            base = CONTRIBUTION_SEQ_INDEX_OFF + SEQ_DESC_STRIDE * FIRED_SEQUENCE
+            struct.pack_into("<i", captured, base + 0x0C, 17)
+            report = self._join(
+                directory, image=bytes(captured), installed=self._bank()
+            )
+            self.assertEqual(
+                report["install"]["counts"]["descriptor_differs_only_at_0xc"], 1
+            )
+            self.assertEqual(
+                report["install"]["counts"]["descriptor_differs_elsewhere"], 0
+            )
+            self.assertIn(
+                "descriptor_differs_only_at_0xc", report["verdict"]["accounted"]
+            )
+            self.assertTrue(report["verdict"]["sources_joined"])
+
+    def test_a_descriptor_differing_elsewhere_is_a_defect(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            captured = bytearray(self._bank())
+            base = CONTRIBUTION_SEQ_INDEX_OFF + SEQ_DESC_STRIDE * FIRED_SEQUENCE
+            struct.pack_into("<i", captured, base + 0x20, 9)
+            report = self._join(
+                directory, image=bytes(captured), installed=self._bank()
+            )
+            self.assertEqual(
+                report["install"]["counts"]["descriptor_differs_elsewhere"], 1
+            )
+            self.assertFalse(report["verdict"]["sources_joined"])
+
+    def test_an_unreadable_install_does_not_join_and_does_not_crash(self) -> None:
+        """An absent install is an answer, but it is a failing one: resolving
+        the installed bytes is what this task is."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            session = root / "session"
+            session.mkdir()
+            self._session(session)
+            original = verify_source_join.patch_first_reader
+
+            def absent() -> object:
+                raise FileNotFoundError("no install root configured")
+
+            verify_source_join.patch_first_reader = absent
+            try:
+                report = verify_join(session, inventory=root / "absent")
+            finally:
+                verify_source_join.patch_first_reader = original
+            self.assertFalse(report["install"]["available"])
+            self.assertIn("FileNotFoundError", report["install"]["reason"])
+            self.assertFalse(report["verdict"]["sources_joined"])
+
+    # ---- arm B: the current exported animation ----
+
+    def test_a_fired_sequence_resolves_to_an_exported_clip(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._join(directory)
+            export = report["export"]
+            self.assertTrue(export["available"])
+            self.assertEqual(export["joined_identities"], 2)
+            sequence = next(
+                item for item in export["outcomes"] if item["kind"] == "SEQP"
+            )
+            self.assertEqual(sequence["outcome"], "joined")
+            self.assertEqual(sequence["label"], BANK_LABELS[FIRED_SEQUENCE])
+            self.assertEqual(sequence["clip"]["stem"], "bank:bank")
+
+    def test_an_owner_the_export_never_seeded_is_accounted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            session = root / "session"
+            session.mkdir()
+            self._session(session)
+            (root / "export" / "npc").mkdir(parents=True)
+            (root / "export" / "npc" / "npc_manifest.json").write_text(
+                json.dumps({"manifest_version": 4, "npcs": {}, "banks": {}}),
+                encoding="utf-8",
+            )
+            report = verify_join(
+                session,
+                export_root=root / "export",
+                inventory=root / "absent",
+                install_reader=self._reader(self._bank()),
+            )
+            self.assertEqual(
+                report["export"]["counts"]["export_has_no_such_owner"], 2
+            )
+            self.assertIn(
+                "export_has_no_such_owner", report["verdict"]["accounted"]
+            )
+            self.assertTrue(report["verdict"]["sources_joined"])
+
+    def test_a_label_a_lower_index_already_owns_is_accounted(self) -> None:
+        """`local_sequences` dedupes by lowercased label, first wins, and drops
+        the index, so a later sequence sharing a label is unexportable."""
+        with tempfile.TemporaryDirectory() as directory:
+            image = self._bank(labels=("stand", "walk", "idle", "IDLE"))
+            report = self._join(
+                directory,
+                image=image,
+                installed=image,
+                contributions=self._contributions(sequence_index=3),
+                inventory=False,
+            )
+            outcome = next(
+                item
+                for item in report["export"]["outcomes"]
+                if item["kind"] == "SEQP"
+            )
+            self.assertEqual(
+                outcome["outcome"], "label_owned_by_another_sequence_index"
+            )
+            self.assertEqual(outcome["owned_by"], FIRED_SEQUENCE)
+            self.assertTrue(report["verdict"]["sources_joined"])
+
+    def test_a_base_cell_outside_the_animation_count_is_accounted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            image = self._bank(base_cells=(0, 0, 99, 0))
+            report = self._join(
+                directory, image=image, installed=image, inventory=False
+            )
+            outcome = next(
+                item
+                for item in report["export"]["outcomes"]
+                if item["kind"] == "SEQP"
+            )
+            self.assertEqual(outcome["outcome"], "base_cell_out_of_range")
+            self.assertEqual(outcome["declared_animations"], CONTRIBUTION_NUM_ANIM)
+            self.assertTrue(report["verdict"]["sources_joined"])
+
+    def test_a_fired_cell_that_is_not_the_base_cell_is_accounted(self) -> None:
+        """`local_sequences` bakes cell [0][0] alone, so every other cell a
+        multi-blend sequence fires has no exported clip."""
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._join(
+                directory,
+                contributions=self._contributions(animation_index=5),
+                inventory=False,
+            )
+            outcome = next(
+                item
+                for item in report["export"]["outcomes"]
+                if item["kind"] == "ANIM"
+            )
+            self.assertEqual(outcome["outcome"], "blend_cell_not_exported")
+            self.assertIn(
+                "blend_cell_not_exported", report["verdict"]["accounted"]
+            )
+            self.assertTrue(report["verdict"]["sources_joined"])
+
+    def test_exported_metadata_disagreeing_with_the_install_is_a_defect(self) -> None:
+        """The manifest and this run decoded the same descriptor, so the fields
+        they both carry have to agree or one of them read the wrong bytes."""
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._join(
+                directory,
+                inventory=False,
+                clips={
+                    BANK_LABELS[FIRED_SEQUENCE]: {
+                        "activity": "ACT_WALK", "weight": 7, "flags": 0,
+                        "frames": 3, "fps": 30.0,
+                    }
+                },
+            )
+            self.assertEqual(
+                report["export"]["counts"]["export_clip_meta_disagrees"], 1
+            )
+            outcome = next(
+                item
+                for item in report["export"]["outcomes"]
+                if item["outcome"] == "export_clip_meta_disagrees"
+            )
+            self.assertIn("activity", outcome["disagreements"])
+            self.assertIn("weight", outcome["disagreements"])
+            self.assertFalse(report["verdict"]["sources_joined"])
+
+    # ---- arm C: the CAP0.5 inventory ----
+
+    def test_the_inventory_descriptor_digest_agrees_with_the_install(self) -> None:
+        """Two readers of one install, neither importing the other's decode."""
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._join(directory)
+            inventory = report["inventory"]
+            self.assertTrue(inventory["available"])
+            self.assertEqual(inventory["joined_identities"], 2)
+            self.assertEqual(inventory["inventory_tool_git"], "def")
+            self.assertEqual(
+                inventory["unknown_descriptor_bytes"][0]["unknown_hex"], "00ff"
+            )
+            self.assertTrue(report["verdict"]["sources_joined"])
+
+    def test_an_inventory_digest_that_disagrees_is_a_defect(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._join(directory, digest="0" * 64)
+            self.assertEqual(
+                report["inventory"]["counts"][
+                    "inventory_descriptor_digest_disagrees"
+                ],
+                1,
+            )
+            self.assertFalse(report["verdict"]["sources_joined"])
+
+    def test_a_fired_cell_the_inventory_never_declared_is_a_defect(self) -> None:
+        """The inventory declares which cells a sequence can fire; the capture
+        witnessed which ones did. A witnessed cell outside the declaration
+        means one of the two is wrong about the same bytes."""
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._join(
+                directory,
+                cells=[{"row": 0, "column": 0, "animation_index": 4}],
+            )
+            self.assertEqual(
+                report["inventory"]["counts"]["fired_cell_not_declared"], 1
+            )
+            self.assertFalse(report["verdict"]["sources_joined"])
+
+    def test_an_owner_outside_the_inventory_bound_is_accounted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            session = root / "session"
+            session.mkdir()
+            self._session(session)
+            empty = root / "inv"
+            empty.mkdir()
+            (empty / "manifest.json").write_text("{}", encoding="utf-8")
+            (empty / "owners.jsonl").write_text("", encoding="utf-8")
+            report = verify_join(
+                session,
+                export_root=self._export(root / "export"),
+                inventory=empty,
+                install_reader=self._reader(self._bank()),
+            )
+            self.assertEqual(
+                report["inventory"]["counts"][
+                    "inventory_does_not_cover_this_owner"
+                ],
+                2,
+            )
+            self.assertIn(
+                "inventory_does_not_cover_this_owner",
+                report["verdict"]["accounted"],
+            )
+            self.assertTrue(report["verdict"]["sources_joined"])
+
+    # ---- shape, provenance and declaration ----
+
+    def test_an_absent_export_is_zero_coverage_and_not_a_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            session = root / "session"
+            session.mkdir()
+            self._session(session)
+            report = verify_join(
+                session,
+                export_root=root / "absent",
+                inventory=root / "absent",
+                install_reader=self._reader(self._bank()),
+            )
+            self.assertFalse(report["export"]["available"])
+            self.assertFalse(report["inventory"]["available"])
+            self.assertTrue(report["verdict"]["sources_joined"])
+
+    def test_every_declared_population_is_a_defect_or_is_accounted(self) -> None:
+        """A population no declaration covers must not read as coverage."""
+        self.assertEqual(
+            set(verify_source_join.DEFECTS) & set(verify_source_join.ACCOUNTED),
+            set(),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._join(directory)
+            self.assertEqual(report["verdict"]["unclassified"], {})
+            for arm in ("install", "export", "inventory"):
+                for name, value in (report[arm].get("counts") or {}).items():
+                    if not value:
+                        continue
+                    self.assertIn(
+                        name,
+                        set(verify_source_join.DEFECTS)
+                        | set(verify_source_join.ACCOUNTED),
+                        f"{arm}.{name} is neither declared nor accounted",
+                    )
+
+    def test_the_report_records_the_provenance_of_every_arm(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._join(directory)
+            owner = report["install"]["owner_entries"][0]
+            self.assertEqual(len(owner["installed_sha256"]), 64)
+            self.assertEqual(owner["install_key"], BANK_MODEL)
+            self.assertEqual(report["identity"]["vtmb_root"], "/synthetic")
+            self.assertEqual(len(report["export"]["sha256"]), 64)
+            self.assertEqual(len(report["inventory"]["manifest_sha256"]), 64)
+            self.assertEqual(report["identity"]["map"], "sp_theatre")
+
+    def test_the_installed_descriptor_is_preserved_as_raw_bytes(self) -> None:
+        """The evidence gate asks for the relevant input spans as raw bytes, so
+        the report answers without the install it was joined against."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            session = root / "session"
+            session.mkdir()
+            image = self._bank()
+            self._session(session, image=image)
+            report = verify_join(
+                session,
+                export_root=root / "absent",
+                inventory=root / "absent",
+                install_reader=self._reader(image),
+            )
+            base = CONTRIBUTION_SEQ_INDEX_OFF + SEQ_DESC_STRIDE * FIRED_SEQUENCE
+            expected = image[base : base + SEQ_DESC_STRIDE]
+            entry = next(
+                item
+                for item in report["install"]["resolved_identities"]
+                if item["kind"] == "SEQP"
+            )
+            self.assertEqual(entry["descriptor_hex"], expected.hex())
+            self.assertEqual(
+                entry["descriptor"]["label"], BANK_LABELS[FIRED_SEQUENCE]
+            )
+            self.assertEqual(
+                entry["descriptor_sha256"],
+                hashlib.sha256(expected).hexdigest(),
+            )
+
+    def test_install_key_normalizes_a_shipped_model_name(self) -> None:
+        """Guards the helper the census and this tool now share."""
+        self.assertEqual(
+            install_key("/character/shared/male/Stances.mdl"),
+            "models/character/shared/male/stances.mdl",
+        )
+        self.assertEqual(
+            install_key("character\\pc\\male\\body.mdl"),
+            "models/character/pc/male/body.mdl",
+        )
+        self.assertEqual(install_key(BANK_MODEL), BANK_MODEL)
+
+    def test_two_sessions_are_reported_side_by_side(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            first = self._join(directory)
+        with tempfile.TemporaryDirectory() as directory:
+            second = self._join(directory)
+        comparison = verify_source_join.compare([first, second])
+        self.assertEqual(len(comparison["identities"]), 2)
+        self.assertIn("side by side", comparison["statement"])
 
 
 GESTURE_EVENT_TYPE = 6

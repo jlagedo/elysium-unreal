@@ -224,9 +224,16 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
   is finally deduplicated by content hash and indexed: each distinct payload is stored once
   behind a view that returns the original bytes, and the joins the readers used to rebuild
   per-tool become one spine keyed on the generation every record already carries, with the
-  integrity roll-up stored so the database reports its own counts. Open: joining the observed
-  source identities to the patch-first export/decoder stack, and the byte-coverage and
-  per-bone transform differences that join makes possible. Header residency stays as it is: there is no
+  integrity roll-up stored so the database reports its own counts. A last offline reader turns
+  the run outward and joins every fired identity to the patch-first installed bytes, the current
+  export and the player inventory, writing a report beside the database rather than into it,
+  because that join depends on the machine's install and export state. Every identity and every
+  contribution record of one cutscene resolves to installed bytes, each captured pointer lands
+  where the installed header — a copy the probe never touched — declares its array position, and
+  the descriptors are byte-identical to the captured copies outside the one dword the loader
+  rewrites. What the current export cannot name is the product: the fired sequences it reaches,
+  the owner models no export seed reaches, and the blend cells it never bakes. Open: the
+  byte-coverage and per-bone transform differences that join makes possible. Header residency stays as it is: there is no
   single model-cache free to hook, so an unload event would cost three brackets and still
   report absence rather than a per-model free, and it is parked until a difference report
   names it. Editable raw byte-span recipes are added

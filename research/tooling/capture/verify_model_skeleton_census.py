@@ -91,6 +91,17 @@ MAX_REPORTED_HEADERS = 400
 MAX_REPORTED_SPANS = 32
 
 
+def install_key(model_name: str) -> str:
+    """A captured studio header name as the install index is keyed.
+
+    Some shipped names are absolute (`/items/rings/Ground/Ring01.mdl`) and none
+    carries the `models/` prefix the index reads, so a name reaches the install
+    only after both are reconciled.
+    """
+    key = model_name.replace("\\", "/").lower().lstrip("/")
+    return key if key.startswith("models/") else "models/" + key
+
+
 def address(value: int | None) -> str | None:
     return None if value is None else f"0x{value:08x}"
 
@@ -713,11 +724,7 @@ def source_join(connection: sqlite3.Connection) -> dict[str, Any]:
         checksum, image, captured, length, name = row[0], row[1], row[2], row[3], row[4]
         bone_index, bone_count = row[5], row[6]
         include_index, include_count = row[7], row[8]
-        # Some shipped names are absolute (`/items/rings/Ground/Ring01.mdl`)
-        # and none carries the `models/` prefix the install index is keyed on.
-        key = name.replace("\\", "/").lower().lstrip("/")
-        if not key.startswith("models/"):
-            key = "models/" + key
+        key = install_key(name)
         installed = install.read(index, key)
         if installed is None:
             unresolved.append(

@@ -1441,6 +1441,58 @@ interval, never that one call caused the other. And an activity change is only o
 as the sequence change it produces, because the selection data is recovered while the
 selector is not.
 
+### 9.15c Joining a run's identities to the sources offline
+
+A capture that only describes itself cannot say what an offline decoder gets wrong. The join
+that turns it outward runs entirely offline and answers one question per fired identity:
+which installed bytes is this, what did our export make of them, and what does an
+independently produced descriptor inventory say about the same span.
+
+**Resolve on checksum, never on the name.** A runtime studio header names its model in a
+128-byte field that a draw record truncates to 64, and shipped names vary in case, separator
+and leading slash. The path is therefore a lookup key that must be normalized, and identity
+is `Checksum`@8 of the file the lookup returned. A name that resolves to a file carrying a
+different checksum is an unresolved identity, not a match.
+
+**The predicate has to be answered by bytes the probe never saw.** Checking that a captured
+descriptor pointer's displacement equals `LocalSeqIndex + index × 764` — or
+`LocalAnimIndex + index × 72` — against the *captured image* verifies the arithmetic and
+nothing about the source. Reading `LocalSeqIndex`, `NumLocalSeq` and their animation
+counterparts out of the **installed file** and answering the same predicate is a second
+witness produced by a different mechanism, so the two agreeing is evidence rather than one
+reader agreeing with itself. Comparing the descriptor bytes at that position between the two
+copies is the content half of the same check: a position check alone would pass on different
+content of the same shape. One cutscene places all 98 of its identities, with 58 descriptors
+byte-identical and 40 differing only in `StudioSeqDesc`+0xc, the loader-written activity
+dword `mdl_v2531.md` names — and none differing elsewhere.
+
+**A third producer is worth more than a third check.** Where a descriptor inventory built for
+an unrelated question covers the same identity, its digest over its own recorded span must
+equal the digest of that span in the installed file. That agreement crosses tools, seeds and
+purposes, which is the kind a self-consistent reader cannot manufacture.
+
+**Coverage is two numbers, and the denominator is the corpus.** Distinct identities and fired
+records answer different questions: one cutscene's 34 owners and 98 identities carry 481,683
+contributions, and a one-record identity is one row beside a thirty-thousand-record one.
+Beside them belongs what the run did *not* reach — 45 of the 2,046 sequences its own owners
+declare — because a coverage claim without that denominator reads as though the run exercised
+the model.
+
+**Measure the decoder under test; do not repair it in the same pass.** Our exporter keys
+clips by label, keeps the first sequence to claim a lowercased one, skips a sequence whose
+base blend cell falls outside `NumLocalAnims`, and bakes cell `[0][0]` alone. Replaying those
+rules over the installed image with the index preserved attributes each missing clip to the
+rule that dropped it, so the output is a ranked list of what is missing rather than an
+unexplained absence. Changing the exporter belongs to the task the list authorizes.
+
+**Separate what would invalidate a comparison from what a comparison found.** An identity
+reaching no installed bytes, or landing outside the array the installed header declares,
+means every later stage would read the wrong bytes and is a defect. An identity our export or
+an inventory cannot name is the finding. Folding the second into the first makes a known
+bound read as a fault on every run; folding the first into the second lets a broken join pass.
+A count belonging to neither category is itself a defect, because a population no declaration
+covers must not quietly become coverage.
+
 ### 9.16 What not to do first
 
 Avoid:
