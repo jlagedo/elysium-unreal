@@ -37,8 +37,13 @@ ACTOR_OBSERVATION_HEADER = struct.Struct("<4sIQq9I64s")
 # The contribution stream. Unlike the census and the actor stream these rows are
 # events on the same generation spine as the evaluations they nest inside, so
 # they land in `records` rather than in a table of their own.
-CONTRIBUTION_FILE_HEADER = struct.Struct("<8sIIQqIIIII65s11s")
-CONTRIBUTION_RECORD_HEADER = struct.Struct("<4sIQq9I2i3Ifi2i2i2i2f3I")
+CONTRIBUTION_FILE_HEADER = struct.Struct("<8sIIQqIIIIIII65s3s")
+CONTRIBUTION_RECORD_HEADER = struct.Struct("<4sIQq9I2i3Ifi2i2i2i2f3I4IifI")
+# The contribution stream from before the channel decoders were witnessed. Its
+# cells carry no accumulator and its file header names three frames rather than
+# five, so those columns stay NULL and byte closure reads the narrower width.
+CONTRIBUTION_FILE_HEADER_V1 = struct.Struct("<8sIIQqIIIII65s11s")
+CONTRIBUTION_RECORD_HEADER_V1 = struct.Struct("<4sIQq9I2i3Ifi2i2i2i2f3I")
 # Mirrors kPoseParameterBytes: the 24 slots the include-model remap walks.
 POSE_PARAMETER_BYTES = 96
 CONTRIBUTION_KINDS = (b"SEQP", b"ANIM")
@@ -269,16 +274,21 @@ def _animation_records(
 
 def _contribution_records(
     stream: BinaryIO,
+    channels: bool = True,
 ) -> Iterator[tuple[dict[str, object], bytes, bytes] | bytes]:
     """Read one fired contribution per record.
 
     A sequence carries the live pose parameters and the selected-bone mask; a
     decoded cell carries neither, because every cell inside one sequence shares
-    the same mask pointer. The declared span counts rather than the kind decide
-    the width, so the size stays a closed form and a record claiming anything
-    else did not come from the hook that wrote the stream.
+    the same mask pointer. A cell instead carries the two witnessed-bone bitmaps
+    the channel decoders filled in. The declared span counts rather than the kind
+    decide the width, so the size stays a closed form and a record claiming
+    anything else did not come from the hook that wrote the stream.
     """
-    headers = {magic: CONTRIBUTION_RECORD_HEADER for magic in CONTRIBUTION_KINDS}
+    header_struct = (
+        CONTRIBUTION_RECORD_HEADER if channels else CONTRIBUTION_RECORD_HEADER_V1
+    )
+    headers = {magic: header_struct for magic in CONTRIBUTION_KINDS}
     while True:
         record = _read_record(stream, headers)
         if record is None:
@@ -293,16 +303,19 @@ def _contribution_records(
         pose_bytes = int(fields[29])
         selected_bytes = int(fields[30])
         sequence_kind = kind == "SEQP"
-        expected_selected = (
-            ((bone_count + 31) // 32) * 4 if sequence_kind else 0
-        )
+        mask_words = (bone_count + 31) // 32
+        expected_selected = mask_words * 4 if sequence_kind else 0
         expected_pose = POSE_PARAMETER_BYTES if sequence_kind else 0
+        channel_bytes = int(fields[37]) if channels else 0
+        expected_channel = 0 if sequence_kind or not channels else mask_words * 8
         if (
             bone_count < 1
             or bone_count > MAXIMUM_BONES
             or pose_bytes != expected_pose
             or selected_bytes != expected_selected
-            or int(fields[1]) != header.size + pose_bytes + selected_bytes
+            or channel_bytes != expected_channel
+            or int(fields[1])
+            != header.size + pose_bytes + selected_bytes + channel_bytes
         ):
             yield raw_header + payload + stream.read()
             return
@@ -336,6 +349,15 @@ def _contribution_records(
                 "faults": int(fields[28]),
                 "pose_parameter_bytes": pose_bytes,
                 "selected_bone_bytes": selected_bytes,
+                "channel_record_base": int(fields[31]) if channels else None,
+                "channel_bone_base": int(fields[32]) if channels else None,
+                "channel_quaternion_calls": (
+                    int(fields[33]) if channels else None
+                ),
+                "channel_position_calls": int(fields[34]) if channels else None,
+                "channel_frame": int(fields[35]) if channels else None,
+                "channel_fraction": float(fields[36]) if channels else None,
+                "channel_bone_bytes": channel_bytes if channels else None,
             },
             raw_header,
             payload,
@@ -536,6 +558,13 @@ CREATE TABLE records (
     faults INTEGER,
     pose_parameter_bytes INTEGER,
     selected_bone_bytes INTEGER,
+    channel_record_base INTEGER,
+    channel_bone_base INTEGER,
+    channel_quaternion_calls INTEGER,
+    channel_position_calls INTEGER,
+    channel_frame INTEGER,
+    channel_fraction REAL,
+    channel_bone_bytes INTEGER,
     raw_header BLOB NOT NULL,
     raw_payload BLOB NOT NULL,
     UNIQUE(stream_name, ordinal)
@@ -613,6 +642,8 @@ CREATE INDEX records_kind_time ON records(kind, qpc);
 CREATE INDEX records_generation ON records(generation);
 CREATE INDEX records_owner ON records(owner_checksum, sequence_index);
 CREATE INDEX records_contribution ON records(contribution);
+CREATE INDEX records_channel
+    ON records(owner_checksum, animation_index, channel_frame);
 CREATE INDEX model_headers_identity ON model_headers(studio_hdr, checksum);
 CREATE INDEX model_images_checksum ON model_images(checksum);
 CREATE INDEX actor_observations_identity
@@ -670,7 +701,9 @@ INSERT INTO records (
     sequence_index, animation_index, sequence_descriptor, animation_descriptor,
     bone_mask, cycle, num_blends, group_size, param_index, blend_cell,
     blend_weight, faults, pose_parameter_bytes, selected_bone_bytes,
-    raw_header, raw_payload
+    channel_record_base, channel_bone_base, channel_quaternion_calls,
+    channel_position_calls, channel_frame, channel_fraction,
+    channel_bone_bytes, raw_header, raw_payload
 ) VALUES (
     :stream_name, :ordinal, :kind, :sequence_number, :qpc, :thread_id,
     :client_entity, :studio_hdr, :checksum, :bone_count, :studio_sequence,
@@ -682,7 +715,9 @@ INSERT INTO records (
     :sequence_index, :animation_index, :sequence_descriptor,
     :animation_descriptor, :bone_mask, :cycle, :num_blends, :group_size,
     :param_index, :blend_cell, :blend_weight, :faults, :pose_parameter_bytes,
-    :selected_bone_bytes, :raw_header, :raw_payload
+    :selected_bone_bytes, :channel_record_base, :channel_bone_base,
+    :channel_quaternion_calls, :channel_position_calls, :channel_frame,
+    :channel_fraction, :channel_bone_bytes, :raw_header, :raw_payload
 )
 """
 
@@ -731,6 +766,13 @@ RECORD_DEFAULTS: dict[str, object] = {
     "faults": None,
     "pose_parameter_bytes": None,
     "selected_bone_bytes": None,
+    "channel_record_base": None,
+    "channel_bone_base": None,
+    "channel_quaternion_calls": None,
+    "channel_position_calls": None,
+    "channel_frame": None,
+    "channel_fraction": None,
+    "channel_bone_bytes": None,
 }
 
 
@@ -750,6 +792,9 @@ def _insert_stream(
         if name == "contribution"
         else ANIMATION_FILE_HEADER
     )
+    # Both contribution file headers are 128 bytes and agree on magic and
+    # version, which is all this reader takes from one; the frame RVAs that
+    # differ between them are read back from the stored header instead.
     with path.open("rb") as stream:
         file_header = stream.read(file_header_struct.size)
         if len(file_header) != file_header_struct.size:
@@ -778,9 +823,9 @@ def _insert_stream(
                 raise ValueError(f"{path} is not a supported ELACT stream")
             records = _actor_records(stream)
         elif name == "contribution":
-            if (magic, version) != (b"ELCON1", 1):
+            if (magic, version) not in {(b"ELCON1", 1), (b"ELCON2", 2)}:
                 raise ValueError(f"{path} is not a supported ELCON stream")
-            records = _contribution_records(stream)
+            records = _contribution_records(stream, channels=version >= 2)
         else:
             if (magic, version) not in {
                 (b"ELANIM1", 1),
@@ -1033,6 +1078,18 @@ def finalize(
             "contribution_unscoped": (
                 int(done.get("contribution_unscoped", "0")),
                 "decoded cells emitted outside every contribution scope",
+            ),
+            "channel_unwitnessed": (
+                int(done.get("channel_unwitnessed", "0")),
+                "decoded cells whose channel decoders left no accumulator",
+            ),
+            "channel_stride_faults": (
+                int(done.get("channel_stride_faults", "0")),
+                "channel decodes whose record pointer was off the 32-byte stride",
+            ),
+            "channel_nested": (
+                int(done.get("channel_nested", "0")),
+                "selected-bone loops re-entered on one thread",
             ),
             "incomplete_streams": (
                 sum(1 for value in tails.values() if value),

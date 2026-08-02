@@ -75,6 +75,12 @@ constexpr DWORD kAnimationDescriptorBytes = 72;
 constexpr DWORD kSequenceNumBlends = 0x34;
 constexpr DWORD kSequenceGroupSize = 0x23c;
 constexpr DWORD kSequenceParamIndex = 0x244;
+// Strides the selected-bone loop advances by. The probe never computes an
+// address from either: it latches the first pointer each decoder was handed and
+// divides by the stride, so a pointer that is not on the stride is a fault
+// rather than a silently wrong bone index.
+constexpr DWORD kAnimationRecordBytes = 32;
+constexpr DWORD kBoneRecordBytes = 160;
 // Why a contribution record could not name something it should have. A fault is
 // per record rather than a global counter, because CAP2.4 asks which
 // contribution failed to resolve, not how many did.
@@ -87,6 +93,10 @@ enum ContributionFault : std::uint32_t {
     kFaultBlendUnwitnessed = 1u << 5,
     kFaultSequenceOutOfRange = 1u << 6,
     kFaultNoContributionScope = 1u << 7,
+    kFaultChannelsUnwitnessed = 1u << 8,
+    kFaultChannelStride = 1u << 9,
+    kFaultChannelNested = 1u << 10,
+    kFaultChannelOverflow = 1u << 11,
 };
 
 // Which stream a queued record belongs to. The writer routes on this and frees
@@ -331,8 +341,10 @@ struct ContributionFileHeader {
     std::uint32_t evaluateSequencePoseRva;
     std::uint32_t decodeSelectedBonesRva;
     std::uint32_t resolveBlendAxisWeightRva;
+    std::uint32_t decodeBoneQuaternionRva;
+    std::uint32_t decodeBonePositionRva;
     char clientSha256[65];
-    char reserved[11];
+    char reserved[3];
 };
 
 // One fired contribution. `SEQP` is a sequence evaluation and `ANIM` one of the
@@ -345,6 +357,12 @@ struct ContributionFileHeader {
 // pointer minus `ownerStudioHdr` is the file offset without a second copy. The
 // live pose parameters are the one thing no image carries, so they are the one
 // span that travels.
+//
+// A cell additionally carries what the two channel decoders were handed: the
+// first animation record and bone they read, the frame and fraction they were
+// given, and one bit per bone each of them ran for. Those are witnessed at the
+// hook boundary and decoded by nobody here, so an offline walker that predicts
+// the same pointers from the image is checked rather than trusted.
 struct ContributionRecordHeader {
     char magic[4];
     std::uint32_t recordBytes;
@@ -380,6 +398,21 @@ struct ContributionRecordHeader {
     std::uint32_t faults;
     std::uint32_t poseParameterBytes;
     std::uint32_t selectedBoneBytes;
+    // The first animation record and StudioBone each channel decoder was handed
+    // for this cell. Latched from the first call rather than computed from
+    // animindex, so nothing in this record depends on the format being what we
+    // think it is.
+    std::uint32_t channelRecordBase;
+    std::uint32_t channelBoneBase;
+    std::uint32_t channelQuaternionCalls;
+    std::uint32_t channelPositionCalls;
+    // The frame the cell frame selected and the fraction it interpolated with,
+    // which is what makes floor((numframes - 1) * cycle) refutable.
+    std::int32_t channelFrame;
+    float channelFraction;
+    // Both witnessed-bone bitmaps together; each is ((ownerBoneCount + 31) / 32)
+    // dwords, quaternion first.
+    std::uint32_t channelBoneBytes;
 };
 #pragma pack(pop)
 
@@ -410,7 +443,7 @@ static_assert(
     sizeof(ContributionFileHeader) == 128,
     "contribution capture file header changed");
 static_assert(
-    sizeof(ContributionRecordHeader) == 132,
+    sizeof(ContributionRecordHeader) == 160,
     "contribution record header changed");
 
 struct PendingRecord {
@@ -464,6 +497,12 @@ using DecodeSelectedBonesFn = void(__cdecl*)(
 // outWeight, outCell), cleaned 0x18.
 using ResolveBlendAxisWeightFn = void(__cdecl*)(
     unsigned char*, float*, unsigned char*, int, float*, int*);
+// The two channel decoders share one six-dword __cdecl contract
+// (studiohdr, frame, fraction, StudioBone, animation record, output), cleaned
+// 0x18 by the one call site each has. Neither reads the header it is given; the
+// two pointers in the middle are what a consumed span is measured from.
+using DecodeBoneChannelFn = void(__cdecl*)(
+    unsigned char*, int, float, unsigned char*, unsigned char*, float*);
 
 // The bracket a record was produced inside. Nothing here is shared between
 // threads, so a push and a pop cost no interlocked operation and no
@@ -488,6 +527,25 @@ struct ThreadPoseState {
     std::uint32_t blendDescriptor[kBlendAxes];
     std::int32_t blendCell[kBlendAxes];
     float blendWeight[kBlendAxes];
+    // The two channel decoders emit no record of their own either. They fold one
+    // bone each into the cell frame's accumulator and that frame reads it back,
+    // so a witnessed per-bone decode costs no record volume at all.
+    //
+    // Keyed by an epoch rather than by a pointer, because neither decoder
+    // receives anything that names the animation descriptor. The cell frame
+    // stamps an epoch before it runs and refuses an accumulator carrying any
+    // other one, which is what makes a nested or orphaned frame a reported fault
+    // instead of another cell's bones.
+    std::uint32_t channelEpoch;
+    std::uint32_t channelBase;
+    std::uint32_t channelBoneBase;
+    std::uint32_t channelQuaternionCalls;
+    std::uint32_t channelPositionCalls;
+    std::int32_t channelFrame;
+    float channelFraction;
+    std::uint32_t channelFaults;
+    std::uint32_t channelQuaternionBits[kMaximumBones / 32];
+    std::uint32_t channelPositionBits[kMaximumBones / 32];
 };
 
 // An open-addressed slot claimed by its own key rather than by a separate
@@ -526,6 +584,8 @@ BaseEntityDestructFn gOriginalBaseEntityDestruct = nullptr;
 EvaluateSequencePoseFn gOriginalEvaluateSequencePose = nullptr;
 DecodeSelectedBonesFn gOriginalDecodeSelectedBones = nullptr;
 ResolveBlendAxisWeightFn gOriginalResolveBlendAxisWeight = nullptr;
+DecodeBoneChannelFn gOriginalDecodeBoneQuaternion = nullptr;
+DecodeBoneChannelFn gOriginalDecodeBonePosition = nullptr;
 elysium::capture::HookHandle gDrawModelHook;
 elysium::capture::HookHandle gResolveVirtualModelPoseHook;
 elysium::capture::HookHandle gBuildTransformationsHook;
@@ -537,6 +597,8 @@ elysium::capture::HookHandle gBaseEntityDestructHook;
 elysium::capture::HookHandle gEvaluateSequencePoseHook;
 elysium::capture::HookHandle gDecodeSelectedBonesHook;
 elysium::capture::HookHandle gResolveBlendAxisWeightHook;
+elysium::capture::HookHandle gDecodeBoneQuaternionHook;
+elysium::capture::HookHandle gDecodeBonePositionHook;
 __declspec(thread) ThreadPoseState gThread{};
 HANDLE gOutput = INVALID_HANDLE_VALUE;
 HANDLE gAnimationOutput = INVALID_HANDLE_VALUE;
@@ -590,6 +652,13 @@ volatile LONG gContributionFaults = 0;
 volatile LONG gContributionOverflow = 0;
 volatile LONG gContributionUnscoped = 0;
 volatile LONG64 gContributionBytes = 0;
+// Per-call totals are absent on purpose. A decoder runs tens of millions of
+// times per cutscene and a global counter would put a locked read-modify-write
+// on every one of them; each cell already carries its own two counts, so the
+// totals are a sum offline instead of a cost on the render thread.
+volatile LONG gChannelUnwitnessed = 0;
+volatile LONG gChannelStrideFaults = 0;
+volatile LONG gChannelNested = 0;
 // Contribution scope 0 is the unassigned sentinel, so the counter starts at 1.
 volatile LONG gContributionScope = 0;
 // Headers keyed by address, images keyed by checksum.
@@ -619,6 +688,8 @@ DWORD gBaseEntityDestructRva = 0;
 DWORD gEvaluateSequencePoseRva = 0;
 DWORD gDecodeSelectedBonesRva = 0;
 DWORD gResolveBlendAxisWeightRva = 0;
+DWORD gDecodeBoneQuaternionRva = 0;
+DWORD gDecodeBonePositionRva = 0;
 ConfiguredSignature gResolveExpected{};
 ConfiguredSignature gBuildExpected{};
 ConfiguredSignature gSetupBonesExpected{};
@@ -629,6 +700,8 @@ ConfiguredSignature gBaseEntityDestructExpected{};
 ConfiguredSignature gEvaluateSequencePoseExpected{};
 ConfiguredSignature gDecodeSelectedBonesExpected{};
 ConfiguredSignature gResolveBlendAxisWeightExpected{};
+ConfiguredSignature gDecodeBoneQuaternionExpected{};
+ConfiguredSignature gDecodeBonePositionExpected{};
 char gHookInstallError[128] = "unspecified";
 
 bool WriteAll(HANDLE file, const void* data, DWORD bytes) {
@@ -1624,7 +1697,7 @@ void CaptureContribution(
     const char (&magic)[5], std::uint32_t scope, unsigned char* ownerHdr,
     int sequenceIndex, unsigned char* animationDescriptor, float cycle,
     const float* poseParameters, const void* selectedBones,
-    std::uintptr_t callerAddress) {
+    std::uintptr_t callerAddress, std::uint32_t channelEpoch = 0) {
     if (gContributionOutput == INVALID_HANDLE_VALUE) {
         return;
     }
@@ -1726,14 +1799,18 @@ void CaptureContribution(
         // The mask travels with the sequence frame only. Every cell inside it
         // receives the same pointer, so repeating it per cell would pay for the
         // same bytes once per blend.
+        const DWORD maskWords = static_cast<DWORD>((boneCount + 31) / 32);
         const DWORD selectedBytes =
-            isSequence
-                ? static_cast<DWORD>((boneCount + 31) / 32) * sizeof(DWORD)
-                : 0u;
+            isSequence ? maskWords * sizeof(DWORD) : 0u;
+        // A cell carries which bones each decoder actually ran for. The width is
+        // the same closed form as the mask, doubled, so a reader re-derives it
+        // from bone count rather than trusting a stored length.
+        const DWORD channelBytes =
+            isSequence ? 0u : 2u * maskWords * sizeof(DWORD);
         const DWORD poseBytes = isSequence ? kPoseParameterBytes : 0u;
         const DWORD diskBytes =
             static_cast<DWORD>(sizeof(ContributionRecordHeader)) + poseBytes +
-            selectedBytes;
+            selectedBytes + channelBytes;
         const SIZE_T allocation =
             offsetof(PendingRecord, payload) + static_cast<SIZE_T>(diskBytes);
         auto* pending = static_cast<PendingRecord*>(
@@ -1783,6 +1860,27 @@ void CaptureContribution(
             header->blendCell[axis] = blendCell[axis];
             header->blendWeight[axis] = blendWeight[axis];
         }
+        // An accumulator carrying any epoch but this frame's belongs to another
+        // cell, on the same terms the blend stash is refused above.
+        const bool witnessed = !isSequence && channelEpoch != 0 &&
+            gThread.channelEpoch == channelEpoch && gThread.channelBase != 0;
+        if (!isSequence) {
+            if (witnessed) {
+                header->channelRecordBase = gThread.channelBase;
+                header->channelBoneBase = gThread.channelBoneBase;
+                header->channelQuaternionCalls = gThread.channelQuaternionCalls;
+                header->channelPositionCalls = gThread.channelPositionCalls;
+                header->channelFrame = gThread.channelFrame;
+                header->channelFraction = gThread.channelFraction;
+                faults |= gThread.channelFaults;
+            } else {
+                // A cell whose every animation record carries a zero weight
+                // decodes nothing at all, so an absent accumulator is a real
+                // outcome and is recorded as one rather than as a loss.
+                faults |= kFaultChannelsUnwitnessed;
+                InterlockedIncrement(&gChannelUnwitnessed);
+            }
+        }
 
         auto* cursor = pending->payload + sizeof(*header);
         if (poseBytes) {
@@ -1814,10 +1912,23 @@ void CaptureContribution(
                 std::memset(cursor, 0, selectedBytes);
                 faults |= kFaultSelectedBones;
             }
+            cursor += selectedBytes;
+        }
+        if (channelBytes) {
+            // Copied from thread-local memory this frame owns, so there is
+            // nothing here that can fault and nothing to guard.
+            const DWORD half = maskWords * sizeof(DWORD);
+            if (witnessed) {
+                std::memcpy(cursor, gThread.channelQuaternionBits, half);
+                std::memcpy(cursor + half, gThread.channelPositionBits, half);
+            } else {
+                std::memset(cursor, 0, channelBytes);
+            }
         }
         header->faults = faults;
         header->poseParameterBytes = poseBytes;
         header->selectedBoneBytes = selectedBytes;
+        header->channelBoneBytes = channelBytes;
         if (faults) {
             InterlockedIncrement(&gContributionFaults);
         }
@@ -1916,6 +2027,94 @@ void __fastcall HookBuildTransformations(
     InterlockedDecrement(&gActiveHooks);
 }
 
+void ResetChannelAccumulator() {
+    gThread.channelBase = 0;
+    gThread.channelBoneBase = 0;
+    gThread.channelQuaternionCalls = 0;
+    gThread.channelPositionCalls = 0;
+    gThread.channelFrame = 0;
+    gThread.channelFraction = 0.0f;
+    gThread.channelFaults = 0;
+    std::memset(
+        gThread.channelQuaternionBits, 0,
+        sizeof(gThread.channelQuaternionBits));
+    std::memset(
+        gThread.channelPositionBits, 0, sizeof(gThread.channelPositionBits));
+}
+
+// Fold one decoded bone into the enclosing cell's accumulator. The bone index
+// comes from the pointer the decoder was handed rather than from a counter,
+// because the point of the record is to witness that pointer: a value off the
+// stride is a fault rather than a rounded-down index.
+//
+// Nothing is dereferenced. Both arguments are pointers the callee has already
+// read, so there is no page to validate and no __try worth the frame.
+void AccumulateChannel(
+    bool quaternion, unsigned char* animationRecord, unsigned char* bone,
+    int frame, float fraction) {
+    if (!gThread.channelEpoch) {
+        return;
+    }
+    if (!gThread.channelBase) {
+        gThread.channelBase =
+            static_cast<std::uint32_t>(
+                reinterpret_cast<std::uintptr_t>(animationRecord));
+        gThread.channelBoneBase =
+            static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(bone));
+        gThread.channelFrame = frame;
+        gThread.channelFraction = fraction;
+    }
+    const std::uint32_t delta =
+        static_cast<std::uint32_t>(
+            reinterpret_cast<std::uintptr_t>(animationRecord)) -
+        gThread.channelBase;
+    if (delta % kAnimationRecordBytes) {
+        gThread.channelFaults |= kFaultChannelStride;
+        InterlockedIncrement(&gChannelStrideFaults);
+        return;
+    }
+    const std::uint32_t index = delta / kAnimationRecordBytes;
+    if (index >= static_cast<std::uint32_t>(kMaximumBones)) {
+        gThread.channelFaults |= kFaultChannelOverflow;
+        return;
+    }
+    if (quaternion) {
+        gThread.channelQuaternionBits[index >> 5] |= 1u << (index & 31);
+        ++gThread.channelQuaternionCalls;
+    } else {
+        gThread.channelPositionBits[index >> 5] |= 1u << (index & 31);
+        ++gThread.channelPositionCalls;
+    }
+}
+
+// The two channel decoders emit no record of their own. Each folds one bone into
+// the accumulator the cell frame below opened, so a witnessed per-bone decode
+// costs record volume only as two bitmaps on the cell.
+//
+// gActiveHooks is still taken. The enclosing cell frame holds it too and is the
+// only caller either decoder has, so the count looks redundant — but RemoveHooks
+// disables that frame first, and every call after that reaches these detours
+// without it. The count a release waits on has to be this frame's own.
+void __cdecl HookDecodeBoneQuaternion(
+    unsigned char* studioHdr, int frame, float fraction, unsigned char* bone,
+    unsigned char* animationRecord, float* output) {
+    InterlockedIncrement(&gActiveHooks);
+    gOriginalDecodeBoneQuaternion(
+        studioHdr, frame, fraction, bone, animationRecord, output);
+    AccumulateChannel(true, animationRecord, bone, frame, fraction);
+    InterlockedDecrement(&gActiveHooks);
+}
+
+void __cdecl HookDecodeBonePosition(
+    unsigned char* studioHdr, int frame, float fraction, unsigned char* bone,
+    unsigned char* animationRecord, float* output) {
+    InterlockedIncrement(&gActiveHooks);
+    gOriginalDecodeBonePosition(
+        studioHdr, frame, fraction, bone, animationRecord, output);
+    AccumulateChannel(false, animationRecord, bone, frame, fraction);
+    InterlockedDecrement(&gActiveHooks);
+}
+
 // The blend resolver emits no record of its own. It stashes the axis it just
 // resolved on the calling thread, and the sequence frame that asked for it
 // folds both axes into one contribution record, so witnessed weights cost no
@@ -1968,21 +2167,42 @@ void __cdecl HookEvaluateSequencePose(
     }
 }
 
+// Unlike the blend stash, which a different frame reads, this frame both opens
+// the accumulator and reads it back, and its record is emitted after the
+// original returns — so the reset has to happen before the call rather than
+// after it. __finally is what restores the epoch across an unwind out of retail;
+// without it an orphaned epoch would let the next cell claim these bones.
 void __cdecl HookDecodeSelectedBones(
     unsigned char* studioHdr, float* positions, float* quaternions,
     unsigned char* animationDescriptor, float cycle, void* selectedBones) {
     InterlockedIncrement(&gActiveHooks);
     const std::uintptr_t caller =
         reinterpret_cast<std::uintptr_t>(_ReturnAddress());
-    gOriginalDecodeSelectedBones(
-        studioHdr, positions, quaternions, animationDescriptor, cycle,
-        selectedBones);
-    if (InterlockedCompareExchange(&gCapturing, 0, 0)) {
-        CaptureContribution(
-            "ANIM", CurrentContribution(), studioHdr, -1, animationDescriptor,
-            cycle, nullptr, selectedBones, caller);
+    const std::uint32_t enclosing = gThread.channelEpoch;
+    const std::uint32_t epoch = enclosing + 1;
+    gThread.channelEpoch = epoch;
+    ResetChannelAccumulator();
+    if (enclosing) {
+        // The call graph says this frame does not recurse — the autolayer
+        // recursion is a level above, in the dispatcher. Stamping it makes that
+        // a claim the capture can refute rather than one it assumes.
+        gThread.channelFaults |= kFaultChannelNested;
+        InterlockedIncrement(&gChannelNested);
     }
-    InterlockedDecrement(&gActiveHooks);
+    __try {
+        gOriginalDecodeSelectedBones(
+            studioHdr, positions, quaternions, animationDescriptor, cycle,
+            selectedBones);
+    } __finally {
+        if (InterlockedCompareExchange(&gCapturing, 0, 0)) {
+            CaptureContribution(
+                "ANIM", CurrentContribution(), studioHdr, -1,
+                animationDescriptor, cycle, nullptr, selectedBones, caller,
+                epoch);
+        }
+        gThread.channelEpoch = enclosing;
+        InterlockedDecrement(&gActiveHooks);
+    }
 }
 
 // The two bracket detours are the only hooks that run work before the
@@ -2160,6 +2380,8 @@ bool MatchesConfiguredProfile(
     const elysium::capture::BinaryTargetProfile& evaluateSequencePose,
     const elysium::capture::BinaryTargetProfile& decodeSelectedBones,
     const elysium::capture::BinaryTargetProfile& resolveBlendAxisWeight,
+    const elysium::capture::BinaryTargetProfile& decodeBoneQuaternion,
+    const elysium::capture::BinaryTargetProfile& decodeBonePosition,
     bool animationEnabled, bool lifetimeEnabled, bool contributionEnabled) {
     const bool drawMatches = drawModel.Rva == gDrawModelRva &&
         drawModel.ObjectRva == gStudioObjectRva &&
@@ -2186,7 +2408,13 @@ bool MatchesConfiguredProfile(
               gDecodeSelectedBonesExpected) &&
           MatchesConfiguredSignature(
               resolveBlendAxisWeight, gResolveBlendAxisWeightRva,
-              gResolveBlendAxisWeightExpected))) {
+              gResolveBlendAxisWeightExpected) &&
+          MatchesConfiguredSignature(
+              decodeBoneQuaternion, gDecodeBoneQuaternionRva,
+              gDecodeBoneQuaternionExpected) &&
+          MatchesConfiguredSignature(
+              decodeBonePosition, gDecodeBonePositionRva,
+              gDecodeBonePositionExpected))) {
         return false;
     }
     return getStudioHdr.Rva == gGetStudioHdrRva &&
@@ -2241,6 +2469,10 @@ bool InstallHooks(HMODULE studioRender, HMODULE client, HMODULE engine) {
         *clientProfile, "client.decode_selected_bones");
     const auto* resolveBlendAxisWeight = FindTarget(
         *clientProfile, "client.resolve_blend_axis_weight");
+    const auto* decodeBoneQuaternion = FindTarget(
+        *clientProfile, "client.decode_bone_quaternion");
+    const auto* decodeBonePosition = FindTarget(
+        *clientProfile, "client.decode_bone_position");
     const bool lifetimeEnabled = gActorOutput != INVALID_HANDLE_VALUE;
     const bool contributionEnabled =
         gContributionOutput != INVALID_HANDLE_VALUE;
@@ -2251,6 +2483,7 @@ bool InstallHooks(HMODULE studioRender, HMODULE client, HMODULE engine) {
         baseEntityConstruct == nullptr || baseEntityDestruct == nullptr ||
         evaluateSequencePose == nullptr || decodeSelectedBones == nullptr ||
         resolveBlendAxisWeight == nullptr ||
+        decodeBoneQuaternion == nullptr || decodeBonePosition == nullptr ||
         !MatchesConfiguredProfile(
             *drawModel,
             *resolvePose,
@@ -2264,6 +2497,8 @@ bool InstallHooks(HMODULE studioRender, HMODULE client, HMODULE engine) {
             *evaluateSequencePose,
             *decodeSelectedBones,
             *resolveBlendAxisWeight,
+            *decodeBoneQuaternion,
+            *decodeBonePosition,
             gAnimationOutput != INVALID_HANDLE_VALUE,
             lifetimeEnabled,
             contributionEnabled)) {
@@ -2447,7 +2682,48 @@ bool InstallHooks(HMODULE studioRender, HMODULE client, HMODULE engine) {
         gOriginalEvaluateSequencePose =
             reinterpret_cast<EvaluateSequencePoseFn>(
                 gEvaluateSequencePoseHook.Original);
-        // Last of the three, so a cell can never be recorded before the scope
+        // The two channel decoders are stash producers like the blend resolver,
+        // so they go in before the cell frame that reads them back: a cell must
+        // never be live while the decoders feeding its accumulator are not, or
+        // it would report an unwitnessed decode that in fact happened.
+        const HookBackendResult quaternionResult = HookBackends::Install(
+                clientActive,
+                *decodeBoneQuaternion,
+                reinterpret_cast<void*>(&HookDecodeBoneQuaternion),
+                &gDecodeBoneQuaternionHook);
+        if (quaternionResult != HookBackendResult::Installed) {
+            std::snprintf(
+                gHookInstallError,
+                sizeof(gHookInstallError),
+                "decode-bone-quaternion-backend-%u rva=%08x bytes=%u",
+                static_cast<unsigned>(quaternionResult),
+                static_cast<unsigned>(decodeBoneQuaternion->Rva),
+                static_cast<unsigned>(
+                    decodeBoneQuaternion->ExpectedByteCount));
+            return false;
+        }
+        gOriginalDecodeBoneQuaternion =
+            reinterpret_cast<DecodeBoneChannelFn>(
+                gDecodeBoneQuaternionHook.Original);
+        const HookBackendResult positionResult = HookBackends::Install(
+                clientActive,
+                *decodeBonePosition,
+                reinterpret_cast<void*>(&HookDecodeBonePosition),
+                &gDecodeBonePositionHook);
+        if (positionResult != HookBackendResult::Installed) {
+            std::snprintf(
+                gHookInstallError,
+                sizeof(gHookInstallError),
+                "decode-bone-position-backend-%u rva=%08x bytes=%u",
+                static_cast<unsigned>(positionResult),
+                static_cast<unsigned>(decodeBonePosition->Rva),
+                static_cast<unsigned>(decodeBonePosition->ExpectedByteCount));
+            return false;
+        }
+        gOriginalDecodeBonePosition =
+            reinterpret_cast<DecodeBoneChannelFn>(
+                gDecodeBonePositionHook.Original);
+        // Last of the five, so a cell can never be recorded before the scope
         // that owns it can be opened.
         const HookBackendResult decodeResult = HookBackends::Install(
                 clientActive,
@@ -2522,6 +2798,8 @@ void RemoveHooks() {
     HookBackends::Disable(&gBaseEntityDestructHook);
     HookBackends::Disable(&gBaseEntityConstructHook);
     HookBackends::Disable(&gDecodeSelectedBonesHook);
+    HookBackends::Disable(&gDecodeBonePositionHook);
+    HookBackends::Disable(&gDecodeBoneQuaternionHook);
     HookBackends::Disable(&gEvaluateSequencePoseHook);
     HookBackends::Disable(&gResolveBlendAxisWeightHook);
     HookBackends::Disable(&gModelRenderDrawModelShadowHook);
@@ -2536,6 +2814,8 @@ void RemoveHooks() {
     HookBackends::Release(&gBaseEntityDestructHook);
     HookBackends::Release(&gBaseEntityConstructHook);
     HookBackends::Release(&gDecodeSelectedBonesHook);
+    HookBackends::Release(&gDecodeBonePositionHook);
+    HookBackends::Release(&gDecodeBoneQuaternionHook);
     HookBackends::Release(&gEvaluateSequencePoseHook);
     HookBackends::Release(&gResolveBlendAxisWeightHook);
     HookBackends::Release(&gModelRenderDrawModelShadowHook);
@@ -2547,6 +2827,8 @@ void RemoveHooks() {
     gOriginalBaseEntityDestruct = nullptr;
     gOriginalBaseEntityConstruct = nullptr;
     gOriginalDecodeSelectedBones = nullptr;
+    gOriginalDecodeBonePosition = nullptr;
+    gOriginalDecodeBoneQuaternion = nullptr;
     gOriginalEvaluateSequencePose = nullptr;
     gOriginalResolveBlendAxisWeight = nullptr;
     gOriginalModelRenderDrawModelShadow = nullptr;
@@ -2758,7 +3040,7 @@ bool ReadConfiguration(
              iniPath,
              L"base_entity_destruct_expected",
              &gBaseEntityDestructExpected));
-    // Likewise the three contribution frames: a recipe that wants poses without
+    // Likewise the five contribution frames: a recipe that wants poses without
     // source attribution stays configurable by leaving the stream out.
     const bool contributionProfile =
         !contributionOutputPath[0] ||
@@ -2785,7 +3067,23 @@ bool ReadConfiguration(
          ReadExpectedBytes(
              iniPath,
              L"resolve_blend_axis_weight_expected",
-             &gResolveBlendAxisWeightExpected));
+             &gResolveBlendAxisWeightExpected) &&
+         ReadProfileDword(
+             iniPath,
+             L"decode_bone_quaternion_rva",
+             &gDecodeBoneQuaternionRva) &&
+         ReadExpectedBytes(
+             iniPath,
+             L"decode_bone_quaternion_expected",
+             &gDecodeBoneQuaternionExpected) &&
+         ReadProfileDword(
+             iniPath,
+             L"decode_bone_position_rva",
+             &gDecodeBonePositionRva) &&
+         ReadExpectedBytes(
+             iniPath,
+             L"decode_bone_position_expected",
+             &gDecodeBonePositionExpected));
     return outputPath[0] && gReadyPath[0] && gStopPath[0] &&
         gDonePath[0] && studioProfile && clientProfile && lifetimeProfile &&
         contributionProfile;
@@ -2977,8 +3275,8 @@ DWORD WINAPI CaptureWorker(void*) {
 
     if (gContributionOutput != INVALID_HANDLE_VALUE) {
         ContributionFileHeader contributionHeader{};
-        std::memcpy(contributionHeader.magic, "ELCON1", 6);
-        contributionHeader.version = 1;
+        std::memcpy(contributionHeader.magic, "ELCON2", 6);
+        contributionHeader.version = 2;
         contributionHeader.headerBytes = sizeof(contributionHeader);
         contributionHeader.qpcFrequency = frequency.QuadPart;
         contributionHeader.startQpc = gStartQpc.QuadPart;
@@ -2989,6 +3287,8 @@ DWORD WINAPI CaptureWorker(void*) {
         contributionHeader.decodeSelectedBonesRva = gDecodeSelectedBonesRva;
         contributionHeader.resolveBlendAxisWeightRva =
             gResolveBlendAxisWeightRva;
+        contributionHeader.decodeBoneQuaternionRva = gDecodeBoneQuaternionRva;
+        contributionHeader.decodeBonePositionRva = gDecodeBonePositionRva;
         wcstombs_s(
             &converted, contributionHeader.clientSha256,
             sizeof(contributionHeader.clientSha256), clientHash, _TRUNCATE);
@@ -3019,7 +3319,7 @@ DWORD WINAPI CaptureWorker(void*) {
         gAnimationOutput == INVALID_HANDLE_VALUE ? "" : "+ELANIM4",
         gCensusOutput == INVALID_HANDLE_VALUE ? "" : "+ELMDL1",
         gActorOutput == INVALID_HANDLE_VALUE ? "" : "+ELACT2",
-        gContributionOutput == INVALID_HANDLE_VALUE ? "" : "+ELCON1");
+        gContributionOutput == INVALID_HANDLE_VALUE ? "" : "+ELCON2");
     WriteMarker(gReadyPath, ready);
 
     for (;;) {
@@ -3067,7 +3367,7 @@ DWORD WINAPI CaptureWorker(void*) {
         gContributionOutput = INVALID_HANDLE_VALUE;
     }
 
-    char done[1792]{};
+    char done[2048]{};
     std::snprintf(
         done, sizeof(done),
         "complete=1\nqueued=%ld\nwritten=%ld\ndropped=%ld\n"
@@ -3083,7 +3383,9 @@ DWORD WINAPI CaptureWorker(void*) {
         "contribution_sequences=%ld\ncontribution_animations=%ld\n"
         "contribution_scopes=%ld\ncontribution_faults=%ld\n"
         "contribution_overflow=%ld\ncontribution_unscoped=%ld\n"
-        "contribution_bytes=%lld\n",
+        "contribution_bytes=%lld\n"
+        "channel_unwitnessed=%ld\nchannel_stride_faults=%ld\n"
+        "channel_nested=%ld\n",
         gQueued, gWritten, gDropped, gQueuePeak, gSkipped, gFiltered,
         static_cast<long long>(gBytesWritten), gGeneration, gUnbracketed,
         gBracketOverflow, gCensusRecords, gCensusImages, gCensusReplacements,
@@ -3094,7 +3396,8 @@ DWORD WINAPI CaptureWorker(void*) {
         static_cast<long long>(gActorBytes), gContributionSequences,
         gContributionAnimations, gContributionScope, gContributionFaults,
         gContributionOverflow, gContributionUnscoped,
-        static_cast<long long>(gContributionBytes));
+        static_cast<long long>(gContributionBytes), gChannelUnwitnessed,
+        gChannelStrideFaults, gChannelNested);
     WriteMarker(gDonePath, done);
     CloseHandle(gWake);
     if (gCensusHeap) {

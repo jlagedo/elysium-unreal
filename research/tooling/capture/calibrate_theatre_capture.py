@@ -37,6 +37,7 @@ from research.tooling.capture.finalize_capture_database import (
     CENSUS_FILE_HEADER,
     CONTRIBUTION_FILE_HEADER,
     CONTRIBUTION_RECORD_HEADER,
+    CONTRIBUTION_RECORD_HEADER_V1,
     MODEL_IMAGE_HEADER,
     MODEL_OBSERVATION_HEADER,
     POSE_FILE_HEADER,
@@ -99,6 +100,21 @@ def record_bytes_expression(
     root = (
         "COALESCE(root_transform_bytes, 0)" if animation_version >= 4 else "0"
     )
+    contribution_version = headers.get("contribution", {}).get("version", 1)
+    contribution = (
+        CONTRIBUTION_RECORD_HEADER
+        if contribution_version >= 2
+        else CONTRIBUTION_RECORD_HEADER_V1
+    )
+    # A cell's two witnessed-bone bitmaps are a third span the record declares.
+    # A database finalized before the channel decoders were hooked carries
+    # neither the column nor the payload, so the term is dropped rather than
+    # referencing a column SQLite would refuse to parse.
+    channel = (
+        "+ COALESCE(channel_bone_bytes, 0) "
+        if columns is None or "channel_bone_bytes" in columns
+        else ""
+    )
     return (
         f"CASE WHEN kind = 'POSE' THEN {pose.size} + 96 * bone_count "
         f"WHEN kind IN ('PBLD', 'DBLD', 'SHDW') "
@@ -111,10 +127,9 @@ def record_bytes_expression(
         # the arm is dropped rather than referencing a column SQLite would
         # refuse to parse.
         + (
-            f"WHEN kind IN ('SEQP', 'ANIM') THEN "
-            f"{CONTRIBUTION_RECORD_HEADER.size} "
+            f"WHEN kind IN ('SEQP', 'ANIM') THEN {contribution.size} "
             "+ COALESCE(pose_parameter_bytes, 0) "
-            "+ COALESCE(selected_bone_bytes, 0) "
+            "+ COALESCE(selected_bone_bytes, 0) " + channel
             if columns is None
             or {"pose_parameter_bytes", "selected_bone_bytes"} <= columns
             else ""

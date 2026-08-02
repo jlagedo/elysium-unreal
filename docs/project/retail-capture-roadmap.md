@@ -171,7 +171,7 @@ a later, longer corpus makes volume bite.
 | 6 | P1 | CAP6 — face and lips | The same loop over expression, flex, phoneme, and deformed-vertex state |
 | 7 | P2 | CAP7 — handoff and trim | Engine-neutral evaluator feeds Unreal; unused probes and readers are deleted |
 
-**The next and only current task is CAP2.5.**
+**The next and only current task is CAP2.6.**
 
 ## CAP1 — First theatre run and calibration
 
@@ -505,10 +505,77 @@ calling convention into the case specification before a hook is written.
   check required an identity change for every extra identity at a reused address, which
   faulted a census that recorded the alternative exactly: an address destroyed and rebuilt as
   a different actor. A destruction is a witnessed separation too. Each has a regression.
-- [ ] **CAP2.5 Consumed byte spans.** Convert each contribution's descriptor and animation
+- [x] **CAP2.5 Consumed byte spans.** Convert each contribution's descriptor and animation
   block pointers into offsets within the owning model image and retain the exact spans the
   runtime dereferences. This is what makes CAP4.2 possible; without it a matching pose
   cannot distinguish a correct decoder from a lucky one.
+
+  The task splits deliberately. The probe **witnesses** pointers and decodes nothing; an
+  offline walker **derives** the spans from the image using the confirmed rules, importing
+  nothing from the exporter's own decoder; and the two are checked against each other. Had
+  one walker produced both sides, CAP4.2's byte-coverage difference would compare a decoder
+  to itself.
+
+  Two client hooks feed it, `decode_bone_quaternion` and `decode_bone_position`, each
+  emitting no record: they fold one bone into a per-thread accumulator that the cell frame
+  reads back, so a witnessed per-bone decode costs two bitmaps on the cell rather than a
+  record. The cell frame resets the accumulator *before* the original runs, because unlike
+  the blend stash it both opens and reads the thing. `uv run elysium research
+  resolve_consumed_spans <session>…` walks a finalized database and writes its span
+  dictionary back into it; `verify_consumed_spans <session>…` reads it read-only and reports
+  witness, roots, frames, gating, spans, dictionary, loader-written overlap and cost.
+
+  **The pointers are solved for, not assumed.** The accumulator latches from the first bone
+  a decoder ran for and indexes its bitmaps off that pointer, so which bone that was is
+  recorded nowhere. The check solves it independently from each pointer —
+  `(record base − studiohdr − animdesc − animindex) / 32` and
+  `(bone base − studiohdr − BoneIndex) / 160` — and requires both to divide exactly, land
+  inside the owner's bone count, and name the same bone. That verifies the animindex
+  indirection, both strides and both base fields together, from two values recorded
+  separately and neither produced by the walker.
+
+  Two complete cutscenes carry **2,173,701** and **2,173,009**-record databases with
+  **zero** drops, skipped, filtered, stride and nested faults and no incomplete tail on any
+  of the five streams. **231,747 of 231,747** and **231,649 of 231,649** witnessed record
+  and bone pointers land where the walker predicts; the same counts of witnessed frames
+  equal `floor((numframes − 1) × cycle)`; and the same counts of decoded-bone sets equal
+  the selected-bone mask of their enclosing sequence. **185** and **188** span sets cover
+  **3,449,152** and **3,474,414** bytes of **34** and **35** owner images, every interval
+  inside the image it names, with **480,678** and **480,488** contributions resolved and
+  none faulted. The **176** shapes the two runs share produce byte-identical spans, so the
+  walk is a function of the shape and nothing else; their consumed unions differ by which
+  frames each run sampled, which is coverage rather than disagreement.
+
+  The cost is **8.65** and **8.68 MB/s** mean against CAP2.4's 8.60, with the queue at
+  **180** and **268** against the 368 CAP2.3 reached — the **12.2M** channel-decoder
+  invocations per cutscene cost invocations rather than volume, so the `gActiveHooks` pair
+  they carry stays. CAP1.2, CAP1.3, CAP2.1, CAP2.2, CAP2.3 and CAP2.4 all re-establish on
+  both databases. Facts: `docs/vtmb/animation_and_movers.md` A.4 and A.4b,
+  `docs/vtmb/mdl_v2531.md`; method and measurements:
+  `docs/vtmb/vtmb-animation-reverse-engineering.md`.
+
+  **Two engine facts close on the way.** The selected-bone mask reaches the cell unchanged
+  through the include-model dispatcher — 463,396 cells across both runs, no exceptions —
+  which `dispatch_model_pose`'s partial confidence left open. And a cell whose mask selects
+  no bone dereferences exactly sixteen bytes and decodes nothing: **10,311** in each run,
+  the same count in both, so it is authored rather than sampled.
+
+  Three bounds travel with the task. **The walk inside a track is transcribed, not
+  witnessed** — the run-skipping and key-selection rules come from the confirmed decompilation
+  and are checked here only for staying inside the image and terminating; the pointers above
+  them are what the capture refutes. **The sequence descriptor is partly claimed**, so its
+  byte totals are a floor and the rest of the 764 bytes stay unknown rather than inert. And
+  **no cutscene fires a 3×3 grid**: every multi-blend sequence in both runs is a 9×1, so the
+  four-cell path is unexercised and CAP2.7 needs a scene with off-center ranged aiming rather
+  than a third theatre run.
+
+  Four defects were closed on the way. The span dictionary keyed sets by frame, which on a
+  cutscene means 143,610 sets against the 122 that are actually distinct and turned a 4 GB
+  capture into a 13 GB one; sets are now keyed without the frame and the per-model union is
+  a bitmap. The resolver wrote bare strings into `capture_metadata`, where every value is
+  JSON, which broke all four earlier verifiers. CAP2.4's fault check counted any bit in the
+  fault word, so this task's new bits read as attribution failures. And the roots check
+  assumed the first decoded bone was bone zero. Each has a regression.
 - [ ] **CAP2.6 Trigger and scene events.** Record every sequence/activity change and
   scene-driven animation request with caller, target entity, and time, so a pose group is
   attributable to what asked for it.

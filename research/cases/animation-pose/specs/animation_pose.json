@@ -172,6 +172,42 @@
       "fact": "The three contribution frames take a five-byte inline detour without prologue relocation: 0x10089740 is a0c9024910, 0x10089c40 is b8c4270000, and 0x10089b20 is 83ec085355.",
       "evidence": "Read from the pinned client.dll at file offsets for those RVAs; 0x10089740 is one MOV AL,moffs32 with an absolute operand, 0x10089c40 is one MOV EAX,imm32, and 0x10089b20 is SUB ESP,0x8 with two pushes. No branch inside any of the three targets a byte in its first five. The same extraction reproduces the already-installed setup_bones signature b830270000.",
       "consequence": "All three take the shared inline backend on the same terms as the existing targets; 0x10089500 begins 83ec08538b5c241c and needs the instruction-aware relocation the backend already performs."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Both channel decoders share one six-dword __cdecl contract (studiohdr, int frame, float fraction, StudioBone, animation record, output), and neither reads the studiohdr it is given.",
+      "evidence": "0x10089b20 pushes the six arguments in that order at 0x10089bae-0x10089bb4 and 0x10089bc5-0x10089bcf and cleans both calls with one ADD ESP,0x30; 0x100889f0 reads them at [ESP+0x14] and [ESP+0x18] before its first push and 0x10088ba0 at [ESP+0x10] through [ESP+0x18]; both end in a bare RET. Neither decompilation references parameter one after entry.",
+      "consequence": "A hook on either frame receives the animation record and the bone directly, so the per-bone span a cell dereferenced is witnessed rather than derived from animindex."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "0x10089b20 is the only caller of both channel decoders.",
+      "evidence": "DumpXrefs on 0x100889f0 reports one reference, an unconditional call at 0x10089bb4; on 0x10088ba0 one reference, an unconditional call at 0x10089bcf. Both sites are inside FUN_10089b20.",
+      "consequence": "Every channel decode is enclosed by one selected-bone loop, so a decoder frame cannot be reached except through the cell frame that owns it."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "An animation record whose weight at +0 is zero ends the decode immediately: the output is zeroed and no channel offset, track byte or bone field is read.",
+      "evidence": "0x100889f0 compares the float at the record base against 0x101e34f0 and 0x10088ba0 against the double at 0x10226fc8, and each writes three or four zeros and returns before touching anything else.",
+      "consequence": "Such a cell dereferences exactly the four weight bytes, so a consumed-span walk must stop there rather than attributing the whole record and its tracks to it."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The channel walk stops at the run holding the sampled frame rather than covering the track: it reads only the two header bytes of each run it skips, then that run's keys for the frame and the frame after it, reaching the following run's first key when the frame after it leaves the run.",
+      "evidence": "Both decoders load total at track+1, subtract it from the frame while total <= remaining and advance by valid*2+2, then index keys at run+2+frame*2 and run+2+(frame+1)*2, clamping to the last key at run+valid*2 and reading run+valid*2+4 when the run is exhausted. 0x10088ba0 additionally resets the frame to zero whenever a run declares total < valid.",
+      "consequence": "The bytes a cell dereferences inside a track are a small non-contiguous set determined by the frame, not the whole track, which is what CAP4.2 compares the exporter's whole-clip walk against."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The quaternion decoder reads quat at bone+44 for an unanimated channel and rotscale at bone+72 for an animated one; the position decoder reads pos at bone+32 as the base of every channel and posscale at bone+60 for an animated one.",
+      "evidence": "0x100889f0 walks a cursor from bone+0x48 and reads cursor[-7] on the zero-offset branch; 0x10088ba0 walks a cursor from bone+0x3c, writes cursor[-7] into the output before testing the offset, and scales by the cursor otherwise. Neither reads flags at bone+136.",
+      "consequence": "The bind fields a cell dereferences are per channel and differ by decoder, so bone spans are attributed by channel rather than by whole StudioBone."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The two channel decoders take an inline detour over whole instructions with no relocated operand: 0x100889f0 is 8b4c241483ec20 over seven bytes and 0x10088ba0 is 8b4c2414d901 over six.",
+      "evidence": "Read from the pinned client.dll at the file offsets for those RVAs by the same section walk that reproduces the installed 83ec085355 and a0c9024910 signatures. 0x100889f0 is MOV ECX,[ESP+0x14] then SUB ESP,0x20; 0x10088ba0 is MOV ECX,[ESP+0x14] then FLD dword [ECX]. The lowest branch target inside either function is 0x10088a1f and 0x10088bc2 respectively, both past the stolen bytes.",
+      "consequence": "Both take the shared inline backend with no relocation declaration, the x87 opcode being one the backend's ModRM table already covers."
     }
   ],
   "functions": [
@@ -225,7 +261,7 @@
       "label": "decode_bone_position",
       "confidence": "confirmed",
       "role": "Decodes three position RLE channels relative to bind position.",
-      "depth": 1,
+      "depth": 2,
       "cap": 60,
       "asm_count": 700
     },

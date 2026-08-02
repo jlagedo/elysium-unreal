@@ -60,6 +60,23 @@ from research.tooling.capture.verify_actor_identity_lifetime import (
 from research.tooling.capture.verify_source_attribution import (
     verify as verify_attribution,
 )
+from research.tooling.capture.resolve_consumed_spans import (
+    ROLE_ANIMATION_DESCRIPTOR,
+    ROLE_ANIM_RECORD,
+    ROLE_HEADER_FIELD,
+    ROLE_TRACK_HEADER,
+    ROLE_TRACK_KEY,
+    Walker,
+    decode_intervals,
+    encode_intervals,
+    merge,
+    resolve as resolve_spans,
+    resolve_cell,
+)
+from research.tooling.capture.verify_consumed_spans import (
+    compare as compare_spans,
+    verify as verify_spans,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NATIVE_ROOT = REPO_ROOT / "research" / "tooling" / "capture" / "native"
@@ -266,8 +283,128 @@ def bracket_record(
     )
 
 
+CONTRIBUTION_OWNER_HDR = 0x5000
+CONTRIBUTION_SEQ_INDEX_OFF = 0x1000
+CONTRIBUTION_ANIM_INDEX_OFF = 0x800
+CONTRIBUTION_NUM_SEQ = 4
+
 BONE_ARRAY_OFFSET = 512
 BONE_STRIDE = 160
+ANIM_DESC_STRIDE = 72
+SEQ_DESC_STRIDE = 764
+ANIM_RECORD_STRIDE = 32
+# posX, posY, posZ, rotX, rotY, rotZ, rotW, in the order the per-bone record
+# declares them.
+CHANNEL_COUNT = 7
+
+
+class Track:
+    """One channel's RLE runs, as ``(total, keys)`` per run.
+
+    ``valid`` is the key count rather than a separate number, so a run is
+    well-formed by construction and a test that wants ``total < valid`` — the
+    corruption the position decoder resets the frame on — says so by passing a
+    total below the key count.
+    """
+
+    def __init__(self, *runs: tuple[int, tuple[int, ...]]) -> None:
+        self.runs = runs
+
+    def encode(self) -> bytes:
+        blob = bytearray()
+        for total, keys in self.runs:
+            blob += struct.pack("<BB", len(keys), total)
+            for key in keys:
+                blob += struct.pack("<h", key)
+        return bytes(blob)
+
+
+class Clip:
+    """One StudioAnimDesc and the animation block it points at."""
+
+    def __init__(
+        self,
+        name: str,
+        numframes: int,
+        *,
+        fps: float = 30.0,
+        tracks: dict[tuple[int, int], Track] | None = None,
+        weights: dict[int, float] | None = None,
+    ) -> None:
+        self.name = name
+        self.numframes = numframes
+        self.fps = fps
+        self.tracks = tracks or {}
+        self.weights = weights or {}
+
+
+# The default corpus exercises every branch a consumed-span walk has to take:
+# a single-run track, a multi-run track the walk has to skip through, a held run
+# whose total exceeds its key count, an unanimated channel that falls back to a
+# bind field, and a zero-weight record that ends the decode before anything else
+# is read.
+DEFAULT_CLIPS = (
+    Clip(
+        "@walk",
+        3,
+        tracks={
+            (0, 3): Track((3, (10, 20, 30))),
+            (1, 0): Track((3, (-5, 0, 5))),
+        },
+    ),
+    Clip(
+        "@run",
+        5,
+        tracks={
+            (0, 0): Track((2, (1, 2)), (3, (7, 8, 9))),
+            (0, 6): Track((5, (100,))),
+        },
+    ),
+    Clip("@idle", 1),
+    Clip("@dead", 2, weights={0: 0.0, 1: 0.0}),
+    Clip("@aim", 4, tracks={(1, 4): Track((4, (0, 11, 22, 33)))}),
+    Clip("@turn", 2, tracks={(0, 1): Track((2, (3, 4)))}),
+    # Long enough that the sampled frame lands past the first two runs, so the
+    # walk has to skip through them and reads only their two header bytes each.
+    Clip(
+        "@skip",
+        9,
+        tracks={(0, 3): Track((2, (1, 2)), (2, (3, 4)), (2, (5, 6)))},
+    ),
+)
+CONTRIBUTION_NUM_ANIM = len(DEFAULT_CLIPS)
+
+
+def _animation_section(bones: int, clips: tuple[Clip, ...]) -> bytearray:
+    """The animdesc array followed by one animation block per clip.
+
+    Every offset a decoder follows is relative to something — ``animindex`` to
+    its own animdesc, a channel offset to its own 32-byte record — so the
+    section is position independent and the caller decides where it lands.
+    """
+    section = bytearray(ANIM_DESC_STRIDE * len(clips))
+    for index, clip in enumerate(clips):
+        desc = ANIM_DESC_STRIDE * index
+        block = len(section)
+        struct.pack_into("<f", section, desc + 4, clip.fps)
+        struct.pack_into("<i", section, desc + 12, clip.numframes)
+        struct.pack_into("<i", section, desc + 48, block - desc)
+        section += bytearray(bones * ANIM_RECORD_STRIDE)
+        for bone in range(bones):
+            record = block + bone * ANIM_RECORD_STRIDE
+            struct.pack_into("<f", section, record, clip.weights.get(bone, 1.0))
+            for channel in range(CHANNEL_COUNT):
+                track = clip.tracks.get((bone, channel))
+                if track is None:
+                    continue
+                struct.pack_into(
+                    "<i", section, record + 4 + channel * 4,
+                    len(section) - record,
+                )
+                section += track.encode()
+        struct.pack_into("<i", section, desc, len(section) - desc)
+        section += clip.name.encode("ascii") + b"\0"
+    return section
 
 
 def model_image(
@@ -278,6 +415,8 @@ def model_image(
         ("Bip01", -1, (0.0, 0.0, 0.0)),
         ("Bip01 Spine", 0, (1.0, 2.0, 3.0)),
     ),
+    clips: tuple[Clip, ...] = DEFAULT_CLIPS,
+    sequences: int = CONTRIBUTION_NUM_SEQ,
 ) -> bytes:
     """A minimal v2531 model image the pipeline bone decoder can read.
 
@@ -285,6 +424,11 @@ def model_image(
     inverse of its composed bind, so a correctly decoded skeleton returns the
     identity and the census verifier's soundness check has something real to
     measure.
+
+    The animation and sequence arrays sit at the two fixed offsets a
+    contribution's default descriptor pointers are built from, so a span walk
+    reads real descriptors, real per-bone records and real RLE runs rather than
+    a count and an array base that point at nothing.
     """
     names_offset = BONE_ARRAY_OFFSET + BONE_STRIDE * len(bones)
     blob = bytearray(names_offset)
@@ -296,13 +440,13 @@ def model_image(
     struct.pack_into("<i", blob, 404, 0)
     struct.pack_into("<i", blob, 408, 0)
     # The sequence and animation arrays a contribution's owner-local index is
-    # range-checked against. Nothing decodes the descriptors themselves here;
-    # the counts and the array bases are what the attribution verifier reads.
+    # range-checked against, at the two offsets the default descriptor pointers
+    # are built from.
     struct.pack_into(
-        "<ii", blob, 264, CONTRIBUTION_NUM_ANIM, CONTRIBUTION_ANIM_INDEX_OFF
+        "<ii", blob, 264, len(clips), CONTRIBUTION_ANIM_INDEX_OFF
     )
     struct.pack_into(
-        "<ii", blob, 272, CONTRIBUTION_NUM_SEQ, CONTRIBUTION_SEQ_INDEX_OFF
+        "<ii", blob, 272, sequences, CONTRIBUTION_SEQ_INDEX_OFF
     )
 
     world = {}
@@ -327,6 +471,24 @@ def model_image(
             0.0, 0.0, 1.0, -composed[2],
         )
         struct.pack_into("<i", blob, base + 136, 0)
+
+    animation = _animation_section(len(bones), clips)
+    if len(blob) > CONTRIBUTION_ANIM_INDEX_OFF or (
+        CONTRIBUTION_ANIM_INDEX_OFF + len(animation)
+        > CONTRIBUTION_SEQ_INDEX_OFF
+    ):
+        raise ValueError("fixture sections overlap; widen the fixed offsets")
+    blob += bytearray(CONTRIBUTION_ANIM_INDEX_OFF - len(blob))
+    blob += animation
+    blob += bytearray(CONTRIBUTION_SEQ_INDEX_OFF - len(blob))
+    # Sequence descriptors carry a single-cell grid: numblends 1 and both group
+    # sizes 1, with cell zero naming animation zero.
+    for index in range(sequences):
+        desc = CONTRIBUTION_SEQ_INDEX_OFF + SEQ_DESC_STRIDE * index
+        blob += bytearray(SEQ_DESC_STRIDE)
+        struct.pack_into("<i", blob, desc + 52, 1)
+        struct.pack_into("<ii", blob, desc + 572, 1, 1)
+        struct.pack_into("<ii", blob, desc + 580, -1, -1)
     struct.pack_into("<i", blob, 140, len(blob))
     return bytes(blob)
 
@@ -394,11 +556,25 @@ def image_record(
     )
 
 
-CONTRIBUTION_OWNER_HDR = 0x5000
-CONTRIBUTION_SEQ_INDEX_OFF = 0x1000
-CONTRIBUTION_ANIM_INDEX_OFF = 0x800
-CONTRIBUTION_NUM_SEQ = 4
-CONTRIBUTION_NUM_ANIM = 6
+CONTRIBUTION_CYCLE = 0.25
+
+
+def animation_block_offset(
+    index: int, *, bones: int = 2, clips: tuple[Clip, ...] = DEFAULT_CLIPS
+) -> int:
+    """Where clip ``index``'s per-bone record array lands in the image.
+
+    Read back out of the section the fixture builds rather than recomputed, so
+    the expectation a test checks and the bytes it checks against cannot drift.
+    """
+    section = _animation_section(bones, clips)
+    desc = ANIM_DESC_STRIDE * index
+    animindex = struct.unpack_from("<i", section, desc + 48)[0]
+    return CONTRIBUTION_ANIM_INDEX_OFF + desc + animindex
+
+
+def sampled_frame(numframes: int, cycle: float = CONTRIBUTION_CYCLE) -> int:
+    return int((numframes - 1) * cycle)
 
 
 def contribution_record(
@@ -422,16 +598,30 @@ def contribution_record(
     caller: int = 0x10091700,
     sequence_descriptor: int | None = None,
     animation_descriptor: int | None = None,
+    mask_bones: tuple[int, ...] | None = None,
+    channel_bones: tuple[int, ...] | None = None,
+    channel_record_base: int | None = None,
+    channel_bone_base: int | None = None,
+    channel_frame: int | None = None,
+    channel_fraction: float | None = None,
+    clips: tuple[Clip, ...] = DEFAULT_CLIPS,
+    image_bones: int = 2,
+    cycle: float = CONTRIBUTION_CYCLE,
 ) -> bytes:
     """One fired contribution, laid out as the probe writes it.
 
-    The descriptor pointers default to the arithmetic the verifier checks, so a
-    test that wants a misplaced pointer has to say so.
+    The descriptor pointers and the witnessed channel bases default to the
+    arithmetic the verifiers check, so a test that wants a misplaced pointer or
+    a frame disagreeing with the cycle has to say so.
     """
     is_sequence = magic == b"SEQP"
     pose_bytes = POSE_PARAMETER_BYTES if is_sequence else 0
-    mask_bytes = (((bones + 31) // 32) * 4) if is_sequence else 0
-    size = CONTRIBUTION_RECORD_HEADER.size + pose_bytes + mask_bytes
+    mask_words = (bones + 31) // 32
+    mask_bytes = mask_words * 4 if is_sequence else 0
+    channel_bytes = 0 if is_sequence else mask_words * 8
+    size = (
+        CONTRIBUTION_RECORD_HEADER.size + pose_bytes + mask_bytes + channel_bytes
+    )
     if sequence_descriptor is None:
         sequence_descriptor = (
             studio_hdr + CONTRIBUTION_SEQ_INDEX_OFF + sequence_index * 764
@@ -444,6 +634,48 @@ def contribution_record(
             if is_sequence
             else studio_hdr + CONTRIBUTION_ANIM_INDEX_OFF + animation_index * 72
         )
+    if channel_bones is None:
+        channel_bones = () if is_sequence else tuple(range(image_bones))
+    first_bone = min(channel_bones) if channel_bones else 0
+    if channel_record_base is None:
+        channel_record_base = (
+            0
+            if is_sequence or not channel_bones
+            else studio_hdr
+            + animation_block_offset(
+                animation_index, bones=image_bones, clips=clips
+            )
+            + first_bone * ANIM_RECORD_STRIDE
+        )
+    if channel_bone_base is None:
+        channel_bone_base = (
+            0
+            if is_sequence or not channel_bones
+            else studio_hdr + BONE_ARRAY_OFFSET + first_bone * BONE_STRIDE
+        )
+    numframes = (
+        clips[animation_index].numframes
+        if not is_sequence and 0 <= animation_index < len(clips)
+        else 1
+    )
+    if channel_frame is None:
+        channel_frame = 0 if is_sequence else sampled_frame(numframes, cycle)
+    if channel_fraction is None:
+        channel_fraction = (
+            0.0 if is_sequence else (numframes - 1) * cycle - channel_frame
+        )
+    bitmap = bytearray(mask_words * 4)
+    for bone in channel_bones:
+        bitmap[bone // 8] |= 1 << (bone % 8)
+    # The selected-bone mask is a real mask rather than filler, because a cell's
+    # decoded bones are checked against it: leaving it arbitrary would make
+    # every clean run report bones the sequence did not select.
+    if mask_bones is None:
+        mask_bones = tuple(range(bones))
+    mask = bytearray(mask_bytes)
+    for bone in mask_bones:
+        if bone // 8 < len(mask):
+            mask[bone // 8] |= 1 << (bone % 8)
     return (
         CONTRIBUTION_RECORD_HEADER.pack(
             magic,
@@ -464,7 +696,7 @@ def contribution_record(
             sequence_descriptor,
             animation_descriptor,
             0x30000000,
-            0.25,
+            cycle,
             num_blends,
             group_size[0],
             group_size[1],
@@ -477,9 +709,17 @@ def contribution_record(
             faults,
             pose_bytes,
             mask_bytes,
+            channel_record_base,
+            channel_bone_base,
+            len(channel_bones),
+            len(channel_bones),
+            channel_frame,
+            channel_fraction,
+            channel_bytes,
         )
         + b"\x11" * pose_bytes
-        + b"\x22" * mask_bytes
+        + bytes(mask)
+        + (bytes(bitmap) * 2 if channel_bytes else b"")
     )
 
 
@@ -604,8 +844,8 @@ def write_session(
     if contribution_records is not None:
         (session / "contribution.elcon").write_bytes(
             CONTRIBUTION_FILE_HEADER.pack(
-                b"ELCON1",
-                1,
+                b"ELCON2",
+                2,
                 CONTRIBUTION_FILE_HEADER.size,
                 QPC_FREQUENCY,
                 90,
@@ -614,6 +854,8 @@ def write_session(
                 0x89740,
                 0x89B20,
                 0x89500,
+                0x889F0,
+                0x88BA0,
                 b"2" * 64 + b"\0",
                 b"",
             )
@@ -2945,9 +3187,486 @@ class RetailCaptureTests(unittest.TestCase):
             self.assertIn(
                 f"sizeof({struct_name}) == {layout.size}", source, struct_name
             )
-        self.assertIn('std::memcpy(contributionHeader.magic, "ELCON1", 6)', source)
+        self.assertIn('std::memcpy(contributionHeader.magic, "ELCON2", 6)', source)
         # The owner census is what makes a bank model joinable at all.
         self.assertIn("ObserveStudioHeader(ownerHdr, checksum)", source)
+        # The cell frame emits its record after the original returns, so the
+        # accumulator has to be cleared before the call rather than after it.
+        # Order is the whole correctness argument, so it is asserted directly.
+        body = source[source.index("void __cdecl HookDecodeSelectedBones(") :]
+        self.assertLess(
+            body.index("ResetChannelAccumulator();"),
+            body.index("gOriginalDecodeSelectedBones("),
+        )
+
+    # --- CAP2.5 consumed byte spans ---
+
+    def _span_session(self, session: Path, contributions: bytes) -> None:
+        self._attribution_session(session, contributions)
+
+    @staticmethod
+    def _query(session: Path, statement: str, *parameters: object) -> list[tuple]:
+        # A context manager around sqlite3.connect commits but does not close,
+        # and Windows will not delete the session directory while the handle
+        # is open, so every read here closes explicitly.
+        connection = sqlite3.connect(session / "capture.sqlite")
+        try:
+            return connection.execute(statement, parameters).fetchall()
+        finally:
+            connection.close()
+
+    def _spans(self, session: Path, kind: str) -> list[tuple[int, int, str]]:
+        spans: list[tuple[int, int, str]] = []
+        for (blob,) in self._query(
+            session,
+            "SELECT intervals FROM span_sets WHERE kind = ? ORDER BY id",
+            kind,
+        ):
+            spans.extend(decode_intervals(bytes(blob)))
+        return spans
+
+    def _walk(self, index: int, frame: int) -> list[tuple[int, int, str]]:
+        walker = Walker(model_image(0xABCD, "models/bank.mdl"), False)
+        return merge(resolve_cell(walker, index, frame, (0, 1), (0, 1)))
+
+    def test_span_resolver_walks_a_cell_to_its_exact_bytes(self) -> None:
+        """A one-run track costs its header and the two keys around the frame.
+
+        Clip 4 samples frame 0 of a four-frame clip whose only track is bone 1's
+        rotY, so the walk reads one run header, the two keys bracketing the
+        frame, that channel's rotscale, and the bind components of every channel
+        that is not animated. Nothing else in the image is touched.
+        """
+        spans = self._walk(4, sampled_frame(DEFAULT_CLIPS[4].numframes))
+        block = animation_block_offset(4)
+        self.assertIn(
+            (block, block + 2 * ANIM_RECORD_STRIDE, ROLE_ANIM_RECORD), spans
+        )
+        headers = [span for span in spans if span[2] == ROLE_TRACK_HEADER]
+        keys = [span for span in spans if span[2] == ROLE_TRACK_KEY]
+        self.assertEqual(len(headers), 1)
+        self.assertEqual(keys, [(headers[0][1], headers[0][1] + 4, ROLE_TRACK_KEY)])
+        # Only numframes and animindex are read out of the 72-byte descriptor,
+        # so the other 64 bytes stay unclaimed.
+        descriptor = [
+            span for span in spans if span[2] == ROLE_ANIMATION_DESCRIPTOR
+        ]
+        self.assertEqual([end - start for start, end, _ in descriptor], [4, 4])
+
+    def test_span_resolver_reads_two_bytes_of_every_run_it_skips(self) -> None:
+        """The walk stops at the frame; a skipped run costs its header alone.
+
+        This is the difference CAP4.2 exists to see. The exporter walks every
+        key of every run; retail reads two bytes of each run it passes over and
+        never looks at their keys.
+        """
+        spans = self._walk(6, sampled_frame(DEFAULT_CLIPS[6].numframes))
+        headers = [span for span in spans if span[2] == ROLE_TRACK_HEADER]
+        keys = [span for span in spans if span[2] == ROLE_TRACK_KEY]
+        # Three runs of two keys each; the frame lands in the second, so the
+        # first is skipped and only the second's keys are read.
+        self.assertEqual(len(headers), 2)
+        self.assertEqual([end - start for start, end, _ in headers], [2, 2])
+        self.assertEqual(headers[1][0] - headers[0][0], 6)
+        self.assertEqual(keys, [(headers[1][1], headers[1][1] + 4, ROLE_TRACK_KEY)])
+
+    def test_span_store_keeps_the_frame_out_of_its_shapes(self) -> None:
+        """One clip at two frames is one shape and two covered frames.
+
+        Keying a span set by its frame is what turned a 4 GB capture into a 13
+        GB one, because a cutscene samples one clip at thousands of them. The
+        frame-varying part is the track walk, which lands in the union instead.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._span_session(
+                session,
+                contribution_record(b"SEQP", 8, 103, sequence_index=2, bones=2)
+                + contribution_record(
+                    b"ANIM", 9, 104, animation_index=6, bones=2, channel_frame=0
+                )
+                + contribution_record(
+                    b"ANIM", 10, 105, animation_index=6, bones=2, channel_frame=2
+                ),
+            )
+            report = resolve_spans(session)
+            self.assertEqual(report["counts"]["faulted"], 0)
+            self.assertEqual(report["counts"]["shape_hits"], 1)
+            self.assertEqual(
+                self._query(session, "SELECT DISTINCT frame FROM record_span_sets "
+                            "WHERE frame IS NOT NULL ORDER BY frame"),
+                [(0,), (2,)],
+            )
+            # No track span reaches the shape; the union carries both frames'.
+            self.assertEqual(
+                [
+                    role
+                    for role in {span[2] for span in self._spans(session, "ANIM")}
+                    if role in (ROLE_TRACK_HEADER, ROLE_TRACK_KEY)
+                ],
+                [],
+            )
+            covered = self._query(
+                session, "SELECT sum(\"end\" - start) FROM model_coverage"
+            )[0][0]
+            self.assertGreater(covered, 0)
+
+    def test_span_resolver_stops_at_a_zero_weight_record(self) -> None:
+        """A zero-weight record costs four bytes and ends the decode."""
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._span_session(
+                session,
+                contribution_record(
+                    b"SEQP", 8, 103, sequence_index=2, bones=2
+                )
+                + contribution_record(
+                    b"ANIM", 9, 104, animation_index=3, bones=2
+                ),
+            )
+            resolve_spans(session)
+            spans = self._spans(session, "ANIM")
+            self.assertEqual(
+                [span[2] for span in spans],
+                [ROLE_HEADER_FIELD]
+                + [ROLE_ANIMATION_DESCRIPTOR, ROLE_ANIMATION_DESCRIPTOR]
+                + [ROLE_ANIM_RECORD, ROLE_ANIM_RECORD],
+            )
+            # NumBones@240 and BoneIndex@244 are adjacent, so they merge.
+            self.assertEqual(
+                sorted(end - start for start, end, _ in spans), [4, 4, 4, 4, 8]
+            )
+
+    def test_span_intervals_round_trip_through_their_blob(self) -> None:
+        """The store is delta encoded, so the decoder is what keeps it readable."""
+        spans = [
+            (240, 248, ROLE_HEADER_FIELD),
+            (2060, 2064, ROLE_ANIMATION_DESCRIPTOR),
+            (2000, 2032, ROLE_ANIM_RECORD),
+            (0x10000, 0x10002, ROLE_TRACK_HEADER),
+        ]
+        self.assertEqual(decode_intervals(encode_intervals(spans)), spans)
+
+    def test_span_resolver_records_a_cell_that_decoded_nothing(self) -> None:
+        """A mask selecting no bone is a real outcome, not a lost witness.
+
+        The cell frame reads the bone count, the bone array base, numframes and
+        animindex before it looks at the mask, then decodes nothing -- so such
+        a cell consumes exactly sixteen bytes.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._span_session(
+                session,
+                contribution_record(
+                    b"SEQP", 8, 103, sequence_index=2, bones=2, mask_bones=()
+                )
+                + contribution_record(
+                    b"ANIM", 9, 104, animation_index=4, bones=2,
+                    channel_bones=(),
+                ),
+            )
+            report = resolve_spans(session)
+            self.assertEqual(report["counts"]["faulted"], 0)
+            self.assertEqual(report["counts"]["decoded_nothing"], 1)
+            spans = self._spans(session, "ANIM")
+            self.assertEqual(
+                [span[2] for span in spans],
+                [ROLE_HEADER_FIELD]
+                + [ROLE_ANIMATION_DESCRIPTOR, ROLE_ANIMATION_DESCRIPTOR],
+            )
+            verdict = verify_spans(session)["verdict"]
+            self.assertTrue(verdict["roots_agree"], verdict["statement"])
+            self.assertTrue(verdict["spans_resolved"])
+
+    def test_span_resolver_deduplicates_identical_cells(self) -> None:
+        """Two cells of one shape cost one span set and two references."""
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._span_session(
+                session,
+                contribution_record(b"SEQP", 8, 103, sequence_index=2, bones=2)
+                + contribution_record(b"ANIM", 9, 104, animation_index=4, bones=2)
+                + contribution_record(b"ANIM", 10, 105, animation_index=4, bones=2),
+            )
+            report = resolve_spans(session)
+            self.assertEqual(report["counts"]["shape_hits"], 1)
+            self.assertEqual(report["counts"]["faulted"], 0)
+            self.assertEqual(
+                self._query(
+                    session,
+                    "SELECT (SELECT count(*) FROM span_sets), "
+                    "(SELECT count(*) FROM record_span_sets)",
+                ),
+                [(2, 3)],
+            )
+
+    def test_span_resolver_refuses_a_database_it_already_resolved(self) -> None:
+        """A finalized database is evidence, so the pass runs over it once."""
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._span_session(
+                session,
+                contribution_record(b"SEQP", 8, 103, sequence_index=2, bones=2)
+                + contribution_record(b"ANIM", 9, 104, animation_index=4, bones=2),
+            )
+            resolve_spans(session)
+            with self.assertRaises(ValueError) as raised:
+                resolve_spans(session)
+            self.assertIn("resolved once", str(raised.exception))
+
+    def test_span_resolver_records_the_digest_it_read(self) -> None:
+        """Writing into the evidence file invalidates the finalizer's hash.
+
+        The digest taken before the pass travels in the database, so anything
+        comparing against the one `result.json` carries reads that instead of
+        concluding the evidence was altered.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._span_session(
+                session,
+                contribution_record(b"SEQP", 8, 103, sequence_index=2, bones=2)
+                + contribution_record(b"ANIM", 9, 104, animation_index=4, bones=2),
+            )
+            report = resolve_spans(session)
+            stored = dict(
+                self._query(
+                    session,
+                    "SELECT key, value FROM capture_metadata "
+                    "WHERE key LIKE 'spans_%'",
+                )
+            )
+            self.assertEqual(
+                json.loads(stored["spans_source_database_sha256"]),
+                report["source_database_sha256"],
+            )
+            self.assertEqual(report["integrity_check"], "ok")
+
+    def test_span_resolver_faults_an_index_outside_the_owner(self) -> None:
+        """An unresolvable cell is recorded as one, not skipped."""
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._span_session(
+                session,
+                contribution_record(b"SEQP", 8, 103, sequence_index=2, bones=2)
+                + contribution_record(
+                    b"ANIM", 9, 104, animation_index=1, bones=2,
+                    channel_bones=(0, 5),
+                ),
+            )
+            report = resolve_spans(session)
+            self.assertEqual(report["counts"]["faulted"], 1)
+            self.assertTrue(
+                any("bone 5" in reason for reason in report["faults"])
+            )
+
+    def _resolved_span_session(
+        self, session: Path, contributions: bytes
+    ) -> dict:
+        self._span_session(session, contributions)
+        resolve_spans(session)
+        return verify_spans(session)
+
+    def test_span_verifier_accepts_a_witnessed_run(self) -> None:
+        """Every witnessed pointer lands where the independent walker predicts."""
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            report = self._resolved_span_session(
+                session,
+                contribution_record(b"SEQP", 8, 103, sequence_index=2, bones=2)
+                + contribution_record(b"ANIM", 9, 104, animation_index=4, bones=2),
+            )
+            self.assertTrue(report["verdict"]["judgeable"])
+            self.assertTrue(report["verdict"]["roots_agree"])
+            self.assertTrue(report["verdict"]["spans_resolved"])
+            self.assertEqual(report["roots"]["misplaced_records"], 0)
+            self.assertEqual(report["roots"]["misplaced_bones"], 0)
+            self.assertEqual(report["frames"]["disagreeing"], 0)
+            self.assertEqual(report["gating"]["decoded_beyond_mask"], 0)
+
+    def test_span_verifier_reports_a_misplaced_record_pointer(self) -> None:
+        """A witnessed base off the animindex indirection fails the check.
+
+        This is what separates evidence from convention: the probe latches a
+        pointer and the walker predicts one, and nothing reconciles them.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            block = animation_block_offset(4)
+            report = self._resolved_span_session(
+                session,
+                contribution_record(b"SEQP", 8, 103, sequence_index=2, bones=2)
+                + contribution_record(
+                    b"ANIM", 9, 104, animation_index=4, bones=2,
+                    channel_record_base=CONTRIBUTION_OWNER_HDR + block + 16,
+                ),
+            )
+            self.assertEqual(report["roots"]["misplaced_records"], 1)
+            self.assertFalse(report["verdict"]["roots_agree"])
+            self.assertIn("do not land where", report["verdict"]["statement"])
+
+    def test_span_verifier_reports_a_frame_that_disagrees_with_the_cycle(
+        self,
+    ) -> None:
+        """floor((numframes - 1) * cycle) is now a claim a capture can refute."""
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            report = self._resolved_span_session(
+                session,
+                contribution_record(b"SEQP", 8, 103, sequence_index=2, bones=2)
+                + contribution_record(
+                    b"ANIM", 9, 104, animation_index=6, bones=2,
+                    channel_frame=5,
+                ),
+            )
+            self.assertEqual(report["frames"]["disagreeing"], 1)
+            self.assertFalse(report["verdict"]["roots_agree"])
+            self.assertIn("numframes", report["verdict"]["statement"])
+
+    def test_span_verifier_reports_a_bitmap_wider_than_its_mask(self) -> None:
+        """A cell decoding a bone its sequence did not select is a failure."""
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            report = self._resolved_span_session(
+                session,
+                contribution_record(
+                    b"SEQP", 8, 103, sequence_index=2, bones=1
+                )
+                + contribution_record(
+                    b"ANIM", 9, 104, animation_index=4, bones=2,
+                    channel_bones=(0, 1),
+                ),
+            )
+            self.assertEqual(report["gating"]["decoded_beyond_mask"], 1)
+            self.assertFalse(report["verdict"]["roots_agree"])
+            self.assertIn("mask does not select", report["verdict"]["statement"])
+
+    def test_a_channel_fault_is_not_an_attribution_fault(self) -> None:
+        """CAP2.4 judges its own bits, not every bit in the word.
+
+        A cell whose mask selects no bone carries the unwitnessed-channel bit,
+        and that record named its source perfectly well; counting it would make
+        a widened probe read as an attribution regression.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._span_session(
+                session,
+                contribution_record(
+                    b"SEQP", 8, 103, sequence_index=2, bones=2, mask_bones=()
+                )
+                + contribution_record(
+                    b"ANIM", 9, 104, animation_index=4, bones=2,
+                    channel_bones=(), faults=1 << 8,
+                ),
+            )
+            report = verify_attribution(session)
+            self.assertEqual(report["faults"]["records_with_a_fault"], 0)
+            self.assertTrue(report["faults"]["clean"])
+
+    def test_resolving_leaves_every_earlier_verifier_able_to_read_it(
+        self,
+    ) -> None:
+        """The pass writes into evidence four other tools already read.
+
+        Every capture_metadata value is JSON and every verifier loads it that
+        way, so a bare string written here is a syntax error in all of them
+        rather than a missing key.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._span_session(
+                session,
+                contribution_record(b"SEQP", 8, 103, sequence_index=2, bones=2)
+                + contribution_record(b"ANIM", 9, 104, animation_index=4, bones=2),
+            )
+            resolve_spans(session)
+            for key, value in self._query(
+                session, "SELECT key, value FROM capture_metadata"
+            ):
+                json.loads(value)
+            # Each verifier has its own verdict shape, so what is asserted is
+            # that all four still read the database at all.
+            for verifier in (
+                verify_attribution,
+                verify_generation,
+                verify_census,
+                verify_actors,
+            ):
+                self.assertIn("verdict", verifier(session))
+
+    def test_span_verifier_answers_a_database_without_channels(self) -> None:
+        """A CAP2.4 database is answered as unjudgeable, never raised on."""
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            self._attribution_session(session, self._clean_contributions())
+            report = verify_spans(session)
+            self.assertFalse(report["verdict"]["judgeable"])
+            self.assertIn("resolve_consumed_spans", report["verdict"]["statement"])
+
+    def test_span_verifier_holds_shapes_identical_across_runs(self) -> None:
+        """One shape has one answer, whatever frame each run sampled it at.
+
+        The consumed union is deliberately not the claim: which frames a run
+        samples depends on where the operator reached the trigger, so two honest
+        runs cover different bytes of the same clip. The walk being a function
+        of the shape alone is what must hold.
+        """
+        reports = []
+        with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
+            for directory, cycle in ((first, 0.0), (second, CONTRIBUTION_CYCLE)):
+                reports.append(
+                    self._resolved_span_session(
+                        Path(directory),
+                        contribution_record(
+                            b"SEQP", 8, 103, sequence_index=2, bones=2
+                        )
+                        + contribution_record(
+                            b"ANIM", 9, 104, animation_index=6, bones=2,
+                            cycle=cycle,
+                        ),
+                    )
+                )
+            across = compare_spans(reports)
+            self.assertEqual(across["divergent_shapes"], [])
+            self.assertGreater(across["shared_shapes"], 0)
+            self.assertIn("byte-identical spans", across["statement"])
+            # The two runs sampled different frames, so their unions differ --
+            # and that is reported as coverage, not as a disagreement.
+            self.assertNotEqual(
+                reports[0]["spans"]["bytes_per_model"],
+                reports[1]["spans"]["bytes_per_model"],
+            )
+
+    def test_channel_decoder_hooks_are_installed_before_the_cell_frame(
+        self,
+    ) -> None:
+        """A cell must never be live while the decoders feeding it are not.
+
+        Removal runs the other way for the same reason the blend resolver does:
+        the consumer goes first, so a cell never reports an unwitnessed decode
+        that in fact happened.
+        """
+        source = (
+            REPO_ROOT
+            / "research"
+            / "tooling"
+            / "capture"
+            / "live_pose_hook.cpp"
+        ).read_text(encoding="utf-8")
+        install = source[source.index("bool InstallHooks(") :]
+        cell = install.index("&HookDecodeSelectedBones)")
+        for detour in ("&HookDecodeBoneQuaternion)", "&HookDecodeBonePosition)"):
+            self.assertLess(install.index(detour), cell, detour)
+        remove = source[source.index("void RemoveHooks()") :]
+        for phase in ("Disable", "Release"):
+            consumer = remove.index(f"{phase}(&gDecodeSelectedBonesHook)")
+            for handle in (
+                "gDecodeBonePositionHook",
+                "gDecodeBoneQuaternionHook",
+            ):
+                self.assertLess(consumer, remove.index(f"{phase}(&{handle})"))
 
     def test_contribution_targets_are_declared_against_the_specification(
         self,

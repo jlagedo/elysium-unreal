@@ -111,11 +111,15 @@ def prepare(connection: sqlite3.Connection) -> None:
         if "root_transform_bytes" in columns
         else "NULL AS root_transform_bytes"
     )
-    # A contribution's size is the sum of the two spans it declares, so byte
+    # A contribution's size is the sum of the spans it declares, so byte
     # closure needs them in the copy on the same terms as the root transform.
     span_bytes = ", ".join(
         column if column in columns else f"NULL AS {column}"
-        for column in ("pose_parameter_bytes", "selected_bone_bytes")
+        for column in (
+            "pose_parameter_bytes",
+            "selected_bone_bytes",
+            "channel_bone_bytes",
+        )
     )
     connection.execute(
         f"""

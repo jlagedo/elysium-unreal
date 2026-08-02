@@ -258,6 +258,31 @@ while remaining > 0:
 # frame sample = shorts[min(frame_in_run, valid-1)]
 ```
 
+**The runtime does not walk the clip — it walks to the sampled frame**
+[capture-verified]. The loop above is what an offline decoder does to materialise a
+whole channel. `FUN_100889f0` and `FUN_10088ba0` instead subtract each run's `total`
+from the frame while it does not exceed what remains, advancing by `valid*2+2`, and
+stop at the run holding the frame. So a run the walk steps over costs **only its two
+header bytes** — its keys are never read — and the run that holds the frame costs its
+header plus the two keys bracketing the frame. When the frame after it leaves the run,
+the quaternion decoder reads the **following run's first key** at `run + valid*2 + 4`;
+the position decoder does not, and holds the key it already has. That asymmetry is the
+one place the two decoders disagree about which bytes they touch.
+
+`FUN_10088ba0` additionally resets the frame to zero on any run declaring
+`total < valid`, which no authored track in the corpus does.
+
+**A zero weight ends the decode** [capture-verified]. `weight`@0 is documented above as
+always 1.0 across the installed corpus, and both decoders compare it against zero
+before anything else: on zero they write an identity-free zero output and return, having
+read those four bytes and nothing else — no channel offset, no track, no bind field.
+
+**Which bone fields each decoder reads** [capture-verified], per channel rather than
+per bone: the quaternion decoder reads `quat`@44 for an unanimated channel and
+`rotscale`@72 for an animated one; the position decoder reads `pos`@32 as the base of
+every channel whether animated or not, and `posscale`@60 only for an animated one.
+Neither reads `Flags`@136, and neither reads the `studiohdr` it is passed.
+
 **Sample → bone transform** [data-verified, matches Crowbar `CalcBoneRotation`
 (`SourceModel2531`)]. **Position and rotation are handled differently — this is the
 one place to get exactly right, or animated limbs fling out.** Both are decoded
@@ -504,6 +529,22 @@ pointer minus the header base is a file offset.
 `groupsize[0]` (A.3). Across the two runs 3,440 and 3,434 sequence contributions are
 multi-blend, every one of them a 9×1 grid — the shared-bank `move_yaw` locomotion
 blends — and each fires exactly two cells from adjacent rows.
+
+**The selected-bone mask reaches the cell unchanged.** `FUN_10089b20` gates each bone
+on `mask[4 + (i >> 5) * 4] & (1 << (i & 31))` in the *owner's* bone index space, and the
+owner is frequently a shared bank the dispatcher resolved to rather than the entity's
+own model — so whether the mask survives that resolution is not a question the code
+answers by inspection. Two complete `sp_theatre` runs record **231,747 of 231,747** and
+**231,649 of 231,649** decoded-bone sets equal to the mask of their enclosing sequence,
+with no cell decoding a bone its mask does not select, over 34 and 35 owner identities
+of which 17 and 18 are banks no actor animates under. For this corpus the mask is
+therefore the same object at both ends of the dispatch.
+
+**A cell whose mask selects no bone still reads sixteen bytes.** `FUN_10089b20` reads
+`NumBones`@240 and `BoneIndex`@244 from the header and `numframes`@12 and `animindex`@48
+from the descriptor before it examines the mask, then walks the bones calling nothing.
+Both runs record **10,311** such cells — the same count in each, so it is an authored
+property of the cutscene rather than a sampling artefact.
 
 `FUN_100968a0`'s base-model path calls `FUN_10089c40`. Its include-model path
 evaluates into temporary position/quaternion arrays, then consumes 0x3c-byte

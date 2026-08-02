@@ -71,6 +71,7 @@ FAULT_NAMES = {
     1 << 6: "sequence_out_of_range",
     1 << 7: "no_contribution_scope",
 }
+FAULT_MASK = sum(FAULT_NAMES)
 
 # MDLHeader displacements the range check reads out of the owner's own image.
 HEADER_NUM_LOCAL_ANIMS = 264
@@ -584,11 +585,18 @@ def multiplicity(connection: sqlite3.Connection) -> dict[str, Any]:
 
 
 def faults(connection: sqlite3.Connection) -> dict[str, Any]:
+    """The attribution faults, and only those.
+
+    A later task may add bits to the same word -- CAP2.5's channel accumulator
+    does -- and a record carrying one of those has not failed to name its
+    source. Masking to the bits this report knows keeps a widened probe from
+    reading as a regression here.
+    """
     counts: dict[str, int] = {}
     total = 0
     for value, count in connection.execute(
-        "SELECT faults, count(*) FROM contribution_row WHERE faults != 0 "
-        "GROUP BY faults"
+        f"SELECT faults, count(*) FROM contribution_row "
+        f"WHERE faults & {FAULT_MASK} != 0 GROUP BY faults"
     ):
         total += count
         for bit, name in FAULT_NAMES.items():

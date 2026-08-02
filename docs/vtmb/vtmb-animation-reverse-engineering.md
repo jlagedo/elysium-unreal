@@ -1336,6 +1336,58 @@ which builder asked for it is a lookup against the case specification by nearest
 preceding seed, so an address inside an unlisted function is reported unresolved
 rather than attributed to the seed below it.
 
+### 9.15a Establishing which bytes an evaluation dereferenced
+
+A pose that matches proves nothing about a field the decoder silently skipped, so the
+byte ranges retail read are first-class evidence rather than a by-product. The method
+that produces them without the answer being circular has three parts, and the split is
+the point of it.
+
+**The probe witnesses and decodes nothing.** Hooks on the two channel decoders emit no
+record at all: each folds one bone into a per-thread accumulator that the enclosing cell
+frame reads back and stamps onto its own record — the trade the blend resolver already
+makes, and the reason a witnessed per-bone decode costs two bitmaps rather than a record
+each. What travels is what the decoder was handed: the first animation record and bone
+it saw, the frame and fraction it was given, and one bit per bone it ran for. No format
+field is interpreted on the live path.
+
+**A separate walker derives the same spans from the image**, transcribing the confirmed
+decompilation and importing nothing from the exporter's own decoder. That independence
+is not fastidiousness: CAP4.2 compares the ranges retail read against the ranges we
+read, and one walker producing both sides would make the difference a tautology.
+
+**The check is what makes the two evidence.** The accumulator indexes its bitmaps off
+the pointer it latched, so which bone that was is recorded nowhere — bit zero means "the
+first one". The verification therefore solves for that bone independently from each of
+the two pointers, `(record base − studiohdr − animdesc − animindex) / 32` and
+`(bone base − studiohdr − BoneIndex) / 160`, and requires both to divide exactly, land
+inside the owner's bone count, and agree. A single-sided check would accept a pointer
+that merely happened to be on the stride.
+
+Two complete cutscenes place **231,747 of 231,747** and **231,649 of 231,649** such
+pairs, so the animindex indirection, both strides and both base fields are verified
+together. The same runs confirm `floor((numframes − 1) × cycle)` on every witnessed
+frame, and show every decoded-bone set equal to the mask of its enclosing sequence.
+
+**Storage is bounded by the images, not the evidence.** Keying a span set by its frame
+looks natural and is wrong at scale: a cutscene samples one clip at thousands of frames
+while only the track walk depends on the frame, so 122 genuinely distinct shapes become
+143,610 and a 4 GB capture becomes 13 GB. Sets are keyed without the frame; the
+per-model union is accumulated as one bit per byte of each image, which makes merging an
+OR and double-counting impossible; and a cell's exact spans regenerate from its shape
+and its frame on demand. What is stored is the union, the shapes and the link — never
+the same bytes a thousand times.
+
+Three bounds travel with a report like this. The walk *inside* a track is transcribed
+rather than witnessed: the run-skipping and key-selection rules come from the
+decompilation and are checked only for staying inside the image and terminating, while
+the pointers above them are what a capture can refute. The sequence descriptor is only
+partly claimed, so its byte totals are a floor and the unclaimed remainder is recorded
+as unknown rather than inert. And a cross-run comparison must not assert that two runs
+consume the same bytes: which frames a run samples depends on where the operator reached
+the trigger, so two correct runs differ there. The claim that holds is that one shape
+produces one answer — checked by digest, and true of all 176 shapes the two runs share.
+
 ### 9.16 What not to do first
 
 Avoid:
@@ -1886,6 +1938,10 @@ Reverse-engineering experiments often coexist with unrelated animation work. Pre
 | A fired contribution names the model it was decoded from | Verified | The three frames below `resolve_virtual_model_pose` take the owning `studiohdr` as argument zero on one seven-dword `__cdecl` contract. Two complete cutscenes record 238,529 and 238,793 sequence contributions naming 34 and 35 owner identities, all observed at or before first use with an image each, and 17 and 18 of them are owners no actor animates under | None |
 | A captured descriptor pointer agrees with the index and stride it claims | Verified | Across two cutscenes, 961,518 of 961,518 contributions satisfy `pointer - studiohdr == LocalSeqIndex + index * 764` or `LocalAnimIndex + index * 72`, with every index inside the owner's own declared count | None |
 | The sequence blend grid is a `groupsize[0] × groupsize[1]` space | Verified | `groupsize[0] * groupsize[1] == numblends` on 294 of 294 multi-blend sequences in the installed character tree; two captures fire 3,440 and 3,434 multi-blend contributions, every one a 9×1 grid evaluating two adjacent cells, with no contribution in either run decoding more than two | Whether the four-cell path evaluates as decoded. The population that would exercise it is bounded: all 49 3×3 sequences are `*_aim_layer` entries in `move_and_ranged.mdl`, driven by pose parameters 2 and 3 over −45°..+45° on both axes and carrying no activity name, so only off-center ranged aiming reaches them |
+| A witnessed decoder pointer agrees with an independently derived one | Verified | Two cutscenes place 231,747 of 231,747 and 231,649 of 231,649 record and bone pointers, each solved separately for the bone it implies and required to agree, verifying the animindex indirection and both strides together | None |
+| The channel decoders walk the whole track | Contradicted | Both stop at the run holding the sampled frame, reading two header bytes of each run stepped over and the keys bracketing the frame. The quaternion decoder reaches the following run's first key when the frame after it leaves the run; the position decoder does not | The exporter walks whole clips, so its coverage is a superset by construction rather than by defect |
+| The selected-bone mask is remapped across an include-model boundary | Contradicted | 231,747 and 231,649 decoded-bone sets equal the mask of their enclosing sequence, with no cell decoding a bone its mask does not select, over 34 and 35 owners of which 17 and 18 are banks no actor animates under | Whether it holds for a scene exercising the four-cell blend path, which no cutscene reaches |
+| A cell always decodes at least one bone | Contradicted | 10,311 cells in each of two runs are enclosed by a mask selecting no bone; each reads `NumBones`@240, `BoneIndex`@244, `numframes`@12 and `animindex`@48 and decodes nothing. The identical count in both runs makes it authored rather than sampled | None |
 | The unindexed region before `LocalAnimIndex` is unreachable | Contradicted | It is the include-model bone remap array, addressed by `StudioModelGroup`+0x10 relative to the group entry. Over 27 include-carrying models the offset is byte-identical on disk in 41 of 41 groups and every array base lands inside the region, which the arrays span completely | None |
 | A hook signature can be a fixed byte sequence | Contradicted | `evaluate_sequence_pose` begins `MOV AL,[0x104902c9]`, whose absolute operand the loader rewrites; `client.dll` loaded at three different bases across three runs. A declaration must name the relocated span and compare it after adding the load delta | None |
 | The loader patches the model image in place | Verified | 26,958 differing bytes in one run, all inside `StudioBone.Flags`, `StudioMesh.VertexData`, `StudioSeqDesc`+0xc, the include-model records, `MDLHeader.Flags`/`NumLocalNodes`, and one unindexed gap | What each rewritten field becomes; layout is owned by `mdl_v2531.md` |

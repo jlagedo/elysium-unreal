@@ -118,6 +118,24 @@
           "rva": "0x00089500",
           "calling_convention": "cdecl",
           "expected_bytes": "83ec08538b5c241c"
+        },
+        {
+          "semantic_label": "client.decode_bone_quaternion",
+          "source_function_label": "decode_bone_quaternion",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x000889f0",
+          "calling_convention": "cdecl",
+          "expected_bytes": "8b4c241483ec20"
+        },
+        {
+          "semantic_label": "client.decode_bone_position",
+          "source_function_label": "decode_bone_position",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00088ba0",
+          "calling_convention": "cdecl",
+          "expected_bytes": "8b4c2414d901"
         }
       ]
     },

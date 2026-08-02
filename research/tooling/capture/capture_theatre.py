@@ -211,6 +211,8 @@ def write_hook_ini(path: Path, session: Path, duration_seconds: int) -> None:
     evaluate_sequence = target(client, "client.evaluate_sequence_pose")
     decode_bones = target(client, "client.decode_selected_bones")
     blend_axis = target(client, "client.resolve_blend_axis_weight")
+    decode_quaternion = target(client, "client.decode_bone_quaternion")
+    decode_position = target(client, "client.decode_bone_position")
     values = {
         "output": session / "scene.elpose",
         "animation_output": session / "animation.elanim",
@@ -251,6 +253,10 @@ def write_hook_ini(path: Path, session: Path, duration_seconds: int) -> None:
         "decode_selected_bones_expected": decode_bones["expected_bytes"],
         "resolve_blend_axis_weight_rva": f"0x{blend_axis['rva']:x}",
         "resolve_blend_axis_weight_expected": blend_axis["expected_bytes"],
+        "decode_bone_quaternion_rva": f"0x{decode_quaternion['rva']:x}",
+        "decode_bone_quaternion_expected": decode_quaternion["expected_bytes"],
+        "decode_bone_position_rva": f"0x{decode_position['rva']:x}",
+        "decode_bone_position_expected": decode_position["expected_bytes"],
         "target_checksum": "0x00000000",
         "duration_seconds": duration_seconds + 60,
     }
