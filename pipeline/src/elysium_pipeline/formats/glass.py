@@ -82,7 +82,13 @@ def derive_normal(
     ) / 8.0
 
     if env_mask is not None:
-        active = np.asarray(env_mask.convert("L"), dtype=np.uint8) >= 128
+        mask = env_mask.convert("L")
+        if mask.size != rgba.size:
+            # Source samples the independently sized mask across the same material UVs.
+            # Bring it into the albedo's texel grid before applying it to the derived
+            # height field; loose overrides do not always preserve the shipped size.
+            mask = mask.resize(rgba.size, Image.Resampling.BILINEAR)
+        active = np.asarray(mask, dtype=np.uint8) >= 128
     else:
         active = np.asarray(rgba.getchannel("A"), dtype=np.uint8) > 0
     active = _erode_one(active).astype(np.float32)

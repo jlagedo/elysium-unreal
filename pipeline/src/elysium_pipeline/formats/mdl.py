@@ -299,6 +299,7 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
     none = {"albedo": None, "emis": None, "additive": False,
             "translucent": False, "alphatest": False,
             "envmap": None, "envmask": None, "envtint": None,
+            "globalwetness": None,
             "glass": False, "bump": None,
             "refract": False, "refract_amount": 0.0, "refract_map": None}
     vmt_txt = vmt_path = None
@@ -446,6 +447,7 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
         "envmap": envmap,
         "envmask": envmask,
         "envtint": envtint,
+        "globalwetness": info.get("globalwetness"),
         "glass": glass,
         "bump": bump_png,
         "refract": refract,
@@ -549,6 +551,10 @@ def write_obj_scene(meshes, name, out_dir, search, read_bytes, tex_cache, *, ski
                     f.write(f"envmapmask tex/{m['envmask']}\n")
                 t = m["envtint"] or [1.0, 1.0, 1.0]
                 f.write(f"envtint {t[0]:.4f} {t[1]:.4f} {t[2]:.4f}\n")
+            if m["globalwetness"] is not None:
+                if not m["envmap"]:
+                    raise ValueError(f"{mat}: GlobalWetness proxy has no $envmap")
+                f.write(f"globalwetness {m['globalwetness']:.6f}\n")
             if m["glass"]:
                 f.write("glass 1\n")                # our semantic: UE thin refractive glass
             if m["bump"]:

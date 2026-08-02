@@ -382,6 +382,22 @@ class GlassMaterialContractTests(unittest.TestCase):
         self.assertEqual(first.getpixel((3, 3)), (128, 128, 255))
         self.assertNotEqual(first.getpixel((1, 3)), (128, 128, 255))
 
+    def test_derived_normal_resamples_independently_sized_mask(self) -> None:
+        source = Image.new("RGBA", (8, 8), (0, 0, 0, 255))
+        for y in range(8):
+            for x in range(8):
+                value = x * 30
+                source.putpixel((x, y), (value, value, value, 255))
+        mask = Image.new("L", (2, 2), 0)
+        mask.putpixel((0, 0), 255)
+        mask.putpixel((0, 1), 255)
+
+        normal = derive_normal(source, mask, blur_radius=0.0)
+
+        self.assertEqual(normal.size, source.size)
+        self.assertNotEqual(normal.getpixel((1, 3)), (128, 128, 255))
+        self.assertEqual(normal.getpixel((6, 3)), (128, 128, 255))
+
     def test_uniform_glass_normal_is_neutral(self) -> None:
         normal = derive_normal(Image.new("RGBA", (5, 5), (100, 120, 140, 80)))
         self.assertEqual(set(normal.get_flattened_data()), {(128, 128, 255)})
