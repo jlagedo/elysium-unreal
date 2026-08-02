@@ -152,7 +152,8 @@ def make_environment_collection():
         raise SystemExit("[make_world_materials] could not create %s" % asset)
     values = {
         "GlobalWetness": 0.0,
-        "RainEnhancement": 1.0,
+        "WetnessOutputScale": 1.0,
+        "RainEnhancement": 0.0,
         "RainWetDarken": 0.06,
         "RainWetRoughness": 0.10,
         "RainLightResponse": 0.25,
@@ -253,13 +254,19 @@ def build_world_graph(mat):
     global_wetness = _collection_scalar(mat, "GlobalWetness", -900, 2160)
     wetness_scale = _scalar(mat, "WetnessScale", 0.0, -900, 2240)
     wetness_driven = _scalar(mat, "WetnessDriven", 0.0, -900, 2320)
-    wet_amount = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -660, 2200)
-    connect(global_wetness, "", wet_amount, "A")
-    connect(wetness_scale, "", wet_amount, "B")
+    wetness_output_scale = _collection_scalar(mat, "WetnessOutputScale", -900, 2400)
+    wet_authored = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -660, 2200)
+    connect(global_wetness, "", wet_authored, "A")
+    connect(wetness_scale, "", wet_authored, "B")
+    wet_scaled = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -500, 2160)
+    connect(wet_authored, "", wet_scaled, "A")
+    connect(wetness_output_scale, "", wet_scaled, "B")
+    wet_amount = mel.create_material_expression(mat, unreal.MaterialExpressionSaturate, -340, 2160)
+    connect(wet_scaled, "", wet_amount, "")
     one = mel.create_material_expression(mat, unreal.MaterialExpressionConstant, -660, 2320)
     one.set_editor_property("r", 1.0)
     wet_selector = mel.create_material_expression(
-        mat, unreal.MaterialExpressionLinearInterpolate, -440, 2240)
+        mat, unreal.MaterialExpressionLinearInterpolate, -160, 2240)
     connect(one, "", wet_selector, "A")
     connect(wet_amount, "", wet_selector, "B")
     connect(wetness_driven, "", wet_selector, "Alpha")

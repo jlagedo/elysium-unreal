@@ -460,13 +460,13 @@ void FElysiumCogWindow_Lights::RenderContent()
 	ImGui::SetNextItemWidth(SliderWidth);
 	bChanged |= SliderWithReset("Sun soft angle", Rig->SunSoftSourceAngleDegrees,
 		0.f, 5.f, 0.f, "%.3f deg");
+	ImGui::SetNextItemWidth(SliderWidth);
+	bChanged |= SliderWithReset("Specular", Rig->SpecularScale, 0.f, 1.f, 0.f, "%.2f");
+	ImGui::SetItemTooltip("Faithful baseline is zero: VtMB's world-light contribution is Lambertian. "
+		"This is the same live value exposed by Elysium.Environment.");
 
 	if (ImGui::CollapsingHeader("Advanced calibration"))
 	{
-		ImGui::SetNextItemWidth(SliderWidth);
-		bChanged |= SliderWithReset("Specular", Rig->SpecularScale, 0.f, 1.f, 0.f, "%.2f");
-		ImGui::SetItemTooltip("Faithful baseline is zero: VtMB's world-light contribution is Lambertian.");
-
 		bool bPointShadows = Rig->bPointShadows;
 		bool bSpotShadows = Rig->bSpotShadows;
 		bool bSunShadows = Rig->bSunShadows;

@@ -114,8 +114,9 @@ reuse them).
 engine arrives as `FElysiumWorldServices`. `IElysiumEmbodiment` (bodies + the player's own view/
 teleport/damage/`+use`/camera, implemented by `AElysiumMapActor`), `IElysiumAudio` (voice,
 `AElysiumMapActor`), `IElysiumTravel` (`AElysiumMapActor`), `IElysiumPresenter` (fades/signs/
-dialog moments, `UElysiumPresentationSubsystem`). Any member may be null; every call site handles
-it. `Private/Tests/ElysiumTestServices.h` is the recording stub implementing all four.
+dialog moments, `UElysiumPresentationSubsystem`), `IElysiumWeather` (wetness and particle state,
+`AElysiumMapActor`). Any member may be null; every call site handles it.
+`Private/Tests/ElysiumTestServices.h` is the recording stub implementing all five.
 
 **Subsystems by scope** (`docs/architecture/runtime-architecture.md`): GameInstance —
 `UElysiumGameFlowSubsystem` (app state), `UElysiumGameStateSubsystem` (`G`, quest map, player
@@ -147,7 +148,8 @@ Shared readers: `ElysiumKeyValues.h`, `ElysiumRulebook.{h,cpp}`, `FElysiumSignDa
 
 `UElysiumCogSubsystem` (`#if ENABLE_COG`) registers the stock CogEngine windows plus the Elysium
 ones (`_Status`, `_Maps`, `_Lights`, `_Entities`, `_Inspector`, `_EventQueue`, `_WorldViz`,
-`_Audio`, `_SoundScheme`, `_Logic`, `_Scripting`, `_Npc`) over `FElysiumCogWindow`.
+`_Audio`, `_SoundScheme`, `_Logic`, `_Scripting`, `_Npc`, `_Environment`) over
+`FElysiumCogWindow`.
 `UElysiumEntityDebugSubsystem` hosts the `elysium.ent_*` verbs and world-viz layers.
 `ElysiumPick.{h,cpp}` is click-selection; `FElysiumGizmoLayer` the retained gizmo ISM.
 `UElysiumMcpSubsystem` is Layer 3, reached through `pipeline/src/elysium_pipeline/devtools/mcp_proxy.py`. Design:

@@ -1811,7 +1811,8 @@ bool FElysiumSantaMonicaRainContentTest::RunTest(const FString&)
 	if (TestNotNull(TEXT("one environment MPC loads"), Collection))
 	{
 		const TArray<FName> Names = Collection->GetScalarParameterNames();
-		for (const FName Name : {FName(TEXT("GlobalWetness")), FName(TEXT("RainEnhancement")),
+		for (const FName Name : {FName(TEXT("GlobalWetness")), FName(TEXT("WetnessOutputScale")),
+			FName(TEXT("RainEnhancement")),
 			FName(TEXT("RainWetDarken")), FName(TEXT("RainWetRoughness")),
 			FName(TEXT("RainLightResponse"))})
 		{

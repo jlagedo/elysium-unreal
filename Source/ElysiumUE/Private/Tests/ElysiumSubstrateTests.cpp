@@ -4330,11 +4330,11 @@ bool FElysiumStorySkipTest::RunTest(const FString&)
 // tutorial's own logic_auto chain end to end against the recording stub: no RHI, no actors,
 // no `$ELYSIUM_EXPORT_ROOT`. sp_tutorial_1's five logic_autos fire OnMapLoad at an NPC (WillTalk), a
 // door (Lock), a math_counter and a delayed wire; this reproduces that shape and adds one
-// entity per service, so all four seams are exercised by the same ignition.
+// entity per entity-addressed service; all five seams are exercised by the same world activation.
 //
 // The second half is the contract that makes the first half meaningful: the SAME defs on a
-// world with NO services must reach the SAME logical state. Embodiment, audio, travel and
-// presentation are outputs of the logic, never inputs to it.
+// world with NO services must reach the SAME logical state. Embodiment, audio, travel,
+// presentation, and weather are outputs of the logic, never inputs to it.
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWorldServicesTest, "Elysium.Substrate.WorldServices", GElysiumTestFlags)
@@ -4443,7 +4443,7 @@ bool FElysiumWorldServicesTest::RunTest(const FString&)
 		return -1.f;
 	};
 
-	// --- With services: the chain reaches all four seams ---------------------------------
+	// --- With services: the chain reaches all five seams ---------------------------------
 	FElysiumRecordingServices Rec;
 	Rec.bHasPlayer = true;
 	Rec.PlayerLocation = FVector(1000.f, 0.f, 0.f);

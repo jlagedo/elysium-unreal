@@ -300,6 +300,10 @@ public:
 	virtual void RemoveEmitter(const FElysiumEntityHandle& Entity) override;
 	void FireWeatherTimer(bool bRainOn);
 	FString GetWeatherDebugSummary() const;
+	const FElysiumWeatherTransition& GetWetnessTransition() const { return WetnessTransition; }
+	float GetPresentedWetness() const { return PresentedWetness; }
+	float GetPresentedWetnessScale() const { return PresentedWetnessScale; }
+	bool IsEnvironmentWetnessOverridden() const { return bEnvironmentWetnessOverride; }
 
 	// Live stats for the debug overlay, filled by LoadMap. The look and collider counts live on
 	// UElysiumMapVisuals / UElysiumMapCollision alongside the things they count.
@@ -342,6 +346,9 @@ private:
 	UPROPERTY(Transient) TMap<int32, TObjectPtr<UNiagaraComponent>> RainComponents;
 	TMap<int32, FElysiumWeatherEmitterState> RainEmitterStates;
 	FElysiumWeatherTransition WetnessTransition;
+	float PresentedWetness = 0.0f;
+	float PresentedWetnessScale = 1.0f;
+	bool bEnvironmentWetnessOverride = false;
 
 	// B7 — the 3D-skybox miniature's placement (`<map>.sky`), or the identity on the 65 maps
 	// with no `sky_camera`. Read at map load and used twice: the def parser carries sky-scope

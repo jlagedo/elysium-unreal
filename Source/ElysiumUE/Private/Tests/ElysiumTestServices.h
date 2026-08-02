@@ -1,6 +1,6 @@
 #pragma once
 
-// The recording world-services stub (11.2). Implements all four FElysiumWorldServices interfaces
+// The recording world-services stub (11.2). Implements all five FElysiumWorldServices interfaces
 // and writes one line per call into `Calls`, so a Substrate-tier test can assert what a map's logic
 // *did* — stood this body, played that voice, faded the screen, asked to travel — with no RHI, no
 // actors and no `$ELYSIUM_EXPORT_ROOT`. That is the tier the back-pointers used to make impossible.

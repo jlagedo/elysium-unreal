@@ -116,6 +116,15 @@ to one scalar each: asphalt `0.56`, six street materials `0.60`, and seven curb,
 grass, stone, and tile materials `1.00`. A missing channel, duplicate channel, malformed scale,
 unequal RGB triple, or proxy without `$envmap` is an export error.
 
+Those 14 values are the **Unofficial Patch authoring**, which is the project's default source:
+the pipeline resolves the installed game patch-first, just as that installation runs. The packed
+base-game versions of the same 14 VMT names carry `GlobalWetness` on only five materials, all at
+scale `1.0`; the patch changes asphalt to `0.56` and adds or retunes the street, curb, stone, and
+tile coverage above. This is provenance, not an A/B mode: the rebuild consumes the patch-first
+14-material contract and records the vanilla comparison so it is not mislabeled as original-retail
+material authoring. The BSP-side `10.0 / 20.0 / 0.0` keys and delayed wet/dry I/O are identical
+between base and patched `sm_hub_1`.
+
 ### `sm_hub_1`'s authored cycle
 
 `sm_hub_1` starts dry. `rain_on_timer` starts enabled and fires after a random **180–300 s**;
@@ -398,9 +407,47 @@ retail semantics do. In particular, the source does not yet justify a sphere, bo
 screen-space spawn field for the `radius=0` drop block: `precipitation=1`, `attach_type=11`, and the
 two unequal `bounds` values are the missing part of that distribution rule.
 
+### Wetness presentation slice
+
+The live Unreal slice connects only the material environment output. The entity world remains the
+single authority for the authored current/target transition and continues to process and serialize
+timers while a debug override is visible. `env_particle` state crosses the same `IElysiumWeather`
+seam as values, but this slice creates no Niagara components.
+
+One shared world-material graph maps the patch-authored reflection channel as:
+
+`wet = saturate(GlobalWetness × authored material scale × WetnessOutputScale)`
+
+`GlobalWetness` is the presented `0..1` state. `WetnessOutputScale` defaults to `1.0` and is an
+owner tuning multiplier; the authored per-material values remain `0.56`, `0.60`, and `1.00`.
+Materials without a valid `GlobalWetness` proxy remain unchanged. Source-reference presentation is
+the default (`RainEnhancement=0`): wetness changes the existing reflection response only. The same
+graph can add restrained base-colour darkening and roughness reduction when `RainEnhancement` is
+raised; it does not select another material or weather system.
+
+The Cog window `Elysium.Environment` exposes the live authored and presented values, transition
+time, patch material groups, output scale, enhancement parameters, and authored timer buttons. Its
+manual wetness override replaces presentation only: the entity state and scheduled I/O keep running,
+and selecting **Follow authored** reveals the current authored value without restarting the cycle.
+It also exposes the light rig's existing `SpecularScale` as **Local-light specular**, shared live
+with `Elysium.Lights` rather than stored as a second environment value. Zero is the source-light
+baseline. A non-zero value affects every non-overridden light and is an explicit presentation test,
+not part of the authored `GlobalWetness` channel.
+
+| Console variable | Default | Live role |
+|---|---:|---|
+| `elysium.EnvironmentWetnessOverride` | `0` | Select manual or authored presentation |
+| `elysium.EnvironmentWetness` | `1.0` | Manual presented wetness |
+| `elysium.EnvironmentWetnessScale` | `1.0` | Output multiplier after the authored material scale |
+| `elysium.RainEnhancement` | `0.0` | Blend source-reference and enhanced response in the same graph |
+| `elysium.RainWetDarken` | `0.06` | Maximum full-wet enhanced base-colour darkening |
+| `elysium.RainWetRoughness` | `0.10` | Maximum full-wet enhanced roughness reduction |
+| `elysium.RainLightResponse` | `0.25` | Retained particle tuning; no effect while Niagara is disconnected |
+
 ### Static cover data
 
-`sm_hub_1.weather.json` is the versioned seam for the patch-first particle/VMT/entity facts. Its
+`sm_hub_1.weather.json` is the versioned seam for the patch-first particle, entity, and cover facts;
+the resolved VMT scalars are carried by `globalwetness` tokens in `sm_hub_1.mtl`. Its
 map footprint is **28,971.24 × 19,639.28 cm**, from Unreal-space `(-8285.48, -8585.20)` to
 `(20685.76, 11054.08)`. The generated 2048² R16 maximum-height texture uses 245,567 world and
 rain-blocking static-geometry triangles and has 964,071 covered texels. Sky, decals, ropes, water,
@@ -424,8 +471,9 @@ camera-motion behavior are comparison evidence, not artist tuning targets until 
 
 Deferred source-defined work remains the sewer `WaterDrops_Timer` layer, fixed `func_particle`
 rain boxes, NPC shelter behavior, lightning, other maps, and the general particle runtime. The
-disabled base-game `RainSheets`/`RainMist2` blocks remain disabled. Enhanced wet darkening,
-roughness, local-light response, and any additional mist stay behind the faithful retail gate.
+disabled base-game `RainSheets`/`RainMist2` blocks remain disabled. Enhanced wet darkening and
+roughness remain zero by default and owner-tunable beside the source response; local-light response
+and any additional mist stay behind the particle retail gate.
 
 When presentation work resumes, measure fresh dry/rain A/B pairs on one fixed generated asset set
 at the existing `sm_hub_1` vantages. At 2560×1440 native on the measured RTX 5070 Ti, rain may add

@@ -10,6 +10,7 @@
 #include "HAL/IConsoleManager.h"
 #include "Debug/ElysiumCogWindow_Audio.h"
 #include "Debug/ElysiumCogWindow_Entities.h"
+#include "Debug/ElysiumCogWindow_Environment.h"
 #include "Debug/ElysiumCogWindow_EventQueue.h"
 #include "Debug/ElysiumCogWindow_Inspector.h"
 #include "Debug/ElysiumCogWindow_Lights.h"
@@ -120,6 +121,7 @@ void UElysiumCogSubsystem::PostInitialize()
 	Cog->AddWindow<FElysiumCogWindow_Status>("Elysium.Status");
 	Cog->AddWindow<FElysiumCogWindow_Maps>("Elysium.Maps");
 	Cog->AddWindow<FElysiumCogWindow_Lights>("Elysium.Lights");
+	Cog->AddWindow<FElysiumCogWindow_Environment>("Elysium.Environment");
 	Cog->AddWindow<FElysiumCogWindow_Entities>("Elysium.Entities");
 	Cog->AddWindow<FElysiumCogWindow_Inspector>("Elysium.Entity Inspector");
 	Cog->AddWindow<FElysiumCogWindow_Logic>("Elysium.Logic");

@@ -647,14 +647,15 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
 - [ ] **7.9 Weather & wetness** *(facts + translation boundary: `docs/vtmb/weather.md`)* — the
   verified `sm_hub_1` work is retained as data and logic: strict patch-first particle/VMT closure,
   versioned weather sidecar, corrected 2048² R16 cover map, serializable wetness/emitter ramps,
-  `env_particle` I/O/fanout, and rain audio fades. The first Niagara/material prototype proved
-  the normal map-load and authored-I/O seam, but its spawn field, lifetime, size, opacity, impact,
-  fog, and cover presentation depended on unresolved semantics and did not establish a faithful
-  visual baseline. The presentation service is deliberately disconnected from normal map loads
-  while RE23 settles `attach_type=11`, `bounds`, distribution, lifetime/keyframe units, blend/mask
-  semantics, and retail appearance. Generated presentation code/assets remain a scaffold, not an
-  accepted implementation. Sewer drips, fixed `func_particle` boxes, NPC shelter behavior,
-  lightning, other maps, and a general particle runtime remain deferred. *Deps:* PL12, RE23.
+  `env_particle` I/O/fanout, and rain audio fades. The patch-first wetness slice is live through one
+  `IElysiumWeather` service and one shared world-material graph: authored transitions drive the
+  environment MPC, while `Elysium.Environment` exposes a presentation-only override, live state,
+  the patch's `0.56 / 0.60 / 1.00` material groups, output scale, source-reference mode, enhanced
+  tuning, and authored timer buttons. The override never alters or pauses entity/save state.
+  `env_particle` presentation remains data-only while RE23 settles `attach_type=11`, `bounds`,
+  distribution, lifetime/keyframe units, blend/mask semantics, retail appearance, and the wetness
+  interpolation units. Sewer drips, fixed `func_particle` boxes, NPC shelter behavior, lightning,
+  other maps, and a general particle runtime remain deferred. *Deps:* PL12, RE23.
 
 **Slice acceptance** *(Track A criterion, re-based)*: side-by-side A/B match with the
 original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.

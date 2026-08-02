@@ -295,7 +295,7 @@ public:
 	UElysiumGameStateSubsystem* GetGameState() const { return GameState; }
 
 	// --- The outbound seam (11.2) ------------------------------------------------------
-	// The four services, injected at construction. **Every one may be null** — a headless world has
+	// The five services, injected at construction. **Every one may be null** — a headless world has
 	// none, `elysium.NpcBodies 0` runs without an embodiment, and Presenter has no production
 	// implementation where nothing publishes a view. Call sites check; the world never manufactures
 	// a substitute.
