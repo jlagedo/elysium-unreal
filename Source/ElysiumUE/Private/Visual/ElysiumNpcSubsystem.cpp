@@ -1,6 +1,8 @@
 #include "ElysiumNpcSubsystem.h"
 
 #include "ElysiumContentPaths.h"
+#include "Visual/ElysiumFacialRig.h"
+#include "Visual/ElysiumNpcAnimInstance.h"
 #include "Visual/ElysiumNpcAnimSubsystem.h"
 #include "Visual/ElysiumNpcVisual.h"
 
@@ -18,8 +20,73 @@
 #include "HAL/PlatformTime.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/Paths.h"
+#include "UObject/UObjectIterator.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumNpc, Log, All);
+
+namespace
+{
+	// What a face can be told to do, read straight off the sidecar. This is the answer when nothing
+	// is standing yet — the whole controller vocabulary, grouped by the five shipped families, plus
+	// the reconstructed eyelid hinges.
+	void DumpFacialRigFromDisk(UGameInstance* GameInstance, const FString& Stem)
+	{
+		UElysiumNpcAnimSubsystem* Anims = GameInstance
+			? GameInstance->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+		if (Anims == nullptr || Stem.IsEmpty())
+		{
+			UE_LOG(LogElysiumNpc, Warning,
+				TEXT("npc.flex_dump: no live rigged NPC; name a stem to read its rig off disk"));
+			return;
+		}
+		const TSharedPtr<const FElysiumFacialRig> Rig = Anims->GetFacialRig(Stem);
+		if (!Rig.IsValid())
+		{
+			UE_LOG(LogElysiumNpc, Warning, TEXT("npc.flex_dump: '%s' carries no facial flex rig"), *Stem);
+			return;
+		}
+		UE_LOG(LogElysiumNpc, Display, TEXT("%s: %d controllers, %d rules, %d morphs, %d lid(s)"),
+			*Rig->Stem, Rig->Controllers.Num(), Rig->Rules.Num(), Rig->Morphs.Num(), Rig->Lids.Num());
+		for (const FElysiumFlexController& Controller : Rig->Controllers)
+		{
+			UE_LOG(LogElysiumNpc, Display, TEXT("  ctl   %-24s %-10s [%.2f..%.2f]"),
+				*Controller.Name, *Controller.Type, Controller.Min, Controller.Max);
+		}
+		for (const FElysiumFlexLid& Lid : Rig->Lids)
+		{
+			UE_LOG(LogElysiumNpc, Display,
+				TEXT("  lid   %-24s lowered %.3f  neutral %.3f  raised %.3f"),
+				*Rig->FlexDescs[Lid.FlexDesc], Lid.LoweredAngle, Lid.NeutralAngle, Lid.RaisedAngle);
+		}
+	}
+}
+
+TArray<UElysiumNpcAnimInstance*> UElysiumNpcSubsystem::FacialBodies(const FString& StemFilter) const
+{
+	TArray<UElysiumNpcAnimInstance*> Bodies;
+	const UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
+	if (World == nullptr)
+	{
+		return Bodies;
+	}
+	// Every rigged body in the world, however it was spawned: the map's `npc_*` entities and this
+	// harness's preview bodies both stand on UElysiumNpcAnimInstance, and the rig knows its own stem,
+	// so one iteration covers both without either side registering anywhere.
+	for (TObjectIterator<UElysiumNpcAnimInstance> It; It; ++It)
+	{
+		UElysiumNpcAnimInstance* Inst = *It;
+		const FElysiumFacialRig* Rig = IsValid(Inst) ? Inst->GetFacialRig() : nullptr;
+		if (Rig == nullptr || Inst->GetWorld() != World)
+		{
+			continue;
+		}
+		if (StemFilter.IsEmpty() || Rig->Stem.Contains(StemFilter, ESearchCase::IgnoreCase))
+		{
+			Bodies.Add(Inst);
+		}
+	}
+	return Bodies;
+}
 
 TArray<FString> UElysiumNpcSubsystem::AvailableGlbStems()
 {
@@ -122,6 +189,102 @@ void UElysiumNpcSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 					*Pair.Key, *Pair.Value.Owner,
 					Pair.Value.Activity.IsEmpty() ? TEXT("-") : *Pair.Value.Activity,
 					Pair.Value.Weight, Pair.Value.Seconds());
+			}
+		}),
+		ECVF_Cheat));
+
+	// elysium.npc.flex <controller> <value> [stem] -- write one flex controller on every live facial
+	// body (12.3). Controllers are the whole input surface: everything below one is arithmetic
+	// replayed from the rig, so this is the acceptance instrument until 12.1's scene expression
+	// tracks and 12.5's lipsync start writing the same values. `blink 1` closes both pairs of lids
+	// through the four eyelid rules; `right_lid_droop 1` moves one lid partway, which is the RPN
+	// layer showing itself rather than a 1:1 passthrough.
+	ConsoleObjects.Add(CM.RegisterConsoleCommand(
+		TEXT("elysium.npc.flex"),
+		TEXT("elysium.npc.flex <controller> <value> [stem] -- set a facial flex controller (e.g. blink 1) on every live rigged NPC, or only those whose model stem contains <stem>"),
+		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
+		{
+			if (Args.Num() < 2)
+			{
+				UE_LOG(LogElysiumNpc, Warning, TEXT("npc.flex: needs <controller> <value>"));
+				return;
+			}
+			const FString Controller = Args[0];
+			const float Value = FCString::Atof(*Args[1]);
+			int32 Written = 0, Missing = 0;
+			for (UElysiumNpcAnimInstance* Inst : FacialBodies(Args.Num() > 2 ? Args[2] : FString()))
+			{
+				(Inst->SetFlexController(Controller, Value) ? Written : Missing)++;
+			}
+			UE_LOG(LogElysiumNpc, Display, TEXT("npc.flex %s=%.3f -> %d body(ies)%s"),
+				*Controller, Value, Written,
+				Missing > 0 ? *FString::Printf(TEXT("; %d rig(s) carry no such controller"), Missing)
+					: TEXT(""));
+		}),
+		ECVF_Cheat));
+
+	ConsoleObjects.Add(CM.RegisterConsoleCommand(
+		TEXT("elysium.npc.flex_reset"),
+		TEXT("elysium.npc.flex_reset [stem] -- put every facial flex controller back to rest, which leaves every morph target at zero"),
+		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
+		{
+			const TArray<UElysiumNpcAnimInstance*> Bodies = FacialBodies(Args.Num() > 0 ? Args[0] : FString());
+			for (UElysiumNpcAnimInstance* Inst : Bodies)
+			{
+				Inst->ResetFlexControllers();
+			}
+			UE_LOG(LogElysiumNpc, Display, TEXT("npc.flex_reset -> %d body(ies)"), Bodies.Num());
+		}),
+		ECVF_Cheat));
+
+	// The read side of the same surface, and the way to find out what a face can be told to do.
+	// With a live body it reports what the three layers currently resolve to; with none, a stem
+	// argument reads the sidecar off disk, so the controller names are answerable before a map is.
+	ConsoleObjects.Add(CM.RegisterConsoleCommand(
+		TEXT("elysium.npc.flex_dump"),
+		TEXT("elysium.npc.flex_dump [stem] -- report each live rigged NPC's controllers and its non-zero flexdesc/morph weights; with no live body, list a stem's rig off disk"),
+		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
+		{
+			const FString Filter = Args.Num() > 0 ? Args[0] : FString();
+			const TArray<UElysiumNpcAnimInstance*> Bodies = FacialBodies(Filter);
+			if (Bodies.IsEmpty())
+			{
+				DumpFacialRigFromDisk(GetGameInstance(), Filter);
+				return;
+			}
+			for (const UElysiumNpcAnimInstance* Inst : Bodies)
+			{
+				const FElysiumFacialRig& Rig = *Inst->GetFacialRig();
+				const TArray<float>& Controllers = Inst->GetFlexControllerValues();
+				const TArray<float>& Flexes = Inst->GetFlexWeights();
+				const TArray<float>& Morphs = Inst->GetMorphWeights();
+				UE_LOG(LogElysiumNpc, Display,
+					TEXT("%s: %d controllers, %d rules, %d morphs, %d lid(s)"), *Rig.Stem,
+					Rig.Controllers.Num(), Rig.Rules.Num(), Rig.Morphs.Num(), Rig.Lids.Num());
+				for (int32 i = 0; i < Controllers.Num(); ++i)
+				{
+					if (Controllers[i] != 0.f)
+					{
+						UE_LOG(LogElysiumNpc, Display, TEXT("  ctl   %-24s %.3f"),
+							*Rig.Controllers[i].Name, Controllers[i]);
+					}
+				}
+				for (int32 i = 0; i < Flexes.Num(); ++i)
+				{
+					if (!FMath::IsNearlyZero(Flexes[i]))
+					{
+						UE_LOG(LogElysiumNpc, Display, TEXT("  flex  %-24s %.4f"),
+							*Rig.FlexDescs[i], Flexes[i]);
+					}
+				}
+				for (int32 i = 0; i < Morphs.Num(); ++i)
+				{
+					if (!FMath::IsNearlyZero(Morphs[i]))
+					{
+						UE_LOG(LogElysiumNpc, Display, TEXT("  morph %-24s %.4f"),
+							*Rig.Morphs[i].Name, Morphs[i]);
+					}
+				}
 			}
 		}),
 		ECVF_Cheat));
@@ -252,10 +415,24 @@ AActor* UElysiumNpcSubsystem::LoadTestNpc(const FString& Stem, const FString& An
 	USkeletalMeshComponent* Component = NewObject<USkeletalMeshComponent>(Actor);
 	Component->SetMobility(EComponentMobility::Movable);
 	Component->SetSkeletalMeshAsset(Mesh);
+	// The same animation host the map's own bodies stand on, installed before the component
+	// registers so it owns the pose from frame one. The preview body carries no A/B against the
+	// single-node instance because a single-node instance has no facial track at all: the face is
+	// the reason this harness needs the real host.
+	Component->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+	Component->SetAnimInstanceClass(UElysiumNpcAnimInstance::StaticClass());
 	Actor->SetRootComponent(Component);
 	Component->RegisterComponent();
 	Component->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	if (Anim != nullptr)
+	if (UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Component->GetAnimInstance()))
+	{
+		Inst->SetFacialRig(Anims ? Anims->GetFacialRig(Stem) : nullptr);
+		if (Anim != nullptr)
+		{
+			Inst->PlayClip(Anim, /*bLoop=*/true);
+		}
+	}
+	else if (Anim != nullptr)
 	{
 		Component->PlayAnimation(Anim, /*bLooping=*/true);
 	}
@@ -318,7 +495,14 @@ bool UElysiumNpcSubsystem::PlayClipOn(int32 Index, const FString& ClipName, FStr
 			OutError.IsEmpty() ? TEXT("no animation subsystem") : *OutError);
 		return false;
 	}
-	Component->PlayAnimation(Anim, /*bLooping=*/true);
+	if (UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Component->GetAnimInstance()))
+	{
+		Inst->PlayClip(Anim, /*bLoop=*/true);
+	}
+	else
+	{
+		Component->PlayAnimation(Anim, /*bLooping=*/true);
+	}
 	Record.Anim = Anim;
 	Record.AnimName = ClipName;
 	UE_LOG(LogElysiumNpc, Display, TEXT("npc.play: %s -> %s"), *Record.Stem, *ClipName);

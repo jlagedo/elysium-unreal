@@ -13,6 +13,7 @@ void UElysiumNpcAnimSubsystem::Deinitialize()
 {
 	BankAssets.Reset();
 	ClipSets.Reset();
+	FacialRigs.Reset();
 	Super::Deinitialize();
 }
 
@@ -69,6 +70,49 @@ const FElysiumNpcClipSet* UElysiumNpcAnimSubsystem::GetClipSet(const FString& St
 	}
 	ClipSets.Add(Stem, Set);
 	return Set.Get();
+}
+
+TSharedPtr<const FElysiumFacialRig> UElysiumNpcAnimSubsystem::GetFacialRig(const FString& Stem)
+{
+	if (Stem.IsEmpty())
+	{
+		return nullptr;
+	}
+	if (const TSharedPtr<const FElysiumFacialRig>* Cached = FacialRigs.Find(Stem))
+	{
+		return *Cached;
+	}
+
+	// The index names the sidecar, so a model with no flex rig is answered without touching the
+	// disk — and answered null, which is a normal load, not a failure.
+	const FElysiumNpcIndexEntry* Entry = GetIndex().Npcs.Find(Stem);
+	TSharedPtr<const FElysiumFacialRig> Result;
+	if (Entry != nullptr && !Entry->Facial.IsEmpty())
+	{
+		TSharedPtr<FElysiumFacialRig> Rig = MakeShared<FElysiumFacialRig>();
+		FString Error;
+		if (!Rig->Load(Entry->Facial, Error))
+		{
+			UE_LOG(LogElysiumNpcAnim, Warning, TEXT("facial '%s': %s"), *Stem, *Error);
+		}
+		else if (!Rig->IsValid())
+		{
+			// A rig with nothing to weight is answered the same way as no rig at all, so no body
+			// carries a facial track that cannot move anything.
+			UE_LOG(LogElysiumNpcAnim, Verbose,
+				TEXT("facial '%s': %d controllers, %d rules, no morph targets — no face to drive"),
+				*Stem, Rig->Controllers.Num(), Rig->Rules.Num());
+		}
+		else
+		{
+			UE_LOG(LogElysiumNpcAnim, Verbose,
+				TEXT("facial '%s': %d controllers, %d rules, %d morphs, %d lid(s)"), *Stem,
+				Rig->Controllers.Num(), Rig->Rules.Num(), Rig->Morphs.Num(), Rig->Lids.Num());
+			Result = Rig;
+		}
+	}
+	FacialRigs.Add(Stem, Result);
+	return Result;
 }
 
 UglTFRuntimeAsset* UElysiumNpcAnimSubsystem::GetBankAsset(const FString& BankStem, FString& OutError)

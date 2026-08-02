@@ -27,11 +27,19 @@ private:
 	// above the glTF test harness; reads the entity world, not the elysium.npc.load spike.
 	void RenderLiveNpcs();
 
+	// The facial flex rig (12.3): one slider per flex controller on every live rigged body, and the
+	// weights the rules and ramps derive from them. Sliding `blink` closes the lids through four RPN
+	// rules; the flexdesc and morph tables beside it are the two derived layers, live. Scriptable
+	// echo: elysium.npc.flex / elysium.npc.flex_dump.
+	void RenderFacial();
+
 	FString PendingStem;             // stem in the input box (glb under out/npc)
 	FString PendingAnim;             // clip name in the input box ("" = first animation)
 	FString LastError;               // last Load failure, shown inline
 	bool bStemsDirty = true;         // rescan out/npc on first open / Rescan
 	TArray<FString> Stems;           // cached available glb stems
+	FString FacialFilter;            // stem substring the Facial tab addresses ("" = every body)
+	bool bFacialNonZeroOnly = true;  // hide the flexdesc/morph rows sitting at rest
 };
 
 #endif // ENABLE_COG

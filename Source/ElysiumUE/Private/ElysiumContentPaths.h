@@ -205,6 +205,12 @@ struct FElysiumContentPaths
 	static FString NpcBankGlb(const FString& RelGlb) { return NpcDir() / RelGlb; }
 	static FString AnimatedPropGlb(const FString& RelGlb) { return NpcDir() / RelGlb; }
 
+	// The facial flex rig beside a rigged NPC's glb (12.3, PL10): the FACS flexdesc names, the 44
+	// flex controllers, the 60 RPN flex rules, the amplitude jaw and the per-morph target ramps,
+	// index-aligned with the glb's morph targets. RelPath is `npc_index.json`'s own
+	// `npcs[stem].facial` ("facial/<stem>.json"); a model with no flex rig names none.
+	static FString NpcFacial(const FString& RelPath) { return NpcDir() / RelPath; }
+
 	// The labelled sky set (debug, sky-ambience RE-A2/B1). Six self-describing face images —
 	// suffix, predicted axis, TOP banner, up arrow, tagged corners, edge neighbours — authored by
 	// research/tooling/probes/sky_probe.py, which also installs them into the *original* game so the two ends of the

@@ -8,6 +8,7 @@
 #include "ElysiumNpcAnimInstance.generated.h"
 
 class UAnimSequence;
+struct FElysiumFacialRig;
 
 // The NPC animation host (roadmap 8.5) — a native C++ anim instance, no Blueprint and no anim
 // graph asset.
@@ -22,6 +23,12 @@ class UAnimSequence;
 // Two sequence players and a lerp: a request starts a crossfade from whatever is currently
 // playing to the new clip. Repeating the same looping stance is a no-op; a one-shot request or a
 // loop-mode change restarts from frame zero, which scripted_sequence/choreo playback requires.
+//
+// A second, independent track rides over that pose: the face (roadmap 12.3). It is not a clip —
+// VtMB authors no facial animation as keyframes — but a rig evaluated from flex controller values
+// (`Visual/ElysiumFacialRig.h`), emitted as morph-target curves. The body and the face never
+// interact: a crossfade between two stances does not touch the face, and a blink does not touch
+// the pose.
 
 USTRUCT()
 struct FElysiumNpcAnimProxy : public FAnimInstanceProxy
@@ -51,7 +58,20 @@ struct FElysiumNpcAnimProxy : public FAnimInstanceProxy
 	bool IsPlayingLoop() const { return bPlayingLoop; }
 	bool IsBlending() const { return BlendAlpha < 1.f; }
 
+	// The facial morph track (12.3): the rig's evaluated morph weights, published from the game
+	// thread and emitted as morph-target anim curves over whatever pose the body produced. Two
+	// parallel arrays in the rig's own morph order — a name list that changes only when the body's
+	// model does, and weights that change whenever a flex controller is written.
+	void SetFacialTrack(TArray<FName>&& InCurves);
+	void SetFacialWeights(TArrayView<const float> InWeights);
+
 private:
+	// The body half of Evaluate: the crossfade between the two sequence players.
+	void EvaluateBody(FPoseContext& Output);
+
+	TArray<FName> FacialCurves;
+	TArray<float> FacialWeights;
+
 	// Standalone (not _Standalone-suffixed by accident): the plain-C++ variant of the sequence
 	// player whose setters actually write, unlike the Blueprint-bound FAnimNode_SequencePlayer
 	// whose SetSequence is a no-op outside a compiled anim graph.
@@ -90,11 +110,44 @@ public:
 
 	UAnimSequence* GetPlayingClip() const { return Proxy.GetPlaying(); }
 
+	// --- the facial flex track (roadmap 12.3) ------------------------------------------------
+	//
+	// Install the body's flex rig (null for a model with no facial sidecar, which is an ordinary
+	// load — most animals, crowd bodies and every player body carry no flex data at all). Every
+	// controller starts at rest, which puts every morph target at exactly zero weight.
+	void SetFacialRig(TSharedPtr<const FElysiumFacialRig> InRig);
+	const FElysiumFacialRig* GetFacialRig() const { return FacialRig.Get(); }
+
+	// Flex controllers are the only writable facial state; the flexdesc weights and morph weights
+	// below them are arithmetic, re-derived on every write. Names are the rig's own (`blink`,
+	// `jaw_drop`, `right_lid_droop`), matched case-insensitively; false when this rig has no such
+	// controller. 12.1's scene expression tracks and 12.5's lipsync both land here.
+	bool SetFlexController(const FString& Name, float Value);
+	bool SetFlexControllerByIndex(int32 Index, float Value);
+	// Back to rest — every controller at zero, every morph target off.
+	void ResetFlexControllers();
+
+	// Read-back for the debug surface: the normalized controller inputs, the flexdesc weights the
+	// rules produced from them, and the ramped weight each morph target is driven at.
+	const TArray<float>& GetFlexControllerValues() const { return ControllerValues; }
+	const TArray<float>& GetFlexWeights() const { return FlexWeights; }
+	const TArray<float>& GetMorphWeights() const { return MorphWeights; }
+
 protected:
 	virtual FAnimInstanceProxy* CreateAnimInstanceProxy() override { return &Proxy; }
 	virtual void DestroyAnimInstanceProxy(FAnimInstanceProxy*) override {}
 
 private:
+	// Run the three layers and publish the result to the proxy. Called on every controller write
+	// rather than every frame: nothing below a controller changes on its own.
+	void EvaluateFacial();
+
 	UPROPERTY(Transient) FElysiumNpcAnimProxy Proxy;
+
+	TSharedPtr<const FElysiumFacialRig> FacialRig;
+	TArray<float> ControllerValues;
+	TArray<float> FlexWeights;
+	TArray<float> MorphWeights;
+
 	friend struct FElysiumNpcAnimProxy;
 };

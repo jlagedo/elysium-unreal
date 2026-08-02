@@ -74,6 +74,8 @@ namespace
 			(*Obj)->TryGetStringField(TEXT("model"), E.Model);
 			(*Obj)->TryGetNumberField(TEXT("bones"), E.Bones);
 			(*Obj)->TryGetNumberField(TEXT("clips"), E.ClipCount);
+			(*Obj)->TryGetStringField(TEXT("facial"), E.Facial);
+			(*Obj)->TryGetNumberField(TEXT("morphs"), E.MorphCount);
 			ReadStringArray(*Obj, TEXT("split_bones"), E.SplitRotationBones);
 			Out.Add(Pair.Key, MoveTemp(E));
 		}

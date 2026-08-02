@@ -7,6 +7,8 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumNpcSubsystem.h"
+#include "Visual/ElysiumFacialRig.h"
+#include "Visual/ElysiumNpcAnimInstance.h"
 
 #include "CogLocalizationConfig.h"   // COG_TCHAR_TO_CHAR
 #include "CogWidgets.h"
@@ -24,10 +26,13 @@ void FElysiumCogWindow_Npc::RenderHelp()
 		"glTFRuntime skeletal-path spike (P8 8.2). Pick a VtMB NPC exported to out/npc/<stem>.glb "
 		"(mdl_gltf.py: mesh + StudioBone skeleton + one RLE animation, a standard glTF 2.0 file) and "
 		"Load it: UElysiumNpcSubsystem runs it through glTFRuntime into a runtime USkeletalMesh + "
-		"UAnimSequence and spawns a skeletal-mesh actor in front of the player, playing the clip on a "
-		"single-node anim instance. The table shows what each load produced -- bone count, the "
+		"UAnimSequence and spawns a skeletal-mesh actor in front of the player, playing the clip on "
+		"the game's own UElysiumNpcAnimInstance. The table shows what each load produced -- bone count, the "
 		"animations present in the glb, the applied clip, load time, spawn location. Per-clip buttons "
-		"re-play any animation; Clear destroys the spawned NPCs. Same path the elysium.npc.* verbs drive.");
+		"re-play any animation; Clear destroys the spawned NPCs. Same path the elysium.npc.* verbs drive.\n\n"
+		"The Facial tab drives the flex rig on any live rigged body (12.3): 44 flex controllers as "
+		"sliders, and beside them the flexdesc weights the 60 RPN rules derive and the morph-target "
+		"weights the per-flex ramps derive from those.");
 }
 
 // The live `npc_*` / `npc_maker` entities in the loaded map (B3): what stands where and its latch
@@ -92,6 +97,133 @@ void FElysiumCogWindow_Npc::RenderLiveNpcs()
 	}
 }
 
+// The facial flex rig (12.3). Everything below a flex controller is arithmetic, so this tab is the
+// whole system in one view: the 44 controllers as sliders, and beside them the 65 flexdesc weights
+// the RPN rules derive and the morph-target weights the per-flex ramps derive from those. Sliding
+// `blink` moves four flexdescs and four morph targets and closes both pairs of lids.
+void FElysiumCogWindow_Npc::RenderFacial()
+{
+	UElysiumNpcSubsystem* Npc = GetNpcSubsystem();
+	if (Npc == nullptr)
+	{
+		ImGui::TextDisabled("NPC subsystem unavailable.");
+		return;
+	}
+
+	ImGui::SetNextItemWidth(GetDpiScale() * 160.f);
+	FCogWidgets::InputTextWithHint("##FacialFilter", "(every rigged body)", FacialFilter);
+	ImGui::SameLine();
+	ImGui::Checkbox("Non-zero only", &bFacialNonZeroOnly);
+
+	const TArray<UElysiumNpcAnimInstance*> Bodies = Npc->FacialBodies(FacialFilter);
+	if (Bodies.IsEmpty())
+	{
+		ImGui::TextDisabled("No live body carries a facial flex rig.");
+		ImGui::TextDisabled("Load a speaking character from the Preview lab, or stand in a map with rigged NPCs.");
+		ImGui::TextDisabled("Animals, dancers, crowd bodies and every player body carry no flex data at all.");
+		return;
+	}
+	ImGui::SameLine();
+	if (ImGui::SmallButton("Reset all"))
+	{
+		for (UElysiumNpcAnimInstance* Inst : Bodies)
+		{
+			Inst->ResetFlexControllers();
+		}
+	}
+
+	for (int32 BodyIndex = 0; BodyIndex < Bodies.Num(); ++BodyIndex)
+	{
+		UElysiumNpcAnimInstance* Inst = Bodies[BodyIndex];
+		const FElysiumFacialRig& Rig = *Inst->GetFacialRig();
+		const TArray<float>& Values = Inst->GetFlexControllerValues();
+		const TArray<float>& Flexes = Inst->GetFlexWeights();
+		const TArray<float>& Morphs = Inst->GetMorphWeights();
+
+		ImGui::PushID(BodyIndex);
+		const FString Header = FString::Printf(TEXT("%s   %d controllers · %d rules · %d morphs · %d lid(s)"),
+			*Rig.Stem, Rig.Controllers.Num(), Rig.Rules.Num(), Rig.Morphs.Num(), Rig.Lids.Num());
+		// Only the first body opens by default: a crowded map stands dozens, and 44 sliders each
+		// would bury the one being driven.
+		if (ImGui::CollapsingHeader(COG_TCHAR_TO_CHAR(*Header),
+			BodyIndex == 0 ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_None))
+		{
+			// The controllers arrive grouped by family — eyelid, brow, nose, mouth, phoneme — so a
+			// family break is just a change of the type string.
+			FString CurrentType;
+			for (int32 i = 0; i < Rig.Controllers.Num() && i < Values.Num(); ++i)
+			{
+				const FElysiumFlexController& Controller = Rig.Controllers[i];
+				if (!Controller.Type.Equals(CurrentType))
+				{
+					CurrentType = Controller.Type;
+					ImGui::SeparatorText(COG_TCHAR_TO_CHAR(*CurrentType));
+				}
+				float Value = Values[i];
+				ImGui::PushID(i);
+				if (ImGui::SliderFloat(COG_TCHAR_TO_CHAR(*Controller.Name), &Value,
+					Controller.Min, Controller.Max))
+				{
+					Inst->SetFlexControllerByIndex(i, Value);
+				}
+				ImGui::PopID();
+			}
+
+			ImGui::SeparatorText("Derived");
+			const ImGuiTableFlags TableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
+				ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchProp;
+			const ImVec2 TableSize(0, GetDpiScale() * 120.f);
+			if (ImGui::BeginTable("##Derived", 2, ImGuiTableFlags_SizingStretchSame))
+			{
+				ImGui::TableNextRow();
+				ImGui::TableNextColumn();
+				ImGui::TextDisabled("flexdesc weights (the rules)");
+				if (ImGui::BeginTable("##Flexes", 2, TableFlags, TableSize))
+				{
+					ImGui::TableSetupScrollFreeze(0, 1);
+					ImGui::TableSetupColumn("Flexdesc");
+					ImGui::TableSetupColumn("Weight", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 56.f);
+					ImGui::TableHeadersRow();
+					for (int32 i = 0; i < Flexes.Num() && i < Rig.FlexDescs.Num(); ++i)
+					{
+						if (bFacialNonZeroOnly && FMath::IsNearlyZero(Flexes[i]))
+						{
+							continue;
+						}
+						ImGui::TableNextRow();
+						ImGui::TableNextColumn(); ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*Rig.FlexDescs[i]));
+						ImGui::TableNextColumn(); ImGui::Text("%.3f", Flexes[i]);
+					}
+					ImGui::EndTable();
+				}
+
+				ImGui::TableNextColumn();
+				ImGui::TextDisabled("morph weights (the target ramps)");
+				if (ImGui::BeginTable("##Morphs", 2, TableFlags, TableSize))
+				{
+					ImGui::TableSetupScrollFreeze(0, 1);
+					ImGui::TableSetupColumn("Morph target");
+					ImGui::TableSetupColumn("Weight", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 56.f);
+					ImGui::TableHeadersRow();
+					for (int32 i = 0; i < Morphs.Num() && i < Rig.Morphs.Num(); ++i)
+					{
+						if (bFacialNonZeroOnly && FMath::IsNearlyZero(Morphs[i]))
+						{
+							continue;
+						}
+						ImGui::TableNextRow();
+						ImGui::TableNextColumn(); ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*Rig.Morphs[i].Name));
+						ImGui::TableNextColumn(); ImGui::Text("%.3f", Morphs[i]);
+					}
+					ImGui::EndTable();
+				}
+				ImGui::EndTable();
+			}
+		}
+		ImGui::PopID();
+	}
+}
+
 void FElysiumCogWindow_Npc::RenderContent()
 {
 	Super::RenderContent();
@@ -103,6 +235,12 @@ void FElysiumCogWindow_Npc::RenderContent()
 	if (ImGui::BeginTabItem("Live map NPCs"))
 	{
 		RenderLiveNpcs();
+		ImGui::EndTabItem();
+	}
+
+	if (ImGui::BeginTabItem("Facial"))
+	{
+		RenderFacial();
 		ImGui::EndTabItem();
 	}
 

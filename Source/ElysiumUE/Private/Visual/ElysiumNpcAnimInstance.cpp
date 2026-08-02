@@ -1,5 +1,8 @@
 #include "Visual/ElysiumNpcAnimInstance.h"
 
+#include "Visual/ElysiumFacialRig.h"
+
+#include "Animation/AnimCurveElementFlags.h"
 #include "Animation/AnimSequence.h"
 #include "AnimationRuntime.h"
 
@@ -26,6 +29,9 @@ void FElysiumNpcAnimProxy::Initialize(UAnimInstance* InAnimInstance)
 	bNeedsReinit[0] = false;
 	bNeedsReinit[1] = false;
 	bInitialized = false;
+	// The facial track is not reset here: the rig is installed once per body, before or after this
+	// runs depending on when the component registers, and re-initializing the pose graph does not
+	// change which face the body wears.
 }
 
 void FElysiumNpcAnimProxy::CacheBones()
@@ -140,12 +146,12 @@ void FElysiumNpcAnimProxy::UpdateAnimationNode(const FAnimationUpdateContext& In
 	}
 }
 
-bool FElysiumNpcAnimProxy::Evaluate(FPoseContext& Output)
+void FElysiumNpcAnimProxy::EvaluateBody(FPoseContext& Output)
 {
 	if (!bInitialized || Players[Incoming].GetSequence() == nullptr)
 	{
 		Output.ResetToRefPose();
-		return true;
+		return;
 	}
 
 	// The incoming player always contributes; the outgoing one only while the crossfade runs,
@@ -156,7 +162,7 @@ bool FElysiumNpcAnimProxy::Evaluate(FPoseContext& Output)
 	if (BlendAlpha >= 1.f || Players[1 - Incoming].GetSequence() == nullptr)
 	{
 		Output = Incoming_;
-		return true;
+		return;
 	}
 
 	FPoseContext Outgoing(this);
@@ -168,7 +174,41 @@ bool FElysiumNpcAnimProxy::Evaluate(FPoseContext& Output)
 	// WeightOfPoseOne is the *first* argument's share, so the outgoing pose leads and the
 	// incoming one takes BlendAlpha.
 	FAnimationRuntime::BlendTwoPosesTogether(OutgoingData, IncomingData, 1.f - BlendAlpha, OutData);
+}
+
+bool FElysiumNpcAnimProxy::Evaluate(FPoseContext& Output)
+{
+	EvaluateBody(Output);
+
+	// The face is written last, over whatever the body produced — including the ref pose a body
+	// with no clip falls back to, so a facial-only preview still moves. VtMB's clips carry no curves
+	// at all, so nothing is being overwritten here; these names exist only because 12.3 puts them
+	// there. The curves reach the component's morph weights through the skeleton's morph-target
+	// curve metadata (`ElysiumNpcVisual::RegisterMorphTargetCurves`), and every morph is written
+	// every frame — including the zeros, which is what releases a controller that went back to rest.
+	const int32 Num = FMath::Min(FacialCurves.Num(), FacialWeights.Num());
+	for (int32 i = 0; i < Num; ++i)
+	{
+		Output.Curve.Set(FacialCurves[i], FacialWeights[i]);
+		Output.Curve.SetFlags(FacialCurves[i], UE::Anim::ECurveElementFlags::MorphTarget);
+	}
 	return true;
+}
+
+void FElysiumNpcAnimProxy::SetFacialTrack(TArray<FName>&& InCurves)
+{
+	FacialCurves = MoveTemp(InCurves);
+	FacialWeights.Reset(FacialCurves.Num());
+	FacialWeights.AddZeroed(FacialCurves.Num());
+}
+
+void FElysiumNpcAnimProxy::SetFacialWeights(TArrayView<const float> InWeights)
+{
+	const int32 Num = FMath::Min(FacialWeights.Num(), InWeights.Num());
+	for (int32 i = 0; i < Num; ++i)
+	{
+		FacialWeights[i] = InWeights[i];
+	}
 }
 
 void UElysiumNpcAnimInstance::PlayClip(UAnimSequence* Sequence, bool bLoop, float BlendSeconds)
@@ -190,4 +230,70 @@ void UElysiumNpcAnimInstance::SeekClip(float PositionSeconds)
 void UElysiumNpcAnimInstance::StopClip()
 {
 	GetProxyOnGameThread<FElysiumNpcAnimProxy>().Stop();
+}
+
+void UElysiumNpcAnimInstance::SetFacialRig(TSharedPtr<const FElysiumFacialRig> InRig)
+{
+	FacialRig = MoveTemp(InRig);
+	ControllerValues.Reset();
+	FlexWeights.Reset();
+	MorphWeights.Reset();
+
+	TArray<FName> Curves;
+	if (FacialRig.IsValid())
+	{
+		ControllerValues.AddZeroed(FacialRig->Controllers.Num());
+		Curves.Reserve(FacialRig->Morphs.Num());
+		for (const FElysiumFlexMorph& Morph : FacialRig->Morphs)
+		{
+			Curves.Add(Morph.Curve);
+		}
+	}
+	GetProxyOnGameThread<FElysiumNpcAnimProxy>().SetFacialTrack(MoveTemp(Curves));
+	// Publish the rest pose immediately: with every controller at zero the rules resolve each lid to
+	// its own hinge, so every morph target lands at exactly zero and the face is the authored mesh.
+	EvaluateFacial();
+}
+
+bool UElysiumNpcAnimInstance::SetFlexController(const FString& Name, float Value)
+{
+	const int32 Index = FacialRig.IsValid() ? FacialRig->FindController(Name) : INDEX_NONE;
+	return Index != INDEX_NONE && SetFlexControllerByIndex(Index, Value);
+}
+
+bool UElysiumNpcAnimInstance::SetFlexControllerByIndex(int32 Index, float Value)
+{
+	if (!FacialRig.IsValid() || !ControllerValues.IsValidIndex(Index))
+	{
+		return false;
+	}
+	const float Normalized = FacialRig->Controllers[Index].Normalize(Value);
+	if (ControllerValues[Index] != Normalized)
+	{
+		ControllerValues[Index] = Normalized;
+		EvaluateFacial();
+	}
+	return true;
+}
+
+void UElysiumNpcAnimInstance::ResetFlexControllers()
+{
+	if (ControllerValues.IsEmpty())
+	{
+		return;
+	}
+	FMemory::Memzero(ControllerValues.GetData(), ControllerValues.Num() * sizeof(float));
+	EvaluateFacial();
+}
+
+void UElysiumNpcAnimInstance::EvaluateFacial()
+{
+	if (!FacialRig.IsValid())
+	{
+		return;
+	}
+	FacialRig->Evaluate(ControllerValues, FlexWeights, MorphWeights);
+	// GetProxyOnGameThread blocks on any in-flight parallel evaluation, so the worker cannot be
+	// reading the weight array this overwrites.
+	GetProxyOnGameThread<FElysiumNpcAnimProxy>().SetFacialWeights(MorphWeights);
 }

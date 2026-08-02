@@ -17,12 +17,13 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumBodies, Log, All);
 
-// The NPC animation host. 1 = UElysiumNpcAnimInstance (two sequence players + a crossfade), 0 =
-// Unreal's single-node instance, which cannot blend, so every clip change pops. Applied at map
-// load, per body.
+// The NPC animation host. 1 = UElysiumNpcAnimInstance (two sequence players + a crossfade, and the
+// facial flex track over them), 0 = Unreal's single-node instance, which cannot blend, so every clip
+// change pops — and which has no facial track at all, so 0 also stands the cast with still faces.
+// Applied at map load, per body.
 static TAutoConsoleVariable<int32> CVarNpcAnim(
 	TEXT("elysium.NpcAnim"), 1,
-	TEXT("NPC animation host: the crossfading Elysium anim instance (1) or single-node (0). Applied at map load."),
+	TEXT("NPC animation host: the crossfading Elysium anim instance and its facial track (1) or single-node, no face (0). Applied at map load."),
 	ECVF_Default);
 
 // A/B toggle for the prop skin pass (8.3/8.4). 1 applies alternate skin families; 0 leaves every
@@ -305,6 +306,19 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 	Comp->RegisterComponent();
 	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);   // no AI, no physics body (B3)
 	Owner->AddInstanceComponent(Comp);
+	// The face (12.3). A model with no facial sidecar gets a null rig and animates with a still
+	// face — the normal case for animals, crowd bodies and every player body, none of which carry
+	// flex data. Nothing drives the controllers yet: scene expressions are 12.1's and lipsync 12.5's.
+	if (UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Comp->GetAnimInstance()))
+	{
+		if (UGameInstance* GI = Owner->GetGameInstance())
+		{
+			if (UElysiumNpcAnimSubsystem* Anims = GI->GetSubsystem<UElysiumNpcAnimSubsystem>())
+			{
+				Inst->SetFacialRig(Anims->GetFacialRig(Stem));
+			}
+		}
+	}
 	if (!IdleClip.IsEmpty())
 	{
 		PlayNpcClip(Comp, Stem, IdleClip, /*bLoop=*/true, /*OutSeconds=*/nullptr);

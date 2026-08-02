@@ -79,6 +79,11 @@ struct FElysiumNpcIndexEntry
 	FString Model;      // the source .mdl, for diagnostics
 	int32   Bones = 0;  // NPCs only
 	int32   ClipCount = 0;
+	// The facial flex rig sidecar, relative to out/npc ("facial/<stem>.json"), and how many glTF
+	// morph targets the glb carries. Both empty/zero on a model with no flex rig — most of the
+	// cast's animals, dancers and crowd bodies, and every player body.
+	FString Facial;
+	int32   MorphCount = 0;
 	// StudioBone names whose Flags & 0x2 select retail split rotation/translation inheritance.
 	// Optional in v3/v4 manifests; an older sidecar therefore retains conventional composition.
 	TArray<FString> SplitRotationBones;

@@ -7,6 +7,8 @@
 #include "glTFRuntimeParser.h"
 
 #include "Animation/AnimSequence.h"
+#include "Animation/MorphTarget.h"
+#include "Animation/Skeleton.h"
 #include "Engine/SkeletalMesh.h"
 #include "Materials/MaterialInterface.h"
 #include "UObject/UObjectGlobals.h"
@@ -39,6 +41,27 @@ namespace
 			if (!Node.Name.IsEmpty() && TargetRef.FindBoneIndex(NodeName) == INDEX_NONE)
 			{
 				Config.RemoveTracks.AddUnique(Node.Name);
+			}
+		}
+	}
+
+	// Declare every morph target the mesh came back with as a morph-target *curve* on its skeleton
+	// (12.3). An anim curve only reaches USkeletalMeshComponent::ActiveMorphTargets when the bone
+	// container flags it, and the bone container takes those flags from this metadata — so without
+	// this registration the facial track evaluates correctly and moves nothing.
+	void RegisterMorphTargetCurves(USkeletalMesh* Mesh)
+	{
+		USkeleton* Skeleton = Mesh ? Mesh->GetSkeleton() : nullptr;
+		if (Skeleton == nullptr)
+		{
+			return;
+		}
+		for (const TObjectPtr<UMorphTarget>& Morph : Mesh->GetMorphTargets())
+		{
+			if (Morph != nullptr)
+			{
+				Skeleton->AccumulateCurveMetaData(Morph->GetFName(), /*bMaterialSet=*/false,
+					/*bMorphtargetSet=*/true);
 			}
 		}
 	}
@@ -104,6 +127,13 @@ namespace ElysiumNpcVisual
 		// Elysium.Content.SkeletalGlbContracts validates the same contract over the complete export.
 		FglTFRuntimeSkeletalMeshConfig SkeletalMeshConfig;
 		SkeletalMeshConfig.bIgnoreMissingBones = false;
+		// A face is not one mesh: `AU27Z` on `nines` moves head, molar, lower-teeth, tongue and a
+		// neck-seam vertex across five of the model's eight material primitives. glTF weights are
+		// mesh-level, so the bake writes the same target list on every primitive and a target that
+		// spans two materials arrives as one same-named piece per primitive. Merge stitches those
+		// pieces into one UMorphTarget; the plugin default, Ignore, keeps the first piece and
+		// silently drops the rest — a jaw that moves and leaves its teeth behind.
+		SkeletalMeshConfig.MorphTargetsDuplicateStrategy = EglTFRuntimeMorphTargetsDuplicateStrategy::Merge;
 		if (bPlayerMaterial)
 		{
 			UMaterialInterface* BodyMaterial = LoadObject<UMaterialInterface>(nullptr,
@@ -126,6 +156,7 @@ namespace ElysiumNpcVisual
 			OutError = TEXT("LoadSkeletalMesh(mesh 0, skin 0) returned null");
 			return nullptr;
 		}
+		RegisterMorphTargetCurves(Mesh);
 
 		OutAsset = Asset;
 		return Mesh;

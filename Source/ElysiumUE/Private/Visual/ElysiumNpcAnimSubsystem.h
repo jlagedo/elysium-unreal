@@ -4,6 +4,7 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 
 #include "Substrate/ElysiumDisposition.h"
+#include "Visual/ElysiumFacialRig.h"
 #include "Visual/ElysiumNpcClips.h"
 
 #include "ElysiumNpcAnimSubsystem.generated.h"
@@ -45,6 +46,11 @@ public:
 	const FElysiumNpcIndex& GetIndex();
 	// out/npc/clips/<Stem>.json, cached per stem. Null when the stem has no slice.
 	const FElysiumNpcClipSet* GetClipSet(const FString& Stem);
+	// out/npc/facial/<Stem>.json, cached per stem (12.3). Null for a model with no flex rig, which
+	// is the normal case for animals, crowd bodies and every player body — the caller animates the
+	// body and leaves the face still. Shared rather than raw: an anim instance holds one for as long
+	// as its body lives, across map epochs this GI-scoped cache outlasts.
+	TSharedPtr<const FElysiumFacialRig> GetFacialRig(const FString& Stem);
 	// vdata/system/dispositiontable.txt, loaded once.
 	const FElysiumDispositionTable& GetDispositions();
 
@@ -101,4 +107,6 @@ private:
 	// Value is null for a stem whose slice is missing, so a failed read is remembered rather than
 	// retried on every NPC that shares the stem.
 	TMap<FString, TSharedPtr<FElysiumNpcClipSet>> ClipSets;
+	// Same shape, same reason: a null entry is the remembered "this model has no flex rig".
+	TMap<FString, TSharedPtr<const FElysiumFacialRig>> FacialRigs;
 };
