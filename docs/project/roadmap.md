@@ -594,8 +594,9 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
   **forced mirror** (roughness only scales brightness — acceptable for VtMB's mirror-like
   water), and **MegaLights does not light water surfaces** — verify the water direct-lighting
   path during this task. *Deps:* 0.4.
-- [x] **7.4 Master-material set (rest)** *(was M1.2)* — the four world masters
-  (`M_World_Opaque`/`_Masked`/`_Translucent`/`M_Additive`) from one generator
+- [x] **7.4 Master-material set (rest)** *(was M1.2)* — the generated surface masters
+  (`M_World_Opaque`, `M_World_Masked`, `M_World_Translucent`, `M_World_Glass`, `M_Refract`,
+  `M_Additive`) from one generator
   (`pipeline/unreal/make_world_materials.py`), the full feature set as named params: `Albedo`,
   `Emissive`+scale, `BumpMap`, `EnvMask`+`EnvStrength` ($envmap → **Lumen roughness**, see
   `docs/vtmb/reflections.md`), `BaseTex2`+`BlendAmount` (WorldVertexTransition via the `.blend` sidecar →

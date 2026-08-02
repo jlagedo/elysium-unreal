@@ -3,6 +3,8 @@
 #   M_World_Opaque       opaque world surfaces (the common case; grown from the old M_VtMB_World)
 #   M_World_Masked       $alphatest scissor surfaces (fences, grates, foliage) -- two-sided
 #   M_World_Translucent  $translucent surfaces (glass, water film) -- alpha-blended, lit per-pixel
+#   M_World_Glass        semantic lit/reflective glass -- Thin Translucent + Pixel Normal Offset
+#   M_Refract            Source Refract overlay -- clear Thin Translucent + authored DUDV PNO
 #   M_Additive           $additive glow overlays (light-fixture "on" panes, neon) -- unlit, additive
 #
 # The three lit world masters (Opaque/Masked/Translucent) share one surface graph built by
@@ -75,6 +77,14 @@ ROUGH_BASE = 1.0
 ROUGH_REFLECT = 0.15
 SPEC_BASE = 0.0
 SPEC_REFLECT = 0.5
+
+# Dedicated Thin Translucent glass defaults. Pixel Normal Offset maps 1.0 to neutral and 2.0
+# to full normal offset, so 1.08 produces the mild large-pane distortion the authored ripple
+# calls for without sampling far outside the scene colour. The texture's alpha remains the
+# exact whole-surface coverage; only its nearly-opaque texels become a painted top layer.
+GLASS_REFRACTION = 1.08
+GLASS_TINT_STRENGTH = 0.25
+GLASS_FRAME_EXPONENT = 8.0
 
 mel = unreal.MaterialEditingLibrary
 tools = unreal.AssetToolsHelpers.get_asset_tools()
@@ -285,6 +295,166 @@ def make_translucent():
     _save(mat, asset)
 
 
+def make_glass():
+    """Author the stable UE5 thin-glass path without changing generic transparency.
+
+    Albedo.A is the authored pane/frame coverage. The custom Thin Translucent output owns that
+    coverage and coloured transmission; root Opacity is only the optional painted layer on top.
+    Raising alpha to the eighth power makes low-alpha panes contribute essentially no diffuse
+    card while leaving the texture's fully opaque mullions and grime intact.
+    """
+    mat, asset = _fresh("M_World_Glass")
+    mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_THIN_TRANSLUCENT)
+    mat.set_editor_property(
+        "translucency_lighting_mode",
+        unreal.TranslucencyLightingMode.TLM_SURFACE_PER_PIXEL_LIGHTING)
+    mat.set_editor_property("refraction_method", unreal.RefractionMode.RM_PIXEL_NORMAL_OFFSET)
+
+    albedo = _tex_param(mat, "Albedo", -1100, -300)
+
+    # Thin transmission: lerp(white, authored RGB, 0.25). This keeps the dirty blue-green
+    # authored tint without treating its dark RGB as an opaque diffuse pane.
+    white = mel.create_material_expression(mat, unreal.MaterialExpressionConstant3Vector, -850, -80)
+    white.set_editor_property("constant", unreal.LinearColor(1.0, 1.0, 1.0, 1.0))
+    tint_strength = _scalar(
+        mat, "GlassTintStrength", GLASS_TINT_STRENGTH, -1100, 40)
+    transmittance = mel.create_material_expression(
+        mat, unreal.MaterialExpressionLinearInterpolate, -600, -180)
+    connect(white, "", transmittance, "A")
+    connect(albedo, "RGB", transmittance, "B")
+    connect(tint_strength, "", transmittance, "Alpha")
+
+    thin = mel.create_material_expression(
+        mat, unreal.MaterialExpressionThinTranslucentMaterialOutput, -300, -240)
+    connect(transmittance, "", thin, "TransmittanceColor")
+    connect(albedo, "A", thin, "SurfaceCoverage")
+
+    # Root opacity is the coloured/diffuse layer on top of thin glass, not the pane's whole
+    # coverage. alpha^8 retains fully opaque painted frames while a 0.27 pane becomes ~0.
+    frame_exp = _scalar(mat, "GlassFrameExponent", GLASS_FRAME_EXPONENT, -1100, 180)
+    frame_coverage = mel.create_material_expression(mat, unreal.MaterialExpressionPower, -600, 80)
+    connect(albedo, "A", frame_coverage, "Base")
+    connect(frame_exp, "", frame_coverage, "Exp")
+    connect_property(frame_coverage, "", unreal.MaterialProperty.MP_OPACITY)
+
+    # Thin Translucent's custom coverage is independent of the root opacity input. Explicitly
+    # premultiply the diffuse layer by the same frame coverage so low-alpha pane pixels cannot
+    # expose the authored blue albedo as a texture card. Fully painted frames and dirt retain
+    # their authored RGB, while pane tint remains exclusively in TransmittanceColor above.
+    diffuse_layer = mel.create_material_expression(
+        mat, unreal.MaterialExpressionMultiply, -430, 160)
+    connect(albedo, "RGB", diffuse_layer, "A")
+    connect(frame_coverage, "", diffuse_layer, "B")
+
+    # Preserve the same per-primitive Source fog term used by the other lit masters.
+    emis = _tex_param(mat, "Emissive", -1100, 360)
+    emis_scale = _scalar(mat, "EmissiveScale", 0.0, -1100, 540)
+    emis_mul = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -600, 400)
+    connect(emis, "RGB", emis_mul, "A")
+    connect(emis_scale, "", emis_mul, "B")
+    f, inv_f, fog_color = mat_fog.fog_from_primitive(mat)
+    connect_property(
+        mat_fog.fade(mat, diffuse_layer, "", inv_f, -180, -120),
+        "", unreal.MaterialProperty.MP_BASE_COLOR)
+    connect_property(
+        mat_fog.inscatter(
+            mat, mat_fog.fade(mat, emis_mul, "", inv_f, -180, 400),
+            f, fog_color, 40, 400),
+        "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+
+    # Existing $envmap/Lumen reflection contract. The mask localises Fresnel/specular and
+    # roughness exactly as on the other world masters; glass remains dielectric (Metallic=0).
+    env_mask = _tex_param(mat, "EnvMask", -1100, 760, white=True)
+    env_strength = _scalar(mat, "EnvStrength", 0.0, -1100, 940)
+    env_mul = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -820, 800)
+    connect(env_mask, "R", env_mul, "A")
+    connect(env_strength, "", env_mul, "B")
+    env = mel.create_material_expression(mat, unreal.MaterialExpressionSaturate, -660, 800)
+    connect(env_mul, "", env, "")
+
+    rough_base = _scalar(mat, "RoughBase", ROUGH_BASE, -1100, 1080)
+    rough_reflect = _scalar(mat, "RoughReflect", ROUGH_REFLECT, -1100, 1160)
+    rough = mel.create_material_expression(mat, unreal.MaterialExpressionLinearInterpolate, -520, 1060)
+    connect(rough_base, "", rough, "A")
+    connect(rough_reflect, "", rough, "B")
+    connect(env, "", rough, "Alpha")
+    connect_property(rough, "", unreal.MaterialProperty.MP_ROUGHNESS)
+
+    spec_base = _scalar(mat, "SpecBase", SPEC_BASE, -1100, 1300)
+    spec_reflect = _scalar(mat, "SpecReflect", SPEC_REFLECT, -1100, 1380)
+    spec = mel.create_material_expression(mat, unreal.MaterialExpressionLinearInterpolate, -520, 1320)
+    connect(spec_base, "", spec, "A")
+    connect(spec_reflect, "", spec, "B")
+    connect(env, "", spec, "Alpha")
+    connect_property(
+        mat_fog.specular(mat, inv_f, -280, 1300, source=spec),
+        "", unreal.MaterialProperty.MP_SPECULAR)
+
+    # Tangent normal drives both lighting and Pixel Normal Offset. Derived glass normals and
+    # real authored $bumpmap textures share this binding; an unbound surface remains flat.
+    bump = _tex_param(mat, "BumpMap", -1100, 1540, normal=True)
+    bump_amount = _scalar(mat, "BumpAmount", 0.0, -1100, 1720)
+    flat_n = mel.create_material_expression(mat, unreal.MaterialExpressionConstant3Vector, -820, 1500)
+    flat_n.set_editor_property("constant", unreal.LinearColor(0.0, 0.0, 1.0, 0.0))
+    normal = mel.create_material_expression(mat, unreal.MaterialExpressionLinearInterpolate, -520, 1560)
+    connect(flat_n, "", normal, "A")
+    connect(bump, "RGB", normal, "B")
+    connect(bump_amount, "", normal, "Alpha")
+    connect_property(normal, "", unreal.MaterialProperty.MP_NORMAL)
+
+    refraction = _scalar(mat, "GlassRefraction", GLASS_REFRACTION, -520, 1780)
+    connect_property(refraction, "", unreal.MaterialProperty.MP_REFRACTION)
+    _save(mat, asset)
+
+
+def make_refract():
+    """Author Source's framebuffer-distortion card as a clear UE5 thin surface.
+
+    A Refract VMT has no albedo in the common case: it samples the framebuffer through an
+    authored signed DUDV/normal field. White transmittance and full surface coverage preserve
+    that meaning without painting the vector texture onto the pane. Pixel Normal Offset is the
+    stable UE path for these large flat cards; 1.0 is neutral, so the original
+    ``$refractamount`` is added to one rather than interpreted as glass IOR.
+    """
+    mat, asset = _fresh("M_Refract")
+    mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_THIN_TRANSLUCENT)
+    mat.set_editor_property(
+        "translucency_lighting_mode",
+        unreal.TranslucencyLightingMode.TLM_SURFACE_PER_PIXEL_LIGHTING)
+    mat.set_editor_property("refraction_method", unreal.RefractionMode.RM_PIXEL_NORMAL_OFFSET)
+
+    refract_map = _tex_param(mat, "RefractMap", -760, -160, normal=True)
+    connect_property(refract_map, "RGB", unreal.MaterialProperty.MP_NORMAL)
+
+    amount = _scalar(mat, "SourceRefractAmount", 0.0, -760, 40)
+    neutral = mel.create_material_expression(mat, unreal.MaterialExpressionConstant, -760, 140)
+    neutral.set_editor_property("r", 1.0)
+    refraction = mel.create_material_expression(mat, unreal.MaterialExpressionAdd, -480, 60)
+    connect(neutral, "", refraction, "A")
+    connect(amount, "", refraction, "B")
+    connect_property(refraction, "", unreal.MaterialProperty.MP_REFRACTION)
+
+    # The overlay contributes no colour or attenuation of its own. It exists only to offset
+    # the scene sample; the actual pane tint/frame remains on the glass material behind it.
+    white = mel.create_material_expression(mat, unreal.MaterialExpressionConstant3Vector, -760, 300)
+    white.set_editor_property("constant", unreal.LinearColor(1.0, 1.0, 1.0, 1.0))
+    coverage = mel.create_material_expression(mat, unreal.MaterialExpressionConstant, -760, 420)
+    coverage.set_editor_property("r", 1.0)
+    thin = mel.create_material_expression(
+        mat, unreal.MaterialExpressionThinTranslucentMaterialOutput, -420, 320)
+    connect(white, "", thin, "TransmittanceColor")
+    connect(coverage, "", thin, "SurfaceCoverage")
+
+    no_top_layer = mel.create_material_expression(mat, unreal.MaterialExpressionConstant, -480, 500)
+    no_top_layer.set_editor_property("r", 0.0)
+    connect_property(no_top_layer, "", unreal.MaterialProperty.MP_OPACITY)
+    _save(mat, asset)
+
+
 def make_additive():
     mat, asset = _fresh("M_Additive")
     mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
@@ -319,6 +489,8 @@ def _save(mat, asset):
 make_opaque()
 make_masked()
 make_translucent()
+make_glass()
+make_refract()
 make_additive()
 
 # Retire the old single master: the runtime now loads M_World_Opaque. Leaving M_VtMB_World behind

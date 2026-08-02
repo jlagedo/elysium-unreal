@@ -105,6 +105,7 @@ def bake_maps(
             f"-script={config.repo_root / 'pipeline/unreal/bake_map.py'}",
             f"-BakeMaps={','.join(batch)}",
             f"-BakeStages={stages}",
+            "-AllowCommandletRendering",
             "-unattended",
             "-nosplash",
             "-nopause",

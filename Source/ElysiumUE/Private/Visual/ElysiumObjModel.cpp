@@ -137,6 +137,19 @@ void FElysiumObjModel::ParseMtlLines(const TArray<FString>& Lines, TMap<FString,
 		{
 			Cur->bAdditive = true;
 		}
+		else if (Key == TEXT("glass") && Tok.Num() >= 2 && Tok[1] == TEXT("1"))
+		{
+			Cur->bGlass = true;
+		}
+		else if (Key == TEXT("refract") && Tok.Num() >= 2)
+		{
+			Cur->bRefract = true;
+			Cur->RefractAmount = FCString::Atof(*Tok[1]);
+		}
+		else if (Key == TEXT("refractmap") && Tok.Num() >= 2)
+		{
+			Cur->RefractMap = Tok[1];
+		}
 		else if (Key == TEXT("bumpmap") && Tok.Num() >= 2)
 		{
 			Cur->Bump = Tok[1];

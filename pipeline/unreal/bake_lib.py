@@ -30,8 +30,9 @@ class MatDef(object):
     """One OBJ material, mirroring FElysiumMaterialDef so the bake selects the same master
     and binds the same named parameters the runtime factory does."""
 
-    __slots__ = ("name", "albedo", "emissive", "bump", "env_mask", "base_tex2",
-                 "scissor", "blend", "additive", "envmap", "env_tint", "decal", "color")
+    __slots__ = ("name", "albedo", "emissive", "bump", "refract_map", "env_mask",
+                 "base_tex2", "scissor", "blend", "additive", "glass", "refract",
+                 "refract_amount", "envmap", "env_tint", "decal", "color")
 
     # Channel spread above which an $envmaptint counts as CHROMATIC rather than a grey
     # dim-down. The population is bimodal -- 361 of the game's 362 grey tints sit at exactly
@@ -44,11 +45,15 @@ class MatDef(object):
         self.albedo = ""
         self.emissive = ""
         self.bump = ""
+        self.refract_map = ""
         self.env_mask = ""
         self.base_tex2 = ""
         self.scissor = False      # illum 4    -> masked master
         self.blend = False        # blend 1    -> translucent master
         self.additive = False     # additive 1 -> additive master
+        self.glass = False        # glass 1    -> UE Thin Translucent glass master
+        self.refract = False      # refract N  -> Source framebuffer-distortion master
+        self.refract_amount = 0.0 # authored $refractamount, PNO-neutral when zero
         self.envmap = False
         self.env_tint = (1.0, 1.0, 1.0)   # envtint -> $envmaptint, white when unauthored
         self.decal = False        # decal 1    -> deferred-decal master
@@ -57,7 +62,7 @@ class MatDef(object):
     @property
     def opaque(self):
         """True when this surface can carry Nanite (Nanite is opaque/masked only)."""
-        return not (self.blend or self.additive)
+        return not (self.blend or self.additive or self.refract)
 
     @property
     def chromatic(self):
@@ -105,6 +110,13 @@ def read_mtl(path):
                 cur.blend = True
             elif key == "additive" and len(tok) >= 2 and tok[1] == "1":
                 cur.additive = True
+            elif key == "glass" and len(tok) >= 2 and tok[1] == "1":
+                cur.glass = True
+            elif key == "refract" and len(tok) >= 2:
+                cur.refract = True
+                cur.refract_amount = float(tok[1])
+            elif key == "refractmap" and len(tok) >= 2:
+                cur.refract_map = tok[1]
             elif key == "decal" and len(tok) >= 2 and tok[1] == "1":
                 cur.decal = True
             elif key == "bumpmap" and len(tok) >= 2:
@@ -328,15 +340,12 @@ def ensure_dir(package):
 
 def import_textures(jobs, package):
     """Batch-import texture source files. `jobs` is [(abs_path, asset_name)]; returns
-    {asset_name: Texture2D}. Existing assets are reused, so a re-run is cheap."""
+    {asset_name: Texture2D}. Existing generated assets are replaced in place so a changed
+    source PNG cannot leave stale pixel data behind while retaining its package identity."""
     ensure_dir(package)
     tasks = []
     have = {}
     for src, name in jobs:
-        target = "%s/%s" % (package, name)
-        if unreal.EditorAssetLibrary.does_asset_exist(target):
-            have[name] = unreal.EditorAssetLibrary.load_asset(target)
-            continue
         task = unreal.AssetImportTask()
         task.filename = src
         task.destination_path = package

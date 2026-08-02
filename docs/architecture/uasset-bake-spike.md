@@ -39,7 +39,7 @@ uv run elysium export map <map> [--force]
 
 | Stage | Reads | Writes |
 |---|---|---|
-| `textures` | `.mtl` + `tex/`, `props/tex/` | `Texture2D`, sRGB/`TC_NORMALMAP`/`TC_MASKS` by role |
+| `textures` | `.mtl` + `tex/`, `props/tex/` | `Texture2D`, alpha-capable source retained where the material needs it, sRGB/`TC_NORMALMAP`/`TC_MASKS` by role, existing packages replaced in place |
 | `materials` | `.mtl` | `MaterialInstanceConstant` off the generated local masters — a `decal 1` surface is a projector, not geometry, so it splits off onto `M_Decal` in its own package |
 | `world` | `.obj`, `.blend`, `brushes/brush_*.obj` | one `SM_World_*` per 2048 cm cell plus unplaced `/Brushes/SM_brush_*` assets |
 | `sky` | `_sky.obj` | `SM_Sky_*` |
@@ -51,6 +51,33 @@ not: the bake writes a reasonable starting point, and `UElysiumLightRig::Adopt` 
 intensity, reach, falloff and specular from the raw `.lights` row at load. So the live calibration —
 not whatever the bake happened to write — is what the map renders, and a Cog slider drag and a fresh
 load agree exactly.
+
+### Material and texture semantics
+
+The shared MTL contract keeps three alpha-bearing paths distinct. Generic `blend 1` remains on
+`M_World_Translucent`; `glass 1` selects `M_World_Glass`; `refract <amount>` plus `refractmap`
+selects `M_Refract` before either. Glass is lit reflective VtMB glass rendered as UE Thin
+Translucent with Surface Forward Shading and Pixel Normal Offset. Its authored albedo alpha is
+surface coverage, an authored bump map wins, and otherwise the exporter derives a restrained
+tangent normal from the retained uneven-glass image inside the reflective/alpha region. Source
+`Refract` is a separate clear distortion overlay: its signed DUDV or authored normal is imported as
+a linear normal map, the authored amount offsets PNO from neutral 1.0, and the vector texture never
+becomes pane colour.
+
+Model textures are decoded once and retained as RGBA in the model-export basetexture cache. Opaque
+materials write RGB, while `$translucent`, `$alphatest`, or `$additive` write RGBA. If an opaque
+material encounters a shared basetexture first and a later material needs alpha, the exporter
+promotes the cached PNG from that retained RGBA image; emissive and reflection-mask products use
+the same original pixels. The Unreal import task always submits an existing `Texture2D` for
+replacement rather than returning it untouched, so a focused re-export updates the package in
+place without breaking material or mesh references.
+
+Verification reads the saved assets rather than trusting exporter intent. Flagged prop albedos with
+non-opaque source alpha require the `HasAlphaChannel` asset tag. Semantic glass additionally
+requires `M_World_Glass`, an alpha-capable albedo, and a bound linear normal-compressed `BumpMap`;
+Source Refract requires `M_Refract`, a bound linear normal-compressed `RefractMap`, and the exact
+`SourceRefractAmount`. Map-specific expectations may pin known placements so a missing effect card
+cannot pass by merely removing its material.
 
 Renderable BSP entity models never belong to the baked static level. The exporter partitions
 their faces out of `<map>.obj`, preserves materials, UVs, blend/cubemap assignment and
@@ -148,6 +175,10 @@ loaded sp_tutorial_1 in 2.50s
 - **A bake that dies mid-run still leaves its assets on disk** — the commandlet saves dirty packages
   on exit, so a half-populated asset survives. Every stage must re-author in full rather than assume
   a clean slate.
+- **Texture import must replace an existing asset in place.** Skipping a `Texture2D` merely because
+  its package already exists preserves stale source pixels and import metadata after a focused
+  re-export. Submitting the loaded asset through an import task with replacement enabled updates the
+  package while every material and mesh reference remains valid.
 - **A USTRUCT's generated Python type takes no constructor kwargs** unless its properties are
   Blueprint-exposed: `unreal.ElysiumSkinOverride(slot_name=…)` raises
   `TypeError: call() takes at most 0 arguments`. Populate through `set_editor_property`.

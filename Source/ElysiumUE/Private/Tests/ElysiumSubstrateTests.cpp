@@ -2721,6 +2721,8 @@ bool FElysiumWorldMaterialsTest::RunTest(const FString&)
 	Lines.Add(TEXT("newmtl glass"));
 	Lines.Add(TEXT("map_Kd tex/glass.png"));
 	Lines.Add(TEXT("blend 1"));
+	Lines.Add(TEXT("glass 1"));
+	Lines.Add(TEXT("bumpmap tex/glass_glass_n.png"));
 	// additive
 	Lines.Add(TEXT("newmtl neon"));
 	Lines.Add(TEXT("map_Kd tex/neon.png"));
@@ -2746,10 +2748,14 @@ bool FElysiumWorldMaterialsTest::RunTest(const FString&)
 	Lines.Add(TEXT("blend 1"));
 	Lines.Add(TEXT("envmap env_cubemap"));
 	Lines.Add(TEXT("envtint 0.5000 0.6000 0.9000"));
+	// Source Refract overlay: no albedo, only the converted DUDV normal + authored amount.
+	Lines.Add(TEXT("newmtl rain_refract"));
+	Lines.Add(TEXT("refract 0.010000"));
+	Lines.Add(TEXT("refractmap tex/rain_refract_n.png"));
 
 	TMap<FString, FElysiumMaterialDef> Mats;
 	FElysiumObjModel::ParseMtlLines(Lines, Mats);
-	TestEqual(TEXT("eight materials parsed"), Mats.Num(), 8);
+	TestEqual(TEXT("nine materials parsed"), Mats.Num(), 9);
 
 	if (const FElysiumMaterialDef* B = Mats.Find(TEXT("brick")))
 	{
@@ -2768,6 +2774,8 @@ bool FElysiumWorldMaterialsTest::RunTest(const FString&)
 	if (const FElysiumMaterialDef* G = Mats.Find(TEXT("glass")))
 	{
 		TestTrue(TEXT("glass is translucent"), G->bBlend && !G->bScissor && !G->bAdditive);
+		TestTrue(TEXT("glass semantic parsed"), G->bGlass);
+		TestEqual(TEXT("glass normal parsed"), G->Bump, FString(TEXT("tex/glass_glass_n.png")));
 	}
 	if (const FElysiumMaterialDef* N = Mats.Find(TEXT("neon")))
 	{
@@ -2800,6 +2808,15 @@ bool FElysiumWorldMaterialsTest::RunTest(const FString&)
 		TestTrue(TEXT("bluepane tint is chromatic"),
 			(Bp->EnvTint.B - Bp->EnvTint.R) >= FElysiumMaterialDef::ChromaticSpread);
 		TestFalse(TEXT("tinted glass stays dielectric"), Bp->IsChromatic());
+	}
+	if (const FElysiumMaterialDef* R = Mats.Find(TEXT("rain_refract")))
+	{
+		TestTrue(TEXT("Source Refract semantic parsed"), R->bRefract);
+		TestEqual(TEXT("Source Refract amount parsed"), R->RefractAmount, 0.01f, 1e-6f);
+		TestEqual(TEXT("Source Refract map parsed"), R->RefractMap,
+			FString(TEXT("tex/rain_refract_n.png")));
+		TestTrue(TEXT("Source Refract is not a generic blend flag"),
+			!R->bBlend && !R->bScissor && !R->bAdditive && !R->bGlass);
 	}
 	return true;
 }

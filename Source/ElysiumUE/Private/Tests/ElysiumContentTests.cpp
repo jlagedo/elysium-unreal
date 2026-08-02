@@ -858,6 +858,108 @@ bool FElysiumReflectionParamsTest::RunTest(const FString&)
 	return true;
 }
 
+// Semantic glass is a separate stable UE5 path: generic $translucent materials must not inherit
+// refraction, while real lit/reflective glass compiles as Thin Translucent with a tangent-normal
+// Pixel Normal Offset. These properties and parameter names are the bake/runtime contract.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGlassMasterTest,
+	"Elysium.Content.GlassMaster", GElysiumContentTestFlags)
+bool FElysiumGlassMasterTest::RunTest(const FString&)
+{
+	UMaterialInterface* Master = LoadObject<UMaterialInterface>(nullptr,
+		TEXT("/Game/VtMB/Materials/M_World_Glass.M_World_Glass"));
+	if (!TestNotNull(TEXT("glass master loads"), Master))
+	{
+		return true;
+	}
+	UMaterial* Material = Master->GetMaterial();
+	if (!TestNotNull(TEXT("glass master resolves its UMaterial"), Material))
+	{
+		return true;
+	}
+
+	TestEqual(TEXT("glass uses translucent blend"), Material->GetBlendMode(), BLEND_Translucent);
+	TestTrue(TEXT("glass uses Thin Translucent shading"),
+		Material->GetShadingModels().HasShadingModel(MSM_ThinTranslucent));
+	TestEqual(TEXT("glass uses Surface ForwardShading"), Material->TranslucencyLightingMode,
+		TLM_SurfacePerPixelLighting);
+	TestEqual(TEXT("glass uses Pixel Normal Offset"), Material->RefractionMethod,
+		RM_PixelNormalOffset);
+	TestTrue(TEXT("glass master carries the ISM permutation"),
+		Master->GetUsageByFlag(MATUSAGE_InstancedStaticMeshes));
+	TestTrue(TEXT("glass master carries the Nanite usage contract"),
+		Master->GetUsageByFlag(MATUSAGE_Nanite));
+
+	struct FExpectedScalar
+	{
+		const TCHAR* Name;
+		float Value;
+	};
+	static const FExpectedScalar Scalars[] = {
+		{ TEXT("GlassRefraction"), 1.08f },
+		{ TEXT("GlassTintStrength"), 0.25f },
+		{ TEXT("GlassFrameExponent"), 8.0f },
+		{ TEXT("BumpAmount"), 0.0f },
+		{ TEXT("EnvStrength"), 0.0f },
+	};
+	for (const FExpectedScalar& Expected : Scalars)
+	{
+		float Value = -1.f;
+		TestTrue(*FString::Printf(TEXT("glass carries scalar %s"), Expected.Name),
+			Master->GetScalarParameterValue(FName(Expected.Name), Value));
+		TestEqual(*FString::Printf(TEXT("glass scalar %s default"), Expected.Name),
+			Value, Expected.Value, 1e-4f);
+	}
+
+	for (const TCHAR* Name : { TEXT("Albedo"), TEXT("BumpMap"), TEXT("EnvMask") })
+	{
+		UTexture* Texture = nullptr;
+		TestTrue(*FString::Printf(TEXT("glass carries texture %s"), Name),
+			Master->GetTextureParameterValue(FName(Name), Texture));
+		TestNotNull(*FString::Printf(TEXT("glass texture %s has a fallback"), Name), Texture);
+	}
+	return true;
+}
+
+// Source Refract is its own clear distortion overlay. The DUDV texture must never become
+// albedo; the dedicated master consumes a linear tangent normal and the original amount through
+// Pixel Normal Offset while white Thin Translucent transmission leaves the pane behind visible.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRefractMasterTest,
+	"Elysium.Content.RefractMaster", GElysiumContentTestFlags)
+bool FElysiumRefractMasterTest::RunTest(const FString&)
+{
+	UMaterialInterface* Master = LoadObject<UMaterialInterface>(nullptr,
+		TEXT("/Game/VtMB/Materials/M_Refract.M_Refract"));
+	if (!TestNotNull(TEXT("refract master loads"), Master))
+	{
+		return true;
+	}
+	UMaterial* Material = Master->GetMaterial();
+	if (!TestNotNull(TEXT("refract master resolves its UMaterial"), Material))
+	{
+		return true;
+	}
+
+	TestEqual(TEXT("refract uses translucent blend"), Material->GetBlendMode(), BLEND_Translucent);
+	TestTrue(TEXT("refract uses Thin Translucent shading"),
+		Material->GetShadingModels().HasShadingModel(MSM_ThinTranslucent));
+	TestEqual(TEXT("refract uses Surface ForwardShading"), Material->TranslucencyLightingMode,
+		TLM_SurfacePerPixelLighting);
+	TestEqual(TEXT("refract uses Pixel Normal Offset"), Material->RefractionMethod,
+		RM_PixelNormalOffset);
+	TestTrue(TEXT("refract master carries the ISM permutation"),
+		Master->GetUsageByFlag(MATUSAGE_InstancedStaticMeshes));
+
+	float Amount = -1.f;
+	TestTrue(TEXT("refract carries SourceRefractAmount"),
+		Master->GetScalarParameterValue(FName(TEXT("SourceRefractAmount")), Amount));
+	TestEqual(TEXT("refract amount defaults neutral"), Amount, 0.f, 1e-6f);
+	UTexture* Texture = nullptr;
+	TestTrue(TEXT("refract carries RefractMap"),
+		Master->GetTextureParameterValue(FName(TEXT("RefractMap")), Texture));
+	TestNotNull(TEXT("refract map has a flat-normal fallback"), Texture);
+	return true;
+}
+
 // =====================================================================================
 // 9.1 / B4 — the `.dlg` parser + branch machine against the real jack_tutorial.dlg. Self-skips when
 // the dialogue mirror has not been exported (out/dlg). Confirms the physical-format parse holds and

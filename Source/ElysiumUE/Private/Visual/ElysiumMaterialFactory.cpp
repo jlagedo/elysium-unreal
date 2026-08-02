@@ -38,6 +38,8 @@ namespace
 	constexpr const TCHAR* OpaqueMasterPath = TEXT("/Game/VtMB/Materials/M_World_Opaque.M_World_Opaque");
 	constexpr const TCHAR* MaskedMasterPath = TEXT("/Game/VtMB/Materials/M_World_Masked.M_World_Masked");
 	constexpr const TCHAR* TranslucentMasterPath = TEXT("/Game/VtMB/Materials/M_World_Translucent.M_World_Translucent");
+	constexpr const TCHAR* GlassMasterPath = TEXT("/Game/VtMB/Materials/M_World_Glass.M_World_Glass");
+	constexpr const TCHAR* RefractMasterPath = TEXT("/Game/VtMB/Materials/M_Refract.M_Refract");
 	constexpr const TCHAR* AdditiveMasterPath = TEXT("/Game/VtMB/Materials/M_Additive.M_Additive");
 
 	// Parameter names, identical across the four world masters (build_world_graph authors them).
@@ -46,6 +48,8 @@ namespace
 	const FName EmissiveScaleParam(TEXT("EmissiveScale"));
 	const FName BumpMapParam(TEXT("BumpMap"));
 	const FName BumpAmountParam(TEXT("BumpAmount"));
+	const FName RefractMapParam(TEXT("RefractMap"));
+	const FName SourceRefractAmountParam(TEXT("SourceRefractAmount"));
 	// The reflection channel's names live in ElysiumReflections.h, shared with the map actor's
 	// live overrides and the tests, so a rename cannot drift between the three.
 	const FName& EnvMaskParam = ElysiumReflections::Params::EnvMask;
@@ -82,6 +86,8 @@ namespace
 		if (Def)
 		{
 			if (Def->bAdditive) { return AdditiveMasterPath; }
+			if (Def->bRefract)  { return RefractMasterPath; }
+			if (Def->bGlass)    { return GlassMasterPath; }
 			if (Def->bBlend)    { return TranslucentMasterPath; }
 			if (Def->bScissor)  { return MaskedMasterPath; }
 		}
@@ -103,6 +109,22 @@ UMaterialInstanceDynamic* FElysiumMaterialFactory::Build(const FElysiumMaterialD
 	if (!Mid)
 	{
 		return nullptr;
+	}
+
+	// Source Refract is a transparent framebuffer-distortion card, not an albedo surface. Its
+	// signed DUDV/normal texture was converted to a tangent normal by the exporter; the dedicated
+	// PNO master consumes only that map and the authored $refractamount.
+	if (Def && Def->bRefract)
+	{
+		if (!Def->RefractMap.IsEmpty())
+		{
+			if (UTexture2D* RefractTex = Cache.LoadTex(Dir, Def->RefractMap, /*bSRGB=*/false))
+			{
+				Mid->SetTextureParameterValue(RefractMapParam, RefractTex);
+			}
+		}
+		Mid->SetScalarParameterValue(SourceRefractAmountParam, Def->RefractAmount);
+		return Mid;
 	}
 
 	// Albedo: the base colour, on every master. A 1x1 Kd fallback keeps an unresolved surface drawn.

@@ -20,8 +20,12 @@ from elysium_pipeline.formats import install, vmt
 from elysium_pipeline.formats import bsp as B
 from elysium_pipeline.formats import mdl as MDL
 from elysium_pipeline.formats import phy
+from elysium_pipeline.formats.glass import derive_normal as derive_glass_normal, is_glass
 from elysium_pipeline.enhancement import retex_dds
-from elysium_pipeline.formats.tex_to_png import decode as decode_texture, decode_cubemap, reflectivity as tth_reflectivity
+from elysium_pipeline.formats.tex_to_png import (
+    decode as decode_texture, decode_cubemap, dudv_to_normal,
+    reflectivity as tth_reflectivity,
+)
 from elysium_pipeline.formats.bsp import (read_lump, source_to_unreal, source_dir_to_unreal, source_angles_to_unreal_quat,
                  strings_from_blob,
                  read_pakfile, read_game_lump, INCH_TO_CM, FACE_SIZE, FE_OFS, NE_OFS,
@@ -1083,6 +1087,8 @@ def main(bsp_path, out_dir, *, index=None):
     env_info = {}        # gkey -> dict(cube, mask, tint, contrast, saturation)
     blend_info = {}      # gkey -> second albedo png (WorldVertexTransition tex2)
     bump_info = {}       # gkey -> normal-map png ($bumpmap; perturbs the reflection)
+    glass_info = set()   # gkeys routed to UE's dedicated thin-glass master
+    refract_info = {}    # gkey -> dict(normalmap, amount), explicit Source Refract cards
     water_info = {}      # water material -> dict(normalmap_png, fogcolor, fog, reflecttint)
     decoded = failed = 0
     # A rendered, non-water material that yields no albedo renders as a flat grey
@@ -1112,6 +1118,7 @@ def main(bsp_path, out_dir, *, index=None):
 
     for gkey in groups:
         mat = gkey_base.get(gkey, gkey)     # base material for VMT/texture lookup
+        material_path = mat
         cube = gkey_cube.get(gkey)          # baked cubemap stem, or None
         vmt_txt = read_material_text(f"materials/{mat}.vmt")
         if vmt_txt is None:
@@ -1123,12 +1130,18 @@ def main(bsp_path, out_dir, *, index=None):
             raw = gkey_raw.get(gkey)
             if raw and raw != mat:
                 vmt_txt = read_material_text(f"materials/{raw}.vmt")
+                if vmt_txt is not None:
+                    material_path = raw
         info = {"basetexture": None, "selfillum": False, "translucent": False, "alphatest": False,
                 "water": False, "normalmap": None, "fogcolor": None, "fogstart": None,
-                "fogend": None, "reflecttint": None}
+                "fogend": None, "reflecttint": None, "refract": False,
+                "dudvmap": None, "refractamount": None}
         if vmt_txt:
             info = vmt.parse(vmt_txt, resolve_include=lambda p: read_material_text(
                 p if p.lower().endswith(".vmt") else p + ".vmt"))
+        glass = is_glass(info, material_path)
+        if glass:
+            glass_info.add(gkey)
         bt = info["basetexture"]
         alphatest = info["alphatest"]
         translucent = info["translucent"]
@@ -1177,6 +1190,28 @@ def main(bsp_path, out_dir, *, index=None):
                 "fogend": info["fogend"] or 128.0,
                 "reflecttint": info["reflecttint"] or [1.0, 1.0, 1.0],
             }
+        # Refract is a separate framebuffer-distortion surface. It frequently has no
+        # $basetexture at all: the rain-window cards in sp_theatre carry only a signed
+        # UVWQ8888 $dudvmap and $refractamount. Prefer a tangent $normalmap when both old/new
+        # hardware paths are authored; otherwise bias the signed DUDV vectors into a UE normal.
+        if info.get("refract"):
+            npng = None
+            nm = info.get("normalmap") or info.get("dudvmap")
+            if nm:
+                nimg = get_img(nm)
+                if nimg is not None:
+                    cache_key = ("refract", nm, bool(info.get("normalmap")))
+                    if cache_key not in normal_cache:
+                        nfn = sanitize(nm) + "_refract_n.png"
+                        normal = (nimg.convert("RGB") if info.get("normalmap")
+                                  else dudv_to_normal(nimg))
+                        normal.save(os.path.join(out_dir, "tex", nfn))
+                        normal_cache[cache_key] = nfn
+                    npng = normal_cache[cache_key]
+            refract_info[gkey] = {
+                "normalmap": npng,
+                "amount": float(info.get("refractamount") or 0.0),
+            }
         # $envmap. The surface is reflective because its VMT says so -- not because a baked
         # cube decoded. The runtime resolves the reflection through Lumen and never samples
         # `tex/cube/` (docs/vtmb/reflections.md), so gating the channel on the cube would silently
@@ -1184,6 +1219,7 @@ def main(bsp_path, out_dir, *, index=None):
         # VBSP left unpatched. The cube is still decoded where one exists, for the record and
         # for anything that wants the original's own reflection source.
         env_ref = info.get("envmap")
+        mask_img = None
         if bt and env_ref:
             cube_id = cube or (sanitize(env_ref) if env_ref != "env_cubemap" else "env_cubemap")
             if cube or env_ref != "env_cubemap":
@@ -1205,12 +1241,13 @@ def main(bsp_path, out_dir, *, index=None):
             mask_png = None
             em = info.get("envmapmask")
             if em:
+                source_mask = get_img(em)
+                mask_img = source_mask.convert("L") if source_mask is not None else None
                 if em not in mask_cache:
-                    mimg = get_img(em)
                     mask_cache[em] = None
-                    if mimg is not None:
+                    if mask_img is not None:
                         mfn = sanitize(em) + "_envmask.png"
-                        mimg.convert("L").save(os.path.join(out_dir, "tex", mfn))
+                        mask_img.save(os.path.join(out_dir, "tex", mfn))
                         mask_cache[em] = mfn
                 mask_png = mask_cache[em]
             elif info.get("basealphaenvmapmask"):
@@ -1223,8 +1260,11 @@ def main(bsp_path, out_dir, *, index=None):
                     if aimg is not None:
                         mfn = sanitize(bt) + "_envmask.png"
                         alpha = aimg.convert("RGBA").getchannel("A")
-                        ImageChops.invert(alpha).save(os.path.join(out_dir, "tex", mfn))
+                        mask_img = ImageChops.invert(alpha)
+                        mask_img.save(os.path.join(out_dir, "tex", mfn))
                         mask_cache[mk] = mfn
+                elif get_img(bt) is not None:
+                    mask_img = ImageChops.invert(get_img(bt).convert("RGBA").getchannel("A"))
                 mask_png = mask_cache[mk]
             # $envmapcontrast/$envmapsaturation are parsed but NOT emitted: VtMB's shipped
             # DX8 shaders carry no term for either (docs/vtmb/reflections.md), and the whole
@@ -1258,13 +1298,27 @@ def main(bsp_path, out_dir, *, index=None):
                     nimg.convert("RGB").save(os.path.join(out_dir, "tex", nfn))
                     normal_cache[bump] = nfn
                 bump_info[gkey] = normal_cache[bump]
+        elif glass and bt and get_img(bt) is not None:
+            # VtMB's window albedos already paint the uneven/rippled glass. Convert that
+            # authored signal into a mild tangent normal for UE's Pixel Normal Offset path;
+            # the env mask keeps frame bars geometrically flat. An authored $bumpmap above
+            # always takes precedence.
+            mask_id = info.get("envmapmask") or (
+                "#basealpha" if info.get("basealphaenvmapmask") else "#alpha")
+            glass_key = ("glass", bt, mask_id)
+            if glass_key not in normal_cache:
+                nfn = sanitize(bt) + "_glass_n.png"
+                derive_glass_normal(get_img(bt), mask_img).save(
+                    os.path.join(out_dir, "tex", nfn))
+                normal_cache[glass_key] = nfn
+            bump_info[gkey] = normal_cache[glass_key]
 
         mat_info[gkey] = (albedo_png, emis_png, alphatest, translucent, additive)
         if bt and refl_cache.get(bt):
             refl_info[gkey] = refl_cache[bt]
 
         # validate: a rendered non-water material must resolve to an albedo.
-        if not info["water"]:
+        if not info["water"] and not info.get("refract"):
             if vmt_txt is None:
                 problems.append(f"{mat}: no VMT found (materials/{mat}.vmt)")
             elif bt is None:
@@ -1279,6 +1333,8 @@ def main(bsp_path, out_dir, *, index=None):
     _tinted = sum(1 for e in env_info.values() if max(e["tint"]) - min(e["tint"]) >= 0.02)
     print(f"envmap: {len(env_info)} reflective surfaces ({len(mask_cache)} masks, "
           f"{_tinted} chromatic tint); {sum(cube_cache.values())} cubemaps decoded")
+    print(f"glass: {len(glass_info)} thin-refraction material(s)")
+    print(f"refract: {len(refract_info)} framebuffer-distortion material(s)")
     for w in warnings:
         print(f"  warning: {w}")
     if problems:
@@ -1696,7 +1752,12 @@ def main(bsp_path, out_dir, *, index=None):
                 m.write("Kd 0.35 0.35 0.38\n")   # generic missing-tex fallback
             if emis_png:
                 m.write(f"map_Ke tex/{emis_png}\n")   # alpha-masked self-illum
-            if mat in water_info:
+            if mat in refract_info:
+                r = refract_info[mat]
+                m.write(f"refract {r['amount']:.6f}\n")  # Source framebuffer distortion
+                if r["normalmap"]:
+                    m.write(f"refractmap tex/{r['normalmap']}\n")
+            elif mat in water_info:
                 m.write("water 1\n")                   # our flag: water shader surface
             elif additive:
                 m.write("additive 1\n")                # our flag: additive glow overlay (unlit)
@@ -1717,6 +1778,8 @@ def main(bsp_path, out_dir, *, index=None):
                     m.write(f"envmapmask tex/{e['mask']}\n")
                 t = e["tint"]
                 m.write(f"envtint {t[0]:.4f} {t[1]:.4f} {t[2]:.4f}\n")
+            if mat in glass_info:
+                m.write("glass 1\n")                 # our semantic: UE thin refractive glass
             if mat in blend_info:
                 # WorldVertexTransition second texture; mixed by vertex COLOR.r.
                 m.write(f"basetex2 tex/{blend_info[mat]}\n")

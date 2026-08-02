@@ -17,6 +17,10 @@ from elysium_pipeline.paths import export_root
 # VTF IMAGE_FORMAT enum values we care about.
 FMT_RGBA8888, FMT_BGR888, FMT_BGRA8888 = 0, 3, 12
 FMT_DXT1, FMT_DXT3, FMT_DXT5 = 13, 14, 15
+# Signed U/V/W displacement plus Q. VtMB's Source Refract cards use this for
+# screen-space distortion vectors rather than colour (for example
+# `models/scenery/structural/santamonica/rain_refract_dudv`).
+FMT_UVWQ8888 = 23
 DXT_FOURCC = {FMT_DXT1: b"DXT1", FMT_DXT3: b"DXT3", FMT_DXT5: b"DXT5"}
 
 def parse_tth(tth: bytes):
@@ -53,7 +57,7 @@ def mip_byte_size(w, h, fmt):
         return max(1, (w + 3) // 4) * max(1, (h + 3) // 4) * 16
     if fmt == FMT_BGR888:
         return w * h * 3
-    if fmt in (FMT_RGBA8888, FMT_BGRA8888):
+    if fmt in (FMT_RGBA8888, FMT_BGRA8888, FMT_UVWQ8888):
         return w * h * 4
     raise ValueError(f"unsupported format {fmt}")
 
@@ -77,7 +81,30 @@ def _decode_mip(raw, w, h, fmt) -> Image.Image:
         return Image.frombytes("RGBA", (w, h), raw, "raw", "BGRA")
     if fmt == FMT_RGBA8888:
         return Image.frombytes("RGBA", (w, h), raw)
+    if fmt == FMT_UVWQ8888:
+        # Preserve the bytes here. UVW are signed two's-complement values, not
+        # display colour; dudv_to_normal performs the semantic conversion.
+        return Image.frombytes("RGBA", (w, h), raw)
     raise ValueError(f"unsupported format {fmt}")
+
+
+def dudv_to_normal(image: Image.Image) -> Image.Image:
+    """Convert Source's signed UVWQ8888 DUDV payload to a UE tangent normal.
+
+    UVWQ stores U/V/W as signed bytes centred on zero. A conventional tangent
+    normal stores the same signed range biased by 128, so toggling the high bit
+    maps byte 0 (zero displacement) to 128, 127 (+1) to 255, and 255 (-1/127)
+    to 127. UE normal compression reconstructs Z from R/G; emit blue=255 so the
+    loose PNG is also a valid flat-forward normal before import.
+    """
+    rgba = image.convert("RGBA")
+    u, v, _w, _q = rgba.split()
+    signed_to_biased = [value ^ 0x80 for value in range(256)]
+    return Image.merge("RGB", (
+        u.point(signed_to_biased),
+        v.point(signed_to_biased),
+        Image.new("L", rgba.size, 255),
+    ))
 
 def decode_cubemap(tth: bytes, ttz) -> list:
     """Decode a baked env cubemap (.tth has the ENVMAP flag) -> the six RGBA cube
@@ -115,6 +142,8 @@ def decode(tth: bytes, ttz: bytes) -> Image.Image:
     if fmt == FMT_BGRA8888:
         return Image.frombytes("RGBA", (w, h), largest, "raw", "BGRA")
     if fmt == FMT_RGBA8888:
+        return Image.frombytes("RGBA", (w, h), largest)
+    if fmt == FMT_UVWQ8888:
         return Image.frombytes("RGBA", (w, h), largest)
     raise ValueError(f"unsupported format {fmt}")
 

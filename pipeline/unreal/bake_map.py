@@ -34,6 +34,8 @@ MASTERS = {
     "opaque": "/Game/VtMB/Materials/M_World_Opaque.M_World_Opaque",
     "masked": "/Game/VtMB/Materials/M_World_Masked.M_World_Masked",
     "translucent": "/Game/VtMB/Materials/M_World_Translucent.M_World_Translucent",
+    "glass": "/Game/VtMB/Materials/M_World_Glass.M_World_Glass",
+    "refract": "/Game/VtMB/Materials/M_Refract.M_Refract",
     "additive": "/Game/VtMB/Materials/M_Additive.M_Additive",
     "decal": "/Game/VtMB/Materials/M_Decal.M_Decal",
 }
@@ -270,6 +272,7 @@ class Bake(object):
         for mat in mats.values():
             for path, role in ((mat.albedo, "albedo"), (mat.emissive, "albedo"),
                                (mat.base_tex2, "albedo"), (mat.bump, "normal"),
+                               (mat.refract_map, "normal"),
                                (mat.env_mask, "mask")):
                 if not path:
                     continue
@@ -336,6 +339,10 @@ class Bake(object):
             return self.masters["decal"]
         if mat.additive:
             return self.masters["additive"]
+        if mat.refract:
+            return self.masters["refract"]
+        if mat.glass:
+            return self.masters["glass"]
         if mat.blend:
             return self.masters["translucent"]
         if mat.scissor:
@@ -348,6 +355,13 @@ class Bake(object):
             if not path:
                 return None
             return self.textures.get((tex_pkg, "T_" + bl.safe_name(os.path.splitext(path)[0])))
+
+        if mat.refract:
+            normal = tex(mat.refract_map)
+            if normal:
+                bl.set_tex_param(mic, "RefractMap", normal)
+            bl.set_scalar_param(mic, "SourceRefractAmount", mat.refract_amount)
+            return
 
         albedo = tex(mat.albedo)
         if albedo:

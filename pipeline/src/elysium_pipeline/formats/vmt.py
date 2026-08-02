@@ -90,9 +90,15 @@ def parse(text, resolve_include=None):
                     parent["basetexture"] = _norm_path(bt)
                 return parent
 
+    shader = _shader_name(text)
     bt = _find(text, "basetexture")
     nm = _find(text, "normalmap")
-    is_water = _shader_name(text) == "water" or _find_pct(text, "compilewater") is not None
+    dudv = _find(text, "dudvmap")
+    is_water = shader == "water" or _find_pct(text, "compilewater") is not None
+    is_refract = shader == "refract"
+    refract_amount = _find_f(text, "refractamount")
+    if is_refract and refract_amount is None:
+        refract_amount = 2.0
     env = _find(text, "envmap")
     envmask = _find(text, "envmapmask")
     bt2 = _find(text, "basetexture2")
@@ -110,7 +116,7 @@ def parse(text, resolve_include=None):
         # bright) from a lightmapped one (takes the underlying face's baked light);
         # $decalscale sizes the quad = texture pixel dims x scale (engine.dll
         # R_DecalSize: GetMappingWidth/Height * $decalScale). Default 1.0.
-        "shader": _shader_name(text),
+        "shader": shader,
         "decal": _find(text, "decal") == "1",
         "decalscale": _find_f(text, "decalscale") or 1.0,
         # $envmap: cubemap reflection (38% of VtMB world materials). The base VMT's
@@ -133,6 +139,13 @@ def parse(text, resolve_include=None):
         # water (the "Water" shader): no $basetexture; a normal map + fog params.
         "water": is_water,
         "normalmap": _norm_path(nm),
+        # Refract is a framebuffer-distortion shader, not ordinary alpha glass.
+        # Older VtMB materials name the signed vector field as $dudvmap; later
+        # ones often carry both that DX8 path and a tangent $normalmap.
+        "refract": is_refract,
+        "dudvmap": _norm_path(dudv),
+        "refractamount": refract_amount,
+        "refracttint": _vec3(_find(text, "refracttint")),
         "fogcolor": _vec3(_find(text, "fogcolor")),      # [r,g,b] 0-1, or None
         "fogstart": _find_f(text, "fogstart"),           # Source units (inches)
         "fogend": _find_f(text, "fogend"),

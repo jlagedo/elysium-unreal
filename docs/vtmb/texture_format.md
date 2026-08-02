@@ -22,7 +22,7 @@ decode's proof and the proof that the average is linear.
 
 Zlib-compressed (`78 da`) raw image data = a DXT mip pyramid, ordered **smallest→largest** (the
 full-res mip is LAST). Formats seen: DXT5 (enum 15, most common), DXT1 (13), DXT3 (14), BGR888
-(3), BGRA8888 (12), RGBA8888 (0).
+(3), BGRA8888 (12), RGBA8888 (0), and signed UVWQ8888 displacement data (23).
 
 Decode: decompress `.ttz`, slice the last mip (size from the block formula), wrap DXT blocks in a
 minimal DDS header, let PIL decode → RGBA.
@@ -63,6 +63,15 @@ lowercased), `selfillum`, `translucent`, `alphatest`. Shader `"patch"` follows o
 
 Material resolution: material name → `materials/<name>.vmt` → `$basetexture` →
 `materials/<basetexture>.tth`/`.ttz`.
+
+`Refract` is a separate framebuffer-distortion shader and does not require `$basetexture`.
+Its `$dudvmap` is a signed vector field: UVWQ8888 stores U/V/W as two's-complement bytes centred
+on zero, while `$refractamount` scales the framebuffer offset. The `sp_theatre` pawnshop rain
+layer is six instances of `models/scenery/structural/santamonica/rain_window.mdl`; its sole
+material declares `$dudvmap .../rain_refract_dudv` and `$refractamount .01`. The DUDV texture is
+256×512 UVWQ8888 with W=127 and Q=255 throughout. It is distortion input, never pane colour.
+When a `Refract` VMT carries both `$normalmap` and `$dudvmap`, the normal map is the tangent-space
+path and the DUDV is the older signed-displacement path.
 
 **What a VMT's shader does is shipped as data, not compiled into a binary.**
 `materials/dxshaders/*.psh` are readable **ps.1.1 assembly source** with Valve's own comments

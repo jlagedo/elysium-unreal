@@ -236,8 +236,11 @@ def sanitize(name):
 
 
 def _envmask_png(info, bt, img, read_bytes, out_dir, tex_cache):
-    """The $envmap reflectivity mask as a grayscale PNG under tex/, or None for a uniform
-    reflector. Two sources, and they are not the same channel:
+    """The $envmap reflectivity mask under tex/ as ``(filename, L image)``.
+
+    Both forms are retained because semantic glass uses the same authored mask to keep
+    its derived refraction normal off mullions and frames. Two sources, and they are not
+    the same channel:
 
       $envmapmask <tex>        a separate mask texture, used as-is
       $basealphaenvmapmask 1   the BASE texture's alpha, INVERTED
@@ -252,14 +255,15 @@ def _envmask_png(info, bt, img, read_bytes, out_dir, tex_cache):
     if em:
         key = "#envmask:" + _norm(em.replace("\\", "/").lstrip("/"))
         if key not in tex_cache:
-            tex_cache[key] = None
+            tex_cache[key] = (None, None)
             src = key[len("#envmask:"):]
             tth, ttz = read_bytes(f"materials/{src}.tth"), read_bytes(f"materials/{src}.ttz")
             if tth and ttz:
                 try:
                     fn = sanitize(src) + "_envmask.png"
-                    decode_texture(tth, ttz).convert("L").save(os.path.join(out_dir, "tex", fn))
-                    tex_cache[key] = fn
+                    mask = decode_texture(tth, ttz).convert("L")
+                    mask.save(os.path.join(out_dir, "tex", fn))
+                    tex_cache[key] = (fn, mask)
                 except Exception:
                     pass
         return tex_cache[key]
@@ -267,70 +271,93 @@ def _envmask_png(info, bt, img, read_bytes, out_dir, tex_cache):
     if info.get("basealphaenvmapmask") and img is not None:
         key = "#envmask:" + bt + "#a"
         if key not in tex_cache:
-            tex_cache[key] = None
+            tex_cache[key] = (None, None)
             try:
                 fn = sanitize(bt) + "_envmask.png"
                 alpha = img.convert("RGBA").getchannel("A")
-                ImageChops.invert(alpha).save(os.path.join(out_dir, "tex", fn))
-                tex_cache[key] = fn
+                mask = ImageChops.invert(alpha)
+                mask.save(os.path.join(out_dir, "tex", fn))
+                tex_cache[key] = (fn, mask)
             except Exception:
                 pass
         return tex_cache[key]
-    return None
+    return (None, None)
 
 
 def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
-    """material name -> dict(albedo, emis, additive, translucent, alphatest, envmap, envmask,
-    envtint). The albedo PNG (and the self-illum emission mask derived from its alpha) is
+    """material name -> decoded channels plus the VMT's render semantics.
+
+    The albedo PNG (and the self-illum emission mask derived from its alpha) is
     decoded once per basetexture and cached; selfillum/additive/translucent/alphatest/envmap
     are per-material (per-VMT), so two materials that share a basetexture but differ in those
-    flags do not inherit each other's."""
+    flags do not inherit each other's. Source ``Refract`` is deliberately independent of
+    albedo: its authored DUDV/normal map distorts the framebuffer and many such VMTs declare no
+    ``$basetexture`` at all."""
     from elysium_pipeline.formats import vmt
-    from elysium_pipeline.formats.tex_to_png import decode as decode_texture
+    from elysium_pipeline.formats.glass import derive_normal, is_glass
+    from elysium_pipeline.formats.tex_to_png import decode as decode_texture, dudv_to_normal
     none = {"albedo": None, "emis": None, "additive": False,
             "translucent": False, "alphatest": False,
-            "envmap": None, "envmask": None, "envtint": None}
-    vmt_txt = None
+            "envmap": None, "envmask": None, "envtint": None,
+            "glass": False, "bump": None,
+            "refract": False, "refract_amount": 0.0, "refract_map": None}
+    vmt_txt = vmt_path = None
     for sp in search:
-        b = read_bytes(_norm(f"materials/{sp}/{mat}.vmt"))
+        candidate = _norm(f"{sp}/{mat}").strip("/")
+        b = read_bytes(_norm(f"materials/{candidate}.vmt"))
         if b:
-            vmt_txt = b.decode("ascii", "replace"); break
+            vmt_txt = b.decode("ascii", "replace")
+            vmt_path = candidate
+            break
     if vmt_txt is None:                       # last resort: flat materials/<mat>.vmt
         b = read_bytes(f"materials/{mat}.vmt")
-        vmt_txt = b.decode("ascii", "replace") if b else None
+        if b:
+            vmt_txt = b.decode("ascii", "replace")
+            vmt_path = mat
     if not vmt_txt:
         return dict(none)
     info = vmt.parse(vmt_txt, resolve_include=lambda p: (
         lambda bb: bb.decode("ascii", "replace") if bb else None)(
         read_bytes(_norm(p if p.lower().endswith(".vmt") else p + ".vmt"))))
     bt = info.get("basetexture")
-    if not bt:
+    refract = bool(info.get("refract"))
+    if not bt and not refract:
         return dict(none)
-    bt = _norm(bt.replace("\\", "/").lstrip("/"))   # prop VMTs carry leading/doubled slashes
+    if bt:
+        bt = _norm(bt.replace("\\", "/").lstrip("/"))  # prop VMTs carry leading/doubled slashes
     additive = bool(info.get("additive"))
     translucent = bool(info.get("translucent"))
     alphatest = bool(info.get("alphatest"))
+    glass = is_glass(info, vmt_path)
+    needs_alpha = additive or translucent or alphatest
 
-    # Cache per basetexture: [albedo_png, emis_png_or_None, decoded_img_or_None].
+    # Cache per basetexture:
+    # [albedo_png, emis_png_or_None, decoded_rgba_or_None, alpha_preserved].
     # emis is generated lazily the first time a selfillum material references this
-    # texture; the decoded image is held so that generation needs no re-decode.
-    ent = tex_cache.get(bt)
-    if ent is None:
-        albedo = None
-        img = None
-        tth, ttz = read_bytes(f"materials/{bt}.tth"), read_bytes(f"materials/{bt}.ttz")
-        if tth and ttz:
-            try:
-                img = decode_texture(tth, ttz)
-                fn = sanitize(bt) + ".png"
-                img.convert("RGB").save(os.path.join(out_dir, "tex", fn))
-                albedo = fn
-            except Exception as e:
-                print(f"    texture decode failed for {mat} ({bt}): {e}")
-                img = None
-        ent = tex_cache[bt] = [albedo, None, img]
+    # texture; the decoded image is held so that generation needs no re-decode. Alpha
+    # preservation is promoted: if an opaque material resolves a shared basetexture first,
+    # a later translucent/masked/additive material rewrites that same PNG as RGBA.
+    albedo = emis = img = None
+    if bt:
+        ent = tex_cache.get(bt)
+        if ent is None:
+            tth, ttz = read_bytes(f"materials/{bt}.tth"), read_bytes(f"materials/{bt}.ttz")
+            if tth and ttz:
+                try:
+                    img = decode_texture(tth, ttz).convert("RGBA")
+                    fn = sanitize(bt) + ".png"
+                    (img if needs_alpha else img.convert("RGB")).save(
+                        os.path.join(out_dir, "tex", fn))
+                    albedo = fn
+                except Exception as e:
+                    print(f"    texture decode failed for {mat} ({bt}): {e}")
+                    img = None
+            ent = tex_cache[bt] = [albedo, None, img, bool(albedo and needs_alpha)]
 
-    albedo, emis, img = ent
+        albedo, emis, img, alpha_preserved = ent
+        if needs_alpha and albedo and img is not None and not alpha_preserved:
+            img.save(os.path.join(out_dir, "tex", albedo))
+            ent[3] = True
     if info.get("selfillum") and albedo and emis is None and img is not None:
         import numpy as np
         from PIL import Image
@@ -348,11 +375,67 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
     # (docs/vtmb/reflections.md). The cube ID is carried for the record only; the Lumen path
     # never samples it, and a prop's $envmap is `env_cubemap` (runtime-resolved) far more
     # often than a named cube.
-    envmap = envmask = envtint = None
+    envmap = envmask = envmask_img = envtint = None
     if info.get("envmap"):
         envmap = sanitize(info["envmap"])
-        envmask = _envmask_png(info, bt, img, read_bytes, out_dir, tex_cache)
+        if bt:
+            envmask, envmask_img = _envmask_png(
+                info, bt, img, read_bytes, out_dir, tex_cache)
         envtint = info.get("envmaptint")
+
+    # Source Refract is an explicit framebuffer-distortion layer. Prefer the authored tangent
+    # normal on materials that carry both hardware paths; the old $dudvmap fallback is signed
+    # UVWQ8888 and must be biased into a conventional tangent normal before UE imports it.
+    refract_png = None
+    if refract:
+        refract_src = info.get("normalmap") or info.get("dudvmap")
+        if refract_src:
+            refract_src = _norm(refract_src.replace("\\", "/").lstrip("/"))
+            is_dudv = not info.get("normalmap")
+            key = "#refract:%s:%s" % ("dudv" if is_dudv else "normal", refract_src)
+            if key not in tex_cache:
+                tex_cache[key] = None
+                tth = read_bytes(f"materials/{refract_src}.tth")
+                ttz = read_bytes(f"materials/{refract_src}.ttz")
+                if tth and ttz:
+                    try:
+                        decoded = decode_texture(tth, ttz)
+                        normal = dudv_to_normal(decoded) if is_dudv else decoded.convert("RGB")
+                        refract_png = sanitize(refract_src) + "_refract_n.png"
+                        normal.save(os.path.join(out_dir, "tex", refract_png))
+                        tex_cache[key] = refract_png
+                    except Exception as e:
+                        print(f"    refract decode failed for {mat} ({refract_src}): {e}")
+            refract_png = tex_cache[key]
+
+    # Props use the same bumpmap channel as world surfaces. Real authored normals win;
+    # otherwise semantic glass derives a mild ripple from its retained RGBA albedo and
+    # confines that ripple with the same reflectivity mask exported above.
+    bump_png = None
+    bump = info.get("bumpmap")
+    if bump:
+        bump = _norm(bump.replace("\\", "/").lstrip("/"))
+        key = "#normal:" + bump
+        if key not in tex_cache:
+            tex_cache[key] = None
+            tth, ttz = read_bytes(f"materials/{bump}.tth"), read_bytes(f"materials/{bump}.ttz")
+            if tth and ttz:
+                try:
+                    bump_png = sanitize(bump) + "_n.png"
+                    decode_texture(tth, ttz).convert("RGB").save(
+                        os.path.join(out_dir, "tex", bump_png))
+                    tex_cache[key] = bump_png
+                except Exception:
+                    pass
+        bump_png = tex_cache[key]
+    elif glass and img is not None and bt:
+        mask_id = info.get("envmapmask") or ("#basealpha" if info.get("basealphaenvmapmask") else "#alpha")
+        key = "#glassnormal:%s|%s" % (bt, mask_id)
+        if key not in tex_cache:
+            bump_png = sanitize(bt) + "_glass_n.png"
+            derive_normal(img, envmask_img).save(os.path.join(out_dir, "tex", bump_png))
+            tex_cache[key] = bump_png
+        bump_png = tex_cache[key]
 
     return {
         "albedo": albedo,
@@ -363,6 +446,11 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
         "envmap": envmap,
         "envmask": envmask,
         "envtint": envtint,
+        "glass": glass,
+        "bump": bump_png,
+        "refract": refract,
+        "refract_amount": float(info.get("refractamount") or 0.0),
+        "refract_map": refract_png,
     }
 
 
@@ -461,6 +549,16 @@ def write_obj_scene(meshes, name, out_dir, search, read_bytes, tex_cache, *, ski
                     f.write(f"envmapmask tex/{m['envmask']}\n")
                 t = m["envtint"] or [1.0, 1.0, 1.0]
                 f.write(f"envtint {t[0]:.4f} {t[1]:.4f} {t[2]:.4f}\n")
+            if m["glass"]:
+                f.write("glass 1\n")                # our semantic: UE thin refractive glass
+            if m["bump"]:
+                f.write(f"bumpmap tex/{m['bump']}\n")
+            if m["refract"]:
+                # Source Refract is a separate transparent framebuffer-distortion card, not
+                # the underlying glass albedo. Preserve its authored amount and vector field.
+                f.write(f"refract {m['refract_amount']:.6f}\n")
+                if m["refract_map"]:
+                    f.write(f"refractmap tex/{m['refract_map']}\n")
     with open(os.path.join(out_dir, name + ".obj"), "w") as f:
         f.write(f"mtllib {name}.mtl\n")
         vbase = 1

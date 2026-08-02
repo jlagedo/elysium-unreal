@@ -12,11 +12,15 @@ struct FElysiumMaterialDef
 	FString Albedo;
 	FString Emissive;        // map_Ke  -> $selfillum emission mask (RGB x alpha, "*_ke.png")
 	FString Bump;            // bumpmap -> $bumpmap tangent-space normal map
+	FString RefractMap;      // refractmap -> Source Refract DUDV/normal converted to tangent normal
 	FString EnvMask;         // envmapmask -> $envmap reflectivity mask (empty = uniform when bEnvmap)
 	FString BaseTex2;        // basetex2 -> WorldVertexTransition second albedo
 	bool bScissor = false;   // illum 4    -> $alphatest (masked master)
 	bool bBlend = false;     // blend 1    -> $translucent (translucent master)
 	bool bAdditive = false;  // additive 1 -> $additive glow overlay (additive master, unlit)
+	bool bGlass = false;     // glass 1    -> semantic lit glass (Thin Translucent master)
+	bool bRefract = false;   // refract N  -> Source framebuffer-distortion overlay
+	float RefractAmount = 0.f; // N is the authored $refractamount; zero is PNO-neutral
 	bool bEnvmap = false;    // envmap     -> $envmap reflective (Lumen roughness path)
 	// envtint -> $envmaptint. Multiplies the reflection in VtMB's own shader, so it is the
 	// reflection's colour and strength in one constant. White when unauthored.
@@ -31,7 +35,7 @@ struct FElysiumMaterialDef
 
 	bool IsChromatic() const
 	{
-		if (!bEnvmap || bBlend || bAdditive)
+		if (!bEnvmap || bBlend || bAdditive || bRefract)
 		{
 			return false;
 		}

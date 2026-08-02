@@ -7,7 +7,8 @@ struct FElysiumTextureCache;
 class UMaterialInstanceDynamic;
 
 // Builds a material instance for one OBJ surface. The OBJ material's blend flags pick one of the
-// four hand-authored world masters (M_World_Opaque / _Masked / _Translucent / M_Additive); the
+// six hand-authored world masters (M_World_Opaque / _Masked / _Translucent / _Glass /
+// M_Refract / M_Additive); the
 // surface's textures bind that master's named parameters (Albedo, Emissive, BumpMap, EnvMask,
 // BaseTex2) with the feature scalars switched on only where a channel is present. Surfaces with no
 // albedo get a 1x1 solid fallback (Kd colour). Used by both the world mesh and the prop ISMs.

@@ -11,6 +11,8 @@ import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from elysium_pipeline.paths import export_root  # noqa: E402
+from elysium_pipeline.validation.png_alpha import alpha_range  # noqa: E402
+from pipeline.unreal import bake_lib as bl  # noqa: E402
 
 MOUNT = "/ElysiumBaked"
 
@@ -21,6 +23,16 @@ def arg(key, default=""):
         if token.lower().startswith(needle.lower()):
             return token[len(needle):].strip('"')
     return default
+
+
+def asset_tag(data, name):
+    """Read a string asset-registry tag across Unreal Python's out-param return shapes."""
+    result = unreal.AssetRegistryHelpers.get_tag_value(data, name)
+    if isinstance(result, tuple):
+        if len(result) == 2 and isinstance(result[0], bool):
+            return str(result[1]) if result[0] else ""
+        return str(result[-1]) if result else ""
+    return str(result) if result is not None else ""
 
 
 def verify_map(map_name):
@@ -36,6 +48,16 @@ def verify_map(map_name):
         by_class[name] = by_class.get(name, 0) + 1
         if name == "StaticMesh":
             meshes.append(data)
+    textures = {
+        str(data.asset_name): data
+        for data in registry.get_assets_by_path(package + "/Props/Textures", recursive=False)
+        if str(data.asset_class_path.asset_name) == "Texture2D"
+    }
+    world_textures = {
+        str(data.asset_name): data
+        for data in registry.get_assets_by_path(package + "/Textures", recursive=False)
+        if str(data.asset_class_path.asset_name) == "Texture2D"
+    }
 
     unreal.log("[verify] %s" % package)
     for name in sorted(by_class):
@@ -87,6 +109,294 @@ def verify_map(map_name):
         errors.append("%d unbound static-mesh material slot(s)" % unbound)
     unreal.log("[verify] physics props %d, %d convex collision shapes, %d with authored mass"
                % (phys_meshes, phys_shapes, massed))
+
+    # A blend flag with an RGB-only source was the prop-transparency failure: the material
+    # correctly selected a translucent/masked master, but Albedo.A arrived as implicit 1. Check
+    # the exported payload and the independently loaded Texture2D so a stale pre-fix asset cannot
+    # pass merely because the mesh has a bound material slot.
+    prop_dir = os.path.join(os.fspath(export_root()), map_name, "props")
+    flagged = 0
+    nonopaque = {}
+    if os.path.isdir(prop_dir):
+        for entry in sorted(os.listdir(prop_dir)):
+            if not entry.lower().endswith(".mtl"):
+                continue
+            for mat in bl.read_mtl(os.path.join(prop_dir, entry)).values():
+                if mat.refract:
+                    continue
+                if not (mat.blend or mat.scissor or mat.additive):
+                    continue
+                flagged += 1
+                if not mat.albedo:
+                    message = "%s/%s: alpha material has no albedo" % (entry, mat.name)
+                    unreal.log_error("[verify] " + message)
+                    errors.append(message)
+                    continue
+                source = os.path.join(prop_dir, mat.albedo.replace("/", os.sep))
+                try:
+                    source_alpha = alpha_range(source)
+                except (OSError, ValueError) as exc:
+                    message = "%s/%s: alpha source invalid: %s" % (entry, mat.name, exc)
+                    unreal.log_error("[verify] " + message)
+                    errors.append(message)
+                    continue
+                if source_alpha is None:
+                    message = "%s/%s: alpha material exported an RGB albedo" % (entry, mat.name)
+                    unreal.log_error("[verify] " + message)
+                    errors.append(message)
+                    continue
+                if source_alpha[0] < 255:
+                    asset_name = "T_" + bl.safe_name(os.path.splitext(mat.albedo)[0])
+                    nonopaque[asset_name] = "%s/%s" % (entry, mat.name)
+
+    alpha_capable = 0
+    for asset_name, owner in sorted(nonopaque.items()):
+        data = textures.get(asset_name)
+        if data is None:
+            message = "%s: baked alpha texture missing: %s" % (owner, asset_name)
+            unreal.log_error("[verify] " + message)
+            errors.append(message)
+            continue
+        if asset_tag(data, "HasAlphaChannel").lower() != "true":
+            message = "%s: baked texture has no alpha channel: %s" % (owner, asset_name)
+            unreal.log_error("[verify] " + message)
+            errors.append(message)
+            continue
+        alpha_capable += 1
+    unreal.log("[verify] prop alpha %d flagged / %d non-opaque / %d alpha-capable" % (
+        flagged, len(nonopaque), alpha_capable))
+
+    # Semantic glass must reach the dedicated Thin Translucent master with both pieces the
+    # refraction graph needs: exact authored alpha on Albedo and a linear normal-compressed
+    # BumpMap. Inspect the exported contract and independently load the baked MIC/Texture2D
+    # assets, so stale material parents or texture settings cannot pass on MTL intent alone.
+    glass_records = {}
+    world_dir = os.path.join(os.fspath(export_root()), map_name)
+    world_mtl = os.path.join(world_dir, map_name + ".mtl")
+    for mat in bl.read_mtl(world_mtl).values():
+        if not mat.glass:
+            continue
+        mic_name = "MI_" + bl.safe_name(mat.name)
+        glass_records[(package + "/Materials", mic_name)] = (
+            "%s/%s" % (map_name + ".mtl", mat.name), mat, world_dir,
+            world_textures)
+    if os.path.isdir(prop_dir):
+        for entry in sorted(os.listdir(prop_dir)):
+            if not entry.lower().endswith(".mtl"):
+                continue
+            for mat in bl.read_mtl(os.path.join(prop_dir, entry)).values():
+                if not mat.glass:
+                    continue
+                key = "%s__%s" % (
+                    bl.safe_name(mat.name),
+                    bl.safe_name(os.path.splitext(mat.albedo)[0]))
+                mic_name = "MI_" + bl.safe_name(key)
+                glass_records[(package + "/Props/Materials", mic_name)] = (
+                    "%s/%s" % (entry, mat.name), mat, prop_dir, textures)
+
+    glass_alpha = 0
+    glass_normals = 0
+    glass_parented = 0
+    expected_parent = "/Game/VtMB/Materials/M_World_Glass.M_World_Glass"
+    for (mat_package, mic_name), (owner, mat, source_dir, tex_index) in sorted(
+            glass_records.items()):
+        if not mat.blend:
+            message = "%s: glass material is not alpha blended" % owner
+            unreal.log_error("[verify] " + message)
+            errors.append(message)
+
+        if not mat.albedo:
+            message = "%s: glass material has no albedo" % owner
+            unreal.log_error("[verify] " + message)
+            errors.append(message)
+        else:
+            source = os.path.join(source_dir, mat.albedo.replace("/", os.sep))
+            try:
+                source_alpha = alpha_range(source)
+            except (OSError, ValueError) as exc:
+                source_alpha = None
+                message = "%s: glass alpha source invalid: %s" % (owner, exc)
+                unreal.log_error("[verify] " + message)
+                errors.append(message)
+            if source_alpha is None or source_alpha[0] >= 255:
+                message = "%s: glass albedo has no non-opaque source alpha" % owner
+                unreal.log_error("[verify] " + message)
+                errors.append(message)
+            else:
+                albedo_name = "T_" + bl.safe_name(os.path.splitext(mat.albedo)[0])
+                albedo_data = tex_index.get(albedo_name)
+                if albedo_data is None or asset_tag(
+                        albedo_data, "HasAlphaChannel").lower() != "true":
+                    message = "%s: baked glass albedo is not alpha-capable: %s" % (
+                        owner, albedo_name)
+                    unreal.log_error("[verify] " + message)
+                    errors.append(message)
+                else:
+                    glass_alpha += 1
+
+        normal_asset = None
+        if not mat.bump:
+            message = "%s: glass material has no bumpmap" % owner
+            unreal.log_error("[verify] " + message)
+            errors.append(message)
+        else:
+            normal_name = "T_" + bl.safe_name(os.path.splitext(mat.bump)[0])
+            normal_data = tex_index.get(normal_name)
+            normal_asset = normal_data.get_asset() if normal_data is not None else None
+            if normal_asset is None:
+                message = "%s: baked glass normal missing: %s" % (owner, normal_name)
+                unreal.log_error("[verify] " + message)
+                errors.append(message)
+            elif normal_asset.get_editor_property("srgb") or normal_asset.get_editor_property(
+                    "compression_settings") != unreal.TextureCompressionSettings.TC_NORMALMAP:
+                message = "%s: glass normal is not linear normal-compressed: %s" % (
+                    owner, normal_name)
+                unreal.log_error("[verify] " + message)
+                errors.append(message)
+            else:
+                glass_normals += 1
+
+        mic_path = "%s/%s" % (mat_package, mic_name)
+        mic = unreal.EditorAssetLibrary.load_asset(mic_path)
+        if mic is None:
+            message = "%s: baked glass material instance missing: %s" % (owner, mic_path)
+            unreal.log_error("[verify] " + message)
+            errors.append(message)
+            continue
+        parent = mic.get_editor_property("parent")
+        if parent is None or parent.get_path_name() != expected_parent:
+            message = "%s: glass MIC parent is not M_World_Glass" % owner
+            unreal.log_error("[verify] " + message)
+            errors.append(message)
+            continue
+        bound_normal = unreal.MaterialEditingLibrary.get_material_instance_texture_parameter_value(
+            mic, "BumpMap")
+        if normal_asset is None or bound_normal != normal_asset:
+            message = "%s: glass MIC has no matching BumpMap binding" % owner
+            unreal.log_error("[verify] " + message)
+            errors.append(message)
+            continue
+        glass_parented += 1
+
+    if map_name == "sp_theatre" and len(glass_records) != 2:
+        message = "sp_theatre expected 2 semantic glass materials, found %d" % len(glass_records)
+        unreal.log_error("[verify] " + message)
+        errors.append(message)
+    unreal.log("[verify] glass %d flagged / %d alpha-capable / %d normal-bound / %d parented" % (
+        len(glass_records), glass_alpha, glass_normals, glass_parented))
+
+    # Source Refract is the authored distortion overlay, independent of glass albedo. Its
+    # converted DUDV/normal must be a linear normal texture, bound to the dedicated clear PNO
+    # master along with the original $refractamount. This is the path the pawnshop rain-window
+    # cards use; treating their UVWQ texture as colour is the opaque "bubble" failure.
+    refract_records = {}
+    for mat in bl.read_mtl(world_mtl).values():
+        if not mat.refract:
+            continue
+        mic_name = "MI_" + bl.safe_name(mat.name)
+        refract_records[(package + "/Materials", mic_name)] = (
+            "%s/%s" % (map_name + ".mtl", mat.name), mat, world_dir,
+            world_textures)
+    if os.path.isdir(prop_dir):
+        for entry in sorted(os.listdir(prop_dir)):
+            if not entry.lower().endswith(".mtl"):
+                continue
+            for mat in bl.read_mtl(os.path.join(prop_dir, entry)).values():
+                if not mat.refract:
+                    continue
+                key = "%s__%s" % (
+                    bl.safe_name(mat.name),
+                    bl.safe_name(os.path.splitext(mat.albedo)[0]))
+                mic_name = "MI_" + bl.safe_name(key)
+                refract_records[(package + "/Props/Materials", mic_name)] = (
+                    "%s/%s" % (entry, mat.name), mat, prop_dir, textures)
+
+    refract_normals = 0
+    refract_parented = 0
+    expected_refract_parent = "/Game/VtMB/Materials/M_Refract.M_Refract"
+    for (mat_package, mic_name), (owner, mat, source_dir, tex_index) in sorted(
+            refract_records.items()):
+        normal_asset = None
+        if not mat.refract_map:
+            message = "%s: Source Refract has no refractmap" % owner
+            unreal.log_error("[verify] " + message)
+            errors.append(message)
+        else:
+            source = os.path.join(source_dir, mat.refract_map.replace("/", os.sep))
+            if not os.path.isfile(source):
+                message = "%s: Source Refract PNG missing: %s" % (owner, source)
+                unreal.log_error("[verify] " + message)
+                errors.append(message)
+            normal_name = "T_" + bl.safe_name(os.path.splitext(mat.refract_map)[0])
+            normal_data = tex_index.get(normal_name)
+            normal_asset = normal_data.get_asset() if normal_data is not None else None
+            if normal_asset is None:
+                message = "%s: baked Source Refract normal missing: %s" % (
+                    owner, normal_name)
+                unreal.log_error("[verify] " + message)
+                errors.append(message)
+            elif normal_asset.get_editor_property("srgb") or normal_asset.get_editor_property(
+                    "compression_settings") != unreal.TextureCompressionSettings.TC_NORMALMAP:
+                message = "%s: Source Refract map is not linear normal-compressed: %s" % (
+                    owner, normal_name)
+                unreal.log_error("[verify] " + message)
+                errors.append(message)
+            else:
+                refract_normals += 1
+
+        mic_path = "%s/%s" % (mat_package, mic_name)
+        mic = unreal.EditorAssetLibrary.load_asset(mic_path)
+        if mic is None:
+            message = "%s: baked Source Refract material instance missing: %s" % (
+                owner, mic_path)
+            unreal.log_error("[verify] " + message)
+            errors.append(message)
+            continue
+        parent = mic.get_editor_property("parent")
+        if parent is None or parent.get_path_name() != expected_refract_parent:
+            message = "%s: Source Refract MIC parent is not M_Refract" % owner
+            unreal.log_error("[verify] " + message)
+            errors.append(message)
+            continue
+        bound_normal = unreal.MaterialEditingLibrary.get_material_instance_texture_parameter_value(
+            mic, "RefractMap")
+        if normal_asset is None or bound_normal != normal_asset:
+            message = "%s: Source Refract MIC has no matching RefractMap binding" % owner
+            unreal.log_error("[verify] " + message)
+            errors.append(message)
+            continue
+        bound_amount = unreal.MaterialEditingLibrary.get_material_instance_scalar_parameter_value(
+            mic, "SourceRefractAmount")
+        if abs(float(bound_amount) - mat.refract_amount) > 1e-6:
+            message = "%s: Source Refract amount binding drifted (%.6f != %.6f)" % (
+                owner, float(bound_amount), mat.refract_amount)
+            unreal.log_error("[verify] " + message)
+            errors.append(message)
+            continue
+        refract_parented += 1
+
+    rain_placements = 0
+    props_path = os.path.join(world_dir, map_name + ".props")
+    if os.path.isfile(props_path):
+        with open(props_path, "r", encoding="utf-8", errors="replace") as handle:
+            rain_placements = sum(
+                1 for line in handle
+                if line.split() and line.split()[0] ==
+                "models_scenery_structural_santamonica_rain_window")
+    if map_name == "sp_theatre":
+        if len(refract_records) != 1:
+            message = "sp_theatre expected 1 Source Refract material, found %d" % len(
+                refract_records)
+            unreal.log_error("[verify] " + message)
+            errors.append(message)
+        if rain_placements != 6:
+            message = "sp_theatre expected 6 rain-window Refract cards, found %d" % (
+                rain_placements)
+            unreal.log_error("[verify] " + message)
+            errors.append(message)
+    unreal.log("[verify] Source Refract %d flagged / %d normal / %d parented / "
+               "%d rain-window placements" % (
+                   len(refract_records), refract_normals, refract_parented, rain_placements))
 
     ents_path = os.path.join(os.fspath(export_root()), map_name, map_name + ".ents")
     annotated = set()
