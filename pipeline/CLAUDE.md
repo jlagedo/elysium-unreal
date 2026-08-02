@@ -20,6 +20,17 @@ scripts are library or worker surfaces called by that command. Imports are absol
 `elysium_pipeline.*` imports. No module constructs a repository-relative output path,
 mutates `sys.path`, or assumes a current directory.
 
+## Tests
+
+Python tests are `unittest`, and pytest is not installed. Run one module from the repo
+root as `uv run python -m unittest pipeline.tests.<module>`; `unittest discover -s
+pipeline/tests` fails because that directory is not an importable package.
+
+`sqlite3.connect()` used as a context manager commits but does not close. On Windows the
+open handle blocks `TemporaryDirectory` cleanup, so a test that opens a session database
+closes it explicitly or fails in teardown with `PermissionError` rather than on the
+assertion it was making.
+
 ## Path contract
 
 `elysium_pipeline.paths` is the only offline path resolver:

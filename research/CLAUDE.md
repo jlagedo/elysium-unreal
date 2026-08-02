@@ -21,3 +21,10 @@ into the owning topic document; generated evidence is not copied into Git.
 Research commands run through `uv run elysium research <case>`. A command that modifies
 the original VtMB install must require an explicit install action and provide a verified
 uninstall path.
+
+That wrapper is not optional: the CLI is what loads `.elysium.local.env`, so invoking a
+tool as `uv run python <path>` dies on `ELYSIUM_WORK_ROOT is not configured`. Dispatch
+resolves `research/cases/<name>/` first and falls back to a unique
+`research/tooling/**/<name>.py`, so a case and a tool may not share a name. Remaining
+arguments pass through to the tool, which means `--help` is consumed by the CLI and never
+reaches it.
