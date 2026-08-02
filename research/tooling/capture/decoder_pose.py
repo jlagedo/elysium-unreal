@@ -2,18 +2,23 @@
 
 A library with no command of its own, beside `verify_transform_difference.py`
 the way `decoder_coverage.py` sits beside `verify_byte_coverage.py`. It holds
-three separable things:
+four separable things:
 
-1. the skeleton read out of a model image, which is `mdl_skel.read_bones` run
-   **unmodified** and nothing else — the decoder under measurement is never
-   edited, reimplemented or worked around here;
+1. the skeleton and the animation clip read out of a model image, which are
+   `mdl_skel.read_bones` and `mdl_skel.read_anim` run **unmodified** and nothing
+   else — the decoder under measurement is never edited, reimplemented or worked
+   around here;
 2. the composition and palette rules, which are **transcribed** from the
    confirmed decompilation and are not an Elysium code path: Unreal composes
    glTF conventionally through glTFRuntime, and `mdl_gltf` discards
    `StudioBone.poseToBone` and regenerates inverse binds by ordinary hierarchy
    FK, so there is no shipped implementation of a `Flags & 0x2` hierarchy or of
    a `poseToBone` palette to compare against;
-3. the metrics and their reporting bands, which
+3. the frame interpolation, cell blend and owner-to-entity bone correspondence a
+   decoded clip has to pass through before it can be held against a captured
+   pose. Only the first is inside `mdl_skel`; the other two are runtime bindings
+   the export approximates, so each carries its own candidate;
+4. the metrics and their reporting bands, which
    `docs/vtmb/vtmb-animation-reverse-engineering.md` 11.3 owns.
 
 Every transform is a 3x4 row-major `float64` array shaped `(..., 3, 4)` — the
@@ -32,6 +37,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import re
 import struct
 
 import numpy as np
@@ -248,6 +254,289 @@ def skeleton_from_image(image: bytes, checksum: int = 0) -> Skeleton:
     )
 
 
+# --- clips -------------------------------------------------------------------
+
+# `StudioAnimDesc`, from docs/vtmb/animation_and_movers.md A.3: 72 bytes at
+# `LocalAnimIndex`@268, `fps`@4 and `numframes`@12. Format facts, not walk rules.
+HEADER_NUM_ANIM = 264
+HEADER_ANIM_INDEX = 268
+ANIMDESC_STRIDE = 72
+ANIMDESC_FPS = 4
+ANIMDESC_FRAMES = 12
+
+#: How a decoded clip is sampled at a witnessed frame and fraction.
+#:
+#: `frame` takes the shipped decoder's own key and nothing else, which is what
+#: `mdl_gltf` bakes into glTF and hands to the runtime. `linear` adds the frame
+#: interpolation A.4b names — `FUN_10089b20` truncates
+#: `floor((numframes - 1) * cycle)` and passes the remainder to both channel
+#: decoders — as a component-wise mix of the two neighbouring samples, the shape
+#: Source's `CalcBonePosition`/`CalcBoneQuaternion` interpolate in.
+INTERPOLATIONS = ("linear", "frame")
+
+
+@dataclass(frozen=True)
+class Clip:
+    """One animation decoded by the shipped decoder, unmodified.
+
+    Held as `float32` because that is the precision the samples were produced
+    in: a captured `matrix3x4_t` is float32 and so is every bind and scale field
+    the decode multiplies, so widening here would buy nothing and a whole
+    cutscene's clips have to fit in memory at once.
+    """
+
+    positions: np.ndarray     # (frames, bones, 3) float32
+    quaternions: np.ndarray   # (frames, bones, 4) float32
+    frames: int
+    fps: float
+    bones: int
+    fault: str = ""
+
+
+def animation_descriptor(image: bytes, index: int) -> tuple[int, int, float]:
+    """`(base, numframes, fps)` of one local animation, or a raise if unreadable."""
+    count = struct.unpack_from("<i", image, HEADER_NUM_ANIM)[0]
+    if not 0 <= index < count:
+        raise IndexError(f"animation {index} outside NumLocalAnims {count}")
+    base = struct.unpack_from("<i", image, HEADER_ANIM_INDEX)[0] + index * ANIMDESC_STRIDE
+    frames = struct.unpack_from("<i", image, base + ANIMDESC_FRAMES)[0]
+    fps = struct.unpack_from("<f", image, base + ANIMDESC_FPS)[0]
+    return base, frames, fps
+
+
+def clip_from_image(image: bytes, index: int) -> Clip:
+    """Decode one local animation with the shipped decoder, unmodified.
+
+    `mdl_skel.read_anim` materialises every frame of every bone, which is the
+    call the exporter makes; sampling one frame out of the result is what keeps
+    the thing measured the shipped decode rather than a frame-seeking rewrite of
+    it. A track that will not read leaves a `fault` rather than raising, so one
+    unreadable clip does not lose every other clip in the same run.
+    """
+    try:
+        base, frames, fps = animation_descriptor(image, index)
+        bones = mdl_skel.read_bones(image)
+        decoded = mdl_skel.read_anim(image, bones, base, frames)
+    except Exception:  # noqa: BLE001 - the fault is the finding, not the traceback
+        return Clip(
+            positions=np.zeros((0, 0, 3), dtype=np.float32),
+            quaternions=np.zeros((0, 0, 4), dtype=np.float32),
+            frames=0,
+            fps=0.0,
+            bones=0,
+            fault="animation_unreadable",
+        )
+    positions = np.array(
+        [[bone[0] for bone in frame] for frame in decoded], dtype=np.float32
+    )
+    quaternions = np.array(
+        [[bone[1] for bone in frame] for frame in decoded], dtype=np.float32
+    )
+    return Clip(
+        positions=positions.reshape(len(decoded), len(bones), 3),
+        quaternions=quaternions.reshape(len(decoded), len(bones), 4),
+        frames=len(decoded),
+        fps=float(fps),
+        bones=len(bones),
+    )
+
+
+def sample_clip(
+    clip: Clip,
+    frame: np.ndarray,
+    fraction: np.ndarray,
+    rule: str,
+    bones: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Sample a decoded clip at a batch of witnessed frames.
+
+    `frame` and `fraction` are `(N,)`; the result is `(N, k, 3)` and `(N, k, 4)`
+    over the `bones` the caller asked for, or over all of them. The frame is
+    clamped to the clip's last, and so is its successor — A.4 records that
+    retail's own look-ahead runs past the end of a track there, so clamping is
+    this side declining to invent the byte rather than a claim about what retail
+    read.
+    """
+    first = np.clip(np.asarray(frame, dtype=np.int64), 0, max(clip.frames - 1, 0))
+    columns = np.arange(clip.bones) if bones is None else np.asarray(bones)
+    grid = np.ix_(first, columns)
+    position = clip.positions[grid].astype(np.float64)
+    quaternion = clip.quaternions[grid].astype(np.float64)
+    if rule == "frame":
+        return position, quaternion
+    second = np.ix_(np.clip(first + 1, 0, max(clip.frames - 1, 0)), columns)
+    alpha = np.asarray(fraction, dtype=np.float64)[:, None, None]
+    position = position * (1.0 - alpha) + clip.positions[second].astype(np.float64) * alpha
+    mixed = quaternion * (1.0 - alpha) + clip.quaternions[second].astype(np.float64) * alpha
+    return position, mixed / np.maximum(
+        np.linalg.norm(mixed, axis=-1, keepdims=True), 1.0e-30
+    )
+
+
+def blend_cells(
+    first: tuple[np.ndarray, np.ndarray],
+    second: tuple[np.ndarray, np.ndarray],
+    weight: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Mix two fired blend cells at the axis weight the capture witnessed.
+
+    Transcribed from A.3's axis resolution: `FUN_10089740` evaluates the cells
+    either side of the resolved position and mixes them by the fractional part,
+    so the second cell's share is the weight and the first's is its complement.
+    The rotation is a shortest-arc interpolation rather than a component mix,
+    which is the one place a blend and a frame sample differ.
+    """
+    alpha = np.asarray(weight, dtype=np.float64)[:, None]
+    position = first[0] * (1.0 - alpha[..., None]) + second[0] * alpha[..., None]
+    return position, slerp(first[1], second[1], np.broadcast_to(alpha, first[1].shape[:-1]))
+
+
+# --- owner-to-entity bone correspondence -------------------------------------
+
+# A biped bone's name is a family token and a role: `Bip01 L Hand`. A cinematic
+# bank holds several complete bipeds in one skeleton and tells them apart by the
+# token alone, so the role is what two skeletons share and the token is what
+# says which actor a chain belongs to.
+BIPED_FAMILY = re.compile(r"^(bip\d+)(?:\s+(.*))?$")
+
+#: How an owner's decoded bone is matched to the entity bone it was written to.
+#:
+#: `family_name` is the complete rule: the family token comes off the owner's own
+#: selected mask, so a cinematic bank's chains are told apart by evidence the
+#: capture carries rather than by which actor happens to be `Bip01`. `name` is
+#: plain name equality, which is what `mdl_gltf` bakes and glTFRuntime resolves
+#: at load, so its count is the cost of the current export.
+CORRESPONDENCES = ("family_name", "name")
+
+
+def biped_families(names: tuple[str, ...], selected: np.ndarray | None = None) -> set[str]:
+    """The distinct biped family tokens among a skeleton's (selected) bones."""
+    indices = (
+        range(len(names)) if selected is None else np.flatnonzero(selected).tolist()
+    )
+    found = set()
+    for index in indices:
+        match = BIPED_FAMILY.match(names[index].lower())
+        if match:
+            found.add(match.group(1))
+    return found
+
+
+def _match_key(name: str, family: str | None) -> str:
+    """The token two skeletons are matched on, with the family divided out."""
+    lowered = name.lower()
+    if family is None:
+        return lowered
+    match = BIPED_FAMILY.match(lowered)
+    if match and match.group(1) == family:
+        # A NUL keeps a de-familied role from colliding with a bone literally
+        # named for it; no studio bone name contains one.
+        return "\x00" + (match.group(2) or "")
+    return lowered
+
+
+# --- the include-model bone remap ---------------------------------------------
+
+# `StudioModelGroup`+0x10 addresses one 56-byte record per bone of the
+# *including* model: a `u16` source bone in the include model at +0x00, a
+# transform byte at +0x03, a loader-written dword at +0x04, and a 3x4 matrix at
+# +0x08. `docs/vtmb/mdl_v2531.md` owns the array's location and
+# `docs/vtmb/animation_and_movers.md` A.4b the rule that applies it: a clear
+# byte copies the source position and a set byte transforms it, while the source
+# rotation is copied verbatim either way.
+REMAP_RECORD_BYTES = 56
+REMAP_SOURCE = 0
+REMAP_TRANSFORM_BYTE = 3
+REMAP_MATRIX = 8
+REMAP_NO_SOURCE = 0xFFFF
+
+
+@dataclass(frozen=True)
+class BoneRemap:
+    """One include group's bone remap array, indexed by including-model bone."""
+
+    source: np.ndarray     # (n,) int32, -1 where the group has no source bone
+    transform: np.ndarray  # (n,) bool, whether the position is transformed
+    matrix: np.ndarray     # (n, 3, 4)
+
+
+def bone_remap(records: bytes, count: int) -> BoneRemap:
+    """Decode a captured remap array into its three parallel columns."""
+    source = np.array(
+        [
+            struct.unpack_from("<H", records, index * REMAP_RECORD_BYTES + REMAP_SOURCE)[0]
+            for index in range(count)
+        ],
+        dtype=np.int32,
+    )
+    return BoneRemap(
+        source=np.where(source == REMAP_NO_SOURCE, -1, source),
+        transform=np.array(
+            [
+                bool(records[index * REMAP_RECORD_BYTES + REMAP_TRANSFORM_BYTE])
+                for index in range(count)
+            ]
+        ),
+        matrix=np.array(
+            [
+                struct.unpack_from(
+                    "<12f", records, index * REMAP_RECORD_BYTES + REMAP_MATRIX
+                )
+                for index in range(count)
+            ],
+            dtype=np.float64,
+        ).reshape(count, 3, 4),
+    )
+
+
+def apply_remap(
+    position: np.ndarray, remap: BoneRemap, bones: np.ndarray
+) -> np.ndarray:
+    """Transform the positions of the `bones` whose transform byte is set.
+
+    `position` is `(N, k, 3)` over the entity bones `bones` names; the rotation
+    is not touched, because A.4b records that the source quaternion is copied to
+    the target in both branches.
+    """
+    take = remap.transform[bones]
+    if not take.any():
+        return position
+    matrix = remap.matrix[bones]
+    moved = (
+        np.einsum("kij,nkj->nki", matrix[..., :3], position) + matrix[..., 3]
+    )
+    return np.where(take[None, :, None], moved, position)
+
+
+def correspondence(
+    entity_names: tuple[str, ...],
+    owner_names: tuple[str, ...],
+    *,
+    entity_family: str | None = None,
+    owner_family: str | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """`(entity bone, owner bone)` index pairs, first owner bone of a name wins.
+
+    With both families given the two skeletons are matched on the role alone,
+    which is what lets a 288-bone cinematic bank drive a 66-bone character. With
+    neither, this is plain name equality.
+    """
+    source: dict[str, int] = {}
+    for index, name in enumerate(owner_names):
+        source.setdefault(_match_key(name, owner_family), index)
+    target: list[int] = []
+    origin: list[int] = []
+    for index, name in enumerate(entity_names):
+        found = source.get(_match_key(name, entity_family))
+        if found is not None:
+            target.append(index)
+            origin.append(found)
+    return (
+        np.array(target, dtype=np.int64),
+        np.array(origin, dtype=np.int64),
+    )
+
+
 # --- transforms --------------------------------------------------------------
 
 
@@ -319,11 +608,19 @@ def payload_local_pose(payload: bytes, bones: int) -> tuple[np.ndarray, np.ndarr
     return positions.reshape(bones, 3), quaternions.reshape(bones, 4)
 
 
-def payload_selected(payload: bytes, bones: int) -> np.ndarray:
-    """Read an evaluation payload's selected-bone mask as a boolean array."""
+def payload_selected(
+    payload: bytes, bones: int, *, offset: int | None = None
+) -> np.ndarray:
+    """Read a selected-bone mask out of a captured payload as a boolean array.
+
+    An evaluation payload carries its mask after the position and quaternion
+    arrays; a sequence contribution carries the owner's own mask after its pose
+    parameters, and passes that displacement in rather than having it derived.
+    """
     words = (bones + 31) // 32
     raw = np.frombuffer(
-        payload, dtype="<u4", count=words, offset=bones * 7 * 4
+        payload, dtype="<u4", count=words,
+        offset=bones * 7 * 4 if offset is None else offset,
     )
     bits = np.unpackbits(raw.view(np.uint8), bitorder="little")
     return bits[:bones].astype(bool)

@@ -141,7 +141,6 @@ from research.tooling.capture.verify_transform_difference import (
     MAX_REPORTED_EXEMPLARS,
     MAX_REPORTED_MODELS,
     REPORT_NAME,
-    UNREACHED,
     compare as compare_transform,
     summarize as summarize_transform,
     verify as verify_transform,
@@ -248,6 +247,7 @@ def animation_record(
     local_pose: list[tuple[tuple[float, ...], tuple[float, ...]]] | None = None,
     selected: set[int] | None = None,
     root: tuple[float, ...] | None = None,
+    sample_phase: float = 0.25,
 ) -> bytes:
     # The composed-pose stage is the only one that receives a root transform, so
     # a FINL record carries the trailer and a BASE record carries none unless a
@@ -300,7 +300,7 @@ def animation_record(
             checksum,
             bone_count,
             4,
-            0.25,
+            sample_phase,
             0.5,
             1,
             0x9000,
@@ -8457,16 +8457,24 @@ class TransformDifferenceTests(unittest.TestCase):
         self.assertFalse(report["verdict"]["transform_difference_compared"])
         self.assertIn("index_capture_database", report["verdict"]["statement"])
 
-    def test_the_unreached_stages_report_a_reason_rather_than_being_omitted(
+    def test_a_session_with_no_contributions_reports_a_reason_per_stage(
         self,
     ) -> None:
+        """The clip stages need a bound `BASE`; without one they say so.
+
+        A session carrying draws and composed poses but no contribution stream
+        can still be differenced at the two composition stages, so the clip
+        stages report why they were not reached rather than the whole pass
+        refusing to judge.
+        """
         with tempfile.TemporaryDirectory() as directory:
             report = self._report(directory)
         for name in ("decoded_locals", "composed_locals"):
             stage = report["stages"][name]
             self.assertFalse(stage["available"])
-            self.assertEqual(stage["reason"], UNREACHED)
-        self.assertIn(UNREACHED, report["verdict"]["accounted"])
+            self.assertIn("contribution", stage["reason"])
+        self.assertFalse(report["binding"]["available"])
+        self.assertTrue(report["verdict"]["transform_difference_compared"])
 
     def test_nothing_is_written_into_the_capture(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -8525,9 +8533,525 @@ class TransformDifferenceTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as directory:
                 reports.append(self._report(directory, perturb={1: (0.0, 0.0, 4.0)}))
         comparison = compare_transform(reports)
-        self.assertEqual(len(comparison["bone_to_world_split"]), 2)
+        self.assertEqual(len(comparison["bone_to_world_split_procedural"]), 2)
         self.assertTrue(comparison["clusters_in_every_run"])
         self.assertIn("coverage", comparison["statement"])
+
+
+
+# --- CAP4.3 pass two: the decoded and composed locals -------------------------
+#
+# The clip stages measure the shipped decoder, so a fixture has to carry a real
+# animation block: RLE runs, per-bone records, and an animdesc the witnessed
+# animation index reaches. `posscale` and `rotscale` are 1.0 in `model_image`,
+# so a hand-written sample is the raw key itself and the oracle below owes
+# nothing to the code it checks.
+
+CLIP_FRAMES = 5
+# One track per bone, each on a different channel, so a wrong channel order
+# shows as a wrong bone rather than as noise. Bone 2 carries `Flags & 0x2` and
+# bone 3 is its child, which keeps the split subtree animated.
+THEATRE_CLIP = Clip(
+    "@theatre",
+    CLIP_FRAMES,
+    tracks={
+        (0, 0): Track((CLIP_FRAMES, (10, 20, 30, 40, 50))),
+        (1, 2): Track((CLIP_FRAMES, (-4, -3, -2, -1, 0))),
+        (2, 6): Track((CLIP_FRAMES, (2, 3, 4, 5, 6))),
+        (3, 4): Track((CLIP_FRAMES, (1, 2, 3, 4, 5))),
+    },
+)
+THEATRE_CLIPS = (THEATRE_CLIP,)
+
+# A bank holding two complete bipeds, the shape a cinematic model has. The
+# `Bip02` chain carries the entity's own binds and is the one the mask selects;
+# the `Bip01` chain deliberately does not, so matching on the plain name reaches
+# a real bone with the wrong pose rather than reaching nothing.
+FAMILY_BONES = (
+    ("Bip01", -1, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0), 0),
+    ("Bip01 Spine", 0, (9.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0), 0),
+    ("Bip01 Neck", 1, (0.0, 9.0, 0.0), (0.0, 0.0, 0.0, 1.0), 0x2),
+    ("Bip01 Head", 2, (0.0, 0.0, 9.0), (0.0, 0.0, 0.0, 1.0), 0),
+    ("Bip02", -1, (0.0, 0.0, 0.0), (0.0, 0.0, HALF, HALF), 0),
+    ("Bip02 Spine", 4, (1.0, 2.0, 3.0), (HALF, 0.0, 0.0, HALF), 0),
+    ("Bip02 Neck", 5, (0.0, 4.0, 0.0), (0.0, HALF, 0.0, HALF), 0x2),
+    ("Bip02 Head", 6, (0.0, 1.0, 0.0), (0.0, 0.0, 0.0, 1.0), 0),
+    # A bone the bank has and the character does not, which is the ordinary
+    # shape of a shared bank: most of what it decodes belongs to somebody else.
+    ("Bip02 Ponytail1", 6, (0.0, 2.0, 0.0), (0.0, 0.0, 0.0, 1.0), 0),
+)
+FAMILY_CLIP = Clip(
+    "@theatre",
+    CLIP_FRAMES,
+    tracks={
+        (bone + 4, channel): track
+        for (bone, channel), track in THEATRE_CLIP.tracks.items()
+    },
+)
+FAMILY_CLIPS = (FAMILY_CLIP,)
+FAMILY_CHECKSUM = 0x3100
+FAMILY_MODEL = "models/bank.mdl"
+#: Where the bank's second biped starts, which is the chain the entity's own
+#: `Bip01` bones correspond to.
+FAMILY_OFFSET = 4
+
+
+def _track_samples(track: Track) -> list[int]:
+    """One channel's per-frame keys, expanded by hand from its runs."""
+    keys: list[int] = []
+    for total, run in track.runs:
+        for frame in range(total):
+            keys.append(run[min(frame, len(run) - 1)])
+    return keys
+
+
+def _clip_frame(bones, clip: Clip, frame: int):
+    """One frame of a clip, decoded by hand.
+
+    Position is a delta on the bind and rotation replaces the bind component,
+    which is A.4's asymmetry and the one thing worth writing out twice.
+    """
+    out = []
+    for index, entry in enumerate(bones):
+        _, _, position, quaternion, _ = _bone_spec(entry)
+        pos = list(position)
+        quat = list(quaternion)
+        for channel in range(CHANNEL_COUNT):
+            track = clip.tracks.get((index, channel))
+            if track is None:
+                continue
+            keys = _track_samples(track)
+            sample = keys[min(frame, len(keys) - 1)]
+            if channel < 3:
+                pos[channel] = position[channel] + sample
+            else:
+                quat[channel - 3] = float(sample)
+        norm = math.sqrt(sum(value * value for value in quat)) or 1.0
+        out.append((tuple(pos), tuple(value / norm for value in quat)))
+    return out
+
+
+def _clip_local(bones, clip: Clip, frame: int, fraction: float):
+    """A clip sampled between two frames, by hand."""
+    first = _clip_frame(bones, clip, frame)
+    if not fraction:
+        return first
+    second = _clip_frame(bones, clip, min(frame + 1, clip.numframes - 1))
+    out = []
+    for (position, quaternion), (next_position, next_quaternion) in zip(first, second):
+        mixed = [
+            a * (1.0 - fraction) + b * fraction
+            for a, b in zip(quaternion, next_quaternion)
+        ]
+        norm = math.sqrt(sum(value * value for value in mixed)) or 1.0
+        out.append(
+            (
+                tuple(
+                    a * (1.0 - fraction) + b * fraction
+                    for a, b in zip(position, next_position)
+                ),
+                tuple(value / norm for value in mixed),
+            )
+        )
+    return out
+
+
+class ClipStageTests(unittest.TestCase):
+    """CAP4.3 pass two: the decoded locals, the composed locals, and the chain.
+
+    Every session is synthetic and game-independent. The pose retail is said to
+    have produced is written by the hand-rolled decoder above, so the shipped
+    decoder agreeing with it is two independent readings of the same bytes
+    agreeing and not the decoder agreeing with itself.
+    """
+
+    def _session(
+        self,
+        session: Path,
+        *,
+        bones=ROTATED_BONES,
+        clips: tuple[Clip, ...] = THEATRE_CLIPS,
+        owner_bones=None,
+        owner_clips: tuple[Clip, ...] | None = None,
+        cycle: float = CONTRIBUTION_CYCLE,
+        animation_index: int = 0,
+        mask_bones: tuple[int, ...] | None = None,
+        base_pose=None,
+        final_pose=None,
+        selected: set[int] | None = None,
+        sample_phase: float | None = None,
+        perturb: dict[int, tuple[float, float, float]] | None = None,
+    ) -> None:
+        """One pose build: a fired contribution, its base pose, and its draw."""
+        count = len(bones)
+        owner = bones if owner_bones is None else owner_bones
+        owner_clips = clips if owner_clips is None else owner_clips
+        owner_count = len(owner)
+        cross = owner_bones is not None
+        checksum = FAMILY_CHECKSUM if cross else TRANSFORM_CHECKSUM
+        frame = sampled_frame(owner_clips[animation_index].numframes, cycle)
+        fraction = (owner_clips[animation_index].numframes - 1) * cycle - frame
+        decoded = _clip_local(owner, owner_clips[animation_index], frame, fraction)
+        if base_pose is None:
+            base_pose = (
+                decoded[FAMILY_OFFSET : FAMILY_OFFSET + count] if cross else decoded
+            )
+        if perturb:
+            base_pose = list(base_pose)
+            for index, offset in perturb.items():
+                position, quaternion = base_pose[index]
+                base_pose[index] = (
+                    tuple(a + b for a, b in zip(position, offset)),
+                    quaternion,
+                )
+        final_pose = base_pose if final_pose is None else final_pose
+        chosen = set(range(count)) if selected is None else selected
+        world = _expected_world(
+            bones, list(final_pose), TRANSFORM_ROOT, split=True,
+            seed=[IDENTITY_3X4] * count, selected=chosen,
+        )
+        binds = _bind_world(bones)
+        skin = [
+            _multiply_3x4(world[index], _invert_rigid_3x4(binds[index]))
+            for index in range(count)
+        ]
+        write_session(
+            session,
+            pose_records=pose_record(
+                6, 106, TRANSFORM_MODEL,
+                bone_count=count,
+                checksum=TRANSFORM_CHECKSUM,
+                client_entity=TRANSFORM_RENDERABLE,
+                generation=2,
+                carry_generation=1,
+                bone_to_world=world,
+                skin_palette=skin,
+            ),
+            animation_records=(
+                animation_record(
+                    b"BASE", 3, 103,
+                    bone_count=count,
+                    checksum=TRANSFORM_CHECKSUM,
+                    client_entity=TRANSFORM_ENTITY,
+                    generation=1,
+                    local_pose=list(base_pose),
+                    selected=chosen,
+                    sample_phase=cycle if sample_phase is None else sample_phase,
+                )
+                + animation_record(
+                    b"FINL", 4, 104,
+                    bone_count=count,
+                    checksum=TRANSFORM_CHECKSUM,
+                    client_entity=TRANSFORM_ENTITY,
+                    generation=1,
+                    local_pose=list(final_pose),
+                    selected=chosen,
+                    root=TRANSFORM_ROOT,
+                )
+                + bracket_record(
+                    b"PBLD", 5, 100, 105,
+                    generation=1, client_entity=TRANSFORM_RENDERABLE,
+                )
+            ),
+            contribution_records=(
+                contribution_record(
+                    b"ANIM", 1, 101,
+                    bones=owner_count,
+                    checksum=checksum,
+                    animation_index=animation_index,
+                    channel_bones=(
+                        mask_bones
+                        if mask_bones is not None
+                        else tuple(range(owner_count))
+                    ),
+                    clips=owner_clips,
+                    image_bones=owner_count,
+                    cycle=cycle,
+                )
+                + contribution_record(
+                    b"SEQP", 2, 102,
+                    bones=owner_count,
+                    checksum=checksum,
+                    sequence_index=0,
+                    mask_bones=(
+                        mask_bones
+                        if mask_bones is not None
+                        else tuple(range(owner_count))
+                    ),
+                    clips=owner_clips,
+                    image_bones=owner_count,
+                    cycle=cycle,
+                )
+            ),
+            census_records=(
+                observation_record(
+                    7, 88, TRANSFORM_MODEL,
+                    checksum=TRANSFORM_CHECKSUM, bone_count=count,
+                )
+                + image_record(
+                    8, 89,
+                    model_image(
+                        TRANSFORM_CHECKSUM, TRANSFORM_MODEL,
+                        bones=bones, clips=clips,
+                    ),
+                    checksum=TRANSFORM_CHECKSUM,
+                )
+                + (
+                    observation_record(
+                        9, 90, FAMILY_MODEL,
+                        checksum=FAMILY_CHECKSUM, bone_count=owner_count,
+                    )
+                    + image_record(
+                        10, 91,
+                        model_image(
+                            FAMILY_CHECKSUM, FAMILY_MODEL,
+                            bones=owner, clips=owner_clips,
+                        ),
+                        checksum=FAMILY_CHECKSUM,
+                    )
+                    if cross
+                    else b""
+                )
+            ),
+        )
+        finalize(session)
+        index_capture(session, rollup=False)
+
+    def _report(self, directory: str, **kwargs) -> dict:
+        session = Path(directory)
+        self._session(session, **kwargs)
+        return verify_transform(session)
+
+    def _stage(self, report, name):
+        stage = report["stages"][name]
+        self.assertTrue(stage["available"], stage.get("reason"))
+        return stage
+
+    def _bands(self, report, stage, candidate):
+        return report["stages"][stage]["candidates"][candidate]["records_by_band"]
+
+    # ---- the binding ----
+
+    def test_a_base_pose_binds_to_the_contribution_nested_below_it(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        binding = report["binding"]
+        self.assertTrue(binding["available"], binding.get("reason"))
+        self.assertEqual(binding["base_evaluations"], 1)
+        self.assertEqual(binding["paired_with_cells"], 1)
+        self.assertEqual(binding["base_records_with_no_paired_contribution"], 0)
+        self.assertEqual(binding["paired_records_whose_cycle_disagrees"], 0)
+        self.assertEqual(
+            binding["paired_records_whose_renderable_offset_disagrees"], 0
+        )
+
+    def test_a_cycle_that_disagrees_is_a_defect_rather_than_a_finding(self) -> None:
+        """The pairing is checked, not assumed.
+
+        Ranking two streams against each other would pair a base pose with the
+        wrong sequence silently. Requiring the cycle to agree turns that into a
+        stopped run, because differencing one sequence's decode against another
+        sequence's output would report a decoder failure that is not there.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory, sample_phase=0.75)
+        self.assertFalse(report["verdict"]["transform_difference_compared"])
+        self.assertIn(
+            "paired_records_whose_cycle_disagrees", report["verdict"]["defects"]
+        )
+
+    # ---- stage 1: the decoded locals ----
+
+    def test_the_shipped_decoder_reproduces_the_captured_base_pose(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        stage = self._stage(report, "decoded_locals")
+        self.assertEqual(stage["records"], 1)
+        self.assertEqual(stage["clips_decoded"], 1)
+        self.assertIn("mdl_skel", stage["our_side"])
+        self.assertEqual(
+            self._bands(report, "decoded_locals", "complete"),
+            {"excellent": 1, "investigate": 0, "definite": 0},
+        )
+
+    def test_a_wrong_local_names_its_bone_and_leaves_the_band(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory, perturb={2: (0.0, 0.0, 3.0)})
+        self.assertEqual(
+            self._bands(report, "decoded_locals", "complete"),
+            {"excellent": 0, "investigate": 0, "definite": 1},
+        )
+        named = [
+            row
+            for row in report["worst_bones"]
+            if row["stage"] == "decoded_locals" and row["candidate"] == "complete"
+        ]
+        self.assertEqual({row["bone"] for row in named}, {2})
+        self.assertEqual(named[0]["bone_name"], "Bip01 Neck")
+
+    def test_the_frame_key_candidate_prices_the_interpolation_the_export_defers(
+        self,
+    ) -> None:
+        """A cycle landing between two frames separates the two candidates.
+
+        `mdl_gltf` bakes one key per frame and leaves the interpolation to its
+        runtime, so holding the nearest key against retail's own sample measures
+        what that runtime owes rather than a decode error. The complete rule
+        interpolates and reproduces the capture.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory, cycle=0.3)
+        self.assertEqual(
+            self._bands(report, "decoded_locals", "complete"),
+            {"excellent": 1, "investigate": 0, "definite": 0},
+        )
+        self.assertEqual(
+            self._bands(report, "decoded_locals", "frame_key"),
+            {"excellent": 0, "investigate": 0, "definite": 1},
+        )
+
+    def test_the_biped_family_comes_off_the_owners_own_mask(self) -> None:
+        """A bank holding two skeletons is told apart by the mask, not the name.
+
+        The clip drives the bank's `Bip02` chain and the contribution's mask
+        selects exactly that chain, so the family the entity's `Bip01` bones map
+        to is witnessed rather than assumed. Plain name matching reaches the
+        bank's own `Bip01` chain, which is a real bone carrying the wrong pose —
+        the cost the current export pays on a cinematic bank.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(
+                directory,
+                owner_bones=FAMILY_BONES,
+                owner_clips=FAMILY_CLIPS,
+                mask_bones=(4, 5, 6, 7),
+            )
+        self.assertEqual(
+            self._bands(report, "decoded_locals", "complete"),
+            {"excellent": 1, "investigate": 0, "definite": 0},
+        )
+        self.assertEqual(
+            self._bands(report, "decoded_locals", "bone_name"),
+            {"excellent": 0, "investigate": 0, "definite": 1},
+        )
+
+    def test_an_owner_bone_with_no_entity_bone_is_counted_rather_than_compared(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(
+                directory,
+                owner_bones=FAMILY_BONES,
+                owner_clips=FAMILY_CLIPS,
+                mask_bones=(4, 5, 6, 7, 8),
+            )
+        counts = report["stages"]["decoded_locals"]["counts"]
+        self.assertEqual(counts["owner_bones_decoded_with_no_entity_target"], 1)
+
+    def test_a_cell_that_decoded_no_bone_is_excluded_with_its_reason(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory, mask_bones=())
+        stage = report["stages"]["decoded_locals"]
+        self.assertEqual(stage["counts"]["cells_that_decoded_no_bone"], 1)
+        self.assertFalse(stage["available"])
+        self.assertIn(
+            "cells_that_decoded_no_bone", report["verdict"]["accounted_counts"]
+        )
+
+    # ---- stage 2: the composed locals ----
+
+    def test_a_final_pose_equal_to_its_base_pose_leaves_the_layer_stage_empty(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        stage = self._stage(report, "composed_locals")
+        self.assertEqual(
+            self._bands(report, "composed_locals", "last_evaluation"),
+            {"excellent": 1, "investigate": 0, "definite": 0},
+        )
+        self.assertIn("no offline model", stage["implementation"])
+
+    def test_a_layer_stage_shows_at_the_composed_locals_and_not_at_the_decode(
+        self,
+    ) -> None:
+        """The two stages separate a decode error from a blend or layer error.
+
+        The decode still reproduces the base pose exactly; the final locals are
+        somewhere else, which is the transition and controller stage acting.
+        Reporting only one of the two would attribute this to the decoder.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            frame = sampled_frame(CLIP_FRAMES, CONTRIBUTION_CYCLE)
+            decoded = _clip_local(ROTATED_BONES, THEATRE_CLIP, frame, 0.0)
+            layered = list(decoded)
+            position, quaternion = layered[1]
+            layered[1] = (tuple(a + b for a, b in zip(position, (0.0, 0.0, 5.0))),
+                          quaternion)
+            self._session(session, final_pose=layered)
+            report = verify_transform(session)
+        self.assertEqual(
+            self._bands(report, "decoded_locals", "complete"),
+            {"excellent": 1, "investigate": 0, "definite": 0},
+        )
+        self.assertEqual(
+            self._bands(report, "composed_locals", "last_evaluation"),
+            {"excellent": 0, "investigate": 0, "definite": 1},
+        )
+
+    # ---- the chain ----
+
+    def test_the_chain_attributes_a_decode_error_to_the_decode(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory, perturb={2: (0.0, 0.0, 3.0)})
+        chain = report["chain"]
+        self.assertTrue(chain["available"], chain.get("reason"))
+        self.assertEqual(chain["by_stage"]["decoded_locals"], 1)
+        self.assertEqual(chain["by_stage"]["bone_to_world"], 0)
+        self.assertEqual(chain["by_stage"]["none"], 0)
+
+    def test_the_chain_reaches_the_palette_when_every_stage_agrees(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory)
+        chain = report["chain"]
+        self.assertEqual(chain["by_stage"]["none"], 1)
+        self.assertEqual(
+            chain["candidates"]["chained"]["records_by_band"],
+            {"excellent": 1, "investigate": 0, "definite": 0},
+        )
+
+    def test_the_chain_attributes_a_layer_error_to_the_composed_locals(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            frame = sampled_frame(CLIP_FRAMES, CONTRIBUTION_CYCLE)
+            decoded = _clip_local(ROTATED_BONES, THEATRE_CLIP, frame, 0.0)
+            layered = list(decoded)
+            position, quaternion = layered[1]
+            layered[1] = (tuple(a + b for a, b in zip(position, (0.0, 0.0, 5.0))),
+                          quaternion)
+            self._session(session, final_pose=layered)
+            report = verify_transform(session)
+        self.assertEqual(report["chain"]["by_stage"]["composed_locals"], 1)
+        self.assertEqual(report["chain"]["by_stage"]["decoded_locals"], 0)
+
+    # ---- ranking ----
+
+    def test_worst_bones_is_ranked_inside_each_candidate(self) -> None:
+        """A deliberately wrong candidate must not crowd out the complete rule.
+
+        `conventional` and `regenerated` exist to be worse, so a list ranked
+        across candidates is theirs alone and the rule under measurement ends up
+        with no bone named. Ranking inside each candidate is what attributes a
+        residual to a bone.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._report(directory, perturb={2: (0.0, 0.0, 3.0)})
+        pairs = {(row["stage"], row["candidate"]) for row in report["worst_bones"]}
+        self.assertIn(("decoded_locals", "complete"), pairs)
+        self.assertIn(("bone_to_world", "conventional"), pairs)
+        for row in report["worst_bones"]:
+            self.assertIn("candidate_rank_truncated", row)
 
 
 if __name__ == "__main__":
