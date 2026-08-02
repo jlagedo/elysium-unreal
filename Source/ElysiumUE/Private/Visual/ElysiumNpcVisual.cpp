@@ -67,8 +67,35 @@ namespace
 	}
 }
 
+namespace
+{
+	// The one config every .glb in this namespace is parsed with. Held so the basis and scale a
+	// sidecar has to follow are read back off the loader rather than restated beside it.
+	const FglTFRuntimeConfig& AssetConfig()
+	{
+		static const FglTFRuntimeConfig Config;
+		return Config;
+	}
+}
+
 namespace ElysiumNpcVisual
 {
+	// FglTFRuntimeParser::GetNodeTransform, applied to something that is not a node: conjugate by
+	// the scene basis, then scale the translation. A rule's `pos`/`quat` entries are the same kind
+	// of quantity as a bone's own local, so they take the same treatment and land in the same space.
+	FTransform ImportGlbLocal(const FTransform& GlbLocal)
+	{
+		const FMatrix Basis = AssetConfig().GetMatrix();
+		FTransform Imported(Basis.Inverse() * GlbLocal.ToMatrixWithScale() * Basis);
+		Imported.ScaleTranslation(AssetConfig().SceneScale);
+		return Imported;
+	}
+
+	FVector ImportGlbDirection(const FVector& GlbDirection)
+	{
+		return AssetConfig().GetMatrix().TransformVector(GlbDirection);
+	}
+
 	UglTFRuntimeAsset* LoadAssetFromPath(const FString& FullPath, FString& OutError)
 	{
 		OutError.Reset();
@@ -80,7 +107,7 @@ namespace ElysiumNpcVisual
 		// Default config: SceneScale 100 (m->cm), TransformBaseType::Default, bAllowExternalFiles so
 		// the sibling tex/*.png resolve relative to the .glb — the raw glb mdl_gltf.py writes loads
 		// 1:1. A bank carries no materials, so only the basis/scale half of this applies to one.
-		FglTFRuntimeConfig Config;
+		const FglTFRuntimeConfig& Config = AssetConfig();
 		UglTFRuntimeAsset* Asset = UglTFRuntimeFunctionLibrary::glTFLoadAssetFromFilename(FullPath, false, Config);
 		if (Asset == nullptr)
 		{

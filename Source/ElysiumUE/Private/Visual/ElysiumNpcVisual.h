@@ -30,6 +30,15 @@ namespace ElysiumNpcVisual
 	// is the expensive step (a bank is 2-35 MB).
 	UglTFRuntimeAsset* LoadAssetFromPath(const FString& FullPath, FString& OutError);
 
+	// The import transform every .glb loaded through this namespace goes through: glTFRuntime
+	// conjugates each node transform by its configured scene basis and scales translation by its
+	// scene scale (metres to centimetres). A sidecar written in the glb's own space — the procedural
+	// rule table (CAP7.1) is one — reaches the skeleton built from that same file by passing through
+	// these, which is why the constants are read back off the loader's own config rather than
+	// restated. Nothing here is a Source-to-Unreal conversion; that half already happened offline.
+	FTransform ImportGlbLocal(const FTransform& GlbLocal);
+	FVector ImportGlbDirection(const FVector& GlbDirection);
+
 	// Bind one named clip from Asset onto Mesh's compatible skeleton by bone name. VtMB banks author
 	// biped-local tracks directly; generic rest-pose retargeting corrupts those locals and Bip01's
 	// absolute scene placement. Optional source tracks absent from the target are filtered before

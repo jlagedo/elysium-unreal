@@ -211,6 +211,13 @@ struct FElysiumContentPaths
 	// `npcs[stem].facial` ("facial/<stem>.json"); a model with no flex rig names none.
 	static FString NpcFacial(const FString& RelPath) { return NpcDir() / RelPath; }
 
+	// The procedural bone rule table beside a driven model's glb (CAP7.1): per driven bone, its
+	// control bone, the axis as a converted direction, and the six-entry pos/quat table the runtime
+	// blends. RelPath is `npc_index.json`'s own `procedural` value — "procedural/<stem>.json", or
+	// "animated_props/procedural/<stem>.json" for a skeletal prop. A model with no `ProcType == 1`
+	// bone names none; 130 of the 185 exported models carry one.
+	static FString NpcProcedural(const FString& RelPath) { return NpcDir() / RelPath; }
+
 	// The labelled sky set (debug, sky-ambience RE-A2/B1). Six self-describing face images —
 	// suffix, predicted axis, TOP banner, up arrow, tagged corners, edge neighbours — authored by
 	// research/tooling/probes/sky_probe.py, which also installs them into the *original* game so the two ends of the

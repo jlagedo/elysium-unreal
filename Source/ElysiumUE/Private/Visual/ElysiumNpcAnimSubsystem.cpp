@@ -14,6 +14,7 @@ void UElysiumNpcAnimSubsystem::Deinitialize()
 	BankAssets.Reset();
 	ClipSets.Reset();
 	FacialRigs.Reset();
+	CompositionRigs.Reset();
 	Super::Deinitialize();
 }
 
@@ -112,6 +113,90 @@ TSharedPtr<const FElysiumFacialRig> UElysiumNpcAnimSubsystem::GetFacialRig(const
 		}
 	}
 	FacialRigs.Add(Stem, Result);
+	return Result;
+}
+
+namespace
+{
+	// Build one composition rig out of the two things that declare it: the index's own split-bone
+	// inventory and, when the model declares any driven bone, the rule table beside its glb. Either
+	// half may be empty; a model with neither is answered null, and that is a normal load.
+	TSharedPtr<const FElysiumCompositionRig> BuildCompositionRig(const FString& Stem,
+		const TArray<FString>& SplitBones, const FString& ProceduralRelPath, FString& OutError)
+	{
+		TSharedPtr<FElysiumCompositionRig> Rig = MakeShared<FElysiumCompositionRig>();
+		Rig->Stem = Stem;
+		Rig->SplitBones.Reserve(SplitBones.Num());
+		for (const FString& BoneName : SplitBones)
+		{
+			Rig->SplitBones.Add(FName(*BoneName));
+		}
+		if (!ProceduralRelPath.IsEmpty() && !Rig->LoadAxisRules(ProceduralRelPath, OutError))
+		{
+			// A named-but-unreadable table is a fault, not a model without one: the split half is
+			// still installed so the body keeps whatever composition it can have.
+			Rig->AxisRules.Reset();
+		}
+		return Rig->HasWork() ? TSharedPtr<const FElysiumCompositionRig>(Rig) : nullptr;
+	}
+}
+
+TSharedPtr<const FElysiumCompositionRig> UElysiumNpcAnimSubsystem::GetCompositionRig(const FString& Stem)
+{
+	if (Stem.IsEmpty())
+	{
+		return nullptr;
+	}
+	if (const TSharedPtr<const FElysiumCompositionRig>* Cached = CompositionRigs.Find(Stem))
+	{
+		return *Cached;
+	}
+
+	const FElysiumNpcIndexEntry* Entry = GetIndex().Npcs.Find(Stem);
+	TSharedPtr<const FElysiumCompositionRig> Result;
+	if (Entry != nullptr)
+	{
+		FString Error;
+		Result = BuildCompositionRig(Stem, Entry->SplitRotationBones, Entry->Procedural, Error);
+		if (!Error.IsEmpty())
+		{
+			UE_LOG(LogElysiumNpcAnim, Warning, TEXT("procedural '%s': %s"), *Stem, *Error);
+		}
+		else if (Result.IsValid())
+		{
+			UE_LOG(LogElysiumNpcAnim, Verbose, TEXT("composition '%s': %d split bone(s), %d rule(s)"),
+				*Stem, Result->SplitBones.Num(), Result->AxisRules.Num());
+		}
+	}
+	CompositionRigs.Add(Stem, Result);
+	return Result;
+}
+
+TSharedPtr<const FElysiumCompositionRig> UElysiumNpcAnimSubsystem::GetAnimatedPropCompositionRig(
+	const FString& ModelPath)
+{
+	if (ModelPath.IsEmpty())
+	{
+		return nullptr;
+	}
+	const FElysiumAnimatedPropEntry* Entry = GetIndex().FindAnimatedProp(ModelPath);
+	if (Entry == nullptr)
+	{
+		return nullptr;
+	}
+	if (const TSharedPtr<const FElysiumCompositionRig>* Cached = CompositionRigs.Find(Entry->Stem))
+	{
+		return *Cached;
+	}
+
+	FString Error;
+	TSharedPtr<const FElysiumCompositionRig> Result =
+		BuildCompositionRig(Entry->Stem, Entry->SplitRotationBones, Entry->Procedural, Error);
+	if (!Error.IsEmpty())
+	{
+		UE_LOG(LogElysiumNpcAnim, Warning, TEXT("procedural prop '%s': %s"), *Entry->Stem, *Error);
+	}
+	CompositionRigs.Add(Entry->Stem, Result);
 	return Result;
 }
 
@@ -262,6 +347,40 @@ FString UElysiumNpcAnimSubsystem::PickIdleClip(const FString& Stem, const FStrin
 		return Candidates[0];
 	}
 	return Candidates[Variant % Candidates.Num()];
+}
+
+FString UElysiumNpcAnimSubsystem::PickActivityClip(const FString& Stem, const FString& Activity,
+	int32 Variant)
+{
+	const FElysiumNpcClipSet* Set = GetClipSet(Stem);
+	if (!Set || Activity.IsEmpty())
+	{
+		return FString();
+	}
+	TArray<FString> Candidates = Set->ByActivity(Activity);
+	if (Candidates.IsEmpty())
+	{
+		return FString();
+	}
+	Candidates.Sort();
+	int32 TotalWeight = 0;
+	for (const FString& Label : Candidates)
+	{
+		const FElysiumNpcClip* Clip = Set->Find(Label);
+		TotalWeight += FMath::Max(1, Clip ? Clip->Weight : 1);
+	}
+	const uint32 Seed = HashCombineFast(GetTypeHash(Stem.ToLower()), static_cast<uint32>(FMath::Max(0, Variant)));
+	int32 Pick = static_cast<int32>(Seed % static_cast<uint32>(TotalWeight));
+	for (const FString& Label : Candidates)
+	{
+		const FElysiumNpcClip* Clip = Set->Find(Label);
+		Pick -= FMath::Max(1, Clip ? Clip->Weight : 1);
+		if (Pick < 0)
+		{
+			return Label;
+		}
+	}
+	return Candidates[0];
 }
 
 const TCHAR* UElysiumNpcAnimSubsystem::TierName(EElysiumIdleTier Tier)

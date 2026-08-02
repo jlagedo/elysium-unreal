@@ -23,6 +23,9 @@ public class ElysiumUE : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
 			"InputCore", "EnhancedInput",
+			// Native NPC locomotion: Recast owns the runtime walkable graph, while the
+			// engine AI/path-following stack moves character capsules over it.
+			"AIModule", "NavigationSystem",
 			"Niagara",
 			"AudioMixer", "AudioModulation", "AudioExtensions",
 			// Runtime asset loading: build meshes in code (no editor bake) and
@@ -35,6 +38,10 @@ public class ElysiumUE : ModuleRules
 			// (out/npc, standard glTF 2.0) at runtime -- no editor import. Vendored under
 			// Plugins/External/glTFRuntime; a runtime module, so it stays in every config.
 			"glTFRuntime",
+			// CAP7.2: VtMB's two composition stages are FAnimNode_SkeletalControlBase nodes, which
+			// live in AnimGraphRuntime. A runtime module -- the nodes are native and driven from
+			// UElysiumNpcAnimInstance's proxy, so none of the editor AnimGraph stack is involved.
+			"AnimGraphRuntime",
 			// 8.7 ropes: the stock (enabled-by-default) CableComponent plugin's UCableComponent
 			// renders each overhead cable as a Verlet-simulated strand built at map load.
 			"CableComponent",

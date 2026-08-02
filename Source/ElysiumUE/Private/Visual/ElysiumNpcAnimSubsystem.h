@@ -4,6 +4,7 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 
 #include "Substrate/ElysiumDisposition.h"
+#include "Visual/ElysiumCompositionRig.h"
 #include "Visual/ElysiumFacialRig.h"
 #include "Visual/ElysiumNpcClips.h"
 
@@ -51,6 +52,15 @@ public:
 	// body and leaves the face still. Shared rather than raw: an anim instance holds one for as long
 	// as its body lives, across map epochs this GI-scoped cache outlasts.
 	TSharedPtr<const FElysiumFacialRig> GetFacialRig(const FString& Stem);
+	// The two composition stages' rig for a stem (CAP7.2): `npc_index.json`'s `split_bones` plus
+	// `npc/procedural/<stem>.json`. Null when the model declares neither, which is a normal load —
+	// the body then poses under Unreal's ordinary hierarchy composition, as it did before CAP7.2.
+	// Same shape and lifetime as GetFacialRig: shared, immutable once built, and GI-scoped so it
+	// outlives the map epoch the skeleton belongs to.
+	TSharedPtr<const FElysiumCompositionRig> GetCompositionRig(const FString& Stem);
+	// The same for a v4 animated prop, which indexes separately and whose sidecar sits under
+	// animated_props/.
+	TSharedPtr<const FElysiumCompositionRig> GetAnimatedPropCompositionRig(const FString& ModelPath);
 	// vdata/system/dispositiontable.txt, loaded once.
 	const FElysiumDispositionTable& GetDispositions();
 
@@ -83,6 +93,9 @@ public:
 	// this disposition, not invented behaviour — it is what stops 42 cops standing identically.
 	FString PickIdleClip(const FString& Stem, const FString& Disposition, EElysiumIdleTier& OutTier,
 		int32 Variant = 0);
+	// Deterministic weighted activity selection. VData interesting places name ACT_* values and
+	// frequencies; the clip manifest supplies the per-sequence weights within that activity.
+	FString PickActivityClip(const FString& Stem, const FString& Activity, int32 Variant = 0);
 
 	// Every candidate the idle policy considered, best first — the debug/verification view.
 	TArray<FString> IdleCandidates(const FString& Stem, const FString& Disposition,
@@ -109,4 +122,7 @@ private:
 	TMap<FString, TSharedPtr<FElysiumNpcClipSet>> ClipSets;
 	// Same shape, same reason: a null entry is the remembered "this model has no flex rig".
 	TMap<FString, TSharedPtr<const FElysiumFacialRig>> FacialRigs;
+	// And again for the composition stages. Keyed by stem for characters and by the normalized
+	// model path for animated props, which is how each is addressed upstream.
+	TMap<FString, TSharedPtr<const FElysiumCompositionRig>> CompositionRigs;
 };

@@ -87,6 +87,11 @@ struct FElysiumNpcIndexEntry
 	// StudioBone names whose Flags & 0x2 select retail split rotation/translation inheritance.
 	// Optional in v3/v4 manifests; an older sidecar therefore retains conventional composition.
 	TArray<FString> SplitRotationBones;
+	// The procedural bone rule table sidecar, relative to out/npc ("procedural/<stem>.json", or
+	// "animated_props/procedural/<stem>.json"), and how many driven bones it declares. Both
+	// empty/zero on a model with no `ProcType == 1` bone, and on any export predating CAP7.1.
+	FString Procedural;
+	int32   ProceduralBones = 0;
 };
 
 // One cinematic anim set (12.1 / PL16): the whole-cast performance a choreo scene's
@@ -111,6 +116,8 @@ struct FElysiumAnimatedPropEntry
 	FString Model;     // normalized source .mdl path
 	int32 Bones = 0;
 	TArray<FString> SplitRotationBones;
+	FString Procedural;
+	int32 ProceduralBones = 0;
 	TSet<FString> Clips;
 
 	bool HasClip(const FString& Label) const { return Clips.Contains(Label.ToLower()); }

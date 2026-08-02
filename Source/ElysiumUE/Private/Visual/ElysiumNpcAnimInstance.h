@@ -4,10 +4,12 @@
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimInstanceProxy.h"
 #include "Animation/AnimNode_SequencePlayer.h"
+#include "Visual/ElysiumAnimNodes.h"
 
 #include "ElysiumNpcAnimInstance.generated.h"
 
 class UAnimSequence;
+struct FElysiumCompositionRig;
 struct FElysiumFacialRig;
 
 // The NPC animation host (roadmap 8.5) — a native C++ anim instance, no Blueprint and no anim
@@ -65,12 +67,25 @@ struct FElysiumNpcAnimProxy : public FAnimInstanceProxy
 	void SetFacialTrack(TArray<FName>&& InCurves);
 	void SetFacialWeights(TArrayView<const float> InWeights);
 
+	// VtMB's two composition stages (CAP7.2), installed together because one model can declare
+	// either, both or neither. Null clears both.
+	void SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig);
+	int32 NumAxisInterpRules() const { return AxisInterp.NumResolvedRules(); }
+
 private:
 	// The body half of Evaluate: the crossfade between the two sequence players.
 	void EvaluateBody(FPoseContext& Output);
+	// The composition half: split inheritance, then axis interpolation, in component space over
+	// whatever the body produced. Order is load-bearing.
+	void EvaluateComposition(FPoseContext& Output);
 
 	TArray<FName> FacialCurves;
 	TArray<float> FacialWeights;
+
+	// Retail's own order. Both are plain members rather than a graph: this instance has no
+	// AnimGraph, so the post-process slot is the tail of Evaluate.
+	UPROPERTY(Transient) FAnimNode_ElysiumSplitInheritance Split;
+	UPROPERTY(Transient) FAnimNode_ElysiumAxisInterp AxisInterp;
 
 	// Standalone (not _Standalone-suffixed by accident): the plain-C++ variant of the sequence
 	// player whose setters actually write, unlike the Blueprint-bound FAnimNode_SequencePlayer
@@ -118,6 +133,18 @@ public:
 	void SetFacialRig(TSharedPtr<const FElysiumFacialRig> InRig);
 	const FElysiumFacialRig* GetFacialRig() const { return FacialRig.Get(); }
 
+	// --- the two composition stages (roadmap CAP7.2) -----------------------------------------
+	//
+	// Install the body's composition rig — the `Flags & 0x2` split-bone inventory and the
+	// `ProcType == 1` rule table. Null for a model declaring neither, which is an ordinary load:
+	// the body then poses under Unreal's own hierarchy composition alone. Both stages run in the
+	// proxy's evaluate, after the graph has blended locals and before skinning, split first.
+	void SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig);
+	const FElysiumCompositionRig* GetCompositionRig() const { return CompositionRig.Get(); }
+	// How many rules resolved against this body's actual skeleton — the number the debug surface
+	// reports, and what distinguishes "no table" from "a table whose bones this skeleton lacks".
+	int32 GetResolvedAxisInterpRules() const;
+
 	// Flex controllers are the only writable facial state; the flexdesc weights and morph weights
 	// below them are arithmetic, re-derived on every write. Names are the rig's own (`blink`,
 	// `jaw_drop`, `right_lid_droop`), matched case-insensitively; false when this rig has no such
@@ -145,6 +172,7 @@ private:
 	UPROPERTY(Transient) FElysiumNpcAnimProxy Proxy;
 
 	TSharedPtr<const FElysiumFacialRig> FacialRig;
+	TSharedPtr<const FElysiumCompositionRig> CompositionRig;
 	TArray<float> ControllerValues;
 	TArray<float> FlexWeights;
 	TArray<float> MorphWeights;

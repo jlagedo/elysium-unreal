@@ -316,6 +316,9 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 			if (UElysiumNpcAnimSubsystem* Anims = GI->GetSubsystem<UElysiumNpcAnimSubsystem>())
 			{
 				Inst->SetFacialRig(Anims->GetFacialRig(Stem));
+				// The two composition stages (CAP7.2). Null for a model declaring neither a split
+				// bone nor a procedural rule, which poses under Unreal's own hierarchy alone.
+				Inst->SetCompositionRig(Anims->GetCompositionRig(Stem));
 			}
 		}
 	}
@@ -386,6 +389,12 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisual(const FStr
 	}
 	Comp->RegisterComponent();
 	Owner->AddInstanceComponent(Comp);
+	// A skeletal prop declares the same two composition stages a character does — 19 of them carry
+	// a rule table — so it takes the same install (CAP7.2).
+	if (UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Comp->GetAnimInstance()))
+	{
+		Inst->SetCompositionRig(Anims->GetAnimatedPropCompositionRig(Entry->Model));
+	}
 	return Comp;
 }
 

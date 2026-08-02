@@ -77,6 +77,8 @@ namespace
 			(*Obj)->TryGetStringField(TEXT("facial"), E.Facial);
 			(*Obj)->TryGetNumberField(TEXT("morphs"), E.MorphCount);
 			ReadStringArray(*Obj, TEXT("split_bones"), E.SplitRotationBones);
+			(*Obj)->TryGetStringField(TEXT("procedural"), E.Procedural);
+			(*Obj)->TryGetNumberField(TEXT("procedural_bones"), E.ProceduralBones);
 			Out.Add(Pair.Key, MoveTemp(E));
 		}
 	}
@@ -290,6 +292,8 @@ bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 				(*Obj)->TryGetStringField(TEXT("model"), Entry.Model);
 				(*Obj)->TryGetNumberField(TEXT("bones"), Entry.Bones);
 				ReadStringArray(*Obj, TEXT("split_bones"), Entry.SplitRotationBones);
+				(*Obj)->TryGetStringField(TEXT("procedural"), Entry.Procedural);
+				(*Obj)->TryGetNumberField(TEXT("procedural_bones"), Entry.ProceduralBones);
 				Entry.Model.ReplaceInline(TEXT("\\"), TEXT("/"));
 				Entry.Model.ToLowerInline();
 				const TArray<TSharedPtr<FJsonValue>>* Clips = nullptr;

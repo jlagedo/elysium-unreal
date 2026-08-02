@@ -1,10 +1,12 @@
 #include "Visual/ElysiumNpcAnimInstance.h"
 
+#include "Visual/ElysiumCompositionRig.h"
 #include "Visual/ElysiumFacialRig.h"
 
 #include "Animation/AnimCurveElementFlags.h"
 #include "Animation/AnimSequence.h"
 #include "AnimationRuntime.h"
+#include "BonePose.h"
 
 void FElysiumNpcAnimProxy::Initialize(UAnimInstance* InAnimInstance)
 {
@@ -41,6 +43,11 @@ void FElysiumNpcAnimProxy::CacheBones()
 	{
 		Player.CacheBones_AnyThread(Context);
 	}
+	// The bone container is what a bone reference resolves against, and this is the callback its
+	// change arrives on — so both composition stages resolve their indices here, once, and never
+	// by name per evaluation.
+	Split.ResolveBones(GetRequiredBones());
+	AxisInterp.ResolveBones(GetRequiredBones());
 }
 
 void FElysiumNpcAnimProxy::Request(UAnimSequence* Sequence, bool bLoop, float BlendSeconds)
@@ -176,9 +183,47 @@ void FElysiumNpcAnimProxy::EvaluateBody(FPoseContext& Output)
 	FAnimationRuntime::BlendTwoPosesTogether(OutgoingData, IncomingData, 1.f - BlendAlpha, OutData);
 }
 
+// The A/B for the two composition stages. 1 = VtMB's own composition, 0 = Unreal's ordinary
+// hierarchy alone, which is what every body posed under before CAP7.2. Dropping it is visible
+// exactly where the docs measure it: up to 44.9 degrees on a shoulder, 26.9 on a bicep, 6.4 on a
+// wrist, and a `Flags & 0x2` spine rooted in its parent rather than the component.
+static TAutoConsoleVariable<int32> CVarCompositionStages(
+	TEXT("elysium.CompositionStages"), 1,
+	TEXT("1 = apply VtMB split inheritance + axis interpolation over the blended pose (CAP7.2), ")
+	TEXT("0 = ordinary Unreal hierarchy composition only."),
+	ECVF_Default);
+
+void FElysiumNpcAnimProxy::EvaluateComposition(FPoseContext& Output)
+{
+	if ((!Split.HasWork() && !AxisInterp.HasWork())
+		|| CVarCompositionStages.GetValueOnAnyThread() == 0)
+	{
+		return;
+	}
+
+	// Retail's slot: the locals are decoded and blended, the hierarchy composes, then these run,
+	// then skinning. The rule is non-linear, so it has to see the blended pose rather than each
+	// clip's — which is exactly why it cannot be baked into the clips instead.
+	// Copied in, not moved: the conversion back writes *into* Output.Pose and addresses it by bone
+	// index, so it has to still be a sized pose when we get there. Moving it out leaves it empty and
+	// the first write indexes an array of size zero.
+	FComponentSpacePoseContext Composed(this);
+	Composed.Pose.InitPose(Output.Pose);
+
+	// ORDER IS LOAD-BEARING. Split inheritance re-roots `Bip01 Spine1`'s orientation, and every
+	// driven arm bone hangs off it, so running these the other way produces a different skeleton.
+	Split.Apply(Composed);
+	AxisInterp.Apply(Composed);
+
+	// Safe, not the plain form: both stages leave a bone in local space whose parent may never have
+	// been asked for in component space, and the plain conversion ensures against exactly that.
+	FCSPose<FCompactPose>::ConvertComponentPosesToLocalPosesSafe(Composed.Pose, Output.Pose);
+}
+
 bool FElysiumNpcAnimProxy::Evaluate(FPoseContext& Output)
 {
 	EvaluateBody(Output);
+	EvaluateComposition(Output);
 
 	// The face is written last, over whatever the body produced — including the ref pose a body
 	// with no clip falls back to, so a facial-only preview still moves. VtMB's clips carry no curves
@@ -208,6 +253,19 @@ void FElysiumNpcAnimProxy::SetFacialWeights(TArrayView<const float> InWeights)
 	for (int32 i = 0; i < Num; ++i)
 	{
 		FacialWeights[i] = InWeights[i];
+	}
+}
+
+void FElysiumNpcAnimProxy::SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig)
+{
+	Split.SetRig(InRig);
+	AxisInterp.SetRig(MoveTemp(InRig));
+	// A rig installed before the component has ever cached bones resolves on the first evaluate;
+	// one installed after re-resolves here, because the bone container is already valid.
+	if (const FBoneContainer& Container = GetRequiredBones(); Container.IsValid())
+	{
+		Split.ResolveBones(Container);
+		AxisInterp.ResolveBones(Container);
 	}
 }
 
@@ -253,6 +311,20 @@ void UElysiumNpcAnimInstance::SetFacialRig(TSharedPtr<const FElysiumFacialRig> I
 	// Publish the rest pose immediately: with every controller at zero the rules resolve each lid to
 	// its own hinge, so every morph target lands at exactly zero and the face is the authored mesh.
 	EvaluateFacial();
+}
+
+void UElysiumNpcAnimInstance::SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig)
+{
+	CompositionRig = MoveTemp(InRig);
+	// GetProxyOnGameThread blocks on any in-flight parallel evaluation, so the worker cannot be
+	// reading the rig this replaces.
+	GetProxyOnGameThread<FElysiumNpcAnimProxy>().SetCompositionRig(CompositionRig);
+}
+
+int32 UElysiumNpcAnimInstance::GetResolvedAxisInterpRules() const
+{
+	return const_cast<UElysiumNpcAnimInstance*>(this)
+		->GetProxyOnGameThread<FElysiumNpcAnimProxy>().NumAxisInterpRules();
 }
 
 bool UElysiumNpcAnimInstance::SetFlexController(const FString& Name, float Value)

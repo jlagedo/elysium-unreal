@@ -427,6 +427,7 @@ AActor* UElysiumNpcSubsystem::LoadTestNpc(const FString& Stem, const FString& An
 	if (UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Component->GetAnimInstance()))
 	{
 		Inst->SetFacialRig(Anims ? Anims->GetFacialRig(Stem) : nullptr);
+		Inst->SetCompositionRig(Anims ? Anims->GetCompositionRig(Stem) : nullptr);
 		if (Anim != nullptr)
 		{
 			Inst->PlayClip(Anim, /*bLoop=*/true);
