@@ -43,6 +43,23 @@ def normalise_rain_sprite(data: bytes, destination: Path) -> None:
         rgba.save(destination, format="PNG")
 
 
+def normalise_sprite(data: bytes, destination: Path) -> None:
+    """Straight TGA -> PNG for every other sprite, colour and alpha intact.
+
+    Same reason as the rain derivative — UE 5.8's Interchange TGA path imports these legacy files
+    but samples their alpha as zero — but not the same transform: a general sprite is tinted
+    (blood, embers, glass), so folding alpha into RGB the way the mask-only rain material wants
+    would throw its colour away.
+    """
+
+    with Image.open(BytesIO(data)) as source:
+        rgba = source.convert("RGBA")
+        if rgba.width <= 0 or rgba.height <= 0:
+            raise ValueError(f"particle sprite has invalid dimensions: {destination}")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        rgba.save(destination, format="PNG")
+
+
 def main(*, force: bool = False, index=None) -> None:
     from elysium_pipeline.formats import install
 
@@ -56,6 +73,7 @@ def main(*, force: bool = False, index=None) -> None:
     copied = cached = 0
     manifest = {}
     normalized = {}
+    sprites = {}
     for key in selected:
         relative = Path(key).relative_to("particles")
         destination = out / relative
@@ -69,17 +87,24 @@ def main(*, force: bool = False, index=None) -> None:
             destination.write_bytes(data)
             copied += 1
         manifest[relative.as_posix()] = {"bytes": len(data), "source": idx[key][0]}
-        if relative.as_posix().lower() in RAIN_SLICE_SPRITES:
+        posix = relative.as_posix()
+        if posix.lower().endswith(".tga"):
             png_relative = relative.with_suffix(".png")
             png_destination = out / png_relative
-            normalise_rain_sprite(data, png_destination)
-            normalized[relative.as_posix()] = png_relative.as_posix()
+            if posix.lower() in RAIN_SLICE_SPRITES:
+                normalise_rain_sprite(data, png_destination)
+                normalized[posix] = png_relative.as_posix()
+            else:
+                if force or not png_destination.is_file():
+                    normalise_sprite(data, png_destination)
+                sprites[posix] = png_relative.as_posix()
     (out / "manifest.json").write_text(
         json.dumps({
             "schema": "elysium.particle-mirror",
-            "version": 2,
+            "version": 3,
             "files": manifest,
             "normalized_rain_closure": normalized,
+            "normalized_sprites": sprites,
         }, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )

@@ -17,6 +17,7 @@
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumSheetSlots.h"
 #include "ElysiumSkeletalBasis.h"
+#include "ElysiumStub.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
@@ -302,14 +303,23 @@ void FElysiumAnimating::OnRuntimeModelChanged()
 	// (PostSpawn attaches a child to GetAttachBody() = Visual) has to survive onto the new one.
 	// Nothing tracks an entity's children, so read them off the component before it is destroyed and
 	// carry their offsets across — a `parentname` child keeps its relative pose, not its world pose.
-	TArray<TPair<TWeakObjectPtr<USceneComponent>, FTransform>> Carried;
+	// The socket travels with the child: a bone-attached env_particle re-parented to the bare root
+	// would silently stop tracking the bone the first time the level script re-models the character,
+	// which is exactly when the cinematic emitters are live.
+	struct FCarriedChild
+	{
+		TWeakObjectPtr<USceneComponent> Component;
+		FTransform RelativeTransform;
+		FName Socket;
+	};
+	TArray<FCarriedChild> Carried;
 	if (Visual)
 	{
 		for (USceneComponent* Child : Visual->GetAttachChildren())
 		{
 			if (Child)
 			{
-				Carried.Emplace(Child, Child->GetRelativeTransform());
+				Carried.Add({ Child, Child->GetRelativeTransform(), Child->GetAttachSocketName() });
 			}
 		}
 		Visual->DestroyComponent();
@@ -318,12 +328,15 @@ void FElysiumAnimating::OnRuntimeModelChanged()
 	BuildBody();
 	if (Visual)
 	{
-		for (const TPair<TWeakObjectPtr<USceneComponent>, FTransform>& Child : Carried)
+		for (const FCarriedChild& Child : Carried)
 		{
-			if (USceneComponent* Live = Child.Key.Get())
+			if (USceneComponent* Live = Child.Component.Get())
 			{
-				Live->AttachToComponent(Visual, FAttachmentTransformRules::KeepRelativeTransform);
-				Live->SetRelativeTransform(Child.Value);
+				const bool bKeepSocket = Child.Socket != NAME_None
+					&& Visual->DoesSocketExist(Child.Socket);
+				Live->AttachToComponent(Visual, FAttachmentTransformRules::KeepRelativeTransform,
+					bKeepSocket ? Child.Socket : NAME_None);
+				Live->SetRelativeTransform(Child.RelativeTransform);
 			}
 		}
 	}
@@ -352,8 +365,13 @@ void FElysiumAnimating::GateVisual()
 void FElysiumCombatCharacter::PendingInput(const TCHAR* Input, const TCHAR* Owner,
 	const FElysiumInputArgs& Args) const
 {
-	UE_LOG(LogElysiumPlayer, Log, TEXT("%s.%s(%s) — no backing system yet (%s)"),
-		*DebugString(), Input, *Args.Param.Describe(), Owner);
+	// Registered so the name resolves through the R2 walk, but nothing behind it yet — the same
+	// condition as an unregistered classname's input, so it reports through the same surface and
+	// lands in the same work list. Keyed on the class the input is declared on, not on the
+	// receiver, so one row covers every NPC that receives it.
+	ElysiumStub::Fired(TEXT("input"),
+		FString::Printf(TEXT("%s.%s"), *ElysiumCombatCharacterClassName().ToString(), Input),
+		DebugString(), ElysiumStub::DescribeInput(Args), Owner);
 }
 
 void FElysiumCombatCharacter::AddMoney(int32 Delta)
@@ -666,6 +684,14 @@ bool FElysiumCombatCharacter::GetDynamicField(FName Name, FElysiumVariant& Out) 
 	}
 	if (Name.ToString().StartsWith(TEXT("base_"), ESearchCase::CaseSensitive))
 	{
+		// Reads 0 rather than raising (see the header), but a name that lands here is a name the
+		// shipped `stats.txt` does not own — either a slot we have not built or a script's
+		// misspelling of one we have. Both are silent divergences, so both get reported: the read
+		// still answers, and the tally says which names answered on nothing.
+		ElysiumStub::Fired(TEXT("field"),
+			FString::Printf(TEXT("%s.%s"), *ElysiumCombatCharacterClassName().ToString(), *Name.ToString()),
+			DebugString(), FString(),
+			TEXT("no compiled sheet slot owns this name — reads 0"));
 		Out = FElysiumVariant::Int(0);
 		return true;
 	}
@@ -1118,6 +1144,27 @@ static FElysiumClassRegistrar GRegPlayer(
 		AddLawField(D, TEXT("criminal_level"),     &FElysiumLawState::Criminal);
 		AddLawField(D, TEXT("supernatural_level"), &FElysiumLawState::Supernatural);
 		AddLawField(D, TEXT("investigate_level"),  &FElysiumLawState::Investigate);
+
+		// `vhistory` is `m_iVHistoryID`: the chargen History row's index into `histories000.txt`.
+		// It is not a sheet slot — `stats.txt` carries no Stat for it — so it reads off the player
+		// record, where chargen writes it and the save's Player block persists it. Read-only for
+		// the same reason as the law counters: chargen is its only writer.
+		//
+		// This is the field `chooseSire()` branches on to set `G.Player_Homo` / `Player_Insane` /
+		// `Player_Batshit` (row 1 is `Homosexual_Player`), which four of sp_theatre's twelve
+		// `logic_pythoncheck` gates then read.
+		{
+			FElysiumFieldAccessor Acc;
+			Acc.ApplyFlags(EElysiumField::None);
+			Acc.Type = EElysiumVariantType::Int;
+			Acc.Get = [](const FElysiumEntity& E)
+			{
+				const UElysiumGameStateSubsystem* State = E.World ? E.World->GetGameState() : nullptr;
+				return FElysiumVariant::Int(State ? State->PlayerRecord().HistoryId : INDEX_NONE);
+			};
+			Acc.Set = [](FElysiumEntity&, const FElysiumVariant&) {};
+			D.Fields.Add(FName(TEXT("vhistory")), MoveTemp(Acc));
+		}
 	});
 
 #undef ELYSIUM_PENDING_INPUT

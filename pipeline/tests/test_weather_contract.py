@@ -171,6 +171,113 @@ class ParticleClosureTests(unittest.TestCase):
             )
 
 
+class ImpactParticleContractTests(unittest.TestCase):
+    """The non-precipitation vocabulary the cinematic emitters use."""
+
+    DEFINITIONS = {
+        "impact_emitter": '''Particle {
+            loop 1
+            spawn { particle impact_fx burst 40 phi "-40~40" theta "-40~40" x 2 y 3 z "-1" }
+            spawn { particle impact_fx rate 30 }
+        }''',
+        "impact_fx": '''Particle {
+            frames 30 sprite bloodspray size 5 height "3,1" width 2 movealign 1
+            parent_speed 1 radius_speed "-40~-100,0" elevation_speed "0,-150" depth_offset 10
+            red "255~150" green 0 blue 0 color "100,0" mask "255,0"
+        }''',
+    }
+
+    def compile(self):
+        return particles.compile_closure(
+            ["impact_emitter"], self.DEFINITIONS.get, {"bloodspray"}.__contains__
+        )
+
+    def test_burst_and_cartesian_spawn_offset(self):
+        spawns = self.compile()["definitions"]["impact_emitter"]["spawns"]
+        self.assertAlmostEqual(spawns[0]["burst"]["values"][0], 40.0)
+        offset = spawns[0]["offset_cm"]
+        self.assertAlmostEqual(offset["x"]["values"][0], 5.08)
+        # `y` takes the same Source reflection the velocities do.
+        self.assertAlmostEqual(offset["y"]["values"][0], -7.62)
+        self.assertAlmostEqual(offset["z"]["values"][0], -2.54)
+        self.assertNotIn("offset_cm", spawns[1])
+        self.assertAlmostEqual(spawns[1]["rate"]["values"][0], 30.0)
+
+    def test_spherical_speeds_convert_and_parent_speed_stays_dimensionless(self):
+        fx = self.compile()["definitions"]["impact_fx"]
+        radial = fx["radial_velocity_cm_per_second"]
+        self.assertAlmostEqual(radial["radius"]["values"][0], -101.6)
+        self.assertAlmostEqual(radial["elevation"]["values"][1], -381.0)
+        self.assertEqual(radial["radius"]["kind"], "range")
+        # A fraction of the parent's velocity, not a length.
+        self.assertAlmostEqual(fx["parent_speed"]["values"][0], 1.0)
+        # Unresolved unit, so carried verbatim.
+        self.assertAlmostEqual(fx["depth_offset"]["values"][0], 10.0)
+
+    def test_rgb_channels_and_width_are_carried(self):
+        fx = self.compile()["definitions"]["impact_fx"]
+        self.assertEqual(fx["red"]["values"], [255.0, 150.0])
+        self.assertEqual(fx["green"]["values"], [0.0])
+        self.assertEqual(fx["blue"]["values"], [0.0])
+        self.assertAlmostEqual(fx["width_cm"]["values"][0], 5.08)
+
+
+class MapParticleDocumentTests(unittest.TestCase):
+    DEFINITIONS = {
+        "good_emitter": 'Particle { loop 1 spawn { particle good_fx burst 4 } }',
+        "good_fx": 'Particle { frames 10 sprite spark size 1 }',
+        # Uses a key the contract has not established.
+        "broken_emitter": 'Particle { frames 10 sprite spark sortfront 1 }',
+    }
+
+    def document(self):
+        entities = {"entities": [
+            {"classname": "env_particle", "targetname": "attached",
+             "origin": [1.0, 2.0, 3.0],
+             "keys": {"particle_definition": "good_emitter", "active": "1",
+                      "attach_type": "2", "parentname": "Sire2", "bone": "Bip01 Neck",
+                      "bounds": "512"}},
+            # Spelled as a path with an extension - the same file.
+            {"classname": "env_particle", "targetname": "pathspelled",
+             "keys": {"particle_definition": "particles/good_emitter.txt"}},
+            {"classname": "env_particle", "targetname": "unresolvable",
+             "keys": {"particle_definition": "broken_emitter"}},
+            {"classname": "env_particle", "targetname": "nodefinition", "keys": {}},
+            {"classname": "logic_relay", "targetname": "notaparticle", "keys": {}},
+        ]}
+        return particles.build_particle_document(
+            "testmap", entities, self.DEFINITIONS.get, {"spark"}.__contains__
+        )
+
+    def test_attachment_keys_and_definition_spelling(self):
+        document = self.document()
+        self.assertEqual(document["schema"], particles.MAP_PARTICLE_SCHEMA)
+        # The keyless entity is skipped; the logic_relay is not an emitter.
+        self.assertEqual([e["targetname"] for e in document["emitters"]],
+                         ["attached", "pathspelled", "unresolvable"])
+        attached = document["emitters"][0]
+        self.assertEqual(attached["attach_type"], 2)
+        self.assertEqual(attached["parentname"], "Sire2")
+        self.assertEqual(attached["bone"], "Bip01 Neck")
+        self.assertAlmostEqual(attached["bounds_cm"], 512 * 2.54)
+        # `particles/good_emitter.txt` resolves to the same definition as `good_emitter`.
+        self.assertEqual(document["emitters"][1]["particle_definition"], "good_emitter")
+
+    def test_one_bad_definition_does_not_lose_the_others(self):
+        document = self.document()
+        self.assertIn("good_emitter", document["particles"]["definitions"])
+        self.assertIn("good_fx", document["particles"]["definitions"])
+        self.assertNotIn("broken_emitter", document["particles"]["definitions"])
+        self.assertEqual([u["definition"] for u in document["unresolved"]], ["broken_emitter"])
+        self.assertIn("sortfront", document["unresolved"][0]["reason"])
+        # The emitter is still listed, so the map records what it wanted to play.
+        self.assertEqual(document["emitters"][2]["particle_definition"], "broken_emitter")
+
+    def test_a_map_with_no_emitters_writes_nothing(self):
+        self.assertIsNone(particles.build_particle_document(
+            "empty", {"entities": []}, self.DEFINITIONS.get, {"spark"}.__contains__))
+
+
 class HeightTextureTests(unittest.TestCase):
     def test_only_solid_non_sky_props_become_placed_cover(self):
         with tempfile.TemporaryDirectory() as directory:

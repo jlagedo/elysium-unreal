@@ -6,6 +6,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumStub.h"
 #include "Scripting/ElysiumScriptNatives.h"
 
 #include <initializer_list>
@@ -696,6 +697,12 @@ namespace
 			{
 				return FVal::MakeCharMethod(E.Handle, AttrName);
 			}
+			// Same report as the CPython host's miss, so the work list does not depend on which
+			// host is installed. The failure itself is unchanged (error-to-false).
+			ElysiumStub::Fired(TEXT("attr"),
+				FString::Printf(TEXT("%s.%s"), E.Def ? *E.Def->Classname : TEXT("?"), *Attr),
+				E.DebugString(), FString(),
+				TEXT("no field, input or Character method of this name — evaluates to false"));
 			Fail(FString::Printf(TEXT("entity has no attribute '%s'"), *Attr));
 			return Void();
 		}

@@ -390,6 +390,9 @@ private:
 	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> RainMaterial;
 	UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInstanceDynamic>> RainLayerMaterials;
 	UPROPERTY(Transient) TMap<int32, TObjectPtr<UNiagaraComponent>> RainComponents;
+
+	/** Bind one emitter's component to its parent entity's bone, or to the map root when it has none. */
+	void AttachEmitter(const struct FElysiumWeatherEmitterState& Emitter, UNiagaraComponent* Component);
 	TMap<int32, FElysiumWeatherEmitterState> RainEmitterStates;
 	FElysiumWeatherTransition WetnessTransition;
 	float PresentedWetness = 0.0f;

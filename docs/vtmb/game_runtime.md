@@ -791,6 +791,36 @@ beside a `Humanity` `Costs.Raise` of `Current_Rating * 1`, and every clan's fren
 is `Frenzy_Check_Mod` `"-1"`/`"-2"` — a real `Stat`. `"Modify"` in the file's header comment
 is stale: the key the code reads is **`Modifier`**.
 
+#### The History index is also read raw — `vhistory` **[VtMB]**
+
+The `Effect` / `CritterScope` path above is how a History changes *stats*. The chosen row's
+**index** is separately readable, and three story flags are derived from it rather than from any
+trait effect.
+
+The index is `m_iVHistoryID` (the value `histories000.txt` position defines and the save's Player
+block carries), exposed on the player datamap as **`vhistory`** — a plain integer field, so
+`pc.vhistory` marshals a number rather than manufacturing a callable. It is not a `stats.txt`
+Stat: no container slot holds it, and `CVStatRef` does not resolve the name.
+
+`chooseSire()` (`vamputil.py`) is the only reader, and the only writer of the three flags it
+derives. It compares the raw index against three rows and assigns `1` on a match, `0` otherwise:
+
+| Test | Flag set | `histories000.txt` row |
+|---|---|---|
+| `pc.vhistory == 1` | `G.Player_Homo` | 1 `Homosexual_Player` |
+| `pc.vhistory == 80` | `G.Player_Insane` | 80 `Subtly Insane` |
+| `pc.vhistory == 63` | `G.Player_Batshit` | 63 `Completely Batshit` |
+
+Row numbers are file positions in the patch's 93-row table, and each names the History its flag
+is about, so the three constants are self-checking against the file.
+
+The flags outlive the function that sets them: `G.Player_Homo` gates dialogue and four of
+`sp_theatre`'s twelve `logic_pythoncheck` gates (`courtroom_scene_bip1`, `embrace_male`,
+`whisper_male`, `whisper_female`), plus the sire-model branches in `courtroomSire()` and
+`nosferatuRevealer()`. Because `chooseSire()` is fired once, by the Embrace `trigger_once`
+(`docs/vtmb/choreographed_scenes.md`), a session that never runs it leaves all three at `G`'s
+default-on-miss `0`.
+
 #### How the operators compose — `CVTraitEffectQuery` **[VtMB]**
 
 A read is one pass over the character's `m_tEffectList` filling a 68-byte accumulator, then one

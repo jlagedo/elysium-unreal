@@ -83,6 +83,13 @@ struct FElysiumClassDesc
 	FName BaseName;                              // NAME_None at the root (CBaseEntity)
 	FElysiumEntityFactory Factory = nullptr;
 
+	// A placeholder registered by ElysiumStubClasses.cpp for a classname no leaf implements: it
+	// names the inputs the shipped maps fire so they resolve and report, and holds nothing else.
+	// Entities of a stub class still spawn record-only, because that is what they are. `StubOwner`
+	// is the owner line its inputs report — empty on every real class.
+	bool bStub = false;
+	FString StubOwner;
+
 	TMap<FName, FElysiumInputThunk> Inputs;
 	TMap<FName, FElysiumFieldAccessor> Fields;
 
@@ -154,6 +161,12 @@ public:
 
 	// Insert a descriptor and return it for the registrar's Build callback to populate.
 	FElysiumClassDesc& Register(FName ClassName, FName BaseName, FElysiumEntityFactory Factory);
+
+	// Insert a stub descriptor, or return null if the name is already claimed. Registration order
+	// across translation units is unspecified, so this is the half that makes a real class always
+	// win: registering first, it is skipped here; registering second, its `Register` replaces the
+	// stub. Either way a stub can never shadow an implementation.
+	FElysiumClassDesc* RegisterStub(FName ClassName, FName BaseName);
 
 	// The descriptor for a classname, or null if unregistered (caller falls back to base).
 	const FElysiumClassDesc* Find(FName ClassName) const;

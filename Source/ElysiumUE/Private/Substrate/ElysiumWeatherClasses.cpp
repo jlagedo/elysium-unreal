@@ -49,10 +49,16 @@ public:
 	bool bActive = false;
 	FString ParticleDefinition;
 	int32 AttachType = 0;
+	FString AttachBone;        // `bone` -> m_sAttachName; the point on the parent's model
 	float Bounds = 0.0f;       // Source inches; converted only at the engine service seam
 	float RampScale = 1.0f;
 	float RampTime = 0.0f;
 
+	// An emitter is placed long before the thing it rides exists: `plus_impact` parents to `Sire2`,
+	// whose model the level script swaps at scene start, and the Embrace emitters parent to
+	// `player_understudy`, which a trigger creates. PostSpawn's parentname pass is one-shot and
+	// never retried, so resolution is deferred to the first TurnOn instead, by which point every
+	// one of these parents exists.
 	void InputTurnOn()  { bActive = true; Publish(); }
 	void InputTurnOff() { bActive = false; Publish(); }
 
@@ -166,6 +172,8 @@ private:
 		State.ParticleDefinition = ParticleDefinition;
 		State.bActive = bActive && !IsInert();
 		State.AttachType = AttachType;
+		State.ParentName = ParentName;
+		State.AttachBone = AttachBone;
 		State.BoundsCm = Bounds * 2.54f;
 		State.RateScale = RampScale;
 		State.RampStartScale = RampStartScale;
@@ -195,6 +203,7 @@ static FElysiumClassRegistrar GRegEnvParticle(
 		AddWeatherField(D, TEXT("active"), &FElysiumEnvParticle::bActive);
 		AddWeatherField(D, TEXT("particle_definition"), &FElysiumEnvParticle::ParticleDefinition);
 		AddWeatherField(D, TEXT("attach_type"), &FElysiumEnvParticle::AttachType);
+		AddWeatherField(D, TEXT("bone"), &FElysiumEnvParticle::AttachBone);
 		AddWeatherField(D, TEXT("bounds"), &FElysiumEnvParticle::Bounds);
 		AddWeatherField(D, TEXT("ramp_scale"), &FElysiumEnvParticle::RampScale);
 		AddWeatherField(D, TEXT("ramp_time"), &FElysiumEnvParticle::RampTime);

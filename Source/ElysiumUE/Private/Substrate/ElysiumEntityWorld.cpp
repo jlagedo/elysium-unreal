@@ -12,6 +12,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumSaveArchive.h"
 #include "ElysiumScriptHost.h"
+#include "ElysiumStub.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSignData.h"
 #include "ElysiumUseIcons.h"
@@ -1057,6 +1058,18 @@ void FElysiumEntityWorld::PlayerUse()
 	// the same handle the trigger touch path carries, so a `+use` wire's `!activator` resolves.
 	if (FElysiumEntity* E = Resolve(AimedUsable))
 	{
+		// VtMB gates this press on CBaseEntity::PassesUseFilter (the 0x400 handler, FUN_100c9250).
+		// The keyvalue parses into UseFilterName and the save carries it, but no filter class
+		// evaluates it, so the press goes through whatever the filter would have said. Reported
+		// rather than silently allowed: a gate that always opens looks exactly like no gate, and
+		// this is the one holding sp_theatre's webcam button shut without a camera in hand.
+		if (!E->UseFilterName.IsEmpty())
+		{
+			ElysiumStub::Fired(TEXT("field"), TEXT("CBaseEntity.use_filter_name"), E->DebugString(),
+				FString::Printf(TEXT("filter=%s activator=%s"),
+					*E->UseFilterName, *Player.ToString()),
+				TEXT("PassesUseFilter is unbuilt — the +use gate always opens"));
+		}
 		E->Use(Player);
 	}
 }
@@ -1744,6 +1757,14 @@ void FElysiumEntityWorld::AcceptInput(const FString& Target, FName Input, const 
 	{
 		++UnknownTargetCount;
 		const FString Key = FString::Printf(TEXT("%s.%s"), *Target, *Input.ToString());
+		// Reported as its own kind rather than as `input`: the wire names an entity the map does
+		// not contain, so nothing is missing from the runtime here and no amount of implementing
+		// will make it fire. It stays on the work list because the two are indistinguishable from
+		// the outside — a scene that does not happen looks the same either way.
+		ElysiumStub::Fired(TEXT("target"), Key, FString(),
+			FString::Printf(TEXT("param=%s activator=%s caller=%s"),
+				*Param.Describe(), *Activator.ToString(), *Caller.ToString()),
+			FString::Printf(TEXT("no entity named '%s' in this map"), *Target));
 		if (!UnknownLogged.Contains(Key))
 		{
 			UnknownLogged.Add(Key);
@@ -1800,6 +1821,19 @@ void FElysiumEntityWorld::DeliverInputTo(
 		++UnknownInputCount;
 		const FString Key = FString::Printf(
 			TEXT("%s.%s"), *Target.Def->Classname, *Event.Input.ToString());
+		// The generic stub surface: an input the R2 walk cannot resolve is unimplemented whether
+		// the classname has a leaf that lacks this one input or no leaf at all (an unregistered
+		// classname resolves to the inert base record, whose chain owns only the base inputs). Both
+		// report here, so every unwired input in every map is on the work list without each
+		// classname having to be enumerated first.
+		ElysiumStub::Fired(TEXT("input"), Key, Target.DebugString(),
+			FString::Printf(TEXT("param=%s activator=%s caller=%s"),
+				*Event.Param.Describe(), *Event.Activator.ToString(), *Event.Caller.ToString()),
+			Target.IsRecordOnly()
+				? FString::Printf(TEXT("'%s' has no runtime class — inert record on %s"),
+					*Target.Def->Classname, *ElysiumBaseClassName().ToString())
+				: FString::Printf(TEXT("'%s' is registered but wires no '%s' input"),
+					*Target.Def->Classname, *Event.Input.ToString()));
 		if (!UnknownLogged.Contains(Key))
 		{
 			UnknownLogged.Add(Key);
@@ -1815,6 +1849,7 @@ void FElysiumEntityWorld::DeliverInputTo(
 	Args.Param = Event.Param;
 	Args.Activator = Event.Activator;
 	Args.Caller = Event.Caller;
+	Args.Input = Event.Input;
 	Thunk(Target, Args);
 	for (const TUniquePtr<IElysiumIOSink>& Sink : Sinks)
 	{

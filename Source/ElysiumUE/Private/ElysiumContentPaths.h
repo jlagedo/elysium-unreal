@@ -77,6 +77,13 @@ struct FElysiumContentPaths
 		const FString Asset = TEXT("DA_") + Map + TEXT("_PropSkins");
 		return BakedMapDir(Map) / TEXT("Props") / Asset + TEXT(".") + Asset;
 	}
+	// One Niagara system per VtMB emitter definition the map places, authored at bake time from
+	// the compiled particle closure. `Definition` is the bare definition name (`impact_flesh_emitter`).
+	static FString BakedParticleSystem(const FString& Map, const FString& Definition)
+	{
+		const FString Asset = TEXT("NS_") + Definition;
+		return BakedMapDir(Map) / TEXT("Particles") / Asset + TEXT(".") + Asset;
+	}
 
 	static FString MapDir(const FString& Map) { return Root() / Map; }
 	static FString MapTexDir(const FString& Map) { return MapDir(Map) / TEXT("tex"); }

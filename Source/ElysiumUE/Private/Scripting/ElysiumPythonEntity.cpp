@@ -8,6 +8,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
+#include "ElysiumStub.h"
 #include "Scripting/ElysiumPythonVM.h"
 #include "Scripting/ElysiumScriptNatives.h"
 
@@ -399,6 +400,15 @@ namespace
 		{
 			return MakeBoundCharMethod(Self, NameObj);
 		}
+		// Reported, then raised anyway. The raise is faithful: VtMB's datamap walk ends the same way
+		// (`docs/vtmb/python_bridge.md` — a miss falls through to the instance `__dict__`, and an
+		// unset name raises from there), so answering a default here would be a divergence, not a
+		// stub. What the report adds is that the miss stops being silent — a name we simply have
+		// not built and a name no datamap ever carried look identical from the raise alone.
+		ElysiumStub::Fired(TEXT("attr"),
+			FString::Printf(TEXT("%s.%s"), E->Def ? *E->Def->Classname : TEXT("?"), *Attr),
+			E->DebugString(), FString(),
+			TEXT("no field, input or Character method of this name — raises AttributeError"));
 		PyErr_Format(PyExc_AttributeError, "entity has no attribute '%s'", TCHAR_TO_UTF8(*Attr));
 		return nullptr;
 	}

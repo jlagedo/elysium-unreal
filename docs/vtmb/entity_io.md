@@ -65,6 +65,16 @@ case, otherwise `_stricmp`. A leading `!` takes a separate single-result path fo
 the patch's `FindEntitiesByName("plus_*")` / `FindEntitiesByName("basic_*")` switches operate over
 the hundreds of hidden variant entities rather than silently finding none.
 
+**A wire may name nothing.** The shipped maps carry outputs whose target no entity in that map
+holds; the lookup finds nothing, the output is discarded, and no error is raised. `sp_theatre`'s
+authored-dangling `controls` pair is one such wire (see `!playercontroller` below); its
+`streetlight_red_south` / `_green_south` / `_yellow_south` trio is another, addressed
+`TurnOn`/`TurnOff` by three `streetlight_state_*_south` relays that nothing triggers either, so
+that traffic light is inert from both ends.
+
+A target that resolves to nothing and an input the target's class does not implement are separate
+conditions and worth counting separately: only the second is a gap in a reimplementation.
+
 ### `!playercontroller` — the cinematic relationship entity
 
 `events_player.CreateControllerNPC` creates one map-epoch `npc_VPlayerController`, not a boolean
@@ -296,6 +306,154 @@ A toucher passes if **any** enabled class bit matches; then, if a **filter entit
 spawnflag bit `0x80` (tested in the wait-over think as `(char)m_spawnflags < 0`) makes the trigger
 **remove itself after firing** (the `trigger_once` behaviour; `trigger_once` is a distinct factory
 `FUN_101c6a30`/vftable `0x1047dee4` over the same `CBaseTrigger` base `0x1047d08c`).
+
+Bit `0x10` is **inert on a trigger**. `sp_theatre`'s Embrace `trigger_once` (`spawnflags 17`) is the
+only trigger in the exported corpus carrying it, and no trigger class reads it: across
+`vampire.dll` there are seven `test byte ptr [reg+0x204], 0x10` sites, and RTTI resolves every one to
+another class — `CPhysBox` (two), `CRotDoor::DoorGoUp` (the `SF_DOOR_ONEWAY` nav bit),
+`CRagdollProp`/`CRagdollPropSpecial`, `CCineNPC`/`CCineAI` (slot 103), and `CAmbientGeneric`
+(slot 104, START_SILENT). Inside the `CBaseTrigger` region (`0x101c5000`–`0x101c7600`) only
+`0x1/0x2/0x4/0x8` appear, in `PassesTriggerFilters`, plus one `0x2` test at `0x101c7531`. So
+`spawnflags 17` is equivalent to `1`.
+
+## `logic_relay` spawnflags and refire
+
+`CLogicRelay`'s datamap is at `0x10579058` (records `0x1057909c`, 8 fields, builder `FUN_10136330`);
+the factory is `0x10136260` and the vftable `0x10469f94`. All the behaviour is in
+`CLogicRelay::InputTrigger` (`FUN_101364e0`):
+
+```c
+if (m_bDisabled /*+0x450*/ == 0 && m_bWaitForRefire /*+0x451*/ == 0) {
+    m_OnTrigger /*+0x454*/ .FireOutput(inputdata.pActivator, this, 0.0f);
+    if (m_spawnflags & 1) { UTIL_Remove(this); return; }
+    if (!(m_spawnflags & 2)) {
+        m_bWaitForRefire = true;
+        g_EventQueue.AddEvent(this, "EnableRefire",
+                              m_OnTrigger.GetMaxDelay() + 0.001, this, this, 0);
+    }
+}
+```
+
+| Bit | Meaning |
+| --- | --- |
+| `0x1` | REMOVE_ON_FIRE — outputs fire, then `UTIL_Remove` (`0x101cd940` → `0x101cd8c0`: sets `EFL_KILLME`, stops thinking, queues destruction). The relay can never fire again. |
+| `0x2` | ALLOW_FAST_RETRIGGER — skips the lockout below |
+| `0x4` and above | **inert** |
+
+Without `0x2` a fired relay sets `m_bWaitForRefire` and queues `EnableRefire` **at itself**, delayed
+by its own longest authored `OnTrigger` delay plus `0.001` (`0x1044f020`), so it cannot re-enter until
+its last delayed output has gone out. The guard order is `m_bDisabled` first, then `m_bWaitForRefire`;
+either silently swallows the input. The activator is taken verbatim from `inputdata.pActivator` and
+`pCaller` is the relay itself.
+
+Unlike `CBaseButton`, this class does **not** diverge from stock Source. The higher bits are a proven
+negative, from three exhaustive checks: an operand scan over all 942,828 disassembled instructions
+finds exactly one `+0x204` read anywhere in the class's code cluster (`0x10135e00`–`0x10136900`), the
+one in `InputTrigger`; all 241 vftable slots resolved through their thunks yield only a debug
+text-overlay printer that displays `m_spawnflags` without testing it; and all 15 inputs (5 own plus 10
+inherited from `CBaseEntity`) lead back to `InputTrigger` as the sole reader.
+
+Corpus values: `0` or absent (249), `1` (39), `8` (1), `49` (1). `8` therefore behaves exactly like
+`0`, and `49` (`0x1|0x10|0x20`) exactly like `1`. `0x2` never occurs.
+
+Other members: `m_bDisabled` `+0x450` is the `StartDisabled` keyfield, written directly at parse time —
+there is no `Spawn`/`Activate` override, so it needs no spawn-time application. `m_bWaitForRefire`
+`+0x451` is saved but not keyable.
+
+## `prop_dynamic` animation (`CDynamicProp`)
+
+The datamap is at `0x1058d4f8` — half-static, with `dataDesc` (`0x1058d53c`) and `numFields` (12)
+written by the builder `FUN_101901ae`. Its own records:
+
+| externalName | internal | offset | notes |
+| --- | --- | --- | --- |
+| `RandomAnimation` | `m_bRandomAnimator` | `+0x7c4` | |
+| — | `m_flNextRandAnim` | `+0x7c8` | save-only |
+| `MinAnimTime` | `m_flMinRandAnimTime` | `+0x7cc` | |
+| `MaxAnimTime` | `m_flMaxRandAnimTime` | `+0x7d0` | |
+| `LoopSequence` | `m_iszSequenceName` | `+0x7d4` | the authored resting animation |
+| `SetAnimation` | `InputSetAnimation` | — | `0x100019ec` → `FUN_10190a00` |
+| `SetSkin` | `InputSetSkin` | — | `0x10014646` → `0x10190810` |
+| `OnAnimationBegun` | `m_pOutputAnimBegun` | `+0x77c` | |
+| `OnAnimationDone` | `m_pOutputAnimOver` | `+0x794` | |
+| `OnAnimationLoop` | `m_pOutputAnimLoop` | `+0x7ac` | |
+
+**There is no `demo_sequence`.** The string appears nowhere in `vampire.dll` (case-insensitive), so it
+is a Hammer/FGD-only field the engine never reads; `LoopSequence` is the only authored default. It is
+nonetheless stamped on map entities — every cinematic prop in `sp_theatre` carries one.
+
+`CDynamicProp::Spawn` (`FUN_101905e0`) sets the resolved loop-sequence index to `-1` and arms
+`CDynamicPropAnimThink` **only** when `m_bRandomAnimator` is set, scheduling
+`m_flNextRandAnim = curtime + RandomFloat(min, max)` and `m_flNextThink = m_flNextRandAnim + 0.1`.
+Everything else spawns thinking never; `InputSetAnimation` is what arms the think otherwise.
+
+`CDynamicPropAnimThink` (`FUN_10190850`, think record `0x1058d6f4` → `LAB_1000d2ce`):
+
+```c
+if (!m_bRandomAnimator || curtime <= m_flNextRandAnim) {
+    // a finished one-shot returns to the authored loop
+    if (loopIdx >= 0 && m_bSequenceFinished /*+0x65c*/ && !m_bSequenceLoops /*+0x65d*/) {
+        m_nSequence = loopIdx; ResetSequenceInfo();
+    }
+} else {
+    m_nSequence = PickRandomSequence();  ResetSequenceInfo();
+    m_pOutputAnimBegun.FireOutput();
+    m_flNextRandAnim = curtime + RandomFloat(m_flMinRandAnimTime, m_flMaxRandAnimTime);
+}
+StudioFrameAdvance();
+if (m_bSequenceFinished) {
+    if (!m_bSequenceLoops) {
+        m_pOutputAnimOver.FireOutput();
+        if (!m_bRandomAnimator) return;            // leaves the think disarmed
+        m_flNextThink = m_flNextRandAnim + 0.1; return;
+    }
+    m_pOutputAnimLoop.FireOutput();
+}
+m_flNextThink = curtime + 0.1;                     // 0.1 is `_DAT_104493d0`
+```
+
+So a prop carrying `LoopSequence` has a scripted `SetAnimation` reverted once that one-shot finishes —
+the revert is gated on the sequence having ended and not being a loop itself, not fired unconditionally.
+
+`InputSetAnimation` (`FUN_10190a00`) resolves the clip name, sets `m_nSequence`, zeroes the cycle,
+fires `m_pOutputAnimBegun`, re-arms the think at `curtime + 0.1`, and plays **non-looping**; on a miss
+it logs `"Dynamic prop no sequence named %s"` and sets sequence 0.
+
+Corpus: `RandomAnimation` is `0` on all 749 entities that carry it, so the random animator never
+engages in shipped data. `LoopSequence` is live on 64 (`idle` ×54, `palmtree_idle` ×6, `fly` ×2,
+`only_sequence`, `running`). `OnAnimationBegun` / `OnAnimationDone` / `OnAnimationLoop` are wired
+**zero** times.
+
+## `env_particle` attachment (`CEnvParticle`)
+
+The datamap is at `0x105669d8` (`dataDesc` `0x10566a1c`, builder write at `0x100fad2a`).
+
+| externalName | internal | offset |
+| --- | --- | --- |
+| `particle_definition` | `m_sParticleDefinition` | `+0x450` |
+| `attach_type` | `m_nAttachType` | `+0x458` |
+| `bone` | `m_sAttachName` | `+0x45c` |
+
+All three are plain keyfields with a null `inputFunc`. `attach_type` is a `FIELD_INTEGER`, so a map's
+numeric value lands directly; the same field is also settable **by name** from the particle definition,
+and that parser (`FUN_100fb620`) gives the low enum its names — a `__strcmpi` chain over
+`"origin"`, `"tree"`, `"point"`, `"treecolor"` writing `0`, `1`, `2`, `3` in that order:
+
+| Value | Name |
+| --- | --- |
+| `0` | `origin` |
+| `1` | `tree` |
+| `2` | `point` |
+| `3` | `treecolor` |
+
+`2` = `point` is the attachment-point/bone follow, and the corpus agrees: all 17 `attach_type 2`
+emitters carry **both** `parentname` and `bone`, and no other value does. `attach_type 0` is the
+entity's own origin (135 of its 143 instances carry neither key).
+
+Values above `3` are **not resolved**. They are used but rare — `11` (3), `5`, `9`, `10` (1 each) —
+and appear in separate consumers: `FUN_100fbdc0` treats `10`–`13` as one family, `FUN_100fc500`
+compares against `5` and `7`, and `FUN_100fb3d0` range-checks `0`–`0x13`, so the enum runs to at least
+19. None occur in `sp_theatre`.
 
 ## Scripted sequences (`scripted_sequence` / `aiscripted_sequence`)
 

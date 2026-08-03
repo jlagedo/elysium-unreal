@@ -16,6 +16,7 @@
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumSaveArchive.h"
 #include "ElysiumWorldServices.h"
 
 #include "Engine/GameInstance.h"
@@ -98,13 +99,89 @@ public:
 // ============================================================================================
 // logic_relay — the indirection layer (5,957 OnTrigger wires — a quarter of all game wires; 107
 // instances on the tutorial). `Trigger` re-fires the entity's OnTrigger outputs, propagating the
-// activator; Enable/Disable/Toggle gate it (a disabled relay swallows Trigger).
+// activator, then either removes the relay or locks out re-entry until its longest delayed output
+// has gone out; Enable/Disable/Toggle gate it (a disabled relay swallows Trigger).
 // ============================================================================================
 
 class FElysiumLogicRelay final : public FElysiumEntity
 {
 public:
-	bool bDisabled = false;   // StartDisabled keyvalue; flipped by Enable/Disable/Toggle
+	// CLogicRelay::InputTrigger (FUN_101364e0) reads exactly these two bits, and nothing else in the
+	// class reads m_spawnflags at all: an operand scan over every +0x204 access in vampire.dll finds
+	// one hit inside the class, all 241 vftable slots resolve to a debug printer as the only other
+	// reader, and all 15 inputs (5 own + 10 inherited) lead back to InputTrigger. So 0x4 and up are
+	// inert here — unlike CBaseButton, this class did not diverge from stock Source.
+	static constexpr int32 SF_RELAY_REMOVE_ON_FIRE       = 0x1;   // UTIL_Remove once it has fired
+	static constexpr int32 SF_RELAY_ALLOW_FAST_RETRIGGER = 0x2;   // skip the post-fire lockout
+
+	bool bDisabled = false;        // StartDisabled keyvalue; flipped by Enable/Disable/Toggle
+	bool bWaitForRefire = false;   // set after firing until the queued EnableRefire lands
+
+	void InputTrigger(const FElysiumInputArgs& Args)
+	{
+		if (bDisabled || bWaitForRefire)
+		{
+			return;
+		}
+		static const FName OnTrigger(TEXT("OnTrigger"));
+		FireOutput(OnTrigger, Args.Activator);   // propagate the incoming activator (Source relays pass it through)
+
+		if ((SpawnFlags & SF_RELAY_REMOVE_ON_FIRE) != 0)
+		{
+			// Retail fires the outputs *before* UTIL_Remove, so a delayed output is already queued
+			// when the relay dies. Those queued events are deliberately left to run: whether retail
+			// still services them was not established, and dropping them would be the larger guess.
+			Kill();
+			return;
+		}
+		if ((SpawnFlags & SF_RELAY_ALLOW_FAST_RETRIGGER) == 0 && World)
+		{
+			bWaitForRefire = true;
+			World->EnqueueInput(TEXT("!self"), FName(TEXT("EnableRefire")), FElysiumVariant::Void(),
+				MaxOnTriggerDelay() + RefireEpsilon, Args.Activator, Handle);
+		}
+	}
+
+	virtual void Serialize(FElysiumSaveArchive& Ar) override
+	{
+		// The queued EnableRefire rides the event queue's own save block, so the latch and the event
+		// that clears it restore together.
+		Ar << bWaitForRefire;
+	}
+
+	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
+	{
+		Out.Emplace(TEXT("Disabled"), bDisabled ? TEXT("yes") : TEXT("no"));
+		Out.Emplace(TEXT("Waiting for refire"), bWaitForRefire ? TEXT("yes") : TEXT("no"));
+		TArray<FString> FlagNames;
+		if (SpawnFlags & SF_RELAY_REMOVE_ON_FIRE)       { FlagNames.Add(TEXT("REMOVE_ON_FIRE")); }
+		if (SpawnFlags & SF_RELAY_ALLOW_FAST_RETRIGGER) { FlagNames.Add(TEXT("ALLOW_FAST_RETRIGGER")); }
+		Out.Emplace(TEXT("Spawnflags"), FString::Printf(TEXT("%d = %s"), SpawnFlags,
+			FlagNames.Num() ? *FString::Join(FlagNames, TEXT(" | ")) : TEXT("(none)")));
+	}
+
+private:
+	// CLogicRelay's refire epsilon (`0x1044f020`, double 0.001).
+	static constexpr double RefireEpsilon = 0.001;
+
+	// Retail asks m_OnTrigger for its longest authored delay so the lockout outlives the last queued
+	// output. There is no CBaseEntityOutput object here — the authored rows live on the def.
+	double MaxOnTriggerDelay() const
+	{
+		static const FName OnTrigger(TEXT("OnTrigger"));
+		double Longest = 0.0;
+		if (Def)
+		{
+			for (const FElysiumOutputDef& O : Def->Outputs)
+			{
+				if (FName(*O.Name) == OnTrigger)
+				{
+					Longest = FMath::Max(Longest, static_cast<double>(O.Delay));
+				}
+			}
+		}
+		return Longest;
+	}
 };
 
 // ============================================================================================
@@ -590,15 +667,7 @@ static FElysiumClassRegistrar GRegLogicRelay(
 	[](FElysiumClassDesc& D)
 	{
 		D.Input(TEXT("Trigger"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
-		{
-			FElysiumLogicRelay& R = static_cast<FElysiumLogicRelay&>(E);
-			if (R.bDisabled)
-			{
-				return;
-			}
-			static const FName OnTrigger(TEXT("OnTrigger"));
-			R.FireOutput(OnTrigger, Args.Activator);   // propagate the incoming activator (Source relays pass it through)
-		});
+			{ static_cast<FElysiumLogicRelay&>(E).InputTrigger(Args); });
 		D.Input(TEXT("Enable"),  [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumLogicRelay&>(E).bDisabled = false; });
 		D.Input(TEXT("Disable"), [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumLogicRelay&>(E).bDisabled = true; });
 		D.Input(TEXT("Toggle"),  [](FElysiumEntity& E, const FElysiumInputArgs&)
@@ -606,10 +675,10 @@ static FElysiumClassRegistrar GRegLogicRelay(
 			FElysiumLogicRelay& R = static_cast<FElysiumLogicRelay&>(E);
 			R.bDisabled = !R.bDisabled;
 		});
+		// The relay queues this at itself after firing; it is not wired by any map.
+		D.Input(TEXT("EnableRefire"), [](FElysiumEntity& E, const FElysiumInputArgs&)
+			{ static_cast<FElysiumLogicRelay&>(E).bWaitForRefire = false; });
 		AddSubclassField(D, TEXT("StartDisabled"), &FElysiumLogicRelay::bDisabled);
-		// (Stock Source SF 1 = remove-on-fire / SF 2 = allow-fast-retrigger are unconfirmed for
-		// VtMB — buttons diverge from stock — so they are not modelled; per-output `times` already
-		// caps re-fires. Revisit with an RE pass if a relay over-fires on the tutorial.)
 	});
 
 static FElysiumClassRegistrar GRegCBaseTrigger(

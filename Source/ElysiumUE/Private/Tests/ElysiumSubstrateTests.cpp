@@ -35,6 +35,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEnvironment.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumStub.h"
 #include "ElysiumWeatherState.h"
 #include "ElysiumFog.h"
 #include "ElysiumEventQueue.h"
@@ -5530,6 +5531,21 @@ bool FElysiumRotatingAttachTest::RunTest(const FString&)
 	Idle.Keys.Add(TEXT("spawnflags"), TEXT("4"));    // Z_AXIS, no START_ON
 	Defs.Defs.Add(MoveTemp(Idle));
 
+	// sp_tutorial_1's ceiling fan: spawnflags 513 = START_ON | SND_LARGE, so neither axis bit is
+	// set and it falls to the default. Every fan and sky rotator in the corpus is authored this
+	// way, and all of them must turn about Z — the case the Z_AXIS clock hand above cannot cover.
+	FElysiumEntityDef Fan;
+	Fan.Classname = TEXT("func_rotating");
+	Fan.TargetName = TEXT("fanrot1");
+	Fan.Origin = FVector(400.f, 0.f, 0.f);
+	Fan.Model = 3;
+	Fan.Hulls.Add(BoxHull());
+	Fan.BrushMesh = TEXT("brush_3");
+	Fan.Keys.Add(TEXT("model"), TEXT("*3"));
+	Fan.Keys.Add(TEXT("maxspeed"), TEXT("360"));
+	Fan.Keys.Add(TEXT("spawnflags"), TEXT("513"));
+	Defs.Defs.Add(MoveTemp(Fan));
+
 	FElysiumEntityDefs RestoreDefs = Defs;
 	FElysiumRecordingServices Services;
 	FElysiumEntityWorld World(Owner, nullptr, Services.Bundle());
@@ -5543,7 +5559,9 @@ bool FElysiumRotatingAttachTest::RunTest(const FString&)
 	FElysiumEntity* LiveSecond = World.FindByName(TEXT("secondhand"));
 	FElysiumEntity* LiveHand = World.FindByName(TEXT("second"));
 	FElysiumEntity* LiveIdle = World.FindByName(TEXT("idlerotator"));
-	if (!TestNotNull(TEXT("character resolved"), LiveUnderstudy)
+	FElysiumEntity* LiveFan = World.FindByName(TEXT("fanrot1"));
+	if (!TestNotNull(TEXT("ceiling fan resolved"), LiveFan)
+		|| !TestNotNull(TEXT("character resolved"), LiveUnderstudy)
 		|| !TestNotNull(TEXT("ornament resolved"), LiveOrnament)
 		|| !TestNotNull(TEXT("orphan ornament resolved"), LiveOrphan)
 		|| !TestNotNull(TEXT("func_rotating resolved"), LiveSecond)
@@ -5588,14 +5606,26 @@ bool FElysiumRotatingAttachTest::RunTest(const FString&)
 	World.Tick(15.0);
 	TestTrue(TEXT("a 6 deg/s rotator has turned 90 degrees at fifteen seconds"),
 		FMath::IsNearlyEqual(AngleOf(LiveSecond), 90.f, 0.01f));
-	// Source Z spin maps to Unreal Z with the angle negated, the same reflection every other
-	// coordinate read uses — so a quarter turn reads as yaw -90.
-	TestTrue(TEXT("the turn lands on the Unreal Z axis with the reflected sign"),
-		FMath::IsNearlyEqual(LiveSecond->Body->GetRelativeRotation().Yaw, -90.f, 0.1f)
+	// The Z_AXIS flag selects the roll component of Spawn's m_vecMoveAng, so a clock hand sweeps
+	// about X — the wall normal — not about Z. X survives the Y-negating reflection unchanged, and
+	// the reflection reverses the turn, so a quarter turn reads as roll -90.
+	// The reflected turn is the same one the fan below makes, but it reads back as roll +90 rather
+	// than -90: FRotator's Roll and Pitch run opposite to a right-handed turn about X and Y, while
+	// Yaw runs with it. The quaternion is FQuat(+X, -90 deg) in both readings.
+	TestTrue(TEXT("a Z_AXIS rotator turns about Unreal X with the reflected sign"),
+		FMath::IsNearlyEqual(LiveSecond->Body->GetRelativeRotation().Roll, 90.f, 0.1f)
 		&& FMath::IsNearlyZero(LiveSecond->Body->GetRelativeRotation().Pitch, 0.1f)
-		&& FMath::IsNearlyZero(LiveSecond->Body->GetRelativeRotation().Roll, 0.1f));
+		&& FMath::IsNearlyZero(LiveSecond->Body->GetRelativeRotation().Yaw, 0.1f));
 	TestTrue(TEXT("the parented hand rides the rotation"),
-		FMath::IsNearlyEqual(LiveHand->GetAttachBody()->GetComponentRotation().Yaw, -90.f, 0.1f));
+		FMath::IsNearlyEqual(LiveHand->GetAttachBody()->GetComponentRotation().Roll, 90.f, 0.1f));
+
+	// The unflagged default is yaw. 360 deg/s for 15.25 s is a quarter turn past the wrap, which
+	// reads as yaw -90 with the reflected sign — a ceiling fan sweeping the ceiling, not the wall.
+	World.Tick(15.25);
+	TestTrue(TEXT("an unflagged rotator turns about Unreal Z with the reflected sign"),
+		FMath::IsNearlyEqual(LiveFan->Body->GetRelativeRotation().Yaw, -90.f, 0.1f)
+		&& FMath::IsNearlyZero(LiveFan->Body->GetRelativeRotation().Pitch, 0.1f)
+		&& FMath::IsNearlyZero(LiveFan->Body->GetRelativeRotation().Roll, 0.1f));
 
 	World.Tick(60.0);
 	TestTrue(TEXT("one full revolution takes a minute and wraps"),
@@ -6439,6 +6469,166 @@ namespace
 	}
 }
 
+// ============================================================================================
+// CDynamicProp's animate think (FUN_10190850): a finished one-shot returns to `LoopSequence`, and
+// `demo_sequence` stands nothing up because the engine has no such keyfield.
+// ============================================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropAnimateThinkTest,
+	"Elysium.Substrate.PropAnimateThink", GElysiumTestFlags)
+bool FElysiumPropAnimateThinkTest::RunTest(const FString&)
+{
+	FElysiumRecordingServices Services;
+	Services.AnimatedPropModels.Add(TEXT("models/cinematic/cin_stake.mdl"), TEXT("cin_stake"));
+	Services.AnimatedPropModels.Add(TEXT("models/cinematic/cin_cigar.mdl"), TEXT("cin_cigar"));
+	Services.ClipSeconds = 4.0f;
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__prop_anim__");
+	{
+		FElysiumEntityDef Stake;
+		Stake.Classname = TEXT("prop_dynamic");
+		Stake.TargetName = TEXT("stake");
+		Stake.ModelMesh = TEXT("cin_stake");
+		Stake.Keys.Add(TEXT("model"), TEXT("models/cinematic/cin_stake.mdl"));
+		Stake.Keys.Add(TEXT("LoopSequence"), TEXT("idle01"));
+		Defs.Defs.Add(MoveTemp(Stake));
+
+		FElysiumEntityDef Cigar;
+		Cigar.Classname = TEXT("prop_dynamic");
+		Cigar.TargetName = TEXT("cigar");
+		Cigar.ModelMesh = TEXT("cin_cigar");
+		Cigar.Keys.Add(TEXT("model"), TEXT("models/cinematic/cin_cigar.mdl"));
+		Cigar.Keys.Add(TEXT("demo_sequence"), TEXT("idle"));
+		Defs.Defs.Add(MoveTemp(Cigar));
+	}
+
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+
+	FElysiumEntity* Stake = World.FindByName(TEXT("stake"));
+	if (!TestNotNull(TEXT("stake resolved"), Stake))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("LoopSequence stands the prop on its authored loop"),
+		Services.Count(TEXT("PlayAnimatedPropClip cin_stake idle01 loop=1")), 1);
+	TestEqual(TEXT("demo_sequence is not an engine keyfield and stands nothing up"),
+		Services.Count(TEXT("PlayAnimatedPropClip cin_cigar")), 0);
+
+	// A scripted one-shot replaces the loop and arms the think.
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("SetAnimation")),
+		FElysiumVariant::String(TEXT("scene")), /*Delay*/ 0.0,
+		FElysiumEntityHandle::Invalid(), Stake->Handle);
+	World.Tick(0.0);
+	TestEqual(TEXT("SetAnimation plays the one-shot"),
+		Services.Count(TEXT("PlayAnimatedPropClip cin_stake scene loop=0")), 1);
+
+	// Mid-clip the think must leave it alone (ClipSeconds is 4).
+	World.Tick(2.0);
+	TestEqual(TEXT("the loop is not restored while the one-shot is still running"),
+		Services.Count(TEXT("PlayAnimatedPropClip cin_stake idle01 loop=1")), 1);
+
+	// Past the clip's end the think returns the prop to its LoopSequence.
+	World.Tick(4.5);
+	TestEqual(TEXT("a finished one-shot reverts to LoopSequence"),
+		Services.Count(TEXT("PlayAnimatedPropClip cin_stake idle01 loop=1")), 2);
+	return true;
+}
+
+// ============================================================================================
+// CLogicRelay::InputTrigger (FUN_101364e0): spawnflag 0x1 removes the relay once it has fired, and
+// without 0x2 a fired relay locks out re-entry until its longest delayed output has gone out.
+// ============================================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLogicRelayLifetimeTest,
+	"Elysium.Substrate.LogicRelayLifetime", GElysiumTestFlags)
+bool FElysiumLogicRelayLifetimeTest::RunTest(const FString&)
+{
+	auto AddRelay = [](FElysiumEntityDefs& Defs, const TCHAR* Name, const TCHAR* Spawnflags)
+	{
+		FElysiumEntityDef Relay;
+		Relay.Classname = TEXT("logic_relay");
+		Relay.TargetName = Name;
+		if (Spawnflags) { Relay.Keys.Add(TEXT("spawnflags"), Spawnflags); }
+		FElysiumOutputDef Wire;
+		Wire.Name = TEXT("OnTrigger");
+		Wire.Target = TEXT("counter1");
+		Wire.Input = TEXT("Add");
+		Wire.Param = TEXT("5");
+		Wire.Times = -1;
+		Relay.Outputs.Add(MoveTemp(Wire));
+		Defs.Defs.Add(MoveTemp(Relay));
+	};
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__relay_lifetime__");
+	AddRelay(Defs, TEXT("plain"), nullptr);
+	AddRelay(Defs, TEXT("oneshot"), TEXT("1"));
+	{
+		FElysiumEntityDef Counter;
+		Counter.Classname = TEXT("math_counter");
+		Counter.TargetName = TEXT("counter1");
+		Defs.Defs.Add(MoveTemp(Counter));
+	}
+
+	FElysiumEntityWorld World(nullptr, nullptr);
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+
+	auto CounterValue = [&World]() -> float
+	{
+		const FElysiumEntity* Counter = World.FindByName(TEXT("counter1"));
+		if (!Counter) { return -1.0f; }
+		TArray<TPair<FString, FString>> State;
+		Counter->GetDebugState(State);
+		for (const TPair<FString, FString>& Row : State)
+		{
+			if (Row.Key == TEXT("Value")) { return FCString::Atof(*Row.Value); }
+		}
+		return -1.0f;
+	};
+
+	FElysiumEntity* Plain = World.FindByName(TEXT("plain"));
+	FElysiumEntity* OneShot = World.FindByName(TEXT("oneshot"));
+	if (!TestNotNull(TEXT("plain relay resolved"), Plain)
+		|| !TestNotNull(TEXT("oneshot relay resolved"), OneShot))
+	{
+		return false;
+	}
+
+	auto Trigger = [&World](FElysiumEntity* Relay, double Now)
+	{
+		World.EnqueueInput(TEXT("!self"), FName(TEXT("Trigger")), FElysiumVariant::Void(),
+			/*Delay*/ 0.0, FElysiumEntityHandle::Invalid(), Relay->Handle);
+		World.Tick(Now);
+	};
+
+	// --- The refire lockout ---------------------------------------------------------------------
+	Trigger(Plain, 0.0);
+	TestEqual(TEXT("the relay fired once"), CounterValue(), 5.0f);
+
+	// A second Trigger inside the lockout is swallowed. The relay's OnTrigger rows carry no delay,
+	// so the queued EnableRefire is due at 0.001.
+	Trigger(Plain, 0.0);
+	TestEqual(TEXT("a re-trigger inside the lockout is swallowed"), CounterValue(), 5.0f);
+
+	World.Tick(0.002);   // deliver EnableRefire
+	Trigger(Plain, 0.002);
+	TestEqual(TEXT("the relay fires again once the lockout has lifted"), CounterValue(), 10.0f);
+
+	// --- Remove on fire -------------------------------------------------------------------------
+	Trigger(OneShot, 0.002);
+	TestEqual(TEXT("the one-shot relay fired"), CounterValue(), 15.0f);
+	TestNull(TEXT("a REMOVE_ON_FIRE relay is gone from name lookup"),
+		World.FindByName(TEXT("oneshot")));
+
+	// Its handle no longer resolves, so a second Trigger addressed at it goes nowhere.
+	Trigger(OneShot, 0.002);
+	TestEqual(TEXT("and cannot fire a second time"), CounterValue(), 15.0f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSaveRoundTripTest, "Elysium.Substrate.SaveRoundTrip",
 	GElysiumTestFlags)
 bool FElysiumSaveRoundTripTest::RunTest(const FString&)
@@ -6473,12 +6663,15 @@ bool FElysiumSaveRoundTripTest::RunTest(const FString&)
 
 	A.EnqueueInput(TEXT("counter1"), FName(TEXT("Add")), FElysiumVariant::Int(3), /*Delay*/ 30.0,
 		FElysiumEntityHandle::Invalid(), Relay->Handle);
-	TestEqual(TEXT("one event still pending at freeze time"), A.Queue().Num(), 1);
+	// Two: this delayed Add, plus the relay's own refire lockout. Triggering relay1 above queued an
+	// EnableRefire at max(OnTrigger delay) + 0.001 = 0.001, and the ticks above all run at t=0, so it
+	// is never due and is still pending here.
+	TestEqual(TEXT("both events still pending at freeze time"), A.Queue().Num(), 2);
 
 	FElysiumMapSnapshot First;
 	A.Freeze(First);
 	TestEqual(TEXT("the frozen map names itself"), First.MapName, FString(TEXT("__save_test__")));
-	TestEqual(TEXT("the pending delivery is in the snapshot"), First.Queue.Num(), 1);
+	TestEqual(TEXT("the pending deliveries are in the snapshot"), First.Queue.Num(), 2);
 	// The omission rule: only entities that differ from a fresh build of their own def are written.
 	TestTrue(TEXT("something was recorded"), First.Entities.Num() >= 3);
 	TestTrue(TEXT("but not more than the world holds"), First.Entities.Num() <= A.NumEntities());
@@ -6500,12 +6693,16 @@ bool FElysiumSaveRoundTripTest::RunTest(const FString&)
 	TestEqual(TEXT("the counter's value survived"), SaveTestCounterValue(CounterB), 5.0f);
 	TestTrue(TEXT("the hidden timer is still hidden"), TimerB->IsHidden());
 	TestNotNull(TEXT("the runtime entity restored under its own name"), B.FindByName(TEXT("runtime1")));
-	TestEqual(TEXT("the queue was replaced, not appended to"), B.Queue().Num(), 1);
-	if (const FElysiumIOEvent* Head = B.Queue().PeekEarliest())
+	TestEqual(TEXT("the queue was replaced, not appended to"), B.Queue().Num(), 2);
+	// Address the delayed Add by name rather than by queue position — the relay's 0.001s refire
+	// lockout sorts ahead of it.
+	const FElysiumIOEvent* Delayed = B.Queue().Pending().FindByPredicate(
+		[](const FElysiumIOEvent& E) { return E.Input == FName(TEXT("Add")); });
+	if (TestNotNull(TEXT("the delayed Add survived the round trip"), Delayed))
 	{
-		TestEqual(TEXT("its fire time is absolute and unchanged"), Head->FireTime, 30.0);
+		TestEqual(TEXT("its fire time is absolute and unchanged"), Delayed->FireTime, 30.0);
 		// §6 — a saved handle is re-stamped against the live epoch, so it resolves again.
-		if (const FElysiumEntity* Caller = B.Resolve(Head->Caller))
+		if (const FElysiumEntity* Caller = B.Resolve(Delayed->Caller))
 		{
 			TestEqual(TEXT("the caller handle re-resolved to the entity that queued it"),
 				Caller->Handle.Index, Relay->Handle.Index);
@@ -8974,6 +9171,108 @@ bool FElysiumWeatherTimerSequenceTest::RunTest(const FString&)
 	World.Tick(20.0);
 	TestEqual(TEXT("the repeating cycle produces one audio start per rain-on"),
 		Services.Count(TEXT("Submit ")), 2);
+	return true;
+}
+
+// =====================================================================================
+// The stub report — that an unimplemented surface says so, and that an implemented one
+// stays quiet. The second half is the one worth guarding: a stub class names the inputs
+// the shipped maps fire at a classname with no leaf, and if such a row ever shadowed a
+// base input (Kill/ScriptHide/ScriptUnhide) it would turn a working input into a warning
+// that does nothing. The tally is the observable; the warning text is cosmetic, so the
+// volume is turned down for the duration rather than expected line by line.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStubReportTest, "Elysium.Substrate.Stubs", GElysiumTestFlags)
+bool FElysiumStubReportTest::RunTest(const FString&)
+{
+	IConsoleVariable* Warn = IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.StubWarn"));
+	const int32 PrevWarn = Warn ? Warn->GetInt() : 2;
+	if (Warn) { Warn->Set(0); }
+	ElysiumStub::ClearTally();
+	ON_SCOPE_EXIT
+	{
+		if (Warn) { Warn->Set(PrevWarn); }
+		ElysiumStub::ClearTally();
+	};
+
+	// One stub class (env_sprite — 208 wires across the shipped maps, no leaf), one classname with
+	// no registration at all, and one real class to prove the quiet path.
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__test__");
+	for (const TCHAR* Pair : { TEXT("env_sprite|sprite1"), TEXT("func_lod|lod1"), TEXT("math_counter|counter1") })
+	{
+		FString Class, Name;
+		FString(Pair).Split(TEXT("|"), &Class, &Name);
+		FElysiumEntityDef Def;
+		Def.Classname = Class;
+		Def.TargetName = Name;
+		Defs.Defs.Add(MoveTemp(Def));
+	}
+
+	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+
+	FElysiumEntity* Sprite = World.FindByName(TEXT("sprite1"));
+	FElysiumEntity* Lod = World.FindByName(TEXT("lod1"));
+	FElysiumEntity* Counter = World.FindByName(TEXT("counter1"));
+	if (!TestNotNull(TEXT("sprite1 resolved"), Sprite)
+		|| !TestNotNull(TEXT("lod1 resolved"), Lod)
+		|| !TestNotNull(TEXT("counter1 resolved"), Counter))
+	{
+		return false;
+	}
+
+	// A stub class is still an inert record: it names inputs, it does not implement any.
+	TestTrue(TEXT("a stub class spawns record-only"), Sprite->IsRecordOnly());
+	TestTrue(TEXT("an unregistered classname spawns record-only"), Lod->IsRecordOnly());
+	TestFalse(TEXT("a real class does not"), Counter->IsRecordOnly());
+
+	auto FireAt = [&World](const TCHAR* Target, const TCHAR* Input)
+	{
+		World.AcceptInput(Target, FName(Input), FElysiumVariant::Void(),
+			FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+	};
+	auto CountFor = [](const TCHAR* Kind, const TCHAR* Surface) -> int32
+	{
+		TArray<ElysiumStub::FTally> Rows;
+		ElysiumStub::CollectTally(Rows);
+		for (const ElysiumStub::FTally& R : Rows)
+		{
+			if (R.Kind == Kind && R.Surface == Surface) { return R.Count; }
+		}
+		return 0;
+	};
+
+	// 1. A stub class's named input resolves to the shared thunk and reports under its own name.
+	FireAt(TEXT("sprite1"), TEXT("HideSprite"));
+	FireAt(TEXT("sprite1"), TEXT("HideSprite"));
+	TestEqual(TEXT("a stub input reports once per fire"),
+		CountFor(TEXT("input"), TEXT("env_sprite.HideSprite")), 2);
+
+	// 2. An input no class on the chain owns reports too — this is what covers the classnames the
+	//    stub table does not enumerate.
+	FireAt(TEXT("lod1"), TEXT("Frobnicate"));
+	TestEqual(TEXT("an unresolvable input reports"),
+		CountFor(TEXT("input"), TEXT("func_lod.Frobnicate")), 1);
+
+	// 3. A wire naming an entity the map does not contain is its own kind, not an input gap.
+	FireAt(TEXT("no_such_entity"), TEXT("Trigger"));
+	TestEqual(TEXT("an unknown target reports as a target"),
+		CountFor(TEXT("target"), TEXT("no_such_entity.Trigger")), 1);
+
+	// 4. The shadowing guard: base inputs still work on a stub class and report nothing.
+	FireAt(TEXT("sprite1"), TEXT("ScriptHide"));
+	TestTrue(TEXT("a base input still reaches a stub class"), Sprite->IsHidden());
+	TestEqual(TEXT("a base input on a stub class reports nothing"),
+		CountFor(TEXT("input"), TEXT("env_sprite.ScriptHide")), 0);
+
+	// 5. And an implemented input on a real class stays quiet.
+	FireAt(TEXT("counter1"), TEXT("Add"));
+	TestEqual(TEXT("an implemented input reports nothing"),
+		CountFor(TEXT("input"), TEXT("math_counter.Add")), 0);
+
 	return true;
 }
 

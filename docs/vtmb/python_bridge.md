@@ -168,6 +168,17 @@ return 0;
   through to the old-style instance `__dict__`, so entities behave as property bags.
 - `cop.Kill` written **without parentheses** (present in retail) manufactures a callable
   and discards it — the input never fires.
+- Step 4 runs **before** step 5 and the walk stops at the first name match, so an input name
+  shadows any same-named value read: the expression yields a bound callable, not a number, and
+  comparing it to an integer is a type comparison that cannot fail the way the author expects.
+  `chooseSire()` (`vamputil.py`) reads `getattr(pc, "BloodHeal") != -1` to pick between two
+  Malkavian sire models. `BloodHeal` is a `CBaseCombatCharacter` **input**
+  (`docs/vtmb/script_api.md`, internal name `BloodHealIn`), not the Blood Healing discipline —
+  that slot's datamap names are `blood_healing` / `base_blood_healing`, from `stats.txt`
+  InternalName `Blood_Healing` (the patch's display `Name` is `Bloodheal`, a third spelling that
+  addresses nothing). The name therefore resolves at step 4, the comparison is always true, and
+  the branch is unconditional. A read of the discipline rating has to spell it
+  `pc.base_blood_healing`.
 
 ## The write path — `Entity.__setattr__`
 

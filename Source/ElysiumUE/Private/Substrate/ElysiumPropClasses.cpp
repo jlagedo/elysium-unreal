@@ -4,9 +4,9 @@
 // now stands its decoded static `.mdl` (out/<map>/props/<stem>.obj via IElysiumEmbodiment::BuildPropVisual,
 // the shared prop decode 8.1 exports) at its placement, and gains per-instance addressability — the base
 // ScriptHide/ScriptUnhide dormancy, the 9.3 SetOrigin/SetAngles/SetModel writers (body-follow), and the
-// prop_dynamic inputs. `Break` hides the body and fires OnBreak. `Skin`/`SetAnimation` are logged stubs:
-// the prop decode is LOD0 static geometry, skin 0 only — no alternate skin families or skeleton are
-// exported — so faithfully they can only record the request.
+// prop_dynamic inputs. `Break` hides the body and fires OnBreak; `Skin` repaints from the baked skin
+// set; `SetAnimation` plays a named clip on the skeletal representation and arms the animate think
+// that returns the prop to its `LoopSequence`.
 //
 // Deliberately out of scope: prop_physics Chaos bodies + constraints (8.4), the interactive
 // prop_button/prop_sign/prop_switch/… `+use` family (4.10/8.8), and collision — a prop stands non-solid
@@ -103,6 +103,18 @@ namespace
 			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Bool(static_cast<const TClass&>(E).*Member); };
 			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt() != 0; };
 		}
+		else if constexpr (std::is_same_v<TMember, float>)
+		{
+			Acc.Type = EElysiumVariantType::Float;
+			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Float(static_cast<const TClass&>(E).*Member); };
+			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToFloat(); };
+		}
+		else if constexpr (std::is_same_v<TMember, FString>)
+		{
+			Acc.Type = EElysiumVariantType::String;
+			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::String(static_cast<const TClass&>(E).*Member); };
+			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToString(); };
+		}
 		else
 		{
 			static_assert(sizeof(TMember) == 0, "AddPropField: unsupported member type");
@@ -145,10 +157,67 @@ public:
 	bool bBroken = false;
 	int32 Skin = 0;
 
+	// CDynamicProp's animation keyfields (datamap `0x1058d4f8`, 12 records at `0x1058d53c`). There is
+	// no `demo_sequence` in the engine — the name appears nowhere in `vampire.dll`, so it is a
+	// Hammer/FGD-only field and `LoopSequence` is the only authored default.
+	FString LoopSequence;               // LoopSequence -> m_iszSequenceName @0x7d4
+	bool    bRandomAnimator = false;    // RandomAnimation -> m_bRandomAnimator @0x7c4
+	float   MinAnimTime = 0.0f;         // MinAnimTime -> m_flMinRandAnimTime @0x7cc
+	float   MaxAnimTime = 0.0f;         // MaxAnimTime -> m_flMaxRandAnimTime @0x7d0
+
+	// Derived. Retail carries a resolved sequence *index* (-1 when LoopSequence names nothing); the
+	// animated-prop index exposes clip *names*, so the equivalent test is "it resolved to a real clip".
+	bool   bLoopSequenceResolved = false;
+	double NextRandAnim = 0.0;          // m_flNextRandAnim @0x7c8
+	double AnimationEndTime = 0.0;      // absolute seconds the current one-shot ends; 0 = none pending
+
 	virtual void Spawn() override
 	{
 		BuildBody(/*bFromSetModel=*/false);
 		PlayAuthoredDefault();
+		// CDynamicProp::Spawn (FUN_101905e0) arms the animate think only for a random animator.
+		// Every other prop spawns thinking never; SetAnimation is what arms it later.
+		if (bRandomAnimator && World)
+		{
+			NextRandAnim = World->NowSeconds() + DrawRandomAnimInterval();
+			NextThink = static_cast<float>(NextRandAnim + AnimThinkInterval);
+		}
+	}
+
+	// CDynamicPropAnimThink (FUN_10190850). Two jobs: return a finished one-shot to the authored
+	// loop, and drive the random animator. Retail leaves the think disarmed once a non-looping
+	// sequence has finished and there is no random animator left to schedule.
+	virtual void Think() override
+	{
+		const double Now = World ? World->NowSeconds() : 0.0;
+		if (!bRandomAnimator || Now <= NextRandAnim)
+		{
+			// The revert is gated on the sequence having *finished* and not being a loop itself —
+			// retail tests m_bSequenceFinished (+0x65c) && !m_bSequenceLoops (+0x65d).
+			if (bLoopSequenceResolved && SequenceFinished(Now))
+			{
+				PlayAnimation(LoopSequence, /*bLoop*/ true);
+			}
+		}
+		else if (PlayRandomAnimation())
+		{
+			static const FName OnAnimationBegun(TEXT("OnAnimationBegun"));
+			FireOutput(OnAnimationBegun, Handle);
+			NextRandAnim = Now + DrawRandomAnimInterval();
+		}
+
+		if (SequenceFinished(Now))
+		{
+			static const FName OnAnimationDone(TEXT("OnAnimationDone"));
+			FireOutput(OnAnimationDone, Handle);
+			if (!bRandomAnimator)
+			{
+				return;   // nothing left to schedule; retail returns without re-arming
+			}
+			NextThink = static_cast<float>(NextRandAnim + AnimThinkInterval);
+			return;
+		}
+		NextThink = static_cast<float>(Now + AnimThinkInterval);
 	}
 
 	virtual UPrimitiveComponent* GetAttachBody() const override
@@ -159,7 +228,9 @@ public:
 
 	virtual void Serialize(FElysiumSaveArchive& Ar) override
 	{
-		Ar << CurrentAnimation << bAnimationLoop;
+		// m_flNextRandAnim is a retail SAVE field. AnimationEndTime is not carried: the replay below
+		// restarts the clip, which is what re-derives it.
+		Ar << CurrentAnimation << bAnimationLoop << NextRandAnim;
 		if (Ar.IsLoading() && AnimatedVisual && !CurrentAnimation.IsEmpty())
 		{
 			PlayAnimation(CurrentAnimation, bAnimationLoop);
@@ -241,6 +312,13 @@ public:
 		{
 			UE_LOG(LogElysiumProp, Warning, TEXT("%s SetAnimation '%s' did not resolve on %s"),
 				*DebugString(), *Clip, AnimatedStem.IsEmpty() ? TEXT("static representation") : *AnimatedStem);
+			return;
+		}
+		// InputSetAnimation (FUN_10190a00) arms the animate think — that is what returns the prop to
+		// its LoopSequence once this one-shot finishes.
+		if (World)
+		{
+			NextThink = static_cast<float>(World->NowSeconds() + AnimThinkInterval);
 		}
 	}
 
@@ -251,6 +329,20 @@ public:
 			: (Visual ? TEXT("static mesh") : TEXT("(none)")));
 		Out.Emplace(TEXT("Animation"), CurrentAnimation.IsEmpty() ? TEXT("(none)") : CurrentAnimation);
 		Out.Emplace(TEXT("Animation loop"), bAnimationLoop ? TEXT("yes") : TEXT("no"));
+		Out.Emplace(TEXT("Loop sequence"), LoopSequence.IsEmpty() ? TEXT("(none)")
+			: (bLoopSequenceResolved ? LoopSequence : LoopSequence + TEXT(" (unresolved)")));
+		if (bRandomAnimator)
+		{
+			Out.Emplace(TEXT("Random animator"),
+				FString::Printf(TEXT("%.2f-%.2fs (not implemented)"), MinAnimTime, MaxAnimTime));
+		}
+		// Authored but ignored — `demo_sequence` is a Hammer/FGD field with no engine keyfield behind
+		// it, so surface it rather than let the divergence disappear silently.
+		const FString Demo = Def ? Def->Keys.FindRef(TEXT("demo_sequence")) : FString();
+		if (MeaningfulSequence(Demo))
+		{
+			Out.Emplace(TEXT("demo_sequence"), Demo + TEXT(" (editor-only, ignored)"));
+		}
 		Out.Emplace(TEXT("Broken"), bBroken ? TEXT("yes") : TEXT("no"));
 		Out.Emplace(TEXT("Skin"), FString::FromInt(Skin));
 	}
@@ -264,6 +356,32 @@ private:
 			&& Sequence != TEXT("0");
 	}
 
+	// CDynamicPropAnimThink's re-arm interval (`_DAT_104493d0`).
+	static constexpr double AnimThinkInterval = 0.1;
+
+	// Retail's m_bSequenceFinished (+0x65c) for the cases the think cares about: a looping clip never
+	// reports finished, and a one-shot is finished once its authored length has elapsed.
+	bool SequenceFinished(double Now) const
+	{
+		return !bAnimationLoop && AnimationEndTime > 0.0 && Now >= AnimationEndTime;
+	}
+
+	// The gap until the next random draw. Cosmetic, so it deliberately does not come from a named
+	// save-carried ElysiumRng stream.
+	double DrawRandomAnimInterval() const
+	{
+		return FMath::FRandRange(FMath::Min(MinAnimTime, MaxAnimTime),
+			FMath::Max(MinAnimTime, MaxAnimTime));
+	}
+
+	// Retail picks a random sequence off the model here (FUN_1008dc40). `RandomAnimation` is 0 on all
+	// 749 entities carrying it across the exported corpus, so the branch is unreachable in shipped
+	// data and the clip-list seam it would need does not exist. The gate around it stays faithful.
+	bool PlayRandomAnimation()
+	{
+		return false;
+	}
+
 	void DestroyBody()
 	{
 		if (Visual) { Visual->DestroyComponent(); Visual = nullptr; }
@@ -272,6 +390,8 @@ private:
 		VisualStem.Reset();
 		CurrentAnimation.Reset();
 		bAnimationLoop = false;
+		bLoopSequenceResolved = false;
+		AnimationEndTime = 0.0;
 	}
 
 	bool PlayAnimation(const FString& Clip, bool bLoop)
@@ -281,33 +401,29 @@ private:
 			return false;
 		}
 		IElysiumEmbodiment* Embodiment = World->Embodiment();
+		float Seconds = 0.0f;
 		if (!Embodiment || !Embodiment->PlayAnimatedPropClip(
-			AnimatedVisual, AnimatedStem, Clip, bLoop, nullptr))
+			AnimatedVisual, AnimatedStem, Clip, bLoop, &Seconds))
 		{
 			return false;
 		}
 		CurrentAnimation = Clip;
 		bAnimationLoop = bLoop;
+		AnimationEndTime = (!bLoop && Seconds > 0.0f) ? World->NowSeconds() + Seconds : 0.0;
 		return true;
 	}
 
+	// The authored resting animation. Retail resolves `LoopSequence` to a sequence index and stands
+	// the prop on it; `demo_sequence` is not an engine keyfield and is deliberately not consulted.
 	void PlayAuthoredDefault()
 	{
-		if (!AnimatedVisual || !Def)
+		bLoopSequenceResolved = false;
+		if (!AnimatedVisual)
 		{
 			return;
 		}
-		const FString Loop = Def->Keys.FindRef(TEXT("LoopSequence"));
-		if (MeaningfulSequence(Loop))
-		{
-			PlayAnimation(Loop, /*bLoop*/ true);
-			return;
-		}
-		const FString Demo = Def->Keys.FindRef(TEXT("demo_sequence"));
-		if (MeaningfulSequence(Demo))
-		{
-			PlayAnimation(Demo, /*bLoop*/ true);
-		}
+		bLoopSequenceResolved = MeaningfulSequence(LoopSequence)
+			&& PlayAnimation(LoopSequence, /*bLoop*/ true);
 	}
 
 	void BuildBody(bool bFromSetModel)
@@ -822,6 +938,13 @@ static void BuildPropClass(FElysiumClassDesc& D)
 	// `skin` keyfield / script `.skin`: a write repaints the body, mirroring VtMB, where the input
 	// and the keyfield are the *same* datamap record and both just write m_nSkin.
 	AddPropSkinField<FElysiumProp>(D);
+
+	// CDynamicProp's own animation keyfields. `demo_sequence` is deliberately absent: it is a
+	// Hammer/FGD field the engine never reads.
+	AddPropField(D, TEXT("LoopSequence"), &FElysiumProp::LoopSequence);
+	AddPropField(D, TEXT("RandomAnimation"), &FElysiumProp::bRandomAnimator);
+	AddPropField(D, TEXT("MinAnimTime"), &FElysiumProp::MinAnimTime);
+	AddPropField(D, TEXT("MaxAnimTime"), &FElysiumProp::MaxAnimTime);
 }
 
 // The static-mesh prop classes that carry a model and a skin but whose interaction surface is not

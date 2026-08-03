@@ -15,7 +15,7 @@
 #       -BakeMap=sp_tutorial_1 -unattended -nosplash -nopause
 #
 # Optional -BakeStages=<csv> restricts the run to a subset of:
-#   textures, materials, world, sky, props, level
+#   textures, materials, world, sky, props, particles, level
 import math
 import json
 import os
@@ -103,7 +103,7 @@ FOG_CPD_START = 4
 FOG_CPD_INV_RANGE = 5
 FOG_CPD_FLOATS = 6
 
-ALL_STAGES = ("textures", "materials", "world", "sky", "props", "level")
+ALL_STAGES = ("textures", "materials", "world", "sky", "props", "particles", "level")
 
 
 # Both are named profiles from Config/DefaultEngine.ini rather than per-channel edits, because
@@ -488,13 +488,14 @@ class Bake(object):
         if mat.wetness_driven:
             bl.set_scalar_param(mic, "WetnessDriven", 1.0)
             bl.set_scalar_param(mic, "WetnessScale", mat.wetness_scale)
-            source_cube = self.cubemaps.get(mat.env_cube)
-            if not source_cube:
-                raise SystemExit(
-                    "[bake] wet material %s has no imported SourceCube %r"
-                    % (mat.name, mat.env_cube))
-            bl.set_tex_param(mic, "SourceCube", source_cube)
-            bl.set_static_switch_param(mic, "WetnessUsesSourceCube", True)
+            if self.map == "sm_hub_1":
+                source_cube = self.cubemaps.get(mat.env_cube)
+                if not source_cube:
+                    raise SystemExit(
+                        "[bake] wet material %s has no imported SourceCube %r"
+                        % (mat.name, mat.env_cube))
+                bl.set_tex_param(mic, "SourceCube", source_cube)
+                bl.set_static_switch_param(mic, "WetnessUsesSourceCube", True)
             if self.weather and self.rain_height:
                 bounds = self.weather["world_bounds_cm"]
                 minimum, maximum = bounds["min"], bounds["max"]
@@ -1335,6 +1336,11 @@ def bake_one(map_name, stages):
         bake.stage_sky()
     if "props" in stages:
         bake.stage_props()
+    if "particles" in stages:
+        # One Niagara system per env_particle definition the map places. Independent of the mesh
+        # stages -- it reads the offline particle sidecar, not the OBJ/material graph.
+        from pipeline.unreal import make_particle_systems
+        make_particle_systems.build(map_name, OUT_ROOT, bake.pkg)
     if bake.flush():
         return False
     if "level" in stages and not bake.stage_level():

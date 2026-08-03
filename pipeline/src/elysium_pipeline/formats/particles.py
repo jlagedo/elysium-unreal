@@ -23,11 +23,17 @@ class ParticleContractError(ValueError):
 
 
 _PARTICLE_KEYS = {
-    "loop", "precipitation", "spawn", "sprite", "frames", "movealign", "flat",
-    "x_speed", "y_speed", "z_speed", "size", "height", "rotation", "color",
-    "mask", "collide",
+    "loop", "precipitation", "spawn", "sprite", "frames", "min_frames", "max_frames",
+    "fps", "movealign", "flat",
+    "x_speed", "y_speed", "z_speed", "size", "height", "width", "rotation", "color",
+    "mask", "collide", "red", "green", "blue", "burst",
+    "parent_speed", "radius_speed", "elevation_speed", "theta_speed", "phi_speed",
+    "depth_offset",
 }
-_SPAWN_KEYS = {"particle", "rate", "radius", "theta", "phi", "friction", "bounce"}
+_SPAWN_KEYS = {
+    "particle", "rate", "burst", "loop", "radius", "theta", "phi", "friction", "bounce",
+    "x", "y", "z",
+}
 _COLLIDE_KEYS = {"spawn", "decal"}
 _DECAL_KEYS = {"particle"}
 _NUMBER = re.compile(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?")
@@ -85,6 +91,12 @@ def _curve(value: Any, where: str, *, scale: float = 1.0, negate: bool = False) 
 
 def _name(value: Any, where: str) -> str:
     name = str(value).strip().replace("\\", "/").lower()
+    # Map data spells a definition three ways: bare (`cigar_emitter`), with the directory
+    # (`particles/cigar_emitter`), and with the extension too. They all name the same file.
+    if name.startswith("particles/"):
+        name = name[len("particles/"):]
+    if name.endswith(".txt"):
+        name = name[: -len(".txt")]
     if not name or not re.fullmatch(r"[a-z0-9_./-]+", name):
         raise ParticleContractError(f"{where}: invalid asset name {value!r}")
     return name
@@ -95,14 +107,28 @@ def _compile_spawn(block: dict[str, Any], where: str) -> dict[str, Any]:
     if "particle" not in block:
         raise ParticleContractError(f"{where}: missing particle")
     result: dict[str, Any] = {"particle": _name(block["particle"], where + ".particle")}
-    for key in ("rate", "friction", "bounce"):
+    # `rate` is a per-second emission rate; `burst` is a one-shot count. A block carries one or the
+    # other, and both are dimensionless.
+    for key in ("rate", "burst", "friction", "bounce"):
         if key in block:
             result[key] = _curve(block[key], where + "." + key)
+    if "loop" in block:
+        result["loop"] = _bool(block["loop"], where + ".loop")
     if "radius" in block:
         result["radius_cm"] = _curve(block["radius"], where + ".radius", scale=INCH_TO_CM)
     for key in ("theta", "phi"):
         if key in block:
             result[key + "_degrees"] = _curve(block[key], where + "." + key)
+    # Cartesian spawn offset, in the same Source frame as the velocities — so `y` takes the same
+    # reflection `y_speed` does.
+    offset = {}
+    for source_key, negate in (("x", False), ("y", True), ("z", False)):
+        if source_key in block:
+            offset[source_key] = _curve(
+                block[source_key], where + "." + source_key, scale=INCH_TO_CM, negate=negate
+            )
+    if offset:
+        result["offset_cm"] = offset
     return result
 
 
@@ -124,12 +150,19 @@ def compile_definition(name: str, text: str) -> tuple[dict[str, Any], set[str], 
         sprite = _name(body["sprite"], name + ".sprite")
         result["sprite"] = sprite
         sprite_refs.add(sprite)
-    for key in ("frames",):
+    # A fixed lifetime, or a min/max pair drawn per particle. Both are counts of frames, paced by
+    # `fps` where one is given.
+    for key in ("frames", "min_frames", "max_frames"):
         if key in body:
             value = int(_finite(body[key], name + "." + key))
             if value <= 0:
                 raise ParticleContractError(f"{name}.{key}: must be positive")
             result[key] = value
+    if "fps" in body:
+        fps = _finite(body["fps"], name + ".fps")
+        if fps <= 0:
+            raise ParticleContractError(f"{name}.fps: must be positive")
+        result["fps"] = fps
     for key in ("movealign", "flat"):
         if key in body:
             result[key] = _bool(body[key], name + "." + key)
@@ -144,12 +177,39 @@ def compile_definition(name: str, text: str) -> tuple[dict[str, Any], set[str], 
             )
     if velocity:
         result["velocity_cm_per_second"] = velocity
-    for key in ("size", "height"):
+
+    # The spherical emission frame, used instead of (or alongside) the cartesian one. `radius_speed`
+    # drives outward from the emitter and `elevation_speed` drives along its axis, so both are
+    # lengths per second; `parent_speed` is the dimensionless fraction of the parent's velocity the
+    # particle inherits (every value in the corpus is 0 or 1).
+    radial = {}
+    for source_key, target_key in (("radius_speed", "radius"), ("elevation_speed", "elevation")):
+        if source_key in body:
+            radial[target_key] = _curve(
+                body[source_key], name + "." + source_key, scale=INCH_TO_CM
+            )
+    if radial:
+        result["radial_velocity_cm_per_second"] = radial
+    # The angular members of the same frame, in degrees per second like `theta`/`phi` are degrees.
+    angular = {}
+    for source_key, target_key in (("theta_speed", "theta"), ("phi_speed", "phi")):
+        if source_key in body:
+            angular[target_key] = _curve(body[source_key], name + "." + source_key)
+    if angular:
+        result["angular_velocity_degrees_per_second"] = angular
+    if "parent_speed" in body:
+        result["parent_speed"] = _curve(body["parent_speed"], name + ".parent_speed")
+
+    for key in ("size", "height", "width"):
         if key in body:
             result[key + "_cm"] = _curve(body[key], name + "." + key, scale=INCH_TO_CM)
-    for key in ("rotation", "color", "mask"):
+    for key in ("rotation", "color", "mask", "red", "green", "blue", "burst"):
         if key in body:
             result[key] = _curve(body[key], name + "." + key)
+    # `depth_offset` is carried unconverted: it biases the particle's sort/draw depth and whether
+    # that is a world length is not established, so a unit conversion here would be a guess.
+    if "depth_offset" in body:
+        result["depth_offset"] = _curve(body["depth_offset"], name + ".depth_offset")
 
     if "spawn" in body:
         spawns = []
@@ -222,3 +282,127 @@ def compile_closure(
         "definitions": {name: definitions[name] for name in sorted(definitions)},
         "sprites": [f"particles/{name}.tga" for name in sorted(sprites)],
     }
+
+
+MAP_PARTICLE_SCHEMA = "elysium.map-particles"
+MAP_PARTICLE_VERSION = 1
+
+
+def _int_key(keys: dict[str, Any], name: str, default: int = 0) -> int:
+    raw = str(keys.get(name, "")).strip()
+    if not raw:
+        return default
+    try:
+        return int(float(raw))
+    except ValueError as exc:
+        raise ParticleContractError(f"env_particle: invalid {name} {raw!r}") from exc
+
+
+def _env_particles(document: dict) -> list[dict]:
+    return [
+        entity for entity in document.get("entities", [])
+        if entity.get("classname", "").lower() == "env_particle"
+        and str(entity.get("keys", {}).get("particle_definition", "")).strip()
+    ]
+
+
+def build_particle_document(
+    map_name: str,
+    entity_document: dict,
+    read_text: Callable[[str], str | None],
+    has_sprite: Callable[[str], bool],
+) -> dict | None:
+    """Every ``env_particle`` a map places, plus the definition closure they resolve to.
+
+    Sibling of the rain-only ``<map>.weather.json``: that document owns wetness, the height
+    texture and the rain timers, and stays the authority for those.  This one covers the
+    general emitter set, including the attachment keys the rain slice never needed.
+    """
+
+    entities = _env_particles(entity_document)
+    if not entities:
+        return None
+
+    roots = sorted({
+        _name(entity["keys"]["particle_definition"], "env_particle.particle_definition")
+        for entity in entities
+    })
+
+    # Compile one root at a time. A map places emitters the rain slice never exercised, and a single
+    # definition that is malformed in the user's install, absent from it, or uses a key this
+    # contract has not established must not take the whole map's export down with it — the emitter
+    # is recorded as unresolved and the rest still compile. `compile_closure` itself stays strict,
+    # because the rain closure is a fixed set that has to be exact.
+    definitions: dict[str, Any] = {}
+    sprites: set[str] = set()
+    unresolved: list[dict[str, str]] = []
+    for root in roots:
+        try:
+            compiled = compile_closure([root], read_text, has_sprite)
+        except ParticleContractError as error:
+            unresolved.append({"definition": root, "reason": str(error)})
+            continue
+        definitions.update(compiled["definitions"])
+        sprites.update(compiled["sprites"])
+    closure = {
+        "schema": "elysium.particle-closure",
+        "version": 1,
+        "roots": [root for root in roots if root in definitions],
+        "definitions": {name: definitions[name] for name in sorted(definitions)},
+        "sprites": sorted(sprites),
+    }
+
+    emitters = []
+    for ordinal, entity in enumerate(entities):
+        keys = entity.get("keys", {})
+        emitters.append({
+            "ordinal": ordinal,
+            "targetname": entity.get("targetname", ""),
+            "origin_cm": entity.get("origin", [0.0, 0.0, 0.0]),
+            "particle_definition": _name(
+                keys["particle_definition"], "env_particle.particle_definition"
+            ),
+            "active": _int_key(keys, "active") != 0,
+            "start_hidden": bool(entity.get("start_hidden", False)),
+            # `attach_type` 2 is `point` — attach to the named point on `parentname`'s model.
+            # The definition-side parser names 0..3 origin/tree/point/treecolor; higher values
+            # are used but unresolved, so they are carried verbatim.
+            "attach_type": _int_key(keys, "attach_type"),
+            "parentname": str(keys.get("parentname", "")).strip(),
+            "bone": str(keys.get("bone", "")).strip(),
+            "bounds_cm": _finite(keys.get("bounds", 0.0), "env_particle.bounds") * INCH_TO_CM,
+        })
+
+    return {
+        "schema": MAP_PARTICLE_SCHEMA,
+        "version": MAP_PARTICLE_VERSION,
+        "map": map_name,
+        "emitters": emitters,
+        "particles": closure,
+        "unresolved": unresolved,
+    }
+
+
+def write_particles(map_name: str, out_dir, entity_document: dict, idx):
+    """Write ``<map>.particles.json``, or nothing when the map places no ``env_particle``."""
+
+    import json
+    from pathlib import Path
+
+    from elysium_pipeline.formats import install
+
+    def read_definition(name: str) -> str | None:
+        raw = install.read(idx, f"particles/{name}.txt")
+        return raw.decode("latin-1") if raw is not None else None
+
+    document = build_particle_document(
+        map_name,
+        entity_document,
+        read_definition,
+        lambda name: install.read(idx, f"particles/{name}.tga") is not None,
+    )
+    if document is None:
+        return None
+    destination = Path(out_dir) / f"{map_name}.particles.json"
+    destination.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return destination

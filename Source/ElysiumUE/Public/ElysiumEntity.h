@@ -46,6 +46,10 @@ struct FElysiumInputArgs
 	FElysiumVariant Param;
 	FElysiumEntityHandle Activator;
 	FElysiumEntityHandle Caller;
+	// The name this input was dispatched under. A thunk is a captureless function pointer, so a
+	// handler shared by several inputs — the stub reporter is the one that needs it — has no other
+	// way to say which of them ran. Set by DeliverInputTo; empty on a hand-built probe.
+	FName Input;
 };
 
 // One flex-controller write, by name. A face's only writable state is its 44 flex controllers;

@@ -1298,6 +1298,12 @@ private:
 namespace
 {
 	// func_rotating spawnflag bits (B.5 / animation_and_movers.md, read off CFuncRotating::Spawn).
+	// The two axis bits carry Source's own misleading names: the flag Hammer labels "Z axis" spins
+	// the brush about X, and the one labelled "X axis" spins it about Y. Spawn stores each as a
+	// QAngle *component selector* (pitch, yaw, roll) in m_vecMoveAng, not as a direction — so the
+	// Z_AXIS flag's Vector(0,0,1) picks roll (a turn about X), and the unflagged default's
+	// Vector(0,1,0) picks yaw (a turn about Z). The names below are the flags'; SourceSpinAxis
+	// resolves what each one actually turns.
 	constexpr int32 SF_ROT_START_ON  = 0x1;
 	constexpr int32 SF_ROT_REVERSE   = 0x2;
 	constexpr int32 SF_ROT_Z_AXIS    = 0x4;
@@ -1306,14 +1312,15 @@ namespace
 	constexpr int32 SF_ROT_HURT      = 0x20;   // crush touch; `dmg` is 0 on every exported instance
 	constexpr int32 SF_ROT_NOT_SOLID = 0x40;   // solidity is applied at body build, not here
 
-	// The spin axis, as a raw-Source direction. The decompiled Spawn reads 0x4 as Z and 0x8 as X,
-	// with Y the default — the inverse of stock Source's (4=X, 8=Y, default Z). This one function is
-	// the whole of that reading: flipping it is the entire change if content proves it backwards.
+	// The spin axis, as a raw-Source direction, after resolving the QAngle component each flag
+	// selects. Every exported instance agrees: the ceiling fans, the junkyard fan, the la_hub blade
+	// and the sky's cloud/lightning rotators are all unflagged and turn about Z, while the wall
+	// clocks' three hands carry Z_AXIS and sweep about the wall normal, X.
 	FVector SourceSpinAxis(int32 SpawnFlags)
 	{
-		if (SpawnFlags & SF_ROT_Z_AXIS) { return FVector(0.f, 0.f, 1.f); }
-		if (SpawnFlags & SF_ROT_X_AXIS) { return FVector(1.f, 0.f, 0.f); }
-		return FVector(0.f, 1.f, 0.f);
+		if (SpawnFlags & SF_ROT_Z_AXIS) { return FVector(1.f, 0.f, 0.f); }   // roll
+		if (SpawnFlags & SF_ROT_X_AXIS) { return FVector(0.f, 1.f, 0.f); }   // pitch
+		return FVector(0.f, 0.f, 1.f);                                       // yaw — the default
 	}
 
 	FString DescribeRotatingSpawnFlags(int32 SF)

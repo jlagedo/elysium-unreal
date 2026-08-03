@@ -1446,13 +1446,82 @@ void AElysiumMapActor::ApplyWetness(const FElysiumWeatherTransition& Transition)
 
 void AElysiumMapActor::ApplyEmitter(const FElysiumWeatherEmitterState& Emitter)
 {
-	if (!Emitter.ParticleDefinition.Equals(TEXT("rain_follow_emitter"), ESearchCase::IgnoreCase))
+	// The rain emitter keeps its own presentation path: its system is a hand-authored global asset
+	// driven by the wetness tuning below, not one of the per-map baked closures.
+	if (Emitter.ParticleDefinition.Equals(TEXT("rain_follow_emitter"), ESearchCase::IgnoreCase))
 	{
-		return; // this slice deliberately does not become the general VtMB particle runtime
+		RainEmitterStates.Add(Emitter.Entity.Index, Emitter);
+		return;
 	}
+	if (!Emitter.bActive)
+	{
+		RemoveEmitter(Emitter.Entity);
+		return;
+	}
+
+	UNiagaraComponent* Component = RainComponents.FindRef(Emitter.Entity.Index);
+	if (!Component)
+	{
+		const FString Path = FElysiumContentPaths::BakedParticleSystem(MapName, Emitter.ParticleDefinition);
+		UNiagaraSystem* System = LoadObject<UNiagaraSystem>(nullptr, *Path);
+		if (!System)
+		{
+			// A definition the offline contract could not compile has no system; the map records it
+			// under `unresolved` and the emitter simply draws nothing.
+			return;
+		}
+		Component = NewObject<UNiagaraComponent>(this);
+		Component->SetAsset(System);
+		Component->SetAutoActivate(false);
+		Component->SetupAttachment(GetRootComponent());
+		Component->RegisterComponent();
+		AddInstanceComponent(Component);
+		RainComponents.Add(Emitter.Entity.Index, Component);
+	}
+
+	AttachEmitter(Emitter, Component);
+	Component->SetVariableFloat(TEXT("User.RateScale"), Emitter.RateScale);
+	Component->Activate();
 	RainEmitterStates.Add(Emitter.Entity.Index, Emitter);
-	// Wetness is the only connected presentation slice. Keep the authored emitter state for
-	// inspection/save behavior, but create no component and load no Niagara asset here.
+}
+
+// `attach_type` 2 is `point`: ride a named point on another entity's body. The parent is resolved
+// here rather than at PostSpawn because none of the cinematic emitters' parents exist at map load.
+void AElysiumMapActor::AttachEmitter(
+	const FElysiumWeatherEmitterState& Emitter, UNiagaraComponent* Component)
+{
+	if (!Component)
+	{
+		return;
+	}
+	USceneComponent* ParentBody = nullptr;
+	if (Emitter.AttachType == 2 && !Emitter.ParentName.IsEmpty() && EntityWorld)
+	{
+		if (FElysiumEntity* Parent = EntityWorld->FindByName(Emitter.ParentName))
+		{
+			ParentBody = Parent->GetAttachBody();
+		}
+	}
+	if (!ParentBody)
+	{
+		Component->AttachToComponent(GetRootComponent(),
+			FAttachmentTransformRules::KeepRelativeTransform);
+		Component->SetRelativeLocation(Emitter.LocationCm);
+		return;
+	}
+	// VtMB bone names carry spaces (`Bip01 Neck`) and survive the glTF export unchanged, so the
+	// authored name is used verbatim. A body that has not got the bone falls back to its root.
+	const FName Bone(*Emitter.AttachBone);
+	const bool bHasBone = !Emitter.AttachBone.IsEmpty()
+		&& ParentBody->DoesSocketExist(Bone);
+	Component->AttachToComponent(ParentBody,
+		FAttachmentTransformRules::SnapToTargetNotIncludingScale, bHasBone ? Bone : NAME_None);
+	Component->SetRelativeLocation(FVector::ZeroVector);
+	if (!bHasBone && !Emitter.AttachBone.IsEmpty())
+	{
+		UE_LOG(LogTemp, Verbose, TEXT("[particles] '%s' has no bone '%s'"),
+			*Emitter.ParentName, *Emitter.AttachBone);
+	}
 }
 
 void AElysiumMapActor::RemoveEmitter(const FElysiumEntityHandle& Entity)

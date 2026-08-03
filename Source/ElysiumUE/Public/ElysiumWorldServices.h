@@ -306,7 +306,12 @@ struct FElysiumWeatherEmitterState
 	FVector LocationCm = FVector::ZeroVector;
 	FString ParticleDefinition;
 	bool bActive = false;
+	// VtMB's `attach_type`. The definition-side parser names the low values origin/tree/point/
+	// treecolor, so 2 = `point`: ride `AttachBone` on `ParentName`'s body. Higher values are used
+	// but unresolved, and are carried rather than interpreted.
 	int32 AttachType = 0;
+	FString ParentName;
+	FString AttachBone;
 	float BoundsCm = 0.0f;
 	float RateScale = 0.0f;
 	float RampStartScale = 0.0f;

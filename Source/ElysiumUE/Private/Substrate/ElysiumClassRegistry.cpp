@@ -24,6 +24,9 @@ static const TCHAR* ElysiumVariantTypeName(EElysiumVariantType T)
 
 // --- Registry ---------------------------------------------------------------------------
 
+// The base factory, defined with the base class below and used by RegisterStub above it.
+static TUniquePtr<FElysiumEntity> MakeBaseEntity();
+
 FElysiumClassRegistry& FElysiumClassRegistry::Get()
 {
 	// Function-local static: constructed on first use, so registrar statics in any TU can
@@ -39,6 +42,17 @@ FElysiumClassDesc& FElysiumClassRegistry::Register(FName ClassName, FName BaseNa
 	Desc.BaseName = BaseName;
 	Desc.Factory = Factory;
 	return Desc;
+}
+
+FElysiumClassDesc* FElysiumClassRegistry::RegisterStub(FName ClassName, FName BaseName)
+{
+	if (Classes.Contains(ClassName))
+	{
+		return nullptr;   // an implementation got here first; leave it alone
+	}
+	FElysiumClassDesc& Desc = Register(ClassName, BaseName, &MakeBaseEntity);
+	Desc.bStub = true;
+	return &Desc;
 }
 
 const FElysiumClassDesc* FElysiumClassRegistry::Find(FName ClassName) const
@@ -107,7 +121,9 @@ TUniquePtr<FElysiumEntity> FElysiumClassRegistry::Create(const FElysiumEntityDef
 	check(Desc != nullptr);   // the base always registers
 
 	TUniquePtr<FElysiumEntity> Ent = Desc->Factory ? Desc->Factory() : MakeUnique<FElysiumEntity>();
-	Ent->bRecordOnly = bRecord;
+	// A stub descriptor names inputs but implements none, so its entities are inert records just
+	// as an unregistered classname's are — the debug surfaces must not report otherwise.
+	Ent->bRecordOnly = bRecord || Desc->bStub;
 	Ent->Construct(Def, Handle, *Desc);
 	return Ent;
 }

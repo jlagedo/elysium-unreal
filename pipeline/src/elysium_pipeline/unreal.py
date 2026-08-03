@@ -16,7 +16,7 @@ FONT_ASSETS = (
     "FF_Inter_Regular.uasset",
     "FF_Inter_SemiBold.uasset",
 )
-DEFAULT_BAKE_STAGES = "textures,materials,world,sky,props,level"
+DEFAULT_BAKE_STAGES = "textures,materials,world,sky,props,particles,level"
 
 
 class UnrealFailure(RuntimeError):

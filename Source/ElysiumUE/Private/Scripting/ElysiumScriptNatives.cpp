@@ -4,6 +4,7 @@
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
+#include "ElysiumStub.h"
 #include "HAL/IConsoleManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumNative, Log, All);
@@ -190,6 +191,24 @@ namespace ElysiumScriptNatives
 	{
 		UE_LOG(LogElysiumNative, Verbose, TEXT("[native%s] %s -> %s"),
 			bStub ? TEXT(" stub") : TEXT(""), *Display, *Result.Describe());
+		if (bStub)
+		{
+			// The one funnel every native return passes through, so hanging the stub report here
+			// covers all 36 bindings plus the unlisted names a receiver binds on the spot. The
+			// table's own `Backing` text is the owner line — it already says what each stub stands
+			// in for, and keeping one source stops the two drifting.
+			const FString Raw = Name.ToString();
+			const ElysiumScriptNatives::FNativeBinding* B = FindBinding(Raw, /*bWantMethod*/ true);
+			const bool bMethod = (B != nullptr);
+			if (!B) { B = FindBinding(Raw, /*bWantMethod*/ false); }
+			// Keyed on the qualified name rather than on `Display`, which carries the arguments —
+			// one row per unimplemented native, not one per distinct call.
+			ElysiumStub::Fired(TEXT("native"),
+				FString::Printf(TEXT("%s.%s"), bMethod ? TEXT("Character") : TEXT("vampire"), *Raw),
+				FString(), Display,
+				B ? FString(B->Status)
+				  : FString(TEXT("not a binding in the vampire module — returns its default")));
+		}
 		if (State) { State->RecordNativeCall(Display, Result, bStub, Name); }
 	}
 

@@ -12,12 +12,13 @@ Pulls together everything we reverse-engineered:
   * textures  : material name -> VMT ($basetexture) -> TTH/TTZ -> DXT -> PNG
 
 TOOLS/* faces (nodraw, clip, trigger, skybox, hint...) are skipped - they are
-invisible engine surfaces, not geometry to draw.
+invisible engine surfaces, not geometry to draw. DRAWN_TOOL_MATERIALS is the
+exception list: a handful of that namespace are ordinary drawn surfaces.
 """
 import struct, os, re, json
 from pathlib import Path
 import numpy as np
-from elysium_pipeline.formats import install, vmt, weather
+from elysium_pipeline.formats import install, particles, vmt, weather
 from elysium_pipeline.formats import bsp as B
 from elysium_pipeline.formats import mdl as MDL
 from elysium_pipeline.formats import phy
@@ -32,6 +33,16 @@ from elysium_pipeline.formats.bsp import (read_lump, source_to_unreal, source_di
                  read_pakfile, read_game_lump, INCH_TO_CM, FACE_SIZE, FE_OFS, NE_OFS,
                  TI_OFS, DISP_OFS, TEXINFO_SIZE, TI_SAXIS, TI_TAXIS, TI_TEXDATA,
                  TEXDATA_SIZE, TD_NAMEID, TD_W, TD_H)
+
+# `tools/` is the compile-tool namespace and is stripped wholesale — nodraw, clip, the trigger
+# volumes, hint/skip, the skybox shell. These two are ordinary drawn surfaces that happen to live
+# there: both are plain `LightmappedGeneric` with a `$basetexture` and no `%compilenodraw`, and
+# VBSP leaves SURF_NODRAW (0x80) clear on every face that uses them — unlike `toolsnodraw` and
+# `toolsinvisible`, which carry it. VtMB builds real geometry out of them (sp_tutorial_1's
+# ceiling-fan downrod, the blacked-out window and portal fills), so they export like any other
+# material. The trigger textures also lack SURF_NODRAW, so the name check has to stay: the flag
+# alone would turn every trigger volume into visible geometry.
+DRAWN_TOOL_MATERIALS = frozenset({"tools/black", "tools/toolsblack"})
 
 # --- the 3D skybox: what belongs to the miniature rather than the playable world ---
 
@@ -1009,7 +1020,7 @@ def main(bsp_path, out_dir, *, index=None):
             continue
         raw_name, s, t, tw, th = material_of(ti)
         mat = base_material(raw_name)
-        if mat.startswith("tools/"):
+        if mat.startswith("tools/") and mat not in DRAWN_TOOL_MATERIALS:
             skipped_tools += 1
             continue
         cube = cubemap_of(raw_name, lm_base)
@@ -1412,7 +1423,8 @@ def main(bsp_path, out_dir, *, index=None):
         if ne < 3 or ti < 0:
             continue
         raw_name, sax, tax, _tw, _th = material_of(ti)
-        if base_material(raw_name).startswith("tools/"):
+        dmat = base_material(raw_name)
+        if dmat.startswith("tools/") and dmat not in DRAWN_TOOL_MATERIALS:
             continue
         fe = struct.unpack_from("<i", faces_l, fb + FE_OFS)[0]
         pn = struct.unpack_from("<H", faces_l, fb + 32)[0]
@@ -1866,6 +1878,17 @@ def main(bsp_path, out_dir, *, index=None):
         )
         if weather_path:
             print(f"weather: {len(cover_triangles)} cover triangles -> {weather_path.name}")
+
+    # Every map's env_particle set plus the definition closure it resolves to. Sibling of the
+    # rain-only weather sidecar above, which stays sm_hub_1's.
+    particles_path = particles.write_particles(
+        base,
+        Path(out_dir),
+        json.loads(open(os.path.join(out_dir, base + ".ents"), encoding="utf-8").read()),
+        idx,
+    )
+    if particles_path:
+        print(f"wrote {particles_path}")
 
 # The default library output is the configured external export root.
 from elysium_pipeline.paths import export_root
