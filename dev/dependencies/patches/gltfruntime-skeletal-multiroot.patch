@@ -57,7 +57,7 @@ index 51bd109..83e8f33 100644
 \ No newline at end of file
 +}
 diff --git a/Source/glTFRuntime/Private/glTFRuntimeParserSkeletalMeshes.cpp b/Source/glTFRuntime/Private/glTFRuntimeParserSkeletalMeshes.cpp
-index 9ccf0e0..2a60680 100644
+index 9ccf0e0..8dfab0b 100644
 --- a/Source/glTFRuntime/Private/glTFRuntimeParserSkeletalMeshes.cpp
 +++ b/Source/glTFRuntime/Private/glTFRuntimeParserSkeletalMeshes.cpp
 @@ -234,6 +234,14 @@ bool glTFRuntime::FillSkeletalMeshRenderData(FSkeletalMeshRenderData* RenderData
@@ -83,7 +83,50 @@ index 9ccf0e0..2a60680 100644
  			FSkelMeshRenderSection& MeshSection = LodRenderData->RenderSections[PrimitiveIndex];
  
  			MeshSection.MaterialIndex = PrimitiveIndex;
-@@ -3008,10 +3015,18 @@ UAnimSequence* FglTFRuntimeParser::CreateSkeletalAnimationFromPath(USkeletalMesh
+@@ -1011,7 +1018,14 @@ USkeletalMesh* FglTFRuntimeParser::FinalizeSkeletalMeshWithLODs(TSharedRef<FglTF
+ 			TMap<FString, UMorphTarget*> MorphTargetNamesHistory;
+ 			TMap<FString, int32> MorphTargetNamesDuplicateCounter;
+ 
+-			int32 BaseIndex = 0;
++			// FMorphTargetDelta::SourceIdx addresses the LOD's *vertex* buffer, so this base has to
++			// track FSkelMeshRenderSection::BaseVertexIndex in FillSkeletalMeshRenderData, which
++			// accumulates Positions.Num(). That function keeps a second counter, also called
++			// BaseIndex, for the index buffer; advancing this one by Indices.Num() instead silently
++			// writes every primitive after the first past the end of the vertex buffer, where the
++			// GPU discards it. The deltas are all present and correct, so nothing reports an error
++			// and only the rendered mesh shows it: morph weights animate and the mesh never moves.
++			int32 BaseVertexIndex = 0;
+ 
+ 			for (int32 PrimitiveIndex = 0; PrimitiveIndex < SkeletalMeshContext->LODs[LODIndex]->Primitives.Num(); PrimitiveIndex++)
+ 			{
+@@ -1022,7 +1036,7 @@ USkeletalMesh* FglTFRuntimeParser::FinalizeSkeletalMeshWithLODs(TSharedRef<FglTF
+ 				{
+ 					bool bSkip = true;
+ 					FMorphTargetLODModel MorphTargetLODModel;
+-					MorphTargetLODModel.NumBaseMeshVerts = Primitive.Indices.Num();
++					MorphTargetLODModel.NumBaseMeshVerts = Primitive.Positions.Num();
+ 					MorphTargetLODModel.SectionIndices.Add(PrimitiveIndex);
+ 
+ 					for (int32 VertexIndex = 0; VertexIndex < Primitive.Positions.Num(); VertexIndex++)
+@@ -1050,7 +1064,7 @@ USkeletalMesh* FglTFRuntimeParser::FinalizeSkeletalMeshWithLODs(TSharedRef<FglTF
+ 							bSkip = false;
+ 						}
+ 
+-						Delta.SourceIdx = BaseIndex + VertexIndex;
++						Delta.SourceIdx = BaseVertexIndex + VertexIndex;
+ #if ENGINE_MAJOR_VERSION > 4
+ 						Delta.TangentZDelta = FVector3f::ZeroVector;
+ #else
+@@ -1144,7 +1158,7 @@ USkeletalMesh* FglTFRuntimeParser::FinalizeSkeletalMeshWithLODs(TSharedRef<FglTF
+ 
+ 					MorphTargetIndex++;
+ 				}
+-				BaseIndex += Primitive.Indices.Num();
++				BaseVertexIndex += Primitive.Positions.Num();
+ 			}
+ 		}
+ 
+@@ -3008,10 +3022,18 @@ UAnimSequence* FglTFRuntimeParser::CreateSkeletalAnimationFromPath(USkeletalMesh
  
  		for (const FName& KeyName : MorphTargetKeys)
  		{
@@ -102,7 +145,7 @@ index 9ccf0e0..2a60680 100644
  				{
  					Value = 0;
  				}
-@@ -4584,4 +4599,4 @@ bool FglTFRuntimeParser::SanitizeBoneTrack(const FReferenceSkeleton& RefSkeleton
+@@ -4584,4 +4606,4 @@ bool FglTFRuntimeParser::SanitizeBoneTrack(const FReferenceSkeleton& RefSkeleton
  	}
  
  	return true;

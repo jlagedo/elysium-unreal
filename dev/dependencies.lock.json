@@ -17,7 +17,7 @@
       "destination": "Plugins/External/glTFRuntime",
       "source_subdirectory": ".",
       "patch": "dev/dependencies/patches/gltfruntime-skeletal-multiroot.patch",
-      "post_patch_tree": "0fb2e26f5b311fc76bbbf504c341a38e24f0ce81"
+      "post_patch_tree": "9d1a83f1133bf8afc63c5ea16f9efd6fcf1f1220"
     }
   ],
   "artifacts": [
