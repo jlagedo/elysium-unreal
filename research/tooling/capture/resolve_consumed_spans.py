@@ -900,6 +900,14 @@ def _fired_cells(
     The cell after the last on an axis is not claimed. Whether the evaluator
     wraps or clamps there is not pinned by any finding, so those bytes stay
     unclaimed rather than attributed to a read nobody has witnessed.
+
+    **Axis 0 takes the fixed 16-short row stride and axis 1 the column**, which
+    is measured rather than transcribed: for every contribution, the animation
+    indices the cell records name are read off the owner's own grid, so a wrong
+    address names animations the capture did not fire. The address below
+    reproduces the witnessed set on **8,302 of 8,302** multi-blend contributions
+    across the theatre and tutorial captures; the transposed one reproduces
+    1,858 — every case where the two coincide — and misses 6,444.
     """
     if num_blends <= 1:
         return (0,)
@@ -912,7 +920,7 @@ def _fired_cells(
             span.append(resolved + 1)
         axes.append(span)
     return tuple(
-        first + second * SEQ_GRID_ROW for second in axes[1] for first in axes[0]
+        first * SEQ_GRID_ROW + second for second in axes[1] for first in axes[0]
     )
 
 

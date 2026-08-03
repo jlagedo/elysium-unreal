@@ -27,11 +27,15 @@ is a measured shortfall reported with the reason it holds — that is the findin
 CAP4.4 ranks, not a fault in the capture.
 
 The export arm characterizes the exporter deliberately. `local_sequences` drops
-the sequence index, keeps the first sequence to claim a lowercased label, skips
-one whose base blend cell is out of range, and bakes cell [0][0] alone. This
-tool replays those rules over the installed image with indices preserved, so a
-missing clip is attributed to the rule that dropped it rather than reported as
-an unexplained absence.
+the sequence index, keeps the first sequence to claim a lowercased label, and
+skips one whose base blend cell is out of range. This tool replays those rules
+over the installed image with indices preserved, so a missing clip is attributed
+to the rule that dropped it rather than reported as an unexplained absence.
+
+An animation reached only through a blend cell is answered from the export's own
+blend sidecars instead. Those name the clip each cell baked as, keyed by the
+owner-local animation index a contribution record carries, so the join runs
+through what the export wrote rather than through a second model of it.
 """
 
 from __future__ import annotations
@@ -134,8 +138,8 @@ ACCOUNTED: dict[str, str] = {
         "manifest carries no clip for it."
     ),
     "blend_cell_not_exported": (
-        "local_sequences bakes blend cell [0][0] alone, so every other cell a "
-        "multi-blend sequence fires has no exported counterpart."
+        "The animation is neither a fired sequence's base cell nor a cell any "
+        "exported blend sidecar names a clip for, so nothing baked it."
     ),
     "inventory_does_not_cover_this_owner": (
         "The CAP0.5 inventory is seeded from clandoc000.txt player bodies and "
@@ -709,6 +713,40 @@ def _export_manifest(export_root: Path | None) -> tuple[Path | None, dict[str, A
     return path, json.loads(path.read_text(encoding="utf-8")), None
 
 
+def _blend_cells(
+    npc_dir: Path, stem: str, relative: str | None
+) -> dict[int, dict[str, Any]]:
+    """One exported stem's blend sidecar -> {animation index: cell}.
+
+    The sidecar is what the export promises about a cell — its position on the
+    two axes and the clip its animation baked as — so reading it is a claim
+    about the export rather than a replay of the exporter's rules. A stem that
+    authors no grid, or whose sidecar cannot be read, contributes nothing, which
+    leaves its cells to the base-cell arm exactly as before.
+
+    The directory comes from the manifest that was actually opened rather than
+    from the caller's root, which may be unset and resolved from the environment.
+    """
+    if not relative:
+        return {}
+    path = npc_dir / Path(*str(relative).split("/"))
+    try:
+        table = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    cells: dict[int, dict[str, Any]] = {}
+    for label, grid in table.get("grids", {}).items():
+        for cell in grid.get("cells", ()):
+            index = cell.get("anim")
+            if index is None or index in cells:
+                continue
+            cells[index] = {
+                "stem": stem, "label": label,
+                "axis": cell.get("axis"), "clip": cell.get("clip"),
+            }
+    return cells
+
+
 def export_arm(
     owners: dict[int, dict[str, Any]],
     resolved: list[dict[str, Any]],
@@ -725,6 +763,7 @@ def export_arm(
     if manifest is None:
         return {"available": False, "reason": reason, "path": str(path) if path else None}
 
+    npc_dir = path.parent
     banks = manifest.get("banks", {})
     npcs = manifest.get("npcs", {})
     props = manifest.get("animated_props", {})
@@ -732,8 +771,14 @@ def export_arm(
 
     # model key -> [(section, stem, {lowercased label: (label, meta)})]
     exported: dict[str, list[tuple[str, str, dict[str, tuple[str, dict[str, Any]]]]]] = {}
+    # model key -> {owner-local animation index: {stem, label, axis, clip}}, read
+    # out of each stem's own blend sidecar.
+    cell_clips: dict[str, dict[int, dict[str, Any]]] = {}
 
-    def _add(section: str, stem: str, model: str, clips: dict[str, Any]) -> None:
+    def _add(
+        section: str, stem: str, model: str, clips: dict[str, Any],
+        blends: str | None = None,
+    ) -> None:
         key = (model or "").lower()
         if not key:
             return
@@ -742,13 +787,19 @@ def export_arm(
             return
         table = {label.lower(): (label, meta) for label, meta in clips.items()}
         registered.append((section, stem, table))
+        for index, cell in _blend_cells(npc_dir, stem, blends).items():
+            if cell["clip"] and cell["clip"].lower() in table:
+                cell_clips.setdefault(key, {}).setdefault(index, cell)
 
     for stem, record in banks.items():
-        _add("bank", stem, record.get("model", ""), record.get("clips", {}))
+        _add("bank", stem, record.get("model", ""), record.get("clips", {}),
+             record.get("blends"))
     for stem, record in npcs.items():
-        _add("npc", stem, record.get("model", ""), record.get("own_clips", {}))
+        _add("npc", stem, record.get("model", ""), record.get("own_clips", {}),
+             record.get("blends"))
     for stem, record in props.items():
-        _add("animated_prop", stem, record.get("model", ""), record.get("clips", {}))
+        _add("animated_prop", stem, record.get("model", ""), record.get("clips", {}),
+             record.get("blends"))
     # A cinematic model is split into one bank per bone root; every root carries
     # the same label set, so the model resolves through the roots rather than
     # through a bank whose own `model` field already registered it above.
@@ -756,11 +807,13 @@ def export_arm(
         for root in record.get("roots", []):
             bank = banks.get(root.get("bank"))
             if bank is not None:
-                _add("cinematic", root["bank"], model, bank.get("clips", {}))
+                _add("cinematic", root["bank"], model, bank.get("clips", {}),
+                     bank.get("blends"))
 
-    # A fired base cell is what an exported clip's animation actually is, so an
-    # animation identity is exported only when some fired sequence of the same
-    # owner names it as its own base cell.
+    # Which animations the export actually reaches, per owner. A base cell is an
+    # exported clip's animation by construction; every other cell is one only
+    # because a blend sidecar names a clip for it, so the two are answered apart
+    # and the cell arm reads the export's own files rather than replaying a rule.
     base_cells: dict[int, set[int]] = {}
     for entry in resolved:
         if entry["kind"] == SEQUENCE_KIND and entry.get("descriptor"):
@@ -801,8 +854,16 @@ def export_arm(
             continue
         outcome["stems"] = [f"{section}:{stem}" for section, stem, _ in stems]
         if entry["kind"] == ANIMATION_KIND:
+            cell = cell_clips.get(
+                (owner["install_key"] or "").lower(), {}
+            ).get(entry["index"])
             if entry["index"] in base_cells.get(checksum, set()):
                 outcome["outcome"] = "joined"
+                joined += 1
+                joined_records += records
+            elif cell is not None:
+                outcome["outcome"] = "joined"
+                outcome["blend_cell"] = cell
                 joined += 1
                 joined_records += records
             else:

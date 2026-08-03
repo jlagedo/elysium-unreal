@@ -18,10 +18,15 @@ stores *directions*, not deltas — `read_anorms` pulls the unit-vector table it
 of the user's own `StudioRender.dll`. `probe_facial.py` is the survey over the same
 decoders; `mdl_gltf.py` bakes their output into glTF morph targets (roadmap PL10).
 
+Blend spaces are decoded but not evaluated: `read_grid` carries a sequence's extents,
+pose-parameter binding and every cell out of the descriptor, and `pose_parameters` reads the
+axes those cells are driven by. Each cell stays its own clip — the mix belongs to the host,
+because evaluate-then-blend and blend-then-evaluate are not the same pose.
+
 Not decoded here: procedural bones (`ProcType`!=0), IK, animation events
-(`numevents`/`eventindex`, located but unread), blend spaces (`numblends`>1 — the `[0][0]`
-base cell is taken), root motion (clips bake in place), and `StudioEyeball` (every shipped
-VtMB model carries `NumEyeballs == 0`, so there is nothing to decode).
+(`numevents`/`eventindex`, located but unread), root motion (clips bake in place), and
+`StudioEyeball` (every shipped VtMB model carries `NumEyeballs == 0`, so there is nothing to
+decode).
 """
 import os
 import struct
@@ -132,19 +137,115 @@ def read_includes(d):
 
 _SEQDESC_STRIDE = 764
 
+#: `MAXSTUDIOBLENDS`. The inline `anim[16][16]` grid keeps this row stride whatever the
+#: authored extents are, so an authored grid is a sub-rectangle of the fixed array.
+MAXSTUDIOBLENDS = 16
+
+_POSEPARAM_STRIDE = 20
+
+#: One `mstudioposeparamdesc_t` (`NumLocalPoseParameters`@384 / `LocalPoseParamIndex`@388).
+#: A non-zero `loop` is the wrap modulus an axis folds the parameter through before it
+#: normalizes over `start`..`end`.
+PoseParam = namedtuple("PoseParam", "index name flags start end loop")
+
+#: One authored blend-grid cell: its position on the two axes and the local animation index
+#: it selects. `anim` is read verbatim and may fall outside `NumLocalAnims`.
+Cell = namedtuple("Cell", "axis0 axis1 anim")
+
+#: One sequence's blend space. `numblends`@52 is the declared cell count and `groupsize`@572
+#: the two axis extents; `paramindex`@580 names the pose parameter driving each axis (-1 when
+#: unused) and `paramstart`@588 / `paramend`@596 give that axis's range in the parameter's own
+#: units. `cells` is every cell inside the extents, row-major over axis 0.
+Grid = namedtuple("Grid", "numblends groupsize paramindex paramstart paramend cells")
+
+#: What a `Seq` built outside `local_sequences` carries — a raw animation baked as a clip
+#: answers to no descriptor, so it declares no cells rather than claiming a base cell.
+_NO_GRID = Grid(numblends=1, groupsize=(1, 1), paramindex=(-1, -1),
+                paramstart=(0.0, 0.0), paramend=(0.0, 0.0), cells=())
+
 #: One game-facing sequence. The first four fields are the bake inputs; `activity`,
-#: `actweight` and `flags` are the engine's own selection keys (see `local_sequences`).
-Seq = namedtuple("Seq", "label base frames fps activity actweight flags")
+#: `actweight` and `flags` are the engine's own selection keys (see `local_sequences`);
+#: `grid` is the blend space the label names (see `read_grid`).
+Seq = namedtuple("Seq", "label base frames fps activity actweight flags grid",
+                 defaults=(_NO_GRID,))
+
+
+def pose_parameters(d):
+    """This model's pose parameters -> list[PoseParam] in header order.
+
+    `NumLocalPoseParameters`@384 / `LocalPoseParamIndex`@388 address 20-byte records:
+    `nameindex`@0 (relative to the record), `flags`@4, `start`@8, `end`@12, `loop`@16. The
+    name is the durable key — a sequence axis binds by *index* into this array, so the two
+    are read together or an axis cannot be named (`docs/vtmb/animation_and_movers.md` A.3)."""
+    n = _i32(d, 384)
+    base = _i32(d, 388)
+    out = []
+    for i in range(n):
+        pb = base + i * _POSEPARAM_STRIDE
+        out.append(PoseParam(index=i, name=_cstr_rel(d, pb, 0), flags=_i32(d, pb + 4),
+                             start=_f32(d, pb + 8), end=_f32(d, pb + 12),
+                             loop=_f32(d, pb + 16)))
+    return out
+
+
+def read_grid(d, sb):
+    """One StudioSeqDesc's blend space at descriptor base `sb` -> Grid.
+
+    `groupsize`@572 gives the extents and `numblends`@52 the cell count; the product of the
+    two extents equals `numblends` on all 294 multi-blend sequences of the installed character
+    tree, which is what establishes these as the axis extents. Extents outside 1..16 (or a
+    product disagreeing with `numblends`) fall back to the base cell alone, so a descriptor
+    the format cannot explain yields the clip it always did rather than a grid of noise.
+
+    A cell sits at `56 + (i0 * 16 + i1) * 2` — axis 0 takes the fixed 16-short row stride and
+    axis 1 the column. That orientation is retail's own: on a 3x3 `smith_aim_layer` the
+    witnessed cell `[1, 0]` decodes the four animations at rows 1-2, columns 0-1, and the
+    transposed address would name a different four.
+
+    `paramindex`@580 binds each axis to a `pose_parameters` index and is -1 when the axis is
+    unused; `paramstart`@588 / `paramend`@596 are that axis's range in the parameter's units."""
+    numblends = _i32(d, sb + 52)
+    groupsize = struct.unpack_from("<2i", d, sb + 572)
+    paramindex = struct.unpack_from("<2i", d, sb + 580)
+    grid = Grid(numblends=numblends, groupsize=groupsize, paramindex=paramindex,
+                paramstart=struct.unpack_from("<2f", d, sb + 588),
+                paramend=struct.unpack_from("<2f", d, sb + 596),
+                cells=())
+    n0, n1 = groupsize
+    if not (1 <= n0 <= MAXSTUDIOBLENDS and 1 <= n1 <= MAXSTUDIOBLENDS) or n0 * n1 != numblends:
+        n0 = n1 = 1
+    cells = tuple(
+        Cell(axis0=i0, axis1=i1,
+             anim=_h16(d, sb + 56 + (i0 * MAXSTUDIOBLENDS + i1) * 2))
+        for i0 in range(n0) for i1 in range(n1)
+    )
+    return grid._replace(cells=cells)
+
+
+def local_animation(d, index):
+    """The local animation at `index` -> (name, animdesc_base, numframes, fps), or None when
+    the index falls outside `NumLocalAnims`@264. The name carries a leading '@' on the disk
+    bytes; it is stripped here, exactly as `find_anim` matches."""
+    n = _i32(d, 264)
+    if not (0 <= index < n):
+        return None
+    ab = _i32(d, 268) + index * 72
+    return _cstr(d, ab + _i32(d, ab)).lstrip("@"), ab, _i32(d, ab + 12), _f32(d, ab + 4)
 
 
 def local_sequences(d):
     """This model's own game-facing sequences -> list[Seq].
 
     StudioSeqDesc[NumLocalSeq@272] (stride 764): label@0 (rel. seq base), anim[0][0]@56 (the
-    blend grid's base cell) -> a local anim index into LocalAnims. For VtMB NPC/bank models
-    the mapping is 1 seq <-> 1 anim (numblends 1), so the grid beyond [0][0] is ignored and a
-    label whose base cell is out of range is skipped. Deduped by lowercased label (first wins);
-    the label is the name the game references (scripted_sequence `m_iszPlay`, activities).
+    blend grid's base cell) -> a local anim index into LocalAnims. A label whose base cell is
+    out of range is skipped. Deduped by lowercased label (first wins); the label is the name
+    the game references (scripted_sequence `m_iszPlay`, activities).
+
+    `base`/`frames`/`fps` are the base cell's, so a single-cell sequence bakes as it always
+    did. `grid` carries the whole blend space beside it — extents, pose-parameter binding and
+    every cell — because a 9x1 walk grid selects a different animation per `move_yaw` and
+    baking the base cell as the clip drops the other eight. The cells are data beside the
+    clips: blending them is the host's job, not the exporter's.
 
     Three more fields carry how the *engine* picks a sequence, rather than how content names
     one. `szactivitynameindex`@4 is the activity literal (`ACT_IDLE`, `ACT_WALK`,
@@ -159,7 +260,10 @@ def local_sequences(d):
     for i in range(ns):
         sb = sbase + i * _SEQDESC_STRIDE
         label = _cstr_rel(d, sb, 0)
-        a0 = _h16(d, sb + 56)
+        # Read before the skips, so every declared descriptor's grid is read off the same
+        # walk that reads its label rather than only the ones that survive the dedup.
+        grid = read_grid(d, sb)
+        a0 = grid.cells[0].anim
         key = label.lower()
         if not label or key in seen or not (0 <= a0 < na):
             continue
@@ -167,7 +271,7 @@ def local_sequences(d):
         ab = abase + a0 * 72
         out.append(Seq(label=label, base=ab, frames=_i32(d, ab + 12), fps=_f32(d, ab + 4),
                        activity=_cstr_rel(d, sb, 4), actweight=_i32(d, sb + 16),
-                       flags=_i32(d, sb + 8)))
+                       flags=_i32(d, sb + 8), grid=grid))
     return out
 
 
@@ -226,12 +330,24 @@ def read_anim(d, bones, animdesc_base, numframes):
 
     At animdesc_base + animindex(@48): one 32B record per bone (weight@0, offset[7]@4
     = posX,posY,posZ,rotX,rotY,rotZ,rotW, each relative to the record start; 0 =
-    channel not animated, use bind value). Sample*scale is a delta on the bind."""
+    channel not animated, use bind value). Sample*scale is a delta on the bind.
+
+    `weight`@0 is a zero test rather than a factor. Both retail channel decoders compare it
+    against zero before anything else and, on zero, write a zero position and a zero
+    quaternion and return — reading no channel offset, no track and no bind field. So a
+    zero-weight bone yields exact zeros here too, not the bind pose and not an identity
+    rotation. No record of the retail capture corpus carries anything but 1.0, so the branch
+    is taken from the decompiled decoders and is exercised only by a synthetic regression;
+    it is not validated against retail bytes."""
     animindex = _i32(d, animdesc_base + 48)
     recs = animdesc_base + animindex
     frames = [[None] * len(bones) for _ in range(numframes)]
     for bi, bone in enumerate(bones):
         rb = recs + bi * 32
+        if _f32(d, rb) == 0.0:
+            for f in range(numframes):
+                frames[f][bi] = ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 0.0))
+            continue
         offs = struct.unpack_from("<7i", d, rb + 4)
         chan = []
         for c in range(7):

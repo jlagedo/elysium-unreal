@@ -60,6 +60,7 @@ INDEX = os.path.join(NPC_DIR, "npc_index.json")
 CLIPS_DIR = os.path.join(NPC_DIR, "clips")
 FACIAL_DIR = os.path.join(NPC_DIR, "facial")
 PROCEDURAL_DIR = os.path.join(NPC_DIR, "procedural")
+BLENDS_DIR = os.path.join(NPC_DIR, "blends")
 ANIMATED_PROP_DIR = os.path.join(NPC_DIR, "animated_props")
 MANIFEST_VERSION = 4
 
@@ -286,6 +287,42 @@ def write_procedural(stem, model, rules, prefix=""):
     return {"procedural": rel, "procedural_bones": len(rules)}
 
 
+def write_blends(stem, model, table, prefix=""):
+    """Write one model's blend grids to `<prefix>blends/<stem>.json` -> the manifest fields
+    naming it.
+
+    Kept out of `npc_manifest.json` for the reason the flex rigs and procedural tables are:
+    `move_and_ranged` alone authors 253 grids, and a map places 17-22 models. `{}` for a model
+    that authors none — 913 of the 1,166 sequences on either `move_and_ranged` are a single
+    cell, which is a clip and needs no table.
+
+    A grid names the clip in *this* stem's glb for each cell; the mix is the host's, driven by
+    the pose parameter each axis binds to. The cells are not pre-blended and must not be: the
+    engine evaluates every cell and mixes the resulting transforms, which is a different pose
+    from mixing the clips first."""
+    if not table:
+        return {}
+    rel = "/".join(filter(None, (prefix, "blends", stem + ".json")))
+    path = os.path.join(NPC_DIR, *rel.split("/"))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"stem": stem, "model": model,
+                   "note": "grids[label] is one sequence's blend space. `groupsize` gives the "
+                           "two axis extents and `cells[].axis` a cell's position on them; "
+                           "`paramindex[a]` indexes `pose_parameters` for axis a and is -1 "
+                           "when that axis is unused. Resolve an axis by wrapping the "
+                           "parameter through a non-zero `loop`, normalizing over the "
+                           "parameter's start..end, remapping through this grid's "
+                           "paramstart[a]..paramend[a], clamping to 0..1 and scaling by the "
+                           "extent; that yields a cell index and a fraction to the next. "
+                           "`cells[].clip` names an animation of this stem's glb, or is null "
+                           "where the cell's animation did not bake. Evaluate each cell and "
+                           "blend the results — never blend the clips. See "
+                           "docs/vtmb/animation_and_movers.md A.3.",
+                   **table}, f, separators=(",", ":"))
+    return {"blends": rel, "blend_grids": len(table["grids"])}
+
+
 def write_sidecars(manifest):
     """The runtime-facing split of `npc_manifest.json` (roadmap 8.5).
 
@@ -306,9 +343,9 @@ def write_sidecars(manifest):
     index = {
         "manifest_version": manifest["manifest_version"],
         "note": "counts only; a clip vocabulary lives in clips/<stem>.json, a flex rig in "
-                "facial/<stem>.json and a procedural bone rule table in "
-                "procedural/<stem>.json. Those paths, like the bank glb paths, are relative "
-                "to this file's directory.",
+                "facial/<stem>.json, a procedural bone rule table in "
+                "procedural/<stem>.json and a blend-grid table in blends/<stem>.json. Those "
+                "paths, like the bank glb paths, are relative to this file's directory.",
         "npcs": {s: {"glb": r["glb"], "model": r["model"], "bones": r["bones"],
                      "split_bones": r.get("split_bones", []),
                      "clips": len(r["clips"]), "own_clips": len(r["own_clips"]),
@@ -316,9 +353,13 @@ def write_sidecars(manifest):
                         else {}),
                      **({"procedural": r["procedural"],
                          "procedural_bones": r["procedural_bones"]} if r.get("procedural")
-                        else {})}
+                        else {}),
+                     **({"blends": r["blends"], "blend_grids": r["blend_grids"]}
+                        if r.get("blends") else {})}
                  for s, r in manifest["npcs"].items()},
-        "banks": {s: {"glb": r["glb"], "model": r["model"], "clips": len(r["clips"])}
+        "banks": {s: {"glb": r["glb"], "model": r["model"], "clips": len(r["clips"]),
+                      **({"blends": r["blends"], "blend_grids": r["blend_grids"]}
+                         if r.get("blends") else {})}
                   for s, r in manifest["banks"].items()},
         # 12.1 — a choreo scene's anim-set model key -> the per-bone-root banks it was split
         # into. The runtime resolves (BaseAnim/MaleAnim/FemaleAnim, the actor's bonerename
@@ -333,6 +374,8 @@ def write_sidecars(manifest):
                    **({"procedural": rec["procedural"],
                        "procedural_bones": rec["procedural_bones"]} if rec.get("procedural")
                       else {}),
+                   **({"blends": rec["blends"], "blend_grids": rec["blend_grids"]}
+                      if rec.get("blends") else {}),
                    "clips": sorted(rec.get("clips", {}))}
             for stem, rec in manifest.get("animated_props", {}).items()
         },
@@ -463,6 +506,7 @@ def main(only=None, *, index=None, integrate=False, strict=False):
             bank_index[info["stem"]] = {
                 "glb": info["glb"], "model": info["model"],
                 "clips": {c.label: _clip_meta(c) for c in info["clips"]},
+                **write_blends(info["stem"], info["model"], info["blends"]),
             }
 
     # The cinematic anim sets (12.1). Each is a whole multi-actor performance in one file, so it
@@ -493,6 +537,7 @@ def main(only=None, *, index=None, integrate=False, strict=False):
             bank_index[info["stem"]] = {
                 "glb": info["glb"], "model": info["model"],
                 "clips": {c.label: _clip_meta(c) for c in info["clips"]},
+                **write_blends(info["stem"], info["model"], info["blends"]),
             }
             if info.get("root"):
                 roots.append({"root": info["root"], "bank": info["stem"]})
@@ -520,6 +565,7 @@ def main(only=None, *, index=None, integrate=False, strict=False):
             "own_clips": {c.label: _clip_meta(c) for c in info["clips"]},
             **write_facial(info["stem"], info["model"], info["facial"]),
             **write_procedural(info["stem"], info["model"], info["procedural"]),
+            **write_blends(info["stem"], info["model"], info["blends"]),
         }
         procedural_faults.extend((info["stem"], f) for f in info["procedural_faults"])
 
@@ -565,6 +611,7 @@ def main(only=None, *, index=None, integrate=False, strict=False):
             "split_bones": info["split_bones"],
             "clips": {c.label: _clip_meta(c) for c in info["clips"]},
             **write_procedural(stem, info["model"], info["procedural"], "animated_props"),
+            **write_blends(stem, info["model"], info["blends"], "animated_props"),
         }
         procedural_faults.extend((stem, f) for f in info["procedural_faults"])
 
@@ -657,6 +704,10 @@ def main(only=None, *, index=None, integrate=False, strict=False):
           f"{sum(r['procedural_bones'] for r in driven)} driven bones -> {PROCEDURAL_DIR}/")
     for stem, fault in procedural_faults:
         print(f"  ! {stem}: procedural rule - {fault}")
+    gridded = [r for r in (*npc_index.values(), *bank_index.values(),
+                           *animated_prop_index.values()) if r.get("blends")]
+    print(f"[npc] blend grids: {len(gridded)} model(s) author one, "
+          f"{sum(r['blend_grids'] for r in gridded)} grids -> {BLENDS_DIR}/")
     print(f"[npc] size: banks {bank_bytes/1e6:.0f} MB (shared) + meshes {npc_bytes/1e6:.0f} MB, "
           f"manifest {os.path.getsize(MANIFEST)/1e6:.1f} MB")
     if warnings:

@@ -541,6 +541,10 @@ BONE_STRIDE = 160
 ANIM_DESC_STRIDE = 72
 SEQ_DESC_STRIDE = 764
 ANIM_RECORD_STRIDE = 32
+# `MAXSTUDIOBLENDS`: the inline `anim[16][16]` grid keeps this row stride
+# whatever the authored extents are.
+BLEND_ROW_STRIDE = 16
+POSE_PARAM_STRIDE = 20
 # posX, posY, posZ, rotX, rotY, rotZ, rotW, in the order the per-bone record
 # declares them.
 CHANNEL_COUNT = 7
@@ -763,6 +767,35 @@ class Track:
         return bytes(blob)
 
 
+class Grid:
+    """One StudioSeqDesc's blend space, as the fixture writes it.
+
+    ``cells`` maps ``(axis0, axis1)`` to a local animation index, and every
+    position inside ``groupsize`` is expected to carry one — a grid whose product
+    disagrees with ``numblends`` is written verbatim so the decoder's fallback can
+    be exercised rather than assumed.
+    """
+
+    def __init__(
+        self,
+        groupsize: tuple[int, int],
+        cells: dict[tuple[int, int], int],
+        *,
+        paramindex: tuple[int, int] = (0, -1),
+        paramstart: tuple[float, float] = (-180.0, 0.0),
+        paramend: tuple[float, float] = (180.0, 0.0),
+        numblends: int | None = None,
+    ) -> None:
+        self.groupsize = groupsize
+        self.cells = cells
+        self.paramindex = paramindex
+        self.paramstart = paramstart
+        self.paramend = paramend
+        self.numblends = (
+            groupsize[0] * groupsize[1] if numblends is None else numblends
+        )
+
+
 class Clip:
     """One StudioAnimDesc and the animation block it points at."""
 
@@ -866,6 +899,8 @@ def model_image(
     base_cells: tuple[int, ...] = (),
     pose_to_bone: str | tuple[tuple[float, ...], ...] = "inverse",
     procedural: dict[int, tuple] | None = None,
+    grids: dict[int, "Grid"] | None = None,
+    pose_parameters: tuple[tuple, ...] = (),
 ) -> bytes:
     """A minimal v2531 model image the pipeline bone decoder can read.
 
@@ -886,6 +921,14 @@ def model_image(
     ``Flags & 0x1`` and a ``ProcIndex`` reaching the 176-byte record. Mapping a
     bone to ``None`` declares the rule and leaves ``ProcIndex`` at zero, which is
     the unreadable case.
+
+    ``grids`` maps a sequence index to a :class:`Grid`, which writes that
+    descriptor's real blend space — ``numblends``, the two axis extents, the pose
+    parameter each axis binds to, its range, and one cell per position inside the
+    extents at the fixed 16-short row stride. A sequence with no entry keeps the
+    single-cell grid every caller predating this argument already produced.
+    ``pose_parameters`` writes ``(name, flags, start, end, loop)`` records at
+    ``NumLocalPoseParameters``/``LocalPoseParamIndex``.
 
     The animation and sequence arrays sit at the two fixed offsets a
     contribution's default descriptor pointers are built from, so a span walk
@@ -958,15 +1001,40 @@ def model_image(
     blob += animation
     blob += bytearray(CONTRIBUTION_SEQ_INDEX_OFF - len(blob))
     # Sequence descriptors carry a single-cell grid: numblends 1 and both group
-    # sizes 1, with cell zero naming animation zero.
+    # sizes 1, with cell zero naming animation zero. `grids` replaces that with a
+    # real blend space on the descriptors it names.
     for index in range(sequences):
         desc = CONTRIBUTION_SEQ_INDEX_OFF + SEQ_DESC_STRIDE * index
         blob += bytearray(SEQ_DESC_STRIDE)
-        struct.pack_into("<i", blob, desc + 52, 1)
-        struct.pack_into("<ii", blob, desc + 572, 1, 1)
-        struct.pack_into("<ii", blob, desc + 580, -1, -1)
+        grid = (grids or {}).get(index)
+        if grid is None:
+            struct.pack_into("<i", blob, desc + 52, 1)
+            struct.pack_into("<ii", blob, desc + 572, 1, 1)
+            struct.pack_into("<ii", blob, desc + 580, -1, -1)
+        else:
+            struct.pack_into("<i", blob, desc + 52, grid.numblends)
+            struct.pack_into("<ii", blob, desc + 572, *grid.groupsize)
+            struct.pack_into("<ii", blob, desc + 580, *grid.paramindex)
+            struct.pack_into("<2f", blob, desc + 588, *grid.paramstart)
+            struct.pack_into("<2f", blob, desc + 596, *grid.paramend)
+            for (axis0, axis1), animation in grid.cells.items():
+                struct.pack_into(
+                    "<h", blob, desc + 56 + (axis0 * BLEND_ROW_STRIDE + axis1) * 2,
+                    animation,
+                )
         if index < len(base_cells):
             struct.pack_into("<h", blob, desc + 56, base_cells[index])
+    # The pose parameters a grid axis binds to by index, after the descriptors.
+    if pose_parameters:
+        struct.pack_into("<ii", blob, 384, len(pose_parameters), len(blob))
+        base = len(blob)
+        blob += bytearray(POSE_PARAM_STRIDE * len(pose_parameters))
+        for index, (name, flags, start, end, loop) in enumerate(pose_parameters):
+            record = base + POSE_PARAM_STRIDE * index
+            struct.pack_into("<i", blob, record, len(blob) - record)
+            blob += name.encode("ascii") + b"\0"
+            struct.pack_into("<i", blob, record + 4, flags)
+            struct.pack_into("<3f", blob, record + 8, start, end, loop)
     # Labels and activity names sit after the descriptor array, reached through
     # the descriptor-relative index fields at +0 and +4. A sequence with no
     # entry keeps the zero index the engine reads as an empty string, which is
@@ -6085,8 +6153,17 @@ class SourceJoinTests(unittest.TestCase):
 
         return read
 
-    def _export(self, root: Path, clips: dict[str, object] | None = None) -> Path:
-        """A manifest whose one bank names the owner model by its install key."""
+    def _export(
+        self,
+        root: Path,
+        clips: dict[str, object] | None = None,
+        blends: dict[str, object] | None = None,
+    ) -> Path:
+        """A manifest whose one bank names the owner model by its install key.
+
+        `blends` writes the bank's blend sidecar as the exporter does, which is
+        what the animation arm resolves a non-base cell through.
+        """
         if clips is None:
             clips = {
                 BANK_LABELS[FIRED_SEQUENCE]: {
@@ -6095,18 +6172,22 @@ class SourceJoinTests(unittest.TestCase):
                 }
             }
         (root / "npc").mkdir(parents=True, exist_ok=True)
+        bank: dict[str, object] = {
+            "glb": "banks/bank.glb", "model": BANK_MODEL, "clips": clips,
+        }
+        if blends is not None:
+            (root / "npc" / "blends").mkdir(parents=True, exist_ok=True)
+            (root / "npc" / "blends" / "bank.json").write_text(
+                json.dumps({"stem": "bank", "model": BANK_MODEL, "grids": blends}),
+                encoding="utf-8",
+            )
+            bank["blends"] = "blends/bank.json"
         (root / "npc" / "npc_manifest.json").write_text(
             json.dumps(
                 {
                     "manifest_version": 4,
                     "npcs": {},
-                    "banks": {
-                        "bank": {
-                            "glb": "banks/bank.glb",
-                            "model": BANK_MODEL,
-                            "clips": clips,
-                        }
-                    },
+                    "banks": {"bank": bank},
                     "animated_props": {},
                     "cinematics": {},
                 }
@@ -6187,6 +6268,7 @@ class SourceJoinTests(unittest.TestCase):
         export: bool = True, inventory: bool = True,
         clips: dict[str, object] | None = None,
         digest: str | None = None, cells: list[dict[str, int]] | None = None,
+        blends: dict[str, object] | None = None,
     ) -> dict[str, object]:
         root = Path(directory)
         session = root / "session"
@@ -6196,7 +6278,9 @@ class SourceJoinTests(unittest.TestCase):
         source = captured if installed == -1 else installed
         return verify_join(
             session,
-            export_root=self._export(root / "export", clips) if export else None,
+            export_root=(
+                self._export(root / "export", clips, blends) if export else None
+            ),
             inventory=(
                 self._inventory(root / "inv", source or captured,
                                 digest=digest, cells=cells)
@@ -6443,9 +6527,10 @@ class SourceJoinTests(unittest.TestCase):
             self.assertEqual(outcome["declared_animations"], CONTRIBUTION_NUM_ANIM)
             self.assertTrue(report["verdict"]["sources_joined"])
 
-    def test_a_fired_cell_that_is_not_the_base_cell_is_accounted(self) -> None:
-        """`local_sequences` bakes cell [0][0] alone, so every other cell a
-        multi-blend sequence fires has no exported clip."""
+    def test_a_fired_cell_no_sidecar_names_is_accounted(self) -> None:
+        """An export whose bank authors no blend sidecar reaches a cell only if
+        it is some fired sequence's base cell, so a fired non-base cell has no
+        clip and is accounted rather than reported as an unexplained absence."""
         with tempfile.TemporaryDirectory() as directory:
             report = self._join(
                 directory,
@@ -6461,6 +6546,85 @@ class SourceJoinTests(unittest.TestCase):
             self.assertIn(
                 "blend_cell_not_exported", report["verdict"]["accounted"]
             )
+            self.assertTrue(report["verdict"]["sources_joined"])
+
+    def test_a_fired_cell_the_blend_sidecar_names_joins_to_its_clip(self) -> None:
+        """CAP5.3's export shortfall, closed and measured from the export.
+
+        The same fired non-base cell joins once the bank ships a blend sidecar
+        naming a clip for its animation index. The bridge is that index rather
+        than a replay of the exporter's rules, so the outcome carries the cell's
+        own axis position and clip name and is a claim about what was written.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._join(
+                directory,
+                contributions=self._contributions(animation_index=5),
+                inventory=False,
+                clips={
+                    BANK_LABELS[FIRED_SEQUENCE]: {
+                        "activity": BANK_ACTIVITIES[FIRED_SEQUENCE],
+                        "weight": 0, "flags": 0, "frames": 3, "fps": 30.0,
+                    },
+                    "turn": {"activity": "", "weight": 0, "flags": 0,
+                             "frames": 2, "fps": 30.0},
+                },
+                blends={
+                    BANK_LABELS[FIRED_SEQUENCE]: {
+                        "groupsize": [2, 1],
+                        "cells": [
+                            {"axis": [0, 0], "anim": FIRED_ANIMATION,
+                             "clip": BANK_LABELS[FIRED_SEQUENCE]},
+                            {"axis": [1, 0], "anim": 5, "clip": "turn"},
+                        ],
+                    }
+                },
+            )
+            outcome = next(
+                item
+                for item in report["export"]["outcomes"]
+                if item["kind"] == "ANIM"
+            )
+            self.assertEqual(outcome["outcome"], "joined")
+            self.assertEqual(outcome["blend_cell"]["clip"], "turn")
+            self.assertEqual(outcome["blend_cell"]["axis"], [1, 0])
+            self.assertEqual(
+                outcome["blend_cell"]["label"], BANK_LABELS[FIRED_SEQUENCE]
+            )
+            self.assertEqual(
+                report["export"]["counts"].get("blend_cell_not_exported", 0), 0
+            )
+            self.assertTrue(report["verdict"]["sources_joined"])
+
+    def test_a_cell_naming_a_clip_the_glb_lacks_is_not_a_join(self) -> None:
+        """The sidecar promises a clip; the manifest says what actually baked.
+
+        A cell whose clip is absent from the owning stem's clip table is not
+        evidence the animation reached the export, so it falls back to the
+        base-cell arm rather than joining on a name nothing carries.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            report = self._join(
+                directory,
+                contributions=self._contributions(animation_index=5),
+                inventory=False,
+                blends={
+                    BANK_LABELS[FIRED_SEQUENCE]: {
+                        "groupsize": [2, 1],
+                        "cells": [
+                            {"axis": [0, 0], "anim": FIRED_ANIMATION,
+                             "clip": BANK_LABELS[FIRED_SEQUENCE]},
+                            {"axis": [1, 0], "anim": 5, "clip": "never_baked"},
+                        ],
+                    }
+                },
+            )
+            outcome = next(
+                item
+                for item in report["export"]["outcomes"]
+                if item["kind"] == "ANIM"
+            )
+            self.assertEqual(outcome["outcome"], "blend_cell_not_exported")
             self.assertTrue(report["verdict"]["sources_joined"])
 
     def test_exported_metadata_disagreeing_with_the_install_is_a_defect(self) -> None:
@@ -6801,7 +6965,7 @@ class ByteCoverageTests(unittest.TestCase):
     that runs on a real capture rather than a stand-in for it.
     """
 
-    def _bank(self) -> bytes:
+    def _bank(self, **kwargs: object) -> bytes:
         return model_image(
             0xABCD,
             BANK_MODEL,
@@ -6809,9 +6973,46 @@ class ByteCoverageTests(unittest.TestCase):
             activities=BANK_ACTIVITIES,
             sequences=len(BANK_LABELS),
             base_cells=(0, 4, 5, 6),
+            **kwargs,
         )
 
-    def _session(self, session: Path, contributions: bytes | None = None) -> None:
+    def _unreadable_grid_bank(self) -> bytes:
+        """A bank whose sequence 1 declares extents its `numblends` denies.
+
+        `groupsize[0] * groupsize[1] == numblends` holds on all 294 authored
+        multi-blend sequences, so a descriptor where it does not is one the
+        format does not explain and `read_grid` falls back to the base cell.
+        That is the one range on this fixture retail reads and we do not, which
+        is what the missing-list machinery below is exercised against.
+        """
+        return self._bank(
+            grids={1: Grid((3, 1), {(0, 0): 4, (1, 0): 4, (2, 0): 6}, numblends=5)}
+        )
+
+    #: Where the two cells that grid fires land in the image. Axis 0 resolves to
+    #: cell 1, so the evaluator takes cell 1 and the one after it — slots 16 and
+    #: 32 down the fixed row stride, four bytes our fallback never reaches.
+    UNREADABLE_GRID_CELLS = tuple(
+        CONTRIBUTION_SEQ_INDEX_OFF + SEQ_DESC_STRIDE + 56 + slot * 2
+        for slot in (1 * BLEND_ROW_STRIDE, 2 * BLEND_ROW_STRIDE)
+    )
+
+    def _unreadable_grid_contributions(self) -> bytes:
+        return (
+            contribution_record(
+                b"SEQP", 8, 103, sequence_index=1, num_blends=5,
+                group_size=(3, 1), blend_cell=(1, 0),
+            )
+            + contribution_record(b"ANIM", 9, 104, animation_index=4)
+            + contribution_record(b"ANIM", 10, 105, animation_index=6)
+        )
+
+    def _session(
+        self,
+        session: Path,
+        contributions: bytes | None = None,
+        image: bytes | None = None,
+    ) -> None:
         write_session(
             session,
             pose_records=pose_record(
@@ -6833,7 +7034,7 @@ class ByteCoverageTests(unittest.TestCase):
                     studio_hdr=CONTRIBUTION_OWNER_HDR, checksum=0xABCD,
                 )
                 + image_record(
-                    7, 91, self._bank(),
+                    7, 91, self._bank() if image is None else image,
                     studio_hdr=CONTRIBUTION_OWNER_HDR, checksum=0xABCD,
                 )
             ),
@@ -6911,19 +7112,28 @@ class ByteCoverageTests(unittest.TestCase):
         """The report outlives the gitignored capture it was taken over.
 
         A range the decoder never reads is a claim about a value nobody looked
-        at, so the value comes along: here every missing weight dword is 1.0,
-        which is what says the guard is absent rather than the decode wrong.
+        at, so the value comes along: here the two cells the unreadable grid
+        fired carry the animation indices retail resolved them to, which is what
+        says the fallback dropped a real cell rather than the decode being wrong.
         """
         with tempfile.TemporaryDirectory() as directory:
-            report = self._report(directory)
+            session = Path(directory)
+            self._session(
+                session,
+                self._unreadable_grid_contributions(),
+                image=self._unreadable_grid_bank(),
+            )
+            report = verify_coverage(session)
         spans = report["difference"]["owners"][0]["retail_only_spans"]
         self.assertTrue(spans)
-        weights = [
-            body
-            for _, _, body in spans
-            if len(body) == 8 and struct.unpack("<f", bytes.fromhex(body))[0] == 1.0
-        ]
-        self.assertTrue(weights, spans)
+        cells = {
+            int(start, 16): struct.unpack("<h", bytes.fromhex(body))[0]
+            for start, _, body in spans
+            if int(start, 16) in self.UNREADABLE_GRID_CELLS and len(body) == 4
+        }
+        self.assertEqual(
+            cells, dict(zip(self.UNREADABLE_GRID_CELLS, (4, 6))), spans
+        )
 
     def test_the_report_names_the_build_it_is_a_difference_from(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -6935,40 +7145,54 @@ class ByteCoverageTests(unittest.TestCase):
         )
         self.assertEqual(len(identity["decoder_sha256"]), 64)
 
-    def test_the_missing_list_names_the_weight_our_decoder_never_reads(
+    def test_the_missing_list_is_empty_once_the_five_ranges_are_carried(
         self,
     ) -> None:
-        """The first finding, and the shape every finding takes.
+        """CAP4.2's whole finding, inverted by CAP5.3.
 
-        Both retail channel decoders read `weight`@0 of a bone's 32-byte
-        animation record and return on zero; `read_anim` reads the seven channel
-        offsets at +4 and never the weight. So four bytes per decoded bone are
-        read by retail and by nobody on our side, and the field is named rather
-        than the offset being reported bare.
+        Five field ranges were read by retail and by nobody offline:
+        `StudioAnimRecord.weight`@0, and `numblends`@52, `groupsize`@572,
+        `paramindex`@580 and the fired grid cells of `StudioSeqDesc`. The
+        decoder now reads all five — the weight as the zero test that ends a
+        bone's decode, the other four as the blend space `local_sequences`
+        carries out beside each clip — so the difference has nothing left to
+        name on a corpus whose grids the format explains.
         """
         with tempfile.TemporaryDirectory() as directory:
             report = self._report(directory)
-        missing = {entry["field"]: entry for entry in report["difference"]["missing_by_field"]}
-        self.assertIn("StudioAnimRecord.weight", missing, sorted(missing))
-        self.assertEqual(missing["StudioAnimRecord.weight"]["region"], "anim_records")
-        self.assertGreater(missing["StudioAnimRecord.weight"]["bytes"], 0)
-        self.assertEqual(missing["StudioAnimRecord.weight"]["bytes"] % 4, 0)
+        self.assertEqual(report["difference"]["missing_by_field"], [])
+        self.assertEqual(report["difference"]["totals"]["retail_only_bytes"], 0)
 
-    def test_the_missing_list_names_the_blend_fields_the_exporter_ignores(
+    def test_the_grid_cells_are_read_at_the_address_retail_resolved_them_at(
         self,
     ) -> None:
-        """`local_sequences` reads a label and a base cell; retail reads a grid.
+        """The address, checked from both sides at once.
 
-        The exporter bakes cell [0][0] alone, so `numblends`, `groupsize` and
-        `paramindex` are read by the evaluator and by nothing of ours. CAP4.1
-        reported that as clips without a counterpart; here it is bytes.
+        Axis 0 takes the fixed 16-short row stride. The retail arm claims the
+        cells the evaluator resolved and the decoder reads the cells inside the
+        extents; if the two disagreed about which axis strides, a fired cell
+        would land in the missing list. A 3x1 grid separates them, because a
+        transposed read would name slots 1 and 2 where retail named 16 and 32.
         """
         with tempfile.TemporaryDirectory() as directory:
-            report = self._report(directory)
-        missing = {entry["field"] for entry in report["difference"]["missing_by_field"]}
-        self.assertIn("StudioSeqDesc.numblends", missing)
-        self.assertIn("StudioSeqDesc.groupsize", missing)
-        self.assertIn("StudioSeqDesc.paramindex", missing)
+            session = Path(directory)
+            self._session(
+                session,
+                (
+                    contribution_record(
+                        b"SEQP", 8, 103, sequence_index=1, num_blends=3,
+                        group_size=(3, 1), blend_cell=(1, 0),
+                    )
+                    + contribution_record(b"ANIM", 9, 104, animation_index=4)
+                    + contribution_record(b"ANIM", 10, 105, animation_index=6)
+                ),
+                image=self._bank(
+                    grids={1: Grid((3, 1), {(0, 0): 4, (1, 0): 4, (2, 0): 6})}
+                ),
+            )
+            report = verify_coverage(session)
+        self.assertEqual(report["difference"]["missing_by_field"], [])
+        self.assertEqual(report["difference"]["totals"]["retail_only_bytes"], 0)
 
     def test_retail_reaches_no_track_run_our_walk_skipped(self) -> None:
         """The one containment the comparison is entitled to assert.
@@ -7026,15 +7250,24 @@ class ByteCoverageTests(unittest.TestCase):
 
     def test_a_fired_identity_carries_its_own_difference(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            report = self._report(directory)
+            session = Path(directory)
+            self._session(
+                session,
+                self._unreadable_grid_contributions(),
+                image=self._unreadable_grid_bank(),
+            )
+            report = verify_coverage(session)
         identities = report["difference"]["identities"]
         self.assertTrue(identities)
+        # Two animations and one sequence fired, and only the sequence is short.
+        # The difference is attributed to the identity that caused it rather
+        # than smeared across every identity the run touched.
+        self.assertEqual(
+            [(entry["kind"], entry["index"]) for entry in identities], [("SEQP", 1)]
+        )
         for entry in identities:
             self.assertGreater(entry["retail_only_bytes"], 0)
             self.assertTrue(entry["retail_only_fields"])
-        self.assertTrue(
-            any(entry["kind"] == "ANIM" for entry in identities), identities
-        )
 
     def test_every_emitted_population_is_declared_once(self) -> None:
         """No count reaches the verdict without a declaration behind it."""
@@ -7091,19 +7324,24 @@ class ByteCoverageTests(unittest.TestCase):
         """A byte the loader rewrote is not a byte the file carries.
 
         `StudioSeqDesc`+0xc is the activity dword the loader writes at load, and
-        retail's walker claims nothing there — but when it does appear on the
-        missing side it must be reported as a runtime value rather than as
-        source bytes the decoder failed to read.
+        retail's walker claims nothing there — but when a range does appear on
+        the missing side it must be reported as a runtime value rather than as
+        source bytes the decoder failed to read. The range here is a cell of the
+        grid whose extents the format cannot explain, which is the one thing
+        this fixture leaves unread.
         """
-        installed = bytearray(self._bank())
-        for index in range(len(BANK_LABELS)):
-            base = CONTRIBUTION_SEQ_INDEX_OFF + SEQ_DESC_STRIDE * index
-            # Differing in every byte of the dword, so the overlay is the whole
+        installed = bytearray(self._unreadable_grid_bank())
+        for offset in self.UNREADABLE_GRID_CELLS:
+            # Differing in both bytes of the cell, so the overlay is the whole
             # field rather than whichever byte happened to change.
-            struct.pack_into("<i", installed, base + 52, 0x02020202)
+            struct.pack_into("<h", installed, offset, 0x0202)
         with tempfile.TemporaryDirectory() as directory:
             session = Path(directory)
-            self._session(session)
+            self._session(
+                session,
+                self._unreadable_grid_contributions(),
+                image=self._unreadable_grid_bank(),
+            )
             report = verify_coverage(
                 session,
                 install_reader=lambda key: (
@@ -7116,7 +7354,7 @@ class ByteCoverageTests(unittest.TestCase):
         self.assertEqual(overlay["missing_bytes_the_loader_wrote"], 4)
         self.assertEqual(
             [entry["field"] for entry in overlay["by_field"]],
-            ["StudioSeqDesc.numblends"],
+            ["StudioSeqDesc.anim[16][16]"],
         )
 
     def test_a_layout_names_the_field_at_a_known_offset(self) -> None:
@@ -7750,6 +7988,253 @@ def _exported_axis_interp_local(rule, driver_axes, world, bones):
         quaternion = quaternions[picked[2]]
         position = positions[picked[2]]
     return _matrix_3x4(position, quaternion)
+
+
+#: A 9x1 walk grid on `move_and_ranged`'s own shape: one axis driven by `move_yaw`
+#: over its whole -180..180 range, nine cells down the fixed 16-short row stride,
+#: and the wrap cell repeating the animation the base cell already names.
+NINE_BY_ONE = Grid(
+    (9, 1),
+    {(0, 0): 0, (1, 0): 1, (2, 0): 2, (3, 0): 3, (4, 0): 4,
+     (5, 0): 5, (6, 0): 6, (7, 0): 2, (8, 0): 0},
+    paramindex=(0, -1),
+)
+
+#: A 3x3 aim layer: both axes bound, over the +/-45 degree range the weapon-aim
+#: sequences carry. Nine distinct cells, so a transposed cell address names a
+#: different animation on six of them.
+THREE_BY_THREE = Grid(
+    (3, 3),
+    {(0, 0): 0, (0, 1): 1, (0, 2): 2,
+     (1, 0): 3, (1, 1): 4, (1, 2): 5,
+     (2, 0): 6, (2, 1): 2, (2, 2): 1},
+    paramindex=(2, 3),
+    paramstart=(-45.0, -45.0),
+    paramend=(45.0, 45.0),
+)
+
+#: The four pose parameters both `move_and_ranged` banks declare, in their order.
+POSE_PARAMETERS = (
+    ("move_yaw", 1, -180.0, 180.0, 360.0),
+    ("hit_yaw", 1, -180.0, 180.0, 360.0),
+    ("aim_yaw", 0, -45.0, 45.0, 0.0),
+    ("aim_pitch", 0, -45.0, 45.0, 0.0),
+)
+
+
+class BlendGridTests(unittest.TestCase):
+    """CAP5.3: the blend grid the exporter carries out beside the clips.
+
+    `local_sequences` used to bake cell `[0][0]` and read nothing else, so a
+    9x1 walk grid shipped as one clip out of nine and the fields naming the
+    other eight went unread. What is checked here is the decode — extents, the
+    pose-parameter binding, and the cell address that retail's own witnessed
+    cells fix — and the export that turns every cell into a clip without
+    blending any of them.
+    """
+
+    def _image(self, grids, *, labels=("walk", "aim", "idle", "turn"), **kwargs):
+        return model_image(
+            TRANSFORM_CHECKSUM,
+            TRANSFORM_MODEL,
+            labels=labels,
+            grids=grids,
+            pose_parameters=POSE_PARAMETERS,
+            **kwargs,
+        )
+
+    def _sequences(self, image):
+        from elysium_pipeline.formats import mdl_skel
+
+        return {seq.label: seq for seq in mdl_skel.local_sequences(image)}
+
+    def test_a_nine_by_one_grid_reads_its_extents_binding_and_every_cell(self) -> None:
+        """The shape the theatre corpus fires throughout, read end to end."""
+        sequences = self._sequences(self._image({0: NINE_BY_ONE}))
+        grid = sequences["walk"].grid
+        self.assertEqual(grid.numblends, 9)
+        self.assertEqual(grid.groupsize, (9, 1))
+        self.assertEqual(grid.paramindex, (0, -1))
+        self.assertEqual(grid.paramstart, (-180.0, 0.0))
+        self.assertEqual(grid.paramend, (180.0, 0.0))
+        self.assertEqual(
+            [(cell.axis0, cell.axis1, cell.anim) for cell in grid.cells],
+            [(0, 0, 0), (1, 0, 1), (2, 0, 2), (3, 0, 3), (4, 0, 4),
+             (5, 0, 5), (6, 0, 6), (7, 0, 2), (8, 0, 0)],
+        )
+        # The clip the sequence still bakes is the base cell's, unchanged.
+        self.assertEqual(sequences["walk"].base, grid.cells[0].anim * ANIM_DESC_STRIDE
+                         + CONTRIBUTION_ANIM_INDEX_OFF)
+
+    def test_a_three_by_three_grid_takes_axis_zero_down_the_row_stride(self) -> None:
+        """The cell address, in the orientation retail's own witness fixes.
+
+        A capture of `smith_aim_layer` records the cell `[1, 0]` decoding the
+        four animations at rows 1-2 and columns 0-1 of the inline array. So axis
+        0 takes the fixed 16-short row stride and axis 1 the column, and the
+        transposed address would name six of these nine cells wrongly.
+        """
+        grid = self._sequences(self._image({1: THREE_BY_THREE}))["aim"].grid
+        self.assertEqual(grid.groupsize, (3, 3))
+        self.assertEqual(grid.paramindex, (2, 3))
+        self.assertEqual(
+            {(cell.axis0, cell.axis1): cell.anim for cell in grid.cells},
+            THREE_BY_THREE.cells,
+        )
+
+    def test_a_single_cell_sequence_reads_a_one_by_one_grid(self) -> None:
+        """The 913-of-1,166 case: a sequence that is a clip and nothing more."""
+        grid = self._sequences(self._image({}))["walk"].grid
+        self.assertEqual(grid.numblends, 1)
+        self.assertEqual(grid.groupsize, (1, 1))
+        self.assertEqual(grid.paramindex, (-1, -1))
+        self.assertEqual(len(grid.cells), 1)
+        self.assertEqual((grid.cells[0].axis0, grid.cells[0].axis1), (0, 0))
+
+    def test_extents_disagreeing_with_numblends_fall_back_to_the_base_cell(self) -> None:
+        """`groupsize[0] * groupsize[1] == numblends` holds on all 294 authored
+        multi-blend sequences, so a descriptor where it does not is one this
+        format does not explain — and it yields the clip it always did rather
+        than a grid of whatever the inline array happens to hold."""
+        broken = Grid((9, 1), {(0, 0): 3, (1, 0): 1}, numblends=5)
+        grid = self._sequences(self._image({0: broken}))["walk"].grid
+        self.assertEqual(grid.numblends, 5)
+        self.assertEqual(grid.groupsize, (9, 1))
+        self.assertEqual([cell.anim for cell in grid.cells], [3])
+
+    def test_the_pose_parameters_a_grid_axis_binds_to_are_read(self) -> None:
+        """A `paramindex` is an index into this model's own array, so the axis
+        cannot be wrapped or normalized without the record it names."""
+        from elysium_pipeline.formats import mdl_skel
+
+        parameters = mdl_skel.pose_parameters(self._image({0: NINE_BY_ONE}))
+        self.assertEqual(
+            [(p.index, p.name, p.flags, p.start, p.end, p.loop) for p in parameters],
+            [(index, name, flags, start, end, loop)
+             for index, (name, flags, start, end, loop) in enumerate(POSE_PARAMETERS)],
+        )
+        grid = self._sequences(self._image({0: NINE_BY_ONE}))["walk"].grid
+        self.assertEqual(parameters[grid.paramindex[0]].name, "move_yaw")
+        self.assertEqual(parameters[grid.paramindex[0]].loop, 360.0)
+
+    def test_every_cell_becomes_its_own_clip_and_none_of_them_are_blended(self) -> None:
+        """The export shortfall CAP4.1 measured, closed.
+
+        Ten fired cells over 6,878 records had no exported counterpart because
+        the base cell was the only clip. Every cell now names one, keyed by the
+        animation's own name, and the grid ships beside them rather than being
+        mixed into them — evaluate-then-blend is the host's job.
+        """
+        from elysium_pipeline.formats import mdl_gltf, mdl_skel
+
+        image = self._image({0: NINE_BY_ONE, 1: THREE_BY_THREE})
+        sequences = mdl_skel.local_sequences(image)
+        extra, blends = mdl_gltf.blend_clip_plan(image, sequences)
+
+        # One extra clip per distinct animation the two grids reach that the
+        # base-cell bake does not: animations 1-6 over the two of them, each
+        # named by the animation's own name. `idle`, `aim` and `turn` are also
+        # sequence labels in this fixture, so those three take the index
+        # disambiguation and the rest read as the animation the content named.
+        self.assertEqual(
+            sorted(clip.label for clip in extra),
+            ["aim#4", "dead", "idle#2", "run", "skip", "turn#5"],
+        )
+        self.assertEqual(len({clip.base for clip in extra}), len(extra))
+
+        walk = blends["walk"]
+        self.assertEqual(walk["groupsize"], [9, 1])
+        self.assertEqual(walk["paramindex"], [0, -1])
+        self.assertEqual(
+            [cell["clip"] for cell in walk["cells"]],
+            # Cell 0 keeps the sequence label; cells 7 and 8 repeat animations
+            # cells 2 and 0 already named, so they resolve to the same clips
+            # rather than baking the tracks twice.
+            ["walk", "run", "idle#2", "dead", "aim#4", "turn#5", "skip", "idle#2",
+             "walk"],
+        )
+        self.assertEqual(
+            [cell["axis"] for cell in blends["aim"]["cells"]],
+            [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2], [2, 0], [2, 1], [2, 2]],
+        )
+        # Nothing in the plan carries a blended clip: every cell names a clip
+        # that decodes one animation of the model, and the weights that mix them
+        # are absent because they are not the exporter's to apply.
+        bases = {clip.label: clip.base for clip in (*sequences, *extra)}
+        for grid in blends.values():
+            for cell in grid["cells"]:
+                self.assertIn(cell["clip"], bases)
+
+    def test_a_cell_outside_the_animation_count_is_carried_as_unresolved(self) -> None:
+        """A cell the model's own declaration cannot answer is a shortfall the
+        sidecar names, not a grid quietly shortened to the cells that worked."""
+        from elysium_pipeline.formats import mdl_gltf, mdl_skel
+
+        image = self._image({0: Grid((3, 1), {(0, 0): 0, (1, 0): 1, (2, 0): 99})})
+        _extra, blends = mdl_gltf.blend_clip_plan(
+            image, mdl_skel.local_sequences(image)
+        )
+        self.assertEqual(
+            [cell["clip"] for cell in blends["walk"]["cells"]],
+            ["walk", "run", None],
+        )
+
+    def test_a_grid_whose_cells_did_not_bake_is_dropped_rather_than_promised(
+        self,
+    ) -> None:
+        """`_bake_animation` returns nothing for a clip whose tracks came out
+        empty, so a cell naming it would promise an animation the glb does not
+        carry. Below two surviving cells there is no blend space left."""
+        from elysium_pipeline.formats import mdl_gltf
+
+        blends = {
+            "walk": {"groupsize": [3, 1], "cells": [
+                {"axis": [0, 0], "clip": "walk"},
+                {"axis": [1, 0], "clip": "run"},
+                {"axis": [2, 0], "clip": "idle"},
+            ]},
+            "aim": {"groupsize": [2, 1], "cells": [
+                {"axis": [0, 0], "clip": "aim"},
+                {"axis": [1, 0], "clip": "idle"},
+            ]},
+        }
+        kept = mdl_gltf._reconcile_blends(blends, {"walk", "run", "aim"})
+        self.assertEqual(sorted(kept), ["walk"])
+        self.assertEqual(
+            [cell["clip"] for cell in kept["walk"]["cells"]], ["walk", "run", None]
+        )
+
+    def test_a_zero_weight_record_decodes_to_zero_rather_than_to_a_pose(self) -> None:
+        """CAP5.3's second half, and the one claim on this page that no captured
+        byte backs.
+
+        Both retail channel decoders compare `weight`@0 against zero before
+        anything else and, on zero, write a zero position and a zero quaternion
+        and return. All 2,254 decoded `(owner, animation, bone)` triples of the
+        retail corpus carry 1.0, so the branch is transcribed from the
+        decompiled decoders and exercised only here. It is **not** validated
+        against retail bytes, and this fixture is the whole of its evidence.
+        """
+        from elysium_pipeline.formats import mdl_skel
+
+        image = self._image({})
+        bones = mdl_skel.read_bones(image)
+        # `@dead` carries weight 0.0 on both bones; `@walk` carries 1.0 on both.
+        dead = CONTRIBUTION_ANIM_INDEX_OFF + ANIM_DESC_STRIDE * 3
+        frames = mdl_skel.read_anim(image, bones, dead, 2)
+        for frame in frames:
+            for position, quaternion in frame:
+                self.assertEqual(position, (0.0, 0.0, 0.0))
+                self.assertEqual(quaternion, (0.0, 0.0, 0.0, 0.0))
+
+        # The zero is the weight's doing, not the clip's: the same bones under a
+        # weight of 1.0 fall back to their bind values on an unanimated channel.
+        alive = CONTRIBUTION_ANIM_INDEX_OFF + ANIM_DESC_STRIDE * 2
+        for position, quaternion in mdl_skel.read_anim(image, bones, alive, 1)[0]:
+            self.assertNotEqual(quaternion, (0.0, 0.0, 0.0, 0.0))
+        self.assertEqual(
+            mdl_skel.read_anim(image, bones, alive, 1)[0][1][0], bones[1].pos
+        )
 
 
 class ProceduralRuleExportTests(unittest.TestCase):

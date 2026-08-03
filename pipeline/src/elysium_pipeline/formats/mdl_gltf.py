@@ -555,6 +555,111 @@ def _assemble_skinned(built, animations):
     return gltf, skel_root
 
 
+def blend_clip_plan(d, clips):
+    """Expand a model's sequences into the clips their blend grids need -> (extra, blends).
+
+    A multi-cell sequence selects a different animation per pose-parameter value, and baking
+    the base cell alone drops the rest — the male and female `move_and_ranged` `walk` grids
+    are nine `walk_0`..`walk_315` animations behind one label. `extra` is one `mdl_skel.Seq`
+    per animation an active cell selects that the base-cell bake does not already reach,
+    labelled by the animation's own name, so every cell ships as its own clip. `blends` maps a
+    sequence label to `{numblends, groupsize, paramindex, paramstart, paramend, cells}`, each
+    cell carrying its position, the owner-local animation index it selects, and the clip that
+    animation baked as. The index travels because it is the identity a contribution record
+    names, so a cell joins back to the model image it was read from.
+
+    **Nothing is blended here.** The grid rides beside the clips because the mix depends on a
+    pose parameter the exporter cannot know, and because blending clips is not the same pose
+    as blending the transforms they decode to — the host evaluates each cell and mixes the
+    results (`docs/vtmb/animation_and_movers.md` A.3).
+
+    A cell whose animation index falls outside the model's declaration resolves to `None`,
+    which is a shortfall carried in the sidecar rather than a silently shortened grid."""
+    by_base = {}
+    taken = set()
+    for c in clips:
+        by_base.setdefault(c.base, c.label)
+        taken.add(c.label.lower())
+
+    extra, blends = [], {}
+    for c in clips:
+        grid = c.grid
+        if len(grid.cells) <= 1:
+            continue
+        cells = []
+        for cell in grid.cells:
+            found = S.local_animation(d, cell.anim)
+            if found is None:
+                cells.append(
+                    {"axis": [cell.axis0, cell.axis1], "anim": cell.anim, "clip": None}
+                )
+                continue
+            name, ab, frames, fps = found
+            if ab not in by_base:
+                # The animation's own name is the cell's clip name. It collides with a
+                # sequence label only where content gave a sequence and an animation the
+                # same string, so the index disambiguates and the common case reads
+                # `walk_45` rather than a synthetic id.
+                base_name = name or f"anim{cell.anim}"
+                clip, suffix = base_name, 0
+                while clip.lower() in taken:
+                    suffix += 1
+                    clip = (f"{base_name}#{cell.anim}" if suffix == 1
+                            else f"{base_name}#{cell.anim}#{suffix}")
+                taken.add(clip.lower())
+                by_base[ab] = clip
+                extra.append(S.Seq(label=clip, base=ab, frames=frames, fps=fps,
+                                   activity="", actweight=0, flags=0))
+            cells.append(
+                {"axis": [cell.axis0, cell.axis1], "anim": cell.anim,
+                 "clip": by_base[ab]}
+            )
+        blends[c.label] = {
+            "numblends": grid.numblends,
+            "groupsize": list(grid.groupsize),
+            "paramindex": list(grid.paramindex),
+            "paramstart": [round(v, 4) for v in grid.paramstart],
+            "paramend": [round(v, 4) for v in grid.paramend],
+            "cells": cells,
+        }
+    return extra, blends
+
+
+def _reconcile_blends(blends, baked):
+    """Drop every grid cell whose clip did not bake, and every grid left with fewer than two.
+
+    `_bake_animation` returns nothing for a sequence whose tracks come out empty, so a cell
+    naming it would promise a clip the glb does not carry — the same reconciliation the NPC
+    manifest runs over its resolved clip vocabulary."""
+    out = {}
+    for label, grid in blends.items():
+        cells = [
+            cell if cell["clip"] in baked else {**cell, "clip": None}
+            for cell in grid["cells"]
+        ]
+        if sum(1 for cell in cells if cell["clip"]) < 2:
+            continue
+        out[label] = {**grid, "cells": cells}
+    return out
+
+
+def blend_sidecar(d, blends):
+    """The blend table a model ships beside its clips, or `{}` when it authors no grid.
+
+    The pose parameters travel with it because a grid's `paramindex` is an index into this
+    model's own array — the axis cannot be named, wrapped or normalized without it."""
+    if not blends:
+        return {}
+    return {
+        "pose_parameters": [
+            {"index": p.index, "name": p.name, "flags": p.flags,
+             "start": round(p.start, 4), "end": round(p.end, 4), "loop": round(p.loop, 4)}
+            for p in S.pose_parameters(d)
+        ],
+        "grids": blends,
+    }
+
+
 def export_npc(idx, model_path, out_dir, stem=None, anorms=None):
     """Write `<out_dir>/<stem>.glb`: skinned mesh + skeleton + the NPC's OWN clips (the
     dialogue anims that live only in this .mdl) + its facial morph targets. Shared clips come
@@ -575,12 +680,15 @@ def export_npc(idx, model_path, out_dir, stem=None, anorms=None):
 
     g = Gltf()
     built = _build_skinned(g, idx, d, v, model_path, out_dir, anorms)
+    own = S.local_sequences(d)
+    extra, blends = blend_clip_plan(d, own)
     animations, labels = [], []
-    for c in S.local_sequences(d):
+    for c in own + extra:
         anim = _bake_animation(g, d, built["bones"], c.label, c.base, c.frames, c.fps)
         if anim:
             animations.append(anim)
             labels.append(c)
+    blends = _reconcile_blends(blends, {c.label for c in labels})
     gltf, _root = _assemble_skinned(built, animations)
     gltf["accessors"] = g.accessors
     gltf["bufferViews"] = g.bufferViews
@@ -593,22 +701,25 @@ def export_npc(idx, model_path, out_dir, stem=None, anorms=None):
     morphs = f", {len(face['morphs'])} morphs" if face and face["morphs"] else ""
     rules, rule_faults = axis_interp_rules(d, built["bones"])
     driven = f", {len(rules)} driven bones" if rules else ""
+    grids = f", {len(blends)} blend grids" if blends else ""
     print(f"  npc {stem}: {len(built['bones'])} bones, {tris} tris, {len(labels)} own clips"
-          f"{morphs}{driven} -> {glb} ({os.path.getsize(glb) // 1024} KB)")
+          f"{morphs}{driven}{grids} -> {glb} ({os.path.getsize(glb) // 1024} KB)")
     for fault in rule_faults:
         print(f"  ! {stem}: procedural rule - {fault}")
     return dict(stem=stem, glb=os.path.basename(glb), model=model_path,
                 bones=len(built["bones"]),
                 split_bones=[b.name for b in built["bones"] if b.flags & 0x2],
-                clips=labels, facial=face,
+                clips=labels, facial=face, blends=blend_sidecar(d, blends),
                 procedural=rules, procedural_faults=rule_faults)
 
 
 def export_bank(idx, model_path, out_dir, stem):
     """Write `<out_dir>/banks/<stem>.glb`: the bank skeleton (named bone nodes) + all its
     clips, no mesh/materials -- an animation library retargeted onto NPC skeletons by bone
-    name at load (A.7). Returns {stem, glb, model, clips:[mdl_skel.Seq,...]} or None if the
-    bank defines no animated clip (aggregator/plumbing models)."""
+    name at load (A.7). Returns {stem, glb, model, clips:[mdl_skel.Seq,...], blends} or None
+    if the bank defines no animated clip (aggregator/plumbing models). `clips` carries one
+    entry per baked animation, which for a multi-cell sequence is every cell rather than the
+    base alone; `blends` is the grid table naming which clip each cell is."""
     from elysium_pipeline.formats import install
 
     key = model_path[:-4] if model_path.lower().endswith(".mdl") else model_path
@@ -619,17 +730,19 @@ def export_bank(idx, model_path, out_dir, stem):
     if not clips:
         return None
     bones = S.read_bones(d)
+    extra, blends = blend_clip_plan(d, clips)
 
     g = Gltf()
     nodes = _skeleton_nodes(bones)
     animations, labels = [], []
-    for c in clips:
+    for c in clips + extra:
         anim = _bake_animation(g, d, bones, c.label, c.base, c.frames, c.fps)
         if anim:
             animations.append(anim)
             labels.append(c)
     if not animations:
         return None
+    blends = _reconcile_blends(blends, {c.label for c in labels})
     root = next(b.index for b in bones if b.parent == -1)
 
     banks_dir = os.path.join(out_dir, "banks")
@@ -646,9 +759,11 @@ def export_bank(idx, model_path, out_dir, stem):
     }
     glb = os.path.join(banks_dir, stem + ".glb")
     _write_glb(gltf, g.bin, glb)
-    print(f"  bank {stem}: {len(bones)} bones, {len(labels)} clips "
+    grids = f", {len(blends)} blend grids" if blends else ""
+    print(f"  bank {stem}: {len(bones)} bones, {len(labels)} clips{grids} "
           f"-> {glb} ({os.path.getsize(glb) // 1024} KB)")
-    return dict(stem=stem, glb="banks/" + os.path.basename(glb), model=model_path, clips=labels)
+    return dict(stem=stem, glb="banks/" + os.path.basename(glb), model=model_path,
+                clips=labels, blends=blend_sidecar(d, blends))
 
 
 def _bone_root(name):
@@ -705,6 +820,11 @@ def export_cinematic(idx, model_path, out_dir, stem):
         if one:
             one["root"] = roots[0] if roots else None
         return [one] if one else None
+
+    # Blend-grid cells bake as clips here for the reason they do anywhere else; the per-root
+    # split below reads them through the same loop, so a cell is a clip on every root.
+    extra, blends = blend_clip_plan(d, clips)
+    clips = clips + extra
 
     # Decode each clip once against the FULL skeleton: the animation records are indexed by the
     # model's own bone order, so a per-root subset has to read through the original indices.
@@ -787,10 +907,12 @@ def export_cinematic(idx, model_path, out_dir, stem):
         }
         glb = os.path.join(banks_dir, name + ".glb")
         _write_glb(gltf, g.bin, glb)
-        print(f"  cinematic {name}: {len(sub)} bones, {len(labels)} clips "
+        rooted = _reconcile_blends(blends, {c.label for c in labels})
+        grids = f", {len(rooted)} blend grids" if rooted else ""
+        print(f"  cinematic {name}: {len(sub)} bones, {len(labels)} clips{grids} "
               f"-> {glb} ({os.path.getsize(glb) // 1024} KB)")
         out.append(dict(stem=name, glb="banks/" + os.path.basename(glb), model=model_path,
-                        clips=labels, root=root))
+                        clips=labels, blends=blend_sidecar(d, rooted), root=root))
 
     return out or None
 
