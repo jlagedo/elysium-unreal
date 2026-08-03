@@ -19,8 +19,11 @@ public:
 	void InitializeAtFeet(const FVector& FeetOrigin, float YawDegrees);
 	void SetRuntimeReady(bool bReady);
 
+	virtual void Tick(float DeltaSeconds) override;
+
 	virtual bool MoveTo(const FVector& FeetDestination, float AcceptanceRadiusCm,
 		float SpeedCmPerSecond) override;
+	virtual void Face(float YawDegrees) override;
 	virtual void Stop() override;
 	virtual void Teleport(const FVector& FeetOrigin, float YawDegrees) override;
 	virtual void SetEnabled(bool bEnabled) override;
@@ -31,7 +34,9 @@ private:
 	void ApplyEnabledState();
 	FVector RequestedFeet = FVector::ZeroVector;
 	float RequestedAcceptanceCm = 20.0f;
+	float RequestedYaw = 0.0f;
 	bool bMoveRequested = false;
+	bool bFaceRequested = false;
 	bool bRequestedEnabled = true;
 	bool bRuntimeReady = false;
 };

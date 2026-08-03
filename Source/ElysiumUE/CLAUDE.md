@@ -183,6 +183,10 @@ Hard-won, non-obvious, and easy to undo:
   first** — overriding `CalcCamera` without it silently breaks first-person rendering.
 - **The player hull is a box, not a capsule** — `StepMove` depends on a flat bottom, and `ACharacter`
   will not take a box root.
+- **An NPC movement tick already depends on the map actor while its character stands on map-owned
+  collision.** CharacterMovement wires the primary tick of the movement base's owner. GameFrame
+  therefore runs from `GameplayTickFunction`, which depends on the motor ticks; adding those
+  prerequisites to `AElysiumMapActor::PrimaryActorTick` closes a cycle and floods `LogTick`.
 - **`ApplyMaterialOverrides` is lazy** — a runtime `SetMaterial` drops the primitive's built
   texture-streaming data, so albedo and `EnvMask` fall back to a low mip.
 - **`UBodySetup::CalculateMass` reads the owning primitive's `FBodyInstance`**, which a runtime-built

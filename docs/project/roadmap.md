@@ -1139,11 +1139,12 @@ recovered, on the owner call recorded there and in `docs/vtmb/facial_animation.m
     rewrite, so its quarter-turn discontinuities do not adjudicate the recovered
     retail rule. `sp_theatre` is exported and baked.
 
-    **Cutscene actors still pose from the wrong biped.** A cinematic bank is one skeleton
-    carrying several complete actors, and matching bones by name hands an actor another's chain —
-    491 source units and 119° wrong. The selected-bone mask names the right family and the export
-    does not yet carry it; detail and status are the retail tracker's CAP5.7. Every stage above
-    composes on top of that pose, so it gates a faithful theatre act.
+    **Multi-actor cinematic banks resolve per actor, and that path is verified against retail.**
+    A cinematic bank is one skeleton carrying several complete actors, so binding by plain bone
+    name would hand an actor another's chain — 491 source units and 119° wrong. The export splits
+    each cinematic model into one bank per `BipNN` root and the runtime binds it through the scene
+    actor's own `bonerename` pair, which joins to the retail capture at 180,812 agreeing and 0
+    disagreeing contributions.
   - **Live acceptance:** `newgame_ttd` activates both camera owners, renders exact-zero edits as
     clean cuts, and carries the authored positive-time moves without the generic look tracker or
     Unreal motion blur turning them into scrolls. The PC and `player_understudy` are visible and
@@ -1158,6 +1159,17 @@ recovered, on the owner call recorded there and in `docs/vtmb/facial_animation.m
   `PlayDialogFile` file-resolution rules) synced to scene time; a subtitle surface on the view
   state (11.8). *Acceptance:* the scene's lines are audible and subtitled in sync. *Deps:* 12.1,
   6.5, 6.6, 11.8.
+- [ ] **12.2b Scene mixahead calibration** *(carve-out of 12.2, blocks lipsync precision)* — the
+  runtime applies VtMB's `snd_mixahead` default of **0.100 s** to every `speak` event, measured
+  consistent to one frame across two independent scheduling anchors on `courtroom_scene_bip2`.
+  Our own audible latency is **~21–61 ms** — 48 kHz, a 1024-frame callback with one buffer
+  queued gives 21.3 ms, behind a WASAPI stream that requested a 1920-frame endpoint buffer on a
+  480-frame device period. **So dialogue is heard 40–80 ms early against every authored cue** —
+  lipsync, expressions, gestures and camera cuts alike. The constant is Source's mixer's lead
+  inherited while running Unreal's. One term is still unmeasured: `ScheduledAudioClock` is
+  stamped at submit, before the async mp3 decode, so a slow decode pushes the audible start
+  later invisibly. *Acceptance:* the lead matches the measured path, with the residual stated.
+  *Deps:* none — it is a constant and a measurement.
 - [ ] **12.3 Facial flex track** — the morph targets are baked (PL10 [x]); what is left is the
   three layers above them, which are runtime evaluation: 44 flex controllers → 60 RPN flex rules
   → 65 flexdesc weights → the per-flex target ramp → the morph weight. All four inputs are in
@@ -1188,19 +1200,24 @@ recovered, on the owner call recorded there and in `docs/vtmb/facial_animation.m
 - [ ] **12.4 Eyes and eyelids** — two halves on different footings. The **lids** are a
   reproduction: blink and lid shaping off the eight `eyelid` controllers and their four rules
   (`raiser × (1 − droop·0.8) × (1 − blink)` and its complements). The **eyes** are an
-  addition, because **there is no eyeball data to consume** — RE20 found `NumEyeballs == 0` on
-  all 4,444 models, so eye posing, look-at, iris and glint have no faithful baseline anywhere
-  in the install and eyes ship as painted head texture.
+  addition. **The eyes themselves are authored and ship**: 400 `eyeball_l/r.vmt` across 199
+  character directories, 394 of them on a dedicated `Eyes` shader compositing `$basetexture`
+  over a per-character `$iris` from `materials/models/character/eyes/`. What is absent is the
+  **orientation** record — RE20 found `NumEyeballs == 0` on all 4,444 models, and 486 of 489
+  character models carry no eye bone either — so nothing in the model data aims an eye. Whether
+  retail moves the iris by some other route (the `Eyes` shader's parameters, `StudioRender`'s
+  eye pass) is unestablished and is the first thing to settle here.
 
-  **Owner call, made: the cast has living eyes.** Faces carry the theatre in close-up and the
-  slice's fidelity bar names eyes explicitly, so a dead painted stare is not acceptable even
-  though it is what retail does. This is an invention on
-  `docs/project/remaster-direction.md`'s Feel layer, not a reproduction; the faithful
-  behaviour and this divergence beside it are recorded in `docs/vtmb/facial_animation.md`.
-  What that buys is open in the detail and closed in the intent — gaze targeting, saccades,
-  iris and glint are the candidates, built one at a time and A/B-able against the painted
-  baseline. *Acceptance:* actors blink, their lids shape, and their eyes are alive and aimed
-  through the theatre scene. *Deps:* 12.3.
+  **Owner call, made: the cast's eyes move.** Faces carry the theatre in close-up and the
+  slice's fidelity bar names eyes explicitly, so a fixed stare is not acceptable. Whether that
+  is a divergence at all depends on the investigation above: if retail already aims the iris,
+  this is a reproduction with a recovered rule; if it does not, the addition stands on
+  `docs/project/remaster-direction.md`'s Feel layer. Both readings and the evidence are in
+  `docs/vtmb/facial_animation.md`. The mechanism is open — gaze targeting, saccades and an
+  oriented iris are the candidates, built one at a time and A/B-able. **Head-turn look-at is a
+  separate, plainly faithful contributor** and probably the larger one; it needs no facial data
+  and has no task of its own yet. *Acceptance:* actors blink, their lids shape, and their eyes
+  are alive and aimed through the theatre scene. *Deps:* 12.3.
 - [ ] **12.5 Lipsync** — `.lip` phoneme tracks (RE20 [x]; 9.3c already logs the scripts' `.lip`
   probes as a named divergence) driving mouth flexes against 12.2's line audio; the 7,136 files
   are on disk in `$ELYSIUM_EXPORT_ROOT/lip/` (PL9 [x]), keyed by the line's own sound path. A **three-file join

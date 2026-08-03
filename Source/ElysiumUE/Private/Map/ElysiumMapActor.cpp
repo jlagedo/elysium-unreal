@@ -245,6 +245,34 @@ FName FElysiumPreMoveTickFunction::DiagnosticContext(bool bDetailed)
 }
 
 // ------------------------------------------------------------------------------------------
+// S2 — the gameplay tick function (runtime-architecture.md §3, steps 5-6).
+// ------------------------------------------------------------------------------------------
+
+void FElysiumGameplayTickFunction::ExecuteTick(float DeltaTime, ELevelTick TickType,
+	ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent)
+{
+	if (Target && IsValidChecked(Target) && !Target->IsUnreachable())
+	{
+		FScopeCycleCounterUObject ActorScope(Target);
+		Target->GameplayTick(DeltaTime);
+	}
+}
+
+FString FElysiumGameplayTickFunction::DiagnosticMessage()
+{
+	return GetFullNameSafe(Target) + TEXT("[AElysiumMapActor::GameplayTick]");
+}
+
+FName FElysiumGameplayTickFunction::DiagnosticContext(bool bDetailed)
+{
+	if (bDetailed)
+	{
+		return FName(*FString::Printf(TEXT("ElysiumMapActorGameplay/%s"), *GetFullNameSafe(Target)));
+	}
+	return FName(TEXT("ElysiumMapActorGameplay"));
+}
+
+// ------------------------------------------------------------------------------------------
 // S2 — the post-move tick function (runtime-architecture.md §3, step 8).
 // ------------------------------------------------------------------------------------------
 
@@ -275,20 +303,25 @@ FName FElysiumPostMoveTickFunction::DiagnosticContext(bool bDetailed)
 AElysiumMapActor::AElysiumMapActor()
 {
 	// S2 — the frame order is declared with tick groups and prerequisites, not left to registration
-	// order. The pre-move pass (clock, activation poll, the player's own think) and the gameplay pass
-	// (thinks, queue, audio) both run before physics, with the pawn's move between them; the
-	// post-move pass runs after physics. Before activation the first two may poll through a hold;
-	// activation restores the normal pause-stops-gameplay rule (§4).
+	// order. Pre-move advances the clock/player think; the actor tick is the map-owned floor's
+	// movement-base barrier; gameplay runs after player and NPC movement; post-move runs after
+	// physics. Before activation the first three may poll through a hold; activation restores the
+	// normal pause-stops-gameplay rule (§4).
 	PreMoveTickFunction.bCanEverTick = true;
 	PreMoveTickFunction.bStartWithTickEnabled = true;
 	PreMoveTickFunction.TickGroup = TG_PrePhysics;
-	// The two pre-physics functions must continue polling the activation barrier if a persistent
-	// dev hold survived travel. ActivateRuntime restores their normal pause behaviour atomically.
+	// The lifecycle-bearing pre-physics functions must continue through the activation barrier if a
+	// persistent dev hold survived travel. ActivateRuntime restores normal pause behaviour atomically.
 	PreMoveTickFunction.bTickEvenWhenPaused = true;
 
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.TickGroup = TG_PrePhysics;
 	PrimaryActorTick.bTickEvenWhenPaused = true;
+
+	GameplayTickFunction.bCanEverTick = true;
+	GameplayTickFunction.bStartWithTickEnabled = true;
+	GameplayTickFunction.TickGroup = TG_PrePhysics;
+	GameplayTickFunction.bTickEvenWhenPaused = true;
 
 	PostMoveTickFunction.bCanEverTick = true;
 	PostMoveTickFunction.bStartWithTickEnabled = true;
@@ -320,12 +353,19 @@ void AElysiumMapActor::RegisterActorTickFunctions(bool bRegister)
 			PreMoveTickFunction.Target = this;
 			PreMoveTickFunction.SetTickFunctionEnable(PreMoveTickFunction.bStartWithTickEnabled);
 			PreMoveTickFunction.RegisterTickFunction(GetLevel());
-			// Pre-move before gameplay, unconditionally. The pawn's movement component is wired
-			// between them when one exists (EnsureTickPrerequisites), but a map that never seats a
-			// pawn — the menu backdrop, a headless logic world — has no such edge, and its thinks
-			// must still run on a clock this frame's pre-move pass has already advanced. Both
-			// functions are TG_PrePhysics, so without this the order would be registration order.
+			// Pre-move before the map-owned floor barrier, unconditionally. The pawn's movement
+			// component is wired between them when one exists (EnsureTickPrerequisites); gameplay
+			// then depends on this barrier even on a backdrop/headless world with no pawn.
 			PrimaryActorTick.AddPrerequisite(this, PreMoveTickFunction);
+		}
+		if (GameplayTickFunction.bCanEverTick)
+		{
+			GameplayTickFunction.Target = this;
+			GameplayTickFunction.SetTickFunctionEnable(GameplayTickFunction.bStartWithTickEnabled);
+			GameplayTickFunction.RegisterTickFunction(GetLevel());
+			// The actor tick is the movement-base barrier for characters standing on this map's
+			// collision. GameFrame is a separate dependent node so NPC movement can sit between them.
+			GameplayTickFunction.AddPrerequisite(this, PrimaryActorTick);
 		}
 		if (PostMoveTickFunction.bCanEverTick)
 		{
@@ -334,7 +374,7 @@ void AElysiumMapActor::RegisterActorTickFunctions(bool bRegister)
 			PostMoveTickFunction.RegisterTickFunction(GetLevel());
 			// The tick groups already separate these two passes; the prerequisite says so in the
 			// graph as well, so the dependency survives anyone re-grouping either end.
-			PostMoveTickFunction.AddPrerequisite(this, PrimaryActorTick);
+			PostMoveTickFunction.AddPrerequisite(this, GameplayTickFunction);
 		}
 	}
 	else
@@ -342,6 +382,10 @@ void AElysiumMapActor::RegisterActorTickFunctions(bool bRegister)
 		if (PreMoveTickFunction.IsTickFunctionRegistered())
 		{
 			PreMoveTickFunction.UnRegisterTickFunction();
+		}
+		if (GameplayTickFunction.IsTickFunctionRegistered())
+		{
+			GameplayTickFunction.UnRegisterTickFunction();
 		}
 		if (PostMoveTickFunction.IsTickFunctionRegistered())
 		{
@@ -642,9 +686,10 @@ IElysiumNpcMotor* AElysiumMapActor::BuildNpcMotor(USkeletalMeshComponent* Body,
 	Body->AttachToComponent(Motor->GetRootComponent(), FAttachmentTransformRules::KeepWorldTransform);
 	if (UCharacterMovementComponent* Movement = Motor->GetCharacterMovement())
 	{
-		// The entity-world gameplay pass samples the position the native character movement produced
-		// this frame, matching the player's already-declared move-before-think relationship.
-		PrimaryActorTick.AddPrerequisite(Movement, Movement->PrimaryComponentTick);
+		// CharacterMovement adds the map actor's primary tick as a prerequisite when this character
+		// stands on map-owned collision. The separate gameplay tick can safely form the forward edge;
+		// using PrimaryActorTick here would close a cycle through that automatic movement-base edge.
+		GameplayTickFunction.AddPrerequisite(Movement, Movement->PrimaryComponentTick);
 	}
 	return Motor;
 }
@@ -671,7 +716,7 @@ void AElysiumMapActor::DestroyNpcMotor(IElysiumNpcMotor* Motor)
 	}
 	if (UCharacterMovementComponent* Movement = Body->GetCharacterMovement())
 	{
-		PrimaryActorTick.RemovePrerequisite(Movement, Movement->PrimaryComponentTick);
+		GameplayTickFunction.RemovePrerequisite(Movement, Movement->PrimaryComponentTick);
 	}
 	NpcMotors.RemoveSingleSwap(Body);
 	Body->Destroy();
@@ -725,6 +770,17 @@ void AElysiumMapActor::StopCinematicClip(USkeletalMeshComponent* Body)
 	{
 		Bodies->StopCinematicClip(Body);
 	}
+}
+
+int32 AElysiumMapActor::SetFlexControllers(USkeletalMeshComponent* Body,
+	TArrayView<const FElysiumFlexWrite> Writes, TArray<FString>* OutMissing)
+{
+	return Bodies ? Bodies->SetFlexControllers(Body, Writes, OutMissing) : INDEX_NONE;
+}
+
+bool AElysiumMapActor::SetMouthOpen(USkeletalMeshComponent* Body, float Open)
+{
+	return Bodies ? Bodies->SetMouthOpen(Body, Open) : false;
 }
 
 FString AElysiumMapActor::AnimatedPropStemForModel(const FString& ModelPath) const
@@ -1337,6 +1393,14 @@ void AElysiumMapActor::PreMoveTick(float DeltaSeconds)
 void AElysiumMapActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	// ACharacter movement automatically depends on the primary tick of the actor owning its
+	// movement base. Runtime world collision is owned here, so this native tick is deliberately an
+	// empty barrier between player movement and NPC movement. GameplayTick performs GameFrame after
+	// both without creating the reverse edge that caused the patrol-era tick cycle.
+}
+
+void AElysiumMapActor::GameplayTick(float DeltaSeconds)
+{
 	if (RuntimePhase == EElysiumMapRuntimePhase::Activating)
 	{
 		ActivateRuntime();
@@ -1712,6 +1776,9 @@ void AElysiumMapActor::EnsureRuntimeNavigation()
 	NavigationBounds->AddInstanceComponent(BoundsBox);
 	BoundsBox->RegisterComponent();
 
+	// Both colliders cook asynchronously after their components register. Refresh their octree data
+	// now that the activation barrier has observed completed BodySetups, then build exactly once.
+	Collision->RefreshNavigationData();
 	Navigation->OnNavigationBoundsUpdated(NavigationBounds);
 	Navigation->Build();
 	bNavigationBuildRequested = true;
@@ -1749,8 +1816,8 @@ void AElysiumMapActor::ActivateRuntime()
 		}
 	}
 	// Characters are constructed with the entity world, before asynchronous collision and Recast
-	// exist. Release them only at the same atomic activation barrier as the player so they cannot
-	// fall through an uncooked map or request paths against a half-built navigation graph.
+	// exist. Admit their visibility/collision only at the same atomic activation barrier as the
+	// player. Idle CharacterMovement stays asleep; the first MoveTo wakes it against the complete graph.
 	for (AElysiumNpcBody* Motor : NpcMotors)
 	{
 		if (IsValid(Motor))
@@ -1795,6 +1862,7 @@ void AElysiumMapActor::ActivateRuntime()
 	}
 	PreMoveTickFunction.bTickEvenWhenPaused = false;
 	PrimaryActorTick.bTickEvenWhenPaused = false;
+	GameplayTickFunction.bTickEvenWhenPaused = false;
 
 	UE_LOG(LogElysium, Log, TEXT("map runtime %s: Active after %.3fs at game time %.3f"),
 		*MapName, GetRuntimeWaitSeconds(), Now);

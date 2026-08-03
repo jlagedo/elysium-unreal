@@ -75,7 +75,7 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnElysiumMapRuntimeReady, AElysiumMapActor*
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnElysiumMapRuntimeFailed, AElysiumMapActor*, const FString&);
 
 // S2 — the map's pre-move tick (runtime-architecture.md §3, steps 2-3). The first of the actor's
-// three tick functions, in TG_PrePhysics, carrying everything that must be settled BEFORE the pawn
+// four tick functions, in TG_PrePhysics, carrying everything that must be settled BEFORE the pawn
 // moves: the frame order's own wiring, the one clock advance, and the player entity's own think.
 // Retail runs the whole player move out of the `clc_move` drain, ahead of `GameFrame`, with the
 // player's think inside it — so the clock has to be at this frame's `now` and the body has to be
@@ -99,11 +99,34 @@ struct TStructOpsTypeTraits<FElysiumPreMoveTickFunction> : public TStructOpsType
 	enum { WithCopy = false };
 };
 
-// S2 — the map's post-move tick (runtime-architecture.md §3, step 8). A third tick function on
+// S2 — GameFrame after every player/NPC movement tick (runtime-architecture.md §3, steps 5-6).
+// This cannot be AElysiumMapActor::PrimaryActorTick: CharacterMovement automatically depends on
+// the primary tick of the actor owning its floor, and the runtime world collision is map-owned.
+// A separate tick can depend on those movement ticks without forming the reverse edge.
+USTRUCT()
+struct FElysiumGameplayTickFunction : public FTickFunction
+{
+	GENERATED_USTRUCT_BODY()
+
+	AElysiumMapActor* Target = nullptr;
+
+	virtual void ExecuteTick(float DeltaTime, ELevelTick TickType, ENamedThreads::Type CurrentThread,
+		const FGraphEventRef& MyCompletionGraphEvent) override;
+	virtual FString DiagnosticMessage() override;
+	virtual FName DiagnosticContext(bool bDetailed) override;
+};
+
+template <>
+struct TStructOpsTypeTraits<FElysiumGameplayTickFunction> : public TStructOpsTypeTraitsBase2<FElysiumGameplayTickFunction>
+{
+	enum { WithCopy = false };
+};
+
+// S2 — the map's post-move tick (runtime-architecture.md §3, step 8). A fourth tick function on
 // the same actor, in TG_PostPhysics, carrying the work that must see the frame's FINAL positions:
 // the `+use` look cursor traces against where a door actually ended up this frame, not where it
-// was before its swept move and the pawn's. Three tick functions on one actor is the engine's own
-// answer to work that straddles physics — splitting into three actors would reintroduce the
+// was before its swept move and the pawn's. Four tick functions on one actor is the engine's own
+// answer to work that straddles physics — splitting into separate actors would reintroduce the
 // ordering question tick groups solve.
 USTRUCT()
 struct FElysiumPostMoveTickFunction : public FTickFunction
@@ -131,7 +154,7 @@ struct TStructOpsTypeTraits<FElysiumPostMoveTickFunction> : public TStructOpsTyp
 // BeginPlay builds the map.
 //
 // **What this actor is** is the map's ORCHESTRATOR and the substrate's engine side (11.2): it owns
-// the load order and the two frame passes, seats the player, holds the entity world / scheme manager
+// the load order and the ordered frame passes, seats the player, holds the entity world / scheme manager
 // / camera director, and implements three of the four FElysiumWorldServices interfaces so the
 // plain-C++ half below it never casts back up here. The fourth, IElysiumPresenter, is the
 // world-scoped UElysiumPresentationSubsystem (11.8), which this actor looks up and threads in.
@@ -171,10 +194,13 @@ public:
 	// retail puts it.
 	void PreMoveTick(float DeltaSeconds);
 
-	// S2 — the frame's gameplay pass (TG_PrePhysics, steps 5-6): the substrate think-first, then the
-	// audio/scheme pass. Runs after the pawn's move — retail moves the player out of the `clc_move`
-	// drain, strictly before `GameFrame` runs a single think or queued event (RE21).
+	// The native actor tick is the map-owned collision's movement-base barrier. It stays between the
+	// player move and NPC moves; GameFrame itself runs from GameplayTickFunction after both.
 	virtual void Tick(float DeltaSeconds) override;
+
+	// S2 — the frame's gameplay pass (TG_PrePhysics, steps 5-6): substrate think-first, then the
+	// audio/scheme pass, after every movement component has produced this frame's final feet/yaw.
+	void GameplayTick(float DeltaSeconds);
 
 	// S2 — the frame's post-move pass (TG_PostPhysics, step 8), driven by PostMoveTickFunction.
 	void PostMoveTick(float DeltaSeconds);
@@ -182,6 +208,10 @@ public:
 	// Steps 2-3's tick function. Public so a test can read the declared frame order off the class.
 	UPROPERTY()
 	FElysiumPreMoveTickFunction PreMoveTickFunction;
+
+	// Steps 5-6's tick function. Public so a test can read the declared frame order off the class.
+	UPROPERTY()
+	FElysiumGameplayTickFunction GameplayTickFunction;
 
 	// Step 8's tick function. Public so a test can read the declared frame order off the class.
 	UPROPERTY()
@@ -245,6 +275,9 @@ public:
 		bool bLoop, float* OutSeconds) override;
 	virtual bool SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds) override;
 	virtual void StopCinematicClip(USkeletalMeshComponent* Body) override;
+	virtual int32 SetFlexControllers(USkeletalMeshComponent* Body,
+		TArrayView<const FElysiumFlexWrite> Writes, TArray<FString>* OutMissing) override;
+	virtual bool SetMouthOpen(USkeletalMeshComponent* Body, float Open) override;
 	virtual FString AnimatedPropStemForModel(const FString& ModelPath) const override;
 	virtual USkeletalMeshComponent* BuildAnimatedPropVisual(const FString& Stem,
 		const FVector& Location, const FQuat& Rotation, float UniformScale) override;
@@ -402,14 +435,14 @@ private:
 	// info_player_start and a landmark offset. Run right after ResolveLandmarkSpawn.
 	void ResolveRestorePlacement();
 
-	// S2 — declare the frame order rather than observe it. Two edges are wired here, both of them
-	// late-binding: the pre-move pass runs after the player controller's input sample (step 1), and
-	// the gameplay pass runs after the pawn's movement component (step 4), so this frame's thinks
-	// and queued events see where the pawn actually ended up. Each end appears later than BeginPlay
+	// S2 — declare the frame order rather than observe it. Three edges are wired here, all of them
+	// late-binding: pre-move follows the player controller's input sample (step 1), player movement
+	// follows pre-move (step 4), and the map-floor barrier follows player movement so this frame's
+	// gameplay pass ultimately sees where the pawn actually ended up. Each end appears after BeginPlay
 	// (no controller yet on a fresh world, no pawn at all on the menu backdrop), so this re-checks
-	// each pre-move tick until both are bound, and rebinds if the pawn is replaced. The third edge —
-	// pre-move before gameplay before post-move — is wired once at registration, because those three
-	// always exist and must hold on a map that never seats a pawn.
+	// each pre-move tick until all are bound, and rebinds if the pawn is replaced. The unconditional
+	// pre-move -> floor barrier -> gameplay -> post-move chain is wired once at registration because
+	// those functions always exist and must hold on a map that never seats a pawn.
 	void EnsureTickPrerequisites();
 	TWeakObjectPtr<class APlayerController> PrereqController;
 	TWeakObjectPtr<class UPawnMovementComponent> PrereqMovement;

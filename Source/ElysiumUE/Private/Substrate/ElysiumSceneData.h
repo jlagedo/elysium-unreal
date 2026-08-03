@@ -84,7 +84,9 @@ struct FElysiumSceneEvent
 	int32 ActorIndex = INDEX_NONE;
 	int32 ChannelIndex = INDEX_NONE;
 
-	// The ramp sampled at scene-relative time T, piecewise-linear and clamped at both ends.
+	// The ramp sampled at **event-relative** seconds, piecewise-linear and clamped at both ends. The
+	// times are authored inside the event's own span, not on the scene clock: across the 1,393 ramped
+	// expression events 1,153 fit only the event-relative reading and none fits the absolute one.
 	// An event with no authored ramp is at full intensity, so this returns 1.
 	float RampAt(float T) const;
 };

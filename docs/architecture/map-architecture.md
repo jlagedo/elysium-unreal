@@ -106,17 +106,19 @@ player body and final placement are mutually ready. Readiness is therefore an ex
 - `UElysiumMapCollision` reports `Ready` for every required procedural component. `Disabled` is an
   intentional satisfied state for `elysium.BrushCollision 0`; `Cooking` waits; missing input or a
   failed Chaos cook reports `Failed`.
-- gameplay maps generate Recast nav data over the completed runtime-collision bounds. A missing
-  navigation system, invalid bounds, or a failed/incomplete build is a required-prerequisite
+- gameplay maps generate Recast nav data over the completed runtime-collision bounds. The hull
+  component has no render sections, so it carries bounds computed from the parsed `.hulls` point
+  clouds and refreshes its completed BodySetup into the navigation octree after async cooking. A
+  missing navigation system, invalid bounds, or a failed/incomplete build is a required-prerequisite
   failure; menu backdrops and the explicit collision-disabled A/B do not require navigation.
 
 The readiness poll uses wall-clock time because the game clock does not advance before activation.
 After eight seconds it fails closed with the missing prerequisite; it never releases a pawn into an
-incomplete world. The two lifecycle-bearing pre-physics ticks may poll through an inherited engine
+incomplete world. The three lifecycle-bearing pre-physics ticks may poll through an inherited engine
 pause, but every gameplay branch remains phase-gated.
 
-Activation is one game-thread transaction at the unchanged game time: release native NPC character
-movement against the completed Recast graph, activate the entity world,
+Activation is one game-thread transaction at the unchanged game time: admit native NPC bodies
+against the completed Recast graph while leaving idle movement components asleep, activate the entity world,
 refresh the finally placed pawn's overlaps, reconcile current brush containment, run the initial
 player-think/entity-think/event-queue pass, start initial audio scheduling, mark `Active`, release
 movement, then publish `MapReady`. Early overlap callbacks are discarded while dormant, so the
@@ -132,12 +134,16 @@ game thread is never held in `WaitForMovieToFinish` while readiness ticks.
 ## Native NPC navigation
 
 The baked level deliberately carries no editor-authored NavMesh. After `.hulls` and `.dispcol`
-finish cooking, the map actor creates one transient `ANavMeshBoundsVolume` covering their combined
-bounds and requests a dynamic Recast build. Each mobile entity's visible runtime glTF component is
-attached to an `AElysiumNpcBody`: an Unreal `ACharacter` with `CharacterMovement`, a character
+finish cooking, the map actor refreshes both completed BodySetups into the navigation octree,
+creates one transient `ANavMeshBoundsVolume` covering their combined bounds, and requests a dynamic
+Recast build. Convex-only brush collision derives those bounds from its sidecar vertices because a
+collision-only `UProceduralMeshComponent` has no render bounds. Each mobile entity's visible runtime
+glTF component is attached to an `AElysiumNpcBody`: an Unreal `ACharacter` with `CharacterMovement`, a character
 capsule and `ADetourCrowdAIController`. Agents exist while the entity world is constructed but stay
 movement-disabled until the activation barrier, so they cannot fall through uncooked collision or
-request paths from a partial graph.
+request paths from a partial graph. Crossing the barrier enables the body's collision and visibility,
+not a permanent movement tick: `CharacterMovement` and the lazily created crowd controller wake on
+the first accepted request and the movement component sleeps again on stop, arrival or failure.
 
 Path selection is still authored game logic. `FElysiumNpc` resolves the original named patrol
 points, place groups, capacities, dwell times, activities, enable state and I/O outputs; the native

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "ElysiumEntity.h"   // FElysiumFlexWrite (passed by view)
 #include "ElysiumEntityBodies.generated.h"
 
 class UAnimSequence;
@@ -60,6 +61,16 @@ public:
 		const FString& ClipName, bool bLoop, float* OutSeconds);
 	bool SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds);
 	void StopCinematicClip(USkeletalMeshComponent* Body);
+
+	// 12.3 — write named flex controllers on a body's facial rig. INDEX_NONE when the body has no
+	// Elysium animation host or no rig on it; otherwise the number of writes that landed, with the
+	// names the rig does not carry appended to OutMissing.
+	int32 SetFlexControllers(USkeletalMeshComponent* Body, TArrayView<const FElysiumFlexWrite> Writes,
+		TArray<FString>* OutMissing);
+
+	// 12.5 — the amplitude jaw. False on a body with no animation host, no rig, or a rig carrying no
+	// `mstudiomouth_t` record.
+	bool SetMouthOpen(USkeletalMeshComponent* Body, float Open);
 
 	bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		bool bLoop, float* OutSeconds);

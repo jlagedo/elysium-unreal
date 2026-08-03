@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumEntity.h"   // FElysiumFlexWrite (passed by view)
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimInstanceProxy.h"
 #include "Animation/AnimNode_SequencePlayer.h"
@@ -151,8 +152,24 @@ public:
 	// controller. 12.1's scene expression tracks and 12.5's lipsync both land here.
 	bool SetFlexController(const FString& Name, float Value);
 	bool SetFlexControllerByIndex(int32 Index, float Value);
-	// Back to rest — every controller at zero, every morph target off.
+	// A whole set of named writes, evaluated once rather than once per controller — an expression row
+	// touches up to 44 of them at a time. Purely additive: a controller the set does not name keeps
+	// its value. Returns the number that landed, INDEX_NONE when there is no rig here; names this rig
+	// does not carry are appended to OutMissing rather than dropped.
+	int32 SetFlexControllers(TArrayView<const FElysiumFlexWrite> Writes, TArray<FString>* OutMissing = nullptr);
+	// Back to rest — every controller at zero, the jaw closed, every morph target off.
 	void ResetFlexControllers();
+
+	// --- the amplitude jaw (roadmap 12.5) ----------------------------------------------------
+	//
+	// The face's second input, and deliberately not a controller: `mstudiomouth_t` names a FLEXDESC,
+	// so this write lands *downstream* of the rule layer that every controller feeds. 0 is a closed
+	// mouth and 1 the line's own peak. False when this body carries no rig or no mouth record — the
+	// majority of the cast — which is an ordinary no-op. Precedence against the rules, and why the
+	// value alone moves nothing on the shipped models: `Visual/ElysiumFacialRig.h`.
+	bool SetMouthOpen(float Open);
+	float GetMouthOpen() const { return MouthOpen; }
+	bool HasMouth() const;
 
 	// Read-back for the debug surface: the normalized controller inputs, the flexdesc weights the
 	// rules produced from them, and the ramped weight each morph target is driven at.
@@ -173,6 +190,7 @@ private:
 
 	TSharedPtr<const FElysiumFacialRig> FacialRig;
 	TSharedPtr<const FElysiumCompositionRig> CompositionRig;
+	float MouthOpen = 0.f;
 	TArray<float> ControllerValues;
 	TArray<float> FlexWeights;
 	TArray<float> MorphWeights;

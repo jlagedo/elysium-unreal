@@ -99,28 +99,41 @@ listed in the order work can start rather than in phase order.
 |---:|---|---|---|
 | 1 | The two closed composition rules reach the runtime — a rule table out of the exporter, two skeletal controls in retail's own order | CAP7.1, CAP7.2 | **done**; visual isolation still owed |
 | 2 | The shipped clip decoder is differenced against retail for the first time | CAP4.3 | **done — the decoder is clean**; what surrounds it is not |
-| 3 | **Cutscene actors are posed from the wrong biped.** A cinematic bank is one skeleton holding several complete actors; plain name matching gives an actor another's chain | CAP5.7 | open, and the largest single defect on this list |
+| 3 | The difference instrument models what the export actually writes on multi-biped banks | CAP5.7 | **done**; the shipped path carries no correspondence error at all |
 | 4 | The face is built from its closed specification — flex rig, eyelids, lip sync | `docs/project/roadmap.md` 12.3–12.5 | 12.3 done pending a clean visual; 12.4 and 12.5 open |
-| 5 | Blend grids and the animation weight are carried out of the model | CAP5.3, then CAP7.3 | open |
-| 6 | Frame interpolation and the include-model remap route | CAP5.8 | open; named with counts by CAP4.3 |
+| 5 | Blend grids and the animation weight are carried out of the model | CAP5.3, then CAP7.3 | CAP5.3 **done** — byte-coverage missing list empty; CAP7.3 open |
+| 6 | The include-model remap route | CAP5.8 | **done**; 6,927 → 2,452, and it needed no capture |
+| 6b | Frame interpolation — is the host loader's LINEAR what retail does | CAP5.10 | open |
 | 7 | Secondary motion — cloth and hair | CAP5.5 | **the mechanism is located**; the clamp is proved, the solve it clamps is not |
 | 8 | The persistent partial update is adjudicated | CAP5.4 | open; the replay that measures it exists |
 | 9 | **The cast has living eyes** — an owner-called addition, since no model authors eyeball data | `docs/project/roadmap.md` 12.4 | open; the lid half sits on row 4's flex runtime |
 | 10 | A visual-acceptance harness that actually isolates one body | `pipeline/` green-room path | open; **now blocking rows 1 and 4** |
 
-**Row 3 is the correction to the earlier ordering.** Nothing on the list is blocked by
-anything else on it except row 5 feeding CAP7.3, row 9's lids sitting on row 4, and rows 1
-and 4 both waiting on row 10 to *demonstrate* what their numbers already establish. But row 3
-was invisible until CAP4.3 measured it, and it outranks most of what was on the list before:
-an actor wearing another actor's chain is 491 source units and 119° wrong, against a
-`bone_name` candidate sitting at 130,651 records over the band. Faces and procedural bones do
-not read correctly on a body posed from the wrong skeleton.
+Nothing on the list is blocked by anything else on it except row 5 feeding CAP7.3, row 9's
+lids sitting on row 4, and rows 1 and 4 both waiting on row 10 to *demonstrate* what their
+numbers already establish.
 
-**Row 9 is a deliberate divergence, and no capture can close it.** RE20 measured
-`NumEyeballs == 0` on all 4,444 models, so VtMB authors no eye pose, look-at, iris or glint
-data anywhere — eyes in the shipped rig are eyelids and painted head texture. The owner call
-is that the cast has living eyes regardless, which makes it an invention under
-`docs/project/remaster-direction.md`'s Feel layer rather than a reproduction. It is on the
+**Row 3 is a measurement defect, and the distinction cost a round of work.** CAP4.3's
+`bone_name` candidate — plain name matching, 130,651 records over the band — was read as the
+shipped export path, which made cutscene actors look catastrophically mis-posed. They are
+not. The biped family is not a property of the clip at all: a cinematic bank's sequence
+animates *every* actor in the scene, so no per-sequence field could carry it, and the witnessed
+masks confirm it — `Courtroom_bip3.mdl` sequence 0 is witnessed under four families at once.
+The family is a property of the **actor binding**, carried by the choreo scene's per-actor
+`bonerename "BipNN" "Bip01"` (`docs/vtmb/choreographed_scenes.md`), and both halves already
+ship: the export splits each cinematic model into one bank per `BipNN` root with the prefix
+folded back, and the runtime resolves it through the scene actor's own rename pair. Joined
+against the capture, that rule agrees with **180,812** witnessed contributions and disagrees
+with **0**, and modelling it in the instrument reproduces the `complete` candidate band for
+band. The export carries no correspondence error; the instrument did.
+
+**Row 9 is narrower than it was written.** The eyes themselves are authored and ship — 400
+`eyeball_l/r.vmt` over 199 character directories on a dedicated `Eyes` shader with a
+per-character iris — so reproducing them is not in question. What no model carries is the
+**orientation** record: `NumEyeballs == 0` on all 4,444, and no eye bone on 486 of 489
+character models. Whether retail aims the iris by some other route is unestablished, so the
+owner call that the cast's eyes move may resolve to a reproduction rather than an invention
+under `docs/project/remaster-direction.md`'s Feel layer. It is on the
 critical path because the theatre is shot in close-up and the fidelity bar for the act is an
 owner call that names eyes explicitly. The faithful baseline and the divergence beside it are
 `docs/vtmb/facial_animation.md`. The eyelid *bridge* is a second, smaller case of the same
@@ -241,7 +254,7 @@ and over, so **42%** of one run's payload bytes repeat bytes it already holds.
 | 2 | P2 — deferred | CAP2 — complete the capture | Contributions group, actors and skeletons are identified, every fired contribution names its source owner, indices, and consumed byte spans, and each pose group names the request that caused it. CAP2.1–CAP2.7 landed; only the two off-path tasks below remain |
 | 3 | P0 — done | CAP3 — decode and index | One deduplicated, joinable database answers per-actor and per-time questions without re-running the game, and reports its own counts |
 | 4 | P0 — CAP4.1–4.3 done | CAP4 — inspect against export and decoder | Byte ranges the runtime reads that we do not, and the first mismatching stage and bone per pose group. The shipped decoder reproduces the corpus; CAP4.4's consolidation is what remains |
-| 5 | P0 — current | CAP5 — close what the difference proves | Recovered rules and carried byte ranges, each with a regression and a fact in the owning topic. CAP5.7 is the ranking item: cutscene actors pose from the wrong biped |
+| 5 | P0 — current | CAP5 — close what the difference proves | Recovered rules and carried byte ranges, each with a regression and a fact in the owning topic. The decode stage's residual is down to **2,452**, and CAP5.3's blend grids are the ranking item — the largest remaining group is a walk grid whose cells the export never wrote |
 | 6 | P0 — current, beside CAP5 | CAP7 — deliver the animation in Unreal | `sp_theatre` animates under the two closed composition rules. CAP7.1 and CAP7.2 are done; blend spaces, the equivalence oracle and acceptance remain |
 | 7 | P1 — build-first | CAP6 — face and lips | The built face is captured against retail only where it diverges |
 | 8 | P2 | CAP8 — trim | Unused probes, readers and fixtures are deleted |
@@ -643,7 +656,10 @@ calling convention into the case specification before a hook is written.
 
   **Two engine facts close on the way.** The selected-bone mask reaches the cell unchanged
   through the include-model dispatcher — 463,396 cells across both runs, no exceptions —
-  which `dispatch_model_pose`'s partial confidence left open. And a cell whose mask selects
+  which `dispatch_model_pose`'s partial confidence left open. CAP5.8 later downgrades that
+  from structural to measured: the dispatcher **rebuilds** the mask in the include model's
+  index space, so the equality is a property of the rigs this corpus fires rather than of the
+  dispatch (`docs/vtmb/animation_and_movers.md`). And a cell whose mask selects
   no bone dereferences exactly sixteen bytes and decodes nothing: **10,311** in each run.
   A third run since records **10,353**, so the behaviour is authored and the count is a
   sample — two runs agreeing exactly is what a narrow corpus looks like.
@@ -1184,14 +1200,17 @@ This phase is the point of the program. It runs entirely offline against the dat
   | complete — family correspondence + frame interpolation + cell blend | 6,927 | the shared-bank position transform |
   | `include_remap` — plus the include group's position transform | 72,523 | applied where it does not belong |
   | `frame_key` — complete, no frame interpolation | 50,538 | only **15,336 of 242,561** cells fire at a whole frame |
-  | `bone_name` — plain name matching, **the shipped path** | 130,651 | what the export costs today |
+  | `cinematic_split` — **the shipped path** | 6,927 | identical to `complete`, band for band |
+  | `bone_name` — plain name matching, a counterfactual | 130,651 | what binding by name *would* cost |
 
-  **The biped family has to come off the owner's own mask, and it is the single largest thing
-  the export lacks.** A cinematic bank is one skeleton holding several complete actors —
-  `Courtroom_bip3.mdl` carries 288 bones over `Bip01`/`Bip02`/`Bip03` chains — so plain name
-  matching hands the Sheriff `Bip01`'s pose when he is `Bip02`, **491 source units and 119°**
-  wrong. The contribution's selected-bone mask names exactly one family, so the correct chain
-  is witnessed rather than fitted. CAP5.7 owns it.
+  **The biped family separates the population, but `bone_name` is not the shipped path.** A
+  cinematic bank is one skeleton holding several complete actors — `Courtroom_bip3.mdl` carries
+  288 bones over four `BipNN` chains — so matching an actor's bones to it by plain name costs
+  **491 source units and 119°**, which is what the `bone_name` candidate's 130,651 measures.
+  The export does not take that route on these banks: it splits each cinematic model into one
+  bank per `BipNN` root and the runtime binds it through the scene actor's `bonerename` pair.
+  Reading that candidate as the export's cost is a mistake this entry made, and CAP5.7 now owns
+  correcting the instrument rather than the export.
 
   **The include-model remap is real, and it is a position transform.**
   `StudioModelGroup`+0x10's 56-byte record is a u16 source bone@0, a transform byte@3 and a
@@ -1272,7 +1291,7 @@ have had no rung to sit on since CAP4.1 named them.
   bones no clip animates and no model field declares. It is CAP5.5's third step and runs only
   if the two offline steps above it fail, because a hook costs a capture cycle and they do
   not.
-- [ ] **CAP5.3 The missing-data ranges, closed at the exporter.** CAP4.2 names five field
+- [x] **CAP5.3 The missing-data ranges, closed at the exporter.** CAP4.2 names five field
   ranges retail reads that nothing offline does, and CAP4.1 names the export shortfall they
   cause. Nothing mismatches here, so CAP5.1's shape does not apply: the work is to carry the
   bytes.
@@ -1292,8 +1311,35 @@ have had no rung to sit on since CAP4.1 named them.
   Cheap to add, and unvalidatable on this corpus — so it lands with a game-independent
   regression and a recorded statement that no captured record exercises it.
 
-  *Acceptance:* CAP4.2 re-runs with its missing list empty, and CAP4.1's ten unexported blend
-  cells each reach a clip.
+  **The missing list is empty.** 9,938 → **0 of 3,430,830** bytes retail dereferences that the
+  decoder does not read. The 2 bytes that remain retail-only are the quaternion look-ahead past
+  a track end, which CAP4.2 already reports apart from the missing list by design. CAP4.1's ten
+  cells reach a baked clip against a **regenerated** export, not an asserted one — 16 models
+  author 279 grids, the banks grow 679 → 723 MB, the male bank 602 → 826 clips and the female
+  564 → 780, and `verify_source_join` agrees independently: `blend_cell_not_exported` falls from
+  10 identities over 6,878 records to **0**, with 80 → 90 of 98 identities reaching a clip. The
+  8 that remain are CAP4.1's scenery and viewmodel owners, which no entity list or clandoc body
+  seeds.
+
+  **The blend-cell address in `StudioSeqDesc` was transposed, in the resolver and in the doc.**
+  Axis 0 takes the fixed 16-`short` row stride: `anim[i0][i1]`. Retail's own records settle it —
+  the correct address reproduces the fired set on **8,302 of 8,302** multi-blend contributions
+  across the theatre and tutorial captures, while the transposed one reproduces 1,858 and misses
+  6,444. A 9×1 grid cannot distinguish them, which is why it survived; a 3×3 names six of nine
+  cells wrongly. `docs/vtmb/animation_and_movers.md` A.3 is corrected and the span dictionary
+  re-derived over 481,683 contributions with 0 faults and an unchanged byte total.
+
+  **The weight-zero branch ships unvalidated against retail, by construction.** `read_anim`
+  reads `weight`@0 and on zero writes an exact zero position and quaternion and skips the
+  record. All 2,254 decoded triples in the corpus carry 1.0, so the branch is transcribed from
+  the decompiled decoder and exercised only by a synthetic fixture; that statement lives in the
+  code and its test rather than only here.
+
+  **CAP5.3 did not move the transform residual, and could not have.** The shipped-path figure is
+  **2,452, unchanged**, because `verify_transform_difference` decodes at the witnessed animation
+  index and never routes through `local_sequences` — the exporter's base-cell baking was never
+  in that path. This is the second, independent refutation of the blend-cell hypothesis CAP5.9
+  carried.
 - [ ] **CAP5.4 Adjudicate the persistent partial update.** `docs/vtmb/procedural_bones.md`
   records the behaviour and leaves the rebuild call open. Retail's bone-to-world array is
   persistent and each build refreshes only the bones a mask selects, so a drawn skeleton is
@@ -1365,31 +1411,122 @@ have had no rung to sit on since CAP4.1 named them.
   clamp over an undecoded solve. **Reproducing the clamp alone is worth measuring first** —
   the corpus sits at the ceiling on most frames, so a limit-only implementation may be visually
   indistinguishable for the theatre without the solve ever being decoded.
-- [ ] **CAP5.7 Biped family correspondence.** CAP4.3's largest finding and the largest defect
-  in the shipped export. A cinematic bank is one skeleton holding several complete actors, so
-  matching an actor's bones to a bank's by name gives an actor another actor's chain — 491
-  source units and 119° wrong, with the `bone_name` candidate at 130,651 records over the
-  band. The contribution's selected-bone mask names exactly one family, so the correct chain is
-  witnessed at runtime rather than inferred, and the export has to carry that correspondence
-  rather than resolve it by name.
+- [x] **CAP5.7 Make the shipped-path candidate model the shipped path.** The difference
+  instrument's `bone_name` candidate is documented as what the exporter bakes and the loader
+  resolves, but it models the single-bank exporter only. On a multi-biped cinematic owner the
+  export takes a different route entirely — one bank per `BipNN` root, bound through the scene
+  actor's `bonerename` — so the candidate's 130,651 records over the band measure a path
+  nothing takes, and reading it as the export's cost led this tracker to name a defect that
+  does not exist.
 
-  This is why it outranks most of the list: every other animation stage is evaluated on top of
-  the pose this one selects, so a face, a procedural correction and a secondary-motion clamp
-  are all applied to the wrong skeleton until it is fixed. *Acceptance:* a theatre cutscene
-  actor poses from its own biped chain, and the `bone_name` candidate's 130,651 collapses.
-- [ ] **CAP5.8 Frame interpolation and the include-remap route.** Two clip-path corrections
-  CAP4.3 named with counts.
+  **The family is settled and needs no recovery work.** It is not derivable from the `.mdl`
+  and no field in it could carry it: a cinematic sequence animates every actor in the scene, so
+  the animated-bone family count per sequence is 2–5 and never 1 across all 85 multi-family
+  models, and 12 of 45 witnessed `(owner, sequence)` keys carry more than one family. Grouped
+  by `(owner, entity)` instead, 84 keys mix no families at all. The carrier is the `.vcd`'s
+  per-actor `bonerename` (`docs/vtmb/choreographed_scenes.md`), which joins to the capture at
+  **180,812 agreeing and 0 disagreeing** contributions.
 
-  **Frame interpolation is not optional.** Only **15,336 of 242,561** cells fire at a whole
-  frame, and the export currently defers interpolation to the host loader; the `frame_key`
-  candidate sits at 50,538 over the band.
+  Three pieces of work, in order:
 
-  **The include-remap route is genuinely ambiguous and needs evidence the capture does not
-  hold.** Applying the include group's position transform closes `doppleganger←misc` and
-  `Isaac←stances` completely and breaks the cinematic banks; not applying it does the reverse.
-  The group's virtual sequence range is a runtime field no image carries, so which route ran is
-  unwitnessed. This is the CAP5.2 case: the smallest hook that records the dispatcher's own
-  choice settles it, and nothing offline will.
+  1. Teach the shipped-path candidate the cinematic split, so its figure measures what ships
+     and is comparable against the `complete` candidate's 6,927.
+  2. Close the one real divergence the split carries: it drops every owner bone whose head is
+     not `BipNN`, where the family rule keeps matching those by plain name. Small, and
+     measurable before it is changed.
+  3. A regression over the existing split, on a synthetic multi-biped fixture.
+
+  **The shipped path carries no correspondence error at all.** The `cinematic_split` candidate
+  reproduces `complete` **band for band** — `{excellent 222,174, investigate 992, definite
+  5,935}` on both — with `cinematic_root_unresolved` and `owner_family_ambiguous` at zero over
+  all 30 `(entity, bank)` pairs. `bone_name` reproduces its old 130,651 exactly, which is the
+  self-check that the pass added a candidate rather than moving the baseline underneath the
+  earlier numbers.
+
+  **The dropped non-BipNN bones are measured and deliberately left alone.** 191 of them do carry
+  animated channels, so they are not inert in the bank — but only 18 of their 115 names exist on
+  any of the install's 485 character skeletons, all 18 come from `creation1_scripted.mdl`,
+  `creation1_scripted_both.mdl` and `kiki_carried.mdl`, and no `logic_choreographed_scene` in any
+  exported map names those three, so `export_cinematic` never runs on them. Over all 30 fired
+  pairs the split reaches exactly the bones the family rule does. The behaviour is pinned by a
+  regression rather than changed.
+
+  One bound travels with the candidate: it takes the root from the **owner's witnessed mask**
+  rather than from the scene, because the database holds no pose-build to scene-actor join. The
+  two agree on 180,812 of 180,812 contributions the scene bindings reach, and the equivalence is
+  stated in the candidate's own declaration — but it makes this one candidate capture-bound in a
+  way the others are not.
+- [x] **CAP5.8 The include-remap route.** Two offline models each closed the other's population
+  and broke it — applying the include group's position transform took `doppleganger←misc` from
+  1,830 to 0 and the cinematic banks from 1,061 to 70,963; not applying it did the reverse.
+
+  **The answer is neither, globally: the route decides, and each candidate was right on exactly
+  the population the route assigns it.**
+
+  | Over the band | `complete` | `include_remap` | `include_route` |
+  |---|---:|---:|---:|
+  | shared bank, reached through the include tree | 5,801 | 1,326 | 1,326 |
+  | cinematic bank, posed on directly | 1,039 | 70,963 | 1,039 |
+  | the model's own sequences, local path | 87 | 234 | 87 |
+  | **total** | 6,927 | 72,523 | **2,452** |
+
+  **6,927 → 2,452, 64.6% of the shipped path's residual closed**, with both prior candidates
+  reproducing exactly so the baseline did not move underneath. 2,452 is also the figure CAP4.3
+  reached by hand-picking the rule per population; one rule now mechanizes it.
+
+  **It needed no capture cycle, and the reason is method rather than luck.** "Which route ran is
+  unwitnessed" was true of the *decision* and irrelevant: at a bone whose remap matrix moves the
+  position beyond the band, the two routes land in different places, so retail's own captured
+  `BASE` position discriminates them. Our decode supplies only the source position, so neither
+  side is produced by the code that produces the other — CAP2.5's split with retail as the
+  witness. **788,799 `(record, bone)` observations, every one decided**: 74,797 transformed,
+  714,002 copied, 0 undecided, 0 matching neither, 0 disagreeing with the include graph.
+
+  The control is what makes it per-contribution rather than per-model: `Sheriff ← stances` reads
+  transformed over 6,572 observations while `Sheriff ← Embrace_bips2` reads copied over 44,172 —
+  same entity, same remap array, opposite verdicts.
+
+  `dispatch_model_pose` goes partial → confirmed, and the record layout, the include-group-only
+  reachability, the rebuilt mask and the latent hang in the chain-rebase branch are
+  `docs/vtmb/animation_and_movers.md` A.4b.
+
+  Three bounds travel with it. **The include graph is read from the installed `.mdl` headers**,
+  the one input this pass takes from outside the database, stated in the tool and counted when
+  absent — the intermediate aggregators `npc_allsequences`, `npcsequences` and `allsequences` are
+  never an owner, so no hook holds their header and the census carries no image for them. Chains
+  run 3–5 deep and **level-1-only application reproduces retail on 74,797 of 74,797**, so the
+  intermediate arrays are measurably immaterial rather than proved inert. And evidence-gate
+  point 5 is met by independent byte comparison rather than by a repeat; the cheapest closure is
+  indexing the `sp_tutorial_1` acquisition — copied out under a `golden_` name and digest-verified
+  first, per CAP3's working-copy rule, never mutating the acquisition.
+- [ ] **CAP5.10 Frame interpolation.** Only **15,336 of 242,561** cells fire at a whole frame, so
+  what happens between keys is most of the corpus. The export defers interpolation to the host
+  loader, and the `frame_key` candidate — complete, with interpolation removed — sits at 50,538
+  over the band, which measures how much the deferral is carrying rather than how well it does
+  it. What is open is whether the host's LINEAR interpolation is what retail does.
+- [ ] **CAP5.9 The `Prince_Escort_Male` cluster.** The 1,061 records the include transform does
+  *not* explain, concentrated hard: **693 of them — 65% — sit on one two-actor cinematic bank**,
+  split 351 on `brujah_Male_Armor_0` and 342 on `Lacroix`, with every other cinematic owner a
+  tail of 14 records or fewer. A two-actor bank holding two thirds of a residual is a shape
+  rather than noise, and it is not CAP5.8's: applying the include transform takes this population
+  the wrong way.
+
+  Undiagnosed and named rather than attributed. **CAP5.8's route evidence does not explain it**
+  — the cinematic total is 1,039 under both `complete` and `include_route`, so this population
+  survives the correction that closed two thirds of everything else.
+
+  It is no longer the largest remaining group. **`move_and_ranged` at 1,318 across five entities
+  is**, and it is **not** the blend-grid gap — that hypothesis is refuted twice over. All **3,107**
+  `move_and_ranged` records sit on non-`[0][0]` cells, the 1,789 excellent ones as well as the
+  1,318 residual, so the cell does not discriminate; and CAP5.3 closing the export shortfall
+  moved the figure by zero, because the difference tool decodes at the witnessed animation index
+  and never routes through `local_sequences`.
+
+  **The shape that does discriminate is the entity, not the bank.** The residual fraction runs
+  26% for Isaac against 47% for Skelter and 41% for Nines — all three on the *same* male grid,
+  all on the 3→4 cell pair — while Therese and VV sit at 46–48% on the female grid. Same bank,
+  same cells, different rates per actor. Whatever this is, it is carried by the actor rather than
+  by the clip, which is where CAP5.9 should start.
 - [ ] **CAP5.6 Theatre-corpus closure.** The engine-neutral evaluator matches the joined
   theatre corpus within the recorded bands, including layered, transition, and
   included-model cases the run exercised. Unknown fields stay preserved and explicitly

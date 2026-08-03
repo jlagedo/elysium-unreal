@@ -78,7 +78,9 @@ struct FElysiumFlexMorph
 };
 
 // The amplitude-driven jaw: one per rigged character, pointing at the `mouth` flexdesc and the jaw
-// bone. Carried so 12.5 can drive it off the line's envelope; nothing reads it yet.
+// bone. `mstudiomouth_t`, read off the sidecar's `mouths` rather than assumed: across the 86
+// exported rigs the flexdesc is 16 on 85 (`female_raver_1`, whose whole rig is one flexdesc, is the
+// exception), `forward` is (0,-1,0) on every one, and the bone is 6 on 75 but also 7, 12 and 14.
 struct FElysiumFlexMouth
 {
 	int32 Bone = INDEX_NONE;
@@ -86,6 +88,18 @@ struct FElysiumFlexMouth
 	int32 FlexDesc = INDEX_NONE;
 
 	bool IsValid() const { return FlexDesc != INDEX_NONE; }
+};
+
+// What the amplitude jaw asks of a face on one evaluation: how open the mouth is, 0 at rest and 1 at
+// the line's own peak.
+struct FElysiumJawInput
+{
+	float Open = 0.f;
+	// Whether the reconstruction below runs. Off leaves the faithful write alone — which, on the
+	// shipped rigs, moves nothing.
+	bool bBridge = true;
+
+	bool IsOpen() const { return Open > 0.f; }
 };
 
 // A lid-value flexdesc — the eyelid hinge that no rule computes.
@@ -126,6 +140,28 @@ struct FElysiumFacialRig
 	TArray<FElysiumFlexLid> Lids;
 	FElysiumFlexMouth Mouth;
 
+	// The controller the jaw bridge writes, derived at load. INDEX_NONE on a rig that has none.
+	//
+	// **Faithful behaviour: writing the mouth flexdesc moves nothing.** `mstudiomouth_t` names a
+	// flexdesc, and on all 86 exported rigs that flexdesc carries **zero** flex records and is read
+	// by **zero** `FETCH2` op — while a rule *computes* it, on 85 of them, as a weighted sum of the
+	// jaw and lip action units (`AU27R x 0.5 + AU25R x 0.35 + AU12AU25 x 0.8 + …`). So `mouth` is a
+	// read-out of how open the face already is, not a driver of it, and Source's own `ControlMouth`
+	// write lands on a value with no consumer. Same shape as the eyelid bridge above: the rig was
+	// authored for a structure the shipped files do not contain.
+	//
+	// **The divergence, gated by `elysium.FacialJawBridge`:** the same weight is also raised into the
+	// `jaw_drop` flex controller, which the shipped rules turn into AU26/AU27 — the authored jaw-open
+	// morphs. 85 of the 86 rigs carry that controller and 84 of the 84 that deform anything carry an
+	// AU26/AU27 morph, so the reconstruction reaches the whole cast. Raised, not assigned: an
+	// expression that already opens the jaw wider keeps its value, because the jaw layer opens a
+	// mouth and never closes one.
+	//
+	// Evidence that would settle whether retail's jaw moves at all: capture the flexdesc weight
+	// `mstudiomouth_t` names across a spoken line on the retail build and see whether anything
+	// downstream of it ever leaves zero.
+	int32 MouthBridge = INDEX_NONE;
+
 	// Whether this rig can move a face. A sidecar can parse and still drive nothing: two exported
 	// models carry flex data with no flex record that deforms a mesh, so they have no morph targets
 	// to weight.
@@ -160,4 +196,26 @@ struct FElysiumFacialRig
 	// Both halves. Every controller at rest leaves every morph weight at exactly zero.
 	void Evaluate(TArrayView<const float> ControllerValues, TArray<float>& OutFlexWeights,
 		TArray<float>& OutMorphWeights) const;
+
+	// --- the amplitude jaw ---------------------------------------------------------------------
+	//
+	// The rig's second input, and the only one that is not a controller write. **Precedence is the
+	// whole point of the ordering below**: 85 of the 86 exported rigs carry a rule that computes the
+	// mouth flexdesc, so a jaw applied before the rules would be recomputed away on every single
+	// evaluation. Source resolves it the same way — `C_BaseFlex::SetupWeights` calls `ControlMouth`
+	// *after* `RunFlexRules` — so:
+	//
+	//   1. the bridge raises `MouthBridge`'s controller value (a rule input, so the rules see it);
+	//   2. the rules run in file order, then the lid combine;
+	//   3. the direct write lands on `Mouth.FlexDesc`, overwriting whatever step 2 left there — the
+	//      jaw always wins, and it wins on every frame rather than only on the frame it changed;
+	//   4. the target ramps turn flexdesc weights into morph weights.
+	//
+	// A rule that reads the mouth flexdesc through `FETCH2` therefore reads the *ruled* value, not
+	// the jaw — again as Source does, and moot on this corpus, where no shipped rule reads it.
+	void Evaluate(TArrayView<const float> ControllerValues, const FElysiumJawInput& Jaw,
+		TArray<float>& OutFlexWeights, TArray<float>& OutMorphWeights) const;
+
+	// Step 3 alone, exposed so the precedence is assertable without a mesh or an anim instance.
+	void ApplyJawToFlexWeights(const FElysiumJawInput& Jaw, TArray<float>& InOutFlexWeights) const;
 };

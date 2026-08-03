@@ -23,6 +23,81 @@
 #include "UObject/Package.h"
 #include "UObject/StrongObjectPtr.h"
 
+struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
+{
+	TArray<FString>* Calls = nullptr;
+	FVector Feet = FVector::ZeroVector;
+	FVector RequestedFeet = FVector::ZeroVector;
+	float Yaw = 0.0f;
+	float RequestedYaw = 0.0f;
+	bool bEnabled = true;
+	bool bMoving = false;
+	bool bFacing = false;
+	// A test drives arrival by flipping these: SampleStatus is what an in-flight move reports, and
+	// clearing bAcceptMoves is how "this mark has no path" is expressed.
+	bool bAcceptMoves = true;
+	EElysiumNpcMoveStatus SampleStatus = EElysiumNpcMoveStatus::Moving;
+
+	void Record(const FString& Call) const
+	{
+		if (Calls)
+		{
+			Calls->Add(Call);
+		}
+	}
+
+	virtual bool MoveTo(const FVector& FeetDestination, float AcceptanceRadiusCm,
+		float SpeedCmPerSecond) override
+	{
+		RequestedFeet = FeetDestination;
+		bMoving = bEnabled && bAcceptMoves;
+		bFacing = false;
+		Record(FString::Printf(TEXT("NpcMotor MoveTo %s radius=%.1f speed=%.1f"),
+			*FeetDestination.ToString(), AcceptanceRadiusCm, SpeedCmPerSecond));
+		return bMoving;
+	}
+	virtual void Face(float YawDegrees) override
+	{
+		RequestedYaw = YawDegrees;
+		bFacing = bEnabled;
+		Record(FString::Printf(TEXT("NpcMotor Face yaw=%.1f"), YawDegrees));
+	}
+	virtual void Stop() override
+	{
+		bMoving = false;
+		bFacing = false;
+		Record(TEXT("NpcMotor Stop"));
+	}
+	virtual void Teleport(const FVector& FeetOrigin, float YawDegrees) override
+	{
+		bMoving = false;
+		bFacing = false;
+		Feet = FeetOrigin;
+		Yaw = YawDegrees;
+		Record(FString::Printf(TEXT("NpcMotor Teleport %s yaw=%.1f"), *Feet.ToString(), Yaw));
+	}
+	virtual void SetEnabled(bool bInEnabled) override
+	{
+		bEnabled = bInEnabled;
+		if (!bEnabled)
+		{
+			bMoving = false;
+			bFacing = false;
+		}
+		Record(FString::Printf(TEXT("NpcMotor SetEnabled %d"), bEnabled ? 1 : 0));
+	}
+	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) override
+	{
+		OutFeetOrigin = Feet;
+		OutYawDegrees = Yaw;
+		if (bMoving)
+		{
+			return SampleStatus;
+		}
+		return bFacing ? EElysiumNpcMoveStatus::Moving : EElysiumNpcMoveStatus::Idle;
+	}
+};
+
 struct FElysiumRecordingServices final
 	: public IElysiumEmbodiment
 	, public IElysiumAudio
@@ -70,6 +145,13 @@ struct FElysiumRecordingServices final
 	FElysiumEntityHandle UseCursorHit;
 	// Damage accumulated by DamagePlayer, so a trigger_hurt cadence is assertable as a number.
 	float DamageTaken = 0.f;
+	// Opt-in because most tests intentionally exercise the supported headless/no-motor path.
+	bool bProvideNpcMotor = false;
+	TArray<TUniquePtr<FElysiumRecordingNpcMotor>> NpcMotors;
+	FElysiumRecordingNpcMotor* LastNpcMotor() const
+	{
+		return NpcMotors.IsEmpty() ? nullptr : NpcMotors.Last().Get();
+	}
 
 	// --- IElysiumEmbodiment ----------------------------------------------------------------
 	virtual float BodyScaleFor(const FElysiumEntityDef& Def) const override { return Def.bSky ? 16.f : 1.f; }
@@ -83,6 +165,26 @@ struct FElysiumRecordingServices final
 		// the leaf classes take their body-carrying path: they register it for teardown, gate it on
 		// dormancy, and route SetAnimation/SetDisposition through it.
 		return NewComponent<USkeletalMeshComponent>();
+	}
+	virtual IElysiumNpcMotor* BuildNpcMotor(USkeletalMeshComponent* Body,
+		const FVector& FeetOrigin, float YawDegrees) override
+	{
+		if (!bProvideNpcMotor || !Body)
+		{
+			return nullptr;
+		}
+		TUniquePtr<FElysiumRecordingNpcMotor> Motor = MakeUnique<FElysiumRecordingNpcMotor>();
+		Motor->Calls = &Calls;
+		Motor->Feet = FeetOrigin;
+		Motor->Yaw = YawDegrees;
+		FElysiumRecordingNpcMotor* Result = Motor.Get();
+		NpcMotors.Add(MoveTemp(Motor));
+		Record(FString::Printf(TEXT("BuildNpcMotor %s yaw=%.1f"), *FeetOrigin.ToString(), YawDegrees));
+		return Result;
+	}
+	virtual void DestroyNpcMotor(IElysiumNpcMotor*) override
+	{
+		Record(TEXT("DestroyNpcMotor"));
 	}
 	virtual bool RefreshNpcIdle(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& Disposition, int32 IdleVariant) override
@@ -118,6 +220,67 @@ struct FElysiumRecordingServices final
 		return Body != nullptr;
 	}
 	virtual void StopCinematicClip(USkeletalMeshComponent*) override { Record(TEXT("StopCinematicClip")); }
+
+	// The controller names this fake face carries, lowercased. Empty is the default and stands for a
+	// body with no facial rig — the majority of the exported cast, and the case every caller must
+	// treat as an ordinary no-op.
+	TSet<FString> FlexControllers;
+	// The last value written per controller, so a test reads a composed expression back by name
+	// instead of by morph weight.
+	TMap<FString, float> FlexPose;
+	float FlexValue(const FString& Name) const
+	{
+		const float* Found = FlexPose.Find(Name.ToLower());
+		return Found != nullptr ? *Found : 0.f;
+	}
+	virtual int32 SetFlexControllers(USkeletalMeshComponent* Body,
+		TArrayView<const FElysiumFlexWrite> Writes, TArray<FString>* OutMissing) override
+	{
+		if (Body == nullptr || FlexControllers.IsEmpty())
+		{
+			return INDEX_NONE;
+		}
+		int32 Applied = 0;
+		for (const FElysiumFlexWrite& Write : Writes)
+		{
+			const FString Key = Write.Name.ToLower();
+			if (!FlexControllers.Contains(Key))
+			{
+				if (OutMissing != nullptr)
+				{
+					OutMissing->AddUnique(Write.Name);
+				}
+				continue;
+			}
+			FlexPose.Add(Key, Write.Value);
+			++Applied;
+		}
+		Record(FString::Printf(TEXT("SetFlexControllers %d of %d"), Applied, Writes.Num()));
+		return Applied;
+	}
+
+	// Whether this fake face carries an `mstudiomouth_t`. 199 of the 201 rigged models do, so the
+	// default is yes — but only for a body that has a rig at all, which is what makes the unrigged
+	// half of the cast a clean no-op rather than a silent write.
+	bool bHasMouthRecord = true;
+	// Per body, because a jaw is the one facial write a multi-actor scene has to keep apart: the
+	// courtroom has seven of them and they do not speak at the same time.
+	TMap<const USkeletalMeshComponent*, float> MouthOpenByBody;
+	float MouthOpenOf(const FElysiumEntity* Entity) const
+	{
+		const USkeletalMeshComponent* Body = Entity ? Entity->GetSkeletalBody() : nullptr;
+		const float* Found = Body ? MouthOpenByBody.Find(Body) : nullptr;
+		return Found != nullptr ? *Found : 0.f;
+	}
+	virtual bool SetMouthOpen(USkeletalMeshComponent* Body, float Open) override
+	{
+		if (Body == nullptr || FlexControllers.IsEmpty() || !bHasMouthRecord)
+		{
+			return false;
+		}
+		MouthOpenByBody.Add(Body, Open);
+		return true;
+	}
 	// Test-controlled model path -> v4 animated-prop stem.
 	TMap<FString, FString> AnimatedPropModels;
 	virtual FString AnimatedPropStemForModel(const FString& ModelPath) const override

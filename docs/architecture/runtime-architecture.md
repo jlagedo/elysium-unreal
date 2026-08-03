@@ -100,31 +100,36 @@ than left to registration order (**S2**).
 | 2 | advance the clock | `AElysiumMapActor::PreMoveTick`, **first** tick function | **the only place `Now` moves** (§4); ahead of the move, because the move runs on this frame's `now` |
 | 3 | the player's own think | `FElysiumEntityWorld::RunPlayerThink(Now)` | retail runs it inside `RunCommand`, not in the think pass; admitted only after map activation |
 | 4 | **move the pawn** | `UElysiumMovementComponent::TickComponent` (`TG_PrePhysics`, prereq on the pre-move tick) | consumes the frame's `FElysiumUserCmd`, on **the command's** delta |
-| 4b | **move NPC agents** | native `UCharacterMovementComponent` ticks (`TG_PrePhysics`) | follows Recast/Detour requests issued by the prior entity think; the gameplay tick has a prerequisite on each live motor |
-| 5 | run due thinks | `FElysiumEntityWorld::RunThinks(Now)` | `GameFrame` begins here; movers issue their swept kinematic moves |
+| 4a | map-floor barrier | `AElysiumMapActor::PrimaryActorTick` (`TG_PrePhysics`) | carries no gameplay; Unreal makes characters standing on map-owned collision depend on this tick |
+| 4b | **move NPC agents** | active native `UCharacterMovementComponent` ticks (`TG_PrePhysics`) | only requested movers tick; they follow Recast/Detour requests issued by the prior entity think, and the separate gameplay tick has a prerequisite on each live motor |
+| 5 | run due thinks | `AElysiumMapActor::GameplayTick` → `FElysiumEntityWorld::RunThinks(Now)` | `GameFrame` begins here; movers issue their swept kinematic moves |
 | 6 | service the queue | `FElysiumEntityWorld::ServiceEvents(Now)` | delayed I/O, field-6 Python, `ScheduleTask`; the audio/scheme pass follows |
 | 7 | physics + overlaps | engine (`TG_DuringPhysics`) | Chaos overlap callbacks → `RouteBrushTouch` |
-| 8 | post-move gameplay | `AElysiumMapActor::PostMoveTick`, **third** tick function (`TG_PostPhysics`) | `+use` look-cursor trace, `Follow` camera shots |
+| 8 | post-move gameplay | `AElysiumMapActor::PostMoveTick`, **fourth** tick function (`TG_PostPhysics`) | `+use` look-cursor trace, `Follow` camera shots |
 | 9 | camera | `APawn::CalcCamera` via `APlayerCameraManager` | weight stack solved here (§9) |
 | 10 | publish | `UElysiumPresentationSubsystem` (`TG_PostUpdateWork`) | builds `FElysiumViewState`, fires discrete events |
 
 Three mechanisms hold the order, all stock UE 5.8:
 
-- `AElysiumMapActor` registers **three tick functions** — a `TG_PrePhysics` pre-move tick (2–3), the
-  `TG_PrePhysics` gameplay tick (5–6), and a `TG_PostPhysics` post-move tick (8). Three functions on
+- `AElysiumMapActor` registers **four tick functions** — a `TG_PrePhysics` pre-move tick (2–3), its
+  native primary tick as the map-floor barrier (4a), a separate `TG_PrePhysics` gameplay tick
+  (5–6), and a `TG_PostPhysics` post-move tick (8). Four functions on
   one actor is the engine's own answer to "some of my work must straddle the move and physics";
-  splitting into three actors would reintroduce the ordering question it solves.
+  splitting into separate actors would reintroduce the ordering question it solves.
 - Prerequisites, not groups, order the two `TG_PrePhysics` passes around the move: the pre-move tick
   takes one on the player controller, the movement component takes one on the pre-move tick, and the
   gameplay tick takes one on the movement component. **The gameplay tick also takes one on the
   pre-move tick unconditionally**, wired at registration — the menu backdrop and a headless logic
   world seat no pawn, so the movement edge never forms there and the clock would otherwise advance
-  in registration order relative to the thinks reading it. Every native NPC motor adds the same
-  move-before-gameplay prerequisite while it lives, so `FElysiumNpc::Think` samples this frame's
-  feet/yaw before advancing a route or issuing the next request.
-- Before map activation, the pre-move and gameplay tick functions have `bTickEvenWhenPaused = true`
+  in registration order relative to the floor barrier. Character movement automatically depends
+  on the primary tick of the actor owning its floor, so GameFrame cannot live on that primary tick:
+  every native NPC motor instead adds a prerequisite to the separate gameplay tick. That tick
+  samples this frame's feet/yaw before advancing a route or issuing the next request without
+  closing a movement-base cycle.
+- Before map activation, the pre-move, floor-barrier, and gameplay tick functions have
+  `bTickEvenWhenPaused = true`
   so an inherited dev hold cannot deadlock readiness; their gameplay branches are phase-gated.
-  Activation restores both to false. The post-move gameplay tick is always false, while the
+  Activation restores all three to false. The post-move gameplay tick is always false, while the
   presentation tick is **true**, so a paused world still draws a live HUD and a Cog window still
   updates (`docs/architecture/debug-tooling.md`).
 
@@ -327,7 +332,13 @@ An NPC's visible skeleton and native motor use that same outbound boundary. The 
 an engine-neutral `IElysiumNpcMotor`. The implementation is an `ACharacter` with Detour crowd path
 following; the interface exposes only move/stop/teleport/enable/sample. Recast, controllers and
 movement components therefore never enter the plain-C++ entity layer, while route/place ownership,
-I/O and serialization never enter Unreal AI state.
+I/O and serialization never enter Unreal AI state. Visibility and capsule collision remain enabled
+for a standing character. When an enabled body crosses the map-ready barrier, one uncached
+`FindFloor` plus `AdjustFloorHeight` pass settles its approximate authored feet origin against the
+live capsule collision, then its movement component remains inactive and its controller absent until
+the first request. Stop, arrival, failure and path-following loss all return the movement component
+to that sleeping state; abandoning an ambient place cancels its outstanding request before releasing
+the authored claim.
 
 Any member may be null, and every call site has to handle "no body" (`elysium.NpcBodies 0`,
 `elysium.BrushBodies 0`), so null-service is the existing A/B path formalised.

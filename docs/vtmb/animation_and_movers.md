@@ -178,9 +178,21 @@ The trailing region carries the blend space. Read from the runtime evaluator
 | 596 | float[2] | `paramend` | |
 | 660/664 | int | `numautolayers` / `autolayerindex` | four bytes per entry, each a sequence index the dispatcher evaluates recursively |
 
-A cell is `anim[i1][i0]` at `56 + (i1 * 16 + i0) * 2`: the row stride is a fixed 16
-`short`s regardless of `groupsize`, so the authored grid is a sub-rectangle of the
+A cell is `anim[i0][i1]` at `56 + (i0 * 16 + i1) * 2`: **axis 0 takes the row stride**, a
+fixed 16 `short`s regardless of `groupsize`, so the authored grid is a sub-rectangle of the
 inline 16×16 array.
+
+**The order is settled by retail's own records, not by inspection.** Reading each captured
+contribution's witnessed animation indices off its owner's grid, this address reproduces the
+fired set on **8,302 of 8,302** multi-blend contributions across the theatre and tutorial
+captures. The transposed address — `anim[i1][i0]`, which this document previously stated —
+reproduces **1,858**, exactly the cases where the two coincide, and misses **6,444**. A 9×1
+grid cannot tell them apart; a 3×3 names six of its nine cells wrongly.
+
+**The extents-disagree fallback never fires on shipped content.** `groupsize[0] * groupsize[1]
+== numblends` holds on **0 exceptions over 297 multi-blend grids across all 4,445 v2531 models**
+— 9×1 (235), 3×3 (49), 2×1 (9), 5×1 (4) — so a reader's disagreement branch is defensive rather
+than a path that silently drops cells.
 
 `groupsize[0] * groupsize[1] == numblends`@52 holds for **294 of 294** multi-blend
 sequences across the installed character tree, which is what establishes these as the
@@ -600,6 +612,13 @@ with no cell decoding a bone its mask does not select, over 34 and 35 owner iden
 of which 17 and 18 are banks no actor animates under. For this corpus the mask is
 therefore the same object at both ends of the dispatch.
 
+**That is a measurement, not a structural property.** `FUN_1008e370` **rebuilds** the mask in
+the include model's own index space before handing it down, so the two ends agreeing is a fact
+about the rigs this corpus fires rather than about the dispatcher. A model whose include
+mapping permutes bone indices differently would break the equality without breaking the
+engine. Read the counts above as coverage, and do not carry the claim to a rig this corpus
+does not reach.
+
 **A cell whose mask selects no bone still reads sixteen bytes.** `FUN_10089b20` reads
 `NumBones`@240 and `BoneIndex`@244 from the header and `numframes`@12 and `animindex`@48
 from the descriptor before it examines the mask, then walks the bones calling nothing.
@@ -615,9 +634,34 @@ and a 3×4 matrix at record `+0x0c`. A clear byte copies the source position; a 
 byte applies `TransformPoint(sourcePosition, mappingMatrix)` through
 `FUN_10107f80`. The source quaternion is copied verbatim to the target in both
 cases. Thus this outer virtual-model remap changes position frame when authored
-but does not transform local rotation. Nested include records inside
-`FUN_10089c40` have a second, more complex remap branch whose complete record
-semantics remain open.
+but does not transform local rotation.
+
+**The 56-byte group remap record, read from its consumer:**
+
+| Off | Type | Field |
+|---|---|---|
+| +0x00 | short | source bone — **negative means write the including model's own bind pose** |
+| +0x02 | byte | branch selector |
+| +0x03 | byte | position transform — clear copies, set `TransformPoint`s |
+| +0x04 | short | chain short A |
+| +0x06 | short | chain short B |
+| +0x08 | matrix3x4 | the mapping matrix |
+
+This corrects two earlier readings. The `+0x04` dword recorded as loader-written is the two
+chain shorts, and the matrix sits at `+0x08` rather than `+0x0c`.
+
+**The array is walked only on the include-group path.** A sequence index below
+`NumLocalSeq`@272 jumps to the evaluator and returns having read no group at all, so the
+remap is reachable only after a group's four ownership tests pass. Which path an evaluation
+took therefore decides whether the transform applies, and it is a property of the
+contribution rather than of the model: one captured actor reads *transformed* under one
+owner bank and *copied* under another, with the same remap array in both.
+
+**One branch of the record would hang the engine.** The chain-rebase branch's second loop
+never advances its induction variable and terminates only when its two shorts are equal, so
+a record carrying unequal shorts loops forever. **0 of 3,095 records in the shipped corpus
+enter it**, so the branch is unreachable on shipped content — a latent hang, not a live one,
+and its semantics stay undecoded because nothing exercises them.
 
 `FUN_10089c40` is where an owner is resolved. A sequence index below `NumLocalSeq`@272
 takes the local path straight to `FUN_10089740`; otherwise it walks the include groups at

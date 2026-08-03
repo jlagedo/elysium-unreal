@@ -233,6 +233,27 @@ void FElysiumAnimating::StopCinematicClip()
 	ResetAnimToIdle();
 }
 
+int32 FElysiumAnimating::SetFlexControllers(TArrayView<const FElysiumFlexWrite> Writes,
+	TArray<FString>* OutMissing)
+{
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (!Embodiment || !Visual)
+	{
+		return INDEX_NONE;   // a bodiless or headless character has no face to move
+	}
+	return Embodiment->SetFlexControllers(Visual, Writes, OutMissing);
+}
+
+bool FElysiumAnimating::SetMouthOpen(float Open)
+{
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (!Embodiment || !Visual)
+	{
+		return false;   // a bodiless or headless character has no jaw to move
+	}
+	return Embodiment->SetMouthOpen(Visual, Open);
+}
+
 bool FElysiumAnimating::ResetAnimToIdle()
 {
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;

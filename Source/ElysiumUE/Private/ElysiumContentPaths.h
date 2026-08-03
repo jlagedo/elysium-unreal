@@ -117,6 +117,14 @@ struct FElysiumContentPaths
 	static FString LipDir() { return Root() / TEXT("lip"); }
 	static FString LipFile(const FString& Rel) { return LipDir() / Rel; }
 
+	// Faceposer's flex-controller weight tables (PL9), mirrored flat from the install's own
+	// `expressions/` directory by the same exporter. The shipped `.vfe` is the compiled twin of the
+	// readable `.txt`, so only the `.txt` is mirrored and only it is read. Leaf is the file name with
+	// its extension — a scene's `expression` event names the stem in `param`, and 12.5's lipsync
+	// names `<model stem>_phonemes`.
+	static FString ExpressionsDir() { return Root() / TEXT("expressions"); }
+	static FString ExpressionFile(const FString& Leaf) { return ExpressionsDir() / Leaf; }
+
 	// Scripting (P5). VtMB's level scripts + dialogue are game-global loose plain-text,
 	// mirrored under the export root's scripts/ and dlg/ directories by
 	// pipeline/src/elysium_pipeline/exporters/UE_extract_scripts.py. A

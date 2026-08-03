@@ -2,10 +2,10 @@
 
 #include "ElysiumContentPaths.h"
 
+#include "AI/NavigationSystemBase.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/FileHelper.h"
 #include "PhysicsEngine/BodySetup.h"
-#include "ProceduralMeshComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumCollision, Log, All);
 
@@ -21,6 +21,19 @@ static TAutoConsoleVariable<int32> CVarBrushCollision(
 UElysiumMapCollision::UElysiumMapCollision()
 {
 	PrimaryComponentTick.bCanEverTick = false;
+}
+
+void UElysiumHullCollisionComponent::SetLocalCollisionBounds(const FBox& InBounds)
+{
+	LocalCollisionBounds = InBounds;
+	UpdateBounds();
+}
+
+FBoxSphereBounds UElysiumHullCollisionComponent::CalcBounds(const FTransform& LocalToWorld) const
+{
+	return LocalCollisionBounds.IsValid
+		? FBoxSphereBounds(LocalCollisionBounds.TransformBy(LocalToWorld))
+		: Super::CalcBounds(LocalToWorld);
 }
 
 const TCHAR* ElysiumCollisionBuildStateName(EElysiumCollisionBuildState State)
@@ -120,6 +133,18 @@ FBox UElysiumMapCollision::GetWorldBounds() const
 	return WorldBox;
 }
 
+void UElysiumMapCollision::RefreshNavigationData()
+{
+	if (HullCollision && HullCollision->IsRegistered())
+	{
+		FNavigationSystem::UpdateComponentData(*HullCollision);
+	}
+	if (DispCollision && DispCollision->IsRegistered())
+	{
+		FNavigationSystem::UpdateComponentData(*DispCollision);
+	}
+}
+
 bool UElysiumMapCollision::LoadHulls(const FString& MapName)
 {
 	AActor* Owner = GetOwner();
@@ -137,6 +162,7 @@ bool UElysiumMapCollision::LoadHulls(const FString& MapName)
 	// water/monsterclip is out.
 	TArray<TArray<FVector>> Hulls;
 	Hulls.Reserve(Lines.Num());
+	FBox HullBounds(ForceInit);
 	for (const FString& Line : Lines)
 	{
 		TArray<FString> Tok;
@@ -150,10 +176,11 @@ bool UElysiumMapCollision::LoadHulls(const FString& MapName)
 		for (int32 I = 0; I + 2 < Tok.Num(); I += 3)
 		{
 			Verts.Emplace(FCString::Atod(*Tok[I]), FCString::Atod(*Tok[I + 1]), FCString::Atod(*Tok[I + 2]));
+			HullBounds += Verts.Last();
 		}
 		Hulls.Add(MoveTemp(Verts));
 	}
-	if (Hulls.Num() == 0)
+	if (Hulls.Num() == 0 || !HullBounds.IsValid)
 	{
 		return false;
 	}
@@ -162,11 +189,12 @@ bool UElysiumMapCollision::LoadHulls(const FString& MapName)
 	// capsule sweeps (which query simple collision) hit the brushes and their invisible clip
 	// volumes. Cooked async — hundreds of synchronous Chaos cooks stall the game thread, and the
 	// map actor's spawn teleport waits for ground before releasing the pawn.
-	HullCollision = NewObject<UProceduralMeshComponent>(Owner, TEXT("HullCollision"));
+	HullCollision = NewObject<UElysiumHullCollisionComponent>(Owner, TEXT("HullCollision"));
 	HullCollision->SetupAttachment(this);
 	HullCollision->bUseComplexAsSimpleCollision = false;
 	HullCollision->bUseAsyncCooking = true;
 	HullCollision->SetCollisionProfileName(TEXT("BlockAll"));
+	HullCollision->SetLocalCollisionBounds(HullBounds);
 	HullCollision->RegisterComponent();
 
 	HullCount = Hulls.Num();

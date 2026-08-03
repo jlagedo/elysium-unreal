@@ -284,6 +284,10 @@ public:
 	const TMap<FString, FElysiumSoundInfo>& Results() const { return DecodeResults; }
 	const TArray<FElysiumAudioVoice>& ActiveVoices() const { return Voices; }
 
+	// The audio render clock every voice's ScheduledAudioClock is stamped against, so a reader can
+	// place a live voice inside its own media instead of inferring it from game time.
+	double AudioClock() const;
+
 private:
 	FElysiumSoundCache::FDecodedPtr LoadAndRecord(const FString& Rel);
 	FElysiumAudioVoice* FindVoice(FElysiumVoiceHandle Handle);
@@ -294,7 +298,6 @@ private:
 		EElysiumVoiceCompletion Completion = EElysiumVoiceCompletion::None);
 	void CompleteAt(int32 VoiceIndex, EElysiumVoiceCompletion Completion);
 	void ApplyMasterGain();
-	double AudioClock() const;
 	void HandleAudioFinished(UAudioComponent* Component);
 	void BeginCatalogLoad();
 	float OutputGain(const FElysiumAudioRequest& Request) const;

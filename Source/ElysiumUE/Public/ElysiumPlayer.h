@@ -246,6 +246,9 @@ public:
 		const FString& ClipName, bool bLoop, float* OutSeconds = nullptr) override;
 	virtual bool SeekCinematicClip(float PositionSeconds) override;
 	virtual void StopCinematicClip() override;
+	virtual int32 SetFlexControllers(TArrayView<const FElysiumFlexWrite> Writes,
+		TArray<FString>* OutMissing = nullptr) override;
+	virtual bool SetMouthOpen(float Open) override;
 	virtual bool ResetAnimToIdle() override;
 	virtual bool SetDispositionName(const FString& NewDisposition) override;
 

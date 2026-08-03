@@ -7,6 +7,21 @@
 #include "Animation/AnimSequence.h"
 #include "AnimationRuntime.h"
 #include "BonePose.h"
+#include "HAL/IConsoleManager.h"
+
+namespace
+{
+	// The reconstruction described in `Visual/ElysiumFacialRig.h`: the amplitude jaw's weight is also
+	// raised into the `jaw_drop` controller, because the flexdesc `mstudiomouth_t` actually names
+	// carries no flex record on any shipped model and so moves nothing on its own. 0 leaves only the
+	// faithful write, which is the A/B baseline for the divergence.
+	TAutoConsoleVariable<int32> CVarFacialJawBridge(
+		TEXT("elysium.FacialJawBridge"),
+		1,
+		TEXT("Bridge the amplitude jaw into the jaw_drop flex controller (1, default) or write only "
+		     "the mouth flexdesc, which no shipped model consumes (0)."),
+		ECVF_Default);
+}
 
 void FElysiumNpcAnimProxy::Initialize(UAnimInstance* InAnimInstance)
 {
@@ -296,6 +311,7 @@ void UElysiumNpcAnimInstance::SetFacialRig(TSharedPtr<const FElysiumFacialRig> I
 	ControllerValues.Reset();
 	FlexWeights.Reset();
 	MorphWeights.Reset();
+	MouthOpen = 0.f;
 
 	TArray<FName> Curves;
 	if (FacialRig.IsValid())
@@ -348,14 +364,72 @@ bool UElysiumNpcAnimInstance::SetFlexControllerByIndex(int32 Index, float Value)
 	return true;
 }
 
+int32 UElysiumNpcAnimInstance::SetFlexControllers(TArrayView<const FElysiumFlexWrite> Writes,
+	TArray<FString>* OutMissing)
+{
+	if (!FacialRig.IsValid())
+	{
+		return INDEX_NONE;
+	}
+	int32 Applied = 0;
+	bool bChanged = false;
+	for (const FElysiumFlexWrite& Write : Writes)
+	{
+		const int32 Index = FacialRig->FindController(Write.Name);
+		if (!ControllerValues.IsValidIndex(Index))
+		{
+			// A key this model does not carry. Reported, never guessed at: the 249 shipped tables draw
+			// on 48 distinct key names and no single rig carries all of them.
+			if (OutMissing != nullptr)
+			{
+				OutMissing->AddUnique(Write.Name);
+			}
+			continue;
+		}
+		++Applied;
+		const float Normalized = FacialRig->Controllers[Index].Normalize(Write.Value);
+		if (ControllerValues[Index] != Normalized)
+		{
+			ControllerValues[Index] = Normalized;
+			bChanged = true;
+		}
+	}
+	if (bChanged)
+	{
+		EvaluateFacial();
+	}
+	return Applied;
+}
+
 void UElysiumNpcAnimInstance::ResetFlexControllers()
 {
-	if (ControllerValues.IsEmpty())
+	if (ControllerValues.IsEmpty() && MouthOpen == 0.f)
 	{
 		return;
 	}
 	FMemory::Memzero(ControllerValues.GetData(), ControllerValues.Num() * sizeof(float));
+	MouthOpen = 0.f;
 	EvaluateFacial();
+}
+
+bool UElysiumNpcAnimInstance::HasMouth() const
+{
+	return FacialRig.IsValid() && FacialRig->Mouth.IsValid();
+}
+
+bool UElysiumNpcAnimInstance::SetMouthOpen(float Open)
+{
+	if (!HasMouth())
+	{
+		return false;
+	}
+	const float Clamped = FMath::Clamp(Open, 0.f, 1.f);
+	if (MouthOpen != Clamped)
+	{
+		MouthOpen = Clamped;
+		EvaluateFacial();
+	}
+	return true;
 }
 
 void UElysiumNpcAnimInstance::EvaluateFacial()
@@ -364,7 +438,12 @@ void UElysiumNpcAnimInstance::EvaluateFacial()
 	{
 		return;
 	}
-	FacialRig->Evaluate(ControllerValues, FlexWeights, MorphWeights);
+	FElysiumJawInput Jaw;
+	Jaw.Open = MouthOpen;
+	// Read here rather than latched at the write, so toggling the cvar takes on the next evaluation
+	// of any kind instead of waiting for the next jaw write.
+	Jaw.bBridge = CVarFacialJawBridge.GetValueOnGameThread() != 0;
+	FacialRig->Evaluate(ControllerValues, Jaw, FlexWeights, MorphWeights);
 	// GetProxyOnGameThread blocks on any in-flight parallel evaluation, so the worker cannot be
 	// reading the weight array this overwrites.
 	GetProxyOnGameThread<FElysiumNpcAnimProxy>().SetFacialWeights(MorphWeights);

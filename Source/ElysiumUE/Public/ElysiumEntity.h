@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Containers/ArrayView.h"
 #include "ElysiumEntityHandle.h"
 #include "ElysiumVariant.h"
 
@@ -15,6 +16,27 @@ class FElysiumDoorBase;
 // `0x7f7fffff` (FLT_MAX) write in CBaseEntity::ScriptHide (entity_io.md).
 inline constexpr float ELYSIUM_NEVER_THINK = FLT_MAX;
 
+// How a `scripted_sequence` sends its NPC to the mark — `m_fMoveTo`'s travelling values. 0 ("No")
+// and 4 ("Instantaneous") never reach the seam: the first touches nothing, the second is a
+// placement.
+enum class EElysiumScriptGait : uint8
+{
+	Face,     // 5 "No - Turn to Face" — take the mark's angles without travelling
+	Walk,     // 1
+	Run,      // 2
+	Custom,   // 3 — travel playing `m_iszCustomMove`'s own cycle instead of the gait activity
+};
+
+// Where an accepted scripted move stands. `Unsupported` is what an entity that never accepted one
+// answers, and what a released move reads as.
+enum class EElysiumScriptMove : uint8
+{
+	Unsupported,
+	Moving,
+	Arrived,
+	Failed,
+};
+
 // The context an input carries to its thunk. `Param` is the marshalled parameter string
 // (field 2 of the output); `Activator`/`Caller` are the I/O provenance the entity world
 // resolves in P1.4 (Invalid for a hand-fired input). Kept a struct so P1.4 can grow the
@@ -24,6 +46,16 @@ struct FElysiumInputArgs
 	FElysiumVariant Param;
 	FElysiumEntityHandle Activator;
 	FElysiumEntityHandle Caller;
+};
+
+// One flex-controller write, by name. A face's only writable state is its 44 flex controllers;
+// everything under them — the RPN rules, the flexdesc weights, the target ramps — is arithmetic
+// re-derived on every write. A choreo scene's `expression` events compose a set of these out of a
+// Faceposer weight table, and lipsync will compose one out of the phoneme table.
+struct FElysiumFlexWrite
+{
+	FString Name;
+	float Value = 0.f;
 };
 
 // R1 — a live entity is a plain C++ object: no UObject, no actor, no reflection. Unreal
@@ -202,6 +234,25 @@ public:
 	// idles it, and the stance idle is the closest thing this runtime has to that. Base answers false.
 	virtual bool ResetAnimToIdle() { return false; }
 
+	// --- The scripted-move seam (8.5) ---------------------------------------------------
+	// Send this entity to a beat's mark under the script's ownership, travelling at `Gait`. Only a
+	// character standing on a movement motor can travel, so the base answers false and the caller
+	// places it on the mark instead — the supported path for the player stand-in, a bodiless
+	// record, a disabled navigation graph and every headless test. `CustomClip` is
+	// `m_iszCustomMove`, the travel cycle `EElysiumScriptGait::Custom` plays. Kept on the base for
+	// the same no-RTTI reason `GetAttachBody` is.
+	virtual bool BeginScriptMove(const FVector& Mark, const FVector& MarkAngles,
+		EElysiumScriptGait Gait, const FString& CustomClip) { return false; }
+
+	// Advance an accepted move by one beat tick, sampling the moved body back into this entity's
+	// origin/angles. The owning beat calls this until it stops answering `Moving`; the pose is the
+	// beat's business, so nothing here touches the animation.
+	virtual EElysiumScriptMove AdvanceScriptMove() { return EElysiumScriptMove::Unsupported; }
+
+	// Release the script's ownership: stop the motor and hand the body back to its own behaviour
+	// (a parked patrol route or interesting-place search resumes). Leaves the pose alone.
+	virtual void EndScriptMove() {}
+
 	// 12.1 — play a clip out of a choreographed scene's own anim set (the whole-cast cinematic
 	// model), selecting this actor's skeleton inside it by the scene's `bonerename` source. Kept
 	// beside PlayAnimClip for the same no-RTTI reason; base answers false.
@@ -209,6 +260,25 @@ public:
 		const FString& ClipName, bool bLoop, float* OutSeconds = nullptr) { return false; }
 	virtual bool SeekCinematicClip(float PositionSeconds) { return false; }
 	virtual void StopCinematicClip() {}
+
+	// 12.3 — write named flex controllers on this entity's face. Purely additive: a controller the
+	// write set does not name keeps whatever it held, so the caller owns clearing what it stopped
+	// driving. That is what lets a scene's expression track and a line's lipsync write the same face
+	// without a layer stack between them.
+	//
+	// Returns how many writes landed, or INDEX_NONE when there is no face here at all — a body with
+	// no facial sidecar, a sidecar whose rig deforms nothing (`shovelhead`, `female_raver_1`), an
+	// entity with no body, or the player, whose every model carries zero flexdescs. All of those are
+	// ordinary no-ops, not errors. Names the rig does not carry are appended to OutMissing so a
+	// caller can report them once instead of dropping them silently.
+	virtual int32 SetFlexControllers(TArrayView<const FElysiumFlexWrite> Writes,
+		TArray<FString>* OutMissing = nullptr) { return INDEX_NONE; }
+
+	// The amplitude jaw, the face's one non-controller input: `mstudiomouth_t` names a flexdesc, so
+	// this lands below the rule layer the writes above feed. 0 is a closed mouth, 1 the speaking
+	// line's own peak. False when there is no face, no body, or no mouth record — all ordinary, and
+	// the answer for the whole unrigged half of the cast. Base answers false.
+	virtual bool SetMouthOpen(float Open) { return false; }
 
 	// A disposition write from script — the animation half of `SetDisposition` (2,510 calls, the
 	// largest single engine demand in the game). Re-picks the standing stance; the emotional-state

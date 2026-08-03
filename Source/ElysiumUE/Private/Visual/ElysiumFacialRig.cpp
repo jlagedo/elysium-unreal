@@ -75,6 +75,7 @@ bool FElysiumFacialRig::LoadJsonText(const FString& JsonText, FString& OutError)
 	Morphs.Reset();
 	Lids.Reset();
 	Mouth = FElysiumFlexMouth();
+	MouthBridge = INDEX_NONE;
 
 	TSharedPtr<FJsonObject> Root;
 	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonText);
@@ -267,6 +268,19 @@ bool FElysiumFacialRig::LoadJsonText(const FString& JsonText, FString& OutError)
 	// Deterministic order, so a debug dump and a test read the same rows on every load.
 	Lids.Sort([](const FElysiumFlexLid& A, const FElysiumFlexLid& B) { return A.FlexDesc < B.FlexDesc; });
 
+	// The jaw bridge's target (see FElysiumFacialRig::MouthBridge). Looked up by name, like the lid
+	// sources, and absent on a rig that carries no phoneme family at all.
+	if (Mouth.IsValid())
+	{
+		MouthBridge = FindController(TEXT("jaw_drop"));
+		if (MouthBridge == INDEX_NONE && !Controllers.IsEmpty())
+		{
+			UE_LOG(LogElysiumFacial, Verbose,
+				TEXT("facial '%s': carries a mouth record but no 'jaw_drop' controller; the jaw writes "
+					 "its flexdesc and moves nothing"), *Stem);
+		}
+	}
+
 	return true;
 }
 
@@ -398,6 +412,41 @@ void FElysiumFacialRig::EvalMorphWeights(TArrayView<const float> FlexWeights,
 void FElysiumFacialRig::Evaluate(TArrayView<const float> ControllerValues,
 	TArray<float>& OutFlexWeights, TArray<float>& OutMorphWeights) const
 {
-	EvalFlexWeights(ControllerValues, OutFlexWeights);
+	Evaluate(ControllerValues, FElysiumJawInput(), OutFlexWeights, OutMorphWeights);
+}
+
+void FElysiumFacialRig::ApplyJawToFlexWeights(const FElysiumJawInput& Jaw,
+	TArray<float>& InOutFlexWeights) const
+{
+	if (Mouth.IsValid() && InOutFlexWeights.IsValidIndex(Mouth.FlexDesc))
+	{
+		InOutFlexWeights[Mouth.FlexDesc] = FMath::Clamp(Jaw.Open, 0.f, 1.f);
+	}
+}
+
+void FElysiumFacialRig::Evaluate(TArrayView<const float> ControllerValues, const FElysiumJawInput& Jaw,
+	TArray<float>& OutFlexWeights, TArray<float>& OutMorphWeights) const
+{
+	// 1 — the bridge, before the rules, because its target is a rule *input*. Raised rather than
+	// assigned, and skipped entirely at rest, so a face with no line to speak evaluates exactly as it
+	// did before this input existed.
+	if (Jaw.bBridge && Jaw.IsOpen() && Controllers.IsValidIndex(MouthBridge)
+		&& ControllerValues.IsValidIndex(MouthBridge))
+	{
+		// The whole shipped cast runs 0..1 controllers, so this normalize is the identity on it; it is
+		// here because every other controller write goes through the same range.
+		const float Bridged = Controllers[MouthBridge].Normalize(Jaw.Open);
+		TArray<float, TInlineAllocator<64>> Values(ControllerValues);
+		Values[MouthBridge] = FMath::Max(Values[MouthBridge], Bridged);
+		// 2 — the rules and the lid combine.
+		EvalFlexWeights(Values, OutFlexWeights);
+	}
+	else
+	{
+		EvalFlexWeights(ControllerValues, OutFlexWeights);
+	}
+	// 3 — the direct flexdesc write, after every rule that could have computed it.
+	ApplyJawToFlexWeights(Jaw, OutFlexWeights);
+	// 4 — the target ramps.
 	EvalMorphWeights(OutFlexWeights, OutMorphWeights);
 }

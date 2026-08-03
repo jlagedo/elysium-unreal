@@ -11,7 +11,9 @@ AElysiumNpcBody::AElysiumNpcBody(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 	AIControllerClass = ADetourCrowdAIController::StaticClass();
-	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
+	// A standing NPC needs a body, not a crowd agent. Spawn the controller on the first accepted
+	// MoveTo, after the runtime Recast graph has crossed the activation barrier.
+	AutoPossessAI = EAutoPossessAI::Disabled;
 	bUseControllerRotationYaw = false;
 
 	UCapsuleComponent* Capsule = GetCapsuleComponent();
@@ -25,6 +27,7 @@ AElysiumNpcBody::AElysiumNpcBody(const FObjectInitializer& ObjectInitializer)
 	Movement->MaxWalkSpeed = 254.0f; // retail speed_walk: 100 Source inches/s, expressed in cm
 	Movement->BrakingDecelerationWalking = 768.0f;
 	Movement->SetCanEverAffectNavigation(false);
+	Movement->SetAutoActivate(false);
 
 	// The ACharacter mesh is unused; the runtime-loaded glTF component is attached by the map actor.
 	GetMesh()->SetVisibility(false);
@@ -34,7 +37,6 @@ AElysiumNpcBody::AElysiumNpcBody(const FObjectInitializer& ObjectInitializer)
 void AElysiumNpcBody::InitializeAtFeet(const FVector& FeetOrigin, float YawDegrees)
 {
 	Teleport(FeetOrigin, YawDegrees);
-	SpawnDefaultController();
 	ApplyEnabledState();
 }
 
@@ -50,16 +52,47 @@ FVector AElysiumNpcBody::FeetLocation() const
 	return GetActorLocation() - FVector(0.0f, 0.0f, Capsule ? Capsule->GetScaledCapsuleHalfHeight() : 0.0f);
 }
 
+void AElysiumNpcBody::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	if (!bFaceRequested)
+	{
+		return;
+	}
+	// The turn-in-place. CharacterMovement is asleep here (a face request never travels), so its
+	// own bOrientRotationToMovement never sees this and there is nothing to fight over the yaw.
+	const float CurrentYaw = GetActorRotation().Yaw;
+	const float RotationRate = GetCharacterMovement() ? GetCharacterMovement()->RotationRate.Yaw : 360.0f;
+	const float NewYaw = FMath::FixedTurn(CurrentYaw, RequestedYaw, RotationRate * DeltaSeconds);
+	SetActorRotation(FRotator(0.0f, NewYaw, 0.0f));
+	if (FMath::Abs(FRotator::NormalizeAxis(RequestedYaw - NewYaw)) <= 1.0f)
+	{
+		bFaceRequested = false;
+	}
+}
+
 bool AElysiumNpcBody::MoveTo(const FVector& FeetDestination, float AcceptanceRadiusCm,
 	float SpeedCmPerSecond)
 {
-	AAIController* AI = Cast<AAIController>(GetController());
-	if (!AI || !GetCharacterMovement() || !GetCharacterMovement()->IsActive())
+	bFaceRequested = false;
+	if (!bRuntimeReady || !bRequestedEnabled)
 	{
 		return false;
 	}
+	if (!GetController())
+	{
+		SpawnDefaultController();
+	}
+	AAIController* AI = Cast<AAIController>(GetController());
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	if (!AI || !Movement)
+	{
+		Stop();
+		return false;
+	}
 
-	GetCharacterMovement()->MaxWalkSpeed = FMath::Max(1.0f, SpeedCmPerSecond);
+	Movement->Activate();
+	Movement->MaxWalkSpeed = FMath::Max(1.0f, SpeedCmPerSecond);
 	RequestedFeet = FeetDestination;
 	RequestedAcceptanceCm = FMath::Max(1.0f, AcceptanceRadiusCm);
 	const EPathFollowingRequestResult::Type Result = AI->MoveToLocation(
@@ -67,7 +100,21 @@ bool AElysiumNpcBody::MoveTo(const FVector& FeetDestination, float AcceptanceRad
 		/*bUsePathfinding=*/true, /*bProjectDestinationToNavigation=*/true,
 		/*bCanStrafe=*/false, nullptr, /*bAllowPartialPath=*/false);
 	bMoveRequested = Result != EPathFollowingRequestResult::Failed;
+	if (!bMoveRequested)
+	{
+		Stop();
+	}
 	return bMoveRequested;
+}
+
+void AElysiumNpcBody::Face(float YawDegrees)
+{
+	if (!bRuntimeReady || !bRequestedEnabled)
+	{
+		return;   // the caller reads Idle back from Sample and treats the facing as already settled
+	}
+	RequestedYaw = FRotator::ClampAxis(YawDegrees);
+	bFaceRequested = true;
 }
 
 void AElysiumNpcBody::Stop()
@@ -76,7 +123,13 @@ void AElysiumNpcBody::Stop()
 	{
 		AI->StopMovement();
 	}
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+	{
+		Movement->StopMovementImmediately();
+		Movement->Deactivate();
+	}
 	bMoveRequested = false;
+	bFaceRequested = false;
 }
 
 void AElysiumNpcBody::Teleport(const FVector& FeetOrigin, float YawDegrees)
@@ -100,13 +153,30 @@ void AElysiumNpcBody::ApplyEnabledState()
 	SetActorEnableCollision(bEnabled);
 	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
 	{
-		if (bEnabled)
+		if (!bEnabled)
+		{
+			Stop();
+		}
+		else if (bMoveRequested)
 		{
 			Movement->Activate();
 		}
 		else
 		{
-			Stop();
+			// Authored NPC origins are approximate feet positions. Active CharacterMovement used to
+			// settle every body under gravity, but sleeping idle movement leaves those raw positions
+			// visibly above or below collision. The entity's enabled transition occurs just after the
+			// map activation barrier, when collision is ready and this capsule has become queryable.
+			// Perform CharacterMovement's own capsule-aware floor query and swept height adjustment
+			// once here, then leave it asleep without spawning a controller or crowd agent.
+			FFindFloorResult Floor;
+			Movement->FindFloor(GetActorLocation(), Floor, /*bCanUseCachedLocation=*/false);
+			if (Floor.IsWalkableFloor())
+			{
+				Movement->CurrentFloor = Floor;
+				Movement->AdjustFloorHeight();
+				Movement->StopMovementImmediately();
+			}
 			Movement->Deactivate();
 		}
 	}
@@ -118,14 +188,14 @@ EElysiumNpcMoveStatus AElysiumNpcBody::Sample(FVector& OutFeetOrigin, float& Out
 	OutYawDegrees = GetActorRotation().Yaw;
 	if (!bMoveRequested)
 	{
-		return EElysiumNpcMoveStatus::Idle;
+		return bFaceRequested ? EElysiumNpcMoveStatus::Moving : EElysiumNpcMoveStatus::Idle;
 	}
 
 	const float Horizontal = FVector::Dist2D(OutFeetOrigin, RequestedFeet);
 	const float Vertical = FMath::Abs(OutFeetOrigin.Z - RequestedFeet.Z);
 	if (Horizontal <= RequestedAcceptanceCm + 4.0f && Vertical <= 96.0f)
 	{
-		bMoveRequested = false;
+		Stop();
 		return EElysiumNpcMoveStatus::Reached;
 	}
 
@@ -133,6 +203,7 @@ EElysiumNpcMoveStatus AElysiumNpcBody::Sample(FVector& OutFeetOrigin, float& Out
 	const UPathFollowingComponent* Following = AI ? AI->GetPathFollowingComponent() : nullptr;
 	if (!Following)
 	{
+		Stop();
 		return EElysiumNpcMoveStatus::Unavailable;
 	}
 	const EPathFollowingStatus::Type Status = Following->GetStatus();
@@ -141,6 +212,6 @@ EElysiumNpcMoveStatus AElysiumNpcBody::Sample(FVector& OutFeetOrigin, float& Out
 	{
 		return EElysiumNpcMoveStatus::Moving;
 	}
-	bMoveRequested = false;
+	Stop();
 	return EElysiumNpcMoveStatus::Failed;
 }

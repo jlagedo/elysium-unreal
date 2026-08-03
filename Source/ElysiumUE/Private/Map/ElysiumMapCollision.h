@@ -2,9 +2,25 @@
 
 #include "CoreMinimal.h"
 #include "Components/SceneComponent.h"
+#include "ProceduralMeshComponent.h"
 #include "ElysiumMapCollision.generated.h"
 
-class UProceduralMeshComponent;
+// UProceduralMeshComponent derives its bounds exclusively from render sections. The brush world
+// deliberately has none, so its collision-only convexes otherwise register with navigation as an
+// empty component even though the BodySetup contains the complete walkable surface. Carry the
+// parsed point-cloud bounds explicitly; the inherited BodySetup remains the geometry Recast reads.
+UCLASS(Transient)
+class UElysiumHullCollisionComponent final : public UProceduralMeshComponent
+{
+	GENERATED_BODY()
+
+public:
+	void SetLocalCollisionBounds(const FBox& InBounds);
+	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
+
+private:
+	FBox LocalCollisionBounds = FBox(ForceInit);
+};
 
 // Readiness of the only collision the player can stand on. Disabled is an intentional satisfied
 // state (`elysium.BrushCollision 0`); Failed is never safe to admit gameplay.
@@ -44,6 +60,9 @@ public:
 	// Union of the live hull/displacement collision components. Valid once Build has produced at
 	// least one collider; used to size the runtime Recast bounds around the actual playable world.
 	FBox GetWorldBounds() const;
+	// Re-register the completed BodySetups with the navigation octree immediately before the one
+	// runtime Recast build. Async Chaos cooking completes after component registration.
+	void RefreshNavigationData();
 
 	// Convex-hull count and displacement-triangle count, for the debug overlay.
 	int32 HullCount = 0;
@@ -59,7 +78,7 @@ private:
 	// sidecar is absent (map has no displacements).
 	void LoadDispCol(const FString& MapName);
 
-	UPROPERTY() TObjectPtr<UProceduralMeshComponent> HullCollision;
+	UPROPERTY() TObjectPtr<UElysiumHullCollisionComponent> HullCollision;
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> DispCollision;
 	EElysiumCollisionBuildState BuildState = EElysiumCollisionBuildState::Disabled;
 	FString FailureReason;

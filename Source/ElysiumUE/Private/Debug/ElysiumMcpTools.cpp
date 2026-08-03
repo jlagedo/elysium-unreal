@@ -1303,6 +1303,11 @@ namespace ElysiumMcpImpl
 					Body->SetBoolField(TEXT("muted"), Audio->IsMuted());
 					Body->SetNumberField(TEXT("master_gain"), Audio->MasterGain());
 					Body->SetNumberField(TEXT("decoded_files"), Audio->Results().Num());
+					// The render clock every voice is scheduled against. With `scheduled_audio_clock`
+					// and `media_offset` below it, a reader can say how far into its media a live voice
+					// is — which is what makes the lead a scene schedules its speech with measurable
+					// against the scene's own clock rather than assumed from the convar.
+					Body->SetNumberField(TEXT("audio_clock"), Audio->AudioClock());
 
 					TArray<TSharedPtr<FJsonValue>> Voices;
 					for (const FElysiumAudioVoice& Voice : Audio->ActiveVoices())
@@ -1319,6 +1324,8 @@ namespace ElysiumMcpImpl
 						Row->SetNumberField(TEXT("volume"), Voice.Request.Gain);
 						Row->SetNumberField(TEXT("pitch"), Voice.Request.Pitch);
 						Row->SetNumberField(TEXT("scheduled_audio_clock"), Voice.Event.ScheduledAudioClock);
+						Row->SetNumberField(TEXT("media_offset"), Voice.Event.MediaOffsetSeconds);
+						Row->SetNumberField(TEXT("duration"), Voice.Event.DurationSeconds);
 						Voices.Add(MakeShared<FJsonValueObject>(Row));
 					}
 					Body->SetArrayField(TEXT("voices"), Voices);

@@ -25,6 +25,7 @@
 #include "Visual/ElysiumDecals.h"
 #include "Visual/ElysiumEntityBodies.h"
 #include "Visual/ElysiumNpcAnimInstance.h"
+#include "Visual/ElysiumNpcBody.h"
 #include "Visual/ElysiumLightRig.h"
 #include "ElysiumDlg.h"
 #include "ElysiumEntity.h"
@@ -42,6 +43,7 @@
 #include "ElysiumKeyValues.h"
 #include "ElysiumLineService.h"
 #include "ElysiumMapActor.h"
+#include "Map/ElysiumMapCollision.h"
 #include "ElysiumSoundCache.h"
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
@@ -77,11 +79,13 @@
 #include "Tests/AutomationCommon.h"
 
 #include "Components/SceneComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/SpotLightComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Sound/SoundGenerator.h"
 #include "Sound/SoundWaveProcedural.h"
 #include "HAL/FileManager.h"
@@ -2260,13 +2264,18 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 	TestEqual(TEXT("the pre-move pass is TG_PrePhysics"),
 		static_cast<int32>(Map->PreMoveTickFunction.TickGroup), static_cast<int32>(TG_PrePhysics));
 
-	// Steps 5-6 also run before physics, but AFTER the pawn's move — this is retail's GameFrame,
-	// and the move is not in it. Both passes share TG_PrePhysics, so what separates them is the
-	// prerequisite the map actor wires at registration, not the group; the Play tier reads that
-	// chain back off the running graph.
-	TestTrue(TEXT("the gameplay pass ticks"), Map->PrimaryActorTick.bCanEverTick);
-	TestEqual(TEXT("the gameplay pass is TG_PrePhysics"),
+	// The primary actor tick is an explicit barrier because Unreal makes an NPC movement component
+	// depend on the actor owning its current floor — this map actor. It carries no GameFrame work.
+	TestTrue(TEXT("the movement-base barrier ticks"), Map->PrimaryActorTick.bCanEverTick);
+	TestEqual(TEXT("the movement-base barrier is TG_PrePhysics"),
 		static_cast<int32>(Map->PrimaryActorTick.TickGroup), static_cast<int32>(TG_PrePhysics));
+
+	// Steps 5-6 also run before physics, but AFTER both player and NPC movement. A separate tick is
+	// what permits the forward movement->gameplay edge without closing the floor-owner cycle.
+	TestTrue(TEXT("the gameplay pass ticks"), Map->GameplayTickFunction.bCanEverTick);
+	TestTrue(TEXT("the gameplay pass starts enabled"), Map->GameplayTickFunction.bStartWithTickEnabled);
+	TestEqual(TEXT("the gameplay pass is TG_PrePhysics"),
+		static_cast<int32>(Map->GameplayTickFunction.TickGroup), static_cast<int32>(TG_PrePhysics));
 
 	// Step 4 — the pawn's mover is in the same group as both, for the same reason: it is ordered by
 	// prerequisite, between them.
@@ -2279,7 +2288,7 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 	}
 
 	// Step 8 runs after physics, on the same actor: the +use cursor traces against the frame's
-	// final positions. Three tick functions, not three actors — one actor keeps the order declarable.
+	// final positions. Four tick functions, not separate actors — one actor keeps the order declarable.
 	TestTrue(TEXT("the post-move pass ticks"), Map->PostMoveTickFunction.bCanEverTick);
 	TestTrue(TEXT("the post-move pass starts enabled"), Map->PostMoveTickFunction.bStartWithTickEnabled);
 	TestEqual(TEXT("the post-move pass is TG_PostPhysics"),
@@ -2289,7 +2298,7 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 			> static_cast<int32>(Map->PreMoveTickFunction.TickGroup));
 
 	// Step 10 rebuilds the view state after everything that could change it has run, so it is later
-	// than all three gameplay passes (11.8).
+	// than all four map passes (11.8).
 	const UElysiumPresentationSubsystem* Present = GetDefault<UElysiumPresentationSubsystem>();
 	if (TestNotNull(TEXT("presentation subsystem class defaults"), Present))
 	{
@@ -2297,16 +2306,17 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 		TestTrue(TEXT("the publish pass starts enabled"), Present->PublishTickFunction.bStartWithTickEnabled);
 		TestEqual(TEXT("the publish pass is TG_PostUpdateWork"),
 			static_cast<int32>(Present->PublishTickFunction.TickGroup), static_cast<int32>(TG_PostUpdateWork));
-		TestTrue(TEXT("the publish pass is last of the four"),
+		TestTrue(TEXT("the publish pass is last of the five"),
 			static_cast<int32>(Present->PublishTickFunction.TickGroup)
 				> static_cast<int32>(Map->PostMoveTickFunction.TickGroup));
 	}
 
-	// §4 — before activation, the two lifecycle-bearing passes are allowed to poll while held, but
-	// their gameplay branches are phase-gated. ActivateRuntime restores both flags to false; the
+	// §4 — before activation, the lifecycle-bearing passes are allowed to poll while held, but
+	// their gameplay branches are phase-gated. ActivateRuntime restores their flags to false; the
 	// post-move gameplay pass is never needed for readiness. Presentation remains live throughout.
 	TestTrue(TEXT("the pre-move pass can poll readiness while held"), Map->PreMoveTickFunction.bTickEvenWhenPaused);
-	TestTrue(TEXT("the activation pass can run while held"), Map->PrimaryActorTick.bTickEvenWhenPaused);
+	TestTrue(TEXT("the movement-base barrier can run while held"), Map->PrimaryActorTick.bTickEvenWhenPaused);
+	TestTrue(TEXT("the activation pass can run while held"), Map->GameplayTickFunction.bTickEvenWhenPaused);
 	TestFalse(TEXT("the post-move pass stops when held"), Map->PostMoveTickFunction.bTickEvenWhenPaused);
 	if (Present)
 	{
@@ -2411,6 +2421,27 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 			PlayerEnt->NextThink, 1.0f);
 	}
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHullCollisionBoundsTest,
+	"Elysium.Substrate.HullCollisionBounds", GElysiumTestFlags)
+bool FElysiumHullCollisionBoundsTest::RunTest(const FString&)
+{
+	UElysiumHullCollisionComponent* Hull = NewObject<UElysiumHullCollisionComponent>();
+	if (!TestNotNull(TEXT("collision-only hull component constructs"), Hull))
+	{
+		return false;
+	}
+
+	const FBox Local(FVector(-10.0, -20.0, -30.0), FVector(40.0, 50.0, 60.0));
+	Hull->SetLocalCollisionBounds(Local);
+	const FBox World = Hull->CalcBounds(FTransform(FVector(100.0, 200.0, 300.0))).GetBox();
+	TestTrue(TEXT("collision-only hull bounds remain valid without a render section"), World.IsValid != 0);
+	TestEqual(TEXT("collision-only hull minimum transforms into world space"),
+		World.Min, FVector(90.0, 180.0, 270.0));
+	TestEqual(TEXT("collision-only hull maximum transforms into world space"),
+		World.Max, FVector(140.0, 250.0, 360.0));
 	return true;
 }
 
@@ -2883,13 +2914,14 @@ bool FElysiumNpcTest::RunTest(const FString&)
 	TestNotNull(TEXT("npc_maker.Enable resolves"),
 		reinterpret_cast<const void*>(Reg.FindInput(*MakerDesc, FName(TEXT("Enable")))));
 
-	// --- A bare world: Jack, a counter wired off his OnDialogBegin, and the blueblood maker ---
+	// --- A recorded world: Jack, a counter wired off his OnDialogBegin, and the blueblood maker ---
 	FElysiumEntityDefs Defs;
 	Defs.MapName = TEXT("__npc_test__");
 
 	FElysiumEntityDef Jack;
 	Jack.Classname = TEXT("npc_VVampire");
 	Jack.TargetName = TEXT("Jack");
+	Jack.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
 	{
 		FElysiumOutputDef Wire;   // OnDialogBegin -> counter.Add(1), to observe the fire
 		Wire.Name = TEXT("OnDialogBegin");
@@ -2936,7 +2968,9 @@ bool FElysiumNpcTest::RunTest(const FString&)
 		Defs.Defs.Add(MoveTemp(Point));
 	}
 
-	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
+	FElysiumRecordingServices Services;
+	Services.bProvideNpcMotor = true;
+	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
 	World.Load(MoveTemp(Defs));
 	World.Activate(0.0);
 
@@ -2996,10 +3030,12 @@ bool FElysiumNpcTest::RunTest(const FString&)
 	TestEqual(TEXT("WillTalk latched"), DebugRow(World.Resolve(JackHandle), TEXT("WillTalk")), FString(TEXT("yes")));
 	TestEqual(TEXT("OnDialogBegin fired once (counter=1)"),
 		FCString::Atof(*DebugRow(World.FindByName(TEXT("dlgcount")), TEXT("Value"))), 1.0f);
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("EndDialog")), FElysiumVariant::Void(), 0.0,
+		FElysiumEntityHandle::Invalid(), JackHandle);
+	World.Tick(0.0);
 
-	// The Python surface calls these exact names on sm_hub_1's two cops. The route remains armed
-	// without an engine motor in this test tier; native movement begins when the map embodiment
-	// supplies one after Recast is ready.
+	// The Python surface calls these exact names on sm_hub_1's two cops. The recording motor keeps
+	// the route engine-neutral while making its move/stop requests observable in this tier.
 	World.EnqueueInput(TEXT("!self"), FName(TEXT("SetupPatrolType")),
 		FElysiumVariant::String(TEXT("255 0 FOLLOW_PATROL_PATH_WALK")), 0.0,
 		FElysiumEntityHandle::Invalid(), JackHandle);
@@ -3009,6 +3045,15 @@ bool FElysiumNpcTest::RunTest(const FString&)
 	World.Tick(0.0);
 	TestTrue(TEXT("named patrol resolves and arms both authored points"),
 		DebugRow(World.Resolve(JackHandle), TEXT("Patrol")).Contains(TEXT("point 1/2")));
+	World.Tick(0.05);
+	FElysiumRecordingNpcMotor* JackMotor = Services.NpcMotors.IsEmpty()
+		? nullptr : Services.NpcMotors[0].Get();
+	if (TestNotNull(TEXT("Jack owns the recording motor"), JackMotor))
+	{
+		TestTrue(TEXT("an active patrol issues a native movement request"), JackMotor->bMoving);
+		TestTrue(TEXT("the native request carries the first authored point"),
+			JackMotor->RequestedFeet.Equals(FVector(100.0f, 25.0f, 0.0f)));
+	}
 
 	FElysiumMapSnapshot PatrolSnapshot;
 	World.Freeze(PatrolSnapshot);
@@ -3017,6 +3062,15 @@ bool FElysiumNpcTest::RunTest(const FString&)
 	if (TestNotNull(TEXT("active patrol contributes a save record"), SavedJack))
 	{
 		TestTrue(TEXT("patrol cursor/path are carried by leaf state"), !SavedJack->LeafState.IsEmpty());
+	}
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("ClearPatrolPath")), FElysiumVariant::Void(), 0.0,
+		FElysiumEntityHandle::Invalid(), JackHandle);
+	World.Tick(0.05);
+	if (JackMotor)
+	{
+		TestFalse(TEXT("clearing a patrol stops its native request"), JackMotor->bMoving);
+		TestTrue(TEXT("clearing a patrol crosses the explicit motor Stop seam"),
+			Services.Saw(TEXT("NpcMotor Stop")));
 	}
 
 	return true;
@@ -4258,6 +4312,58 @@ bool FElysiumGenesisExitTest::RunTest(const FString&)
 // and synchronously deliver BeginOverlap to the real runtime convex trigger component.
 // =====================================================================================
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMotorSleepTest,
+	"Elysium.Substrate.NpcMotorSleep", GElysiumTestFlags)
+bool FElysiumNpcMotorSleepTest::RunTest(const FString&)
+{
+	FTestWorldWrapper TestWorld;
+	if (!TestWorld.CreateTestWorld(EWorldType::Game)
+		|| !TestWorld.BeginPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	UWorld* World = TestWorld.GetTestWorld();
+	AElysiumNpcBody* Body = World ? World->SpawnActor<AElysiumNpcBody>() : nullptr;
+	if (!TestNotNull(TEXT("native NPC motor spawned"), Body))
+	{
+		return false;
+	}
+
+	Body->InitializeAtFeet(FVector::ZeroVector, 0.0f);
+	UCharacterMovementComponent* Movement = Body->GetCharacterMovement();
+	if (!TestNotNull(TEXT("native NPC motor owns CharacterMovement"), Movement))
+	{
+		return false;
+	}
+	TestFalse(TEXT("NPC capsule never contributes navigation geometry"),
+		Body->GetCapsuleComponent()->CanEverAffectNavigation());
+	TestFalse(TEXT("NPC movement never contributes navigation geometry"),
+		Movement->CanEverAffectNavigation());
+	TestNull(TEXT("an idle NPC does not create a crowd controller before Recast is ready"),
+		Body->GetController());
+	TestFalse(TEXT("movement stays inactive before the runtime barrier"), Movement->IsActive());
+
+	Body->SetRuntimeReady(true);
+	TestTrue(TEXT("the enabled idle body keeps physical collision"), Body->GetActorEnableCollision());
+	TestFalse(TEXT("crossing the runtime barrier does not tick an idle motor"), Movement->IsActive());
+	TestNull(TEXT("crossing the runtime barrier still does not create an idle controller"),
+		Body->GetController());
+
+	Movement->Activate();
+	TestTrue(TEXT("the test can model an outstanding movement request"), Movement->IsActive());
+	Body->Stop();
+	TestFalse(TEXT("Stop deactivates CharacterMovement"), Movement->IsActive());
+	TestFalse(TEXT("Stop disables the movement component tick"), Movement->IsComponentTickEnabled());
+
+	Body->SetEnabled(false);
+	TestFalse(TEXT("a disabled NPC drops physical collision"), Body->GetActorEnableCollision());
+	Body->SetEnabled(true);
+	TestTrue(TEXT("re-enabling restores collision"), Body->GetActorEnableCollision());
+	TestFalse(TEXT("re-enabling an idle NPC does not wake CharacterMovement"), Movement->IsActive());
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEngineTeleportOverlapTest,
 	"Elysium.Substrate.EngineTeleportOverlap", GElysiumTestFlags)
 bool FElysiumEngineTeleportOverlapTest::RunTest(const FString&)
@@ -4283,6 +4389,8 @@ bool FElysiumEngineTeleportOverlapTest::RunTest(const FString&)
 	{
 		return false;
 	}
+	TestFalse(TEXT("the moving faithful player hull never reshapes Recast"),
+		Pawn->GetRootComponent()->CanEverAffectNavigation());
 	PC->Possess(Pawn);
 	TestTrue(TEXT("transient world exposes the possessed pawn"),
 		World->GetFirstPlayerController() == PC && PC->GetPawn() == Pawn);

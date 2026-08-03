@@ -218,6 +218,23 @@ void UElysiumEntityBodies::StopCinematicClip(USkeletalMeshComponent* Body)
 	}
 }
 
+int32 UElysiumEntityBodies::SetFlexControllers(USkeletalMeshComponent* Body,
+	TArrayView<const FElysiumFlexWrite> Writes, TArray<FString>* OutMissing)
+{
+	// No host under `elysium.NpcAnim 0`, and no rig on a model with no facial sidecar. Both stand a
+	// body with a still face rather than failing, so both answer the same way.
+	UElysiumNpcAnimInstance* Inst = Body
+		? Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()) : nullptr;
+	return Inst != nullptr ? Inst->SetFlexControllers(Writes, OutMissing) : INDEX_NONE;
+}
+
+bool UElysiumEntityBodies::SetMouthOpen(USkeletalMeshComponent* Body, float Open)
+{
+	UElysiumNpcAnimInstance* Inst = Body
+		? Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()) : nullptr;
+	return Inst != nullptr && Inst->SetMouthOpen(Open);
+}
+
 bool UElysiumEntityBodies::RefreshNpcIdle(USkeletalMeshComponent* Body, const FString& Stem,
 	const FString& Disposition, int32 IdleVariant)
 {
@@ -286,6 +303,9 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 	// RegisterComponent. The hulls-body path uses relative placement against the root at world origin;
 	// NPC origins are the same Unreal-space verbatim values, so relative == world here.
 	USkeletalMeshComponent* Comp = NewObject<USkeletalMeshComponent>(Owner);
+	// Visual-only meshes follow a pawn/motor or mover; they are never navigation geometry. Set this
+	// before the mesh and transform so none of those property changes can enqueue an octree update.
+	Comp->SetCanEverAffectNavigation(false);
 	Comp->SetMobility(EComponentMobility::Movable);
 	Comp->SetSkeletalMeshAsset(Mesh);
 	Comp->SetupAttachment(Root);
@@ -384,6 +404,7 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisual(const FStr
 	}
 
 	USkeletalMeshComponent* Comp = NewObject<USkeletalMeshComponent>(Owner);
+	Comp->SetCanEverAffectNavigation(false);
 	Comp->SetMobility(EComponentMobility::Movable);
 	Comp->SetSkeletalMeshAsset(Mesh);
 	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -532,6 +553,7 @@ UStaticMeshComponent* UElysiumEntityBodies::BuildBrushVisual(const FString& Stem
 	}
 
 	UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(Owner);
+	Comp->SetCanEverAffectNavigation(false);
 	Comp->SetMobility(EComponentMobility::Movable);
 	Comp->SetStaticMesh(Mesh);
 	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -588,6 +610,7 @@ UStaticMeshComponent* UElysiumEntityBodies::BuildPropVisual(const FString& Stem,
 	// Standard runtime-component recipe (mirrors BuildNpcVisual): NewObject → mesh → attach → place →
 	// register. The map actor sits at the origin, so relative == world for these Unreal-space values.
 	UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(Owner);
+	Comp->SetCanEverAffectNavigation(false);
 	Comp->SetMobility(EComponentMobility::Movable);
 	Comp->SetStaticMesh(Mesh);
 	// prop_dynamic is visual-only (8.3); prop_physics owns collision (8.4). The baked mesh carries

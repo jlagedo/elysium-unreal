@@ -189,7 +189,49 @@ and see whether they ever leave zero.
 One per rigged character (199 of 201), always pointing at the `mouth` flexdesc (index 16)
 and at the jaw bone with `forward = (0, -1, 0)`. This is Source's audio-amplitude jaw: the
 mouth flex is driven by the envelope of whatever the actor is saying, independently of the
-phoneme track.
+phoneme track. In Source the order is `RunFlexRules` and then `ControlMouth`, so the amplitude
+value overwrites whatever the rules computed for that flexdesc.
+
+**But writing flexdesc 16 moves nothing in VtMB.** Across all 86 exported rigs it carries
+**zero flex records** and is read by **zero `FETCH2` op**, while a rule *computes* it on 85 of
+them as a weighted sum of the jaw and lip action units
+(`AU27R × 0.5 + AU25R × 0.35 + AU12AU25 × 0.8 + …`). So `mouth` is a **read-out of how open the
+face already is, not a driver of it** — the amplitude jaw has a slot to write into and no
+geometry behind the slot.
+
+### Divergence — Elysium bridges the jaw into the controller layer
+
+**Faithful behaviour:** the amplitude value is written to flexdesc 16, where it moves nothing,
+because no mesh carries a flex record for it.
+
+**The divergence:** the same weight is *raised* into the `jaw_drop` controller, which the
+shipped rules turn into AU26/AU27 — 85 of 86 rigs carry that controller and all 84 that deform
+anything carry an AU26/AU27 morph. Raised rather than assigned, so an expression already
+holding the jaw wider keeps its own value. The faithful write is kept beside it and is
+inspectable; only the bridge makes a mouth move.
+
+**A second divergence rides on it, for the theatre specifically.** Of the 30 map-placed scene
+files the exported maps resolve, 16 carry a `silence`/`loud` envelope and 14 do not —
+**including all eleven of `sp_theatre`'s**, whose 21 `speak` events would otherwise leave the
+courtroom stone-jawed. The per-line `.vcd` beside each of those lines does carry one, cut from
+the same wav by the same tool, so Elysium reads the envelope out of the line file and places it
+at the event's authored start. Retail's courtroom jaw comes from `mstudiomouth_t` driven live
+off the playing sample by the sound engine, which this path does not reproduce: **the outcome
+matches and the source of the envelope does not.**
+
+### The read-out pattern
+
+That is the second flexdesc of this shape, and the repetition is the fact rather than either
+instance. The four eyelid rules compute `_lowerer`/`_neutral`/`_raiser` flexdescs that carry no
+morph, while the flexdescs that *do* carry eyelid morphs carry no rule; `mstudioeyeball_t`
+would have bridged them and VtMB ships none. `mouth` is the same: a slot Source's engine-side
+system would drive, present in the rig, connected to nothing.
+
+**VtMB's facial rig was authored against structures the shipped files do not contain.** Both
+gaps sit exactly where an engine-side driver — the eyeball chunk, `ControlMouth` — would have
+met the rig. A reproduction that writes the faithful value into either slot is inert, and any
+implementation that makes them move is bridging a gap the data leaves open. Record such a
+bridge as a divergence rather than as a decode.
 
 ## `StudioModel` — two corrections the flex walk forced
 
@@ -311,29 +353,56 @@ procedural-lid or glint data in the models at all. What the shipped rig *does* h
   raiser/tightener/droop left-right pairs), and
 - the 16 eyelid flexdescs the four eyelid rules drive.
 
-So eyes in VtMB are **eyelids only**: blinking and lid shaping are flexes; there is no
-authored eyeball geometry orientation. Any gaze/look-at behaviour is either bone-driven or
-absent. Roadmap **12.4 must be built on that basis** — it cannot decode an eye pose that was
-never authored.
+**The cast has eyes. What it lacks is a way to aim them.** Eyes are authored as their own
+geometry with their own two-layer material, entirely outside the eyeball chunk:
 
-### Divergence — Elysium gives the cast living eyes
+- **400 `eyeball_l.vmt` / `eyeball_r.vmt` files across 199 character directories** — the same
+  199 of 201 rigged characters that carry `mstudiomouth_t`.
+- **394 of them declare a dedicated `Eyes` shader**; 4 fall back to `VertexLitGeneric`.
+- The shader composites two textures: `$basetexture` is the eyeball, `$iris` a separate
+  per-character iris. LaCroix's reads
+  `$basetexture "models/character/eyes/Eyeball2"` over `$iris "models/character/eyes/prince"`.
+- A shared library sits at `materials/models/character/eyes/` (15 materials plus their
+  `.tth`/`.ttz`), so irises are picked from a palette per character rather than painted into
+  each head.
 
-**Faithful behaviour:** eyes do not move. The eye surface is head texture, the only authored
-eye motion is the lids, and no model carries a `StudioEyeball` record to orient, aim, or
-glint. A reproduction of VtMB renders a fixed painted stare under moving eyelids.
+So the model-side inventory is: eye geometry yes, eye material yes, per-character iris yes,
+eyelid flexes yes — **orientation data no**. Blinking and lid shaping are reproducible from
+the flex rig. What no model carries is the record that would tell the renderer where an eye is
+pointing, which is a different and much narrower gap than "no eyes".
 
-**The divergence, on an explicit owner call:** the cast has living eyes. Faces carry the
-theatre act in close-up and the slice's fidelity bar names eyes explicitly, so the painted
-stare is rejected even though it is what retail draws. This is an addition on
-`docs/project/remaster-direction.md`'s Feel layer — there is no VtMB behaviour to be faithful
-to here, so the usual "reproduce by default" resolution has nothing to resolve to.
+Any gaze or look-at behaviour therefore comes from somewhere other than the model: a bone, the
+`Eyes` shader's own parameters, or `StudioRender`'s eye pass sourcing a direction another way.
+Which of those, if any, VtMB uses is **unestablished** — and 486 of 489 character models carry
+no eye bone at all (only `manbat`, `mingxiao` and `doppleganger_female` do), so the bone route
+is ruled out for the ordinary cast. Roadmap **12.4 must be built on that inventory**: it
+reproduces eyes that exist and cannot decode an eye *pose* that was never authored.
 
-The intent is settled and the mechanism is not. Gaze targeting, saccades, an oriented iris
-and a glint are the candidates; each is built one at a time and stays A/B-able against the
-painted baseline, per the Feel-layer rule that a delta is polished by explicit owner call
-rather than in a batch. Whatever is built is **new data beside the model**, since the
-140-byte `StudioEyeball` layout above is decoded but never populated by any shipped file —
-it documents a chunk VtMB's own tools never wrote.
+### Divergence — Elysium gives the cast *moving* eyes
+
+The eyes themselves are a **reproduction**: the geometry, the `Eyes` shader and the
+per-character iris are all authored and all on disk. Only their motion is at issue.
+
+**Faithful behaviour, as far as it is established:** no model carries a `StudioEyeball` record,
+and the ordinary cast carries no eye bone, so nothing in the model data aims an eye. Whether
+retail's renderer moves the iris by some other route is **unestablished** — the `Eyes` shader's
+parameters and `StudioRender`'s eye pass are where to look, and nobody has. Do not read this
+section as evidence that VtMB's eyes are static; read it as evidence that the models do not say.
+
+**The divergence, on an explicit owner call:** the cast's eyes move — gaze that tracks, and
+whatever lid and iris behaviour sells it. Faces carry the theatre act in close-up and the
+slice's fidelity bar names eyes explicitly. If the investigation above finds retail already
+moves them, this stops being a divergence and becomes a reproduction with a recovered rule; if
+it finds retail does not, the addition stands on `docs/project/remaster-direction.md`'s Feel
+layer.
+
+Either way the mechanism is unsettled. Gaze targeting, saccades and an oriented iris are the
+candidates, each built one at a time and A/B-able, per the Feel-layer rule that a delta is
+polished by explicit owner call rather than in a batch.
+
+**Head-turn look-at is a separate and probably larger contributor**, and it is a plain
+reproduction: a character who turns to face the player reads as attentive whatever the eyes do.
+It needs no facial data at all and is not owned by any task here.
 
 Roadmap 12.4 owns the build; this section owns the call.
 
@@ -557,9 +626,10 @@ set by its dialogue clips (`heather` +2.4 %) and the whole of a glb that has non
 - The controller → rule → flexdesc evaluation has to run at load time, not as a flat morph
   list: 44 controllers drive 65 morphs through 60 RPN rules, and the rules are where the
   eyelid interaction lives.
-- There is no eyeball data to consume (eyeballs section above), so nothing decodes an eye
-  pose. Elysium adds living eyes anyway, on the owner call recorded beside that section as a
-  divergence; the lids stay a reproduction.
+- The eyes are authored and ship — geometry, an `Eyes` shader, a per-character iris — but no
+  model carries an eyeball *orientation* record, so nothing in the model data decodes an eye
+  pose (eyeballs section above). Reproducing eyes is not in question; moving them is the open
+  call recorded beside that section. The lids stay a plain reproduction.
 - Lip sync is a three-file join per line — `.lip` for timing, `expressions/<stem>_phonemes`
   for the weights, `mstudiomouth_t` for the amplitude jaw — with the phoneme *string* as the
   key. All three are on disk: `$ELYSIUM_EXPORT_ROOT/lip/`, `$ELYSIUM_EXPORT_ROOT/expressions/`, and `mouths` in the facial

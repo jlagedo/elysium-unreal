@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "ElysiumAudioSubsystem.h"   // FElysiumAudioVoiceHandle + FElysiumPlayParams (passed by value)
+#include "ElysiumEntity.h"           // FElysiumFlexWrite (passed by view)
 #include "ElysiumEntityHandle.h"
 
 class FElysiumDlgConversation;
@@ -30,9 +31,15 @@ public:
 	virtual ~IElysiumNpcMotor() = default;
 	virtual bool MoveTo(const FVector& FeetDestination, float AcceptanceRadiusCm,
 		float SpeedCmPerSecond) = 0;
+	// Turn in place toward a yaw without travelling — HL1 CCineMonster's TASK_FACE_SCRIPT, which a
+	// beat runs after reaching its mark and which `m_fMoveTo 5` runs on its own. Cancelled by
+	// Stop/Teleport/MoveTo like any other request.
+	virtual void Face(float YawDegrees) = 0;
 	virtual void Stop() = 0;
 	virtual void Teleport(const FVector& FeetOrigin, float YawDegrees) = 0;
 	virtual void SetEnabled(bool bEnabled) = 0;
+	// The body's live feet/yaw plus what its outstanding request is doing. A turn-in-place reports
+	// Moving until it is aligned, then falls back to Idle — there is only one request at a time.
 	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) = 0;
 };
 
@@ -103,6 +110,16 @@ public:
 		bool bLoop, float* OutSeconds) = 0;
 	virtual bool SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds) = 0;
 	virtual void StopCinematicClip(USkeletalMeshComponent* Body) = 0;
+
+	// 12.3 — write named flex controllers on a body's facial rig, evaluating the rule/ramp chain once
+	// for the whole set. INDEX_NONE when the body carries no rig, which is the majority of the cast.
+	virtual int32 SetFlexControllers(USkeletalMeshComponent* Body,
+		TArrayView<const FElysiumFlexWrite> Writes, TArray<FString>* OutMissing) { return INDEX_NONE; }
+
+	// 12.5 — the amplitude jaw, 0 closed to 1 at the line's own peak. Not a controller write: it
+	// targets the flexdesc `mstudiomouth_t` names and so lands below the rule layer. False when the
+	// body carries no rig or no mouth record.
+	virtual bool SetMouthOpen(USkeletalMeshComponent* Body, float Open) { return false; }
 
 	// v4 animated props. Model selection is explicit and manifest-backed; ordinary props stay on
 	// the existing static representation. The skeletal surface remains non-solid.

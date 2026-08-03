@@ -159,10 +159,32 @@ both the actor's business.
 
 `SILENCE` and `LOUD` always sit on a `Speech Triggers` channel beside the line's `speak`
 event, and their `param` is the event's own duration as a string (`"0.590"` for
-`time 1.110000 1.700000`) — exact on 21,877 of 21,898. They are the **amplitude envelope of
-the line**, cut from the wav at author time: 4,927 of 5,444 scenes carry one. This is
-VtMB's jaw-flap track and is independent of the `.lip` phoneme files
-(`docs/vtmb/facial_animation.md`) — as is `mstudiomouth_t`, the model's own amplitude-driven jaw.
+`time 1.110000 1.700000`) — exact on 21,877 of 21,898. They are cut from the wav at author
+time: 4,927 of 5,444 scenes carry a set. They are independent of the `.lip` phoneme files
+(`docs/vtmb/facial_animation.md`) and of `mstudiomouth_t`, the model's own amplitude jaw.
+
+**It is a sparse accent-and-pause envelope, not a continuous track.** Over a 400-scene sample
+carrying 1,581 markers, consecutive spans on one actor **gap 1,220 times and abut twice**, with
+one overlap. A `silence` runs 0.11–1.39 s (median 0.27) and a `loud` 0.05–0.20 s (median 0.11);
+together they cover a median **17%** of the line's audio at roughly 2.2 silences and 1.7 louds
+per line. The author marked the line's pauses and its peaks and said nothing about the rest.
+
+**What the markers mean is measurable against the audio they were cut from.** Decoding each
+line's `.mp3` and taking the RMS envelope normalised to that line's own p99, over 110 corpus
+lines plus all 35 of the courtroom cast's:
+
+| Region | Mean normalised RMS |
+|---|---:|
+| inside a `silence` span | 0.037 |
+| the gaps between spans | 0.312 |
+| inside a `loud` span | 0.640, span peaks at a median 1.17 |
+
+A `loud` span's peaks are the line's own maxima, so pinning `loud` to a fully open jaw puts
+`silence` at 0.06 and the unmarked majority at **0.49**. Nothing in the `.vcd` says a marker
+ramps — all 1,401 authored `event_ramp`s sit on `expression` and `gesture`, none on
+`silence`/`loud` — so stepping is the literal reading, and what the actor's AI object does with
+the event is undecoded. For reference, the wavs' own envelopes rise 10→90% into a `loud` in a
+median 100 ms and fall 90→10% into a `silence` in 150 ms.
 
 `CAMERASHOT` is registered, named, parsed — and unhandled. `SECTION`, `LOOKAT`, `MOVETO`,
 `FACE`, `FLEXANIMATION`, `SUBSCENE`, `LOOP`, `CAMERAMOVE` and `CAMERARESTORE` all have

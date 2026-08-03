@@ -15,6 +15,10 @@ AElysiumPawn::AElysiumPawn()
 	// Source's player hull, 32 x 32 x 72 units -> 81.28 x 81.28 x 182.88 cm. The box extent is half
 	// of each, and the component's origin is the box centre, so the feet sit at -91.44.
 	Hull = CreateDefaultSubobject<UBoxComponent>(TEXT("Hull"));
+	// A moving pawn is an agent on the graph, never geometry that reshapes it. UShapeComponent
+	// defaults this to true, and APawn does not propagate its actor-level navigation flag to an
+	// arbitrary box root, so leaving it enabled dirties Recast tiles on every move and crouch.
+	Hull->SetCanEverAffectNavigation(false);
 	Hull->InitBoxExtent(FVector(ElysiumMove::HullHalfWidth, ElysiumMove::HullHalfWidth,
 		ElysiumMove::StandHeight * 0.5f));
 	Hull->SetCollisionProfileName(UCollisionProfile::Pawn_ProfileName);
