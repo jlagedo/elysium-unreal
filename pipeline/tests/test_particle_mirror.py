@@ -7,6 +7,9 @@ from PIL import Image
 from elysium_pipeline.exporters.UE_extract_particles import normalise_rain_sprite
 
 
+REPO = Path(__file__).resolve().parents[2]
+
+
 class ParticleMirrorTests(unittest.TestCase):
     def test_rain_tga_normalization_preserves_rgba(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -24,6 +27,24 @@ class ParticleMirrorTests(unittest.TestCase):
                 self.assertEqual(result.size, (5, 3))
                 self.assertEqual(result.getpixel((0, 0)), (68, 68, 68, 255))
                 self.assertEqual(result.getpixel((2, 1)), (50, 50, 50, 255))
+
+    def test_standalone_particle_replacement_drains_compilation_before_delete(self):
+        generator = (REPO / "pipeline/unreal/make_particle_systems.py").read_text(
+            encoding="utf-8"
+        )
+        builder = (
+            REPO / "Source/ElysiumUE/Private/Editor/ElysiumParticleAssetBuilder.cpp"
+        ).read_text(encoding="utf-8")
+
+        preload = generator.index("existing = []")
+        finish = generator.index("finish_asset_compilation()")
+        delete = generator.index("delete_owned_asset(asset)")
+        self.assertLess(preload, finish)
+        self.assertLess(finish, delete)
+        self.assertIn(
+            "UElysiumParticleAssetBuilder::FinishAssetCompilation", builder
+        )
+        self.assertIn("FAssetCompilingManager::Get().FinishAllCompilation()", builder)
 
 
 if __name__ == "__main__":

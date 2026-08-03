@@ -83,6 +83,13 @@ class Manifest:
         saved = self.data.get("tasks", {}).get(task.name, {})
         if saved.get("status") != "complete" or saved.get("fingerprint") != fingerprint:
             return False
+        # A generated package family is an inventory, not merely one sentinel file.  Requiring
+        # the current inventory to agree with the recorded one makes a removed or unexpected
+        # asset invalidate the task just like a missing declared output does.
+        current_outputs = sorted(str(path) for path in task.outputs)
+        saved_outputs = sorted(str(path) for path in saved.get("outputs", []))
+        if current_outputs != saved_outputs:
+            return False
         return all(path.exists() for path in task.outputs)
 
     def record(self, result: TaskResult) -> None:
@@ -107,6 +114,65 @@ class Manifest:
             handle.write(payload)
             temporary = Path(handle.name)
         temporary.replace(self.path)
+
+
+class ContentDigestCache:
+    """Persistent SHA-256 cache keyed by stable file metadata."""
+
+    SCHEMA = 1
+
+    def __init__(self, path: Path):
+        self.path = path
+        self.entries: dict[str, dict[str, Any]] = {}
+        self.dirty = False
+        if path.is_file():
+            try:
+                loaded = json.loads(path.read_text(encoding="utf-8"))
+                if loaded.get("schema") == self.SCHEMA:
+                    self.entries = loaded.get("entries", {})
+            except (OSError, ValueError):
+                pass
+
+    def digest(self, path: Path) -> str:
+        resolved = path.resolve()
+        key = str(resolved)
+        stat = resolved.stat()
+        identity = {
+            "size": stat.st_size,
+            "mtime_ns": stat.st_mtime_ns,
+            "ctime_ns": stat.st_ctime_ns,
+        }
+        saved = self.entries.get(key)
+        if saved and all(saved.get(name) == value for name, value in identity.items()):
+            value = saved.get("sha256")
+            if isinstance(value, str) and len(value) == 64:
+                return value
+
+        digest = hashlib.sha256()
+        with resolved.open("rb") as handle:
+            while chunk := handle.read(1024 * 1024):
+                digest.update(chunk)
+        value = digest.hexdigest()
+        self.entries[key] = {**identity, "sha256": value}
+        self.dirty = True
+        return value
+
+    def write(self) -> None:
+        if not self.dirty:
+            return
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        payload = json.dumps(
+            {"schema": self.SCHEMA, "entries": self.entries},
+            indent=2,
+            sort_keys=True,
+        ) + "\n"
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", newline="\n", delete=False, dir=self.path.parent
+        ) as handle:
+            handle.write(payload)
+            temporary = Path(handle.name)
+        temporary.replace(self.path)
+        self.dirty = False
 
 
 class TaskGraph:
@@ -251,6 +317,65 @@ def fingerprint_paths(paths: Iterable[Path], *, extra: Iterable[str] = ()) -> st
         else:
             digest.update(b"missing")
         digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def fingerprint_content(
+    paths: Iterable[Path],
+    *,
+    extra: Iterable[str] = (),
+    cache: ContentDigestCache | None = None,
+) -> str:
+    """Hash path identities and file bytes rather than mtimes.
+
+    Exporters are allowed to replace a generated intermediate with byte-identical output.  An
+    mtime fingerprint would turn that harmless rewrite into a costly Unreal bake, while a content
+    fingerprint remains stable.  Directory membership is part of the digest, so additions,
+    removals, and renames still invalidate it.
+    """
+
+    digest = hashlib.sha256()
+    for value in extra:
+        digest.update(value.encode("utf-8"))
+        digest.update(b"\0")
+
+    roots = sorted(
+        {item.resolve() for item in paths},
+        key=lambda item: str(item).lower(),
+    )
+    for root in roots:
+        digest.update(str(root).encode("utf-8", errors="surrogateescape"))
+        digest.update(b"\0")
+        if root.is_file():
+            entries = ((root, Path(root.name)),)
+        elif root.is_dir():
+            entries = tuple(
+                (child, child.relative_to(root))
+                for child in sorted(
+                    (entry for entry in root.rglob("*") if entry.is_file()),
+                    key=lambda item: str(item).lower(),
+                )
+            )
+        else:
+            digest.update(b"missing\0")
+            continue
+
+        for child, relative in entries:
+            digest.update(relative.as_posix().encode("utf-8", errors="surrogateescape"))
+            digest.update(b"\0")
+            try:
+                if cache is not None:
+                    child_digest = cache.digest(child)
+                else:
+                    content = hashlib.sha256()
+                    with child.open("rb") as handle:
+                        while chunk := handle.read(1024 * 1024):
+                            content.update(chunk)
+                    child_digest = content.hexdigest()
+                digest.update(child_digest.encode("ascii"))
+            except OSError:
+                digest.update(b"missing")
+            digest.update(b"\0")
     return digest.hexdigest()
 
 

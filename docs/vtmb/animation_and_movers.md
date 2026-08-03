@@ -22,8 +22,8 @@ confirmed. All counts are over the **patched** install.
 formats, materials) and deliberately **raises** on the ~485 `models/character/**`
 skeletal models. This part fills that gap: bones, sequences, the compressed
 animation tracks, skinning, and attachments — enough to rig and play a clip. The **face**
-— flex/morph data, the flex-controller and flex-rule layers, the (absent) eyeball chunks and
-the `.lip` phoneme files — is `docs/vtmb/facial_animation.md`.
+— flex/morph data, the flex-controller and flex-rule layers, the eyeball records and the eye
+system they feed, and the `.lip` phoneme files — is `docs/vtmb/facial_animation.md`.
 
 **Scale** [data]: **427** `character/**` `.mdl` in the VPKs (485 merged with the
 patch); **377 are true skeletons** (>5 bones), median **67 bones**, up to 270
@@ -204,6 +204,13 @@ axis extents rather than nearby integers. Their distribution is 9×1 (235), 3×3
 A non-zero `loop` is a wrap modulus. The player-body corpus reads `move_yaw` and
 `hit_yaw` with `flags` 1, `start` −180, `end` 180 and `loop` 360 — matching the
 `paramstart`/`paramend` of every 9×1 sequence that selects them.
+
+**That pair is the whole vocabulary.** Across the merged install, 451 models carry pose
+parameters, and on **all 451** index 0 is `move_yaw` and index 1 is `hit_yaw`. Exactly two
+models carry more — `(move_yaw, hit_yaw, aim_yaw, aim_pitch)`. No model in the install declares
+`head_yaw`, `head_pitch`, `head_roll`, or any `body_*`, `spine_*` or `neck_trans` parameter, so
+the engine's spawn-time lookups for those names resolve to −1 on every character
+(`docs/vtmb/facial_animation.md` → Gaze).
 
 An axis resolves by wrapping the parameter into its loop range, normalizing it over the
 descriptor's `start`..`end`, remapping through the sequence's `paramstart`..`paramend`,
@@ -1235,7 +1242,7 @@ player body cannot replace an ordinary NPC's materials.
 | attachment / hitbox | 92B / 68B | **60B / 32B** |
 | skin `NumBones` byte | reliable | **unused (0)** — derive from weights |
 | `mstudioflex_t` / vertanim | 60B / 16B `short delta[3]` + `short ndelta[3]` | **32B / 8B**, and the 8B record stores *directions* into a renderer-side unit-vector table (`docs/vtmb/facial_animation.md`) |
-| `mstudioeyeball_t` | 168B, authored on every speaking character | **140B, and never authored** — `NumEyeballs` is 0 on all 4,444 models |
+| `mstudioeyeball_t` | 168B, authored on every speaking character | **140B**, authored two per character on 301 models — but the count/index pair sits at `StudioModel`+192/+196, not Source's slot |
 
 ---
 

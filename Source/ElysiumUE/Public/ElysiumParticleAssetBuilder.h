@@ -65,6 +65,10 @@ class ELYSIUMUE_API UElysiumParticleAssetBuilder final : public UBlueprintFuncti
 	GENERATED_BODY()
 
 public:
+	/** Wait for any Niagara work started while existing systems were loaded for replacement. */
+	UFUNCTION(BlueprintCallable, Category="Elysium|Particles")
+	static void FinishAssetCompilation();
+
 	/** Author one Niagara system per VtMB emitter closure. Null on any authoring error. */
 	UFUNCTION(BlueprintCallable, Category="Elysium|Particles")
 	static UNiagaraSystem* BuildParticleSystem(

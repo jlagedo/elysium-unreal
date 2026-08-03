@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+import ast
+from collections import defaultdict
+from collections.abc import Sequence
 import hashlib
 import json
 from pathlib import Path
@@ -15,8 +17,15 @@ from elysium_pipeline.clean import (
     mark_complete,
     validate_clean_targets,
 )
-from elysium_pipeline.tasking import Manifest, Task, TaskGraph, TaskResult, fingerprint_paths
-from elysium_pipeline import unreal
+from elysium_pipeline.tasking import (
+    Manifest,
+    Task,
+    TaskGraph,
+    TaskResult,
+    fingerprint_content,
+    fingerprint_paths,
+)
+from elysium_pipeline import bake_cache, unreal
 
 
 class OfflineExportFailure(RuntimeError):
@@ -271,9 +280,55 @@ def run_offline_profile(
     return maps, results
 
 
+def _policy_script_paths(config) -> list[Path]:
+    unreal_root = config.repo_root / "pipeline" / "unreal"
+    build_content = unreal_root / "build_content.py"
+    scripts = [build_content, unreal_root / "make_ui_fonts.py"]
+    try:
+        tree = ast.parse(build_content.read_text(encoding="utf-8"))
+        generator_names: list[str] = []
+        for node in tree.body:
+            if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                continue
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if not any(
+                isinstance(target, ast.Name) and target.id == "GENERATORS"
+                for target in targets
+            ):
+                continue
+            value = ast.literal_eval(node.value)
+            generator_names = [str(item) for item in value]
+            break
+        scripts.extend(unreal_root / name for name in generator_names)
+    except (OSError, SyntaxError, ValueError, TypeError):
+        # The umbrella itself still invalidates the policy task.  A malformed file will then fail
+        # in Unreal with its real diagnostic instead of being hidden by fingerprint discovery.
+        pass
+
+    # Follow local helper imports without importing the modules (they import ``unreal`` and are
+    # only executable inside an editor process).
+    pending = list(scripts)
+    seen = set(scripts)
+    while pending:
+        script = pending.pop()
+        try:
+            tree = ast.parse(script.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError, UnicodeError):
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom) or node.module != "pipeline.unreal":
+                continue
+            for alias in node.names:
+                dependency = unreal_root / f"{alias.name}.py"
+                if dependency.is_file() and dependency not in seen:
+                    seen.add(dependency)
+                    pending.append(dependency)
+    return sorted(seen, key=lambda path: str(path).lower())
+
+
 def _policy_fingerprint(config) -> str:
     scripts = [
-        config.repo_root / "pipeline" / "unreal",
+        *_policy_script_paths(config),
         config.repo_root / "Content" / "Fonts",
         config.export_root / "particles" / "manifest.json",
         config.export_root / "particles" / "dropletfast.tga",
@@ -284,8 +339,15 @@ def _policy_fingerprint(config) -> str:
         config.export_root / "particles" / "fortituderings.png",
         config.export_root / "particles" / "d_targetblob.png",
         config.export_root / "particles" / "furball.png",
+        config.repo_root / "Source" / "ElysiumUE" / "Public" / "ElysiumRainAssetBuilder.h",
+        config.repo_root
+        / "Source"
+        / "ElysiumUE"
+        / "Private"
+        / "Editor"
+        / "ElysiumRainAssetBuilder.cpp",
     ]
-    return fingerprint_paths(scripts, extra=("policy",))
+    return fingerprint_content(scripts, extra=("policy-v2",))
 
 
 def ensure_policy_content(config, runner, *, force: bool = False) -> TaskResult:
@@ -297,15 +359,11 @@ def ensure_policy_content(config, runner, *, force: bool = False) -> TaskResult:
 
     UE_extract_particles.main(index=install.build_index(dirs=("particles",)))
     manifest = Manifest(config.export_root / MANIFEST_FILE)
+    font_root = config.repo_root / "Content" / "VtMB" / "UI" / "Fonts"
     outputs = (
         config.repo_root / "Content" / "Elysium.umap",
         config.repo_root / "Content" / "VtMB" / "Materials" / "M_World_Opaque.uasset",
-        config.repo_root
-        / "Content"
-        / "VtMB"
-        / "UI"
-        / "Fonts"
-        / unreal.FONT_ASSETS[0],
+        *(font_root / name for name in unreal.FONT_ASSETS),
         config.repo_root / "Content" / "VtMB" / "Particles" / "M_ElysiumRain.uasset",
         config.repo_root / "Content" / "VtMB" / "Particles" / "NS_ElysiumRain.uasset",
     )
@@ -329,62 +387,119 @@ def _baked_package(config, map_name: str) -> Path:
     )
 
 
+def _verification_task(config, map_name: str) -> Task:
+    baked_root = _baked_package(config, map_name).parent
+    fingerprint = fingerprint_paths(
+        [
+            baked_root,
+            config.repo_root / "pipeline" / "unreal" / "bake_verify.py",
+            config.repo_root / "pipeline" / "unreal" / "bake_lib.py",
+            config.repo_root
+            / "pipeline"
+            / "src"
+            / "elysium_pipeline"
+            / "validation"
+            / "png_alpha.py",
+        ],
+        extra=("verify-bake-v2", map_name),
+    )
+    output = _baked_package(config, map_name)
+    return Task(
+        name=f"verify:{map_name}",
+        action=lambda: None,
+        fingerprint=lambda value=fingerprint: value,
+        outputs=(output,) if output.is_file() else (),
+    )
+
+
 def bake_and_verify(
     config,
     runner,
     maps: Sequence[str],
     *,
     force: bool = False,
-    changed_maps: Iterable[str] = (),
 ) -> None:
     manifest = Manifest(config.export_root / MANIFEST_FILE)
-    changed = set(changed_maps)
-    wanted: list[str] = []
-    for name in maps:
-        output = _baked_package(config, name)
-        fingerprint = fingerprint_paths(
-            [
-                config.export_root / name,
-                config.repo_root / "pipeline" / "unreal" / "bake_map.py",
-                config.repo_root / "pipeline" / "unreal" / "bake_lib.py",
-            ],
-            extra=("bake", name),
+    names = list(dict.fromkeys(maps))
+    plan = bake_cache.plan_stages(manifest, config, names, force=force)
+    asset_plan_path = None
+    asset_plan = None
+    if plan:
+        asset_plan_path, asset_plan = bake_cache.create_asset_run_plan(
+            config, plan, force=force
         )
-        probe = Task(
-            f"bake:{name}",
-            lambda: None,
-            fingerprint=lambda value=fingerprint: value,
-            outputs=(output,),
-        )
-        if force or name in changed or not manifest.can_skip(probe, fingerprint):
-            wanted.append(name)
-    if wanted:
-        try:
-            unreal.bake_maps(config, runner, wanted)
-        except Exception as exc:
-            raise ExportBakeFailure(str(exc)) from exc
-        for name in wanted:
-            output = _baked_package(config, name)
-            if not output.is_file():
-                raise ExportBakeFailure(f"bake did not produce {output}")
-            fingerprint = fingerprint_paths(
-                [
-                    config.export_root / name,
-                    config.repo_root / "pipeline" / "unreal" / "bake_map.py",
-                    config.repo_root / "pipeline" / "unreal" / "bake_lib.py",
-                ],
-                extra=("bake", name),
-            )
-            manifest.record(
-                TaskResult(
-                    name=f"bake:{name}",
-                    status="ok",
-                    duration_seconds=0.0,
-                    fingerprint=fingerprint,
-                    outputs=[str(output)],
+
+    try:
+        if plan:
+            grouped: dict[tuple[str, ...], list[str]] = defaultdict(list)
+            for name, stages in plan.items():
+                grouped[stages].append(name)
+            for stages, stage_maps in grouped.items():
+                unreal.bake_maps(
+                    config,
+                    runner,
+                    stage_maps,
+                    stages=",".join(stages),
+                    asset_plan=asset_plan_path,
                 )
+
+        missing = [
+            str(_baked_package(config, name))
+            for name in plan
+            if not _baked_package(config, name).is_file()
+        ]
+        if missing:
+            raise ExportBakeFailure("bake did not produce: " + ", ".join(missing))
+
+        reports = (
+            bake_cache.load_asset_run_reports(config, asset_plan)
+            if asset_plan is not None
+            else {}
+        )
+        if asset_plan is not None:
+            bake_cache.assert_asset_run_inputs_current(config, asset_plan)
+        changed = bake_cache.mutated_maps(reports)
+        verification = []
+        for name in names:
+            task = _verification_task(config, name)
+            fingerprint = task.fingerprint() if task.fingerprint else None
+            if name in changed or force or not manifest.can_skip(task, fingerprint):
+                verification.append(name)
+        if not plan and not verification:
+            return
+        if verification:
+            unreal.verify_bakes(config, runner, verification)
+        if asset_plan is not None:
+            bake_cache.assert_asset_run_inputs_current(config, asset_plan)
+    except ExportBakeFailure:
+        raise
+    except Exception as exc:
+        raise ExportBakeFailure(str(exc)) from exc
+
+    # A commandlet can save partial packages before failing.  Advance neither the stage receipts
+    # nor the verification receipt until every selected map has passed independent verification.
+    if asset_plan is not None:
+        bake_cache.promote_asset_run(config, asset_plan, reports)
+    bake_cache.record_stages(
+        manifest,
+        config,
+        plan,
+        frozen_fingerprints={
+            name: value["fingerprints"]
+            for name, value in (asset_plan or {}).get("maps", {}).items()
+        },
+    )
+    for name in verification:
+        task = _verification_task(config, name)
+        manifest.record(
+            TaskResult(
+                name=task.name,
+                status="ok",
+                duration_seconds=0.0,
+                fingerprint=task.fingerprint() if task.fingerprint else None,
+                outputs=[str(path) for path in task.outputs],
             )
-    unreal.verify_bakes(config, runner, maps)
+        )
 
 
 def export_profile(
@@ -396,7 +511,7 @@ def export_profile(
     force: bool = False,
     jobs: int | None = None,
 ) -> list[str]:
-    maps, results = run_offline_profile(
+    maps, _results = run_offline_profile(
         config,
         profile,
         clean=clean,
@@ -407,12 +522,7 @@ def export_profile(
         ensure_policy_content(config, runner, force=force or clean)
     except Exception as exc:
         raise ExportBakeFailure(str(exc)) from exc
-    changed = [
-        name.removeprefix("map:")
-        for name, result in results.items()
-        if name.startswith("map:") and result.status == "ok"
-    ]
-    bake_and_verify(config, runner, maps, force=force or clean, changed_maps=changed)
+    bake_and_verify(config, runner, maps, force=force or clean)
     mark_complete(config.export_root)
     return maps
 
@@ -473,7 +583,7 @@ def export_targeted_maps(
             ensure_policy_content(config, runner, force=force)
         except Exception as exc:
             raise ExportBakeFailure(str(exc)) from exc
-        bake_and_verify(config, runner, names, force=True, changed_maps=names)
+        bake_and_verify(config, runner, names, force=force)
     return names
 
 
@@ -538,7 +648,6 @@ def export_model(
             runner,
             dependent_maps,
             force=True,
-            changed_maps=dependent_maps,
         )
     return config.export_root / "npc"
 

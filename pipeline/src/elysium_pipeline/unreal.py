@@ -94,6 +94,7 @@ def bake_maps(
     maps: Sequence[str],
     *,
     stages: str = DEFAULT_BAKE_STAGES,
+    asset_plan: Path | None = None,
     batch_size: int = 4,
 ) -> None:
     maps = list(dict.fromkeys(maps))
@@ -105,6 +106,7 @@ def bake_maps(
             f"-script={config.repo_root / 'pipeline/unreal/bake_map.py'}",
             f"-BakeMaps={','.join(batch)}",
             f"-BakeStages={stages}",
+            *([f"-BakeAssetPlan={asset_plan}"] if asset_plan is not None else []),
             "-AllowCommandletRendering",
             "-unattended",
             "-nosplash",
@@ -120,7 +122,14 @@ def bake_maps(
             failures: list[str] = []
             for name in batch:
                 try:
-                    bake_maps(config, runner, [name], stages=stages, batch_size=1)
+                    bake_maps(
+                        config,
+                        runner,
+                        [name],
+                        stages=stages,
+                        asset_plan=asset_plan,
+                        batch_size=1,
+                    )
                 except UnrealFailure:
                     failures.append(name)
             raise UnrealFailure(

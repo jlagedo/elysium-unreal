@@ -5,10 +5,34 @@ import json
 import tempfile
 import unittest
 
-from elysium_pipeline.tasking import Manifest, Task, TaskFailure, TaskGraph
+from elysium_pipeline.tasking import (
+    ContentDigestCache,
+    Manifest,
+    Task,
+    TaskFailure,
+    TaskGraph,
+    fingerprint_content,
+)
 
 
 class ManifestContractTests(unittest.TestCase):
+    def test_content_fingerprint_ignores_identical_rewrite_and_detects_new_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            product = root / "product"
+            cache_path = root / "digests.json"
+            product.write_bytes(b"first")
+            cache = ContentDigestCache(cache_path)
+            initial = fingerprint_content([product], cache=cache)
+            self.assertEqual(fingerprint_content([product]), initial)
+            cache.write()
+
+            product.write_bytes(b"first")
+            cache = ContentDigestCache(cache_path)
+            self.assertEqual(fingerprint_content([product], cache=cache), initial)
+            product.write_bytes(b"other")
+            self.assertNotEqual(fingerprint_content([product], cache=cache), initial)
+
     def test_manifest_records_run_context_tool_version_and_task_dependencies(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -122,6 +146,38 @@ class ManifestContractTests(unittest.TestCase):
             result = TaskGraph([task]).run(manifest=manifest)
 
             self.assertEqual(result["bundle:audio"].status, "ok")
+            self.assertEqual(calls, 2)
+
+    def test_changed_output_inventory_invalidates_saved_task(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            first_output = root / "first"
+            added_output = root / "added"
+            first_output.write_text("one", encoding="utf-8")
+            added_output.write_text("two", encoding="utf-8")
+            manifest = Manifest(root / ".elysium-manifest.json")
+            calls = 0
+
+            def action() -> None:
+                nonlocal calls
+                calls += 1
+
+            initial = Task(
+                "bake:test:textures",
+                action,
+                fingerprint=lambda: "same-inputs",
+                outputs=(first_output,),
+            )
+            TaskGraph([initial]).run(manifest=manifest)
+            expanded = Task(
+                "bake:test:textures",
+                action,
+                fingerprint=lambda: "same-inputs",
+                outputs=(first_output, added_output),
+            )
+            result = TaskGraph([expanded]).run(manifest=manifest)
+
+            self.assertEqual(result["bake:test:textures"].status, "ok")
             self.assertEqual(calls, 2)
 
     def test_failed_task_is_never_a_skip_candidate(self) -> None:

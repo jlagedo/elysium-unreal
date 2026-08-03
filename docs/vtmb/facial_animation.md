@@ -4,7 +4,10 @@ VtMB animates a face with **flexes**: per-vertex morph targets stored inside the
 driven by a small set of named *flex controllers*, which are themselves driven by an RPN
 *flex-rule* per morph. Lipsync feeds those controllers from a plain-text **`.lip`** phoneme
 document shipped beside each line of audio, through a per-character **`expressions/*.vfe`**
-weight table. There is no separate eye system in the shipped data.
+weight table. Eyes are a **second system that meets the flex rig from outside it**: every
+character model carries `StudioEyeball` records, the server runs a gaze and blink behaviour,
+and the renderer's eye pass aims the iris and writes the eyelid flexdescs back into the flex
+weights the rules just computed.
 
 Struct offsets are the `.mdl` v2531 layout (`docs/vtmb/mdl_v2531.md` holds the rest of the format);
 the runtime semantics come from `Bin/StudioRender.dll` (imagebase `0x2C000000`) and
@@ -22,7 +25,7 @@ Related: `docs/vtmb/choreographed_scenes.md` (the `.vcd` scenes that schedule th
 | `.mdl` read across the merged install | **4,444** (1 unreadable) |
 | …carrying flex data | **201** |
 | …carrying a `mstudiomouth_t` | **199** |
-| …carrying eyeball data | **0** |
+| …carrying `StudioEyeball` records | **301** (two per model) |
 | `StudioFlex` records | **17,960** (17,846 compressed / 114 raw) |
 | vertex-animation records | **3,314,219** |
 | `.lip` phoneme files | **7,136** (31 with no sibling audio) |
@@ -36,10 +39,16 @@ Related: `docs/vtmb/choreographed_scenes.md` (the `.vcd` scenes that schedule th
 `NumFlexDescs` 0, as do all **21** `models/hands/**.mdl` first-person viewmodels — so the 56
 clan bodies `clandoc000.txt` names (roadmap PL13) have no flexdescs, no
 controllers, no rules and no `StudioFlex` records at all. The PC's face is authored only in the
-NPC-model portraits VtMB shows elsewhere; on the body itself there is nothing to drive. The
-eyeball finding below is the same shape and carries the same consequence: the lipsync and
-expression layers (12.3, 12.5) apply to NPCs, and any PC facial performance would be a remaster
-addition under `docs/project/remaster-direction.md`'s rule, not a reproduction.
+NPC-model portraits VtMB shows elsewhere; on the body itself there is nothing to drive. So the
+lipsync and expression layers (12.3, 12.5) apply to NPCs, and any PC facial performance would be
+a remaster addition under `docs/project/remaster-direction.md`'s rule, not a reproduction.
+
+**The PC's eyes are the exception, and they cut the other way.** 57 of those 59 player models
+carry a full pair of `StudioEyeball` records. Eye aiming needs no flex data — it is a
+renderer-side basis built from the record and the gaze target — so the player's irises track
+exactly like an NPC's. What the PC cannot do is blink or shape a lid: the eye pass delivers its
+lid result into a flexdesc, and a model with `NumFlexDescs` 0 has no flexdesc to receive it and
+no morph behind it. A still face with live eyes is the faithful state.
 
 ## The studiohdr facial block
 
@@ -152,31 +161,38 @@ with `fc0` = `right_lid_raiser`, `fc4` = `right_lid_droop`, `fc6` = `blink` — 
 suppressed by droop and cancelled by a blink, its neutral the complement, and the lowerer
 driven by blink alone.
 
-**The four eyelid rules drive nothing on their own, and the gap is structural.** The
-flexdescs that carry eyelid *morphs* — `upper_right`, `lower_right`, `upper_left`,
-`lower_left`, flexdescs 0/4/8/12 — carry no rule. The `_lowerer`/`_neutral`/`_raiser`
-flexdescs the rules above compute carry no morph. Nothing in the shipped rig connects the
-two, so evaluating the rules exactly as authored moves no eyelid vertex at all.
+**The four eyelid rules do not reach a morph by themselves — the eyeball record is the bridge,
+and it is authored.** The flexdescs that carry eyelid *morphs* — `upper_right`, `lower_right`,
+`upper_left`, `lower_left`, flexdescs 0/4/8/12 — carry no rule. The `_lowerer`/`_neutral`/
+`_raiser` flexdescs the rules above compute carry no morph. `mstudioeyeball_t` connects the two,
+and the wiring reads back exactly: on `jeanette` the right eye's record names
+`upperflexdesc = {1, 2, 3}`, `lowerflexdesc = {5, 6, 7}`, `upperlidflexdesc = 0`,
+`lowerlidflexdesc = 4`, and the left eye's `{9, 10, 11}` / `{13, 14, 15}` / `8` / `12`. The rule
+outputs are the record's inputs and the morph-carrying flexdescs are its outputs.
 
-Source closes that gap inside `mstudioeyeball_t`, whose `upperlidflexdesc` takes
-`Σ(lid weight × uppertarget[k])` over the three lid states. VtMB ships no eyeball record on
-any model (see below), so the bridge is absent from the data rather than from our reading of
-it. The rig was authored for a structure the shipped files do not contain.
+The renderer closes it in `R_StudioEyeballPosition` (`StudioRender.dll` `0x2C0502C0`), per eye,
+per frame, writing back into the same flex-weight array it was handed:
 
-**Elysium reconstructs the bridge — uncertain, and it may be an addition rather than a
-reproduction.** The three lid angles are recoverable from the ramps (`lowered` is the low
-ramp's `Target2`, `neutral` the hinge, `raised` the high ramp's `Target1`) and the three
-sources match by name. Two things support it: without it a blink moves nothing, and the
-resting lid sits at 0 rather than its 0.208 hinge, which leaves the lowered-lid morph on at
-0.565 on every face in the game; with it, all 84 deforming rigs resolve to exactly zero morph
-weight at rest. That last check is independent of how the bridge was constructed, which is
-what makes it evidence.
+```
+f   = Σ_{k<3} asin(uppertarget[k] / radius) × flexweight[upperflexdesc[k]]
+upL = VectorIRotate(state.up,      boneToWorld)      // the lid basis, back in bone space
+fwL = VectorIRotate(state.forward, boneToWorld)
+v   = upL × (sin(f) × radius) + fwL × (cos(f) × radius)
+flexweight[upperlidflexdesc] = dot(v, eyeball.up)    // and the same for the lower lid
+```
 
-What it does not establish is whether **retail** bridges it. If the original engine also
-found no eyeball record, VtMB's lids may never have moved, and this reconstruction is an
-improvement on the Feel layer rather than a recovery — the same footing as the eye divergence
-below. Evidence that would settle it: capture retail's lid flexdesc weights across a blink
-and see whether they ever leave zero.
+**`uppertarget` / `lowertarget` are not angles.** They are linear offsets in eyeball units,
+turned into an angle by `asin(target / radius)` — `jeanette`'s
+`uppertarget = (-0.278, 0.207, 0.309)` and `lowertarget = (-0.386, -0.278, -0.139)` against
+`radius = 0.5`. Reading them as radians produces a lid that moves, which is why the error is
+easy to keep.
+
+Two consequences for a consumer. The lid weight depends on the eye's *aim*, not only on the
+controllers, because `state.forward` is built from the gaze target — a blink on a
+looking-away eye lands differently from a blink on a centred one. And the eye pass runs
+**after** the flex rules and **overwrites** flexdescs 0/4/8/12, so a port that evaluates rules
+and stops has no lid motion, while one that runs them in the other order loses the rules'
+contribution.
 
 ### `mstudiomouth_t` — 20 bytes
 
@@ -221,17 +237,17 @@ matches and the source of the envelope does not.**
 
 ### The read-out pattern
 
-That is the second flexdesc of this shape, and the repetition is the fact rather than either
-instance. The four eyelid rules compute `_lowerer`/`_neutral`/`_raiser` flexdescs that carry no
-morph, while the flexdescs that *do* carry eyelid morphs carry no rule; `mstudioeyeball_t`
-would have bridged them and VtMB ships none. `mouth` is the same: a slot Source's engine-side
-system would drive, present in the rig, connected to nothing.
+`mouth` and the eyelid flexdescs look alike in the rig and are not alike in the engine, and the
+contrast is the fact worth carrying. Both are slots an engine-side driver is expected to meet:
+the eyelid morphs carry no rule, and `mouth` carries no morph. The eyelid slots **are** met —
+`mstudioeyeball_t` is authored on every character and the eye pass writes them every frame
+(above). `mouth` is not: nothing in the shipped data or in `StudioRender` puts geometry behind
+flexdesc 16.
 
-**VtMB's facial rig was authored against structures the shipped files do not contain.** Both
-gaps sit exactly where an engine-side driver — the eyeball chunk, `ControlMouth` — would have
-met the rig. A reproduction that writes the faithful value into either slot is inert, and any
-implementation that makes them move is bridging a gap the data leaves open. Record such a
-bridge as a divergence rather than as a decode.
+So a reproduction that writes the amplitude value into `mouth` is inert, and an implementation
+that makes the jaw move is bridging a gap the data leaves open — record that as a divergence
+rather than as a decode. The eyelid case carries no such caveat; it is a plain decode of an
+authored record.
 
 ## `StudioModel` — two corrections the flex walk forced
 
@@ -337,74 +353,235 @@ transformation is a whole-body morph across 19 frames of 2,650 vertices each, wi
 to 121 inches — far outside the compressed record's 8-inch ceiling, which is presumably why
 the format exists at all.
 
-## Eyeballs — the chunk exists, the data does not
+## Eyes — the record, the renderer pass, and the gaze behaviour
 
-`StudioModel.NumEyeballs`@80 / `EyeballIndex`@84 point at a **140-byte** `StudioEyeball`
-(name index, bone, org, zoffset, radius, up, forward, texture, iris material, iris scale,
-glint material, `upperflexdesc[3]`, `lowerflexdesc[3]`, `uppertarget[3]`, `lowertarget[3]`,
-upper/lower lid flexdesc, pitch `[2]`, yaw `[2]`). The stride is confirmed by the `0x8C`
-scaling in `StudioRender`'s eye pass.
+VtMB's eyes are a complete engine-side system in three parts, all reproducible: a
+`StudioEyeball` record per eye in the model, a renderer pass that turns a gaze point into iris
+and glint texture coordinates, and a server-side behaviour that chooses where to look and when
+to blink. The flex rig meets it only at the eyelids (above).
 
-**`NumEyeballs` is zero on every model in the install** — all 4,444, including all 201
-rigged characters. VtMB ships no eyeball records, so there is no eye-posing, look-at,
-procedural-lid or glint data in the models at all. What the shipped rig *does* have is:
+### `StudioEyeball` — 140 bytes, two per character
 
-- the eight `eyelid` flex controllers (`blink`, `half_closed`, and the
-  raiser/tightener/droop left-right pairs), and
-- the 16 eyelid flexdescs the four eyelid rules drive.
+`StudioModel.NumEyeballs`@**192** / `EyeballIndex`@**196**. The offsets are confirmed by the
+consumer: the eye pass indexes `model_base + *(int*)(model_base + 0xC4) + materialparam * 0x8C`.
 
-**The cast has eyes. What it lacks is a way to aim them.** Eyes are authored as their own
-geometry with their own two-layer material, entirely outside the eyeball chunk:
+| Off | Type | Field | Note |
+|---|---|---|---|
+| 0 | int | `nameindex` | 0 on every shipped record |
+| 4 | int | `bone` | the head bone |
+| 8 | Vector | `org` | eye centre, bone-local inches; the pair mirrors in Z |
+| 20 | float | `zoffset` | sideways shift, applied as `forward += right × 2·zoffset` |
+| 24 | float | `radius` | `0.5` on every shipped record |
+| 28 | Vector | `up` | bone-local, orthonormal with `forward` |
+| 40 | Vector | `forward` | the authored resting aim |
+| 52 | int | `texture` | **never read by the renderer** (Source's `texture`) |
+| 56 | int | `iris_material` | **never read** (Source's `unused1`) |
+| 60 | float | `iris_scale` | per character; enters as `1/(1/iris_scale + fEyeSize)` |
+| 64 | int | `glint_material` | **never read** (Source's `unused2`) |
+| 68 | int[3] | `upperflexdesc` | the upper lid's three rule outputs |
+| 80 | int[3] | `lowerflexdesc` | the lower lid's three |
+| 92 | float[3] | `uppertarget` | linear offsets, **not radians** — see the eyelid bridge above |
+| 104 | float[3] | `lowertarget` | |
+| 116 | int | `upperlidflexdesc` | the morph-carrying flexdesc the pass writes |
+| 120 | int | `lowerlidflexdesc` | |
+| 124 | — | 16 bytes | **never read** (Source's `unused[4]`) |
 
-- **400 `eyeball_l.vmt` / `eyeball_r.vmt` files across 199 character directories** — the same
-  199 of 201 rigged characters that carry `mstudiomouth_t`.
-- **394 of them declare a dedicated `Eyes` shader**; 4 fall back to `VertexLitGeneric`.
-- The shader composites two textures: `$basetexture` is the eyeball, `$iris` a separate
-  per-character iris. LaCroix's reads
-  `$basetexture "models/character/eyes/Eyeball2"` over `$iris "models/character/eyes/prince"`.
-- A shared library sits at `materials/models/character/eyes/` (15 materials plus their
-  `.tth`/`.ttz`), so irises are picked from a palette per character rather than painted into
-  each head.
+The three material-index fields hold real texture-table indices — `jeanette`'s resolve to
+`Eyeball_l` / `Eyeball_r` and `glint`, LaCroix's and Nines' to `Pupil_r` / `Pupil_l` — and
+`StudioRender` reads none of them. The material actually bound is the eye mesh's ordinary
+skinref material, and the iris and glint textures come from the `.vmt`'s `$iris` and `$glint`.
+The 16 bytes at +124 are read by nothing either, so **there is no data-driven gaze limit**: the
+only shaping in the data is `zoffset`, and the only switch is the renderer config's `bEyeMove`.
 
-So the model-side inventory is: eye geometry yes, eye material yes, per-character iris yes,
-eyelid flexes yes — **orientation data no**. Blinking and lid shaping are reproducible from
-the flex rig. What no model carries is the record that would tell the renderer where an eye is
-pointing, which is a different and much narrower gap than "no eyes".
+**Census: 301 models carry records, two each.** 298 sit under `models/character/` (221 `npc`,
+57 `pc`, 15 `shared`, 5 `monster`); the other three are a cinematic `sewer_guard` and the two
+`handleclaws` wield models. Models without them are gibs, props and scenery.
 
-Any gaze or look-at behaviour therefore comes from somewhere other than the model: a bone, the
-`Eyes` shader's own parameters, or `StudioRender`'s eye pass sourcing a direction another way.
-Which of those, if any, VtMB uses is **unestablished** — and 486 of 489 character models carry
-no eye bone at all (only `manbat`, `mingxiao` and `doppleganger_female` do), so the bone route
-is ruled out for the ordinary cast. Roadmap **12.4 must be built on that inventory**: it
-reproduces eyes that exist and cannot decode an eye *pose* that was never authored.
+The eyes are also authored as their own geometry and material, independently of the record:
+**400 `eyeball_l.vmt` / `eyeball_r.vmt` across 199 character directories**, 394 on the `Eyes`
+shader and 4 on `VertexLitGeneric`, over a shared iris palette at
+`materials/models/character/eyes/`.
 
-### Divergence — Elysium gives the cast *moving* eyes
+### The eye meshes are flagged for the pass
 
-The eyes themselves are a **reproduction**: the geometry, the `Eyes` shader and the
-per-character iris are all authored and all on disk. Only their motion is at issue.
+`StudioMesh.materialtype`@24 is **1** on an eyeball mesh, and `materialparam`@28 selects which
+eyeball — **598 such meshes over 299 models**, `materialparam` ∈ {0, 1}. `StudioRender`'s
+hardware draw loop dispatches on that field alone: `materialtype == 1` takes the eye path,
+everything else the ordinary mesh path.
 
-**Faithful behaviour, as far as it is established:** no model carries a `StudioEyeball` record,
-and the ordinary cast carries no eye bone, so nothing in the model data aims an eye. Whether
-retail's renderer moves the iris by some other route is **unestablished** — the `Eyes` shader's
-parameters and `StudioRender`'s eye pass are where to look, and nobody has. Do not read this
-section as evidence that VtMB's eyes are static; read it as evidence that the models do not say.
+### The renderer pass
 
-**The divergence, on an explicit owner call:** the cast's eyes move — gaze that tracks, and
-whatever lid and iris behaviour sells it. Faces carry the theatre act in close-up and the
-slice's fidelity bar names eyes explicitly. If the investigation above finds retail already
-moves them, this stops being a divergence and becomes a reproduction with a recovered rule; if
-it finds retail does not, the addition stands on `docs/project/remaster-direction.md`'s Feel
-layer.
+`R_StudioEyeballPosition` (`0x2C0502C0`) runs once per eyeball per frame, *before* the mesh
+loop, into an `eyeballstate_t` (112 B at `CStudioRender + 0x288 + i × 0x70`):
 
-Either way the mechanism is unsettled. Gaze targeting, saccades and an oriented iris are the
-candidates, each built one at a time and A/B-able, per the Feel-layer rule that a delta is
-polished by explicit owner call rather than in a batch.
+```
+o = eb.org;  o += sign(o) × cfg.fEyeShift          // per component
+state.org = VectorTransform(o, boneToWorld[eb.bone])
+state.up  = VectorRotate(eb.up, boneToWorld)
 
-**Head-turn look-at is a separate and probably larger contributor**, and it is a plain
-reproduction: a character who turns to face the player reads as attentive whatever the eyes do.
-It needs no facial data at all and is not owned by any task here.
+state.forward = normalize(cfg.m_ViewTarget − state.org)      // the gaze point
+if (!cfg.bEyeMove) state.forward = −VectorRotate(eb.forward, boneToWorld)
 
-Roadmap 12.4 owns the build; this section owns the call.
+state.right   = normalize(cross(state.forward, state.up))
+state.forward = normalize(state.forward + state.right × (2 × eb.zoffset))
+state.right   = normalize(cross(state.forward, state.up))
+state.up      = normalize(cross(state.right, state.forward))
+
+s = 1/eb.iris_scale + cfg.fEyeSize;  if (s > 0) s = 1/s;  s = −s
+state.irisU.xyz = s × state.right;  state.irisU.w = 0.5 − dot(state.irisU.xyz, state.org)
+state.irisV.xyz = s × state.up;     state.irisV.w = 0.5 − dot(state.irisV.xyz, state.org)
+```
+
+The planes are consumed as `u = dot(worldPos, irisU.xyz) + irisU.w`. Two details a port has to
+keep: `$eyeorigin` is recomputed **without** the eye shift while `state.org` (which the plane
+`w` terms use) includes it, and `$eyeup` is the **bone-local** `eb.up` halved, not `state.up`.
+The same function writes the eyelid flexdescs back (the eyelid bridge above).
+
+### The `Eyes` shader
+
+`stdshader_dx8.dll` only — `stdshader_dx9.dll` has no eye shader. Params: `$IRIS`,
+`$IRISFRAME`, `$GLINT`, `$EYEORIGIN`, `$EYEUP`, `$IRISU`, `$IRISV`, `$GLINTU`, `$GLINTV`, and
+`$VAMPIRE` (*"Turn on to get whatever vampire-eye effect we use"*). The compiled programs live
+in the VPKs at `shaders/vsh/*.vcs` and `shaders/psh/*.vcs`, resolved by name as
+`shaders\<vsh|psh|fxc>\<name>.vcs`; `materials/dxshaders/*.psh` ships the readable ps1.1
+sources for all but the two vampire variants.
+
+The vertex program is always `Eyes`; the pixel program is chosen per material:
+
+| `$vampire` | config overbright | pixel program |
+|---|---|---|
+| 0 | ≠ 2.0 | `Eyes` |
+| 1 | ≠ 2.0 | `Eyes_Vampire` |
+| 0 | 2.0 | `Eyes_Overbright2` |
+| 1 | 2.0 | `Eyes_Vampire_Overbright2` |
+
+**The vampire variant reorders the lighting modulate against the iris composite.** Stock is
+`((sclera lerp iris) × illumination) + glint`; vampire is
+`((sclera × illumination) lerp iris) + glint`, so the iris texel is never multiplied by scene
+lighting and renders at full texture value however dark the room is — a self-illuminated iris
+over a normally lit sclera, blended by the iris texture's own alpha. Alpha comes from the
+sclera in both. **12 shipped materials set `$vampire 1`**, the Sheriff among them. No shipped
+material sets `$glint` or `$irisframe`.
+
+In the vertex program, `c44`–`c47` are the iris and glint planes, applied as
+`oT1.xy = dot4(c44/c45, worldPos)` and `oT2.xy = dot4(c46/c47, worldPos)`; `oT0` is the raw
+mesh UV for the sclera. `c42`/`c43` (`$EYEORIGIN`/`$EYEUP`) build the shading normal instead,
+`n = normalize((P − eyeOrigin) − 0.5 × dot(P − eyeOrigin, eyeUp) × eyeUp)` — half the up
+component is removed, flattening the sphere normal so the eyeball does not go dark top and
+bottom.
+
+### The glint
+
+`$GLINT` is a **32×32 BGRA procedural texture** regenerated per eye per frame, never a shipped
+file. Its planes come from `2 × eb.radius` and the *view* right/up rather than the eye basis.
+The generator takes at most the **first two lights**, and per light splats up to two points: a
+cornea highlight at `(2/3)·radius` along the half-angle vector, and a sclera one at `radius`,
+the latter only when the light is more than 30° off the eye's axis. Each splat is a **1-to-4
+texel bilinear dot** with a `≥ 0.25` energy gate, written through a 1024-entry linear→texture
+gamma LUT. The softness is bilinear magnification of 32×32 across the eyeball, not a falloff
+kernel.
+
+Two properties are as-compiled rather than evidently intended, and a port that "fixes" either
+will not match: the second sample reuses the first sample's half-angle vector, and the
+accumulator is allocated `w·h·16` bytes, indexed as `w·h·12`, and cleared only `w·h·4` — so two
+thirds of it carries over between regenerations. `u`/`v` are world-space lengths consumed as
+normalized `[-0.5, +0.5]` texture offsets, which makes the eyeball radius the effective
+lobe-size constant.
+
+### Gaze — the server behaviour
+
+State lives on `CBaseCombatCharacter` (`vampire.dll`): `m_vEyeLookTarget`@0x0E44 (commanded),
+`m_vCurEyeTarget`@0x0E50 (smoothed), `m_hEyeLookTarget`@0x0E64, `m_flEyeIntegRate`@0x0E3C,
+plus a scripted-mode int at **0x0E68 that the datamap does not carry** — so a scripted look-at
+does not survive a save.
+
+**Every timing and rate constant is content**, read from `vdata/System/DispositionTable.txt`
+(the compiled-in fallbacks sit in BSS and are zero); the `Neutral` block seeds the global
+defaults, so every other disposition inherits from it. Retail values:
+
+| Disposition | Fidget points | Hold min/max | Eye turn rate |
+|---|---|---|---|
+| Neutral | `[-1,-1,-1]` | .15 / .25 | 0.3 |
+| Anger, PrinceSitting | `[0,2,0]` | .25 / 1 | 0.95 |
+| Disgust | `[0,2,3]` | .15 / .45 | 0.6 |
+| Apathy | `[7,8,9]` | 1 / 2 | 0.2 |
+| Confused | `[7,5,9]` | .15 / .25 | 0.2 |
+
+Disposition-level and therefore global: blink interval **2.5–6.0 s**, eye turn rate **0.9**,
+fidget interval **5–8 s**.
+
+**Selection** is a priority cascade — dialogue partner, target entity, enemy, navigation goal,
+heard sound, then an autonomous scan — with every candidate gated by
+`dot(headForward, normalize(p − headPos)) > 0.866`, a **±30° cone** off the live head bone. The
+navigation-goal and sound arms apply the target directly and bypass smoothing. The autonomous
+scan sweeps a 300-unit sphere centred 300 units ahead of the eyes, keeps the nearest survivor,
+and re-picks after `RandomInt(1, 5)` seconds; finding nothing it looks straight ahead at
+`eyePos + BodyDirection2D() × 500` and retries in 0.5 s. The candidate filter is
+`entity->+0x94 != 0 || (GetFlags() & FL_CLIENT)`, so **the player always qualifies**.
+
+In dialogue the NPC looks at the partner's `EyePosition()` — eye height on the entity, not an
+attachment or a head bone. A dialogue **camera shot can redirect it**: when the shot's flags
+carry bit `0x10`, gaze swaps to a third entity, which couples eye direction to the cinematic
+camera.
+
+**Fidget** is the saccade layer. Once the eyes converge to within a unit of the target, the
+character holds for the disposition's interval, then walks a **three-step sequence of
+head-relative keypad cells** — Troika's own comment: *"eye targets are head relative, with the
+numbers being like the numbers on a keypad; 0 will have the NPC fall back to normal look
+behavior."* Cell 5 is centre, each step is ±20° of pitch and yaw projected 25 units out, held
+for the disposition's hold range, and a `Fidget Points` triple of `[-1,-1,-1]` means pick a
+random cell 1–9 instead. Exhausting the sequence restores the default direction.
+
+**Integration** is a fixed-timestep lerp, not a rate: per 0.1 s of accumulated interval,
+`m_vCurEyeTarget += rate × (m_vEyeLookTarget − m_vCurEyeTarget)`. The head is given the
+*commanded* target and the eyes the *smoothed* one.
+
+**Head turn is inert in retail.** `m_flHeadYaw`/`m_flHeadPitch` are integrated every think
+through a `0.8 / 0.2` filter and applied with `CBaseAnimating::SetBoneController(0, …)` and
+`(1, …)` — **bone controllers, not pose parameters**. No shipped model declares a single bone
+controller (`docs/vtmb/mdl_v2531.md`), so the lookup fails, the value never reaches the
+skeleton, and the filter runs unclamped apart from a `> 360 → 0` guard. Visible head movement
+in VtMB dialogue is animation and choreography, not this path. The *input* side is live: the
+gaze cone and the fidget grid are computed in the real animated head-bone frame, with a
+fallback to `EyePosition()`/`EyeAngles()` when a model has no head bone.
+
+Blink is likewise server-side only as a cadence: `Blink()` is a single networked toggle, and
+the envelope that animates it is client-side (below).
+
+### The scripted look-at inputs
+
+Four `CBaseCombatCharacter` inputs resolve a named entity and store it with a mode:
+
+| Input | Mode pushed | Aim point |
+|---|---|---|
+| `LookAtEntityEye` | 1 | `EyePosition()` |
+| `LookAtEntityCenter` | **1** | `EyePosition()` — the handler pushes the Eye constant |
+| `LookAtEntityOrigin` | 3 | `GetAbsOrigin()` |
+| `LookAtEntityDefault` | 0 | clears the target, restoring autonomous behaviour |
+
+**`LookAtEntityCenter` is a shipped defect.** Mode 2 resolves `WorldSpaceCenter()`, and no
+handler ever passes 2, so all 10 authored `LookAtEntityCenter` firings behave exactly as
+`LookAtEntityEye`. A scripted gaze still passes the ±30° cone test and falls back to straight
+ahead outside it, and it yields back to autonomous automatically if the target entity goes
+away.
+
+Shipped maps fire these 40 times across 15 of the 101 maps. `sp_theatre` wires the intro both
+ways: on one keyframe the player is aimed at `prince1` while `Prince1` is released to
+autonomous, and on a later keyframe `Prince1` is aimed at `!playercontroller`.
+
+### The networked hop
+
+Two values leave the server: `m_viewtarget` (the smoothed gaze point) and `m_blinktoggle`, both
+on `CBaseEntity` and both in the `DT_BaseFlex` table. The client interpolates `m_viewtarget`
+against its previous value and hands it to `IStudioRender::SetEyeViewTarget`, which parks it at
+`CStudioRender+0x78` — the `m_ViewTarget` the eye pass reads. `m_blinktoggle` drives the blink
+envelope in `C_BaseFlex::SetupWeights` (below).
+
+`GetEyeballs` exists server-side and walks the records correctly, but has no callers and sits
+in no vftable; the server reasons about eye *positions* only through `EyePosition()`.
+`sv_draw_eye_orientation` is registered with no reader — the visualiser is compiled out of the
+retail build. The live debug surface is `npc_disposition`, `dump_disposition_table`, and an NPC
+overlay printing the current, default and step eye targets.
 
 ## The unit-vector table
 
@@ -525,22 +702,71 @@ stem**. `expressions/phonemes.vfe` and `expressions/phonemes_male.vfe` are the f
 ## The chain, end to end
 
 ```
-.lip phoneme row  ──►  expressions/<model stem>_phonemes.vfe   (phoneme → controller weights)
-                                     │
-line audio envelope ──►  mstudiomouth_t  ──►  the `mouth` flexdesc
-                                     ▼
-                         flex-controller values (44)
-                                     │  mstudioflexrule_t RPN
-                                     ▼
-                          flexdesc weights (65)
-                                     │  StudioFlex target ramp
-                                     ▼
+.lip phoneme row  ──►  expressions/<model stem>_phonemes.vfe  ─┐  (accumulated, +=)
+networked m_flexWeight[128]  ─────────────────────────────────┤  (lerped, then min/max remap)
+Blink() toggle  ──►  the 0.3 s blink envelope  ───────────────┤  (assigned, no remap)
+                                                              ▼
+                       global flex-controller weights — g_flexweight[128]
+                                                              │  mstudioflexrule_t RPN
+                                                              ▼
+                                        flexdesc weights (65)
+                                                              │  SetFlexWeights
+                                                              ▼
+                    R_StudioEyeballPosition  ──►  overwrites flexdescs 0/4/8/12 (the lids)
+                                                              │  StudioFlex target ramp
+                                                              ▼
               per-mesh StudioVertAnim  ──►  pos += w·delta,  norm += w·ndelta
+
+line audio envelope  ──►  mstudiomouth_t  ──►  the `mouth` flexdesc  (no geometry behind it)
 ```
 
 `.vcd` scenes drive the same controllers directly through their `flexanimations` tracks
 (`docs/vtmb/choreographed_scenes.md`), so expression and lipsync meet at the controller layer, not at
 the vertex layer.
+
+### `C_BaseFlex::SetupWeights` — the client-side order
+
+The whole client half runs in one function, called by the engine **per drawn model per frame**,
+so the face is evaluated at render time rather than on a think tick. The order is load-bearing:
+
+1. zero `g_flexweight[128]` — a **global** controller index space, distinct from the model's own
+   controller order; names are interned by `AddGlobalFlexController` into a 256-entry table;
+2. `dt = (curtime − m_flAnimTime) × 10.0`, **unclamped in both directions**;
+3. lazily fill each controller's `localToGlobal`, **mutating the shared loaded `studiohdr` in
+   place** — per model file, not per instance;
+4. per controller: lerp previous↔current by `dt` (or snap, when the entity's effects carry
+   `0x10`), then remap through the controller's own `min`/`max`;
+5. **blink** (below) — assigned *after* the loop, so it overwrites any networked `blink` value,
+   and written raw, bypassing the `min`/`max` remap every other controller receives;
+6. visemes accumulate additively from the `.vfe`: `g_flexweight[map[i]] += scale × weight_i`, so
+   lipsync, expression and blink share one surface;
+7. `RunFlexRules` → the flexdesc array — gated by the `flex_rules` ConVar, which when 0 returns
+   **without zeroing the destination**, sending uninitialized stack to the renderer;
+8. the view target is interpolated and pushed to the renderer;
+9. `SetFlexWeights(count, weights)` — flexdesc index space, confirmed by the debug overlay,
+   which walks `numflexdesc` printing each flexdesc name against the same array.
+
+The blink envelope, with no ConVar behind it — the duration is a literal `0.3` (stock Source
+uses 0.2):
+
+```
+on m_blinktoggle changing:  m_blinktime = curtime + 0.3
+a = (m_blinktime − curtime) × 5.235987755982989       // (π/2) / 0.3
+w = 0                                                  // outside the window
+if (a > 0 and cos(a) > 0):
+    w = 2 × sqrt(cos(a));  if (w > 1) w = 2 − w        // folded about 1
+g_flexweight[blink] = w
+```
+
+With `u = (m_blinktime − curtime)/0.3` running 1 → 0, the lid is **fully closed 48.3 ms after
+the toggle** and reopens over the remaining **251.7 ms** — a fast close and a slow open, 300 ms
+in total. The cadence that drives the toggle is the server's, `RandomFloat(2.5, 6.0)` from the
+disposition table.
+
+The `eyes_updown` / `eyes_rightleft` names are interned as **flex controllers**, not pose
+parameters, and nothing indexes the weight array by them — gaze reaches the renderer only
+through the view target. A model that declared them would still have them driven by the
+ordinary networked controller path.
 
 ## The offline export (PL10)
 
@@ -604,9 +830,10 @@ authored one.
 | `mouths` | `{bone, forward, flexdesc}` — the amplitude jaw, for 12.5 |
 | `morphs` | `{name, flexdesc, targets}` per glTF morph target, in order; `targets` is the four-value ramp |
 
-Not exported: **eyeballs** (none authored anywhere in the install) and the `.vfe` expression
-tables — `UE_extract_scenes.py` mirrors the readable `.txt` twins to `$ELYSIUM_EXPORT_ROOT/expressions/`
-instead.
+Not exported: the **`StudioEyeball` records** — which the eyes section above shows every
+character carries, and which a face needs for its lids as well as its irises — and the `.vfe`
+expression tables, where `UE_extract_scenes.py` mirrors the readable `.txt` twins to
+`$ELYSIUM_EXPORT_ROOT/expressions/` instead.
 
 **A sidecar can be complete and still drive nothing**, so a consumer decides on morph targets
 rather than on the manifest parsing. `shovelhead` carries the full 65/44/60 rig with **zero**
@@ -626,16 +853,22 @@ set by its dialogue clips (`heather` +2.4 %) and the whole of a glb that has non
 - The controller → rule → flexdesc evaluation has to run at load time, not as a flat morph
   list: 44 controllers drive 65 morphs through 60 RPN rules, and the rules are where the
   eyelid interaction lives.
-- The eyes are authored and ship — geometry, an `Eyes` shader, a per-character iris — but no
-  model carries an eyeball *orientation* record, so nothing in the model data decodes an eye
-  pose (eyeballs section above). Reproducing eyes is not in question; moving them is the open
-  call recorded beside that section. The lids stay a plain reproduction.
+- Eyes are a **plain reproduction end to end** — record, renderer math, gaze behaviour and
+  tuning data are all recovered (eyes section above). Two pieces of it are inert in retail and
+  are therefore owner calls rather than decisions: head turn drives bone controllers no model
+  declares, and `LookAtEntityCenter` aims at the eye rather than the centre.
+- The flex evaluation has an **order dependency that spans the seam**: rules first, then the
+  eyeball pass, which overwrites the four eyelid flexdescs. A morph pipeline that ends at the
+  rules has no lid motion.
+- The eyelid `uppertarget`/`lowertarget` values are **linear offsets through `asin(t/radius)`**,
+  not radians.
 - Lip sync is a three-file join per line — `.lip` for timing, `expressions/<stem>_phonemes`
   for the weights, `mstudiomouth_t` for the amplitude jaw — with the phoneme *string* as the
   key. All three are on disk: `$ELYSIUM_EXPORT_ROOT/lip/`, `$ELYSIUM_EXPORT_ROOT/expressions/`, and `mouths` in the facial
   manifest.
 - No player body carries a flex rig (inventory above), so the PC has no morph targets to
-  drive and no `facial/` sidecar — it animates with a still face.
+  drive and no `facial/` sidecar — but 57 of the 59 carry eyeball records, so the faithful
+  player face is a **still face with live, aiming eyes**.
 
 Implementation roll-up status for this system is in `docs/project/roadmap.md`; detailed retail
 facial/lip capture status is in `docs/project/retail-capture-roadmap.md`.
@@ -653,6 +886,21 @@ facial/lip capture status is in `docs/project/retail-capture-roadmap.md`.
 - `client.dll` (imagebase `0x10000000`): the expression-file name at `0x100C4210` /
   `0x100C4270` / `0x100C42F0`; the flex convars `flex_rules`, `print_flex_weights`,
   `print_flex_rules`, `phoneme_delay`, `phonemefilter_min`, `phonemefilter_max`.
+- The eye system, by half. Model: `StudioModel+192/+196` and `StudioMesh+24/+28`, censused over
+  the merged install. Renderer (`StudioRender.dll`): the eye pass `0x2C0502C0`, the per-mesh
+  eye path `0x2C01CB60` off the draw loop `0x2C01D9F0`, the material-var setter `0x2C01CA20`,
+  the glint planes `0x2C0513F0`, the glint texture `0x2C051350` and its regenerator
+  `0x2C051690`, the splat `0x2C050D70`, the light query `0x2C051F70`, and the view-target
+  setter `0x2C050270` (`IStudioRender` vtable `+0x1C`; flex weights at `+0x34`). Shader
+  (`stdshader_dx8.dll`): the `Eyes` object `0x100250F4`, vtable `0x1001E358`, `DrawElements`
+  `0x100053F0`; the compiled programs in the VPKs under `shaders/vsh/` and `shaders/psh/`.
+  Server (`vampire.dll`): `SetScriptedEyeTarget` `0x10325CB0` and the four input handlers
+  `0x10325940`/`…A30`/`…B20`/`…C10`, the scripted maintainer `0x10325620`, the autonomous
+  maintainer `0x1026B810`, the fidget `0x102C0010`, `SetHeadDirection` `0x1026AF70`, the
+  cone test `0x10325DA0`, `CalcLookData` `0x10331DA0`, `Blink` `0x100B5CE0`. Client
+  (`client.dll`): `SetupWeights` `0x100C42F0`, `RunFlexRules` `0x100C3CD0`, the view-target
+  interpolation `0x100C4110`, `AddGlobalFlexController` `0x100C4880`, the weight array
+  `0x104A4A90`.
 - Reference parsers: `$ELYSIUM_WORK_ROOT/research/reference-source/VAMPTools` `studio.h` (flex block 8 bytes short; eyeball and
   vertanim marked *UNVERIFIED ALIGNMENT*) and `$ELYSIUM_WORK_ROOT/research/reference-source/Crowbar` `SourceModel2531`
   (`StudioFlex` 32 B with field 0x1C as *"unknown"*, `StudioVertAnim` read as

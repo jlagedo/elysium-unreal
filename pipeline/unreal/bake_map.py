@@ -19,6 +19,7 @@
 import math
 import json
 import os
+from pathlib import Path
 import struct
 import sys
 import time
@@ -27,7 +28,9 @@ import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from pipeline.unreal import bake_lib as bl  # noqa: E402
+from elysium_pipeline import bake_cache  # noqa: E402
 from elysium_pipeline.paths import export_root  # noqa: E402
+from elysium_pipeline.tasking import ContentDigestCache  # noqa: E402
 
 MOUNT = "/ElysiumBaked"
 OUT_ROOT = os.fspath(export_root())
@@ -180,9 +183,95 @@ def cmdline_arg(key, default=""):
     return default
 
 
-class Bake(object):
-    def __init__(self, map_name):
+def _asset_path(asset):
+    if asset is None:
+        return ""
+    path = asset.get_path_name() if hasattr(asset, "get_path_name") else str(asset)
+    return path.split(".", 1)[0]
+
+
+class AssetTracker(object):
+    """Decide and report per-package work for one map bake."""
+
+    def __init__(self, map_name, plan, digest_cache):
         self.map = map_name
+        self.plan = plan
+        self.run_id = str(plan["run_id"])
+        self.force = bool(plan.get("force"))
+        self.map_plan = plan["maps"][map_name]
+        self.digest_cache = digest_cache
+        self.selected = tuple(self.map_plan["stages"])
+        self.receipts = bake_cache.AssetReceiptStore(Path(OUT_ROOT), map_name)
+        self.repo_root = Path(unreal.Paths.project_dir()).resolve()
+        self.stages = {}
+        for stage in self.selected:
+            self.stages[stage] = {
+                "policy": self.map_plan["policies"][stage],
+                "assets": {},
+                "built": 0,
+                "reused": 0,
+                "pruned": 0,
+            }
+
+    def selected_stage(self, stage):
+        return stage in self.stages
+
+    def file_sha256(self, path):
+        return self.digest_cache.digest(Path(path))
+
+    def register(self, stage, object_path, recipe, expected_class="", fresh=True):
+        if stage not in self.stages:
+            raise RuntimeError("asset registered for an unselected stage: %s" % stage)
+        policy = self.stages[stage]["policy"]
+        fingerprint = bake_cache.asset_recipe_fingerprint(
+            stage, object_path, policy, recipe)
+        output = bake_cache.unreal_output_path(self.repo_root, object_path, stage)
+        exists = unreal.EditorAssetLibrary.does_asset_exist(object_path)
+        class_ok = True
+        if exists and expected_class:
+            class_ok = bl.asset_class_name(object_path) == expected_class
+            if not class_ok:
+                bl.delete_owned_asset(object_path)
+                exists = False
+        dirty = (self.force or not fresh or not exists or not class_ok
+                 or not self.receipts.matches(stage, object_path, fingerprint))
+        self.stages[stage]["assets"][object_path] = {
+            "object_path": object_path,
+            "fingerprint": fingerprint,
+            "output": str(output),
+        }
+        if dirty:
+            return True
+        self.stages[stage]["reused"] += 1
+        return False
+
+    def built(self, stage, count=1):
+        self.stages[stage]["built"] += count
+
+    def pruned(self, stage, count):
+        self.stages[stage]["pruned"] += int(count)
+
+    def summary(self, stage):
+        data = self.stages[stage]
+        return "%d built / %d reused / %d pruned" % (
+            data["built"], data["reused"], data["pruned"])
+
+    def write_report(self):
+        report = {
+            "schema": bake_cache.ASSET_RUN_SCHEMA,
+            "version": bake_cache.ASSET_SCHEMA_VERSION,
+            "run_id": self.run_id,
+            "map": self.map,
+            "stages": self.stages,
+        }
+        bake_cache.write_asset_run_report(Path(OUT_ROOT), report)
+
+
+class Bake(object):
+    def __init__(self, map_name, tracker, digest_cache):
+        self.map = map_name
+        self.tracker = tracker
+        self.digest_cache = digest_cache
         self.dir = os.path.join(OUT_ROOT, map_name)
         self.pkg = "%s/%s" % (MOUNT, map_name)
         self.tex_pkg = "%s/Textures" % self.pkg
@@ -214,6 +303,9 @@ class Bake(object):
         self.weather = None              # <map>.weather.json
         self.rain_height = None
         self.saved = []                  # asset paths pending save
+
+    def _file_sha256(self, path):
+        return self.digest_cache.digest(Path(path))
 
     # ------------------------------------------------------------------ inputs
 
@@ -305,13 +397,66 @@ class Bake(object):
                 if not path:
                     continue
                 src = os.path.join(base_dir, path.replace("/", os.sep))
-                if not os.path.isfile(src):
-                    continue
                 name = "T_" + bl.safe_name(os.path.splitext(path)[0])
                 # First use wins the role; a texture bound as both colour and mask is rare
                 # and the colour reading is the safe default.
                 roles.setdefault(name, (src, role))
         return [(name, src, role) for name, (src, role) in sorted(roles.items())]
+
+    def _import_texture_jobs(self, jobs, package, expected_class="Texture2D", prune_prefix=""):
+        wanted = set()
+        dirty = []
+        result = {}
+        md5_missing = 0
+        md5_mismatch = 0
+        for name, source, role in jobs:
+            if not os.path.isfile(source):
+                raise SystemExit("[bake] referenced texture source is missing: %s" % source)
+            object_path = "%s/%s" % (package, name)
+            wanted.add(name)
+            source_md5 = bl.file_md5(source)
+            exists = unreal.EditorAssetLibrary.does_asset_exist(object_path)
+            if exists:
+                unreal_md5 = bl.texture_source_md5(object_path)
+                if not unreal_md5:
+                    md5_missing += 1
+                elif unreal_md5 != source_md5:
+                    md5_mismatch += 1
+            recipe = {
+                "source": os.path.relpath(source, self.dir).replace(os.sep, "/"),
+                "sha256": self._file_sha256(source),
+                "role": role,
+                "class": expected_class,
+                "settings": "elysium-texture-role-v1",
+            }
+            if self.tracker.register(
+                    "textures", object_path, recipe,
+                    expected_class=expected_class):
+                dirty.append((source, name, role, object_path))
+            else:
+                asset = unreal.EditorAssetLibrary.load_asset(object_path)
+                if not asset:
+                    raise SystemExit("[bake] cached texture could not be loaded: %s" % object_path)
+                result[name] = asset
+
+        if md5_missing or md5_mismatch:
+            log("textures: Unreal SourceFile MD5 diagnostic: %d missing / %d mismatch" % (
+                md5_missing, md5_mismatch))
+
+        imported = bl.import_textures(
+            [(source, name) for source, name, _, _ in dirty], package)
+        for source, name, role, object_path in dirty:
+            texture = imported.get(name)
+            if not texture or texture.get_class().get_name() != expected_class:
+                raise SystemExit("[bake] texture import failed: %s" % object_path)
+            bl.configure_texture(texture, role)
+            result[name] = texture
+            self.saved.append(object_path)
+            self.tracker.built("textures")
+        pruned = (bl.prune_package_prefix(package, prune_prefix, wanted)
+                  if prune_prefix else bl.prune_package(package, wanted))
+        self.tracker.pruned("textures", pruned)
+        return result
 
     def stage_textures(self):
         for mats, base_dir, package in (
@@ -319,18 +464,18 @@ class Bake(object):
                 (self._all_prop_mats(), os.path.join(self.dir, "props"), self.prop_tex_pkg)):
             jobs = self._texture_jobs(mats, base_dir, package)
             if not jobs:
+                pruned = bl.prune_package(package, set())
+                self.tracker.pruned("textures", pruned)
                 continue
             start = time.time()
-            imported = bl.import_textures([(src, name) for name, src, _ in jobs], package)
+            imported = self._import_texture_jobs(jobs, package)
             for name, _, role in jobs:
                 texture = imported.get(name)
                 if not texture:
-                    fail("texture import failed: %s/%s" % (package, name))
-                    continue
-                bl.configure_texture(texture, role)
+                    raise SystemExit("[bake] texture resolution failed: %s/%s" % (package, name))
                 self.textures[(package, name)] = texture
-                self.saved.append("%s/%s" % (package, name))
-            log("textures: %d into %s (%.1fs)" % (len(imported), package, time.time() - start))
+            log("textures: %d desired in %s (%.1fs)" % (
+                len(imported), package, time.time() - start))
 
         # This slice deliberately imports only the patch-authored wetness closure. General
         # world/prop cubemap conversion remains the later reflection rollout.
@@ -350,31 +495,37 @@ class Bake(object):
                 source = os.path.join(self.dir, "tex", "cube", cube_id + ".dds")
                 if not os.path.isfile(source):
                     raise SystemExit("[bake] wet cubemap missing: %s" % source)
-                jobs.append((source, "TC_" + bl.safe_name(cube_id)))
-            imported = bl.import_textures(jobs, self.cube_pkg)
+                jobs.append(("TC_" + bl.safe_name(cube_id), source, "cube"))
+            imported = self._import_texture_jobs(jobs, self.cube_pkg, "TextureCube")
             for cube_id in sorted(cube_ids):
                 name = "TC_" + bl.safe_name(cube_id)
                 texture = imported.get(name)
                 if not texture or texture.get_class().get_name() != "TextureCube":
                     raise SystemExit(
                         "[bake] %s/%s did not import as TextureCube" % (self.cube_pkg, name))
-                bl.configure_texture(texture, "cube")
                 self.cubemaps[cube_id] = texture
-                self.saved.append("%s/%s" % (self.cube_pkg, name))
             log("wet cubemaps: %d into %s" % (len(imported), self.cube_pkg))
+        else:
+            pruned = bl.prune_package(self.cube_pkg, set())
+            self.tracker.pruned("textures", pruned)
         if self.weather:
             relative = self.weather["height_texture"]["path"]
             source = os.path.join(self.dir, relative.replace("/", os.sep))
             if not os.path.isfile(source):
                 fail("weather height texture missing: %s" % source)
             else:
-                imported = bl.import_textures([(source, "T_RainHeight")], self.weather_pkg)
+                imported = self._import_texture_jobs(
+                    [("T_RainHeight", source, "height")], self.weather_pkg,
+                    prune_prefix="T_")
                 self.rain_height = imported.get("T_RainHeight")
                 if not self.rain_height:
-                    fail("weather height texture import failed")
-                else:
-                    bl.configure_texture(self.rain_height, "height")
-                    self.saved.append("%s/T_RainHeight" % self.weather_pkg)
+                    raise SystemExit("[bake] weather height texture import failed")
+        else:
+            path = "%s/T_RainHeight" % self.weather_pkg
+            if unreal.EditorAssetLibrary.does_asset_exist(path):
+                bl.delete_owned_asset(path)
+                self.tracker.pruned("textures", 1)
+        log("textures: %s" % self.tracker.summary("textures"))
 
     def _all_prop_mats(self):
         """Every prop material, keyed uniquely so identical names in different models do not
@@ -420,6 +571,41 @@ class Bake(object):
         if mat.scissor:
             return self.masters["masked"]
         return self.masters["opaque"]
+
+    def _material_recipe(self, mat, tex_pkg):
+        values = {name: getattr(mat, name) for name in mat.__slots__}
+        values.update({
+            "opaque": mat.opaque,
+            "chromatic": mat.chromatic,
+            "tint_luma": mat.tint_luma,
+            "master": _asset_path(self._master_for(mat)),
+            "textures": {
+                key: ("%s/T_%s" % (
+                    tex_pkg, bl.safe_name(os.path.splitext(path)[0]))) if path else ""
+                for key, path in {
+                    "albedo": mat.albedo,
+                    "emissive": mat.emissive,
+                    "base_tex2": mat.base_tex2,
+                    "bump": mat.bump,
+                    "refract_map": mat.refract_map,
+                    "env_mask": mat.env_mask,
+                }.items()
+            },
+            "constants": {
+                "emissive": EMISSIVE_SCALE,
+                "bump": BUMP_AMOUNT,
+                "env": ENV_STRENGTH,
+                "rough_base": ROUGH_BASE,
+                "rough_reflect": ROUGH_REFLECT,
+                "spec_base": SPEC_BASE,
+                "spec_reflect": SPEC_REFLECT,
+            },
+        })
+        if mat.decal:
+            values["fog"] = fog_data(self.env)
+        if mat.wetness_driven:
+            values["weather"] = self.weather
+        return values
 
     def _bind(self, mic, mat, tex_pkg):
         """Bind the same named parameters FElysiumMaterialFactory::Build binds."""
@@ -515,25 +701,36 @@ class Bake(object):
     def stage_materials(self):
         for mats, mat_pkg, tex_pkg in self._material_sets():
             if not mats:
+                pruned = bl.prune_package(mat_pkg, set())
+                self.tracker.pruned("materials", pruned)
                 continue
             start = time.time()
             made = 0
             wanted = set()
             for key, mat in sorted(mats.items()):
                 name = "MI_" + bl.safe_name(key)
-                mic = bl.make_material_instance(name, mat_pkg, self._master_for(mat))
-                if not mic:
-                    fail("material instance failed: %s/%s" % (mat_pkg, name))
-                    continue
-                self._bind(mic, mat, tex_pkg)
+                object_path = "%s/%s" % (mat_pkg, name)
+                if self.tracker.register(
+                        "materials", object_path, self._material_recipe(mat, tex_pkg),
+                        expected_class="MaterialInstanceConstant"):
+                    mic = bl.make_material_instance(name, mat_pkg, self._master_for(mat))
+                    if not mic:
+                        raise SystemExit("[bake] material instance failed: %s" % object_path)
+                    self._bind(mic, mat, tex_pkg)
+                    self.saved.append(object_path)
+                    self.tracker.built("materials")
+                else:
+                    mic = unreal.EditorAssetLibrary.load_asset(object_path)
+                    if not mic:
+                        raise SystemExit("[bake] cached material could not be loaded: %s" % object_path)
                 self.materials[(mat_pkg, key)] = mic
-                self.saved.append("%s/%s" % (mat_pkg, name))
                 wanted.add(name)
                 made += 1
             # This stage authors a package's whole material set in one pass, so anything else
             # left in it is from an earlier bake of a different export -- an unreferenced asset
             # the level would never load but the registry still carries.
             pruned = bl.prune_package(mat_pkg, wanted)
+            self.tracker.pruned("materials", pruned)
             log("materials: %d into %s%s (%.1fs)" % (
                 made, mat_pkg, ", %d stale pruned" % pruned if pruned else "",
                 time.time() - start))
@@ -545,25 +742,50 @@ class Bake(object):
             if not master or not system or not self.rain_height:
                 fail("rain policy assets or height texture are missing")
                 return
-            mic = bl.make_material_instance("MI_ElysiumRain", self.weather_pkg, master)
-            if not mic:
-                fail("weather rain material instance failed")
-                return
             bounds = self.weather["world_bounds_cm"]
             minimum, maximum = bounds["min"], bounds["max"]
             height = self.weather["height_texture"]
-            bl.set_tex_param(mic, "RainHeightTexture", self.rain_height)
-            bl.set_scalar_param(mic, "RainBoundsMinX", minimum[0])
-            bl.set_scalar_param(mic, "RainBoundsMinY", minimum[1])
-            bl.set_scalar_param(mic, "RainBoundsSizeX", maximum[0] - minimum[0])
-            bl.set_scalar_param(mic, "RainBoundsSizeY", maximum[1] - minimum[1])
-            bl.set_scalar_param(mic, "RainHeightMinZ", height["min_z_cm"])
-            bl.set_scalar_param(mic, "RainHeightZScale", height["z_scale_cm"])
-            self.saved.append("%s/MI_ElysiumRain" % self.weather_pkg)
-            if not unreal.ElysiumRainAssetBuilder.bind_rain_material(system, mic):
-                fail("could not bind the map rain material to NS_ElysiumRain")
-                return
-            self.saved.append("/Game/VtMB/Particles/NS_ElysiumRain")
+            rain_path = "%s/MI_ElysiumRain" % self.weather_pkg
+            rain_recipe = {
+                "master": _asset_path(master),
+                "height": "%s/T_RainHeight" % self.weather_pkg,
+                "weather": self.weather,
+            }
+            if self.tracker.register(
+                    "materials", rain_path, rain_recipe,
+                    expected_class="MaterialInstanceConstant"):
+                mic = bl.make_material_instance("MI_ElysiumRain", self.weather_pkg, master)
+                if not mic:
+                    raise SystemExit("[bake] weather rain material instance failed")
+                bl.set_tex_param(mic, "RainHeightTexture", self.rain_height)
+                bl.set_scalar_param(mic, "RainBoundsMinX", minimum[0])
+                bl.set_scalar_param(mic, "RainBoundsMinY", minimum[1])
+                bl.set_scalar_param(mic, "RainBoundsSizeX", maximum[0] - minimum[0])
+                bl.set_scalar_param(mic, "RainBoundsSizeY", maximum[1] - minimum[1])
+                bl.set_scalar_param(mic, "RainHeightMinZ", height["min_z_cm"])
+                bl.set_scalar_param(mic, "RainHeightZScale", height["z_scale_cm"])
+                self.saved.append(rain_path)
+                self.tracker.built("materials")
+            else:
+                mic = unreal.EditorAssetLibrary.load_asset(rain_path)
+                if not mic:
+                    raise SystemExit("[bake] cached rain material could not be loaded")
+
+            system_path = "/Game/VtMB/Particles/NS_ElysiumRain"
+            if self.tracker.register(
+                    "materials", system_path,
+                    {"material": rain_path, "binding": "rain-material-v1"},
+                    expected_class="NiagaraSystem"):
+                if not unreal.ElysiumRainAssetBuilder.bind_rain_material(system, mic):
+                    raise SystemExit("[bake] could not bind the map rain material")
+                self.saved.append(system_path)
+                self.tracker.built("materials")
+        else:
+            rain_path = "%s/MI_ElysiumRain" % self.weather_pkg
+            if unreal.EditorAssetLibrary.does_asset_exist(rain_path):
+                bl.delete_owned_asset(rain_path)
+                self.tracker.pruned("materials", 1)
+        log("materials: %s" % self.tracker.summary("materials"))
 
     def resolve_textures(self):
         """Load already-imported textures into the lookup, so the material stage can bind
@@ -601,11 +823,22 @@ class Bake(object):
                 if unreal.EditorAssetLibrary.does_asset_exist(path):
                     self.materials[(mat_pkg, key)] = unreal.EditorAssetLibrary.load_asset(path)
 
-    def _emit(self, asset_path, sections, names, materials, nanite, phys=None,
+    def _emit(self, stage, asset_path, sections, names, materials, nanite, phys=None,
               collision=True):
         """Build one StaticMesh from prepared sections.
         Returns (triangles kept, dropped, simple collision shapes)."""
         want = sum(len(s[4]) for s in sections) // 3
+        recipe = {
+            "sections": sections,
+            "slot_names": [bl.safe_name(name) for name in names],
+            "materials": [_asset_path(material) for material in materials],
+            "nanite": bool(nanite),
+            "collision": bool(collision),
+            "physics": phys,
+        }
+        if not self.tracker.register(
+                stage, asset_path, recipe, expected_class="StaticMesh"):
+            return want, 0, len(phys["hulls"]) if phys else 0
         mesh = bl.build_dynamic_mesh(sections)
         got = bl.mesh_triangle_count(mesh)
         static_mesh = bl.create_static_mesh(
@@ -620,6 +853,7 @@ class Bake(object):
         if not phys and collision:
             bl.set_complex_collision(static_mesh)
         self.saved.append(asset_path)
+        self.tracker.built(stage)
         return got, want - got, shapes
 
     # ------------------------------------------------------------------- world
@@ -691,13 +925,15 @@ class Bake(object):
             asset_path = "%s/SM_World_%s%d_%d_%d" % (
                 self.mesh_pkg, "" if opaque else "T_", cx, cy, cz)
             materials = [self.materials.get((self.mat_pkg, name)) for name in names]
-            kept, lost, _ = self._emit(asset_path, sections, names, materials, nanite=opaque)
+            kept, lost, _ = self._emit(
+                "world", asset_path, sections, names, materials, nanite=opaque)
             tris += kept
             dropped += lost
             built += 1 if kept else 0
             if kept:
                 wanted.add(asset_path.rsplit("/", 1)[-1])
         pruned = bl.prune_package_prefix(self.mesh_pkg, "SM_World_", wanted)
+        self.tracker.pruned("world", pruned)
         log("world: %d chunk meshes / %d tris / %d dropped / %d stale pruned (%.1fs)" % (
             built, tris, dropped, pruned, time.time() - start))
 
@@ -718,22 +954,26 @@ class Bake(object):
             nanite = all(self.world_mats.get(name).opaque
                          if self.world_mats.get(name) else True for name in names)
             kept, lost, _ = self._emit(
-                asset_path, sections, names, materials, nanite=nanite,
+                "world", asset_path, sections, names, materials, nanite=nanite,
                 collision=False)
             if kept:
                 wanted.add("SM_%s" % stem)
             brush_tris += kept
             brush_dropped += lost
         pruned = bl.prune_package(self.brush_pkg, wanted)
+        self.tracker.pruned("world", pruned)
         log("brushes: %d meshes / %d tris / %d dropped / %d stale pruned" % (
             len(wanted), brush_tris, brush_dropped, pruned))
+        log("world assets: %s" % self.tracker.summary("world"))
 
     # --------------------------------------------------------------------- sky
 
     def stage_sky(self):
         sky_path = os.path.join(self.dir, "%s_sky.obj" % self.map)
         if not os.path.isfile(sky_path):
-            log("sky: no _sky.obj, skipped")
+            pruned = bl.prune_package_prefix(self.mesh_pkg, "SM_Sky_", set())
+            self.tracker.pruned("sky", pruned)
+            log("sky: no _sky.obj, %d stale pruned" % pruned)
             return
         start = time.time()
         model = bl.read_obj(sky_path)
@@ -752,15 +992,18 @@ class Bake(object):
             asset_path = "%s/SM_Sky_%s%d_%d_%d" % (
                 self.mesh_pkg, "" if opaque else "T_", cx, cy, cz)
             materials = [self.materials.get((self.mat_pkg, name)) for name in names]
-            kept, lost, _ = self._emit(asset_path, sections, names, materials, nanite=opaque)
+            kept, lost, _ = self._emit(
+                "sky", asset_path, sections, names, materials, nanite=opaque)
             tris += kept
             dropped += lost
             built += 1 if kept else 0
             if kept:
                 wanted.add(asset_path.rsplit("/", 1)[-1])
         pruned = bl.prune_package_prefix(self.mesh_pkg, "SM_Sky_", wanted)
+        self.tracker.pruned("sky", pruned)
         log("sky: %d meshes / %d tris / %d dropped / %d stale pruned (%.1fs)" % (
             built, tris, dropped, pruned, time.time() - start))
+        log("sky assets: %s" % self.tracker.summary("sky"))
 
     # ------------------------------------------------------------------- props
 
@@ -795,7 +1038,7 @@ class Bake(object):
                                     for rep in remap.values()}
             nanite = all((mats[n].opaque if n in mats else True) for n in skinned)
             phys = self.prop_phys.get(stem)
-            kept, lost, shapes = self._emit(asset_path, sections, names, materials,
+            kept, lost, shapes = self._emit("props", asset_path, sections, names, materials,
                                             nanite=nanite, phys=phys)
             tris += kept
             dropped += lost
@@ -809,17 +1052,23 @@ class Bake(object):
                     fail("%s: %d hulls in the sidecar but %d collision shapes"
                          % (stem, len(phys["hulls"]), shapes))
         pruned = bl.prune_package_prefix(self.prop_pkg, "SM_", wanted)
+        self.tracker.pruned("props", pruned)
         log("props: %d meshes / %d tris / %d dropped / %d physics (%d convex shapes) / "
             "%d stale pruned (%.1fs)"
             % (built, tris, dropped, phys_meshes, phys_shapes, pruned, time.time() - start))
         self._author_skin_set()
+        log("prop assets: %s" % self.tracker.summary("props"))
 
     def _author_skin_set(self):
         """Author the map's UElysiumPropSkinSet from the `.skins` sidecars, resolving each family
         material to the instance the material stage already made. The runtime looks an override up
         by mesh material *slot* name, which is the authored material's name -- the same key the
         sidecar uses -- so no naming rule has to be reproduced on either side."""
+        object_path = "%s/DA_%s_PropSkins" % (self.prop_pkg, self.map)
         if not self.prop_skins:
+            if unreal.EditorAssetLibrary.does_asset_exist(object_path):
+                bl.delete_owned_asset(object_path)
+                self.tracker.pruned("props", 1)
             return
         models, overrides, unresolved = [], 0, 0
         for stem in sorted(self.prop_skins):
@@ -841,11 +1090,23 @@ class Bake(object):
                     rows[family][bl.safe_name(slot)] = mic
                     overrides += 1
             models.append((stem, rows))
+        recipe_models = []
+        for stem, rows in models:
+            recipe_models.append((stem, [
+                {slot: _asset_path(material) for slot, material in sorted(row.items())}
+                for row in rows
+            ]))
+        if not self.tracker.register(
+                "props", object_path, {"models": recipe_models},
+                expected_class="ElysiumPropSkinSet"):
+            log("prop skins: cached %d models / %d overrides" % (len(models), overrides))
+            return
         asset = bl.make_skin_set("DA_%s_PropSkins" % self.map, self.prop_pkg, models)
         if asset is None:
             fail("prop skin set failed: %s" % self.prop_pkg)
             return
-        self.saved.append("%s/DA_%s_PropSkins" % (self.prop_pkg, self.map))
+        self.saved.append(object_path)
+        self.tracker.built("props")
         log("prop skins: %d models / %d overrides%s" % (
             len(models), overrides, ", %d unresolved" % unresolved if unresolved else ""))
 
@@ -1050,8 +1311,35 @@ class Bake(object):
 
     # ------------------------------------------------------------------- level
 
+    def _level_recipe(self):
+        def assets(package, prefixes=()):
+            values = unreal.EditorAssetLibrary.list_assets(
+                package, recursive=False, include_folder=False)
+            paths = [value.split(".", 1)[0] for value in values]
+            if prefixes:
+                paths = [path for path in paths
+                         if path.rsplit("/", 1)[-1].startswith(prefixes)]
+            return sorted(paths)
+
+        return {
+            "placement": bake_cache.level_sidecar_recipe(Path(self.dir), self.map),
+            "world_sky_meshes": assets(self.mesh_pkg, ("SM_World_", "SM_Sky_")),
+            "props": assets(self.prop_pkg, ("SM_",)),
+            "brushes": assets(self.brush_pkg, ("SM_",)),
+            "materials": sorted(
+                _asset_path(material) for material in self.materials.values() if material),
+            "prop_skins": self.prop_skins,
+            "cell_cm": CELL_CM,
+            "profiles": [PROFILE_PICK_ONLY, PROFILE_PROP_SOLID],
+        }
+
     def stage_level(self):
         start = time.time()
+        map_path = "%s/%s" % (self.pkg, self.map)
+        if not self.tracker.register(
+                "level", map_path, self._level_recipe(), expected_class="World"):
+            log("level: reused %s" % map_path)
+            return True
         world = unreal.EditorLoadingAndSavingUtils.new_blank_map(False)
         if not world:
             fail("new_blank_map returned null")
@@ -1119,8 +1407,8 @@ class Bake(object):
         self._place_sky(actors, sky_ambient)
         self._place_player_start(actors)
 
-        map_path = "%s/%s" % (self.pkg, self.map)
         if unreal.EditorLoadingAndSavingUtils.save_map(world, map_path):
+            self.tracker.built("level")
             log("level: saved %s (%.1fs)" % (map_path, time.time() - start))
             return True
         else:
@@ -1316,9 +1604,10 @@ class Bake(object):
         return failed
 
 
-def bake_one(map_name, stages):
+def bake_one(map_name, stages, asset_plan, digest_cache):
     """Bake one map in the current editor process."""
-    bake = Bake(map_name)
+    tracker = AssetTracker(map_name, asset_plan, digest_cache)
+    bake = Bake(map_name, tracker, digest_cache)
     if not bake.load_masters() or not bake.load_sources():
         return False
 
@@ -1340,11 +1629,13 @@ def bake_one(map_name, stages):
         # One Niagara system per env_particle definition the map places. Independent of the mesh
         # stages -- it reads the offline particle sidecar, not the OBJ/material graph.
         from pipeline.unreal import make_particle_systems
-        make_particle_systems.build(map_name, OUT_ROOT, bake.pkg)
+        make_particle_systems.build(
+            map_name, Path(OUT_ROOT), bake.pkg, tracker=bake.tracker)
     if bake.flush():
         return False
     if "level" in stages and not bake.stage_level():
         return False
+    tracker.write_report()
     log("%s done" % map_name)
     return True
 
@@ -1366,6 +1657,37 @@ def main():
     if unknown:
         fail("unknown stage(s): %s" % ", ".join(unknown))
         raise SystemExit(1)
+    asset_plan_path = cmdline_arg("BakeAssetPlan", "")
+    if asset_plan_path:
+        try:
+            with open(asset_plan_path, "r", encoding="utf-8") as handle:
+                asset_plan = json.load(handle)
+        except (OSError, ValueError) as exc:
+            fail("invalid asset run plan: %s" % exc)
+            raise SystemExit(1)
+        if (asset_plan.get("schema") != bake_cache.ASSET_RUN_SCHEMA
+                or asset_plan.get("version") != bake_cache.ASSET_SCHEMA_VERSION):
+            fail("unsupported asset run plan schema")
+            raise SystemExit(1)
+    else:
+        # Direct developer invocation remains a recovery surface. It is deliberately forced and
+        # never promoted by the outer orchestrator.
+        asset_plan = {
+            "schema": bake_cache.ASSET_RUN_SCHEMA,
+            "version": bake_cache.ASSET_SCHEMA_VERSION,
+            "run_id": "manual-%d" % int(time.time()),
+            "force": True,
+            "maps": {name: {
+                "stages": list(stages),
+                "fingerprints": {stage: "manual" for stage in stages},
+                "policies": {stage: "manual" for stage in stages},
+            } for name in map_names},
+        }
+    for map_name in map_names:
+        planned = asset_plan.get("maps", {}).get(map_name)
+        if not planned or set(planned.get("stages", [])) != set(stages):
+            fail("asset run plan does not match %s stages" % map_name)
+            raise SystemExit(1)
     log("maps=%s stages=%s" % (",".join(map_names), ",".join(stages)))
 
     # A fresh commandlet has not indexed the mount, so does_asset_exist reports False for
@@ -1375,16 +1697,18 @@ def main():
         [MOUNT], force_rescan=True)
 
     failed = []
+    digest_cache = ContentDigestCache(Path(OUT_ROOT) / bake_cache.DIGEST_CACHE_FILE)
     for position, map_name in enumerate(map_names, 1):
         log("--- [%d/%d] %s ---" % (position, len(map_names), map_name))
         try:
-            if not bake_one(map_name, stages):
+            if not bake_one(map_name, stages, asset_plan, digest_cache):
                 failed.append(map_name)
         except (Exception, SystemExit) as exc:
             fail("%s raised: %s" % (map_name, exc))
             failed.append(map_name)
         finally:
             _collect_garbage()
+    digest_cache.write()
 
     if failed:
         fail("%d of %d map bake(s) failed: %s" % (

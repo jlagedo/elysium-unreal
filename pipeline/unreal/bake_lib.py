@@ -7,6 +7,8 @@
 # editor asset APIs the bake needs: texture import, material instances, static meshes.
 import os
 import re
+import hashlib
+import json
 
 import unreal
 
@@ -371,6 +373,47 @@ def import_textures(jobs, package):
     return have
 
 
+def file_md5(path):
+    digest = hashlib.md5()
+    with open(path, "rb") as handle:
+        while True:
+            chunk = handle.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def asset_tag(asset_path, name):
+    data = unreal.EditorAssetLibrary.find_asset_data(asset_path)
+    result = unreal.AssetRegistryHelpers.get_tag_value(data, name)
+    if isinstance(result, tuple):
+        if len(result) == 2 and isinstance(result[0], bool):
+            return str(result[1]) if result[0] else ""
+        return str(result[-1]) if result else ""
+    return str(result) if result is not None else ""
+
+
+def asset_class_name(asset_path):
+    """Read the registry class without loading the package into the editor process."""
+    data = unreal.EditorAssetLibrary.find_asset_data(asset_path)
+    try:
+        return str(data.asset_class_path.asset_name)
+    except (AttributeError, TypeError):
+        return ""
+
+
+def texture_source_md5(asset_path):
+    """Return Unreal's stored source MD5 from the hidden SourceFile registry tag."""
+    try:
+        rows = json.loads(asset_tag(asset_path, "SourceFile"))
+    except (TypeError, ValueError):
+        return ""
+    if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict):
+        return ""
+    return str(rows[0].get("FileMD5", "")).lower()
+
+
 def configure_texture(texture, role):
     """Set the compression/colour-space a texture's role needs. `role` is one of
     'albedo' (sRGB colour + alpha), 'normal' (tangent-space bump), 'mask' (linear
@@ -474,8 +517,8 @@ def prune_package(package, keep):
         name = path.rsplit("/", 1)[-1].split(".")[0]
         if name in keep:
             continue
-        if unreal.EditorAssetLibrary.delete_asset(path):
-            gone += 1
+        delete_owned_asset(path)
+        gone += 1
     return gone
 
 
@@ -490,9 +533,15 @@ def prune_package_prefix(package, prefix, keep):
         name = path.rsplit("/", 1)[-1].split(".")[0]
         if not name.startswith(prefix) or name in keep:
             continue
-        if unreal.EditorAssetLibrary.delete_asset(path):
-            gone += 1
+        delete_owned_asset(path)
+        gone += 1
     return gone
+
+
+def delete_owned_asset(asset_path):
+    """Delete a generated asset or fail the commandlet; failed pruning is not cacheable."""
+    if not unreal.EditorAssetLibrary.delete_asset(asset_path):
+        raise RuntimeError("could not delete generated asset: %s" % asset_path)
 
 
 def set_tex_param(mic, param, texture):
@@ -619,7 +668,7 @@ def create_static_mesh(mesh, asset_path, materials, slot_names, nanite, collisio
     """Write a UDynamicMesh out as a real StaticMesh asset and bind its material slots.
     Returns the asset, or None when the build failed."""
     if unreal.EditorAssetLibrary.does_asset_exist(asset_path):
-        unreal.EditorAssetLibrary.delete_asset(asset_path)
+        delete_owned_asset(asset_path)
     nanite_settings = unreal.MeshNaniteSettings()
     nanite_settings.set_editor_property("enabled", nanite)
     options = unreal.GeometryScriptCreateNewStaticMeshAssetOptions()
@@ -648,4 +697,4 @@ def create_static_mesh(mesh, asset_path, materials, slot_names, nanite, collisio
 
 
 def save(asset_path):
-    return unreal.EditorAssetLibrary.save_asset(asset_path, only_if_is_dirty=False)
+    return unreal.EditorAssetLibrary.save_asset(asset_path, only_if_is_dirty=True)

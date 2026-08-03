@@ -1082,8 +1082,9 @@ driving actors, scripted camera (11.7), line audio, subtitles, and facial animat
 bar is an owner call: the scene is not done until the faces are alive — **eyes and lipsync
 included**. **RE19** closes the scene format and event semantics
 (`docs/vtmb/choreographed_scenes.md`); **PL9** supplies the corpus under `$ELYSIUM_EXPORT_ROOT/scenes/` and
-`$ELYSIUM_EXPORT_ROOT/lip/`; **RE20** closes the flex/eyeball chunks, `.lip` grammar, and
-phoneme→controller tables (`docs/vtmb/facial_animation.md`). **PL10** bakes the faces into the NPC
+`$ELYSIUM_EXPORT_ROOT/lip/`; **RE20** closes the flex chunks, `.lip` grammar, and
+phoneme→controller tables, and **RE34** the eye system end to end
+(`docs/vtmb/facial_animation.md`). **PL10** bakes the faces into the NPC
 export — morph targets in each glb, the flex rig in `$ELYSIUM_EXPORT_ROOT/npc/facial/<stem>.json`, and
 `$ELYSIUM_EXPORT_ROOT/expressions/`. **RE32 and RE33 remain open:** skeletal pose,
 scene placement, secondary-motion/physics, and facial/lip runtime equivalence are
@@ -1097,12 +1098,14 @@ and PL10 exported every input it names, so the face is built from that specifica
 captured against retail only where the build diverges — the rule the retail tracker states as
 "capture is the oracle, not the gate". None of the three carries RE33 as a dependency below.
 
-RE20 changes what 12.4 can be: **no model in the install carries eyeball data** — the whole
-cast ships `NumEyeballs == 0`, so there is no authored eye pose, look-at cone or procedural
-lid. Eyes in VtMB are *eyelids*: eight `eyelid` flex controllers driving 16 eyelid flexdescs
-through four RPN rules. Blink and lid shaping are reproducible; gaze is not RE-able because
-it was never authored — so 12.4's eye half is built as a deliberate addition rather than
-recovered, on the owner call recorded there and in `docs/vtmb/facial_animation.md`.
+**RE34 makes 12.4 a plain reproduction.** VtMB's eyes are a complete engine-side system and
+all three of its layers are recovered: `StudioEyeball` records on all 301 character models
+(two each, at `StudioModel`+192/+196), a renderer pass that aims the iris and writes the
+eyelid flexdescs back, and a server-side gaze/fidget/blink behaviour whose every constant
+comes from `vdata/System/DispositionTable.txt` — a file the export already carries. Nothing in
+12.4 is an addition. Two pieces are inert in retail and are the only owner calls left there:
+head turn drives bone controllers no model declares, and `LookAtEntityCenter` aims at the eye
+rather than the centre. Full specification: `docs/vtmb/facial_animation.md`.
 
 - [~] **12.1 Choreographed scenes** — `logic_choreographed_scene` as a real class + the scene-file
   parser (PL9) + an event timeline on the game clock, `Start`/`Pause`/`Resume`/`Cancel` inputs and
@@ -1194,30 +1197,36 @@ recovered, on the owner call recorded there and in `docs/vtmb/facial_animation.m
     `FETCH2`'s operand is a **flexdesc** index into the array the rules are filling, not a
     controller index, so rules evaluate in file order; the `DIV` guard is required rather than
     defensive (`1 / right_open`, zero at rest); and the four eyelid rules connect to no eyelid
-    morph in the shipped rig, a gap Source closes inside `mstudioeyeball_t` and VtMB ships none
-    of. The bridge Elysium reconstructs for it is marked uncertain in that document and is 12.4's
-    question, not this one's.
-- [ ] **12.4 Eyes and eyelids** — two halves on different footings. The **lids** are a
-  reproduction: blink and lid shaping off the eight `eyelid` controllers and their four rules
-  (`raiser × (1 − droop·0.8) × (1 − blink)` and its complements). The **eyes** are an
-  addition. **The eyes themselves are authored and ship**: 400 `eyeball_l/r.vmt` across 199
-  character directories, 394 of them on a dedicated `Eyes` shader compositing `$basetexture`
-  over a per-character `$iris` from `materials/models/character/eyes/`. What is absent is the
-  **orientation** record — RE20 found `NumEyeballs == 0` on all 4,444 models, and 486 of 489
-  character models carry no eye bone either — so nothing in the model data aims an eye. Whether
-  retail moves the iris by some other route (the `Eyes` shader's parameters, `StudioRender`'s
-  eye pass) is unestablished and is the first thing to settle here.
+    morph in the shipped rig. `mstudioeyeball_t` is the bridge and it is authored on every
+    character, so applying it — and the ordering it forces, rules before the eye pass — is
+    12.4's work rather than this one's.
+- [ ] **12.4 Eyes and eyelids** — a reproduction throughout, against the specification RE34
+  closed (`docs/vtmb/facial_animation.md` → Eyes). Five pieces, each independently checkable:
 
-  **Owner call, made: the cast's eyes move.** Faces carry the theatre in close-up and the
-  slice's fidelity bar names eyes explicitly, so a fixed stare is not acceptable. Whether that
-  is a divergence at all depends on the investigation above: if retail already aims the iris,
-  this is a reproduction with a recovered rule; if it does not, the addition stands on
-  `docs/project/remaster-direction.md`'s Feel layer. Both readings and the evidence are in
-  `docs/vtmb/facial_animation.md`. The mechanism is open — gaze targeting, saccades and an
-  oriented iris are the candidates, built one at a time and A/B-able. **Head-turn look-at is a
-  separate, plainly faithful contributor** and probably the larger one; it needs no facial data
-  and has no task of its own yet. *Acceptance:* actors blink, their lids shape, and their eyes
-  are alive and aimed through the theatre scene. *Deps:* 12.3.
+  1. **Export the `StudioEyeball` records.** `StudioModel`+192/+196, 140 B, two per character;
+     `StudioMesh`+24/+28 flags which meshes are eyes. Nothing downstream can start without it.
+  2. **The lid bridge.** The eye pass writes flexdescs 0/4/8/12 from the record's
+     `upper/lowerflexdesc` triples and `upper/lowertarget` offsets — which are linear, read
+     through `asin(t / radius)`, not radians. The order is rules first, then the eye pass.
+  3. **Blink.** A 0.3 s envelope, `w = 2·√(cos(π·u/2))` folded about 1 — closed in 48 ms,
+     reopening over 252 ms — on a `RandomFloat(2.5, 6.0)` cadence.
+  4. **Gaze.** The priority cascade, the ±30° cone off the head bone, the three-step keypad
+     saccade grid, and the 0.1 s fixed-step integrator, with every rate and interval read from
+     the exported `vdata/System/DispositionTable.txt` rather than tuned.
+  5. **The iris.** The eye basis and the two UV planes, plus the `Eyes` shader's `$vampire`
+     variant (12 shipped materials) whose iris ignores scene lighting.
+
+  **Two owner calls, both narrow, both about retail behaviour that is inert rather than
+  absent.** Head turn is integrated every think and applied through bone controllers that no
+  shipped model declares, so it reaches nothing — visible head movement in VtMB dialogue is
+  animation, not this path; reproducing the dead path or making it live is a Feel-layer call.
+  `LookAtEntityCenter` pushes the `Eye` constant, so all 10 authored firings aim at the eye
+  rather than the centre — reproduce the defect or fix it. Both are recorded beside the
+  faithful behaviour in `docs/vtmb/facial_animation.md`.
+
+  *Acceptance:* actors blink on their own cadence, their lids shape with the gaze, their eyes
+  select and track targets through the theatre scene, and `Prince1.LookAtEntityEye` aims
+  LaCroix at the player where `sp_theatre` fires it. *Deps:* 12.3.
 - [ ] **12.5 Lipsync** — `.lip` phoneme tracks (RE20 [x]; 9.3c already logs the scripts' `.lip`
   probes as a named divergence) driving mouth flexes against 12.2's line audio; the 7,136 files
   are on disk in `$ELYSIUM_EXPORT_ROOT/lip/` (PL9 [x]), keyed by the line's own sound path. A **three-file join
@@ -1271,6 +1280,7 @@ retail end to end, and `uv run elysium test Play` proves it headlessly.
 | PL16 [x] | Cinematic animation sets are exported and split into actor-addressable banks. → `docs/vtmb/choreographed_scenes.md`. | 12.1 |
 | PL17 | Build the patch-first audio catalog + typed sidecars: codec/channel/rate/frame/duration metadata, complete static reference closure, parsed map + entity sound schemes, sentences/surfaces, item/discipline events, radio/news, case collisions and missing refs. Raw game audio remains gitignored under `$ELYSIUM_EXPORT_ROOT/sound/`. → `docs/vtmb/audio_pipeline.md`, `docs/architecture/audio-architecture.md`. | 6.5–6.8, 9.2, 12.2 |
 | PL18 | Resolve the four structured NPC-export source warnings: the absent generic Night Watchman doppleganger model and the truncated skeletal records in `bottleb`, `bottlec`, and `stage_light`. The current export records all four; the three props use their successfully decoded static `model_mesh` fallback. → `docs/vtmb/animation_and_movers.md`. | 8.5, 12.1 |
+| PL19 [x] | Verified per-asset Unreal bake caching across all seven stages. Normal exports retain coarse content-addressed stage planning, then compare canonical semantic recipes for every desired texture, material, world/sky chunk, prop/skin asset, particle asset, and level; only dirty assets author/save and pruning is namespace-owned. Frozen-input, pending-inventory, commandlet, save/prune, and independent-verifier failures promote nothing; schema v1 establishes receipts through one conservative full rebuild and `--force` bypasses both cache layers. Acceptance on the current 2,100-asset `sp_tutorial_1` inventory: final no-op 10.246s with no Unreal launch; a one-pixel asphalt edit built 1/880 textures, changed one package, passed verification, and took 47.932s end to end (3.767s commandlet script, 12.220s verifier); a combined material/world/prop/particle/placement edit and its restore each changed exactly the five expected packages. → `docs/architecture/uasset-bake-spike.md`. | 0.9 |
 | PL7 [x] | The sidecar-space audit found no fixes: all consumed sidecars are already Unreal centimetres. | 0.4 [x] |
 | PL9 [x] | Choreographed scenes and `.lip` files are mirrored patch-first. → `docs/vtmb/choreographed_scenes.md`, `docs/vtmb/facial_animation.md`. | 12.1, 12.5 |
 | PL10 [x] | NPC flex data, morph targets, facial sidecars, and expression tables are exported. → `docs/vtmb/facial_animation.md`. | 12.3–12.5 |
@@ -1299,7 +1309,7 @@ retail end to end, and `uv run elysium test Play` proves it headlessly.
 | RE17 | **Owner-run reference captures** *(was sky-ambience RE-A6)* — original-game screenshots at the shared vantages (3–4 sky maps + one sky-only view per skyname), for the **world** half of the display ratio (`albedo × lightmap × 2` beside a sky texel — the sky's own transfer is the identity, RE16) and as 7.8's reference. **Gate cleared (SDK cross-reference, pending VtMB binary confirmation):** `snapshot` grabs pre-gamma-ramp — capture and the hardware gamma ramp are separate D3D surfaces that never touch. → `docs/vtmb/color_gamma.md` → "Screenshot capture happens before the gamma ramp". What is left is the owner actually running the captures | 3.6/3.7, 7.8 | [ ] |
 | RE18 | The script→engine action inventory and demand ranking are recovered. → `docs/vtmb/script_api.md`. | 9.7–9.10 | [x] |
 | RE19 | Choreographed-scene format, binding, timing, and completion semantics are recovered. → `docs/vtmb/choreographed_scenes.md`. | 12.1 | [x] |
-| RE20 | MDL facial data, flex rules, eyeball absence, and `.lip` format are recovered. → `docs/vtmb/facial_animation.md`. | 12.3–12.5 | [x] |
+| RE20 | MDL facial data, flex rules, and the `.lip` format are recovered; the eye system is RE34. → `docs/vtmb/facial_animation.md`. | 12.3–12.5 | [x] |
 | RE21 | Player commands run before the think/event pass; the full frame order is recovered. → `docs/vtmb/game_runtime.md`. | 11.1, 11.11, 4.7 | [x] |
 | RE22 | Player hull/view constants and the absence of ladder movement are recovered. → `docs/vtmb/source_movement.md`. | 4.7, 11.6 | [x] |
 | RE23 | **The particle format + the wetness channel** — VtMB's weather is Troika-custom, not Source; the versioned `sm_hub_1` closure now resolves particle dependencies, rates, Unreal units, sprites, and collision relations, and its VMT triples prove that `GlobalWetness` drives the three `$envmaptint` channels. The authored timer caller and `env_particle` I/O surface are known. Original-retail evidence still must settle interpolation/ramp/audio time units, density, `attach_type=11`, `bounds`, brush-volume sampling, lifetime/keyframe units, and sprite blend semantics. The community FGD defines both particle classnames but marks their special fields untested. Full: `docs/vtmb/weather.md` | 7.9, PL12 | [ ] |
@@ -1313,6 +1323,7 @@ retail end to end, and `uv run elysium test Play` proves it headlessly.
 | RE31 | Recover the SoundScheme RandomSound frequency scheduler/distribution and transition edge cases; the current approximate curve is not a faithful baseline. → `docs/vtmb/audio_pipeline.md`. | 6.7 | [ ] |
 | RE32 | Capture one source-attributed `sp_theatre` run from pre-map resource loads through actors/models/skeletons, every fired skeletal contribution, pose-build stages, and final render matrices in one queryable database. Join observed owner/sequence/animation identities to exact patch-first bytes and current export/decoder output, then trace only selected mismatches through decoding, blends/remaps, scene placement, root/entity motion, procedural work, hierarchy, and render handoff. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/animation_and_movers.md`, `docs/vtmb/mdl_v2531.md`, `docs/vtmb/choreographed_scenes.md`, and `docs/vtmb/vtmb-animation-reverse-engineering.md`. | 8.5, 8.11, 12.1 | [~] |
 | RE33 | Trace expression, VCD/audio, and `.lip` resources from source bytes through runtime objects, controller mixing, flex rules/ramps, eyelids, amplitude mouth, vertex deformation, and render submission. **It verifies 12.3–12.5 rather than gating them** — RE20 closed the facial format and PL10 exported every input it names, so the face is built from that specification and captured only where the build diverges. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/facial_animation.md`. | 12.3–12.5 (as verification) | [~] |
+| RE34 | **VtMB's eye system is recovered end to end** — the `StudioEyeball` record and its true `StudioModel`+192/+196 slot, the `StudioMesh` eye-mesh flags, the renderer's iris/glint math and its eyelid write-back, the `Eyes` shader family including the `$vampire` variant, the server's gaze/fidget/blink behaviour and its `vdata/System/DispositionTable.txt` tuning, the four `LookAtEntity*` inputs, and the networked hop between them. Head turn (applied through bone controllers no model declares) and `LookAtEntityCenter` (pushes the `Eye` constant) are inert or defective in retail and are recorded as such. → `docs/vtmb/facial_animation.md`, `docs/vtmb/mdl_v2531.md`, `docs/vtmb/animation_and_movers.md`. | 12.4 | [x] |
 | SKY | The sky/ambience rework is complete; remaining work is tracked as 3.10–3.13 and RE17. Facts: `docs/vtmb/sky-ambience.md`. | 3.6, 3.7 | [x] |
 
 The Ghidra extraction findings behind the closed rows (the RE1/RE2/RE3/RE4 detail: addresses,

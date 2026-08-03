@@ -106,12 +106,12 @@ listed in the order work can start rather than in phase order.
 | 6b | Frame interpolation — is the host loader's LINEAR what retail does | CAP5.10 | open |
 | 7 | Secondary motion — cloth and hair | CAP5.5 | **the mechanism is located**; the clamp is proved, the solve it clamps is not |
 | 8 | The persistent partial update is adjudicated | CAP5.4 | open; the replay that measures it exists |
-| 9 | **The cast has living eyes** — an owner-called addition, since no model authors eyeball data | `docs/project/roadmap.md` 12.4 | open; the lid half sits on row 4's flex runtime |
+| 9 | **The cast has living eyes** — a plain reproduction; the whole eye system is specified | `docs/project/roadmap.md` 12.4 | open as a build; nothing here gates it |
 | 10 | A visual-acceptance harness that actually isolates one body | `pipeline/` green-room path | open; **now blocking rows 1 and 4** |
 
-Nothing on the list is blocked by anything else on it except row 5 feeding CAP7.3, row 9's
-lids sitting on row 4, and rows 1 and 4 both waiting on row 10 to *demonstrate* what their
-numbers already establish.
+Nothing on the list is blocked by anything else on it except row 5 feeding CAP7.3, and rows 1
+and 4 both waiting on row 10 to *demonstrate* what their numbers already establish. Row 9's
+build consumes row 4's flex runtime, but no capture work stands between them.
 
 **Row 3 is a measurement defect, and the distinction cost a round of work.** CAP4.3's
 `bone_name` candidate — plain name matching, 130,651 records over the band — was read as the
@@ -127,19 +127,15 @@ against the capture, that rule agrees with **180,812** witnessed contributions a
 with **0**, and modelling it in the instrument reproduces the `complete` candidate band for
 band. The export carries no correspondence error; the instrument did.
 
-**Row 9 is narrower than it was written.** The eyes themselves are authored and ship — 400
-`eyeball_l/r.vmt` over 199 character directories on a dedicated `Eyes` shader with a
-per-character iris — so reproducing them is not in question. What no model carries is the
-**orientation** record: `NumEyeballs == 0` on all 4,444, and no eye bone on 486 of 489
-character models. Whether retail aims the iris by some other route is unestablished, so the
-owner call that the cast's eyes move may resolve to a reproduction rather than an invention
-under `docs/project/remaster-direction.md`'s Feel layer. It is on the
-critical path because the theatre is shot in close-up and the fidelity bar for the act is an
-owner call that names eyes explicitly. The faithful baseline and the divergence beside it are
-`docs/vtmb/facial_animation.md`. The eyelid *bridge* is a second, smaller case of the same
-question and is not yet adjudicated — the shipped rig connects no eyelid rule to an eyelid
-morph, and whether retail bridged that gap at all is what decides whether reproducing it is a
-recovery or an addition.
+**Row 9 is not an owner call — it is a build against a closed specification.** RE34 recovered
+VtMB's eye system whole: `StudioEyeball` records on all 301 character models, the renderer pass
+that aims the iris and writes the eyelid flexdescs back, the `Eyes` shader's `$vampire` variant,
+and the server-side gaze, saccade and blink behaviour whose constants are content in
+`vdata/System/DispositionTable.txt`. The eyelid bridge is part of the same record and needs no
+adjudication. Two pieces are inert or defective in retail — head turn drives bone controllers no
+model declares, and `LookAtEntityCenter` aims at the eye — and those are the only calls left.
+The specification is `docs/vtmb/facial_animation.md`. Row 9 stays on the critical path because
+the theatre is shot in close-up, but **capture is not what unblocks it**; the build is.
 
 **Both of the path's known unknowns have resolved, and neither resolved badly.** The shipped
 decoder did *not* diverge, which retires the largest risk the program carried and makes every
@@ -1570,22 +1566,24 @@ explain: flex weights that the rules do not account for, a phoneme the three-fil
 key, a controller with no source, or a mouth that mistimes against the line audio. It fires
 on a named divergence and stays closed otherwise.
 
-One thing capture cannot supply, so no task below should be opened expecting it: **there is
-no eyeball data anywhere in the install** — `NumEyeballs == 0` on all 4,444 models — so gaze,
-iris and glint have no faithful baseline to recover. Eyes in VtMB are eyelids plus painted
-head texture, and lids are reproducible. Living eyes are an **owner-called addition** under
-`docs/project/remaster-direction.md`'s Feel layer, built by `docs/project/roadmap.md` 12.4
-and recorded as a divergence in `docs/vtmb/facial_animation.md`. This phase can verify the
-lids against retail and can say nothing at all about the eyes, because retail has none to
-compare against.
+**Eyes have a faithful baseline and it is already recovered statically.** Every character model
+carries `StudioEyeball` records, the renderer aims the iris from the networked gaze point and
+writes the eyelid flexdescs back into the flex weights, and the gaze, saccade and blink
+behaviour is tuned by `vdata/System/DispositionTable.txt` (RE34 →
+`docs/vtmb/facial_animation.md`). So gaze *is* in scope for this phase, on the same footing as
+everything else here: capture verifies the built behaviour where it diverges and stays closed
+otherwise. Two retail behaviours are inert or defective rather than absent — head turn reaches
+no skeleton, and `LookAtEntityCenter` aims at the eye — and a capture that observes either is
+confirming a recorded fact, not discovering one.
 
 - [ ] **CAP6.1 One line's resource and object path.** Follow one controlled theatre line
   from its expression, VCD, audio, `.lip`, and model facial bytes through load, runtime
   object construction, timing identity, and the pointers facial evaluation uses.
 - [ ] **CAP6.2 Controller and flex stage capture.** Capture raw state before and after the
   expression, phoneme, amplitude-mouth, eyelid and blink stages that actually contribute to
-  that line, plus the flex weights and representative deformed vertices they produce. Gaze is
-  not among them, for the reason above.
+  that line, plus the flex weights and representative deformed vertices they produce. The
+  eyelid stage is the renderer's eye pass, so the capture has to straddle `SetFlexWeights` to
+  see both the rules' output and the lid values written over it.
 - [ ] **CAP6.3 Controlled-line equivalence.** Reproduce controller values, lip timing, flex
   weights, and selected final vertices for that line, then expand only to another line or
   model that exposes a new mismatch.

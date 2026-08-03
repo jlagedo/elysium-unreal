@@ -135,6 +135,13 @@ void ConfigureLayer(
 }
 #endif
 
+void UElysiumParticleAssetBuilder::FinishAssetCompilation()
+{
+#if WITH_EDITOR
+	FAssetCompilingManager::Get().FinishAllCompilation();
+#endif
+}
+
 UNiagaraSystem* UElysiumParticleAssetBuilder::BuildParticleSystem(
 	const FString& AssetName,
 	const FString& PackagePath,
