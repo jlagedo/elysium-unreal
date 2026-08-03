@@ -13,7 +13,7 @@
   "lock_delay_seconds": 9,
   "questions": [
     "How must the recovered post-blend split-inheritance correction be integrated across sequence-player, single-node, and direct playback paths, and which rendered retail invariant validates it?",
-    "What are the complete nested virtual-model remap record semantics in the transformed branch inside 0x10089c40?",
+    "What do the chain-rebase branch's shorts at remap record +0x04 and +0x06 select, and which corpus reaches that branch at all? The branch structure, the parent-chain walk against the included model's StudioBone.parent, and the position-transform byte are read; no shipped model in the captured corpus carries a record that enters it, and its second loop cannot terminate unless the two shorts are equal.",
     "Which model/material decode defect causes the observed rainbow cloth independently of skeletal pose?",
     "Where are SetSequence, ResetSequence, SelectWeightedSequence and the activity-name lookup implemented? The selection data is fully recovered (szactivitynameindex, actweight, and the 3,045-name activity table registered by vampire.dll 0x104126e0) but no selector function is located in either module, so an activity change is observable only as the sequence change it produces."
   ],
@@ -220,14 +220,50 @@
       "fact": "The client entity index is the low 13 bits of the entity's own EHANDLE at C_BaseEntity+0xe4.",
       "evidence": "The constructor at 0x1008f3c0 installs five vtables, the primary at 0x1022d6d4 and subobject vtables at +4, +8, +0xc and +0x10; the +4 entry is the renderable CAP1.3 measured. Primary slot +0 is 0x1009f050, MOV [ECX+0xe4],EDX, and primary slot +4 is 0x1009f060, LEA EAX,[ECX+0xe4]; RET, so a setter and a getter independently name the same displacement. The 13-bit index and 19-bit serial split is shared with vampire.dll: client.dll carries 278 AND *,0x1fff against 269 SHR *,13 and vampire.dll 2227 against 2226, paired inside 48 bytes 191 and 1622 times.",
       "consequence": "A client pose group can be joined to a server animation request on the index alone, bounded by the serial and by the witnessed lifetime of each address. This is the entity identity docs/vtmb/animation_and_movers.md records as missing from the render hook."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The include-model bone remap array is walked only on the include-group path. A sequence index below NumLocalSeq@272 jumps straight to the sequence evaluator and returns without reading any group, so a contribution whose owner is the model the dispatcher was entered with carries no remap at all.",
+      "evidence": "0x10089c5b loads NumLocalSeq@0x110 and 0x10089c64 jumps to 0x1008a016 when the sequence argument is below it; that path reaches 0x1008a046's call to 0x10089740 and the autolayer loop, and never touches group+0x10. The remap loop at 0x10089d95-0x10089fe0 is reachable only from 0x10089cdd, which is entered after a group's range test and studiohdr accessor both succeed.",
+      "consequence": "Whether a contribution's position was remapped is a property of the route to its owner rather than of the owner or of the group's contents, so an offline evaluator must decide it per contribution from the include chain and not as a global rule."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "A group owns a virtual sequence index only when all four of its tests pass: base@+0x08 <= index, index < base + count@+0x0c, the loaded model at +0x04 is non-null, and its vtable slot +0x04 returns a non-zero studiohdr. When no group owns the index the dispatcher sets the sequence to 0 and takes the local path.",
+      "evidence": "0x10089c92-0x10089cb8 performs the four tests in that order and advances by 0x74 on any failure; 0x10089cd8 leaves the loop to 0x1008a01a, which zeroes the sequence argument before falling into 0x1008a016's local path. The recursion at 0x10089d5f is reached only after all four pass, and 0x10089d49 subtracts group+0x08 from the index to make it owner-local.",
+      "consequence": "An unloaded include model degrades to sequence 0 of the including model rather than faulting, and the group's sequence range is a runtime field, so no installed image can say which group a captured virtual index resolved through."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The 56-byte remap record is a short source bone@+0x00, a branch selector byte@+0x02, a position-transform byte@+0x03, two chain bone shorts at +0x04 and +0x06, and a row-major 3x4 matrix at +0x08. A negative source bone makes the dispatcher write the including model's own bind pose into the target instead of anything the included model decoded.",
+      "evidence": "0x10089d95-0x10089da0 addresses the record at group + group[0x10] + index * 0x38 and reads the short at +0. 0x10089da6 branches on its sign to 0x10089da8, which reads StudioBone.pos@+0x20 and StudioBone.quat@+0x2c out of the including model's own BoneIndex@244 array at stride 0xa0. 0x10089de4 branches on the byte at +0x02 and 0x10089dee on the byte at +0x03; 0x10089e12 passes record+0x08 as the matrix argument of TransformPoint 0x10107f80. 0x10089ef7 and 0x10089efb read the shorts at +0x04 and +0x06.",
+      "consequence": "A bone the including model declares but the shared bank does not animate resolves to the target's own bind pose, which is the opposite of the donor-bind fallback the outer virtual-model remap produces, and the two must not be conflated."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The position-transform byte@+0x03 means the same thing in both branches: transform the resulting position through the record's own 3x4 matrix. The branches differ in the rotation. The copy branch copies the source quaternion verbatim; the chain-rebase branch decomposes the composed matrix, so it writes a rotation the source bone does not carry.",
+      "evidence": "In the copy branch 0x10089e24-0x10089e46 copies four dwords from the source quaternion at stride 0x10 regardless of the byte at +0x03. In the chain branch 0x10089f8c tests the same byte and either calls 0x10107e40 straight into the target pair or into a stack position that 0x10089fc1 then passes through 0x10107f80 with record+0x08. 0x10107e40 decomposes a 3x4 into a quaternion and a translation.",
+      "consequence": "The transform byte can be modelled once for both branches, and only the chain branch needs the parent-chain walk, so an evaluator that meets no chain-branch record needs the matrix multiply and nothing else."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The chain-rebase branch's second loop never advances its induction variable, so it terminates only when the shorts at record +0x04 and +0x06 are equal. A record carrying the two unequal would hang the engine, and no record in the captured corpus reaches the branch at all.",
+      "evidence": "0x10089ef7 loads the short at +0x04 into EDI and 0x10089f24-0x10089f76 re-tests that same EDI against the short at +0x06 without writing it; the three calls in the body take EDI only as an input. Over the golden sp_theatre capture's 41 located remap arrays, 3,095 records split 2,352 copy-branch and 743 negative-source, and 0 carry a non-zero byte at +0x02.",
+      "consequence": "The open nested-remap question is not on the theatre path, so CAP5.8's numbers do not depend on closing it; the branch stays partial and needs a corpus that reaches it."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The bone mask handed to a resolved include model is rebuilt in that model's own bone index space, sized from its NumBones@240 and populated by mapping each set bit of the caller's mask through the group's remap array. It is not the caller's mask forwarded unchanged.",
+      "evidence": "0x10089d1b-0x10089d2e calls 0x1008e370 as a __thiscall on a stack object with the caller's mask, the group's remap array base and the included studiohdr; 0x1008e370 reads NumBones@0xf0 from the studiohdr, zeroes ceil(bones/32) words, and for each set source bit sets the bit the remap short names when that short is non-negative. 0x10089d3e passes the rebuilt object as the recursion's seventh argument.",
+      "consequence": "CAP2.5's finding that the selected-bone set reaches the cell unchanged is a measured property of this corpus's remap arrays rather than a structural identity, so a corpus whose remap is not a bijection on the selected set would break it."
     }
   ],
   "functions": [
     {
       "address": "10089c40",
       "label": "dispatch_model_pose",
-      "confidence": "partial",
-      "role": "Resolves a virtual sequence index to its owning include model, remaps pose parameters and bones across the group boundary, reaches the sequence evaluator on the local path, and recurses over the descriptor's autolayers. The nested transformed remap branch remains open.",
+      "confidence": "confirmed",
+      "role": "Resolves a virtual sequence index to its owning include model on the group's runtime sequence range, rebuilds the bone mask and the 24 pose parameters in that model's index space, recurses with the owner-local index, maps the result back through the group's 56-byte bone remap array, and then evaluates the descriptor's autolayers recursively. An index below NumLocalSeq takes the local path and no remap runs. The chain-rebase branch of the remap record is the one part still open, and no shipped model in the captured corpus reaches it.",
       "depth": 2,
       "cap": 120,
       "asm_count": 2200
@@ -501,6 +537,15 @@
       "depth": 1,
       "cap": 40,
       "asm_count": 40
+    },
+    {
+      "address": "1008e370",
+      "label": "remap_bone_mask",
+      "confidence": "confirmed",
+      "role": "Rebuilds a selected-bone mask in a resolved include model's own bone index space, sized from its NumBones@240 and populated by mapping each set source bit through the group's 56-byte remap records.",
+      "depth": 1,
+      "cap": 20,
+      "asm_count": 120
     }
   ],
   "relationships": [
@@ -611,6 +656,18 @@
       "to": "10088e10",
       "confidence": "confirmed",
       "evidence": "xref at 0x1008a0e7; the autolayer accumulator invoked after each recursive evaluation"
+    },
+    {
+      "from": "10089c40",
+      "to": "10107f80",
+      "confidence": "confirmed",
+      "evidence": "position transform applied to a remapped bone at 0x10089e18 and 0x10089fc1 in client.dll"
+    },
+    {
+      "from": "10089c40",
+      "to": "1008e370",
+      "confidence": "confirmed",
+      "evidence": "bone mask rebuilt in the resolved include model's index space at 0x10089d2e in client.dll"
     }
   ]
 }

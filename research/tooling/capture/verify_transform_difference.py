@@ -63,11 +63,11 @@ The decoded-locals stage is the one that does measure shipped code, and it is
 the only stage whose subject is a decoder rather than a rule. What surrounds
 `mdl_skel` there is not: the frame interpolation, the blend-cell mix, the
 owner-to-entity bone correspondence and the include-model position transform are
-runtime bindings, so the stage carries five candidates — the complete rule, the
-same rule with the position transform the entity's own include group declares,
-the same rule without the frame interpolation the exporter defers to its
-runtime, the correspondence the export actually ships, and plain bone-name
-matching.
+runtime bindings, so the stage carries six candidates — the complete rule with no
+transform, the transform applied unconditionally, the transform applied on the
+route the dispatcher actually took, the rule without the frame interpolation the
+exporter defers to its runtime, the correspondence the export actually ships, and
+plain bone-name matching.
 
 The shipped correspondence is not plain name matching, and reading it as such
 understates the export by the whole cinematic cast. `mdl_gltf.export_cinematic`
@@ -77,13 +77,30 @@ resolves `(anim set, the scene actor's bonerename root)` to that bank, so an
 actor posed on `Bip02` already takes the `Bip02` chain. `cinematic_split` models
 that, and `bone_name` stays as the counterfactual it avoids.
 
-Which of the two remap candidates governs a record is not something the capture
-witnesses. An include group's transform belongs to the sequence resolving
-through that group, and a cinematic bank holding several complete actors is
-reached above it; the capture records the owning header and the owner-local
-index but not the route. So the two candidates are reported side by side and
-split per owner, and the report says which population each one closes rather
-than choosing between them.
+Which remap candidate governs a record is decided by the route to its owner, and
+the capture witnesses that route. `dispatch_model_pose` reads a group's remap
+array only after resolving the virtual sequence index through that group, so an
+owner that is the entity's own model took the local path and an owner that is not
+in the entity model's include tree was posed on directly — neither carries a
+transform, and a shared bank reached through the tree does. `include_route`
+applies that rule; `complete` and `include_remap` are retained as the two halves
+it replaces, each closing one population and breaking the other.
+
+The rule is graded against retail's own bytes rather than asserted. At a bone
+whose remap matrix moves the position further than the excellent band the two
+routes land in different places, so the captured `BASE` position says which one
+ran — per contribution, with our decode supplying only the source position. Those
+counts are `route_witness_*`, and `route_witness_disagrees_with_the_include_graph`
+is what makes the installed include graph a usable stand-in for the runtime
+sequence range the capture cannot hold.
+
+That graph is the one input this pass takes from outside the database. The
+aggregator models an include chain passes through are never an owner, so no hook
+holds their header and the census carries no image for them; the installed `.mdl`
+headers supply the edges, and it is the same source the export resolves bank
+ownership from. Without a readable install the route table is empty,
+`include_route` degrades to `complete`, and every record scored that way is
+counted under `records_scored_with_no_route_table`.
 
 A mismatch is not a defect. It is the product: CAP4.4 ranks these clusters, and
 a run that found nothing would have proved only that the corpus was too narrow.
@@ -203,11 +220,20 @@ LADDER_CANDIDATE = "split_procedural"
 # The decoded-locals rules, as (name, bone correspondence, frame interpolation,
 # include-model position transform, inherits retail's selected mask).
 #
+# The transform element is which rule decides whether the include group's
+# position transform runs: `none` never, `always` on every record the entity's
+# own merged array carries a set byte for, and `route` on the records whose owner
+# the dispatcher actually reached through one of the entity model's include
+# groups. `route` is the recovered rule — `dispatch_model_pose` walks a group's
+# array only after resolving the sequence index through that group, so the local
+# path and an owner reached above the dispatcher both carry no transform.
+#
 # `complete` is A.4b's stated remap with the transform byte clear — the position
 # copied and the rotation copied; `include_remap` adds the transform the entity's
-# own group array declares for the bones whose byte is set; `frame_key` drops the
-# frame interpolation, so its residual is what `mdl_gltf` leaves to its runtime
-# rather than a decode error.
+# own group array declares for the bones whose byte is set, on every record
+# regardless of route, which is the candidate that had no way to ask;
+# `frame_key` drops the frame interpolation, so its residual is what `mdl_gltf`
+# leaves to its runtime rather than a decode error.
 #
 # `cinematic_split` is the shipped path. `export_cinematic` splits a bank holding
 # several complete actors into one bank per `BipNN` root, folded onto `Bip01`,
@@ -230,13 +256,14 @@ LADDER_CANDIDATE = "split_procedural"
 # bone whose name matches — so gating them by a mask they never consult would
 # credit them for exactly the slots their correspondence gets wrong.
 CLIP_CANDIDATES = (
-    ("complete", "family_name", "linear", False, True),
-    ("include_remap", "family_name", "linear", True, True),
-    ("frame_key", "family_name", "frame", False, True),
-    ("cinematic_split", "cinematic_split", "linear", False, False),
-    ("bone_name", "name", "linear", False, False),
+    ("complete", "family_name", "linear", "none", True),
+    ("include_remap", "family_name", "linear", "always", True),
+    ("include_route", "family_name", "linear", "route", True),
+    ("frame_key", "family_name", "frame", "none", True),
+    ("cinematic_split", "cinematic_split", "linear", "none", False),
+    ("bone_name", "name", "linear", "none", False),
 )
-CLIP_LADDER_CANDIDATE = "complete"
+CLIP_LADDER_CANDIDATE = "include_route"
 
 # The composed-locals rules. Nothing offline models the transition, layer and
 # controller stage between the base pose and the final locals, so both
@@ -249,7 +276,9 @@ MAX_REPORTED_CLUSTERS = 64
 MAX_REPORTED_BONES = 40
 MAX_REPORTED_EXEMPLARS = 3
 MAX_REPORTED_MODELS = 60
-MAX_REPORTED_OWNERS = 400
+# One row per (entity model, owner model, candidate), so the cap scales with the
+# candidate count rather than with the cast.
+MAX_REPORTED_OWNERS = 600
 
 DEFAULT_BATCH = 4096
 # The clip stages hold a whole batch's owner-space samples at once, and a
@@ -272,6 +301,14 @@ DEFECTS = (
     "paired_records_whose_cycle_disagrees",
     "paired_records_whose_renderable_offset_disagrees",
     "animation_index_outside_the_owner_declaration",
+    # The two populations that would refute the recovered include route. An
+    # observation whose captured position matches neither the copied nor the
+    # transformed candidate says the transform is not what the dispatcher applied;
+    # one the include graph resolves the other way from the witness says
+    # reachability is not the dispatcher's own condition and the graph cannot
+    # stand in for the runtime sequence range.
+    "route_witness_matches_neither",
+    "route_witness_disagrees_with_the_include_graph",
 )
 
 # A population whose non-zero value is a recorded property of the runtime, of
@@ -374,20 +411,65 @@ ACCOUNTED = {
         "names which owner and bone carry it."
     ),
     "stage1_include_remap_over_the_band": (
-        "What the include-model position transform costs where it is applied. "
-        "The entity's own `StudioModelGroup`+0x10 array declares a matrix per "
-        "bone; A.4b's rule applies it to the position where the record's "
-        "transform byte is set. Whether a given evaluation resolved through "
-        "that group or through the virtual-model path above it is not something "
-        "the capture witnesses, so the transform is carried as its own "
-        "candidate rather than folded into the complete rule, and the two "
-        "counts are read against the models the cluster list names."
+        "What the include-model position transform costs when it is applied "
+        "without a route: the entity's own merged `StudioModelGroup`+0x10 array "
+        "on every record, whatever owner it names. Retained as the counterfactual "
+        "`include_route` is measured against, because it is the rule the report "
+        "carried while the route was unwitnessed."
+    ),
+    "stage1_complete_over_the_band": (
+        "What never applying the transform costs. Right for an owner the "
+        "dispatcher reached above the include walk and wrong for a shared bank, "
+        "so like `include_remap` it closes one population and breaks the other."
     ),
     "remap_bones_the_groups_disagree_on": (
         "A model declaring two include groups whose arrays name different "
-        "transforms for one bone. Which group a sequence resolved through is a "
-        "runtime range no image carries, so the bone keeps its untransformed "
-        "position and is counted instead of being transformed by a guess."
+        "transforms for one bone, where a rule with no route has to merge them. "
+        "The bone keeps its untransformed position and is counted instead of "
+        "being transformed by a guess."
+    ),
+    "census_pairs_resolved_to_an_include_group": (
+        "Census `(entity model, owner model)` pairs the include graph routes "
+        "through one of the entity model's own groups. Enumerated over the census "
+        "rather than over witnessed contributions, so it bounds the route table "
+        "rather than counting evaluations."
+    ),
+    "census_pairs_matching_more_than_one_include_group": (
+        "A pair whose owner is reachable under two of the entity model's groups — "
+        "the include tree is a DAG, so `frenzy` and `pc_idles` reappear under "
+        "several parents. The matched arrays are merged the way a routeless rule "
+        "merges, and the bones they disagree on are counted separately."
+    ),
+    "remap_bones_the_matched_groups_disagree_on": (
+        "Bones lost to that merge. Zero means the DAG never forced a guess."
+    ),
+    "including_models_whose_own_image_the_install_lacks": (
+        "A model carrying remap groups whose own `.mdl` the install cannot supply, "
+        "so no include graph can be walked from it and its pairs take no route. "
+        "The capture is the owner's install, so this is a hole rather than a "
+        "difference of opinion."
+    ),
+    "records_scored_with_no_route_table": (
+        "`include_route` records scored while the install supplied no include "
+        "graph, which makes the candidate degrade to `complete` rather than "
+        "fail. A non-zero count means the route was not applied and the "
+        "candidate's figure is not the recovered rule's."
+    ),
+    "route_witness_transformed": (
+        "A (record, bone) observation where the record's transform byte is set, "
+        "the two candidates land further apart than the excellent band, and "
+        "retail's own captured position matches the transformed one. Retail's "
+        "bytes witness the route; our decode supplies only the source position, "
+        "so neither side is produced by the code that produces the other."
+    ),
+    "route_witness_copied": (
+        "The same observation resolving the other way — retail's position matches "
+        "the verbatim copy, so no group array was walked for that contribution."
+    ),
+    "route_witness_undecided": (
+        "An observation where the record matrix is near enough to the identity, or "
+        "both candidates are inside the band, that the two cannot be separated. It "
+        "witnesses nothing and is excluded rather than counted for either route."
     ),
     "stage1_frame_key_over_the_band": (
         "What the exporter's baked key costs before its runtime interpolates: "
@@ -1223,20 +1305,21 @@ class ClipCache:
 ) = range(24)
 
 
-def bone_remaps(
+def remap_groups(
     connection: sqlite3.Connection, models: dict[int, Skeleton]
-) -> tuple[dict[int, decoder_pose.BoneRemap], int]:
-    """One merged remap array per including model, plus the bones in dispute.
+) -> dict[int, list[tuple[str, decoder_pose.BoneRemap]]]:
+    """Each including model's remap arrays, in group order, with the path each
+    group includes.
 
-    A model that includes two banks carries two arrays. Which one a sequence
-    resolved through is the group's virtual range, a runtime field no image
-    holds, so a bone the arrays agree on is taken and a bone they disagree on
-    keeps its untransformed position and is counted.
+    One row per `StudioModelGroup` whose array landed inside the captured image.
+    The path is what the route rule matches an owner against, so it is kept
+    beside the bytes rather than collapsed away.
     """
-    rows: dict[int, list[decoder_pose.BoneRemap]] = {}
-    for checksum, count, records in connection.execute(
-        "SELECT owner_checksum, record_count, records FROM bone_remap_group "
-        "WHERE inside_image = 1 AND records IS NOT NULL ORDER BY group_index"
+    groups: dict[int, list[tuple[str, decoder_pose.BoneRemap]]] = {}
+    for checksum, path, count, records in connection.execute(
+        "SELECT owner_checksum, include_path, record_count, records "
+        "FROM bone_remap_group WHERE inside_image = 1 AND records IS NOT NULL "
+        "ORDER BY owner_checksum, group_index"
     ):
         checksum, count = int(checksum), int(count)
         skeleton = models.get(checksum)
@@ -1244,26 +1327,155 @@ def bone_remaps(
             continue
         if len(records) < count * decoder_pose.REMAP_RECORD_BYTES:
             continue
-        rows.setdefault(checksum, []).append(
-            decoder_pose.bone_remap(bytes(records), count)
+        groups.setdefault(checksum, []).append(
+            (
+                decoder_pose.normalise_model_key(path),
+                decoder_pose.bone_remap(bytes(records), count),
+            )
         )
+    return groups
+
+
+def _merge_remaps(
+    group: list[decoder_pose.BoneRemap],
+) -> tuple[decoder_pose.BoneRemap, int]:
+    """Fold several arrays into one, dropping the bones they disagree on.
+
+    What a rule with no route has to do when a model carries more than one group:
+    a bone the arrays agree on is taken and a bone they disagree on keeps its
+    untransformed position and is counted.
+    """
+    first = group[0]
+    transform = first.transform.copy()
+    matrix = first.matrix.copy()
+    disputed = 0
+    for other in group[1:]:
+        differs = (other.transform != transform) | (
+            np.abs(other.matrix - matrix).max(axis=(1, 2)) > 1.0e-6
+        )
+        differs &= transform | other.transform
+        disputed += int(differs.sum())
+        transform = transform & ~differs
+    return (
+        decoder_pose.BoneRemap(
+            source=first.source,
+            transform=transform,
+            matrix=matrix,
+            chain=first.chain,
+            chain_bones=first.chain_bones,
+        ),
+        disputed,
+    )
+
+
+def bone_remaps(
+    groups: dict[int, list[tuple[str, decoder_pose.BoneRemap]]]
+) -> tuple[dict[int, decoder_pose.BoneRemap], int]:
+    """One merged remap array per including model, plus the bones in dispute.
+
+    What the `include_remap` candidate consumes, and only that candidate. It has
+    no route, so it cannot know which of a model's groups a sequence resolved
+    through and merges them all. `include_route` needs no merge on a pair the
+    route resolves to one group.
+    """
     resolved: dict[int, decoder_pose.BoneRemap] = {}
     disputed = 0
-    for checksum, group in rows.items():
-        first = group[0]
-        transform = first.transform.copy()
-        matrix = first.matrix.copy()
-        for other in group[1:]:
-            differs = (other.transform != transform) | (
-                np.abs(other.matrix - matrix).max(axis=(1, 2)) > 1.0e-6
-            )
-            differs &= transform | other.transform
-            disputed += int(differs.sum())
-            transform = transform & ~differs
-        resolved[checksum] = decoder_pose.BoneRemap(
-            source=first.source, transform=transform, matrix=matrix
-        )
+    for checksum, group in groups.items():
+        merged, bones = _merge_remaps([remap for _, remap in group])
+        resolved[checksum] = merged
+        disputed += bones
     return resolved, disputed
+
+
+def install_loader() -> tuple[Any, str]:
+    """A `load(key) -> bytes | None` over the install, and why it is absent.
+
+    The include *graph* is the one thing the route rule needs that no capture
+    holds: a group's virtual sequence range is written at load time, and the
+    aggregator models the chain passes through are never an owner, so no hook ever
+    holds their header and the census has no image for them. So this stage reads
+    the installed `.mdl` headers — which is the same source the export resolves
+    its own bank ownership from, and still not the live process.
+
+    The import is deferred and guarded because `install` resolves the user's game
+    root at import time. Without it the route table is empty, `include_route`
+    degrades to `complete`, and the records scored that way are counted rather
+    than quietly reported as the recovered rule's figure.
+    """
+    try:
+        from elysium_pipeline.formats import install
+    except Exception as error:  # pragma: no cover - configuration, not logic
+        return None, f"the install package did not import: {error}"
+    try:
+        index = install.build_index(verbose=False)
+    except Exception as error:
+        return None, f"the install could not be indexed: {error}"
+    cache: dict[str, bytes | None] = {}
+
+    def load(key: str) -> bytes | None:
+        if key not in cache:
+            cache[key] = install.read(index, key)
+        return cache[key]
+
+    return load, ""
+
+
+def include_routes(
+    names: dict[int, str],
+    groups: dict[int, list[tuple[str, decoder_pose.BoneRemap]]],
+    load,
+) -> tuple[dict[tuple[int, int], decoder_pose.BoneRemap], dict[str, int]]:
+    """The remap array each `(entity model, owner model)` pair resolves through.
+
+    `dispatch_model_pose` reads a group's array only after resolving the virtual
+    sequence index through that group, so a pair maps to an array exactly when
+    the owner sits under one of the entity model's own include groups. An owner
+    that is the entity's own model took the local path, and an owner that is
+    neither took no group walk from this entity at all — a whole-cast cinematic
+    bank is nobody's include, and the scene poses the actor on it directly.
+
+    Which group a virtual index resolved through is a runtime field the capture
+    cannot hold, so this resolves the group by *reachability* from the group's
+    own include path: the include graph is what says a bank is reachable, and
+    the graph comes from the install rather than from the capture.
+    """
+    counts = {
+        "census_pairs_resolved_to_an_include_group": 0,
+        "census_pairs_matching_more_than_one_include_group": 0,
+        "remap_bones_the_matched_groups_disagree_on": 0,
+        "including_models_whose_own_image_the_install_lacks": 0,
+    }
+    routes: dict[tuple[int, int], decoder_pose.BoneRemap] = {}
+    subtrees: dict[str, frozenset[str]] = {}
+
+    def subtree(key: str) -> frozenset[str]:
+        if key not in subtrees:
+            subtrees[key] = decoder_pose.include_reachability(load, key)
+        return subtrees[key]
+
+    for checksum, group in groups.items():
+        entity_key = decoder_pose.normalise_model_key(names.get(checksum, ""))
+        if load(entity_key) is None:
+            counts["including_models_whose_own_image_the_install_lacks"] += 1
+            continue
+        for owner, owner_name in names.items():
+            owner_key = decoder_pose.normalise_model_key(owner_name)
+            if owner_key == entity_key:
+                continue
+            matched = [
+                remap
+                for path, remap in group
+                if owner_key == path or owner_key in subtree(path)
+            ]
+            if not matched:
+                continue
+            if len(matched) > 1:
+                counts["census_pairs_matching_more_than_one_include_group"] += 1
+            merged, disputed = _merge_remaps(matched)
+            counts["remap_bones_the_matched_groups_disagree_on"] += disputed
+            counts["census_pairs_resolved_to_an_include_group"] += 1
+            routes[(checksum, owner)] = merged
+    return routes, counts
 
 
 def split_roots(
@@ -1336,6 +1548,66 @@ def _scatter(values: np.ndarray, columns: np.ndarray, width: int) -> np.ndarray:
     return full
 
 
+def _fold_route_witness(
+    counts: dict[str, int],
+    by_route: dict[tuple[int, int], np.ndarray],
+    checksum: int,
+    owner: int,
+    remap: decoder_pose.BoneRemap,
+    routed: bool,
+    plain: np.ndarray,
+    retail: np.ndarray,
+    live: np.ndarray,
+    multiplier: np.ndarray,
+    target: np.ndarray,
+) -> None:
+    """Read the route out of retail's own positions, and score the graph against it.
+
+    `plain` is the source position our decode produced with nothing applied, and
+    `retail` the position the capture holds for the same bone. A bone whose record
+    matrix moves the position by more than the excellent band separates the two
+    routes; a bone whose matrix barely moves it does not, and is excluded rather
+    than credited to whichever route happens to be nearer.
+
+    `routed` is what the include graph says. It is scored against the witness
+    rather than trusted, because the graph stands in for a runtime sequence range
+    the capture cannot hold.
+    """
+    take = remap.transform[target]
+    if not take.any():
+        return
+    band = BANDS["local_translation"][0]
+    moved = decoder_pose.apply_remap(plain, remap, target)
+    apart = np.linalg.norm(moved - plain, axis=-1)
+    error_plain = decoder_pose.position_error(plain, retail)
+    error_moved = decoder_pose.position_error(moved, retail)
+
+    observed = live & take[None, :] & (apart > band)
+    near_plain = error_plain <= band
+    near_moved = error_moved <= band
+    weights = np.broadcast_to(multiplier[:, None], observed.shape)
+
+    undecided = live & take[None, :] & ~observed
+    transformed = observed & near_moved & ~near_plain
+    copied = observed & near_plain & ~near_moved
+    both = observed & near_plain & near_moved
+    neither = observed & ~near_plain & ~near_moved
+
+    counts["route_witness_transformed"] += int(weights[transformed].sum())
+    counts["route_witness_copied"] += int(weights[copied].sum())
+    counts["route_witness_undecided"] += int(weights[undecided | both].sum())
+    counts["route_witness_matches_neither"] += int(weights[neither].sum())
+    counts["route_witness_disagrees_with_the_include_graph"] += int(
+        weights[copied if routed else transformed].sum()
+    )
+    totals = by_route.setdefault(
+        (checksum, owner), np.zeros(5, dtype=np.int64)
+    )
+    for index, mask in enumerate((transformed, copied, undecided | both, neither)):
+        totals[index] += int(weights[mask].sum())
+    totals[4] = 1 if routed else 0
+
+
 def _blend_weight(text: str | None) -> float:
     """The axis-0 weight a contribution recorded, or zero if it carried none."""
     if not text:
@@ -1382,6 +1654,7 @@ def clip_stages(
     models: dict[int, Skeleton],
     images: dict[int, bytes],
     remaps: dict[int, decoder_pose.BoneRemap],
+    routes: dict[tuple[int, int], decoder_pose.BoneRemap],
     *,
     batch: int,
     sample: int | None,
@@ -1432,6 +1705,12 @@ def clip_stages(
         "bones_selected_with_no_owner_source": 0,
         "owner_bones_decoded_with_no_entity_target": 0,
         "records_excluded_by_the_sample_bound": 0,
+        "records_scored_with_no_route_table": 0,
+        "route_witness_transformed": 0,
+        "route_witness_copied": 0,
+        "route_witness_undecided": 0,
+        "route_witness_matches_neither": 0,
+        "route_witness_disagrees_with_the_include_graph": 0,
     }
     composed_counts = {
         "payload_width_disagrees_with_bone_count": 0,
@@ -1449,12 +1728,16 @@ def clip_stages(
     by_stage["none"] = 0
     chain_first_bone: dict[tuple[int, int, str], int] = {}
     # Which owner a record's clip came from is the identity the decoded stage
-    # turns on and the only one that separates its two remap candidates: a
-    # shared bank is reached through an include group and carries that group's
-    # position transform, while a cinematic bank holding several actors is
-    # reached above it and does not. Nothing in the capture says which route an
-    # evaluation took, so the split is reported per owner rather than decided.
+    # turns on and the one that separates its remap candidates: a shared bank is
+    # reached through an include group and carries that group's position
+    # transform, while a cinematic bank holding several actors is posed on
+    # directly and does not. The per-owner split is retained beside the route so
+    # a candidate's figure can be read against the population it governs.
     by_owner: dict[tuple[int, int, str], np.ndarray] = {}
+    # Per `(entity model, owner model)`: how retail's own positions resolved the
+    # route, and what the include graph said. Columns are transformed, copied,
+    # undecided, neither, and whether the graph routed the pair.
+    by_route: dict[tuple[int, int], np.ndarray] = {}
 
     base_join, base_column = _payload_join(flags, "bp", "base_key")
     sequence_join, sequence_column = _payload_join(flags, "sp", "sequence_key")
@@ -1673,7 +1956,7 @@ def clip_stages(
             for candidate, matching, interpolation, transform, masked in CLIP_CANDIDATES:
                 family = matching == "family_name"
                 split = matching == "cinematic_split"
-                if transform and checksum not in remaps:
+                if transform == "always" and checksum not in remaps:
                     continue
                 if family and owner_family is None:
                     if candidate == CLIP_LADDER_CANDIDATE:
@@ -1735,9 +2018,44 @@ def clip_stages(
                         np.where(take, mixed[0], ours[0]),
                         np.where(take, mixed[1], ours[1]),
                     )
-                if transform:
+                # The witness, taken once on the candidate that applies nothing so
+                # `ours[0]` is still the source position. At a bone whose record
+                # matrix moves the position further than the excellent band the
+                # two routes land in different places, so retail's own captured
+                # position says which one ran — per contribution, and without our
+                # decode having any say in the answer.
+                if candidate == "complete" and checksum in remaps:
+                    _fold_route_witness(
+                        decoded_counts,
+                        by_route,
+                        checksum,
+                        owner,
+                        remaps[checksum],
+                        (checksum, owner) in routes,
+                        ours[0],
+                        base_pos[grid],
+                        live,
+                        multiplier[picked],
+                        target,
+                    )
+
+                # `always` takes the entity's merged array whatever the owner is;
+                # `route` takes the array of the group the dispatcher reached this
+                # owner through, and nothing at all when it reached the owner some
+                # other way — the local path, or a bank the scene posed the actor
+                # on directly.
+                remap = None
+                if transform == "always":
+                    remap = remaps[checksum]
+                elif transform == "route":
+                    if not routes:
+                        decoded_counts["records_scored_with_no_route_table"] += int(
+                            multiplier[picked].sum()
+                        )
+                    remap = routes.get((checksum, owner))
+                if remap is not None:
                     ours = (
-                        decoder_pose.apply_remap(ours[0], remaps[checksum], target),
+                        decoder_pose.apply_remap(ours[0], remap, target),
                         ours[1],
                     )
                 translation = _scatter(
@@ -1988,6 +2306,7 @@ def clip_stages(
     decoded_counts["stage1_include_remap_over_the_band"] = decoded_arm.over_band(
         "include_remap"
     )
+    decoded_counts["stage1_complete_over_the_band"] = decoded_arm.over_band("complete")
     decoded_counts["stage1_frame_key_over_the_band"] = decoded_arm.over_band("frame_key")
     decoded_counts["stage1_cinematic_split_over_the_band"] = decoded_arm.over_band(
         "cinematic_split"
@@ -2019,11 +2338,13 @@ def clip_stages(
         "clips_decoded": clips.decoded,
         "clips_unreadable": clips.faults,
         "models_carrying_an_include_remap": len(remaps),
+        "pairs_routed_through_an_include_group": len(routes),
         "cinematic_root_pairs_resolved": len(roots),
         "cinematic_root_pairs_unresolved": unresolved_pairs,
         "elapsed_seconds": elapsed,
         "candidates": decoded_arm.summary(models),
         "by_owner": by_owner,
+        "by_route": by_route,
         "counts": decoded_counts,
     }
     composed = {
@@ -2084,9 +2405,51 @@ def finish_by_owner(
                 },
             }
         )
-    rows.sort(key=lambda row: (row["candidate"], -row["records"]))
+    # The ladder candidate first, then the rest alphabetically. Truncation is by
+    # row count across every candidate, so ordering by name alone would let a
+    # candidate added later push the one the report is about off the end.
+    rows.sort(
+        key=lambda row: (
+            row["candidate"] != CLIP_LADDER_CANDIDATE,
+            row["candidate"],
+            -row["records"],
+        )
+    )
     stage["by_owner"] = rows[:MAX_REPORTED_OWNERS]
     stage["by_owner_truncated"] = max(len(rows) - MAX_REPORTED_OWNERS, 0)
+
+    witness = stage.pop("by_route", None)
+    if witness is None:
+        return stage
+    routed = []
+    for (checksum, owner), totals in witness.items():
+        transformed, copied, undecided, neither, graph = (int(value) for value in totals)
+        routed.append(
+            {
+                "model": names.get(checksum, ""),
+                "checksum": f"0x{checksum:08x}",
+                "owner": names.get(owner, ""),
+                "owner_checksum": f"0x{owner:08x}",
+                "observations": transformed + copied + undecided + neither,
+                "witnessed_route": (
+                    "transformed"
+                    if transformed and not copied
+                    else "copied"
+                    if copied and not transformed
+                    else "split"
+                    if transformed and copied
+                    else "undecided"
+                ),
+                "transformed": transformed,
+                "copied": copied,
+                "undecided": undecided,
+                "matches_neither": neither,
+                "include_graph_routes_the_pair": bool(graph),
+            }
+        )
+    routed.sort(key=lambda row: -row["observations"])
+    stage["by_route"] = routed[:MAX_REPORTED_OWNERS]
+    stage["by_route_truncated"] = max(len(routed) - MAX_REPORTED_OWNERS, 0)
     return stage
 
 
@@ -3086,11 +3449,21 @@ def verify(
                     for checksum, walker in load_images(connection).items()
                     if not walker.capped
                 }
-                remaps, disputed = bone_remaps(connection, models)
+                groups = remap_groups(connection, models)
+                remaps, disputed = bone_remaps(groups)
                 binding["remap_bones_the_groups_disagree_on"] = disputed
                 binding["counts"]["remap_bones_the_groups_disagree_on"] = disputed
+                load, absent = install_loader()
+                binding["include_graph_source"] = (
+                    "the installed .mdl headers" if load else absent
+                )
+                routes, route_counts = (
+                    include_routes(names, groups, load) if load else ({}, {})
+                )
+                binding.update(route_counts)
+                binding["counts"].update(route_counts)
                 one, one_arm, two, two_arm, chain, chain_arm = clip_stages(
-                    connection, flags, models, images, remaps,
+                    connection, flags, models, images, remaps, routes,
                     batch=batch, sample=sample,
                 )
                 del images

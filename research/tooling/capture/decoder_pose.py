@@ -470,17 +470,29 @@ def _split_key(name: str, family: str) -> str | None:
 # --- the include-model bone remap ---------------------------------------------
 
 # `StudioModelGroup`+0x10 addresses one 56-byte record per bone of the
-# *including* model: a `u16` source bone in the include model at +0x00, a
-# transform byte at +0x03, a loader-written dword at +0x04, and a 3x4 matrix at
-# +0x08. `docs/vtmb/mdl_v2531.md` owns the array's location and
-# `docs/vtmb/animation_and_movers.md` A.4b the rule that applies it: a clear
-# byte copies the source position and a set byte transforms it, while the source
-# rotation is copied verbatim either way.
+# *including* model. Read from the consumer at `dispatch_model_pose`
+# (`research/cases/animation-pose/specs/animation_pose.json`): a `short` source
+# bone in the include model at +0x00, a branch selector byte at +0x02, a
+# position-transform byte at +0x03, two chain bone `short`s at +0x04 and +0x06,
+# and a row-major 3x4 matrix at +0x08. `docs/vtmb/mdl_v2531.md` owns the array's
+# location and `docs/vtmb/animation_and_movers.md` A.4b the rules that apply it.
+#
+# The selector at +0x02 chooses between two branches. The copy branch copies the
+# source quaternion verbatim and either copies the source position or transforms
+# it through the record matrix on the byte at +0x03; the chain-rebase branch
+# composes the source bone up the include model's parent chain and writes a
+# rotation the source does not carry. Only the copy branch is modelled, because
+# no record in any captured corpus carries a non-zero selector.
+#
+# A negative source bone is not "no data": the dispatcher writes the *including*
+# model's own bind pose into that target, which is the opposite of the donor-bind
+# fallback the outer virtual-model remap produces.
 REMAP_RECORD_BYTES = 56
 REMAP_SOURCE = 0
+REMAP_SELECTOR_BYTE = 2
 REMAP_TRANSFORM_BYTE = 3
+REMAP_CHAIN_SHORTS = 4
 REMAP_MATRIX = 8
-REMAP_NO_SOURCE = 0xFFFF
 
 
 @dataclass(frozen=True)
@@ -490,25 +502,24 @@ class BoneRemap:
     source: np.ndarray     # (n,) int32, -1 where the group has no source bone
     transform: np.ndarray  # (n,) bool, whether the position is transformed
     matrix: np.ndarray     # (n, 3, 4)
+    chain: np.ndarray      # (n,) bool, the branch nothing offline models
+    chain_bones: np.ndarray  # (n, 2) int32, the chain branch's two shorts
 
 
 def bone_remap(records: bytes, count: int) -> BoneRemap:
-    """Decode a captured remap array into its three parallel columns."""
-    source = np.array(
-        [
-            struct.unpack_from("<H", records, index * REMAP_RECORD_BYTES + REMAP_SOURCE)[0]
-            for index in range(count)
-        ],
-        dtype=np.int32,
-    )
+    """Decode a captured remap array into its parallel columns."""
+    fields = [
+        struct.unpack_from(
+            "<hBBhh", records, index * REMAP_RECORD_BYTES
+        )
+        for index in range(count)
+    ]
+    source = np.array([field[0] for field in fields], dtype=np.int32)
     return BoneRemap(
-        source=np.where(source == REMAP_NO_SOURCE, -1, source),
-        transform=np.array(
-            [
-                bool(records[index * REMAP_RECORD_BYTES + REMAP_TRANSFORM_BYTE])
-                for index in range(count)
-            ]
-        ),
+        # The dispatcher tests the sign of a `short`, so 0xffff is -1 rather than
+        # a sentinel compared as an unsigned value.
+        source=np.where(source < 0, -1, source),
+        transform=np.array([bool(field[2]) for field in fields]),
         matrix=np.array(
             [
                 struct.unpack_from(
@@ -518,7 +529,82 @@ def bone_remap(records: bytes, count: int) -> BoneRemap:
             ],
             dtype=np.float64,
         ).reshape(count, 3, 4),
+        chain=np.array([bool(field[1]) for field in fields]),
+        chain_bones=np.array(
+            [(field[3], field[4]) for field in fields], dtype=np.int32
+        ).reshape(count, 2),
     )
+
+
+# --- which route a contribution's owner was reached by -------------------------
+
+# `dispatch_model_pose` walks a group's remap array only after resolving the
+# virtual sequence index *through* that group. An index below `NumLocalSeq`@272
+# takes the local path and returns having touched no group at all, and a
+# studiohdr the dispatcher was never entered with cannot be reached by a group
+# walk from the entity's model. So whether a contribution carries the remap is
+# decided by the route to its owner:
+#
+#   owner is the entity's own model      -> the local path, no remap
+#   owner sits in the entity's include   -> one remap per group hop, and the
+#   tree                                    outermost hop is the entity model's
+#                                           own array
+#   owner is neither                     -> the pose was rooted on that owner
+#                                           rather than reached from the entity,
+#                                           so again no remap
+#
+# The third case is how a cinematic bank reaches an actor: a whole-cast bank is
+# nobody's include, and the scene poses the actor on it directly.
+#
+# The group's virtual sequence range is a runtime field no installed image
+# carries, so the *group* a given index resolved through is not derivable
+# offline. Reachability is, and it is what the rule needs.
+
+
+def include_reachability(load, model_key: str, depth: int = 8) -> frozenset[str]:
+    """Every model key reachable from `model_key` through include groups.
+
+    Excludes `model_key` itself, so membership answers "did a group walk reach
+    this owner" rather than "is this the model's own skeleton". `load(key)`
+    returns raw `.mdl` bytes or `None`; an unreadable model contributes no edges
+    rather than raising, because a model absent from one install is a counted
+    hole and not a failure of the rule.
+    """
+    reached: set[str] = set()
+    frontier = [(normalise_model_key(model_key), 0)]
+    seen = {frontier[0][0]}
+    while frontier:
+        following: list[tuple[str, int]] = []
+        for key, level in frontier:
+            if level >= depth:
+                continue
+            data = load(key)
+            if data is None:
+                continue
+            for child in mdl_skel.read_includes(data):
+                child = normalise_model_key(child)
+                if child in seen:
+                    continue
+                seen.add(child)
+                reached.add(child)
+                following.append((child, level + 1))
+        frontier = following
+    return frozenset(reached)
+
+
+def normalise_model_key(key: str) -> str:
+    """A `models/`-rooted, forward-slashed, lowercase `.mdl` key.
+
+    Captured model names, include-group paths and install index keys each carry a
+    different mix of leading slash, separator and extension, and the route rule
+    compares them to each other.
+    """
+    key = key.replace("\\", "/").lower().strip().lstrip("/")
+    if not key.startswith("models/"):
+        key = "models/" + key
+    if not key.endswith(".mdl"):
+        key += ".mdl"
+    return key
 
 
 def apply_remap(

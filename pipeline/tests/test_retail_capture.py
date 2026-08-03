@@ -135,13 +135,17 @@ from research.tooling.capture.decoder_coverage import (
 from research.tooling.capture import decoder_pose
 from research.tooling.capture.verify_transform_difference import (
     ACCOUNTED as TRANSFORM_ACCOUNTED,
+    CLIP_CANDIDATES,
+    CLIP_LADDER_CANDIDATE,
     DEFECTS as TRANSFORM_DEFECTS,
     MAX_REPORTED_BONES,
     MAX_REPORTED_CLUSTERS,
     MAX_REPORTED_EXEMPLARS,
     MAX_REPORTED_MODELS,
     REPORT_NAME,
+    _fold_route_witness,
     compare as compare_transform,
+    include_routes,
     summarize as summarize_transform,
     verify as verify_transform,
 )
@@ -7892,6 +7896,354 @@ class ProceduralRuleExportTests(unittest.TestCase):
         self.assertEqual(rules, [])
         self.assertEqual(len(faults), 1)
         self.assertIn("axis 3", faults[0])
+
+
+# --- CAP5.8: the include-model remap and the route that decides it ------------
+
+# A 56-byte remap record, written field by field so the test states the layout
+# rather than importing the reader's own constants for it:
+#   short +0x00 source bone, negative selecting the including model's bind pose
+#   byte  +0x02 branch selector, non-zero taking the chain rebase
+#   byte  +0x03 transform the position through the record matrix
+#   short +0x04, +0x06 the chain branch's two bone indices
+#   float +0x08 a row-major 3x4
+def remap_record(
+    source: int,
+    *,
+    selector: int = 0,
+    transform: int = 0,
+    chain: tuple[int, int] = (0, 0),
+    matrix: tuple[float, ...] = (
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+    ),
+) -> bytes:
+    record = bytearray(56)
+    struct.pack_into("<hBBhh", record, 0, source, selector, transform, *chain)
+    struct.pack_into("<12f", record, 8, *matrix)
+    return bytes(record)
+
+
+# A matrix that both rotates a quarter turn about Z and translates, so a
+# transformed position is nowhere near the copied one and the witness has
+# something to separate.
+MOVED_REMAP = (
+    0.0, -1.0, 0.0, 10.0,
+    1.0, 0.0, 0.0, 20.0,
+    0.0, 0.0, 1.0, 30.0,
+)
+
+
+def include_image(model_name: str, includes: tuple[str, ...]) -> bytes:
+    """The smallest v2531 header carrying `StudioModelGroup` entries.
+
+    Only `NumIncludeModels`@404, `IncludeModelIndex`@408 and each group's
+    `FilenameIndex`@0 matter to the include graph, so nothing else is written.
+    """
+    groups = 512
+    blob = bytearray(groups + 116 * len(includes))
+    struct.pack_into("<4sI", blob, 0, b"IDST", 2531)
+    blob[12 : 12 + len(model_name)] = model_name.encode("ascii")
+    struct.pack_into("<ii", blob, 404, len(includes), groups)
+    for index, path in enumerate(includes):
+        entry = groups + 116 * index
+        struct.pack_into("<i", blob, entry, len(blob) - entry)
+        blob += path.encode("ascii") + b"\0"
+    return bytes(blob)
+
+
+class IncludeRemapRecordTests(unittest.TestCase):
+    """The 56-byte record as `dispatch_model_pose` reads it.
+
+    Expected values are written by `remap_record` above and by the arithmetic
+    spelled out in each test, never by `decoder_pose`, so an agreement is between
+    two formulations of the same layout.
+    """
+
+    def test_the_record_decodes_every_field_the_dispatcher_reads(self) -> None:
+        records = b"".join(
+            (
+                remap_record(3, transform=1, matrix=MOVED_REMAP),
+                remap_record(-1),
+                remap_record(0xFFFF - 0x10000, selector=2, chain=(7, 9)),
+            )
+        )
+        remap = decoder_pose.bone_remap(records, 3)
+        self.assertEqual(list(remap.source), [3, -1, -1])
+        self.assertEqual(list(remap.transform), [True, False, False])
+        self.assertEqual(list(remap.chain), [False, False, True])
+        self.assertEqual(remap.chain_bones[2].tolist(), [7, 9])
+        self.assertTrue(
+            np.allclose(remap.matrix[0], np.asarray(MOVED_REMAP).reshape(3, 4))
+        )
+        # The identity default is what an untransformed record carries, and a
+        # reader that mistook the field offset would not land on it.
+        self.assertTrue(np.allclose(remap.matrix[1][:, :3], np.eye(3)))
+
+    def test_a_source_of_0xffff_is_minus_one_because_the_field_is_signed(self) -> None:
+        # The dispatcher branches on the sign of a `short`, so every value with
+        # the top bit set selects the bind pose rather than only the sentinel.
+        for raw in (-1, -2, -32768):
+            remap = decoder_pose.bone_remap(remap_record(raw), 1)
+            self.assertEqual(int(remap.source[0]), -1, msg=f"source {raw}")
+
+    def test_the_transform_is_transformpoint_on_the_bones_whose_byte_is_set(
+        self,
+    ) -> None:
+        records = b"".join(
+            (
+                remap_record(0, transform=1, matrix=MOVED_REMAP),
+                remap_record(1, matrix=MOVED_REMAP),
+            )
+        )
+        remap = decoder_pose.bone_remap(records, 2)
+        position = np.array([[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]])
+        moved = decoder_pose.apply_remap(position, remap, np.array([0, 1]))
+
+        # TransformPoint, written out: row . xyz + row translation.
+        matrix = np.asarray(MOVED_REMAP).reshape(3, 4)
+        expected = [
+            sum(matrix[row][column] * position[0][0][column] for column in range(3))
+            + matrix[row][3]
+            for row in range(3)
+        ]
+        self.assertTrue(np.allclose(moved[0][0], expected))
+        self.assertTrue(np.allclose(moved[0][0], [8.0, 21.0, 33.0]))
+        # The clear byte leaves its bone alone rather than transforming it too.
+        self.assertTrue(np.allclose(moved[0][1], [4.0, 5.0, 6.0]))
+
+
+class IncludeRouteTests(unittest.TestCase):
+    """CAP5.8: which contributions the include remap runs for.
+
+    `dispatch_model_pose` walks a group's remap array only after resolving the
+    virtual sequence index through that group, so the local path and an owner the
+    scene posed an actor on directly both carry no transform.
+    """
+
+    TREE = {
+        "models/npc.mdl": ("shared/aggregator.mdl",),
+        "models/shared/aggregator.mdl": ("shared/bank.mdl", "shared/frenzy.mdl"),
+        "models/shared/bank.mdl": (),
+        "models/shared/frenzy.mdl": (),
+        "models/cinematic/whole_cast.mdl": (),
+    }
+
+    def _load(self, key: str) -> bytes | None:
+        includes = self.TREE.get(key)
+        if includes is None:
+            return None
+        return include_image(key, includes)
+
+    def test_a_key_normalises_whatever_shape_it_arrives_in(self) -> None:
+        for raw in (
+            "models/shared/bank.mdl",
+            "/models/shared/bank.mdl",
+            "models\\shared\\Bank.MDL",
+            "shared/bank",
+        ):
+            self.assertEqual(
+                decoder_pose.normalise_model_key(raw), "models/shared/bank.mdl"
+            )
+
+    def test_reachability_is_transitive_and_excludes_the_model_itself(self) -> None:
+        reached = decoder_pose.include_reachability(self._load, "models/npc.mdl")
+        self.assertEqual(
+            reached,
+            frozenset(
+                {
+                    "models/shared/aggregator.mdl",
+                    "models/shared/bank.mdl",
+                    "models/shared/frenzy.mdl",
+                }
+            ),
+        )
+        self.assertNotIn("models/npc.mdl", reached)
+        self.assertNotIn("models/cinematic/whole_cast.mdl", reached)
+
+    def test_an_unreadable_model_contributes_no_edges_rather_than_raising(self) -> None:
+        self.assertEqual(
+            decoder_pose.include_reachability(self._load, "models/absent.mdl"),
+            frozenset(),
+        )
+
+    def test_a_cycle_terminates_and_visits_each_model_once(self) -> None:
+        loop = {
+            "models/a.mdl": ("b.mdl",),
+            "models/b.mdl": ("a.mdl", "c.mdl"),
+            "models/c.mdl": (),
+        }
+        reached = decoder_pose.include_reachability(
+            lambda key: include_image(key, loop[key]) if key in loop else None,
+            "models/a.mdl",
+        )
+        self.assertEqual(reached, frozenset({"models/b.mdl", "models/c.mdl"}))
+
+    def _routes(self, groups):
+        names = {
+            0x01: "models/npc.mdl",
+            0x02: "models/shared/bank.mdl",
+            0x03: "models/cinematic/whole_cast.mdl",
+            0x04: "models/shared/frenzy.mdl",
+        }
+        return include_routes(names, groups, self._load)
+
+    def test_the_route_follows_the_include_tree_and_nothing_else(self) -> None:
+        remap = decoder_pose.bone_remap(
+            remap_record(0, transform=1, matrix=MOVED_REMAP), 1
+        )
+        routes, counts = self._routes(
+            {0x01: [("models/shared/aggregator.mdl", remap)]}
+        )
+        # A bank under the entity model's own group is reached by a group walk.
+        self.assertIn((0x01, 0x02), routes)
+        # Its own model is the local path, and a whole-cast bank is nobody's
+        # include — the scene posed the actor on it above the dispatcher.
+        self.assertNotIn((0x01, 0x01), routes)
+        self.assertNotIn((0x01, 0x03), routes)
+        # `bank` and `frenzy` sit under the group; the model itself and the
+        # whole-cast bank do not.
+        self.assertEqual(counts["census_pairs_resolved_to_an_include_group"], 2)
+        self.assertEqual(counts["census_pairs_matching_more_than_one_include_group"], 0)
+        self.assertEqual(counts["remap_bones_the_matched_groups_disagree_on"], 0)
+
+    def test_an_owner_under_two_groups_merges_them_and_counts_the_dispute(
+        self,
+    ) -> None:
+        # The include tree is a DAG: `frenzy` hangs under both groups, so the
+        # pair matches twice and the two arrays disagree on the one bone.
+        tree = dict(self.TREE)
+        tree["models/shared/other.mdl"] = ("shared/frenzy.mdl",)
+        self.TREE = tree
+        transformed = decoder_pose.bone_remap(
+            remap_record(0, transform=1, matrix=MOVED_REMAP), 1
+        )
+        plain = decoder_pose.bone_remap(remap_record(0), 1)
+        routes, counts = self._routes(
+            {
+                0x01: [
+                    ("models/shared/aggregator.mdl", transformed),
+                    ("models/shared/other.mdl", plain),
+                ]
+            }
+        )
+        self.assertEqual(counts["census_pairs_matching_more_than_one_include_group"], 1)
+        self.assertEqual(counts["remap_bones_the_matched_groups_disagree_on"], 1)
+        # A disputed bone keeps its untransformed position rather than taking a
+        # guess from whichever group was listed first.
+        self.assertFalse(bool(routes[(0x01, 0x04)].transform[0]))
+        # The bank only the first group reaches keeps its transform.
+        self.assertTrue(bool(routes[(0x01, 0x02)].transform[0]))
+
+    def test_an_including_model_the_install_lacks_takes_no_route(self) -> None:
+        remap = decoder_pose.bone_remap(remap_record(0, transform=1), 1)
+        routes, counts = self._routes({0x09: [("models/shared/bank.mdl", remap)]})
+        self.assertEqual(routes, {})
+        self.assertEqual(counts["including_models_whose_own_image_the_install_lacks"], 1)
+
+    def test_the_candidate_table_declares_the_three_transform_rules(self) -> None:
+        rules = {name: transform for name, _, _, transform, _ in CLIP_CANDIDATES}
+        self.assertEqual(rules["complete"], "none")
+        self.assertEqual(rules["include_remap"], "always")
+        self.assertEqual(rules["include_route"], "route")
+        # The ladder attributes a record with the most complete rule available,
+        # which is the recovered route and not either half of it.
+        self.assertEqual(CLIP_LADDER_CANDIDATE, "include_route")
+
+
+class RouteWitnessTests(unittest.TestCase):
+    """Reading the route out of retail's own captured positions.
+
+    Retail's side of each case is a literal written here; our side is the source
+    position the decode produced. The classifier is what is under test, so
+    neither input comes from it.
+    """
+
+    SOURCE = np.array([[[1.0, 2.0, 3.0]]])
+    # `MOVED_REMAP` applied to SOURCE, by hand.
+    TRANSFORMED = np.array([[[8.0, 21.0, 33.0]]])
+
+    def _witness(self, retail, *, routed, matrix=MOVED_REMAP):
+        counts = {
+            name: 0
+            for name in (
+                "route_witness_transformed",
+                "route_witness_copied",
+                "route_witness_undecided",
+                "route_witness_matches_neither",
+                "route_witness_disagrees_with_the_include_graph",
+            )
+        }
+        remap = decoder_pose.bone_remap(
+            remap_record(0, transform=1, matrix=matrix), 1
+        )
+        _fold_route_witness(
+            counts,
+            {},
+            0x01,
+            0x02,
+            remap,
+            routed,
+            self.SOURCE,
+            np.asarray(retail),
+            np.array([[True]]),
+            np.array([1]),
+            np.array([0]),
+        )
+        return counts
+
+    def test_retail_landing_on_the_transformed_position_witnesses_the_transform(
+        self,
+    ) -> None:
+        counts = self._witness(self.TRANSFORMED[0], routed=True)
+        self.assertEqual(counts["route_witness_transformed"], 1)
+        self.assertEqual(counts["route_witness_copied"], 0)
+        self.assertEqual(counts["route_witness_disagrees_with_the_include_graph"], 0)
+
+    def test_retail_landing_on_the_source_position_witnesses_the_copy(self) -> None:
+        counts = self._witness(self.SOURCE[0], routed=False)
+        self.assertEqual(counts["route_witness_copied"], 1)
+        self.assertEqual(counts["route_witness_transformed"], 0)
+        self.assertEqual(counts["route_witness_disagrees_with_the_include_graph"], 0)
+
+    def test_the_graph_resolving_against_the_witness_is_a_counted_disagreement(
+        self,
+    ) -> None:
+        # The graph says the pair was routed; retail's own bytes say the position
+        # was copied. That is the count that would refute the reachability rule.
+        counts = self._witness(self.SOURCE[0], routed=True)
+        self.assertEqual(counts["route_witness_copied"], 1)
+        self.assertEqual(counts["route_witness_disagrees_with_the_include_graph"], 1)
+
+    def test_a_position_matching_neither_candidate_is_its_own_population(self) -> None:
+        counts = self._witness([[-40.0, 12.0, 5.0]], routed=True)
+        self.assertEqual(counts["route_witness_matches_neither"], 1)
+        self.assertEqual(counts["route_witness_transformed"], 0)
+        self.assertEqual(counts["route_witness_copied"], 0)
+
+    def test_a_matrix_that_barely_moves_the_bone_witnesses_nothing(self) -> None:
+        # Inside the excellent band the two routes are the same answer, so the
+        # observation is excluded rather than credited to whichever is nearer.
+        near = (
+            1.0, 0.0, 0.0, 1.0e-4,
+            0.0, 1.0, 0.0, 0.0,
+            0.0, 0.0, 1.0, 0.0,
+        )
+        counts = self._witness(self.SOURCE[0], routed=True, matrix=near)
+        self.assertEqual(counts["route_witness_undecided"], 1)
+        self.assertEqual(counts["route_witness_copied"], 0)
+        self.assertEqual(counts["route_witness_disagrees_with_the_include_graph"], 0)
+
+    def test_both_refutation_counts_fail_the_verdict_rather_than_being_accounted(
+        self,
+    ) -> None:
+        for name in (
+            "route_witness_matches_neither",
+            "route_witness_disagrees_with_the_include_graph",
+        ):
+            self.assertIn(name, TRANSFORM_DEFECTS)
+            self.assertNotIn(name, TRANSFORM_ACCOUNTED)
 
 
 class TransformDifferenceTests(unittest.TestCase):
