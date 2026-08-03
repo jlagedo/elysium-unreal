@@ -104,6 +104,14 @@ points. Two answers, one per menu layout (§7):
 second red. The recovered `0xc00000a8` is what *armed* means; the
 classic layout keeps it as the resting colour, which is what makes the A/B worth having.
 
+The in-world HUD needs a stronger contrast contract than screens with controlled grounds. Its
+Nocturne glyphs and code-authored vitae droplets carry a one-virtual-pixel near-black outline; the
+reticle carries two. Exported context icons receive a slightly enlarged dark silhouette, and the
+two bottom meter clusters sit over shallow procedurally generated corner veils. These treatments
+are HUD-local: applying them to menu and sheet type would muddy surfaces that already own a scrim.
+The veils are static rather than scene-luminance adaptive, avoiding colour flips and flicker as the
+camera crosses a bright edge.
+
 ## 4. Type
 
 The **Nocturne** system: **Spectral SC** for small-caps labels,

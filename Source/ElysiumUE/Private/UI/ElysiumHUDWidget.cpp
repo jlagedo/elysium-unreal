@@ -27,12 +27,23 @@
 
 namespace
 {
+	const FLinearColor HUDOutline(0.004f, 0.003f, 0.002f, 0.96f);
+
+	FSlateFontInfo HUDFont(EElysiumFontRole Role, EElysiumFontWeight Weight,
+		float VirtualSize, int32 OutlineSize = 1)
+	{
+		FSlateFontInfo Font = ElysiumUIFonts().Font(Role, Weight, VirtualSize, 1.0f);
+		Font.OutlineSettings = FFontOutlineSettings(OutlineSize, HUDOutline);
+		Font.OutlineSettings.bSeparateFillAlpha = true;
+		return Font;
+	}
+
 	FSlateColor BloodPipColor(const UElysiumHUDModel* Model, int32 Index)
 	{
 		return Model && Index < Model->BloodPool
 			? FSlateColor(ElysiumUI::Palette::BloodLit)
 			: FSlateColor(FLinearColor(ElysiumUI::Palette::BoneDim.R,
-				ElysiumUI::Palette::BoneDim.G, ElysiumUI::Palette::BoneDim.B, 0.24f));
+				ElysiumUI::Palette::BoneDim.G, ElysiumUI::Palette::BoneDim.B, 0.45f));
 	}
 
 	TSharedRef<SWidget> BloodDroplet(UElysiumHUDModel* Model, int32 Index)
@@ -51,16 +62,16 @@ namespace
 				[
 					SNew(STextBlock)
 					.Text(FText::FromString(TEXT("●")))
-					.Font(ElysiumUIFonts().Font(EElysiumFontRole::Data,
-						EElysiumFontWeight::Regular, 10.0f, 1.0f))
+					.Font(HUDFont(EElysiumFontRole::Data,
+						EElysiumFontWeight::Regular, 10.0f))
 					.ColorAndOpacity_Lambda([Model, Index]() { return BloodPipColor(Model, Index); })
 				]
 				+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Bottom).Padding(0, 0, 0, 1)
 				[
 					SNew(STextBlock)
 					.Text(FText::FromString(TEXT("▼")))
-					.Font(ElysiumUIFonts().Font(EElysiumFontRole::Data,
-						EElysiumFontWeight::Regular, 7.0f, 1.0f))
+					.Font(HUDFont(EElysiumFontRole::Data,
+						EElysiumFontWeight::Regular, 7.0f))
 					.ColorAndOpacity_Lambda([Model, Index]() { return BloodPipColor(Model, Index); })
 				]
 			];
@@ -81,14 +92,15 @@ namespace
 TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 {
 	EnsureUseIconAtlas();
+	EnsureContrastVeils();
 	UElysiumHUDModel* M = Model;
 	const FSlateBrush* White = FCoreStyle::Get().GetBrush(TEXT("WhiteBrush"));
-	const FSlateFontInfo Label = ElysiumUIFonts().Font(
-		EElysiumFontRole::Label, EElysiumFontWeight::SemiBold, ElysiumUI::Type::Label, 1.0f);
-	const FSlateFontInfo Data = ElysiumUIFonts().Font(
-		EElysiumFontRole::Data, EElysiumFontWeight::SemiBold, ElysiumUI::Type::Body, 1.0f);
-	const FSlateFontInfo Caption = ElysiumUIFonts().Font(
-		EElysiumFontRole::Data, EElysiumFontWeight::Regular, ElysiumUI::Type::Caption, 1.0f);
+	const FSlateFontInfo Label = HUDFont(
+		EElysiumFontRole::Label, EElysiumFontWeight::SemiBold, ElysiumUI::Type::Label);
+	const FSlateFontInfo Data = HUDFont(
+		EElysiumFontRole::Data, EElysiumFontWeight::SemiBold, ElysiumUI::Type::Body);
+	const FSlateFontInfo Caption = HUDFont(
+		EElysiumFontRole::Data, EElysiumFontWeight::Regular, ElysiumUI::Type::Caption);
 
 	TSharedRef<SHorizontalBox> BloodRow = SNew(SHorizontalBox);
 	for (int32 Index = 0; Index < 15; ++Index)
@@ -152,6 +164,23 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 		.Visibility_Lambda([M]() { return M && M->bVisible
 			? EVisibility::HitTestInvisible : EVisibility::Collapsed; });
 
+	// Static local contrast beds beat scene-luminance sampling: no flicker, no palette inversion,
+	// and only the corners occupied by the always-on meters pay the darkening cost.
+	Content->AddSlot().HAlign(HAlign_Left).VAlign(VAlign_Bottom)
+	[
+		SNew(SBox).WidthOverride(430).HeightOverride(150)
+		[
+			SNew(SImage).Image(&LeftContrastBrush)
+		]
+	];
+	Content->AddSlot().HAlign(HAlign_Right).VAlign(VAlign_Bottom)
+	[
+		SNew(SBox).WidthOverride(430).HeightOverride(150)
+		[
+			SNew(SImage).Image(&RightContrastBrush)
+		]
+	];
+
 	// Life: compact and continuous. Exact values remain visible for accessibility and testing.
 	Content->AddSlot().HAlign(HAlign_Left).VAlign(VAlign_Bottom).Padding(38, 0, 0, 38)
 	[
@@ -177,19 +206,22 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 		]
 		+ SVerticalBox::Slot().AutoHeight().Padding(0, 5, 0, 0)
 		[
-			SNew(SBox).WidthOverride(240).HeightOverride(8)
+			SNew(SBox).WidthOverride(240).HeightOverride(10)
 			[
-				SNew(SProgressBar)
-				.Percent_Lambda([M]() -> TOptional<float>
-				{
-					return M && M->MaxHealth > 0
-						? FMath::Clamp(float(M->Health) / float(M->MaxHealth), 0.0f, 1.0f) : 0.0f;
-				})
-				.FillColorAndOpacity_Lambda([M]()
-				{
-					return M && M->MaxHealth > 0 && M->Health * 4 <= M->MaxHealth
-						? ElysiumUI::Palette::BloodLit : ElysiumUI::Palette::Bone;
-				})
+				SNew(SBorder).BorderImage(White).BorderBackgroundColor(HUDOutline).Padding(1)
+				[
+					SNew(SProgressBar)
+					.Percent_Lambda([M]() -> TOptional<float>
+					{
+						return M && M->MaxHealth > 0
+							? FMath::Clamp(float(M->Health) / float(M->MaxHealth), 0.0f, 1.0f) : 0.0f;
+					})
+					.FillColorAndOpacity_Lambda([M]()
+					{
+						return M && M->MaxHealth > 0 && M->Health * 4 <= M->MaxHealth
+							? ElysiumUI::Palette::BloodLit : ElysiumUI::Palette::Bone;
+					})
+				]
 			]
 		]
 	];
@@ -276,7 +308,7 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
 		[
 			SNew(STextBlock).Text(FText::FromString(TEXT("+")))
-			.Font(ElysiumUIFonts().Font(EElysiumFontRole::Data, EElysiumFontWeight::Regular, 18, 1))
+			.Font(HUDFont(EElysiumFontRole::Data, EElysiumFontWeight::Regular, 18, 2))
 			.ColorAndOpacity(FLinearColor(1, 1, 1, 0.72f))
 			.Visibility_Lambda([M, this]()
 			{
@@ -292,6 +324,21 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 				? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
 			[
 				SNew(SOverlay)
+				+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
+				[
+					SNew(SBox).WidthOverride(52).HeightOverride(52)
+					[
+						SNew(SImage).Image_Lambda([this]() { return UseIconBrush(); })
+						.ColorAndOpacity(HUDOutline)
+					]
+				]
+				+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
+				[
+					SNew(SBox).WidthOverride(52).HeightOverride(52)
+					[
+						SNew(SImage).Image(&UseRingBrush).ColorAndOpacity(HUDOutline)
+					]
+				]
 				+ SOverlay::Slot()[SNew(SImage).Image_Lambda([this]() { return UseIconBrush(); })]
 				+ SOverlay::Slot()[SNew(SImage).Image(&UseRingBrush)]
 			]
@@ -386,4 +433,43 @@ void UElysiumHUDWidget::EnsureUseIconAtlas()
 const FSlateBrush* UElysiumHUDWidget::UseIconBrush() const
 {
 	return Model ? UseIconBrushes.Find(Model->UseIcon) : nullptr;
+}
+
+void UElysiumHUDWidget::EnsureContrastVeils()
+{
+	if (bContrastVeilsBuilt)
+	{
+		return;
+	}
+	bContrastVeilsBuilt = true;
+
+	constexpr int32 Width = 32;
+	constexpr int32 Height = 16;
+	TArray<uint8> LeftAlpha;
+	TArray<uint8> RightAlpha;
+	LeftAlpha.SetNumUninitialized(Width * Height);
+	RightAlpha.SetNumUninitialized(Width * Height);
+	for (int32 Y = 0; Y < Height; ++Y)
+	{
+		const float Vertical = FMath::Square(float(Y) / float(Height - 1));
+		for (int32 X = 0; X < Width; ++X)
+		{
+			const float Left = FMath::Square(1.0f - float(X) / float(Width - 1));
+			const float Right = FMath::Square(float(X) / float(Width - 1));
+			LeftAlpha[Y * Width + X] = uint8(FMath::RoundToInt(96.0f * Left * Vertical));
+			RightAlpha[Y * Width + X] = uint8(FMath::RoundToInt(96.0f * Right * Vertical));
+		}
+	}
+
+	LeftContrastVeil = ElysiumUI::MakeAlphaRamp(LeftAlpha, Width, Height);
+	RightContrastVeil = ElysiumUI::MakeAlphaRamp(RightAlpha, Width, Height);
+	auto Configure = [](FSlateBrush& Brush, UTexture2D* Texture)
+	{
+		Brush.SetResourceObject(Texture);
+		Brush.DrawAs = ESlateBrushDrawType::Image;
+		Brush.ImageSize = FVector2D(1, 1);
+		Brush.TintColor = FSlateColor(FLinearColor::Black);
+	};
+	Configure(LeftContrastBrush, LeftContrastVeil);
+	Configure(RightContrastBrush, RightContrastVeil);
 }

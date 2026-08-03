@@ -26,6 +26,7 @@ protected:
 private:
 	float VirtualScale() const;
 	void EnsureUseIconAtlas();
+	void EnsureContrastVeils();
 	const FSlateBrush* UseIconBrush() const;
 
 	UPROPERTY(Transient)
@@ -34,7 +35,16 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UTexture2D> UseAtlas;
 
+	UPROPERTY(Transient)
+	TObjectPtr<UTexture2D> LeftContrastVeil;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTexture2D> RightContrastVeil;
+
 	FSlateBrush UseRingBrush;
 	TMap<int32, FSlateBrush> UseIconBrushes;
+	FSlateBrush LeftContrastBrush;
+	FSlateBrush RightContrastBrush;
 	bool bUseAtlasLoadAttempted = false;
+	bool bContrastVeilsBuilt = false;
 };
