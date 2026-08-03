@@ -596,6 +596,12 @@ private:
 // the ordinary name index and the move is `SetRuntimeOrigin`/`SetRuntimeAngles`, exactly as it is
 // for an NPC or a brush. Whether the moved entity carries a pawn, a skeletal body or a brush body
 // is the entity's own business — the teleporter no longer knows.
+//
+// Four engine behaviours are not reproduced (`docs/vtmb/entity_io.md` -> `point_teleport`): the
+// destination is read live here rather than cached at Activate; spawnflag 1 ("teleport home", two
+// entities, both `!player`) is ignored, so those land on the teleporter instead of on their own
+// spawn; a parented target is moved rather than refused; and a teleported player keeps its view
+// angles instead of having them snapped to the destination.
 // ============================================================================================
 
 class FElysiumPointTeleport final : public FElysiumEntity

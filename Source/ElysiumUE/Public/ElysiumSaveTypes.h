@@ -31,6 +31,7 @@ struct FElysiumSaveVersion
 		History       = 6,   // m_iVHistoryID — the background trait chargen writes
 		BodyIdentity  = 7,   // the authored M_BodyN/F_BodyN armor-slot appearance
 		Weather       = 8,   // map wetness transition and env_particle ramps
+		ScriptedBody  = 9,   // the cutscene body state: a scene's frozen cast, a beat's NPC claim
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
@@ -44,7 +45,12 @@ struct FElysiumSaveVersion
 	// `Identity` the name and the quest log's hub tab, and `History` the background trait. All five
 	// are additions to the player block with no upgrade branch: an older payload is refused, not
 	// half-read.
-	static constexpr int32 MinSupported = History;
+	//
+	// `ScriptedBody` is the same kind of break. A choreographed scene now records which of its cast
+	// it immobilised and a `scripted_sequence` records which NPC it has claimed, both mid-record in
+	// their leaf blocks; a payload written before that reads those bytes as the fields that followed
+	// them, so it is refused rather than mis-restored.
+	static constexpr int32 MinSupported = ScriptedBody;
 
 	static const FGuid GUID;
 };

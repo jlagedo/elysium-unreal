@@ -53,6 +53,7 @@ namespace
 		{ TEXT("SewerMap"),            true,  TEXT("stub") },
 		{ TEXT("SetQuest"),            true,  TEXT("quest map + the catalogue's awards and journal") },
 		{ TEXT("CurrentMoney"),        true,  TEXT("the combat character's money field") },
+		{ TEXT("TakeDamage"),          true,  TEXT("damage onto the receiver's combat character") },
 		{ TEXT("IsMale"),              true,  TEXT("player sheet") },
 		{ TEXT("SeductiveFeed"),       true,  TEXT("stub") },
 		{ TEXT("SetCamera"),           true,  TEXT("the scripted-shot channel") },
@@ -231,6 +232,21 @@ namespace ElysiumScriptNatives
 			Record(State, Method, Display, R, /*bStub*/ false);
 			return R;
 		}
+		// TakeDamage lands on the RECEIVER, which is the whole point of the one call that uses it:
+		// sp_theatre's `courtroom_camera_24` fires `Find('Sire2').TakeDamage(1000)` to destroy the
+		// sire on camera at the climax of the trial. The class is `CBaseCombatCharacter`, so an NPC
+		// answers for itself exactly as the PC does.
+		if (Method == FName(TEXT("TakeDamage")))
+		{
+			FElysiumCombatCharacter* Char = ResolveCharacter(World, Self);
+			if (Char && Args.Num() >= 1)
+			{
+				Char->TakeDamage(Args[0].ToFloat());
+			}
+			Record(State, Method, Display, FElysiumVariant::Void(), /*bStub*/ Char == nullptr);
+			return FElysiumVariant::Void();
+		}
+
 		// CurrentMoney reads the receiver's own money field (11.4 put it on the combat character,
 		// which is where VtMB has it and where MoneyAdd/MoneyRemove write). The rest of the economy
 		// — prices, barter, the HUD readout — is still 9.10's.

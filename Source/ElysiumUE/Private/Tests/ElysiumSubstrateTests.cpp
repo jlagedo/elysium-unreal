@@ -11,7 +11,10 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "HAL/IConsoleManager.h"
+#include "Misc/ScopeExit.h"
 #include "ElysiumAppState.h"
+#include "ElysiumAudioLatency.h"
 #include "ElysiumBinds.h"
 #include "ElysiumBrushComponent.h"
 #include "Player/ElysiumCameraShots.h"
@@ -3765,6 +3768,347 @@ bool FElysiumScriptedSequenceTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// scripted_sequence locomotion (8.5) — the travel phase, over the recording motor.
+//
+// The claim: a beat whose `m_fMoveTo` says walk sends its NPC to the mark under its own power
+// and holds `OnEndSequence` until it gets there. 132 of the 188 exported sequences travel, and
+// the ones that carry no `m_iszPlay` — sp_theatre's five-beat courtroom walk-out among them —
+// have nothing BUT the transit to time their outputs off, so a beat that ends at the input
+// collapses the shot to a blink. The mirror claim is that no failure can hang the beat: a mark
+// with no path falls back to the placement and ends in the same pass.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScriptedSequenceLocomotionTest,
+	"Elysium.Substrate.ScriptedSequenceLocomotion", GElysiumTestFlags)
+bool FElysiumScriptedSequenceLocomotionTest::RunTest(const FString&)
+{
+	const FVector Spawn(0.f, 0.f, 0.f);
+	const FVector Mark(1000.f, 0.f, 0.f);
+
+	auto BuildDefs = [&Mark](FElysiumEntityDefs& Defs)
+	{
+		Defs.MapName = TEXT("__walkout__");
+
+		FElysiumEntityDef Npc;
+		Npc.Classname = TEXT("npc_VVampire");
+		Npc.TargetName = TEXT("Isaac");
+		Npc.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/isaac/isaac.mdl"));
+		Defs.Defs.Add(MoveTemp(Npc));
+
+		// walk_out_people_walk_3's shape: walk, no action animation, one OnEndSequence wire.
+		FElysiumEntityDef Seq;
+		Seq.Classname = TEXT("scripted_sequence");
+		Seq.TargetName = TEXT("walk_out");
+		Seq.Origin = Mark;
+		Seq.Keys.Add(TEXT("m_iszEntity"), TEXT("Isaac"));
+		Seq.Keys.Add(TEXT("m_fMoveTo"), TEXT("1"));
+		Seq.Keys.Add(TEXT("angles"), TEXT("0 270 0"));
+		FElysiumOutputDef W;
+		W.Name = TEXT("OnEndSequence");
+		W.Target = TEXT("counter1");
+		W.Input = TEXT("Add");
+		W.Param = TEXT("5");
+		Seq.Outputs.Add(W);
+		Defs.Defs.Add(MoveTemp(Seq));
+
+		FElysiumEntityDef Counter;
+		Counter.Classname = TEXT("math_counter");
+		Counter.TargetName = TEXT("counter1");
+		Defs.Defs.Add(MoveTemp(Counter));
+	};
+
+	auto CounterValue = [](const FElysiumEntity* Entity) -> float
+	{
+		TArray<TPair<FString, FString>> State;
+		Entity->GetDebugState(State);
+		for (const TPair<FString, FString>& Row : State)
+		{
+			if (Row.Key == TEXT("Value"))
+			{
+				return FCString::Atof(*Row.Value);
+			}
+		}
+		return -1.f;
+	};
+
+	// --- The beat walks, and holds its output until the mark is reached ---------------------
+	{
+		FElysiumEntityDefs Defs;
+		BuildDefs(Defs);
+
+		FElysiumRecordingServices Services;
+		Services.bProvideNpcMotor = true;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MoveTemp(Defs));
+		World.Activate(0.0);
+
+		FElysiumEntity* Seq = World.FindByName(TEXT("walk_out"));
+		FElysiumEntity* Npc = World.FindByName(TEXT("Isaac"));
+		FElysiumEntity* Count = World.FindByName(TEXT("counter1"));
+		FElysiumRecordingNpcMotor* Motor = Services.LastNpcMotor();
+		if (!TestNotNull(TEXT("walk_out resolved"), Seq) || !TestNotNull(TEXT("Isaac resolved"), Npc)
+			|| !TestNotNull(TEXT("counter1 resolved"), Count)
+			|| !TestNotNull(TEXT("Isaac stands on a motor"), Motor))
+		{
+			return false;
+		}
+
+		World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
+			FElysiumEntityHandle::Invalid(), Seq->Handle);
+
+		double Now = 0.0;
+		for (int32 i = 0; i < 10; ++i) { World.Tick(Now); Now += 0.1; }
+
+		TestTrue(TEXT("the beat asked the motor for the mark"),
+			Motor->RequestedFeet.Equals(Mark, 0.01));
+		TestFalse(TEXT("the NPC was not teleported onto the mark"), Npc->Origin.Equals(Mark, 0.01));
+		TestEqual(TEXT("OnEndSequence is held while the NPC is still walking"),
+			CounterValue(Count), 0.f);
+
+		// The body reaches the mark; the beat then turns it onto the mark's angles before ending.
+		Motor->SampleStatus = EElysiumNpcMoveStatus::Reached;
+		World.Tick(Now); Now += 0.1;
+		TestTrue(TEXT("arriving starts the turn onto the mark"),
+			Services.Calls.ContainsByPredicate([](const FString& C) { return C.StartsWith(TEXT("NpcMotor Face")); }));
+		TestEqual(TEXT("OnEndSequence is still held through the turn"), CounterValue(Count), 0.f);
+
+		// The turn is bounded, so the beat completes even against a motor that never reports level.
+		for (int32 i = 0; i < 40; ++i) { World.Tick(Now); Now += 0.1; }
+		TestEqual(TEXT("OnEndSequence fires once the beat's travel is over"), CounterValue(Count), 5.f);
+	}
+
+	// --- A mark with no path still ends the beat, on the placement fallback -----------------
+	{
+		FElysiumEntityDefs Defs;
+		BuildDefs(Defs);
+
+		FElysiumRecordingServices Services;
+		Services.bProvideNpcMotor = true;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MoveTemp(Defs));
+		World.Activate(0.0);
+
+		FElysiumEntity* Seq = World.FindByName(TEXT("walk_out"));
+		FElysiumEntity* Npc = World.FindByName(TEXT("Isaac"));
+		FElysiumEntity* Count = World.FindByName(TEXT("counter1"));
+		if (!TestNotNull(TEXT("walk_out resolved"), Seq) || !TestNotNull(TEXT("Isaac resolved"), Npc)
+			|| !TestNotNull(TEXT("counter1 resolved"), Count))
+		{
+			return false;
+		}
+		if (FElysiumRecordingNpcMotor* Motor = Services.LastNpcMotor())
+		{
+			Motor->bAcceptMoves = false;   // the navigation graph has nothing to offer this mark
+		}
+
+		World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
+			FElysiumEntityHandle::Invalid(), Seq->Handle);
+		for (int32 i = 0; i < 4; ++i) { World.Tick(0.0); }
+
+		TestTrue(TEXT("an unreachable mark places the NPC on it instead"), Npc->Origin.Equals(Mark, 0.01));
+		TestTrue(TEXT("and applies the mark's facing"),
+			FMath::IsNearlyEqual(Npc->Angles.Y, 270.f, 0.01f));
+		TestEqual(TEXT("and the beat still fires OnEndSequence"), CounterValue(Count), 5.f);
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// The three VtMB spawnflag additions on CCineNPC (`docs/vtmb/entity_io.md`): 256 holds the
+// post-idle so the beat never completes, 512 makes the beat's claim on its NPC unbreakable,
+// and 4096 turns off character collision for the beat's duration. sp_theatre's courtroom
+// walk-out authors all three — `0x1260` on the five who walk, `0x360` on the two who stand.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScriptedSequenceFlagsTest,
+	"Elysium.Substrate.ScriptedSequenceFlags", GElysiumTestFlags)
+bool FElysiumScriptedSequenceFlagsTest::RunTest(const FString&)
+{
+	// One NPC, and two beats aimed at it so the queue rules have something to arbitrate.
+	// `MoveTo` 1 keeps a beat alive in its travel phase for as long as the motor reports Moving,
+	// which is the only way to observe state a beat holds *while running*; `MoveTo` 0 with no action
+	// animation is the in-place shape Ash and Damsel use, and ends in the pass that starts it.
+	auto BuildDefs = [](FElysiumEntityDefs& Defs, int32 FirstFlags, const TCHAR* PostIdle, int32 MoveTo)
+	{
+		Defs.MapName = TEXT("__flags__");
+
+		FElysiumEntityDef Npc;
+		Npc.Classname = TEXT("npc_VVampire");
+		Npc.TargetName = TEXT("Damsel");
+		Npc.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/downtown/damsel/damsel.mdl"));
+		Defs.Defs.Add(MoveTemp(Npc));
+
+		FElysiumEntityDef Seq;
+		Seq.Classname = TEXT("scripted_sequence");
+		Seq.TargetName = TEXT("beat_a");
+		Seq.Origin = FVector(1000.f, 0.f, 0.f);
+		Seq.Keys.Add(TEXT("m_iszEntity"), TEXT("Damsel"));
+		Seq.Keys.Add(TEXT("m_fMoveTo"), *FString::FromInt(MoveTo));
+		Seq.Keys.Add(TEXT("spawnflags"), *FString::FromInt(FirstFlags));
+		if (PostIdle && *PostIdle)
+		{
+			Seq.Keys.Add(TEXT("m_iszPostIdle"), PostIdle);
+		}
+		FElysiumOutputDef W;
+		W.Name = TEXT("OnEndSequence");
+		W.Target = TEXT("counter1");
+		W.Input = TEXT("Add");
+		W.Param = TEXT("5");
+		Seq.Outputs.Add(W);
+		Defs.Defs.Add(MoveTemp(Seq));
+
+		FElysiumEntityDef Other;
+		Other.Classname = TEXT("scripted_sequence");
+		Other.TargetName = TEXT("beat_b");
+		Other.Keys.Add(TEXT("m_iszEntity"), TEXT("Damsel"));
+		Other.Keys.Add(TEXT("m_fMoveTo"), TEXT("0"));
+		FElysiumOutputDef W2;
+		W2.Name = TEXT("OnBeginSequence");
+		W2.Target = TEXT("counter1");
+		W2.Input = TEXT("Add");
+		W2.Param = TEXT("100");
+		Other.Outputs.Add(W2);
+		Defs.Defs.Add(MoveTemp(Other));
+
+		FElysiumEntityDef Counter;
+		Counter.Classname = TEXT("math_counter");
+		Counter.TargetName = TEXT("counter1");
+		Defs.Defs.Add(MoveTemp(Counter));
+	};
+
+	auto CounterValue = [](const FElysiumEntity* Entity) -> float
+	{
+		TArray<TPair<FString, FString>> State;
+		Entity->GetDebugState(State);
+		for (const TPair<FString, FString>& Row : State)
+		{
+			if (Row.Key == TEXT("Value")) { return FCString::Atof(*Row.Value); }
+		}
+		return -1.f;
+	};
+
+	auto Begin = [](FElysiumEntityWorld& World, FElysiumEntity* Seq)
+	{
+		World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
+			FElysiumEntityHandle::Invalid(), Seq->Handle);
+	};
+
+	// --- 4096: the beat borrows the NPC's character collision and gives it back --------------
+	// The walk-out's own shape: `0x1260` on a walking beat (NOINTERRUPT | OVERRIDESTATE | priority
+	// | ignore-collision), which is what lets five NPCs share one aisle.
+	{
+		FElysiumEntityDefs Defs;
+		BuildDefs(Defs, /*spawnflags*/ 0x1260, nullptr, /*m_fMoveTo*/ 1);
+
+		FElysiumRecordingServices Services;
+		Services.bProvideNpcMotor = true;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MoveTemp(Defs));
+		World.Activate(0.0);
+
+		FElysiumEntity* Seq = World.FindByName(TEXT("beat_a"));
+		FElysiumRecordingNpcMotor* Motor = Services.LastNpcMotor();
+		if (!TestNotNull(TEXT("beat_a resolved"), Seq)
+			|| !TestNotNull(TEXT("Damsel stands on a motor"), Motor))
+		{
+			return false;
+		}
+		TestFalse(TEXT("collision is ordinary before the beat"), Motor->bIgnoreCharacterCollision);
+
+		double Now = 0.0;
+		Begin(World, Seq);
+		World.Tick(Now); Now += 0.1;
+		TestTrue(TEXT("4096 turns character collision off for the beat"),
+			Motor->bIgnoreCharacterCollision);
+
+		// The body reaches the mark; with no action animation the beat then ends, and must hand
+		// the borrowed collision back with it.
+		Motor->SampleStatus = EElysiumNpcMoveStatus::Reached;
+		for (int32 i = 0; i < 40; ++i) { World.Tick(Now); Now += 0.1; }
+		TestFalse(TEXT("and gives it back when the beat ends"), Motor->bIgnoreCharacterCollision);
+	}
+
+	// --- 4096: a cancelled beat gives it back too --------------------------------------------
+	{
+		FElysiumEntityDefs Defs;
+		BuildDefs(Defs, /*spawnflags*/ 0x360 | 4096, TEXT("Converse_Normal_Talk_A"), /*m_fMoveTo*/ 0);
+
+		FElysiumRecordingServices Services;
+		Services.bProvideNpcMotor = true;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MoveTemp(Defs));
+		World.Activate(0.0);
+
+		FElysiumEntity* Seq = World.FindByName(TEXT("beat_a"));
+		FElysiumEntity* Count = World.FindByName(TEXT("counter1"));
+		FElysiumRecordingNpcMotor* Motor = Services.LastNpcMotor();
+		if (!TestNotNull(TEXT("beat_a resolved"), Seq) || !TestNotNull(TEXT("counter1 resolved"), Count)
+			|| !TestNotNull(TEXT("Damsel stands on a motor"), Motor))
+		{
+			return false;
+		}
+
+		double Now = 0.0;
+		Begin(World, Seq);
+		for (int32 i = 0; i < 6; ++i) { World.Tick(Now); Now += 0.1; }
+
+		// 256: the post-idle is held, so the beat never completes and its wire never fires.
+		TestEqual(TEXT("256 suppresses OnEndSequence"), CounterValue(Count), 0.f);
+		TestTrue(TEXT("a held beat keeps the collision it borrowed"),
+			Motor->bIgnoreCharacterCollision);
+
+		World.EnqueueInput(TEXT("beat_a"), FName(TEXT("CancelSequence")), FElysiumVariant::Void(),
+			0.0, {}, {});
+		for (int32 i = 0; i < 3; ++i) { World.Tick(Now); Now += 0.1; }
+		TestEqual(TEXT("cancelling a held beat still fires no OnEndSequence"),
+			CounterValue(Count), 0.f);
+		TestFalse(TEXT("cancelling releases the borrowed collision"),
+			Motor->bIgnoreCharacterCollision);
+	}
+
+	// --- 512: a priority beat cannot be kicked out of the queue ------------------------------
+	{
+		FElysiumEntityDefs Defs;
+		BuildDefs(Defs, /*spawnflags*/ 0x360, TEXT("Converse_Normal_Talk_A"), /*m_fMoveTo*/ 0);
+
+		FElysiumRecordingServices Services;
+		Services.bProvideNpcMotor = true;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MoveTemp(Defs));
+		World.Activate(0.0);
+
+		FElysiumEntity* First = World.FindByName(TEXT("beat_a"));
+		FElysiumEntity* Second = World.FindByName(TEXT("beat_b"));
+		FElysiumEntity* Count = World.FindByName(TEXT("counter1"));
+		if (!TestNotNull(TEXT("beat_a resolved"), First) || !TestNotNull(TEXT("beat_b resolved"), Second)
+			|| !TestNotNull(TEXT("counter1 resolved"), Count))
+		{
+			return false;
+		}
+
+		double Now = 0.0;
+		Begin(World, First);
+		for (int32 i = 0; i < 6; ++i) { World.Tick(Now); Now += 0.1; }
+
+		Begin(World, Second);
+		for (int32 i = 0; i < 6; ++i) { World.Tick(Now); Now += 0.1; }
+		TestEqual(TEXT("512 refuses the challenger outright — not even OnBeginSequence"),
+			CounterValue(Count), 0.f);
+
+		// Releasing the claim reopens the queue: the same challenger now gets the NPC.
+		World.EnqueueInput(TEXT("beat_a"), FName(TEXT("CancelSequence")), FElysiumVariant::Void(),
+			0.0, {}, {});
+		for (int32 i = 0; i < 3; ++i) { World.Tick(Now); Now += 0.1; }
+		Begin(World, Second);
+		for (int32 i = 0; i < 6; ++i) { World.Tick(Now); Now += 0.1; }
+		TestEqual(TEXT("and admits it once the claim is released"), CounterValue(Count), 100.f);
+	}
+
+	return true;
+}
+
+// =====================================================================================
 // The player entity (11.4, S3). The claim under test is that the player stopped being a
 // special case: it is a registry class on VtMB's own chain, it answers to a targetname the
 // maps already write (`!player`), its inputs arrive through the same R2 walk from either
@@ -5062,6 +5406,259 @@ bool FElysiumDoorElevatorTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// func_rotating + the character attach point.
+//
+// Two things a `parentname` needs that the substrate did not have: a character that can BE a
+// parent (an ornament worn on an NPC, which survives the model swap a level script does), and the
+// continuous spinner its own children ride. The rate is the assertion that matters — VtMB authors
+// clock hands as `maxspeed` in degrees/second, so a second hand is 6 and a minute hand is 0.1.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRotatingAttachTest,
+	"Elysium.Substrate.RotatingAttach", GElysiumTestFlags)
+bool FElysiumRotatingAttachTest::RunTest(const FString&)
+{
+	FTestWorldWrapper TestWorld;
+	if (!TestWorld.CreateTestWorld(EWorldType::Game)
+		|| !TestWorld.BeginPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	UWorld* EngineWorld = TestWorld.GetTestWorld();
+	AActor* Owner = EngineWorld ? EngineWorld->SpawnActor<AActor>() : nullptr;
+	if (!TestNotNull(TEXT("rotating owner spawned"), Owner))
+	{
+		return false;
+	}
+	USceneComponent* Root = NewObject<USceneComponent>(Owner, TEXT("RotatingRoot"));
+	Owner->SetRootComponent(Root);
+	Root->RegisterComponent();
+	Owner->AddInstanceComponent(Root);
+
+	auto BoxHull = []()
+	{
+		FElysiumConvexHull Hull;
+		for (float X : { -20.f, 20.f })
+		{
+			for (float Y : { -20.f, 20.f })
+			{
+				for (float Z : { -20.f, 20.f })
+				{
+					Hull.Vertices.Emplace(X, Y, Z);
+				}
+			}
+		}
+		return Hull;
+	};
+	auto DebugRow = [](const FElysiumEntity* Entity, const TCHAR* Key)
+	{
+		TArray<TPair<FString, FString>> State;
+		Entity->GetDebugState(State);
+		const TPair<FString, FString>* Row = State.FindByPredicate(
+			[Key](const TPair<FString, FString>& R) { return R.Key == Key; });
+		return Row ? Row->Value : FString();
+	};
+	auto AngleOf = [&DebugRow](const FElysiumEntity* Entity)
+	{
+		return FCString::Atof(*DebugRow(Entity, TEXT("Angle")));
+	};
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__rotating_attach__");
+
+	// The character an ornament hangs off — the sp_theatre shape (a level script SetModels these).
+	FElysiumEntityDef Understudy;
+	Understudy.Classname = TEXT("npc_VPedestrian");
+	Understudy.TargetName = TEXT("understudy");
+	Understudy.Keys.Add(TEXT("model"), TEXT("models/character/npc/common/blueblood/male/Blueblood_Male.mdl"));
+	Defs.Defs.Add(MoveTemp(Understudy));
+
+	FElysiumEntityDef Ornament;
+	Ornament.Classname = TEXT("prop_dynamic_ornament");
+	Ornament.TargetName = TEXT("worn_sign");
+	Ornament.ModelMesh = TEXT("prophet_sign");
+	Ornament.Keys.Add(TEXT("model"), TEXT("models/props/prophet_sign.mdl"));
+	Ornament.Keys.Add(TEXT("parentname"), TEXT("understudy"));
+	Defs.Defs.Add(MoveTemp(Ornament));
+
+	// A bodiless character cannot be a parent — the honest "nothing to attach to" path.
+	FElysiumEntityDef Bodiless;
+	Bodiless.Classname = TEXT("npc_VPedestrian");
+	Bodiless.TargetName = TEXT("no_body");
+	Defs.Defs.Add(MoveTemp(Bodiless));
+
+	FElysiumEntityDef Orphan;
+	Orphan.Classname = TEXT("prop_dynamic_ornament");
+	Orphan.TargetName = TEXT("orphan_sign");
+	Orphan.ModelMesh = TEXT("prophet_sign");
+	Orphan.Keys.Add(TEXT("model"), TEXT("models/props/prophet_sign.mdl"));
+	Orphan.Keys.Add(TEXT("parentname"), TEXT("no_body"));
+	Defs.Defs.Add(MoveTemp(Orphan));
+
+	// sm_bailbonds_1's second hand: maxspeed 6 deg/s = one revolution per minute.
+	// spawnflags 69 = START_ON | Z_AXIS | NOT_SOLID, exactly as exported.
+	FElysiumEntityDef SecondHand;
+	SecondHand.Classname = TEXT("func_rotating");
+	SecondHand.TargetName = TEXT("secondhand");
+	SecondHand.Model = 1;
+	SecondHand.Hulls.Add(BoxHull());
+	SecondHand.BrushMesh = TEXT("brush_1");
+	SecondHand.Keys.Add(TEXT("model"), TEXT("*1"));
+	SecondHand.Keys.Add(TEXT("maxspeed"), TEXT("6"));
+	SecondHand.Keys.Add(TEXT("spawnflags"), TEXT("69"));
+	Defs.Defs.Add(MoveTemp(SecondHand));
+
+	FElysiumEntityDef Hand;
+	Hand.Classname = TEXT("prop_dynamic");
+	Hand.TargetName = TEXT("second");
+	Hand.ModelMesh = TEXT("clock_hand");
+	Hand.Keys.Add(TEXT("model"), TEXT("models/props/clock_hand.mdl"));
+	Hand.Keys.Add(TEXT("parentname"), TEXT("secondhand"));
+	Defs.Defs.Add(MoveTemp(Hand));
+
+	// A rotator that is not START_ON, to prove Start/Stop/Reverse/SetSpeed drive it.
+	FElysiumEntityDef Idle;
+	Idle.Classname = TEXT("func_rotating");
+	Idle.TargetName = TEXT("idlerotator");
+	Idle.Origin = FVector(200.f, 0.f, 0.f);
+	Idle.Model = 2;
+	Idle.Hulls.Add(BoxHull());
+	Idle.BrushMesh = TEXT("brush_2");
+	Idle.Keys.Add(TEXT("model"), TEXT("*2"));
+	Idle.Keys.Add(TEXT("maxspeed"), TEXT("10"));
+	Idle.Keys.Add(TEXT("spawnflags"), TEXT("4"));    // Z_AXIS, no START_ON
+	Defs.Defs.Add(MoveTemp(Idle));
+
+	FElysiumEntityDefs RestoreDefs = Defs;
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(Owner, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+	World.Tick(0.0);   // the activation frame: a START_ON rotator starts its clock on its first think
+
+	FElysiumEntity* LiveUnderstudy = World.FindByName(TEXT("understudy"));
+	FElysiumEntity* LiveOrnament = World.FindByName(TEXT("worn_sign"));
+	FElysiumEntity* LiveOrphan = World.FindByName(TEXT("orphan_sign"));
+	FElysiumEntity* LiveSecond = World.FindByName(TEXT("secondhand"));
+	FElysiumEntity* LiveHand = World.FindByName(TEXT("second"));
+	FElysiumEntity* LiveIdle = World.FindByName(TEXT("idlerotator"));
+	if (!TestNotNull(TEXT("character resolved"), LiveUnderstudy)
+		|| !TestNotNull(TEXT("ornament resolved"), LiveOrnament)
+		|| !TestNotNull(TEXT("orphan ornament resolved"), LiveOrphan)
+		|| !TestNotNull(TEXT("func_rotating resolved"), LiveSecond)
+		|| !TestNotNull(TEXT("rotator child resolved"), LiveHand)
+		|| !TestNotNull(TEXT("idle func_rotating resolved"), LiveIdle))
+	{
+		return false;
+	}
+
+	// --- A character is an attach parent ---------------------------------------------------
+	TestTrue(TEXT("a character's attach body is its skeletal body"),
+		LiveUnderstudy->GetAttachBody() != nullptr
+		&& LiveUnderstudy->GetAttachBody() == LiveUnderstudy->GetSkeletalBody());
+	TestTrue(TEXT("parentname attaches an ornament to the character body"),
+		LiveOrnament->GetAttachBody()
+		&& LiveOrnament->GetAttachBody()->GetAttachParent() == LiveUnderstudy->GetAttachBody());
+	TestNull(TEXT("a bodiless character has no attach body"),
+		World.FindByName(TEXT("no_body"))->GetAttachBody());
+	TestTrue(TEXT("a child of a bodiless character stays unattached"),
+		LiveOrphan->GetAttachBody() && LiveOrphan->GetAttachBody()->GetAttachParent() == nullptr);
+
+	// --- A model swap carries the children onto the new body --------------------------------
+	const FTransform WornOffset(FRotator(0.f, 30.f, 0.f), FVector(0.f, 0.f, 90.f));
+	LiveOrnament->GetAttachBody()->SetRelativeTransform(WornOffset);
+	USkeletalMeshComponent* BeforeSwap = LiveUnderstudy->GetSkeletalBody();
+	LiveUnderstudy->SetRuntimeModel(TEXT("models/character/npc/common/blueblood/female/Blueblood_Female.mdl"));
+	TestTrue(TEXT("SetModel rebuilds the character body"),
+		LiveUnderstudy->GetSkeletalBody() && LiveUnderstudy->GetSkeletalBody() != BeforeSwap);
+	TestTrue(TEXT("SetModel re-parents the ornament onto the new body"),
+		LiveOrnament->GetAttachBody()
+		&& LiveOrnament->GetAttachBody()->GetAttachParent() == LiveUnderstudy->GetSkeletalBody());
+	TestTrue(TEXT("SetModel preserves the ornament's worn offset"),
+		LiveOrnament->GetAttachBody()->GetRelativeTransform().Equals(WornOffset, 0.01f));
+
+	// --- func_rotating turns at maxspeed degrees per second ----------------------------------
+	TestTrue(TEXT("parentname attaches the clock hand to the rotator body"),
+		LiveHand->GetAttachBody()
+		&& LiveHand->GetAttachBody()->GetAttachParent() == LiveSecond->Body);
+	TestEqual(TEXT("NOT_SOLID rotator takes the traceable passable profile"),
+		LiveSecond->Body->GetCollisionProfileName(), FName(TEXT("ElysiumBrushPassable")));
+
+	World.Tick(15.0);
+	TestTrue(TEXT("a 6 deg/s rotator has turned 90 degrees at fifteen seconds"),
+		FMath::IsNearlyEqual(AngleOf(LiveSecond), 90.f, 0.01f));
+	// Source Z spin maps to Unreal Z with the angle negated, the same reflection every other
+	// coordinate read uses — so a quarter turn reads as yaw -90.
+	TestTrue(TEXT("the turn lands on the Unreal Z axis with the reflected sign"),
+		FMath::IsNearlyEqual(LiveSecond->Body->GetRelativeRotation().Yaw, -90.f, 0.1f)
+		&& FMath::IsNearlyZero(LiveSecond->Body->GetRelativeRotation().Pitch, 0.1f)
+		&& FMath::IsNearlyZero(LiveSecond->Body->GetRelativeRotation().Roll, 0.1f));
+	TestTrue(TEXT("the parented hand rides the rotation"),
+		FMath::IsNearlyEqual(LiveHand->GetAttachBody()->GetComponentRotation().Yaw, -90.f, 0.1f));
+
+	World.Tick(60.0);
+	TestTrue(TEXT("one full revolution takes a minute and wraps"),
+		FMath::IsNearlyEqual(AngleOf(LiveSecond), 0.f, 0.01f));
+
+	// --- Stop / Start / Reverse / SetSpeed ---------------------------------------------------
+	FElysiumEntityHandle Self = LiveIdle->Handle;
+	World.Tick(70.0);
+	TestTrue(TEXT("a rotator without START_ON does not turn"), FMath::IsNearlyZero(AngleOf(LiveIdle)));
+	// A queued input runs at the start of the tick that drains it, so each one is dispatched at the
+	// time it should take effect and the interval is measured from there.
+	World.AcceptInput(TEXT("idlerotator"), FName(TEXT("Start")), FElysiumVariant::Void(), Self, Self);
+	World.Tick(70.0);
+	World.Tick(73.0);
+	TestTrue(TEXT("Start turns it at maxspeed"), FMath::IsNearlyEqual(AngleOf(LiveIdle), 30.f, 0.01f));
+	World.AcceptInput(TEXT("idlerotator"), FName(TEXT("Stop")), FElysiumVariant::Void(), Self, Self);
+	World.Tick(73.0);
+	World.Tick(80.0);
+	TestTrue(TEXT("Stop freezes the angle where it was"),
+		FMath::IsNearlyEqual(AngleOf(LiveIdle), 30.f, 0.01f));
+	World.AcceptInput(TEXT("idlerotator"), FName(TEXT("Reverse")), FElysiumVariant::Void(), Self, Self);
+	World.AcceptInput(TEXT("idlerotator"), FName(TEXT("Start")), FElysiumVariant::Void(), Self, Self);
+	World.Tick(80.0);
+	World.Tick(82.0);
+	TestTrue(TEXT("Reverse turns the other way from where it stopped"),
+		FMath::IsNearlyEqual(AngleOf(LiveIdle), 10.f, 0.01f));
+	World.AcceptInput(TEXT("idlerotator"), FName(TEXT("SetSpeed")), FElysiumVariant::Float(1.0f), Self, Self);
+	World.Tick(82.0);
+	World.Tick(92.0);
+	TestTrue(TEXT("SetSpeed keeps turning the same way from the angle it had"),
+		FMath::IsNearlyEqual(AngleOf(LiveIdle), 0.f, 0.01f));
+
+	// --- A save resumes mid-spin -------------------------------------------------------------
+	FElysiumMapSnapshot Snapshot;
+	World.Freeze(Snapshot);
+
+	AActor* RestoreOwner = EngineWorld->SpawnActor<AActor>();
+	USceneComponent* RestoreRoot = NewObject<USceneComponent>(RestoreOwner, TEXT("RotatingRestoreRoot"));
+	RestoreOwner->SetRootComponent(RestoreRoot);
+	RestoreRoot->RegisterComponent();
+	RestoreOwner->AddInstanceComponent(RestoreRoot);
+	FElysiumRecordingServices RestoreServices;
+	FElysiumEntityWorld Restored(RestoreOwner, nullptr, RestoreServices.Bundle());
+	Restored.Load(MoveTemp(RestoreDefs));
+	Restored.ApplySnapshot(Snapshot);
+	Restored.Activate(92.0);
+	Restored.Tick(92.0);
+	FElysiumEntity* RestoredSecond = Restored.FindByName(TEXT("secondhand"));
+	if (TestNotNull(TEXT("restored rotator resolved"), RestoredSecond))
+	{
+		// 6 deg/s for 92 s is 552 degrees — one revolution and 192 more.
+		TestTrue(TEXT("a restored rotator resumes at the saved angle"),
+			FMath::IsNearlyEqual(AngleOf(RestoredSecond), 192.f, 0.01f)
+			&& FMath::IsNearlyEqual(AngleOf(RestoredSecond), AngleOf(LiveSecond), 0.01f));
+		Restored.Tick(107.0);
+		TestTrue(TEXT("and keeps turning at its speed from there"),
+			FMath::IsNearlyEqual(AngleOf(RestoredSecond), 282.f, 0.01f));
+	}
+
+	return true;
+}
+
+// =====================================================================================
 // The camera (11.7) — the weight driver and the scripted-shot channel.
 //
 // VtMB ships one camera with a blend weight, not two cameras, and the whole first<->third
@@ -6087,13 +6684,14 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	TArray<uint8> Truncated(Bytes.GetData(), 8);
 	TestFalse(TEXT("a truncated payload is refused"), ElysiumSave::Read(Truncated, Rejected, Error));
 
-	// `BodyIdentity` is the first additive schema with an upgrade branch: v6 is still the floor,
-	// and its absent armor slot migrates to retail's first body. Weather is the current additive
-	// schema and leaves that compatibility floor unchanged.
-	TestEqual(TEXT("the floor remains the migratable history schema"),
-		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::History);
-	TestEqual(TEXT("weather is the current schema"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::Weather);
+	// `ScriptedBody` writes the cutscene body state mid-record inside two leaf blocks — a scene's
+	// frozen cast and a beat's NPC claim — so an older payload would read those bytes as the fields
+	// that followed them. It is therefore a breaking schema, not an additive one, and it carries the
+	// floor up with it.
+	TestEqual(TEXT("the floor is the scripted-body schema"),
+		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::ScriptedBody);
+	TestEqual(TEXT("scripted body is the current schema"),
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::ScriptedBody);
 
 	// Build the exact v6 player byte stream (which has no ArmorSlot field) and read it through the
 	// current operator. This is deliberately manual: asking the current writer to emit v6 would
@@ -7464,6 +8062,122 @@ bool FElysiumSceneTimelineTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// 12.2b — the lead a scene schedules its speech with belongs to the audio path we run on.
+//
+// VtMB hands its scenes `snd_mixahead`, 0.1 s. The *behaviour* that buys is "the sample is heard
+// at the authored instant"; the *number* is Source's own mixer's lead. Carrying the number into
+// Unreal's mixer reproduces Source's implementation instead of VtMB's behaviour, and the line is
+// then heard tens of milliseconds ahead of every cue authored against it — lipsync, expressions,
+// gestures and camera cuts alike.
+//
+// This test holds the derivation in place. It fails if the lead stops tracking what the output
+// path reports — which is what reintroducing any constant inherited from a different mixer does.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSceneMixaheadTest, "Elysium.Substrate.SceneMixahead", GElysiumTestFlags)
+
+bool FElysiumSceneMixaheadTest::RunTest(const FString&)
+{
+	IConsoleVariable* MixaheadVar = IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.SceneMixahead"));
+	if (!TestNotNull(TEXT("elysium.SceneMixahead is registered"), MixaheadVar))
+	{
+		return false;
+	}
+	const float WasMixahead = MixaheadVar->GetFloat();
+	ON_SCOPE_EXIT{ MixaheadVar->Set(WasMixahead, ECVF_SetByCode); };
+
+	// --- the default is "derive", not a constant -------------------------------------------
+	{
+		// A negative default is the whole guard: the moment somebody writes a number here, every
+		// scene in the game goes back to being scheduled against a mixer we do not run.
+		TestTrue(TEXT("the shipped default derives the lead from the audio path"), WasMixahead < 0.f);
+		TestNotEqual(TEXT("  and is not VtMB's snd_mixahead default"), WasMixahead, 0.1f);
+	}
+
+	// --- the terms add up, and the fallback is named as one ---------------------------------
+	{
+		FElysiumAudioLatency L;
+		L.MixerQueueSeconds = 0.020f;
+		L.EndpointSeconds = 0.030f;
+		L.SubmitToRenderSeconds = 0.004f;
+		TestEqual(TEXT("the lead is the sum of its terms"), L.Lead(), 0.054f, 1e-6f);
+		TestFalse(TEXT("a default-constructed latency has not been near a device"), L.bDeviceQueried);
+
+		// The no-device value is one Unreal mixer callback at 48 kHz. It is a fallback, and the
+		// point of asserting it is that it is not, and must not become, 0.1.
+		TestEqual(TEXT("the fallback is one 1024-frame callback at 48 kHz"),
+			ElysiumAudioLatency::FallbackLeadSeconds, 1024.f / 48000.f, 1e-9f);
+		TestNotEqual(TEXT("  and is not Source's mixer's lead"),
+			ElysiumAudioLatency::FallbackLeadSeconds, 0.1f);
+	}
+
+	// --- a scene leads its speech by whatever the output path reports ------------------------
+	//
+	// The scene is driven twice with two different reported leads. Comparing the two dispatch
+	// instants is what pins the behaviour: a hardcoded constant would produce the same instant
+	// both times no matter what the audio path said.
+	ElysiumScene::ClearCache();
+	ElysiumScene::RegisterInline(TEXT("test/mixahead.vcd"), SceneWith(
+		SceneEvent(TEXT("speak"), TEXT("line"), 1.f, 2.f, TEXT("test/line.wav"))));
+
+	// Drive one scene forward in small steps and answer the scene time at which the line was
+	// submitted to the audio path, or -1 if it never was.
+	auto DispatchTime = [](float ReportedLead) -> double
+	{
+		FElysiumRecordingServices Services;
+		Services.OutputLead = ReportedLead;
+
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__test__");
+		FElysiumEntityDef S;
+		S.Classname = TEXT("logic_choreographed_scene");
+		S.TargetName = TEXT("scene1");
+		S.Keys.Add(TEXT("SceneFile"), TEXT("test/mixahead.vcd"));
+		Defs.Defs.Add(MoveTemp(S));
+
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MoveTemp(Defs));
+		World.Activate(0.0);
+		World.EnqueueInput(TEXT("scene1"), FName(TEXT("Start")), FElysiumVariant::Void(), 0.0, {}, {});
+
+		// 1 ms steps: fine enough that the answer is the lead rather than the step.
+		for (int32 Step = 0; Step <= 1500; ++Step)
+		{
+			const double T = Step * 0.001;
+			World.Tick(T);
+			if (Services.Saw(TEXT("Submit")))
+			{
+				return T;
+			}
+		}
+		return -1.0;
+	};
+
+	{
+		const double Short = DispatchTime(0.020f);
+		const double Long = DispatchTime(0.250f);
+		TestTrue(TEXT("the line is submitted under a short lead"), Short > 0.0);
+		TestTrue(TEXT("the line is submitted under a long lead"), Long > 0.0);
+		// The authored start is 1.0, so each dispatch lands one step past `1 - lead`.
+		TestEqual(TEXT("a 20 ms lead submits 20 ms before the authored instant"), Short, 0.980, 0.002);
+		TestEqual(TEXT("a 250 ms lead submits 250 ms before it"), Long, 0.750, 0.002);
+		TestTrue(TEXT("so the lead tracks the audio path rather than a constant"),
+			FMath::Abs((Short - Long) - 0.230) < 0.004);
+	}
+
+	// --- the retail constant survives as an explicit override --------------------------------
+	// Reproducing VtMB's own 0.1 is still one console command away, which is what keeps the
+	// derived lead A/B-able against the behaviour the original shipped with.
+	{
+		MixaheadVar->Set(0.1f, ECVF_SetByCode);
+		const double Forced = DispatchTime(0.250f);
+		TestEqual(TEXT("a forced mixahead overrides what the audio path reports"), Forced, 0.900, 0.002);
+	}
+
+	return true;
+}
+
+// =====================================================================================
 // 12.1 — `logic_choreographed_scene` end to end, through the real world and event queue.
 //
 // The scene text is seeded into the parse cache inline, so this stays in the content-free tier.
@@ -7692,7 +8406,7 @@ bool FElysiumChoreoSceneTest::RunTest(const FString&)
 		TestEqual(TEXT("a cancelled scene never completes"), CounterValue(Count), 1101.f);
 	}
 
-	// --- position_start places and re-pins; position_end 2 restores --------------------------
+	// --- position_start places ONCE and freezes; position_end 2 restores ---------------------
 	{
 		FElysiumEntityWorld World(nullptr, nullptr);
 		BuildWorld(World, /*position_start*/ 1, /*position_end*/ 2, TEXT("test/scene.vcd"), TEXT("A"));
@@ -7707,10 +8421,14 @@ bool FElysiumChoreoSceneTest::RunTest(const FString&)
 		World.Tick(T);
 		TestEqual(TEXT("position_start 1 places the actor on the scene"), Actor->Origin, Mark);
 
-		// Move it away mid-scene; the re-pin must drag it back.
-		Actor->SetRuntimeOrigin(FVector(-1.f, -1.f, -1.f));
+		// The placement is the scene's only write. VtMB holds its cast by immobilising the body
+		// (FUN_10081ed0's MOVETYPE_NONE + SOLID_NONE), not by rewriting the transform every frame,
+		// so a mid-scene move stays where it was put — nothing drags it back.
+		const FVector Moved(-1.f, -1.f, -1.f);
+		Actor->SetRuntimeOrigin(Moved);
 		T = 1.0; World.Tick(T);
-		TestEqual(TEXT("  and re-pins it every frame"), Actor->Origin, Mark);
+		TestEqual(TEXT("  and does not re-pin it per frame"), Actor->Origin, Moved);
+		Actor->SetRuntimeOrigin(Mark);   // put it back for the position_end assertion below
 
 		T = 4.5; World.Tick(T);
 		T = 4.6; World.Tick(T);

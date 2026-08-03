@@ -33,6 +33,8 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	bool bEnabled = true;
 	bool bMoving = false;
 	bool bFacing = false;
+	bool bFrozen = false;
+	bool bIgnoreCharacterCollision = false;
 	// A test drives arrival by flipping these: SampleStatus is what an in-flight move reports, and
 	// clearing bAcceptMoves is how "this mark has no path" is expressed.
 	bool bAcceptMoves = true;
@@ -47,13 +49,14 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	}
 
 	virtual bool MoveTo(const FVector& FeetDestination, float AcceptanceRadiusCm,
-		float SpeedCmPerSecond) override
+		float SpeedCmPerSecond, bool bAllowPartialPath = false) override
 	{
 		RequestedFeet = FeetDestination;
 		bMoving = bEnabled && bAcceptMoves;
 		bFacing = false;
-		Record(FString::Printf(TEXT("NpcMotor MoveTo %s radius=%.1f speed=%.1f"),
-			*FeetDestination.ToString(), AcceptanceRadiusCm, SpeedCmPerSecond));
+		Record(FString::Printf(TEXT("NpcMotor MoveTo %s radius=%.1f speed=%.1f partial=%d"),
+			*FeetDestination.ToString(), AcceptanceRadiusCm, SpeedCmPerSecond,
+			bAllowPartialPath ? 1 : 0));
 		return bMoving;
 	}
 	virtual void Face(float YawDegrees) override
@@ -85,6 +88,21 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 			bFacing = false;
 		}
 		Record(FString::Printf(TEXT("NpcMotor SetEnabled %d"), bEnabled ? 1 : 0));
+	}
+	virtual void SetFrozen(bool bInFrozen) override
+	{
+		bFrozen = bInFrozen;
+		if (bFrozen)
+		{
+			bMoving = false;
+			bFacing = false;
+		}
+		Record(FString::Printf(TEXT("NpcMotor SetFrozen %d"), bFrozen ? 1 : 0));
+	}
+	virtual void SetIgnoreCharacterCollision(bool bIgnore) override
+	{
+		bIgnoreCharacterCollision = bIgnore;
+		Record(FString::Printf(TEXT("NpcMotor SetIgnoreCharacterCollision %d"), bIgnore ? 1 : 0));
 	}
 	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) override
 	{
@@ -511,6 +529,10 @@ struct FElysiumRecordingServices final
 		}
 	}
 	virtual FString ActiveSchemeRel() const override { return ActiveScheme; }
+	// What the recorded output path claims its lead is. A test sets it to stand in for a measured
+	// device; left alone it is the same no-device fallback a headless world answers with.
+	float OutputLead = ElysiumAudioLatency::FallbackLeadSeconds;
+	virtual float OutputLeadSeconds() const override { return OutputLead; }
 
 	// --- IElysiumTravel --------------------------------------------------------------------
 	virtual void RequestLandmarkTravel(const FString& Map, const FString& Landmark,

@@ -22,16 +22,22 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 
 	virtual bool MoveTo(const FVector& FeetDestination, float AcceptanceRadiusCm,
-		float SpeedCmPerSecond) override;
+		float SpeedCmPerSecond, bool bAllowPartialPath = false) override;
 	virtual void Face(float YawDegrees) override;
 	virtual void Stop() override;
 	virtual void Teleport(const FVector& FeetOrigin, float YawDegrees) override;
 	virtual void SetEnabled(bool bEnabled) override;
+	virtual void SetFrozen(bool bFrozen) override;
+	virtual void SetIgnoreCharacterCollision(bool bIgnore) override;
 	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) override;
 
 private:
 	FVector FeetLocation() const;
 	void ApplyEnabledState();
+	// Solidity is three independent decisions — enabled, frozen, and character-ignoring — so it is
+	// resolved in one place and re-applied from every one of them.
+	void ApplyCollisionState();
+	void ApplyCrowdState();
 	FVector RequestedFeet = FVector::ZeroVector;
 	float RequestedAcceptanceCm = 20.0f;
 	float RequestedYaw = 0.0f;
@@ -39,4 +45,8 @@ private:
 	bool bFaceRequested = false;
 	bool bRequestedEnabled = true;
 	bool bRuntimeReady = false;
+	// Borrowed by a cutscene and given back: a frozen body cannot move or be touched but stays on
+	// screen; an ignoring body still collides with the world, just not with other characters.
+	bool bFrozen = false;
+	bool bIgnoreCharacterCollision = false;
 };

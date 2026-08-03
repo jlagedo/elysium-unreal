@@ -330,6 +330,7 @@ public:
 	virtual void FadeInScheme(const FString& SchemeRel, const FVector& Anchor, float FadeSeconds) override;
 	virtual void FadeOutScheme(const FString& SchemeRel, float FadeSeconds) override;
 	virtual FString ActiveSchemeRel() const override;
+	virtual float OutputLeadSeconds() const override;
 
 	// --- IElysiumTravel ---------------------------------------------------------------------
 	// Both forward to the GI-scoped UElysiumMapSubsystem, which owns when the travel happens.

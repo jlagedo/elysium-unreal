@@ -216,6 +216,12 @@ Hard-won, non-obvious, and easy to undo:
   headless think measuring elapsed time reads zero forever no matter what `Tick(t)` is passed.
 - **Cog boots dormant** (`elysium.CogPersist 0` deletes its layout ini before the dependency brings
   Cog up) — restored input capture makes the game's own UI unclickable otherwise.
+- **`IElysiumNpcMotor::SetEnabled(false)` also hides the body, so it cannot immobilise a cutscene
+  actor.** A choreographed scene's `position_start` cast has to stop moving while staying on
+  camera, which is what `SetFrozen` is for; `SetIgnoreCharacterCollision` is the separate
+  character-vs-character switch a `scripted_sequence` beat borrows. Collapsing any of the three into
+  the others makes a scene's cast vanish. They are resolved together in `ApplyCollisionState`, so a
+  new caller must go through it rather than touching the capsule directly.
 
 ## Build and test loop
 

@@ -29,8 +29,12 @@ class IElysiumNpcMotor
 {
 public:
 	virtual ~IElysiumNpcMotor() = default;
+	// `bAllowPartialPath` takes the best path the graph can offer instead of refusing the request.
+	// A route point wants the refusal — it must never silently skip authored route data. A
+	// scripted_sequence mark wants the partial walk: the transit is the point of the beat, and its
+	// caller places the NPC on the mark when the walk ends short.
 	virtual bool MoveTo(const FVector& FeetDestination, float AcceptanceRadiusCm,
-		float SpeedCmPerSecond) = 0;
+		float SpeedCmPerSecond, bool bAllowPartialPath = false) = 0;
 	// Turn in place toward a yaw without travelling — HL1 CCineMonster's TASK_FACE_SCRIPT, which a
 	// beat runs after reaching its mark and which `m_fMoveTo 5` runs on its own. Cancelled by
 	// Stop/Teleport/MoveTo like any other request.
@@ -38,6 +42,13 @@ public:
 	virtual void Stop() = 0;
 	virtual void Teleport(const FVector& FeetOrigin, float YawDegrees) = 0;
 	virtual void SetEnabled(bool bEnabled) = 0;
+	// Immobilise the body without hiding it — a choreographed scene's `position_start` placement
+	// (VtMB's MOVETYPE_NONE + SOLID_NONE + FSOLID_NOT_SOLID). Distinct from SetEnabled, which also
+	// takes the body off screen and so cannot hold a cast that has to stay on camera.
+	virtual void SetFrozen(bool bFrozen) = 0;
+	// Pass through other characters and the player for a scripted beat's duration
+	// (`scripted_sequence` spawnflag 4096). World collision is retained.
+	virtual void SetIgnoreCharacterCollision(bool bIgnore) = 0;
 	// The body's live feet/yaw plus what its outstanding request is doing. A turn-in-place reports
 	// Moving until it is aligned, then falls back to Idle — there is only one request at a time.
 	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) = 0;
@@ -217,6 +228,14 @@ public:
 	virtual void FadeOutScheme(const FString& SchemeRel, float FadeSeconds) = 0;
 	// The scheme currently running, or empty. What an ambient_soundscheme reports as its own state.
 	virtual FString ActiveSchemeRel() const = 0;
+
+	// 12.2b — how far ahead of an authored instant a cue must be submitted for its first sample to
+	// be heard at that instant. VtMB hands its scenes `snd_mixahead`, which is Source's mixer's own
+	// lead; the behaviour that constant encodes is reproduced by leading with *this* path's latency
+	// instead, composed by UElysiumAudioSubsystem from the device it is actually running on.
+	//
+	// The default is the no-device fallback, which is also what a substrate-only world answers.
+	virtual float OutputLeadSeconds() const { return ElysiumAudioLatency::FallbackLeadSeconds; }
 };
 
 // --------------------------------------------------------------------------------------------

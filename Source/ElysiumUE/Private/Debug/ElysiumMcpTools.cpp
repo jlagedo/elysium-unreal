@@ -1303,11 +1303,32 @@ namespace ElysiumMcpImpl
 					Body->SetBoolField(TEXT("muted"), Audio->IsMuted());
 					Body->SetNumberField(TEXT("master_gain"), Audio->MasterGain());
 					Body->SetNumberField(TEXT("decoded_files"), Audio->Results().Num());
-					// The render clock every voice is scheduled against. With `scheduled_audio_clock`
-					// and `media_offset` below it, a reader can say how far into its media a live voice
-					// is — which is what makes the lead a scene schedules its speech with measurable
-					// against the scene's own clock rather than assumed from the convar.
+					// The render clock every voice is scheduled against. `scheduled_audio_clock` says
+					// when a voice was *asked for*; `render_head` below says where the mixer has
+					// actually reached inside it, which is the read that survives a slow decode.
 					Body->SetNumberField(TEXT("audio_clock"), Audio->AudioClock());
+
+					// 12.2b — the lead every cue is scheduled with and the terms it is made of. The
+					// device half is queried, the endpoint half modelled from those queried frame
+					// counts, the submit->render half measured on the voices that have played.
+					const FElysiumAudioLatency& Lat = Audio->OutputLatency();
+					TSharedRef<FJsonObject> Latency = Obj();
+					Latency->SetBoolField(TEXT("device_queried"), Lat.bDeviceQueried);
+					Latency->SetStringField(TEXT("platform_api"), Lat.PlatformApi);
+					Latency->SetStringField(TEXT("device"), Lat.DeviceName);
+					Latency->SetNumberField(TEXT("sample_rate"), Lat.SampleRate);
+					Latency->SetNumberField(TEXT("callback_frames"), Lat.CallbackFrames);
+					Latency->SetNumberField(TEXT("output_buffers"), Lat.OutputBuffers);
+					Latency->SetNumberField(TEXT("device_period_frames"), Lat.DevicePeriodFrames);
+					Latency->SetNumberField(TEXT("endpoint_frames"), Lat.EndpointFrames);
+					Latency->SetNumberField(TEXT("mixer_queue"), Lat.MixerQueueSeconds);
+					Latency->SetNumberField(TEXT("endpoint"), Lat.EndpointSeconds);
+					Latency->SetNumberField(TEXT("submit_to_render"), Lat.SubmitToRenderSeconds);
+					Latency->SetNumberField(TEXT("submit_to_render_peak"), Lat.SubmitToRenderPeakSeconds);
+					Latency->SetNumberField(TEXT("submit_to_render_samples"), Lat.SubmitToRenderSamples);
+					Latency->SetNumberField(TEXT("decode"), Lat.DecodeSeconds);
+					Latency->SetNumberField(TEXT("lead"), Lat.Lead());
+					Body->SetObjectField(TEXT("latency"), Latency);
 
 					TArray<TSharedPtr<FJsonValue>> Voices;
 					for (const FElysiumAudioVoice& Voice : Audio->ActiveVoices())
@@ -1326,6 +1347,12 @@ namespace ElysiumMcpImpl
 						Row->SetNumberField(TEXT("scheduled_audio_clock"), Voice.Event.ScheduledAudioClock);
 						Row->SetNumberField(TEXT("media_offset"), Voice.Event.MediaOffsetSeconds);
 						Row->SetNumberField(TEXT("duration"), Voice.Event.DurationSeconds);
+						// Where the mixer's render head sits inside this voice's own media, and how
+						// long the file read + decode + realization took before it got there.
+						// Negative on both until the mixer has pulled from the voice once.
+						Row->SetNumberField(TEXT("render_head"), Voice.RenderHeadSeconds());
+						Row->SetNumberField(TEXT("submit_to_render"),
+							Voice.Render ? Voice.Render->SubmitToRenderSeconds() : -1.0);
 						Voices.Add(MakeShared<FJsonValueObject>(Row));
 					}
 					Body->SetArrayField(TEXT("voices"), Voices);

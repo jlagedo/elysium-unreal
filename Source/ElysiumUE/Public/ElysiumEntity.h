@@ -253,6 +253,29 @@ public:
 	// (a parked patrol route or interesting-place search resumes). Leaves the pose alone.
 	virtual void EndScriptMove() {}
 
+	// --- Body state a cutscene borrows (entity_io.md, choreographed_scenes.md) -----------
+	// A choreographed scene with `position_start 1` places its cast once and then immobilises it:
+	// VtMB's FUN_10081ed0 follows the placement with SetMoveType(MOVETYPE_NONE), SetSolid(SOLID_NONE)
+	// and AddSolidFlags(FSOLID_NOT_SOLID), restoring all four at OnSceneFinished. The actors hold
+	// position because they cannot move, not because anything rewrites their transform — so this is
+	// deliberately NOT ScriptHide, which would also undraw a cast that has to stay on camera.
+	virtual void SetBodyFrozen(bool bFrozen) {}
+
+	// `scripted_sequence` spawnflag 4096 ORs troika bit 0x40 for the beat's duration, which makes
+	// CBaseAnimating::IsIgnoreCollisionEntity answer true for every NPC and for the player. It is
+	// how five NPCs walk sp_theatre's aisle past each other without jamming. World collision is
+	// unaffected — only character-vs-character.
+	virtual void SetIgnoreCharacterCollision(bool bIgnore) {}
+
+	// --- Scripted-beat ownership (VtMB's m_pCine) ---------------------------------------
+	// The `scripted_sequence` currently driving this entity, and whether that owner refuses to be
+	// kicked out of the queue (spawnflag 512, or an authored `m_iszNextScript`). Claimed on a
+	// successful BeginSequence and released when the beat ends or is cancelled. Not part of the
+	// base snapshot: the owning sequence serializes its own claim and re-stamps this on load, so
+	// the two can never disagree.
+	FElysiumEntityHandle ScriptOwner;
+	bool bScriptOwnerLocked = false;
+
 	// 12.1 — play a clip out of a choreographed scene's own anim set (the whole-cast cinematic
 	// model), selecting this actor's skeleton inside it by the scene's `bonerename` source. Kept
 	// beside PlayAnimClip for the same no-RTTI reason; base answers false.

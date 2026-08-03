@@ -260,6 +260,11 @@ public:
 	// The body a camera shot's `Bone: Bip01 Head` attach point resolves against (11.7).
 	virtual USkeletalMeshComponent* GetSkeletalBody() const override { return Visual; }
 
+	// The `parentname` attach point for a character (an ornament or an emitter worn on an NPC).
+	// A point character has no brush body, so the standing skeletal body is the only primitive
+	// there is; null for a bodiless character, which cannot be a parent.
+	virtual UPrimitiveComponent* GetAttachBody() const override { return Visual; }
+
 	// The model stem the clip manifest is keyed by: the model file's lowercased basename.
 	FString ModelStem() const;
 

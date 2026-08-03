@@ -298,12 +298,35 @@ void FElysiumAnimating::OnRuntimeModelChanged()
 	{
 		return;   // bare test world — the logical Model field is still updated
 	}
+	// A model swap replaces the body, it does not remove it, so anything parented to this character
+	// (PostSpawn attaches a child to GetAttachBody() = Visual) has to survive onto the new one.
+	// Nothing tracks an entity's children, so read them off the component before it is destroyed and
+	// carry their offsets across — a `parentname` child keeps its relative pose, not its world pose.
+	TArray<TPair<TWeakObjectPtr<USceneComponent>, FTransform>> Carried;
 	if (Visual)
 	{
+		for (USceneComponent* Child : Visual->GetAttachChildren())
+		{
+			if (Child)
+			{
+				Carried.Emplace(Child, Child->GetRelativeTransform());
+			}
+		}
 		Visual->DestroyComponent();
 		Visual = nullptr;
 	}
 	BuildBody();
+	if (Visual)
+	{
+		for (const TPair<TWeakObjectPtr<USceneComponent>, FTransform>& Child : Carried)
+		{
+			if (USceneComponent* Live = Child.Key.Get())
+			{
+				Live->AttachToComponent(Visual, FAttachmentTransformRules::KeepRelativeTransform);
+				Live->SetRelativeTransform(Child.Value);
+			}
+		}
+	}
 }
 
 void FElysiumAnimating::OnDormancyChanged()

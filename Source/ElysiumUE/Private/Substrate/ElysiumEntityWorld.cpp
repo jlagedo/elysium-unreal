@@ -253,6 +253,13 @@ void FElysiumEntityWorld::BuildBrushBody(FElysiumEntity& Ent)
 	{
 		Sol = EElysiumBrushSolidity::Passable;
 	}
+	// func_rotating NOT_SOLID (0x40) is per-entity, not per-class: the clock hands and the la_hub
+	// blade set it, the sky's cloud/lightning rotators do not.
+	if (Ent.Def->Classname.Equals(TEXT("func_rotating"), ESearchCase::IgnoreCase)
+		&& (Ent.SpawnFlags & 0x40) != 0)
+	{
+		Sol = EElysiumBrushSolidity::Passable;
+	}
 
 	// Standard runtime-component recipe: NewObject → cook the setup + place → SetupAttachment →
 	// RegisterComponent (which creates the physics body from the now-valid setup, at the origin).

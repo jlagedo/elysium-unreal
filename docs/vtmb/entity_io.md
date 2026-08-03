@@ -306,43 +306,130 @@ either side. The class in `vampire.dll` is **`CCineNPC`** — the `aiscripted_se
 constructor. `CCineNPC` is an **HL1 `CCineMonster` derivative**, not HL2's `CAI_ScriptedSequence`,
 which is what fixes the spawnflag lineage below.
 
-**Keyfields** (datamap names; the binary carries both `m_iszIdle` and `m_iszPreIdle`, and every
-exported map uses `m_iszIdle`):
+The datamap is half-static: its 36 records live at `0x1059366c`, the leading keyfields and inputs
+statically initialized and the nine trailing outputs written by the builder `FUN_101a5e10`; the base
+map is `CAI_BaseNPC` (`105c9814`).
 
-| Field | Meaning |
-| --- | --- |
-| `m_iszEntity` | the NPC's targetname. `!playercontroller` on 10 of the 108 exported sequences |
-| `m_iszIdle` | pre-action idle — the pose the NPC waits in from level start until the beat begins |
-| `m_iszPlay` | the action animation; its length is the beat's duration |
-| `m_iszPostIdle` | the resting pose held after the action |
-| `m_iszCustomMove` | the travel animation used when `m_fMoveTo` is 3 |
-| `m_iszNextScript` | the sequence to begin when this one ends |
-| `m_fMoveTo` | 0 No / 1 Walk / 2 Run / 3 Custom movement / 4 Instantaneous / 5 No - Turn to Face |
-| `m_flRadius` | NPC search radius when `m_iszEntity` is not a plain targetname (512 on 81 of 108) |
-| `m_flRepeat` | repeat rate in ms (0 on 104 of 108) |
+**Keyfields** (external name, then the internal name and offset where they differ). `m_iszIdle` and
+`m_iszPreIdle` are **one record**, not two — external `m_iszIdle`, internal `m_iszPreIdle` — so a map
+writing the literal key `m_iszPreIdle` is dropped by the keyvalue lookup:
 
-**Inputs:** `BeginSequence`, `CancelSequence` (plus the base `Kill`/`ScriptHide`/`ScriptUnhide`).
-**Outputs:** `OnBeginSequence`, `OnEndSequence`, and `OnScriptEvent01..08` — the last driven by
-animation events embedded in the clip, so they need decoded `.mdl` events to fire at all.
+| Field | Offset | Meaning |
+| --- | --- | --- |
+| `m_iszEntity` | `0x5f54` | the NPC's targetname. `!playercontroller` on 10 of the 108 exported sequences |
+| `m_iszIdle` (`m_iszPreIdle`) | `0x5f44` | pre-action idle — the pose the NPC waits in from level start until the beat begins |
+| `m_iszPlay` | `0x5f48` | the action animation; its length is the beat's duration |
+| `m_iszPostIdle` | `0x5f4c` | the resting pose held after the action |
+| `m_iszCustomMove` | `0x5f50` | the travel animation used when `m_fMoveTo` is 3 |
+| `m_iszNextScript` | `0x5f58` | the sequence to begin when this one ends |
+| `m_iszLinkedSequence` | `0x5f5c` | resolved to an entity by a single getter (`FUN_101a8130`); no exported map writes it |
+| `m_fMoveTo` | `0x5f60` | 0 No / 1 Walk / 2 Run / 3 Custom movement / 4 Instantaneous / 5 No - Turn to Face |
+| `m_iFinishSchedule` | `0x5f64` | which schedule the NPC is handed back on, in `FixScriptNPCSchedule` (`FUN_101a95d0`): `0` the default, `1` schedule `0x2a`, anything else `DevMsg("FixScriptNPCSchedule - no case!")` and then the default. All six exported `aiscripted_sequence`s write `0` |
+| `m_flRadius` | `0x5f68` | **never read** — no site in the class range touches it |
+| `m_flRepeat` | `0x5f6c` | **never read** |
 
-**Spawnflags** follow the HL1 `CCineMonster` set for bits 1–128; VtMB adds 256, 512, 4096 and 8192,
-whose meanings are **not established**:
+The private half of the record set — `m_iDelay`, `m_startTime`, `m_saved_movetype`,
+`m_saved_movecollide`, `m_saved_solid`, `m_saved_solidflags`, `m_saved_effects`,
+`m_saved_troika_flags`, `m_interruptable` (`0x5f90`), `m_sequenceStarted`, `m_hNextCine` (`0x5f94`) —
+records that a beat takes ownership of the NPC's movement and collision state for its duration and
+gives it back afterwards.
 
-| Bit | Meaning |
-| --- | --- |
-| `1` | WAITTILLSEEN |
-| `2` | EXITAGITATED |
-| `4` | REPEATABLE |
-| `8` | LEAVECORPSE |
-| `16` | START_ON_SPAWN — **set on none of the 108 exported sequences** |
-| `32` | NOINTERRUPT |
-| `64` | OVERRIDESTATE |
-| `128` | NOSCRIPTMOVEMENT — do not move the NPC to the mark |
-| `256`, `512`, `4096`, `8192` | VtMB additions; meaning unknown |
+**Inputs:** `BeginSequence`, `CancelSequence`, **`MoveToPosition`** (`inputFunc 0x1000d6c0`, whose
+body is `FUN_101a72b0` — reached only through the datamap, so the analyzers leave it
+undisassembled), plus the base `Kill`/`ScriptHide`/`ScriptUnhide`. `MoveToPosition` sends the NPC to
+the mark without running the action: it returns unless the NPC's script state is `0` or `2`, picks
+the move activity through vftable `+0x924`, validates it through `+0x788`, starts the move through
+`+0x91c`, and re-arms the `Use` throttle. No exported map wires it. **Outputs:** `OnBeginSequence`,
+`OnEndSequence`, and
+`OnScriptEvent01..08` — the last driven by animation events embedded in the clip, so they need
+decoded `.mdl` events to fire at all.
+
+**`m_fMoveTo` selects the NPC's script state** (`FUN_101a9080`, NPC `+0x5d70`); an unrecognised value
+raises `DevWarning("aiscript: invalid Move To Positi[on]")`:
+
+| `m_fMoveTo` | Script state | Meaning |
+| --- | --- | --- |
+| 0 No, 5 No - Turn to Face | 1 | `SCRIPT_WAIT` |
+| 1 Walk | 4 | `SCRIPT_WALK_TO_MARK` |
+| 2 Run | 5 | `SCRIPT_RUN_TO_MARK` |
+| 3 Custom movement | 6 | `SCRIPT_CUSTOM_MOVE` |
+| 4 Instantaneous | 1 | placed inline, then `SCRIPT_WAIT` |
+
+Instantaneous placement does not write angles directly: it sets the origin, drives the yaw through
+the NPC's yaw controller, zeroes angular velocity, and raises the entity's effect bit `0x10`
+(`docs/vtmb/choreographed_scenes.md` → *The effect bit a scripted jump raises*).
+
+The yaw controller is `FUN_102e0a80`: it wraps `target - current` (`m_pAnim+0x18`) into ±180°,
+clamps it to ±the per-step yaw limit at `m_pAnim+0x1c`, re-adds the current yaw and re-wraps into
+`[0, 360)`. The placement flips the target 180° first when `m_pAnim+0x28` is set, and writes the
+ideal yaw at `m_pAnim+0x34` **directly** when the yaw limit is exactly `180.0` — that value is the
+"no limit, snap" sentinel. Any other limit makes the turn a rate-limited approach.
+
+*Divergence, by owner call:* this runtime writes the mark's angles directly instead of driving them
+through a rate-limited yaw controller. No `sp_theatre` sequence uses `m_fMoveTo` 4 or 5, so the
+difference is confined to `sp_tutorial_1` and `sm_warehouse_1`.
+
+**Spawnflags** live at `CBaseEntity+0x204` and follow the HL1 `CCineMonster` set for bits 1–128; the
+VtMB additions are decoded from the bit tests in the class range `0x101a5000–0x101a9600`:
+
+| Bit | Meaning | Site |
+| --- | --- | --- |
+| `1` | WAITTILLSEEN | — |
+| `2` | EXITAGITATED | — |
+| `4` | REPEATABLE — when clear, the beat schedules its own removal | `FUN_101a8640` |
+| `8` | LEAVECORPSE | — |
+| `16` | START_ON_SPAWN — **set on none of the exported sequences** | — |
+| `32` | NOINTERRUPT — gates `m_interruptable` | `FUN_101a8890` |
+| `64` | OVERRIDESTATE | — |
+| `128` | NOSCRIPTMOVEMENT — do not move the NPC to the mark | — |
+| `256` | **Hold the post-idle.** With `m_iszPostIdle` set and no live `m_hNextCine`, the sequence-done path logs `Post Idle %s finished`, sets the NPC's script state to 2, replays the post-idle, and returns before cleanup — so the beat never completes and `OnEndSequence` never fires | `FUN_101a8640` |
+| `512` | **Priority script.** Tested on the contending cine; when set the challenger is refused with `%s is a priority script and cannot be kicked out of the queue` | `FUN_101a8ac0` |
+| `1024` | caches the resolved NPC pointer into the cine at `+0x5f98`; no exported map sets it | `FUN_101a7760` |
+| `2048` | suppresses the `Found %s, but can't play` console warning; no exported map sets it | `FUN_101a7600` |
+| `4096` | **Pass through characters.** Saves the NPC's troika flags into `m_saved_troika_flags` and ORs bit `0x40` into them for the beat's duration, restoring on cleanup. Bit `0x40` is read by the NPC's `CBaseAnimating::IsIgnoreCollisionEntity` override (`FUN_1029afc0`, `FUN_1029b180`), which with it set answers true for any entity carrying an AI object (`+0x94`) or a player controller (`+0xa8`) — every NPC and the player. World collision is untouched | `FUN_101a7880`, `FUN_101a9080` |
+| `8192` | **Never read.** No instruction in `.text` tests spawnflags bit `0x2000`, in either the dword encoding (`+0x204` with immediate `0x2000`) or the byte one (`+0x205` with `0x20`), across all 391 sites that read the field — though four sequences author it | — |
+
+Bit usage across the 22 exported maps: `4` on 49, `32` on 53, `64` on 55, `128` on 1, `256` on 21,
+`512` on 31, `4096` on 6, `8192` on 4; bits `1`, `2`, `8`, `16`, `1024` and `2048` on none.
+
+**The queue is a real thing with its own diagnostics.** `BeginSequence` (`FUN_101a7390`) opens with
+a re-trigger throttle — a call arriving within 0.05 s of the last is dropped and the gate pushed
+further out, with `"*** WARNING *** Called BeginSequence…"`, `"Still another %f seconds before…"`
+and `"Try delaying your BeginSequence call…"`. Past it, taking an NPC that another script holds logs
+`script "%s" kicking script "%s" out of the queue`; the two refusals above are what stop that
+happening. `CCineNPC::Activate` (`FUN_101a8de0`) reports its own resolution failures —
+`Could not find NPC %s in CCineNPC::Activate for %s` and `NPC %s has no model in CCineNPC::Activate
+for %s`.
 
 That no sequence carries bit 16 is load-bearing: every beat is entered by an explicit
 `BeginSequence` — an I/O wire, a `m_iszNextScript` chain, or a level-script call — and none starts
 itself at map load.
+
+`sp_theatre`'s courtroom walk-out is the worked example of the two additions that matter: the five
+NPCs that walk carry `0x1260` (NOINTERRUPT + OVERRIDESTATE + priority + troika), and the two that
+were teleported to the far end and only play looping idles carry `0x360` — the same word with
+post-idle hold in place of the troika bit.
+
+### Where the rebuild diverges
+
+Each is a deliberate call, recorded beside the behaviour it departs from:
+
+- **Travel can fail here; in retail it cannot.** Retail's mover always reaches its mark, so a beat
+  has no failure branch. This runtime walks a real navigation graph, so travel is bounded by a
+  no-progress window and an absolute cap, and a body that runs out is placed on the mark so the beat
+  still ends — a beat that never ends stalls the map's whole script flow. The cap has to sit under
+  the cleanup timers a map hangs off its own camera track: `sp_theatre` kills the walk-out beats
+  twenty seconds into the shot, having authored them against a walk of about half that.
+- **Gait speed comes from `speed_walk`/`speed_runbase`, not from the cycle's own displacement**,
+  which is not decoded, so a travelling NPC can foot-slide.
+- **Spawnflag 256's condition is approximated.** The engine holds the post-idle when there is no
+  live `m_hNextCine`; the nearest thing here is an authored `m_iszNextScript`, so an empty one
+  stands in for it.
+- **Queue ownership is one bit, not a re-read of the owner.** The engine decides a refusal by
+  inspecting the cine that holds the NPC; this runtime stamps "this owner refuses handover" onto the
+  NPC when the claim is made, and distinguishes the two refusal messages by re-reading only the
+  owner's spawnflags. A claim whose owner has been destroyed is cleared rather than honoured.
+- **`OnScriptEvent01..08` do not fire** — they need decoded `.mdl` animation events.
 
 **Demand across the 10 exported maps:** 104 `scripted_sequence` + 4 `aiscripted_sequence`;
 68 `BeginSequence` and 16 `CancelSequence` I/O wires, plus 68 and 8 receiver-qualified script calls
@@ -351,6 +438,38 @@ itself at map load.
 `OnScriptEvent01/02/03` 5 — and they unlock doors, restore cameras, and open conversations, so a
 beat that never ends stalls the map's flow. 94 animation references across the set, of which the
 4 that name no NPC skeleton all belong to `!playercontroller`.
+
+## `point_teleport`
+
+`CPointTeleport` — factory `FUN_1018d940` (allocates `0x468`, vftable `0x10472e94`), datamap
+`0x1058cbf8` (3 records, builder `FUN_1018da10`). It moves the entity named by `target` to a
+destination **captured at `Activate`**, not read at input time.
+
+`Activate` (`FUN_1018da40`) caches the teleporter's own origin and angles, then resolves `target`:
+
+- no target and no `m_target` → `Warning("ERROR: %s given no target. Deleted")` and the entity
+  removes itself;
+- a target that has a parent → `Warning("ERROR: %s can't teleport object (%s) which has a parent")`
+  and the destination is left alone;
+- **spawnflag `1`** → the cached destination is replaced by the *target's* current origin and
+  angles, so the input later returns the target to where it spawned. Two exported entities set it,
+  both naming `!player`.
+
+`InputTeleport` (`FUN_1018dc00`) re-checks the parent (same warning, three arguments this time),
+then applies the cached transform with `SetAbsOrigin` / `SetAbsAngles` — all three angles, not yaw
+alone. When the target carries a player controller it additionally snaps the player's view angles to
+the destination's and stamps a teleport time on the player.
+
+Every teleport ends with `FUN_101cf600` on the target, which is **`CBaseEntity::Relink`** (trace
+string `0x10558f08`) and whose body is a profiler scope push and pop with no work between them. It
+adds nothing: re-establishing the entity's spatial links falls out of `SetAbsOrigin` itself, so
+there is no separate touch re-test in the teleport path.
+
+*Divergence, by owner call:* this runtime reads the destination from the entity's own origin at
+input time rather than caching it at `Activate`, ignores spawnflag `1`, and moves a parented target
+instead of refusing it. None of `sp_theatre`'s nine teleports sets the flag, carries a parent, or
+moves after spawn, so the three are confined to `sp_tutorial_1`'s two `!player` teleports. The view
+snap *is* reproduced — a teleported player's control rotation follows the destination angles.
 
 ## Skin families (`skin` / `SetSkin` / `FadeToSkin`)
 

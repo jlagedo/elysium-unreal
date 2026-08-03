@@ -63,23 +63,37 @@ namespace ElysiumNpcGait
 	inline constexpr float WalkSpeed = 254.0f;   // speed_walk 100 in/s
 	inline constexpr float RunSpeed  = 571.5f;   // speed_runbase 225 in/s
 
-	// How close to the mark counts as standing on it, and how close counts when another crowd
-	// agent is already there (a capsule radius is 34 cm and marks are authored centimetres apart).
+	// How close to the mark counts as standing on it.
 	inline constexpr float ScriptAcceptanceCm = 24.0f;
-	inline constexpr float ScriptCrowdedCm    = 90.0f;
-	// The distance that counts as progress, and how long without it means the body is jammed.
-	inline constexpr float ScriptProgressCm   = 8.0f;
+	// And how close counts for a body that has stopped closing. A beat sends several NPCs to marks
+	// a few centimetres apart — sp_theatre's walk-out lands five of them inside 30 cm — which two
+	// 34 cm crowd agents cannot resolve while they collide. They no longer do: spawnflag 4096 turns
+	// character collision off for the beat's duration, so the cluster this was written for does not
+	// form and the walkers reach the tight acceptance above. What is left is a failure net for a
+	// mark a body genuinely cannot stand on (world geometry, a bad graph), and a net wants to be
+	// small — declaring a body "arrived" a metre and a half out would hide exactly that failure.
+	inline constexpr float ScriptCrowdedCm = 90.0f;
+	// The distance that counts as progress, and the two windows without it. Within the net above a
+	// short one gives up quickly, because a body that close and no longer improving is stuck rather
+	// than working; outside it a long one leaves room for a detour whose straight-line distance to
+	// the mark is not falling yet.
+	inline constexpr float ScriptProgressCm = 8.0f;
+	inline constexpr double ScriptCrowdSettleSeconds = 1.5;
 	inline constexpr double ScriptStallSeconds = 4.0;
 	// The turn-in-place budget, and how long an unadvanced move waits before the NPC frees itself.
 	inline constexpr double ScriptFaceSeconds = 2.0;
 	inline constexpr double ScriptWatchdogSeconds = 1.0;
 
-	// The absolute cap on a travel phase: the straight-line time, tripled for the path the
-	// navmesh actually takes and for crowd avoidance, plus a fixed floor for a short hop.
+	// The absolute cap on a travel phase. It has to sit under the cleanup timers the map hangs off
+	// its own camera track — sp_theatre kills the walk-out beats 20 s after the shot starts, having
+	// been authored against a walk that takes about half that — so the budget is the straight-line
+	// time plus half again for the route the navmesh actually takes, and a floor for a short hop.
+	// A beat that hits the cap places its NPC on the mark and ends, which is always better than
+	// being killed mid-travel with its OnEndSequence unfired.
 	inline double TravelCapSeconds(float DistanceCm, float SpeedCmPerSecond)
 	{
-		return 3.0 * static_cast<double>(DistanceCm) / FMath::Max(1.0, static_cast<double>(SpeedCmPerSecond))
-			+ 5.0;
+		return 1.5 * static_cast<double>(DistanceCm) / FMath::Max(1.0, static_cast<double>(SpeedCmPerSecond))
+			+ 3.0;
 	}
 }
 
@@ -437,7 +451,8 @@ public:
 
 		const float Speed = (Gait == EElysiumScriptGait::Run)
 			? ElysiumNpcGait::RunSpeed : ElysiumNpcGait::WalkSpeed;
-		if (!Motor->MoveTo(Mark, ElysiumNpcGait::ScriptAcceptanceCm, Speed))
+		if (!Motor->MoveTo(Mark, ElysiumNpcGait::ScriptAcceptanceCm, Speed,
+			/*bAllowPartialPath=*/true))
 		{
 			ScriptPhase = EScriptPhase::None;
 			return false;   // no path to the mark: the beat falls back to placing the NPC there
@@ -505,17 +520,30 @@ public:
 		{
 			return BeginScriptFacing(Now);
 		}
-		const bool bStalled = (Now - ScriptProgressAt) >= ElysiumNpcGait::ScriptStallSeconds;
-		if (Status == EElysiumNpcMoveStatus::Moving && !bStalled && Now < ScriptDeadline)
+
+		// A body that has stopped closing this near the mark is where it is going to end up, so take
+		// it now rather than letting it grind. A body walking straight in never trips this — it
+		// improves every tick until path following reports Reached on the tight acceptance radius —
+		// and with spawnflag 4096 turning character collision off for the beat, neither does a
+		// walker whose mark is shared with four others. Reaching here therefore means something
+		// actually blocked the body, which is worth saying out loud.
+		const double Stalled = Now - ScriptProgressAt;
+		const bool bNearMark = Remaining <= ElysiumNpcGait::ScriptCrowdedCm;
+		if (bNearMark && Stalled >= ElysiumNpcGait::ScriptCrowdSettleSeconds)
+		{
+			UE_LOG(LogElysiumNpcEnt, Log,
+				TEXT("%s settled %.0fcm short of %s (stopped closing for %.1fs)"),
+				*DebugString(), Remaining, *ScriptMark.ToString(), Stalled);
+			return BeginScriptFacing(Now);
+		}
+		if (Status == EElysiumNpcMoveStatus::Moving
+			&& Stalled < ElysiumNpcGait::ScriptStallSeconds && Now < ScriptDeadline)
 		{
 			return EElysiumScriptMove::Moving;
 		}
-		// Two NPCs are routinely sent to marks a few centimetres apart (sp_theatre puts Skelter and
-		// VV on one), and two crowd agents cannot occupy one spot. A body that stopped improving
-		// within a capsule's reach of its mark has arrived as far as the crowd will allow.
-		if (Remaining <= ElysiumNpcGait::ScriptCrowdedCm)
+		if (bNearMark)
 		{
-			return BeginScriptFacing(Now);
+			return BeginScriptFacing(Now);   // out of budget, but standing where the beat wanted it
 		}
 		ScriptPhase = EScriptPhase::None;
 		UE_LOG(LogElysiumNpcEnt, Warning,
@@ -542,6 +570,27 @@ public:
 		if (bPatrolActive || bUseInteresting)
 		{
 			NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+		}
+	}
+
+	// --- Body state a cutscene borrows ------------------------------------------------------
+	// Both are the motor's business and both are idempotent there, so this is a plain forward. A
+	// bodiless NPC (`elysium.NpcBodies 0`, a headless test, a failed spawn) silently does neither,
+	// which is correct: there is nothing to immobilise and nothing to collide with.
+
+	virtual void SetBodyFrozen(bool bFrozen) override
+	{
+		if (Motor)
+		{
+			Motor->SetFrozen(bFrozen);
+		}
+	}
+
+	virtual void SetIgnoreCharacterCollision(bool bIgnore) override
+	{
+		if (Motor)
+		{
+			Motor->SetIgnoreCharacterCollision(bIgnore);
 		}
 	}
 

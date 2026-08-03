@@ -8,8 +8,9 @@ namespace
 	{
 	public:
 		FElysiumPcmGenerator(FElysiumSoundCache::FDecodedPtr InDecoded, bool bInLooping,
-			float StartTimeSeconds, int32 InSamplesPerCallback)
+			float StartTimeSeconds, int32 InSamplesPerCallback, FElysiumVoiceRenderProbePtr InProbe)
 			: Decoded(MoveTemp(InDecoded))
+			, Probe(MoveTemp(InProbe))
 			, SamplesPerCallback(FMath::Max(InSamplesPerCallback, 1))
 			, bLooping(bInLooping)
 		{
@@ -31,10 +32,25 @@ namespace
 			{
 				bFinished = true;
 			}
+			if (Probe)
+			{
+				Probe->SampleRate.store(Decoded->Info.SampleRate, std::memory_order_relaxed);
+				Probe->StartFrame.store(Cursor / FMath::Max(NumChannels, 1), std::memory_order_relaxed);
+			}
 		}
 
 		virtual int32 OnGenerateAudio(float* OutAudio, int32 NumSamples) override
 		{
+			// Stamped before the early-outs: the mixer having asked at all is what dates the
+			// voice's first audible frame, whether or not this call produces samples.
+			if (Probe)
+			{
+				const double Now = FPlatformTime::Seconds();
+				double Expected = -1.0;
+				Probe->FirstRenderSeconds.compare_exchange_strong(Expected, Now,
+					std::memory_order_relaxed);
+				Probe->LastRenderSeconds.store(Now, std::memory_order_relaxed);
+			}
 			if (bFinished || !Decoded || NumSamples <= 0)
 			{
 				return 0;
@@ -66,6 +82,10 @@ namespace
 			{
 				bFinished = true;
 			}
+			if (Probe && NumChannels > 0)
+			{
+				Probe->FramesRendered.fetch_add(Written / NumChannels, std::memory_order_relaxed);
+			}
 			return Written;
 		}
 
@@ -86,6 +106,7 @@ namespace
 
 	private:
 		FElysiumSoundCache::FDecodedPtr Decoded;
+		FElysiumVoiceRenderProbePtr Probe;
 		int64 Cursor = 0;
 		int32 NumChannels = 0;
 		int32 SamplesPerCallback = 1024;
@@ -99,10 +120,12 @@ void UElysiumPcmSoundWave::Initialize(
 {
 	Decoded = MoveTemp(InDecoded);
 	bLoopDecodedPcm = bInLooping;
+	Probe = MakeShared<FElysiumVoiceRenderProbe, ESPMode::ThreadSafe>();
 	if (!Decoded)
 	{
 		return;
 	}
+	Probe->SampleRate.store(Decoded->Info.SampleRate, std::memory_order_relaxed);
 	SetSampleRate(static_cast<uint32>(Decoded->Info.SampleRate));
 	NumChannels = Decoded->Info.Channels;
 	Duration = bInLooping ? 10000.0f : Decoded->Info.DurationSeconds;
@@ -123,5 +146,5 @@ ISoundGeneratorPtr UElysiumPcmSoundWave::CreateSoundGenerator(
 	const int32 CallbackSamples =
 		FMath::Max(InParams.NumFramesPerCallback, 1) * FMath::Max(NumChannels, 1);
 	return MakeShared<FElysiumPcmGenerator, ESPMode::ThreadSafe>(
-		Decoded, bLoopDecodedPcm, InParams.StartTime, CallbackSamples);
+		Decoded, bLoopDecodedPcm, InParams.StartTime, CallbackSamples, Probe);
 }

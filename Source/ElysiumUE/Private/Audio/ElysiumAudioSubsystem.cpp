@@ -1,5 +1,6 @@
 #include "ElysiumAudioSubsystem.h"
 
+#include "Audio/ElysiumPcmSoundWave.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumUserSettings.h"
 
@@ -145,6 +146,45 @@ void UElysiumAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 				*Rel, *Info->FormatName(), Info->Channels, Info->SampleRate, Info->FrameCount,
 				Info->DurationSeconds, Info->DecodeMilliseconds,
 				Info->Error.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" error=%s"), *Info->Error));
+		}), ECVF_Cheat));
+
+	// 12.2b — the lead a cue is scheduled with, term by term and labelled by where each came from,
+	// so the number is explicable instead of trusted.
+	ConsoleObjects.Add(CM.RegisterConsoleCommand(
+		TEXT("elysium.audio_latency"),
+		TEXT("Report the output path's latency: what the device says, what the render path measured."),
+		FConsoleCommandDelegate::CreateWeakLambda(this, [this]()
+		{
+			RefreshOutputLatency();
+			const FElysiumAudioLatency& L = Latency;
+			if (!L.bDeviceQueried)
+			{
+				UE_LOG(LogElysiumAudio, Display,
+					TEXT("audio latency: no device — fallback lead %.1f ms"), L.Lead() * 1000.f);
+				return;
+			}
+			UE_LOG(LogElysiumAudio, Display,
+				TEXT("audio latency on %s (%s): %d Hz, %d-frame callback x%d, device period %d, endpoint %d"),
+				*L.DeviceName, *L.PlatformApi, L.SampleRate, L.CallbackFrames, L.OutputBuffers,
+				L.DevicePeriodFrames, L.EndpointFrames);
+			UE_LOG(LogElysiumAudio, Display,
+				TEXT("  mixer queue %.1f ms (queried) + endpoint %.1f ms (modelled) + submit->render %.1f ms "
+					 "(measured over %d dialogue lines, peak %.1f, of which decode %.1f) = lead %.1f ms"),
+				L.MixerQueueSeconds * 1000.f, L.EndpointSeconds * 1000.f,
+				L.SubmitToRenderSeconds * 1000.f, L.SubmitToRenderSamples,
+				L.SubmitToRenderPeakSeconds * 1000.f, L.DecodeSeconds * 1000.f,
+				L.Lead() * 1000.f);
+			for (const FElysiumAudioVoice& Voice : Voices)
+			{
+				const double Head = Voice.RenderHeadSeconds();
+				if (Head >= 0.0)
+				{
+					UE_LOG(LogElysiumAudio, Display,
+						TEXT("  voice %s: render head %.3fs of %.3fs, submit->render %.1f ms"),
+						*Voice.Event.ResolvedPath, Head, Voice.Event.DurationSeconds,
+						Voice.Render->SubmitToRenderSeconds() * 1000.0);
+				}
+			}
 		}), ECVF_Cheat));
 }
 
@@ -344,6 +384,68 @@ const FElysiumAudioVoice* UElysiumAudioSubsystem::FindVoice(FElysiumVoiceHandle 
 		: nullptr;
 }
 
+double FElysiumAudioVoice::RenderHeadSeconds() const
+{
+	if (!Render || !Render->HasRendered())
+	{
+		return -1.0;
+	}
+	const double Head = Render->RenderHeadSeconds();
+	// A loop's generator wraps its cursor, so the head keeps climbing past the file. Folding it
+	// back is what makes the reading a *position* rather than a total.
+	return (Request.bLooping && Event.DurationSeconds > 0.f)
+		? FMath::Fmod(Head, static_cast<double>(Event.DurationSeconds))
+		: Head;
+}
+
+void UElysiumAudioSubsystem::RefreshOutputLatency()
+{
+	const FElysiumAudioLatency Queried = ElysiumAudioLatency::QueryDevice(GetWorld());
+	// The measured half belongs to the session, not to the device query, so it survives a refresh.
+	const float Mean = Latency.SubmitToRenderSeconds;
+	const float Peak = Latency.SubmitToRenderPeakSeconds;
+	const float Decode = Latency.DecodeSeconds;
+	const int32 Samples = Latency.SubmitToRenderSamples;
+	Latency = Queried;
+	Latency.SubmitToRenderSeconds = Mean;
+	Latency.SubmitToRenderPeakSeconds = Peak;
+	Latency.DecodeSeconds = Decode;
+	Latency.SubmitToRenderSamples = Samples;
+	bLatencyQueried = true;
+}
+
+void UElysiumAudioSubsystem::ObserveRenderLatency(FElysiumAudioVoice& Voice)
+{
+	if (Voice.bRenderLatencyObserved || !Voice.Render || !Voice.Render->HasRendered())
+	{
+		return;
+	}
+	// Dialogue only. The lead this feeds is the one a scene schedules speech with, and a 209-second
+	// ambience bed or a 223-second music stream costs an order of magnitude more to decode than a
+	// spoken line — folding those in would lead every line by a delay no line ever pays.
+	if (Voice.Request.Category != EElysiumAudioCategory::Dialogue)
+	{
+		return;
+	}
+	const double Observed = Voice.Render->SubmitToRenderSeconds();
+	if (Observed < 0.0)
+	{
+		return;
+	}
+	Voice.bRenderLatencyObserved = true;
+	SubmitToRenderTotal += Observed;
+	if (const FElysiumSoundInfo* Info = DecodeResults.Find(Voice.Event.ResolvedPath))
+	{
+		DecodeTotal += Info->DecodeMilliseconds * 0.001;
+	}
+	++Latency.SubmitToRenderSamples;
+	Latency.SubmitToRenderSeconds =
+		static_cast<float>(SubmitToRenderTotal / Latency.SubmitToRenderSamples);
+	Latency.DecodeSeconds = static_cast<float>(DecodeTotal / Latency.SubmitToRenderSamples);
+	Latency.SubmitToRenderPeakSeconds =
+		FMath::Max(Latency.SubmitToRenderPeakSeconds, static_cast<float>(Observed));
+}
+
 double UElysiumAudioSubsystem::AudioClock() const
 {
 	if (const UWorld* World = GetWorld())
@@ -383,6 +485,11 @@ FElysiumVoiceHandle UElysiumAudioSubsystem::Submit(const FElysiumAudioRequest& R
 	Voice.Event.MediaOffsetSeconds = FMath::Max(Request.StartOffsetSeconds, 0.f);
 	Voice.Event.ScheduledAudioClock =
 		Request.ScheduledAudioClock >= 0.0 ? Request.ScheduledAudioClock : AudioClock();
+	// 12.2b — the submit instant on the wall clock, stamped here because everything that follows
+	// (the file read, the mp3 decode, the game-thread realization) happens after this line and is
+	// invisible to ScheduledAudioClock. The probe itself is minted by the wave, so the stamp rides
+	// on the voice until there is one to hand it to.
+	Voice.SubmitSeconds = FPlatformTime::Seconds();
 
 	FElysiumAudioRequestSnapshot& Snapshot = Snapshots.AddDefaulted_GetRef();
 	Snapshot.Handle = Voice.Handle;
@@ -529,6 +636,17 @@ void UElysiumAudioSubsystem::RealizeVoice(
 
 	Voice.Comp = Comp;
 	Voice.Wave = Wave;
+	// The probe is created with the wave and written by its generator on the render thread. Handing
+	// it the submit stamp here closes the one gap ScheduledAudioClock cannot see: how long the file
+	// read, the decode and this realization actually took before a single sample was pulled.
+	if (const UElysiumPcmSoundWave* PcmWave = Cast<UElysiumPcmSoundWave>(Wave))
+	{
+		Voice.Render = PcmWave->RenderProbe();
+		if (Voice.Render)
+		{
+			Voice.Render->SubmitSeconds.store(Voice.SubmitSeconds, std::memory_order_relaxed);
+		}
+	}
 	Voice.Event.DurationSeconds = Decoded->Info.DurationSeconds;
 	Comp->OnAudioFinishedNative.AddUObject(this, &UElysiumAudioSubsystem::HandleAudioFinished);
 	const double Now = AudioClock();
@@ -782,6 +900,9 @@ void UElysiumAudioSubsystem::CompleteAt(int32 VoiceIndex, EElysiumVoiceCompletio
 		return;
 	}
 	FElysiumAudioVoice& Voice = Voices[VoiceIndex];
+	// A short line can be submitted, rendered and finished between two game frames, so the reading
+	// is taken here too rather than only on the tick that sees the voice alive.
+	ObserveRenderLatency(Voice);
 	UAudioComponent* Comp = Voice.Comp.Get();
 	EElysiumVoiceState TerminalState = EElysiumVoiceState::Canceled;
 	if (Completion == EElysiumVoiceCompletion::NaturalEnd)
@@ -826,9 +947,16 @@ void UElysiumAudioSubsystem::HandleAudioFinished(UAudioComponent* Component)
 void UElysiumAudioSubsystem::TickAudio(float /*DeltaSeconds*/)
 {
 	const double Now = AudioClock();
+	if (!bLatencyQueried && GetWorld() != nullptr)
+	{
+		// Deferred to the first tick rather than done in Initialize: a GameInstance subsystem comes
+		// up before there is a world, and the device is reached through the world.
+		RefreshOutputLatency();
+	}
 	for (int32 Index = Voices.Num() - 1; Index >= 0; --Index)
 	{
 		FElysiumAudioVoice& Voice = Voices[Index];
+		ObserveRenderLatency(Voice);
 		if (Voice.Event.State == EElysiumVoiceState::PendingDecode ||
 			Voice.Event.State == EElysiumVoiceState::Scheduled)
 		{

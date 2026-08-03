@@ -107,6 +107,18 @@ void UElysiumBrushComponent::SetDormant(bool bDormant)
 	else
 	{
 		ApplySolidity(BuiltSolidity);
+		// A trigger waking up under something already standing in it must still raise its
+		// begin-touch. Unreal only produces overlap edges from movement: SetGenerateOverlapEvents
+		// merely clears the skip flag (UPrimitiveComponent::OnGenerateOverlapEventsChanged), and
+		// the profile change's own UpdateOverlaps runs while events are still off. Nothing here
+		// moves, so without an explicit re-query a ScriptUnhide'd volume stays inert until
+		// something crosses its boundary — which never happens for a `trigger_changelevel`
+		// authored to span the map and fire wherever the player happens to be.
+		if (GetGenerateOverlapEvents() && IsQueryCollisionEnabled())
+		{
+			ClearSkipUpdateOverlaps();
+			UpdateOverlaps(nullptr, /*bDoNotifies=*/true);
+		}
 	}
 	if (Visual)
 	{

@@ -341,24 +341,56 @@ the one shared animation. Nested `SUBSCENE` events are walked recursively by the
 ### `position_start` / `position_end`
 
 `position_start == 1` (70 of the 105 entities that set the key — all twelve of `sp_theatre`'s
-and `sp_tutorial_1`'s alley fight) makes the scene **own the actors' transforms**: at `Start`,
-`FUN_10081ed0` saves every actor's origin, angles, solidity and flags into the scene's actor
-record, then teleports the actor to the scene entity's own origin/angles so the shared
-cinematic animation lines up; every frame `FUN_100846c0` re-pins them; and at
-`OnSceneFinished` the saved transform, solid type and solid flags are restored.
+and `sp_tutorial_1`'s alley fight) makes the scene **own the actors' bodies**. At `Start`,
+`FUN_10081ed0` saves every actor's origin, angles, move type, move collide, solid type and solid
+flags into the scene's actor record, then teleports the actor to the scene entity's own
+origin/angles so the shared cinematic animation lines up — and **immobilises it**: `SetMoveType(0)`
+(`MOVETYPE_NONE`), `SetSolid(0)` (`SOLID_NONE`) and `AddSolidFlags(flags | 4)`
+(`FSOLID_NOT_SOLID`), with the no-interpolation bit raised over the jump.
+
+**The actors are placed once, not re-pinned.** They hold position because they cannot move, not
+because anything rewrites their transform. The per-frame call the playback think makes when
+`position_start == 1` is `FUN_100846c0`, which walks the actors propagating one float on each
+studio model (read through vftable `+0x3e8`, written through `+0x4e0`) and recurses into
+`SUBSCENE` events; it never touches origin or angles.
+
+At `OnSceneFinished`, `FUN_10081b60` restores **only** the four body fields — move type, move
+collide, solid flags, solid type. The saved transform is *not* restored, which is why
+`position_end == 2` exists as a separate value.
 
 `position_end` decides where the actors are left, applied over every actor at completion
-(`FUN_100821f0`):
+(`FUN_100821f0`). The whole pass is wrapped in `if (position_end != 0)`, so `0` is a genuine
+early-out that leaves each actor's entity wherever `position_start` put it:
 
 | Value | Effect | Uses |
 |---:|---|---:|
-| 0 | leave the actors where the animation ended | 60 |
+| 0 | nothing — the applier returns before its loop | 60 |
 | 1 | move each actor to the scene entity's origin and angles | 1 |
 | 2 | restore the origin/angles saved at `Start` | 2 |
 | 3 | snap each actor's origin onto its **`bip01`** bone (settle the entity under the pose the animation finished in) | 43 |
 
-The corpus is effectively 0-or-3. Either way the actor is flagged and re-activated for
-normal simulation afterwards.
+Values 1 and 2 then raise the actor's effect bit `0x10` and re-activate it for normal simulation;
+value 3 deliberately branches past both.
+
+### The effect bit a scripted jump raises
+
+`position_start`'s placement and `position_end` 1 and 2 all raise bit `0x10`, and so does
+`scripted_sequence`'s instantaneous placement — every scripted teleport in the engine carries it.
+It arrives by two routes:
+
+- written straight into the entity's effects field at `+0x19c`; and
+- queued through **`CBaseAnimating::AddEffectsForNextSequence`** (`FUN_10090bc0`, trace string
+  `0x1054f4d8`), which ORs the mask into a *pending* field at `+0x5b0`.
+
+**`CBaseAnimating::ResetSequenceInfo`** drains the pending field every time a new sequence starts:
+`m_fEffects |= pending | 0x300; pending = 0`. So the deferred half lands on the entity at the next
+animation change rather than at the position write, and bits `0x100`/`0x200` are raised on every
+sequence reset regardless.
+
+**What bit `0x10` means is not established.** `m_fEffects` is networked — `ScriptHide` saves it at
+`[this+0xf8]` — so its consumer is in `client.dll`, and this word is demonstrably not the stock
+`EF_` enum (nothing in SDK 2003 raises two bits on every sequence reset). Do not assume it is
+`EF_NOINTERP` on the strength of the setter's name.
 
 `hide_ents` is set on 116 entities but **enabled on only 22** (including the tutorial's two
 Jack lines); when set it hides the surrounding entities for the scene's duration and
@@ -411,7 +443,9 @@ Per call:
    Pending events are dispatched in start-time order;
 6. if the scene reports its simulation finished, call `OnSceneFinished` (`+0x3dc`) — which
    restores the actors, fires **`OnCompletion`**, clears the events and unhides;
-7. otherwise, if `position_start == 1`, re-pin the actors.
+7. otherwise, if `position_start == 1`, run `FUN_100846c0` over the cast — the studio-model
+   propagate described under *`position_start` / `position_end`*, which resolves every actor by
+   name again but does not move it.
 
 ### The completion test
 
@@ -433,7 +467,8 @@ reset the simulation → bind the actors → apply the anim set (`FUN_100843d0`)
 save-and-teleport (`FUN_10081ed0`) → arm the think → `hide_ents` → and fires **`OnStart` last**.
 
 `FUN_10081b60` is the mirror: stop the live events → reset → clear the playing/paused flags and
-zero the clock → apply **`position_end`** → restore the actors → fire **`OnCompletion`** → unhide.
+zero the clock → apply **`position_end`** → restore each actor's move type, move collide, solid
+type and solid flags → fire **`OnCompletion`** → unhide.
 
 **`Resume` does not re-base the clock.** `FUN_10082b00` re-applies the anim set and writes
 `m_flLastUpdateTime` (`+0x4a4`) and the next-think (`+0x17c`) — **not** `m_flStartTime` (`+0x4a8`),
@@ -613,8 +648,8 @@ site, since the event arms pass an event `param` instead.
 
 One 336-second `sp_theatre` capture records **281,353** actor resolutions against 40
 animation-set applications and 20 playback transitions. The cause is `position_start`,
-which all twelve of the map's scenes set: the scene owns its cast's transforms and
-`FUN_100846c0` re-pins every actor on every frame it plays, resolving each of them by name
+which all twelve of the map's scenes set: the scene owns its cast's bodies and
+`FUN_100846c0` runs over every actor on every frame it plays, resolving each of them by name
 again. Twelve scenes of roughly seven actors at 29.3 simulation steps per second accounts
 for the count, and two independent runs produced the same **280,857** resolutions outside
 any start or anim-set frame — identical to the record, which is what an authored scene
@@ -668,8 +703,12 @@ diverges as follows, each an explicit call:
   over a base sequence; this runtime has a single clip slot per body, so both play through it. Same
   class of simplification as `scripted_sequence`'s missing locomotion. `sequenceduration` is parsed
   and surfaced, not acted on.
-- **`position_start` round-trips origin and angles only.** VtMB also saves and restores each actor's
-  solidity and solid flags; there is no per-entity solid state here to save.
+- **`position_start` immobilises the body rather than restoring four separate fields.** The engine
+  saves and restores move type, move collide, solid type and solid flags individually; this runtime
+  has one reversible freeze (`FElysiumEntity::SetBodyFrozen`) that stops the movement motor and
+  drops the capsule's collision, and it records only whether a given actor is frozen. The cast is
+  placed once and held by the same mechanism the engine uses — an immobile body, not a per-frame
+  transform write — but the granularity of the saved state is coarser.
 - **A scene's end is clamped** by `elysium.SceneMaxDuration` (600 s). The corpus contains authored
   ranges that are plainly wrong — one event runs to ~1.5 million seconds — and unbounded, such a
   scene never satisfies the completion test, so `OnCompletion` never fires. On `sp_tutorial_1` that
@@ -715,7 +754,7 @@ patch-first, with the `sound/` prefix stripped — so a `SceneFile` is that path
 | `DispatchStartEvent` + its jump table | `FUN_10082ee0`, table `0x10083500` |
 | `OnSceneFinished` | `0x10081b60` |
 | speak audio resolution | `FUN_10081700` |
-| actor save / re-pin / anim-set / `position_end` | `FUN_10081ed0` / `FUN_100846c0` / `FUN_100843d0` / `FUN_100821f0` |
+| actor save-and-place / per-frame cast pass / anim-set / `position_end` | `FUN_10081ed0` / `FUN_100846c0` / `FUN_100843d0` / `FUN_100821f0` |
 | `CInstancedSceneEntity` | vftable `0x1044f584`, think `0x10084c80` |
 | `CChoreoEvent` getters | type `0x10075b70`, name `0x10075c00`, `param` `0x10075c50`, `param2` `0x10075ca0`, start `0x10075e70`, end `0x10075f10`, has-end `0x10075f30`, actor `0x10076690` |
 | `CChoreoActor` getters | name `0x10072d90`, `bonerename` `0x10072e20` / `0x10072e40` |

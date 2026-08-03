@@ -330,10 +330,21 @@ here rather than to `IElysiumPresenter`, because the camera is part of the body.
 An NPC's visible skeleton and native motor use that same outbound boundary. The substrate asks
 `IElysiumEmbodiment` to build/play the glTF body, select a manifest clip by ACT activity, and create
 an engine-neutral `IElysiumNpcMotor`. The implementation is an `ACharacter` with Detour crowd path
-following; the interface exposes only move/stop/teleport/enable/sample. Recast, controllers and
-movement components therefore never enter the plain-C++ entity layer, while route/place ownership,
-I/O and serialization never enter Unreal AI state. Visibility and capsule collision remain enabled
-for a standing character. When an enabled body crosses the map-ready barrier, one uncached
+following; the interface exposes only move/stop/teleport/enable/freeze/ignore-collision/sample.
+Recast, controllers and movement components therefore never enter the plain-C++ entity layer, while
+route/place ownership, I/O and serialization never enter Unreal AI state. Visibility and capsule
+collision remain enabled for a standing character.
+
+**A cutscene borrows body state, and the two ways it does so are deliberately separate.** A
+choreographed scene's `position_start` immobilises its cast — the engine's `MOVETYPE_NONE` +
+`SOLID_NONE` + `FSOLID_NOT_SOLID` — while the cast stays on camera, and a `scripted_sequence`
+carrying spawnflag 4096 turns character-vs-character collision off for the beat's duration so
+several NPCs can share one mark. Neither is `SetEnabled(false)`, which also takes the body off
+screen. They reach the motor as `SetFrozen` and `SetIgnoreCharacterCollision`, and the substrate
+calls them through `FElysiumEntity::SetBodyFrozen` / `SetIgnoreCharacterCollision` so a scene or a
+beat never needs to know whether its actor has a body at all. Solidity is therefore three
+independent decisions — enabled, frozen, character-ignoring — resolved in one place on the body and
+re-applied whenever any of them moves. When an enabled body crosses the map-ready barrier, one uncached
 `FindFloor` plus `AdjustFloorHeight` pass settles its approximate authored feet origin against the
 live capsule collision, then its movement component remains inactive and its controller absent until
 the first request. Stop, arrival, failure and path-following loss all return the movement component

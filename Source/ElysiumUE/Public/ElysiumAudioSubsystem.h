@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "ElysiumAudioLatency.h"
 #include "ElysiumSoundCache.h"
 #include "ElysiumAudioSubsystem.generated.h"
 
@@ -227,6 +228,19 @@ struct FElysiumAudioVoice
 	FElysiumVoiceEvent Event;
 	double DestroyAudioClock = -1.0;
 	double InactiveSinceAudioClock = -1.0;
+	// FPlatformTime::Seconds() at Submit, ahead of the async decode.
+	double SubmitSeconds = -1.0;
+	// 12.2b — the mixer's render head for this voice, written by the sound generator on the audio
+	// render thread. Null until the voice is realized, and on any wave the PCM path did not build.
+	FElysiumVoiceRenderProbePtr Render;
+	// Latched once the voice's submit → first-pull has been folded into the rolling measurement, so
+	// a voice that lives for ten seconds contributes one reading rather than one per tick.
+	bool bRenderLatencyObserved = false;
+
+	// Where the mixer has actually reached inside this voice's media, in seconds. Distinct from
+	// Event.ScheduledAudioClock, which is stamped at submit and so cannot see the decode.
+	// Negative when the mixer has not pulled from this voice yet.
+	double RenderHeadSeconds() const;
 };
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FElysiumVoiceEventDelegate, const FElysiumVoiceEvent&);
@@ -288,7 +302,19 @@ public:
 	// place a live voice inside its own media instead of inferring it from game time.
 	double AudioClock() const;
 
+	// 12.2b — the output path's latency, term by term, and the lead a cue must be scheduled with so
+	// its first sample is heard at the authored instant. The device half is queried once and cached
+	// (it only changes on a device swap); the submit → first-pull half accumulates over every voice
+	// that plays, so the reading gets better the longer the session runs.
+	const FElysiumAudioLatency& OutputLatency() const { return Latency; }
+	float OutputLeadSeconds() const { return Latency.Lead(); }
+	// Re-ask the device. Called on the first voice of a session and by `elysium.audio_latency`.
+	void RefreshOutputLatency();
+
 private:
+	// Fold one live voice's submit → first-pull into the rolling measurement, once.
+	void ObserveRenderLatency(FElysiumAudioVoice& Voice);
+
 	FElysiumSoundCache::FDecodedPtr LoadAndRecord(const FString& Rel);
 	FElysiumAudioVoice* FindVoice(FElysiumVoiceHandle Handle);
 	const FElysiumAudioVoice* FindVoice(FElysiumVoiceHandle Handle) const;
@@ -318,4 +344,9 @@ private:
 	bool bCatalogReady = false;
 	int32 PendingPrefetches = 0;
 	FString CatalogLoadError;
+
+	FElysiumAudioLatency Latency;
+	bool bLatencyQueried = false;
+	double SubmitToRenderTotal = 0.0;
+	double DecodeTotal = 0.0;
 };

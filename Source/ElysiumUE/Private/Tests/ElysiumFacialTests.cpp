@@ -1220,6 +1220,10 @@ bool FElysiumSceneJawTest::RunTest(const FString&)
 
 	FElysiumRecordingServices Services;
 	Services.FlexControllers = { TEXT("jaw_drop") };
+	// A speak event is dispatched a lead early so its sample is HEARD at the authored instant; the
+	// jaw below runs on the unoffset clock. The lead is normally the audio path's own (12.2b), so
+	// it is pinned here rather than inherited — this test is about the jaw, not about the device.
+	Services.OutputLead = 0.1f;
 
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 	World.Load(MoveTemp(Defs));
@@ -1243,7 +1247,7 @@ bool FElysiumSceneJawTest::RunTest(const FString&)
 		Services.MouthOpenOf(Marked), 0.f);
 
 	// --- t = 0.95: the speak event has been dispatched, the line has not started ---------------
-	// `elysium.SceneMixahead` pulls a speak event's start 0.1 s earlier so the sample is HEARD at the
+	// The audio lead pulls a speak event's start 0.1 s earlier here so the sample is HEARD at the
 	// authored instant. The jaw runs on the authored clock instead, and the audio catches up to it —
 	// so a jaw reading the dispatch would already be half open here.
 	T = 0.95; World.Tick(T);

@@ -26,8 +26,9 @@
 //   - `gesture` and `sequence` both play through the one clip player. Source layers a gesture
 //     additively over a sequence; this runtime has a single clip slot, so the two collapse — the
 //     same class of stated simplification as `scripted_sequence`'s missing locomotion.
-//   - `position_start` round-trips origin and angles only. VtMB also saves and restores each
-//     actor's solidity and solid flags; there is no per-entity solid state here to save.
+//   - `position_start` holds its cast by rewriting the transform every frame. VtMB places each
+//     actor once and immobilises it (MOVETYPE_NONE / SOLID_NONE / FSOLID_NOT_SOLID), restoring
+//     those at completion; the end state matches, the mechanism does not.
 //   - The `m_bAutomated` pause-automation block and the intro-skip global at 0x106e7e91 are not
 //     reproduced — nothing in any map or script reaches either.
 //
@@ -61,11 +62,17 @@ namespace
 {
 	// The sound system's lead. VtMB caches `snd_mixahead` in the scene's constructor and hands it to
 	// the scene every think, which pulls each speak event's start earlier by that much so the sample
-	// reaches the ear on time. 0.1 is Source's own default.
+	// reaches the ear on time.
+	//
+	// 12.2b — the behaviour that reproduces is "speech is heard at the authored instant"; the 0.1 is
+	// Source's *mixer's* lead, and inheriting it while running Unreal's mixer reproduces the wrong
+	// half. Negative therefore means "ask the audio path what its own lead is", which is the default;
+	// a value >= 0 forces a constant, which is how VtMB's 0.1 stays A/B-able beside the derived one.
 	TAutoConsoleVariable<float> CVarSceneMixahead(
 		TEXT("elysium.SceneMixahead"),
-		0.1f,
-		TEXT("Audio lead (seconds) a choreo scene schedules its speak events against."),
+		-1.f,
+		TEXT("Audio lead (seconds) a choreo scene schedules its speak events against. "
+			 "Negative derives it from the running audio device; >= 0 forces that constant."),
 		ECVF_Default);
 
 	// A ceiling on how long a scene may run before it is allowed to finish. The corpus contains
@@ -258,6 +265,7 @@ public:
 		FVector SavedOrigin = FVector::ZeroVector;
 		FVector SavedAngles = FVector::ZeroVector;
 		bool bSaved = false;
+		bool bBodyFrozen = false;           // position_start immobilised it and owes it a thaw
 		bool bPlayingClip = false;          // we started a clip on it and owe it a reset
 		bool bCachedBip01 = false;
 		FVector CachedBipOrigin = FVector::ZeroVector;
@@ -462,7 +470,8 @@ public:
 	// --- position_start: the scene owns its actors' transforms --------------------------------
 	// 70 of the 105 entities that set the key use 1, including the alley fight and all twelve of
 	// sp_theatre's. At Start the actors are saved and teleported onto the scene entity's own
-	// transform so the shared cinematic animation lines up; every frame they are re-pinned there.
+	// transform so the shared cinematic animation lines up, and this runtime holds them there by
+	// rewriting the transform each frame (VtMB instead immobilises the body — see the header).
 	void SaveAndPlaceActors()
 	{
 		if (PositionStart != 1 || !ActorsEnabled())
@@ -478,22 +487,46 @@ public:
 				Bound[i].bSaved = true;
 				A->SetRuntimeOrigin(Origin);
 				A->SetRuntimeAngles(Angles);
+				// The placement is the only one the scene makes. What holds the actor here for the
+				// next two minutes is that its body stops simulating, exactly as VtMB's
+				// SetMoveType(MOVETYPE_NONE)/SetSolid(SOLID_NONE)/AddSolidFlags(FSOLID_NOT_SOLID)
+				// does — not a per-frame rewrite of a transform a live movement body is fighting.
+				A->SetBodyFrozen(true);
+				Bound[i].bBodyFrozen = true;
 			}
 		}
 	}
 
-	void RepinActors()
+	// A load rebuilds every body from the payload, so a scene restored mid-play owns actors whose
+	// bodies are simulating again. The record says they should be frozen; make it true.
+	void RefreezeRestoredActors()
 	{
-		if (PositionStart != 1 || !ActorsEnabled())
-		{
-			return;
-		}
 		for (int32 i = 0; i < Bound.Num(); ++i)
 		{
+			if (Bound[i].bBodyFrozen)
+			{
+				if (FElysiumEntity* A = ActorAt(i))
+				{
+					A->SetBodyFrozen(true);
+				}
+			}
+		}
+	}
+
+	// Hand the bodies back. Runs on completion AND on cancel: a cancelled scene skips `position_end`
+	// but must never leave its cast frozen, or the map keeps a cast it can no longer move.
+	void ThawActors()
+	{
+		for (int32 i = 0; i < Bound.Num(); ++i)
+		{
+			if (!Bound[i].bBodyFrozen)
+			{
+				continue;
+			}
+			Bound[i].bBodyFrozen = false;
 			if (FElysiumEntity* A = ActorAt(i))
 			{
-				A->SetRuntimeOrigin(Origin);
-				A->SetRuntimeAngles(Angles);
+				A->SetBodyFrozen(false);
 			}
 		}
 	}
@@ -592,6 +625,20 @@ public:
 		Hidden.Reset();
 	}
 
+	// The lead this scene's speak events are scheduled with, resolved once per Begin — VtMB caches
+	// `snd_mixahead` in the scene's constructor for the same reason, so a mid-scene device change
+	// cannot shift a running timeline under itself.
+	float SceneLead() const
+	{
+		const float Forced = CVarSceneMixahead.GetValueOnGameThread();
+		if (Forced >= 0.f)
+		{
+			return Forced;
+		}
+		return (World && World->Audio()) ? World->Audio()->OutputLeadSeconds()
+										 : ElysiumAudioLatency::FallbackLeadSeconds;
+	}
+
 	// --- Inputs --------------------------------------------------------------------------------
 	// FUN_100829e0's order, which is what decides when OnStart fires relative to actor placement:
 	// reset -> bind -> anim set -> position_start -> arm the think -> hide_ents -> OnStart LAST.
@@ -603,7 +650,7 @@ public:
 		}
 
 		Activator = Args.Activator;
-		Player.Begin(Scene, CVarSceneMixahead.GetValueOnGameThread(),
+		Player.Begin(Scene, SceneLead(),
 			CVarSceneMaxDuration.GetValueOnGameThread());
 		bPlaying = true;
 		bPaused = false;
@@ -672,6 +719,7 @@ public:
 			return;
 		}
 		Player.StopActiveEvents(*this);
+		ThawActors();          // Cancel skips position_end (FUN_10082b80) but still frees the cast
 		ReleaseActorClips();
 		RefreshFacialPose();   // the live set is empty now, so this writes every driven key back to rest
 		ShutJaws();
@@ -715,6 +763,7 @@ public:
 		NextThink = ELYSIUM_NEVER_THINK;
 
 		ApplyPositionEnd();
+		ThawActors();          // FUN_10081b60's order: position_end, then the cast's body state back
 		ReleaseActorClips();
 		RefreshFacialPose();   // as in Cancel: the faces this scene drove go back to rest
 		ShutJaws();
@@ -766,7 +815,9 @@ public:
 		RefreshFacialPose();
 		RefreshJaw(SceneTime, static_cast<float>(Now - JawTime));
 		JawTime = Now;
-		RepinActors();
+		// No per-frame placement pass. VtMB's equivalent think step (FUN_100846c0) resolves the cast
+		// and refreshes each actor's animation layers; it never touches origin or angles. The actors
+		// hold position because SaveAndPlaceActors froze their bodies.
 	}
 
 	// ============================================================================================
@@ -1494,7 +1545,7 @@ public:
 		{
 			if (bPlaying && HasScene())
 			{
-				Player.Begin(Scene, CVarSceneMixahead.GetValueOnGameThread(),
+				Player.Begin(Scene, SceneLead(),
 					CVarSceneMaxDuration.GetValueOnGameThread());
 				BindActors();
 				const double Now = World ? World->NowSeconds() : 0.0;
@@ -1542,6 +1593,7 @@ public:
 			Ar << B.SavedOrigin;
 			Ar << B.SavedAngles;
 			Ar << B.bSaved;
+			Ar << B.bBodyFrozen;
 			Ar << B.bPlayingClip;
 			Ar << B.bCachedBip01;
 			Ar << B.CachedBipOrigin;
@@ -1607,7 +1659,7 @@ public:
 
 		if (bPlaying && HasScene())
 		{
-			Player.Begin(Scene, CVarSceneMixahead.GetValueOnGameThread(),
+			Player.Begin(Scene, SceneLead(),
 				CVarSceneMaxDuration.GetValueOnGameThread());
 			if (Bound.Num() != Scene->Actors.Num())
 			{
@@ -1619,6 +1671,7 @@ public:
 			RefreshFacialPose();
 			RefreshJaw(Elapsed, 0.f);
 			NextThink = static_cast<float>(Now);
+			RefreezeRestoredActors();
 		}
 		else
 		{

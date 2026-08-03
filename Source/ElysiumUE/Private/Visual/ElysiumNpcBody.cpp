@@ -5,6 +5,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "DetourCrowdAIController.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Navigation/CrowdFollowingComponent.h"
 #include "Navigation/PathFollowingComponent.h"
 
 AElysiumNpcBody::AElysiumNpcBody(const FObjectInitializer& ObjectInitializer)
@@ -72,16 +73,17 @@ void AElysiumNpcBody::Tick(float DeltaSeconds)
 }
 
 bool AElysiumNpcBody::MoveTo(const FVector& FeetDestination, float AcceptanceRadiusCm,
-	float SpeedCmPerSecond)
+	float SpeedCmPerSecond, bool bAllowPartialPath)
 {
 	bFaceRequested = false;
-	if (!bRuntimeReady || !bRequestedEnabled)
+	if (!bRuntimeReady || !bRequestedEnabled || bFrozen)
 	{
-		return false;
+		return false;   // a scene owns this body; it does not take travel requests
 	}
 	if (!GetController())
 	{
 		SpawnDefaultController();
+		ApplyCrowdState();   // the agent exists only now; re-apply what the beat already asked for
 	}
 	AAIController* AI = Cast<AAIController>(GetController());
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
@@ -98,7 +100,7 @@ bool AElysiumNpcBody::MoveTo(const FVector& FeetDestination, float AcceptanceRad
 	const EPathFollowingRequestResult::Type Result = AI->MoveToLocation(
 		FeetDestination, RequestedAcceptanceCm, /*bStopOnOverlap=*/false,
 		/*bUsePathfinding=*/true, /*bProjectDestinationToNavigation=*/true,
-		/*bCanStrafe=*/false, nullptr, /*bAllowPartialPath=*/false);
+		/*bCanStrafe=*/false, nullptr, bAllowPartialPath);
 	bMoveRequested = Result != EPathFollowingRequestResult::Failed;
 	if (!bMoveRequested)
 	{
@@ -146,14 +148,72 @@ void AElysiumNpcBody::SetEnabled(bool bEnabled)
 	ApplyEnabledState();
 }
 
+void AElysiumNpcBody::SetFrozen(bool bInFrozen)
+{
+	if (bFrozen == bInFrozen)
+	{
+		return;
+	}
+	bFrozen = bInFrozen;
+	if (bFrozen)
+	{
+		Stop();   // drop the outstanding request before the body stops simulating
+	}
+	ApplyEnabledState();
+}
+
+void AElysiumNpcBody::SetIgnoreCharacterCollision(bool bIgnore)
+{
+	if (bIgnoreCharacterCollision == bIgnore)
+	{
+		return;
+	}
+	bIgnoreCharacterCollision = bIgnore;
+	ApplyCollisionState();
+	ApplyCrowdState();
+}
+
+void AElysiumNpcBody::ApplyCrowdState()
+{
+	// Blocking is only half of it: a crowd agent steers around its neighbours long before it
+	// touches them, which is the jam the flag exists to remove. Separation is per-agent state on
+	// the follower, so it is set here and not through the movement component. The controller is
+	// spawned lazily by the first accepted MoveTo, so this runs from there as well as from the
+	// setter — whichever happens second is the one that sticks.
+	const AAIController* AI = Cast<AAIController>(GetController());
+	UCrowdFollowingComponent* Crowd = AI
+		? Cast<UCrowdFollowingComponent>(AI->GetPathFollowingComponent()) : nullptr;
+	if (!Crowd)
+	{
+		return;
+	}
+	Crowd->SetCrowdSeparation(!bIgnoreCharacterCollision);
+	Crowd->SetCrowdCollisionQueryRange(bIgnoreCharacterCollision ? 0.0f : 200.0f);
+}
+
+void AElysiumNpcBody::ApplyCollisionState()
+{
+	const bool bEnabled = bRuntimeReady && bRequestedEnabled;
+	// A frozen body is non-solid outright — VtMB's SOLID_NONE + FSOLID_NOT_SOLID.
+	SetActorEnableCollision(bEnabled && !bFrozen);
+	// An ignoring body keeps its world collision and stops answering only the pawn channel, which
+	// is what CBaseAnimating::IsIgnoreCollisionEntity returning true for NPCs and the player means.
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCollisionResponseToChannel(ECC_Pawn,
+			bIgnoreCharacterCollision ? ECR_Ignore : ECR_Block);
+	}
+}
+
 void AElysiumNpcBody::ApplyEnabledState()
 {
 	const bool bEnabled = bRuntimeReady && bRequestedEnabled;
+	// Frozen deliberately does NOT hide: a scene's cast is immobilised while staying on camera.
 	SetActorHiddenInGame(!bEnabled);
-	SetActorEnableCollision(bEnabled);
+	ApplyCollisionState();
 	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
 	{
-		if (!bEnabled)
+		if (!bEnabled || bFrozen)
 		{
 			Stop();
 		}

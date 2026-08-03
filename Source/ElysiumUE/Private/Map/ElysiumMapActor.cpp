@@ -1178,6 +1178,12 @@ FString AElysiumMapActor::ActiveSchemeRel() const
 	return SchemeManager ? SchemeManager->ActiveSchemeRel() : FString();
 }
 
+float AElysiumMapActor::OutputLeadSeconds() const
+{
+	const UElysiumAudioSubsystem* Audio = GetAudioSubsystem();
+	return Audio ? Audio->OutputLeadSeconds() : ElysiumAudioLatency::FallbackLeadSeconds;
+}
+
 void AElysiumMapActor::RequestLandmarkTravel(const FString& Map, const FString& Landmark,
 	const FVector& Offset, float Yaw)
 {
