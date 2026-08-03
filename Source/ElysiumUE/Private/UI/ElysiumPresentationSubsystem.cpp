@@ -75,21 +75,21 @@ void UElysiumPresentationSubsystem::Initialize(FSubsystemCollectionBase& Collect
 
 	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
 		TEXT("elysium.viewstate"),
-		TEXT("elysium.viewstate — dump the published view state (app, surface, reticle, fade, sign, dialogue, vitals)"),
+		TEXT("elysium.viewstate — dump the published view state (app, surface, cinematic, reticle, fade, sign, dialogue, vitals)"),
 		FConsoleCommandDelegate::CreateWeakLambda(this, [this]()
 		{
 			const FElysiumViewState& V = ViewState;
-			UE_LOG(LogElysiumView, Display, TEXT("app=%s surface=%d reticle=%d fade=(%.2f,%.2f,%.2f,%.2f)"),
-				ElysiumAppState::Name(V.App), V.bPlayerSurface ? 1 : 0, V.ReticleIcon,
+			UE_LOG(LogElysiumView, Display, TEXT("app=%s surface=%d cinematic=%d reticle=%d fade=(%.2f,%.2f,%.2f,%.2f)"),
+				ElysiumAppState::Name(V.App), V.bPlayerSurface ? 1 : 0, V.bCinematic ? 1 : 0, V.ReticleIcon,
 				V.Fade.R, V.Fade.G, V.Fade.B, V.Fade.A);
 			UE_LOG(LogElysiumView, Display, TEXT("sign=%s alpha=%.2f hideHUD=%d"),
 				V.Sign ? *V.Sign->SourceFile : TEXT("<none>"), V.SignAlpha, V.bSignHidesHUD ? 1 : 0);
 			UE_LOG(LogElysiumView, Display, TEXT("dialogue=%s rev=%u speaker='%s' choices=%d terminal=%d"),
 				V.Dialogue.IsOpen() ? TEXT("open") : TEXT("<none>"), V.Dialogue.Revision,
 				*V.Dialogue.Speaker, V.Dialogue.Choices.Num(), V.Dialogue.bTerminal ? 1 : 0);
-			UE_LOG(LogElysiumView, Display, TEXT("vitals valid=%d health=%d/%d blood=%d humanity=%d masq=%d"),
+			UE_LOG(LogElysiumView, Display, TEXT("vitals valid=%d health=%d/%d blood=%d/%d humanity=%d masq=%d"),
 				V.Vitals.bValid ? 1 : 0, V.Vitals.Health, V.Vitals.MaxHealth,
-				V.Vitals.BloodPool, V.Vitals.Humanity, V.Vitals.Masquerade);
+				V.Vitals.BloodPool, V.Vitals.MaxBloodPool, V.Vitals.Humanity, V.Vitals.Masquerade);
 		}),
 		ECVF_Default));
 }
@@ -216,6 +216,10 @@ void UElysiumPresentationSubsystem::Publish()
 	const FElysiumEntityWorld* World = Map ? Map->GetEntityWorld() : nullptr;
 	if (World)
 	{
+		// Authored cutscenes take the view through camera_track or SetCamera and return it through
+		// RestoreCameraToPlayerControl / RemoveCamera. Camera ownership is the exact suppression
+		// lifetime; scene playback alone would also catch ambient NPC choreography.
+		Next.bCinematic = World->HasTrackCamera() || World->HasScriptedCamera();
 		Next.ReticleIcon = World->GetAimedUseIcon();
 
 		FLinearColor FadeColor;
@@ -277,6 +281,7 @@ void UElysiumPresentationSubsystem::Publish()
 			Vit.MaxHealth = PlayerEnt->MaxHealth;
 			const FElysiumSheet& Sheet = PlayerEnt->Sheet;
 			Vit.BloodPool  = Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPool);
+			Vit.MaxBloodPool = Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPoolMax);
 			Vit.Humanity   = Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Humanity);
 			Vit.Masquerade = Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Masquerade);
 		}

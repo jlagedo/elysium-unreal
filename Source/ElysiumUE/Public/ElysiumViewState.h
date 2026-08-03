@@ -32,6 +32,7 @@ struct FElysiumVitals
 	int32 Health = 0;
 	int32 MaxHealth = 0;
 	int32 BloodPool = 0;
+	int32 MaxBloodPool = 0;
 	int32 Humanity = 0;
 	int32 Masquerade = 0;
 
@@ -39,7 +40,7 @@ struct FElysiumVitals
 	{
 		return bValid == Other.bValid
 			&& Health == Other.Health && MaxHealth == Other.MaxHealth
-			&& BloodPool == Other.BloodPool
+			&& BloodPool == Other.BloodPool && MaxBloodPool == Other.MaxBloodPool
 			&& Humanity == Other.Humanity
 			&& Masquerade == Other.Masquerade;
 	}
@@ -79,6 +80,12 @@ struct FElysiumViewState
 	// one is at its default: the publisher does not fill a surface it is not showing, so a reader
 	// cannot draw one by forgetting to check.
 	bool bPlayerSurface = false;
+
+	// A scripted camera currently owns the player's view. This suppresses the heads-up layer only:
+	// fades, dialogue and future cutscene subtitles remain part of the published player surface.
+	// Derived from actual camera ownership, not from logic_choreographed_scene activity — ambient
+	// NPC choreography is allowed to run during ordinary play.
+	bool bCinematic = false;
 
 	// --- Reticle (P4.4) ---------------------------------------------------------------------
 	// The +use context-icon cell for whatever the look-cursor is on (0 = nothing usable aimed at);
@@ -133,7 +140,7 @@ namespace ElysiumView
 
 	inline EReticle ResolveReticle(const FElysiumViewState& V)
 	{
-		if (!V.bPlayerSurface || V.bSignHidesHUD)
+		if (!V.bPlayerSurface || V.bCinematic || V.bSignHidesHUD)
 		{
 			return EReticle::None;
 		}

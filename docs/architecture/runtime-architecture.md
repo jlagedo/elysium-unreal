@@ -652,6 +652,12 @@ conversation already on screen when the pause menu opens is republished as close
 down, and closing the screen rebuilds it from the next publish. The conversation itself is
 untouched in the entity world; only its UI is withheld.
 
+That rule owns the complete player-facing surface. Inside an admitted surface, `bCinematic` marks
+the narrower heads-up layer suppressed while `FElysiumEntityWorld::HasTrackCamera()` or
+`HasScriptedCamera()` owns the view. Reticle and meters come down, but fades, dialogue and future
+cutscene subtitles keep publishing. Camera ownership, rather than choreographed-scene activity,
+also means an ambient NPC scene cannot hide the player's HUD.
+
 The struct and the three rules over it (`ShowsPlayerSurface`, `ResolveReticle`,
 `ReconcileDialogue`) are plain C++ in `Public/ElysiumViewState.h`, like `ElysiumAppState.h` and
 `ElysiumInputScope.h`, so the whole set is asserted with no world, no HUD and no viewport —

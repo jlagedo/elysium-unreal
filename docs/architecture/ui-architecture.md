@@ -27,6 +27,9 @@ in the UI is a `.uasset` except the typefaces.
 | Type | Role |
 |---|---|
 | `UElysiumUISubsystem` | GI-scoped owner of the screens. Creates/shows/tears down, owns the input-mode switch. GI-scoped because the menu outlives any one world — it is up before the first map and survives the travel New Game triggers. Verbs: `elysium.menu [pause]`, `elysium.menu.close` |
+| `UElysiumHUDSubsystem` | Local-player-scoped owner of the in-game HUD root and its stable `UElysiumHUDModel`. It binds the current world's presentation publisher, rebinds across travel, and owns no gameplay state. Non-shipping verb: `elysium.hud.preview off\|passive\|combat\|weapon\|discipline\|inventory\|critical` |
+| `UElysiumHUDRoot` | The one passive viewport root for the HUD plus reserved transient, game-modal and system-modal hosts. It is `SelfHitTestInvisible`; interactive selectors become activatable children rather than teaching the always-on HUD to capture input. |
+| `UElysiumHUDWidget` | The resolution-independent in-world surface: life, discrete vitae droplets, Masquerade readout, equipment/discipline regions, selector preview, reticle and full-viewport fade. Unowned regions collapse instead of displaying fabricated runtime data. |
 | `UElysiumMainMenu` | the main / pause menu (`UCommonActivatableWidget`) |
 | `UElysiumCharacterScreen` | the character screen — sheet / info / quest log, one shell parameterised for chargen's tab set too. Verb: `elysium.charscreen`; keys `C` and `L` |
 | `ElysiumUIStyle.{h,cpp}` | the design tokens — palette, type ramp, spacing, the virtual canvas — plus `FElysiumUIFontLibrary` |
@@ -45,6 +48,17 @@ discards its layout between runs (`elysium.CogPersist`, see `Source/ElysiumUE/CL
 input scope stack revokes any capture the moment a UI-only scope is pushed
 (`docs/architecture/runtime-architecture.md` §8.1). F1 still re-enables Cog deliberately — the revocation fires at
 push time, not continuously, because the front end has a menu up permanently.
+
+The runtime boundary is one-way: `UElysiumPresentationSubsystem` publishes an
+`FElysiumViewState`; the HUD subsystem projects it into the Blueprint-readable model; widgets
+render that model. A future selector sends commands through the input/command layer and never
+mutates the model or entity world. The first HUD slice leaves the faithful `game_sign` Canvas panel
+and retained dialogue box in `AElysiumHUD`, while moving the duplicated reticle and `env_fade`
+rendering into the unified local-player root. This is a migration boundary, not two HUD owners.
+The heads-up layer is also withheld while the entity world has a `camera_track` or named scripted
+camera shot. Those owners already span the authored `PlayAsCamera*`/`SetCamera` through
+`RestoreCameraToPlayerControl`/`RemoveCamera` lifetime, so ambient choreography without a camera
+does not accidentally suppress the HUD; fades, dialogue and future cutscene subtitles remain up.
 
 ## 2. The virtual canvas
 
@@ -154,8 +168,9 @@ there would silently change what `uv run elysium debug profile` and `uv run elys
 - The **MCP `elysium_screenshot` tool** passes `true`, because its job is to show what the player
   sees and since 8.6 that includes the menu.
 
-The Canvas HUD draws with the world and appears either way — which is why a UI-free capture can look
-convincing (the reticle is there) while every Slate widget is silently missing.
+The legacy Canvas sign panel draws with the world, while the unified HUD root is Slate UI and obeys
+`bShowUI`. A UI-free capture can therefore include an open faithful sign but omit life, vitae and
+the reticle; HUD regression captures must explicitly include UI.
 
 UI regression captures must request `bShowUI`; tracker work for HUD/UI coverage lives in
 `docs/project/roadmap.md` 8.9.

@@ -15,16 +15,17 @@ class SElysiumDialogueBox;
 class UElysiumPresentationSubsystem;
 class UTexture2D;
 
-// The game HUD. Always-on: the centre crosshair (or the +use context cursor), the sign/popup
-// panel, and the env_fade screen fade. Player pose, FPS, and movement/skybox/light state live
-// in the Cog Maps window's Player section (`docs/architecture/debug-tooling.md`), not here.
+// The legacy world-HUD bridge. The local-player UElysiumHUDSubsystem owns the always-on reticle,
+// vitals and fade; this actor keeps the faithful Canvas sign panel, the retained dialogue bridge,
+// and map-scoped developer commands until those modal surfaces move into the unified root.
 //
 // **It reads FElysiumViewState and nothing else** (11.8): no map-actor walk, no FElysiumEntityWorld,
 // no per-draw-path IsMenuUp() check. `UElysiumPresentationSubsystem` publishes the state in step 9
 // of the frame and calls OnViewPublished right after, which is where the retained surfaces — the
-// dialogue box and the sign's input scope — reconcile; DrawHUD then draws this frame's state on the
-// Canvas. The map-actor handle that survives is the dev console verbs' (`elysium.lights` and
-// friends), which are not presentation.
+// dialogue box and the sign's input scope — reconcile; DrawHUD draws only the sign panel on Canvas.
+// The local-player HUD subsystem consumes the same publication for its Slate surface. The map-actor
+// handle that survives is the dev console verbs' (`elysium.lights` and friends), which are not
+// presentation.
 UCLASS()
 class AElysiumHUD : public AHUD
 {
@@ -71,19 +72,6 @@ private:
 	const FElysiumDlgConversation* ShownConv = nullptr;
 	uint32 ShownRev = 0;
 	FElysiumInputScopeHandle DialogueScope;            // the box's claim on input while it is open
-
-	// --- +use context-icon reticle (P4.4) ----------------------------------------------------
-	// The reticle swaps to VtMB's context cursor while the +use look-cursor is on a usable entity:
-	// the ring frame + the entity's GetUseIcon() cell (locked_icon when locked). Atlas + per-icon
-	// UVs come from the offline `out/hud/use_icons.png` + `.json` (PL3); loaded once, lazily, on the
-	// first DrawHUD (BeginPlay is too early for a reliable file read on some launch paths).
-	void EnsureUseIconAtlas();
-	void DrawUseReticle(float CenterX, float CenterY, int32 IconIndex);
-
-	bool bUseAtlasLoadAttempted = false;
-	TStrongObjectPtr<UTexture2D> UseAtlas;
-	FBox2D UseRingUV = FBox2D(ForceInit);   // context_icon_ring frame (drawn around every usable)
-	TMap<int32, FBox2D> UseIconUV;          // use_icon index (1-based) -> atlas UV rect
 
 	// --- Sign / popup window (P4.10) ---------------------------------------------------------
 	// The one open game_sign panel, taken off the published state each frame with its fade-in ramp
