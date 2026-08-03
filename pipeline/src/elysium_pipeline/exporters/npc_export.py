@@ -31,8 +31,12 @@ morph targets in its own glb, and the three layers that drive them -- 44 flex co
 `facial/<stem>.json`, because none of the three is a vertex displacement a morph can hold.
 Baking needs the unit-vector table out of the user's own `Bin/StudioRender.dll`
 (`mdl_skel.read_anorms`, the same one `probe_facial.py --anorms` dumps); it is game-derived,
-so it is read at export time and never committed. No model in the install carries eyeball
-data, so there is none to export. Format: `docs/vtmb/facial_animation.md`.
+so it is read at export time and never committed.
+
+Manifest v5 adds the **eyes**: the pair of `StudioEyeball` records every character model
+carries, in `eyes/<stem>.json`. It is a separate sidecar from the flex rig rather than a
+field on it, because 57 of the 59 player bodies carry eyeballs and no flex data at all.
+Format for both: `docs/vtmb/facial_animation.md`.
 
 The public tooling CLI exposes full and targeted exports.  Targeted runtime
 integration merges into the existing manifest; it never replaces the complete
@@ -62,7 +66,7 @@ FACIAL_DIR = os.path.join(NPC_DIR, "facial")
 PROCEDURAL_DIR = os.path.join(NPC_DIR, "procedural")
 BLENDS_DIR = os.path.join(NPC_DIR, "blends")
 ANIMATED_PROP_DIR = os.path.join(NPC_DIR, "animated_props")
-MANIFEST_VERSION = 4
+MANIFEST_VERSION = 5
 
 
 def npc_models_from_ents(out_root=OUT):
@@ -255,6 +259,35 @@ def write_facial(stem, model, rig):
     return {"facial": "facial/" + os.path.basename(path), "morphs": len(rig["morphs"])}
 
 
+def write_eyes(stem, model, rig):
+    """Write one character's eyeball records to `eyes/<stem>.json` -> the manifest fields.
+
+    A separate sidecar from the flex rig, and deliberately: **57 of the 59 player bodies carry
+    a pair of eyeball records and no flex data at all**, so a rig-gated write would give the
+    player no eyes. Eye aiming needs no flex data — it is a renderer-side basis — while the
+    lids the same record names need a flexdesc to land on. `{}` for a model with none, which
+    is every gib, prop and piece of scenery.
+
+    The record is the authored bridge the four eyelid rules run into: `upper/lowerflexdesc`
+    are the rule outputs and `upper/lowerlidflexdesc` the morph-carrying flexdescs the eye
+    pass overwrites after the rules have run. `docs/vtmb/facial_animation.md`."""
+    if not rig:
+        return {}
+    eyes_dir = os.path.join(NPC_DIR, "eyes")
+    os.makedirs(eyes_dir, exist_ok=True)
+    path = os.path.join(eyes_dir, stem + ".json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"stem": stem, "model": model,
+                   "note": "org/up/forward are in <stem>.glb's own basis, written by the same "
+                           "conversion that basis's mesh and clips are. uppertarget/lowertarget "
+                           "are LINEAR OFFSETS in eyeball units, not angles - the renderer takes "
+                           "asin(t/radius); reading them as radians still moves a lid. `meshes` "
+                           "joins a glTF material name to the eyeball it draws. See "
+                           "docs/vtmb/facial_animation.md.",
+                   **rig}, f, separators=(",", ":"))
+    return {"eyes": "eyes/" + os.path.basename(path), "eyeballs": len(rig["eyeballs"])}
+
+
 def write_procedural(stem, model, rules, prefix=""):
     """Write one character's procedural bone rules to `<prefix>procedural/<stem>.json` -> the
     manifest fields naming it.
@@ -343,13 +376,16 @@ def write_sidecars(manifest):
     index = {
         "manifest_version": manifest["manifest_version"],
         "note": "counts only; a clip vocabulary lives in clips/<stem>.json, a flex rig in "
-                "facial/<stem>.json, a procedural bone rule table in "
-                "procedural/<stem>.json and a blend-grid table in blends/<stem>.json. Those "
+                "facial/<stem>.json, an eyeball pair in eyes/<stem>.json, a procedural bone "
+                "rule table in procedural/<stem>.json and a blend-grid table in "
+                "blends/<stem>.json. Those "
                 "paths, like the bank glb paths, are relative to this file's directory.",
         "npcs": {s: {"glb": r["glb"], "model": r["model"], "bones": r["bones"],
                      "split_bones": r.get("split_bones", []),
                      "clips": len(r["clips"]), "own_clips": len(r["own_clips"]),
                      **({"facial": r["facial"], "morphs": r["morphs"]} if r.get("facial")
+                        else {}),
+                     **({"eyes": r["eyes"], "eyeballs": r["eyeballs"]} if r.get("eyes")
                         else {}),
                      **({"procedural": r["procedural"],
                          "procedural_bones": r["procedural_bones"]} if r.get("procedural")
@@ -551,6 +587,7 @@ def main(only=None, *, index=None, integrate=False, strict=False):
     print(f"[npc] exporting {len(npcs)} NPC mesh glb(s) -> {NPC_DIR}/ ...", flush=True)
     npc_index = {}
     procedural_faults = []
+    eye_faults = []
     for m in npcs:
         try:
             info = mdl_gltf.export_npc(idx, m, NPC_DIR, npc_stem[m], anorms)
@@ -564,10 +601,12 @@ def main(only=None, *, index=None, integrate=False, strict=False):
             "clips": npc_records.get(m, {}),
             "own_clips": {c.label: _clip_meta(c) for c in info["clips"]},
             **write_facial(info["stem"], info["model"], info["facial"]),
+            **write_eyes(info["stem"], info["model"], info["eyes"]),
             **write_procedural(info["stem"], info["model"], info["procedural"]),
             **write_blends(info["stem"], info["model"], info["blends"]),
         }
         procedural_faults.extend((info["stem"], f) for f in info["procedural_faults"])
+        eye_faults.extend((info["stem"], f) for f in info["eye_faults"])
 
     # Skeletal prop GLBs are intentionally separate from NPCs: prop_dynamic selects them only when
     # this index promises an animated representation, while ordinary props retain their baked
@@ -704,6 +743,11 @@ def main(only=None, *, index=None, integrate=False, strict=False):
           f"{sum(r['procedural_bones'] for r in driven)} driven bones -> {PROCEDURAL_DIR}/")
     for stem, fault in procedural_faults:
         print(f"  ! {stem}: procedural rule - {fault}")
+    eyed = [r for r in npc_index.values() if r.get("eyes")]
+    print(f"[npc] eyeballs: {len(eyed)}/{len(npc_index)} models carry a pair, "
+          f"{sum(r['eyeballs'] for r in eyed)} records -> {NPC_DIR}/eyes/")
+    for stem, fault in eye_faults:
+        print(f"  ! {stem}: eyeball - {fault}")
     gridded = [r for r in (*npc_index.values(), *bank_index.values(),
                            *animated_prop_index.values()) if r.get("blends")]
     print(f"[npc] blend grids: {len(gridded)} model(s) author one, "

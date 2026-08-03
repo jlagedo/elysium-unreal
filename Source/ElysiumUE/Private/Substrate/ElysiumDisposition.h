@@ -35,6 +35,13 @@ struct FElysiumDisposition
 	float StandingStanceChangeThreshold = 0.f;
 	int32 StandingStanceChangeChance = 0;
 
+	// The blink cadence, in seconds: each blink is scheduled a uniform random interval after the
+	// last. Authored at disposition level and, in the shipped table, only on `Neutral` — from which
+	// every other row inherits it, so in practice these are global. The 300 ms envelope the toggle
+	// drives is the client's and is not in this file.
+	float MinBlinkInterval = 2.5f;
+	float MaxBlinkInterval = 6.f;
+
 	bool IsValid() const { return !Name.IsEmpty(); }
 };
 

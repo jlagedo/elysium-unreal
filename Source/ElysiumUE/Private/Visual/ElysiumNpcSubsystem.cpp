@@ -26,6 +26,56 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumNpc, Log, All);
 
 namespace
 {
+	// 12.4 — the eye pass's own inputs and what they solve to. Every wrong answer the lid write-back
+	// can give is a plausible-looking number, so the terms print separately rather than only the
+	// result: at rest `upL.up` must be 1, `fwL.up` must be 0, and the lid must land exactly on the
+	// neutral target, which is the hinge the two morph ramps meet at.
+	void DumpEyeState(const UElysiumNpcAnimInstance* Inst)
+	{
+		if (Inst == nullptr || Inst->GetFacialRig() == nullptr)
+		{
+			return;
+		}
+		const FElysiumEyeInput& Eyes = Inst->GetEyeInput();
+		const TArray<float>& Flex = Inst->GetFlexWeights();
+		UE_LOG(LogElysiumNpc, Display, TEXT("%s: blink %.4f, lids %s"), *Inst->GetFacialRig()->Stem,
+			Eyes.Blink, Eyes.bWriteLids ? TEXT("on") : TEXT("off"));
+		for (int32 e = 0; e < 2; ++e)
+		{
+			const FElysiumEyeAim& A = Eyes.Eyes[e];
+			if (!A.bValid)
+			{
+				UE_LOG(LogElysiumNpc, Display, TEXT("  eye[%d] no aim"), e);
+				continue;
+			}
+			UE_LOG(LogElysiumNpc, Display,
+				TEXT("  eye[%d] r=%.3f upL=(%.4f %.4f %.4f) fwL=(%.4f %.4f %.4f) up=(%.4f %.4f %.4f)"),
+				e, A.Radius, A.UpLocal.X, A.UpLocal.Y, A.UpLocal.Z,
+				A.ForwardLocal.X, A.ForwardLocal.Y, A.ForwardLocal.Z,
+				A.AuthoredUp.X, A.AuthoredUp.Y, A.AuthoredUp.Z);
+			UE_LOG(LogElysiumNpc, Display, TEXT("         upL.up=%.4f fwL.up=%.4f |upL|=%.4f |up|=%.4f"),
+				FVector::DotProduct(A.UpLocal, A.AuthoredUp),
+				FVector::DotProduct(A.ForwardLocal, A.AuthoredUp),
+				A.UpLocal.Size(), A.AuthoredUp.Size());
+			const auto Report = [&](const TCHAR* Label, const int32 (&Src)[3], const float (&Tgt)[3], int32 Lid)
+			{
+				float Sum = 0.f;
+				FString Terms;
+				for (int32 k = 0; k < 3; ++k)
+				{
+					const float W = Flex.IsValidIndex(Src[k]) ? Flex[Src[k]] : 0.f;
+					const float Angle = FMath::Asin(FMath::Clamp(Tgt[k] / A.Radius, -1.f, 1.f));
+					Sum += Angle * W;
+					Terms += FString::Printf(TEXT("[fd%d t=%.3f w=%.3f a=%.4f] "), Src[k], Tgt[k], W, Angle);
+				}
+				UE_LOG(LogElysiumNpc, Display, TEXT("         %s %s sum=%.4f -> fd%d = %.4f"),
+					Label, *Terms, Sum, Lid, Flex.IsValidIndex(Lid) ? Flex[Lid] : 0.f);
+			};
+			Report(TEXT("upper"), A.UpperFlexDesc, A.UpperTarget, A.UpperLidFlexDesc);
+			Report(TEXT("lower"), A.LowerFlexDesc, A.LowerTarget, A.LowerLidFlexDesc);
+		}
+	}
+
 	// What a face can be told to do, read straight off the sidecar. This is the answer when nothing
 	// is standing yet — the whole controller vocabulary, grouped by the five shipped families, plus
 	// the reconstructed eyelid hinges.
@@ -240,6 +290,22 @@ void UElysiumNpcSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	// The read side of the same surface, and the way to find out what a face can be told to do.
 	// With a live body it reports what the three layers currently resolve to; with none, a stem
 	// argument reads the sidecar off disk, so the controller names are answerable before a map is.
+	// 12.4 — the eye pass's own inputs and what they solve to. The lid write-back is a chain of
+	// dots and an asin, and every wrong answer it can give is a plausible-looking number, so the
+	// terms are printed separately rather than only the result.
+	ConsoleObjects.Add(CM.RegisterConsoleCommand(
+		TEXT("elysium.npc.eyes_dump"),
+		TEXT("elysium.npc.eyes_dump [stem] -- per live rigged NPC, each eye's bone-local basis, the lid solve's terms, and the flexdesc weight it produces"),
+		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
+		{
+			const FString Filter = Args.Num() > 0 ? Args[0] : FString();
+			for (const UElysiumNpcAnimInstance* Inst : FacialBodies(Filter))
+			{
+				DumpEyeState(Inst);
+			}
+		}),
+		ECVF_Cheat));
+
 	ConsoleObjects.Add(CM.RegisterConsoleCommand(
 		TEXT("elysium.npc.flex_dump"),
 		TEXT("elysium.npc.flex_dump [stem] -- report each live rigged NPC's controllers and its non-zero flexdesc/morph weights; with no live body, list a stem's rig off disk"),
@@ -277,13 +343,41 @@ void UElysiumNpcSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 							*Rig.FlexDescs[i], Flexes[i]);
 					}
 				}
+				int32 FirstMoved = INDEX_NONE;
 				for (int32 i = 0; i < Morphs.Num(); ++i)
 				{
 					if (!FMath::IsNearlyZero(Morphs[i]))
 					{
 						UE_LOG(LogElysiumNpc, Display, TEXT("  morph %-24s %.4f"),
 							*Rig.Morphs[i].Name, Morphs[i]);
+						FirstMoved = FirstMoved == INDEX_NONE ? i : FirstMoved;
 					}
+				}
+				// The three hops below the rig, which a weight alone cannot tell apart: the rig's
+				// answer, the curve the anim instance published, and the weight the component will
+				// actually skin with. A face that computes correctly and does not move is one of the
+				// last two being zero.
+				if (const USkeletalMeshComponent* Comp = Inst->GetSkelMeshComponent())
+				{
+					int32 NonZero = 0;
+					for (const float W : Comp->MorphTargetWeights)
+					{
+						NonZero += FMath::IsNearlyZero(W) ? 0 : 1;
+					}
+					UE_LOG(LogElysiumNpc, Display,
+						TEXT("  comp  %d morph slot(s), %d non-zero, %d active"),
+						Comp->MorphTargetWeights.Num(), NonZero, Comp->ActiveMorphTargets.Num());
+					if (const USkeletalMesh* Asset = Comp->GetSkeletalMeshAsset())
+					{
+						UE_LOG(LogElysiumNpc, Display, TEXT("  comp  mesh carries %d morph target(s)"),
+							Asset->GetMorphTargets().Num());
+					}
+				}
+				if (FirstMoved != INDEX_NONE)
+				{
+					UE_LOG(LogElysiumNpc, Display, TEXT("  curve %-24s %.4f (anim instance)"),
+						*Rig.Morphs[FirstMoved].Name,
+						Inst->GetCurveValue(Rig.Morphs[FirstMoved].Curve));
 				}
 			}
 		}),

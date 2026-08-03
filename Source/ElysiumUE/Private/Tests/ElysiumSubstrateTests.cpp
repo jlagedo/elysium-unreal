@@ -4378,11 +4378,31 @@ bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
 			Glass->SplitRotationBones.Num(), 1);
 	}
 
+	// v5 adds the eyeball sidecar. It rides on its own fields rather than on the flex rig's,
+	// because a player body carries eyeballs and no flex data at all — so `eyes` present with
+	// `facial` absent is the shipped state for 57 of the 59 of them, not a malformed row.
+	FElysiumNpcIndex V5;
+	Error.Reset();
+	const FString Json5 = FString::Printf(
+		TEXT("{\"manifest_version\":5,\"npcs\":{\"dummy\":{\"glb\":\"dummy.glb\","
+			 "\"model\":\"models/dummy.mdl\",\"clips\":1,"
+			 "\"eyes\":\"eyes/dummy.json\",\"eyeballs\":2}},\"banks\":{},\"cinematics\":{}}"));
+	TestTrue(FString::Printf(TEXT("v5 manifest parses: %s"), *Error), V5.LoadJsonText(Json5, Error));
+	TestEqual(TEXT("v5 version retained"), V5.ManifestVersion, 5);
+	TestEqual(TEXT("v5 eyeball sidecar path is retained"),
+		V5.Npcs[TEXT("dummy")].Eyes, FString(TEXT("eyes/dummy.json")));
+	TestEqual(TEXT("v5 eyeball count is retained"), V5.Npcs[TEXT("dummy")].EyeballCount, 2);
+	TestTrue(TEXT("eyeballs do not imply a flex rig"), V5.Npcs[TEXT("dummy")].Facial.IsEmpty());
+
+	// An older index simply carries no eye fields, which is a model with no eyeballs rather
+	// than a parse failure.
+	TestTrue(TEXT("v3 index reads no eyeball sidecar"), V3.Npcs[TEXT("dummy")].Eyes.IsEmpty());
+
 	FElysiumNpcIndex Future;
 	Error.Reset();
-	const FString Json5 = FString::Printf(TEXT("{\"manifest_version\":5,%s}"), *MinimalNpc);
-	TestFalse(TEXT("future manifest is rejected"), Future.LoadJsonText(Json5, Error));
-	TestTrue(TEXT("future rejection explains supported versions"), Error.Contains(TEXT("expected 3 or 4")));
+	const FString Json6 = FString::Printf(TEXT("{\"manifest_version\":6,%s}"), *MinimalNpc);
+	TestFalse(TEXT("future manifest is rejected"), Future.LoadJsonText(Json6, Error));
+	TestTrue(TEXT("future rejection explains supported versions"), Error.Contains(TEXT("expected 3 to 5")));
 	return true;
 }
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOpeningEmbodimentTest,

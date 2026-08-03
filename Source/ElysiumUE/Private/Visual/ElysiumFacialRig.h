@@ -104,16 +104,20 @@ struct FElysiumJawInput
 
 // A lid-value flexdesc — the eyelid hinge that no rule computes.
 //
-// Source drives it from `mstudioeyeball_t`: `upperlidflexdesc` takes the sum of the
-// lowerer/neutral/raiser flexdesc weights against `uppertarget[3]`, the three authored lid angles in
-// radians, and the flexdesc's two hinged ramps split that angle into a lowered half and a raised
-// half. VtMB ships no eyeball records anywhere (`NumEyeballs == 0` on all 4,444 models), so the
-// three angles are recovered from the ramps instead: the lowered angle is the low ramp's `Target2`,
-// the hinge (the neutral angle) is where the two ramps meet, and the raised angle is the high ramp's
-// `Target1`. The three source flexdescs are the rig's own `<lid>_lowerer`/`_neutral`/`_raiser`.
+// **This is the fallback, not the mechanism.** The bridge is authored, in the model's own
+// `StudioEyeball` record: `upperlidflexdesc` takes the three lid-state weights against
+// `uppertarget[3]`, and the renderer's eye pass writes the result after the rules have run
+// (`Visual/ElysiumEyeRig.h`, `docs/vtmb/facial_animation.md` -> Eyes). Where a record is loaded it
+// supersedes this per flexdesc.
 //
-// Without this step the four eyelid rules compute weights nothing consumes, `blink` moves nothing,
-// and the resting face sits at 0 — off the hinge, with a lid morph half-applied.
+// This reconstruction still runs for any hinged lid flexdesc no record names, and it is what every
+// body falls back to on an export predating the eyeball decode: the three angles are recovered from
+// the ramps instead — the lowered angle is the low ramp's `Target2`, the hinge (the neutral angle)
+// is where the two ramps meet, and the raised angle is the high ramp's `Target1`. The three source
+// flexdescs are the rig's own `<lid>_lowerer`/`_neutral`/`_raiser`.
+//
+// Without one of the two the four eyelid rules compute weights nothing consumes, `blink` moves
+// nothing, and the resting face sits at 0 — off the hinge, with a lid morph half-applied.
 struct FElysiumFlexLid
 {
 	int32 FlexDesc = INDEX_NONE;
@@ -123,6 +127,62 @@ struct FElysiumFlexLid
 	float LoweredAngle = 0.f;
 	float NeutralAngle = 0.f;
 	float RaisedAngle = 0.f;
+};
+
+// One eye's live aim plus the lid half of its `StudioEyeball` record, as the eyelid bridge consumes
+// them. The aim is the eye basis rotated back into the eye bone's own space — the only part of the
+// renderer's eye pass the flex layer sees.
+//
+// The record's lid fields ride here rather than on the rig on purpose. The rig then needs no eye
+// state of its own, so it stays a pure function of its arguments, and there is exactly one source
+// of truth for the record: `FElysiumEyeSet`.
+struct FElysiumEyeAim
+{
+	// The live basis, bone-local.
+	FVector UpLocal = FVector::ZeroVector;
+	FVector ForwardLocal = FVector::ZeroVector;
+	// The record's own authored `up` — the axis the lid position projects onto, and a property of
+	// the head rather than of where the eye is looking.
+	FVector AuthoredUp = FVector::ZeroVector;
+
+	// Eyeball units. `Radius` divides the targets, so the two are only meaningful together.
+	float Radius = 0.5f;
+	// The three lid-state flexdescs the eyelid rules compute, and their authored offsets.
+	int32 UpperFlexDesc[3] = { INDEX_NONE, INDEX_NONE, INDEX_NONE };
+	int32 LowerFlexDesc[3] = { INDEX_NONE, INDEX_NONE, INDEX_NONE };
+	// **Linear offsets, not angles** — the pass takes `asin(t / Radius)`.
+	float UpperTarget[3] = { 0.f, 0.f, 0.f };
+	float LowerTarget[3] = { 0.f, 0.f, 0.f };
+	// The morph-carrying flexdescs this eye's pass overwrites.
+	int32 UpperLidFlexDesc = INDEX_NONE;
+	int32 LowerLidFlexDesc = INDEX_NONE;
+
+	bool bValid = false;
+
+	// Take the lid half of a record and the basis `ElysiumEyes::BuildState` solved for it. The one
+	// place the two halves of the eye pass are joined, so a test drives the same seam the per-frame
+	// pass does rather than a copy of it.
+	void FromRecord(const struct FElysiumEyeball& Eye, const struct FElysiumEyeState& State);
+};
+
+// What the eye pass asks of a face on one evaluation. Deliberately carries no rig pointer, no
+// transform and no component: the eyelid write-back is arithmetic over floats and bone-local
+// vectors, so the whole of it stays assertable without a mesh, a world or an anim instance.
+struct FElysiumEyeInput
+{
+	// In record order. A model with one usable eye still drives that eye's lids.
+	FElysiumEyeAim Eyes[2];
+
+	// The client-side blink envelope's current weight, 0 open to 1 closed. Applied **raw**, before
+	// the rules and outside the controller min/max remap: retail assigns it after its controller
+	// pass, so a scene's own `blink` track cannot hold a lid open against it.
+	float Blink = 0.f;
+
+	// Off keeps the `FElysiumFlexLid` reconstruction alone — the A/B, and the state of any body
+	// whose model has no eyeball record.
+	bool bWriteLids = true;
+
+	bool HasAim() const { return Eyes[0].bValid || Eyes[1].bValid; }
 };
 
 struct FElysiumFacialRig
@@ -216,6 +276,35 @@ struct FElysiumFacialRig
 	void Evaluate(TArrayView<const float> ControllerValues, const FElysiumJawInput& Jaw,
 		TArray<float>& OutFlexWeights, TArray<float>& OutMorphWeights) const;
 
+	// --- the eyes ------------------------------------------------------------------------------
+	//
+	// The rig's third input, and the second that is not a controller. The full order, with the two
+	// eye steps in the places retail puts them:
+	//
+	//   1.  the jaw bridge raises `MouthBridge`'s controller value;
+	//   1.5 `blink` is assigned RAW into its controller — retail writes it after its own controller
+	//       pass and outside the min/max remap, so an expression track cannot hold a lid open;
+	//   2.  the rules run in file order, then the `FElysiumFlexLid` reconstruction;
+	//   2.5 the eye pass overwrites the lid flexdescs the records name, superseding step 2 for
+	//       those and leaving any hinged lid no record names on the reconstruction;
+	//   3.  the direct jaw write lands on `Mouth.FlexDesc`;
+	//   4.  the target ramps turn flexdesc weights into morph weights.
+	//
+	// Steps 2.5 and 3 touch disjoint flexdescs (the lids 0/4/8/12 against the mouth), so their
+	// order relative to each other is free; both must follow the rules.
+	void Evaluate(TArrayView<const float> ControllerValues, const FElysiumJawInput& Jaw,
+		const FElysiumEyeInput& Eyes, TArray<float>& OutFlexWeights,
+		TArray<float>& OutMorphWeights) const;
+
 	// Step 3 alone, exposed so the precedence is assertable without a mesh or an anim instance.
 	void ApplyJawToFlexWeights(const FElysiumJawInput& Jaw, TArray<float>& InOutFlexWeights) const;
+	// Step 2.5 alone, exposed for the same reason.
+	//
+	// Per eye and per lid: the three lid-state weights the rules produced become an angle through
+	// `asin(target / radius)`, that angle places a point on the eyeball, and the point's extent
+	// along the record's own up axis is the lid's flexdesc weight. Reading the targets as radians
+	// instead still produces a lid that moves, so a test that only asserts motion passes on the bug.
+	void ApplyEyesToFlexWeights(const FElysiumEyeInput& Eyes, TArray<float>& InOutFlexWeights) const;
+	// The `blink` controller's index, derived at load. INDEX_NONE on a rig that has none.
+	int32 BlinkController = INDEX_NONE;
 };

@@ -116,6 +116,41 @@ TSharedPtr<const FElysiumFacialRig> UElysiumNpcAnimSubsystem::GetFacialRig(const
 	return Result;
 }
 
+TSharedPtr<const FElysiumEyeSet> UElysiumNpcAnimSubsystem::GetEyeSet(const FString& Stem)
+{
+	if (Stem.IsEmpty())
+	{
+		return nullptr;
+	}
+	if (const TSharedPtr<const FElysiumEyeSet>* Cached = EyeSets.Find(Stem))
+	{
+		return *Cached;
+	}
+
+	// As with the flex rig, the index names the sidecar — so a model with no eyeballs is answered
+	// without touching the disk, and answered null, which is a normal load.
+	const FElysiumNpcIndexEntry* Entry = GetIndex().Npcs.Find(Stem);
+	TSharedPtr<const FElysiumEyeSet> Result;
+	if (Entry != nullptr && !Entry->Eyes.IsEmpty())
+	{
+		TSharedPtr<FElysiumEyeSet> Set = MakeShared<FElysiumEyeSet>();
+		FString Error;
+		if (!Set->Load(Entry->Eyes, Error))
+		{
+			UE_LOG(LogElysiumNpcAnim, Warning, TEXT("eyes '%s': %s"), *Stem, *Error);
+		}
+		else
+		{
+			UE_LOG(LogElysiumNpcAnim, Verbose, TEXT("eyes '%s': %d record(s), lids %s"), *Stem,
+				Set->Eyeballs.Num(),
+				Set->Eyeballs[0].HasLids() ? TEXT("driven") : TEXT("absent (no flex rig)"));
+			Result = Set;
+		}
+	}
+	EyeSets.Add(Stem, Result);
+	return Result;
+}
+
 namespace
 {
 	// Build one composition rig out of the two things that declare it: the index's own split-bone

@@ -84,6 +84,13 @@ struct FElysiumNpcIndexEntry
 	// cast's animals, dancers and crowd bodies, and every player body.
 	FString Facial;
 	int32   MorphCount = 0;
+	// The eyeball sidecar, relative to out/npc ("eyes/<stem>.json"), and how many records it
+	// carries — two on every character model. Deliberately independent of `Facial`: 57 of the 59
+	// player bodies carry eyeballs and no flex rig at all, so their irises aim while their lids
+	// have no flexdesc to land on. Both empty/zero on a model with none (gibs, props, scenery)
+	// and on any export predating manifest v5.
+	FString Eyes;
+	int32   EyeballCount = 0;
 	// StudioBone names whose Flags & 0x2 select retail split rotation/translation inheritance.
 	// Optional in v3/v4 manifests; an older sidecar therefore retains conventional composition.
 	TArray<FString> SplitRotationBones;

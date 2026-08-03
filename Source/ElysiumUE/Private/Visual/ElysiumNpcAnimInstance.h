@@ -6,12 +6,13 @@
 #include "Animation/AnimInstanceProxy.h"
 #include "Animation/AnimNode_SequencePlayer.h"
 #include "Visual/ElysiumAnimNodes.h"
+// By value: the eye input is a member, so the rig's own header rather than a forward declaration.
+#include "Visual/ElysiumFacialRig.h"
 
 #include "ElysiumNpcAnimInstance.generated.h"
 
 class UAnimSequence;
 struct FElysiumCompositionRig;
-struct FElysiumFacialRig;
 
 // The NPC animation host (roadmap 8.5) — a native C++ anim instance, no Blueprint and no anim
 // graph asset.
@@ -171,6 +172,18 @@ public:
 	float GetMouthOpen() const { return MouthOpen; }
 	bool HasMouth() const;
 
+	// --- the eyes (12.4) -----------------------------------------------------------------------
+	//
+	// The face's third input. Written once per frame by `UElysiumEntityBodies::TickEyes`, which is
+	// the only thing that has both the settled bone transforms the aim is built from and the gaze
+	// target it is aimed at. Everything below it is arithmetic replayed from the rig, so this
+	// write is what re-evaluates the face — the same contract every controller write has.
+	//
+	// False when this body carries no rig, which is an ordinary no-op: a model with eyeballs and no
+	// flex data still aims its irises, it just has no flexdesc for the lids to land on.
+	bool SetEyeInput(const FElysiumEyeInput& Eyes);
+	const FElysiumEyeInput& GetEyeInput() const { return EyeInput; }
+
 	// Read-back for the debug surface: the normalized controller inputs, the flexdesc weights the
 	// rules produced from them, and the ramped weight each morph target is driven at.
 	const TArray<float>& GetFlexControllerValues() const { return ControllerValues; }
@@ -191,6 +204,7 @@ private:
 	TSharedPtr<const FElysiumFacialRig> FacialRig;
 	TSharedPtr<const FElysiumCompositionRig> CompositionRig;
 	float MouthOpen = 0.f;
+	FElysiumEyeInput EyeInput;
 	TArray<float> ControllerValues;
 	TArray<float> FlexWeights;
 	TArray<float> MorphWeights;

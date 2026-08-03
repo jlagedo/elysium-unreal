@@ -7,12 +7,15 @@
 #include "Visual/ElysiumNpcVisual.h"
 
 #include "Animation/AnimSequence.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "GameFramework/Actor.h"
+#include "Camera/PlayerCameraManager.h"
+#include "Kismet/GameplayStatics.h"
 #include "HAL/IConsoleManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumBodies, Log, All);
@@ -32,6 +35,22 @@ static TAutoConsoleVariable<int32> CVarNpcAnim(
 static TAutoConsoleVariable<int32> CVarPropSkins(
 	TEXT("elysium.PropSkins"), 1,
 	TEXT("Apply alternate prop skin families (1, default) or keep every prop on skin 0 (0)."),
+	ECVF_Default);
+
+// 12.4 — an unambiguous visual check on the eye basis before the gaze cascade exists. Aiming every
+// eye at a target that moves is the only way to tell a correct basis from one that merely looks
+// plausible while parked on the record's authored resting aim.
+static TAutoConsoleVariable<int32> CVarEyeTrackPlayer(
+	TEXT("elysium.EyeTrackPlayer"), 0,
+	TEXT("Aim every NPC's eyes at the player camera (1) instead of the eyeball record's authored resting aim (0, default)."),
+	ECVF_Cheat);
+
+// 12.4 — A/B for the whole eye pass: the iris aim and the eyelid write-back together. 0 leaves the
+// irises on their authored resting aim and the lids on the FElysiumFlexLid reconstruction, which is
+// how the face evaluated before the eyeball records were decoded.
+static TAutoConsoleVariable<int32> CVarEyes(
+	TEXT("elysium.Eyes"), 1,
+	TEXT("Run the eye pass: iris aiming, the blink envelope and the authored eyelid write-back (1, default) or none of it (0)."),
 	ECVF_Default);
 
 UElysiumEntityBodies::UElysiumEntityBodies()
@@ -250,6 +269,223 @@ bool UElysiumEntityBodies::RefreshNpcIdle(USkeletalMeshComponent* Body, const FS
 	return !Clip.IsEmpty() && PlayNpcClip(Body, Stem, Clip, /*bLoop=*/true, /*OutSeconds=*/nullptr);
 }
 
+void UElysiumEntityBodies::InstallEyes(USkeletalMeshComponent* Comp,
+	const TSharedPtr<const FElysiumEyeSet>& Set, const FString& Disposition)
+{
+	if (Comp == nullptr || !Set.IsValid())
+	{
+		return;
+	}
+	UMaterialInterface* Master = ElysiumNpcVisual::EyeMaster();
+	USkeletalMesh* Mesh = Comp->GetSkeletalMeshAsset();
+	if (Master == nullptr || Mesh == nullptr)
+	{
+		return;
+	}
+
+	FElysiumEyeBinding Binding;
+	Binding.Comp = Comp;
+	Binding.Set = Set;
+	Binding.Disposition = Disposition;
+
+	const TArray<FSkeletalMaterial>& Slots = Mesh->GetMaterials();
+	for (int32 Slot = 0; Slot < Slots.Num(); ++Slot)
+	{
+		// Two independent tests, because either alone can be defeated. The base-material test
+		// survives any change to the plugin's slot naming; the name test says *which* eye.
+		UMaterialInterface* Existing = Comp->GetMaterial(Slot);
+		const bool bIsEye = Existing != nullptr && Existing->GetBaseMaterial() == Master;
+		if (!bIsEye)
+		{
+			continue;
+		}
+		// glTFRuntime names a slot `LOD_<n>_Section_<n>_<glTF material name>`.
+		const FString SlotName = Slots[Slot].MaterialSlotName.ToString();
+		const FElysiumEyeball* Eye = nullptr;
+		for (const FElysiumEyeball& Candidate : Set->Eyeballs)
+		{
+			if (!Candidate.Material.IsEmpty()
+				&& SlotName.EndsWith(TEXT("_") + Candidate.Material, ESearchCase::IgnoreCase))
+			{
+				Eye = &Candidate;
+				break;
+			}
+		}
+		if (Eye == nullptr)
+		{
+			UE_LOG(LogElysiumBodies, Warning,
+				TEXT("eyes '%s': slot %d ('%s') draws M_Eyes but matches no record"),
+				*Set->Stem, Slot, *SlotName);
+			continue;
+		}
+
+		UMaterialInstanceDynamic* Mid = Comp->CreateDynamicMaterialInstance(Slot);
+		if (Mid == nullptr)
+		{
+			continue;
+		}
+		// The iris texture is the .vmt's `$iris`, not anything in the glb — the exporter decodes it
+		// beside the mesh's own textures and names it here.
+		if (!Eye->IrisTexture.IsEmpty())
+		{
+			const FString Dir = FPaths::GetPath(FElysiumContentPaths::NpcGlb(Set->Stem));
+			if (UTexture2D* Iris = EyeTextures.LoadTex(Dir, Eye->IrisTexture, /*bSRGB=*/true))
+			{
+				Mid->SetTextureParameterValue(TEXT("IrisTexture"), Iris);
+			}
+		}
+		Mid->SetScalarParameterValue(TEXT("Vampire"), Eye->bVampire ? 1.f : 0.f);
+
+		FElysiumEyeSlot Bound;
+		Bound.Mid = Mid;
+		Bound.EyeIndex = Eye->Index;
+		// Resolved once, by name: a synthetic skeleton root makes the .mdl's own bone index wrong
+		// on some models, and the reference-skeleton index is what GetBoneTransform takes.
+		Bound.BoneIndex = Comp->GetBoneIndex(Eye->Bone);
+		if (Bound.BoneIndex == INDEX_NONE)
+		{
+			UE_LOG(LogElysiumBodies, Warning, TEXT("eyes '%s': bone '%s' is not on this skeleton"),
+				*Set->Stem, *Eye->Bone.ToString());
+			continue;
+		}
+		FVector Zero = FVector::ZeroVector;
+		Mid->InitializeVectorParameterAndGetIndex(TEXT("IrisU"), FLinearColor(Zero), Bound.ParamIrisU);
+		Mid->InitializeVectorParameterAndGetIndex(TEXT("IrisV"), FLinearColor(Zero), Bound.ParamIrisV);
+		Mid->InitializeVectorParameterAndGetIndex(TEXT("IrisOrigin"), FLinearColor(Zero), Bound.ParamIrisOrigin);
+		Mid->InitializeVectorParameterAndGetIndex(TEXT("NormalOrigin"), FLinearColor(Zero), Bound.ParamNormalOrigin);
+		Mid->InitializeVectorParameterAndGetIndex(TEXT("EyeUpN"), FLinearColor(Zero), Bound.ParamEyeUp);
+		Binding.Slots.Add(Bound);
+	}
+
+	if (!Binding.Slots.IsEmpty())
+	{
+		EyeBindings.Add(MoveTemp(Binding));
+	}
+}
+
+void UElysiumEntityBodies::TickEyes(float)
+{
+	// Everything here reads this frame's settled component-space pose, which is why it runs in the
+	// post-move pass rather than in the component's own tick: at TG_PrePhysics the transforms are
+	// last frame's, and GetProxyOnGameThread would flush a live parallel evaluation.
+	// Until 12.4's gaze cascade supplies a target, an eye sits on the record's own authored resting
+	// aim — the state `bEyeMove` off produces, which is a real retail configuration but is NOT
+	// guaranteed to point out of the face: it is whatever the model's QC authored.
+	//
+	// `elysium.EyeTrackPlayer` overrides that with the player's camera, which is the cheapest
+	// unambiguous check that the basis math is right: if the irises converge on the camera as it
+	// moves, the record, the import transform, the solve and the plane parameters are all correct.
+	if (CVarEyes.GetValueOnGameThread() == 0 || EyeBindings.IsEmpty())
+	{
+		return;
+	}
+	const UWorld* World = GetWorld();
+	const float Now = World ? World->GetTimeSeconds() : 0.f;
+
+	// The blink cadence is content, and it is per disposition: most rows sit at 2.5/6.0 s, `Anger`
+	// blinks slowly and `Error` — the row a character falls to when its own disposition does not
+	// resolve — blinks fast enough to read as a tell.
+	const AActor* Owner = GetOwner();
+	const UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
+	UElysiumNpcAnimSubsystem* Anims = GI
+		? const_cast<UGameInstance*>(GI)->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+
+	FElysiumEyeTuning Tuning;
+	Tuning.bEyeMove = CVarEyeTrackPlayer.GetValueOnGameThread() != 0;
+	FVector TrackWorld = FVector::ZeroVector;
+	if (Tuning.bEyeMove)
+	{
+		if (const APlayerCameraManager* Cam = UGameplayStatics::GetPlayerCameraManager(this, 0))
+		{
+			TrackWorld = Cam->GetCameraLocation();
+		}
+		else
+		{
+			Tuning.bEyeMove = false;
+		}
+	}
+	for (int32 i = EyeBindings.Num() - 1; i >= 0; --i)
+	{
+		FElysiumEyeBinding& Binding = EyeBindings[i];
+		USkeletalMeshComponent* Comp = Binding.Comp.Get();
+		if (Comp == nullptr || !Binding.Set.IsValid())
+		{
+			EyeBindings.RemoveAtSwap(i);
+			continue;
+		}
+		// Retail runs the eye pass per *drawn* model, so skipping an unseen body is faithful as
+		// well as cheap.
+		if (!Comp->WasRecentlyRendered(0.2f))
+		{
+			continue;
+		}
+		// Blink: schedule, then evaluate the envelope. The interval is content — retail reads it
+		// from `vdata/system/dispositiontable.txt`, which the disposition table already carries.
+		float BlinkMin = 2.5f;
+		float BlinkMax = 6.f;
+		if (Anims != nullptr)
+		{
+			if (const FElysiumDisposition* Row = Anims->GetDispositions().Resolve(Binding.Disposition))
+			{
+				BlinkMin = Row->MinBlinkInterval;
+				BlinkMax = Row->MaxBlinkInterval;
+			}
+		}
+		FElysiumEyeInput EyeInput;
+		if (Binding.NextBlinkTime <= 0.f)
+		{
+			Binding.NextBlinkTime = Now + FMath::FRandRange(BlinkMin, BlinkMax);
+		}
+		else if (Now >= Binding.NextBlinkTime)
+		{
+			Binding.BlinkEndsAt = Now + ElysiumEyes::BlinkSeconds;
+			Binding.NextBlinkTime = Now + FMath::FRandRange(BlinkMin, BlinkMax);
+		}
+		EyeInput.Blink = ElysiumEyes::BlinkWeight(Binding.BlinkEndsAt - Now);
+
+		for (const FElysiumEyeSlot& Slot : Binding.Slots)
+		{
+			UMaterialInstanceDynamic* Mid = Slot.Mid.Get();
+			const FElysiumEyeball* Eye = Binding.Set->Find(Slot.EyeIndex);
+			if (Mid == nullptr || Eye == nullptr)
+			{
+				continue;
+			}
+			// Component space throughout: the material measures its planes from the component
+			// origin, and it keeps the arithmetic away from large world coordinates.
+			const FTransform BoneToComponent = Comp->GetBoneTransform(Slot.BoneIndex, FTransform::Identity);
+			const FVector Target = Tuning.bEyeMove
+				? Comp->GetComponentTransform().InverseTransformPosition(TrackWorld)
+				: FVector::ZeroVector;
+			FElysiumEyeState State;
+			ElysiumEyes::BuildState(*Eye, BoneToComponent, Target, Tuning, State);
+			if (!State.bValid)
+			{
+				continue;
+			}
+			Mid->SetVectorParameterByIndex(Slot.ParamIrisU, FLinearColor(State.IrisU));
+			Mid->SetVectorParameterByIndex(Slot.ParamIrisV, FLinearColor(State.IrisV));
+			Mid->SetVectorParameterByIndex(Slot.ParamIrisOrigin, FLinearColor(State.Org));
+			Mid->SetVectorParameterByIndex(Slot.ParamNormalOrigin, FLinearColor(State.NormalOrg));
+			Mid->SetVectorParameterByIndex(Slot.ParamEyeUp, FLinearColor(State.AuthoredUp));
+
+			// The lid half of the same pass. Carried in the eye bone's own space, with the record's
+			// lid fields beside it, so the flex rig needs no eye state of its own.
+			if (Slot.EyeIndex >= 0 && Slot.EyeIndex < 2)
+			{
+				EyeInput.Eyes[Slot.EyeIndex].FromRecord(*Eye, State);
+			}
+		}
+
+		// One write per body per frame, which is what re-evaluates the face. A body with no flex
+		// rig answers false and keeps its aiming irises — the player-body case.
+		if (UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Comp->GetAnimInstance()))
+		{
+			Inst->SetEyeInput(EyeInput);
+		}
+	}
+}
+
 USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem, const FVector& Location,
 	const FRotator& Rotation, float UniformScale, const FString& Disposition, int32 IdleVariant,
 	bool bPlayerMaterial)
@@ -264,6 +500,27 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 	// Cache-checked load: mesh per stem, so a shared model (three Sabbat share shovelhead) loads
 	// once. A stem that failed once is not cached (Mesh stays null), so it retries — cheap, and a
 	// genuinely missing glb is a one-line warning per NPC, not per frame.
+	// The eyeball pair (12.4). Fetched before the mesh because the eye sections are drawn with
+	// M_Eyes, and that override has to be in the load config — it cannot be applied afterwards
+	// without losing the sclera glTFRuntime injects.
+	UElysiumNpcAnimSubsystem* Anims = nullptr;
+	if (UGameInstance* GI = Owner->GetGameInstance())
+	{
+		Anims = GI->GetSubsystem<UElysiumNpcAnimSubsystem>();
+	}
+	TSharedPtr<const FElysiumEyeSet> EyeSet = Anims ? Anims->GetEyeSet(Stem) : nullptr;
+	TArray<FString> EyeMaterials;
+	if (EyeSet.IsValid())
+	{
+		for (const FElysiumEyeball& E : EyeSet->Eyeballs)
+		{
+			if (!E.Material.IsEmpty())
+			{
+				EyeMaterials.AddUnique(E.Material);
+			}
+		}
+	}
+
 	const FString VisualKey = ElysiumEntityAnimation::NpcVisualCacheKey(Stem, bPlayerMaterial);
 	const TObjectPtr<USkeletalMesh>* Cached = NpcMeshCache.Find(VisualKey);
 	USkeletalMesh* Mesh = Cached ? Cached->Get() : nullptr;
@@ -271,7 +528,7 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 	{
 		UglTFRuntimeAsset* Asset = nullptr;
 		FString Error;
-		Mesh = ElysiumNpcVisual::LoadMesh(Stem, Asset, Error, bPlayerMaterial);
+		Mesh = ElysiumNpcVisual::LoadMesh(Stem, Asset, Error, bPlayerMaterial, &EyeMaterials);
 		if (Mesh == nullptr)
 		{
 			UE_LOG(LogElysiumBodies, Warning, TEXT("BuildNpcVisual '%s': %s"), *Stem, *Error);
@@ -286,9 +543,8 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 	// (stem, clip), so a crowd spread across three stance idles still resolves three sequences,
 	// not one per NPC.
 	FString IdleClip;
-	if (UGameInstance* GI = Owner->GetGameInstance())
 	{
-		if (UElysiumNpcAnimSubsystem* Anims = GI->GetSubsystem<UElysiumNpcAnimSubsystem>())
+		if (Anims != nullptr)
 		{
 			EElysiumIdleTier Tier = EElysiumIdleTier::None;
 			IdleClip = Anims->PickIdleClip(Stem, Disposition, Tier, IdleVariant);
@@ -332,17 +588,17 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 	// flex data. Nothing drives the controllers yet: scene expressions are 12.1's and lipsync 12.5's.
 	if (UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Comp->GetAnimInstance()))
 	{
-		if (UGameInstance* GI = Owner->GetGameInstance())
+		if (Anims != nullptr)
 		{
-			if (UElysiumNpcAnimSubsystem* Anims = GI->GetSubsystem<UElysiumNpcAnimSubsystem>())
-			{
-				Inst->SetFacialRig(Anims->GetFacialRig(Stem));
-				// The two composition stages (CAP7.2). Null for a model declaring neither a split
-				// bone nor a procedural rule, which poses under Unreal's own hierarchy alone.
-				Inst->SetCompositionRig(Anims->GetCompositionRig(Stem));
-			}
+			Inst->SetFacialRig(Anims->GetFacialRig(Stem));
+			// The two composition stages (CAP7.2). Null for a model declaring neither a split
+			// bone nor a procedural rule, which poses under Unreal's own hierarchy alone.
+			Inst->SetCompositionRig(Anims->GetCompositionRig(Stem));
 		}
 	}
+	// The eyes (12.4). Independent of the facial rig above: a player body binds eyes here and no
+	// flex rig at all, which is the shipped state for 57 of the 59 of them.
+	InstallEyes(Comp, EyeSet, Disposition);
 	if (!IdleClip.IsEmpty())
 	{
 		PlayNpcClip(Comp, Stem, IdleClip, /*bLoop=*/true, /*OutSeconds=*/nullptr);

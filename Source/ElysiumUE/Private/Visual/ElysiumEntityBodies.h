@@ -3,10 +3,13 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "ElysiumEntity.h"   // FElysiumFlexWrite (passed by view)
+#include "Visual/ElysiumEyeRig.h"
+#include "Visual/ElysiumTextureCache.h"
 #include "ElysiumEntityBodies.generated.h"
 
 class UAnimSequence;
 class UElysiumPropSkinSet;
+class UMaterialInstanceDynamic;
 class UglTFRuntimeAsset;
 class USkeletalMesh;
 class USkeletalMeshComponent;
@@ -126,8 +129,61 @@ public:
 	// disables the whole pass.
 	void ApplyPropSkin(UStaticMeshComponent* Comp, const FString& Stem, int32 Family);
 
+	// 12.4 — rebuild every bound eye's basis against this frame's final pose and publish it to the
+	// material. Driven from AElysiumMapActor::PostMoveTick for the reason the camera director is:
+	// it reads the frame's settled bone transforms, so the iris never lags the head by a frame.
+	void TickEyes(float DeltaSeconds);
+
 private:
 	FString MapName;
+
+	// One eye section on one body: which slot draws it, which record it draws, the head bone it
+	// rides, and the material instance whose parameters carry the basis.
+	//
+	// The MID is per COMPONENT, never per mesh. NpcMeshCache shares one USkeletalMesh across every
+	// NPC of a stem, and glTFRuntime's own material instances live on that shared mesh's slots —
+	// writing an iris plane there would make every NPC of the model look wherever the last one
+	// looked, which reads as a feature rather than a bug.
+	struct FElysiumEyeSlot
+	{
+		TWeakObjectPtr<UMaterialInstanceDynamic> Mid;
+		int32 EyeIndex = 0;
+		int32 BoneIndex = INDEX_NONE;
+		// Resolved once; the per-frame writes go by index and never look a name up again.
+		int32 ParamIrisU = INDEX_NONE;
+		int32 ParamIrisV = INDEX_NONE;
+		int32 ParamIrisOrigin = INDEX_NONE;
+		int32 ParamNormalOrigin = INDEX_NONE;
+		int32 ParamEyeUp = INDEX_NONE;
+	};
+	struct FElysiumEyeBinding
+	{
+		TWeakObjectPtr<USkeletalMeshComponent> Comp;
+		TSharedPtr<const FElysiumEyeSet> Set;
+		TArray<FElysiumEyeSlot> Slots;
+		// The body's disposition, resolved against the table for this character's blink cadence.
+		// Latched at build: a disposition change rebuilds the body.
+		FString Disposition;
+
+		// Blink is two halves in retail: the server picks *when* (a random interval from the
+		// disposition table) and the client runs the 300 ms envelope. Both sit here until 12.4's
+		// gaze cascade lands, which owns the cadence and pushes the toggle through the seam.
+		//
+		// The envelope is asymmetric and that is authored: `w = 2*sqrt(cos(pi*u/2))` folded about
+		// 1 closes the lid 48 ms after the toggle and reopens it over the remaining 252 ms.
+		float NextBlinkTime = 0.f;
+		float BlinkEndsAt = 0.f;
+	};
+	TArray<FElysiumEyeBinding> EyeBindings;
+	// The per-character iris is the `.vmt`'s `$iris`, decoded beside the glb rather than carried
+	// inside it, so it loads through the same per-map dedup index the world uses. Strong-ref'd for
+	// the epoch, released with this component.
+	FElysiumTextureCache EyeTextures;
+
+	// Find the eye sections on a freshly built body, build their per-component material instances,
+	// and register them for TickEyes. A body whose model authors no eyeball binds nothing.
+	void InstallEyes(USkeletalMeshComponent* Comp, const TSharedPtr<const FElysiumEyeSet>& Set,
+		const FString& Disposition);
 
 	// B3/8.5 NPC skeletal bodies: per-stem mesh cache and a per-(stem, clip) animation cache,
 	// GC-rooted here so a model shared by several NPCs loads once and survives until unload. The

@@ -77,8 +77,14 @@ def _cstr_rel(b, base, field=0):
 # --- the .mdl facial chunks -------------------------------------------------------
 
 def eyeballs(d, model_base):
-    """[dict] -- StudioEyeball, stride 140. Empty on every shipped VtMB model."""
-    n, rel = _i32(d, model_base + 80), _i32(d, model_base + 84)
+    """[dict] -- StudioEyeball, stride 140. Two per character model, 301 models in all.
+
+    The count/index pair is at +192/+196, not Source's +80/+84 — fixed by its consumer, the
+    renderer's eye pass, which resolves a record as
+    `model_base + *(int*)(model_base + 0xC4) + materialparam * 0x8C`. Reading the Source slot
+    reports zero everywhere by construction. The `pitch`/`yaw` tail is never read by the
+    renderer (Source's `unused[4]`) and is zero on every shipped record."""
+    n, rel = _i32(d, model_base + 192), _i32(d, model_base + 196)
     out = []
     for i in range(n):
         b = model_base + rel + i * EYEBALL_STRIDE

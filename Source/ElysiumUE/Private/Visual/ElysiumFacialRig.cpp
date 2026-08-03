@@ -1,6 +1,7 @@
 #include "Visual/ElysiumFacialRig.h"
 
 #include "ElysiumContentPaths.h"
+#include "Visual/ElysiumEyeRig.h"
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
@@ -76,6 +77,7 @@ bool FElysiumFacialRig::LoadJsonText(const FString& JsonText, FString& OutError)
 	Lids.Reset();
 	Mouth = FElysiumFlexMouth();
 	MouthBridge = INDEX_NONE;
+	BlinkController = INDEX_NONE;
 
 	TSharedPtr<FJsonObject> Root;
 	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonText);
@@ -268,6 +270,10 @@ bool FElysiumFacialRig::LoadJsonText(const FString& JsonText, FString& OutError)
 	// Deterministic order, so a debug dump and a test read the same rows on every load.
 	Lids.Sort([](const FElysiumFlexLid& A, const FElysiumFlexLid& B) { return A.FlexDesc < B.FlexDesc; });
 
+	// The blink envelope's target. One of the eight `eyelid` controllers, present on every rigged
+	// character; absent only on a rig with no eyelid family.
+	BlinkController = FindController(TEXT("blink"));
+
 	// The jaw bridge's target (see FElysiumFacialRig::MouthBridge). Looked up by name, like the lid
 	// sources, and absent on a rig that carries no phoneme family at all.
 	if (Mouth.IsValid())
@@ -424,29 +430,111 @@ void FElysiumFacialRig::ApplyJawToFlexWeights(const FElysiumJawInput& Jaw,
 	}
 }
 
-void FElysiumFacialRig::Evaluate(TArrayView<const float> ControllerValues, const FElysiumJawInput& Jaw,
-	TArray<float>& OutFlexWeights, TArray<float>& OutMorphWeights) const
+void FElysiumEyeAim::FromRecord(const FElysiumEyeball& Eye, const FElysiumEyeState& State)
 {
-	// 1 — the bridge, before the rules, because its target is a rule *input*. Raised rather than
-	// assigned, and skipped entirely at rest, so a face with no line to speak evaluates exactly as it
-	// did before this input existed.
-	if (Jaw.bBridge && Jaw.IsOpen() && Controllers.IsValidIndex(MouthBridge)
-		&& ControllerValues.IsValidIndex(MouthBridge))
+	UpLocal = State.UpLocal;
+	ForwardLocal = State.ForwardLocal;
+	// The record's own axis, bone-local — deliberately NOT `State.AuthoredUp`, which is the same
+	// vector rotated into the space the basis was solved in. Mixing the two silently turns the lid
+	// projection into a dot between two different spaces.
+	AuthoredUp = Eye.Up;
+	Radius = Eye.Radius;
+	FMemory::Memcpy(UpperFlexDesc, Eye.UpperFlexDesc, sizeof(UpperFlexDesc));
+	FMemory::Memcpy(LowerFlexDesc, Eye.LowerFlexDesc, sizeof(LowerFlexDesc));
+	FMemory::Memcpy(UpperTarget, Eye.UpperTarget, sizeof(UpperTarget));
+	FMemory::Memcpy(LowerTarget, Eye.LowerTarget, sizeof(LowerTarget));
+	UpperLidFlexDesc = Eye.UpperLidFlexDesc;
+	LowerLidFlexDesc = Eye.LowerLidFlexDesc;
+	bValid = State.bValid && Eye.HasLids();
+}
+
+void FElysiumFacialRig::ApplyEyesToFlexWeights(const FElysiumEyeInput& Eyes,
+	TArray<float>& InOutFlexWeights) const
+{
+	if (!Eyes.bWriteLids)
 	{
-		// The whole shipped cast runs 0..1 controllers, so this normalize is the identity on it; it is
-		// here because every other controller write goes through the same range.
-		const float Bridged = Controllers[MouthBridge].Normalize(Jaw.Open);
+		return;
+	}
+	// The renderer's own lid solve, per eye and per lid. `Sum` is an angle in radians built from
+	// the three lid-state weights the rules produced against their authored offsets; the point that
+	// angle places on the eyeball, measured along the record's up axis, is the lid's weight.
+	const auto Solve = [&InOutFlexWeights](const FElysiumEyeAim& Aim, const int32 (&Sources)[3],
+		const float (&Targets)[3], int32 LidFlexDesc)
+	{
+		if (!InOutFlexWeights.IsValidIndex(LidFlexDesc) || Aim.Radius <= 0.f)
+		{
+			return;
+		}
+		float Sum = 0.f;
+		for (int32 k = 0; k < 3; ++k)
+		{
+			if (!InOutFlexWeights.IsValidIndex(Sources[k]))
+			{
+				continue;
+			}
+			// The targets are linear offsets in eyeball units; the ratio is what makes an angle.
+			const float Ratio = FMath::Clamp(Targets[k] / Aim.Radius, -1.f, 1.f);
+			Sum += FMath::Asin(Ratio) * InOutFlexWeights[Sources[k]];
+		}
+		const FVector Point = Aim.UpLocal * (FMath::Sin(Sum) * Aim.Radius)
+			+ Aim.ForwardLocal * (FMath::Cos(Sum) * Aim.Radius);
+		InOutFlexWeights[LidFlexDesc] = static_cast<float>(FVector::DotProduct(Point, Aim.AuthoredUp));
+	};
+
+	for (const FElysiumEyeAim& Aim : Eyes.Eyes)
+	{
+		if (!Aim.bValid)
+		{
+			continue;
+		}
+		Solve(Aim, Aim.UpperFlexDesc, Aim.UpperTarget, Aim.UpperLidFlexDesc);
+		Solve(Aim, Aim.LowerFlexDesc, Aim.LowerTarget, Aim.LowerLidFlexDesc);
+	}
+}
+
+void FElysiumFacialRig::Evaluate(TArrayView<const float> ControllerValues, const FElysiumJawInput& Jaw,
+	const FElysiumEyeInput& Eyes, TArray<float>& OutFlexWeights,
+	TArray<float>& OutMorphWeights) const
+{
+	// 1 / 1.5 — the two writes that have to reach the rules as *controller* values. The jaw is
+	// raised (an expression already opening the mouth keeps its own value); blink is assigned,
+	// because retail's blink overwrites whatever the controller pass left there.
+	const bool bBridge = Jaw.bBridge && Jaw.IsOpen() && Controllers.IsValidIndex(MouthBridge)
+		&& ControllerValues.IsValidIndex(MouthBridge);
+	const bool bBlink = Controllers.IsValidIndex(BlinkController)
+		&& ControllerValues.IsValidIndex(BlinkController) && Eyes.Blink > 0.f;
+	if (bBridge || bBlink)
+	{
 		TArray<float, TInlineAllocator<64>> Values(ControllerValues);
-		Values[MouthBridge] = FMath::Max(Values[MouthBridge], Bridged);
-		// 2 — the rules and the lid combine.
+		if (bBridge)
+		{
+			Values[MouthBridge] = FMath::Max(Values[MouthBridge],
+				Controllers[MouthBridge].Normalize(Jaw.Open));
+		}
+		if (bBlink)
+		{
+			// Raw: no Normalize, deliberately. The shipped controllers are all 0..1 so the remap
+			// would be the identity here, but the asymmetry is authored and a modded rig would show it.
+			Values[BlinkController] = Eyes.Blink;
+		}
 		EvalFlexWeights(Values, OutFlexWeights);
 	}
 	else
 	{
 		EvalFlexWeights(ControllerValues, OutFlexWeights);
 	}
+	// 2.5 — the authored eye pass, over the lid flexdescs the records name.
+	ApplyEyesToFlexWeights(Eyes, OutFlexWeights);
 	// 3 — the direct flexdesc write, after every rule that could have computed it.
 	ApplyJawToFlexWeights(Jaw, OutFlexWeights);
 	// 4 — the target ramps.
 	EvalMorphWeights(OutFlexWeights, OutMorphWeights);
+}
+
+void FElysiumFacialRig::Evaluate(TArrayView<const float> ControllerValues, const FElysiumJawInput& Jaw,
+	TArray<float>& OutFlexWeights, TArray<float>& OutMorphWeights) const
+{
+	// No eye data is the same structurally inert no-op that no jaw already is: the eye pass writes
+	// nothing and the `FElysiumFlexLid` reconstruction keeps every hinged lid.
+	Evaluate(ControllerValues, Jaw, FElysiumEyeInput(), OutFlexWeights, OutMorphWeights);
 }

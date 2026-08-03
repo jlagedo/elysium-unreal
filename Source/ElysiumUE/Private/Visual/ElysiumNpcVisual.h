@@ -4,6 +4,7 @@
 
 class UAnimSequence;
 class UglTFRuntimeAsset;
+class UMaterialInterface;
 class USkeletalMesh;
 
 // Shared runtime glTF NPC loader (P8 8.2 / B3). One code path both the interactive test harness
@@ -19,10 +20,15 @@ namespace ElysiumNpcVisual
 	// the parsed glTFRuntime asset so the caller can pull animations off it (LoadIdleAnim, or the
 	// harness's own per-clip auditioning). Needs no UWorld — glTFLoadAssetFromFilename is world-free.
 	USkeletalMesh* LoadMesh(const FString& Stem, UglTFRuntimeAsset*& OutAsset, FString& OutError,
-		bool bPlayerMaterial = false);
+		bool bPlayerMaterial = false, const TArray<FString>* EyeMaterials = nullptr);
 	// The same strict skeletal loader for a manifest-provided absolute path (v4 animated props).
 	USkeletalMesh* LoadMeshFromPath(const FString& FullPath, UglTFRuntimeAsset*& OutAsset,
-		FString& OutError, bool bPlayerMaterial = false);
+		FString& OutError, bool bPlayerMaterial = false,
+		const TArray<FString>* EyeMaterials = nullptr);
+
+	// The master an eye section is drawn with, or null when the policy content has not been
+	// generated. Callers compare a built slot's base material against this to find the eye slots.
+	UMaterialInterface* EyeMaster();
 
 	// Parse any .glb by absolute path — the shared animation banks (out/npc/banks/<stem>.glb), which
 	// carry a skeleton and clips but no mesh. Same config as LoadMesh, so a bank reorients into

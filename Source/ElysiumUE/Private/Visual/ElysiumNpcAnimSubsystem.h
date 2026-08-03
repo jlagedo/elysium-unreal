@@ -5,6 +5,7 @@
 
 #include "Substrate/ElysiumDisposition.h"
 #include "Visual/ElysiumCompositionRig.h"
+#include "Visual/ElysiumEyeRig.h"
 #include "Visual/ElysiumFacialRig.h"
 #include "Visual/ElysiumNpcClips.h"
 
@@ -52,6 +53,11 @@ public:
 	// body and leaves the face still. Shared rather than raw: an anim instance holds one for as long
 	// as its body lives, across map epochs this GI-scoped cache outlasts.
 	TSharedPtr<const FElysiumFacialRig> GetFacialRig(const FString& Stem);
+	// The eyeball pair for a stem (12.4): `npc/eyes/<stem>.json`, carried onto the skeleton through
+	// the glb's import transform. Same shape and lifetime as GetFacialRig — shared, immutable once
+	// built, GI-scoped. Answered independently of the flex rig, because a player body carries a
+	// pair of eyeballs and no flex rig at all.
+	TSharedPtr<const FElysiumEyeSet> GetEyeSet(const FString& Stem);
 	// The two composition stages' rig for a stem (CAP7.2): `npc_index.json`'s `split_bones` plus
 	// `npc/procedural/<stem>.json`. Null when the model declares neither, which is a normal load —
 	// the body then poses under Unreal's ordinary hierarchy composition, as it did before CAP7.2.
@@ -122,6 +128,7 @@ private:
 	TMap<FString, TSharedPtr<FElysiumNpcClipSet>> ClipSets;
 	// Same shape, same reason: a null entry is the remembered "this model has no flex rig".
 	TMap<FString, TSharedPtr<const FElysiumFacialRig>> FacialRigs;
+	TMap<FString, TSharedPtr<const FElysiumEyeSet>> EyeSets;
 	// And again for the composition stages. Keyed by stem for characters and by the normalized
 	// model path for animated props, which is how each is addressed upstream.
 	TMap<FString, TSharedPtr<const FElysiumCompositionRig>> CompositionRigs;

@@ -26,6 +26,7 @@
 #include "ElysiumReflections.h"
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumChargen.h"
+#include "Substrate/ElysiumDisposition.h"
 #include "Substrate/ElysiumInterestingPlaces.h"
 #include "Substrate/ElysiumQuestLog.h"
 #include "Substrate/ElysiumQuestView.h"
@@ -1707,11 +1708,11 @@ bool FElysiumOpeningAnimatedPropsContentTest::RunTest(const FString&)
 	}
 	FElysiumNpcIndex Index;
 	FString Error;
-	if (!TestTrue(FString::Printf(TEXT("npc_index v4 loads: %s"), *Error), Index.Load(Error)))
+	if (!TestTrue(FString::Printf(TEXT("npc_index loads: %s"), *Error), Index.Load(Error)))
 	{
 		return true;
 	}
-	TestEqual(TEXT("animated-prop manifest schema is v4"), Index.ManifestVersion, 4);
+	TestTrue(TEXT("animated-prop manifest schema is at least v4"), Index.ManifestVersion >= 4);
 
 	FElysiumEntityDefs Defs;
 	if (!TestTrue(TEXT("sp_theatre entities parse"), FElysiumEntityDefs::Parse(Path, Defs)))
@@ -3918,6 +3919,70 @@ bool FElysiumSceneAnimSetsTest::RunTest(const FString&)
 	TestEqual(TEXT("every scene actor's bonerename root resolves to a bank"),
 		NumActorBindsResolved, NumActorBinds);
 
+	return true;
+}
+
+// The blink cadence the eye pass schedules from (roadmap 12.4). The table authors the key under two
+// spellings — `"Min Blink Interval"` on four rows and `"MinBlinkInterval"` on six — and reading only
+// one is a silent fallback to the defaults rather than a parse error, which is exactly the shape of
+// bug this tier exists to catch: the two rows that carry a cadence other than 2.5/6.0 are both
+// spelled the second way.
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDispositionBlinkContentTest,
+	"Elysium.Content.DispositionBlink", GElysiumContentTestFlags)
+
+bool FElysiumDispositionBlinkContentTest::RunTest(const FString&)
+{
+	if (!IFileManager::Get().FileExists(
+		*FElysiumContentPaths::VdataFile(TEXT("system/dispositiontable.txt"))))
+	{
+		AddInfo(TEXT("disposition table not exported; skipping"));
+		return true;
+	}
+	FElysiumDispositionTable Table;
+	FString Error;
+	if (!TestTrue(TEXT("the disposition table loads"), Table.Load(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	int32 Cadences = 0;
+	TSet<FString> Distinct;
+	for (const TPair<FString, FElysiumDisposition>& Pair : Table.Rows)
+	{
+		const FElysiumDisposition& Row = Pair.Value;
+		TestTrue(FString::Printf(TEXT("'%s' blinks at a positive interval"), *Pair.Key),
+			Row.MinBlinkInterval > 0.f);
+		TestTrue(FString::Printf(TEXT("'%s' has a usable blink range"), *Pair.Key),
+			Row.MaxBlinkInterval >= Row.MinBlinkInterval);
+		// Long enough for the 0.3 s envelope to finish before the next toggle is scheduled.
+		TestTrue(FString::Printf(TEXT("'%s' blinks slower than the envelope"), *Pair.Key),
+			Row.MinBlinkInterval > 0.3f);
+		++Cadences;
+		Distinct.Add(FString::Printf(TEXT("%.2f/%.2f"), Row.MinBlinkInterval, Row.MaxBlinkInterval));
+	}
+	TestTrue(TEXT("every disposition carries a cadence"), Cadences > 0);
+	// More than one cadence reaches the rows. A single distinct value means the unspaced spelling
+	// stopped being read and every row collapsed onto the default.
+	//
+	// The file authors three; the reader keys rows by name alone, so where a disposition is authored
+	// several times over — `Anger` four times, once per `DispositionLevel` — only the last block
+	// survives and `Enraged`'s 4.5/7.0 is not among them.
+	TestTrue(FString::Printf(TEXT("the authored cadences survive the parse (%d distinct)"),
+		Distinct.Num()), Distinct.Num() >= 2);
+
+	// `Error` is the row a character falls to when its own disposition does not resolve, and it is
+	// authored to blink fast enough to read as a tell. It is also spelled the unspaced way.
+	if (const FElysiumDisposition* Err = Table.Rows.Find(TEXT("error")))
+	{
+		TestEqual(TEXT("Error blinks fast"), Err->MinBlinkInterval, 1.5f, 1e-3f);
+		TestEqual(TEXT("and closes its range"), Err->MaxBlinkInterval, 2.f, 1e-3f);
+	}
+	else
+	{
+		AddError(TEXT("the disposition table carries no `Error` row"));
+	}
 	return true;
 }
 

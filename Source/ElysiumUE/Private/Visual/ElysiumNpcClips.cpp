@@ -76,6 +76,8 @@ namespace
 			(*Obj)->TryGetNumberField(TEXT("clips"), E.ClipCount);
 			(*Obj)->TryGetStringField(TEXT("facial"), E.Facial);
 			(*Obj)->TryGetNumberField(TEXT("morphs"), E.MorphCount);
+			(*Obj)->TryGetStringField(TEXT("eyes"), E.Eyes);
+			(*Obj)->TryGetNumberField(TEXT("eyeballs"), E.EyeballCount);
 			ReadStringArray(*Obj, TEXT("split_bones"), E.SplitRotationBones);
 			(*Obj)->TryGetStringField(TEXT("procedural"), E.Procedural);
 			(*Obj)->TryGetNumberField(TEXT("procedural_bones"), E.ProceduralBones);
@@ -231,9 +233,9 @@ bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 		return false;
 	}
 	Root->TryGetNumberField(TEXT("manifest_version"), ManifestVersion);
-	if (ManifestVersion != 3 && ManifestVersion != 4)
+	if (ManifestVersion < 3 || ManifestVersion > 5)
 	{
-		OutError = FString::Printf(TEXT("unsupported npc_index manifest version %d (expected 3 or 4)"),
+		OutError = FString::Printf(TEXT("unsupported npc_index manifest version %d (expected 3 to 5)"),
 			ManifestVersion);
 		return false;
 	}

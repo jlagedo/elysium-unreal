@@ -219,4 +219,12 @@ def parse(text, resolve_include=None):
         "fogstart": _find_f(text, "fogstart"),           # Source units (inches)
         "fogend": _find_f(text, "fogend"),
         "reflecttint": _vec3(_find(text, "reflecttint")),
+        # The "Eyes" shader (394 of the 400 eyeball materials). $iris is a second texture
+        # composited over $basetexture by its own alpha, at UVs the renderer's eye pass
+        # supplies per frame; $vampire selects a pixel program that does not multiply the
+        # iris by scene lighting. No shipped material sets $glint - it names a procedural
+        # texture the renderer generates. Format: `docs/vtmb/facial_animation.md`.
+        "iris": _norm_path(_find(text, "iris")),
+        "glint": _norm_path(_find(text, "glint")),
+        "vampire": _find(text, "vampire") == "1",
     }

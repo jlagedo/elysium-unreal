@@ -432,6 +432,17 @@ bool UElysiumNpcAnimInstance::SetMouthOpen(float Open)
 	return true;
 }
 
+bool UElysiumNpcAnimInstance::SetEyeInput(const FElysiumEyeInput& Eyes)
+{
+	if (!FacialRig.IsValid())
+	{
+		return false;
+	}
+	EyeInput = Eyes;
+	EvaluateFacial();
+	return true;
+}
+
 void UElysiumNpcAnimInstance::EvaluateFacial()
 {
 	if (!FacialRig.IsValid())
@@ -443,7 +454,7 @@ void UElysiumNpcAnimInstance::EvaluateFacial()
 	// Read here rather than latched at the write, so toggling the cvar takes on the next evaluation
 	// of any kind instead of waiting for the next jaw write.
 	Jaw.bBridge = CVarFacialJawBridge.GetValueOnGameThread() != 0;
-	FacialRig->Evaluate(ControllerValues, Jaw, FlexWeights, MorphWeights);
+	FacialRig->Evaluate(ControllerValues, Jaw, EyeInput, FlexWeights, MorphWeights);
 	// GetProxyOnGameThread blocks on any in-flight parallel evaluation, so the worker cannot be
 	// reading the weight array this overwrites.
 	GetProxyOnGameThread<FElysiumNpcAnimProxy>().SetFacialWeights(MorphWeights);

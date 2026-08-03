@@ -430,6 +430,77 @@ def axis_interp_rules(d, bones):
     return rules, faults
 
 
+def eye_rig(d, bones, mesh_map, matinfo):
+    """The model's `StudioEyeball` records, in the glb's own basis, joined to the eye meshes.
+
+    Two per character model. The record carries the eye's bone and resting basis, the iris
+    scale, and the eyelid flexdescs the renderer's eye pass writes back into the flex weights
+    after the rules have run -- so it is the authored bridge between the four eyelid rules and
+    the lid morphs, not a reconstruction. `StudioMesh.materialtype == 1` flags which meshes the
+    pass applies to and `materialparam` says which eyeball, which is how a material name (and
+    therefore the `.vmt`'s `$iris` and `$vampire`) reaches a record.
+
+    The bone rides as a **name**: a model with more than one parent-less bone gets a synthetic
+    root appended at assembly, so the runtime skeleton's bone order is not the `.mdl`'s.
+
+    `uppertarget`/`lowertarget` stay verbatim -- they are linear offsets read through
+    `asin(t / radius)` against a radius in the same units, so converting either alone breaks
+    the ratio. Format and the whole system they feed: `docs/vtmb/facial_animation.md`.
+
+    Returns `(rig, faults)`; `rig` is None when the model authors no eyeball.
+    """
+    faults = []
+    eye_mat, seen = {}, {}
+    for r in mesh_map:
+        seen.setdefault(r["material"], set()).add(r.get("materialtype", 0))
+        if r.get("materialtype") != 1:
+            continue
+        param = r.get("materialparam", 0)
+        if param not in (0, 1):
+            faults.append(f"eye mesh {r['material']}: materialparam {param} outside 0..1")
+            continue
+        eye_mat.setdefault(param, r["material"])
+    for name, types in seen.items():
+        if len(types) > 1:
+            faults.append(f"{name}: used by both eye and non-eye meshes, so the primitives merge")
+
+    records = []
+    for model_base in dict.fromkeys(r["model_base"] for r in mesh_map):
+        for e in S.eyeballs(d, model_base):
+            if not 0 <= e["bone"] < len(bones):
+                faults.append(f"eyeball {e['index']}: bone {e['bone']} outside 0..{len(bones) - 1}")
+                continue
+            mat = eye_mat.get(e["index"])
+            info = matinfo.get(mat) or {}
+            records.append({
+                "index": e["index"],
+                "bone": bones[e["bone"]].name, "bone_index": e["bone"],
+                "org": [float(c) for c in conv_pos(e["org"])],
+                "up": [float(c) for c in conv_dir(e["up"])],
+                "forward": [float(c) for c in conv_dir(e["forward"])],
+                "zoffset": float(e["zoffset"]), "radius": float(e["radius"]),
+                "iris_scale": float(e["iris_scale"]),
+                "upperflexdesc": e["upperflexdesc"], "lowerflexdesc": e["lowerflexdesc"],
+                "uppertarget": [round(t, 6) for t in e["uppertarget"]],
+                "lowertarget": [round(t, 6) for t in e["lowertarget"]],
+                "upperlidflexdesc": e["upperlidflexdesc"],
+                "lowerlidflexdesc": e["lowerlidflexdesc"],
+                "material": mdl.sanitize(mat) if mat else None,
+                "iris": ("tex/" + info["iris"]) if info.get("iris") else None,
+                "vampire": bool(info.get("vampire")),
+            })
+            if mat is None:
+                faults.append(f"eyeball {e['index']}: no mesh carries materialtype 1 for it")
+
+    if not records:
+        return None, faults
+    if len(records) != 2:
+        faults.append(f"{len(records)} eyeball records; every shipped character carries two")
+    return {"eyeballs": records,
+            "meshes": [{"material": mdl.sanitize(m), "eyeball": p}
+                       for p, m in sorted(eye_mat.items())]}, faults
+
+
 def _build_skinned(g, idx, d, v, model_path, out_dir, anorms=None):
     """Skeleton nodes + skin + per-material mesh primitives + materials into `g`.
 
@@ -453,9 +524,10 @@ def _build_skinned(g, idx, d, v, model_path, out_dir, anorms=None):
 
     # --- materials ---
     matnames = list(surfaces.keys())
-    images, textures, materials, mat_index = [], [], [], {}
+    images, textures, materials, mat_index, matinfo = [], [], [], {}, {}
     for mn in matnames:
-        albedo = mdl._resolve_material(mn, search, read_bytes, out_dir, tex_cache)["albedo"]
+        matinfo[mn] = mdl._resolve_material(mn, search, read_bytes, out_dir, tex_cache)
+        albedo = matinfo[mn]["albedo"]
         # Double-sided like the rest of the project (world/props render CullMode Disabled):
         # VtMB character meshes have open/thin geometry (tank-top neck & armholes, mouth, eye
         # sockets) that shows the culled interior when orbited.
@@ -507,6 +579,9 @@ def _build_skinned(g, idx, d, v, model_path, out_dir, anorms=None):
                  surfaces=surfaces, matnames=matnames, mesh_map=mesh_map, target_names=[])
     built["facial"] = (facial_rig(d, _build_morphs(g, d, built, anorms))
                        if anorms and S.flex_descs(d) else None)
+    # Independent of the flex rig: 57 of the 59 player bodies carry eyeballs and no flex data
+    # at all, so their irises aim while their lids cannot move.
+    built["eyes"], built["eye_faults"] = eye_rig(d, bones, mesh_map, matinfo)
     return built
 
 
@@ -702,15 +777,20 @@ def export_npc(idx, model_path, out_dir, stem=None, anorms=None):
     rules, rule_faults = axis_interp_rules(d, built["bones"])
     driven = f", {len(rules)} driven bones" if rules else ""
     grids = f", {len(blends)} blend grids" if blends else ""
+    eyes = built["eyes"]
+    eyeballs = f", {len(eyes['eyeballs'])} eyeballs" if eyes else ""
     print(f"  npc {stem}: {len(built['bones'])} bones, {tris} tris, {len(labels)} own clips"
-          f"{morphs}{driven}{grids} -> {glb} ({os.path.getsize(glb) // 1024} KB)")
+          f"{morphs}{driven}{grids}{eyeballs} -> {glb} ({os.path.getsize(glb) // 1024} KB)")
     for fault in rule_faults:
         print(f"  ! {stem}: procedural rule - {fault}")
+    for fault in built["eye_faults"]:
+        print(f"  ! {stem}: eyeball - {fault}")
     return dict(stem=stem, glb=os.path.basename(glb), model=model_path,
                 bones=len(built["bones"]),
                 split_bones=[b.name for b in built["bones"] if b.flags & 0x2],
                 clips=labels, facial=face, blends=blend_sidecar(d, blends),
-                procedural=rules, procedural_faults=rule_faults)
+                procedural=rules, procedural_faults=rule_faults,
+                eyes=eyes, eye_faults=built["eye_faults"])
 
 
 def export_bank(idx, model_path, out_dir, stem):

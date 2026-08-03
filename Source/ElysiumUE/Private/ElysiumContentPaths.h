@@ -233,6 +233,12 @@ struct FElysiumContentPaths
 	// bone names none; 130 of the 185 exported models carry one.
 	static FString NpcProcedural(const FString& RelPath) { return NpcDir() / RelPath; }
 
+	// The eyeball pair beside a character's glb (12.4): the eye's bone and resting basis, the iris
+	// scale and texture, and the eyelid flexdescs the renderer's eye pass writes back into the flex
+	// weights. RelPath is `npc_index.json`'s own `npcs[stem].eyes` value ("eyes/<stem>.json").
+	// Named separately from the flex rig because a player body carries eyeballs and no flex rig.
+	static FString NpcEyes(const FString& RelPath) { return NpcDir() / RelPath; }
+
 	// The labelled sky set (debug, sky-ambience RE-A2/B1). Six self-describing face images —
 	// suffix, predicted axis, TOP banner, up arrow, tagged corners, edge neighbours — authored by
 	// research/tooling/probes/sky_probe.py, which also installs them into the *original* game so the two ends of the

@@ -22,6 +22,7 @@
 #include "Substrate/ElysiumSceneData.h"
 #include "Tests/ElysiumTestServices.h"
 #include "Visual/ElysiumExpressionTable.h"
+#include "Visual/ElysiumEyeRig.h"
 #include "Visual/ElysiumFacialRig.h"
 #include "Visual/ElysiumNpcAnimInstance.h"
 #include "Visual/ElysiumNpcClips.h"
@@ -38,6 +39,8 @@
 #include "HAL/IConsoleManager.h"
 #include "Misc/Paths.h"
 #include "Misc/ScopeExit.h"
+#include "Rendering/SkeletalMeshLODRenderData.h"
+#include "Rendering/SkeletalMeshRenderData.h"
 #include "Tests/AutomationCommon.h"
 
 static constexpr EAutomationTestFlags GElysiumFacialTestFlags =
@@ -95,6 +98,42 @@ namespace
 	  ]
 	}
 	)JSON");
+
+	// The eyeball record that closes `GTestRigJson`'s lid family, in the exported sidecar's own shape.
+	// Its `uppertarget` triple is the same three numbers the rig's ramps hinge on, which is how the
+	// shipped models are authored — so the record and the `FElysiumFlexLid` reconstruction are two
+	// independent derivations of one value and must agree wherever exactly one lid state is held.
+	//
+	// `up`/`forward` are stated already orthonormal, as every shipped record is, and `LoadJsonText`
+	// leaves them in the file's own space — no import transform, no skeleton.
+	const TCHAR* const GTestEyeJson = TEXT(R"JSON(
+	{
+	  "stem": "testrig",
+	  "eyeballs": [
+	    {"index":0, "bone":"Bip01 Head", "bone_index":6,
+	     "org":[0.0,0.0,0.0], "up":[0.0,0.0,1.0], "forward":[1.0,0.0,0.0],
+	     "zoffset":0.0, "radius":0.5, "iris_scale":2.0,
+	     "upperflexdesc":[1,2,3], "uppertarget":[-0.16,0.208,0.298],
+	     "upperlidflexdesc":0, "material":"eyeball_r"}
+	  ]
+	}
+	)JSON");
+
+	// Solve the first record's basis against a gaze point and hand the lid half on, exactly as the
+	// per-frame pass does — `FromRecord` is the shared seam, so a divergence between the two cannot
+	// hide here.
+	FElysiumEyeInput AimEye(const FElysiumEyeSet& Set, const FVector& Target, bool bEyeMove,
+		float Blink = 0.f)
+	{
+		FElysiumEyeTuning Tuning;
+		Tuning.bEyeMove = bEyeMove;
+		FElysiumEyeState State;
+		ElysiumEyes::BuildState(Set.Eyeballs[0], FTransform::Identity, Target, Tuning, State);
+		FElysiumEyeInput Input;
+		Input.Eyes[0].FromRecord(Set.Eyeballs[0], State);
+		Input.Blink = Blink;
+		return Input;
+	}
 
 	// Controller/flexdesc/morph indices in the rig above, so the assertions read as names.
 	enum { CtlBlink = 0, CtlLidUp = 1, CtlDroop = 2, CtlWide = 3, CtlJawDrop = 4 };
@@ -415,6 +454,245 @@ bool FElysiumFlexJawTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// The eye basis — `R_StudioEyeballPosition`, without a mesh under it.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEyeSolveTest, "Elysium.Substrate.EyeSolve", GElysiumFacialTestFlags)
+bool FElysiumEyeSolveTest::RunTest(const FString&)
+{
+	FElysiumEyeSet Set;
+	FString Error;
+	if (!TestTrue(TEXT("the test eye record parses"), Set.LoadJsonText(GTestEyeJson, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestEqual(TEXT("one record"), Set.Eyeballs.Num(), 1);
+	TestTrue(TEXT("found by its material name, case-insensitively"),
+		Set.FindByMaterial(TEXT("EYEBALL_R")) == &Set.Eyeballs[0]);
+	TestTrue(TEXT("and by its record index"), Set.Find(0) == &Set.Eyeballs[0]);
+
+	const FElysiumEyeball& Eye = Set.Eyeballs[0];
+	FElysiumEyeTuning Tuning;
+	FElysiumEyeState State;
+
+	// --- the resting aim, and its sign ---------------------------------------------------------
+	// `bEyeMove` off is a real retail configuration, and the record stores the resting aim NEGATED:
+	// drop the sign and the whole cast looks out of the back of its head, which is invisible until
+	// someone stands in front of one.
+	Tuning.bEyeMove = false;
+	ElysiumEyes::BuildState(Eye, FTransform::Identity, FVector(100.f, 0.f, 0.f), Tuning, State);
+	TestTrue(TEXT("the resting basis solves"), State.bValid);
+	TestTrue(TEXT("resting forward is the record's own, negated"),
+		State.Forward.Equals(FVector(-1.f, 0.f, 0.f), 1e-4f));
+	TestTrue(TEXT("and the target is ignored with bEyeMove off"),
+		State.Forward.X < 0.f);
+	TestTrue(TEXT("up is the record's up"), State.Up.Equals(FVector(0.f, 0.f, 1.f), 1e-4f));
+
+	// The bone-local pair the eyelid bridge consumes. Under an identity bone these are the record's
+	// own vectors back again, which is the only configuration where the two spaces are checkable
+	// against each other by inspection.
+	TestTrue(TEXT("UpLocal is the authored up"), State.UpLocal.Equals(Eye.Up, 1e-4f));
+	TestEqual(TEXT("the lid axis and the aim are orthogonal at rest"),
+		static_cast<float>(FVector::DotProduct(State.ForwardLocal, Eye.Up)), 0.f, 1e-4f);
+
+	// --- the iris plane scale is an inverse length ---------------------------------------------
+	// `1/(1/iris_scale + EyeSize)` is in eyeball-unit⁻¹, so it reaches centimetres by DIVISION.
+	// Multiplying instead is a 6.45x error that still draws a perfectly round iris.
+	const float Expected = (1.f / (1.f / 2.f)) / ElysiumEyes::UnitsToCm;
+	TestEqual(TEXT("|IrisU| divides by the unit scale"),
+		static_cast<float>(State.IrisU.Size()), Expected, 1e-4f);
+	TestEqual(TEXT("|IrisV| matches it"),
+		static_cast<float>(State.IrisV.Size()), Expected, 1e-4f);
+	TestEqual(TEXT("the plane axes are perpendicular"),
+		static_cast<float>(FVector::DotProduct(State.IrisU, State.IrisV)), 0.f, 1e-4f);
+	// EyeSize widens the iris by *shrinking* the inverse length.
+	Tuning.EyeSize = 0.25f;
+	ElysiumEyes::BuildState(Eye, FTransform::Identity, FVector::ZeroVector, Tuning, State);
+	TestEqual(TEXT("EyeSize enters as an inverse"), static_cast<float>(State.IrisU.Size()),
+		(1.f / (1.f / 2.f + 0.25f)) / ElysiumEyes::UnitsToCm, 1e-4f);
+	Tuning.EyeSize = 0.f;
+
+	// --- the two origins are two parameters -----------------------------------------------------
+	// The shift moves the iris planes and deliberately not the shading normal's origin. They
+	// coincide at the shipped default, so collapsing them into one is invisible until the knob moves.
+	ElysiumEyes::BuildState(Eye, FTransform::Identity, FVector::ZeroVector, Tuning, State);
+	TestTrue(TEXT("unshifted, the two origins coincide"), State.Org.Equals(State.NormalOrg, 1e-5f));
+	FElysiumEyeSet Shifted;
+	Shifted.LoadJsonText(GTestEyeJson, Error);
+	Shifted.Eyeballs[0].Org = FVector(2.f, -3.f, 0.f);
+	Tuning.EyeShift = FVector(0.5f, 0.5f, 0.f);
+	ElysiumEyes::BuildState(Shifted.Eyeballs[0], FTransform::Identity, FVector::ZeroVector, Tuning, State);
+	// By the sign of each component, so a mirrored pair moves apart rather than both one way.
+	TestTrue(TEXT("the shift follows each component's sign"),
+		State.Org.Equals(FVector(2.5f, -3.5f, 0.f), 1e-4f));
+	TestTrue(TEXT("and the shading origin does not take it"),
+		State.NormalOrg.Equals(FVector(2.f, -3.f, 0.f), 1e-4f));
+	Tuning.EyeShift = FVector::ZeroVector;
+
+	// --- looking at something --------------------------------------------------------------------
+	Tuning.bEyeMove = true;
+	ElysiumEyes::BuildState(Eye, FTransform::Identity, FVector(0.f, 50.f, 0.f), Tuning, State);
+	TestTrue(TEXT("the eye turns to the target"), State.Forward.Equals(FVector(0.f, 1.f, 0.f), 1e-4f));
+	TestTrue(TEXT("the basis stays right-handed"),
+		FVector::CrossProduct(State.Right, State.Forward).Equals(State.Up, 1e-4f));
+
+	// A target on the up axis has no basis to build — `forward` and `up` are parallel there, so the
+	// solve reports invalid rather than handing on a degenerate frame.
+	ElysiumEyes::BuildState(Eye, FTransform::Identity, FVector(0.f, 0.f, 50.f), Tuning, State);
+	TestFalse(TEXT("a target straight along up is degenerate"), State.bValid);
+
+	// --- zoffset shifts the aim sideways, in the plane the lid axis is normal to ------------------
+	FElysiumEyeSet Offset;
+	Offset.LoadJsonText(GTestEyeJson, Error);
+	Offset.Eyeballs[0].ZOffset = 0.1f;
+	ElysiumEyes::BuildState(Offset.Eyeballs[0], FTransform::Identity, FVector(0.f, 50.f, 0.f), Tuning, State);
+	TestTrue(TEXT("the nudged aim is still a unit vector"),
+		FMath::IsNearlyEqual(static_cast<float>(State.Forward.Size()), 1.f, 1e-4f));
+	TestEqual(TEXT("the nudge is sideways only — up is untouched"),
+		static_cast<float>(FVector::DotProduct(State.Up, Offset.Eyeballs[0].Up)), 1.f, 1e-4f);
+	TestTrue(TEXT("and the aim actually moved"), FMath::Abs(State.Forward.X) > 1e-3f);
+
+	return true;
+}
+
+// =====================================================================================
+// The eyelid bridge — the record's write-back, against the reconstruction it supersedes.
+// =====================================================================================
+//
+// The four eyelid rules compute weights no morph reads, and the lid morphs hang off flexdescs no
+// rule computes. `StudioEyeball` is the authored bridge between them, and the failure mode is that
+// every wrong version of it still moves a lid: reading `uppertarget` as radians moves one, dropping
+// the aim term moves one, and running the pass before the rules instead of after moves one. So the
+// assertions below pin the resting *value*, not the presence of motion.
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEyeLidTest, "Elysium.Substrate.EyeLids", GElysiumFacialTestFlags)
+bool FElysiumEyeLidTest::RunTest(const FString&)
+{
+	FElysiumFacialRig Rig;
+	FElysiumEyeSet Set;
+	FString Error;
+	if (!TestTrue(TEXT("the test rig parses"), Rig.LoadJsonText(GTestRigJson, Error))
+		|| !TestTrue(TEXT("the test eye record parses"), Set.LoadJsonText(GTestEyeJson, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestEqual(TEXT("the rig reconstructs exactly one lid"), Rig.Lids.Num(), 1);
+	TestEqual(TEXT("hinged where the two ramps meet"), Rig.Lids[0].NeutralAngle, 0.208f, 1e-5f);
+
+	TArray<float> Controllers;
+	Controllers.AddZeroed(Rig.Controllers.Num());
+	TArray<float> Flex, Morph;
+	const FElysiumJawInput NoJaw;
+
+	// --- at rest the record and the reconstruction agree, exactly on the hinge -------------------
+	// The record says `radius * sin(asin(0.208/radius))` and the reconstruction says `1 x 0.208`.
+	// They are two independent derivations — one off the eyeball record, one off the morph ramps —
+	// so their agreement is a free check on the whole recovery. Reading the targets as radians would
+	// give `0.5 * sin(0.208)` = 0.1032 here, which still moves a lid and still looks like a face.
+	const FElysiumEyeInput Rest = AimEye(Set, FVector::ZeroVector, /*bEyeMove=*/false);
+	TestTrue(TEXT("the resting aim is usable"), Rest.Eyes[0].bValid);
+	Rig.Evaluate(Controllers, NoJaw, Rest, Flex, Morph);
+	TestEqual(TEXT("the resting lid lands on the neutral target"), Flex[FdLid], 0.208f, 1e-4f);
+	TestEqual(TEXT("which is exactly the reconstruction's answer"),
+		Flex[FdLid], Rig.Lids[0].NeutralAngle, 1e-4f);
+	// And the hinge is the point of it: both ramps read zero there, so a face at rest is still.
+	TestEqual(TEXT("the low lid morph is off at rest"), Morph[MorphLid], 0.f, 1e-3f);
+	TestEqual(TEXT("the high lid morph is off at rest"), Morph[MorphLidHigh], 0.f, 1e-3f);
+
+	// --- the lid follows the eye -----------------------------------------------------------------
+	// The property that says the pass is coupled to the gaze at all: identical controllers, three
+	// aims, three answers. `dot(v, up)` is `radius * sin(sum + elevation)`, so an eye looking up
+	// carries its upper lid up with it.
+	const FElysiumEyeInput Up = AimEye(Set, FVector(10.f, 0.f, 5.f), /*bEyeMove=*/true);
+	Rig.Evaluate(Controllers, NoJaw, Up, Flex, Morph);
+	const float LidUp = Flex[FdLid];
+	TestEqual(TEXT("looking 26.6 degrees up raises the lid"), LidUp, 0.38942f, 1e-4f);
+	TestEqual(TEXT("far enough to saturate the high ramp"), Morph[MorphLidHigh], 1.f, 1e-4f);
+
+	const FElysiumEyeInput Down = AimEye(Set, FVector(10.f, 0.f, -5.f), /*bEyeMove=*/true);
+	Rig.Evaluate(Controllers, NoJaw, Down, Flex, Morph);
+	TestEqual(TEXT("and looking down lowers it symmetrically"), Flex[FdLid], -0.01729f, 1e-4f);
+	TestTrue(TEXT("the two aims differ"), FMath::Abs(LidUp - Flex[FdLid]) > 0.1f);
+
+	// --- a blink, at rest ------------------------------------------------------------------------
+	// `blink` is assigned raw ahead of the rules, which drive the lowerer to 1 and everything else to
+	// 0; the record then places the lid on its lowered offset, which is exactly where the low ramp
+	// saturates. A blink that reached the flexdesc any other way would not land on that number.
+	const FElysiumEyeInput Blink = AimEye(Set, FVector::ZeroVector, /*bEyeMove=*/false, /*Blink=*/1.f);
+	Rig.Evaluate(Controllers, NoJaw, Blink, Flex, Morph);
+	TestEqual(TEXT("a blink drives the lowerer alone"), Flex[FdLowerer], 1.f, 1e-5f);
+	TestEqual(TEXT("and cancels the neutral"), Flex[FdNeutral], 0.f, 1e-5f);
+	TestEqual(TEXT("the lid lands on its lowered offset"), Flex[FdLid], -0.16f, 1e-4f);
+	TestEqual(TEXT("closing the eye"), Morph[MorphLid], 1.f, 1e-4f);
+	TestEqual(TEXT("with the high morph off"), Morph[MorphLidHigh], 0.f, 1e-4f);
+
+	// --- the record supersedes the reconstruction, per flexdesc ----------------------------------
+	// Re-authored so the two disagree: the record now says 0.30 where the ramps still hinge at 0.208.
+	// Whichever one wins is visible in the flexdesc, and the record must.
+	FElysiumEyeSet Moved;
+	Moved.LoadJsonText(GTestEyeJson, Error);
+	Moved.Eyeballs[0].UpperTarget[1] = 0.30f;
+	FElysiumEyeInput MovedRest = AimEye(Moved, FVector::ZeroVector, /*bEyeMove=*/false);
+	Rig.Evaluate(Controllers, NoJaw, MovedRest, Flex, Morph);
+	TestEqual(TEXT("the record's own target wins"), Flex[FdLid], 0.30f, 1e-4f);
+
+	// Off, the reconstruction is what stands — the A/B, and the state of every body whose model
+	// carries no record at all.
+	MovedRest.bWriteLids = false;
+	Rig.Evaluate(Controllers, NoJaw, MovedRest, Flex, Morph);
+	TestEqual(TEXT("with the pass off the reconstruction stands"), Flex[FdLid], 0.208f, 1e-4f);
+
+	// A record naming a flexdesc this rig does not have must write nothing rather than anything.
+	FElysiumEyeSet Foreign;
+	Foreign.LoadJsonText(GTestEyeJson, Error);
+	Foreign.Eyeballs[0].UpperLidFlexDesc = 99;
+	Rig.Evaluate(Controllers, NoJaw, AimEye(Foreign, FVector::ZeroVector, false), Flex, Morph);
+	TestEqual(TEXT("an out-of-range lid flexdesc leaves the reconstruction alone"),
+		Flex[FdLid], 0.208f, 1e-4f);
+
+	// --- order: the pass runs after the rules ----------------------------------------------------
+	// Rules first, then the eye pass, is the recovered order. Reversed, the rule layer's own lid
+	// reconstruction recomputes the flexdesc and the record's answer is gone — which is why the two
+	// orders have to be told apart on a record whose targets differ from the ramps'.
+	MovedRest.bWriteLids = true;
+	Rig.EvalFlexWeights(Controllers, Flex);
+	TestEqual(TEXT("the rule layer alone leaves the reconstruction"), Flex[FdLid], 0.208f, 1e-4f);
+	Rig.ApplyEyesToFlexWeights(MovedRest, Flex);
+	TestEqual(TEXT("rules then eyes: the record stands"), Flex[FdLid], 0.30f, 1e-4f);
+
+	Rig.ApplyEyesToFlexWeights(MovedRest, Flex);
+	Rig.EvalFlexWeights(Controllers, Flex);
+	TestEqual(TEXT("eyes then rules: the record is lost"), Flex[FdLid], 0.208f, 1e-4f);
+
+	// --- the blink envelope ------------------------------------------------------------------------
+	// Not a symmetric curve: shut in 48 ms, open over the remaining quarter second.
+	TestEqual(TEXT("open at the top of the window"),
+		ElysiumEyes::BlinkWeight(ElysiumEyes::BlinkSeconds), 0.f, 1e-3f);
+	TestEqual(TEXT("open at the bottom"), ElysiumEyes::BlinkWeight(0.f), 0.f);
+	TestEqual(TEXT("open outside it"), ElysiumEyes::BlinkWeight(0.5f), 0.f);
+	TestEqual(TEXT("open before it"), ElysiumEyes::BlinkWeight(-0.1f), 0.f);
+	// Fully closed where `2*sqrt(cos a)` reaches 1, i.e. `cos a = 0.25`.
+	const float ClosedRemaining = FMath::Acos(0.25f) / ElysiumEyes::BlinkRate;
+	TestEqual(TEXT("fully closed 48 ms in"), ElysiumEyes::BlinkWeight(ClosedRemaining), 1.f, 1e-3f);
+	TestEqual(TEXT("which is 48.3 ms after the toggle"),
+		ElysiumEyes::BlinkSeconds - ClosedRemaining, 0.0483f, 1e-3f);
+	// Monotone on each side of that peak, which is what makes it read as a blink rather than a twitch.
+	for (int32 i = 1; i <= 8; ++i)
+	{
+		const float A = ClosedRemaining + (ElysiumEyes::BlinkSeconds - ClosedRemaining) * (i / 8.f);
+		const float B = ClosedRemaining * (1.f - i / 8.f);
+		TestTrue(FString::Printf(TEXT("closing is monotone at step %d"), i),
+			ElysiumEyes::BlinkWeight(A) <= ElysiumEyes::BlinkWeight(ClosedRemaining));
+		TestTrue(FString::Printf(TEXT("opening is monotone at step %d"), i),
+			ElysiumEyes::BlinkWeight(B) <= ElysiumEyes::BlinkWeight(ClosedRemaining));
+	}
+
+	return true;
+}
+
+// =====================================================================================
 // The exported rigs — every one of them, at rest and at a blink.
 // =====================================================================================
 
@@ -645,6 +923,134 @@ bool FElysiumFacialMorphTargetsTest::RunTest(const FString&)
 		}
 	}
 	TestTrue(TEXT("the rig hinges at least one flexdesc into two named ramps"), Hinged > 0);
+
+	// Contract 3 — the deltas arrive at the mesh's own scale, and they are big enough to see.
+	//
+	// Everything above can pass on a mesh whose morph targets move nothing: the names match, the
+	// curve metadata is right, the weights reach 1.0, and the face does not budge. The export states
+	// its deltas in metres beside a metre-scale mesh; the loader scales the mesh to centimetres, so a
+	// delta that skipped that scaling is a hundredth of its intended travel — applied, correct in
+	// every other respect, and invisible. An eyelid's authored travel is millimetres, so the absolute
+	// number is the only thing that tells the two apart.
+	float Largest = 0.f;
+	FName LargestOn;
+	for (const TObjectPtr<UMorphTarget>& Target : Targets)
+	{
+		if (Target == nullptr || Target->GetMorphLODModels().IsEmpty())
+		{
+			continue;
+		}
+		for (const FMorphTargetDelta& Delta : Target->GetMorphLODModels()[0].Vertices)
+		{
+			if (Delta.PositionDelta.Size() > Largest)
+			{
+				Largest = Delta.PositionDelta.Size();
+				LargestOn = Target->GetFName();
+			}
+		}
+	}
+	AddInfo(FString::Printf(TEXT("largest morph delta on '%s': %.4f cm (on '%s')"),
+		*Stem, Largest, *LargestOn.ToString()));
+
+	// The eyelid family gets its own report, because it is the one the blink drives and it is the
+	// smallest authored travel on the face: a lid that moves a tenth of what it should still reads as
+	// "the character does not blink" rather than as a broken import.
+	for (const FElysiumFlexLid& Lid : Rig.Lids)
+	{
+		for (const FElysiumFlexMorph& Morph : Rig.Morphs)
+		{
+			if (Morph.FlexDesc != Lid.FlexDesc)
+			{
+				continue;
+			}
+			float Peak = 0.f;
+			int32 Moved = 0;
+			for (const TObjectPtr<UMorphTarget>& Target : Targets)
+			{
+				if (Target == nullptr || Target->GetFName() != Morph.Curve
+					|| Target->GetMorphLODModels().IsEmpty())
+				{
+					continue;
+				}
+				for (const FMorphTargetDelta& Delta : Target->GetMorphLODModels()[0].Vertices)
+				{
+					Peak = FMath::Max(Peak, static_cast<float>(Delta.PositionDelta.Size()));
+					++Moved;
+				}
+			}
+			AddInfo(FString::Printf(TEXT("  lid morph '%s': %d vert(s), peak %.4f cm"),
+				*Morph.Name, Moved, Peak));
+		}
+	}
+	// A VtMB face's widest authored move is the jaw, around a centimetre. Anything under a
+	// millimetre across the whole rig is the metres-not-centimetres failure, not an authoring choice.
+	TestTrue(FString::Printf(TEXT("the morph deltas are at the mesh's scale (largest %.4f cm)"),
+		Largest), Largest > 0.1f);
+
+	// Contract 4 — every delta addresses a vertex that exists, in the section that owns it.
+	//
+	// FMorphTargetDelta::SourceIdx indexes the LOD's *vertex* buffer. A loader that walks primitives
+	// can just as easily accumulate the index count, which is a different and larger number, and
+	// then every primitive past the first addresses vertices that are not its own — or, once the
+	// running total passes the vertex count, no vertex at all. That failure is completely silent:
+	// the deltas are present and correct (contract 3 passes on their magnitudes), the names match,
+	// the curves are declared, the weights animate to 1.0, and the mesh never moves. Nothing above
+	// this point looks at SourceIdx, so nothing above this point can tell the two apart.
+	//
+	// Checking the section bounds rather than only the vertex count matters: a wrong base that still
+	// lands inside the buffer silently deforms another material's geometry, which reads as corrupt
+	// art rather than as a loader bug.
+	const FSkeletalMeshRenderData* RenderData = Mesh->GetResourceForRendering();
+	if (TestTrue(TEXT("the mesh has LOD render data"),
+		RenderData != nullptr && RenderData->LODRenderData.Num() > 0))
+	{
+		const FSkeletalMeshLODRenderData& LOD = RenderData->LODRenderData[0];
+		const int32 NumVerts = static_cast<int32>(LOD.GetNumVertices());
+		int32 OutOfRange = 0;
+		int32 OutOfSection = 0;
+		int32 Checked = 0;
+		for (const TObjectPtr<UMorphTarget>& Target : Targets)
+		{
+			if (Target == nullptr || Target->GetMorphLODModels().IsEmpty())
+			{
+				continue;
+			}
+			const FMorphTargetLODModel& Model = Target->GetMorphLODModels()[0];
+			for (const FMorphTargetDelta& Delta : Model.Vertices)
+			{
+				++Checked;
+				const int32 Idx = static_cast<int32>(Delta.SourceIdx);
+				if (Idx < 0 || Idx >= NumVerts)
+				{
+					++OutOfRange;
+					continue;
+				}
+				bool bInOwningSection = false;
+				for (const int32 SectionIndex : Model.SectionIndices)
+				{
+					if (!LOD.RenderSections.IsValidIndex(SectionIndex))
+					{
+						continue;
+					}
+					const FSkelMeshRenderSection& Section = LOD.RenderSections[SectionIndex];
+					const int32 Base = static_cast<int32>(Section.BaseVertexIndex);
+					if (Idx >= Base && Idx < Base + static_cast<int32>(Section.NumVertices))
+					{
+						bInOwningSection = true;
+						break;
+					}
+				}
+				OutOfSection += bInOwningSection ? 0 : 1;
+			}
+		}
+		AddInfo(FString::Printf(
+			TEXT("checked %d morph delta(s) against %d LOD0 vertices in %d section(s)"),
+			Checked, NumVerts, LOD.RenderSections.Num()));
+		TestEqual(TEXT("every morph delta addresses a vertex inside the LOD vertex buffer"),
+			OutOfRange, 0);
+		TestEqual(TEXT("every morph delta lands in a section its morph target declares"),
+			OutOfSection, 0);
+	}
 
 	return true;
 }

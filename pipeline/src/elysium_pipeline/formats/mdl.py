@@ -301,7 +301,8 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
             "envmap": None, "envmask": None, "envtint": None,
             "globalwetness": None,
             "glass": False, "bump": None,
-            "refract": False, "refract_amount": 0.0, "refract_map": None}
+            "refract": False, "refract_amount": 0.0, "refract_map": None,
+            "iris": None, "vampire": False}
     vmt_txt = vmt_path = None
     for sp in search:
         candidate = _norm(f"{sp}/{mat}").strip("/")
@@ -438,6 +439,26 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
             tex_cache[key] = bump_png
         bump_png = tex_cache[key]
 
+    # The "Eyes" shader's second layer. Kept RGBA: the iris is composited over the eyeball
+    # by its own alpha, so dropping alpha would paint the whole sclera.
+    iris_png = None
+    iris = info.get("iris")
+    if iris:
+        iris = _norm(iris.replace("\\", "/").lstrip("/"))
+        key = "#iris:" + iris
+        if key not in tex_cache:
+            tex_cache[key] = None
+            tth, ttz = read_bytes(f"materials/{iris}.tth"), read_bytes(f"materials/{iris}.ttz")
+            if tth and ttz:
+                try:
+                    fn = sanitize(iris) + "_iris.png"
+                    decode_texture(tth, ttz).convert("RGBA").save(
+                        os.path.join(out_dir, "tex", fn))
+                    tex_cache[key] = fn
+                except Exception as e:
+                    print(f"    iris decode failed for {mat} ({iris}): {e}")
+        iris_png = tex_cache[key]
+
     return {
         "albedo": albedo,
         "emis": emis if info.get("selfillum") else None,
@@ -453,6 +474,8 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
         "refract": refract,
         "refract_amount": float(info.get("refractamount") or 0.0),
         "refract_map": refract_png,
+        "iris": iris_png,
+        "vampire": bool(info.get("vampire")),
     }
 
 

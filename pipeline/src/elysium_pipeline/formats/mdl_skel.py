@@ -23,10 +23,14 @@ pose-parameter binding and every cell out of the descriptor, and `pose_parameter
 axes those cells are driven by. Each cell stays its own clip — the mix belongs to the host,
 because evaluate-then-blend and blend-then-evaluate are not the same pose.
 
+`StudioEyeball` decodes here too: the count/index pair sits at `StudioModel`+192/+196 (not
+Source's slot), and 301 models carry two records each — the whole character cast, players
+included. The record names the eye's bone, its resting basis, the iris scale, and the eyelid
+flexdescs the renderer's eye pass writes back into the flex weights; `StudioMesh.materialtype`
+flags which meshes it applies to.
+
 Not decoded here: procedural bones (`ProcType`!=0), IK, animation events
-(`numevents`/`eventindex`, located but unread), root motion (clips bake in place), and
-`StudioEyeball` (every shipped VtMB model carries `NumEyeballs == 0`, so there is nothing to
-decode).
+(`numevents`/`eventindex`, located but unread), and root motion (clips bake in place).
 """
 import os
 import struct
@@ -45,6 +49,9 @@ _quat = lambda b, o: struct.unpack_from("<4f", b, o)
 #: bodypart, and no VtMB character does.
 MODEL_STRIDE = 224
 MESH_STRIDE = 60
+#: `StudioEyeball`. Fixed by its consumer: the renderer's eye pass resolves a record as
+#: `model_base + *(int*)(model_base + 0xC4) + materialparam * 0x8C`.
+EYEBALL_STRIDE = 140
 
 
 def _cstr(b, o):
@@ -469,8 +476,12 @@ def decode_skinned(d, v, mesh_map=None):
                                 tri.append(remap[gvid])
                             surf["tris"].append(tuple(tri))
                 if mesh_map is not None:
+                    # `materialtype`@24 is 1 on an eyeball mesh and `materialparam`@28 selects
+                    # which eyeball; the draw loop dispatches its eye path on that field alone.
                     mesh_map.append(dict(material=matname, model_base=model_base,
                                          mesh_index=mi, vertex_offset=vertex_offset,
+                                         materialtype=_i32(d, mesh_base + 24),
+                                         materialparam=_i32(d, mesh_base + 28),
                                          remap=remap))
     return surfaces
 
@@ -596,6 +607,41 @@ def mouths(d):
     n, base = _i32(d, H_NUM_MOUTH), _i32(d, H_MOUTH)
     return [(_i32(d, base + i * 20), _vec3(d, base + i * 20 + 4), _i32(d, base + i * 20 + 16))
             for i in range(n)]
+
+
+def eyeballs(d, model_base):
+    """`StudioEyeball[NumEyeballs]` (140 B) for one `StudioModel` -> [dict].
+
+    `NumEyeballs`@192 / `EyeballIndex`@196, the latter relative to the model record. Two per
+    character model, mirrored in Z.
+
+    `uppertarget`/`lowertarget` are **linear offsets in eyeball units, not angles** — the
+    renderer takes `asin(target / radius)`. Reading them as radians still moves a lid, which
+    is what makes the error easy to keep.
+
+    `texture`/`iris_material`/`glint_material` hold real texture-table indices but the renderer
+    reads none of them (Source's `texture`/`unused1`/`unused2`); the bound material is the eye
+    mesh's own skinref and the iris comes from the `.vmt`'s `$iris`. They are carried for
+    diagnostics only. The 16 bytes at +124 are read by nothing, so there is no data-driven
+    gaze limit."""
+    n, rel = _i32(d, model_base + 192), _i32(d, model_base + 196)
+    out = []
+    for i in range(max(n, 0)):
+        b = model_base + rel + i * EYEBALL_STRIDE
+        out.append(dict(
+            index=i, bone=_i32(d, b + 4),
+            org=_vec3(d, b + 8), zoffset=_f32(d, b + 20), radius=_f32(d, b + 24),
+            up=_vec3(d, b + 28), forward=_vec3(d, b + 40),
+            iris_scale=_f32(d, b + 60),
+            upperflexdesc=[_i32(d, b + 68 + 4 * q) for q in range(3)],
+            lowerflexdesc=[_i32(d, b + 80 + 4 * q) for q in range(3)],
+            uppertarget=[_f32(d, b + 92 + 4 * q) for q in range(3)],
+            lowertarget=[_f32(d, b + 104 + 4 * q) for q in range(3)],
+            upperlidflexdesc=_i32(d, b + 116), lowerlidflexdesc=_i32(d, b + 120),
+            # unread by the renderer; kept so a survey can resolve the eye's texture names
+            texture=_i32(d, b + 52), iris_material=_i32(d, b + 56),
+            glint_material=_i32(d, b + 64)))
+    return out
 
 
 def mesh_flexes(d, model_base, mesh_index):

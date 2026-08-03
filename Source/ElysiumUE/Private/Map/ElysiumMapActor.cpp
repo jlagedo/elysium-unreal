@@ -2009,6 +2009,15 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 		CameraDirector->Tick(EntityWorld.Get(), PlayerCamera());
 	}
 
+	// 12.4 — rebuild each eye's basis against this frame's settled pose and publish it to the
+	// material. Here for the same reason as the two above, and for one of its own: the bone
+	// transforms it reads are only stable once the frame's parallel animation evaluation has
+	// completed, which at this tick group it has.
+	if (Bodies)
+	{
+		Bodies->TickEyes(DeltaSeconds);
+	}
+
 	// The tail of a released frame: a dev step spends one here, and the last one re-holds the world.
 	if (const UGameInstance* GI = GetGameInstance())
 	{

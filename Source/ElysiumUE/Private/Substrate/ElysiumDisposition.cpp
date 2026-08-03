@@ -47,6 +47,12 @@ bool FElysiumDispositionTable::Load(FString& OutError)
 		// Authored with a lowercase `stance` in the middle on every row — the KV reader folds keys
 		// to lower, so this reads as spelled either way.
 		Row.StandingStanceChangeChance = N->Int(TEXT("Standing stance Change Chance"), 0);
+		// Authored under two spellings, and reading only one is a silent content loss rather than a
+		// parse failure: four rows space the words and six run them together, and two of the six carry
+		// the only cadences in the file that are not 2.5/6.0 — `Error`, the row a character falls to
+		// when its disposition does not resolve, blinks at 1.5/2.0.
+		Row.MinBlinkInterval = N->Flt(TEXT("Min Blink Interval"), N->Flt(TEXT("MinBlinkInterval"), 2.5f));
+		Row.MaxBlinkInterval = N->Flt(TEXT("Max Blink Interval"), N->Flt(TEXT("MaxBlinkInterval"), 6.f));
 		Rows.Add(Kid.Key, MoveTemp(Row));
 	}
 	if (Rows.IsEmpty())

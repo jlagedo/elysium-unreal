@@ -145,8 +145,13 @@ namespace ElysiumNpcVisual
 		return Anim;
 	}
 
+	UMaterialInterface* EyeMaster()
+	{
+		return LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/VtMB/Materials/M_Eyes.M_Eyes"));
+	}
+
 	USkeletalMesh* LoadMeshFromPath(const FString& FullPath, UglTFRuntimeAsset*& OutAsset,
-		FString& OutError, bool bPlayerMaterial)
+		FString& OutError, bool bPlayerMaterial, const TArray<FString>* EyeMaterials)
 	{
 		OutAsset = nullptr;
 		OutError.Reset();
@@ -186,6 +191,31 @@ namespace ElysiumNpcVisual
 					static_cast<EglTFRuntimeMaterialType>(Raw), BodyMaterial);
 			}
 		}
+		// The eye sections are drawn with M_Eyes rather than the plugin's uber material, keyed by
+		// the glTF material name the exporter wrote (`eyeball_l` / `eyeball_r`).
+		//
+		// `bMaterialsOverrideMapInjectParams` is not optional and its absence fails silently: with
+		// it false the override short-circuits and returns the bare master, so the section gets no
+		// material instance and therefore no sclera texture — white eyes. With it true glTFRuntime
+		// builds a MID over M_Eyes and injects `baseColorTexture` and the glTF factors, which is
+		// what the master is written to receive. `UberMaterialsOverrideMap` cannot be used here: it
+		// keys on material *type*, not on the section.
+		if (EyeMaterials != nullptr && !EyeMaterials->IsEmpty())
+		{
+			if (UMaterialInterface* Master = EyeMaster())
+			{
+				SkeletalMeshConfig.MaterialsConfig.bMaterialsOverrideMapInjectParams = true;
+				for (const FString& Name : *EyeMaterials)
+				{
+					SkeletalMeshConfig.MaterialsConfig.MaterialsOverrideByNameMap.Add(Name, Master);
+				}
+			}
+			else
+			{
+				UE_LOG(LogTemp, Warning,
+					TEXT("M_Eyes is missing; run: uv run elysium export bundle policy"));
+			}
+		}
 		USkeletalMesh* Mesh = Asset->LoadSkeletalMesh(0, 0, SkeletalMeshConfig);
 		if (Mesh == nullptr)
 		{
@@ -199,9 +229,10 @@ namespace ElysiumNpcVisual
 	}
 
 	USkeletalMesh* LoadMesh(const FString& Stem, UglTFRuntimeAsset*& OutAsset, FString& OutError,
-		bool bPlayerMaterial)
+		bool bPlayerMaterial, const TArray<FString>* EyeMaterials)
 	{
-		return LoadMeshFromPath(FElysiumContentPaths::NpcGlb(Stem), OutAsset, OutError, bPlayerMaterial);
+		return LoadMeshFromPath(FElysiumContentPaths::NpcGlb(Stem), OutAsset, OutError,
+			bPlayerMaterial, EyeMaterials);
 	}
 
 }

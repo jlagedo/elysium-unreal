@@ -505,6 +505,20 @@ M1 leftovers that live in this lane.
   `spawnflags 5` undecoded; real `.fnt`-role type is 8.8. *Acceptance (rest):* `+use` on
   `sign_chopshop_upstairs` reads "password: chopshop"; a dispatch-wrapper sign picks its variant
   from `G`. *Deps:* 4.4, 1.6, PL5c; 5.2 for the redirect.
+- [ ] **4.11 Close the trigger and `+use`-prop I/O gaps RE35 exposed** — four separable pieces.
+  (a) **`trigger_hurt` cadence is wrong**: retail deals `damage × 0.5` on entry then `damage × 3.0`
+  every 3.0 s (sustained rate = `damage`); the runtime deals `damage` on entry then `damage` every
+  0.5 s, i.e. double damage at six times the tick rate. Register `HurtNow`, `SetDamage`, `OnHurt`
+  and `OnHurtPlayer` (6 + 11 shipped wires) while there.
+  (b) **`filtername` is unread** on 21 `trigger_multiple` volumes, so they admit activators retail
+  rejects; needs `m_hFilter` resolution plus `filter_activator_name` and `filter_multi`.
+  (c) **`prop_switch` and the lockable family have no inputs at all** — 49 shipped wires land
+  nowhere, and because the classnames are already claimed the stub registrar skips them, so they are
+  invisible to `elysium.stubs`. `CPropSwitch` is a sequence player over `activate`/`deactivate`/
+  `idle_on`/`idle_off` whose `OnActivate` (117 wires) fires on clip end, not on use; the four
+  lockable classes share one `CBaseLockableEnt`/`CBaseVampireSkillEntity` implementation.
+  (d) **The doorknob handle sequence** is a virtual the *door* calls, which is why an animated
+  doorknob stands in bind pose. → `docs/vtmb/entity_io.md`. *Deps:* 4.1, 8.3.
 
 **Slice acceptance** *(M3 criterion)*: the tutorial elevator chain works — button →
 `Unlock`/`Trigger` → doors open → `thug_2` `ScriptUnhide` — and walking out of the tutorial
@@ -688,6 +702,30 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
 - [x] **8.4 Physics props** — `prop_physics` / `phys_hinge` as Chaos rigid bodies on the baked
   `SM_<stem>`; collision and mass reproduce VtMB's own `.phy` exactly. **Chaos settle/push feel +
   hinge swing await an owner in-game play test.** → `docs/vtmb/phy_vphysics.md`.
+- [ ] **8.4a Close the `prop_dynamic` divergences RE35 exposed** — ordered by visible impact.
+  (a) **Skeletal props are placed with the static-mesh basis.** The animated representation is
+  built from `Def->ModelQuat`, the OBJ placement quaternion, while every other glTF body goes
+  through `ElysiumSkeletalBasis::FromSourceAngles` and its fixed −90° glTFRuntime offset — so an
+  animated prop is yawed 90° off, at rest and while playing. Affects all 16 animated props in
+  `sp_theatre`.
+  (b) **No rest pose.** Retail holds *frame 0* of `SelectWeightedSequence(ACT_IDLE)` (index-0
+  fallback) at playback rate 0 — a frozen pose, not a playing clip. A prop with no `LoopSequence`
+  currently stands in the glTF bind pose instead. The export sidecar already carries `activity` and
+  `actweight` per clip.
+  (c) **`CDynamicProp::Activate` is not implemented** — `LoopSequence` resolves there, starts after
+  a `RandomFloat(0.1, 0.99)` stagger, and fires `OnAnimationBegun`.
+  (d) **`SetAnimation` forces `loop=false`** where retail honours the clip's own `STUDIO_LOOPING`
+  flag, already exported as `flags`.
+  (e) **The revert-to-`LoopSequence` on a finished one-shot is a divergence**, not reproduction:
+  retail's think disarms itself on the finish frame, so the prop holds its final frame. Needs an
+  owner call to keep or drop.
+  (f) **`solid` is unread** — 699 of 903 shipped `prop_dynamic` placements build static collision
+  from the model's `.phy` in retail and are walk-through here.
+  (g) **`disableshadows` is unread** — 849 props cast shadows the author switched off.
+  (h) **An animated representation that resolves no playable clip loses its static mesh**, standing
+  a bind-pose skeleton instead (`lampfloor`, `glassa`, `junkyardcraneb`; `drknobantique` in
+  `sp_theatre`). → `docs/vtmb/entity_io.md`, `docs/vtmb/phy_vphysics.md`,
+  `docs/vtmb/entity_visuals.md`. *Deps:* 8.3, 12.1.
 - [x] **8.5 NPC presence + native locomotion + `scripted_sequence` minimal** — NPCs idle on a
   disposition-selected stance. Mobile NPCs are native Unreal characters over a runtime Recast
   projection of the sidecar collision: `SetupPatrolType` / `FollowPatrolPath` loop the shipped
@@ -1279,7 +1317,7 @@ retail end to end, and `uv run elysium test Play` proves it headlessly.
 | PL14 | **Export the first-person hand viewmodels.** `clandoc000.txt` also names `M_Hands`/`F_Hands` per clan — the patch-restored per-clan viewmodels under `models/hands/**` (21 in the merged install) — and PL13 deliberately left them out: they are the first-person half of the body and 8.11a's acceptance is the third-person boom. Same seed function, one more key pair; none carries a flex rig | 8.11a |
 | PL16 [x] | Cinematic animation sets are exported and split into actor-addressable banks. → `docs/vtmb/choreographed_scenes.md`. | 12.1 |
 | PL17 | Build the patch-first audio catalog + typed sidecars: codec/channel/rate/frame/duration metadata, complete static reference closure, parsed map + entity sound schemes, sentences/surfaces, item/discipline events, radio/news, case collisions and missing refs. Raw game audio remains gitignored under `$ELYSIUM_EXPORT_ROOT/sound/`. → `docs/vtmb/audio_pipeline.md`, `docs/architecture/audio-architecture.md`. | 6.5–6.8, 9.2, 12.2 |
-| PL18 | Resolve the four structured NPC-export source warnings: the absent generic Night Watchman doppleganger model and the truncated skeletal records in `bottleb`, `bottlec`, and `stage_light`. The current export records all four; the three props use their successfully decoded static `model_mesh` fallback. → `docs/vtmb/animation_and_movers.md`. | 8.5, 12.1 |
+| PL18 | Resolve the four structured NPC-export source warnings: the absent generic Night Watchman doppleganger model and the truncated skeletal records in `bottleb`, `bottlec`, and `stage_light`. The current export records all four; the three props use their successfully decoded static `model_mesh` fallback. **Root cause for the three props: `mdl_skel._rle_channel` reads `struct.unpack_from(f"<{valid}h", …)` without clamping to the remaining buffer, so a final `mstudioanimvalue_t` run that overshoots the file end aborts the whole model** — `stage_light.mdl` is 11,400 bytes and the decode asks for 11,419. Retail's `ExtractAnimValue` walks runs lazily and stops at the frame it wants, so a shipped file may legitimately end mid-run; clamping the read is the faithful fix. `stage_light` carries `LoopSequence "idle"` in `sp_theatre`, so the theatre's stage lights do not sway until this lands. Also in scope: `lampfloor`, `glassa` and `junkyardcraneb` export as animated props carrying **zero** clips, which the runtime must not prefer over the static mesh (8.4a h). → `docs/vtmb/animation_and_movers.md`. | 8.5, 12.1 |
 | PL19 [x] | Verified per-asset Unreal bake caching across all seven stages. Normal exports retain coarse content-addressed stage planning, then compare canonical semantic recipes for every desired texture, material, world/sky chunk, prop/skin asset, particle asset, and level; only dirty assets author/save and pruning is namespace-owned. Frozen-input, pending-inventory, commandlet, save/prune, and independent-verifier failures promote nothing; schema v1 establishes receipts through one conservative full rebuild and `--force` bypasses both cache layers. Acceptance on the current 2,100-asset `sp_tutorial_1` inventory: final no-op 10.246s with no Unreal launch; a one-pixel asphalt edit built 1/880 textures, changed one package, passed verification, and took 47.932s end to end (3.767s commandlet script, 12.220s verifier); a combined material/world/prop/particle/placement edit and its restore each changed exactly the five expected packages. → `docs/architecture/uasset-bake-spike.md`. | 0.9 |
 | PL7 [x] | The sidecar-space audit found no fixes: all consumed sidecars are already Unreal centimetres. | 0.4 [x] |
 | PL9 [x] | Choreographed scenes and `.lip` files are mirrored patch-first. → `docs/vtmb/choreographed_scenes.md`, `docs/vtmb/facial_animation.md`. | 12.1, 12.5 |
@@ -1324,6 +1362,7 @@ retail end to end, and `uv run elysium test Play` proves it headlessly.
 | RE32 | Capture one source-attributed `sp_theatre` run from pre-map resource loads through actors/models/skeletons, every fired skeletal contribution, pose-build stages, and final render matrices in one queryable database. Join observed owner/sequence/animation identities to exact patch-first bytes and current export/decoder output, then trace only selected mismatches through decoding, blends/remaps, scene placement, root/entity motion, procedural work, hierarchy, and render handoff. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/animation_and_movers.md`, `docs/vtmb/mdl_v2531.md`, `docs/vtmb/choreographed_scenes.md`, and `docs/vtmb/vtmb-animation-reverse-engineering.md`. | 8.5, 8.11, 12.1 | [~] |
 | RE33 | Trace expression, VCD/audio, and `.lip` resources from source bytes through runtime objects, controller mixing, flex rules/ramps, eyelids, amplitude mouth, vertex deformation, and render submission. **It verifies 12.3–12.5 rather than gating them** — RE20 closed the facial format and PL10 exported every input it names, so the face is built from that specification and captured only where the build diverges. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/facial_animation.md`. | 12.3–12.5 (as verification) | [~] |
 | RE34 | **VtMB's eye system is recovered end to end** — the `StudioEyeball` record and its true `StudioModel`+192/+196 slot, the `StudioMesh` eye-mesh flags, the renderer's iris/glint math and its eyelid write-back, the `Eyes` shader family including the `$vampire` variant, the server's gaze/fidget/blink behaviour and its `vdata/System/DispositionTable.txt` tuning, the four `LookAtEntity*` inputs, and the networked hop between them. Head turn (applied through bone controllers no model declares) and `LookAtEntityCenter` (pushes the `Eye` constant) are inert or defective in retail and are recorded as such. → `docs/vtmb/facial_animation.md`, `docs/vtmb/mdl_v2531.md`, `docs/vtmb/animation_and_movers.md`. | 12.4 | [x] |
+| RE35 | **The prop and trigger entity surface is recovered end to end.** `CDynamicProp`'s chain (`CBreakableProp → CBaseAnimating → CBaseToggle → CBaseEntity`, so every animating entity inherits the mover) with its complete 9 outputs / 25 inputs; `CDynamicProp::Activate` and the `SelectWeightedSequence(ACT_IDLE)` held-pose rest state; server-side `StudioFrameAdvance` versus the `m_bClientSideAnimation`-gated client path; the real `CBaseTrigger` spawnflag table including the absence of an allow-all fallback and the per-leaf reinterpretations of `0x2`/`0x10`/`0x20`/`0x80`; `filtername` resolution and the filter classes; `CTriggerHurt`'s datamap and its `×0.5`/`×3.0` cadence; `CPropSwitch`, `CBaseLockableEnt`/`CBaseVampireSkillEntity`, `CItemContainer`, `CBaseTerminal`/`CPropHacking`; the `EF_NOSHADOW`/`EF_NODRAW`/`EF_NORECEIVESHADOW` enum shift; `solid` → `VPhysicsInitStatic`. Proven-dead FGD keys: `demo_sequence`, `climbable`, `locksnd`, `npc_opaque`, `diceroll`, `actsnd`/`deactsnd`. The skin crossfade renders but is unreachable, so snapping is faithful. Extends RE1. Open: no consumer of `EF_NORECEIVESHADOW` found in `client.dll` (`engine.dll` unchecked); `rendermode`/`renderfx` per-value semantics undecoded; the `CPropHacking` `trigger`→`m_OnTrigger[n]` fire site inferred from the loader, not decompiled. → `docs/vtmb/entity_io.md`, `docs/vtmb/entity_visuals.md`, `docs/vtmb/phy_vphysics.md`, `docs/vtmb/animation_and_movers.md` B.0. | 4.11, 8.4a | [x] |
 | SKY | The sky/ambience rework is complete; remaining work is tracked as 3.10–3.13 and RE17. Facts: `docs/vtmb/sky-ambience.md`. | 3.6, 3.7 | [x] |
 
 The Ghidra extraction findings behind the closed rows (the RE1/RE2/RE3/RE4 detail: addresses,
