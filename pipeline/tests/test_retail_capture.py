@@ -706,6 +706,17 @@ def _slerp_one(a, b, alpha):
     return tuple(v / norm for v in out)
 
 
+def _nlerp_one(a, b, alpha):
+    """Retail's shortest-arc normalized component mix, written by hand."""
+    a = list(a)
+    b = list(b)
+    if sum(x * y for x, y in zip(a, b)) < 0.0:
+        b = [-value for value in b]
+    out = [(1.0 - alpha) * x + alpha * y for x, y in zip(a, b)]
+    norm = math.sqrt(sum(value * value for value in out)) or 1.0
+    return tuple(value / norm for value in out)
+
+
 def _axis_interp_local(rule, world, bones):
     """The local a `ProcType == 1` table produces, by hand.
 
@@ -7464,6 +7475,53 @@ class DecoderPoseTests(unittest.TestCase):
     def _skeleton(self, bones=ROTATED_BONES, **kwargs):
         image = model_image(0x3000, "models/rotated.mdl", bones=bones, **kwargs)
         return decoder_pose.skeleton_from_image(image, 0x3000)
+
+    def test_frame_interpolation_flips_a_quaternion_to_the_nearer_hemisphere(
+        self,
+    ) -> None:
+        """The Prince bank's synthetic shape: adjacent keys change sign.
+
+        A quaternion and its negation name the same endpoint, but mixing their
+        raw components takes the long way between frames. Retail chooses the
+        nearer sign before normalized lerp through `FUN_1010a0b0`.
+        """
+        first = (0.0, 0.0, 0.0, 1.0)
+        second = (0.0, 0.0, -HALF, -HALF)
+        clip = decoder_pose.Clip(
+            positions=np.zeros((2, 1, 3), dtype=np.float32),
+            quaternions=np.asarray([[first], [second]], dtype=np.float32),
+            frames=2,
+            fps=30.0,
+            bones=1,
+        )
+
+        _, sampled = decoder_pose.sample_clip(
+            clip, np.array([0]), np.array([0.5]), "linear"
+        )
+        expected = _nlerp_one(first, second, 0.5)
+        self.assertTrue(np.allclose(sampled[0, 0], expected, atol=1.0e-7))
+
+    def test_blend_cells_use_normalized_lerp_instead_of_slerp(self) -> None:
+        """The walk-grid shape, independently separating the two operations."""
+        first_quaternion = (0.0, 0.0, 0.0, 1.0)
+        second_quaternion = (HALF, 0.0, 0.0, HALF)
+        first = (
+            np.zeros((1, 1, 3), dtype=np.float64),
+            np.asarray([[first_quaternion]], dtype=np.float64),
+        )
+        second = (
+            np.asarray([[[4.0, 8.0, 12.0]]]),
+            np.asarray([[second_quaternion]], dtype=np.float64),
+        )
+
+        position, quaternion = decoder_pose.blend_cells(
+            first, second, np.array([0.25])
+        )
+        expected = _nlerp_one(first_quaternion, second_quaternion, 0.25)
+        counterfactual = _slerp_one(first_quaternion, second_quaternion, 0.25)
+        self.assertTrue(np.allclose(position[0, 0], (1.0, 2.0, 3.0)))
+        self.assertTrue(np.allclose(quaternion[0, 0], expected, atol=1.0e-9))
+        self.assertFalse(np.allclose(quaternion[0, 0], counterfactual, atol=1.0e-4))
 
     def test_a_skeleton_decodes_its_binds_flags_and_inverse_binds(self) -> None:
         skeleton = self._skeleton()

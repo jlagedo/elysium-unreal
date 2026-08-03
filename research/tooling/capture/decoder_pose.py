@@ -270,8 +270,8 @@ ANIMDESC_FRAMES = 12
 #: `mdl_gltf` bakes into glTF and hands to the runtime. `linear` adds the frame
 #: interpolation A.4b names — `FUN_10089b20` truncates
 #: `floor((numframes - 1) * cycle)` and passes the remainder to both channel
-#: decoders — as a component-wise mix of the two neighbouring samples, the shape
-#: Source's `CalcBonePosition`/`CalcBoneQuaternion` interpolate in.
+#: decoders. `FUN_100889f0` hemisphere-corrects the second quaternion, mixes the
+#: four components and normalizes through `FUN_1010a0b0`; position stays linear.
 INTERPOLATIONS = ("linear", "frame")
 
 
@@ -341,6 +341,23 @@ def clip_from_image(image: bytes, index: int) -> Clip:
     )
 
 
+def nlerp(a: np.ndarray, b: np.ndarray, alpha: np.ndarray) -> np.ndarray:
+    """Shortest-arc normalized component interpolation over leading axes.
+
+    Retail's `FUN_1010a0b0` first chooses between `b` and `-b` by whichever is
+    closer to `a`, linearly mixes the four components, then normalizes. Both
+    the per-channel frame sampler and the blend-cell mixer call this helper.
+    """
+    a = np.asarray(a, dtype=np.float64)
+    b = np.asarray(b, dtype=np.float64).copy()
+    alpha = np.asarray(alpha, dtype=np.float64)[..., None]
+    b = np.where(np.sum(a * b, axis=-1, keepdims=True) < 0.0, -b, b)
+    mixed = (1.0 - alpha) * a + alpha * b
+    return mixed / np.maximum(
+        np.linalg.norm(mixed, axis=-1, keepdims=True), 1.0e-30
+    )
+
+
 def sample_clip(
     clip: Clip,
     frame: np.ndarray,
@@ -367,9 +384,10 @@ def sample_clip(
     second = np.ix_(np.clip(first + 1, 0, max(clip.frames - 1, 0)), columns)
     alpha = np.asarray(fraction, dtype=np.float64)[:, None, None]
     position = position * (1.0 - alpha) + clip.positions[second].astype(np.float64) * alpha
-    mixed = quaternion * (1.0 - alpha) + clip.quaternions[second].astype(np.float64) * alpha
-    return position, mixed / np.maximum(
-        np.linalg.norm(mixed, axis=-1, keepdims=True), 1.0e-30
+    return position, nlerp(
+        quaternion,
+        clip.quaternions[second].astype(np.float64),
+        np.asarray(fraction, dtype=np.float64)[:, None],
     )
 
 
@@ -383,12 +401,16 @@ def blend_cells(
     Transcribed from A.3's axis resolution: `FUN_10089740` evaluates the cells
     either side of the resolved position and mixes them by the fractional part,
     so the second cell's share is the weight and the first's is its complement.
-    The rotation is a shortest-arc interpolation rather than a component mix,
-    which is the one place a blend and a frame sample differ.
+    `FUN_100892c0` sends the two quaternions and this weight through the same
+    `FUN_1010a0b0` helper as frame interpolation: flip the second quaternion to
+    the nearer hemisphere, mix the four components, then normalize. This is
+    normalized lerp, not spherical interpolation.
     """
     alpha = np.asarray(weight, dtype=np.float64)[:, None]
     position = first[0] * (1.0 - alpha[..., None]) + second[0] * alpha[..., None]
-    return position, slerp(first[1], second[1], np.broadcast_to(alpha, first[1].shape[:-1]))
+    return position, nlerp(
+        first[1], second[1], np.broadcast_to(alpha, first[1].shape[:-1])
+    )
 
 
 # --- owner-to-entity bone correspondence -------------------------------------
