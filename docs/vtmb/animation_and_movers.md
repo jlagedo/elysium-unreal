@@ -1253,6 +1253,51 @@ Source `CBaseToggle` lineage compiled into `vampire.dll` and wired through the I
 bus. All are authored at `(0,0,0)`; the entity `origin` is the spawn translation and
 — for rotating doors — the **hinge** (`docs/vtmb/mdl_v2531.md`/`docs/vtmb/entity_io.md`).
 
+## B.0 `CBaseToggle` sits under every animating entity [VtMB — decompiled]
+
+VtMB's class chain is **`CBaseEntity → CBaseToggle → CBaseAnimating → …`**, inverted relative to
+stock Source, where `CBaseToggle` is a leaf branch. Every animating entity therefore inherits the
+mover — a `prop_dynamic`, an NPC and a `func_door` all carry the same `MoverData` block and the same
+four move inputs. The mover keyvalues are **not** per-class, and a class that never calls
+`StartMover` still parses and stores them.
+
+Datamap `0x1059b6f0`, records `0x1059b734`, 38, builder `FUN_101c0cc0`:
+
+| externalName | internal | offset | notes |
+| --- | --- | --- | --- |
+| — | `m_toggle_state` | `+0x4f8` | save |
+| — | `m_flMoveDistance` | `+0x4fc` | save |
+| `wait` | `m_flWait` | `+0x500` | |
+| `lip` | `m_flLip` | `+0x504` | |
+| `height` | `m_flHeight` | `+0x538` | |
+| — | `MoverData.vecMovePos1` | `+0x450` | home position, captured at spawn |
+| `move_dest` | `MoverData.vecMovePos2` | `+0x45c` | destination position |
+| — | `MoverData.angMoveAngle1` | `+0x468` | home angles, captured at spawn |
+| — | `MoverData.angMoveAngle2` | `+0x474` | home angles with component `[rot_axis] += rot_dist` |
+| `move_speed` | `MoverData.flMoveSpeed` | `+0x480` | |
+| — | `MoverData.Rot` | `+0x484` | save |
+| `rot_axis` | `MoverData.Axis` | `+0x488` | index 0/1/2 into the angle triple |
+| `rot_dist` | `MoverData.flRotDist` | `+0x48c` | degrees |
+| `rot_speed` | `MoverData.flRotSpeed` | `+0x490` | deg/s |
+| — | `MoverData.TargetPos` | `+0x494` | save |
+| — | `MoverData.CurrPos` | `+0x498` | save |
+| — | `MoverData.UseType` | `+0x49c` | save; copied from `use_pref` at mover init |
+| `use_pref` | `m_MoverMoveType` | `+0x4a0` | **`1` linear, `2` rotational, anything else no mover** |
+| — | `m_flMoveRebound{Duration,Amount,StartTime,Velocity}` | `+0x4d4`…`+0x4ec` | save |
+| `MoveToDest` | `InputMoveToDest` | — | `0x101c1b60` → `StartMover(1)` |
+| `MoveToHome` | `InputMoveToHome` | — | `0x101c1b40` → `StartMover(0)` |
+| `RotateToDest` | `InputRotateToDest` | — | `0x101c1ba0` → `StartMover(3)` |
+| `RotateToHome` | `InputRotateToHome` | — | `0x101c1b80` → `StartMover(2)` |
+| `OnLinearMoveDone` | `m_OnLinearMoveDone` | `+0x4a4` | |
+| `OnAngularMoveDone` | `m_OnAngularMoveDone` | `+0x4bc` | |
+
+`CBaseToggle::StartMover` (`FUN_101c1bc0`) switches 0..3 onto LinearMove/AngularMove; mover init is
+`FUN_101c1cb0` (`UseType ← use_pref`, `CurrPos ← 0` linear / `2` rotational); the toggle helper is
+`FUN_101c1dc0`. In the shipped corpus only `item_container`, `item_container_animated` and
+`prop_mover` drive it — `item_container*` uses it for the lid
+(`docs/vtmb/entity_io.md` → "`item_container`"). `prop_switch` carries the same keys but animates
+through its own `.mdl` sequences instead.
+
 ## B.1 Inventory [data — exact counts, 108 maps]
 
 | classname | count | maps | role |
@@ -1299,8 +1344,9 @@ through the audio layer (`docs/vtmb/audio_pipeline.md`), plus explicit `locked_s
 `unlocked_sound` on buttons. **`movedir` does not exist** — direction is `angles`.
 `func_movelinear` uses `movedistance`/`startposition`, not Source's `movedir`.
 VtMB-added: `use_icon`/`locked_icon`, `StartHidden`, `soundgroup`, `linked_door`
-(485 uses), `use_override` (26 — routes `+use` to a separate button), `climbable`
-(1090).
+(485 uses), `use_override` (26 — routes `+use` to a separate button). `climbable`
+(1090 uses) is authored but **dead** — the string occurs nowhere in `vampire.dll`
+(`docs/vtmb/entity_io.md` → "Proven-dead Hammer/FGD keys").
 
 ## B.3 The I/O surface [data — wire counts]
 

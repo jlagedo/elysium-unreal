@@ -145,3 +145,47 @@ the body inert.
 
 With the Unofficial Patch installed the path is unreachable in practice — all 27 `prop_physics`
 models across the exported maps resolve a `.phy` (19 of them supplied by the patch).
+
+## Which entities get a collision model
+
+`solid` is a keyfield on the **embedded** `CCollisionProperty` map (`datamap_t` `0x10560c20`,
+records `0x10560cbc`), reached from `CBaseEntity` record `0x10552f38` (`m_Collision`,
+`FIELD_EMBEDDED` at `+0x270`), so the absolute field is `CBaseEntity+0x2b0`:
+
+```
+[0] 10560cbc INTEGER m_Solid        off=0x0040 flags=0x0006 KEY|SAVE  ext=solid
+[1] 10560ce8 SHORT   m_usSolidFlags off=0x0044 flags=0x0002
+```
+
+It is also `DT_CollisionProperty`'s `solid` SendProp at **3 bits** (`FUN_100dbf50`), so the maximum
+value is 7 and the enum is stock `SolidType_t`: `NONE=0, BSP=1, BBOX=2, OBB=3, OBB_YAW=4, CUSTOM=5,
+VPHYSICS=6`.
+
+**A `prop_dynamic` builds static collision from the same `.phy` a `prop_physics` simulates against.**
+`CDynamicProp::Spawn` ends in a virtual tail call through vtable `+0x37c` (vftable `0x10474234`) to
+`CDynamicProp::CreateVPhysics` (`FUN_101907e0`):
+
+```c
+if (GetSolid() != 0)                     // vtable +0x170 -> CBaseEntity::GetSolid (0x10027570)
+    CBaseEntity::VPhysicsInitStatic(this);
+return 1;
+```
+
+and `VPhysicsInitStatic` (`FUN_100a5bb0`) chooses by the same value:
+
+```c
+if (GetSolid() == 0) return NULL;
+if (GetSolid() == 2) return PhysModelCreateBox(mins, maxs, origin, true);   // SOLID_BBOX
+else                 return PhysModelParseSolid(this, model);                // the .phy
+```
+
+So `solid 6` and `solid 3` produce a **static** VPhysics object parsed from the model's collision
+data, `solid 2` produces a box from the model bounds, and only `solid 0` is genuinely non-solid.
+Across the exported maps the `prop_dynamic` family authors `6` on 689 placements, `0` on 200, `3` on
+8, `2` on 2, and leaves it unset on 4 — so most dynamic props are world-solid in the original game.
+
+`CBaseProp::Spawn` (`FUN_1018df70`) reads the same value a second time for audio:
+`if (0 < solid && (solid < 3 || solid == 6)) SetOccludesSound(true)` (`FUN_100a9470`, writing
+`m_bOccludesSound` `+0xfe`). `CDynamicProp::Spawn` additionally sets `m_fFlags |= 0x40000` — bit 18,
+the `FL_STATICPROP` position in Source's flag list; its consumer in this build has not been
+identified.

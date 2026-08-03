@@ -190,7 +190,22 @@ research/tooling/ghidra/driver/run.ps1 -Program vampire.dll -Script DumpFuncs `
 uv run elysium research parse_datamap_builder …/bcc_builder.txt --recs 10616694 --count 305
 ```
 
-The builder's tail names both arguments — `_DAT_<map+4> = <count>; _DAT_<map> = &DAT_<recs>;`.
+The builder's tail names both arguments — `_DAT_<map+4> = <count>; _DAT_<map> = &DAT_<recs>;`
+
+**When the builder is split across static-init fragments, read the PE instead.** MSVC emits some
+per-class datamap builders as several small static-init functions, and the decompiler then returns
+only the fragment you asked for — `CBaseToggle`'s builder decompiled to 3 of its 26 dynamically
+assigned records. Reconstructing from the image beats both readers: walk the sections, scan for
+`typedescription_t` arrays at stride `0x2C`, then merge in every `mov [abs], imm` in `.text` whose
+target lands inside a record slot. That recovers builder-assigned records without a decompiler pass
+and without spending a headless run. Reading a datamap, a record array or a vtable slot straight out
+of the PE is generally faster than decompiling it — see also the `clc_*` handler table and the
+`CInstancedSceneEntity` vtable note above.
+
+**Parallel sessions need one project copy each.** The lock warning above is not just about pacing:
+two agents working at once will collide. Copy the analyzed project directory per workstream
+(`-ProjDir <copy> -ProjName vtmb`) — a full copy of the eight-program `vtmb` project is ~535 MB and
+costs no re-analysis..
 
 **Finding a builder or a handler:** grep an input name. The string table carries both the external
 name and the `Input<Name>` internal name, and the referencing function is the builder. Handlers

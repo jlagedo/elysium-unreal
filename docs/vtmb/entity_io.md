@@ -93,12 +93,98 @@ The opening map also has one deliberately dangling authored wire:
 `controls.Activate`. `sp_theatre` contains no target named `controls` and no `game_ui` entity. The
 rebuild therefore leaves both as non-fatal missing-target diagnostics; it does not invent a receiver.
 
-## `trigger_changelevel` forced input
+## `trigger_changelevel` (`CChangeLevel`)
 
 The forced-transition input is named **`ChangeNow`**. The exported corpus carries 88 such wires
 across 19 maps and zero wires named `ChangeLevel`; genesis's
 `firetrans.OnStartTouch → boogieout,ChangeNow` is one of them. `ChangeLevel` is not a shipped map
 input name and exists in the rebuild only as a compatibility alias for earlier internal callers.
+
+`InputChangeNow` (`FUN_101c77d0`) **requires a player activator**: a non-player activator produces
+`Warning("%s recieved ChangeNow input from non-player activator!")` and nothing else.
+
+`CChangeLevel::Spawn` (`FUN_101c74c0`) errors out on an empty `map` or `landmark`, installs
+`UseChangeLevel` (`FUN_101c7870`) when the entity has a `targetname` — so a named
+`trigger_changelevel` is `+use`-able — and gates the **touch handler** on spawnflag bit `0x2`:
+
+```c
+CBaseTrigger::InitTrigger(this);
+if ((*(byte *)(this + 0x204) & 2) == 0)
+    m_pfnTouch /*+0x1ec*/ = TouchChangeLevel;      // FUN_101c7d90
+```
+
+Bit `0x2` is therefore stock `SF_CHANGELEVEL_NOTOUCH` on this class, **not** `CBaseTrigger`'s
+`ALLOW_NPCS`. It is the dominant shipped value: 94 of the 104 exported `trigger_changelevel`
+entities carry `2`, five carry `0`, two carry `1`, one carries `3`. Those 94 transition only when a
+script fires `ChangeNow`.
+
+`TouchChangeLevel` does not consult `PassesTriggerFilters` at all — the toucher merely has to be the
+player, and a noclipping player is refused with `DevMsg("In level transition: %s %s")`:
+
+```c
+if (pOther[0x2a] /*+0xa8 player controller*/ != 0) {
+    if (pOther->GetMoveType() == 9 /*MOVETYPE_NOCLIP*/) { DevMsg(...); return; }
+    ChangeLevelNow(this);                          // FUN_101c7890
+}
+```
+
+`ChangeLevelNow` latches one transition per frame (`if (curtime == m_flLastChange) return;`).
+`InTransitionVolume` (`FUN_101c7fa0`) is **gutted — it returns `1` unconditionally**, so the
+`"Player isn't in the transition volume"` branch is dead and `trigger_transition`
+(`FUN_101c7060`) is inert.
+
+`CChangeLevel` still inherits `CBaseTrigger::StartTouch`/`EndTouch`, so its `OnStartTouch` /
+`OnEndTouch` outputs remain subject to the activator-class filter. No exported
+`trigger_changelevel` wires either output.
+
+## `trigger_hurt` (`CTriggerHurt`)
+
+Datamap `0x1059d7f0`, records `0x1059d834`, 14, builder `FUN_101c59b0`.
+
+| externalName | internal | offset | notes |
+| --- | --- | --- | --- |
+| `damage` | `m_flDamage` | `+0x598` | float |
+| `SetDamage` | `m_flDamage` | `+0x598` | KEY + INPUT, null `inputFunc` — a direct write, like `skin` |
+| `damagetype` | `m_bitsDamageInflict` | `+0x5a0` | bitfield; `& 0x8` selects a separate impact path |
+| `damagevelocitymag` | `m_flDamageVelMag` | `+0x5a4` | force magnitude; `<= 0` disables the force entirely |
+| `damagevelocitypos` | `m_vecDamageVelPos` | `+0x5a8` | vector |
+| `damagevelocitydir` | `m_nDamageVelDir` | `+0x5c0` | **integer mode**, not a vector |
+| — | `m_vecDamageVelVect` | `+0x5b4` | derived at `Spawn`, save-only |
+| — | `m_flLastDmgTime` | `+0x59c` | save-only |
+| — | `m_hurtEntities` | `+0x5f4` | `CUtlVector`, save-only |
+| `HurtNow` | `InputHurtNow` | — | `0x10009557` → `FUN_101c6670` |
+| `OnHurt` | `m_OnHurt` | `+0x5c4` | fires for a non-player victim |
+| `OnHurtPlayer` | `m_OnHurtPlayer` | `+0x5dc` | fires for a player victim |
+
+`HurtEntity` (`FUN_101c5f40`) selects between the two outputs on the victim's player-controller
+pointer: `FireOutput(pOther[0xa8] == 0 ? m_OnHurt : m_OnHurtPlayer, pOther)`.
+
+**Damage cadence.** Entry deals a half tick and the think deals a triple tick every three seconds,
+so the sustained rate equals `damage` per second:
+
+```
+CTriggerHurt::StartTouch  FUN_101c6410 : m_flDamage * 0.5      (FMUL [0x10449270])
+CTriggerHurt::HurtThink   FUN_101c6390 : HurtAllTouchers(3.0f)
+                                         m_flNextThink = curtime + 3.0   ([0x10449258])
+```
+
+`HurtAllTouchers(t)` deals `m_flDamage * t` to every entity in the volume; a think that hurt nobody
+does not re-arm. `InputHurtNow` (`FUN_101c6670`) hurts all touchers immediately when enabled;
+against a disabled volume it temporarily calls `InputEnable`, then arms `HurtOnceThink`
+(`FUN_101c63d0`, also `×3.0`) at `curtime + 0.1` and disarms after one pass.
+
+**The damage-velocity trio.** `m_flDamageVelMag` gates the whole path; at or below zero the victim
+takes a plain `CTakeDamageInfo` (`FUN_101c26d0`) with no force. `m_nDamageVelDir` then selects how
+the direction is derived from the point `m_vecDamageVelPos`:
+
+| `damagevelocitydir` | damage position | direction, normalized then scaled by `damagevelocitymag` |
+| --- | --- | --- |
+| `0` | the trigger's own origin | `m_vecDamageVelVect`, precomputed once in `Spawn` (`FUN_101c5e80`) as `normalize(damagevelocitypos − trigger origin) × mag` |
+| `1` | `damagevelocitypos` | `victimOrigin − damagevelocitypos` — blow outward from the point |
+| other | victim origin | `damagevelocitypos − victimOrigin` — pull toward the point |
+
+The force is also applied to the victim's VPhysics object (`FUN_10344f80`, mode 2) when the
+pushable test in `PassesTriggerFilters` holds.
 
 ## Hidden state: StartHidden / ScriptHide / ScriptUnhide
 
@@ -290,31 +376,84 @@ and creates an infinite arrival loop.
 ## Trigger activation filter (`trigger_multiple` / `trigger_once`)
 
 `CBaseTrigger::PassesTriggerFilters` (`FUN_101c5460`, `vampire.dll`) decides whether a touching
-entity may fire the trigger. Called from the StartTouch handler (`FUN_101c6410`); a `false`
-return routes to the reject/cleanup path. It reads `m_spawnflags` (`+0x204`) and — unlike the
-button — **matches stock Source** exactly:
+entity may fire the trigger. It is called from `CBaseTrigger::StartTouch` (`FUN_101c5590`, fires
+`m_OnStartTouch` `+0x568`), `CBaseTrigger::EndTouch` (`FUN_101c55d0`, `m_OnEndTouch` `+0x580`),
+`CTriggerMultiple::MultiTouch` (`FUN_101c68b0`) and `CTriggerHurt` (`FUN_101c6410` /
+`FUN_101c5f40`); a `false` return routes to the reject/cleanup path. It reads `m_spawnflags`
+(`+0x204`):
 
-| Bit | Meaning |
-| --- | --- |
-| `0x1` | ALLOW_CLIENTS — toucher's `GetFlags()` (`+0x434`) client bit |
-| `0x2` | ALLOW_NPCS — `GetFlags() & 0x2000` |
-| `0x4` | ALLOW_PUSHABLES — movetype/class check (`0x101c53d0`) |
-| `0x8` | ALLOW_PHYSICS — `GetMoveType() == 7` (`MOVETYPE_VPHYSICS`) (`0x101c5420`) |
+| Bit | Meaning | Test |
+| --- | --- | --- |
+| `0x1` | ALLOW_CLIENTS | `GetFlags()` (`+0x434`) `& FL_CLIENT (0x80)` — the raw `TEST AL,AL / JS` on the low byte |
+| `0x2` | ALLOW_NPCS | `GetFlags() & FL_NPC (0x2000)` |
+| `0x4` | ALLOW_PUSHABLES | `FUN_101c53d0`: `[ent+0x4c] & 0x8`, else `vt+0x170 == 1 && GetMoveType() == 8` |
+| `0x8` | ALLOW_PHYSICS | `FUN_101c5420`: `GetMoveType() == 7`, else `[ent+0x4c] & 0x2000` |
 
-A toucher passes if **any** enabled class bit matches; then, if a **filter entity** is set
-(`m_hFilter` at `+0x564`), its `PassesFilter` (vtable `+0x3c4`) is the final say. Separately,
-spawnflag bit `0x80` (tested in the wait-over think as `(char)m_spawnflags < 0`) makes the trigger
-**remove itself after firing** (the `trigger_once` behaviour; `trigger_once` is a distinct factory
-`FUN_101c6a30`/vftable `0x1047dee4` over the same `CBaseTrigger` base `0x1047d08c`).
+A toucher passes if **any** enabled class bit matches. **There is no allow-all fallback**: a trigger
+carrying none of these four bits falls through to `XOR AL,AL` at `0x101c553b` and rejects every
+toucher, so `spawnflags 0` admits nothing.
 
-Bit `0x10` is **inert on a trigger**. `sp_theatre`'s Embrace `trigger_once` (`spawnflags 17`) is the
-only trigger in the exported corpus carrying it, and no trigger class reads it: across
-`vampire.dll` there are seven `test byte ptr [reg+0x204], 0x10` sites, and RTTI resolves every one to
-another class — `CPhysBox` (two), `CRotDoor::DoorGoUp` (the `SF_DOOR_ONEWAY` nav bit),
-`CRagdollProp`/`CRagdollPropSpecial`, `CCineNPC`/`CCineAI` (slot 103), and `CAmbientGeneric`
-(slot 104, START_SILENT). Inside the `CBaseTrigger` region (`0x101c5000`–`0x101c7600`) only
-`0x1/0x2/0x4/0x8` appear, in `PassesTriggerFilters`, plus one `0x2` test at `0x101c7531`. So
-`spawnflags 17` is equivalent to `1`.
+The engine names the two principal bits itself. `CBaseTrigger`'s datamap (`0x1059d570`, records
+`0x1059d5b4`, 13, builder `FUN_101c49e0`) registers six inputs that mutate them at runtime —
+`EnableFlagClient` / `DisableFlagClient` / `ToggleFlagClient` (`FUN_101c5840` / `101c58a0` /
+`101c57e0`, bit `0x1`) and `EnableFlagNPC` / `DisableFlagNPC` / `ToggleFlagNPC` (`FUN_101c5870` /
+`101c58d0` / `101c5810`, bit `0x2`). No exported map wires any of them. The same datamap carries
+`filtername` → `m_iFilterName` (`FIELD_STRING`, `+0x560`), `StartDisabled` → `m_bDisabled`
+(`+0x55c`), and the two touch outputs. `Enable` / `Disable` (`FUN_101c4bf0` / `FUN_101c4dd0`) work by
+adding and removing solid flag `0x8` (`FSOLID_TRIGGER`), so a disabled trigger stops receiving
+touches at the collision layer rather than filtering them.
+
+The remaining observed bits are **not activator classes**, and two of them are reinterpreted by a
+single leaf:
+
+| Bit | Owner | Meaning |
+| --- | --- | --- |
+| `0x2` | `CChangeLevel` | *also* `SF_CHANGELEVEL_NOTOUCH` — see "`trigger_changelevel` forced input" |
+| `0x10` | `CBaseTrigger::InitTrigger` (`FUN_101c5080`, test at `0x101c52ef`) | keeps the brush drawn: without it, and with `showtriggers` at zero, `InitTrigger` sets `m_fEffects \|= EF_NODRAW (0x40)` |
+| `0x20` | `CTriggerPlayerActivityLevel::EndTouch` (`FUN_102109b0`, test at `0x10210a0b`) | restore the player's activity and awareness levels on exit; without it the level set on entry sticks |
+| `0x80` | `CTriggerLook::Touch` (`FUN_101c6cb0`, test at `0x101c6ee9`) | `SF_TRIGGERLOOK_FIREONCE` — after `OnTrigger`, `SetThink(SUB_Remove)` |
+
+`trigger_once`'s self-removal is **not** a spawnflag. `CTriggerOnce::Spawn` (`FUN_101c6ad0`) sets
+`m_flWait = -1.0f`, which routes `ActivateMultiTrigger` (`FUN_101c68e0`) into
+`SetTouch(NULL); SetThink(SUB_Remove); m_flNextThink = curtime + 0.1`.
+`CTriggerMultiple::MultiWaitOver` (`FUN_101c6a10`) is `SetThink(NULL)` and nothing else.
+
+`sp_theatre`'s Embrace `trigger_once` (`spawnflags 17`) is the only trigger in the exported corpus
+carrying `0x10`; since that bit only suppresses a debug-visibility `EF_NODRAW` on a brush with no
+drawable surfaces, `spawnflags 17` behaves as `1`.
+
+### The filter entity
+
+`filtername` is resolved once in `CBaseTrigger::Activate` (`FUN_101c4d60`):
+
+```c
+if (m_iFilterName /*+0x560*/ != NULL) {
+    ent = gEntList.FindEntityByName(NULL, m_iFilterName, NULL, NULL);   // FUN_100f7770
+    if (ent) { m_hFilter /*+0x564*/ = ent->GetRefEHandle(); BaseClass::Activate(); return; }
+    m_hFilter = INVALID_EHANDLE;
+}
+```
+
+There is **no `dynamic_cast<CBaseFilter*>`** — whatever entity the name finds has its `vt+0x3c4`
+called blind. The filter is consulted at the tail of `PassesTriggerFilters` (`0x101c54bf`), **only
+after a class bit has already matched**, and its verdict is returned verbatim, so a filter can
+reject but never admit. An unset or stale `m_hFilter` passes.
+
+`CBaseFilter` (`filter_base`, ctor `FUN_10107670`, vftable `0x1045b1c4`, datamap `0x1056c1e8`) holds
+`m_bNegated` `+0x450`, `m_OnPass` `+0x454`, `m_OnFail` `+0x46c`, and the input `TestActivator`
+(`FUN_10107860`). The two filters the exported maps use:
+
+- **`filter_activator_name`** (`CFilterName`, ctor `FUN_10107b90`, vftable `0x1045bae4`):
+  `m_iFilterName` at `+0x484`, `PassesFilterImpl` = `FUN_10107c20` — pointer-identity fast path,
+  then an empty filter matches only nameless entities, then a trailing `*` compares with
+  `strnicmp(name, filter, len-1)`, else `stricmp`. The same rule as `FindEntityByName`
+  ("Entity-name matching").
+- **`filter_multi`** (`CFilterMultiple`, ctor `FUN_101078e0`, vftable `0x1045b654`): `FilterType`
+  `+0x484` (`0` = AND, anything else = OR), five sub-filter names `+0x488`…`+0x498` resolved to
+  EHANDLEs `+0x49c`…`+0x4ac` in `Activate` (`FUN_10107a30`); `PassesFilterImpl` = `FUN_10107aa0`.
+
+Also present but unused by the exported maps: `filter_activator_class` (`FUN_10107d80`),
+`filter_mass` (`FUN_10107ef0`), `filter_inventory` (`FUN_10108090`), `filter_feat` (`FUN_101082d0`).
 
 ## `logic_relay` spawnflags and refire
 
@@ -378,14 +517,82 @@ written by the builder `FUN_101901ae`. Its own records:
 | `OnAnimationDone` | `m_pOutputAnimOver` | `+0x794` | |
 | `OnAnimationLoop` | `m_pOutputAnimLoop` | `+0x7ac` | |
 
-**There is no `demo_sequence`.** The string appears nowhere in `vampire.dll` (case-insensitive), so it
-is a Hammer/FGD-only field the engine never reads; `LoopSequence` is the only authored default. It is
-nonetheless stamped on map entities — every cinematic prop in `sp_theatre` carries one.
+**There is no `demo_sequence`.** The string appears nowhere in `vampire.dll` or `client.dll`
+(case-insensitive), so it is a Hammer/FGD-only field the engine never reads; `LoopSequence` is the
+only authored default, and it occurs exactly once in the image, in this datamap's string block at
+`0x1054eadc`. `demo_sequence` is nonetheless stamped on map entities — every cinematic prop in
+`sp_theatre` carries one.
 
-`CDynamicProp::Spawn` (`FUN_101905e0`) sets the resolved loop-sequence index to `-1` and arms
-`CDynamicPropAnimThink` **only** when `m_bRandomAnimator` is set, scheduling
-`m_flNextRandAnim = curtime + RandomFloat(min, max)` and `m_flNextThink = m_flNextRandAnim + 0.1`.
-Everything else spawns thinking never; `InputSetAnimation` is what arms the think otherwise.
+### The resting pose
+
+A `prop_dynamic` at rest is a **held pose, not a playing clip**. `CBaseProp::Spawn`
+(`FUN_1018df70`) leaves the cycle and the playback rate at zero and picks the sequence by activity:
+
+```c
+SetModel(szModel);  SetMoveType(0,0);  m_takedamage = 0;
+m_flNextThink /*+0x17c*/ = 0;                       // "think never"
+m_flPlaybackRate /*+0x6f4*/ = 0;  m_flCycle /*+0x6f8*/ = 0;
+m_nSequence /*+0x6f0*/ = SelectWeightedSequence(ACT_IDLE /*1*/, -1);   // FUN_1008dc40
+if (m_nSequence < 0) m_nSequence = 0;               // fall back to the first sequence
+```
+
+`ACT_IDLE` is activity `1`, from the registration table at `0x104126e3` (`ACT_WALK` is 9, `ACT_RUN`
+`0x13`). `ResetSequenceInfo` (`FUN_10090950`) is the only thing that ever raises
+`m_flPlaybackRate` to `1.0`, and nothing calls it for a prop with neither a `LoopSequence` nor a
+scripted `SetAnimation` — so such a prop stands frozen on frame 0 of its idle sequence for the
+whole map. `ResetSequenceInfo` also contains the only literal sequence-0 default,
+`if (m_nSequence == -1) m_nSequence = 0;`.
+
+Most cinematic props miss the activity lookup and land on the fallback: they tag their idle
+`ACT_VM_IDLE` rather than `ACT_IDLE`, and `cin_wineglass` carries no idle at all, so its rest pose
+is frame 0 of `wineglass_1` — the first frame of the clip a script later plays.
+
+### `Activate` — where `LoopSequence` starts
+
+`CDynamicProp::Spawn` (`FUN_101905e0`) only writes `m_iGoalSequence /*+0x7d8*/ = -1` and, **when
+`m_bRandomAnimator` is set**, arms `CDynamicPropAnimThink` at
+`m_flNextRandAnim = curtime + RandomFloat(min, max)`, `m_flNextThink = m_flNextRandAnim + 0.1`. It
+never reads `m_iszSequenceName`. Its tail is a virtual call to `CDynamicProp::CreateVPhysics`
+(vtable `+0x37c` → `FUN_101907e0`), which is how a prop gets collision — see
+`phy_vphysics.md` → "Which entities get a collision model".
+
+The authored loop is resolved one phase later, in **`CDynamicProp::Activate` (`FUN_101906c0`)**:
+
+```c
+BaseClass::Activate();
+m_iGoalSequence /*+0x7d8*/ = LookupSequence(m_iszSequenceName /*+0x7d4*/);   // FUN_1008f7b0
+if (m_iGoalSequence > 0) {
+    SetThink(FUN_10190750);
+    m_flNextThink = curtime + RandomFloat(0.1f, 0.99f);   // per-prop stagger
+}
+```
+
+and that one-shot think (`FUN_10190750`) starts it:
+
+```c
+if (m_iGoalSequence > 0) {
+    m_nSequence = m_iGoalSequence;  ResetSequenceInfo();  ResetClientsideFrame();
+    m_pOutputAnimBegun /*+0x77c*/ .FireOutput();
+    SetThink(CDynamicPropAnimThink);  m_flNextThink = curtime + 0.1;
+}
+```
+
+So `OnAnimationBegun` fires for the resting loop as well as for `SetAnimation`, and the loop starts
+0.1–0.99 s after level load, staggered per prop, then ticks at 10 Hz for the rest of the map.
+
+### Who advances the cycle
+
+The **server** does, in `CBaseAnimating::StudioFrameAdvance` (`FUN_1008f120`), called from the anim
+think through vtable `+0x3e8`. It advances `m_flCycle` by
+`GetSequenceCycleRate(m_nSequence) * m_flPlaybackRate * dt`, clamps a non-looping sequence at `1.0`
+and wraps a looping one, and sets `m_bSequenceFinished` in **both** branches.
+
+`m_flCycle` (`+0x6f8`), `m_flPlaybackRate` (`+0x6f4`) and `m_nSequence` (`+0x6f0`) are
+`DT_BaseAnimating` SendProps, received client-side at `+0x648`, `+0x640` and `+0x63c` and
+interpolated. Client-side *advance* is a separate mechanism gated on `m_bClientSideAnimation`
+(server `+0x70c`, client `+0x6a8`): `C_BaseAnimating::OnDataChanged` (`FUN_10094b20`) only calls
+`SetNextClientThink(CLIENT_THINK_ALWAYS)` when that flag is set, and no code in the prop cluster
+`0x1018d000`–`0x10191000` ever sets it. **A prop whose server think is disarmed does not animate.**
 
 `CDynamicPropAnimThink` (`FUN_10190850`, think record `0x1058d6f4` → `LAB_1000d2ce`):
 
@@ -396,7 +603,8 @@ if (!m_bRandomAnimator || curtime <= m_flNextRandAnim) {
         m_nSequence = loopIdx; ResetSequenceInfo();
     }
 } else {
-    m_nSequence = PickRandomSequence();  ResetSequenceInfo();
+    m_nSequence = SelectWeightedSequence(ACT_IDLE, -1);   // FUN_1008dc40, same call as spawn
+    ResetSequenceInfo();  ResetClientsideFrame();
     m_pOutputAnimBegun.FireOutput();
     m_flNextRandAnim = curtime + RandomFloat(m_flMinRandAnimTime, m_flMaxRandAnimTime);
 }
@@ -412,17 +620,303 @@ if (m_bSequenceFinished) {
 m_flNextThink = curtime + 0.1;                     // 0.1 is `_DAT_104493d0`
 ```
 
-So a prop carrying `LoopSequence` has a scripted `SetAnimation` reverted once that one-shot finishes —
-the revert is gated on the sequence having ended and not being a loop itself, not fired unconditionally.
+The random animator re-picks by activity, not arbitrarily — it is the same
+`SelectWeightedSequence(ACT_IDLE, -1)` the spawn path uses.
 
-`InputSetAnimation` (`FUN_10190a00`) resolves the clip name, sets `m_nSequence`, zeroes the cycle,
-fires `m_pOutputAnimBegun`, re-arms the think at `curtime + 0.1`, and plays **non-looping**; on a miss
-it logs `"Dynamic prop no sequence named %s"` and sets sequence 0.
+**The revert branch is unreachable in shipped data.** `CBaseEntity::PhysicsRunSpecificThink`
+(`FUN_10033de0`) zeroes `m_flNextThink` before every dispatch, so a think that returns without
+rewriting it is disarmed permanently. With `m_bRandomAnimator == 0` — true for all 749 entities that
+carry the key — the think returns at `0x10190935` on the frame the one-shot finishes, so it is never
+called again and the top-of-think revert never runs. A `SetAnimation` one-shot therefore **holds its
+final frame**: for a prop with no `LoopSequence` there is no fallback to a rest sequence, and for a
+prop with one, the `LoopSequence` only ever plays *before* the first `SetAnimation`.
+
+`InputSetAnimation` (`FUN_10190a00`) resolves the clip name, sets `m_nSequence`, zeroes
+`m_flCycle`, calls `ResetSequenceInfo` and `ResetClientsideFrame`, fires `m_pOutputAnimBegun`, and
+re-arms the think at `curtime + 0.1`. It does **not** force non-looping: `ResetSequenceInfo` derives
+`m_bSequenceLoops /*+0x65d*/ = GetSequenceFlags(m_nSequence) & 1`, so playback honours the model's
+own `STUDIO_LOOPING` bit. On a miss it logs `"Dynamic prop no sequence named:%s\n"` and sets
+`m_nSequence = 0` — but calls no `ResetSequenceInfo`, does not zero the cycle and does not arm the
+think, leaving `m_bSequenceLoops`, `m_flPlaybackRate` and `m_flCycle` stale from whatever was
+playing.
+
+Member offsets on the server `CBaseAnimating`: `m_nSequence` `+0x6f0`, `m_flPlaybackRate` `+0x6f4`,
+`m_flCycle` `+0x6f8`, `m_bSequenceFinished` `+0x65c`, `m_bSequenceLoops` `+0x65d`,
+`m_bClientSideAnimation` `+0x70c`, `m_flNextThink` `+0x17c`.
 
 Corpus: `RandomAnimation` is `0` on all 749 entities that carry it, so the random animator never
 engages in shipped data. `LoopSequence` is live on 64 (`idle` ×54, `palmtree_idle` ×6, `fly` ×2,
 `only_sequence`, `running`). `OnAnimationBegun` / `OnAnimationDone` / `OnAnimationLoop` are wired
 **zero** times.
+
+### Class chain and the complete I/O surface
+
+`CDynamicProp` `0x1058d4f8` → `CBreakableProp` `0x1058d1c8` → `CBaseAnimating` `0x1054cd70` →
+**`CBaseToggle` `0x1059b6f0`** → `CBaseEntity` `0x10552e18`. Record arrays and counts:
+`0x1058d53c`/12, `0x1058d20c`/17, `0x1054cdb4`/43, `0x1059b734`/38, `0x10552e5c`/110.
+`CPhysicsProp` (`0x1058d864`) and `CBreakable` (`0x1056e590`) are **siblings**, not ancestors — an
+input declared only there does not reach a `prop_dynamic`.
+
+`CBaseToggle` in the chain means **every animating entity is a mover**; the inherited keyfields and
+move inputs are documented in `animation_and_movers.md` → Part B.
+
+Outputs reaching `prop_dynamic` (9):
+
+| output | member | offset | declared by |
+| --- | --- | --- | --- |
+| `OnAnimationBegun` | `m_pOutputAnimBegun` | `+0x77c` | `CDynamicProp` |
+| `OnAnimationDone` | `m_pOutputAnimOver` | `+0x794` | `CDynamicProp` |
+| `OnAnimationLoop` | `m_pOutputAnimLoop` | `+0x7ac` | `CDynamicProp` |
+| `OnBreak` | `m_OnBreak` | `+0x730` | `CBreakableProp` |
+| `OnHealthChanged` | `m_OnHealthChanged` | `+0x748` | `CBreakableProp` |
+| `OnLinearMoveDone` | `m_OnLinearMoveDone` | `+0x4a4` | `CBaseToggle` |
+| `OnAngularMoveDone` | `m_OnAngularMoveDone` | `+0x4bc` | `CBaseToggle` |
+| `OnUseBegin` | `m_OnUseBegin` | `+0x5c` | `CBaseEntity` |
+| `OnUseEnd` | `m_OnUseEnd` | `+0x74` | `CBaseEntity` |
+
+`CBaseAnimating` contributes no outputs. Inputs reaching `prop_dynamic` (25): `SetAnimation`,
+`SetSkin` (`CDynamicProp`); `Break`, `SetHealth`, `AddHealth`, `RemoveHealth`, `FadeOutKill`,
+`SetDebris`, `physdamagescale` (`CBreakableProp`); `SetBodygroup`, `SetSkinFadeTime`, `FadeToSkin`,
+`SpawnTempParticle`, `skin` (`CBaseAnimating`); `MoveToDest`, `MoveToHome`, `RotateToDest`,
+`RotateToHome` (`CBaseToggle`); `Kill`, `Use`, `Alpha`, `Color`, `SetParent`, `ClearParent`,
+`ScriptHide`, `ScriptUnhide`, `SetSoundOverrideEnt`, `SetFakeSilence` (`CBaseEntity`).
+
+`OnHealthChanged` fires from `CBreakableProp::OnTakeDamage` (`FUN_1018f400`) on **every** accepted
+damage call — there is no threshold — and from `InputSetHealth` / `InputAddHealth` /
+`InputRemoveHealth` (`FUN_1018f960` / `FUN_1018f750` / `FUN_1018f7f0`), which fall through to
+`Break()` at zero. The payload is variant type 4, `FIELD_INTEGER`: the raw health value, **not**
+stock Source's 0..1 ratio.
+
+`OnTrigger0`..`OnTrigger7` are **not** in this chain. They belong to `CPropHacking`, and
+`CSceneEntity` separately declares `OnTrigger1`..`OnTrigger4`; a wire naming one on a `prop_dynamic`
+cannot connect and is dead in retail. `SetCausesImpactDamage` is likewise a `CPhysicsProp` input
+(record `0x1058d8d8` → `FUN_10191720`, which sets spawnflag bit `0x2` on `m_spawnflags` rather than
+a dedicated member), so it too is inert on a `prop_dynamic`.
+
+## `prop_switch` (`CPropSwitch`)
+
+Datamap `0x105aa864`, records `0x105aa8ac`, 16, builder `FUN_1020d1b0`; base map `CBaseAnimating`.
+Factory `FUN_1020d0e0`, ctor `FUN_1020d5f0`, vftable `0x104862fc`, instance size `0x7b8`.
+
+| externalName | internal | offset | notes |
+| --- | --- | --- | --- |
+| — | `m_bLocked` | `+0x7a4` | save-only |
+| — | `m_bActivated` | `+0x7a5` | save-only |
+| `linkedswitch` | `m_sLinkedSwitch` | `+0x730` | targetname of a second `prop_switch` mirrored on every state change; never authored in the exported corpus |
+| `use_icon` | `m_UseIcon` | `+0x734` | |
+| `locked_icon` | `m_LockedIcon` | `+0x738` | |
+| `reset_state` | `m_nResetState` | `+0x73c` | `0` keep, `1` force deactivated, `2` force activated, applied by the reset hook (vtable `+0x208`, `FUN_1020e100`) |
+| `OnActivate` | `m_OnActivate` | `+0x744` | fires when the `activate` **sequence finishes** |
+| `OnDeactivate` | `m_OnDeactivate` | `+0x75c` | fires when the `deactivate` sequence finishes |
+| `OnUse` | `m_OnUse` | `+0x774` | fires immediately on an unlocked `+use` |
+| `OnLockedUse` | `m_OnLockedUse` | `+0x78c` | fires instead of everything else when locked |
+| `Toggle` | `InputToggle` | — | `0x1020db00` → `Use(activator, caller, USE_TOGGLE, 0)` |
+| `Lock` | `InputLock` | — | `0x1020e060` |
+| `Unlock` | `InputUnlock` | — | `0x1020e080` |
+| `Activate` | `InputActivate` | — | `0x1020e0a0`, no-op when already activated |
+| `Deactivate` | `InputDeactivate` | — | `0x1020e0d0`, no-op when already deactivated |
+| — | `CPropSwitchSwitchThink` | — | think func, body `0x1020dd70` |
+
+**A switch is a sequence player, not a mover.** `CPropSwitch::Activate` (`FUN_1020d9c0`) resolves the
+linked switch — which must also be classname `prop_switch`, checked by `_stricmp` plus an RTTI cast —
+then looks up four sequences by name: **`activate`, `deactivate`, `idle_on`, `idle_off`**, holding the
+matching idle at spawn (resolved indices at `+0x7a8`/`+0x7ac`/`+0x7b0`/`+0x7b4`). `SetState`
+(`FUN_1020dce0`) plays the transition clip and emits the `soundgroup` event `on` or `off`; the think
+(`FUN_1020dd70`) waits for that clip to end, writes `m_nSkin` (`+0x670`) to `1`/`0`, fires
+`OnActivate`/`OnDeactivate`, then loops `idle_on`/`idle_off`. Nothing in the class touches the
+inherited `CBaseToggle` mover — a `prop_switch` animates only through its own `.mdl` clips.
+
+`Use` (`FUN_1020db30`, vtable `+0x2b4`): locked fires `OnLockedUse` and stops; otherwise `OnUse`,
+then its own state flips, then `linkedswitch` is set to the same value. `GetUseIcon`
+(`FUN_1020dfc0`) returns `locked_icon` while locked. Spawn (`FUN_1020d850`) spawnflags: `0x2000`
+start activated (skin 1), `0x4000` start locked, `0x8000` skip the `SOLID_BBOX` model-bbox
+collision setup.
+
+## The lockable family (`CBaseLockableEnt` / `CBaseVampireSkillEntity`)
+
+`prop_doorknob`, `prop_doorknob_electronic`, `prop_padlock` and `item_container_lock` are four
+factories over **one** datamap pair. There is no `CPropDoorknob` datamap.
+
+`CBaseVampireSkillEntity` — datamap `0x105aa150`, records `0x105aa194`, 12, builder `FUN_1020a7d0`,
+vftable `0x104858cc`:
+
+| externalName | internal | offset | notes |
+| --- | --- | --- | --- |
+| `difficulty` | `m_nSkillDifficulty` | `+0x77c` | read through `GetDifficulty` (vtable `+0x430`, `FUN_1020b1c0`); the dice target number |
+| `skilltype` | `m_vSkillType` | `+0x784` | selects the skill registry entry |
+| — | `m_LastRoll` | `+0x780` | `FIELD_EMBEDDED` (td `0x105a1668`); its first int is the live roll **and** the lock state |
+| — | `m_flLastAttempt` | `+0x788` | `FIELD_TIME` |
+| — | `m_nSkillAttempts` | `+0x78c` | |
+| — | `m_nLastSkillLevel` | `+0x790` | |
+| `ResetDifficulty` | `InputResetDifficulty` | — | `0x1020abc0`, clamps the payload to 0..10 then calls the reset virtual `+0x440` |
+| `OnSkillSuccess` | `m_OnSkillSuccess` | `+0x794` | |
+| `OnSkillFail` | `m_OnSkillFail` | `+0x7ac` | |
+| `OnSkillBotch` | `m_OnSkillBotch` | `+0x7c4` | |
+| `OnSkillAttemptBegin` | `m_OnSkillAttemptBegin` | `+0x7dc` | |
+| `OnSkillAttemptCycle` | `m_OnSkillAttemptCycle` | `+0x7f4` | |
+
+The roll (`FUN_1020b090`) returns a **success count**, and the three outcomes are thresholds on it:
+
+```c
+m_flLastAttempt = curtime;
+if (m_vSkillType == 1)      m_LastRoll = DiceSystem::RollA(...);   // FUN_101e7ea0
+else if (m_vSkillType == 2) m_LastRoll = DiceSystem::RollB(...);   // FUN_101e8100
+FireOutput(m_OnSkillAttemptCycle, player);
+if (m_LastRoll > 2)       vt[0x438](player);   // success -> m_nSkillAttempts++, m_OnSkillSuccess
+else if (m_LastRoll == 0) vt[0x434](player);   // botch   -> m_OnSkillBotch
+else                      vt[0x43c](player);   // fail    -> m_OnSkillFail
+```
+
+`IsLocked()` (`FUN_10224100`) is literally `m_LastRoll < 3`; `Lock` writes `1` and `Unlock` writes
+`3`. `skilltype` `1` queries registry id `0` (lockpicking) and `2` queries id `2` (computers); **any
+other value skips the lookup and no roll is taken**. Attempt pacing is
+`(K1 − skillLevel·K2) / player[+0x1488]` seconds per cycle (`FUN_1020aea0`), and `FUN_1020acb0`
+re-reads the player's skill on approach so an improved character may retry.
+
+`CBaseLockableEnt` — datamap `0x105b21e8`, records `0x105b222c`, 9, builder `FUN_102240d0`:
+
+| externalName | internal | offset | notes |
+| --- | --- | --- | --- |
+| `key_name` | `m_sKeyName` | `+0x810` | inventory item that opens it |
+| `delete_key` | `m_bDeleteKey` | `+0x814` | consume the key on use |
+| `requires_key` | `m_bRequiresKey` | `+0x815` | blocks the lockpick attempt entirely |
+| `use_icon` | `m_UseIcon` | `+0x818` | |
+| `locked_icon` | `m_LockedIcon` | `+0x81c` | |
+| `key_icon` | `m_KeyIcon` | `+0x820` | shown when the player holds the key |
+| `Lock` | `InputLock` | — | `0x10224150` → `FUN_10224190` |
+| `Unlock` | `InputUnlock` | — | `0x10224170` → `FUN_102241b0` (fires `OnUnlocked`, then writes `3`) |
+| `Use` | `InputUse` | — | `0x102241f0`, forwards to the attached door or container |
+
+`parentname` is the **attachment**, not a transform parent: `CPropDoorknob::Activate`
+(`FUN_10225af0` → `FUN_102256f0`) resolves it with `FindEntityByName`, RTTI-casts to `CBaseDoor` and
+calls `CBaseDoor::AddDoorknob(this)`. A missing target produces
+`DevWarning("%s attached to non-existent door: %s")` followed by `UTIL_Remove`, and a door accepts at
+most two (`"Door %s already has 2 doorknobs!"`). `item_container_lock` does the same against a
+container (`FUN_10226520`).
+
+Lockpick flow: `HasKey` `FUN_10224910` · `UnlockWithKey` `FUN_10224950` · `CanAttempt`
+`FUN_10224ae0` (requires the lock actually locked, refuses when `requires_key`, else checks the
+player carries the item named by vtable `+0x90`, `item_g_lockpick`) · `StartAttempt` `FUN_10225070`
+(fires `OnSkillAttemptBegin`, opens the `Intrusion` HUD entity) · per-tick `FUN_102252f0` · finish
+`FUN_10225140` / `FUN_10224fa0`. `GetUseIcon` (`FUN_10224d40`) returns icon 58 or 59 for special door
+states, else `key_icon` when the player has the key, else `locked_icon`, else `use_icon`.
+
+Ctor defaults, which is where the corpus's "typical" icon values come from:
+
+| class | factory / ctor / vftable | `use_icon` | `locked_icon` | `key_icon` | notes |
+| --- | --- | --- | --- | --- | --- |
+| `prop_doorknob` | `0x10225830` / `0x102258a0` / `0x1048c364` | 10 | 3 | 4 | |
+| `prop_padlock` | `0x10225c00` / `0x10225c70` / `0x1048c89c` | 10 | 3 | 4 | on unlock it detaches and deletes itself (`FUN_10225f60`) |
+| `prop_doorknob_electronic` | `0x10226190` / `0x10226200` / `0x1048cdd4` | 53 | 54 | 5 | Spawn forces `requires_key = 1`, so it cannot be picked; `Lock`/`Unlock` also set skin 0/1 (`FUN_10226360` / `FUN_10226380`) |
+| `item_container_lock` | `0x102263b0` / `0x10226420` / `0x1048d30c` | 10 | 3 | — | attaches to a container |
+
+### The doorknob handle sequence
+
+`CPropDoorknob` overrides vtable slot `+0x444` with `FUN_10225b40`:
+
+```c
+const char *seq = IsLocked() ? "handle_locked" : "handle_unlocked";   // 0x105b2690 / 0x105b267c
+int idx = LookupSequence(seq);
+if (idx < 0)                 { m_nSequence = 0; }                    // falls back to `idle`
+else if (m_nSequence != idx) { m_flCycle = 0; m_nSequence = idx;
+                               ResetSequenceInfo(); StudioFrameAdvance(); }
+```
+
+It is **not** called from `Lock`/`Unlock`. `CBaseDoor`/`CRotDoor` push the state down to every
+registered doorknob — the call sites are `0x100eef88`, `0x100f0485`, `0x100f0524`, `0x100f2877`,
+`0x100f2916`. `CPropPadlock` overrides the same slot with an empty stub (`FUN_10225ce0`).
+
+`CPropDoorknob::Spawn` (`FUN_102259e0`) seeds the state from the keyfield: `difficulty != 0` spawns
+locked (`m_LastRoll = 1`) with bodygroup 1; `difficulty == 0` spawns unlocked (`m_LastRoll = 3`) with
+bodygroup 0. Every doorknob in `sp_theatre` carries `difficulty 0`, so they rest on
+`handle_unlocked`.
+
+## `item_container` / `item_container_animated` / `item_container_lock`
+
+Datamap `0x105a93d0`, records `0x105a9414`, 24, builder `FUN_10207f80`; base map
+**`CBaseCombatCharacter`** — a container owns a real inventory. Factory `FUN_10207eb0`, instance
+size `0x1a38`.
+
+| externalName | internal | offset | notes |
+| --- | --- | --- | --- |
+| `Use` | `InputUse` | — | `0x10208c90` |
+| `AddEntityToContainer` | `InputAddEntityToContainer` | — | `0x10208e50`, `FIELD_STRING` payload |
+| `SpawnItemInContainer` | `InputSpawnItemInContainer` | — | `0x10208f30`, `FIELD_STRING` payload |
+| `DeleteItems` | `InputDeleteItems` | — | `0x10208fa0` |
+| `OnItemRemove` | `m_OnItemRemove` | `+0x19b0` | |
+| `OnItemInsert` | `m_OnItemInsert` | `+0x19c8` | |
+| `OnBreak` | `m_OnBreak` | `+0x19e0` | |
+| `dmgmodel` | `m_sDmgModel` | `+0x1a30` | model swapped in when broken |
+| `health` | `m_iHealth` | `+0x210` | |
+| `use_icon` | `m_UseIcon` | `+0x1a34` | |
+| `equip0` … `equip11` | `m_sEquip0` … `m_sEquip11` | `+0x19f8` … `+0x1a24` | the twelve authored contents slots; the corpus uses `equip0`–`equip4` |
+| — | `m_BCCUser` | `+0x1a28` | EHANDLE, save |
+| — | `m_hLockEnt` | `+0x1a2c` | EHANDLE of the attached `item_container_lock`, save |
+
+`Lock` / `Unlock` wires aimed at a container are handled by that attached lock entity, not by the
+container. The lid is the inherited `CBaseToggle` mover, selected by `use_pref`:
+
+```c
+CItemContainer::OpenMover()  // FUN_10208c30
+    UseType == 1 -> StartMover(1);   // linear:  move_dest at move_speed
+    UseType == 2 -> StartMover(3);   // angular: rot_dist degrees about rot_axis at rot_speed
+CItemContainer::CloseMover() // FUN_10208c60 -> StartMover(0) / StartMover(2)
+```
+
+`CItemContainer::Spawn` (`FUN_10209350`) is the only class in this family that calls the mover
+initialiser `FUN_101c1cb0`. `item_container_animated` (factory `0x10209cd0`, ctor `0x10209d40`,
+vftable `0x104844cc`) additionally plays sequences named `open` / `close` (`FUN_10209df0` /
+`FUN_10209e10` → `FUN_10209e30`; a missing clip logs `"%s no sequence named %s"` and falls back to
+sequence 0) and emits the `soundgroup` events `open`, `close`, `swing`, `locked` (`FUN_10209790`).
+`item_container_one_item_filtered` (factory `0x10209ef0`, vftable `0x10484c84`) presets a filter
+slot to `5`.
+
+## `prop_hacking` (`CBaseTerminal` / `CPropHacking`)
+
+`CBaseTerminal` — datamap `0x105af268`, records `0x105af2ac`, 10, builder `FUN_10217650`:
+`start_enabled` → `m_bEnabled` `+0x80c`, `textcolumns` → `m_nScreenColumns` `+0x810`, `textrows` →
+`m_nScreenRows` `+0x814`, `colorscheme` → `m_nColorScheme` `+0x818`; save-only `m_bInUse` `+0x80d`,
+`m_HackFlags` `+0x81c`, `m_nMaxInput` `+0x820`, `m_szHackPWD` `+0x82c` (`char[16]`); inputs `Enable`
+(`0x10218080`) and `Disable` (`0x102180a0`). Its `soundgroup` events are `typing`, `accept`,
+`access`, `error` (`FUN_10217680`).
+
+`CPropHacking` — datamap `0x105af464`, records `0x105af4ac`, 18, builder `FUN_10219770`, factory
+`0x102196a0`: `hack_file` → `m_sHackFile` `+0x900`, `global_email` → `m_bHasGlobalEmail` `+0xa10`,
+`ss_delay` → `m_flSS_Delay` `+0x9e4`, `ss_start` → `m_flSS_Start` `+0x9e8`, plus save-only
+`m_bSubdirUnlocked` `+0x986` (`bool[5]`), `m_EmailFlags` `+0xa28` (128 ints), `m_bEmailUnlocked`
+`+0xc2c`, `m_SubDirAttempts` `+0x98c` (`FIELD_CUSTOM`), `m_nEmailAttempts` `+0xc28`, and the think
+`CPropHackingSS_Think` (`0x10014b82`).
+
+It declares **`OnTrigger0`…`OnTrigger7`**, `m_OnTrigger[0..7]` at `+0x840` stride `0x18`; the ctor
+`FUN_10219d40` builds the array in a loop. These are **not** outcome tiers — hack success and failure
+go through the inherited `OnSkillSuccess` / `OnSkillFail` / `OnSkillBotch`. `CPropHacking::LoadFromFile`
+(`0x1021cba0`) parses the `.hac` KeyValues tree
+`TerminalDefinition { screen_saver, brackets, email_password, email_username, LogonScreen{line_N},
+SubDir{ description, password, dependency, difficulty, Function{ description, runtext, dependency,
+runscript, trigger } }, Email{ subject, sender, dependency, runscript } }`, and each `Function`
+block's integer `trigger` key (default `-1`) names the output index that running that function
+fires. *The mapping from `trigger` to `m_OnTrigger[n]` is read from the loader's key name and
+default; the fire site is reached through a computed `0x840 + n*0x18` address and has not been
+decompiled.*
+
+## Proven-dead Hammer/FGD keys
+
+These keys are stamped on shipped entities and read by no engine code. A case-insensitive scan of
+the whole `vampire.dll` image returns zero occurrences of each; `demo_sequence` and `npc_opaque` are
+additionally absent from `client.dll`.
+
+| key | authored | stamped on |
+| --- | --- | --- |
+| `demo_sequence` | 1,619 | `prop_dynamic`, `prop_physics`, NPC classes |
+| `climbable` | 366 | `func_door_rotating`, `func_brush`, `prop_switch` |
+| `locksnd` | 174 | the lockable family, `prop_switch` |
+| `npc_opaque` | 130 | `prop_dynamic`, `item_container_animated` |
+| `diceroll` | 86 | `prop_doorknob`, `prop_hacking` |
+| `actsnd` / `deactsnd` | 12 each | `prop_switch` |
+
+Sound selection runs entirely through `soundgroup` — a `CBaseEntity` keyfield, `m_iszVSoundGroup`
+`+0xc0` (record `0x10553f34`, builder `FUN_100a22f0`), resolved to a group handle at `+0xb4` — with
+each class playing named events inside the group, as listed per class above.
 
 ## `env_particle` attachment (`CEnvParticle`)
 
@@ -649,9 +1143,34 @@ maps that is the *only* skin input any map fires (18 wires); `FadeToSkin` / `Set
 `SetSkinFadeTime` are wired **zero** times.
 
 `m_nSkin` / `m_nSkinCrossfade` / `m_flSkinCrossfadeTime` (0x670/0x674/0x678) are all networked
-SendProps and `FadeToSkin` writes no start time, so the crossfade is rendered **client-side**.
-`crossfade_skin_time` carries no authored signal — it is `2.0` on all 723 entities that have it,
-including `npc_maker` and `npc_VRat`, i.e. an FGD default stamped on everything that animates.
+SendProps (`DT_BaseAnimating` builder `0x1008aaf0`; 10 bits, 10 bits, and an unscaled float) and
+`FadeToSkin` writes no start time, so the crossfade would have to be rendered client-side.
+
+**The client crossfade is dead code, and every skin change snaps.** The client receives the three
+props at `+0x410` (`m_nSkinCrossfade`), `+0x418` (`m_flSkinCrossfadeTime`) and `+0x55c` (`m_nSkin`),
+and keeps a client-only start time at `+0x41c`. `C_BaseAnimating`'s draw path (`0x10092970`) really
+does implement the blend, by drawing the model twice — once with `m_nSkinCrossfade` at a reduced
+`modelrender->SetBlend`, then once with `m_nSkin` — gated on `IsSkinCrossfading` (`0x10093e40`):
+
+```c
+if (m_nSkinCrossfade /*+0x410*/ == -1) return false;
+elapsed = curtime - m_flCrossfadeStart /*+0x41c*/;
+if (m_flSkinCrossfadeTime /*+0x418*/ < elapsed) { m_nSkinCrossfade = -1; return false; }
+return true;
+```
+
+The only writer of `+0x41c` anywhere in `client.dll` is the `C_BaseAnimating` constructor
+(`0x1008f3c0`), which stores `-FLT_MAX`; `m_nSkinCrossfade` is registered with RecvProxy `0` and no
+`OnDataChanged` latch touches it. An operand scan for that displacement across the whole image (106
+hits) finds no other write. So `elapsed` always exceeds the fade time, the first evaluation resets
+`m_nSkinCrossfade` to `-1`, and the second draw pass never runs.
+
+`crossfade_skin_time` is therefore inert on all 1,785 entities that carry it, and it carries no
+authored signal in any case — `2.0` on nearly all of them, i.e. an FGD default stamped on everything
+that animates.
+
+Server-side the two fade inputs are real but write only fields: `InputFadeToSkin` (`0x1008d520` →
+body `0x1008d6d0`) and `InputSetSkinFadeTime` (`0x1008d450` → body `0x1008d5f0`).
 
 ## Screen fade (`env_fade` spawnflags)
 

@@ -219,7 +219,69 @@ exporting the definitions — nothing about signs is a quad/decal rendering prob
 
 ---
 
-## 8. Related docs
+## 8. Render and shadow keyfields (`CBaseEntity`) [VtMB — decompiled]
+
+Four of these are **not datamap records**. `CBaseEntity::KeyValue` (`FUN_1009e430`, `vampire.dll`)
+intercepts them by name before the datamap walk and folds them into `m_fEffects` (`+0x19c`) or
+`m_clrRender` (`+0x1a0`):
+
+```c
+if (!__strcmpi(key, "disableshadows"))        { if (atoi(v)) m_fEffects |= 0x20; }
+else if (!__strcmpi(key, "disablereceiveshadows")) { if (atoi(v)) m_fEffects |= 0x80; }
+```
+
+`rendercolor`/`rendercolor32` and `renderamt` are intercepted in the same function and written
+straight into the `m_clrRender` bytes `+0x1a0`…`+0x1a2` and `+0x1a3`. Everything else falls through
+to the datamap walk (`ParseKeyvalue` `0x101a5a80`), which also descends into embedded maps.
+
+**The effect-flag enum for this build is shifted one position up from the retail HL2 SDK.** Do not
+reuse SDK constants:
+
+| bit | flag |
+| --- | --- |
+| `0x20` | `EF_NOSHADOW` |
+| `0x40` | `EF_NODRAW` |
+| `0x80` | `EF_NORECEIVESHADOW` |
+
+`0x40` is independently confirmed by `CBaseTrigger::InitTrigger`, which sets it on a trigger brush
+when `showtriggers` is zero (`docs/vtmb/entity_io.md` → "Trigger activation filter").
+
+`disableshadows` **suppresses the cast entirely**. `client.dll`'s `C_BaseAnimating::ShadowCastType`
+(`0x1009f300`) returns `SHADOWS_NONE` when either bit is present:
+
+```
+1009f300  TEST byte ptr [ECX + 0x74],0x60      ; EF_NOSHADOW | EF_NODRAW
+1009f306  XOR EAX,EAX                          ; SHADOWS_NONE
+1009f309  ...                                  ; else RENDER_TO_TEXTURE for a studio model
+```
+
+| key | where it lands | networked | effect |
+| --- | --- | --- | --- |
+| `disableshadows` | `KeyValue` → `m_fEffects \| 0x20` | yes (`m_fEffects` `+0x19c`, 12 bits) | no shadow cast |
+| `disablereceiveshadows` | `KeyValue` → `m_fEffects \| 0x80` | yes, same prop | *see below* |
+| `rendermode` | datamap rec `0x10553014`, `m_nRenderMode` `+0x16c` | yes, 8 bits | client-side only |
+| `renderfx` | rec `0x10552fe8`, `m_nRenderFX` `+0x168` | yes, 8 bits | client-side only |
+| `rendercolor` | `KeyValue` + rec `0x105531a0`, `m_clrRender` `+0x1a0` | yes, 8 bits per channel | client-side only |
+| `renderamt` | `KeyValue` → `m_clrRender.a` `+0x1a3` | yes | alpha of the same colour |
+| `effects` | rec `0x10553174`, `m_fEffects` `+0x19c` | yes | direct authoring of the same bitfield |
+| `npc_transparent` | rec `0x10553f60`, `m_bNPCTransparent` `+0xfc` | **no — server only** | AI trace filter |
+| `npc_opaque` | — | — | **dead**; the string exists in neither DLL |
+
+`npc_transparent` is an **AI trace filter**, not a render flag. Its only reader is the accessor
+`0x100a91f0`, whose sole caller is a trace-filter override in the AI region (`0x10107630`):
+`IsNPCTransparent()` true makes `ShouldHitEntity` return false, so the entity is invisible to NPC
+line-of-sight, shot and movement traces while staying solid to everything else. Its neighbour
+`blocks_traces` (`m_bBlocksTraces` `+0xfd`) is the general counterpart.
+
+**Uncertain.** No consumer of bit `0x80` (`disablereceiveshadows`) exists anywhere in `client.dll` —
+this 2004 build has no `ShouldReceiveProjectedTextures` equivalent. Whether `engine.dll`'s shadow
+manager honours it is undetermined; settling it means an operand scan for the flag in `engine.dll`.
+For `rendermode`/`renderfx` only the plumbing is confirmed (keyfield → SendProp → client); the
+per-value visual table for this build has not been decoded.
+
+---
+
+## 9. Related docs
 
 `docs/vtmb/entity_io.md` (the 7-field I/O, `use_icon`, `StartHidden`/`ScriptHide` — the runtime
 behavior surface this data feeds), `docs/vtmb/python_bridge.md` (name→delegate namespace, the five

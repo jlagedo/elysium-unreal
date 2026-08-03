@@ -31,7 +31,7 @@ documents:
   - {path: vtmb/facial_animation.md, kind: vtmb-fact, owner: facial animation, subject: flex and lip animation, eyes and gaze}
   - {path: vtmb/choreographed_scenes.md, kind: vtmb-fact, owner: choreographed scenes, subject: VCD playback}
   - {path: vtmb/entity_io.md, kind: vtmb-fact, owner: entity I/O, subject: Source entity I/O}
-  - {path: vtmb/entity_visuals.md, kind: vtmb-fact, owner: entity visuals, subject: placed visual entities}
+  - {path: vtmb/entity_visuals.md, kind: vtmb-fact, owner: entity visuals, subject: placed visual entities and the render/shadow keyfields}
   - {path: vtmb/game_runtime.md, kind: vtmb-fact, owner: game runtime, subject: game loop and RPG model}
   - {path: vtmb/python_bridge.md, kind: vtmb-fact, owner: scripting, subject: Python binding mechanism}
   - {path: vtmb/script_api.md, kind: vtmb-fact, owner: scripting, subject: script action inventory}
