@@ -13,7 +13,7 @@
 
 namespace
 {
-void ReportErrors(const TCHAR* Operation, const FNiagaraExternalEditContext& Context)
+void ReportParticleErrors(const TCHAR* Operation, const FNiagaraExternalEditContext& Context)
 {
 	for (const FText& Error : Context.Errors)
 	{
@@ -22,7 +22,7 @@ void ReportErrors(const TCHAR* Operation, const FNiagaraExternalEditContext& Con
 }
 
 template<typename TValue>
-FNiagaraExt_SetParameterEntry Parameter(
+FNiagaraExt_SetParameterEntry ParticleParameter(
 	const TCHAR* Name,
 	const FNiagaraTypeDefinition& Type,
 	const TValue& Value)
@@ -100,22 +100,22 @@ void ConfigureLayer(
 	LifetimeValue.Value = FMath::Max(Layer.LifetimeSeconds, KINDA_SMALL_NUMBER);
 
 	TArray<FNiagaraExt_SetParameterEntry> Parameters;
-	Parameters.Add(Parameter(TEXT("Particles.Lifetime"),
+	Parameters.Add(ParticleParameter(TEXT("Particles.Lifetime"),
 		FNiagaraTypeDefinition::GetFloatDef(), LifetimeValue));
-	Parameters.Add(Parameter(TEXT("Particles.SpriteSize"),
+	Parameters.Add(ParticleParameter(TEXT("Particles.SpriteSize"),
 		FNiagaraTypeDefinition::GetVec2Def(),
 		FVector2f(static_cast<float>(Layer.SpriteSize.X), static_cast<float>(Layer.SpriteSize.Y))));
-	Parameters.Add(Parameter(TEXT("Particles.Velocity"),
+	Parameters.Add(ParticleParameter(TEXT("Particles.Velocity"),
 		FNiagaraTypeDefinition::GetVec3Def(),
 		FVector3f(static_cast<float>(Layer.Velocity.X), static_cast<float>(Layer.Velocity.Y),
 			static_cast<float>(Layer.Velocity.Z))));
-	Parameters.Add(Parameter(TEXT("Particles.Position"),
+	Parameters.Add(ParticleParameter(TEXT("Particles.Position"),
 		FNiagaraTypeDefinition::GetVec3Def(),
 		FVector3f(static_cast<float>(Layer.Offset.X), static_cast<float>(Layer.Offset.Y),
 			static_cast<float>(Layer.Offset.Z))));
-	Parameters.Add(Parameter(TEXT("Particles.Color"),
+	Parameters.Add(ParticleParameter(TEXT("Particles.Color"),
 		FNiagaraTypeDefinition::GetColorDef(), Layer.Color));
-	Parameters.Add(Parameter(TEXT("Particles.SpriteFacing"),
+	Parameters.Add(ParticleParameter(TEXT("Particles.SpriteFacing"),
 		FNiagaraTypeDefinition::GetVec3Def(), FVector3f(0.0f, 0.0f, 1.0f)));
 
 	FNiagaraExt_StackItemReference Location(System, Emitter, FName(TEXT("ParticleSpawnScript")));
@@ -165,7 +165,7 @@ UNiagaraSystem* UElysiumParticleAssetBuilder::BuildParticleSystem(
 		AssetName, PackagePath, nullptr, Context);
 	if (!System || Context.HasErrors())
 	{
-		ReportErrors(TEXT("create system"), Context);
+		ReportParticleErrors(TEXT("create system"), Context);
 		return nullptr;
 	}
 
@@ -194,7 +194,7 @@ UNiagaraSystem* UElysiumParticleAssetBuilder::BuildParticleSystem(
 	{
 		ConfigureLayer(System, Names[Index], Layers[Index], Context);
 	}
-	ReportErrors(TEXT("author system"), Context);
+	ReportParticleErrors(TEXT("author system"), Context);
 	if (Context.HasErrors())
 	{
 		return nullptr;
@@ -262,7 +262,7 @@ bool UElysiumParticleAssetBuilder::BindLayerMaterial(
 		UE_LOG(LogTemp, Error, TEXT("[particle-assets] no emitter named '%s'"), *LayerName);
 		return false;
 	}
-	ReportErrors(TEXT("bind layer material"), Context);
+	ReportParticleErrors(TEXT("bind layer material"), Context);
 	System->RequestCompile(false);
 	FAssetCompilingManager::Get().FinishAllCompilation();
 	System->MarkPackageDirty();
